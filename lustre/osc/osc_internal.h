@@ -10,13 +10,6 @@
 #ifndef OSC_INTERNAL_H
 #define OSC_INTERNAL_H
 
-#include <portals/lib-types.h> /* for PTL_MTU and PTL_MD_MAX_PAGES */
-
-
-/* bug 1578: negotiate BRW_MAX_SIZE with the OST, instead of hard-coding it */
-#define OSC_BRW_MAX_SIZE PTL_MTU
-#define OSC_BRW_MAX_IOV PTL_MD_MAX_PAGES
-
 #define OAP_MAGIC 8675309
 
 struct osc_async_page {

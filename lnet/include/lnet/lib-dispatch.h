@@ -1,6 +1,7 @@
 #ifndef PTL_DISPATCH_H
 #define PTL_DISPATCH_H
 
+#include "build_check.h"
 /*
  * include/dispatch.h
  *

@@ -67,7 +67,7 @@ if test x$enable_inkernel = xyes ; then
 		sh -e -x -c '(cp -f $0.mk $0.in)'
 fi
 
-AM_CONFIG_HEADER(portals/include/config.h)
+AM_CONFIG_HEADER(include/config.h)
 
 AC_OUTPUT([Makefile lvfs/Makefile portals/Makefile portals/Kernelenv \
           portals/libcfs/Makefile portals/portals/Makefile \

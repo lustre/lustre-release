@@ -194,7 +194,7 @@ kibnal_shutdown(nal_t *nal, int ni)
 // when do we call this yield function 
 //
 void 
-kibnal_yield( nal_t *nal )
+kibnal_yield( nal_t *nal, unsigned long *flags, int milliseconds )
 {
         kibnal_data_t *k = nal->nal_data;
         nal_cb_t      *nal_cb = k->kib_cb;
@@ -204,6 +204,11 @@ kibnal_yield( nal_t *nal )
         LASSERT (k    == &kibnal_data);
         LASSERT (nal_cb == &kibnal_lib);
 
+        if (milliseconds != 0) {
+                CERROR("Blocking yeild not implemented yet\n");
+                LBUG();
+        }
+        
         // check under what condition that we need to 
         // call schedule()
         // who set this need_resched 

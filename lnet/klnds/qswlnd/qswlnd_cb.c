@@ -85,6 +85,9 @@ kqswnal_printf (nal_cb_t * nal, const char *fmt, ...)
         CDEBUG (D_NET, "%s", msg);
 }
 
+#if (defined(CONFIG_SPARC32) || defined(CONFIG_SPARC64))
+# error "Can't save/restore irq contexts in different procedures"
+#endif
 
 static void
 kqswnal_cli(nal_cb_t *nal, unsigned long *flags)
@@ -103,6 +106,17 @@ kqswnal_sti(nal_cb_t *nal, unsigned long *flags)
         spin_unlock_irqrestore(&data->kqn_statelock, *flags);
 }
 
+static void
+kqswnal_callback(nal_cb_t *nal, void *private, lib_eq_t *eq, ptl_event_t *ev)
+{
+        /* holding kqn_statelock */
+
+        if (eq->event_callback != NULL)
+                eq->event_callback(ev);
+
+        if (waitqueue_active(&kqswnal_data.kqn_yield_waitq))
+                wake_up_all(&kqswnal_data.kqn_yield_waitq);
+}
 
 static int
 kqswnal_dist(nal_cb_t *nal, ptl_nid_t nid, unsigned long *dist)
@@ -513,15 +527,15 @@ kqswnal_tx_done (kqswnal_tx_t *ktx, int error)
                 lib_finalize (&kqswnal_lib, ktx->ktx_args[0],
                               (lib_msg_t *)ktx->ktx_args[1],
                               (error == 0) ? PTL_OK : 
-                              (error == -ENOMEM) ? PTL_NOSPACE : PTL_FAIL);
+                              (error == -ENOMEM) ? PTL_NO_SPACE : PTL_FAIL);
                 break;
 
         case KTX_GETTING:          /* Peer has DMA-ed direct? */
                 msg = (lib_msg_t *)ktx->ktx_args[1];
 
                 if (error == 0) {
-                        repmsg = lib_fake_reply_msg (&kqswnal_lib, 
-                                                     ktx->ktx_nid, msg->md);
+                        repmsg = lib_create_reply_msg (&kqswnal_lib, 
+                                                       ktx->ktx_nid, msg);
                         if (repmsg == NULL)
                                 error = -ENOMEM;
                 }
@@ -532,7 +546,7 @@ kqswnal_tx_done (kqswnal_tx_t *ktx, int error)
                         lib_finalize (&kqswnal_lib, NULL, repmsg, PTL_OK);
                 } else {
                         lib_finalize (&kqswnal_lib, ktx->ktx_args[0], msg,
-                                      (error == -ENOMEM) ? PTL_NOSPACE : PTL_FAIL);
+                                      (error == -ENOMEM) ? PTL_NO_SPACE : PTL_FAIL);
                 }
                 break;
 
@@ -937,7 +951,7 @@ kqswnal_sendmsg (nal_cb_t     *nal,
                                           in_interrupt()));
         if (ktx == NULL) {
                 kqswnal_cerror_hdr (hdr);
-                return (PTL_NOSPACE);
+                return (PTL_NO_SPACE);
         }
 
         ktx->ktx_nid     = targetnid;
@@ -1845,5 +1859,6 @@ nal_cb_t kqswnal_lib =
         cb_printf:      kqswnal_printf,
         cb_cli:         kqswnal_cli,
         cb_sti:         kqswnal_sti,
+        cb_callback:    kqswnal_callback,
         cb_dist:        kqswnal_dist
 };

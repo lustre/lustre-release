@@ -157,13 +157,16 @@ gmnal_api_validate(nal_t *nal, void *base, size_t extent)
  *	Give up the processor
  */
 void
-gmnal_api_yield(nal_t *nal)
+gmnal_api_yield(nal_t *nal, unsigned long *flags, int milliseconds)
 {
 	CDEBUG(D_TRACE, "gmnal_api_yield : nal [%p]\n", nal);
 
-	set_current_state(TASK_INTERRUPTIBLE);
-	schedule();
+        if (milliseconds != 0) {
+                CERROR("Blocking yield not implemented yet\n");
+                LBUG();
+        }
 
+        our_cond_resched();
 	return;
 }
 

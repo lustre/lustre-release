@@ -1,6 +1,8 @@
 #ifndef PTL_BLOCKS_H
 #define PTL_BLOCKS_H
 
+#include "build_check.h"
+
 /*
  * blocks.h
  *
@@ -161,6 +163,7 @@ typedef struct PtlMDBind_in {
         ptl_handle_ni_t ni_in;
         ptl_handle_eq_t eq_in;
         ptl_md_t md_in;
+	ptl_unlink_t unlink_in;
 } PtlMDBind_in;
 
 typedef struct PtlMDBind_out {

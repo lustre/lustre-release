@@ -9,6 +9,8 @@
 #ifndef _LIB_P30_H_
 #define _LIB_P30_H_
 
+#include "build_check.h"
+
 #ifdef __KERNEL__
 # include <asm/page.h>
 # include <linux/string.h>
@@ -195,7 +197,7 @@ lib_md_alloc (nal_cb_t *nal, ptl_md_t *umd)
                 niov = umd->niov;
                 size = offsetof(lib_md_t, md_iov.kiov[niov]);
         } else {
-                niov = ((umd->options & PTL_MD_IOV) != 0) ?
+                niov = ((umd->options & PTL_MD_IOVEC) != 0) ?
                        umd->niov : 1;
                 size = offsetof(lib_md_t, md_iov.iov[niov]);
         }
@@ -245,10 +247,14 @@ lib_me_free(nal_cb_t *nal, lib_me_t *me)
 static inline lib_msg_t *
 lib_msg_alloc(nal_cb_t *nal)
 {
-        /* NEVER called with statelock held */
+        /* NEVER called with statelock held; may be in interrupt... */
         lib_msg_t *msg;
 
-        PORTAL_ALLOC(msg, sizeof(*msg));
+        if (in_interrupt())
+                PORTAL_ALLOC_ATOMIC(msg, sizeof(*msg));
+        else
+                PORTAL_ALLOC(msg, sizeof(*msg));
+
         if (msg != NULL) {
                 /* NULL pointers, clear flags etc */
                 memset (msg, 0, sizeof (*msg));
@@ -363,10 +369,10 @@ extern char *dispatch_name(int index);
 extern void lib_enq_event_locked (nal_cb_t *nal, void *private,
                                   lib_eq_t *eq, ptl_event_t *ev);
 extern void lib_finalize (nal_cb_t *nal, void *private, lib_msg_t *msg, 
-                          ptl_err_t status);
+                          ptl_ni_fail_t ni_fail_type);
 extern void lib_parse (nal_cb_t *nal, ptl_hdr_t *hdr, void *private);
-extern lib_msg_t *lib_fake_reply_msg (nal_cb_t *nal, ptl_nid_t peer_nid, 
-                                      lib_md_t *getmd);
+extern lib_msg_t *lib_create_reply_msg (nal_cb_t *nal, ptl_nid_t peer_nid, 
+                                        lib_msg_t *get_msg);
 extern void print_hdr (nal_cb_t * nal, ptl_hdr_t * hdr);
 
 

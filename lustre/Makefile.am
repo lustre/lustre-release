@@ -11,12 +11,20 @@ else
 DIRS24 = ptlbd
 endif
 
+# just until things are farther along
+if CRAY_PORTALS
+UTILS_TESTS = 
+else
+UTILS_TESTS = utils tests
+endif
+
 if LIBLUSTRE
 SUBDIRS = portals obdclass lov ptlrpc obdecho osc utils mdc lvfs liblustre
 else
-SUBDIRS = lvfs portals obdclass include $(DIRS24) mds utils obdfilter mdc osc ost 
-SUBDIRS+= llite obdecho lov cobd tests doc scripts conf ptlrpc
+SUBDIRS = lvfs portals obdclass include $(DIRS24) mds obdfilter mdc osc ost 
+SUBDIRS+= llite obdecho lov cobd doc scripts conf ptlrpc $(UTILS_TESTS)
 endif
+
 
 if SNAPFS
 SUBDIRS+= snapfs

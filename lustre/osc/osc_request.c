@@ -36,7 +36,8 @@
 # include <linux/module.h>
 # include <linux/mm.h>
 # include <linux/highmem.h>
-# include <linux/lustre_dlm.h>
+# include <linux/ctype.h>
+# include <linux/init.h>
 # if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 #  include <linux/workqueue.h>
 #  include <linux/smp_lock.h>
@@ -47,16 +48,14 @@
 # include <liblustre.h>
 #endif
 
+# include <linux/lustre_dlm.h>
 #include <linux/kp30.h>
 #include <linux/lustre_net.h>
 #include <linux/lustre_user.h>
 #include <linux/obd_ost.h>
 #include <linux/obd_lov.h>
 
-#ifndef  __CYGWIN__
-# include <linux/ctype.h>
-# include <linux/init.h>
-#else
+#ifdef  __CYGWIN__
 # include <ctype.h>
 #endif
 
@@ -189,7 +188,7 @@ static int osc_getattr_interpret(struct ptlrpc_request *req,
                 memcpy(aa->aa_oa, &body->oa, sizeof(*aa->aa_oa));
 
                 /* This should really be sent by the OST */
-                aa->aa_oa->o_blksize = OSC_BRW_MAX_SIZE;
+                aa->aa_oa->o_blksize = PTLRPC_MAX_BRW_SIZE;
                 aa->aa_oa->o_valid |= OBD_MD_FLBLKSZ;
         } else {
                 CERROR("can't unpack ost_body\n");
@@ -264,7 +263,7 @@ static int osc_getattr(struct obd_export *exp, struct obdo *oa,
         memcpy(oa, &body->oa, sizeof(*oa));
 
         /* This should really be sent by the OST */
-        oa->o_blksize = OSC_BRW_MAX_SIZE;
+        oa->o_blksize = PTLRPC_MAX_BRW_SIZE;
         oa->o_valid |= OBD_MD_FLBLKSZ;
 
         EXIT;
@@ -357,7 +356,7 @@ int osc_real_create(struct obd_export *exp, struct obdo *oa,
         memcpy(oa, &body->oa, sizeof(*oa));
 
         /* This should really be sent by the OST */
-        oa->o_blksize = OSC_BRW_MAX_SIZE;
+        oa->o_blksize = PTLRPC_MAX_BRW_SIZE;
         oa->o_valid |= OBD_MD_FLBLKSZ;
 
         /* XXX LOV STACKING: the lsm that is passed to us from LOV does not
@@ -1082,8 +1081,8 @@ static int osc_brw(int cmd, struct obd_export *exp, struct obdo *oa,
                 obd_count pages_per_brw;
                 int rc;
 
-                if (page_count > OSC_BRW_MAX_IOV)
-                        pages_per_brw = OSC_BRW_MAX_IOV;
+                if (page_count > PTLRPC_MAX_BRW_PAGES)
+                        pages_per_brw = PTLRPC_MAX_BRW_PAGES;
                 else
                         pages_per_brw = page_count;
 
@@ -1122,8 +1121,8 @@ static int osc_brw_async(int cmd, struct obd_export *exp, struct obdo *oa,
                 obd_count pages_per_brw;
                 int rc;
 
-                if (page_count > OSC_BRW_MAX_IOV)
-                        pages_per_brw = OSC_BRW_MAX_IOV;
+                if (page_count > PTLRPC_MAX_BRW_PAGES)
+                        pages_per_brw = PTLRPC_MAX_BRW_PAGES;
                 else
                         pages_per_brw = page_count;
 
@@ -2342,8 +2341,8 @@ static int sanosc_brw(int cmd, struct obd_export *exp, struct obdo *oa,
                 obd_count pages_per_brw;
                 int rc;
 
-                if (page_count > OSC_BRW_MAX_IOV)
-                        pages_per_brw = OSC_BRW_MAX_IOV;
+                if (page_count > PTLRPC_MAX_BRW_PAGES)
+                        pages_per_brw = PTLRPC_MAX_BRW_PAGES;
                 else
                         pages_per_brw = page_count;
 

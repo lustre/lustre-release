@@ -95,7 +95,7 @@ static void nal_cli(nal_cb_t *nal,
     bridge b = (bridge) nal->nal_data;
     procbridge p = (procbridge) b->local;
 
-    pthread_mutex_lock(&p->nal_cb_lock);
+    pthread_mutex_lock(&p->mutex);
 }
 
 
@@ -105,9 +105,21 @@ static void nal_sti(nal_cb_t *nal,
     bridge b = (bridge)nal->nal_data;
     procbridge p = (procbridge) b->local;
 
-    pthread_mutex_unlock(&p->nal_cb_lock);
+    pthread_mutex_unlock(&p->mutex);
 }
 
+static void nal_callback(nal_cb_t *nal, void *private,
+                         lib_eq_t *eq, ptl_event_t *ev)
+{
+        bridge b = (bridge)nal->nal_data;
+        procbridge p = (procbridge) b->local;
+
+        /* holding p->mutex */
+        if (eq->event_callback != NULL)
+                eq->event_callback(ev);
+        
+        pthread_cond_broadcast(&p->cond);
+}
 
 static int nal_dist(nal_cb_t *nal,
                     ptl_nid_t nid,
@@ -116,21 +128,20 @@ static int nal_dist(nal_cb_t *nal,
     return 0;
 }
 
-static void wakeup_topside(void *z)
+static void check_stopping(void *z)
 {
     bridge b = z;
     procbridge p = b->local;
-    int stop;
 
+    if ((p->nal_flags & NAL_FLAG_STOPPING) == 0)
+            return;
+    
     pthread_mutex_lock(&p->mutex);
-    stop = p->nal_flags & NAL_FLAG_STOPPING;
-    if (stop)
-        p->nal_flags |= NAL_FLAG_STOPPED;
+    p->nal_flags |= NAL_FLAG_STOPPED;
     pthread_cond_broadcast(&p->cond);
     pthread_mutex_unlock(&p->mutex);
 
-    if (stop)
-        pthread_exit(0);
+    pthread_exit(0);
 }
 
 
@@ -175,6 +186,7 @@ void *nal_thread(void *z)
     b->nal_cb->cb_printf=nal_printf;
     b->nal_cb->cb_cli=nal_cli;
     b->nal_cb->cb_sti=nal_sti;
+    b->nal_cb->cb_callback=nal_callback;
     b->nal_cb->cb_dist=nal_dist;
 
     pid_request = args->nia_requested_pid;
@@ -216,7 +228,7 @@ void *nal_thread(void *z)
            performs an operation and returns to blocking mode. we
            overload this function to inform the api side that
            it may be interested in looking at the event queue */
-        register_thunk(wakeup_topside,b);
+        register_thunk(check_stopping,b);
         timer_loop();
     }
     return(0);

@@ -422,6 +422,11 @@ int ldlm_handle_cancel(struct ptlrpc_request *req);
 int ldlm_del_waiting_lock(struct ldlm_lock *lock);
 int ldlm_get_ref(void);
 void ldlm_put_ref(int force);
+#ifndef __KERNEL__
+void liblustre_ldlm_handle_bl_callback(struct ldlm_namespace *ns,
+                                       struct ldlm_lock_desc *ld,
+                                       struct ldlm_lock *lock);
+#endif
 
 /* ldlm_lock.c */
 ldlm_processing_policy ldlm_get_processing_policy(struct ldlm_resource *res);

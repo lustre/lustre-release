@@ -477,8 +477,13 @@ void ldlm_lock_decref_internal(struct ldlm_lock *lock, __u32 mode)
 
                 LDLM_LOCK_GET(lock); /* dropped by bl thread */
                 ldlm_lock_remove_from_lru(lock);
+#ifdef __KERNEL__
                 ldlm_bl_to_thread(ns, NULL, lock);
                 l_unlock(&ns->ns_lock);
+#else
+                l_unlock(&ns->ns_lock);
+                liblustre_ldlm_handle_bl_callback(ns, NULL, lock);
+#endif
         } else if (ns->ns_client == LDLM_NAMESPACE_CLIENT &&
                    !lock->l_readers && !lock->l_writers) {
                 /* If this is a client-side namespace and this was the last

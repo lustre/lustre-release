@@ -485,14 +485,7 @@ static int llu_iop_getattr(struct pnode *pno,
         rc = llu_inode_revalidate(ino);
         if (!rc) {
                 copy_stat_buf(ino, b);
-
-                if (llu_i2info(ino)->lli_it) {
-                        struct lookup_intent *it;
-
-                        LL_GET_INTENT(ino, it);
-                        it->it_op_release(it);
-                        OBD_FREE(it, sizeof(*it));
-                }
+                LASSERT(!llu_i2info(ino)->lli_it);
         }
 
         RETURN(rc);

@@ -100,7 +100,7 @@ lib_finalize(nal_cb_t *nal, void *private, lib_msg_t *msg, ptl_err_t status)
         if (status == PTL_OK &&
             !ptl_is_wire_handle_none(&msg->ack_wmd)) {
 
-                LASSERT(msg->ev.type == PTL_EVENT_PUT);
+                LASSERT(msg->ev.type == PTL_EVENT_PUT_END);
 
                 memset (&ack, 0, sizeof (ack));
                 ack.type     = HTON__u32 (PTL_MSG_ACK);
@@ -133,11 +133,16 @@ lib_finalize(nal_cb_t *nal, void *private, lib_msg_t *msg, ptl_err_t status)
         LASSERT (md->pending >= 0);
 
         /* Should I unlink this MD? */
-        unlink = (md->pending == 0 &&           /* No other refs */
-                  (md->threshold == 0 ||        /* All ops done */
-                   md->md_flags & PTL_MD_FLAG_UNLINK) != 0); /* black spot */
+        if (md->pending != 0)                   /* other refs */
+                unlink = 0;
+        else if ((md->md_flags & PTL_MD_FLAG_ZOMBIE) != 0)
+                unlink = 1;
+        else if ((md->md_flags & PTL_MD_FLAG_AUTO_UNLINK) == 0)
+                unlink = 0;
+        else
+                unlink = lib_md_exhausted(md);
 
-        msg->ev.status = status;
+        msg->ev.ni_fail_type = status;
         msg->ev.unlinked = unlink;
 
         if (md->eq != NULL)

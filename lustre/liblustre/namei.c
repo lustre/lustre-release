@@ -108,8 +108,8 @@ void llu_lookup_finish_locks(struct lookup_intent *it, struct pnode *pnode)
                 mdc_set_lock_data(&it->d.lustre.it_lock_handle, inode);
         }
 
-        /* drop IT_LOOKUP locks */
-        if (it->it_op == IT_LOOKUP)
+        /* drop lookup/getattr locks */
+        if (it->it_op == IT_LOOKUP || it->it_op == IT_GETATTR)
                 ll_intent_release(it);
 
 }
@@ -279,14 +279,19 @@ int llu_pb_revalidate(struct pnode *pnode, int flags, struct lookup_intent *it)
                 GOTO(out, rc = 0);
 
         rc = pnode_revalidate_finish(req, 1, it, pnode);
+        if (rc != 0) {
+                ll_intent_release(it);
+                GOTO(out, rc = 0);
+        }
+        rc = 1;
 
         /* Note: ll_intent_lock may cause a callback, check this! */
 
-        if (it->it_op & (IT_OPEN | IT_GETATTR))
+        if (it->it_op & IT_OPEN)
                 LL_SAVE_INTENT(pb->pb_ino, it);
-        RETURN(1);
+
  out:
-        if (req)
+        if (req && rc == 1)
                 ptlrpc_req_finished(req);
         if (rc == 0) {
                 LASSERT(pb->pb_ino);
@@ -295,8 +300,6 @@ int llu_pb_revalidate(struct pnode *pnode, int flags, struct lookup_intent *it)
         } else {
                 llu_lookup_finish_locks(it, pnode);
                 llu_i2info(pb->pb_ino)->lli_stale_flag = 0;
-                if (it->it_op & (IT_OPEN | IT_GETATTR))
-                        LL_SAVE_INTENT(pb->pb_ino, it);
         }
         RETURN(rc);
 }
@@ -361,7 +364,7 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
         }
 
         /* intent will be further used in cases of open()/getattr() */
-        if (inode && (it->it_op & (IT_OPEN | IT_GETATTR)))
+        if (inode && (it->it_op & IT_OPEN))
                 LL_SAVE_INTENT(inode, it);
 
         child->p_base->pb_ino = inode;

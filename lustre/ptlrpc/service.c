@@ -851,7 +851,7 @@ int ptlrpc_unregister_service(struct ptlrpc_service *service)
                                            rqbd_list);
 
                         rc = PtlMDUnlink(rqbd->rqbd_md_h);
-                        LASSERT (rc == PTL_OK || rc == PTL_INV_MD);
+                        LASSERT (rc == PTL_OK || rc == PTL_MD_INVALID);
                 }
 
                 /* Wait for the network to release any buffers it's

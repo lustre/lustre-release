@@ -110,7 +110,7 @@ int PtlNIInit(ptl_interface_t interface, ptl_pt_index_t ptl_size,
         int i;
 
         if (!ptl_init)
-                return PTL_NOINIT;
+                return PTL_NO_INIT;
 
         ptl_ni_init_mutex_enter ();
 
@@ -136,7 +136,7 @@ int PtlNIInit(ptl_interface_t interface, ptl_pt_index_t ptl_size,
                 if (nal->shutdown)
                         nal->shutdown (nal, ptl_num_interfaces);
                 ptl_ni_init_mutex_exit ();
-                return PTL_NOSPACE;
+                return PTL_NO_SPACE;
         }
 
         handle->nal_idx = (NI_HANDLE_MAGIC & ~NI_HANDLE_MASK) | ptl_num_interfaces;
@@ -157,14 +157,14 @@ int PtlNIFini(ptl_handle_ni_t ni)
         int rc;
 
         if (!ptl_init)
-                return PTL_NOINIT;
+                return PTL_NO_INIT;
 
         ptl_ni_init_mutex_enter ();
 
         nal = ptl_hndl2nal (&ni);
         if (nal == NULL) {
                 ptl_ni_init_mutex_exit ();
-                return PTL_INV_HANDLE;
+                return PTL_HANDLE_INVALID;
         }
 
         idx = ni.nal_idx & NI_HANDLE_MASK;

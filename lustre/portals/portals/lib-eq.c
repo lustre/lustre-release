@@ -52,7 +52,7 @@ int do_PtlEQAlloc_internal(nal_cb_t * nal, void *private, void *v_args,
 
         eq = lib_eq_alloc (nal);
         if (eq == NULL)
-                return (ret->rc = PTL_NOSPACE);
+                return (ret->rc = PTL_NO_SPACE);
 
         state_lock(nal, &flags);
 
@@ -104,9 +104,9 @@ int do_PtlEQFree_internal(nal_cb_t * nal, void *private, void *v_args,
 
         eq = ptl_handle2eq(&args->eventq_in, nal);
         if (eq == NULL) {
-                ret->rc = PTL_INV_EQ;
+                ret->rc = PTL_EQ_INVALID;
         } else if (eq->eq_refcount != 0) {
-                ret->rc = PTL_EQ_INUSE;
+                ret->rc = PTL_EQ_IN_USE;
         } else {
                 if (nal->cb_unmap != NULL) {
                         struct iovec iov = {

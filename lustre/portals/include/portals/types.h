@@ -1,6 +1,8 @@
 #ifndef _P30_TYPES_H_
 #define _P30_TYPES_H_
 
+#include "build_check.h"
+
 #ifdef __linux__
 # include <asm/types.h>
 # if defined(__powerpc__) && !defined(__KERNEL__)
@@ -25,6 +27,11 @@ typedef u_int64_t __u64;
 
 #include <portals/errno.h>
 
+/* This implementation uses the same type for API function return codes and
+ * the completion status in an event  */
+#define PTL_NI_OK  PTL_OK
+typedef ptl_err_t ptl_ni_fail_t;
+
 typedef __u64 ptl_nid_t;
 typedef __u32 ptl_pid_t;
 typedef __u32 ptl_pt_index_t;
@@ -32,6 +39,9 @@ typedef __u32 ptl_ac_index_t;
 typedef __u64 ptl_match_bits_t;
 typedef __u64 ptl_hdr_data_t;
 typedef __u32 ptl_size_t;
+
+#define PTL_TIME_FOREVER    (-1)
+#define PTL_EQ_HANDLER_NONE NULL
 
 typedef struct {
         unsigned long nal_idx;			/* which network interface */
@@ -43,11 +53,11 @@ typedef ptl_handle_any_t ptl_handle_eq_t;
 typedef ptl_handle_any_t ptl_handle_md_t;
 typedef ptl_handle_any_t ptl_handle_me_t;
 
-#define PTL_HANDLE_NONE \
+#define PTL_INVALID_HANDLE \
     ((const ptl_handle_any_t){.nal_idx = -1, .cookie = -1})
-#define PTL_EQ_NONE PTL_HANDLE_NONE
+#define PTL_EQ_NONE PTL_INVALID_HANDLE
 
-static inline int PtlHandleEqual (ptl_handle_any_t h1, ptl_handle_any_t h2)
+static inline int PtlHandleIsEqual (ptl_handle_any_t h1, ptl_handle_any_t h2)
 {
 	return (h1.nal_idx == h2.nal_idx && h1.cookie == h2.cookie);
 }
@@ -88,24 +98,38 @@ typedef struct {
 } ptl_md_t;
 
 /* Options for the MD structure */
-#define PTL_MD_OP_PUT           (1 << 0)
-#define PTL_MD_OP_GET           (1 << 1)
-#define PTL_MD_MANAGE_REMOTE    (1 << 2)
-#define PTL_MD_AUTO_UNLINK      (1 << 3)
-#define PTL_MD_TRUNCATE         (1 << 4)
-#define PTL_MD_ACK_DISABLE      (1 << 5)
-#define PTL_MD_IOV		(1 << 6)
-#define PTL_MD_MAX_SIZE		(1 << 7)
-#define PTL_MD_KIOV             (1 << 8)
+#define PTL_MD_OP_PUT               (1 << 0)
+#define PTL_MD_OP_GET               (1 << 1)
+#define PTL_MD_MANAGE_REMOTE        (1 << 2)
+/* unused                           (1 << 3) */
+#define PTL_MD_TRUNCATE             (1 << 4)
+#define PTL_MD_ACK_DISABLE          (1 << 5)
+#define PTL_MD_IOVEC		    (1 << 6)
+#define PTL_MD_MAX_SIZE		    (1 << 7)
+#define PTL_MD_KIOV                 (1 << 8)
+#define PTL_MD_EVENT_START_DISABLE  (1 << 9)
+#define PTL_MD_EVENT_END_DISABLE    (1 << 10)
+
+/* For compatibility with Cray Portals */
+#define PTL_MD_LUSTRE_COMPLETION_SEMANTICS  0
 
 #define PTL_MD_THRESH_INF       (-1)
 
 typedef enum {
-        PTL_EVENT_GET,
-        PTL_EVENT_PUT,
-        PTL_EVENT_REPLY,
+        PTL_EVENT_GET_START,
+        PTL_EVENT_GET_END,
+
+        PTL_EVENT_PUT_START,
+        PTL_EVENT_PUT_END,
+
+        PTL_EVENT_REPLY_START,
+        PTL_EVENT_REPLY_END,
+
         PTL_EVENT_ACK,
-        PTL_EVENT_SENT,
+
+        PTL_EVENT_SEND_START,
+	PTL_EVENT_SEND_END,
+
 	PTL_EVENT_UNLINK,
 } ptl_event_kind_t;
 
@@ -122,8 +146,6 @@ typedef unsigned PTL_SEQ_BASETYPE ptl_seq_t;
 #endif
 typedef struct {
         ptl_event_kind_t   type;
-	ptl_err_t          status;
-	int                unlinked;
         ptl_process_id_t   initiator;
         ptl_pt_index_t     portal;
         ptl_match_bits_t   match_bits;
@@ -132,7 +154,8 @@ typedef struct {
 	ptl_size_t         offset;
         ptl_md_t           mem_desc;
         ptl_hdr_data_t     hdr_data;
-        struct timeval     arrival_time;
+	int                unlinked;
+	ptl_ni_fail_t      ni_fail_type;
 
         volatile ptl_seq_t sequence;
 } ptl_event_t;

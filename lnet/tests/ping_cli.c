@@ -187,7 +187,7 @@ pingcli_start(struct portal_ioctl_data *args)
         client->md_in_head.length    = (args->ioc_size + STDSIZE)
                                                 * count;
         client->md_in_head.threshold = PTL_MD_THRESH_INF;
-        client->md_in_head.options   = PTL_MD_OP_PUT;
+        client->md_in_head.options   = PTL_MD_EVENT_START_DISABLE | PTL_MD_OP_PUT;
         client->md_in_head.user_ptr  = NULL;
         client->md_in_head.eventq    = client->eq;
         memset (client->inbuf, 0, (args->ioc_size + STDSIZE) * count);
@@ -203,7 +203,7 @@ pingcli_start(struct portal_ioctl_data *args)
         client->md_out_head.start     = client->outbuf;
         client->md_out_head.length    = STDSIZE + args->ioc_size;
         client->md_out_head.threshold = args->ioc_count;
-        client->md_out_head.options   = PTL_MD_OP_PUT;
+        client->md_out_head.options   = PTL_MD_EVENT_START_DISABLE | PTL_MD_OP_PUT;
         client->md_out_head.user_ptr  = NULL;
         client->md_out_head.eventq    = PTL_EQ_NONE;
 
@@ -213,7 +213,7 @@ pingcli_start(struct portal_ioctl_data *args)
 
         /* Bind the outgoing ping header */
         if ((rc=PtlMDBind (*nip, client->md_out_head,
-                                        &client->md_out_head_h))) {
+                           PTL_UNLINK, &client->md_out_head_h))) {
                 CERROR ("PtlMDBind error %d\n", rc);
                 pingcli_shutdown (1);
                 return NULL;

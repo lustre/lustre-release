@@ -57,7 +57,7 @@ static int ptl_send_buf (ptl_handle_md_t *mdh, void *base, int len,
         md.start     = base;
         md.length    = len;
         md.threshold = (ack == PTL_ACK_REQ) ? 2 : 1;
-        md.options   = 0;
+        md.options   = PTLRPC_MD_OPTIONS;
         md.user_ptr  = cbid;
         md.eventq    = conn->c_peer.peer_ni->pni_eq_h;
 
@@ -68,10 +68,11 @@ static int ptl_send_buf (ptl_handle_md_t *mdh, void *base, int len,
                 obd_fail_loc |= OBD_FAIL_ONCE | OBD_FAILED;
         }
 
-        rc = PtlMDBind (conn->c_peer.peer_ni->pni_ni_h, md, mdh);
+        rc = PtlMDBind (conn->c_peer.peer_ni->pni_ni_h, md, 
+                        PTL_UNLINK, mdh);
         if (rc != PTL_OK) {
                 CERROR ("PtlMDBind failed: %d\n", rc);
-                LASSERT (rc == PTL_NOSPACE);
+                LASSERT (rc == PTL_NO_SPACE);
                 RETURN (-ENOMEM);
         }
 
@@ -90,6 +91,20 @@ static int ptl_send_buf (ptl_handle_md_t *mdh, void *base, int len,
         }
 
         RETURN (0);
+}
+
+static void ptlrpc_fill_md(ptl_md_t *md, struct ptlrpc_bulk_desc *desc)
+{
+        LASSERT(ptl_md_max_iovs() == 0  || 
+                (desc->bd_iov_count <= ptl_md_max_iovs()));
+
+        if (ptl_requires_iov() || desc->bd_iov_count > 0) {
+                md->options |= PTLRPC_PTL_MD_IOV;
+                md->start = &desc->bd_iov[0];
+                md->niov = desc->bd_iov_count;
+        } else {
+                md->start = ptl_iov_base(&desc->bd_iov[0]);
+        }
 }
 
 int ptlrpc_start_bulk_transfer (struct ptlrpc_bulk_desc *desc)
@@ -112,16 +127,12 @@ int ptlrpc_start_bulk_transfer (struct ptlrpc_bulk_desc *desc)
         desc->bd_success = 0;
         peer = &desc->bd_export->exp_connection->c_peer;
 
-        md.start = &desc->bd_iov[0];
-        md.niov = desc->bd_page_count;
         md.length = desc->bd_nob;
         md.eventq = peer->peer_ni->pni_eq_h;
         md.threshold = 2; /* SENT and ACK/REPLY */
-#ifdef __KERNEL__
-        md.options = PTL_MD_KIOV;
-#else
-        md.options = PTL_MD_IOV;
-#endif
+        md.options = PTLRPC_MD_OPTIONS;
+
+        ptlrpc_fill_md(&md, desc);
         md.user_ptr = &desc->bd_cbid;
         LASSERT (desc->bd_cbid.cbid_fn == server_bulk_callback);
         LASSERT (desc->bd_cbid.cbid_arg == desc);
@@ -129,10 +140,11 @@ int ptlrpc_start_bulk_transfer (struct ptlrpc_bulk_desc *desc)
         /* NB total length may be 0 for a read past EOF, so we send a 0
          * length bulk, since the client expects a bulk event. */
 
-        rc = PtlMDBind(peer->peer_ni->pni_ni_h, md, &desc->bd_md_h);
+        rc = PtlMDBind(peer->peer_ni->pni_ni_h, md,
+                       PTL_UNLINK, &desc->bd_md_h);
         if (rc != PTL_OK) {
                 CERROR("PtlMDBind failed: %d\n", rc);
-                LASSERT (rc == PTL_NOSPACE);
+                LASSERT (rc == PTL_NO_SPACE);
                 RETURN(-ENOMEM);
         }
 
@@ -186,7 +198,7 @@ void ptlrpc_abort_bulk (struct ptlrpc_bulk_desc *desc)
          * happened. */
 
         rc = PtlMDUnlink (desc->bd_md_h);
-        if (rc == PTL_INV_MD) {
+        if (rc == PTL_MD_INVALID) {
                 LASSERT(!ptlrpc_bulk_active(desc));
                 return;
         }
@@ -224,7 +236,7 @@ int ptlrpc_register_bulk (struct ptlrpc_request *req)
         /* NB no locking required until desc is on the network */
         LASSERT (desc->bd_nob > 0);
         LASSERT (!desc->bd_network_rw);
-        LASSERT (desc->bd_page_count <= PTL_MD_MAX_PAGES);
+        LASSERT (desc->bd_iov_count <= PTLRPC_MAX_BRW_PAGES);
         LASSERT (desc->bd_req != NULL);
         LASSERT (desc->bd_type == BULK_PUT_SINK ||
                  desc->bd_type == BULK_GET_SOURCE);
@@ -233,18 +245,13 @@ int ptlrpc_register_bulk (struct ptlrpc_request *req)
 
         peer = &desc->bd_import->imp_connection->c_peer;
 
-        md.start = &desc->bd_iov[0];
-        md.niov = desc->bd_page_count;
         md.length = desc->bd_nob;
         md.eventq = peer->peer_ni->pni_eq_h;
         md.threshold = 1;                       /* PUT or GET */
-        md.options = (desc->bd_type == BULK_GET_SOURCE) ? 
-                     PTL_MD_OP_GET : PTL_MD_OP_PUT;
-#ifdef __KERNEL__
-        md.options |= PTL_MD_KIOV;
-#else
-        md.options |= PTL_MD_IOV;
-#endif
+        md.options = PTLRPC_MD_OPTIONS | 
+                     ((desc->bd_type == BULK_GET_SOURCE) ? 
+                      PTL_MD_OP_GET : PTL_MD_OP_PUT);
+        ptlrpc_fill_md(&md, desc);
         md.user_ptr = &desc->bd_cbid;
         LASSERT (desc->bd_cbid.cbid_fn == client_bulk_callback);
         LASSERT (desc->bd_cbid.cbid_arg == desc);
@@ -264,7 +271,7 @@ int ptlrpc_register_bulk (struct ptlrpc_request *req)
                          PTL_UNLINK, PTL_INS_AFTER, &me_h);
         if (rc != PTL_OK) {
                 CERROR("PtlMEAttach failed: %d\n", rc);
-                LASSERT (rc == PTL_NOSPACE);
+                LASSERT (rc == PTL_NO_SPACE);
                 RETURN (-ENOMEM);
         }
 
@@ -273,7 +280,7 @@ int ptlrpc_register_bulk (struct ptlrpc_request *req)
         rc = PtlMDAttach(me_h, md, PTL_UNLINK, &desc->bd_md_h);
         if (rc != PTL_OK) {
                 CERROR("PtlMDAttach failed: %d\n", rc);
-                LASSERT (rc == PTL_NOSPACE);
+                LASSERT (rc == PTL_NO_SPACE);
                 desc->bd_network_rw = 0;
                 rc2 = PtlMEUnlink (me_h);
                 LASSERT (rc2 == PTL_OK);
@@ -309,7 +316,7 @@ void ptlrpc_unregister_bulk (struct ptlrpc_request *req)
          * happened. */
 
         rc = PtlMDUnlink (desc->bd_md_h);
-        if (rc == PTL_INV_MD) {
+        if (rc == PTL_MD_INVALID) {
                 LASSERT(!ptlrpc_bulk_active(desc));
                 return;
         }
@@ -453,7 +460,7 @@ int ptl_send_rpc(struct ptlrpc_request *request)
                          PTL_INS_AFTER, &reply_me_h);
         if (rc != PTL_OK) {
                 CERROR("PtlMEAttach failed: %d\n", rc);
-                LASSERT (rc == PTL_NOSPACE);
+                LASSERT (rc == PTL_NO_SPACE);
                 GOTO(cleanup_repmsg, rc = -ENOMEM);
         }
 
@@ -471,7 +478,7 @@ int ptl_send_rpc(struct ptlrpc_request *request)
         reply_md.start     = request->rq_repmsg;
         reply_md.length    = request->rq_replen;
         reply_md.threshold = 1;
-        reply_md.options   = PTL_MD_OP_PUT;
+        reply_md.options   = PTLRPC_MD_OPTIONS | PTL_MD_OP_PUT;
         reply_md.user_ptr  = &request->rq_reply_cbid;
         reply_md.eventq    = connection->c_peer.peer_ni->pni_eq_h;
 
@@ -479,7 +486,7 @@ int ptl_send_rpc(struct ptlrpc_request *request)
                          &request->rq_reply_md_h);
         if (rc != PTL_OK) {
                 CERROR("PtlMDAttach failed: %d\n", rc);
-                LASSERT (rc == PTL_NOSPACE);
+                LASSERT (rc == PTL_NO_SPACE);
                 GOTO(cleanup_me, rc -ENOMEM);
         }
 
@@ -535,10 +542,8 @@ int ptlrpc_register_rqbd (struct ptlrpc_request_buffer_desc *rqbd)
         ptl_md_t                 md;
         ptl_handle_me_t          me_h;
 
-        CDEBUG(D_NET, "PtlMEAttach: portal %d on %s h %lx."LPX64"\n",
-               service->srv_req_portal, srv_ni->sni_ni->pni_name,
-               srv_ni->sni_ni->pni_ni_h.nal_idx,
-               srv_ni->sni_ni->pni_ni_h.cookie);
+        CDEBUG(D_NET, "PtlMEAttach: portal %d on %s\n",
+               service->srv_req_portal, srv_ni->sni_ni->pni_name);
 
         if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_PTLRPC_RQBD))
                 return (-ENOMEM);
@@ -553,20 +558,20 @@ int ptlrpc_register_rqbd (struct ptlrpc_request_buffer_desc *rqbd)
         LASSERT(rqbd->rqbd_refcount == 0);
         rqbd->rqbd_refcount = 1;
 
-        md.start      = rqbd->rqbd_buffer;
-        md.length     = service->srv_buf_size;
-        md.max_size   = service->srv_max_req_size;
-        md.threshold  = PTL_MD_THRESH_INF;
-        md.options    = PTL_MD_OP_PUT | PTL_MD_MAX_SIZE | PTL_MD_AUTO_UNLINK;
-        md.user_ptr   = &rqbd->rqbd_cbid;
-        md.eventq     = srv_ni->sni_ni->pni_eq_h;
+        md.start     = rqbd->rqbd_buffer;
+        md.length    = service->srv_buf_size;
+        md.max_size  = service->srv_max_req_size;
+        md.threshold = PTL_MD_THRESH_INF;
+        md.options   = PTLRPC_MD_OPTIONS | PTL_MD_OP_PUT | PTL_MD_MAX_SIZE;
+        md.user_ptr  = &rqbd->rqbd_cbid;
+        md.eventq    = srv_ni->sni_ni->pni_eq_h;
         
         rc = PtlMDAttach(me_h, md, PTL_UNLINK, &rqbd->rqbd_md_h);
         if (rc == PTL_OK)
                 return (0);
 
         CERROR("PtlMDAttach failed: %d; \n", rc);
-        LASSERT (rc == PTL_NOSPACE);
+        LASSERT (rc == PTL_NO_SPACE);
         rc = PtlMEUnlink (me_h);
         LASSERT (rc == PTL_OK);
         rqbd->rqbd_refcount = 0;

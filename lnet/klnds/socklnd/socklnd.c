@@ -95,13 +95,6 @@ ksocknal_api_shutdown(nal_t *nal, int ni)
 }
 
 void
-ksocknal_api_yield(nal_t *nal)
-{
-        our_cond_resched();
-        return;
-}
-
-void
 ksocknal_api_lock(nal_t *nal, unsigned long *flags)
 {
         ksock_nal_data_t *k;
@@ -121,6 +114,44 @@ ksocknal_api_unlock(nal_t *nal, unsigned long *flags)
         k = nal->nal_data;
         nal_cb = k->ksnd_nal_cb;
         nal_cb->cb_sti(nal_cb,flags);
+}
+
+int
+ksocknal_api_yield(nal_t *nal, unsigned long *flags, int milliseconds)
+{
+	/* NB called holding statelock */
+        wait_queue_t       wait;
+	unsigned long      now = jiffies;
+
+	CDEBUG (D_NET, "yield\n");
+
+	if (milliseconds == 0) {
+                our_cond_resched();
+		return 0;
+	}
+
+	init_waitqueue_entry(&wait, current);
+	set_current_state (TASK_INTERRUPTIBLE);
+	add_wait_queue (&ksocknal_data.ksnd_yield_waitq, &wait);
+
+	ksocknal_api_unlock(nal, flags);
+
+	if (milliseconds < 0)
+		schedule ();
+	else
+		schedule_timeout((milliseconds * HZ) / 1000);
+	
+	ksocknal_api_lock(nal, flags);
+
+	remove_wait_queue (&ksocknal_data.ksnd_yield_waitq, &wait);
+
+	if (milliseconds > 0) {
+		milliseconds -= ((jiffies - now) * 1000) / HZ;
+		if (milliseconds < 0)
+			milliseconds = 0;
+	}
+	
+	return (milliseconds);
 }
 
 nal_t *
@@ -745,6 +776,9 @@ ksocknal_create_conn (ksock_route_t *route, struct socket *sock,
 
         ksocknal_get_peer_addr (conn);
 
+        CWARN("New conn nid:"LPX64" ip:%08x/%d incarnation:"LPX64"\n",
+              nid, conn->ksnc_ipaddr, conn->ksnc_port, incarnation);
+
         irq = ksocknal_conn_irq (conn);
 
         write_lock_irqsave (&ksocknal_data.ksnd_global_lock, flags);
@@ -1071,6 +1105,11 @@ ksocknal_close_stale_conns_locked (ksock_peer_t *peer, __u64 incarnation)
 
                 if (conn->ksnc_incarnation == incarnation)
                         continue;
+
+                CWARN("Closing stale conn nid:"LPX64" ip:%08x/%d "
+                      "incarnation:"LPX64"("LPX64")\n",
+                      peer->ksnp_nid, conn->ksnc_ipaddr, conn->ksnc_port,
+                      conn->ksnc_incarnation, incarnation);
                 
                 count++;
                 ksocknal_close_conn_locked (conn, -ESTALE);
@@ -1568,7 +1607,6 @@ ksocknal_module_init (void)
 
         ksocknal_api.forward  = ksocknal_api_forward;
         ksocknal_api.shutdown = ksocknal_api_shutdown;
-        ksocknal_api.yield    = ksocknal_api_yield;
         ksocknal_api.validate = NULL;           /* our api validate is a NOOP */
         ksocknal_api.lock     = ksocknal_api_lock;
         ksocknal_api.unlock   = ksocknal_api_unlock;
@@ -1600,7 +1638,8 @@ ksocknal_module_init (void)
 
         ksocknal_data.ksnd_nal_cb = &ksocknal_lib;
         spin_lock_init (&ksocknal_data.ksnd_nal_cb_lock);
-
+        init_waitqueue_head(&ksocknal_data.ksnd_yield_waitq);
+        
         spin_lock_init(&ksocknal_data.ksnd_small_fmp.fmp_lock);
         INIT_LIST_HEAD(&ksocknal_data.ksnd_small_fmp.fmp_idle_fmbs);
         INIT_LIST_HEAD(&ksocknal_data.ksnd_small_fmp.fmp_blocked_conns);
@@ -1743,9 +1782,9 @@ ksocknal_module_init (void)
         ksocknal_data.ksnd_init = SOCKNAL_INIT_ALL;
 
         printk(KERN_INFO "Lustre: Routing socket NAL loaded "
-               "(Routing %s, initial mem %d)\n",
+               "(Routing %s, initial mem %d, incarnation "LPX64")\n",
                kpr_routing (&ksocknal_data.ksnd_router) ?
-               "enabled" : "disabled", pkmem);
+               "enabled" : "disabled", pkmem, ksocknal_data.ksnd_incarnation);
 
         return (0);
 }

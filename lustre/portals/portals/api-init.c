@@ -26,17 +26,6 @@
 #include <portals/api-support.h>
 
 int ptl_init;
-unsigned int portal_subsystem_debug = ~0 - (S_PORTALS | S_QSWNAL | S_SOCKNAL |
-                                            S_GMNAL | S_IBNAL);
-unsigned int portal_debug = (D_WARNING | D_DLMTRACE | D_ERROR | D_EMERG | D_HA |
-                             D_RPCTRACE | D_VFSTRACE | D_MALLOC);
-unsigned int portal_cerror = 1;
-unsigned int portal_printk;
-unsigned int portal_stack;
-
-#ifdef __KERNEL__
-atomic_t portal_kmemory = ATOMIC_INIT(0);
-#endif
 
 int __p30_initialized;
 int __p30_myr_initialized;
@@ -44,20 +33,20 @@ int __p30_ip_initialized;
 ptl_handle_ni_t __myr_ni_handle;
 ptl_handle_ni_t __ip_ni_handle;
 
-int __p30_myr_timeout = 10;
-int __p30_ip_timeout;
-
-int PtlInit(void)
+int PtlInit(int *max_interfaces)
 {
+        if (max_interfaces != NULL)
+                *max_interfaces = NAL_ENUM_END_MARKER;
 
         if (ptl_init)
                 return PTL_OK;
+
+        LASSERT(!strcmp(ptl_err_str[PTL_MAX_ERRNO], "PTL_MAX_ERRNO"));
 
         ptl_ni_init();
         ptl_me_init();
         ptl_eq_init();
         ptl_init = 1;
-        __p30_initialized = 1;
 
         return PTL_OK;
 }
@@ -71,4 +60,10 @@ void PtlFini(void)
         ptl_me_fini();
         ptl_ni_fini();
         ptl_init = 0;
+}
+
+
+void PtlSnprintHandle(char *str, int len, ptl_handle_any_t h)
+{
+        snprintf(str, len, "0x%lx."LPX64, h.nal_idx, h.cookie);
 }

@@ -92,9 +92,9 @@ static inline struct ptlrpc_bulk_desc *new_bulk(int npages, int type, int portal
 
         spin_lock_init(&desc->bd_lock);
         init_waitqueue_head(&desc->bd_waitq);
-        desc->bd_max_pages = npages;
-        desc->bd_page_count = 0;
-        desc->bd_md_h = PTL_HANDLE_NONE;
+        desc->bd_max_iov = npages;
+        desc->bd_iov_count = 0;
+        desc->bd_md_h = PTL_INVALID_HANDLE;
         desc->bd_portal = portal;
         desc->bd_type = type;
         
@@ -152,27 +152,15 @@ struct ptlrpc_bulk_desc *ptlrpc_prep_bulk_exp (struct ptlrpc_request *req,
 void ptlrpc_prep_bulk_page(struct ptlrpc_bulk_desc *desc,
                            struct page *page, int pageoffset, int len)
 {
-#ifdef __KERNEL__
-        ptl_kiov_t *kiov = &desc->bd_iov[desc->bd_page_count];
-#else
-        struct iovec *iov = &desc->bd_iov[desc->bd_page_count];
-#endif
-        LASSERT(desc->bd_page_count < desc->bd_max_pages);
+        LASSERT(desc->bd_iov_count < desc->bd_max_iov);
         LASSERT(page != NULL);
         LASSERT(pageoffset >= 0);
         LASSERT(len > 0);
         LASSERT(pageoffset + len <= PAGE_SIZE);
 
-#ifdef __KERNEL__
-        kiov->kiov_page   = page;
-        kiov->kiov_offset = pageoffset;
-        kiov->kiov_len    = len;
-#else
-        iov->iov_base = page->addr + pageoffset;
-        iov->iov_len  = len;
-#endif
-        desc->bd_page_count++;
         desc->bd_nob += len;
+
+        pers_bulk_add_page(desc, page, pageoffset, len);
 }
 
 void ptlrpc_free_bulk(struct ptlrpc_bulk_desc *desc)
@@ -180,7 +168,7 @@ void ptlrpc_free_bulk(struct ptlrpc_bulk_desc *desc)
         ENTRY;
 
         LASSERT(desc != NULL);
-        LASSERT(desc->bd_page_count != 0x5a5a5a5a); /* not freed already */
+        LASSERT(desc->bd_iov_count != 0x5a5a5a5a); /* not freed already */
         LASSERT(!desc->bd_network_rw);         /* network hands off or */
         LASSERT((desc->bd_export != NULL) ^ (desc->bd_import != NULL));
         if (desc->bd_export)
@@ -189,7 +177,7 @@ void ptlrpc_free_bulk(struct ptlrpc_bulk_desc *desc)
                 class_import_put(desc->bd_import);
 
         OBD_FREE(desc, offsetof(struct ptlrpc_bulk_desc, 
-                                bd_iov[desc->bd_max_pages]));
+                                bd_iov[desc->bd_max_iov]));
         EXIT;
 }
 
@@ -1112,7 +1100,7 @@ void ptlrpc_unregister_reply (struct ptlrpc_request *request)
                 return;
 
         rc = PtlMDUnlink (request->rq_reply_md_h);
-        if (rc == PTL_INV_MD) {
+        if (rc == PTL_MD_INVALID) {
                 LASSERT (!ptlrpc_client_receiving_reply(request));
                 return;
         }

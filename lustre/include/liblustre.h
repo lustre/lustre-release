@@ -263,6 +263,8 @@ typedef int spinlock_t;
 typedef __u64 kdev_t;
 
 #define SPIN_LOCK_UNLOCKED 0
+#define LASSERT_SPIN_LOCKED(lock) do {} while(0)
+
 static inline void spin_lock(spinlock_t *l) {return;}
 static inline void spin_unlock(spinlock_t *l) {return;}
 static inline void spin_lock_init(spinlock_t *l) {return;}

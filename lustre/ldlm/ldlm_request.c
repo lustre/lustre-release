@@ -586,6 +586,9 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
 int ldlm_cancel_lru(struct ldlm_namespace *ns)
 {
         struct list_head *tmp, *next;
+#ifndef __KERNEL__
+        LIST_HEAD(cblist);
+#endif
         int count, rc = 0;
         ENTRY;
 
@@ -612,12 +615,25 @@ int ldlm_cancel_lru(struct ldlm_namespace *ns)
 
                 LDLM_LOCK_GET(lock); /* dropped by bl thread */
                 ldlm_lock_remove_from_lru(lock);
+#if __KERNEL__
                 ldlm_bl_to_thread(ns, NULL, lock);
+#else
+                list_add(&lock->l_lru, &cblist);
+#endif
 
                 if (--count == 0)
                         break;
         }
         l_unlock(&ns->ns_lock);
+#ifndef __KERNEL__
+        while (!list_empty(&cblist)) {
+                struct ldlm_lock *lock;
+
+                lock = list_entry(cblist.next, struct ldlm_lock, l_lru);
+                list_del_init(&lock->l_lru);
+                liblustre_ldlm_handle_bl_callback(ns, NULL, lock);
+        }
+#endif
         RETURN(rc);
 }
 

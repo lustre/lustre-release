@@ -12,43 +12,35 @@ const char *ptl_err_str[] = {
         "PTL_OK",
         "PTL_SEGV",
 
-        "PTL_NOSPACE",
-        "PTL_INUSE",
+        "PTL_NO_SPACE",
+        "PTL_ME_IN_USE",
         "PTL_VAL_FAILED",
 
         "PTL_NAL_FAILED",
-        "PTL_NOINIT",
-        "PTL_INIT_DUP",
-        "PTL_INIT_INV",
-        "PTL_AC_INV_INDEX",
+        "PTL_NO_INIT",
+        "PTL_IFACE_DUP",
+        "PTL_IFACE_INVALID",
 
-        "PTL_INV_ASIZE",
-        "PTL_INV_HANDLE",
-        "PTL_INV_MD",
-        "PTL_INV_ME",
-        "PTL_INV_NI",
+        "PTL_HANDLE_INVALID",
+        "PTL_MD_INVALID",
+        "PTL_ME_INVALID",
 /* If you change these, you must update the number table in portals/errno.h */
-        "PTL_ILL_MD",
-        "PTL_INV_PROC",
-        "PTL_INV_PSIZE",
-        "PTL_INV_PTINDEX",
-        "PTL_INV_REG",
+        "PTL_PROCESS_INVALID",
+        "PTL_PT_INDEX_INVALID",
 
-        "PTL_INV_SR_INDX",
-        "PTL_ML_TOOLONG",
-        "PTL_ADDR_UNKNOWN",
-        "PTL_INV_EQ",
+        "PTL_SR_INDEX_INVALID",
+        "PTL_EQ_INVALID",
         "PTL_EQ_DROPPED",
 
         "PTL_EQ_EMPTY",
-        "PTL_NOUPDATE",
+        "PTL_MD_NO_UPDATE",
         "PTL_FAIL",
-        "PTL_NOT_IMPLEMENTED",
-        "PTL_NO_ACK",
 
         "PTL_IOV_TOO_MANY",
         "PTL_IOV_TOO_SMALL",
 
-        "PTL_EQ_INUSE",
+        "PTL_EQ_IN_USE",
+
+        "PTL_MAX_ERRNO"
 };
 /* If you change these, you must update the number table in portals/errno.h */

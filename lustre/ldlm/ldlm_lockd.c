@@ -965,6 +965,14 @@ int ldlm_bl_to_thread(struct ldlm_namespace *ns, struct ldlm_lock_desc *ld,
 
         RETURN(0);
 }
+#else
+/* XXX */
+void liblustre_ldlm_handle_bl_callback(struct ldlm_namespace *ns,
+                                       struct ldlm_lock_desc *ld,
+                                       struct ldlm_lock *lock)
+{
+        ldlm_handle_bl_callback(ns, ld, lock);
+}
 #endif
 
 static int ldlm_callback_handler(struct ptlrpc_request *req)

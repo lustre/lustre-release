@@ -59,7 +59,7 @@ int osc_wr_max_pages_per_rpc(struct file *file, const char *buffer,
         if (rc)
                 return rc;
 
-        if (val < 1 || val > PTL_MD_MAX_PAGES)
+        if (val < 1 || val > PTLRPC_MAX_BRW_PAGES)
                 return -ERANGE;
 
         spin_lock(&cli->cl_loi_list_lock);

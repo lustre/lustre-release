@@ -41,6 +41,32 @@
 #include <linux/lustre_import.h>
 #include <linux/lprocfs_status.h>
 
+/* MD flags we _always_ use */
+#define PTLRPC_MD_OPTIONS  (PTL_MD_EVENT_START_DISABLE | \
+                            PTL_MD_LUSTRE_COMPLETION_SEMANTICS)
+
+/* Define some large-ish defaults for MTU and MAX_IOV if portals ones
+ * aren't defined (i.e. no limits) or too large */
+#if (defined(PTL_MTU) && (PTL_MTU <= (1 << 20)))
+# define PTLRPC_MTU  PTL_MTU
+#else
+# define PTLRPC_MTU  (1 << 20)
+#endif
+#if (defined(PTL_MAX_IOV) && (PTL_MAX_IOV <= 512))
+# define PTLRPC_MAX_IOV PTL_MAX_IOV
+#else
+# define PTLRPC_MAX_IOV 512
+#endif
+
+/* Define consistent max bulk size/pages */
+#if (PTLRPC_MTU > PTLRPC_MAX_IOV * PAGE_SIZE)
+# define PTLRPC_MAX_BRW_PAGES   PTLRPC_MAX_IOV
+# define PTLRPC_MAX_BRW_SIZE   (PTLRPC_MAX_IOV * PAGE_SIZE)
+#else
+# define PTLRPC_MAX_BRW_PAGES  (PTLRPC_MTU / PAGE_SIZE)
+# define PTLRPC_MAX_BRW_SIZE    PTLRPC_MTU
+#endif
+
 /* Size over which to OBD_VMALLOC() rather than OBD_ALLOC() service request
  * buffers */
 #define SVC_BUF_VMALLOC_THRESHOLD (2*PAGE_SIZE)
@@ -377,8 +403,8 @@ struct ptlrpc_bulk_desc {
         __u32 bd_portal;
         struct ptlrpc_request *bd_req;          /* associated request */
         wait_queue_head_t      bd_waitq;        /* server side only WQ */
-        int                    bd_page_count;   /* # pages (== entries in bd_iov) */
-        int                    bd_max_pages;    /* allocated size of bd_iov */
+        int                    bd_iov_count;    /* # entries in bd_iov */
+        int                    bd_max_iov;      /* allocated size of bd_iov */
         int                    bd_nob;          /* # bytes covered */
         int                    bd_nob_transferred; /* # bytes GOT/PUT */
 
@@ -387,10 +413,10 @@ struct ptlrpc_bulk_desc {
         struct ptlrpc_cb_id    bd_cbid;         /* network callback info */
         ptl_handle_md_t        bd_md_h;         /* associated MD */
         
-#ifdef __KERNEL__
-        ptl_kiov_t bd_iov[PTL_MD_MAX_IOV];
+#if (!CRAY_PORTALS && defined(__KERNEL__))
+        ptl_kiov_t             bd_iov[0];
 #else
-        struct iovec bd_iov[PTL_MD_MAX_IOV];
+        struct iovec           bd_iov[0];
 #endif
 };
 

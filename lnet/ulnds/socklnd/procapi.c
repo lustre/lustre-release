@@ -127,11 +127,21 @@ static int procbridge_validate(nal_t *nal, void *base, size_t extent)
 }
 
 
-/* FIXME cfs temporary workaround! FIXME
- * global time out value
- */
-int __tcpnal_eqwait_timeout_value = 0;
-int __tcpnal_eqwait_timedout = 0;
+static void procbridge_lock(nal_t * n, unsigned long *flags)
+{
+    bridge b=(bridge)n->nal_data;
+    procbridge p=(procbridge)b->local;
+
+    pthread_mutex_lock(&p->mutex);
+}
+
+static void procbridge_unlock(nal_t * n, unsigned long *flags)
+{
+    bridge b=(bridge)n->nal_data;
+    procbridge p=(procbridge)b->local;
+
+    pthread_mutex_unlock(&p->mutex);
+}
 
 /* Function: yield
  * Arguments:  pid:
@@ -141,31 +151,43 @@ int __tcpnal_eqwait_timedout = 0;
  *   overload it to explicitly block until signalled by the
  *   lower half.
  */
-static void procbridge_yield(nal_t *n)
+static int procbridge_yield(nal_t *n, unsigned long *flags, int milliseconds)
 {
     bridge b=(bridge)n->nal_data;
     procbridge p=(procbridge)b->local;
 
-    pthread_mutex_lock(&p->mutex);
-    if (!__tcpnal_eqwait_timeout_value) {
+    if (milliseconds == 0)
+            return 0;
+            
+    if (milliseconds < 0) {
         pthread_cond_wait(&p->cond,&p->mutex);
     } else {
+        struct timeval then;
         struct timeval now;
         struct timespec timeout;
 
-        gettimeofday(&now, NULL);
-        timeout.tv_sec = now.tv_sec + __tcpnal_eqwait_timeout_value;
-        timeout.tv_nsec = now.tv_usec * 1000;
+        gettimeofday(&then, NULL);
+        timeout.tv_sec = then.tv_sec + milliseconds/1000;
+        timeout.tv_nsec = then.tv_usec * 1000 + milliseconds % 1000 * 1000000;
+        if (timeout.tv_nsec >= 1000000000) {
+                timeout.tv_sec++;
+                timeout.tv_nsec -= 1000000000;
+        }
 
-        __tcpnal_eqwait_timedout =
-                pthread_cond_timedwait(&p->cond, &p->mutex, &timeout);
+        pthread_cond_timedwait(&p->cond, &p->mutex, &timeout);
+
+        gettimeofday(&now, NULL);
+        milliseconds -= (now.tv_sec - then.tv_sec) * 1000 + 
+                        (now.tv_usec - then.tv_usec) / 1000;
+        
+        if (milliseconds < 0)
+                milliseconds = 0;
     }
-    pthread_mutex_unlock(&p->mutex);
+
+    return (milliseconds);
 }
 
 
-static void procbridge_lock(nal_t * nal, unsigned long *flags){}
-static void procbridge_unlock(nal_t * nal, unsigned long *flags){}
 /* api_nal
  *  the interface vector to allow the generic code to access
  *  this nal. this is seperate from the library side nal_cb.
@@ -233,7 +255,6 @@ nal_t *procbridge_interface(int num_interface,
     pthread_mutex_init(&p->mutex,0);
     pthread_cond_init(&p->cond, 0);
     p->nal_flags = 0;
-    pthread_mutex_init(&p->nal_cb_lock, 0);
 
     /* initialize notifier */
     if (socketpair(AF_UNIX, SOCK_STREAM, 0, p->notifier)) {

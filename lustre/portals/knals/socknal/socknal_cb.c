@@ -90,6 +90,8 @@ ksocknal_cli(nal_cb_t *nal, unsigned long *flags)
 {
         ksock_nal_data_t *data = nal->nal_data;
 
+        /* OK to ignore 'flags'; we're only ever serialise threads and
+         * never need to lock out interrupts */
         spin_lock(&data->ksnd_nal_cb_lock);
 }
 
@@ -99,7 +101,21 @@ ksocknal_sti(nal_cb_t *nal, unsigned long *flags)
         ksock_nal_data_t *data;
         data = nal->nal_data;
 
+        /* OK to ignore 'flags'; we're only ever serialise threads and
+         * never need to lock out interrupts */
         spin_unlock(&data->ksnd_nal_cb_lock);
+}
+
+void
+ksocknal_callback(nal_cb_t *nal, void *private, lib_eq_t *eq, ptl_event_t *ev)
+{
+        /* holding ksnd_nal_cb_lock */
+
+        if (eq->event_callback != NULL)
+                eq->event_callback(ev);
+        
+        if (waitqueue_active(&ksocknal_data.ksnd_yield_waitq))
+                wake_up_all(&ksocknal_data.ksnd_yield_waitq);
 }
 
 int
@@ -1058,7 +1074,7 @@ ksocknal_sendmsg(nal_cb_t     *nal,
         if (ltx == NULL) {
                 CERROR("Can't allocate tx desc type %d size %d %s\n",
                        type, desc_size, in_interrupt() ? "(intr)" : "");
-                return (PTL_NOSPACE);
+                return (PTL_NO_SPACE);
         }
 
         atomic_inc(&ksocknal_data.ksnd_nactive_ltxs);
@@ -2659,8 +2675,8 @@ ksocknal_reaper (void *arg)
                 }
                 ksocknal_data.ksnd_reaper_waketime = jiffies + timeout;
 
-                add_wait_queue (&ksocknal_data.ksnd_reaper_waitq, &wait);
                 set_current_state (TASK_INTERRUPTIBLE);
+                add_wait_queue (&ksocknal_data.ksnd_reaper_waitq, &wait);
 
                 if (!ksocknal_data.ksnd_shuttingdown &&
                     list_empty (&ksocknal_data.ksnd_deathrow_conns) &&
@@ -2692,5 +2708,6 @@ nal_cb_t ksocknal_lib = {
         cb_printf:       ksocknal_printf,
         cb_cli:          ksocknal_cli,
         cb_sti:          ksocknal_sti,
+        cb_callback:     ksocknal_callback,
         cb_dist:         ksocknal_dist
 };

@@ -1,6 +1,8 @@
 #ifndef _NAL_H_
 #define _NAL_H_
 
+#include "build_check.h"
+
 /*
  * p30/nal.h
  *
@@ -27,7 +29,7 @@ struct nal_t {
 
 	int (*validate) (nal_t * nal, void *base, size_t extent);
 
-	void (*yield) (nal_t * nal);
+	int (*yield) (nal_t * nal, unsigned long *flags, int milliseconds);
 
 	void (*lock) (nal_t * nal, unsigned long *flags);
 

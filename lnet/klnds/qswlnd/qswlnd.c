@@ -109,14 +109,43 @@ kqswnal_shutdown(nal_t *nal, int ni)
 	return (0);
 }
 
-static void
-kqswnal_yield( nal_t *nal )
+static int
+kqswnal_yield(nal_t *nal, unsigned long *flags, int milliseconds)
 {
+	/* NB called holding statelock */
+        wait_queue_t       wait;
+	unsigned long      now = jiffies;
+
 	CDEBUG (D_NET, "yield\n");
 
-	if (current->need_resched)
-		schedule();
-	return;
+	if (milliseconds == 0) {
+		if (current->need_resched)
+			schedule();
+		return 0;
+	}
+
+	init_waitqueue_entry(&wait, current);
+	set_current_state(TASK_INTERRUPTIBLE);
+	add_wait_queue(&kqswnal_data.kqn_yield_waitq, &wait);
+
+	kqswnal_unlock(nal, flags);
+
+	if (milliseconds < 0)
+		schedule ();
+	else
+		schedule_timeout((milliseconds * HZ) / 1000);
+	
+	kqswnal_lock(nal, flags);
+
+	remove_wait_queue(&kqswnal_data.kqn_yield_waitq, &wait);
+
+	if (milliseconds > 0) {
+		milliseconds -= ((jiffies - now) * 1000) / HZ;
+		if (milliseconds < 0)
+			milliseconds = 0;
+	}
+	
+	return (milliseconds);
 }
 
 static nal_t *
@@ -491,6 +520,7 @@ kqswnal_initialise (void)
 	init_waitqueue_head (&kqswnal_data.kqn_sched_waitq);
 
 	spin_lock_init (&kqswnal_data.kqn_statelock);
+	init_waitqueue_head (&kqswnal_data.kqn_yield_waitq);
 
 	/* pointers/lists/locks initialised */
 	kqswnal_data.kqn_init = KQN_INIT_DATA;

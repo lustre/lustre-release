@@ -61,7 +61,8 @@ void class_exit_uuidlist(void)
         class_del_uuid(NULL);
 }
 
-int lustre_uuid_to_peer(char *uuid, struct lustre_peer *peer)
+int lustre_uuid_to_peer(char *uuid, 
+                        ptl_handle_ni_t *peer_ni, ptl_nid_t *peer_nid)
 {
         struct list_head *tmp;
 
@@ -72,8 +73,8 @@ int lustre_uuid_to_peer(char *uuid, struct lustre_peer *peer)
                         list_entry(tmp, struct uuid_nid_data, head);
 
                 if (strcmp(data->uuid, uuid) == 0) {
-                        peer->peer_nid = data->nid;
-                        peer->peer_ni = data->ni;
+                        *peer_nid = data->nid;
+                        *peer_ni = data->ni;
 
                         spin_unlock (&g_uuid_lock);
                         return 0;

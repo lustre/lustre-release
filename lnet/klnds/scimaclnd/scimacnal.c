@@ -108,9 +108,14 @@ static int kscimacnal_shutdown(nal_t *nal, int ni)
 }
 
 
-static void kscimacnal_yield( nal_t *nal )
+static void kscimacnal_yield( nal_t *nal, unsigned long *flags, int milliseconds )
 {
         LASSERT (nal == &kscimacnal_api);
+
+        if (milliseconds != 0) {
+                CERROR ("Blocking yield not implemented yet\n");
+                LBUG();
+        }
 
         if (current->need_resched) 
                 schedule();

@@ -50,6 +50,29 @@
 
 #include <linux/kp30.h>
 #include <linux/portals_compat25.h>
+#include <linux/libcfs.h>
+
+unsigned int portal_subsystem_debug = ~0 - (S_PORTALS | S_QSWNAL | S_SOCKNAL |
+                                            S_GMNAL | S_IBNAL);
+EXPORT_SYMBOL(portal_subsystem_debug);
+
+unsigned int portal_debug = (D_WARNING | D_DLMTRACE | D_ERROR | D_EMERG | D_HA |
+                             D_RPCTRACE | D_VFSTRACE | D_MALLOC);
+EXPORT_SYMBOL(portal_debug);
+
+unsigned int portal_cerror = 1;
+EXPORT_SYMBOL(portal_cerror);
+
+unsigned int portal_printk;
+EXPORT_SYMBOL(portal_printk);
+
+unsigned int portal_stack;
+EXPORT_SYMBOL(portal_stack);
+
+#ifdef __KERNEL__
+atomic_t portal_kmemory = ATOMIC_INIT(0);
+EXPORT_SYMBOL(portal_kmemory);
+#endif
 
 #define DEBUG_OVERFLOW 1024
 static char *debug_buf = NULL;
@@ -926,6 +949,8 @@ void portals_run_lbug_upcall(char *file, const char *fn, const int line)
 char *portals_nid2str(int nal, ptl_nid_t nid, char *str)
 {
         switch(nal){
+/* XXX this should be a nal method of some sort */
+#ifndef CRAY_PORTALS 
         case TCPNAL:
                 /* userspace NAL */
         case SOCKNAL:
@@ -938,8 +963,9 @@ char *portals_nid2str(int nal, ptl_nid_t nid, char *str)
         case SCIMACNAL:
                 sprintf(str, "%u:%u", (__u32)(nid >> 32), (__u32)nid);
                 break;
+#endif
         default:
-                return NULL;
+                snprintf(str, PTL_NALFMT_SIZE-1, "(?%llx)", (long long)nid);
         }
         return str;
 }

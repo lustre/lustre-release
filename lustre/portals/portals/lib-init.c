@@ -63,7 +63,7 @@ lib_freelist_init (nal_cb_t *nal, lib_freelist_t *fl, int n, int size)
 
         space = nal->cb_malloc (nal, n * size);
         if (space == NULL)
-                return (PTL_NOSPACE);
+                return (PTL_NO_SPACE);
 
         INIT_LIST_HEAD (&fl->fl_list);
         fl->fl_objs = space;
@@ -179,7 +179,7 @@ lib_setup_handle_hash (nal_cb_t *nal)
                 (struct list_head *)nal->cb_malloc (nal, ni->ni_lh_hash_size
                                                     * sizeof (struct list_head));
         if (ni->ni_lh_hash_table == NULL)
-                return (PTL_NOSPACE);
+                return (PTL_NO_SPACE);
         
         for (i = 0; i < ni->ni_lh_hash_size; i++)
                 INIT_LIST_HEAD (&ni->ni_lh_hash_table[i]);
@@ -295,7 +295,7 @@ lib_init(nal_cb_t * nal, ptl_nid_t nid, ptl_pid_t pid, int gsize,
 
         ni->tbl.tbl = nal->cb_malloc(nal, sizeof(struct list_head) * ptl_size);
         if (ni->tbl.tbl == NULL) {
-                rc = PTL_NOSPACE;
+                rc = PTL_NO_SPACE;
                 goto out;
         }
 
