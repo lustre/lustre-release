@@ -98,24 +98,29 @@ int ll_lock(struct inode *dir, struct dentry *dentry,
             struct lookup_intent *it, struct lustre_handle *lockh)
 {
         struct ll_sb_info *sbi = ll_i2sbi(dir);
+        char *tgt = NULL;
+        int tgtlen = 0;
         int err, lock_mode;
 
-        if ((it->it_op & (IT_CREAT | IT_MKDIR | IT_SYMLINK | IT_SETATTR |
-                          IT_MKNOD)))
+        if ((it->it_op & (IT_CREAT | IT_MKDIR | IT_SETATTR | IT_MKNOD)))
                 lock_mode = LCK_PW;
         else if (it->it_op & (IT_READDIR | IT_GETATTR | IT_OPEN | IT_UNLINK |
                               IT_RMDIR | IT_RENAME | IT_RENAME2 | IT_READLINK))
                 lock_mode = LCK_PR;
-        else if (it->it_op & IT_LOOKUP)
+        else if (it->it_op & IT_SYMLINK) {
+                lock_mode = LCK_PW;
+                tgt = it->it_data;
+                tgtlen = strlen(tgt);
+                it->it_data = NULL;
+        } else if (it->it_op & IT_LOOKUP) {
                 lock_mode = LCK_CR;
-        else {
+        } else {
                 LBUG();
                 RETURN(-EINVAL);
         }
 
-#warning FIXME: add symlink tgt to intent and as a parameter here
         err = mdc_enqueue(&sbi->ll_mdc_conn, LDLM_MDSINTENT, it, lock_mode, dir,
-                          dentry, lockh, 0, NULL, 0, dir, sizeof(*dir));
+                          dentry, lockh, 0, tgt, tgtlen, dir, sizeof(*dir));
 
         RETURN(err);
 }
@@ -474,20 +479,26 @@ static int ll_symlink(struct inode *dir, struct dentry *dentry,
         unsigned l = strlen(symname);
         struct inode *inode;
         struct ll_inode_info *oinfo;
+        int err;
 
-        inode = ll_create_node(dir, dentry->d_name.name, dentry->d_name.len,
-                               symname, l, S_IFLNK | S_IRWXUGO, 0,
-                               dentry->d_it, NULL);
-        if (IS_ERR(inode))
-                RETURN(PTR_ERR(inode));
+        if (dentry->d_it && dentry->d_it->it_disposition) {
+                err = dentry->d_it->it_status;
+                inode = dentry->d_inode;
+        } else {
+                inode = ll_create_node(dir, dentry->d_name.name,
+                                       dentry->d_name.len, symname, l,
+                                       S_IFLNK | S_IRWXUGO, 0, dentry->d_it,
+                                       NULL);
+                if (IS_ERR(inode))
+                        RETURN(PTR_ERR(inode));
+
+                err = ext2_add_nondir(dentry, inode);
+        }
+
+        if (err)
+                GOTO(out, err);
 
         oinfo = ll_i2info(inode);
-
-        if (dentry->d_it->it_disposition) {
-#warning FIXME: still needs intent support
-                d_instantiate(dentry, inode);
-                return 0;
-        }
 
         OBD_ALLOC(oinfo->lli_symlink_name, l + 1);
         if (!oinfo->lli_symlink_name)
@@ -496,7 +507,8 @@ static int ll_symlink(struct inode *dir, struct dentry *dentry,
         memcpy(oinfo->lli_symlink_name, symname, l + 1);
         inode->i_size = l;
 
-        return ext2_add_nondir(dentry, inode);
+out:
+        return err;
 }
 
 static int ll_link(struct dentry *old_dentry, struct inode * dir,
