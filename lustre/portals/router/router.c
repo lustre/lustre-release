@@ -23,8 +23,8 @@
 
 #include "router.h"
 
-struct list_head kpr_routes;
-struct list_head kpr_nals;
+LIST_HEAD(kpr_routes);
+LIST_HEAD(kpr_nals);
 
 unsigned long long kpr_fwd_bytes;
 unsigned long      kpr_fwd_packets;
@@ -35,7 +35,7 @@ atomic_t           kpr_queue_depth;
  *
  * Once in a blue moon we register/deregister NALs and add/remove routing
  * entries (thread context only)... */
-rwlock_t         kpr_rwlock;
+rwlock_t         kpr_rwlock = RW_LOCK_UNLOCKED;
 
 kpr_router_interface_t kpr_router_interface = {
 	kprri_register:		kpr_register_nal,
@@ -426,10 +426,6 @@ kpr_initialise (void)
 {
         CDEBUG(D_MALLOC, "kpr_initialise: kmem %d\n",
                atomic_read(&portal_kmemory));
-
-	rwlock_init(&kpr_rwlock);
-	INIT_LIST_HEAD(&kpr_routes);
-	INIT_LIST_HEAD(&kpr_nals);
 
         kpr_proc_init();
 
