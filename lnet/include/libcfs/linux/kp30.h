@@ -110,30 +110,30 @@ do {                                                                    \
 #endif /* __arch_um__ */
 
 /* ------------------------------------------------------------------- */
-                                                                                                                                                                            
+
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-                                                                                                                                                                            
+
 #define PORTAL_SYMBOL_REGISTER(x) inter_module_register(#x, THIS_MODULE, &x)
 #define PORTAL_SYMBOL_UNREGISTER(x) inter_module_unregister(#x)
-                                                                                                                                                                            
+
 #define PORTAL_SYMBOL_GET(x) ((typeof(&x))inter_module_get(#x))
 #define PORTAL_SYMBOL_PUT(x) inter_module_put(#x)
-                                                                                                                                                                            
+
 #define PORTAL_MODULE_USE       MOD_INC_USE_COUNT
 #define PORTAL_MODULE_UNUSE     MOD_DEC_USE_COUNT
 #else
-                                                                                                                                                                            
+
 #define PORTAL_SYMBOL_REGISTER(x)
 #define PORTAL_SYMBOL_UNREGISTER(x)
-                                                                                                                                                                            
+
 #define PORTAL_SYMBOL_GET(x) symbol_get(x)
 #define PORTAL_SYMBOL_PUT(x) symbol_put(x)
-                                                                                                                                                                            
+
 #define PORTAL_MODULE_USE       try_module_get(THIS_MODULE)
 #define PORTAL_MODULE_UNUSE     module_put(THIS_MODULE)
-                                                                                                                                                                            
+
 #endif
-                                                                                                                                                                            
+
 /******************************************************************************/
 
 #if (__GNUC__)

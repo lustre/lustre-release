@@ -86,10 +86,10 @@
 #endif
 
 #ifndef HAVE_CPU_ONLINE
-#define cpu_online(cpu) (test_bit(cpu_online_map, &(cpu)))
+#define cpu_online(cpu) test_bit(cpu, &(cpu_online_map))
 #endif
 #ifndef HAVE_CPUMASK_T
-#define cpu_set(cpu, map) (set_bit(cpu, &(map)))
+#define cpu_set(cpu, map) set_bit(cpu, &(map))
 typedef unsigned long cpumask_t;
 #endif
 

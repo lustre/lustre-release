@@ -254,7 +254,7 @@ static void lcw_dispatch_stop(void)
         EXIT;
 }
 
-struct lc_watchdog *lc_watchdog_add(int time,
+struct lc_watchdog *lc_watchdog_add(int timeout_ms,
                                     void (*callback)(struct lc_watchdog *,
                                                      struct task_struct *,
                                                      void *),
@@ -271,7 +271,7 @@ struct lc_watchdog *lc_watchdog_add(int time,
 
         lcw->lcw_task = cfs_current();
         lcw->lcw_pid = cfs_curproc_pid();
-        lcw->lcw_time = (time * HZ) / 1000;
+        lcw->lcw_time = (timeout_ms * HZ) / 1000;
         lcw->lcw_callback = callback ? callback : lc_watchdog_dumplog;
         lcw->lcw_data = data;
         lcw->lcw_state = LC_WATCHDOG_DISABLED;
