@@ -226,6 +226,8 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_lock *parent,
         INIT_LIST_HEAD(&lock->l_children);
         INIT_LIST_HEAD(&lock->l_res_link);
         INIT_LIST_HEAD(&lock->l_inode_link);
+        INIT_LIST_HEAD(&lock->l_export_chain);
+        INIT_LIST_HEAD(&lock->l_pending_chain);
         init_waitqueue_head(&lock->l_waitq);
 
         if (parent != NULL) {

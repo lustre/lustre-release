@@ -119,6 +119,9 @@ struct ldlm_lock {
         struct list_head      l_childof;
         struct list_head      l_res_link; /*position in one of three res lists*/
         struct list_head      l_inode_link; /* position in inode info list */
+        struct list_head      l_export_chain; /* per-export chain of locks */
+        struct list_head      l_pending_chain; /* locks with callbacks pending */
+        unsigned long         l_callback_timeout;
 
         ldlm_mode_t           l_req_mode;
         ldlm_mode_t           l_granted_mode;

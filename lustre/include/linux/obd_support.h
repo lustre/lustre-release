@@ -93,6 +93,8 @@ extern char obd_recovery_upcall[128];
 #define OBD_FAIL_OSC                     0x400
 #define OBD_FAIL_OSC_BRW_READ_BULK       0x401
 #define OBD_FAIL_OSC_BRW_WRITE_BULK      0x402
+#define OBD_FAIL_OSC_LOCK_BL_AST         0x403
+#define OBD_FAIL_OSC_LOCK_BL_REPLY       0x404
 
 /* preparation for a more advanced failure testbed (not functional yet) */
 #define OBD_FAIL_MASK_SYS    0x0000FF00
