@@ -1,3 +1,5 @@
+# FIXME: we need to make it clear that obdclass.o depends on
+# lustre_build_version, or 'make -j2' breaks!
 DEFS=
 MODULE = obdclass
 modulefs_DATA = lustre_build_version obdclass.o
