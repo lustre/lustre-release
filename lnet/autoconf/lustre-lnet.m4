@@ -581,10 +581,8 @@ portals/autoconf/Makefile
 portals/doc/Makefile
 portals/include/Makefile
 portals/include/libcfs/Makefile
-portals/include/libcfs/darwin/Makefile
 portals/include/libcfs/linux/Makefile
 portals/include/portals/Makefile
-portals/include/portals/darwin/Makefile
 portals/include/portals/linux/Makefile
 portals/knals/Makefile
 portals/knals/autoMakefile
@@ -606,7 +604,6 @@ portals/knals/socknal/Makefile
 portals/knals/socknal/autoMakefile
 portals/libcfs/Makefile
 portals/libcfs/autoMakefile
-portals/libcfs/darwin/Makefile
 portals/libcfs/linux/Makefile
 portals/portals/Makefile
 portals/portals/autoMakefile
@@ -617,4 +614,13 @@ portals/tests/autoMakefile
 portals/unals/Makefile
 portals/utils/Makefile
 ])
+case $lb_target_os in
+	darwin)
+		AC_CONFIG_FILES([
+portals/include/libcfs/darwin/Makefile
+portals/include/portals/darwin/Makefile
+portals/libcfs/darwin/Makefile
+])
+		;;
+esac
 ])

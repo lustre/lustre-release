@@ -1,6 +1,10 @@
 portalsdir=$(includedir)/portals
 
-SUBDIRS := darwin linux
+SUBDIRS := linux
+if DARWIN
+SUBDIRS += darwin
+endif
+DIST_SUBDIRS := $(SUBDIRS)
 
 EXTRA_DIST = api.h api-support.h build_check.h errno.h		\
 	internal.h kpr.h lib-p30.h lib-types.h			\

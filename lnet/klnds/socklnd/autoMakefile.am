@@ -1,37 +1,30 @@
-# Copyright (C) 2001  Cluster File Systems, Inc.
-#
-# This code is issued under the GNU General Public License.
-# See the file COPYING in this distribution
-
-if MODULES
+if LINUX
 if !CRAY_PORTALS
 
-if LINUX
-modulenet_DATA = ksocknal$(KMODEXT)
-endif
+  modulenet_DATA := ksocknal$(KMODEXT)
+
+endif # !CRAY_PORTALS
+endif # LINUX
+
+DIST_SOURCES := $(ksocknal-objs:%.o=%.c) socknal_lib-linux.h socknal.h
 
 if DARWIN
-macos_PROGRAMS := ksocknal
 
-ksocknal_SOURCES := socknal.c socknal_cb.c socknal_lib-darwin.c
+  macos_PROGRAMS := ksocknal
 
-ksocknal_CFLAGS := $(EXTRA_KCFLAGS)
-ksocknal_LDFLAGS := $(EXTRA_KLDFLAGS)
-ksocknal_LDADD := $(EXTRA_KLIBS)
+  nodist_ksocknal_SOURCES := socknal.c socknal_cb.c socknal_lib-darwin.c
+  DIST_SOURCES += socknal_lib-darwin.c socknal_lib-darwin.h
 
-plist_DATA := Info.plist
+  ksocknal_CFLAGS := $(EXTRA_KCFLAGS)
+  ksocknal_LDFLAGS := $(EXTRA_KLDFLAGS)
+  ksocknal_LDADD := $(EXTRA_KLIBS)
 
-install_data_hook := fix-kext-ownership
+  plist_DATA := Info.plist
+  install_data_hook := fix-kext-ownership
 
-endif
+endif # DARWIN
 
-endif
-endif
-
+EXTRA_DIST := $(plist_DATA)
 install-data-hook: $(install_data_hook)
 
-EXTRA_DIST := Info.plist
-
 MOSTLYCLEANFILES = *.o *.ko *.mod.c socknal_lib.c
-DIST_SOURCES = $(ksocknal-objs:%.o=%.c) socknal_lib-darwin.c	\
-	socknal_lib-darwin.h socknal_lib-linux.h socknal.h
