@@ -24,7 +24,7 @@ extern struct address_space_operations ll_aops;
 extern struct address_space_operations ll_dir_aops;
 struct super_operations ll_super_operations;
 
-extern int ll_recover(struct ptlrpc_client *);
+extern int ll_recover(struct recovd_data *, int);
 extern int ll_commitcbd_setup(struct ll_sb_info *);
 extern int ll_commitcbd_cleanup(struct ll_sb_info *);
 
@@ -131,7 +131,11 @@ static struct super_block * ll_read_super(struct super_block *sb,
                 CERROR("cannot connect to %s: rc = %d\n", mdc, err);
                 GOTO(out_free, sb = NULL);
         }
-        sbi2mdc(sbi)->cl_conn->c_level = LUSTRE_CONN_FULL;
+        recovd_conn_manage(obd->u.cli.cl_import.imp_connection,
+                           ptlrpc_recovd, ll_recover);
+        
+#warning Peter: is this the right place to raise the connection level?
+        sbi2mdc(sbi)->cl_import.imp_connection->c_level = LUSTRE_CONN_FULL;
 
         obd = class_uuid2obd(osc);
         if (!obd) {
@@ -143,6 +147,8 @@ static struct super_block * ll_read_super(struct super_block *sb,
                 CERROR("cannot connect to %s: rc = %d\n", osc, err);
                 GOTO(out_mdc, sb = NULL);
         }
+        recovd_conn_manage(obd->u.cli.cl_import.imp_connection,
+                           ptlrpc_recovd, ll_recover);
 
         /* XXX: need to store the last_* values somewhere */
         err = mdc_getstatus(&sbi->ll_mdc_conn, &rootfid, &last_committed,

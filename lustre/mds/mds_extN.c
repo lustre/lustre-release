@@ -27,10 +27,13 @@
 
 #include <linux/fs.h>
 #include <linux/jbd.h>
+#include <linux/slab.h>
 #include <linux/extN_fs.h>
 #include <linux/extN_jbd.h>
 #include <linux/extN_xattr.h>
+#include <linux/kp30.h>
 #include <linux/lustre_mds.h>
+#include <linux/obd.h>
 #include <linux/module.h>
 #include <linux/obd_lov.h>
 

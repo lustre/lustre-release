@@ -25,6 +25,7 @@
 #define DEBUG_SUBSYSTEM S_LLITE
 
 #include <linux/lustre_net.h>
+#include <linux/obd.h>
 #include <linux/obd_support.h>
 
 void lov_packdesc(struct lov_desc *ld)

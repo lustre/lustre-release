@@ -12,6 +12,7 @@
 #define DEBUG_SUBSYSTEM S_LDLM
 
 #include <linux/lustre_dlm.h>
+#include <linux/obd.h>
 
 int ldlm_completion_ast(struct ldlm_lock *lock, int flags)
 {
@@ -130,7 +131,8 @@ int ldlm_cli_enqueue(struct lustre_handle *connh,
         ldlm_lock2handle(lock, lockh);
 
         if (req == NULL) {
-                req = ptlrpc_prep_req2(connh, LDLM_ENQUEUE, 1, &size, NULL);
+                req = ptlrpc_prep_req(class_conn2cliimp(connh), LDLM_ENQUEUE, 1,
+                                      &size, NULL);
                 if (!req)
                         GOTO(out, rc = -ENOMEM);
                 req_passed_in = 0;
@@ -158,7 +160,6 @@ int ldlm_cli_enqueue(struct lustre_handle *connh,
         }
         lock->l_connh = connh;
         lock->l_export = NULL;
-        lock->l_client = client_conn2cli(connh)->cl_client;
 
         rc = ptlrpc_queue_wait(req);
         /* FIXME: status check here? */
@@ -303,7 +304,8 @@ int ldlm_cli_convert(struct lustre_handle *lockh, int new_mode, int *flags)
 
         LDLM_DEBUG(lock, "client-side convert");
 
-        req = ptlrpc_prep_req2(connh, LDLM_CONVERT, 1, &size, NULL);
+        req = ptlrpc_prep_req(class_conn2cliimp(connh), LDLM_CONVERT, 1, &size,
+                              NULL);
         if (!req)
                 GOTO(out, rc = -ENOMEM);
 
@@ -363,8 +365,8 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
                 lock->l_flags |= LDLM_FL_CBPENDING;
                 l_unlock(&lock->l_resource->lr_namespace->ns_lock);
 
-                req = ptlrpc_prep_req2(lock->l_connh, LDLM_CANCEL, 1, &size,
-                                       NULL);
+                req = ptlrpc_prep_req(class_conn2cliimp(lock->l_connh), 
+                                      LDLM_CANCEL, 1, &size, NULL);
                 if (!req)
                         GOTO(out, rc = -ENOMEM);
 

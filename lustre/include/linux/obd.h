@@ -16,6 +16,8 @@
 
 #include <linux/lustre_lib.h>
 #include <linux/lustre_idl.h>
+#include <linux/lustre_mds.h>
+#include <linux/lustre_export.h>
 
 struct obd_type {
         struct list_head typ_chain;
@@ -99,14 +101,11 @@ struct filter_obd {
 struct mds_server_data;
 
 struct client_obd {
-        struct ptlrpc_client *cl_client;
-        struct ptlrpc_client *cl_ldlm_client;
-        struct ptlrpc_connection *cl_conn;
-        struct lustre_handle cl_exporth;
-        struct semaphore cl_sem;
-        int cl_conn_count;
-        __u8 cl_target_uuid[37];
-        int cl_max_mdsize;
+        struct obd_import    cl_import;
+        struct semaphore     cl_sem;
+        int                  cl_conn_count;
+        __u8                 cl_target_uuid[37]; /* XXX -> lustre_name */
+        int                  cl_max_mdsize;
 };
 
 struct mds_obd {
@@ -150,17 +149,17 @@ struct echo_obd {
 };
 
 struct recovd_obd {
-        time_t                recovd_waketime;
-        time_t                recovd_timeout;
+        __u32                 recovd_phase;
+        __u32                 recovd_next_phase;
         __u32                 recovd_flags; 
-        __u32                 recovd_wakeup_flag; 
+        struct recovd_data   *recovd_current_rd;
         spinlock_t            recovd_lock;
         struct list_head      recovd_managed_items; /* items managed  */
         struct list_head      recovd_troubled_items; /* items in trouble */
         wait_queue_head_t     recovd_recovery_waitq;
         wait_queue_head_t     recovd_ctl_waitq;
         wait_queue_head_t     recovd_waitq;
-        struct task_struct    *recovd_thread;
+        struct task_struct   *recovd_thread;
 };
 
 struct trace_obd {
@@ -217,9 +216,10 @@ struct obd_device {
         int obd_minor;
         int obd_flags;
         struct proc_dir_entry *obd_proc_entry;
-        struct list_head obd_exports;
-        struct list_head obd_imports;
+        struct list_head       obd_exports;
+        struct list_head       obd_imports;
         struct ldlm_namespace *obd_namespace;
+        struct ptlrpc_client   obd_ldlm_client; /* XXX OST/MDS only */
         /* a spinlock is OK for what we do now, may need a semaphore later */
         spinlock_t obd_dev_lock;
         union {
@@ -315,5 +315,76 @@ struct obd_ops {
 #define LPD64 "%Ld"
 #define LPX64 "%Lx"
 #endif
+
+static inline void *mds_fs_start(struct mds_obd *mds, struct inode *inode,
+                                 int op)
+{
+        return mds->mds_fsops->fs_start(inode, op);
+}
+
+static inline int mds_fs_commit(struct mds_obd *mds, struct inode *inode,
+                                void *handle)
+{
+        return mds->mds_fsops->fs_commit(inode, handle);
+}
+
+static inline int mds_fs_setattr(struct mds_obd *mds, struct dentry *dentry,
+                                 void *handle, struct iattr *iattr)
+{
+        int rc;
+        /*
+         * NOTE: we probably don't need to take i_sem here when changing
+         *       ATTR_SIZE because the MDS never needs to truncate a file.
+         *       The ext2/ext3 code never truncates a directory, and files
+         *       stored on the MDS are entirely sparse (no data blocks).
+         *       If we do need to get it, we can do it here.
+         */
+        lock_kernel();
+        rc = mds->mds_fsops->fs_setattr(dentry, handle, iattr);
+        unlock_kernel();
+
+        return rc;
+}
+
+static inline int mds_fs_set_md(struct mds_obd *mds, struct inode *inode,
+                                  void *handle, struct lov_mds_md *md)
+{
+        return mds->mds_fsops->fs_set_md(inode, handle, md);
+}
+
+static inline int mds_fs_get_md(struct mds_obd *mds, struct inode *inode,
+                                  struct lov_mds_md *md)
+{
+        return mds->mds_fsops->fs_get_md(inode, md);
+}
+
+static inline ssize_t mds_fs_readpage(struct mds_obd *mds, struct file *file,
+                                      char *buf, size_t count, loff_t *offset)
+{
+        return mds->mds_fsops->fs_readpage(file, buf, count, offset);
+}
+
+/* Set up callback to update mds->mds_last_committed with the current
+ * value of mds->mds_last_recieved when this transaction is on disk.
+ */
+static inline int mds_fs_set_last_rcvd(struct mds_obd *mds, void *handle)
+{
+        return mds->mds_fsops->fs_set_last_rcvd(mds, handle);
+}
+
+/* Enable data journaling on the given file */
+static inline ssize_t mds_fs_journal_data(struct mds_obd *mds,
+                                          struct file *file)
+{
+        return mds->mds_fsops->fs_journal_data(file);
+}
+
+static inline int mds_fs_statfs(struct mds_obd *mds, struct statfs *sfs)
+{
+        if (mds->mds_fsops->fs_statfs)
+                return mds->mds_fsops->fs_statfs(mds->mds_sb, sfs);
+
+        return vfs_statfs(mds->mds_sb, sfs);
+}
 
 #endif

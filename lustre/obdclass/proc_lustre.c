@@ -94,7 +94,8 @@ static int read_lustre_status(char *page, char **start, off_t offset,
                 while ((lh = lh->next) != &obddev->obd_exports) {
                         p += sprintf(&page[p],
                                   ((export == NULL) ? ", connections(" : ",") );
-                        export = list_entry(lh, struct obd_export, exp_chain);
+                        export = list_entry(lh, struct obd_export, 
+                                            exp_obd_chain);
                         p += sprintf(&page[p], "%p", export);
                 }
                 if (export != 0) { /* there was at least one export */

@@ -122,7 +122,7 @@ static int ldlm_server_blocking_ast(struct ldlm_lock *lock,
         int rc = 0, size = sizeof(*body);
         ENTRY;
 
-        req = ptlrpc_prep_req(&lock->l_export->exp_ldlm_data.led_client,
+        req = ptlrpc_prep_req(&lock->l_export->exp_ldlm_data.led_import,
                               LDLM_BL_CALLBACK, 1, &size, NULL);
         if (!req)
                 RETURN(-ENOMEM);
@@ -155,7 +155,7 @@ static int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags)
                 RETURN(-EINVAL);
         }
 
-        req = ptlrpc_prep_req(&lock->l_export->exp_ldlm_data.led_client,
+        req = ptlrpc_prep_req(&lock->l_export->exp_ldlm_data.led_import,
                               LDLM_CP_CALLBACK, 1, &size, NULL);
         if (!req)
                 RETURN(-ENOMEM);
@@ -517,8 +517,10 @@ static int ldlm_iocontrol(long cmd, struct lustre_handle *conn, int len,
         if (!connection)
                 CERROR("No LDLM UUID found: assuming ldlm is local.\n");
 
-        ptlrpc_init_client(LDLM_REQUEST_PORTAL, LDLM_REPLY_PORTAL,
-                           obddev->u.ldlm.ldlm_client, connection);
+        /* XXX
+           ptlrpc_init_client(LDLM_REQUEST_PORTAL, LDLM_REPLY_PORTAL,
+           obddev->u.ldlm.ldlm_client, connection);
+        */
 
         switch (cmd) {
         case IOC_LDLM_TEST:

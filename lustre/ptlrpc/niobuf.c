@@ -330,10 +330,10 @@ int ptl_send_rpc(struct ptlrpc_request *request)
                 RETURN(ENOMEM);
         }
 
-        down(&request->rq_client->cli_rpc_sem);
+        // down(&request->rq_client->cli_rpc_sem);
 
         rc = PtlMEAttach(request->rq_connection->c_peer.peer_ni,
-                         request->rq_client->cli_reply_portal,
+                         request->rq_import->imp_client->cli_reply_portal,
                          local_id, request->rq_xid, 0, PTL_UNLINK,
                          PTL_INS_AFTER, &request->rq_reply_me_h);
         if (rc != PTL_OK) {
@@ -360,17 +360,17 @@ int ptl_send_rpc(struct ptlrpc_request *request)
 
         CDEBUG(D_NET, "Setup reply buffer: %u bytes, xid %Lu, portal %u\n",
                request->rq_replen, request->rq_xid,
-               request->rq_client->cli_reply_portal);
+               request->rq_import->imp_client->cli_reply_portal);
 
         rc = ptl_send_buf(request, request->rq_connection,
-                          request->rq_client->cli_request_portal);
+                          request->rq_import->imp_client->cli_request_portal);
         RETURN(rc);
 
  cleanup2:
         PtlMEUnlink(request->rq_reply_me_h);
  cleanup:
         OBD_FREE(repbuf, request->rq_replen);
-        up(&request->rq_client->cli_rpc_sem);
+        // up(&request->rq_client->cli_rpc_sem);
 
         return rc;
 }

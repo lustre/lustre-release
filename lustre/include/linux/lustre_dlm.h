@@ -8,10 +8,11 @@
 #ifdef __KERNEL__
 
 #include <linux/proc_fs.h>
+#include <linux/lustre_lib.h>
 #include <linux/lustre_net.h>
+#include <linux/lustre_import.h>
 
 struct obd_ops;
-struct obd_export;
 struct obd_device;
 
 #define OBD_LDLM_DEVICENAME  "ldlm"
@@ -85,7 +86,6 @@ static inline int lockmode_compat(ldlm_mode_t exist, ldlm_mode_t new)
 
 struct ldlm_namespace {
         char                  *ns_name;
-        struct ptlrpc_client   ns_rpc_client;/* used for revocation callbacks */
         __u32                  ns_client; /* is this a client-side lock tree? */
         struct list_head      *ns_hash; /* hash table for ns */
         __u32                  ns_refcount; /* count of resources in the hash */
@@ -132,10 +132,9 @@ struct ldlm_lock {
         ldlm_blocking_callback    l_blocking_ast;
 
         struct obd_export    *l_export;
-        struct ptlrpc_client *l_client;
         struct lustre_handle *l_connh;
         __u32                 l_flags;
-        struct lustre_handle    l_remote_handle;
+        struct lustre_handle   l_remote_handle;
         void                 *l_data;
         __u32                 l_data_len;
         void                 *l_cookie;
@@ -199,7 +198,7 @@ struct ldlm_ast_work {
 /* Per-export ldlm state. */
 struct ldlm_export_data {
         struct list_head        led_held_locks;
-        struct ptlrpc_client    led_client;     /* cached client for locks  */
+        struct obd_import       led_import;
 };
         
 static inline struct ldlm_extent *ldlm_res2extent(struct ldlm_resource *res)

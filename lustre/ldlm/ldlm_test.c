@@ -28,6 +28,7 @@
 #include <linux/random.h>
 
 #include <linux/lustre_dlm.h>
+#include <linux/obd.h>
 
 struct ldlm_test_thread {
         struct obd_device *obddev;

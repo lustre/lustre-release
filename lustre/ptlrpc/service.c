@@ -175,18 +175,16 @@ static int handle_incoming_request(struct obd_device *obddev,
 
         CDEBUG(D_NET, "got req %Ld\n", request.rq_xid);
 
-        peer.peer_nid = event->initiator.nid;
+        request.rq_peer.peer_nid = event->initiator.nid;
         /* FIXME: this NI should be the incoming NI.
          * We don't know how to find that from here. */
-        peer.peer_ni = svc->srv_self.peer_ni;
+        request.rq_peer.peer_ni = svc->srv_self.peer_ni;
 
         request.rq_export = class_conn2export((struct lustre_handle *) request.rq_reqmsg);
 
         if (request.rq_export) {
                 request.rq_connection = request.rq_export->exp_connection;
                 ptlrpc_connection_addref(request.rq_connection);
-        } else {
-                request.rq_connection = ptlrpc_get_connection(&peer);
         }
 
         spin_unlock(&svc->srv_lock);

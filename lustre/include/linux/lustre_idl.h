@@ -80,14 +80,6 @@ typedef __u8 uuid_t[37];
 #define SVC_STOPPING            16
 #define SVC_STOPPED             32
 
-#define RECOVD_STOPPING          1  /* how cleanup tells recovd to quit */
-#define RECOVD_IDLE              2  /* normal state */
-#define RECOVD_STOPPED           4  /* after recovd has stopped */
-#define RECOVD_FAIL              8  /* RPC timeout: wakeup recovd, sets flag */
-#define RECOVD_TIMEOUT          16  /* set when recovd detects a timeout */
-#define RECOVD_UPCALL_WAIT      32  /* an upcall has been placed */
-#define RECOVD_UPCALL_ANSWER    64  /* an upcall has been answered */
-
 #define LUSTRE_CONN_NEW          1
 #define LUSTRE_CONN_CON          2
 #define LUSTRE_CONN_RECOVD       3
@@ -108,6 +100,11 @@ struct lustre_handle {
         __u64 addr;
         __u64 cookie;
 };
+
+static inline void ptlrpc_invalidate_handle(struct lustre_handle *hdl)
+{
+        hdl->addr = hdl->cookie = 0; /* XXX invalid enough? */
+}
 
 /* we depend on this structure to be 8-byte aligned */
 struct lustre_msg {

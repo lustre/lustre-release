@@ -58,8 +58,7 @@ static int sync_io_timeout(void *data)
         ENTRY;
         desc->b_connection->c_level = LUSTRE_CONN_RECOVD;
         desc->b_flags |= PTL_RPC_FL_TIMEOUT;
-        if (desc->b_connection && desc->b_connection->c_recovd &&
-            class_signal_connection_failure) {
+        if (desc->b_connection && class_signal_connection_failure) {
                 /* XXXshaver Do we need a resend strategy, or do we just
                  * XXXshaver return -ERESTARTSYS and punt it?
                  */

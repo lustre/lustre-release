@@ -268,6 +268,16 @@ struct obd_device *class_conn2obd(struct lustre_handle *conn)
         return NULL;
 }
 
+struct obd_import *class_conn2cliimp(struct lustre_handle *conn)
+{
+        return &class_conn2obd(conn)->u.cli.cl_import;
+}
+
+struct obd_import *class_conn2ldlmimp(struct lustre_handle *conn)
+{
+        return &class_conn2export(conn)->exp_ldlm_data.led_import;
+}
+
 struct obd_export *class_new_export(struct obd_device *obddev)
 {
         struct obd_export * export;
@@ -284,8 +294,9 @@ struct obd_export *class_new_export(struct obd_device *obddev)
         /* XXX should these be in MDS and LDLM init functions? */
         INIT_LIST_HEAD(&export->exp_mds_data.med_open_head);
         INIT_LIST_HEAD(&export->exp_ldlm_data.led_held_locks);
+        INIT_LIST_HEAD(&export->exp_conn_chain);
         spin_lock(&obddev->obd_dev_lock);
-        list_add(&export->exp_chain, &export->exp_obd->obd_exports);
+        list_add(&export->exp_obd_chain, &export->exp_obd->obd_exports);
         spin_unlock(&obddev->obd_dev_lock);
         return export;
 }
@@ -296,9 +307,13 @@ void class_destroy_export(struct obd_export *exp)
         ENTRY;
 
         spin_lock(&exp->exp_obd->obd_dev_lock);
-        list_del(&exp->exp_chain);
+        list_del(&exp->exp_obd_chain);
         spin_unlock(&exp->exp_obd->obd_dev_lock);
 
+        spin_lock(&exp->exp_connection->c_lock);
+        list_del(&exp->exp_conn_chain);
+        spin_unlock(&exp->exp_connection->c_lock);
+        
         /* XXXshaver these bits want to be hung off the export, instead of
          * XXXshaver hard-coded here.
          */
@@ -337,26 +352,12 @@ int class_connect (struct lustre_handle *conn, struct obd_device *obd,
         if (!export)
                 return -ENOMEM;
 
-        export->exp_rconnh.addr = conn->addr;
-        export->exp_rconnh.cookie = conn->cookie;
 
         conn->addr = (__u64) (unsigned long)export;
         conn->cookie = export->exp_cookie;
+        
         CDEBUG(D_IOCTL, "connect: addr %Lx cookie %Lx\n",
                (long long)conn->addr, (long long)conn->cookie);
-        return 0;
-}
-
-int class_rconn2export(struct lustre_handle *conn, struct lustre_handle *rconn)
-{
-        struct obd_export *export = class_conn2export(conn);
-
-        if (!export)
-                return -EINVAL;
-
-        export->exp_rconnh.addr = rconn->addr;
-        export->exp_rconnh.cookie = rconn->cookie;
-
         return 0;
 }
 
@@ -391,7 +392,8 @@ void class_disconnect_all(struct obd_device *obddev)
                         struct lustre_handle conn;
                         int rc;
 
-                        export = list_entry(tmp, struct obd_export, exp_chain);
+                        export = list_entry(tmp, struct obd_export, 
+                                            exp_obd_chain);
                         conn.addr = (__u64)(unsigned long)export;
                         conn.cookie = export->exp_cookie;
                         spin_unlock(&obddev->obd_dev_lock);

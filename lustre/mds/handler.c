@@ -276,13 +276,12 @@ static int mds_connect(struct lustre_handle *conn, struct obd_device *obd,
 
         spin_lock(&obd->obd_dev_lock);
         list_for_each(p, &obd->obd_exports) {
-                exp = list_entry(p, struct obd_export, exp_chain);
+                exp = list_entry(p, struct obd_export, exp_obd_chain);
                 mcd = exp->exp_mds_data.med_mcd;
                 if (!memcmp(cluuid, mcd->mcd_uuid, sizeof(mcd->mcd_uuid))) {
                         LASSERT(exp->exp_obd == obd);
 
-                        exp->exp_rconnh.addr = conn->addr;
-                        exp->exp_rconnh.cookie = conn->cookie;
+                        LASSERT(list_empty(&exp->exp_conn_chain));
                         conn->addr = (__u64) (unsigned long)exp;
                         conn->cookie = exp->exp_cookie;
                         spin_unlock(&obd->obd_dev_lock);
@@ -1118,6 +1117,9 @@ static int mds_setup(struct obd_device *obddev, obd_count len, void *buf)
                 GOTO(err_thread, rc);
         
         mds_destroy_export = mds_client_free;
+
+        ptlrpc_init_client(LDLM_REQUEST_PORTAL, LDLM_REPLY_PORTAL,
+                           "mds_ldlm_client", &obddev->obd_ldlm_client);
 
         RETURN(0);
 

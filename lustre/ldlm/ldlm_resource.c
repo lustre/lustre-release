@@ -177,7 +177,7 @@ int ldlm_namespace_free(struct ldlm_namespace *ns)
 int ldlm_client_free(struct obd_export *exp)
 {
         struct ldlm_export_data *led = &exp->exp_ldlm_data;
-        ptlrpc_cleanup_client(&led->led_client);
+        ptlrpc_cleanup_client(&led->led_import);
         RETURN(0);
 }
 

@@ -28,11 +28,17 @@
 
 #ifdef __KERNEL__
 
+#include <linux/fs.h>
 #include <linux/lustre_idl.h>
-#include <linux/lustre_net.h>
 
 struct ldlm_lock_desc;
 struct lov_stripe_md;
+struct mds_obd;
+struct ptlrpc_connection;
+struct ptlrpc_client;
+struct obd_export;
+struct ptlrpc_request;
+struct obd_device;
 
 #define LUSTRE_MDS_NAME "mds"
 #define LUSTRE_MDC_NAME "mdc"
@@ -140,10 +146,6 @@ struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
 int mds_reint(int offset, struct ptlrpc_request *req);
 
 /* mdc/mdc_request.c */
-extern int mdc_con2cl(struct lustre_handle *conn, struct ptlrpc_client **cl,
-                      struct ptlrpc_connection **connection,
-                      struct lustre_handle **rconn);
-
 int mdc_enqueue(struct lustre_handle *conn, int lock_type,
                 struct lookup_intent *it, int lock_mode, struct inode *dir,
                 struct dentry *de, struct lustre_handle *lockh, char *tgt,
@@ -211,77 +213,6 @@ extern int mds_register_fs_type(struct mds_fs_operations *op, const char *name);
 extern void mds_unregister_fs_type(const char *name);
 extern int mds_fs_setup(struct obd_device *obddev, struct vfsmount *mnt);
 extern void mds_fs_cleanup(struct obd_device *obddev);
-
-static inline void *mds_fs_start(struct mds_obd *mds, struct inode *inode,
-                                 int op)
-{
-        return mds->mds_fsops->fs_start(inode, op);
-}
-
-static inline int mds_fs_commit(struct mds_obd *mds, struct inode *inode,
-                                void *handle)
-{
-        return mds->mds_fsops->fs_commit(inode, handle);
-}
-
-static inline int mds_fs_setattr(struct mds_obd *mds, struct dentry *dentry,
-                                 void *handle, struct iattr *iattr)
-{
-        int rc;
-        /*
-         * NOTE: we probably don't need to take i_sem here when changing
-         *       ATTR_SIZE because the MDS never needs to truncate a file.
-         *       The ext2/ext3 code never truncates a directory, and files
-         *       stored on the MDS are entirely sparse (no data blocks).
-         *       If we do need to get it, we can do it here.
-         */
-        lock_kernel();
-        rc = mds->mds_fsops->fs_setattr(dentry, handle, iattr);
-        unlock_kernel();
-
-        return rc;
-}
-
-static inline int mds_fs_set_md(struct mds_obd *mds, struct inode *inode,
-                                  void *handle, struct lov_mds_md *md)
-{
-        return mds->mds_fsops->fs_set_md(inode, handle, md);
-}
-
-static inline int mds_fs_get_md(struct mds_obd *mds, struct inode *inode,
-                                  struct lov_mds_md *md)
-{
-        return mds->mds_fsops->fs_get_md(inode, md);
-}
-
-static inline ssize_t mds_fs_readpage(struct mds_obd *mds, struct file *file,
-                                      char *buf, size_t count, loff_t *offset)
-{
-        return mds->mds_fsops->fs_readpage(file, buf, count, offset);
-}
-
-/* Set up callback to update mds->mds_last_committed with the current
- * value of mds->mds_last_recieved when this transaction is on disk.
- */
-static inline int mds_fs_set_last_rcvd(struct mds_obd *mds, void *handle)
-{
-        return mds->mds_fsops->fs_set_last_rcvd(mds, handle);
-}
-
-/* Enable data journaling on the given file */
-static inline ssize_t mds_fs_journal_data(struct mds_obd *mds,
-                                          struct file *file)
-{
-        return mds->mds_fsops->fs_journal_data(file);
-}
-
-static inline int mds_fs_statfs(struct mds_obd *mds, struct statfs *sfs)
-{
-        if (mds->mds_fsops->fs_statfs)
-                return mds->mds_fsops->fs_statfs(mds->mds_sb, sfs);
-
-        return vfs_statfs(mds->mds_sb, sfs);
-}
 
 #define MDS_FSOP_UNLINK         1
 #define MDS_FSOP_RMDIR          2

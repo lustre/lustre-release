@@ -20,6 +20,7 @@
 
 #define DEBUG_SUBSYSTEM S_FILTER
 
+#include <linux/obd.h>
 #include <linux/lustre_mds.h>
 #include <linux/lustre_lib.h>
 #include <linux/lustre_net.h>

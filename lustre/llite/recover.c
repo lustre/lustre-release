@@ -16,6 +16,7 @@
 
 #include <linux/config.h>
 #include <linux/module.h>
+#include <linux/kmod.h>
 
 #define DEBUG_SUBSYSTEM S_LLITE
 
@@ -29,10 +30,11 @@ static int ll_reconnect(struct ll_sb_info *sbi)
         __u64 last_xid;
         int err;
         struct ptlrpc_request *request; 
+        struct ptlrpc_connection *conn = sbi2mdc(sbi)->cl_import.imp_connection;
 
-        ptlrpc_readdress_connection(sbi2mdc(sbi)->cl_conn, "mds");
+        ptlrpc_readdress_connection(conn, "mds");
 
-        sbi2mdc(sbi)->cl_conn->c_level = LUSTRE_CONN_CON;
+        conn->c_level = LUSTRE_CONN_CON;
 
         /* XXX: need to store the last_* values somewhere */
         err = mdc_getstatus(&sbi->ll_mdc_conn, &rootfid, &last_committed,
@@ -41,14 +43,33 @@ static int ll_reconnect(struct ll_sb_info *sbi)
                 CERROR("cannot mds_connect: rc = %d\n", err);
                 GOTO(out_disc, err = -ENOTCONN);
         }
-        sbi2mdc(sbi)->cl_conn->c_last_xid = last_xid;
-        sbi2mdc(sbi)->cl_conn->c_level = LUSTRE_CONN_RECOVD;
+        conn->c_last_xid = last_xid;
+        conn->c_level = LUSTRE_CONN_RECOVD;
 
  out_disc:
         return err;
 }
 
-int ll_recover(struct ptlrpc_client *cli)
+static int ll_recover_upcall(struct ptlrpc_connection *conn)
+{
+        char *argv[3];
+        char *envp[3];
+
+        ENTRY;
+        conn->c_level = LUSTRE_CONN_RECOVD;
+
+        argv[0] = obd_recovery_upcall;
+        argv[1] = conn->c_remote_uuid;
+        argv[2] = NULL;
+
+        envp[0] = "HOME=/";
+        envp[1] = "PATH=/sbin:/bin:/usr/sbin:/usr/bin";
+        envp[2] = NULL;
+
+        RETURN(call_usermodehelper(argv[0], argv, envp));
+}
+
+static int ll_recover_reconnect(struct ptlrpc_connection *conn)
 {
         RETURN(-ENOSYS);
 #if 0
@@ -142,4 +163,25 @@ int ll_recover(struct ptlrpc_client *cli)
         spin_unlock(&conn->c_lock);
         return rc;
 #endif
+}
+
+int ll_recover(struct recovd_data *rd, int phase)
+{
+        struct ptlrpc_connection *conn = class_rd2conn(rd);
+
+        LASSERT(conn);
+        ENTRY;
+
+        switch (phase) {
+            case PTLRPC_RECOVD_PHASE_PREPARE:
+                RETURN(ll_recover_upcall(conn));
+            case PTLRPC_RECOVD_PHASE_RECOVER:
+                RETURN(ll_recover_reconnect(conn));
+            case PTLRPC_RECOVD_PHASE_FAILURE:
+                fixme();
+                RETURN(0);
+        }
+
+        LBUG();
+        RETURN(-ENOSYS);
 }

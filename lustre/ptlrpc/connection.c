@@ -29,16 +29,21 @@ static spinlock_t conn_lock;
 static struct list_head conn_list;
 static struct list_head conn_unused_list;
 
-struct ptlrpc_connection *ptlrpc_get_connection(struct lustre_peer *peer)
+struct ptlrpc_connection *ptlrpc_get_connection(struct lustre_peer *peer,
+                                                char *uuid)
 {
         struct list_head *tmp, *pos;
         struct ptlrpc_connection *c;
         ENTRY;
 
+        CDEBUG(D_INFO, "peer is %08x %08lx %08lx\n",
+               peer->peer_nid, peer->peer_ni.nal_idx, peer->peer_ni.handle_idx);
+
         spin_lock(&conn_lock);
         list_for_each(tmp, &conn_list) {
                 c = list_entry(tmp, struct ptlrpc_connection, c_link);
-                if (memcmp(peer, &c->c_peer, sizeof(*peer)) == 0) {
+                if (memcmp(peer, &c->c_peer, sizeof(*peer)) == 0 &&
+                    (!uuid || strcmp(c->c_remote_uuid, uuid) == 0)) {
                         ptlrpc_connection_addref(c);
                         GOTO(out, c);
                 }
@@ -46,7 +51,8 @@ struct ptlrpc_connection *ptlrpc_get_connection(struct lustre_peer *peer)
 
         list_for_each_safe(tmp, pos, &conn_unused_list) {
                 c = list_entry(tmp, struct ptlrpc_connection, c_link);
-                if (memcmp(peer, &c->c_peer, sizeof(*peer)) == 0) {
+                if (memcmp(peer, &c->c_peer, sizeof(*peer)) == 0 &&
+                    (!uuid || strcmp(c->c_remote_uuid, uuid) == 0)) {
                         ptlrpc_connection_addref(c);
                         list_del(&c->c_link);
                         list_add(&c->c_link, &conn_list);
@@ -66,6 +72,7 @@ struct ptlrpc_connection *ptlrpc_get_connection(struct lustre_peer *peer)
         c->c_generation = 1;
         c->c_epoch = 1;
         c->c_bootcount = 0;
+        strcpy(c->c_remote_uuid, uuid);
         INIT_LIST_HEAD(&c->c_delayed_head);
         INIT_LIST_HEAD(&c->c_sending_head);
         INIT_LIST_HEAD(&c->c_dying_head);

@@ -25,10 +25,11 @@
 
 #include <linux/tqueue.h>
 #include <linux/kp30.h>
-#include <linux/obd.h>
+// #include <linux/obd.h>
 #include <portals/p30.h>
 #include <linux/lustre_idl.h>
 #include <linux/lustre_ha.h>
+#include <linux/lustre_import.h>
 
 /* default rpc ring length */
 #define RPC_RING_LENGTH    10
@@ -63,23 +64,17 @@ struct ptlrpc_connection {
         struct list_head        c_clients; /* XXXshaver will be c_imports */
         struct list_head        c_exports;
 
-        /* should this be in recovd_data? */
-        struct recovd_obd      *c_recovd;
 };
 
 struct ptlrpc_client {
-        struct obd_device        *cli_obd;
         __u32                     cli_request_portal;
         __u32                     cli_reply_portal;
 
         __u32                     cli_target_devno;
 
-        struct ptlrpc_connection *cli_connection;
-
         void                     *cli_data;
-        struct semaphore          cli_rpc_sem; /* limits outstanding requests */
+        // struct semaphore          cli_rpc_sem; /* limits outstanding requests */
 
-        struct list_head          cli_client_chain;
         char                     *cli_name;
 };
 
@@ -137,7 +132,7 @@ struct ptlrpc_request {
         struct lustre_peer rq_peer; /* XXX see service.c can this be factored away? */
         struct obd_export *rq_export;
         struct ptlrpc_connection *rq_connection;
-        struct ptlrpc_client *rq_client;
+        struct obd_import *rq_import;
         struct ptlrpc_service *rq_svc;
 };
 
@@ -218,9 +213,6 @@ static inline void ptlrpc_hdl2req(struct ptlrpc_request *req, struct lustre_hand
         req->rq_reqmsg->addr = h->addr;
         req->rq_reqmsg->cookie = h->cookie;
 }
-struct ptlrpc_request *ptlrpc_prep_req2(struct lustre_handle *conn, 
-                                        int opcode, int count, int *lengths,
-                                        char **bufs);
 
 typedef void (*bulk_callback_t)(struct ptlrpc_bulk_desc *, void *);
 
@@ -228,7 +220,8 @@ typedef int (*svc_handler_t)(struct ptlrpc_request *req);
 
 /* rpc/connection.c */
 void ptlrpc_readdress_connection(struct ptlrpc_connection *conn, char *uuid);
-struct ptlrpc_connection *ptlrpc_get_connection(struct lustre_peer *peer);
+struct ptlrpc_connection *ptlrpc_get_connection(struct lustre_peer *peer,
+                                                char *uuid);
 int ptlrpc_put_connection(struct ptlrpc_connection *c);
 struct ptlrpc_connection *ptlrpc_connection_addref(struct ptlrpc_connection *);
 void ptlrpc_init_connection(void);
@@ -247,9 +240,9 @@ int ptl_send_rpc(struct ptlrpc_request *request);
 void ptlrpc_link_svc_me(struct ptlrpc_service *service, int i);
 
 /* rpc/client.c */
-void ptlrpc_init_client(int req_portal, int rep_portal, struct ptlrpc_client *,
-                        struct ptlrpc_connection *);
-void ptlrpc_cleanup_client(struct ptlrpc_client *cli);
+void ptlrpc_init_client(int req_portal, int rep_portal, char *name,
+                        struct ptlrpc_client *);
+void ptlrpc_cleanup_client(struct obd_import *imp);
 __u8 *ptlrpc_req_to_uuid(struct ptlrpc_request *req);
 struct ptlrpc_connection *ptlrpc_uuid_to_connection(char *uuid);
 
@@ -258,7 +251,7 @@ void ptlrpc_continue_req(struct ptlrpc_request *req);
 int ptlrpc_replay_req(struct ptlrpc_request *req);
 void ptlrpc_restart_req(struct ptlrpc_request *req);
 
-struct ptlrpc_request *ptlrpc_prep_req(struct ptlrpc_client *cl, int opcode,
+struct ptlrpc_request *ptlrpc_prep_req(struct obd_import *imp, int opcode,
                                        int count, int *lengths, char **bufs);
 void ptlrpc_free_req(struct ptlrpc_request *request);
 void ptlrpc_req_finished(struct ptlrpc_request *request);

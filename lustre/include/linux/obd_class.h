@@ -64,38 +64,6 @@ extern void proc_lustre_remove_obd_entry(const char* name,
  */
 
 #ifdef __KERNEL__
-struct obd_export {
-        __u64 exp_cookie;
-        struct lustre_handle      exp_rconnh;     /* remote connection handle */
-        struct lustre_handle      exp_impconnh;
-        struct list_head          exp_chain;
-        struct obd_device        *exp_obd;
-        struct ptlrpc_connection *exp_connection;
-        struct mds_export_data    exp_mds_data;
-        struct ldlm_export_data   exp_ldlm_data;
-#if NOTYET && 0
-        struct ost_export_data    exp_ost_data;
-#endif
-        void                     *exp_data; /* device specific data */
-        int                       exp_desclen;
-        char                     *exp_desc;
-        uuid_t                    exp_uuid;
-};
-
-extern struct obd_export *class_conn2export(struct lustre_handle *conn);
-extern struct obd_device *class_conn2obd(struct lustre_handle *conn);
-extern int class_rconn2export(struct lustre_handle *conn,
-                              struct lustre_handle *rconn);
-
-struct obd_import {
-        __u64 imp_cookie;
-        struct lustre_handle imp_expconnh;
-        struct list_head imp_chain;
-        struct obd_device *imp_obd;
-        unsigned int imp_id;
-        void *imp_data; /* device specific data */
-};
-
 static inline int obd_check_conn(struct lustre_handle *conn) 
 {
         struct obd_device *obd;
@@ -731,6 +699,12 @@ extern void (*class_signal_connection_failure)(struct ptlrpc_connection *);
 extern int (*mds_destroy_export)(struct obd_export *exp);
 /* == ldlm_client_free if(?) DLM running here */
 extern int (*ldlm_destroy_export)(struct obd_export *exp);
+
+static inline struct ptlrpc_connection *class_rd2conn(struct recovd_data *rd)
+{
+        /* reuse list_entry's member-pointer offset stuff */
+        return list_entry(rd, struct ptlrpc_connection, c_recovd_data);
+}
 
 #endif
 

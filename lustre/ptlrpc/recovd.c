@@ -16,62 +16,54 @@
 
 #define DEBUG_SUBSYSTEM S_RPC
 
-#include <linux/kmod.h>
 #include <linux/lustre_lite.h>
 #include <linux/lustre_ha.h>
 #include <linux/obd_support.h>
 
-void recovd_conn_manage(struct recovd_obd *recovd,
-                        struct ptlrpc_connection *conn)
+void recovd_conn_manage(struct ptlrpc_connection *conn,
+                        struct recovd_obd *recovd, ptlrpc_recovery_cb_t recover)
 {
+        struct recovd_data *rd = &conn->c_recovd_data;
         ENTRY;
-        conn->c_recovd = recovd;
+
+        rd->rd_recovd = recovd;
+        rd->rd_recover = recover;
+
         spin_lock(&recovd->recovd_lock);
-        list_add(&conn->c_recovd_data.rd_managed_chain,
-                 &recovd->recovd_managed_items);
+        list_add(&rd->rd_managed_chain, &recovd->recovd_managed_items);
         spin_unlock(&recovd->recovd_lock);
+
         EXIT;
 }
 
 void recovd_conn_fail(struct ptlrpc_connection *conn)
 {
+        struct recovd_data *rd = &conn->c_recovd_data;
+        struct recovd_obd *recovd = rd->rd_recovd;
         ENTRY;
-        spin_lock(&conn->c_recovd->recovd_lock);
-        conn->c_recovd->recovd_flags |= RECOVD_FAIL;
-        conn->c_recovd->recovd_wakeup_flag = 1;
-        list_del(&conn->c_recovd_data.rd_managed_chain);
-        list_add(&conn->c_recovd_data.rd_managed_chain, 
-                 &conn->c_recovd->recovd_troubled_items);
-        spin_unlock(&conn->c_recovd->recovd_lock);
-        wake_up(&conn->c_recovd->recovd_waitq);
+
+        spin_lock(&recovd->recovd_lock);
+        list_del(&rd->rd_managed_chain);
+        list_add_tail(&rd->rd_managed_chain, &recovd->recovd_troubled_items);
+        spin_unlock(&recovd->recovd_lock);
+
+        wake_up(&recovd->recovd_waitq);
+
         EXIT;
 }
 
 /* this function must be called with conn->c_lock held */
 void recovd_conn_fixed(struct ptlrpc_connection *conn)
 {
+        struct recovd_data *rd = &conn->c_recovd_data;
         ENTRY;
-        list_del(&conn->c_recovd_data.rd_managed_chain);
-        list_add(&conn->c_recovd_data.rd_managed_chain,
-                 &conn->c_recovd->recovd_managed_items);
+
+        list_del(&rd->rd_managed_chain);
+        list_add(&rd->rd_managed_chain, &rd->rd_recovd->recovd_managed_items);
+
         EXIT;
 }
 
-
-static int recovd_upcall(void)
-{
-        char *argv[2];
-        char *envp[3];
-
-        argv[0] = obd_recovery_upcall;
-        argv[1] = NULL;
-
-        envp [0] = "HOME=/";
-        envp [1] = "PATH=/sbin:/bin:/usr/sbin:/usr/bin";
-        envp [2] = NULL;
-
-        return call_usermodehelper(argv[0], argv, envp);
-}
 
 static int recovd_check_event(struct recovd_obd *recovd)
 {
@@ -80,72 +72,110 @@ static int recovd_check_event(struct recovd_obd *recovd)
 
         spin_lock(&recovd->recovd_lock);
 
-        recovd->recovd_waketime = CURRENT_TIME;
-        if (recovd->recovd_timeout) 
-                schedule_timeout(recovd->recovd_timeout);
-
-        if (recovd->recovd_wakeup_flag) {
-                CERROR("service woken\n"); 
+        if (recovd->recovd_phase == RECOVD_IDLE &&
+            !list_empty(&recovd->recovd_troubled_items)) {
                 GOTO(out, rc = 1);
         }
 
-        if (recovd->recovd_timeout && 
-            CURRENT_TIME > recovd->recovd_waketime + recovd->recovd_timeout) {
-                recovd->recovd_flags |= RECOVD_TIMEOUT;
-                CERROR("timeout\n");
+        if (recovd->recovd_flags & RECOVD_STOPPING)
+                GOTO(out, rc = 1);
+
+        if (recovd->recovd_flags & RECOVD_FAILED) {
+                LASSERT(recovd->recovd_phase != RECOVD_IDLE && 
+                        recovd->recovd_current_rd);
                 GOTO(out, rc = 1);
         }
 
-        if (recovd->recovd_flags & RECOVD_STOPPING) {
-                CERROR("recovd stopping\n");
-                rc = 1;
-        }
+        if (recovd->recovd_phase == recovd->recovd_next_phase)
+                GOTO(out, rc = 1);
 
  out:
-        recovd->recovd_wakeup_flag = 0;
         spin_unlock(&recovd->recovd_lock);
         RETURN(rc);
 }
 
 static int recovd_handle_event(struct recovd_obd *recovd)
 {
+        struct recovd_data *rd;
+        int rc;
         ENTRY;
 
-        if (!(recovd->recovd_flags & RECOVD_UPCALL_WAIT) &&
-            recovd->recovd_flags & RECOVD_FAIL) { 
+        if (recovd->recovd_flags & RECOVD_FAILED) {
 
-                CERROR("client in trouble: flags -> UPCALL_WAITING\n");
-                recovd->recovd_flags |= RECOVD_UPCALL_WAIT;
+                LASSERT(recovd->recovd_phase != RECOVD_IDLE && 
+                        recovd->recovd_current_rd);
 
-                recovd_upcall();
-                recovd->recovd_waketime = CURRENT_TIME;
-                recovd->recovd_timeout = 10 * HZ;
-                schedule_timeout(recovd->recovd_timeout);
+                rd = recovd->recovd_current_rd;
+        cb_failed:
+                CERROR("recovery FAILED for rd %p (conn %p), recovering\n",
+                       rd, class_rd2conn(rd));
+
+                list_add(&rd->rd_managed_chain, &recovd->recovd_managed_items);
+                spin_unlock(&recovd->recovd_lock);
+                rd->rd_recover(rd, PTLRPC_RECOVD_PHASE_FAILURE);
+                spin_lock(&recovd->recovd_lock);
+                recovd->recovd_phase = RECOVD_IDLE;
+                recovd->recovd_next_phase = RECOVD_PREPARING;
+                
+                recovd->recovd_flags &= ~RECOVD_FAILED;
+
+                RETURN(1);
         }
 
-        if (recovd->recovd_flags & RECOVD_TIMEOUT) { 
-                CERROR("timeout - no news from upcall?\n");
-                recovd->recovd_flags &= ~RECOVD_TIMEOUT;
-        }
+        switch (recovd->recovd_phase) {
+            case RECOVD_IDLE:
+                if (recovd->recovd_current_rd ||
+                    list_empty(&recovd->recovd_troubled_items))
+                        break;
+                rd = list_entry(recovd->recovd_troubled_items.next,
+                                struct recovd_data, rd_managed_chain);
+                
+                list_del(&rd->rd_managed_chain);
+                if (!rd->rd_recover)
+                        LBUG();
 
-        if (recovd->recovd_flags & RECOVD_UPCALL_ANSWER) { 
-                CERROR("UPCALL_WAITING: upcall answer\n");
+                CERROR("starting recovery for rd %p (conn %p)\n",
+                       rd, class_rd2conn(rd));
+                recovd->recovd_current_rd = rd;
+                recovd->recovd_flags &= ~RECOVD_FAILED;
+                recovd->recovd_phase = RECOVD_PREPARING;
 
-                while (!list_empty(&recovd->recovd_troubled_items)) {
-                        struct recovd_data *rd =
-                                list_entry(recovd->recovd_troubled_items.next,
-                                           struct recovd_data, rd_managed_chain);
+                spin_unlock(&recovd->recovd_lock);
+                rc = rd->rd_recover(rd, PTLRPC_RECOVD_PHASE_PREPARE);
+                spin_lock(&recovd->recovd_lock);
+                if (rc)
+                        goto cb_failed;
+                
+                recovd->recovd_next_phase = RECOVD_PREPARED;
+                break;
 
-                        list_del(&rd->rd_managed_chain);
-                        if (rd->rd_recover) {
-                                spin_unlock(&recovd->recovd_lock);
-                                rd->rd_recover(rd);
-                                spin_lock(&recovd->recovd_lock);
-                        }
-                }
+            case RECOVD_PREPARED:
+                rd = recovd->recovd_current_rd;
+                recovd->recovd_phase = RECOVD_RECOVERING;
 
-                recovd->recovd_timeout = 0;
-                recovd->recovd_flags = RECOVD_IDLE; 
+                CERROR("recovery prepared for rd %p (conn %p), recovering\n",
+                       rd, class_rd2conn(rd));
+
+                spin_unlock(&recovd->recovd_lock);
+                rc = rd->rd_recover(rd, PTLRPC_RECOVD_PHASE_RECOVER);
+                spin_lock(&recovd->recovd_lock);
+                if (rc)
+                        goto cb_failed;
+                
+                recovd->recovd_next_phase = RECOVD_RECOVERED;
+                break;
+
+            case RECOVD_RECOVERED:
+                rd = recovd->recovd_current_rd;
+                recovd->recovd_phase = RECOVD_IDLE;
+                recovd->recovd_next_phase = RECOVD_PREPARING;
+
+                CERROR("recovery complete for rd %p (conn %p), recovering\n",
+                       rd, class_rd2conn(rd));
+                break;
+
+            default:
+                break;
         }
 
         RETURN(0);
@@ -177,6 +207,7 @@ static int recovd_main(void *arg)
                 wait_event(recovd->recovd_waitq, recovd_check_event(recovd));
 
                 spin_lock(&recovd->recovd_lock);
+
                 if (recovd->recovd_flags & RECOVD_STOPPING) {
                         spin_unlock(&recovd->recovd_lock);
                         CERROR("lustre_recovd stopping\n");
@@ -211,16 +242,20 @@ int recovd_setup(struct recovd_obd *recovd)
         init_waitqueue_head(&recovd->recovd_recovery_waitq);
         init_waitqueue_head(&recovd->recovd_ctl_waitq);
 
+        recovd->recovd_next_phase = RECOVD_PREPARING;
+        
         rc = kernel_thread(recovd_main, (void *)recovd,
                            CLONE_VM | CLONE_FS | CLONE_FILES);
         if (rc < 0) {
                 CERROR("cannot start thread\n");
                 RETURN(-EINVAL);
         }
-        wait_event(recovd->recovd_ctl_waitq, recovd->recovd_flags & RECOVD_IDLE);
+        wait_event(recovd->recovd_ctl_waitq,
+                   recovd->recovd_phase == RECOVD_IDLE);
 
         /* exported and called by obdclass timeout handlers */
         class_signal_connection_failure = recovd_conn_fail;
+        ptlrpc_recovd = recovd;
 
         RETURN(0);
 }
@@ -236,3 +271,5 @@ int recovd_cleanup(struct recovd_obd *recovd)
                    (recovd->recovd_flags & RECOVD_STOPPED));
         RETURN(0);
 }
+
+struct recovd_obd *ptlrpc_recovd;

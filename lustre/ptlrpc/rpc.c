@@ -64,6 +64,7 @@ int connmgr_cleanup(struct obd_device *dev)
         RETURN(0);
 }
 
+/* should this be in llite? */
 
 int connmgr_iocontrol(long cmd, struct lustre_handle *conn, int len, void *karg,
                       void *uarg)
@@ -74,8 +75,7 @@ int connmgr_iocontrol(long cmd, struct lustre_handle *conn, int len, void *karg,
         ENTRY;
         if (cmd == OBD_IOC_RECOVD_NEWCONN) { 
                 spin_lock(&recovd->recovd_lock);
-                recovd->recovd_flags |= RECOVD_UPCALL_ANSWER;
-                recovd->recovd_wakeup_flag = 1;
+                /* XXX shaver flag upcall answer */
                 wake_up(&recovd->recovd_waitq);
                 spin_unlock(&recovd->recovd_lock);
                 EXIT;
@@ -109,7 +109,8 @@ static void __exit ptlrpc_exit(void)
         ptlrpc_cleanup_connection();
 }
 
-/* connmgr.c */
+/* recovd.c */
+EXPORT_SYMBOL(ptlrpc_recovd);
 EXPORT_SYMBOL(recovd_conn_fail);
 EXPORT_SYMBOL(recovd_conn_manage);
 EXPORT_SYMBOL(recovd_conn_fixed);
@@ -145,7 +146,6 @@ EXPORT_SYMBOL(ptlrpc_replay_req);
 EXPORT_SYMBOL(ptlrpc_restart_req);
 EXPORT_SYMBOL(ptlrpc_prep_req);
 EXPORT_SYMBOL(ptlrpc_free_req);
-EXPORT_SYMBOL(ptlrpc_prep_req2);
 EXPORT_SYMBOL(ptlrpc_req_finished);
 EXPORT_SYMBOL(ptlrpc_prep_bulk);
 EXPORT_SYMBOL(ptlrpc_free_bulk);

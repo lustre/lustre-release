@@ -38,7 +38,8 @@ static int osc_getattr(struct lustre_handle *conn, struct obdo *oa,
         int rc, size = sizeof(*body);
         ENTRY;
 
-        request = ptlrpc_prep_req2(conn, OST_GETATTR, 1, &size, NULL);
+        request = ptlrpc_prep_req(class_conn2cliimp(conn), OST_GETATTR, 1, &size,
+                                  NULL);
         if (!request)
                 RETURN(-ENOMEM);
 
@@ -74,7 +75,8 @@ static int osc_open(struct lustre_handle *conn, struct obdo *oa,
         int rc, size = sizeof(*body);
         ENTRY;
 
-        request = ptlrpc_prep_req2(conn, OST_OPEN, 1, &size, NULL);
+        request = ptlrpc_prep_req(class_conn2cliimp(conn), OST_OPEN, 1, &size,
+                                  NULL);
         if (!request)
                 RETURN(-ENOMEM);
 
@@ -108,7 +110,8 @@ static int osc_close(struct lustre_handle *conn, struct obdo *oa,
         int rc, size = sizeof(*body);
         ENTRY;
 
-        request = ptlrpc_prep_req2(conn, OST_CLOSE, 1, &size, NULL);
+        request = ptlrpc_prep_req(class_conn2cliimp(conn), OST_CLOSE, 1, &size,
+                                  NULL);
         if (!request)
                 RETURN(-ENOMEM);
 
@@ -142,7 +145,8 @@ static int osc_setattr(struct lustre_handle *conn, struct obdo *oa,
         int rc, size = sizeof(*body);
         ENTRY;
 
-        request = ptlrpc_prep_req2(conn, OST_SETATTR, 1, &size, NULL);
+        request = ptlrpc_prep_req(class_conn2cliimp(conn), OST_SETATTR, 1, &size,
+                                  NULL);
         if (!request)
                 RETURN(-ENOMEM);
 
@@ -184,7 +188,8 @@ static int osc_create(struct lustre_handle *conn, struct obdo *oa,
                 (*ea)->lmd_easize = oa->o_easize;
         }
 
-        request = ptlrpc_prep_req2(conn, OST_CREATE, 1, &size, NULL);
+        request = ptlrpc_prep_req(class_conn2cliimp(conn), OST_CREATE, 1, &size,
+                                  NULL);
         if (!request)
                 RETURN(-ENOMEM);
 
@@ -223,7 +228,8 @@ static int osc_punch(struct lustre_handle *conn, struct obdo *oa,
                 RETURN(-EINVAL);
         }
 
-        request = ptlrpc_prep_req2(conn, OST_PUNCH, 1, &size, NULL);
+        request = ptlrpc_prep_req(class_conn2cliimp(conn), OST_PUNCH, 1, &size,
+                                  NULL);
         if (!request)
                 RETURN(-ENOMEM);
 
@@ -265,7 +271,8 @@ static int osc_destroy(struct lustre_handle *conn, struct obdo *oa,
                 CERROR("oa NULL\n");
                 RETURN(-EINVAL);
         }
-        request = ptlrpc_prep_req2(conn, OST_DESTROY, 1, &size, NULL);
+        request = ptlrpc_prep_req(class_conn2cliimp(conn), OST_DESTROY, 1, &size,
+                                  NULL);
         if (!request)
                 RETURN(-ENOMEM);
 
@@ -345,7 +352,8 @@ static int osc_brw_read(struct lustre_handle *conn, struct lov_stripe_md *md,
                         obd_count page_count, struct brw_page *pga,
                         brw_callback_t callback, struct io_cb_data *data)
 {
-        struct ptlrpc_connection *connection = client_conn2cli(conn)->cl_conn;
+        struct ptlrpc_connection *connection =
+                client_conn2cli(conn)->cl_import.imp_connection;
         struct ptlrpc_request *request = NULL;
         struct ptlrpc_bulk_desc *desc = NULL;
         struct ost_body *body;
@@ -359,7 +367,8 @@ static int osc_brw_read(struct lustre_handle *conn, struct lov_stripe_md *md,
         size[1] = sizeof(struct obd_ioobj);
         size[2] = page_count * sizeof(struct niobuf_remote);
 
-        request = ptlrpc_prep_req2(conn, OST_READ, 3, size, NULL);
+        request = ptlrpc_prep_req(class_conn2cliimp(conn), OST_READ, 3, size,
+                                  NULL);
         if (!request)
                 RETURN(-ENOMEM);
 
@@ -459,7 +468,8 @@ static int osc_brw_write(struct lustre_handle *conn, struct lov_stripe_md *md,
                          obd_count page_count, struct brw_page *pga,
                          brw_callback_t callback, struct io_cb_data *data)
 {
-        struct ptlrpc_connection *connection = client_conn2cli(conn)->cl_conn;
+        struct ptlrpc_connection *connection =
+                client_conn2cli(conn)->cl_import.imp_connection;
         struct ptlrpc_request *request = NULL;
         struct ptlrpc_bulk_desc *desc = NULL;
         struct ost_body *body;
@@ -474,7 +484,8 @@ static int osc_brw_write(struct lustre_handle *conn, struct lov_stripe_md *md,
         size[1] = sizeof(struct obd_ioobj);
         size[2] = page_count * sizeof(*remote);
 
-        request = ptlrpc_prep_req2(conn, OST_WRITE, 3, size, NULL);
+        request = ptlrpc_prep_req(class_conn2cliimp(conn), OST_WRITE, 3, size,
+                                  NULL);
         if (!request)
                 RETURN(-ENOMEM);
 
@@ -669,7 +680,8 @@ static int osc_statfs(struct lustre_handle *conn, struct statfs *sfs)
         int rc, size = sizeof(*osfs);
         ENTRY;
 
-        request = ptlrpc_prep_req2(conn, OST_STATFS, 0, NULL, NULL);
+        request = ptlrpc_prep_req(class_conn2cliimp(conn), OST_STATFS, 0, NULL,
+                                  NULL);
         if (!request)
                 RETURN(-ENOMEM);
 

@@ -55,7 +55,8 @@ int mdc_setattr(struct lustre_handle *conn,
         int rc, size = sizeof(*rec);
         ENTRY;
 
-        req = ptlrpc_prep_req2(conn, MDS_REINT, 1, &size, NULL);
+        req = ptlrpc_prep_req(class_conn2cliimp(conn), MDS_REINT, 1, &size,
+                              NULL);
         if (!req)
                 RETURN(-ENOMEM);
 
@@ -98,7 +99,8 @@ int mdc_create(struct lustre_handle *conn,
                 bufcount = 3;
         }
 
-        req = ptlrpc_prep_req2(conn, MDS_REINT, bufcount, size, NULL);
+        req = ptlrpc_prep_req(class_conn2cliimp(conn), MDS_REINT, bufcount, size,
+                              NULL);
         if (!req)
                 RETURN(-ENOMEM);
 
@@ -141,7 +143,7 @@ int mdc_unlink(struct lustre_handle *conn, struct inode *dir,
         int rc, size[2] = {sizeof(struct mds_rec_unlink), namelen + 1};
         ENTRY;
 
-        req = ptlrpc_prep_req2(conn, MDS_REINT, 2, size, NULL);
+        req = ptlrpc_prep_req(class_conn2cliimp(conn), MDS_REINT, 2, size, NULL);
         if (!req)
                 RETURN(-ENOMEM);
 
@@ -166,7 +168,7 @@ int mdc_link(struct lustre_handle *conn,
         int rc, size[2] = {sizeof(struct mds_rec_link), namelen + 1};
         ENTRY;
 
-        req = ptlrpc_prep_req2(conn, MDS_REINT, 2, size, NULL);
+        req = ptlrpc_prep_req(class_conn2cliimp(conn), MDS_REINT, 2, size, NULL);
         if (!req)
                 RETURN(-ENOMEM);
 
@@ -193,7 +195,7 @@ int mdc_rename(struct lustre_handle *conn,
                            newlen + 1};
         ENTRY;
 
-        req = ptlrpc_prep_req2(conn, MDS_REINT, 3, size, NULL);
+        req = ptlrpc_prep_req(class_conn2cliimp(conn), MDS_REINT, 3, size, NULL);
         if (!req)
                 RETURN(-ENOMEM);
 
