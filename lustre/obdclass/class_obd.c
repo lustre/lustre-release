@@ -283,7 +283,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 INIT_LIST_HEAD(&obd->obd_exports);
 
                 /* do the attach */
-                if (OBT(obd) && OBP(obd, attach))
+                if (OBP(obd, attach))
                         err = OBP(obd,attach)(obd, sizeof(*data), data);
                 if (err) {
                         obd->obd_type = NULL;

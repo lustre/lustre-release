@@ -55,6 +55,7 @@ struct ldlm_namespace *ldlm_namespace_new(char *name, __u32 client)
                 LBUG();
                 GOTO(out, ns);
         }
+        obd_memory += sizeof(*ns->ns_hash) * RES_HASH_SIZE;
 
         OBD_ALLOC(ns->ns_name, strlen(name) + 1);
         if (!ns->ns_name) {
@@ -85,8 +86,10 @@ struct ldlm_namespace *ldlm_namespace_new(char *name, __u32 client)
         RETURN(ns);
 
  out:
-        if (ns && ns->ns_hash)
+        if (ns && ns->ns_hash) {
                 vfree(ns->ns_hash);
+                obd_memory -= sizeof(*ns->ns_hash) * RES_HASH_SIZE;
+        }
         if (ns && ns->ns_name)
                 OBD_FREE(ns->ns_name, strlen(name) + 1);
         if (ns)
@@ -165,7 +168,8 @@ int ldlm_namespace_free(struct ldlm_namespace *ns)
                 }
         }
 
-        vfree(ns->ns_hash /* , sizeof(struct list_head) * RES_HASH_SIZE */);
+        vfree(ns->ns_hash /* , sizeof(*ns->ns_hash) * RES_HASH_SIZE */);
+        obd_memory -= sizeof(*ns->ns_hash) * RES_HASH_SIZE;
         ptlrpc_cleanup_client(&ns->ns_rpc_client);
         OBD_FREE(ns->ns_name, strlen(ns->ns_name) + 1);
         OBD_FREE(ns, sizeof(*ns));

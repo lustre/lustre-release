@@ -805,7 +805,7 @@ struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
                                 lock->l_completion_ast(lock, 0);
                 }
         } else
-                list_add(&lock->l_res_link, res->lr_converting.prev);
+                list_add_tail(&lock->l_res_link, &res->lr_converting);
 
         l_unlock(&ns->ns_lock);
 

@@ -80,7 +80,7 @@ int class_register_type(struct obd_ops *ops, char *nm)
                 RETURN(-ENOMEM);
         INIT_LIST_HEAD(&type->typ_chain);
         MOD_INC_USE_COUNT;
-        list_add(&type->typ_chain, obd_types.next);
+        list_add(&type->typ_chain, &obd_types);
         type->typ_ops = ops;
         type->typ_name = nm;
         RETURN(0);
@@ -92,12 +92,12 @@ int class_unregister_type(char *nm)
 
         ENTRY;
 
-        if ( !type ) {
+        if (!type) {
                 CERROR("unknown obd type\n");
                 RETURN(-EINVAL);
         }
 
-        if ( type->typ_refcnt ) {
+        if (type->typ_refcnt) {
                 CERROR("type %s has refcount (%d)\n", nm, type->typ_refcnt);
                 RETURN(-EBUSY);
         }
@@ -275,7 +275,7 @@ struct obd_export *class_new_export(struct obd_device *obddev)
         get_random_bytes(&export->exp_cookie, sizeof(__u64));
         export->exp_obd = obddev;
         INIT_LIST_HEAD(&export->exp_mds_data.med_open_head);
-        list_add(&(export->exp_chain), export->exp_obd->obd_exports.prev);
+        list_add(&(export->exp_chain), &export->exp_obd->obd_exports);
         return export;
 }
 

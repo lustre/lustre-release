@@ -1123,8 +1123,7 @@ static int filter_preprw(int cmd, struct lustre_handle *conn,
                 struct inode *inode;
                 int j;
 
-                dentry = filter_fid2dentry(obd,
-                                           filter_parent(obd, S_IFREG),
+                dentry = filter_fid2dentry(obd, filter_parent(obd, S_IFREG),
                                            o->ioo_id, S_IFREG);
                 if (IS_ERR(dentry))
                         GOTO(out_clean, rc = PTR_ERR(dentry));
