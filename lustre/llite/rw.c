@@ -527,7 +527,7 @@ static int ll_page_matches(struct page *page, int fd_flags)
         int flags, matches;
         ENTRY;
 
-        if (fd_flags & LL_FILE_CW_LOCKED)
+        if (fd_flags & LL_FILE_GROUP_LOCKED)
                 RETURN(1);
 
         page_extent.l_extent.start = (__u64)page->index << PAGE_CACHE_SHIFT;

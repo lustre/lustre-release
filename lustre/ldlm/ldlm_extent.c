@@ -159,14 +159,15 @@ ldlm_extent_compat_queue(struct list_head *queue, struct ldlm_lock *req,
 
                 /* locks are compatible, overlap doesn't matter */
                 if (lockmode_compat(lock->l_req_mode, req_mode)) {
-                        /* nonCW locks are compatible, overlap doesn't matter */
-                        if (req_mode != LCK_CW)
+                        /* non-group locks are compatible, overlap doesn't
+                           matter */
+                        if (req_mode != LCK_GROUP)
                                 continue;
                                 
-                        /* If we are trying to get a CW lock and there is
+                        /* If we are trying to get a GROUP lock and there is
                            another one of this kind, we need to compare gid */
                         if (req->l_policy_data.l_extent.gid ==
-                             lock->l_policy_data.l_extent.gid) {
+                            lock->l_policy_data.l_extent.gid) {
                                 if (lock->l_req_mode == lock->l_granted_mode)
                                         RETURN(2);
 
@@ -191,8 +192,8 @@ ldlm_extent_compat_queue(struct list_head *queue, struct ldlm_lock *req,
                         }
                 }
 
-                if (lock->l_req_mode == LCK_CW) {
-                        /* If compared lock is CW, then requested is PR/PW/ =>
+                if (lock->l_req_mode == LCK_GROUP) {
+                        /* If compared lock is GROUP, then requested is PR/PW/=>
                          * this is not compatible; extent range does not
                          * matter */
                         if (*flags & LDLM_FL_BLOCK_NOWAIT) {
@@ -203,7 +204,7 @@ ldlm_extent_compat_queue(struct list_head *queue, struct ldlm_lock *req,
                         }
                 } else if (lock->l_policy_data.l_extent.end < req_start ||
                            lock->l_policy_data.l_extent.start > req_end) {
-                        /* if a non-CW lock doesn't overlap skip it */
+                        /* if a non grouplock doesn't overlap skip it */
                         continue;
                 }
 

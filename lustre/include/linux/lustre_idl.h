@@ -724,7 +724,8 @@ typedef enum {
         LCK_PR = 4,
         LCK_CW = 8,
         LCK_CR = 16,
-        LCK_NL = 32
+        LCK_NL = 32,
+        LCK_GROUP = 64
 } ldlm_mode_t;
 
 struct ldlm_extent {

@@ -102,6 +102,7 @@ typedef enum {
 #define LCK_COMPAT_CW  (LCK_COMPAT_PW | LCK_CW)
 #define LCK_COMPAT_CR  (LCK_COMPAT_CW | LCK_PR | LCK_PW)
 #define LCK_COMPAT_NL  (LCK_COMPAT_CR | LCK_EX)
+#define LCK_COMPAT_GROUP  (LCK_GROUP | LCK_NL)
 
 static ldlm_mode_t lck_compat_array[] = {
         [LCK_EX] LCK_COMPAT_EX,
@@ -109,12 +110,13 @@ static ldlm_mode_t lck_compat_array[] = {
         [LCK_PR] LCK_COMPAT_PR,
         [LCK_CW] LCK_COMPAT_CW,
         [LCK_CR] LCK_COMPAT_CR,
-        [LCK_NL] LCK_COMPAT_NL
+        [LCK_NL] LCK_COMPAT_NL,
+        [LCK_GROUP] LCK_COMPAT_GROUP
 };
 
 static inline void lockmode_verify(ldlm_mode_t mode)
 {
-       LASSERT(mode >= LCK_EX && mode <= LCK_NL);
+       LASSERT(mode >= LCK_EX && mode <= LCK_GROUP);
 }
 
 static inline int lockmode_compat(ldlm_mode_t exist, ldlm_mode_t new)

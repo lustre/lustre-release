@@ -32,13 +32,13 @@
 #define LL_IOC_LOV_GETSTRIPE            _IOW ('f', 155, long)
 #define LL_IOC_LOV_SETEA                _IOW ('f', 156, long)
 #define LL_IOC_RECREATE_OBJ             _IOW ('f', 157, long)
-#define LL_IOC_CW_LOCK                  _IOW ('f', 158, long)
-#define LL_IOC_CW_UNLOCK                _IOW ('f', 159, long)
+#define LL_IOC_GROUP_LOCK               _IOW ('f', 158, long)
+#define LL_IOC_GROUP_UNLOCK             _IOW ('f', 159, long)
 
 #define O_LOV_DELAY_CREATE 0100000000  /* hopefully this does not conflict */
 
 #define LL_FILE_IGNORE_LOCK             0x00000001
-#define LL_FILE_CW_LOCKED               0x00000002
+#define LL_FILE_GROUP_LOCKED            0x00000002
 
 #define LOV_USER_MAGIC_V1 0x0BD10BD0
 #define LOV_USER_MAGIC    LOV_USER_MAGIC_V1

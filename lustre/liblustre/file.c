@@ -259,10 +259,11 @@ int llu_mdc_close(struct obd_export *mdc_exp, struct inode *inode)
         ENTRY;
 
         /* clear group lock, if present */
-        if (fd->fd_flags & LL_FILE_CW_LOCKED) {
+        if (fd->fd_flags & LL_FILE_GROUP_LOCKED) {
                 struct lov_stripe_md *lsm = llu_i2info(inode)->lli_smd;
-                fd->fd_flags &= ~(LL_FILE_CW_LOCKED|LL_FILE_IGNORE_LOCK);
-                rc = llu_extent_unlock(fd, inode, lsm, LCK_CW, &fd->fd_cwlockh);
+                fd->fd_flags &= ~(LL_FILE_GROUP_LOCKED|LL_FILE_IGNORE_LOCK);
+                rc = llu_extent_unlock(fd, inode, lsm, LCK_GROUP,
+                                       &fd->fd_cwlockh);
         }
 
         valid = OBD_MD_FLID;

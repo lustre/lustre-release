@@ -45,7 +45,8 @@ char *ldlm_lockname[] = {
         [LCK_PR] "PR",
         [LCK_CW] "CW",
         [LCK_CR] "CR",
-        [LCK_NL] "NL"
+        [LCK_NL] "NL",
+        [LCK_GROUP] "GROUP"
 };
 char *ldlm_typename[] = {
         [LDLM_PLAIN] "PLN",
@@ -432,7 +433,7 @@ void ldlm_lock_addref_internal(struct ldlm_lock *lock, __u32 mode)
         ldlm_lock_remove_from_lru(lock);
         if (mode & (LCK_NL | LCK_CR | LCK_PR))
                 lock->l_readers++;
-        if (mode & (LCK_EX | LCK_CW | LCK_PW))
+        if (mode & (LCK_EX | LCK_CW | LCK_PW | LCK_GROUP))
                 lock->l_writers++;
         lock->l_last_used = jiffies;
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
@@ -452,7 +453,7 @@ void ldlm_lock_decref_internal(struct ldlm_lock *lock, __u32 mode)
                 LASSERT(lock->l_readers > 0);
                 lock->l_readers--;
         }
-        if (mode & (LCK_EX | LCK_CW | LCK_PW)) {
+        if (mode & (LCK_EX | LCK_CW | LCK_PW | LCK_GROUP)) {
                 LASSERT(lock->l_writers > 0);
                 lock->l_writers--;
         }
@@ -591,7 +592,7 @@ static struct ldlm_lock *search_queue(struct list_head *queue, ldlm_mode_t mode,
                         continue;
 
                 if (lock->l_resource->lr_type == LDLM_EXTENT &&
-                    mode == LCK_CW &&
+                    mode == LCK_GROUP &&
                     lock->l_policy_data.l_extent.gid != policy->l_extent.gid)
                         continue;
 

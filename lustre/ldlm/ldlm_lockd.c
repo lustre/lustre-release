@@ -185,7 +185,7 @@ static void waiting_locks_callback(unsigned long unused)
                                   l_pending_chain);
 
                 if ((lock->l_callback_timeout > jiffies) ||
-                    (lock->l_req_mode == LCK_CW))
+                    (lock->l_req_mode == LCK_GROUP))
                         break;
 
                 LDLM_ERROR(lock, "lock callback timer expired: evicting client "

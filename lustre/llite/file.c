@@ -44,10 +44,11 @@ static int ll_mdc_close(struct obd_export *mdc_exp, struct inode *inode,
         ENTRY;
 
         /* clear group lock, if present */
-        if (fd->fd_flags & LL_FILE_CW_LOCKED) {
+        if (fd->fd_flags & LL_FILE_GROUP_LOCKED) {
                 struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
-                fd->fd_flags &= ~(LL_FILE_CW_LOCKED|LL_FILE_IGNORE_LOCK);
-                rc = ll_extent_unlock(fd, inode, lsm, LCK_CW, &fd->fd_cwlockh);
+                fd->fd_flags &= ~(LL_FILE_GROUP_LOCKED|LL_FILE_IGNORE_LOCK);
+                rc = ll_extent_unlock(fd, inode, lsm, LCK_GROUP,
+                                      &fd->fd_cwlockh);
         }
 
         valid = OBD_MD_FLID;
@@ -1018,7 +1019,7 @@ static int ll_lov_getstripe(struct inode *inode, unsigned long arg)
                             (void *)arg);
 }
 
-static int ll_get_cwlock(struct inode *inode, struct file *file,
+static int ll_get_grouplock(struct inode *inode, struct file *file,
                          unsigned long arg)
 {
         struct ll_file_data *fd = file->private_data;
@@ -1031,7 +1032,7 @@ static int ll_get_cwlock(struct inode *inode, struct file *file,
         int flags = 0;
         ENTRY;
 
-        if (fd->fd_flags & LL_FILE_CW_LOCKED) {
+        if (fd->fd_flags & LL_FILE_GROUP_LOCKED) {
                 RETURN(-EINVAL);
         }
 
@@ -1039,18 +1040,18 @@ static int ll_get_cwlock(struct inode *inode, struct file *file,
         if (file->f_flags & O_NONBLOCK)
                 flags = LDLM_FL_BLOCK_NOWAIT;
 
-        err = ll_extent_lock(fd, inode, lsm, LCK_CW, &policy, &lockh, flags);
+        err = ll_extent_lock(fd, inode, lsm, LCK_GROUP, &policy, &lockh, flags);
         if (err)
                 RETURN(err);
 
-        fd->fd_flags |= LL_FILE_CW_LOCKED|LL_FILE_IGNORE_LOCK;
+        fd->fd_flags |= LL_FILE_GROUP_LOCKED|LL_FILE_IGNORE_LOCK;
         fd->fd_gid = arg;
         memcpy(&fd->fd_cwlockh, &lockh, sizeof(lockh));
 
         RETURN(0);
 }
 
-static int ll_put_cwlock(struct inode *inode, struct file *file,
+static int ll_put_grouplock(struct inode *inode, struct file *file,
                          unsigned long arg)
 {
         struct ll_file_data *fd = file->private_data;
@@ -1059,7 +1060,7 @@ static int ll_put_cwlock(struct inode *inode, struct file *file,
         ldlm_error_t err;
         ENTRY;
 
-        if (!(fd->fd_flags & LL_FILE_CW_LOCKED)) {
+        if (!(fd->fd_flags & LL_FILE_GROUP_LOCKED)) {
                 /* Ugh, it's already unlocked. */
                 RETURN(-EINVAL);
         }
@@ -1067,9 +1068,9 @@ static int ll_put_cwlock(struct inode *inode, struct file *file,
         if (fd->fd_gid != arg) /* Ugh? Unlocking with different gid? */
                 RETURN(-EINVAL);
         
-        fd->fd_flags &= ~(LL_FILE_CW_LOCKED|LL_FILE_IGNORE_LOCK);
+        fd->fd_flags &= ~(LL_FILE_GROUP_LOCKED|LL_FILE_IGNORE_LOCK);
 
-        err = ll_extent_unlock(fd, inode, lsm, LCK_CW, &fd->fd_cwlockh);
+        err = ll_extent_unlock(fd, inode, lsm, LCK_GROUP, &fd->fd_cwlockh);
         if (err)
                 RETURN(err);
 
@@ -1122,10 +1123,10 @@ int ll_file_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
         case EXT3_IOC_GETFLAGS:
         case EXT3_IOC_SETFLAGS:
                 RETURN( ll_iocontrol(inode, file, cmd, arg) );
-        case LL_IOC_CW_LOCK:
-                RETURN(ll_get_cwlock(inode, file, arg));
-        case LL_IOC_CW_UNLOCK:
-                RETURN(ll_put_cwlock(inode, file, arg));
+        case LL_IOC_GROUP_LOCK:
+                RETURN(ll_get_grouplock(inode, file, arg));
+        case LL_IOC_GROUP_UNLOCK:
+                RETURN(ll_put_grouplock(inode, file, arg));
         /* We need to special case any other ioctls we want to handle,
          * to send them to the MDS/OST as appropriate and to properly
          * network encode the arg field.

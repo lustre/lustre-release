@@ -1187,7 +1187,7 @@ static int llu_iop_fcntl(struct inode *ino, int cmd, va_list ap)
         return -ENOSYS;
 }
 
-static int llu_get_cwlock(struct inode *inode, unsigned long arg)
+static int llu_get_grouplock(struct inode *inode, unsigned long arg)
 {
         struct llu_inode_info *lli = llu_i2info(inode);
         struct ll_file_data *fd = lli->lli_file_data;
@@ -1199,7 +1199,7 @@ static int llu_get_cwlock(struct inode *inode, unsigned long arg)
         int flags = 0;
         ENTRY;
 
-        if (fd->fd_flags & LL_FILE_CW_LOCKED) {
+        if (fd->fd_flags & LL_FILE_GROUP_LOCKED) {
                 RETURN(-EINVAL);
         }
 
@@ -1207,18 +1207,19 @@ static int llu_get_cwlock(struct inode *inode, unsigned long arg)
         if (lli->lli_open_flags & O_NONBLOCK)
                 flags = LDLM_FL_BLOCK_NOWAIT;
 
-        err = llu_extent_lock(fd, inode, lsm, LCK_CW, &policy, &lockh, flags);
+        err = llu_extent_lock(fd, inode, lsm, LCK_GROUP, &policy, &lockh,
+                              flags);
         if (err)
                 RETURN(err);
 
-        fd->fd_flags |= LL_FILE_CW_LOCKED|LL_FILE_IGNORE_LOCK;
+        fd->fd_flags |= LL_FILE_GROUP_LOCKED|LL_FILE_IGNORE_LOCK;
         fd->fd_gid = arg;
         memcpy(&fd->fd_cwlockh, &lockh, sizeof(lockh));
 
         RETURN(0);
 }
 
-static int llu_put_cwlock(struct inode *inode, unsigned long arg)
+static int llu_put_grouplock(struct inode *inode, unsigned long arg)
 {
         struct llu_inode_info *lli = llu_i2info(inode);
         struct ll_file_data *fd = lli->lli_file_data;
@@ -1226,15 +1227,15 @@ static int llu_put_cwlock(struct inode *inode, unsigned long arg)
         ldlm_error_t err;
         ENTRY;
 
-        if (!(fd->fd_flags & LL_FILE_CW_LOCKED))
+        if (!(fd->fd_flags & LL_FILE_GROUP_LOCKED))
                 RETURN(-EINVAL);
 
         if (fd->fd_gid != arg)
                 RETURN(-EINVAL);
 
-        fd->fd_flags &= ~(LL_FILE_CW_LOCKED|LL_FILE_IGNORE_LOCK);
+        fd->fd_flags &= ~(LL_FILE_GROUP_LOCKED|LL_FILE_IGNORE_LOCK);
 
-        err = llu_extent_unlock(fd, inode, lsm, LCK_CW, &fd->fd_cwlockh);
+        err = llu_extent_unlock(fd, inode, lsm, LCK_GROUP, &fd->fd_cwlockh);
         if (err)
                 RETURN(err);
 
@@ -1250,12 +1251,12 @@ static int llu_iop_ioctl(struct inode *ino, unsigned long int request,
         unsigned long arg;
 
         switch (request) {
-        case LL_IOC_CW_LOCK:
+        case LL_IOC_GROUP_LOCK:
                 arg = va_arg(ap, unsigned long);
-                return llu_get_cwlock(ino, arg);
-        case LL_IOC_CW_UNLOCK:
+                return llu_get_grouplock(ino, arg);
+        case LL_IOC_GROUP_UNLOCK:
                 arg = va_arg(ap, unsigned long);
-                return llu_put_cwlock(ino, arg);
+                return llu_put_grouplock(ino, arg);
         }
 
         CERROR("did not support ioctl cmd %lx\n", request);
