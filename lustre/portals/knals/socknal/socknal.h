@@ -67,11 +67,7 @@
 #include <portals/nal.h>
 #include <portals/socknal.h>
 
-#if CONFIG_SMP
-# define SOCKNAL_N_SCHED       num_online_cpus() /* # socknal schedulers */
-#else
-# define SOCKNAL_N_SCHED        1               /* # socknal schedulers */
-#endif
+#define SOCKNAL_N_SCHED         ksocknal_nsched() /* # socknal schedulers */
 #define SOCKNAL_N_AUTOCONNECTD  4               /* # socknal autoconnect daemons */
 
 #define SOCKNAL_MIN_RECONNECT_INTERVAL	HZ      /* first failed connection retry... */
@@ -391,6 +387,64 @@ ksocknal_putconnsock (ksock_conn_t *conn)
 {
         fput (conn->ksnc_sock->file);
 }
+
+#ifndef CONFIG_SMP
+static inline 
+int ksocknal_nsched(void)
+{
+        return 1;
+}
+#else
+#include <linux/lustre_version.h>
+# if !(defined(CONFIG_X86) && (LINUX_VERSION_CODE >= KERNEL_VERSION(2,4,21))) || defined(CONFIG_X86_64) || (LUSTRE_KERNEL_VERSION < 39) || ((LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,0)) && !defined(CONFIG_X86_HT))
+static inline int
+ksocknal_nsched(void)
+{
+        return num_online_cpus();
+}
+
+static inline int
+ksocknal_sched2cpu(int i)
+{
+        return i;
+}
+
+static inline int
+ksocknal_irqsched2cpu(int i)
+{
+        return i;
+}
+# else 
+static inline int
+ksocknal_nsched(void)
+{
+        if (smp_num_siblings == 1)
+                return (num_online_cpus());
+
+        /* We need to know if this assumption is crap */
+        LASSERT (smp_num_siblings == 2);
+        return (num_online_cpus()/2);
+}
+
+static inline int
+ksocknal_sched2cpu(int i)
+{
+        if (smp_num_siblings == 1)
+                return i;
+        
+        return (i * 2);
+}
+
+static inline int
+ksocknal_irqsched2cpu(int i)
+{
+        if (smp_num_siblings == 1)
+                return ksocknal_sched2cpu(i);
+
+        return (ksocknal_sched2cpu(i) + 1);
+}
+# endif
+#endif
 
 extern void ksocknal_put_route (ksock_route_t *route);
 extern void ksocknal_put_peer (ksock_peer_t *peer);

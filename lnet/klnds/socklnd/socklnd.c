@@ -159,6 +159,7 @@ ksocknal_bind_irq (unsigned int irq)
 {
 #if (defined(CONFIG_SMP) && CPU_AFFINITY)
         int              bind;
+        int              cpu;
         unsigned long    flags;
         char             cmdline[64];
         ksock_irqinfo_t *info;
@@ -171,7 +172,7 @@ ksocknal_bind_irq (unsigned int irq)
                                    NULL};
 
         LASSERT (irq < NR_IRQS);
-        if (irq == 0)                           /* software NIC */
+        if (irq == 0)              /* software NIC or affinity disabled */
                 return;
 
         info = &ksocknal_data.ksnd_irqinfo[irq];
@@ -187,11 +188,12 @@ ksocknal_bind_irq (unsigned int irq)
         if (!bind)                              /* bound already */
                 return;
 
+        cpu = ksocknal_irqsched2cpu(info->ksni_sched);
         snprintf (cmdline, sizeof (cmdline),
-                  "echo %d > /proc/irq/%u/smp_affinity", 1 << info->ksni_sched, irq);
+                  "echo %d > /proc/irq/%u/smp_affinity", 1 << cpu, irq);
 
         printk (KERN_INFO "Lustre: Binding irq %u to CPU %d with cmd: %s\n",
-                irq, info->ksni_sched, cmdline);
+                irq, cpu, cmdline);
 
         /* FIXME: Find a better method of setting IRQ affinity...
          */
