@@ -26,13 +26,12 @@
 # Based in part on the XML obdctl modifications done by Brian Behlendorf 
 
 import sys, getopt
-import string, os, stat, popen2, socket
+import string, os, stat, popen2, socket, time
 import re, exceptions
 import xml.dom.minidom
 
 # Global parameters
 TCP_ACCEPTOR = ''
-options = {}
 
 #
 # Maximum number of devices to search for.
@@ -47,9 +46,11 @@ config.xml          Lustre configuration in xml format.
 --get <url>         URL to fetch a config file
 -v | --verbose      Print system commands as they are run
 -d | --debug        Print system commands, but does not run them
---host <hostname>   Load config for <hostname>
+--node <nodename>   Load config for <nodename>
 --cleanup	    Cleans up config. (Shutdown)
 -h | --help         Print this help 
+--gdb               Create a gdb script to load the modules. Prints message
+                    after creating script and sleeps for 5 seconds.
 """
     TODO = """
 --ldap server	    LDAP server with lustre config database
@@ -58,9 +59,77 @@ config.xml          Lustre configuration in xml format.
                     for modules.
 --portals=src       Portals source 
 --makeldiff         Translate xml source to LDIFF 
---iam myname	    ??
 """
     sys.exit()
+
+# ============================================================
+# Config parameters, encapsulated in a class
+class Config:
+    def __init__(self):
+        # flags
+        self._noexec = 0
+        self._verbose = 0
+        self._reformat = 0
+        self._cleanup = 0
+        self._gdb = 0
+        self._nomod = 0
+        # parameters
+        self._modules = None
+        self._node = None
+        self._url = None
+        self._gdb_script = '/tmp/ogdb'
+        self._debug_path = '/tmp/lustre-log'
+        self._src_dir = None
+
+    def verbose(self, flag = None):
+        if flag: self._verbose = flag
+        return self._verbose
+
+    def noexec(self, flag = None):
+        if flag: self._noexec = flag
+        return self._noexec
+
+    def reformat(self, flag = None):
+        if flag: self._reformat = flag
+        return self._reformat
+
+    def cleanup(self, flag = None):
+        if flag: self._cleanup = flag
+        return self._cleanup
+
+    def gdb(self, flag = None):
+        if flag: self._gdb = flag
+        return self._gdb
+
+    def nomod(self, flag = None):
+        if flag: self._nomod = flag
+        return self._nomod
+
+    def node(self, val = None):
+        if val: self._node = val
+        return self._node
+
+    def url(self, val = None):
+        if val: self._url = val
+        return self._url
+
+    def gdb_script(self):
+        if os.path.isdir('/r'):
+            return '/r' + self._gdb_script
+        else:
+            return self._gdb_script
+
+    def debug_path(self):
+        if os.path.isdir('/r'):
+            return '/r' + self._debug_path
+        else:
+            return self._debug_path
+
+    def src_dir(self, val = None):
+        if val: self._url = val
+        return self._url
+
+config = Config()
 
 # ============================================================ 
 # debugging and error funcs
@@ -71,7 +140,8 @@ def fixme(msg = "this feature"):
 def panic(*args):
     msg = string.join(map(str,args))
     print msg
-    raise RuntimeError, msg
+    if not config.noexec():
+        raise RuntimeError, msg
 
 def log(*args):
     msg = string.join(map(str,args))
@@ -82,14 +152,9 @@ def logall(msgs):
         print string.strip(s)
 
 def debug(*args):
-    msg = string.join(map(str,args))
-    if isverbose(): print msg
-
-def isverbose():
-    return options.has_key('verbose') and  options['verbose'] == 1
-
-def isnotouch():
-    return options.has_key('debug') and options['debug'] == 1
+    if config.verbose():
+        msg = string.join(map(str,args))
+        print msg
 
 # ============================================================
 # locally defined exceptions
@@ -110,7 +175,7 @@ class LCTLInterface:
         """
         self.lctl = find_prog(cmd)
         if not self.lctl:
-            if isnotouch():
+            if config.noexec():
                 debug('! lctl not found')
                 self.lctl = 'lctl'
             else:
@@ -126,7 +191,7 @@ class LCTLInterface:
         create complex command line options
         """
         debug("+", self.lctl, cmds)
-        if isnotouch(): return ([], 0)
+        if config.noexec(): return (0, [])
         p = popen2.Popen3(self.lctl, 1)
         p.tochild.write(cmds + "\n")
         p.tochild.close()
@@ -175,12 +240,22 @@ class LCTLInterface:
         """ 
         #self.run(cmds)
 
-    # create a new device with lctl
+    # disconnect one connection
     def disconnect(self, net, nid, port, servuuid):
         cmds =  """
   network %s
   disconnect %s 
-  quit""" % (net, nid)
+  del_uuid %s
+  quit""" % (net, nid, servuuid)
+        self.run(cmds)
+
+    # disconnect all connections
+    def disconnectAll(self, net):
+        cmds =  """
+  network %s
+  disconnect
+  del_uuid self
+  quit""" % (net)
         self.run(cmds)
 
     # create a new device with lctl
@@ -220,7 +295,7 @@ class LCTLInterface:
 def run(*args):
     cmd = string.join(map(str,args))
     debug ("+", cmd)
-    if isnotouch(): return (0, [])
+    if config.noexec(): return (0, [])
     f = os.popen(cmd + ' 2>&1')
     out = f.readlines()
     ret = f.close()
@@ -234,7 +309,7 @@ def run(*args):
 def run_daemon(*args):
     cmd = string.join(map(str,args))
     debug ("+", cmd)
-    if isnotouch(): return 0
+    if config.noexec(): return 0
     f = os.popen(cmd + ' 2>&1')
     ret = f.close()
     if ret:
@@ -242,7 +317,6 @@ def run_daemon(*args):
     else:
         ret = 0
     return ret
-
 
 # Determine full path to use for an external command
 # searches dirname(argv[0]) first, then PATH
@@ -257,6 +331,29 @@ def find_prog(cmd):
             return prog
     return ''
 
+# Recursively look for file starting at base dir
+def do_find_file(base, mod):
+    fullname = os.path.join(base, mod)
+    if os.access(fullname, os.R_OK):
+        return fullname
+    for d in os.listdir(base):
+        dir = os.path.join(base,d)
+        if os.path.isdir(dir):
+            module = do_find_file(dir, mod)
+            if module:
+                return module
+
+def find_module(src_dir, modname):
+    mod = '%s.o' % (modname)
+    search = (src_dir + "/lustre", src_dir + "/portals")
+    for d in search:
+        try:
+            module = do_find_file(d, mod)
+            if module:
+                return module
+        except OSError:
+            pass
+    return None
 
 # is the path a block device?
 def is_block(path):
@@ -347,7 +444,7 @@ def clean_loop(file):
 
 # initialize a block device if needed
 def block_dev(dev, size, fstype, format):
-    if isnotouch(): return dev
+    if config.noexec(): return dev
     if not is_block(dev):
         dev = init_loop(dev, size, fstype)
     if (format == 'yes'):
@@ -366,7 +463,8 @@ class Module:
         self.tag_name = tag_name
         self.name = node.getAttribute('name')
         self.uuid = node.getAttribute('uuid')
-
+        self.kmodule_list = []
+        
     def info(self, *args):
         msg = string.join(map(str,args))
         print self.tag_name + ":", self.name, self.uuid, msg
@@ -379,6 +477,49 @@ class Module:
         except CommandError:
             print "cleanup failed: ", self.name
 
+    def add_module(self, modname):
+        """Append a module to list of modules to load."""
+        self.kmodule_list.append(modname)
+
+    def mod_loaded(self, modname):
+        """Check if a module is already loaded. Look in /proc/modules for it."""
+        fp = open('/proc/modules')
+        lines = fp.readlines()
+        fp.close()
+        # please forgive my tired fingers for this one
+        ret = filter(lambda word, mod=modname: word == mod,
+                     map(lambda line: string.split(line)[0], lines))
+        return ret
+
+    def load_module(self):
+        """Load all the modules in the list in the order they appear."""
+        for mod in self.kmodule_list:
+            #  (rc, out) = run ('/sbin/lsmod | grep -s', mod)
+            if self.mod_loaded(mod) and not config.noexec():
+                continue
+            if config.src_dir():
+                module = find_module(config.src_dir(), mod)
+                if not module:
+                    panic('module not found:', mod)
+                (rc, out)  = run('/sbin/insmod', module)
+                if rc:
+                    raise CommandError("insmod failed:", module)
+            else:
+                (rc, out) = run('/sbin/modprobe', mod)
+                if rc:
+                    raise CommandError("modprobe failed:", module)
+            
+    def cleanup_module(self):
+        """Unload the modules in the list in reverse order."""
+        rev = self.kmodule_list
+        rev.reverse()
+        for mod in rev:
+            debug('rmmod', mod)
+            if config.noexec():
+                continue
+            run('/sbin/rmmod', mod)
+        
+
 class Network(Module):
     def __init__(self,node):
         Module.__init__(self, 'NETWORK', node)
@@ -387,6 +528,16 @@ class Network(Module):
         self.port = int(getText(node, 'port', 0))
         self.send_buf = int(getText(node, 'send_buf', 0))
         self.read_buf = int(getText(node, 'read_buf', 0))
+
+        self.add_module('portals')
+        if self.net_type == 'tcp':
+            self.add_module('ksocknal')
+        if self.net_type == 'elan':
+            self.add_module('kqswnal')
+        if self.net_type == 'gm':
+            self.add_module('kgmnal')
+        self.add_module('obdclass')
+        self.add_module('ptlrpc')
 
     def prepare(self):
         self.info(self.net_type, self.nid, self.port)
@@ -402,6 +553,7 @@ class Network(Module):
         self.info(self.net_type, self.nid, self.port)
         try:
             lctl.cleanup("RPCDEV", "")
+            lctl.disconnectAll(self.net_type)
         except CommandError:
             print "cleanup failed: ", self.name
         if self.net_type == 'tcp':
@@ -411,6 +563,8 @@ class Network(Module):
 class LDLM(Module):
     def __init__(self,node):
         Module.__init__(self, 'LDLM', node)
+        self.add_module('ldlm')
+        self.add_module('extN') # yuck, fix dupe handling and move this
     def prepare(self):
         self.info()
         lctl.newdev(attach="ldlm %s %s" % (self.name, self.uuid),
@@ -435,6 +589,8 @@ class LOV(Module):
                 stripe_cnt = stripe_cnt + 1
         self.devlist = devlist
         self.stripe_cnt = stripe_cnt
+        self.add_module('osc')
+        self.add_module('lov')
 
     def prepare(self):
         self.info(self.mdsuuid, self.stripe_cnt, self.stripe_sz, self.stripe_off, self.pattern,
@@ -452,7 +608,9 @@ class MDS(Module):
         self.devname, self.size = getDevice(node)
         self.fstype = getText(node, 'fstype')
         self.format = getText(node, 'autoformat', "no")
-
+        self.add_module('mds')
+        self.add_module('mds_%s' % (self.fstype))
+            
     def prepare(self):
         self.info(self.devname, self.fstype, self.format)
         blkdev = block_dev(self.devname, self.size, self.fstype, self.format)
@@ -467,6 +625,7 @@ class MDC(Module):
         Module.__init__(self, 'MDC', node)
         ref = node.getElementsByTagName('mds_ref')[0]
         self.mds_uuid = ref.getAttribute('uuidref')
+        self.add_module('mdc')
 
     def prepare(self):
         self.info(self.mds_uuid)
@@ -496,6 +655,7 @@ class OBD(Module):
         self.devname, self.size = getDevice(node)
         self.fstype = getText(node, 'fstype')
         self.format = getText(node, 'autoformat', 'yes')
+        self.add_module(self.obdtype)
 
     # need to check /proc/mounts and /etc/mtab before
     # formatting anything.
@@ -514,6 +674,7 @@ class OST(Module):
         Module.__init__(self, 'OST', node)
         ref = node.getElementsByTagName('obd_ref')[0]
         self.obd_uuid = ref.getAttribute('uuidref')
+        self.add_module('ost')
 
     def prepare(self):
         self.info(self.obd_uuid)
@@ -527,6 +688,7 @@ class OSC(Module):
         self.obd_uuid = ref.getAttribute('uuidref')
         ref = node.getElementsByTagName('ost_ref')[0]
         self.ost_uuid = ref.getAttribute('uuidref')
+        self.add_module('osc')
 
     def prepare(self):
         self.info(self.obd_uuid, self.ost_uuid)
@@ -539,7 +701,7 @@ class OSC(Module):
     def cleanup(self):
         self.info(self.obd_uuid, self.ost_uuid)
         net_uuid = get_ost_net(self.dom_node.parentNode, self.ost_uuid)
-        srv = Network(net)
+        srv = Network(net_uuid)
         try:
             lctl.disconnect(srv.net_type, srv.nid, srv.port, srv.uuid)
             lctl.cleanup(self.name, self.uuid)
@@ -554,25 +716,27 @@ class Mountpoint(Module):
         self.mdc_uuid = ref.getAttribute('uuidref')
         ref = node.getElementsByTagName('osc_ref')[0]
         self.lov_uuid = ref.getAttribute('uuidref')
+        self.add_module('osc')
+        self.add_module('llite')
 
     def prepare(self):
         l = lookup(self.dom_node.parentNode, self.lov_uuid)
         if l.nodeName == 'lov':
-            dev = LOV(l)
-            for osc_uuid in string.split(dev.devlist):
+            lov = LOV(l)
+            for osc_uuid in string.split(lov.devlist):
                 osc = lookup(self.dom_node.parentNode, osc_uuid)
                 if osc:
                     n = OSC(osc)
                     n.prepare()
                 else:
                     panic('osc not found:', osc_uuid)
+            lctl.newdev(attach="lov %s %s" % (lov.name, lov.uuid),
+                        setup ="%s" % (self.mdc_uuid))
         else:
-            dev = OSC(l)
-            dev.prepare()
+            osc = OSC(l)
+            osc.prepare()
             
         self.info(self.path, self.mdc_uuid,self.lov_uuid)
-        lctl.newdev(attach="lov %s %s" % (dev.name, dev.uuid),
-                    setup ="%s" % (self.mdc_uuid))
         cmd = "mount -t lustre_lite -o osc=%s,mdc=%s none %s" % \
               (self.lov_uuid, self.mdc_uuid, self.path)
         run("mkdir", self.path)
@@ -582,7 +746,21 @@ class Mountpoint(Module):
     def cleanup(self):
         self.info(self.path, self.mdc_uuid,self.lov_uuid)
         run("umount", self.path)
-
+        l = lookup(self.dom_node.parentNode, self.lov_uuid)
+        if l.nodeName == 'lov':
+            lov = LOV(l)
+            for osc_uuid in string.split(lov.devlist):
+                osc = lookup(self.dom_node.parentNode, osc_uuid)
+                if osc:
+                    n = OSC(osc)
+                    n.cleanup()
+                else:
+                    panic('osc not found:', osc_uuid)
+            lov.cleanup()
+        else:
+            osc = OSC(l)
+            osc.cleanup()
+            
 # ============================================================
 # XML processing and query
 # TODO: Change query funcs to use XPath, which is muc cleaner
@@ -691,9 +869,9 @@ def getByName(lustreNode, tag, name):
 # ============================================================
 # lconf level logic
 # Start a service.
-def startService(node, cleanFlag):
+def startService(node, clean_flag, module_flag):
     type = getServiceType(node)
-    debug('Starting service:', type, getName(node), getUUID(node))
+    debug('Service:', type, getName(node), getUUID(node))
     # there must be a more dynamic way of doing this...
     n = None
     if type == 'ldlm':
@@ -717,10 +895,18 @@ def startService(node, cleanFlag):
     else:
         panic ("unknown service type:", type)
 
-    if cleanFlag:
-        n.cleanup()
+    if module_flag:
+        if config.nomod():
+            return
+        if clean_flag:
+            n.cleanup_module()
+        else:
+            n.load_module()
     else:
-        n.prepare()
+        if clean_flag:
+            n.cleanup()
+        else:
+            n.prepare()
 
 #
 # Prepare the system to run lustre using a particular profile
@@ -730,18 +916,18 @@ def startService(node, cleanFlag):
 #  * make sure partitions are in place and prepared
 #  * initialize devices with lctl
 # Levels is important, and needs to be enforced.
-def startProfile(lustreNode, profileNode, cleanFlag):
+def startProfile(lustreNode, profileNode, clean_flag, module_flag):
     if not profileNode:
         panic("profile:", profile, "not found.")
     services = getServices(lustreNode, profileNode)
-    if cleanFlag:
+    if clean_flag:
         services.reverse()
     for s in services:
-        startService(s[1], cleanFlag)
+        startService(s[1], clean_flag, module_flag)
 
 #
 # Load profile for 
-def doHost(lustreNode, hosts, cleanFlag):
+def doHost(lustreNode, hosts, clean_flag):
     node = None
     for h in hosts:
         node = getByName(lustreNode, 'node', h)
@@ -752,20 +938,35 @@ def doHost(lustreNode, hosts, cleanFlag):
         print 'No host entry found.'
         return
 
+    # Two step process: (1) load modules, (2) setup lustre
+    # if not cleaning, load modules first.
+    module_flag = not clean_flag
     reflist = node.getElementsByTagName('profile')
     for profile in reflist:
-            startProfile(lustreNode,  profile, cleanFlag)
+            startProfile(lustreNode,  profile, clean_flag, module_flag)
+
+    if not clean_flag:
+        setDebugPath()
+        if config.gdb():
+            # dump /tmp/ogdb and sleep/pause here
+            script = config.gdb_script()
+            run(lctl.lctl, ' modules >', script)
+            log ("The GDB module script is in", script)
+            time.sleep(5)
+            
+    module_flag = not module_flag
+    for profile in reflist:
+            startProfile(lustreNode,  profile, clean_flag, module_flag)
 
 # Command line processing
 #
 def parse_cmdline(argv):
     short_opts = "hdv"
-    long_opts = ["ldap", "reformat", "lustre=", "verbose",
-                 "portals=", "makeldiff", "cleanup", "iam=",
-                 "help", "debug", "host=", "get="]
+    long_opts = ["ldap", "reformat", "lustre=", "verbose", "gdb",
+                 "portals=", "makeldiff", "cleanup",
+                 "help", "debug", "node=", "get=", "nomod"]
     opts = []
     args = []
-    global options
     try:
         opts, args = getopt.getopt(argv, short_opts, long_opts)
     except getopt.GetoptError:
@@ -776,22 +977,26 @@ def parse_cmdline(argv):
         if o in ("-h", "--help"):
             usage()
         if o == "--cleanup":
-            options['cleanup'] = 1
+            config.cleanup(1)
         if o in ("-v", "--verbose"):
-            options['verbose'] = 1
+            config.verbose(1)
         if o in ("-d", "--debug"):
-            options['debug'] = 1
-            options['verbose'] = 1
+            config.noexec(1)
+            config.verbose(1)
         if o == "--portals":
-            options['portals'] = a
+            config.portals =  a
         if o == "--lustre":
-            options['lustre'] = a
+            config.lustre  = a
         if o  == "--reformat":
-            options['reformat'] = 1
-        if o  == "--host":
-            options['hostname'] = [a]
+            config.reformat(1)
+        if o  == "--node":
+            config.node(a)
         if o  == "--get":
-            options['url'] = a
+            config.url(a)
+        if o  == "--gdb":
+            config.gdb(1)
+        if o  == "--nomod":
+            config.nomod(1)
     return args
 
 def fetch(url):
@@ -804,36 +1009,56 @@ def fetch(url):
         usage()
     return data
 
+def setupModulePath(cmd):
+    base = os.path.dirname(cmd)
+    if os.access(base+"/Makefile", os.R_OK):
+        config.src_dir(base + "/../../")
+
+def setDebugPath():
+    debug("debug path: ", config.debug_path())
+    fp = open('/proc/sys/portals/debug_path', 'w')
+    fp.write(config.debug_path())
+    fp.close()
+             
+    
+def makeDevices():
+    if not os.access('/dev/portals', os.R_OK):
+        run('mknod /dev/portals c 10 240')
+    if not os.access('/dev/obd', os.R_OK):
+        run('mknod /dev/obd c 10 241')
+
 # Initialize or shutdown lustre according to a configuration file
 #   * prepare the system for lustre
 #   * configure devices with lctl
 # Shutdown does steps in reverse
 #
 def main():
-    global options, TCP_ACCEPTOR, lctl
+    global TCP_ACCEPTOR, lctl
     args = parse_cmdline(sys.argv[1:])
     if len(args) > 0:
         if not os.access(args[0], os.R_OK | os.W_OK):
             print 'File not found:', args[0]
             sys.exit(1)
         dom = xml.dom.minidom.parse(args[0])
-    elif options.has_key('url'):
-        xmldata = fetch(options['url'])
+    elif config.url():
+        xmldata = fetch(config.url())
         dom = xml.dom.minidom.parseString(xmldata)
     else:
         usage()
 
-    if not options.has_key('hostname'):
-        options['hostname'] = []
+    node_list = []
+    if config.node():
+        node_list.append(config.node())
+    else:
         host = socket.gethostname()
         if len(host) > 0:
-            options['hostname'].append(host)
-        options['hostname'].append('localhost')
-    print "configuring for host: ", options['hostname']
+            node_list.append(host)
+        node_list.append('localhost')
+    print "configuring for host: ", node_list
 
     TCP_ACCEPTOR = find_prog('acceptor')
     if not TCP_ACCEPTOR:
-        if isnotouch():
+        if config.noexec():
             TCP_ACCEPTOR = 'acceptor'
             debug('! acceptor not found')
         else:
@@ -841,7 +1066,9 @@ def main():
 
     lctl = LCTLInterface('lctl')
 
-    doHost(dom.documentElement, options['hostname'], options.has_key('cleanup') )
+    setupModulePath(sys.argv[0])
+    makeDevices()
+    doHost(dom.documentElement, node_list, config.cleanup())
 
 if __name__ == "__main__":
     try:
@@ -849,7 +1076,5 @@ if __name__ == "__main__":
     except RuntimeError:
         pass
     except CommandError:
-        print '<insert exception data here>'
-        pass
-
+        print 'FIXME: insert exception data here'
 
