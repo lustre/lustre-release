@@ -83,6 +83,7 @@ static int ll_readlink(struct dentry *dentry, char *buffer, int buflen)
         RETURN(rc);
 }
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 static int ll_follow_link(struct dentry *dentry, struct nameidata *nd,
                           struct lookup_intent *it)
 {
@@ -118,8 +119,7 @@ static int ll_follow_link(struct dentry *dentry, struct nameidata *nd,
 
         RETURN(rc);
 }
-
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
+#else
 static int ll_follow_link(struct dentry *dentry, struct nameidata *nd)
 {
         struct inode *inode = dentry->d_inode;
