@@ -41,3 +41,4 @@ runas
 openfile
 unlinkmany
 fchdir_test
+getdents
