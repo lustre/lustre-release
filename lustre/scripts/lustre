@@ -1,0 +1,75 @@
+#!/bin/bash
+#
+# lustre   This shell script takes care of starting and stopping Lustre
+#
+# chkconfig: 2345 99 1
+# description: Lustre Lite File System
+# processname: obdctl
+# config: /etc/lustre/lustre.cfg
+# pidfile: /var/run/lustre.pid
+
+# Source function library.
+if [ -f /etc/init.d/functions ] ; then
+   . /etc/init.d/functions
+fi
+
+# Source networking configuration.
+if [ -f /etc/sysconfig/network ] ; then
+   . /etc/sysconfig/network
+fi
+
+# Source InterSync configureation.
+if [ -f /etc/sysconfig/intersync ] ; then
+	. /etc/sysconfig/intersync
+else
+	CLIENT_OPTS=
+        CACHE=/var/intermezzo/cache
+fi
+
+# Check that networking is up.
+[ "${NETWORKING}" = "no" ] && exit 0
+
+[ -f /usr/sbin/obdctl ] || exit 0
+
+start() {
+        echo -n $"Starting lustre: "
+	/usr/sbin/llrsetup.sh
+        echo -n lustre
+        RETVAL=$?
+        [ $RETVAL = 0 ] && touch /var/lock/subsys/lustre
+}
+
+stop() {
+        echo -n $"Shutting down lustre: "
+	/usr/sbin/llcleanup.sh
+	echo -n lustre              
+	echo
+	rm -f /var/lock/subsys/intersync
+}
+
+restart() {
+	stop
+	start
+}
+
+# See how we were called.
+case "$1" in
+  start)
+	start
+	;;
+  stop)
+	stop
+	;;
+  restart)
+	restart
+	;;
+  status)
+	status intersync
+	;;
+  *)
+	echo $"Usage: lustre {start|stop|restart|status}"
+	exit 1
+esac
+
+exit $RETVAL
+
