@@ -30,9 +30,9 @@ lmc
 \layout Subsection
 
 NAME
-\layout Standard
+\layout Description
 
-lmc - lustre configuration maker.
+lmc Lustre configuration maker.
 \layout Subsection
 
 SYNOPSIS
@@ -40,254 +40,589 @@ SYNOPSIS
 
 
 \series bold 
+\emph on 
 lmc [options] --add <objectype> [args] 
 \layout Standard
 
 
 \series bold 
-NOT IMPLEMENTED -- lmc [options] --remove <objecttype> [args]
+NOT IMPLEMENTED 
+\emph on 
+-- lmc [options] --remove <objecttype> [args]
 \layout Standard
 
 
 \series bold 
-NOT IMPLEMENTED -- lmc [options] --convert [args]
+NOT IMPLEMENTED 
+\emph on 
+-- lmc [options] --convert [args]
 \layout Subsection
 
 DESCRIPTION
 \layout Standard
 
-At present lmc when invoked adds configuration data to the config file.
- lmc will also be able to remove configuration data or convert its forma.
- One generates a single config file for the cluster at present including
- at the minimum mds's, mtpt's and ost's and whatever those reference (e.g.
- net's and profiles)
+At present lmc, when invoked, adds configuration data to the config file.
+ lmc will also be able to remove configuration data or convert its format.
+ One generates a single config file for the cluster at present including,
+ at the minimum, MDS's, mtpt's, and OST's and whatever those reference (e.g.
+ nets and profiles).
 \layout Standard
 
-The objecttype refers to a collection of related configuration entities
- and can be one of 
+The 
+\emph on 
+objecttype
+\emph default 
+ refers to a collection of related configuration entities and can be one
+ of 
 \series bold 
-net, mds, lov, ost, mtpt, route, oscref.
+net, MDS, LOV, OST, mtpt, route, or oscref.
  
 \series default 
-We describe the arguments required for the addition of each objecttype.
- [NOT implemented] Lmc can also remove items from or convert the format
+We describe the arguments required for the addition of each 
+\emph on 
+objecttype
+\emph default 
+.
+ [NOT IMPLEMENTED] lmc can also remove items from or convert the format
  of configuration data.
 \layout Standard
 
-to generate configuration data associated with systems in a Lustre cluster.
- 
-\layout Description
+To generate configuration data associated with systems in a Lustre cluster:
+\layout List
+\labelwidthstring 00.00.0000
 
+
+\series bold 
+\emph on 
 --add\SpecialChar ~
-net Adds a network device descriptor for the given node, with parameters
- as indicated.
+net
+\series default 
+\emph default 
+ Adds a network device descriptor for the given node, with parameters as
+ indicated.
 \begin_deeper 
 \layout Standard
 
-The arguments required are 
-\layout Description
+The arguments required are:
+\layout List
+\labelwidthstring 00.00.0000
 
---node\SpecialChar ~
-''node_name'' If not present this will create a new node with the
- given name.
- This is also used to specify a specific node for other elements, and the
-\layout Description
 
---nettype\SpecialChar ~
-<type> this can be 
 \series bold 
-tcp, elan, gm
-\layout Description
+\emph on 
+--node\SpecialChar ~
+''node_name''
+\series default 
+\emph default 
+ This will create a new node with the given name if not already present.
+ This is also used to specify a specific node for other elements.
+\layout List
+\labelwidthstring 00.00.0000
 
+
+\series bold 
+\emph on 
+--nettype\SpecialChar ~
+<type>
+\series default 
+\emph default 
+ This can be 
+\series bold 
+tcp, elan, gm.
+\layout List
+\labelwidthstring 00.00.0000
+
+
+\series bold 
+\emph on 
 --nid\SpecialChar ~
-nid the network id, e.g.
- ElanID or IP address as used by portals.
- If host_name is '*', then the local address while be substituted when the
- node is configured with lconf.
-\layout Description
+nid
+\series default 
+\emph default 
+ The network 
+\emph on 
+id
+\emph default 
+, e.g.
+ ElanID or IP address as used by Portals.
+ If 
+\emph on 
+host_name
+\emph default 
+ is '*', then the local address while be substituted when the node is configured
+ with lconf.
+\layout List
+\labelwidthstring 00.00.0000
 
---router optional flag to mark this node as a router
-\layout Description
 
---profile optional flag to mark this node as a profile node.
- This is automatically true if the the --nid argument contains a '*'.
-\layout Description
+\series bold 
+\emph on 
+--router
+\series default 
+\emph default 
+ Optional flag to mark this node as a router
+\layout List
+\labelwidthstring 00.00.0000
 
+
+\series bold 
+\emph on 
+--profile
+\series default 
+\emph default 
+ Optional flag to mark this node as a profile node.
+ This is automatically true if the the 
+\emph on 
+--nid
+\emph default 
+ argument contains a '*'.
+\layout List
+\labelwidthstring 00.00.0000
+
+
+\series bold 
+\emph on 
 --port\SpecialChar ~
-[port] optional argument to indicate the tcp port.
+[port]
+\series default 
+\emph default 
+ Optional argument to indicate the tcp port.
  The default is 988.
  
-\layout Description
+\layout List
+\labelwidthstring 00.00.0000
 
+
+\series bold 
+\emph on 
 --tcpbuf\SpecialChar ~
-<size> optional argument
+<size>
+\series default 
+\emph default 
+ Optional argument.
 \end_deeper 
-\layout Description
+\layout List
+\labelwidthstring 00.00.0000
 
+
+\series bold 
+\emph on 
 --add\SpecialChar ~
 mds
 \begin_deeper 
-\layout Description
+\layout List
+\labelwidthstring 00.00.0000
 
+
+\series bold 
+\emph on 
 --mds\SpecialChar ~
-<mds_name> 
-\layout Description
+<mds_name>
+\series default 
+\emph default 
+ 
+\layout List
+\labelwidthstring 00.00.0000
 
+
+\series bold 
+\emph on 
 --dev\SpecialChar ~
-<pathname> Path of device on local system.
+<pathname>
+\series default 
+\emph default 
+ Path of device on local system.
  If the is a file, then a loop device is created and used as the block device.
-\layout Description
+\layout List
+\labelwidthstring 00.00.0000
 
+
+\series bold 
+\emph on 
 --size\SpecialChar ~
-<size> optional argument indicating the size of the device to be created
- (used typically for loop devices).
-\layout Description
+<size>
+\series default 
+\emph default 
+ Optional argument indicating the size of the device to be created (used
+ typically for loop devices).
+\layout List
+\labelwidthstring 00.00.0000
 
+
+\series bold 
+\emph on 
 --node\SpecialChar ~
-<nodename> Adds an MDS to the specified node.
- This requires a --node argument, and it must not be a profile node.
+<nodename>
+\series default 
+\emph default 
+ Adds an MDS to the specified node.
+ This requires a 
+\emph on 
+--node
+\emph default 
+ argument, and it must not be a profile node.
 \end_deeper 
-\layout Description
+\layout List
+\labelwidthstring 00.00.0000
 
+
+\series bold 
+\emph on 
 --add\SpecialChar ~
-lov Creates an LOV with the specified parameters.
- The mds_name must already exist in the descriptor.
+lov
+\series default 
+\emph default 
+ Creates an LOV with the specified parameters.
+ The 
+\emph on 
+mds_name
+\emph default 
+ must already exist in the descriptor.
 \begin_deeper 
-\layout Description
+\layout List
+\labelwidthstring 00.00.0000
 
+
+\series bold 
+\emph on 
 --lov_<name>
-\layout Description
+\layout List
+\labelwidthstring 00.00.0000
 
+
+\series bold 
+\emph on 
 --mds_<name>
-\layout Description
+\layout List
+\labelwidthstring 00.00.0000
 
+
+\series bold 
+\emph on 
 --stripe_sz\SpecialChar ~
 <size>
-\layout Description
+\layout List
+\labelwidthstring 00.00.0000
 
+
+\series bold 
+\emph on 
 --stripe_cnt\SpecialChar ~
 <count>
-\layout Description
+\layout List
+\labelwidthstring 00.00.0000
 
+
+\series bold 
+\emph on 
 --stripe_pattern\SpecialChar ~
-<pattern> Pattern can be 0.
+<pattern>
+\series default 
+\emph default 
+ Pattern can be 0.
 \end_deeper 
-\layout Description
+\layout List
+\labelwidthstring 00.00.0000
 
+
+\series bold 
+\emph on 
 --add\SpecialChar ~
-ost Creates an OBD, OST, and OSC.
+ost
+\series default 
+\emph default 
+ Creates an OBD, OST, and OSC.
  The OST and OBD are created on the specified node.
 \begin_deeper 
-\layout Description
+\layout List
+\labelwidthstring 00.00.0000
 
+
+\series bold 
+\emph on 
 --obd\SpecialChar ~
-<name> Assign a name to the OBD device.
-\layout Description
+<name>
+\series default 
+\emph default 
+ Assign a name to the OBD device.
+\layout List
+\labelwidthstring 00.00.0000
 
+
+\series bold 
+\emph on 
 --node\SpecialChar ~
-<nodename> Node on which the OST service is run, can not be a profile
- node.
-\layout Description
+<nodename>
+\series default 
+\emph default 
+ Node on which the OST service is run, can not be a profile node.
+\layout List
+\labelwidthstring 00.00.0000
 
+
+\series bold 
+\emph on 
 --dev\SpecialChar ~
-<pathname> Path of device on local system.
- If the is a file, then a loop device is created and used as the block device.
-\layout Description
+<pathname>
+\series default 
+\emph default 
+ Path of device on local system.
+ If this is a file, then a loop device is created and used as the block
+ device.
+\layout List
+\labelwidthstring 00.00.0000
 
+
+\series bold 
+\emph on 
 --size\SpecialChar ~
 [size]
-\layout Description
+\layout List
+\labelwidthstring 00.00.0000
 
+
+\series bold 
+\emph on 
 --lov\SpecialChar ~
-<name> Name of LOV to which this OSC will be attached.
+<name>
+\series default 
+\emph default 
+ Name of LOV to which this OSC will be attached.
  
-\layout Description
+\layout List
+\labelwidthstring 00.00.0000
 
+
+\series bold 
 --obduuid\SpecialChar ~
-UUID specify the UUID of the OBD device.
- The default value is OBD_nodename_UUID.
+UUID
+\series default 
+ Specify the UUID of the OBD device.
+ The default value is 
+\emph on 
+OBD_nodename_UUID
+\emph default 
+.
 \end_deeper 
-\layout Description
+\layout List
+\labelwidthstring 00.00.0000
 
+
+\series bold 
+\emph on 
 --add\SpecialChar ~
-mtpt Creates a mount point on the specified node.
+mtpt
+\series default 
+\emph default 
+ Creates a mount-point on the specified node.
  Either an LOV or OSC name can be used.
 \begin_deeper 
-\layout Description
+\layout List
+\labelwidthstring 00.00.0000
 
+
+\series bold 
+\emph on 
 --node\SpecialChar ~
-node node or profile node that will use the mtpt
-\layout Description
+node
+\series default 
+\emph default 
+ Node or profile node that will use the 
+\emph on 
+mtpt
+\emph default 
+.
+\layout List
+\labelwidthstring 00.00.0000
 
+
+\series bold 
+\emph on 
 --path\SpecialChar ~
 /mnt/path\SpecialChar ~
 
-\layout Description
+\layout List
+\labelwidthstring 00.00.0000
 
+
+\series bold 
+\emph on 
 --mds\SpecialChar ~
 mds_name 
-\layout Description
+\layout List
+\labelwidthstring 00.00.0000
 
+
+\series bold 
+\emph on 
 --obd\SpecialChar ~
 lov_name|osc_name
 \end_deeper 
-\layout Description
+\layout List
+\labelwidthstring 00.00.0000
 
+
+\series bold 
+\emph on 
 --add\SpecialChar ~
-route Creates a static route through a gateway to a specific nid or
- a range of nids.
+route
+\series default 
+\emph default 
+ Creates a static route through a gateway to a specific 
+\emph on 
+nid
+\emph default 
+ or a range of 
+\emph on 
+nid
+\emph default 
+'s.
 \begin_deeper 
-\layout Description
+\layout List
+\labelwidthstring 00.00.0000
 
+
+\series bold 
+\emph on 
 --node\SpecialChar ~
-node node or profile node to add the route to
-\layout Description
+node
+\series default 
+\emph default 
+ Node or profile node to add the route to.
+\layout List
+\labelwidthstring 00.00.0000
 
+
+\series bold 
+\emph on 
 --gw\SpecialChar ~
-nid the nid of the gateway (must be a local interface or a peer)
-\layout Description
+nid
+\series default 
+\emph default 
+ The 
+\emph on 
+nid
+\emph default 
+ of the gateway (must be a local interface or a peer).
+\layout List
+\labelwidthstring 00.00.0000
 
+
+\series bold 
+\emph on 
 --tgt\SpecialChar ~
-nid for a specific route, this is the target nid
-\layout Description
+nid
+\series default 
+\emph default 
+ For a specific route, this is the target 
+\emph on 
+nid.
+\layout List
+\labelwidthstring 00.00.0000
 
+
+\series bold 
+\emph on 
 --lo\SpecialChar ~
-nid for a range route, this is the lo value nid
-\layout Description
+nid
+\series default 
+\emph default 
+ For a range route, this is the lo value 
+\emph on 
+nid.
+\layout List
+\labelwidthstring 00.00.0000
 
+
+\series bold 
+\emph on 
 --hi\SpecialChar ~
-nid for a range route, this is the hi value nid
+nid
+\series default 
+\emph default 
+ For a range route, this is the hi value 
+\emph on 
+nid.
 \end_deeper 
-\layout Description
+\layout List
+\labelwidthstring 00.00.0000
 
+
+\series bold 
+\emph on 
 --add\SpecialChar ~
-oscref Adds an OSC reference to a node.
- This is only necessary when the the OSC will be used without a mountpoint.
+oscref
+\series default 
+\emph default 
+ Adds an OSC reference to a node.
+ This is only necessary when the the OSC will be used without a mount-point.
 \begin_deeper 
-\layout Description
+\layout List
+\labelwidthstring 00.00.0000
 
+
+\series bold 
+\emph on 
 --node\SpecialChar ~
-node node or profile node to add the OSC ref to
-\layout Description
+node 
+\series default 
+\emph default 
+Node or profile node to add the 
+\emph on 
+oscref
+\emph default 
+ to.
+\layout List
+\labelwidthstring 00.00.0000
 
+
+\series bold 
+\emph on 
 --osc\SpecialChar ~
-osc_name Name of the OSC to add a reference to.
- The --add ost command automatically creates the OSC, and the name will
- be OSC_<node>, where node is the name of node the OST is on.
+osc_name
+\series default 
+\emph default 
+ Name of the OSC to add a reference to.
+ The 
+\emph on 
+--add
+\emph default 
+ OST command automatically creates the OSC, and the name will be 
+\emph on 
+OSC_<node>
+\emph default 
+, where node is the name of node the OST is on.
 \end_deeper 
-\layout Description
+\layout List
+\labelwidthstring 00.00.0000
 
-Options: 
+
+\series bold 
+Options
 \begin_deeper 
-\layout Description
+\layout List
+\labelwidthstring 00.00.0000
 
+
+\series bold 
+\emph on 
 --output\SpecialChar ~
-filename Sends output to the file.
+filename
+\series default 
+\emph default 
+ Send output to the file.
  If the file exists, it will be overwritten.
-\layout Description
+\layout List
+\labelwidthstring 00.00.0000
 
+
+\series bold 
+\emph on 
 --merge\SpecialChar ~
-filename Add the new element to an existing file.
+filename 
+\series default 
+\emph default 
+Add the new element to an existing file.
  
 \end_deeper 
 \layout Subsection
@@ -295,18 +630,11 @@ filename Add the new element to an existing file.
 EXAMPLES
 \layout Standard
 
-Real life examples are given in the lustre-conf man page.
+Real life examples are given in the Lustre-conf manual page.
 \layout Subsection
 
 BUGS
 \layout Standard
 
 None are known.
-\layout Subsection
-
-AUTHOR
-\layout Standard
-
-Cluster File Systems, Inc.
- 2002 - created
 \the_end
