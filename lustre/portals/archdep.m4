@@ -52,7 +52,6 @@ case ${host_cpu} in
 	AC_MSG_RESULT($host_cpu)
 	KCFLAGS='-g -Wall '
 	KCPPFLAGS='-D__arch_lib__ '
-	AM_CONDITIONAL(LIBLUSTRE, test x$host_cpu = xlib)
    	libdir='${exec_prefix}/lib/lustre'
         MOD_LINK=elf_i386
 ;;
@@ -204,5 +203,6 @@ fi
 CFLAGS="$KCFLAGS"
 CPPFLAGS="$KINCFLAGS $KCPPFLAGS $MFLAGS "
 
+AM_CONDITIONAL(LIBLUSTRE, test x$host_cpu = xlib)
 AC_SUBST(MOD_LINK)
 AC_SUBST(LINUX25)
