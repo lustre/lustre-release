@@ -121,8 +121,8 @@ int ll_lock(struct inode *dir, struct dentry *dentry,
                 RETURN(-EINVAL);
         }
 
-        err = mdc_enqueue(&sbi->ll_mdc_conn, LDLM_MDSINTENT, it, lock_mode, dir,
-                          dentry, lockh, tgt, tgtlen, dir, sizeof(*dir));
+        err = mdc_enqueue(&sbi->ll_mdc_conn, LDLM_MDSINTENT, it, lock_mode,
+                          dir, dentry, lockh, tgt, tgtlen, dir, sizeof(*dir));
 
         RETURN(err);
 }
@@ -250,11 +250,10 @@ static struct dentry *ll_lookup2(struct inode *dir, struct dentry *dentry,
 
  iget:
         lic.lic_body = lustre_msg_buf(request->rq_repmsg, offset);
-        if (S_ISREG(lic.lic_body->mode)) {
+        if (S_ISREG(lic.lic_body->mode) &&
+            lic.lic_body->valid & OBD_MD_FLEASIZE) {
                 LASSERT(request->rq_repmsg->bufcount > offset);
                 lic.lic_lmm = lustre_msg_buf(request->rq_repmsg, offset + 1);
-                if (lic.lic_lmm->lmm_magic != LOV_MAGIC)
-                        lic.lic_lmm = NULL;
         } else
                 lic.lic_lmm = NULL;
 
@@ -359,7 +358,7 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
 
         EXIT;
  out:
-        if (lmm != NULL)
+        if (lmm)
                 OBD_FREE(lmm, mds_md_size);
         ptlrpc_free_req(request);
         return inode;
