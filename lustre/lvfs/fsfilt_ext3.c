@@ -275,11 +275,12 @@ static int fsfilt_ext3_commit(struct inode *inode, void *h, int force_sync)
         return rc;
 }
 
-static int fsfilt_ext3_commit_async(struct inode *inode, void **h)
+static int fsfilt_ext3_commit_async(struct inode *inode, void *h,
+                                        void **wait_handle)
 {
         transaction_t *transaction;
         unsigned long tid, rtid;
-        handle_t *handle = *h;
+        handle_t *handle = h;
         journal_t *journal;
         int rc;
 
@@ -304,7 +305,7 @@ static int fsfilt_ext3_commit_async(struct inode *inode, void **h)
                        (unsigned long) tid, (unsigned long) rtid);
         unlock_kernel();
 
-        *h = (void *) tid;
+        *wait_handle = (void *) tid;
         CDEBUG(D_INODE, "commit async: %lu\n", (unsigned long) tid);
         return 0;
 }
