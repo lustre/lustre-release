@@ -1115,7 +1115,7 @@ kibnal_api_shutdown (nal_t *nal)
                 libcfs_nal_cmd_unregister(OPENIBNAL);
                 /* No new peers */
 
-                /* resetting my NID to unadvertises me, removes my
+                /* resetting my NID unadvertises me, removes my
                  * listener and nukes all current peers */
                 kibnal_set_mynid (PTL_NID_ANY);
 

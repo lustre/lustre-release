@@ -131,34 +131,49 @@ AC_SUBST(GMNAL)
 AC_DEFUN([LP_CONFIG_OPENIB],[
 AC_MSG_CHECKING([whether to enable OpenIB support])
 # set default
-DFLTOPENIBCPPFLAGS="-I$LINUX/drivers/infiniband/include -DIN_TREE_BUILD"
+OPENIBPATH="$LINUX/drivers/infiniband"
 AC_ARG_WITH([openib],
 	AC_HELP_STRING([--with-openib=path],
 	               [build openibnal against path]),
 	[
 		case $with_openib in
-		yes)    OPENIBCPPFLAGS="$DFLTOPENIBCPPFLAGS"
-			ENABLEOPENIB=2
+		yes)    ENABLEOPENIB=2
 			;;
 		no)     ENABLEOPENIB=0
 			;;
-		*)      OPENIBCPPFLAGS="-I$with_openib/include"
+		*)      OPENIBPATH="$with_openib"
 			ENABLEOPENIB=3
 			;;
 		esac
 	],[
-                OPENIBCPPFLAGS="$DFLTOPENIBCPPFLAGS"
 		ENABLEOPENIB=1
 	])
 if test $ENABLEOPENIB -eq 0; then
 	AC_MSG_RESULT([disabled])
+elif test ! \( -f ${OPENIBPATH}/include/ts_ib_core.h -a \
+               -f ${OPENIBPATH}/include/ts_ib_sa_client.h \); then
+	AC_MSG_RESULT([no])
+	case $ENABLEOPENIB in
+	1) ;;
+	2) AC_MSG_ERROR([kernel OpenIB headers not present]);;
+	3) AC_MSG_ERROR([bad --with-openib path]);;
+	*) AC_MSG_ERROR([internal error]);;
+	esac
 else
+    	case $ENABLEOPENIB in
+	1|2) OPENIBCPPFLAGS="-I$OPENIBPATH/include -DIN_TREE_BUILD";;
+	3)   OPENIBCPPFLAGS="-I$OPENIBPATH/include";;
+	*)   AC_MSG_RESULT([no])
+	     AC_MSG_ERROR([internal error]);;
+	esac
 	EXTRA_KCFLAGS_save="$EXTRA_KCFLAGS"
 	EXTRA_KCFLAGS="$EXTRA_KCFLAGS $OPENIBCPPFLAGS"
 	LB_LINUX_TRY_COMPILE([
 		#include <ts_ib_core.h>
+		#include <ts_ib_sa_client.h>
 	],[
        	        struct ib_device_properties props;
+	        struct ib_common_attrib_services svc;
 		return 0;
 	],[
 		AC_MSG_RESULT([yes])
@@ -167,8 +182,8 @@ else
 		AC_MSG_RESULT([no])
 		case $ENABLEOPENIB in
 		1) ;;
-		2) AC_MSG_ERROR([default openib headers not present]);;
-		3) AC_MSG_ERROR([bad --with-openib path]);;
+		2) AC_MSG_ERROR([can't compile with kernel OpenIB headers]);;
+		3) AC_MSG_ERROR([can't compile with OpenIB headers under $OPENIBPATH]);;
 		*) AC_MSG_ERROR([internal error]);;
 		esac
 		OPENIBNAL=""
