@@ -26,7 +26,7 @@
  *   need only look at logs relevant to itself
  */
 
-#define DEBUG_SUBSYSTEM S_LOG
+#define DEBUG_SUBSYSTEM S_UNDEFINED
 
 #include <linux/fs.h>
 #include <linux/obd_class.h>
@@ -206,7 +206,6 @@ struct llog_handle *llog_current_log(struct llog_handle *cathandle, int reclen,
         struct llog_handle *loghandle = NULL;
         ENTRY;
 
-        down(&cathandle->lgh_lock);
         if (!list_empty(loglist)) {
                 struct llog_object_hdr *loh;
 
@@ -222,9 +221,6 @@ struct llog_handle *llog_current_log(struct llog_handle *cathandle, int reclen,
                 GOTO(out, loghandle);
         }
 out:
-        if (loghandle)
-                down(&loghandle->lgh_lock);
-        up(&cathandle->lgh_lock);
         return loghandle;
 }
 
@@ -248,9 +244,14 @@ int llog_add_record(struct llog_handle *cathandle, struct llog_trans_hdr *rec,
         ENTRY;
 
         LASSERT(rec->lth_len <= LLOG_CHUNK_SIZE);
+        down(&cathandle->lgh_lock);
         loghandle = llog_current_log(cathandle, reclen, oti);
-        if (IS_ERR(loghandle))
+        if (IS_ERR(loghandle)) {
+                up(&cathandle->lgh_lock);
                 RETURN(PTR_ERR(loghandle));
+        }
+        down(&loghandle->lgh_lock);
+        up(&cathandle->lgh_lock);
 
         loh = loghandle->lgh_hdr;
         file = loghandle->lgh_file;
@@ -323,7 +324,7 @@ int llog_add_record(struct llog_handle *cathandle, struct llog_trans_hdr *rec,
         logcookies->lgc_index = index;
 
 out:
-        up(&loghandle->lgh_lock);       /* drop lock from llog_current_log() */
+        up(&loghandle->lgh_lock);
         RETURN(sizeof(*logcookies));
 }
 
