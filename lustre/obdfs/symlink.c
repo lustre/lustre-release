@@ -71,7 +71,7 @@ struct dentry * obdfs_follow_link(struct dentry * dentry,
 	ENTRY;
 	link = (char *) inode->u.ext2_i.i_data;
 	if (inode->i_blocks) {
-		IDEBUG(inode);
+		OIDEBUG(inode);
 		page = obdfs_getpage(inode, 0, 0, 0);
 		PDEBUG(page, "follow_link");
 		if (!page) {
@@ -104,7 +104,7 @@ int obdfs_readlink (struct dentry * dentry, char * buffer, int buflen)
 
 	link = (char *) inode->u.ext2_i.i_data;
 	if (inode->i_blocks) {
-		IDEBUG(inode);
+		OIDEBUG(inode);
 		page = obdfs_getpage(inode, 0, 0, 0);
 		PDEBUG(page, "readlink");
 		if (!page) {

@@ -147,7 +147,7 @@ struct obd_ops {
 	int (*o_write)(struct obd_conn *conn, struct obdo *oa, char *buf,
 		       obd_size *count, obd_off offset);
 	int (*o_brw)(int rw, struct obd_conn *conn, struct obdo *oa,
-		     char *buf, obd_size count, obd_off offset, obd_flag flags);
+		     char *buf, obd_size *count, obd_off offset, obd_flag flags);
 	int (*o_punch)(struct obd_conn *conn, struct obdo *tgt, obd_size count,
 		       obd_off offset);
 	int (*o_sync)(struct obd_conn *conn, struct obdo *tgt, obd_size count,
@@ -302,7 +302,7 @@ static __inline__ void obdo_cpy_md(struct obdo *dst, struct obdo *src)
 
 static __inline__ void obdo_from_inode(struct obdo *dst, struct inode *src)
 {
-	CDEBUG(D_INODE, "flags %x\n", dst->o_valid);
+	CDEBUG(D_INODE, "flags 0x%08x\n", dst->o_valid);
 	if ( dst->o_valid & OBD_MD_FLID )
 		dst->o_id = src->i_ino;
 	if ( dst->o_valid & OBD_MD_FLATIME )
@@ -334,7 +334,7 @@ static __inline__ void obdo_from_inode(struct obdo *dst, struct inode *src)
 static __inline__ void obdo_to_inode(struct inode *dst, struct obdo *src)
 {
 
-	CDEBUG(D_INODE, "flags %x\n", src->o_valid);
+	CDEBUG(D_INODE, "flags 0x%08x\n", src->o_valid);
 	if ( src->o_valid & OBD_MD_FLID )
 		dst->i_ino = src->o_id;
 	if ( src->o_valid & OBD_MD_FLATIME ) 
@@ -453,9 +453,9 @@ struct oic_attr_s {
 
 /* for copy, migrate */
 struct ioc_mv_s {
-	unsigned int src_conn_id;
+	uint32_t src_conn_id;
 	struct obdo  src;
-	unsigned int dst_conn_id;
+	uint32_t dst_conn_id;
 	struct obdo  dst;
 };
 

@@ -37,18 +37,15 @@ kmem_cache_t *obdo_cachep = NULL;
 int obd_init_obdo_cache(void)
 {
 	ENTRY;
-	if (obdo_cachep != NULL) {
-		printk(KERN_INFO "obdo_cache already exists\n");
-		EXIT;
-		/* XXX maybe this shoul be an error return? */
-		return 0;
-	}
-
-	obdo_cachep = kmem_cache_create("obdo_cache", sizeof(struct obdo),
-					0, SLAB_HWCACHE_ALIGN, NULL, NULL);
 	if (obdo_cachep == NULL) {
-		EXIT;
-		return -ENOMEM;
+		obdo_cachep = kmem_cache_create("obdo_cache",
+						sizeof(struct obdo),
+						0, SLAB_HWCACHE_ALIGN,
+						NULL, NULL);
+		if (obdo_cachep == NULL) {
+			EXIT;
+			return -ENOMEM;
+		}
 	}
 	EXIT;
 	return 0;
@@ -57,10 +54,12 @@ int obd_init_obdo_cache(void)
 void obd_cleanup_obdo_cache(void)
 {
 	ENTRY;
-	if (obdo_cachep != NULL)
-		kmem_cache_destroy(obdo_cachep);
+	if (obdo_cachep != NULL) {
+		if (kmem_cache_shrink(obdo_cachep))
+			printk(KERN_INFO "obd_cleanup_obdo_cache: unable to free all of cache\n");
+	} else
+		printk(KERN_INFO "obd_cleanup_obdo_cache: called with NULL cache pointer\n");
 
-	obdo_cachep = NULL;
 	EXIT;
 }
 
@@ -272,7 +271,7 @@ int gen_copy_data(struct obd_conn *dst_conn, struct obdo *dst,
 		CDEBUG(D_INODE, "Read page %ld ...\n", page->index);
 
 		rc = OBP(dst_conn->oc_dev, brw)
-			(WRITE, dst_conn, dst,  (char *)page_address(page), 
+			(WRITE, dst_conn, dst, (char *)page_address(page), 
 			 PAGE_SIZE, (page->index) << PAGE_SHIFT, 1);
 		if ( rc != PAGE_SIZE)
 			break;

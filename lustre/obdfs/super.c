@@ -346,8 +346,10 @@ void obdfs_read_inode(struct inode *inode)
 
 	ODEBUG(oa);
 	obdfs_to_inode(inode, oa);
+	INIT_LIST_HEAD(&OBD_LIST(inode));
+
 	obdo_free(oa);
-	IDEBUG(inode);
+	OIDEBUG(inode);
 
 	if (S_ISREG(inode->i_mode))
 		inode->i_op = &obdfs_file_inode_operations;
@@ -358,6 +360,8 @@ void obdfs_read_inode(struct inode *inode)
 	else
 		/* XXX what do we pass here??? */
 		init_special_inode(inode, inode->i_mode, 0 /* XXX XXX */ );
+
+	EXIT;
 	return;
 }
 
@@ -494,6 +498,8 @@ void cleanup_module(void)
 	obdfs_cleanup_wreqcache();
 	obdfs_sysctl_clean();
 	unregister_filesystem(&obdfs_fs_type);
+
+	EXIT;
 }
 
 #endif

@@ -59,18 +59,30 @@ extern int obd_print_entry;
 
 #define CMD(cmd) (( cmd == READ ) ? "read" : "write")
 
-#define IDEBUG(inode) { \
+/* Inode common information printed out */
+#define ICDEBUG(inode) { \
 		printk("]]%s line %d[[  ino %ld, blocks %ld, size %Ld, atm %ld, ctm %ld, mtm %ld, mode %o, uid %d, gid %d\n", \
 		       __FUNCTION__ , __LINE__, \
 		       inode->i_ino, inode->i_blocks, inode->i_size,\
 		       inode->i_atime, inode->i_ctime, inode->i_mtime,\
 		       inode->i_mode, inode->i_uid, inode->i_gid);\
-		printk("blk: %d %d %d %d %d %d %d %d %d %d\n",\
+	}
+
+/* Ext2 inode information */
+#define EXDEBUG(inode) { \
+		ICDEBUG(inode);\
+		printk("data: 0x%08x 0x%08x 0x%08x 0x%08x\n",\
 		       inode->u.ext2_i.i_data[0], inode->u.ext2_i.i_data[1],\
-		       inode->u.ext2_i.i_data[2], inode->u.ext2_i.i_data[3],\
-		       inode->u.ext2_i.i_data[4], inode->u.ext2_i.i_data[5],\
-		       inode->u.ext2_i.i_data[6], inode->u.ext2_i.i_data[7],\
-		       inode->u.ext2_i.i_data[8], inode->u.ext2_i.i_data[9]);\
+		       inode->u.ext2_i.i_data[2], inode->u.ext2_i.i_data[3]);\
+	}
+
+/* OBDFS inode information */
+/* Should print these with oi_flags and oi_list.prev, next instead of i_data */
+#define OIDEBUG(inode) { \
+		ICDEBUG(inode);\
+		printk("oinfo: flags 0x%08x next 0x%08x prev 0x%08x\n",\
+		       inode->u.ext2_i.i_data[0], inode->u.ext2_i.i_data[1],\
+		       inode->u.ext2_i.i_data[2]);\
 	}
 
 #define ODEBUG(obdo) { \
