@@ -1,0 +1,77 @@
+ fs/inode.c         |   21 ++++++++++++++++++++-
+ include/linux/fs.h |    1 +
+ 2 files changed, 21 insertions(+), 1 deletion(-)
+
+--- linux-2.4.20/fs/inode.c~inode_unhash	2003-07-13 15:23:43.000000000 -0600
++++ linux-2.4.20-braam/fs/inode.c	2003-07-13 17:33:44.000000000 -0600
+@@ -550,6 +552,18 @@ static void dispose_list(struct list_hea
+ 	}
+ }
+ 
++/**     unhash_notify - notify the FS that an inode is being unhashed
++ *      @inode: inode being unhashed
++ *
++ *      the unhash_inode method must not block
++ */
++static void unhash_notify(struct inode *inode)
++{
++        if (inode->i_sb && inode->i_sb->s_op && 
++            inode->i_sb->s_op->unhash_inode)
++                inode->i_sb->s_op->unhash_inode(inode);
++}
++
+ /*
+  * Invalidate all inodes for a device.
+  */
+@@ -572,6 +586,7 @@ static int invalidate_list(struct list_h
+ 			continue;
+ 		invalidate_inode_buffers(inode);
+ 		if (!atomic_read(&inode->i_count)) {
++                        unhash_notify(inode);
+ 			list_del_init(&inode->i_hash);
+ 			list_del(&inode->i_list);
+ 			list_add(&inode->i_list, dispose);
+@@ -692,6 +707,7 @@ void prune_icache(int goal)
+ 		if (atomic_read(&inode->i_count))
+ 			continue;
+ 		list_del(tmp);
++                unhash_notify(inode);
+ 		list_del(&inode->i_hash);
+ 		INIT_LIST_HEAD(&inode->i_hash);
+ 		list_add(tmp, freeable);
+@@ -1018,6 +1034,7 @@ void insert_inode_hash(struct inode *ino
+ void remove_inode_hash(struct inode *inode)
+ {
+ 	spin_lock(&inode_lock);
++        unhash_notify(inode);
+ 	list_del(&inode->i_hash);
+ 	INIT_LIST_HEAD(&inode->i_hash);
+ 	spin_unlock(&inode_lock);
+@@ -1049,6 +1066,7 @@ void iput(struct inode *inode)
+ 			return;
+ 
+ 		if (!inode->i_nlink) {
++                        unhash_notify(inode);
+ 			list_del(&inode->i_hash);
+ 			INIT_LIST_HEAD(&inode->i_hash);
+ 			list_del(&inode->i_list);
+@@ -1083,6 +1101,7 @@ void iput(struct inode *inode)
+ 				write_inode_now(inode, 1);
+ 				spin_lock(&inode_lock);
+ 				inodes_stat.nr_unused--;
++                                unhash_notify(inode);
+ 				list_del_init(&inode->i_hash);
+ 			}
+ 			list_del_init(&inode->i_list);
+--- linux-2.4.20/include/linux/fs.h~inode_unhash	2003-07-13 15:23:43.000000000 -0600
++++ linux-2.4.20-braam/include/linux/fs.h	2003-07-13 17:26:03.000000000 -0600
+@@ -920,6 +920,7 @@ struct super_operations {
+ 	int (*statfs) (struct super_block *, struct statfs *);
+ 	int (*remount_fs) (struct super_block *, int *, char *);
+ 	void (*clear_inode) (struct inode *);
++	void (*unhash_inode) (struct inode *);
+ 	void (*umount_begin) (struct super_block *);
+ 
+ 	/* Following are for knfsd to interact with "interesting" filesystems
+
+_
