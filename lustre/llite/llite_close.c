@@ -132,8 +132,8 @@ static void ll_close_done_writing(struct inode *inode)
         if (test_bit(LLI_F_HAVE_OST_SIZE_LOCK, &lli->lli_flags))
                 goto rpc;
 
-        rc = ll_extent_lock_no_validate(NULL, inode, lli->lli_smd, LCK_PW,
-                                        &policy, &lockh, ast_flags);
+        rc = ll_extent_lock(NULL, inode, lli->lli_smd, LCK_PW, &policy, &lockh,
+                            ast_flags);
         if (rc != ELDLM_OK) {
                 CERROR("lock acquisition failed (%d): unable to send "
                        "DONE_WRITING for inode %lu/%u\n", rc, inode->i_ino,
