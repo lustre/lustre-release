@@ -11,5 +11,3 @@ EXTRA_PROGRAMS = ost
 ost_SOURCES = ost_handler.c lproc_ost.c
 
 include $(top_srcdir)/Rules
-
-CFLAGS += -DOBD_MAX_IOCTL_BUFFER=@OBD_BUFFER_SIZE@
