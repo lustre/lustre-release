@@ -610,11 +610,6 @@ kibnal_map_kiov (kib_tx_t *tx, enum ib_memory_access access,
                 resid -= PAGE_SIZE;
         }
 
-#if 0
-        CWARN ("nphys %d, nob %d, page_offset %d\n", nphys, nob, page_offset);
-        for (rc = 0; rc < nphys; rc++)
-                CWARN ("   [%d] "LPX64" / %d\n", rc, phys[rc].address, phys[rc].size);
-#endif
         tx->tx_md.md_addr = IBNAL_RDMA_BASE;
 
 #if IBNAL_FMR
@@ -1627,8 +1622,6 @@ kibnal_connreq_done (kib_conn_t *conn, int active, int status)
         if (status == 0) {
                 /* Everything worked! */
 
-#warning "purge old conn incarnations"
-
                 peer->ibp_connecting--;
 
                 /* +1 ref for ibc_list; caller(== CM)'s ref remains until
@@ -2034,7 +2027,7 @@ kibnal_active_conn_callback (tTS_IB_CM_EVENT event,
         }
 
         case TS_IB_CM_ESTABLISHED:
-                CDEBUG(D_WARNING, "Connection %p -> "LPX64" Established\n",
+                CDEBUG(D_WARNING, "Connection %p -> "LPX64" ESTABLISHED\n",
                        conn, conn->ibc_peer->ibp_nid);
 
                 kibnal_connreq_done (conn, 1, 0);
@@ -2100,7 +2093,7 @@ kibnal_pathreq_callback (tTS_IB_CLIENT_QUERY_TID tid, int status,
         /* Flag I'm getting involved with the CM... */
         conn->ibc_state = IBNAL_CONN_CONNECTING;
 
-        CDEBUG(D_WARNING, "Connecting to, service id "LPX64", on "LPX64"\n",
+        CDEBUG(D_NET, "Connecting to, service id "LPX64", on "LPX64"\n",
                conn->ibc_connreq->cr_svcrsp.ibsr_svc_id, peer->ibp_nid);
 
         /* kibnal_connect_callback gets my conn ref */

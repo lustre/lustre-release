@@ -750,7 +750,7 @@ kibnal_start_ip_listener (void)
         long           pid;
         int            rc;
 
-        CDEBUG(D_WARNING, "Starting listener\n");
+        CDEBUG(D_NET, "Starting listener\n");
 
         /* Called holding kib_nid_mutex: listener stopped */
         LASSERT (kibnal_data.kib_listener_sock == NULL);
@@ -768,7 +768,11 @@ kibnal_start_ip_listener (void)
         rc = kibnal_data.kib_listener_shutdown;
         LASSERT ((rc != 0) == (kibnal_data.kib_listener_sock == NULL));
 
-        CDEBUG(D_WARNING, "Listener %ld started OK\n", pid);
+        CDEBUG((rc == 0) ? D_WARNING : D_ERROR, 
+               "Listener %s: pid:%ld port:%d backlog:%d\n", 
+               (rc == 0) ? "started OK" : "startup failed",
+               pid, kibnal_tunables.kib_port, kibnal_tunables.kib_backlog);
+
         return rc;
 }
 
@@ -779,7 +783,7 @@ kibnal_stop_ip_listener(int clear_acceptq)
         kib_acceptsock_t *as;
         unsigned long     flags;
 
-        CDEBUG(D_WARNING, "Stopping listener\n");
+        CDEBUG(D_NET, "Stopping listener\n");
 
         /* Called holding kib_nid_mutex: listener running */
         LASSERT (kibnal_data.kib_listener_sock != NULL);
@@ -840,7 +844,6 @@ kibnal_listener_procint(ctl_table *table, int write, struct file *filp,
                         kibnal_stop_ip_listener(0);
 
                 rc = kibnal_start_ip_listener();
-
                 if (rc != 0) {
                         CERROR("Unable to restart listener with new tunable:"
                                " reverting to old value\n");
