@@ -100,7 +100,7 @@ Index: linux-2.4.20/fs/ext3/extents-in-ea.c
 +	memset(root, 0, size);
 +
 +	/* first, create ea to store root of the tree */
-+	handle = ext3_journal_start(inode, EXT3_ALLOC_NEEDED + 2);
++	handle = ext3_journal_start(inode, EXT3_ALLOC_NEEDED + 3);
 +	if (IS_ERR(handle))
 +		return PTR_ERR(handle);
 +	if ((err = ext3_xattr_set(handle, inode, name_index,
