@@ -403,7 +403,7 @@ int lustre_process_log(struct lustre_mount_data *lmd, char * profile,
                 pcfg.pcfg_nid     = lmd->lmd_server_nid;
                 pcfg.pcfg_id      = lmd->lmd_server_ipaddr;
                 pcfg.pcfg_misc    = lmd->lmd_port;
-                pcfg.pcfg_size    = 0;
+                pcfg.pcfg_size    = 8388608;
                 pcfg.pcfg_flags   = 0x4; /*share*/
                 err = kportal_nal_cmd(&pcfg);
                 if (err <0)
