@@ -255,6 +255,7 @@ static struct dentry *filter_fid2dentry(struct obd_device *obddev,
 
         if (id == 0) {
                 CERROR("fatal: invalid object #0\n");
+                LBUG();
                 RETURN(ERR_PTR(-ESTALE));
         }
 
@@ -1157,6 +1158,8 @@ static int filter_preprw(int cmd, struct obd_conn *conn,
                 dentry = filter_fid2dentry(obddev,
                                            filter_parent(obddev, S_IFREG),
                                            o->ioo_id, S_IFREG);
+                if (IS_ERR(dentry))
+                        GOTO(out_ctxt, rc = PTR_ERR(dentry));
                 inode = dentry->d_inode;
 
                 for (j = 0; j < o->ioo_bufcnt; j++, b++, r++) {
@@ -1177,7 +1180,7 @@ static int filter_preprw(int cmd, struct obd_conn *conn,
 
                         /* FIXME: we need to iput all inodes on error */
                         if (!inode)
-                                RETURN(-EINVAL);
+                                GOTO(out_ctxt, rc = -EINVAL);
 
                         if (cmd == OBD_BRW_WRITE) {
                                 page = filter_get_page_write(inode, index, r);
@@ -1193,7 +1196,7 @@ static int filter_preprw(int cmd, struct obd_conn *conn,
 
                         /* FIXME: we need to clean up here... */
                         if (IS_ERR(page))
-                                RETURN(PTR_ERR(page));
+                                GOTO(out_ctxt, rc = PTR_ERR(page));
 
                         r->addr = page_address(page);
                         r->offset = b->offset;

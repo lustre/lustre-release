@@ -60,19 +60,39 @@ cat /mnt/lustre/bar4
 umount /mnt/lustre
 mount -t lustre_lite -o ost=5,mds=6 none /mnt/lustre
 
-touch /mnt/lustre/bar
-touch /mnt/lustre/bar2
-
-touch /mnt/lustre/bar
+touch /mnt/lustre/bar5
+touch /mnt/lustre/bar6
+touch /mnt/lustre/bar5
 
 umount /mnt/lustre
 mount -t lustre_lite -o ost=5,mds=6 none /mnt/lustre
 
-touch /mnt/lustre/bar
+touch /mnt/lustre/bar5
+
+umount /mnt/lustre
+mount -t lustre_lite -o ost=5,mds=6 none /mnt/lustre
+
+echo "ready debugger"
+read
+
+echo foo >> /mnt/lustre/bar
+
+umount /mnt/lustre
+mount -t lustre_lite -o ost=5,mds=6 none /mnt/lustre
+
+cat /mnt/lustre/bar
 
 exit;
 
-echo foo >> /mnt/lustre/bar
+echo foo >> /mnt/lustre/iotest
+echo bar >> /mnt/lustre/iotest
+cat /mnt/lustre/iotest
+
+umount /mnt/lustre
+mount -t lustre_lite -o ost=5,mds=6 none /mnt/lustre
+
+cat /mnt/lustre/iotest
+echo baz >> /mnt/lustre/iotest
 
 umount /mnt/lustre
 mount -t lustre_lite -o ost=5,mds=6 none /mnt/lustre
@@ -91,3 +111,8 @@ mount -t lustre_lite -o ost=5,mds=6 none /mnt/lustre
 ls /mnt/lustre
 mkdir /mnt/lustre/newer
 ls /mnt/lustre
+
+umount /mnt/lustre
+mount -t lustre_lite -o ost=5,mds=6 none /mnt/lustre
+
+cat /mnt/lustre/iotest

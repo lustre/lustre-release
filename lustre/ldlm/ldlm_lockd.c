@@ -171,7 +171,8 @@ static int _ldlm_enqueue(struct obd_device *obddev, struct ptlrpc_service *svc,
 
 static int _ldlm_convert(struct ptlrpc_service *svc, struct ptlrpc_request *req)
 {
-        struct ldlm_request *dlm_req, *dlm_rep;
+        struct ldlm_request *dlm_req;
+        struct ldlm_reply *dlm_rep;
         struct ldlm_resource *res;
         int rc, size = sizeof(*dlm_rep);
         ENTRY;
@@ -449,8 +450,10 @@ static int __init ldlm_init(void)
 static void __exit ldlm_exit(void)
 {
         obd_unregister_type(OBD_LDLM_DEVICENAME);
-        kmem_cache_destroy(ldlm_resource_slab);
-        kmem_cache_destroy(ldlm_lock_slab);
+        if (kmem_cache_destroy(ldlm_resource_slab) != 0)
+                CERROR("couldn't free ldlm resource slab\n");
+        if (kmem_cache_destroy(ldlm_lock_slab) != 0)
+                CERROR("couldn't free ldlm lock slab\n");
 }
 
 EXPORT_SYMBOL(ldlm_local_lock_match);

@@ -227,9 +227,11 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
                         GOTO(out, rc);
                 }
                 body = lustre_msg_buf(request->rq_repmsg, 0);
+                md.obdo = obdo;
         } else {
                 request = it->it_data;
                 body = lustre_msg_buf(request->rq_repmsg, 1);
+                md.obdo = NULL;
         }
 
         body->valid = (__u32)OBD_MD_FLNOTOBD;
@@ -241,7 +243,6 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
         body->mode = mode;
 
         md.body = body;
-        md.obdo = obdo;
 
         inode = iget4(dir->i_sb, body->ino, ll_find_inode, &md);
         if (IS_ERR(inode)) {

@@ -5,7 +5,7 @@ SRCDIR="`dirname $0`/"
 
 TIME=`date +'%s'`
 
-$DBGCTL debug_kernel /tmp/debug.1.$TIME
+$DBGCTL debug_kernel /tmp/debug.1.$TIME 1
 
 if mount | grep '/mnt/lustre'; then
 	umount /mnt/lustre || fail "cannot unmount"
@@ -54,7 +54,7 @@ rmmod ptlrpc
 rmmod obdclass
 rmmod extN
 
-$DBGCTL debug_kernel /tmp/debug.2.$TIME
+$DBGCTL debug_kernel /tmp/debug.2.$TIME 1
 
 $PTLCTL <<EOF
 setup tcp
