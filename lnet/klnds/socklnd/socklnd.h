@@ -105,9 +105,6 @@
 # define sk_prot        prot
 # define sk_sndbuf      sndbuf
 # define sk_socket      socket
-#endif
-
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,0))
 # define sk_wmem_queued wmem_queued
 #endif
 

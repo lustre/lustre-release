@@ -155,7 +155,9 @@ DIR=${DIR:-$MOUNT}
 [ -z "`echo $DIR | grep $MOUNT`" ] && echo "$DIR not in $MOUNT" && exit 99
 
 LOVNAME=`cat /proc/fs/lustre/llite/fs0/lov/common_name`
-STRIPECOUNT=`cat /proc/fs/lustre/lov/$LOVNAME/numobd`
+OSTCOUNT=`cat /proc/fs/lustre/lov/$LOVNAME/numobd`
+STRIPECOUNT=`cat /proc/fs/lustre/lov/$LOVNAME/stripecount`
+STRIPESIZE=`cat /proc/fs/lustre/lov/$LOVNAME/stripesize`
 
 [ -f $DIR/d52a/foo ] && chattr -a $DIR/d52a/foo
 [ -f $DIR/d52b/foo ] && chattr -i $DIR/d52b/foo
@@ -702,7 +704,7 @@ test_27a() {
 run_test 27a "one stripe file =================================="
 
 test_27c() {
-	[ "$STRIPECOUNT" -lt "2" ] && echo "skipping 2-stripe test" && return
+	[ "$OSTCOUNT" -lt "2" ] && echo "skipping 2-stripe test" && return
 	if [ ! -d $DIR/d27 ]; then
 		mkdir $DIR/d27
 	fi
@@ -764,7 +766,7 @@ test_27j() {
         if [ ! -d $DIR/d27 ]; then
                 mkdir $DIR/d27
         fi
-        $LSTRIPE $DIR/d27/f27j 65536 $STRIPECOUNT 1 && error || true
+        $LSTRIPE $DIR/d27/f27j 65536 $OSTCOUNT 1 && error || true
 }
 run_test 27j "lstripe with bad stripe offset (should return error)"
 
@@ -1242,7 +1244,7 @@ stop_kupdated() {
 # ensure that all stripes have some grant before we test client-side cache
 setup_test42() {
 	[ "$SETUP_TEST42" ] && return
-	for i in `seq -f $DIR/f42-%g 1 $STRIPECOUNT`; do
+	for i in `seq -f $DIR/f42-%g 1 $OSTCOUNT`; do
 		dd if=/dev/zero of=$i bs=4k count=1
 		rm $i
 	done
@@ -1379,7 +1381,7 @@ test_43c() {
 run_test 43c "md5sum of copy into lustre========================"
 
 test_44() {
-	[  "$STRIPECOUNT" -lt "2" ] && echo "skipping 2-stripe test" && return
+	[  "$OSTCOUNT" -lt "2" ] && echo "skipping 2-stripe test" && return
 	dd if=/dev/zero of=$DIR/f1 bs=4k count=1 seek=127
 	dd if=$DIR/f1 bs=4k count=1
 }
@@ -1587,13 +1589,54 @@ test_53() {
 }
 run_test 53 "verify that MDS and OSTs agree on pre-creation ===="
 
-test_54() {
+test_54a() {
      	$SOCKETSERVER $DIR/socket &
 	sleep 1
      	$SOCKETCLIENT $DIR/socket || error
       	$MUNLINK $DIR/socket
 }
-run_test 54 "unix damain socket test ==========================="
+run_test 54a "unix damain socket test =========================="
+
+test_54b() {
+	f="$DIR/f54b"
+	mknod $f c 1 3
+	chmod 0666 $f
+	dd if=/dev/zero of=$f bs=`page_size` count=1 
+}
+run_test 54b "char device works in lustre ======================"
+
+test_54c() {
+	tfile="$DIR/f54c"
+	tdir="$DIR/d54c"
+	loopdev="$DIR/loop54c"
+	
+	for i in `seq 3 7`; do
+		rm -f $loopdev
+		mknod $loopdev b 7 $i
+		losetup $loopdev > /dev/null 2>&1 || break
+	done
+	echo "make a loop file system with $tfile on $loopdev ($i)..."	
+	dd if=/dev/zero of=$tfile bs=`page_size` seek=1024 count=1 > /dev/null
+	losetup $loopdev $tfile || error "can't set up $loopdev for $tfile"
+	mkfs.ext2 $loopdev || error "mke2fs on $loopdev"
+	mkdir -p $tdir
+	mount -t ext2 $loopdev $tdir || error "error mounting $loopdev on $tdir"
+	dd if=/dev/zero of=$tdir/tmp bs=`page_size` count=30 || error "dd write"
+	df $tdir
+	dd if=$tdir/tmp of=/dev/zero bs=`page_size` count=30 || error "dd read"
+	umount $tdir
+	losetup -d $loopdev
+	rm $loopdev
+}
+run_test 54c "block device works in lustre ====================="
+
+test_54d() {
+	f="$DIR/f54d"
+	string="aaaaaa"
+	mknod $f p
+	[ "$string" = `echo $string > $f | cat $f` ] || error
+}
+run_test 54d "fifo device works in lustre ======================"
 
 test_55() {
         rm -rf $DIR/d55
@@ -1606,7 +1649,7 @@ test_55() {
         rm -rf $DIR/d55/*
         umount $DIR/d55 || error
 }
-run_test 55 "check iopen_connect_dentry()======================="
+run_test 55 "check iopen_connect_dentry() ======================"
 
 test_56() {
         rm -rf $DIR/d56
@@ -1646,7 +1689,7 @@ test_56() {
         $LFIND --obd wrong_uuid $DIR/d56 2>&1 | grep -q "unknown obduuid" || \
                 error "lfs find --obd wrong_uuid should return error information"
 
-        [  "$STRIPECOUNT" -lt 2 ] && \
+        [  "$OSTCOUNT" -lt 2 ] && \
                 echo "skipping other lfs find --obd test" && return
         FILENUM=`$LFIND --recursive $DIR/d56 | sed -n '/^[	 ]*1[	 ]/p' | wc -l`
         OBDUUID=`$LFIND --recursive $DIR/d56 | sed -n '/^[	 ]*1:/p' | awk '{print $2}'`

@@ -39,7 +39,7 @@ if [ "$BUSY" ]; then
 	mv $TMP/debug $TMP/debug-busy.`date +%s`
 	exit 255
 fi
-LEAK_LUSTRE=`dmesg | tail -40 | grep "obd mem.*leaked"`
+LEAK_LUSTRE=`dmesg | tail -30 | grep "obd mem.*leaked"`
 LEAK_PORTALS=`dmesg | tail -20 | grep "Portals memory leaked"`
 if [ "$LEAK_LUSTRE" -o "$LEAK_PORTALS" ]; then
 	echo "$LEAK_LUSTRE" 1>&2
@@ -47,5 +47,6 @@ if [ "$LEAK_LUSTRE" -o "$LEAK_PORTALS" ]; then
 	mv $TMP/debug $TMP/debug-leak.`date +%s`
 	exit 254
 fi
+lsmod | grep portals && echo "modules still loaded" && exit 1
 
 exit $rc

@@ -394,7 +394,7 @@ static void llu_ap_fill_obdo(void *data, int cmd, struct obdo *oa)
 }
 
 /* called for each page in a completed rpc.*/
-static void llu_ap_completion(void *data, int cmd, int rc)
+static void llu_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
 {
         struct ll_async_page *llap;
         struct page *page;

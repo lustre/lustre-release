@@ -40,7 +40,7 @@ int filter_san_setup(struct obd_device *obd, obd_count len, void *buf)
         struct lustre_cfg* lcfg = buf;
         char *option = NULL;
 
-        if (!lcfg->lcfg_inlbuf2)
+        if (!lcfg->lcfg_inlbuf1 || !lcfg->lcfg_inlbuf2)
                 RETURN(-EINVAL);
 
         /* for extN/ext3 filesystem, we must mount it with 'writeback' mode */

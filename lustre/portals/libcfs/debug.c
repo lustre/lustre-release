@@ -569,7 +569,7 @@ int portals_debug_init(unsigned long bufsize)
         debug_buf = vmalloc(bufsize + DEBUG_OVERFLOW);
         if (debug_buf == NULL)
                 return -ENOMEM;
-        memset(debug_buf, 0, debug_size);
+        memset(debug_buf, 0, bufsize + DEBUG_OVERFLOW);
         debug_wrapped = 0;
 
         //printk(KERN_INFO "Portals: allocated %lu byte debug buffer at %p.\n",

@@ -710,7 +710,8 @@ static void ec_ap_fill_obdo(void *data, int cmd, struct obdo *oa)
 
         memcpy(oa, &eap->eap_eas->eas_oa, sizeof(*oa));
 }
-static void ec_ap_completion(void *data, int cmd, int rc)
+
+static void ec_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
 {
         struct echo_async_page *eap = eap_from_cookie(data);
         struct echo_async_state *eas;

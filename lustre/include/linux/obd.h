@@ -56,9 +56,10 @@ struct lov_oinfo {                 /* per-stripe data structure */
         struct list_head loi_write_item;
 
         int loi_kms_valid:1;
-        __u64 loi_kms; /* known minimum size */
-        __u64 loi_rss; /* recently seen size */
-        __u64 loi_mtime; /* recently seen mtime */
+        __u64 loi_kms;             /* known minimum size */
+        __u64 loi_rss;             /* recently seen size */
+        __u64 loi_mtime;           /* recently seen mtime */
+        __u64 loi_blocks;          /* recently seen blocks */
 };
 
 static inline void loi_init(struct lov_oinfo *loi)
@@ -120,7 +121,7 @@ struct obd_async_page_ops {
         int  (*ap_make_ready)(void *data, int cmd);
         int  (*ap_refresh_count)(void *data, int cmd);
         void (*ap_fill_obdo)(void *data, int cmd, struct obdo *oa);
-        void (*ap_completion)(void *data, int cmd, int rc);
+        void (*ap_completion)(void *data, int cmd, struct obdo *oa, int rc);
 };
 
 /* the `oig' is passed down from a caller of obd rw methods.  the callee

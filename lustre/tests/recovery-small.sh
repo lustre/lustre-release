@@ -244,7 +244,7 @@ test_20a() {	# bug 2983 - ldlm_handle_enqueue cleanup
 run_test 20a "ldlm_handle_enqueue error (should return error)" 
 
 test_20b() {	# bug 2986 - ldlm_handle_enqueue error during open
-	mkdir $DIR/$tdir
+	mkdir -p $DIR/$tdir
 	touch $DIR/$tdir/${tfile}
 	cancel_lru_locks OSC
 #define OBD_FAIL_LDLM_ENQUEUE_EXTENT_ERR 0x308

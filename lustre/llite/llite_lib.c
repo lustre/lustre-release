@@ -1155,10 +1155,26 @@ void ll_read_inode2(struct inode *inode, void *opaque)
         } else {
                 inode->i_op = &ll_special_inode_operations;
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
+#warning "need to fix this for 2.6 also"
                 init_special_inode(inode, inode->i_mode,
                                    kdev_t_to_nr(inode->i_rdev));
 #else
                 init_special_inode(inode, inode->i_mode, inode->i_rdev);
+
+                lli->ll_save_ifop = inode->i_fop;
+                if (S_ISCHR(inode->i_mode))
+                        inode->i_fop = &ll_special_chr_inode_fops;
+                else if (S_ISBLK(inode->i_mode))
+                        inode->i_fop = &ll_special_blk_inode_fops;
+                else if (S_ISFIFO(inode->i_mode))
+                        inode->i_fop = &ll_special_fifo_inode_fops;
+                else if (S_ISSOCK(inode->i_mode))
+                        inode->i_fop = &ll_special_sock_inode_fops;
+                CWARN("saved %p, replaced with %p\n", lli->ll_save_ifop,
+                      inode->i_fop);
+                if (lli->ll_save_ifop->owner)
+                        CWARN("%p has owner %p\n", lli->ll_save_ifop,
+                              lli->ll_save_ifop->owner);
 #endif
                 EXIT;
         }

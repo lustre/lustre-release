@@ -83,8 +83,11 @@ static int filter_lvbo_init(struct ldlm_resource *res)
 
         lvb->lvb_size = dentry->d_inode->i_size;
         lvb->lvb_mtime = LTIME_S(dentry->d_inode->i_mtime);
-        CDEBUG(D_DLMTRACE, "res: "LPU64" initial lvb size: "LPU64", mtime: "
-               LPU64"\n", res->lr_name.name[0], lvb->lvb_size, lvb->lvb_mtime);
+        lvb->lvb_blocks = dentry->d_inode->i_blocks;
+        CDEBUG(D_DLMTRACE, "res: "LPU64" initial lvb size: "LPU64", "
+               "mtime: "LPU64", blocks: "LPU64"\n",
+               res->lr_name.name[0], lvb->lvb_size,
+               lvb->lvb_mtime, lvb->lvb_blocks);
 
  out:
         if (oa)
@@ -151,6 +154,12 @@ static int filter_lvbo_update(struct ldlm_resource *res, struct lustre_msg *m,
                                lvb->lvb_mtime, new->lvb_mtime);
                         lvb->lvb_mtime = new->lvb_mtime;
                 }
+                if (new->lvb_blocks > lvb->lvb_blocks || !increase) {
+                        CDEBUG(D_DLMTRACE, "res: "LPU64" updating lvb blocks: "
+                               LPU64" -> "LPU64"\n", res->lr_name.name[0],
+                               lvb->lvb_blocks, new->lvb_blocks);
+                        lvb->lvb_blocks = new->lvb_blocks;
+                }
                 GOTO(out, rc = 0);
         }
 
@@ -184,6 +193,11 @@ static int filter_lvbo_update(struct ldlm_resource *res, struct lustre_msg *m,
                        lvb->lvb_mtime, LTIME_S(dentry->d_inode->i_mtime));
                 lvb->lvb_mtime = LTIME_S(dentry->d_inode->i_mtime);
         }
+        CDEBUG(D_DLMTRACE, "res: "LPU64" updating lvb blocks from disk: "
+               LPU64" -> %lu\n", res->lr_name.name[0],
+               lvb->lvb_blocks, dentry->d_inode->i_blocks);
+        lvb->lvb_blocks = dentry->d_inode->i_blocks;
+
         f_dput(dentry);
 
  out:

@@ -88,6 +88,11 @@ struct ll_inode_info {
         struct list_head        lli_pending_write_llaps;
 
         struct list_head        lli_close_item;
+
+        struct file_operations *ll_save_ifop;
+        struct file_operations *ll_save_ffop;
+        struct file_operations *ll_save_wfop;
+        struct file_operations *ll_save_wrfop;
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
         struct inode            lli_vfs_inode;
 #endif

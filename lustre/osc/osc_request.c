@@ -853,6 +853,7 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, struct obdo *oa,
         }
 
         osc_update_grant(cli, body);
+        memcpy(oa, &body->oa, sizeof(*oa));
 
         if (req->rq_reqmsg->opc == OST_WRITE) {
                 if (rc > 0) {
@@ -878,8 +879,6 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, struct obdo *oa,
 
         if (rc < requested_nob)
                 handle_short_read(rc, page_count, pga);
-
-        memcpy(oa, &body->oa, sizeof(*oa));
 
 #if CHECKSUM_BULK
         if (oa->o_valid & OBD_MD_FLCKSUM) {
@@ -1197,8 +1196,8 @@ unlock:
 
 /* this must be called holding the loi list lock to give coverage to exit_cache,
  * async_flag maintenance, and oap_request */
-static void osc_complete_oap(struct client_obd *cli,
-                             struct osc_async_page *oap, int sent, int rc)
+static void osc_ap_completion(struct client_obd *cli, struct obdo *oa,
+                              struct osc_async_page *oap, int sent, int rc)
 {
         osc_exit_cache(cli, oap, sent);
         oap->oap_async_flags = 0;
@@ -1209,6 +1208,9 @@ static void osc_complete_oap(struct client_obd *cli,
                 oap->oap_request = NULL;
         }
 
+        if (rc == 0 && oa != NULL)
+                oap->oap_loi->loi_blocks = oa->o_blocks;
+
         if (oap->oap_oig) {
                 oig_complete_one(oap->oap_oig, &oap->oap_occ, rc);
                 oap->oap_oig = NULL;
@@ -1217,7 +1219,7 @@ static void osc_complete_oap(struct client_obd *cli,
         }
 
         oap->oap_caller_ops->ap_completion(oap->oap_caller_data, oap->oap_cmd,
-                                           rc);
+                                           oa, rc);
 }
 
 static int brw_interpret_oap(struct ptlrpc_request *request,
@@ -1242,7 +1244,7 @@ static int brw_interpret_oap(struct ptlrpc_request *request,
 
         spin_lock(&cli->cl_loi_list_lock);
 
-        /* We need to decrement before osc_complete_oap->osc_wake_cache_waiters
+        /* We need to decrement before osc_ap_completion->osc_wake_cache_waiters
          * is called so we know whether to go to sync BRWs or wait for more
          * RPCs to complete */
         cli->cl_brw_in_flight--;
@@ -1256,7 +1258,7 @@ static int brw_interpret_oap(struct ptlrpc_request *request,
                        //oap->oap_page, oap->oap_page->index, oap);
 
                 list_del_init(&oap->oap_rpc_item);
-                osc_complete_oap(cli, oap, 1, rc);
+                osc_ap_completion(cli, aa->aa_oa, oap, 1, rc);
         }
 
         osc_wake_cache_waiters(cli);
@@ -1431,7 +1433,7 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
                 if (oap->oap_count <= 0) {
                         CDEBUG(D_CACHE, "oap %p count %d, completing\n", oap,
                                oap->oap_count);
-                        osc_complete_oap(cli, oap, 0, oap->oap_count);
+                        osc_ap_completion(cli, aa->aa_oa, oap, 0, oap->oap_count);
                         continue;
                 }
 
@@ -1463,7 +1465,8 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
                          * were between the pending list and the rpc */
                         if (oap->oap_interrupted) {
                                 CDEBUG(D_INODE, "oap %p interrupted\n", oap);
-                                osc_complete_oap(cli, oap, 0, oap->oap_count);
+                                osc_ap_completion(cli, aa->aa_oa, oap, 0, 
+                                                  oap->oap_count);
                                 continue;
                         }
 
@@ -2433,8 +2436,10 @@ static int osc_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
                               &lvb, sizeof(lvb), lustre_swab_ost_lvb, lockh);
 
         if ((*flags & LDLM_FL_HAS_INTENT && rc == ELDLM_LOCK_ABORTED) || !rc) {
-                CDEBUG(D_INODE, "received kms == "LPU64"\n", lvb.lvb_size);
+                CDEBUG(D_INODE, "received kms == "LPU64", blocks == "LPU64"\n",
+                       lvb.lvb_size, lvb.lvb_blocks);
                 lsm->lsm_oinfo->loi_rss = lvb.lvb_size;
+                lsm->lsm_oinfo->loi_blocks = lvb.lvb_blocks;
         }
 
         RETURN(rc);
