@@ -1,15 +1,7 @@
- Documentation/filesystems/ext2.txt |   16 ++
- fs/ext3/Makefile                   |    2 
- fs/ext3/inode.c                    |    4 
- fs/ext3/iopen.c                    |  240 +++++++++++++++++++++++++++++++++++++
- fs/ext3/iopen.h                    |   15 ++
- fs/ext3/namei.c                    |   12 +
- fs/ext3/super.c                    |   11 +
- include/linux/ext3_fs.h            |    2 
- 8 files changed, 301 insertions(+), 1 deletion(-)
+ 0 files changed
 
---- linux-2.4.18-18.8.0-l18/Documentation/filesystems/ext2.txt~iopen-2.4.18	Wed Jul 11 18:44:45 2001
-+++ linux-2.4.18-18.8.0-l18-phil/Documentation/filesystems/ext2.txt	Sun May 18 13:31:09 2003
+--- linux-2.4.18-chaos52/Documentation/filesystems/ext2.txt~iopen-2.4.18	2003-04-13 15:21:33.000000000 +0800
++++ linux-2.4.18-chaos52-root/Documentation/filesystems/ext2.txt	2003-06-03 17:10:55.000000000 +0800
 @@ -35,6 +35,22 @@ resgid=n			The group ID which may use th
  
  sb=n				Use alternate superblock at this location.
@@ -33,8 +25,8 @@
  grpquota,noquota,quota,usrquota	Quota options are silently ignored by ext2.
  
  
---- linux-2.4.18-18.8.0-l18/fs/ext3/Makefile~iopen-2.4.18	Sun May 18 12:58:10 2003
-+++ linux-2.4.18-18.8.0-l18-phil/fs/ext3/Makefile	Sun May 18 13:34:51 2003
+--- linux-2.4.18-chaos52/fs/ext3/Makefile~iopen-2.4.18	2003-06-01 03:24:07.000000000 +0800
++++ linux-2.4.18-chaos52-root/fs/ext3/Makefile	2003-06-03 17:10:55.000000000 +0800
 @@ -11,7 +11,7 @@ O_TARGET := ext3.o
  
  export-objs :=	super.o inode.o xattr.o
@@ -44,8 +36,8 @@
  		ioctl.o namei.o super.o symlink.o xattr.o
  obj-m    := $(O_TARGET)
  
---- linux-2.4.18-18.8.0-l18/fs/ext3/inode.c~iopen-2.4.18	Sun May 18 13:24:49 2003
-+++ linux-2.4.18-18.8.0-l18-phil/fs/ext3/inode.c	Sun May 18 13:31:09 2003
+--- linux-2.4.18-chaos52/fs/ext3/inode.c~iopen-2.4.18	2003-06-03 17:10:21.000000000 +0800
++++ linux-2.4.18-chaos52-root/fs/ext3/inode.c	2003-06-03 17:10:55.000000000 +0800
 @@ -31,6 +31,7 @@
  #include <linux/highuid.h>
  #include <linux/quotaops.h>
@@ -64,8 +56,8 @@
  	if(ext3_get_inode_loc(inode, &iloc))
  		goto bad_inode;
  	bh = iloc.bh;
---- /dev/null	Thu Apr 11 10:25:15 2002
-+++ linux-2.4.18-18.8.0-l18-phil/fs/ext3/iopen.c	Sun May 18 13:31:09 2003
+--- /dev/null	2002-08-31 07:31:37.000000000 +0800
++++ linux-2.4.18-chaos52-root/fs/ext3/iopen.c	2003-06-03 17:10:55.000000000 +0800
 @@ -0,0 +1,240 @@
 +
 +
@@ -307,8 +299,8 @@
 +
 +	return 1;
 +}
---- /dev/null	Thu Apr 11 10:25:15 2002
-+++ linux-2.4.18-18.8.0-l18-phil/fs/ext3/iopen.h	Sun May 18 13:31:09 2003
+--- /dev/null	2002-08-31 07:31:37.000000000 +0800
++++ linux-2.4.18-chaos52-root/fs/ext3/iopen.h	2003-06-03 17:10:55.000000000 +0800
 @@ -0,0 +1,15 @@
 +/*
 + * iopen.h
@@ -325,8 +317,8 @@
 +extern int ext3_iopen_get_inode(struct inode * inode);
 +
 +
---- linux-2.4.18-18.8.0-l18/fs/ext3/namei.c~iopen-2.4.18	Sun May 18 12:58:14 2003
-+++ linux-2.4.18-18.8.0-l18-phil/fs/ext3/namei.c	Sun May 18 13:34:35 2003
+--- linux-2.4.18-chaos52/fs/ext3/namei.c~iopen-2.4.18	2003-06-03 17:10:20.000000000 +0800
++++ linux-2.4.18-chaos52-root/fs/ext3/namei.c	2003-06-03 17:10:55.000000000 +0800
 @@ -34,6 +34,7 @@
  #include <linux/locks.h>
  #include <linux/quotaops.h>
@@ -370,9 +362,9 @@
  	d_add(dentry, inode);
  	return NULL;
  }
---- linux-2.4.18-18.8.0-l18/fs/ext3/super.c~iopen-2.4.18	Sun May 18 13:24:55 2003
-+++ linux-2.4.18-18.8.0-l18-phil/fs/ext3/super.c	Sun May 18 13:31:09 2003
-@@ -602,6 +602,17 @@ static int parse_options (char * options
+--- linux-2.4.18-chaos52/fs/ext3/super.c~iopen-2.4.18	2003-06-03 17:10:21.000000000 +0800
++++ linux-2.4.18-chaos52-root/fs/ext3/super.c	2003-06-03 17:10:55.000000000 +0800
+@@ -820,6 +820,17 @@ static int parse_options (char * options
  		         || !strcmp (this_char, "quota")
  		         || !strcmp (this_char, "usrquota"))
  			/* Don't do anything ;-) */ ;
@@ -390,15 +382,15 @@
  		else if (!strcmp (this_char, "journal")) {
  			/* @@@ FIXME */
  			/* Eventually we will want to be able to create
---- linux-2.4.18-18.8.0-l18/include/linux/ext3_fs.h~iopen-2.4.18	Sun May 18 13:31:05 2003
-+++ linux-2.4.18-18.8.0-l18-phil/include/linux/ext3_fs.h	Sun May 18 13:33:03 2003
-@@ -320,6 +320,8 @@ struct ext3_inode {
+--- linux-2.4.18-chaos52/include/linux/ext3_fs.h~iopen-2.4.18	2003-06-03 17:10:22.000000000 +0800
++++ linux-2.4.18-chaos52-root/include/linux/ext3_fs.h	2003-06-03 17:12:08.000000000 +0800
+@@ -321,6 +321,8 @@ struct ext3_inode {
  #define EXT3_MOUNT_UPDATE_JOURNAL	0x1000	/* Update the journal format */
  #define EXT3_MOUNT_NO_UID32		0x2000  /* Disable 32-bit UIDs */
  #define EXT3_MOUNT_INDEX		0x4000  /* Enable directory index */
-+#define EXT3_MOUNT_IOPEN		0x8000	/* Allow access via iopen */
-+#define EXT3_MOUNT_IOPEN_NOPRIV		0x10000	/* Make iopen world-readable */
- #define EXT3_MOUNT_ASYNCDEL		0x20000	/* Delayed deletion */
++#define EXT3_MOUNT_IOPEN                0x8000  /* Allow access via iopen */
++#define EXT3_MOUNT_IOPEN_NOPRIV        0x10000  /* Make iopen world-readable */
+ #define EXT3_MOUNT_ASYNCDEL	       0x20000  /* Delayed deletion */
  
  /* Compatibility, for having both ext2_fs.h and ext3_fs.h included at once */
 
