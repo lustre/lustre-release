@@ -124,8 +124,8 @@ AC_SUBST(LINUX_CONFIG)
 
 AC_CHECK_FILE([/boot/kernel.h],
 	[KERNEL_SOURCE_HEADER='/boot/kernel.h'],
-	[AC_CHECK_FILE([/var/adm/running-kernel.h]),
-		[KERNEL_SOURCE_HEADER='/var/adm/running-kernel.h']])
+	[AC_CHECK_FILE([/var/adm/running-kernel.h],
+		[KERNEL_SOURCE_HEADER='/var/adm/running-kernel.h'])])
 
 AC_ARG_WITH([kernel-source-header],
 	AC_HELP_STRING([--with-kernel-source-header=path],
