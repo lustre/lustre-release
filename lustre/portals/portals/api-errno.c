@@ -50,6 +50,5 @@ const char *ptl_err_str[] = {
         "PTL_IOV_TOO_SMALL",
 
         "PTL_EQ_INUSE",
-        "PTL_MD_INUSE"
 };
 /* If you change these, you must update the number table in portals/errno.h */

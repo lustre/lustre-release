@@ -32,7 +32,7 @@ static int do_forward(ptl_handle_any_t any_h, int cmd, void *argbuf,
         nal_t *nal;
 
         if (!ptl_init) {
-                fprintf(stderr, "PtlGetId: Not initialized\n");
+                CERROR("Not initialized\n");
                 return PTL_NOINIT;
         }
 
@@ -262,7 +262,7 @@ static int validate_md(ptl_handle_any_t current_in, ptl_md_t md_in)
         int i;
 
         if (!ptl_init) {
-                fprintf(stderr, "PtlMDAttach/Bind/Update: Not initialized\n");
+                CERROR("PtlMDAttach/Bind/Update: Not initialized\n");
                 return PTL_NOINIT;
         }
 
