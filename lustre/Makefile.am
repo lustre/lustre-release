@@ -7,7 +7,7 @@ AUTOMAKE_OPTIONS = foreign
 
 # NOTE: keep extN before mds
 SUBDIRS = lov utils obdclass ldlm ptlrpc llite lib obdecho mdc osc
-SUBDIRS+=  mds ost tests obdfilter doc scripts extN 
+SUBDIRS+=  extN mds ost tests obdfilter doc scripts 
 
 DIST_SUBDIRS = $(SUBDIRS)
 EXTRA_DIST = BUGS FDL Rules include patches archdep.m4
