@@ -39,13 +39,20 @@ struct snap_table_data {
 	unsigned int 	tblcmd_count;		/* how many snaps */
 	struct snap 	tblcmd_snaps[0];	/* sorted times! */
 };
-
+/*FIXME, use ioc_data temporary, will use obd_ioc_data later*/
+struct ioc_data {
+	unsigned int ioc_inlen;
+	char 	     *ioc_inbuf;
+	char	     ioc_bulk[0];
+};
 /* we have just a single snapshot control device
    it contains a list of all the snap_current info's
 */
 #define SNAPDEV_NAME "/dev/snapconf"
 #define SNAP_PSDEV_MINOR 240
 #define SNAP_PSDEV_MAJOR 10
+
+#define SNAP_TABLE_OUTBUF_LEN	1020
 
 #ifdef __KERNEL__
 

@@ -35,11 +35,15 @@ command_t cmdlist[] = {
          "ignore errors that occur during script processing\n"
          "--ignore_errors"},
         /* snapshot commands*/
-        {"add", snapshot_add, 0, 
+        {"device_list", snap_dev_list, 0, 
+          "device_list list snap available device\n"},
+        {"device", snap_dev_open, 0, 
+          "dev <device> open available snap device\n"},
+        {"add", snap_snap_add, 0, 
           "add [table_no] <snap_name> add snapshot to the device\n"},
-        {"list", snapshot_list, 0, "snap_list list snap available device\n"},
-        {"dev", snapshot_dev, 0, "open <device> open available snap device\n"},
-
+        {"snap_list", snap_snap_list, 0, 
+          "snap_list [table_no] list all the snapshots on the device\n"},
+        
         /* User interface commands */
         {"======= control ========", jt_noop, 0, "control commands"},
         {"help", Parser_help, 0, "help"},

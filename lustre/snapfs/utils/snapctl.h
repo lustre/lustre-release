@@ -2,6 +2,7 @@
 #define DEV_NAME_MAX_LEN 64 
 struct snap_device {
 	char name[DEV_NAME_MAX_LEN];
+	char mntpt[DEV_NAME_MAX_LEN];
 	unsigned long dev;
 	int fd;
 };
@@ -13,12 +14,9 @@ struct open_snap_device {
 	struct snap_device device[10];	
 	int count;
 };
-struct ioc_data {
-	int len;
-	char *data;
-};
 extern void init_snap_list(void);
 
-extern int snapshot_dev(int argc, char **argv);
-extern int snapshot_list(int argc, char **argv);
-extern int snapshot_add(int argc, char **argv);
+extern int snap_dev_open(int argc, char **argv);
+extern int snap_dev_list(int argc, char **argv);
+extern int snap_snap_add(int argc, char **argv);
+extern int snap_snap_list(int argc, char **argv);

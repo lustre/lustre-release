@@ -72,15 +72,9 @@ struct snap_cache *snap_init_cache(void)
 	/* make a snap_cache structure for the hash */
 	SNAP_ALLOC(cache,  sizeof(struct snap_cache));
 	if ( cache ) {
-		int i;
-                
                 memset(cache, 0, sizeof(struct snap_cache));
 		INIT_LIST_HEAD(&cache->cache_chain);
 		INIT_LIST_HEAD(&cache->cache_clone_list);
-                        	
-                for (i = 0; i < SNAP_MAX_TABLES; i++) {
-                        init_MUTEX(&snap_tables[i].tbl_sema); 
-                }
         }
 	return cache;
 }

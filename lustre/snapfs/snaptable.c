@@ -15,6 +15,7 @@
 #include <linux/slab.h>
 #include <linux/string.h>
 #include <linux/snap.h>
+#include <linux/time.h>
 #include <asm/uaccess.h>
 #include "snapfs_internal.h" 
 
@@ -116,35 +117,12 @@ int snap_needs_cow(struct inode *inode)
 	RETURN(index);
 } /* snap_needs_cow */
 
-static int nprint_buf(char *buf, int buflen, char *fmt, ...)
-{
-        va_list args;
-        int n;
-	char local_buf[1024];
-
-        va_start(args, fmt);
-        n = vsprintf(local_buf, fmt, args);
-        va_end(args);
-	
-	if( n > buflen ) {
-		if( buflen > 1024)	buflen=1024;
-		memcpy(buf, local_buf, buflen);
-		return buflen;
-	}
-	else {
-		memcpy(buf, local_buf, n);
-		return n;
-	}
-}
-	
 int snap_print_table(struct snap_table_data *data, char *buf, int *buflen)
 {
-	int tableno = data->tblcmd_no;
-	int i;
 	struct snap_table *table;
+	int tableno = data->tblcmd_no;
+	int i, l, rc = 0, nleft = (*buflen);
 	char *buf_ptr;
-	int nleft = (*buflen);
-	int nprint = 0;
 
 	if ( tableno < 0 || tableno > SNAP_MAX_TABLES ) {
 		CERROR("invalid table number %d\n", tableno);
@@ -153,38 +131,37 @@ int snap_print_table(struct snap_table_data *data, char *buf, int *buflen)
 
 	table = &snap_tables[tableno];
 
-	printk("------- snap table %d\n", tableno);
-	printk("     -- snap count %d\n", table->tbl_count);
-	for ( i = 0 ; i < SNAP_MAX ; i++ ) {
-		printk("     -- slot %d, idx %d, time %ld, name %s\n",
-		       i, table->snap_items[i].index, table->snap_items[i].time, 
-			&table->snap_items[i].name[0]);
-	}
-
 	buf_ptr = buf;
-	nprint= nprint_buf(buf_ptr, nleft, "------- snap table %d\n", tableno);
-	nleft -= nprint;
-	if( nleft > 0 )  buf_ptr += nprint;
-	else goto exit; 
-	nprint = nprint_buf(buf_ptr, nleft, "     -- snap count %d\n", table->tbl_count);
-	nleft -= nprint;
-	if( nleft > 0 )  buf_ptr += nprint;
-	else goto exit;
+	l = snprintf(buf_ptr, nleft, "snap table %d snap count %d \n", 
+		     tableno, table->tbl_count);
+	nleft -= l;
+	if(nleft < 0) { 
+		CERROR("can not get enough space to print snaptable\n");
+		rc = -ERANGE;
+		goto exit; 
+	} else {
+		buf_ptr += l;
+	}	
 
-	if( nleft > 0 )  buf_ptr += nprint;
-	else goto exit;
-	for ( i = 0 ; i < SNAP_MAX ; i++ ) {
-		nprint = nprint_buf( buf_ptr, nleft,
-			"     -- slot %d, idx %d, time %ld, name %s\n",
-		       i, table->snap_items[i].index, table->snap_items[i].time, 
-			&table->snap_items[i].name[0]);
-		nleft -= nprint;
-		if( nleft > 0 )  buf_ptr += nprint;
-		else goto exit;
+	for (i = 0; i < table->tbl_count; i++) {
+		/*FIXME later, will convert time to time string later */
+		l = snprintf(buf_ptr, nleft,
+			"-- slot %d, idx %d, time %lu, name %s\n", i, 
+			table->snap_items[i+1].index, table->snap_items[i+1].time, 
+			&table->snap_items[i+1].name[0]);
+		
+		nleft -= l;
+		if(nleft < 0) { 
+			CERROR("can not get enough space to print snaptable\n");
+			rc = -ERANGE;
+			goto exit; 
+		} else {
+			buf_ptr += l;
+		}	
 	}
-
 exit:
-	if(nleft > 0) (*buflen) = (*buflen) - nleft;
+	if(nleft > 0) 
+		(*buflen) = (*buflen) - nleft;
 
 	return 0;
 }
@@ -222,7 +199,7 @@ int snaptable_add_item(struct snap_table_data *data)
 		RETURN(-EINVAL);
 
 	tableno = data->tblcmd_no;
-	if ( tableno < 0 || tableno > SNAP_MAX_TABLES ) {
+	if (tableno < 0 || tableno > SNAP_MAX_TABLES) {
 		CERROR("invalid table number %d\n", tableno);
 		RETURN(-EINVAL);
 	}
@@ -230,7 +207,7 @@ int snaptable_add_item(struct snap_table_data *data)
 	count = table->tbl_count;
 
 	/* XXX Is down this sema necessary*/
-	down_interruptible(&table->tbl_sema);
+	//down_interruptible(&table->tbl_sema);
 
 	/*add item in snap_table*/
 	table->snap_items[count+1].gen = table->generation;
@@ -253,7 +230,8 @@ int snaptable_add_item(struct snap_table_data *data)
 	disk_snap_table->generation = cpu_to_le32((__u32)table->generation);
 	memset(&disk_snap_table->snap_items[0], 0, 
 	       SNAP_MAX * sizeof(struct snap_disk));
-	for (i = 1; i <= count; i++) {
+	
+	for (i = 1; i <= count + 1; i++) {
 		struct snap *item = &table->snap_items[i];
 		disk_snap_table->snap_items[i].time = cpu_to_le64((__u64)item->time);
 		disk_snap_table->snap_items[i].gen = cpu_to_le32((__u32)item->gen);
@@ -268,7 +246,7 @@ int snaptable_add_item(struct snap_table_data *data)
 	table->tbl_count++;
 	table->generation++;
 	
-	up(&table->tbl_sema);
+	//up(&table->tbl_sema);
 	
 	return 0;
 }
@@ -459,14 +437,19 @@ int snapfs_read_snaptable(struct snap_cache *cache, int tableno)
 
 	size = sizeof(struct snap_disk_table);
 
+	
+	table = &snap_tables[tableno];
+
+	memset(table, 0, sizeof(struct snap_table));
+        init_MUTEX(&table->tbl_sema); 
+	
 	rc = snapops->get_meta_attr(cache->cache_sb, DISK_SNAPTABLE_ATTR,
 			       (char*)disk_snap_table, &size);
 	if (rc < 0) {
 		SNAP_FREE(disk_snap_table, sizeof(struct snap_disk_table));
 		RETURN(rc);
 	}
-	table = &snap_tables[tableno];
-
+	
 	if (le32_to_cpu(disk_snap_table->magic) != DISK_SNAP_TABLE_MAGIC) {
 		CERROR("On disk snaptable is not right \n");
 		RETURN(rc);
@@ -486,35 +469,34 @@ int snapfs_read_snaptable(struct snap_cache *cache, int tableno)
 	return 0;
 }
 
-static int getdata(int len, void **data)
+static int getdata(struct ioc_data *input, void **karg)
 {
 	void *tmp = NULL;
 
-	if (!len) {
-		*data = NULL;
+	if (!input->ioc_inlen || !input->ioc_inbuf) 
 		return 0;
+
+	SNAP_ALLOC(tmp, input->ioc_inlen);
+	if (!tmp)
+		RETURN(-ENOMEM);
+
+	CDEBUG(D_SNAP, "snap_alloc:len %d, add %p\n", input->ioc_inlen, tmp);
+
+	memset(tmp, 0, input->ioc_inlen);
+	if (copy_from_user(tmp, input->ioc_inbuf, input->ioc_inlen)) {
+		CERROR("get inbuf data error \n");
+		SNAP_FREE(tmp, input->ioc_inlen);
+		RETURN(-EFAULT);
 	}
-
-	SNAP_ALLOC(tmp, len);
-	if ( !tmp )
-		return -ENOMEM;
-
-	CDEBUG(D_SNAP, "snap_alloc:len %d, add %p\n", len, tmp);
-
-	memset(tmp, 0, len);
-	if ( copy_from_user(tmp, *data, len)) {
-		SNAP_FREE(tmp, len);
-		CDEBUG(D_SNAP, "snap_free:len %d, add %p\n", len, tmp);
-		return -EFAULT;
-	}
-	*data = tmp;
+	*karg = tmp;
 
 	return 0;
 }
 
-static void freedata(void *data, int len) {
-	SNAP_FREE(data, len);
-	CDEBUG(D_SNAP, "snap_free:len %d, add %p\n", len, data);
+static inline void freedata(void *data, struct ioc_data *input) 
+{
+	SNAP_FREE(data, input->ioc_inlen);
+	CDEBUG(D_SNAP, "snap_free:len %d, add %p\n", input->ioc_inlen, data);
 }
 
 static int get_next_inode(struct inode *pri, void *ino)
@@ -673,8 +655,7 @@ static int restore_inode(struct inode *pri, void *param)
 			pri->i_ino, index, restore_time, tableno);
 
        	/* XXX: should we have = here? */	
-	if( pri->i_mtime > restore_time || pri->i_ctime > restore_time )
-	{
+	if(pri->i_mtime > restore_time || pri->i_ctime > restore_time) {
 		restore_index = index;
 		table = &snap_tables[tableno];
 		/* first find if there are indirected at the index */
@@ -809,69 +790,63 @@ int snap_iterate_func(int len, struct snap_ioc_data *ioc_data, unsigned int cmd)
 	RETURN(0);
 }
 
+#define BUF_SIZE 1024
 int snap_ioctl (struct inode * inode, struct file * filp, 
                             unsigned int cmd, unsigned long arg)
 {
-	void *uarg, *karg;
-	int len;
-	int err;
-	kdev_t dev;
-	struct  {
-		int len;
-		char *data;
-	}input;
+	struct ioc_data input; 
+	void *karg = NULL;
 	int rc = 0;
+	kdev_t dev;
 
 	ENTRY; 	
 
         dev = MINOR(inode->i_rdev);
         if (dev != SNAP_PSDEV_MINOR)
-                return -ENODEV;
+                RETURN(-ENODEV);
 
         if (!inode) {
                 CDEBUG(D_IOCTL, "invalid inode\n");
-                return -EINVAL;
+                RETURN(-EINVAL);
         }
 
         if ( _IOC_TYPE(cmd) != IOC_SNAP_TYPE || 
              _IOC_NR(cmd) < IOC_SNAP_MIN_NR  || 
              _IOC_NR(cmd) > IOC_SNAP_MAX_NR ) {
                 /*FIXME: Sometimes Gettimeof the day will come here
-		 * Do not know the reason*/
+		 * still do not know the reason*/
 		CDEBUG(D_IOCTL, "invalid ioctl ( type %d, nr %d, size %d )\n",
                                 _IOC_TYPE(cmd), _IOC_NR(cmd), _IOC_SIZE(cmd));
-                EXIT;
-                return 0;
+                RETURN(0);
         }
 
 	/* get data structures */
-	err = copy_from_user(&input, (void *)arg, sizeof(input));
-	if ( err ) {
-		EXIT;
-		return err;
-	}
-	uarg = input.data;
-	len = input.len;
+	rc = copy_from_user(&input, (void *)arg, sizeof(input));
+	if (rc) RETURN(rc);
 
-	karg = input.data;
-	err = getdata(input.len, &karg);
-	if ( err ) {
-		EXIT;
-		return err;
-	}
-	
+	/* get data from the input data*/
+	rc = getdata(&input, &karg);
+	if (rc) RETURN(rc);
+
 	switch (cmd) {
-	case IOC_SNAP_ADD:
+	case IOC_SNAP_ADD: {
 		rc = snaptable_add_item(karg);
 		break;
+	}
 	case IOC_SNAP_PRINTTABLE: {
-		struct output_data{
-			int len;
-			char buf[1024];
-		}output;
-		output.len = sizeof(output.buf);
-		snap_print_table(karg, output.buf, &(output.len));
-		rc = copy_to_user((char *)arg, &output, output.len+sizeof(int));
+		struct ioc_data *output;
+		char   *tmp;
+		
+		SNAP_ALLOC(tmp, BUF_SIZE);
+		output=(struct ioc_data*)tmp;
+		output->ioc_inbuf = output->ioc_bulk;
+		output->ioc_inlen = BUF_SIZE - sizeof(int) - sizeof(unsigned long);
+		snap_print_table(karg, output->ioc_inbuf, &(output->ioc_inlen));
+		
+		rc = copy_to_user((char *)arg, output, 
+				  (output->ioc_inlen + sizeof(int) + sizeof(unsigned long)));
+		SNAP_FREE(tmp, BUF_SIZE);
+
 		break;
 	}
 	case IOC_SNAP_GETINDEXFROMNAME: {
@@ -889,7 +864,7 @@ int snap_ioctl (struct inode * inode, struct file * filp,
 
 		struct get_index_struct *data = karg;
 	
-		name_len = len - sizeof(kdev_t);	
+		name_len = input.ioc_inlen - sizeof(kdev_t);	
 		dev = data->dev;
 		memset(name, 0, SNAP_MAX_NAMELEN);	
 		if(name_len > SNAP_MAX_NAMELEN)
@@ -901,7 +876,7 @@ int snap_ioctl (struct inode * inode, struct file * filp,
 		}
 		*/
 		memcpy(name, data->name, name_len);
-		printk("dev %d , len %d, name_len %d, find name is [%s]\n", dev, len, name_len, name);
+		printk("dev %d , len %d, name_len %d, find name is [%s]\n", dev, input.ioc_inlen, name_len, name);
 		cache = snap_find_cache(dev); 
 		if ( !cache ) {
         	        EXIT;
@@ -959,7 +934,7 @@ int snap_ioctl (struct inode * inode, struct file * filp,
 	case IOC_SNAP_DELETE: 
 	case IOC_SNAP_RESTORE:
 	case IOC_SNAP_DEBUG:
-		rc = snap_iterate_func(len, karg, cmd);
+		rc = snap_iterate_func(input.ioc_inlen, karg, cmd);
 		break;
 #ifdef SNAP_DEBUG
 	case IOC_SNAP_DEVFAIL:
@@ -986,13 +961,11 @@ int snap_ioctl (struct inode * inode, struct file * filp,
 		
 		break;
 	}
-
 	default:
 		rc = -EINVAL;
 		break;
 	}
 
-	freedata(karg, input.len);
-	EXIT;
-	return rc;
+	freedata(karg, &input);
+	RETURN(rc);
 }
