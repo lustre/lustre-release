@@ -116,7 +116,7 @@ static int mds_osc_destroy_orphan(struct mds_obd *mds,
 
         if (lmm_size == 0)
                 RETURN(0);
-        
+
         rc = obd_unpackmd(mds->mds_osc_exp, &lsm, lmm, lmm_size);
         if (rc < 0) {
                 CERROR("Error unpack md %p\n", lmm);
@@ -133,16 +133,14 @@ static int mds_osc_destroy_orphan(struct mds_obd *mds,
         oa->o_mode = inode->i_mode & S_IFMT;
         oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE;
 
-#ifdef ENABLE_ORPHANS
         if (log_unlink && logcookies) {
                 oa->o_valid |= OBD_MD_FLCOOKIE;
-                oti.oti_logcookies = logcookies; 
+                oti.oti_logcookies = logcookies;
         }
-#endif
 
         rc = obd_destroy(mds->mds_osc_exp, oa, lsm, &oti);
         obdo_free(oa);
-        if (rc) 
+        if (rc)
                 CERROR("destroy orphan objid 0x"LPX64" on ost error "
                        "%d\n", lsm->lsm_object_id, rc);
 out_free_memmd:
@@ -204,26 +202,23 @@ static int mds_unlink_orphan(struct obd_device *obd, struct dentry *dchild,
                 rc = 0;
         }
 
-        if (S_ISDIR(inode->i_mode)) {
+        if (S_ISDIR(inode->i_mode))
                 rc = vfs_rmdir(pending_dir, dchild);
-        } else {
+        else
                 rc = vfs_unlink(pending_dir, dchild);
-        }
-        if (rc) 
+
+        if (rc)
                 CERROR("error %d unlinking orphan %*s from PENDING directory\n",
                        rc, dchild->d_name.len, dchild->d_name.name);
 
-#ifdef ENABLE_ORPHANS
         if (!rc && lmm_size) {
                 OBD_ALLOC(logcookies, mds->mds_max_cookiesize);
                 if (logcookies == NULL)
-                        rc = -ENOMEM; 
-
-                if (!rc && mds_log_op_unlink(obd, inode, lmm, lmm_size,
-                              logcookies, mds->mds_max_cookiesize) > 0)
+                        rc = -ENOMEM;
+                else if (mds_log_op_unlink(obd, inode, lmm,lmm_size,logcookies,
+                                           mds->mds_max_cookiesize) > 0)
                         log_unlink = 1;
         }
-#endif
         err = fsfilt_commit(obd, pending_dir, handle, 0);
         if (err) {
                 CERROR("error committing orphan unlink: %d\n", err);
@@ -235,10 +230,8 @@ static int mds_unlink_orphan(struct obd_device *obd, struct dentry *dchild,
                                             logcookies, log_unlink);
         }
 
-#ifdef ENABLE_ORPHANS
         if (logcookies != NULL)
                 OBD_FREE(logcookies, mds->mds_max_cookiesize);
-#endif
 out_free_lmm:
         OBD_FREE(lmm, mds->mds_max_mdsize);
         RETURN(rc);
@@ -297,7 +290,7 @@ int mds_cleanup_orphans(struct obd_device *obd)
                 child_inode = dchild->d_inode;
                 if (mds_inode_is_orphan(child_inode) &&
                     mds_open_orphan_count(child_inode)) {
-                        CWARN("orphan %s was re-opened during recovery\n", 
+                        CWARN("orphan %s was re-opened during recovery\n",
                               ptr->d_name);
                         GOTO(next, rc2 = 0);
                 }
@@ -308,7 +301,7 @@ int mds_cleanup_orphans(struct obd_device *obd)
                         CWARN("removed orphan %s from MDS and OST\n",
                                ptr->d_name);
                 } else {
-                        l_dput(dchild); 
+                        l_dput(dchild);
                         up(&pending_dir->i_sem);
                         GOTO(err_out, rc2);
                 }

@@ -45,9 +45,9 @@
 
 #ifdef __KERNEL__
 int llog_origin_connect(struct llog_ctxt *ctxt, int count,
-                        struct llog_logid *logid,
-                        struct llog_ctxt_gen *gen)
+                        struct llog_logid *logid, struct llog_gen *gen)
 {
+        struct llog_gen_rec *lgr;
         struct obd_import *imp;
         struct ptlrpc_request *request;
         struct llogd_conn_body *req_body;
@@ -55,11 +55,31 @@ int llog_origin_connect(struct llog_ctxt *ctxt, int count,
         int rc;
         ENTRY;
 
+        if (list_empty(&ctxt->loc_handle->u.chd.chd_head)) {
+                CDEBUG(D_HA, "there is no record related to ctxt %p", ctxt);
+                RETURN(0);
+        }
+
+        /* FIXME what value for gen->conn_cnt */
+        LLOG_GEN_INC(ctxt->loc_gen);
+
+        /* first add llog_gen_rec */
+        OBD_ALLOC(lgr, sizeof(*lgr));
+        if (!lgr)
+                RETURN(-ENOMEM);
+        lgr->lgr_hdr.lrh_len = lgr->lgr_tail.lrt_len = sizeof(*lgr);
+        lgr->lgr_hdr.lrh_type = LLOG_GEN_REC;
+        lgr->lgr_gen = ctxt->loc_gen;
+        rc = llog_add(ctxt, &lgr->lgr_hdr, NULL, NULL, 1);
+        OBD_FREE(lgr, sizeof(*lgr));
+        if (rc != 1)
+                RETURN(rc);
+
         LASSERT(ctxt->loc_imp);
         imp = ctxt->loc_imp;
 
         request = ptlrpc_prep_req(imp, LLOG_ORIGIN_CONNECT, 1, &size, NULL);
-        if (!request) 
+        if (!request)
                 RETURN(-ENOMEM);
 
         req_body = lustre_msg_buf(request->rq_reqmsg, 0, sizeof(*req_body));
@@ -87,9 +107,9 @@ int llog_handle_connect(struct ptlrpc_request *req)
         req_body = lustre_msg_buf(req->rq_reqmsg, 0, sizeof(*req_body));
 
         ctxt = llog_get_context(obd, req_body->lgdc_ctxt_idx);
-        rc = llog_connect(ctxt, 1, &req_body->lgdc_logid, 
+        rc = llog_connect(ctxt, 1, &req_body->lgdc_logid,
                           &req_body->lgdc_gen);
-        if (rc != 0) 
+        if (rc != 0)
                 CERROR("failed at llog_relp_connect\n");
 
         RETURN(rc);

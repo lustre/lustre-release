@@ -158,7 +158,7 @@ static inline void lustre_daemonize_helper(void)
 #endif
 
 /* to find proc_dir_entry from inode. 2.6 has native one -bzzz */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,4,23)
+#ifndef HAVE_PDE
 #define PDE(ii)         ((ii)->u.generic_ip)
 #endif
 
