@@ -63,8 +63,10 @@ int mds_client_add(struct mds_export_data *med, int cl_off)
                         LBUG();
                         goto repeat;
                 }
-                cl_off = word - last_rcvd_slots + bit;
+                cl_off = (word - last_rcvd_slots) * sizeof(unsigned long) + bit;
         } else {
+                /* test_and_set_bit can handle cl_off > sizeof(long), so there's
+                 * no need to frob it */
                 if (test_and_set_bit(cl_off, last_rcvd_slots)) {
                         CERROR("bit %d already set in bitmap - bad bad\n",
                                cl_off);
