@@ -46,7 +46,7 @@ command_t cmdlist[] = {
          "--device <devno> <command [args ...]>"},
         {"--threads", jt_opt_threads, 0,
          "run <threads> separate instances of <command> on device <devno>\n"
-         "--threads <threads> <devno> <command [args ...]>"},
+         "--threads <threads> <verbose> <devno> <command [args ...]>"},
 
         /* Network configuration commands */
         {"==== network config ====", jt_noop, 0, "network config"},
