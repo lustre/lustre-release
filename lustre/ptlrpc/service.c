@@ -96,7 +96,7 @@ ptlrpc_init_svc(__u32 bufsize, int req_portal, int rep_portal, char *uuid,
 
         service->srv_ring_length = RPC_RING_LENGTH;
 
-        rc = PtlEQAlloc(service->srv_self.peer_ni, 128, request_in_callback,
+        rc = PtlEQAlloc(service->srv_self.peer_ni, 1024, request_in_callback,
                         &(service->srv_eq_h));
 
         if (rc != PTL_OK) {

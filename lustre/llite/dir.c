@@ -188,6 +188,8 @@ static void ext2_check_page(struct page *page)
                 for (offs = limit; offs<PAGE_CACHE_SIZE; offs += chunk_size) {
                         ext2_dirent *p = (ext2_dirent*)(kaddr + offs);
                         p->rec_len = cpu_to_le16(chunk_size);
+                        p->name_len = 0;
+                        p->inode = 0;
                 }
                 if (!limit)
                         goto out;
@@ -349,8 +351,7 @@ static inline void ext2_set_de_type(ext2_dirent *de, struct inode *inode)
         de->file_type = ext2_type_by_mode[(mode & S_IFMT)>>S_SHIFT];
 }
 
-int
-ll_readdir (struct file * filp, void * dirent, filldir_t filldir)
+int ll_readdir(struct file * filp, void * dirent, filldir_t filldir)
 {
         loff_t pos = filp->f_pos;
         struct inode *inode = filp->f_dentry->d_inode;
@@ -361,6 +362,7 @@ ll_readdir (struct file * filp, void * dirent, filldir_t filldir)
         unsigned chunk_mask = ~(ext2_chunk_size(inode)-1);
         unsigned char *types = NULL;
         int need_revalidate = (filp->f_version != inode->i_version);
+        ENTRY;
 
         if (pos > inode->i_size - EXT2_DIR_REC_LEN(1))
                 GOTO(done, 0);

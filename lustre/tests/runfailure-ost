@@ -33,11 +33,11 @@ test_fail() {
 	$MNT
 }
 
-#set -vx
+set -vx
 
-#touch /mnt/lustre/foo
-#chmod a+x /mnt/lustre/foo
-#sync
+touch /mnt/lustre/foo
+chmod a+x /mnt/lustre/foo
+sync
 
 # OBD_FAIL_OST_OPEN_NET: OST will discard open request packet
 cp /etc/issue /mnt/lustre/foo

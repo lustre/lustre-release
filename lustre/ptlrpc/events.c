@@ -182,23 +182,23 @@ int ptlrpc_init_portals(void)
         else
                 ni = *socknal_nip;
 
-        rc = PtlEQAlloc(ni, 128, request_out_callback, &request_out_eq);
+        rc = PtlEQAlloc(ni, 1024, request_out_callback, &request_out_eq);
         if (rc != PTL_OK)
                 CERROR("PtlEQAlloc failed: %d\n", rc);
 
-        rc = PtlEQAlloc(ni, 128, reply_out_callback, &reply_out_eq);
+        rc = PtlEQAlloc(ni, 1024, reply_out_callback, &reply_out_eq);
         if (rc != PTL_OK)
                 CERROR("PtlEQAlloc failed: %d\n", rc);
 
-        rc = PtlEQAlloc(ni, 128, reply_in_callback, &reply_in_eq);
+        rc = PtlEQAlloc(ni, 1024, reply_in_callback, &reply_in_eq);
         if (rc != PTL_OK)
                 CERROR("PtlEQAlloc failed: %d\n", rc);
 
-        rc = PtlEQAlloc(ni, 128, bulk_source_callback, &bulk_source_eq);
+        rc = PtlEQAlloc(ni, 1024, bulk_source_callback, &bulk_source_eq);
         if (rc != PTL_OK)
                 CERROR("PtlEQAlloc failed: %d\n", rc);
 
-        rc = PtlEQAlloc(ni, 128, bulk_sink_callback, &bulk_sink_eq);
+        rc = PtlEQAlloc(ni, 1024, bulk_sink_callback, &bulk_sink_eq);
         if (rc != PTL_OK)
                 CERROR("PtlEQAlloc failed: %d\n", rc);
 
