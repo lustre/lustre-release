@@ -50,9 +50,11 @@ struct ctl_table_header *obd_table_header = NULL;
 enum {
         OBD_FAIL_LOC = 1,       /* control test failures instrumentation */
         OBD_TIMEOUT,            /* RPC timeout before recovery/intr */
+        OBD_DUMP_ON_TIMEOUT,    /* dump kernel debug log upon eviction */
         OBD_UPCALL,             /* path to recovery upcall */
         OBD_MEMUSED,            /* bytes currently OBD_ALLOCated */
         OBD_SYNCFILTER,         /* XXX temporary, as we play with sync osts.. */
+        OBD_LDLM_TIMEOUT,       /* LDLM timeout for ASTs before client eviction */
 };
 
 int proc_fail_loc(ctl_table *table, int write, struct file *filp,
@@ -63,6 +65,8 @@ static ctl_table obd_table[] = {
                 &proc_dointvec},
         {OBD_TIMEOUT, "timeout", &obd_timeout, sizeof(int), 0644, NULL,
                 &proc_fail_loc},
+        {OBD_DUMP_ON_TIMEOUT, "dump_on_timeout", &obd_dump_on_timeout,
+                sizeof(int), 0644, NULL, &proc_dointvec},
         /* XXX need to lock so we avoid update races with recovery upcall! */
         {OBD_UPCALL, "upcall", obd_lustre_upcall, 128, 0644, NULL,
                 &proc_dostring, &sysctl_string },
@@ -70,6 +74,8 @@ static ctl_table obd_table[] = {
                 sizeof(int), 0644, NULL, &proc_dointvec},
         {OBD_SYNCFILTER, "filter_sync_on_commit", &obd_sync_filter, sizeof(int),
                 0644, NULL, &proc_dointvec},
+        {OBD_LDLM_TIMEOUT, "ldlm_timeout", &ldlm_timeout, sizeof(int), 0644,
+                NULL, &proc_dointvec},
         { 0 }
 };
 
