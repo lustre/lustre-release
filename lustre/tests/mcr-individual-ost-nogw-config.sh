@@ -11,7 +11,7 @@ SERVER_CNT=62
 
 TCPBUF=1048576
  
-h2ip () {
+h2tcp () {
     echo "${1}"
 }
 BATCH=/tmp/lmc-batch.$$
