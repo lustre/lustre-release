@@ -17,6 +17,8 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- fix gateway LMC keyword conflict (2318)
 	- fix MDS lock inversions in getattr/reint paths (1844)
 	- fix a rare lock re-ordering bug, which caused deadlock (2322)
+	- fix i_sem/journal inversion in fsfilt_ext3_write_record (2306)
+	- protect MDS inode fsdata with stronger locking (2313)
        * miscellania
 	- allow configurable automake binary, for testing new versions
 	- small update to the lfs documentation
