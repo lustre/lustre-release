@@ -52,13 +52,20 @@ if [ "$ONLY" == "cleanup" ]; then
     exit
 fi
 
-gen_config
+SETUP=${SETUP:-"setup"}
+CLEANUP=${CLEANUP:-"cleanup"}
 
-start ost --reformat $OSTLCONFARGS 
-start ost2 --reformat $OSTLCONFARGS 
-[ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
-start mds $MDSLCONFARGS --reformat
-zconf_mount $MOUNT
+setup() {
+    gen_config
+
+    start ost --reformat $OSTLCONFARGS 
+    start ost2 --reformat $OSTLCONFARGS 
+    [ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
+    start mds $MDSLCONFARGS --reformat
+    zconf_mount $MOUNT
+}
+
+$SETUP
 
 if [ "$ONLY" == "setup" ]; then
     exit 0
@@ -646,8 +653,7 @@ test_34() {
     fail_abort mds
     kill -USR1 $pid
     [ -e $DIR/$tfile ] && return 1
-    sleep 3
-    # wait for commitment of removal
+    sync
     return 0
 }
 run_test 34 "abort recovery before client does replay (test mds_cleanup_orphans)"
@@ -665,5 +671,41 @@ test_35() {
 }
 run_test 35 "test recovery from llog for unlink op"
 
+# b=2432 resent cancel after replay uses wrong cookie,
+# so don't resend cancels
+test_36() {
+    replay_barrier mds
+    touch $DIR/$tfile
+    checkstat $DIR/$tfile
+    facet_failover mds
+    cancel_lru_locks MDC
+    if dmesg | grep "unknown lock cookie"; then 
+	echo "cancel after replay failed"
+	return 1
+    fi
+}
+run_test 36 "don't resend cancel"
+
+# b=2368
+# directory orphans can't be unlinked from PENDING directory
+test_37() {
+    rmdir $DIR/$tfile 2>/dev/null
+    multiop $DIR/$tfile dD_c &
+    pid=$!
+    # give multiop a chance to open
+    sleep 1 
+    rmdir $DIR/$tfile
+
+    replay_barrier mds
+    # clear the dmesg buffer so we only see errors from this recovery
+    dmesg -c >/dev/null
+    fail_abort mds
+    kill -USR1 $pid
+    dmesg | grep  "mds_unlink_orphan.*error .* unlinking orphan" && return 1
+    sync
+    return 0
+}
+run_test 37 "abort recovery before client does replay (test mds_cleanup_orphans for directories)"
+
 equals_msg test complete, cleaning up
-cleanup
+$CLEANUP

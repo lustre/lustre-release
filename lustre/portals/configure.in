@@ -29,6 +29,6 @@ AM_CONFIG_HEADER(include/config.h)
 AC_OUTPUT([Makefile Kernelenv libcfs/Makefile portals/Makefile \
           unals/Makefile knals/Makefile router/Makefile \
 	  knals/socknal/Makefile knals/gmnal/Makefile knals/qswnal/Makefile \
-	  knals/scimacnal/Makefile knals/toenal/Makefile knals/ibnal/Makefile\
+	  knals/scimacnal/Makefile knals/ibnal/Makefile\
           utils/Makefile tests/Makefile doc/Makefile ])
 
