@@ -48,3 +48,5 @@ mkdirdeep
 utime
 small_write
 multiop
+sleeptest
+write_append_truncate
