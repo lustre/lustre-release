@@ -215,6 +215,8 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 }
 
                 err = copy_to_user((void *)arg, data, len);
+                if (err)
+                        err = -EFAULT;
                 GOTO(out, err);
         }
 
@@ -246,6 +248,8 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 CDEBUG(D_IOCTL, "device name %s, dev %d\n", data->ioc_inlbuf1,
                        dev);
                 err = copy_to_user((void *)arg, data, sizeof(*data));
+                if (err)
+                        err = -EFAULT;
                 GOTO(out, err);
         }
 
@@ -276,6 +280,8 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 CDEBUG(D_IOCTL, "device name %s, dev %d\n", data->ioc_inlbuf1,
                        dev);
                 err = copy_to_user((void *)arg, data, sizeof(*data));
+                if (err)
+                        err = -EFAULT;
                 GOTO(out, err);
         }
 
@@ -299,6 +305,8 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                         GOTO(out, err=-EINVAL);
 
                 err = copy_to_user((void *)arg, data, sizeof(*data));
+                if (err)
+                        err = -EFAULT;
                 GOTO(out, err);
         }
 
@@ -475,6 +483,8 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                         GOTO(out, err);
 
                 err = copy_to_user((void *)arg, data, sizeof(*data));
+                if (err)
+                        err = -EFAULT;
                 // XXX save connection data into file handle
                 GOTO(out, err);
         }
@@ -498,24 +508,33 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 
 #warning FIXME: save lsm into file handle for other ops, release on close
                 err = obd_create(&conn, &data->ioc_obdo1, &lsm);
-                if (!err)
+                if (!err) {
                         err = copy_to_user((void *)arg, data, sizeof(*data));
+                        if (err)
+                                err = -EFAULT;
+                }
                 GOTO(out, err);
         }
 
         case OBD_IOC_GETATTR: {
                 obd_data2conn(&conn, data);
                 err = obd_getattr(&conn, &data->ioc_obdo1, NULL);
-                if (!err)
+                if (!err) {
                         err = copy_to_user((void *)arg, data, sizeof(*data));
+                        if (err)
+                                err = -EFAULT;
+                }
                 GOTO(out, err);
         }
 
         case OBD_IOC_SETATTR: {
                 obd_data2conn(&conn, data);
                 err = obd_setattr(&conn, &data->ioc_obdo1, NULL);
-                if (!err)
+                if (!err) {
                         err = copy_to_user((void *)arg, data, sizeof(*data));
+                        if (err)
+                                err = -EFAULT;
+                }
                 GOTO(out, err);
         }
 
@@ -524,8 +543,11 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 obd_data2conn(&conn, data);
 
                 err = obd_destroy(&conn, &data->ioc_obdo1, NULL);
-                if (!err)
+                if (!err) {
                         err = copy_to_user((void *)arg, data, sizeof(*data));
+                        if (err)
+                                err = -EFAULT;
+                }
                 GOTO(out, err);
         }
 
@@ -534,8 +556,11 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 
                 obd_data2conn(&conn, data);
                 err = obd_open(&conn, &data->ioc_obdo1, lsm);
-                if (!err)
+                if (!err) {
                         err = copy_to_user((void *)arg, data, sizeof(*data));
+                        if (err)
+                                err = -EFAULT;
+                }
                 GOTO(out, err);
         }
 
@@ -635,6 +660,8 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                         GOTO(out, err);
 
                 err = copy_to_user((void *)arg, data, len);
+                if (err)
+                        err = -EFAULT;
                 GOTO(out, err);
         }
 
