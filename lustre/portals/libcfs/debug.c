@@ -633,9 +633,9 @@ int portals_debug_mark_buffer(char *text)
         if (debug_buf == NULL)
                 return -EINVAL;
 
-        CDEBUG(0, "********************************************************\n");
+        CDEBUG(D_TRACE,"***************************************************\n");
         CWARN("DEBUG MARKER: %s\n", text);
-        CDEBUG(0, "********************************************************\n");
+        CDEBUG(D_TRACE,"***************************************************\n");
 
         return 0;
 }
@@ -805,6 +805,10 @@ portals_debug_msg(int subsys, int mask, char *file, const char *fn,
                               subsys, mask, smp_processor_id(),
                               tv.tv_sec, tv.tv_usec, stack, current->pid);
         max_nob -= prefix_nob;
+
+        if(*(format + strlen(format) - 1) != '\n')
+                printk(KERN_INFO "format at %s:%d:%s doesn't end in newline\n",
+                       file, line, fn);
 
 #if defined(__arch_um__) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,4,20))
         msg_nob = snprintf(debug_buf + debug_off + prefix_nob, max_nob,
