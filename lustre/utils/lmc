@@ -342,9 +342,6 @@ def add_ost(gen, lustre, options, args):
     size = 0
     fstype = 'extN'
     
-    if len(args) < 1:
-        usage()
-
     if options.has_key('node'):
         node_name = options['node']
     else:
@@ -359,6 +356,8 @@ def add_ost(gen, lustre, options, args):
     if obdtype == 'obdecho':
         fstype = ''
     else:
+        if len(args) < 1:
+            usage()
         devname = args[0]
         if len(args) > 1:
             size = args[1]
