@@ -333,7 +333,7 @@ static int ll_lock_to_stripe_offset(struct inode *inode, struct ldlm_lock *lock)
                 RETURN(rc);
         }
         LASSERT(stripe < lsm->lsm_stripe_count);
-
+        EXIT;
 check:
         if (lsm->lsm_oinfo[stripe].loi_id != lock->l_resource->lr_name.name[0]||
             lsm->lsm_oinfo[stripe].loi_gr != lock->l_resource->lr_name.name[2]){
@@ -342,10 +342,10 @@ check:
                            lsm->lsm_oinfo[stripe].loi_id,
                            lsm->lsm_oinfo[stripe].loi_gr,
                            inode->i_ino, inode->i_generation, inode);
-                RETURN(-ELDLM_NO_LOCK_DATA);
+                return -ELDLM_NO_LOCK_DATA;
         }
 
-        RETURN(stripe);
+        return stripe;
 }
 
 /* Flush the page cache for an extent as its canceled.  When we're on an LOV,
@@ -907,13 +907,13 @@ static ssize_t ll_file_write(struct file *file, const char *buf,
 
         /* generic_file_write handles O_APPEND after getting i_sem */
         retval = generic_file_write(file, buf, count, ppos);
-
+        EXIT;
 out:
         ll_tree_unlock(&tree, inode);
         /* serialize with mmap/munmap/mremap */
         lprocfs_counter_add(ll_i2sbi(inode)->ll_stats, LPROC_LL_WRITE_BYTES,
                             retval > 0 ? retval : 0);
-        RETURN(retval);
+        return retval;
 }
 
 static int ll_lov_recreate_obj(struct inode *inode, struct file *file,
@@ -969,7 +969,7 @@ static int ll_lov_recreate_obj(struct inode *inode, struct file *file,
 out:
         up(&lli->lli_open_sem);
         obdo_free(oa);
-        RETURN (rc);
+        return rc;
 }
 
 static int ll_lov_setstripe_ea_info(struct inode *inode, struct file *file,
@@ -1024,14 +1024,14 @@ static int ll_lov_setstripe_ea_info(struct inode *inode, struct file *file,
         ll_intent_release(&oit);
 
         rc = ll_file_release(f->f_dentry->d_inode, f);
-
+        EXIT;
  out:
         if (f)
                 put_filp(f);
         up(&lli->lli_open_sem);
         if (req != NULL)
                 ptlrpc_req_finished(req);
-        RETURN(rc);
+        return rc;
 }
 
 static int ll_lov_setea(struct inode *inode, struct file *file,
@@ -1493,10 +1493,11 @@ int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
          * the file.
          */
         rc = ll_glimpse_size(inode);
+        EXIT;
 out:
         if (req)
                 ptlrpc_req_finished(req);
-        RETURN(rc);
+        return rc;
 }
 
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))

@@ -848,7 +848,7 @@ struct md_ops {
         int (*m_getattr)(struct obd_export *, struct lustre_id *,
                          unsigned long, unsigned int,
                          struct ptlrpc_request **);
-        int (*m_getattr_name)(struct obd_export *, struct lustre_id *,
+        int (*m_getattr_lock)(struct obd_export *, struct lustre_id *,
                               char *, int, unsigned long,
                               unsigned int, struct ptlrpc_request **);
         int (*m_intent_lock)(struct obd_export *,

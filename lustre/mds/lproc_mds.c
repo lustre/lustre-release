@@ -57,7 +57,7 @@ struct ll_mdscounters_opcode {
        { MDS_LINK_COUNT,          "mds_link" },
        { MDS_UNLINK_COUNT,        "mds_unlink" },
        { MDS_GETATTR_COUNT,       "mds_getattr" },
-       { MDS_GETATTR_NAME_COUNT,  "mds_getattr_name" },
+       { MDS_GETATTR_LOCK_COUNT,  "mds_getattr_lock" },
        { MDS_SETATTR_COUNT,       "mds_setattr" },
        { MDS_RENAME_COUNT,        "mds_rename" },
        { MDS_STATFS_COUNT,        "mds_statfs" },

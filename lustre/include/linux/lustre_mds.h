@@ -226,7 +226,7 @@ int mdc_getstatus(struct obd_export *exp, struct lustre_id *rootid);
 int mdc_getattr(struct obd_export *exp, struct lustre_id *id,
                 unsigned long valid, unsigned int ea_size,
                 struct ptlrpc_request **request);
-int mdc_getattr_name(struct obd_export *exp, struct lustre_id *id,
+int mdc_getattr_lock(struct obd_export *exp, struct lustre_id *id,
                      char *filename, int namelen, unsigned long valid,
                      unsigned int ea_size, struct ptlrpc_request **request);
 int mdc_setattr(struct obd_export *exp, struct mdc_op_data *data,

@@ -198,6 +198,7 @@ int ll_tree_unlock(struct ll_lock_tree *tree, struct inode *inode)
 
         RETURN(rc);
 }
+
 int ll_tree_lock(struct ll_lock_tree *tree,
                  struct ll_lock_tree_node *first_node, struct inode *inode,
                  const char *buf, size_t count, int ast_flags)
@@ -236,7 +237,7 @@ int ll_tree_lock(struct ll_lock_tree *tree,
         RETURN(rc);
 out:
         ll_tree_unlock(tree, inode);
-        RETURN(rc);
+        return rc;
 }
 
 static ldlm_mode_t mode_from_vma(struct vm_area_struct *vma)

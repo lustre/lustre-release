@@ -128,6 +128,7 @@ int lustre_common_fill_super(struct super_block *sb, char *lmv, char *lov)
         struct lustre_md md;
         kdev_t devno;
         int err;
+        ENTRY;
 
         obd = class_name2obd(lmv);
         if (!obd) {
@@ -262,7 +263,6 @@ int lustre_common_fill_super(struct super_block *sb, char *lmv, char *lov)
 #endif
 
         RETURN(err);
-
 out_root:
         if (root)
                 iput(root);
@@ -272,7 +272,7 @@ out_lmv:
         obd_disconnect(sbi->ll_lmv_exp, 0);
 out:
         lprocfs_unregister_mountpoint(sbi);
-        RETURN(err);
+        return err;
 }
 
 void lustre_common_put_super(struct super_block *sb)
@@ -416,6 +416,7 @@ int ll_fill_super(struct super_block *sb, void *data, int silent)
         }
 
         err = lustre_common_fill_super(sb, lmv, lov);
+        EXIT;
 out:
         if (err)
                 lustre_free_sbi(sb);
@@ -424,7 +425,7 @@ out:
                 OBD_FREE(lmv, strlen(lmv) + 1);
         if (lov)
                 OBD_FREE(lov, strlen(lov) + 1);
-        RETURN(err);
+        return err;
 } /* ll_read_super */
 
 static int lustre_process_log(struct lustre_mount_data *lmd, char *profile,
@@ -525,7 +526,8 @@ static int lustre_process_log(struct lustre_mount_data *lmd, char *profile,
                 CERROR("class_config_process_llog failed: rc = %d\n", rc);
 
         err = obd_disconnect(exp, 0);
-
+        
+        EXIT;
 out_cleanup:
         LCFG_INIT(lcfg, LCFG_CLEANUP, name);
         err = class_process_config(&lcfg);
@@ -559,7 +561,7 @@ out:
         if (rc == 0)
                 rc = err;
 
-        RETURN(rc);
+        return rc;
 }
 
 int lustre_fill_super(struct super_block *sb, void *data, int silent)
@@ -1575,10 +1577,10 @@ int ll_get_fid(struct obd_export *exp, struct lustre_id *idp,
 
         valid |= OBD_MD_FID;
         
-        rc = md_getattr_name(exp, idp, filename, strlen(filename) + 1,
+        rc = md_getattr_lock(exp, idp, filename, strlen(filename) + 1,
                              valid, 0, &request);
         if (rc < 0) {
-                CDEBUG(D_INFO, "md_getattr_name failed on %s: rc %d\n",
+                CDEBUG(D_INFO, "md_getattr_lock failed on %s: rc %d\n",
                        filename, rc);
                 return rc;
         }

@@ -1330,16 +1330,16 @@ static inline int md_enqueue(struct obd_export *exp, int lock_type,
         RETURN(rc);
 }
 
-static inline int md_getattr_name(struct obd_export *exp, struct lustre_id *id,
+static inline int md_getattr_lock(struct obd_export *exp, struct lustre_id *id,
                                   char *filename, int namelen,
                                   unsigned long valid, unsigned int ea_size,
                                   struct ptlrpc_request **request)
 {
         int rc;
         ENTRY;
-        EXP_CHECK_MD_OP(exp, getattr_name);
-        MD_COUNTER_INCREMENT(exp->exp_obd, getattr_name);
-        rc = MDP(exp->exp_obd, getattr_name)(exp, id, filename, namelen,
+        EXP_CHECK_MD_OP(exp, getattr_lock);
+        MD_COUNTER_INCREMENT(exp->exp_obd, getattr_lock);
+        rc = MDP(exp->exp_obd, getattr_lock)(exp, id, filename, namelen,
                                              valid, ea_size, request);
         RETURN(rc);
 }

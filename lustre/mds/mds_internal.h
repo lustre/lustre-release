@@ -37,7 +37,7 @@ typedef enum {
         MDS_LINK_COUNT         = 3,
         MDS_UNLINK_COUNT       = 4,
         MDS_GETATTR_COUNT      = 5,
-        MDS_GETATTR_NAME_COUNT = 6,
+        MDS_GETATTR_LOCK_COUNT = 6,
         MDS_SETATTR_COUNT      = 7,
         MDS_RENAME_COUNT       = 8,
         MDS_STATFS_COUNT       = 9,

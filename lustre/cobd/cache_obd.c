@@ -879,7 +879,7 @@ static int cobd_md_change_cbdata(struct obd_export *exp, struct lustre_id *id,
         return md_change_cbdata(cobd_exp, id, it, data);
 }
 
-static int cobd_md_getattr_name(struct obd_export *exp, struct lustre_id *id,
+static int cobd_md_getattr_lock(struct obd_export *exp, struct lustre_id *id,
                                 char *filename, int namelen, unsigned long valid,
                                 unsigned int ea_size, struct ptlrpc_request **request)
 {
@@ -892,7 +892,7 @@ static int cobd_md_getattr_name(struct obd_export *exp, struct lustre_id *id,
                 return -EINVAL;
         }
         cobd_exp = cobd_get_exp(obd);
-        return md_getattr_name(cobd_exp, id, filename, namelen, valid,
+        return md_getattr_lock(cobd_exp, id, filename, namelen, valid,
                                ea_size, request);
 }
 
@@ -1244,7 +1244,7 @@ struct md_ops cobd_md_ops = {
         .m_getattr              = cobd_md_getattr,
         .m_req2lustre_md        = cobd_md_req2lustre_md,
         .m_change_cbdata        = cobd_md_change_cbdata,
-        .m_getattr_name         = cobd_md_getattr_name,
+        .m_getattr_lock         = cobd_md_getattr_lock,
         .m_create               = cobd_md_create,
         .m_unlink               = cobd_md_unlink,
         .m_valid_attrs          = cobd_md_valid_attrs,

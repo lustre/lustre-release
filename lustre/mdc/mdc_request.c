@@ -240,7 +240,7 @@ int mdc_getattr(struct obd_export *exp, struct lustre_id *id,
         RETURN (rc);
 }
 
-int mdc_getattr_name(struct obd_export *exp, struct lustre_id *id,
+int mdc_getattr_lock(struct obd_export *exp, struct lustre_id *id,
                      char *filename, int namelen, unsigned long valid,
                      unsigned int ea_size, struct ptlrpc_request **request)
 {
@@ -1419,7 +1419,7 @@ struct md_ops mdc_md_ops = {
         .m_create        = mdc_create,
         .m_done_writing  = mdc_done_writing,
         .m_enqueue       = mdc_enqueue,
-        .m_getattr_name  = mdc_getattr_name,
+        .m_getattr_lock  = mdc_getattr_lock,
         .m_intent_lock   = mdc_intent_lock,
         .m_link          = mdc_link,
         .m_rename        = mdc_rename,
@@ -1460,7 +1460,7 @@ EXPORT_SYMBOL(mdc_req2lustre_md);
 EXPORT_SYMBOL(mdc_change_cbdata);
 EXPORT_SYMBOL(mdc_getstatus);
 EXPORT_SYMBOL(mdc_getattr);
-EXPORT_SYMBOL(mdc_getattr_name);
+EXPORT_SYMBOL(mdc_getattr_lock);
 EXPORT_SYMBOL(mdc_create);
 EXPORT_SYMBOL(mdc_unlink);
 EXPORT_SYMBOL(mdc_rename);

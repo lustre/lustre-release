@@ -1036,7 +1036,7 @@ int lmv_enqueue(struct obd_export *exp, int lock_type,
         RETURN(rc);
 }
 
-int lmv_getattr_name(struct obd_export *exp, struct lustre_id *id,
+int lmv_getattr_lock(struct obd_export *exp, struct lustre_id *id,
                      char *filename, int namelen, unsigned long valid,
                      unsigned int ea_size, struct ptlrpc_request **request)
 {
@@ -1046,7 +1046,7 @@ int lmv_getattr_name(struct obd_export *exp, struct lustre_id *id,
         struct lustre_id rid = *id;
         struct mds_body *body;
         struct lmv_obj *obj;
-        int fetch_fid_on;
+        int old_valid;
         ENTRY;
         
         rc = lmv_check_connect(obd);
@@ -1063,20 +1063,20 @@ repeat:
                 lmv_put_obj(obj);
         }
         
-        CDEBUG(D_OTHER, "getattr_name for %*s on "DLID4" -> "DLID4"\n",
+        CDEBUG(D_OTHER, "getattr_lock for %*s on "DLID4" -> "DLID4"\n",
                namelen, filename, OLID4(id), OLID4(&rid));
 
-        fetch_fid_on = (valid & OBD_MD_FID);
+	old_valid = valid;
 
         /*
          * here should be applied OBD_MD_FID to ->valid, because otherwise,
-         * mds_getattr_name() will not fetch fid component of lustre_id and
-         * thus, next call to md_getattr_name() will be performed to wrong mds.
+         * mds_getattr_lock() will not fetch fid component of lustre_id and
+         * thus, next call to md_getattr_lock() will be performed to wrong mds.
          */
-        if (!fetch_fid_on)
+        if (!(old_valid & OBD_MD_FID))
                 valid |= OBD_MD_FID;
         
-        rc = md_getattr_name(lmv->tgts[id_group(&rid)].ltd_exp, 
+        rc = md_getattr_lock(lmv->tgts[id_group(&rid)].ltd_exp, 
                              &rid, filename, namelen, valid,
                              ea_size, request);
         if (rc == 0) {
@@ -1098,10 +1098,10 @@ repeat:
                          * full lustre_id and do need to fetch fid component
                          * again. This will help to make thing slightly faster.
                          */
-                        if (!fetch_fid_on)
+                        if (!(old_valid & OBD_MD_FID))
                                 valid &= ~OBD_MD_FID;
                         
-                        rc = md_getattr_name(lmv->tgts[id_group(&rid)].ltd_exp, 
+                        rc = md_getattr_lock(lmv->tgts[id_group(&rid)].ltd_exp, 
                                              &rid, NULL, 1, valid, ea_size, &req);
                         ptlrpc_req_finished(*request);
                         *request = req;
@@ -1929,7 +1929,7 @@ struct md_ops lmv_md_ops = {
         .m_create               = lmv_create,
         .m_done_writing         = lmv_done_writing,
         .m_enqueue              = lmv_enqueue,
-        .m_getattr_name         = lmv_getattr_name,
+        .m_getattr_lock         = lmv_getattr_lock,
         .m_intent_lock          = lmv_intent_lock,
         .m_link                 = lmv_link,
         .m_rename               = lmv_rename,

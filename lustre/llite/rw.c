@@ -444,13 +444,14 @@ static int queue_or_sync_write(struct obd_export *exp,
         if (!rc && async_flags & ASYNC_READY)
                 unlock_page(llap->llap_page);
 
-        LL_CDEBUG_PAGE(D_PAGE, llap->llap_page, "sync write returned %d\n",
-                       rc);
+        LL_CDEBUG_PAGE(D_PAGE, llap->llap_page,
+                       "sync write returned %d\n", rc);
 
+        EXIT;
 free_oig:
         oig_release(oig);
 out:
-        RETURN(rc);
+        return rc;
 }
 
 void lov_increase_kms(struct obd_export *exp, struct lov_stripe_md *lsm,
@@ -505,7 +506,7 @@ int ll_commit_write(struct file *file, struct page *page, unsigned from,
          * don't dirty the page if it has been write out in q_o_s_w */
         if (llap->llap_write_queued)
                 set_page_dirty(page);
-
+        EXIT;
 out:
         if (rc == 0) {
                 size = (((obd_off)page->index) << PAGE_SHIFT) + to;
@@ -514,7 +515,7 @@ out:
                         inode->i_size = size;
                 SetPageUptodate(page);
         }
-        RETURN(rc);
+        return rc;
 }
                                                                                                                                                                                                      
 int ll_writepage(struct page *page)
@@ -524,18 +525,18 @@ int ll_writepage(struct page *page)
         struct ll_async_page *llap;
         int rc = 0;
         ENTRY;
-                                                                                                                                                                                                     
+
         LASSERT(!PageDirty(page));
         LASSERT(PageLocked(page));
-                                                                                                                                                                                                     
+
         exp = ll_i2obdexp(inode);
         if (exp == NULL)
                 GOTO(out, rc = -EINVAL);
-                                                                                                                                                                                                     
+
         llap = llap_from_page(page);
         if (IS_ERR(llap))
                 GOTO(out, rc = PTR_ERR(llap));
-                                                                                                                                                                                                     
+
         page_cache_get(page);
         if (llap->llap_write_queued) {
                 LL_CDEBUG_PAGE(D_PAGE, page, "marking urgent\n");
@@ -549,13 +550,15 @@ int ll_writepage(struct page *page)
         }
         if (rc)
                 page_cache_release(page);
+        EXIT;
 out:
         if (rc)
                 unlock_page(page);
-        RETURN(rc);
+        return rc;
 }
 
-static unsigned long ll_ra_count_get(struct ll_sb_info *sbi, unsigned long len)
+static unsigned long
+ll_ra_count_get(struct ll_sb_info *sbi, unsigned long len)
 {
         struct ll_ra_info *ra = &sbi->ll_ra_info;
         unsigned long ret;
@@ -971,7 +974,6 @@ out_unlock:
         RAS_CDEBUG(ras);
         spin_unlock(&ras->ras_lock);
         spin_unlock(&sbi->ll_lock);
-        return;
 }
 
 /*
@@ -1052,12 +1054,12 @@ int ll_readpage(struct file *filp, struct page *page)
                              fd->fd_flags);
 
         rc = obd_trigger_group_io(exp, ll_i2info(inode)->lli_smd, NULL, oig);
-
+        EXIT;
 out:
         if (rc)
                 unlock_page(page);
 out_oig:
         if (oig != NULL)
                 oig_release(oig);
-        RETURN(rc);
+        return rc;
 }

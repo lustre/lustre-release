@@ -131,15 +131,17 @@ static int __init init_lustre_lite(void)
 
         printk(KERN_INFO "Lustre: Lustre Lite Client File System; "
                "info@clusterfs.com\n");
+
         rc = ll_init_inodecache();
         if (rc)
                 return -ENOMEM;
+
         ll_file_data_slab = kmem_cache_create("ll_file_data",
                                               sizeof(struct ll_file_data), 0,
                                               SLAB_HWCACHE_ALIGN, NULL, NULL);
         if (ll_file_data_slab == NULL) {
-                GOTO(out, rc = ENOMEM);
-                return -ENOMEM;
+                rc = -ENOMEM;
+                goto out;
         }
 
         proc_lustre_fs_root = proc_lustre_root ?
@@ -147,19 +149,18 @@ static int __init init_lustre_lite(void)
 
         rc = register_filesystem(&lustre_lite_fs_type);
         if (rc)
-                GOTO(out, rc);
+                goto out;
         cleanup = 1;
 
         rc = register_filesystem(&lustre_fs_type);
         if (rc)
-                GOTO(out, rc);
+                goto out;
         cleanup = 2;
 
         rc = ll_gns_start_thread();
         if (rc)
-                GOTO(out, rc);
+                goto out;
         return 0;
-
 out:
         switch (cleanup) {
         case 2:

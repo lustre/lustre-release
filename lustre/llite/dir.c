@@ -364,11 +364,12 @@ int ll_readdir(struct file * filp, void * dirent, filldir_t filldir)
                 ext2_put_page(page);
         }
 
+        EXIT;
 done:
         filp->f_pos = (n << PAGE_CACHE_SHIFT) | offset;
         filp->f_version = inode->i_version;
         update_atime(inode);
-        RETURN(rc);
+        return rc;
 }
 
 static int ll_mkdir_stripe(struct inode *inode, unsigned long arg)
@@ -393,7 +394,7 @@ static int ll_mkdir_stripe(struct inode *inode, unsigned long arg)
                 RETURN(-ENOMEM);
 
         if (copy_from_user(name, lums.lums_name, lums.lums_namelen))
-                GOTO(out, err=-EFAULT);
+                GOTO(out, err = -EFAULT);
 
         CDEBUG(D_VFSTRACE, "ioctl Op:name=%s,dir=%lu/%u(%p)\n",
                name, inode->i_ino, inode->i_generation, inode);
@@ -405,10 +406,10 @@ static int ll_mkdir_stripe(struct inode *inode, unsigned long arg)
         err = md_create(sbi->ll_lmv_exp, &op_data, &nstripes, sizeof(nstripes),
                         mode, current->fsuid, current->fsgid, 0, &request);
         ptlrpc_req_finished(request);
-
+        EXIT;
 out:
         OBD_FREE(name, lums.lums_namelen);
-        RETURN(err);
+        return err;
 }
 
 static int ll_dir_ioctl(struct inode *inode, struct file *file,
@@ -452,10 +453,10 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
 
                 valid = OBD_MD_FLID;
                 ll_inode2id(&id, inode);
-                rc = md_getattr_name(sbi->ll_lmv_exp, &id,
+                rc = md_getattr_lock(sbi->ll_lmv_exp, &id,
                                      filename, namelen, valid, 0, &request);
                 if (rc < 0) {
-                        CDEBUG(D_INFO, "md_getattr_name: %d\n", rc);
+                        CDEBUG(D_INFO, "md_getattr_lock: %d\n", rc);
                         GOTO(out, rc);
                 }
 
@@ -522,8 +523,8 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 }
 
                 body = lustre_msg_buf(request->rq_repmsg, 0, sizeof(*body));
-                LASSERT(body != NULL);         /* checked by md_getattr_name */
-                LASSERT_REPSWABBED(request, 0);/* swabbed by md_getattr_name */
+                LASSERT(body != NULL);         /* checked by md_getattr_lock */
+                LASSERT_REPSWABBED(request, 0);/* swabbed by md_getattr_lock */
 
                 lmmsize = body->eadatasize;
                 if (lmmsize == 0)
@@ -580,19 +581,19 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                         RETURN(PTR_ERR(filename));
 
                 ll_inode2id(&id, inode);
-                rc = md_getattr_name(sbi->ll_lmv_exp, &id, filename,
+                rc = md_getattr_lock(sbi->ll_lmv_exp, &id, filename,
                                      strlen(filename) + 1, OBD_MD_FLEASIZE,
                                      obd_size_diskmd(sbi->ll_lov_exp, NULL),
                                      &request);
                 if (rc < 0) {
-                        CDEBUG(D_INFO, "md_getattr_name failed on %s: rc %d\n",
+                        CDEBUG(D_INFO, "md_getattr_lock failed on %s: rc %d\n",
                                filename, rc);
                         GOTO(out_name, rc);
                 }
 
                 body = lustre_msg_buf(request->rq_repmsg, 0, sizeof (*body));
-                LASSERT(body != NULL);         /* checked by md_getattr_name */
-                LASSERT_REPSWABBED(request, 0);/* swabbed by md_getattr_name */
+                LASSERT(body != NULL);         /* checked by md_getattr_lock */
+                LASSERT_REPSWABBED(request, 0);/* swabbed by md_getattr_lock */
 
                 lmmsize = body->eadatasize;
 

@@ -611,9 +611,10 @@ static int ll_mknod(struct inode *dir, struct dentry *child, int mode,
         }
 
         d_instantiate(child, inode);
+        EXIT;
  out_err:
         ptlrpc_req_finished(request);
-        RETURN(err);
+        return err;
 }
 
 static int ll_symlink_raw(struct nameidata *nd, const char *tgt)
@@ -786,6 +787,7 @@ int ll_objects_destroy(struct ptlrpc_request *request,
         if (rc)
                 CERROR("obd destroy objid "LPX64" error %d\n",
                        lsm->lsm_object_id, rc);
+        EXIT;
  out_free_memmd:
         obd_free_memmd(ll_i2obdexp(dir), &lsm);
  out:
@@ -811,9 +813,10 @@ static int ll_unlink_raw(struct nameidata *nd)
         ll_update_times(request, 0, dir);
         
         rc = ll_objects_destroy(request, dir, 2);
+        EXIT;
 out:
         ptlrpc_req_finished(request);
-        RETURN(rc);
+        return rc;
 }
 
 static int ll_rename_raw(struct nameidata *oldnd, struct nameidata *newnd)

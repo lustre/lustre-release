@@ -937,7 +937,7 @@ static int mds_getattr_lock(struct ptlrpc_request *req, int offset,
         ENTRY;
 
         LASSERT(!strcmp(obd->obd_type->typ_name, LUSTRE_MDS_NAME));
-        MDS_UPDATE_COUNTER((&obd->u.mds), MDS_GETATTR_NAME_COUNT);
+        MDS_UPDATE_COUNTER((&obd->u.mds), MDS_GETATTR_LOCK_COUNT);
 
         rsd = lustre_swab_mds_secdesc(req, MDS_REQ_SECDESC_OFF);
         if (!rsd) {
