@@ -884,13 +884,12 @@ static int ost_get_info(struct obd_export *exp, struct ptlrpc_request *req)
 static int ost_llog_handle_connect(struct obd_export *exp,
                 struct ptlrpc_request *req)
 {
-        struct obd_device *obd = exp->exp_obd;
         struct llogd_conn_body *body;
         int rc;
         ENTRY;
 
         body = lustre_msg_buf(req->rq_reqmsg, 0, sizeof(*body));
-        rc = obd_llog_connect(obd, body);
+        rc = obd_llog_connect(exp, body);
         RETURN(rc);
 }
 

@@ -176,6 +176,7 @@ struct filter_group_llog {
         struct list_head list;
         int group;
         struct obd_llogs *llogs;
+        struct obd_export *exp;
 };
 
 struct filter_obd {
@@ -190,6 +191,7 @@ struct filter_obd {
         __u64                 *fo_last_objids;  /* per-group last created objid */
         struct file          **fo_last_objid_files;
         struct semaphore     fo_init_lock;      /* group initialization lock */
+        int                  fo_committed_group;
 
         spinlock_t           fo_objidlock; /* protect fo_lastobjid increment */
         spinlock_t           fo_translock; /* protect fsd_last_rcvd increment */
@@ -642,6 +644,7 @@ struct obd_ops {
         int (*o_postrecov)(struct obd_device *dev);
         int (*o_connect)(struct lustre_handle *conn, struct obd_device *src,
                          struct obd_uuid *cluuid, unsigned long connect_flags);
+        int (*o_connect_post)(struct obd_export *exp);
         int (*o_disconnect)(struct obd_export *exp, int flags);
 
         int (*o_statfs)(struct obd_device *obd, struct obd_statfs *osfs,
@@ -753,7 +756,7 @@ struct obd_ops {
         int (*o_llog_init)(struct obd_device *, struct obd_llogs *,
                            struct obd_device *, int, struct llog_catid *);
         int (*o_llog_finish)(struct obd_device *, struct obd_llogs *, int);
-        int (*o_llog_connect)(struct obd_device *, struct llogd_conn_body *);
+        int (*o_llog_connect)(struct obd_export *, struct llogd_conn_body *);
 
        
         /* metadata-only methods */

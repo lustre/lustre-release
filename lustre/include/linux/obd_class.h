@@ -637,6 +637,19 @@ static inline int obd_connect(struct lustre_handle *conn,
         RETURN(rc);
 }
 
+static inline int obd_connect_post(struct obd_export *exp)
+{
+        int rc;
+        ENTRY;
+
+        OBD_CHECK_DEV_ACTIVE(exp->exp_obd);
+        if (!OBT(exp->exp_obd) || !OBP((exp->exp_obd), connect_post))
+                RETURN(0);
+        OBD_COUNTER_INCREMENT(exp->exp_obd, connect_post);
+        rc = OBP(exp->exp_obd, connect_post)(exp);
+        RETURN(rc);
+}
+
 static inline int obd_disconnect(struct obd_export *exp, int flags)
 {
         int rc;
@@ -1095,21 +1108,12 @@ static inline void obd_import_event(struct obd_device *obd,
         }
 }
 
-static inline int obd_llog_connect(struct obd_device *obd,
+static inline int obd_llog_connect(struct obd_export *exp,
                                         struct llogd_conn_body *body)
 {
         ENTRY;
-        if (!obd->obd_set_up) {
-                CERROR("obd %s not set up\n", obd->obd_name);
-                return -EINVAL;
-        }
-
-        if (!OBP(obd, llog_connect)) {
-                CERROR("obd %s has no llog_connect handler\n", obd->obd_name);
-                return -ENOSYS;
-        }
-
-        return OBP(obd, llog_connect)(obd, body);
+        EXP_CHECK_OP(exp, llog_connect);
+        return OBP(exp->exp_obd, llog_connect)(exp, body);
 }
 
 static inline int obd_notify(struct obd_device *obd,

@@ -219,7 +219,8 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
         CDEBUG(D_HA, "obd: %s osc: %s lov_name: %s\n",
                obd->obd_name, mds->mds_osc_obd->obd_name, lov_name);
 
-        rc = obd_connect(&conn, mds->mds_osc_obd, &obd->obd_uuid, 0);
+        rc = obd_connect(&conn, mds->mds_osc_obd, &obd->obd_uuid,
+                         mds->mds_num + FILTER_GROUP_FIRST_MDS);
         if (rc) {
                 CERROR("MDS cannot connect to LOV %s (%d)\n",
                        lov_name, rc);

@@ -92,7 +92,8 @@ int filter_log_sz_change(struct llog_handle *cathandle,
         out:
         RETURN(rc);
 }
-struct obd_llogs * filter_grab_llog_for_group(struct obd_device *, int);
+struct obd_llogs * filter_grab_llog_for_group(struct obd_device *,
+                                              int, struct obd_export *);
 
 /* When this (destroy) operation is committed, return the cancel cookie */
 void filter_cancel_cookies_cb(struct obd_device *obd, __u64 transno,
@@ -103,7 +104,7 @@ void filter_cancel_cookies_cb(struct obd_device *obd, __u64 transno,
         struct llog_ctxt *ctxt;
 
         /* we have to find context for right group */
-        llogs = filter_grab_llog_for_group(obd, cookie->lgc_lgl.lgl_ogr);
+        llogs = filter_grab_llog_for_group(obd, cookie->lgc_lgl.lgl_ogr, NULL);
 
         if (llogs) {
                 ctxt = llog_get_context(llogs, cookie->lgc_subsys + 1);
@@ -112,8 +113,9 @@ void filter_cancel_cookies_cb(struct obd_device *obd, __u64 transno,
                 } else
                         CERROR("no valid context for group "LPU64"\n",
                                cookie->lgc_lgl.lgl_ogr);
-        } else
-                CERROR("unknown group "LPU64"!\n", cookie->lgc_lgl.lgl_ogr);
+        } else {
+                CDEBUG(D_HA, "unknown group "LPU64"!\n", cookie->lgc_lgl.lgl_ogr);
+        }
 
         OBD_FREE(cb_data, sizeof(struct llog_cookie));
 }

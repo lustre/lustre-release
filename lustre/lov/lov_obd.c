@@ -116,7 +116,7 @@ static void lov_llh_destroy(struct lov_lock_handles *llh)
 /* obd methods */
 #define MAX_STRING_SIZE 128
 static int lov_connect_obd(struct obd_device *obd, struct lov_tgt_desc *tgt,
-                           int activate)
+                           int activate, unsigned long connect_flags)
 {
         struct lov_obd *lov = &obd->u.lov;
         struct obd_uuid *tgt_uuid = &tgt->uuid;
@@ -157,7 +157,7 @@ static int lov_connect_obd(struct obd_device *obd, struct lov_tgt_desc *tgt,
                 RETURN(0);
         }
 
-        rc = obd_connect(&conn, tgt_obd, &lov_osc_uuid, 0);
+        rc = obd_connect(&conn, tgt_obd, &lov_osc_uuid, connect_flags);
         if (rc) {
                 CERROR("Target %s connect error %d\n", tgt_uuid->uuid, rc);
                 RETURN(rc);
@@ -230,7 +230,7 @@ static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
         for (i = 0, tgt = lov->tgts; i < lov->desc.ld_tgt_count; i++, tgt++) {
                 if (obd_uuid_empty(&tgt->uuid))
                         continue;
-                rc = lov_connect_obd(obd, tgt, 0);
+                rc = lov_connect_obd(obd, tgt, 0, connect_flags);
                 if (rc)
                         GOTO(out_disc, rc);
         }
@@ -591,7 +591,7 @@ lov_add_obd(struct obd_device *obd, struct obd_uuid *uuidp, int index, int gen)
                         osc_obd->obd_no_recov = 0;
         }
 
-        rc = lov_connect_obd(obd, tgt, 1);
+        rc = lov_connect_obd(obd, tgt, 1, 0);
         if (rc || !obd->obd_observer)
                 RETURN(rc);
 

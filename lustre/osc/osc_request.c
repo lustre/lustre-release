@@ -2743,12 +2743,10 @@ static int osc_get_info(struct obd_export *exp, obd_count keylen,
 static int osc_set_info(struct obd_export *exp, obd_count keylen,
                         void *key, obd_count vallen, void *val)
 {
-        struct ptlrpc_request *req;
         struct obd_device  *obd = exp->exp_obd;
         struct obd_import *imp = class_exp2cliimp(exp);
         struct llog_ctxt *ctxt;
-        int rc, size[2] = {keylen, vallen};
-        char *bufs[2] = {key, val};
+        int rc = 0;
         ENTRY;
 
         if (keylen == strlen("next_id") &&
@@ -2802,14 +2800,6 @@ static int osc_set_info(struct obd_export *exp, obd_count keylen,
         if (keylen < strlen("mds_conn") ||
             memcmp(key, "mds_conn", strlen("mds_conn")) != 0)
                 RETURN(-EINVAL);
-
-        req = ptlrpc_prep_req(imp, OST_SET_INFO, 2, size, bufs);
-        if (req == NULL)
-                RETURN(-ENOMEM);
-
-        req->rq_replen = lustre_msg_size(0, NULL);
-        rc = ptlrpc_queue_wait(req);
-        ptlrpc_req_finished(req);
 
         ctxt = llog_get_context(&exp->exp_obd->obd_llogs, LLOG_UNLINK_ORIG_CTXT);
         if (ctxt) {
@@ -2875,7 +2865,7 @@ static int osc_connect(struct lustre_handle *exph,
 {
         int rc;
 
-        rc = client_connect_import(exph, obd, cluuid, 0);
+        rc = client_connect_import(exph, obd, cluuid, connect_flags);
 
         return rc;
 }

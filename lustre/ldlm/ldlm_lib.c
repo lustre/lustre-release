@@ -583,6 +583,8 @@ int target_handle_connect(struct ptlrpc_request *req)
         revimp->imp_dlm_fake = 1;
         revimp->imp_state = LUSTRE_IMP_FULL;
         class_import_put(revimp);
+
+        rc = obd_connect_post(export);
 out:
         if (rc)
                 req->rq_status = rc;
