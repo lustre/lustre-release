@@ -1,4 +1,4 @@
-tbd         Cluster File Systems, Inc. <info@clusterfs.com>
+2004-10-07  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.7
        * bug fixes
 	- ignore -ENOENT errors in osc_destroy (3639)
