@@ -43,6 +43,7 @@ replay_barrier() {
     sync
     lctl --device %${dev}1 readonly
     lctl --device %${dev}1 notransno
+    lctl mark "REPLAY BARRIER"
 }
 
 fail() {
@@ -131,7 +132,7 @@ EQUALS="======================================================================"
 run_one() {
     testnum=$1
     message=$2
-    
+
     # Pretty tests run faster.
     echo -n '=====' $testnum: $message
     local suffixlen=`echo -n $2 | awk '{print 65 - length($0)}'`
@@ -237,8 +238,28 @@ test_7() {
 }
 run_test 7 "create open write rename |X| create-old-name read"
 
+test_8() {
+    keepopen.py $MOUNTPT/f8 &
+    pid=$!
+    # wait until keepopen has created the file
+    while [ ! -e $MOUNTPT/f8 ]; do sleep 1; done
+    mcreate $MOUNTPT/f8b
+    rm -f $MOUNTPT/f8
+    replay_barrier mds
+    kill -USR1 $pid
+    wait $pid || return 6
+
+    fail mds
+    [ -e $MOUNTPT/f8 ] && return 7
+    rm $MOUNTPT/f8b
+    [ -e $MOUNTPT/f8b ] && return 8
+    return 0
+}
+run_test 8 "open, unlink |X| close"
+
+
 stop client $CLIENTLCONFARGS
 stop ost
-stop mds $MDSLCONFARGS
+stop mds $MDSLCONFARGS --dump cleanup.log
 
 trap - EXIT

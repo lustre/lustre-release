@@ -41,6 +41,7 @@ replay_barrier() {
     sync
     lctl --device %${dev}1 readonly
     lctl --device %${dev}1 notransno
+    lctl mark "REPLAY BARRIER"
 }
 
 fail() {
