@@ -123,7 +123,7 @@ int pingsrv_thread(void *arg)
                 server->mdout.threshold = 1; 
                 server->mdout.options   = PTL_MD_EVENT_START_DISABLE | PTL_MD_OP_PUT;
                 server->mdout.user_ptr  = NULL;
-                server->mdout.eventq    = PTL_EQ_NONE;
+                server->mdout.eq_handle = PTL_EQ_NONE;
        
                 /* Bind the outgoing buffer */
                 if ((rc = PtlMDBind (server->ni, server->mdout, 
@@ -139,7 +139,7 @@ int pingsrv_thread(void *arg)
                 server->mdin.threshold = 1; 
                 server->mdin.options   = PTL_MD_EVENT_START_DISABLE | PTL_MD_OP_PUT;
                 server->mdin.user_ptr  = NULL;
-                server->mdin.eventq    = server->eq;
+                server->mdin.eq_handle = server->eq;
         
                 if ((rc = PtlMDAttach (server->me, server->mdin,
                         PTL_UNLINK, &server->mdin_h))) {
@@ -177,7 +177,7 @@ static void pingsrv_callback(ptl_event_t *ev)
         printk ("Lustre: received ping from nid "LPX64" "
                "(off=%u rlen=%u mlen=%u head=%x)\n",
                ev->initiator.nid, ev->offset, ev->rlength, ev->mlength,
-               *((int *)(ev->mem_desc.start + ev->offset)));
+               *((int *)(ev->md.start + ev->offset)));
         
         packets_valid++;
 
@@ -235,7 +235,7 @@ static struct pingsrv_data *pingsrv_setup(void)
         server->mdin.threshold = 1; 
         server->mdin.options   = PTL_MD_EVENT_START_DISABLE | PTL_MD_OP_PUT;
         server->mdin.user_ptr  = NULL;
-        server->mdin.eventq    = server->eq;
+        server->mdin.eq_handle = server->eq;
         memset (server->in_buf, 0, STDSIZE);
         
         if ((rc = PtlMDAttach (server->me, server->mdin,
