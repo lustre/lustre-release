@@ -2169,7 +2169,6 @@ static void filter_destroy_precreated(struct obd_export *exp, struct obdo *oa,
         LASSERT(oa->o_gr != 0);
         LASSERT(oa->o_valid & OBD_MD_FLGROUP);
 
-        OBD_ALLOC(doa, sizeof(*doa));
 	doa = obdo_alloc();
         if (doa == NULL) {
                 CERROR("cannot allocate doa, error %d\n",
