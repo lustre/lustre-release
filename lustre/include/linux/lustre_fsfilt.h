@@ -58,9 +58,9 @@ struct fsfilt_operations {
         int     (* fs_get_md)(struct inode *inode, void *md, int size);
         ssize_t (* fs_readpage)(struct file *file, char *buf, size_t count,
                                 loff_t *offset);
-        int     (* fs_set_last_rcvd)(struct obd_device *obd, __u64 last_rcvd,
-                                     void *handle, fsfilt_cb_t cb_func,
-                                     void *cb_data);
+        int     (* fs_add_journal_cb)(struct obd_device *obd, __u64 last_rcvd,
+                                      void *handle, fsfilt_cb_t cb_func,
+                                      void *cb_data);
         int     (* fs_statfs)(struct super_block *sb, struct obd_statfs *osfs);
         int     (* fs_sync)(struct super_block *sb);
         int     (* fs_prep_san_write)(struct inode *inode, long *blocks,
@@ -208,12 +208,12 @@ static inline ssize_t fsfilt_readpage(struct obd_device *obd,
         return obd->obd_fsops->fs_readpage(file, buf, count, offset);
 }
 
-static inline int fsfilt_set_last_rcvd(struct obd_device *obd, __u64 last_rcvd,
-                                       void *handle, fsfilt_cb_t cb_func,
-                                       void *cb_data)
+static inline int fsfilt_add_journal_cb(struct obd_device *obd, __u64 last_rcvd,
+                                        void *handle, fsfilt_cb_t cb_func,
+                                        void *cb_data)
 {
-        return obd->obd_fsops->fs_set_last_rcvd(obd, last_rcvd, handle,
-                                                cb_func, cb_data);
+        return obd->obd_fsops->fs_add_journal_cb(obd, last_rcvd, handle,
+                                                 cb_func, cb_data);
 }
 
 static inline int fsfilt_statfs(struct obd_device *obd, struct super_block *sb,
