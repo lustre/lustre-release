@@ -749,6 +749,7 @@ static inline int lov_brw(int cmd, struct lustre_handle *conn,
 
                 if (si->bufct) {
                         LASSERT(shift < oa_bufs);
+                        /* XXX handle error returns here */
                         obd_brw(cmd, &lov->tgts[si->ost_idx].conn,
                                 &si->lsm, si->bufct, &ioarr[shift],
                                 lov_osc_brw_callback, our_cb);
