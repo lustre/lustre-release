@@ -31,6 +31,7 @@
 #include <asm/div64.h>
 #else
 #include <liblustre.h>
+#include <sys/capability.h>
 #endif
 
 #include <linux/obd.h>

@@ -4,7 +4,7 @@ AM_CPPFLAGS = -I$(SYSIO)/include -I/opt/lam/include $(LLCPPFLAGS) -I$(top_srcdir
 AM_CFLAGS = $(LLCFLAGS)
 LIBS = $(LIBEFENCE) $(LIBREADLINE)
 
-LLIB_EXEC= ../liblustre.a -lpthread
+LLIB_EXEC= ../liblustre.a -lcap -lpthread
 
 if LIBLUSTRE
 noinst_LIBRARIES = libtestcommon.a
@@ -21,7 +21,7 @@ libtestcommon_a_SOURCES = test_common.c test_common.h
 
 echo_test_SOURCES = echo_test.c  ../../utils/parser.c ../../utils/obd.c ../../utils/lustre_cfg.c
 echo_test_CFLAGS = $(LL_CFLAGS)
-echo_test_LDADD = ../liblsupport.a $(LIBREADLINE) -lpthread 
+echo_test_LDADD = ../liblsupport.a $(LIBREADLINE) -lcap -lpthread 
 echo_test_DEPENDENCIES=$(top_builddir)/liblustre/liblsupport.a
 
 sanity_SOURCES = sanity.c
