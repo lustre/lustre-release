@@ -415,10 +415,10 @@ void ldlm_lock_decref(struct lustre_handle *lockh, __u32 mode)
          * run the callback. */
         if (!lock->l_readers && !lock->l_writers &&
             (lock->l_flags & LDLM_FL_CBPENDING)) {
-                if (!lock->l_resource->lr_namespace->ns_client) {
-                        CERROR("LDLM_FL_CBPENDING set on non-local lock!\n");
-                        LBUG();
-                }
+                if (!lock->l_resource->lr_namespace->ns_client &&
+                    lock->l_export)
+                        CERROR("FL_CBPENDING set on non-local lock--just a "
+                               "warning\n");
 
                 LDLM_DEBUG(lock, "final decref done on cbpending lock");
                 l_unlock(&lock->l_resource->lr_namespace->ns_lock);

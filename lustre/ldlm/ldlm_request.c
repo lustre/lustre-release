@@ -122,11 +122,12 @@ static int ldlm_cli_enqueue_local(struct ldlm_namespace *ns,
         int err;
 
         if (ns->ns_client) {
-                CERROR("Trying to cancel local lock\n");
+                CERROR("Trying to enqueue local lock in a shadow namespace\n");
                 LBUG();
         }
 
-        lock = ldlm_lock_create(ns, parent_lockh, res_id, type, mode, data, data_len);
+        lock = ldlm_lock_create(ns, parent_lockh, res_id, type, mode, data,
+                                data_len);
         if (!lock)
                 GOTO(out_nolock, err = -ENOMEM);
         LDLM_DEBUG(lock, "client-side local enqueue handler, new lock created");
