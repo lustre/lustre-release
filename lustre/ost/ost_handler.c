@@ -434,7 +434,7 @@ static int ost_brw_write_cb(struct ptlrpc_bulk_desc *bulk, void *data)
         RETURN(rc);
 }
 
-int ost_brw_write(struct ost_obd *obddev, struct ptlrpc_request *req)
+static int ost_brw_write(struct ost_obd *obddev, struct ptlrpc_request *req)
 {
         struct obd_conn conn;
         int rc;
@@ -531,7 +531,7 @@ int ost_brw_write(struct ost_obd *obddev, struct ptlrpc_request *req)
         return 0;
 }
 
-int ost_brw(struct ost_obd *obddev, struct ptlrpc_request *req)
+static int ost_brw(struct ost_obd *obddev, struct ptlrpc_request *req)
 {
         struct ost_req *r = req->rq_req.ost;
         int cmd = r->cmd;
@@ -659,20 +659,21 @@ static int ost_setup(struct obd_device *obddev, obd_count len,
         if (data->ioc_dev  < 0 || data->ioc_dev > MAX_OBD_DEVICES)
                 RETURN(-ENODEV);
 
+        MOD_INC_USE_COUNT;
         tgt = &obd_dev[data->ioc_dev];
         ost->ost_tgt = tgt;
         if ( ! (tgt->obd_flags & OBD_ATTACHED) ||
              ! (tgt->obd_flags & OBD_SET_UP) ){
                 CERROR("device not attached or not set up (%d)\n",
                        data->ioc_dev);
-                RETURN(-EINVAL);
+                GOTO(error_dec, err = -EINVAL);
         }
 
         ost->ost_conn.oc_dev = tgt;
         err = obd_connect(&ost->ost_conn);
         if (err) {
                 CERROR("fail to connect to device %d\n", data->ioc_dev);
-                RETURN(-EINVAL);
+                GOTO(error_dec, err = -EINVAL);
         }
 
         ost->ost_service = ptlrpc_init_svc(128 * 1024,
@@ -680,18 +681,21 @@ static int ost_setup(struct obd_device *obddev, obd_count len,
                                            "self", ost_handle);
         if (!ost->ost_service) {
                 CERROR("failed to start service\n");
-                obd_disconnect(&ost->ost_conn);
-                RETURN(-EINVAL);
+                GOTO(error_disc, err = -EINVAL);
         }
 
         err = ptlrpc_start_thread(obddev, ost->ost_service, "lustre_ost");
         if (err) {
-                obd_disconnect(&ost->ost_conn);
-                RETURN(-EINVAL);
+                GOTO(error_disc, err = -EINVAL);
         }
 
-        MOD_INC_USE_COUNT;
         RETURN(0);
+
+error_disc:
+        obd_disconnect(&ost->ost_conn);
+error_dec:
+        MOD_DEC_USE_COUNT;
+        RETURN(err);
 }
 
 static int ost_cleanup(struct obd_device * obddev)
