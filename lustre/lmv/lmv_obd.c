@@ -1510,6 +1510,8 @@ int lmv_obd_create(struct obd_export *exp, struct obdo *oa,
                 c++;
                 CDEBUG(D_OTHER, "dirobj at mds %d: "LPU64"/%u\n",
                        i, oa->o_id, oa->o_generation);
+                CDEBUG(D_ERROR, "dirobj at mds %d: "LPU64"/%u\n",
+                       i, oa->o_id, oa->o_generation);
         }
         LASSERT(c == mea->mea_count);
         CDEBUG(D_OTHER, "%d dirobjects created\n", (int) mea->mea_count);
