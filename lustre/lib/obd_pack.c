@@ -27,21 +27,21 @@
 #include <linux/obd_ost.h>
 #include <linux/lustre_net.h>
 
-void ost_pack_ioo(void **tmp, struct lov_stripe_md *lsm, int bufcnt)
+void ost_pack_ioo(struct obd_ioobj **tmp, struct lov_stripe_md *lsm,int bufcnt)
 {
         struct obd_ioobj *ioo = *tmp;
-        char *c = *tmp;
+        void *p = *tmp;
 
         ioo->ioo_id = HTON__u64(lsm->lsm_object_id);
         ioo->ioo_gr = HTON__u64(0);
         ioo->ioo_type = HTON__u32(S_IFREG);
         ioo->ioo_bufcnt = HTON__u32(bufcnt);
-        *tmp = c + sizeof(*ioo);
+        *tmp = p + sizeof(*ioo);
 }
 
-void ost_unpack_ioo(void **tmp, struct obd_ioobj **ioop)
+void ost_unpack_ioo(struct obd_ioobj **tmp, struct obd_ioobj **ioop)
 {
-        char *c = *tmp;
+        void *p = *tmp;
         struct obd_ioobj *ioo = *tmp;
         *ioop = *tmp;
 
@@ -49,7 +49,7 @@ void ost_unpack_ioo(void **tmp, struct obd_ioobj **ioop)
         ioo->ioo_gr = NTOH__u64(ioo->ioo_gr);
         ioo->ioo_type = NTOH__u32(ioo->ioo_type);
         ioo->ioo_bufcnt = NTOH__u32(ioo->ioo_bufcnt);
-        *tmp = c + sizeof(*ioo);
+        *tmp = p + sizeof(*ioo);
 }
 
 void ost_pack_niobuf(void **tmp, __u64 offset, __u32 len, __u32 flags,
