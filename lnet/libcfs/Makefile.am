@@ -20,7 +20,7 @@ link-stamp:
 	echo timestamp > link-stamp
 
 DEFS =
-portals_SOURCES = $(LINKS) module.c proc.c debug.c
+portals_SOURCES = $(LINKS) module.c proc.c debug.c lwt.c
 
 # Don't distribute any patched files.
 dist-hook:

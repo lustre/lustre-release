@@ -114,6 +114,18 @@ kqswnal_dist(nal_cb_t *nal, ptl_nid_t nid, unsigned long *dist)
 }
 
 void
+kqswnal_notify_peer_down(kqswnal_tx_t *ktx)
+{
+        struct timeval     now;
+        time_t             then;
+
+        do_gettimeofday (&now);
+        then = now.tv_sec - (jiffies - ktx->ktx_launchtime)/HZ;
+
+        kpr_notify(&kqswnal_data.kqn_router, ktx->ktx_nid, 0, then);
+}
+
+void
 kqswnal_unmap_tx (kqswnal_tx_t *ktx)
 {
         if (ktx->ktx_nmappedpages == 0)
@@ -451,7 +463,10 @@ kqswnal_txhandler(EP_TXD *txd, void *arg, int status)
 
         if (status != EP_SUCCESS)
         {
-                CERROR ("kqswnal: Transmit failed with %d\n", status);
+                CERROR ("Tx completion to "LPX64" failed: %d\n", 
+                        ktx->ktx_nid, status);
+
+                kqswnal_notify_peer_down(ktx);
                 status = -EIO;
 
         } else if (ktx->ktx_state == KTX_GETTING) {
@@ -474,7 +489,9 @@ kqswnal_launch (kqswnal_tx_t *ktx)
         int   dest = kqswnal_nid2elanid (ktx->ktx_nid);
         long  flags;
         int   rc;
-        
+
+        ktx->ktx_launchtime = jiffies;
+
         LASSERT (dest >= 0);                    /* must be a peer */
         if (ktx->ktx_state == KTX_GETTING) {
                 LASSERT (KQSW_OPTIMIZE_GETS);
@@ -487,24 +504,28 @@ kqswnal_launch (kqswnal_tx_t *ktx)
                                        ktx, ktx->ktx_frags.iov, ktx->ktx_nfrag);
         }
 
-        if (rc != ENOMEM)
+        switch (rc) {
+        case ESUCCESS: /* success */
+                return (0);
+
+        case ENOMEM: /* can't allocate ep txd => queue for later */
+                LASSERT (in_interrupt());
+
+                spin_lock_irqsave (&kqswnal_data.kqn_sched_lock, flags);
+
+                list_add_tail (&ktx->ktx_delayed_list, &kqswnal_data.kqn_delayedtxds);
+                if (waitqueue_active (&kqswnal_data.kqn_sched_waitq))
+                        wake_up (&kqswnal_data.kqn_sched_waitq);
+
+                spin_unlock_irqrestore (&kqswnal_data.kqn_sched_lock, flags);
+                return (0);
+
+        default: /* fatal error */
+                CERROR ("Tx to "LPX64" failed: %d\n", ktx->ktx_nid, rc);
+                kqswnal_notify_peer_down(ktx);
                 return (rc);
-
-        /* can't allocate ep txd => queue for later */
-
-        LASSERT (in_interrupt());      /* not called by thread (not looping) */
-
-        spin_lock_irqsave (&kqswnal_data.kqn_sched_lock, flags);
-
-        list_add_tail (&ktx->ktx_delayed_list, &kqswnal_data.kqn_delayedtxds);
-        if (waitqueue_active (&kqswnal_data.kqn_sched_waitq))
-                wake_up (&kqswnal_data.kqn_sched_waitq);
-
-        spin_unlock_irqrestore (&kqswnal_data.kqn_sched_lock, flags);
-
-        return (0);
+        }
 }
-
 
 static char *
 hdr_type_string (ptl_hdr_t *hdr)
@@ -748,7 +769,8 @@ kqswnal_sendmsg (nal_cb_t     *nal,
 
         targetnid = nid;
         if (kqswnal_nid2elanid (nid) < 0) {     /* Can't send direct: find gateway? */
-                rc = kpr_lookup (&kqswnal_data.kqn_router, nid, &targetnid);
+                rc = kpr_lookup (&kqswnal_data.kqn_router, nid, 
+                                 sizeof (ptl_hdr_t) + payload_nob, &targetnid);
                 if (rc != 0) {
                         CERROR("Can't route to "LPX64": router error %d\n",
                                nid, rc);
@@ -777,6 +799,16 @@ kqswnal_sendmsg (nal_cb_t     *nal,
 #if KQSW_OPTIMIZE_GETS
         if (type == PTL_MSG_REPLY &&
             ep_rxd_isrpc(((kqswnal_rx_t *)private)->krx_rxd)) {
+                if (nid != targetnid ||
+                    kqswnal_nid2elanid(nid) != 
+                    ep_rxd_node(((kqswnal_rx_t *)private)->krx_rxd)) {
+                        CERROR("Optimized reply nid conflict: "
+                               "nid "LPX64" via "LPX64" elanID %d\n",
+                               nid, targetnid,
+                               ep_rxd_node(((kqswnal_rx_t *)private)->krx_rxd));
+                        return(PTL_FAIL);
+                }
+
                 /* peer expects RPC completion with GET data */
                 rc = kqswnal_dma_reply (ktx,
                                         payload_niov, payload_iov, 
@@ -901,7 +933,8 @@ kqswnal_sendmsg (nal_cb_t     *nal,
                 return (PTL_FAIL);
         }
 
-        CDEBUG(D_NET, "send to "LPSZ" bytes to "LPX64"\n", payload_nob, targetnid);
+        CDEBUG(D_NET, "sent "LPSZ" bytes to "LPX64" via "LPX64"\n", 
+               payload_nob, nid, targetnid);
         return (PTL_OK);
 }
 

@@ -676,6 +676,7 @@ int Parser_bool (int *b, char *str) {
         if (!strcasecmp (str, "no") ||
             !strcasecmp (str, "n") ||
             !strcasecmp (str, "off") ||
+            !strcasecmp (str, "down") ||
             !strcasecmp (str, "disable"))
         {
                 *b = 0;
@@ -685,6 +686,7 @@ int Parser_bool (int *b, char *str) {
         if (!strcasecmp (str, "yes") ||
             !strcasecmp (str, "y") ||
             !strcasecmp (str, "on") ||
+            !strcasecmp (str, "up") ||
             !strcasecmp (str, "enable"))
         {
                 *b = 1;

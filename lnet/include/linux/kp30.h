@@ -388,12 +388,14 @@ typedef struct {
 } kpr_fwd_desc_t;
 
 typedef void  (*kpr_fwd_t)(void *arg, kpr_fwd_desc_t *fwd);
+typedef void  (*kpr_notify_t)(void *arg, ptl_nid_t peer, int alive);
 
 /* NAL's routing interface (Kernel Portals Routing Nal Interface) */
 typedef const struct {
         int             kprni_nalid;    /* NAL's id */
         void           *kprni_arg;      /* Arg to pass when calling into NAL */
         kpr_fwd_t       kprni_fwd;      /* NAL's forwarding entrypoint */
+        kpr_notify_t    kprni_notify;   /* NAL's notification entrypoint */
 } kpr_nal_interface_t;
 
 /* Router's routing interface (Kernel Portals Routing Router Interface) */
@@ -403,9 +405,10 @@ typedef const struct {
         int     (*kprri_register) (kpr_nal_interface_t *nal_interface,
                                    void **router_arg);
 
-        /* ask the router to find a gateway that forwards to 'nid' and is a peer
-         * of the calling NAL */
-        int     (*kprri_lookup) (void *router_arg, ptl_nid_t nid,
+        /* ask the router to find a gateway that forwards to 'nid' and is a
+         * peer of the calling NAL; assume caller will send 'nob' bytes of
+         * payload there */
+        int     (*kprri_lookup) (void *router_arg, ptl_nid_t nid, int nob,
                                  ptl_nid_t *gateway_nid);
 
         /* hand a packet over to the router for forwarding */
@@ -414,6 +417,10 @@ typedef const struct {
         /* hand a packet back to the router for completion */
         void    (*kprri_fwd_done) (void *router_arg, kpr_fwd_desc_t *fwd,
                                    int error);
+
+        /* notify the router about peer state */
+        void    (*kprri_notify) (void *router_arg, ptl_nid_t peer,
+                                 int alive, time_t when);
 
         /* the calling NAL is shutting down */
         void    (*kprri_shutdown) (void *router_arg);
@@ -433,10 +440,14 @@ typedef struct {
 typedef const struct {
         int     (*kprci_add_route)(int gateway_nal, ptl_nid_t gateway_nid,
                                    ptl_nid_t lo_nid, ptl_nid_t hi_nid);
-        int     (*kprci_del_route)(ptl_nid_t nid);
+        int     (*kprci_del_route)(int gateway_nal, ptl_nid_t gateway_nid,
+                                   ptl_nid_t lo_nid, ptl_nid_t hi_nid);
         int     (*kprci_get_route)(int index, int *gateway_nal,
-                                   ptl_nid_t *gateway, ptl_nid_t *lo_nid,
-                                   ptl_nid_t *hi_nid);
+                                   ptl_nid_t *gateway,
+                                   ptl_nid_t *lo_nid, ptl_nid_t *hi_nid,
+                                   int *alive);
+        int     (*kprci_notify)(int gateway_nal, ptl_nid_t gateway_nid, 
+                                int alive, time_t when);
 } kpr_control_interface_t;
 
 extern kpr_control_interface_t  kpr_control_interface;
@@ -466,12 +477,12 @@ kpr_routing (kpr_router_t *router)
 }
 
 static inline int
-kpr_lookup (kpr_router_t *router, ptl_nid_t nid, ptl_nid_t *gateway_nid)
+kpr_lookup (kpr_router_t *router, ptl_nid_t nid, int nob, ptl_nid_t *gateway_nid)
 {
         if (!kpr_routing (router))
-                return (-EHOSTUNREACH);
+                return (-ENETUNREACH);
 
-        return (router->kpr_interface->kprri_lookup(router->kpr_arg, nid,
+        return (router->kpr_interface->kprri_lookup(router->kpr_arg, nid, nob,
                                                     gateway_nid));
 }
 
@@ -493,7 +504,7 @@ static inline void
 kpr_fwd_start (kpr_router_t *router, kpr_fwd_desc_t *fwd)
 {
         if (!kpr_routing (router))
-                fwd->kprfd_callback (fwd->kprfd_callback_arg, -EHOSTUNREACH);
+                fwd->kprfd_callback (fwd->kprfd_callback_arg, -ENETUNREACH);
         else
                 router->kpr_interface->kprri_fwd_start (router->kpr_arg, fwd);
 }
@@ -503,6 +514,16 @@ kpr_fwd_done (kpr_router_t *router, kpr_fwd_desc_t *fwd, int error)
 {
         LASSERT (kpr_routing (router));
         router->kpr_interface->kprri_fwd_done (router->kpr_arg, fwd, error);
+}
+
+static inline void
+kpr_notify (kpr_router_t *router, 
+            ptl_nid_t peer, int alive, time_t when)
+{
+        if (!kpr_routing (router))
+                return;
+        
+        router->kpr_interface->kprri_notify(router->kpr_arg, peer, alive, when);
 }
 
 static inline void
@@ -571,6 +592,7 @@ extern struct prof_ent prof_ents[MAX_PROFS];
 #endif /* PORTALS_PROFILING */
 
 /* debug.c */
+void portals_run_upcall(char **argv);
 void portals_run_lbug_upcall(char * file, const char *fn, const int line);
 void portals_debug_dumplog(void);
 int portals_debug_init(unsigned long bufsize);
@@ -640,6 +662,92 @@ extern void kportal_blockallsigs (void);
 #ifndef CURRENT_TIME
 # define CURRENT_TIME time(0)
 #endif
+
+/******************************************************************************/
+/* Light-weight trace 
+ * Support for temporary event tracing with minimal Heisenberg effect. */
+#define LWT_SUPPORT  1
+
+typedef struct {
+        cycles_t    lwte_when;
+        char       *lwte_where;
+        void       *lwte_task;
+        long        lwte_p1;
+        long        lwte_p2;
+        long        lwte_p3;
+        long        lwte_p4;
+} lwt_event_t;
+
+#if LWT_SUPPORT
+#ifdef __KERNEL__
+#define LWT_EVENTS_PER_PAGE (PAGE_SIZE / sizeof (lwt_event_t))
+
+typedef struct _lwt_page {
+        struct list_head     lwtp_list;
+        struct page         *lwtp_page;
+        lwt_event_t         *lwtp_events;
+} lwt_page_t;
+
+typedef struct {
+        int                lwtc_current_index;
+        lwt_page_t        *lwtc_current_page;
+} lwt_cpu_t;
+
+extern int       lwt_enabled;
+extern lwt_cpu_t lwt_cpus[];
+
+extern int  lwt_init (void);
+extern void lwt_fini (void);
+extern int  lwt_lookup_string (int *size, char *knlptr,
+                               char *usrptr, int usrsize);
+extern int  lwt_control (int enable, int clear);
+extern int  lwt_snapshot (int *ncpu, int *total_size,
+                          void *user_ptr, int user_size);
+
+/* Note that we _don't_ define LWT_EVENT at all if LWT_SUPPORT isn't set.
+ * This stuff is meant for finding specific problems; it never stays in
+ * production code... */
+
+#define LWTSTR(n)	#n
+#define LWTWHERE(f,l)   f ":" LWTSTR(l)
+
+#define LWT_EVENT(p1, p2, p3, p4)                                       \
+do {                                                                    \
+        unsigned long    flags;                                         \
+        lwt_cpu_t       *cpu;                                           \
+        lwt_page_t      *p;                                             \
+        lwt_event_t     *e;                                             \
+                                                                        \
+        local_irq_save (flags);                                         \
+                                                                        \
+        if (lwt_enabled) {                                              \
+                cpu = &lwt_cpus[smp_processor_id()];                    \
+                p = cpu->lwtc_current_page;                             \
+                e = &p->lwtp_events[cpu->lwtc_current_index++];         \
+                                                                        \
+                if (cpu->lwtc_current_index >= LWT_EVENTS_PER_PAGE) {   \
+                        cpu->lwtc_current_page =                        \
+                                list_entry (p->lwtp_list.next,          \
+                                            lwt_page_t, lwtp_list);     \
+                        cpu->lwtc_current_index = 0;                    \
+                }                                                       \
+                                                                        \
+                e->lwte_when  = get_cycles();                           \
+                e->lwte_where = LWTWHERE(__FILE__,__LINE__);            \
+                e->lwte_task  = current;                                \
+                e->lwte_p1    = (long)(p1);                             \
+                e->lwte_p2    = (long)(p2);                             \
+                e->lwte_p3    = (long)(p3);                             \
+                e->lwte_p4    = (long)(p4);                             \
+        }                                                               \
+                                                                        \
+        local_irq_restore (flags);                                      \
+} while (0)
+#else  /* __KERNEL__ */
+#define LWT_EVENT(p1,p2,p3,p4)     /* no userland implementation yet */
+#endif /* __KERNEL__ */
+#endif /* LWT_SUPPORT */
+
 
 #include <linux/portals_lib.h>
 
@@ -875,8 +983,11 @@ static inline int portal_ioctl_getdata(char *buf, char *end, void *arg)
 #define IOC_PORTAL_GET_NID                 _IOWR('e', 39, long)
 #define IOC_PORTAL_FAIL_NID                _IOWR('e', 40, long)
 #define IOC_PORTAL_SET_DAEMON              _IOWR('e', 41, long)
-
-#define IOC_PORTAL_MAX_NR               41
+#define IOC_PORTAL_NOTIFY_ROUTER           _IOWR('e', 42, long)
+#define IOC_PORTAL_LWT_CONTROL             _IOWR('e', 43, long)
+#define IOC_PORTAL_LWT_SNAPSHOT            _IOWR('e', 44, long)
+#define IOC_PORTAL_LWT_LOOKUP_STRING       _IOWR('e', 45, long)
+#define IOC_PORTAL_MAX_NR                             45
 
 enum {
         QSWNAL  =  1,

@@ -476,7 +476,7 @@ static void reset_recovery_timer(struct obd_device *obd)
 
         if (!recovering)
                 return;
-        CERROR("timer will expire in %ld seconds\n", OBD_RECOVERY_TIMEOUT / HZ);
+        CERROR("timer will expire in %d seconds\n", OBD_RECOVERY_TIMEOUT / HZ);
         mod_timer(&obd->obd_recovery_timer, jiffies + OBD_RECOVERY_TIMEOUT);
 }
 
