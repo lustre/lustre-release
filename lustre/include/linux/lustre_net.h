@@ -83,7 +83,7 @@
  */
 
 #define LDLM_NUM_THREADS        min(smp_num_cpus * smp_num_cpus * 8, 64)
-#define LDLM_NBUF_MAX   256UL
+#define LDLM_NBUF_MAX   512UL
 #define LDLM_BUFSIZE    (8 * 1024)
 #define LDLM_MAXREQSIZE (5 * 1024)
 #define LDLM_MAXMEM      (num_physpages*(PAGE_SIZE/1024))
