@@ -141,23 +141,21 @@ static struct super_block * ll_read_super(struct super_block *sb,
         obd = class_uuid2obd(ost);
         if (!obd) {
                 CERROR("OST %s: not setup or attached\n", ost);
-                GOTO(out_free, sb = NULL);
+                GOTO(out_mdc, sb = NULL);
         }
 #warning error: need to set obd->u.lov.mdc_connh from sbi->ll_mdc_conn
         err = obd_connect(&sbi->ll_osc_conn, obd);
         if (err) {
                 CERROR("cannot connect to %s: rc = %d\n", ost, err);
-                GOTO(out_free, sb = NULL);
+                GOTO(out_mdc, sb = NULL);
         }
 
         /* XXX: need to store the last_* values somewhere */
-        err = mdc_getstatus(&sbi->ll_mdc_conn,
-                            &rootfid, &last_committed, 
-                            &last_rcvd, &last_xid,
-                            &request);
+        err = mdc_getstatus(&sbi->ll_mdc_conn, &rootfid, &last_committed,
+                            &last_rcvd, &last_xid, &request);
         if (err) {
                 CERROR("cannot mds_connect: rc = %d\n", err);
-                GOTO(out_disc, sb = NULL);
+                GOTO(out_request, sb = NULL);
         }
         CDEBUG(D_SUPER, "rootfid %Ld\n", (unsigned long long)rootfid.id);
         sbi->ll_rootino = rootfid.id;
@@ -173,15 +171,15 @@ static struct super_block * ll_read_super(struct super_block *sb,
         sb->s_op = &ll_super_operations;
 
         /* make root inode */
-        err = mdc_getattr(&sbi->ll_mdc_conn,
-                          sbi->ll_rootino, S_IFDIR, OBD_MD_FLNOTOBD|OBD_MD_FLBLOCKS, 0, &request);
+        err = mdc_getattr(&sbi->ll_mdc_conn, sbi->ll_rootino, S_IFDIR,
+                          OBD_MD_FLNOTOBD|OBD_MD_FLBLOCKS, 0, &request);
         if (err) {
                 CERROR("mdc_getattr failed for root: rc = %d\n", err);
-                GOTO(out_mdc, sb = NULL);
+                GOTO(out_request, sb = NULL);
         }
 
         /* initialize committed transaction callback daemon */
-        spin_lock_init(&sbi->ll_commitcbd_lock); 
+        spin_lock_init(&sbi->ll_commitcbd_lock);
         init_waitqueue_head(&sbi->ll_commitcbd_waitq);
         init_waitqueue_head(&sbi->ll_commitcbd_ctl_waitq);
         sbi->ll_commitcbd_flags = 0;
@@ -194,7 +192,7 @@ static struct super_block * ll_read_super(struct super_block *sb,
         md.body = lustre_msg_buf(request->rq_repmsg, 0);
         md.md = NULL;
         root = iget4(sb, sbi->ll_rootino, NULL, &md);
-                     
+
         if (root) {
                 sb->s_root = d_alloc_root(root);
         } else {
