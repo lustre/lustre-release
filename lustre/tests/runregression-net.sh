@@ -4,7 +4,7 @@ export PATH=/sbin:/usr/sbin:$PATH
 SRCDIR="`dirname $0`/"
 . $SRCDIR/common.sh
 
-OSCDEV="`device_list 2> /dev/null | awk '/ osc | lov / { print $4 }' | tail -1`"
+OSCDEV="`$OBDCTL device_list 2> /dev/null | awk '/ osc | lov / { print $4 }' | tail -1`"
 
 if [ -z "$OSCDEV" ]; then
 	echo "$0: needs an OSC set up first" 1>&2
