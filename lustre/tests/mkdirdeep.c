@@ -16,7 +16,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <linux/limits.h>
-#include <portals/lltrace.h>
+#include <libcfs/lltrace.h>
 
 static int opt_verbose = 0;
 static int opt_trace = 0;

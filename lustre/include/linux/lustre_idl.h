@@ -62,7 +62,7 @@
 # include <asm/types.h>
 # include <stdint.h>
 #endif
-# include <portals/list.h>
+# include <libcfs/list.h>
 # include <string.h>
 #endif
 

@@ -35,18 +35,18 @@
 #ifdef __KERNEL__
 #include <linux/fs.h>
 #else
-# include <portals/list.h>
+# include <libcfs/list.h>
 # include <liblustre.h>
 #endif
 
-#include <linux/kp30.h>
+#include <libcfs/kp30.h>
 #include <linux/obd_class.h>
 #include <linux/lustre_commit_confd.h>
 #include <linux/obd_support.h>
 #include <linux/obd_class.h>
 #include <linux/lustre_net.h>
 #include <portals/types.h>
-#include <portals/list.h>
+#include <libcfs/list.h>
 #include <linux/lustre_log.h>
 #include "ptlrpc_internal.h"
 

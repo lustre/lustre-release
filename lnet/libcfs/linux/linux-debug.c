@@ -59,7 +59,6 @@
 #include <linux/kallsyms.h>
 #endif
 
-static int handled_panic; /* to avoid recursive calls to notifiers */
 char portals_upcall[1024] = "/usr/lib/lustre/portals_upcall";
 
 void portals_run_upcall(char **argv)

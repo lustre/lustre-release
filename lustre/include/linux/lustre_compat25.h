@@ -29,7 +29,7 @@
 #error sorry, lustre requires at least 2.5.69
 #endif
 
-#include <linux/portals_compat25.h>
+#include <libcfs/linux/portals_compat25.h>
 
 /*
  * groups_info related staff

@@ -35,7 +35,7 @@
 # include <linux/signal.h>
 # include <linux/types.h>
 #endif
-#include <linux/kp30.h> 
+#include <libcfs/kp30.h> 
 #include <linux/lustre_idl.h>
 #include <linux/lustre_cfg.h>
 
@@ -486,7 +486,7 @@ static inline void obd_ioctl_freedata(char *buf, int len)
 #define OBD_IOC_SMFS_SNAP_ADD          _IOWR('f', 230, long)
 
 /* XXX _IOWR('f', 250, long) has been defined in
- * portals/include/linux/kp30.h for debug, don't use it
+ * portals/include/libcfs/kp30.h for debug, don't use it
  */
 
 /* Until such time as we get_info the per-stripe maximum from the OST,

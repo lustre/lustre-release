@@ -25,7 +25,7 @@
 
 #ifndef __KERNEL__
 #include <sys/types.h>
-#include <portals/list.h>
+#include <libcfs/list.h>
 #else
 #include <asm/segment.h>
 #include <asm/uaccess.h>

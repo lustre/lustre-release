@@ -49,7 +49,7 @@
 #endif
 
 #include <linux/lustre_dlm.h>
-#include <linux/kp30.h>
+#include <libcfs/kp30.h>
 #include <linux/lustre_net.h>
 #include <lustre/lustre_user.h>
 #include <linux/obd_ost.h>

@@ -38,7 +38,7 @@
 #include <linux/obd_class.h>
 #include <linux/lustre_log.h>
 #include <linux/lustre_net.h>
-#include <portals/list.h>
+#include <libcfs/list.h>
 
 /* This is a callback from the llog_* functions.
  * Assumes caller has already pushed us into the kernel context. */

@@ -67,7 +67,7 @@
 #include <linux/lustre_build_version.h>
 #include <linux/lustre_version.h>
 #endif
-#include <portals/list.h>
+#include <libcfs/list.h>
 
 #ifndef __KERNEL__
 /* liblustre workaround */

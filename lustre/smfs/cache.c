@@ -29,7 +29,7 @@
 #include <linux/slab.h>
 #include <linux/string.h>
 #include <linux/lustre_idl.h>
-#include <portals/list.h>
+#include <libcfs/list.h>
 #include <linux/obd_class.h>
 #include <linux/obd_support.h>
 #include <linux/lustre_lib.h>

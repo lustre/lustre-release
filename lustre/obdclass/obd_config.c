@@ -37,7 +37,7 @@
 #endif
 #include <linux/lustre_log.h>
 #include <linux/lprocfs_status.h>
-#include <portals/list.h>
+#include <libcfs/list.h>
 
 
 /* Create a new device and set the type, name and uuid.  If

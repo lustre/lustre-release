@@ -52,10 +52,6 @@
 
 #include <asm/page.h>           /* needed for PAGE_SIZE - rread */
 
-#define __KERNEL__
-#include <linux/list.h>
-#undef __KERNEL__
-
 #include <linux/obd_class.h>
 #include <portals/ptlctl.h>
 #include "parser.h"

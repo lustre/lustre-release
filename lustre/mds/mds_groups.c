@@ -41,7 +41,7 @@
 #include <linux/slab.h>
 #include <asm/segment.h>
 
-#include <portals/list.h>
+#include <libcfs/list.h>
 #include <linux/obd_support.h>
 #include <linux/lustre_lib.h>
 #include <linux/lustre_mds.h>

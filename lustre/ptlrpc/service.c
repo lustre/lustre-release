@@ -23,7 +23,7 @@
 #define DEBUG_SUBSYSTEM S_RPC
 #ifndef __KERNEL__
 #include <liblustre.h>
-#include <linux/kp30.h>
+#include <libcfs/kp30.h>
 #endif
 #include <linux/obd_support.h>
 #include <linux/obd_class.h>

@@ -40,9 +40,9 @@
 #include <sys/stat.h>
 #include <sys/vfs.h>
 
-#include <portals/list.h>
+#include <libcfs/list.h>
 #include <portals/p30.h>
-#include <linux/kp30.h>
+#include <libcfs/kp30.h>
 
 /* definitions for liblustre */
 
@@ -348,16 +348,7 @@ static inline int kmem_cache_destroy(kmem_cache_t *a)
 #define PAGE_CACHE_SHIFT PAGE_SHIFT
 #define PAGE_CACHE_MASK  PAGE_MASK
 
-struct page {
-        void   *addr;
-        unsigned long index;
-        struct list_head list;
-        unsigned long private;
-
-        /* internally used by liblustre file i/o */
-        int     _offset;
-        int     _count;
-};
+/* struct page decl moved out from here into portals/include/libcfs/user-prim.h */
 
 /* 2.4 defines */
 #define PAGE_LIST_ENTRY list

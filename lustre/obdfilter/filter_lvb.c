@@ -30,7 +30,7 @@
 #include <linux/module.h>
 #include <linux/version.h>
 
-#include <portals/list.h>
+#include <libcfs/list.h>
 #include <linux/obd_class.h>
 #include <linux/lustre_dlm.h>
 

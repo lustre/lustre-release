@@ -16,7 +16,7 @@
 #include <linux/pagemap.h>
 #include <linux/quotaops.h>
 #include <linux/version.h>
-#include <linux/kp30.h>
+#include <libcfs/kp30.h>
 #include <linux/lustre_fsfilt.h>
 #include <linux/obd.h>
 #include <linux/obd_class.h>

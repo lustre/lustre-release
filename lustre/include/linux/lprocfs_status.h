@@ -31,7 +31,7 @@
 #include <linux/proc_fs.h>
 #include <linux/version.h>
 #include <linux/smp.h>
-#include <linux/kp30.h>
+#include <libcfs/kp30.h>
 
 # if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 #  include <linux/statfs.h>

@@ -22,7 +22,7 @@
 #include <linux/obd_class.h>
 #include <linux/lustre_log.h>
 #include <linux/lustre_mds.h>
-#include <portals/list.h>
+#include <libcfs/list.h>
 
 /* helper functions for calling the llog obd methods */
 
