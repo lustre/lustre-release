@@ -345,14 +345,13 @@ if test $ac_cv_sizeof_unsigned_long_long != 8 ; then
 fi
 
 AC_MSG_CHECKING([if $CC accepts -m64])
-CFLAGS_save="$CFLAGS"
-CFLAGS="-m64 $CFLAGS"
+CC_save="$CC"
+CC="$CC -m64"
 AC_TRY_COMPILE([],[],[
 	AC_MSG_RESULT([yes])
-	EXTRA_KCFLAGS="-m64 $EXTRA_KCFLAGS"
 ],[
 	AC_MSG_RESULT([no])
-	CFLAGS="$CFLAGS_save"
+	CC="$CC_save"
 ])
 
 CPPFLAGS="-I\$(top_builddir)/portals/include -I\$(top_srcdir)/portals/include -I\$(top_builddir)/lustre/include -I\$(top_srcdir)/lustre/include $CPPFLAGS"
@@ -448,11 +447,13 @@ AC_OUTPUT
 
 cat <<_ACEOF
 
-CPPFLAGS: $CPPFLAGS
-LLCPPFLAGS: $LLCPPFLAGS
-CFLAGS: $CFLAGS
+CC:            $CC
+LD:            $LD
+CPPFLAGS:      $CPPFLAGS
+LLCPPFLAGS:    $LLCPPFLAGS
+CFLAGS:        $CFLAGS
 EXTRA_KCFLAGS: $EXTRA_KCFLAGS
-LLCFLAGS: $LLCFLAGS
+LLCFLAGS:      $LLCFLAGS
 
 Type 'make' to build Lustre.
 _ACEOF
