@@ -74,6 +74,9 @@ static int osc_connect(struct lustre_handle *conn, struct obd_device *obd)
                 GOTO(out, rc);
         }
 
+        /* XXX eventually maybe more refinement */
+        osc->osc_conn->c_level = LUSTRE_CONN_FULL;
+
         /* XXX: Make this a handle */
         osc->osc_connh.addr = request->rq_repmsg->addr;
         osc->osc_connh.cookie = request->rq_repmsg->cookie;

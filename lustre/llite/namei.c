@@ -155,7 +155,9 @@ static struct dentry *ll_lookup2(struct inode * dir, struct dentry *dentry,
 
         err = ll_lock(dir, dentry, it, &lockh);
         if (err < 0) {
-                /* FIXME: Mike handle EINTR here */
+                /* FIXME: Mike LBUG() can disappear the moment that 
+                 *   ll_lock has sane interrupt behavior 
+                 */
                 LBUG();
                 RETURN(ERR_PTR(err));
         }
@@ -200,16 +202,17 @@ static struct dentry *ll_lookup2(struct inode * dir, struct dentry *dentry,
         } else
                 md.md = NULL;
 
+        /* No rpc's happen during iget4, -ENOMEM's are possible */
         inode = iget4(dir->i_sb, ino, ll_find_inode, &md);
-
         if (it->it_op & IT_RENAME)
                 it->it_data = dentry;
 
  out_req:
         ptlrpc_free_req(request);
-        if (!inode)
+        if (!inode || IS_ERR(inode)) { 
+                ll_intent_release(dentry); 
                 RETURN(ERR_PTR(-ENOMEM));
-
+        }
         EXIT;
  negative:
         dentry->d_op = &ll_d_ops;
