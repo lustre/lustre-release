@@ -135,10 +135,7 @@ int fct_name(char *page, char **start, off_t off,                \
 static inline struct proc_dir_entry *
 lprocfs_register(const char *name, struct proc_dir_entry *parent,
                  struct lprocfs_vars *list, void *data) { return NULL; }
-static inline void lprocfs_init_vars(struct lprocfs_static_vars *x) 
-{                                                    
-        return;
-}                                                    
+static inline void lprocfs_init_vars(struct lprocfs_static_vars *x) { return; }
 static inline int lprocfs_add_vars(struct proc_dir_entry *root,
                                    struct lprocfs_vars *var,
                                    void *data) { return 0; }
