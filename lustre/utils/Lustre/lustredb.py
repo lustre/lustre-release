@@ -118,6 +118,9 @@ class LustreDB:
     def update_active(self, tgtuuid, new_uuid):
         self._update_active(tgtuuid, new_uuid)
 
+    def get_version(self):
+        return self.get_val('version')
+
 class LustreDB_XML(LustreDB):
     def __init__(self, dom, root_node):
         # init xmlfile
@@ -289,9 +292,14 @@ class LustreDB_LDAP(LustreDB):
             # user and pw only needed if modifying db
             self.l.bind_s(self._user, self._pw, ldap.AUTH_SIMPLE);
         except ldap.LDAPError, e:
-            raise LconfError(e)
-            # FIXME, do something useful here
+            raise Lustre.LconfError('Unable to connection to ldap server')
 
+        try:
+            self._name, self._attrs = self.l.search_s(self._base,
+                                                      ldap.SCOPE_BASE)[0]
+        except ldap.LDAPError, e:
+            raise Lustre.LconfError("no config found in ldap: %s"
+                                      % (self._base,))
     def close(self):
         self.l.unbind_s()
 
@@ -397,5 +405,3 @@ class LustreDB_LDAP(LustreDB):
         except ldap.LDAPError, e:
             print e                     # FIXME: die here?
         return 
-
-
