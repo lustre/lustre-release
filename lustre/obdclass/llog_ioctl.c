@@ -34,7 +34,7 @@ static int str2logid(struct llog_logid *logid, char *str, int len)
                 RETURN(-EINVAL);
 
         *end = '\0';
-        logid->lgl_oid = simple_strtoull(start, &endp, 16);
+        logid->lgl_oid = simple_strtoull(start, &endp, 0);
         if (endp != end)
                 RETURN(-EINVAL);
 
@@ -46,7 +46,7 @@ static int str2logid(struct llog_logid *logid, char *str, int len)
                 RETURN(-EINVAL);
 
         *end = '\0';
-        logid->lgl_ogr = simple_strtoull(start, &endp, 16);
+        logid->lgl_ogr = simple_strtoull(start, &endp, 0);
         if (endp != end)
                 RETURN(-EINVAL);
 
@@ -316,15 +316,23 @@ int llog_ioctl(struct llog_ctxt *ctxt, int cmd, struct obd_ioctl_data *data)
                 struct llog_logid plain;
                 char *endp;
 
-                if (!(handle->lgh_hdr->llh_flags & LLOG_F_IS_CAT))
+                cookie.lgc_index = simple_strtoul(data->ioc_inlbuf3, &endp, 0);
+                if (*endp != '\0')
                         GOTO(out_close, err = -EINVAL);
+
+                if (handle->lgh_hdr->llh_flags & LLOG_F_IS_CAT) {
+                        down_write(&handle->lgh_lock);
+                        err = llog_cancel_rec(handle, cookie.lgc_index);
+                        up_write(&handle->lgh_lock);
+                        GOTO(out_close, err);
+                }
 
                 err = str2logid(&plain, data->ioc_inlbuf2, data->ioc_inllen2);
                 if (err)
                         GOTO(out_close, err);
                 cookie.lgc_lgl = plain;
-                cookie.lgc_index = simple_strtoul(data->ioc_inlbuf3, &endp, 0);
-                if (*endp != '\0')
+
+                if (!(handle->lgh_hdr->llh_flags & LLOG_F_IS_CAT))
                         GOTO(out_close, err = -EINVAL);
 
                 err = llog_cat_cancel_records(handle, 1, &cookie);
@@ -332,6 +340,13 @@ int llog_ioctl(struct llog_ctxt *ctxt, int cmd, struct obd_ioctl_data *data)
         }
         case OBD_IOC_LLOG_REMOVE: {
                 struct llog_logid plain;
+
+                if (handle->lgh_hdr->llh_flags & cpu_to_le32(LLOG_F_IS_PLAIN)) {
+                        err = llog_destroy(handle);
+                        if (!err)
+                                llog_free_handle(handle);
+                        GOTO(out, err);
+                }
 
                 if (!(handle->lgh_hdr->llh_flags & LLOG_F_IS_CAT))
                         GOTO(out_close, err = -EINVAL);
