@@ -122,7 +122,6 @@ static int mds_extN_set_md(struct inode *inode, void *handle,
                 rc = extN_xattr_set(handle, inode, EXTN_XATTR_INDEX_LUSTRE,
                                     XATTR_LUSTRE_MDS_OBJID, NULL, 0, 0);
         else {
-                lmm->lmm_magic = cpu_to_le32(XATTR_MDS_MO_MAGIC);
                 rc = extN_xattr_set(handle, inode, EXTN_XATTR_INDEX_LUSTRE,
                                     XATTR_LUSTRE_MDS_OBJID, lmm,
                                     lmm->lmm_easize, XATTR_CREATE);
@@ -166,15 +165,9 @@ static int mds_extN_get_md(struct inode *inode, struct lov_mds_md *lmm)
                 return rc;
         }
 
-        if (lmm->lmm_magic != cpu_to_le32(XATTR_MDS_MO_MAGIC)) {
-                CERROR("MDS striping md for ino %ld has bad magic\n",
-                       inode->i_ino);
-                rc = -EINVAL;
-        } else {
-                /* This field is byteswapped because it appears in the
-                 * catalogue.  All others are opaque to the MDS */
-                lmm->lmm_object_id = le64_to_cpu(lmm->lmm_object_id);
-        }
+        /* This field is byteswapped because it appears in the
+         * catalogue.  All others are opaque to the MDS */
+        lmm->lmm_object_id = le64_to_cpu(lmm->lmm_object_id);
 
         return rc;
 }
