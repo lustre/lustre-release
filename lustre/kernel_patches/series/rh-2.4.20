@@ -1,3 +1,5 @@
+mcore-2.4.20-8.patch
+dsp.patch
 dev_read_only_2.4.20.patch
 exports_hp_2.4.20.patch
 kmem_cache_validate_2.4.20-rh.patch
@@ -12,6 +14,8 @@ ext-2.4-patch-3.patch
 ext-2.4-patch-4.patch
 linux-2.4.20-xattr-0.8.54-chaos.patch
 ext3-2.4.20-fixes.patch
+ext3_orphan_lock-2.4.20-rh.patch
+ext3-delete_thread-2.4.20.patch
 ext3-noread-2.4.20.patch
 extN-wantedi.patch
-extN-san.patch
+ext3-san-2.4.20-hp.patch
