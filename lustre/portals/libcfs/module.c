@@ -157,7 +157,7 @@ kportal_del_route(int gw_nalid, ptl_nid_t gw_nid,
 
 static int
 kportal_notify_router (int gw_nalid, ptl_nid_t gw_nid,
-                       int alive, struct timeval when)
+                       int alive, time_t when)
 {
         int rc;
         kpr_control_interface_t *ci;
@@ -403,14 +403,14 @@ static int kportal_ioctl(struct inode *inode, struct file *file,
                 break;
 
         case IOC_PORTAL_NOTIFY_ROUTER: {
-                struct timeval now;
-                
-                CDEBUG (D_IOCTL, "%s routes via [%d] "LPU64"\n",
+                CDEBUG (D_IOCTL, "Notifying peer [%d] "LPU64" %s @ %ld\n",
+                        data->ioc_nal, data->ioc_nid,
                         data->ioc_flags ? "Enabling" : "Disabling",
-                        data->ioc_nal, data->ioc_nid);
-                do_gettimeofday (&now);
+                        (time_t)data->ioc_nid3);
+                
                 err = kportal_notify_router (data->ioc_nal, data->ioc_nid,
-                                             data->ioc_flags, now);
+                                             data->ioc_flags, 
+                                             (time_t)data->ioc_nid3);
                 break;
         }
                 
