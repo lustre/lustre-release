@@ -69,19 +69,19 @@ int ptlbd_send_rw_req(struct ptlbd_obd *ptlbd, ptlbd_cmd_t cmd,
         op->op_block_cnt = page_count;
 
         if (cmd == PTLBD_READ) 
-                desc = ptlrpc_prep_bulk_imp (req, BULK_PUT_SINK, PTLBD_BULK_PORTAL);
+                desc = ptlrpc_prep_bulk_imp (req, page_count,
+                                             BULK_PUT_SINK, PTLBD_BULK_PORTAL);
         else
-                desc = ptlrpc_prep_bulk_imp (req, BULK_GET_SOURCE, PTLBD_BULK_PORTAL);
+                desc = ptlrpc_prep_bulk_imp (req, page_count,
+                                             BULK_GET_SOURCE, PTLBD_BULK_PORTAL);
         if ( desc == NULL )
                 GOTO(out, rc = 1);              /* need to return error cnt */
         /* NB req now owns desc, and frees it when she frees herself */
         
         for ( niob = niobs, bh = first_bh ; bh ; bh = bh->b_reqnext, niob++ ) {
-                rc = ptlrpc_prep_bulk_page(desc, bh->b_page,
-                                           bh_offset (bh) & (PAGE_SIZE - 1),
-                                           bh->b_size);
-                if (rc != 0)
-                        GOTO(out, rc = 1);      /* need to return error cnt */
+                ptlrpc_prep_bulk_page(desc, bh->b_page,
+                                      bh_offset (bh) & (PAGE_SIZE - 1),
+                                      bh->b_size);
 
                 niob->n_block_nr = bh->b_blocknr;
                 niob->n_offset = bh_offset(bh);
@@ -221,6 +221,7 @@ int ptlbd_srv_rw_req(ptlbd_cmd_t cmd, __u16 index,
         if ( rsp == NULL )
                 GOTO (out, rc = -EFAULT);
 
+        /* FIXME: assumes each niobuf fits in 1 page */
         page_count = req->rq_reqmsg->buflens[1] / sizeof(struct ptlbd_niob);
         if (swab) {                             /* swab remaining niobs */
                 for (i = 1; i < page_count; i++)
@@ -232,9 +233,11 @@ int ptlbd_srv_rw_req(ptlbd_cmd_t cmd, __u16 index,
         }
         
         if (cmd == PTLBD_READ)
-                desc = ptlrpc_prep_bulk_exp (req, BULK_PUT_SOURCE, PTLBD_BULK_PORTAL);
+                desc = ptlrpc_prep_bulk_exp (req, page_count, 
+                                             BULK_PUT_SOURCE, PTLBD_BULK_PORTAL);
         else
-                desc = ptlrpc_prep_bulk_exp (req, BULK_GET_SINK, PTLBD_BULK_PORTAL);
+                desc = ptlrpc_prep_bulk_exp (req, page_count,
+                                             BULK_GET_SINK, PTLBD_BULK_PORTAL);
         if (desc == NULL) {
                 error_cnt++;
                 GOTO(out_reply, rc = -ENOMEM);
@@ -250,25 +253,20 @@ int ptlbd_srv_rw_req(ptlbd_cmd_t cmd, __u16 index,
                 }
                 list_add_tail(&page->list, &tmp_pages);
 
-                rc = ptlrpc_prep_bulk_page(desc, page,
-                                           niob->n_offset & (PAGE_SIZE - 1),
-                                           niob->n_length);
-                if (rc != 0) {
-                        error_cnt++;
-                        GOTO(out_reply, rc);
-                }
+                ptlrpc_prep_bulk_page(desc, page,
+                                      niob->n_offset & (PAGE_SIZE - 1),
+                                      niob->n_length);
         }
 
         if ( cmd == PTLBD_READ ) {
-                if ((rc = ptlbd_do_filp(filp, PTLBD_READ, niobs, 
-                                        page_count, &tmp_pages)) < 0) {
+                rc = ptlbd_do_filp(filp, PTLBD_READ, niobs, 
+                                   page_count, &tmp_pages);
+                if (rc < 0) {
                         error_cnt++;
                         GOTO(out_reply, rc);
                 }
-                rc = ptlrpc_bulk_put(desc);
-        } else {
-                rc = ptlrpc_bulk_get(desc);
         }
+        rc = ptlrpc_start_bulk_transfer(desc);
 
         if ( rc ) {
                 error_cnt++;
@@ -276,13 +274,16 @@ int ptlbd_srv_rw_req(ptlbd_cmd_t cmd, __u16 index,
         }
 
         lwi = LWI_TIMEOUT(obd_timeout * HZ / 4, NULL, desc);
-        rc = l_wait_event(desc->bd_waitq, ptlrpc_bulk_complete(desc), &lwi);
+        rc = l_wait_event(desc->bd_waitq, !ptlrpc_bulk_active(desc), &lwi);
         if (rc != 0) {
                 LASSERT(rc == -ETIMEDOUT);
                 ptlrpc_abort_bulk(desc);
                 error_cnt++;
                 GOTO(out_reply, rc);
         }
+
+        /* XXX do some error handling */
+        LASSERT(desc->bd_success && desc->bd_nob_transferred == desc->bd_nob);
         
         if ( cmd == PTLBD_WRITE ) {
                 if ((rc = ptlbd_do_filp(filp, PTLBD_WRITE, niobs, 
