@@ -791,14 +791,14 @@ int mds_open(struct mds_update_record *rec, int offset,
          * opened this file and is only replaying the RPC, so we open the
          * inode by fid (at some large expense in security). */
         if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
-                DEBUG_REQ(D_HA, req, "open replay, disp: "LPX64"\n", 
+                DEBUG_REQ(D_HA, req, "open replay, disp: "LPX64"\n",
                           rep->lock_policy_res1);
 
                 LASSERT(rec->ur_fid2->id);
-                
+
                 rc = mds_open_by_fid(req, rec->ur_fid2, body, rec->ur_flags,
                                      rec, rep);
-                if (rc != -ENOENT) 
+                if (rc != -ENOENT)
                         RETURN(rc);
                 /* We didn't find the correct inode on disk either, so we
                  * need to re-create it via a regular replay. */

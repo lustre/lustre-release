@@ -93,7 +93,7 @@ extern void fsfilt_put_ops(struct fsfilt_operations *fs_ops);
 #define FSFILT_OP_LINK           9
 #define FSFILT_OP_CANCEL_UNLINK 10
 
-struct obd_reservation_handle {
+struct obd_handle {
         void *orh_filt_handle;
         int orh_reserve;
 };
@@ -117,9 +117,9 @@ static inline int fsfilt_statfs(struct obd_device *obd, struct super_block *sb,
 }
 
 static inline int fsfilt_reserve(struct obd_device *obd, struct super_block *sb,
-                                 int reserve, struct obd_reservation_handle **h)
+                                 int reserve, struct obd_handle **h)
 {
-        struct obd_reservation_handle *handle;
+        struct obd_handle *handle;
 
         OBD_ALLOC(handle, sizeof(*handle));
         if (!handle)
@@ -158,13 +158,25 @@ static inline int fsfilt_reserve(struct obd_device *obd, struct super_block *sb,
         return 0;
 }
 
+static inline void fsfilt_release(struct obd_device *obd,
+                                  struct obd_handle *handle)
+{
+        struct obd_handle *h = handle;
+
+        spin_lock(&obd->obd_osfs_lock);
+        obd->obd_reserve_space -= h->orh_reserve;
+        LASSERT(obd->obd_reserve_space >= 0);
+        spin_unlock(&obd->obd_osfs_lock);
+
+        OBD_FREE(h, sizeof(*h));
+}
+
 static inline void *fsfilt_start_log(struct obd_device *obd,
                                      struct inode *inode, int op,
                                      struct obd_trans_info *oti, int logs)
 {
         unsigned long now = jiffies;
-        struct obd_reservation_handle *parent_handle = oti?oti->oti_handle:NULL;
-        struct obd_reservation_handle *h;
+        struct obd_handle *parent_handle = oti ? oti->oti_handle : NULL, *h;
         int reserve = 0;
         int rc;
 
@@ -179,6 +191,11 @@ static inline void *fsfilt_start_log(struct obd_device *obd,
                                                       logs);
         CDEBUG(D_HA, "started handle %p (%p)\n", h->orh_filt_handle,
                parent_handle);
+        if (IS_ERR(h->orh_filt_handle)) {
+                rc = PTR_ERR(h->orh_filt_handle);
+                fsfilt_release(obd, h);
+                RETURN(ERR_PTR(rc));
+        }
 
         if (oti != NULL) {
                 if (parent_handle == NULL) {
@@ -206,16 +223,15 @@ static inline void *fsfilt_brw_start_log(struct obd_device *obd,
                                          int objcount,
                                          struct fsfilt_objinfo *fso,
                                          int niocount, struct niobuf_local *nb,
-                                         struct obd_trans_info *oti,int numlogs)
+                                         struct obd_trans_info *oti, int logs)
 {
         unsigned long now = jiffies;
-        struct obd_reservation_handle *parent_handle = oti?oti->oti_handle:NULL;
-        struct obd_reservation_handle *h;
+        struct obd_handle *parent_handle = oti ? oti->oti_handle : NULL, *h;
         int reserve = 0;
         int rc;
 
         if (obd->obd_fsops->fs_get_op_len)
-                reserve = obd->obd_fsops->fs_get_op_len(objcount, fso, numlogs);
+                reserve = obd->obd_fsops->fs_get_op_len(objcount, fso, logs);
 
         rc = fsfilt_reserve(obd, fso->fso_dentry->d_inode->i_sb, reserve, &h);
         if (rc)
@@ -223,7 +239,7 @@ static inline void *fsfilt_brw_start_log(struct obd_device *obd,
 
         h->orh_filt_handle = obd->obd_fsops->fs_brw_start(objcount, fso,
                                                           niocount, nb,
-                                                          parent_handle, numlogs);
+                                                          parent_handle, logs);
         CDEBUG(D_HA, "started handle %p (%p)\n", h->orh_filt_handle,
                                                  parent_handle);
 
@@ -256,7 +272,7 @@ static inline int fsfilt_commit(struct obd_device *obd, struct inode *inode,
                                 void *handle, int force_sync)
 {
         unsigned long now = jiffies;
-        struct obd_reservation_handle *h = handle;
+        struct obd_handle *h = handle;
         int rc;
 
         rc = obd->obd_fsops->fs_commit(inode, h->orh_filt_handle, force_sync);
@@ -265,22 +281,17 @@ static inline int fsfilt_commit(struct obd_device *obd, struct inode *inode,
         if (time_after(jiffies, now + 15 * HZ))
                 CERROR("long journal start time %lus\n", (jiffies - now) / HZ);
 
-        spin_lock(&obd->obd_osfs_lock);
-        obd->obd_reserve_space -= h->orh_reserve;
-        LASSERT(obd->obd_reserve_space >= 0);
-        spin_unlock(&obd->obd_osfs_lock);
-        OBD_FREE(h, sizeof(*h));
+        fsfilt_release(obd, h);
 
         return rc;
 }
 
 static inline int fsfilt_commit_async(struct obd_device *obd,
-                                         struct inode *inode,
-                                         void *handle,
-                                         void **wait_handle)
+                                      struct inode *inode, void *handle,
+                                      void **wait_handle)
 {
         unsigned long now = jiffies;
-        struct obd_reservation_handle *h = handle;
+        struct obd_handle *h = handle;
         int rc;
 
         rc = obd->obd_fsops->fs_commit_async(inode, h->orh_filt_handle,
@@ -290,17 +301,13 @@ static inline int fsfilt_commit_async(struct obd_device *obd,
         if (time_after(jiffies, now + 15 * HZ))
                 CERROR("long journal start time %lus\n", (jiffies - now) / HZ);
 
-        spin_lock(&obd->obd_osfs_lock);
-        obd->obd_reserve_space -= h->orh_reserve;
-        LASSERT(obd->obd_reserve_space >= 0);
-        spin_unlock(&obd->obd_osfs_lock);
-        OBD_FREE(h, sizeof(*h));
+        fsfilt_release(obd, h);
 
         return rc;
 }
 
-static inline int fsfilt_commit_wait(struct obd_device *obd, struct inode *inode,
-                                        void *handle)
+static inline int fsfilt_commit_wait(struct obd_device *obd,
+                                     struct inode *inode, void *handle)
 {
         unsigned long now = jiffies;
         int rc = obd->obd_fsops->fs_commit_wait(inode, handle);
@@ -314,7 +321,7 @@ static inline int fsfilt_setattr(struct obd_device *obd, struct dentry *dentry,
                                  void *handle, struct iattr *iattr,int do_trunc)
 {
         unsigned long now = jiffies;
-        struct obd_reservation_handle *h = handle;
+        struct obd_handle *h = handle;
         int rc;
         rc = obd->obd_fsops->fs_setattr(dentry, h->orh_filt_handle, iattr, do_trunc);
         if (time_after(jiffies, now + 15 * HZ))
@@ -332,7 +339,7 @@ static inline int fsfilt_iocontrol(struct obd_device *obd, struct inode *inode,
 static inline int fsfilt_set_md(struct obd_device *obd, struct inode *inode,
                                 void *handle, void *md, int size)
 {
-        struct obd_reservation_handle *h = handle;
+        struct obd_handle *h = handle;
         return obd->obd_fsops->fs_set_md(inode, h->orh_filt_handle, md, size);
 }
 
@@ -353,7 +360,7 @@ static inline int fsfilt_add_journal_cb(struct obd_device *obd, __u64 last_rcvd,
                                         void *handle, fsfilt_cb_t cb_func,
                                         void *cb_data)
 {
-        struct obd_reservation_handle *h = handle;
+        struct obd_handle *h = handle;
         return obd->obd_fsops->fs_add_journal_cb(obd, last_rcvd,
                                                  h->orh_filt_handle, cb_func,
                                                  cb_data);

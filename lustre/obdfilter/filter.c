@@ -1881,7 +1881,7 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
                         } else {
                                 CERROR("Serious error: objid %*s already "
                                        "exists; is this filesystem corrupt?\n",
-                                        dchild->d_name.len, dchild->d_name.name);
+                                       dchild->d_name.len, dchild->d_name.name);
                         }
                         GOTO(cleanup, rc = -EEXIST);
                 }

@@ -590,9 +590,9 @@ int mds_obd_create(struct obd_export *exp, struct obdo *oa,
 
         handle = fsfilt_start(exp->exp_obd, mds->mds_objects_dir->d_inode,
                               FSFILT_OP_RENAME, NULL);
-        if (IS_ERR(handle)) 
+        if (IS_ERR(handle))
                 GOTO(out_dput, rc = PTR_ERR(handle));
-        
+
         lock_kernel();
         rc = vfs_rename(mds->mds_objects_dir->d_inode, filp->f_dentry,
                         mds->mds_objects_dir->d_inode, new_child);
