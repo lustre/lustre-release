@@ -42,7 +42,6 @@ install-exec-hook: liblustre.so
 	done
 else
 install-exec-hook:
-
 endif
 
 libllite_a_SOURCES = llite_lib.c super.c namei.c rw.c file.c dir.c llite_lib.h
