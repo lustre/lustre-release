@@ -251,7 +251,8 @@ static int mds_extN_set_last_rcvd(struct mds_obd *mds, void *handle)
                (unsigned long long)mcb->cb_last_rcvd);
         journal_callback_set(handle, mds_extN_callback_status,
                              (struct journal_callback *)mcb);
-#elif HAVE_JOURNAL_CALLBACK /* XXX original patch version - remove soon */
+#elif defined(HAVE_JOURNAL_CALLBACK)
+        /* XXX original patch version - remove soon */
 #warning "using old journal callback kernel patch, please update"
         CDEBUG(D_EXT2, "set callback for last_rcvd: %Ld\n",
                (unsigned long long)mcb->cb_last_rcvd);
