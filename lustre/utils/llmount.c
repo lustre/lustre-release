@@ -285,6 +285,11 @@ int parse_options(char * options, struct lustre_mount_data *lmd)
                         *opteq = '\0';
                         if (!strcmp(opt, "nettype")) {
                                 lmd->lmd_nal = ptl_name2nal(opteq + 1);
+                                if (lmd->lmd_nal < 0) {
+                                        fprintf(stderr, "%s: can't parse NET "
+                                                "%s\n", progname, opteq + 1);
+                                        return (-1);
+                                }
                         } else if(!strcmp(opt, "cluster_id")) {
                                 if (ptl_parse_nid(&cluster_id, opteq+1) != 0) {
                                         fprintf (stderr, "%s: can't parse NID "
@@ -385,12 +390,26 @@ set_local(struct lustre_mount_data *lmd)
 
         memset(buf, 0, sizeof(buf));
 
-#ifdef CRAY_PORTALS
-        if (lmd->lmd_nal == CRAY_KB_ERNAL) {
+        switch (lmd->lmd_nal) {
+        default:
+                fprintf(stderr, "%s: Unknown network type: %d\n",
+                        progname, lmd->lmd_nal);
+                return 1;
+
+#if CRAY_PORTALS
+        case CRAY_KB_SSNAL:
+                return 0;
+
+        case CRAY_KB_ERNAL:
 #else
-        if (lmd->lmd_nal == SOCKNAL || lmd->lmd_nal == TCPNAL ||
-            lmd->lmd_nal == OPENIBNAL || lmd->lmd_nal == IIBNAL) {
+        case SOCKNAL:
+        case TCPNAL:
+        case OPENIBNAL:
+        case IIBNAL:
+        case VIBNAL:
+        case RANAL:
 #endif
+        {
                 struct utsname uts;
 
                 rc = gethostname(buf, sizeof(buf) - 1);
@@ -427,8 +446,11 @@ set_local(struct lustre_mount_data *lmd)
                                 close(f);
                         }
                 }
-#ifndef CRAY_PORTALS
-        } else if (lmd->lmd_nal == QSWNAL) {
+                break;
+        }
+#if !CRAY_PORTALS
+        case QSWNAL:
+        {
                 char *pfiles[] = {"/proc/qsnet/elan3/device0/position",
                                   "/proc/qsnet/elan4/device0/position",
                                   "/proc/elan/device0/position",
@@ -445,9 +467,8 @@ set_local(struct lustre_mount_data *lmd)
 
                         return -1;
                 }
-#else
-	} else if (lmd->lmd_nal == CRAY_KB_SSNAL) {
-		return 0;
+                break;
+        }
 #endif
         }
 
@@ -466,17 +487,41 @@ set_peer(char *hostname, struct lustre_mount_data *lmd)
         ptl_nid_t nid = 0;
         int rc;
 
-#ifdef CRAY_PORTALS
-        if (lmd->lmd_nal == CRAY_KB_ERNAL) {
+        switch (lmd->lmd_nal) {
+        default:
+                fprintf(stderr, "%s: Unknown network type: %d\n",
+                        progname, lmd->lmd_nal);
+                return 1;
+
+#if CRAY_PORTALS
+	case CRAY_KB_SSNAL:
+		lmd->lmd_server_nid = strtoll(hostname,0,0);
+                return 0;
+
+        case CRAY_KB_ERNAL:
 #else
-        if (lmd->lmd_nal == SOCKNAL || lmd->lmd_nal == TCPNAL ||
-            lmd->lmd_nal == OPENIBNAL || lmd->lmd_nal == IIBNAL) {
+        case IIBNAL:
+                if (lmd->lmd_server_nid != PTL_NID_ANY)
+                        break;
+                if (ptl_parse_nid (&nid, hostname) != 0) {
+                        fprintf (stderr, "%s: can't parse NID %s\n",
+                                 progname, hostname);
+                        return (1);
+                }
+                lmd->lmd_server_nid = nid;
+                break;
+
+        case SOCKNAL:
+        case TCPNAL:
+        case OPENIBNAL:
+        case VIBNAL:
+        case RANAL:
 #endif
                 if (lmd->lmd_server_nid == PTL_NID_ANY) {
                         if (ptl_parse_nid (&nid, hostname) != 0) {
                                 fprintf (stderr, "%s: can't parse NID %s\n",
                                          progname, hostname);
-                                return (-1);
+                                return (1);
                         }
                         lmd->lmd_server_nid = nid;
                 }
@@ -486,9 +531,15 @@ set_peer(char *hostname, struct lustre_mount_data *lmd)
                                  progname, hostname);
                         return (-1);
                 }
-#ifndef CRAY_PORTALS
-        } else if (lmd->lmd_nal == QSWNAL &&lmd->lmd_server_nid == PTL_NID_ANY){
+
+                break;
+
+#if !CRAY_PORTALS
+        case QSWNAL: {
                 char buf[64];
+                if (lmd->lmd_server_nid != PTL_NID_ANY)
+                        break;
+
                 rc = sscanf(hostname, "%*[^0-9]%63[0-9]", buf);
                 if (rc != 1) {
                         fprintf (stderr, "%s: can't get elan id from host %s\n",
@@ -501,13 +552,11 @@ set_peer(char *hostname, struct lustre_mount_data *lmd)
                         return (-1);
                 }
                 lmd->lmd_server_nid = nid;
-#else
-	} else if (lmd->lmd_nal == CRAY_KB_SSNAL) {
-		lmd->lmd_server_nid = strtoll(hostname,0,0);
+
+                break;
+        }
 #endif
         }
-
-
         return 0;
 }
 
