@@ -141,7 +141,7 @@
  	struct dentry * dentry = d_lookup(parent, name);
  
 +	if (dentry && dentry->d_op && dentry->d_op->d_revalidate_it) {
-+		if (!dentry->d_op->d_revalidate_it(dentry, flags, it) &&
++		if (!dentry->d_op->d_revalidate_it(dentry, flags, NULL, it) &&
 +		    !d_invalidate(dentry)) {
 +			dput(dentry);
 +			dentry = NULL;
@@ -173,7 +173,7 @@
  		if (dentry) {
  			lock_kernel();
 +			if (dir->i_op->lookup_it)
-+				result = dir->i_op->lookup_it(dir, dentry, it, flags);
++				result = dir->i_op->lookup_it(dir, dentry, NULL, it, flags);
 +			else
  			result = dir->i_op->lookup(dir, dentry);
  			unlock_kernel();
@@ -183,7 +183,7 @@
  			result = ERR_PTR(-ENOENT);
  		}
 +	} else if (result->d_op && result->d_op->d_revalidate_it) {
-+		if (!result->d_op->d_revalidate_it(result, flags, it) &&
++		if (!result->d_op->d_revalidate_it(result, flags, NULL, it) &&
 +		    !d_invalidate(result)) {
 +			dput(result);
 +			if (counter > 10)
@@ -294,7 +294,7 @@
  		dentry = nd->dentry;
 +		if (dentry && dentry->d_op && dentry->d_op->d_revalidate_it) {
 +			err = -ESTALE;
-+			if (!dentry->d_op->d_revalidate_it(dentry, 0, it)) {
++			if (!dentry->d_op->d_revalidate_it(dentry, 0, NULL, it)) {
 +				struct dentry *new;
 +				err = permission(dentry->d_parent->d_inode,
 +						MAY_EXEC);
@@ -304,7 +304,7 @@
 +						&dentry->d_name, 0, NULL);
 +				d_invalidate(dentry);
 +				dput(dentry);
-+				if (IS_ERR(new)) { 
++				if (IS_ERR(new)) {
 +					err = PTR_ERR(new);
 +					break;
 +				}
@@ -393,7 +393,7 @@
  			goto out;
  		lock_kernel();
 +		if (inode->i_op->lookup_it)
-+			dentry = inode->i_op->lookup_it(inode, new, it, 0);
++			dentry = inode->i_op->lookup_it(inode, new, NULL, it, 0);
 +		else
  		dentry = inode->i_op->lookup(inode, new);
  		unlock_kernel();
