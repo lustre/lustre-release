@@ -334,6 +334,8 @@ int class_process_config(int len, char *data)
         lustre_cfg_getdata(&buf, len, data);
         lcfg = (struct lustre_cfg* ) buf;
 
+        CERROR("processing cmd: %x\n", lcfg->lcfg_command);
+
         /* Commands that don't need a device */
 	switch(lcfg->lcfg_command) {
         case LCFG_ATTACH: {
