@@ -29,13 +29,7 @@
 #include <linux/obd_lov.h>
 #include <linux/obd_support.h>
 
-void lov_packdesc(struct lov_desc *ld)
-{
-        ld->ld_tgt_count = HTON__u32(ld->ld_tgt_count);
-        ld->ld_default_stripe_count = HTON__u32(ld->ld_default_stripe_count);
-        ld->ld_default_stripe_size = HTON__u32(ld->ld_default_stripe_size);
-        ld->ld_pattern = HTON__u32(ld->ld_pattern);
-}
+/* lov_packdesc() is in mds/mds_lov.c */
 
 void lov_unpackdesc(struct lov_desc *ld)
 {
@@ -76,21 +70,24 @@ int lov_packmd(struct lustre_handle *conn, struct lov_mds_md **lmmp,
         if (*lmmp && !lsm) {
                 /* endianness */
                 stripe_count = ((*lmmp)->lmm_stripe_count);
-                OBD_FREE(*lmmp, lov_stripe_md_size(stripe_count));
+                CERROR("freeing %p with %d stripes\n", *lmmp, stripe_count);
+                OBD_FREE(*lmmp, lov_mds_md_size(stripe_count));
                 *lmmp = NULL;
                 RETURN(0);
         }
 
         if (!*lmmp) {
                 OBD_ALLOC(*lmmp, lmm_size);
+                CERROR("allocated %p with %d stripes\n", *lmmp, stripe_count);
                 if (!*lmmp)
                         RETURN(-ENOMEM);
         }
+
+        lmm = *lmmp;
+
         lmm->lmm_stripe_count = (stripe_count);
         if (!lsm)
                 RETURN(lmm_size);
-        lmm = *lmmp;
-
         /* XXX endianness */
         lmm->lmm_magic = (lsm->lsm_magic);
         lmm->lmm_object_id = (lsm->lsm_object_id);
@@ -137,6 +134,7 @@ int lov_unpackmd(struct lustre_handle *conn, struct lov_stripe_md **lsmp,
 
         if (*lsmp && !lmm) {
                 stripe_count = (*lsmp)->lsm_stripe_count;
+                CERROR("freeing %p with %d stripes\n", *lsmp, stripe_count);
                 OBD_FREE(*lsmp, lov_stripe_md_size(stripe_count));
                 *lsmp = NULL;
                 RETURN(0);
@@ -144,15 +142,16 @@ int lov_unpackmd(struct lustre_handle *conn, struct lov_stripe_md **lsmp,
 
         if (!*lsmp) {
                 OBD_ALLOC(*lsmp, lsm_size);
+                CERROR("allocated %p with %d stripes\n", *lsmp, stripe_count);
                 if (!*lsmp)
                         RETURN(-ENOMEM);
         }
 
+        lsm = *lsmp;
+
         lsm->lsm_stripe_count = stripe_count;
         if (!lmm)
                 RETURN(lsm_size);
-
-        lsm = *lsmp;
 
         /* XXX endianness */
         ost_offset = lsm->lsm_stripe_offset = (lmm->lmm_stripe_offset);
