@@ -62,7 +62,6 @@ int ldlm_add_waiting_lock(struct ldlm_lock *lock)
         
         LASSERT(list_empty(&lock->l_pending_chain));
         
-        CERROR("waiting for lock %p\n", lock);
         spin_lock_bh(&waiting_locks_spinlock);
         lock->l_callback_timeout = jiffies + (obd_timeout * HZ);
         
@@ -70,9 +69,6 @@ int ldlm_add_waiting_lock(struct ldlm_lock *lock)
         
         if (timeout_rounded < waiting_locks_timer.expires ||
             !timer_pending(&waiting_locks_timer)) {
-                CERROR("adjusting timer! (%0lx/%0lx < %0lx)\n",
-                       lock->l_callback_timeout, timeout_rounded,
-                       waiting_locks_timer.expires);
                 mod_timer(&waiting_locks_timer, timeout_rounded);
         }
         list_add_tail(&lock->l_pending_chain, &waiting_locks_list); /* FIFO */
@@ -98,22 +94,16 @@ int ldlm_del_waiting_lock(struct ldlm_lock *lock)
                 RETURN(0);
         }
 
-        CERROR("no longer waiting for lock %p\n", lock);
-
         list_next = lock->l_pending_chain.next;
         if (lock->l_pending_chain.prev == &waiting_locks_list) {
                 /* Removing the head of the list, adjust timer. */
                 if (list_next == &waiting_locks_list) {
                         /* No more, just cancel. */
-                        CERROR("no more locks waiting, stopping timer\n");
                         del_timer(&waiting_locks_timer);
                 } else {
                         struct ldlm_lock *next;
                         next = list_entry(list_next, struct ldlm_lock,
                                           l_pending_chain);
-                        CERROR("adjusting timer (%0lx %0lx)\n",
-                               waiting_locks_timer.expires,
-                               round_timeout(next->l_callback_timeout));
                         mod_timer(&waiting_locks_timer,
                                   round_timeout(next->l_callback_timeout));
                 }
