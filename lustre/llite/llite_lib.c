@@ -494,24 +494,18 @@ out_free:
 void ll_put_super(struct super_block *sb)
 {
         struct ll_sb_info *sbi = ll_s2sbi(sb);
-        struct obd_device *obd = class_exp2obd(sbi->ll_mdc_exp);
         struct hlist_node *tmp, *next;
-        struct ll_fid rootfid;
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op: sb %p\n", sb);
-        
+
         list_del(&sbi->ll_conn_chain);
         obd_disconnect(sbi->ll_osc_exp, 0);
 
-        /* NULL request to force sync on the MDS, and get the last_committed
-         * value to flush remaining RPCs from the sending queue on client.
-         *
-         * XXX This should be an mdc_sync() call to sync the whole MDS fs,
-         *     which we can call for other reasons as well.
-         */
-        if (!obd->obd_no_recov)
-                mdc_getstatus(sbi->ll_mdc_exp, &rootfid);
+        /* Force sync on the MDS, and get the last_committed value to flush
+         * remaining RPCs from the sending queue on client. */
+        if (!class_exp2obd(sbi->ll_mdc_exp)->obd_no_recov)
+                mdc_sync(sbi->ll_mdc_exp, NULL, NULL);
 
         lprocfs_unregister_mountpoint(sbi);
         if (sbi->ll_proc_root) {
@@ -539,7 +533,7 @@ void ll_put_super(struct super_block *sb)
 
                 err = ll_process_log(sbi->ll_mds_uuid.uuid, cln_prof, 
                                      sbi);
-                if (err < 0) 
+                if (err < 0)
                         CERROR("Unable to process log: %s\n", cln_prof);
 
                 OBD_FREE(cln_prof, len);
