@@ -100,8 +100,11 @@ int main(int argc, char **argv)
         int c;
         int noclose = 0;
         int nal = SOCKNAL;
+        int privileged_only = 0;
+        int rport;
+
         
-        while ((c = getopt (argc, argv, "N:l")) != -1)
+        while ((c = getopt (argc, argv, "N:lp")) != -1)
                 switch (c)
                 {
                 case 'l':
@@ -112,6 +115,10 @@ int main(int argc, char **argv)
                         if (sscanf(optarg, "%d", &nal) != 1 ||
                             nal < 0 || nal > NAL_MAX_NR)
                                 usage(argv[0]);
+                        break;
+
+                case 'p':
+                        privileged_only = 1;
                         break;
                         
                 default:
@@ -178,6 +185,7 @@ int main(int argc, char **argv)
                 int cfd;
                 struct portal_ioctl_data data;
                 struct portals_cfg pcfg;
+                int    privileged;
 #ifdef HAVE_LIBWRAP
                 struct request_info request;
                 char addrstr[INET_ADDRSTRLEN];
@@ -188,6 +196,15 @@ int main(int argc, char **argv)
                         perror("accept");
                         exit(0);
                         continue;
+                }
+
+                privileged = 1;
+                if (privileged_only) {
+                        privileged = 0;
+                        rport = ntohs(clntaddr.sin_port);
+
+                        if (rport > 0 && rport < 1024) 
+                                privileged = 1; 
                 }
 
 #ifdef HAVE_LIBWRAP
@@ -204,6 +221,13 @@ int main(int argc, char **argv)
                 }
 #endif
                 show_connection (cfd, clntaddr.sin_addr.s_addr);
+                if (!privileged) {
+                        syslog(LOG_ERR, "un-privileged client closed. port=%d!\n", rport);
+                        rc = close(cfd);
+                        if (rc)
+                                perror ("close un-privileged client failed");
+                        continue;
+                }
 
                 PCFG_INIT(pcfg, NAL_CMD_REGISTER_PEER_FD);
                 pcfg.pcfg_nal = nal;
