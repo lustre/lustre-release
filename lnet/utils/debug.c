@@ -377,6 +377,7 @@ static int parse_buffer(FILE *in, FILE *out)
 int jt_dbg_debug_kernel(int argc, char **argv)
 {
         char filename[4096];
+        struct stat st;
         int rc, raw = 0, fd;
         FILE *in, *out = stdout;
 
@@ -390,18 +391,21 @@ int jt_dbg_debug_kernel(int argc, char **argv)
         } else if (argc > 1 && (argv[1][0] == '0' || argv[1][0] == '1')) {
                 raw = atoi(argv[1]);
                 argc--;
-        } else {
-                sprintf(filename, "%s.%lu.%u", argc > 1 ? argv[1] :
-                        "/tmp/lustre-log", time(NULL), getpid());
         }
 
-        unlink(filename);
+        /* If we are dumping raw (which means no conversion step to ASCII)
+         * then dump directly to any supplied filename, otherwise this is
+         * just a temp file and we dump to the real file at convert time. */
+        if (argc > 1 && raw)
+                strcpy(filename, argv[1]);
+        else
+                sprintf(filename, "/tmp/lustre-log.%lu.%u",time(NULL),getpid());
+
+        if (stat(filename, &st) == 0 && S_ISREG(st.st_mode))
+                unlink(filename);
 
         fd = open("/proc/sys/portals/dump_kernel", O_WRONLY);
         if (fd < 0) {
-                if (errno == ENOENT) /* no dump file created */
-                        return 0;
-
                 fprintf(stderr, "open(dump_kernel) failed: %s\n",
                         strerror(errno));
                 return 1;
@@ -421,6 +425,9 @@ int jt_dbg_debug_kernel(int argc, char **argv)
 
         in = fopen(filename, "r");
         if (in == NULL) {
+                if (errno == ENOENT) /* no dump file created */
+                        return 0;
+
                 fprintf(stderr, "fopen(%s) failed: %s\n", filename,
                         strerror(errno));
                 return 1;
