@@ -35,9 +35,6 @@ static struct lprocfs_vars lprocfs_obd_vars[]  = { {0} };
 static struct lprocfs_vars lprocfs_module_vars[] = { {0} };
 #else
 
-#define OSC_MAX_RIF_MAX 32
-#define OSC_MAX_DIRTY_MB_MAX 4096 /* totally arbitrary */
-
 int osc_rd_max_pages_per_rpc(char *page, char **start, off_t off, int count,
                              int *eof, void *data)
 {
@@ -80,7 +77,7 @@ int osc_rd_max_rpcs_in_flight(char *page, char **start, off_t off, int count,
         int rc;
 
         spin_lock(&cli->cl_loi_list_lock);
-        rc = snprintf(page, count, "%d\n", cli->cl_max_rpcs_in_flight);
+        rc = snprintf(page, count, "%u\n", cli->cl_max_rpcs_in_flight);
         spin_unlock(&cli->cl_loi_list_lock);
         return rc;
 }
@@ -289,9 +286,9 @@ static struct lprocfs_vars lprocfs_obd_vars[] = {
         //{ "filegroups",      lprocfs_rd_filegroups,  0, 0 },
         { "ost_server_uuid", lprocfs_rd_server_uuid, 0, 0 },
         { "ost_conn_uuid",   lprocfs_rd_conn_uuid, 0, 0 },
-        { "max_pages_per_rpc", osc_rd_max_pages_per_rpc, 
+        { "max_pages_per_rpc", osc_rd_max_pages_per_rpc,
                                osc_wr_max_pages_per_rpc, 0 },
-        { "max_rpcs_in_flight", osc_rd_max_rpcs_in_flight, 
+        { "max_rpcs_in_flight", osc_rd_max_rpcs_in_flight,
                                 osc_wr_max_rpcs_in_flight, 0 },
         { "max_dirty_mb", osc_rd_max_dirty_mb, osc_wr_max_dirty_mb, 0 },
         { "cur_dirty_bytes", osc_rd_cur_dirty_bytes, 0, 0 },

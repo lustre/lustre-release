@@ -173,6 +173,11 @@ struct filter_obd {
 
 struct mds_server_data;
 
+#define OSC_MAX_RIF_DEFAULT       4
+#define OSC_MAX_RIF_MAX          32
+#define OSC_MAX_DIRTY_DEFAULT     4
+#define OSC_MAX_DIRTY_MB_MAX    256     /* totally arbitrary */
+
 struct mdc_rpc_lock;
 struct client_obd {
         struct obd_import       *cl_import;
