@@ -10,6 +10,7 @@ tbd  Cluster File Systems, Inc. <info@clusterfs.com>
 	- mount MDS with errors=remount-ro, like obdfilter (2009)
 	- initialize lock handle to avoid ASSERT on error cleanup (3057)
 	- don't use cancelling-locks' kms values (2947)
+	- use highest lock extent for kms, not last one (2925)
        * miscellania
 	- allow default OST striping configuration per directory (1414)
 
