@@ -695,9 +695,10 @@ ksocknal_process_transmit (ksock_conn_t *conn, ksock_tx_t *tx)
 
         if (!conn->ksnc_closing)
                 CERROR ("[%p] Error %d on write to "LPX64
-                        " ip %08x:%d\n",conn, rc, 
+                        " ip %d.%d.%d.%d:%d\n",conn, rc, 
                         conn->ksnc_peer->ksnp_nid,
-                        conn->ksnc_ipaddr, conn->ksnc_port);
+                        HIPQUAD(conn->ksnc_ipaddr),
+                        conn->ksnc_port);
 
         ksocknal_close_conn_and_siblings (conn, rc);
         ksocknal_tx_launched (tx);
@@ -737,6 +738,7 @@ ksocknal_launch_autoconnect_locked (ksock_route_t *route)
 ksock_peer_t *
 ksocknal_find_target_peer_locked (ksock_tx_t *tx, ptl_nid_t nid)
 {
+        char          ipbuf[PTL_NALFMT_SIZE];
         ptl_nid_t     target_nid;
         int           rc;
         ksock_peer_t *peer = ksocknal_find_peer_locked (nid);
@@ -746,14 +748,16 @@ ksocknal_find_target_peer_locked (ksock_tx_t *tx, ptl_nid_t nid)
         
         if (tx->tx_isfwd) {
                 CERROR ("Can't send packet to "LPX64
-                        ": routed target is not a peer\n", nid);
+                        " %s: routed target is not a peer\n", 
+                        nid, portals_nid2str(SOCKNAL, nid, ipbuf));
                 return (NULL);
         }
         
         rc = kpr_lookup (&ksocknal_data.ksnd_router, nid, tx->tx_nob,
                          &target_nid);
         if (rc != 0) {
-                CERROR ("Can't route to "LPX64": router error %d\n", nid, rc);
+                CERROR ("Can't route to "LPX64" %s: router error %d\n", 
+                        nid, portals_nid2str(SOCKNAL, nid, ipbuf), rc);
                 return (NULL);
         }
 
@@ -761,7 +765,8 @@ ksocknal_find_target_peer_locked (ksock_tx_t *tx, ptl_nid_t nid)
         if (peer != NULL)
                 return (peer);
 
-        CERROR ("Can't send packet to "LPX64": no peer entry\n", target_nid);
+        CERROR ("Can't send packet to "LPX64" %s: no peer entry\n",
+                target_nid, portals_nid2str(SOCKNAL, target_nid, ipbuf));
         return (NULL);
 }
 
@@ -829,8 +834,10 @@ ksocknal_queue_tx_locked (ksock_tx_t *tx, ksock_conn_t *conn)
         LASSERT(!conn->ksnc_closing);
         LASSERT(tx->tx_resid == tx->tx_nob);
         
-        CDEBUG (D_NET, "Sending to "LPX64" on port %d\n", 
-                conn->ksnc_peer->ksnp_nid, conn->ksnc_port);
+        CDEBUG (D_NET, "Sending to "LPX64" ip %d.%d.%d.%d:%d\n", 
+                conn->ksnc_peer->ksnp_nid,
+                HIPQUAD(conn->ksnc_ipaddr),
+                conn->ksnc_port);
 
         atomic_add (tx->tx_nob, &conn->ksnc_tx_nob);
         tx->tx_conn = conn;
@@ -1185,10 +1192,15 @@ ksocknal_fmb_callback (void *arg, int error)
         ksock_conn_t      *conn = NULL;
         ksock_sched_t     *sched;
         unsigned long      flags;
+        char               ipbuf[PTL_NALFMT_SIZE];
 
         if (error != 0)
-                CERROR("Failed to route packet from "LPX64" to "LPX64": %d\n",
-                       NTOH__u64(hdr->src_nid), NTOH__u64(hdr->dest_nid),
+                CERROR("Failed to route packet from "
+                       LPX64" %s to "LPX64" %s: %d\n",
+                       NTOH__u64(hdr->src_nid),
+                       portals_nid2str(SOCKNAL, NTOH__u64(hdr->src_nid), ipbuf),
+                       NTOH__u64(hdr->dest_nid),
+                       portals_nid2str(SOCKNAL, NTOH__u64(hdr->dest_nid), ipbuf),
                        error);
         else
                 CDEBUG (D_NET, "routed packet from "LPX64" to "LPX64": OK\n",
@@ -1529,13 +1541,16 @@ ksocknal_process_receive (ksock_conn_t *conn)
                 LASSERT (rc != -EAGAIN);
 
                 if (rc == 0)
-                        CWARN ("[%p] EOF from "LPX64" ip %08x:%d\n",
+                        CWARN ("[%p] EOF from "LPX64" ip %d.%d.%d.%d:%d\n",
                                conn, conn->ksnc_peer->ksnp_nid,
-                               conn->ksnc_ipaddr, conn->ksnc_port);
+                               HIPQUAD(conn->ksnc_ipaddr),
+                               conn->ksnc_port);
                 else if (!conn->ksnc_closing)
-                        CERROR ("[%p] Error %d on read from "LPX64" ip %08x:%d\n",
+                        CERROR ("[%p] Error %d on read from "LPX64
+                                " ip %d.%d.%d.%d:%d\n",
                                 conn, rc, conn->ksnc_peer->ksnp_nid,
-                                conn->ksnc_ipaddr, conn->ksnc_port);
+                                HIPQUAD(conn->ksnc_ipaddr),
+                                conn->ksnc_port);
 
                 ksocknal_close_conn_and_siblings (conn, rc);
                 return (rc == 0 ? -ESHUTDOWN : rc);
@@ -2019,6 +2034,7 @@ ksocknal_hello (struct socket *sock, ptl_nid_t *nid, int *type, __u64 *incarnati
         int                 rc;
         ptl_hdr_t           hdr;
         ptl_magicversion_t *hmv = (ptl_magicversion_t *)&hdr.dest_nid;
+        char                ipbuf[PTL_NALFMT_SIZE];
 
         LASSERT (sizeof (*hmv) == sizeof (hdr.dest_nid));
 
@@ -2037,31 +2053,34 @@ ksocknal_hello (struct socket *sock, ptl_nid_t *nid, int *type, __u64 *incarnati
         /* Assume sufficient socket buffering for this message */
         rc = ksocknal_sock_write (sock, &hdr, sizeof (hdr));
         if (rc != 0) {
-                CERROR ("Error %d sending HELLO to "LPX64"\n", rc, *nid);
+                CERROR ("Error %d sending HELLO to "LPX64" %s\n",
+                        rc, *nid, portals_nid2str(SOCKNAL, *nid, ipbuf));
                 return (rc);
         }
 
         rc = ksocknal_sock_read (sock, hmv, sizeof (*hmv));
         if (rc != 0) {
-                CERROR ("Error %d reading HELLO from "LPX64"\n", rc, *nid);
+                CERROR ("Error %d reading HELLO from "LPX64" %s\n",
+                        rc, *nid, portals_nid2str(SOCKNAL, *nid, ipbuf));
                 return (rc);
         }
         
         if (hmv->magic != __le32_to_cpu (PORTALS_PROTO_MAGIC)) {
-                CERROR ("Bad magic %#08x (%#08x expected) from "LPX64"\n",
-                        __cpu_to_le32 (hmv->magic), PORTALS_PROTO_MAGIC, *nid);
+                CERROR ("Bad magic %#08x (%#08x expected) from "LPX64" %s\n",
+                        __cpu_to_le32 (hmv->magic), PORTALS_PROTO_MAGIC, *nid,
+                        portals_nid2str(SOCKNAL, *nid, ipbuf));
                 return (-EPROTO);
         }
 
         if (hmv->version_major != __cpu_to_le16 (PORTALS_PROTO_VERSION_MAJOR) ||
             hmv->version_minor != __cpu_to_le16 (PORTALS_PROTO_VERSION_MINOR)) {
                 CERROR ("Incompatible protocol version %d.%d (%d.%d expected)"
-                        " from "LPX64"\n",
+                        " from "LPX64" %s\n",
                         __le16_to_cpu (hmv->version_major),
                         __le16_to_cpu (hmv->version_minor),
                         PORTALS_PROTO_VERSION_MAJOR,
                         PORTALS_PROTO_VERSION_MINOR,
-                        *nid);
+                        *nid, portals_nid2str(SOCKNAL, *nid, ipbuf));
                 return (-EPROTO);
         }
 
@@ -2073,8 +2092,8 @@ ksocknal_hello (struct socket *sock, ptl_nid_t *nid, int *type, __u64 *incarnati
 
         rc = ksocknal_sock_read (sock, hmv + 1, sizeof (hdr) - sizeof (*hmv));
         if (rc != 0) {
-                CERROR ("Error %d reading rest of HELLO hdr from "LPX64"\n",
-                        rc, *nid);
+                CERROR ("Error %d reading rest of HELLO hdr from "LPX64" %s\n",
+                        rc, *nid, portals_nid2str(SOCKNAL, *nid, ipbuf));
                 return (rc);
         }
 
@@ -2082,9 +2101,10 @@ ksocknal_hello (struct socket *sock, ptl_nid_t *nid, int *type, __u64 *incarnati
         if (hdr.type != __cpu_to_le32 (PTL_MSG_HELLO) ||
             hdr.payload_length != __cpu_to_le32 (0)) {
                 CERROR ("Expecting a HELLO hdr with 0 payload,"
-                        " but got type %d with %d payload from "LPX64"\n",
+                        " but got type %d with %d payload from "LPX64" %s\n",
                         __le32_to_cpu (hdr.type),
-                        __le32_to_cpu (hdr.payload_length), *nid);
+                        __le32_to_cpu (hdr.payload_length), *nid,
+                        portals_nid2str(SOCKNAL, *nid, ipbuf));
                 return (-EPROTO);
         }
 
@@ -2096,8 +2116,12 @@ ksocknal_hello (struct socket *sock, ptl_nid_t *nid, int *type, __u64 *incarnati
         if (*nid == PTL_NID_ANY) {              /* don't know peer's nid yet */
                 *nid = __le64_to_cpu(hdr.src_nid);
         } else if (*nid != __le64_to_cpu (hdr.src_nid)) {
-                CERROR ("Connected to nid "LPX64", but expecting "LPX64"\n",
-                        __le64_to_cpu (hdr.src_nid), *nid);
+                CERROR ("Connected to nid "LPX64" %s, but expecting "LPX64" %s\n",
+                        __le64_to_cpu (hdr.src_nid),
+                        portals_nid2str(SOCKNAL, 
+                                        __le64_to_cpu(hdr.src_nid),
+                                        ipbuf),
+                        *nid, portals_nid2str(SOCKNAL, *nid, ipbuf));
                 return (-EPROTO);
         }
 
@@ -2115,12 +2139,15 @@ ksocknal_hello (struct socket *sock, ptl_nid_t *nid, int *type, __u64 *incarnati
                         *type = SOCKNAL_CONN_BULK_IN;
                         break;
                 default:
-                        CERROR ("Unexpected type %d from "LPX64"\n", *type, *nid);
+                        CERROR ("Unexpected type %d from "LPX64" %s\n", 
+                                *type, *nid,
+                                portals_nid2str(SOCKNAL, *nid, ipbuf));
                         return (-EPROTO);
                 }
         } else if (__le32_to_cpu(hdr.msg.hello.type) != SOCKNAL_CONN_NONE) {
-                CERROR ("Mismatched types: me %d "LPX64" %d\n",
-                        *type, *nid, __le32_to_cpu(hdr.msg.hello.type));
+                CERROR ("Mismatched types: me %d "LPX64" %s %d\n",
+                        *type, *nid, portals_nid2str(SOCKNAL, *nid, ipbuf),
+                        __le32_to_cpu(hdr.msg.hello.type));
                 return (-EPROTO);
         }
 
@@ -2224,6 +2251,7 @@ ksocknal_connect_peer (ksock_route_t *route, int type)
         int                 fd;
         struct socket      *sock;
         int                 rc;
+        char                ipbuf[PTL_NALFMT_SIZE];
 
         rc = sock_create (PF_INET, SOCK_STREAM, 0, &sock);
         if (rc != 0) {
@@ -2316,8 +2344,11 @@ ksocknal_connect_peer (ksock_route_t *route, int type)
         rc = sock->ops->connect (sock, (struct sockaddr *)&peer_addr, 
                                  sizeof (peer_addr), sock->file->f_flags);
         if (rc != 0) {
-                CERROR ("Error %d connecting to "LPX64"\n", rc,
-                        route->ksnr_peer->ksnp_nid);
+                CERROR ("Error %d connecting to "LPX64" %s\n", rc,
+                        route->ksnr_peer->ksnp_nid,
+                        portals_nid2str(SOCKNAL, 
+                                        route->ksnr_peer->ksnp_nid, 
+                                        ipbuf));
                 goto out;
         }
         
@@ -2399,13 +2430,20 @@ ksocknal_autoconnect (ksock_route_t *route)
         write_unlock_irqrestore (&ksocknal_data.ksnd_global_lock, flags);
 
         while (!list_empty (&zombies)) {
+                char ipbuf[PTL_NALFMT_SIZE];
                 tx = list_entry (zombies.next, ksock_tx_t, tx_list);
                 
-                CERROR ("Deleting packet type %d len %d ("LPX64"->"LPX64")\n",
+                CERROR ("Deleting packet type %d len %d ("LPX64" %s->"LPX64" %s)\n",
                         NTOH__u32 (tx->tx_hdr->type),
                         NTOH__u32 (tx->tx_hdr->payload_length),
                         NTOH__u64 (tx->tx_hdr->src_nid),
-                        NTOH__u64 (tx->tx_hdr->dest_nid));
+                        portals_nid2str(SOCKNAL,
+                                        NTOH__u64(tx->tx_hdr->src_nid),
+                                        ipbuf),
+                        NTOH__u64 (tx->tx_hdr->dest_nid),
+                        portals_nid2str(SOCKNAL,
+                                        NTOH__u64(tx->tx_hdr->src_nid),
+                                        ipbuf));
 
                 list_del (&tx->tx_list);
                 /* complete now */
@@ -2478,8 +2516,8 @@ ksocknal_find_timed_out_conn (ksock_peer_t *peer)
                     time_after_eq (jiffies, conn->ksnc_rx_deadline)) {
                         /* Timed out incomplete incoming message */
                         atomic_inc (&conn->ksnc_refcount);
-                        CERROR ("Timed out RX from "LPX64" %p\n", 
-                                peer->ksnp_nid, conn);
+                        CERROR ("Timed out RX from "LPX64" %p %d.%d.%d.%d\n",
+                                peer->ksnp_nid, conn, HIPQUAD(conn->ksnc_ipaddr));
                         return (conn);
                 }
                 
@@ -2489,10 +2527,11 @@ ksocknal_find_timed_out_conn (ksock_peer_t *peer)
                         /* Timed out messages queued for sending, or
                          * messages buffered in the socket's send buffer */
                         atomic_inc (&conn->ksnc_refcount);
-                        CERROR ("Timed out TX to "LPX64" %s%d %p\n", 
+                        CERROR ("Timed out TX to "LPX64" %s%d %p %d.%d.%d.%d\n", 
                                 peer->ksnp_nid, 
                                 list_empty (&conn->ksnc_tx_queue) ? "" : "Q ",
-                                conn->ksnc_sock->sk->sk_wmem_queued, conn);
+                                conn->ksnc_sock->sk->sk_wmem_queued, conn,
+                                HIPQUAD(conn->ksnc_ipaddr));
                         return (conn);
                 }
         }
@@ -2521,8 +2560,9 @@ ksocknal_check_peer_timeouts (int idx)
                 if (conn != NULL) {
                         read_unlock (&ksocknal_data.ksnd_global_lock);
 
-                        CERROR ("Timeout out conn->"LPX64" ip %x:%d\n",
-                                peer->ksnp_nid, conn->ksnc_ipaddr,
+                        CERROR ("Timeout out conn->"LPX64" ip %d.%d.%d.%d:%d\n",
+                                peer->ksnp_nid,
+                                HIPQUAD(conn->ksnc_ipaddr),
                                 conn->ksnc_port);
                         ksocknal_close_conn_and_siblings (conn, -ETIMEDOUT);
                         
