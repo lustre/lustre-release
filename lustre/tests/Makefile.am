@@ -5,7 +5,11 @@ CFLAGS := -g -Wall
 # LDADD := -lreadline -ltermcap # -lefence
 pkglibdir = @libdir@/$(PACKAGE)
 pkgcfgdir = @sysconfdir@/$(PACKAGE)
-EXTRA_DIST = llsetup.sh llrsetup.sh llcleanup.sh common.sh lustre.cfg
+EXTRA_DIST = llsetup.sh llrsetup.sh llcleanup.sh common.sh lustre.cfg \
+client-echo.cfg    elan-server.cfg  net-client.cfg  obdecho.cfg \
+client-mount.cfg   ldlm.cfg         net-local.cfg   obdfilter.cfg \
+client-mount2.cfg  lustre.cfg       net-server.cfg \
+elan-client.cfg    mds.cfg 
 sbin_SCRIPTS = llsetup.sh llrsetup.sh llcleanup.sh
 pkglib_SCRIPTS = common.sh
 pkgcfg_DATA = lustre.cfg
@@ -24,4 +28,3 @@ writeme_SOURCES = writeme.c
 fsx_SOURCES = fsx.c
 
 include $(top_srcdir)/Rules
-
