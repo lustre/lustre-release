@@ -28,14 +28,23 @@ linux/ldiskfs%.h: linux-stage/include/linux/ext3%.h
 # (see bug 1679)
 #
 series := @top_srcdir@/kernel_patches/series/ldiskfs-2.6-suse.series
+patches := @top_srcdir@/kernel_patches/patches
 
 sources: $(ext3_sources) $(ext3_headers) $(linux_headers) $(series)
 	rm -rf linux-stage linux sources $(ldiskfs_SOURCES)
 	mkdir -p linux-stage/fs/ext3 linux-stage/include/linux
-	cd linux-stage && quilt setup -l ../$(series)
 	cp $(ext3_sources) $(ext3_headers) $(ext3_extra) linux-stage/fs/ext3
 	cp $(linux_headers) linux-stage/include/linux
 	cd linux-stage && quilt push -a -q
+if USE_QUILT
+	cd linux-stage && quilt setup -l ../$(series) -d ../$(patches)
+	cd linux-stage && quilt push -a -q
+else
+	@cd linux-stage && for i in $$(<../$(series)) ; do \
+		echo "patch -p1 < ../$(patches)/$$i" ; \
+		patch -p1 < ../$(patches)/$$i || exit 1 ; \
+	done
+endif
 	mkdir linux
 	@echo -n "Replacing 'ext3' with 'ldiskfs':"
 	@for i in $(notdir $(ext3_headers) $(ext3_sources)) $(new_sources) ; do \
@@ -49,6 +58,7 @@ sources: $(ext3_sources) $(ext3_headers) $(linux_headers) $(series)
 			linux-stage/include/linux/ext3$$i \
 			> linux/ldiskfs$$i ; \
 	done
+	@echo
 	touch sources
 
 foo-check:
