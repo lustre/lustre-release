@@ -59,7 +59,7 @@ int osc_wr_max_pages_per_rpc(struct file *file, const char *buffer,
         if (rc)
                 return rc;
 
-        if (val < 1 || val > PTL_MD_MAX_PAGES)
+        if (val < 1 || val > PTLRPC_MAX_BRW_PAGES)
                 return -ERANGE;
 
         spin_lock(&cli->cl_loi_list_lock);
@@ -170,28 +170,21 @@ int osc_rd_create_low_wm(char *page, char **start, off_t off, int count,
                          int *eof, void *data)
 {
         struct obd_device *obd = data;
-        struct obd_export *exp;
 
-        if (obd == NULL || list_empty(&obd->obd_exports))
+        if (obd == NULL)
                 return 0;
 
-        spin_lock(&obd->obd_dev_lock);
-        exp = list_entry(obd->obd_exports.next, struct obd_export,
-                         exp_obd_chain);
-        spin_unlock(&obd->obd_dev_lock);
-
         return snprintf(page, count, "%d\n",
-                        exp->exp_osc_data.oed_oscc.oscc_kick_barrier);
+                        obd->u.cli.cl_oscc.oscc_kick_barrier);
 }
 
 int osc_wr_create_low_wm(struct file *file, const char *buffer,
                          unsigned long count, void *data)
 {
         struct obd_device *obd = data;
-        struct obd_export *exp;
         int val, rc;
 
-        if (obd == NULL || list_empty(&obd->obd_exports))
+        if (obd == NULL)
                 return 0;
 
         rc = lprocfs_write_helper(buffer, count, &val);
@@ -202,9 +195,7 @@ int osc_wr_create_low_wm(struct file *file, const char *buffer,
                 return -ERANGE;
 
         spin_lock(&obd->obd_dev_lock);
-        exp = list_entry(obd->obd_exports.next, struct obd_export,
-                         exp_obd_chain);
-        exp->exp_osc_data.oed_oscc.oscc_kick_barrier = val;
+        obd->u.cli.cl_oscc.oscc_kick_barrier = val;
         spin_unlock(&obd->obd_dev_lock);
 
         return count;
@@ -214,28 +205,21 @@ int osc_rd_create_count(char *page, char **start, off_t off, int count,
                         int *eof, void *data)
 {
         struct obd_device *obd = data;
-        struct obd_export *exp;
 
-        if (obd == NULL || list_empty(&obd->obd_exports))
+        if (obd == NULL)
                 return 0;
 
-        spin_lock(&obd->obd_dev_lock);
-        exp = list_entry(obd->obd_exports.next, struct obd_export,
-                         exp_obd_chain);
-        spin_unlock(&obd->obd_dev_lock);
-
         return snprintf(page, count, "%d\n",
-                        exp->exp_osc_data.oed_oscc.oscc_grow_count);
+                        obd->u.cli.cl_oscc.oscc_grow_count);
 }
 
 int osc_wr_create_count(struct file *file, const char *buffer,
                         unsigned long count, void *data)
 {
         struct obd_device *obd = data;
-        struct obd_export *exp;
         int val, rc;
 
-        if (obd == NULL || list_empty(&obd->obd_exports))
+        if (obd == NULL)
                 return 0;
 
         rc = lprocfs_write_helper(buffer, count, &val);
@@ -245,11 +229,7 @@ int osc_wr_create_count(struct file *file, const char *buffer,
         if (val < 0)
                 return -ERANGE;
 
-        spin_lock(&obd->obd_dev_lock);
-        exp = list_entry(obd->obd_exports.next, struct obd_export,
-                         exp_obd_chain);
-        exp->exp_osc_data.oed_oscc.oscc_grow_count = val;
-        spin_unlock(&obd->obd_dev_lock);
+        obd->u.cli.cl_oscc.oscc_grow_count = val;
 
         return count;
 }
@@ -258,36 +238,24 @@ int osc_rd_prealloc_next_id(char *page, char **start, off_t off, int count,
                             int *eof, void *data)
 {
         struct obd_device *obd = data;
-        struct obd_export *exp;
 
-        if (obd == NULL || list_empty(&obd->obd_exports))
+        if (obd == NULL)
                 return 0;
 
-        spin_lock(&obd->obd_dev_lock);
-        exp = list_entry(obd->obd_exports.next, struct obd_export,
-                         exp_obd_chain);
-        spin_unlock(&obd->obd_dev_lock);
-
         return snprintf(page, count, LPU64"\n",
-                        exp->exp_osc_data.oed_oscc.oscc_next_id);
+                        obd->u.cli.cl_oscc.oscc_next_id);
 }
 
 int osc_rd_prealloc_last_id(char *page, char **start, off_t off, int count,
                             int *eof, void *data)
 {
         struct obd_device *obd = data;
-        struct obd_export *exp;
 
-        if (obd == NULL || list_empty(&obd->obd_exports))
+        if (obd == NULL)
                 return 0;
 
-        spin_lock(&obd->obd_dev_lock);
-        exp = list_entry(obd->obd_exports.next, struct obd_export,
-                         exp_obd_chain);
-        spin_unlock(&obd->obd_dev_lock);
-
         return snprintf(page, count, LPU64"\n",
-                        exp->exp_osc_data.oed_oscc.oscc_last_id);
+                        obd->u.cli.cl_oscc.oscc_last_id);
 }
 
 static struct lprocfs_vars lprocfs_obd_vars[] = {
@@ -338,7 +306,7 @@ static int osc_rpc_stats_seq_show(struct seq_file *seq, void *v)
         rpcs = cli->cl_brw_in_flight;
         r = cli->cl_pending_r_pages;
         w = cli->cl_pending_w_pages;
-                                                                                
+
         seq_printf(seq, "snapshot_time:         %lu:%lu (secs:usecs)\n",
                    now.tv_sec, now.tv_usec);
         seq_printf(seq, "RPCs in flight:        %d\n", rpcs);
@@ -359,9 +327,9 @@ static int osc_rpc_stats_seq_show(struct seq_file *seq, void *v)
                 unsigned long w = cli->cl_write_page_hist.oh_buckets[i];
                 read_cum += r;
                 write_cum += w;
-                seq_printf(seq, "%d:\t\t%10lu %3lu %3lu   | %10lu %3lu %3lu\n", 
-                                 1 << i, r, pct(r, read_tot), 
-                                 pct(read_cum, read_tot), w, 
+                seq_printf(seq, "%d:\t\t%10lu %3lu %3lu   | %10lu %3lu %3lu\n",
+                                 1 << i, r, pct(r, read_tot),
+                                 pct(read_cum, read_tot), w,
                                  pct(w, write_tot),
                                  pct(write_cum, write_tot));
                 if (read_cum == read_tot && write_cum == write_tot)
@@ -382,9 +350,9 @@ static int osc_rpc_stats_seq_show(struct seq_file *seq, void *v)
                 unsigned long w = cli->cl_write_rpc_hist.oh_buckets[i];
                 read_cum += r;
                 write_cum += w;
-                seq_printf(seq, "%d:\t\t%10lu %3lu %3lu   | %10lu %3lu %3lu\n", 
-                                 i, r, pct(r, read_tot), 
-                                 pct(read_cum, read_tot), w, 
+                seq_printf(seq, "%d:\t\t%10lu %3lu %3lu   | %10lu %3lu %3lu\n",
+                                 i, r, pct(r, read_tot),
+                                 pct(read_cum, read_tot), w,
                                  pct(w, write_tot),
                                  pct(write_cum, write_tot));
                 if (read_cum == read_tot && write_cum == write_tot)
@@ -423,7 +391,7 @@ static int osc_rpc_stats_seq_open(struct inode *inode, struct file *file)
         struct proc_dir_entry *dp = PDE(inode);
         struct seq_file *seq;
         int rc;
- 
+
         rc = seq_open(file, &osc_rpc_stats_seq_sops);
         if (rc)
                 return rc;
@@ -448,6 +416,7 @@ static ssize_t osc_rpc_stats_seq_write(struct file *file, const char *buf,
 }
 
 struct file_operations osc_rpc_stats_fops = {
+        .owner   = THIS_MODULE,
         .open    = osc_rpc_stats_seq_open,
         .read    = seq_read,
         .write   = osc_rpc_stats_seq_write,
@@ -457,10 +426,9 @@ struct file_operations osc_rpc_stats_fops = {
 
 int lproc_osc_attach_seqstat(struct obd_device *dev)
 {
-        return lprocfs_obd_seq_create(dev, "rpc_stats", 0444, 
+        return lprocfs_obd_seq_create(dev, "rpc_stats", 0444,
                                       &osc_rpc_stats_fops, dev);
 }
 
-
 #endif /* LPROCFS */
-LPROCFS_INIT_VARS(osc,lprocfs_module_vars, lprocfs_obd_vars)
+LPROCFS_INIT_VARS(osc, lprocfs_module_vars, lprocfs_obd_vars)

@@ -28,6 +28,7 @@
 #ifdef __KERNEL__
 
 #include <linux/obd.h>
+#include <linux/obd_class.h>
 
 typedef void (*fsfilt_cb_t)(struct obd_device *obd, __u64 last_rcvd,
                             void *data, int error);
@@ -41,10 +42,11 @@ struct fsfilt_operations {
         struct list_head fs_list;
         struct module *fs_owner;
         char   *fs_type;
-        void   *(* fs_start)(struct inode *inode, int op, void *desc_private);
+        void   *(* fs_start)(struct inode *inode, int op, void *desc_private,
+                             int logs);
         void   *(* fs_brw_start)(int objcount, struct fsfilt_objinfo *fso,
                                  int niocount, struct niobuf_local *nb,
-                                 void *desc_private);
+                                 void *desc_private, int logs);
         int     (* fs_commit)(struct inode *inode, void *handle,int force_sync);
         int     (* fs_commit_async)(struct inode *inode, void *handle,
                                         void **wait_handle);
@@ -72,6 +74,7 @@ struct fsfilt_operations {
                                     int force_sync);
         int     (* fs_read_record)(struct file *, void *, int size, loff_t *);
         int     (* fs_setup)(struct super_block *sb);
+        int     (* fs_get_op_len)(int, struct fsfilt_objinfo *, int);
 };
 
 extern int fsfilt_register_ops(struct fsfilt_operations *fs_ops);
@@ -88,29 +91,61 @@ extern void fsfilt_put_ops(struct fsfilt_operations *fs_ops);
 #define FSFILT_OP_MKNOD          7
 #define FSFILT_OP_SETATTR        8
 #define FSFILT_OP_LINK           9
-#define FSFILT_OP_CREATE_LOG    10
-#define FSFILT_OP_UNLINK_LOG    11
-#define FSFILT_OP_CANCEL_UNLINK_LOG    12
+#define FSFILT_OP_CANCEL_UNLINK 10
 
-static inline void *fsfilt_start(struct obd_device *obd, struct inode *inode,
-                                 int op, struct obd_trans_info *oti)
+static inline void *fsfilt_start_log(struct obd_device *obd,
+                                     struct inode *inode, int op,
+                                     struct obd_trans_info *oti, int logs)
 {
         unsigned long now = jiffies;
         void *parent_handle = oti ? oti->oti_handle : NULL;
-        void *handle = obd->obd_fsops->fs_start(inode, op, parent_handle);
-        CDEBUG(D_INFO, "started handle %p (%p)\n", handle, parent_handle);
+        void *handle = obd->obd_fsops->fs_start(inode, op, parent_handle, logs);
+        CDEBUG(D_HA, "started handle %p (%p)\n", handle, parent_handle);
 
         if (oti != NULL) {
                 if (parent_handle == NULL) {
                         oti->oti_handle = handle;
                 } else if (handle != parent_handle) {
                         CERROR("mismatch: parent %p, handle %p, oti %p\n",
-                               parent_handle, handle, oti->oti_handle);
+                               parent_handle, handle, oti);
                         LBUG();
                 }
         }
         if (time_after(jiffies, now + 15 * HZ))
                 CERROR("long journal start time %lus\n", (jiffies - now) / HZ);
+        return handle;
+}
+
+static inline void *fsfilt_start(struct obd_device *obd, struct inode *inode,
+                                 int op, struct obd_trans_info *oti)
+{
+        return fsfilt_start_log(obd, inode, op, oti, 0);
+}
+
+static inline void *fsfilt_brw_start_log(struct obd_device *obd,
+                                         int objcount,
+                                         struct fsfilt_objinfo *fso,
+                                         int niocount, struct niobuf_local *nb,
+                                         struct obd_trans_info *oti, int logs)
+{
+        unsigned long now = jiffies;
+        void *parent_handle = oti ? oti->oti_handle : NULL;
+        void *handle = obd->obd_fsops->fs_brw_start(objcount, fso, niocount, nb,
+                                                    parent_handle, logs);
+        CDEBUG(D_HA, "started handle %p (%p)\n", handle, parent_handle);
+
+        if (oti != NULL) {
+                if (parent_handle == NULL) {
+                        oti->oti_handle = handle;
+                } else if (handle != parent_handle) {
+                        CERROR("mismatch: parent %p, handle %p, oti %p\n",
+                               parent_handle, handle, oti);
+                        LBUG();
+                }
+        }
+        if (time_after(jiffies, now + 15 * HZ))
+                CERROR("long journal start time %lus\n", (jiffies - now) / HZ);
+
         return handle;
 }
 
@@ -119,26 +154,7 @@ static inline void *fsfilt_brw_start(struct obd_device *obd, int objcount,
                                      struct niobuf_local *nb,
                                      struct obd_trans_info *oti)
 {
-        unsigned long now = jiffies;
-        void *parent_handle = oti ? oti->oti_handle : NULL;
-        void *handle;
-
-        handle = obd->obd_fsops->fs_brw_start(objcount, fso, niocount, nb,
-                                              parent_handle);
-        CDEBUG(D_HA, "started handle %p (%p)\n", handle, parent_handle);
-
-        if (oti != NULL) {
-                if (parent_handle == NULL) {
-                        oti->oti_handle = handle;
-                } else if (handle != parent_handle) {
-                        CERROR("mismatch: parent %p, handle %p, oti %p\n",
-                               parent_handle, handle, oti->oti_handle);
-                        LBUG();
-                }
-        }
-        if (time_after(jiffies, now + 15 * HZ))
-                CERROR("long journal start time %lus\n", (jiffies - now) / HZ);
-        return handle;
+        return fsfilt_brw_start_log(obd, objcount, fso, niocount, nb, oti, 0);
 }
 
 static inline int fsfilt_commit(struct obd_device *obd, struct inode *inode,
@@ -146,27 +162,30 @@ static inline int fsfilt_commit(struct obd_device *obd, struct inode *inode,
 {
         unsigned long now = jiffies;
         int rc = obd->obd_fsops->fs_commit(inode, handle, force_sync);
-        CDEBUG(D_INFO, "committing handle %p\n", handle);
+        CDEBUG(D_HA, "committing handle %p\n", handle);
+
         if (time_after(jiffies, now + 15 * HZ))
                 CERROR("long journal start time %lus\n", (jiffies - now) / HZ);
+
         return rc;
 }
 
 static inline int fsfilt_commit_async(struct obd_device *obd,
-                                         struct inode *inode,
-                                         void *handle,
-                                         void **wait_handle)
+                                      struct inode *inode, void *handle,
+                                      void **wait_handle)
 {
         unsigned long now = jiffies;
         int rc = obd->obd_fsops->fs_commit_async(inode, handle, wait_handle);
+
         CDEBUG(D_HA, "committing handle %p (async)\n", *wait_handle);
         if (time_after(jiffies, now + 15 * HZ))
                 CERROR("long journal start time %lus\n", (jiffies - now) / HZ);
+
         return rc;
 }
 
-static inline int fsfilt_commit_wait(struct obd_device *obd, struct inode *inode,
-                                        void *handle)
+static inline int fsfilt_commit_wait(struct obd_device *obd,
+                                     struct inode *inode, void *handle)
 {
         unsigned long now = jiffies;
         int rc = obd->obd_fsops->fs_commit_wait(inode, handle);
@@ -217,8 +236,8 @@ static inline int fsfilt_add_journal_cb(struct obd_device *obd, __u64 last_rcvd,
                                         void *handle, fsfilt_cb_t cb_func,
                                         void *cb_data)
 {
-        return obd->obd_fsops->fs_add_journal_cb(obd, last_rcvd, handle,
-                                                 cb_func, cb_data);
+        return obd->obd_fsops->fs_add_journal_cb(obd, last_rcvd,
+                                                 handle, cb_func, cb_data);
 }
 
 /* very similar to obd_statfs(), but caller already holds obd_osfs_lock */
