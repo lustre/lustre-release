@@ -780,34 +780,16 @@ class Module:
         msg = string.join(map(str,args))
         print self.module_name + ":", self.name, self.uuid, msg
 
-    def lookup_server(self, srv_uuid):
-        """ Lookup a server's network information """
-        net = self.db.get_ost_net(srv_uuid)
-        if not net:
-            panic ("Unable to find a server for:", srv_uuid)
-        self._server = Network(net)
-
-    def get_server(self):
-        return self._server
-
     def cleanup(self):
         """ default cleanup, used for most modules """
         self.info()
-        srv = self.get_server()
-        if srv and local_net(srv):
-            try:
-                lctl.disconnect(srv.net_type, srv.nid, srv.port, srv.uuid)
-            except CommandError, e:
-                log(self.module_name, "disconnect failed: ", self.name)
-                e.dump()
-                cleanup_error(e.rc)
         try:
             lctl.cleanup(self.name, self.uuid)
         except CommandError, e:
             log(self.module_name, "cleanup failed: ", self.name)
             e.dump()
             cleanup_error(e.rc)
-
+            
     def add_portals_module(self, dev_dir, modname):
         """Append a module to list of modules to load."""
         self.kmodule_list.append((config.portals_dir(), dev_dir, modname))
@@ -886,7 +868,7 @@ class Network(Module):
             if not self.nid:
                 panic("unable to set nid for", self.net_type, self.hostaddr)
             debug("hostaddr:", self.hostaddr)
-        debug ( "hostaddr ", self.hostaddr, "net_type", self.net_type)
+        # debug ( "hostaddr ", self.hostaddr, "net_type", self.net_type)
 
         self.add_portals_module("linux/oslib", 'portals')
         if node_needs_router():
@@ -1182,43 +1164,56 @@ class Client(Module):
         self.lookup_server(self.tgt_dev_uuid)
         self.add_lustre_module(module, module)
 
+    def lookup_server(self, srv_uuid):
+        """ Lookup a server's network information """
+        self._server_nets = self.db.get_ost_net(srv_uuid)
+        if len(self._server_nets) == 0:
+            panic ("Unable to find a server for:", srv_uuid)
+
+    def get_servers(self):
+        return self._server_nets
+
     def prepare(self, ignore_connect_failure = 0):
         if is_prepared(self.uuid):
             return
         self.info(self.target_uuid)
-        srv = self.get_server()
         try:
-            if local_net(srv):
-                #debug("LOCAL NET")
+            srv = local_net(self.get_servers())
+            if srv:
                 lctl.connect(srv)
             else:
-                #debug("NOT LOCAL NET")
-                r =  find_route(srv)
-                if r:
+                srv, r =  find_route(self.get_servers())
+                if srv:
                     lctl.add_route_host(r[0], srv.uuid, r[1], r[2])
                 else:
-                    panic ("no route to",  srv.hostaddr)
+                    panic ("no route to",  self.target_uuid)
         except CommandError:
             if (ignore_connect_failure == 0):
                 pass
-        lctl.newdev(attach="%s %s %s" % (self.module, self.name, self.uuid),
+        if srv:
+            lctl.newdev(attach="%s %s %s" % (self.module, self.name, self.uuid),
                         setup ="%s %s" %(self.target_uuid, srv.uuid))
 
     def cleanup(self):
-        srv = self.get_server()
-        if local_net(srv):
-            Module.cleanup(self)
+        Module.cleanup(self)
+        srv = local_net(self.get_servers())
+        if srv:
+            try:
+                lctl.disconnect(srv.net_type, srv.nid, srv.port, srv.uuid)
+            except CommandError, e:
+                log(self.module_name, "disconnect failed: ", self.name)
+                e.dump()
+                cleanup_error(e.rc)
         else:
             self.info(self.targt_uuid)
-            r =  find_route(srv)
-            if r:
+            srv, r =  find_route(self.get_servers())
+            if srv:
                 try:
                     lctl.del_route_host(r[0], srv.uuid, r[1], r[2])
                 except CommandError, e:
                     print "del_route failed: ", self.name
                     e.dump()
                     cleanup_error(e.rc)
-            Module.cleanup(self)
 
 
 
@@ -1412,12 +1407,15 @@ class LustreDB:
         uuids = self._get_all_refs()
         return uuids
 
-    def get_ost_net(self, uuid):
-        ost = self.lookup(uuid)
-        uuid = ost.get_first_ref('network')
-        if not uuid:
-            return None
-        return ost.lookup(uuid)
+    def get_ost_net(self, osd_uuid):
+        srv_list = []
+        osd = self.lookup(osd_uuid)
+        node_uuid = osd.get_first_ref('node')
+        node = self.lookup(node_uuid)
+        for net_uuid in node.get_networks():
+            db = node.lookup(net_uuid)
+            srv_list.append(Network(db))
+        return srv_list
 
     def nid2server(self, nid, net_type):
         netlist = self.lookup_class('network')
@@ -1496,7 +1494,7 @@ class LustreDB:
         for prof_uuid in prof_list:
             prof_db = self.lookup(prof_uuid)
             net_list = prof_db.get_refs('network')
-            debug("get_networks():", prof_uuid, net_list)
+            #debug("get_networks():", prof_uuid, net_list)
             for net_uuid in net_list:
                 ret.append(net_uuid)
         return ret
@@ -1833,25 +1831,27 @@ def init_route_config(lustre):
     #debug("init_route_config routes:", routes)
 
 
-def local_net(net):
+def local_net(srv_list):
     global local_node
     for iface in local_node:
-        #debug("local_net a:", net.net_type, "b:", iface[0])
-        if net.net_type == iface[0]:
-            return 1
-    return 0
+        for srv in srv_list:
+            #debug("local_net a:", srv.net_type, "b:", iface[0])
+            if srv.net_type == iface[0]:
+                return srv
+    return None
 
-def find_route(net):
+def find_route(srv_list):
     global local_node, routes
     frm_type = local_node[0][0]
-    to_type = net.net_type
-    to = net.hostaddr
-    debug ('looking for route to', to_type,to)
-    for r in routes:
-        #debug("find_route: ", r)
-        if  r[2] == to:
-            return r
-    return None
+    for srv in srv_list:
+        to_type = srv.net_type
+        to = srv.hostaddr
+        debug ('looking for route to', to_type, to)
+        for r in routes:
+            #debug("find_route: ", r)
+            if  r[2] == to:
+                return srv, r
+    return None,None
            
 
 ############################################################
