@@ -156,6 +156,11 @@ struct osc_obd {
         struct ptlrpc_connection *osc_conn;
 };
 
+struct lov_obd {
+        int lov_count;
+        struct obd_conn *lov_targets;
+};
+
 /* corresponds to one of the obd's */
 #define MAX_MULTI       16
 struct obd_device {
@@ -186,6 +191,7 @@ struct obd_device {
                 struct echo_obd echo;
                 struct recovd_obd recovd;
                 struct trace_obd trace;
+                struct lov_obd lov;
 #if 0
                 struct raid1_obd raid1;
                 struct snap_obd snap;
@@ -236,11 +242,11 @@ struct obd_ops {
                          obd_id *startid, obd_gr group, void *data);
         int (*o_preprw)(int cmd, struct obd_conn *conn,
                         int objcount, struct obd_ioobj *obj,
-                        int niocount, struct niobuf *nb,
-                        struct niobuf *res);
+                        int niocount, struct niobuf_remote *remote,
+                        struct niobuf_local *local);
         int (*o_commitrw)(int cmd, struct obd_conn *conn,
                           int objcount, struct obd_ioobj *obj,
-                          int niocount, struct niobuf *res);
+                          int niocount, struct niobuf_local *local);
         int (*o_enqueue)(struct obd_conn *conn, struct ldlm_namespace *ns,
                          struct ldlm_handle *parent_lock, __u64 *res_id,
                          __u32 type, struct ldlm_extent *, __u32 mode,

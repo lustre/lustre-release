@@ -66,10 +66,10 @@ static int echo_getattr(struct obd_conn *conn, struct obdo *oa)
 }
 
 int echo_preprw(int cmd, struct obd_conn *conn, int objcount,
-                struct obd_ioobj *obj, int niocount, struct niobuf *nb,
-                struct niobuf *res)
+                struct obd_ioobj *obj, int niocount, struct niobuf_remote *nb,
+                struct niobuf_local *res)
 {
-        struct niobuf *r = res;
+        struct niobuf_local *r = res;
         int rc = 0;
         int i;
 
@@ -91,9 +91,7 @@ int echo_preprw(int cmd, struct obd_conn *conn, int objcount,
                                 CERROR("can't get new page %d/%d for id %Ld\n",
                                        j, obj->ioo_bufcnt,
                                        (unsigned long long)obj->ioo_id);
-                                rc = -ENOMEM;
-                                EXIT;
-                                goto preprw_cleanup;
+                                GOTO(preprw_cleanup, rc = -ENOMEM);
                         }
                         echo_pages++;
 
@@ -117,8 +115,7 @@ int echo_preprw(int cmd, struct obd_conn *conn, int objcount,
         }
         CDEBUG(D_PAGE, "%ld pages allocated after prep\n", echo_pages);
 
-        EXIT;
-        return 0;
+        RETURN(0);
 
 preprw_cleanup:
         /* It is possible that we would rather handle errors by  allow
@@ -139,12 +136,11 @@ preprw_cleanup:
 }
 
 int echo_commitrw(int cmd, struct obd_conn *conn, int objcount,
-                  struct obd_ioobj *obj, int niocount, struct niobuf *res)
+                  struct obd_ioobj *obj, int niocount, struct niobuf_local *res)
 {
-        struct niobuf *r = res;
+        struct niobuf_local *r = res;
         int rc = 0;
         int i;
-
         ENTRY;
 
         CDEBUG(D_PAGE, "%s %d obdos with %d IOs\n",
@@ -152,8 +148,7 @@ int echo_commitrw(int cmd, struct obd_conn *conn, int objcount,
 
         if (niocount && !r) {
                 CERROR("NULL res niobuf with niocount %d\n", niocount);
-                EXIT;
-                return -EINVAL;
+                RETURN(-EINVAL);
         }
 
         for (i = 0; i < objcount; i++, obj++) {
@@ -167,9 +162,7 @@ int echo_commitrw(int cmd, struct obd_conn *conn, int objcount,
                                 CERROR("bad page %p, id %Ld (%d), buf %d/%d\n",
                                        page, (unsigned long long)obj->ioo_id, i,
                                        j, obj->ioo_bufcnt);
-                                rc = -EFAULT;
-                                EXIT;
-                                goto commitrw_cleanup;
+                                GOTO(commitrw_cleanup, rc = -EFAULT);
                         }
 
                         free_pages(addr, 0);
@@ -177,8 +170,7 @@ int echo_commitrw(int cmd, struct obd_conn *conn, int objcount,
                 }
         }
         CDEBUG(D_PAGE, "%ld pages remain after commit\n", echo_pages);
-        EXIT;
-        return 0;
+        RETURN(0);
 
 commitrw_cleanup:
         CERROR("cleaning up %ld pages (%d obdos)\n",

@@ -180,7 +180,7 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
  out:
         ptlrpc_free_req(request);
         return inode;
-} /* ll_new_inode */
+}
 
 int ll_mdc_unlink(struct inode *dir, struct inode *child,
                   const char *name, int len)

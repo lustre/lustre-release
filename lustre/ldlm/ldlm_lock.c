@@ -276,7 +276,8 @@ int ldlm_local_lock_match(struct ldlm_namespace *ns, __u64 *res_id, __u32 type,
         return rc;
 }
 
-/* Must be called without the resource lock held. */
+/* Must be called without the resource lock held.  Returns a referenced,
+ * unlocked ldlm_lock. */
 ldlm_error_t ldlm_local_lock_create(struct ldlm_namespace *ns,
                                     struct ldlm_handle *parent_lock_handle,
                                     __u64 *res_id, __u32 type,

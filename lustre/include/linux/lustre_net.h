@@ -176,22 +176,31 @@ struct ptlrpc_request {
         struct ptlrpc_client *rq_client;
 };
 
-struct ptlrpc_bulk_desc {
-        int b_flags;
-        struct ptlrpc_connection *b_connection;
-        __u32 b_portal;
+struct ptlrpc_bulk_page {
+        struct ptlrpc_bulk_desc *b_desc;
+        struct list_head b_link;
         char *b_buf;
         int b_buflen;
-        int (*b_cb)(struct ptlrpc_bulk_desc *, void *);
         struct page *b_page;
-        struct obd_conn b_conn;
         __u32 b_xid;
-
-        wait_queue_head_t b_waitq;
+        int (*b_cb)(struct ptlrpc_bulk_page *);
 
         ptl_md_t b_md;
         ptl_handle_md_t b_md_h;
         ptl_handle_me_t b_me_h;
+};
+
+struct ptlrpc_bulk_desc {
+        int b_flags;
+        struct ptlrpc_connection *b_connection;
+        __u32 b_portal;
+        int (*b_cb)(struct ptlrpc_bulk_desc *);
+        struct obd_conn b_conn;
+
+        wait_queue_head_t b_waitq;
+        struct list_head b_page_list;
+        __u32 b_page_count;
+        __u32 b_finished_count;
 };
 
 struct ptlrpc_thread {
@@ -245,8 +254,7 @@ void ptlrpc_init_connection(void);
 void ptlrpc_cleanup_connection(void);
 
 /* rpc/niobuf.c */
-int ptlrpc_check_bulk_sent(struct ptlrpc_bulk_desc *);
-int ptlrpc_send_bulk(struct ptlrpc_bulk_desc *, int portal);
+int ptlrpc_send_bulk(struct ptlrpc_bulk_desc *);
 int ptlrpc_register_bulk(struct ptlrpc_bulk_desc *);
 int ptlrpc_abort_bulk(struct ptlrpc_bulk_desc *bulk);
 int ptlrpc_reply(struct ptlrpc_service *svc, struct ptlrpc_request *req);
@@ -272,10 +280,12 @@ void ptlrpc_restart_req(struct ptlrpc_request *req);
 struct ptlrpc_request *ptlrpc_prep_req(struct ptlrpc_client *cl,
                                        struct ptlrpc_connection *u, int opcode,
                                        int count, int *lengths, char **bufs);
-void ptlrpc_free_bulk(struct ptlrpc_bulk_desc *bulk);
 void ptlrpc_free_req(struct ptlrpc_request *request);
 void ptlrpc_req_finished(struct ptlrpc_request *request);
 struct ptlrpc_bulk_desc *ptlrpc_prep_bulk(struct ptlrpc_connection *);
+void ptlrpc_free_bulk(struct ptlrpc_bulk_desc *bulk);
+struct ptlrpc_bulk_page *ptlrpc_prep_bulk_page(struct ptlrpc_bulk_desc *desc);
+void ptlrpc_free_bulk_page(struct ptlrpc_bulk_page *page);
 int ptlrpc_check_status(struct ptlrpc_request *req, int err);
 
 /* rpc/service.c */

@@ -23,16 +23,16 @@
 
 #ifndef __LUSTRE_IDL_H__
 #define __LUSTRE_IDL_H__
-#ifdef __KERNEL__
-#include <linux/ioctl.h>
-#include <asm/types.h>
 
-#include <linux/types.h>
+#ifdef __KERNEL__
+# include <linux/ioctl.h>
+# include <asm/types.h>
+# include <linux/types.h>
 #else
-#define __KERNEL__
-#include <linux/list.h>
-#undef __KERNEL__
-#include <stdint.h>
+# define __KERNEL__
+# include <linux/list.h>
+# undef __KERNEL__
+# include <stdint.h>
 #endif
 /*
  * this file contains all data structures used in Lustre interfaces:
@@ -59,6 +59,21 @@ struct lustre_msg {
         __u32   connid;
         __u32   bufcount;
         __u32   buflens[0];
+};
+
+struct niobuf_remote {
+        __u64 offset;
+        __u32 len;
+        __u32 xid;
+        __u32 flags;
+};
+
+struct niobuf_local {
+        __u64 addr;
+        __u64 offset;
+        __u32 len;
+        __u32 xid;
+        void *page;
 };
 
 /*
@@ -184,15 +199,6 @@ struct ll_fid {
         __u64 id;
         __u32 generation;
         __u32 f_type;
-};
-
-struct niobuf {
-        __u64 addr;
-        __u64 offset;
-        __u32 len;
-        __u32 flags;
-        __u32 xid;
-        void *page;
 };
 
 struct mds_body {

@@ -13,10 +13,10 @@ setup_lustre
 echo -n "Hit return to continue..."
 read
 
-new_fs ext2 /tmp/ost 10000
+new_fs ext2 /tmp/ost 10001
 OST=$LOOPDEV
 MDSFS=ext3
-new_fs ${MDSFS} /tmp/mds 10000
+new_fs ${MDSFS} /tmp/mds 10001
 MDS=$LOOPDEV
 
 echo 0xffffffff > /proc/sys/portals/debug

@@ -10,15 +10,8 @@
  *
  */
 
-#include <linux/mm.h>
-#include <linux/pagemap.h>
-#include <linux/fs.h>
-#include <linux/sched.h>
-#include <asm/uaccess.h>
-
 #define DEBUG_SUBSYSTEM S_CLASS
 
-#include <linux/obd_support.h>
 #include <linux/obd_class.h>
 
 extern struct obd_device obd_dev[MAX_OBD_DEVICES];
@@ -33,17 +26,14 @@ int obd_init_obdo_cache(void)
                                                 sizeof(struct obdo),
                                                 0, SLAB_HWCACHE_ALIGN,
                                                 NULL, NULL);
-                if (obdo_cachep == NULL) {
-                        EXIT;
-                        return -ENOMEM;
-                } else {
+                if (obdo_cachep == NULL)
+                        RETURN(-ENOMEM);
+                else
                         CDEBUG(D_CACHE, "allocated cache at %p\n", obdo_cachep);
-                }
         } else {
                 CDEBUG(D_CACHE, "using existing cache at %p\n", obdo_cachep);
         }
-        EXIT;
-        return 0;
+        RETURN(0);
 }
 
 void obd_cleanup_obdo_cache(void)
@@ -75,16 +65,16 @@ struct obd_client *gen_client(const struct obd_conn *conn)
         lh = next = &obddev->obd_gen_clients;
         while ((lh = lh->next) != &obddev->obd_gen_clients) {
                 cli = list_entry(lh, struct obd_client, cli_chain);
-                
+
                 if (cli->cli_id == conn->oc_id)
                         return cli;
         }
 
         return NULL;
-} /* obd_client */
+} /* gen_client */
 
 
-/* a connection defines a context in which preallocation can be managed. */ 
+/* a connection defines a context in which preallocation can be managed. */
 int gen_connect (struct obd_conn *conn)
 {
         struct obd_client * cli;
@@ -105,7 +95,7 @@ int gen_connect (struct obd_conn *conn)
         CDEBUG(D_INFO, "connect: new ID %u\n", cli->cli_id);
         conn->oc_id = cli->cli_id;
         return 0;
-} /* gen_obd_connect */
+} /* gen_connect */
 
 
 int gen_disconnect(struct obd_conn *conn)
@@ -116,7 +106,7 @@ int gen_disconnect(struct obd_conn *conn)
         if (!(cli = gen_client(conn))) {
                 CDEBUG(D_IOCTL, "disconnect: attempting to free "
                        "nonexistent client %u\n", conn->oc_id);
-                return -EINVAL;
+                RETURN(-EINVAL);
         }
 
 
@@ -125,58 +115,49 @@ int gen_disconnect(struct obd_conn *conn)
 
         CDEBUG(D_INFO, "disconnect: ID %u\n", conn->oc_id);
 
-        EXIT;
-        return 0;
+        RETURN(0);
 } /* gen_obd_disconnect */
 
-
-/* 
- *   raid1 defines a number of connections to child devices,
- *   used to make calls to these devices.
- *   data holds nothing
- */ 
+/* FIXME: Data is a space- or comma-separated list of device IDs.  This will
+ * have to change. */
 int gen_multi_setup(struct obd_device *obddev, uint32_t len, void *data)
 {
-        int i;
+        int count, rc;
+        char *p;
+        ENTRY;
 
-        for (i = 0 ; i < obddev->obd_multi_count ; i++ ) {
-                int rc;
-                struct obd_conn *ch_conn = &obddev->obd_multi_conn[i];
-                rc  = OBP(ch_conn->oc_dev, connect)(ch_conn);
+        for (p = data, count = 0; p < (char *)data + len; count++) {
+                char *end;
+                int tmp = simple_strtoul(p, &end, 0);
 
-                if ( rc != 0 ) {
-                        int j;
-
-                        for (j = --i; j >= 0; --j) {
-                                ch_conn = &obddev->obd_multi_conn[i];
-                                OBP(ch_conn->oc_dev, disconnect)(ch_conn);
-                        }
-                        return -EINVAL;
+                if (p == end) {
+                        CERROR("invalid device ID starting at: %s\n", p);
+                        GOTO(err_disconnect, rc = -EINVAL);
                 }
-        }               
-        return 0;
-}
 
+                obddev->obd_multi_conn[count].oc_dev = &obd_dev[tmp];
+                rc = obd_connect(&obddev->obd_multi_conn[count]);
+                if (rc) {
+                        CERROR("cannot connect to device %d: rc = %d\n", tmp,
+                               rc);
+                        GOTO(err_disconnect, rc);
+                }
 
-#if 0
-int gen_multi_attach(struct obd_device *obddev, int len, void *data)
-{
-        int i;
-        int count;
-        struct obd_device *rdev = obddev->obd_multi_dev[0];
+                CDEBUG(D_INFO, "target OBD %d is of type %s\n", count,
+                       obd_dev[tmp].obd_type->typ_name);
 
-        count = len/sizeof(int);
-        obddev->obd_multi_count = count;
-        for (i=0 ; i<count ; i++) {
-                rdev = &obd_dev[*((int *)data + i)];
-                rdev = rdev + 1;
-                CDEBUG(D_INFO, "OBD RAID1: replicator %d is of type %s\n", i,
-                       (rdev + i)->obd_type->typ_name);
+                p = end + 1;
         }
-        return 0;
-}
-#endif
 
+        obddev->obd_multi_count = count;
+
+        RETURN(0);
+
+ err_disconnect:
+        for (count--; count >= 0; count--)
+                obd_disconnect(&obddev->obd_multi_conn[count]);
+        return rc;
+}
 
 /*
  *    remove all connections to this device
@@ -187,18 +168,14 @@ int gen_multi_cleanup(struct obd_device *obddev)
 {
         int i;
 
-        for (i = 0 ; i < obddev->obd_multi_count ; i++ ) {
-                struct obd_conn *ch_conn = &obddev->obd_multi_conn[i];
-                int rc;
-                rc  = OBP(ch_conn->oc_dev, disconnect)(ch_conn);
-
-                if ( rc != 0 ) {
+        for (i = 0; i < obddev->obd_multi_count; i++) {
+                int rc = obd_disconnect(&obddev->obd_multi_conn[i]);
+                if (rc)
                         CERROR("disconnect failure %d\n",
-                               ch_conn->oc_dev->obd_minor);
-                }
-        }               
+                               obddev->obd_multi_conn[i].oc_dev->obd_minor);
+        }
         return 0;
-} /* gen_multi_cleanup_device */
+}
 
 
 /*
@@ -254,17 +231,15 @@ int gen_copy_data(struct obd_conn *dst_conn, struct obdo *dst,
         int err = 0;
 
         ENTRY;
-        CDEBUG(D_INFO, "src: ino %Ld blocks %Ld, size %Ld, dst: ino %Ld\n", 
+        CDEBUG(D_INFO, "src: ino %Ld blocks %Ld, size %Ld, dst: ino %Ld\n",
                (unsigned long long)src->o_id, (unsigned long long)src->o_blocks,
                (unsigned long long)src->o_size, (unsigned long long)dst->o_id);
         page = alloc_page(GFP_USER);
-        if ( !page ) {
-                EXIT;
-                return -ENOMEM;
-        }
-        
+        if (page == NULL)
+                RETURN(-ENOMEM);
+
         lck_page(page);
-        
+
         /* XXX with brw vector I/O, we could batch up reads and writes here,
          *     all we need to do is allocate multiple pages to handle the I/Os
          *     and arrays to handle the request parameters.
@@ -276,7 +251,7 @@ int gen_copy_data(struct obd_conn *dst_conn, struct obdo *dst,
                 obd_off          brw_offset = (page->index) << PAGE_SHIFT;
                 obd_flag         flagr = 0;
                 obd_flag         flagw = OBD_BRW_CREATE;
-                
+
                 page->index = index;
                 err = OBP(src_conn->oc_dev, brw)(READ, src_conn, num_oa, &src,
                                                  &num_buf, &page, &brw_count,
@@ -299,7 +274,7 @@ int gen_copy_data(struct obd_conn *dst_conn, struct obdo *dst,
                 }
 
                 CDEBUG(D_INFO, "Wrote page %ld ...\n", page->index);
-                
+
                 index++;
         }
         dst->o_size = src->o_size;
@@ -308,6 +283,5 @@ int gen_copy_data(struct obd_conn *dst_conn, struct obdo *dst,
         UnlockPage(page);
         __free_page(page);
 
-        EXIT;
-        return err;
+        RETURN(err);
 }

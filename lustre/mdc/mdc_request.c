@@ -181,36 +181,32 @@ int mdc_readpage(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
                  struct ptlrpc_request **request)
 {
         struct ptlrpc_request *req = NULL;
-        struct ptlrpc_bulk_desc *bulk = NULL;
-        struct niobuf niobuf;
+        struct ptlrpc_bulk_desc *desc = NULL;
+        struct ptlrpc_bulk_page *bulk = NULL;
         struct mds_body *body;
-        int rc, size[2] = {sizeof(*body), sizeof(struct niobuf)};
-        char *bufs[2] = {NULL, (char *)&niobuf};
-
-        niobuf.addr = (__u64) (long) addr;
+        int rc, size = sizeof(*body);
+        ENTRY;
 
         CDEBUG(D_INODE, "inode: %ld\n", (long)ino);
 
-        bulk = ptlrpc_prep_bulk(conn);
-        if (bulk == NULL) {
-                CERROR("%s: cannot init bulk desc\n", __FUNCTION__);
-                rc = -ENOMEM;
-                goto out;
-        }
-
-        req = ptlrpc_prep_req(cl, conn, MDS_READPAGE, 2, size, bufs);
-        if (!req)
+        desc = ptlrpc_prep_bulk(conn);
+        if (desc == NULL)
                 GOTO(out, rc = -ENOMEM);
 
-        bulk->b_buflen = PAGE_SIZE;
-        bulk->b_buf = (void *)(long)niobuf.addr;
-        bulk->b_portal = MDS_BULK_PORTAL;
-        bulk->b_xid = req->rq_reqmsg->xid;
+        req = ptlrpc_prep_req(cl, conn, MDS_READPAGE, 1, &size, NULL);
+        if (!req)
+                GOTO(out2, rc = -ENOMEM);
 
-        rc = ptlrpc_register_bulk(bulk);
+        bulk = ptlrpc_prep_bulk_page(desc);
+        bulk->b_buflen = PAGE_SIZE;
+        bulk->b_buf = addr;
+        bulk->b_xid = req->rq_reqmsg->xid;
+        desc->b_portal = MDS_BULK_PORTAL;
+
+        rc = ptlrpc_register_bulk(desc);
         if (rc) {
                 CERROR("couldn't setup bulk sink: error %d.\n", rc);
-                GOTO(out, rc);
+                GOTO(out2, rc);
         }
 
         body = lustre_msg_buf(req->rq_reqmsg, 0);
@@ -218,21 +214,20 @@ int mdc_readpage(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
         body->fid1.f_type = type;
         body->size = offset;
 
-        req->rq_replen = lustre_msg_size(1, size);
+        req->rq_replen = lustre_msg_size(1, &size);
         req->rq_level = LUSTRE_CONN_FULL;
         rc = ptlrpc_queue_wait(req);
         if (rc) {
                 CERROR("error in handling %d\n", rc);
-                ptlrpc_abort_bulk(bulk);
-                GOTO(out, rc);
-        }
+                ptlrpc_abort_bulk(desc);
+        } else
+                mds_unpack_rep_body(req);
 
-        mds_unpack_rep_body(req);
         EXIT;
-
+ out2:
+        ptlrpc_free_bulk(desc);
  out:
         *request = req;
-        ptlrpc_free_bulk(bulk);
         return rc;
 }
 

@@ -22,53 +22,45 @@
 #include <linux/module.h>
 #include <linux/lustre_mds.h>
 
-int mds_sendpage(struct ptlrpc_request *req, struct file *file,
-                 __u64 offset, struct niobuf *dst)
+int mds_sendpage(struct ptlrpc_request *req, struct file *file, __u64 offset)
 {
         int rc = 0;
         mm_segment_t oldfs = get_fs();
-        struct ptlrpc_bulk_desc *bulk;
+        struct ptlrpc_bulk_desc *desc;
+        struct ptlrpc_bulk_page *bulk;
         char *buf;
+        ENTRY;
 
-        bulk = ptlrpc_prep_bulk(req->rq_connection);
-        if (bulk == NULL) {
-                rc = -ENOMEM;
-                GOTO(out, rc);
-        }
+        desc = ptlrpc_prep_bulk(req->rq_connection);
+        if (desc == NULL)
+                GOTO(out, rc = -ENOMEM);
 
-        bulk->b_xid = req->rq_reqmsg->xid;
+        bulk = ptlrpc_prep_bulk_page(desc);
+        if (bulk == NULL)
+                GOTO(cleanup_bulk, rc = -ENOMEM);
 
         OBD_ALLOC(buf, PAGE_SIZE);
-        if (!buf) {
-                rc = -ENOMEM;
-                GOTO(cleanup_bulk, rc);
-        }
+        if (buf == NULL)
+                GOTO(cleanup_bulk, rc = -ENOMEM);
 
         set_fs(KERNEL_DS);
         rc = mds_fs_readpage(&req->rq_obd->u.mds, file, buf, PAGE_SIZE,
                              (loff_t *)&offset);
         set_fs(oldfs);
 
-        if (rc != PAGE_SIZE) {
-                rc = -EIO;
-                GOTO(cleanup_buf, rc);
-        }
+        if (rc != PAGE_SIZE)
+                GOTO(cleanup_buf, rc = -EIO);
 
+        bulk->b_xid = req->rq_reqmsg->xid;
         bulk->b_buf = buf;
         bulk->b_buflen = PAGE_SIZE;
+        desc->b_portal = MDS_BULK_PORTAL;
 
-        rc = ptlrpc_send_bulk(bulk, MDS_BULK_PORTAL);
+        rc = ptlrpc_send_bulk(desc);
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_SENDPAGE)) {
                 CERROR("obd_fail_loc=%x, fail operation rc=%d\n",
                        OBD_FAIL_MDS_SENDPAGE, rc);
-                PtlMDUnlink(bulk->b_md_h);
-                GOTO(cleanup_buf, rc);
-        }
-        wait_event_interruptible(bulk->b_waitq,
-                                 ptlrpc_check_bulk_sent(bulk));
-
-        if (bulk->b_flags & PTL_RPC_FL_INTR) {
-                rc = -EINTR;
+                ptlrpc_abort_bulk(desc);
                 GOTO(cleanup_buf, rc);
         }
 
@@ -76,7 +68,7 @@ int mds_sendpage(struct ptlrpc_request *req, struct file *file,
  cleanup_buf:
         OBD_FREE(buf, PAGE_SIZE);
  cleanup_bulk:
-        ptlrpc_free_bulk(bulk);
+        ptlrpc_free_bulk(desc);
  out:
         return rc;
 }
@@ -462,7 +454,6 @@ int mds_readpage(struct ptlrpc_request *req)
         struct vfsmount *mnt;
         struct dentry *de;
         struct file *file;
-        struct niobuf *niobuf;
         struct mds_body *body;
         int rc, size = sizeof(*body);
         ENTRY;
@@ -490,17 +481,10 @@ int mds_readpage(struct ptlrpc_request *req)
                 RETURN(0);
         }
 
-        niobuf = lustre_msg_buf(req->rq_reqmsg, 1);
-        if (!niobuf) {
-                req->rq_status = -EINVAL;
-                LBUG();
-                RETURN(0);
-        }
-
         /* to make this asynchronous make sure that the handling function
            doesn't send a reply when this function completes. Instead a
            callback function would send the reply */
-        rc = mds_sendpage(req, file, body->size, niobuf);
+        rc = mds_sendpage(req, file, body->size);
 
         filp_close(file, 0);
         req->rq_status = rc;

@@ -20,7 +20,7 @@ extern struct file_operations *obd_fso;
 /* ext2_obd.c */
 extern struct obd_ops ext2_obd_ops;
 
-
+#include <linux/fs.h>
 #include <linux/ext2_fs.h>
 
 /* super.c */

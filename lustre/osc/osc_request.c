@@ -348,131 +348,116 @@ static int osc_destroy(struct obd_conn *conn, struct obdo *oa)
         return 0;
 }
 
-int osc_sendpage(struct obd_conn *conn, struct ptlrpc_request *req,
-                 struct niobuf *dst, struct niobuf *src)
+static int osc_sendpage(struct ptlrpc_bulk_desc *desc,
+                        struct niobuf_remote *dst, struct niobuf_local *src)
 {
-        struct ptlrpc_client *cl;
-        struct ptlrpc_connection *connection;
-        struct ptlrpc_bulk_desc *bulk;
-        int rc;
+        struct ptlrpc_bulk_page *page;
         ENTRY;
 
-        osc_con2cl(conn, &cl, &connection);
-
-        bulk = ptlrpc_prep_bulk(connection);
-        if (bulk == NULL)
+        page = ptlrpc_prep_bulk_page(desc);
+        if (page == NULL)
                 RETURN(-ENOMEM);
 
-        bulk->b_buf = (void *)(unsigned long)src->addr;
-        bulk->b_buflen = src->len;
-        bulk->b_xid = dst->xid;
-        rc = ptlrpc_send_bulk(bulk, OSC_BULK_PORTAL);
-        if (rc != 0) {
-                CERROR("send_bulk failed: %d\n", rc);
-                ptlrpc_free_bulk(bulk);
-                LBUG();
-                RETURN(rc);
-        }
-        wait_event_interruptible(bulk->b_waitq, ptlrpc_check_bulk_sent(bulk));
+        page->b_buf = (void *)(unsigned long)src->addr;
+        page->b_buflen = src->len;
+        page->b_xid = dst->xid;
 
-        if (bulk->b_flags & PTL_RPC_FL_INTR) {
-                ptlrpc_free_bulk(bulk);
-                RETURN(-EINTR);
-        }
-
-        ptlrpc_free_bulk(bulk);
         RETURN(0);
 }
 
-int osc_brw_read(struct obd_conn *conn, obd_count num_oa, struct obdo **oa,
-                 obd_count *oa_bufs, struct page **buf, obd_size *count,
-                 obd_off *offset, obd_flag *flags)
+static int osc_brw_read(struct obd_conn *conn, obd_count num_oa,
+                        struct obdo **oa, obd_count *oa_bufs, struct page **buf,
+                        obd_size *count, obd_off *offset, obd_flag *flags)
 {
         struct ptlrpc_client *cl;
         struct ptlrpc_connection *connection;
         struct ptlrpc_request *request;
         struct ost_body *body;
+        struct list_head *tmp, *next;
         int pages, rc, i, j, size[3] = {sizeof(*body)};
         void *ptr1, *ptr2;
-        struct ptlrpc_bulk_desc **bulk;
+        struct ptlrpc_bulk_desc *desc;;
         ENTRY;
 
         size[1] = num_oa * sizeof(struct obd_ioobj);
         pages = 0;
         for (i = 0; i < num_oa; i++)
                 pages += oa_bufs[i];
-        size[2] = pages * sizeof(struct niobuf);
-
-        OBD_ALLOC(bulk, pages * sizeof(*bulk));
-        if (bulk == NULL)
-                RETURN(-ENOMEM);
+        size[2] = pages * sizeof(struct niobuf_remote);
 
         osc_con2cl(conn, &cl, &connection);
         request = ptlrpc_prep_req(cl, connection, OST_BRW, 3, size, NULL);
         if (!request)
-                GOTO(out, rc = -ENOMEM);
+                GOTO(out3, rc = -ENOMEM);
 
         body = lustre_msg_buf(request->rq_reqmsg, 0);
         body->data = OBD_BRW_READ;
+
+        desc = ptlrpc_prep_bulk(connection);
+        if (desc == NULL)
+                GOTO(out2, rc = -ENOMEM);
+        desc->b_portal = OST_BULK_PORTAL;
 
         ptr1 = lustre_msg_buf(request->rq_reqmsg, 1);
         ptr2 = lustre_msg_buf(request->rq_reqmsg, 2);
         for (pages = 0, i = 0; i < num_oa; i++) {
                 ost_pack_ioo(&ptr1, oa[i], oa_bufs[i]);
                 for (j = 0; j < oa_bufs[i]; j++, pages++) {
-                        bulk[pages] = ptlrpc_prep_bulk(connection);
-                        if (bulk[pages] == NULL)
+                        struct ptlrpc_bulk_page *page;
+                        page = ptlrpc_prep_bulk_page(desc);
+                        if (page == NULL)
                                 GOTO(out, rc = -ENOMEM);
 
                         spin_lock(&connection->c_lock);
-                        bulk[pages]->b_xid = ++connection->c_xid_out;
+                        page->b_xid = ++connection->c_xid_out;
                         spin_unlock(&connection->c_lock);
 
-                        bulk[pages]->b_buf = kmap(buf[pages]);
-                        bulk[pages]->b_buflen = PAGE_SIZE;
-                        bulk[pages]->b_portal = OST_BULK_PORTAL;
-                        ost_pack_niobuf(&ptr2, bulk[pages]->b_buf,
-                                        offset[pages], count[pages],
-                                        flags[pages], bulk[pages]->b_xid);
-
-                        rc = ptlrpc_register_bulk(bulk[pages]);
-                        if (rc)
-                                GOTO(out, rc);
+                        page->b_buf = kmap(buf[pages]);
+                        page->b_buflen = PAGE_SIZE;
+                        ost_pack_niobuf(&ptr2, offset[pages], count[pages],
+                                        flags[pages], page->b_xid);
                 }
         }
+
+        rc = ptlrpc_register_bulk(desc);
+        if (rc)
+                GOTO(out, rc);
 
         request->rq_replen = lustre_msg_size(1, size);
         rc = ptlrpc_queue_wait(request);
+        if (rc)
+                ptlrpc_abort_bulk(desc);
         GOTO(out, rc);
 
  out:
-        /* FIXME: if we've called ptlrpc_wait_bulk but rc != 0, we need to
-         * abort those bulk listeners. */
+        list_for_each_safe(tmp, next, &desc->b_page_list) {
+                struct ptlrpc_bulk_page *page;
+                page = list_entry(tmp, struct ptlrpc_bulk_page, b_link);
 
-        for (pages = 0, i = 0; i < num_oa; i++) {
-                for (j = 0; j < oa_bufs[i]; j++, pages++) {
-                        if (bulk[pages] == NULL)
-                                continue;
-                        kunmap(buf[pages]);
-                        ptlrpc_free_bulk(bulk[pages]);
-                }
+                if (page->b_buf != NULL)
+                        kunmap(page->b_buf);
         }
 
-        OBD_FREE(bulk, pages * sizeof(*bulk));
+        ptlrpc_free_bulk(desc);
+ out2:
         ptlrpc_free_req(request);
+ out3:
         return rc;
 }
 
-int osc_brw_write(struct obd_conn *conn, obd_count num_oa, struct obdo **oa,
-                  obd_count *oa_bufs, struct page **buf, obd_size *count,
-                  obd_off *offset, obd_flag *flags)
+static int osc_brw_write(struct obd_conn *conn, obd_count num_oa,
+                         struct obdo **oa, obd_count *oa_bufs,
+                         struct page **buf, obd_size *count, obd_off *offset,
+                         obd_flag *flags)
 {
         struct ptlrpc_client *cl;
         struct ptlrpc_connection *connection;
         struct ptlrpc_request *request;
+        struct ptlrpc_bulk_desc *desc;
         struct obd_ioobj ioo;
         struct ost_body *body;
-        struct niobuf *src;
+        struct niobuf_local *local;
+        struct niobuf_remote *remote;
         long pages;
         int rc, i, j, size[3] = {sizeof(*body)};
         void *ptr1, *ptr2;
@@ -482,16 +467,16 @@ int osc_brw_write(struct obd_conn *conn, obd_count num_oa, struct obdo **oa,
         pages = 0;
         for (i = 0; i < num_oa; i++)
                 pages += oa_bufs[i];
-        size[2] = pages * sizeof(*src);
+        size[2] = pages * sizeof(*remote);
 
-        OBD_ALLOC(src, size[2]);
-        if (!src)
+        OBD_ALLOC(local, pages * sizeof(*local));
+        if (local == NULL)
                 RETURN(-ENOMEM);
 
         osc_con2cl(conn, &cl, &connection);
         request = ptlrpc_prep_req(cl, connection, OST_BRW, 3, size, NULL);
         if (!request)
-                RETURN(-ENOMEM);
+                GOTO(out3, rc = -ENOMEM);
         body = lustre_msg_buf(request->rq_reqmsg, 0);
         body->data = OBD_BRW_WRITE;
 
@@ -500,50 +485,64 @@ int osc_brw_write(struct obd_conn *conn, obd_count num_oa, struct obdo **oa,
         for (pages = 0, i = 0; i < num_oa; i++) {
                 ost_pack_ioo(&ptr1, oa[i], oa_bufs[i]);
                 for (j = 0; j < oa_bufs[i]; j++, pages++) {
-                        ost_pack_niobuf(&ptr2, kmap(buf[pages]), offset[pages],
-                                        count[pages], flags[pages], 0);
+                        local[pages].addr = (__u64)(long)kmap(buf[pages]);
+                        local[pages].offset = offset[pages];
+                        local[pages].len = count[pages];
+                        ost_pack_niobuf(&ptr2, offset[pages], count[pages],
+                                        flags[pages], 0);
                 }
         }
-        memcpy(src, lustre_msg_buf(request->rq_reqmsg, 2), size[2]);
 
-        size[1] = pages * sizeof(struct niobuf);
+        size[1] = pages * sizeof(struct niobuf_remote);
         request->rq_replen = lustre_msg_size(2, size);
 
         rc = ptlrpc_queue_wait(request);
         if (rc)
-                GOTO(out, rc);
+                GOTO(out2, rc);
 
         ptr2 = lustre_msg_buf(request->rq_repmsg, 1);
         if (ptr2 == NULL)
-                GOTO(out, rc = -EINVAL);
+                GOTO(out2, rc = -EINVAL);
 
-        if (request->rq_repmsg->buflens[1] != pages * sizeof(struct niobuf)) {
+        if (request->rq_repmsg->buflens[1] !=
+            pages * sizeof(struct niobuf_remote)) {
                 CERROR("buffer length wrong (%d vs. %ld)\n",
                        request->rq_repmsg->buflens[1],
-                       pages * sizeof(struct niobuf));
-                GOTO(out, rc = -EINVAL);
+                       pages * sizeof(struct niobuf_remote));
+                GOTO(out2, rc = -EINVAL);
         }
+
+        desc = ptlrpc_prep_bulk(connection);
+        desc->b_portal = OSC_BULK_PORTAL;
 
         for (pages = 0, i = 0; i < num_oa; i++) {
                 for (j = 0; j < oa_bufs[i]; j++, pages++) {
-                        struct niobuf *dst;
-                        ost_unpack_niobuf(&ptr2, &dst);
-                        osc_sendpage(conn, request, dst, &src[pages]);
+                        ost_unpack_niobuf(&ptr2, &remote);
+                        rc = osc_sendpage(desc, remote, &local[pages]);
+                        if (rc)
+                                GOTO(out, rc);
                 }
         }
-        OBD_FREE(src, size[2]);
+
+        rc = ptlrpc_send_bulk(desc);
+        GOTO(out, rc);
+
  out:
+        ptlrpc_free_bulk(desc);
+ out2:
+        ptlrpc_free_req(request);
         for (pages = 0, i = 0; i < num_oa; i++)
                 for (j = 0; j < oa_bufs[i]; j++, pages++)
                         kunmap(buf[pages]);
+ out3:
+        OBD_FREE(local, pages * sizeof(*local));
 
-        ptlrpc_free_req(request);
-        return 0;
+        return rc;
 }
 
-int osc_brw(int rw, struct obd_conn *conn, obd_count num_oa,
-              struct obdo **oa, obd_count *oa_bufs, struct page **buf,
-              obd_size *count, obd_off *offset, obd_flag *flags)
+static int osc_brw(int rw, struct obd_conn *conn, obd_count num_oa,
+                   struct obdo **oa, obd_count *oa_bufs, struct page **buf,
+                   obd_size *count, obd_off *offset, obd_flag *flags)
 {
         if (rw == OBD_BRW_READ)
                 return osc_brw_read(conn, num_oa, oa, oa_bufs, buf, count,
@@ -553,10 +552,11 @@ int osc_brw(int rw, struct obd_conn *conn, obd_count num_oa,
                                      offset, flags);
 }
 
-int osc_enqueue(struct obd_conn *oconn, struct ldlm_namespace *ns,
-                struct ldlm_handle *parent_lock, __u64 *res_id, __u32 type,
-                struct ldlm_extent *extent, __u32 mode, int *flags, void *data,
-                int datalen, struct ldlm_handle *lockh)
+static int osc_enqueue(struct obd_conn *oconn, struct ldlm_namespace *ns,
+                       struct ldlm_handle *parent_lock, __u64 *res_id,
+                       __u32 type, struct ldlm_extent *extent, __u32 mode,
+                       int *flags, void *data, int datalen,
+                       struct ldlm_handle *lockh)
 {
         struct ptlrpc_connection *conn;
         struct ptlrpc_client *cl;
@@ -610,7 +610,8 @@ int osc_enqueue(struct obd_conn *oconn, struct ldlm_namespace *ns,
         return rc;
 }
 
-int osc_cancel(struct obd_conn *oconn, __u32 mode, struct ldlm_handle *lockh)
+static int osc_cancel(struct obd_conn *oconn, __u32 mode,
+                      struct ldlm_handle *lockh)
 {
         struct ldlm_lock *lock;
         ENTRY;

@@ -166,18 +166,15 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
                             loff_t *ppos)
 {
         struct inode *inode = filp->f_dentry->d_inode;
-#if 0
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct ldlm_extent extent;
         struct ldlm_handle lockh;
         __u64 res_id[RES_NAME_SIZE] = {inode->i_ino};
         int flags = 0;
         ldlm_error_t err;
-#endif
         ssize_t retval;
         ENTRY;
 
-#if 0
         extent.start = *ppos;
         extent.end = *ppos + count;
         CDEBUG(D_INFO, "Locking inode %ld, start %Lu end %Lu\n",
@@ -189,7 +186,6 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
         if (err != ELDLM_OK)
                 CERROR("lock enqueue: err: %d\n", err);
         ldlm_lock_dump((void *)(unsigned long)lockh.addr);
-#endif
 
         CDEBUG(D_INFO, "Reading inode %ld, %d bytes, offset %Ld\n",
                inode->i_ino, count, *ppos);
@@ -201,11 +197,9 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
                 ll_setattr(filp->f_dentry, &attr);
         }
 
-#if 0
         err = obd_cancel(&sbi->ll_conn, LCK_PR, &lockh);
         if (err != ELDLM_OK)
                 CERROR("lock cancel: err: %d\n", err);
-#endif
 
         RETURN(retval);
 }
@@ -217,18 +211,15 @@ static ssize_t
 ll_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 {
         struct inode *inode = file->f_dentry->d_inode;
-#if 0
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct ldlm_extent extent;
         struct ldlm_handle lockh;
         __u64 res_id[RES_NAME_SIZE] = {inode->i_ino};
         int flags = 0;
         ldlm_error_t err;
-#endif
         ssize_t retval;
         ENTRY;
 
-#if 0
         extent.start = *ppos;
         extent.end = *ppos + count;
         CDEBUG(D_INFO, "Locking inode %ld, start %Lu end %Lu\n",
@@ -240,19 +231,15 @@ ll_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
         if (err != ELDLM_OK)
                 CERROR("lock enqueue: err: %d\n", err);
         ldlm_lock_dump((void *)(unsigned long)lockh.addr);
-#endif
 
         CDEBUG(D_INFO, "Writing inode %ld, %ld bytes, offset %Ld\n",
                inode->i_ino, (long)count, *ppos);
 
         retval = generic_file_write(file, buf, count, ppos);
 
-
-#if 0
         err = obd_cancel(&sbi->ll_conn, LCK_PW, &lockh);
         if (err != ELDLM_OK)
                 CERROR("lock cancel: err: %d\n", err);
-#endif
 
         RETURN(retval);
 }

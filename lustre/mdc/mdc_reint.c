@@ -104,10 +104,11 @@ int mdc_create(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
         level = LUSTRE_CONN_FULL;
  resend:
         rc = mdc_reint(cl, req, level);
-        if (rc == -ERESTARTSYS ) { 
-                struct mds_update_record_hdr *hdr = lustre_msg_buf(req->rq_reqmsg, 0);
+        if (rc == -ERESTARTSYS) {
+                struct mds_update_record_hdr *hdr =
+                        lustre_msg_buf(req->rq_reqmsg, 0);
                 level = LUSTRE_CONN_RECOVD;
-                CERROR("Lost reply: re-create rep.\n"); 
+                CERROR("Lost reply: re-create rep.\n");
                 req->rq_flags = 0;
                 hdr->ur_opcode = NTOH__u32(REINT_RECREATE);
                 goto resend;

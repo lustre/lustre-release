@@ -308,28 +308,28 @@ static inline int obd_brw(int rw, struct obd_conn *conn, obd_count num_oa,
 
 static inline int obd_preprw(int cmd, struct obd_conn *conn,
                              int objcount, struct obd_ioobj *obj,
-                             int niocount, struct niobuf *nb,
-                             struct niobuf *res)
+                             int niocount, struct niobuf_remote *remote,
+                             struct niobuf_local *local)
 {
         int rc;
         OBD_CHECK_SETUP(conn);
         OBD_CHECK_OP(conn, preprw);
 
-        rc = OBP(conn->oc_dev, preprw)(cmd, conn, objcount, obj, niocount, nb,
-                                       res);
+        rc = OBP(conn->oc_dev, preprw)(cmd, conn, objcount, obj, niocount,
+                                       remote, local);
         RETURN(rc);
 }
 
 static inline int obd_commitrw(int cmd, struct obd_conn *conn,
                                int objcount, struct obd_ioobj *obj,
-                               int niocount, struct niobuf *res)
+                               int niocount, struct niobuf_local *local)
 {
         int rc;
         OBD_CHECK_SETUP(conn);
         OBD_CHECK_OP(conn, commitrw);
 
         rc = OBP(conn->oc_dev, commitrw)(cmd, conn, objcount, obj, niocount,
-                                         res);
+                                         local);
         RETURN(rc);
 }
 

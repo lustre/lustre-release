@@ -42,7 +42,6 @@ int ldlm_cli_enqueue(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
 
         lock = ldlm_handle2object(lockh);
 
-        spin_unlock(&lock->l_lock);
         req = ptlrpc_prep_req(cl, conn, LDLM_ENQUEUE, 2, size, bufs);
         if (!req)
                 GOTO(out, rc = -ENOMEM);

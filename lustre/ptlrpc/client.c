@@ -93,22 +93,59 @@ struct ptlrpc_bulk_desc *ptlrpc_prep_bulk(struct ptlrpc_connection *conn)
         if (bulk != NULL) {
                 bulk->b_connection = ptlrpc_connection_addref(conn);
                 init_waitqueue_head(&bulk->b_waitq);
+                INIT_LIST_HEAD(&bulk->b_page_list);
         }
 
         return bulk;
 }
 
+struct ptlrpc_bulk_page *ptlrpc_prep_bulk_page(struct ptlrpc_bulk_desc *desc)
+{
+        struct ptlrpc_bulk_page *page;
+
+        OBD_ALLOC(page, sizeof(*page));
+        if (page != NULL) {
+                page->b_desc = desc;
+                ptl_set_inv_handle(&page->b_md_h);
+                ptl_set_inv_handle(&page->b_me_h);
+                list_add(&page->b_link, &desc->b_page_list);
+                desc->b_page_count++;
+        }
+        return page;
+}
+
 void ptlrpc_free_bulk(struct ptlrpc_bulk_desc *bulk)
 {
+        struct list_head *tmp, *next;
         ENTRY;
         if (bulk == NULL) {
                 EXIT;
                 return;
         }
 
+        list_for_each_safe(tmp, next, &bulk->b_page_list) {
+                struct ptlrpc_bulk_page *page;
+                page = list_entry(tmp, struct ptlrpc_bulk_page, b_link);
+                ptlrpc_free_bulk_page(page);
+        }
+
         ptlrpc_put_connection(bulk->b_connection);
 
         OBD_FREE(bulk, sizeof(*bulk));
+        EXIT;
+}
+
+void ptlrpc_free_bulk_page(struct ptlrpc_bulk_page *page)
+{
+        ENTRY;
+        if (page == NULL) {
+                EXIT;
+                return;
+        }
+
+        list_del(&page->b_link);
+        page->b_desc->b_page_count--;
+        OBD_FREE(page, sizeof(*page));
         EXIT;
 }
 

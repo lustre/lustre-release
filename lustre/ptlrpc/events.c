@@ -133,15 +133,16 @@ int request_in_callback(ptl_event_t *ev, void *data)
 
 static int bulk_source_callback(ptl_event_t *ev, void *data)
 {
-        struct ptlrpc_bulk_desc *bulk = ev->mem_desc.user_ptr;
+        struct ptlrpc_bulk_page *bulk = ev->mem_desc.user_ptr;
+        struct ptlrpc_bulk_desc *desc = bulk->b_desc;
         ENTRY;
 
         if (ev->type == PTL_EVENT_SENT) {
                 CDEBUG(D_NET, "got SENT event\n");
         } else if (ev->type == PTL_EVENT_ACK) {
                 CDEBUG(D_NET, "got ACK event\n");
-                bulk->b_flags |= PTL_BULK_FL_SENT;
-                wake_up_interruptible(&bulk->b_waitq);
+                desc->b_flags |= PTL_BULK_FL_SENT;
+                wake_up_interruptible(&desc->b_waitq);
         } else {
                 CERROR("Unexpected event type!\n");
                 LBUG();
@@ -152,24 +153,26 @@ static int bulk_source_callback(ptl_event_t *ev, void *data)
 
 static int bulk_sink_callback(ptl_event_t *ev, void *data)
 {
-        struct ptlrpc_bulk_desc *bulk = ev->mem_desc.user_ptr;
+        struct ptlrpc_bulk_page *bulk = ev->mem_desc.user_ptr;
+        struct ptlrpc_bulk_desc *desc = bulk->b_desc;
         ENTRY;
 
         if (ev->type == PTL_EVENT_PUT) {
                 if (bulk->b_buf != ev->mem_desc.start + ev->offset)
                         CERROR("bulkbuf != mem_desc -- why?\n");
-                bulk->b_flags |= PTL_BULK_FL_RCVD;
+                desc->b_finished_count++;
+                if (desc->b_finished_count == desc->b_page_count) {
+                        desc->b_flags |= PTL_BULK_FL_RCVD;
+                        wake_up_interruptible(&desc->b_waitq);
+                        if (desc->b_cb != NULL)
+                                desc->b_cb(desc);
+                }
                 if (bulk->b_cb != NULL)
-                        bulk->b_cb(bulk, data);
-                wake_up_interruptible(&bulk->b_waitq);
+                        bulk->b_cb(bulk);
         } else {
                 CERROR("Unexpected event type!\n");
                 LBUG();
         }
-
-        /* FIXME: This should happen unconditionally */
-        if (bulk->b_cb != NULL)
-                ptlrpc_free_bulk(bulk);
 
         RETURN(1);
 }
