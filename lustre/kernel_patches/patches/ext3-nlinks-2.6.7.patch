@@ -2,12 +2,13 @@ Index: linux-2.6.7/fs/ext3/namei.c
 ===================================================================
 --- linux-2.6.7.orig/fs/ext3/namei.c	2004-06-15 23:19:36.000000000 -0600
 +++ linux-2.6.7/fs/ext3/namei.c	2004-08-20 17:48:54.000000000 -0600
-@@ -1596,11 +1596,16 @@ static int ext3_delete_entry (handle_t *
+@@ -1596,11 +1596,17 @@ static int ext3_delete_entry (handle_t *
  static inline void ext3_inc_count(handle_t *handle, struct inode *inode)
  {
  	inode->i_nlink++;
 +	if (is_dx(inode) && inode->i_nlink > 1) {
-+		if (inode->i_nlink >= 65000) /* limit is 16-bit i_links_count */
++		/* limit is 16-bit i_links_count */
++		if (inode->i_nlink >= EXT3_LINK_MAX || inode->i_nlink == 2)
 +			inode->i_nlink = 1;
 +        }
  }
@@ -137,6 +138,15 @@ Index: linux-2.6.7/include/linux/ext3_fs.h
  
  /*
   * Debug code
+@@ -79,7 +81,7 @@
+ /*
+  * Maximal count of links to a file
+  */
+-#define EXT3_LINK_MAX		32000
++#define EXT3_LINK_MAX		65000
+ 
+ /*
+  * Macro-instructions used to manage several block sizes
 @@ -595,14 +595,15 @@ struct ext3_dir_entry_2 {
   */
  
