@@ -1002,7 +1002,7 @@ class MDC(Module):
 
         host = socket.gethostname()
         self.name = 'MDC_%s' % (self.mds.name)
-        self.uuid = '%s_%4.4x_UUID' % (self.name , int(random.random() * 100000 ))
+        self.uuid = '%s_%05x_UUID' % (self.name , int(random.random() * 100000))
 
         self.lookup_server(self.mds.uuid)
         self.add_module('lustre/mdc', 'mdc')
@@ -1667,6 +1667,16 @@ def sanitise_path():
 def main():
     global TCP_ACCEPTOR, lctl, MAXTCPBUF
     host = socket.gethostname()
+
+    # the PRNG is normally seeded with time(), which is not so good for starting
+    # time-synchronized clusters
+    input = open('/dev/urandom', 'r')
+    if not input:
+        print 'Unable to open /dev/urandom!'
+        sys.exit(1)
+    seed = input.read(32)
+    input.close()
+    random.seed(seed)
 
     sanitise_path()
 
