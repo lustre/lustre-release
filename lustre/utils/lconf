@@ -41,24 +41,23 @@ MAX_LOOP_DEVICES = 256
 
 
 def usage():
-    print """usage: lconf --ldap server | config.xml
+    print """usage: lconf config.xml
 
 config.xml          Lustre configuration in xml format.
+-v | --verbose      Print system commands as they are run
+-d | --debug        Print system commands, but does not run them
+--cleanup	    Cleans up config. (Shutdown)
+"""
+    TODO = """
 --ldap server	    LDAP server with lustre config database
-
-Options:
--v|--verbose           
---debug             Don't send lctl commenads           
 --reformat	    Reformat all devices (will confirm)
 --lustre="src dir"  Base directory of lustre sources. Used to search
                     for modules.
 --portals=src       Portals source 
 --makeldiff         Translate xml source to LDIFF 
---cleanup	    Cleans up config. (Shutdown)
 --iam myname	    ??
-
-(SCRIPT STILL UNDER DEVELOPMENT, MOST FUNCTIONALITY UNIMPLEMENTED)
 """
+    sys.exit()
 
 # ============================================================ 
 # debugging and error funcs
@@ -715,7 +714,7 @@ def doHost(lustreNode, hostname, cleanFlag):
 # Command line processing
 #
 def parse_cmdline(argv):
-    short_opts = "hv"
+    short_opts = "hdv"
     long_opts = ["ldap", "reformat", "lustre=",
                  "portals=", "makeldiff", "cleanup", "iam=",
                  "help", "debug"]
@@ -727,18 +726,17 @@ def parse_cmdline(argv):
     except getopt.GetoptError:
         print "invalid opt"
         usage()
-        sys.exit(2)
 
     for o, a in opts:
         if o in ("-h", "--help"):
             usage()
-            sys.exit()
         if o == "--cleanup":
             options['cleanup'] = 1
-        if o in ("-v",  "--verbose"):
+        if o in ("-v", "--verbose"):
             options['verbose'] = 1
-        if o == "--debug":
+        if o in ("-d", "--debug"):
             options['debug'] = 1
+            options['verbose'] = 1
         if o == "--portals":
             options['portals'] = a
         if o == "--lustre":
@@ -761,36 +759,14 @@ def main():
         dom = xml.dom.minidom.parse(args[0])
     else:
         usage()
-        fixme("ldap not implemented yet")
 
     if not options.has_key('hostname'):
         ret, host = run('hostname')
         if ret:
             panic("unable to determine hostname")
         options['hostname'] = host
-
     doHost(dom.childNodes[0], options['hostname'], options.has_key('cleanup') )
 
-    
-# 
-# try a different traceback style. (dare ya to try this in java)
-def my_traceback(file=None):
-    """Print the list of tuples as returned by extract_tb() or
-    extract_stack() as a formatted stack trace to the given file."""
-    import traceback
-    (t,v, tb) = sys.exc_info()
-    list = traceback.extract_tb(tb)
-    if not file:
-        file = sys.stderr
-    for filename, lineno, name, line in list:
-        if line:
-            print '%s:%04d %-14s %s' % (filename,lineno, name, line.strip())
-        else:
-            print '%s:%04d %s' % (filename,lineno, name)
-    print '%s: %s' % (t, v)
-
 if __name__ == "__main__":
-    try:
-        main()
-    except:
-        my_traceback()
+    main()
+
