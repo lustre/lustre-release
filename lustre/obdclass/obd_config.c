@@ -648,7 +648,33 @@ static int class_config_dump_handler(struct llog_handle * handle,
 
                 lustre_cfg_freedata(buf, cfg_len);
         } else if (rec->lrh_type == PTL_CFG_REC) {
-                ;
+                struct portals_cfg *pcfg = (struct portals_cfg *)cfg_buf;
+
+                CDEBUG(D_INFO, "pcfg command: %d\n", pcfg->pcfg_command);
+                if (pcfg->pcfg_nal)
+                        CDEBUG(D_INFO, "         nal: %d\n",
+                               pcfg->pcfg_nal);
+                if (pcfg->pcfg_gw_nal)
+                        CDEBUG(D_INFO, "      gw_nal: %d\n",
+                               pcfg->pcfg_gw_nal);
+                if (pcfg->pcfg_nid)
+                        CDEBUG(D_INFO, "         nid: "LPX64"\n",
+                               pcfg->pcfg_nid);
+                if (pcfg->pcfg_nid2)
+                        CDEBUG(D_INFO, "         nid: "LPX64"\n",
+                               pcfg->pcfg_nid2);
+                if (pcfg->pcfg_nid3)
+                        CDEBUG(D_INFO, "         nid: "LPX64"\n",
+                               pcfg->pcfg_nid3);
+                if (pcfg->pcfg_misc)
+                        CDEBUG(D_INFO, "         nid: %d\n",
+                               pcfg->pcfg_misc);
+                if (pcfg->pcfg_id)
+                        CDEBUG(D_INFO, "          id: %x\n",
+                               pcfg->pcfg_id);
+                if (pcfg->pcfg_flags)
+                        CDEBUG(D_INFO, "       flags: %x\n",
+                               pcfg->pcfg_flags);
         }
 out:
         RETURN(rc);
