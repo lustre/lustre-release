@@ -1,5 +1,18 @@
 #!/bin/bash
 #
+# WARNING: these tests will delete all data on your
+#          Lustre mount point!
+#
+# The QOS tests need two nodes. The first acts as server (variable SERVER),
+# the second as client only.
+# The principle behind the QOS unit test is:
+# 1) create an unbalanced situation on SERVER
+# 2) perform opertion on CLIENT to trigger QOS information update
+# 3) verify usage of new QOS information on CLIENT
+SERVER=${SERVER:-`hostname`}
+# must change client to a valid hostname
+CLIENT=${CLIENT:-""}
+#
 # Run select tests by setting ONLY, or as arguments to the script.
 # Skip specific tests by setting EXCEPT.
 #
@@ -11,15 +24,6 @@ ONLY=${ONLY:-"$*"}
 ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-""}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
-# The QOS tests need two nodes. The first acts as server (variable SERVER),
-# the second as client only.
-# The principle behind the QOS unit test is:
-# 1) create an unbalanced situation on SERVER
-# 2) perform opertion on CLIENT to trigger QOS information update
-# 3) verify usage of new QOS information on CLIENT
-SERVER=${SERVER:-`hostname`}
-# must change client to a valid hostname
-CLIENT=${CLIENT:-""}
 
 SRCDIR=`dirname $0`
 PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$PATH
@@ -39,7 +43,7 @@ FULL_SRCDIR=${SAVE_PWD}/${SRCDIR}
 
 clean() {
 	echo -n "cln.."
-	${RSH} ${CLIENT} "cd ${FULL_SRCDIR}; NAME=${NAME} NODE=client sh ./llmountcleanup.sh" || exit 20
+	${RSH} ${CLIENT} "cd ${FULL_SRCDIR}; NAME=${NAME} NODE=client sh ./llmountcleanup.sh" > /dev/null || exit 20
 	sh llmountcleanup.sh > /dev/null || exit 21
 	I_MOUNTED=no
 }
@@ -48,7 +52,7 @@ CLEAN=${CLEAN:-clean}
 start() {
 	echo -n "mnt.."
 	sh llrmount.sh > /dev/null || exit 10
-	${RSH} ${CLIENT} "cd ${FULL_SRCDIR}; NAME=${NAME} NODE=client sh ./llrmount.sh" || exit 11
+	${RSH} ${CLIENT} "cd ${FULL_SRCDIR}; NAME=${NAME} NODE=client sh ./llrmount.sh" > /dev/null || exit 11
 	I_MOUNTED=yes
 	echo "done"
 }
@@ -151,6 +155,8 @@ rm -rf $DIR/[Rdfs][1-9]*
 
 build_test_filter
 
+# check whether the QOS tunable parameters
+# are present, i.e. the QOS code is in the tree
 test_0() {
     cat ${QOSPROC}/QoS_statfs_interval || error
     cat ${QOSPROC}/QoS_rescan_interval || error
@@ -161,6 +167,9 @@ test_0() {
 }
 run_test 0 "cat ${QOSPROC}/QoS_*"
 
+# check whether the QOS tunable parameters
+# are present, i.e. the QOS code is in the tree
+# also on the second node
 test_1() {
     ${RSH} ${CLIENT} cat ${QOSPROC}/QoS_statfs_interval || error
     ${RSH} ${CLIENT} cat ${QOSPROC}/QoS_rescan_interval || error
@@ -170,6 +179,87 @@ test_1() {
     ${RSH} ${CLIENT} cat ${QOSPROC}/QoS_nobjects_imbalance || error
 }
 run_test 1 "${RSH} ${CLIENT} cat ${QOSPROC}/QoS_*"
+
+qos_setval() {
+    # use == not eq, since eq will fail on the large numbers
+    if [ -z $3 ]; then
+	echo $2 > ${QOSPROC}/$1
+	[ `cat ${QOSPROC}/$1` == $2 ] || return 1
+    else
+	${RSH} $3 "echo $2 > ${QOSPROC}/$1"
+	[ `${RSH} $3 cat ${QOSPROC}/$1` == $2 ] || return 1
+    fi
+    return 0
+}
+
+# check whether we can set the minum and maximum values
+test_2() {
+    qos_setval QoS_statfs_interval 0 || error
+    qos_setval QoS_statfs_interval 86400 || error
+    qos_setval QoS_rescan_interval 1 || error
+    qos_setval QoS_rescan_interval 604800 || error
+    qos_setval QoS_update_interval 0 || error
+    qos_setval QoS_update_interval 86400 || error
+    qos_setval QoS_freeblock_imbalance 0 || error
+    qos_setval QoS_freeblock_imbalance 4294967295 || error
+    qos_setval QoS_freeblock_percent 0 || error
+    qos_setval QoS_freeblock_percent 100 || error
+    qos_setval QoS_nobjects_imbalance 0 || error
+    qos_setval QoS_nobjects_imbalance 4294967295 || error
+}
+run_test 2 "set min/max in ${QOSPROC}/QoS_*"
+
+# check whether create updates QOS information on remove node
+test_3() {
+    # set statfs caching to 1 jiffie on server
+    qos_setval QoS_statfs_interval 0 || error
+    # make QOS updates immediate (1 jiffie) on MDS and client
+    qos_setval QoS_update_interval 0 || error
+    qos_setval QoS_update_interval 0 ${CLIENT} || error
+    # disable nobjects and percent policies on MDS and client
+    qos_setval QoS_freeblock_percent 100 || error
+    qos_setval QoS_freeblock_percent 100 ${CLIENT} || error
+    qos_setval QoS_nobjects_imbalance 4294967295 || error
+    qos_setval QoS_nobjects_imbalance 4294967295 ${CLIENT} || error
+    # enable freeblock policy on MDS and client
+    qos_setval QoS_freeblock_imbalance 0 || error
+    qos_setval QoS_freeblock_imbalance 0 ${CLIENT} || error
+    # cleanup test mount. This is needed to get system balanced
+    rm -r $MOUNT/* >& /dev/null
+    # create test directory
+    mkdir $DIR/d3 || error
+    # initialize QoS on MDS and client
+    df $MOUNT > /dev/null
+    ${RSH} ${CLIENT} df $MOUNT > /dev/null
+    # create imbalance on local mount
+    for ((i=0; $i<100; i=$i+1)); do
+	${LSTRIPE} $DIR/d3/imbalance$i 0 0 1 || error
+	echo "hello, world" > $DIR/d3/imbalance$i
+    done
+    # create a file on the MDS and the remote node (this is the QOS update trigger)
+    # BUG: we actually need to update the MDS
+    ${LSTRIPE} $DIR/d3/trigger1 0 0 1 || error
+    ${RSH} ${CLIENT} "cd ${FULL_SRCDIR}; PATH=$FULL_SRCDIR/../utils:\$PATH ${LSTRIPE} $DIR/d3/trigger2 0 0 1" || error
+    # sleep a while to make QOS propagate
+    usleep 500
+    # create a lot of files on the remote node
+    for ((i=0; $i<80; i=$i+1)); do
+	${RSH} ${CLIENT} "cd ${FULL_SRCDIR}; PATH=$FULL_SRCDIR/../utils:\$PATH ${LSTRIPE} $DIR/d3/test$i 0 -1 1" || error
+    done
+    for ((i=0; $i<80; i=$i+1)); do
+	# get the OST number for each new file
+	obd=`${LFIND} $DIR/d3/test$i | tail -2 | head -1 | awk '{ print $1 }'`
+        # the file must not be on OST 0, since we are still imbalanced
+	if [ $obd -eq 0 ]; then
+	    echo "$DIR/d3/test$i OST $obd"
+	    error
+	else
+	    echo $obd
+	fi
+    done
+    rm -rf $DIR/d3
+}
+run_test 3 "check QOS propagation on create"
 
 TMPDIR=$OLDTMPDIR
 TMP=$OLDTMP
