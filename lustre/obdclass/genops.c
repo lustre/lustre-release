@@ -372,7 +372,6 @@ struct obd_export *class_new_export(struct obd_device *obddev)
 
 void class_destroy_export(struct obd_export *exp)
 {
-        int rc;
         ENTRY;
 
         spin_lock(&exp->exp_obd->obd_dev_lock);
