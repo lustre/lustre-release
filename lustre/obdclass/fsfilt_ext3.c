@@ -555,7 +555,7 @@ static int fsfilt_ext3_read_record(struct file * file, void *buf,
         memcpy(buf, bh->b_data + boffs, size);
         brelse(bh);
         *offs += size;
-        return size;
+        return 0;
 }
 
 static int fsfilt_ext3_write_record(struct file *file, void *buf, int size,
@@ -617,7 +617,6 @@ static int fsfilt_ext3_write_record(struct file *file, void *buf, int size,
                 CERROR("journal_dirty_metadata() returned error %d\n", err);
                 goto out;
         }
-        err = size;
 
         if (force_sync)
                 handle->h_sync = 1; /* recovery likes this */
@@ -625,7 +624,7 @@ out:
         if (bh)
                 brelse(bh);
         journal_stop(handle);
-        if (err > 0)
+        if (err == 0)
                 *offs += size;
         return err;
 }
