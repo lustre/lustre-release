@@ -265,7 +265,8 @@ static int ldlm_iocontrol(int cmd, struct obd_conn *conn, int len, void *karg,
         }
 
  out:
-        ptlrpc_put_connection(connection);
+        if (connection)
+                ptlrpc_put_connection(connection);
         return err;
 }
 
