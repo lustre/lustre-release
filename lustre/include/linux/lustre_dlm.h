@@ -22,7 +22,6 @@ typedef enum {
 
         ELDLM_LOCK_CHANGED = 300,
         ELDLM_LOCK_ABORTED = 301,
-        ELDLM_RESOURCE_FREED = 302,
 
         ELDLM_NAMESPACE_EXISTS = 400,
         ELDLM_BAD_NAMESPACE    = 401
