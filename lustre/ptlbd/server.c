@@ -56,7 +56,7 @@ static int ptlbd_sv_setup(struct obd_device *obd, obd_count len, void *buf)
                 ptlrpc_init_svc(PTLBD_NBUFS, PTLBD_BUFSIZE, PTLBD_MAXREQSIZE,
                                 PTLBD_REQUEST_PORTAL, PTLBD_REPLY_PORTAL, 30000,
                                 ptlbd_handle, "ptlbd_sv",
-                                obd->obd_proc_entry);
+                                obd->obd_proc_entry, NULL);
 
         if (ptlbd->ptlbd_service == NULL)
                 GOTO(out_filp, rc = -ENOMEM);

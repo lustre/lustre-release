@@ -80,12 +80,6 @@ int filter_san_preprw(int cmd, struct obd_export *exp, struct obdo *oa,
                         GOTO(out, rc = PTR_ERR(dentry));
 
                 inode = dentry->d_inode;
-                if (!inode) {
-                        CERROR("trying to BRW to non-existent file "LPU64"\n",
-                               o->ioo_id);
-                        f_dput(dentry);
-                        GOTO(out, rc = -ENOENT);
-                }
                 fs_bmap = inode->i_mapping->a_ops->bmap;
 
                 for (j = 0; j < o->ioo_bufcnt; j++, rnb++) {

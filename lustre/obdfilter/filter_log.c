@@ -109,7 +109,7 @@ void filter_cancel_cookies_cb(struct obd_device *obd, __u64 transno,
                          NULL, 1, cookie, 0);
         if (rc)
                 CERROR("error cancelling log cookies: rc = %d\n", rc);
-        OBD_FREE(cb_data, sizeof(struct llog_cookie));
+        OBD_FREE(cookie, sizeof(*cookie));
 }
 
 /* Callback for processing the unlink log record received from MDS by 

@@ -209,15 +209,16 @@ test_15() {
 }
 run_test 15 "failed open (-ENOMEM)"
 
+READ_AHEAD=`cat /proc/fs/lustre/llite/*/max_read_ahead_mb | head -n 1`
 stop_read_ahead() {
-   for f in /proc/fs/lustre/llite/*/read_ahead; do 
+   for f in /proc/fs/lustre/llite/*/max_read_ahead_mb; do 
       echo 0 > $f
    done
 }
 
 start_read_ahead() {
-   for f in /proc/fs/lustre/llite/*/read_ahead; do 
-      echo 1 > $f
+   for f in /proc/fs/lustre/llite/*/max_read_ahead_mb; do 
+      echo $READ_AHEAD > $f
    done
 }
 

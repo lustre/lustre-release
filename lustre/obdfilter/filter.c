@@ -2135,6 +2135,12 @@ static int filter_destroy(struct obd_export *exp, struct obdo *oa,
         if (dchild->d_inode == NULL) {
                 CDEBUG(D_INODE, "destroying non-existent object "LPU64"\n",
                        oa->o_id);
+                /* If object already gone, cancel cookie right now */
+                if (oa->o_valid & OBD_MD_FLCOOKIE) {
+                        fcc = obdo_logcookie(oa);
+                        llog_cancel(llog_get_context(obd, fcc->lgc_subsys + 1),
+                                    NULL, 1, fcc, 0);
+                }
                 GOTO(cleanup, rc = -ENOENT);
         }
 

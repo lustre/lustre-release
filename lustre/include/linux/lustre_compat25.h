@@ -47,6 +47,7 @@
 #define TryLockPage(page)                TestSetPageLocked(page)
 #define filemap_fdatasync(mapping)       filemap_fdatawrite(mapping)
 #define Page_Uptodate(page)              PageUptodate(page)
+#define ClearPageLaunder(page)           do {} while(0)
 
 #define KDEVT_INIT(val)                 (val)
 

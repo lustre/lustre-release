@@ -262,6 +262,7 @@ struct ptlrpc_reply_state {
         struct obd_export    *rs_export;
         struct ptlrpc_srv_ni *rs_srv_ni;
         ptl_handle_md_t       rs_md_h;
+        atomic_t              rs_refcount;
 
         /* locks awaiting client reply ACK */
         int                   rs_nlocks;
@@ -274,6 +275,8 @@ struct ptlrpc_reply_state {
 struct ptlrpc_request {
         int rq_type; /* one of PTL_RPC_MSG_* */
         struct list_head rq_list;
+        struct list_head rq_history_list;       /* server-side history */
+        __u64            rq_history_seq;        /* history sequence # */
         int rq_status;
         spinlock_t rq_lock;
         /* client-side flags */
@@ -350,14 +353,30 @@ struct ptlrpc_request {
 #define RQ_PHASE_INTERPRET     0xebc0de03
 #define RQ_PHASE_COMPLETE      0xebc0de04
 
+static inline const char *
+ptlrpc_rqphase2str(struct ptlrpc_request *req)
+{
+        switch (req->rq_phase) {
+        case RQ_PHASE_NEW:
+                return "New";
+        case RQ_PHASE_RPC:
+                return "Rpc";
+        case RQ_PHASE_BULK:
+                return "Bulk";
+        case RQ_PHASE_INTERPRET:
+                return "Interpret";
+        case RQ_PHASE_COMPLETE:
+                return "Complete";
+        default:
+                return "?Phase?";
+        }
+}
+
 /* Spare the preprocessor, spoil the bugs. */
 #define FLAG(field, str) (field ? str : "")
 
 #define DEBUG_REQ_FLAGS(req)                                                    \
-        ((req->rq_phase == RQ_PHASE_NEW) ? "New" :                              \
-         (req->rq_phase == RQ_PHASE_RPC) ? "Rpc" :                              \
-         (req->rq_phase == RQ_PHASE_INTERPRET) ? "Interpret" :                  \
-         (req->rq_phase == RQ_PHASE_COMPLETE) ? "Complete" : "?phase?"),        \
+        ptlrpc_rqphase2str(req),                                                \
         FLAG(req->rq_intr, "I"), FLAG(req->rq_replied, "R"),                    \
         FLAG(req->rq_err, "E"),                                                 \
         FLAG(req->rq_timedout, "X") /* eXpired */, FLAG(req->rq_resend, "S"),   \
@@ -437,6 +456,7 @@ struct ptlrpc_thread {
 
 struct ptlrpc_request_buffer_desc {
         struct list_head       rqbd_list;
+        struct list_head       rqbd_reqs;
         struct ptlrpc_srv_ni  *rqbd_srv_ni;
         ptl_handle_md_t        rqbd_md_h;
         int                    rqbd_refcount;
@@ -466,6 +486,7 @@ struct ptlrpc_srv_ni {
 };
 
 typedef int (*svc_handler_t)(struct ptlrpc_request *req);
+typedef void (*svcreq_printfn_t)(void *, struct ptlrpc_request *);
 
 struct ptlrpc_service {
         struct list_head srv_list;              /* chain thru all services */
@@ -485,8 +506,16 @@ struct ptlrpc_service {
         int               srv_n_queued_reqs;    /* # reqs waiting to be served */
         struct list_head  srv_request_queue;    /* reqs waiting for service */
 
-        struct list_head  srv_idle_rqbds;       /* request buffers to be reposted */
+        struct list_head  srv_request_history;  /* request history */
+        __u64             srv_request_seq;      /* next request sequence # */
+        __u64             srv_request_max_cull_seq; /* highest seq culled from history */
+        svcreq_printfn_t  srv_request_history_print_fn; /* service-specific print fn */
 
+        struct list_head  srv_idle_rqbds;       /* request buffers to be reposted */
+        struct list_head  srv_history_rqbds;    /* request buffer history */
+        int               srv_n_history_rqbds;  /* # request buffers in history */
+        int               srv_max_history_rqbds; /* max # request buffers in history */
+        
         atomic_t          srv_outstanding_replies;
         struct list_head  srv_reply_queue;      /* replies waiting for service */
 
@@ -650,7 +679,8 @@ struct ptlrpc_service *ptlrpc_init_svc(int nbufs, int bufsize, int max_req_size,
                                        int req_portal, int rep_portal,
                                        int watchdog_timeout, /* in ms */
                                        svc_handler_t, char *name,
-                                       struct proc_dir_entry *proc_entry);
+                                       struct proc_dir_entry *proc_entry,
+                                       svcreq_printfn_t);
 void ptlrpc_stop_all_threads(struct ptlrpc_service *svc);
 int ptlrpc_start_n_threads(struct obd_device *dev, struct ptlrpc_service *svc,
                            int cnt, char *base_name);
@@ -690,6 +720,21 @@ void *lustre_swab_reqbuf (struct ptlrpc_request *req, int n, int minlen,
                           void *swabber);
 void *lustre_swab_repbuf (struct ptlrpc_request *req, int n, int minlen,
                           void *swabber);
+
+static inline void
+ptlrpc_rs_addref(struct ptlrpc_reply_state *rs)
+{
+        LASSERT(atomic_read(&rs->rs_refcount) > 0);
+        atomic_inc(&rs->rs_refcount);
+}
+
+static inline void
+ptlrpc_rs_decref(struct ptlrpc_reply_state *rs)
+{
+        LASSERT(atomic_read(&rs->rs_refcount) > 0);
+        if (atomic_dec_and_test(&rs->rs_refcount))
+                lustre_free_reply_state(rs);
+}
 
 /* ldlm/ldlm_lib.c */
 int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf);

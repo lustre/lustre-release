@@ -56,7 +56,13 @@ struct ll_sb_info *lustre_init_sbi(struct super_block *sb)
         spin_lock_init(&sbi->ll_lock);
         INIT_LIST_HEAD(&sbi->ll_pglist);
         sbi->ll_pglist_gen = 0;
-        sbi->ll_ra_info.ra_max_pages = SBI_DEFAULT_RA_MAX;
+        if (num_physpages >> (20 - PAGE_SHIFT) < 512)
+                sbi->ll_async_page_max = num_physpages / 2;
+        else
+                sbi->ll_async_page_max = (num_physpages / 4) * 3;
+        sbi->ll_ra_info.ra_max_pages = min(num_physpages / 8,
+                                           SBI_DEFAULT_READAHEAD_MAX);
+
         INIT_LIST_HEAD(&sbi->ll_conn_chain);
         INIT_HLIST_HEAD(&sbi->ll_orphan_dentry_list);
         ll_s2sbi(sb) = sbi;
@@ -150,6 +156,18 @@ int lustre_common_fill_super(struct super_block *sb, char *mdc, char *osc)
                 GOTO(out_mdc, err);
         }
         sbi->ll_osc_exp = class_conn2export(&osc_conn);
+
+        if (!ll_async_page_slab) {
+                ll_async_page_slab_size =
+                        size_round(sizeof(struct ll_async_page)) +
+                        obd_prep_async_page(sbi->ll_osc_exp, NULL, NULL, NULL,
+                                            0, NULL, NULL, NULL);
+                ll_async_page_slab = kmem_cache_create("ll_async_page",
+                                                       ll_async_page_slab_size,
+                                                       0, 0, NULL, NULL);
+                if (!ll_async_page_slab)
+                        GOTO(out_osc, -ENOMEM);
+        }
 
         err = mdc_getstatus(sbi->ll_mdc_exp, &rootfid);
         if (err) {
@@ -341,7 +359,6 @@ int ll_fill_super(struct super_block *sb, void *data, int silent)
         if (!sbi)
                 RETURN(-ENOMEM);
 
-        sbi->ll_flags |= LL_SBI_READAHEAD;
         ll_options(data, &osc, &mdc, &sbi->ll_flags);
 
         if (!osc) {
@@ -555,8 +572,6 @@ int lustre_fill_super(struct super_block *sb, void *data, int silent)
         sbi = lustre_init_sbi(sb);
         if (!sbi)
                 RETURN(-ENOMEM);
-
-        sbi->ll_flags |= LL_SBI_READAHEAD;
 
         if (lmd->lmd_profile) {
                 struct lustre_profile *lprof;
@@ -1357,3 +1372,30 @@ int ll_prep_inode(struct obd_export *exp, struct inode **inode,
 
         RETURN(rc);
 }
+
+char *llap_origins[] = {
+        [LLAP_ORIGIN_UNKNOWN] = "--",
+        [LLAP_ORIGIN_READPAGE] = "rp",
+        [LLAP_ORIGIN_READAHEAD] = "ra",
+        [LLAP_ORIGIN_COMMIT_WRITE] = "cw",
+        [LLAP_ORIGIN_WRITEPAGE] = "wp",
+};
+
+struct ll_async_page *llite_pglist_next_llap(struct ll_sb_info *sbi,
+                                             struct list_head *list)
+{
+        struct ll_async_page *llap;
+        struct list_head *pos;
+
+        list_for_each(pos, list) {
+                if (pos == &sbi->ll_pglist)
+                        return NULL;
+                llap = list_entry(pos, struct ll_async_page, llap_pglist_item);
+                if (llap->llap_page == NULL)
+                        continue;
+                return llap;
+        }
+        LBUG();
+        return NULL;
+}
+

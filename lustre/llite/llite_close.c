@@ -43,8 +43,7 @@ void llap_write_complete(struct inode *inode, struct ll_async_page *llap)
 {
         struct ll_inode_info *lli = ll_i2info(inode);
         spin_lock(&lli->lli_lock);
-        if (!list_empty(&llap->llap_pending_write))
-                list_del_init(&llap->llap_pending_write);
+        list_del_init(&llap->llap_pending_write);
         spin_unlock(&lli->lli_lock);
 }
 

@@ -337,6 +337,7 @@ int ptlrpc_send_reply (struct ptlrpc_request *req, int may_be_difficult)
                 conn = ptlrpc_connection_addref(req->rq_export->exp_connection);
 
         atomic_inc (&svc->srv_outstanding_replies);
+        ptlrpc_rs_addref(rs);                   /* +1 ref for the network */
 
         rc = ptl_send_buf (&rs->rs_md_h, req->rq_repmsg, req->rq_replen,
                            rs->rs_difficult ? PTL_ACK_REQ : PTL_NOACK_REQ,
@@ -344,14 +345,7 @@ int ptlrpc_send_reply (struct ptlrpc_request *req, int may_be_difficult)
                            svc->srv_rep_portal, req->rq_xid);
         if (rc != 0) {
                 atomic_dec (&svc->srv_outstanding_replies);
-
-                if (!rs->rs_difficult) {
-                        /* Callers other than target_send_reply() expect me
-                         * to clean up on a comms error */
-                        lustre_free_reply_state (rs);
-                        req->rq_reply_state = NULL;
-                        req->rq_repmsg = NULL;
-                }
+                ptlrpc_rs_decref(rs);
         }
         ptlrpc_put_connection(conn);
         return rc;
@@ -406,7 +400,7 @@ int ptl_send_rpc(struct ptlrpc_request *request)
         request->rq_reqmsg->handle = request->rq_import->imp_remote_handle;
         request->rq_reqmsg->type = PTL_RPC_MSG_REQUEST;
         request->rq_reqmsg->conn_cnt = request->rq_import->imp_conn_cnt;
-                
+
         LASSERT (request->rq_replen != 0);
         if (request->rq_repmsg == NULL)
                 OBD_ALLOC(request->rq_repmsg, request->rq_replen);

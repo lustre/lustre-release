@@ -5,6 +5,11 @@
 	- flock/lockf fixes (but it's still disabled, pending 5135)
 	- don't use EXT3 constants in llite code (5094)
 	- memory shortage at startup could cause assertion (5176)
+	- don't keep a lock reference when lock is not granted (4238)
+	- unsafe list practices (rarely) led to infinite eviction loop (4908)
+	- add per-fs limit of Lustre pages in page cache, avoid OOM (4699)
+	- drop import inflight refcount on signal_completed_replay error (5255)
+	- unlock page after async write error during send (3677)
        * miscellania
 	- reorganization of lov code
 	- single portals codebase
@@ -12,6 +17,9 @@
 	- add extents/mballoc support (5025)
 	- direct I/O reads in the obdfilter (4048)
 	- kernel patches from LNXI for 2.6 (bluesmoke, perfctr, mtd, kexec)
+	- service request history (4965)
+	- put {ll,lov,osc}_async_page structs in a single slab (4699)
+	- create an "evict_client" /proc entry on OSTs, like the MDS has
 
 tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.9
@@ -19,6 +27,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- don't ASSERT in ptl_send_rpc() if we run out of memory (5119)
 	- lock /proc/sys/portals/routes internal state, avoiding oops (4827)
 	- the watchdog thread now runs as interruptible (5246)
+	- handle missing objects in filter_preprw_read properly (5265)
        * miscellania
 	- add pid to ldlm debugging output (4922)
 

@@ -94,7 +94,7 @@ Index: linux-2.6.0/fs/ext3/xattr.c
  
  /*
 - * ext3_xattr_list()
-+ * ext3_xattr_ibode_get()
++ * ext3_xattr_ibody_get()
   *
 - * Copy a list of attribute names into the buffer
 + * routine looks for attribute in inode body and returns it's value and size

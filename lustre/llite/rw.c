@@ -54,6 +54,9 @@
                 pos = n, n = pos->prev )
 #endif
 
+kmem_cache_t *ll_async_page_slab = NULL;
+size_t ll_async_page_slab_size = 0;
+
 /* SYNCHRONOUS I/O to object storage for an inode */
 static int ll_brw(int cmd, struct inode *inode, struct obdo *oa,
                   struct page *page, int flags)
@@ -359,7 +362,103 @@ struct ll_async_page *llap_cast_private(struct page *page)
         return llap;
 }
 
-/* XXX have the exp be an argument? */
+/* Try to shrink the page cache for the @sbi filesystem by 1/@shrink_fraction.
+ *
+ * There is an llap attached onto every page in lustre, linked off @sbi.
+ * We add an llap to the list so we don't lose our place during list walking.
+ * If llaps in the list are being moved they will only move to the end
+ * of the LRU, and we aren't terribly interested in those pages here (we
+ * start at the beginning of the list where the least-used llaps are.
+ */
+int llap_shrink_cache(struct ll_sb_info *sbi, int shrink_fraction)
+{
+        struct ll_async_page *llap, dummy_llap = { .llap_magic = 0xd11ad11a };
+        unsigned long total, want, count = 0;
+
+        total = sbi->ll_async_page_count;
+
+        /* There can be a large number of llaps (600k or more in a large
+         * memory machine) so the VM 1/6 shrink ratio is likely too much.
+         * Since we are freeing pages also, we don't necessarily want to
+         * shrink so much.  Limit to 40MB of pages + llaps per call. */
+        if (shrink_fraction == 0)
+                want = sbi->ll_async_page_count - sbi->ll_async_page_max + 32;
+        else
+                want = (total + shrink_fraction - 1) / shrink_fraction;
+
+        if (want > 40 << (20 - PAGE_CACHE_SHIFT))
+                want = 40 << (20 - PAGE_CACHE_SHIFT);
+
+        CDEBUG(D_CACHE, "shrinking %lu of %lu pages (1/%d)\n",
+               want, total, shrink_fraction);
+
+        spin_lock(&sbi->ll_lock);
+        list_add(&dummy_llap.llap_pglist_item, &sbi->ll_pglist);
+
+        while (--total >= 0 && count < want) {
+                struct page *page;
+
+                if (unlikely(need_resched())) {
+                        spin_unlock(&sbi->ll_lock);
+                        cond_resched();
+                        spin_lock(&sbi->ll_lock);
+                }
+
+                llap = llite_pglist_next_llap(sbi,&dummy_llap.llap_pglist_item);
+                list_del_init(&dummy_llap.llap_pglist_item);
+                if (llap == NULL)
+                        break;
+
+                page = llap->llap_page;
+                LASSERT(page != NULL);
+
+                list_add(&dummy_llap.llap_pglist_item, &llap->llap_pglist_item);
+
+                /* Page needs/undergoing IO */
+                if (TryLockPage(page)) {
+                        LL_CDEBUG_PAGE(D_PAGE, page, "can't lock\n");
+                        continue;
+                }
+
+                /* If page is dirty or undergoing IO don't discard it */
+                if (llap->llap_write_queued || PageDirty(page) ||
+                    (!PageUptodate(page) &&
+                     llap->llap_origin != LLAP_ORIGIN_READAHEAD)) {
+                        unlock_page(page);
+                        LL_CDEBUG_PAGE(D_PAGE, page, "can't drop from cache: "
+                                       "%s%s%s%s origin %s\n",
+                                       llap->llap_write_queued ? "wq " : "",
+                                       PageDirty(page) ? "pd " : "",
+                                       PageUptodate(page) ? "" : "!pu",
+                                       llap->llap_defer_uptodate ? "" : "!du",
+                                       llap_origins[llap->llap_origin]);
+                        continue;
+                }
+
+                page_cache_get(page);
+                spin_unlock(&sbi->ll_lock);
+
+                ++count;
+                LL_CDEBUG_PAGE(D_PAGE, page, "drop from cache %lu/%lu\n",
+                               count, want);
+                if (page->mapping != NULL) {
+                        ll_ra_accounting(page, page->mapping);
+                        ll_truncate_complete_page(page);
+                }
+                unlock_page(page);
+                page_cache_release(page);
+
+                spin_lock(&sbi->ll_lock);
+        }
+        list_del(&dummy_llap.llap_pglist_item);
+        spin_unlock(&sbi->ll_lock);
+
+        CDEBUG(D_CACHE, "shrank %lu/%lu and left %lu unscanned\n",
+               count, want, total);
+
+        return count;
+}
+
 struct ll_async_page *llap_from_page(struct page *page, unsigned origin)
 {
         struct ll_async_page *llap;
@@ -369,25 +468,40 @@ struct ll_async_page *llap_from_page(struct page *page, unsigned origin)
         int rc;
         ENTRY;
 
+        LASSERT(ll_async_page_slab);
         LASSERTF(origin < LLAP__ORIGIN_MAX, "%u\n", origin);
 
         llap = llap_cast_private(page);
-        if (llap != NULL)
+        if (llap != NULL) {
+                /* move to end of LRU list */
+                spin_lock(&sbi->ll_lock);
+                sbi->ll_pglist_gen++;
+                list_del_init(&llap->llap_pglist_item);
+                list_add_tail(&llap->llap_pglist_item, &sbi->ll_pglist);
+                spin_unlock(&sbi->ll_lock);
                 GOTO(out, llap);
+        }
 
         exp = ll_i2obdexp(page->mapping->host);
         if (exp == NULL)
                 RETURN(ERR_PTR(-EINVAL));
 
-        OBD_ALLOC(llap, sizeof(*llap));
+        /* limit the number of lustre-cached pages */
+        if (sbi->ll_async_page_count >= sbi->ll_async_page_max)
+                llap_shrink_cache(sbi, 0);
+
+        OBD_SLAB_ALLOC(llap, ll_async_page_slab, SLAB_KERNEL,
+                       ll_async_page_slab_size);
         if (llap == NULL)
                 RETURN(ERR_PTR(-ENOMEM));
         llap->llap_magic = LLAP_MAGIC;
+        llap->llap_cookie = (void *)llap + size_round(sizeof(*llap));
         rc = obd_prep_async_page(exp, ll_i2info(inode)->lli_smd, NULL, page,
                                  (obd_off)page->index << PAGE_SHIFT,
                                  &ll_async_page_ops, llap, &llap->llap_cookie);
         if (rc) {
-                OBD_FREE(llap, sizeof(*llap));
+                OBD_SLAB_FREE(llap, ll_async_page_slab,
+                              ll_async_page_slab_size);
                 RETURN(ERR_PTR(rc));
         }
 
@@ -399,7 +513,8 @@ struct ll_async_page *llap_from_page(struct page *page, unsigned origin)
 
         spin_lock(&sbi->ll_lock);
         sbi->ll_pglist_gen++;
-        list_add_tail(&llap->llap_proc_item, &sbi->ll_pglist);
+        sbi->ll_async_page_count++;
+        list_add_tail(&llap->llap_pglist_item, &sbi->ll_pglist);
         spin_unlock(&sbi->ll_lock);
 
 out:
@@ -594,8 +709,12 @@ void ll_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
                 }
                 ClearPageError(page);
         } else {
-                if (cmd == OBD_BRW_READ)
+                if (cmd == OBD_BRW_READ) {
                         llap->llap_defer_uptodate = 0;
+                } else {
+                        SetPageDirty(page);
+                        ClearPageLaunder(page);
+                }
                 SetPageError(page);
         }
 
@@ -663,11 +782,12 @@ void ll_removepage(struct page *page)
         __clear_page_ll_data(page);
 
         spin_lock(&sbi->ll_lock);
-        if (!list_empty(&llap->llap_proc_item))
-                list_del_init(&llap->llap_proc_item);
+        if (!list_empty(&llap->llap_pglist_item))
+                list_del_init(&llap->llap_pglist_item);
         sbi->ll_pglist_gen++;
+        sbi->ll_async_page_count--;
         spin_unlock(&sbi->ll_lock);
-        OBD_FREE(llap, sizeof(*llap));
+        OBD_SLAB_FREE(llap, ll_async_page_slab, ll_async_page_slab_size);
         EXIT;
 }
 
@@ -991,7 +1111,7 @@ int ll_readpage(struct file *filp, struct page *page)
         if (IS_ERR(llap))
                 GOTO(out, rc = PTR_ERR(llap));
 
-        if (ll_i2sbi(inode)->ll_flags & LL_SBI_READAHEAD)
+        if (ll_i2sbi(inode)->ll_ra_info.ra_max_pages)
                 ras_update(ll_i2sbi(inode), &fd->fd_ras, page->index,
                            llap->llap_defer_uptodate);
 
@@ -1028,7 +1148,7 @@ int ll_readpage(struct file *filp, struct page *page)
                 GOTO(out, rc);
 
         LL_CDEBUG_PAGE(D_PAGE, page, "queued readpage\n");
-        if (ll_i2sbi(inode)->ll_flags & LL_SBI_READAHEAD)
+        if (ll_i2sbi(inode)->ll_ra_info.ra_max_pages)
                 ll_readahead(&fd->fd_ras, exp, page->mapping, oig,
                              fd->fd_flags);
 

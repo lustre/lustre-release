@@ -121,6 +121,7 @@ int lustre_pack_reply (struct ptlrpc_request *req,
         if (rs == NULL)
                 RETURN (-ENOMEM);
 
+        atomic_set(&rs->rs_refcount, 1);        /* 1 ref for rq_reply_state */
         rs->rs_cb_id.cbid_fn = reply_out_callback;
         rs->rs_cb_id.cbid_arg = rs;
         rs->rs_srv_ni = req->rq_rqbd->rqbd_srv_ni;
@@ -142,6 +143,7 @@ void lustre_free_reply_state (struct ptlrpc_reply_state *rs)
 {
         PTLRPC_RS_DEBUG_LRU_DEL(rs);
 
+        LASSERT (atomic_read(&rs->rs_refcount) == 0);
         LASSERT (!rs->rs_difficult || rs->rs_handled);
         LASSERT (!rs->rs_on_net);
         LASSERT (!rs->rs_scheduled);

@@ -58,16 +58,15 @@ inline unsigned long round_timeout(unsigned long timeout)
 }
 
 #ifdef __KERNEL__
-/* XXX should this be per-ldlm? */
-static struct list_head waiting_locks_list;
+/* w_l_spinlock protects both waiting_locks_list and expired_lock_thread */
 static spinlock_t waiting_locks_spinlock;
+static struct list_head waiting_locks_list;
 static struct timer_list waiting_locks_timer;
 
 static struct expired_lock_thread {
         wait_queue_head_t         elt_waitq;
         int                       elt_state;
         struct list_head          elt_expired_locks;
-        spinlock_t                elt_lock;
 } expired_lock_thread;
 #endif
 
@@ -96,9 +95,9 @@ static inline int have_expired_locks(void)
 {
         int need_to_run;
 
-        spin_lock_bh(&expired_lock_thread.elt_lock);
+        spin_lock_bh(&waiting_locks_spinlock);
         need_to_run = !list_empty(&expired_lock_thread.elt_expired_locks);
-        spin_unlock_bh(&expired_lock_thread.elt_lock);
+        spin_unlock_bh(&waiting_locks_spinlock);
 
         RETURN(need_to_run);
 }
@@ -129,7 +128,7 @@ static int expired_lock_main(void *arg)
                              expired_lock_thread.elt_state == ELT_TERMINATE,
                              &lwi);
 
-                spin_lock_bh(&expired_lock_thread.elt_lock);
+                spin_lock_bh(&waiting_locks_spinlock);
                 while (!list_empty(expired)) {
                         struct obd_export *export;
                         struct ldlm_lock *lock;
@@ -151,13 +150,13 @@ static int expired_lock_main(void *arg)
                                 continue;
                         }
                         export = class_export_get(lock->l_export);
-                        spin_unlock_bh(&expired_lock_thread.elt_lock);
+                        spin_unlock_bh(&waiting_locks_spinlock);
 
                         ptlrpc_fail_export(export);
                         class_export_put(export);
-                        spin_lock_bh(&expired_lock_thread.elt_lock);
+                        spin_lock_bh(&waiting_locks_spinlock);
                 }
-                spin_unlock_bh(&expired_lock_thread.elt_lock);
+                spin_unlock_bh(&waiting_locks_spinlock);
 
                 if (expired_lock_thread.elt_state == ELT_TERMINATE)
                         break;
@@ -175,6 +174,7 @@ static void waiting_locks_callback(unsigned long unused)
 
         spin_lock_bh(&waiting_locks_spinlock);
         while (!list_empty(&waiting_locks_list)) {
+
                 lock = list_entry(waiting_locks_list.next, struct ldlm_lock,
                                   l_pending_chain);
 
@@ -182,10 +182,9 @@ static void waiting_locks_callback(unsigned long unused)
                         break;
 
                 LDLM_ERROR(lock, "lock callback timer expired: evicting client "
-                           "%s@%s nid %s ",
-                           lock->l_export->exp_client_uuid.uuid,
+                           "%s@%s nid %s ",lock->l_export->exp_client_uuid.uuid,
                            lock->l_export->exp_connection->c_remote_uuid.uuid,
-                           ptlrpc_peernid2str(&lock->l_export->exp_connection->c_peer, str));
+                           ptlrpc_peernid2str(&lock->l_export->exp_connection->c_peer,str));
 
                 if (lock == last) {
                         LDLM_ERROR(lock, "waiting on lock multiple times");
@@ -193,16 +192,15 @@ static void waiting_locks_callback(unsigned long unused)
                                waiting_locks_list.next, waiting_locks_list.prev,
                                lock->l_pending_chain.next,
                                lock->l_pending_chain.prev);
-                        spin_unlock(&waiting_locks_spinlock);
+                        spin_unlock_bh(&waiting_locks_spinlock);
                         LBUG();
                 }
                 last = lock;
 
-                spin_lock_bh(&expired_lock_thread.elt_lock);
                 list_del(&lock->l_pending_chain);
                 list_add(&lock->l_pending_chain,
                          &expired_lock_thread.elt_expired_locks);
-                spin_unlock_bh(&expired_lock_thread.elt_lock);
+
                 wake_up(&expired_lock_thread.elt_waitq);
         }
 
@@ -232,11 +230,10 @@ static int ldlm_add_waiting_lock(struct ldlm_lock *lock)
 
         spin_lock_bh(&waiting_locks_spinlock);
         if (!list_empty(&lock->l_pending_chain)) {
-                LDLM_DEBUG(lock, "not re-adding to wait list");
                 spin_unlock_bh(&waiting_locks_spinlock);
+                LDLM_DEBUG(lock, "not re-adding to wait list");
                 return 0;
         }
-        LDLM_DEBUG(lock, "adding to wait list");
 
         lock->l_callback_timeout = jiffies + (obd_timeout * HZ / 2);
 
@@ -248,6 +245,7 @@ static int ldlm_add_waiting_lock(struct ldlm_lock *lock)
         }
         list_add_tail(&lock->l_pending_chain, &waiting_locks_list); /* FIFO */
         spin_unlock_bh(&waiting_locks_spinlock);
+        LDLM_DEBUG(lock, "adding to wait list");
         return 1;
 }
 
@@ -288,11 +286,7 @@ int ldlm_del_waiting_lock(struct ldlm_lock *lock)
                                   round_timeout(next->l_callback_timeout));
                 }
         }
-
-        /* the lock could already be expired, get the elt_lock also */
-        spin_lock_bh(&expired_lock_thread.elt_lock);
         list_del_init(&lock->l_pending_chain);
-        spin_unlock_bh(&expired_lock_thread.elt_lock);
 
         spin_unlock_bh(&waiting_locks_spinlock);
         LDLM_DEBUG(lock, "removed");
@@ -1313,7 +1307,7 @@ static int ldlm_setup(void)
                 ptlrpc_init_svc(LDLM_NBUFS, LDLM_BUFSIZE, LDLM_MAXREQSIZE,
                                 LDLM_CB_REQUEST_PORTAL, LDLM_CB_REPLY_PORTAL,
                                 1500, ldlm_callback_handler, "ldlm_cbd",
-                                ldlm_svc_proc_dir);
+                                ldlm_svc_proc_dir, NULL);
 
         if (!ldlm_state->ldlm_cb_service) {
                 CERROR("failed to start service\n");
@@ -1325,7 +1319,7 @@ static int ldlm_setup(void)
                                 LDLM_CANCEL_REQUEST_PORTAL,
                                 LDLM_CANCEL_REPLY_PORTAL, 30000,
                                 ldlm_cancel_handler, "ldlm_canceld",
-                                ldlm_svc_proc_dir);
+                                ldlm_svc_proc_dir, NULL);
 
         if (!ldlm_state->ldlm_cancel_service) {
                 CERROR("failed to start service\n");
@@ -1369,9 +1363,14 @@ static int ldlm_setup(void)
                 GOTO(out_thread, rc);
 
         INIT_LIST_HEAD(&expired_lock_thread.elt_expired_locks);
-        spin_lock_init(&expired_lock_thread.elt_lock);
         expired_lock_thread.elt_state = ELT_STOPPED;
         init_waitqueue_head(&expired_lock_thread.elt_waitq);
+
+        INIT_LIST_HEAD(&waiting_locks_list);
+        spin_lock_init(&waiting_locks_spinlock);
+        waiting_locks_timer.function = waiting_locks_callback;
+        waiting_locks_timer.data = 0;
+        init_timer(&waiting_locks_timer);
 
         rc = kernel_thread(expired_lock_main, NULL, CLONE_VM | CLONE_FS);
         if (rc < 0) {
@@ -1381,12 +1380,6 @@ static int ldlm_setup(void)
 
         wait_event(expired_lock_thread.elt_waitq,
                    expired_lock_thread.elt_state == ELT_READY);
-
-        INIT_LIST_HEAD(&waiting_locks_list);
-        spin_lock_init(&waiting_locks_spinlock);
-        waiting_locks_timer.function = waiting_locks_callback;
-        waiting_locks_timer.data = 0;
-        init_timer(&waiting_locks_timer);
 #endif
 
         RETURN(0);

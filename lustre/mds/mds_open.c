@@ -1000,6 +1000,11 @@ int mds_open(struct mds_update_record *rec, int offset,
                 }
         }
 
+        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_OPEN_CREATE)) {
+                obd_fail_loc = OBD_FAIL_LDLM_REPLY | OBD_FAIL_ONCE;
+                GOTO(cleanup, rc = -EAGAIN);
+        }
+
         /* Step 5: mds_open it */
         rc = mds_finish_open(req, dchild, body, rec->ur_flags, &handle, rec,
                              rep);
@@ -1032,8 +1037,6 @@ int mds_open(struct mds_update_record *rec, int offset,
                 else
                         ptlrpc_save_lock (req, &parent_lockh, parent_mode);
         }
-        if (rc == 0)
-                atomic_inc(&mds->mds_open_count);
         RETURN(rc);
 }
 
@@ -1207,7 +1210,6 @@ out:
         mds_mfd_destroy(mfd);
 
  cleanup:
-        atomic_dec(&mds->mds_open_count);
         if (req != NULL && reply_body != NULL) {
                 rc = mds_finish_transno(mds, pending_dir, handle, req, rc, 0);
         } else if (handle) {
@@ -1276,7 +1278,7 @@ int mds_close(struct ptlrpc_request *req)
 
                 mds_pack_inode2fid(&body->fid1, inode);
                 mds_pack_inode2body(body, inode);
-                mds_pack_md(obd, req->rq_repmsg, 1, body, inode, MDS_PACK_MD_LOCK);
+                mds_pack_md(obd, req->rq_repmsg, 1,body,inode,MDS_PACK_MD_LOCK);
         }
         spin_lock(&med->med_open_lock);
         list_del(&mfd->mfd_list);
@@ -1293,7 +1295,7 @@ int mds_close(struct ptlrpc_request *req)
                 RETURN(-ENOMEM);
         }
 
-        RETURN(0);
+        RETURN(rc);
 }
 
 int mds_done_writing(struct ptlrpc_request *req)

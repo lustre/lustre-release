@@ -210,7 +210,10 @@ class DaemonHandler:
             if not self.path:
                 panic(self.command, "not found.")
         ret, out = runcmd(self.path +' '+ self.command_line())
-        if ret:
+
+        # FIXME: add this check can only narrow the race but can not avoid it
+        # completely, so I don't apply this method on inserting module.
+        if ret and not self.running():
             raise CommandError(self.path, out, ret)
 
     def stop(self):
@@ -243,6 +246,11 @@ class DaemonHandler:
             fp.close()
             return pid
         except IOError:
+            return 0
+        except ValueError:
+            print "WARNING: invalid pid in %s, removed" % self.pidfile()
+            print "WARNING: You may need to stop acceptor by yourself and then unload the module libcfs"
+            os.unlink(self.pidfile())
             return 0
         
     def clean_pidfile(self):
@@ -1094,12 +1102,13 @@ class kmod:
                 if not module:
                     panic('module not found:', mod)
                 (rc, out)  = run('/sbin/insmod', module)
-                if rc:
+                if rc and not mod_loaded(mod):
                     raise CommandError('insmod', out, rc)
             else:
-                (rc, out) = run('/sbin/modprobe', mod)
-                if rc:
+                (rc, out)  = run('/sbin/modprobe', mod)
+                if rc and not mod_loaded(mod):
                     raise CommandError('modprobe', out, rc)
+
 
     def cleanup_module(self):
         """Unload the modules in the list in reverse order."""
@@ -1634,6 +1643,12 @@ class MDSDEV(Module):
                                         "--record_device", self.name,
                                         "--node", client_name,
                                         config_options)
+                        if ret:
+                            lctl.clear_log(self.name, client_name)
+                            print out
+                            self.cleanup()
+                            panic("Record client log %s on %s failed" %(
+                                           client_name, self.name))
                         if config.verbose:
                             for s in out: log("record> ", string.strip(s))
                         ret, out = run (sys.argv[0],
@@ -1643,6 +1658,17 @@ class MDSDEV(Module):
                                         "--record_device", self.name,
                                         "--node", client_name,
                                         config_options)
+                        if ret:
+              # In this case, although 0-conf mount works but 0-conf umount
+              # doesn't work. As a boring result, the user is forced to
+              # cleanup client service manually again and again. So I prefer 
+              # deleting these two llogs together and let the user write_conf.
+                            lctl.clear_log(self.name, client_name)
+                            lctl.clear_log(self.name, client_name + '-clean')
+                            print out
+                            self.cleanup()
+                            panic("Record client log %s on %s failed" %(
+                                           client_name + '-clean', self.name))
                         if config.verbose:
                             for s in out: log("record> ", string.strip(s))
                         config.noexec = old_noexec

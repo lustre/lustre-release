@@ -182,40 +182,7 @@ static int ll_rd_sb_uuid(char *page, char **start, off_t off, int count,
         return snprintf(page, count, "%s\n", ll_s2sbi(sb)->ll_sb_uuid.uuid);
 }
 
-static int ll_rd_read_ahead(char *page, char **start, off_t off, int count,
-                            int *eof, void *data)
-{
-        struct super_block *sb = (struct super_block*)data;
-        struct ll_sb_info *sbi = ll_s2sbi(sb);
-        int val, rc;
-        ENTRY;
-
-        *eof = 1;
-        val = (sbi->ll_flags & LL_SBI_READAHEAD) ? 1 : 0;
-        rc = snprintf(page, count, "%d\n", val);
-        RETURN(rc);
-}
-
-static int ll_wr_read_ahead(struct file *file, const char *buffer,
-                            unsigned long count, void *data)
-{
-        struct super_block *sb = (struct super_block*)data;
-        struct ll_sb_info *sbi = ll_s2sbi(sb);
-        int readahead;
-        ENTRY;
-
-        if (sscanf(buffer, "%d", &readahead) != 1)
-                RETURN(-EINVAL);        
-
-        if (readahead)
-                sbi->ll_flags |= LL_SBI_READAHEAD;
-        else
-                sbi->ll_flags &= ~LL_SBI_READAHEAD;
-
-        RETURN(count);
-}
-
-static int ll_rd_max_read_ahead_mb(char *page, char **start, off_t off, 
+static int ll_rd_max_readahead_mb(char *page, char **start, off_t off,
                                    int count, int *eof, void *data)
 {
         struct super_block *sb = data;
@@ -223,13 +190,13 @@ static int ll_rd_max_read_ahead_mb(char *page, char **start, off_t off,
         unsigned val;
 
         spin_lock(&sbi->ll_lock);
-        val = (sbi->ll_ra_info.ra_max_pages << PAGE_CACHE_SHIFT) >> 20;
+        val = sbi->ll_ra_info.ra_max_pages >> (20 - PAGE_CACHE_SHIFT);
         spin_unlock(&sbi->ll_lock);
 
         return snprintf(page, count, "%u\n", val);
 }
 
-static int ll_wr_max_read_ahead_mb(struct file *file, const char *buffer,
+static int ll_wr_max_readahead_mb(struct file *file, const char *buffer,
                                    unsigned long count, void *data)
 {
         struct super_block *sb = data;
@@ -240,12 +207,56 @@ static int ll_wr_max_read_ahead_mb(struct file *file, const char *buffer,
         if (rc)
                 return rc;
 
-        if (val < 0 || val > (num_physpages << PAGE_SHIFT) >> 20)
+        if (val < 0 || val > (num_physpages >> (20 - PAGE_CACHE_SHIFT - 1))) {
+                CERROR("can't set readahead more than %lu MB\n",
+                        num_physpages >> (20 - PAGE_CACHE_SHIFT - 1));
                 return -ERANGE;
+        }
 
         spin_lock(&sbi->ll_lock);
-        sbi->ll_ra_info.ra_max_pages = (val << 20) >> PAGE_CACHE_SHIFT;
+        sbi->ll_ra_info.ra_max_pages = val << (20 - PAGE_CACHE_SHIFT);
         spin_unlock(&sbi->ll_lock);
+
+        return count;
+}
+
+static int ll_rd_max_cached_mb(char *page, char **start, off_t off,
+                               int count, int *eof, void *data)
+{
+        struct super_block *sb = data;
+        struct ll_sb_info *sbi = ll_s2sbi(sb);
+        unsigned val;
+
+        spin_lock(&sbi->ll_lock);
+        val = sbi->ll_async_page_max >> (20 - PAGE_CACHE_SHIFT);
+        spin_unlock(&sbi->ll_lock);
+
+        return snprintf(page, count, "%u\n", val);
+}
+
+static int ll_wr_max_cached_mb(struct file *file, const char *buffer,
+                                  unsigned long count, void *data)
+{
+        struct super_block *sb = data;
+        struct ll_sb_info *sbi = ll_s2sbi(sb);
+        int val, rc;
+
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+
+        if (val < 0 || val > (num_physpages >> (20 - PAGE_CACHE_SHIFT))) {
+                CERROR("can't set max cache more than %lu MB\n",
+                        num_physpages >> (20 - PAGE_CACHE_SHIFT));
+                return -ERANGE;
+        }
+
+        spin_lock(&sbi->ll_lock);
+        sbi->ll_async_page_max = val << (20 - PAGE_CACHE_SHIFT);
+        spin_unlock(&sbi->ll_lock);
+
+        if (sbi->ll_async_page_count >= sbi->ll_async_page_max)
+                llap_shrink_cache(sbi, 0);
 
         return count;
 }
@@ -261,9 +272,9 @@ static struct lprocfs_vars lprocfs_obd_vars[] = {
         { "filestotal",   ll_rd_filestotal,       0, 0 },
         { "filesfree",    ll_rd_filesfree,        0, 0 },
         //{ "filegroups",   lprocfs_rd_filegroups,  0, 0 },
-        { "read_ahead",   ll_rd_read_ahead, ll_wr_read_ahead, 0 },
-        { "max_read_ahead_mb",   ll_rd_max_read_ahead_mb, 
-                                 ll_wr_max_read_ahead_mb, 0 },
+        { "max_read_ahead_mb", ll_rd_max_readahead_mb,
+                               ll_wr_max_readahead_mb, 0 },
+        { "max_cached_mb", ll_rd_max_cached_mb, ll_wr_max_cached_mb, 0 },
         { 0 }
 };
 
@@ -458,24 +469,6 @@ void lprocfs_unregister_mountpoint(struct ll_sb_info *sbi)
 }
 #undef MAX_STRING_SIZE
 
-static struct ll_async_page *llite_pglist_next_llap(struct ll_sb_info *sbi,
-                                                    struct list_head *list)
-{
-        struct ll_async_page *llap;
-        struct list_head *pos;
-
-        list_for_each(pos, list) {
-                if (pos == &sbi->ll_pglist)
-                        return NULL;
-                llap = list_entry(pos, struct ll_async_page, llap_proc_item);
-                if (llap->llap_page == NULL)
-                        continue;
-                return llap;
-        }
-        LBUG();
-        return NULL;
-}
-
 #define seq_page_flag(seq, page, flag, has_flags) do {                  \
                 if (test_bit(PG_##flag, &(page)->flags)) {              \
                         if (!has_flags)                                 \
@@ -486,6 +479,16 @@ static struct ll_async_page *llite_pglist_next_llap(struct ll_sb_info *sbi,
                 }                                                       \
         } while(0);
 
+static void *llite_dump_pgcache_seq_start(struct seq_file *seq, loff_t *pos)
+{
+        struct ll_async_page *dummy_llap = seq->private;
+
+        if (dummy_llap->llap_magic == 2)
+                return NULL;
+
+        return (void *)1;
+}
+
 static int llite_dump_pgcache_seq_show(struct seq_file *seq, void *v)
 {
         struct ll_async_page *llap, *dummy_llap = seq->private;
@@ -494,32 +497,27 @@ static int llite_dump_pgcache_seq_show(struct seq_file *seq, void *v)
         /* 2.4 doesn't seem to have SEQ_START_TOKEN, so we implement
          * it in our own state */
         if (dummy_llap->llap_magic == 0) {
-                seq_printf(seq, "generation | llap cookie origin | page ");
-                seq_printf(seq, "inode index count [ page flags ]\n");
+                seq_printf(seq, "gener |  llap  cookie  origin wq du | page "
+                                "inode index count [ page flags ]\n");
                 return 0;
         }
 
         spin_lock(&sbi->ll_lock);
 
-        llap = llite_pglist_next_llap(sbi, &dummy_llap->llap_proc_item);
+        llap = llite_pglist_next_llap(sbi, &dummy_llap->llap_pglist_item);
         if (llap != NULL)  {
                 int has_flags = 0;
                 struct page *page = llap->llap_page;
-                static char *origins[] = {
-                        [LLAP_ORIGIN_UNKNOWN] = "--",
-                        [LLAP_ORIGIN_READPAGE] = "rp",
-                        [LLAP_ORIGIN_READAHEAD] = "ra",
-                        [LLAP_ORIGIN_COMMIT_WRITE] = "cw",
-                        [LLAP_ORIGIN_WRITEPAGE] = "wp",
-                };
 
                 LASSERTF(llap->llap_origin < LLAP__ORIGIN_MAX, "%u\n",
                          llap->llap_origin);
 
-                seq_printf(seq, "%lu | %p %p %s | %p %p %lu %u [",
+                seq_printf(seq, "%5lu | %p %p %s %s %s | %p %p %lu %u [",
                                 sbi->ll_pglist_gen,
                                 llap, llap->llap_cookie,
-                                origins[llap->llap_origin],
+                                llap_origins[llap->llap_origin],
+                                llap->llap_write_queued ? "wq" : "- ",
+                                llap->llap_defer_uptodate ? "du" : "- ",
                                 page, page->mapping->host, page->index,
                                 page_count(page));
                 seq_page_flag(seq, page, locked, has_flags);
@@ -539,16 +537,6 @@ static int llite_dump_pgcache_seq_show(struct seq_file *seq, void *v)
         return 0;
 }
 
-static void *llite_dump_pgcache_seq_start(struct seq_file *seq, loff_t *pos)
-{
-        struct ll_async_page *llap = seq->private;
-
-        if (llap->llap_magic == 2)
-                return NULL;
-
-        return (void *)1;
-}
-
 static void *llite_dump_pgcache_seq_next(struct seq_file *seq, void *v, 
                                          loff_t *pos)
 {
@@ -565,11 +553,11 @@ static void *llite_dump_pgcache_seq_next(struct seq_file *seq, void *v,
          * we advance to a position beyond it, returning null if there
          * isn't another llap in the list beyond that new position. */
         spin_lock(&sbi->ll_lock);
-        llap = llite_pglist_next_llap(sbi, &dummy_llap->llap_proc_item);
-        list_del_init(&dummy_llap->llap_proc_item);
+        llap = llite_pglist_next_llap(sbi, &dummy_llap->llap_pglist_item);
+        list_del_init(&dummy_llap->llap_pglist_item);
         if (llap) {
-                list_add(&dummy_llap->llap_proc_item, &llap->llap_proc_item);
-                llap = llite_pglist_next_llap(sbi, &dummy_llap->llap_proc_item);
+                list_add(&dummy_llap->llap_pglist_item,&llap->llap_pglist_item);
+                llap =llite_pglist_next_llap(sbi,&dummy_llap->llap_pglist_item);
         }
         spin_unlock(&sbi->ll_lock);
 
@@ -606,28 +594,28 @@ struct seq_operations llite_dump_pgcache_seq_sops = {
 static int llite_dump_pgcache_seq_open(struct inode *inode, struct file *file)
 {
         struct proc_dir_entry *dp = PDE(inode);
-        struct ll_async_page *llap;
+        struct ll_async_page *dummy_llap;
         struct seq_file *seq;
         struct ll_sb_info *sbi = dp->data;
         int rc;
 
-        OBD_ALLOC_GFP(llap, sizeof(*llap), GFP_KERNEL);
-        if (llap == NULL)
+        OBD_ALLOC_GFP(dummy_llap, sizeof(*dummy_llap), GFP_KERNEL);
+        if (dummy_llap == NULL)
                 return -ENOMEM;
-        llap->llap_page = NULL;
-        llap->llap_cookie = sbi;
-        llap->llap_magic = 0;
+        dummy_llap->llap_page = NULL;
+        dummy_llap->llap_cookie = sbi;
+        dummy_llap->llap_magic = 0;
 
         rc = seq_open(file, &llite_dump_pgcache_seq_sops);
         if (rc) {
-                OBD_FREE(llap, sizeof(*llap));
+                OBD_FREE(dummy_llap, sizeof(*dummy_llap));
                 return rc;
         }
         seq = file->private_data;
-        seq->private = llap;
+        seq->private = dummy_llap;
 
         spin_lock(&sbi->ll_lock);
-        list_add(&llap->llap_proc_item, &sbi->ll_pglist);
+        list_add(&dummy_llap->llap_pglist_item, &sbi->ll_pglist);
         spin_unlock(&sbi->ll_lock);
 
         return 0;
@@ -637,14 +625,14 @@ static int llite_dump_pgcache_seq_release(struct inode *inode,
                                           struct file *file)
 {
         struct seq_file *seq = file->private_data;
-        struct ll_async_page *llap = seq->private;
-        struct ll_sb_info *sbi = llap->llap_cookie;
+        struct ll_async_page *dummy_llap = seq->private;
+        struct ll_sb_info *sbi = dummy_llap->llap_cookie;
 
         spin_lock(&sbi->ll_lock);
-        if (!list_empty(&llap->llap_proc_item))
-                list_del_init(&llap->llap_proc_item);
+        if (!list_empty(&dummy_llap->llap_pglist_item))
+                list_del_init(&dummy_llap->llap_pglist_item);
         spin_unlock(&sbi->ll_lock);
-        OBD_FREE(llap, sizeof(*llap));
+        OBD_FREE(dummy_llap, sizeof(*dummy_llap));
 
         return seq_release(inode, file);
 }

@@ -1024,13 +1024,15 @@ int lov_prep_async_page(struct obd_export *exp, struct lov_stripe_md *lsm,
         int rc;
         ENTRY;
 
+        if (!page)
+                return size_round(sizeof(*lap)) +
+                       obd_prep_async_page(lov->tgts[0].ltd_exp, NULL, NULL,
+                                           NULL, 0, NULL, NULL, NULL);
+
         ASSERT_LSM_MAGIC(lsm);
         LASSERT(loi == NULL);
 
-        OBD_ALLOC(lap, sizeof(*lap));
-        if (lap == NULL)
-                RETURN(-ENOMEM);
-
+        lap = *res;
         lap->lap_magic = LAP_MAGIC;
         lap->lap_caller_ops = ops;
         lap->lap_caller_data = data;
@@ -1043,17 +1045,16 @@ int lov_prep_async_page(struct obd_export *exp, struct lov_stripe_md *lsm,
         /* so the callback doesn't need the lsm */
         lap->lap_loi_id = loi->loi_id;
 
+        lap->lap_sub_cookie = (void *)lap + size_round(sizeof(*lap));
+
         rc = obd_prep_async_page(lov->tgts[loi->loi_ost_idx].ltd_exp,
                                  lsm, loi, page, lap->lap_sub_offset,
                                  &lov_async_page_ops, lap,
                                  &lap->lap_sub_cookie);
-        if (rc) {
-                OBD_FREE(lap, sizeof(*lap));
+        if (rc)
                 RETURN(rc);
-        }
         CDEBUG(D_CACHE, "lap %p page %p cookie %p off "LPU64"\n", lap, page,
                lap->lap_sub_cookie, offset);
-        *res = lap;
         RETURN(0);
 }
 
@@ -1172,7 +1173,6 @@ static int lov_teardown_async_page(struct obd_export *exp,
                        lap->lap_sub_cookie, rc);
                 RETURN(rc);
         }
-        OBD_FREE(lap, sizeof(*lap));
         RETURN(rc);
 }
 

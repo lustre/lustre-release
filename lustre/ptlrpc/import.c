@@ -476,8 +476,10 @@ static int signal_completed_replay(struct obd_import *imp)
         atomic_inc(&imp->imp_replay_inflight);
 
         req = ptlrpc_prep_req(imp, OBD_PING, 0, NULL, NULL);
-        if (!req)
+        if (!req) {
+                atomic_dec(&imp->imp_replay_inflight);
                 RETURN(-ENOMEM);
+        }
 
         req->rq_replen = lustre_msg_size(0, NULL);
         req->rq_send_state = LUSTRE_IMP_REPLAY_WAIT;

@@ -14,7 +14,7 @@
 
 /* default to about 40meg of readahead on a given system.  That much tied
  * up in 512k readahead requests serviced at 40ms each is about 1GB/s. */
-#define SBI_DEFAULT_RA_MAX ((40 << 20) >> PAGE_CACHE_SHIFT)
+#define SBI_DEFAULT_READAHEAD_MAX ((40UL << 20) >> PAGE_CACHE_SHIFT)
 enum ra_stat {
         RA_STAT_HIT = 0,
         RA_STAT_MISS,
@@ -56,8 +56,10 @@ struct ll_sb_info {
 
         struct lprocfs_stats     *ll_stats; /* lprocfs stats counter */
 
+        unsigned long             ll_async_page_max;
+        unsigned long             ll_async_page_count;
         unsigned long             ll_pglist_gen;
-        struct list_head          ll_pglist;
+        struct list_head          ll_pglist; /* all pages (llap_pglist_item) */
 
         struct ll_ra_info         ll_ra_info;
         unsigned int              ll_namelen;
@@ -127,6 +129,8 @@ struct it_cb_data {
 
 #define LLAP_MAGIC 98764321
 
+extern kmem_cache_t *ll_async_page_slab;
+extern size_t ll_async_page_slab_size;
 struct ll_async_page {
         int             llap_magic;
         void            *llap_cookie;
@@ -137,7 +141,7 @@ struct ll_async_page {
                          llap_defer_uptodate:1,
                          llap_origin:3,
                          llap_ra_used:1;
-        struct list_head llap_proc_item;
+        struct list_head llap_pglist_item;
 };
 
 enum {
@@ -148,6 +152,7 @@ enum {
         LLAP_ORIGIN_WRITEPAGE,
         LLAP__ORIGIN_MAX,
 };
+extern char *llap_origins[];
 
 /* llite/lproc_llite.c */
 int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
@@ -177,6 +182,7 @@ int ll_commit_write(struct file *, struct page *, unsigned from, unsigned to);
 int ll_writepage(struct page *page);
 void ll_inode_fill_obdo(struct inode *inode, int cmd, struct obdo *oa);
 void ll_ap_completion(void *data, int cmd, struct obdo *oa, int rc);
+int llap_shrink_cache(struct ll_sb_info *sbi, int shrink_fraction);
 void ll_removepage(struct page *page);
 int ll_readpage(struct file *file, struct page *page);
 struct ll_async_page *llap_from_cookie(void *cookie);
@@ -228,7 +234,6 @@ int lustre_fill_super(struct super_block *sb, void *data, int silent);
 void lustre_put_super(struct super_block *sb);
 struct inode *ll_inode_from_lock(struct ldlm_lock *lock);
 void ll_clear_inode(struct inode *inode);
-int ll_attr2inode(struct inode *inode, struct iattr *attr, int trunc);
 int ll_setattr_raw(struct inode *inode, struct iattr *attr);
 int ll_setattr(struct dentry *de, struct iattr *attr);
 int ll_statfs(struct super_block *sb, struct kstatfs *sfs);
@@ -236,14 +241,16 @@ int ll_statfs_internal(struct super_block *sb, struct obd_statfs *osfs,
                        unsigned long maxage);
 void ll_update_inode(struct inode *inode, struct mds_body *body,
                      struct lov_stripe_md *lsm);
-int it_disposition(struct lookup_intent *it, int flag);
-void it_set_disposition(struct lookup_intent *it, int flag);
 void ll_read_inode2(struct inode *inode, void *opaque);
 int ll_iocontrol(struct inode *inode, struct file *file,
                  unsigned int cmd, unsigned long arg);
 void ll_umount_begin(struct super_block *sb);
 int ll_prep_inode(struct obd_export *exp, struct inode **inode,
                   struct ptlrpc_request *req, int offset, struct super_block *);
+struct ll_async_page *llite_pglist_next_llap(struct ll_sb_info *sbi,
+                                             struct list_head *list);
+
+/* llite/llite_nfs.c */
 __u32 get_uuid2int(const char *name, int len);
 struct dentry *ll_fh_to_dentry(struct super_block *sb, __u32 *data, int len,
                                int fhtype, int parent);
@@ -279,7 +286,6 @@ void ll_close_thread_shutdown(struct ll_close_queue *lcq);
 int ll_close_thread_start(struct ll_close_queue **lcq_ret);
 
 #define LL_SBI_NOLCK            0x1
-#define LL_SBI_READAHEAD        0x2
 
 #define LL_MAX_BLKSIZE          (4UL * 1024 * 1024)
 

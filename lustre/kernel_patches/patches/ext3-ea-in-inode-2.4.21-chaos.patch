@@ -99,7 +99,7 @@ Index: linux-2.4.21-chaos/fs/ext3/xattr.c
  }
  
  /*
-+ * ext3_xattr_ibode_get()
++ * ext3_xattr_ibody_get()
 + *
 + * routine looks for attribute in inode body and returns it's value and size
 + */

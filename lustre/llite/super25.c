@@ -160,6 +160,10 @@ static void __exit exit_lustre_lite(void)
         ll_destroy_inodecache();
         LASSERTF(kmem_cache_destroy(ll_file_data_slab) == 0,
                  "couldn't destroy ll_file_data slab\n");
+        if (ll_async_page_slab)
+                LASSERTF(kmem_cache_destroy(ll_async_page_slab) == 0,
+                         "couldn't destroy ll_async_page slab\n");
+
         if (proc_lustre_fs_root) {
                 lprocfs_remove(proc_lustre_fs_root);
                 proc_lustre_fs_root = NULL;

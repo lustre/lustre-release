@@ -673,7 +673,8 @@ run_test 24n "Statting the old file after renameing (Posix rename 2)"
 
 test_24o() {
 	check_kernel_version 37 || return 0
-	rename_many -s random -v -n 10 $DIR
+	mkdir -p $DIR/d24o
+	rename_many -s random -v -n 10 $DIR/d24o
 }
 run_test 24o "rename of files during htree split ==============="
 
@@ -2102,7 +2103,22 @@ test_63() {
 	done
 	true
 }
-run_test 63 "Verify oig_wait interruption does not crash ======"
+run_test 63 "Verify oig_wait interruption does not crash ======="
+
+# bug 2248 - async write errors didn't return to application on sync
+# bug 3677 - async write errors left page locked
+test_63b() {
+	# ensure we have a grant to do async writes
+	dd if=/dev/zero of=/mnt/lustre/f63b bs=4k count=1
+	rm /mnt/lustre/f63b
+
+	#define OBD_FAIL_OSC_BRW_PREP_REQ        0x406
+	sysctl -w lustre.fail_loc=0x80000406
+	multiop /mnt/lustre/f63b Owy && error "sync didn't return ENOMEM"
+	grep -q locked /proc/fs/lustre/llite/fs*/dump_page_cache && \
+		error "locked page left in cache after async error" || true
+}
+run_test 63b "async write errors should be returned to fsync ==="
 
 test_64a () {
 	df $DIR

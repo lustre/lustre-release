@@ -109,10 +109,11 @@ struct llu_inode_info {
         unsigned long 		lli_st_generation;
 };
 
-#define LLU_SYSIO_COOKIE_SIZE(x) \
+#define LLU_SYSIO_COOKIE_SIZE(exp, x) \
         (sizeof(struct llu_sysio_cookie) + \
          sizeof(struct ll_async_page) * (x) + \
-         sizeof(struct page) * (x))
+         sizeof(struct page) * (x) + \
+         llap_cookie_size * (x))
 
 struct llu_sysio_cookie {
         struct obd_io_group    *lsc_oig;
@@ -121,6 +122,7 @@ struct llu_sysio_cookie {
         int                     lsc_npages;
         struct ll_async_page   *lsc_llap;
         struct page            *lsc_pages;
+        void                   *lsc_llap_cookie;
         __u64                   lsc_rwcount;
 };
 

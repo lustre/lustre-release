@@ -136,11 +136,12 @@ static struct lprocfs_vars lprocfs_obd_vars[] = {
         { "tot_dirty",    lprocfs_filter_rd_tot_dirty,   0, 0 },
         { "tot_pending",  lprocfs_filter_rd_tot_pending, 0, 0 },
         { "tot_granted",  lprocfs_filter_rd_tot_granted, 0, 0 },
+        { "recovery_status", lprocfs_obd_rd_recovery_status, 0, 0 },
+        { "evict_client", 0, lprocfs_wr_evict_client, 0 },
         { "num_exports",  lprocfs_rd_num_exports,   0, 0 },
         { "readcache_max_filesize",
                           lprocfs_filter_rd_readcache,
                           lprocfs_filter_wr_readcache, 0 },
-        { "recovery_status", lprocfs_obd_rd_recovery_status, 0, 0 },
         { 0 }
 };
 

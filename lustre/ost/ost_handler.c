@@ -45,6 +45,7 @@
 #include <linux/lprocfs_status.h>
 #include <linux/lustre_commit_confd.h>
 #include <portals/list.h>
+#include "ost_internal.h"
 
 void oti_init(struct obd_trans_info *oti, struct ptlrpc_request *req)
 {
@@ -1136,7 +1137,8 @@ static int ost_setup(struct obd_device *obd, obd_count len, void *buf)
                 ptlrpc_init_svc(OST_NBUFS, OST_BUFSIZE, OST_MAXREQSIZE,
                                 OST_REQUEST_PORTAL, OSC_REPLY_PORTAL, 30000,
                                 ost_handle, "ost",
-                                obd->obd_proc_entry);
+                                obd->obd_proc_entry,
+                                ost_print_req);
         if (ost->ost_service == NULL) {
                 CERROR("failed to start service\n");
                 GOTO(out_lprocfs, rc = -ENOMEM);
@@ -1151,7 +1153,8 @@ static int ost_setup(struct obd_device *obd, obd_count len, void *buf)
                 ptlrpc_init_svc(OST_NBUFS, OST_BUFSIZE, OST_MAXREQSIZE,
                                 OST_CREATE_PORTAL, OSC_REPLY_PORTAL, 30000,
                                 ost_handle, "ost_create",
-                                obd->obd_proc_entry);
+                                obd->obd_proc_entry,
+                                ost_print_req);
         if (ost->ost_create_service == NULL) {
                 CERROR("failed to start OST create service\n");
                 GOTO(out_service, rc = -ENOMEM);

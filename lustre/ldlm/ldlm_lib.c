@@ -113,8 +113,16 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         spin_lock_init(&cli->cl_write_rpc_hist.oh_lock);
         spin_lock_init(&cli->cl_read_page_hist.oh_lock);
         spin_lock_init(&cli->cl_write_page_hist.oh_lock);
-        cli->cl_max_pages_per_rpc = PTLRPC_MAX_BRW_PAGES;
-        cli->cl_max_rpcs_in_flight = OSC_MAX_RIF_DEFAULT;
+        if (num_physpages >> (20 - PAGE_SHIFT) <= 128) { /* <= 128 MB */
+                cli->cl_max_pages_per_rpc = PTLRPC_MAX_BRW_PAGES / 4;
+                cli->cl_max_rpcs_in_flight = OSC_MAX_RIF_DEFAULT / 4;
+        } else if (num_physpages >> (20 - PAGE_SHIFT) <= 512) { /* <= 512 MB */
+                cli->cl_max_pages_per_rpc = PTLRPC_MAX_BRW_PAGES / 2;
+                cli->cl_max_rpcs_in_flight = OSC_MAX_RIF_DEFAULT / 2;
+        } else {
+                cli->cl_max_pages_per_rpc = PTLRPC_MAX_BRW_PAGES;
+                cli->cl_max_rpcs_in_flight = OSC_MAX_RIF_DEFAULT;
+        }
 
         rc = ldlm_get_ref();
         if (rc) {
@@ -596,6 +604,9 @@ void target_destroy_export(struct obd_export *exp)
 
 static void target_release_saved_req(struct ptlrpc_request *req) 
 {
+        if (req->rq_reply_state != NULL)
+                ptlrpc_rs_decref(req->rq_reply_state);
+
         class_export_put(req->rq_export);
         OBD_FREE(req->rq_reqmsg, req->rq_reqlen);
         OBD_FREE(req, sizeof *req);
@@ -684,15 +695,12 @@ void target_cleanup_recovery(struct obd_device *obd)
         list_for_each_safe(tmp, n, &obd->obd_delayed_reply_queue) {
                 req = list_entry(tmp, struct ptlrpc_request, rq_list);
                 list_del(&req->rq_list);
-                LASSERT (req->rq_reply_state);
-                lustre_free_reply_state(req->rq_reply_state);
                 target_release_saved_req(req);
         }
 
         list_for_each_safe(tmp, n, &obd->obd_recovery_queue) {
                 req = list_entry(tmp, struct ptlrpc_request, rq_list);
                 list_del(&req->rq_list);
-                LASSERT (req->rq_reply_state == 0);
                 target_release_saved_req(req);
         }
 }
@@ -1005,8 +1013,7 @@ int target_queue_final_reply(struct ptlrpc_request *req, int rc)
                 LBUG();
         memcpy(saved_req, req, sizeof *saved_req);
         memcpy(reqmsg, req->rq_reqmsg, req->rq_reqlen);
-        /* the copied req takes over the reply state */
-        req->rq_reply_state = NULL;
+        ptlrpc_rs_addref(req->rq_reply_state);  /* +1 ref for saved reply */
         req = saved_req;
         req->rq_reqmsg = reqmsg;
         class_export_get(req->rq_export);
@@ -1045,18 +1052,6 @@ target_send_reply_msg (struct ptlrpc_request *req, int rc, int fail_id)
         if (OBD_FAIL_CHECK(fail_id | OBD_FAIL_ONCE)) {
                 obd_fail_loc |= OBD_FAIL_ONCE | OBD_FAILED;
                 DEBUG_REQ(D_ERROR, req, "dropping reply");
-                /* NB this does _not_ send with ACK disabled, to simulate
-                 * sending OK, but timing out for the ACK */
-                if (req->rq_reply_state != NULL) {
-                        if (!req->rq_reply_state->rs_difficult) {
-                                lustre_free_reply_state (req->rq_reply_state);
-                                req->rq_reply_state = NULL;
-                        } else {
-                                struct ptlrpc_service *svc =
-                                        req->rq_rqbd->rqbd_srv_ni->sni_service;
-                                atomic_inc(&svc->srv_outstanding_replies);
-                        }
-                }
                 return (-ECOMM);
         }
 
@@ -1087,12 +1082,8 @@ target_send_reply(struct ptlrpc_request *req, int rc, int fail_id)
         
         rs = req->rq_reply_state;
         if (rs == NULL || !rs->rs_difficult) {
-                /* The easy case; no notifiers and reply_out_callback()
-                 * cleans up (i.e. we can't look inside rs after a
-                 * successful send) */
-                netrc = target_send_reply_msg (req, rc, fail_id);
-
-                LASSERT (netrc == 0 || req->rq_reply_state == NULL);
+                /* no notifiers */
+                target_send_reply_msg (req, rc, fail_id);
                 return;
         }
 
@@ -1141,8 +1132,16 @@ target_send_reply(struct ptlrpc_request *req, int rc, int fail_id)
 
         svc->srv_n_difficult_replies++;
 
-        if (netrc != 0) /* error sending: reply is off the net */
+        if (netrc != 0) {
+                /* error sending: reply is off the net.  Also we need +1
+                 * reply ref until ptlrpc_server_handle_reply() is done
+                 * with the reply state (if the send was successful, there
+                 * would have been +1 ref for the net, which
+                 * reply_out_callback leaves alone) */
                 rs->rs_on_net = 0;
+                ptlrpc_rs_addref(rs);
+                atomic_inc (&svc->srv_outstanding_replies);
+        }
 
         if (!rs->rs_on_net ||                   /* some notifier */
             list_empty(&rs->rs_exp_list) ||     /* completed already */

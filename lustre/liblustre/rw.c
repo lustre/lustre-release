@@ -41,7 +41,9 @@
 
 #include "llite_lib.h"
 
-static int llu_lock_to_stripe_offset(struct inode *inode, struct ldlm_lock *lock)
+size_t llap_cookie_size;
+
+static int llu_lock_to_stripe_offset(struct inode *inode,struct ldlm_lock *lock)
 {
         struct llu_inode_info *lli = llu_i2info(inode);
         struct lov_stripe_md *lsm = lli->lli_smd;
@@ -418,12 +420,17 @@ static struct obd_async_page_ops llu_async_page_ops = {
 };
 
 static
-struct llu_sysio_cookie* get_sysio_cookie(struct inode *inode, int maxpages)
+struct llu_sysio_cookie* get_sysio_cookie(struct inode *inode,
+                                          struct obd_export *exp, int maxpages)
 {
         struct llu_sysio_cookie *cookie;
         int rc;
 
-        OBD_ALLOC(cookie, LLU_SYSIO_COOKIE_SIZE(maxpages));
+        if (!llap_cookie_size)
+                llap_cookie_size = obd_prep_async_page(llu_i2obdexp(inode),
+                                                       NULL, NULL, NULL, 0,
+                                                       NULL, NULL, NULL);
+        OBD_ALLOC(cookie, LLU_SYSIO_COOKIE_SIZE(exp, maxpages));
         if (cookie == NULL)
                 goto out;
 
@@ -432,10 +439,11 @@ struct llu_sysio_cookie* get_sysio_cookie(struct inode *inode, int maxpages)
         cookie->lsc_maxpages = maxpages;
         cookie->lsc_llap = (struct ll_async_page *)(cookie + 1);
         cookie->lsc_pages = (struct page *) (cookie->lsc_llap + maxpages);
+        cookie->lsc_llap_cookie = (void *)(cookie->lsc_pages + maxpages);
 
         rc = oig_init(&cookie->lsc_oig);
         if (rc) {
-                OBD_FREE(cookie, LLU_SYSIO_COOKIE_SIZE(maxpages));
+                OBD_FREE(cookie, LLU_SYSIO_COOKIE_SIZE(exp, maxpages));
                 cookie = NULL;
         }
 
@@ -469,7 +477,7 @@ void put_sysio_cookie(struct llu_sysio_cookie *cookie)
         I_RELE(cookie->lsc_inode);
 
         oig_release(cookie->lsc_oig);
-        OBD_FREE(cookie, LLU_SYSIO_COOKIE_SIZE(cookie->lsc_maxpages));
+        OBD_FREE(cookie, LLU_SYSIO_COOKIE_SIZE(exp, cookie->lsc_maxpages));
 }
 
 #ifdef LIBLUSTRE_HANDLE_UNALIGNED_PAGE
@@ -560,6 +568,7 @@ int llu_prep_async_io(struct llu_sysio_cookie *cookie, int cmd,
         struct obd_export *exp = llu_i2obdexp(cookie->lsc_inode);
         struct page *pages = cookie->lsc_pages;
         struct ll_async_page *llap = cookie->lsc_llap;
+        void *llap_cookie = cookie->lsc_llap_cookie;
         int i, rc, npages = 0;
         ENTRY;
 
@@ -611,6 +620,7 @@ int llu_prep_async_io(struct llu_sysio_cookie *cookie, int cmd,
 
         for (i = 0; i < npages; i++) {
                 llap[i].llap_magic = LLAP_MAGIC;
+                llap[i].llap_cookie = llap_cookie + i * llap_cookie_size;
                 rc = obd_prep_async_page(exp, lsm, NULL, &pages[i],
                                          (obd_off)pages[i].index << PAGE_SHIFT,
                                          &llu_async_page_ops,
@@ -661,7 +671,7 @@ llu_rw(int cmd, struct inode *inode, char *buf, size_t count, loff_t pos)
 
         max_pages = (count >> PAGE_SHIFT) + 2;
 
-        cookie = get_sysio_cookie(inode, max_pages);
+        cookie = get_sysio_cookie(inode, llu_i2obdexp(inode), max_pages);
         if (!cookie)
                 RETURN(ERR_PTR(-ENOMEM));
 

@@ -156,7 +156,7 @@ struct oig_callback_context {
          * callees of this method are encouraged to abort their state 
          * in the oig.  This may be called multiple times. */
         void (*occ_interrupted)(struct oig_callback_context *occ);
-        int interrupted;
+        unsigned interrupted:1;
 };
 
 /* if we find more consumers this could be generalized */
@@ -322,8 +322,6 @@ struct mds_obd {
         struct file                     *mds_lov_objid_filp;
         unsigned long                   *mds_client_bitmap;
         struct semaphore                 mds_orphan_recovery_sem;
-
-        atomic_t                         mds_open_count;
 };
 
 struct echo_obd {

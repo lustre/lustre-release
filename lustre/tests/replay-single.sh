@@ -978,5 +978,18 @@ test_52() {
 }
 run_test 52 "time out lock replay (3764)"
 
+#b3761 ASSERTION(hash != 0) failed
+test_53() {
+# OBD_FAIL_MDS_OPEN_CREATE | OBD_FAIL_ONCE
+    do_facet mds "sysctl -w lustre.fail_loc=0x8000012b"
+    touch $DIR/$tfile &
+    # give touch a chance to run
+    sleep 5
+    do_facet mds "sysctl -w lustre.fail_loc=0x0"
+    rm $DIR/$tfile
+    return 0
+}
+run_test 53 "let MDS_CHECK_RESENT return the original return code instead of 0"
+
 equals_msg test complete, cleaning up
 $CLEANUP

@@ -747,6 +747,7 @@ static int osc_brw_prep_request(int cmd, struct obd_import *imp,struct obdo *oa,
         size[1] = sizeof(*ioobj);
         size[2] = niocount * sizeof(*niobuf);
 
+        OBD_FAIL_RETURN(OBD_FAIL_OSC_BRW_PREP_REQ, -ENOMEM);
         req = ptlrpc_prep_req(imp, opc, 3, size, NULL);
         if (req == NULL)
                 return (-ENOMEM);
@@ -1196,9 +1197,9 @@ static void osc_process_ar(struct osc_async_rc *ar, struct ptlrpc_request *req,
                 ar->ar_min_xid = ptlrpc_sample_next_xid();
                 return;
 
-        } 
-        
-        if (ar->ar_force_sync && (ptlrpc_req_xid(req) >= ar->ar_min_xid))
+        }
+
+        if (ar->ar_force_sync && req && (ptlrpc_req_xid(req) >= ar->ar_min_xid))
                 ar->ar_force_sync = 0;
 }
 
@@ -1211,13 +1212,12 @@ static void osc_ap_completion(struct client_obd *cli, struct obdo *oa,
         oap->oap_async_flags = 0;
         oap->oap_interrupted = 0;
 
-        if (oap->oap_request != NULL) {
-                if (sent && oap->oap_cmd == OBD_BRW_WRITE) {
-                        osc_process_ar(&cli->cl_ar, oap->oap_request, rc);
-                        osc_process_ar(&oap->oap_loi->loi_ar, 
-                                        oap->oap_request, rc);
-                }
+        if (oap->oap_cmd == OBD_BRW_WRITE) {
+                osc_process_ar(&cli->cl_ar, oap->oap_request, rc);
+                osc_process_ar(&oap->oap_loi->loi_ar, oap->oap_request, rc);
+        }
 
+        if (oap->oap_request != NULL) {
                 ptlrpc_req_finished(oap->oap_request);
                 oap->oap_request = NULL;
         }
@@ -1485,6 +1485,7 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
                                                   oap->oap_count);
                                 continue;
                         }
+                        osc_ap_completion(cli, NULL, oap, 0, PTR_ERR(request));
 
                         /* put the page back in the loi/lop lists */
                         list_add_tail(&oap->oap_pending_item,
@@ -1831,10 +1832,10 @@ int osc_prep_async_page(struct obd_export *exp, struct lov_stripe_md *lsm,
         struct osc_async_page *oap;
         ENTRY;
 
-        OBD_ALLOC(oap, sizeof(*oap));
-        if (oap == NULL)
-                return -ENOMEM;
+        if (!page)
+                return size_round(sizeof(*oap));
 
+        oap = *res;
         oap->oap_magic = OAP_MAGIC;
         oap->oap_cli = &exp->exp_obd->u.cli;
         oap->oap_loi = loi;
@@ -1852,7 +1853,6 @@ int osc_prep_async_page(struct obd_export *exp, struct lov_stripe_md *lsm,
         oap->oap_occ.occ_interrupted = osc_occ_interrupted;
 
         CDEBUG(D_CACHE, "oap %p page %p obj off "LPU64"\n", oap, page, offset);
-        *res = oap;
         RETURN(0);
 }
 
@@ -2116,8 +2116,6 @@ static int osc_teardown_async_page(struct obd_export *exp,
         LOI_DEBUG(loi, "oap %p page %p torn down\n", oap, oap->oap_page);
 out:
         spin_unlock(&cli->cl_loi_list_lock);
-        if (rc == 0)
-                OBD_FREE(oap, sizeof(*oap));
         RETURN(rc);
 }
 

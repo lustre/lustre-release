@@ -304,17 +304,15 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
                 GOTO(cleanup, rc);
 
         dentry = filter_oa2dentry(obd, oa);
-        if (IS_ERR(dentry))
-                GOTO(cleanup, rc = PTR_ERR(dentry));
-
-        if (dentry->d_inode == NULL) {
-                CERROR("trying to BRW to non-existent file "LPU64"\n",
-                               obj->ioo_id);
-                GOTO(cleanup, rc = -ENOENT);
+        if (IS_ERR(dentry)) {
+                rc = PTR_ERR(dentry);
+                dentry = NULL;
+                GOTO(cleanup, rc);
         }
+
         inode = dentry->d_inode;
 
-        obdo_to_inode(dentry->d_inode, oa, OBD_MD_FLATIME);
+        obdo_to_inode(inode, oa, OBD_MD_FLATIME);
 
         fsfilt_check_slow(now, obd_timeout, "preprw_read setup");
 
@@ -370,8 +368,6 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
 
                 if (dentry != NULL)
                         f_dput(dentry);
-                else
-                        CERROR("NULL dentry in cleanup -- tell CFS\n");
         }
 
         if (iobuf != NULL)

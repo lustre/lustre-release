@@ -216,8 +216,12 @@ void request_in_callback(ptl_event_t *ev)
         req->rq_peer.peer_ni = rqbd->rqbd_srv_ni->sni_ni;
         ptlrpc_id2str(&req->rq_peer, req->rq_peerstr);
         req->rq_rqbd = rqbd;
+        req->rq_phase = RQ_PHASE_NEW;
         
         spin_lock_irqsave (&service->srv_lock, flags);
+
+        req->rq_history_seq = service->srv_request_seq++;
+        list_add_tail(&req->rq_history_list, &service->srv_request_history);
 
         if (ev->unlinked) {
                 srv_ni->sni_nrqbd_receiving--;
@@ -265,9 +269,10 @@ void reply_out_callback(ptl_event_t *ev)
                  ev->type == PTL_EVENT_UNLINK);
 
         if (!rs->rs_difficult) {
-                /* I'm totally responsible for freeing "easy" replies */
+                /* 'Easy' replies have no further processing so I drop the
+                 * net's ref on 'rs' */
                 LASSERT (ev->unlinked);
-                lustre_free_reply_state (rs);
+                ptlrpc_rs_decref(rs);
                 atomic_dec (&svc->srv_outstanding_replies);
                 EXIT;
                 return;
@@ -276,7 +281,8 @@ void reply_out_callback(ptl_event_t *ev)
         LASSERT (rs->rs_on_net);
 
         if (ev->unlinked) {
-                /* Last network callback */
+                /* Last network callback.  The net's ref on 'rs' stays put
+                 * until ptlrpc_server_handle_reply() is done with it */
                 spin_lock_irqsave (&svc->srv_lock, flags);
                 rs->rs_on_net = 0;
                 ptlrpc_schedule_difficult_reply (rs);

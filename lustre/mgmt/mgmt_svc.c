@@ -91,7 +91,7 @@ static int mgmt_setup(struct obd_device *obd, obd_count len, void *buf)
         mgmt_service = 
                 ptlrpc_init_svc(MGMT_NBUFS, MGMT_BUFSIZE, MGMT_MAXREQSIZE,
                                 MGMT_REQUEST_PORTAL, MGMT_REPLY_PORTAL, 30000,
-                                mgmt_handler, "mgmt", obd->obd_proc_entry);
+                                mgmt_handler, "mgmt", obd->obd_proc_entry, NULL);
         if (!mgmt_service) {
                 CERROR("Failed to start mgmt service\n");
                 RETURN(-ENOMEM);

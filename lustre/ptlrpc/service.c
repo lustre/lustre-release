@@ -37,18 +37,6 @@ static int ptlrpc_server_post_idle_rqbds (struct ptlrpc_service *svc);
 static LIST_HEAD (ptlrpc_all_services);
 static spinlock_t ptlrpc_all_services_lock = SPIN_LOCK_UNLOCKED;
 
-static void
-ptlrpc_free_server_req (struct ptlrpc_request *req)
-{
-        /* The last request to be received into a request buffer uses space
-         * in the request buffer descriptor, otherwise requests are
-         * allocated dynamically in the incoming reply event handler */
-        if (req == &req->rq_rqbd->rqbd_req)
-                return;
-
-        OBD_FREE(req, sizeof(*req));
-}
-
 static char *
 ptlrpc_alloc_request_buffer (int size)
 {
@@ -86,6 +74,7 @@ ptlrpc_alloc_rqbd (struct ptlrpc_srv_ni *srv_ni)
         rqbd->rqbd_refcount = 0;
         rqbd->rqbd_cbid.cbid_fn = request_in_callback;
         rqbd->rqbd_cbid.cbid_arg = rqbd;
+        INIT_LIST_HEAD(&rqbd->rqbd_reqs);
         rqbd->rqbd_buffer = ptlrpc_alloc_request_buffer(svc->srv_buf_size);
 
         if (rqbd->rqbd_buffer == NULL) {
@@ -109,6 +98,7 @@ ptlrpc_free_rqbd (struct ptlrpc_request_buffer_desc *rqbd)
         unsigned long          flags;
         
         LASSERT (rqbd->rqbd_refcount == 0);
+        LASSERT (list_empty(&rqbd->rqbd_reqs));
 
         spin_lock_irqsave(&svc->srv_lock, flags);
         list_del(&rqbd->rqbd_list);
@@ -280,7 +270,8 @@ struct ptlrpc_service *
 ptlrpc_init_svc(int nbufs, int bufsize, int max_req_size,
                 int req_portal, int rep_portal, int watchdog_timeout,
                 svc_handler_t handler, char *name,
-                struct proc_dir_entry *proc_entry)
+                struct proc_dir_entry *proc_entry,
+                svcreq_printfn_t svcreq_printfn)
 {
         int                                i;
         int                                rc;
@@ -311,9 +302,14 @@ ptlrpc_init_svc(int nbufs, int bufsize, int max_req_size,
         service->srv_req_portal = req_portal;
         service->srv_watchdog_timeout = watchdog_timeout;
         service->srv_handler = handler;
+        service->srv_request_history_print_fn = svcreq_printfn;
+        service->srv_request_seq = 1;           /* valid seq #s start at 1 */
+        service->srv_request_max_cull_seq = 0;
 
         INIT_LIST_HEAD(&service->srv_request_queue);
         INIT_LIST_HEAD(&service->srv_idle_rqbds);
+        INIT_LIST_HEAD(&service->srv_history_rqbds);
+        INIT_LIST_HEAD(&service->srv_request_history);
         INIT_LIST_HEAD(&service->srv_reply_queue);
 
         /* First initialise enough for early teardown */
@@ -357,23 +353,83 @@ failed:
 }
 
 static void
-ptlrpc_server_free_request(struct ptlrpc_service *svc, struct ptlrpc_request *req)
+ptlrpc_server_free_request(struct ptlrpc_request *req)
 {
-        unsigned long  flags;
-        int            refcount;
-        
-        spin_lock_irqsave(&svc->srv_lock, flags);
-        svc->srv_n_active_reqs--;
-        refcount = --(req->rq_rqbd->rqbd_refcount);
-        if (refcount == 0) {
-                /* request buffer is now idle */
-                list_del(&req->rq_rqbd->rqbd_list);
-                list_add_tail(&req->rq_rqbd->rqbd_list,
-                              &svc->srv_idle_rqbds);
-        }
-        spin_unlock_irqrestore(&svc->srv_lock, flags);
+        struct ptlrpc_request_buffer_desc *rqbd = req->rq_rqbd;
+        struct ptlrpc_srv_ni              *srv_ni = rqbd->rqbd_srv_ni;
+        struct ptlrpc_service             *svc = srv_ni->sni_service;
+        unsigned long                      flags;
+        int                                refcount;
+        struct list_head                  *tmp;
+        struct list_head                  *nxt;
 
-        ptlrpc_free_server_req(req);
+        spin_lock_irqsave(&svc->srv_lock, flags);
+
+        svc->srv_n_active_reqs--;
+        list_add (&req->rq_list, &rqbd->rqbd_reqs);
+
+        refcount = --(rqbd->rqbd_refcount);
+        if (refcount == 0) {
+                /* request buffer is now idle: add to history */
+                list_del(&rqbd->rqbd_list);
+                list_add_tail(&rqbd->rqbd_list, &svc->srv_history_rqbds);
+                svc->srv_n_history_rqbds++;
+                
+                /* cull some history? 
+                 * I expect only about 1 or 2 rqbds need to be recycled here */
+                while (svc->srv_n_history_rqbds > svc->srv_max_history_rqbds) {
+                        rqbd = list_entry(svc->srv_history_rqbds.next,
+                                          struct ptlrpc_request_buffer_desc,
+                                          rqbd_list);
+
+                        list_del(&rqbd->rqbd_list);
+                        svc->srv_n_history_rqbds--;
+
+                        /* remove rqbd's reqs from svc's req history while
+                         * I've got the service lock */
+                        list_for_each(tmp, &rqbd->rqbd_reqs) {
+                                req = list_entry(tmp, struct ptlrpc_request,
+                                                 rq_list);
+                                /* Track the highest culled req seq */
+                                if (req->rq_history_seq >
+                                    svc->srv_request_max_cull_seq)
+                                        svc->srv_request_max_cull_seq =
+                                                req->rq_history_seq;
+                                list_del(&req->rq_history_list);
+                        }
+
+                        spin_unlock_irqrestore(&svc->srv_lock, flags);
+
+                        list_for_each_safe(tmp, nxt, &rqbd->rqbd_reqs) {
+                                req = list_entry(rqbd->rqbd_reqs.next,
+                                                 struct ptlrpc_request,
+                                                 rq_list);
+
+                                list_del(&req->rq_list);
+
+                                if (req->rq_reply_state != NULL) {
+                                        ptlrpc_rs_decref(req->rq_reply_state);
+                                        req->rq_reply_state = NULL;
+                                }
+
+                                if (req != &rqbd->rqbd_req) {
+                                        /* NB request buffers use an embedded
+                                         * req if the incoming req unlinked the
+                                         * MD; this isn't one of them! */
+                                        OBD_FREE(req, sizeof(*req));
+                                }
+                        }
+
+                        spin_lock_irqsave(&svc->srv_lock, flags);
+
+                        /* schedule request buffer for re-use.  
+                         * NB I can only do this after I've disposed of their
+                         * reqs; particularly the embedded req */
+                        list_add_tail(&rqbd->rqbd_list, &svc->srv_idle_rqbds);
+                }
+        }
+        
+        spin_unlock_irqrestore(&svc->srv_lock, flags);
 }
 
 static int
@@ -464,6 +520,8 @@ ptlrpc_server_handle_request (struct ptlrpc_service *svc)
                 request->rq_export->exp_last_request_time = CURRENT_SECONDS;
         }
 
+        request->rq_phase = RQ_PHASE_INTERPRET;
+
         CDEBUG(D_RPCTRACE, "Handling RPC pname:cluuid+ref:pid:xid:ni:nid:opc "
                "%s:%s+%d:%d:"LPU64":%s:%s:%d\n", current->comm,
                (request->rq_export ?
@@ -476,6 +534,8 @@ ptlrpc_server_handle_request (struct ptlrpc_service *svc)
                request->rq_reqmsg->opc);
 
         rc = svc->srv_handler(request);
+
+        request->rq_phase = RQ_PHASE_COMPLETE;
 
         CDEBUG(D_RPCTRACE, "Handled RPC pname:cluuid+ref:pid:xid:ni:nid:opc "
                "%s:%s+%d:%d:"LPU64":%s:%s:%d\n", current->comm,
@@ -513,7 +573,7 @@ put_conn:
                 }
         }
 
-        ptlrpc_server_free_request(svc, request);
+        ptlrpc_server_free_request(request);
         
         RETURN(1);
 }
@@ -605,7 +665,7 @@ ptlrpc_server_handle_reply (struct ptlrpc_service *svc)
                 
                 class_export_put (exp);
                 rs->rs_export = NULL;
-                lustre_free_reply_state (rs);
+                ptlrpc_rs_decref (rs);
                 atomic_dec (&svc->srv_outstanding_replies);
                 RETURN(1);
         }
@@ -678,6 +738,12 @@ ptlrpc_check_rqbd_pools(struct ptlrpc_service *svc)
 
                 avail += sni->sni_nrqbd_receiving;
                 /* NB I'm not locking; just looking. */
+
+                /* CAVEAT EMPTOR: We might be allocating buffers here
+                 * because we've allowed the request history to grow out of
+                 * control.  We could put a sanity check on that here and
+                 * cull some history if we need the space. */
+
                 if (sni->sni_nrqbd_receiving <= low_water)
                         ptlrpc_grow_req_bufs(sni);
         }
@@ -918,6 +984,10 @@ int ptlrpc_unregister_service(struct ptlrpc_service *service)
 
         ptlrpc_lprocfs_unregister_service(service);
 
+        /* All history will be culled when the next request buffer is
+         * freed */
+        service->srv_max_history_rqbds = 0;
+
         for (i = 0; i < ptlrpc_ninterfaces; i++) {
                 srv_ni = &service->srv_interfaces[i];
                 CDEBUG(D_NET, "%s: tearing down interface %s\n",
@@ -982,10 +1052,11 @@ int ptlrpc_unregister_service(struct ptlrpc_service *service)
                 service->srv_n_queued_reqs--;
                 service->srv_n_active_reqs++;
 
-                ptlrpc_server_free_request(service, req);
+                ptlrpc_server_free_request(req);
         }
         LASSERT(service->srv_n_queued_reqs == 0);
         LASSERT(service->srv_n_active_reqs == 0);
+        LASSERT(service->srv_n_history_rqbds == 0);
 
         for (i = 0; i < ptlrpc_ninterfaces; i++) {
                 srv_ni = &service->srv_interfaces[i];

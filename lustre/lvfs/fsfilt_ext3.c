@@ -1027,7 +1027,7 @@ int fsfilt_ext3_map_bm_inode_pages(struct inode *inode, struct page **page,
                                inode->i_ino, *b, *cr, create, rc);
                         break;
                 }
-                                                                                                                             
+
                 b += blocks_per_page;
                 cr += blocks_per_page;
         }
@@ -1053,7 +1053,7 @@ int fsfilt_ext3_map_inode_pages(struct inode *inode, struct page **page,
                                             created, create);
         if (optional_sem != NULL)
                 up(optional_sem);
-                                                                                                                             
+
         return rc;
 }
 

@@ -91,6 +91,8 @@ out:
         if (rc) {
                 if (!lli->lli_async_rc)
                         lli->lli_async_rc = rc;
+                SetPageDirty(page);
+                ClearPageLaunder(page);
                 unlock_page(page);
         }
         RETURN(rc);

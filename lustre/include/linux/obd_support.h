@@ -88,6 +88,7 @@ extern wait_queue_head_t obd_race_waitq;
 #define OBD_FAIL_MDS_PAUSE_OPEN          0x129
 #endif
 #define OBD_FAIL_MDS_STATFS_LCW_SLEEP    0x12a
+#define OBD_FAIL_MDS_OPEN_CREATE         0x12b
 
 #define OBD_FAIL_OST                     0x200
 #define OBD_FAIL_OST_CONNECT_NET         0x201
@@ -133,6 +134,7 @@ extern wait_queue_head_t obd_race_waitq;
 #define OBD_FAIL_OSC_LOCK_BL_AST         0x403
 #define OBD_FAIL_OSC_LOCK_CP_AST         0x404
 #define OBD_FAIL_OSC_MATCH               0x405
+#define OBD_FAIL_OSC_BRW_PREP_REQ        0x406
 
 #define OBD_FAIL_PTLRPC                  0x500
 #define OBD_FAIL_PTLRPC_ACK              0x501

@@ -1187,10 +1187,6 @@ int mds_handle(struct ptlrpc_request *req)
                 rc = mds_readpage(req);
 
                 if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_MDS_SENDPAGE)) {
-                        if (req->rq_reply_state) {
-                                lustre_free_reply_state (req->rq_reply_state);
-                                req->rq_reply_state = NULL;
-                        }
                         RETURN(0);
                 }
 
@@ -1433,7 +1429,6 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         spin_lock_init(&mds->mds_transno_lock);
         mds->mds_max_mdsize = sizeof(struct lov_mds_md);
         mds->mds_max_cookiesize = sizeof(struct llog_cookie);
-        atomic_set(&mds->mds_open_count, 0);
 
         sprintf(ns_name, "mds-%s", obd->obd_uuid.uuid);
         obd->obd_namespace = ldlm_namespace_new(ns_name, LDLM_NAMESPACE_SERVER);
@@ -1904,7 +1899,7 @@ static int mdt_setup(struct obd_device *obd, obd_count len, void *buf)
                 ptlrpc_init_svc(MDS_NBUFS, MDS_BUFSIZE, MDS_MAXREQSIZE,
                                 MDS_REQUEST_PORTAL, MDC_REPLY_PORTAL,
                                 MDS_SERVICE_WATCHDOG_TIMEOUT,
-                                mds_handle, "mds", obd->obd_proc_entry);
+                                mds_handle, "mds", obd->obd_proc_entry, NULL);
 
         if (!mds->mds_service) {
                 CERROR("failed to start service\n");
@@ -1921,7 +1916,7 @@ static int mdt_setup(struct obd_device *obd, obd_count len, void *buf)
                                 MDS_SETATTR_PORTAL, MDC_REPLY_PORTAL,
                                 MDS_SERVICE_WATCHDOG_TIMEOUT,
                                 mds_handle, "mds_setattr",
-                                obd->obd_proc_entry);
+                                obd->obd_proc_entry, NULL);
         if (!mds->mds_setattr_service) {
                 CERROR("failed to start getattr service\n");
                 GOTO(err_thread, rc = -ENOMEM);
@@ -1937,7 +1932,7 @@ static int mdt_setup(struct obd_device *obd, obd_count len, void *buf)
                                 MDS_READPAGE_PORTAL, MDC_REPLY_PORTAL,
                                 MDS_SERVICE_WATCHDOG_TIMEOUT,
                                 mds_handle, "mds_readpage",
-                                obd->obd_proc_entry);
+                                obd->obd_proc_entry, NULL);
         if (!mds->mds_readpage_service) {
                 CERROR("failed to start readpage service\n");
                 GOTO(err_thread2, rc = -ENOMEM);
