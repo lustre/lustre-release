@@ -400,8 +400,7 @@ class LCTLInterface:
   network %s
   add_uuid %s %s
   connect %s %d
-  quit""" % (net, srv.uuid, srv.nid, srv.nid, srv.port,  )
-            
+  quit""" % (srv.net_type, srv.uuid, srv.nid, srv.nid, srv.port)
         self.run(cmds)
                 
     # add a route to a range
