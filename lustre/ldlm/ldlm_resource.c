@@ -86,7 +86,7 @@ static int cleanup_resource(struct ldlm_resource *res, struct list_head *q)
                         CERROR("Freeing a lock still held by a client node.\n");
 
                         ldlm_resource_unlink_lock(lock);
-                        ldlm_lock_free(lock);
+                        ldlm_lock_destroy(lock);
 
                         rc = ldlm_resource_put(res);
                 }
@@ -251,7 +251,7 @@ struct ldlm_resource *ldlm_resource_get(struct ldlm_namespace *ns,
         RETURN(res);
 }
 
-struct ldlm_resource *ldlm_resource_addref(struct ldlm_resource *res)
+struct ldlm_resource *ldlm_resource_getref(struct ldlm_resource *res)
 {
         atomic_inc(&res->lr_refcount);
         return res;

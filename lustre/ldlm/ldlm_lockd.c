@@ -126,7 +126,7 @@ static int ldlm_handle_convert(struct ptlrpc_service *svc, struct ptlrpc_request
                 req->rq_status = EINVAL;
         } else {         
                 LDLM_DEBUG(lock, "server-side convert handler START");
-                ldlm_lock_convert(lock, dlm_req->lock_desc.l_req_mode,
+                ldlm_convert(lock, dlm_req->lock_desc.l_req_mode,
                                   &dlm_rep->lock_flags);
                 req->rq_status = 0;
         }
@@ -463,7 +463,6 @@ EXPORT_SYMBOL(ldlm_lock_decref);
 EXPORT_SYMBOL(ldlm_cli_convert);
 EXPORT_SYMBOL(ldlm_cli_enqueue);
 EXPORT_SYMBOL(ldlm_cli_cancel);
-EXPORT_SYMBOL(lustre_handle2object);
 EXPORT_SYMBOL(ldlm_test);
 EXPORT_SYMBOL(ldlm_lock_dump);
 EXPORT_SYMBOL(ldlm_namespace_new);

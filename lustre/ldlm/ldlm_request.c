@@ -38,6 +38,7 @@ int ldlm_cli_enqueue(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
                                 data, data_len);
         if (lock == NULL)
                 GOTO(out, rc = -ENOMEM);
+        ldlm_lock2handle(lock, lockh);
 
         LDLM_DEBUG(lock, "client-side enqueue START");
 
@@ -51,11 +52,8 @@ int ldlm_cli_enqueue(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
 
         /* Dump all of this data into the request buffer */
         body = lustre_msg_buf(req->rq_reqmsg, 0);
-        body->lock_desc.l_resource.lr_type = type;
-        memcpy(body->lock_desc.l_resource.lr_name, res_id,
-               sizeof(body->lock_desc.l_resource.lr_name));
-
-        body->lock_desc.l_req_mode = mode;
+        ldlm_lock2desc(lock, &body->lock_desc);
+        /* Phil: make this part of ldlm_lock2desc */
         if (type == LDLM_EXTENT)
                 memcpy(&body->lock_desc.l_extent, cookie,
                        sizeof(body->lock_desc.l_extent));
@@ -76,6 +74,7 @@ int ldlm_cli_enqueue(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
         lock->l_client = cl;
 
         rc = ptlrpc_queue_wait(req);
+        /* FIXME: status check here? */
         rc = ptlrpc_check_status(req, rc);
 
         if (rc != ELDLM_OK) {
@@ -230,7 +229,7 @@ int ldlm_cli_convert(struct ptlrpc_client *cl, struct lustre_handle *lockh,
                 GOTO(out, rc);
 
         reply = lustre_msg_buf(req->rq_repmsg, 0);
-        res = ldlm_lock_convert(lock, new_mode, &reply->lock_flags);
+        res = ldlm_convert(lock, new_mode, &reply->lock_flags);
         if (res != NULL)
                 ldlm_reprocess_all(res);
         if (lock->l_req_mode != lock->l_granted_mode) {

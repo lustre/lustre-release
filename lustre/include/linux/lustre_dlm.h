@@ -206,7 +206,7 @@ void ldlm_lock2handle(struct ldlm_lock *lock, struct lustre_handle *lockh);
 struct ldlm_lock *ldlm_handle2lock(struct lustre_handle *handle);
 void ldlm_lock2handle(struct ldlm_lock *lock, struct lustre_handle *lockh);
 void ldlm_lock_put(struct ldlm_lock *lock);
-void ldlm_lock_free(struct ldlm_lock *lock);
+void ldlm_lock_destroy(struct ldlm_lock *lock);
 void ldlm_lock2desc(struct ldlm_lock *lock, struct ldlm_lock_desc *desc);
 void ldlm_lock_addref(struct ldlm_lock *lock, __u32 mode);
 void ldlm_lock_decref(struct ldlm_lock *lock, __u32 mode);
@@ -223,7 +223,7 @@ ldlm_error_t ldlm_lock_enqueue(struct ldlm_lock *lock, void *cookie,
                                int cookie_len, int *flags,
                                ldlm_lock_callback completion,
                                ldlm_lock_callback blocking);
-struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
+struct ldlm_resource *ldlm_convert(struct ldlm_lock *lock, int new_mode,
                                         int *flags);
 void ldlm_lock_cancel(struct ldlm_lock *lock);
 void ldlm_reprocess_all(struct ldlm_resource *res);

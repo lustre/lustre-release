@@ -50,10 +50,10 @@ struct ldlm_lock *ldlm_handle2lock(struct lustre_handle *handle)
         struct ldlm_lock *lock = NULL;
         ENTRY;
 
-        if (!handle)
+        if (!handle || !handle->addr)
                 RETURN(NULL);
-        lock = (struct ldlm_lock *)(unsigned long)(handle->addr);
 
+        lock = (struct ldlm_lock *)(unsigned long)(handle->addr);
         if (!kmem_cache_validate(ldlm_lock_slab, (void *)lock))
                 RETURN(NULL);
 
@@ -124,6 +124,11 @@ void ldlm_lock_destroy(struct ldlm_lock *lock)
         if (!list_empty(&lock->l_res_link))
                 LBUG();
 
+        if (lock->l_flags & LDLM_FL_DESTROYED) {
+                EXIT;
+                return;
+        }
+
         lock->l_flags = LDLM_FL_DESTROYED;
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
         ldlm_lock_put(lock);
@@ -150,7 +155,7 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_lock *parent,
                 RETURN(NULL);
 
         memset(lock, 0, sizeof(*lock));
-        get_random_bytes(&lock->l_cookie, sizeof(__u64));
+        get_random_bytes(&lock->l_random, sizeof(__u64));
 
         lock->l_resource = resource;
         lock->l_refc = 1;
@@ -598,8 +603,8 @@ int ldlm_lock_match(struct ldlm_namespace *ns, __u64 *res_id, __u32 type,
         return rc;
 }
 
-/* Must be called without the resource lock held.  Returns a referenced,
- * unlocked ldlm_lock. */
+/*   Returns a referenced, lock */
+
 struct ldlm_lock *ldlm_lock_create(struct ldlm_namespace *ns,
                                    struct lustre_handle *parent_lock_handle,
                                    __u64 *res_id, __u32 type,
@@ -610,7 +615,7 @@ struct ldlm_lock *ldlm_lock_create(struct ldlm_namespace *ns,
         struct ldlm_resource *res, *parent_res = NULL;
         struct ldlm_lock *lock, *parent_lock;
 
-        parent_lock = lustre_handle2object(parent_lock_handle);
+        parent_lock = ldlm_handle2lock(parent_lock_handle);
         if (parent_lock)
                 parent_res = parent_lock->l_resource;
 
@@ -656,16 +661,9 @@ ldlm_error_t ldlm_lock_enqueue(struct ldlm_lock *lock,
         if (!local && (policy = ldlm_res_policy_table[res->lr_type])) {
                 int rc;
 
-                /* We do this dancing with refcounts and locks because the
-                 * policy function could send an RPC */
                 ldlm_resource_getref(res);
 
                 rc = policy(lock, cookie, lock->l_req_mode, NULL);
-
-                if (ldlm_resource_put(res) && rc != ELDLM_LOCK_CHANGED)
-                        /* ldlm_resource_put() should not destroy 'res' unless
-                         * 'res' is no longer the resource for this lock. */
-                        LBUG();
 
                 if (rc == ELDLM_LOCK_CHANGED) {
                         res = lock->l_resource;
@@ -687,6 +685,7 @@ ldlm_error_t ldlm_lock_enqueue(struct ldlm_lock *lock,
         }
 
         /* If this is a local resource, put it on the appropriate list. */
+        /* FIXME: don't like this: can we call ldlm_resource_unlink_lock? */
         list_del_init(&lock->l_res_link);
         if (local) {
                 if (*flags & LDLM_FL_BLOCK_CONV)
@@ -819,14 +818,12 @@ void ldlm_lock_cancel(struct ldlm_lock *lock)
 }
 
 /* Must be called with lock and lock->l_resource unlocked */
-struct ldlm_resource *ldlm_convert(struct lustre_handle *lockh, int new_mode, int *flags)
+struct ldlm_resource *ldlm_convert(struct ldlm_lock *lock, int new_mode, int *flags)
 {
-        struct ldlm_lock *lock;
         struct ldlm_resource *res;
         struct ldlm_namespace *ns;
         ENTRY;
 
-        lock = lustre_handle2object(lockh);
         res = lock->l_resource;
         ns = res->lr_namespace;
 

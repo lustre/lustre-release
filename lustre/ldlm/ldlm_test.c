@@ -69,7 +69,7 @@ int ldlm_test_basics(struct obd_device *obddev)
                 LBUG();
         ldlm_resource_dump(res);
 
-        res = ldlm_lock_convert(lock1, LCK_NL, &flags);
+        res = ldlm_convert(lock1, LCK_NL, &flags);
         if (res != NULL)
                 ldlm_reprocess_all(res);
 
@@ -128,7 +128,7 @@ int ldlm_test_extents(struct obd_device *obddev)
 
         /* Convert/cancel blocking locks */
         flags = 0;
-        res = ldlm_lock_convert(lock1, LCK_NL, &flags);
+        res = ldlm_convert(lock1, LCK_NL, &flags);
         if (res != NULL)
                 ldlm_reprocess_all(res);
 
