@@ -88,7 +88,7 @@ done
 
 [ "$ERROR" ] && fail "old and new files are different" $ERROR
 
-$LCONF --cleanup $OPTS || exit 19
+cleanup || exit 19
 $LCONF $OPTS || exit 20
 
 echo "comparing previously copied files"
@@ -99,7 +99,7 @@ done
 
 [ "$ERROR" ] && fail "old and new files are different on second diff" $ERROR
 
-$LCONF --cleanup $OPTS || exit 29
+cleanup || exit 29
 $LCONF $OPTS || exit 30
 
 echo "renaming $HOSTS.ren to $HOSTS"
