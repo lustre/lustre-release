@@ -394,9 +394,6 @@ int ll_fill_super(struct super_block *sb, void *data, int silent)
         
         devno = get_uuid2int(sbi2mdc(sbi)->cl_import->imp_target_uuid.uuid, 
                              strlen(sbi2mdc(sbi)->cl_import->imp_target_uuid.uuid));
-        write_lock(&file_systems_lock);
-        sb->s_type->fs_flags = FS_REQUIRES_DEV;
-        write_unlock(&file_systems_lock);
         sb->s_dev = devno;
 
         obd = class_name2obd(osc);
@@ -503,9 +500,6 @@ void ll_put_super(struct super_block *sb)
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op: sb %p\n", sb);
-        write_lock(&file_systems_lock);
-        sb->s_type->fs_flags = 0;
-        write_unlock(&file_systems_lock);
         
         list_del(&sbi->ll_conn_chain);
         obd_disconnect(sbi->ll_osc_exp, 0);
