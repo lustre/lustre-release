@@ -41,7 +41,7 @@ static void uuid_unpack(class_uuid_t in, struct uuid *uu)
 	tmp = *ptr++;
 	tmp = (tmp << 8) | *ptr++;
 	uu->time_mid = tmp;
-	
+
 	tmp = *ptr++;
 	tmp = (tmp << 8) | *ptr++;
 	uu->time_hi_and_version = tmp;
@@ -53,6 +53,7 @@ static void uuid_unpack(class_uuid_t in, struct uuid *uu)
 	memcpy(uu->node, ptr, 6);
 }
 
+#if 0
 static void uuid_pack(struct uuid *uu, class_uuid_t ptr)
 {
 	__u32	tmp;
@@ -66,7 +67,7 @@ static void uuid_pack(struct uuid *uu, class_uuid_t ptr)
 	out[1] = (unsigned char) tmp;
 	tmp >>= 8;
 	out[0] = (unsigned char) tmp;
-	
+
 	tmp = uu->time_mid;
 	out[5] = (unsigned char) tmp;
 	tmp >>= 8;
@@ -115,10 +116,11 @@ int class_uuid_parse(char *in, class_uuid_t uu)
 		buf[1] = *cp++;
 		uuid.node[i] = simple_strtoul(buf, NULL, 16);
 	}
-	
+
 	uuid_pack(&uuid, uu);
 	return 0;
 }
+#endif
 
 void class_uuid_unparse(class_uuid_t uu, char *out)
 {
