@@ -611,9 +611,9 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                 rc = mdc_setattr(&sbi->ll_mdc_conn, &op_data,
                                   attr, NULL, 0, NULL, 0, &request);
 
-                if (rc) { 
+                if (rc) {
                         ptlrpc_req_finished(request);
-                        if (rc  != -EPERM) 
+                        if (rc != -EPERM)
                                 CERROR("mdc_setattr fails: err = %d\n", rc);
                         RETURN(rc);
                 }
