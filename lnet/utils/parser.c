@@ -33,7 +33,11 @@
 #define	READLINE_LIBRARY
 #include <readline/readline.h>
 #endif
-//extern char **completion_matches __P((char *, rl_compentry_func_t *));
+
+/* completion_matches() is #if 0-ed out in modern glibc */
+#ifndef completion_matches
+#define completion_matches rl_completion_matches
+#endif
 extern void using_history(void);
 extern void stifle_history(int);
 extern void add_history(char *);
