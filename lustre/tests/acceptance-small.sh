@@ -4,7 +4,7 @@
 set -vxe
 
 [ "$CONFIGS" -a -z "$SANITYN" ] && SANITYN=no
-[ "$CONFIGS" ] || CONFIGS="local-large-inode local lov"
+[ "$CONFIGS" ] || CONFIGS="local lov"
 [ "$MAX_THREADS" ] || MAX_THREADS=10
 if [ -z "$THREADS" ]; then
 	KB=`awk '/MemTotal:/ { print $2 }' /proc/meminfo`
