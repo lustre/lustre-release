@@ -64,16 +64,12 @@ AC_MSG_CHECKING(for Linux release)
 
 dnl We need to rid ourselves of the nasty [ ] quotes.
 changequote(, )
-LVERSION="`sed -ne 's/^VERSION[ 	]*=[ 	]*//gp' $LINUX/Makefile`"
-PATCHLEVEL="`sed -ne 's/^PATCHLEVEL[ 	]*=[ 	]*//gp' $LINUX/Makefile`"
-SUBLEVEL="`sed -ne 's/^SUBLEVEL[ 	]*=[ 	]*//gp' $LINUX/Makefile`"
-EXTRAVERSION="`sed -ne 's/^EXTRAVERSION[ 	]*=[ 	]*//gp' $LINUX/Makefile`"
+dnl Get release from version.h
+RELEASE="`sed -ne 's/.*UTS_RELEASE[ \"]*\([0-9.a-zA-Z-]*\).*/\1/p' $LINUX/include/linux/version.h`"
 changequote([, ])
 
-RELEASE="$LVERSION.$PATCHLEVEL.$SUBLEVEL$EXTRAVERSION"
 moduledir='$(libdir)/modules/'$RELEASE/kernel
 AC_SUBST(moduledir)
-AC_SUBST(EXTRAVERSION)
 
 modulefsdir='$(moduledir)/fs'
 AC_SUBST(modulefsdir)
