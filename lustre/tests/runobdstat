@@ -1,0 +1,7 @@
+#!/bin/sh
+PATH=`dirname $0`/../utils:$PATH
+
+obdstat filter 1 | while read LINE; do
+	echo "`date +s`: $LINE"
+	[ "$1" ] && echo "`date +s`: $LINE" >> $1
+done
