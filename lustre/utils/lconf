@@ -135,6 +135,8 @@ class LCTLInterface:
         p.tochild.close()
         out = p.fromchild.readlines()
         ret = p.poll()
+        for l in out:
+            debug('lctl:',string.strip(l))
         err = p.childerr.readlines()
         if ret or len(err):
             log (self.lctl, "error:", ret)
@@ -535,16 +537,21 @@ class Mountpoint(Module):
 
     def prepare(self):
         l = lookup(self.dom_node.parentNode, self.lov_uuid)
-        lov = LOV(l)
-        for osc_uuid in string.split(lov.devlist):
-            osc = lookup(self.dom_node.parentNode, osc_uuid)
-            if osc:
-                n = OSC(osc)
-                n.prepare()
-            else:
-                panic('osc not found:', osc_uuid)
+        if l.nodeName == 'lov':
+            dev = LOV(l)
+            for osc_uuid in string.split(dev.devlist):
+                osc = lookup(self.dom_node.parentNode, osc_uuid)
+                if osc:
+                    n = OSC(osc)
+                    n.prepare()
+                else:
+                    panic('osc not found:', osc_uuid)
+        else:
+            dev = OSC(l)
+            dev.prepare()
+            
         self.info(self.path, self.mdc_uuid,self.lov_uuid)
-        lctl.newdev(attach="lov %s %s" % (lov.name, lov.uuid),
+        lctl.newdev(attach="lov %s %s" % (dev.name, dev.uuid),
                     setup ="%s" % (self.mdc_uuid))
         cmd = "mount -t lustre_lite -o osc=%s,mdc=%s none %s" % \
               (self.lov_uuid, self.mdc_uuid, self.path)
@@ -787,6 +794,9 @@ def main():
     global options
     args = parse_cmdline(sys.argv[1:])
     if len(args) > 0:
+        if not os.access(args[0], os.R_OK | os.W_OK):
+            print 'File not found:', args[0]
+            sys.exit(1)
         dom = xml.dom.minidom.parse(args[0])
     elif options.has_key('url'):
         xmldata = fetch(options['url'])

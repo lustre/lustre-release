@@ -21,7 +21,7 @@
 
 """
 lmc - lustre configurtion data  manager
-
+ 
  Basic plan for lmc usage:
 # create nodes
 ./lmc --output config.xml --node server --net server1 tcp 

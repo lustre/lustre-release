@@ -1129,7 +1129,7 @@ int jt_obd_lov_config(int argc, char **argv)
         }
 
         rc = ioctl(fd, OBD_IOC_LOV_CONFIG, buf);
-        if (rc < 0)
+        if (rc)
                 fprintf(stderr, "lov_config: error: %s: %s\n",
                         cmdname(argv[0]), strerror(rc = errno));
         free(uuidarray);
