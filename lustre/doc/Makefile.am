@@ -72,7 +72,7 @@ $(VERSIONED) : %.lyx: %.lin Makefile
 .ps.pdf:
 	$(PS2PDF) $< $@
 
-lustre.tex lustre.pdf lustre.txt lustre.html: $(IMAGES) $(LYXFILES)
+lustre.tex lustre.pdf lustre.txt lustre.html: $(IMAGES) $(LYXFILES) lustre-HOWTO.lyx
 .fig.eps:
 	-fig2dev -L eps $< > $@
 
