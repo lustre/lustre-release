@@ -76,7 +76,7 @@ echo "creating $DST"
 mkdir $DST || fail "can't mkdir $DST" 10
 
 # ok, that hopefully worked, so let's do a little more
-FILES=`find $SRC -type f | head -$COUNT`
+FILES=`find $SRC -type f | grep -v mtab | head -$COUNT`
 echo "copying files from $SRC to $DST$SRC"
 tar cf - $FILES | tar xvf - -C $DST || fail "copying $SRC" 11
 
