@@ -298,6 +298,11 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         if (rc && rc != EALREADY)
                 GOTO(out, rc);
 
+        /* XXX track this all the time? */
+        if (target->obd_recovering) {
+                target->obd_connected_clients++;
+        }
+
         req->rq_repmsg->handle = conn;
 
         /* If the client and the server are the same node, we will already
@@ -352,8 +357,6 @@ out:
 
 int target_handle_disconnect(struct ptlrpc_request *req)
 {
-        struct obd_export *export;
-        struct obd_import *dlmimp;
         int rc;
         ENTRY;
 
@@ -361,17 +364,17 @@ int target_handle_disconnect(struct ptlrpc_request *req)
         if (rc)
                 RETURN(rc);
 
-        /* Create an export reference to disconnect, so the rq_export
-         * ref is not destroyed. See class_disconnect() for more info. */
-        export = class_export_get(req->rq_export);
-        req->rq_status = obd_disconnect(export, 0);
-
-        dlmimp = req->rq_export->exp_ldlm_data.led_import;
-        class_destroy_import(dlmimp);
-
-        class_export_put(req->rq_export);
+        req->rq_status = obd_disconnect(req->rq_export, 0);
         req->rq_export = NULL;
         RETURN(0);
+}
+
+void target_destroy_export(struct obd_export *exp)
+{
+        /* exports created from last_rcvd data, and "fake"
+           exports created by lctl don't have an import */
+        if (exp->exp_ldlm_data.led_import != NULL)
+                class_destroy_import(exp->exp_ldlm_data.led_import);
 }
 
 /*
@@ -437,7 +440,6 @@ void target_abort_recovery(void *data)
         }
 
         obd->obd_recovering = obd->obd_abort_recovery = 0;
-        obd->obd_recoverable_clients = 0;
 
         wake_up(&obd->obd_next_transno_waitq);
         target_cancel_recovery_timer(obd);
@@ -473,7 +475,7 @@ static void reset_recovery_timer(struct obd_device *obd)
 
         if (!recovering)
                 return;
-        CERROR("timer will expire in %ld seconds\n", OBD_RECOVERY_TIMEOUT / HZ);
+        CERROR("timer will expire in %d seconds\n", OBD_RECOVERY_TIMEOUT / HZ);
         mod_timer(&obd->obd_recovery_timer, jiffies + OBD_RECOVERY_TIMEOUT);
 }
 
@@ -499,21 +501,38 @@ void target_start_recovery_timer(struct obd_device *obd, svc_handler_t handler)
 static int check_for_next_transno(struct obd_device *obd)
 {
         struct ptlrpc_request *req;
-        int wake_up;
+        int wake_up = 0, connected, completed, queue_len, max;
+        __u64 next_transno, req_transno;
 
-        /* XXX shouldn't we take obd->obd_processing_task_lock to check these
-           flags and the recovery_queue? */
-        if (obd->obd_abort_recovery || !obd->obd_recovering)
-                return 1;
-
+        spin_lock_bh(&obd->obd_processing_task_lock);
         req = list_entry(obd->obd_recovery_queue.next,
                          struct ptlrpc_request, rq_list);
-        LASSERT(req->rq_reqmsg->transno >= obd->obd_next_recovery_transno);
+        max = obd->obd_max_recoverable_clients;
+        req_transno = req->rq_reqmsg->transno;
+        connected = obd->obd_connected_clients;
+        completed = max - obd->obd_recoverable_clients;
+        queue_len = obd->obd_requests_queued_for_recovery;
+        next_transno = obd->obd_next_recovery_transno;
 
-        wake_up = req->rq_reqmsg->transno == obd->obd_next_recovery_transno;
-        CDEBUG(D_HA, "check_for_next_transno: "LPD64" vs "LPD64", %d == %d\n",
-               req->rq_reqmsg->transno, obd->obd_next_recovery_transno,
-               obd->obd_recovering, wake_up);
+        if (obd->obd_abort_recovery) {
+                CDEBUG(D_HA, "waking for aborted recovery\n");
+                wake_up = 1;
+        } else if (!obd->obd_recovering) {
+                CDEBUG(D_HA, "waking for completed recovery (?)\n");
+                wake_up = 1;
+        } else if (req_transno == next_transno) {
+                CDEBUG(D_HA, "waking for next ("LPD64")\n", next_transno);
+                wake_up = 1;
+        } else if (queue_len + completed == max) {
+                CDEBUG(D_ERROR,
+                       "waking for skipped transno (skip: "LPD64
+                       ", ql: %d, comp: %d, conn: %d, next: "LPD64")\n",
+                       next_transno, queue_len, completed, max, req_transno);
+                obd->obd_next_recovery_transno = req_transno;
+                wake_up = 1;
+        }
+        spin_unlock_bh(&obd->obd_processing_task_lock);
+        LASSERT(req->rq_reqmsg->transno >= next_transno);
         return wake_up;
 }
 
@@ -548,10 +567,12 @@ static void process_recovery_queue(struct obd_device *obd)
                         continue;
                 }
                 list_del_init(&req->rq_list);
+                obd->obd_requests_queued_for_recovery--;
                 spin_unlock_bh(&obd->obd_processing_task_lock);
 
-                DEBUG_REQ(D_ERROR, req, "processing: ");
+                DEBUG_REQ(D_HA, req, "processing: ");
                 (void)obd->obd_recovery_handler(req);
+                obd->obd_replayed_requests++;
                 reset_recovery_timer(obd);
                 /* bug 1580: decide how to properly sync() in recovery */
                 //mds_fsync_super(mds->mds_sb);
@@ -640,12 +661,13 @@ int target_queue_recovery_request(struct ptlrpc_request *req,
                 list_add_tail(&req->rq_list, &obd->obd_recovery_queue);
         }
 
+        obd->obd_requests_queued_for_recovery++;
+
         if (obd->obd_processing_task != 0) {
                 /* Someone else is processing this queue, we'll leave it to
                  * them.
                  */
-                if (transno == obd->obd_next_recovery_transno)
-                        wake_up(&obd->obd_next_transno_waitq);
+                wake_up(&obd->obd_next_transno_waitq);
                 spin_unlock_bh(&obd->obd_processing_task_lock);
                 return 0;
         }
@@ -725,6 +747,7 @@ int target_queue_final_reply(struct ptlrpc_request *req, int rc)
         } else {
                 CERROR("%s: %d recoverable clients remain\n",
                        obd->obd_name, obd->obd_recoverable_clients);
+                wake_up(&obd->obd_next_transno_waitq);
         }
 
         return 1;
