@@ -35,6 +35,7 @@
 
 static int llog_test_rand;
 static struct obd_uuid uuid = { .uuid = "test_uuid" };
+static struct llog_logid cat_logid;
 
 /* Test named-log create/open, close */
 static int llog_test_1(struct obd_device *obd)
@@ -53,7 +54,7 @@ static int llog_test_1(struct obd_device *obd)
         }
         llog_init_handle(llh, LLOG_F_IS_PLAIN, &uuid);
 
-        if (llh->lgh_last_idx != 1) {
+        if (llh->lgh_last_idx != 0) {
                 CERROR("1a: handle->last_idx is %d, expected 0 after create\n",
                        llh->lgh_last_idx);
                 GOTO(out, rc = -ERANGE);
@@ -92,7 +93,7 @@ static int llog_test_2(struct obd_device *obd, struct llog_handle **llh)
         }
         llog_init_handle(*llh, LLOG_F_IS_PLAIN, &uuid);
 
-        if ((*llh)->lgh_last_idx != 1) {
+        if ((*llh)->lgh_last_idx != 0) {
                 CERROR("2: handle->last_idx is %d, expected 1 after reopen\n",
                        (*llh)->lgh_last_idx);
                 RETURN(-ERANGE);
@@ -127,8 +128,8 @@ static int llog_test_3(struct obd_device *obd, struct llog_handle *llh)
                 RETURN(rc);
         }
 
-        if (llh->lgh_last_idx != 2) {
-                CERROR("3: handle->last_idx is %d, expected 2 after write\n",
+        if (llh->lgh_last_idx != 1) {
+                CERROR("3: handle->last_idx is %d, expected 1 after write\n",
                        llh->lgh_last_idx);
                 RETURN(-ERANGE);
         }
@@ -152,7 +153,7 @@ static int llog_test_3(struct obd_device *obd, struct llog_handle *llh)
                 }
         }
 
-        if (llh->lgh_last_idx != 1002) {
+        if (llh->lgh_last_idx != 1001) {
                 CERROR("3: handle->last_idx is %d, expected 1001 after write\n",
                        llh->lgh_last_idx);
                 RETURN(-ERANGE);
@@ -185,6 +186,8 @@ static int llog_test_4(struct obd_device *obd)
         char name[10];
         int rc, i;
         struct llog_rec_hdr rec;
+        struct llog_cookie cookie;
+
         ENTRY;
 
         rec.lrh_len = LLOG_MIN_REC_SIZE;
@@ -198,27 +201,97 @@ static int llog_test_4(struct obd_device *obd)
                 GOTO(out, rc);
         }
         llog_init_handle(llh, LLOG_F_IS_CAT, &uuid);
+        cat_logid = llh->lgh_id;
 
         CERROR("4b: write 1 log records\n");
-        rc = llog_cat_add_rec(llh, &rec, NULL, NULL);
-        if (rc) {
+        rc = llog_cat_add_rec(llh, &rec, &cookie, NULL);
+        if (rc != 1) {
                 CERROR("4b: write 1 catalog record failed at: %d\n", rc);
-                        GOTO(out, rc);
+                GOTO(out, rc);
         }
 
-        CERROR("4c: write 40,000 more log records\n");
+        if (llh->u.chd.chd_current_log->lgh_hdr->llh_count != 2) {
+                CERROR("llh->u.chd.chd_current_log->lgh_hdr->llh_count != 2\n");
+                GOTO(out, rc = -EINVAL);
+        }
+
+        CERROR("4c: cancel 1 log record\n");
+        rc = llog_cat_cancel_records(llh, 1, &cookie);
+        if (rc) {
+                CERROR("4c: cancel 1 catalog based record failed: %d\n", rc);
+                GOTO(out, rc);
+        }
+
+        if (llh->u.chd.chd_current_log && 
+            llh->u.chd.chd_current_log->lgh_hdr->llh_count != 1) {
+                CERROR("llh->u.chd.chd_current_log->lgh_hdr->llh_count != 2\n");
+                GOTO(out, rc = -EINVAL);
+        }
+
+        CERROR("4d: write 40,000 more log records\n");
         for (i = 0; i < 40000; i++) {
                 rc = llog_cat_add_rec(llh, &rec, NULL, NULL);
                 if (rc) {
-                        CERROR("4c: write 1000 records failed at #%d: %d\n",
+                        CERROR("4d: write 1000 records failed at #%d: %d\n",
                                i + 1, rc);
                         GOTO(out, rc);
                 }
         }
 
  out:
-        CERROR("1b: close newly-created log\n");
+        CERROR("4e: put newly-created catalog\n");
         rc = llog_cat_put(llh);
+        if (rc)
+                CERROR("1b: close log %s failed: %d\n", name, rc);
+        RETURN(rc);
+}
+
+static int cat_print_cb(struct llog_handle *llh, struct llog_rec_hdr *rec, void *data)
+{
+        struct llog_logid_rec *lir = (struct llog_logid_rec *)rec;
+
+        if (rec->lrh_type != LLOG_LOGID_MAGIC) {
+                CERROR("invalid record in catalog\n");
+                RETURN(-EINVAL);
+        }
+
+        CERROR("seeing record at index %d in log "LPX64"\n", rec->lrh_index, 
+               lir->lid_id.lgl_oid);
+        RETURN(0);
+}
+
+/* Test log and catalogue processing */
+static int llog_test_5(struct obd_device *obd)
+{
+        struct llog_handle *llh = NULL;
+        char name[10];
+        int rc;
+        struct llog_rec_hdr rec;
+
+        ENTRY;
+
+        rec.lrh_len = LLOG_MIN_REC_SIZE;
+        rec.lrh_type = 0xf00f00;
+
+        CERROR("5a: re-open catalog by id\n");
+        rc = llog_create(obd, &llh, &cat_logid, NULL);
+        if (rc) {
+                CERROR("5a: llog_create with logid failed: %d\n", rc);
+                GOTO(out, rc);
+        }
+        llog_init_handle(llh, LLOG_F_IS_CAT, &uuid);
+
+        CERROR("5b: print the catalog entries.. we expect 2\n");
+        rc = llog_process_log(llh, (llog_cb_t)cat_print_cb, "test 5");
+        if (rc) {
+                CERROR("5b: process with cat_print_cb failed: %d\n", rc);
+                GOTO(out, rc);
+        }
+
+ out:
+        CERROR("5: close re-opened catalog\n");
+        if (llh)
+                rc = llog_cat_put(llh);
         if (rc)
                 CERROR("1b: close log %s failed: %d\n", name, rc);
         RETURN(rc);
@@ -255,6 +328,10 @@ static int llog_run_tests(struct obd_device *obd)
         if (rc)
                 GOTO(cleanup, rc);
 
+        rc = llog_test_5(obd);
+        if (rc)
+                GOTO(cleanup, rc);
+
         GOTO(cleanup, rc);
  cleanup:
         switch (cleanup_phase) {
@@ -282,7 +359,7 @@ static int llog_test_cleanup(struct obd_device *obd, int flags)
 static int llog_test_setup(struct obd_device *obd, obd_count len, void *buf)
 {
         struct obd_ioctl_data *data = buf;
-        struct lustre_handle conn = {0, };
+        struct lustre_handle exph = {0, };
         struct obd_device *tgt;
         struct obd_uuid fake_uuid = { "LLOG_TEST_UUID" };
         int rc;
@@ -300,12 +377,12 @@ static int llog_test_setup(struct obd_device *obd, obd_count len, void *buf)
                 RETURN(-EINVAL);
         }
 
-        rc = obd_connect(&conn, tgt, &fake_uuid);
+        rc = obd_connect(&exph, tgt, &fake_uuid);
         if (rc) {
                 CERROR("fail to connect to target device %d\n", data->ioc_dev);
                 RETURN(rc);
         }
-        obd->obd_log_exp = class_conn2export(&conn);
+        obd->obd_log_exp = class_conn2export(&exph);
 
         llog_test_rand = ll_insecure_random_int();
 
