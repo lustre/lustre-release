@@ -317,8 +317,9 @@ static int ll_direct_IO_24(int rw, struct inode *inode, struct kiobuf *iobuf,
         if (!lsm || !lsm->lsm_object_id)
                 RETURN(-EBADF);
 
-        if ((iobuf->offset & (blocksize - 1)) ||
-            (iobuf->length & (blocksize - 1)))
+        /* FIXME: io smaller than PAGE_SIZE is broken on ia64 */
+        if ((iobuf->offset & (PAGE_SIZE - 1)) ||
+            (iobuf->length & (PAGE_SIZE - 1)))
                 RETURN(-EINVAL);
 
         set = ptlrpc_prep_set();
