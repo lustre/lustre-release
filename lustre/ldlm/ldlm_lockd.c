@@ -64,13 +64,12 @@ static int ldlm_handle_enqueue(struct obd_device *obddev, struct ptlrpc_service 
         if (!lock)
                 GOTO(out, -ENOMEM);
 
-        ldlm_lock2handle(&lockh);
         memcpy(&lock->l_remote_handle, &dlm_req->lock_handle1,
                sizeof(lock->l_remote_handle));
         LDLM_DEBUG(lock, "server-side enqueue handler, new lock created");
 
         flags = dlm_req->lock_flags;
-        err = ldlm_local_lock_enqueue(&lockh, cookie, cookielen, &flags,
+        err = ldlm_lock_enqueue(lock, cookie, cookielen, &flags,
                                       ldlm_cli_callback, ldlm_cli_callback);
         if (err != ELDLM_OK)
                 GOTO(out, err);
@@ -78,7 +77,7 @@ static int ldlm_handle_enqueue(struct obd_device *obddev, struct ptlrpc_service 
         dlm_rep = lustre_msg_buf(req->rq_repmsg, 0);
         dlm_rep->lock_flags = flags;
 
-        memcpy(&dlm_rep->lock_handle, &lockh, sizeof(lockh));
+        ldlm_lock2handle(lock, &dlm_rep->lock_handle);
         if (dlm_req->lock_desc.l_resource.lr_type == LDLM_EXTENT)
                 memcpy(&dlm_rep->lock_extent, &lock->l_extent,
                        sizeof(lock->l_extent));
@@ -126,14 +125,15 @@ static int ldlm_handle_convert(struct ptlrpc_service *svc, struct ptlrpc_request
         dlm_rep->lock_flags = dlm_req->lock_flags;
 
         lock = ldlm_handle2lock(&dlm_req->lock_handle1);
-        if (!lock)
-                RETURN(0);
-
-        LDLM_DEBUG(lock, "server-side convert handler START");
-        ldlm_local_lock_convert(&dlm_req->lock_handle1,
-                                dlm_req->lock_desc.l_req_mode,
-                                &dlm_rep->lock_flags);
-        req->rq_status = 0;
+        if (!lock) { 
+                req->rq_status = EINVAL;
+        } else {         
+                LDLM_DEBUG(lock, "server-side convert handler START");
+                ldlm_lock_convert(&dlm_req->lock_handle1,
+                                  dlm_req->lock_desc.l_req_mode,
+                                  &dlm_rep->lock_flags);
+                req->rq_status = 0;
+        }
         if (ptlrpc_reply(svc, req) != 0)
                 LBUG();
 
@@ -160,12 +160,13 @@ static int ldlm_handle_cancel(struct ptlrpc_service *svc, struct ptlrpc_request 
         dlm_req = lustre_msg_buf(req->rq_reqmsg, 0);
 
         lock = ldlm_handle2lock(&dlm_req->lock_handle1);
-        if (!lock)
-                RETURN(0); 
-
-        LDLM_DEBUG(lock, "server-side cancel handler START");
-        ldlm_local_lock_cancel(lock);
-        req->rq_status = 0;
+        if (!lock) { 
+                req->rq_status = ESTALE;
+        } else { 
+                LDLM_DEBUG(lock, "server-side cancel handler START");
+                ldlm_local_lock_cancel(lock);
+                req->rq_status = 0;
+        }
 
         if (ptlrpc_reply(svc, req) != 0)
                 LBUG();
@@ -181,7 +182,10 @@ static int ldlm_handle_callback(struct ptlrpc_service *svc,
                           struct ptlrpc_request *req)
 {
         struct ldlm_request *dlm_req;
-        struct ldlm_lock *lock, *new;
+        struct ldlm_lock_desc desc; 
+        struct ldlm_lock_desc *descp; 
+        struct ldlm_lock *lock;
+        __u64 is_blocking_ast;
         int rc;
         ENTRY;
 
@@ -199,7 +203,13 @@ static int ldlm_handle_callback(struct ptlrpc_service *svc,
                 RETURN(rc);
 
         lock = ldlm_handle2lock(&dlm_req->lock_handle1);
-        new = ldlm_handle2lock(&dlm_req->lock_handle2);
+        is_blocking_ast = dlm_req->lock_handle2.addr;
+        if (is_blocking_ast) { 
+                /* FIXME: copy lock information into desc here */
+                descp = &desc;
+        }  else 
+                descp = NULL; 
+
         if (!lock) { 
                 CERROR("callback on lock %Lx - lock disappeared\n", 
                        dlm_req->lock_handle.addr);
@@ -209,25 +219,7 @@ static int ldlm_handle_callback(struct ptlrpc_service *svc,
         LDLM_DEBUG(lock, "client %s callback handler START",
                    new == NULL ? "completion" : "blocked");
 
-        spin_lock(&lock->l_resource->lr_lock);
-        spin_lock(&lock->l_lock);
-        if (!new) {
-                lock->l_req_mode = dlm_req->lock_desc.l_granted_mode;
-
-                /* If we receive the completion AST before the actual enqueue
-                 * returned, then we might need to switch resources. */
-                if (memcmp(dlm_req->lock_desc.l_resource.lr_name,
-                           lock->l_resource->lr_name,
-                           sizeof(__u64) * RES_NAME_SIZE) != 0) {
-
-                        ldlm_lock_change_resource(lock, dlm_req->lock_desc.l_resource.lr_name);
-                        LDLM_DEBUG(lock, "completion AST, new resource");
-                }
-                ldlm_grant_lock(lock);
-                /* XXX Fixme: we want any completion function, not just wake_up */
-                wake_up(&lock->l_waitq);
-                ldlm_lock_put(lock);
-        } else {
+        if (is_blocking_ast) {
                 int do_ast; 
                 l_lock(&lock->l_resource->lr_namespace->ns_lock);
                 lock->l_flags |= LDLM_FL_CBPENDING;
@@ -238,18 +230,32 @@ static int ldlm_handle_callback(struct ptlrpc_service *svc,
                         CDEBUG(D_INFO, "Lock already unused, calling "
                                "callback (%p).\n", lock->l_blocking_ast);
                         if (lock->l_blocking_ast != NULL)
-                                lock->l_blocking_ast(lock, new, lock->l_data,
+                                lock->l_blocking_ast(lock, descp, lock->l_data,
                                                      lock->l_data_len, NULL);
                 } else {
                         LDLM_DEBUG(lock, "Lock still has references, will be"
                                " cancelled later");
                 }
                 ldlm_lock_put(lock); 
+        } else {
+                lock->l_req_mode = dlm_req->lock_desc.l_granted_mode;
+
+                /* If we receive the completion AST before the actual enqueue
+                 * returned, then we might need to switch resources. */
+                if (memcmp(dlm_req->lock_desc.l_resource.lr_name,
+                           lock->l_resource->lr_name,
+                           sizeof(__u64) * RES_NAME_SIZE) != 0) {
+                        ldlm_lock_change_resource(lock, dlm_req->lock_desc.l_resource.lr_name);
+                        LDLM_DEBUG(lock, "completion AST, new resource");
+                }
+                ldlm_grant_lock(lock);
+                /*  FIXME: we want any completion function, not just wake_up */
+                wake_up(&lock->l_waitq);
+                ldlm_lock_put(lock);
         }
 
         LDLM_DEBUG_NOLOCK("client %s callback handler END (lock: %p)",
                    new == NULL ? "completion" : "blocked", lock);
-
         RETURN(0);
 }
 
