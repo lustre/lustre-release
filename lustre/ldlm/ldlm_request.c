@@ -12,6 +12,7 @@
 #define DEBUG_SUBSYSTEM S_LDLM
 
 #include <linux/lustre_dlm.h>
+#include <linux/obd_class.h>
 #include <linux/obd.h>
 
 static int interrupted_completion_wait(void *data)
