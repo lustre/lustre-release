@@ -4,6 +4,7 @@
 #ifndef _KP30_INCLUDED
 #define _KP30_INCLUDED
 
+#include <linux/libcfs.h>
 #define PORTAL_DEBUG
 
 #ifndef offsetof
@@ -11,158 +12,6 @@
 #endif
 
 #define LOWEST_BIT_SET(x)       ((x) & ~((x) - 1))
-
-/*
- *  Debugging
- */
-extern unsigned int portal_subsystem_debug;
-extern unsigned int portal_stack;
-extern unsigned int portal_debug;
-extern unsigned int portal_printk;
-extern unsigned int portal_cerror;
-/* Debugging subsystems (32 bits, non-overlapping) */
-#define S_UNDEFINED    (1 << 0)
-#define S_MDC          (1 << 1)
-#define S_MDS          (1 << 2)
-#define S_OSC          (1 << 3)
-#define S_OST          (1 << 4)
-#define S_CLASS        (1 << 5)
-#define S_LOG          (1 << 6)
-#define S_LLITE        (1 << 7)
-#define S_RPC          (1 << 8)
-#define S_MGMT         (1 << 9)
-#define S_PORTALS     (1 << 10)
-#define S_SOCKNAL     (1 << 11)
-#define S_QSWNAL      (1 << 12)
-#define S_PINGER      (1 << 13)
-#define S_FILTER      (1 << 14)
-#define S_PTLBD       (1 << 15)
-#define S_ECHO        (1 << 16)
-#define S_LDLM        (1 << 17)
-#define S_LOV         (1 << 18)
-#define S_GMNAL       (1 << 19)
-#define S_PTLROUTER   (1 << 20)
-#define S_COBD        (1 << 21)
-#define S_IBNAL       (1 << 22)
-
-/* If you change these values, please keep portals/utils/debug.c
- * up to date! */
-
-/* Debugging masks (32 bits, non-overlapping) */
-#define D_TRACE     (1 << 0) /* ENTRY/EXIT markers */
-#define D_INODE     (1 << 1)
-#define D_SUPER     (1 << 2)
-#define D_EXT2      (1 << 3) /* anything from ext2_debug */
-#define D_MALLOC    (1 << 4) /* print malloc, free information */
-#define D_CACHE     (1 << 5) /* cache-related items */
-#define D_INFO      (1 << 6) /* general information */
-#define D_IOCTL     (1 << 7) /* ioctl related information */
-#define D_BLOCKS    (1 << 8) /* ext2 block allocation */
-#define D_NET       (1 << 9) /* network communications */
-#define D_WARNING   (1 << 10) /* CWARN(...) == CDEBUG (D_WARNING, ...) */
-#define D_BUFFS     (1 << 11)
-#define D_OTHER     (1 << 12)
-#define D_DENTRY    (1 << 13)
-#define D_PORTALS   (1 << 14) /* ENTRY/EXIT markers */
-#define D_PAGE      (1 << 15) /* bulk page handling */
-#define D_DLMTRACE  (1 << 16)
-#define D_ERROR     (1 << 17) /* CERROR(...) == CDEBUG (D_ERROR, ...) */
-#define D_EMERG     (1 << 18) /* CEMERG(...) == CDEBUG (D_EMERG, ...) */
-#define D_HA        (1 << 19) /* recovery and failover */
-#define D_RPCTRACE  (1 << 20) /* for distributed debugging */
-#define D_VFSTRACE  (1 << 21)
-#define D_READA     (1 << 22) /* read-ahead */
-
-#ifdef __KERNEL__
-# include <linux/sched.h> /* THREAD_SIZE */
-#else
-# ifndef THREAD_SIZE /* x86_64 has THREAD_SIZE in userspace */
-#  define THREAD_SIZE 8192
-# endif
-#endif
-
-#define LUSTRE_TRACE_SIZE (THREAD_SIZE >> 5)
-
-#ifdef __KERNEL__
-# ifdef  __ia64__
-#  define CDEBUG_STACK (THREAD_SIZE -                                      \
-                        ((unsigned long)__builtin_dwarf_cfa() &            \
-                         (THREAD_SIZE - 1)))
-# else
-#  define CDEBUG_STACK (THREAD_SIZE -                                      \
-                        ((unsigned long)__builtin_frame_address(0) &       \
-                         (THREAD_SIZE - 1)))
-# endif
-
-#define CHECK_STACK(stack)                                                    \
-        do {                                                                  \
-                if ((stack) > 3*THREAD_SIZE/4 && (stack) > portal_stack) {    \
-                        portals_debug_msg(DEBUG_SUBSYSTEM, D_WARNING,         \
-                                          __FILE__, __FUNCTION__, __LINE__,   \
-                                          (stack),"maximum lustre stack %u\n",\
-                                          portal_stack = (stack));            \
-                      /*panic("LBUG");*/                                      \
-                }                                                             \
-        } while (0)
-#else /* __KERNEL__ */
-#define CHECK_STACK(stack) do { } while(0)
-#define CDEBUG_STACK (0L)
-#endif /* __KERNEL__ */
-
-#if 1
-#define CDEBUG(mask, format, a...)                                            \
-do {                                                                          \
-        if (portal_cerror == 0)                                               \
-                break;                                                        \
-        CHECK_STACK(CDEBUG_STACK);                                            \
-        if (((mask) & (D_ERROR | D_EMERG | D_WARNING)) ||                     \
-            (portal_debug & (mask) &&                                         \
-             portal_subsystem_debug & DEBUG_SUBSYSTEM))                       \
-                portals_debug_msg(DEBUG_SUBSYSTEM, mask,                      \
-                                  __FILE__, __FUNCTION__, __LINE__,           \
-                                  CDEBUG_STACK, format, ## a);                \
-} while (0)
-
-#define CWARN(format, a...) CDEBUG(D_WARNING, format, ## a)
-#define CERROR(format, a...) CDEBUG(D_ERROR, format, ## a)
-#define CEMERG(format, a...) CDEBUG(D_EMERG, format, ## a)
-
-#define GOTO(label, rc)                                                 \
-do {                                                                    \
-        long GOTO__ret = (long)(rc);                                    \
-        CDEBUG(D_TRACE,"Process leaving via %s (rc=%lu : %ld : %lx)\n", \
-               #label, (unsigned long)GOTO__ret, (signed long)GOTO__ret,\
-               (signed long)GOTO__ret);                                 \
-        goto label;                                                     \
-} while (0)
-
-#define RETURN(rc)                                                      \
-do {                                                                    \
-        typeof(rc) RETURN__ret = (rc);                                  \
-        CDEBUG(D_TRACE, "Process leaving (rc=%lu : %ld : %lx)\n",       \
-               (long)RETURN__ret, (long)RETURN__ret, (long)RETURN__ret);\
-        return RETURN__ret;                                             \
-} while (0)
-
-#define ENTRY                                                           \
-do {                                                                    \
-        CDEBUG(D_TRACE, "Process entered\n");                           \
-} while (0)
-
-#define EXIT                                                            \
-do {                                                                    \
-        CDEBUG(D_TRACE, "Process leaving\n");                           \
-} while(0)
-#else
-#define CDEBUG(mask, format, a...)      do { } while (0)
-#define CWARN(format, a...)             do { } while (0)
-#define CERROR(format, a...)            printk("<3>" format, ## a)
-#define CEMERG(format, a...)            printk("<0>" format, ## a)
-#define GOTO(label, rc)                 do { (void)(rc); goto label; } while (0)
-#define RETURN(rc)                      return (rc)
-#define ENTRY                           do { } while (0)
-#define EXIT                            do { } while (0)
-#endif
 
 #ifdef __KERNEL__
 # include <linux/vmalloc.h>
@@ -172,7 +21,7 @@ do {                                                                    \
 # include <linux/highmem.h>
 # include <linux/module.h>
 # include <linux/version.h>
-# include <portals/lib-nal.h>
+# include <portals/p30.h>
 # include <linux/smp_lock.h>
 # include <asm/atomic.h>
 
@@ -232,6 +81,12 @@ extern void kportal_assertion_failed(char *expr, char *file, const char *func,
 #else
 #define LASSERT(e)
 #define LASSERTF(cond, fmt...) do { } while (0)
+#endif
+
+#ifdef CONFIG_SMP
+#define LASSERT_SPIN_LOCKED(lock) LASSERT(spin_is_locked(lock))
+#else
+#define LASSERT_SPIN_LOCKED(lock) do {} while(0)
 #endif
 
 #ifdef __arch_um__
@@ -347,186 +202,6 @@ do {                                                                    \
 #endif
 
 /******************************************************************************/
-/* Kernel Portals Router interface */
-
-typedef void (*kpr_fwd_callback_t)(void *arg, int error); // completion callback
-
-/* space for routing targets to stash "stuff" in a forwarded packet */
-typedef union {
-        long long        _alignment;
-        void            *_space[16];            /* scale with CPU arch */
-} kprfd_scratch_t;
-
-/* Kernel Portals Routing Forwarded message Descriptor */
-typedef struct {
-        struct list_head     kprfd_list;        /* stash in queues (routing target can use) */
-        ptl_nid_t            kprfd_target_nid;  /* final destination NID */
-        ptl_nid_t            kprfd_gateway_nid; /* gateway NID */
-        int                  kprfd_nob;         /* # message bytes (including header) */
-        int                  kprfd_niov;        /* # message frags (including header) */
-        struct iovec        *kprfd_iov;         /* message fragments */
-        void                *kprfd_router_arg;  // originating NAL's router arg
-        kpr_fwd_callback_t   kprfd_callback;    /* completion callback */
-        void                *kprfd_callback_arg; /* completion callback arg */
-        kprfd_scratch_t      kprfd_scratch;    // scratchpad for routing targets
-} kpr_fwd_desc_t;
-
-typedef void  (*kpr_fwd_t)(void *arg, kpr_fwd_desc_t *fwd);
-typedef void  (*kpr_notify_t)(void *arg, ptl_nid_t peer, int alive);
-
-/* NAL's routing interface (Kernel Portals Routing Nal Interface) */
-typedef const struct {
-        int             kprni_nalid;    /* NAL's id */
-        void           *kprni_arg;      /* Arg to pass when calling into NAL */
-        kpr_fwd_t       kprni_fwd;      /* NAL's forwarding entrypoint */
-        kpr_notify_t    kprni_notify;   /* NAL's notification entrypoint */
-} kpr_nal_interface_t;
-
-/* Router's routing interface (Kernel Portals Routing Router Interface) */
-typedef const struct {
-        /* register the calling NAL with the router and get back the handle for
-         * subsequent calls */
-        int     (*kprri_register) (kpr_nal_interface_t *nal_interface,
-                                   void **router_arg);
-
-        /* ask the router to find a gateway that forwards to 'nid' and is a
-         * peer of the calling NAL; assume caller will send 'nob' bytes of
-         * payload there */
-        int     (*kprri_lookup) (void *router_arg, ptl_nid_t nid, int nob,
-                                 ptl_nid_t *gateway_nid);
-
-        /* hand a packet over to the router for forwarding */
-        kpr_fwd_t kprri_fwd_start;
-
-        /* hand a packet back to the router for completion */
-        void    (*kprri_fwd_done) (void *router_arg, kpr_fwd_desc_t *fwd,
-                                   int error);
-
-        /* notify the router about peer state */
-        void    (*kprri_notify) (void *router_arg, ptl_nid_t peer,
-                                 int alive, time_t when);
-
-        /* the calling NAL is shutting down */
-        void    (*kprri_shutdown) (void *router_arg);
-
-        /* deregister the calling NAL with the router */
-        void    (*kprri_deregister) (void *router_arg);
-
-} kpr_router_interface_t;
-
-/* Convenient struct for NAL to stash router interface/args */
-typedef struct {
-        kpr_router_interface_t  *kpr_interface;
-        void                    *kpr_arg;
-} kpr_router_t;
-
-/* Router's control interface (Kernel Portals Routing Control Interface) */
-typedef const struct {
-        int     (*kprci_add_route)(int gateway_nal, ptl_nid_t gateway_nid,
-                                   ptl_nid_t lo_nid, ptl_nid_t hi_nid);
-        int     (*kprci_del_route)(int gateway_nal, ptl_nid_t gateway_nid,
-                                   ptl_nid_t lo_nid, ptl_nid_t hi_nid);
-        int     (*kprci_get_route)(int index, int *gateway_nal,
-                                   ptl_nid_t *gateway,
-                                   ptl_nid_t *lo_nid, ptl_nid_t *hi_nid,
-                                   int *alive);
-        int     (*kprci_notify)(int gateway_nal, ptl_nid_t gateway_nid,
-                                int alive, time_t when);
-} kpr_control_interface_t;
-
-extern kpr_control_interface_t  kpr_control_interface;
-extern kpr_router_interface_t   kpr_router_interface;
-
-static inline int
-kpr_register (kpr_router_t *router, kpr_nal_interface_t *nalif)
-{
-        int    rc;
-
-        router->kpr_interface = PORTAL_SYMBOL_GET (kpr_router_interface);
-        if (router->kpr_interface == NULL)
-                return (-ENOENT);
-
-        rc = (router->kpr_interface)->kprri_register (nalif, &router->kpr_arg);
-        if (rc != 0)
-                router->kpr_interface = NULL;
-
-        PORTAL_SYMBOL_PUT (kpr_router_interface);
-        return (rc);
-}
-
-static inline int
-kpr_routing (kpr_router_t *router)
-{
-        return (router->kpr_interface != NULL);
-}
-
-static inline int
-kpr_lookup (kpr_router_t *router, ptl_nid_t nid, int nob, ptl_nid_t *gateway_nid)
-{
-        if (!kpr_routing (router))
-                return (-ENETUNREACH);
-
-        return (router->kpr_interface->kprri_lookup(router->kpr_arg, nid, nob,
-                                                    gateway_nid));
-}
-
-static inline void
-kpr_fwd_init (kpr_fwd_desc_t *fwd, ptl_nid_t nid,
-              int nob, int niov, struct iovec *iov,
-              kpr_fwd_callback_t callback, void *callback_arg)
-{
-        fwd->kprfd_target_nid   = nid;
-        fwd->kprfd_gateway_nid  = nid;
-        fwd->kprfd_nob          = nob;
-        fwd->kprfd_niov         = niov;
-        fwd->kprfd_iov          = iov;
-        fwd->kprfd_callback     = callback;
-        fwd->kprfd_callback_arg = callback_arg;
-}
-
-static inline void
-kpr_fwd_start (kpr_router_t *router, kpr_fwd_desc_t *fwd)
-{
-        if (!kpr_routing (router))
-                fwd->kprfd_callback (fwd->kprfd_callback_arg, -ENETUNREACH);
-        else
-                router->kpr_interface->kprri_fwd_start (router->kpr_arg, fwd);
-}
-
-static inline void
-kpr_fwd_done (kpr_router_t *router, kpr_fwd_desc_t *fwd, int error)
-{
-        LASSERT (kpr_routing (router));
-        router->kpr_interface->kprri_fwd_done (router->kpr_arg, fwd, error);
-}
-
-static inline void
-kpr_notify (kpr_router_t *router,
-            ptl_nid_t peer, int alive, time_t when)
-{
-        if (!kpr_routing (router))
-                return;
-
-        router->kpr_interface->kprri_notify(router->kpr_arg, peer, alive, when);
-}
-
-static inline void
-kpr_shutdown (kpr_router_t *router)
-{
-        if (kpr_routing (router))
-                router->kpr_interface->kprri_shutdown (router->kpr_arg);
-}
-
-static inline void
-kpr_deregister (kpr_router_t *router)
-{
-        if (!kpr_routing (router))
-                return;
-        router->kpr_interface->kprri_deregister (router->kpr_arg);
-        router->kpr_interface = NULL;
-}
-
-/******************************************************************************/
 
 #ifdef PORTALS_PROFILING
 #define prof_enum(FOO) PROF__##FOO
@@ -626,6 +301,7 @@ extern void kportal_blockallsigs (void);
 #endif
 # include <unistd.h>
 # include <time.h>
+# include <limits.h>
 # include <asm/types.h>
 # ifndef DEBUG_SUBSYSTEM
 #  define DEBUG_SUBSYSTEM S_UNDEFINED
@@ -642,6 +318,7 @@ extern void kportal_blockallsigs (void);
 # define printk(format, args...) printf (format, ## args)
 # define PORTAL_ALLOC(ptr, size) do { (ptr) = malloc(size); } while (0);
 # define PORTAL_FREE(a, b) do { free(a); } while (0);
+void portals_debug_dumplog(void);
 # define portals_debug_msg(subsys, mask, file, fn, line, stack, format, a...) \
     printf("%02x:%06x (@%lu %s:%s,l. %d %d %lu): " format,                    \
            (subsys), (mask), (long)time(0), file, fn, line,                   \
@@ -758,75 +435,9 @@ struct portals_device_userstate
  * USER LEVEL STUFF BELOW
  */
 
-#define PORTALS_CFG_VERSION 0x00010001;
-
-struct portals_cfg {
-        __u32 pcfg_version;
-        __u32 pcfg_command;
-
-        __u32 pcfg_nal;
-        __u32 pcfg_flags;
-
-        __u32 pcfg_gw_nal;
-        __u64 pcfg_nid;
-        __u64 pcfg_nid2;
-        __u64 pcfg_nid3;
-        __u32 pcfg_id;
-        __u32 pcfg_misc;
-        __u32 pcfg_fd;
-        __u32 pcfg_count;
-        __u32 pcfg_size;
-        __u32 pcfg_wait;
-
-        __u32 pcfg_plen1; /* buffers in userspace */
-        char *pcfg_pbuf1;
-        __u32 pcfg_plen2; /* buffers in userspace */
-        char *pcfg_pbuf2;
-};
-
-#define PCFG_INIT(pcfg, cmd)                            \
-do {                                                    \
-        memset(&pcfg, 0, sizeof(pcfg));                 \
-        pcfg.pcfg_version = PORTALS_CFG_VERSION;        \
-        pcfg.pcfg_command = (cmd);                      \
-                                                        \
-} while (0)
-
 #define PORTAL_IOCTL_VERSION 0x00010007
 #define PING_SYNC       0
 #define PING_ASYNC      1
-
-struct portal_ioctl_data {
-        __u32 ioc_len;
-        __u32 ioc_version;
-        __u64 ioc_nid;
-        __u64 ioc_nid2;
-        __u64 ioc_nid3;
-        __u32 ioc_count;
-        __u32 ioc_nal;
-        __u32 ioc_nal_cmd;
-        __u32 ioc_fd;
-        __u32 ioc_id;
-
-        __u32 ioc_flags;
-        __u32 ioc_size;
-
-        __u32 ioc_wait;
-        __u32 ioc_timeout;
-        __u32 ioc_misc;
-
-        __u32 ioc_inllen1;
-        char *ioc_inlbuf1;
-        __u32 ioc_inllen2;
-        char *ioc_inlbuf2;
-
-        __u32 ioc_plen1; /* buffers in userspace */
-        char *ioc_pbuf1;
-        __u32 ioc_plen2; /* buffers in userspace */
-        char *ioc_pbuf2;
-
-        char ioc_bulk[0];
-};
 
 struct portal_ioctl_hdr {
         __u32 ioc_len;
@@ -1032,16 +643,9 @@ enum {
         SCIMACNAL = 6,
         ROUTER    = 7,
         IBNAL     = 8,
+        CRAY_KB_ERNAL = 9,
         NAL_ENUM_END_MARKER
 };
-
-#ifdef __KERNEL__
-extern ptl_handle_ni_t  kqswnal_ni;
-extern ptl_handle_ni_t  ksocknal_ni;
-extern ptl_handle_ni_t  kgmnal_ni;
-extern ptl_handle_ni_t  kibnal_ni;
-extern ptl_handle_ni_t  kscimacnal_ni;
-#endif
 
 #define PTL_NALFMT_SIZE         16
 
@@ -1068,17 +672,6 @@ enum {
         DEBUG_DAEMON_CONTINUE    =  4,
 };
 
-/* XXX remove to lustre ASAP */
-struct lustre_peer {
-        ptl_nid_t       peer_nid;
-        ptl_handle_ni_t peer_ni;
-};
-
-
-/* module.c */
-typedef int (*nal_cmd_handler_t)(struct portals_cfg *, void * private);
-int kportal_nal_register(int nal, nal_cmd_handler_t handler, void * private);
-int kportal_nal_unregister(int nal);
 
 enum cfg_record_type {
         PORTALS_CFG_TYPE = 1,
@@ -1086,10 +679,6 @@ enum cfg_record_type {
 };
 
 typedef int (*cfg_record_cb_t)(enum cfg_record_type, int len, void *data);
-int kportal_nal_cmd(struct portals_cfg *);
-
-ptl_handle_ni_t *kportal_get_ni (int nal);
-void kportal_put_ni (int nal);
 
 #ifdef __CYGWIN__
 # ifndef BITS_PER_LONG
@@ -1107,18 +696,21 @@ void kportal_put_ni (int nal);
 # define LPX64 "%#Lx"
 # define LPSZ  "%lu"
 # define LPSSZ "%ld"
+# define LP_POISON ((void *)0x5a5a5a5a5a5a5a5a)
 #elif (BITS_PER_LONG == 32 || __WORDSIZE == 32)
 # define LPU64 "%Lu"
 # define LPD64 "%Ld"
 # define LPX64 "%#Lx"
 # define LPSZ  "%u"
 # define LPSSZ "%d"
+# define LP_POISON ((void *)0x5a5a5a5a)
 #elif (BITS_PER_LONG == 64 || __WORDSIZE == 64)
 # define LPU64 "%lu"
 # define LPD64 "%ld"
 # define LPX64 "%#lx"
 # define LPSZ  "%lu"
 # define LPSSZ "%ld"
+# define LP_POISON ((void *)0x5a5a5a5a5a5a5a5a)
 #endif
 #ifndef LPU64
 # error "No word size defined"

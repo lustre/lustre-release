@@ -102,13 +102,14 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         INIT_LIST_HEAD(&cli->cl_cache_waiters);
         INIT_LIST_HEAD(&cli->cl_loi_ready_list);
         INIT_LIST_HEAD(&cli->cl_loi_write_list);
+        INIT_LIST_HEAD(&cli->cl_loi_read_list);
         spin_lock_init(&cli->cl_loi_list_lock);
         cli->cl_brw_in_flight = 0;
         spin_lock_init(&cli->cl_read_rpc_hist.oh_lock);
         spin_lock_init(&cli->cl_write_rpc_hist.oh_lock);
         spin_lock_init(&cli->cl_read_page_hist.oh_lock);
         spin_lock_init(&cli->cl_write_page_hist.oh_lock);
-        cli->cl_max_pages_per_rpc = PTL_MD_MAX_PAGES;
+        cli->cl_max_pages_per_rpc = PTLRPC_MAX_BRW_PAGES;
         cli->cl_max_rpcs_in_flight = OSC_MAX_RIF_DEFAULT;
 
         ldlm_get_ref();
@@ -255,6 +256,7 @@ int client_connect_import(struct lustre_handle *dlm_handle,
                 GOTO(out_ldlm, rc);
         }
 
+        ptlrpc_pinger_add_import(imp);
         EXIT;
 
         if (rc) {
@@ -312,7 +314,7 @@ int client_disconnect_export(struct obd_export *exp, int failover)
 
         /* Yeah, obd_no_recov also (mainly) means "forced shutdown". */
         if (obd->obd_no_recov)
-                ptlrpc_set_import_active(imp, 0);
+                ptlrpc_invalidate_import(imp, 0);
         else
                 rc = ptlrpc_disconnect_import(imp);
 
@@ -371,7 +373,10 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         struct list_head *p;
         char *str, *tmp;
         int rc = 0, abort_recovery;
+        unsigned long flags;
         ENTRY;
+
+        OBD_RACE(OBD_FAIL_TGT_CONN_RACE); 
 
         LASSERT_REQSWAB (req, 0);
         str = lustre_msg_string(req->rq_reqmsg, 0, sizeof(tgtuuid) - 1);
@@ -385,7 +390,7 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         if (!target) {
                 target = class_name2obd(str);
         }
-
+        
         if (!target || target->obd_stopping || !target->obd_set_up) {
                 CERROR("UUID '%s' is not available for connect\n", str);
                 GOTO(out, rc = -ENODEV);
@@ -401,8 +406,19 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         obd_str2uuid (&cluuid, str);
 
         /* XXX extract a nettype and format accordingly */
-        snprintf(remote_uuid.uuid, sizeof remote_uuid,
-                 "NET_"LPX64"_UUID", req->rq_peer.peer_nid);
+        switch (sizeof(ptl_nid_t)) {
+                /* NB the casts only avoid compiler warnings */
+        case 8:
+                snprintf(remote_uuid.uuid, sizeof remote_uuid,
+                         "NET_"LPX64"_UUID", (__u64)req->rq_peer.peer_nid);
+                break;
+        case 4:
+                snprintf(remote_uuid.uuid, sizeof remote_uuid,
+                         "NET_%x_UUID", (__u32)req->rq_peer.peer_nid);
+                break;
+        default:
+                LBUG();
+        }
 
         spin_lock_bh(&target->obd_processing_task_lock);
         abort_recovery = target->obd_abort_recovery;
@@ -497,6 +513,17 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         export = req->rq_export = class_conn2export(&conn);
         LASSERT(export != NULL);
 
+        spin_lock_irqsave(&export->exp_lock, flags);
+        if (export->exp_conn_cnt >= req->rq_reqmsg->conn_cnt) {
+                CERROR("%s: already connected at a higher conn_cnt: %d > %d\n",
+                       cluuid.uuid, export->exp_conn_cnt, 
+                       req->rq_reqmsg->conn_cnt);
+                spin_unlock_irqrestore(&export->exp_lock, flags);
+                GOTO(out, rc = -EALREADY);
+        }
+        export->exp_conn_cnt = req->rq_reqmsg->conn_cnt;
+        spin_unlock_irqrestore(&export->exp_lock, flags);
+
         /* request from liblustre? */
         if (lustre_msg_get_op_flags(req->rq_reqmsg) & MSG_CONNECT_LIBCLIENT)
                 export->exp_libclient = 1;
@@ -505,9 +532,6 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
                 ptlrpc_put_connection(export->exp_connection);
         export->exp_connection = ptlrpc_get_connection(&req->rq_peer,
                                                        &remote_uuid);
-
-        LASSERT(export->exp_conn_cnt < req->rq_reqmsg->conn_cnt);
-        export->exp_conn_cnt = req->rq_reqmsg->conn_cnt;
 
         if (rc == EALREADY) {
                 /* We indicate the reconnection in a flag, not an error code. */
