@@ -53,6 +53,7 @@
 #include <linux/lprocfs_status.h>
 #include <linux/lustre_log.h>
 #include <linux/lustre_commit_confd.h>
+#include <portals/list.h>
 
 #include "filter_internal.h"
 
@@ -1136,12 +1137,12 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
 
         LASSERT(l->l_glimpse_ast != NULL);
         rc = l->l_glimpse_ast(l, NULL); /* this will update the LVB */
+        if (rc != 0 && res->lr_namespace->ns_lvbo &&
+            res->lr_namespace->ns_lvbo->lvbo_update) {
+                res->lr_namespace->ns_lvbo->lvbo_update(res, NULL, 0, 1);
+        }
 
         down(&res->lr_lvb_sem);
-#if 0
-        if (res_lvb->lvb_size == reply_lvb->lvb_size)
-                LDLM_ERROR(l, "we lost the glimpse race!");
-#endif
         reply_lvb->lvb_size = res_lvb->lvb_size;
         up(&res->lr_lvb_sem);
 
@@ -1449,23 +1450,29 @@ static void filter_grant_sanity_check(struct obd_device *obd, char *func)
         spin_unlock(&obd->obd_osfs_lock);
 
         /* Do these assertions outside the spinlocks so we don't kill system */
-        LASSERTF(tot_granted == fo_tot_granted, "%s "LPU64" != "LPU64"\n",
-                 func, tot_granted, fo_tot_granted);
-        LASSERTF(tot_pending == fo_tot_pending, "%s "LPU64" != "LPU64"\n",
-                 func, tot_pending, fo_tot_pending);
-        LASSERTF(tot_dirty == fo_tot_dirty, "%s "LPU64" != "LPU64"\n",
-                 func, tot_dirty, fo_tot_dirty);
-        LASSERTF(tot_pending <= tot_granted, "%s "LPU64" > "LPU64"\n",
-                 func, tot_pending, tot_granted);
-        LASSERTF(tot_granted <= maxsize, "%s "LPU64" > "LPU64"\n",
-                 func, tot_granted, maxsize);
-        LASSERTF(tot_dirty <= maxsize, "%s "LPU64" > "LPU64"\n",
-                 func, tot_dirty, maxsize);
+        if (tot_granted != fo_tot_granted)
+                CERROR("%s: tot_granted "LPU64" != fo_tot_granted "LPU64"\n",
+                       func, tot_granted, fo_tot_granted);
+        if (tot_pending != fo_tot_pending)
+                CERROR("%s: tot_pending "LPU64" != fo_tot_pending "LPU64"\n",
+                       func, tot_pending, fo_tot_pending);
+        if (tot_dirty != fo_tot_dirty)
+                CERROR("%s: tot_dirty "LPU64" != fo_tot_dirty "LPU64"\n",
+                       func, tot_dirty, fo_tot_dirty);
+        if (tot_pending > tot_granted)
+                CERROR("%s: tot_pending "LPU64" > tot_granted "LPU64"\n",
+                       func, tot_pending, tot_granted);
+        if (tot_granted > maxsize)
+                CERROR("%s: tot_granted "LPU64" > maxsize "LPU64"\n",
+                       func, tot_granted, maxsize);
+        if (tot_dirty > maxsize)
+                CERROR("%s: tot_dirty "LPU64" > maxsize "LPU64"\n",
+                       func, tot_dirty, maxsize);
 }
 
-/* Remove this client from the grant accounting totals.  This is done at
- * disconnect time and also at export destroy time in case there was a race
- * between removing the export and an incoming BRW updating the client grant.
+/* Remove this client from the grant accounting totals.  We also remove
+ * the export from the obd device under the osfs and dev locks to ensure
+ * that the filter_grant_sanity_check() calculations are always valid.
  * The client should do something similar when it invalidates its import. */
 static void filter_grant_discard(struct obd_export *exp)
 {
@@ -1474,6 +1481,10 @@ static void filter_grant_discard(struct obd_export *exp)
         struct filter_export_data *fed = &exp->exp_filter_data;
 
         spin_lock(&obd->obd_osfs_lock);
+        spin_lock(&exp->exp_obd->obd_dev_lock);
+        list_del_init(&exp->exp_obd_chain);
+        spin_unlock(&exp->exp_obd->obd_dev_lock);
+
         CDEBUG(D_CACHE, "%s: cli %s/%p dirty %lu pend %lu grant %lu\n",
                obd->obd_name, exp->exp_client_uuid.uuid, exp,
                fed->fed_dirty, fed->fed_pending, fed->fed_grant);
@@ -1512,7 +1523,9 @@ static int filter_destroy_export(struct obd_export *exp)
         if (exp->exp_obd->obd_replayable)
                 filter_client_free(exp, exp->exp_flags);
 
-        filter_grant_sanity_check(exp->exp_obd, __FUNCTION__);
+        filter_grant_discard(exp);
+        if (!(exp->exp_flags & OBD_OPT_FORCE))
+                filter_grant_sanity_check(exp->exp_obd, __FUNCTION__);
 
         RETURN(0);
 }
@@ -1533,14 +1546,12 @@ static int filter_disconnect(struct obd_export *exp, int flags)
         exp->exp_flags = flags;
         spin_unlock_irqrestore(&exp->exp_lock, irqflags);
 
+        if (!(flags & OBD_OPT_FORCE))
+                filter_grant_sanity_check(obd, __FUNCTION__);
         filter_grant_discard(exp);
 
         /* Disconnect early so that clients can't keep using export */
         rc = class_disconnect(exp, flags);
-
-        /* Do this twice in case a BRW arrived between the first call and
-         * the class_export_unlink() call (bug 2663) */
-        filter_grant_discard(exp);
 
         ldlm_cancel_locks_for_export(exp);
 
@@ -1665,7 +1676,7 @@ static int filter_setattr(struct obd_export *exp, struct obdo *oa,
                         if (res->lr_namespace->ns_lvbo &&
                             res->lr_namespace->ns_lvbo->lvbo_update) {
                                 rc = res->lr_namespace->ns_lvbo->lvbo_update
-                                        (res, NULL, 0);
+                                        (res, NULL, 0, 0);
                         }
                         ldlm_resource_putref(res);
                 }

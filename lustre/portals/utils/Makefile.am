@@ -26,11 +26,11 @@ libptlctl_a_SOURCES = portals.c debug.c l_ioctl.c parser.c parser.h
 gmnalnid_SOURCES = gmnalnid.c
 
 ptlctl_SOURCES = ptlctl.c
-ptlctl_LDADD =  -L. -lptlctl -lncurses # -lefence
+ptlctl_LDADD =  -L. -lptlctl $(LIBREADLINE) $(LIBEFENCE)
 ptlctl_DEPENDENCIES = libptlctl.a
 
 debugctl_SOURCES = debugctl.c
-debugctl_LDADD = -L. -lptlctl -lncurses # -lefence
+debugctl_LDADD = -L. -lptlctl $(LIBREADLINE) $(LIBEFENCE)
 debugctl_DEPENDENCIES = libptlctl.a
 
 routerstat_SOURCES = routerstat.c

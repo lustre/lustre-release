@@ -1388,6 +1388,7 @@ ksocknal_cmd(struct portals_cfg *pcfg, void * private)
 void
 ksocknal_free_fmbs (ksock_fmb_pool_t *p)
 {
+        int          npages = p->fmp_buff_pages;
         ksock_fmb_t *fmb;
         int          i;
 
@@ -1399,12 +1400,12 @@ ksocknal_free_fmbs (ksock_fmb_pool_t *p)
                 fmb = list_entry(p->fmp_idle_fmbs.next,
                                  ksock_fmb_t, fmb_list);
                 
-                for (i = 0; i < fmb->fmb_npages; i++)
-                        if (fmb->fmb_pages[i] != NULL)
-                                __free_page(fmb->fmb_pages[i]);
-                
+                for (i = 0; i < npages; i++)
+                        if (fmb->fmb_kiov[i].kiov_page != NULL)
+                                __free_page(fmb->fmb_kiov[i].kiov_page);
+
                 list_del(&fmb->fmb_list);
-                PORTAL_FREE(fmb, sizeof(*fmb));
+                PORTAL_FREE(fmb, offsetof(ksock_fmb_t, fmb_kiov[npages]));
         }
 }
 
@@ -1603,10 +1604,12 @@ ksocknal_module_init (void)
         spin_lock_init(&ksocknal_data.ksnd_small_fmp.fmp_lock);
         INIT_LIST_HEAD(&ksocknal_data.ksnd_small_fmp.fmp_idle_fmbs);
         INIT_LIST_HEAD(&ksocknal_data.ksnd_small_fmp.fmp_blocked_conns);
+        ksocknal_data.ksnd_small_fmp.fmp_buff_pages = SOCKNAL_SMALL_FWD_PAGES;
 
         spin_lock_init(&ksocknal_data.ksnd_large_fmp.fmp_lock);
         INIT_LIST_HEAD(&ksocknal_data.ksnd_large_fmp.fmp_idle_fmbs);
         INIT_LIST_HEAD(&ksocknal_data.ksnd_large_fmp.fmp_blocked_conns);
+        ksocknal_data.ksnd_large_fmp.fmp_buff_pages = SOCKNAL_LARGE_FWD_PAGES;
 
         spin_lock_init (&ksocknal_data.ksnd_reaper_lock);
         INIT_LIST_HEAD (&ksocknal_data.ksnd_enomem_conns);
@@ -1690,34 +1693,36 @@ ksocknal_module_init (void)
 
                 for (i = 0; i < (SOCKNAL_SMALL_FWD_NMSGS +
                                  SOCKNAL_LARGE_FWD_NMSGS); i++) {
-                        ksock_fmb_t *fmb;
+                        ksock_fmb_t      *fmb;
+                        ksock_fmb_pool_t *pool;
                         
-                        PORTAL_ALLOC(fmb, sizeof(*fmb));
+
+                        if (i < SOCKNAL_SMALL_FWD_NMSGS)
+                                pool = &ksocknal_data.ksnd_small_fmp;
+                        else
+                                pool = &ksocknal_data.ksnd_large_fmp;
+                        
+                        PORTAL_ALLOC(fmb, offsetof(ksock_fmb_t, 
+                                                   fmb_kiov[pool->fmp_buff_pages]));
                         if (fmb == NULL) {
                                 ksocknal_module_fini();
                                 return (-ENOMEM);
                         }
 
-                        if (i < SOCKNAL_SMALL_FWD_NMSGS) {
-                                fmb->fmb_npages = SOCKNAL_SMALL_FWD_PAGES;
-                                fmb->fmb_pool = &ksocknal_data.ksnd_small_fmp;
-                        } else {
-                                fmb->fmb_npages = SOCKNAL_LARGE_FWD_PAGES;
-                                fmb->fmb_pool = &ksocknal_data.ksnd_large_fmp;
-                        }
+                        fmb->fmb_pool = pool;
+                        
+                        for (j = 0; j < pool->fmp_buff_pages; j++) {
+                                fmb->fmb_kiov[j].kiov_page = alloc_page(GFP_KERNEL);
 
-                        for (j = 0; j < fmb->fmb_npages; j++) {
-                                fmb->fmb_pages[j] = alloc_page(GFP_KERNEL);
-
-                                if (fmb->fmb_pages[j] == NULL) {
+                                if (fmb->fmb_kiov[j].kiov_page == NULL) {
                                         ksocknal_module_fini ();
                                         return (-ENOMEM);
                                 }
 
-                                LASSERT(page_address(fmb->fmb_pages[j]) != NULL);
+                                LASSERT(page_address(fmb->fmb_kiov[j].kiov_page) != NULL);
                         }
 
-                        list_add(&fmb->fmb_list, &fmb->fmb_pool->fmp_idle_fmbs);
+                        list_add(&fmb->fmb_list, &pool->fmp_idle_fmbs);
                 }
         }
 

@@ -117,8 +117,8 @@ gmnal_alloc_txd(gmnal_data_t *nal_data)
 					 GMNAL_SMALL_MSG_SIZE(nal_data));
 		GMNAL_GM_UNLOCK(nal_data);
 		if (!txbuffer) {
-			CDEBUG(D_ERROR, "Failed to gm_dma_malloc txbuffer [%d],
-			       size [%d]\n", i, 
+			CDEBUG(D_ERROR, "Failed to gm_dma_malloc txbuffer [%d],"
+			       " size [%d]\n", i, 
 			       GMNAL_SMALL_MSG_SIZE(nal_data));
 			PORTAL_FREE(txd, sizeof(gmnal_stxd_t));
 			return(GMNAL_STATUS_FAIL);
@@ -131,8 +131,8 @@ gmnal_alloc_txd(gmnal_data_t *nal_data)
 
 		txd->next = nal_data->stxd;
 		nal_data->stxd = txd;
-		CDEBUG(D_INFO, "Registered txd [%p] with buffer [%p], 
-		       size [%d]\n", txd, txd->buffer, txd->buffer_size);
+		CDEBUG(D_INFO, "Registered txd [%p] with buffer [%p], "
+		       "size [%d]\n", txd, txd->buffer, txd->buffer_size);
 	}
 
 	for (i=0; i<=nrxt_stx; i++) {
@@ -146,8 +146,8 @@ gmnal_alloc_txd(gmnal_data_t *nal_data)
 					 GMNAL_SMALL_MSG_SIZE(nal_data));
 		GMNAL_GM_UNLOCK(nal_data);
 		if (!txbuffer) {
-			CDEBUG(D_ERROR, "Failed to gm_dma_malloc txbuffer [%d],
-			       size [%d]\n", i, 
+			CDEBUG(D_ERROR, "Failed to gm_dma_malloc txbuffer [%d],"
+			       " size [%d]\n", i, 
 			       GMNAL_SMALL_MSG_SIZE(nal_data));
 			PORTAL_FREE(txd, sizeof(gmnal_stxd_t));
 			return(GMNAL_STATUS_FAIL);
@@ -160,8 +160,8 @@ gmnal_alloc_txd(gmnal_data_t *nal_data)
 
 		txd->next = nal_data->rxt_stxd;
 		nal_data->rxt_stxd = txd;
-		CDEBUG(D_INFO, "Registered txd [%p] with buffer [%p], 
-		       size [%d]\n", txd, txd->buffer, txd->buffer_size);
+		CDEBUG(D_INFO, "Registered txd [%p] with buffer [%p], "
+		       "size [%d]\n", txd, txd->buffer, txd->buffer_size);
 	}
 
 	/*
@@ -187,8 +187,8 @@ gmnal_free_txd(gmnal_data_t *nal_data)
 	CDEBUG(D_TRACE, "gmnal_free_small tx\n");
 
 	while(txd) {
-		CDEBUG(D_INFO, "Freeing txd [%p] with buffer [%p], 
-		       size [%d]\n", txd, txd->buffer, txd->buffer_size);
+		CDEBUG(D_INFO, "Freeing txd [%p] with buffer [%p], "
+		       "size [%d]\n", txd, txd->buffer, txd->buffer_size);
 		_txd = txd;
 		txd = txd->next;
 		GMNAL_GM_LOCK(nal_data);
@@ -198,8 +198,8 @@ gmnal_free_txd(gmnal_data_t *nal_data)
 	}
         txd = nal_data->rxt_stxd;
 	while(txd) {
-		CDEBUG(D_INFO, "Freeing txd [%p] with buffer [%p], 
-		       size [%d]\n", txd, txd->buffer, txd->buffer_size);
+		CDEBUG(D_INFO, "Freeing txd [%p] with buffer [%p], "
+		       "size [%d]\n", txd, txd->buffer, txd->buffer_size);
 		_txd = txd;
 		txd = txd->next;
 		GMNAL_GM_LOCK(nal_data);
@@ -392,22 +392,22 @@ gmnal_alloc_srxd(gmnal_data_t *nal_data)
 #if 0
 		PORTAL_ALLOC(rxbuffer, GMNAL_SMALL_MSG_SIZE(nal_data));
 		if (!rxbuffer) {
-			CDEBUG(D_ERROR, "Failed to malloc rxbuffer [%d], 
-			       size [%d]\n", i, 
+			CDEBUG(D_ERROR, "Failed to malloc rxbuffer [%d], "
+			       "size [%d]\n", i, 
 			       GMNAL_SMALL_MSG_SIZE(nal_data));
 			PORTAL_FREE(rxd, sizeof(gmnal_srxd_t));
 			return(GMNAL_STATUS_FAIL);
 		}
-		CDEBUG(D_NET, "Calling gm_register_memory with port [%p] 
-		       rxbuffer [%p], size [%d]\n", nal_data->gm_port, 
+		CDEBUG(D_NET, "Calling gm_register_memory with port [%p] "
+		       "rxbuffer [%p], size [%d]\n", nal_data->gm_port, 
 		       rxbuffer, GMNAL_SMALL_MSG_SIZE(nal_data));
 		GMNAL_GM_LOCK(nal_data);
 		gm_status = gm_register_memory(nal_data->gm_port, rxbuffer, 
 					       GMNAL_SMALL_MSG_SIZE(nal_data));
 		GMNAL_GM_UNLOCK(nal_data);
 		if (gm_status != GM_SUCCESS) {
-			CDEBUG(D_ERROR, "gm_register_memory failed buffer [%p],
-			       index [%d]\n", rxbuffer, i);
+			CDEBUG(D_ERROR, "gm_register_memory failed buffer [%p],"
+			       " index [%d]\n", rxbuffer, i);
 			switch(gm_status) {
 				case(GM_FAILURE):
 					CDEBUG(D_ERROR, "GM_FAILURE\n");
@@ -432,8 +432,8 @@ gmnal_alloc_srxd(gmnal_data_t *nal_data)
 					 GMNAL_SMALL_MSG_SIZE(nal_data));
 		GMNAL_GM_UNLOCK(nal_data);
 		if (!rxbuffer) {
-			CDEBUG(D_ERROR, "Failed to gm_dma_malloc rxbuffer [%d],
-			       size [%d]\n", i, 
+			CDEBUG(D_ERROR, "Failed to gm_dma_malloc rxbuffer [%d],"
+			       " size [%d]\n", i, 
 			       GMNAL_SMALL_MSG_SIZE(nal_data));
 			PORTAL_FREE(rxd, sizeof(gmnal_srxd_t));
 			return(GMNAL_STATUS_FAIL);
@@ -447,15 +447,15 @@ gmnal_alloc_srxd(gmnal_data_t *nal_data)
 		if (gm_hash_insert(nal_data->srxd_hash, 
 				   (void*)rxbuffer, (void*)rxd)) {
 
-			CDEBUG(D_ERROR, "failed to create hash entry rxd[%p] 
-			       for rxbuffer[%p]\n", rxd, rxbuffer);
+			CDEBUG(D_ERROR, "failed to create hash entry rxd[%p] "
+			       "for rxbuffer[%p]\n", rxd, rxbuffer);
 			return(GMNAL_STATUS_FAIL);
 		}
 
 		rxd->next = nal_data->srxd;
 		nal_data->srxd = rxd;
-		CDEBUG(D_INFO, "Registered rxd [%p] with buffer [%p], 
-		       size [%d]\n", rxd, rxd->buffer, rxd->size);
+		CDEBUG(D_INFO, "Registered rxd [%p] with buffer [%p], "
+		       "size [%d]\n", rxd, rxd->buffer, rxd->size);
 	}
 
 	return(GMNAL_STATUS_OK);
@@ -623,6 +623,8 @@ gmnal_stop_ctthread(gmnal_data_t *nal_data)
 char * 
 gmnal_gm_error(gm_status_t status)
 {
+	return(gm_strerror(status));
+
 	switch(status) {
 		case(GM_SUCCESS):
 			return("SUCCESS");
@@ -972,7 +974,7 @@ gmnal_get_rxtwe(gmnal_data_t *nal_data)
 		}
 		spin_lock(&nal_data->rxtwe_lock);
 		if (nal_data->rxtwe_head) {
-			CDEBUG(D_WARNING, "Got a work entry\n");
+			CDEBUG(D_INFO, "Got a work entry\n");
 			we = nal_data->rxtwe_head;
 			nal_data->rxtwe_head = we->next;
 			if (!nal_data->rxtwe_head)
@@ -983,7 +985,7 @@ gmnal_get_rxtwe(gmnal_data_t *nal_data)
 		spin_unlock(&nal_data->rxtwe_lock);
 	} while (!we);
 
-	CDEBUG(D_WARNING, "Returning we[%p]\n", we);
+	CDEBUG(D_INFO, "Returning we[%p]\n", we);
 	return(we);
 }
 

@@ -159,20 +159,8 @@ int mds_lov_set_nextid(struct obd_device *obd)
                 GOTO(out, rc);
 
         rc = mds_lov_clearorphans(mds, NULL /* all OSTs */);
-        if (rc < 0)
-                GOTO(out, rc);
 
 out:
-        if (rc && mds->mds_lov_objids) {
-                /* Might as well crash here, until we figure out what to do.
-                 * If we OBD_FREE, we'll just LASSERT the next time through this
-                 * function. */
-                LBUG();
-                OBD_FREE(mds->mds_lov_objids,
-                         mds->mds_lov_desc.ld_tgt_count * sizeof(obd_id));
-                mds->mds_lov_objids = NULL;
-        }
-
         RETURN(rc);
 }
 

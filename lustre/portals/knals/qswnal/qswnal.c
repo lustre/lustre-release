@@ -348,10 +348,10 @@ kqswnal_finalise (void)
 		for (i = 0; i < KQSW_NRXMSGS_SMALL + KQSW_NRXMSGS_LARGE; i++) {
 			kqswnal_rx_t *krx = &kqswnal_data.kqn_rxds[i];
 
-			/* If krx_pages[0] got allocated, it got mapped.
+			/* If krx_kiov[0].kiov_page got allocated, it got mapped.  
 			 * NB subsequent pages get merged */
 
-			if (krx->krx_pages[0] != NULL)
+			if (krx->krx_kiov[0].kiov_page != NULL)
 				ep_dvma_unload(kqswnal_data.kqn_ep,
 					       kqswnal_data.kqn_ep_rx_nmh,
 					       &krx->krx_elanbuffer);
@@ -416,8 +416,8 @@ kqswnal_finalise (void)
 			kqswnal_rx_t *krx = &kqswnal_data.kqn_rxds[i];
 
 			for (j = 0; j < krx->krx_npages; j++)
-				if (krx->krx_pages[j] != NULL)
-					__free_page (krx->krx_pages[j]);
+				if (krx->krx_kiov[j].kiov_page != NULL)
+					__free_page (krx->krx_kiov[j].kiov_page);
 		}
 
 		PORTAL_FREE(kqswnal_data.kqn_rxds,
@@ -709,18 +709,19 @@ kqswnal_initialise (void)
 		LASSERT (krx->krx_npages > 0);
 		for (j = 0; j < krx->krx_npages; j++)
 		{
-			krx->krx_pages[j] = alloc_page(GFP_KERNEL);
-			if (krx->krx_pages[j] == NULL)
-			{
+			struct page *page = alloc_page(GFP_KERNEL);
+			
+			if (page == NULL) {
 				kqswnal_finalise ();
 				return (-ENOMEM);
 			}
 
-			LASSERT(page_address(krx->krx_pages[j]) != NULL);
+			krx->krx_kiov[j].kiov_page = page;
+			LASSERT(page_address(page) != NULL);
 
 #if MULTIRAIL_EKC
 			ep_dvma_load(kqswnal_data.kqn_ep, NULL,
-				     page_address(krx->krx_pages[j]),
+				     page_address(page),
 				     PAGE_SIZE, kqswnal_data.kqn_ep_rx_nmh,
 				     elan_page_idx, &all_rails, &elanbuffer);
 			
@@ -736,7 +737,7 @@ kqswnal_initialise (void)
 #else
 			elan3_dvma_kaddr_load(kqswnal_data.kqn_ep->DmaState,
 					      kqswnal_data.kqn_eprxdmahandle,
-					      page_address(krx->krx_pages[j]),
+					      page_address(page),
 					      PAGE_SIZE, elan_page_idx,
 					      &elanbuffer);
 			if (j == 0)

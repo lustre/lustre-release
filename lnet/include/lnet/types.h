@@ -3,7 +3,13 @@
 
 #ifdef __linux__
 # include <asm/types.h>
-# include <asm/timex.h>
+# if defined(__powerpc__) && !defined(__KERNEL__)
+#  define __KERNEL__
+#  include <asm/timex.h>
+#  undef __KERNEL__
+# else
+#  include <asm/timex.h>
+# endif
 #else
 # include <sys/types.h>
 typedef u_int32_t __u32;
@@ -14,7 +20,7 @@ typedef u_int64_t __u64;
 # include <linux/time.h>
 #else
 # include <sys/time.h>
-# define do_gettimeofday(tv) gettimeofday(tv, NULL)
+# define do_gettimeofday(tv) gettimeofday(tv, NULL);
 #endif
 
 #include <portals/errno.h>
@@ -129,7 +135,7 @@ typedef struct {
         struct timeval     arrival_time;
 
         volatile ptl_seq_t sequence;
-} ptl_event_t;
+} __attribute__((packed)) ptl_event_t;
 #ifdef __CYGWIN__
 #pragma pop
 #endif

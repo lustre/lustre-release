@@ -1,3 +1,13 @@
+tbd  Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 1.2.1
+       * bug fixes
+	- fixes for glimpse AST timeouts / incorrectly 0-sized files (2818)
+	- don't overwrite extent policy data in reply if lock was blocked (2901)
+	- drop filter export grants atomically with removal from device (2663)
+	- del obd_self_export from work_list in class_disconnect_exports (2908)
+	- don't LBUG if MDS recovery times out during orphan cleanup (2530)
+	- swab reply message in mdc_close, other PPC fixes (2464)
+
 2004-03-04  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.0
        * bug fixes

@@ -104,6 +104,7 @@ int ll_set_inode(struct inode *inode, void *opaque)
         ll_read_inode2(inode, opaque);
         return 0;
 }
+
 struct inode *ll_iget(struct super_block *sb, ino_t hash,
                       struct lustre_md *md)
 {

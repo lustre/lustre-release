@@ -133,8 +133,8 @@ case ${host_cpu} in
 
 	powerpc )
 	AC_MSG_RESULT($host_cpu)
-        KCFLAGS='-O2 -Wall -Wstrict-prototypes -Wno-trigraphs -fomit-frame-pointer -fno-strict-aliasing -fno-common -D__powerpc__ -fsigned-char -msoft-float -pipe -ffixed-r2 -Wno-uninitialized -mmultiple -mstring'
-        KCPPFLAGS='-D__KERNEL__'
+        KCFLAGS='-O2 -g -Wall -Wstrict-prototypes -Wno-trigraphs -fomit-frame-pointer -fno-strict-aliasing -fno-common -D__powerpc__ -fsigned-char -msoft-float -pipe -ffixed-r2 -Wno-uninitialized -mmultiple -mstring'
+        KCPPFLAGS='-D__KERNEL__ -DMODULE'
         MOD_LINK=elf32ppclinux
 ;;
 
@@ -337,6 +337,18 @@ AM_CONDITIONAL(LIBLUSTRE, test x$host_cpu = xlib)
 AC_SUBST(MOD_LINK)
 AC_SUBST(LINUX25)
 AM_CONDITIONAL(LIBLUSTRE, test x$host_cpu = xlib)
+
+# ---------- Red Hat 2.4.18 has iobuf->dovary --------------
+# But other kernels don't
+
+AC_MSG_CHECKING([if struct kiobuf has a dovary field])
+AC_TRY_COMPILE([#define __KERNEL__
+		#include <linux/iobuf.h>],
+	       [struct kiobuf iobuf;
+		iobuf.dovary = 1;],
+	       [AC_MSG_RESULT([yes])
+                CPPFLAGS="$CPPFLAGS -DHAVE_KIOBUF_DOVARY"],
+	       [AC_MSG_RESULT([no])])
 
 # ---------- Red Hat 2.4.20 backports some 2.5 bits --------
 # This needs to run after we've defined the KCPPFLAGS

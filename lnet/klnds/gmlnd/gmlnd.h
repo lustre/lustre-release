@@ -45,6 +45,7 @@
 #include "linux/init.h"
 #include "linux/sem.h"
 #include "linux/vmalloc.h"
+#include "linux/sysctl.h"
 
 #define DEBUG_SUBSYSTEM S_GMNAL
 
@@ -80,9 +81,14 @@
 extern  int gmnal_small_msg_size;
 extern  int num_rx_threads;
 extern  int num_stxds;
+extern  int gm_port;
 #define GMNAL_SMALL_MSG_SIZE(a)		a->small_msg_size
 #define GMNAL_IS_SMALL_MESSAGE(n,a,b,c)	gmnal_is_small_msg(n, a, b, c)
 #define GMNAL_MAGIC				0x1234abcd
+/*
+ *	The gm_port to use for gmnal
+ */
+#define GMNAL_GM_PORT	gm_port
 
 
 /*
@@ -218,6 +224,7 @@ typedef struct _gmnal_data_t {
 	gmnal_rxtwe_t	*rxtwe_tail;
 	spinlock_t	rxtwe_lock;
 	struct	semaphore rxtwe_wait;
+        struct ctl_table_header *sysctl;
 } gmnal_data_t;
 
 /*
@@ -232,11 +239,6 @@ typedef struct _gmnal_data_t {
 
 
 extern gmnal_data_t	*global_nal_data;
-
-/*
- *	The gm_port to use for gmnal
- */
-#define GMNAL_GM_PORT	4
 
 /*
  * for ioctl get pid
@@ -353,6 +355,8 @@ int gmnal_cb_read(nal_cb_t *, void *private, void *, user_ptr, size_t);
 
 int gmnal_cb_write(nal_cb_t *, void *private, user_ptr, void *, size_t);
 
+int gmnal_cb_callback(nal_cb_t *, void *, lib_eq_t *, ptl_event_t *);
+
 void *gmnal_cb_malloc(nal_cb_t *, size_t);
 
 void gmnal_cb_free(nal_cb_t *, void *, size_t);
@@ -382,7 +386,7 @@ void  gmnal_fini(void);
 				a->cb_recv_pages = gmnal_cb_recv_pages; \
 				a->cb_read = gmnal_cb_read; \
 				a->cb_write = gmnal_cb_write; \
-				a->cb_callback = NULL; \
+				a->cb_callback = gmnal_cb_callback; \
 				a->cb_malloc = gmnal_cb_malloc; \
 				a->cb_free = gmnal_cb_free; \
 				a->cb_map = NULL; \
@@ -418,6 +422,7 @@ void		gmnal_stop_rxthread(gmnal_data_t *);
 void		gmnal_stop_ctthread(gmnal_data_t *);
 void		gmnal_small_tx_callback(gm_port_t *, void *, gm_status_t);
 void		gmnal_drop_sends_callback(gm_port_t *, void *, gm_status_t);
+void		gmnal_resume_sending_callback(gm_port_t *, void *, gm_status_t);
 char		*gmnal_gm_error(gm_status_t);
 char		*gmnal_rxevent(gm_recv_event_t*);
 int		gmnal_is_small_msg(gmnal_data_t*, int, struct iovec*, int);

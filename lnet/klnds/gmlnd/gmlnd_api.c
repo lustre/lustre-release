@@ -25,7 +25,36 @@
 
 #include "gmnal.h"
 
+
+
 gmnal_data_t	*global_nal_data = NULL;
+#define         GLOBAL_NID_STR_LEN      16
+char            global_nid_str[GLOBAL_NID_STR_LEN] = {0};
+
+/*
+ *      Write the global nid /proc/sys/gmnal/globalnid
+ */
+#define GMNAL_SYSCTL    201
+#define GMNAL_SYSCTL_GLOBALNID  1
+
+static ctl_table gmnal_sysctl_table[] = {
+        {GMNAL_SYSCTL_GLOBALNID, "globalnid",
+         global_nid_str, GLOBAL_NID_STR_LEN,
+         0444, NULL, &proc_dostring},
+        { 0 }
+};
+
+
+static ctl_table gmnalnal_top_sysctl_table[] = {
+        {GMNAL_SYSCTL, "gmnal", NULL, 0, 0555, gmnal_sysctl_table},
+        { 0 }
+};
+
+
+
+
+
+
 /*
  *	gmnal_api_forward
  *	This function takes a pack block of arguments from the NAL API
@@ -193,8 +222,8 @@ gmnal_init(int interface, ptl_pt_index_t ptl_size, ptl_ac_index_t ac_size,
 	ptl_pid_t	portals_pid = 0;
 
 
-	CDEBUG(D_TRACE, "gmnal_init : interface [%d], ptl_size [%d], 
-	       ac_size[%d]\n", interface, ptl_size, ac_size);
+	CDEBUG(D_TRACE, "gmnal_init : interface [%d], ptl_size [%d], "
+	       "ac_size[%d]\n", interface, ptl_size, ac_size);
 
 
 	PORTAL_ALLOC(nal_data, sizeof(gmnal_data_t));
@@ -255,8 +284,8 @@ gmnal_init(int interface, ptl_pt_index_t ptl_size, ptl_ac_index_t ac_size,
 	}
 
 
-	CDEBUG(D_NET, "Calling gm_open with interface [%d], port [%d], 
-       	       name [%s], version [%d]\n", interface, GMNAL_GM_PORT, 
+	CDEBUG(D_NET, "Calling gm_open with interface [%d], port [%d], "
+       	       "name [%s], version [%d]\n", interface, GMNAL_GM_PORT, 
 	       "gmnal", GM_API_VERSION);
 
 	GMNAL_GM_LOCK(nal_data);
@@ -280,15 +309,15 @@ gmnal_init(int interface, ptl_pt_index_t ptl_size, ptl_ac_index_t ac_size,
 			CDEBUG(D_ERROR, "gm_open Failure. No such device\n");
 			break;
 		case(GM_INCOMPATIBLE_LIB_AND_DRIVER):
-			CDEBUG(D_ERROR, "gm_open Failure. Incompatile lib 
-			       and driver\n");
+			CDEBUG(D_ERROR, "gm_open Failure. Incompatile lib "
+			       "and driver\n");
 			break;
 		case(GM_OUT_OF_MEMORY):
 			CDEBUG(D_ERROR, "gm_open Failure. Out of Memory\n");
 			break;
 		default:
-			CDEBUG(D_ERROR, "gm_open Failure. Unknow error 
-			       code [%d]\n", gm_status);
+			CDEBUG(D_ERROR, "gm_open Failure. Unknow error "
+			       "code [%d]\n", gm_status);
 			break;
 		}	
 		GMNAL_GM_LOCK(nal_data);
@@ -403,6 +432,7 @@ gmnal_init(int interface, ptl_pt_index_t ptl_size, ptl_ac_index_t ac_size,
 	}
 	CDEBUG(D_INFO, "Global node id is [%u]\n", global_nid);
 	nal_data->gm_global_nid = global_nid;
+        snprintf(global_nid_str, GLOBAL_NID_STR_LEN, "%u", global_nid);
 
 /*
 	pid = gm_getpid();
@@ -429,6 +459,9 @@ gmnal_init(int interface, ptl_pt_index_t ptl_size, ptl_ac_index_t ac_size,
 		return(NULL);
 		
 	}
+        nal_data->sysctl = NULL;
+        nal_data->sysctl = register_sysctl_table (gmnalnal_top_sysctl_table, 0);
+
 	
 	CDEBUG(D_INFO, "gmnal_init finished\n");
 	global_nal_data = nal->nal_data;
@@ -459,6 +492,8 @@ void gmnal_fini()
 	gm_close(nal_data->gm_port);
 	gm_finalize();
 	GMNAL_GM_UNLOCK(nal_data);
+        if (nal_data->sysctl)
+                unregister_sysctl_table (nal_data->sysctl);
 	PORTAL_FREE(nal, sizeof(nal_t));	
 	PORTAL_FREE(nal_data, sizeof(gmnal_data_t));	
 	PORTAL_FREE(nal_cb, sizeof(nal_cb_t));

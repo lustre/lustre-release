@@ -630,6 +630,9 @@ void class_disconnect_exports(struct obd_device *obd, int flags)
                         CDEBUG(D_HA,
                                "exp %p export uuid == obd uuid, don't discon\n",
                                exp);
+                        /* Need to delete this now so we don't end up pointing
+                         * to work_list later when this export is cleaned up. */
+                        list_del_init(&exp->exp_obd_chain);
                         class_export_put(exp);
                         continue;
                 }

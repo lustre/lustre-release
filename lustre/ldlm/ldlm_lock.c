@@ -752,11 +752,13 @@ struct ldlm_lock *ldlm_lock_create(struct ldlm_namespace *ns,
         lock->l_completion_ast = completion;
         lock->l_glimpse_ast = glimpse;
 
-        lock->l_lvb_len = lvb_len;
-        OBD_ALLOC(lock->l_lvb_data, lvb_len);
-        if (lock->l_lvb_data == NULL) {
-                OBD_SLAB_FREE(lock, ldlm_lock_slab, sizeof(*lock));
-                RETURN(NULL);
+        if (lvb_len) {
+                lock->l_lvb_len = lvb_len;
+                OBD_ALLOC(lock->l_lvb_data, lvb_len);
+                if (lock->l_lvb_data == NULL) {
+                        OBD_SLAB_FREE(lock, ldlm_lock_slab, sizeof(*lock));
+                        RETURN(NULL);
+                }
         }
 
         RETURN(lock);

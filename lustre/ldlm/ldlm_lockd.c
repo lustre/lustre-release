@@ -37,6 +37,7 @@
 
 #include <linux/lustre_dlm.h>
 #include <linux/obd_class.h>
+#include <portals/list.h>
 #include "ldlm_internal.h"
 
 extern kmem_cache_t *ldlm_resource_slab;
@@ -547,12 +548,15 @@ int ldlm_server_glimpse_ast(struct ldlm_lock *lock, void *data)
         } else if (rc == -EINVAL) {
                 LDLM_DEBUG(lock, "lost the race -- client no longer has this "
                            "lock");
+        } else if (rc == -ELDLM_NO_LOCK_DATA) {
+                LDLM_DEBUG(lock, "lost a race -- client has a lock, but no "
+                           "inode");
         } else if (rc) {
                 LDLM_ERROR(lock, "client sent rc %d rq_status %d from "
                            "glimpse AST", rc, req->rq_status);
         } else {
-                rc = res->lr_namespace->ns_lvbo->lvbo_update(res,
-                                                             req->rq_repmsg, 0);
+                rc = res->lr_namespace->ns_lvbo->lvbo_update
+                        (res, req->rq_repmsg, 0, 1);
         }
         ptlrpc_req_finished(req);
         RETURN(rc);
@@ -767,7 +771,7 @@ int ldlm_handle_cancel(struct ptlrpc_request *req)
                 if (res && res->lr_namespace->ns_lvbo &&
                     res->lr_namespace->ns_lvbo->lvbo_update) {
                         (void)res->lr_namespace->ns_lvbo->lvbo_update
-                                (res, NULL, 0);
+                                (res, NULL, 0, 0);
                                 //(res, req->rq_reqmsg, 1);
                 }
 
@@ -840,9 +844,12 @@ static void ldlm_handle_cp_callback(struct ptlrpc_request *req,
                 lock->l_req_mode = dlm_req->lock_desc.l_granted_mode;
                 LDLM_DEBUG(lock, "completion AST, new lock mode");
         }
-        if (lock->l_resource->lr_type != LDLM_PLAIN)
+
+        if (lock->l_resource->lr_type != LDLM_PLAIN) {
                 memcpy(&lock->l_policy_data, &dlm_req->lock_desc.l_policy_data,
                        sizeof(lock->l_policy_data));
+                LDLM_DEBUG(lock, "completion AST, new policy data");
+        }
 
         ldlm_resource_unlink_lock(lock);
         if (memcmp(&dlm_req->lock_desc.l_resource.lr_name,
@@ -889,6 +896,7 @@ static void ldlm_handle_gl_callback(struct ptlrpc_request *req,
                                     struct ldlm_request *dlm_req,
                                     struct ldlm_lock *lock)
 {
+        int rc = -ENOSYS;
         ENTRY;
 
         l_lock(&ns->ns_lock);
@@ -897,8 +905,15 @@ static void ldlm_handle_gl_callback(struct ptlrpc_request *req,
         if (lock->l_glimpse_ast != NULL) {
                 l_unlock(&ns->ns_lock);
                 l_check_no_ns_lock(ns);
-                lock->l_glimpse_ast(lock, req);
+                rc = lock->l_glimpse_ast(lock, req);
                 l_lock(&ns->ns_lock);
+        }
+
+        if (req->rq_repmsg != NULL) {
+                ptlrpc_reply(req);
+        } else {
+                req->rq_status = rc;
+                ptlrpc_error(req);
         }
 
         if (lock->l_granted_mode == LCK_PW &&

@@ -29,6 +29,7 @@ typedef enum {
         ELDLM_LOCK_CHANGED = 300,
         ELDLM_LOCK_ABORTED = 301,
         ELDLM_LOCK_REPLACED = 302,
+        ELDLM_NO_LOCK_DATA = 303,
 
         ELDLM_NAMESPACE_EXISTS = 400,
         ELDLM_BAD_NAMESPACE    = 401
@@ -144,7 +145,7 @@ typedef int (*ldlm_res_policy)(struct ldlm_namespace *, struct ldlm_lock **,
 struct ldlm_valblock_ops {
         int (*lvbo_init)(struct ldlm_resource *res);
         int (*lvbo_update)(struct ldlm_resource *res, struct lustre_msg *m,
-                           int buf_idx);
+                           int buf_idx, int increase);
 };
 
 struct ldlm_namespace {

@@ -115,5 +115,5 @@ int main(int argc, char **argv)
 	free(pcfg.pcfg_pbuf1);
 	close(pfd);
 	printf("%u\n", nid);
-        exit(nid);
+        exit(0);
 }

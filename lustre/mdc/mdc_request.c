@@ -507,6 +507,11 @@ int mdc_close(struct obd_export *exp, struct obdo *obdo,
                         CERROR("Unexpected: can't find mdc_open_data, but the "
                                "close succeeded.  Please tell CFS.\n");
                 }
+                if (!lustre_swab_repbuf(req, 0, sizeof(struct mds_body),
+                                        lustre_swab_mds_body)) {
+                        CERROR("Error unpacking mds_body\n");
+                        rc = -EPROTO;
+                }
         }
         if (req->rq_async_args.pointer_arg[0] != NULL) {
                 CERROR("returned without dropping rpc_lock: rc %d\n", rc);
