@@ -21,7 +21,7 @@ LYXFILES= lustre.lin evolution.lyx  llocks.lyx mgmt.lyx uncertain.lyx\
 	intro.lyx      obdspec.lyx recovery.lyx
 
 MAINTAINERCLEANFILES =  $(IMAGES) $(DOCS) $(VERSIONED)
-CLEANFILES = *.aux *.tex doc.old/*.aux doc.old/*.tex *.pdf *.eps
+CLEANFILES = *.aux *.tex doc.old/*.aux doc.old/*.tex *.eps
 VERSIONED = lustre-HOWTO.lyx lustre.lyx doc.old/lustre-HOWTO.lyx doc.old/lustre.lyx
 GENERATED = $(VERSIONED) lustre-full.tex lustre-chbar.tex
 
