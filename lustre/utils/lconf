@@ -315,12 +315,12 @@ class LCTLInterface:
   quit""" % (net, nid, servuuid)
         self.run(cmds)
 
-    # disconnect all connections
+    # disconnect all
     def disconnectAll(self, net):
         cmds =  """
   network %s
-  disconnect
   del_uuid self
+  disconnect
   quit""" % (net)
         self.run(cmds)
 
