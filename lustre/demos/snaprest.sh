@@ -32,6 +32,7 @@ detach
 device /dev/obd2
 connect
 snaprestore 2 $SNAPTABLE 0
+quit
 EOF
 
 plog log "COMPLETE snaprestore"

@@ -16,7 +16,7 @@ fi
 if [ ! -d /mnt/obd/lost+found ]; then 
     $OBDDIR/demos/obdfssetup.sh
     if [ x$? != x0 ]; then 
-	echo "Error in obdfssetup.sh"
+	echo "Error running obdfssetup.sh"
 	exit 4
    fi
 fi

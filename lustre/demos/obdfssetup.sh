@@ -6,7 +6,7 @@ OBDDIR="`dirname $0`/.."
 $OBDDIR/demos/basesetup.sh
 
 if [ x$? != x0 ]; then 
-    echo "Errors in basesetup"
+    echo "Error running basesetup.sh"
     exit 4;
 fi
 

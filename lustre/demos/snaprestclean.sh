@@ -10,6 +10,8 @@ if [ x$? = x0 ]; then
     exit 
 fi
 
+rmmod obdfs
+
 $OBDDIR/class/obdcontrol -f << EOF
 device /dev/obd2
 cleanup
@@ -20,7 +22,6 @@ detach
 quit
 EOF
 
-rmmod obdfs
 rmmod obdsnap
 rmmod obdext2
 rmmod obdclass
