@@ -22,11 +22,14 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
+#define DEBUG_SUBSYSTEM S_RPC
+#ifdef __KERNEL__
 #include <linux/config.h>
 #include <linux/module.h>
 #include <linux/kmod.h>
-
-#define DEBUG_SUBSYSTEM S_RPC
+#else 
+#include <liblustre.h>
+#endif
 
 #include <linux/lustre_ha.h>
 #include <linux/lustre_net.h>
@@ -230,11 +233,6 @@ int ptlrpc_resend(struct obd_import *imp)
         ENTRY;
 
         spin_lock_irqsave(&imp->imp_lock, flags);
-        list_for_each(tmp, &imp->imp_sending_list) {
-                req = list_entry(tmp, struct ptlrpc_request, rq_list);
-                DEBUG_REQ(D_HA, req, "SENDING: ");
-        }
-
         list_for_each_safe(tmp, pos, &imp->imp_sending_list) {
                 req = list_entry(tmp, struct ptlrpc_request, rq_list);
 
@@ -243,12 +241,10 @@ int ptlrpc_resend(struct obd_import *imp)
                         break;
 
                     case RESTART:
-                        DEBUG_REQ(D_HA, req, "RESTART:");
                         ptlrpc_restart_req(req);
                         break;
 
                     case RESEND_IGNORE:
-                        DEBUG_REQ(D_HA, req, "RESEND_IGNORE:");
                         rc = ptlrpc_replay_req(req);
                         if (rc) {
                                 DEBUG_REQ(D_ERROR, req, "error %d resending:",
@@ -258,7 +254,6 @@ int ptlrpc_resend(struct obd_import *imp)
                         break;
 
                     case RESEND:
-                        DEBUG_REQ(D_HA, req, "RESEND:");
                         ptlrpc_resend_req(req);
                         break;
 
