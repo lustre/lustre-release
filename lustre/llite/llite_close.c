@@ -134,7 +134,7 @@ static void ll_close_done_writing(struct inode *inode)
 
         rc = ll_extent_lock(NULL, inode, lli->lli_smd, LCK_PW, &policy, &lockh,
                             ast_flags);
-        if (rc != 0) {
+        if (rc != ELDLM_OK) {
                 CERROR("lock acquisition failed (%d): unable to send "
                        "DONE_WRITING for inode %lu/%u\n", rc, inode->i_ino,
                        inode->i_generation);
@@ -168,7 +168,7 @@ static void ll_close_done_writing(struct inode *inode)
         obdo.o_blocks = inode->i_blocks;
         obdo.o_valid = OBD_MD_FLID | OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
 
-        rc = mdc_done_writing(ll_i2sbi(inode)->ll_mdc_exp, &obdo);
+        rc = md_done_writing(ll_i2sbi(inode)->ll_mdc_exp, &obdo);
  out:
 }
 #endif

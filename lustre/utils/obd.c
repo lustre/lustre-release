@@ -779,21 +779,22 @@ int jt_obd_list(int argc, char **argv)
         int rc;
         char buf[MAX_STRING_SIZE];
         FILE *fp = fopen(DEVICES_LIST, "r");
-
+                                                                                                                                               
         if (fp == NULL) {
-                fprintf(stderr, "error: %s: %s opening "DEVICES_LIST"\n",
+                fprintf(stderr, "error: %s: %s could not open file " 
+                        DEVICES_LIST " .\n",
                         jt_cmdname(argv[0]), strerror(rc =  errno));
                 return rc;
         }
-
+                                                                                                                                               
         if (argc != 1)
                 return CMD_HELP;
-
+                                                                                                                                               
         while (fgets(buf, sizeof(buf), fp) != NULL)
                 printf("%s", buf);
-
+                                                                                                                                               
         fclose(fp);
-
+                                                                                                                                               
         return 0;
 }
 
@@ -1988,7 +1989,7 @@ int jt_llog_remove(int argc, char **argv)
                 if (argc == 3)
                         fprintf(stdout, "log %s are removed.\n", argv[2]);
                 else
-                        fprintf(stdout, "the log in catalog %s are removed. \n", argv[1]);
+                        fprintf(stdout, "the log in catlog %s are removed. \n", argv[1]);
         } else
                 fprintf(stderr, "OBD_IOC_LLOG_REMOVE failed: %s\n",
                         strerror(errno));

@@ -38,6 +38,8 @@
 static DECLARE_MUTEX(pinger_sem);
 static struct list_head pinger_imports = LIST_HEAD_INIT(pinger_imports);
 
+static struct ptlrpc_thread *pinger_thread = NULL;
+
 int ptlrpc_ping(struct obd_import *imp) 
 {
         struct ptlrpc_request *req;
@@ -80,10 +82,7 @@ static int ptlrpc_pinger_main(void *arg)
         RECALC_SIGPENDING;
         SIGNAL_MASK_UNLOCK(current, flags);
 
-        LASSERTF(strlen(data->name) < sizeof(current->comm),
-                 "name %d > len %d\n",
-                 (int)strlen(data->name), (int)sizeof(current->comm));
-        THREAD_NAME(current->comm, sizeof(current->comm) - 1, "%s", data->name);
+        THREAD_NAME(current->comm, "%s", data->name);
         unlock_kernel();
 
         /* Record that the thread is running */
@@ -170,8 +169,6 @@ static int ptlrpc_pinger_main(void *arg)
         CDEBUG(D_NET, "pinger thread exiting, process %d\n", current->pid);
         return 0;
 }
-
-static struct ptlrpc_thread *pinger_thread = NULL;
 
 int ptlrpc_start_pinger(void)
 {

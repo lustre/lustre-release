@@ -20,8 +20,8 @@ rm -f $OOS $OOS2 $LOG $LOG2
 
 sleep 1	# to ensure we get up-to-date statfs info
 
-STRIPECOUNT=`cat /proc/fs/lustre/lov/*/activeobd | head -n 1`
-ORIGFREE=`cat /proc/fs/lustre/llite/*/kbytesavail | head -n 1`
+STRIPECOUNT=`cat /proc/fs/lustre/lov/*/activeobd | head -1`
+ORIGFREE=`cat /proc/fs/lustre/llite/*/kbytesavail | head -1`
 MAXFREE=${MAXFREE:-$((200000 * $STRIPECOUNT))}
 if [ $ORIGFREE -gt $MAXFREE ]; then
 	echo "skipping out-of-space test on $OSC"
@@ -54,14 +54,12 @@ fi
 # flush cache to OST(s) so avail numbers are correct
 sync; sleep 1 ; sync
 
-for OSC in /proc/fs/lustre/osc/OSC*MNT*; do
-	AVAIL=`cat $OSC/kbytesavail`
-	GRANT=`cat $OSC/cur_grant_bytes`
-	[ $(($AVAIL - $GRANT / 1024)) -lt 400 ] && OSCFULL=full
+for AVAIL in /proc/fs/lustre/osc/OSC*MNT*/kbytesavail; do
+	[ `cat $AVAIL` -lt 400 ] && OSCFULL=full
 done
 if [ -z "$OSCFULL" ]; then
 	echo "no OSTs are close to full"
-	grep [0-9] /proc/fs/lustre/osc/OSC*MNT*/{kbytesavail,cur*} |tee -a $LOG
+	grep "[0-9]" /proc/fs/lustre/osc/OSC*MNT*/{kbytesavail,cur*} |tee -a $LOG
 	SUCCESS=0
 fi
 

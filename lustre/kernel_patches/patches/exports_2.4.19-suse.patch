@@ -4,10 +4,8 @@
  kernel/ksyms.c     |    4 ++++
  4 files changed, 8 insertions(+), 1 deletion(-)
 
-Index: linux-2.4.19/fs/ext3/Makefile
-===================================================================
---- linux-2.4.19.orig/fs/ext3/Makefile	2004-04-23 17:53:55.000000000 -0400
-+++ linux-2.4.19/fs/ext3/Makefile	2004-04-23 18:25:03.000000000 -0400
+--- linux/fs/ext3/Makefile~exports_2.4.20	Wed Apr  9 10:07:14 2003
++++ linux-mmonroe/fs/ext3/Makefile	Wed Apr  9 10:19:53 2003
 @@ -9,6 +9,8 @@
  
  O_TARGET := ext3.o
@@ -17,12 +15,10 @@ Index: linux-2.4.19/fs/ext3/Makefile
  obj-y    := balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o \
  		ioctl.o namei.o super.o symlink.o
  obj-m    := $(O_TARGET)
-Index: linux-2.4.19/fs/ext3/super.c
-===================================================================
---- linux-2.4.19.orig/fs/ext3/super.c	2004-04-23 17:53:55.000000000 -0400
-+++ linux-2.4.19/fs/ext3/super.c	2004-04-23 18:25:03.000000000 -0400
-@@ -1821,7 +1821,7 @@
- 	exit_ext3_xattr();
+--- linux/fs/ext3/super.c~exports_2.4.20	Wed Apr  9 10:07:14 2003
++++ linux-mmonroe/fs/ext3/super.c	Wed Apr  9 10:19:53 2003
+@@ -1769,7 +1769,7 @@ static void __exit exit_ext3_fs(void)
+ 	unregister_filesystem(&ext3_fs_type);
  }
  
 -EXPORT_NO_SYMBOLS;
@@ -30,23 +26,19 @@ Index: linux-2.4.19/fs/ext3/super.c
  
  MODULE_AUTHOR("Remy Card, Stephen Tweedie, Andrew Morton, Andreas Dilger, Theodore Ts'o and others");
  MODULE_DESCRIPTION("Second Extended Filesystem with journaling extensions");
-Index: linux-2.4.19/include/linux/fs.h
-===================================================================
---- linux-2.4.19.orig/include/linux/fs.h	2004-04-23 17:54:14.000000000 -0400
-+++ linux-2.4.19/include/linux/fs.h	2004-04-23 18:25:27.000000000 -0400
-@@ -1183,6 +1183,7 @@
+--- linux/include/linux/fs.h~exports_2.4.20	Wed Apr  9 10:07:14 2003
++++ linux-mmonroe/include/linux/fs.h	Wed Apr  9 10:19:53 2003
+@@ -1020,6 +1020,7 @@ extern int unregister_filesystem(struct 
  extern struct vfsmount *kern_mount(struct file_system_type *);
  extern int may_umount(struct vfsmount *);
  extern long do_mount(char *, char *, char *, unsigned long, void *);
 +struct vfsmount *do_kern_mount(const char *type, int flags, char *name, void *data);
- extern void umount_tree(struct vfsmount *);
  
  #define kern_umount mntput
-Index: linux-2.4.19/kernel/ksyms.c
-===================================================================
---- linux-2.4.19.orig/kernel/ksyms.c	2004-04-23 17:54:14.000000000 -0400
-+++ linux-2.4.19/kernel/ksyms.c	2004-04-23 18:25:03.000000000 -0400
-@@ -330,6 +330,10 @@
+ 
+--- linux/kernel/ksyms.c~exports_2.4.20	Wed Apr  9 10:07:14 2003
++++ linux-mmonroe/kernel/ksyms.c	Wed Apr  9 10:19:53 2003
+@@ -308,6 +308,10 @@ EXPORT_SYMBOL(dcache_dir_fsync);
  EXPORT_SYMBOL(dcache_readdir);
  EXPORT_SYMBOL(dcache_dir_ops);
  
@@ -57,3 +49,5 @@ Index: linux-2.4.19/kernel/ksyms.c
  /* for stackable file systems (lofs, wrapfs, cryptfs, etc.) */
  EXPORT_SYMBOL(default_llseek);
  EXPORT_SYMBOL(dentry_open);
+
+_

@@ -139,12 +139,12 @@ void mdc_set_lock_data(__u64 *l, void *data)
         if (lock->l_ast_data && lock->l_ast_data != data) {
                 struct inode *new_inode = data;
                 struct inode *old_inode = lock->l_ast_data;
-                LASSERTF(old_inode->i_state & I_FREEING,
-                         "Found existing inode %p/%lu/%u state %lu in lock: "
-                         "setting data to %p/%lu/%u\n", old_inode,
-                         old_inode->i_ino, old_inode->i_generation,
-                         old_inode->i_state,
-                         new_inode, new_inode->i_ino, new_inode->i_generation);
+                unsigned long state = old_inode->i_state & I_FREEING;
+                CERROR("Found existing inode %p/%lu/%u state %lu in lock: "
+                       "setting data to %p/%lu/%u\n", old_inode,
+                       old_inode->i_ino, old_inode->i_generation, state,
+                       new_inode, new_inode->i_ino, new_inode->i_generation);
+                LASSERT(state);
         }
 #endif
         lock->l_ast_data = data;
@@ -346,9 +346,6 @@ int mdc_enqueue(struct obd_export *exp,
                 spin_unlock(&req->rq_lock);
         }
 
-        DEBUG_REQ(D_RPCTRACE, req, "disposition: %x, status: %d",
-                  it->d.lustre.it_disposition, it->d.lustre.it_status);
-
         /* We know what to expect, so we do any byte flipping required here */
         LASSERT(reply_buffers == 4 || reply_buffers == 3 || reply_buffers == 1);
         if (reply_buffers >= 3) {
@@ -414,9 +411,9 @@ EXPORT_SYMBOL(mdc_enqueue);
  */
 int mdc_intent_lock(struct obd_export *exp, struct ll_uctxt *uctxt,
                     struct ll_fid *pfid, const char *name, int len,
-                    void *lmm, int lmmsize,
-                    struct ll_fid *cfid, struct lookup_intent *it,
-                    int lookup_flags, struct ptlrpc_request **reqp,
+                    void *lmm, int lmmsize, struct ll_fid *cfid,
+                    struct lookup_intent *it, int lookup_flags,
+                    struct ptlrpc_request **reqp,
                     ldlm_blocking_callback cb_blocking)
 {
         struct lustre_handle lockh;
@@ -429,9 +426,9 @@ int mdc_intent_lock(struct obd_export *exp, struct ll_uctxt *uctxt,
         LASSERT(it);
 
         CDEBUG(D_DLMTRACE, "name: %*s in %ld, intent: %s\n", len, name,
-               (unsigned long)pfid->id, ldlm_it2str(it->it_op));
+               pfid ? (unsigned long) pfid->id : 0 , ldlm_it2str(it->it_op));
 
-        if (cfid && (it->it_op == IT_LOOKUP || it->it_op == IT_GETATTR)) {
+        if ((it->it_op == IT_LOOKUP || it->it_op == IT_GETATTR) && cfid) {
                 /* We could just return 1 immediately, but since we should only
                  * be called in revalidate_it if we already have a lock, let's
                  * verify that. */
@@ -508,7 +505,12 @@ int mdc_intent_lock(struct obd_export *exp, struct ll_uctxt *uctxt,
         if (cfid != NULL) {
                 it_set_disposition(it, DISP_ENQ_COMPLETE);
                 /* Also: did we find the same inode? */
-                if (memcmp(cfid, &mds_body->fid1, sizeof(*cfid)))
+                /* we have to compare all the fields but type, because
+                 * MDS can return mds/ino/generation triple if inode
+                 * lives on another MDS -bzzz */
+                if (cfid->generation != mds_body->fid1.generation ||
+                                cfid->id != mds_body->fid1.id ||
+                                cfid->mds != mds_body->fid1.mds)
                         RETURN(-ESTALE);
         }
 

@@ -45,8 +45,7 @@ char *ldlm_lockname[] = {
         [LCK_PR] "PR",
         [LCK_CW] "CW",
         [LCK_CR] "CR",
-        [LCK_NL] "NL",
-        [LCK_GROUP] "GROUP"
+        [LCK_NL] "NL"
 };
 char *ldlm_typename[] = {
         [LDLM_PLAIN] "PLN",
@@ -189,7 +188,6 @@ void ldlm_lock_destroy(struct ldlm_lock *lock)
         }
 
         if (!list_empty(&lock->l_res_link)) {
-                LDLM_ERROR(lock, "lock still on resource");
                 ldlm_lock_dump(D_ERROR, lock, 0);
                 LBUG();
         }
@@ -436,7 +434,7 @@ void ldlm_lock_addref_internal(struct ldlm_lock *lock, __u32 mode)
         ldlm_lock_remove_from_lru(lock);
         if (mode & (LCK_NL | LCK_CR | LCK_PR))
                 lock->l_readers++;
-        if (mode & (LCK_EX | LCK_CW | LCK_PW | LCK_GROUP))
+        if (mode & (LCK_EX | LCK_CW | LCK_PW))
                 lock->l_writers++;
         lock->l_last_used = jiffies;
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
@@ -456,7 +454,7 @@ void ldlm_lock_decref_internal(struct ldlm_lock *lock, __u32 mode)
                 LASSERT(lock->l_readers > 0);
                 lock->l_readers--;
         }
-        if (mode & (LCK_EX | LCK_CW | LCK_PW | LCK_GROUP)) {
+        if (mode & (LCK_EX | LCK_CW | LCK_PW)) {
                 LASSERT(lock->l_writers > 0);
                 lock->l_writers--;
         }
@@ -486,7 +484,7 @@ void ldlm_lock_decref_internal(struct ldlm_lock *lock, __u32 mode)
                 l_unlock(&ns->ns_lock);
 #else
                 l_unlock(&ns->ns_lock);
-                ldlm_handle_bl_callback(ns, NULL, lock);
+                liblustre_ldlm_handle_bl_callback(ns, NULL, lock);
 #endif
         } else if (ns->ns_client == LDLM_NAMESPACE_CLIENT &&
                    !lock->l_readers && !lock->l_writers) {
@@ -497,7 +495,7 @@ void ldlm_lock_decref_internal(struct ldlm_lock *lock, __u32 mode)
                 list_add_tail(&lock->l_lru, &ns->ns_unused_list);
                 ns->ns_nr_unused++;
                 l_unlock(&ns->ns_lock);
-                ldlm_cancel_lru(ns, LDLM_ASYNC);
+                ldlm_cancel_lru(ns);
         } else {
                 l_unlock(&ns->ns_lock);
         }
@@ -595,7 +593,7 @@ static struct ldlm_lock *search_queue(struct list_head *queue, ldlm_mode_t mode,
                         continue;
 
                 if (lock->l_resource->lr_type == LDLM_EXTENT &&
-                    mode == LCK_GROUP &&
+                    mode == LCK_CW &&
                     lock->l_policy_data.l_extent.gid != policy->l_extent.gid)
                         continue;
 
@@ -1051,7 +1049,8 @@ void ldlm_lock_cancel(struct ldlm_lock *lock)
         /* Please do not, no matter how tempting, remove this LBUG without
          * talking to me first. -phik */
         if (lock->l_readers || lock->l_writers) {
-                LDLM_ERROR(lock, "lock still has references");
+                LDLM_DEBUG(lock, "lock still has references");
+                ldlm_lock_dump(D_OTHER, lock, 0);
                 LBUG();
         }
 
@@ -1166,25 +1165,28 @@ void ldlm_lock_dump(int level, struct ldlm_lock *lock, int pos)
         if (lock->l_conn_export != NULL)
                 obd = lock->l_conn_export->exp_obd;
         if (lock->l_export && lock->l_export->exp_connection) {
-                CDEBUG(level, "  Node: NID %s on %s (rhandle: "LPX64")\n",
-                       ptlrpc_peernid2str(&lock->l_export->exp_connection->c_peer, str),
+                CDEBUG(level, "  Node: NID "LPX64" (%s) on %s (rhandle: "LPX64")\n",
+                       lock->l_export->exp_connection->c_peer.peer_nid,
+                       portals_nid2str(lock->l_export->exp_connection->c_peer.peer_ni->pni_number,
+                                       lock->l_export->exp_connection->c_peer.peer_nid, str),
                        lock->l_export->exp_connection->c_peer.peer_ni->pni_name,
                        lock->l_remote_handle.cookie);
         } else if (obd == NULL) {
                 CDEBUG(level, "  Node: local\n");
         } else {
                 struct obd_import *imp = obd->u.cli.cl_import;
-                CDEBUG(level, "  Node: NID %s on %s (rhandle: "LPX64")\n",
-                       ptlrpc_peernid2str(&imp->imp_connection->c_peer, str),
+                CDEBUG(level, "  Node: NID "LPX64" (%s) on %s (rhandle: "LPX64")\n",
+                       imp->imp_connection->c_peer.peer_nid,
+                       portals_nid2str(imp->imp_connection->c_peer.peer_ni->pni_number,
+                                       imp->imp_connection->c_peer.peer_nid, str),
                        imp->imp_connection->c_peer.peer_ni->pni_name,
                        lock->l_remote_handle.cookie);
         }
         CDEBUG(level, "  Resource: %p ("LPU64"/"LPU64")\n", lock->l_resource,
                lock->l_resource->lr_name.name[0],
                lock->l_resource->lr_name.name[1]);
-        CDEBUG(level, "  Req mode: %s, grant mode: %s, rc: %u, read: %d, "
-               "write: %d\n", ldlm_lockname[lock->l_req_mode],
-               ldlm_lockname[lock->l_granted_mode],
+        CDEBUG(level, "  Req mode: %d, grant mode: %d, rc: %u, read: %d, "
+               "write: %d\n", (int)lock->l_req_mode, (int)lock->l_granted_mode,
                atomic_read(&lock->l_refc), lock->l_readers, lock->l_writers);
         if (lock->l_resource->lr_type == LDLM_EXTENT)
                 CDEBUG(level, "  Extent: "LPU64" -> "LPU64

@@ -74,8 +74,8 @@ int obd_memmax;
 #endif
 
 /* push / pop to root of obd store */
-void push_ctxt(struct lvfs_run_ctxt *save, struct lvfs_run_ctxt *new_ctx,
-               struct lvfs_ucred *uc)
+void push_ctxt(struct obd_run_ctxt *save, struct obd_run_ctxt *new_ctx,
+               struct obd_ucred *uc)
 {
         //ASSERT_NOT_KERNEL_CTXT("already in kernel context!\n");
         ASSERT_CTXT_MAGIC(new_ctx->magic);
@@ -105,21 +105,21 @@ void push_ctxt(struct lvfs_run_ctxt *save, struct lvfs_run_ctxt *new_ctx,
         LASSERT(new_ctx->pwdmnt);
 
         if (uc) {
-                save->luc.luc_fsuid = current->fsuid;
-                save->luc.luc_fsgid = current->fsgid;
-                save->luc.luc_cap = current->cap_effective;
-                save->luc.luc_suppgid1 = current_groups[0];
-                save->luc.luc_suppgid2 = current_groups[1];
+                save->ouc.ouc_fsuid = current->fsuid;
+                save->ouc.ouc_fsgid = current->fsgid;
+                save->ouc.ouc_cap = current->cap_effective;
+                save->ouc.ouc_suppgid1 = current_groups[0];
+                save->ouc.ouc_suppgid2 = current_groups[1];
 
-                current->fsuid = uc->luc_fsuid;
-                current->fsgid = uc->luc_fsgid;
-                current->cap_effective = uc->luc_cap;
+                current->fsuid = uc->ouc_fsuid;
+                current->fsgid = uc->ouc_fsgid;
+                current->cap_effective = uc->ouc_cap;
                 current_ngroups = 0;
 
-                if (uc->luc_suppgid1 != -1)
-                        current_groups[current_ngroups++] = uc->luc_suppgid1;
-                if (uc->luc_suppgid2 != -1)
-                        current_groups[current_ngroups++] = uc->luc_suppgid2;
+                if (uc->ouc_suppgid1 != -1)
+                        current_groups[current_ngroups++] = uc->ouc_suppgid1;
+                if (uc->ouc_suppgid2 != -1)
+                        current_groups[current_ngroups++] = uc->ouc_suppgid2;
         }
         set_fs(new_ctx->fs);
         set_fs_pwd(current->fs, new_ctx->pwdmnt, new_ctx->pwd);
@@ -137,8 +137,8 @@ void push_ctxt(struct lvfs_run_ctxt *save, struct lvfs_run_ctxt *new_ctx,
 }
 EXPORT_SYMBOL(push_ctxt);
 
-void pop_ctxt(struct lvfs_run_ctxt *saved, struct lvfs_run_ctxt *new_ctx,
-              struct lvfs_ucred *uc)
+void pop_ctxt(struct obd_run_ctxt *saved, struct obd_run_ctxt *new_ctx,
+              struct obd_ucred *uc)
 {
         //printk("pc0");
         ASSERT_CTXT_MAGIC(saved->magic);
@@ -165,12 +165,12 @@ void pop_ctxt(struct lvfs_run_ctxt *saved, struct lvfs_run_ctxt *new_ctx,
         dput(saved->pwd);
         mntput(saved->pwdmnt);
         if (uc) {
-                current->fsuid = saved->luc.luc_fsuid;
-                current->fsgid = saved->luc.luc_fsgid;
-                current->cap_effective = saved->luc.luc_cap;
+                current->fsuid = saved->ouc.ouc_fsuid;
+                current->fsgid = saved->ouc.ouc_fsgid;
+                current->cap_effective = saved->ouc.ouc_cap;
                 current_ngroups = saved->ngroups;
-                current_groups[0] = saved->luc.luc_suppgid1;
-                current_groups[1] = saved->luc.luc_suppgid2;
+                current_groups[0] = saved->ouc.ouc_suppgid1;
+                current_groups[1] = saved->ouc.ouc_suppgid2;
         }
 
         /*
@@ -325,7 +325,7 @@ int lustre_fsync(struct file *file)
 }
 EXPORT_SYMBOL(lustre_fsync);
 
-struct l_file *l_dentry_open(struct lvfs_run_ctxt *ctxt, struct l_dentry *de,
+struct l_file *l_dentry_open(struct obd_run_ctxt *ctxt, struct l_dentry *de,
                              int flags)
 {
         mntget(ctxt->pwdmnt);

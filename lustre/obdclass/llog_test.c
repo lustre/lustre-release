@@ -81,12 +81,13 @@ static int verify_handle(char *test, struct llog_handle *llh, int num_recs)
 static int llog_test_1(struct obd_device *obd, char *name)
 {
         struct llog_handle *llh;
-        struct llog_ctxt *ctxt = llog_get_context(obd, LLOG_TEST_ORIG_CTXT);
+        struct llog_ctxt *ctxt;
         int rc;
         int rc2;
         ENTRY;
 
         CWARN("1a: create a log with name: %s\n", name);
+        ctxt = llog_get_context(&obd->obd_llogs, LLOG_TEST_ORIG_CTXT);
         LASSERT(ctxt);
 
         rc = llog_create(ctxt, &llh, NULL, name);
@@ -117,9 +118,10 @@ static int llog_test_2(struct obd_device *obd, char *name,
         struct llog_handle *loghandle;
         struct llog_logid logid;
         int rc;
-        struct llog_ctxt *ctxt = llog_get_context(obd, LLOG_TEST_ORIG_CTXT);
+        struct llog_ctxt *ctxt;
         ENTRY;
 
+        ctxt = llog_get_context(&obd->obd_llogs, LLOG_TEST_ORIG_CTXT);
         CWARN("2a: re-open a log with name: %s\n", name);
         rc = llog_create(ctxt, llh, NULL, name);
         if (rc) {
@@ -230,13 +232,13 @@ static int llog_test_4(struct obd_device *obd)
         int rc, i, buflen;
         struct llog_mini_rec lmr;
         struct llog_cookie cookie;
-        struct llog_ctxt *ctxt = llog_get_context(obd, LLOG_TEST_ORIG_CTXT);
+        struct llog_ctxt *ctxt;
         int num_recs = 0;
         char *buf;
         struct llog_rec_hdr rec;
-
         ENTRY;
 
+        ctxt = llog_get_context(&obd->obd_llogs, LLOG_TEST_ORIG_CTXT);
         lmr.lmr_hdr.lrh_len = lmr.lmr_tail.lrt_len = LLOG_MIN_REC_SIZE;
         lmr.lmr_hdr.lrh_type = 0xf00f00;
 
@@ -364,6 +366,8 @@ static int llog_cancel_rec_cb(struct llog_handle *llh, struct llog_rec_hdr *rec,
         RETURN(0);
 }
 
+
+
 /* Test log and catalogue processing */
 static int llog_test_5(struct obd_device *obd)
 {
@@ -371,10 +375,10 @@ static int llog_test_5(struct obd_device *obd)
         char name[10];
         int rc;
         struct llog_mini_rec lmr;
-        struct llog_ctxt *ctxt = llog_get_context(obd, LLOG_TEST_ORIG_CTXT);
-
+        struct llog_ctxt *ctxt;
         ENTRY;
 
+        ctxt = llog_get_context(&obd->obd_llogs, LLOG_TEST_ORIG_CTXT);
         lmr.lmr_hdr.lrh_len = lmr.lmr_tail.lrt_len = LLOG_MIN_REC_SIZE;
         lmr.lmr_hdr.lrh_type = 0xf00f00;
 
@@ -422,14 +426,6 @@ static int llog_test_5(struct obd_device *obd)
                 GOTO(out, rc);
         }
 
-        CWARN("5f: print plain log entries reversely.. expect 6\n");
-        rc = llog_cat_reverse_process(llh, plain_print_cb, "foobar");
-        if (rc) {
-                CERROR("5f: reversely process with plain_print_cb failed: %d\n",
-                       rc);
-                GOTO(out, rc);
-        }
-
  out:
         CWARN("5: close re-opened catalog\n");
         if (llh)
@@ -443,14 +439,17 @@ static int llog_test_5(struct obd_device *obd)
 static int llog_test_6(struct obd_device *obd, char *name)
 {
         struct obd_device *mdc_obd;
-        struct llog_ctxt *ctxt = llog_get_context(obd, LLOG_TEST_ORIG_CTXT);
-        struct obd_uuid *mds_uuid = &ctxt->loc_exp->exp_obd->obd_uuid;
+        struct llog_ctxt *ctxt;
+        struct obd_uuid *mds_uuid;
         struct lustre_handle exph = {0, };
         struct obd_export *exp;
         struct obd_uuid uuid = {"LLOG_TEST6_UUID"};
         struct llog_handle *llh = NULL;
         struct llog_ctxt *nctxt;
         int rc;
+
+        ctxt = llog_get_context(&obd->obd_llogs, LLOG_TEST_ORIG_CTXT);
+        mds_uuid = &ctxt->loc_exp->exp_obd->obd_uuid;
 
         CWARN("6a: re-open log %s using client API\n", name);
         mdc_obd = class_find_client_obd(mds_uuid, LUSTRE_MDC_NAME, NULL);
@@ -467,7 +466,7 @@ static int llog_test_6(struct obd_device *obd, char *name)
         }
         exp = class_conn2export(&exph);
 
-        nctxt = llog_get_context(mdc_obd, LLOG_CONFIG_REPL_CTXT);
+        nctxt = llog_get_context(&mdc_obd->obd_llogs, LLOG_CONFIG_REPL_CTXT);
         rc = llog_create(nctxt, &llh, NULL, name);
         if (rc) {
                 CERROR("6: llog_create failed %d\n", rc);
@@ -484,10 +483,6 @@ static int llog_test_6(struct obd_device *obd, char *name)
         if (rc)
                 CERROR("6: llog_process failed %d\n", rc);
 
-        rc = llog_reverse_process(llh, (llog_cb_t)plain_print_cb, NULL, NULL);
-        if (rc)
-                CERROR("6: llog_reverse_process failed %d\n", rc);
-
 parse_out:
         rc = llog_close(llh);
         if (rc) {
@@ -501,13 +496,14 @@ parse_out:
 
 static int llog_test_7(struct obd_device *obd)
 {
-        struct llog_ctxt *ctxt = llog_get_context(obd, LLOG_TEST_ORIG_CTXT);
+        struct llog_ctxt *ctxt;
         struct llog_handle *llh;
         struct llog_create_rec lcr;
         char name[10];
         int rc;
         ENTRY;
 
+        ctxt = llog_get_context(&obd->obd_llogs, LLOG_TEST_ORIG_CTXT);
         sprintf(name, "%x", llog_test_rand+2);
         CWARN("7: create a log with name: %s\n", name);
         LASSERT(ctxt);
@@ -541,14 +537,15 @@ static int llog_test_7(struct obd_device *obd)
 static int llog_run_tests(struct obd_device *obd)
 {
         struct llog_handle *llh;
-        struct lvfs_run_ctxt saved;
-        struct llog_ctxt *ctxt = llog_get_context(obd, LLOG_TEST_ORIG_CTXT);
+        struct obd_run_ctxt saved;
+        struct llog_ctxt *ctxt;
         int rc, err, cleanup_phase = 0;
         char name[10];
         ENTRY;
 
+        ctxt = llog_get_context(&obd->obd_llogs, LLOG_TEST_ORIG_CTXT);
         sprintf(name, "%x", llog_test_rand);
-        push_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_lvfs_ctxt, NULL);
+        push_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_ctxt, NULL);
 
         rc = llog_test_1(obd, name);
         if (rc)
@@ -588,47 +585,46 @@ static int llog_run_tests(struct obd_device *obd)
                 if (!rc)
                         rc = err;
         case 0:
-                pop_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_lvfs_ctxt, NULL);
+                pop_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_ctxt, NULL);
         }
 
         return rc;
 }
 
 
-static int llog_test_llog_init(struct obd_device *obd, struct obd_device *tgt,
-                               int count, struct llog_catid *logid)
+static int llog_test_llog_init(struct obd_device *obd, struct obd_llogs *llogs,
+                               struct obd_device *tgt, int count,
+                               struct llog_catid *logid)
 {
         int rc;
         ENTRY;
 
-        rc = obd_llog_setup(obd, LLOG_TEST_ORIG_CTXT, tgt, 0, NULL,
-                            &llog_lvfs_ops);
+        rc = llog_setup(obd, llogs, LLOG_TEST_ORIG_CTXT, tgt, 0,
+                        NULL, &llog_lvfs_ops);
         RETURN(rc);
 }
 
-static int llog_test_llog_finish(struct obd_device *obd, int count)
+static int llog_test_llog_finish(struct obd_device *obd,
+                                 struct obd_llogs *llogs, int count)
 {
         int rc;
         ENTRY;
 
-        rc = obd_llog_cleanup(llog_get_context(obd, LLOG_TEST_ORIG_CTXT));
+        rc = llog_cleanup(llog_get_context(&obd->obd_llogs, LLOG_TEST_ORIG_CTXT));
         RETURN(rc);
 }
 
 static int llog_test_cleanup(struct obd_device *obd, int flags)
 {
-        int rc = obd_llog_finish(obd, 0);
+        int rc = obd_llog_finish(obd, &obd->obd_llogs, 0);
         if (rc)
                 CERROR("failed to llog_test_llog_finish: %d\n", rc);
-
-        lprocfs_obd_cleanup(obd);
 
         return rc;
 }
 
 static int llog_test_setup(struct obd_device *obd, obd_count len, void *buf)
 {
-        struct lprocfs_static_vars lvars;
         struct lustre_cfg *lcfg = buf;
         struct obd_device *tgt;
         int rc;
@@ -646,7 +642,7 @@ static int llog_test_setup(struct obd_device *obd, obd_count len, void *buf)
                 RETURN(-EINVAL);
         }
 
-        rc = obd_llog_init(obd, tgt, 0, NULL);
+        rc = obd_llog_init(obd, &obd->obd_llogs, tgt, 0, NULL);
         if (rc)
                 RETURN(rc);
 
@@ -655,19 +651,35 @@ static int llog_test_setup(struct obd_device *obd, obd_count len, void *buf)
         rc = llog_run_tests(obd);
         if (rc)
                 llog_test_cleanup(obd, 0);
-
-        lprocfs_init_vars(llog_test, &lvars);
-        lprocfs_obd_setup(obd, lvars.obd_vars);
-
         RETURN(rc);
 }
 
+static struct lprocfs_vars lprocfs_ost_obd_vars[] = { {0} };
+static struct lprocfs_vars lprocfs_ost_module_vars[] = { {0} };
+LPROCFS_INIT_VARS(ost, lprocfs_ost_module_vars, lprocfs_ost_obd_vars)
+
+static int llog_test_attach(struct obd_device *dev, obd_count len, void *data)
+{
+        struct lprocfs_static_vars lvars;
+
+        lprocfs_init_vars(ost, &lvars);
+        return lprocfs_obd_attach(dev, lvars.obd_vars);
+}
+
+static int llog_test_detach(struct obd_device *dev)
+{
+        return lprocfs_obd_detach(dev);
+}
+
 static struct obd_ops llog_obd_ops = {
-        .o_owner       = THIS_MODULE,
-        .o_setup       = llog_test_setup,
-        .o_cleanup     = llog_test_cleanup,
-        .o_llog_init   = llog_test_llog_init,
-        .o_llog_finish = llog_test_llog_finish,
+        o_owner:       THIS_MODULE,
+        o_attach:      llog_test_attach,
+        o_detach:      llog_test_detach,
+        o_setup:       llog_test_setup,
+        o_cleanup:     llog_test_cleanup,
+        o_llog_init:   llog_test_llog_init,
+        o_llog_finish: llog_test_llog_finish,
+
 };
 
 static struct lprocfs_vars lprocfs_obd_vars[] = { {0} };
@@ -679,7 +691,8 @@ static int __init llog_test_init(void)
         struct lprocfs_static_vars lvars;
 
         lprocfs_init_vars(llog_test, &lvars);
-        return class_register_type(&llog_obd_ops,lvars.module_vars,"llog_test");
+        return class_register_type(&llog_obd_ops, NULL, lvars.module_vars,
+                                   "llog_test");
 }
 
 static void __exit llog_test_exit(void)

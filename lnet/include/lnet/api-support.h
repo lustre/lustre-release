@@ -1,3 +1,5 @@
+# define DEBUG_SUBSYSTEM S_PORTALS
+# define PORTAL_DEBUG
 
 #include "build_check.h"
 

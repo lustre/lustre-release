@@ -90,14 +90,6 @@ typedef enum {
  * pretty high-risk, though, and would need a lot more testing. */
 #define LDLM_FL_CAN_MATCH      0x100000
 
-/* A lock contributes to the kms calculation until it has finished the part
- * of it's cancelation that performs write back on its dirty pages.  It
- * can remain on the granted list during this whole time.  Threads racing
- * to update the kms after performing their writeback need to know to
- * exclude each others locks from the calculation as they walk the granted
- * list. */
-#define LDLM_FL_KMS_IGNORE     0x200000
-
 /* The blocking callback is overloaded to perform two functions.  These flags
  * indicate which operation should be performed. */
 #define LDLM_CB_BLOCKING    1
@@ -110,7 +102,6 @@ typedef enum {
 #define LCK_COMPAT_CW  (LCK_COMPAT_PW | LCK_CW)
 #define LCK_COMPAT_CR  (LCK_COMPAT_CW | LCK_PR | LCK_PW)
 #define LCK_COMPAT_NL  (LCK_COMPAT_CR | LCK_EX)
-#define LCK_COMPAT_GROUP  (LCK_GROUP | LCK_NL)
 
 static ldlm_mode_t lck_compat_array[] = {
         [LCK_EX] LCK_COMPAT_EX,
@@ -118,13 +109,12 @@ static ldlm_mode_t lck_compat_array[] = {
         [LCK_PR] LCK_COMPAT_PR,
         [LCK_CW] LCK_COMPAT_CW,
         [LCK_CR] LCK_COMPAT_CR,
-        [LCK_NL] LCK_COMPAT_NL,
-        [LCK_GROUP] LCK_COMPAT_GROUP
+        [LCK_NL] LCK_COMPAT_NL
 };
 
 static inline void lockmode_verify(ldlm_mode_t mode)
 {
-       LASSERT(mode >= LCK_EX && mode <= LCK_GROUP);
+       LASSERT(mode >= LCK_EX && mode <= LCK_NL);
 }
 
 static inline int lockmode_compat(ldlm_mode_t exist, ldlm_mode_t new)
@@ -389,7 +379,7 @@ do {                                                                          \
         {                                                                     \
                 CDEBUG(level, "### " format                                   \
                        " ns: %s lock: %p/"LPX64" lrc: %d/%d,%d mode: %s/%s "  \
-                       "res: "LPU64"/"LPU64" rrc: %d type: %s "               \
+                       "res: "LPU64"/"LPU64"/"LPU64"/"LPU64" rrc: %d type: %s "\
                        "flags: %x remote: "LPX64" expref: %d\n" , ## a,       \
                        lock->l_resource->lr_namespace->ns_name,               \
                        lock, lock->l_handle.h_cookie,                         \
@@ -399,6 +389,8 @@ do {                                                                          \
                        ldlm_lockname[lock->l_req_mode],                       \
                        lock->l_resource->lr_name.name[0],                     \
                        lock->l_resource->lr_name.name[1],                     \
+                       lock->l_resource->lr_name.name[2],                     \
+                       lock->l_resource->lr_name.name[3],                     \
                        atomic_read(&lock->l_resource->lr_refcount),           \
                        ldlm_typename[lock->l_resource->lr_type],              \
                        lock->l_flags, lock->l_remote_handle.cookie,           \
@@ -457,6 +449,11 @@ int ldlm_handle_cancel(struct ptlrpc_request *req);
 int ldlm_del_waiting_lock(struct ldlm_lock *lock);
 int ldlm_get_ref(void);
 void ldlm_put_ref(int force);
+#ifndef __KERNEL__
+void liblustre_ldlm_handle_bl_callback(struct ldlm_namespace *ns,
+                                       struct ldlm_lock_desc *ld,
+                                       struct ldlm_lock *lock);
+#endif
 
 /* ldlm_lock.c */
 ldlm_processing_policy ldlm_get_processing_policy(struct ldlm_resource *res);

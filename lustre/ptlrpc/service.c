@@ -123,6 +123,9 @@ ptlrpc_save_lock (struct ptlrpc_request *req,
         struct ptlrpc_reply_state *rs = req->rq_reply_state;
         int                        idx;
 
+        if (!lock->cookie)
+                return;
+
         LASSERT (rs != NULL);
         LASSERT (rs->rs_nlocks < RS_MAX_LOCKS);
 
@@ -360,7 +363,6 @@ ptlrpc_server_handle_request (struct ptlrpc_service *svc)
         struct timeval         work_end;
         long                   timediff;
         int                    rc;
-        char                   str[PTL_NALFMT_SIZE];
         ENTRY;
 
         spin_lock_irqsave (&svc->srv_lock, flags);
@@ -399,18 +401,17 @@ ptlrpc_server_handle_request (struct ptlrpc_service *svc)
 #endif
         rc = lustre_unpack_msg (request->rq_reqmsg, request->rq_reqlen);
         if (rc != 0) {
-                CERROR ("error unpacking request: ptl %d from %s"
+                CERROR ("error unpacking request: ptl %d from "LPX64
                         " xid "LPU64"\n", svc->srv_req_portal,
-                        ptlrpc_peernid2str(&request->rq_peer, str),
-                       request->rq_xid);
+                       request->rq_peer.peer_nid, request->rq_xid);
                 goto out;
         }
 
         rc = -EINVAL;
         if (request->rq_reqmsg->type != PTL_RPC_MSG_REQUEST) {
-                CERROR("wrong packet type received (type=%u) from %s\n",
-                       request->rq_reqmsg->type,
-                       ptlrpc_peernid2str(&request->rq_peer, str));
+                CERROR("wrong packet type received (type=%u) from "
+                       LPX64"\n", request->rq_reqmsg->type,
+                       request->rq_peer.peer_nid);
                 goto out;
         }
 
@@ -420,9 +421,9 @@ ptlrpc_server_handle_request (struct ptlrpc_service *svc)
          * client's timeout is similar to mine, she'll be timing out this
          * REQ anyway (bug 1502) */
         if (timediff / 1000000 > (long)obd_timeout) {
-                CERROR("Dropping timed-out request from %s: %ld seconds old\n",
-                       ptlrpc_peernid2str(&request->rq_peer, str), 
-                       timediff / 1000000);
+                CERROR("Dropping timed-out request from "LPX64
+                       ": %ld seconds old\n",
+                       request->rq_peer.peer_nid, timediff / 1000000);
                 goto out;
         }
 
@@ -443,26 +444,26 @@ ptlrpc_server_handle_request (struct ptlrpc_service *svc)
         }
 
         CDEBUG(D_RPCTRACE, "Handling RPC pname:cluuid+ref:pid:xid:ni:nid:opc "
-               "%s:%s+%d:%d:"LPU64":%s:%s:%d\n", current->comm,
+               "%s:%s+%d:%d:"LPU64":%s:"LPX64":%d\n", current->comm,
                (request->rq_export ?
                 (char *)request->rq_export->exp_client_uuid.uuid : "0"),
                (request->rq_export ?
                 atomic_read(&request->rq_export->exp_refcount) : -99),
                request->rq_reqmsg->status, request->rq_xid,
                request->rq_peer.peer_ni->pni_name,
-               ptlrpc_peernid2str(&request->rq_peer, str),
+               request->rq_peer.peer_nid,
                request->rq_reqmsg->opc);
 
         rc = svc->srv_handler(request);
         CDEBUG(D_RPCTRACE, "Handled RPC pname:cluuid+ref:pid:xid:ni:nid:opc "
-               "%s:%s+%d:%d:"LPU64":%s:%s:%d\n", current->comm,
+               "%s:%s+%d:%d:"LPU64":%s:"LPX64":%d\n", current->comm,
                (request->rq_export ?
                 (char *)request->rq_export->exp_client_uuid.uuid : "0"),
                (request->rq_export ?
                 atomic_read(&request->rq_export->exp_refcount) : -99),
                request->rq_reqmsg->status, request->rq_xid,
                request->rq_peer.peer_ni->pni_name,
-               ptlrpc_peernid2str(&request->rq_peer, str),
+               request->rq_peer.peer_nid,
                request->rq_reqmsg->opc);
 
 put_conn:
@@ -475,9 +476,9 @@ put_conn:
         timediff = timeval_sub(&work_end, &work_start);
 
         CDEBUG((timediff / 1000000 > (long)obd_timeout) ? D_ERROR : D_HA,
-               "request "LPU64" opc %u from NID %s processed in %ldus "
+               "request "LPU64" opc %u from NID "LPX64" processed in %ldus "
                "(%ldus total)\n", request->rq_xid, request->rq_reqmsg->opc,
-               ptlrpc_peernid2str(&request->rq_peer, str),
+               request->rq_peer.peer_nid,
                timediff, timeval_sub(&work_end, &request->rq_arrival_time));
 
         if (svc->srv_stats != NULL) {
@@ -504,7 +505,6 @@ ptlrpc_server_handle_reply (struct ptlrpc_service *svc)
         struct obd_device         *obd;
         int                        nlocks;
         int                        been_handled;
-        char                       str[PTL_NALFMT_SIZE];
         ENTRY;
 
         spin_lock_irqsave (&svc->srv_lock, flags);
@@ -549,11 +549,10 @@ ptlrpc_server_handle_reply (struct ptlrpc_service *svc)
                 /* If we see this, we should already have seen the warning
                  * in mds_steal_ack_locks()  */
                 CWARN("All locks stolen from rs %p x"LPD64".t"LPD64
-                      " o%d NID %s\n",
+                      " o%d NID"LPX64"\n",
                       rs, 
                       rs->rs_xid, rs->rs_transno,
-                      rs->rs_msg.opc, 
-                      ptlrpc_peernid2str(&exp->exp_connection->c_peer, str));
+                      rs->rs_msg.opc, exp->exp_connection->c_peer.peer_nid);
         }
 
         if ((!been_handled && rs->rs_on_net) || 
@@ -667,10 +666,7 @@ static int ptlrpc_main(void *arg)
         RECALC_SIGPENDING;
         SIGNAL_MASK_UNLOCK(current, flags);
 
-        LASSERTF(strlen(data->name) < sizeof(current->comm),
-                 "name %d > len %d\n",
-                 (int)strlen(data->name), (int)sizeof(current->comm));
-        THREAD_NAME(current->comm, sizeof(current->comm) - 1, "%s", data->name);
+        THREAD_NAME(current->comm, "%s", data->name);
         unlock_kernel();
 
         /* Record that the thread is running */
@@ -680,7 +676,7 @@ static int ptlrpc_main(void *arg)
         spin_lock_irqsave(&svc->srv_lock, flags);
         svc->srv_nthreads++;
         spin_unlock_irqrestore(&svc->srv_lock, flags);
-
+        
         /* XXX maintain a list of all managed devices: insert here */
 
         while ((thread->t_flags & SVC_STOPPING) == 0 ||
@@ -688,7 +684,7 @@ static int ptlrpc_main(void *arg)
                 /* Don't exit while there are replies to be handled */
                 struct l_wait_info lwi = LWI_TIMEOUT(svc->srv_rqbd_timeout,
                                                      ptlrpc_retry_rqbds, svc);
-
+                                  
                 l_wait_event_exclusive (svc->srv_waitq,
                               ((thread->t_flags & SVC_STOPPING) != 0 &&
                                svc->srv_n_difficult_replies == 0) ||
@@ -697,7 +693,7 @@ static int ptlrpc_main(void *arg)
                               !list_empty (&svc->srv_reply_queue) ||
                               (!list_empty (&svc->srv_request_queue) &&
                                (svc->srv_n_difficult_replies == 0 ||
-                                svc->srv_n_active_reqs <
+                                svc->srv_n_active_reqs < 
                                 (svc->srv_nthreads - 1))),
                               &lwi);
 
@@ -750,7 +746,7 @@ static void ptlrpc_stop_thread(struct ptlrpc_service *svc,
         spin_lock_irqsave(&svc->srv_lock, flags);
         list_del(&thread->t_link);
         spin_unlock_irqrestore(&svc->srv_lock, flags);
-
+        
         OBD_FREE(thread, sizeof(*thread));
 }
 
@@ -761,7 +757,7 @@ void ptlrpc_stop_all_threads(struct ptlrpc_service *svc)
 
         spin_lock_irqsave(&svc->srv_lock, flags);
         while (!list_empty(&svc->srv_threads)) {
-                thread = list_entry(svc->srv_threads.next,
+                thread = list_entry(svc->srv_threads.next, 
                                     struct ptlrpc_thread, t_link);
 
                 spin_unlock_irqrestore(&svc->srv_lock, flags);
@@ -772,7 +768,6 @@ void ptlrpc_stop_all_threads(struct ptlrpc_service *svc)
         spin_unlock_irqrestore(&svc->srv_lock, flags);
 }
 
-/* @base_name should be 12 characters or less - 3 will be added on */
 int ptlrpc_start_n_threads(struct obd_device *dev, struct ptlrpc_service *svc,
                            int num_threads, char *base_name)
 {
@@ -845,8 +840,6 @@ int ptlrpc_unregister_service(struct ptlrpc_service *service)
         spin_lock (&ptlrpc_all_services_lock);
         list_del_init (&service->srv_list);
         spin_unlock (&ptlrpc_all_services_lock);
-
-        ptlrpc_lprocfs_unregister_service(service);
 
         for (i = 0; i < ptlrpc_ninterfaces; i++) {
                 srv_ni = &service->srv_interfaces[i];
@@ -948,6 +941,8 @@ int ptlrpc_unregister_service(struct ptlrpc_service *service)
                 }
                 CWARN("Unexpectedly long timeout %p\n", service);
         }
+
+        ptlrpc_lprocfs_unregister_service(service);
 
         OBD_FREE(service,
                  offsetof(struct ptlrpc_service,

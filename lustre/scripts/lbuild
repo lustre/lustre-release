@@ -29,9 +29,6 @@ UP_ARCHS=
 
 DATE=$(date)
 
-USE_DATESTAMP=1
-RPMBUILD=
-
 cleanup()
 {
     true
@@ -114,11 +111,6 @@ Usage: ${0##*/} [OPTION]... [-- <lustre configure options>]
     Also note that by using a non-"base" arch (eg, i386) only kernels
     will be built - there will be no lustre-lite-utils package.
 
-  --disable-datestamp
-    Prevents the datestamp flag (-D) from being passed to cvs for 
-    checkouts. This is a workaround for a problem encountered when 
-    using lbuild with tinderbox.
-
 EOF
 
 #   list_targets
@@ -155,14 +147,6 @@ check_options()
 #    TARGET_FILE="$TOPDIR/kernel_patches/targets/$TARGET.target"
 #    [ -r "$TARGET_FILE" ] || \
 #	usage 1 "Target '$TARGET' was not found."
-
-    RPMBUILD=$(which rpmbuild 2>/dev/null | head -1)
-    if [ ! "$RPMBUILD" -o "$RPMBUILD" == "" ]; then
-	RPMBUILD=$(which rpm 2>/dev/null | head -1)
-	if [ ! "$RPMBUILD" -o "$RPMBUILD" == "" ]; then
-	    usage 1 "Could not find binary for making rpms (tried rpmbuild and rpm)."
-	fi
-    fi
 }
 
 uniqify()
@@ -250,13 +234,7 @@ unpack_lustre()
 	untar "$LUSTRE"
 	[ -d lustre ] || ln -sf lustre* lustre
     else
-	if [ "$USE_DATESTAMP" ]; then
-	    DATESTAMP="-D '$DATE'"
-	else
-	    DATESTAMP=""
-	fi	    
-
-	cvs -d "$CVSROOT" -qz3 co $DATESTAMP -r "$TAG" -d "$DIRNAME" lustre || \
+	cvs -d "$CVSROOT" -qz3 co -D "$DATE" "-r$TAG" -d "$DIRNAME" lustre || \
 	    fatal 1 "There was an error checking out Lustre from CVS."
 	echo "Creating lustre tarball..."
 	tar zcf "$DIRNAME.tar.gz" "$DIRNAME" \
@@ -292,7 +270,6 @@ patch_linux()
     popd >/dev/null
     echo "Full patch has been saved in ${FULL_PATCH##*/}."
     echo "Replacing .config files..."
-    [ -d linux/configs ] || mkdir linux/configs
     rm -f linux/configs/*
     cp -v lustre/kernel_patches/kernel_configs/kernel-${VERSION}-${TARGET}*.config linux/configs/
 }
@@ -324,7 +301,7 @@ prep_build()
 	-e "s/@KERNEL_SOURCE@/$KERNEL/g" \
 	-e "s/@LUSTRE_SOURCE@/${LUSTRE##*/}/g" \
 	-e "s/@LUSTRE_TARGET@/$TARGET/g" \
-	-e "s#@CONFIGURE_FLAGS@#$CONFIGURE_FLAGS#g" \
+	-e "s/@CONFIGURE_FLAGS@/$CONFIGURE_FLAGS/g" \
 	-e "s/@BASE_ARCHS@/$BASE_ARCHS/g" \
 	-e "s/@BIGMEM_ARCHS@/$BIGMEM_ARCHS/g" \
 	-e "s/@BOOT_ARCHS@/$BOOT_ARCHS/g" \
@@ -360,11 +337,11 @@ build()
 	targets="--target $arch $targets"
     done
 
-    $RPMBUILD $targets -bb lustre-kernel-2.4.spec \
+    rpmbuild $targets -bb lustre-kernel-2.4.spec \
 	--define "_topdir $TOPDIR" || \
 	fatal 1 "Error building rpms for $arch."
 
-    (( $DO_SRC )) && $RPMBUILD -bs lustre-kernel-2.4.spec \
+    (( $DO_SRC )) && rpmbuild -bs lustre-kernel-2.4.spec \
 	--define "_topdir $TOPDIR" || \
 	fatal 1 "Error building .src.rpm."
 }
@@ -376,7 +353,7 @@ publish()
 
 [ -r ~/.lbuildrc ] && . ~/.lbuildrc
 
-options=$(getopt -o d:D:h -l extraversion:,kerneldir:,lustre:,nosrc,publish,release,tag:,target:,target-archs:,disable-datestamp -- "$@")
+options=$(getopt -o d:D:h -l extraversion:,kerneldir:,lustre:,nosrc,publish,release,tag:,target:,target-archs: -- "$@")
 
 eval set -- "$options"
     
@@ -431,10 +408,6 @@ while [ "$1" ] ; do
 	--target-archs)
 	    TARGET_ARCHS=$2
 	    shift 2
-	    ;;
-	--disable-datestamp)
-	    USE_DATESTAMP=
-	    shift
 	    ;;
 	--)
 	    shift

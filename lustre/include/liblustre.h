@@ -24,8 +24,8 @@
 #ifndef LIBLUSTRE_H__
 #define LIBLUSTRE_H__
 
-#include <sys/mman.h>
 #include <asm/byteorder.h>
+#include <sys/mman.h>
 #ifndef  __CYGWIN__
 #include <stdint.h>
 #include <asm/page.h>
@@ -52,7 +52,7 @@
 #define PAGE_SHIFT 12
 #define PAGE_SIZE (1UL << PAGE_SHIFT)
 #define PAGE_MASK (~(PAGE_SIZE-1))
-#define loff_t long long
+#define loff_t __u64
 #define ERESTART 2001
 typedef unsigned short umode_t;
 
@@ -116,6 +116,9 @@ static inline void *kmalloc(int size, int prot)
 #define PTR_ERR(a) ((long)(a))
 #define ERR_PTR(a) ((void*)((long)(a)))
 
+#define capable(foo) 1
+#define CAP_SYS_ADMIN 1
+
 typedef struct {
         void *cwd;
 }mm_segment_t;
@@ -139,7 +142,7 @@ typedef int (write_proc_t)(struct file *file, const char *buffer,
         ((unsigned char *)&addr)[1], \
         ((unsigned char *)&addr)[2], \
         ((unsigned char *)&addr)[3]
-
+                                                                                                                        
 #if defined(__LITTLE_ENDIAN)
 #define HIPQUAD(addr) \
         ((unsigned char *)&addr)[3], \
@@ -237,18 +240,8 @@ static inline int request_module(char *name)
 #define __MOD_DEC_USE_COUNT(m)  do {} while (0)
 #define MOD_INC_USE_COUNT       do {} while (0)
 #define MOD_DEC_USE_COUNT       do {} while (0)
-static inline void __module_get(struct module *module)
-{
-}
-
-static inline int try_module_get(struct module *module)
-{
-        return 1;
-}
-
-static inline void module_put(struct module *module)
-{
-}
+#define try_module_get          __MOD_INC_USE_COUNT
+#define module_put              __MOD_DEC_USE_COUNT
 
 /* module initialization */
 extern int init_obdclass(void);
@@ -262,13 +255,14 @@ extern int echo_client_init(void);
 
 
 /* general stuff */
+#define jiffies 0
 
 #define EXPORT_SYMBOL(S)
 
-typedef struct { } spinlock_t;
+typedef int spinlock_t;
 typedef __u64 kdev_t;
 
-#define SPIN_LOCK_UNLOCKED (spinlock_t) { }
+#define SPIN_LOCK_UNLOCKED 0
 #define LASSERT_SPIN_LOCKED(lock) do {} while(0)
 
 static inline void spin_lock(spinlock_t *l) {return;}
@@ -302,7 +296,14 @@ static inline void spin_unlock_irqrestore(spinlock_t *a, unsigned long b) {}
 
 /* random */
 
-void get_random_bytes(void *ptr, int size);
+static inline void get_random_bytes(void *ptr, int size)
+{
+        int *p = (int *)ptr;
+        int i, count = size/sizeof(int);
+
+        for (i = 0; i< count; i++)
+                *p++ = rand();
+}
 
 /* memory */
 
@@ -356,6 +357,11 @@ static inline int kmem_cache_destroy(kmem_cache_t *a)
 #define PAGE_CACHE_SHIFT 12
 #define PAGE_CACHE_MASK PAGE_MASK
 
+/* XXX
+ * for this moment, liblusre will not rely OST for non-page-aligned write
+ */
+#define LIBLUSTRE_HANDLE_UNALIGNED_PAGE
+
 struct page {
         void   *addr;
         unsigned long index;
@@ -365,11 +371,10 @@ struct page {
         /* internally used by liblustre file i/o */
         int     _offset;
         int     _count;
+#ifdef LIBLUSTRE_HANDLE_UNALIGNED_PAGE
+        int     _managed;
+#endif
 };
-
-/* 2.4 defines */
-#define PAGE_LIST_ENTRY list
-#define PAGE_LIST(page) ((page)->list)
 
 #define kmap(page) (page)->addr
 #define kunmap(a) do {} while (0)
@@ -518,15 +523,14 @@ struct semaphore {
         int count;
 };
 
-/* use the macro's argument to avoid unused warnings */
-#define down(a) do { (void)a; } while (0)
-#define up(a) do { (void)a; } while (0)
-#define down_read(a) do { (void)a; } while (0)
-#define up_read(a) do { (void)a; } while (0)
-#define down_write(a) do { (void)a; } while (0)
-#define up_write(a) do { (void)a; } while (0)
-#define sema_init(a,b) do { (void)a; } while (0)
-#define init_rwsem(a) do { (void)a; } while (0)
+#define down(a) do {} while (0)
+#define up(a) do {} while (0)
+#define down_read(a) do {} while (0)
+#define up_read(a) do {} while (0)
+#define down_write(a) do {} while (0)
+#define up_write(a) do {} while (0)
+#define sema_init(a,b) do {} while (0)
+#define init_rwsem(a) do {} while (0)
 #define DECLARE_MUTEX(name)     \
         struct semaphore name = { 1 }
 static inline void init_MUTEX (struct semaphore *sem)
@@ -560,23 +564,12 @@ struct task_struct {
         int pid;
         int fsuid;
         int fsgid;
-        int max_groups;
-        int ngroups;
-        gid_t *groups;
         __u32 cap_effective;
-
-        struct fs_struct __fs;
 };
 
 extern struct task_struct *current;
-int in_group_p(gid_t gid);
-static inline int capable(int cap)
-{
-        if (current->cap_effective & (1 << cap))
-                return 1;
-        else
-                return 0;
-}
+
+#define in_group_p(a) 0 /* FIXME */
 
 #define set_current_state(foo) do { current->state = foo; } while (0)
 
@@ -625,20 +618,6 @@ static inline int schedule_timeout(signed long t)
 #define SIGNAL_MASK_ASSERT()
 #define KERN_INFO
 
-#include <sys/time.h>
-#if HZ != 1
-#error "liblustre's jiffies currently expects HZ to be 1"
-#endif
-#define jiffies                                 \
-({                                              \
-        unsigned long _ret = 0;                 \
-        struct timeval tv;                      \
-        if (gettimeofday(&tv, NULL) == 0)       \
-                _ret = tv.tv_sec;               \
-        _ret;                                   \
-})
-#define time_after(a, b) ((long)(b) - (long)(a) > 0)
-#define time_before(a, b) time_after(b,a)
 
 struct timer_list {
         struct list_head tl_list;
@@ -671,6 +650,11 @@ static inline void del_timer(struct timer_list *l)
         free(l);
 }
 
+#define time_after(a, b)                                        \
+({                                                              \
+        1;                                                      \
+})
+
 typedef struct { volatile int counter; } atomic_t;
 
 #define atomic_read(a) ((a)->counter)
@@ -687,33 +671,6 @@ typedef struct { volatile int counter; } atomic_t;
 #ifndef unlikely
 #define unlikely(exp) (exp)
 #endif
-
-/* FIXME sys/capability will finally included linux/fs.h thus
- * cause numerous trouble on x86-64. as temporary solution for
- * build broken at cary, we copy definition we need from capability.h
- * FIXME
- */
-struct _cap_struct;
-typedef struct _cap_struct *cap_t;
-typedef int cap_value_t;
-typedef enum {
-    CAP_EFFECTIVE=0,
-    CAP_PERMITTED=1,
-    CAP_INHERITABLE=2
-} cap_flag_t;
-typedef enum {
-    CAP_CLEAR=0,
-    CAP_SET=1
-} cap_flag_value_t;
-
-#define CAP_FOWNER      3
-#define CAP_FSETID      4
-#define CAP_SYS_ADMIN   21
-
-cap_t   cap_get_proc(void);
-int     cap_get_flag(cap_t, cap_value_t, cap_flag_t, cap_flag_value_t *);
-
-
 
 /* log related */
 static inline int llog_init_commit_master(void) { return 0; }

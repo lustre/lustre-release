@@ -304,15 +304,13 @@ static void mds_objids_from_lmm(obd_id *ids, struct lov_mds_md *lmm,
 static int mds_create_objects(struct ptlrpc_request *req, int offset,
                               struct mds_update_record *rec,
                               struct mds_obd *mds, struct obd_device *obd,
-                              struct dentry *dchild, void **handle, 
-                              obd_id **ids)
+                              struct inode *inode, void **handle, obd_id **ids)
 {
         struct obdo *oa;
         struct obd_trans_info oti = { 0 };
         struct mds_body *body;
         struct lov_stripe_md *lsm = NULL;
         struct lov_mds_md *lmm = NULL;
-        struct inode *inode = dchild->d_inode;
         void *lmm_buf;
         int rc, lmm_bufsize, lmm_size;
         ENTRY;
@@ -333,6 +331,14 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                 RETURN(-ENOMEM);
         oti.oti_objid = *ids;
 
+        if (*handle == NULL)
+                *handle = fsfilt_start(obd, inode, FSFILT_OP_CREATE, NULL);
+        if (IS_ERR(*handle)) {
+                rc = PTR_ERR(*handle);
+                *handle = NULL;
+                GOTO(out_ids, rc);
+        }
+
         /* replay case */
         if(lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
                 LASSERT (rec->ur_fid2->id);
@@ -340,14 +346,6 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                 lmm_size = rec->ur_eadatalen;
                 lmm = rec->ur_eadata;
                 LASSERT(lmm);
-
-                if (*handle == NULL)
-                        *handle = fsfilt_start(obd,inode,FSFILT_OP_CREATE,NULL);
-                if (IS_ERR(*handle)) {
-                        rc = PTR_ERR(*handle);
-                        *handle = NULL;
-                        GOTO(out_ids, rc);
-                }
 
                 mds_objids_from_lmm(*ids, lmm, &mds->mds_lov_desc);
 
@@ -362,6 +360,7 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                 RETURN(0);
         }
 
+        
         if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_MDS_ALLOC_OBDO))
                 GOTO(out_ids, rc = -ENOMEM);
 
@@ -370,40 +369,27 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                 GOTO(out_ids, rc = -ENOMEM);
         oa->o_mode = S_IFREG | 0600;
         oa->o_id = inode->i_ino;
+        oa->o_gr = FILTER_GROUP_FIRST_MDS + mds->mds_num;
         oa->o_generation = inode->i_generation;
         oa->o_uid = 0; /* must have 0 uid / gid on OST */
         oa->o_gid = 0;
         oa->o_valid = OBD_MD_FLID | OBD_MD_FLGENER | OBD_MD_FLTYPE |
-                OBD_MD_FLMODE | OBD_MD_FLUID | OBD_MD_FLGID;
+                OBD_MD_FLMODE | OBD_MD_FLUID | OBD_MD_FLGID | OBD_MD_FLGROUP;
         oa->o_size = 0;
 
         obdo_from_inode(oa, inode, OBD_MD_FLTYPE|OBD_MD_FLATIME|OBD_MD_FLMTIME|
                         OBD_MD_FLCTIME);
 
         if (!(rec->ur_flags & MDS_OPEN_HAS_OBJS)) {
-                /* check if things like lfs setstripe are sending us the ea */
+                /* check if things like lstripe/lfs stripe are sending us the ea */
                 if (rec->ur_flags & MDS_OPEN_HAS_EA) {
-                        rc = obd_iocontrol(OBD_IOC_LOV_SETSTRIPE,
+                        rc = obd_iocontrol(OBD_IOC_LOV_SETSTRIPE, 
                                            mds->mds_osc_exp,
                                            0, &lsm, rec->ur_eadata);
                         if (rc)
                                 GOTO(out_oa, rc);
-                } else {
-                        OBD_ALLOC(lmm, mds->mds_max_mdsize);
-                        if (lmm == NULL)
-                                GOTO(out_oa, rc = -ENOMEM);
-
-                        lmm_size = mds->mds_max_mdsize;
-                        rc = mds_get_md(obd, dchild->d_parent->d_inode,
-                                        lmm, &lmm_size, 1);
-                        if (rc > 0)
-                                rc = obd_iocontrol(OBD_IOC_LOV_SETSTRIPE,
-                                                   mds->mds_osc_exp,
-                                                   0, &lsm, lmm);
-                        OBD_FREE(lmm, mds->mds_max_mdsize);
-                        if (rc)
-                                GOTO(out_oa, rc);
                 }
+                LASSERT(oa->o_gr >= FILTER_GROUP_FIRST_MDS);
                 rc = obd_create(mds->mds_osc_exp, oa, &lsm, &oti);
                 if (rc) {
                         int level = D_ERROR;
@@ -426,6 +412,7 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                         GOTO(out_oa, rc);
                 }
                 lsm->lsm_object_id = oa->o_id;
+                lsm->lsm_object_gr = oa->o_gr;
         }
         if (inode->i_size) {
                 oa->o_size = inode->i_size;
@@ -454,15 +441,6 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
         LASSERT(rc >= 0);
         lmm_size = rc;
         body->eadatasize = rc;
-
-        if (*handle == NULL)
-                *handle = fsfilt_start(obd, inode, FSFILT_OP_CREATE, NULL);
-        if (IS_ERR(*handle)) {
-                rc = PTR_ERR(*handle);
-                *handle = NULL;
-                GOTO(out_ids, rc);
-        }
-
         rc = fsfilt_set_md(obd, inode, *handle, lmm, lmm_size);
         lmm_buf = lustre_msg_buf(req->rq_repmsg, offset, 0);
         lmm_bufsize = req->rq_repmsg->buflens[offset];
@@ -534,8 +512,8 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
 
         /* get lock (write for O_CREAT, read otherwise) */
 
-        mds_pack_inode2fid(&body->fid1, child->d_inode);
-        mds_pack_inode2body(body, child->d_inode);
+        mds_pack_inode2fid(obd, &body->fid1, child->d_inode);
+        mds_pack_inode2body(obd, body, child->d_inode);
         if (S_ISREG(child->d_inode->i_mode)) {
                 rc = mds_pack_md(obd, req->rq_repmsg, 2, body,
                                  child->d_inode, 1);
@@ -583,7 +561,7 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
                 mfd = NULL;
         }
 
-        /* #warning "XXX fixme" bug 2991 */
+#warning "XXX fixme"
         /* Here it used to LASSERT(mfd) if exp_outstanding_reply != NULL.
          * Now that exp_outstanding_reply is a list, it's just using mfd != NULL
          * to detect a re-open */
@@ -597,10 +575,6 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
                         GOTO(out_dput, req->rq_status = -ENOMEM);
                 }
                 put_child = 0;
-        } else {
-                body->handle.cookie = mfd->mfd_handle.h_cookie;
-                CDEBUG(D_INODE, "resend mfd %p, cookie "LPX64"\n", mfd,
-                       mfd->mfd_handle.h_cookie);
         }
 
  out_dput:
@@ -633,13 +607,15 @@ static int mds_finish_open(struct ptlrpc_request *req, struct dentry *dchild,
         struct obd_device *obd = req->rq_export->exp_obd;
         struct mds_file_data *mfd = NULL;
         obd_id *ids = NULL; /* object IDs created */
+        unsigned mode;
         int rc = 0;
         ENTRY;
 
         /* atomically create objects if necessary */
         down(&dchild->d_inode->i_sem);
-        if (S_ISREG(dchild->d_inode->i_mode) &&
-            !(body->valid & OBD_MD_FLEASIZE)) {
+        mode = dchild->d_inode->i_mode;
+        if ((S_ISREG(mode) || S_ISDIR(mode)) &&
+                        !(body->valid & OBD_MD_FLEASIZE)) {
                 rc = mds_pack_md(obd, req->rq_repmsg, 2, body,
                                  dchild->d_inode, 0);
                 if (rc) {
@@ -650,7 +626,7 @@ static int mds_finish_open(struct ptlrpc_request *req, struct dentry *dchild,
         if (rec != NULL) {
                 /* no EA: create objects */
                 rc = mds_create_objects(req, 2, rec, mds, obd,
-                                        dchild, handle, &ids);
+                                        dchild->d_inode, handle, &ids);
                 if (rc) {
                         CERROR("mds_create_objects: rc = %d\n", rc);
                         up(&dchild->d_inode->i_sem);
@@ -706,8 +682,8 @@ static int mds_open_by_fid(struct ptlrpc_request *req, struct ll_fid *fid,
         if (dchild->d_inode != NULL) {
                 up(&pending_dir->i_sem);
                 mds_inode_set_orphan(dchild->d_inode);
-                mds_pack_inode2fid(&body->fid1, dchild->d_inode);
-                mds_pack_inode2body(body, dchild->d_inode);
+                mds_pack_inode2fid(req2obd(req), &body->fid1, dchild->d_inode);
+                mds_pack_inode2body(req2obd(req), body, dchild->d_inode);
                 intent_set_disposition(rep, DISP_LOOKUP_EXECD);
                 intent_set_disposition(rep, DISP_LOOKUP_POS);
                 CWARN("Orphan %s found and opened in PENDING directory\n",
@@ -723,8 +699,8 @@ static int mds_open_by_fid(struct ptlrpc_request *req, struct ll_fid *fid,
         if (IS_ERR(dchild))
                 RETURN(PTR_ERR(dchild));
 
-        mds_pack_inode2fid(&body->fid1, dchild->d_inode);
-        mds_pack_inode2body(body, dchild->d_inode);
+        mds_pack_inode2fid(req2obd(req), &body->fid1, dchild->d_inode);
+        mds_pack_inode2body(req2obd(req), body, dchild->d_inode);
         intent_set_disposition(rep, DISP_LOOKUP_EXECD);
         intent_set_disposition(rep, DISP_LOOKUP_POS);
 
@@ -742,7 +718,7 @@ int mds_pin(struct ptlrpc_request *req)
 {
         struct obd_device *obd = req->rq_export->exp_obd;
         struct mds_body *request_body, *reply_body;
-        struct lvfs_run_ctxt saved;
+        struct obd_run_ctxt saved;
         int rc, size = sizeof(*reply_body);
         ENTRY;
 
@@ -753,10 +729,10 @@ int mds_pin(struct ptlrpc_request *req)
                 RETURN(rc);
         reply_body = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*reply_body));
 
-        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+        push_ctxt(&saved, &obd->obd_ctxt, NULL);
         rc = mds_open_by_fid(req, &request_body->fid1, reply_body,
                              request_body->flags, NULL, NULL);
-        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+        pop_ctxt(&saved, &obd->obd_ctxt, NULL);
 
         RETURN(rc);
 }
@@ -797,12 +773,17 @@ int mds_open(struct mds_update_record *rec, int offset,
         struct mds_body *body = NULL;
         struct dentry *dchild = NULL, *dparent = NULL;
         struct mds_export_data *med;
-        struct lustre_handle parent_lockh;
+        struct lustre_handle parent_lockh[2];
         int rc = 0, cleanup_phase = 0, acc_mode, created = 0;
         int parent_mode = LCK_PR;
         void *handle = NULL;
         struct dentry_params dp;
+        struct mea *mea = NULL;
+        int mea_size;
         ENTRY;
+
+        parent_lockh[0].cookie = 0;
+        parent_lockh[1].cookie = 0;
 
         if (offset == 2) { /* intent */
                 rep = lustre_msg_buf(req->rq_repmsg, 0, sizeof (*rep));
@@ -853,8 +834,24 @@ int mds_open(struct mds_update_record *rec, int offset,
                    But we do not know if it exists or not yet */
                 parent_mode = LCK_PW;
         }
+        
+        if (rec->ur_namelen == 1) {
+                /* client (LMV) wants to open the file by fid */
+                CDEBUG(D_OTHER, "OPEN by fid %u/%u/%u\n",
+                                (unsigned) rec->ur_fid1->mds,
+                                (unsigned) rec->ur_fid1->id,
+                                (unsigned) rec->ur_fid1->generation);
+                dchild = mds_fid2dentry(mds, rec->ur_fid1, NULL);
+                if (IS_ERR(dchild)) {
+                        rc = PTR_ERR(dparent);
+                        CERROR("child lookup by a fid error %d\n", rc);
+                        GOTO(cleanup, rc);
+                }
+                goto got_child;
+        }
+        
         dparent = mds_fid2locked_dentry(obd, rec->ur_fid1, NULL, parent_mode,
-                                        &parent_lockh, rec->ur_name,
+                                        parent_lockh, rec->ur_name,
                                         rec->ur_namelen - 1,
                                         MDS_INODELOCK_UPDATE);
         if (IS_ERR(dparent)) {
@@ -866,6 +863,21 @@ int mds_open(struct mds_update_record *rec, int offset,
 
         cleanup_phase = 1; /* parent dentry and lock */
 
+        /* try to retrieve MEA data for this dir */
+        rc = mds_get_lmv_attr(obd, dparent->d_inode, &mea, &mea_size);
+       
+        if (mea != NULL) {
+                /* dir is already splitted, check is requested filename
+                 * should live at this MDS or at another one */
+                int i;
+                i = mea_name2idx(mea, rec->ur_name, rec->ur_namelen - 1);
+                if (mea->mea_master != i) {
+                        CERROR("inapropriate MDS(%d) for %s. should be %d\n",
+                                mea->mea_master, rec->ur_name, i);
+                        GOTO(cleanup, rc = -ESTALE);
+                }
+        }
+
         /* Step 2: Lookup the child */
         dchild = ll_lookup_one_len(rec->ur_name, dparent, rec->ur_namelen - 1);
         if (IS_ERR(dchild)) {
@@ -874,9 +886,45 @@ int mds_open(struct mds_update_record *rec, int offset,
                 GOTO(cleanup, rc);
         }
 
+got_child:
         cleanup_phase = 2; /* child dentry */
 
         intent_set_disposition(rep, DISP_LOOKUP_EXECD);
+
+        if (dchild->d_flags & DCACHE_CROSS_REF) {
+                struct ldlm_res_id res_id = { . name = {0} };
+                ldlm_policy_data_t policy;
+                int flags = 0;
+                CDEBUG(D_OTHER, "cross reference: %lu/%lu/%lu\n",
+                       (unsigned long) dchild->d_mdsnum,
+                       (unsigned long) dchild->d_inum,
+                       (unsigned long) dchild->d_generation);
+                body->valid |= OBD_MD_FLID | OBD_MD_MDS;
+                body->fid1.id = dchild->d_inum;
+                body->fid1.mds = dchild->d_mdsnum;
+                body->fid1.generation = dchild->d_generation;
+                intent_set_disposition(rep, DISP_LOOKUP_POS);
+                res_id.name[0] = dchild->d_inum;
+                res_id.name[1] = dchild->d_generation;
+                policy.l_inodebits.bits = MDS_INODELOCK_LOOKUP;
+                rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace,
+                                      res_id, LDLM_IBITS, &policy,
+                                      LCK_PR, &flags,
+                                      mds_blocking_ast,
+                                      ldlm_completion_ast, NULL, NULL,
+                                      NULL, 0, NULL, child_lockh);
+#ifdef S_PDIROPS
+                if (parent_lockh[1].cookie != 0)
+                        ldlm_lock_decref(parent_lockh + 1, LCK_CW);
+#endif
+                ldlm_lock_decref(parent_lockh, parent_mode);
+                if (mea)
+                        OBD_FREE(mea, mea_size);
+                l_dput(dchild);
+                l_dput(dparent);
+                RETURN(rc);
+        }
+        
         if (dchild->d_inode)
                 intent_set_disposition(rep, DISP_LOOKUP_POS);
         else
@@ -887,6 +935,16 @@ int mds_open(struct mds_update_record *rec, int offset,
                 unsigned long ino = rec->ur_fid2->id;
                 struct iattr iattr;
                 struct inode *inode;
+
+                if ((rc = mds_try_to_split_dir(obd, dparent, &mea, 0))) {
+                        if (rc > 0) {
+                                /* dir got splitted */
+                                GOTO(cleanup, rc = -ESTALE);
+                        } else {
+                                /* error happened during spitting */
+                                GOTO(cleanup, rc);
+                        }
+                }
 
                 if (!(rec->ur_flags & MDS_OPEN_CREAT)) {
                         /* It's negative and we weren't supposed to create it */
@@ -946,16 +1004,13 @@ int mds_open(struct mds_update_record *rec, int offset,
                 if (rc)
                         CERROR("error on parent setattr: rc = %d\n", rc);
 
-                rc = mds_finish_transno(mds, dchild->d_inode, handle, req, 0,
-                                        rep ? rep->lock_policy_res1 : 0);
-                handle = NULL;
-                acc_mode = 0;           /* Don't check for permissions */
+                acc_mode = 0;                  /* Don't check for permissions */
         }
 
         LASSERT(!mds_inode_is_orphan(dchild->d_inode));
 
-        mds_pack_inode2fid(&body->fid1, dchild->d_inode);
-        mds_pack_inode2body(body, dchild->d_inode);
+        mds_pack_inode2fid(obd, &body->fid1, dchild->d_inode);
+        mds_pack_inode2body(obd, body, dchild->d_inode);
 
         if (S_ISREG(dchild->d_inode->i_mode)) {
                 /* Check permissions etc */
@@ -989,17 +1044,33 @@ int mds_open(struct mds_update_record *rec, int offset,
         if ((rec->ur_flags & MDS_OPEN_DIRECTORY) &&
             !S_ISDIR(dchild->d_inode->i_mode))
                 GOTO(cleanup, rc = -ENOTDIR);
-
-        if (S_ISDIR(dchild->d_inode->i_mode)) {
-                if (rec->ur_flags & MDS_OPEN_CREAT ||
-                    rec->ur_flags & FMODE_WRITE) {
+ 
+        if (S_ISDIR(dchild->d_inode->i_mode)) { 
+                if (rec->ur_flags & MDS_OPEN_CREAT || rec->ur_flags & FMODE_WRITE) {
                         /*we are tryying to create or write a exist dir*/
                         GOTO(cleanup, rc = -EISDIR);
                 }
                 if (ll_permission(dchild->d_inode, acc_mode, NULL)) {
-                        intent_set_disposition(rep, DISP_OPEN_OPEN);
                         GOTO(cleanup, rc = -EACCES);
                 }
+        }
+
+        if (rc == 0) {
+                struct ldlm_res_id res_id = { . name = {0} };
+                ldlm_policy_data_t policy;
+                int flags = 0;
+                res_id.name[0] = dchild->d_inode->i_ino;
+                res_id.name[1] = dchild->d_inode->i_generation;
+                policy.l_inodebits.bits = MDS_INODELOCK_LOOKUP |
+                                                MDS_INODELOCK_UPDATE;
+                rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace,
+                                      res_id, LDLM_IBITS, &policy,
+                                      LCK_PR, &flags,
+                                      mds_blocking_ast,
+                                      ldlm_completion_ast, NULL, NULL,
+                                      NULL, 0, NULL, child_lockh);
+                if (rc == 0)
+                        cleanup_phase = 3;
         }
 
         /* Step 5: mds_open it */
@@ -1008,15 +1079,14 @@ int mds_open(struct mds_update_record *rec, int offset,
         GOTO(cleanup, rc);
 
  cleanup:
-        if (dchild && dchild->d_inode)
-                rc = mds_finish_transno(mds, dchild->d_inode, handle, req, rc, 
-                                        rep ? rep->lock_policy_res1 : 0);
-        else 
-                rc = mds_finish_transno(mds, !IS_ERR(dparent) ? dparent->d_inode :
-                                        NULL, handle, req, rc, 
-                                        rep ? rep->lock_policy_res1 : 0);
+        rc = mds_finish_transno(mds, dchild ? dchild->d_inode : NULL, handle,
+                                req, rc, rep ? rep->lock_policy_res1 : 0);
+
 
         switch (cleanup_phase) {
+        case 3:
+                if (rc)
+                        ldlm_lock_decref(child_lockh, LCK_PR);
         case 2:
                 if (rc && created) {
                         int err = vfs_unlink(dparent->d_inode, dchild);
@@ -1034,13 +1104,21 @@ int mds_open(struct mds_update_record *rec, int offset,
                         break;
 
                 l_dput(dparent);
+#ifdef S_PDIROPS
+                if (parent_lockh[1].cookie != 0)
+                        ldlm_lock_decref(parent_lockh + 1, LCK_CW);
+#endif
                 if (rc)
-                        ldlm_lock_decref(&parent_lockh, parent_mode);
+                        ldlm_lock_decref(parent_lockh, parent_mode);
                 else
-                        ptlrpc_save_lock (req, &parent_lockh, parent_mode);
+                        ptlrpc_save_lock (req, parent_lockh, parent_mode);
         }
         if (rc == 0)
                 atomic_inc(&mds->mds_open_count);
+        if (mea)
+                OBD_FREE(mea, mea_size);
+        if ((cleanup_phase != 3) && !rc)
+                rc = ENOLCK;
         RETURN(rc);
 }
 
@@ -1065,15 +1143,15 @@ int mds_mfd_close(struct ptlrpc_request *req, struct obd_device *obd,
         void *handle = NULL;
         struct mds_body *request_body = NULL, *reply_body = NULL;
         struct dentry_params dp;
-        struct iattr iattr = { 0 };
+        struct lov_mds_md *lmm;
         ENTRY;
 
-        if (req && req->rq_reqmsg != NULL)
+        if (req != NULL) {
                 request_body = lustre_msg_buf(req->rq_reqmsg, 0,
                                               sizeof(*request_body));
-        if (req && req->rq_repmsg != NULL)
                 reply_body = lustre_msg_buf(req->rq_repmsg, 0,
                                             sizeof(*reply_body));
+        }
 
         fidlen = ll_fid2str(fidname, inode->i_ino, inode->i_generation);
 
@@ -1089,8 +1167,6 @@ int mds_mfd_close(struct ptlrpc_request *req, struct obd_device *obd,
         }
 
         if (last_orphan && unlink_orphan) {
-                struct lov_mds_md *lmm = NULL;
-                int stripe_count = 0;
                 LASSERT(rc == 0); /* mds_put_write_access must have succeeded */
 
                 CDEBUG(D_HA, "destroying orphan object %s\n", fidname);
@@ -1108,22 +1184,20 @@ int mds_mfd_close(struct ptlrpc_request *req, struct obd_device *obd,
                 LASSERT(pending_child->d_inode != NULL);
 
                 cleanup_phase = 2; /* dput(pending_child) when finished */
-                if (req != NULL && req->rq_repmsg != NULL) {
-                        lmm = lustre_msg_buf(req->rq_repmsg, 1, 0);
-                        stripe_count = le32_to_cpu(lmm->lmm_stripe_count);
-                }
-
-                handle = fsfilt_start_log(obd, pending_dir, FSFILT_OP_UNLINK,
-                                          NULL, stripe_count);
+                lmm = lustre_msg_buf(req->rq_repmsg, 1, 0);
+                handle = fsfilt_start_log(obd, pending_dir,
+                                          FSFILT_OP_UNLINK, NULL,
+                                          le32_to_cpu(lmm->lmm_stripe_count));
                 if (IS_ERR(handle)) {
                         rc = PTR_ERR(handle);
                         handle = NULL;
                         GOTO(cleanup, rc);
                 }
 
-                if (req != NULL && req->rq_repmsg != NULL &&
+                if (req != NULL &&
                     (reply_body->valid & OBD_MD_FLEASIZE) &&
-                    mds_log_op_unlink(obd, pending_child->d_inode, lmm,
+                    mds_log_op_unlink(obd, pending_child->d_inode,
+                                      lustre_msg_buf(req->rq_repmsg, 1, 0),
                                       req->rq_repmsg->buflens[1],
                                       lustre_msg_buf(req->rq_repmsg, 2, 0),
                                       req->rq_repmsg->buflens[2]) > 0) {
@@ -1139,64 +1213,32 @@ int mds_mfd_close(struct ptlrpc_request *req, struct obd_device *obd,
                         rc = vfs_unlink(pending_dir, pending_child);
                 if (rc)
                         CERROR("error unlinking orphan %s: rc %d\n",fidname,rc);
-
-                goto out; /* Don't bother updating attrs on unlinked inode */
-        }
-
-        if (request_body != NULL && mfd->mfd_mode & FMODE_WRITE && rc == 0) {
+        } else if (mfd->mfd_mode & FMODE_WRITE && rc == 0) {
                 /* Update the on-disk attributes if this was the last write
                  * close, and all information was provided (i.e., rc == 0)
                  *
                  * XXX this should probably be abstracted with mds_reint_setattr
                  */
-
 #if 0
-                if (request_body->valid & OBD_MD_FLMTIME &&
-                    request_body->mtime > LTIME_S(inode->i_mtime)) {
-                        LTIME_S(iattr.ia_mtime) = request_body->mtime;
-                        iattr.ia_valid |= ATTR_MTIME;
-                }
-                if (request_body->valid & OBD_MD_FLCTIME &&
-                    request_body->ctime > LTIME_S(inode->i_ctime)) {
-                        LTIME_S(iattr.ia_ctime) = request_body->ctime;
-                        iattr.ia_valid |= ATTR_CTIME;
-                }
+                struct iattr iattr;
 
                 /* XXX can't set block count with fsfilt_setattr (!) */
-                if (request_body->valid & OBD_MD_FLSIZE) {
-                        iattr.ia_valid |= ATTR_SIZE;
-                        iattr.ia_size = request_body->size;
-                }
-                /* if (request_body->valid & OBD_MD_FLBLOCKS) {
-                        iattr.ia_valid |= ATTR_BLOCKS;
-                        iattr.ia_blocks = request_body->blocks
-                } */
+                iattr.ia_valid = ATTR_CTIME | ATTR_ATIME |
+                        ATTR_MTIME | ATTR_SIZE;
+                iattr.ia_atime = request_body->atime;
+                iattr.ia_ctime = request_body->ctime;
+                iattr.ia_mtime = request_body->mtime;
+                iattr.ia_size = request_body->size;
+                /* iattr.ia_blocks = request_body->blocks */
 
-#endif
-        }
-        if (request_body != NULL && request_body->valid & OBD_MD_FLATIME) {
-                /* Only start a transaction to write out only the atime if
-                 * it is more out-of-date than the specified limit.  If we
-                 * are already going to write out the atime then do it anyway.
-                 * */
-                if ((request_body->atime >
-                     LTIME_S(inode->i_atime) + MAX_ATIME_DIFF) ||
-                    (iattr.ia_valid != 0 &&
-                     request_body->atime > LTIME_S(inode->i_atime))) {
-                        LTIME_S(iattr.ia_atime) = request_body->atime;
-                        iattr.ia_valid |= ATTR_ATIME;
-                }
-        }
-
-        if (iattr.ia_valid != 0) {
                 handle = fsfilt_start(obd, inode, FSFILT_OP_SETATTR, NULL);
                 if (IS_ERR(handle))
                         GOTO(cleanup, rc = PTR_ERR(handle));
                 rc = fsfilt_setattr(obd, mfd->mfd_dentry, handle, &iattr, 0);
                 if (rc)
                         CERROR("error in setattr(%s): rc %d\n", fidname, rc);
+#endif
         }
-out:
         /* If other clients have this file open for write, rc will be > 0 */
         if (rc > 0)
                 rc = 0;
@@ -1205,7 +1247,7 @@ out:
 
  cleanup:
         atomic_dec(&mds->mds_open_count);
-        if (req != NULL && reply_body != NULL) {
+        if (req) {
                 rc = mds_finish_transno(mds, pending_dir, handle, req, rc, 0);
         } else if (handle) {
                 int err = fsfilt_commit(obd, pending_dir, handle, 0);
@@ -1231,7 +1273,7 @@ int mds_close(struct ptlrpc_request *req)
         struct obd_device *obd = req->rq_export->exp_obd;
         struct mds_body *body;
         struct mds_file_data *mfd;
-        struct lvfs_run_ctxt saved;
+        struct obd_run_ctxt saved;
         struct inode *inode;
         int rc, repsize[3] = {sizeof(struct mds_body),
                               obd->u.mds.mds_max_mdsize,
@@ -1269,25 +1311,26 @@ int mds_close(struct ptlrpc_request *req)
                 body = lustre_msg_buf(req->rq_repmsg, 0, sizeof (*body));
                 LASSERT(body != NULL);
 
-                mds_pack_inode2fid(&body->fid1, inode);
-                mds_pack_inode2body(body, inode);
+                mds_pack_inode2fid(obd, &body->fid1, inode);
+                mds_pack_inode2body(obd, body, inode);
                 mds_pack_md(obd, req->rq_repmsg, 1, body, inode, 1);
         }
         spin_lock(&med->med_open_lock);
         list_del(&mfd->mfd_list);
         spin_unlock(&med->med_open_lock);
 
-        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-        req->rq_status = mds_mfd_close(req, obd, mfd, 1);
-        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+        push_ctxt(&saved, &obd->obd_ctxt, NULL);
+        req->rq_status = mds_mfd_close(rc ? NULL : req, obd, mfd, 1);
+        pop_ctxt(&saved, &obd->obd_ctxt, NULL);
 
-        mds_mfd_put(mfd);
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_CLOSE_PACK)) {
                 CERROR("test case OBD_FAIL_MDS_CLOSE_PACK\n");
                 req->rq_status = -ENOMEM;
+                mds_mfd_put(mfd);
                 RETURN(-ENOMEM);
         }
 
+        mds_mfd_put(mfd);
         RETURN(0);
 }
 

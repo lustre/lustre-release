@@ -49,15 +49,18 @@
 #include <linux/lustre_lib.h>
 #include <linux/lustre_mds.h>
 
-void mds_pack_inode2fid(struct ll_fid *fid, struct inode *inode)
+void mds_pack_inode2fid(struct obd_device *obd, struct ll_fid *fid,
+                                struct inode *inode)
 {
         fid->id = inode->i_ino;
         fid->generation = inode->i_generation;
         fid->f_type = (S_IFMT & inode->i_mode);
+        fid->mds = obd->u.mds.mds_num;
 }
 
 /* Note that we can copy all of the fields, just some will not be "valid" */
-void mds_pack_inode2body(struct mds_body *b, struct inode *inode)
+void mds_pack_inode2body(struct obd_device *obd, struct mds_body *b,
+                                struct inode *inode)
 {
         b->valid |= OBD_MD_FLID | OBD_MD_FLCTIME | OBD_MD_FLUID |
                     OBD_MD_FLGID | OBD_MD_FLFLAGS | OBD_MD_FLTYPE |
@@ -83,6 +86,7 @@ void mds_pack_inode2body(struct mds_body *b, struct inode *inode)
         b->nlink = mds_inode_is_orphan(inode) ? 0 : inode->i_nlink;
         b->generation = inode->i_generation;
         b->suppgid = -1;
+        b->mds = obd->u.mds.mds_num;
 }
 
 /* unpacking */
@@ -165,17 +169,27 @@ static int mds_create_unpack(struct ptlrpc_request *req, int offset,
 
         LASSERT_REQSWAB (req, offset + 2);
         if (req->rq_reqmsg->bufcount > offset + 2) {
-                /* NB for now, we only seem to pass NULL terminated symlink
-                 * target strings here.  If this ever changes, we'll have
-                 * to stop checking for a buffer filled completely with a
-                 * NULL terminated string here, and make the callers check
-                 * depending on what they expect.  We should probably stash
-                 * it in r->ur_eadata in that case, so it's obvious... -eeb
-                 */
-                r->ur_tgt = lustre_msg_string(req->rq_reqmsg, offset + 2, 0);
-                if (r->ur_tgt == NULL)
-                        RETURN (-EFAULT);
-                r->ur_tgtlen = req->rq_reqmsg->buflens[offset + 2];
+                if (S_ISLNK(r->ur_mode)) {
+                        r->ur_tgt = lustre_msg_string(req->rq_reqmsg,
+                                                      offset + 2, 0);
+                        if (r->ur_tgt == NULL)
+                                RETURN (-EFAULT);
+                        r->ur_tgtlen = req->rq_reqmsg->buflens[offset + 2];
+                } else if (S_ISDIR(r->ur_mode)) {
+                        /* Stripe info for mkdir - just a 16bit integer */
+                        if (req->rq_reqmsg->buflens[offset + 2] != 2) {
+                                CERROR("mkdir stripe info does not match "
+                                       "expected size %d vs 2\n",
+                                       req->rq_reqmsg->buflens[offset + 2]);
+                                RETURN (-EINVAL);
+                        }
+                        r->ur_eadata = lustre_swab_buf (req->rq_reqmsg,
+                                               offset + 2, 2, __swab16s);
+                        r->ur_eadatalen = req->rq_reqmsg->buflens[offset + 2];
+                } else {
+                        /* Hm, no other users so far? */
+                        LBUG();
+                }
         }
         RETURN(0);
 }

@@ -275,7 +275,8 @@ void ptlrpc_request_handle_notconn(struct ptlrpc_request *failed_req)
         /* Wait for recovery to complete and resend. If evicted, then
            this request will be errored out later.*/
         spin_lock_irqsave(&failed_req->rq_lock, flags);
-        failed_req->rq_resend = 1;
+        if (!failed_req->rq_no_resend)
+                failed_req->rq_resend = 1;
         spin_unlock_irqrestore(&failed_req->rq_lock, flags);
         
         EXIT;
@@ -285,7 +286,7 @@ void ptlrpc_request_handle_notconn(struct ptlrpc_request *failed_req)
  * This should only be called by the ioctl interface, currently
  * with the lctl deactivate and activate commands.
  */
-int ptlrpc_set_import_active(struct obd_import *imp, int active)
+int  ptlrpc_set_import_active(struct obd_import *imp, int active)
 {
         struct obd_device *obd = imp->imp_obd;
         int rc = 0;

@@ -1,0 +1,54 @@
+Index: linux-2.6.0/fs/inode.c
+===================================================================
+--- linux-2.6.0.orig/fs/inode.c	2004-01-04 15:21:49.000000000 +0300
++++ linux-2.6.0/fs/inode.c	2004-01-04 15:25:35.000000000 +0300
+@@ -351,7 +351,36 @@
+ }
+ 
+ EXPORT_SYMBOL(invalidate_inodes);
+- 
++
++void show_remaining_inodes(struct super_block *sb)
++{
++	struct list_head *head;
++	struct list_head *next;
++
++	down(&iprune_sem);
++	spin_lock(&inode_lock);
++	head = &sb->s_inodes;
++	next = head->next;
++	for (;;) {
++		struct list_head * tmp = next;
++		struct inode * inode;
++
++		next = next->next;
++		if (tmp == head)
++			break;
++		inode = list_entry(tmp, struct inode, i_sb_list);
++		if (atomic_read(&inode->i_count) == 0)
++			continue;
++		printk(KERN_ERR
++				"%u:%u %lu (%p) mode %o count %u\n",
++				MAJOR(sb->s_dev), MINOR(sb->s_dev),
++				inode->i_ino, inode,
++				inode->i_mode, atomic_read(&inode->i_count));
++	}
++	spin_unlock(&inode_lock);
++	up(&iprune_sem);
++}
++
+ int __invalidate_device(struct block_device *bdev, int do_sync)
+ {
+ 	struct super_block *sb;
+Index: linux-2.6.0/fs/super.c
+===================================================================
+--- linux-2.6.0.orig/fs/super.c	2004-01-04 15:26:13.000000000 +0300
++++ linux-2.6.0/fs/super.c	2004-01-04 15:26:36.000000000 +0300
+@@ -206,6 +206,7 @@
+ 		if (invalidate_inodes(sb)) {
+ 			printk("VFS: Busy inodes after unmount. "
+ 			   "Self-destruct in 5 seconds.  Have a nice day...\n");
++			show_remaining_inodes(sb);
+ 		}
+ 
+ 		unlock_kernel();

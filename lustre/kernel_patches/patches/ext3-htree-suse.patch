@@ -1667,8 +1667,8 @@ Index: linux-2.4.21-suse/fs/ext3/namei.c
 +	data1 = bh2->b_data;
 +
 +	/* The 0th block becomes the root, move the dirents out */
-+	de = (struct ext3_dir_entry_2 *)&root->dotdot;
-+	de = (struct ext3_dir_entry_2 *)((char *)de + le16_to_cpu(de->rec_len));
++	de = (struct ext3_dir_entry_2 *) &root->dotdot;
++	de = (struct ext3_dir_entry_2 *) ((char *)de + de->rec_len);
 +	len = ((char *) root) + blocksize - (char *) de;
 +	memcpy (data1, de, len);
 +	de = (struct ext3_dir_entry_2 *) data1;

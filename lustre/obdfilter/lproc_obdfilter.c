@@ -34,47 +34,10 @@ static struct lprocfs_vars lprocfs_obd_vars[]  = { {0} };
 static struct lprocfs_vars lprocfs_module_vars[] = { {0} };
 #else
 
-static int lprocfs_filter_rd_groups(char *page, char **start, off_t off,
-                                    int count, int *eof, void *data)
-{
-        *eof = 1;
-        return snprintf(page, count, "%u\n", FILTER_GROUPS);
-}
-
-static int lprocfs_filter_rd_tot_dirty(char *page, char **start, off_t off,
-                                       int count, int *eof, void *data)
-{
-        struct obd_device *obd = (struct obd_device *)data;
-
-        LASSERT(obd != NULL);
-        *eof = 1;
-        return snprintf(page, count, LPU64"\n", obd->u.filter.fo_tot_dirty);
-}
-
-static int lprocfs_filter_rd_tot_granted(char *page, char **start, off_t off,
-                                         int count, int *eof, void *data)
-{
-        struct obd_device *obd = (struct obd_device *)data;
-
-        LASSERT(obd != NULL);
-        *eof = 1;
-        return snprintf(page, count, LPU64"\n", obd->u.filter.fo_tot_granted);
-}
-
-static int lprocfs_filter_rd_tot_pending(char *page, char **start, off_t off,
-                                         int count, int *eof, void *data)
-{
-        struct obd_device *obd = (struct obd_device *)data;
-
-        LASSERT(obd != NULL);
-        *eof = 1;
-        return snprintf(page, count, LPU64"\n", obd->u.filter.fo_tot_pending);
-}
-
 static int lprocfs_filter_rd_mntdev(char *page, char **start, off_t off,
                                     int count, int *eof, void *data)
 {
-        struct obd_device *obd = (struct obd_device *)data;
+        struct obd_device* obd = (struct obd_device *)data;
 
         LASSERT(obd != NULL);
         LASSERT(obd->u.filter.fo_vfsmnt->mnt_devname);
@@ -87,12 +50,23 @@ static int lprocfs_filter_rd_last_id(char *page, char **start, off_t off,
                                      int count, int *eof, void *data)
 {
         struct obd_device *obd = data;
+        struct filter_obd *filter = &obd->u.filter;
+        int retval = 0, rc, i;
 
         if (obd == NULL)
                 return 0;
 
-        return snprintf(page, count, LPU64"\n",
-                        filter_last_id(&obd->u.filter, 0));
+        for (i = 1; i < filter->fo_group_count; i++) {
+                rc = snprintf(page, count, LPU64"\n",filter_last_id(filter, i));
+                if (rc < 0) {
+                        retval = rc;
+                        break;
+                }
+                page += rc;
+                count -= rc;
+                retval += rc;
+        }
+        return retval;
 }
 
 int lprocfs_filter_rd_readcache(char *page, char **start, off_t off, int count,
@@ -129,14 +103,10 @@ static struct lprocfs_vars lprocfs_obd_vars[] = {
         { "kbytesavail",  lprocfs_rd_kbytesavail,   0, 0 },
         { "filestotal",   lprocfs_rd_filestotal,    0, 0 },
         { "filesfree",    lprocfs_rd_filesfree,     0, 0 },
-        { "filegroups",   lprocfs_filter_rd_groups, 0, 0 },
+        //{ "filegroups",   lprocfs_rd_filegroups,    0, 0 },
         { "fstype",       lprocfs_rd_fstype,        0, 0 },
         { "mntdev",       lprocfs_filter_rd_mntdev, 0, 0 },
         { "last_id",      lprocfs_filter_rd_last_id,0, 0 },
-        { "tot_dirty",    lprocfs_filter_rd_tot_dirty,   0, 0 },
-        { "tot_pending",  lprocfs_filter_rd_tot_pending, 0, 0 },
-        { "tot_granted",  lprocfs_filter_rd_tot_granted, 0, 0 },
-        { "num_exports",  lprocfs_rd_num_exports,   0, 0 },
         { "readcache_max_filesize",
                           lprocfs_filter_rd_readcache,
                           lprocfs_filter_wr_readcache, 0 },
@@ -178,7 +148,7 @@ void filter_tally_write(struct filter_obd *filter, struct page **pages,
         lprocfs_oh_tally(&filter->fo_w_discont_blocks, discont_blocks);
 }
 
-void filter_tally_read(struct filter_obd *filter, struct niobuf_local *lnb,
+void filter_tally_read(struct filter_obd *filter, struct niobuf_local *lnb, 
                        int niocount)
 {
         struct niobuf_local *end;
@@ -197,7 +167,7 @@ void filter_tally_read(struct filter_obd *filter, struct niobuf_local *lnb,
                         /* XXX not so smart for now */
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
                         if ((page->buffers && last_page->buffers) &&
-                            (page->buffers->b_blocknr !=
+                            (page->buffers->b_blocknr != 
                              (last_page->buffers->b_blocknr + 1)))
                                 discont_blocks++;
 #else
@@ -243,9 +213,9 @@ static int filter_brw_stats_seq_show(struct seq_file *seq, void *v)
                 unsigned long w = filter->fo_w_pages.oh_buckets[i];
                 read_cum += r;
                 write_cum += w;
-                seq_printf(seq, "%d:\t\t%10lu %3lu %3lu   | %10lu %3lu %3lu\n",
-                                 1 << i, r, pct(r, read_tot),
-                                 pct(read_cum, read_tot), w,
+                seq_printf(seq, "%d:\t\t%10lu %3lu %3lu   | %10lu %3lu %3lu\n", 
+                                 1 << i, r, pct(r, read_tot), 
+                                 pct(read_cum, read_tot), w, 
                                  pct(w, write_tot),
                                  pct(write_cum, write_tot));
                 if (read_cum == read_tot && write_cum == write_tot)
@@ -267,9 +237,9 @@ static int filter_brw_stats_seq_show(struct seq_file *seq, void *v)
                 unsigned long w = filter->fo_w_discont_pages.oh_buckets[i];
                 read_cum += r;
                 write_cum += w;
-                seq_printf(seq, "%d:\t\t%10lu %3lu %3lu   | %10lu %3lu %3lu\n",
-                                 i, r, pct(r, read_tot),
-                                 pct(read_cum, read_tot), w,
+                seq_printf(seq, "%d:\t\t%10lu %3lu %3lu   | %10lu %3lu %3lu\n", 
+                                 i, r, pct(r, read_tot), 
+                                 pct(read_cum, read_tot), w, 
                                  pct(w, write_tot),
                                  pct(write_cum, write_tot));
                 if (read_cum == read_tot && write_cum == write_tot)
@@ -290,9 +260,9 @@ static int filter_brw_stats_seq_show(struct seq_file *seq, void *v)
                 unsigned long w = filter->fo_w_discont_blocks.oh_buckets[i];
                 read_cum += r;
                 write_cum += w;
-                seq_printf(seq, "%d:\t\t%10lu %3lu %3lu   | %10lu %3lu %3lu\n",
-                                 i, r, pct(r, read_tot),
-                                 pct(read_cum, read_tot), w,
+                seq_printf(seq, "%d:\t\t%10lu %3lu %3lu   | %10lu %3lu %3lu\n", 
+                                 i, r, pct(r, read_tot), 
+                                 pct(read_cum, read_tot), w, 
                                  pct(w, write_tot),
                                  pct(write_cum, write_tot));
                 if (read_cum == read_tot && write_cum == write_tot)
@@ -329,7 +299,7 @@ static int filter_brw_stats_seq_open(struct inode *inode, struct file *file)
         struct proc_dir_entry *dp = PDE(inode);
         struct seq_file *seq;
         int rc;
-
+ 
         rc = seq_open(file, &filter_brw_stats_seq_sops);
         if (rc)
                 return rc;
@@ -356,7 +326,6 @@ static ssize_t filter_brw_stats_seq_write(struct file *file, const char *buf,
 }
 
 struct file_operations filter_brw_stats_fops = {
-        .owner   = THIS_MODULE,
         .open    = filter_brw_stats_seq_open,
         .read    = seq_read,
         .write   = filter_brw_stats_seq_write,
@@ -366,11 +335,11 @@ struct file_operations filter_brw_stats_fops = {
 
 int lproc_filter_attach_seqstat(struct obd_device *dev)
 {
-        return lprocfs_obd_seq_create(dev, "brw_stats", 0444,
+        return lprocfs_obd_seq_create(dev, "brw_stats", 0444, 
                                       &filter_brw_stats_fops, dev);
 }
 
 
 
 #endif /* LPROCFS */
-LPROCFS_INIT_VARS(filter, lprocfs_module_vars, lprocfs_obd_vars)
+LPROCFS_INIT_VARS(filter,lprocfs_module_vars, lprocfs_obd_vars)

@@ -71,20 +71,21 @@ static int ll_test_inode(struct inode *inode, void *opaque)
                 last_ino = md->body->ino;
                 last_gen = md->body->generation;
                 CDEBUG(D_VFSTRACE,
-                       "comparing inode %p ino %lu/%u to body %u/%u\n",
+                       "comparing inode %p ino %lu/%u/%u to body %u/%u/%u\n",
                        inode, inode->i_ino, inode->i_generation,
-                       md->body->ino, md->body->generation);
+                       ll_i2info(inode)->lli_mds,
+                       md->body->ino, md->body->generation,
+                       md->body->mds);
         }
 
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-        if (inode->i_ino != md->body->ino)
-                return 0;
-#endif
         if (inode->i_generation != md->body->generation)
                 return 0;
 
+        if (ll_i2info(inode)->lli_mds != md->body->mds)
+                return 0;
+
         /* Apply the attributes in 'opaque' to this inode */
-        ll_update_inode(inode, md->body, md->lsm);
+        ll_update_inode(inode, md);
         return 1;
 }
 
@@ -188,7 +189,7 @@ int ll_mdc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                         CDEBUG(D_INODE, "invalidating inode %lu\n",
                                inode->i_ino);
 
-                        truncate_inode_pages(inode->i_mapping, 0);
+                        ll_invalidate_inode_pages(inode);
                 }
 
                 if (inode->i_sb->s_root &&
@@ -227,8 +228,13 @@ void ll_prepare_mdc_op_data(struct mdc_op_data *data, struct inode *i1,
         ll_i2uctxt(&data->ctxt, i1, i2);
         ll_inode2fid(&data->fid1, i1);
 
-        if (i2)
+        /* it could be directory with mea */
+        data->mea1 = ll_i2info(i1)->lli_mea;
+
+        if (i2) {
                 ll_inode2fid(&data->fid2, i2);
+                data->mea2 = ll_i2info(i2)->lli_mea;
+        }
 
         data->name = name;
         data->namelen = namelen;
@@ -271,9 +277,6 @@ struct dentry *ll_find_alias(struct inode *inode, struct dentry *de)
                 atomic_inc(&dentry->d_count);
                 iput(inode);
                 dentry->d_flags &= ~DCACHE_LUSTRE_INVALID;
-                CDEBUG(D_DENTRY, "alias dentry %*s (%p) parent %p inode %p "
-                       "refc %d\n", de->d_name.len, de->d_name.name, de,
-                       de->d_parent, de->d_inode, atomic_read(&de->d_count));
                 return dentry;
         }
 
@@ -298,8 +301,8 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
         if (!it_disposition(it, DISP_LOOKUP_NEG)) {
                 ENTRY;
 
-                rc = ll_prep_inode(sbi->ll_osc_exp, &inode, request, offset,
-                                   dentry->d_sb);
+                rc = ll_prep_inode(sbi->ll_osc_exp, sbi->ll_mdc_exp,
+                                   &inode, request, offset, dentry->d_sb);
                 if (rc)
                         RETURN(rc);
 
@@ -322,7 +325,7 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
                         rc = ll_glimpse_size(inode, &lvb);
                         if (rc) {
                                 iput(inode);
-                                RETURN(rc);
+                                RETURN(-EIO);
                         }
                         inode->i_size = lvb.lvb_size;
                 }
@@ -372,9 +375,9 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
         ll_inode2fid(&pfid, parent);
         ll_i2uctxt(&ctxt, parent, NULL);
 
-        rc = mdc_intent_lock(ll_i2mdcexp(parent), &ctxt, &pfid,
-                             dentry->d_name.name, dentry->d_name.len, NULL, 0,
-                             NULL, it, flags, &req, ll_mdc_blocking_ast);
+        rc = md_intent_lock(ll_i2mdcexp(parent), &ctxt, &pfid,
+                            dentry->d_name.name, dentry->d_name.len, NULL, 0,
+                            NULL, it, flags, &req, ll_mdc_blocking_ast);
         if (rc < 0)
                 GOTO(out, retval = ERR_PTR(rc));
 
@@ -393,6 +396,20 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
  out:
         if (req)
                 ptlrpc_req_finished(req);
+        if (dentry->d_inode)
+                CDEBUG(D_INODE, "lookup 0x%p in %lu/%lu: %*s -> %lu/%lu\n",
+                                dentry,
+                                (unsigned long) parent->i_ino,
+                                (unsigned long) parent->i_generation,
+                                dentry->d_name.len, dentry->d_name.name,
+                                (unsigned long) dentry->d_inode->i_ino,
+                                (unsigned long) dentry->d_inode->i_generation);
+        else
+                CDEBUG(D_INODE, "lookup 0x%p in %lu/%lu: %*s -> ??\n",
+                                dentry,
+                                (unsigned long) parent->i_ino,
+                                (unsigned long) parent->i_generation,
+                                dentry->d_name.len, dentry->d_name.name);
         return retval;
 }
 
@@ -427,7 +444,8 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
         LASSERT(it && it->d.lustre.it_disposition);
 
         request = it->d.lustre.it_data;
-        rc = ll_prep_inode(sbi->ll_osc_exp, &inode, request, 1, dir->i_sb);
+        rc = ll_prep_inode(sbi->ll_osc_exp, sbi->ll_mdc_exp,
+                           &inode, request, 1, dir->i_sb);
         if (rc)
                 GOTO(out, inode = ERR_PTR(rc));
 
@@ -521,7 +539,7 @@ static int ll_mknod_raw(struct nameidata *nd, int mode, dev_t rdev)
         case S_IFIFO:
         case S_IFSOCK:
                 ll_prepare_mdc_op_data(&op_data, dir, NULL, name, len, 0);
-                err = mdc_create(sbi->ll_mdc_exp, &op_data, NULL, 0, mode,
+                err = md_create(sbi->ll_mdc_exp, &op_data, NULL, 0, mode,
                                  current->fsuid, current->fsgid,
                                  rdev, &request);
                 ptlrpc_req_finished(request);
@@ -564,11 +582,11 @@ static int ll_mknod(struct inode *dir, struct dentry *child, int mode,
         case S_IFIFO:
         case S_IFSOCK:
                 ll_prepare_mdc_op_data(&op_data, dir, NULL, name, len, 0);
-                err = mdc_create(sbi->ll_mdc_exp, &op_data, NULL, 0, mode,
+                err = md_create(sbi->ll_mdc_exp, &op_data, NULL, 0, mode,
                                  current->fsuid, current->fsgid,
                                  rdev, &request);
-                err = ll_prep_inode(sbi->ll_osc_exp, &inode, request, 0,
-                                    child->d_sb);
+                err = ll_prep_inode(sbi->ll_osc_exp, sbi->ll_mdc_exp,
+                                    &inode, request, 0, child->d_sb);
                 if (err)
                         GOTO(out_err, err);
                 break;
@@ -603,7 +621,7 @@ static int ll_symlink_raw(struct nameidata *nd, const char *tgt)
                 RETURN(err);
 
         ll_prepare_mdc_op_data(&op_data, dir, NULL, name, len, 0);
-        err = mdc_create(sbi->ll_mdc_exp, &op_data,
+        err = md_create(sbi->ll_mdc_exp, &op_data,
                          tgt, strlen(tgt) + 1, S_IFLNK | S_IRWXUGO,
                          current->fsuid, current->fsgid, 0, &request);
         ptlrpc_req_finished(request);
@@ -627,7 +645,7 @@ static int ll_link_raw(struct nameidata *srcnd, struct nameidata *tgtnd)
                dir->i_ino, dir->i_generation, dir, name);
 
         ll_prepare_mdc_op_data(&op_data, src, dir, name, len, 0);
-        err = mdc_link(sbi->ll_mdc_exp, &op_data, &request);
+        err = md_link(sbi->ll_mdc_exp, &op_data, &request);
         ptlrpc_req_finished(request);
 
         RETURN(err);
@@ -647,12 +665,9 @@ static int ll_mkdir_raw(struct nameidata *nd, int mode)
         CDEBUG(D_VFSTRACE, "VFS Op:name=%s,dir=%lu/%u(%p)\n",
                name, dir->i_ino, dir->i_generation, dir);
 
-        if (dir->i_nlink >= EXT3_LINK_MAX)
-                RETURN(err);
-
         mode = (mode & (S_IRWXUGO|S_ISVTX) & ~current->fs->umask) | S_IFDIR;
         ll_prepare_mdc_op_data(&op_data, dir, NULL, name, len, 0);
-        err = mdc_create(sbi->ll_mdc_exp, &op_data, NULL, 0, mode,
+        err = md_create(sbi->ll_mdc_exp, &op_data, NULL, 0, mode,
                          current->fsuid, current->fsgid, 0, &request);
         ptlrpc_req_finished(request);
         RETURN(err);
@@ -671,7 +686,7 @@ static int ll_rmdir_raw(struct nameidata *nd)
                name, dir->i_ino, dir->i_generation, dir);
 
         ll_prepare_mdc_op_data(&op_data, dir, NULL, name, len, S_IFDIR);
-        rc = mdc_unlink(ll_i2sbi(dir)->ll_mdc_exp, &op_data, &request);
+        rc = md_unlink(ll_i2sbi(dir)->ll_mdc_exp, &op_data, &request);
         ptlrpc_req_finished(request);
         RETURN(rc);
 }
@@ -720,8 +735,9 @@ int ll_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
                 GOTO(out_free_memmd, rc = -ENOMEM);
 
         oa->o_id = lsm->lsm_object_id;
+        oa->o_gr = lsm->lsm_object_gr;
         oa->o_mode = body->mode & S_IFMT;
-        oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE;
+        oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLGROUP;
 
         if (body->valid & OBD_MD_FLCOOKIE) {
                 oa->o_valid |= OBD_MD_FLCOOKIE;
@@ -759,7 +775,7 @@ static int ll_unlink_raw(struct nameidata *nd)
                name, dir->i_ino, dir->i_generation, dir);
 
         ll_prepare_mdc_op_data(&op_data, dir, NULL, name, len, 0);
-        rc = mdc_unlink(ll_i2sbi(dir)->ll_mdc_exp, &op_data, &request);
+        rc = md_unlink(ll_i2sbi(dir)->ll_mdc_exp, &op_data, &request);
         if (rc)
                 GOTO(out, rc);
 
@@ -787,8 +803,8 @@ static int ll_rename_raw(struct nameidata *oldnd, struct nameidata *newnd)
                src, newname, tgt->i_ino, tgt->i_generation, tgt);
 
         ll_prepare_mdc_op_data(&op_data, src, tgt, NULL, 0, 0);
-        err = mdc_rename(sbi->ll_mdc_exp, &op_data,
-                         oldname, oldlen, newname, newlen, &request);
+        err = md_rename(sbi->ll_mdc_exp, &op_data,
+                             oldname, oldlen, newname, newlen, &request);
         if (!err) {
                 err = ll_objects_destroy(request, src);
         }
@@ -799,23 +815,23 @@ static int ll_rename_raw(struct nameidata *oldnd, struct nameidata *newnd)
 }
 
 struct inode_operations ll_dir_inode_operations = {
-        .link_raw           = ll_link_raw,
-        .unlink_raw         = ll_unlink_raw,
-        .symlink_raw        = ll_symlink_raw,
-        .mkdir_raw          = ll_mkdir_raw,
-        .rmdir_raw          = ll_rmdir_raw,
-        .mknod_raw          = ll_mknod_raw,
-        .mknod              = ll_mknod,
-        .rename_raw         = ll_rename_raw,
-        .setattr            = ll_setattr,
-        .setattr_raw        = ll_setattr_raw,
+        link_raw:           ll_link_raw,
+        unlink_raw:         ll_unlink_raw,
+        symlink_raw:        ll_symlink_raw,
+        mkdir_raw:          ll_mkdir_raw,
+        rmdir_raw:          ll_rmdir_raw,
+        mknod_raw:          ll_mknod_raw,
+        mknod:              ll_mknod,
+        rename_raw:         ll_rename_raw,
+        setattr:            ll_setattr,
+        setattr_raw:        ll_setattr_raw,
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-        .create_it          = ll_create_it,
-        .lookup_it          = ll_lookup_it,
-        .revalidate_it      = ll_inode_revalidate_it,
+        create_it:          ll_create_it,
+        lookup_it:          ll_lookup_it,
+        revalidate_it:      ll_inode_revalidate_it,
 #else
-        .lookup             = ll_lookup_nd,
-        .create             = ll_create_nd,
-        .getattr_it         = ll_getattr,
+        lookup:             ll_lookup_nd,
+        create:             ll_create_nd,
+        getattr_it:         ll_getattr,
 #endif
 };

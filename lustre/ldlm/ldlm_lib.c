@@ -46,7 +46,7 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         int rq_portal, rp_portal, connect_op;
         char *name = obddev->obd_type->typ_name;
         char *mgmt_name = NULL;
-        int rc;
+        int rc = 0;
         struct obd_device *mgmt_obd;
         mgmtcli_register_for_events_t register_f;
         ENTRY;
@@ -112,7 +112,7 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         cli->cl_max_pages_per_rpc = PTLRPC_MAX_BRW_PAGES;
         cli->cl_max_rpcs_in_flight = OSC_MAX_RIF_DEFAULT;
 
-        rc = ldlm_get_ref();
+        ldlm_get_ref();
         if (rc) {
                 CERROR("ldlm_get_ref failed: %d\n", rc);
                 GOTO(err, rc);
@@ -406,19 +406,8 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         obd_str2uuid (&cluuid, str);
 
         /* XXX extract a nettype and format accordingly */
-        switch (sizeof(ptl_nid_t)) {
-                /* NB the casts only avoid compiler warnings */
-        case 8:
-                snprintf(remote_uuid.uuid, sizeof remote_uuid,
-                         "NET_"LPX64"_UUID", (__u64)req->rq_peer.peer_nid);
-                break;
-        case 4:
-                snprintf(remote_uuid.uuid, sizeof remote_uuid,
-                         "NET_%x_UUID", (__u32)req->rq_peer.peer_nid);
-                break;
-        default:
-                LBUG();
-        }
+        snprintf(remote_uuid.uuid, sizeof remote_uuid,
+                 "NET_"LPX64"_UUID", req->rq_peer.peer_nid);
 
         spin_lock_bh(&target->obd_processing_task_lock);
         abort_recovery = target->obd_abort_recovery;
@@ -713,6 +702,7 @@ void target_start_recovery_timer(struct obd_device *obd, svc_handler_t handler)
         obd->obd_recovery_handler = handler;
         obd->obd_recovery_timer.function = target_recovery_expired;
         obd->obd_recovery_timer.data = (unsigned long)obd;
+        init_timer(&obd->obd_recovery_timer);
         spin_unlock_bh(&obd->obd_processing_task_lock);
 
         reset_recovery_timer(obd);

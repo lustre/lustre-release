@@ -84,8 +84,10 @@ static int filter_direct_io(int rw, struct dentry *dchild, struct kiobuf *iobuf,
 {
         struct obd_device *obd = exp->exp_obd;
         struct inode *inode = dchild->d_inode;
-        int rc, create = (rw == OBD_BRW_WRITE), blocks_per_page;
-        int cleanup_phase = 0, *created = NULL;
+        struct page *page;
+        unsigned long *b = iobuf->blocks;
+        int rc, i, create = (rw == OBD_BRW_WRITE), blocks_per_page;
+        int *cr, cleanup_phase = 0, *created = NULL;
         int committed = 0;
         ENTRY;
 
@@ -103,11 +105,22 @@ static int filter_direct_io(int rw, struct dentry *dchild, struct kiobuf *iobuf,
                 GOTO(cleanup, rc);
         cleanup_phase = 2;
 
-        rc = fsfilt_map_inode_pages(obd, inode, iobuf->maplist,
-                                    iobuf->nr_pages, iobuf->blocks, created,
-                                    create, &obd->u.filter.fo_alloc_lock);
-        if (rc)
-                GOTO(cleanup, rc);
+        down(&exp->exp_obd->u.filter.fo_alloc_lock);
+        for (i = 0, cr = created, b = iobuf->blocks; i < iobuf->nr_pages; i++){
+                page = iobuf->maplist[i];
+
+                rc = fsfilt_map_inode_page(obd, inode, page, b, cr, create);
+                if (rc) {
+                        CERROR("ino %lu, blk %lu cr %u create %d: rc %d\n",
+                               inode->i_ino, *b, *cr, create, rc);
+                        up(&exp->exp_obd->u.filter.fo_alloc_lock);
+                        GOTO(cleanup, rc);
+                }
+
+                b += blocks_per_page;
+                cr += blocks_per_page;
+        }
+        up(&exp->exp_obd->u.filter.fo_alloc_lock);
 
         filter_tally_write(&obd->u.filter, iobuf->maplist, iobuf->nr_pages,
                            iobuf->blocks, blocks_per_page);
@@ -142,11 +155,14 @@ static int filter_direct_io(int rw, struct dentry *dchild, struct kiobuf *iobuf,
         if (rc < 0)
                 GOTO(cleanup, rc);
 
-        rc = fsfilt_send_bio(obd, inode, iobuf);
-
+        rc = brw_kiovec(WRITE, 1, &iobuf, inode->i_dev, iobuf->blocks,
+                        1 << inode->i_blkbits);
         CDEBUG(D_INFO, "tried to write %d pages, rc = %d\n",
                iobuf->nr_pages, rc);
-
+        if (rc != (1 << inode->i_blkbits) * iobuf->nr_pages * blocks_per_page)
+                CERROR("short write?  expected %d, wrote %d\n",
+                       (1 << inode->i_blkbits) * iobuf->nr_pages *
+                       blocks_per_page, rc);
         if (rc > 0)
                 rc = 0;
 
@@ -211,7 +227,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
                           int rc)
 {
         struct obd_device *obd = exp->exp_obd;
-        struct lvfs_run_ctxt saved;
+        struct obd_run_ctxt saved;
         struct niobuf_local *lnb;
         struct fsfilt_objinfo fso;
         struct iattr iattr = { 0 };
@@ -271,7 +287,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
                         iattr.ia_size = this_size;
         }
 
-        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+        push_ctxt(&saved, &obd->obd_ctxt, NULL);
         cleanup_phase = 2;
 
         down(&inode->i_sem);
@@ -310,17 +326,18 @@ cleanup:
 
         switch (cleanup_phase) {
         case 2:
-                pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+                pop_ctxt(&saved, &obd->obd_ctxt, NULL);
                 LASSERT(current->journal_info == NULL);
         case 1:
                 free_kiovec(1, &iobuf);
         case 0:
                 for (i = 0, lnb = res; i < obj->ioo_bufcnt; i++, lnb++) {
-                        filter_release_write_page(&obd->u.filter,
-                                                  res->dentry->d_inode, lnb,
-                                                  rc);
+                        /* flip_.. gets a ref, while free_page only frees
+                         * when it decrefs to 0 */
+                        if (rc == 0)
+                                flip_into_page_cache(inode, lnb->page);
+                        __free_page(lnb->page);
                 }
-
                 f_dput(res->dentry);
         }
 

@@ -7,8 +7,8 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test: 2108
-ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"42a"}
+# bug number for skipped test: 2399 (temporarily until new kernels arrive)
+ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"48"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 [ "$ALWAYS_EXCEPT$EXCEPT" ] && echo "Skipping tests: $ALWAYS_EXCEPT $EXCEPT"
@@ -20,10 +20,8 @@ TMP=${TMP:-/tmp}
 
 CHECKSTAT=${CHECKSTAT:-"checkstat -v"}
 CREATETEST=${CREATETEST:-createtest}
-LFS=${LFS:-lfs}
-LSTRIPE=${LSTRIPE:-"$LFS setstripe"}
-LFIND=${LFIND:-"$LFS find"}
-LVERIFY=${LVERIFY:-ll_dirstripe_verify}
+LFIND=${LFIND:-lfind}
+LSTRIPE=${LSTRIPE:-lstripe}
 LCTL=${LCTL:-lctl}
 MCREATE=${MCREATE:-mcreate}
 OPENFILE=${OPENFILE:-openfile}
@@ -68,29 +66,11 @@ log() {
 	lctl mark "$*" 2> /dev/null || true
 }
 
-trace() {
-	log "STARTING: $*"
-	strace -o $TMP/$1.strace -ttt $*
-	RC=$?
-	log "FINISHED: $*: rc $RC"
-	return 1
-}
-TRACE=${TRACE:-""}
-
-check_kernel_version() {
-	VERSION_FILE=/proc/fs/lustre/kernel_version
-	WANT_VER=$1
-	[ ! -f $VERSION_FILE ] && echo "can't find kernel version" && return 1
-	GOT_VER=`cat $VERSION_FILE`
-	[ $GOT_VER -ge $WANT_VER ] && return 0
-	log "test needs at least kernel version $WANT_VER, running $GOT_VER"
-	return 1
-}
-
 run_one() {
 	if ! mount | grep -q $DIR; then
 		$START
 	fi
+	echo -1 >/proc/sys/portals/debug	
 	log "== test $1: $2"
 	export TESTNAME=test_$1
 	test_$1 || error "test_$1: exit with rc=$?"
@@ -176,9 +156,7 @@ DIR=${DIR:-$MOUNT}
 [ -z "`echo $DIR | grep $MOUNT`" ] && echo "$DIR not in $MOUNT" && exit 99
 
 LOVNAME=`cat /proc/fs/lustre/llite/fs0/lov/common_name`
-OSTCOUNT=`cat /proc/fs/lustre/lov/$LOVNAME/numobd`
-STRIPECOUNT=`cat /proc/fs/lustre/lov/$LOVNAME/stripecount`
-STRIPESIZE=`cat /proc/fs/lustre/lov/$LOVNAME/stripesize`
+STRIPECOUNT=`cat /proc/fs/lustre/lov/$LOVNAME/numobd`
 
 [ -f $DIR/d52a/foo ] && chattr -a $DIR/d52a/foo
 [ -f $DIR/d52b/foo ] && chattr -i $DIR/d52b/foo
@@ -725,7 +703,7 @@ test_27a() {
 run_test 27a "one stripe file =================================="
 
 test_27c() {
-	[ "$OSTCOUNT" -lt "2" ] && echo "skipping 2-stripe test" && return
+	[ "$STRIPECOUNT" -lt "2" ] && echo "skipping 2-stripe test" && return
 	if [ ! -d $DIR/d27 ]; then
 		mkdir $DIR/d27
 	fi
@@ -787,7 +765,7 @@ test_27j() {
         if [ ! -d $DIR/d27 ]; then
                 mkdir $DIR/d27
         fi
-        $LSTRIPE $DIR/d27/f27j 65536 $OSTCOUNT 1 && error || true
+        $LSTRIPE $DIR/d27/f27j 65536 $STRIPECOUNT 1 && error || true
 }
 run_test 27j "lstripe with bad stripe offset (should return error)"
 
@@ -803,13 +781,6 @@ test_27k() { # bug 2844
 	[ $BLKSIZE -le $LL_MAX_BLKSIZE ] || error "$BLKSIZE > $LL_MAX_BLKSIZE"
 }
 run_test 27k "limit i_blksize for broken user apps ============="
-
-test_27l() {
-	mcreate $DIR/f27l || error "creating file"
-	$RUNAS $LSTRIPE $DIR/f27l 65536 -1 1 && \
-		error "lstripe should have failed" || true
-}
-run_test 27l "check setstripe permissions (should return error)"
 
 test_28() {
 	mkdir $DIR/d28
@@ -887,12 +858,6 @@ test_31d() {
 	$CHECKSTAT -a $DIR/d31d || error
 }
 run_test 31d "remove of open directory ========================="
-
-test_31e() {
-	check_kernel_version 34 || return 0
-	openfilleddirunlink $DIR/d31e || error
-}
-run_test 31e "remove of open non-empty directory ==============="
 
 test_32a() {
 	echo "== more mountpoints and symlinks ================="
@@ -1158,7 +1123,6 @@ test_34c() {
 run_test 34c "O_RDWR opening file-with-size works =============="
 
 test_34d() {
-	[ ! -f $DIR/f34 ] && test_34a 
 	dd if=/dev/zero of=$DIR/f34 conv=notrunc bs=4k count=1 || error
 	$CHECKSTAT -s $TEST_34_SIZE $DIR/f34 || error
 	rm $DIR/f34
@@ -1212,7 +1176,7 @@ test_36d() {
 run_test 36d "non-root OST utime check (open, utime) ==========="
 
 test_36e() {
-	[ $RUNAS_ID -eq $UID ] && echo "skipping test 36e" && return
+	[ $RUNAS_ID -eq $UID ] && return
 	[ ! -d $DIR/d36 ] && mkdir $DIR/d36
 	touch $DIR/d36/f36e
 	$RUNAS utime $DIR/d36/f36e && error "utime worked, want failure" || true
@@ -1433,8 +1397,8 @@ test_43c() {
 run_test 43c "md5sum of copy into lustre========================"
 
 test_44() {
-	[  "$OSTCOUNT" -lt "2" ] && echo "skipping 2-stripe test" && return
-	dd if=/dev/zero of=$DIR/f1 bs=4k count=1 seek=1023
+	[  "$STRIPECOUNT" -lt "2" ] && echo "skipping 2-stripe test" && return
+	dd if=/dev/zero of=$DIR/f1 bs=4k count=1 seek=127
 	dd if=$DIR/f1 bs=4k count=1
 }
 run_test 44 "zero length read from a sparse stripe ============="
@@ -1511,18 +1475,18 @@ page_size() {
 	getconf PAGE_SIZE
 }
 
-# in a 2 stripe file (lov.sh), page 1023 maps to page 511 in its object.  this
+# in a 2 stripe file (lov.sh), page 63 maps to page 31 in its object.  this
 # test tickles a bug where re-dirtying a page was failing to be mapped to the
-# objects offset and an assert hit when an rpc was built with 1023's mapped 
-# offset 511 and 511's raw 511 offset. it also found general redirtying bugs.
+# objects offset and an assert hit when an rpc was built with 63's mapped 
+# offset 31 and 31's raw 31 offset. it also found general redirtying bugs.
 test_46() {
 	f="$DIR/f46"
 	stop_writeback
 	sync
-	dd if=/dev/zero of=$f bs=`page_size` seek=511 count=1
+	dd if=/dev/zero of=$f bs=`page_size` seek=31 count=1
 	sync
-	dd conv=notrunc if=/dev/zero of=$f bs=`page_size` seek=1023 count=1
-	dd conv=notrunc if=/dev/zero of=$f bs=`page_size` seek=511 count=1
+	dd conv=notrunc if=/dev/zero of=$f bs=`page_size` seek=63 count=1
+	dd conv=notrunc if=/dev/zero of=$f bs=`page_size` seek=31 count=1
 	sync
 	start_writeback
 }
@@ -1534,9 +1498,8 @@ test_47() {
 }
 run_test 47 "Device nodes check ================================"
 
-test_48a() { # bug 2399
-	check_kernel_version 34 || return 0
-	mkdir -p $DIR/d48a
+test_48a() {
+	mkdir $DIR/d48a
 	cd $DIR/d48a
 	mv $DIR/d48a $DIR/d48.new || error "move directory failed"
 	mkdir $DIR/d48a || error "recreate directory failed"
@@ -1548,64 +1511,23 @@ test_48a() { # bug 2399
 	mkdir . && error "'mkdir .' worked after recreating cwd"
 	rmdir . && error "'rmdir .' worked after recreating cwd"
 	ln -s . baz || error "'ln -s .' failed after recreating cwd"
-	cd .. || error "'cd ..' failed after recreating cwd"
 }
 run_test 48a "Access renamed working dir (should return errors)="
 
-test_48b() { # bug 2399
-	check_kernel_version 34 || return 0
-	mkdir -p $DIR/d48b
+test_48b() {
+	mkdir $DIR/d48b
 	cd $DIR/d48b
 	rmdir $DIR/d48b || error "remove cwd $DIR/d48b failed"
 	touch foo && error "'touch foo' worked after removing cwd"
 	mkdir foo && error "'mkdir foo' worked after removing cwd"
 	ls . && error "'ls .' worked after removing cwd"
 	ls .. || error "'ls ..' failed after removing cwd"
-	cd . && error "'cd .' worked after removing cwd"
+	cd . && error "'cd .' worked after recreate cwd"
 	mkdir . && error "'mkdir .' worked after removing cwd"
 	rmdir . && error "'rmdir .' worked after removing cwd"
 	ln -s . foo && error "'ln -s .' worked after removing cwd" || true
-	#cd .. || error "'cd ..' failed after removing cwd"
 }
 run_test 48b "Access removed working dir (should return errors)="
-
-test_48c() { # bug 2350
-	check_kernel_version 36 || return 0
-	#sysctl -w portals.debug=-1
-	#set -vx
-	mkdir -p $DIR/d48c/dir
-	cd $DIR/d48c/dir
-	rmdir $DIR/d48c/dir || error "remove cwd $DIR/d48c/dir failed"
-	$TRACE touch foo && error "'touch foo' worked after removing cwd"
-	$TRACE mkdir foo && error "'mkdir foo' worked after removing cwd"
-	$TRACE ls . && error "'ls .' worked after removing cwd"
-	$TRACE ls .. || error "'ls ..' failed after removing cwd"
-	$TRACE cd . && error "'cd .' worked after recreate cwd"
-	$TRACE mkdir . && error "'mkdir .' worked after removing cwd"
-	$TRACE rmdir . && error "'rmdir .' worked after removing cwd"
-	$TRACE ln -s . foo && error "'ln -s .' worked after removing cwd" ||true
-	$TRACE cd .. || error "'cd ..' failed after removing cwd"
-}
-run_test 48c "Access removed working subdir (should return errors)"
-
-test_48d() { # bug 2350
-	check_kernel_version 36 || return 0
-	#sysctl -w portals.debug=-1
-	#set -vx
-	mkdir -p $DIR/d48d/dir
-	cd $DIR/d48d/dir
-	rm -r $DIR/d48d || error "remove cwd and parent $DIR/d48d failed"
-	$TRACE touch foo && error "'touch foo' worked after removing cwd"
-	$TRACE mkdir foo && error "'mkdir foo' worked after removing cwd"
-	$TRACE ls . && error "'ls .' worked after removing cwd"
-	$TRACE ls .. && error "'ls ..' worked after removing cwd"
-	$TRACE cd . && error "'cd .' worked after recreate cwd"
-	$TRACE mkdir . && error "'mkdir .' worked after removing cwd"
-	$TRACE rmdir . && error "'rmdir .' worked after removing cwd"
-	$TRACE ln -s . foo && error "'ln -s .' worked after removing cwd" ||true
-	$TRACE cd .. && error "'cd ..' worked after removing cwd" || true
-}
-run_test 48d "Access removed parent subdir (should return errors)"
 
 test_50() {
 	# bug 1485
@@ -1683,53 +1605,13 @@ test_53() {
 }
 run_test 53 "verify that MDS and OSTs agree on pre-creation ===="
 
-test_54a() {
-     	$SOCKETSERVER $DIR/socket
+test_54() {
+     	$SOCKETSERVER $DIR/socket &
+	sleep 1
      	$SOCKETCLIENT $DIR/socket || error
       	$MUNLINK $DIR/socket
 }
-run_test 54a "unix damain socket test =========================="
-
-test_54b() {
-	f="$DIR/f54b"
-	mknod $f c 1 3
-	chmod 0666 $f
-	dd if=/dev/zero of=$f bs=`page_size` count=1 
-}
-run_test 54b "char device works in lustre ======================"
-
-test_54c() {
-	tfile="$DIR/f54c"
-	tdir="$DIR/d54c"
-	loopdev="$DIR/loop54c"
-	
-	for i in `seq 3 7`; do
-		rm -f $loopdev
-		mknod $loopdev b 7 $i
-		losetup $loopdev > /dev/null 2>&1 || break
-	done
-	echo "make a loop file system with $tfile on $loopdev ($i)..."	
-	dd if=/dev/zero of=$tfile bs=`page_size` seek=1024 count=1 > /dev/null
-	losetup $loopdev $tfile || error "can't set up $loopdev for $tfile"
-	mkfs.ext2 $loopdev || error "mke2fs on $loopdev"
-	mkdir -p $tdir
-	mount -t ext2 $loopdev $tdir || error "error mounting $loopdev on $tdir"
-	dd if=/dev/zero of=$tdir/tmp bs=`page_size` count=30 || error "dd write"
-	df $tdir
-	dd if=$tdir/tmp of=/dev/zero bs=`page_size` count=30 || error "dd read"
-	umount $tdir
-	losetup -d $loopdev
-	rm $loopdev
-}
-run_test 54c "block device works in lustre ====================="
-
-test_54d() {
-	f="$DIR/f54d"
-	string="aaaaaa"
-	mknod $f p
-	[ "$string" = `echo $string > $f | cat $f` ] || error
-}
-run_test 54d "fifo device works in lustre ======================"
+run_test 54 "unix damain socket test ==========================="
 
 test_55() {
         rm -rf $DIR/d55
@@ -1742,7 +1624,7 @@ test_55() {
         rm -rf $DIR/d55/*
         umount $DIR/d55 || error
 }
-run_test 55 "check iopen_connect_dentry() ======================"
+run_test 55 "check iopen_connect_dentry()======================="
 
 test_56() {
         rm -rf $DIR/d56
@@ -1782,7 +1664,7 @@ test_56() {
         $LFIND --obd wrong_uuid $DIR/d56 2>&1 | grep -q "unknown obduuid" || \
                 error "lfs find --obd wrong_uuid should return error information"
 
-        [  "$OSTCOUNT" -lt 2 ] && \
+        [  "$STRIPECOUNT" -lt 2 ] && \
                 echo "skipping other lfs find --obd test" && return
         FILENUM=`$LFIND --recursive $DIR/d56 | sed -n '/^[	 ]*1[	 ]/p' | wc -l`
         OBDUUID=`$LFIND --recursive $DIR/d56 | sed -n '/^[	 ]*1:/p' | awk '{print $2}'`
@@ -1894,7 +1776,7 @@ run_test 62 "verify obd_match failure doesn't LBUG (should -EIO)"
 
 # bug 2319 - oig_wait() interrupted causes crash because of invalid waitq.
 test_63() {
-	MAX_DIRTY_MB=`cat /proc/fs/lustre/osc/*/max_dirty_mb | head -n 1`
+	MAX_DIRTY_MB=`cat /proc/fs/lustre/osc/*/max_dirty_mb | head -1`
 	for i in /proc/fs/lustre/osc/*/max_dirty_mb ; do
 		echo 0 > $i
 	done
@@ -1916,84 +1798,12 @@ test_64a () {
 	df $DIR
 	grep "[0-9]" /proc/fs/lustre/osc/OSC*MNT*/cur*
 }
-run_test 64a "verify filter grant calculations (in kernel) ====="
+run_test 64a "verify filter grant calculations (in kernel) ======"
 
 test_64b () {
 	sh oos.sh $MOUNT
 }
-run_test 64b "check out-of-space detection on client ==========="
-
-# bug 1414 - set/get directories' stripe info
-test_65a() {
-	mkdir -p $DIR/d65
-	touch $DIR/d65/f1
-	$LVERIFY $DIR/d65 $DIR/d65/f1 || error "lverify failed"
-}
-run_test 65a "directory with no stripe info ===================="
-
-test_65b() {
-	mkdir -p $DIR/d65
-       	$LSTRIPE $DIR/d65 $(($STRIPESIZE * 2)) 0 1 || error "setstripe"
-	touch $DIR/d65/f2
-	$LVERIFY $DIR/d65 $DIR/d65/f2 || error "lverify failed"
-}
-run_test 65b "directory setstripe $(($STRIPESIZE * 2)) 0 1 ==============="
-
-test_65c() {
-	if [ $OSTCOUNT -gt 1 ]; then
-		mkdir -p $DIR/d65
-    		$LSTRIPE $DIR/d65 $(($STRIPESIZE * 4)) 1 \
-			$(($OSTCOUNT - 1)) || error "setstripe"
-	        touch $DIR/d65/f3
-	        $LVERIFY $DIR/d65 $DIR/d65/f3 || error "lverify failed"
-	fi
-}
-run_test 65c "directory setstripe $(($STRIPESIZE * 4)) 1 $(($OSTCOUNT - 1))"
-
-[ $STRIPECOUNT -eq 0 ] && sc=1 || sc=$(($STRIPECOUNT - 1))
-
-test_65d() {
-	mkdir -p $DIR/d65
-	$LSTRIPE $DIR/d65 $STRIPESIZE -1 $sc || error "setstripe"
-	touch $DIR/d65/f4 $DIR/d65/f5
-	$LVERIFY $DIR/d65 $DIR/d65/f4 $DIR/d65/f5 || error "lverify failed"
-}
-run_test 65d "directory setstripe $STRIPESIZE -1 $sc ======================"
-
-test_65e() {
-	mkdir -p $DIR/d65
-
-	$LSTRIPE $DIR/d65 0 -1 0 || error "setstripe"
-	touch $DIR/d65/f6
-	$LVERIFY $DIR/d65 $DIR/d65/f6 || error "lverify failed"
-}
-run_test 65e "directory setstripe 0 -1 0 (default) ============="
-
-test_65f() {
-	mkdir -p $DIR/d65f
-	$RUNAS $LSTRIPE $DIR/d65f 0 -1 0 && error "setstripe succeeded" || true
-}
-run_test 65f "dir setstripe permission (should return error) ==="
-
-# bug 2543 - update blocks count on client
-test_66() {
-	COUNT=${COUNT:-8}
-	dd if=/dev/zero of=$DIR/f66 bs=1k count=$COUNT
-	sync
-	BLOCKS=`ls -s $DIR/f66 | awk '{ print $1 }'`
-	[ $BLOCKS -ge $COUNT ] || error "$DIR/f66 blocks $BLOCKS < $COUNT"
-}
-run_test 66 "update inode blocks count on client ==============="
-
-test_67() { # bug 3285 - supplementary group fails on MDS, passes on client
-	[ "$RUNAS_ID" = "$UID" ] && echo "skipping test 67" && return
-	check_kernel_version 35 || return 0
-	mkdir $DIR/d67
-	chmod 771 $DIR/d67
-	chgrp $RUNAS_ID $DIR/d67
-	$RUNAS -g $((RUNAS_ID + 1)) -G1,2,$RUNAS_ID ls $DIR/d67 && error || true
-}
-run_test 67 "supplementary group failure (should return error) ="
+run_test 64b "check out-of-space detection on client ============"
 
 # on the LLNL clusters, runas will still pick up root's $TMP settings,
 # which will not be writable for the runas user, and then you get a CVS
@@ -2016,12 +1826,7 @@ run_test 99a "cvs init ========================================="
 test_99b() {
 	[ ! -d $DIR/d99cvsroot ] && test_99a
 	cd /etc/init.d
-	# some versions of cvs import exit(1) when asked to import links or
-	# files they can't read.  ignore those files.
-	TOIGNORE=$(find . -type l -printf '-I %f\n' -o \
-			! -perm +4 -printf '-I %f\n')
-	$RUNAS cvs -d $DIR/d99cvsroot import -m "nomesg" $TOIGNORE \
-		d99reposname vtag rtag
+	$RUNAS cvs -d $DIR/d99cvsroot import -m "nomesg" d99reposname vtag rtag
 }
 run_test 99b "cvs import ======================================="
 

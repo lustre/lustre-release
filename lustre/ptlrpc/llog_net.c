@@ -71,7 +71,7 @@ int llog_origin_connect(struct llog_ctxt *ctxt, int count,
         lgr->lgr_hdr.lrh_len = lgr->lgr_tail.lrt_len = sizeof(*lgr);
         lgr->lgr_hdr.lrh_type = LLOG_GEN_REC;
         lgr->lgr_gen = ctxt->loc_gen;
-        rc = llog_add(ctxt, &lgr->lgr_hdr, NULL, NULL, 1, NULL);
+        rc = llog_add(ctxt, &lgr->lgr_hdr, NULL, NULL, 1);
         OBD_FREE(lgr, sizeof(*lgr));
         if (rc != 1)
                 RETURN(rc);
@@ -107,7 +107,8 @@ int llog_handle_connect(struct ptlrpc_request *req)
 
         req_body = lustre_msg_buf(req->rq_reqmsg, 0, sizeof(*req_body));
 
-        ctxt = llog_get_context(obd, req_body->lgdc_ctxt_idx);
+#warning "FIXME: shouldn't llogs be passed directly?"
+        ctxt = llog_get_context(&obd->obd_llogs, req_body->lgdc_ctxt_idx);
         rc = llog_connect(ctxt, 1, &req_body->lgdc_logid,
                           &req_body->lgdc_gen, NULL);
         if (rc != 0)

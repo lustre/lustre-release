@@ -36,7 +36,7 @@ case $child in
   *) child="b_$child"
 esac
 
-if [ "$child" != "HEAD" -a "`cat CVS/Tag 2> /dev/null`" != "T$child" ]; then
+if [ "$child" != "HEAD" -a "`cat CVS/Tag`" != "T$child" ]; then
 	echo "This script must be run within the $child branch"
 	exit 1
 fi
@@ -59,12 +59,9 @@ echo "done"
 echo -n "tagging $child as '${PARENT}_${CHILD}_UPDATE_CHILD_$date' ...."
 $CVS rtag -r $child ${PARENT}_${CHILD}_UPDATE_CHILD_$date $module
 echo "done"
-
-# Apply all of the changes to your local tree:
 echo "Updating: -j ${CHILD}_BASE -j ${PARENT}_${CHILD}_UPDATE_PARENT_$date ...."
 $CVS update -j ${CHILD}_BASE -j ${PARENT}_${CHILD}_UPDATE_PARENT_$date -dP
 echo "done"
-
 echo -n "Recording conflicts in $CONFLICTS ..."
 if $CVS update | grep '^C' > $CONFLICTS; then
     echo "Conflicts found, fix before committing."
@@ -73,6 +70,4 @@ else
     echo "No conflicts found"
     rm -f $CONFLICTS
 fi
-echo "done"
-
 echo "Test, commit and then run merge2.sh (no arguments)"

@@ -1,11 +1,5 @@
 .deps
 Makefile
+Makefile.in
 link-stamp
-.*.cmd
-autoMakefile.in
-autoMakefile
-*.ko
-*.mod.c
-.*.flags
-.tmp_versions
-.depend
+.*.o.cmd

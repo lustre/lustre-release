@@ -54,6 +54,7 @@ struct ll_file_data;
 struct lustre_md {
         struct mds_body *body;
         struct lov_stripe_md *lsm;
+        struct mea *mea;
 };
 
 struct ll_uctxt {
@@ -69,6 +70,8 @@ struct mdc_op_data {
         const char *name;
         int namelen;
         __u32 create_mode;
+        struct mea *mea1;       /* mea of inode1 */
+        struct mea *mea2;       /* mea of inode2 */
 };
 
 struct mds_update_record {
@@ -84,18 +87,18 @@ struct mds_update_record {
         int ur_cookielen;
         struct llog_cookie *ur_logcookies;
         struct iattr ur_iattr;
-        struct lvfs_ucred ur_uc;
+        struct obd_ucred ur_uc;
         __u64 ur_rdev;
         __u32 ur_mode;
         __u64 ur_time;
         __u32 ur_flags;
 };
 
-#define ur_fsuid    ur_uc.luc_fsuid
-#define ur_fsgid    ur_uc.luc_fsgid
-#define ur_cap      ur_uc.luc_cap
-#define ur_suppgid1 ur_uc.luc_suppgid1
-#define ur_suppgid2 ur_uc.luc_suppgid2
+#define ur_fsuid    ur_uc.ouc_fsuid
+#define ur_fsgid    ur_uc.ouc_fsgid
+#define ur_cap      ur_uc.ouc_cap
+#define ur_suppgid1 ur_uc.ouc_suppgid1
+#define ur_suppgid2 ur_uc.ouc_suppgid2
 
 /* i_attr_flags holds the open count in the inode in 2.4 */
 //XXX Alex implement on 2.4 with i_attr_flags and find soln for 2.5 please
@@ -218,9 +221,9 @@ int mdc_enqueue(struct obd_export *exp,
                 void *cb_data);
 
 /* mdc/mdc_request.c */
-int mdc_init_ea_size(struct obd_device *obd, char *lov_name);
 int mdc_req2lustre_md(struct ptlrpc_request *req, int offset,
-                      struct obd_export *exp,
+                      struct obd_export *exp_osc,
+                      struct obd_export *exp_mdc,
                       struct lustre_md *md);
 int mdc_getstatus(struct obd_export *exp, struct ll_fid *rootfid);
 int mdc_getattr(struct obd_export *exp, struct ll_fid *fid,
@@ -241,8 +244,8 @@ void mdc_set_open_replay_data(struct obd_client_handle *och,
 void mdc_clear_open_replay_data(struct obd_client_handle *och);
 int mdc_close(struct obd_export *, struct obdo *, struct obd_client_handle *,
               struct ptlrpc_request **);
-int mdc_readpage(struct obd_export *exp, struct ll_fid *mdc_fid, __u64 offset,
-                 struct page *, struct ptlrpc_request **);
+int mdc_readpage(struct obd_export *exp, struct ll_fid *mdc_fid,
+                 __u64, struct page *, struct ptlrpc_request **);
 int mdc_create(struct obd_export *exp, struct mdc_op_data *op_data,
                const void *data, int datalen, int mode, __u32 uid, __u32 gid,
                __u64 rdev, struct ptlrpc_request **request);

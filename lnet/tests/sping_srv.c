@@ -53,7 +53,7 @@
 
 #define STDSIZE (sizeof(int) + sizeof(int) + 4)
 
-static int nal  = PTL_IFACE_DEFAULT;            // Your NAL,
+static int nal  = 0;                            // Your NAL,
 static unsigned long packets_valid = 0;         // Valid packets 
 static int running = 1;
 atomic_t pkt;
@@ -86,7 +86,7 @@ static void *pingsrv_shutdown(int err)
                                         PDEBUG ("PtlMEUnlink", rc);
 
                 case 3:
-                        PtlNIFini(server->ni);
+                        kportal_put_ni (nal);
 
                 case 4:
                         
@@ -159,18 +159,19 @@ int pingsrv_thread(void *arg)
         return 0;    
 }
 
-static void pingsrv_packet(ptl_event_t *ev)
+static int pingsrv_packet(ptl_event_t *ev)
 {
         atomic_inc (&pkt);
         wake_up_process (server->tsk);
+        return 1;
 } /* pingsrv_head() */
 
-static void pingsrv_callback(ptl_event_t *ev)
+static int pingsrv_callback(ptl_event_t *ev)
 {
         
         if (ev == NULL) {
                 CERROR ("null in callback, ev=%p\n", ev);
-                return;
+                return 0;
         }
         server->evnt = *ev;
         
@@ -181,23 +182,23 @@ static void pingsrv_callback(ptl_event_t *ev)
         
         packets_valid++;
 
-        pingsrv_packet(ev);
+        return pingsrv_packet(ev);
         
 } /* pingsrv_callback() */
 
 
 static struct pingsrv_data *pingsrv_setup(void)
 {
+        ptl_handle_ni_t *nip;
         int rc;
 
        /* Aquire and initialize the proper nal for portals. */
-        server->ni = PTL_INVALID_HANDLE;
-
-        rc = PtlNIInit(nal, 0, NULL, NULL, &server->ni);
-        if (rc != PTL_OK && rc != PTL_IFACE_DUP) {
+        if ((nip = kportal_get_ni (nal)) == NULL) {
                 CDEBUG (D_OTHER, "Nal %d not loaded.\n", nal);
                 return pingsrv_shutdown (4);
         }
+
+        server->ni= *nip;
 
         /* Based on the initialization aquire our unique portal ID. */
         if ((rc = PtlGetId (server->ni, &server->my_id))) {
@@ -284,7 +285,7 @@ static void /*__exit*/ pingsrv_cleanup(void)
 
 MODULE_PARM(nal, "i");
 MODULE_PARM_DESC(nal, "Use the specified NAL "
-                "(2-ksocknal, 1-kqswnal)");
+                "(6-kscimacnal, 2-ksocknal, 1-kqswnal)");
  
 MODULE_AUTHOR("Brian Behlendorf (LLNL)");
 MODULE_DESCRIPTION("A kernel space ping server for portals testing");

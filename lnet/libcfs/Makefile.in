@@ -1,4 +1,0 @@
-MODULES = libcfs
-libcfs-objs := debug.o lwt.o module.o proc.o
-
-@INCLUDE_RULES@

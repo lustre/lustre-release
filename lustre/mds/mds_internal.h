@@ -7,8 +7,6 @@
 
 #include <linux/lustre_mds.h>
 
-#define MAX_ATIME_DIFF 60
-
 struct mds_filter_data {
         __u64 io_epoch;
 };
@@ -18,6 +16,10 @@ struct mds_filter_data {
 static inline struct mds_obd *mds_req2mds(struct ptlrpc_request *req)
 {
         return &req->rq_export->exp_obd->u.mds;
+}
+static inline struct obd_device *req2obd(struct ptlrpc_request *req)
+{
+        return req->rq_export->exp_obd;
 }
 
 /* mds/mds_reint.c */
@@ -59,9 +61,9 @@ int mds_cleanup_orphans(struct obd_device *obd);
 int mds_log_op_unlink(struct obd_device *obd, struct inode *inode,
                       struct lov_mds_md *lmm, int lmm_size,
                       struct llog_cookie *logcookies, int cookies_size);
-int mds_llog_init(struct obd_device *obd, struct obd_device *tgt, int count,
-                  struct llog_catid *logid);
-int mds_llog_finish(struct obd_device *obd, int count);
+int mds_llog_init(struct obd_device *obd, struct obd_llogs *,
+                  struct obd_device *tgt, int count, struct llog_catid *logid);
+int mds_llog_finish(struct obd_device *obd, struct obd_llogs *, int count);
 
 /* mds/mds_lov.c */
 int mds_lov_connect(struct obd_device *obd, char * lov_name);
@@ -102,12 +104,17 @@ int mds_lov_clean(struct obd_device *obd);
 extern int mds_iocontrol(unsigned int cmd, struct obd_export *exp,
                          int len, void *karg, void *uarg);
 #ifdef __KERNEL__
-int mds_get_md(struct obd_device *, struct inode *, void *md, int *size, 
-               int lock);
 int mds_pack_md(struct obd_device *, struct lustre_msg *, int offset,
                 struct mds_body *, struct inode *, int lock);
-void mds_pack_inode2fid(struct ll_fid *fid, struct inode *inode);
-void mds_pack_inode2body(struct mds_body *body, struct inode *inode);
+void mds_pack_inode2fid(struct obd_device *, struct ll_fid *, struct inode *);
+void mds_pack_inode2body(struct obd_device *, struct mds_body *, struct inode *);
 #endif
+
+/* mds/mds_lmv.c */
+int mds_lmv_connect(struct obd_device *obd, char * lov_name);
+int mds_lmv_disconnect(struct obd_device *obd, int flags);
+int mds_try_to_split_dir(struct obd_device *, struct dentry *, struct mea **,
+                         int);
+int mds_get_lmv_attr(struct obd_device *, struct inode *, struct mea **, int *);
 
 #endif /* _MDS_INTERNAL_H */

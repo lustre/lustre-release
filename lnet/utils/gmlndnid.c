@@ -29,7 +29,9 @@
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
+#include <asm/byteorder.h>
 #include <syslog.h>
+
 #include <errno.h>
 
 #include <portals/api-support.h>

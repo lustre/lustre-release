@@ -16,8 +16,6 @@
 #include <linux/lustre_handles.h>
 #include <linux/obd.h>
 
-#define FILTER_LAYOUT_VERSION "2"
-
 #ifndef OBD_FILTER_DEVICENAME
 # define OBD_FILTER_DEVICENAME "obdfilter"
 #endif
@@ -37,9 +35,6 @@
 /* This limit is arbitrary, but for now we fit it in 1 page (32k clients) */
 #define FILTER_LR_MAX_CLIENTS (PAGE_SIZE * 8)
 #define FILTER_LR_MAX_CLIENT_WORDS (FILTER_LR_MAX_CLIENTS/sizeof(unsigned long))
-
-#define FILTER_SUBDIR_COUNT      32            /* set to zero for no subdirs */
-#define FILTER_GROUPS 3 /* must be at least 3; not dynamic yet */
 
 #define FILTER_RECOVERY_TIMEOUT (obd_timeout * 5 * HZ / 2) /* *waves hands* */
 
@@ -103,8 +98,8 @@ struct dentry *__filter_oa2dentry(struct obd_device *obd, struct obdo *oa,
 #define filter_oa2dentry(obd, oa) __filter_oa2dentry(obd, oa, __FUNCTION__)
 
 int filter_finish_transno(struct obd_export *, struct obd_trans_info *, int rc);
-__u64 filter_next_id(struct filter_obd *, struct obdo *);
-__u64 filter_last_id(struct filter_obd *, struct obdo *);
+__u64 filter_next_id(struct filter_obd *, int group);
+__u64 filter_last_id(struct filter_obd *, int group);
 int filter_update_server_data(struct obd_device *, struct file *,
                               struct filter_server_data *, int force_sync);
 int filter_update_last_objid(struct obd_device *, obd_gr, int force_sync);
@@ -126,10 +121,6 @@ int filter_brw(int cmd, struct obd_export *, struct obdo *,
 	       struct lov_stripe_md *, obd_count oa_bufs, struct brw_page *,
 	       struct obd_trans_info *);
 void flip_into_page_cache(struct inode *inode, struct page *new_page);
-void filter_release_read_page(struct filter_obd *filter, struct inode *inode,
-                              struct page *page);
-void filter_release_write_page(struct filter_obd *filter, struct inode *inode,
-                               struct niobuf_local *lnb, int rc);
 
 /* filter_io_*.c */
 int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,

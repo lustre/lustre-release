@@ -18,7 +18,7 @@ ALWAYS_EXCEPT="5"
 gen_config() {
     rm -f $XMLCONFIG
     add_mds mds --dev $MDSDEV --size $MDSSIZE
-    add_lov lov1 mds --stripe_sz $STRIPE_BYTES \
+    add_lov lov1 mds --stripe_sz $STRIPE_BYTES\
 	--stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0
     add_ost ost --lov lov1 --dev $OSTDEV --size $OSTSIZE --failover
     if [ ! -z "$ostfailover_HOST" ]; then
@@ -56,7 +56,7 @@ setup() {
     start ost --reformat $OSTLCONFARGS
     [ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
     start mds --reformat $MDSLCONFARGS
-    grep " $MOUNT " /proc/mounts || zconf_mount `hostname` $MOUNT
+    zconf_mount `hostname` $MOUNT
 }
 
 mkdir -p $DIR
@@ -94,7 +94,7 @@ run_test 2 "|x| 10 open(O_CREAT)s"
 
 test_3() {
     verify=$ROOT/tmp/verify-$$
-    dd if=/dev/urandom bs=4096 count=1280 | tee $verify > $DIR/$tfile &
+    dd if=/dev/urandom bs=1024 count=5120 | tee $verify > $DIR/$tfile &
     ddpid=$!
     sync &
     fail ost
@@ -106,7 +106,7 @@ run_test 3 "Fail OST during write, with verification"
 
 test_4() {
     verify=$ROOT/tmp/verify-$$
-    dd if=/dev/urandom bs=4096 count=1280 | tee $verify > $DIR/$tfile
+    dd if=/dev/urandom bs=1024 count=5120 | tee $verify > $DIR/$tfile
     # invalidate cache, so that we're reading over the wire
     for i in /proc/fs/lustre/ldlm/namespaces/OSC_*MNT*; do
         echo -n clear > $i/lru_size
@@ -137,16 +137,17 @@ kbytesfree() {
 
 test_6() {
     f=$DIR/$tfile
-    rm -f $f
-    sync && sleep 2 && sync	# wait for delete thread
+    rm $f 2>/dev/null && sync && sleep 2 && sync	# wait for delete thread
+    grep [0-9] /proc/fs/lustre/osc/OSC*MNT*/kbytes*
     before=`kbytesfree`
-    dd if=/dev/urandom bs=4096 count=1280 of=$f
+    dd if=/dev/urandom bs=1024 count=5120 of=$f
 #define OBD_FAIL_MDS_REINT_NET_REP       0x119
     do_facet mds "sysctl -w lustre.fail_loc=0x80000119"
     sync
     sleep 1					# ensure we have a fresh statfs
+    grep [0-9] /proc/fs/lustre/osc/OSC*MNT*/kbytes*
     after_dd=`kbytesfree`
-    log "before: $before after_dd: $after_dd"
+    echo "before: $before after_dd: $after_dd"
     (( $before > $after_dd )) || return 1
     rm -f $f
     fail ost
@@ -154,22 +155,21 @@ test_6() {
     sync
     # let the delete happen
     sleep 2
+    grep [0-9] /proc/fs/lustre/osc/OSC*MNT*/kbytes*
     after=`kbytesfree`
-    log "before: $before after: $after"
+    echo "before: $before after: $after"
     (( $before <= $after + 40 )) || return 3	# take OST logs into account
 }
 run_test 6 "Fail OST before obd_destroy"
 
 test_7() {
     f=$DIR/$tfile
-    rm -f $f
-    sync && sleep 2 && sync	# wait for delete thread
     before=`kbytesfree`
-    dd if=/dev/urandom bs=4096 count=1280 of=$f
+    dd if=/dev/urandom bs=1024 count=5120 of=$f
     sync
     after_dd=`kbytesfree`
-    log "before: $before after_dd: $after_dd"
-    (( $before > $after_dd )) || return 1
+    echo "before: $before after_dd: $after_dd"
+    (( before > after_dd )) || return 1
     replay_barrier ost
     rm -f $f
     fail ost
@@ -178,8 +178,8 @@ test_7() {
     # let the delete happen
     sleep 2
     after=`kbytesfree`
-    log "before: $before after: $after"
-    (( $before <= $after + 40 )) || return 3	# take OST logs into account
+    echo "before: $before after: $after"
+    (( before == after )) || return 3
 }
 run_test 7 "Fail OST before obd_destroy"
 

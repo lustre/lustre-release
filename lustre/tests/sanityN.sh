@@ -3,8 +3,8 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test: 1768
-ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"4   14b"}
+# bug number for skipped test: 1768 1557
+ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"4   8    14b"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 [ "$ALWAYS_EXCEPT$EXCEPT" ] && echo "Skipping tests: $ALWAYS_EXCEPT $EXCEPT"
@@ -103,8 +103,8 @@ pass() {
 	echo PASS
 }
 
-export MOUNT1=`mount| awk '/ lustre/ { print $3 }'| head -n 1`
-export MOUNT2=`mount| awk '/ lustre/ { print $3 }'| tail -n 1`
+export MOUNT1=`mount| awk '/ lustre/ { print $3 }'| head -1`
+export MOUNT2=`mount| awk '/ lustre/ { print $3 }'| tail -1`
 [ -z "$MOUNT1" ] && error "NAME=$NAME not mounted once"
 [ "$MOUNT1" = "$MOUNT2" ] && error "NAME=$NAME not mounted twice"
 [ `mount| awk '/ lustre/ { print $3 }'| wc -l` -ne 2 ] && \
@@ -317,16 +317,10 @@ test_14b() {
 run_test 14b "truncate of file being executed should return -ETXTBSY"
 
 test_15() {	# bug 974 - ENOSPC
-	echo $PATH
+	env
 	sh oos2.sh $MOUNT1 $MOUNT2
 }
 run_test 15 "test out-of-space with multiple writers ==========="
-
-test_16() {
-	./fsx -R -W -c 50 -p 100 -N 2500 \
-		$MOUNT1/fsxfile $MOUNT2/fsxfile
-}
-run_test 16 "2500 iterations of dual-mount fsx ================="
 
 log "cleanup: ======================================================"
 rm -rf $DIR1/[df][0-9]* $DIR1/lnk || true

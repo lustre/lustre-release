@@ -33,7 +33,7 @@
 #include <linux/obd_lov.h>
 #include <linux/obd_class.h>
 #include <linux/obd_support.h>
-#include <lustre/lustre_user.h>
+#include <linux/lustre_user.h>
 
 #include "lov_internal.h"
 
@@ -186,7 +186,7 @@ static int lov_verify_lmm_v0(struct lov_mds_md_v0 *lmm, int lmm_bytes,
 
         if (lmm_bytes < lov_mds_md_v0_size(*stripe_count)) {
                 CERROR("LOV EA too small: %d, need %d\n",
-                       lmm_bytes, lov_mds_md_v0_size(*stripe_count));
+                       lmm_bytes, lov_mds_md_size(*stripe_count));
                 lov_dump_lmm_v0(D_WARNING, lmm);
                 return -EINVAL;
         }
@@ -238,9 +238,9 @@ static int lov_verify_lmm_v1(struct lov_mds_md_v1 *lmm, int lmm_bytes,
                 return -EINVAL;
         }
 
-        if (lmm_bytes < lov_mds_md_v1_size(*stripe_count)) {
+        if (lmm_bytes < lov_mds_md_size(*stripe_count)) {
                 CERROR("LOV EA too small: %d, need %d\n",
-                       lmm_bytes, lov_mds_md_v1_size(*stripe_count));
+                       lmm_bytes, lov_mds_md_size(*stripe_count));
                 lov_dump_lmm_v1(D_WARNING, lmm);
                 return -EINVAL;
         }
@@ -295,7 +295,7 @@ int lov_alloc_memmd(struct lov_stripe_md **lsmp, int stripe_count, int pattern)
         (*lsmp)->lsm_magic = LOV_MAGIC;
         (*lsmp)->lsm_stripe_count = stripe_count;
         (*lsmp)->lsm_maxbytes = LUSTRE_STRIPE_MAXBYTES * stripe_count;
-        (*lsmp)->lsm_xfersize = PTLRPC_MAX_BRW_SIZE * stripe_count;
+        (*lsmp)->lsm_xfersize = PTLRPC_MTU * stripe_count;
         (*lsmp)->lsm_pattern = pattern;
         (*lsmp)->lsm_oinfo[0].loi_ost_idx = ~0;
 
@@ -505,7 +505,7 @@ int lov_setstripe(struct obd_export *exp, struct lov_stripe_md **lsmp,
 }
 
 int lov_setea(struct obd_export *exp, struct lov_stripe_md **lsmp,
-                  struct lov_user_md *lump)
+              struct lov_user_md *lump)
 {
         int i;
         int rc;
@@ -516,26 +516,25 @@ int lov_setea(struct obd_export *exp, struct lov_stripe_md **lsmp,
         for (i = 0; i < lump->lmm_stripe_count; i++) {
                 __u32 len = sizeof(last_id);
                 oexp = lov->tgts[lump->lmm_objects[i].l_ost_idx].ltd_exp;
-                rc = obd_get_info(oexp, strlen("last_id"), "last_id",
-                                  &len, &last_id);
+                rc = obd_get_info(oexp, strlen("last_id"), "last_id", 
+                                  &len, &last_id); 
                 if (rc)
                         RETURN(rc);
-                if (lump->lmm_objects[i].l_object_id > last_id) {
+                if (last_id < lump->lmm_objects[i].l_object_id) {
                         CERROR("Setting EA for object > than last id on "
-                               "ost idx %d "LPD64" > "LPD64" \n",
-                               lump->lmm_objects[i].l_ost_idx,
-                               lump->lmm_objects[i].l_object_id, last_id);
+                          "ost idx %d "LPD64" > "LPD64" \n", 
+                          lump->lmm_objects[i].l_ost_idx,
+                          lump->lmm_objects[i].l_object_id, last_id);
                         RETURN(-EINVAL);
                 }
         }
 
         rc = lov_setstripe(exp, lsmp, lump);
-        if (rc)
+        if (rc) 
                 RETURN(rc);
-
         for (i = 0; i < lump->lmm_stripe_count; i++) {
-                (*lsmp)->lsm_oinfo[i].loi_ost_idx =
-                        lump->lmm_objects[i].l_ost_idx;
+                (*lsmp)->lsm_oinfo[i].loi_ost_idx = 
+                                                 lump->lmm_objects[i].l_ost_idx;
                 (*lsmp)->lsm_oinfo[i].loi_id = lump->lmm_objects[i].l_object_id;
                 (*lsmp)->lsm_oinfo[i].loi_gr = lump->lmm_objects[i].l_object_gr;
         }

@@ -1,55 +1,25 @@
-# -------- we can't build modules unless srcdir = builddir
-if test x$enable_modules != xno ; then
-AC_CHECK_FILE([autoMakefile.am],[],
-	[AC_MSG_ERROR([At this time, Lustre does not support building kernel modules with srcdir != buildir.])])
-fi
 
 # -------- in kernel compilation? (2.5 only) -------------
-AC_MSG_CHECKING([if inkernel build support is requested])
-AC_ARG_ENABLE([inkernel],
-	AC_HELP_STRING([--enable-inkernel],
-		       [set up 2.5 kernel makefiles]),
-	[],[enable_inkernel=no])
-AC_MSG_RESULT([$enable_inkernel])
+AC_ARG_ENABLE(inkernel, [  --enable-inkernel set up 2.5 kernel makefiles])
 AM_CONDITIONAL(INKERNEL, test x$enable_inkernel = xyes)
+echo "Makefile for in kernel build: $INKERNEL"
 
 # -------- are we building against an external portals? -------
-AC_MSG_CHECKING([if Cray portals should be used])
-AC_ARG_WITH([cray-portals],
-	AC_HELP_STRING([--with-cray-portals=path],
-		       [path to cray portals]),
-	[
-	        if test "$with_cray_portals" != no; then
-			if test -r $with_cray_portals/include/portals/api.h ; then
-				CRAY_PORTALS_INCLUDE="-I$with_cray_portals/include"
-				AC_DEFINE(CRAY_PORTALS, 1, [Building with Cray Portals])
-			else
-				AC_MSG_ERROR([--with-cray-portals specified badly])
-                        fi
-                fi
-	],[with_cray_portals=no])
-AC_MSG_RESULT([$with_cray_portals])
+# haha, I wonder how one is really supposed to do this
+# automake seems to have a DEFS variable which looks good
+AC_ARG_WITH(cray-portals, [  --with-cray-portals=[path] path to cray portals],
+	CRAY_PORTALS_INCLUDE="-I$with_cray_portals"
+	CC="$CC -DCRAY_PORTALS=1"
+	)
+AC_SUBST(CRAY_PORTALS_INCLUDE)
+AM_CONDITIONAL(CRAY_PORTALS, test ! "x$with_cray_portals" = x)
 
-AM_CONDITIONAL(CRAY_PORTALS, test x$with_cray_portals != xno)
-
-# -------- enable tests and utils? -------
-if test x$enable_tests = xno ; then
-	AC_MSG_NOTICE([disabling tests])
-	enable_tests=no
-fi
-if test x$enable_utils = xno ; then
-	AC_MSG_NOTICE([disabling utilities])
-	enable_utils=no
-fi
+# -------- liblustre compilation --------------
+AC_ARG_WITH(lib, [  --with-lib compile lustre library], host_cpu="lib")
 
 # -------- set linuxdir ------------
-AC_MSG_CHECKING([for Linux sources])
-AC_ARG_WITH([linux],
-	AC_HELP_STRING([--with-linux=path],
-		       [set path to Linux source (default=/usr/src/linux)]),
-	[LINUX=$with_linux],
-	[LINUX=/usr/src/linux])
-AC_MSG_RESULT([$LINUX])
+
+AC_ARG_WITH(linux, [  --with-linux=[path] set path to Linux source (default=/usr/src/linux)],LINUX=$with_linux,LINUX=/usr/src/linux)
 AC_SUBST(LINUX)
 if test x$enable_inkernel = xyes ; then
         echo ln -s `pwd` $LINUX/fs/lustre
@@ -57,196 +27,201 @@ if test x$enable_inkernel = xyes ; then
         ln -s `pwd` $LINUX/fs/lustre
 fi
 
-# -------- check for .confg --------
-AC_ARG_WITH([linux-config],
-	[AC_HELP_STRING([--with-linux-config=path],
-			[set path to Linux .conf (default=\$LINUX/.config)])],
-	[LINUX_CONFIG=$with_linux_config],
-	[LINUX_CONFIG=$LINUX/.config])
-AC_SUBST(LINUX_CONFIG)
-
-AC_CHECK_FILE([/boot/kernel.h],
-	[KERNEL_SOURCE_HEADER='/boot/kernel.h'],
-	[AC_CHECK_FILE([/var/adm/running-kernel.h]),
-		[KERNEL_SOURCE_HEADER='/var/adm/running-kernel.h']])
-
-AC_ARG_WITH([kernel-source-header],
-	AC_HELP_STRING([--with-kernel-source-header=path],
-			[Use a different kernel version header.  Consult README.kernel-source for details.]),
-	[KERNEL_SOURCE_HEADER=$with_kernel_source_header])
-
 #  --------------------
-ARCH_UM=
-UML_CFLAGS=
-if test x$enable_modules != xno ; then
-	AC_MSG_CHECKING([if you are running user mode linux for $host_cpu])
-	if test -e $LINUX/include/asm-um ; then
-		if test  X`ls -id $LINUX/include/asm/ | awk '{print $1}'` = X`ls -id $LINUX/include/asm-um | awk '{print $1}'` ; then
-			ARCH_UM='ARCH=um'
-			# see notes in Rules.in
-			UML_CFLAGS='-O0'
-			AC_MSG_RESULT(yes)
-	    	else
-			AC_MSG_RESULT([no (asm doesn't point at asm-um)])
-		fi
-	else
-		AC_MSG_RESULT([no (asm-um missing)])
-	fi
+AC_MSG_CHECKING(if you are running user mode linux for $host_cpu ...)
+if test $host_cpu = "lib" ; then 
+        host_cpu="lib"
+	AC_MSG_RESULT(no building Lustre library)
+else
+  if test -e $LINUX/include/asm-um ; then
+    if test  X`ls -id $LINUX/include/asm/ | awk '{print $1}'` = X`ls -id $LINUX/include/asm-um | awk '{print $1}'` ; then
+	host_cpu="um";
+	AC_MSG_RESULT(yes)
+    else
+	AC_MSG_RESULT(no (asm doesn't point at asm-um))
+    fi
+
+  else 
+        AC_MSG_RESULT(no (asm-um missing))
+  fi
 fi
-AC_SUBST(ARCH_UM)
-AC_SUBST(UML_CFLAGS)
+
 # --------- Linux 25 ------------------
 
-AC_CHECK_FILE([$LINUX/include/linux/namei.h],
-	[
-	        linux25="yes"
-		KMODEXT=".ko"
-	],[
-		KMODEXT=".o"
-        	linux25="no"
-	])
-AC_MSG_CHECKING([if you are using Linux 2.6])
-AC_MSG_RESULT([$linux25])
+AC_MSG_CHECKING(if you are running linux 2.5)
+if test -e $LINUX/include/linux/namei.h ; then
+        linux25="yes"
+        AC_MSG_RESULT(yes)
+else
+        linux25="no"
+        AC_MSG_RESULT(no)
+fi
 AM_CONDITIONAL(LINUX25, test x$linux25 = xyes)
-AC_SUBST(KMODEXT)
+echo "Makefiles for in linux 2.5 build: $LINUX25"
 
 # -------  Makeflags ------------------
 
-CPPFLAGS="$CRAY_PORTALS_INCLUDE $CRAY_PORTALS_COMMANDLINE -I\$(top_srcdir)/include -I\$(top_srcdir)/portals/include"
+AC_MSG_CHECKING(setting make flags system architecture: )
+case ${host_cpu} in
+	lib )
+	AC_MSG_RESULT($host_cpu)
+	KCFLAGS='-g -Wall '
+	KCPPFLAGS='-D__arch_lib__ '
+   	libdir='${exec_prefix}/lib/lustre'
+        MOD_LINK=elf_i386
+;;
+	um )
+	AC_MSG_RESULT($host_cpu)
+	KCFLAGS='-g -Wall -pipe -Wno-trigraphs -Wstrict-prototypes -fno-strict-aliasing -fno-common '
+        case ${linux25} in
+                yes )
+                KCPPFLAGS='-D__KERNEL__ -U__i386__ -Ui386 -DUM_FASTCALL -D__arch_um__ -DSUBARCH="i386" -DNESTING=0 -D_LARGEFILE64_SOURCE  -Derrno=kernel_errno -DPATCHLEVEL=4 -DMODULE -I$(LINUX)/arch/um/include -I$(LINUX)/arch/um/kernel/tt/include -I$(LINUX)/arch/um/kernel/skas/include -O2 -nostdinc -iwithprefix include'
+        ;;
+                * )
+                KCPPFLAGS='-D__KERNEL__ -U__i386__ -Ui386 -DUM_FASTCALL -D__arch_um__ -DSUBARCH="i386" -DNESTING=0 -D_LARGEFILE64_SOURCE  -Derrno=kernel_errno -DPATCHLEVEL=4 -DMODULE -I$(LINUX)/arch/um/kernel/tt/include -I$(LINUX)/arch/um/include '
+        ;;
+        esac
 
-# liblustre are all the same
-LLCPPFLAGS="-D__arch_lib__ -D_LARGEFILE64_SOURCE=1"
-AC_SUBST(LLCPPFLAGS)
+        MOD_LINK=elf_i386
+;;
+	i*86 )
+	AC_MSG_RESULT($host_cpu)
+        KCFLAGS='-g -O2 -Wall -Wstrict-prototypes -pipe'
+        case ${linux25} in
+                yes )
+                KCPPFLAGS='-D__KERNEL__ -DMODULE -march=i686 -I$(LINUX)/include/asm-i386/mach-default -nostdinc -iwithprefix include '
+        ;;
+                * )
+                KCPPFLAGS='-D__KERNEL__ -DMODULE '
+        ;;
+        esac
+        MOD_LINK=elf_i386
+;;
 
-LLCFLAGS="-g -Wall -fPIC"
-AC_SUBST(LLCFLAGS)
+	alphaev6 )
+	AC_MSG_RESULT($host_cpu)
+        KCFLAGS='-g -O2  -Wall -Wstrict-prototypes -Wno-trigraphs -fomit-frame-pointer -fno-strict-aliasing -fno-common -pipe -mno-fp-regs -ffixed-8 -mcpu=ev5 -Wa,-mev6'
+        KCPPFLAGS='-D__KERNEL__ -DMODULE '
+        MOD_LINK=elf64alpha
+;;
 
-# everyone builds against portals and lustre
+	alphaev67 )
+	AC_MSG_RESULT($host_cpu)
+        KCFLAGS='-g -O2  -Wall -Wstrict-prototypes -Wno-trigraphs -fomit-frame-pointer -fno-strict-aliasing -fno-common -pipe -mno-fp-regs -ffixed-8 -mcpu=ev5 -Wa,-mev6'
+        KCPPFLAGS='-D__KERNEL__ -DMODULE '
+        MOD_LINK=elf64alpha
+;;
 
-if test x$enable_ldiskfs = xyes ; then
-	AC_DEFINE(CONFIG_LDISKFS_FS_MODULE, 1, [build ldiskfs as a module])
-	AC_DEFINE(CONFIG_LDISKFS_FS_XATTR, 1, [enable extended attributes for ldiskfs])
-	AC_DEFINE(CONFIG_LDISKFS_FS_POSIX_ACL, 1, [enable posix acls])
-	AC_DEFINE(CONFIG_LDISKFS_FS_SECURITY, 1, [enable fs security])
+	alpha* )
+	AC_MSG_RESULT($host_cpu)
+        KCFLAGS='-g -O2  -Wall -Wstrict-prototypes -Wno-trigraphs -fomit-frame-pointer -fno-strict-aliasing -fno-common -pipe -mno-fp-regs -ffixed-8 -mcpu=ev5 -Wa,-mev5'
+        KCPPFLAGS='-D__KERNEL__ -DMODULE '
+        MOD_LINK=elf64alpha
+;;
+
+	ia64 )
+	AC_MSG_RESULT($host_cpu)
+        KCFLAGS='-g -O2 -Wall -Wstrict-prototypes -Wno-trigraphs -fno-strict-aliasing -fno-common -pipe -ffixed-r13 -mfixed-range=f10-f15,f32-f127 -falign-functions=32 -mb-step'
+	KCPPFLAGS='-D__KERNEL__ -DMODULE'
+        MOD_LINK=elf64_ia64
+;;
+
+	x86_64 )
+	AC_MSG_RESULT($host_cpu)
+        KCFLAGS='-g -O2 -Wall -Wstrict-prototypes -Wno-trigraphs -fno-strict-aliasing -fno-common -fomit-frame-pointer -mno-red-zone -mcmodel=kernel -pipe -fno-reorder-blocks -finline-limit=2000 -fno-strength-reduce -fno-asynchronous-unwind-tables'
+	KCPPFLAGS='-D__KERNEL__ -DMODULE'
+        MOD_LINK=elf_x86_64
+;;
+
+	sparc64 )
+	AC_MSG_RESULT($host_cpu)
+        KCFLAGS='-O2 -Wall -Wstrict-prototypes -Wno-trigraphs -fomit-frame-pointer -fno-strict-aliasing -fno-common -Wno-unused -m64 -pipe -mno-fpu -mcpu=ultrasparc -mcmodel=medlow -ffixed-g4 -fcall-used-g5 -fcall-used-g7 -Wno-sign-compare -Wa,--undeclared-regs'
+        KCPPFLAGS='-D__KERNEL__'
+        MOD_LINK=elf64_sparc
+
+;;
+
+	powerpc )
+	AC_MSG_RESULT($host_cpu)
+        KCFLAGS='-O2 -g -Wall -Wstrict-prototypes -Wno-trigraphs -fomit-frame-pointer -fno-strict-aliasing -fno-common -D__powerpc__ -fsigned-char -msoft-float -pipe -ffixed-r2 -Wno-uninitialized -mmultiple -mstring'
+        KCPPFLAGS='-D__KERNEL__ -DMODULE'
+        MOD_LINK=elf32ppclinux
+;;
+
+        *)
+	AC_ERROR("Unknown Linux Platform: $host_cpu")
+;;
+esac
+
+# ----------- make dep run? ------------------
+
+if test $host_cpu != "lib" ; then 
+  AC_MSG_CHECKING(if make dep has been run in kernel source (host $host_cpu) )
+  if test -f $LINUX/include/linux/config.h ; then
+  AC_MSG_RESULT(yes)
+ else
+  AC_MSG_ERROR(** cannot find $LINUX/include/linux/config.h. Run make dep in $LINUX.)
+  fi
 fi
-
-EXTRA_KCFLAGS="-g $CRAY_PORTALS_INCLUDE $CRAY_PORTALS_COMMANDLINE -I$PWD/portals/include -I$PWD/include"
-
-# these are like AC_TRY_COMPILE, but try to build modules against the
-# kernel, inside the kernel-tests directory
-
-AC_DEFUN([LUSTRE_MODULE_CONFTEST],
-[cat >conftest.c <<_ACEOF
-$1
-_ACEOF
-])
-
-AC_DEFUN([LUSTRE_MODULE_COMPILE_IFELSE],
-[m4_ifvaln([$1], [LUSTRE_MODULE_CONFTEST([$1])])dnl
-rm -f kernel-tests/conftest.o kernel-tests/conftest.mod.c kernel-tests/conftest.ko
-AS_IF([AC_TRY_COMMAND(cp conftest.c kernel-tests && make [$2] -f $PWD/kernel-tests/Makefile LUSTRE_LINUX_CONFIG=$LINUX_CONFIG -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX EXTRA_CFLAGS="$EXTRA_KCFLAGS" $ARCH_UM SUBDIRS=$PWD/kernel-tests) >/dev/null && AC_TRY_COMMAND([$3])],
-	[$4],
-	[_AC_MSG_LOG_CONFTEST
-m4_ifvaln([$5],[$5])dnl])dnl
-rm -f kernel-tests/conftest.o kernel-tests/conftest.mod.c kernel-tests/conftest.mod.o kernel-tests/conftest.ko m4_ifval([$1], [kernel-tests/conftest.c conftest.c])[]dnl
-])
-
-AC_DEFUN([LUSTRE_MODULE_TRY_COMPILE],
-[LUSTRE_MODULE_COMPILE_IFELSE(
-	[AC_LANG_PROGRAM([[$1]], [[$2]])],
-	[modules],
-	[test -s kernel-tests/conftest.o],
-	[$3], [$4])])
-
-AC_DEFUN([LUSTRE_MODULE_TRY_MAKE],
-[LUSTRE_MODULE_COMPILE_IFELSE([AC_LANG_PROGRAM([[$1]], [[$2]])], [$3], [$4], [$5], [$6])])
 
 # ------------ include paths ------------------
 
-if test x$enable_modules != xno ; then
-	# ------------ .config exists ----------------
-	AC_CHECK_FILE([$LINUX_CONFIG],[],
-		[AC_MSG_ERROR([Kernel config could not be found.  If you are building from a kernel-source rpm consult README.kernel-source])])
+KINCFLAGS="$CRAY_PORTALS_INCLUDE $CRAY_PORTALS_COMMANDLINE \
+	-I\$(top_srcdir)/include \
+	-I\$(top_srcdir)/portals/include"
+if test $host_cpu != "lib" ; then 
+    KINCFLAGS="$KINCFLAGS -I$LINUX/include -I$LINUX/include"
+fi
+CPPFLAGS="$KINCFLAGS $ARCHCPPFLAGS"
 
-	# ----------- make dep run? ------------------
-	AC_CHECK_FILES([$LINUX/include/linux/autoconf.h
-			$LINUX/include/linux/version.h
-			$LINUX/include/linux/config.h],[],
-		[AC_MSG_ERROR([Run make config in $LINUX.])])
+if test $host_cpu != "lib" ; then 
+# ------------ autoconf.h ------------------
+  AC_MSG_CHECKING(if autoconf.h is in kernel source)
+  if test -f $LINUX/include/linux/autoconf.h ; then
+      AC_MSG_RESULT(yes)
+  else
+      AC_MSG_ERROR(** cannot find $LINUX/include/linux/autoconf.h. Run make config in $LINUX.)
+  fi
 
-	# ------------ rhconfig.h includes runtime-generated bits --
-	# red hat kernel-source checks
+# ------------ LINUXRELEASE and moduledir ------------------
+  AC_MSG_CHECKING(for Linux release)
+  
+  dnl We need to rid ourselves of the nasty [ ] quotes.
+  changequote(, )
+  dnl Get release from version.h
+  LINUXRELEASE="`sed -ne 's/.*UTS_RELEASE[ \"]*\([0-9.a-zA-Z_-]*\).*/\1/p' $LINUX/include/linux/version.h`"
+  changequote([, ])
+  
+  moduledir='$(libdir)/modules/'$LINUXRELEASE/kernel
+  AC_SUBST(moduledir)
+  
+  modulefsdir='$(moduledir)/fs/$(PACKAGE)'
+  AC_SUBST(modulefsdir)
+  
+  AC_MSG_RESULT($LINUXRELEASE)
+  AC_SUBST(LINUXRELEASE)
 
-	# we know this exists after the check above.  if the user
-	# tarred up the tree and ran make dep etc. in it, then
-	# version.h gets overwritten with a standard linux one.
+# ------------ RELEASE --------------------------------
+  AC_MSG_CHECKING(lustre release)
+  
+  dnl We need to rid ourselves of the nasty [ ] quotes.
+  changequote(, )
+  dnl Get release from version.h
+  RELEASE="`sed -ne 's/-/_/g' -e 's/.*UTS_RELEASE[ \"]*\([0-9.a-zA-Z_]*\).*/\1/p' $LINUX/include/linux/version.h`_`date +%Y%m%d%H%M`"
+  changequote([, ])
 
-	if grep rhconfig $LINUX/include/linux/version.h >/dev/null ; then
-		# This is a clean kernel-source tree, we need to
-		# enable extensive workarounds to get this to build
-		# modules
-		AC_CHECK_FILE([$KERNEL_SOURCE_HEADER],
-			[if test $KERNEL_SOURCE_HEADER = '/boot/kernel.h' ; then
-				AC_MSG_WARN([Using /boot/kernel.h from RUNNING kernel.])
-				AC_MSG_WARN([If this is not what you want, use --with-kernel-source-header.])
-				AC_MSG_WARN([Consult README.kernel-source for details.])
-			fi],
-			[AC_MSG_ERROR([$KERNEL_SOURCE_HEADER not found.  Consult README.kernel-source for details.])])
-		EXTRA_KCFLAGS="-include $KERNEL_SOURCE_HEADER $EXTRA_KCFLAGS"
-	fi
+  AC_MSG_RESULT($RELEASE)
+  AC_SUBST(RELEASE)
 
-	# --- check that we can build modules at all
-	AC_MSG_CHECKING([that modules can be built])
-	LUSTRE_MODULE_TRY_COMPILE([],[],
-		[
-			AC_MSG_RESULT([yes])
-		],[
-			AC_MSG_RESULT([no])
-			AC_MSG_WARN([Consult config.log for details.])
-			AC_MSG_WARN([If you are trying to build with a kernel-source rpm, consult README.kernel-source])
-			AC_MSG_ERROR([Kernel modules could not be built.])
-		])
-
-	# ------------ LINUXRELEASE and moduledir ------------------
-	AC_MSG_CHECKING([for Linux release])
-	rm -f kernel-tests/conftest.i
-	LINUXRELEASE=
-	if test $linux25 = 'yes' ; then
-		makerule="$PWD/kernel-tests"
-	else
-		makerule="_dir_$PWD/kernel-tests"
-	fi
-	LUSTRE_MODULE_TRY_MAKE(
-		[#include <linux/version.h>],
-		[LINUXRELEASE=UTS_RELEASE],
-		[$makerule LUSTRE_KERNEL_TEST=conftest.i],
-		[test -s kernel-tests/conftest.i],
-		[
-			# LINUXRELEASE="UTS_RELEASE"
-			eval $(grep LINUXRELEASE kernel-tests/conftest.i)
-		],[
-			AC_MSG_RESULT([unknown])
-			AC_MSG_ERROR([Could not preprocess test program.  Consult config.log for details.])
-		])
-	rm -f kernel-tests/conftest.i
-	if test x$LINUXRELEASE = x ; then
-		AC_MSG_RESULT([unknown])
-		AC_MSG_ERROR([Could not determine Linux release version from linux/version.h.])
-	fi
-	AC_MSG_RESULT([$LINUXRELEASE])
-	AC_SUBST(LINUXRELEASE)
-
-	moduledir='$(libdir)/modules/'$LINUXRELEASE/kernel
-	AC_SUBST(moduledir)
-
-	modulefsdir='$(moduledir)/fs/$(PACKAGE)'
-	AC_SUBST(modulefsdir)
-
-	# ------------ RELEASE --------------------------------
-	AC_MSG_CHECKING([for Lustre release])
-  	RELEASE="`echo ${LINUXRELEASE} | tr '-' '_'`_`date +%Y%m%d%H%M`"
-	AC_MSG_RESULT($RELEASE)
-	AC_SUBST(RELEASE)
+# ---------- modversions? --------------------
+  AC_MSG_CHECKING(for MODVERSIONS)
+  if egrep -e 'MODVERSIONS.*1' $LINUX/include/linux/autoconf.h >/dev/null 2>&1;
+  then
+	if test $linux25 != "yes"; then
+                MFLAGS="-DMODULE -DMODVERSIONS -include $LINUX/include/linux/modversions.h -DEXPORT_SYMTAB"
+                AC_MSG_RESULT(yes)
+        fi
+  fi
 fi
 
 # ---------- Portals flags --------------------
@@ -259,299 +234,166 @@ fi
 #fi
 #AC_SUBST(usrprefix)
 
-AC_MSG_CHECKING([for zero-copy TCP support])
-AC_ARG_ENABLE([zerocopy],
-	AC_HELP_STRING([--disable-zerocopy],
-		       [disable socknal zerocopy]),
-	[],[enable_zerocopy='yes'])
-if test x$enable_zerocopy = xno ; then
-	AC_MSG_RESULT([no (by request)])
+AC_MSG_CHECKING(if kernel has CPU affinity support)
+SET_CPUS_ALLOW="`grep -c set_cpus_allowed $LINUX/kernel/softirq.c`"
+if test "$SET_CPUS_ALLOW" != 0 ; then
+  enable_affinity_temp="-DCPU_AFFINITY=1"
+  AC_MSG_RESULT(yes)
 else
-	ZCCD="`grep -c zccd $LINUX/include/linux/skbuff.h`"
-	if test "$ZCCD" != 0 ; then
-		AC_DEFINE(SOCKNAL_ZC, 1, [use zero-copy TCP])
-		AC_MSG_RESULT(yes)
-	else
-		AC_MSG_RESULT([no (no kernel support)])
-	fi
+  enable_affinity_temp=""
+  AC_MSG_RESULT(no)
 fi
 
-AC_MSG_CHECKING([for CPU affinity support])
-AC_ARG_ENABLE([affinity],
-	AC_HELP_STRING([--disable-affinity],
-		       [disable process/irq affinity]),
-	[],[enable_affinity='yes'])
-if test x$enable_affinity = xno ; then
-	AC_MSG_RESULT([no (by request)])
+AC_MSG_CHECKING(if kernel has zero-copy TCP support)
+ZCCD="`grep -c zccd $LINUX/include/linux/skbuff.h`"
+if test "$ZCCD" != 0 ; then
+  enable_zerocopy_temp="-DSOCKNAL_ZC=1"
+  AC_MSG_RESULT(yes)
 else
-	SET_CPUS_ALLOW="`grep -c set_cpus_allowed $LINUX/kernel/softirq.c`"
-	if test "$SET_CPUS_ALLOW" != 0 ; then
-		AC_DEFINE(CPU_AFFINITY, 1, [kernel has cpu affinity support])
-		AC_MSG_RESULT([yes])
-	else
-		AC_MSG_RESULT([no (no kernel support)])
-	fi
+  enable_zerocopy_temp=""
+  AC_MSG_RESULT(no)
 fi
 
+AC_ARG_ENABLE(zerocopy, [  --disable-zerocopy disable socknal zerocopy],enable_zerocopy="", enable_zerocopy=$enable_zerocopy_temp)
 
+AC_ARG_ENABLE(affinity, [  --disable-affinity disable process/irq affinity],enable_affinity="", enable_affinity=$enable_affinity_temp)
 #####################################
 
-AC_MSG_CHECKING([if quadrics kernel headers are present])
+AC_MSG_CHECKING(if quadrics kernel headers are present)
 if test -d $LINUX/drivers/net/qsnet ; then
-	AC_MSG_RESULT([yes])
-	QSWNAL="qswnal"
-	AC_MSG_CHECKING([for multirail EKC])
-	if test -f $LINUX/include/elan/epcomms.h; then
-		AC_MSG_RESULT([supported])
-		QSWCPPFLAGS="-DMULTIRAIL_EKC=1"
-	else
-		AC_MSG_RESULT([not supported])
-		if test -d $LINUX/drivers/net/qsnet/include; then
-			QSWCPPFLAGS="-I$LINUX/drivers/net/qsnet/include"
-		else
-			QSWCPPFLAGS="-I$LINUX/include/linux"
-		fi
-	fi
+  AC_MSG_RESULT(yes)
+  QSWNAL="qswnal"
+  AC_MSG_CHECKING(for multirail EKC)
+  if test -f $LINUX/include/elan/epcomms.h; then
+	AC_MSG_RESULT(supported)
+	with_quadrics="-DMULTIRAIL_EKC=1"
+  else
+	AC_MSG_RESULT(not supported)
+	with_quadrics="-I$LINUX/drivers/net/qsnet/include"
+  fi
+  :
 else
-	AC_MSG_RESULT([no])
-	QSWNAL=""
-	QSWCPPFLAGS=""
+  AC_MSG_RESULT(no)
+  QSWNAL=""
+  with_quadrics=""
+  :
 fi
-AC_SUBST(QSWCPPFLAGS)
+AC_SUBST(with_quadrics)
 AC_SUBST(QSWNAL)
-AM_CONDITIONAL(BUILD_QSWNAL, test x$QSWNAL = "xqswnal")
 
-AC_MSG_CHECKING([if gm support was requested])
-AC_ARG_WITH([gm],
-	AC_HELP_STRING([--with-gm=path],
-		       [build gmnal against path]),
-	[
-		case $with_gm in 
-			yes)
-				AC_MSG_RESULT([yes])
-				GMCPPFLAGS="-I/usr/local/gm/include"
-				GMNAL="gmnal"
-				;;
-			no)
-				AC_MSG_RESULT([no])
-				GMCPPFLAGS=""
-				GMNAL=""
-				;;
-			*)
-				AC_MSG_RESULT([yes])
-				GMCPPFLAGS="-I$with_gm/include -I$with_gm/drivers -I$with_gm/drivers/linux/gm"
-				GMNAL="gmnal"
-				;;
-		esac
-	],[
-		AC_MSG_RESULT([no])
-		GMCPPFLAGS=""
-		GMNAL=""
-	])
-AC_SUBST(GMCPPFLAGS)
+# R. Read 5/02
+GMNAL=""
+echo "checking with-gm=" ${with_gm}
+if test "${with_gm+set}" = set; then
+  if test "${with_gm}" = yes; then
+    with_gm="-I/usr/local/gm/include"
+  else
+    with_gm="-I$with_gm/include -I$with_gm/drivers -I$with_gm/drivers/linux/gm"
+  fi
+  GMNAL="gmnal"
+else
+# default case - no GM
+  with_gm=""
+fi
+AC_SUBST(with_gm)
 AC_SUBST(GMNAL)
-AM_CONDITIONAL(BUILD_GMNAL, test x$GMNAL = "xgmnal")
+
 
 #fixme: where are the default IB includes?
 default_ib_include_dir=/usr/local/ib/include
 an_ib_include_file=vapi.h
 
-AC_MSG_CHECKING([if ib nal support was requested])
-AC_ARG_WITH([ib],
-	AC_HELP_STRING([--with-ib=yes/no/path],
-		       [Path to IB includes]),
-	[
-		case $with_ib in
-			yes)
-				AC_MSG_RESULT([yes])
-				IBCPPFLAGS="-I/usr/local/ib/include"
-				IBNAL="ibnal"
-				;;
-			no)
-				AC_MSG_RESULT([no])
-				IBCPPFLAGS=""
-				IBNAL=""
-				;;
-			*)
-				AC_MSG_RESULT([yes])
-				IBCPPFLAGS="-I$with_ib"
-				IBNAL=""
-				;;
-		esac
-	],[
-		AC_MSG_RESULT([no])
-		IBFLAGS=""
-		IBNAL=""
-	])
+AC_ARG_WITH(ib, [  --with-ib=[yes/no/path] Path to IB includes], with_ib=$withval, with_ib=$default_ib)
+AC_MSG_CHECKING(if IB headers are present)
+if test "$with_ib" = yes; then
+    with_ib=$default_ib_include_dir
+fi
+if test "$with_ib" != no -a -f ${with_ib}/${an_ib_include_file}; then
+    AC_MSG_RESULT(yes)
+    IBNAL="ibnal"
+    with_ib="-I${with_ib}"
+else
+    AC_MSG_RESULT(no)
+    IBNAL=""
+    with_ib=""
+fi
 AC_SUBST(IBNAL)
-AC_SUBST(IBCPPFLAGS)
-AM_CONDITIONAL(BUILD_IBNAL, test x$IBNAL = "xibnal")
+AC_SUBST(with_ib)
 
+
+def_scamac=/opt/scali/include
+AC_ARG_WITH(scamac, [  --with-scamac=[yes/no/path] Path to ScaMAC includes (default=/opt/scali/include)], with_scamac=$withval, with_scamac=$def_scamac)
+AC_MSG_CHECKING(if ScaMAC headers are present)
+if test "$with_scamac" = yes; then
+  with_scamac=$def_scamac
+fi
+if test "$with_scamac" != no -a -f ${with_scamac}/scamac.h; then
+  AC_MSG_RESULT(yes)
+  SCIMACNAL="scimacnal"
+  with_scamac="-I${with_scamac} -I${with_scamac}/icm"
+else
+  AC_MSG_RESULT(no)
+  SCIMACNAL=""
+  with_scamac=""
+fi
+
+AC_SUBST(with_scamac)
+AC_SUBST(SCIMACNAL)
+
+CFLAGS="$KCFLAGS"
+CPPFLAGS="$KINCFLAGS $KCPPFLAGS $MFLAGS $enable_zerocopy $enable_affinity $with_quadrics $with_gm $with_scamac $with_ib"
+
+AM_CONDITIONAL(LIBLUSTRE, test x$host_cpu = xlib)
 AC_SUBST(MOD_LINK)
 AC_SUBST(LINUX25)
+AM_CONDITIONAL(LIBLUSTRE, test x$host_cpu = xlib)
 
 # ---------- Red Hat 2.4.18 has iobuf->dovary --------------
 # But other kernels don't
 
 AC_MSG_CHECKING([if struct kiobuf has a dovary field])
-LUSTRE_MODULE_TRY_COMPILE(
-	[
-		#include <linux/iobuf.h>
-	],[
-		struct kiobuf iobuf;
-		iobuf.dovary = 1;
-	],[
-		AC_MSG_RESULT([yes])
-		AC_DEFINE(HAVE_KIOBUF_DOVARY, 1, [struct kiobuf has a dovary field])
-	],[
-		AC_MSG_RESULT([no])
-	])
-
-# ----------- 2.6.4 no longer has page->list ---------------
-AC_MSG_CHECKING([if struct page has a list field])
-LUSTRE_MODULE_TRY_COMPILE(
-	[
-		#include <linux/mm.h>
-	],[
-		struct page page;
-		&page.list;
-	],[
-		AC_MSG_RESULT([yes])
-		AC_DEFINE(HAVE_PAGE_LIST, 1, [struct page has a list field])
-	],[
-		AC_MSG_RESULT([no])
-	])
+AC_TRY_COMPILE([#define __KERNEL__
+		#include <linux/iobuf.h>],
+	       [struct kiobuf iobuf;
+		iobuf.dovary = 1;],
+	       [AC_MSG_RESULT([yes])
+                CPPFLAGS="$CPPFLAGS -DHAVE_KIOBUF_DOVARY"],
+	       [AC_MSG_RESULT([no])])
 
 # ---------- Red Hat 2.4.20 backports some 2.5 bits --------
 # This needs to run after we've defined the KCPPFLAGS
 
-AC_MSG_CHECKING([for kernel version])
-LUSTRE_MODULE_TRY_COMPILE(
-	[
-		#include <linux/sched.h>
-	],[
-		struct task_struct p;
-		p.sighand = NULL;
-	],[
-		AC_DEFINE(CONFIG_RH_2_4_20, 1, [this kernel contains Red Hat 2.4.20 patches])
-		AC_MSG_RESULT([redhat-2.4.20])
-	],[
-		AC_MSG_RESULT([$LINUXRELEASE])
-	])
+AC_MSG_CHECKING(for kernel version)
+AC_TRY_COMPILE([#define __KERNEL__
+             #include <linux/sched.h>],
+            [struct task_struct p;
+             p.sighand = NULL;],
+            [RH_2_4_20=1],
+            [RH_2_4_20=0])
+
+if test $RH_2_4_20 = 1; then
+	AC_MSG_RESULT(redhat-2.4.20)
+	CPPFLAGS="$CPPFLAGS -DCONFIG_RH_2_4_20"
+else
+	AC_MSG_RESULT($LINUXRELEASE)
+fi 
 
 # ---------- Red Hat 2.4.21 backports some more 2.5 bits --------
 
-AC_MSG_CHECKING([if kernel defines PDE])
+AC_MSG_CHECKING(if kernel defines PDE)
 HAVE_PDE="`grep -c 'proc_dir_entry..PDE' $LINUX/include/linux/proc_fs.h`"
 if test "$HAVE_PDE" != 0 ; then
-	AC_DEFINE(HAVE_PDE, 1, [the kernel defines PDE])
-	AC_MSG_RESULT([yes])
+  CPPFLAGS="$CPPFLAGS -DHAVE_PDE"
+  AC_MSG_RESULT(yes)
 else
-	AC_MSG_RESULT([no])
+  AC_MSG_RESULT(no)
 fi
 
-AC_MSG_CHECKING([if kernel passes struct file to direct_IO])
+AC_MSG_CHECKING(if kernel passes struct file to direct_IO)
 HAVE_DIO_FILE="`grep -c 'direct_IO.*struct file' $LINUX/include/linux/fs.h`"
 if test "$HAVE_DIO_FILE" != 0 ; then
-	AC_DEFINE(HAVE_DIO_FILE, 1, [the kernel passes struct file to direct_IO])
-	AC_MSG_RESULT(yes)
+  CPPFLAGS="$CPPFLAGS -DHAVE_DIO_FILE"
+  AC_MSG_RESULT(yes)
 else
-	AC_MSG_RESULT(no)
+  AC_MSG_RESULT(no)
 fi
-
-if test x$enable_modules != xno ; then
-	# ---------- modules? ------------------------
-	AC_MSG_CHECKING([for module support])
-	LUSTRE_MODULE_TRY_COMPILE(
-		[
-			#include <linux/config.h>
-		],[
-			#ifndef CONFIG_MODULES
-			#error CONFIG_MODULES not #defined
-			#endif
-		],[
-			AC_MSG_RESULT([yes])
-		],[
-			AC_MSG_RESULT([no])
-			AC_MSG_ERROR([module support is required to build Lustre kernel modules.])
-		])
-
-	# ---------- modversions? --------------------
-	AC_MSG_CHECKING([for MODVERSIONS])
-	LUSTRE_MODULE_TRY_COMPILE(
-		[
-			#include <linux/config.h>
-		],[
-			#ifndef CONFIG_MODVERSIONS
-			#error CONFIG_MODVERSIONS not #defined
-			#endif
-		],[
-			AC_MSG_RESULT([yes])
-		],[
-			AC_MSG_RESULT([no])
-		])
-
-	# ------------ preempt -----------------------
-	AC_MSG_CHECKING([if preempt is enabled])
-	LUSTRE_MODULE_TRY_COMPILE(
-		[
-			#include <linux/config.h>
-		],[
-			#ifndef CONFIG_PREEMPT
-			#error CONFIG_PREEMPT is not #defined
-			#endif
-		],[
-			AC_MSG_RESULT([yes])
-			AC_MSG_ERROR([Lustre does not support kernels with preempt enabled.])
-		],[
-			AC_MSG_RESULT([no])
-		])
-
-	if test $BACKINGFS = 'ext3' ; then
-		# --- Check that ext3 and ext3 xattr are enabled in the kernel
-		AC_MSG_CHECKING([that ext3 is enabled in the kernel])
-		LUSTRE_MODULE_TRY_COMPILE(
-			[
-				#include <linux/config.h>
-			],[
-				#ifndef CONFIG_EXT3_FS
-				#ifndef CONFIG_EXT3_FS_MODULE
-				#error CONFIG_EXT3_FS not #defined
-				#endif
-				#endif
-			],[
-				AC_MSG_RESULT([yes])
-			],[
-				AC_MSG_RESULT([no])
-				AC_MSG_ERROR([Lustre requires that ext3 is enabled in the kernel (CONFIG_EXT3_FS)])
-			])
-
-		AC_MSG_CHECKING([that extended attributes for ext3 are enabled in the kernel])
-		LUSTRE_MODULE_TRY_COMPILE(
-			[
-				#include <linux/config.h>
-			],[
-				#ifndef CONFIG_EXT3_FS_XATTR
-				#error CONFIG_EXT3_FS_XATTR not #defined
-				#endif
-			],[
-				AC_MSG_RESULT([yes])
-			],[
-				AC_MSG_RESULT([no])
-				AC_MSG_WARN([Lustre requires that extended attributes for ext3 are enabled in the kernel (CONFIG_EXT3_FS_XATTR.)])
-				AC_MSG_WARN([This build may fail.])
-			])
-	fi # BACKINGFS = ext3
-fi
-
-CPPFLAGS="-include \$(top_builddir)/include/config.h $CPPFLAGS"
-EXTRA_KCFLAGS="-include $PWD/include/config.h $EXTRA_KCFLAGS"
-AC_SUBST(EXTRA_KCFLAGS)
-
-#echo "KCPPFLAGS: $KCPPFLAGS"
-#echo "KCFLAGS: $KCFLAGS"
-#echo "LLCPPFLAGS: $LLCPPFLAGS"
-#echo "LLCFLAGS: $LLCFLAGS"
-#echo "MOD_LINK: $MOD_LINK"
-#echo "CFLAGS: $CFLAGS"
-#echo "CPPFLAGS: $CPPFLAGS"

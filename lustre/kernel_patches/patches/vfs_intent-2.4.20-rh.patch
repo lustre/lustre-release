@@ -286,7 +286,7 @@ Index: linux-2.4.20/fs/namei.c
  {
  	struct dentry *dentry;
  	struct inode *inode;
-@@ -526,18 +579,18 @@
+@@ -526,19 +579,18 @@
  				break;
  		}
  		/* This does the actual lookups.. */
@@ -304,10 +304,11 @@ Index: linux-2.4.20/fs/namei.c
  		}
  		/* Check mountpoints.. */
 -		while (d_mountpoint(dentry) && __follow_down(&nd->mnt, &dentry))
-+		while (d_mountpoint(dentry) && __follow_down(&nd->mnt, &dentry, NULL))
- 			;
+-			;
++		while (d_mountpoint(dentry) && __follow_down(&nd->mnt, &dentry, NULL));
  
  		err = -ENOENT;
+ 		inode = dentry->d_inode;
 @@ -549,7 +601,7 @@
  			goto out_dput;
  
@@ -376,13 +377,13 @@ Index: linux-2.4.20/fs/namei.c
 +				if (err)
 +					break;
 +				new = real_lookup(dentry->d_parent,
-+						  &dentry->d_name, 0, it);
++						  &dentry->d_name, 0, NULL);
++				d_invalidate(dentry);
++				dput(dentry);
 +				if (IS_ERR(new)) {
 +					err = PTR_ERR(new);
 +					break;
 +				}
-+				d_invalidate(dentry);
-+				dput(dentry);
 +				nd->dentry = new;
 +			}
 +			if (!nd->dentry->d_inode)
@@ -1010,7 +1011,7 @@ Index: linux-2.4.20/fs/namespace.c
  	int retval = 0;
  	int mnt_flags = 0;
  
-@@ -722,9 +729,11 @@
+@@ -722,10 +729,11 @@
  	flags &= ~(MS_NOSUID|MS_NOEXEC|MS_NODEV);
  
  	/* ... and get the mountpoint */
@@ -1020,10 +1021,11 @@ Index: linux-2.4.20/fs/namespace.c
 +	if (retval) {
 +		intent_release(&it);
  		return retval;
+-
 +	}
- 
  	if (flags & MS_REMOUNT)
  		retval = do_remount(&nd, flags & ~MS_REMOUNT, mnt_flags,
+ 				    data_page);
 @@ -736,6 +744,8 @@
  	else
  		retval = do_add_mount(&nd, type_page, flags, mnt_flags,
@@ -1281,7 +1283,7 @@ Index: linux-2.4.20/fs/open.c
 -	error = __user_walk(filename, LOOKUP_POSITIVE | LOOKUP_FOLLOW |
 -		      LOOKUP_DIRECTORY | LOOKUP_NOALT, &nd);
 +	error = __user_walk_it(filename, LOOKUP_POSITIVE | LOOKUP_FOLLOW |
-+			       LOOKUP_DIRECTORY | LOOKUP_NOALT, &nd, &it);
++		      LOOKUP_DIRECTORY | LOOKUP_NOALT, &nd, &it);
  	if (error)
  		goto out;
  
@@ -1678,7 +1680,7 @@ Index: linux-2.4.20/include/linux/fs.h
  #define ATTR_ATTR_FLAG	1024
 +#define ATTR_RAW	0x0800	/* file system, not vfs will massage attrs */
 +#define ATTR_FROM_OPEN	0x1000	/* called from open path, ie O_TRUNC */
-+#define ATTR_CTIME_SET	0x2000
++#define ATTR_CTIME_SET 0x2000
  
  /*
   * This is the Inode Attributes structure, used for notify_change().  It
@@ -1821,6 +1823,36 @@ Index: linux-2.4.20/include/linux/fs_struct.h
  		dput(old_pwd);
  		mntput(old_pwdmnt);
  	}
+Index: linux-2.4.20/kernel/ksyms.c
+===================================================================
+--- linux-2.4.20.orig/kernel/ksyms.c	Wed Mar 17 13:57:11 2004
++++ linux-2.4.20/kernel/ksyms.c	Wed Mar 17 13:57:11 2004
+@@ -297,6 +297,7 @@
+ EXPORT_SYMBOL(set_page_dirty);
+ EXPORT_SYMBOL(vfs_readlink);
+ EXPORT_SYMBOL(vfs_follow_link);
++EXPORT_SYMBOL(vfs_follow_link_it);
+ EXPORT_SYMBOL(page_readlink);
+ EXPORT_SYMBOL(page_follow_link);
+ EXPORT_SYMBOL(page_symlink_inode_operations);
+Index: linux-2.4.20/kernel/fork.c
+===================================================================
+--- linux-2.4.20.orig/kernel/fork.c	Wed Mar 17 13:57:05 2004
++++ linux-2.4.20/kernel/fork.c	Wed Mar 17 13:57:11 2004
+@@ -440,10 +440,13 @@
+ 		fs->umask = old->umask;
+ 		read_lock(&old->lock);
+ 		fs->rootmnt = mntget(old->rootmnt);
++		PIN(old->pwd, old->pwdmnt, 0);
++		PIN(old->root, old->rootmnt, 1);
+ 		fs->root = dget(old->root);
+ 		fs->pwdmnt = mntget(old->pwdmnt);
+ 		fs->pwd = dget(old->pwd);
+ 		if (old->altroot) {
++			PIN(old->altroot, old->altrootmnt, 1);
+ 			fs->altrootmnt = mntget(old->altrootmnt);
+ 			fs->altroot = dget(old->altroot);
+ 		} else {
 Index: linux-2.4.20/kernel/exit.c
 ===================================================================
 --- linux-2.4.20.orig/kernel/exit.c	Wed Mar 17 13:57:05 2004
@@ -1840,33 +1872,3 @@ Index: linux-2.4.20/kernel/exit.c
  			dput(fs->altroot);
  			mntput(fs->altrootmnt);
  		}
-Index: linux-2.4.20/kernel/fork.c
-===================================================================
---- linux-2.4.20.orig/kernel/fork.c	Wed Mar 17 13:57:05 2004
-+++ linux-2.4.20/kernel/fork.c	Wed Mar 17 13:57:11 2004
-@@ -440,10 +440,13 @@
- 		fs->umask = old->umask;
- 		read_lock(&old->lock);
- 		fs->rootmnt = mntget(old->rootmnt);
-+		PIN(old->pwd, old->pwdmnt, 0);
-+		PIN(old->root, old->rootmnt, 1);
- 		fs->root = dget(old->root);
- 		fs->pwdmnt = mntget(old->pwdmnt);
- 		fs->pwd = dget(old->pwd);
- 		if (old->altroot) {
-+			PIN(old->altroot, old->altrootmnt, 1);
- 			fs->altrootmnt = mntget(old->altrootmnt);
- 			fs->altroot = dget(old->altroot);
- 		} else {
-Index: linux-2.4.20/kernel/ksyms.c
-===================================================================
---- linux-2.4.20.orig/kernel/ksyms.c	Wed Mar 17 13:57:11 2004
-+++ linux-2.4.20/kernel/ksyms.c	Wed Mar 17 13:57:11 2004
-@@ -297,6 +297,7 @@
- EXPORT_SYMBOL(set_page_dirty);
- EXPORT_SYMBOL(vfs_readlink);
- EXPORT_SYMBOL(vfs_follow_link);
-+EXPORT_SYMBOL(vfs_follow_link_it);
- EXPORT_SYMBOL(page_readlink);
- EXPORT_SYMBOL(page_follow_link);
- EXPORT_SYMBOL(page_symlink_inode_operations);

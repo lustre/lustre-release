@@ -23,39 +23,15 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#define DEBUG_SUBSYSTEM S_PORTALS
 #include <portals/api-support.h>
-
-int ptl_init;
 
 /* Put some magic in the NI handle so uninitialised/zeroed handles are easy
  * to spot */
 #define NI_HANDLE_MAGIC  0xebc0de00
 #define NI_HANDLE_MASK   0x000000ff
-
-static struct nal_t *ptl_nal_table[NAL_MAX_NR];
-
-#ifdef __KERNEL__
-DECLARE_MUTEX(ptl_mutex);
-
-static void ptl_mutex_enter (void) 
-{
-        down (&ptl_mutex);
-}
-
-static void ptl_mutex_exit (void)
-{
-        up (&ptl_mutex);
-}
-#else
-static void ptl_mutex_enter (void)
-{
-}
-
-static void ptl_mutex_exit (void) 
-{
-}
-#endif
+#define MAX_NIS          8         
+static nal_t *ptl_interfaces[MAX_NIS];
+int ptl_num_interfaces = 0;
 
 nal_t *ptl_hndl2nal(ptl_handle_any_t *handle)
 {
@@ -70,188 +46,147 @@ nal_t *ptl_hndl2nal(ptl_handle_any_t *handle)
                 return NULL;
 
         idx &= NI_HANDLE_MASK;
-        
-        if (idx >= NAL_MAX_NR ||
-            ptl_nal_table[idx] == NULL ||
-            ptl_nal_table[idx]->nal_refct == 0)
-                return NULL;
+        if (idx < MAX_NIS)
+                return ptl_interfaces[idx];
 
-        return ptl_nal_table[idx];
-}
-
-int ptl_register_nal (ptl_interface_t interface, nal_t *nal)
-{
-        int    rc;
-        
-        ptl_mutex_enter();
-        
-        if (interface < 0 || interface >= NAL_MAX_NR)
-                rc = PTL_IFACE_INVALID;
-        else if (ptl_nal_table[interface] != NULL)
-                rc = PTL_IFACE_DUP;
-        else {
-                rc = PTL_OK;
-                ptl_nal_table[interface] = nal;
-                LASSERT(nal->nal_refct == 0);
-        }
-
-        ptl_mutex_exit();
-        return (rc);
-}
-
-void ptl_unregister_nal (ptl_interface_t interface)
-{
-        LASSERT(interface >= 0 && interface < NAL_MAX_NR);
-        LASSERT(ptl_nal_table[interface] != NULL);
-        LASSERT(ptl_nal_table[interface]->nal_refct == 0);
-        
-        ptl_mutex_enter();
-        
-        ptl_nal_table[interface] = NULL;
-
-        ptl_mutex_exit();
+        return NULL;
 }
 
 int ptl_ni_init(void)
 {
-        /* If this assertion fails, we need more bits in NI_HANDLE_MASK and
-         * to shift NI_HANDLE_MAGIC left appropriately */
-        LASSERT (NAL_MAX_NR <= (NI_HANDLE_MASK + 1));
+        int i;
+
+        LASSERT (MAX_NIS <= (NI_HANDLE_MASK + 1));
         
-        ptl_mutex_enter();
+        for (i = 0; i < MAX_NIS; i++)
+                ptl_interfaces[i] = NULL;
 
-        if (!ptl_init) {
-                /* NULL pointers, clear flags */
-                memset(ptl_nal_table, 0, sizeof(ptl_nal_table));
-#ifndef __KERNEL__
-                /* Kernel NALs register themselves when their module loads,
-                 * and unregister themselves when their module is unloaded.
-                 * Userspace NALs, are plugged in explicitly here... */
-                {
-                        extern nal_t procapi_nal;
-
-                        /* XXX pretend it's socknal to keep liblustre happy... */
-                        ptl_nal_table[SOCKNAL] = &procapi_nal;
-                        LASSERT (procapi_nal.nal_refct == 0);
-                }
-#endif
-                ptl_init = 1;
-        }
-
-        ptl_mutex_exit();
-        
         return PTL_OK;
 }
 
 void ptl_ni_fini(void)
 {
-        nal_t  *nal;
-        int     i;
+        int i;
 
-        ptl_mutex_enter();
+        for (i = 0; i < MAX_NIS; i++) {
+                nal_t *nal = ptl_interfaces[i];
+                if (!nal)
+                        continue;
 
-        if (ptl_init) {
-                for (i = 0; i < NAL_MAX_NR; i++) {
-
-                        nal = ptl_nal_table[i];
-                        if (nal == NULL)
-                                continue;
-                        
-                        if (nal->nal_refct != 0) {
-                                CWARN("NAL %d has outstanding refcount %d\n",
-                                      i, nal->nal_refct);
-                                nal->shutdown(nal);
-                        }
-                        
-                        ptl_nal_table[i] = NULL;
-                }
-
-                ptl_init = 0;
+                if (nal->shutdown)
+                        nal->shutdown(nal, i);
         }
-        
-        ptl_mutex_exit();
 }
 
-int PtlNIInit(ptl_interface_t interface, ptl_pid_t requested_pid,
-              ptl_ni_limits_t *desired_limits, ptl_ni_limits_t *actual_limits,
-              ptl_handle_ni_t *handle)
+#ifdef __KERNEL__
+DECLARE_MUTEX(ptl_ni_init_mutex);
+
+static void ptl_ni_init_mutex_enter (void) 
+{
+        down (&ptl_ni_init_mutex);
+}
+
+static void ptl_ni_init_mutex_exit (void)
+{
+        up (&ptl_ni_init_mutex);
+}
+
+#else
+static void ptl_ni_init_mutex_enter (void)
+{
+}
+
+static void ptl_ni_init_mutex_exit (void) 
+{
+}
+
+#endif
+
+int PtlNIInit(ptl_interface_t interface, ptl_pt_index_t ptl_size,
+              ptl_ac_index_t acl_size, ptl_pid_t requested_pid,
+              ptl_handle_ni_t * handle)
 {
         nal_t *nal;
-        int    i;
-        int    rc;
+        int i;
 
         if (!ptl_init)
                 return PTL_NO_INIT;
 
-        ptl_mutex_enter ();
+        ptl_ni_init_mutex_enter ();
 
-        if (interface == PTL_IFACE_DEFAULT) {
-                for (i = 0; i < NAL_MAX_NR; i++)
-                        if (ptl_nal_table[i] != NULL) {
-                                interface = i;
-                                break;
-                        }
-                /* NB if no interfaces are registered, 'interface' will
-                 * fail the valid test below */
-        }
-        
-        if (interface < 0 || 
-            interface >= NAL_MAX_NR ||
-            ptl_nal_table[interface] == NULL) {
-                GOTO(out, rc = PTL_IFACE_INVALID);
+        nal = interface(ptl_num_interfaces, ptl_size, acl_size, requested_pid);
+
+        if (!nal) {
+                ptl_ni_init_mutex_exit ();
+                return PTL_NAL_FAILED;
         }
 
-        nal = ptl_nal_table[interface];
-
-        CDEBUG(D_OTHER, "Starting up NAL (%d) refs %d\n", interface, nal->nal_refct);
-        rc = nal->startup(nal, requested_pid, desired_limits, actual_limits);
-
-        if (rc != PTL_OK) {
-                CERROR("Error %d starting up NAL %d, refs %d\n", rc,
-                       interface, nal->nal_refct);
-                GOTO(out, rc);
+        for (i = 0; i < ptl_num_interfaces; i++) {
+                if (ptl_interfaces[i] == nal) {
+                        nal->refct++;
+                        handle->nal_idx = (NI_HANDLE_MAGIC & ~NI_HANDLE_MASK) | i;
+                        CDEBUG(D_OTHER, "Returning existing NAL (%d)\n", i);
+                        ptl_ni_init_mutex_exit ();
+                        return PTL_OK;
+                }
         }
-        
-        if (nal->nal_refct != 0) {
-                /* Caller gets to know if this was the first ref or not */
-                rc = PTL_IFACE_DUP;
-        }
-        
-        nal->nal_refct++;
-        handle->nal_idx = (NI_HANDLE_MAGIC & ~NI_HANDLE_MASK) | interface;
+        nal->refct = 1;
 
- out:
-        ptl_mutex_exit ();
-        return rc;
+        if (ptl_num_interfaces >= MAX_NIS) {
+                if (nal->shutdown)
+                        nal->shutdown (nal, ptl_num_interfaces);
+                ptl_ni_init_mutex_exit ();
+                return PTL_NO_SPACE;
+        }
+
+        handle->nal_idx = (NI_HANDLE_MAGIC & ~NI_HANDLE_MASK) | ptl_num_interfaces;
+        ptl_interfaces[ptl_num_interfaces++] = nal;
+
+        ptl_eq_ni_init(nal);
+        ptl_me_ni_init(nal);
+
+        ptl_ni_init_mutex_exit ();
+        return PTL_OK;
 }
+
 
 int PtlNIFini(ptl_handle_ni_t ni)
 {
         nal_t *nal;
-        int    idx;
+        int idx;
+        int rc;
 
         if (!ptl_init)
                 return PTL_NO_INIT;
 
-        ptl_mutex_enter ();
+        ptl_ni_init_mutex_enter ();
 
         nal = ptl_hndl2nal (&ni);
         if (nal == NULL) {
-                ptl_mutex_exit ();
+                ptl_ni_init_mutex_exit ();
                 return PTL_HANDLE_INVALID;
         }
 
         idx = ni.nal_idx & NI_HANDLE_MASK;
 
-        LASSERT(nal->nal_refct > 0);
+        nal->refct--;
+        if (nal->refct > 0) {
+                ptl_ni_init_mutex_exit ();
+                return PTL_OK;
+        }
 
-        nal->nal_refct--;
+        ptl_me_ni_fini(nal);
+        ptl_eq_ni_fini(nal);
 
-        /* nal_refct == 0 tells nal->shutdown to really shut down */
-        nal->shutdown(nal);
+        rc = PTL_OK;
+        if (nal->shutdown)
+                rc = nal->shutdown(nal, idx);
 
-        ptl_mutex_exit ();
-        return PTL_OK;
+        ptl_interfaces[idx] = NULL;
+        ptl_num_interfaces--;
+
+        ptl_ni_init_mutex_exit ();
+        return rc;
 }
 
 int PtlNIHandle(ptl_handle_any_t handle_in, ptl_handle_ni_t * ni_out)

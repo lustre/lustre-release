@@ -36,7 +36,7 @@ case $child in
   *) child="b_$child"
 esac
 
-if [ "$parent" != "HEAD" -a "`cat CVS/Tag 2> /dev/null`" != "T$parent" ]; then
+if [ "$parent" != "HEAD" -a "`cat CVS/Tag`" != "T$parent" ]; then
         echo "This script must be run within the $parent branch"
 	exit 1
 fi

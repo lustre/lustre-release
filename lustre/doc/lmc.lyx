@@ -197,7 +197,7 @@ The arguments required are:
 --nettype\SpecialChar ~
 <type> This can be 
 \series bold 
-tcp, elan, gm.
+tcp, elan, gm, scimac.
 \layout Description
 
 --nid\SpecialChar ~

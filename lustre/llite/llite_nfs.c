@@ -61,13 +61,14 @@ static struct inode * search_inode_for_lustre(struct super_block *sb,
         fid.generation = generation;
         fid.f_type = mode;
 
-        rc = mdc_getattr(sbi->ll_mdc_exp, &fid, valid, eadatalen, &req);
+        rc = md_getattr(sbi->ll_mdc_exp, &fid, valid, eadatalen, &req);
         if (rc) {
                 CERROR("failure %d inode %lu\n", rc, ino);
                 return ERR_PTR(rc);
         }
 
-        rc = ll_prep_inode(sbi->ll_osc_exp, &inode, req, 0, sb);
+        rc = ll_prep_inode(sbi->ll_osc_exp, sbi->ll_mdc_exp,
+                           &inode, req, 0, sb);
         if (rc) {
                 ptlrpc_req_finished(req);
                 return ERR_PTR(rc);
@@ -81,8 +82,8 @@ extern struct dentry_operations ll_d_ops;
 
 static struct dentry *ll_iget_for_nfs(struct super_block *sb, unsigned long ino,
                                       __u32 generation, umode_t mode)
-{
-        struct inode *inode;
+{                                      
+        struct inode *inode;      
         struct dentry *result;
         struct list_head *lp;
 

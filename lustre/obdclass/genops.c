@@ -91,8 +91,8 @@ void class_put_type(struct obd_type *type)
         module_put(type->typ_ops->o_owner);
 }
 
-int class_register_type(struct obd_ops *ops, struct lprocfs_vars *vars,
-                        char *name)
+int class_register_type(struct obd_ops *ops, struct md_ops *md_ops,
+                        struct lprocfs_vars *vars, char *name)
 {
         struct obd_type *type;
         int rc = 0;
@@ -112,10 +112,17 @@ int class_register_type(struct obd_ops *ops, struct lprocfs_vars *vars,
 
         OBD_ALLOC(type->typ_ops, sizeof(*type->typ_ops));
         OBD_ALLOC(type->typ_name, strlen(name) + 1);
-        if (type->typ_ops == NULL || type->typ_name == NULL)
+        if (md_ops)
+                OBD_ALLOC(type->typ_md_ops, sizeof(*type->typ_md_ops));
+        if (type->typ_ops == NULL || type->typ_name == NULL ||
+                        (md_ops && type->typ_md_ops == NULL))
                 GOTO (failed, rc);
 
         *(type->typ_ops) = *ops;
+        if (md_ops)
+                *(type->typ_md_ops) = *md_ops;
+        else
+                type->typ_md_ops = NULL;
         strcpy(type->typ_name, name);
 
 #ifdef LPROCFS
@@ -139,6 +146,8 @@ int class_register_type(struct obd_ops *ops, struct lprocfs_vars *vars,
                 OBD_FREE(type->typ_name, strlen(name) + 1);
         if (type->typ_ops != NULL)
                 OBD_FREE (type->typ_ops, sizeof (*type->typ_ops));
+        if (type->typ_md_ops != NULL)
+                OBD_FREE (type->typ_md_ops, sizeof (*type->typ_md_ops));
         OBD_FREE(type, sizeof(*type));
         RETURN(rc);
 }
@@ -172,6 +181,8 @@ int class_unregister_type(char *name)
         OBD_FREE(type->typ_name, strlen(name) + 1);
         if (type->typ_ops != NULL)
                 OBD_FREE(type->typ_ops, sizeof(*type->typ_ops));
+        if (type->typ_md_ops != NULL)
+                OBD_FREE (type->typ_md_ops, sizeof (*type->typ_md_ops));
         OBD_FREE(type, sizeof(*type));
         RETURN(0);
 } /* class_unregister_type */
@@ -537,7 +548,7 @@ struct obd_import *class_new_import(void)
 void class_destroy_import(struct obd_import *import)
 {
         LASSERT(import != NULL);
-        LASSERT(import != LP_POISON);
+        LASSERT((unsigned long)import != 0x5a5a5a5a);
 
         class_handle_unhash(&import->imp_handle);
 

@@ -76,11 +76,13 @@ extern struct file_operations ll_pgcache_seq_fops;
 #define LLI_F_PREFER_EXTENDED_SIZE      2
 struct ll_inode_info {
         struct lov_stripe_md   *lli_smd;
+        struct mea             *lli_mea;
         char                   *lli_symlink_name;
         struct semaphore        lli_open_sem;
         __u64                   lli_maxbytes;
         __u64                   lli_io_epoch;
         unsigned long           lli_flags;
+        __u32                   lli_mds;
 
         /* this lock protects s_d_w and p_w_ll */
         spinlock_t              lli_lock;
@@ -88,11 +90,6 @@ struct ll_inode_info {
         struct list_head        lli_pending_write_llaps;
 
         struct list_head        lli_close_item;
-
-        struct file_operations *ll_save_ifop;
-        struct file_operations *ll_save_ffop;
-        struct file_operations *ll_save_wfop;
-        struct file_operations *ll_save_wrfop;
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
         struct inode            lli_vfs_inode;
 #endif
@@ -147,6 +144,6 @@ enum {
 #include <linux/lustre_idl.h>
 #endif /* __KERNEL__ */
 
-#include <lustre/lustre_user.h>
+#include <linux/lustre_user.h>
 
 #endif

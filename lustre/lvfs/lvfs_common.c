@@ -27,7 +27,7 @@
 
 #include <linux/lvfs.h>
 
-struct dentry *lvfs_fid2dentry(struct lvfs_run_ctxt *ctxt, __u64 id,
+struct dentry *lvfs_fid2dentry(struct obd_run_ctxt *ctxt, __u64 id,
                                __u32 gen, __u64 gr, void *data)
 {
         return ctxt->cb_ops.l_fid2dentry(id, gen, gr, data);

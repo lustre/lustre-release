@@ -1,11 +1,9 @@
-/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
- * vim:expandtab:shiftwidth=8:tabstop=8:
- */
 #include <stdio.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 
+#include <portals/api-support.h> /* needed for ptpctl.h */
 #include <portals/ptlctl.h>	/* needed for parse_dump */
 
 
@@ -23,18 +21,7 @@ struct obd_import;
 
 unsigned int portal_subsystem_debug = ~0 - (S_PORTALS | S_QSWNAL | S_SOCKNAL |
                                             S_GMNAL | S_IBNAL);
-
-void get_random_bytes(void *ptr, int size)
-{
-        char *p = ptr;
-
-        if (size < 1)
-                return;
-
-        while(size--)
-                *p++ = rand();
-}
-
+                                                                                                                        
 void *inter_module_get(char *arg)
 {
         if (!strcmp(arg, "tcpnal_ni"))
@@ -56,19 +43,17 @@ char *portals_nid2str(int nal, ptl_nid_t nid, char *str)
         case TCPNAL:
                 /* userspace NAL */
         case SOCKNAL:
-                snprintf(str, PTL_NALFMT_SIZE - 1, "%u:%u.%u.%u.%u",
-                         (__u32)(nid >> 32), HIPQUAD(nid));
+                sprintf(str, "%u:%d.%d.%d.%d", (__u32)(nid >> 32),
+                        HIPQUAD(nid));
                 break;
         case QSWNAL:
         case GMNAL:
         case IBNAL:
-                snprintf(str, PTL_NALFMT_SIZE - 1, "%u:%u",
-                         (__u32)(nid >> 32), (__u32)nid);
+        case SCIMACNAL:
+                sprintf(str, "%u:%u", (__u32)(nid >> 32), (__u32)nid);
                 break;
         default:
-                snprintf(str, PTL_NALFMT_SIZE - 1, "?%d? %llx",
-                         nal, (long long)nid);
-                break;
+                return NULL;
         }
         return str;
 }
@@ -85,16 +70,46 @@ struct pingcli_args {
 
 struct task_struct *current;
 
-int
-libcfs_nal_cmd(struct portals_cfg *pcfg)
+/* portals interfaces */
+ptl_handle_ni_t *
+kportal_get_ni (int nal)
 {
-        CERROR("empty function!!!\n");
-        return 0;
+        switch (nal)
+        {
+        case SOCKNAL:
+                return &tcpnal_ni;
+        default:
+                return NULL;
+        }
 }
 
-int in_group_p(gid_t gid)
+inline void
+kportal_put_ni (int nal)
 {
+        return;
+}
+
+int
+kportal_nal_cmd(struct portals_cfg *pcfg)
+{
+#if 0
+        __u32 nal = pcfg->pcfg_nal;
+        int rc = -EINVAL;
+
+        ENTRY;
+
+        down(&nal_cmd_sem);
+        if (nal > 0 && nal <= NAL_MAX_NR && nal_cmd[nal].nch_handler) {
+                CDEBUG(D_IOCTL, "calling handler nal: %d, cmd: %d\n", nal, 
+                       pcfg->pcfg_command);
+                rc = nal_cmd[nal].nch_handler(pcfg, nal_cmd[nal].nch_private);
+        }
+        up(&nal_cmd_sem);
+        RETURN(rc);
+#else
+        CERROR("empty function!!!\n");
         return 0;
+#endif
 }
 
 int init_current(int argc, char **argv)
@@ -112,17 +127,20 @@ int init_lib_portals()
 	int max_interfaces;
         int rc;
 
-        rc = PtlInit(&max_interfaces);
+        PtlInit(&max_interfaces);
+        rc = PtlNIInit(procbridge_interface, 0, 0, 0, &tcpnal_ni);
         if (rc != 0) {
                 CERROR("ksocknal: PtlNIInit failed: error %d\n", rc);
+                PtlFini();
                 RETURN (rc);
         }
+        PtlNIDebug(tcpnal_ni, ~0);
         return rc;
 }
 
 extern int class_handle_ioctl(unsigned int cmd, unsigned long arg);
 
-int liblustre_ioctl(int dev_id, unsigned int opc, void *ptr)
+int liblustre_ioctl(int dev_id, int opc, void *ptr)
 {
 	int   rc = -EINVAL;
 	
@@ -331,6 +349,7 @@ int main(int argc, char **argv)
         if (init_current(argc, argv) ||
 	    init_obdclass() || init_lib_portals() ||
 	    ptlrpc_init() ||
+	    ldlm_init() ||
 	    mdc_init() ||
 	    lov_init() ||
 	    osc_init() ||

@@ -1,59 +1,9 @@
 tbd  Cluster File Systems, Inc. <info@clusterfs.com>
-       * version 1.2.x
-       * bug fixes
-	- clear page cache after eviction (2766)
-	- don't dereference NULL peer_ni in ldlm_handle_ast_error (3258)
-	- don't allow unlinking open directory if it isn't empty (2904)
-	- handle partial page writes in filter; fix 512b direct IO (3138)
-	- handle page cache pages in cleanup path for 2.6 (3335)
-	- leave liblustre's partial write handling to filter (3274)
-	- chose better nal ids in liblustre (3292)
-	- initialize liblustre with uid/group membership (2862)
-       * miscellania
-	- drop scimac NAL (unmaintained)
+	* version 1.2.x
+	* Bug fixes
+ 	- clear page cache after eviction  (2766)
 
 tbd  Cluster File Systems, Inc. <info@clusterfs.com>
-       * version 1.2.2
-       * bug fixes
-	- don't copy lvb into (possibly NULL) reply on error (2983)
-	- don't deref dentry after dput, don't free lvb on error (2922)
-	- use the kms to determine writeback rpc length (2947)
-	- increment oti_logcookies when osc is inactive (2948)
-	- update client's i_blocks count via lvb messages (2543)
-	- handle intent open/close of special files properly (1557)
-	- mount MDS with errors=remount-ro, like obdfilter (2009)
-	- initialize lock handle to avoid ASSERT on error cleanup (3057)
-	- don't use cancelling-locks' kms values (2947)
-	- use highest lock extent for kms, not last one (2925)
-	- don't dereference ERR_PTR() dentry in error handling path (3107)
-	- fix thread race in portals_debug_dumplog() (3122)
-	- create lprocfs device entries at setup instead of at attach (1519)
-	- common AST error handler, don't evict client on completion race (3145)
-	- zero nameidata in detach_mnt in 2.6 (3118)
-	- verify d_inode after revalidate_special is valid in 2.6 (3116)
-	- use lustre_put_super() to handle zconf unmounts in 2.6 (3064)
-	- initialize RPC timeout timer earlier for 2.6 (3219)
-	- don't dereference NULL reply buffer if mdc_close was never sent (2410)
-	- print nal/nid for unknown nid (3258)
-	- additional checks for oscc recovery before doing precreate (3284)
-	- fix ll_extent_lock() error return code for 64-bit systems (3043)
-	- don't crash in mdc_close for bad permissions on open (3285)
-	- zero i_rdev for non-device files (3147)
-	- clear page->private before handing to FS, better assertion (3119)
-	- fix incorrect decref of invalidated dentry (2350)
-	- don't hold journal transaction open across create RPC (3313)
-	- update atime on MDS at close time (3265)
-	- close LDAP connection when recovering to avoid server load (3315)
-	- update iopen-2.6 patch with fixes from 2399,2517,2904 (3301)
-	- don't leak open file on MDS after open resend (3325)
-	- serialize filter_precreate and filter_destroy_precreated (3329)
-       * miscellania
-	- allow default OST striping configuration per directory (1414)
-	- fix compilation for qswnal for 2.6 kernels (3125)
-	- increase maximum number of MDS request buffers for large systems
-	- change liblustreapi to be useful for external progs like lfsck (3098)
-
-2004-03-22  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.1
        * bug fixes
 	- fixes for glimpse AST timeouts / incorrectly 0-sized files (2818)
@@ -75,8 +25,6 @@ tbd  Cluster File Systems, Inc. <info@clusterfs.com>
 	- don't evict page beyond end of stripe extent (2925)
 	- don't oops on a deleted current working directory (2399)
 	- handle hard links to targets without a parent properly (2517)
-	- don't dereference NULL lock when racing during eviction (2867)
-	- don't grow lock extents when lots of conflicting locks (2919)
 
 2004-03-04  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.0

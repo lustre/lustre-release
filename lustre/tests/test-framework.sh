@@ -27,11 +27,10 @@ usage() {
 init_test_env() {
     export LUSTRE=`absolute_path $LUSTRE`
     export TESTSUITE=`basename $0 .sh`
-    export XMLCONFIG=${XMLCONFIG:-${TESTSUITE}.xml}
+    export XMLCONFIG="${TESTSUITE}.xml"
     export LTESTDIR=${LTESTDIR:-$LUSTRE/../ltest}
 
     [ -d /r ] && export ROOT=/r
-    export TMP=${TMP:-$ROOT/tmp}
 
     export PATH=:$PATH:$LUSTRE/utils:$LUSTRE/tests
     export LLMOUNT=${LLMOUNT:-"llmount"}
@@ -39,7 +38,6 @@ init_test_env() {
     export LMC=${LMC:-"lmc"}
     export LCTL=${LCTL:-"$LUSTRE/utils/lctl"}
     export CHECKSTAT="${CHECKSTAT:-checkstat} "
-    export FSYTPE=${FSTYPE:-"ext3"}
 
     # Paths on remote nodes, if different 
     export RLUSTRE=${RLUSTRE:-$LUSTRE}
@@ -87,12 +85,12 @@ zconf_mount() {
     do_node $client mkdir $mnt 2> /dev/null || :
 
     if [ -x /sbin/mount.lustre ] ; then
-	do_node $client mount -t lustre -o nettype=$NETTYPE `facet_active_host mds`:/mds_svc/client_facet $mnt || return 1
+	do_node $client mount -t lustre -o nettype=$NETTYPE `facet_active_host mds1`:/mds1_svc/client_facet $mnt || return 1
     else
        # this is so cheating
        do_node $client $LCONF --nosetup --node client_facet $XMLCONFIG  > /dev/null || return 2
        $LCONF --nosetup --node client_facet $XMLCONFIG
-       do_node $client $LLMOUNT `facet_active_host mds`:/mds_svc/client_facet $mnt -o nettype=$NETTYPE|| return 4
+       do_node $client $LLMOUNT `facet_active_host mds1`:/mds1_svc/client_facet $mnt -o nettype=$NETTYPE|| return 4
     fi
 
     [ -d /r ] && $LCTL modules > /r/tmp/ogdb-`hostname`
@@ -170,7 +168,7 @@ replay_barrier() {
 
 mds_evict_client() {
     UUID=`cat /proc/fs/lustre/mdc/*_MNT_*/uuid`
-    do_facet mds "echo $UUID > /proc/fs/lustre/mds/mds_svc/evict_client"
+    do_facet mds "echo $UUID > /proc/fs/lustre/mds/mds1_svc/evict_client"
 }
 
 fail() {
@@ -279,6 +277,16 @@ do_node() {
 do_facet() {
     facet=$1
     shift
+
+    if [ "$facet" == "mds" ]; then
+        if [ "$MDSCOUNT" -gt 1 ]; then
+            for num in `seq $MDSCOUNT`; do
+                HOST=`facet_active_host $facet$num`
+                do_node $HOST $@
+            done
+           return
+        fi
+    fi
     HOST=`facet_active_host $facet`
     do_node $HOST $@
 }
@@ -298,14 +306,14 @@ add_mds() {
     shift
     rm -f ${facet}active
     add_facet $facet
-    do_lmc --add mds --node ${facet}_facet --mds ${facet}_svc --fstype $FSTYPE $*
+    do_lmc --add mds --node ${facet}_facet --mds ${facet}_svc $*
 }
 
 add_mdsfailover() {
     facet=$1
     shift
     add_facet ${facet}failover  --lustre_upcall $UPCALL
-    do_lmc --add mds  --node ${facet}failover_facet --mds ${facet}_svc --fstype $FSTYPE $*
+    do_lmc --add mds  --node ${facet}failover_facet --mds ${facet}_svc $*
 }
 
 add_ost() {
@@ -313,14 +321,14 @@ add_ost() {
     shift
     rm -f ${facet}active
     add_facet $facet
-    do_lmc --add ost --node ${facet}_facet --ost ${facet}_svc --fstype $FSTYPE $*
+    do_lmc --add ost --node ${facet}_facet --ost ${facet}_svc $*
 }
 
 add_ostfailover() {
     facet=$1
     shift
     add_facet ${facet}failover
-    do_lmc --add ost --failover --node ${facet}failover_facet --ost ${facet}_svc --fstype $FSTYPE $*
+    do_lmc --add ost --failover --node ${facet}failover_facet --ost ${facet}_svc $*
 }
 
 add_lov() {
@@ -328,16 +336,26 @@ add_lov() {
     mds_facet=$2
     shift; shift
     do_lmc --add lov --mds ${mds_facet}_svc --lov $lov $*
-    
+}
+
+add_lov_to_lmv() {
+    lov=$1
+    lmv=$2
+    shift; shift
+    do_lmc --add lov --lmv $lmv --lov $lov $*
+}
+
+add_lmv() {
+    lmv=$1
+    shift;
+    do_lmc --add lmv --lmv $lmv $*
 }
 
 add_client() {
     facet=$1
-    mds=$2
-    shift; shift
+    shift;
     add_facet $facet --lustre_upcall $UPCALL
-    do_lmc --add mtpt --node ${facet}_facet --mds ${mds}_svc $*
-
+    do_lmc --add mtpt --node ${facet}_facet $*
 }
 
 
@@ -458,18 +476,6 @@ cancel_lru_locks() {
 	    grep [0-9] $d/lock_unused_count
 	fi
     done
-}
-
-
-pgcache_empty() {
-    for a in /proc/fs/lustre/llite/*/dump_page_cache; do
-        if [ `wc -l $a | awk '{print $1}'` -gt 1 ]; then
-                echo there is still data in page cache $a ?
-                cat $a;
-                return 1;
-        fi
-    done
-    return 0
 }
 
 ##################################

@@ -170,7 +170,6 @@ int jt_lcfg_setup(int argc, char **argv)
                 lcfg.lcfg_inllen3 = strlen(argv[3]) + 1;
                 lcfg.lcfg_inlbuf3 = argv[3];
         }
-	
         if (argc > 4) {
                 lcfg.lcfg_inllen4 = strlen(argv[4]) + 1;
                 lcfg.lcfg_inlbuf4 = argv[4];
@@ -426,6 +425,68 @@ int jt_lcfg_lov_setup(int argc, char **argv)
         lcfg.lcfg_inllen1 = sizeof(desc);
         lcfg.lcfg_inlbuf1 = (char *)&desc;
         lcfg.lcfg_inllen2 = desc.ld_tgt_count * sizeof(*uuidarray);
+        lcfg.lcfg_inlbuf2 = (char *)uuidarray;
+
+        rc = lcfg_ioctl(argv[0], OBD_DEV_ID, &lcfg);
+        if (rc)
+                fprintf(stderr, "error: %s: ioctl error: %s\n",
+                        jt_cmdname(argv[0]), strerror(rc = errno));
+out:
+        free(uuidarray);
+        return rc;
+}
+
+int jt_lcfg_lmv_setup(int argc, char **argv)
+{
+        struct lustre_cfg lcfg;
+        struct lmv_desc desc;
+        struct obd_uuid *uuidarray, *ptr;
+        int rc, i;
+
+        LCFG_INIT(lcfg, LCFG_SETUP, lcfg_devname);
+
+        if (argc <= 2)
+                return CMD_HELP;
+
+        if (strlen(argv[1]) > sizeof(desc.ld_uuid) - 1) {
+                fprintf(stderr,
+                        "error: %s: LMV uuid '%s' longer than "LPSZ" chars\n",
+                        jt_cmdname(argv[0]), argv[1], sizeof(desc.ld_uuid) - 1);
+                return -EINVAL;
+        }
+
+        memset(&desc, 0, sizeof(desc));
+        obd_str2uuid(&desc.ld_uuid, argv[1]);
+        desc.ld_count = argc - 2;
+        printf("LMV: %d uuids:\n", desc.ld_count);
+
+        /* NOTE: it is possible to overwrite the default striping parameters,
+         *       but EXTREME care must be taken when saving the OST UUID list.
+         *       It must be EXACTLY the same, or have only additions at the
+         *       end of the list, or only overwrite individual OST entries
+         *       that are restored from backups of the previous OST.
+         */
+        uuidarray = calloc(desc.ld_count, sizeof(*uuidarray));
+        if (!uuidarray) {
+                fprintf(stderr, "error: %s: no memory for %d UUIDs\n",
+                        jt_cmdname(argv[0]), desc.ld_count);
+                rc = -ENOMEM;
+                goto out;
+        }
+        for (i = 2, ptr = uuidarray; i < argc; i++, ptr++) {
+                if (strlen(argv[i]) >= sizeof(*ptr)) {
+                        fprintf(stderr, "error: %s: arg %d (%s) too long\n",
+                                jt_cmdname(argv[0]), i, argv[i]);
+                        rc = -EINVAL;
+                        goto out;
+                }
+                printf("  %s\n", argv[i]);
+                strcpy((char *)ptr, argv[i]);
+        }
+
+        lcfg.lcfg_inllen1 = sizeof(desc);
+        lcfg.lcfg_inlbuf1 = (char *)&desc;
+        lcfg.lcfg_inllen2 = desc.ld_count * sizeof(*uuidarray);
         lcfg.lcfg_inlbuf2 = (char *)uuidarray;
 
         rc = lcfg_ioctl(argv[0], OBD_DEV_ID, &lcfg);

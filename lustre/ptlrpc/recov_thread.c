@@ -133,8 +133,9 @@ EXPORT_SYMBOL(llcd_send);
  * log record for the deletion.  The commit callback calls this
  * function
  */
-int llog_obd_repl_cancel(struct llog_ctxt *ctxt, int count,
-                         struct llog_cookie *cookies, int flags, void *data)
+int llog_obd_repl_cancel(struct llog_ctxt *ctxt,
+                         struct lov_stripe_md *lsm, int count,
+                         struct llog_cookie *cookies, int flags)
 {
         struct llog_canceld_ctxt *llcd;
         int rc = 0;
@@ -203,7 +204,7 @@ int llog_obd_repl_sync(struct llog_ctxt *ctxt, struct obd_export *exp)
                 }
                 up(&ctxt->loc_sem);
         } else {
-                rc = llog_cancel(ctxt, 0, NULL, OBD_LLOG_FL_SENDNOW, NULL);
+                rc = llog_cancel(ctxt, NULL, 0, NULL, OBD_LLOG_FL_SENDNOW);
         }
 
         RETURN(rc);
@@ -231,8 +232,8 @@ static int log_commit_thread(void *arg)
         SIGNAL_MASK_UNLOCK(current, flags);
 
         spin_lock(&lcm->lcm_thread_lock);
-        THREAD_NAME(current->comm, sizeof(current->comm) - 1,
-                    "ll_log_comt_%02d", atomic_read(&lcm->lcm_thread_total));
+        THREAD_NAME(current->comm, "ll_log_commit_%d",
+                    atomic_read(&lcm->lcm_thread_total));
         atomic_inc(&lcm->lcm_thread_total);
         spin_unlock(&lcm->lcm_thread_lock);
         unlock_kernel();
@@ -590,7 +591,7 @@ int llog_repl_connect(struct llog_ctxt *ctxt, int count,
         ctxt->loc_llcd = llcd;
         up(&ctxt->loc_sem);
 
-        rc = llog_recovery_generic(ctxt, ctxt->loc_proc_cb, logid);
+        rc = llog_recovery_generic(ctxt, ctxt->llog_proc_cb, logid);
         if (rc != 0)
                 CERROR("error recovery process: %d\n", rc);
 
@@ -600,8 +601,9 @@ EXPORT_SYMBOL(llog_repl_connect);
 
 #else /* !__KERNEL__ */
 
-int llog_obd_repl_cancel(struct llog_ctxt *ctxt, int count,
-                         struct llog_cookie *cookies, int flags, void *data)
+int llog_obd_repl_cancel(struct llog_ctxt *ctxt,
+                         struct lov_stripe_md *lsm, int count,
+                         struct llog_cookie *cookies, int flags)
 {
         return 0;
 }

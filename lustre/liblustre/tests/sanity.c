@@ -105,8 +105,6 @@ void t4()
 #define PAGE_SIZE (4096)
 #define _npages (2048)
 
-#define MAX_PATH_LENGTH 4096
-
 static int _buffer[_npages][PAGE_SIZE/sizeof(int)];
 
 /* pos:   i/o start from
@@ -284,11 +282,11 @@ void t10()
 void t11()
 {
         char *base="/mnt/lustre";
-        char path[MAX_PATH_LENGTH], path2[MAX_PATH_LENGTH];
+        char path[4096], path2[4096];
         int i, j, level = 5, nreg = 5;
         ENTRY("deep tree");
 
-        safe_strncpy(path, base, MAX_PATH_LENGTH);
+        strcpy(path, base);
 
         for (i = 0; i < level; i++) {
                 for (j = 0; j < nreg; j++) {
@@ -301,7 +299,7 @@ void t11()
         }
 
         for (i = level; i > 0; i--) {
-                safe_strncpy(path, base, MAX_PATH_LENGTH);
+                strcpy(path, base);
                 for (j = 1; j < i; j++)
                         strcat(path, "/dir");
                 

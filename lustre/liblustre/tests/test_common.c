@@ -313,16 +313,3 @@ void t_ls(int fd, char *buf, int size)
 		EXIT(-1);
 	}
 }
-
-char *safe_strncpy(char *dst, char *src, int max_size)
-{
-       int src_size;
-       src_size=strlen(src);
-       if (src_size >= max_size) {
-	 src_size=max_size-1;
-       }
-       memcpy(dst, src, src_size);
-       dst[src_size]=0;
-
-       return(dst);
-}

@@ -11,7 +11,7 @@ LUSTRE=${LUSTRE:-`dirname $0`/..}
 
 init_test_env $@
 
-. ${CONFIG:=$LUSTRE/tests/cfg/local.sh}
+. ${CONFIG:=$LUSTRE/tests/cfg/lmv.sh}
 
 # Skip these tests
 ALWAYS_EXCEPT=""
@@ -19,16 +19,30 @@ ALWAYS_EXCEPT=""
 
 gen_config() {
     rm -f $XMLCONFIG
-    add_mds mds --dev $MDSDEV --size $MDSSIZE
-    if [ ! -z "$mdsfailover_HOST" ]; then
-	 add_mdsfailover mds --dev $MDSDEV --size $MDSSIZE
+
+    if [ "$MDSCOUNT" -gt 1 ]; then
+        add_lmv lmv1
+        for num in `seq $MDSCOUNT`; do
+            MDSDEV=$TMP/mds${num}-`hostname`
+            add_mds mds$num --dev $MDSDEV --size $MDSSIZE --master --lmv lmv1
+        done
+        add_lov_to_lmv lov1 lmv1 --stripe_sz $STRIPE_BYTES \
+	    --stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0
+        add_ost ost --lov lov1 --dev $OSTDEV --size $OSTSIZE
+        add_ost ost2 --lov lov1 --dev ${OSTDEV}-2 --size $OSTSIZE
+        add_client client --lmv lmv1 --lov lov1 --path $MOUNT
+    else
+        add_mds mds1 --dev $MDSDEV --size $MDSSIZE
+        if [ ! -z "$mdsfailover_HOST" ]; then
+	     add_mdsfailover mds --dev $MDSDEV --size $MDSSIZE
+        fi
+
+        add_lov lov1 mds1 --stripe_sz $STRIPE_BYTES \
+	    --stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0
+        add_ost ost --lov lov1 --dev $OSTDEV --size $OSTSIZE
+        add_ost ost2 --lov lov1 --dev ${OSTDEV}-2 --size $OSTSIZE
+        add_client client --mds mds1_svc --lov lov1 --path $MOUNT
     fi
-    
-    add_lov lov1 mds --stripe_sz $STRIPE_BYTES \
-	--stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0
-    add_ost ost --lov lov1 --dev $OSTDEV --size $OSTSIZE
-    add_ost ost2 --lov lov1 --dev ${OSTDEV}-2 --size $OSTSIZE
-    add_client client mds --lov lov1 --path $MOUNT
 }
 
 build_test_filter
@@ -41,7 +55,13 @@ cleanup() {
         fail mds
     fi
     zconf_umount `hostname` $MOUNT
-    stop mds ${FORCE} $MDSLCONFARGS
+    if [ "$MDSCOUNT" -gt 1 ]; then
+        for num in `seq $MDSCOUNT`; do
+            stop mds$num ${FORCE} $MDSLCONFARGS
+        done
+    else
+        stop mds ${FORCE} $MDSLCONFARGS
+    fi
     stop ost2 ${FORCE} --dump cleanup.log
     stop ost ${FORCE} --dump cleanup.log
 }
@@ -61,8 +81,15 @@ setup() {
     start ost --reformat $OSTLCONFARGS 
     start ost2 --reformat $OSTLCONFARGS 
     [ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
-    start mds $MDSLCONFARGS --reformat
-    grep " $MOUNT " /proc/mounts || zconf_mount `hostname` $MOUNT
+    if [ "$MDSCOUNT" -gt 1 ]; then
+        for num in `seq $MDSCOUNT`; do
+            start mds$num $MDSLCONFARGS --reformat
+        done
+    else
+        start mds $MDSLCONFARGS --reformat
+    fi
+    zconf_mount `hostname` $MOUNT
+    echo 0x3f0410 > /proc/sys/portals/debug
 }
 
 $SETUP
@@ -74,24 +101,15 @@ fi
 mkdir -p $DIR
 
 test_0() {
-    replay_barrier mds
-    fail mds
+    replay_barrier mds1
+    fail mds1
 }
 run_test 0 "empty replay"
 
-test_0b() {
-    # this test attempts to trigger a race in the precreation code, 
-    # and must run before any other objects are created on the filesystem
-    fail ost
-    createmany -o $DIR/$tfile 20 || return 1
-    unlinkmany $DIR/$tfile 20 || return 2
-}
-run_test 0b "ensure object created after recover exists. (3284)"
-
 test_1() {
-    replay_barrier mds
+    replay_barrier mds2
     mcreate $DIR/$tfile
-    fail mds
+    fail mds2
     $CHECKSTAT -t file $DIR/$tfile || return 1
     rm $DIR/$tfile
 }
@@ -387,7 +405,6 @@ test_18() {
     sleep 1 
     rm -f $DIR/$tfile
     touch $DIR/$tfile-2 || return 1
-    echo "pid: $pid will close"
     kill -USR1 $pid
     wait $pid || return 2
 
@@ -833,19 +850,19 @@ run_test 41 "read from a valid osc while other oscs are invalid"
 
 # test MDS recovery after ost failure
 test_42() {
-    blocks=`df $MOUNT | tail -n 1 | awk '{ print $1 }'`
+    blocks=`df $MOUNT | tail -1 | awk '{ print $1 }'`
     createmany -o $DIR/$tfile-%d 800
     replay_barrier ost
     unlinkmany $DIR/$tfile-%d 0 400
     facet_failover ost
     
     # osc is evicted, fs is smaller
-    blocks_after=`df $MOUNT | tail -n 1 | awk '{ print $1 }'`
+    blocks_after=`df $MOUNT | tail -1 | awk '{ print $1 }'`
     [ $blocks_after -lt $blocks ] || return 1
     echo wait for MDS to timeout and recover
     sleep $((TIMEOUT * 2))
     unlinkmany $DIR/$tfile-%d 400 400
-    $CHECKSTAT -t file $DIR/$tfile-* && return 2 || true
+    $CHECKSTAT -t file $DIR/$tfile-* && return 1 || true
 }
 run_test 42 "recovery after ost failure"
 
@@ -874,41 +891,6 @@ test_44() {
     return 0
 }
 run_test 44 "race in target handle connect"
-
-# Handle failed close
-test_45() {
-    mdcdev=`awk '/mds_svc_MNT/ {print $1}' < /proc/fs/lustre/devices`
-    $LCTL --device $mdcdev recover
-
-    multiop $DIR/$tfile O_c &
-    pid=$!
-    sleep 1
-
-    # This will cause the CLOSE to fail before even 
-    # allocating a reply buffer
-    $LCTL --device $mdcdev deactivate
-
-    # try the close
-    kill -USR1 $pid
-    wait $pid || return 1
-
-    $LCTL --device $mdcdev activate
-
-    $CHECKSTAT -t file $DIR/$tfile || return 2
-    return 0
-}
-run_test 45 "Handle failed close"
-
-test_46() {
-    dmesg -c >/dev/null
-    drop_reply "touch $DIR/$tfile"
-    fail mds
-    # ironically, the previous test, 45, will cause a real forced close,
-    # so just look for one for this test
-    dmesg | grep -i "force closing client file handle for $tfile" && return 1
-    return 0
-}
-run_test 46 "Don't leak file handle after open resend (3325)"
 
 equals_msg test complete, cleaning up
 $CLEANUP

@@ -1,5 +1,3 @@
 Makefile
-autoMakefile
-autoMakefile.in
-.*.cmd
-.depend
+Makefile.in
+.*.o.cmd

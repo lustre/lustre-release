@@ -229,7 +229,7 @@ tcpnal_hello (int sockfd, ptl_nid_t *nid, int type, __u64 incarnation)
         hdr.type    = __cpu_to_le32 (PTL_MSG_HELLO);
 
         hdr.msg.hello.type = __cpu_to_le32 (type);
-        hdr.msg.hello.incarnation = __cpu_to_le64(incarnation);
+        hdr.msg.hello.incarnation = 0;
 
         /* Assume sufficient socket buffering for this message */
         rc = syscall(SYS_write, sockfd, &hdr, sizeof(hdr));
@@ -315,8 +315,6 @@ connection force_tcp_connection(manager m,
     connection conn;
     struct sockaddr_in addr;
     unsigned int id[2];
-    struct timeval tv;
-    __u64 incarnation;
 
     port = tcpnal_acceptor_port;
 
@@ -355,11 +353,8 @@ connection force_tcp_connection(manager m,
         setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &option, sizeof(option));
 #endif
    
-        gettimeofday(&tv, NULL);
-        incarnation = (((__u64)tv.tv_sec) * 1000000) + tv.tv_usec;
-
         /* say hello */
-        if (tcpnal_hello(fd, &peernid, SOCKNAL_CONN_ANY, incarnation))
+        if (tcpnal_hello(fd, &peernid, SOCKNAL_CONN_ANY, 0))
             exit(-1);
 
         conn = allocate_connection(m, ip, port, fd);

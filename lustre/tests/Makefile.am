@@ -1,11 +1,11 @@
 # Lustre test Makefile
-AM_CPPFLAGS = $(LLCPPFLAGS) -D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64
-AM_CFLAGS = $(LLCFLAGS)
+DEFS=
+CPPFLAGS = -I. -I$(top_srcdir)/portals/include/ -I$(top_srcdir)/include -D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64
+CFLAGS := -g -Wall
 # LDADD = -lldap
 # LDADD := -lreadline -ltermcap # -lefence
 EXTRA_DIST = $(pkgexample_SCRIPTS) $(noinst_SCRIPTS) $(noinst_DATA) \
 	sanity.sh rundbench
-if TESTS
 pkgexample_SCRIPTS = llmount.sh llmountcleanup.sh llecho.sh llechocleanup.sh
 pkgexample_SCRIPTS += local.sh echo.sh uml.sh lov.sh
 noinst_DATA =
@@ -15,15 +15,13 @@ noinst_SCRIPTS += runfailure-ost runiozone runregression-net.sh runtests
 noinst_SCRIPTS += sanity.sh rundbench
 noinst_PROGRAMS = openunlink testreq truncate directio openme writeme open_delay
 noinst_PROGRAMS += tchmod toexcl fsx test_brw openclose createdestroy
-noinst_PROGRAMS += stat createmany statmany multifstat createtest mlink utime
+noinst_PROGRAMS += stat createmany statmany multifstat createtest mlink utime cmknod
 noinst_PROGRAMS += opendirunlink opendevunlink unlinkmany fchdir_test checkstat
 noinst_PROGRAMS += wantedi statone runas openfile getdents mkdirdeep o_directory
-noinst_PROGRAMS += small_write multiop sleeptest ll_sparseness_verify cmknod
-noinst_PROGRAMS += ll_sparseness_write mrename ll_dirstripe_verify copy_attr
-noinst_PROGRAMS += openfilleddirunlink
+noinst_PROGRAMS += small_write multiop sleeptest ll_sparseness_verify
+noinst_PROGRAMS += ll_sparseness_write mrename
 # noinst_PROGRAMS += ldaptest
 bin_PROGRAMS = mcreate munlink mkdirmany iopentest1 iopentest2
-endif # TESTS
 
 # ldaptest_SOURCES = ldaptest.c
 tchmod_SOURCES = tchmod.c
@@ -57,7 +55,6 @@ wantedi_SOURCES = wantedi.c
 createtest_SOURCES = createtest.c
 open_delay_SOURCES = open_delay.c
 opendirunlink_SOURCES = opendirunlink.c
-openfilleddirunlink_SOURCES = openfilleddirunlink.c
 opendevunlink_SOURCES = opendevunlink.c
 fchdir_test_SOURCES = fchdir_test.c
 getdents_SOURCES=getdents.c
@@ -65,19 +62,17 @@ o_directory_SOURCES = o_directory.c
 utime_SOURCES = utime.c
 cmknod_SOURCES = cmknod.c
 mkdirdeep_SOURCES = mkdirdeep.c
-mkdirdeep_LDADD=-L$(top_builddir)/portals/utils -lptlctl $(LIBREADLINE)
+mkdirdeep_LDADD=-L$(top_builddir)/portals/utils -lptlctl
+mkdirdeep_CPPFLAGS=-I$(top_srcdir)/portals/include
 small_write_SOURCES = small_write.c
 sleeptest_SOURCES = sleeptest.c
 #write_append_truncate_SOURCES=write_append_truncate.c
 #write_append_truncate_CC=mpicc
 #createmany_mpi_SOURCES=createmany_mpi.c
 #createmany_mpi_CC=mpicc
-#parallel_grouplock_SOURCES=parallel_grouplock.c lp_utils.c
-#parallel_grouplock_CC=mpicc
-copy_attr_SOURCES= copy_attr.c
-copy_attr_LDADD= -lattr
 
 #sanity test 
 ll_sparseness_verify_SOURCES = ll_sparseness_verify.c
 ll_sparseness_write_SOURCES = ll_sparseness_write.c
-ll_dirstripe_verify_SOURCE = ll_dirstripe_verify.c
+
+include $(top_srcdir)/Rules

@@ -1,7 +1,7 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Lustre Light name resolution
+ * Lustre Light Super operations
  *
  *  Copyright (c) 2002, 2003 Cluster File Systems, Inc.
  *
@@ -140,7 +140,6 @@ int llu_mdc_blocking_ast(struct ldlm_lock *lock,
         case LDLM_CB_CANCELING: {
                 struct inode *inode = llu_inode_from_lock(lock);
                 struct llu_inode_info *lli;
-                __u64 bits = lock->l_policy_data.l_inodebits.bits;
 
                 /* Invalidate all dentries associated with this inode */
                 if (inode == NULL)
@@ -148,16 +147,14 @@ int llu_mdc_blocking_ast(struct ldlm_lock *lock,
 
                 lli =  llu_i2info(inode);
 
-                if (bits & MDS_INODELOCK_UPDATE)
-                        clear_bit(LLI_F_HAVE_MDS_SIZE_LOCK, &lli->lli_flags);
+                clear_bit(LLI_F_HAVE_MDS_SIZE_LOCK, &lli->lli_flags);
 
                 if (lock->l_resource->lr_name.name[0] != lli->lli_st_ino ||
                     lock->l_resource->lr_name.name[1] != lli->lli_st_generation) {
                         LDLM_ERROR(lock, "data mismatch with ino %lu/%lu",
                                    lli->lli_st_ino, lli->lli_st_generation);
                 }
-                if (S_ISDIR(lli->lli_st_mode) &&
-                    (bits & MDS_INODELOCK_UPDATE)) {
+                if (S_ISDIR(lli->lli_st_mode)) {
                         CDEBUG(D_INODE, "invalidating inode %lu\n",
                                lli->lli_st_ino);
 
@@ -319,11 +316,7 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
 
         /* NB 1 request reference will be taken away by ll_intent_lock()
          * when I return
-         */
-        /* FIXME: for CREAT, libsysio require the inode must be generated here
-         * currently here we don't know the whether the create is successful
-         * or failed on mds. thus blinded return -EPERM in llu_iget(). need
-         * a fix later.
+         * Note: libsysio require the inode must be generated here
          */
         if ((it->it_op & IT_CREAT) || !it_disposition(it, DISP_LOOKUP_NEG)) {
                 struct lustre_md md;
@@ -335,11 +328,11 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
                         RETURN(rc);
 
                 inode = llu_iget(parent->i_fs, &md);
-                if (!inode || IS_ERR(inode)) {
+                if (!inode) {
                         /* free the lsm if we allocated one above */
                         if (md.lsm != NULL)
                                 obd_free_memmd(sbi->ll_osc_exp, &md.lsm);
-                        RETURN(inode ? PTR_ERR(inode) : -ENOMEM);
+                        RETURN(-ENOMEM);
                 } else if (md.lsm != NULL &&
                            llu_i2info(inode)->lli_smd != md.lsm) {
                         obd_free_memmd(sbi->ll_osc_exp, &md.lsm);

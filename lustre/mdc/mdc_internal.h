@@ -21,8 +21,6 @@ void mdc_link_pack(struct ptlrpc_request *req, int offset,
 void mdc_rename_pack(struct ptlrpc_request *req, int offset,
                      struct mdc_op_data *data,
                      const char *old, int oldlen, const char *new, int newlen);
-void mdc_close_pack(struct ptlrpc_request *req, int offset, struct obdo *oa,
-		    int valid, struct obd_client_handle *och);
 
 struct mdc_open_data {
         struct obd_client_handle *mod_och;

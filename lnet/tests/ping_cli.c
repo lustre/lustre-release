@@ -46,7 +46,7 @@ static struct pingcli_data *client = NULL;
 static int count = 0;
 
 static void
-pingcli_shutdown(ptl_handle_ni_t nih, int err)
+pingcli_shutdown(int err)
 {
         int rc;
 
@@ -70,7 +70,7 @@ pingcli_shutdown(ptl_handle_ni_t nih, int err)
                         if ((rc = PtlMEUnlink (client->me)))
                                 PDEBUG ("PtlMEUnlink", rc);
                 case 3:
-                        PtlNIFini(nih);
+                        kportal_put_ni (client->args->ioc_nal);
 
                 case 4:
                         /* Free our buffers */
@@ -84,7 +84,7 @@ pingcli_shutdown(ptl_handle_ni_t nih, int err)
         CDEBUG (D_OTHER, "ping client released resources\n");
 } /* pingcli_shutdown() */
 
-static void pingcli_callback(ptl_event_t *ev)
+static int pingcli_callback(ptl_event_t *ev)
 {
         int i, magic;
         i = *(int *)(ev->mem_desc.start + ev->offset + sizeof(unsigned));
@@ -92,19 +92,21 @@ static void pingcli_callback(ptl_event_t *ev)
 
         if(magic != 0xcafebabe) {
                 printk ("LustreError: Unexpected response \n");
+                return 1;
         }
 
         if((i == count) || !count)
                 wake_up_process (client->tsk);
         else
                 printk ("LustreError: Received response after timeout for %d\n",i);
+        return 1;
 }
 
 
 static struct pingcli_data *
 pingcli_start(struct portal_ioctl_data *args)
 {
-        ptl_handle_ni_t nih = PTL_INVALID_HANDLE;
+        ptl_handle_ni_t *nip;
         unsigned ping_head_magic = PING_HEADER_MAGIC;
         unsigned ping_bulk_magic = PING_BULK_MAGIC;
         int rc;
@@ -125,7 +127,7 @@ pingcli_start(struct portal_ioctl_data *args)
         if (client->outbuf == NULL)
         {
                 CERROR ("Unable to allocate out_buf ("LPSZ" bytes)\n", STDSIZE);
-                pingcli_shutdown (nih, 4);
+                pingcli_shutdown (4);
                 return (NULL);
         }
 
@@ -134,24 +136,23 @@ pingcli_start(struct portal_ioctl_data *args)
         if (client->inbuf == NULL)
         {
                 CERROR ("Unable to allocate out_buf ("LPSZ" bytes)\n", STDSIZE);
-                pingcli_shutdown (nih, 4);
+                pingcli_shutdown (4);
                 return (NULL);
         }
 
         /* Aquire and initialize the proper nal for portals. */
-        rc = PtlNIInit(args->ioc_nal, 0, NULL, NULL, &nih);
-        if (rc != PTL_OK || rc != PTL_IFACE_DUP)
+        if ((nip = kportal_get_ni (args->ioc_nal)) == NULL)
         {
                 CERROR ("NAL %d not loaded\n", args->ioc_nal);
-                pingcli_shutdown (nih, 4);
+                pingcli_shutdown (4);
                 return (NULL);
         }
 
         /* Based on the initialization aquire our unique portal ID. */
-        if ((rc = PtlGetId (nih, &client->myid)))
+        if ((rc = PtlGetId (*nip, &client->myid)))
         {
                 CERROR ("PtlGetId error %d\n", rc);
-                pingcli_shutdown (nih, 2);
+                pingcli_shutdown (2);
                 return (NULL);
         }
 
@@ -163,20 +164,20 @@ pingcli_start(struct portal_ioctl_data *args)
         client->id_remote.nid = args->ioc_nid;
         client->id_remote.pid = 0;
 
-        if ((rc = PtlMEAttach (nih, PTL_PING_CLIENT,
+        if ((rc = PtlMEAttach (*nip, PTL_PING_CLIENT,
                    client->id_local, 0, ~0, PTL_RETAIN,
                    PTL_INS_AFTER, &client->me)))
         {
                 CERROR ("PtlMEAttach error %d\n", rc);
-                pingcli_shutdown (nih, 2);
+                pingcli_shutdown (2);
                 return (NULL);
         }
 
         /* Allocate the event queue for this network interface */
-        if ((rc = PtlEQAlloc (nih, 64, pingcli_callback, &client->eq)))
+        if ((rc = PtlEQAlloc (*nip, 64, pingcli_callback, &client->eq)))
         {
                 CERROR ("PtlEQAlloc error %d\n", rc);
-                pingcli_shutdown (nih, 2);
+                pingcli_shutdown (2);
                 return (NULL);
         }
 
@@ -195,7 +196,7 @@ pingcli_start(struct portal_ioctl_data *args)
         if ((rc = PtlMDAttach (client->me, client->md_in_head,
                               PTL_UNLINK, &client->md_in_head_h))) {
                 CERROR ("PtlMDAttach error %d\n", rc);
-                pingcli_shutdown (nih, 1);
+                pingcli_shutdown (1);
                 return (NULL);
         }
         /* Setup the outgoing ping header */
@@ -211,10 +212,10 @@ pingcli_start(struct portal_ioctl_data *args)
         count = 0;
 
         /* Bind the outgoing ping header */
-        if ((rc=PtlMDBind (nih, client->md_out_head,
+        if ((rc=PtlMDBind (*nip, client->md_out_head,
                            PTL_UNLINK, &client->md_out_head_h))) {
                 CERROR ("PtlMDBind error %d\n", rc);
-                pingcli_shutdown (nih, 1);
+                pingcli_shutdown (1);
                 return NULL;
         }
         while ((args->ioc_count - count)) {
@@ -229,7 +230,7 @@ pingcli_start(struct portal_ioctl_data *args)
                 if((rc = PtlPut (client->md_out_head_h, PTL_NOACK_REQ,
                           client->id_remote, PTL_PING_SERVER, 0, 0, 0, 0))) {
                          PDEBUG ("PtlPut (header)", rc);
-                         pingcli_shutdown (nih, 1);
+                         pingcli_shutdown (1);
                          return NULL;
                 }
                 printk ("Lustre: sent msg no %d", count);
@@ -254,7 +255,7 @@ pingcli_start(struct portal_ioctl_data *args)
                 PORTAL_FREE (client->inbuf,
                                (args->ioc_size + STDSIZE) * args->ioc_count);
 
-        pingcli_shutdown (nih, 2);
+        pingcli_shutdown (2);
 
         /* Success! */
         return NULL;

@@ -56,7 +56,7 @@ static struct ioc_dev ioc_dev_list[10];
 struct dump_hdr {
 	int magic;
 	int dev_id;
-        unsigned int opc;
+	int opc;
 };
 
 char *dump_filename;
@@ -101,7 +101,7 @@ open_ioc_dev(int dev_id)
 
 
 static int 
-do_ioctl(int dev_id, unsigned int opc, void *buf)
+do_ioctl(int dev_id, int opc, void *buf)
 {
 	int fd, rc;
 	
@@ -131,7 +131,7 @@ get_dump_file()
  * used, but for now it will assumed whatever app reads the file will
  * know what to do. */
 int 
-dump(int dev_id, unsigned int opc, void *buf)
+dump(int dev_id, int opc, void *buf)
 {
 	FILE *fp;
 	struct dump_hdr dump_hdr;
@@ -212,7 +212,7 @@ set_ioctl_dump(char * file)
 }
 
 int
-l_ioctl(int dev_id, unsigned int opc, void *buf)
+l_ioctl(int dev_id, int opc, void *buf)
 {
         return current_ioc_handler(dev_id, opc, buf);
 }
@@ -226,7 +226,7 @@ l_ioctl(int dev_id, unsigned int opc, void *buf)
  * each device used in the dump.
  */
 int 
-parse_dump(char * dump_file, ioc_handler_t ioc_func)
+parse_dump(char * dump_file, int (*ioc_func)(int dev_id, int opc, void *))
 {
 	int line =0;
 	struct stat st;

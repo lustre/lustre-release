@@ -40,9 +40,6 @@
 # define RECALC_SIGPENDING         recalc_sigpending()
 # define CURRENT_SECONDS           CURRENT_TIME
 
-# define kernel_text_address(addr) is_kernel_text_address(addr)
-extern int is_kernel_text_address(unsigned long addr);
-
 #else /* 2.4.x */
 
 # define SIGNAL_MASK_LOCK(task, flags)                                  \
@@ -54,30 +51,17 @@ extern int is_kernel_text_address(unsigned long addr);
 # define RECALC_SIGPENDING         recalc_sigpending(current)
 # define CURRENT_SECONDS           CURRENT_TIME
 
-# define kernel_text_address(addr) is_kernel_text_address(addr)
-extern int is_kernel_text_address(unsigned long addr);
-
 #endif
 
 #if defined(__arch_um__) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,4,20))
-# define THREAD_NAME(comm, len, fmt, a...)                              \
-        snprintf(comm, len, fmt "|%d", ## a, current->thread.extern_pid)
+# define THREAD_NAME(comm, fmt, a...)                                   \
+        sprintf(comm, fmt "|%d", ## a, current->thread.extern_pid)
 #elif defined(__arch_um__) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-# define THREAD_NAME(comm, len, fmt, a...)                              \
-        snprintf(comm, len,fmt"|%d", ## a,current->thread.mode.tt.extern_pid)
+# define THREAD_NAME(comm, fmt, a...)                                   \
+        sprintf(comm, fmt "|%d", ## a, current->thread.mode.tt.extern_pid)
 #else
-# define THREAD_NAME(comm, len, fmt, a...)                              \
-        snprintf(comm, len, fmt, ## a)
-#endif
-
-#ifdef HAVE_PAGE_LIST
-/* 2.4 alloc_page users can use page->list */
-#define PAGE_LIST_ENTRY list
-#define PAGE_LIST(page) ((page)->list)
-#else
-/* 2.6 alloc_page users can use page->lru */
-#define PAGE_LIST_ENTRY lru
-#define PAGE_LIST(page) ((page)->lru)
+# define THREAD_NAME(comm, fmt, a...)                                   \
+        sprintf(comm, fmt, ## a)
 #endif
 
 #endif /* _PORTALS_COMPAT_H */

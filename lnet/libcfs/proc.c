@@ -62,18 +62,16 @@ extern char debug_daemon_file_path[1024];
 extern char portals_upcall[1024];
 
 #define PSDEV_PORTALS  (0x100)
-enum {
-        PSDEV_DEBUG = 1,          /* control debugging */
-        PSDEV_SUBSYSTEM_DEBUG,    /* control debugging */
-        PSDEV_PRINTK,             /* force all errors to console */
-        PSDEV_CONSOLE,            /* allow _any_ messages to console */
-        PSDEV_DEBUG_PATH,         /* crashdump log location */
-        PSDEV_DEBUG_DUMP_PATH,    /* crashdump tracelog location */
-        PSDEV_PORTALS_UPCALL,     /* User mode upcall script  */
-        PSDEV_PORTALS_MEMUSED,    /* bytes currently PORTAL_ALLOCated */
-};
+#define PSDEV_DEBUG           1   /* control debugging */
+#define PSDEV_SUBSYSTEM_DEBUG 2   /* control debugging */
+#define PSDEV_PRINTK          3   /* force all errors to console */
+#define PSDEV_CONSOLE         4   /* allow _any_ messages to console */
+#define PSDEV_DEBUG_PATH      5   /* crashdump log location */
+#define PSDEV_DEBUG_DUMP_PATH 6   /* crashdump tracelog location */
+#define PSDEV_PORTALS_UPCALL  7   /* User mode upcall script  */
 
-static struct ctl_table portals_table[] = {
+#define PORTALS_PRIMARY_CTLCNT 7
+static struct ctl_table portals_table[PORTALS_PRIMARY_CTLCNT + 1] = {
         {PSDEV_DEBUG, "debug", &portal_debug, sizeof(int), 0644, NULL,
          &proc_dointvec},
         {PSDEV_SUBSYSTEM_DEBUG, "subsystem_debug", &portal_subsystem_debug,
@@ -90,8 +88,6 @@ static struct ctl_table portals_table[] = {
         {PSDEV_PORTALS_UPCALL, "upcall", portals_upcall,
          sizeof(portals_upcall), 0644, NULL, &proc_dostring,
          &sysctl_string},
-        {PSDEV_PORTALS_MEMUSED, "memused", (int *)&portal_kmemory.counter,
-         sizeof(int), 0644, NULL, &proc_dointvec},
         {0}
 };
 

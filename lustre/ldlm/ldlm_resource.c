@@ -50,15 +50,15 @@ static int ldlm_proc_dump_ns(struct file *file, const char *buffer,
 int ldlm_proc_setup(void)
 {
         int rc;
-        struct lprocfs_vars list[] = {
+        struct lprocfs_vars list[] = { 
                 { "dump_namespaces", NULL, ldlm_proc_dump_ns, NULL },
                 { NULL }};
         ENTRY;
         LASSERT(ldlm_ns_proc_dir == NULL);
 
         ldlm_type_proc_dir = lprocfs_register(OBD_LDLM_DEVICENAME,
-                                              proc_lustre_root,
-                                              NULL, NULL);
+                                               proc_lustre_root,
+                                               NULL, NULL);
         if (IS_ERR(ldlm_type_proc_dir)) {
                 CERROR("LProcFS failed in ldlm-init\n");
                 rc = PTR_ERR(ldlm_type_proc_dir);
@@ -87,9 +87,9 @@ int ldlm_proc_setup(void)
 
         RETURN(0);
 
-err_ns:
+err_ns:        
         lprocfs_remove(ldlm_ns_proc_dir);
-err_type:
+err_type:        
         lprocfs_remove(ldlm_type_proc_dir);
 err:
         ldlm_type_proc_dir = NULL;
@@ -148,7 +148,7 @@ static int lprocfs_write_lru_size(struct file *file, const char *buffer,
                        ns->ns_name);
                 tmp = ns->ns_max_unused;
                 ns->ns_max_unused = 0;
-                ldlm_cancel_lru(ns, LDLM_SYNC);
+                ldlm_cancel_lru(ns);
                 ns->ns_max_unused = tmp;
                 return count;
         }
@@ -158,7 +158,7 @@ static int lprocfs_write_lru_size(struct file *file, const char *buffer,
                ns->ns_name, ns->ns_max_unused, (unsigned int)tmp);
         ns->ns_max_unused = (unsigned int)tmp;
 
-        ldlm_cancel_lru(ns, LDLM_ASYNC);
+        ldlm_cancel_lru(ns);
 
         return count;
 }
@@ -534,7 +534,7 @@ ldlm_resource_get(struct ldlm_namespace *ns, struct ldlm_resource *parent,
 struct ldlm_resource *ldlm_resource_getref(struct ldlm_resource *res)
 {
         LASSERT(res != NULL);
-        LASSERT(res != LP_POISON);
+        LASSERT(res != (void *)0x5a5a5a5a);
         atomic_inc(&res->lr_refcount);
         CDEBUG(D_INFO, "getref res: %p count: %d\n", res,
                atomic_read(&res->lr_refcount));
@@ -550,7 +550,7 @@ int ldlm_resource_putref(struct ldlm_resource *res)
         CDEBUG(D_INFO, "putref res: %p count: %d\n", res,
                atomic_read(&res->lr_refcount) - 1);
         LASSERT(atomic_read(&res->lr_refcount) > 0);
-        LASSERT(atomic_read(&res->lr_refcount) < LI_POISON);
+        LASSERT(atomic_read(&res->lr_refcount) < 0x5a5a5a5a);
 
         if (atomic_dec_and_test(&res->lr_refcount)) {
                 struct ldlm_namespace *ns = res->lr_namespace;

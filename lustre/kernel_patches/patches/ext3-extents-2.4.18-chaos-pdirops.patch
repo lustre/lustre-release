@@ -1762,7 +1762,7 @@
 @@ -12,7 +12,8 @@ O_TARGET := ext3.o
  export-objs :=	ext3-exports.o
  
- obj-y    := balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o iopen.o \
+ obj-y    := balloc.o iopen.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o \
 -		ioctl.o namei.o super.o symlink.o xattr.o hash.o ext3-exports.o
 +		ioctl.o namei.o super.o symlink.o xattr.o hash.o ext3-exports.o \
 +		extents.o

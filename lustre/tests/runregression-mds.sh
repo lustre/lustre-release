@@ -23,11 +23,11 @@ cleanup() {
 
 [ -z "$*" ] && fail "usage: $0 [--reformat] <conf>.xml" 1
 
-OSCMT="`mount | awk '/ lustre_lite / { print $3 }' | tail -n 1`"
+OSCMT="`mount | awk '/ lustre_lite / { print $3 }' | tail -1`"
 if [ -z "$OSCMT" ]; then
 	$LCONF $@ || exit 1
         trap cleanup 0
-	OSCMT="`mount | awk '/ lustre_lite / { print $3 }' | tail -n 1`"
+	OSCMT="`mount | awk '/ lustre_lite / { print $3 }' | tail -1`"
 	[ -z "$OSCMT" ] && fail "no lustre filesystem mounted" 1
 fi
 
@@ -42,7 +42,7 @@ while [ "$1" ]; do
 done
 
 OSCTMP=`echo $OSCMT | tr "/" "."`
-USED=`df | awk "/$OSCTMP/ { print \\$3 }" | tail -n 1`
+USED=`df | awk "/$OSCTMP/ { print \\$3 }" | tail -1`
 USED=`expr $USED + 16`	# Some space for the status file
 
 THREADS=1
@@ -58,7 +58,7 @@ done
 
 rm -f $ENDRUN
 
-NOWUSED=`df | awk "/$OSCTMP/ { print \\$3 }" | tail -n 1`
+NOWUSED=`df | awk "/$OSCTMP/ { print \\$3 }" | tail -1`
 if [ $NOWUSED -gt $USED ]; then
 	echo "Space not all freed: now ${NOWUSED}kB, was ${USED}kB." 1>&2
 	echo "This is normal on BA OSTs, because of subdirectories." 1>&2

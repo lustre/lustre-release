@@ -10,7 +10,7 @@
 #ifndef LOV_INTERNAL_H
 #define LOV_INTERNAL_H
 
-#include <lustre/lustre_user.h>
+#include <linux/lustre_user.h>
 
 #define LAP_MAGIC 8200
 
@@ -30,9 +30,9 @@ int lov_alloc_memmd(struct lov_stripe_md **lsmp, int stripe_count, int pattern);
 void lov_free_memmd(struct lov_stripe_md **lsmp);
 
 /* lov_log.c */
-int lov_llog_init(struct obd_device *obd, struct obd_device *tgt,
-                  int count, struct llog_catid *logid);
-int lov_llog_finish(struct obd_device *obd, int count);
+int lov_llog_init(struct obd_device *, struct obd_llogs *,
+                  struct obd_device *, int, struct llog_catid *);
+int lov_llog_finish(struct obd_device *, struct obd_llogs *, int);
 
 /* lov_pack.c */
 int lov_packmd(struct obd_export *exp, struct lov_mds_md **lmm,

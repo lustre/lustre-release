@@ -16,6 +16,7 @@
 #include <linux/obd_class.h>
 #include <linux/lustre_log.h>
 #include <portals/list.h>
+#include "llog_internal.h"
 
 static int str2logid(struct llog_logid *logid, char *str, int len)
 {
@@ -340,7 +341,7 @@ int llog_ioctl(struct llog_ctxt *ctxt, int cmd, struct obd_ioctl_data *data)
         case OBD_IOC_LLOG_REMOVE: {
                 struct llog_logid plain;
 
-                if (handle->lgh_hdr->llh_flags & LLOG_F_IS_PLAIN) {
+                if (handle->lgh_hdr->llh_flags & cpu_to_le32(LLOG_F_IS_PLAIN)) {
                         err = llog_destroy(handle);
                         if (!err)
                                 llog_free_handle(handle);
@@ -376,8 +377,8 @@ out:
 }
 EXPORT_SYMBOL(llog_ioctl);
 
-int llog_catalog_list(struct obd_device *obd, int count,
-                      struct obd_ioctl_data *data)
+int llog_catlog_list(struct obd_device *obd, int count,
+                     struct obd_ioctl_data *data)
 {
         int size, i;
         struct llog_catid *idarray;
@@ -393,8 +394,7 @@ int llog_catalog_list(struct obd_device *obd, int count,
                 RETURN(-ENOMEM);
         memset(idarray, 0, size);
 
-        rc = llog_get_cat_list(&obd->obd_lvfs_ctxt, obd->obd_fsops,
-                               name, count, idarray);
+        rc = llog_get_cat_list(obd, obd, name, count, idarray);
         if (rc) {
                 OBD_FREE(idarray, size);
                 RETURN(rc);
@@ -418,4 +418,4 @@ int llog_catalog_list(struct obd_device *obd, int count,
         RETURN(0);
 
 }
-EXPORT_SYMBOL(llog_catalog_list);
+EXPORT_SYMBOL(llog_catlog_list);

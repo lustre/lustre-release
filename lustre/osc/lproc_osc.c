@@ -108,13 +108,14 @@ int osc_rd_max_dirty_mb(char *page, char **start, off_t off, int count,
 {
         struct obd_device *dev = data;
         struct client_obd *cli = &dev->u.cli;
-        unsigned val;
+        int val;
+        int rc;
 
         spin_lock(&cli->cl_loi_list_lock);
         val = cli->cl_dirty_max >> 20;
+        rc = snprintf(page, count, "%d\n", val);
         spin_unlock(&cli->cl_loi_list_lock);
-
-        return snprintf(page, count, "%u\n", val);
+        return rc;
 }
 
 int osc_wr_max_dirty_mb(struct file *file, const char *buffer,
@@ -305,7 +306,7 @@ static int osc_rpc_stats_seq_show(struct seq_file *seq, void *v)
         rpcs = cli->cl_brw_in_flight;
         r = cli->cl_pending_r_pages;
         w = cli->cl_pending_w_pages;
-
+                                                                                
         seq_printf(seq, "snapshot_time:         %lu:%lu (secs:usecs)\n",
                    now.tv_sec, now.tv_usec);
         seq_printf(seq, "RPCs in flight:        %d\n", rpcs);
@@ -326,9 +327,9 @@ static int osc_rpc_stats_seq_show(struct seq_file *seq, void *v)
                 unsigned long w = cli->cl_write_page_hist.oh_buckets[i];
                 read_cum += r;
                 write_cum += w;
-                seq_printf(seq, "%d:\t\t%10lu %3lu %3lu   | %10lu %3lu %3lu\n",
-                                 1 << i, r, pct(r, read_tot),
-                                 pct(read_cum, read_tot), w,
+                seq_printf(seq, "%d:\t\t%10lu %3lu %3lu   | %10lu %3lu %3lu\n", 
+                                 1 << i, r, pct(r, read_tot), 
+                                 pct(read_cum, read_tot), w, 
                                  pct(w, write_tot),
                                  pct(write_cum, write_tot));
                 if (read_cum == read_tot && write_cum == write_tot)
@@ -349,9 +350,9 @@ static int osc_rpc_stats_seq_show(struct seq_file *seq, void *v)
                 unsigned long w = cli->cl_write_rpc_hist.oh_buckets[i];
                 read_cum += r;
                 write_cum += w;
-                seq_printf(seq, "%d:\t\t%10lu %3lu %3lu   | %10lu %3lu %3lu\n",
-                                 i, r, pct(r, read_tot),
-                                 pct(read_cum, read_tot), w,
+                seq_printf(seq, "%d:\t\t%10lu %3lu %3lu   | %10lu %3lu %3lu\n", 
+                                 i, r, pct(r, read_tot), 
+                                 pct(read_cum, read_tot), w, 
                                  pct(w, write_tot),
                                  pct(write_cum, write_tot));
                 if (read_cum == read_tot && write_cum == write_tot)
@@ -390,7 +391,7 @@ static int osc_rpc_stats_seq_open(struct inode *inode, struct file *file)
         struct proc_dir_entry *dp = PDE(inode);
         struct seq_file *seq;
         int rc;
-
+ 
         rc = seq_open(file, &osc_rpc_stats_seq_sops);
         if (rc)
                 return rc;
@@ -415,7 +416,6 @@ static ssize_t osc_rpc_stats_seq_write(struct file *file, const char *buf,
 }
 
 struct file_operations osc_rpc_stats_fops = {
-        .owner   = THIS_MODULE,
         .open    = osc_rpc_stats_seq_open,
         .read    = seq_read,
         .write   = osc_rpc_stats_seq_write,
@@ -425,9 +425,10 @@ struct file_operations osc_rpc_stats_fops = {
 
 int lproc_osc_attach_seqstat(struct obd_device *dev)
 {
-        return lprocfs_obd_seq_create(dev, "rpc_stats", 0444,
+        return lprocfs_obd_seq_create(dev, "rpc_stats", 0444, 
                                       &osc_rpc_stats_fops, dev);
 }
 
+
 #endif /* LPROCFS */
-LPROCFS_INIT_VARS(osc, lprocfs_module_vars, lprocfs_obd_vars)
+LPROCFS_INIT_VARS(osc,lprocfs_module_vars, lprocfs_obd_vars)

@@ -218,8 +218,7 @@ static int echo_create_object(struct obd_device *obd, int on_target,
                 oa->o_id = ++last_object_id;
 
         if (on_target) {
-                /* XXX get some filter group constants */
-                oa->o_gr = 2;
+                oa->o_gr = FILTER_GROUP_ECHO;
                 oa->o_valid |= OBD_MD_FLGROUP;
                 rc = obd_create(ec->ec_exp, oa, &lsm, oti);
                 if (rc != 0)
@@ -535,7 +534,7 @@ static int echo_client_kbrw(struct obd_device *obd, int rw, struct obdo *oa,
                         goto out;
 
                 pgp->count = PAGE_SIZE;
-                pgp->disk_offset = pgp->page_offset = off;
+                pgp->off = off;
                 pgp->flag = 0;
 
                 if (verify)
@@ -556,8 +555,7 @@ static int echo_client_kbrw(struct obd_device *obd, int rw, struct obdo *oa,
                 if (verify) {
                         int vrc;
                         vrc = echo_client_page_debug_check(lsm, pgp->pg, oa->o_id,
-                                                           pgp->page_offset,
-                                                           pgp->count);
+                                                           pgp->off, pgp->count);
                         if (vrc != 0 && rc == 0)
                                 rc = vrc;
                 }
@@ -616,7 +614,7 @@ static int echo_client_ubrw(struct obd_device *obd, int rw,
         for (i = 0, off = offset, pgp = pga;
              i < npages;
              i++, off += PAGE_SIZE, pgp++) {
-                pgp->disk_offset = pgp->page_offset = off;
+                pgp->off = off;
                 pgp->pg = kiobuf->maplist[i];
                 pgp->count = PAGE_SIZE;
                 pgp->flag = 0;
@@ -711,8 +709,7 @@ static void ec_ap_fill_obdo(void *data, int cmd, struct obdo *oa)
 
         memcpy(oa, &eap->eap_eas->eas_oa, sizeof(*oa));
 }
-
-static void ec_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
+static void ec_ap_completion(void *data, int cmd, int rc)
 {
         struct echo_async_page *eap = eap_from_cookie(data);
         struct echo_async_state *eas;
@@ -795,7 +792,7 @@ static int echo_client_async_page(struct obd_export *exp, int rw,
                         GOTO(out, rc = -ENOMEM);
 
                 page->private = 0;
-                list_add_tail(&PAGE_LIST(page), &pages);
+                list_add_tail(&page->list, &pages);
 
                 OBD_ALLOC(eap, sizeof(*eap));
                 if (eap == NULL)
@@ -881,10 +878,9 @@ static int echo_client_async_page(struct obd_export *exp, int rw,
 
 out:
         list_for_each_safe(pos, n, &pages) {
-                struct page *page = list_entry(pos, struct page, 
-                                               PAGE_LIST_ENTRY);
+                struct page *page = list_entry(pos, struct page, list);
 
-                list_del(&PAGE_LIST(page));
+                list_del(&page->list);
                 if (page->private != 0) {
                         eap = (struct echo_async_page *)page->private;
                         if (eap->eap_cookie != NULL)
@@ -998,7 +994,7 @@ int echo_client_brw_ioctl(int rw, struct obd_export *exp,
 
         data->ioc_obdo1.o_valid &= ~OBD_MD_FLHANDLE;
         data->ioc_obdo1.o_valid |= OBD_MD_FLGROUP;
-        data->ioc_obdo1.o_gr = 2;
+        data->ioc_obdo1.o_gr = FILTER_GROUP_ECHO;
 
         switch((long)data->ioc_pbuf1) {
         case 1:
@@ -1217,7 +1213,7 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp,
                 rc = echo_get_object (&eco, obd, &data->ioc_obdo1);
                 if (rc == 0) {
                         oa = &data->ioc_obdo1;
-                        oa->o_gr = 2;
+                        oa->o_gr = FILTER_GROUP_ECHO;
                         oa->o_valid |= OBD_MD_FLGROUP;
                         rc = obd_destroy(ec->ec_exp, oa, eco->eco_lsm, 
                                          &dummy_oti);
@@ -1437,12 +1433,12 @@ static int echo_client_disconnect(struct obd_export *exp, int flags)
 }
 
 static struct obd_ops echo_obd_ops = {
-        .o_owner       = THIS_MODULE,
-        .o_setup       = echo_client_setup,
-        .o_cleanup     = echo_client_cleanup,
-        .o_iocontrol   = echo_client_iocontrol,
-        .o_connect     = echo_client_connect,
-        .o_disconnect  = echo_client_disconnect
+        o_owner:       THIS_MODULE,
+        o_setup:       echo_client_setup,
+        o_cleanup:     echo_client_cleanup,
+        o_iocontrol:   echo_client_iocontrol,
+        o_connect:     echo_client_connect,
+        o_disconnect:  echo_client_disconnect
 };
 
 int echo_client_init(void)
@@ -1450,7 +1446,7 @@ int echo_client_init(void)
         struct lprocfs_static_vars lvars;
 
         lprocfs_init_vars(echo, &lvars);
-        return class_register_type(&echo_obd_ops, lvars.module_vars,
+        return class_register_type(&echo_obd_ops, NULL, lvars.module_vars,
                                    OBD_ECHO_CLIENT_DEVICENAME);
 }
 

@@ -29,6 +29,7 @@ struct osc_creator {
         struct obd_device       *oscc_obd;
         obd_id                  oscc_last_id;//last available pre-created object
         obd_id                  oscc_next_id;// what object id to give out next
+        obd_id                  oscc_gr;
         int                     oscc_initial_create_count;
         int                     oscc_grow_count;
         int                     oscc_kick_barrier;
@@ -48,8 +49,10 @@ struct ec_export_data { /* echo client */
 
 /* In-memory access to client data from OST struct */
 struct filter_client_data;
+struct obd_llogs;
 struct filter_export_data {
         spinlock_t                 fed_lock;      /* protects fed_open_head */
+        __u32                      fed_group;
         struct filter_client_data *fed_fcd;
         loff_t                     fed_lr_off;
         int                        fed_lr_idx;

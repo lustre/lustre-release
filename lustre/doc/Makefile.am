@@ -122,3 +122,5 @@ doc.old/lustre.lin:
 
 dist-hook:
 	rm -rf $(distdir)/figs/CVS
+
+include $(top_srcdir)/Rules

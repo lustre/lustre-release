@@ -198,10 +198,9 @@ static struct lprocfs_vars lprocfs_module_vars[] = {
 };
 
 struct file_operations lov_proc_target_fops = {
-        .owner   = THIS_MODULE,
-        .open    = lov_target_seq_open,
-        .read    = seq_read,
-        .llseek  = seq_lseek,
+        .open = lov_target_seq_open,
+        .read = seq_read,
+        .llseek = seq_lseek,
         .release = seq_release,
 };
 

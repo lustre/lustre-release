@@ -49,6 +49,50 @@
 #include "llite_internal.h"
 #include <linux/lustre_compat25.h>
 
+/* called for each page in a completed rpc.*/
+void ll_ap_completion_24(void *data, int cmd, int rc)
+{
+        struct ll_async_page *llap;
+        struct page *page;
+        ENTRY;
+
+        llap = llap_from_cookie(data);
+        if (IS_ERR(llap)) {
+                EXIT;
+                return;
+        }
+
+        page = llap->llap_page;
+        LASSERT(PageLocked(page));
+
+        LL_CDEBUG_PAGE(D_PAGE, page, "completing cmd %d with %d\n", cmd, rc);
+
+        if (rc == 0)  {
+                if (cmd == OBD_BRW_READ) {
+                        if (!llap->llap_defer_uptodate)
+                                SetPageUptodate(page);
+                } else {
+                        llap->llap_write_queued = 0;
+                }
+                ClearPageError(page);
+        } else {
+                if (cmd == OBD_BRW_READ)
+                        llap->llap_defer_uptodate = 0;
+                SetPageError(page);
+        }
+
+
+        unlock_page(page);
+
+        if (0 && cmd == OBD_BRW_WRITE) {
+                llap_write_complete(page->mapping->host, llap);
+                ll_try_done_writing(page->mapping->host);
+        }
+
+        page_cache_release(page);
+        EXIT;
+}
+
 static int ll_writepage_24(struct page *page)
 {
         struct inode *inode = page->mapping->host;
@@ -116,6 +160,11 @@ static int ll_direct_IO_24(int rw,
         if (!lsm || !lsm->lsm_object_id)
                 RETURN(-EBADF);
 
+        /* FIXME: io smaller than PAGE_SIZE is broken on ia64 */
+        if ((iobuf->offset & (PAGE_SIZE - 1)) ||
+            (iobuf->length & (PAGE_SIZE - 1)))
+                RETURN(-EINVAL);
+
         set = ptlrpc_prep_set();
         if (set == NULL)
                 RETURN(-ENOMEM);
@@ -127,17 +176,15 @@ static int ll_direct_IO_24(int rw,
         }
 
         flags = 0 /* | OBD_BRW_DIRECTIO */;
-        offset = ((obd_off)blocknr * blocksize);
+        offset = ((obd_off)blocknr << inode->i_blkbits);
         length = iobuf->length;
-        pga[0].page_offset = iobuf->offset;
-        LASSERT(iobuf->offset < PAGE_SIZE);
 
         for (i = 0, length = iobuf->length; length > 0;
              length -= pga[i].count, offset += pga[i].count, i++) { /*i last!*/
                 pga[i].pg = iobuf->maplist[i];
-                pga[i].disk_offset = offset;
+                pga[i].off = offset;
                 /* To the end of the page, or the length, whatever is less */
-                pga[i].count = min_t(int, PAGE_SIZE - pga[i].page_offset,
+                pga[i].count = min_t(int, PAGE_SIZE - (offset & ~PAGE_MASK),
                                      length);
                 pga[i].flag = flags;
                 if (rw == READ)
@@ -164,14 +211,6 @@ static int ll_direct_IO_24(int rw,
                         CERROR("error from callback: rc = %d\n", rc);
         }
         ptlrpc_set_destroy(set);
-        if (rc == 0 && rw == WRITE) {
-                void lov_increase_kms(struct obd_export *,
-                                      struct lov_stripe_md *, obd_off size);
-                obd_off size = offset + length;
-                lov_increase_kms(ll_i2obdexp(inode), lsm, size);
-                if (size > inode->i_size)
-                        inode->i_size = size;
-        }
         if (rc == 0) {
                 rc = iobuf->length;
                 obdo_to_inode(inode, &oa, OBD_MD_FLBLOCKS);
@@ -182,12 +221,12 @@ static int ll_direct_IO_24(int rw,
 }
 
 struct address_space_operations ll_aops = {
-        .readpage       = ll_readpage,
-        .direct_IO      = ll_direct_IO_24,
-        .writepage      = ll_writepage_24,
-        .prepare_write  = ll_prepare_write,
-        .commit_write   = ll_commit_write,
-        .removepage     = ll_removepage,
-        .sync_page      = NULL,
-        .bmap           = NULL
+        readpage: ll_readpage,
+        direct_IO: ll_direct_IO_24,
+        writepage: ll_writepage_24,
+        prepare_write: ll_prepare_write,
+        commit_write: ll_commit_write,
+        removepage: ll_removepage,
+        sync_page: NULL,
+        bmap: NULL
 };

@@ -1,0 +1,543 @@
+diff -rupN --exclude='ide*' linux-2.4.20.orig/fs/Config.in linux-2.4.20/fs/Config.in
+--- linux-2.4.20.orig/fs/Config.in	2002-11-29 01:53:15.000000000 +0200
++++ linux-2.4.20/fs/Config.in	2004-02-08 21:37:47.000000000 +0200
+@@ -48,6 +48,9 @@ if [ "$CONFIG_JFFS2_FS" = "y" -o "$CONFI
+ fi
+ tristate 'Compressed ROM file system support' CONFIG_CRAMFS
+ bool 'Virtual memory file system support (former shm fs)' CONFIG_TMPFS
++if [ "$CONFIG_TMPFS" = "y" ]; then
++   bool '  tmpfs Extended Attributes' CONFIG_TMPFS_XATTR
++fi
+ define_bool CONFIG_RAMFS y
+ 
+ tristate 'ISO 9660 CDROM file system support' CONFIG_ISO9660_FS
+diff -rupN --exclude='ide*' linux-2.4.20.orig/include/linux/mm.h linux-2.4.20/include/linux/mm.h
+--- linux-2.4.20.orig/include/linux/mm.h	2002-08-03 03:39:45.000000000 +0300
++++ linux-2.4.20/include/linux/mm.h	2004-02-10 11:43:10.000000000 +0200
+@@ -468,6 +468,7 @@ extern void clear_page_tables(struct mm_
+ extern int fail_writepage(struct page *);
+ struct page * shmem_nopage(struct vm_area_struct * vma, unsigned long address, int unused);
+ struct file *shmem_file_setup(char * name, loff_t size);
++int shmem_getpage(struct inode * inode, unsigned long idx, struct page **ptr);
+ extern void shmem_lock(struct file * file, int lock);
+ extern int shmem_zero_setup(struct vm_area_struct *);
+ 
+diff -rupN --exclude='ide*' linux-2.4.20.orig/include/linux/shmem_fs.h linux-2.4.20/include/linux/shmem_fs.h
+--- linux-2.4.20.orig/include/linux/shmem_fs.h	2001-12-21 19:42:03.000000000 +0200
++++ linux-2.4.20/include/linux/shmem_fs.h	2004-02-10 18:39:17.000000000 +0200
+@@ -3,6 +3,8 @@
+ 
+ /* inode in-kernel data */
+ 
++#include <linux/config.h>
++
+ #define SHMEM_NR_DIRECT 16
+ 
+ /*
+@@ -28,6 +30,10 @@ struct shmem_inode_info {
+ 	unsigned long		swapped;
+ 	int			locked;     /* into memory */
+ 	struct list_head	list;
++#ifdef CONFIG_TMPFS_XATTR
++	struct list_head	xattrs;
++	struct list_head	*xtail;
++#endif
+ 	struct inode	       *inode;
+ };
+ 
+@@ -39,6 +45,32 @@ struct shmem_sb_info {
+ 	spinlock_t    stat_lock;
+ };
+ 
++#ifdef CONFIG_TMPFS_XATTR
++struct shmem_xattr {
++	u8 namelen;
++	u16 valuelen;
++	void *entity;
++	struct list_head list;
++};
++
++extern struct shmem_xattr *
++shmem_xattr_find(struct inode *inode, const char *name);
++
++extern ssize_t
++shmem_xattr_set(struct inode *inode, const char *name,
++		const void *value, u16 valuelen, int flags);
++		
++extern ssize_t
++shmem_xattr_get(struct inode *inode, const char *name,
++		void *value, size_t valuelen);
++		
++extern int
++shmem_xattr_delete(struct inode *inode, struct shmem_xattr *xattr);
++
++extern int
++shmem_xattr_remove(struct inode *inode, const char *name);
++#endif
++
+ #define SHMEM_I(inode)  (&inode->u.shmem_i)
+ 
+ #endif
+diff -rupN --exclude='ide*' linux-2.4.20.orig/mm/shmem.c linux-2.4.20/mm/shmem.c
+--- linux-2.4.20.orig/mm/shmem.c	2002-11-29 01:53:15.000000000 +0200
++++ linux-2.4.20/mm/shmem.c	2004-02-10 18:44:05.000000000 +0200
+@@ -27,6 +27,8 @@
+ #include <linux/string.h>
+ #include <linux/locks.h>
+ #include <linux/smp_lock.h>
++#include <linux/slab.h>
++#include <linux/xattr.h>
+ 
+ #include <asm/uaccess.h>
+ 
+@@ -58,6 +60,344 @@ atomic_t shmem_nrpages = ATOMIC_INIT(0);
+ 
+ static struct page *shmem_getpage_locked(struct shmem_inode_info *, struct inode *, unsigned long);
+ 
++#ifdef CONFIG_TMPFS
++static struct inode_operations shmem_symlink_inode_operations;
++static struct inode_operations shmem_symlink_inline_operations;
++#endif
++
++#ifdef CONFIG_TMPFS_XATTR
++#define xattr_name(xattr)			\
++	((char *)xattr->entity)
++
++#define xattr_value(xattr)				\
++	((void *)xattr->entity + xattr->namelen + 1)
++
++/* allocates memory for new xattr with name length of @namelen and value size of
++ * @valuelen. */
++static struct shmem_xattr *
++shmem_xattr_alloc(u8 namelen, u16 valuelen)
++{
++	u16 size;
++        struct shmem_xattr *xattr;
++                                                                                      
++	size = namelen + 1 + valuelen;
++
++        if (!(xattr = kmalloc(sizeof(*xattr), GFP_KERNEL)))
++                return NULL;
++
++	if (!(xattr->entity = kmalloc(size, GFP_KERNEL))) {
++		kfree(xattr);
++		return NULL;
++	}
++                                                                                      
++        xattr->namelen = namelen;
++        xattr->valuelen = valuelen;
++        return xattr;
++}
++
++/* reallocs passed @xattr with new @value. */
++static int
++shmem_xattr_realloc(struct shmem_xattr *xattr, u16 valuelen)
++{
++        if (xattr->valuelen != valuelen) {
++		u16 new_size;
++                void *entity;
++
++		/* allocating new entity. */
++		new_size = xattr->namelen + 1 + valuelen;
++                                                                                      
++		if (!(entity = kmalloc(new_size, GFP_KERNEL)))
++                        return -ENOMEM;
++
++		/* copying old name to new entity.*/
++		memcpy(entity, xattr->entity, xattr->namelen);
++		*((char *)(entity + xattr->namelen)) = '\0';
++
++		/* finishing the change.*/
++                kfree(xattr->entity);
++		xattr->entity = entity;
++                xattr->valuelen = valuelen;
++        }
++
++        return 0;
++}
++
++/* assigns @name and @value to passed @xattr. */
++static int
++shmem_xattr_assign(struct shmem_xattr *xattr,
++		   const char *name, const void *value)
++{
++	if (name) {
++		if (xattr->namelen != strlen(name))
++			return -EINVAL;
++		
++		memcpy(xattr->entity, name, xattr->namelen);
++		*((char *)(xattr->entity + xattr->namelen)) = '\0';
++	}
++
++	if (value) {
++		memcpy(xattr_value(xattr),
++		       value, xattr->valuelen);
++	}
++
++        return 0;
++}
++
++/* frees passed @xattr. */
++static void
++shmem_xattr_free(struct shmem_xattr *xattr)
++{
++        kfree(xattr->entity);
++        kfree(xattr);
++}
++
++/* lookups passed @name inside @inode's xattr list. */
++struct shmem_xattr *
++shmem_xattr_find(struct inode *inode, const char *name)
++{
++	u8 namelen;
++        struct list_head *p;
++        struct shmem_xattr *xattr;
++        struct shmem_inode_info *info;
++
++        info = SHMEM_I(inode);
++	namelen = strlen(name);
++
++        list_for_each(p, &info->xattrs) {
++                xattr = list_entry(p, struct shmem_xattr, list);
++
++                if (xattr->namelen == namelen &&
++                    !memcmp(xattr->entity, name, namelen))
++                {
++                        return xattr;
++                }
++        }
++
++        return NULL;
++}
++
++/* allocates new xattr and fills it with passed value, name, etc. */
++ssize_t
++shmem_xattr_set(struct inode *inode, const char *name,
++		const void *value, u16 valuelen, int flags)
++{
++	ssize_t error;
++        struct shmem_xattr *xattr;
++	struct shmem_inode_info *info;
++
++        xattr = shmem_xattr_find(inode, name);
++
++        if (xattr) {
++                if (flags & XATTR_CREATE)
++                        return -EEXIST;
++
++                if ((error = shmem_xattr_realloc(xattr, valuelen)))
++                        return error;
++
++		if ((error = shmem_xattr_assign(xattr, NULL, value)))
++			return error;
++        } else {
++                info = SHMEM_I(inode);
++
++		if (flags & XATTR_REPLACE)
++                        return -ENODATA;
++
++		if (!(xattr = shmem_xattr_alloc(strlen(name), valuelen)))
++			return -ENOMEM;
++
++		if ((error = shmem_xattr_assign(xattr, name, value)))
++			return error;
++		
++                list_add(&xattr->list, info->xtail);
++		info->xtail = &xattr->list;
++        }
++	
++        return 0;
++}
++
++/* fills passed @value by attribute value found by @name. */
++ssize_t
++shmem_xattr_get(struct inode *inode, const char *name,
++		void *value, size_t valuelen)
++{
++        struct shmem_xattr *xattr;
++
++        if (!(xattr = shmem_xattr_find(inode, name)))
++                return -ENODATA;
++
++        /* handling value size guess request */
++        if (valuelen == 0 || value == NULL)
++                return xattr->valuelen;
++
++        if (xattr->valuelen > valuelen)
++                return -ERANGE;
++
++        memcpy(value, xattr_value(xattr),
++	       xattr->valuelen);
++	
++        return xattr->valuelen;
++}
++
++/* deletes passed @xattr from inode xattr list and frees it. */
++int
++shmem_xattr_delete(struct inode *inode, struct shmem_xattr *xattr)
++{
++	struct shmem_inode_info *info;
++
++	info = SHMEM_I(inode);
++	
++	if (&xattr->list == info->xtail)
++		info->xtail = xattr->list.prev;
++	
++	list_del(&xattr->list);
++	shmem_xattr_free(xattr);
++
++	return 0;
++}
++
++/* removes attribute found by passed @name. */
++int
++shmem_xattr_remove(struct inode *inode, const char *name)
++{
++        struct shmem_xattr *xattr;
++
++        if (!(xattr = shmem_xattr_find(inode, name)))
++                return -ENODATA;
++
++	return shmem_xattr_delete(inode, xattr);
++}
++
++static int
++shmem_xattr_can_read(struct inode *inode, const char *name)
++{
++	/* check for inlined symlinks. They store path inside inode info and
++	 * thus, cannot be used for access xattrs. */
++	if (S_ISLNK(inode->i_mode) &&
++	    inode->i_op == &shmem_symlink_inline_operations)
++	{
++                return -EPERM;
++	}
++	
++	return permission(inode, MAY_READ);
++}
++                                                                                      
++static int
++shmem_xattr_can_write(struct inode *inode, const char *name)
++{
++        if (IS_RDONLY(inode))
++                return -EROFS;
++                                                                                      
++        if (IS_IMMUTABLE(inode) || IS_APPEND(inode) ||
++	    S_ISLNK(inode->i_mode))
++	{
++                return -EPERM;
++	}
++                                                                                      
++        if ((!S_ISREG(inode->i_mode) && !S_ISDIR(inode->i_mode)) ||
++	    inode->i_mode & S_ISVTX)
++	{
++                return -EPERM;
++	}
++                                                                                      
++        return permission(inode, MAY_WRITE);
++}
++
++/* fills passed @value with data of attribute @name from @dentry->d_inode
++ * attribute list. */
++static ssize_t
++shmem_getxattr(struct dentry *dentry, const char *name,
++               void *value, size_t valuelen)
++{
++        int error;
++        struct inode *inode = dentry->d_inode;
++
++	if (name == NULL)
++		return -EINVAL;
++                                                                                      
++        if ((error = shmem_xattr_can_read(inode, name)))
++                return error;
++
++	return shmem_xattr_get(inode, name,
++			       value, valuelen);
++                                                                                      
++}
++
++/* updates attribute with @name inside @dentry->d_inode attributes list (if
++ * any), or creates new attribute with name @name and value @value and put it to
++ * inode attributes list.*/
++static int
++shmem_setxattr(struct dentry *dentry, const char *name,
++               void *value, size_t valuelen, int flags)
++{
++        int error;
++        struct inode *inode = dentry->d_inode;
++                                                                                      
++	if (name == NULL)
++		return -EINVAL;
++	
++        if ((error = shmem_xattr_can_write(inode, name)))
++                return error;
++                                                                                      
++        if (value == NULL) {
++                value = "";
++                valuelen = 0;
++        }
++                                                                                      
++        return shmem_xattr_set(inode, name, value,
++			       valuelen, flags);
++}
++
++/* removes attribute with passed @name from @dentry->d_inode attributes list. */
++static int
++shmem_removexattr(struct dentry *dentry, const char *name)
++{
++        int error;
++        struct inode *inode = dentry->d_inode;
++                                                                                      
++	if (name == NULL)
++		return -EINVAL;
++
++        if ((error = shmem_xattr_can_write(inode, name)))
++                return error;
++                                                                                      
++        return shmem_xattr_remove(inode, name);
++}
++
++/* fills passed @data with list of @dentry->d_inode attributes. Returns size of
++ * actuall data put to @data. */
++static ssize_t
++shmem_listxattr(struct dentry *dentry, char *data, size_t buf_size)
++{
++        ssize_t size = 0;
++        struct list_head *p;
++        struct shmem_xattr *xattr;
++        struct shmem_inode_info *info;
++        struct inode *inode = dentry->d_inode;
++
++        info = SHMEM_I(inode);
++
++        list_for_each(p, &info->xattrs) {
++                xattr = list_entry(p, struct shmem_xattr, list);
++                size += xattr->namelen + 1;
++        }
++
++        /* handling data size guess request. */
++        if (buf_size == 0 || data == NULL)
++                return size;
++
++        if (size > buf_size)
++                return -ERANGE;
++
++        list_for_each(p, &info->xattrs) {
++                xattr = list_entry(p, struct shmem_xattr, list);
++                memcpy(data, xattr->entity, xattr->namelen + 1);
++                data += xattr->namelen + 1;
++        }
++
++        return size;
++}
++#endif
++
+ /*
+  * shmem_recalc_inode - recalculate the size of an inode
+  *
+@@ -359,6 +699,11 @@ static void shmem_truncate (struct inode
+ 
+ static void shmem_delete_inode(struct inode * inode)
+ {
++#ifdef CONFIG_TMPFS_XATTR
++	struct list_head *tmp, *p;
++	struct shmem_xattr *xattr;
++	struct shmem_inode_info * info = SHMEM_I(inode);
++#endif
+ 	struct shmem_sb_info *sbinfo = SHMEM_SB(inode->i_sb);
+ 
+ 	if (inode->i_op->truncate == shmem_truncate) {
+@@ -371,6 +716,12 @@ static void shmem_delete_inode(struct in
+ 	spin_lock (&sbinfo->stat_lock);
+ 	sbinfo->free_inodes++;
+ 	spin_unlock (&sbinfo->stat_lock);
++#ifdef CONFIG_TMPFS_XATTR
++        list_for_each_safe(p, tmp, &info->xattrs) {
++                xattr = list_entry(p, struct shmem_xattr, list);
++		shmem_xattr_delete(inode, xattr);
++        }
++#endif
+ 	clear_inode(inode);
+ }
+ 
+@@ -634,7 +985,7 @@ wait_retry:
+ 	goto repeat;
+ }
+ 
+-static int shmem_getpage(struct inode * inode, unsigned long idx, struct page **ptr)
++int shmem_getpage(struct inode * inode, unsigned long idx, struct page **ptr)
+ {
+ 	struct shmem_inode_info *info = SHMEM_I(inode);
+ 	int error;
+@@ -727,6 +1078,11 @@ struct inode *shmem_get_inode(struct sup
+ 		info->inode = inode;
+ 		spin_lock_init (&info->lock);
+ 		sema_init (&info->sem, 1);
++
++#ifdef CONFIG_TMPFS_XATTR
++		INIT_LIST_HEAD(&info->xattrs);
++		info->xtail = &info->xattrs;
++#endif
+ 		switch (mode & S_IFMT) {
+ 		default:
+ 			init_special_inode(inode, mode, dev);
+@@ -777,10 +1133,6 @@ out:
+ }
+ 
+ #ifdef CONFIG_TMPFS
+-
+-static struct inode_operations shmem_symlink_inode_operations;
+-static struct inode_operations shmem_symlink_inline_operations;
+-
+ static ssize_t
+ shmem_file_write(struct file *file,const char *buf,size_t count,loff_t *ppos)
+ {
+@@ -1250,6 +1602,12 @@ static struct inode_operations shmem_sym
+ 	truncate:	shmem_truncate,
+ 	readlink:	shmem_readlink,
+ 	follow_link:	shmem_follow_link,
++#ifdef CONFIG_TMPFS_XATTR
++	setxattr:       shmem_setxattr,
++	getxattr:       shmem_getxattr,
++	listxattr:      shmem_listxattr,
++	removexattr:    shmem_removexattr,
++#endif
+ };
+ 
+ static int shmem_parse_options(char *options, int *mode, uid_t *uid, gid_t *gid, unsigned long * blocks, unsigned long *inodes)
+@@ -1398,6 +1756,12 @@ static struct file_operations shmem_file
+ 
+ static struct inode_operations shmem_inode_operations = {
+ 	truncate:	shmem_truncate,
++#ifdef CONFIG_TMPFS_XATTR
++	setxattr:       shmem_setxattr,
++	getxattr:       shmem_getxattr,
++	listxattr:      shmem_listxattr,
++	removexattr:    shmem_removexattr,
++#endif
+ };
+ 
+ static struct inode_operations shmem_dir_inode_operations = {
+@@ -1411,6 +1775,12 @@ static struct inode_operations shmem_dir
+ 	rmdir:		shmem_rmdir,
+ 	mknod:		shmem_mknod,
+ 	rename:		shmem_rename,
++#ifdef CONFIG_TMPFS_XATTR
++	setxattr:       shmem_setxattr,
++	getxattr:       shmem_getxattr,
++	listxattr:      shmem_listxattr,
++	removexattr:    shmem_removexattr,
++#endif
+ #endif
+ };
+ 
+@@ -1557,3 +1927,9 @@ int shmem_zero_setup(struct vm_area_stru
+ }
+ 
+ EXPORT_SYMBOL(shmem_file_setup);
++EXPORT_SYMBOL(shmem_getpage);
++EXPORT_SYMBOL(shmem_xattr_find);
++EXPORT_SYMBOL(shmem_xattr_set);
++EXPORT_SYMBOL(shmem_xattr_get);
++EXPORT_SYMBOL(shmem_xattr_delete);
++EXPORT_SYMBOL(shmem_xattr_remove);

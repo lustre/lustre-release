@@ -17,7 +17,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <lustre/lustre_user.h>
+#include <linux/lustre_user.h>
 
 typedef struct flag_mapping {
        const char *string;
@@ -61,7 +61,7 @@ int main(int argc, char** argv)
         int    flag_set=0;
         int    file_set=0;
         char   c;
-        char*  cloned_flags = NULL;
+        char*  cloned_flags;
 
         if (argc == 1)
                 Usage_and_abort();

@@ -41,15 +41,8 @@
 #ifndef PTL_USE_LIB_FREELIST
 
 int
-kportal_descriptor_setup (nal_cb_t *nal,
-                          ptl_ni_limits_t *requested_limits,
-                          ptl_ni_limits_t *actual_limits)
+kportal_descriptor_setup (nal_cb_t *nal)
 {
-        /* Ignore requested limits! */
-        actual_limits->max_mes = INT_MAX;
-        actual_limits->max_mds = INT_MAX;
-        actual_limits->max_eqs = INT_MAX;
-
         return PTL_OK;
 }
 
@@ -107,9 +100,7 @@ lib_freelist_fini (nal_cb_t *nal, lib_freelist_t *fl)
 }
 
 int
-kportal_descriptor_setup (nal_cb_t *nal,
-                          ptl_ni_limits_t *requested_limits,
-                          ptl_ni_limits_t *actual_limits)
+kportal_descriptor_setup (nal_cb_t *nal)
 {
         /* NB on failure caller must still call kportal_descriptor_cleanup */
         /*               ******                                            */
@@ -119,13 +110,6 @@ kportal_descriptor_setup (nal_cb_t *nal,
         memset (&nal->ni.ni_free_msgs, 0, sizeof (nal->ni.ni_free_msgs));
         memset (&nal->ni.ni_free_mds,  0, sizeof (nal->ni.ni_free_mds));
         memset (&nal->ni.ni_free_eqs,  0, sizeof (nal->ni.ni_free_eqs));
-
-        /* Ignore requested limits! */
-        actual_limits->max_mes = MAX_MES;
-        actual_limits->max_mds = MAX_MDS;
-        actual_limits->max_eqs = MAX_EQS;
-        /* Hahahah what a load of bollocks.  There's nowhere to
-         * specify the max # messages in-flight */
 
         rc = lib_freelist_init (nal, &nal->ni.ni_free_mes,
                                 MAX_MES, sizeof (lib_me_t));
@@ -264,17 +248,20 @@ lib_invalidate_handle (nal_cb_t *nal, lib_handle_t *lh)
 }
 
 int
-lib_init(nal_cb_t *nal, ptl_process_id_t process_id,
-         ptl_ni_limits_t *requested_limits,
-         ptl_ni_limits_t *actual_limits)
+lib_init(nal_cb_t * nal, ptl_nid_t nid, ptl_pid_t pid, int gsize,
+         ptl_pt_index_t ptl_size, ptl_ac_index_t acl_size)
 {
         int       rc = PTL_OK;
         lib_ni_t *ni = &nal->ni;
-        int ptl_size;
         int i;
         ENTRY;
 
         /* NB serialised in PtlNIInit() */
+
+        if (ni->refcnt != 0) {                       /* already initialised */
+                ni->refcnt++;
+                goto out;
+        }
 
         lib_assert_wire_constants ();
         
@@ -284,8 +271,7 @@ lib_init(nal_cb_t *nal, ptl_process_id_t process_id,
          */
         memset(&ni->counters, 0, sizeof(lib_counters_t));
 
-        rc = kportal_descriptor_setup (nal, requested_limits, 
-                                       &ni->actual_limits);
+        rc = kportal_descriptor_setup (nal);
         if (rc != PTL_OK)
                 goto out;
 
@@ -301,15 +287,12 @@ lib_init(nal_cb_t *nal, ptl_process_id_t process_id,
         if (rc != PTL_OK)
                 goto out;
         
-        ni->nid = process_id.nid;
-        ni->pid = process_id.pid;
+        ni->nid = nid;
+        ni->pid = pid;
 
-        if (requested_limits != NULL)
-                ptl_size = requested_limits->max_pt_index + 1;
-        else
-                ptl_size = 64;
-
+        ni->num_nodes = gsize;
         ni->tbl.size = ptl_size;
+
         ni->tbl.tbl = nal->cb_malloc(nal, sizeof(struct list_head) * ptl_size);
         if (ni->tbl.tbl == NULL) {
                 rc = PTL_NO_SPACE;
@@ -319,20 +302,9 @@ lib_init(nal_cb_t *nal, ptl_process_id_t process_id,
         for (i = 0; i < ptl_size; i++)
                 INIT_LIST_HEAD(&(ni->tbl.tbl[i]));
 
-        /* max_{mes,mds,eqs} set in kportal_descriptor_setup */
-
-        /* We don't have an access control table! */
-        ni->actual_limits.max_ac_index = -1;
-
-        ni->actual_limits.max_pt_index = ptl_size - 1;
-        ni->actual_limits.max_md_iovecs = PTL_MD_MAX_IOV;
-        ni->actual_limits.max_me_list = INT_MAX;
-
-        /* We don't support PtlGetPut! */
-        ni->actual_limits.max_getput_md = 0;
-
-        if (actual_limits != NULL)
-                *actual_limits = ni->actual_limits;
+        ni->debug = PTL_DEBUG_NONE;
+        ni->up = 1;
+        ni->refcnt++;
 
  out:
         if (rc != PTL_OK) {
@@ -349,7 +321,12 @@ lib_fini(nal_cb_t * nal)
         lib_ni_t *ni = &nal->ni;
         int       idx;
 
-        /* NB no state_lock() since this is the last reference.  The NAL
+        ni->refcnt--;
+
+        if (ni->refcnt != 0)
+                goto out;
+
+        /* NB no stat_lock() since this is the last reference.  The NAL
          * should have shut down already, so it should be safe to unlink
          * and free all descriptors, even those that appear committed to a
          * network op (eg MD with non-zero pending count)
@@ -393,9 +370,11 @@ lib_fini(nal_cb_t * nal)
         }
 
         nal->cb_free(nal, ni->tbl.tbl, sizeof(struct list_head) * ni->tbl.size);
+        ni->up = 0;
 
         lib_cleanup_handle_hash (nal);
         kportal_descriptor_cleanup (nal);
 
+ out:
         return (PTL_OK);
 }

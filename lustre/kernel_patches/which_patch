@@ -6,4 +6,3 @@ vanilla-2.4.20         linux-2.4.20             patch with uml-2.4.20-6     um
 chaos-2.4.20           linux-chaos-2.4.20       same as rh-2.4.20-8         i386
 kgdb-2.5.73            linux-2.5.73             vanilla 2.5.73 with kgdb    i386
 bproc-2.4.20-hp-pnnl   linux-2.4.20-hp4_pnnl9   hp-pnnl + bproc             i386
-suse-2.4.19                                     SUSE ES 8

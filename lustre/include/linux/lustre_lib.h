@@ -25,6 +25,8 @@
 #ifndef _LUSTRE_LIB_H
 #define _LUSTRE_LIB_H
 
+#include <config.h>
+
 #ifndef __KERNEL__
 # include <string.h>
 # include <sys/types.h>
@@ -39,18 +41,6 @@
 #include <linux/kp30.h> /* XXX just for LASSERT! */
 #include <linux/lustre_idl.h>
 #include <linux/lustre_cfg.h>
-
-#ifndef LP_POISON
-#if BITS_PER_LONG > 32
-# define LI_POISON ((int)0x5a5a5a5a5a5a5a5a)
-# define LL_POISON ((long)0x5a5a5a5a5a5a5a5a)
-# define LP_POISON ((void *)(long)0x5a5a5a5a5a5a5a5a)
-#else
-# define LI_POISON ((int)0x5a5a5a5a)
-# define LL_POISON ((long)0x5a5a5a5a)
-# define LP_POISON ((void *)(long)0x5a5a5a5a)
-#endif
-#endif
 
 #ifndef LPU64
 /* x86_64 has 64bit longs and defines u64 as long long */

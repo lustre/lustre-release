@@ -91,17 +91,29 @@ int filter_log_sz_change(struct llog_handle *cathandle,
         out:
         RETURN(rc);
 }
+struct obd_llogs * filter_grab_llog_for_group(struct obd_device *, int);
 
 /* When this (destroy) operation is committed, return the cancel cookie */
 void filter_cancel_cookies_cb(struct obd_device *obd, __u64 transno,
                                      void *cb_data, int error)
 {
         struct llog_cookie *cookie = cb_data;
-        int rc;
-        rc = llog_cancel(llog_get_context(obd, cookie->lgc_subsys + 1),
-                         1, cookie, 0, NULL);
-        if (rc)
-                CERROR("error cancelling log cookies: rc = %d\n", rc);
+        struct obd_llogs *llogs = NULL;
+        struct llog_ctxt *ctxt;
+
+        /* we have to find context for right group */
+        llogs = filter_grab_llog_for_group(obd, cookie->lgc_lgl.lgl_ogr);
+
+        if (llogs) {
+                ctxt = llog_get_context(llogs, cookie->lgc_subsys + 1);
+                if (ctxt) {
+                        llog_cancel(ctxt, NULL, 1, cookie, 0);
+                } else
+                        CERROR("no valid context for group "LPU64"\n",
+                               cookie->lgc_lgl.lgl_ogr);
+        } else
+                CERROR("unknown group "LPU64"!\n", cookie->lgc_lgl.lgl_ogr);
+
         OBD_FREE(cb_data, sizeof(struct llog_cookie));
 }
 
@@ -121,7 +133,7 @@ int filter_recov_log_unlink_cb(struct llog_handle *llh,
         obd_id oid;
         int rc = 0;
         ENTRY;
-                                                                                                                             
+    
         if (!(le32_to_cpu(llh->lgh_hdr->llh_flags) & LLOG_F_IS_PLAIN)) {
                 CERROR("log is not plain\n");
                 RETURN(-EINVAL);
@@ -143,7 +155,7 @@ int filter_recov_log_unlink_cb(struct llog_handle *llh,
                 else
                         rc = LLOG_PROC_BREAK;
                 CWARN("fetch generation log, send cookie\n");
-                llog_cancel(ctxt, 1, &cookie, 0, NULL);
+                llog_cancel(ctxt, NULL, 1, &cookie, 0);
                 RETURN(rc);
         }
 
@@ -154,6 +166,7 @@ int filter_recov_log_unlink_cb(struct llog_handle *llh,
         oa->o_valid |= OBD_MD_FLCOOKIE;
         oa->o_id = lur->lur_oid;
         oa->o_gr = lur->lur_ogen;
+        oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
         memcpy(obdo_logcookie(oa), &cookie, sizeof(cookie));
         oid = oa->o_id;
 
@@ -161,7 +174,7 @@ int filter_recov_log_unlink_cb(struct llog_handle *llh,
         obdo_free(oa);
         if (rc == -ENOENT) {
                 CDEBUG(D_HA, "object already removed, send cookie\n");
-                llog_cancel(ctxt, 1, &cookie, 0, NULL);
+                llog_cancel(ctxt, NULL, 1, &cookie, 0);
                 RETURN(0);
         }
 

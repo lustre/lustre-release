@@ -41,6 +41,7 @@ static int filter_lvbo_init(struct ldlm_resource *res)
         int rc = 0;
         struct ost_lvb *lvb = NULL;
         struct obd_device *obd;
+        struct obdo *oa = NULL;
         struct dentry *dentry;
         ENTRY;
 
@@ -65,26 +66,36 @@ static int filter_lvbo_init(struct ldlm_resource *res)
         obd = res->lr_namespace->ns_lvbp;
         LASSERT(obd != NULL);
 
-        dentry = filter_fid2dentry(obd, NULL, 0, res->lr_name.name[0]);
+        oa = obdo_alloc();
+        if (oa == NULL)
+                GOTO(out, rc = -ENOMEM);
+
+        oa->o_id = res->lr_name.name[0];
+        oa->o_gr = res->lr_name.name[2];
+        oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
+
+        dentry = filter_oa2dentry(obd, oa);
         if (IS_ERR(dentry))
                 GOTO(out, rc = PTR_ERR(dentry));
 
-        if (dentry->d_inode == NULL)
-                GOTO(out_dentry, rc = -ENOENT);
+        /* Limit the valid bits in the return data to what we actually use */
+        oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
+        obdo_from_inode(oa, dentry->d_inode, FILTER_VALID_FLAGS);
+        f_dput(dentry);
 
         lvb->lvb_size = dentry->d_inode->i_size;
         lvb->lvb_mtime = LTIME_S(dentry->d_inode->i_mtime);
-        lvb->lvb_blocks = dentry->d_inode->i_blocks;
+        CDEBUG(D_DLMTRACE, "res: "LPU64" initial lvb size: "LPU64", mtime: "
+               LPU64"\n", res->lr_name.name[0], lvb->lvb_size, lvb->lvb_mtime);
 
-        CDEBUG(D_DLMTRACE, "res: "LPU64" initial lvb size: "LPU64", "
-               "mtime: "LPU64", blocks: "LPU64"\n",
-               res->lr_name.name[0], lvb->lvb_size,
-               lvb->lvb_mtime, lvb->lvb_blocks);
-
- out_dentry:
-        f_dput(dentry);
  out:
-        /* Don't free lvb data on lookup error */
+        if (oa)
+                obdo_free(oa);
+        if (rc && lvb != NULL) {
+                OBD_FREE(lvb, sizeof(*lvb));
+                res->lr_lvb_data = NULL;
+                res->lr_lvb_len = 0;
+        }
         up(&res->lr_lvb_sem);
         return rc;
 }
@@ -102,6 +113,7 @@ static int filter_lvbo_update(struct ldlm_resource *res, struct lustre_msg *m,
         int rc = 0;
         struct ost_lvb *lvb = res->lr_lvb_data;
         struct obd_device *obd;
+        struct obdo *oa = NULL;
         struct dentry *dentry;
         ENTRY;
 
@@ -141,12 +153,6 @@ static int filter_lvbo_update(struct ldlm_resource *res, struct lustre_msg *m,
                                lvb->lvb_mtime, new->lvb_mtime);
                         lvb->lvb_mtime = new->lvb_mtime;
                 }
-                if (new->lvb_blocks > lvb->lvb_blocks || !increase) {
-                        CDEBUG(D_DLMTRACE, "res: "LPU64" updating lvb blocks: "
-                               LPU64" -> "LPU64"\n", res->lr_name.name[0],
-                               lvb->lvb_blocks, new->lvb_blocks);
-                        lvb->lvb_blocks = new->lvb_blocks;
-                }
                 GOTO(out, rc = 0);
         }
 
@@ -154,12 +160,20 @@ static int filter_lvbo_update(struct ldlm_resource *res, struct lustre_msg *m,
         obd = res->lr_namespace->ns_lvbp;
         LASSERT(obd);
 
-        dentry = filter_fid2dentry(obd, NULL, 0, res->lr_name.name[0]);
+        oa = obdo_alloc();
+        if (oa == NULL)
+                GOTO(out, rc = -ENOMEM);
+
+        oa->o_id = res->lr_name.name[0];
+        oa->o_gr = res->lr_name.name[2];
+        oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
+        dentry = filter_oa2dentry(obd, oa);
         if (IS_ERR(dentry))
                 GOTO(out, rc = PTR_ERR(dentry));
 
-        if (dentry->d_inode == NULL)
-                GOTO(out_dentry, rc = -ENOENT);
+        /* Limit the valid bits in the return data to what we actually use */
+        oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
+        obdo_from_inode(oa, dentry->d_inode, FILTER_VALID_FLAGS);
 
         if (dentry->d_inode->i_size > lvb->lvb_size || !increase) {
                 CDEBUG(D_DLMTRACE, "res: "LPU64" updating lvb size from disk: "
@@ -167,25 +181,22 @@ static int filter_lvbo_update(struct ldlm_resource *res, struct lustre_msg *m,
                        lvb->lvb_size, dentry->d_inode->i_size);
                 lvb->lvb_size = dentry->d_inode->i_size;
         }
-
         if (LTIME_S(dentry->d_inode->i_mtime) > lvb->lvb_mtime || !increase) {
                 CDEBUG(D_DLMTRACE, "res: "LPU64" updating lvb mtime from disk: "
                        LPU64" -> %lu\n", res->lr_name.name[0],
                        lvb->lvb_mtime, LTIME_S(dentry->d_inode->i_mtime));
                 lvb->lvb_mtime = LTIME_S(dentry->d_inode->i_mtime);
         }
-        CDEBUG(D_DLMTRACE, "res: "LPU64" updating lvb blocks from disk: "
-               LPU64" -> %lu\n", res->lr_name.name[0],
-               lvb->lvb_blocks, dentry->d_inode->i_blocks);
-        lvb->lvb_blocks = dentry->d_inode->i_blocks;
-
-out_dentry:
         f_dput(dentry);
 
-out:
+ out:
+        if (oa != NULL)
+                obdo_free(oa);
         up(&res->lr_lvb_sem);
         return rc;
 }
+
+
 
 struct ldlm_valblock_ops filter_lvbo = {
         lvbo_init: filter_lvbo_init,

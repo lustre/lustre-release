@@ -337,14 +337,13 @@ static struct inode* llu_new_inode(struct filesys *fs,
         return inode;
 }
 
-static int llu_have_md_lock(struct inode *inode, __u64 lockpart)
+static int llu_have_md_lock(struct inode *inode)
 {
         struct llu_sb_info *sbi = llu_i2sbi(inode);
         struct llu_inode_info *lli = llu_i2info(inode);
         struct lustre_handle lockh;
         struct ldlm_res_id res_id = { .name = {0} };
         struct obd_device *obddev;
-        ldlm_policy_data_t policy = { .l_inodebits = { lockpart } };
         int flags;
         ENTRY;
 
@@ -358,14 +357,14 @@ static int llu_have_md_lock(struct inode *inode, __u64 lockpart)
 
         /* FIXME use LDLM_FL_TEST_LOCK instead */
         flags = LDLM_FL_BLOCK_GRANTED | LDLM_FL_CBPENDING;
-        if (ldlm_lock_match(obddev->obd_namespace, flags, &res_id, LDLM_IBITS,
-                            &policy, LCK_PR, &lockh)) {
+        if (ldlm_lock_match(obddev->obd_namespace, flags, &res_id, LDLM_PLAIN,
+                            NULL, LCK_PR, &lockh)) {
                 ldlm_lock_decref(&lockh, LCK_PR);
                 RETURN(1);
         }
 
-        if (ldlm_lock_match(obddev->obd_namespace, flags, &res_id, LDLM_IBITS,
-                            &policy, LCK_PW, &lockh)) {
+        if (ldlm_lock_match(obddev->obd_namespace, flags, &res_id, LDLM_PLAIN,
+                            NULL, LCK_PW, &lockh)) {
                 ldlm_lock_decref(&lockh, LCK_PW);
                 RETURN(1);
         }
@@ -383,7 +382,7 @@ static int llu_inode_revalidate(struct inode *inode)
                 RETURN(0);
         }
 
-        if (!llu_have_md_lock(inode, MDS_INODELOCK_UPDATE)) {
+        if (!llu_have_md_lock(inode)) {
                 struct lustre_md md;
                 struct ptlrpc_request *req = NULL;
                 struct llu_sb_info *sbi = llu_i2sbi(inode);
@@ -1188,7 +1187,7 @@ static int llu_iop_fcntl(struct inode *ino, int cmd, va_list ap)
         return -ENOSYS;
 }
 
-static int llu_get_grouplock(struct inode *inode, unsigned long arg)
+static int llu_get_cwlock(struct inode *inode, unsigned long arg)
 {
         struct llu_inode_info *lli = llu_i2info(inode);
         struct ll_file_data *fd = lli->lli_file_data;
@@ -1200,7 +1199,7 @@ static int llu_get_grouplock(struct inode *inode, unsigned long arg)
         int flags = 0;
         ENTRY;
 
-        if (fd->fd_flags & LL_FILE_GROUP_LOCKED) {
+        if (fd->fd_flags & LL_FILE_CW_LOCKED) {
                 RETURN(-EINVAL);
         }
 
@@ -1208,19 +1207,18 @@ static int llu_get_grouplock(struct inode *inode, unsigned long arg)
         if (lli->lli_open_flags & O_NONBLOCK)
                 flags = LDLM_FL_BLOCK_NOWAIT;
 
-        err = llu_extent_lock(fd, inode, lsm, LCK_GROUP, &policy, &lockh,
-                              flags);
+        err = llu_extent_lock(fd, inode, lsm, LCK_CW, &policy, &lockh, flags);
         if (err)
                 RETURN(err);
 
-        fd->fd_flags |= LL_FILE_GROUP_LOCKED|LL_FILE_IGNORE_LOCK;
+        fd->fd_flags |= LL_FILE_CW_LOCKED|LL_FILE_IGNORE_LOCK;
         fd->fd_gid = arg;
         memcpy(&fd->fd_cwlockh, &lockh, sizeof(lockh));
 
         RETURN(0);
 }
 
-static int llu_put_grouplock(struct inode *inode, unsigned long arg)
+static int llu_put_cwlock(struct inode *inode, unsigned long arg)
 {
         struct llu_inode_info *lli = llu_i2info(inode);
         struct ll_file_data *fd = lli->lli_file_data;
@@ -1228,15 +1226,15 @@ static int llu_put_grouplock(struct inode *inode, unsigned long arg)
         ldlm_error_t err;
         ENTRY;
 
-        if (!(fd->fd_flags & LL_FILE_GROUP_LOCKED))
+        if (!(fd->fd_flags & LL_FILE_CW_LOCKED))
                 RETURN(-EINVAL);
 
         if (fd->fd_gid != arg)
                 RETURN(-EINVAL);
 
-        fd->fd_flags &= ~(LL_FILE_GROUP_LOCKED|LL_FILE_IGNORE_LOCK);
+        fd->fd_flags &= ~(LL_FILE_CW_LOCKED|LL_FILE_IGNORE_LOCK);
 
-        err = llu_extent_unlock(fd, inode, lsm, LCK_GROUP, &fd->fd_cwlockh);
+        err = llu_extent_unlock(fd, inode, lsm, LCK_CW, &fd->fd_cwlockh);
         if (err)
                 RETURN(err);
 
@@ -1252,12 +1250,12 @@ static int llu_iop_ioctl(struct inode *ino, unsigned long int request,
         unsigned long arg;
 
         switch (request) {
-        case LL_IOC_GROUP_LOCK:
+        case LL_IOC_CW_LOCK:
                 arg = va_arg(ap, unsigned long);
-                return llu_get_grouplock(ino, arg);
-        case LL_IOC_GROUP_UNLOCK:
+                return llu_get_cwlock(ino, arg);
+        case LL_IOC_CW_UNLOCK:
                 arg = va_arg(ap, unsigned long);
-                return llu_put_grouplock(ino, arg);
+                return llu_put_cwlock(ino, arg);
         }
 
         CERROR("did not support ioctl cmd %lx\n", request);
@@ -1290,11 +1288,8 @@ struct inode *llu_iget(struct filesys *fs, struct lustre_md *md)
 
         if ((md->body->valid &
              (OBD_MD_FLGENER | OBD_MD_FLID | OBD_MD_FLTYPE)) !=
-            (OBD_MD_FLGENER | OBD_MD_FLID | OBD_MD_FLTYPE)) {
-                /* FIXME this is workaround for for open(O_CREAT),
-                 * see lookup_it_finish(). */
-                return ERR_PTR(-EPERM);
-        }
+            (OBD_MD_FLGENER | OBD_MD_FLID | OBD_MD_FLTYPE))
+                CERROR("invalide fields!\n");
 
         /* try to find existing inode */
         fid.id = md->body->ino;
@@ -1493,7 +1488,7 @@ llu_fsswop_mount(const char *source,
         LASSERT(sbi->ll_rootino != 0);
 
         root = llu_iget(fs, &md);
-        if (!root || IS_ERR(root)) {
+        if (root == NULL) {
                 CERROR("fail to generate root inode\n");
                 GOTO(out_request, err = -EBADF);
         }
@@ -1563,3 +1558,5 @@ static struct inode_ops llu_inode_ops = {
 #endif
         inop_gone:      llu_iop_gone,
 };
+
+#warning "time_after() defined in liblustre.h need to be rewrite in userspace"

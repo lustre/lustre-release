@@ -3,7 +3,28 @@
 
 #include "build_check.h"
 
-#include <linux/libcfs.h>
+#ifdef __linux__
+# include <asm/types.h>
+# if defined(__powerpc__) && !defined(__KERNEL__)
+#  define __KERNEL__
+#  include <asm/timex.h>
+#  undef __KERNEL__
+# else
+#  include <asm/timex.h>
+# endif
+#else
+# include <sys/types.h>
+typedef u_int32_t __u32;
+typedef u_int64_t __u64;
+#endif
+
+#ifdef __KERNEL__
+# include <linux/time.h>
+#else
+# include <sys/time.h>
+# define do_gettimeofday(tv) gettimeofday(tv, NULL);
+#endif
+
 #include <portals/errno.h>
 
 /* This implementation uses the same type for API function return codes and
@@ -20,6 +41,7 @@ typedef __u64 ptl_hdr_data_t;
 typedef __u32 ptl_size_t;
 
 #define PTL_TIME_FOREVER    (-1)
+#define PTL_EQ_HANDLER_NONE NULL
 
 typedef struct {
         unsigned long nal_idx;			/* which network interface */
@@ -59,6 +81,12 @@ typedef enum {
 } ptl_ins_pos_t;
 
 typedef struct {
+	struct page     *kiov_page;
+	unsigned int     kiov_len;
+	unsigned int     kiov_offset;
+} ptl_kiov_t;
+
+typedef struct {
         void            *start;
         ptl_size_t       length;
         int              threshold;
@@ -66,6 +94,7 @@ typedef struct {
         unsigned int     options;
         void            *user_ptr;
         ptl_handle_eq_t  eventq;
+	unsigned int     niov;
 } ptl_md_t;
 
 /* Options for the MD structure */
@@ -83,18 +112,8 @@ typedef struct {
 
 /* For compatibility with Cray Portals */
 #define PTL_MD_LUSTRE_COMPLETION_SEMANTICS  0
-#define PTL_MD_PHYS                         0
 
 #define PTL_MD_THRESH_INF       (-1)
-
-/* NB lustre portals uses struct iovec internally! */
-typedef struct iovec ptl_md_iovec_t;
-
-typedef struct {
-	struct page     *kiov_page;
-	unsigned int     kiov_len;
-	unsigned int     kiov_offset;
-} ptl_kiov_t;
 
 typedef enum {
         PTL_EVENT_GET_START,
@@ -149,9 +168,6 @@ typedef enum {
         PTL_NOACK_REQ
 } ptl_ack_req_t;
 
-typedef void (*ptl_eq_handler_t)(ptl_event_t *event);
-#define PTL_EQ_HANDLER_NONE NULL
-
 typedef struct {
         volatile ptl_seq_t sequence;
         ptl_size_t size;
@@ -164,14 +180,11 @@ typedef struct {
 } ptl_ni_t;
 
 typedef struct {
-	int max_mes;
-	int max_mds;
-	int max_eqs;
-	int max_ac_index;
-	int max_pt_index;
-	int max_md_iovecs;
-	int max_me_list;
-	int max_getput_md;
+        int max_match_entries;    /* max number of match entries */
+        int max_mem_descriptors;  /* max number of memory descriptors */
+        int max_event_queues;     /* max number of event queues */
+        int max_atable_index;     /* maximum access control list table index */
+        int max_ptable_index;     /* maximum portals table index */
 } ptl_ni_limits_t;
 
 /*
@@ -188,8 +201,5 @@ typedef enum {
 } ptl_sr_index_t;
 
 typedef int ptl_sr_value_t;
-
-typedef int ptl_interface_t;
-#define PTL_IFACE_DEFAULT    (-1)
 
 #endif

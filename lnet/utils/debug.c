@@ -65,9 +65,9 @@ static int debug_mask = ~0;
 
 static const char *portal_debug_subsystems[] =
         {"undefined", "mdc", "mds", "osc", "ost", "class", "log", "llite",
-         "rpc", "mgmt", "portals", "libcfs", "socknal", "qswnal", "pinger",
-         "filter", "ptlbd", "echo", "ldlm", "lov", "gmnal", "router", "cobd",
-         "ibnal", NULL};
+         "rpc", "mgmt", "portals", "socknal", "qswnal", "pinger", "filter",
+         "ptlbd", "echo", "ldlm", "lov", "gmnal", "router", "cobd", "ibnal",
+         "lmv", NULL};
 static const char *portal_debug_masks[] =
         {"trace", "inode", "super", "ext2", "malloc", "cache", "info", "ioctl",
          "blocks", "net", "warning", "buffs", "other", "dentry", "portals",
@@ -182,6 +182,9 @@ static int applymask(char* procpath, int value)
         close(fd);
         return 0;
 }
+
+extern char *dump_filename;
+extern int dump(int dev_id, int opc, void *buf);
 
 static void applymask_all(unsigned int subs_mask, unsigned int debug_mask)
 {
@@ -538,7 +541,6 @@ static struct mod_paths {
         {"mds", "lustre/mds"},
         {"mdc", "lustre/mdc"},
         {"llite", "lustre/llite"},
-        {"smfs", "lustre/smfs"},
         {"obdecho", "lustre/obdecho"},
         {"ldlm", "lustre/ldlm"},
         {"obdfilter", "lustre/obdfilter"},
@@ -547,13 +549,13 @@ static struct mod_paths {
         {"fsfilt_ext3", "lustre/lvfs"},
         {"fsfilt_extN", "lustre/lvfs"},
         {"fsfilt_reiserfs", "lustre/lvfs"},
-        {"fsfilt_smfs", "lustre/lvfs"},
         {"mds_ext2", "lustre/mds"},
         {"mds_ext3", "lustre/mds"},
         {"mds_extN", "lustre/mds"},
         {"ptlbd", "lustre/ptlbd"},
         {"mgmt_svc", "lustre/mgmt"},
         {"mgmt_cli", "lustre/mgmt"},
+        {"lmv", "lustre/lmv"},
         {NULL, NULL}
 };
 
