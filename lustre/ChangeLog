@@ -1,6 +1,11 @@
 tbd  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.3
        * bug fixes
+       * miscellania
+
+2004-06-17  Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 1.2.3
+       * bug fixes
 	- clean kiobufs before and after use (3485)
 	- strip trailing '/'s before comparing paths with /proc/mounts (3486)
 	- remove assertions to work around "in-flight rpcs" recovery bug (3063)
