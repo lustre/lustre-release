@@ -1,10 +1,7 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  lustre/mds/handler.c
- *  Lustre Metadata Server (mds) request handler
- *
- *  Copyright (c) 2001, 2002 Cluster File Systems, Inc.
+ *  Copyright (c) 2003 Cluster File Systems, Inc.
  *   Author: Peter Braam <braam@clusterfs.com>
  *   Author: Andreas Dilger <adilger@clusterfs.com>
  *   Author: Phil Schwan <phil@clusterfs.com>
@@ -35,10 +32,11 @@
 #include <linux/init.h>
 #include <linux/obd_class.h>
 #include <linux/random.h>
-#include <linux/locks.h>
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 #include <linux/buffer_head.h>
 #include <linux/workqueue.h>
+#else
+#include <linux/locks.h>
 #endif
 #include <linux/obd_lov.h>
 #include <linux/lustre_mds.h>
@@ -47,9 +45,8 @@
 
 extern kmem_cache_t *mds_file_cache;
 extern inline struct mds_obd *mds_req2mds(struct ptlrpc_request *req);
-extern void mds_start_transno(struct mds_obd *mds);
-extern int mds_finish_transno(struct mds_obd *mds, void *handle,
-                              struct ptlrpc_request *req, int rc);
+int mds_finish_transno(struct mds_obd *mds, struct inode *i, void *handle,
+                       struct ptlrpc_request *req, int rc, __u32 op_data);
 extern int enqueue_ordered_locks(int lock_mode, struct obd_device *obd,
                                  struct ldlm_res_id *p1_res_id,
                                  struct ldlm_res_id *p2_res_id,
@@ -130,18 +127,18 @@ int mds_open(struct mds_update_record *rec, int offset,
         if ((rec->ur_flags & O_CREAT) && !dchild->d_inode) {
                 int err;
                 void *handle;
-                mds_start_transno(mds);
                 rep->lock_policy_res1 |= IT_OPEN_CREATE;
                 handle = fsfilt_start(obd, parent->d_inode, FSFILT_OP_CREATE);
                 if (IS_ERR(handle)) {
                         rc = PTR_ERR(handle);
-                        mds_finish_transno(mds, handle, req, rc);
+                        mds_finish_transno(mds, parent->d_inode, handle, req,
+                                           rc, rep->lock_policy_res1);
                         GOTO(out_step_3, rc);
                 }
                 rc = vfs_create(parent->d_inode, dchild, rec->ur_mode);
-                rc = mds_finish_transno(mds, handle, req, rc);
-                err = fsfilt_commit(obd, parent->d_inode, handle);
-                if (rc || err) {
+                err = mds_finish_transno(mds, parent->d_inode, handle, req, rc,
+                                        rep->lock_policy_res1);
+                if (err) {
                         CERROR("error on commit: err = %d\n", err);
                         if (!rc)
                                 rc = err;
@@ -199,7 +196,7 @@ int mds_open(struct mds_update_record *rec, int offset,
         mfd = kmem_cache_alloc(mds_file_cache, GFP_KERNEL);
         if (!mfd) {
                 CERROR("mds: out of memory\n");
-                GOTO(out_step_4, req->rq_status = -ENOMEM);
+                GOTO(out_step_4, rc = -ENOMEM);
         }
 
         /* dentry_open does a dput(de) and mntput(mds->mds_vfsmnt) on error */
@@ -233,6 +230,12 @@ int mds_open(struct mds_update_record *rec, int offset,
         l_dput(dchild);
  out_step_2:
         l_dput(parent);
-        ldlm_lock_decref(&parent_lockh, parent_mode);
+        if (rc) {
+                ldlm_lock_decref(&parent_lockh, parent_mode);
+        } else {
+                memcpy(&req->rq_ack_locks[0].lock, &parent_lockh,
+                       sizeof(parent_lockh));
+                req->rq_ack_locks[0].mode = parent_mode;
+        }
         RETURN(rc);
 }
