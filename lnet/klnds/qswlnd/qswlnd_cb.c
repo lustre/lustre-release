@@ -119,6 +119,18 @@ kqswnal_dist(nal_cb_t *nal, ptl_nid_t nid, unsigned long *dist)
 }
 
 void
+kqswnal_notify_peer_down(kqswnal_tx_t *ktx)
+{
+        struct timeval     now;
+        time_t             then;
+
+        do_gettimeofday (&now);
+        then = now.tv_sec - (jiffies - ktx->ktx_launchtime)/HZ;
+
+        kpr_notify(&kqswnal_data.kqn_router, ktx->ktx_nid, 0, then);
+}
+
+void
 kqswnal_unmap_tx (kqswnal_tx_t *ktx)
 {
         if (ktx->ktx_nmappedpages == 0)
@@ -421,8 +433,6 @@ static void
 kqswnal_txhandler(EP_TXD *txd, void *arg, int status)
 {
         kqswnal_tx_t      *ktx = (kqswnal_tx_t *)arg;
-        struct timeval     now;
-        time_t             then;
         
         LASSERT (txd != NULL);
         LASSERT (ktx != NULL);
@@ -437,12 +447,7 @@ kqswnal_txhandler(EP_TXD *txd, void *arg, int status)
                 CERROR ("Tx completion to "LPX64" failed: %d\n", 
                         ktx->ktx_nid, status);
 
-                do_gettimeofday (&now);
-                then = now.tv_sec - (jiffies - ktx->ktx_launchtime)/HZ;
-        
-                kpr_notify (&kqswnal_data.kqn_router, 
-                            ktx->ktx_nid, 0, then);
-
+                kqswnal_notify_peer_down(ktx);
                 status = -EIO;
         }
 
@@ -483,10 +488,7 @@ kqswnal_launch (kqswnal_tx_t *ktx)
 
         default: /* fatal error */
                 CERROR ("Tx to "LPX64" failed: %d\n", ktx->ktx_nid, rc);
-
-                /* Tell router I think a node is down */
-                kpr_notify (&kqswnal_data.kqn_router, ktx->ktx_nid,
-                            0, ktx->ktx_launchtime);
+                kqswnal_notify_peer_down(ktx);
                 return (rc);
         }
 }

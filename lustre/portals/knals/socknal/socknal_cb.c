@@ -1526,9 +1526,9 @@ ksocknal_process_receive (ksock_sched_t *sched, unsigned long *irq_flags)
                                         conn, rc, conn->ksnc_peer->ksnp_nid,
                                         conn->ksnc_ipaddr, conn->ksnc_port);
                         else
-                                CERROR ("[%p] EOF from "LPX64" ip %08x:%d\n",
-                                        conn, conn->ksnc_peer->ksnp_nid,
-                                        conn->ksnc_ipaddr, conn->ksnc_port);
+                                CWARN ("[%p] EOF from "LPX64" ip %08x:%d\n",
+                                       conn, conn->ksnc_peer->ksnp_nid,
+                                       conn->ksnc_ipaddr, conn->ksnc_port);
                 }
                 goto out;
         }

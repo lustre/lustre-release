@@ -119,6 +119,8 @@ kpr_do_upcall (void *arg)
         snprintf (whenstr, sizeof(whenstr), "%ld", u->kpru_when);
 
         portals_run_upcall (argv);
+
+        kfree (u);
 }
 
 void
@@ -161,11 +163,12 @@ kpr_do_notify (int byNal, int gateway_nalid, ptl_nid_t gateway_nid,
         /* can't do predictions... */
         do_gettimeofday (&now);
         if (when > now.tv_sec) {
-                CERROR ("Ignoring prediction from %s of [%d] "LPX64" %s "
-                        "%ld seconds in the future\n", 
-                byNal ? "NAL" : "userspace", 
-                gateway_nalid, gateway_nid, alive ? "up" : "down",
-                        when - now.tv_sec);
+                CWARN ("Ignoring prediction from %s of [%d] "LPX64" %s "
+                       "%ld seconds in the future\n", 
+                       byNal ? "NAL" : "userspace", 
+                       gateway_nalid, gateway_nid, 
+                       alive ? "up" : "down",
+                       when - now.tv_sec);
                 return (EINVAL);
         }
 
@@ -189,14 +192,14 @@ kpr_do_notify (int byNal, int gateway_nalid, ptl_nid_t gateway_nid,
         if (rc != 0) {
                 /* gateway not found */
                 write_unlock_irqrestore(&kpr_rwlock, flags);
-                CERROR ("Gateway not found\n");
+                CDEBUG (D_NET, "Gateway not found\n");
                 return (rc);
         }
         
         if (when < ge->kpge_timestamp) {
                 /* out of date information */
                 write_unlock_irqrestore (&kpr_rwlock, flags);
-                CERROR ("Out of date\n");
+                CDEBUG (D_NET, "Out of date\n");
                 return (0);
         }
 
@@ -206,7 +209,7 @@ kpr_do_notify (int byNal, int gateway_nalid, ptl_nid_t gateway_nid,
         if ((!ge->kpge_alive) == (!alive)) {
                 /* new date for old news */
                 write_unlock_irqrestore (&kpr_rwlock, flags);
-                CERROR ("Old news\n");
+                CDEBUG (D_NET, "Old news\n");
                 return (0);
         }
 
@@ -250,10 +253,12 @@ kpr_do_notify (int byNal, int gateway_nalid, ptl_nid_t gateway_nid,
         
         if (byNal) {
                 /* It wasn't userland that notified me... */
-                CERROR ("Doing upcall\n");
+                CWARN ("Upcall: NAL %d NID "LPX64" is %s\n",
+                       gateway_nalid, gateway_nid,
+                       alive ? "alive" : "dead");
                 kpr_upcall (gateway_nalid, gateway_nid, alive, when);
         } else {
-                CERROR (" NOT Doing upcall\n");
+                CDEBUG (D_NET, " NOT Doing upcall\n");
         }
         
         return (0);
