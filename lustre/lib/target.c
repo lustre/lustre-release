@@ -56,7 +56,6 @@ int target_handle_reconnect(struct lustre_handle *conn, struct obd_export *exp,
                          * file separately into each server module, so I won't
                          * go _immediately_ to hell.
                          */
-                        MOD_DEC_USE_COUNT;
                         RETURN(-EALREADY);
                 }
         }
