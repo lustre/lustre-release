@@ -370,6 +370,7 @@ extern void lib_copy_buf2iov (int niov, struct iovec *iov, char *dest, ptl_size_
 extern ptl_size_t lib_kiov_nob (int niov, ptl_kiov_t *iov);
 extern void lib_copy_kiov2buf (char *dest, int niov, ptl_kiov_t *iov, ptl_size_t len);
 extern void lib_copy_buf2kiov (int niov, ptl_kiov_t *iov, char *src, ptl_size_t len);
+extern void lib_assert_wire_constants (void);
 
 extern void lib_recv (nal_cb_t *nal, void *private, lib_msg_t *msg, lib_md_t *md,
                       ptl_size_t offset, ptl_size_t mlen, ptl_size_t rlen);

@@ -357,6 +357,8 @@ lib_init(nal_cb_t * nal, ptl_nid_t nid, ptl_pid_t pid, int gsize,
                 goto out;
         }
 
+        lib_assert_wire_constants ();
+        
         /*
          * Allocate the portal table for this interface
          * and all per-interface objects.
