@@ -393,7 +393,7 @@ static int llog_lvfs_create(struct obd_device *obd, struct llog_handle **res,
                 oa = obdo_alloc();
                 if (oa == NULL) 
                         GOTO(cleanup, rc = -ENOMEM);
-                /* XXX */
+                /* XXX get some filter group constants */
                 oa->o_gr = 1;
                 oa->o_valid = OBD_MD_FLGENER | OBD_MD_FLGROUP;
                 rc = obd_create(obd->obd_log_exp, oa, NULL, NULL);
