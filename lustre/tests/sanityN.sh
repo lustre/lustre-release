@@ -3,7 +3,7 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test: 1768 3192 3192
+# bug number for skipped test: 1768 3192 4035
 ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"4   14b  14c"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
@@ -375,12 +375,6 @@ test_18() {
 	./mmap_sanity -d $MOUNT1 -m $MOUNT2
 }
 run_test 18 "mmap sanity check ================================="
-
-test_18() {
-	./mmap_sanity -d $MOUNT1 -m $MOUNT2
-	sync; sleep 1; sync
-}
-#run_test 18 "mmap sanity check ================================="
 
 test_19() { # bug3811
 	[ -d /proc/fs/lustre/obdfilter ] || return 0
