@@ -20,12 +20,15 @@ declare -a cleanup_pids
 declare -a cleanup_mounts
 # global for completing the table.  XXX this is a wart that could go
 cur_y="0"
+# a global which funcs use to get at the blocks[] array
+last_block=-1
 
 # defaults for some options:
 min_threads=1
 max_threads=4
 possible_tests="sgp_dd ext2_iozone echo_filter"
 run_tests="$possible_tests"
+echo_module=""
 
 # optional output directory
 output_dir=""
@@ -313,14 +316,27 @@ ext2_iozone_start() {
 		*) die "asked to do io with $wor?"
 	esac
 
-	echo iozone "$args -r ${iosize}k -s ${io_len}k -I -f $f"
+	echo iozone "$args -r ${iosize}k -s $(($io_len / $threads))k \
+			-t $threads -x -I -f $f"
 }
 ext2_iozone_result() {
 	local output=$1
+	local wor=$2
+	local string
+	local field
 
-	kps=`awk '($2 == "reclen"){results=NR+1}(results == NR){print $3}' \
-		< $output`
-	do_bc_scale 0 "$kps / 1024"
+	case "$wor" in
+		w) string="writers" 
+		   field=7 
+			;;
+		r) string="readers" 
+		   field=6
+			;;
+		*) die "asked to do io with $wor?"
+	esac
+
+	do_bc_scale 1 `awk '($1 == "Parent" && $'$field' == "'$string'") \
+			{print $'$(($field + 2))'}' $output` / 1024
 }
 ext2_iozone_cleanup() {
 	local id=$1
@@ -349,7 +365,7 @@ ext2_iozone_teardown() {
 
 # the echo_client setup is nutty enough to warrant its own clenaup
 running_config=""
-running_modules=""
+running_module=""
 declare -a running_names
 declare -a running_oids
 
@@ -372,12 +388,12 @@ detach
 quit
 EOF
 	done
-	running_names=""
+	unset running_names
 
-	for m in $running_modules; do
+	for m in $running_module; do
 		rmmod $m
 	done
-	running_modules=""
+	running_module=""
 
 	[ ! -z "$running_config" ] && lconf --cleanup $running_config
 	running_config=""
@@ -435,11 +451,23 @@ echo_filter_prepare() {
 		fi
 		running_config="$config"
 		if ! grep -q '^obdecho\>' /proc/modules; then
+			local m
 			if ! modprobe obdecho; then
-				echo "error running modprobe obdecho"
-				return 1;
+				if [ ! -z "$echo_module" ]; then
+					if ! insmod $echo_module; then
+						echo "err: insmod $echo_module"
+						return 1;
+					else
+						m="$echo_module"
+					fi
+				else
+					echo "err: modprobe $obdecho"
+					return 1;
+				fi
+			else
+				m=obdecho
 			fi
-			running_modules="obdecho"
+			running_module=`basename $m | cut -d'.' -f 1`
 		fi
 	fi
 
@@ -470,7 +498,7 @@ echo_filter_setup() {
 
 	running_threads=$threads
 	oid=`lctl --device "\$"$name create $threads | \
-		awk '/1 is object id/ { print $6 }'`
+		awk '/ #1 is object id/ { print $6 }'`
 	# XXX need to deal with errors
 	running_oids[$id]=$oid
 }
@@ -479,17 +507,19 @@ echo_filter_start() {
 	local iosize=$2
 	local wor=$3
 	local id=$4
+
 	local name="echo_$id"
-	local pages=$(($io_len / 4))
+	local len_pages=$(($io_len / $(($page_size / 1024)) ))
+	local size_pages=$(($iosize / $(($page_size / 1024)) ))
 
 	case "$wor" in
-		w) args="-i 0 -w" ;;
-		r) args="-i 1 -w" ;;
+		w) ;;
+		r) ;;
 		*) die "asked to do io with $wor?"
 	esac
 
 	echo lctl --threads $threads v "\$"$name \
-		test_brw 1 w v $pages ${running_oids[$i]} p$iosize
+		test_brw 1 $wor v $len_pages t${running_oids[$i]} p$size_pages
 }
 echo_filter_result() {
 	local output=$1
@@ -499,7 +529,7 @@ echo_filter_result() {
 	for mbs in `awk '($8=="MB/s):"){print substr($7,2)}' < $output`; do
 		total=$(do_bc $total + $mbs)
 	done
-	do_bc_scale $total / 1
+	do_bc_scale 2 $total / 1
 }
 echo_filter_cleanup() {
 	local id=$1
@@ -620,7 +650,7 @@ test_one() {
 	# record each index's test results and sum them
 	thru=0
 	for i in `seq 0 $last_block`; do
-		local t=`${test}_result $tmpdir/$i`
+		local t=`${test}_result $tmpdir/$i $wor`
 		save_output $tmpdir/$i $opref.$i
 		echo test returned "$t"
 		mb_s[$i]="$t"
@@ -680,7 +710,7 @@ test_iterator() {
 	done
 
 	while [ -z "$cleanup" -a $thr -lt $(($max_threads + 1)) ]; do
-		for iosize in 64 128; do
+		for iosize in 128 512; do
 			table_set $test 0 $cur_y $thr
 			table_set $test 1 $cur_y $iosize
 
@@ -705,8 +735,9 @@ test_iterator() {
 	return $rc;
 }
 
-while getopts ":d:b:l:t:T:r:" opt; do
+while getopts ":d:b:l:t:T:r:e:" opt; do
         case $opt in
+                e) echo_module=$OPTARG                 ;;
                 b) block=$OPTARG                 ;;
                 d) output_dir=$OPTARG                 ;;
                 l) io_len=$OPTARG			;;
@@ -716,6 +747,11 @@ while getopts ":d:b:l:t:T:r:" opt; do
                 \?) usage
         esac
 done
+
+page_size=`getconf PAGE_SIZE` || die '"getconf PAGE_SIZE" failed'
+
+[ ! -z "$echo_module" -a ! -f "$echo_module" ] && \
+	die "obdecho module $echo_module is not a file"
 
 if [ -z "$io_len" ]; then
 	io_len=`awk '($1 == "MemTotal:"){print $2}' < /proc/meminfo`
@@ -741,7 +777,6 @@ done
 [ $min_threads -gt $max_threads ] && \
 	die "min threads $min_threads must be <= min_threads $min_threads"
 
-last_block=-1
 for b in $block; do
 	[ ! -e $b ] && die "block device file $b doesn't exist"
 	[ ! -b $b ] && die "$b isn't a block device"
