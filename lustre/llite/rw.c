@@ -88,35 +88,35 @@ inline struct obdo * ll_oa_from_inode(struct inode *inode, unsigned long valid)
         }
         oa->o_valid = valid;
 
-        if ( oa->o_valid & OBD_MD_FLID )
+        if ( valid & OBD_MD_FLID )
                 oa->o_id = oinfo->lli_objid;
-        if ( oa->o_valid & OBD_MD_FLATIME )
+        if ( valid & OBD_MD_FLATIME )
                 oa->o_atime = inode->i_atime;
-        if ( oa->o_valid & OBD_MD_FLMTIME )
+        if ( valid & OBD_MD_FLMTIME )
                 oa->o_mtime = inode->i_mtime;
-        if ( oa->o_valid & OBD_MD_FLCTIME )
+        if ( valid & OBD_MD_FLCTIME )
                 oa->o_ctime = inode->i_ctime;
-        if ( oa->o_valid & OBD_MD_FLSIZE )
+        if ( valid & OBD_MD_FLSIZE )
                 oa->o_size = inode->i_size;
-        if ( oa->o_valid & OBD_MD_FLBLOCKS )   /* allocation of space */
+        if ( valid & OBD_MD_FLBLOCKS )   /* allocation of space */
                 oa->o_blocks = inode->i_blocks;
-        if ( oa->o_valid & OBD_MD_FLBLKSZ )
+        if ( valid & OBD_MD_FLBLKSZ )
                 oa->o_blksize = inode->i_blksize;
-        if ( oa->o_valid & OBD_MD_FLMODE )
+        if ( valid & OBD_MD_FLMODE )
                 oa->o_mode = inode->i_mode;
-        if ( oa->o_valid & OBD_MD_FLUID )
+        if ( valid & OBD_MD_FLUID )
                 oa->o_uid = inode->i_uid;
-        if ( oa->o_valid & OBD_MD_FLGID )
+        if ( valid & OBD_MD_FLGID )
                 oa->o_gid = inode->i_gid;
-        if ( oa->o_valid & OBD_MD_FLFLAGS )
+        if ( valid & OBD_MD_FLFLAGS )
                 oa->o_flags = inode->i_flags;
-        if ( oa->o_valid & OBD_MD_FLNLINK )
+        if ( valid & OBD_MD_FLNLINK )
                 oa->o_nlink = inode->i_nlink;
-        if ( oa->o_valid & OBD_MD_FLGENER ) 
+        if ( valid & OBD_MD_FLGENER ) 
                 oa->o_generation = inode->i_generation;
 
-        CDEBUG(D_INFO, "src inode %ld, dst obdo %ld valid 0x%08x\n",
-               inode->i_ino, (long)oa->o_id, oa->o_valid);
+        CDEBUG(D_INFO, "src inode %ld, dst obdo %ld valid 0x%08lx\n",
+               inode->i_ino, (long)oa->o_id, valid);
 #if 0
         /* this will transfer metadata for the logical object to 
            the oa: that metadata could contain the constituent objects
@@ -387,8 +387,8 @@ int ll_direct_IO(int rw, struct inode * inode, struct kiobuf * iobuf, unsigned l
 
         err = obd_brw(rw, ll_i2obdconn(inode), num_obdo, &oa, &bufs_per_obdo,
                       iobuf->maplist, count, offset, flags);
-        if (err == 0) 
-                err = bufs_per_obdo * 4096;
+        if (err == 0)
+                err = bufs_per_obdo * PAGE_SIZE;
 
  out:
         if (oa) 
