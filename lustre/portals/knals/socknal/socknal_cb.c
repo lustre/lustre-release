@@ -740,15 +740,16 @@ ksocknal_setup_hdr (nal_cb_t *nal, void *private, lib_msg_t *cookie,
 }
 
 int
-ksocknal_send (nal_cb_t *nal, void *private, lib_msg_t *cookie, 
+ksocknal_send (nal_cb_t *nal, void *private, lib_msg_t *cookie,
                ptl_hdr_t *hdr, int type, ptl_nid_t nid, ptl_pid_t pid,
-               unsigned int payload_niov, struct iovec *payload_iov, size_t payload_len)
+               unsigned int payload_niov, struct iovec *payload_iov,
+               size_t payload_len)
 {
         ksock_ltx_t  *ltx;
         ksock_conn_t *conn;
-        
+
         /* NB 'private' is different depending on what we're sending.
-         * Just ignore it until we can rely on it 
+         * Just ignore it until we can rely on it
          *
          * Also, the return code from this procedure is ignored.
          * If we can't send, we must still complete with lib_finalize().
@@ -756,31 +757,31 @@ ksocknal_send (nal_cb_t *nal, void *private, lib_msg_t *cookie,
          */
 
         CDEBUG(D_NET,
-               "sending "LPSZ" bytes in %d mapped frags to nid: "LPX64" pid %d\n",
-               payload_len, payload_niov, nid, pid);
+               "sending "LPSZ" bytes in %d mapped frags to nid: "LPX64
+               " pid %d\n", payload_len, payload_niov, nid, pid);
 
         conn = ksocknal_send_target (nid);
         if (conn == NULL) {
                 lib_finalize (&ksocknal_lib, private, cookie);
                 return (-1);
         }
-        
+
         ltx = ksocknal_setup_hdr (nal, private, cookie, hdr, type);
         if (ltx == NULL) {
                 ksocknal_put_conn (conn);
                 lib_finalize (&ksocknal_lib, private, cookie);
                 return (-1);
         }
-        
+
         /* append the payload_iovs to the one pointing at the header */
         LASSERT (ltx->ltx_tx.tx_niov == 1 && ltx->ltx_tx.tx_nkiov == 0);
         LASSERT (payload_niov <= PTL_MD_MAX_IOV);
-        
-        memcpy (ltx->ltx_tx.tx_iov + 1, payload_iov, 
+
+        memcpy (ltx->ltx_tx.tx_iov + 1, payload_iov,
                 payload_niov * sizeof (*payload_iov));
         ltx->ltx_tx.tx_niov = 1 + payload_niov;
         ltx->ltx_tx.tx_nob = sizeof (*hdr) + payload_len;
-        
+
         ksocknal_launch_packet (conn, &ltx->ltx_tx);
         return (0);
 }

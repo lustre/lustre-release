@@ -1,5 +1,4 @@
 /*
-** $Id: internal.h,v 1.1.2.1 2003/05/19 04:25:31 braam Exp $
 */
 #ifndef _P30_INTERNAL_H_
 #define _P30_INTERNAL_H_

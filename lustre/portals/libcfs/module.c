@@ -19,7 +19,9 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#define EXPORT_SYMTAB
+#ifndef EXPORT_SYMTAB
+# define EXPORT_SYMTAB
+#endif
 #define DEBUG_SUBSYSTEM S_PORTALS
 
 #include <linux/config.h>
@@ -63,10 +65,9 @@ struct semaphore nal_cmd_sem;
 void kportal_assertion_failed(char *expr, char *file, const char *func, 
                               const int line)
 {
-        unsigned long stack = CDEBUG_STACK(stack);
-        portals_debug_msg(0, D_EMERG, file, func, line, stack,
+        portals_debug_msg(0, D_EMERG, file, func, line, CDEBUG_STACK(),
                           "ASSERTION(%s) failed\n", expr);
-        LBUG();
+        LBUG_WITH_LOC(file, func, line);
 }
 #endif
 
@@ -87,8 +88,8 @@ kportal_blockallsigs ()
         unsigned long  flags;
 
         SIGNAL_MASK_LOCK(current, flags);
-        siginitsetinv (&current->blocked, 0);
-        RECALC_SIGPENDING();
+        sigfillset(&current->blocked);
+        RECALC_SIGPENDING;
         SIGNAL_MASK_UNLOCK(current, flags);
 }
 

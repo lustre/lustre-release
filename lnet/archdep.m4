@@ -150,7 +150,7 @@ fi
 # ------------ include paths ------------------
 
 if test $host_cpu != "lib" ; then 
-    KINCFLAGS='-I$(top_srcdir)/include -I$(top_srcdir)/portals/include -I$(LINUX)/include'
+    KINCFLAGS="-I\$(top_srcdir)/include -I\$(top_srcdir)/portals/include -I$LINUX/include"
 else
     KINCFLAGS='-I$(top_srcdir)/include -I$(top_srcdir)/portals/include'
 fi
@@ -303,4 +303,20 @@ AC_SUBST(MOD_LINK)
 AC_SUBST(LINUX25)
 AM_CONDITIONAL(LIBLUSTRE, test x$host_cpu = xlib)
 
+# ---------- Red Hat 2.4.20 backports some 2.5 bits --------
+# This needs to run after we've defined the KCPPFLAGS
 
+AC_MSG_CHECKING(for kernel version)
+AC_TRY_LINK([#define __KERNEL__
+             #include <linux/sched.h>],
+            [struct task_struct p;
+             p.sighand = NULL;],
+            [RH_2_4_20=1],
+            [RH_2_4_20=0])
+
+if test $RH_2_4_20 = 1; then
+	AC_MSG_RESULT(redhat-2.4.20)
+	CPPFLAGS="$CPPFLAGS -DCONFIG_RH_2_4_20"
+else
+	AC_MSG_RESULT($RELEASE)
+fi 

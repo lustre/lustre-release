@@ -83,45 +83,40 @@ extern unsigned int portal_printk;
 #ifdef __KERNEL__
 # include <linux/sched.h> /* THREAD_SIZE */
 
-#ifdef  __arch_ia64__
-#define CDEBUG_STACK(var) (&var & (THREAD_SIZE - 1))
+#ifdef  __ia64__
+#define CDEBUG_STACK() ((unsigned long)__builtin_dwarf_cfa()&(THREAD_SIZE - 1))
 #else
-#define CDEBUG_STACK(var) (THREAD_SIZE -                                      \
-                           ((unsigned long)__builtin_frame_address(0)&        \
-                            (THREAD_SIZE - 1)))
+#define CDEBUG_STACK() (THREAD_SIZE -                                      \
+                        ((unsigned long)__builtin_frame_address(0) &       \
+                         (THREAD_SIZE - 1)))
 #endif
 
 #define CHECK_STACK(stack)                                                    \
         do {                                                                  \
-                if ((stack) > 3*THREAD_SIZE/4 && (stack) > portal_stack)      \
+                if ((stack) > 3*THREAD_SIZE/4 && (stack) > portal_stack) {    \
                         portals_debug_msg(DEBUG_SUBSYSTEM, D_ERROR,           \
                                           __FILE__, __FUNCTION__, __LINE__,   \
                                           (stack),                            \
                                           "maximum lustre stack %u\n",        \
                                           portal_stack = (stack));            \
+                      /*panic("LBUG");*/                                      \
+                }                                                             \
         } while (0)
 #else
 #define CHECK_STACK(stack) do{}while(0)
 #define CDEBUG_STACK(var) (0)
 #endif
 
+#if 1
 #define CDEBUG(mask, format, a...)                                            \
 do {                                                                          \
-        unsigned long stack = CDEBUG_STACK(stack);                            \
-        int match = 0;                                                        \
-                                                                              \
-        CHECK_STACK(stack);                                                   \
-        if (!(mask))                                                          \
-                match = 1;                                                    \
-        else if ((mask) & (D_ERROR | D_EMERG))                                \
-                match = 1;                                                    \
-        else if (portal_debug & (mask) &&                                     \
-                 portal_subsystem_debug & (1 << (DEBUG_SUBSYSTEM >> 24)))     \
-                match = 1;                                                    \
-        if (match)                                                            \
+        CHECK_STACK(CDEBUG_STACK());                                          \
+        if (!(mask) || ((mask) & (D_ERROR | D_EMERG)) ||                      \
+            (portal_debug & (mask) &&                                         \
+             portal_subsystem_debug & (1 << (DEBUG_SUBSYSTEM >> 24))))        \
                 portals_debug_msg(DEBUG_SUBSYSTEM, mask,                      \
                                   __FILE__, __FUNCTION__, __LINE__,           \
-                                  stack, format , ## a);                      \
+                                  CDEBUG_STACK(), format , ## a);             \
 } while (0)
 
 #define CWARN(format, a...) CDEBUG(D_WARNING, format, ## a)
@@ -140,10 +135,8 @@ do {                                                                    \
 #define RETURN(rc)                                                      \
 do {                                                                    \
         typeof(rc) RETURN__ret = (rc);                                  \
-        long tmp = (long)RETURN__ret;                                   \
         CDEBUG(D_TRACE, "Process leaving (rc=%lu : %ld : %lx)\n",       \
-               (unsigned long)tmp, (signed long)tmp,                    \
-               (signed long)tmp);                                       \
+               (long)RETURN__ret, (long)RETURN__ret, (long)RETURN__ret);\
         return RETURN__ret;                                             \
 } while (0)
 
@@ -156,6 +149,16 @@ do {                                                                    \
 do {                                                                    \
         CDEBUG(D_TRACE, "Process leaving\n");                           \
 } while(0)
+#else
+#define CDEBUG(mask, format, a...)      do { } while (0)
+#define CWARN(format, a...)             do { } while (0)
+#define CERROR(format, a...)            printk("<3>" format, ## a)
+#define CEMERG(format, a...)            printk("<0>" format, ## a)
+#define GOTO(label, rc)                 do { (void)(rc); goto label; } while (0)
+#define RETURN(rc)                      return (rc)
+#define ENTRY                           do { } while (0)
+#define EXIT                            do { } while (0)
+#endif
 
 
 #ifdef __KERNEL__
@@ -214,23 +217,25 @@ extern void kportal_assertion_failed(char *expr, char *file,
 #endif
 
 #ifdef __arch_um__
-#define LBUG()                                                          \
+#define LBUG_WITH_LOC(file, func, line)                                 \
 do {                                                                    \
         CEMERG("LBUG - trying to dump log to /tmp/lustre-log\n");       \
         portals_debug_dumplog();                                        \
-        portals_run_lbug_upcall(__FILE__, __FUNCTION__, __LINE__);      \
+        portals_run_lbug_upcall(file, func, line);                      \
         panic("LBUG");                                                  \
 } while (0)
 #else
-#define LBUG()                                                          \
+#define LBUG_WITH_LOC(file, func, line)                                 \
 do {                                                                    \
         CEMERG("LBUG\n");                                               \
         portals_debug_dumplog();                                        \
-        portals_run_lbug_upcall(__FILE__, __FUNCTION__, __LINE__);      \
+        portals_run_lbug_upcall(file, func, line);                      \
         set_task_state(current, TASK_UNINTERRUPTIBLE);                  \
         schedule();                                                     \
 } while (0)
 #endif /* __arch_um__ */
+
+#define LBUG() LBUG_WITH_LOC(__FILE__, __FUNCTION__, __LINE__)
 
 /*
  * Memory
