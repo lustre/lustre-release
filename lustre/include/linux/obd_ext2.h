@@ -17,6 +17,7 @@
 
 struct ext2_obd {
         struct super_block * ext2_sb;
+	struct vfsmount *vfsmnt;
 };
 
 
