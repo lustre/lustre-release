@@ -80,10 +80,8 @@ static void cleanup_resource(struct ldlm_resource *res, struct list_head *q)
                         ldlm_lock2handle(lock, &lockh);
                         /* can we get away without a connh here? */
                         rc = ldlm_cli_cancel(&lockh);
-                        if (rc < 0) {
+                        if (rc < 0)
                                 CERROR("ldlm_cli_cancel: %d\n", rc);
-                                LBUG();
-                        }
                 } else {
                         CERROR("Freeing a lock still held by a client node.\n");
 
@@ -92,8 +90,6 @@ static void cleanup_resource(struct ldlm_resource *res, struct list_head *q)
                 }
                 LDLM_LOCK_PUT(lock);
         }
-
-        return; 
 }
 
 int ldlm_namespace_free(struct ldlm_namespace *ns)
@@ -115,8 +111,8 @@ int ldlm_namespace_free(struct ldlm_namespace *ns)
                         cleanup_resource(res, &res->lr_granted);
                         cleanup_resource(res, &res->lr_converting);
                         cleanup_resource(res, &res->lr_waiting);
-                        
-                        if (!ldlm_resource_put(res)) { 
+
+                        if (!ldlm_resource_put(res)) {
                                 CERROR("Resource refcount nonzero (%d) after "
                                        "lock cleanup; forcing cleanup.\n",
                                        atomic_read(&res->lr_refcount));
