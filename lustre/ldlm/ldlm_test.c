@@ -75,26 +75,17 @@ static int ldlm_do_convert(void);
  */
 static int ldlm_test_blocking_ast(struct ldlm_lock *lock,
                                   struct ldlm_lock_desc *new,
-                                  void *data, __u32 data_len, int flag)
+                                  void *data, __u32 data_len)
 {
         int rc;
         struct lustre_handle lockh;
         ENTRY;
 
-        switch (flag) {
-        case LDLM_CB_BLOCKING:
-                LDLM_DEBUG(lock, "We're blocking. Cancelling lock");
-                ldlm_lock2handle(lock, &lockh);
-                rc = ldlm_cli_cancel(&lockh);
-                if (rc < 0) {
-                        CERROR("ldlm_cli_cancel: %d\n", rc);
-                        LBUG();
-                }
-                break;
-        case LDLM_CB_DYING:
-                LDLM_DEBUG(lock, "this lock is being freed");
-                break;
-        default:
+        LDLM_DEBUG(lock, "We're blocking. Cancelling lock");
+        ldlm_lock2handle(lock, &lockh);
+        rc = ldlm_cli_cancel(&lockh);
+        if (rc < 0) {
+                CERROR("ldlm_cli_cancel: %d\n", rc);
                 LBUG();
         }
 
@@ -104,11 +95,10 @@ static int ldlm_test_blocking_ast(struct ldlm_lock *lock,
 /* blocking ast for basic tests. noop */
 static int ldlm_blocking_ast(struct ldlm_lock *lock,
                              struct ldlm_lock_desc *new,
-                             void *data, __u32 data_len, int flag)
+                             void *data, __u32 data_len)
 {
         ENTRY;
-        CERROR("ldlm_blocking_ast: lock=%p, new=%p, flag=%d\n", lock, new,
-               flag);
+        CERROR("ldlm_blocking_ast: lock=%p, new=%p\n", lock, new);
         RETURN(0);
 }
 
