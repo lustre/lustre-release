@@ -1,5 +1,5 @@
 # lustre.spec
-%define version b_devel
+%define version HEAD 
 %define kversion @LINUXRELEASE@
 %define linuxdir @LINUX@
 
