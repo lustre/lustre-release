@@ -349,7 +349,7 @@ int obdfs_flush_dirty_pages(unsigned long check_time)
 
 static void pupdate_wakeup(unsigned long l)
 {
-	wake_up_interruptible(&pupdated.waitq);
+	wake_up(&pupdated.waitq);
 }
 
 
@@ -442,7 +442,7 @@ static int pupdate(void *unused)
 
 	CDEBUG(D_CACHE, "pupdated stopped...\n");
 	pupdated.active = -1;
-	wake_up_interruptible (&pupdated.waitq);
+	wake_up(&pupdated.waitq);
 	return 0;
 }
 
@@ -465,7 +465,7 @@ int obdfs_flushd_cleanup(void)
         if (pupdated.active > 0) {
                 CDEBUG(D_CACHE, "inform pupdated\n");
 		pupdated.active = 0;
-		wake_up_interruptible(&pupdated.waitq);
+		wake_up(&pupdated.waitq);
 
                 CDEBUG(D_CACHE, "wait for pupdated\n");
 		while (pupdated.active == 0) {

@@ -467,8 +467,7 @@ static int lov_brw(int cmd, struct lustre_handle *conn, obd_count num_oa,
                 buf += size;
         }
 
-        wait_event_interruptible(&cb_data->waitq,
-                                 lov_read_check_status(cb_data));
+        wait_event(&cb_data->waitq, lov_read_check_status(cb_data));
         if (cb_data->flags & PTL_RPC_FL_INTR)
                 rc = -EINTR;
 

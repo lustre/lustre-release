@@ -170,8 +170,7 @@ static int recovd_main(void *arg)
 
         /* And now, loop forever on requests */
         while (1) {
-                wait_event_interruptible(recovd->recovd_waitq,
-                                         recovd_check_event(recovd));
+                wait_event(recovd->recovd_waitq, recovd_check_event(recovd));
 
                 spin_lock(&recovd->recovd_lock);
                 if (recovd->recovd_flags & RECOVD_STOPPING) {
@@ -223,7 +222,7 @@ int recovd_cleanup(struct recovd_obd *recovd)
         wake_up(&recovd->recovd_waitq);
         spin_unlock(&recovd->recovd_lock);
 
-        wait_event_interruptible(recovd->recovd_ctl_waitq,
-                                 (recovd->recovd_flags & RECOVD_STOPPED));
+        wait_event(recovd->recovd_ctl_waitq,
+                   (recovd->recovd_flags & RECOVD_STOPPED));
         RETURN(0);
 }

@@ -134,8 +134,8 @@ int ldlm_cli_enqueue(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
                 LDLM_DEBUG(lock, "client-side enqueue returned a blocked lock,"
                            " sleeping");
                 ldlm_lock_dump(lock);
-                wait_event_interruptible(lock->l_waitq, lock->l_req_mode ==
-                                         lock->l_granted_mode);
+                wait_event(lock->l_waitq,
+                           lock->l_req_mode == lock->l_granted_mode);
                 LDLM_DEBUG(lock, "client-side enqueue waking up: granted");
         }
         LDLM_DEBUG(lock, "client-side enqueue END");
@@ -239,8 +239,8 @@ int ldlm_cli_convert(struct ptlrpc_client *cl, struct lustre_handle *lockh,
                 /* FIXME: or cancelled. */
                 CDEBUG(D_NET, "convert returned a blocked lock, "
                        "going to sleep.\n");
-                wait_event_interruptible(lock->l_waitq, lock->l_req_mode ==
-                                         lock->l_granted_mode);
+                wait_event(lock->l_waitq,
+                           lock->l_req_mode == lock->l_granted_mode);
                 CDEBUG(D_NET, "waking up, the lock must be granted.\n");
         }
         ldlm_lock_put(lock);

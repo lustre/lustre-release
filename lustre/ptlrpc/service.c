@@ -34,13 +34,6 @@ static int ptlrpc_check_event(struct ptlrpc_service *svc,
         ENTRY;
 
         spin_lock(&svc->srv_lock);
-        if (sigismember(&(current->pending.signal), SIGKILL) ||
-            sigismember(&(current->pending.signal), SIGTERM) ||
-            sigismember(&(current->pending.signal), SIGINT)) {
-                thread->t_flags |= SVC_KILLED;
-                GOTO(out, rc = 1);
-        }
-
         if (thread->t_flags & SVC_STOPPING)
                 GOTO(out, rc = 1);
 
@@ -264,12 +257,6 @@ static int ptlrpc_main(void *arg)
                            ptlrpc_check_event(svc, thread, &event));
 
                 spin_lock(&svc->srv_lock);
-                if (thread->t_flags & SVC_SIGNAL) {
-                        thread->t_flags &= ~SVC_SIGNAL;
-                        spin_unlock(&svc->srv_lock);
-                        EXIT;
-                        break;
-                }
 
                 if (thread->t_flags & SVC_STOPPING) {
                         thread->t_flags &= ~SVC_STOPPING;
@@ -307,8 +294,7 @@ static void ptlrpc_stop_thread(struct ptlrpc_service *svc,
         spin_unlock(&svc->srv_lock);
 
         wake_up(&svc->srv_waitq);
-        wait_event_interruptible(thread->t_ctl_waitq,
-                                 (thread->t_flags & SVC_STOPPED));
+        wait_event(thread->t_ctl_waitq, (thread->t_flags & SVC_STOPPED));
 }
 
 void ptlrpc_stop_all_threads(struct ptlrpc_service *svc)

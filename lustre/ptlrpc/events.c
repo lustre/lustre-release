@@ -86,7 +86,7 @@ static int reply_in_callback(ptl_event_t *ev)
         if (ev->type == PTL_EVENT_PUT) {
                 req->rq_repmsg = ev->mem_desc.start + ev->offset;
                 barrier();
-                wake_up_interruptible(&req->rq_wait_for_rep);
+                wake_up(&req->rq_wait_for_rep);
         } else {
                 // XXX make sure we understand all events, including ACK's
                 CERROR("Unknown event %d\n", ev->type);
@@ -126,7 +126,7 @@ static int bulk_source_callback(ptl_event_t *ev)
                         bulk->b_cb(bulk);
                 if (atomic_dec_and_test(&desc->b_pages_remaining)) {
                         desc->b_flags |= PTL_BULK_FL_SENT;
-                        wake_up_interruptible(&desc->b_waitq);
+                        wake_up(&desc->b_waitq);
                         if (desc->b_cb != NULL)
                                 desc->b_cb(desc, desc->b_cb_data);
                 }
@@ -151,7 +151,7 @@ static int bulk_sink_callback(ptl_event_t *ev)
                         bulk->b_cb(bulk);
                 if (atomic_dec_and_test(&desc->b_pages_remaining)) {
                         desc->b_flags |= PTL_BULK_FL_RCVD;
-                        wake_up_interruptible(&desc->b_waitq);
+                        wake_up(&desc->b_waitq);
                         if (desc->b_cb != NULL)
                                 desc->b_cb(desc, desc->b_cb_data);
                 }

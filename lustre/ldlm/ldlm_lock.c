@@ -651,8 +651,8 @@ int ldlm_lock_match(struct ldlm_namespace *ns, __u64 *res_id, __u32 type,
 
         if (lock) {
                 ldlm_lock2handle(lock, lockh);
-                wait_event_interruptible(lock->l_waitq, lock->l_req_mode ==
-                                         lock->l_granted_mode);
+                wait_event(lock->l_waitq,
+                           lock->l_req_mode == lock->l_granted_mode);
         }
         if (rc)
                 LDLM_DEBUG(lock, "matched");

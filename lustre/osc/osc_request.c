@@ -627,7 +627,7 @@ static int osc_brw_write(struct lustre_handle *conn, obd_count num_oa,
                 GOTO(out, rc);
 
         /* If there's no callback function, sleep here until complete. */
-        wait_event_interruptible(desc->b_waitq, ptlrpc_check_bulk_sent(desc));
+        l_wait_event_killable(desc->b_waitq, ptlrpc_check_bulk_sent(desc));
         if (desc->b_flags & PTL_RPC_FL_INTR)
                 rc = -EINTR;
 

@@ -311,8 +311,7 @@ int ldlm_regression_stop(void)
                 spin_unlock(&ctl_lock);
 
                 wake_up(&thread->t_ctl_waitq);
-                wait_event_interruptible(thread->t_ctl_waitq,
-                                         thread->t_flags & SVC_STOPPED);
+                wait_event(thread->t_ctl_waitq, thread->t_flags & SVC_STOPPED);
 
                 spin_lock(&ctl_lock);
                 list_del(&thread->t_link);

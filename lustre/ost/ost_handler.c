@@ -261,7 +261,8 @@ static int ost_brw_read(struct ptlrpc_request *req)
         if (rc)
                 GOTO(out_bulk, rc);
 
-        wait_event_interruptible(desc->b_waitq, ptlrpc_check_bulk_sent(desc));
+#warning OST must time out here.
+        wait_event(desc->b_waitq, ptlrpc_check_bulk_sent(desc));
         if (desc->b_flags & PTL_RPC_FL_INTR)
                 rc = -EINTR;
 
@@ -372,8 +373,8 @@ static int ost_brw_write(struct ptlrpc_request *req)
         reply_sent = 1;
         ptlrpc_reply(req->rq_svc, req);
 
-        wait_event_interruptible(desc->b_waitq,
-                                 desc->b_flags & PTL_BULK_FL_RCVD);
+#warning OST must time out here.
+        wait_event(desc->b_waitq, desc->b_flags & PTL_BULK_FL_RCVD);
 
         rc = obd_commitrw(cmd, conn, objcount, tmp1, niocount, local_nb,
                           desc->b_desc_private);

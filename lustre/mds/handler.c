@@ -78,7 +78,7 @@ static int mds_sendpage(struct ptlrpc_request *req, struct file *file,
                 GOTO(cleanup_buf, rc);
         }
 
-        wait_event_interruptible(desc->b_waitq, ptlrpc_check_bulk_sent(desc));
+        wait_event(desc->b_waitq, ptlrpc_check_bulk_sent(desc));
         if (desc->b_flags & PTL_RPC_FL_INTR)
                 GOTO(cleanup_buf, rc = -EINTR);
 

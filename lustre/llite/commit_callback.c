@@ -73,9 +73,8 @@ static int ll_commitcbd_main(void *arg)
 
         /* And now, loop forever on requests */
         while (1) {
-                wait_event_interruptible
-                        (sbi->ll_commitcbd_waitq, 
-                         ll_commitcbd_check_event(sbi));
+                wait_event(sbi->ll_commitcbd_waitq, 
+                           ll_commitcbd_check_event(sbi));
 
                 spin_lock(&sbi->ll_commitcbd_lock);
                 if (sbi->ll_commitcbd_flags & LL_COMMITCBD_STOPPING) {
@@ -121,8 +120,7 @@ int ll_commitcbd_cleanup(struct ll_sb_info *sbi)
         sbi->ll_commitcbd_flags = LL_COMMITCBD_STOPPING;
 
         wake_up(&sbi->ll_commitcbd_waitq);
-        wait_event_interruptible
-                (sbi->ll_commitcbd_ctl_waitq,
-                 sbi->ll_commitcbd_flags & LL_COMMITCBD_STOPPED);
+        wait_event(sbi->ll_commitcbd_ctl_waitq,
+                   sbi->ll_commitcbd_flags & LL_COMMITCBD_STOPPED);
         RETURN(0);
 }

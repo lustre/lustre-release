@@ -426,7 +426,7 @@ void ptlrpc_continue_req(struct ptlrpc_request *req)
         ENTRY;
         CDEBUG(D_INODE, "continue delayed request %Ld opc %d\n", 
                req->rq_xid, req->rq_reqmsg->opc); 
-        wake_up_interruptible(&req->rq_wait_for_rep); 
+        wake_up(&req->rq_wait_for_rep); 
         EXIT;
 }
 
@@ -439,7 +439,7 @@ void ptlrpc_resend_req(struct ptlrpc_request *req)
         req->rq_level = LUSTRE_CONN_RECOVD;
         req->rq_flags |= PTL_RPC_FL_RESEND;
         req->rq_flags &= ~PTL_RPC_FL_TIMEOUT;
-        wake_up_interruptible(&req->rq_wait_for_rep);
+        wake_up(&req->rq_wait_for_rep);
         EXIT;
 }
 
@@ -451,7 +451,7 @@ void ptlrpc_restart_req(struct ptlrpc_request *req)
         req->rq_status = -ERESTARTSYS;
         req->rq_flags |= PTL_RPC_FL_RECOVERY;
         req->rq_flags &= ~PTL_RPC_FL_TIMEOUT;
-        wake_up_interruptible(&req->rq_wait_for_rep);
+        wake_up(&req->rq_wait_for_rep);
         EXIT;
 }
 
@@ -473,7 +473,7 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
                 list_del_init(&req->rq_list);
                 list_add(&req->rq_list, cli->cli_delayed_head.prev); 
                 spin_unlock(&cli->cli_lock);
-                wait_event_interruptible
+                l_wait_event_killable
                         (req->rq_wait_for_rep, 
                          req->rq_level <= req->rq_connection->c_level);
                 spin_lock(&cli->cli_lock);
@@ -500,8 +500,7 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
         spin_unlock(&cli->cli_lock);
 
         CDEBUG(D_OTHER, "-- sleeping\n");
-        wait_event_interruptible(req->rq_wait_for_rep, 
-                                 ptlrpc_check_reply(req));
+        l_wait_event_killable(req->rq_wait_for_rep, ptlrpc_check_reply(req));
         CDEBUG(D_OTHER, "-- done\n");
 
         if (req->rq_flags & PTL_RPC_FL_RESEND) {
@@ -565,8 +564,7 @@ int ptlrpc_replay_req(struct ptlrpc_request *req)
         }
 
         CDEBUG(D_OTHER, "-- sleeping\n");
-        wait_event_interruptible(req->rq_wait_for_rep, 
-                                 ptlrpc_check_reply(req));
+        l_wait_event_killable(req->rq_wait_for_rep, ptlrpc_check_reply(req));
         CDEBUG(D_OTHER, "-- done\n");
 
         up(&cli->cli_rpc_sem);
