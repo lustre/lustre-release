@@ -89,7 +89,7 @@ $SENDING = "Sending";
 $COMPLETED = "Completed";
 $HANDLING = "Handling";
 $HANDLED = "Handled";
-$RPCREGEX = qr/($SENDING|$HANDLING|$HANDLED|$COMPLETED)\sRPC\scluuid:pid:xid:ni:nid:opc\s([-\w]+):(\d+):(?:0x)?(\w+):(?:\w+):(?:0x)?(\w+):(\d+)/;
+$RPCREGEX = qr/($SENDING|$HANDLING|$HANDLED|$COMPLETED)\sRPC\spname:cluuid:pid:xid:ni:nid:opc\s([-\w]+):([-\w]+):(\d+):(?:0x)?(\w+):(?:\w+):(?:0x)?(\w+):(\d+)/;
 
 
 #VFS REGEX BELOW
@@ -345,18 +345,18 @@ sub update_RPC
 {
     my $rpcref = shift;
     my $ldlmref = shift;
+    my $pidref = shift;
     my $lineref = shift;
 
     my $tmpfmtref;
-    
-
     if ($lineref->[$e_fmtstr] =~ $RPCREGEX) {
-	my $rpcuuid =$2;
+	my $rpcuuid =$3;
+	my $processname = $2;
 	my $rpctype = $1;
-	my $rpcxid = $4;
-	my $rpcopc = $6;
-	my $rpcpid = $3;
-	my $rpcnid = $5;
+	my $rpcxid = $5;
+	my $rpcopc = $7;
+	my $rpcpid = $4;
+	my $rpcnid = $6;
 	my $rpckey;
 
 	if ($rpcopc < 104) {
@@ -403,6 +403,9 @@ sub update_RPC
 		print STDERR "Current line: $lineref\n";
 	    }
 	}
+	# Update the name
+	$pidref->{$lineref->[$e_pid]}->[$e_pidcmd] = $processname;
+
 	# Check if client entry/exit times are present
 	if (($thisrpc->[$e_cliRPCent] != 0) && ($thisrpc->[$e_cliRPCexit] != 0)) {
 	    $thisrpc->[$e_clirpctime] = compute_time_diff($thisrpc->[$e_cliRPCent], 
@@ -419,7 +422,6 @@ sub update_RPC
     } elsif ($lineref->[$e_fmtstr] =~ qr/### /) {
 	update_ldlm($ldlmref, $lineref);
     }
-    
 }
 
 sub update_debugreqs
@@ -485,9 +487,6 @@ sub process_array
 	    if ($pidprevious == 0) {
 		# True only for the first line, the PID marker line.
 		$pidhashref->{$lineref->[$e_pid]}->[$e_lineref] = $lineref;
-		@cmdname = split(/:/, $lineref->[$e_pid]);
-		$pidhashref->{$lineref->[$e_pid]}->[$e_pidcmd] = $cmdname[0];
-		# print STDERR "LINE ADDED TO HASH: @$lineref\n";
 		$pidprevious = $lineref;
 	    }
 	    else {
@@ -502,33 +501,11 @@ sub process_array
 	    elsif ($lineref->[$e_fmtstr] =~ $MARKER_REGEX) {
 		$marker_ref->{$lineref->[$e_time]} = [$1, $2, $lineref];
 	    }
-	    # Match DEBUGREQ Lines
-	    #elsif ($lineref->[$e_fmtstr] =~ qr/@@@ /) {
-		#$debugreq++;
-		#update_debugreqs($rpc_ref, $lineref);
-	    #}
-	    # Is this a process name ?
-	    elsif (($lineref->[$e_fmtstr] =~ qr/($SENDING|$HANDLING|$HANDLED|$COMPLETED)/) || 
+	    else {
+		if (($lineref->[$e_fmtstr] =~ qr/($SENDING|$HANDLING|$HANDLED|$COMPLETED)/) || 
 		   (($lineref->[$e_fmtstr] =~ $LDLM_REGEX))
 		  ) {
-		update_RPC($rpc_ref, $ldlm_ref, $lineref);
-	    } else {
-		my $tagged_pid = $lineref->[$e_pid];
-		$tagged_pid =~ /(\d+):(.+)/;
-		my $numericpid = $1;
-		my $pidtag = $2;
-		if (($numericpid == 0) &&
-		    ($lineref->[$e_subsys] == $subsysnum->{RPC}) &&
-		    ($lineref->[$e_mask] == $tracemasks->{VFSTRACE})) {
-		    if ($lineref->[$e_fmtstr] =~ /\s*(\d+)\s+(\w+)/) {
-			# first is pid, second is cmd
-			my $thispid = $1;
-			my $cmdline = $2;
-			my $lookuptag = "$thispid:$pidtag";
-			if (exists($pidhashref->{$lookuptag})) {
-			    $pidhashref->{$lookuptag}->[$e_pidcmd] = $cmdline;
-			}
-		    }
+		    update_RPC($rpc_ref, $ldlm_ref, $pidhashref, $lineref);
 		}
 	    }
 	    # For all lines create parent/child relations
@@ -542,7 +519,7 @@ sub process_array
 	print STDERR "Processed $fileline, time: $tottime\n"; 
 	$filearrayidx++;
     }
-
+    #print_rpc($rpc_ref);
     #print_hash($ldlm_ref);
     return $newarrayref;
 }
@@ -583,10 +560,11 @@ sub HTML_leftpane
 	my $numericpid = $1;
 	print LEFTHTML "<b>$2</b>";
 	if (!$nograph) {
-	    print LEFTHTML "   [  <A HREF = \"${htmfile}_${graphhtmfile}.html\" target=\"right\">graph</A>  ]<BR>";
+	    print LEFTHTML "   [  <A HREF = \"${htmfile}_${graphhtmfile}.html\" target=\"right\">graph</A>  ]";
 	}
+	print LEFTHTML "<BR>";
 	for($idx = 1; $idx <= $#pidlist; $idx++) {
-	    if ($numericpid) {
+	    if (($numericpid) && ($pidref->{$element}->[$e_pidcmd] ne "")) {
 		my $anchorlinkpid = sprintf "%s_%s", ${numericpid}, ${graphhtmfile};
 		print LEFTHTML "<a href = \"${htmfile}_right.html#$anchorlinkpid\" target=\"right\">$numericpid</a>";
 		print LEFTHTML "\[$pidref->{$element}->[$e_pidcmd]\]<br>\n";
@@ -708,7 +686,7 @@ sub parse_file
 		    $marker_line[$e_backref] = 0;
 		    $marker_line[$e_marked] = 0;
 		    $pid_ref->{$parsed_line[$e_pid]}->[$e_lineref] = $marker_line;
-		    $pid_ref->{$parsed_line[$e_pid]}->[$e_pidcmd] = $parsed_line[$e_pid];
+		    $pid_ref->{$parsed_line[$e_pid]}->[$e_pidcmd] = "";
 		    # Update the current file line to provide info about all PIDS
 		    if ($fileline->[$e_pid] == 0) {
 			$fileline->[$e_pid] = $parsed_line[$e_pid];
@@ -752,28 +730,39 @@ sub HTML_graph
     my $start = times();
     my $file_idx = 0;
     while ($file_idx <= $#$gbl_array_parsed) {
-	$array_parsed = $gbl_array_parsed->[$file_idx];
-	$lineref = $array_parsed->[0];
+	my $array_parsed = $gbl_array_parsed->[$file_idx];
+	my $lineref = $array_parsed->[0];
 	# Prepare the graph file for this file
-	$graph_file = sprintf "%s_%s.html", $htmfile, $lineref->[$e_fmtstr];
+
+	my @allpids = split(',', $lineref->[$e_pid]);
+	my @actpids = ();
+	for($idx = 0; $idx <= $#allpids; $idx ++) {
+	    next if ($pid_ref->{$allpids[$idx]}->[$e_pidcmd] eq "");
+	    push @actpids, $allpids[$idx];
+	}
+	@allpids = ();
+	undef @allpids;
+	if (!exists $actpids[0]) {
+    	    next;
+	}
+	my $colwidth = int 100/($#actpids+2);
+	my $graph_file = sprintf "%s_%s.html", $htmfile, $lineref->[$e_fmtstr];
 	open(GRAPHHTML, ">$graph_file");
 	print GRAPHHTML "<HTML><HEAD><TITLE> Graphical view </TITLE></HEAD><BODY>";
 	print GRAPHHTML "<table cellpadding=\"0\" cellspacing=\"0\" border=\"1\" width=\"100\%\"><tbody><tr>";
-	@allpids = split(',', $lineref->[$e_pid]);
-	$colwidth = int 100/($#allpids+2);
 	print GRAPHHTML "<td valign=\"top\" width=\"$colwidth\%\"><font size=\"-1\">Time<br></font></td>";
-	$lasthtm = $pid_ref->{$allpids[0]}->[$e_lineref];
-	for ($idx = 0; $idx <= $#allpids; $idx ++) {
-	    $graphidx = $idx%$MAX_GRAPH_COLOR;
-	    $pid_name = $pid_ref->{$allpids[$idx]}->[$e_pidcmd];
-	    $anchortag = join('_', split(/[\/,:, \.]/, $allpids[$idx]));
+	my $lasthtm = $pid_ref->{$actpids[0]}->[$e_lineref];
+	for ($idx = 0; $idx <= $#actpids; $idx ++) {
+	    my $graphidx = $idx%$MAX_GRAPH_COLOR;
+	    my $pid_name = $pid_ref->{$actpids[$idx]}->[$e_pidcmd];
+	    my $anchortag = join('_', split(/[\/,:, \.]/, $actpids[$idx]));
 	    print GRAPHHTML "<td valign=\"top\" bgcolor=\"$graph_colors[$graphidx]\" width=\"$colwidth\%\">";
 	    print GRAPHHTML "<a href = \"${htmfile}_right.html#$anchortag\" target=\"right\">";
 	    print GRAPHHTML "<font size = \"-1\">$pid_name</font></a>";
 	    print GRAPHHTML "</td>";
 	    # Initialize the time origin
-	    if (($pid_ref->{$allpids[$idx]}->[$e_lineref]->[$e_time]) < $lasthtm->[$e_time]) {
-		$lasthtm = $pid_ref->{$allpids[$idx]}->[$e_lineref];
+	    if (($pid_ref->{$actpids[$idx]}->[$e_lineref]->[$e_time]) < $lasthtm->[$e_time]) {
+		$lasthtm = $pid_ref->{$actpids[$idx]}->[$e_lineref];
 	    }
 	    # Initialize the html state variables for this PID. Note that every PID can doing 
 	    # at most 2 RPCs at any time, i.e in the HANDLING, it could do a SENDING. We need
@@ -783,8 +772,8 @@ sub HTML_graph
 	    # (a) current RPC linereference, if any
 	    # (b) iswritten : flag determining if the current text for RPC has already been written to HTML
 	    # (c) colorcode
-	    $htmstate{$allpids[$idx]}[0] = [0, 0, $graph_colors[$graphidx]];
-	    $htmstate{$allpids[$idx]}[1] = [0, 0, $graph_colors[($graphidx+2)%$MAX_GRAPH_COLOR]];
+	    $htmstate{$actpids[$idx]}[0] = [0, 0, $graph_colors[$graphidx]];
+	    $htmstate{$actpids[$idx]}[1] = [0, 0, $graph_colors[($graphidx+2)%$MAX_GRAPH_COLOR]];
 	    $currtime = 0;
 	}
 	#print STDERR "File: $lineref->[$e_fmtstr]\n";
@@ -792,13 +781,17 @@ sub HTML_graph
 	#print STDERR "Txt starttime: $gblstarttime{$lineref->[$e_fmtstr]}\n";
 	print GRAPHHTML "</tr>";
 	# Do the first line again, we'll pass over it again, if it happens to be the fileline
-	$arrayidx = 0;
+	my $arrayidx = 0;
 	while( $arrayidx <= $#$array_parsed ) {
-	    $lineref = $array_parsed->[($arrayidx+$start_idx[$file_idx])%($#$array_parsed+1)];
+	    my $lineref = $array_parsed->[($arrayidx+$start_idx[$file_idx])%($#$array_parsed+1)];
 	    $arrayidx++;
 	    next if ($lineref->[$e_rpcref] == 0);
-	   # next if ($lineref->[$e_rpcref]->[$e_clirpctime] == -1);
-	   # next if ($lineref->[$e_rpcref]->[$e_srvrpctime] == -1);
+	    my $l_rpcline = $lineref->[$e_rpcref];
+	    my $allexist = ($l_rpcline->[$e_cliRPCent] && 
+			    $l_rpcline->[$e_cliRPCexit] && 
+			    $l_rpcline->[$e_srvRPCent] && 
+			    $l_rpcline->[$e_srvRPCexit]);
+	    next if ($allexist == 0);
 	    # this is an rpc line:
 	    $htmduration = compute_time_diff($lasthtm, $lineref);
 	    $flt_htmrows = $htmduration/$timebase;
@@ -820,10 +813,10 @@ sub HTML_graph
 		    print GRAPHHTML "<td valign=\"top\" width=\"$colwidth\%\"><font size=\"-2\">$newtime</font></td>";
 		    $newtime += $timebase;
 		}
-		for ($idx = 0; $idx <= $#allpids; $idx ++) {
-		    $current_htm = $htmstate{$allpids[$idx]}[1];
+		for ($idx = 0; $idx <= $#actpids; $idx ++) {
+		    $current_htm = $htmstate{$actpids[$idx]}[1];
 		    if ($current_htm->[$e_htmline] == 0) {
-			$current_htm = $htmstate{$allpids[$idx]}[0];
+			$current_htm = $htmstate{$actpids[$idx]}[0];
 		    }
 		    if ($current_htm->[$e_htmline] != 0) {
 			$bgcolor = $current_htm->[$e_htmbgcolor];
@@ -1080,19 +1073,18 @@ sub print_array
 
 sub print_RPCfields
 {
+    my $rpckey = shift;
     my $rpc_line = shift;
-    my $rpckey = "$rpc_line->[$e_rpcopc]:$rpc_line->[$e_rpcxid]:$rpc_line->[$e_rpcpid]:$rpc_line->[$e_rpcuuid]";
-    if ($rpc_line->[$e_rpcopc] > 102) {
-    	print "RPC LINE: <$rpckey> ";
-    	print "XID: $rpc_line->[$e_rpcxid], OPC: $rpc_line->[$e_rpcopc],",
-	"REINT:  $rpc_line->[$e_rpcreint],",
-    	"SNDRCV: $rpc_line->[$e_rpcsndrcv],",
-    	"PID: $rpc_line->[$e_rpcpid], NID: $rpc_line->[$e_rpcnid]\n";
-    	print "CLIENT ENTRY: $rpc_line->[$e_cliRPCent]->[$e_fmtstr]\n";
-    	print "SRV ENTRY: $rpc_line->[$e_srvRPCent]->[$e_fmtstr]\n";
-   	print "SRV EXIT: $rpc_line->[$e_srvRPCexit]->[$e_fmtstr]\n";
-    	print "CLIENT EXIT: $rpc_line->[$e_cliRPCexit]->[$e_fmtstr]\n";
-	}
+
+    print STDERR "RPC LINE: <$rpckey> ";
+    print STDERR "XID: $rpc_line->[$e_rpcxid], OPC: $rpc_line->[$e_rpcopc],",
+    "REINT:  $rpc_line->[$e_rpcreint],",
+    "SNDRCV: $rpc_line->[$e_rpcsndrcv],",
+    "PID: $rpc_line->[$e_rpcpid], NID: $rpc_line->[$e_rpcnid]\n";
+    print STDERR "CLIENT ENTRY: $rpc_line->[$e_cliRPCent]->[$e_fmtstr]\n";
+    print STDERR "SRV ENTRY: $rpc_line->[$e_srvRPCent]->[$e_fmtstr]\n";
+    print STDERR "SRV EXIT: $rpc_line->[$e_srvRPCexit]->[$e_fmtstr]\n";
+    print STDERR "CLIENT EXIT: $rpc_line->[$e_cliRPCexit]->[$e_fmtstr]\n";
 }
 
 my $summary_indent = 0;
@@ -1281,6 +1273,7 @@ sub print_summary_terse
     my $htmfile = shift;
 
     my $start = times();
+    my @ignored_pids;
     # HTML stuff
     if ($htmfile ne "") {
 	my $htmfilename = sprintf "%s_right.html", $htmfile;
@@ -1290,9 +1283,11 @@ sub print_summary_terse
     foreach $pid (sort (sort_by_number_descending keys %$pid_ref)) {
 	$pid =~ /(\d+):(.+)/;
 	my $currentpid = $1;
-	next if ($currentpid==0);
 	my $curr_file = $2;
-
+	if ($pid_ref->{$pid}->[$e_pidcmd] eq "") {
+	    push @{$ignored_pids{$curr_file}}, $currentpid;
+	    next;
+	}
 	my $linecnt = 0;
 	my $lineref = $pid_ref->{$pid}->[$e_lineref];
         #print STDERR "pid=$pid \[$pid_ref->{$pid}->[$e_pidcmd]\]\n";	
@@ -1501,6 +1496,14 @@ sub print_summary_terse
 	    $lineref = $next;
 	} until ($lineref == 0);
     }
+    foreach $filename (keys %ignored_pids) {
+	print STDERR "Ignoring zero-RPC PIDS in file $filename: ";
+	while(@{$ignored_pids{$filename}}) {
+	    my $pidnum = pop(@{$ignored_pids{$filename}});
+	    print STDERR "$pidnum, ";
+	}
+	print STDERR "\n";
+    }
     if ($htmfile) {
 	print HTMLOG "<PRE>\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n</PRE>";
 	print HTMLOG "</BODY></HTML>";
@@ -1515,7 +1518,7 @@ sub print_summary_terse
 sub print_rpc {
     $rpc_ref = shift;
     foreach $rpckey (sort keys %$rpc_ref) {
-	print_RPCfields($rpc_ref->{$rpckey}); 	
+	print_RPCfields($rpckey, $rpc_ref->{$rpckey}); 	
     }
 }
 
