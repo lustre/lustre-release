@@ -120,7 +120,7 @@ void ll_queue_done_writing(struct inode *inode)
 static void ll_close_done_writing(struct inode *inode)
 {
         struct ll_inode_info *lli = ll_i2info(inode);
-        struct ldlm_extent extent = { .start = 0, .end = OBD_OBJECT_EOF };
+        ldlm_policy_data_t policy = { .l_extent = {0, OBD_OBJECT_EOF } };
         struct lustre_handle lockh = { 0 };
         struct obdo obdo;
         obd_flag valid;
@@ -132,7 +132,7 @@ static void ll_close_done_writing(struct inode *inode)
                 goto rpc;
 
         rc = ll_extent_lock_no_validate(NULL, inode, lli->lli_smd, LCK_PW,
-                                        &extent, &lockh, ast_flags);
+                                        &policy, &lockh, ast_flags);
         if (rc != ELDLM_OK) {
                 CERROR("lock acquisition failed (%d): unable to send "
                        "DONE_WRITING for inode %lu/%u\n", rc, inode->i_ino,

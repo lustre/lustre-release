@@ -396,6 +396,9 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
 
                         LASSERT(lsm->lsm_object_id != 0);
 
+                        /* bug 2334: drop MDS lock before acquiring OST lock */
+                        ll_intent_drop_lock(it);
+
                         rc = llu_extent_lock(NULL, inode, lsm, LCK_PR, &extent,
                                             &lockh);
                         if (rc != ELDLM_OK) {
