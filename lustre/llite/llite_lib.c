@@ -131,7 +131,6 @@ int ll_fill_super(struct super_block *sb, void *data, int silent)
         struct inode *root = 0;
         struct obd_device *obd;
         struct ll_sb_info *sbi;
-        struct obd_export *mdc_export;
         char *osc = NULL;
         char *mdc = NULL;
         int err;
@@ -187,6 +186,16 @@ int ll_fill_super(struct super_block *sb, void *data, int silent)
                 GOTO(out_free, err);
         }
 
+        err = obd_statfs(obd, &osfs, jiffies - HZ);
+        if (err)
+                GOTO(out_mdc, err);
+
+        LASSERT(osfs.os_bsize);
+        sb->s_blocksize = osfs.os_bsize;
+        sb->s_blocksize_bits = log2(osfs.os_bsize);
+        sb->s_magic = LL_SUPER_MAGIC;
+        sb->s_maxbytes = PAGE_CACHE_MAXBYTES;
+
         mdc_conn = sbi2mdc(sbi)->cl_import->imp_connection;
 
         obd = class_name2obd(osc);
@@ -208,19 +217,6 @@ int ll_fill_super(struct super_block *sb, void *data, int silent)
         }
         CDEBUG(D_SUPER, "rootfid "LPU64"\n", rootfid.id);
         sbi->ll_rootino = rootfid.id;
-
-        memset(&osfs, 0, sizeof(osfs));
-        mdc_export = class_conn2export(&sbi->ll_mdc_conn);
-        if (mdc_export == NULL) {
-                CERROR("null mdc_export\n");
-                GOTO(out_osc, sb = NULL);
-        }
-        err = obd_statfs(mdc_export, &osfs);
-        class_export_put(mdc_export);
-        sb->s_blocksize = osfs.os_bsize;
-        sb->s_blocksize_bits = log2(osfs.os_bsize);
-        sb->s_magic = LL_SUPER_MAGIC;
-        sb->s_maxbytes = PAGE_CACHE_MAXBYTES;
 
         sb->s_op = &ll_super_operations;
 
@@ -314,7 +310,7 @@ void ll_put_super(struct super_block *sb)
         list_del(&sbi->ll_conn_chain);
         ll_commitcbd_cleanup(sbi);
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-	lliod_stop(sbi);
+        lliod_stop(sbi);
 #endif
         obd_disconnect(&sbi->ll_osc_conn, 0);
 
@@ -526,23 +522,27 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
         lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_SETATTR);
 #endif
 
-        if ((ia_valid & ATTR_SIZE) && attr->ia_size > ll_file_maxbytes(inode)){
-                CDEBUG(D_INODE, "file too large %llu > "LPU64"\n",
-                       attr->ia_size, ll_file_maxbytes(inode));
-                RETURN(-EFBIG);
+        if (ia_valid & ATTR_SIZE) {
+                if (attr->ia_size > ll_file_maxbytes(inode)) {
+                        CDEBUG(D_INODE, "file too large %llu > "LPU64"\n",
+                               attr->ia_size, ll_file_maxbytes(inode));
+                        RETURN(-EFBIG);
+                }
+
+                attr->ia_valid |= ATTR_MTIME | ATTR_CTIME;
         }
 
-        /* We mark all of the fields "set" so the MDS does not re-set them */
-        if (ia_valid & ATTR_CTIME) {
-                attr->ia_ctime = CURRENT_TIME;
+        /* We mark all of the fields "set" so MDS/OST does not re-set them */
+        if (attr->ia_valid & ATTR_CTIME) {
+                attr->ia_ctime = CURRENT_SECONDS;
                 attr->ia_valid |= ATTR_CTIME_SET;
         }
-        if (!(ia_valid & ATTR_ATIME_SET) && (ia_valid & ATTR_ATIME)) {
-                attr->ia_atime = CURRENT_TIME;
+        if (!(ia_valid & ATTR_ATIME_SET) && (attr->ia_valid & ATTR_ATIME)) {
+                attr->ia_atime = CURRENT_SECONDS;
                 attr->ia_valid |= ATTR_ATIME_SET;
         }
-        if (!(ia_valid & ATTR_MTIME_SET) && (ia_valid & ATTR_MTIME)) {
-                attr->ia_mtime = CURRENT_TIME;
+        if (!(ia_valid & ATTR_MTIME_SET) && (attr->ia_valid & ATTR_MTIME)) {
+                attr->ia_mtime = CURRENT_SECONDS;
                 attr->ia_valid |= ATTR_MTIME_SET;
         }
 
@@ -563,17 +563,16 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                 rc = mdc_setattr(&sbi->ll_mdc_conn, &op_data,
                                   attr, NULL, 0, NULL, 0, &request);
 
-                if (rc) { 
+                if (rc) {
                         ptlrpc_req_finished(request);
-                        if (rc  != -EPERM) 
-                                CERROR("mdc_setattr fails: err = %d\n", rc);
+                        if (rc != -EPERM && rc != -EACCES)
+                                CERROR("mdc_setattr fails: rc = %d\n", rc);
                         RETURN(rc);
                 }
 
                 rc = mdc_req2lustre_md(request, 0, &sbi->ll_osc_conn, &md);
-                if (rc && rc != -EPERM) {
+                if (rc) {
                         ptlrpc_req_finished(request);
-                        CERROR("mdc_setattr fails: err = %d\n", rc);
                         RETURN(rc);
                 }
                 ll_update_inode(inode, md.body, md.lsm);
@@ -594,10 +593,12 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                                 if (current->fsuid != inode->i_uid &&
                                     (rc = permission(inode, MAY_WRITE)) != 0)
                                         RETURN(rc);
+                        } else {
+				/* from inode_change_ok() */
+				if (current->fsuid != inode->i_uid &&
+				    !capable(CAP_FOWNER))
+					RETURN(-EPERM);
                         }
-
-                        if ((rc = inode_change_ok(inode, attr)))
-                                RETURN(rc);
                 }
 
                 /* Won't invoke vmtruncate, as we already cleared ATTR_SIZE */
@@ -621,7 +622,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                  * nodes through dirtying and writeback of final cached
                  * pages.  This last one is especially bad for racing
                  * o_append users on other nodes. */
-                rc = ll_extent_lock_no_validate(NULL, inode, lsm, LCK_PW, 
+                rc = ll_extent_lock_no_validate(NULL, inode, lsm, LCK_PW,
                                                  &extent, &lockh);
                 if (rc != ELDLM_OK) {
                         if (rc > 0)
@@ -631,10 +632,10 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
 
                 rc = vmtruncate(inode, attr->ia_size);
                 if (rc == 0)
-                        set_bit(LLI_F_HAVE_SIZE_LOCK, 
+                        set_bit(LLI_F_HAVE_SIZE_LOCK,
                                 &ll_i2info(inode)->lli_flags);
 
-                /* unlock now as we don't mind others file lockers racing with 
+                /* unlock now as we don't mind others file lockers racing with
                  * the mds updates below? */
                 err = ll_extent_unlock(NULL, inode, lsm, LCK_PW, &lockh);
                 if (err) {
@@ -642,7 +643,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                         if (!rc)
                                 rc = err;
                 }
-        } else if (ia_valid & ATTR_MTIME_SET) {
+        } else if (ia_valid & (ATTR_MTIME | ATTR_MTIME_SET)) {
                 struct obdo oa;
 
                 CDEBUG(D_INODE, "set mtime on OST inode %lu to %lu\n",
@@ -669,47 +670,68 @@ int ll_setattr(struct dentry *de, struct iattr *attr)
         return ll_inode_setattr(de->d_inode, attr, 1);
 }
 
-int ll_statfs(struct super_block *sb, struct kstatfs *sfs)
+int ll_statfs_internal(struct super_block *sb, struct obd_statfs *osfs,
+                       unsigned long max_age)
 {
         struct ll_sb_info *sbi = ll_s2sbi(sb);
-        struct obd_export *mdc_exp = class_conn2export(&sbi->ll_mdc_conn);
-        struct obd_export *osc_exp;
-        struct obd_statfs osfs;
+        struct obd_statfs obd_osfs;
         int rc;
         ENTRY;
 
-        if (mdc_exp == NULL)
-                RETURN(-EINVAL);
+        rc = obd_statfs(class_conn2obd(&sbi->ll_mdc_conn), osfs, max_age);
+        if (rc) {
+                CERROR("mdc_statfs fails: rc = %d\n", rc);
+                RETURN(rc);
+        }
+
+        CDEBUG(D_SUPER, "MDC blocks "LPU64"/"LPU64" objects "LPU64"/"LPU64"\n",
+               osfs->os_bavail, osfs->os_blocks, osfs->os_ffree,osfs->os_files);
+
+        rc = obd_statfs(class_conn2obd(&sbi->ll_osc_conn), &obd_osfs, max_age);
+        if (rc) {
+                CERROR("obd_statfs fails: rc = %d\n", rc);
+                RETURN(rc);
+        }
+
+        CDEBUG(D_SUPER, "OSC blocks "LPU64"/"LPU64" objects "LPU64"/"LPU64"\n",
+               obd_osfs.os_bavail, obd_osfs.os_blocks, obd_osfs.os_ffree,
+               obd_osfs.os_files);
+
+        osfs->os_blocks = obd_osfs.os_blocks;
+        osfs->os_bfree = obd_osfs.os_bfree;
+        osfs->os_bavail = obd_osfs.os_bavail;
+
+        /* If we don't have as many objects free on the OST as inodes
+         * on the MDS, we reduce the total number of inodes to
+         * compensate, so that the "inodes in use" number is correct.
+         */
+        if (obd_osfs.os_ffree < osfs->os_ffree) {
+                osfs->os_files = (osfs->os_files - osfs->os_ffree) +
+                        obd_osfs.os_ffree;
+                osfs->os_ffree = obd_osfs.os_ffree;
+        }
+
+        RETURN(rc);
+}
+
+int ll_statfs(struct super_block *sb, struct kstatfs *sfs)
+{
+        struct obd_statfs osfs;
+        int rc;
 
         CDEBUG(D_VFSTRACE, "VFS Op:\n");
-        lprocfs_counter_incr(sbi->ll_stats, LPROC_LL_STAFS);
-        memset(sfs, 0, sizeof(*sfs));
-        rc = obd_statfs(mdc_exp, &osfs);
-        statfs_unpack(sfs, &osfs);
+        lprocfs_counter_incr(ll_s2sbi(sb)->ll_stats, LPROC_LL_STAFS);
+
+        /* For now we will always get up-to-date statfs values, but in the
+         * future we may allow some amount of caching on the client (e.g.
+         * from QOS or lprocfs updates). */
+        rc = ll_statfs_internal(sb, &osfs, jiffies - 1);
         if (rc)
-                CERROR("mdc_statfs fails: rc = %d\n", rc);
-        else
-                CDEBUG(D_SUPER, "mdc_statfs shows blocks "LPU64"/"LPU64
-                       " objects "LPU64"/"LPU64"\n",
-                       osfs.os_bavail, osfs.os_blocks,
-                       osfs.os_ffree, osfs.os_files);
+                return rc;
 
-        /* temporary until mds_statfs returns statfs info for all OSTs */
-        if (!rc) {
-                osc_exp = class_conn2export(&sbi->ll_osc_conn);
-                if (osc_exp == NULL)
-                        GOTO(out, rc = -EINVAL);
-                rc = obd_statfs(osc_exp, &osfs);
-                class_export_put(osc_exp);
-                if (rc) {
-                        CERROR("obd_statfs fails: rc = %d\n", rc);
-                        GOTO(out, rc);
-                }
-                CDEBUG(D_SUPER, "obd_statfs shows blocks "LPU64"/"LPU64
-                       " objects "LPU64"/"LPU64"\n",
-                       osfs.os_bavail, osfs.os_blocks,
-                       osfs.os_ffree, osfs.os_files);
+        statfs_unpack(sfs, &osfs);
 
+        if (sizeof(sfs->f_blocks) == 4) {
                 while (osfs.os_blocks > ~0UL) {
                         sfs->f_bsize <<= 1;
 
@@ -717,25 +739,13 @@ int ll_statfs(struct super_block *sb, struct kstatfs *sfs)
                         osfs.os_bfree >>= 1;
                         osfs.os_bavail >>= 1;
                 }
-
-                sfs->f_blocks = osfs.os_blocks;
-                sfs->f_bfree = osfs.os_bfree;
-                sfs->f_bavail = osfs.os_bavail;
-
-                /* If we don't have as many objects free on the OST as inodes
-                 * on the MDS, we reduce the total number of inodes to
-                 * compensate, so that the "inodes in use" number is correct.
-                 */
-                if (osfs.os_ffree < (__u64)sfs->f_ffree) {
-                        sfs->f_files = (sfs->f_files - sfs->f_ffree) +
-                                       osfs.os_ffree;
-                        sfs->f_ffree = osfs.os_ffree;
-                }
         }
 
-out:
-        class_export_put(mdc_exp);
-        RETURN(rc);
+        sfs->f_blocks = osfs.os_blocks;
+        sfs->f_bfree = osfs.os_bfree;
+        sfs->f_bavail = osfs.os_bavail;
+
+        return 0;
 }
 
 void dump_lsm(int level, struct lov_stripe_md *lsm)
@@ -878,7 +888,7 @@ void ll_umount_begin(struct super_block *sb)
         obd->obd_no_recov = 1;
         obd_iocontrol(IOC_OSC_SET_ACTIVE, &sbi->ll_osc_conn, sizeof ioc_data,
                       &ioc_data, NULL);
-        
+
         /* Really, we'd like to wait until there are no requests outstanding,
          * and then continue.  For now, we just invalidate the requests,
          * schedule, and hope.
@@ -887,5 +897,3 @@ void ll_umount_begin(struct super_block *sb)
 
         EXIT;
 }
-
-
