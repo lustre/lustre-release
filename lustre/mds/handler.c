@@ -180,7 +180,7 @@ int mds_lock_mode_for_dir(struct obd_device *obd,
          *    type of access (lookup/modify/split) - LCK_EX -bzzz */
 
         split = mds_splitting_expected(obd, dentry);
-        if (split == MDS_NO_SPLITTABLE || MDS_NO_SPLIT_EXPECTED) {
+        if (split == MDS_NO_SPLITTABLE || split == MDS_NO_SPLIT_EXPECTED) {
                 /* this inode won't be splitted. so we need not to protect from
                  * just flush client's cache on modification */
                 ret_mode = 0;
