@@ -14,6 +14,8 @@
 #ifndef _LL_H
 #define _LL_H
 
+#ifdef __KERNEL__
+
 #include <linux/fs.h>
 #include <linux/ext2_fs.h>
 
@@ -35,12 +37,6 @@ struct ll_read_inode2_cookie {
         struct mds_body *lic_body;
         struct lov_mds_md *lic_lmm;
 };
-
-#define LL_IOC_GETFLAGS                 _IOR ('f', 151, long)
-#define LL_IOC_SETFLAGS                 _IOW ('f', 152, long)
-#define LL_IOC_CLRFLAGS                 _IOW ('f', 153, long)
-
-#define LL_FILE_IGNORE_LOCK             0x00000001
 
 #define LL_INLINESZ      60
 struct ll_inode_info {
@@ -77,10 +73,10 @@ struct ll_sb_info {
         __u32                     ll_mount_epoch;
 };
 
-#define CHECK_MOUNT_EPOCH(i)                                                    \
-do {                                                                            \
-        if (ll_i2info(i)->lli_mount_epoch != ll_i2sbi(i)->ll_mount_epoch)       \
-                RETURN(-EIO);                                                   \
+#define CHECK_MOUNT_EPOCH(i)                                                  \
+do {                                                                          \
+        if (ll_i2info(i)->lli_mount_epoch != ll_i2sbi(i)->ll_mount_epoch)     \
+                RETURN(-EIO);                                                 \
 } while(0)
 
 static inline struct ll_sb_info *ll_s2sbi(struct super_block *sb)
@@ -179,5 +175,13 @@ extern struct inode_operations ll_symlink_inode_operations;
 /* sysctl.c */
 void ll_sysctl_init(void);
 void ll_sysctl_clean(void);
+
+#endif /* __KERNEL__ */
+
+#define LL_IOC_GETFLAGS                 _IOR ('f', 151, long)
+#define LL_IOC_SETFLAGS                 _IOW ('f', 152, long)
+#define LL_IOC_CLRFLAGS                 _IOW ('f', 153, long)
+
+#define LL_FILE_IGNORE_LOCK             0x00000001
 
 #endif
