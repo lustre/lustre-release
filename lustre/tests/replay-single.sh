@@ -169,6 +169,8 @@ test_5() {
       grep -q "tag-$i" $DIR/$tfile-$i || error "f1c-$i"
     done 
     rm -rf $DIR/$tfile-*
+    sleep 5
+    # waiting for commitment of removal
 }
 run_test 5 "|x| 220 open(O_CREAT)"
 
@@ -180,6 +182,8 @@ test_6() {
     fail mds
     $CHECKSTAT -t dir $DIR/$tdir || return 1
     $CHECKSTAT -t file $DIR/$tdir/$tfile || return 2
+    sleep 2
+    # waiting for log process thread
 }
 run_test 6 "mkdir + contained create"
 
@@ -405,8 +409,8 @@ test_20() {
 
     fail mds
     kill -USR1 $pid
-    wait $pid || return 2
-    [ -e $DIR/$tfile ] && return 3
+    wait $pid || return 1
+    [ -e $DIR/$tfile ] && return 2
     return 0
 }
 run_test 20 "|X| open(O_CREAT), unlink, replay, close (test mds_cleanup_orphans)"
@@ -440,8 +444,8 @@ test_22() {
 
     fail mds
     kill -USR1 $pid
-    wait $pid || return 2
-    [ -e $DIR/$tfile ] && return 3
+    wait $pid || return 1
+    [ -e $DIR/$tfile ] && return 2
     return 0
 }
 run_test 22 "open(O_CREAT), |X| unlink, replay, close (test mds_cleanup_orphans)"
@@ -475,8 +479,8 @@ test_24() {
     fail mds
     rm -f $DIR/$tfile
     kill -USR1 $pid
-    wait $pid || return 2
-    [ -e $DIR/$tfile ] && return 3
+    wait $pid || return 1
+    [ -e $DIR/$tfile ] && return 2
     return 0
 }
 run_test 24 "open(O_CREAT), replay, unlink, close (test mds_cleanup_orphans)"
@@ -491,134 +495,140 @@ test_25() {
     replay_barrier mds
     fail mds
     kill -USR1 $pid
-    wait $pid || return 2
-    [ -e $DIR/$tfile ] && return 3
+    wait $pid || return 1
+    [ -e $DIR/$tfile ] && return 2
     return 0
 }
 run_test 25 "open(O_CREAT), unlink, replay, close (test mds_cleanup_orphans)"
 
 test_26() {
     replay_barrier mds
-    multiop $DIR/$tfile O_tSc &
-    pid=$!
+    multiop $DIR/$tfile-1 O_tSc &
+    pid1=$!
     multiop $DIR/$tfile-2 O_tSc &
     pid2=$!
     # give multiop a chance to open
     sleep 1 
-    rm -f $DIR/$tfile
+    rm -f $DIR/$tfile-1
     rm -f $DIR/$tfile-2
     kill -USR1 $pid2
-    wait $pid2 || return 4
+    wait $pid2 || return 1
 
     fail mds
-    kill -USR1 $pid
-    wait $pid || return 2
-    [ -e $DIR/$tfile ] && return 3
+    kill -USR1 $pid1
+    wait $pid1 || return 2
+    [ -e $DIR/$tfile-1 ] && return 3
+    [ -e $DIR/$tfile-2 ] && return 4
     return 0
 }
 run_test 26 "|X| open(O_CREAT), unlink two, close one, replay, close one (test mds_cleanup_orphans)"
 
 test_27() {
     replay_barrier mds
-    multiop $DIR/$tfile O_tSc &
-    pid=$!
+    multiop $DIR/$tfile-1 O_tSc &
+    pid1=$!
     multiop $DIR/$tfile-2 O_tSc &
     pid2=$!
     # give multiop a chance to open
     sleep 1 
-    rm -f $DIR/$tfile
+    rm -f $DIR/$tfile-1
     rm -f $DIR/$tfile-2
 
     fail mds
-    kill -USR1 $pid
-    wait $pid || return 2
+    kill -USR1 $pid1
+    wait $pid1 || return 1
     kill -USR1 $pid2
-    wait $pid2 || return 4
-    [ -e $DIR/$tfile ] && return 3
+    wait $pid2 || return 2
+    [ -e $DIR/$tfile-1 ] && return 3
+    [ -e $DIR/$tfile-2 ] && return 4
     return 0
 }
 run_test 27 "|X| open(O_CREAT), unlink two, replay, close two (test mds_cleanup_orphans)"
 
 test_28() {
-    multiop $DIR/$tfile O_tSc &
-    pid=$!
+    multiop $DIR/$tfile-1 O_tSc &
+    pid1=$!
     multiop $DIR/$tfile-2 O_tSc &
     pid2=$!
     # give multiop a chance to open
     sleep 1 
     replay_barrier mds
-    rm -f $DIR/$tfile
+    rm -f $DIR/$tfile-1
     rm -f $DIR/$tfile-2
     kill -USR1 $pid2
-    wait $pid2 || return 4
+    wait $pid2 || return 1
 
     fail mds
-    kill -USR1 $pid
-    wait $pid || return 2
-    [ -e $DIR/$tfile ] && return 3
+    kill -USR1 $pid1
+    wait $pid1 || return 2
+    [ -e $DIR/$tfile-1 ] && return 3
+    [ -e $DIR/$tfile-2 ] && return 4
     return 0
 }
 run_test 28 "open(O_CREAT), |X| unlink two, close one, replay, close one (test mds_cleanup_orphans)"
 
 test_29() {
-    multiop $DIR/$tfile O_tSc &
-    pid=$!
+    multiop $DIR/$tfile-1 O_tSc &
+    pid1=$!
     multiop $DIR/$tfile-2 O_tSc &
     pid2=$!
     # give multiop a chance to open
     sleep 1 
     replay_barrier mds
-    rm -f $DIR/$tfile
+    rm -f $DIR/$tfile-1
     rm -f $DIR/$tfile-2
 
     fail mds
-    kill -USR1 $pid
-    wait $pid || return 2
+    kill -USR1 $pid1
+    wait $pid1 || return 1
     kill -USR1 $pid2
-    wait $pid2 || return 4
-    [ -e $DIR/$tfile ] && return 3
+    wait $pid2 || return 2
+    [ -e $DIR/$tfile-1 ] && return 3
+    [ -e $DIR/$tfile-2 ] && return 4
     return 0
 }
 run_test 29 "open(O_CREAT), |X| unlink two, replay, close two (test mds_cleanup_orphans)"
 
 test_30() {
-    multiop $DIR/$tfile O_tSc &
-    pid=$!
+    multiop $DIR/$tfile-1 O_tSc &
+    pid1=$!
     multiop $DIR/$tfile-2 O_tSc &
     pid2=$!
     # give multiop a chance to open
     sleep 1 
-    rm -f $DIR/$tfile
+    rm -f $DIR/$tfile-1
     rm -f $DIR/$tfile-2
 
     replay_barrier mds
     fail mds
-    kill -USR1 $pid
-    wait $pid || return 2
+    kill -USR1 $pid1
+    wait $pid1 || return 1
     kill -USR1 $pid2
-    wait $pid2 || return 4
-    [ -e $DIR/$tfile ] && return 3
+    wait $pid2 || return 2
+    [ -e $DIR/$tfile-1 ] && return 3
+    [ -e $DIR/$tfile-2 ] && return 4
     return 0
 }
 run_test 30 "open(O_CREAT) two, unlink two, replay, close two (test mds_cleanup_orphans)"
 
 test_31() {
-    multiop $DIR/$tfile O_tSc &
-    pid=$!
+    multiop $DIR/$tfile-1 O_tSc &
+    pid1=$!
     multiop $DIR/$tfile-2 O_tSc &
     pid2=$!
     # give multiop a chance to open
     sleep 1 
-    rm -f $DIR/$tfile
+    rm -f $DIR/$tfile-1
 
     replay_barrier mds
     rm -f $DIR/$tfile-2
     fail mds
-    kill -USR1 $pid
-    wait $pid || return 2
+    kill -USR1 $pid1
+    wait $pid1 || return 1
     kill -USR1 $pid2
-    wait $pid2 || return 4
-    [ -e $DIR/$tfile ] && return 3
+    wait $pid2 || return 2
+    [ -e $DIR/$tfile-1 ] && return 3
+    [ -e $DIR/$tfile-2 ] && return 4
     return 0
 }
 run_test 31 "open(O_CREAT) two, unlink one, |X| unlink one, close two (test mds_cleanup_orphans)"
@@ -649,6 +659,23 @@ test_33() {
     return 0
 }
 run_test 33 "abort recovery before client does replay"
+
+test_34() {
+    multiop $DIR/$tfile O_c &
+    pid=$!
+    # give multiop a chance to open
+    sleep 1 
+    rm -f $DIR/$tfile
+
+    replay_barrier mds
+    fail_abort mds
+    kill -USR1 $pid
+    [ -e $DIR/$tfile ] && return 1
+    sleep 5
+    # wait for commitment of removal
+    return 0
+}
+run_test 34 "abort recovery before client does replay (test mds_cleanup_orphans)"
 
 equals_msg test complete, cleaning up
 cleanup

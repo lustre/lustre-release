@@ -640,7 +640,10 @@ void target_abort_recovery(void *data)
         /* when recovery was abort, cleanup orphans for mds */
         if (OBT(obd) && OBP(obd, postrecov)) {
                 rc = OBP(obd, postrecov)(obd);
-                CERROR("Cleanup %d orphans after recovery was abort!\n", rc);
+                if (rc >= 0)
+                        CERROR("Cleanup %d orphans after recovery was aborted\n", rc);
+                else
+                        CERROR("postrecov failed %d\n", rc);
         }
 
         abort_delayed_replies(obd);
@@ -922,11 +925,14 @@ int target_queue_final_reply(struct ptlrpc_request *req, int rc)
                        obd->obd_name);
                 obd->obd_recovering = 0;
 
-                /* when recovering finished, cleanup orphans for mds       */
+                /* when recovering finished, cleanup orphans for mds */
                 if (OBT(obd) && OBP(obd, postrecov)) {
                         rc2 = OBP(obd, postrecov)(obd);
-                        CERROR("%s: all clients recovered, %d MDS orphans "
-                               "deleted\n", obd->obd_name, rc2);
+                        if (rc2 >= 0)
+                                CERROR("%s: all clients recovered, %d MDS orphans "
+                                       "deleted\n", obd->obd_name, rc2);
+                        else
+                                CERROR("postrecov failed %d\n", rc2);
                 }
 
                 list_for_each_safe(tmp, n, &obd->obd_delayed_reply_queue) {

@@ -141,10 +141,11 @@ int filter_log_sz_change(struct llog_handle *cathandle,
                          __u32 io_epoch,
                          struct llog_cookie *logcookie, 
                          struct inode *inode);
-int filter_get_catalog(struct obd_device *);
+//int filter_get_catalog(struct obd_device *);
 void filter_cancel_cookies_cb(struct obd_device *obd, __u64 transno,
                               void *cb_data, int error);
-
+int filter_recov_log_unlink_cb(struct llog_handle *llh,
+                               struct llog_rec_hdr *rec, void *data);
 
 /* filter_san.c */
 int filter_san_setup(struct obd_device *obd, obd_count len, void *buf);

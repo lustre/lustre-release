@@ -40,11 +40,12 @@
 
 
 #ifdef ENABLE_ORPHANS
-int llog_origin_handle_cancel(struct llog_obd_ctxt *ctxt, 
-                              struct ptlrpc_request *req)
+int llog_origin_handle_cancel(struct ptlrpc_request *req)
 {
-        struct obd_device *obd = ctxt->loc_exp->exp_obd;
+        struct obd_device *obd = req->rq_export->exp_obd;
+        struct obd_device *disk_obd;
         struct llog_cookie *logcookies;
+        struct llog_ctxt *ctxt;
         int num_cookies, rc = 0;
         struct obd_run_ctxt saved;
         struct llog_handle *cathandle;
@@ -57,21 +58,84 @@ int llog_origin_handle_cancel(struct llog_obd_ctxt *ctxt,
                 RETURN(-EFAULT);
         }
 
+        ctxt = llog_get_context(obd, logcookies->lgc_subsys);
+        if (ctxt == NULL) {
+                CERROR("llog subsys not setup or already cleanup\n");
+                RETURN(-ENOENT);
+        }
+        down(&ctxt->loc_sem);
+        disk_obd = ctxt->loc_exp->exp_obd;
         cathandle = ctxt->loc_handle;
         LASSERT(cathandle);
 
-        push_ctxt(&saved, &obd->obd_ctxt, NULL); 
+        push_ctxt(&saved, &disk_obd->obd_ctxt, NULL); 
         rc = llog_cat_cancel_records(cathandle, num_cookies, logcookies);
         if (rc)
                 CERROR("cancel %d llog-records failed: %d\n", num_cookies, rc);
-        pop_ctxt(&saved, &obd->obd_ctxt, NULL);
+        else
+                CERROR("cancel %d llog-records successful\n", num_cookies);
+
+        pop_ctxt(&saved, &disk_obd->obd_ctxt, NULL);
+        up(&ctxt->loc_sem);
 
         RETURN(rc);
 }
 EXPORT_SYMBOL(llog_origin_handle_cancel);
 #endif
+                                                                                                                             
+int llog_origin_connect(struct llog_ctxt *ctxt, int count,
+                        struct llog_logid *logid,
+                        struct llog_ctxt_gen *gen)
+{
+        struct obd_import *imp;
+        struct ptlrpc_request *request;
+        struct llogd_conn_body *req_body;
+        int size = sizeof(struct llogd_conn_body);
+        int rc;
+        ENTRY;
 
-int llog_receptor_accept(struct llog_obd_ctxt *ctxt, struct obd_import *imp)
+        LASSERT(ctxt->loc_imp);
+        imp = ctxt->loc_imp;
+
+        request = ptlrpc_prep_req(imp, LLOG_ORIGIN_CONNECT, 1, &size, NULL);
+        if (!request) 
+                RETURN(-ENOMEM);
+
+        req_body = lustre_msg_buf(request->rq_reqmsg, 0, sizeof(*req_body));
+
+        req_body->lgdc_gen = ctxt->loc_gen;
+        req_body->lgdc_logid = ctxt->loc_handle->lgh_id;
+        req_body->lgdc_ctxt_idx = ctxt->loc_idx + 1;
+        request->rq_replen = lustre_msg_size(0, NULL);
+
+        rc = ptlrpc_queue_wait(request);
+        ptlrpc_req_finished(request);
+
+        RETURN(rc);
+}
+EXPORT_SYMBOL(llog_origin_connect);
+
+int llog_handle_connect(struct ptlrpc_request *req)
+{
+        struct obd_device *obd = req->rq_export->exp_obd;
+        struct llogd_conn_body *req_body;
+        struct llog_ctxt *ctxt;
+        int rc;
+        ENTRY;
+                                                                                                                             
+        req_body = lustre_msg_buf(req->rq_reqmsg, 0, sizeof(*req_body));
+                                                                                                                             
+        ctxt = llog_get_context(obd, req_body->lgdc_ctxt_idx);
+        rc = llog_connect(ctxt, 1, &req_body->lgdc_logid, 
+                          &req_body->lgdc_gen);
+        if (rc != 0) 
+                CERROR("failed at llog_relp_connect\n");
+
+        RETURN(rc);
+}
+EXPORT_SYMBOL(llog_handle_connect);
+
+int llog_receptor_accept(struct llog_ctxt *ctxt, struct obd_import *imp)
 {
         ENTRY;
         LASSERT(ctxt);
@@ -80,7 +144,7 @@ int llog_receptor_accept(struct llog_obd_ctxt *ctxt, struct obd_import *imp)
 }
 EXPORT_SYMBOL(llog_receptor_accept);
 
-int llog_initiator_connect(struct llog_obd_ctxt *ctxt)
+int llog_initiator_connect(struct llog_ctxt *ctxt)
 {
         ENTRY;
         LASSERT(ctxt);
@@ -88,4 +152,3 @@ int llog_initiator_connect(struct llog_obd_ctxt *ctxt)
         RETURN(0);
 }
 EXPORT_SYMBOL(llog_initiator_connect);
-
