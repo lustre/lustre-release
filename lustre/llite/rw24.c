@@ -190,8 +190,10 @@ static int ll_direct_IO_24(int rw, struct inode *inode, struct kiobuf *iobuf,
                         CERROR("error from callback: rc = %d\n", rc);
         }
         ptlrpc_set_destroy(set);
-        if (rc == 0)
+        if (rc == 0) {
                 rc = iobuf->length;
+                obdo_to_inode(inode, &oa, OBD_MD_FLBLOCKS);
+        }
 
         OBD_FREE(pga, sizeof(*pga) * iobuf->nr_pages);
         RETURN(rc);
