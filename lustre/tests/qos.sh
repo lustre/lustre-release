@@ -19,7 +19,7 @@ SERVER=${SERVER:-`hostname`}
 CLIENT=${CLIENT:-""}
 #
 # number of files created
-ALOT=100
+IMBALANCE_NFILES=100
 #
 # Run select tests by setting ONLY, or as arguments to the script.
 # Skip specific tests by setting EXCEPT.
@@ -218,6 +218,17 @@ test_2() {
 run_test 2 "set min/max in ${QOSPROC}/QoS_*"
 
 imbalance_setup() {
+    # disable QOS updates - we don't want the
+    # imbalance creation be the trigger
+    qos_setval QoS_statfs_interval 86400 || error
+    qos_setval QoS_rescan_interval 604800 || error
+    qos_setval QoS_update_interval 86400 || error
+    # create imbalance on local mount
+    for ((i=0; $i<$IMBALANCE_NFILES; i=$i+1)); do
+	${LSTRIPE} $1/imbalance$i 0 $2 1 || error
+	dd if=/dev/zero of=$1/imbalance$i count=10 bs=1024 >& /dev/null
+    done
+    # enable QOS updates again
     # set statfs caching to 1 jiffie on server
     qos_setval QoS_statfs_interval 0 || error
     # make QOS updates immediate (1 jiffie) on MDS and client
@@ -231,22 +242,14 @@ imbalance_setup() {
     # enable freeblock policy on MDS and client
     qos_setval QoS_freeblock_imbalance 0 || error
     qos_setval QoS_freeblock_imbalance 0 ${CLIENT} || error
-    # initialize QoS on MDS and client
-    df $MOUNT > /dev/null
-    ${RSH} ${CLIENT} df $MOUNT > /dev/null
-    # create imbalance on local mount
-    for ((i=0; $i<$ALOT; i=$i+1)); do
-	${LSTRIPE} $1/imbalance$i 0 $2 1 || error
-	echo "hello, world" > $1/imbalance$i
-    done
 }
 
 imbalance_check() {
     # create a lot of files on the remote node
-    for ((i=0; $i<$ALOT; i=$i+1)); do
+    for ((i=0; $i<$IMBALANCE_NFILES; i=$i+1)); do
 	${RSH} ${CLIENT} "cd ${FULL_SRCDIR}; PATH=$FULL_SRCDIR/../utils:\$PATH ${LSTRIPE} $1/test$i 0 -1 1" || error
     done
-    for ((i=0; $i<$ALOT; i=$i+1)); do
+    for ((i=0; $i<$IMBALANCE_NFILES; i=$i+1)); do
 	# get the OST number for each new file
 	obd=`${LFIND} $1/test$i | tail -2 | head -1 | awk '{ print $1 }'`
         # the file must not be on OST $2, since we are still imbalanced
@@ -349,6 +352,28 @@ test_3f() {
     rm -rf $DIR/d3f
 }
 run_test 3f "check QOS propagation on punch"
+
+# check percentage free policy
+test_4() {
+    # create test directory
+    mkdir $DIR/d4 || error
+    imbalance_setup $DIR/d4 0
+    # disable free block policy
+    qos_setval QoS_freeblock_imbalance 4294967295 || error
+    qos_setval QoS_freeblock_imbalance 4294967295 ${CLIENT} || error
+    # enable percentage free policy
+    qos_setval QoS_freeblock_percent 0 || error
+    qos_setval QoS_freeblock_percent 0 ${CLIENT} || error
+    # create a file on the MDS and the remote node (this is the QOS update trigger)
+    ${LSTRIPE} $DIR/d4/trigger1 0 0 1 || error
+    ${RSH} ${CLIENT} "cd ${FULL_SRCDIR}; PATH=$FULL_SRCDIR/../utils:\$PATH ${LSTRIPE} $DIR/d4/trigger2 0 0 1" || error
+    imbalance_check $DIR/d4 0
+    rm -rf $DIR/d4
+}
+run_test 4 "check percentage free policy"
+
+# can't test number of objects allocation policy due to object pre-creation:
+# behaviour is not predictable.
 
 TMPDIR=$OLDTMPDIR
 TMP=$OLDTMP
