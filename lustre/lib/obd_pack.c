@@ -55,15 +55,15 @@ void ost_unpack_ioo(void **tmp, struct obd_ioobj **ioop)
 void ost_pack_niobuf(void **tmp, void *addr, __u64 offset, __u32 len, 
                      __u32 flags, __u32 xid)
 {
-        struct niobuf *ioo = *tmp;
+        struct niobuf *nb = *tmp;
         char *c = *tmp;
 
-        ioo->addr = HTON__u64((__u64)(unsigned long)addr); 
-        ioo->offset = HTON__u64(offset); 
-        ioo->len = HTON__u32(len); 
-        ioo->flags = HTON__u32(flags); 
-        ioo->xid = HTON__u32(xid);
-        *tmp = c + sizeof(*ioo); 
+        nb->addr = HTON__u64((__u64)(unsigned long)addr); 
+        nb->offset = HTON__u64(offset); 
+        nb->len = HTON__u32(len); 
+        nb->flags = HTON__u32(flags); 
+        nb->xid = HTON__u32(xid);
+        *tmp = c + sizeof(*nb); 
 }
 
 void ost_unpack_niobuf(void **tmp, struct niobuf **nbp)
