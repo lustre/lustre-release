@@ -634,6 +634,9 @@ int ptlrpc_replay_req(struct ptlrpc_request *req)
                 LBUG();
         }
 
+        if (req->rq_replay_cb)
+                req->rq_replay_cb(req, req->rq_replay_cb_data);
+
  out:
         RETURN(rc);
 }

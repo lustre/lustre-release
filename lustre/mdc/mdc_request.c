@@ -337,6 +337,16 @@ int mdc_enqueue(struct lustre_handle *conn, int lock_type,
         RETURN(0);
 }
 
+static void mdc_replay_open(struct ptlrpc_request *req, void *data)
+{
+        __u64 *fh = data;
+        struct mds_body *body;
+        
+        body = lustre_msg_buf(req->rq_repmsg, 0);
+        mds_unpack_body(body);
+        *fh = body->extra;
+}
+
 int mdc_open(struct lustre_handle *conn, obd_id ino, int type, int flags,
              struct lov_stripe_md *smd, __u64 cookie, __u64 *fh,
              struct ptlrpc_request **request)
@@ -375,6 +385,10 @@ int mdc_open(struct lustre_handle *conn, obd_id ino, int type, int flags,
                 mds_unpack_body(body);
                 *fh = body->extra;
         }
+
+        /* If open is replayed, we need to fix up the fh. */
+        req->rq_replay_cb = mdc_replay_open;
+        req->rq_replay_cb_data = fh;
 
         EXIT;
  out:
