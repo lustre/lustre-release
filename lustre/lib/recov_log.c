@@ -43,6 +43,12 @@ struct llog_handle *llog_alloc_handle(void)
         if (loghandle == NULL)
                 RETURN(ERR_PTR(-ENOMEM));
 
+        OBD_ALLOC(loghandle->lgh_hdr, LLOG_CHUNK_SIZE);
+        if (loghandle->lgh_hdr == NULL) {
+                OBD_FREE(loghandle, sizeof(*loghandle));
+                RETURN(ERR_PTR(-ENOMEM));
+        }
+
         INIT_LIST_HEAD(&loghandle->lgh_list);
         sema_init(&loghandle->lgh_lock, 1);
 
@@ -55,6 +61,7 @@ void llog_free_handle(struct llog_handle *loghandle)
                 return;
 
         list_del_init(&loghandle->lgh_list);
+        OBD_FREE(loghandle->lgh_hdr, LLOG_CHUNK_SIZE);
         OBD_FREE(loghandle, sizeof(*loghandle));
 }
 
@@ -64,6 +71,7 @@ void llog_free_handle(struct llog_handle *loghandle)
  * Assumes caller has already pushed us into the kernel context and is locking.
  */
 static struct llog_handle *llog_new_log(struct llog_handle *cathandle,
+                                        struct obd_uuid *tgtuuid,
                                         struct obd_trans_info *oti)
 {
         struct llog_handle *loghandle;
@@ -79,14 +87,13 @@ static struct llog_handle *llog_new_log(struct llog_handle *cathandle,
         if (IS_ERR(loghandle))
                 GOTO(out, rc = PTR_ERR(loghandle));
 
-        OBD_ALLOC(loh, sizeof(*loh));
-        if (!loh)
-                GOTO(out_handle, rc = -ENOMEM);
+        loh = loghandle->lgh_hdr;
         loh->loh_hdr.lth_type = LLOG_OBJECT_MAGIC;
         loh->loh_hdr.lth_len = loh->loh_hdr_end_len = sizeof(*loh);
         loh->loh_timestamp = CURRENT_TIME;
         loh->loh_bitmap_offset = offsetof(struct llog_object_hdr, loh_bitmap);
-        loghandle->lgh_hdr = loh;
+        memcpy(&loh->loh_tgtuuid, tgtuuid, sizeof(loh->loh_tgtuuid));
+        loghandle->lgh_tgtuuid = &loh->loh_tgtuuid;
 
         lch = cathandle->lgh_hdr;
         bitmap_size = sizeof(lch->lch_bitmap) * 8;
@@ -138,17 +145,15 @@ static struct llog_handle *llog_new_log(struct llog_handle *cathandle,
 
         RETURN(loghandle);
 
-out_handle:
         llog_free_handle(loghandle);
 out:
         RETURN(ERR_PTR(rc));
 }
 
 /* Assumes caller has already pushed us into the kernel context. */
-int llog_init_catalog(struct llog_handle *cathandle)
+int llog_init_catalog(struct llog_handle *cathandle, struct obd_uuid *tgtuuid)
 {
         struct llog_catalog_hdr *lch;
-        struct file *file = cathandle->lgh_file;
         loff_t offset = 0;
         int rc = 0;
         ENTRY;
@@ -156,20 +161,18 @@ int llog_init_catalog(struct llog_handle *cathandle)
         LASSERT(sizeof(*lch) == LLOG_CHUNK_SIZE);
 
         down(&cathandle->lgh_lock);
-        OBD_ALLOC(lch, sizeof(*lch));
-        if (!lch)
-                GOTO(out, rc = -ENOMEM);
+        lch = cathandle->lgh_hdr;
 
-        cathandle->lgh_hdr = lch;
-
-        if (file->f_dentry->d_inode->i_size == 0) {
+        if (cathandle->lgh_file->f_dentry->d_inode->i_size == 0) {
 write_hdr:      lch->lch_hdr.lth_type = LLOG_CATALOG_MAGIC;
                 lch->lch_hdr.lth_len = lch->lch_hdr_end_len = LLOG_CHUNK_SIZE;
                 lch->lch_timestamp = CURRENT_TIME;
                 lch->lch_bitmap_offset = offsetof(struct llog_catalog_hdr,
                                                   lch_bitmap);
-                rc = lustre_fwrite(file, lch, sizeof(*lch), &offset);
-                if (rc != sizeof(*lch)) {
+                memcpy(&lch->lch_tgtuuid, tgtuuid, sizeof(lch->lch_tgtuuid));
+                rc = lustre_fwrite(cathandle->lgh_file, lch, LLOG_CHUNK_SIZE,
+                                   &offset);
+                if (rc != LLOG_CHUNK_SIZE) {
                         CERROR("error writing catalog header: rc %d\n", rc);
                         OBD_FREE(lch, sizeof(*lch));
                         if (rc >= 0)
@@ -177,8 +180,9 @@ write_hdr:      lch->lch_hdr.lth_type = LLOG_CATALOG_MAGIC;
                 } else
                         rc = 0;
         } else {
-                rc = lustre_fread(file, lch, sizeof(*lch), &offset);
-                if (rc != sizeof(*lch)) {
+                rc = lustre_fread(cathandle->lgh_file, lch, LLOG_CHUNK_SIZE,
+                                  &offset);
+                if (rc != LLOG_CHUNK_SIZE) {
                         CERROR("error reading catalog header: rc %d\n", rc);
                         /* Can we do much else if the header is bad? */
                         goto write_hdr;
@@ -186,7 +190,7 @@ write_hdr:      lch->lch_hdr.lth_type = LLOG_CATALOG_MAGIC;
                         rc = 0;
         }
 
-out:
+        cathandle->lgh_tgtuuid = &lch->lch_tgtuuid;
         up(&cathandle->lgh_lock);
         RETURN(rc);
 }
@@ -217,7 +221,7 @@ struct llog_handle *llog_current_log(struct llog_handle *cathandle, int reclen,
         }
 
         if (reclen) {
-                loghandle = llog_new_log(cathandle, oti);
+                loghandle = llog_new_log(cathandle, cathandle->lgh_tgtuuid,oti);
                 GOTO(out, loghandle);
         }
 out:
