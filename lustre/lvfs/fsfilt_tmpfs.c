@@ -43,7 +43,6 @@
 /* prefix is needed because tmpfs xattr patch deos not support namespaces
  * yet. */
 #define XATTR_LUSTRE_MDS_LOV_EA         "trusted.lov"
-#define XATTR_LUSTRE_MDS_OBJID          "system.lustre_mds_objid"
 
 /* structure instance of to be returned as a transaction handle. This is not
  * needed for now, but probably we will need to save something during modifying
@@ -329,12 +328,6 @@ fsfilt_tmpfs_get_md(struct inode *inode, void *lmm,
         rc = shmem_xattr_get(inode, XATTR_LUSTRE_MDS_LOV_EA,
                              lmm, lmm_size);
 
-	/* check for old one. */
-        if (rc == -ENODATA) {
-                rc = shmem_xattr_get(inode, XATTR_LUSTRE_MDS_OBJID,
-                                     lmm, lmm_size);
-        }
-
         unlock_kernel();
 
         if (lmm == NULL)
@@ -342,7 +335,7 @@ fsfilt_tmpfs_get_md(struct inode *inode, void *lmm,
 
         if (rc < 0) {
                 CDEBUG(D_INFO, "error getting EA %s from inode %lu: rc = %d\n",
-                       XATTR_LUSTRE_MDS_OBJID, inode->i_ino, rc);
+                       XATTR_LUSTRE_MDS_LOV_EA, inode->i_ino, rc);
                 
                 memset(lmm, 0, lmm_size);
                 return (rc == -ENODATA) ? 0 : rc;
@@ -484,7 +477,7 @@ fsfilt_tmpfs_readpage(struct file *file, char *buf,
 		if (file->f_op->llseek(file, offset, 0) != offset)
 			return -ENOENT;
 
-                /* reading @count bytesof data. */
+                /* reading @count bytes of data. */
 		while (count > 0) {
                         hint.count = 0;
                         hint.file = file;
