@@ -199,6 +199,7 @@ int gen_cleanup(struct obd_device * obddev)
         return 0;
 } /* sim_cleanup_device */
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,4,0)
 void ___wait_on_page(struct page *page)
 {
         struct task_struct *tsk = current;
@@ -215,6 +216,7 @@ void ___wait_on_page(struct page *page)
         tsk->state = TASK_RUNNING;
         remove_wait_queue(&page->wait, &wait);
 }
+#endif
 
 void lck_page(struct page *page)
 {
