@@ -77,7 +77,7 @@ setup() {
 }
 
 setup_portals() {
-	if [ "$NETWORK" -a "$LOCALHOST" -a "$SERVER" ]; then
+	if [ -z "$NETWORK" -o -z "$LOCALHOST" -o -z "$SERVER" ]; then
 		echo "$0: NETWORK or LOCALHOST or SERVER is not set"
 		exit -1
 	fi
@@ -105,6 +105,7 @@ setup_portals() {
 	add_uuid self
 	add_uuid mds
 	add_uuid ost
+	quit
 	EOF
 }
 
