@@ -560,7 +560,6 @@ get_new_msg (nal_cb_t *nal, lib_md_t *md)
         return (msg);
 }
 
-
 /*
  * Incoming messages have a ptl_msg_t object associated with them
  * by the library.  This object encapsulates the state of the
@@ -756,9 +755,13 @@ static int parse_get(nal_cb_t * nal, ptl_hdr_t * hdr, void *private)
 
         rc = lib_send (nal, private, msg, &reply, PTL_MSG_REPLY, 
                        hdr->src_nid, hdr->src_pid, md, offset, mlength);
-        if (rc != 0) {
+        if (rc != PTL_OK) {
                 CERROR(LPU64": Dropping GET from "LPU64": send REPLY failed\n",
                        ni->nid, hdr->src_nid);
+                /* Hmm, this will create a GET event and make believe
+                 * the reply completed, which it kind of did, only the
+                 * source won't get her reply */
+                lib_finalize (nal, private, msg);
                 state_lock (nal, &flags);
                 goto drop;
         }
@@ -1099,7 +1102,8 @@ int do_PtlPut(nal_cb_t * nal, void *private, void *v_args, void *v_ret)
         lib_msg_t *msg = NULL;
         ptl_process_id_t *id = &args->target_in;
         unsigned long flags;
-
+        int           rc;
+        
         if (!list_empty (&nal->ni.ni_test_peers) && /* normally we don't */
             fail_peer (nal, id->nid, 1))           /* shall we now? */
         {
@@ -1177,9 +1181,15 @@ int do_PtlPut(nal_cb_t * nal, void *private, void *v_args, void *v_ret)
 
         state_unlock(nal, &flags);
         
-        lib_send (nal, private, msg, &hdr, PTL_MSG_PUT,
-                  id->nid, id->pid, md, 0, md->length);
-
+        rc = lib_send (nal, private, msg, &hdr, PTL_MSG_PUT,
+                       id->nid, id->pid, md, 0, md->length);
+        if (rc != PTL_OK) {
+                /* get_new_msg() committed us to sending by decrementing
+                 * md->threshold, so we have to act like we did send, but
+                 * the network dropped it. */
+                lib_finalize (nal, private, msg);
+        }
+        
         return ret->rc = PTL_OK;
 }
 
@@ -1268,7 +1278,8 @@ int do_PtlGet(nal_cb_t * nal, void *private, void *v_args, void *v_ret)
         ptl_process_id_t *id = &args->target_in;
         lib_md_t *md;
         unsigned long flags;
-
+        int           rc;
+        
         if (!list_empty (&nal->ni.ni_test_peers) && /* normally we don't */
             fail_peer (nal, id->nid, 1))           /* shall we now? */
         {
@@ -1342,9 +1353,15 @@ int do_PtlGet(nal_cb_t * nal, void *private, void *v_args, void *v_ret)
 
         state_unlock(nal, &flags);
 
-        lib_send (nal, private, msg, &hdr, PTL_MSG_GET,
-                  id->nid, id->pid, NULL, 0, 0);
-
+        rc = lib_send (nal, private, msg, &hdr, PTL_MSG_GET,
+                       id->nid, id->pid, NULL, 0, 0);
+        if (rc != PTL_OK) {
+                /* get_new_msg() committed us to sending by decrementing
+                 * md->threshold, so we have to act like we did send, but
+                 * the network dropped it. */
+                lib_finalize (nal, private, msg);
+        }
+        
         return ret->rc = PTL_OK;
 }
 

@@ -59,6 +59,8 @@ static int max = 8192;
 static int subsystem_mask = ~0;
 static int debug_mask = ~0;
 
+#define MAX_MARK_SIZE 100
+
 static const char *portal_debug_subsystems[] =
         {"undefined", "mdc", "mds", "osc", "ost", "class", "log", "llite",
          "rpc", "mgmt", "portals", "socknal", "qswnal", "pinger", "filter",
@@ -488,21 +490,28 @@ int jt_dbg_clear_debug_buf(int argc, char **argv)
 
 int jt_dbg_mark_debug_buf(int argc, char **argv)
 {
-        int rc;
+        int rc, max_size = MAX_MARK_SIZE-1;
         struct portal_ioctl_data data;
         char *text;
         time_t now = time(NULL);
 
-        if (argc > 2) {
-                fprintf(stderr, "usage: %s [marker text]\n", argv[0]);
-                return 0;
-        }
-
-        if (argc == 2) {
-                text = argv[1];
+        if (argc > 1) {
+                int counter;
+                text = malloc(MAX_MARK_SIZE);
+                strncpy(text, argv[1], max_size);
+                max_size-=strlen(argv[1]);
+                for(counter = 2; (counter < argc) && (max_size > 0) ; counter++){
+                        strncat(text, " ", 1);
+                        max_size-=1;
+                        strncat(text, argv[counter], max_size);
+                        max_size-=strlen(argv[counter]);
+                }
         } else {
                 text = ctime(&now);
                 text[strlen(text) - 1] = '\0'; /* stupid \n */
+        }
+        if (!max_size) {
+                text[MAX_MARK_SIZE - 1] = '\0';
         }
 
         memset(&data, 0, sizeof(data));
@@ -530,7 +539,9 @@ int jt_dbg_modules(int argc, char **argv)
         } *mp, mod_paths[] = {
                 {"portals", "lustre/portals/libcfs"},
                 {"ksocknal", "lustre/portals/knals/socknal"},
+                {"lvfs", "lustre/lvfs"},
                 {"obdclass", "lustre/obdclass"},
+                {"llog_test", "lustre/obdclass"},
                 {"ptlrpc", "lustre/ptlrpc"},
                 {"obdext2", "lustre/obdext2"},
                 {"ost", "lustre/ost"},
@@ -543,8 +554,9 @@ int jt_dbg_modules(int argc, char **argv)
                 {"obdfilter", "lustre/obdfilter"},
                 {"extN", "lustre/extN"},
                 {"lov", "lustre/lov"},
-                {"fsfilt_ext3", "lustre/obdclass"},
-                {"fsfilt_extN", "lustre/obdclass"},
+                {"fsfilt_ext3", "lustre/lvfs"},
+                {"fsfilt_extN", "lustre/lvfs"},
+                {"fsfilt_reiserfs", "lustre/lvfs"},
                 {"mds_ext2", "lustre/mds"},
                 {"mds_ext3", "lustre/mds"},
                 {"mds_extN", "lustre/mds"},

@@ -225,7 +225,8 @@ fi
 #AC_SUBST(usrprefix)
 
 AC_MSG_CHECKING(if kernel has CPU affinity support)
-if test "$target_cpu" != ia64 ; then
+SET_CPUS_ALLOW="`grep -c set_cpus_allowed $LINUX/kernel/softirq.c`"
+if test "$SET_CPUS_ALLOW" != 0 ; then
   enable_affinity_temp="-DCPU_AFFINITY=1"
   AC_MSG_RESULT(yes)
 else
