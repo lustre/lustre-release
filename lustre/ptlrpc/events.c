@@ -23,6 +23,7 @@
 #define DEBUG_SUBSYSTEM S_RPC
 
 #include <linux/module.h>
+#include <linux/obd_support.h>
 #include <linux/lustre_net.h>
 
 ptl_handle_eq_t request_out_eq, reply_in_eq, reply_out_eq, bulk_source_eq,

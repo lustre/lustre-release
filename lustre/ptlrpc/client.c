@@ -22,6 +22,8 @@
 
 #define DEBUG_SUBSYSTEM S_RPC
 
+#include <linux/obd_support.h>
+#include <linux/lustre_lib.h>
 #include <linux/lustre_ha.h>
 
 void ptlrpc_init_client(struct recovd_obd *recovd, 

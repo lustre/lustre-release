@@ -22,6 +22,7 @@
 
 #define DEBUG_SUBSYSTEM S_RPC
 
+#include <linux/obd_support.h>
 #include <linux/lustre_net.h>
 
 extern ptl_handle_eq_t request_out_eq, reply_in_eq, reply_out_eq,
