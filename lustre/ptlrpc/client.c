@@ -441,10 +441,12 @@ static int expired_request(void *data)
         ENTRY;
         CERROR("req timeout on connid %d xid %Ld\n", req->rq_connid,
                (unsigned long long)req->rq_xid);
+        req->rq_flags |= PTL_RPC_FL_TIMEOUT;
+        if (!req->rq_import->imp_connection->c_recovd_data.rd_recovd)
+                RETURN(1);
+
         req->rq_timeout = 0;
         req->rq_connection->c_level = LUSTRE_CONN_RECOVD;
-        req->rq_flags |= PTL_RPC_FL_TIMEOUT;
-        /* Activate the recovd for this client, if there is one. */
         recovd_conn_fail(req->rq_import->imp_connection);
 
         /* If this request is for recovery or other primordial tasks,
