@@ -16,5 +16,8 @@ ext3-2.4-ino_t.patch
 ext3-largefile.patch
 ext3-truncate_blocks.patch
 ext3-use-after-free.patch
+ext3-orphan_lock.patch
+ext3-delete_thread-2.4.20.patch
+ext3-noread-2.4.20.patch
 extN-wantedi.patch
 ext3-san-2.4.20-hp.patch
