@@ -36,41 +36,53 @@
 int mds_sendpage(struct ptlrpc_request *req, struct file *file, 
                  __u64 offset, struct niobuf *dst)
 {
-	int rc; 
+        int rc = 0;
 	mm_segment_t oldfs = get_fs();
 
 	if (req->rq_peer.peer_nid == 0) {
 		/* dst->addr is a user address, but in a different task! */
 		set_fs(KERNEL_DS); 
+                /* FIXME: Can't use file->f_op->read() on a directory */
 		rc = generic_file_read(file, (char *)(long)dst->addr, 
 				       PAGE_SIZE, &offset); 
 		set_fs(oldfs);
 
-		if (rc != PAGE_SIZE) 
-			return -EIO;
+		if (rc != PAGE_SIZE) {
+                        rc = -EIO;
+                        EXIT;
+                        goto out;
+                }
+                EXIT;
 	} else {
                 struct ptlrpc_bulk_desc *bulk;
-		char *buf;
+		char *buf = NULL;
 
                 bulk = ptlrpc_prep_bulk(&req->rq_peer);
-                if (bulk == NULL)
-                        return -ENOMEM;
+                if (bulk == NULL) {
+                        rc = -ENOMEM;
+                        EXIT;
+                        goto out;
+                }
 
                 bulk->b_xid = req->rq_xid;
 
 		OBD_ALLOC(buf, PAGE_SIZE);
 		if (!buf) {
-                        OBD_FREE(bulk, sizeof(*bulk));
-			return -ENOMEM;
+                        rc = -ENOMEM;
+                        EXIT;
+                        goto cleanup_bulk;
                 }
 
 		set_fs(KERNEL_DS); 
-		rc = generic_file_read(file, buf, PAGE_SIZE, &offset); 
+                /* FIXME: Can't use file->f_op->read() on a directory */
+                //rc = file->f_op->read(file, buf, PAGE_SIZE, &offset);
+                rc = generic_file_read(file, buf, PAGE_SIZE, &offset);
 		set_fs(oldfs);
 
 		if (rc != PAGE_SIZE) {
-                        OBD_FREE(buf, PAGE_SIZE);
-			return -EIO;
+                        rc = -EIO;
+                        EXIT;
+                        goto cleanup_buf;
                 }
 
 		bulk->b_buf = buf;
@@ -82,15 +94,18 @@ int mds_sendpage(struct ptlrpc_request *req, struct file *file,
 
                 if (bulk->b_flags == PTL_RPC_INTR) {
                         EXIT;
-                        /* FIXME: hey hey, we leak here. */
-                        return -EINTR;
+                        rc = -EINTR;
+                        goto cleanup_buf;
                 }
 
-                OBD_FREE(bulk, sizeof(*bulk));
+                EXIT;
+        cleanup_buf:
                 OBD_FREE(buf, PAGE_SIZE);
+        cleanup_bulk:
+                OBD_FREE(bulk, sizeof(*bulk));
 	}
-
-	return 0;
+out:
+	return rc;
 }
 
 struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
@@ -160,6 +175,7 @@ struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
 
 static inline void mds_get_objid(struct inode *inode, __u64 *id)
 {
+        /* FIXME: it is only by luck that this works on ext3 */
 	memcpy(id, &inode->u.ext2_i.i_data, sizeof(*id));
 }
 
@@ -422,8 +438,7 @@ out:
 
 /* mount the file system (secretly) */
 static int mds_setup(struct obd_device *obddev, obd_count len,
-			void *buf)
-			
+                     void *buf)
 {
 	struct obd_ioctl_data* data = buf;
 	struct mds_obd *mds = &obddev->u.mds;
@@ -439,13 +454,13 @@ static int mds_setup(struct obd_device *obddev, obd_count len,
 	}
 
 	mds->mds_sb = mnt->mnt_root->d_inode->i_sb;
-	if (!obddev->u.mds.mds_sb) {
+        if (!mds->mds_sb) {
 		EXIT;
 		return -ENODEV;
 	}
 
 	mds->mds_vfsmnt = mnt;
-	obddev->u.mds.mds_fstype = strdup(data->ioc_inlbuf2);
+        mds->mds_fstype = strdup(data->ioc_inlbuf2);
 
 	mds->mds_ctxt.pwdmnt = mnt;
 	mds->mds_ctxt.pwd = mnt->mnt_root;
@@ -465,7 +480,6 @@ static int mds_setup(struct obd_device *obddev, obd_count len,
         if (err) { 
                 CERROR("cannot start thread\n");
         }
-                
 
         MOD_INC_USE_COUNT;
         EXIT; 
