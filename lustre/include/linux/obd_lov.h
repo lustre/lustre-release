@@ -7,6 +7,17 @@
 
 #define OBD_LOV_DEVICENAME "lov"
 
+struct lov_brw_async_args {
+        obd_count        aa_oa_bufs;
+        struct brw_page *aa_ioarr;
+};
+
+struct lov_getattr_async_args {
+        struct lov_stripe_md  *aa_lsm;
+        struct obdo           *aa_oa;
+        struct obdo           *aa_stripe_oas;
+};
+
 static inline int lov_stripe_md_size(int stripes)
 {
         return sizeof(struct lov_stripe_md) + stripes*sizeof(struct lov_oinfo);

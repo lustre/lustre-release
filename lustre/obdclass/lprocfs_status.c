@@ -519,6 +519,7 @@ int lprocfs_alloc_obd_counters(struct obd_device *obddev,
         LPROCFS_OBD_OP_INIT(num_private_counters, obdops_cntrs, destroy);
         LPROCFS_OBD_OP_INIT(num_private_counters, obdops_cntrs, setattr);
         LPROCFS_OBD_OP_INIT(num_private_counters, obdops_cntrs, getattr);
+        LPROCFS_OBD_OP_INIT(num_private_counters, obdops_cntrs, getattr_async);
         LPROCFS_OBD_OP_INIT(num_private_counters, obdops_cntrs, open);
         LPROCFS_OBD_OP_INIT(num_private_counters, obdops_cntrs, close);
         LPROCFS_OBD_OP_INIT(num_private_counters, obdops_cntrs, brw);
