@@ -976,6 +976,7 @@ int mds_open(struct mds_update_record *rec, int offset,
                         GOTO(cleanup, rc = -EISDIR);
                 }
                 if (ll_permission(dchild->d_inode, acc_mode, NULL)) {
+                        intent_set_disposition(rep, DISP_OPEN_OPEN);
                         GOTO(cleanup, rc = -EACCES);
                 }
         }
