@@ -107,9 +107,9 @@ static struct page * obdfs_find_entry (struct inode * dir,
 			/* this code is executed quadratically often */
 			/* do minimal checking `by hand' */
 			int de_len;
-			CDEBUG(D_INODE, "Entry %p len %d, page at %#lx - %#lx , offset %lx\n",
+			/* CDEBUG(D_INODE, "Entry %p len %d, page at %#lx - %#lx , offset %lx\n",
 			       de, le16_to_cpu(de->rec_len), page_address(page),
-			       page_address(page) + PAGE_SIZE, offset);
+			       page_address(page) + PAGE_SIZE, offset); */
 
 			if ((char *) de + namelen <= dlimit &&
 			    ext2_match (namelen, name, de)) {
@@ -125,14 +125,13 @@ static struct page * obdfs_find_entry (struct inode * dir,
 			/* prevent looping on a bad block */
 			de_len = le16_to_cpu(de->rec_len);
 			if (de_len <= 0) {
-				CDEBUG(D_INODE, "Bad entry: at %p len %d\n",
-				       de, de_len);
+				printk("Bad entry at %p len %d\n", de, de_len);
 				goto failure;
 			}
 			offset += de_len;
 			de = (struct ext2_dir_entry_2 *)
 				((char *) de + de_len);
-			CDEBUG(D_INODE, "Next while %lx\n", offset);
+			/* CDEBUG(D_INODE, "Next while %lx\n", offset); */
 		}
 		if ( lock ) 
 			UnlockPage(page);

@@ -3,12 +3,33 @@
 # not already mounted on /mnt/obd, we call the basic OBD setup script to
 # create and mount a filesystem for us.
 OBDDIR="`dirname $0`/.."
-[ "$OBDDIR" = "" ] && OBDDIR=".."
+
 . $OBDDIR/demos/config.sh
 
-[ ! -d $MNTOBD/lost+found ] && $OBDDIR/demos/obdsetup.sh
 
-[ ! -f $MNTDIR/hello ] && $OBDDIR/demos/obdtest.sh
+# prepare the snapshot drive with a file to be COW'd
+
+mount | grep $MNTOBD > /dev/null 2>&1
+if [ x$? = x0 ]; then 
+    echo "Stuff still mounted on $MNTOBD; clean up first."
+    exit 
+fi
+
+if [ ! -d /mnt/obd/lost+found ]; then 
+    $OBDDIR/demos/obdfssetup.sh
+    if [ x$? != x0 ]; then 
+	echo "Error in obdfssetup.sh"
+	exit 4
+   fi
+fi
+
+if [ ! -f $MNTOBD/hello ]; then
+	$OBDDIR/demos/obdtest.sh
+	if [ x$? != x0 ]; then 
+	    echo "Error in obdfssetup.sh"
+	exit 4
+    fi
+fi
 
 umount $MNTOBD
 
@@ -37,17 +58,16 @@ y
 snapset 0 $SNAPTABLE
 device /dev/obd1
 attach snap_obd 0 1 0
-setup snap_obd
+setup
 device /dev/obd2
 attach snap_obd 0 2 0
-setup snap_obd
+setup
 quit
 EOF
 
 # Mount the two filesystems.  The filesystem under $MNTOBD will be the
 # one where changes are made, while $MNTSNAP will contain the original
 # files at the point when the snapshot was taken.
-[ ! -d $MNTOBD ] && mkdir $MNTOBD
-plog mount -t obdfs -odevice=/dev/obd1 /dev/obd1 $MNTOBD
-[ ! -d $MNTSNAP ] && mkdir $MNTSNAP
-plog mount -t obdfs -oro,device=/dev/obd2 /dev/obd2 $MNTSNAP
+
+plog mount -t obdfs -odevice=/dev/obd1 none $MNTOBD
+plog mount -t obdfs -oro,device=/dev/obd2 none $MNTSNAP

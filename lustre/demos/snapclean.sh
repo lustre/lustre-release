@@ -20,4 +20,4 @@ EOF
 
 rmmod obdsnap
 
-$OBDDIR/demos/obdclean.sh
+$OBDDIR/demos/obdfsclean.sh

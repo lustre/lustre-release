@@ -36,7 +36,7 @@ plog () {
 	echo "****start**** $* *****" >> /var/log/messages
 	echo "$*"
 	$*
-	sleep 3 # to allow messages to be flushed
+	# sleep 3 # to allow messages to be flushed
 	echo "*****end***** $* *****" >> /var/log/messages
     fi
 }

@@ -28,4 +28,4 @@ quit
 EOF
 
 [ ! -d "$MNTSNAP2" ] && mkdir $MNTSNAP2
-plog mount -t obdfs -oro,device=/dev/obd3 /dev/obd3 $MNTSNAP2
+plog mount -t obdfs -oro,device=/dev/obd3 none $MNTSNAP2

@@ -103,7 +103,7 @@ my $arg;
 my %commands =
     ('device' => {func => "Device", doc => "device <dev>: open another OBD device"},
      'create' => {func => "Create", doc => "create: creates a new inode"},
-     'attach' => {func => "Attach", doc => "attach {ext2_obd | snap_obd snapdev snapidx tableno | scsi_obd adapter bus tid lun}"}, #
+     'attach' => {func => "Attach", doc => "attach { ext2_obd | snap_obd snapdev snapidx tableno | scsi_obd adapter bus tid lun" },
      'detach' => {func => "Detach", doc => "detach this device"},
      'testext2iterator' => {func => "TestExt2Iterator", doc => "test ext2 iterator function"},
      'snapset' => {func => "SnapSetTable", doc => "snapset <tableno> <file>: set the table (created with snaptable) as table #tableno" },
@@ -261,7 +261,7 @@ sub Attach {
     if ( ! $type ) {
 	print "error: missing type\n";
 usage:
-	print "usage: attach {ext2_obd | snap_obd}\n"; # XXX add scsi_obd later
+	print "usage: attach {ext2_obd | snap_obd | scsi_obd}\n";
 	return;
     }
 
@@ -281,12 +281,7 @@ usage:
 	$data = pack("iii", $snapdev, $snapidx, $tableno);
 	$datalen = 3 * 4;
     } elsif ($type eq "ext2_obd") {
-    	my $basedev = shift;
-	# $basedev = "/dev/loop0" unless $basedev;
-
-	if (!defined($::st = stat($basedev))) {
-	    die "Unable to stat $basedev.\n";
-	}
+	1;
     } else {
 	print "error: unknown attach type $type\n";
 	goto usage;
@@ -386,27 +381,63 @@ sub SnapDelete {
 }
 
 
-# XXX the parameter to snaprestore SHOULD be the snapshot number of the
-#     snapshot to be restored, and this routine should handle all of the
-#     removal of intervening snapshots and changing the snaptable to have
-#     the "restored" snapshot as current and move the previous current.
+#      this routine does the whole job
 sub SnapRestore { 
+    my $restoreto = shift;
+    my $snaptable = shift;
+    my $tableno = shift;
+    my $key;
+
+    # don't do anything until connected
     if (!defined($::client_id)) {
 	print "You must first ``connect''.\n";
 	return;
     }
 
+    if ( ! $snaptable || ! defined $restoreto ) {
+	print "Usage: snaprestore \"restore to slot\" \"snaptable\" \"tableno\"\n";
+	return;
+    }
+
+    if ( ! -f $snaptable ) {
+	print "Table $snaptable doesn't exist\n";
+	return;
+    }
+   
+    my $table = ReadSnapShotTable($snaptable);
+    $key = FindSnapInTable($table, $restoreto);
+    if ( ! defined $table->{0} || ! defined $key ) {
+	PrintSnapShotTable($table);
+	print "No current or $restoreto slot in this table\n";
+	return;
+    }
+
+    my $currentindex = $table->{0};
+    if (  $table->{$key} == $currentindex ) {
+	print "You should not restore to the current snapshot\n";
+	return;
+    }
+    
+    # swap the entries for 0 and $restoreto
+    my $tmp = $table->{$key};
+    $table->{$key} = $table->{0};
+    $table->{0} = $tmp;
+    PrintSnapShotTable($table);
+
+    # write it back
+    WriteSnapShotTable($snaptable, $table);
+
+    # set it in the kernel
+    SnapSetTable($tableno, $snaptable);
+
+    # ready for the ioctl
     my $err = 0;
     my $type = "snap_obd";
-    my $prevcurrent = shift;
- 
-    $data = pack("i", $prevcurrent); # where previous current snapshot now lives
+    $data = pack("i", $currentindex); # slot of previous current snapshot 
     $datalen = 4;
 
     my $len = length($type);
     my $cl = length($data);
-    my $add = pack("p", $data);
-    print "type $type (len $len), datalen $datalen ($cl)\n";
     my $packed = pack("Lipip", $::client_id, length($type), $type, $datalen, $data);
 
     my $rc = ioctl(DEV_OBD, &OBD_SNAP_RESTORE, $packed);
@@ -414,13 +445,33 @@ sub SnapRestore {
     if (!defined $rc) {
 	print STDERR "ioctl failed: $!\n";
     } elsif ($rc eq "0 but true") {
-	print "Finished (success)\n";
+	print "Snaprestore finished (success)\n";
+	delete $table->{$restoreto};
+	# write it back
+	WriteSnapShotTable($snaptable, $table);
+	
+	# set it in the kernel
+	SnapSetTable($tableno, $snaptable);
+	PrintSnapShotTable($table);
+
     } else {
 	print "ioctl returned error code $rc.\n";
     }
 }
 
+sub FindSnapInTable { 
+    my $table = shift;
+    my $snapno =shift;
 
+    foreach my $key ( keys %{$table} ) {
+	if ( $table->{$key} == $snapno) { 
+	    print "Found key $key for snapno $snapno\n";
+	    return $key;
+	}
+    }
+    undef;
+}
+	    
 
 sub SnapPrint { 
     my $err = 0;
@@ -672,14 +723,19 @@ sub Partition {
 
 sub Setup {
     my $err = 0;
-    my $type = shift;
+    my $arg = shift;
     my $data;
     my $datalen = 0;
-    
-    $type = "ext2_obd" unless $type;
 
-    if ( $type eq "ext2_obd" ) {
-	my $dev = shift;
+    # XXX we need a getinfo ioctl to validate parameters 
+    # by type here
+
+    if ($arg  && !defined($::st = stat($arg))) {
+	    print "$arg is not a valid device\n";
+	    return;
+    }
+    
+    if ( $arg ) {
 	$dev = $::st->rdev() unless $dev;
 	$data = pack("i", $dev);
 	$datalen = 4;

@@ -30,4 +30,4 @@ y
 snapset 0 $SNAPTABLE
 EOF
 plog log "COMPLETE snapdelete"
-plog mount -t obdfs -odevice=/dev/obd1 /dev/obd1 $MNTOBD
+plog mount -t obdfs -odevice=/dev/obd1 none $MNTOBD

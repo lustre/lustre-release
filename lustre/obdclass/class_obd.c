@@ -74,7 +74,7 @@ static int obd_class_open(struct inode * inode, struct file * file)
 	if (dev >= MAX_OBD_DEVICES)
 		return -ENODEV;
 	obd_dev[dev].obd_refcnt++;
-	CDEBUG(D_PSDEV, "Refcount now %d\n", obd_dev[dev].obd_refcnt++);
+	CDEBUG(D_PSDEV, "Refcount now %d\n", obd_dev[dev].obd_refcnt);
 
         MOD_INC_USE_COUNT;
         EXIT;
@@ -98,8 +98,7 @@ static int obd_class_release(struct inode * inode, struct file * file)
 		       obd_dev[dev].obd_refcnt);
 	obd_dev[dev].obd_refcnt--;
 
-	CDEBUG(D_PSDEV, "Refcount now %d\n", obd_dev[dev].obd_refcnt++);
-
+	CDEBUG(D_PSDEV, "Refcount now %d\n", obd_dev[dev].obd_refcnt);
         MOD_DEC_USE_COUNT;
 
         EXIT;
