@@ -11,7 +11,7 @@ host-progs := openunlink testreq truncate directio openme writeme open_delay \
 		stat createmany statmany multifstat createtest mlink \
 		opendirunlink opendevunlink unlinkmany fchdir_test \
 		checkstat wantedi statone runas openfile \
-		mcreate mkdirmany utime o_directory small_write
+		mcreate mkdirmany utime o_directory small_write multiop
 
 always := $(host-progs) 
 
@@ -50,3 +50,4 @@ fchdir_test-objs :=fchdir_test.o
 utime-objs :=utime.o
 o_directory-objs :=o_directory.o
 small_write-objs :=small_write.o
+multiop-objs :=multiop.o
