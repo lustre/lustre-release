@@ -132,7 +132,7 @@ void mds_pack_inode2body(struct mds_body *body, struct inode *inode);
 
 /* mds/handler.c */
 struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid, struct vfsmount **mnt);
-int mds_lock_callback(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
+int mds_lock_callback(struct lustre_handle *lockh, struct ldlm_lock_desc *desc,
                       void *data, int data_len, struct ptlrpc_request **req);
 int mds_reint(int offset, struct ptlrpc_request *req);
 

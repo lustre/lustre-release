@@ -262,7 +262,7 @@ int mds_lock_callback(struct lustre_handle *lockh, struct ldlm_lock_desc *desc,
 {
         ENTRY;
 
-        if (new == NULL) {
+        if (desc == NULL) {
                 /* Completion AST.  Do nothing */
                 RETURN(0);
         }
