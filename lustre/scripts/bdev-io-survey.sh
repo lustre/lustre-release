@@ -226,7 +226,7 @@ sgp_dd_start() {
 	local bdev=${blocks[$i]};
 
 	case "$wor" in
-		w) ifof="if=/dev/zero of=$bdev" ;;
+		[wo]) ifof="if=/dev/zero of=$bdev" ;;
 		r) ifof="if=$bdev of=/dev/null" ;;
 		*) die "asked to do io with $wor?"
 	esac
@@ -302,7 +302,7 @@ ext2_iozone_setup() {
 
 	case "$wor" in
 		w) rm -f $f ;;
-		r) ;;
+		[or]) ;;
 		*) die "asked to do io with $wor?"
 	esac
 }
@@ -315,7 +315,7 @@ ext2_iozone_start() {
 	local f="$tmpdir/mount_$id/iozone"
 
 	case "$wor" in
-		w) args="-i 0 -w" ;;
+		[wo]) args="-i 0 -w" ;;
 		r) args="-i 1" ;;
 		*) die "asked to do io with $wor?"
 	esac
@@ -330,7 +330,7 @@ ext2_iozone_result() {
 	local field
 
 	case "$wor" in
-		w) string="writers" 
+		[wo]) string="writers" 
 		   field=7 
 			;;
 		r) string="readers" 
@@ -489,7 +489,7 @@ echo_filter_setup() {
 
 	case "$wor" in
 		w) ;;
-		r) return ;;
+		[or]) return ;;
 		*) die "asked to do io with $wor?"
 	esac
 
@@ -504,19 +504,20 @@ echo_filter_start() {
 	local iosize=$2
 	local wor=$3
 	local id=$4
+	local rw
 
 	local name="echo_$id"
 	local len_pages=$(($io_len / $(($page_size / 1024)) / $threads ))
 	local size_pages=$(($iosize / $(($page_size / 1024)) ))
 
 	case "$wor" in
-		w) ;;
-		r) ;;
+		[wo]) rw="w" ;;
+		r) rw="r" ;;
 		*) die "asked to do io with $wor?"
 	esac
 
 	echo lctl --threads $threads v "\$"$name \
-		test_brw 1 $wor v $len_pages t${running_oids[$id]} p$size_pages
+		test_brw 1 $rw v $len_pages t${running_oids[$id]} p$size_pages
 }
 echo_filter_result() {
 	local output=$1
@@ -535,7 +536,7 @@ echo_filter_cleanup() {
 	local name="echo_$id"
 
 	case "$wor" in
-		w) return ;;
+		[wo]) return ;;
 		r) ;;
 		*) die "asked to do io with $wor?"
 	esac
@@ -721,7 +722,7 @@ test_iterator() {
 			table_set $test 0 $cur_y $thr
 			table_set $test 1 $cur_y $iosize
 
-			for wor in w r; do
+			for wor in w o r; do
 				table_set $test 2 $cur_y $wor
 				test_one $test 3 $thr $iosize $wor
 			done
@@ -766,8 +767,9 @@ if [ -z "$io_len" ]; then
 fi
 
 if [ ! -z "$output_dir" ]; then
-	[ ! -e "$output_dir" ] && mkdir -p "$output_dir" || die \
-		"error creating $output_dir"
+	if [ ! -e "$output_dir" ]; then
+		 mkdir -p "$output_dir" || die  "error creating $output_dir"
+	fi
 	[ ! -d "$output_dir" ] && die "$output_dir isn't a directory"
 fi
 

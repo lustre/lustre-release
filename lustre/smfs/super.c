@@ -197,6 +197,7 @@ static void duplicate_sb(struct super_block *csb,
 	sb->s_magic = csb->s_magic;
 	sb->s_blocksize_bits = csb->s_blocksize_bits;
 	sb->s_maxbytes = csb->s_maxbytes;
+	sb->s_flags = csb->s_flags;
 }
 extern struct super_operations smfs_super_ops;
 
