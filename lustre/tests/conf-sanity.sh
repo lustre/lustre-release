@@ -646,4 +646,29 @@ test_16() {
 }
 run_test 16 "verify that lustre will correct the mode of OBJECTS/LOGS/PENDING"
 
+test_17() {
+        TMPMTPT="/mnt/conf17"
+
+        if [ ! -f "$MDSDEV" ]; then
+            echo "no $MDSDEV existing, so mount Lustre to create one"
+            start_ost
+            start_mds
+            mount_client $MOUNT
+            check_mount || return 41
+            cleanup || return $?
+        fi
+
+        echo "Remove mds config log"
+        [ -d $TMPMTPT ] || mkdir -p $TMPMTPT
+        mount -o loop -t ext3 $MDSDEV $TMPMTPT || return $?
+        rm -f $TMPMTPT/LOGS/mds_svc || return $?
+        umount $TMPMTPT || return $?
+
+        start_ost
+	start mds $MDSLCONFARGS && return 42
+        cleanup || return $?
+}
+run_test 17 "Verify failed mds_postsetup won't fail assertion (2936)"
+
+
 equals_msg "Done"

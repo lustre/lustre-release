@@ -321,6 +321,9 @@ static int mds_destroy_export(struct obd_export *export)
         med = &export->exp_mds_data;
         target_destroy_export(export);
 
+        if (obd_uuid_equals(&export->exp_client_uuid, &obd->obd_uuid))
+                GOTO(out, 0);
+
         push_ctxt(&saved, &obd->obd_ctxt, NULL);
         /* Close any open files (which may also cause orphan unlinking). */
         spin_lock(&med->med_open_lock);
@@ -350,6 +353,7 @@ static int mds_destroy_export(struct obd_export *export)
         spin_unlock(&med->med_open_lock);
         pop_ctxt(&saved, &obd->obd_ctxt, NULL);
 
+out:
         mds_client_free(export, !(export->exp_flags & OBD_OPT_FAILOVER));
 
         RETURN(rc);
