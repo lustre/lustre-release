@@ -98,36 +98,67 @@ ptlrpc_init_svc(__u32 bufsize, int req_portal, int rep_portal, char *uuid,
                 svc_handler_t handler)
 {
         int err;
-        struct ptlrpc_service *svc;
+        int rc, i;
+        struct ptlrpc_service *service;
 
-        OBD_ALLOC(svc, sizeof(*svc)); 
-        if ( !svc ) { 
+        OBD_ALLOC(service, sizeof(*service)); 
+        if ( !service ) { 
                 CERROR("no memory\n");
+                LBUG();
                 return NULL;
         }
 
-        memset(svc, 0, sizeof(*svc)); 
+        memset(service, 0, sizeof(*service)); 
 
-        spin_lock_init(&svc->srv_lock);
-        INIT_LIST_HEAD(&svc->srv_reqs);
-        init_waitqueue_head(&svc->srv_ctl_waitq); 
-        init_waitqueue_head(&svc->srv_waitq); 
+        spin_lock_init(&service->srv_lock);
+        INIT_LIST_HEAD(&service->srv_reqs);
+        init_waitqueue_head(&service->srv_ctl_waitq); 
+        init_waitqueue_head(&service->srv_waitq); 
 
-        svc->srv_thread = NULL;
-        svc->srv_flags = 0;
+        service->srv_thread = NULL;
+        service->srv_flags = 0;
 
-        svc->srv_buf_size = bufsize;
-        svc->srv_rep_portal = rep_portal;
-        svc->srv_req_portal = req_portal;
+        service->srv_buf_size = bufsize;
+        service->srv_rep_portal = rep_portal;
+        service->srv_req_portal = req_portal;
+        service->srv_handler = handler;
 
-        svc->srv_handler = handler;
-        err = kportal_uuid_to_peer(uuid, &svc->srv_self);
+        err = kportal_uuid_to_peer(uuid, &service->srv_self);
         if (err) { 
                 CERROR("cannot get peer for uuid %s", uuid); 
-                OBD_FREE(svc, sizeof(*svc));
+                OBD_FREE(service, sizeof(*service));
                 return NULL; 
         }
-        return svc;
+
+        service->srv_ring_length = RPC_RING_LENGTH;
+        service->srv_id.nid = PTL_ID_ANY;
+        service->srv_id.pid = PTL_ID_ANY;
+
+        rc = PtlEQAlloc(service->srv_self.peer_ni, 128, 
+                        server_request_callback,
+                        service, &(service->srv_eq_h));
+
+        if (rc != PTL_OK) {
+                CERROR("PtlEQAlloc failed: %d\n", rc);
+                LBUG();
+                return NULL;
+        }
+
+        for (i = 0; i < service->srv_ring_length; i++) {
+                OBD_ALLOC(service->srv_buf[i], service->srv_buf_size);
+                if (service->srv_buf[i] == NULL) {
+                        CERROR("no memory\n");
+                        LBUG();
+                        return NULL;
+                }
+                service->srv_ref_count[i] = 0; 
+                ptlrpc_link_svc_me(service, i); 
+        }
+
+        CDEBUG(D_NET, "Starting service listening on portal %d\n",
+               service->srv_req_portal);
+
+        return service;
 }
 
 static int ptlrpc_main(void *arg)
@@ -261,97 +292,18 @@ int ptlrpc_start_thread(struct obd_device *dev, struct ptlrpc_service *svc,
 }
 
 
-int rpc_register_service(struct ptlrpc_service *service, char *uuid)
-{
-        struct lustre_peer peer;
-        int rc, i;
-
-        rc = kportal_uuid_to_peer(uuid, &peer);
-        if (rc != 0) {
-                CERROR("Invalid uuid \"%s\"\n", uuid);
-                return -EINVAL;
-        }
-
-        service->srv_ring_length = RPC_RING_LENGTH;
-        service->srv_md_active = 0;
-
-        service->srv_id.nid = PTL_ID_ANY;
-        service->srv_id.pid = PTL_ID_ANY;
-
-        rc = PtlEQAlloc(peer.peer_ni, 128, server_request_callback,
-                        service, &(service->srv_eq_h));
-
-        if (rc != PTL_OK) {
-                CERROR("PtlEQAlloc failed: %d\n", rc);
-                return rc;
-        }
-
-        CDEBUG(D_NET, "Starting service listening on portal %d\n",
-               service->srv_req_portal);
-
-        /* Attach the leading ME on which we build the ring */
-        rc = PtlMEAttach(peer.peer_ni, service->srv_req_portal,
-                         service->srv_id, 0, ~0, PTL_RETAIN,
-                         &(service->srv_me_h[0]));
-
-        if (rc != PTL_OK) {
-                CERROR("PtlMEAttach failed: %d\n", rc);
-                return rc;
-        }
-
-        for (i = 0; i < service->srv_ring_length; i++) {
-                OBD_ALLOC(service->srv_buf[i], service->srv_buf_size);
-
-                if (service->srv_buf[i] == NULL) {
-                        CERROR("no memory\n");
-                        return -ENOMEM;
-                }
-
-                /* Insert additional ME's to the ring */
-                if (i > 0) {
-                        rc = PtlMEInsert(service->srv_me_h[i - 1],
-                                         service->srv_id, 0, ~0, PTL_RETAIN,
-                                         PTL_INS_AFTER,
-                                         &(service->srv_me_h[i]));
-                        service->srv_me_tail = i;
-
-                        if (rc != PTL_OK) {
-                                CERROR("PtlMEInsert failed: %d\n", rc);
-                                return rc;
-                        }
-                }
-
-                service->srv_ref_count[i] = 0;
-                service->srv_md[i].start         = service->srv_buf[i];
-                service->srv_md[i].length        = service->srv_buf_size;
-                service->srv_md[i].max_offset    = service->srv_buf_size;
-                service->srv_md[i].threshold     = PTL_MD_THRESH_INF;
-                service->srv_md[i].options       = PTL_MD_OP_PUT;
-                service->srv_md[i].user_ptr      = service;
-                service->srv_md[i].eventq        = service->srv_eq_h;
-                service->srv_md[i].max_offset    = service->srv_buf_size;
-
-                rc = PtlMDAttach(service->srv_me_h[i], service->srv_md[i],
-                                 PTL_RETAIN, &(service->srv_md_h[i]));
-
-                if (rc != PTL_OK) {
-                        /* cleanup */
-                        CERROR("PtlMDAttach failed: %d\n", rc);
-                        return rc;
-                }
-        }
-
-        return 0;
-}
 
 int rpc_unregister_service(struct ptlrpc_service *service)
 {
         int rc, i;
 
         for (i = 0; i < service->srv_ring_length; i++) {
-                rc = PtlMEUnlink(service->srv_me_h[i]);
-                if (rc)
-                        CERROR("PtlMEUnlink failed: %d\n", rc);
+                if (service->srv_me_h[i]) { 
+                        rc = PtlMEUnlink(service->srv_me_h[i]);
+                        if (rc)
+                                CERROR("PtlMEUnlink failed: %d\n", rc);
+                        service->srv_me_h[i] = 0;
+                }
 
                 if (service->srv_buf[i] != NULL)
                         OBD_FREE(service->srv_buf[i], service->srv_buf_size);

@@ -682,11 +682,10 @@ static int ost_setup(struct obd_device *obddev, obd_count len,
                                            OST_REQUEST_PORTAL, OSC_REPLY_PORTAL,
                                            "self", ost_handle);
         if (!ost->ost_service) {
+                CERROR("failed to start service\n");
                 obd_disconnect(&ost->ost_conn);
                 RETURN(-EINVAL);
         }
-
-        rpc_register_service(ost->ost_service, "self");
 
         err = ptlrpc_start_thread(obddev, ost->ost_service, "lustre_ost");
         if (err) {

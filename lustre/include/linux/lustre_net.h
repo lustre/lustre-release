@@ -99,28 +99,28 @@ struct ptlrpc_client {
 struct ptlrpc_request { 
         int rq_type; /* one of PTL_RPC_REQUEST, PTL_RPC_REPLY, PTL_RPC_BULK */
         spinlock_t rq_lock;
-	struct list_head rq_list;
-	struct obd_device *rq_obd;
-	int rq_status;
+        struct list_head rq_list;
+        struct obd_device *rq_obd;
+        int rq_status;
         int rq_flags; 
         __u32 rq_connid;
         __u32 rq_xid;
 
-	char *rq_reqbuf;
-	int rq_reqlen;
-	struct ptlreq_hdr *rq_reqhdr;
-	union ptl_req rq_req;
+        char *rq_reqbuf;
+        int rq_reqlen;
+        struct ptlreq_hdr *rq_reqhdr;
+        union ptl_req rq_req;
 
- 	char *rq_repbuf;
-	int rq_replen;
-	struct ptlrep_hdr *rq_rephdr;
-	union ptl_rep rq_rep;
+        char *rq_repbuf;
+        int rq_replen;
+        struct ptlrep_hdr *rq_rephdr;
+        union ptl_rep rq_rep;
 
         char *rq_bulkbuf;
         int rq_bulklen;
 
         void * rq_reply_handle;
-	wait_queue_head_t rq_wait_for_rep;
+        wait_queue_head_t rq_wait_for_rep;
 
         /* incoming reply */
         ptl_md_t rq_reply_md;
@@ -148,7 +148,7 @@ struct ptlrpc_bulk_desc {
         struct obd_conn b_conn;
         __u32 b_xid;
 
-	wait_queue_head_t b_waitq;
+        wait_queue_head_t b_waitq;
 
         ptl_md_t b_md;
         ptl_handle_md_t b_md_h;
@@ -159,17 +159,13 @@ struct ptlrpc_service {
         /* incoming request buffers */
         /* FIXME: perhaps a list of EQs, if multiple NIs are used? */
         char *srv_buf[RPC_RING_LENGTH];
+        __u32 srv_ref_count[RPC_RING_LENGTH];
+        ptl_handle_me_t srv_me_h[RPC_RING_LENGTH];
         __u32 srv_buf_size;
-	__u32 srv_me_tail;
-	__u32 srv_md_active;
         __u32 srv_ring_length;
         __u32 srv_req_portal;
         __u32 srv_rep_portal;
-        __u32 srv_ref_count[RPC_RING_LENGTH];
-        ptl_handle_me_t srv_me_h[RPC_RING_LENGTH];
-        ptl_process_id_t srv_id;
-        ptl_md_t srv_md[RPC_RING_LENGTH];
-        ptl_handle_md_t srv_md_h[RPC_RING_LENGTH];
+
         __u32 srv_xid;
 
         /* event queue */
@@ -177,13 +173,14 @@ struct ptlrpc_service {
 
         __u32 srv_flags; 
         struct lustre_peer srv_self;
-	struct task_struct *srv_thread;
-	wait_queue_head_t srv_waitq;
-	wait_queue_head_t srv_ctl_waitq;
-	int ost_flags;
+        ptl_process_id_t srv_id;
 
-	spinlock_t srv_lock;
-	struct list_head srv_reqs;
+        struct task_struct *srv_thread;
+        wait_queue_head_t srv_waitq;
+        wait_queue_head_t srv_ctl_waitq;
+
+        spinlock_t srv_lock;
+        struct list_head srv_reqs;
         ptl_event_t  srv_ev;
         req_unpack_t      srv_req_unpack;
         rep_pack_t        srv_rep_pack;
@@ -208,6 +205,7 @@ int ptlrpc_reply(struct obd_device *obddev, struct ptlrpc_service *svc,
 int ptlrpc_error(struct obd_device *obddev, struct ptlrpc_service *svc,
                  struct ptlrpc_request *req);
 int ptl_send_rpc(struct ptlrpc_request *request, struct lustre_peer *peer);
+void ptlrpc_link_svc_me(struct ptlrpc_service *service, int i);
 
 /* rpc/client.c */
 int ptlrpc_connect_client(int dev, char *uuid, int req_portal, int rep_portal, 

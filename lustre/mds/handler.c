@@ -505,8 +505,10 @@ static int mds_setup(struct obd_device *obddev, obd_count len, void *buf)
         mds->mds_service = ptlrpc_init_svc(64 * 1024,
                                            MDS_REQUEST_PORTAL, MDC_REPLY_PORTAL,
                                            "self", mds_handle);
-
-        rpc_register_service(mds->mds_service, "self");
+        if (!mds->mds_service) {
+                CERROR("failed to start service\n");
+                RETURN(-EINVAL);
+        }
 
         err = ptlrpc_start_thread(obddev, mds->mds_service, "lustre_mds");
         if (err)

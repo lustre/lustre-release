@@ -158,8 +158,9 @@ int ptlrpc_register_bulk(struct ptlrpc_bulk_desc *bulk)
 
         ENTRY;
 
-        rc = PtlMEPrepend(bulk->b_peer.peer_ni, bulk->b_portal, local_id,
-                          bulk->b_xid, 0, PTL_UNLINK, &bulk->b_me_h);
+        rc = PtlMEAttach(bulk->b_peer.peer_ni, bulk->b_portal, local_id,
+                          bulk->b_xid, 0, PTL_UNLINK, PTL_INS_AFTER, 
+                         &bulk->b_me_h);
         if (rc != PTL_OK) {
                 CERROR("PtlMEAttach failed: %d\n", rc);
                 LBUG();
@@ -293,8 +294,8 @@ int ptl_send_rpc(struct ptlrpc_request *request, struct lustre_peer *peer)
         local_id.pid = PTL_ID_ANY;
 
         //CERROR("sending req %d\n", request->rq_xid);
-        rc = PtlMEPrepend(peer->peer_ni, request->rq_reply_portal, local_id,
-                          request->rq_xid, 0, PTL_UNLINK,
+        rc = PtlMEAttach(peer->peer_ni, request->rq_reply_portal, local_id,
+                          request->rq_xid, 0, PTL_UNLINK, PTL_INS_AFTER,
                           &request->rq_reply_me_h);
         if (rc != PTL_OK) {
                 CERROR("PtlMEAttach failed: %d\n", rc);
@@ -334,21 +335,55 @@ int ptl_send_rpc(struct ptlrpc_request *request, struct lustre_peer *peer)
         return rc;
 }
 
+void ptlrpc_link_svc_me(struct ptlrpc_service *service, int i)
+{
+        int rc;
+        ptl_md_t dummy;
+        ptl_handle_md_t md_h;
+
+        /* Attach the leading ME on which we build the ring */
+        rc = PtlMEAttach(service->srv_self.peer_ni, service->srv_req_portal,
+                         service->srv_id, 0, ~0, PTL_RETAIN, PTL_INS_BEFORE,
+                         &(service->srv_me_h[i]));
+        if (rc != PTL_OK) {
+                CERROR("PtlMEAttach failed: %d\n", rc);
+                LBUG();
+        }
+        
+        if (service->srv_ref_count[i])
+                LBUG();
+
+        dummy.start         = service->srv_buf[i];
+        dummy.length        = service->srv_buf_size;
+        dummy.max_offset    = service->srv_buf_size;
+        dummy.threshold     = PTL_MD_THRESH_INF;
+        dummy.options       = PTL_MD_OP_PUT | PTL_MD_AUTO_UNLINK;
+        dummy.user_ptr      = service;
+        dummy.eventq        = service->srv_eq_h;
+        dummy.max_offset    = service->srv_buf_size;
+        
+        rc = PtlMDAttach(service->srv_me_h[i], dummy, PTL_UNLINK, &md_h);
+        if (rc != PTL_OK) {
+                /* cleanup */
+                CERROR("PtlMDAttach failed: %d\n", rc);
+                LBUG();
+        }
+}        
+
 /* ptl_handled_rpc() should be called by the sleeping process once
  * it finishes processing an event.  This ensures the ref count is
  * decremented and that the rpc ring buffer cycles properly.
  */ 
 int ptl_handled_rpc(struct ptlrpc_service *service, void *start) 
 {
-        int rc, index = 0;
+        int index;
 
         spin_lock(&service->srv_lock);
 
-        while (index < service->srv_ring_length) {
-                if ( service->srv_md[index].start == start) 
+        for (index = 0; index < service->srv_ring_length; index++)
+                if (service->srv_buf[index] == start) 
                         break;
-                index++;
-        }
+
         if (index == service->srv_ring_length)
                 LBUG();
 
@@ -360,44 +395,10 @@ int ptl_handled_rpc(struct ptlrpc_service *service, void *start)
                 LBUG();
         
         if (service->srv_ref_count[index] == 0 &&
-            service->srv_me_h[index] == 0) {
-
-                /* Replace the unlinked ME and MD */
-                rc = PtlMEInsert(service->srv_me_h[service->srv_me_tail],
-                                 service->srv_id, 0, ~0, PTL_RETAIN,
-                                 PTL_INS_AFTER, &(service->srv_me_h[index]));
-                if (rc != PTL_OK) {
-                        CERROR("PtlMEInsert failed: %d\n", rc);
-                        LBUG();
-                        spin_unlock(&service->srv_lock);
-                        return rc;
-                }
-                CDEBUG(D_NET, "Inserting new ME and MD in ring, rc %d\n", rc);
-
-                service->srv_me_tail = index;
-
-                service->srv_md[index].start        = service->srv_buf[index];
-                service->srv_md[index].length       = service->srv_buf_size;
-                service->srv_md[index].threshold    = PTL_MD_THRESH_INF;
-                service->srv_md[index].options      = PTL_MD_OP_PUT;
-                service->srv_md[index].user_ptr     = service;
-                service->srv_md[index].eventq       = service->srv_eq_h;
-
-                rc = PtlMDAttach(service->srv_me_h[index],
-                                 service->srv_md[index],
-                                 PTL_RETAIN, &(service->srv_md_h[index]));
-                //CERROR("MDAttach (request MDs): %Lu\n",
-                //(__u64)(service->srv_md_h[index]));
-
-                CDEBUG(D_INFO, "Attach MD in ring, rc %d\n", rc);
-                if (rc != PTL_OK) {
-                        /* XXX cleanup */
-                        CERROR("PtlMDAttach failed: %d\n", rc);
-                        LBUG();
-                        spin_unlock(&service->srv_lock);
-                        return rc;
-                }
-        } 
+            service->srv_me_h[index] == 0)  {
+                CDEBUG(D_NET, "relinking %d\n", index); 
+                ptlrpc_link_svc_me(service, index); 
+        }
         
         spin_unlock(&service->srv_lock);
         return 0;

@@ -79,63 +79,43 @@ static int rcvd_reply_callback(ptl_event_t *ev, void *data)
 int server_request_callback(ptl_event_t *ev, void *data)
 {
         struct ptlrpc_service *service = data;
-        int rc;
+        int index;
 
         if (ev->rlength != ev->mlength)
                 CERROR("Warning: Possibly truncated rpc (%d/%d)\n",
                        ev->mlength, ev->rlength);
 
-        /* The ME is unlinked when there is less than 1024 bytes free
-         * on its MD.  This ensures we are always able to handle the rpc, 
-         * although the 1024 value is a guess as to the size of a
-         * large rpc (the known safe margin should be determined).
-         *
-         * NOTE: The portals API by default unlinks all MD's associated
-         *       with an ME when it's unlinked.  For now, this behavior
-         *       has been commented out of the portals library so the
-         *       MD can be unlinked when its ref count drops to zero.
-         *       A new MD and ME will then be created that use the same
-         *       kmalloc()'ed memory and inserted at the ring tail.
-         */
-
         spin_lock(&service->srv_lock); 
-        if ( ev->mem_desc.start != 
-             service->srv_md[service->srv_md_active].start ) {
+        for (index = 0; index < service->srv_ring_length; index++)
+                if ( service->srv_buf[index] == ev->mem_desc.start) 
+                        break;
+
+        if (index == service->srv_ring_length)
                 LBUG();
-        }
 
-        service->srv_ref_count[service->srv_md_active]++;
-        CDEBUG(D_INODE, "event offset %d buf size %d\n", 
-               ev->offset, service->srv_buf_size);
-        if (ev->offset >= (service->srv_buf_size - 1024)) {
-                CDEBUG(D_INODE, "Unlinking ME %d\n", service->srv_md_active);
+        service->srv_ref_count[index]++;
 
-                rc = PtlMEUnlink(service->srv_me_h[service->srv_md_active]);
-                service->srv_me_h[service->srv_md_active] = 0;
+        if (ev->unlinked_me != -1) {
+                int idx;
 
-                if (rc != PTL_OK) {
-                        CERROR("PtlMEUnlink failed - DROPPING soon: %d\n", rc);
+                for (idx = 0; idx < service->srv_ring_length; idx++)
+                        if (service->srv_me_h[idx] == ev->unlinked_me)
+                                break;
+                if (idx == service->srv_ring_length)
                         LBUG();
-                        spin_unlock(&service->srv_lock); 
-                        return rc;
-                }
 
-                service->srv_md_active = (service->srv_md_active + 1) % 
-                        service->srv_ring_length;
+                CDEBUG(D_NET, "unlinked %d\n", idx); 
+                service->srv_me_h[idx] = 0; 
 
-                if (service->srv_me_h[service->srv_md_active] == 0) { 
-                        CERROR("All %d ring ME's are unlinked!\n",
-                               service->srv_ring_length);
-                        LBUG();
-                }
+                if (service->srv_ref_count[idx] == 0)
+                        ptlrpc_link_svc_me(service, idx); 
         }
 
         spin_unlock(&service->srv_lock); 
-        if (ev->type == PTL_EVENT_PUT) {
+        if (ev->type == PTL_EVENT_PUT)
                 wake_up(&service->srv_waitq);
-        } else {
+        else
                 CERROR("Unexpected event type: %d\n", ev->type);
-        }
 
         return 0;
 }
@@ -180,9 +160,8 @@ static int bulk_sink_callback(ptl_event_t *ev, void *data)
         }
 
         /* FIXME: This should happen unconditionally */
-        if (bulk->b_cb != NULL) {
+        if (bulk->b_cb != NULL)
                 OBD_FREE(bulk, sizeof(*bulk));
-        }
 
         EXIT;
         return 1;
