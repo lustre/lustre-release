@@ -607,7 +607,7 @@
  		nfsd_sync_dir(tdentry);
  		nfsd_sync_dir(fdentry);
 --- lum-pristine/fs/namei.c	Mon Feb 25 12:38:09 2002
-+++ lum/fs/namei.c	Sat Jun 22 18:37:55 2002
++++ lum/fs/namei.c	Wed Jul  3 12:23:08 2002
 @@ -94,6 +94,14 @@
   * XEmacs seems to be relying on it...
   */
@@ -892,11 +892,7 @@
  	/* Negative dentry, just create the file */
  	if (!dentry->d_inode) {
  		error = vfs_create(dir->d_inode, dentry,
-@@ -1136,9 +1212,11 @@
- 		if (flag & FMODE_WRITE)
- 			DQUOT_INIT(inode);
- 
-+        intent_release(dentry);
+@@ -1139,6 +1215,7 @@
  	return 0;
  
  exit_dput:
@@ -904,7 +900,7 @@
  	dput(dentry);
  exit:
  	path_release(nd);
-@@ -1181,13 +1259,20 @@
+@@ -1181,13 +1258,20 @@
  	}
  	dir = nd->dentry;
  	down(&dir->d_inode->i_sem);
@@ -927,7 +923,7 @@
  {
  	struct dentry *dentry;
  
-@@ -1195,7 +1280,7 @@
+@@ -1195,7 +1279,7 @@
  	dentry = ERR_PTR(-EEXIST);
  	if (nd->last_type != LAST_NORM)
  		goto fail;
@@ -936,7 +932,7 @@
  	if (IS_ERR(dentry))
  		goto fail;
  	if (!is_dir && nd->last.name[nd->last.len] && !dentry->d_inode)
-@@ -1241,6 +1326,7 @@
+@@ -1241,6 +1325,7 @@
  	char * tmp;
  	struct dentry * dentry;
  	struct nameidata nd;
@@ -944,7 +940,7 @@
  
  	if (S_ISDIR(mode))
  		return -EPERM;
-@@ -1252,11 +1338,12 @@
+@@ -1252,11 +1337,12 @@
  		error = path_walk(tmp, &nd);
  	if (error)
  		goto out;
@@ -958,7 +954,7 @@
  		switch (mode & S_IFMT) {
  		case 0: case S_IFREG:
  			error = vfs_create(nd.dentry->d_inode,dentry,mode);
-@@ -1270,6 +1357,7 @@
+@@ -1270,6 +1356,7 @@
  		default:
  			error = -EINVAL;
  		}
@@ -966,7 +962,7 @@
  		dput(dentry);
  	}
  	up(&nd.dentry->d_inode->i_sem);
-@@ -1310,6 +1398,7 @@
+@@ -1310,6 +1397,7 @@
  {
  	int error = 0;
  	char * tmp;
@@ -974,7 +970,7 @@
  
  	tmp = getname(pathname);
  	error = PTR_ERR(tmp);
-@@ -1321,11 +1410,13 @@
+@@ -1321,11 +1409,13 @@
  			error = path_walk(tmp, &nd);
  		if (error)
  			goto out;
@@ -989,7 +985,7 @@
  			dput(dentry);
  		}
  		up(&nd.dentry->d_inode->i_sem);
-@@ -1407,6 +1498,7 @@
+@@ -1407,6 +1497,7 @@
  	char * name;
  	struct dentry *dentry;
  	struct nameidata nd;
@@ -997,7 +993,7 @@
  
  	name = getname(pathname);
  	if(IS_ERR(name))
-@@ -1429,10 +1521,12 @@
+@@ -1429,10 +1520,12 @@
  			goto exit1;
  	}
  	down(&nd.dentry->d_inode->i_sem);
@@ -1011,7 +1007,7 @@
  		dput(dentry);
  	}
  	up(&nd.dentry->d_inode->i_sem);
-@@ -1476,6 +1570,7 @@
+@@ -1476,6 +1569,7 @@
  	char * name;
  	struct dentry *dentry;
  	struct nameidata nd;
@@ -1019,7 +1015,7 @@
  
  	name = getname(pathname);
  	if(IS_ERR(name))
-@@ -1489,14 +1584,16 @@
+@@ -1489,14 +1583,16 @@
  	if (nd.last_type != LAST_NORM)
  		goto exit1;
  	down(&nd.dentry->d_inode->i_sem);
@@ -1037,7 +1033,7 @@
  		dput(dentry);
  	}
  	up(&nd.dentry->d_inode->i_sem);
-@@ -1543,6 +1640,7 @@
+@@ -1543,6 +1639,7 @@
  	int error = 0;
  	char * from;
  	char * to;
@@ -1045,7 +1041,7 @@
  
  	from = getname(oldname);
  	if(IS_ERR(from))
-@@ -1557,10 +1655,12 @@
+@@ -1557,10 +1654,12 @@
  			error = path_walk(to, &nd);
  		if (error)
  			goto out;
@@ -1059,7 +1055,7 @@
  			dput(dentry);
  		}
  		up(&nd.dentry->d_inode->i_sem);
-@@ -1626,6 +1726,7 @@
+@@ -1626,6 +1725,7 @@
  	int error;
  	char * from;
  	char * to;
@@ -1067,7 +1063,7 @@
  
  	from = getname(oldname);
  	if(IS_ERR(from))
-@@ -1648,10 +1749,12 @@
+@@ -1648,10 +1748,12 @@
  		error = -EXDEV;
  		if (old_nd.mnt != nd.mnt)
  			goto out_release;
@@ -1081,7 +1077,7 @@
  			dput(new_dentry);
  		}
  		up(&nd.dentry->d_inode->i_sem);
-@@ -1694,7 +1797,8 @@
+@@ -1694,7 +1796,8 @@
   *	   locking].
   */
  int vfs_rename_dir(struct inode *old_dir, struct dentry *old_dentry,
@@ -1091,7 +1087,7 @@
  {
  	int error;
  	struct inode *target;
-@@ -1748,12 +1852,14 @@
+@@ -1748,12 +1851,14 @@
  	} else
  		double_down(&old_dir->i_zombie,
  			    &new_dir->i_zombie);
@@ -1106,7 +1102,7 @@
  	if (target) {
  		if (!error)
  			target->i_flags |= S_DEAD;
-@@ -1775,7 +1881,8 @@
+@@ -1775,7 +1880,8 @@
  }
  
  int vfs_rename_other(struct inode *old_dir, struct dentry *old_dentry,
@@ -1116,7 +1112,7 @@
  {
  	int error;
  
-@@ -1802,10 +1909,12 @@
+@@ -1802,10 +1908,12 @@
  	DQUOT_INIT(old_dir);
  	DQUOT_INIT(new_dir);
  	double_down(&old_dir->i_zombie, &new_dir->i_zombie);
@@ -1129,7 +1125,7 @@
  	double_up(&old_dir->i_zombie, &new_dir->i_zombie);
  	if (error)
  		return error;
-@@ -1817,13 +1926,14 @@
+@@ -1817,13 +1925,14 @@
  }
  
  int vfs_rename(struct inode *old_dir, struct dentry *old_dentry,
@@ -1147,7 +1143,7 @@
  	if (!error) {
  		if (old_dir == new_dir)
  			inode_dir_notify(old_dir, DN_RENAME);
-@@ -1841,6 +1951,7 @@
+@@ -1841,6 +1950,7 @@
  	struct dentry * old_dir, * new_dir;
  	struct dentry * old_dentry, *new_dentry;
  	struct nameidata oldnd, newnd;
@@ -1155,7 +1151,7 @@
  
  	if (path_init(oldname, LOOKUP_PARENT, &oldnd))
  		error = path_walk(oldname, &oldnd);
-@@ -1868,7 +1979,9 @@
+@@ -1868,7 +1978,9 @@
  
  	double_lock(new_dir, old_dir);
  
@@ -1166,7 +1162,7 @@
  	error = PTR_ERR(old_dentry);
  	if (IS_ERR(old_dentry))
  		goto exit3;
-@@ -1884,14 +1997,15 @@
+@@ -1884,14 +1996,15 @@
  		if (newnd.last.name[newnd.last.len])
  			goto exit4;
  	}
