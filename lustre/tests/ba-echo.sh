@@ -5,7 +5,7 @@ config=${1:-ba-echo.xml}
 LMC="save_cmd"
 LMC_REAL="../../lustre/utils/lmc -m $config"
 
-PORT=2432
+PORT=988
 TCPBUF=1048576
 OST=ba-ost-1
 CLIENT=client
