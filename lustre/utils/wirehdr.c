@@ -14,5 +14,9 @@ int main()
 {
 	lustre_assert_wire_constants();
 
+	if (ret == 0)
+		printf("wire constants OK\n");
+
 	return ret;
 }
+

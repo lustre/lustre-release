@@ -9,6 +9,7 @@ Summary: The Linux kernel (the core of the Linux operating system)
 # adding some text to the end of the version number.
 #
 %define kversion @KERNEL_VERSION@
+%define kextraver @KERNEL_EXTRA_VERSION@
 %define release @KERNEL_RELEASE@
 # /usr/src/%{kslnk} -> /usr/src/linux-%{KVERREL}
 %define kslnk linux-2.4
@@ -124,7 +125,7 @@ Second, per-architecture exclusions (ifarch)
 Name: kernel
 Version: %{kversion}
 Release: %{release}%{?targetboard:%{targetboard}}%{?debuglevel_1:.dbg}
-%define KVERREL %{PACKAGE_VERSION}-%{PACKAGE_RELEASE}
+%define KVERREL %{PACKAGE_VERSION}-%{kextraver}%{?targetboard:%{targetboard}}%{?debuglevel_1:.dbg}
 License: GPL
 Group: System Environment/Kernel
 ExclusiveArch: %{all_x86} x86_64
@@ -149,6 +150,7 @@ Buildroot: /var/tmp/%{name}-%{PACKAGE_VERSION}-root
 Source0: @LUSTRE_SOURCE@
 Source1: @KERNEL_SOURCE@
 
+Source15: linux-rhconfig.h
 Source16: linux-merge-config.awk
 Source17: linux-merge-modules.awk
 
@@ -318,7 +320,7 @@ DependKernel()
 	--target @LUSTRE_TARGET@ \
 	--target-arch %{_target_cpu} \
 	${target_config} \
-	--extraversion %{release} \
+	--extraversion %{kextraver} \
 	-j $RPM_BUILD_NCPUS
 }
 
@@ -331,7 +333,7 @@ BuildKernel()
 	--target @LUSTRE_TARGET@ \
 	--target-arch %{_target_cpu} \
 	${target_config} \
-	--extraversion %{release} \
+	--extraversion %{kextraver} \
 	--kerneldir $RPM_SOURCE_DIR \
 	-j $RPM_BUILD_NCPUS \
 	--destdir $RPM_BUILD_ROOT \
@@ -343,7 +345,7 @@ SaveHeaders()
   sh -x ./scripts/lmake \
 	--save-headers \
 	--target @LUSTRE_TARGET@ \
-	--extraversion %{release} \
+	--extraversion %{kextraver} \
 	--destdir $RPM_BUILD_ROOT
 }
 
@@ -401,7 +403,7 @@ pushd linux >/dev/null
 mkdir -p $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}
 rm -f drivers/net/hamradio/soundmodem/gentbl scripts/mkdep
 tar cf - . | tar xf - -C $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}
-perl -p -i -e "s/^EXTRAVERSION.*/EXTRAVERSION = -%{release}custom/" $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}/Makefile
+perl -p -i -e "s/^EXTRAVERSION.*/EXTRAVERSION = -%{kextraver}custom/" $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}/Makefile
 ln -sf linux-%{KVERREL} $RPM_BUILD_ROOT/usr/src/linux
 # install -m 644 %{SOURCE10}  $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}
 
@@ -443,7 +445,7 @@ for l in $list; do
 done
 echo '#endif' >> modversions.h
 sed 's,$,autoconf.h,' ../../savedheaders/list | awk -f %{SOURCE16} >> autoconf.h
-# install -m 644 %{SOURCE15} rhconfig.h
+install -m 644 %{SOURCE15} rhconfig.h
 echo "#include <linux/rhconfig.h>" >> version.h
 keyword=if
 for i in smp BOOT BOOTsmp bigmem  up ; do
@@ -753,6 +755,7 @@ exit 0
 %files -n lustre-lite-utils
 %defattr(-, root, root)
 %doc lustre/COPYING lustre/BUGS lustre/ChangeLog lustre/README lustre/doc/lustre.pdf
+/sbin/*
 %{_sbindir}/*
 %{_bindir}/*
 %{_libdir}/lustre/python

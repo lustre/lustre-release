@@ -46,8 +46,8 @@ struct dio_request {
         atomic_t numreqs;       /* number of reqs being processed */
         struct bio *bio_list;   /* list of completed bios */
         wait_queue_head_t wait;
-	int created[MAX_BLOCKS_PER_PAGE];
-	unsigned long blocks[MAX_BLOCKS_PER_PAGE];
+        int created[MAX_BLOCKS_PER_PAGE];
+        unsigned long blocks[MAX_BLOCKS_PER_PAGE];
         spinlock_t lock;
 };
 
@@ -68,13 +68,13 @@ static int dio_complete_routine(struct bio *bio, unsigned int done, int error)
 
 static int can_be_merged(struct bio *bio, sector_t sector)
 {
-	int size;
-	
-	if (!bio)
-		return 0;
-	
-	size = bio->bi_size >> 9;
-	return bio->bi_sector + size == sector ? 1 : 0;
+        int size;
+
+        if (!bio)
+                return 0;
+
+        size = bio->bi_size >> 9;
+        return bio->bi_sector + size == sector ? 1 : 0;
 }
 
 int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
@@ -89,7 +89,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
         struct inode *inode = NULL;
         int rc = 0, i, k, cleanup_phase = 0, err;
         unsigned long now = jiffies; /* DEBUGGING OST TIMEOUTS */
-	int blocks_per_page;
+        int blocks_per_page;
         struct dio_request *dreq;
         struct bio *bio = NULL;
         ENTRY;
@@ -99,7 +99,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
 
         inode = res->dentry->d_inode;
         blocks_per_page = PAGE_SIZE >> inode->i_blkbits;
-	LASSERT(blocks_per_page <= MAX_BLOCKS_PER_PAGE);
+        LASSERT(blocks_per_page <= MAX_BLOCKS_PER_PAGE);
 
         OBD_ALLOC(dreq, sizeof(*dreq));
         if (dreq == NULL)
@@ -114,7 +114,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
         fso.fso_bufcnt = obj->ioo_bufcnt;
 
         push_ctxt(&saved, &obd->obd_ctxt, NULL);
-        cleanup_phase = 2; 
+        cleanup_phase = 2;
 
         oti->oti_handle = fsfilt_brw_start(obd, objcount, &fso, niocount, oti);
         if (IS_ERR(oti->oti_handle)) {
@@ -130,37 +130,37 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
 
         for (i = 0, lnb = res; i < obj->ioo_bufcnt; i++, lnb++) {
                 loff_t this_size;
-		sector_t sector;
-		int offs;
+                sector_t sector;
+                int offs;
 
-		/* get block number for next page */
+                /* get block number for next page */
                 rc = ext3_map_inode_page(inode, lnb->page, dreq->blocks,
                                                 dreq->created, 1);
                 if (rc)
                         GOTO(cleanup, rc);
 
-		for (k = 0; k < blocks_per_page; k++) {
-			sector = dreq->blocks[k] * (inode->i_sb->s_blocksize >> 9);
-			offs = k * inode->i_sb->s_blocksize;
+                for (k = 0; k < blocks_per_page; k++) {
+                        sector = dreq->blocks[k] *(inode->i_sb->s_blocksize>>9);
+                        offs = k * inode->i_sb->s_blocksize;
 
-			if (!bio || !can_be_merged(bio, sector) ||
-				!bio_add_page(bio, lnb->page, lnb->len, offs)) {
-				if (bio) {
+                        if (!bio || !can_be_merged(bio, sector) ||
+                            !bio_add_page(bio, lnb->page, lnb->len, offs)) {
+                                if (bio) {
                                         atomic_inc(&dreq->numreqs);
-					submit_bio(WRITE, bio);
-					bio = NULL;
-				}
-				/* allocate new bio */
-				bio = bio_alloc(GFP_NOIO, obj->ioo_bufcnt);
-				bio->bi_bdev = inode->i_sb->s_bdev;
-				bio->bi_sector = sector;
-				bio->bi_end_io = dio_complete_routine; 
+                                        submit_bio(WRITE, bio);
+                                        bio = NULL;
+                                }
+                                /* allocate new bio */
+                                bio = bio_alloc(GFP_NOIO, obj->ioo_bufcnt);
+                                bio->bi_bdev = inode->i_sb->s_bdev;
+                                bio->bi_sector = sector;
+                                bio->bi_end_io = dio_complete_routine;
                                 bio->bi_private = dreq;
 
-				if (!bio_add_page(bio, lnb->page, lnb->len, 0))
-					LBUG();
-			}
-		}
+                                if (!bio_add_page(bio, lnb->page, lnb->len, 0))
+                                        LBUG();
+                        }
+                }
 
                 /* We expect these pages to be in offset order, but we'll
                  * be forgiving */
@@ -168,12 +168,14 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
                 if (this_size > iattr.ia_size)
                         iattr.ia_size = this_size;
         }
-	if (bio) {
+
+#warning This probably needs filemap_fdatasync() like filter_io_24 (bug 2366)
+        if (bio) {
                 atomic_inc(&dreq->numreqs);
                 submit_bio(WRITE, bio);
         }
 
-	/* time to wait for I/O completion */
+        /* time to wait for I/O completion */
         wait_event(dreq->wait, atomic_read(&dreq->numreqs) == 0);
 
         /* free all bios */
