@@ -109,7 +109,7 @@ replay() {
     shutdown_mds -f
     start_mds
     wait
-    do_client "ls $MOUNPT" # trigger failover, if we haven't already
+    do_client "df -h $MOUNPT" # trigger failover, if we haven't already
 }
 
 if [ ! -z "$ONLY" ]; then
