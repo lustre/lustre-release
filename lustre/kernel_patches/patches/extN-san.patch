@@ -1,9 +1,9 @@
- fs/ext3/inode.c |   82 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
- 1 files changed, 82 insertions(+)
+ fs/ext3/inode.c |   81 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 files changed, 81 insertions(+)
 
---- linux-2.4.20/fs/ext3/inode.c~extN-san	2003-04-08 23:35:59.000000000 -0600
-+++ linux-2.4.20-braam/fs/ext3/inode.c	2003-04-08 23:35:59.000000000 -0600
-@@ -2734,3 +2734,85 @@ int ext3_change_inode_journal_flag(struc
+--- linux-2.4.18-chaos60-lustre17/fs/ext3/inode.c~extN-san	2003-05-17 14:11:34.000000000 -0600
++++ linux-2.4.18-chaos60-lustre17-braam/fs/ext3/inode.c	2003-05-17 19:48:18.000000000 -0600
+@@ -2781,3 +2781,84 @@ int ext3_change_inode_journal_flag(struc
   * here, in ext3_aops_journal_start() to ensure that the forthcoming "see if we
   * need to extend" test in ext3_prepare_write() succeeds.  
   */
@@ -88,6 +88,5 @@
 +		ret = ret2;
 +	return ret;
 +}
-+EXPORT_SYMBOL(ext3_prep_san_write);
 
 _

@@ -30,14 +30,14 @@
  fs/ext2/symlink.c             |   14 
  fs/ext2/xattr.c               | 1212 +++++++++++++++++++++++++++++++++++++++++
  fs/ext2/xattr_user.c          |  103 +++
- fs/ext3/Makefile              |    6 
+ fs/ext3/Makefile              |   10 
  fs/ext3/file.c                |    5 
  fs/ext3/ialloc.c              |    2 
  fs/ext3/inode.c               |   35 -
  fs/ext3/namei.c               |   21 
- fs/ext3/super.c               |   33 +
+ fs/ext3/super.c               |   36 +
  fs/ext3/symlink.c             |   14 
- fs/ext3/xattr.c               | 1232 ++++++++++++++++++++++++++++++++++++++++++
+ fs/ext3/xattr.c               | 1225 ++++++++++++++++++++++++++++++++++++++++++
  fs/ext3/xattr_user.c          |  111 +++
  fs/jfs/jfs_xattr.h            |    6 
  fs/jfs/xattr.c                |    6 
@@ -59,10 +59,11 @@
  include/linux/mbcache.h       |   69 ++
  kernel/ksyms.c                |    4 
  mm/vmscan.c                   |   36 +
- 61 files changed, 4336 insertions(+), 178 deletions(-)
+ fs/ext3/ext3-exports.c        |   14 +  
+ 62 files changed, 4331 insertions(+), 197 deletions(-)
 
---- linux-chaos-2.4.20-6/Documentation/Configure.help~linux-2.4.20-xattr-0.8.54-chaos	2003-03-12 12:48:52.000000000 -0700
-+++ linux-chaos-2.4.20-6-braam/Documentation/Configure.help	2003-04-09 16:30:45.000000000 -0600
+--- linux-rh-2.4.20-8/Documentation/Configure.help~linux-2.4.20-xattr-0.8.54-chaos	2003-05-07 17:33:50.000000000 +0800
++++ linux-rh-2.4.20-8-root/Documentation/Configure.help	2003-05-07 17:34:25.000000000 +0800
 @@ -15226,6 +15226,39 @@ CONFIG_EXT2_FS
    be compiled as a module, and so this could be dangerous.  Most
    everyone wants to say Y here.
@@ -143,8 +144,8 @@
  Journal Block Device support (JBD for ext3) (EXPERIMENTAL)
  CONFIG_JBD
    This is a generic journalling layer for block devices.  It is
---- linux-chaos-2.4.20-6/arch/alpha/defconfig~linux-2.4.20-xattr-0.8.54-chaos	2002-05-07 15:53:54.000000000 -0600
-+++ linux-chaos-2.4.20-6-braam/arch/alpha/defconfig	2003-04-09 16:30:45.000000000 -0600
+--- linux-rh-2.4.20-8/arch/alpha/defconfig~linux-2.4.20-xattr-0.8.54-chaos	2001-11-20 07:19:42.000000000 +0800
++++ linux-rh-2.4.20-8-root/arch/alpha/defconfig	2003-05-07 17:34:25.000000000 +0800
 @@ -1,6 +1,13 @@
  #
  # Automatically generated make config: don't edit
@@ -159,8 +160,8 @@
  CONFIG_ALPHA=y
  # CONFIG_UID16 is not set
  # CONFIG_RWSEM_GENERIC_SPINLOCK is not set
---- linux-chaos-2.4.20-6/arch/alpha/kernel/entry.S~linux-2.4.20-xattr-0.8.54-chaos	2003-03-12 12:48:57.000000000 -0700
-+++ linux-chaos-2.4.20-6-braam/arch/alpha/kernel/entry.S	2003-04-09 16:30:45.000000000 -0600
+--- linux-rh-2.4.20-8/arch/alpha/kernel/entry.S~linux-2.4.20-xattr-0.8.54-chaos	2003-04-11 14:04:53.000000000 +0800
++++ linux-rh-2.4.20-8-root/arch/alpha/kernel/entry.S	2003-05-07 17:34:25.000000000 +0800
 @@ -1162,6 +1162,18 @@ sys_call_table:
  	.quad sys_readahead
  	.quad sys_ni_syscall			/* 380, sys_security */
@@ -180,8 +181,8 @@
  
  /* Remember to update everything, kids.  */
  .ifne (. - sys_call_table) - (NR_SYSCALLS * 8)
---- linux-chaos-2.4.20-6/arch/arm/defconfig~linux-2.4.20-xattr-0.8.54-chaos	2002-05-07 15:53:56.000000000 -0600
-+++ linux-chaos-2.4.20-6-braam/arch/arm/defconfig	2003-04-09 16:30:45.000000000 -0600
+--- linux-rh-2.4.20-8/arch/arm/defconfig~linux-2.4.20-xattr-0.8.54-chaos	2001-05-20 08:43:05.000000000 +0800
++++ linux-rh-2.4.20-8-root/arch/arm/defconfig	2003-05-07 17:34:25.000000000 +0800
 @@ -1,6 +1,13 @@
  #
  # Automatically generated make config: don't edit
@@ -196,8 +197,8 @@
  CONFIG_ARM=y
  # CONFIG_EISA is not set
  # CONFIG_SBUS is not set
---- linux-chaos-2.4.20-6/arch/arm/kernel/calls.S~linux-2.4.20-xattr-0.8.54-chaos	2002-09-25 11:09:16.000000000 -0600
-+++ linux-chaos-2.4.20-6-braam/arch/arm/kernel/calls.S	2003-04-09 16:30:45.000000000 -0600
+--- linux-rh-2.4.20-8/arch/arm/kernel/calls.S~linux-2.4.20-xattr-0.8.54-chaos	2002-08-03 08:39:42.000000000 +0800
++++ linux-rh-2.4.20-8-root/arch/arm/kernel/calls.S	2003-05-07 17:34:25.000000000 +0800
 @@ -240,18 +240,18 @@ __syscall_start:
  		.long	SYMBOL_NAME(sys_ni_syscall) /* Security */
  		.long	SYMBOL_NAME(sys_gettid)
@@ -229,8 +230,8 @@
  		.long	SYMBOL_NAME(sys_tkill)
  		/*
  		 * Please check 2.5 _before_ adding calls here,
---- linux-chaos-2.4.20-6/arch/i386/defconfig~linux-2.4.20-xattr-0.8.54-chaos	2003-03-12 12:49:05.000000000 -0700
-+++ linux-chaos-2.4.20-6-braam/arch/i386/defconfig	2003-04-09 16:30:45.000000000 -0600
+--- linux-rh-2.4.20-8/arch/i386/defconfig~linux-2.4.20-xattr-0.8.54-chaos	2003-04-11 14:04:53.000000000 +0800
++++ linux-rh-2.4.20-8-root/arch/i386/defconfig	2003-05-07 17:34:25.000000000 +0800
 @@ -1,6 +1,13 @@
  #
  # Automatically generated make config: don't edit
@@ -245,8 +246,8 @@
  CONFIG_X86=y
  CONFIG_ISA=y
  # CONFIG_SBUS is not set
---- linux-chaos-2.4.20-6/arch/ia64/defconfig~linux-2.4.20-xattr-0.8.54-chaos	2003-03-12 12:49:10.000000000 -0700
-+++ linux-chaos-2.4.20-6-braam/arch/ia64/defconfig	2003-04-09 16:30:45.000000000 -0600
+--- linux-rh-2.4.20-8/arch/ia64/defconfig~linux-2.4.20-xattr-0.8.54-chaos	2003-04-11 14:04:43.000000000 +0800
++++ linux-rh-2.4.20-8-root/arch/ia64/defconfig	2003-05-07 17:34:25.000000000 +0800
 @@ -1,6 +1,13 @@
  #
  # Automatically generated make config: don't edit
@@ -261,8 +262,8 @@
  
  #
  # Code maturity level options
---- linux-chaos-2.4.20-6/arch/m68k/defconfig~linux-2.4.20-xattr-0.8.54-chaos	2002-05-07 15:53:55.000000000 -0600
-+++ linux-chaos-2.4.20-6-braam/arch/m68k/defconfig	2003-04-09 16:30:59.000000000 -0600
+--- linux-rh-2.4.20-8/arch/m68k/defconfig~linux-2.4.20-xattr-0.8.54-chaos	2000-06-20 03:56:08.000000000 +0800
++++ linux-rh-2.4.20-8-root/arch/m68k/defconfig	2003-05-07 17:34:25.000000000 +0800
 @@ -1,6 +1,13 @@
  #
  # Automatically generated make config: don't edit
@@ -277,8 +278,8 @@
  CONFIG_UID16=y
  
  #
---- linux-chaos-2.4.20-6/arch/mips/defconfig~linux-2.4.20-xattr-0.8.54-chaos	2003-02-14 15:58:06.000000000 -0700
-+++ linux-chaos-2.4.20-6-braam/arch/mips/defconfig	2003-04-09 16:30:59.000000000 -0600
+--- linux-rh-2.4.20-8/arch/mips/defconfig~linux-2.4.20-xattr-0.8.54-chaos	2002-11-29 07:53:10.000000000 +0800
++++ linux-rh-2.4.20-8-root/arch/mips/defconfig	2003-05-07 17:34:25.000000000 +0800
 @@ -1,6 +1,13 @@
  #
  # Automatically generated make config: don't edit
@@ -293,8 +294,8 @@
  CONFIG_MIPS=y
  CONFIG_MIPS32=y
  # CONFIG_MIPS64 is not set
---- linux-chaos-2.4.20-6/arch/mips64/defconfig~linux-2.4.20-xattr-0.8.54-chaos	2003-02-14 15:58:11.000000000 -0700
-+++ linux-chaos-2.4.20-6-braam/arch/mips64/defconfig	2003-04-09 16:30:59.000000000 -0600
+--- linux-rh-2.4.20-8/arch/mips64/defconfig~linux-2.4.20-xattr-0.8.54-chaos	2002-11-29 07:53:10.000000000 +0800
++++ linux-rh-2.4.20-8-root/arch/mips64/defconfig	2003-05-07 17:34:25.000000000 +0800
 @@ -1,6 +1,13 @@
  #
  # Automatically generated make config: don't edit
@@ -309,8 +310,8 @@
  CONFIG_MIPS=y
  # CONFIG_MIPS32 is not set
  CONFIG_MIPS64=y
---- linux-chaos-2.4.20-6/arch/ppc/defconfig~linux-2.4.20-xattr-0.8.54-chaos	2003-03-12 12:49:21.000000000 -0700
-+++ linux-chaos-2.4.20-6-braam/arch/ppc/defconfig	2003-04-09 16:30:59.000000000 -0600
+--- linux-rh-2.4.20-8/arch/ppc/defconfig~linux-2.4.20-xattr-0.8.54-chaos	2003-04-11 14:04:43.000000000 +0800
++++ linux-rh-2.4.20-8-root/arch/ppc/defconfig	2003-05-07 17:34:25.000000000 +0800
 @@ -1,6 +1,20 @@
  #
  # Automatically generated make config: don't edit
@@ -332,8 +333,8 @@
  # CONFIG_UID16 is not set
  # CONFIG_RWSEM_GENERIC_SPINLOCK is not set
  CONFIG_RWSEM_XCHGADD_ALGORITHM=y
---- linux-chaos-2.4.20-6/arch/ppc64/kernel/misc.S~linux-2.4.20-xattr-0.8.54-chaos	2003-02-14 15:58:20.000000000 -0700
-+++ linux-chaos-2.4.20-6-braam/arch/ppc64/kernel/misc.S	2003-04-09 16:30:59.000000000 -0600
+--- linux-rh-2.4.20-8/arch/ppc64/kernel/misc.S~linux-2.4.20-xattr-0.8.54-chaos	2002-11-29 07:53:11.000000000 +0800
++++ linux-rh-2.4.20-8-root/arch/ppc64/kernel/misc.S	2003-05-07 17:34:25.000000000 +0800
 @@ -731,6 +731,7 @@ _GLOBAL(sys_call_table32)
  	.llong .sys_gettid		/* 207 */
  #if 0 /* Reserved syscalls */
@@ -350,8 +351,8 @@
  	.llong .sys_futex
  #endif
  	.llong .sys_perfmonctl   /* Put this here for now ... */
---- linux-chaos-2.4.20-6/arch/s390/defconfig~linux-2.4.20-xattr-0.8.54-chaos	2003-02-14 15:58:20.000000000 -0700
-+++ linux-chaos-2.4.20-6-braam/arch/s390/defconfig	2003-04-09 16:30:59.000000000 -0600
+--- linux-rh-2.4.20-8/arch/s390/defconfig~linux-2.4.20-xattr-0.8.54-chaos	2002-11-29 07:53:11.000000000 +0800
++++ linux-rh-2.4.20-8-root/arch/s390/defconfig	2003-05-07 17:34:25.000000000 +0800
 @@ -1,6 +1,13 @@
  #
  # Automatically generated make config: don't edit
@@ -366,8 +367,8 @@
  # CONFIG_ISA is not set
  # CONFIG_EISA is not set
  # CONFIG_MCA is not set
---- linux-chaos-2.4.20-6/arch/s390/kernel/entry.S~linux-2.4.20-xattr-0.8.54-chaos	2003-02-14 15:58:20.000000000 -0700
-+++ linux-chaos-2.4.20-6-braam/arch/s390/kernel/entry.S	2003-04-09 16:30:59.000000000 -0600
+--- linux-rh-2.4.20-8/arch/s390/kernel/entry.S~linux-2.4.20-xattr-0.8.54-chaos	2002-11-29 07:53:11.000000000 +0800
++++ linux-rh-2.4.20-8-root/arch/s390/kernel/entry.S	2003-05-07 17:34:25.000000000 +0800
 @@ -558,18 +558,18 @@ sys_call_table:
          .long  sys_fcntl64 
  	.long  sys_ni_syscall
@@ -399,8 +400,8 @@
  	.long  sys_gettid
  	.long  sys_tkill
  	.rept  255-237
---- linux-chaos-2.4.20-6/arch/s390x/defconfig~linux-2.4.20-xattr-0.8.54-chaos	2003-02-14 15:58:21.000000000 -0700
-+++ linux-chaos-2.4.20-6-braam/arch/s390x/defconfig	2003-04-09 16:30:59.000000000 -0600
+--- linux-rh-2.4.20-8/arch/s390x/defconfig~linux-2.4.20-xattr-0.8.54-chaos	2002-11-29 07:53:11.000000000 +0800
++++ linux-rh-2.4.20-8-root/arch/s390x/defconfig	2003-05-07 17:34:25.000000000 +0800
 @@ -1,6 +1,13 @@
  #
  # Automatically generated make config: don't edit
@@ -415,8 +416,8 @@
  # CONFIG_ISA is not set
  # CONFIG_EISA is not set
  # CONFIG_MCA is not set
---- linux-chaos-2.4.20-6/arch/s390x/kernel/entry.S~linux-2.4.20-xattr-0.8.54-chaos	2003-02-14 15:58:21.000000000 -0700
-+++ linux-chaos-2.4.20-6-braam/arch/s390x/kernel/entry.S	2003-04-09 16:30:59.000000000 -0600
+--- linux-rh-2.4.20-8/arch/s390x/kernel/entry.S~linux-2.4.20-xattr-0.8.54-chaos	2002-11-29 07:53:11.000000000 +0800
++++ linux-rh-2.4.20-8-root/arch/s390x/kernel/entry.S	2003-05-07 17:34:25.000000000 +0800
 @@ -591,18 +591,18 @@ sys_call_table:
  	.long  SYSCALL(sys_ni_syscall,sys32_fcntl64_wrapper)
  	.long  SYSCALL(sys_ni_syscall,sys_ni_syscall)
@@ -448,8 +449,8 @@
  	.long  SYSCALL(sys_gettid,sys_gettid)
  	.long  SYSCALL(sys_tkill,sys_tkill)
  	.rept  255-237
---- linux-chaos-2.4.20-6/arch/s390x/kernel/wrapper32.S~linux-2.4.20-xattr-0.8.54-chaos	2002-05-07 15:53:59.000000000 -0600
-+++ linux-chaos-2.4.20-6-braam/arch/s390x/kernel/wrapper32.S	2003-04-09 16:30:59.000000000 -0600
+--- linux-rh-2.4.20-8/arch/s390x/kernel/wrapper32.S~linux-2.4.20-xattr-0.8.54-chaos	2002-02-26 03:37:56.000000000 +0800
++++ linux-rh-2.4.20-8-root/arch/s390x/kernel/wrapper32.S	2003-05-07 17:34:25.000000000 +0800
 @@ -1091,3 +1091,95 @@ sys32_fstat64_wrapper:
  	llgtr	%r3,%r3			# struct stat64 *
  	llgfr	%r4,%r4			# long
@@ -546,8 +547,8 @@
 +	jg	sys_fremovexattr
 +
 +
---- linux-chaos-2.4.20-6/arch/sparc/defconfig~linux-2.4.20-xattr-0.8.54-chaos	2002-09-25 11:10:50.000000000 -0600
-+++ linux-chaos-2.4.20-6-braam/arch/sparc/defconfig	2003-04-09 16:30:59.000000000 -0600
+--- linux-rh-2.4.20-8/arch/sparc/defconfig~linux-2.4.20-xattr-0.8.54-chaos	2002-08-03 08:39:43.000000000 +0800
++++ linux-rh-2.4.20-8-root/arch/sparc/defconfig	2003-05-07 17:34:25.000000000 +0800
 @@ -1,6 +1,13 @@
  #
  # Automatically generated make config: don't edit
@@ -562,8 +563,8 @@
  CONFIG_UID16=y
  CONFIG_HIGHMEM=y
  
---- linux-chaos-2.4.20-6/arch/sparc/kernel/systbls.S~linux-2.4.20-xattr-0.8.54-chaos	2002-09-25 11:10:52.000000000 -0600
-+++ linux-chaos-2.4.20-6-braam/arch/sparc/kernel/systbls.S	2003-04-09 16:30:59.000000000 -0600
+--- linux-rh-2.4.20-8/arch/sparc/kernel/systbls.S~linux-2.4.20-xattr-0.8.54-chaos	2002-08-03 08:39:43.000000000 +0800
++++ linux-rh-2.4.20-8-root/arch/sparc/kernel/systbls.S	2003-05-07 17:34:25.000000000 +0800
 @@ -51,11 +51,11 @@ sys_call_table:
  /*150*/	.long sys_nis_syscall, sys_nis_syscall, sys_nis_syscall, sys_poll, sys_getdents64
  /*155*/	.long sys_fcntl64, sys_nis_syscall, sys_statfs, sys_fstatfs, sys_oldumount
@@ -581,8 +582,8 @@
  /*190*/	.long sys_init_module, sys_personality, sys_nis_syscall, sys_nis_syscall, sys_nis_syscall
  /*195*/	.long sys_nis_syscall, sys_nis_syscall, sys_getppid, sparc_sigaction, sys_sgetmask
  /*200*/	.long sys_ssetmask, sys_sigsuspend, sys_newlstat, sys_uselib, old_readdir
---- linux-chaos-2.4.20-6/arch/sparc64/defconfig~linux-2.4.20-xattr-0.8.54-chaos	2003-03-12 12:49:27.000000000 -0700
-+++ linux-chaos-2.4.20-6-braam/arch/sparc64/defconfig	2003-04-09 16:30:59.000000000 -0600
+--- linux-rh-2.4.20-8/arch/sparc64/defconfig~linux-2.4.20-xattr-0.8.54-chaos	2003-04-11 14:04:43.000000000 +0800
++++ linux-rh-2.4.20-8-root/arch/sparc64/defconfig	2003-05-07 17:34:25.000000000 +0800
 @@ -1,6 +1,13 @@
  #
  # Automatically generated make config: don't edit
@@ -597,8 +598,8 @@
  
  #
  # Code maturity level options
---- linux-chaos-2.4.20-6/arch/sparc64/kernel/systbls.S~linux-2.4.20-xattr-0.8.54-chaos	2002-09-25 11:10:55.000000000 -0600
-+++ linux-chaos-2.4.20-6-braam/arch/sparc64/kernel/systbls.S	2003-04-09 16:30:59.000000000 -0600
+--- linux-rh-2.4.20-8/arch/sparc64/kernel/systbls.S~linux-2.4.20-xattr-0.8.54-chaos	2002-08-03 08:39:43.000000000 +0800
++++ linux-rh-2.4.20-8-root/arch/sparc64/kernel/systbls.S	2003-05-07 17:34:25.000000000 +0800
 @@ -52,11 +52,11 @@ sys_call_table32:
  /*150*/	.word sys_nis_syscall, sys_nis_syscall, sys_nis_syscall, sys_poll, sys_getdents64
  	.word sys32_fcntl64, sys_nis_syscall, sys32_statfs, sys32_fstatfs, sys_oldumount
@@ -633,8 +634,8 @@
  /*190*/	.word sys_init_module, sparc64_personality, sys_nis_syscall, sys_nis_syscall, sys_nis_syscall
  	.word sys_nis_syscall, sys_nis_syscall, sys_getppid, sys_nis_syscall, sys_sgetmask
  /*200*/	.word sys_ssetmask, sys_nis_syscall, sys_newlstat, sys_uselib, sys_nis_syscall
---- linux-chaos-2.4.20-6/fs/Config.in~linux-2.4.20-xattr-0.8.54-chaos	2003-03-12 12:50:56.000000000 -0700
-+++ linux-chaos-2.4.20-6-braam/fs/Config.in	2003-04-09 16:30:59.000000000 -0600
+--- linux-rh-2.4.20-8/fs/Config.in~linux-2.4.20-xattr-0.8.54-chaos	2003-04-11 14:05:03.000000000 +0800
++++ linux-rh-2.4.20-8-root/fs/Config.in	2003-05-07 17:34:25.000000000 +0800
 @@ -34,6 +34,11 @@ dep_mbool '  Debug Befs' CONFIG_BEFS_DEB
  dep_tristate 'BFS file system support (EXPERIMENTAL)' CONFIG_BFS_FS $CONFIG_EXPERIMENTAL
  
@@ -670,8 +671,8 @@
  mainmenu_option next_comment
  comment 'Partition Types'
  source fs/partitions/Config.in
---- linux-chaos-2.4.20-6/fs/Makefile~linux-2.4.20-xattr-0.8.54-chaos	2003-04-09 16:11:02.000000000 -0600
-+++ linux-chaos-2.4.20-6-braam/fs/Makefile	2003-04-09 16:30:59.000000000 -0600
+--- linux-rh-2.4.20-8/fs/Makefile~linux-2.4.20-xattr-0.8.54-chaos	2003-05-07 17:33:58.000000000 +0800
++++ linux-rh-2.4.20-8-root/fs/Makefile	2003-05-07 17:34:25.000000000 +0800
 @@ -84,6 +84,9 @@ obj-y				+= binfmt_script.o
  
  obj-$(CONFIG_BINFMT_ELF)	+= binfmt_elf.o
@@ -682,8 +683,8 @@
  # persistent filesystems
  obj-y += $(join $(subdir-y),$(subdir-y:%=/%.o))
  
---- linux-chaos-2.4.20-6/fs/ext2/Makefile~linux-2.4.20-xattr-0.8.54-chaos	2002-05-07 15:53:46.000000000 -0600
-+++ linux-chaos-2.4.20-6-braam/fs/ext2/Makefile	2003-04-09 16:30:59.000000000 -0600
+--- linux-rh-2.4.20-8/fs/ext2/Makefile~linux-2.4.20-xattr-0.8.54-chaos	2001-10-11 23:05:18.000000000 +0800
++++ linux-rh-2.4.20-8-root/fs/ext2/Makefile	2003-05-07 17:34:25.000000000 +0800
 @@ -13,4 +13,8 @@ obj-y    := balloc.o bitmap.o dir.o file
  		ioctl.o namei.o super.o symlink.o
  obj-m    := $(O_TARGET)
@@ -693,8 +694,8 @@
 +obj-$(CONFIG_EXT2_FS_XATTR_USER) += xattr_user.o
 +
  include $(TOPDIR)/Rules.make
---- linux-chaos-2.4.20-6/fs/ext2/file.c~linux-2.4.20-xattr-0.8.54-chaos	2002-05-07 15:53:46.000000000 -0600
-+++ linux-chaos-2.4.20-6-braam/fs/ext2/file.c	2003-04-09 16:30:59.000000000 -0600
+--- linux-rh-2.4.20-8/fs/ext2/file.c~linux-2.4.20-xattr-0.8.54-chaos	2001-10-11 23:05:18.000000000 +0800
++++ linux-rh-2.4.20-8-root/fs/ext2/file.c	2003-05-07 17:34:25.000000000 +0800
 @@ -20,6 +20,7 @@
  
  #include <linux/fs.h>
@@ -712,8 +713,8 @@
 +	listxattr:	ext2_listxattr,
 +	removexattr:	ext2_removexattr,
  };
---- linux-chaos-2.4.20-6/fs/ext2/ialloc.c~linux-2.4.20-xattr-0.8.54-chaos	2003-02-14 15:59:09.000000000 -0700
-+++ linux-chaos-2.4.20-6-braam/fs/ext2/ialloc.c	2003-04-09 16:30:59.000000000 -0600
+--- linux-rh-2.4.20-8/fs/ext2/ialloc.c~linux-2.4.20-xattr-0.8.54-chaos	2002-11-29 07:53:15.000000000 +0800
++++ linux-rh-2.4.20-8-root/fs/ext2/ialloc.c	2003-05-07 17:34:25.000000000 +0800
 @@ -15,6 +15,7 @@
  #include <linux/config.h>
  #include <linux/fs.h>
@@ -730,8 +731,8 @@
  	    	DQUOT_FREE_INODE(inode);
  		DQUOT_DROP(inode);
  	}
---- linux-chaos-2.4.20-6/fs/ext2/inode.c~linux-2.4.20-xattr-0.8.54-chaos	2003-02-14 15:59:09.000000000 -0700
-+++ linux-chaos-2.4.20-6-braam/fs/ext2/inode.c	2003-04-09 16:30:59.000000000 -0600
+--- linux-rh-2.4.20-8/fs/ext2/inode.c~linux-2.4.20-xattr-0.8.54-chaos	2002-11-29 07:53:15.000000000 +0800
++++ linux-rh-2.4.20-8-root/fs/ext2/inode.c	2003-05-07 17:34:25.000000000 +0800
 @@ -39,6 +39,18 @@ MODULE_LICENSE("GPL");
  static int ext2_update_inode(struct inode * inode, int do_sync);
  
@@ -814,8 +815,8 @@
  	brelse (bh);
  	inode->i_attr_flags = 0;
  	if (inode->u.ext2_i.i_flags & EXT2_SYNC_FL) {
---- linux-chaos-2.4.20-6/fs/ext2/namei.c~linux-2.4.20-xattr-0.8.54-chaos	2002-05-07 15:53:46.000000000 -0600
-+++ linux-chaos-2.4.20-6-braam/fs/ext2/namei.c	2003-04-09 16:30:59.000000000 -0600
+--- linux-rh-2.4.20-8/fs/ext2/namei.c~linux-2.4.20-xattr-0.8.54-chaos	2001-10-04 13:57:36.000000000 +0800
++++ linux-rh-2.4.20-8-root/fs/ext2/namei.c	2003-05-07 17:34:25.000000000 +0800
 @@ -31,6 +31,7 @@
  
  #include <linux/fs.h>
@@ -849,8 +850,8 @@
 +	listxattr:	ext2_listxattr,
 +	removexattr:	ext2_removexattr,
  };
---- linux-chaos-2.4.20-6/fs/ext2/super.c~linux-2.4.20-xattr-0.8.54-chaos	2003-02-14 15:59:09.000000000 -0700
-+++ linux-chaos-2.4.20-6-braam/fs/ext2/super.c	2003-04-09 16:30:59.000000000 -0600
+--- linux-rh-2.4.20-8/fs/ext2/super.c~linux-2.4.20-xattr-0.8.54-chaos	2002-11-29 07:53:15.000000000 +0800
++++ linux-rh-2.4.20-8-root/fs/ext2/super.c	2003-05-07 17:34:25.000000000 +0800
 @@ -21,6 +21,7 @@
  #include <linux/string.h>
  #include <linux/fs.h>
@@ -920,8 +921,8 @@
  }
  
  EXPORT_NO_SYMBOLS;
---- linux-chaos-2.4.20-6/fs/ext2/symlink.c~linux-2.4.20-xattr-0.8.54-chaos	2002-05-07 15:53:46.000000000 -0600
-+++ linux-chaos-2.4.20-6-braam/fs/ext2/symlink.c	2003-04-09 16:30:59.000000000 -0600
+--- linux-rh-2.4.20-8/fs/ext2/symlink.c~linux-2.4.20-xattr-0.8.54-chaos	2000-09-28 04:41:33.000000000 +0800
++++ linux-rh-2.4.20-8-root/fs/ext2/symlink.c	2003-05-07 17:34:25.000000000 +0800
 @@ -19,6 +19,7 @@
  
  #include <linux/fs.h>
@@ -951,8 +952,8 @@
 +	listxattr:	ext2_listxattr,
 +	removexattr:	ext2_removexattr,
  };
---- /dev/null	2003-01-30 03:24:37.000000000 -0700
-+++ linux-chaos-2.4.20-6-braam/fs/ext2/xattr.c	2003-04-09 16:30:59.000000000 -0600
+--- /dev/null	2003-01-30 18:24:37.000000000 +0800
++++ linux-rh-2.4.20-8-root/fs/ext2/xattr.c	2003-05-07 17:34:25.000000000 +0800
 @@ -0,0 +1,1212 @@
 +/*
 + * linux/fs/ext2/xattr.c
@@ -2166,8 +2167,8 @@
 +}
 +
 +#endif  /* CONFIG_EXT2_FS_XATTR_SHARING */
---- /dev/null	2003-01-30 03:24:37.000000000 -0700
-+++ linux-chaos-2.4.20-6-braam/fs/ext2/xattr_user.c	2003-04-09 16:30:59.000000000 -0600
+--- /dev/null	2003-01-30 18:24:37.000000000 +0800
++++ linux-rh-2.4.20-8-root/fs/ext2/xattr_user.c	2003-05-07 17:34:25.000000000 +0800
 @@ -0,0 +1,103 @@
 +/*
 + * linux/fs/ext2/xattr_user.c
@@ -2272,8 +2273,8 @@
 +	ext2_xattr_unregister(EXT2_XATTR_INDEX_USER,
 +			      &ext2_xattr_user_handler);
 +}
---- linux-chaos-2.4.20-6/fs/ext3/Makefile~linux-2.4.20-xattr-0.8.54-chaos	2003-04-09 16:26:17.000000000 -0600
-+++ linux-chaos-2.4.20-6-braam/fs/ext3/Makefile	2003-04-09 16:30:59.000000000 -0600
+--- linux-rh-2.4.20-8/fs/ext3/Makefile~linux-2.4.20-xattr-0.8.54-chaos	2003-05-07 17:33:59.000000000 +0800
++++ linux-rh-2.4.20-8-root/fs/ext3/Makefile	2003-05-07 17:45:13.000000000 +0800
 @@ -1,5 +1,5 @@
  #
 -# Makefile for the linux ext2-filesystem routines.
@@ -2281,8 +2282,16 @@
  #
  # Note! Dependencies are done automagically by 'make dep', which also
  # removes any old dependencies. DON'T put your own dependencies here
-@@ -15,4 +15,8 @@ obj-y    := balloc.o bitmap.o dir.o file
- 		ioctl.o namei.o super.o symlink.o hash.o
+@@ -9,10 +9,14 @@
+ 
+ O_TARGET := ext3.o
+ 
+-export-objs :=	super.o inode.o
++export-objs := ext3-exports.o
+ 
+ obj-y    := balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o \
+-		ioctl.o namei.o super.o symlink.o hash.o
++		ioctl.o namei.o super.o symlink.o hash.o ext3-exports.o
  obj-m    := $(O_TARGET)
  
 +export-objs += xattr.o
@@ -2290,8 +2299,8 @@
 +obj-$(CONFIG_EXT3_FS_XATTR_USER) += xattr_user.o
 +
  include $(TOPDIR)/Rules.make
---- linux-chaos-2.4.20-6/fs/ext3/file.c~linux-2.4.20-xattr-0.8.54-chaos	2003-04-09 16:26:17.000000000 -0600
-+++ linux-chaos-2.4.20-6-braam/fs/ext3/file.c	2003-04-09 16:30:59.000000000 -0600
+--- linux-rh-2.4.20-8/fs/ext3/file.c~linux-2.4.20-xattr-0.8.54-chaos	2003-05-07 17:33:59.000000000 +0800
++++ linux-rh-2.4.20-8-root/fs/ext3/file.c	2003-05-07 17:34:25.000000000 +0800
 @@ -23,6 +23,7 @@
  #include <linux/locks.h>
  #include <linux/jbd.h>
@@ -2310,8 +2319,8 @@
 +	removexattr:	ext3_removexattr,	/* BKL held */
  };
  
---- linux-chaos-2.4.20-6/fs/ext3/ialloc.c~linux-2.4.20-xattr-0.8.54-chaos	2003-03-12 12:51:02.000000000 -0700
-+++ linux-chaos-2.4.20-6-braam/fs/ext3/ialloc.c	2003-04-09 16:30:59.000000000 -0600
+--- linux-rh-2.4.20-8/fs/ext3/ialloc.c~linux-2.4.20-xattr-0.8.54-chaos	2003-04-11 14:04:48.000000000 +0800
++++ linux-rh-2.4.20-8-root/fs/ext3/ialloc.c	2003-05-07 17:34:25.000000000 +0800
 @@ -17,6 +17,7 @@
  #include <linux/jbd.h>
  #include <linux/ext3_fs.h>
@@ -2328,8 +2337,8 @@
  	DQUOT_FREE_INODE(inode);
  	DQUOT_DROP(inode);
  
---- linux-chaos-2.4.20-6/fs/ext3/inode.c~linux-2.4.20-xattr-0.8.54-chaos	2003-03-12 12:51:02.000000000 -0700
-+++ linux-chaos-2.4.20-6-braam/fs/ext3/inode.c	2003-04-09 16:30:59.000000000 -0600
+--- linux-rh-2.4.20-8/fs/ext3/inode.c~linux-2.4.20-xattr-0.8.54-chaos	2003-04-11 14:04:58.000000000 +0800
++++ linux-rh-2.4.20-8-root/fs/ext3/inode.c	2003-05-07 17:34:25.000000000 +0800
 @@ -39,6 +39,18 @@
   */
  #undef SEARCH_FROM_ZERO
@@ -2420,8 +2429,8 @@
  	/* inode->i_attr_flags = 0;				unused */
  	if (inode->u.ext3_i.i_flags & EXT3_SYNC_FL) {
  		/* inode->i_attr_flags |= ATTR_FLAG_SYNCRONOUS; unused */
---- linux-chaos-2.4.20-6/fs/ext3/namei.c~linux-2.4.20-xattr-0.8.54-chaos	2003-04-09 16:26:24.000000000 -0600
-+++ linux-chaos-2.4.20-6-braam/fs/ext3/namei.c	2003-04-09 16:30:59.000000000 -0600
+--- linux-rh-2.4.20-8/fs/ext3/namei.c~linux-2.4.20-xattr-0.8.54-chaos	2003-05-07 17:33:59.000000000 +0800
++++ linux-rh-2.4.20-8-root/fs/ext3/namei.c	2003-05-07 17:34:25.000000000 +0800
 @@ -29,6 +29,7 @@
  #include <linux/sched.h>
  #include <linux/ext3_fs.h>
@@ -2483,8 +2492,8 @@
 +	removexattr:	ext3_removexattr,	/* BKL held */
 +};
 +
---- linux-chaos-2.4.20-6/fs/ext3/super.c~linux-2.4.20-xattr-0.8.54-chaos	2003-04-09 16:26:17.000000000 -0600
-+++ linux-chaos-2.4.20-6-braam/fs/ext3/super.c	2003-04-09 16:30:59.000000000 -0600
+--- linux-rh-2.4.20-8/fs/ext3/super.c~linux-2.4.20-xattr-0.8.54-chaos	2003-05-07 17:33:59.000000000 +0800
++++ linux-rh-2.4.20-8-root/fs/ext3/super.c	2003-05-07 17:40:45.000000000 +0800
 @@ -24,6 +24,7 @@
  #include <linux/jbd.h>
  #include <linux/ext3_fs.h>
@@ -2536,7 +2545,7 @@
  	if (!parse_options ((char *) data, &sb_block, sbi, &journal_inum, 0)) {
  		sb->s_dev = 0;
  		goto out_fail;
-@@ -1768,12 +1784,27 @@ static DECLARE_FSTYPE_DEV(ext3_fs_type, 
+@@ -1768,17 +1784,29 @@ static DECLARE_FSTYPE_DEV(ext3_fs_type, 
  
  static int __init init_ext3_fs(void)
  {
@@ -2564,9 +2573,14 @@
 +	exit_ext3_xattr();
  }
  
- EXPORT_SYMBOL(ext3_force_commit);
---- linux-chaos-2.4.20-6/fs/ext3/symlink.c~linux-2.4.20-xattr-0.8.54-chaos	2002-05-07 15:53:46.000000000 -0600
-+++ linux-chaos-2.4.20-6-braam/fs/ext3/symlink.c	2003-04-09 16:30:59.000000000 -0600
+-EXPORT_SYMBOL(ext3_force_commit);
+-EXPORT_SYMBOL(ext3_bread);
+-
+ MODULE_AUTHOR("Remy Card, Stephen Tweedie, Andrew Morton, Andreas Dilger, Theodore Ts'o and others");
+ MODULE_DESCRIPTION("Second Extended Filesystem with journaling extensions");
+ MODULE_LICENSE("GPL");
+--- linux-rh-2.4.20-8/fs/ext3/symlink.c~linux-2.4.20-xattr-0.8.54-chaos	2001-11-10 06:25:04.000000000 +0800
++++ linux-rh-2.4.20-8-root/fs/ext3/symlink.c	2003-05-07 17:34:25.000000000 +0800
 @@ -20,6 +20,7 @@
  #include <linux/fs.h>
  #include <linux/jbd.h>
@@ -2596,9 +2610,9 @@
 +	listxattr:	ext3_listxattr,		/* BKL held */
 +	removexattr:	ext3_removexattr,	/* BKL held */
  };
---- /dev/null	2003-01-30 03:24:37.000000000 -0700
-+++ linux-chaos-2.4.20-6-braam/fs/ext3/xattr.c	2003-04-09 16:30:59.000000000 -0600
-@@ -0,0 +1,1232 @@
+--- /dev/null	2003-01-30 18:24:37.000000000 +0800
++++ linux-rh-2.4.20-8-root/fs/ext3/xattr.c	2003-05-07 17:42:06.000000000 +0800
+@@ -0,0 +1,1225 @@
 +/*
 + * linux/fs/ext3/xattr.c
 + *
@@ -2670,13 +2684,6 @@
 +#include <linux/compatmac.h>
 +
 +#define EXT3_EA_USER "user."
-+
-+/* These symbols may be needed by a module. */
-+EXPORT_SYMBOL(ext3_xattr_register);
-+EXPORT_SYMBOL(ext3_xattr_unregister);
-+EXPORT_SYMBOL(ext3_xattr_get);
-+EXPORT_SYMBOL(ext3_xattr_list);
-+EXPORT_SYMBOL(ext3_xattr_set);
 +
 +#if LINUX_VERSION_CODE < KERNEL_VERSION(2,4,0)
 +# define mark_buffer_dirty(bh) mark_buffer_dirty(bh, 1)
@@ -3831,8 +3838,8 @@
 +}
 +
 +#endif  /* CONFIG_EXT3_FS_XATTR_SHARING */
---- /dev/null	2003-01-30 03:24:37.000000000 -0700
-+++ linux-chaos-2.4.20-6-braam/fs/ext3/xattr_user.c	2003-04-09 16:30:59.000000000 -0600
+--- /dev/null	2003-01-30 18:24:37.000000000 +0800
++++ linux-rh-2.4.20-8-root/fs/ext3/xattr_user.c	2003-05-07 17:34:25.000000000 +0800
 @@ -0,0 +1,111 @@
 +/*
 + * linux/fs/ext3/xattr_user.c
@@ -3945,8 +3952,8 @@
 +	ext3_xattr_unregister(EXT3_XATTR_INDEX_USER,
 +			      &ext3_xattr_user_handler);
 +}
---- linux-chaos-2.4.20-6/fs/jfs/jfs_xattr.h~linux-2.4.20-xattr-0.8.54-chaos	2003-02-14 15:59:11.000000000 -0700
-+++ linux-chaos-2.4.20-6-braam/fs/jfs/jfs_xattr.h	2003-04-09 16:30:59.000000000 -0600
+--- linux-rh-2.4.20-8/fs/jfs/jfs_xattr.h~linux-2.4.20-xattr-0.8.54-chaos	2002-11-29 07:53:15.000000000 +0800
++++ linux-rh-2.4.20-8-root/fs/jfs/jfs_xattr.h	2003-05-07 17:34:25.000000000 +0800
 @@ -52,8 +52,10 @@ struct jfs_ea_list {
  #define	END_EALIST(ealist) \
  	((struct jfs_ea *) (((char *) (ealist)) + EALIST_SIZE(ealist)))
@@ -3960,8 +3967,8 @@
  extern ssize_t __jfs_getxattr(struct inode *, const char *, void *, size_t);
  extern ssize_t jfs_getxattr(struct dentry *, const char *, void *, size_t);
  extern ssize_t jfs_listxattr(struct dentry *, char *, size_t);
---- linux-chaos-2.4.20-6/fs/jfs/xattr.c~linux-2.4.20-xattr-0.8.54-chaos	2003-02-14 15:59:11.000000000 -0700
-+++ linux-chaos-2.4.20-6-braam/fs/jfs/xattr.c	2003-04-09 16:30:59.000000000 -0600
+--- linux-rh-2.4.20-8/fs/jfs/xattr.c~linux-2.4.20-xattr-0.8.54-chaos	2002-11-29 07:53:15.000000000 +0800
++++ linux-rh-2.4.20-8-root/fs/jfs/xattr.c	2003-05-07 17:34:25.000000000 +0800
 @@ -641,7 +641,7 @@ static int ea_put(struct inode *inode, s
  }
  
@@ -3989,8 +3996,8 @@
  		 size_t value_len, int flags)
  {
  	if (value == NULL) {	/* empty EA, do not remove */
---- /dev/null	2003-01-30 03:24:37.000000000 -0700
-+++ linux-chaos-2.4.20-6-braam/fs/mbcache.c	2003-04-09 16:30:59.000000000 -0600
+--- /dev/null	2003-01-30 18:24:37.000000000 +0800
++++ linux-rh-2.4.20-8-root/fs/mbcache.c	2003-05-07 17:34:25.000000000 +0800
 @@ -0,0 +1,648 @@
 +/*
 + * linux/fs/mbcache.c
@@ -4640,8 +4647,8 @@
 +module_init(init_mbcache)
 +module_exit(exit_mbcache)
 +
---- linux-chaos-2.4.20-6/include/asm-arm/unistd.h~linux-2.4.20-xattr-0.8.54-chaos	2003-03-12 12:51:10.000000000 -0700
-+++ linux-chaos-2.4.20-6-braam/include/asm-arm/unistd.h	2003-04-09 16:30:59.000000000 -0600
+--- linux-rh-2.4.20-8/include/asm-arm/unistd.h~linux-2.4.20-xattr-0.8.54-chaos	2003-04-11 14:04:53.000000000 +0800
++++ linux-rh-2.4.20-8-root/include/asm-arm/unistd.h	2003-05-07 17:34:25.000000000 +0800
 @@ -244,7 +244,6 @@
  #define __NR_security			(__NR_SYSCALL_BASE+223)
  #define __NR_gettid			(__NR_SYSCALL_BASE+224)
@@ -4658,8 +4665,8 @@
  #define __NR_tkill			(__NR_SYSCALL_BASE+238)
  /*
   * Please check 2.5 _before_ adding calls here,
---- linux-chaos-2.4.20-6/include/asm-ppc64/unistd.h~linux-2.4.20-xattr-0.8.54-chaos	2002-09-25 11:13:42.000000000 -0600
-+++ linux-chaos-2.4.20-6-braam/include/asm-ppc64/unistd.h	2003-04-09 16:30:59.000000000 -0600
+--- linux-rh-2.4.20-8/include/asm-ppc64/unistd.h~linux-2.4.20-xattr-0.8.54-chaos	2002-08-03 08:39:45.000000000 +0800
++++ linux-rh-2.4.20-8-root/include/asm-ppc64/unistd.h	2003-05-07 17:34:25.000000000 +0800
 @@ -218,6 +218,7 @@
  #define __NR_gettid		207
  #if 0 /* Reserved syscalls */
@@ -4676,8 +4683,8 @@
  #define __NR_futex		221
  #endif
  
---- linux-chaos-2.4.20-6/include/asm-s390/unistd.h~linux-2.4.20-xattr-0.8.54-chaos	2002-09-25 11:13:44.000000000 -0600
-+++ linux-chaos-2.4.20-6-braam/include/asm-s390/unistd.h	2003-04-09 16:30:59.000000000 -0600
+--- linux-rh-2.4.20-8/include/asm-s390/unistd.h~linux-2.4.20-xattr-0.8.54-chaos	2002-08-03 08:39:45.000000000 +0800
++++ linux-rh-2.4.20-8-root/include/asm-s390/unistd.h	2003-05-07 17:34:25.000000000 +0800
 @@ -212,9 +212,18 @@
  #define __NR_madvise            219
  #define __NR_getdents64		220
@@ -4700,8 +4707,8 @@
  #define __NR_gettid		236
  #define __NR_tkill		237
  
---- linux-chaos-2.4.20-6/include/asm-s390x/unistd.h~linux-2.4.20-xattr-0.8.54-chaos	2002-09-25 11:13:45.000000000 -0600
-+++ linux-chaos-2.4.20-6-braam/include/asm-s390x/unistd.h	2003-04-09 16:30:59.000000000 -0600
+--- linux-rh-2.4.20-8/include/asm-s390x/unistd.h~linux-2.4.20-xattr-0.8.54-chaos	2002-08-03 08:39:45.000000000 +0800
++++ linux-rh-2.4.20-8-root/include/asm-s390x/unistd.h	2003-05-07 17:34:25.000000000 +0800
 @@ -180,9 +180,18 @@
  #define __NR_pivot_root         217
  #define __NR_mincore            218
@@ -4724,8 +4731,8 @@
  #define __NR_gettid		236
  #define __NR_tkill		237
  
---- linux-chaos-2.4.20-6/include/asm-sparc/unistd.h~linux-2.4.20-xattr-0.8.54-chaos	2002-09-25 11:13:46.000000000 -0600
-+++ linux-chaos-2.4.20-6-braam/include/asm-sparc/unistd.h	2003-04-09 16:30:59.000000000 -0600
+--- linux-rh-2.4.20-8/include/asm-sparc/unistd.h~linux-2.4.20-xattr-0.8.54-chaos	2002-08-03 08:39:45.000000000 +0800
++++ linux-rh-2.4.20-8-root/include/asm-sparc/unistd.h	2003-05-07 17:34:25.000000000 +0800
 @@ -184,24 +184,24 @@
  /* #define __NR_exportfs        166    SunOS Specific                              */
  #define __NR_mount              167 /* Common                                      */
@@ -4763,8 +4770,8 @@
  #define __NR_tkill              187 /* SunOS: fpathconf                            */
  /* #define __NR_sysconf         188    SunOS Specific                              */
  #define __NR_uname              189 /* Linux Specific                              */
---- linux-chaos-2.4.20-6/include/asm-sparc64/unistd.h~linux-2.4.20-xattr-0.8.54-chaos	2002-09-25 11:13:48.000000000 -0600
-+++ linux-chaos-2.4.20-6-braam/include/asm-sparc64/unistd.h	2003-04-09 16:30:59.000000000 -0600
+--- linux-rh-2.4.20-8/include/asm-sparc64/unistd.h~linux-2.4.20-xattr-0.8.54-chaos	2002-08-03 08:39:45.000000000 +0800
++++ linux-rh-2.4.20-8-root/include/asm-sparc64/unistd.h	2003-05-07 17:34:25.000000000 +0800
 @@ -184,24 +184,24 @@
  /* #define __NR_exportfs        166    SunOS Specific                              */
  #define __NR_mount              167 /* Common                                      */
@@ -4802,8 +4809,8 @@
  #define __NR_tkill              187 /* SunOS: fpathconf                            */
  /* #define __NR_sysconf         188    SunOS Specific                              */
  #define __NR_uname              189 /* Linux Specific                              */
---- /dev/null	2003-01-30 03:24:37.000000000 -0700
-+++ linux-chaos-2.4.20-6-braam/include/linux/cache_def.h	2003-04-09 16:30:59.000000000 -0600
+--- /dev/null	2003-01-30 18:24:37.000000000 +0800
++++ linux-rh-2.4.20-8-root/include/linux/cache_def.h	2003-05-07 17:34:25.000000000 +0800
 @@ -0,0 +1,15 @@
 +/*
 + * linux/cache_def.h
@@ -4820,8 +4827,8 @@
 +
 +extern void register_cache(struct cache_definition *);
 +extern void unregister_cache(struct cache_definition *);
---- linux-chaos-2.4.20-6/include/linux/errno.h~linux-2.4.20-xattr-0.8.54-chaos	2003-03-12 12:51:27.000000000 -0700
-+++ linux-chaos-2.4.20-6-braam/include/linux/errno.h	2003-04-09 16:30:59.000000000 -0600
+--- linux-rh-2.4.20-8/include/linux/errno.h~linux-2.4.20-xattr-0.8.54-chaos	2003-04-11 14:04:53.000000000 +0800
++++ linux-rh-2.4.20-8-root/include/linux/errno.h	2003-05-07 17:34:25.000000000 +0800
 @@ -26,4 +26,8 @@
  
  #endif
@@ -4831,8 +4838,8 @@
 +#define ENOTSUP EOPNOTSUPP	/* Operation not supported */
 +
  #endif
---- linux-chaos-2.4.20-6/include/linux/ext2_fs.h~linux-2.4.20-xattr-0.8.54-chaos	2002-05-07 15:53:47.000000000 -0600
-+++ linux-chaos-2.4.20-6-braam/include/linux/ext2_fs.h	2003-04-09 16:30:59.000000000 -0600
+--- linux-rh-2.4.20-8/include/linux/ext2_fs.h~linux-2.4.20-xattr-0.8.54-chaos	2003-04-12 15:46:42.000000000 +0800
++++ linux-rh-2.4.20-8-root/include/linux/ext2_fs.h	2003-05-07 17:34:25.000000000 +0800
 @@ -57,8 +57,6 @@
   */
  #define	EXT2_BAD_INO		 1	/* Bad blocks inode */
@@ -4915,8 +4922,8 @@
  extern struct inode_operations ext2_fast_symlink_inode_operations;
  
  #endif	/* __KERNEL__ */
---- /dev/null	2003-01-30 03:24:37.000000000 -0700
-+++ linux-chaos-2.4.20-6-braam/include/linux/ext2_xattr.h	2003-04-09 16:30:59.000000000 -0600
+--- /dev/null	2003-01-30 18:24:37.000000000 +0800
++++ linux-rh-2.4.20-8-root/include/linux/ext2_xattr.h	2003-05-07 17:34:25.000000000 +0800
 @@ -0,0 +1,157 @@
 +/*
 +  File: linux/ext2_xattr.h
@@ -5075,8 +5082,8 @@
 +
 +#endif  /* __KERNEL__ */
 +
---- linux-chaos-2.4.20-6/include/linux/ext3_fs.h~linux-2.4.20-xattr-0.8.54-chaos	2003-04-09 16:26:22.000000000 -0600
-+++ linux-chaos-2.4.20-6-braam/include/linux/ext3_fs.h	2003-04-09 16:30:59.000000000 -0600
+--- linux-rh-2.4.20-8/include/linux/ext3_fs.h~linux-2.4.20-xattr-0.8.54-chaos	2003-05-07 17:33:59.000000000 +0800
++++ linux-rh-2.4.20-8-root/include/linux/ext3_fs.h	2003-05-07 17:34:25.000000000 +0800
 @@ -63,8 +63,6 @@
   */
  #define	EXT3_BAD_INO		 1	/* Bad blocks inode */
@@ -5159,8 +5166,8 @@
  extern struct inode_operations ext3_fast_symlink_inode_operations;
  
  
---- linux-chaos-2.4.20-6/include/linux/ext3_jbd.h~linux-2.4.20-xattr-0.8.54-chaos	2003-04-09 16:26:17.000000000 -0600
-+++ linux-chaos-2.4.20-6-braam/include/linux/ext3_jbd.h	2003-04-09 16:30:59.000000000 -0600
+--- linux-rh-2.4.20-8/include/linux/ext3_jbd.h~linux-2.4.20-xattr-0.8.54-chaos	2003-05-07 17:33:59.000000000 +0800
++++ linux-rh-2.4.20-8-root/include/linux/ext3_jbd.h	2003-05-07 17:34:25.000000000 +0800
 @@ -30,13 +30,19 @@
  
  #define EXT3_SINGLEDATA_TRANS_BLOCKS	8U
@@ -5182,8 +5189,8 @@
  
  extern int ext3_writepage_trans_blocks(struct inode *inode);
  
---- /dev/null	2003-01-30 03:24:37.000000000 -0700
-+++ linux-chaos-2.4.20-6-braam/include/linux/ext3_xattr.h	2003-04-09 16:30:59.000000000 -0600
+--- /dev/null	2003-01-30 18:24:37.000000000 +0800
++++ linux-rh-2.4.20-8-root/include/linux/ext3_xattr.h	2003-05-07 17:34:25.000000000 +0800
 @@ -0,0 +1,157 @@
 +/*
 +  File: linux/ext3_xattr.h
@@ -5342,9 +5349,9 @@
 +
 +#endif  /* __KERNEL__ */
 +
---- linux-chaos-2.4.20-6/include/linux/fs.h~linux-2.4.20-xattr-0.8.54-chaos	2003-04-09 16:10:59.000000000 -0600
-+++ linux-chaos-2.4.20-6-braam/include/linux/fs.h	2003-04-09 16:30:59.000000000 -0600
-@@ -918,7 +918,7 @@ struct inode_operations {
+--- linux-rh-2.4.20-8/include/linux/fs.h~linux-2.4.20-xattr-0.8.54-chaos	2003-05-07 17:33:58.000000000 +0800
++++ linux-rh-2.4.20-8-root/include/linux/fs.h	2003-05-07 17:34:25.000000000 +0800
+@@ -915,7 +915,7 @@ struct inode_operations {
  	int (*setattr) (struct dentry *, struct iattr *);
  	int (*setattr_raw) (struct inode *, struct iattr *);
  	int (*getattr) (struct dentry *, struct iattr *);
@@ -5353,8 +5360,8 @@
  	ssize_t (*getxattr) (struct dentry *, const char *, void *, size_t);
  	ssize_t (*listxattr) (struct dentry *, char *, size_t);
  	int (*removexattr) (struct dentry *, const char *);
---- /dev/null	2003-01-30 03:24:37.000000000 -0700
-+++ linux-chaos-2.4.20-6-braam/include/linux/mbcache.h	2003-04-09 16:30:59.000000000 -0600
+--- /dev/null	2003-01-30 18:24:37.000000000 +0800
++++ linux-rh-2.4.20-8-root/include/linux/mbcache.h	2003-05-07 17:34:25.000000000 +0800
 @@ -0,0 +1,69 @@
 +/*
 +  File: linux/mbcache.h
@@ -5425,8 +5432,8 @@
 +struct mb_cache_entry *mb_cache_entry_find_next(struct mb_cache_entry *, int,
 +						kdev_t, unsigned int);
 +#endif
---- linux-chaos-2.4.20-6/kernel/ksyms.c~linux-2.4.20-xattr-0.8.54-chaos	2003-04-09 16:10:53.000000000 -0600
-+++ linux-chaos-2.4.20-6-braam/kernel/ksyms.c	2003-04-09 16:33:03.000000000 -0600
+--- linux-rh-2.4.20-8/kernel/ksyms.c~linux-2.4.20-xattr-0.8.54-chaos	2003-05-07 17:33:58.000000000 +0800
++++ linux-rh-2.4.20-8-root/kernel/ksyms.c	2003-05-07 17:34:25.000000000 +0800
 @@ -12,6 +12,7 @@
  #define __KERNEL_SYSCALLS__
  #include <linux/config.h>
@@ -5443,17 +5450,17 @@
  
  /* internal kernel memory management */
  EXPORT_SYMBOL(_alloc_pages);
-@@ -125,6 +127,8 @@ EXPORT_SYMBOL(kmem_cache_validate);
- EXPORT_SYMBOL(kmem_cache_alloc);
+@@ -125,6 +127,8 @@ EXPORT_SYMBOL(kmem_cache_alloc);
  EXPORT_SYMBOL(kmem_cache_free);
+ EXPORT_SYMBOL(kmem_cache_validate);
  EXPORT_SYMBOL(kmem_cache_size);
 +EXPORT_SYMBOL(register_cache);
 +EXPORT_SYMBOL(unregister_cache);
  EXPORT_SYMBOL(kmalloc);
  EXPORT_SYMBOL(kfree);
  EXPORT_SYMBOL(vfree);
---- linux-chaos-2.4.20-6/mm/vmscan.c~linux-2.4.20-xattr-0.8.54-chaos	2003-04-09 16:11:02.000000000 -0600
-+++ linux-chaos-2.4.20-6-braam/mm/vmscan.c	2003-04-09 16:34:57.000000000 -0600
+--- linux-rh-2.4.20-8/mm/vmscan.c~linux-2.4.20-xattr-0.8.54-chaos	2003-05-07 17:33:58.000000000 +0800
++++ linux-rh-2.4.20-8-root/mm/vmscan.c	2003-05-07 17:34:25.000000000 +0800
 @@ -21,6 +21,7 @@
  #include <linux/kernel_stat.h>
  #include <linux/swap.h>
@@ -5511,5 +5518,21 @@
  #ifdef CONFIG_QUOTA
  	ret += shrink_dqcache_memory(DEF_PRIORITY, gfp_mask);
  #endif
+--- /dev/null	2003-01-30 18:24:37.000000000 +0800
++++ linux-root/fs/ext3/ext3-exports.c	2003-05-05 18:19:11.000000000 +0800
+@@ -0,0 +1,13 @@
++#include <linux/config.h>
++#include <linux/module.h>
++#include <linux/ext3_fs.h>
++#include <linux/ext3_jbd.h>
++#include <linux/ext3_xattr.h>
++
++EXPORT_SYMBOL(ext3_force_commit);
++EXPORT_SYMBOL(ext3_bread);
++EXPORT_SYMBOL(ext3_xattr_register);
++EXPORT_SYMBOL(ext3_xattr_unregister);
++EXPORT_SYMBOL(ext3_xattr_get);
++EXPORT_SYMBOL(ext3_xattr_list);
++EXPORT_SYMBOL(ext3_xattr_set);
 
 _

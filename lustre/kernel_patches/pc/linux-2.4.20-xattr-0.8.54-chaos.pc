@@ -5,7 +5,6 @@ arch/arm/defconfig
 arch/arm/kernel/calls.S
 arch/i386/defconfig
 arch/ia64/defconfig
-arch/ia64/kernel/entry.S
 arch/m68k/defconfig
 arch/mips/defconfig
 arch/mips64/defconfig
@@ -44,7 +43,6 @@ fs/jfs/jfs_xattr.h
 fs/jfs/xattr.c
 fs/mbcache.c
 include/asm-arm/unistd.h
-include/asm-ia64/unistd.h
 include/asm-ppc64/unistd.h
 include/asm-s390/unistd.h
 include/asm-s390x/unistd.h
@@ -61,3 +59,4 @@ include/linux/fs.h
 include/linux/mbcache.h
 kernel/ksyms.c
 mm/vmscan.c
+fs/ext3/ext3-exports.c

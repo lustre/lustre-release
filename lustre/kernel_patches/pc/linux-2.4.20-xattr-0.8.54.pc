@@ -61,3 +61,4 @@ include/linux/fs.h
 include/linux/mbcache.h
 kernel/ksyms.c
 mm/vmscan.c
+fs/ext3/ext3-exports.c
