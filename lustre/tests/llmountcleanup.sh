@@ -28,6 +28,7 @@ rmmod obdecho
 rmmod mds
 rmmod osc
 rmmod ost
+rmmod obdfilter
 rmmod obdext2
 rmmod ldlm
 rmmod ptlrpc
