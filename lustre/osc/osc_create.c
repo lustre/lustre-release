@@ -187,7 +187,7 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
 	    oa->o_flags == OBD_FL_DELORPHAN) {
                 /* delete from next_id on up */
                 oa->o_valid |= OBD_MD_FLID;
-                oa->o_id = oscc->oscc_next_id;
+                oa->o_id = oscc->oscc_next_id + oscc->oscc_initial_create_count;
                 if (oa->o_id == 0)
                         RETURN(0);
                 rc = osc_real_create(oscc->oscc_exp, oa, ea, NULL);
@@ -235,9 +235,9 @@ void oscc_init(struct lustre_handle *exph)
         init_waitqueue_head(&oed->oed_oscc.oscc_waitq);
         spin_lock_init(&oed->oed_oscc.oscc_lock);
         oed->oed_oscc.oscc_exp = exp;
-        oed->oed_oscc.oscc_kick_barrier = 1000;
-        oed->oed_oscc.oscc_grow_count = 2000;
-        oed->oed_oscc.oscc_initial_create_count = 2000;
+        oed->oed_oscc.oscc_kick_barrier = 5000;
+        oed->oed_oscc.oscc_grow_count = 10000;
+        oed->oed_oscc.oscc_initial_create_count = 10000;
 
         oed->oed_oscc.oscc_next_id = 2;
         oed->oed_oscc.oscc_last_id = 1;

@@ -1052,6 +1052,7 @@ int lib_parse(nal_cb_t * nal, ptl_hdr_t * hdr, void *private)
                        ": simulated failure\n",
                        nal->ni.nid, hdr_type_string (hdr), 
                        hdr->src_nid);
+                lib_recv (nal, private, NULL, NULL, 0, 0, PTL_HDR_LENGTH (hdr));
                 return (-1);
         }
         
