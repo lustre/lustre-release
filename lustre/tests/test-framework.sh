@@ -58,7 +58,7 @@ replay_barrier() {
 }
 
 mds_evict_client() {
-    UUID= `cat /proc/fs/lustre/mdc/*_MNT_*/uuid`
+    UUID=`cat /proc/fs/lustre/mdc/*_MNT_*/uuid`
     do_facet mds "echo $UUID > /proc/fs/lustre/mds/mds1/evict_client"
 }
 
