@@ -162,6 +162,7 @@ static struct dentry *ll_lookup2(struct inode * dir, struct dentry *dentry,
              it->it_disposition && it->it_status)
                 GOTO(negative, NULL);
 
+        request = (struct ptlrpc_request *)it->it_data;
         if (!it->it_disposition) {
                 struct ll_inode_info *lli = ll_i2info(dir);
                 memcpy(&lli->lli_intent_lock_handle, &lockh, sizeof(lockh));
@@ -178,11 +179,10 @@ static struct dentry *ll_lookup2(struct inode * dir, struct dentry *dentry,
                 offset = 0;
         } else if (it->it_op == IT_UNLINK) { 
                 struct obdo *obdo;
-                request = (struct ptlrpc_request *)it->it_data;
                 obdo = lustre_msg_buf(request->rq_repmsg, 1);
                 inode = new_inode(dir->i_sb);
-                ll_i2info(inode)->lli_obdo = obdo_alloc();
 
+                ll_i2info(inode)->lli_obdo = obdo_alloc();
                 /* XXX fix mem allocation error */
                 memcpy(ll_i2info(inode)->lli_obdo, obdo, sizeof(*obdo));
 
@@ -203,7 +203,6 @@ static struct dentry *ll_lookup2(struct inode * dir, struct dentry *dentry,
                 struct mds_body *body;
 
                 offset = 1;
-                request = (struct ptlrpc_request *)it->it_data;
                 body = lustre_msg_buf(request->rq_repmsg, 1);
                 type = body->mode;
                 ino = body->fid1.id;

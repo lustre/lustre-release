@@ -62,7 +62,7 @@ int ldlm_cli_enqueue(struct ptlrpc_client *cl, struct ptlrpc_connection *conn, s
                        sizeof(body->lock_desc.l_extent));
         body->lock_flags = *flags;
 
-        ldlm_lock2handle(lock, &body->lock_handle1);
+        memcpy(&body->lock_handle1, lockh, sizeof(*lockh));
         if (parent_lock_handle)
                 memcpy(&body->lock_handle2, parent_lock_handle,
                        sizeof(body->lock_handle2));
@@ -83,7 +83,8 @@ int ldlm_cli_enqueue(struct ptlrpc_client *cl, struct ptlrpc_connection *conn, s
         if (rc != ELDLM_OK) {
                 LDLM_DEBUG(lock, "client-side enqueue END (%s)",
                            rc == ELDLM_LOCK_ABORTED ? "ABORTED" : "FAILED");
-                ldlm_lock_put(lock);
+                ldlm_lock_decref(lockh, mode);
+                ldlm_lock_destroy(lock);
                 GOTO(out, rc);
         }
 

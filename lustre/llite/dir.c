@@ -20,10 +20,10 @@
  *
  *  All code that works with directory layout had been switched to pagecache
  *  and moved here. AV
- *   
+ *
  *  Adapted for Lustre Light
  *  Copyright (C) 2002, Cluster File Systems, Inc.
- * 
+ *
  */
 
 #include <linux/fs.h>
@@ -62,35 +62,36 @@ static int ll_dir_readpage(struct file *file, struct page *page)
         char *buf;
         __u64 offset;
         int rc = 0;
-        struct ptlrpc_request *request = NULL;
-        struct lustre_handle lockh; 
-        struct lookup_intent it = {IT_READDIR }; 
+        struct ptlrpc_request *request;
+        struct lustre_handle lockh;
+        struct lookup_intent it = {IT_READDIR};
 
         ENTRY;
 
         if ((inode->i_size + PAGE_CACHE_SIZE - 1) >> PAGE_SHIFT <= page->index){
                 memset(kmap(page), 0, PAGE_CACHE_SIZE);
                 kunmap(page);
-                EXIT;
-                goto readpage_out;
+                GOTO(readpage_out, rc);
         }
 
         rc = ll_lock(inode, NULL, &it, &lockh);
+        request = (struct ptlrpc_request *)it.it_data;
+        ptlrpc_free_req(request);
         if (rc != ELDLM_OK)
                 CERROR("lock enqueue: err: %d\n", rc);
         ldlm_lock_dump((void *)(unsigned long)lockh.addr);
 
+
         if (Page_Uptodate(page)) {
                 CERROR("Explain this please?\n");
-                EXIT;
-                goto readpage_out;
+                GOTO(readpage_out, rc);
         }
 
-        offset = page->index << PAGE_SHIFT; 
+        offset = page->index << PAGE_SHIFT;
         buf = kmap(page);
         rc = mdc_readpage(&sbi->ll_mdc_conn, inode->i_ino,
                           S_IFDIR, offset, buf, &request);
-        kunmap(page); 
+        kunmap(page);
         ptlrpc_free_req(request);
         EXIT;
 
@@ -144,7 +145,7 @@ static inline unsigned long dir_pages(struct inode *inode)
         return (inode->i_size+PAGE_CACHE_SIZE-1)>>PAGE_CACHE_SHIFT;
 }
 
-extern void set_page_clean(struct page *page); 
+extern void set_page_clean(struct page *page);
 
 static int ext2_commit_chunk(struct page *page, unsigned from, unsigned to)
 {
@@ -178,8 +179,8 @@ static void ext2_check_page(struct page *page)
         if ((dir->i_size >> PAGE_CACHE_SHIFT) == page->index) {
                 limit = dir->i_size & ~PAGE_CACHE_MASK;
                 if (limit & (chunk_size - 1)) {
-                        CERROR("limit %d dir size %lld index %ld\n", 
-                                        limit, dir->i_size, page->index); 
+                        CERROR("limit %d dir size %lld index %ld\n",
+                                        limit, dir->i_size, page->index);
                         goto Ebadsize;
                 }
                 for (offs = limit; offs<PAGE_CACHE_SIZE; offs += chunk_size) {
@@ -297,7 +298,7 @@ static inline ext2_dirent *ext2_next_entry(ext2_dirent *p)
         return (ext2_dirent *)((char*)p + le16_to_cpu(p->rec_len));
 }
 
-static inline unsigned 
+static inline unsigned
 ext2_validate_entry(char *base, unsigned offset, unsigned mask)
 {
         ext2_dirent *de = (ext2_dirent*)(base + offset);
@@ -319,16 +320,16 @@ static unsigned char ext2_filetype_table[EXT2_FT_MAX] = {
 };
 
 static unsigned int ll_dt2fmt[DT_WHT + 1] = {
-        [EXT2_FT_UNKNOWN]       0, 
+        [EXT2_FT_UNKNOWN]       0,
         [EXT2_FT_REG_FILE]      S_IFREG,
         [EXT2_FT_DIR]           S_IFDIR,
         [EXT2_FT_CHRDEV]        S_IFCHR,
-        [EXT2_FT_BLKDEV]        S_IFBLK, 
+        [EXT2_FT_BLKDEV]        S_IFBLK,
         [EXT2_FT_FIFO]          S_IFIFO,
         [EXT2_FT_SOCK]          S_IFSOCK,
         [EXT2_FT_SYMLINK]       S_IFLNK
 };
-        
+
 #define S_SHIFT 12
 static unsigned char ext2_type_by_mode[S_IFMT >> S_SHIFT] = {
         [S_IFREG >> S_SHIFT]    EXT2_FT_REG_FILE,
@@ -474,7 +475,7 @@ ino_t ll_inode_by_name(struct inode * dir, struct dentry *dentry, int *type)
         ino_t res = 0;
         struct ext2_dir_entry_2 * de;
         struct page *page;
-        
+
         de = ext2_find_entry (dir, dentry, &page);
         if (de) {
                 res = le32_to_cpu(de->inode);
@@ -636,7 +637,7 @@ int ext2_make_empty(struct inode *inode, struct inode *parent)
         if (!page)
                 return -ENOMEM;
         base = kmap(page);
-        if (!base) 
+        if (!base)
                 return -ENOMEM;
 
         err = mapping->a_ops->prepare_write(NULL, page, 0, chunk_size);
@@ -673,7 +674,7 @@ int ext2_empty_dir (struct inode * inode)
 {
         struct page *page = NULL;
         unsigned long i, npages = dir_pages(inode);
-        
+
         for (i = 0; i < npages; i++) {
                 char *kaddr;
                 ext2_dirent * de;

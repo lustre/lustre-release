@@ -93,6 +93,8 @@ void ldlm_lock_put(struct ldlm_lock *lock)
         if (lock->l_refc == 0 && (lock->l_flags & LDLM_FL_DESTROYED)) {
                 if (lock->l_connection)
                         ptlrpc_put_connection(lock->l_connection);
+                CDEBUG(D_MALLOC, "kfreed 'lock': %d at %p (tot 1).\n",
+                       sizeof(*lock), lock);
                 kmem_cache_free(ldlm_lock_slab, lock);
         }
         l_unlock(nslock);
@@ -149,6 +151,8 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_lock *parent,
         lock = kmem_cache_alloc(ldlm_lock_slab, SLAB_KERNEL);
         if (lock == NULL)
                 RETURN(NULL);
+        CDEBUG(D_MALLOC, "kmalloced 'lock': %d at "
+               "%p (tot %d).\n", sizeof(*lock), lock, 1);
 
         memset(lock, 0, sizeof(*lock));
         get_random_bytes(&lock->l_random, sizeof(__u64));
@@ -409,21 +413,22 @@ static void ldlm_add_ast_work_item(struct ldlm_lock *lock,
         struct ldlm_ast_work *w;
         ENTRY;
 
+        l_lock(&lock->l_resource->lr_namespace->ns_lock);
+        if (new && (lock->l_flags & LDLM_FL_AST_SENT))
+                GOTO(out, 0);
+
         OBD_ALLOC(w, sizeof(*w));
         if (!w) {
                 LBUG();
                 return;
         }
 
-        l_lock(&lock->l_resource->lr_namespace->ns_lock);
         if (new) {
-                if (lock->l_flags & LDLM_FL_AST_SENT)
-                        GOTO(out, 0);
-
                 lock->l_flags |= LDLM_FL_AST_SENT;
                 w->w_blocking = 1;
                 ldlm_lock2desc(new, &w->w_desc);
         }
+
         w->w_lock = ldlm_lock_get(lock);
         list_add(&w->w_list, lock->l_resource->lr_tmp);
  out:
@@ -433,11 +438,11 @@ static void ldlm_add_ast_work_item(struct ldlm_lock *lock,
 
 void ldlm_lock_addref(struct lustre_handle *lockh, __u32 mode)
 {
-                struct ldlm_lock *lock;
+        struct ldlm_lock *lock;
 
-                lock = ldlm_handle2lock(lockh);
-                ldlm_lock_addref_internal(lock, mode);
-                ldlm_lock_put(lock);
+        lock = ldlm_handle2lock(lockh);
+        ldlm_lock_addref_internal(lock, mode);
+        ldlm_lock_put(lock);
 }
 
 /* only called for local locks */
