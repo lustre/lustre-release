@@ -26,13 +26,14 @@ struct ec_export_data { /* echo client */
 };
 
 struct obd_export {
-        __u64                     exp_cookie;
+        struct portals_handle     exp_handle;
+        atomic_t                  exp_refcount;
         struct obd_uuid           exp_client_uuid;
         struct list_head          exp_obd_chain;
-        struct list_head          exp_conn_chain;
         struct obd_device        *exp_obd;
         struct ptlrpc_connection *exp_connection;
         struct ldlm_export_data   exp_ldlm_data;
+        struct ptlrpc_request    *exp_outstanding_reply;
         union {
                 struct mds_export_data    eu_mds_data;
                 struct filter_export_data eu_filter_data;
