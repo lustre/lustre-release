@@ -123,8 +123,10 @@ void recovd_conn_fail(struct ptlrpc_connection *conn)
                 EXIT;
                 return;
         }
-                
+
         CERROR("connection %p to %s failed\n", conn, conn->c_remote_uuid);
+        CERROR("peer is %08x %08lx %08lx\n", conn->c_peer->peer_nid,
+               conn->c_peer->peer_ni.nal_idx, conn->c_peer->peer_ni.handle_idx);
         list_del(&rd->rd_managed_chain);
         list_add_tail(&rd->rd_managed_chain, &recovd->recovd_troubled_items);
         if (rd->rd_phase != RD_IDLE) {
@@ -215,12 +217,12 @@ static int recovd_handle_event(struct recovd_obd *recovd)
                 cb_failed: /* must always reach here with recovd_lock held! */
                         CERROR("recovery FAILED for rd %p (conn %p): %d\n",
                                rd, class_rd2conn(rd), rc);
-                        
+
                         spin_unlock(&recovd->recovd_lock);
                         (void)rd->rd_recover(rd, PTLRPC_RECOVD_PHASE_FAILURE);
                         spin_lock(&recovd->recovd_lock);
                         break;
-                        
+
                     case RD_TROUBLED:
                         if (!rd->rd_recover) {
                                 CERROR("no rd_recover for rd %p (conn %p)\n",
@@ -232,38 +234,38 @@ static int recovd_handle_event(struct recovd_obd *recovd)
                                rd, class_rd2conn(rd));
                         rd->rd_phase = RD_PREPARING;
                         rd->rd_next_phase = RD_PREPARED;
-                        
+
                         spin_unlock(&recovd->recovd_lock);
                         rc = rd->rd_recover(rd, PTLRPC_RECOVD_PHASE_PREPARE);
                         spin_lock(&recovd->recovd_lock);
                         if (rc)
                                 goto cb_failed;
-                        
+
                         break;
-                        
+
                     case RD_PREPARED:
-                        
+
                         CERROR("recovery prepared for rd %p (conn %p)\n",
                                rd, class_rd2conn(rd));
                         rd->rd_phase = RD_RECOVERING;
                         rd->rd_next_phase = RD_RECOVERED;
-                        
+
                         spin_unlock(&recovd->recovd_lock);
                         rc = rd->rd_recover(rd, PTLRPC_RECOVD_PHASE_RECOVER);
                         spin_lock(&recovd->recovd_lock);
                         if (rc)
                                 goto cb_failed;
-                        
+
                         break;
-                        
+
                     case RD_RECOVERED:
                         rd->rd_phase = RD_IDLE;
                         rd->rd_next_phase = RD_TROUBLED;
-                        
+
                         CERROR("recovery complete for rd %p (conn %p)\n",
                                rd, class_rd2conn(rd));
                         break;
-                        
+
                     default:
                         break;
                 }

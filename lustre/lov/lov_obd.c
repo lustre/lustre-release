@@ -54,6 +54,7 @@ static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
         struct lustre_handle mdc_conn;
         obd_uuid_t *uuidarray;
         int rc, rc2, i;
+        ENTRY;
 
         MOD_INC_USE_COUNT;
         rc = class_connect(conn, obd, cluuid);
@@ -178,7 +179,7 @@ static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
 
  out:
         ptlrpc_req_finished(req);
-        return rc;
+        RETURN(rc);
 
  out_disc:
         while (i-- > 0) {
