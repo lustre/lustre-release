@@ -33,7 +33,7 @@ static void d_c_l(struct list_head *head)
                 CDEBUG(D_HA, "   %p = %s (%d/%d)\n", conn, conn->c_remote_uuid,
                        conn->c_recovd_data.rd_phase,
                        conn->c_recovd_data.rd_next_phase);
-                if (sanity++ > 50)
+                if (sanity++ > 1000)
                         LBUG();
         }
 }
