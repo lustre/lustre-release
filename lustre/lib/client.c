@@ -123,6 +123,7 @@ int client_obd_connect(struct lustre_handle *conn, struct obd_device *obd,
         char *tmp[] = {cli->cl_target_uuid, obd->obd_uuid};
         int rq_opc = (obd->obd_type->typ_ops->o_brw) ? OST_CONNECT :MDS_CONNECT;
         struct ptlrpc_connection *c;
+        struct obd_import *imp = &cli->cl_import;
 
         ENTRY;
         down(&cli->cl_sem);
@@ -140,6 +141,12 @@ int client_obd_connect(struct lustre_handle *conn, struct obd_device *obd,
                                                 LDLM_NAMESPACE_CLIENT);
         if (obd->obd_namespace == NULL)
                 GOTO(out_disco, rc = -ENOMEM);
+
+        INIT_LIST_HEAD(&imp->imp_request_list);
+        spin_lock_init(&imp->imp_lock);
+        imp->imp_last_xid = 0;
+        imp->imp_peer_last_xid = 0;
+        imp->imp_peer_committed_xid = 0;
 
         request = ptlrpc_prep_req(&cli->cl_import, rq_opc, 2, size, tmp);
         if (!request)
@@ -159,11 +166,11 @@ int client_obd_connect(struct lustre_handle *conn, struct obd_device *obd,
                 GOTO(out_req, rc);
 
         if (rq_opc == MDS_CONNECT)
-                cli->cl_import.imp_flags |= IMP_REPLAYABLE;
-        list_add(&cli->cl_import.imp_chain, &c->c_imports);
+                imp->imp_flags |= IMP_REPLAYABLE;
+        list_add(&imp->imp_chain, &c->c_imports);
         c->c_level = LUSTRE_CONN_FULL;
-        cli->cl_import.imp_handle.addr = request->rq_repmsg->addr;
-        cli->cl_import.imp_handle.cookie = request->rq_repmsg->cookie;
+        imp->imp_handle.addr = request->rq_repmsg->addr;
+        imp->imp_handle.cookie = request->rq_repmsg->cookie;
 
         EXIT;
 out_req:
