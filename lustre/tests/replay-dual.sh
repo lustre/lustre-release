@@ -2,11 +2,6 @@
 
 set -e
 
-# attempt to print a useful error location, but the ERR trap isn't
-# exported to functions, and the $LINENO doesn't work in EXIT.
-
-trap 'echo ERROR $0:$FUNCNAME:$LINENO: rc: $?' ERR EXIT
-
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 LTESTDIR=${LTESTDIR:-$LUSTRE/../ltest}
 PATH=$PATH:$LUSTRE/utils:$LUSTRE/tests
@@ -76,7 +71,7 @@ gen_config() {
     do_lmc --add mds --node mds_facet --mds mds1 --dev $MDSDEV --size $MDSSIZE
     do_lmc --add ost --node ost_facet --ost ost1 --dev $OSTDEV --size $OSTSIZE
     do_lmc --add mtpt --node client1_facet --path $MOUNT1 --mds mds1 --ost ost1
-    do_lmc --add mtpt --node client1_facet --path $MOUNT2 --mds mds1 --ost ost1
+    do_lmc --add mtpt --node client2_facet --path $MOUNT2 --mds mds1 --ost ost1
 }
 error() {
     echo '**** FAIL:' $@
@@ -132,15 +127,19 @@ run_test() {
 }
 
 EQUALS="======================================================================"
+equals_msg() {
+   msg="$@"
+
+   local suffixlen=$((65 - ${#msg}))
+   printf '===== %s %.*s\n' "$msg" $suffixlen $EQUALS
+}
 
 run_one() {
     testnum=$1
     message=$2
     
     # Pretty tests run faster.
-    echo -n '=====' $testnum: $message
-	local suffixlen=`echo -n $2 | awk '{print 65 - length($0)}'`
-    printf ' %.*s\n' $suffixlen $EQUALS
+    equals_msg $testnum: $message
 
     test_${testnum} || error "test_$testnum failed with $?"
 }
@@ -154,15 +153,17 @@ start client1
 start client2
 
 test_1() {
-    touch $MOUNT1/lustre-works
+    touch $MOUNT1/a
     replay_barrier mds
-    touch $MOUNT2/lustre-does-not-work
+    touch $MOUNT2/b
 
     fail mds
-    if [ -e $MOUNT1/lustre-does-not-work ]; then
-        echo "$MOUNT1/lustre-does-not-work exists"
-        exit 1
-    fi
+    checkstat $MOUNT2/a || return 1
+    checkstat $MOUNT1/b || return 2
+    rm $MOUNT2/a $MOUNT1/b
+    checkstat $MOUNT1/a && return 3
+    checkstat $MOUNT2/b && return 4
+    return 0
 }
 
 run_test 1 "|X| simple create"
@@ -170,28 +171,53 @@ run_test 1 "|X| simple create"
 
 test_2() {
     replay_barrier mds
-    mkdir $MOUNT1/1
+    mkdir $MOUNT1/adir
 
     fail mds
-    ls $MOUNT2/1 
+    checkstat $MOUNT2/adir || return 1
+    rmdir $MOUNT2/adir
+    checkstat $MOUNT2/adir && return 2
+    return 0
 }
 
-run_test 2 "|X| mkdir "
-
+run_test 2 "|X| mkdir adir"
 
 test_3() {
     replay_barrier mds
-    mkdir $MOUNT1/1
-    mkdir $MOUNT2/1/2
+    mkdir $MOUNT1/adir
+    mkdir $MOUNT2/adir/bdir
 
     fail mds
-    ls $MOUNT2/1
-    ls $MOUNT1/1/2 
+    checkstat $MOUNT2/adir      || return 1
+    checkstat $MOUNT1/adir/bdir || return 2
+    rmdir $MOUNT2/adir/bdir $MOUNT1/adir
+    checkstat $MOUNT1/adir      && return 3
+    checkstat $MOUNT2/adir/bdir && return 4
+    return 0
 }
 
-run_test 3 "|X| mkdir 1, mkdir 1/2 "
+run_test 3 "|X| mkdir adir, mkdir adir/bdir "
 
-stop client2
+test_4() {
+    mkdir $MOUNT1/adir
+    replay_barrier mds
+    mkdir $MOUNT1/adir  && return 1
+    mkdir $MOUNT2/adir/bdir
+
+    fail mds
+    checkstat $MOUNT2/adir      || return 2
+    checkstat $MOUNT1/adir/bdir || return 3
+
+    rmdir $MOUNT2/adir/bdir $MOUNT1/adir
+    checkstat $MOUNT1/adir      && return 4
+    checkstat $MOUNT2/adir/bdir && return 5
+    return 0
+}
+
+run_test 4 "|X| mkdir adir (-EEXIST), mkdir adir/bdir "
+
+equals_msg test complete, cleaning up
+stop client2 --nomod
 stop client1
 stop ost
 stop mds
