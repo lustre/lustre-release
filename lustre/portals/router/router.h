@@ -67,6 +67,14 @@ typedef struct
         ptl_nid_t               kpre_hi_nid;
 } kpr_route_entry_t;
 
+typedef struct
+{
+        struct tq_struct        kpru_tq;
+        int                     kpru_nal_id;
+        ptl_nid_t               kpru_nid;
+        int                     kpru_alive;
+} kpr_upcall_t;
+
 extern int kpr_register_nal (kpr_nal_interface_t *nalif, void **argp);
 extern int kpr_lookup_target (void *arg, ptl_nid_t target_nid, int nob, 
                               ptl_nid_t *gateway_nidp);
