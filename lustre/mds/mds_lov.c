@@ -340,10 +340,6 @@ int mds_lov_set_nextid(struct obd_device *obd)
         if (rc < 0)
                 GOTO(out, rc);
 
-        rc = mds_lov_set_growth(mds, 100);
-        if (rc < 0)
-                GOTO(out, rc);
-
         // XXX CONFIG warning remove me when configuration is better
         mds->mds_lov_nextid_set = 1;
 out:
