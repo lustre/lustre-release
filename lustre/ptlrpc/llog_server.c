@@ -337,12 +337,11 @@ static int llog_catinfo_config(struct obd_device *obd, char *buf, int buf_len,
                                 uncanceled++;
                 }
 
-                l = snprintf(out, remains, "[Log Name]: %s\nLog Size: "LPD64"\n"
+                l = snprintf(out, remains, "[Log Name]: %s\nLog Size: %llu\n"
                              "Last Index: %d\nUncanceled Records: %d\n\n",
                              name[i],
                              handle->lgh_file->f_dentry->d_inode->i_size,
-                             handle->lgh_last_idx,
-                             uncanceled);
+                             handle->lgh_last_idx, uncanceled);
                 out += l;
                 remains -= l;
 
@@ -399,7 +398,7 @@ static int llog_catinfo_cb(struct llog_handle *cat,
         }
 
         l = snprintf(out, remains, "\t[Log ID]: #"LPX64"#"LPX64"#%08x\n"
-                     "\tLog Size: "LPD64"\n\tLast Index: %d\n"
+                     "\tLog Size: %llu\n\tLast Index: %d\n"
                      "\tUncanceled Records: %d\n",
                      logid->lgl_oid, logid->lgl_ogr, logid->lgl_ogen,
                      handle->lgh_file->f_dentry->d_inode->i_size,
