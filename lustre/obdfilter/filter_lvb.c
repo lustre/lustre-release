@@ -38,7 +38,7 @@
 
 static int filter_lvbo_init(struct ldlm_resource *res)
 {
-        int rc;
+        int rc = 0;
         struct ost_lvb *lvb = NULL;
         struct obd_device *obd;
         struct obdo *oa = NULL;
@@ -74,7 +74,7 @@ static int filter_lvbo_init(struct ldlm_resource *res)
         oa->o_gr = 0;
         dentry = filter_oa2dentry(obd, oa);
         if (IS_ERR(dentry))
-                GOTO(out, PTR_ERR(dentry));
+                GOTO(out, rc = PTR_ERR(dentry));
 
         /* Limit the valid bits in the return data to what we actually use */
         oa->o_valid = OBD_MD_FLID;
@@ -96,8 +96,59 @@ static int filter_lvbo_init(struct ldlm_resource *res)
         return rc;
 }
 
+static int filter_lvbo_update(struct ldlm_resource *res, struct lustre_msg *m)
+{
+        int rc = 0;
+        struct ost_lvb *lvb = res->lr_lvb_data;
+        struct obd_device *obd;
+        struct obdo *oa = NULL;
+        struct dentry *dentry;
+        ENTRY;
+        
+        LASSERT(res);
+
+        /* we only want lvb's for object resources */
+        /* check for internal locks: these have name[1] != 0 */
+        if (res->lr_name.name[1])
+                RETURN(0);
+
+        down(&res->lr_lvb_sem);
+        if (!res->lr_lvb_data) {
+                CERROR("No lvb when running lvbo_update!\n");
+                GOTO(out, rc = 0);
+        }
+
+        obd = res->lr_namespace->ns_lvbp;
+        LASSERT(obd); /* not supposed to fail */
+
+        oa = obdo_alloc();
+        if (!oa)
+                GOTO(out, rc = -ENOMEM);
+        
+        oa->o_id = res->lr_name.name[0];
+        oa->o_gr = 0;
+        dentry = filter_oa2dentry(obd, oa);
+        if (IS_ERR(dentry))
+                GOTO(out, rc = PTR_ERR(dentry));
+
+        /* Limit the valid bits in the return data to what we actually use */
+        oa->o_valid = OBD_MD_FLID;
+        obdo_from_inode(oa, dentry->d_inode, FILTER_VALID_FLAGS);
+        f_dput(dentry); 
+
+        lvb->lvb_size = dentry->d_inode->i_size;
+        lvb->lvb_time = dentry->d_inode->i_mtime;
+
+ out:
+        if (oa)
+                obdo_free(oa);
+        up(&res->lr_lvb_sem);
+        return rc;
+}
+
 
 
 struct ldlm_valblock_ops filter_lvbo = {
         lvbo_init: filter_lvbo_init,
+        lvbo_update: filter_lvbo_update
 };
