@@ -212,6 +212,7 @@ static struct super_block * ll_read_super(struct super_block *sb,
 
         lic.lic_body = lustre_msg_buf(request->rq_repmsg, 0);
         lic.lic_lmm = NULL;
+        LASSERT(sbi->ll_rootino != 0);
         root = iget4(sb, sbi->ll_rootino, NULL, &lic);
 
         if (root) {
