@@ -59,7 +59,7 @@
 
 static int obd_init_magic;
 int obd_print_entry = 0;
-int obd_debug_level = D_IOCTL|D_INODE|D_SUPER|D_WARNING|D_MALLOC|D_CACHE;
+int obd_debug_level = ~D_INFO;
 long obd_memory = 0;
 struct obd_device obd_dev[MAX_OBD_DEVICES];
 struct list_head obd_types;
@@ -758,6 +758,34 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 		err = OBP(obddev, migrate)(&conn, &mvdata->dst, &mvdata->src, 
 					   mvdata->src.o_size, 0);
 
+		return err;
+	}
+	case OBD_IOC_PUNCH: {
+		struct oic_rw_s *rw_s = tmp_buf;  /* read, write ioctl str */
+
+		err = copy_from_user(rw_s, (int *)arg, sizeof(*rw_s));
+		if ( err ) {
+			EXIT;
+			return err;
+		}
+
+		conn.oc_id = rw_s->conn_id;
+
+		if ( !OBT(obddev) || !OBP(obddev, punch) ) {
+			err = -EOPNOTSUPP;
+			return err;
+		}
+
+		CDEBUG(D_INFO, "PUNCH: conn %d, count %Ld, offset %Ld\n",
+		       rw_s->conn_id, rw_s->count, rw_s->offset);
+		err = OBP(obddev, punch)(&conn, &rw_s->obdo, rw_s->count,
+					 rw_s->offset);
+		ODEBUG(&rw_s->obdo);
+		if ( err ) {
+			EXIT;
+			return err;
+		}
+		EXIT;
 		return err;
 	}
 

@@ -12,6 +12,9 @@
 /* global variables */
 extern int obd_debug_level;
 extern int obd_print_entry;
+extern int obd_inodes;
+extern int obd_pages;
+extern long obd_memory;
 
 #define EXT2_OBD_DEBUG
 
@@ -19,19 +22,20 @@ extern int obd_print_entry;
 #define CMD(cmd) (( cmd == READ ) ? "read" : "write")
 
 /* debugging masks */
-#define D_PSDEV       1 /* debug information from psdev.c */
-#define D_INODE       2
-#define D_SUPER       4
-#define D_SNAP        8
-#define D_UNUSED     16
-#define D_WARNING    32 /* misc warnings */
-#define D_EXT2       64 /* anything from ext2_debug */
-#define D_MALLOC    128 /* print malloc, free information */
-#define D_CACHE     256 /* cache-related items */
-#define D_INFO      512 /* general information, especially from interface.c */
-#define D_IOCTL    1024 /* ioctl related information */
-#define D_BLOCKS   2048 /* ext2 block allocation */
-#define D_RPC      4096 /* rpc communications */
+#define D_PSDEV   0x001	/* debug information from psdev.c */
+#define D_INODE   0x002
+#define D_SUPER   0x004
+#define D_SNAP    0x008
+#define D_UNUSED4 0x010
+#define D_WARNING 0x020	/* misc warnings */
+#define D_EXT2    0x040	/* anything from ext2_debug */
+#define D_MALLOC  0x080	/* print malloc, free information */
+#define D_CACHE   0x100	/* cache-related items */
+#define D_INFO    0x200	/* general information, especially from interface.c */
+#define D_IOCTL   0x400	/* ioctl related information */
+#define D_BLOCKS  0x800	/* ext2 block allocation */
+#define D_RPC    0x1000	/* rpc communications */
+#define D_PUNCH  0x2000
  
 #define CDEBUG(mask, format, a...)                                      \
 	do {                                                            \
@@ -41,12 +45,11 @@ extern int obd_print_entry;
 	} while (0)
 
 #define ENTRY if (obd_print_entry) \
-			printk(KERN_INFO "Process %d entered %s\n",\
-			       current->pid, __FUNCTION__)
+	printk(KERN_INFO "Process %d entered %s\n", current->pid, __FUNCTION__)
 
 #define EXIT if (obd_print_entry) \
-			printk(KERN_INFO "Process %d leaving %s [%d]\n",\
-			       current->pid, __FUNCTION__, __LINE__)
+	printk(KERN_INFO "Process %d leaving %s [%d]\n", current->pid,\
+	       __FUNCTION__, __LINE__)
 
 /* Inode common information printed out (used by obdfs and ext2obd inodes) */
 #define ICDEBUG(inode) { \
@@ -90,19 +93,45 @@ extern int obd_print_entry;
 }
 
 
-#define PDEBUG(page,cmd) { \
+#define PDEBUG(page,msg) { \
 	if (page){\
-		char *uptodate = (Page_Uptodate(page)) ? "yes" : "no";\
-		char *locked = (PageLocked(page)) ? "yes" : "no";\
-		int count = page->count.counter;\
+		char *uptodate = (Page_Uptodate(page)) ? "upto" : "outof";\
+		char *locked = (PageLocked(page)) ? "" : "un";\
+		char *buffer = page->buffers ? "buffer" : "";\
+		int count = page_count(page);\
 		long index = page->index;\
-		CDEBUG(D_CACHE, " ** %s, cmd: %s, off %ld, uptodate: %s, "\
-		       "locked: %s, cnt %d page %p pages %ld** \n",\
-		       __FUNCTION__, cmd, index, uptodate, locked, count, \
-		       page, (!page->mapping) ? -1 : page->mapping->nrpages);\
+		CDEBUG(D_CACHE, "%s: ** off %ld, %sdate, %slocked, flag %ld,"\
+		       " cnt %d page 0x%p pages %ld virt %lx %s**\n",\
+		       msg, index, uptodate, locked, page->flags, count,\
+		       page, page->mapping ? page->mapping->nrpages : -1,\
+		       page->virtual, buffer);\
 	} else \
-		CDEBUG(D_CACHE, "** %s, no page\n", __FUNCTION__);\
+		CDEBUG(D_CACHE, "** %s: no page\n", msg);\
 }
+
+#if 0
+#define iget(sb, ino) obd_iget(sb, ino)
+#define iput(sb, ino) obd_iput(sb, ino)
+
+static inline struct inode *obd_iget(struct super_block *sb, unsigned long ino)
+{
+	struct inode *inode;
+	
+	if ((inode = iget(sb, ino)) == NULL)
+		CDEBUG(D_INODE, "NULL in iget for %ld\n", ino);
+	else
+		obd_inodes++;
+	return inode;
+}
+
+static inline void obd_iput(struct inode *inode)
+{
+	if (inode == NULL)
+		CDEBUG(D_INODE, "NULL in iput\n");
+	else
+		obd_inodes--;
+}
+#endif
 
 #else /* EXT2_OBD_DEBUG */
 
@@ -121,32 +150,35 @@ extern int obd_print_entry;
 #define OBD_ALLOC(ptr, cast, size)					\
 do {									\
 	if (size <= 4096) {						\
-		ptr = (cast)kmalloc((unsigned long) size, GFP_KERNEL); \
-                CDEBUG(D_MALLOC, "kmalloced: %x at %x.\n",		\
+		ptr = (cast)kmalloc((unsigned long) size, GFP_KERNEL);	\
+                CDEBUG(D_MALLOC, "kmalloced: %d at %x.\n",		\
 		       (int) size, (int) ptr);				\
 	} else {							\
 		ptr = (cast)vmalloc((unsigned long) size);		\
-		CDEBUG(D_MALLOC, "vmalloced: %x at %x.\n",		\
+		CDEBUG(D_MALLOC, "vmalloced: %d at %x.\n",		\
 		       (int) size, (int) ptr);				\
 	}								\
 	if (ptr == 0) {							\
 		printk("kernel malloc returns 0 at %s:%d\n",		\
 		       __FILE__, __LINE__);				\
+	} else {							\
+		memset(ptr, 0, size);					\
+		obd_memory += size;					\
 	}								\
-	memset(ptr, 0, size);						\
 } while (0)
 
 #define OBD_FREE(ptr,size)				\
 do {							\
 	if (size <= 4096) {				\
 		kfree_s((ptr), (size));			\
-		CDEBUG(D_MALLOC, "kfreed: %x at %x.\n",	\
+		CDEBUG(D_MALLOC, "kfreed: %d at %x.\n",	\
 		       (int) size, (int) ptr);		\
 	} else {					\
 		vfree((ptr));				\
-		CDEBUG(D_MALLOC, "vfreed: %x at %x.\n",	\
+		CDEBUG(D_MALLOC, "vfreed: %d at %x.\n",	\
 		       (int) size, (int) ptr);		\
 	}						\
+	obd_memory -= size;				\
 } while (0)
 
 

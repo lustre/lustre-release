@@ -525,7 +525,7 @@ struct oic_range_s {
 #define OBD_IOC_CONNECT                _IOR ('f', 13, long)
 #define OBD_IOC_DISCONNECT             _IOW ('f', 14, long)
 #define OBD_IOC_STATFS                 _IOWR('f', 15, long)
-#define OBD_IOC_SYNC                   _IOR ('f',  16, long)
+#define OBD_IOC_SYNC                   _IOR ('f', 16, long)
 #define OBD_IOC_READ2                  _IOWR('f', 17, long)
 #define OBD_IOC_FORMAT                 _IOWR('f', 18, long)
 #define OBD_IOC_PARTITION              _IOWR('f', 19, long)
@@ -533,6 +533,7 @@ struct oic_range_s {
 #define OBD_IOC_DETACH                 _IOWR('f', 21, long)
 #define OBD_IOC_COPY                   _IOWR('f', 22, long)
 #define OBD_IOC_MIGR                   _IOWR('f', 23, long)
+#define OBD_IOC_PUNCH                  _IOWR('f', 24, long)
 
 #define OBD_IOC_DEC_FS_USE_COUNT       _IO  ('f', 32      )
 

@@ -31,6 +31,7 @@ struct obdfs_sb_info {
 	ino_t			 osi_rootino;	/* number of root inode */
 	int			 osi_minor;	/* minor of /dev/obdX */
 	struct list_head	 osi_inodes;	/* list of dirty inodes */
+	unsigned long		 osi_cache_count;
 	struct semaphore         osi_list_mutex;
 };
 
@@ -53,10 +54,11 @@ extern struct file_operations obdfs_file_operations;
 extern struct inode_operations obdfs_file_inode_operations;
 
 /* flush.c */
+void obdfs_dequeue_pages(struct inode *inode);
 int obdfs_flushd_init(void);
 int obdfs_flushd_cleanup(void);
-int obdfs_flush_reqs(struct list_head *inode_list, int check_time);
-void obdfs_flush_dirty_pages(int check_time);
+int obdfs_flush_reqs(struct list_head *inode_list, unsigned long check_time);
+int obdfs_flush_dirty_pages(unsigned long check_time);
 
 /* namei.c */
 struct dentry *obdfs_lookup(struct inode * dir, struct dentry *dentry);
@@ -88,10 +90,13 @@ int obdfs_do_vec_wr(struct inode **inodes, obd_count num_io, obd_count num_oa,
 		    struct obdo **obdos, obd_count *oa_bufs,
 		    struct page **pages, char **bufs, obd_size *counts,
 		    obd_off *offsets, obd_flag *flags);
+void obdfs_truncate(struct inode *inode);
 
 /* super.c */
+extern long obdfs_cache_count;
 
 /* symlink.c */
+extern struct inode_operations obdfs_fast_symlink_inode_operations;
 extern struct inode_operations obdfs_symlink_inode_operations;
 
 /* sysctl.c */

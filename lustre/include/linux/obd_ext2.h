@@ -78,8 +78,9 @@ int obd_remount (struct super_block * sb, int * flags, char * data);
 struct super_block * ext2_read_super (struct super_block * sb, void * data,
 				      int silent);
 
-/* truncate.c */
-void obd_truncate (struct inode * inode);
+/* punch.c */
+void ext2_truncate (struct inode * inode);
+int ext2_punch (struct inode * inode, loff_t start, size_t count);
 
 static inline struct page *addr_to_page(char *buf)
 {
