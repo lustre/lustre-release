@@ -297,7 +297,7 @@ class LCTLInterface:
         """ initialized network and add "self" """
         # Idea: "mynid" could be used for all network types to add "self," and then
         # this special case would be gone and the "self" hack would be hidden.
-        if net  == 'tcp':
+        if net  in ('tcp', 'toe'):
             cmds =  """
   network %s
   mynid %s
@@ -313,7 +313,7 @@ class LCTLInterface:
 
     # create a new connection
     def connect(self, net, nid, port, servuuid, send_mem, recv_mem):
-        if net == 'tcp':
+        if net  in ('tcp', 'toe'):
             cmds =  """
   network %s
   add_uuid %s %s
@@ -614,7 +614,7 @@ def if2addr(iface):
 def get_local_address(net_type, wildcard):
     """Return the local address for the network type."""
     local = ""
-    if net_type == 'tcp':
+    if net_type in ('tcp', 'toe'):
         if  ':' in wildcard:
             iface, star = string.split(wildcard, ':')
             local = if2addr(iface)
@@ -803,7 +803,7 @@ class Network(Module):
                 lo = get_attr(r, 'lo')
                 hi = get_attr(r,'hi', '')
                 lctl.add_route(net_type, gw, lo, hi)
-                if net_type == 'tcp' and net_type == self.net_type and hi == '':
+                if net_type in ('tcp', 'toe') and net_type == self.net_type and hi == '':
                     srv = nid2server(self.dom_node.parentNode.parentNode, lo)
                     if not srv:
                         panic("no server for nid", lo)
@@ -821,7 +821,7 @@ class Network(Module):
             for r in a.getElementsByTagName('route'):
                 lo = get_attr(r, 'lo')
                 hi = get_attr(r,'hi', '')
-                if self.net_type == 'tcp' and hi == '':
+                if self.net_type in ('tcp', 'toe') and hi == '':
                     srv = nid2server(self.dom_node.parentNode.parentNode, lo)
                     if not srv:
                         panic("no server for nid", lo)
@@ -851,7 +851,7 @@ class Network(Module):
             print "disconnectAll failed: ", self.name
             e.dump()
             cleanup_error(e.rc)
-        if self.net_type == 'tcp':
+        if self.net_type in ('tcp', 'toe'):
             # yikes, this ugly! need to save pid in /var/something
             run("killall acceptor")
 
