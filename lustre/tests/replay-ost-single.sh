@@ -137,23 +137,28 @@ kbytesfree() {
 
 test_6() {
     f=$DIR/$tfile
+    rm $f 2>/dev/null && sync && sleep 2 && sync	# wait for delete thread
+    grep [0-9] /proc/fs/lustre/osc/OSC*MNT*/kbytes*
     before=`kbytesfree`
     dd if=/dev/urandom bs=1024 count=5120 of=$f
 #define OBD_FAIL_MDS_REINT_NET_REP       0x119
     do_facet mds "sysctl -w lustre.fail_loc=0x80000119"
     sync
+    sleep 1					# ensure we have a fresh statfs
+    grep [0-9] /proc/fs/lustre/osc/OSC*MNT*/kbytes*
     after_dd=`kbytesfree`
     echo "before: $before after_dd: $after_dd"
-    (( before > after_dd )) || return 1
+    (( $before > $after_dd )) || return 1
     rm -f $f
     fail ost
     $CHECKSTAT -t file $f && return 2 || true
     sync
     # let the delete happen
     sleep 2
+    grep [0-9] /proc/fs/lustre/osc/OSC*MNT*/kbytes*
     after=`kbytesfree`
     echo "before: $before after: $after"
-    (( before == after ))  || return 3
+    (( $before <= $after + 40 )) || return 3	# take OST logs into account
 }
 run_test 6 "Fail OST before obd_destroy"
 
