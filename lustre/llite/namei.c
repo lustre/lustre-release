@@ -381,16 +381,10 @@ struct dentry *ll_find_alias(struct inode *inode, struct dentry *de)
 		struct dentry *dentry = list_entry(tmp, struct dentry, d_alias);
 
                 /* We are called here with 'de' already on the aliases list. */
-                if (dentry == de)
-                        continue;
-
-                if (!atomic_read(&dentry->d_count)) {
-                        iput(inode);
+                if (dentry == de) { 
+                        CERROR("whoops\n");
                         continue;
                 }
-
-                if (!list_empty(&dentry->d_lru))
-                        continue;
 
                 if (dentry->d_parent != de->d_parent)
                         continue;
@@ -402,8 +396,10 @@ struct dentry *ll_find_alias(struct inode *inode, struct dentry *de)
                            de->d_name.len) != 0)
                         continue;
 
-                list_del_init(&dentry->d_hash);
+                if (!list_empty(&dentry->d_lru))
+                        list_del_init(&dentry->d_lru);
 
+                list_del_init(&dentry->d_hash);
                 spin_unlock(&dcache_lock);
                 d_rehash(dentry);
 		atomic_inc(&dentry->d_count);
