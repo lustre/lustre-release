@@ -12,14 +12,14 @@ init_test_env $@
 ostfailover_HOST=${ostfailover_HOST:-$ost_HOST}
 
 # Skip these tests
-ALWAYS_EXCEPT="3"
+ALWAYS_EXCEPT=""
 
 gen_config() {
     rm -f $XMLCONFIG
     add_mds mds --dev $MDSDEV --size $MDSSIZE
     add_lov lov1 mds --stripe_sz $STRIPE_BYTES\
 	--stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0
-    add_ost ost --lov lov1 --dev $OSTDEV --size $OSTSIZE
+    add_ost ost --lov lov1 --dev $OSTDEV --size $OSTSIZE --failover
     if [ ! -z "$ostfailover_HOST" ]; then
 	 add_ostfailover ost --dev $OSTDEV --size $OSTSIZE
     fi
@@ -95,11 +95,12 @@ run_test 2 "|x| 10 open(O_CREAT)s"
 
 test_3() {
     # small blocksize, to slow things down
-    dd if=/dev/zero of=$DIR/$tfile bs=1 count=5m &
+    dd if=/dev/zero of=$DIR/$tfile bs=1024 count=$((5 * 1024)) &
     ddpid=$!
+    sync &
     fail ost
     wait $ddpid || return 1
-    $CHECKSTAT -s 5000000 $DIR/$tfile 
+    $CHECKSTAT -s $((5 * 1024 * 1024)) $DIR/$tfile 
 }
 run_test 3 "Fail  OST during IO"
 
