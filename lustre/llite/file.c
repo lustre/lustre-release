@@ -37,7 +37,7 @@ static int ll_file_open(struct inode *inode, struct file *file)
         struct ptlrpc_request *req = NULL;
         struct ll_file_data *fd;
         struct obdo *oa = NULL;
-        struct lov_stripe_md *md = NULL; 
+        struct lov_stripe_md *md = NULL;
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct ll_inode_info *lli = ll_i2info(inode);
         ENTRY;
@@ -182,16 +182,12 @@ int ll_file_size(struct inode *inode, struct lov_stripe_md *md)
                 RETURN(rc);
         }
 
-        /* FIXME: I don't like this; why doesn't osc_getattr get o_id from md
-         * like lov_getattr? --phil */
         oa.o_id = md->lmd_object_id;
         oa.o_mode = S_IFREG;
         oa.o_valid = OBD_MD_FLID|OBD_MD_FLMODE|OBD_MD_FLSIZE|OBD_MD_FLBLOCKS;
         rc = obd_getattr(&sbi->ll_osc_conn, &oa, md);
-        if (!rc) {
-                inode->i_size = oa.o_size;
-                inode->i_blocks = oa.o_blocks;
-        }
+        if (!rc)
+                obdo_to_inode(inode, &oa, oa.o_valid);
 
         err = ll_size_unlock(inode, md, LCK_PR, lockhs);
         if (err != ELDLM_OK) {
@@ -237,7 +233,8 @@ static int ll_file_release(struct inode *inode, struct file *file)
 
                 oa.o_id = lli->lli_smd->lmd_object_id;
                 oa.o_mode = S_IFREG;
-                oa.o_valid = OBD_MD_FLID | OBD_MD_FLMODE | OBD_MD_FLSIZE;
+                oa.o_valid = OBD_MD_FLID | OBD_MD_FLMODE | OBD_MD_FLSIZE |
+                        OBD_MD_FLBLOCKS;
                 rc = obd_getattr(&sbi->ll_osc_conn, &oa, lli->lli_smd);
                 if (!rc) {
                         struct iattr attr;
@@ -247,6 +244,8 @@ static int ll_file_release(struct inode *inode, struct file *file)
                         attr.ia_ctime = inode->i_ctime;
                         attr.ia_atime = inode->i_atime;
                         attr.ia_size = oa.o_size;
+
+                        inode->i_blocks = oa.o_blocks;
 
                         /* XXX: this introduces a small race that we should
                          * evaluate */
@@ -421,11 +420,14 @@ ll_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 
                 oa.o_id = md->lmd_object_id;
                 oa.o_mode = inode->i_mode;
-                oa.o_valid = OBD_MD_FLID | OBD_MD_FLMODE | OBD_MD_FLSIZE;
+                oa.o_valid = OBD_MD_FLID | OBD_MD_FLMODE | OBD_MD_FLSIZE |
+                        OBD_MD_FLBLOCKS;
                 retval = obd_getattr(&sbi->ll_osc_conn, &oa, md);
                 if (retval)
                         GOTO(out_eof, retval);
+
                 *ppos = oa.o_size;
+                obdo_to_inode(inode, &oa, oa.o_valid);
         }
 
         if (!(fd->fd_flags & LL_FILE_IGNORE_LOCK)) {
