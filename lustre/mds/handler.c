@@ -1275,11 +1275,15 @@ static int ldlm_intent_policy(struct ldlm_lock *lock, void *req_cookie,
                         LBUG();
                 }
 
-                /* XXX Why is this logical to abort lock acq 
-                   in these cases? .... PJB
-                */
-                if (it->opc & (IT_UNLINK | IT_RMDIR | 
-                               IT_LINK2 | IT_LINK | 
+                /* We don't bother returning a lock to the client for a file
+                 * or directory we are removing.
+                 *
+                 * As for link and rename, there is no reason for the client
+                 * to get a lock on the target at this point.  If they are
+                 * going to modify the file/directory later they will get a
+                 * lock at that time.
+                 */
+                if (it->opc & (IT_UNLINK | IT_RMDIR | IT_LINK | IT_LINK2 |
                                IT_RENAME | IT_RENAME2))
                         RETURN(ELDLM_LOCK_ABORTED);
 
