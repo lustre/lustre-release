@@ -48,7 +48,7 @@
  
  /*
   * define how far ahead to read directories while searching them.
-@@ -38,6 +42,433 @@
+@@ -38,6 +42,437 @@
  #define NAMEI_RA_SIZE        (NAMEI_RA_CHUNKS * NAMEI_RA_BLOCKS)
  #define NAMEI_RA_INDEX(c,b)  (((c) * NAMEI_RA_BLOCKS) + (b))
  
@@ -81,7 +81,6 @@
 +
 +#define dxtrace_on(command) command
 +#define dxtrace_off(command)
-+#define dxtrace dxtrace_off
 +
 +struct fake_dirent
 +{
@@ -247,6 +246,8 @@
 +/*
 + * Debug
 + */
++#ifdef DX_DEBUG
++#define dxtrace dxtrace_on
 +static void dx_show_index (char * label, struct dx_entry *entries)
 +{
 +	int i, n = dx_get_count (entries);
@@ -318,6 +319,9 @@
 +			names, space/bcount,(space/bcount)*100/blocksize);
 +	return (struct stats) { names, space, bcount};
 +}
++#else
++#define dxtrace dxtrace_off
++#endif
 +
 +/*
 + * Probe for a directory leaf block to search
