@@ -91,13 +91,13 @@ static void pingcli_callback(ptl_event_t *ev)
         magic = *(int *)(ev->md.start + ev->offset);
 
         if(magic != 0xcafebabe) {
-                printk ("LustreError: Unexpected response \n");
+                CERROR("Unexpected response %x\n", magic);
         }
 
         if((i == count) || !count)
                 wake_up_process (client->tsk);
         else
-                printk ("LustreError: Received response after timeout for %d\n",i);
+                CERROR("Received response after timeout for %d\n",i);
 }
 
 
@@ -232,17 +232,17 @@ pingcli_start(struct portal_ioctl_data *args)
                          pingcli_shutdown (nih, 1);
                          return NULL;
                 }
-                printk ("Lustre: sent msg no %d", count);
+                CWARN ("Lustre: sent msg no %d", count);
 
                 set_current_state (TASK_INTERRUPTIBLE);
                 rc = schedule_timeout (20 * args->ioc_timeout);
                 if (rc == 0) {
-                        printk ("LustreError:   ::  timeout .....\n");
+                        CERROR ("timeout .....\n");
                 } else {
                         do_gettimeofday (&tv2);
-                        printk("Lustre:   ::  Reply in %u usec\n",
-                                (unsigned)((tv2.tv_sec - tv1.tv_sec)
-                                 * 1000000 +  (tv2.tv_usec - tv1.tv_usec)));
+                        CWARN("Reply in %u usec\n",
+                              (unsigned)((tv2.tv_sec - tv1.tv_sec)
+                                         * 1000000 +  (tv2.tv_usec - tv1.tv_usec)));
                 }
                 count++;
         }
