@@ -145,6 +145,13 @@ struct ptldebug_header {
 # endif
 #endif
 
+#ifndef likely
+# define likely(exp) (exp)
+#endif
+#ifndef unlikely
+# define unlikely(exp) (exp)
+#endif
+
 #define LUSTRE_TRACE_SIZE (THREAD_SIZE >> 5)
 
 #ifdef __KERNEL__

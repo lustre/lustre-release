@@ -103,13 +103,13 @@ int enqueue_ordered_locks(struct obd_device *obd, struct ldlm_res_id *p1_res_id,
                           struct ldlm_res_id *p2_res_id,
                           struct lustre_handle *p2_lockh, int p2_lock_mode,
                           ldlm_policy_data_t *p2_policy);
-void mds_commit_cb(struct obd_device *, __u64 last_rcvd, void *data, int error);
+
 int mds_finish_transno(struct mds_obd *mds, struct inode *inode, void *handle,
                        struct ptlrpc_request *req, int rc, __u32 op_data);
 void mds_reconstruct_generic(struct ptlrpc_request *req);
 void mds_req_from_mcd(struct ptlrpc_request *req, struct mds_client_data *mcd);
 int mds_get_parent_child_locked(struct obd_device *obd, struct mds_obd *mds,
-                                struct ll_fid *fid,
+                                struct lustre_id *id,
                                 struct lustre_handle *parent_lockh,
                                 struct dentry **dparentp, int parent_mode,
                                 __u64 parent_lockpart, int *update_mode,
@@ -187,20 +187,59 @@ void mds_squash_root(struct mds_obd *mds, struct mds_req_sec_desc *rsd,
 int mds_handle(struct ptlrpc_request *req);
 extern struct lvfs_callback_ops mds_lvfs_ops;
 int mds_lov_clean(struct obd_device *obd);
-extern int mds_iocontrol(unsigned int cmd, struct obd_export *exp,
-                         int len, void *karg, void *uarg);
-extern int mds_lock_mode_for_dir(struct obd_device *, struct dentry *, int);
 int mds_postrecov(struct obd_device *obd);
+extern struct lvfs_callback_ops mds_lvfs_ops;
+
+extern int mds_iocontrol(unsigned int cmd,
+                         struct obd_export *exp,
+                         int len, void *karg,
+                         void *uarg);
+
+extern int mds_lock_mode_for_dir(struct obd_device *,
+                                 struct dentry *, int);
+
+int mds_fs_setup_rootid(struct obd_device *obd);
+int mds_fs_setup_virtid(struct obd_device *obd);
+
+int mds_alloc_inode_sid(struct obd_device *, struct inode *,
+                        void *, struct lustre_id *);
+
+int mds_update_inode_sid(struct obd_device *, struct inode *,
+                         void *, struct lustre_id *);
+
+int mds_read_inode_sid(struct obd_device *, struct inode *,
+                       struct lustre_id *);
+
+int mds_update_inode_mid(struct obd_device *, struct inode *,
+                         void *, struct lustre_id *);
+
+int mds_read_inode_mid(struct obd_device *, struct inode *,
+                       struct lustre_id *);
+
+void mds_commit_last_fid_cb(struct obd_device *, __u64 fid,
+                            void *data, int error);
+
+void mds_commit_last_transno_cb(struct obd_device *, __u64 transno,
+                                void *data, int error);
 
 #ifdef __KERNEL__
-int mds_get_md(struct obd_device *, struct inode *, void *md, int *size, 
-               int lock);
+int mds_get_md(struct obd_device *, struct inode *, void *md,
+               int *size, int lock);
+
 int mds_pack_md(struct obd_device *, struct lustre_msg *, int offset,
                 struct mds_body *, struct inode *, int lock);
-void mds_pack_dentry2fid(struct ll_fid *, struct dentry *);
-void mds_pack_dentry2body(struct mds_body *b, struct dentry *dentry);
-void mds_pack_inode2fid(struct obd_device *, struct ll_fid *, struct inode *);
-void mds_pack_inode2body(struct obd_device *, struct mds_body *, struct inode *);
+
+int mds_pack_inode2id(struct obd_device *, struct lustre_id *,
+                      struct inode *, int);
+
+void mds_pack_inode2body(struct obd_device *, struct mds_body *,
+                         struct inode *, int);
+
+void mds_pack_dentry2id(struct obd_device *, struct lustre_id *,
+                        struct dentry *, int);
+
+void mds_pack_dentry2body(struct obd_device *, struct mds_body *b,
+                          struct dentry *, int);
 #endif
 
 /* mds/mds_lmv.c */

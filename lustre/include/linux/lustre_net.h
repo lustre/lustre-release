@@ -708,15 +708,86 @@ void *mdc_setattr_pack(struct lustre_msg *msg, int offset,
                        struct mdc_op_data *data, struct iattr *iattr,
                        void *ea, int ealen, void *ea2, int ea2len);
 void *mdc_create_pack(struct lustre_msg *msg, int offset,
-                      struct mdc_op_data *op_data, __u32 mode, __u64 rdev,
-                      const void *data, int datalen);
+                      struct mdc_op_data *op_data, __u32 mode,
+                      __u64 rdev, const void *data, int datalen);
 void *mdc_unlink_pack(struct lustre_msg *msg, int offset,
                       struct mdc_op_data *data);
 void *mdc_link_pack(struct lustre_msg *msg, int offset,
                     struct mdc_op_data *data);
 void *mdc_rename_pack(struct lustre_msg *msg, int offset,
                       struct mdc_op_data *data,
-                      const char *old, int oldlen, const char *new, int newlen);
+                      const char *old, int oldlen,
+                      const char *new, int newlen);
+
+/* lustre id helper functions and macros. */
+static inline
+void mdc_pack_id(struct lustre_id *id, obd_id ino, 
+                 __u32 gen, int type, __u64 mds, 
+                 __u64 fid)
+{
+        LASSERT(id != NULL);
+
+        id->li_fid.lf_id = fid;
+        id->li_fid.lf_group = mds;
+        
+        id->li_stc.u.e3s.l3s_ino = ino;
+        id->li_stc.u.e3s.l3s_gen = gen;
+        id->li_stc.u.e3s.l3s_type = type;
+}
+
+#define id_ino(id)                              \
+        (id)->li_stc.u.e3s.l3s_ino
+
+#define id_gen(id)                              \
+        (id)->li_stc.u.e3s.l3s_gen
+
+#define id_type(id)                             \
+        (id)->li_stc.u.e3s.l3s_type
+
+#define id_fid(id)                              \
+        (id)->li_fid.lf_id
+
+#define id_group(id)                            \
+        (id)->li_fid.lf_group
+
+#define id_assign_fid(id1, id2)                 \
+        ((id1)->li_fid = (id2)->li_fid)
+
+#define id_assign_stc(id1, id2)                 \
+        ((id1)->li_stc = (id2)->li_stc)
+
+#define id_equal(id1, id2)                      \
+        (id_ino(id1) == id_ino(id2) &&          \
+         id_gen(id1) == id_gen(id2) &&          \
+         id_fid(id1) == id_fid(id2) &&          \
+         id_group(id1) == id_group(id2))
+
+#ifdef __KERNEL__
+static inline void
+mdc_inode2id(struct lustre_id *id, struct inode *inode)
+{
+        mdc_pack_id(id, inode->i_ino, inode->i_generation,
+                    (inode->i_mode & S_IFMT), 0, 0);
+}
+
+static inline void 
+mdc_prepare_mdc_data(struct mdc_op_data *data, struct inode *i1,
+                     struct inode *i2, const char *name, int namelen,
+                     int mode)
+{
+        LASSERT(i1);
+
+        mdc_inode2id(&data->id1, i1);
+        if (i2)
+                mdc_inode2id(&data->id2, i2);
+
+	data->valid = 0;
+        data->name = name;
+        data->namelen = namelen;
+        data->create_mode = mode;
+        data->mod_time = CURRENT_TIME;
+}
+#endif
 
 /* ldlm/ldlm_lib.c */
 int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf);

@@ -7,10 +7,8 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test: 2108 3637 3561 
-RENAME_TESTS="24a 24b 24c 24d 24e 24f 24g 24h 24i 24j 24k 24l 24m 24n 24o 42a 42c 45 48a 48b  48c 48d 51b 51c 65a 65b 65c 65d 65e 65f"
-ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"$RENAME_TESTS 58"}
-
+# bug number for skipped test: 2739
+ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"65a 65b 65c 65d 65e 65f"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 [ "$ALWAYS_EXCEPT$EXCEPT" ] && echo "Skipping tests: $ALWAYS_EXCEPT $EXCEPT"
@@ -795,7 +793,7 @@ test_27c() {
 		mkdir $DIR/d27
 	fi
 	$LSTRIPE $DIR/d27/f01 65536 0 2 || error "lstripe failed"
-	[ `$LFIND $DIR/d27/f01 | grep -A 10 obdidx | wc -l` -eq 4 ] ||
+	[ `$LFIND $DIR/d27/f01 --quiet | grep [^[:blank:]*] | wc -l` -eq 2 ] ||
 		error "two-stripe file doesn't have two stripes"
 	pass
 	log "== test_27d: write to two stripe file file f01 ================"
@@ -1662,18 +1660,17 @@ test_48d() { # bug 2350
 	#set -vx
 	mkdir -p $DIR/d48d/dir
 	cd $DIR/d48d/dir
-        $TRACE rmdir $DIR/d48d/dir || error "remove cwd $DIR/d48d/dir failed"
-        $TRACE rmdir $DIR/d48d || error "remove parent $DIR/d48d failed"
-        $TRACE touch foo && error "'touch foo' worked after removing parent"
-        $TRACE mkdir foo && error "'mkdir foo' worked after removing parent"
-        $TRACE ls . && error "'ls .' worked after removing parent"
-        $TRACE ls .. && error "'ls ..' worked after removing parent"
-        $TRACE cd . && error "'cd .' worked after recreate parent"
-        $TRACE mkdir . && error "'mkdir .' worked after removing parent"
-        $TRACE rmdir . && error "'rmdir .' worked after removing parent"
-        $TRACE ln -s . foo && error "'ln -s .' worked after removing parent"
-        $TRACE cd .. && error "'cd ..' worked after removing parent" || true
-
+	$TRACE rmdir $DIR/d48d/dir || error "remove cwd $DIR/d48d/dir failed"
+	$TRACE rmdir $DIR/d48d || error "remove parent $DIR/d48d failed"
+	$TRACE touch foo && error "'touch foo' worked after removing parent"
+	$TRACE mkdir foo && error "'mkdir foo' worked after removing parent"
+	$TRACE ls . && error "'ls .' worked after removing parent"
+	$TRACE ls .. && error "'ls ..' worked after removing parent"
+	$TRACE cd . && error "'cd .' worked after recreate parent"
+	$TRACE mkdir . && error "'mkdir .' worked after removing parent"
+	$TRACE rmdir . && error "'rmdir .' worked after removing parent"
+	$TRACE ln -s . foo && error "'ln -s .' worked after removing parent"
+	$TRACE cd .. && error "'cd ..' worked after removing parent" || true
 }
 run_test 48d "Access removed parent subdir (should return errors)"
 
@@ -1871,25 +1868,25 @@ test_56() {
         done
 
         # test lfs find with --recursive
-        FILENUM=`$LFIND --recursive $DIR/d56 | grep -c obdidx`
+        FILENUM=`$LFIND --recursive $DIR/d56 | grep -v OBDS | grep -c obdidx`
         [ $FILENUM -eq $NUMFILESx2 ] || error \
                 "lfs find --recursive $DIR/d56 wrong: found $FILENUM, expected $NUMFILESx2"
-        FILENUM=`$LFIND $DIR/d56 | grep -c obdidx`
+        FILENUM=`$LFIND $DIR/d56 | grep -v OBDS | grep -c obdidx`
         [ $FILENUM -eq $NUMFILES ] || error \
                 "lfs find $DIR/d56 without --recursive wrong: found $FILENUM,
 		expected $NUMFILES"
         echo "lfs find --recursive passed."
 
         # test lfs find with file instead of dir
-        FILENUM=`$LFIND $DIR/d56/file1 | grep -c obdidx`
+        FILENUM=`$LFIND $DIR/d56/file1 | grep -v OBDS | grep -c obdidx`
         [ $FILENUM  -eq 1 ] || error \
-                 "lfs find $DIR/d56/file1 wrong:found $FILENUM, expected 1"
+                 "lfs find $DIR/d56/file1 wrong: found $FILENUM, expected 1"
         echo "lfs find file passed."
 
         #test lfs find with --verbose
-        [ `$LFIND --verbose $DIR/d56 | grep -c lmm_magic` -eq $NUMFILES ] ||\
+        [ `$LFIND --verbose $DIR/d56 | grep -v OBDS | grep -c lmm_magic` -eq $NUMFILES ] ||\
                 error "lfs find --verbose $DIR/d56 wrong: should find $NUMFILES lmm_magic info"
-        [ `$LFIND $DIR/d56 | grep -c lmm_magic` -eq 0 ] || error \
+        [ `$LFIND $DIR/d56 | grep -v OBDS | grep -c lmm_magic` -eq 0 ] || error \
                 "lfs find $DIR/d56 without --verbose wrong: should not show lmm_magic info"
         echo "lfs find --verbose passed."
 
@@ -1899,14 +1896,17 @@ test_56() {
 
         [  "$OSTCOUNT" -lt 2 ] && \
                 echo "skipping other lfs find --obd test" && return
-        FILENUM=`$LFIND --recursive $DIR/d56 | sed -n '/^[	 ]*1[	 ]/p' | wc -l`
-        OBDUUID=`$LFIND --recursive $DIR/d56 | sed -n '/^[	 ]*1:/p' | awk '{print $2}'`
-        FOUND=`$LFIND -r --obd $OBDUUID $DIR/d56 | wc -l`
+        FILENUM=`$LFIND --recursive $DIR/d56 | grep -v OBDS | grep obdidx | wc -l`
+        OBDUUID=`$LFIND --recursive $DIR/d56 | grep -A 1 OBDS | grep -v OBDS | awk '{print $3}'`
+        OBDIDX=`$LFIND --recursive $DIR/d56 | grep -A 1 OBDS | grep -v OBDS | awk '{print $1}'`
+        FOUND=`$LFIND --recursive --obd $OBDUUID $DIR/d56 | wc -l`
+
         [ $FOUND -eq $FILENUM ] || \
                 error "lfs find --obd wrong: found $FOUND, expected $FILENUM"
-        [ `$LFIND -r -v --obd $OBDUUID $DIR/d56 | sed '/^[	 ]*1[	 ]/d' | \
-                sed -n '/^[	 ]*[0-9][0-9]*[	 ]/p' | wc -l` -eq 0 ] || \
+
+        [ `$LFIND -r -v --obd $OBDUUID $DIR/d56 | grep "^[[:blank:]]*$OBDIDX" | wc -l` ] || \
                 error "lfs find --obd wrong: should not show file on other obd"
+
         echo "lfs find --obd passed."
 }
 run_test 56 "check lfs find ===================================="

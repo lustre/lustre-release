@@ -45,8 +45,9 @@
 #include <linux/lustre_smfs.h>
 #include "smfs_internal.h"
 
-static char *smfs_options(char *data, char **devstr, char **namestr, 
-                          char *opts, int *flags)  
+static char *smfs_options(char *data, char **devstr, 
+                          char **namestr, char *opts, 
+                          int *flags)  
 {
         struct option *opt_value = NULL;
         char   *pos;
@@ -74,7 +75,7 @@ static char *smfs_options(char *data, char **devstr, char **namestr,
                                 sprintf((char *)opts + strlen(opts), ",%s",
                                         opt_value->value);
                 } else {
-                        /*FIXME:WANGDI How about the opt_value->value*/
+                        /* FIXME-WANGDI: how about the opt_value->value */
                         if (strlen(opts) == 0)
                                 sprintf((char *)opts + strlen(opts), "%s",
                                         opt_value->opt);
@@ -85,6 +86,35 @@ static char *smfs_options(char *data, char **devstr, char **namestr,
         }
         return pos;
 }
+
+struct super_block *smfs_get_sb_by_path(char *path, int len)
+{
+        struct super_block *sb;
+        struct nameidata nd;
+        int error = 0;
+
+        ENTRY;
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+        if (path_init(path, LOOKUP_FOLLOW, &nd)) {
+#else
+        if (path_lookup(path, LOOKUP_FOLLOW, &nd)) {
+#endif
+                error = path_walk(path, &nd);
+                if (error) {
+                        path_release(&nd);
+                        RETURN(NULL);
+                }
+        } else {
+                RETURN(NULL);
+        }
+
+        /* FIXME-WANGDI: add some check code here. */
+        sb = nd.dentry->d_sb;
+        path_release(&nd);
+        RETURN(sb);
+}
+
 static struct smfs_super_info *smfs_init_smb(struct super_block *sb)
 {
         struct smfs_super_info *smb;
@@ -94,14 +124,16 @@ static struct smfs_super_info *smfs_init_smb(struct super_block *sb)
         if (!smb)
                 RETURN(NULL);        
         
-        S2SMI(sb) = smb;
+        S2FSI(sb) = smb;
         RETURN(smb);        
 }
+
 static int smfs_init_fsfilt_ops(struct smfs_super_info *smb)
 {
         ENTRY;
         if (!smb->sm_cache_fsfilt) {
-                smb->sm_cache_fsfilt = fsfilt_get_ops(smb->smsi_cache_ftype);
+                smb->sm_cache_fsfilt =
+                        fsfilt_get_ops(smb->smsi_cache_ftype);
                 if (!smb->sm_cache_fsfilt) {
                         CERROR("Can not get %s fsfilt ops needed by kml\n",
                                smb->smsi_cache_ftype);
@@ -109,7 +141,8 @@ static int smfs_init_fsfilt_ops(struct smfs_super_info *smb)
                 }
         }
         if (!smb->sm_fsfilt) {
-                smb->sm_fsfilt = fsfilt_get_ops(smb->smsi_ftype);
+                smb->sm_fsfilt =
+                        fsfilt_get_ops(smb->smsi_ftype);
                 if (!smb->sm_fsfilt) {
                         CERROR("Can not get %s fsfilt ops needed by kml\n",
                                smb->smsi_ftype);
@@ -137,11 +170,10 @@ static int smfs_mount_cache(struct smfs_super_info *smb, char *devstr,
         typelen = strlen(typestr);
 
         printk("smfs: mounting %s at %s\n", typestr, devstr);
-
         mnt = do_kern_mount(typestr, 0, devstr, (void *)opts);
-
         if (IS_ERR(mnt)) {
-                CERROR("do_kern_mount failed: rc = %ld\n", PTR_ERR(mnt));
+                CERROR("do_kern_mount failed: rc = %ld\n", 
+                       PTR_ERR(mnt));
                 GOTO(err_out, err = PTR_ERR(mnt));
         }
 
@@ -185,11 +217,10 @@ static int smfs_umount_cache(struct smfs_super_info *smb)
 static int smfs_init_hook_ops(struct smfs_super_info *smb)
 {
         ENTRY;
-
         INIT_LIST_HEAD(&smb->smsi_hook_list);
-
         RETURN(0); 
 }
+
 static void smfs_cleanup_hook_ops(struct smfs_super_info *smb)
 {
         struct list_head *hlist = &smb->smsi_hook_list;
@@ -206,7 +237,6 @@ static void smfs_cleanup_hook_ops(struct smfs_super_info *smb)
                 smfs_free_hook_ops(smfs_hops); 
         } 
         EXIT;
-        return;        
 }
 
 static void smfs_cleanup_smb(struct super_block *sb)
@@ -218,8 +248,8 @@ static void smfs_cleanup_smb(struct super_block *sb)
         if (smb) 
                 OBD_FREE(smb, sizeof(*smb));
         EXIT;
-        return;
 }
+
 void smfs_cleanup_hooks(struct smfs_super_info *smb)
 {
         
@@ -243,7 +273,6 @@ void smfs_put_super(struct super_block *sb)
         if (sb)
                 smfs_umount_cache(smfs_info);
         smfs_cleanup_smb(sb); 
-        return;
 }
 
 static int smfs_init_hooks(struct super_block *sb)
@@ -273,7 +302,8 @@ int smfs_fill_super(struct super_block *sb, void *data, int silent)
 
         ENTRY;
 
-        CDEBUG(D_SUPER, "mount opts: %s\n", data ?  (char *)data : "(none)");
+        CDEBUG(D_SUPER, "mount opts: %s\n", data ? 
+               (char *)data : "(none)");
 
         smb = smfs_init_smb(sb);
         if (!smb)
@@ -282,7 +312,7 @@ int smfs_fill_super(struct super_block *sb, void *data, int silent)
         page = __get_free_page(GFP_KERNEL);
         if (!page)
                 GOTO(out_err, err = -ENOMEM);
-                                                                                                                                                                                                     
+        
         memset((void *)page, 0, PAGE_SIZE);
         opts = (char *)page;
 
@@ -294,17 +324,17 @@ int smfs_fill_super(struct super_block *sb, void *data, int silent)
                       "option %s\n", cache_data);
 
         if (!typestr || !devstr) {
-                CERROR("mount options name and dev mandatory\n");
+                CERROR("mount options name and dev are mandatory\n");
                 free_page(page);
                 GOTO(out_err, err = -EINVAL);
         }
-        err = smfs_mount_cache(smb, devstr, typestr, opts);
         
+        err = smfs_mount_cache(smb, devstr, typestr, opts);
         free_page(page);
         
         if (err) {
                 CERROR("Can not mount %s as %s\n", devstr, typestr);
-                GOTO(out_err, 0);
+                GOTO(out_err, err);
         }
 
         duplicate_sb(sb, smb->smsi_sb);
@@ -313,9 +343,11 @@ int smfs_fill_super(struct super_block *sb, void *data, int silent)
         err = smfs_init_hook_ops(smb);
         if (err) {
                 CERROR("Can not init super hook ops err %d\n", err);
-                GOTO(out_err, 0);
+                smfs_umount_cache(smb);
+                GOTO(out_err, err);
         }
-        /*init the root_inode of smfs*/ 
+        
+        /* init the root_inode of smfs. */ 
         dget(S2CSB(sb)->s_root);
         root_ino = S2CSB(sb)->s_root->d_inode->i_ino;
         root_inode = smfs_get_inode(sb, root_ino, NULL, 0);
@@ -327,13 +359,13 @@ int smfs_fill_super(struct super_block *sb, void *data, int silent)
 
         if (!sb->s_root) {
                 smfs_umount_cache(smb);
-                GOTO(out_err, err=-EINVAL);
+                GOTO(out_err, err = -ENOMEM);
         }
         
         err = smfs_init_hooks(sb);  
         if (err) {
                 smfs_umount_cache(smb);
-                GOTO(out_err, err=-EINVAL);        
+                GOTO(out_err, err);
         }       
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         CDEBUG(D_SUPER, "sb %lx, &sb->u.generic_sbp: %lx\n",
@@ -348,6 +380,7 @@ out_err:
                 smfs_cleanup_smb(sb);
         return err;
 }
+
 struct smfs_hook_ops *smfs_alloc_hook_ops(char *name, smfs_hook_func pre_hook, 
                                           smfs_hook_func post_hook)
 {
@@ -402,6 +435,7 @@ int smfs_register_hook_ops(struct smfs_super_info *smb,
 	list_add(&smh_ops->smh_list, hlist);
         RETURN(0);
 } 
+
 struct smfs_hook_ops *smfs_unregister_hook_ops(struct smfs_super_info *smb, 
                                                char *name)
 {

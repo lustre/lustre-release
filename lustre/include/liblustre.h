@@ -363,6 +363,7 @@ struct page {
 #define PAGE_LIST_ENTRY list
 #define PAGE_LIST(page) ((page)->list)
 
+#define page_address(page) ((page)->addr)
 #define kmap(page) (page)->addr
 #define kunmap(a) do {} while (0)
 
@@ -673,13 +674,6 @@ typedef struct { volatile int counter; } atomic_t;
 #define atomic_dec(a)  do { (a)->counter--; } while (0)
 #define atomic_add(b,a)  do {(a)->counter += b;} while (0)
 #define atomic_sub(b,a)  do {(a)->counter -= b;} while (0)
-
-#ifndef likely
-#define likely(exp) (exp)
-#endif
-#ifndef unlikely
-#define unlikely(exp) (exp)
-#endif
 
 /* FIXME sys/capability will finally included linux/fs.h thus
  * cause numerous trouble on x86-64. as temporary solution for

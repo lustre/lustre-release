@@ -49,8 +49,6 @@
 #include <linux/lustre_lib.h>
 #include "mds_internal.h"
 
-#include "mds_internal.h"
-
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,4)
 struct group_info *groups_alloc(int ngroups)
 {
@@ -145,7 +143,6 @@ int groups_search(struct group_info *ginfo, gid_t grp)
         }
         return 0;
 }
-
 #endif
 
 void groups_from_buffer(struct group_info *ginfo, __u32 *gids)
@@ -161,48 +158,74 @@ void groups_from_buffer(struct group_info *ginfo, __u32 *gids)
         }
 }
 
-void mds_pack_dentry2fid(struct ll_fid *fid, struct dentry *dentry)
+void mds_pack_dentry2id(struct obd_device *obd,
+                        struct lustre_id *id,
+                        struct dentry *dentry,
+                        int read_fid)
 {
-        fid->id = dentry->d_inum;
-        fid->generation = dentry->d_generation;
-        fid->mds = dentry->d_mdsnum;
-}
+        id_ino(id) = dentry->d_inum;
+        id_gen(id) = dentry->d_generation;
 
-void mds_pack_dentry2body(struct mds_body *b, struct dentry *dentry)
-{
-        b->valid |= OBD_MD_FLID | OBD_MD_FLGENER;
-        b->ino = dentry->d_inum;
-        b->generation = dentry->d_generation;
-        b->mds = dentry->d_mdsnum;
-}
-
-void mds_pack_inode2fid(struct obd_device *obd, struct ll_fid *fid,
-                                struct inode *inode)
-{
-        if (!obd || !fid || !inode) {
-                printk("obd %p, fid %p, inode %p\n", obd, fid, inode);
-                LBUG();
+        if (read_fid) {
+                id_fid(id) = dentry->d_fid;
+                id_group(id) = dentry->d_mdsnum;
         }
-        fid->id = inode->i_ino;
-        fid->generation = inode->i_generation;
-        fid->f_type = (S_IFMT & inode->i_mode);
-        fid->mds = obd->u.mds.mds_num;
+}
+
+void mds_pack_dentry2body(struct obd_device *obd,
+                          struct mds_body *b,
+                          struct dentry *dentry,
+                          int read_fid)
+{
+        b->valid |= OBD_MD_FLID | OBD_MD_FLGENER |
+                OBD_MD_MDS;
+
+        if (read_fid)
+                b->valid |= OBD_MD_FID;
+        
+        mds_pack_dentry2id(obd, &b->id1, dentry,
+                           read_fid);
+}
+
+int mds_pack_inode2id(struct obd_device *obd,
+                      struct lustre_id *id,
+                      struct inode *inode,
+                      int read_fid)
+{
+        int rc = 0;
+        ENTRY;
+        
+        if (read_fid) {
+                /* we have to avoid deadlock. */
+                if (!down_trylock(&inode->i_sem)) {
+                        rc = mds_read_inode_sid(obd, inode, id);
+                        up(&inode->i_sem);
+                } else {
+                        rc = mds_read_inode_sid(obd, inode, id);
+                }
+        }
+        if (rc == 0) {
+                id_ino(id) = inode->i_ino;
+                id_gen(id) = inode->i_generation;
+                id_type(id) = (S_IFMT & inode->i_mode);
+        }
+        RETURN(rc);
 }
 
 /* Note that we can copy all of the fields, just some will not be "valid" */
 void mds_pack_inode2body(struct obd_device *obd, struct mds_body *b,
-                                struct inode *inode)
+                         struct inode *inode, int read_fid)
 {
         b->valid |= OBD_MD_FLID | OBD_MD_FLCTIME | OBD_MD_FLUID |
-                    OBD_MD_FLGID | OBD_MD_FLFLAGS | OBD_MD_FLTYPE |
-                    OBD_MD_FLMODE | OBD_MD_FLNLINK | OBD_MD_FLGENER |
-                    OBD_MD_FLATIME | OBD_MD_FLMTIME; /* bug 2020 */
+                OBD_MD_FLGID | OBD_MD_FLFLAGS | OBD_MD_FLTYPE |
+                OBD_MD_FLMODE | OBD_MD_FLNLINK | OBD_MD_FLGENER |
+                OBD_MD_FLATIME | OBD_MD_FLMTIME; /* bug 2020 */
 
-        if (!S_ISREG(inode->i_mode))
-                b->valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS | OBD_MD_FLATIME |
-                            OBD_MD_FLMTIME | OBD_MD_FLRDEV;
-
-        b->ino = inode->i_ino;
+        if (!S_ISREG(inode->i_mode)) {
+                b->valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
+                        OBD_MD_FLATIME | OBD_MD_FLMTIME |
+                        OBD_MD_FLRDEV;
+        }
         b->atime = LTIME_S(inode->i_atime);
         b->mtime = LTIME_S(inode->i_mtime);
         b->ctime = LTIME_S(inode->i_ctime);
@@ -213,6 +236,7 @@ void mds_pack_inode2body(struct obd_device *obd, struct mds_body *b,
         b->gid = inode->i_gid;
         b->flags = inode->i_flags;
         b->rdev = inode->i_rdev;
+        
         /* Return the correct link count for orphan inodes */
         if (mds_inode_is_orphan(inode)) {
                 b->nlink = 0;
@@ -221,8 +245,9 @@ void mds_pack_inode2body(struct obd_device *obd, struct mds_body *b,
         } else {
                 b->nlink = inode->i_nlink;
         }
-        b->generation = inode->i_generation;
-        b->mds = obd->u.mds.mds_num;
+        if (read_fid)
+                b->valid |= OBD_MD_FID;
+        mds_pack_inode2id(obd, &b->id1, inode, read_fid);
 }
 
 /* unpacking */
@@ -238,7 +263,7 @@ static int mds_setattr_unpack(struct ptlrpc_request *req, int offset,
         if (rec == NULL)
                 RETURN (-EFAULT);
 
-        r->ur_fid1 = &rec->sa_fid;
+        r->ur_id1 = &rec->sa_id;
         attr->ia_valid = rec->sa_valid;
         attr->ia_mode = rec->sa_mode;
         attr->ia_uid = rec->sa_uid;
@@ -259,7 +284,7 @@ static int mds_setattr_unpack(struct ptlrpc_request *req, int offset,
         }
 
         if (req->rq_reqmsg->bufcount > offset + 2) {
-                r->ur_logcookies = lustre_msg_buf(req->rq_reqmsg, offset + 2,0);
+                r->ur_logcookies = lustre_msg_buf(req->rq_reqmsg, offset + 2, 0);
                 if (r->ur_eadata == NULL)
                         RETURN (-EFAULT);
 
@@ -280,8 +305,8 @@ static int mds_create_unpack(struct ptlrpc_request *req, int offset,
         if (rec == NULL)
                 RETURN (-EFAULT);
 
-        r->ur_fid1 = &rec->cr_fid;
-        r->ur_fid2 = &rec->cr_replayfid;
+        r->ur_id1 = &rec->cr_id;
+        r->ur_id2 = &rec->cr_replayid;
         r->ur_mode = rec->cr_mode;
         r->ur_rdev = rec->cr_rdev;
         r->ur_time = rec->cr_time;
@@ -331,8 +356,8 @@ static int mds_link_unpack(struct ptlrpc_request *req, int offset,
         if (rec == NULL)
                 RETURN (-EFAULT);
 
-        r->ur_fid1 = &rec->lk_fid1;
-        r->ur_fid2 = &rec->lk_fid2;
+        r->ur_id1 = &rec->lk_id1;
+        r->ur_id2 = &rec->lk_id2;
         r->ur_time = rec->lk_time;
 
         LASSERT_REQSWAB (req, offset + 1);
@@ -355,8 +380,8 @@ static int mds_unlink_unpack(struct ptlrpc_request *req, int offset,
                 RETURN(-EFAULT);
 
         r->ur_mode = rec->ul_mode;
-        r->ur_fid1 = &rec->ul_fid1;
-        r->ur_fid2 = &rec->ul_fid2;
+        r->ur_id1 = &rec->ul_id1;
+        r->ur_id2 = &rec->ul_id2;
         r->ur_time = rec->ul_time;
 
         LASSERT_REQSWAB (req, offset + 1);
@@ -378,8 +403,8 @@ static int mds_rename_unpack(struct ptlrpc_request *req, int offset,
         if (rec == NULL)
                 RETURN(-EFAULT);
 
-        r->ur_fid1 = &rec->rn_fid1;
-        r->ur_fid2 = &rec->rn_fid2;
+        r->ur_id1 = &rec->rn_id1;
+        r->ur_id2 = &rec->rn_id2;
         r->ur_time = rec->rn_time;
 
         LASSERT_REQSWAB (req, offset + 1);
@@ -407,8 +432,8 @@ static int mds_open_unpack(struct ptlrpc_request *req, int offset,
         if (rec == NULL)
                 RETURN (-EFAULT);
 
-        r->ur_fid1 = &rec->cr_fid;
-        r->ur_fid2 = &rec->cr_replayfid;
+        r->ur_id1 = &rec->cr_id;
+        r->ur_id2 = &rec->cr_replayid;
         r->ur_mode = rec->cr_mode;
         r->ur_rdev = rec->cr_rdev;
         r->ur_time = rec->cr_time;
@@ -450,10 +475,12 @@ int mds_update_unpack(struct ptlrpc_request *req, int offset,
         int rc;
         ENTRY;
 
-        /* NB don't lustre_swab_reqbuf() here.  We're just taking a peek
-         * and we want to leave it to the specific unpacker once we've
-         * identified the message type */
-        opcodep = lustre_msg_buf (req->rq_reqmsg, offset, sizeof (*opcodep));
+        /*
+         * NB don't lustre_swab_reqbuf() here. We're just taking a peek and we
+         * want to leave it to the specific unpacker once we've identified the
+         * message type.
+         */
+        opcodep = lustre_msg_buf (req->rq_reqmsg, offset, sizeof(*opcodep));
         if (opcodep == NULL)
                 RETURN(-EFAULT);
 
@@ -467,7 +494,10 @@ int mds_update_unpack(struct ptlrpc_request *req, int offset,
                 RETURN(-EFAULT);
         }
 
+        rec->ur_id1 = NULL;
+        rec->ur_id2 = NULL;
         rec->ur_opcode = opcode;
+
         rc = mds_unpackers[opcode](req, offset, rec);
         RETURN(rc);
 }

@@ -166,7 +166,7 @@ int smfs_llog_cleanup(struct super_block *sb)
         RETURN(rc);
 }
 
-int smfs_llog_add_rec(struct smfs_super_info * sinfo, void *data, int data_size)
+int smfs_llog_add_rec(struct smfs_super_info *sinfo, void *data, int data_size)
 {
         struct llog_rec_hdr rec;
         int rc = 0;

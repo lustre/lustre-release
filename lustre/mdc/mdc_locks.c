@@ -36,8 +36,6 @@
 #include <linux/obd_class.h>
 #include <linux/lustre_mds.h>
 #include <linux/lustre_dlm.h>
-//#include <linux/lustre_smfs.h>
-//#include <linux/lustre_snap.h>
 #include <linux/lprocfs_status.h>
 #include "mdc_internal.h"
 
@@ -53,18 +51,20 @@ void it_set_disposition(struct lookup_intent *it, int flag)
 }
 EXPORT_SYMBOL(it_set_disposition);
 
-static void mdc_fid2mdc_op_data(struct mdc_op_data *data,
-                                struct ll_fid *f1, struct ll_fid *f2,
-                                const char *name, int namelen, int mode)
+static void mdc_id2mdc_op_data(struct mdc_op_data *data,
+                               struct lustre_id *f1, 
+                               struct lustre_id *f2,
+                               const char *name, 
+                               int namelen, int mode)
 {
         LASSERT(data);
         LASSERT(f1);
 
-        data->fid1 = *f1;
+        data->id1 = *f1;
         if (f2)
-                data->fid2 = *f2;
-        else
-                memset(&data->fid2, 0, sizeof(data->fid2));
+                data->id2 = *f2;
+
+        data->valid = 0;
         data->name = name;
         data->namelen = namelen;
         data->create_mode = mode;
@@ -144,8 +144,8 @@ int mdc_set_lock_data(struct obd_export *exp, __u64 *l, void *data)
                          "Found existing inode %p/%lu/%u state %lu in lock: "
                          "setting data to %p/%lu/%u\n", old_inode,
                          old_inode->i_ino, old_inode->i_generation,
-                         old_inode->i_state,
-                         new_inode, new_inode->i_ino, new_inode->i_generation);
+                         old_inode->i_state, new_inode, new_inode->i_ino,
+                         new_inode->i_generation);
         }
 #endif
         lock->l_ast_data = data;
@@ -157,17 +157,17 @@ int mdc_set_lock_data(struct obd_export *exp, __u64 *l, void *data)
 }
 EXPORT_SYMBOL(mdc_set_lock_data);
 
-int mdc_change_cbdata(struct obd_export *exp, struct ll_fid *fid, 
+int mdc_change_cbdata(struct obd_export *exp, struct lustre_id *id, 
                       ldlm_iterator_t it, void *data)
 {
         struct ldlm_res_id res_id = { .name = {0} };
         ENTRY;
 
-        res_id.name[0] = fid->id;
-        res_id.name[1] = fid->generation;
+        res_id.name[0] = id_fid(id);
+        res_id.name[1] = id_group(id);
 
-        ldlm_change_cbdata(class_exp2obd(exp)->obd_namespace, &res_id, it, 
-                           data);
+        ldlm_change_cbdata(class_exp2obd(exp)->obd_namespace,
+                           &res_id, it, data);
 
         EXIT;
         return 0;
@@ -188,9 +188,10 @@ int mdc_enqueue(struct obd_export *exp,
                 void *cb_data)
 {
         struct ptlrpc_request *req;
+        struct ldlm_res_id res_id = {
+                .name = {id_fid(&data->id1), id_group(&data->id1)}
+        };
         struct obd_device *obddev = class_exp2obd(exp);
-        struct ldlm_res_id res_id =
-                { .name = {data->fid1.id, data->fid1.generation} };
         ldlm_policy_data_t policy = { .l_inodebits = { MDS_INODELOCK_LOOKUP } };
         struct ldlm_intent *lit;
         struct ldlm_request *lockreq;
@@ -242,13 +243,14 @@ int mdc_enqueue(struct obd_export *exp,
                 reply_buffers = 3;
                 req->rq_replen = lustre_msg_size(3, repsize);
         } else if (it->it_op & (IT_GETATTR | IT_LOOKUP | IT_CHDIR)) {
-                int valid = OBD_MD_FLNOTOBD | OBD_MD_FLEASIZE;
+                int valid = data->valid | OBD_MD_FLNOTOBD | OBD_MD_FLEASIZE;
 
                 reqsize[req_buffers++] = sizeof(struct mds_body);
                 reqsize[req_buffers++] = data->namelen + 1;
 
                 if (it->it_op & IT_GETATTR)
                         policy.l_inodebits.bits = MDS_INODELOCK_UPDATE;
+
                 req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_DLM_VERSION,
                                       LDLM_ENQUEUE, req_buffers, reqsize, NULL);
 
@@ -263,6 +265,7 @@ int mdc_enqueue(struct obd_export *exp,
                 /* pack the intended request */
                 mdc_getattr_pack(req->rq_reqmsg, MDS_REQ_INTENT_REC_OFF,
                                  valid, it->it_flags, data);
+                
                 /* get ready for the reply */
                 reply_buffers = 3;
                 req->rq_replen = lustre_msg_size(3, repsize);
@@ -435,43 +438,42 @@ EXPORT_SYMBOL(mdc_enqueue);
  * Else, if DISP_LOOKUP_EXECD then d.lustre.it_status is the rc of the
  * child lookup.
  */
-int mdc_intent_lock(struct obd_export *exp,
-                    struct ll_fid *pfid, const char *name, int len,
-                    void *lmm, int lmmsize, struct ll_fid *cfid,
-                    struct lookup_intent *it, int lookup_flags,
-                    struct ptlrpc_request **reqp,
+int mdc_intent_lock(struct obd_export *exp, struct lustre_id *pid, 
+                    const char *name, int len, void *lmm, int lmmsize, 
+                    struct lustre_id *cid, struct lookup_intent *it, 
+                    int lookup_flags, struct ptlrpc_request **reqp,
                     ldlm_blocking_callback cb_blocking)
 {
         struct lustre_handle lockh;
         struct ptlrpc_request *request;
-        int rc = 0;
         struct mds_body *mds_body;
         struct lustre_handle old_lock;
         struct ldlm_lock *lock;
+        int rc = 0;
         ENTRY;
         LASSERT(it);
 
-        CDEBUG(D_DLMTRACE, "name: %*s in inode "LPU64", intent: %s flags %#o\n",
-               len, name, pfid->id, ldlm_it2str(it->it_op), it->it_flags);
+        CDEBUG(D_DLMTRACE, "name: %*s in obj "DLID4", intent: %s flags %#o\n",
+               len, name, OLID4(pid), ldlm_it2str(it->it_op), it->it_flags);
 
-        if (cfid && (it->it_op == IT_LOOKUP || it->it_op == IT_GETATTR ||
-                     it->it_op == IT_CHDIR)) {
+        if (cid && (it->it_op == IT_LOOKUP || it->it_op == IT_GETATTR ||
+                    it->it_op == IT_CHDIR)) {
                 /* We could just return 1 immediately, but since we should only
                  * be called in revalidate_it if we already have a lock, let's
                  * verify that. */
-                struct ldlm_res_id res_id ={.name = {cfid->id,
-                                                     cfid->generation}};
+                struct ldlm_res_id res_id = {.name = {id_fid(cid),
+                                                      id_group(cid)}};
                 struct lustre_handle lockh;
                 ldlm_policy_data_t policy;
                 int mode = LCK_PR;
 
                 /* For the GETATTR case, ll_revalidate_it issues two separate
-                   queries - for LOOKUP and for UPDATE lock because if cannot
+                   queries - for LOOKUP and for UPDATE lock because it cannot
                    check them together - we might have those two bits to be
                    present in two separate granted locks */
-                policy.l_inodebits.bits = 
-                                 (it->it_op == IT_GETATTR)?MDS_INODELOCK_UPDATE:
-                                                           MDS_INODELOCK_LOOKUP;
+                policy.l_inodebits.bits = (it->it_op == IT_GETATTR) ?
+                        MDS_INODELOCK_UPDATE: MDS_INODELOCK_LOOKUP;
+                
                 mode = LCK_PR;
                 rc = ldlm_lock_match(exp->exp_obd->obd_namespace,
                                      LDLM_FL_BLOCK_GRANTED, &res_id,
@@ -505,13 +507,23 @@ int mdc_intent_lock(struct obd_export *exp,
          * never dropped its reference, so the refcounts are all OK */
         if (!it_disposition(it, DISP_ENQ_COMPLETE)) {
                 struct mdc_op_data op_data;
-                mdc_fid2mdc_op_data(&op_data, pfid, cfid, name, len, 0);
+
+                mdc_id2mdc_op_data(&op_data, pid, cid, name, len, 0);
+
+                /* 
+                 * if we getting inode by name (ll_lookup_it() case), we always
+                 * should ask for fid, as later we will not be able to take
+                 * locks, revalidate dentry, etc. with invalid fid in inode.
+                 */
+                if (cid == NULL && name != NULL)
+                        op_data.valid |= OBD_MD_FID;
 
                 rc = mdc_enqueue(exp, LDLM_IBITS, it, it_to_lock_mode(it),
                                  &op_data, &lockh, lmm, lmmsize,
                                  ldlm_completion_ast, cb_blocking, NULL);
                 if (rc < 0)
                         RETURN(rc);
+                
                 memcpy(&it->d.lustre.it_lock_handle, &lockh, sizeof(lockh));
         }
         request = *reqp = it->d.lustre.it_data;
@@ -545,20 +557,21 @@ int mdc_intent_lock(struct obd_export *exp,
                 RETURN(rc);
 
         mds_body = lustre_msg_buf(request->rq_repmsg, 1, sizeof(*mds_body));
-        LASSERT(mds_body != NULL);           /* mdc_enqueue checked */
+        LASSERT(mds_body != NULL);      /* mdc_enqueue checked */
         LASSERT_REPSWABBED(request, 1); /* mdc_enqueue swabbed */
 
-        /* If we were revalidating a fid/name pair, mark the intent in
-         * case we fail and get called again from lookup */
-        if (cfid != NULL) {
+        /* If we were revalidating a fid/name pair, mark the intent in case we
+         * fail and get called again from lookup */
+        if (cid != NULL) {
                 it_set_disposition(it, DISP_ENQ_COMPLETE);
                 /* Also: did we find the same inode? */
-                /* we have to compare all the fields but type, because
-                 * MDS can return mds/ino/generation triple if inode
-                 * lives on another MDS -bzzz */
-                if (cfid->generation != mds_body->fid1.generation ||
-                                cfid->id != mds_body->fid1.id ||
-                                cfid->mds != mds_body->fid1.mds)
+                
+                /* we have to compare all the fields but type, because MDS can
+                 * return fid/mds/ino/gen if inode lives on another MDS -bzzz */
+                if (id_gen(cid) != id_gen(&mds_body->id1) ||
+                    id_ino(cid) != id_ino(&mds_body->id1) ||
+                    id_fid(cid) != id_fid(&mds_body->id1) ||
+                    id_group(cid) != id_group(&mds_body->id1))
                         RETURN(-ESTALE);
         }
 
@@ -566,8 +579,9 @@ int mdc_intent_lock(struct obd_export *exp,
         if (rc)
                 RETURN(rc);
 
-        /* keep requests around for the multiple phases of the call
-         * this shows the DISP_XX must guarantee we make it into the call
+        /*
+         * keep requests around for the multiple phases of the call this shows
+         * the DISP_XX must guarantee we make it into the call.
          */
         if (it_disposition(it, DISP_OPEN_CREATE) &&
             !it_open_error(DISP_OPEN_CREATE, it))
@@ -584,16 +598,27 @@ int mdc_intent_lock(struct obd_export *exp,
                 LASSERT(it->it_op & (IT_GETATTR | IT_LOOKUP | IT_CHDIR));
         }
 
-        /* If we already have a matching lock, then cancel the new
-         * one.  We have to set the data here instead of in
-         * mdc_enqueue, because we need to use the child's inode as
-         * the l_ast_data to match, and that's not available until
-         * intent_finish has performed the iget().) */
+        /*
+         * if we already have a matching lock, then cancel the new one. We have
+         * to set the data here instead of in mdc_enqueue, because we need to
+         * use the child's inode as the l_ast_data to match, and that's not
+         * available until intent_finish has performed the iget().)
+         */
         lock = ldlm_handle2lock(&lockh);
         if (lock) {
                 ldlm_policy_data_t policy = lock->l_policy_data;
                 LDLM_DEBUG(lock, "matching against this");
                 LDLM_LOCK_PUT(lock);
+                
+                LASSERTF(id_fid(&mds_body->id1) == lock->l_resource->lr_name.name[0] &&
+                         id_group(&mds_body->id1) == lock->l_resource->lr_name.name[1],
+                         "Invalid lock is returned to client. Lock res_is: %lu/%lu, "
+                         "response res_id: %lu/%lu.\n",
+                         (unsigned long)lock->l_resource->lr_name.name[0],
+                         (unsigned long)lock->l_resource->lr_name.name[1],
+                         (unsigned long)id_fid(&mds_body->id1),
+                         (unsigned long)id_group(&mds_body->id1));
+                
                 memcpy(&old_lock, &lockh, sizeof(lockh));
                 if (ldlm_lock_match(NULL, LDLM_FL_BLOCK_GRANTED, NULL,
                                     LDLM_IBITS, &policy, LCK_NL, &old_lock)) {

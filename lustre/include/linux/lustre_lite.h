@@ -40,15 +40,6 @@
 /* careful, this is easy to screw up */
 #define PAGE_CACHE_MAXBYTES ((__u64)(~0UL) << PAGE_CACHE_SHIFT)
 
-
-/*
-struct lustre_intent_data {
-        __u64 it_lock_handle[2];
-        __u32 it_disposition;
-        __u32 it_status;
-        __u32 it_lock_mode;
-        }; */
-
 #define LL_IT2STR(it) ((it) ? ldlm_it2str((it)->it_op) : "0")
 
 static inline struct lookup_intent *ll_nd2it(struct nameidata *nd)
@@ -76,16 +67,17 @@ extern struct file_operations ll_pgcache_seq_fops;
 #define LLI_F_HAVE_OST_SIZE_LOCK        0
 #define LLI_F_HAVE_MDS_SIZE_LOCK        1
 #define LLI_F_PREFER_EXTENDED_SIZE      2
+
 struct ll_inode_info {
         int                     lli_inode_magic;
         struct lov_stripe_md   *lli_smd;
         struct mea             *lli_mea;
+        struct lustre_id        lli_id;    /* full lustre_id */
         char                   *lli_symlink_name;
         struct semaphore        lli_open_sem;
         __u64                   lli_maxbytes;
         __u64                   lli_io_epoch;
         unsigned long           lli_flags;
-        __u32                   lli_mds;
 
         /* this lock protects s_d_w and p_w_ll */
         spinlock_t              lli_lock;
@@ -151,31 +143,34 @@ enum {
          LPROC_LL_FILE_OPCODES
 };
 
-static inline void ll_inode2fid(struct ll_fid *fid, struct inode *inode)
+static inline void
+ll_inode2id(struct lustre_id *id, struct inode *inode)
 {
-        mdc_pack_fid(fid, inode->i_ino, inode->i_generation,
-                     inode->i_mode & S_IFMT);
-        LASSERT(ll_i2info(inode));
-        fid->mds = ll_i2info(inode)->lli_mds;
+        struct lustre_id *lid = &ll_i2info(inode)->lli_id;
+
+        mdc_pack_id(id, inode->i_ino, inode->i_generation,
+                    (inode->i_mode & S_IFMT), id_group(lid),
+                    id_fid(lid));
 }
 
 static inline void 
-ll_prepare_mdc_op_data(struct mdc_op_data *data, struct inode *i1,
-                       struct inode *i2, const char *name, int namelen,
-                       int mode)
+ll_prepare_mdc_data(struct mdc_op_data *data, struct inode *i1,
+                    struct inode *i2, const char *name, int namelen,
+                    int mode)
 {
         LASSERT(i1);
 
-        ll_inode2fid(&data->fid1, i1);
+        ll_inode2id(&data->id1, i1);
 
         /* it could be directory with mea */
         data->mea1 = ll_i2info(i1)->lli_mea;
 
         if (i2) {
-                ll_inode2fid(&data->fid2, i2);
+                ll_inode2id(&data->id2, i2);
                 data->mea2 = ll_i2info(i2)->lli_mea;
         }
 
+	data->valid = 0;
         data->name = name;
         data->namelen = namelen;
         data->create_mode = mode;

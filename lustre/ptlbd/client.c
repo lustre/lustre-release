@@ -166,13 +166,13 @@ out_disco:
 
 
 /* modelled after ptlrpc_import_disconnect() */
-int ptlbd_cl_disconnect(struct obd_export *exp, int failover)
+int ptlbd_cl_disconnect(struct obd_export *exp, int flags)
 {
         struct obd_device *obd = exp->exp_obd;
         struct ptlbd_obd *ptlbd = &obd->u.ptlbd;
         struct obd_import *imp = ptlbd->bd_import;
         struct ptlrpc_request *request;
-        int     rc, err;
+        int rc, err;
         ENTRY;
 
         if (!obd)

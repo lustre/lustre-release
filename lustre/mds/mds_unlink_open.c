@@ -56,7 +56,7 @@ static int mds_osc_destroy_orphan(struct mds_obd *mds,
         if (lmm_size == 0)
                 RETURN(0);
 
-        rc = obd_unpackmd(mds->mds_osc_exp, &lsm, lmm, lmm_size);
+        rc = obd_unpackmd(mds->mds_lov_exp, &lsm, lmm, lmm_size);
         if (rc < 0) {
                 CERROR("Error unpack md %p\n", lmm);
                 RETURN(rc);
@@ -78,13 +78,13 @@ static int mds_osc_destroy_orphan(struct mds_obd *mds,
                 oti.oti_logcookies = logcookies;
         }
 
-        rc = obd_destroy(mds->mds_osc_exp, oa, lsm, &oti);
+        rc = obd_destroy(mds->mds_lov_exp, oa, lsm, &oti);
         obdo_free(oa);
         if (rc)
                 CDEBUG(D_INODE, "destroy orphan objid 0x"LPX64" on ost error "
                        "%d\n", lsm->lsm_object_id, rc);
 out_free_memmd:
-        obd_free_memmd(mds->mds_osc_exp, &lsm);
+        obd_free_memmd(mds->mds_lov_exp, &lsm);
         RETURN(rc);
 }
 
@@ -99,7 +99,7 @@ static int mds_unlink_orphan(struct obd_device *obd, struct dentry *dchild,
         int rc, err;
         ENTRY;
 
-        LASSERT(mds->mds_osc_obd != NULL);
+        LASSERT(mds->mds_lov_obd != NULL);
 
         OBD_ALLOC(lmm, mds->mds_max_mdsize);
         if (lmm == NULL)
@@ -175,7 +175,7 @@ int mds_cleanup_orphans(struct obd_device *obd)
         struct inode *child_inode, *pending_dir = mds->mds_pending_dir->d_inode;
         struct l_linux_dirent *dirent, *n;
         struct list_head dentry_list;
-        char d_name[LL_FID_NAMELEN];
+        char d_name[LL_ID_NAMELEN];
         __u64 i = 0;
         int rc = 0, item = 0, namlen;
         ENTRY;

@@ -79,6 +79,7 @@
 #include <portals/p30.h>
 #include <portals/lib-p30.h>
 #include <portals/nal.h>
+#include <linux/lustre_idl.h>
 
 #define KQSW_CHECKSUM   0
 #if KQSW_CHECKSUM

@@ -83,7 +83,7 @@ struct mds_grp_hash *__mds_get_global_group_hash()
         return &_group_hash;
 }
 
-static struct mds_grp_hash_entry * alloc_entry(uid_t uid)
+static struct mds_grp_hash_entry *alloc_entry(uid_t uid)
 {
         struct mds_grp_hash_entry *entry;
 
@@ -172,18 +172,17 @@ static int refresh_entry(struct mds_grp_hash *hash,
         RETURN(rc);
 }
 
-struct mds_grp_hash_entry * mds_get_group_entry(struct mds_obd *mds, uid_t uid)
+struct mds_grp_hash_entry *mds_get_group_entry(struct mds_obd *mds, uid_t uid)
 {
-        struct mds_grp_hash *hash = &_group_hash;
         struct mds_grp_hash_entry *entry = NULL, *new = NULL, *next;
+        struct mds_grp_hash *hash = &_group_hash;
         struct list_head *head;
         wait_queue_t wait;
         int rc, found;
         ENTRY;
 
-        LASSERT(hash);
-
         head = &hash->gh_table[MDSGRP_HASH_INDEX(uid)];
+        
 find_again:
         found = 0;
         spin_lock(&hash->gh_lock);
@@ -224,7 +223,7 @@ find_again:
                 GRP_SET_ACQUIRING(entry);
                 GRP_CLEAR_NEW(entry);
                 entry->ge_acquire_expire = jiffies +
-                                           hash->gh_acquire_expire * HZ;
+                        hash->gh_acquire_expire * HZ;
                 spin_unlock(&hash->gh_lock);
 
                 rc = refresh_entry(hash, entry);
@@ -236,8 +235,10 @@ find_again:
                 }
                 /* fall through */
         }
-        /* someone (and only one) is doing upcall upon
-         * this item, just wait it complete
+        
+        /*
+         * someone (and only one) is doing upcall upon this item, just wait it
+         * complete
          */
         if (GRP_IS_ACQUIRING(entry)) {
                 init_waitqueue_entry(&wait, current);
@@ -267,15 +268,15 @@ find_again:
                 RETURN(NULL);
         }
 
-        /* check expired 
-         * We can't refresh the existed one because some
-         * memory might be shared by multiple processes.
+        /*
+         * check expired. We can't refresh the existed one because some memory
+         * might be shared by multiple processes.
          */
         if (check_unlink_entry(entry)) {
-                /* if expired, try again. but if this entry is
-                 * created by me but too quickly turn to expired
-                 * without any error, should at least give a
-                 * chance to use it once.
+                /*
+                 * if expired, try again. but if this entry is created by me but
+                 * too quickly turn to expired without any error, should at
+                 * least give a chance to use it once.
                  */
                 if (entry != new) {
                         put_entry(entry);
@@ -289,7 +290,6 @@ find_again:
         spin_unlock(&hash->gh_lock);
         RETURN(entry);
 }
-
 
 void mds_put_group_entry(struct mds_obd *mds, struct mds_grp_hash_entry *entry)
 {

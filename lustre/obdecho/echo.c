@@ -69,7 +69,6 @@ static int echo_disconnect(struct obd_export *exp, int flags)
         unsigned long irqflags;
 
         LASSERT (exp != NULL);
-
         ldlm_cancel_locks_for_export(exp);
 
         spin_lock_irqsave(&exp->exp_lock, irqflags);

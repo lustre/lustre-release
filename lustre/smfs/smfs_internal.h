@@ -292,8 +292,9 @@ static inline int get_active_entry(struct inode *dir, __u64 *active_entry)
 #define HOOK_READDIR      12
 #define HOOK_MAX          12 
 
-#define PRE_HOOK 0
-#define POST_HOOK 1
+#define PRE_HOOK          0
+#define POST_HOOK         1
+
 #define SMFS_HOOK(inode, dentry, data1, data2, op, handle, flag, rc, label)    \
 do {                                                                           \
         LASSERT(inode->i_sb);                                                  \

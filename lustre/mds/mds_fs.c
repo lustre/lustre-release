@@ -50,6 +50,7 @@
 
 #define LAST_RCVD "last_rcvd"
 #define LOV_OBJID "lov_objid"
+#define LAST_FID  "last_fid"
 
 /* Add client data to the MDS.  We use a bitmap to locate a free space
  * in the last_rcvd file if cl_off is -1 (i.e. a new client).
@@ -189,6 +190,46 @@ static int mds_server_free_data(struct mds_obd *mds)
         return 0;
 }
 
+static int mds_read_last_fid(struct obd_device *obd, struct file *file)
+{
+        int rc = 0;
+        loff_t off = 0;
+        struct mds_obd *mds = &obd->u.mds;
+        unsigned long last_fid_size = file->f_dentry->d_inode->i_size;
+        ENTRY;
+
+        if (last_fid_size == 0) {
+                CWARN("%s: initializing new %s\n", obd->obd_name,
+                      file->f_dentry->d_name.name);
+
+                /* 
+                 * as fid is used for forming res_id for locking, it should not
+                 * be zero. This will keep us out of lots possible problems,
+                 * asserts, etc.
+                 */
+                mds->mds_last_fid = 1;
+        } else {
+                __u64 last_fid;
+                
+                rc = fsfilt_read_record(obd, file, &last_fid,
+                                        sizeof(last_fid), &off);
+                if (rc) {
+                        CERROR("error reading MDS %s: rc = %d\n",
+                               file->f_dentry->d_name.name, rc);
+                        RETURN(rc);
+                }
+
+                if (last_fid > mds->mds_last_fid)
+                        mds->mds_last_fid = last_fid;
+        }
+
+        CDEBUG(D_INODE, "%s: server last_fid: "LPU64"\n",
+               obd->obd_name, mds->mds_last_fid);
+
+        rc = mds_update_last_fid(obd, 1);
+        RETURN(rc);
+}
+
 static int mds_read_last_rcvd(struct obd_device *obd, struct file *file)
 {
         struct mds_obd *mds = &obd->u.mds;
@@ -220,7 +261,8 @@ static int mds_read_last_rcvd(struct obd_device *obd, struct file *file)
         mds->mds_server_data = msd;
 
         if (last_rcvd_size == 0) {
-                CWARN("%s: initializing new %s\n", obd->obd_name, LAST_RCVD);
+                CWARN("%s: initializing new %s\n", obd->obd_name,
+                      file->f_dentry->d_name.name);
 
                 memcpy(msd->msd_uuid, obd->obd_uuid.uuid,sizeof(msd->msd_uuid));
                 msd->msd_last_transno = 0;
@@ -232,7 +274,8 @@ static int mds_read_last_rcvd(struct obd_device *obd, struct file *file)
         } else {
                 rc = fsfilt_read_record(obd, file, msd, sizeof(*msd), &off);
                 if (rc) {
-                        CERROR("error reading MDS %s: rc = %d\n", LAST_RCVD, rc);
+                        CERROR("error reading MDS %s: rc = %d\n",
+                               file->f_dentry->d_name.name, rc);
                         GOTO(err_msd, rc);
                 }
                 if (strcmp(msd->msd_uuid, obd->obd_uuid.uuid) != 0) {
@@ -300,7 +343,7 @@ static int mds_read_last_rcvd(struct obd_device *obd, struct file *file)
                 rc = fsfilt_read_record(obd, file, mcd, sizeof(*mcd), &off);
                 if (rc) {
                         CERROR("error reading MDS %s idx %d, off %llu: rc %d\n",
-                               LAST_RCVD, cl_idx, off, rc);
+                               file->f_dentry->d_name.name, cl_idx, off, rc);
                         break; /* read error shouldn't cause startup to fail */
                 }
 
@@ -374,24 +417,141 @@ err_msd:
         RETURN(rc);
 }
 
-static int  mds_fs_post_setup(struct obd_device *obd)
+static int mds_fs_post_setup(struct obd_device *obd)
 {
         struct mds_obd *mds = &obd->u.mds;
-        struct dentry *de = mds_fid2dentry(mds, &mds->mds_rootfid, NULL);
-        int    rc = 0;
+        struct dentry *dentry;
+        int rc = 0;
        
-        rc = fsfilt_post_setup(obd, de);
+        dentry = mds_id2dentry(obd, &mds->mds_rootid, NULL);
+        rc = fsfilt_post_setup(obd, dentry);
         if (rc)
-                GOTO(out, rc);
+                GOTO(out_dentry, rc);
  
-        fsfilt_set_fs_flags(obd, de->d_inode, 
-                              SM_DO_REC | SM_DO_COW);
+        fsfilt_set_fs_flags(obd, dentry->d_inode, 
+                            SM_DO_REC | SM_DO_COW);
+        
         fsfilt_set_fs_flags(obd, mds->mds_pending_dir->d_inode, 
-                              SM_DO_REC | SM_DO_COW);
+                            SM_DO_REC | SM_DO_COW);
+        
         fsfilt_set_mds_flags(obd, mds->mds_sb);
-out:
-        l_dput(de);
+out_dentry:
+        l_dput(dentry);
         return rc; 
+}
+
+/*
+ * sets up root inode id. It tries to read it first from root inode and if it is
+ * not there, new rootid is allocated and saved there.
+ */
+int mds_fs_setup_rootid(struct obd_device *obd)
+{
+        int rc = 0;
+        void *handle;
+        struct inode *inode;
+        struct dentry *dentry;
+        struct lustre_id rootid;
+        struct mds_obd *mds = &obd->u.mds;
+        ENTRY;
+
+        memcpy(&rootid, &mds->mds_rootid, sizeof(rootid));
+        
+        /* getting root directory and setup its fid. */
+        dentry = mds_id2dentry(obd, &rootid, NULL);
+        if (IS_ERR(dentry))
+                RETURN(PTR_ERR(dentry));
+
+        inode = dentry->d_inode;
+
+        rc = mds_pack_inode2id(obd, &rootid, inode, 1);
+        if (rc < 0) {
+                if (rc != -ENODATA)
+                        GOTO(out_dentry, rc);
+        } else {
+                /*
+                 * rootid is filled by mds_read_inode_sid(), so we do not need
+                 * to allocate it and update. The only thing we need to check is
+                 * mds_num.
+                 */
+                LASSERT(id_group(&rootid) == mds->mds_num);
+                GOTO(out_dentry, rc);
+        }
+
+        /* allocating new one, as it is not found in root inode. */
+        handle = fsfilt_start(obd, inode,
+                              FSFILT_OP_SETATTR, NULL);
+        
+        if (IS_ERR(handle)) {
+                rc = PTR_ERR(handle);
+                CERROR("fsfilt_start() failed, rc = %d\n", rc);
+                GOTO(out_dentry, rc);
+        }
+        
+        down(&inode->i_sem);
+        rc = mds_alloc_inode_sid(obd, inode, handle, &rootid);
+        up(&inode->i_sem);
+        
+        if (rc) {
+                CERROR("mds_alloc_inode_sid() failed, rc = %d\n",
+                       rc);
+                GOTO(out_dentry, rc);
+        }
+
+        rc = fsfilt_commit(obd, mds->mds_sb, inode, handle, 0);
+        if (rc)
+                CERROR("fsfilt_commit() failed, rc = %d\n", rc);
+
+out_dentry:
+        l_dput(dentry);
+
+        if (rc == 0) {
+                memcpy(&mds->mds_rootid, &rootid, sizeof(rootid));
+                CWARN("%s: rootid: "DLID4"\n", obd->obd_name,
+                      OLID4(&rootid));
+        }
+        RETURN(rc);
+}
+
+/*
+ * initializes lustre_id for virtual id directory, it is needed sometimes, as it
+ * is possible that it will be the parent for object an operations is going to
+ * be performed on.
+ */
+int mds_fs_setup_virtid(struct obd_device *obd)
+{
+        int rc = 0;
+        void *handle;
+        struct lustre_id id;
+        struct mds_obd *mds = &obd->u.mds;
+        struct inode *inode = mds->mds_id_dir->d_inode;
+        ENTRY;
+
+        handle = fsfilt_start(obd, inode,
+                              FSFILT_OP_SETATTR, NULL);
+        
+        if (IS_ERR(handle)) {
+                rc = PTR_ERR(handle);
+                CERROR("fsfilt_start() failed, rc = %d\n", rc);
+                RETURN(rc);
+        }
+        
+        down(&inode->i_sem);
+        rc = mds_alloc_inode_sid(obd, inode, handle, &id);
+        up(&inode->i_sem);
+        
+        if (rc) {
+                CERROR("mds_alloc_inode_sid() failed, rc = %d\n",
+                       rc);
+                RETURN(rc);
+        }
+
+        rc = fsfilt_commit(obd, mds->mds_sb, inode, handle, 0);
+        if (rc) {
+                CERROR("fsfilt_commit() failed, rc = %d\n", rc);
+                RETURN(rc);
+        }
+
+        RETURN(rc);
 }
 
 int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
@@ -420,6 +580,7 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
 
         /* setup the directory tree */
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+        
         dentry = simple_mkdir(current->fs->pwd, "ROOT", 0755, 0);
         if (IS_ERR(dentry)) {
                 rc = PTR_ERR(dentry);
@@ -427,12 +588,11 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
                 GOTO(err_pop, rc);
         }
 
-        mds->mds_rootfid.id = dentry->d_inode->i_ino;
-        mds->mds_rootfid.generation = dentry->d_inode->i_generation;
-        mds->mds_rootfid.f_type = S_IFDIR;
+        mdc_pack_id(&mds->mds_rootid, dentry->d_inode->i_ino,
+                    dentry->d_inode->i_generation, S_IFDIR, 0, 0);
 
         dput(dentry);
-
+        
         dentry = lookup_one_len("__iopen__", current->fs->pwd,
                                 strlen("__iopen__"));
         if (IS_ERR(dentry)) {
@@ -440,18 +600,19 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
                 CERROR("cannot lookup __iopen__ directory: rc = %d\n", rc);
                 GOTO(err_pop, rc);
         }
+        mds->mds_id_de = dentry;
+
         if (!dentry->d_inode) {
                 rc = -ENOENT;
                 CERROR("__iopen__ directory has no inode? rc = %d\n", rc);
-                GOTO(err_fid, rc);
+                GOTO(err_id_de, rc);
         }
-        mds->mds_fid_de = dentry;
 
         dentry = simple_mkdir(current->fs->pwd, "PENDING", 0777, 1);
         if (IS_ERR(dentry)) {
                 rc = PTR_ERR(dentry);
                 CERROR("cannot create PENDING directory: rc = %d\n", rc);
-                GOTO(err_fid, rc);
+                GOTO(err_id_de, rc);
         }
         mds->mds_pending_dir = dentry;
       
@@ -475,9 +636,9 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
         if (IS_ERR(dentry)) {
                 rc = PTR_ERR(dentry);
                 CERROR("cannot create FIDS directory: rc = %d\n", rc);
-                GOTO(err_fids, rc);
+                GOTO(err_objects, rc);
         }
-        mds->mds_fids_dir = dentry;
+        mds->mds_id_dir = dentry;
 
         dentry = simple_mkdir(current->fs->pwd, "UNNAMED", 0777, 1);
         if (IS_ERR(dentry)) {
@@ -492,9 +653,10 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
         if (IS_ERR(file)) {
                 rc = PTR_ERR(file);
                 CERROR("cannot open/create %s file: rc = %d\n", LAST_RCVD, rc);
-                GOTO(err_objects, rc = PTR_ERR(file));
+                GOTO(err_id_dir, rc = PTR_ERR(file));
         }
         mds->mds_rcvd_filp = file;
+        
         if (!S_ISREG(file->f_dentry->d_inode->i_mode)) {
                 CERROR("%s is not a regular file!: mode = %o\n", LAST_RCVD,
                        file->f_dentry->d_inode->i_mode);
@@ -507,12 +669,33 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
                 GOTO(err_last_rcvd, rc);
         }
 
-        /* open and test the lov objd file */
+        /* open and test the last fid file */
+        file = filp_open(LAST_FID, O_RDWR | O_CREAT, 0644);
+        if (IS_ERR(file)) {
+                rc = PTR_ERR(file);
+                CERROR("cannot open/create %s file: rc = %d\n",
+                       LAST_FID, rc);
+                GOTO(err_client, rc = PTR_ERR(file));
+        }
+        mds->mds_fid_filp = file;
+        if (!S_ISREG(file->f_dentry->d_inode->i_mode)) {
+                CERROR("%s is not a regular file!: mode = %o\n",
+                       LAST_FID, file->f_dentry->d_inode->i_mode);
+                GOTO(err_last_fid, rc = -ENOENT);
+        }
+
+        rc = mds_read_last_fid(obd, file);
+        if (rc) {
+                CERROR("cannot read %s: rc = %d\n", LAST_FID, rc);
+                GOTO(err_last_fid, rc);
+        }
+
+        /* open and test the lov objid file */
         file = filp_open(LOV_OBJID, O_RDWR | O_CREAT, 0644);
         if (IS_ERR(file)) {
                 rc = PTR_ERR(file);
                 CERROR("cannot open/create %s file: rc = %d\n", LOV_OBJID, rc);
-                GOTO(err_client, rc = PTR_ERR(file));
+                GOTO(err_last_fid, rc = PTR_ERR(file));
         }
         mds->mds_lov_objid_filp = file;
         if (!S_ISREG(file->f_dentry->d_inode->i_mode)) {
@@ -532,6 +715,9 @@ err_pop:
 err_lov_objid:
         if (mds->mds_lov_objid_filp && filp_close(mds->mds_lov_objid_filp, 0))
                 CERROR("can't close %s after error\n", LOV_OBJID);
+err_last_fid:
+        if (mds->mds_fid_filp && filp_close(mds->mds_fid_filp, 0))
+                CERROR("can't close %s after error\n", LAST_FID);
 err_client:
         class_disconnect_exports(obd, 0);
 err_last_rcvd:
@@ -539,16 +725,16 @@ err_last_rcvd:
                 CERROR("can't close %s after error\n", LAST_RCVD);
 err_unnamed:
         dput(mds->mds_unnamed_dir);
-err_fids:
-        dput(mds->mds_fids_dir);
+err_id_dir:
+        dput(mds->mds_id_dir);
 err_objects:
         dput(mds->mds_objects_dir);
 err_logs:
         dput(mds->mds_logs_dir);
 err_pending:
         dput(mds->mds_pending_dir);
-err_fid:
-        dput(mds->mds_fid_de);
+err_id_de:
+        dput(mds->mds_id_de);
         goto err_pop;
 }
 
@@ -574,11 +760,17 @@ int mds_fs_cleanup(struct obd_device *obd, int flags)
         mds_server_free_data(mds);
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+        if (mds->mds_fid_filp) {
+                rc = filp_close(mds->mds_fid_filp, 0);
+                mds->mds_fid_filp = NULL;
+                if (rc)
+                        CERROR("%s file won't close, rc = %d\n", LAST_FID, rc);
+        }
         if (mds->mds_rcvd_filp) {
                 rc = filp_close(mds->mds_rcvd_filp, 0);
                 mds->mds_rcvd_filp = NULL;
                 if (rc)
-                        CERROR("%s file won't close, rc=%d\n", LAST_RCVD, rc);
+                        CERROR("%s file won't close, rc = %d\n", LAST_RCVD, rc);
         }
         if (mds->mds_lov_objid_filp) {
                 rc = filp_close(mds->mds_lov_objid_filp, 0);
@@ -590,9 +782,9 @@ int mds_fs_cleanup(struct obd_device *obd, int flags)
                 l_dput(mds->mds_unnamed_dir);
                 mds->mds_unnamed_dir = NULL;
         }
-        if (mds->mds_fids_dir != NULL) {
-                l_dput(mds->mds_fids_dir);
-                mds->mds_fids_dir = NULL;
+        if (mds->mds_id_dir != NULL) {
+                l_dput(mds->mds_id_dir);
+                mds->mds_id_dir = NULL;
         }
         if (mds->mds_objects_dir != NULL) {
                 l_dput(mds->mds_objects_dir);
@@ -609,15 +801,15 @@ int mds_fs_cleanup(struct obd_device *obd, int flags)
         rc = mds_fs_post_cleanup(obd);
         
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-        shrink_dcache_parent(mds->mds_fid_de);
-        dput(mds->mds_fid_de);
+        shrink_dcache_parent(mds->mds_id_de);
+        dput(mds->mds_id_de);
 
         return rc;
 }
 
-/* Creates an object with the same name as its fid.  Because this is not at all
+/* Creates an object with the same name as its id.  Because this is not at all
  * performance sensitive, it is accomplished by creating a file, checking the
- * fid, and renaming it. */
+ * id, and renaming it. */
 int mds_obd_create(struct obd_export *exp, struct obdo *oa,
                    struct lov_stripe_md **ea, struct obd_trans_info *oti)
 {
@@ -626,17 +818,16 @@ int mds_obd_create(struct obd_export *exp, struct obdo *oa,
         struct file *filp;
         struct dentry *dchild;
         struct lvfs_run_ctxt saved;
-        char fidname[LL_FID_NAMELEN];
+        char idname[LL_ID_NAMELEN];
+        int rc = 0, err, idlen;
         void *handle;
-        int rc = 0, err, namelen;
         ENTRY;
 
         push_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
         down(&parent_inode->i_sem);
         if (oa->o_id) {
-                namelen = ll_fid2str(fidname, oa->o_id, oa->o_generation);
-
-                dchild = lookup_one_len(fidname, mds->mds_objects_dir, namelen);
+                idlen = ll_id2str(idname, oa->o_id, oa->o_generation);
+                dchild = lookup_one_len(idname, mds->mds_objects_dir, idlen);
                 if (IS_ERR(dchild))
                         GOTO(out_pop, rc = PTR_ERR(dchild));
 
@@ -669,16 +860,17 @@ int mds_obd_create(struct obd_export *exp, struct obdo *oa,
                 GOTO(out_pop, rc);
         }
 
-        sprintf(fidname, "OBJECTS/%u.%u",ll_insecure_random_int(),current->pid);
-        filp = filp_open(fidname, O_CREAT | O_EXCL, 0644);
+        sprintf(idname, "OBJECTS/%u.%u", ll_insecure_random_int(), current->pid);
+        filp = filp_open(idname, O_CREAT | O_EXCL, 0644);
         if (IS_ERR(filp)) {
                 rc = PTR_ERR(filp);
                 if (rc == -EEXIST) {
                         CERROR("impossible object name collision %s\n",
-                               fidname);
+                               idname);
                         LBUG();
                 }
-                CERROR("error creating tmp object %s: rc %d\n", fidname, rc);
+                CERROR("error creating tmp object %s: rc %d\n", 
+                       idname, rc);
                 GOTO(out_pop, rc);
         }
 
@@ -686,11 +878,12 @@ int mds_obd_create(struct obd_export *exp, struct obdo *oa,
 
         oa->o_id = filp->f_dentry->d_inode->i_ino;
         oa->o_generation = filp->f_dentry->d_inode->i_generation;
-        namelen = ll_fid2str(fidname, oa->o_id, oa->o_generation);
-        CWARN("created log anonymous "LPU64"/%u\n", oa->o_id, oa->o_generation);
+        idlen = ll_id2str(idname, oa->o_id, oa->o_generation);
+        
+        CWARN("created log anonymous "LPU64"/%u\n",
+              oa->o_id, oa->o_generation);
 
-        dchild = lookup_one_len(fidname, mds->mds_objects_dir, namelen);
-
+        dchild = lookup_one_len(idname, mds->mds_objects_dir, idlen);
         if (IS_ERR(dchild)) {
                 CERROR("getting neg dentry for obj rename: %d\n", rc);
                 GOTO(out_close, rc = PTR_ERR(dchild));
@@ -726,7 +919,7 @@ out_dput:
 out_close:
         err = filp_close(filp, 0);
         if (err) {
-                CERROR("closing tmpfile %s: rc %d\n", fidname, rc);
+                CERROR("closing tmpfile %s: rc %d\n", idname, rc);
                 if (!rc)
                         rc = err;
         }
@@ -743,22 +936,22 @@ int mds_obd_destroy(struct obd_export *exp, struct obdo *oa,
         struct inode *parent_inode = mds->mds_objects_dir->d_inode;
         struct obd_device *obd = exp->exp_obd;
         struct lvfs_run_ctxt saved;
-        char fidname[LL_FID_NAMELEN];
+        char idname[LL_ID_NAMELEN];
         struct dentry *de;
         void *handle;
-        int err, namelen, rc = 0;
+        int err, idlen, rc = 0;
         ENTRY;
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
-        namelen = ll_fid2str(fidname, oa->o_id, oa->o_generation);
+        idlen = ll_id2str(idname, oa->o_id, oa->o_generation);
 
         down(&parent_inode->i_sem);
-        de = lookup_one_len(fidname, mds->mds_objects_dir, namelen);
+        de = lookup_one_len(idname, mds->mds_objects_dir, idlen);
         if (IS_ERR(de) || de->d_inode == NULL) {
                 rc = IS_ERR(de) ? PTR_ERR(de) : -ENOENT;
                 CERROR("destroying non-existent object "LPU64" %s: rc %d\n",
-                       oa->o_id, fidname, rc);
+                       oa->o_id, idname, rc);
                 GOTO(out_dput, rc);
         }
         /* Stripe count is 1 here since this is some MDS specific stuff

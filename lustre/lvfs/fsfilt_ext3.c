@@ -59,14 +59,17 @@ struct fsfilt_cb_data {
         struct journal_callback cb_jcb; /* jbd private data - MUST BE FIRST */
         fsfilt_cb_t cb_func;            /* MDS/OBD completion function */
         struct obd_device *cb_obd;      /* MDS/OBD completion device */
-        __u64 cb_last_rcvd;             /* MDS/OST last committed operation */
+        __u64 cb_last_num;              /* MDS/OST last committed operation */
         void *cb_data;                  /* MDS/OST completion function data */
 };
 
 #ifndef EXT3_XATTR_INDEX_TRUSTED        /* temporary until we hit l28 kernel */
 #define EXT3_XATTR_INDEX_TRUSTED        4
 #endif
+
 #define XATTR_LUSTRE_MDS_LOV_EA         "lov"
+#define XATTR_LUSTRE_MDS_MID_EA         "mid"
+#define XATTR_LUSTRE_MDS_SID_EA         "sid"
 
 /*
  * We don't currently need any additional blocks for rmdir and
@@ -441,6 +444,45 @@ static int fsfilt_ext3_iocontrol(struct inode * inode, struct file *file,
         RETURN(rc);
 }
 
+static int fsfilt_ext3_set_xattr(struct inode * inode, void *handle, char *name,
+                                 void *buffer, int buffer_size)
+{
+        int rc = 0;
+
+        lock_kernel();
+
+        rc = ext3_xattr_set_handle(handle, inode, EXT3_XATTR_INDEX_TRUSTED,
+                                   name, buffer, buffer_size, 0);
+        unlock_kernel();
+        if (rc)
+                CERROR("set xattr %s from inode %lu: rc %d\n",
+                       name,  inode->i_ino, rc);
+        return rc;
+}
+
+static int fsfilt_ext3_get_xattr(struct inode *inode, char *name,
+                                 void *buffer, int buffer_size)
+{
+        int rc = 0;
+       
+        lock_kernel();
+
+        rc = ext3_xattr_get(inode, EXT3_XATTR_INDEX_TRUSTED,
+                            name, buffer, buffer_size);
+        unlock_kernel();
+
+        if (buffer == NULL)
+                return (rc == -ENODATA) ? 0 : rc;
+        if (rc < 0) {
+                CDEBUG(D_INFO, "error getting EA %s from inode %lu: rc %d\n",
+                       name,  inode->i_ino, rc);
+                memset(buffer, 0, buffer_size);
+                return (rc == -ENODATA) ? 0 : rc;
+        }
+
+        return rc;
+}
+
 static int fsfilt_ext3_set_md(struct inode *inode, void *handle,
                               void *lmm, int lmm_size)
 {
@@ -451,17 +493,10 @@ static int fsfilt_ext3_set_md(struct inode *inode, void *handle,
         /* keep this when we get rid of OLD_EA (too noisy during conversion) */
         if (EXT3_I(inode)->i_file_acl /* || large inode EA flag */)
                 CWARN("setting EA on %lu/%u again... interesting\n",
-                       inode->i_ino, inode->i_generation);
+                      inode->i_ino, inode->i_generation);
 
-        lock_kernel();
-        rc = ext3_xattr_set_handle(handle, inode, EXT3_XATTR_INDEX_TRUSTED,
-                                   XATTR_LUSTRE_MDS_LOV_EA, lmm, lmm_size, 0);
-
-        unlock_kernel();
-
-        if (rc)
-                CERROR("error adding MD data to inode %lu: rc = %d\n",
-                       inode->i_ino, rc);
+        rc = fsfilt_ext3_set_xattr(inode, handle, XATTR_LUSTRE_MDS_LOV_EA,
+                                   lmm, lmm_size);
         return rc;
 }
 
@@ -470,25 +505,48 @@ static int fsfilt_ext3_get_md(struct inode *inode, void *lmm, int lmm_size)
 {
         int rc;
 
-        LASSERT(down_trylock(&inode->i_sem) != 0);
-        lock_kernel();
+        rc = fsfilt_ext3_get_xattr(inode, XATTR_LUSTRE_MDS_LOV_EA,
+                                   lmm, lmm_size);
+        return rc;
+}
 
-        rc = ext3_xattr_get(inode, EXT3_XATTR_INDEX_TRUSTED,
-                            XATTR_LUSTRE_MDS_LOV_EA, lmm, lmm_size);
-        unlock_kernel();
+static int fsfilt_ext3_set_mid(struct inode *inode, void *handle,
+                               void *mid, int mid_size)
+{
+        int rc;
 
-        /* This gives us the MD size */
-        if (lmm == NULL)
-                return (rc == -ENODATA) ? 0 : rc;
+        rc = fsfilt_ext3_set_xattr(inode, handle, XATTR_LUSTRE_MDS_MID_EA,
+                                   mid, mid_size);
+        return rc;
+}
 
-        if (rc < 0) {
-                CDEBUG(D_INFO, "error getting EA %d/%s from inode %lu: rc %d\n",
-                       EXT3_XATTR_INDEX_TRUSTED, XATTR_LUSTRE_MDS_LOV_EA,
-                       inode->i_ino, rc);
-                memset(lmm, 0, lmm_size);
-                return (rc == -ENODATA) ? 0 : rc;
-        }
+/* Must be called with i_sem held */
+static int fsfilt_ext3_get_mid(struct inode *inode, void *mid, int mid_size)
+{
+        int rc;
 
+        rc = fsfilt_ext3_get_xattr(inode, XATTR_LUSTRE_MDS_MID_EA,
+                                   mid, mid_size);
+        return rc;
+}
+
+static int fsfilt_ext3_set_sid(struct inode *inode, void *handle,
+                               void *sid, int sid_size)
+{
+        int rc;
+
+        rc = fsfilt_ext3_set_xattr(inode, handle, XATTR_LUSTRE_MDS_SID_EA,
+                                   sid, sid_size);
+        return rc;
+}
+
+/* Must be called with i_sem held */
+static int fsfilt_ext3_get_sid(struct inode *inode, void *sid, int sid_size)
+{
+        int rc;
+
+        rc = fsfilt_ext3_get_xattr(inode, XATTR_LUSTRE_MDS_SID_EA,
+                                   sid, sid_size);
         return rc;
 }
 
@@ -602,7 +660,7 @@ static void fsfilt_ext3_cb_func(struct journal_callback *jcb, int error)
 {
         struct fsfilt_cb_data *fcb = (struct fsfilt_cb_data *)jcb;
 
-        fcb->cb_func(fcb->cb_obd, fcb->cb_last_rcvd, fcb->cb_data, error);
+        fcb->cb_func(fcb->cb_obd, fcb->cb_last_num, fcb->cb_data, error);
 
         OBD_SLAB_FREE(fcb, fcb_cache, sizeof *fcb);
         atomic_dec(&fcb_cache_count);
@@ -610,8 +668,8 @@ static void fsfilt_ext3_cb_func(struct journal_callback *jcb, int error)
 
 static int fsfilt_ext3_add_journal_cb(struct obd_device *obd,
                                       struct super_block *sb,
-                                      __u64 last_rcvd,
-                                      void *handle, fsfilt_cb_t cb_func,
+                                      __u64 last_num, void *handle,
+                                      fsfilt_cb_t cb_func,
                                       void *cb_data)
 {
         struct fsfilt_cb_data *fcb;
@@ -623,10 +681,11 @@ static int fsfilt_ext3_add_journal_cb(struct obd_device *obd,
         atomic_inc(&fcb_cache_count);
         fcb->cb_func = cb_func;
         fcb->cb_obd = obd;
-        fcb->cb_last_rcvd = last_rcvd;
+        fcb->cb_last_num = last_num;
         fcb->cb_data = cb_data;
 
-        CDEBUG(D_EXT2, "set callback for last_rcvd: "LPD64"\n", last_rcvd);
+        CDEBUG(D_EXT2, "set callback for last_num: "LPD64"\n", last_num);
+        
         lock_kernel();
         journal_callback_set(handle, fsfilt_ext3_cb_func,
                              (struct journal_callback *)fcb);
@@ -1034,7 +1093,7 @@ static int fsfilt_ext3_write_record(struct file *file, void *buf, int bufsize,
         loff_t new_size = inode->i_size;
         journal_t *journal;
         handle_t *handle;
-        int err, block_count = 0, blocksize, size, boffs;
+        int err = 0, block_count = 0, blocksize, size, boffs;
 
         /* Determine how many transaction credits are needed */
         blocksize = 1 << inode->i_blkbits;
@@ -1165,11 +1224,12 @@ extern int ext3_add_dir_entry(struct dentry *dentry);
 extern int ext3_del_dir_entry(struct dentry *dentry);
 
 static int fsfilt_ext3_add_dir_entry(struct obd_device *obd,
-                                 struct dentry *parent,
-                                 char *name, int namelen,
-                                 unsigned long ino,
-                                 unsigned long generation,
-                                 unsigned mds)
+                                     struct dentry *parent,
+                                     char *name, int namelen,
+                                     unsigned long ino,
+                                     unsigned long generation,
+                                     unsigned long mds, 
+                                     unsigned long fid)
 {
 #ifdef EXT3_FEATURE_INCOMPAT_MDSNUM
         struct dentry *dentry;
@@ -1200,6 +1260,7 @@ static int fsfilt_ext3_add_dir_entry(struct obd_device *obd,
         dentry->d_inum = ino;
         dentry->d_mdsnum = mds;
         dentry->d_generation = generation;
+        dentry->d_fid = fid;
         lock_kernel();
         err = ext3_add_dir_entry(dentry);
         unlock_kernel();
@@ -1228,45 +1289,6 @@ static int fsfilt_ext3_del_dir_entry(struct obd_device *obd,
 #error "rebuild kernel and lustre with ext3-mds-num patch!"
         LASSERT(0);
 #endif
-}
-
-static int fsfilt_ext3_set_xattr(struct inode * inode, void *handle, char *name,
-                                 void *buffer, int buffer_size)
-{
-        int rc = 0;
-
-        lock_kernel();
-
-        rc = ext3_xattr_set_handle(handle, inode, EXT3_XATTR_INDEX_TRUSTED,
-                                   name, buffer, buffer_size, 0);
-        unlock_kernel();
-        if (rc)
-                CERROR("set xattr %s from inode %lu: rc %d\n",
-                       name,  inode->i_ino, rc);
-        return rc;
-}
-
-static int fsfilt_ext3_get_xattr(struct inode *inode, char *name,
-                                 void *buffer, int buffer_size)
-{
-        int rc = 0;
-       
-        lock_kernel();
-
-        rc = ext3_xattr_get(inode, EXT3_XATTR_INDEX_TRUSTED,
-                            name, buffer, buffer_size);
-        unlock_kernel();
-
-        if (buffer == NULL)
-                return (rc == -ENODATA) ? 0 : rc;
-        if (rc < 0) {
-                CDEBUG(D_INFO, "error getting EA %s from inode %lu: rc %d\n",
-                       name,  inode->i_ino, rc);
-                memset(buffer, 0, buffer_size);
-                return (rc == -ENODATA) ? 0 : rc;
-        }
-
-        return rc;
 }
 
 /* If fso is NULL, op is FSFILT operation, otherwise op is number of fso
@@ -1363,33 +1385,37 @@ static int fsfilt_ext3_get_write_extents_num(struct inode *inode, int *size)
 } 
 
 static struct fsfilt_operations fsfilt_ext3_ops = {
-        .fs_type                = "ext3",
-        .fs_owner               = THIS_MODULE,
-        .fs_start               = fsfilt_ext3_start,
-        .fs_brw_start           = fsfilt_ext3_brw_start,
-        .fs_commit              = fsfilt_ext3_commit,
-        .fs_commit_async        = fsfilt_ext3_commit_async,
-        .fs_commit_wait         = fsfilt_ext3_commit_wait,
-        .fs_setattr             = fsfilt_ext3_setattr,
-        .fs_iocontrol           = fsfilt_ext3_iocontrol,
-        .fs_set_md              = fsfilt_ext3_set_md,
-        .fs_get_md              = fsfilt_ext3_get_md,
-        .fs_readpage            = fsfilt_ext3_readpage,
-        .fs_add_journal_cb      = fsfilt_ext3_add_journal_cb,
-        .fs_statfs              = fsfilt_ext3_statfs,
-        .fs_sync                = fsfilt_ext3_sync,
-        .fs_map_inode_pages     = fsfilt_ext3_map_inode_pages,
-        .fs_prep_san_write      = fsfilt_ext3_prep_san_write,
-        .fs_write_record        = fsfilt_ext3_write_record,
-        .fs_read_record         = fsfilt_ext3_read_record,
-        .fs_setup               = fsfilt_ext3_setup,
-        .fs_getpage             = fsfilt_ext3_getpage,
-        .fs_send_bio            = fsfilt_ext3_send_bio,
-        .fs_set_xattr           = fsfilt_ext3_set_xattr,
-        .fs_get_xattr           = fsfilt_ext3_get_xattr,
-        .fs_get_op_len          = fsfilt_ext3_get_op_len,
-        .fs_add_dir_entry       = fsfilt_ext3_add_dir_entry,
-        .fs_del_dir_entry       = fsfilt_ext3_del_dir_entry,
+        .fs_type                    = "ext3",
+        .fs_owner                   = THIS_MODULE,
+        .fs_start                   = fsfilt_ext3_start,
+        .fs_brw_start               = fsfilt_ext3_brw_start,
+        .fs_commit                  = fsfilt_ext3_commit,
+        .fs_commit_async            = fsfilt_ext3_commit_async,
+        .fs_commit_wait             = fsfilt_ext3_commit_wait,
+        .fs_setattr                 = fsfilt_ext3_setattr,
+        .fs_iocontrol               = fsfilt_ext3_iocontrol,
+        .fs_set_md                  = fsfilt_ext3_set_md,
+        .fs_get_md                  = fsfilt_ext3_get_md,
+        .fs_set_mid                 = fsfilt_ext3_set_mid,
+        .fs_get_mid                 = fsfilt_ext3_get_mid,
+        .fs_set_sid                 = fsfilt_ext3_set_sid,
+        .fs_get_sid                 = fsfilt_ext3_get_sid,
+        .fs_readpage                = fsfilt_ext3_readpage,
+        .fs_add_journal_cb          = fsfilt_ext3_add_journal_cb,
+        .fs_statfs                  = fsfilt_ext3_statfs,
+        .fs_sync                    = fsfilt_ext3_sync,
+        .fs_map_inode_pages         = fsfilt_ext3_map_inode_pages,
+        .fs_prep_san_write          = fsfilt_ext3_prep_san_write,
+        .fs_write_record            = fsfilt_ext3_write_record,
+        .fs_read_record             = fsfilt_ext3_read_record,
+        .fs_setup                   = fsfilt_ext3_setup,
+        .fs_getpage                 = fsfilt_ext3_getpage,
+        .fs_send_bio                = fsfilt_ext3_send_bio,
+        .fs_set_xattr               = fsfilt_ext3_set_xattr,
+        .fs_get_xattr               = fsfilt_ext3_get_xattr,
+        .fs_get_op_len              = fsfilt_ext3_get_op_len,
+        .fs_add_dir_entry           = fsfilt_ext3_add_dir_entry,
+        .fs_del_dir_entry           = fsfilt_ext3_del_dir_entry,
         .fs_init_extents_ea         = fsfilt_ext3_init_extents_ea,
         .fs_insert_extents_ea       = fsfilt_ext3_insert_extents_ea,
         .fs_remove_extents_ea       = fsfilt_ext3_remove_extents_ea,

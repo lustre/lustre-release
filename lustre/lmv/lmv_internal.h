@@ -6,10 +6,10 @@
 
 #define MEA_SIZE_LMV(lmv)				\
         ((lmv)->desc.ld_tgt_count *			\
-	 sizeof(struct ll_fid) + sizeof(struct mea))
+	 sizeof(struct lustre_id) + sizeof(struct mea))
         
 struct lmv_inode {
-        struct ll_fid      fid;            /* fid of dirobj */
+        struct lustre_id   id;             /* id of dirobj */
         unsigned long      size;           /* slave size value */
         int                flags;
 };
@@ -21,7 +21,7 @@ struct lmv_obj {
 	struct semaphore   guard;
 	int                state;          /* object state. */
         atomic_t           count;          /* ref counter. */
-        struct ll_fid      fid;            /* master fid of dir */
+        struct lustre_id   id;             /* master id of dir */
         void               *update;        /* bitmap of status (uptodate) */
 	__u32		   hashtype;
         int                objcount;       /* number of slaves */
@@ -60,48 +60,47 @@ int lmv_check_connect(struct obd_device *obd);
 struct lmv_obj *lmv_get_obj(struct lmv_obj *obj);
 
 struct lmv_obj *lmv_grab_obj(struct obd_device *obd,
-			     struct ll_fid *fid);
+			     struct lustre_id *id);
 
 struct lmv_obj *lmv_alloc_obj(struct obd_device *obd,
-			      struct ll_fid *fid,
+			      struct lustre_id *id,
 			      struct mea *mea);
 
 struct lmv_obj *lmv_create_obj(struct obd_export *exp,
-			       struct ll_fid *fid,
+			       struct lustre_id *id,
 			       struct mea *mea);
 
-int lmv_delete_obj(struct obd_export *exp, struct ll_fid *fid);
+int lmv_delete_obj(struct obd_export *exp, struct lustre_id *id);
 
-int lmv_intent_lock(struct obd_export *,
-                    struct ll_fid *, const char *, int, void *, int,
-		    struct ll_fid *, struct lookup_intent *, int,
+int lmv_intent_lock(struct obd_export *, struct lustre_id *, 
+		    const char *, int, void *, int,
+		    struct lustre_id *, struct lookup_intent *, int,
 		    struct ptlrpc_request **, ldlm_blocking_callback);
 
-int lmv_intent_lookup(struct obd_export *,
-                      struct ll_fid *, const char *, int, void *, int,
-		      struct ll_fid *, struct lookup_intent *, int,
+int lmv_intent_lookup(struct obd_export *, struct lustre_id *, 
+		      const char *, int, void *, int,
+		      struct lustre_id *, struct lookup_intent *, int,
 		      struct ptlrpc_request **, ldlm_blocking_callback);
 
-int lmv_intent_getattr(struct obd_export *,
-                       struct ll_fid *, const char *, int, void *, int,
-		       struct ll_fid *, struct lookup_intent *, int,
+int lmv_intent_getattr(struct obd_export *, struct lustre_id *, 
+		       const char *, int, void *, int,
+		       struct lustre_id *, struct lookup_intent *, int,
 		       struct ptlrpc_request **, ldlm_blocking_callback);
 
-int lmv_intent_open(struct obd_export *,
-                    struct ll_fid *, const char *, int, void *, int,
-		    struct ll_fid *, struct lookup_intent *, int,
-		    struct ptlrpc_request **, ldlm_blocking_callback);
+int lmv_intent_open(struct obd_export *, struct lustre_id *, const char *, 
+		    int, void *, int, struct lustre_id *, struct lookup_intent *, 
+		    int, struct ptlrpc_request **, ldlm_blocking_callback);
 
 int lmv_revalidate_slaves(struct obd_export *, struct ptlrpc_request **,
-                          struct ll_fid *, struct lookup_intent *, int,
+                          struct lustre_id *, struct lookup_intent *, int,
 			  ldlm_blocking_callback cb_blocking);
 
-int lmv_get_mea_and_update_object(struct obd_export *, struct ll_fid *);
+int lmv_get_mea_and_update_object(struct obd_export *, struct lustre_id *);
 int lmv_dirobj_blocking_ast(struct ldlm_lock *, struct ldlm_lock_desc *,
 			    void *, int);
 
 static inline struct mea * 
-body_of_splitted_dir(struct ptlrpc_request *req, int offset)
+lmv_splitted_dir_body(struct ptlrpc_request *req, int offset)
 {
 	struct mds_body *body;
 	struct mea *mea;
@@ -113,8 +112,8 @@ body_of_splitted_dir(struct ptlrpc_request *req, int offset)
 	if (!body || !S_ISDIR(body->mode) || !body->eadatasize)
 		return NULL;
 
-        mea = lustre_msg_buf(req->rq_repmsg,
-			     offset + 1, body->eadatasize);
+        mea = lustre_msg_buf(req->rq_repmsg, offset + 1,
+			     body->eadatasize);
 	LASSERT(mea);
 
 	if (mea->mea_count == 0)
@@ -123,15 +122,18 @@ body_of_splitted_dir(struct ptlrpc_request *req, int offset)
 	return mea;
 }
 
+/* this checks if passed ids are eaqual. We check here only group (that is mds
+ * number) and fid number as store cookie is not known outside of its MDS
+ * anymore and should not be used. */
 static inline int
-fid_equal(struct ll_fid *fid1, struct ll_fid *fid2)
+lmv_id_equal(struct lustre_id *id1, struct lustre_id *id2)
 {
-        if (fid1->mds != fid2->mds)
+        if (id1->li_fid.lf_group != id2->li_fid.lf_group)
                 return 0;
-        if (fid1->id != fid2->id)
+
+        if (id1->li_fid.lf_id != id2->li_fid.lf_id)
                 return 0;
-        if (fid1->generation != fid2->generation)
-                return 0;
+	
         return 1;
 }
 

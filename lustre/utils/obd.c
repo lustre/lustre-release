@@ -2386,9 +2386,10 @@ int jt_obd_reint_sync(int argc, char **argv)
         IOC_PACK(argv[0], data);
         rc = l_ioctl(OBD_DEV_ID, OBD_IOC_CMOBD_SYNC, buf);
        
-        if (rc)
-                fprintf(stderr, "OBD_IOC_CMOBD_SYNC failed: rc=%d\n",
-                        rc);
+        if (rc) {
+                fprintf(stderr, "OBD_IOC_CMOBD_SYNC failed: %s\n",
+                        strerror(errno));
+        }
         return rc;  
                
 }
@@ -2404,9 +2405,10 @@ int jt_obd_cache_on(int argc, char **argv)
         IOC_PACK(argv[0], data);
         rc = l_ioctl(OBD_DEV_ID, OBD_IOC_COBD_CON, buf);
        
-        if (rc)
-                fprintf(stderr, "OBD_IOC_CMOBD_SYNC failed: rc=%d\n",
-                        rc);
+        if (rc) {
+                fprintf(stderr, "OBD_IOC_COBD_CON failed: %s\n",
+                        strerror(errno));
+        }
         return rc;  
                
 }
@@ -2420,9 +2422,10 @@ int jt_obd_cache_off(int argc, char **argv)
                return CMD_HELP; 
         IOC_PACK(argv[0], data);
         rc = l_ioctl(OBD_DEV_ID, OBD_IOC_COBD_COFF, buf);
-        if (rc)
-                fprintf(stderr, "OBD_IOC_CMOBD_SYNC failed: rc=%d\n",
-                        rc);
+        if (rc) {
+                fprintf(stderr, "OBD_IOC_COBD_COFF failed: %s\n",
+                        strerror(errno));
+        }
         return rc;  
 }
 int jt_obd_snap_add(int argc, char **argv)
@@ -2448,9 +2451,11 @@ int jt_obd_snap_add(int argc, char **argv)
         rc = l_ioctl(SMFS_DEV_ID, OBD_IOC_SMFS_SNAP_ADD, buf);
         
         unregister_ioc_dev(SMFS_DEV_ID);       
+        if (rc) {
+                fprintf(stderr, "OBD_IOC_SNAP_ADD failed: rc=%s\n", 
+                        strerror(errno));
+        }
  
-        if (rc)
-                fprintf(stderr, "OBD_IOC_SNAP_ADD failed: rc=%d\n", rc);
         return rc;
 }
 static void signal_server(int sig)
@@ -2459,7 +2464,8 @@ static void signal_server(int sig)
                 do_disconnect("sigint", 1);
                 exit(1);
         } else
-                fprintf(stderr, "%s: got signal %d\n", jt_cmdname("sigint"), sig);
+                fprintf(stderr, "%s: got signal %d\n", 
+                        jt_cmdname("sigint"), sig);
 }
 
 int obd_initialize(int argc, char **argv)

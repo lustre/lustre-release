@@ -51,6 +51,7 @@ static int smfs_ost_get_id(obd_id *id, char *data, int size)
                 return -EINVAL;
         return 0;
 }
+
 /* Group 0 is no longer a legal group, to catch uninitialized IDs */
 #define FILTER_MIN_GROUPS 3
 static int smfs_ost_get_group(struct dentry *dentry, struct obdo *oa)
@@ -166,6 +167,7 @@ static int ost_rec_write_pack(char *buffer, struct dentry *dentry,
 out:
         RETURN(rc);
 }
+
 typedef int (*ost_pack_rec_func)(char *buffer, struct dentry *dentry,
                                  struct inode *dir, void *data1, void *data2);
 static ost_pack_rec_func ost_kml_pack[REINT_MAX + 1] = {
@@ -187,6 +189,5 @@ int ost_rec_pack_init(struct smfs_super_info *smsi)
 {
 
         smsi->smsi_pack_rec[PACK_OST] = ost_rec_pack;
-
         return 0;
 }

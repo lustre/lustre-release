@@ -40,12 +40,12 @@
 #endif
 
 void mdc_readdir_pack(struct ptlrpc_request *req, int req_offset,
-                      __u64 offset, __u32 size, struct ll_fid *mdc_fid)
+                      __u64 offset, __u32 size, struct lustre_id *mdc_id)
 {
         struct mds_body *b;
 
         b = lustre_msg_buf(req->rq_reqmsg, req_offset, sizeof (*b));
-        b->fid1 = *mdc_fid;
+        b->id1 = *mdc_id;
         b->size = offset;                       /* !! */
         b->nlink = size;                        /* !! */
 }
@@ -64,6 +64,7 @@ static __u32 mds_pack_open_flags(__u32 flags)
                 ((flags & O_DIRECTORY) ? MDS_OPEN_DIRECTORY : 0) |
                 0;
 }
+
 /* packing of MDS records */
 void mdc_open_pack(struct lustre_msg *msg, int offset,
                    struct mdc_op_data *op_data, __u32 mode, __u64 rdev,
@@ -76,8 +77,8 @@ void mdc_open_pack(struct lustre_msg *msg, int offset,
         /* XXX do something about time, uid, gid */
         rec->cr_opcode = REINT_OPEN;
         if (op_data != NULL)
-                rec->cr_fid = op_data->fid1;
-        memset(&rec->cr_replayfid, 0, sizeof(rec->cr_replayfid));
+                rec->cr_id = op_data->id1;
+        memset(&rec->cr_replayid, 0, sizeof(rec->cr_replayid));
         rec->cr_mode = mode;
         rec->cr_flags = mds_pack_open_flags(flags);
         rec->cr_rdev = rdev;
@@ -105,8 +106,8 @@ void mdc_getattr_pack(struct lustre_msg *msg, int offset, int valid,
         b->valid = valid;
         b->flags = flags;
 
-        b->fid1 = data->fid1;
-        b->fid2 = data->fid2;
+        b->id1 = data->id1;
+        b->id2 = data->id2;
         if (data->name) {
                 char *tmp;
                 tmp = lustre_msg_buf(msg, offset + 1,
@@ -121,8 +122,8 @@ void mdc_close_pack(struct ptlrpc_request *req, int offset, struct obdo *oa,
         struct mds_body *body;
 
         body = lustre_msg_buf(req->rq_reqmsg, offset, sizeof(*body));
+        mdc_pack_id(&body->id1, oa->o_id, 0, oa->o_mode, 0, 0);
 
-        mdc_pack_fid(&body->fid1, oa->o_id, 0, oa->o_mode);
         memcpy(&body->handle, &och->och_fh, sizeof(body->handle));
         if (oa->o_valid & OBD_MD_FLATIME) {
                 body->atime = oa->o_atime;

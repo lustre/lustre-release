@@ -27,9 +27,9 @@
 
 #include <linux/lvfs.h>
 
-struct dentry *lvfs_fid2dentry(struct lvfs_run_ctxt *ctxt, __u64 id,
-                               __u32 gen, __u64 gr, void *data)
+struct dentry *lvfs_id2dentry(struct lvfs_run_ctxt *ctxt, __u64 id,
+                              __u32 gen, __u64 gr, void *data)
 {
-        return ctxt->cb_ops.l_fid2dentry(id, gen, gr, data);
+        return ctxt->cb_ops.l_id2dentry(id, gen, gr, data);
 }
-EXPORT_SYMBOL(lvfs_fid2dentry);
+EXPORT_SYMBOL(lvfs_id2dentry);

@@ -66,22 +66,24 @@ static int cobd_setup(struct obd_device *obd, obd_count len, void *buf)
 {
         struct lustre_cfg *lcfg = (struct lustre_cfg *)buf;
         struct cache_obd  *cobd = &obd->u.cobd;
-//        struct lustre_handle real_conn = {0,}, cache_conn = {0,};
-        struct lustre_handle  cache_conn = {0,};
-        struct obd_device *real;
+#if 0
+        struct lustre_handle master_conn = {0,};
+#endif
+        struct lustre_handle cache_conn = {0,};
+        struct obd_device *master;
         struct obd_device *cache;
         int rc;
         ENTRY;
 
         if (lcfg->lcfg_inllen1 == 0 || lcfg->lcfg_inlbuf1 == NULL) {
-                CERROR("%s: setup requires real device name\n", 
+                CERROR("%s: setup requires master device name\n", 
                        obd->obd_name);
                 RETURN(-EINVAL);
         }
 
-        real = class_name2obd(lcfg->lcfg_inlbuf1);
-        if (real == NULL) {
-                CERROR("%s: unable to find a client for real: %s\n",
+        master = class_name2obd(lcfg->lcfg_inlbuf1);
+        if (master == NULL) {
+                CERROR("%s: unable to find a client for master: %s\n",
                        obd->obd_name, lcfg->lcfg_inlbuf1);
                 RETURN(-EINVAL);
         }
@@ -91,60 +93,60 @@ static int cobd_setup(struct obd_device *obd, obd_count len, void *buf)
                 RETURN(-EINVAL);
         }
 
-        cache  = class_name2obd(lcfg->lcfg_inlbuf2);
+        cache = class_name2obd(lcfg->lcfg_inlbuf2);
         if (cache == NULL) {
                 CERROR("%s: unable to find a client for cache: %s\n",
                        obd->obd_name, lcfg->lcfg_inlbuf2);
                 RETURN(-EINVAL);
         }
 
-        OBD_ALLOC(cobd->cobd_real_name, strlen(lcfg->lcfg_inlbuf1) + 1);
-        if (!cobd->cobd_real_name) 
+        OBD_ALLOC(cobd->master_name, strlen(lcfg->lcfg_inlbuf1) + 1);
+        if (!cobd->master_name) 
                 GOTO(exit, rc = -ENOMEM);
-        memcpy(cobd->cobd_real_name, lcfg->lcfg_inlbuf1, 
+        memcpy(cobd->master_name, lcfg->lcfg_inlbuf1, 
                strlen(lcfg->lcfg_inlbuf1));
         
-        OBD_ALLOC(cobd->cobd_cache_name, strlen(lcfg->lcfg_inlbuf2) + 1);
-        if (!cobd->cobd_cache_name) 
+        OBD_ALLOC(cobd->cache_name, strlen(lcfg->lcfg_inlbuf2) + 1);
+        if (!cobd->cache_name) 
                 GOTO(exit, rc = -ENOMEM);
-        memcpy(cobd->cobd_cache_name, lcfg->lcfg_inlbuf2, 
+        memcpy(cobd->cache_name, lcfg->lcfg_inlbuf2, 
                strlen(lcfg->lcfg_inlbuf2));
 
 #if 0        
-        /* don't bother checking attached/setup;
-         * obd_connect() should, and it can change underneath us */
-        rc = connect_to_obd(cobd->cobd_real_name, &real_conn);
+        /* don't bother checking attached/setup; obd_connect() should, and it
+         * can change underneath us */
+        rc = connect_to_obd(cobd->master_name, &master_conn);
         if (rc != 0)
                 GOTO(exit, rc);
-        cobd->cobd_real_exp = class_conn2export(&real_conn);
+        cobd->master_exp = class_conn2export(&master_conn);
 #endif        
-        rc = connect_to_obd(cobd->cobd_cache_name, &cache_conn);
+        rc = connect_to_obd(cobd->cache_name, &cache_conn);
         if (rc != 0) {
-                obd_disconnect(cobd->cobd_cache_exp, 0);
+                obd_disconnect(cobd->cache_exp, 0);
                 GOTO(exit, rc);
         }
-        cobd->cobd_cache_exp = class_conn2export(&cache_conn);
-        
+        cobd->cache_exp = class_conn2export(&cache_conn);
         cobd->cache_on = 1;
-        if (!strcmp(real->obd_type->typ_name, LUSTRE_MDC_NAME)) {
-                /* set mds_num for lustre */
-                int mds_num;
-                mds_num = REAL_MDS_NUMBER;
-                obd_set_info(cobd->cobd_real_exp, strlen("mds_num"),
-                             "mds_num", sizeof(mds_num), &mds_num);
-                mds_num = CACHE_MDS_NUMBER;
-                obd_set_info(cobd->cobd_cache_exp, strlen("mds_num"),
-                             "mds_num", sizeof(mds_num), &mds_num);
+
+        if (!strcmp(master->obd_type->typ_name, LUSTRE_MDC_NAME)) {
+                int mds_type;
+                
+                mds_type = MDS_MASTER_OBD;
+                obd_set_info(cobd->master_exp, strlen("mds_type"),
+                             "mds_type", sizeof(mds_type), &mds_type);
+                
+                mds_type = MDS_CACHE_OBD;
+                obd_set_info(cobd->cache_exp, strlen("mds_type"),
+                             "mds_type", sizeof(mds_type), &mds_type);
         }
-        /*default write to real obd*/
 exit:
         if (rc) {
-                if (cobd->cobd_cache_name)
-                        OBD_FREE(cobd->cobd_cache_name, 
-                                 strlen(cobd->cobd_cache_name) + 1);
-                if (cobd->cobd_real_name)
-                        OBD_FREE(cobd->cobd_real_name, 
-                                 strlen(cobd->cobd_real_name) + 1);
+                if (cobd->cache_name)
+                        OBD_FREE(cobd->cache_name, 
+                                 strlen(cobd->cache_name) + 1);
+                if (cobd->master_name)
+                        OBD_FREE(cobd->master_name, 
+                                 strlen(cobd->master_name) + 1);
         }
         RETURN(rc);
 }
@@ -157,20 +159,20 @@ static int cobd_cleanup(struct obd_device *obd, int flags)
         if (!list_empty(&obd->obd_exports))
                 return (-EBUSY);
         
-        if (cobd->cobd_cache_name)
-                OBD_FREE(cobd->cobd_cache_name, 
-                         strlen(cobd->cobd_cache_name) + 1);
-        if (cobd->cobd_real_name)
-                OBD_FREE(cobd->cobd_real_name, 
-                         strlen(cobd->cobd_real_name) + 1);
+        if (cobd->cache_name)
+                OBD_FREE(cobd->cache_name, 
+                         strlen(cobd->cache_name) + 1);
+        if (cobd->master_name)
+                OBD_FREE(cobd->master_name, 
+                         strlen(cobd->master_name) + 1);
         if (cobd->cache_on) { 
-                rc = obd_disconnect(cobd->cobd_cache_exp, flags);
+                rc = obd_disconnect(cobd->cache_exp, flags);
                 if (rc != 0)
                         CERROR("error %d disconnecting cache\n", rc);
         }
-        rc = obd_disconnect(cobd->cobd_real_exp, flags);
+        rc = obd_disconnect(cobd->master_exp, flags);
         if (rc != 0)
-                CERROR("error %d disconnecting real\n", rc);
+                CERROR("error %d disconnecting master\n", rc);
         
         return (rc);
 }
@@ -180,25 +182,21 @@ struct obd_export *cobd_get_exp(struct obd_device *obd)
         struct cache_obd  *cobd = &obd->u.cobd;
         
         if (cobd->cache_on)  
-                return cobd->cobd_cache_exp;
+                return cobd->cache_exp;
         else
-                return cobd->cobd_real_exp;
+                return cobd->master_exp;
 }
 
 static int
 cobd_connect(struct lustre_handle *conn, struct obd_device *obd,
              struct obd_uuid *cluuid, unsigned long connect_flags)
 {
-        int rc;
-        rc = class_connect(conn, obd, cluuid);
-        return rc; 
+        return class_connect(conn, obd, cluuid);
 }
 
 static int cobd_disconnect(struct obd_export *exp, int flags)
 {
-        int rc;
-        rc = class_disconnect(exp, 0);
-        return rc; 
+        return class_disconnect(exp, 0);
 }
 
 static int cobd_get_info(struct obd_export *exp, obd_count keylen,
@@ -206,14 +204,15 @@ static int cobd_get_info(struct obd_export *exp, obd_count keylen,
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
+        
         if (obd == NULL) {
                 CERROR("invalid client cookie "LPX64"\n", 
                        exp->exp_handle.h_cookie);
                 return -EINVAL;
         }
         cobd_exp = cobd_get_exp(obd);
-        /* intercept cache utilisation info? */
 
+        /* intercept cache utilisation info? */
         return obd_get_info(cobd_exp, keylen, key, vallen, val);
 }
 
@@ -229,8 +228,8 @@ static int cobd_set_info(struct obd_export *exp, obd_count keylen,
                 return -EINVAL;
         }
         cobd_exp = cobd_get_exp(obd);
+        
         /* intercept cache utilisation info? */
-
         return obd_set_info(cobd_exp, keylen, key, vallen, val);
 }
 
@@ -311,7 +310,7 @@ static int cobd_destroy(struct obd_export *exp, struct obdo *obdo,
 
 static int cobd_precleanup(struct obd_device *obd, int flags)
 {
-        /*FIXME Do we need some cleanup here?*/
+        /* FIXME-WANGDI: do we need some cleanup here? */
         return 0;
 }
 
@@ -331,8 +330,8 @@ static int cobd_getattr(struct obd_export *exp, struct obdo *oa,
 }
 
 static int cobd_getattr_async(struct obd_export *exp,
-                             struct obdo *obdo, struct lov_stripe_md *ea,
-                             struct ptlrpc_request_set *set)
+                              struct obdo *obdo, struct lov_stripe_md *ea,
+                              struct ptlrpc_request_set *set)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
@@ -362,7 +361,8 @@ static int cobd_setattr(struct obd_export *exp, struct obdo *obdo,
         return obd_setattr(cobd_exp, obdo, ea, oti);
 }
 
-static int cobd_md_getstatus(struct obd_export *exp, struct ll_fid *rootfid)
+static int cobd_md_getstatus(struct obd_export *exp,
+                             struct lustre_id *rootid)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
@@ -373,7 +373,7 @@ static int cobd_md_getstatus(struct obd_export *exp, struct ll_fid *rootfid)
                 return -EINVAL;
         }
         cobd_exp = cobd_get_exp(obd);
-        return md_getstatus(cobd_exp, rootfid);
+        return md_getstatus(cobd_exp, rootid);
 }
 
 static int cobd_brw(int cmd, struct obd_export *exp, struct obdo *oa,
@@ -675,8 +675,7 @@ static int cobd_commitrw(int cmd, struct obd_export *exp, struct obdo *oa,
 
 static int cobd_flush(struct obd_device *obd)
 {
-       /*FLUSH the filesystem from the cache 
-        *to the real device */
+        /* flush the filesystem from the cache to the real device. */
         return 0; 
 }
 
@@ -685,7 +684,7 @@ static int cobd_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct cache_obd  *cobd = &obd->u.cobd;
-        struct obd_device *real_dev = NULL;
+        struct obd_device *master_dev = NULL;
         struct obd_export *cobd_exp;
         int rc = 0;
  
@@ -694,39 +693,39 @@ static int cobd_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 if (!cobd->cache_on) {
                         struct lustre_handle cache_conn = {0,};
                         
-                        rc = obd_disconnect(cobd->cobd_real_exp, 0);
+                        rc = obd_disconnect(cobd->master_exp, 0);
                         if (rc != 0)
-                                CERROR("error %d disconnecting real\n", rc);
-                        rc = connect_to_obd(cobd->cobd_cache_name, &cache_conn);
+                                CERROR("error %d disconnecting master\n", rc);
+                        rc = connect_to_obd(cobd->cache_name, &cache_conn);
                         if (rc != 0)
                                 RETURN(rc); 
-                        cobd->cobd_cache_exp = class_conn2export(&cache_conn);
+                        cobd->cache_exp = class_conn2export(&cache_conn);
                         
                         cobd->cache_on = 1;
                 }
                 break;
         case OBD_IOC_COBD_COFF: 
                 if (cobd->cache_on) {
-                        struct lustre_handle real_conn = {0,};
+                        struct lustre_handle master_conn = {0,};
                         struct obd_device *cache_dev = NULL;
                         int m_easize, m_cooksize;
 
-                        cache_dev = class_exp2obd(cobd->cobd_cache_exp); 
+                        cache_dev = class_exp2obd(cobd->cache_exp); 
                         m_easize = cache_dev->u.cli.cl_max_mds_easize; 
                         m_cooksize = cache_dev->u.cli.cl_max_mds_cookiesize; 
-                        rc = obd_disconnect(cobd->cobd_cache_exp, 0);
+                        rc = obd_disconnect(cobd->cache_exp, 0);
                         if (rc != 0)
-                                CERROR("error %d disconnecting real\n", rc);
+                                CERROR("error %d disconnecting master\n", rc);
 
-                        /*FIXME, should read from real_dev*/
+                        /* FIXME-WANGDI: should we read from master_dev? */
                         
-                        rc = connect_to_obd(cobd->cobd_real_name, &real_conn);
+                        rc = connect_to_obd(cobd->master_name, &master_conn);
                         if (rc != 0)
                                 RETURN(rc); 
-                        cobd->cobd_real_exp = class_conn2export(&real_conn);
-                        real_dev = class_exp2obd(cobd->cobd_real_exp);
-                        real_dev->u.cli.cl_max_mds_easize = m_easize;
-                        real_dev->u.cli.cl_max_mds_cookiesize = m_cooksize;
+                        cobd->master_exp = class_conn2export(&master_conn);
+                        master_dev = class_exp2obd(cobd->master_exp);
+                        master_dev->u.cli.cl_max_mds_easize = m_easize;
+                        master_dev->u.cli.cl_max_mds_cookiesize = m_cooksize;
                         cobd->cache_on = 0;
                 }
                 break;
@@ -833,7 +832,7 @@ static int  cobd_import_event(struct obd_device *obd,
         return 0; 
 }
 
-static int cobd_md_getattr(struct obd_export *exp, struct ll_fid *fid,
+static int cobd_md_getattr(struct obd_export *exp, struct lustre_id *id,
                            unsigned long valid, unsigned int ea_size,
                            struct ptlrpc_request **request)
 {
@@ -846,7 +845,7 @@ static int cobd_md_getattr(struct obd_export *exp, struct ll_fid *fid,
                 return -EINVAL;
         }
         cobd_exp = cobd_get_exp(obd);
-        return md_getattr(cobd_exp, fid, valid, ea_size, request);
+        return md_getattr(cobd_exp, id, valid, ea_size, request);
 }
 
 static int cobd_md_req2lustre_md (struct obd_export *mdc_exp, 
@@ -865,7 +864,7 @@ static int cobd_md_req2lustre_md (struct obd_export *mdc_exp,
         return md_req2lustre_md(cobd_exp, req, offset, osc_exp, md);
 }
 
-static int cobd_md_change_cbdata(struct obd_export *exp, struct ll_fid *fid, 
+static int cobd_md_change_cbdata(struct obd_export *exp, struct lustre_id *id, 
                                  ldlm_iterator_t it, void *data)
 {
         struct obd_device *obd = class_exp2obd(exp);
@@ -877,14 +876,12 @@ static int cobd_md_change_cbdata(struct obd_export *exp, struct ll_fid *fid,
                 return -EINVAL;
         }
         cobd_exp = cobd_get_exp(obd);
-        return md_change_cbdata(cobd_exp, fid, it, data);
+        return md_change_cbdata(cobd_exp, id, it, data);
 }
 
-static int cobd_md_getattr_name(struct obd_export *exp, struct ll_fid *fid,
-                                char *filename, int namelen, 
-                                unsigned long valid,
-                                unsigned int ea_size, 
-                                struct ptlrpc_request **request)
+static int cobd_md_getattr_name(struct obd_export *exp, struct lustre_id *id,
+                                char *filename, int namelen, unsigned long valid,
+                                unsigned int ea_size, struct ptlrpc_request **request)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
@@ -895,7 +892,7 @@ static int cobd_md_getattr_name(struct obd_export *exp, struct ll_fid *fid,
                 return -EINVAL;
         }
         cobd_exp = cobd_get_exp(obd);
-        return md_getattr_name(cobd_exp, fid, filename, namelen, valid,
+        return md_getattr_name(cobd_exp, id, filename, namelen, valid,
                                ea_size, request);
 }
 
@@ -932,7 +929,8 @@ static int cobd_md_unlink(struct obd_export *exp, struct mdc_op_data *data,
         return md_unlink(cobd_exp, data, request);
 }
 
-static int cobd_md_valid_attrs(struct obd_export *exp, struct ll_fid *fid)
+static int cobd_md_valid_attrs(struct obd_export *exp,
+                               struct lustre_id *id)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
@@ -943,7 +941,7 @@ static int cobd_md_valid_attrs(struct obd_export *exp, struct ll_fid *fid)
                 return -EINVAL;
         }
         cobd_exp = cobd_get_exp(obd);
-        return md_valid_attrs(cobd_exp, fid);
+        return md_valid_attrs(cobd_exp, id);
 }
 
 static int cobd_md_rename(struct obd_export *exp, struct mdc_op_data *data,
@@ -993,7 +991,8 @@ static int cobd_md_setattr(struct obd_export *exp, struct mdc_op_data *data,
         return md_setattr(cobd_exp, data, iattr, ea, ealen, ea2, ea2len, request);
 }
 
-static int cobd_md_readpage(struct obd_export *exp, struct ll_fid *mdc_fid,
+static int cobd_md_readpage(struct obd_export *exp,
+                            struct lustre_id *mdc_id,
                             __u64 offset, struct page *page, 
                             struct ptlrpc_request **request)
 {
@@ -1006,7 +1005,7 @@ static int cobd_md_readpage(struct obd_export *exp, struct ll_fid *mdc_fid,
                 return -EINVAL;
         }
         cobd_exp = cobd_get_exp(obd);
-        return md_readpage(cobd_exp, mdc_fid, offset, page, request);
+        return md_readpage(cobd_exp, mdc_id, offset, page, request);
 }
 
 static int cobd_md_close(struct obd_export *exp, struct obdo *obdo,
@@ -1039,7 +1038,7 @@ static int cobd_md_done_writing(struct obd_export *exp, struct obdo *obdo)
         return md_done_writing(cobd_exp, obdo);
 }
 
-static int cobd_md_sync(struct obd_export *exp, struct ll_fid *fid,
+static int cobd_md_sync(struct obd_export *exp, struct lustre_id *id,
                         struct ptlrpc_request **request)
 {
         struct obd_device *obd = class_exp2obd(exp);
@@ -1052,7 +1051,7 @@ static int cobd_md_sync(struct obd_export *exp, struct ll_fid *fid,
         }
         cobd_exp = cobd_get_exp(obd);
         
-        return md_sync(cobd_exp, fid, request);
+        return md_sync(cobd_exp, id, request);
 }
 
 static int cobd_md_set_open_replay_data(struct obd_export *exp,
@@ -1141,10 +1140,9 @@ static int cobd_md_enqueue(struct obd_export *exp, int lock_type,
                           cb_data);
 }
 
-static int cobd_md_intent_lock(struct obd_export *exp,
-                               struct ll_fid *pfid, const char *name, int len,
-                               void *lmm, int lmmsize,
-                               struct ll_fid *cfid, struct lookup_intent *it,
+static int cobd_md_intent_lock(struct obd_export *exp, struct lustre_id *pid, 
+                               const char *name, int len, void *lmm, int lmmsize,
+                               struct lustre_id *cid, struct lookup_intent *it,
                                int lookup_flags, struct ptlrpc_request **reqp,
                                ldlm_blocking_callback cb_blocking)
 {
@@ -1157,12 +1155,12 @@ static int cobd_md_intent_lock(struct obd_export *exp,
                 return -EINVAL;
         }
         cobd_exp = cobd_get_exp(obd);
-        return md_intent_lock(cobd_exp, pfid, name, len, lmm, lmmsize,
-                              cfid, it, lookup_flags, reqp, cb_blocking);
+        return md_intent_lock(cobd_exp, pid, name, len, lmm, lmmsize,
+                              cid, it, lookup_flags, reqp, cb_blocking);
 }
 
-static struct obd_device * cobd_md_get_real_obd(struct obd_export *exp,
-                                                char *name, int len)
+static struct obd_device *cobd_md_get_real_obd(struct obd_export *exp,
+                                               char *name, int len)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
@@ -1177,8 +1175,8 @@ static struct obd_device * cobd_md_get_real_obd(struct obd_export *exp,
 }
 
 static int cobd_md_change_cbdata_name(struct obd_export *exp,
-                                      struct ll_fid *fid, char *name,
-                                      int namelen, struct ll_fid *fid2,
+                                      struct lustre_id *id, char *name,
+                                      int namelen, struct lustre_id *id2,
                                       ldlm_iterator_t it, void *data)
 {
         struct obd_device *obd = class_exp2obd(exp);
@@ -1190,8 +1188,8 @@ static int cobd_md_change_cbdata_name(struct obd_export *exp,
                 return -EINVAL;
         }
         cobd_exp = cobd_get_exp(obd);
-        return md_change_cbdata_name(cobd_exp, fid, name, namelen, fid2, it, 
-                                     data);
+        return md_change_cbdata_name(cobd_exp, id, name, namelen,
+                                     id2, it, data);
 }
 static struct obd_ops cobd_obd_ops = {
         .o_owner                = THIS_MODULE,

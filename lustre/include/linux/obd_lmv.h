@@ -7,5 +7,4 @@
 
 #define OBD_LMV_DEVICENAME "lmv"
 
-
 #endif

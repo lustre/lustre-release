@@ -650,7 +650,7 @@ static int filter_read_group_internal(struct obd_device *obd, int group,
         name[24] = '\0';
 
         if (!create) {
-                dentry = ll_lookup_one_len(name, filter->fo_dentry_O,
+                dentry = ll_lookup_one_len(name, filter->fo_dentry_O, 
                                            strlen(name));
                 if (IS_ERR(dentry)) {
                         CERROR("Cannot lookup expected object group %d: %ld\n",
@@ -1146,16 +1146,16 @@ struct dentry *filter_parent_lock(struct obd_device *obd, obd_gr group,
         return dparent;
 }
 
-/* How to get files, dentries, inodes from object id's.
+/* How to get files, dentries, inodes from object store cookie.
  *
  * If dir_dentry is passed, the caller has already locked the parent
  * appropriately for this operation (normally a write lock).  If
  * dir_dentry is NULL, we do a read lock while we do the lookup to
  * avoid races with create/destroy and such changing the directory
  * internal to the filesystem code. */
-struct dentry *filter_fid2dentry(struct obd_device *obd,
-                                 struct dentry *dir_dentry,
-                                 obd_gr group, obd_id id)
+struct dentry *filter_id2dentry(struct obd_device *obd,
+                                struct dentry *dir_dentry,
+                                obd_gr group, obd_id id)
 {
         struct dentry *dparent = dir_dentry;
         struct dentry *dchild;
@@ -1728,7 +1728,7 @@ static int filter_connect(struct lustre_handle *conn, struct obd_device *obd,
                 GOTO(cleanup, rc);
         }
         rc = filter_group_set_fs_flags(obd, group);
-         if (rc != 0) {
+        if (rc != 0) {
                 CERROR("can't set kml flags %u\n", group);
                 GOTO(cleanup, rc);
         }
@@ -1963,11 +1963,10 @@ static int filter_disconnect(struct obd_export *exp, int flags)
                 filter_grant_sanity_check(obd, __FUNCTION__);
         filter_grant_discard(exp);
 
-        /* Disconnect early so that clients can't keep using export */
+        /* disconnect early so that clients can't keep using export */
         rc = class_disconnect(exp, flags);
 
         ldlm_cancel_locks_for_export(exp);
-
         fsfilt_sync(obd, obd->u.filter.fo_sb);
 
         /* flush any remaining cancel messages out to the target */
@@ -1986,7 +1985,7 @@ struct dentry *__filter_oa2dentry(struct obd_device *obd,
         if (oa->o_valid & OBD_MD_FLGROUP)
                 group = oa->o_gr;
 
-        dchild = filter_fid2dentry(obd, NULL, group, oa->o_id);
+        dchild = filter_id2dentry(obd, NULL, group, oa->o_id);
 
         if (IS_ERR(dchild)) {
                 CERROR("%s error looking up object: "LPU64"\n", what, oa->o_id);
@@ -2315,8 +2314,7 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
 
                 /*only do precreate rec record. so clean kml flags here*/
                 fsfilt_clear_fs_flags(obd, dparent->d_inode, SM_DO_REC);
-
-                dchild = filter_fid2dentry(obd, dparent, group, next_id);
+                dchild = filter_id2dentry(obd, dparent, group, next_id);
                 if (IS_ERR(dchild))
                         GOTO(cleanup, rc = PTR_ERR(dchild));
                 cleanup_phase = 2;
@@ -2522,7 +2520,7 @@ static int filter_destroy(struct obd_export *exp, struct obdo *oa,
                 GOTO(cleanup, rc = PTR_ERR(dparent));
         cleanup_phase = 1;
 
-        dchild = filter_fid2dentry(obd, dparent, oa->o_gr, oa->o_id);
+        dchild = filter_id2dentry(obd, dparent, oa->o_gr, oa->o_id);
         if (IS_ERR(dchild))
                 GOTO(cleanup, rc = -ENOENT);
         cleanup_phase = 2;
@@ -2958,14 +2956,14 @@ static int filter_llog_connect(struct obd_export *exp,
         RETURN(rc);
 }
 
-static struct dentry *filter_lvfs_fid2dentry(__u64 id, __u32 gen, __u64 gr,
-                                             void *data)
+static struct dentry *filter_lvfs_id2dentry(__u64 id, __u32 gen, 
+                                            __u64 gr, void *data)
 {
-        return filter_fid2dentry(data, NULL, gr, id);
+        return filter_id2dentry(data, NULL, gr, id);
 }
 
 static struct lvfs_callback_ops filter_lvfs_ops = {
-        l_fid2dentry:     filter_lvfs_fid2dentry,
+        l_id2dentry:     filter_lvfs_id2dentry,
 };
 
 static struct obd_ops filter_obd_ops = {
