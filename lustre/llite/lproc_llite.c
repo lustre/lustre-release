@@ -70,7 +70,7 @@ int rd_sb_uuid(char *page, char **start, off_t off, int count, int *eof,
         struct super_block *sb = (struct super_block *)data;
 
         *eof = 1;
-        return snprintf(page, count, "%s\n", ll_s2sbi(sb)->ll_sb_uuid);
+        return snprintf(page, count, "%s\n", ll_s2sbi(sb)->ll_sb_uuid.uuid);
 }
 
 struct lprocfs_vars lprocfs_obd_vars[] = {
@@ -94,6 +94,7 @@ int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
         struct ll_sb_info *sbi = ll_s2sbi(sb);
         struct obd_device *obd;
         char name[MAX_STRING_SIZE + 1];
+        struct obd_uuid uuid;
         int err;
         ENTRY;
 
@@ -116,7 +117,8 @@ int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
                 RETURN(err);
 
         /* MDC info */
-        obd = class_uuid2obd(mdc);
+        strncpy(uuid.uuid, mdc, sizeof(uuid.uuid));
+        obd = class_uuid2obd(&uuid);
         snprintf(name, MAX_STRING_SIZE, "%s/common_name",
                  obd->obd_type->typ_name);
         lvars[0].read_fptr = lprocfs_rd_name;
@@ -131,7 +133,8 @@ int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
                 RETURN(err);
 
         /* OSC */
-        obd = class_uuid2obd(osc);
+        strncpy(uuid.uuid, osc, sizeof(uuid.uuid));
+        obd = class_uuid2obd(&uuid);
 
         snprintf(name, MAX_STRING_SIZE, "%s/common_name",
                  obd->obd_type->typ_name);
