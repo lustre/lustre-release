@@ -1,6 +1,7 @@
 fs/sysfs/inode.c
-fs/namei.c
 fs/dcache.c
+fs/exec.c
+fs/namei.c
 fs/namespace.c
 fs/open.c
 fs/stat.c
@@ -9,3 +10,4 @@ include/linux/fs.h
 include/linux/namei.h
 kernel/ksyms.c
 net/unix/af_unix.c
+net/sunrpc/rpc_pipe.c

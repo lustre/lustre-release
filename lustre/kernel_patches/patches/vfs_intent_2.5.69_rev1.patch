@@ -1,19 +1,20 @@
  fs/dcache.c            |   15 ++++-
+ fs/exec.c              |   15 +++--
  fs/namei.c             |  144 +++++++++++++++++++++++++++++++++++++++----------
  fs/namespace.c         |    1 
- fs/open.c              |   66 ++++++++++++++--------
+ fs/open.c              |   67 +++++++++++++++-------
  fs/stat.c              |   24 ++++++--
  fs/sysfs/inode.c       |    2 
  include/linux/dcache.h |   33 +++++++++++
- include/linux/fs.h     |   10 +++
+ include/linux/fs.h     |   11 +++
  include/linux/namei.h  |    9 ++-
  kernel/ksyms.c         |    7 ++
+ net/sunrpc/rpc_pipe.c  |    6 +-
  net/unix/af_unix.c     |    2 
- net/sunrpc/rpc_pipe.c  |    3 
- 12 files changed, 252 insertions(+), 61 deletions(-)
+ 13 files changed, 267 insertions(+), 69 deletions(-)
 
 --- uml-2.5/fs/sysfs/inode.c~vfs_intent_2.5.69_rev1	2003-05-30 03:33:20.000000000 -0600
-+++ uml-2.5-braam/fs/sysfs/inode.c	2003-06-02 02:13:24.000000000 -0600
++++ uml-2.5-braam/fs/sysfs/inode.c	2003-06-03 07:29:32.000000000 -0600
 @@ -80,7 +80,7 @@ struct dentry * sysfs_get_dentry(struct 
  	qstr.name = name;
  	qstr.len = strlen(name);
@@ -23,8 +24,83 @@
  }
  
  void sysfs_hash_and_remove(struct dentry * dir, const char * name)
+--- uml-2.5/fs/dcache.c~vfs_intent_2.5.69_rev1	2003-05-30 03:33:15.000000000 -0600
++++ uml-2.5-braam/fs/dcache.c	2003-06-03 07:29:32.000000000 -0600
+@@ -1134,14 +1134,23 @@ void d_delete(struct dentry * dentry)
+  * Adds a dentry to the hash according to its name.
+  */
+  
+-void d_rehash(struct dentry * entry)
++void __d_rehash(struct dentry * entry, int lock)
+ {
+ 	struct hlist_head *list = d_hash(entry->d_parent, entry->d_name.hash);
+-	spin_lock(&dcache_lock);
++	if (lock)
++		spin_lock(&dcache_lock);
+  	entry->d_vfs_flags &= ~DCACHE_UNHASHED;
+ 	entry->d_bucket = list;
+  	hlist_add_head_rcu(&entry->d_hash, list);
+-	spin_unlock(&dcache_lock);
++	if (lock)
++		spin_unlock(&dcache_lock);
++}
++
++EXPORT_SYMBOL(__d_rehash);
++
++void d_rehash(struct dentry * entry)
++{
++	__d_rehash(entry, 1);
+ }
+ 
+ #define do_switch(x,y) do { \
+--- uml-2.5/fs/exec.c~vfs_intent_2.5.69_rev1	2003-06-03 07:22:33.000000000 -0600
++++ uml-2.5-braam/fs/exec.c	2003-06-03 07:29:32.000000000 -0600
+@@ -116,8 +116,9 @@ asmlinkage long sys_uselib(const char __
+ 	struct file * file;
+ 	struct nameidata nd;
+ 	int error;
++        intent_init(&nd.it, IT_OPEN, O_RDONLY);
+ 
+-	error = user_path_walk(library, &nd);
++	error = user_path_walk_it(library, &nd);
+ 	if (error)
+ 		goto out;
+ 
+@@ -129,7 +130,7 @@ asmlinkage long sys_uselib(const char __
+ 	if (error)
+ 		goto exit;
+ 
+-	file = dentry_open(nd.dentry, nd.mnt, O_RDONLY);
++	file = dentry_open_nd(&nd, O_RDONLY);
+ 	error = PTR_ERR(file);
+ 	if (IS_ERR(file))
+ 		goto out;
+@@ -452,8 +453,12 @@ static inline void free_arg_pages(struct
+ struct file *open_exec(const char *name)
+ {
+ 	struct nameidata nd;
+-	int err = path_lookup(name, LOOKUP_FOLLOW, &nd);
+-	struct file *file = ERR_PTR(err);
++	int err;
++	struct file *file;
++        
++        intent_init(&nd.it, IT_OPEN, O_RDONLY);
++        err = path_lookup(name, LOOKUP_FOLLOW, &nd);
++        file = ERR_PTR(err);
+ 
+ 	if (!err) {
+ 		struct inode *inode = nd.dentry->d_inode;
+@@ -465,7 +470,7 @@ struct file *open_exec(const char *name)
+ 				err = -EACCES;
+ 			file = ERR_PTR(err);
+ 			if (!err) {
+-				file = dentry_open(nd.dentry, nd.mnt, O_RDONLY);
++				file = dentry_open_nd(&nd, O_RDONLY);
+ 				if (!IS_ERR(file)) {
+ 					err = deny_write_access(file);
+ 					if (err) {
 --- uml-2.5/fs/namei.c~vfs_intent_2.5.69_rev1	2003-05-30 03:33:15.000000000 -0600
-+++ uml-2.5-braam/fs/namei.c	2003-06-02 03:04:25.000000000 -0600
++++ uml-2.5-braam/fs/namei.c	2003-06-03 07:29:32.000000000 -0600
 @@ -263,8 +263,15 @@ int deny_write_access(struct file * file
  	return 0;
  }
@@ -418,37 +494,8 @@
  	error = PTR_ERR(new_dentry);
  	if (IS_ERR(new_dentry))
  		goto exit4;
---- uml-2.5/fs/dcache.c~vfs_intent_2.5.69_rev1	2003-05-30 03:33:15.000000000 -0600
-+++ uml-2.5-braam/fs/dcache.c	2003-06-02 02:13:24.000000000 -0600
-@@ -1134,14 +1134,23 @@ void d_delete(struct dentry * dentry)
-  * Adds a dentry to the hash according to its name.
-  */
-  
--void d_rehash(struct dentry * entry)
-+void __d_rehash(struct dentry * entry, int lock)
- {
- 	struct hlist_head *list = d_hash(entry->d_parent, entry->d_name.hash);
--	spin_lock(&dcache_lock);
-+	if (lock)
-+		spin_lock(&dcache_lock);
-  	entry->d_vfs_flags &= ~DCACHE_UNHASHED;
- 	entry->d_bucket = list;
-  	hlist_add_head_rcu(&entry->d_hash, list);
--	spin_unlock(&dcache_lock);
-+	if (lock)
-+		spin_unlock(&dcache_lock);
-+}
-+
-+EXPORT_SYMBOL(__d_rehash);
-+
-+void d_rehash(struct dentry * entry)
-+{
-+	__d_rehash(entry, 1);
- }
- 
- #define do_switch(x,y) do { \
 --- uml-2.5/fs/namespace.c~vfs_intent_2.5.69_rev1	2003-05-30 03:33:16.000000000 -0600
-+++ uml-2.5-braam/fs/namespace.c	2003-06-02 02:13:24.000000000 -0600
++++ uml-2.5-braam/fs/namespace.c	2003-06-03 07:29:32.000000000 -0600
 @@ -927,6 +927,7 @@ void set_fs_pwd(struct fs_struct *fs, st
  		mntput(old_pwdmnt);
  	}
@@ -458,7 +505,7 @@
  static void chroot_fs_refs(struct nameidata *old_nd, struct nameidata *new_nd)
  {
 --- uml-2.5/fs/open.c~vfs_intent_2.5.69_rev1	2003-05-30 03:33:16.000000000 -0600
-+++ uml-2.5-braam/fs/open.c	2003-06-02 02:13:24.000000000 -0600
++++ uml-2.5-braam/fs/open.c	2003-06-03 07:29:32.000000000 -0600
 @@ -97,7 +97,7 @@ static inline long do_sys_truncate(const
  	struct nameidata nd;
  	struct inode * inode;
@@ -567,7 +614,13 @@
  	return f;
  
  cleanup_all:
-@@ -693,6 +683,38 @@ cleanup_dentry:
+@@ -688,11 +678,44 @@ cleanup_all:
+ cleanup_file:
+ 	put_filp(f);
+ cleanup_dentry:
++        intent_release(nd->dentry, &nd->it);
+ 	dput(dentry);
+ 	mntput(mnt);
  	return ERR_PTR(error);
  }
  
@@ -607,7 +660,7 @@
   * Find an empty file descriptor entry, and mark it busy.
   */
 --- uml-2.5/fs/stat.c~vfs_intent_2.5.69_rev1	2003-05-30 03:33:16.000000000 -0600
-+++ uml-2.5-braam/fs/stat.c	2003-06-02 02:13:24.000000000 -0600
++++ uml-2.5-braam/fs/stat.c	2003-06-03 07:29:32.000000000 -0600
 @@ -33,7 +33,7 @@ void generic_fillattr(struct inode *inod
  	stat->blksize = inode->i_blksize;
  }
@@ -680,7 +733,7 @@
  }
  
 --- uml-2.5/include/linux/dcache.h~vfs_intent_2.5.69_rev1	2003-05-30 03:33:40.000000000 -0600
-+++ uml-2.5-braam/include/linux/dcache.h	2003-06-02 02:13:24.000000000 -0600
++++ uml-2.5-braam/include/linux/dcache.h	2003-06-03 07:29:32.000000000 -0600
 @@ -4,6 +4,7 @@
  #ifdef __KERNEL__
  
@@ -750,7 +803,7 @@
  extern spinlock_t dcache_lock;
  
 --- uml-2.5/include/linux/fs.h~vfs_intent_2.5.69_rev1	2003-05-30 03:33:41.000000000 -0600
-+++ uml-2.5-braam/include/linux/fs.h	2003-06-02 02:13:24.000000000 -0600
++++ uml-2.5-braam/include/linux/fs.h	2003-06-03 07:29:32.000000000 -0600
 @@ -237,6 +237,9 @@ typedef int (get_blocks_t)(struct inode 
  #define ATTR_ATTR_FLAG	1024
  #define ATTR_KILL_SUID	2048
@@ -790,7 +843,15 @@
  extern long do_mount(char *, char *, char *, unsigned long, void *);
  
  extern int vfs_statfs(struct super_block *, struct statfs *);
-@@ -1116,6 +1125,7 @@ extern void sync_filesystems(int wait);
+@@ -1023,6 +1032,7 @@ extern int do_truncate(struct dentry *, 
+ 
+ extern struct file *filp_open(const char *, int, int);
+ extern struct file * dentry_open(struct dentry *, struct vfsmount *, int);
++extern struct file * dentry_open_nd(struct nameidata *, int);
+ extern int filp_close(struct file *, fl_owner_t id);
+ extern char * getname(const char __user *);
+ 
+@@ -1116,6 +1126,7 @@ extern void sync_filesystems(int wait);
  extern sector_t bmap(struct inode *, sector_t);
  extern int setattr_mask(unsigned int);
  extern int notify_change(struct dentry *, struct iattr *);
@@ -799,7 +860,7 @@
  extern int vfs_permission(struct inode *, int);
  extern int get_write_access(struct inode *);
 --- uml-2.5/include/linux/namei.h~vfs_intent_2.5.69_rev1	2003-05-30 03:33:42.000000000 -0600
-+++ uml-2.5-braam/include/linux/namei.h	2003-06-02 02:39:14.000000000 -0600
++++ uml-2.5-braam/include/linux/namei.h	2003-06-03 07:29:32.000000000 -0600
 @@ -11,6 +11,7 @@ struct nameidata {
  	struct qstr	last;
  	unsigned int	flags;
@@ -837,7 +898,7 @@
  extern int follow_down(struct vfsmount **, struct dentry **);
  extern int follow_up(struct vfsmount **, struct dentry **);
 --- uml-2.5/kernel/ksyms.c~vfs_intent_2.5.69_rev1	2003-05-30 03:33:49.000000000 -0600
-+++ uml-2.5-braam/kernel/ksyms.c	2003-06-02 02:13:24.000000000 -0600
++++ uml-2.5-braam/kernel/ksyms.c	2003-06-03 07:29:32.000000000 -0600
 @@ -374,6 +374,7 @@ EXPORT_SYMBOL(unregister_filesystem);
  EXPORT_SYMBOL(kern_mount);
  EXPORT_SYMBOL(__mntput);
@@ -860,7 +921,7 @@
  EXPORT_SYMBOL(add_wait_queue);
  EXPORT_SYMBOL(add_wait_queue_exclusive);
 --- uml-2.5/net/unix/af_unix.c~vfs_intent_2.5.69_rev1	2003-05-30 03:33:52.000000000 -0600
-+++ uml-2.5-braam/net/unix/af_unix.c	2003-06-02 02:13:24.000000000 -0600
++++ uml-2.5-braam/net/unix/af_unix.c	2003-06-03 07:29:32.000000000 -0600
 @@ -721,7 +721,7 @@ static int unix_bind(struct socket *sock
  		/*
  		 * Do the final lookup.
@@ -870,9 +931,8 @@
  		err = PTR_ERR(dentry);
  		if (IS_ERR(dentry))
  			goto out_mknod_unlock;
- 
---- uml-2.5/net/sunrpc/rpc_pipe.c	Tue Jun  3 14:33:00 2003
-+++ uml-2.5/net/sunrpc/rpc_pipe.c	Tue Jun  3 14:33:38 2003
+--- uml-2.5/net/sunrpc/rpc_pipe.c~vfs_intent_2.5.69_rev1	2003-06-03 07:29:03.000000000 -0600
++++ uml-2.5-braam/net/sunrpc/rpc_pipe.c	2003-06-03 07:29:46.000000000 -0600
 @@ -566,7 +566,7 @@ rpc_lookup_negative(char *path, struct n
  		return ERR_PTR(error);
  	dir = nd->dentry->d_inode;
@@ -900,4 +960,5 @@
  	if (IS_ERR(dentry)) {
  		error = PTR_ERR(dentry);
  		goto out_release;
+
 _
