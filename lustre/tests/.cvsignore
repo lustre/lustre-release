@@ -26,3 +26,4 @@ mkdirmany
 lovstripe
 *.xml
 stat
+setuid
