@@ -64,10 +64,11 @@ static int ll_dir_readpage(struct file *file, struct page *page)
 
         ENTRY;
 
-	if ( ((inode->i_size + PAGE_CACHE_SIZE -1)>>PAGE_SHIFT) 
-	     <= page->index) {
+	if ( ((inode->i_size + PAGE_CACHE_SIZE -1)>>PAGE_SHIFT)
+             <= page->index) {
 		memset(kmap(page), 0, PAGE_CACHE_SIZE);
 		kunmap(page);
+                EXIT;
 		goto readpage_out;
 	}
 
