@@ -338,6 +338,7 @@ kpr_forward_packet (void *arg, kpr_fwd_desc_t *fwd)
                 return;
 	}
 
+        read_unlock (&kpr_rwlock);
  out:
         kpr_fwd_errors++;
 
@@ -378,11 +379,16 @@ kpr_add_route (int gateway_nalid, ptl_nid_t gateway_nid, ptl_nid_t lo_nid,
 	unsigned long	   flags;
 	struct list_head  *e;
 	kpr_route_entry_t *re;
-
+        int                dup = 0;
+        
         CDEBUG(D_NET, "Add route: %d "LPX64" : "LPX64" - "LPX64"\n",
                gateway_nalid, gateway_nid, lo_nid, hi_nid);
 
-        LASSERT(lo_nid <= hi_nid);
+        if (gateway_nalid == PTL_NID_ANY ||
+            lo_nid == PTL_NID_ANY ||
+            hi_nid == PTL_NID_ANY ||
+            lo_nid > hi_nid)
+                return (-EINVAL);
 
         PORTAL_ALLOC (re, sizeof (*re));
         if (re == NULL)
@@ -393,6 +399,7 @@ kpr_add_route (int gateway_nalid, ptl_nid_t gateway_nid, ptl_nid_t lo_nid,
         re->kpre_lo_nid = lo_nid;
         re->kpre_hi_nid = hi_nid;
         re->kpre_gateway_alive = 1;
+        re->kpre_refcount = 1;
         atomic_set (&re->kpre_weight, 0);
 
         LASSERT(!in_interrupt());
@@ -402,14 +409,32 @@ kpr_add_route (int gateway_nalid, ptl_nid_t gateway_nid, ptl_nid_t lo_nid,
                 kpr_route_entry_t *re2 = list_entry(e, kpr_route_entry_t,
                                                     kpre_list);
 
-                /* NB no check for duplicate routes; we expect them when we
-                 * do gateway load balancing and failover.  However we _do_
-                 * zero all route weights so newly added gateways don't
-                 * have to 'catch up'. */
+                if (re2->kpre_gateway_nalid == gateway_nalid &&
+                    re2->kpre_gateway_nid == gateway_nid &&
+                    re2->kpre_lo_nid == lo_nid &&
+                    re2->kpre_hi_nid == hi_nid) {
+                        dup++;
+                        re2->kpre_refcount++;
+                }
+                
+                /* NB check for exact duplicate routes and bump the route's
+                 * refcount if we find one.  Also, zero all route weights
+                 * so newly added routes don't have to play 'catch up'.
+                 *
+                 * Note that for gateway loadbalancing to work properly, we
+                 * should really maintain per-gateway weights rather than
+                 * per-route weights.  However until we're sure trying to
+                 * spread the traffic over all the gateways is on the right
+                 * track (rather than random selection say), we'll keep
+                 * things simple... */
                 atomic_set (&re2->kpre_weight, 0);
         }
 
-        list_add (&re->kpre_list, &kpr_routes);
+        LASSERT (dup == 0 || dup == 1);
+        if (dup)
+                PORTAL_FREE (re, sizeof (*re));
+        else
+                list_add (&re->kpre_list, &kpr_routes);
 
         write_unlock_irqrestore (&kpr_rwlock, flags);
         return (0);
@@ -424,6 +449,9 @@ kpr_set_route (ptl_nid_t gateway_nid, int alive)
 	struct list_head  *n;
 
         LASSERT(!in_interrupt());
+
+        if (gateway_nid == PTL_NID_ANY)
+                return (-EINVAL);
 
         /* Serialise with lookups (i.e. write lock) */
 	write_lock_irqsave(&kpr_rwlock, flags);
@@ -445,28 +473,46 @@ kpr_set_route (ptl_nid_t gateway_nid, int alive)
 }
 
 int
-kpr_del_route (ptl_nid_t gateway_nid)
+kpr_del_route (ptl_nid_t gw, ptl_nid_t lo, ptl_nid_t hi)
 {
+        int                specific = (lo != PTL_NID_ANY);
 	unsigned long	   flags;
         int                rc = -ENOENT;
 	struct list_head  *e;
 	struct list_head  *n;
 
-        CDEBUG(D_NET, "Del route "LPX64"\n", gateway_nid);
+        CDEBUG(D_NET, "Del route "LPX64" : "LPX64" - "LPX64"\n", gw, lo, hi);
 
         LASSERT(!in_interrupt());
+
+        /* NB Caller may specify either all routes via the given gateway
+         * (lo/hi == PTL_NID_ANY) or a specific route entry (lo/hi are
+         * actual NIDs) */
+        
+        if (gw == PTL_NID_ANY ||
+            (specific ? (hi == PTL_NID_ANY || hi < lo) : (hi != PTL_NID_ANY)))
+                return (-EINVAL);
+
 	write_lock_irqsave(&kpr_rwlock, flags);
 
         list_for_each_safe (e, n, &kpr_routes) {
                 kpr_route_entry_t *re = list_entry(e, kpr_route_entry_t,
                                                    kpre_list);
 
-                if (re->kpre_gateway_nid != gateway_nid) 
+                if (re->kpre_gateway_nid != gw ||
+                    (specific && (lo != re->kpre_lo_nid || hi != re->kpre_hi_nid)))
                         continue;
 
                 rc = 0;
-                list_del (&re->kpre_list);
-                PORTAL_FREE(re, sizeof (*re));
+
+                if (!specific ||                 /* all routes via gw being deleted */
+                    --re->kpre_refcount == 0) {  /* last ref on specific route */
+                        list_del (&re->kpre_list);
+                        PORTAL_FREE(re, sizeof (*re));
+                }
+
+                if (specific)
+                        break;
         }
 
         write_unlock_irqrestore(&kpr_rwlock, flags);
