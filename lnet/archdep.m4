@@ -415,20 +415,21 @@ if test "$host_cpu" != "lib" ; then
 		[AC_MSG_RESULT([no])
 		AC_MSG_ERROR([Lustre requires that ext3 is enabled in the kernel (CONFIG_EXT3_FS)])
 		])
-	AC_MSG_CHECKING([that extended attributes for ext3 are enabled in the kernel])
-	AC_TRY_COMPILE([
-#define __KERNEL__
-#include <linux/config.h>
-		],
-		[
-#ifdef CONFIG_EXT3_FS_XATTR
-	return 0;
-#else
-#error CONFIG_EXT3_FS_XATTR not #defined
-#endif
-		],[AC_MSG_RESULT([yes])],
-		[AC_MSG_RESULT([no])
-		AC_MSG_ERROR([Lustre requires that extended attributes for ext3 are enabled in the kernel (CONFIG_EXT3_FS_XATTR)])
-		])
+# disable this check until our xattr patches define it!
+#	AC_MSG_CHECKING([that extended attributes for ext3 are enabled in the kernel])
+#	AC_TRY_COMPILE([
+##define __KERNEL__
+##include <linux/config.h>
+#		],
+#		[
+##ifdef CONFIG_EXT3_FS_XATTR
+#	return 0;
+##else
+##error CONFIG_EXT3_FS_XATTR not #defined
+##endif
+#		],[AC_MSG_RESULT([yes])],
+#		[AC_MSG_RESULT([no])
+#		AC_MSG_ERROR([Lustre requires that extended attributes for ext3 are enabled in the kernel (CONFIG_EXT3_FS_XATTR)])
+#		])
 fi
 
