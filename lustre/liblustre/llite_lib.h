@@ -10,7 +10,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-struct ll_sb_info
+struct llu_sb_info
 {
         struct obd_uuid         ll_sb_uuid;
         struct lustre_handle    ll_mdc_conn;
@@ -20,8 +20,8 @@ struct ll_sb_info
         struct list_head        ll_conn_chain;
 };
 
-struct ll_inode_info {
-	struct ll_sb_info	*lli_sbi;
+struct llu_inode_info {
+	struct llu_sb_info	*lli_sbi;
 	struct ll_fid		lli_fid;
         struct lov_stripe_md	*lli_smd;
         char                	*lli_symlink_name;
@@ -42,29 +42,38 @@ struct ll_inode_info {
 	time_t			lli_st_atime;
 	time_t			lli_st_mtime;
 	time_t			lli_st_ctime;
+
+	/* not for stat, change it later */
+	int			lli_st_flags;
+	unsigned long 		lli_st_generation;
 };
 
-static inline struct ll_sb_info *ll_fs2sbi(struct filesys *fs)
+static inline struct llu_sb_info *llu_fs2sbi(struct filesys *fs)
 {
-	return (struct ll_sb_info*)(fs->fs_private);
+	return (struct llu_sb_info*)(fs->fs_private);
 }
 
-static inline struct ll_inode_info *ll_i2info(struct inode *inode)
+static inline struct llu_inode_info *llu_i2info(struct inode *inode)
 {
-	return (struct ll_inode_info*)(inode->i_private);
+	return (struct llu_inode_info*)(inode->i_private);
 }
 
-static inline struct ll_sb_info *ll_i2sbi(struct inode *inode)
+static inline struct llu_sb_info *llu_i2sbi(struct inode *inode)
 {
-        return ll_i2info(inode)->lli_sbi;
+        return llu_i2info(inode)->lli_sbi;
 }
 
-static inline struct client_obd *sbi2mdc(struct ll_sb_info *sbi)
+static inline struct client_obd *sbi2mdc(struct llu_sb_info *sbi)
 {
 	struct obd_device *obd = class_conn2obd(&sbi->ll_mdc_conn);
 	if (obd == NULL)
 		LBUG();
 	return &obd->u.cli;
+}
+
+static inline struct lustre_handle *llu_i2obdconn(struct inode *inode)
+{
+        return &(llu_i2info(inode)->lli_sbi->ll_osc_conn);
 }
 
 #endif

@@ -92,61 +92,144 @@ int init_lib_portals()
         return rc;
 }
 
-static void ll_fsop_gone(struct filesys *fs)
+static void llu_fsop_gone(struct filesys *fs)
 {
         /* FIXME */
 }
 
-static struct inode_ops ll_inode_ops;
+static struct inode_ops llu_inode_ops;
 
-static void fill_inode_fields(struct ll_inode_info *lli,
-                              struct mds_body *body)
+void llu_update_inode(struct inode *inode, struct mds_body *body,
+                     struct lov_mds_md *lmm)
 {
-	lli->lli_st_dev = 0; /* FIXME */
-        lli->lli_st_ino = body->ino;
-	lli->lli_st_mode = body->mode;
-	lli->lli_st_nlink = body->nlink;
-	lli->lli_st_uid = body->uid;
-	lli->lli_st_gid = body->gid;
-	lli->lli_st_rdev = body->rdev;
-	lli->lli_st_size = 0; /* XXX  */
-	lli->lli_st_blksize = 0; /* XXX */
-	lli->lli_st_blocks = body->blocks;
-	lli->lli_st_atime = body->atime;
-	lli->lli_st_mtime = body->mtime;
-	lli->lli_st_ctime = body->ctime;
+        struct llu_inode_info *lli = llu_i2info(inode);
+
+        if (lmm != NULL)
+                obd_unpackmd(llu_i2obdconn(inode), &lli->lli_smd, lmm);
+
+        if (body->valid & OBD_MD_FLID)
+                lli->lli_st_ino = body->ino;
+        if (body->valid & OBD_MD_FLATIME)
+                LTIME_S(lli->lli_st_atime) = body->atime;
+        if (body->valid & OBD_MD_FLMTIME)
+                LTIME_S(lli->lli_st_mtime) = body->mtime;
+        if (body->valid & OBD_MD_FLCTIME)
+                LTIME_S(lli->lli_st_ctime) = body->ctime;
+        if (body->valid & OBD_MD_FLMODE)
+                lli->lli_st_mode = (lli->lli_st_mode & S_IFMT)|(body->mode & ~S_IFMT);
+        if (body->valid & OBD_MD_FLTYPE)
+                lli->lli_st_mode = (lli->lli_st_mode & ~S_IFMT)|(body->mode & S_IFMT);
+        if (body->valid & OBD_MD_FLUID)
+                lli->lli_st_uid = body->uid;
+        if (body->valid & OBD_MD_FLGID)
+                lli->lli_st_gid = body->gid;
+        if (body->valid & OBD_MD_FLFLAGS)
+                lli->lli_st_flags = body->flags;
+        if (body->valid & OBD_MD_FLNLINK)
+                lli->lli_st_nlink = body->nlink;
+        if (body->valid & OBD_MD_FLGENER)
+                lli->lli_st_generation = body->generation;
+        if (body->valid & OBD_MD_FLRDEV)
+                lli->lli_st_rdev = body->rdev;
+        if (body->valid & OBD_MD_FLSIZE)
+                lli->lli_st_size = body->size;
+        if (body->valid & OBD_MD_FLBLOCKS)
+                lli->lli_st_blocks = body->blocks;
 }
 
-struct inode* ll_new_inode(struct filesys *fs, struct mds_body *body)
+static void obdo_to_inode(struct inode *dst, struct obdo *src,
+                          obd_flag valid)
+{
+        struct llu_inode_info *lli = llu_i2info(dst);
+
+        valid &= src->o_valid;
+
+        if (valid & OBD_MD_FLATIME)
+                LTIME_S(lli->lli_st_atime) = src->o_atime;
+        if (valid & OBD_MD_FLMTIME)
+                LTIME_S(lli->lli_st_mtime) = src->o_mtime;
+        if (valid & OBD_MD_FLCTIME && src->o_ctime > LTIME_S(lli->lli_st_ctime))
+                LTIME_S(lli->lli_st_ctime) = src->o_ctime;
+        if (valid & OBD_MD_FLSIZE)
+                lli->lli_st_size = src->o_size;
+        if (valid & OBD_MD_FLBLOCKS) /* allocation of space */
+                lli->lli_st_blocks = src->o_blocks;
+        if (valid & OBD_MD_FLBLKSZ)
+                lli->lli_st_blksize = src->o_blksize;
+        if (valid & OBD_MD_FLTYPE)
+                lli->lli_st_mode = (lli->lli_st_mode & ~S_IFMT) | (src->o_mode & S_IFMT);
+        if (valid & OBD_MD_FLMODE)
+                lli->lli_st_mode = (lli->lli_st_mode & S_IFMT) | (src->o_mode & ~S_IFMT);
+        if (valid & OBD_MD_FLUID)
+                lli->lli_st_uid = src->o_uid;
+        if (valid & OBD_MD_FLGID)
+                lli->lli_st_gid = src->o_gid;
+        if (valid & OBD_MD_FLFLAGS)
+                lli->lli_st_flags = src->o_flags;
+        if (valid & OBD_MD_FLNLINK)
+                lli->lli_st_nlink = src->o_nlink;
+        if (valid & OBD_MD_FLGENER)
+                lli->lli_st_generation = src->o_generation;
+        if (valid & OBD_MD_FLRDEV)
+                lli->lli_st_rdev = src->o_rdev;
+}
+
+int llu_inode_getattr(struct inode *inode, struct lov_stripe_md *lsm,
+                      char *ostdata)
+{
+        struct llu_sb_info *sbi = llu_i2sbi(inode);
+        struct obdo oa;
+        int rc;
+        ENTRY;
+
+        LASSERT(lsm);
+        LASSERT(sbi);
+
+        memset(&oa, 0, sizeof oa);
+        oa.o_id = lsm->lsm_object_id;
+        oa.o_mode = S_IFREG;
+        oa.o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLSIZE |
+                OBD_MD_FLBLOCKS | OBD_MD_FLMTIME | OBD_MD_FLCTIME;
+
+        if (ostdata != NULL) {
+                memcpy(&oa.o_inline, ostdata, FD_OSTDATA_SIZE);
+                oa.o_valid |= OBD_MD_FLHANDLE;
+        }
+
+        rc = obd_getattr(&sbi->ll_osc_conn, &oa, lsm);
+        if (rc)
+                RETURN(rc);
+
+        obdo_to_inode(inode, &oa, OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
+                           OBD_MD_FLMTIME | OBD_MD_FLCTIME);
+
+        RETURN(0);
+}
+
+struct inode* llu_new_inode(struct filesys *fs, ino_t ino, mode_t mode)
 {
 	struct inode *inode;
-        struct ll_inode_info *lli;
+        struct llu_inode_info *lli;
 
         OBD_ALLOC(lli, sizeof(*lli));
         if (!lli)
                 return NULL;
 
         /* initialize lli here */
-        lli->lli_sbi = ll_fs2sbi(fs);
-        lli->lli_smd = NULL; /* FIXME need setup it here */
-        lli->lli_symlink_name = NULL; /* FIXME */
+        lli->lli_sbi = llu_fs2sbi(fs);
+        lli->lli_smd = NULL;
+        lli->lli_symlink_name = NULL;
         lli->lli_flags = 0;
         INIT_LIST_HEAD(&lli->lli_read_extents);
-        ll_ino2fid(&lli->lli_fid,
-                   body->ino,
-                   body->generation,
-                   body->mode & S_IFMT);
-        fill_inode_fields(lli, body);
-
 
         /* could file_identifier be 0 ? FIXME */
-	inode = _sysio_i_new(fs, body->ino, NULL,
+	inode = _sysio_i_new(fs, ino, NULL,
 #ifndef AUTOMOUNT_FILE_NAME
-	 	       	     body->mode & S_IFMT,
+	 	       	     mode & S_IFMT,
 #else
-			     body->mode,	/* all of the bits! */
+			     mode,	/* all of the bits! */
 #endif
-			     &ll_inode_ops, lli);
+			     &llu_inode_ops, lli);
 
 	if (!inode)
 		free(lli);
@@ -154,19 +237,20 @@ struct inode* ll_new_inode(struct filesys *fs, struct mds_body *body)
         return inode;
 }
 
-static int ll_iop_lookup(struct pnode *pnode,
-                         struct inode **inop,
-                         struct intent *intnt __IS_UNUSED,
-                         const char *path __IS_UNUSED)
+static int llu_iop_lookup(struct pnode *pnode,
+                          struct inode **inop,
+                          struct intent *intnt __IS_UNUSED,
+                          const char *path __IS_UNUSED)
 {
         struct pnode_base *pb_dir = pnode->p_parent->p_base;
         struct ptlrpc_request *request = NULL;
-        struct ll_sb_info *sbi = ll_i2sbi(pb_dir->pb_ino);
-        struct ll_fid *fid = &ll_i2info(pb_dir->pb_ino)->lli_fid;
+        struct llu_sb_info *sbi = llu_i2sbi(pb_dir->pb_ino);
+        struct ll_fid *fid = &llu_i2info(pb_dir->pb_ino)->lli_fid;
         struct qstr *name = &pnode->p_base->pb_name;
         struct mds_body *body;
         unsigned long valid;
         int rc;
+        struct ll_read_inode2_cookie lic = {.lic_body = NULL, .lic_lmm = NULL};
 
         /* the mount root inode have no name, so don't call
          * remote in this case. but probably we need revalidate
@@ -189,19 +273,38 @@ static int ll_iop_lookup(struct pnode *pnode,
                 CERROR("mdc_getattr_name: %d\n", rc);
                 goto out;
         }
-
         body = lustre_msg_buf(request->rq_repmsg, 0);
-        *inop = ll_new_inode(pnode->p_mount->mnt_fs, body);
+
+        *inop = llu_new_inode(pnode->p_mount->mnt_fs, body->ino, body->mode);
+        if (!inop)
+                goto out;
+
+        lic.lic_body = lustre_msg_buf(request->rq_repmsg, 0);
+        if (S_ISREG(lic.lic_body->mode) &&
+            lic.lic_body->valid & OBD_MD_FLEASIZE) {
+                LASSERT(request->rq_repmsg->bufcount > 0);
+                lic.lic_lmm = lustre_msg_buf(request->rq_repmsg, 1);
+        } else {
+                lic.lic_lmm = NULL;
+        }
+
+        llu_update_inode(*inop, body, lic.lic_lmm);
+                
+        rc = llu_inode_getattr(*inop, llu_i2info(*inop)->lli_smd, NULL);
+        if (rc)
+                _sysio_i_gone(*inop);
+
 out:
         ptlrpc_req_finished(request);
+
         return rc;
 }
 
-static int ll_iop_getattr(struct pnode *pno,
-                          struct inode *ino,
-                          struct intnl_stat *b)
+static int llu_iop_getattr(struct pnode *pno,
+                           struct inode *ino,
+                           struct intnl_stat *b)
 {
-        struct ll_inode_info *lli = ll_i2info(ino);
+        struct llu_inode_info *lli = llu_i2info(ino);
 
         b->st_dev = lli->lli_st_dev;
         b->st_ino = lli->lli_st_ino;
@@ -220,9 +323,9 @@ static int ll_iop_getattr(struct pnode *pno,
         return 0;
 }
 
-struct filesys_ops ll_filesys_ops =
+struct filesys_ops llu_filesys_ops =
 {
-        fsop_gone: ll_fsop_gone,
+        fsop_gone: llu_fsop_gone,
 };
 
 /* FIXME */
@@ -235,18 +338,18 @@ void generate_random_uuid(unsigned char uuid_out[16])
                 arr[i] = rand();
 }
 
-static struct inode_ops ll_inode_ops = {
-        inop_lookup:    ll_iop_lookup,
-        inop_getattr:   ll_iop_getattr,
+static struct inode_ops llu_inode_ops = {
+        inop_lookup:    llu_iop_lookup,
+        inop_getattr:   llu_iop_getattr,
 };
 
 
 static int
-ll_fsswop_mount(const char *source,
-                unsigned flags,
-                const void *data __IS_UNUSED,
-                struct pnode *tocover,
-                struct mount **mntp)
+llu_fsswop_mount(const char *source,
+                 unsigned flags,
+                 const void *data __IS_UNUSED,
+                 struct pnode *tocover,
+                 struct mount **mntp)
 {
         struct filesys *fs;
         struct inode *root;
@@ -254,8 +357,7 @@ ll_fsswop_mount(const char *source,
         static struct qstr noname = { NULL, 0, 0 };
         struct ll_fid rootfid;
 
-        struct ll_sb_info *sbi;
-        struct obd_statfs osfs;
+        struct llu_sb_info *sbi;
         struct ptlrpc_connection *mdc_conn;
         struct ptlrpc_request *request = NULL;
         struct mds_body *root_body;
@@ -275,7 +377,7 @@ ll_fsswop_mount(const char *source,
         generate_random_uuid(uuid);
         class_uuid_unparse(uuid, &sbi->ll_sb_uuid);
 
-        fs = _sysio_fs_new(&ll_filesys_ops, flags, sbi);
+        fs = _sysio_fs_new(&llu_filesys_ops, flags, sbi);
         if (!fs) {
                 err = -ENOMEM;
                 goto out_free;
@@ -340,11 +442,13 @@ ll_fsswop_mount(const char *source,
         root_body = lustre_msg_buf(request->rq_repmsg, 0);
         LASSERT(sbi->ll_rootino != 0);
 
-        root = ll_new_inode(fs, root_body);
+        root = llu_new_inode(fs, root_body->ino, root_body->mode);
         if (!root) {
 		err = -ENOMEM;
                 goto out_request;
         }
+
+        llu_update_inode(root, root_body, NULL);
 
 	/*
 	 * Generate base path-node for root.
@@ -384,7 +488,7 @@ out_free:
 }
 
 static struct fssw_ops llu_fssw_ops = {
-        ll_fsswop_mount
+        llu_fsswop_mount
 };
 
 extern int class_handle_ioctl(struct obd_class_user_state *ocus, unsigned int cmd, unsigned long arg);
