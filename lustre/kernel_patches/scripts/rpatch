@@ -59,11 +59,13 @@ fi
 PATCH_NAME=$(stripit $1)
 
 warn_top_current
-
 if is_applied "$PATCH_NAME"
 then
 #	if can_remove "$PATCH_NAME"
 #	then
+		if [ ! -f $P/pc/$PATCH_NAME.pc ]; then
+			exit 1
+		fi
 		do_remove "$PATCH_NAME"
 		kill_old_ones "$PATCH_NAME"
 		remove_from_db "$PATCH_NAME"
