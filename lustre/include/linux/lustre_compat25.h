@@ -36,17 +36,22 @@
 # define PGCACHE_WRUNLOCK(mapping)        write_unlock(&mapping->page_lock)
 
 #define KDEVT_INIT(val)                 { .value = val }
+
 #define LTIME_S(time)                   (time.tv_sec)
 #define USERMODEHELPER(path, argv, envp) \
                                         call_usermodehelper(path, argv, envp, 1)
 #define ll_path_lookup                  path_lookup
-
+#define ll_permission                   permission
 
 #define ll_pgcache_lock(mapping)          spin_lock(&mapping->page_lock)
 #define ll_pgcache_unlock(mapping)        spin_unlock(&mapping->page_lock)
 
+#define ll_vfs_create(a,b,c,d)              vfs_create(a,b,c,d)
+
 #else /* 2.4.. */
 
+#define ll_vfs_create(a,b,c,d)              vfs_create(a,b,c)
+#define ll_permission(a,b,c)                permission(a,b)
 # define PGCACHE_WRLOCK(mapping)          spin_lock(&pagecache_lock)
 # define PGCACHE_WRUNLOCK(mapping)        spin_unlock(&pagecache_lock)
 
@@ -78,10 +83,17 @@ static inline int ll_path_lookup(const char *path, unsigned flags,
                 error = path_walk(path, nd);
         return error;
 }
+#define ll_permission(a,b,c)  permission(a,b)
 typedef long sector_t;
 
 #define ll_pgcache_lock(mapping)        spin_lock(&pagecache_lock)
 #define ll_pgcache_unlock(mapping)      spin_unlock(&pagecache_lock)
+
+static inline void __d_drop(struct dentry *dentry)
+{
+	list_del(&dentry->d_hash);
+	INIT_LIST_HEAD(&dentry->d_hash);
+}
 
 #endif /* end of 2.4 compat macros */
 
