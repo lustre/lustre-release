@@ -24,9 +24,12 @@
 #include <ctype.h>
 #include <string.h>
 #include <stddef.h>
+#include <unistd.h>
 #include <sys/param.h>
 #include <assert.h>
 
+#include <config.h>
+#ifdef HAVE_LIBREADLINE
 #define READLINE_LIBRARY
 #include <readline/readline.h>
 
@@ -34,6 +37,7 @@
 extern void using_history(void);
 extern void stifle_history(int);
 extern void add_history(char *);
+#endif
 
 #include "parser.h"
 
@@ -179,6 +183,7 @@ static int process(char *s, char ** next, command_t *lookup,
         }
 }
 
+#ifdef HAVE_LIBREADLINE
 static char * command_generator(const char * text, int state) 
 {
         static int index,
@@ -224,6 +229,7 @@ static char **command_completion(char * text, int start, int end)
 
         return(completion_matches(text, command_generator));
 }
+#endif
 
 /* take a string and execute the function or print help */
 int execute_line(char * line)
@@ -270,20 +276,66 @@ int execute_line(char * line)
         return rc;
 }
 
+int
+noop_fn ()
+{
+        return (0);
+}
+
+/* just in case you're ever in an airplane and discover you 
+   forgot to install readline-dev. :) */
+int init_input() 
+{
+        int   interactive = isatty (fileno (stdin));
+
+#ifdef HAVE_LIBREADLINE
+        using_history();
+        stifle_history(HISTORY);
+
+        if (!interactive)
+        {
+                rl_prep_term_function = (rl_vintfunc_t *)noop_fn;
+                rl_deprep_term_function = (rl_voidfunc_t *)noop_fn;
+        }
+
+        rl_attempted_completion_function = (CPPFunction *)command_completion;
+        rl_completion_entry_function = (void *)command_generator;
+#endif 
+        return interactive;
+}
+
+#ifndef HAVE_LIBREADLINE
+#define add_history(s)
+char * readline(char * prompt) 
+{
+        char line[2048];
+        int n;
+        char * ret = NULL;
+        if (prompt)
+                printf ("%s", prompt);
+        fgets(line, sizeof(line), stdin);
+        n = strlen(line);
+        if (n && line[n-1] == '\n')
+                line[--n] = '\0';
+        if (n == 0 && feof(stdin)) {
+                ret = NULL;
+        } else
+                ret =  strdup(line);
+        return ret;
+}
+#endif
+
 /* this is the command execution machine */
 int Parser_commands(void)
 {
         char *line, *s;
         int rc = 0;
-
-        using_history();
-        stifle_history(HISTORY);
-
-        rl_attempted_completion_function = (CPPFunction *)command_completion;
-        rl_completion_entry_function = (void *)command_generator;
+        int interactive;
+        
+        interactive = init_input();
 
         while(!done) {
-                line = readline(parser_prompt);
+                line = readline(interactive ? parser_prompt : NULL);
 
                 if (!line) break;
 
@@ -628,19 +680,19 @@ int Parser_size (int *sizep, char *str) {
 
 /* Convert a string boolean to an int; "enable" -> 1 */
 int Parser_bool (int *b, char *str) {
-        if (strcasecmp (str, "no") ||
-            strcasecmp (str, "n") ||
-            strcasecmp (str, "off") ||
-            strcasecmp (str, "disable"))
+        if (!strcasecmp (str, "no") ||
+            !strcasecmp (str, "n") ||
+            !strcasecmp (str, "off") ||
+            !strcasecmp (str, "disable"))
         {
                 *b = 0;
                 return (0);
         }
         
-        if (strcasecmp (str, "yes") ||
-            strcasecmp (str, "y") ||
-            strcasecmp (str, "on") ||
-            strcasecmp (str, "enable"))
+        if (!strcasecmp (str, "yes") ||
+            !strcasecmp (str, "y") ||
+            !strcasecmp (str, "on") ||
+            !strcasecmp (str, "enable"))
         {
                 *b = 1;
                 return (0);

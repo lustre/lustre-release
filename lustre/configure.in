@@ -24,6 +24,8 @@ XML2_LIBS=$($XML2_CONFIG --libs)
 AC_SUBST(XML2_CFLAGS)
 AC_SUBST(XML2_LIBS)
 
+AC_CHECK_LIB(readline, readline)
+
 # Kernel build environment.
 ac_default_prefix=
 bindir='${exec_prefix}/usr/bin'
@@ -83,6 +85,8 @@ AC_SUBST(docdir)
 
 demodir='$(docdir)/demo'
 AC_SUBST(demodir)
+
+AM_CONFIG_HEADER(include/config.h)
 
 AC_OUTPUT(Makefile lib/Makefile ldlm/Makefile \
          obdecho/Makefile ptlrpc/Makefile \
