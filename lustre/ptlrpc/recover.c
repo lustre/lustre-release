@@ -25,7 +25,6 @@
 
 int ll_reconnect(struct ptlrpc_connection *conn) 
 {
-        struct ptlrpc_request *request; 
         struct list_head *tmp;
         int rc = -EINVAL;
 
@@ -44,14 +43,24 @@ int ll_reconnect(struct ptlrpc_connection *conn)
                                sizeof(obd->obd_uuid) };
                 char *tmp[] = {cli->cl_target_uuid, obd->obd_uuid };
                 struct lustre_handle old_hdl;
+                struct ptlrpc_request *request; 
+                struct obd_export *ldlmexp;
 
                 LASSERT(imp->imp_connection == conn);
                 request = ptlrpc_prep_req(imp, rq_opc, 2, size, tmp);
                 request->rq_level = LUSTRE_CONN_NEW;
                 request->rq_replen = lustre_msg_size(0, NULL);
-                /* XXX are (addr, cookie) right? */
-                request->rq_reqmsg->addr = imp->imp_handle.addr;
-                request->rq_reqmsg->cookie = imp->imp_handle.cookie;
+                /*
+                 * This address is the export that represents our client-side
+                 * LDLM service (for ASTs).  We should only have one on this
+                 * list, so we just grab the first one.
+                 *
+                 * XXX tear down export, call class_obd_connect!
+                 */
+                ldlmexp = list_entry(obd->obd_exports.next, struct obd_export,
+                                     exp_obd_chain);
+                request->rq_reqmsg->addr = (__u64)(unsigned long)ldlmexp;
+                request->rq_reqmsg->cookie = ldlmexp->exp_cookie;
                 rc = ptlrpc_queue_wait(request);
                 rc = ptlrpc_check_status(request, rc);
                 if (rc) {
