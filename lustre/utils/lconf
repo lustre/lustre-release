@@ -575,7 +575,10 @@ class Module:
             log('unloading module:', mod)
             if config.noexec():
                 continue
-            run('/sbin/rmmod', mod)
+            (rc, out) = run('/sbin/rmmod', mod)
+            if rc:
+                log('! unable to unload module:', mod)
+                logall(out)
         
 
 class Network(Module):
@@ -706,6 +709,9 @@ class MDC(Module):
         srv = Network(net)
         try:
             lctl.disconnect(srv.net_type, srv.nid, srv.port, srv.uuid)
+        except CommandError:
+            print "disconnect failed: ", self.name
+        try:
             lctl.cleanup(self.name, self.uuid)
         except CommandError:
             print "cleanup failed: ", self.name
@@ -726,15 +732,16 @@ class OBD(Module):
     # FIXME: check if device is already formatted.
     def prepare(self):
         self.info(self.obdtype, self.devname, self.size, self.fstype, self.format)
-        if not self.obdtype == 'obdecho':
-            blkdev = block_dev(self.devname, self.size, self.fstype, self.format)
-        else:
+        if self.obdtype == 'obdecho':
             blkdev = ''
+        else:
+            blkdev = block_dev(self.devname, self.size, self.fstype, self.format)
         lctl.newdev(attach="%s %s %s" % (self.obdtype, self.name, self.uuid),
                     setup ="%s %s" %(blkdev, self.fstype))
     def cleanup(self):
         Module.cleanup(self)
-        clean_loop(self.devname)
+        if not self.obdtype == 'obdecho':
+            clean_loop(self.devname)
 
 class OST(Module):
     def __init__(self,node):
@@ -771,6 +778,9 @@ class OSC(Module):
         srv = Network(net_uuid)
         try:
             lctl.disconnect(srv.net_type, srv.nid, srv.port, srv.uuid)
+        except CommandError:
+            print "disconnect failed: ", self.name
+        try:
             lctl.cleanup(self.name, self.uuid)
         except CommandError:
             print "cleanup failed: ", self.name

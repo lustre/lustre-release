@@ -1,13 +1,20 @@
 #!/bin/sh
 
-SRCDIR="`dirname $0`/"
-. $SRCDIR/common.sh
+config=echo.xml
+lmc=../utils/lmc
+lconf=../utils/lconf
 
-export DEBUG_WAIT=yes
-. $SRCDIR/llsetup.sh $SRCDIR/net-local.cfg $SRCDIR/obdecho.cfg $SRCDIR/client-echo.cfg
+# create nodes
+$lmc -o $config --node localhost --net localhost tcp 
+$lmc -m $config --node localhost --obdtype=obdecho --ost
+# force the osc to be configured (this is normally done when it is mounted)
+$lmc -m $config --node localhost --osc OSC_localhost
+
+$lconf --gdb $config
 
 cat <<EOF
 
 run getattr tests as:
-$OBDCTL --device `$OBDCTL name2dev OSCDEV` test_getattr 1000000
+../utils/lctl --device '\$OSC_localhost' test_getattr 1000000
 EOF
+

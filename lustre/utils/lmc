@@ -391,6 +391,20 @@ def add_ost(gen, lustre, options, args):
     lustre.appendChild(osc)
     lustre.appendChild(ost)
                    
+# this is generally only used by llecho.sh
+def add_osc(gen, lustre, options, args):
+    """ add the osc to the profile for this node. """
+    if len(args) < 1:
+        usage()
+    osc_name = args[0]
+    if options.has_key('node'):
+        node_name = options['node']
+    else:
+        error("--osc requires a --node argument")
+    osc_uuid = name2uuid(lustre, osc_name)
+    node = findByName(lustre, node_name, "node")
+    node_add_profile(gen, node, 'osc', osc_uuid)
+
 def add_net(gen, lustre, options, args):
     """ create a node with a network config """
     if len(args) < 2:
@@ -561,7 +575,7 @@ def add_mds(gen, lustre, options, args):
 
 def parse_cmdline(argv):
     short_opts = "ho:i:m:"
-    long_opts = ["ost", "mtpt", "lov=", "node=", "mds=", "net",
+    long_opts = ["ost", "osc", "mtpt", "lov=", "node=", "mds=", "net",
                  "mdc", "merge=", "format", "reformat", "output=",
                  "obdtype=", "in=", "help"]
     opts = []
@@ -580,6 +594,8 @@ def parse_cmdline(argv):
             options['output'] = a
         if o == "--ost":
             options['ost'] = 1
+        if o == "--osc":
+            options['osc'] = 1
         if o == "--mds":
             options['mds'] = a
         if o == "--mdc":
@@ -649,6 +665,8 @@ def main():
     gen = GenConfig(doc)
     if options.has_key('ost'):
         add_ost(gen, lustre, options, args)
+    elif options.has_key('osc'):
+        add_osc(gen, lustre, options, args)
     elif options.has_key('mtpt'):
         add_mtpt(gen, lustre, options, args)
     elif options.has_key('mds'):
