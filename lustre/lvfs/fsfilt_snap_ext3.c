@@ -92,18 +92,6 @@ set_parent_ino(struct snap_ea *pea, int size, int index, ino_t val)
                                                                                                                                                                                                      
        return 0;
 }
-static int add_primary_inode_to_cowed_dir(handle_t *handle, struct inode *pri, 
-                                           char *buf_pri)
-{
-        ENTRY;
-        RETURN(0);
-}
-
-static int del_primary_inode_to_cowed_dir(handle_t *handle, struct inode *pri)
-{
-        ENTRY;
-        RETURN(0);
-}
 /**
  * fsfilt_ext3_get_indirect - get a specific indirect inode from a primary inode
  * @primary: primary (direct) inode
@@ -142,7 +130,7 @@ static struct inode *fsfilt_ext3_get_indirect(struct inode *primary, int *table,
 	rc = ext3_xattr_get(primary, EXT3_SNAP_INDEX, EXT3_SNAP_ATTR, buf, 
                              EXT3_MAX_SNAP_DATA); 
 	if (rc == -ENODATA) {
-		slot = 0;
+		slot = -1;
 	} else if (rc < 0) {
 		CERROR("attribute read rc=%d \n", rc);
 		RETURN(NULL);
@@ -150,17 +138,17 @@ static struct inode *fsfilt_ext3_get_indirect(struct inode *primary, int *table,
 	snaps = (struct snap_ea *)buf;
 
 	/* if table is NULL and there is a slot */
-	if( !table && slot ) {
+	if( !table && slot >= 0) {
 		index = slot;
-		ino = le32_to_cpu ( snaps->ino[index] );
+		ino = le32_to_cpu(snaps->ino[index]);
 		if(ino)	
                         inode = iget(primary->i_sb, ino);
 		GOTO(err_free, rc);
 	}
 	/* if table is not NULL */
-	while ( !inode && slot > 0) {
+	while (!inode && slot >= 0 && table) {
 		index = table[slot];
-		ino = le32_to_cpu ( snaps->ino[index] );
+		ino = le32_to_cpu(snaps->ino[index]);
 
 		CDEBUG(D_INODE, "snap inode at slot %d is %lu\n", slot, ino);
 		if (!ino) {
@@ -170,7 +158,7 @@ static struct inode *fsfilt_ext3_get_indirect(struct inode *primary, int *table,
 		inode = iget(primary->i_sb, ino);
 		GOTO(err_free, rc);
 	}
-	if( slot == 0 && table ) {
+	if( slot == -1 && table ) {
 		CDEBUG(D_INODE, "redirector not found, using primary\n");
 		inode = iget(primary->i_sb, primary->i_ino);
 	}
@@ -221,13 +209,8 @@ static int fsfilt_ext3_set_indirect(struct inode *pri, int index, ino_t ind_ino,
 
 	set_parent_ino(snaps, ea_size, index, cpu_to_le32(parent_ino));
 
-	if (inlist) {
-	 	err = ext3_xattr_set(handle, pri, EXT3_SNAP_INDEX, EXT3_SNAP_ATTR,
+	err = ext3_xattr_set(handle, pri, EXT3_SNAP_INDEX, EXT3_SNAP_ATTR,
 			             buf, EXT3_MAX_SNAP_DATA, 0);
-	}
-	else {
-		err = add_primary_inode_to_cowed_dir(handle, pri, buf);
-	}
 	ext3_mark_inode_dirty(handle, pri);
 	ext3_journal_stop(handle, pri);
 out_unlock:
@@ -665,13 +648,19 @@ static struct inode* fsfilt_ext3_create_indirect(struct inode *pri, int index,
 	}
 	/* XXX: check this, ext3_new_inode, the first arg should be "dir" */ 
 	ind = ext3_new_inode(handle, pri, (int)pri->i_mode, 0);
-	if (!ind)
+	if (IS_ERR(ind))
 		GOTO(exit, err);
-
 	CDEBUG(D_INODE, "got new inode %lu\n", ind->i_ino);
 	ind->i_rdev = pri->i_rdev;
 	ind->i_op = pri->i_op;
-	ext3_set_generation(ind, (unsigned long)gen);
+      
+        /*init ind ops*/ 
+        memcpy(ind->i_op, pri->i_op, sizeof(*pri->i_op));
+        memcpy(ind->i_fop, pri->i_fop, sizeof(*pri->i_fop));
+        memcpy(ind->i_mapping->a_ops, pri->i_mapping->a_ops, 
+               sizeof(*pri->i_mapping->a_ops));
+         
+        ext3_set_generation(ind, (unsigned long)gen);
 	/* If we are deleting the primary inode, we want to ensure that it is
 	 * written to disk with a non-zero link count, otherwise the next iget
 	 * and iput will mark the inode as free (which we don't want, we want
@@ -1287,8 +1276,6 @@ static int fsfilt_ext3_destroy_indirect(struct inode *pri, int index,
 	for (i = 0; i < EXT3_MAX_SNAPS; i++)
 		save += snaps->ino[i];
 
-	if(!save) 	
-		del_primary_inode_to_cowed_dir(handle, pri);
 
 	/*Should we remove snap feature here*/
         /*

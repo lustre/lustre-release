@@ -46,7 +46,7 @@ static int smfs_init_snaptabe(struct super_block *sb)
         struct snap_info         *snap_info = S2SNAPI(sb);	
         struct snap_table        *snap_table = NULL;       
 	struct fsfilt_operations *snapops = snap_info->snap_fsfilt;
-        int                      rc = 0, size, table_size, vallen;
+        int                      rc = 0, size, table_size, vallen, i;
  
         ENTRY;
 
@@ -74,8 +74,11 @@ static int smfs_init_snaptabe(struct super_block *sb)
          
         snap_table->sntbl_magic = cpu_to_le32((__u32)SNAPTABLE_MAGIC); 
         snap_table->sntbl_max_count = size;
+        for (i = 0; i < snap_table->sntbl_max_count; i++) {
+                /*init sn_index to -1*/ 
+                snap_table->sntbl_items[i].sn_index = -1;
+        }
         /*get snaptable info*/
-
         rc = snapops->fs_get_snap_info(sb, NULL, SNAPTABLE_INFO, 
                                        strlen(SNAPTABLE_INFO), 
                                        snap_table, &table_size);       
@@ -575,13 +578,16 @@ int smfs_cow_write(struct inode *inode, struct dentry *dentry, void *data1,
         struct snap_table *table = snap_info->sntbl; 
 	long   blocks[2]={-1,-1};
        	int  index = 0, i, rc = 0;
-        size_t count = *(size_t *)data1;
-	loff_t pos = *(loff_t*)data2;
+        size_t count;
+	loff_t pos;
 
         ENTRY;
 
-        LASSERT(count);
-        LASSERT(pos);
+        LASSERT(data1);
+        LASSERT(data2);
+        
+        count = *(size_t *)data1;
+	pos = *(loff_t*)data2;
  
 	down(&inode->i_sem);
         
