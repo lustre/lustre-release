@@ -31,7 +31,7 @@ import re, exceptions
 import xml.dom.minidom
 
 # Global parameters
-TCP_ACCEPTOR = 'acceptor'
+TCP_ACCEPTOR = '../..//portals/linux/utils/acceptor'
 options = {}
 
 #
@@ -140,14 +140,14 @@ class LCTLInterface:
             logall(err)
             raise CommandError, err
         return ret, out
-        
-        
+
     # create a new device with lctl
     def network(self, net, nid):
         cmds =  """
   network %s
   mynid %s
-  quit""" % (net, nid)
+  add_uuid self %s
+  quit""" % (net, nid, nid)
         self.run(cmds)
 
     # create a new connection 
@@ -168,7 +168,7 @@ class LCTLInterface:
         self.run(cmds)
 
     # create a new device with lctl
-    def newdev(self, attach, setup):
+    def newdev(self, attach, setup = ""):
         cmds = """
   newdev
   attach %s
@@ -213,6 +213,19 @@ def run(*args):
     else:
         ret = 0
     return (ret, out)
+
+# Run a command in the background.
+def run_daemon(*args):
+    cmd = string.join(map(str,args))
+    debug ("+", cmd)
+    if isnotouch(): return ([], 0)
+    f = os.popen(cmd + ' 2>&1')
+    ret = f.close()
+    if ret:
+        ret = ret >> 8
+    else:
+        ret = 0
+    return ret
 
 
 # is the path a block device?
@@ -325,8 +338,12 @@ def prepare_network(node):
     (name, uuid, type, nid, port) = getNetworkInfo(node)
     print 'NETWORK:', name, uuid, type, nid, port
     if type == 'tcp':
-        run(TCP_ACCEPTOR, port)
+        ret = run_daemon(TCP_ACCEPTOR, port)
+        if ret:
+            print "error:", ret
+            raise CommandError, "cannot run acceptor"
     lctl.network(type, nid)
+    lctl.newdev(attach = "ptlrpc RPCDEV")
 
 
 # need to check /proc/mounts and /etc/mtab before
@@ -401,7 +418,13 @@ def cleanup_lov(node):
 def cleanup_network(node):
     (name, uuid, type, nid, port) = getNetworkInfo(node)
     print 'NETWORK:', name, uuid, type, nid, port
-    #lctl.network(type, nid)
+    try:
+        lctl.cleanup("RPCDEV", "")
+    except CommandError:
+        print "cleanup failed: ", name
+    # yikes, this ugly! need to save pid in /var/something
+    run("killall acceptor")
+
 
 # need to check /proc/mounts and /etc/mtab before
 # formatting anything.
@@ -748,7 +771,7 @@ def doHost(lustreNode, hosts, cleanFlag):
 #
 def parse_cmdline(argv):
     short_opts = "hdv"
-    long_opts = ["ldap", "reformat", "lustre=",
+    long_opts = ["ldap", "reformat", "lustre=", "verbose",
                  "portals=", "makeldiff", "cleanup", "iam=",
                  "help", "debug", "host="]
     opts = []
