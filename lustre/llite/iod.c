@@ -57,6 +57,9 @@ void sort_brw_pages(struct brw_page *array, int num)
         int stride, i, j;
         struct brw_page tmp;
 
+        if ( num == 1 )
+                return;
+
         for( stride = 1; stride < num ; stride = (stride*3) +1  )
                 ;
 
@@ -75,14 +78,24 @@ void sort_brw_pages(struct brw_page *array, int num)
 	} while ( stride > 1 );
 }
 
-static inline void fill_brw_page(struct brw_page *pg,
+/*
+ * returns 0 if the page was inserted in the array because it was
+ * within i_size.  if we raced with truncate and i_size was less
+ * than the page we can unlock the page because truncate_inode_pages will
+ * be waiting to cleanup the page
+ */
+static int brw_pack_valid_page(struct brw_page *pg,
                                    struct inode *inode,
                                    struct page *page)
 {
-        page_cache_get(page);
+        obd_off off = ((obd_off)page->index) << PAGE_SHIFT;
+
+        /* we raced with truncate? */
+        if ( off >= inode->i_size )
+                return -1;
 
         pg->pg = page;
-        pg->off = ((obd_off)page->index) << PAGE_SHIFT;
+        pg->off = off;
         pg->flag = OBD_BRW_CREATE;
         pg->count = PAGE_SIZE;
 
@@ -97,10 +110,10 @@ static inline void fill_brw_page(struct brw_page *pg,
          */
         LASSERT(pg->count >= 0);
 
-        CDEBUG(D_CACHE, "brw_page %p: off %lld cnt %d, "
-                        "page %p: ind %ld\n",
-                        pg, pg->off, pg->count,
-                        page, page->index);
+        CDEBUG(D_CACHE, "brw_page %p: off %lld cnt %d, page %p: ind %ld\n",
+                        pg, pg->off, pg->count, page, page->index);
+
+        return 0;
 }
 
 /* 
@@ -131,12 +144,18 @@ static int ll_get_dirty_pages(struct inode *inode, struct brw_page *pgs,
                 list_del(&page->list);
                 list_add(&page->list, &mapping->locked_pages);
 
-                if (PageDirty(page)) {
-                        ClearPageDirty(page);
-                        fill_brw_page(&pgs[ret], inode, page);
-                        ret++;
-                } else 
-                        UnlockPage(page);
+                if ( ! PageDirty(page) ) {
+                        unlock_page(page);
+                        continue;
+                }
+                ClearPageDirty(page);
+
+                if ( brw_pack_valid_page(&pgs[ret], inode, page) != 0) {
+                        unlock_page(page);
+                        continue;
+                }
+                page_cache_get(page);
+                ret++;
         }
 
         spin_unlock(&pagecache_lock);
@@ -277,7 +296,7 @@ int ll_batch_writepage( struct inode *inode, struct page *page )
         struct obd_brw_set *set = NULL;
         struct brw_page *pgs = NULL;
         unsigned long old_flags; /* hack? */
-        int npgs;
+        int npgs = 0;
         int rc = 0;
         ENTRY;
 
@@ -288,8 +307,12 @@ int ll_batch_writepage( struct inode *inode, struct page *page )
         if ( pgs == NULL || set == NULL )
                 GOTO(cleanup, rc = -ENOMEM);
 
-        fill_brw_page(pgs, inode, page);
-        npgs = 1;
+        if ( brw_pack_valid_page(pgs, inode, page) == 0) {
+                page_cache_get(page);
+                npgs++;
+        } else  {
+                unlock_page(page);
+        }
 
         npgs += ll_get_dirty_pages(inode, &pgs[npgs], LIOD_FLUSH_NR - npgs);
         ll_brw_pages_unlock(inode, pgs, npgs, set);
