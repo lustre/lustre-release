@@ -57,7 +57,7 @@
   */
  
  #include <linux/fs.h>
-@@ -38,6 +42,435 @@
+@@ -38,6 +42,438 @@
  #define NAMEI_RA_SIZE        (NAMEI_RA_CHUNKS * NAMEI_RA_BLOCKS)
  #define NAMEI_RA_INDEX(c,b)  (((c) * NAMEI_RA_BLOCKS) + (b))
  
@@ -73,14 +73,17 @@
 +	}
 +}
 +
-+static struct buffer_head *ext3_append (handle_t *handle,
++static struct buffer_head *ext3_append(handle_t *handle,
 +					struct inode *inode,
 +					u32 *block, int *err)
 +{
 +	struct buffer_head *bh;
++
 +	*block = inode->i_size >> inode->i_sb->s_blocksize_bits;
-+	if((bh = ext3_bread (handle,inode, *block, 1, err))) {
++
++	if ((bh = ext3_bread(handle, inode, *block, 1, err))) {
 +		inode->i_size += inode->i_sb->s_blocksize;
++		EXT3_I(inode)->i_disksize = inode->i_size;
 +		ext3_journal_get_write_access(handle,bh);
 +	}
 +	return bh;
