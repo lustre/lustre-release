@@ -81,7 +81,6 @@ static int ext2_commit_chunk(struct page *page, unsigned from, unsigned to)
 static void ext2_check_page(struct page *page)
 {
 	struct inode *dir = page->mapping->host;
-	struct super_block *sb = dir->i_sb;
 	unsigned chunk_size = ext2_chunk_size(dir);
 	char *kaddr = page_address(page);
 	//	u32 max_inumber = le32_to_cpu(sb->u.ext2_sb.s_es->s_inodes_count);
@@ -125,7 +124,7 @@ out:
 	/* Too bad, we had an error */
 
 Ebadsize:
-	ext2_error(sb, "ext2_check_page",
+	printk("ext2_check_page"
 		"size of directory #%lu is not a multiple of chunk size",
 		dir->i_ino
 	);
@@ -145,7 +144,7 @@ Espan:
 	//Einumber:
 	// error = "inode out of bounds";
 bad_entry:
-	ext2_error (sb, "ext2_check_page", "bad entry in directory #%lu: %s - "
+	printk("ext2_check_page: bad entry in directory #%lu: %s - "
 		"offset=%lu, inode=%lu, rec_len=%d, name_len=%d",
 		dir->i_ino, error, (page->index<<PAGE_CACHE_SHIFT)+offs,
 		(unsigned long) le32_to_cpu(p->inode),
@@ -153,7 +152,7 @@ bad_entry:
 	goto fail;
 Eend:
 	p = (ext2_dirent *)(kaddr + offs);
-	ext2_error (sb, "ext2_check_page",
+	printk("ext2_check_page"
 		"entry in directory #%lu spans the page boundary"
 		"offset=%lu, inode=%lu",
 		dir->i_ino, (page->index<<PAGE_CACHE_SHIFT)+offs,
@@ -229,7 +228,7 @@ static unsigned char ext2_filetype_table[EXT2_FT_MAX] = {
 	[EXT2_FT_SYMLINK]	DT_LNK,
 };
 
-static unsigned int obdfs_dt2fmt[DT_WHT + 1] = {
+static unsigned int ll_dt2fmt[DT_WHT + 1] = {
 	[EXT2_FT_UNKNOWN]	0, 
 	[EXT2_FT_REG_FILE]	S_IFREG,
 	[EXT2_FT_DIR]		S_IFDIR,
@@ -258,7 +257,7 @@ static inline void ext2_set_de_type(ext2_dirent *de, struct inode *inode)
 }
 
 int
-new_obdfs_readdir (struct file * filp, void * dirent, filldir_t filldir)
+new_ll_readdir (struct file * filp, void * dirent, filldir_t filldir)
 {
 	loff_t pos = filp->f_pos;
 	struct inode *inode = filp->f_dentry->d_inode;
@@ -380,7 +379,7 @@ struct ext2_dir_entry_2 * ext2_dotdot (struct inode *dir, struct page **p)
 	return de;
 }
 
-ino_t obdfs_inode_by_name(struct inode * dir, struct dentry *dentry, int *type)
+ino_t ll_inode_by_name(struct inode * dir, struct dentry *dentry, int *type)
 {
 	ino_t res = 0;
 	struct ext2_dir_entry_2 * de;
@@ -389,7 +388,7 @@ ino_t obdfs_inode_by_name(struct inode * dir, struct dentry *dentry, int *type)
 	de = ext2_find_entry (dir, dentry, &page);
 	if (de) {
 		res = le32_to_cpu(de->inode);
-		*type = obdfs_dt2fmt[de->file_type];
+		*type = ll_dt2fmt[de->file_type];
 		kunmap(page);
 		page_cache_release(page);
 	}
@@ -486,7 +485,7 @@ got_it:
 	err = ext2_commit_chunk(page, from, to);
 
 	// change_inode happens with the commit_chunk
-        // obdfs_change_inode(dir);
+        // ll_change_inode(dir);
 	/* OFFSET_CACHE */
 out_unlock:
 	UnlockPage(page);
@@ -619,7 +618,7 @@ not_empty:
 	return 0;
 }
 
-struct file_operations obdfs_dir_operations = {
+struct file_operations ll_dir_operations = {
         read: generic_read_dir,
-        readdir: new_obdfs_readdir
+        readdir: new_ll_readdir
 };

@@ -35,12 +35,12 @@
 #include <linux/smp_lock.h>
 
 #include <linux/obd_support.h>
-#include <linux/obdfs.h>
+#include <linux/lustre_light.h>
 
-extern int obdfs_setattr(struct dentry *de, struct iattr *attr);
-void obdfs_change_inode(struct inode *inode);
+extern int ll_setattr(struct dentry *de, struct iattr *attr);
+void ll_change_inode(struct inode *inode);
 
-static inline void obdfs_remove_suid(struct inode *inode)
+static inline void ll_remove_suid(struct inode *inode)
 {
         unsigned int mode;
 
@@ -52,7 +52,7 @@ static inline void obdfs_remove_suid(struct inode *inode)
         if (mode && !capable(CAP_FSETID)) {
                 inode->i_mode &= ~mode;
 		// XXX careful here - we cannot change the size
-                //obdfs_change_inode(inode);
+                //ll_change_inode(inode);
         }
 }
 
@@ -60,7 +60,7 @@ static inline void obdfs_remove_suid(struct inode *inode)
  * Write to a file (through the page cache).
  */
 static ssize_t
-obdfs_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
+ll_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 {
         ssize_t retval;
         CDEBUG(D_INFO, "Writing inode %ld, %d bytes, offset %Ld\n",
@@ -75,7 +75,7 @@ obdfs_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 		attr.ia_valid = ATTR_MTIME | ATTR_CTIME | ATTR_ATIME;
 		attr.ia_mtime = attr.ia_ctime = attr.ia_atime =
 			CURRENT_TIME;
-                obdfs_setattr(file->f_dentry, &attr);
+                ll_setattr(file->f_dentry, &attr);
         }
         EXIT;
         return retval;
@@ -84,21 +84,21 @@ obdfs_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 
 /* XXX this does not need to do anything for data, it _does_ need to
    call setattr */ 
-int obdfs_fsync(struct file *file, struct dentry *dentry, int data)
+int ll_fsync(struct file *file, struct dentry *dentry, int data)
 {
 	return 0;
 }
 
-struct file_operations obdfs_file_operations = {
+struct file_operations ll_file_operations = {
         read: generic_file_read,
-        write: obdfs_file_write,
+        write: ll_file_write,
         mmap: generic_file_mmap,
 	fsync: NULL
 };
 
 
-struct inode_operations obdfs_file_inode_operations = {
-        truncate: obdfs_truncate,
-	setattr: obdfs_setattr
+struct inode_operations ll_file_inode_operations = {
+        truncate: ll_truncate,
+	setattr: ll_setattr
 };
 

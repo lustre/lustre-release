@@ -69,15 +69,41 @@ static void inline ll_from_inode(struct obdo *oa, struct inode *inode)
         }
 } /* ll_from_inode */
 
-static void inline ll_to_inode(struct inode *inode, struct obdo *oa)
+static __inline__ void mds_rep_to_inode(struct inode *dst, struct mds_rep *rep)
 {
-        struct ll_inode_info *oinfo = ll_i2info(inode);
 
-        CDEBUG(D_INFO, "src obdo %ld valid 0x%08x, dst inode %ld\n",
-               (long)oa->o_id, oa->o_valid, inode->i_ino);
+        if ( rep->valid & OBD_MD_FLID )
+                dst->i_ino = rep->ino;
+        if ( rep->valid & OBD_MD_FLATIME ) 
+                dst->i_atime = rep->atime;
+        if ( rep->valid & OBD_MD_FLMTIME ) 
+                dst->i_mtime = rep->mtime;
+        if ( rep->valid & OBD_MD_FLCTIME ) 
+                dst->i_ctime = rep->ctime;
+        if ( rep->valid & OBD_MD_FLSIZE ) 
+                dst->i_size = rep->size;
+        if ( rep->valid & OBD_MD_FLMODE ) 
+                dst->i_mode = rep->mode;
+        if ( rep->valid & OBD_MD_FLUID ) 
+                dst->i_uid = rep->uid;
+        if ( rep->valid & OBD_MD_FLGID ) 
+                dst->i_gid = rep->gid;
+        if ( rep->valid & OBD_MD_FLFLAGS ) 
+                dst->i_flags = rep->flags;
+        if ( rep->valid & OBD_MD_FLNLINK )
+                dst->i_nlink = rep->nlink;
+        if ( rep->valid & OBD_MD_FLGENER )
+                dst->i_generation = rep->generation;
+}
 
-        obdo_to_inode(inode, oa);
+static void inline ll_to_inode(struct inode *inode, struct mds_rep *rep)
+{
+        CDEBUG(D_INFO, "src obdo %d valid 0x%08x, dst inode %ld\n",
+               rep->ino, rep->valid, inode->i_ino);
 
+        mds_rep_to_inode(inode, rep);
+
+#if 0
         if (obdo_has_inline(oa)) {
 		if (S_ISCHR(inode->i_mode) || S_ISBLK(inode->i_mode) ||
 		    S_ISFIFO(inode->i_mode)) {
@@ -91,6 +117,7 @@ static void inline ll_to_inode(struct inode *inode, struct obdo *oa)
 		}
                 oinfo->lli_flags |= OBD_FL_INLINEDATA;
         }
+#endif 
 } /* ll_to_inode */
 
 

@@ -33,10 +33,9 @@
 #include <linux/smp_lock.h>
 
 #include <linux/obd_support.h>
-#include <linux/obd_ext2.h>
-#include <linux/obdfs.h>
+#include <linux/lustre_light.h>
 
-void obdfs_change_inode(struct inode *inode);
+void ll_change_inode(struct inode *inode);
 
 static int cache_writes = 0;
 
@@ -97,7 +96,7 @@ inline void set_page_clean(struct page *page)
 }
 
 /* SYNCHRONOUS I/O to object storage for an inode -- object attr will be updated too */
-static int obdfs_brw(int rw, struct inode *inode, struct page *page, int create)
+static int ll_brw(int rw, struct inode *inode, struct page *page, int create)
 {
         obd_count        num_obdo = 1;
         obd_count        bufs_per_obdo = 1;
@@ -120,22 +119,22 @@ static int obdfs_brw(int rw, struct inode *inode, struct page *page, int create)
                 return -ENOMEM;
         }
 	oa->o_valid = OBD_MD_FLNOTOBD;
-        obdfs_from_inode(oa, inode);
+        ll_from_inode(oa, inode);
 
         err = IOPS(inode, brw)(rw, IID(inode), num_obdo, &oa, &bufs_per_obdo,
                                &page, &count, &offset, &flags);
         //if ( !err )
-	//      obdfs_to_inode(inode, oa); /* copy o_blocks to i_blocks */
+	//      ll_to_inode(inode, oa); /* copy o_blocks to i_blocks */
 
         obdo_free(oa);
         EXIT;
         return err;
-} /* obdfs_brw */
+} /* ll_brw */
 
 extern void set_page_clean(struct page *);
 
 /* SYNCHRONOUS I/O to object storage for an inode -- object attr will be updated too */
-static int obdfs_commit_page(struct page *page, int create, int from, int to)
+static int ll_commit_page(struct page *page, int create, int from, int to)
 {
 	struct inode *inode = page->mapping->host;
         obd_count        num_obdo = 1;
@@ -159,7 +158,7 @@ static int obdfs_commit_page(struct page *page, int create, int from, int to)
                 return -ENOMEM;
         }
 	oa->o_valid = OBD_MD_FLNOTOBD;
-        obdfs_from_inode(oa, inode);
+        ll_from_inode(oa, inode);
 
 	CDEBUG(D_INODE, "commit_page writing (at %d) to %d, count %Ld\n", 
 	       from, to, count);
@@ -172,16 +171,16 @@ static int obdfs_commit_page(struct page *page, int create, int from, int to)
 	}
 
         //if ( !err )
-	//      obdfs_to_inode(inode, oa); /* copy o_blocks to i_blocks */
+	//      ll_to_inode(inode, oa); /* copy o_blocks to i_blocks */
 
         obdo_free(oa);
         EXIT;
         return err;
-} /* obdfs_brw */
+} /* ll_brw */
 
 
 /* returns the page unlocked, but with a reference */
-int obdfs_readpage(struct file *file, struct page *page)
+int ll_readpage(struct file *file, struct page *page)
 {
 	struct inode *inode = page->mapping->host;
         int rc;
@@ -200,7 +199,7 @@ int obdfs_readpage(struct file *file, struct page *page)
 		goto readpage_out;
 	}
 
-        rc = obdfs_brw(READ, inode, page, 0);
+        rc = ll_brw(READ, inode, page, 0);
         if ( rc ) {
 		EXIT; 
 		return rc;
@@ -212,9 +211,9 @@ int obdfs_readpage(struct file *file, struct page *page)
 	obd_unlock_page(page);
         EXIT;
         return 0;
-} /* obdfs_readpage */
+} /* ll_readpage */
 
-int obdfs_prepare_write(struct file *file, struct page *page, unsigned from, unsigned to)
+int ll_prepare_write(struct file *file, struct page *page, unsigned from, unsigned to)
 {
         struct inode *inode = page->mapping->host;
         obd_off offset = ((obd_off)page->index) << PAGE_SHIFT;
@@ -232,7 +231,7 @@ int obdfs_prepare_write(struct file *file, struct page *page, unsigned from, uns
                 return 0;
         }
         
-        rc = obdfs_brw(READ, inode, page, 0);
+        rc = ll_brw(READ, inode, page, 0);
         if ( !rc ) {
                 SetPageUptodate(page);
         } 
@@ -249,64 +248,64 @@ int obdfs_prepare_write(struct file *file, struct page *page, unsigned from, uns
 
 
 
-static kmem_cache_t *obdfs_pgrq_cachep = NULL;
+static kmem_cache_t *ll_pgrq_cachep = NULL;
 
-int obdfs_init_pgrqcache(void)
+int ll_init_pgrqcache(void)
 {
         ENTRY;
-        if (obdfs_pgrq_cachep == NULL) {
-                CDEBUG(D_CACHE, "allocating obdfs_pgrq_cache\n");
-                obdfs_pgrq_cachep = kmem_cache_create("obdfs_pgrq",
-                                                      sizeof(struct obdfs_pgrq),
+        if (ll_pgrq_cachep == NULL) {
+                CDEBUG(D_CACHE, "allocating ll_pgrq_cache\n");
+                ll_pgrq_cachep = kmem_cache_create("ll_pgrq",
+                                                      sizeof(struct ll_pgrq),
                                                       0, SLAB_HWCACHE_ALIGN,
                                                       NULL, NULL);
-                if (obdfs_pgrq_cachep == NULL) {
+                if (ll_pgrq_cachep == NULL) {
                         EXIT;
                         return -ENOMEM;
                 } else {
                         CDEBUG(D_CACHE, "allocated cache at %p\n",
-                               obdfs_pgrq_cachep);
+                               ll_pgrq_cachep);
                 }
         } else {
                 CDEBUG(D_CACHE, "using existing cache at %p\n",
-                       obdfs_pgrq_cachep);
+                       ll_pgrq_cachep);
         }
         EXIT;
         return 0;
-} /* obdfs_init_wreqcache */
+} /* ll_init_wreqcache */
 
-inline void obdfs_pgrq_del(struct obdfs_pgrq *pgrq)
+inline void ll_pgrq_del(struct ll_pgrq *pgrq)
 {
-        --obdfs_cache_count;
+        --ll_cache_count;
         CDEBUG(D_INFO, "deleting page %p from list [count %ld]\n",
-               pgrq->rq_page, obdfs_cache_count);
+               pgrq->rq_page, ll_cache_count);
         list_del(&pgrq->rq_plist);
         OBDClearCachePage(pgrq->rq_page);
-        kmem_cache_free(obdfs_pgrq_cachep, pgrq);
+        kmem_cache_free(ll_pgrq_cachep, pgrq);
 }
 
-void obdfs_cleanup_pgrqcache(void)
+void ll_cleanup_pgrqcache(void)
 {
         ENTRY;
-        if (obdfs_pgrq_cachep != NULL) {
-                CDEBUG(D_CACHE, "destroying obdfs_pgrqcache at %p, count %ld\n",
-                       obdfs_pgrq_cachep, obdfs_cache_count);
-                if (kmem_cache_destroy(obdfs_pgrq_cachep))
+        if (ll_pgrq_cachep != NULL) {
+                CDEBUG(D_CACHE, "destroying ll_pgrqcache at %p, count %ld\n",
+                       ll_pgrq_cachep, ll_cache_count);
+                if (kmem_cache_destroy(ll_pgrq_cachep))
                         printk(KERN_INFO __FUNCTION__
                                ": unable to free all of cache\n");
-                obdfs_pgrq_cachep = NULL;
+                ll_pgrq_cachep = NULL;
         } else
                 printk(KERN_INFO __FUNCTION__ ": called with NULL pointer\n");
 
         EXIT;
-} /* obdfs_cleanup_wreqcache */
+} /* ll_cleanup_wreqcache */
 
 
 /* called with the list lock held */
-static struct page *obdfs_find_page_index(struct inode *inode,
+static struct page *ll_find_page_index(struct inode *inode,
                                           unsigned long index)
 {
-        struct list_head *page_list = obdfs_iplist(inode);
+        struct list_head *page_list = ll_iplist(inode);
         struct list_head *tmp;
         struct page *page;
 
@@ -322,9 +321,9 @@ static struct page *obdfs_find_page_index(struct inode *inode,
         }
         tmp = page_list;
         while ( (tmp = tmp->next) != page_list ) {
-                struct obdfs_pgrq *pgrq;
+                struct ll_pgrq *pgrq;
 
-                pgrq = list_entry(tmp, struct obdfs_pgrq, rq_plist);
+                pgrq = list_entry(tmp, struct ll_pgrq, rq_plist);
                 page = pgrq->rq_page;
                 if (index == page->index) {
                         CDEBUG(D_INFO,
@@ -337,11 +336,11 @@ static struct page *obdfs_find_page_index(struct inode *inode,
 
         EXIT;
         return NULL;
-} /* obdfs_find_page_index */
+} /* ll_find_page_index */
 
 
 /* call and free pages from Linux page cache: called with io lock on inodes */
-int obdfs_do_vec_wr(struct inode **inodes, obd_count num_io,
+int ll_do_vec_wr(struct inode **inodes, obd_count num_io,
                     obd_count num_obdos, struct obdo **obdos,
                     obd_count *oa_bufs, struct page **pages, char **bufs,
                     obd_size *counts, obd_off *offsets, obd_flag *flags)
@@ -388,8 +387,8 @@ int obdfs_do_vec_wr(struct inode **inodes, obd_count num_io,
                 --num_obdos;
                 CDEBUG(D_INFO, "free obdo %ld\n",(long)obdos[num_obdos]->o_id);
                 /* copy o_blocks to i_blocks */
-		obdfs_set_size (inodes[num_obdos], obdos[num_obdos]->o_size);
-                //obdfs_to_inode(inodes[num_obdos], obdos[num_obdos]);
+		ll_set_size (inodes[num_obdos], obdos[num_obdos]->o_size);
+                //ll_to_inode(inodes[num_obdos], obdos[num_obdos]);
                 obdo_free(obdos[num_obdos]);
         }
         CDEBUG(D_INFO, "obdo_free done\n");
@@ -402,12 +401,12 @@ int obdfs_do_vec_wr(struct inode **inodes, obd_count num_io,
  * Add a page to the write request cache list for later writing.
  * ASYNCHRONOUS write method.
  */
-static int obdfs_add_page_to_cache(struct inode *inode, struct page *page)
+static int ll_add_page_to_cache(struct inode *inode, struct page *page)
 {
         int err = 0;
         ENTRY;
 
-        /* The PG_obdcache bit is cleared by obdfs_pgrq_del() BEFORE the page
+        /* The PG_obdcache bit is cleared by ll_pgrq_del() BEFORE the page
          * is written, so at worst we will write the page out twice.
          *
          * If the page has the PG_obdcache bit set, then the inode MUST be
@@ -418,8 +417,8 @@ static int obdfs_add_page_to_cache(struct inode *inode, struct page *page)
          * have an inode with dirty pages NOT on the superblock dirty list.
          */
         if (!OBDAddCachePage(page)) {
-                struct obdfs_pgrq *pgrq;
-                pgrq = kmem_cache_alloc(obdfs_pgrq_cachep, SLAB_KERNEL);
+                struct ll_pgrq *pgrq;
+                pgrq = kmem_cache_alloc(ll_pgrq_cachep, SLAB_KERNEL);
                 if (!pgrq) {
                         OBDClearCachePage(page);
                         EXIT;
@@ -433,10 +432,10 @@ static int obdfs_add_page_to_cache(struct inode *inode, struct page *page)
                 pgrq->rq_jiffies = jiffies;
                 get_page(pgrq->rq_page);
 
-                obd_down(&obdfs_i2sbi(inode)->osi_list_mutex);
-                list_add(&pgrq->rq_plist, obdfs_iplist(inode));
-                obdfs_cache_count++;
-		//printk("-- count %d\n", obdfs_cache_count);
+                obd_down(&ll_i2sbi(inode)->ll_list_mutex);
+                list_add(&pgrq->rq_plist, ll_iplist(inode));
+                ll_cache_count++;
+		//printk("-- count %d\n", ll_cache_count);
 
                 /* If inode isn't already on superblock inodes list, add it.
                  *
@@ -447,36 +446,36 @@ static int obdfs_add_page_to_cache(struct inode *inode, struct page *page)
                  * again there.  Instead we just increment/decrement i_count,
                  * which is mostly what iget/iput do for an inode in memory.
                  */
-                if ( list_empty(obdfs_islist(inode)) ) {
+                if ( list_empty(ll_islist(inode)) ) {
                         atomic_inc(&inode->i_count);
                         CDEBUG(D_INFO,
                                "adding inode %ld to superblock list %p\n",
-                               inode->i_ino, obdfs_slist(inode));
-                        list_add(obdfs_islist(inode), obdfs_slist(inode));
+                               inode->i_ino, ll_slist(inode));
+                        list_add(ll_islist(inode), ll_slist(inode));
                 }
-                obd_up(&obdfs_i2sbi(inode)->osi_list_mutex);
+                obd_up(&ll_i2sbi(inode)->ll_list_mutex);
 
         }
 
         /* XXX For testing purposes, we can write out the page here.
-        err = obdfs_flush_reqs(obdfs_slist(inode), ~0UL);
+        err = ll_flush_reqs(ll_slist(inode), ~0UL);
          */
 
         EXIT;
         return err;
-} /* obdfs_add_page_to_cache */
+} /* ll_add_page_to_cache */
 
 void rebalance(void)
 {
-	if (obdfs_cache_count > 60000) {
-		printk("-- count %ld\n", obdfs_cache_count);
-		//obdfs_flush_dirty_pages(~0UL);
-		printk("-- count %ld\n", obdfs_cache_count);
+	if (ll_cache_count > 60000) {
+		printk("-- count %ld\n", ll_cache_count);
+		//ll_flush_dirty_pages(~0UL);
+		printk("-- count %ld\n", ll_cache_count);
 	}
 }
 
 /* select between SYNC and ASYNC I/O methods */
-int obdfs_do_writepage(struct page *page, int sync)
+int ll_do_writepage(struct page *page, int sync)
 {
         struct inode *inode = page->mapping->host;
         int err;
@@ -484,9 +483,9 @@ int obdfs_do_writepage(struct page *page, int sync)
         ENTRY;
         /* PDEBUG(page, "WRITEPAGE"); */
         if ( sync )
-                err = obdfs_brw(WRITE, inode, page, 1);
+                err = ll_brw(WRITE, inode, page, 1);
         else {
-                err = obdfs_add_page_to_cache(inode, page);
+                err = ll_add_page_to_cache(inode, page);
                 CDEBUG(D_INFO, "DO_WR ino: %ld, page %p, err %d, uptodate %d\n",
                        inode->i_ino, page, err, Page_Uptodate(page));
         }
@@ -498,19 +497,19 @@ int obdfs_do_writepage(struct page *page, int sync)
         /* PDEBUG(page,"WRITEPAGE"); */
         EXIT;
         return err;
-} /* obdfs_do_writepage */
+} /* ll_do_writepage */
 
 
 
 /* returns the page unlocked, but with a reference */
-int obdfs_writepage(struct page *page)
+int ll_writepage(struct page *page)
 {
 	int rc;
 	struct inode *inode = page->mapping->host;
         ENTRY;
 	printk("---> writepage called ino %ld!\n", inode->i_ino);
 	BUG();
-        rc = obdfs_do_writepage(page, 1);
+        rc = ll_do_writepage(page, 1);
 	if ( !rc ) {
 		set_page_clean(page);
 	} else {
@@ -527,12 +526,12 @@ void write_inode_pages(struct inode *inode)
 	while ( (tmp = tmp->next) != &inode->i_mapping->dirty_pages) { 
 		struct page *page;
 		page = list_entry(tmp, struct page, list);
-		obdfs_writepage(page);
+		ll_writepage(page);
 	}
 }
 
 
-int obdfs_commit_write(struct file *file, struct page *page, unsigned from, unsigned to)
+int ll_commit_write(struct file *file, struct page *page, unsigned from, unsigned to)
 {
         struct inode *inode = page->mapping->host;
 	int rc = 0;
@@ -543,11 +542,11 @@ int obdfs_commit_write(struct file *file, struct page *page, unsigned from, unsi
 
 
 	if (cache_writes == 0) { 
-		rc = obdfs_commit_page(page, 1, from, to);
+		rc = ll_commit_page(page, 1, from, to);
 	}
 
         if (len > inode->i_size) {
-		obdfs_set_size(inode, len);
+		ll_set_size(inode, len);
         }
 
         kunmap(page);
@@ -567,7 +566,7 @@ int obdfs_commit_write(struct file *file, struct page *page, unsigned from, unsi
  *
  * Return value is the number of bytes written.
  */
-int obdfs_write_one_page(struct file *file, struct page *page,
+int ll_write_one_page(struct file *file, struct page *page,
                          unsigned long offset, unsigned long bytes,
                          const char * buf)
 {
@@ -579,7 +578,7 @@ int obdfs_write_one_page(struct file *file, struct page *page,
          * get the page before writing over everything anyways.
          */
         if ( !Page_Uptodate(page) && (offset != 0 || bytes != PAGE_SIZE) ) {
-                err = obdfs_brw(READ, inode, page, 0);
+                err = ll_brw(READ, inode, page, 0);
                 if ( err )
                         return err;
                 SetPageUptodate(page);
@@ -589,11 +588,11 @@ int obdfs_write_one_page(struct file *file, struct page *page,
                 return -EFAULT;
 
         lock_kernel();
-        err = obdfs_writepage(page);
+        err = ll_writepage(page);
         unlock_kernel();
 
         return (err < 0 ? err : bytes);
-} /* obdfs_write_one_page */
+} /* ll_write_one_page */
 
 /* 
  * return an up to date page:
@@ -603,7 +602,7 @@ int obdfs_write_one_page(struct file *file, struct page *page,
  *
  * modeled on NFS code.
  */
-struct page *obdfs_getpage(struct inode *inode, unsigned long offset,
+struct page *ll_getpage(struct inode *inode, unsigned long offset,
                            int create, int locked)
 {
         struct page * page;
@@ -642,13 +641,13 @@ struct page *obdfs_getpage(struct inode *inode, unsigned long offset,
 
 
 #ifdef EXT2_OBD_DEBUG
-        if ((obd_debug_level & D_INFO) && obdfs_find_page_index(inode, index)) {
+        if ((obd_debug_level & D_INFO) && ll_find_page_index(inode, index)) {
                 CDEBUG(D_INFO, "OVERWRITE: found dirty page %p, index %ld\n",
                        page, page->index);
         }
 #endif
 
-        err = obdfs_brw(READ, inode, page, create);
+        err = ll_brw(READ, inode, page, create);
 
         if ( err ) {
                 SetPageError(page);
@@ -663,16 +662,16 @@ struct page *obdfs_getpage(struct inode *inode, unsigned long offset,
         /* PDEBUG(page,"GETPAGE - after reading"); */
         EXIT;
         return page;
-} /* obdfs_getpage */
+} /* ll_getpage */
 
 
-void obdfs_truncate(struct inode *inode)
+void ll_truncate(struct inode *inode)
 {
         struct obdo *oa;
         int err;
         ENTRY;
 
-        //obdfs_dequeue_pages(inode);
+        //ll_dequeue_pages(inode);
 
         if (IOPS(inode, punch) == NULL) {
                 printk(KERN_ERR __FUNCTION__ ": no punch method!\n");
@@ -690,12 +689,12 @@ void obdfs_truncate(struct inode *inode)
                 printk(__FUNCTION__ ": obdo_alloc failed - using stack!\n");
 
                 obdo.o_valid = OBD_MD_FLNOTOBD;
-                obdfs_from_inode(&obdo, inode);
+                ll_from_inode(&obdo, inode);
 
                 err = IOPS(inode, punch)(IID(inode), &obdo, 0, obdo.o_size);
         } else {
                 oa->o_valid = OBD_MD_FLNOTOBD;
-                obdfs_from_inode(oa, inode);
+                ll_from_inode(oa, inode);
 
                 CDEBUG(D_INFO, "calling punch for %ld (%Lu bytes at 0)\n",
                        (long)oa->o_id, oa->o_size);
@@ -710,13 +709,13 @@ void obdfs_truncate(struct inode *inode)
                 return;
         }
         EXIT;
-} /* obdfs_truncate */
+} /* ll_truncate */
 
-struct address_space_operations obdfs_aops = {
-        readpage: obdfs_readpage,
-        writepage: obdfs_writepage,
+struct address_space_operations ll_aops = {
+        readpage: ll_readpage,
+        writepage: ll_writepage,
         sync_page: block_sync_page,
-        prepare_write: obdfs_prepare_write, 
-        commit_write: obdfs_commit_write,
+        prepare_write: ll_prepare_write, 
+        commit_write: ll_commit_write,
         bmap: NULL
 };

@@ -179,6 +179,36 @@ static int obdfs_commit_page(struct page *page, int create, int from, int to)
         return err;
 } /* obdfs_brw */
 
+/* returns the page unlocked, but with a reference */
+int obdfs_writepage(struct page *page)
+{
+	int rc;
+	struct inode *inode = page->mapping->host;
+        ENTRY;
+	printk("---> writepage called ino %ld!\n", inode->i_ino);
+	BUG();
+	rc = obdfs_brw(WRITE, inode, page, 1);
+	if ( !rc ) {
+		set_page_clean(page);
+	} else {
+		CDEBUG(D_INODE, "--> GRR %d\n", rc);
+	}
+        EXIT;
+	return rc;
+}
+
+
+void write_inode_pages(struct inode *inode)
+{
+	struct list_head *tmp = &inode->i_mapping->dirty_pages;
+	
+	while ( (tmp = tmp->next) != &inode->i_mapping->dirty_pages) { 
+		struct page *page;
+		page = list_entry(tmp, struct page, list);
+		obdfs_writepage(page);
+	}
+}
+
 
 /* returns the page unlocked, but with a reference */
 int obdfs_readpage(struct file *file, struct page *page)
@@ -245,7 +275,7 @@ int obdfs_prepare_write(struct file *file, struct page *page, unsigned from, uns
 }
 
 
-
+#if 0
 
 
 
@@ -475,6 +505,8 @@ void rebalance(void)
 	}
 }
 
+
+
 /* select between SYNC and ASYNC I/O methods */
 int obdfs_do_writepage(struct page *page, int sync)
 {
@@ -502,35 +534,8 @@ int obdfs_do_writepage(struct page *page, int sync)
 
 
 
-/* returns the page unlocked, but with a reference */
-int obdfs_writepage(struct page *page)
-{
-	int rc;
-	struct inode *inode = page->mapping->host;
-        ENTRY;
-	printk("---> writepage called ino %ld!\n", inode->i_ino);
-	BUG();
-        rc = obdfs_do_writepage(page, 1);
-	if ( !rc ) {
-		set_page_clean(page);
-	} else {
-		CDEBUG(D_INODE, "--> GRR %d\n", rc);
-	}
-        EXIT;
-	return rc;
-}
 
-void write_inode_pages(struct inode *inode)
-{
-	struct list_head *tmp = &inode->i_mapping->dirty_pages;
-	
-	while ( (tmp = tmp->next) != &inode->i_mapping->dirty_pages) { 
-		struct page *page;
-		page = list_entry(tmp, struct page, list);
-		obdfs_writepage(page);
-	}
-}
-
+#endif
 
 int obdfs_commit_write(struct file *file, struct page *page, unsigned from, unsigned to)
 {
@@ -639,14 +644,6 @@ struct page *obdfs_getpage(struct inode *inode, unsigned long offset,
                 EXIT;
                 return page;
         } 
-
-
-#ifdef EXT2_OBD_DEBUG
-        if ((obd_debug_level & D_INFO) && obdfs_find_page_index(inode, index)) {
-                CDEBUG(D_INFO, "OVERWRITE: found dirty page %p, index %ld\n",
-                       page, page->index);
-        }
-#endif
 
         err = obdfs_brw(READ, inode, page, create);
 

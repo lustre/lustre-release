@@ -95,7 +95,8 @@ void mds_free_req(struct mds_request *request)
 	kfree(request);
 }
 
-int mdc_getattr(ino_t ino, struct  mds_rep  **rep)
+int mdc_getattr(ino_t ino, int type, int valid, 
+		struct mds_rep  **rep, struct mds_rep_hdr **hdr)
 {
 	struct mds_request *request;
 	int rc; 
@@ -107,6 +108,8 @@ int mdc_getattr(ino_t ino, struct  mds_rep  **rep)
 	}
 
 	request->rq_req->fid1.id = ino;
+	request->rq_req->fid1.f_type = type;
+	request->rq_req->valid = valid;
 
 	rc = mds_queue_wait(request);
 	if (rc) { 
@@ -116,8 +119,11 @@ int mdc_getattr(ino_t ino, struct  mds_rep  **rep)
 
 	printk("mds_getattr: mode: %o\n", request->rq_rep->mode); 
 
-	if (rep ) { 
+	if (rep) { 
 		*rep = request->rq_rep;
+	}
+	if (hdr) { 
+		*hdr = request->rq_rephdr;
 	}
 
  out: 
@@ -149,8 +155,10 @@ static int request_ioctl(struct inode *inode, struct file *file,
 	
 	switch (cmd) {
 	case IOC_REQUEST_GETATTR: { 
+		struct mds_rep_hdr *hdr;
 		printk("-- getting attr for ino 2\n"); 
-		err = mdc_getattr(2, NULL);
+		err = mdc_getattr(2, S_IFDIR, ~0, NULL, &hdr);
+		kfree(hdr);
 		printk("-- done err %d\n", err);
 		break;
 	}
@@ -193,7 +201,6 @@ MODULE_DESCRIPTION("Lustre MDS Request Tester v1.0");
 MODULE_LICENSE("GPL");
 
 EXPORT_SYMBOL(mdc_getattr); 
-
 
 module_init(mds_request_init);
 module_exit(mds_request_exit);

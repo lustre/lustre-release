@@ -1,4 +1,3 @@
-
 /*
  * OBDFS Super operations
  *
@@ -36,7 +35,7 @@
 #include <linux/obd_class.h>
 #include <linux/lustre_light.h>
 
-struct list_head ll_super_list;
+//struct list_head ll_super_list;
 extern struct address_space_operations ll_aops;
 struct super_operations ll_super_operations;
 long ll_cache_count = 0;
@@ -97,7 +96,8 @@ static struct super_block * ll_read_super(struct super_block *sb,
 	int connected = 0;
         int devno;
         int err;
-	struct obdo *oa;
+	struct mds_rep *rep; 
+	struct mds_rep_hdr *hdr = NULL; 
         
 
         ENTRY;
@@ -136,16 +136,18 @@ static struct super_block * ll_read_super(struct super_block *sb,
         CDEBUG(D_INFO, "\n"); 
         sbi->ll_obd = obddev;
         sbi->ll_ops = sbi->ll_obd->obd_type->typ_ops;
-        
         sbi->ll_conn.oc_dev = obddev;
+
+        CDEBUG(D_INFO, "\n"); 
         err = sbi->ll_ops->o_connect(&sbi->ll_conn);
+        CDEBUG(D_INFO, "\n"); 
         if ( err ) {
                 printk("OBDFS: cannot connect to %s\n", device);
                 EXIT;
                 goto ERR;
         }
-
 	connected = 1;
+
         CDEBUG(D_INFO, "\n"); 
         /* list of dirty inodes, and a mutex to hold while modifying it */
         INIT_LIST_HEAD(&sbi->ll_inodes);
@@ -165,18 +167,21 @@ static struct super_block * ll_read_super(struct super_block *sb,
 
         /* make root inode */
         CDEBUG(D_INFO, "\n"); 
-        oa = obdo_fromid(&sbi->ll_conn, root_ino, S_IFDIR,
-                         OBD_MD_FLNOTOBD | OBD_MD_FLBLOCKS);
-        CDEBUG(D_INFO, "mode %o\n", oa->o_mode); 
-        if ( IS_ERR(oa) ) {
-                printk(__FUNCTION__ ": obdo_fromid failed\n");
+	err = mdc_getattr(root_ino, S_IFDIR, OBD_MD_FLNOTOBD|OBD_MD_FLBLOCKS, 
+			 &rep, &hdr);
+        if (err) {
+                printk(__FUNCTION__ ": mds_getattr failed %d\n", err);
 		iput(root); 
+		if (rep)
+			kfree(rep);
                 EXIT;
                 goto ERR;
         }
+                         
+        CDEBUG(D_INFO, "mode %o\n", rep->mode);
         CDEBUG(D_INFO, "\n"); 
-        root = iget4(sb, root_ino, NULL, oa);
-	obdo_free(oa);
+        root = iget4(sb, root_ino, NULL, rep);
+	kfree(hdr);
         CDEBUG(D_INFO, "\n"); 
         if (!root) {
             printk("OBDFS: bad iget4 for root\n");
@@ -187,7 +192,7 @@ static struct super_block * ll_read_super(struct super_block *sb,
         } 
         
         sb->s_root = d_alloc_root(root);
-        list_add(&sbi->ll_list, &ll_super_list);
+	//        list_add(&sbi->ll_list, &ll_super_list);
         OBD_FREE(device, strlen(device) + 1);
         if (version)
                 OBD_FREE(version, strlen(version) + 1);
@@ -418,10 +423,10 @@ static int ll_statfs(struct super_block *sb, struct statfs *buf)
 
 static inline void ll_read_inode2(struct inode *inode, void *opaque)
 {
-	struct obdo *oa = opaque; 
+	struct mds_rep *rep = opaque; 
 	
 	ENTRY;
-	ll_to_inode(inode, oa); 
+	ll_to_inode(inode, rep); 
 
         INIT_LIST_HEAD(ll_iplist(inode)); /* list of dirty pages on inode */
         INIT_LIST_HEAD(ll_islist(inode)); /* list of inodes in superblock */
@@ -448,7 +453,7 @@ static inline void ll_read_inode2(struct inode *inode, void *opaque)
                 EXIT;
         } else {
                 init_special_inode(inode, inode->i_mode,
-                                   ((int *)ll_i2info(inode)->oi_inline)[0]);
+                                   ((int *)ll_i2info(inode)->lli_inline)[0]);
         }
 
 	EXIT;

@@ -107,6 +107,7 @@ struct mds_req {
         __u32                       major;
         __u32                       minor;
         __u32                       ino;
+        __u32                       nlink;
         __u32                       generation;
         char 		           *name;
         char                      *tgt;
@@ -130,6 +131,7 @@ struct mds_rep {
         __u32                       major;
         __u32                       minor;
         __u32                       ino;
+        __u32                       nlink;
         __u32                       generation;
         char 		           *name;
         char                      *tgt;
@@ -144,6 +146,10 @@ int mds_unpack_rep(char *buf, int len, struct mds_rep_hdr **hdr, struct mds_rep 
 
 
 /* llight/request.c */
+int mdc_getattr(ino_t ino, int type, int valid, 
+		struct mds_rep  **mds_reply, struct mds_rep_hdr **hdr);
+
+
 
 /* ioctls for trying requests */
 #define IOC_REQUEST_TYPE                   'f'

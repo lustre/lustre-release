@@ -231,6 +231,7 @@ struct mds_req_packed {
         __u32                       major;
         __u32                       minor;
         __u32                       ino;
+        __u32                       nlink;
         __u32                       generation;
         __u32  		            name_offset;
         __u32                       tgt_offset;
@@ -253,6 +254,7 @@ struct mds_rep_packed {
         __u32                       major;
         __u32                       minor;
         __u32                       ino;
+        __u32                       nlink;
         __u32                       generation;
         __u32 		            name_offset;
         __u32                       tgt_offset;

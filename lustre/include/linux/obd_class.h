@@ -199,8 +199,6 @@ static __inline__ void obdo_free(struct obdo *oa)
         kmem_cache_free(obdo_cachep, oa);
 }
 
-
-
 static __inline__ struct obdo *obdo_fromid(struct obd_conn *conn, obd_id id,
 					   obd_mode mode, obd_flag valid)
 {

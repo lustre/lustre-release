@@ -17,8 +17,10 @@
  *
  *  ext2 symlink handling code
  *
- * Modified for OBDFS: 
- *  Copyright (C) 1999 Seagate Technology Inc. (author: braam@stelias.com)
+ * Modified for OBDFS.
+ * Re-written Oct 2001.
+ *
+ *  Copyright (C) 2001 Cluster File Systems, Inc. (author: braam@clusterfs.com)
  */
 
 #include <linux/fs.h>

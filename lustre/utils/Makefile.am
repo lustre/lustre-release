@@ -1,3 +1,5 @@
+DEFS:=
+
 bin_SCRIPTS = obdcontrol
 EXTRA_DIST = $(bin_SCRIPTS)
 

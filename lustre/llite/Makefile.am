@@ -3,6 +3,8 @@
 # This code is issued under the GNU General Public License.
 # See the file COPYING in this distribution
 
+DEFS:= 
+
 MODULE = llight
 modulefs_DATA = llight.o
 EXTRA_PROGRAMS = llight

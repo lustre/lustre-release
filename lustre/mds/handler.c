@@ -172,6 +172,7 @@ int mds_getattr(struct mds_request *req)
 	rep->gid = inode->i_gid;
 	rep->size = inode->i_size;
 	rep->mode = inode->i_mode;
+	rep->valid = ~0;
 
 	dput(de); 
 	return 0;

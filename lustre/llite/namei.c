@@ -1,5 +1,4 @@
 /*
- *  linux/fs/obdfs/namei.c
  *
  * This code is issued under the GNU General Public License.
  * See the file COPYING in this distribution
@@ -31,16 +30,16 @@
 #include <linux/locks.h>
 #include <linux/quotaops.h>
 #include <linux/obd_support.h>
-#include <linux/obdfs.h>
-extern struct address_space_operations obdfs_aops;
+#include <linux/lustre_light.h>
+extern struct address_space_operations ll_aops;
 
 /* from super.c */
-extern void obdfs_change_inode(struct inode *inode);
-extern int obdfs_setattr(struct dentry *de, struct iattr *attr);
+extern void ll_change_inode(struct inode *inode);
+extern int ll_setattr(struct dentry *de, struct iattr *attr);
 
 /* from dir.c */
 extern int ext2_add_link (struct dentry *dentry, struct inode *inode);
-ino_t obdfs_inode_by_name(struct inode * dir, struct dentry *dentry, int *typ);
+ino_t ll_inode_by_name(struct inode * dir, struct dentry *dentry, int *typ);
 int ext2_make_empty(struct inode *inode, struct inode *parent);
 struct ext2_dir_entry_2 * ext2_find_entry (struct inode * dir,
 		   struct dentry *dentry, struct page ** res_page);
@@ -56,7 +55,7 @@ void ext2_set_link(struct inode *dir, struct ext2_dir_entry_2 *de,
 static inline void ext2_inc_count(struct inode *inode)
 {
 	inode->i_nlink++;
-	obdfs_change_inode(inode);
+	ll_change_inode(inode);
 }
 
 /* postpone the disk update until the inode really goes away */ 
@@ -64,7 +63,7 @@ static inline void ext2_dec_count(struct inode *inode)
 {
 	inode->i_nlink--;
 	if (inode->i_nlink > 0) 
-		obdfs_change_inode(inode);
+		ll_change_inode(inode);
 }
 
 static inline int ext2_add_nondir(struct dentry *dentry, struct inode *inode)
@@ -81,7 +80,7 @@ static inline int ext2_add_nondir(struct dentry *dentry, struct inode *inode)
 }
 
 /* methods */
-static struct dentry *obdfs_lookup(struct inode * dir, struct dentry *dentry)
+static struct dentry *ll_lookup(struct inode * dir, struct dentry *dentry)
 {
         struct obdo *oa;
 	struct inode * inode = NULL;
@@ -92,7 +91,7 @@ static struct dentry *obdfs_lookup(struct inode * dir, struct dentry *dentry)
 	if (dentry->d_name.len > EXT2_NAME_LEN)
 		return ERR_PTR(-ENAMETOOLONG);
 
-	ino = obdfs_inode_by_name(dir, dentry, &type);
+	ino = ll_inode_by_name(dir, dentry, &type);
 	if (!ino)
 		goto negative;
 
@@ -132,7 +131,7 @@ static inline int ext2_match (int len, const char * const name,
         return !memcmp(name, de->name, len);
 }
 
-static struct inode *obdfs_new_inode(struct inode *dir, int mode)
+static struct inode *ll_new_inode(struct inode *dir, int mode)
 {
         struct obdo *oa;
         struct inode *inode;
@@ -189,7 +188,7 @@ static struct inode *obdfs_new_inode(struct inode *dir, int mode)
 
         EXIT;
         return inode;
-} /* obdfs_new_inode */
+} /* ll_new_inode */
 
 
 /*
@@ -200,64 +199,64 @@ static struct inode *obdfs_new_inode(struct inode *dir, int mode)
  * If the create succeeds, we fill in the inode information
  * with d_instantiate(). 
  */
-static int obdfs_create (struct inode * dir, struct dentry * dentry, int mode)
+static int ll_create (struct inode * dir, struct dentry * dentry, int mode)
 {
-	struct inode * inode = obdfs_new_inode (dir, mode);
+	struct inode * inode = ll_new_inode (dir, mode);
 	int err = PTR_ERR(inode);
 	if (!IS_ERR(inode)) {
-		inode->i_op = &obdfs_file_inode_operations;
-		inode->i_fop = &obdfs_file_operations;
-		inode->i_mapping->a_ops = &obdfs_aops;
+		inode->i_op = &ll_file_inode_operations;
+		inode->i_fop = &ll_file_operations;
+		inode->i_mapping->a_ops = &ll_aops;
 		err = ext2_add_nondir(dentry, inode);
 	}
 	return err;
-} /* obdfs_create */
+} /* ll_create */
 
 
-static int obdfs_mknod (struct inode * dir, struct dentry *dentry, int mode, int rdev)
+static int ll_mknod (struct inode * dir, struct dentry *dentry, int mode, int rdev)
 {
-	struct inode * inode = obdfs_new_inode (dir, mode);
+	struct inode * inode = ll_new_inode (dir, mode);
 	int err = PTR_ERR(inode);
 	if (!IS_ERR(inode)) {
 		init_special_inode(inode, mode, rdev);
-		obdfs_change_inode(inode);
+		ll_change_inode(inode);
 		err = ext2_add_nondir(dentry, inode);
 	}
 	return err;
 }
 
-static int obdfs_symlink (struct inode * dir, struct dentry * dentry,
+static int ll_symlink (struct inode * dir, struct dentry * dentry,
 	const char * symname)
 {
 	struct super_block * sb = dir->i_sb;
 	int err = -ENAMETOOLONG;
 	unsigned l = strlen(symname)+1;
 	struct inode * inode;
-        struct obdfs_inode_info *oinfo;
+        struct ll_inode_info *oinfo;
 
 	if (l > sb->s_blocksize)
 		goto out;
 
-	inode = obdfs_new_inode (dir, S_IFLNK | S_IRWXUGO);
+	inode = ll_new_inode (dir, S_IFLNK | S_IRWXUGO);
 	err = PTR_ERR(inode);
 	if (IS_ERR(inode))
 		goto out;
 
-        oinfo = obdfs_i2info(inode);
-        if (l >= sizeof(oinfo->oi_inline)) {
+        oinfo = ll_i2info(inode);
+        if (l >= sizeof(oinfo->lli_inline)) {
 		/* slow symlink */
 		inode->i_op = &page_symlink_inode_operations;
-		inode->i_mapping->a_ops = &obdfs_aops;
+		inode->i_mapping->a_ops = &ll_aops;
 		err = block_symlink(inode, symname, l);
 		if (err)
 			goto out_fail;
 	} else {
 		/* fast symlink */
-		inode->i_op = &obdfs_fast_symlink_inode_operations;
-		memcpy(oinfo->oi_inline, symname, l);
+		inode->i_op = &ll_fast_symlink_inode_operations;
+		memcpy(oinfo->lli_inline, symname, l);
 		inode->i_size = l-1;
 	}
-	obdfs_change_inode(inode);
+	ll_change_inode(inode);
 
 	err = ext2_add_nondir(dentry, inode);
 out:
@@ -271,7 +270,7 @@ out_fail:
 
 
 
-static int obdfs_link (struct dentry * old_dentry, struct inode * dir,
+static int ll_link (struct dentry * old_dentry, struct inode * dir,
 	struct dentry *dentry)
 {
 	struct inode *inode = old_dentry->d_inode;
@@ -290,7 +289,7 @@ static int obdfs_link (struct dentry * old_dentry, struct inode * dir,
 }
 
 
-static int obdfs_mkdir(struct inode * dir, struct dentry * dentry, int mode)
+static int ll_mkdir(struct inode * dir, struct dentry * dentry, int mode)
 {
 	struct inode * inode;
 	int err = -EMLINK;
@@ -301,14 +300,14 @@ static int obdfs_mkdir(struct inode * dir, struct dentry * dentry, int mode)
 
 	ext2_inc_count(dir);
 
-	inode = obdfs_new_inode (dir, S_IFDIR | mode);
+	inode = ll_new_inode (dir, S_IFDIR | mode);
 	err = PTR_ERR(inode);
 	if (IS_ERR(inode))
 		goto out_dir;
 
-	inode->i_op = &obdfs_dir_inode_operations;
-	inode->i_fop = &obdfs_dir_operations;
-	inode->i_mapping->a_ops = &obdfs_aops;
+	inode->i_op = &ll_dir_inode_operations;
+	inode->i_fop = &ll_dir_operations;
+	inode->i_mapping->a_ops = &ll_aops;
 
 	ext2_inc_count(inode);
 
@@ -336,7 +335,7 @@ out_dir:
 	goto out;
 }
 
-static int obdfs_unlink(struct inode * dir, struct dentry *dentry)
+static int ll_unlink(struct inode * dir, struct dentry *dentry)
 {
 	struct inode * inode = dentry->d_inode;
 	struct ext2_dir_entry_2 * de;
@@ -359,13 +358,13 @@ out:
 }
 
 
-static int obdfs_rmdir (struct inode * dir, struct dentry *dentry)
+static int ll_rmdir (struct inode * dir, struct dentry *dentry)
 {
 	struct inode * inode = dentry->d_inode;
 	int err = -ENOTEMPTY;
 
 	if (ext2_empty_dir(inode)) {
-		err = obdfs_unlink(dir, dentry);
+		err = ll_unlink(dir, dentry);
 		if (!err) {
 			inode->i_size = 0;
 			ext2_dec_count(inode);
@@ -375,7 +374,7 @@ static int obdfs_rmdir (struct inode * dir, struct dentry *dentry)
 	return err;
 }
 
-static int obdfs_rename (struct inode * old_dir, struct dentry * old_dentry,
+static int ll_rename (struct inode * old_dir, struct dentry * old_dentry,
 	struct inode * new_dir,	struct dentry * new_dentry )
 {
 	struct inode * old_inode = old_dentry->d_inode;
@@ -453,15 +452,15 @@ out:
 	return err;
 }
 
-struct inode_operations obdfs_dir_inode_operations = {
-	create:		obdfs_create,
-	lookup:		obdfs_lookup,
-	link:		obdfs_link,
-	unlink:		obdfs_unlink,
-	symlink:	obdfs_symlink,
-	mkdir:		obdfs_mkdir,
-	rmdir:		obdfs_rmdir,
-	mknod:		obdfs_mknod,
-	rename:		obdfs_rename,
-	setattr:        obdfs_setattr
+struct inode_operations ll_dir_inode_operations = {
+	create:		ll_create,
+	lookup:		ll_lookup,
+	link:		ll_link,
+	unlink:		ll_unlink,
+	symlink:	ll_symlink,
+	mkdir:		ll_mkdir,
+	rmdir:		ll_rmdir,
+	mknod:		ll_mknod,
+	rename:		ll_rename,
+	setattr:        ll_setattr
 };

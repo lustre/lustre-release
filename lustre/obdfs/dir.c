@@ -81,7 +81,6 @@ static int ext2_commit_chunk(struct page *page, unsigned from, unsigned to)
 static void ext2_check_page(struct page *page)
 {
 	struct inode *dir = page->mapping->host;
-	struct super_block *sb = dir->i_sb;
 	unsigned chunk_size = ext2_chunk_size(dir);
 	char *kaddr = page_address(page);
 	//	u32 max_inumber = le32_to_cpu(sb->u.ext2_sb.s_es->s_inodes_count);
@@ -125,7 +124,7 @@ out:
 	/* Too bad, we had an error */
 
 Ebadsize:
-	ext2_error(sb, "ext2_check_page",
+	printk("ext2_check_page"
 		"size of directory #%lu is not a multiple of chunk size",
 		dir->i_ino
 	);
@@ -145,7 +144,7 @@ Espan:
 	//Einumber:
 	// error = "inode out of bounds";
 bad_entry:
-	ext2_error (sb, "ext2_check_page", "bad entry in directory #%lu: %s - "
+	printk("ext2_check_page" "bad entry in directory #%lu: %s - "
 		"offset=%lu, inode=%lu, rec_len=%d, name_len=%d",
 		dir->i_ino, error, (page->index<<PAGE_CACHE_SHIFT)+offs,
 		(unsigned long) le32_to_cpu(p->inode),
@@ -153,7 +152,7 @@ bad_entry:
 	goto fail;
 Eend:
 	p = (ext2_dirent *)(kaddr + offs);
-	ext2_error (sb, "ext2_check_page",
+	printk("ext2_check_page"
 		"entry in directory #%lu spans the page boundary"
 		"offset=%lu, inode=%lu",
 		dir->i_ino, (page->index<<PAGE_CACHE_SHIFT)+offs,
