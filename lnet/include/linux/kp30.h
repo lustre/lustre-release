@@ -310,7 +310,12 @@ extern void kportal_blockallsigs (void);
 #  undef NDEBUG
 #  include <assert.h>
 #  define LASSERT(e)     assert(e)
-#  define LASSERTF(cond, args...)     assert(cond)
+#  define LASSERTF(cond, args...)                                              \
+do {                                                                           \
+          if (!(cond))                                                         \
+                CERROR(args);                                                  \
+          assert(cond);                                                        \
+} while (0)
 # else
 #  define LASSERT(e)
 #  define LASSERTF(cond, args...) do { } while (0)
@@ -640,10 +645,9 @@ enum {
         GMNAL     = 3,
         /*          4 unused */
         TCPNAL    = 5,
-        SCIMACNAL = 6,
-        ROUTER    = 7,
-        IBNAL     = 8,
-        CRAY_KB_ERNAL = 9,
+        ROUTER    = 6,
+        IBNAL     = 7,
+        CRAY_KB_ERNAL = 8,
         NAL_ENUM_END_MARKER
 };
 
@@ -690,27 +694,30 @@ typedef int (*cfg_record_cb_t)(enum cfg_record_type, int len, void *data);
 # endif
 #endif
 
+#ifndef LP_POISON
+# define LI_POISON ((int)0x5a5a5a5a5a5a5a5a)
+# define LL_POISON ((long)0x5a5a5a5a5a5a5a5a)
+# define LP_POISON ((void *)(long)0x5a5a5a5a5a5a5a5a)
+#endif
+
 #if defined(__x86_64__)
 # define LPU64 "%Lu"
 # define LPD64 "%Ld"
 # define LPX64 "%#Lx"
 # define LPSZ  "%lu"
 # define LPSSZ "%ld"
-# define LP_POISON ((void *)0x5a5a5a5a5a5a5a5a)
 #elif (BITS_PER_LONG == 32 || __WORDSIZE == 32)
 # define LPU64 "%Lu"
 # define LPD64 "%Ld"
 # define LPX64 "%#Lx"
 # define LPSZ  "%u"
 # define LPSSZ "%d"
-# define LP_POISON ((void *)0x5a5a5a5a)
 #elif (BITS_PER_LONG == 64 || __WORDSIZE == 64)
 # define LPU64 "%lu"
 # define LPD64 "%ld"
 # define LPX64 "%#lx"
 # define LPSZ  "%lu"
 # define LPSSZ "%ld"
-# define LP_POISON ((void *)0x5a5a5a5a5a5a5a5a)
 #endif
 #ifndef LPU64
 # error "No word size defined"
