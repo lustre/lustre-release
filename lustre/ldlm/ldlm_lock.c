@@ -21,6 +21,7 @@
 
 /* lock types */
 char *ldlm_lockname[] = {
+        [0]      "--",
         [LCK_EX] "EX", 
         [LCK_PW] "PW",
         [LCK_PR] "PR",
@@ -28,7 +29,6 @@ char *ldlm_lockname[] = {
         [LCK_CR] "CR",
         [LCK_NL] "NL"
 };
-
 char *ldlm_typename[] = {
         [LDLM_PLAIN]     "PLN",
         [LDLM_EXTENT]    "EXT",
@@ -55,41 +55,6 @@ ldlm_res_policy ldlm_res_policy_table [] = {
         [LDLM_MDSINTENT] ldlm_intent_policy
 };
 
-void ldlm_lock2handle(struct ldlm_lock *lock, struct lustre_handle *lockh)
-{
-        lockh->addr = (__u64)(unsigned long)lock;
-        lockh->cookie = lock->l_random;
-}
-
-/* 
- *  HANDLES
- */ 
-
-struct ldlm_lock *ldlm_handle2lock(struct lustre_handle *handle)
-{
-        struct ldlm_lock *lock = NULL;
-        ENTRY;
-
-        if (!handle || !handle->addr)
-                RETURN(NULL);
-
-        lock = (struct ldlm_lock *)(unsigned long)(handle->addr);
-        if (!kmem_cache_validate(ldlm_lock_slab, (void *)lock))
-                RETURN(NULL);
-
-        l_lock(&lock->l_resource->lr_namespace->ns_lock);
-        if (lock->l_random != handle->cookie)
-                GOTO(out, handle = NULL);
-
-        if (lock->l_flags & LDLM_FL_DESTROYED)
-                GOTO(out, handle = NULL);
-
-        lock->l_refc++;
-        EXIT;
- out:
-        l_unlock(&lock->l_resource->lr_namespace->ns_lock);
-        return  lock;
-}
 
 /*
  * REFCOUNTED LOCK OBJECTS
@@ -157,13 +122,11 @@ void ldlm_lock_destroy(struct ldlm_lock *lock)
 
         if (lock->l_flags & LDLM_FL_DESTROYED) {
                 EXIT;
-                ldlm_lock_put(lock);
                 return;
         }
 
         lock->l_flags = LDLM_FL_DESTROYED;
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
-        ldlm_lock_put(lock);
         ldlm_lock_put(lock);
         EXIT;
         return;
@@ -240,6 +203,45 @@ int ldlm_lock_change_resource(struct ldlm_lock *lock, __u64 new_resid[3])
         l_unlock(&ns->ns_lock);
         RETURN(0);
 }
+
+/* 
+ *  HANDLES
+ */ 
+
+void ldlm_lock2handle(struct ldlm_lock *lock, struct lustre_handle *lockh)
+{
+        lockh->addr = (__u64)(unsigned long)lock;
+        lockh->cookie = lock->l_random;
+}
+
+
+struct ldlm_lock *ldlm_handle2lock(struct lustre_handle *handle)
+{
+        struct ldlm_lock *lock = NULL;
+        ENTRY;
+
+        if (!handle || !handle->addr)
+                RETURN(NULL);
+
+        lock = (struct ldlm_lock *)(unsigned long)(handle->addr);
+        if (!kmem_cache_validate(ldlm_lock_slab, (void *)lock))
+                RETURN(NULL);
+
+        l_lock(&lock->l_resource->lr_namespace->ns_lock);
+        if (lock->l_random != handle->cookie)
+                GOTO(out, handle = NULL);
+
+        if (lock->l_flags & LDLM_FL_DESTROYED)
+                GOTO(out, handle = NULL);
+
+        ldlm_lock_get(lock);
+        EXIT;
+ out:
+        l_unlock(&lock->l_resource->lr_namespace->ns_lock);
+        return  lock;
+}
+
+
 
 static int ldlm_intent_policy(struct ldlm_lock *lock, void *req_cookie,
                               ldlm_mode_t mode, void *data)
@@ -706,6 +708,7 @@ ldlm_error_t ldlm_lock_enqueue(struct ldlm_lock *lock,
                         *flags |= LDLM_FL_LOCK_CHANGED;
                 } else if (rc == ELDLM_LOCK_ABORTED) {
                         ldlm_lock_destroy(lock);
+                        ldlm_lock_put(lock);
                         RETURN(rc);
                 }
         }

@@ -62,7 +62,9 @@ struct ldlm_namespace *ldlm_namespace_new(char *name, __u32 client)
         return NULL;
 }
 
-static int cleanup_resource(struct ldlm_resource *res, struct list_head *q)
+extern struct ldlm_lock *ldlm_lock_get(struct ldlm_lock *lock);
+
+static void cleanup_resource(struct ldlm_resource *res, struct list_head *q)
 {
         struct list_head *tmp, *pos;
         int rc = 0, client = res->lr_namespace->ns_client;
@@ -71,6 +73,7 @@ static int cleanup_resource(struct ldlm_resource *res, struct list_head *q)
         list_for_each_safe(tmp, pos, q) {
                 struct ldlm_lock *lock;
                 lock = list_entry(tmp, struct ldlm_lock, l_res_link);
+                ldlm_lock_get(lock);
 
                 if (client) {
                         struct lustre_handle lockh;
@@ -80,25 +83,22 @@ static int cleanup_resource(struct ldlm_resource *res, struct list_head *q)
                                 CERROR("ldlm_cli_cancel: %d\n", rc);
                                 LBUG();
                         }
-                        if (rc == ELDLM_RESOURCE_FREED)
-                                rc = 1;
                 } else {
                         CERROR("Freeing a lock still held by a client node.\n");
 
                         ldlm_resource_unlink_lock(lock);
                         ldlm_lock_destroy(lock);
-
-                        rc = ldlm_resource_put(res);
                 }
+                ldlm_lock_put(lock);
         }
 
-        RETURN(rc);
+        return; 
 }
 
 int ldlm_namespace_free(struct ldlm_namespace *ns)
 {
         struct list_head *tmp, *pos;
-        int i, rc;
+        int i;
 
         if (!ns)
                 RETURN(ELDLM_OK);
@@ -109,20 +109,19 @@ int ldlm_namespace_free(struct ldlm_namespace *ns)
                 list_for_each_safe(tmp, pos, &(ns->ns_hash[i])) {
                         struct ldlm_resource *res;
                         res = list_entry(tmp, struct ldlm_resource, lr_hash);
+                        ldlm_resource_getref(res);
 
-                        rc = cleanup_resource(res, &res->lr_granted);
-                        if (!rc)
-                                rc = cleanup_resource(res, &res->lr_converting);
-                        if (!rc)
-                                rc = cleanup_resource(res, &res->lr_waiting);
-
-                        if (rc == 0) {
+                        cleanup_resource(res, &res->lr_granted);
+                        cleanup_resource(res, &res->lr_converting);
+                        cleanup_resource(res, &res->lr_waiting);
+                        
+                        if (!ldlm_resource_put(res)) { 
                                 CERROR("Resource refcount nonzero (%d) after "
                                        "lock cleanup; forcing cleanup.\n",
                                        atomic_read(&res->lr_refcount));
                                 ldlm_resource_dump(res);
                                 atomic_set(&res->lr_refcount, 1);
-                                rc = ldlm_resource_put(res);
+                                ldlm_resource_put(res);
                         }
                 }
         }

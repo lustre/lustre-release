@@ -229,7 +229,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                         GOTO(out_create_de, rc = -EIO);
                 }
         } else {
-                lock = lustre_handle2object(&lockh);
+                lock = ldlm_handle2lock(&lockh);
                 LDLM_DEBUG(lock, "matched");
         }
         ldlm_lock_dump((void *)(unsigned long)lockh.addr);

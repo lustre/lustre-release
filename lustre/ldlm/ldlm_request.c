@@ -255,7 +255,6 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
         struct ptlrpc_request *req;
         struct ldlm_lock *lock;
         struct ldlm_request *body;
-        struct ldlm_resource *res;
         int rc, size = sizeof(*body);
         ENTRY;
 
@@ -282,7 +281,7 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
                 GOTO(out, rc);
 
         ldlm_lock_cancel(lock);
-        ldlm_reprocess_all(res);
+        ldlm_reprocess_all(lock->l_resource);
         ldlm_lock_put(lock); 
         EXIT;
  out:
