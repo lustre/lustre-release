@@ -7,7 +7,7 @@ KFLAGS:=
 CPPFLAGS = $(HAVE_LIBREADLINE)
 LIBS= 
 
-libtest_LDADD := $(LIBREADLINE) ../obdecho/libobdecho.a ../osc/libosc.a ../ldlm/libldlm.a \
+libtest_LDADD := $(LIBREADLINE) ../lov/liblov.a ../obdecho/libobdecho.a ../osc/libosc.a ../ldlm/libldlm.a \
                  ../ptlrpc/libptlrpc.a ../obdclass/liblustreclass.a  \
                  $(PORTALS)/user/procbridge/libprocbridge.a  $(PORTALS)/user/tcpnal/libtcpnal.a \
 	         $(PORTALS)/user/util/libtcpnalutil.a $(PORTALS)/user/$(PORTALS)/api/libptlapi.a \
