@@ -1195,11 +1195,11 @@ static int mdt_obj_create(struct ptlrpc_request *req)
         struct lustre_handle lockh;
         struct obd_run_ctxt saved;
         ldlm_policy_data_t policy;
+        struct dentry *new = NULL;
         struct dentry_params dp;
         int mealen, flags = 0;
         unsigned int tmpname;
         struct obd_ucred uc;
-        struct dentry *new;
         struct mea *mea;
         void *handle;
         ENTRY;
@@ -1226,7 +1226,33 @@ static int mdt_obj_create(struct ptlrpc_request *req)
 
         repbody = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*repbody));
 
-
+        if (body->oa.o_flags & OBD_FL_RECREATE_OBJS) {
+                /* this is re-create request from MDS holding directory name.
+                 * we have to lookup given ino/generation first. if it exists
+                 * (good case) then there is nothing to do. if it does not
+                 * then we have to recreate it */
+                struct ll_fid fid;
+                fid.id = body->oa.o_id;
+                fid.generation = body->oa.o_generation;
+                new = mds_fid2dentry(mds, &fid, NULL);
+                if (!IS_ERR(new) && new->d_inode) {
+                        CWARN("mkdir() repairing is on its way: %lu/%lu\n",
+                              (unsigned long) fid.id,
+                              (unsigned long) fid.generation);
+                        obdo_from_inode(&repbody->oa, new->d_inode,
+                                        FILTER_VALID_FLAGS);
+                        repbody->oa.o_id = new->d_inode->i_ino;
+                        repbody->oa.o_generation = new->d_inode->i_generation;
+                        repbody->oa.o_valid |= OBD_MD_FLID | OBD_MD_FLGENER;
+                        GOTO(cleanup2, rc = 0);
+                }
+                CWARN("hmm. for some reason dir %lu/%lu (or reply) got lost\n",
+                      (unsigned long) fid.id, (unsigned long) fid.generation);
+                LASSERT(new->d_inode == NULL ||
+                        new->d_inode->i_generation != fid.generation);
+                l_dput(new); 
+        }
+        
         down(&parent_inode->i_sem);
         handle = fsfilt_start(obd, parent_inode, FSFILT_OP_MKDIR, NULL);
         LASSERT(!IS_ERR(handle));
@@ -1314,6 +1340,7 @@ cleanup:
                 ptlrpc_save_lock(req, &lockh, LCK_EX);
         else
                 ldlm_lock_decref(&lockh, LCK_EX);
+cleanup2:
         l_dput(new);
         pop_ctxt(&saved, &obd->obd_ctxt, &uc);
         RETURN(rc);

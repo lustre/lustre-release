@@ -664,6 +664,16 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                         oa->o_mode = dir->i_mode;
                         CDEBUG(D_OTHER, "%s: create dir on MDS %u\n",
                                         obd->obd_name, i);
+                        if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
+                                CWARN("%s: replay dir creation %*s -> %u/%u\n",
+                                      obd->obd_name, rec->ur_namelen - 1,
+                                      rec->ur_name, (unsigned) rec->ur_fid2->id,
+                                      (unsigned) rec->ur_fid2->generation);
+                                oa->o_id = rec->ur_fid2->id;
+                                oa->o_generation = rec->ur_fid2->generation;
+                                oa->o_flags |= OBD_FL_RECREATE_OBJS;
+                        }
+
                         rc = obd_create(mds->mds_lmv_exp, oa, NULL, NULL);
 	                LASSERT(rc == 0);
                         
