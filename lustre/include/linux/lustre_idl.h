@@ -110,14 +110,14 @@ struct lustre_msg {
         __u64 cookie; /* security token */
         __u32 magic;
         __u32 type;
-        __u32 flags;
+        __u32 version;
         __u32 opc;
         __u64 last_xid;
         __u64 last_committed;
         __u64 transno;
         __u32 status;
         __u32 bufcount;
-        __u32 version;
+        __u32 flags;
         __u32 buflens[0];
 };
 
