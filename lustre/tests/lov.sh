@@ -17,16 +17,16 @@ STRIPE_BYTES=65536
 STRIPES_PER_OBJ=2	# 0 means stripe over all OSTs
 
 # create nodes
-${LMC} -o $config --node localhost --net localhost tcp || exit 1
+${LMC} -o $config --add net --node localhost --nid localhost --nettype tcp || exit 1
 
 # configure mds server
-${LMC} -m $config --format --node localhost --mds mds1 $MDSDEV $MDSSIZE || exit 10
+${LMC} -m $config --format --add mds --node localhost --mds mds1 --dev $MDSDEV --size $MDSSIZE || exit 10
 
 # configure ost
-${LMC} -m $config --lov lov1 mds1 $STRIPE_BYTES $STRIPES_PER_OBJ 0 || exit 20
-${LMC} -m $config --node localhost --lov lov1 --ost $OSTDEV1 $OSTSIZE || exit 21
-${LMC} -m $config --node localhost --lov lov1 --ost $OSTDEV2 $OSTSIZE || exit 22
-${LMC} -m $config --node localhost --lov lov1 --ost $OSTDEV3 $OSTSIZE || exit 23
+${LMC} -m $config --add lov --lov lov1 --mds mds1 --stripe_sz $STRIPE_BYTES --stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0 || exit 20
+${LMC} -m $config --add ost --node localhost --lov lov1 --dev $OSTDEV1 --size $OSTSIZE || exit 21
+${LMC} -m $config --add ost --node localhost --lov lov1 --dev $OSTDEV2 --size $OSTSIZE || exit 22
+${LMC} -m $config --add ost --node localhost --lov lov1 --dev $OSTDEV3 --size $OSTSIZE || exit 23
 
 # create client config
-${LMC} -m $config  --node localhost --mtpt /mnt/lustre mds1 lov1 || exit 30
+${LMC} -m $config  --add mtpt --node localhost --path /mnt/lustre --mds mds1 --lov lov1 || exit 30
