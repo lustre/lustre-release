@@ -506,9 +506,6 @@ llu_fsswop_mount(const char *source,
 		goto out_inode;
         }
 
-        /* not clear why we need this XXX */
-        P_REF((*mntp)->mnt_root);
-
         ptlrpc_req_finished(request);
         request = NULL;
 

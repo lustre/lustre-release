@@ -378,10 +378,123 @@ int llu_iop_open(struct pnode *pnode, int flags, mode_t mode)
         return llu_file_open(pnode->p_base->pb_ino);
 }
 
+
+static int llu_mdc_close(struct lustre_handle *mdc_conn, struct inode *inode)
+{
+        struct llu_inode_info *lli = llu_i2info(inode);
+        struct ll_file_data *fd = lli->lli_file_data;
+        struct ptlrpc_request *req = NULL;
+        unsigned long flags;
+        struct obd_import *imp;
+        int rc;
+
+        /* FIXME add following code later FIXME */
+#if 0
+        /* Complete the open request and remove it from replay list */
+        rc = mdc_close(&ll_i2sbi(inode)->ll_mdc_conn, lli->lli_st_ino,
+                       inode->i_mode, &fd->fd_mds_och.och_fh, &req);
+        if (rc)
+                CERROR("inode %lu close failed: rc = %d\n",
+                                lli->lli_st_ino, rc);
+
+        imp = fd->fd_mds_och.och_req->rq_import;
+        LASSERT(imp != NULL);
+        spin_lock_irqsave(&imp->imp_lock, flags);
+
+        DEBUG_REQ(D_HA, fd->fd_mds_och.och_req, "matched open req %p", 
+		  fd->fd_mds_och.och_req);
+
+        /* We held on to the request for replay until we saw a close for that
+         * file.  Now that we've closed it, it gets replayed on the basis of
+         * its transno only. */
+        fd->fd_mds_och.och_req->rq_replay = 0;
+
+        if (fd->fd_mds_och.och_req->rq_transno) {
+                /* This open created a file, so it needs replay as a
+                 * normal transaction now.  Our reference to it now
+                 * effectively owned by the imp_replay_list, and it'll
+                 * be committed just like other transno-having
+                 * requests from here on out. */
+
+                /* We now retain this close request, so that it is
+                 * replayed if the open is replayed.  We duplicate the
+                 * transno, so that we get freed at the right time,
+                 * and rely on the difference in xid to keep
+                 * everything ordered correctly.
+                 *
+                 * But! If this close was already given a transno
+                 * (because it caused real unlinking of an
+                 * open-unlinked file, f.e.), then we'll be ordered on
+                 * the basis of that and we don't need to do anything
+                 * magical here. */
+                if (!req->rq_transno) {
+                        req->rq_transno = fd->fd_mds_och.och_req->rq_transno;
+                        ptlrpc_retain_replayable_request(req, imp);
+                }
+                spin_unlock_irqrestore(&imp->imp_lock, flags);
+
+                /* Should we free_committed now? we always free before
+                 * replay, so it's probably a wash.  We could check to
+                 * see if the fd_req should already be committed, in
+                 * which case we can avoid the whole retain_replayable
+                 * dance. */
+        } else {
+                /* No transno means that we can just drop our ref. */
+                spin_unlock_irqrestore(&imp->imp_lock, flags);
+        }
+        ptlrpc_req_finished(fd->fd_mds_och.och_req);
+
+        /* Do this after the fd_req->rq_transno check, because we don't want
+         * to bounce off zero references. */
+        ptlrpc_req_finished(req);
+        fd->fd_mds_och.och_fh.cookie = DEAD_HANDLE_MAGIC;
+#endif
+        lli->lli_file_data = NULL;
+        free(fd);
+
+        RETURN(-abs(rc));
+}
+
+static int llu_file_release(struct inode *inode)
+{
+        struct llu_sb_info *sbi = llu_i2sbi(inode);
+        struct llu_inode_info *lli = llu_i2info(inode);
+        struct lov_stripe_md *lsm = lli->lli_smd;
+        struct ll_file_data *fd;
+        struct obdo oa;
+        int rc = 0, rc2;
+
+        fd = lli->lli_file_data;
+        if (!fd) /* no process opened the file after an mcreate */
+                RETURN(rc = 0);
+
+        /* we might not be able to get a valid handle on this file
+         * again so we really want to flush our write cache.. */
+        if (S_ISREG(inode->i_mode) && lsm) {
+                memset(&oa, 0, sizeof(oa));
+                oa.o_id = lsm->lsm_object_id;
+                oa.o_mode = S_IFREG;
+                oa.o_valid = OBD_MD_FLTYPE | OBD_MD_FLID;
+                
+                memcpy(&oa.o_inline, &fd->fd_ost_och, FD_OSTDATA_SIZE);
+                oa.o_valid |= OBD_MD_FLHANDLE;
+
+                rc = obd_close(&sbi->ll_osc_conn, &oa, lsm, NULL);
+                if (rc)
+                        CERROR("inode %lu object close failed: rc = "
+                               "%d\n", lli->lli_st_ino, rc);
+	}
+
+        rc2 = llu_mdc_close(&sbi->ll_mdc_conn, inode);
+        if (rc2 && !rc)
+                rc = rc2;
+
+        RETURN(rc);
+}
+
 int llu_iop_close(struct inode *inode)
 {
-        /* FIXME do proper cleanup here */
-        return 0;
+        return llu_file_release(inode);
 }
 
 int llu_iop_ipreadv(struct inode *ino,
