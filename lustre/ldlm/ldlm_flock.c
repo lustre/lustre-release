@@ -40,7 +40,8 @@ static struct list_head ldlm_flock_waitq = LIST_HEAD_INIT(ldlm_flock_waitq);
 static inline int
 ldlm_same_flock_owner(struct ldlm_lock *lock, struct ldlm_lock *new)
 {
-        if ((new->l_data.l_flock.pid == lock->l_data.l_flock.pid) &&
+        if ((new->l_policy_data.l_flock.pid ==
+             lock->l_policy_data.l_flock.pid) &&
             (new->l_export == lock->l_export))
                 return 1;
         else
@@ -50,8 +51,10 @@ ldlm_same_flock_owner(struct ldlm_lock *lock, struct ldlm_lock *new)
 static inline int
 ldlm_flocks_overlap(struct ldlm_lock *lock, struct ldlm_lock *new)
 {
-        if ((new->l_data.l_flock.start <= lock->l_data.l_flock.end) &&
-            (new->l_data.l_flock.end >= lock->l_data.l_flock.start))
+        if ((new->l_policy_data.l_flock.start <=
+             lock->l_policy_data.l_flock.end) &&
+            (new->l_policy_data.l_flock.end >=
+             lock->l_policy_data.l_flock.start))
                 return 1;
         else
                 return 0;
@@ -90,9 +93,9 @@ ldlm_flock_deadlock(struct ldlm_lock *waiter, struct ldlm_lock *blocker)
 	pid_t blocker_pid;
 
 	waiter_export = waiter->l_export;
-	waiter_pid = waiter->l_data.l_flock.pid;
+	waiter_pid = waiter->l_policy_data.l_flock.pid;
 	blocker_export = blocker->l_export;
-	blocker_pid = blocker->l_data.l_flock.pid;
+	blocker_pid = blocker->l_policy_data.l_flock.pid;
 
 next_task:
 	if (waiter_export == blocker_export && waiter_pid == blocker_pid)
@@ -102,10 +105,10 @@ next_task:
 
 		lock = list_entry(tmp, struct ldlm_lock, l_flock_waitq);
 		if ((lock->l_export == blocker_export)
-		    && (lock->l_data.l_flock.pid == blocker_pid)) {
+		    && (lock->l_policy_data.l_flock.pid == blocker_pid)) {
 			lock = lock->l_flock_blocker;
 			blocker_export = lock->l_export;
-			blocker_pid = lock->l_data.l_flock.pid;
+			blocker_pid = lock->l_policy_data.l_flock.pid;
 			goto next_task;
 		}
 	}
@@ -130,8 +133,9 @@ ldlm_flock_enqueue(struct ldlm_lock *req, int *flags, int first_enq,
         ENTRY;
 
         CDEBUG(D_DLMTRACE, "flags: 0x%x pid: %d mode: %d start: %llu end: %llu\n",
-               *flags, new->l_data.l_flock.pid, mode,
-               req->l_data.l_flock.start, req->l_data.l_flock.end);
+               *flags, new->l_policy_data.l_flock.pid, mode,
+               req->l_policy_data.l_flock.start,
+               req->l_policy_data.l_flock.end);
 
         *err = ELDLM_OK;
 
@@ -187,12 +191,12 @@ ldlm_flock_enqueue(struct ldlm_lock *req, int *flags, int first_enq,
 
                         if (*flags & LDLM_FL_TEST_LOCK) {
                                 req->l_granted_mode = lock->l_granted_mode;
-                                req->l_data.l_flock.pid =
-                                        lock->l_data.l_flock.pid;
-                                req->l_data.l_flock.start =
-                                        lock->l_data.l_flock.start;
-                                req->l_data.l_flock.end =
-                                        lock->l_data.l_flock.end;
+                                req->l_policy_data.l_flock.pid =
+                                        lock->l_policy_data.l_flock.pid;
+                                req->l_policy_data.l_flock.start =
+                                        lock->l_policy_data.l_flock.start;
+                                req->l_policy_data.l_flock.end =
+                                        lock->l_policy_data.l_flock.end;
                                 ldlm_flock_destroy(req, *flags);
                                 RETURN(LDLM_ITER_STOP);
                         }
@@ -234,29 +238,29 @@ ldlm_flock_enqueue(struct ldlm_lock *req, int *flags, int first_enq,
                         break;
 
 		if (lock->l_granted_mode == mode) {
-			if (lock->l_data.l_flock.end <
-                            (new->l_data.l_flock.start - 1))
+			if (lock->l_policy_data.l_flock.end <
+                            (new->l_policy_data.l_flock.start - 1))
 				continue;
 
-			if (lock->l_data.l_flock.start >
-                            (new->l_data.l_flock.end + 1))
+			if (lock->l_policy_data.l_flock.start >
+                            (new->l_policy_data.l_flock.end + 1))
 				break;
 
-			if (lock->l_data.l_flock.start >
-                            new->l_data.l_flock.start)
-				lock->l_data.l_flock.start =
-                                        new->l_data.l_flock.start;
+			if (lock->l_policy_data.l_flock.start >
+                            new->l_policy_data.l_flock.start)
+				lock->l_policy_data.l_flock.start =
+                                        new->l_policy_data.l_flock.start;
 			else
-				new->l_data.l_flock.start =
-                                        lock->l_data.l_flock.start;
+				new->l_policy_data.l_flock.start =
+                                        lock->l_policy_data.l_flock.start;
 
-			if (lock->l_data.l_flock.end <
-                            new->l_data.l_flock.end)
-				lock->l_data.l_flock.end =
-                                        new->l_data.l_flock.end;
+			if (lock->l_policy_data.l_flock.end <
+                            new->l_policy_data.l_flock.end)
+				lock->l_policy_data.l_flock.end =
+                                        new->l_policy_data.l_flock.end;
 			else
-				new->l_data.l_flock.end =
-                                        lock->l_data.l_flock.end;
+				new->l_policy_data.l_flock.end =
+                                        lock->l_policy_data.l_flock.end;
 
 			if (added) {
                                 ldlm_flock_destroy(lock, *flags);
@@ -267,35 +271,38 @@ ldlm_flock_enqueue(struct ldlm_lock *req, int *flags, int first_enq,
                         continue;
 		}
 
-                if (lock->l_data.l_flock.end < new->l_data.l_flock.start)
+                if (lock->l_policy_data.l_flock.end <
+                    new->l_policy_data.l_flock.start)
                         continue;
-                if (lock->l_data.l_flock.start > new->l_data.l_flock.end)
+                if (lock->l_policy_data.l_flock.start >
+                    new->l_policy_data.l_flock.end)
                         break;
 
                 ++overlaps;
 
-                if (new->l_data.l_flock.start <=
-                    lock->l_data.l_flock.start) {
-                        if (new->l_data.l_flock.end <
-                            lock->l_data.l_flock.end) {
-                                lock->l_data.l_flock.start =
-                                        new->l_data.l_flock.end + 1;
+                if (new->l_policy_data.l_flock.start <=
+                    lock->l_policy_data.l_flock.start) {
+                        if (new->l_policy_data.l_flock.end <
+                            lock->l_policy_data.l_flock.end) {
+                                lock->l_policy_data.l_flock.start =
+                                        new->l_policy_data.l_flock.end + 1;
                                 break;
                         } else if (added) {
                                 ldlm_flock_destroy(lock, *flags);
                         } else {
-                                lock->l_data.l_flock.start =
-                                        new->l_data.l_flock.start;
-                                lock->l_data.l_flock.end =
-                                        new->l_data.l_flock.end;
+                                lock->l_policy_data.l_flock.start =
+                                        new->l_policy_data.l_flock.start;
+                                lock->l_policy_data.l_flock.end =
+                                        new->l_policy_data.l_flock.end;
                                 new = lock;
                                 added = 1;
                         }
                         continue;
                 }
-                if (new->l_data.l_flock.end >= lock->l_data.l_flock.end) {
-                        lock->l_data.l_flock.end =
-                                new->l_data.l_flock.start - 1;
+                if (new->l_policy_data.l_flock.end >=
+                    lock->l_policy_data.l_flock.end) {
+                        lock->l_policy_data.l_flock.end =
+                                new->l_policy_data.l_flock.start - 1;
                         continue;
                 }
 
@@ -320,15 +327,19 @@ ldlm_flock_enqueue(struct ldlm_lock *req, int *flags, int first_enq,
                 }
 
                 new2->l_granted_mode = lock->l_granted_mode;
-                new2->l_data.l_flock.pid = new->l_data.l_flock.pid;
-                new2->l_data.l_flock.start = lock->l_data.l_flock.start;
-                new2->l_data.l_flock.end = new->l_data.l_flock.start - 1;
-                lock->l_data.l_flock.start = new->l_data.l_flock.end + 1;
-                new2->l_connh = lock->l_connh;
-                if ((new2->l_export = lock->l_export) != NULL) {
+                new2->l_policy_data.l_flock.pid =
+                        new->l_policy_data.l_flock.pid;
+                new2->l_policy_data.l_flock.start =
+                        lock->l_policy_data.l_flock.start;
+                new2->l_policy_data.l_flock.end =
+                        new->l_policy_data.l_flock.start - 1;
+                lock->l_policy_data.l_flock.start =
+                        new->l_policy_data.l_flock.end + 1;
+                new2->l_conn_export = lock->l_conn_export;
+                if (lock->l_export != NULL) {
+                        new2->l_export = class_export_get(lock->l_export);
                         list_add(&new2->l_export_chain,
-                                 &new2->l_export->
-                                 exp_ldlm_data.led_held_locks);
+                                 &new2->l_export->exp_ldlm_data.led_held_locks);
                 }
                 if (*flags == LDLM_FL_WAIT_NOREPROC)
                         ldlm_lock_addref_internal(new2, lock->l_granted_mode);
@@ -401,7 +412,7 @@ ldlm_flock_completion_ast(struct ldlm_lock *lock, int flags, void *data)
 
         if (!(flags & (LDLM_FL_BLOCK_WAIT | LDLM_FL_BLOCK_GRANTED |
                        LDLM_FL_BLOCK_CONV)))
-                goto  granted;
+                goto granted;
 
         LDLM_DEBUG(lock, "client-side enqueue returned a blocked lock, "
                    "sleeping");
@@ -409,7 +420,7 @@ ldlm_flock_completion_ast(struct ldlm_lock *lock, int flags, void *data)
         ldlm_lock_dump(D_OTHER, lock);
 
         fwd.fwd_lock = lock;
-        obd = class_conn2obd(lock->l_connh);
+        obd = class_exp2obd(lock->l_conn_export);
 
         /* if this is a local lock, then there is no import */
         if (obd != NULL)
@@ -458,9 +469,9 @@ granted:
                         getlk->fl_type = F_WRLCK;
                 else
                         getlk->fl_type = F_UNLCK;
-                getlk->fl_pid = lock->l_data.l_flock.pid;
-                getlk->fl_start = lock->l_data.l_flock.start;
-                getlk->fl_end = lock->l_data.l_flock.end;
+                getlk->fl_pid = lock->l_policy_data.l_flock.pid;
+                getlk->fl_start = lock->l_policy_data.l_flock.start;
+                getlk->fl_end = lock->l_policy_data.l_flock.end;
                 /* ldlm_flock_destroy(lock); */
         } else {
                 flags = LDLM_FL_WAIT_NOREPROC;
