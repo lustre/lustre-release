@@ -71,11 +71,11 @@ void ll_ap_completion_24(void *data, int cmd, int rc)
                 } else {
                         llap->llap_write_queued = 0;
                 }
-        } else { 
+        } else {
                 SetPageError(page);
         }
 
-        LL_CDEBUG_PAGE(page, "io complete, unlocking\n");
+        LL_CDEBUG_PAGE(D_PAGE, page, "io complete, unlocking\n");
 
         unlock_page(page);
 
@@ -108,7 +108,7 @@ static int ll_writepage_24(struct page *page)
 
         page_cache_get(page);
         if (llap->llap_write_queued) {
-                LL_CDEBUG_PAGE(page, "marking urgent\n");
+                LL_CDEBUG_PAGE(D_PAGE, page, "marking urgent\n");
                 rc = obd_set_async_flags(exp, ll_i2info(inode)->lli_smd, NULL,
                                          llap->llap_cookie,
                                          ASYNC_READY | ASYNC_URGENT);
@@ -118,7 +118,7 @@ static int ll_writepage_24(struct page *page)
                                         llap->llap_cookie, OBD_BRW_WRITE, 0, 0,
                                         0, ASYNC_READY | ASYNC_URGENT);
                 if (rc == 0)
-                        LL_CDEBUG_PAGE(page, "mmap write queued\n");
+                        LL_CDEBUG_PAGE(D_PAGE, page, "mmap write queued\n");
                 else
                         llap->llap_write_queued = 0;
         }

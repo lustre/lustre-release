@@ -324,7 +324,6 @@ static int ll_lock_to_stripe_offset(struct inode *inode, struct ldlm_lock *lock)
 void ll_pgcache_remove_extent(struct inode *inode, struct lov_stripe_md *lsm,
                               struct ldlm_lock *lock, __u32 stripe)
 {
-        struct ldlm_extent *extent = &lock->l_policy_data.l_extent;
         ldlm_policy_data_t tmpex;
         unsigned long start, end, count, skip, i, j;
         struct page *page;
@@ -332,48 +331,49 @@ void ll_pgcache_remove_extent(struct inode *inode, struct lov_stripe_md *lsm,
         struct lustre_handle lockh;
         ENTRY;
 
-        CDEBUG(D_INODE, "obdo %lu inode %p ["LPU64"->"LPU64"] size: %llu\n",
-               inode->i_ino, inode, extent->start, extent->end, inode->i_size);
+        memcpy(&tmpex, &lock->l_policy_data.l_extent, sizeof(tmpex));
+        CDEBUG(D_INODE|D_PAGE, "inode %lu(%p) ["LPU64"->"LPU64"] size: %llu\n",
+               inode->i_ino, inode, tmpex.l_extent.start, tmpex.l_extent.end,
+               inode->i_size);
 
         /* our locks are page granular thanks to osc_enqueue, we invalidate the
          * whole page. */
-        LASSERT((extent->start & ~PAGE_CACHE_MASK) == 0);
-        LASSERT(((extent->end+1) & ~PAGE_CACHE_MASK) == 0);
+        LASSERT((tmpex.l_extent.start & ~PAGE_CACHE_MASK) == 0);
+        LASSERT(((tmpex.l_extent.end + 1) & ~PAGE_CACHE_MASK) == 0);
 
-        start = extent->start >> PAGE_CACHE_SHIFT;
         count = ~0;
         skip = 0;
-        end = (extent->end >> PAGE_CACHE_SHIFT) + 1;
-        if ((end << PAGE_CACHE_SHIFT) < extent->end)
-                end = ~0;
+        start = tmpex.l_extent.start >> PAGE_CACHE_SHIFT;
+        end = tmpex.l_extent.end >> PAGE_CACHE_SHIFT;
         if (lsm->lsm_stripe_count > 1) {
                 count = lsm->lsm_stripe_size >> PAGE_CACHE_SHIFT;
                 skip = (lsm->lsm_stripe_count - 1) * count;
-                start += (start/count * skip) + (stripe * count);
+                start += start/count * skip + stripe * count;
                 if (end != ~0)
-                        end += (end/count * skip) + (stripe * count);
+                        end += end/count * skip + stripe * count;
         }
+        if (end < tmpex.l_extent.end >> PAGE_CACHE_SHIFT)
+                end = ~0;
 
         i = (inode->i_size + PAGE_CACHE_SIZE-1) >> PAGE_CACHE_SHIFT;
         if (i < end)
                 end = i;
 
-        CDEBUG(D_INODE, "walking page indices start: %lu j: %lu count: %lu "
-               "skip: %lu end: %lu%s\n", start, start % count, count, skip, end,
-               discard ? " (DISCARDING)" : "");
+        CDEBUG(D_INODE|D_PAGE, "walking page indices start: %lu j: %lu "
+               "count: %lu skip: %lu end: %lu%s\n", start, start % count,
+               count, skip, end, discard ? " (DISCARDING)" : "");
 
         /* this is the simplistic implementation of page eviction at
          * cancelation.  It is careful to get races with other page
          * lockers handled correctly.  fixes from bug 20 will make it
          * more efficient by associating locks with pages and with
          * batching writeback under the lock explicitly. */
-        for (i = start, j = start % count ; ; j++, i++) {
-                if (j == count) {
-                        i += skip;
-                        j = 0;
-                }
-                if (i >= end)
-                        break;
+        for (i = start, j = start % count ; i <= end;
+             tmpex.l_extent.start += PAGE_CACHE_SIZE, j++, i++) {
+                LASSERTF(tmpex.l_extent.start< lock->l_policy_data.l_extent.end,
+                         LPU64" >= "LPU64" start %lu i %lu end %lu\n",
+                         tmpex.l_extent.start, lock->l_policy_data.l_extent.end,
+                         start, i, end);
 
                 ll_pgcache_lock(inode->i_mapping);
                 if (list_empty(&inode->i_mapping->dirty_pages) &&
@@ -389,14 +389,14 @@ void ll_pgcache_remove_extent(struct inode *inode, struct lov_stripe_md *lsm,
 
                 page = find_get_page(inode->i_mapping, i);
                 if (page == NULL)
-                        continue;
-                LL_CDEBUG_PAGE(page, "locking page\n");
+                        goto next_index;
+                LL_CDEBUG_PAGE(D_PAGE, page, "locking page\n");
                 lock_page(page);
 
                 /* page->mapping to check with racing against teardown */
                 if (page->mapping && PageDirty(page) && !discard) {
                         ClearPageDirty(page);
-                        LL_CDEBUG_PAGE(page, "found dirty\n");
+                        LL_CDEBUG_PAGE(D_PAGE, page, "found dirty\n");
                         ll_pgcache_lock(inode->i_mapping);
                         list_del(&page->list);
                         list_add(&page->list, &inode->i_mapping->locked_pages);
@@ -411,7 +411,6 @@ void ll_pgcache_remove_extent(struct inode *inode, struct lov_stripe_md *lsm,
                         lock_page(page);
                 }
 
-                tmpex.l_extent.start = (__u64)page->index << PAGE_CACHE_SHIFT;
                 tmpex.l_extent.end = tmpex.l_extent.start + PAGE_CACHE_SIZE - 1;
                 /* check to see if another DLM lock covers this page */
                 rc2 = ldlm_lock_match(lock->l_resource->lr_namespace,
@@ -421,11 +420,17 @@ void ll_pgcache_remove_extent(struct inode *inode, struct lov_stripe_md *lsm,
                                       &tmpex, LCK_PR | LCK_PW, &lockh);
                 if (rc2 == 0 && page->mapping != NULL) {
                         // checking again to account for writeback's lock_page()
-                        LL_CDEBUG_PAGE(page, "truncating\n");
+                        LL_CDEBUG_PAGE(D_PAGE, page, "truncating\n");
                         ll_truncate_complete_page(page);
                 }
                 unlock_page(page);
                 page_cache_release(page);
+        next_index:
+                if (j == count) {
+                        i += skip;
+                        j = 0;
+                }
+
         }
         EXIT;
 }
@@ -624,8 +629,10 @@ int ll_glimpse_size(struct inode *inode, struct ost_lvb *lvb)
                          LCK_PR, &flags, ll_extent_lock_callback,
                          ldlm_completion_ast, ll_glimpse_callback, inode,
                          sizeof(*lvb), lustre_swab_ost_lvb, &lockh);
-        if (rc > 0)
+        if (rc > 0) {
+                CERROR("obd_enqueue returned rc %d, returning -EIO\n", rc);
                 RETURN(-EIO);
+        }
 
         lvb->lvb_size = lov_merge_size(lli->lli_smd, 0);
         //inode->i_mtime = lov_merge_mtime(lli->lli_smd, inode->i_mtime);
@@ -1241,6 +1248,7 @@ static int ll_have_md_lock(struct dentry *de)
 
         CDEBUG(D_INFO, "trying to match res "LPU64"\n", res_id.name[0]);
 
+        /* FIXME use LDLM_FL_TEST_LOCK instead */
         flags = LDLM_FL_BLOCK_GRANTED | LDLM_FL_CBPENDING;
         if (ldlm_lock_match(obddev->obd_namespace, flags, &res_id, LDLM_PLAIN,
                             NULL, LCK_PR, &lockh)) {

@@ -115,9 +115,9 @@ struct ll_async_page {
         struct list_head llap_proc_item;
 };
 
-#define LL_CDEBUG_PAGE(page, STR)                                       \
-        CDEBUG(D_PAGE, "page %p map %p ind %lu priv %0lx: " STR,        \
-               page, page->mapping, page->index, page->private)
+#define LL_CDEBUG_PAGE(mask, page, fmt, arg...)                         \
+        CDEBUG(mask, "page %p map %p ind %lu priv %0lx: " fmt,          \
+               page, page->mapping, page->index, page->private, ## arg)
 
 /* llite/lproc_llite.c */
 int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
