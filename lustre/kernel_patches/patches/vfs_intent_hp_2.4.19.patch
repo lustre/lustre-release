@@ -1,5 +1,5 @@
  fs/dcache.c            |   20 ++
- fs/exec.c              |   16 +-
+ fs/exec.c              |   18 +-
  fs/namei.c             |  351 +++++++++++++++++++++++++++++++++++++++++--------
  fs/nfsd/vfs.c          |    2 
  fs/open.c              |  144 +++++++++++++++-----
@@ -7,10 +7,10 @@
  include/linux/dcache.h |   28 +++
  include/linux/fs.h     |   31 ++++
  kernel/ksyms.c         |    1 
- 9 files changed, 506 insertions(+), 111 deletions(-)
+ 9 files changed, 508 insertions(+), 111 deletions(-)
 
 --- linux-2.4.19-hp3_pnnl1/fs/dcache.c~vfs_intent_hp_2.4.19	2003-04-23 16:52:44.000000000 +0800
-+++ linux-2.4.19-hp3_pnnl1-root/fs/dcache.c	2003-04-23 17:07:19.000000000 +0800
++++ linux-2.4.19-hp3_pnnl1-root/fs/dcache.c	2003-05-13 13:52:34.000000000 +0800
 @@ -181,6 +181,13 @@ int d_invalidate(struct dentry * dentry)
  		spin_unlock(&dcache_lock);
  		return 0;
@@ -57,7 +57,7 @@
  
  #define do_switch(x,y) do { \
 --- linux-2.4.19-hp3_pnnl1/fs/namei.c~vfs_intent_hp_2.4.19	2003-04-11 17:41:45.000000000 +0800
-+++ linux-2.4.19-hp3_pnnl1-root/fs/namei.c	2003-04-23 17:07:19.000000000 +0800
++++ linux-2.4.19-hp3_pnnl1-root/fs/namei.c	2003-05-13 13:52:34.000000000 +0800
 @@ -94,6 +94,13 @@
   * XEmacs seems to be relying on it...
   */
@@ -856,7 +856,7 @@
  		kunmap(page);
  		page_cache_release(page);
 --- linux-2.4.19-hp3_pnnl1/fs/nfsd/vfs.c~vfs_intent_hp_2.4.19	2002-08-03 08:39:45.000000000 +0800
-+++ linux-2.4.19-hp3_pnnl1-root/fs/nfsd/vfs.c	2003-04-23 17:07:19.000000000 +0800
++++ linux-2.4.19-hp3_pnnl1-root/fs/nfsd/vfs.c	2003-05-13 13:52:34.000000000 +0800
 @@ -1295,7 +1295,7 @@ nfsd_rename(struct svc_rqst *rqstp, stru
  			err = nfserr_perm;
  	} else
@@ -867,7 +867,7 @@
  		nfsd_sync_dir(tdentry);
  		nfsd_sync_dir(fdentry);
 --- linux-2.4.19-hp3_pnnl1/fs/open.c~vfs_intent_hp_2.4.19	2002-08-03 08:39:45.000000000 +0800
-+++ linux-2.4.19-hp3_pnnl1-root/fs/open.c	2003-04-23 17:07:19.000000000 +0800
++++ linux-2.4.19-hp3_pnnl1-root/fs/open.c	2003-05-13 13:52:34.000000000 +0800
 @@ -19,6 +19,8 @@
  #include <asm/uaccess.h>
  
@@ -1211,7 +1211,7 @@
   * Find an empty file descriptor entry, and mark it busy.
   */
 --- linux-2.4.19-hp3_pnnl1/fs/stat.c~vfs_intent_hp_2.4.19	2003-04-23 17:06:53.000000000 +0800
-+++ linux-2.4.19-hp3_pnnl1-root/fs/stat.c	2003-04-23 17:07:19.000000000 +0800
++++ linux-2.4.19-hp3_pnnl1-root/fs/stat.c	2003-05-13 13:52:34.000000000 +0800
 @@ -135,13 +135,15 @@ static int cp_new_stat(struct inode * in
  asmlinkage long sys_stat(char * filename, struct __old_kernel_stat * statbuf)
  {
@@ -1313,7 +1313,7 @@
  	}
  	return error;
 --- linux-2.4.19-hp3_pnnl1/include/linux/dcache.h~vfs_intent_hp_2.4.19	2002-08-03 08:39:45.000000000 +0800
-+++ linux-2.4.19-hp3_pnnl1-root/include/linux/dcache.h	2003-04-23 17:07:19.000000000 +0800
++++ linux-2.4.19-hp3_pnnl1-root/include/linux/dcache.h	2003-05-13 13:52:34.000000000 +0800
 @@ -6,6 +6,25 @@
  #include <asm/atomic.h>
  #include <linux/mount.h>
@@ -1372,8 +1372,8 @@
  
  extern spinlock_t dcache_lock;
  
---- linux-2.4.19-hp3_pnnl1/include/linux/fs.h~vfs_intent_hp_2.4.19	2003-04-23 16:25:28.000000000 +0800
-+++ linux-2.4.19-hp3_pnnl1-root/include/linux/fs.h	2003-04-23 17:07:19.000000000 +0800
+--- linux-2.4.19-hp3_pnnl1/include/linux/fs.h~vfs_intent_hp_2.4.19	2003-05-13 13:52:30.000000000 +0800
++++ linux-2.4.19-hp3_pnnl1-root/include/linux/fs.h	2003-05-13 13:52:34.000000000 +0800
 @@ -339,6 +339,8 @@ extern void set_bh_page(struct buffer_he
  #define ATTR_MTIME_SET	256
  #define ATTR_FORCE	512	/* Not a change, but a change it */
@@ -1478,8 +1478,8 @@
  extern int page_readlink(struct dentry *, char *, int);
  extern int page_follow_link(struct dentry *, struct nameidata *);
  extern struct inode_operations page_symlink_inode_operations;
---- linux-2.4.19-hp3_pnnl1/kernel/ksyms.c~vfs_intent_hp_2.4.19	2003-04-23 16:25:29.000000000 +0800
-+++ linux-2.4.19-hp3_pnnl1-root/kernel/ksyms.c	2003-04-23 17:07:19.000000000 +0800
+--- linux-2.4.19-hp3_pnnl1/kernel/ksyms.c~vfs_intent_hp_2.4.19	2003-05-13 13:52:31.000000000 +0800
++++ linux-2.4.19-hp3_pnnl1-root/kernel/ksyms.c	2003-05-13 13:52:34.000000000 +0800
 @@ -293,6 +293,7 @@ EXPORT_SYMBOL(read_cache_page);
  EXPORT_SYMBOL(set_page_dirty);
  EXPORT_SYMBOL(vfs_readlink);
@@ -1489,7 +1489,7 @@
  EXPORT_SYMBOL(page_follow_link);
  EXPORT_SYMBOL(page_symlink_inode_operations);
 --- linux-2.4.19-hp3_pnnl1/fs/exec.c~vfs_intent_hp_2.4.19	2003-04-23 16:12:58.000000000 +0800
-+++ linux-2.4.19-hp3_pnnl1-root/fs/exec.c	2003-04-23 17:21:09.000000000 +0800
++++ linux-2.4.19-hp3_pnnl1-root/fs/exec.c	2003-05-13 14:03:27.000000000 +0800
 @@ -109,8 +109,9 @@ asmlinkage long sys_uselib(const char * 
  	struct file * file;
  	struct nameidata nd;
@@ -1502,16 +1502,17 @@
  	if (error)
  		goto out;
  
-@@ -122,7 +123,7 @@ asmlinkage long sys_uselib(const char * 
+@@ -122,7 +123,8 @@ asmlinkage long sys_uselib(const char * 
  	if (error)
  		goto exit;
  
 -	file = dentry_open(nd.dentry, nd.mnt, O_RDONLY);
 +	file = dentry_open_it(nd.dentry, nd.mnt, O_RDONLY, &it);
++	intent_release(nd.dentry, &it);	
  	error = PTR_ERR(file);
  	if (IS_ERR(file))
  		goto out;
-@@ -344,9 +345,10 @@ struct file *open_exec(const char *name)
+@@ -344,9 +346,10 @@ struct file *open_exec(const char *name)
  	struct inode *inode;
  	struct file *file;
  	int err = 0;
@@ -1524,7 +1525,7 @@
  	file = ERR_PTR(err);
  	if (!err) {
  		inode = nd.dentry->d_inode;
-@@ -358,7 +360,7 @@ struct file *open_exec(const char *name)
+@@ -358,7 +361,7 @@ struct file *open_exec(const char *name)
  				err = -EACCES;
  			file = ERR_PTR(err);
  			if (!err) {
@@ -1533,7 +1534,15 @@
  				if (!IS_ERR(file)) {
  					err = deny_write_access(file);
  					if (err) {
-@@ -1058,7 +1060,7 @@ int do_coredump(long signr, struct pt_re
+@@ -367,6 +370,7 @@ struct file *open_exec(const char *name)
+ 					}
+ 				}
+ out:
++				intent_release(nd.dentry, &it);	
+ 				return file;
+ 			}
+ 		}
+@@ -1058,7 +1062,7 @@ int do_coredump(long signr, struct pt_re
  		goto close_fail;
  	if (!file->f_op->write)
  		goto close_fail;
