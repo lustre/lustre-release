@@ -511,7 +511,7 @@ out:
                 if (req->rq_repmsg == NULL)
                         CERROR("handler for opcode %d returned rc=0 without "
                                "creating rq_repmsg; needs to return rc != "
-                               "0!\n");
+                               "0!\n", req->rq_reqmsg->opc);
                 ptlrpc_reply(req->rq_svc, req);
         }
 
