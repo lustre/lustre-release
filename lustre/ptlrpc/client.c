@@ -618,7 +618,7 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
 {
         unsigned long flags;
         struct list_head *tmp;
-        int sending_error = 0;
+        int force_timer_recalc = 0;
         ENTRY;
 
         if (set->set_remaining == 0)
@@ -632,7 +632,7 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
 
                 if (req->rq_phase == RQ_PHASE_NEW &&
                     ptlrpc_send_new_req(req)) {
-                        sending_error = 1;
+                        force_timer_recalc = 1;
                 }
 
                 if (!(req->rq_phase == RQ_PHASE_RPC ||
@@ -726,9 +726,11 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
                                 if (rc) {
                                         DEBUG_REQ(D_HA, req, "send failed (%d)",
                                                   rc);
-                                        sending_error = 1;
+                                        force_timer_recalc = 1;
                                         req->rq_timeout = 0;
                                 }
+                                /* need to reset the timeout */
+                                force_timer_recalc = 1;
                         }
 
                         /* Ensure the network callback returned */
@@ -798,7 +800,7 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
         }
 
         /* If we hit an error, we want to recover promptly. */
-        RETURN(set->set_remaining == 0 || sending_error);
+        RETURN(set->set_remaining == 0 || force_timer_recalc);
 }
 
 int ptlrpc_expire_one_request(struct ptlrpc_request *req)
