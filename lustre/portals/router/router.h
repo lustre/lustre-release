@@ -71,7 +71,11 @@ typedef struct
 
 typedef struct
 {
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
+        struct work_struct        kpru_tq;
+#else
         struct tq_struct        kpru_tq;
+#endif
         int                     kpru_nal_id;
         ptl_nid_t               kpru_nid;
         int                     kpru_alive;
