@@ -1,0 +1,156 @@
+#!/bin/sh
+
+# print out patch status.  Usage: pstatus [ patchfile ... ]
+#
+# Stephen Cameron <steve.cameron@hp.com>
+#
+
+. patchfns >/dev/null || . /usr/lib/patch-scripts/patchfns >/dev/null || { \
+	echo "Impossible to find my library 'patchfns'."
+	echo "Check your install, or go to the right directory"
+	exit 1
+}
+
+if [ ! -f ./series ]
+then
+	echo "./series does not exist." 1>&2
+	exit 1
+fi
+
+if [ ! -d ./patches ]
+then
+	echo "Directory ./patches does not exist." 1>&2
+	exit 1
+fi
+
+
+PATCHLIST="$*"
+if [ "$PATCHLIST" = "" ]
+then
+	series_optimize=yes
+	PATCHLIST=`cat series | sed -e 's/[.]patch[ 	]*$//'`
+	SORTSERIES=`mktemp /tmp/ser.XXXXXX` || exit 1 
+	SORTPATCHES=`mktemp /tmp/pat.XXXXXX` || exit 1
+	sed -e 's/^[ 	]//' -e 's/[.]patch[ 	]*$//' < series | \
+		sort > $SORTSERIES 
+	exists="`echo $P/patches/*.patch 2>/dev/null`"
+	if [ "$exists" != "$P/patches/*.patch" ]
+	then
+		ls -1 $P/patches/*.patch | sed -e 's/^.*\/patches\///' \
+			-e 's/[.]patch[ 	]*$//' | sort > $SORTPATCHES
+		PATCHLIST="$PATCHLIST"" `comm -1 -3 $SORTSERIES $SORTPATCHES`"
+	fi
+	rm -f $SORTPATCHES $SORTSERIES
+else
+	series_optimize=no
+fi
+
+NSERIES=`wc -l series | awk '{ print $1; }'`
+series=1
+for PATCH_NAME in $PATCHLIST 
+do
+	PATCH_NAME=$(stripit $PATCH_NAME)
+	# see if this patch even exists
+	if [ ! -f $P/patches/"$PATCH_NAME".patch ]
+	then
+		echo "$PATCH_NAME does not exist."
+		continue
+	fi
+	# see if this patch is applied
+	applied="-"
+	if [ -f applied-patches ]
+	then 
+		grep '^'"$PATCH_NAME"'$' applied-patches > /dev/null
+		if [ "$?" = "0" ]
+		then
+			applied="a"
+		fi
+	fi
+
+	# figure the status of this patch, that is, 
+	# if it needs changelog, pcpatch, refpatch
+
+	stat=""
+	if [ ! -f $P/txt/"$PATCH_NAME".txt ]
+	then
+		stat="changelog "
+	fi
+	if [ ! -f $P/pc/"$PATCH_NAME".pc ]
+	then
+		stat="$stat""pcpatch "
+	elif [ "$applied" != '-' ]
+	then
+		rpatch=n
+
+		# for each file this patch touches
+		for y in `cat $P/pc/"$PATCH_NAME".pc`
+		do
+			# is the patch adding the file?
+			if [ ! -e "$y"'~'"$PATCH_NAME" -a -f "$y" ]
+			then
+				# file is newer than the patch?
+				if [ "$y" -nt $P/patches/"$PATCH_NAME".patch ]
+				then
+					rpatch=y
+					stat="$stat""refpatch "
+					break
+				fi
+			else
+				# modified file is newer than the patch?
+				if [ "$y"'~'"$PATCH_NAME" -nt \
+					$P/patches/"$PATCH_NAME".patch ]
+				then
+					rpatch=y
+					stat="$stat""refpatch "
+					break
+				fi
+				if [ "`toppatch`" = "$PATCH_NAME" -a \
+					"$y" -nt $P/patches/"$PATCH_NAME".patch ]
+				then
+					# toppatch, so check if the file 
+				        # is newer than the patch?
+					rpatch=y
+					stat="$stat""refpatch "
+					break
+				fi
+			fi
+		done
+	fi
+	# check if they changed the changelog recently
+	if [ "$rpatch" = "n" -a -f $P/txt/"$PATCH_NAME".txt \
+		-a $P/txt/"$PATCH_NAME".txt -nt \
+		$P/patches/"$PATCH_NAME".patch ]
+	then
+		rpatch=y
+		stat="$stat""refpatch "
+	fi
+	if [ "$stat" != "" ]
+	then
+		stat="Needs ""$stat"
+	fi
+
+	if [ "$series_optimize" != "yes" ]
+	then
+		# have to find the series number the hard way.
+		series=`grep -n '^'"$PATCH_NAME"'\.patch$' series |\
+			awk -F: '{ printf "%d", $1}' `
+		if [ "$series" = "" ]
+		then
+			series="?"
+		fi
+	fi
+
+	echo "$series":"$applied":"$PATCH_NAME $stat"
+
+	if [ "$series_optimize" = "yes" ]
+	then
+		if [ "$series" != "?" ]
+		then
+			series=`expr $series + 1`
+			if [ $series -gt $NSERIES ]
+			then 
+				series="?"
+			fi
+		fi
+	fi
+done 
