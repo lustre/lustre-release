@@ -164,8 +164,6 @@ static inline void lustre_daemonize_helper(void)
                 page->private = 0; \
         } while(0)
 
-#define smp_num_cpus    NR_CPUS
-
 #define kiobuf bio
 
 #include <linux/proc_fs.h>

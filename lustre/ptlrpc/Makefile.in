@@ -1,6 +1,6 @@
 MODULES := ptlrpc
 ifeq ($(PATCHLEVEL),6)
-LDLM := @top_srcdir@/ldlm/
+LDLM := @top_srcdir@/lustre/ldlm/
 else
 LDLM :=
 endif
