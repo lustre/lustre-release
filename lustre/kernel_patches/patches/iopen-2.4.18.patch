@@ -227,8 +227,7 @@
 +
 +	/* Move the goal to the de hash queue - like d_move() */
 +	goal->d_flags &= ~DCACHE_NFSD_DISCONNECTED;
-+	list_del(&goal->d_hash);
-+	list_add(&goal->d_hash, &de->d_hash);
++	list_del_init(&goal->d_hash);
 +
 +	list_del(&goal->d_child);
 +	list_del(&de->d_child);
@@ -242,6 +241,7 @@
 +	/* And add them back to the (new) parent lists */
 +	list_add(&goal->d_child, &goal->d_parent->d_subdirs);
 +	list_add(&de->d_child, &de->d_parent->d_subdirs);
++	__d_rehash(goal, 0);
 +	spin_unlock(&dcache_lock);
 +
 +	return goal;
