@@ -146,7 +146,6 @@ void ll_truncate(struct inode *inode);
 /* llite/file.c */
 extern struct file_operations ll_file_operations;
 extern struct inode_operations ll_file_inode_operations;
-extern struct inode_operations ll_special_inode_operations;
 extern int ll_inode_revalidate_it(struct dentry *, struct lookup_intent *);
 int ll_extent_lock(struct ll_file_data *, struct inode *,
                    struct lov_stripe_md *, int mode, struct ldlm_extent *,
@@ -159,10 +158,23 @@ int ll_extent_lock_no_validate(struct ll_file_data *, struct inode *,
                                struct lov_stripe_md *, int mode,
                                struct ldlm_extent *, struct lustre_handle *,
                                int ast_flags);
+
+int ll_local_open(struct file *file, struct lookup_intent *it);
+int ll_mdc_close(struct obd_export *mdc_exp, struct inode *inode, 
+                 struct file *file);
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
 int ll_getattr(struct vfsmount *mnt, struct dentry *de,
                struct lookup_intent *it, struct kstat *stat);
 #endif
+
+/* llite/special.c */
+extern struct inode_operations ll_special_inode_operations;
+extern struct file_operations ll_special_chr_inode_fops;
+extern struct file_operations ll_special_chr_file_fops;
+extern struct file_operations ll_special_blk_inode_fops;
+extern struct file_operations ll_special_fifo_inode_fops;
+extern struct file_operations ll_special_fifo_file_fops;
+extern struct file_operations ll_special_sock_inode_fops;
 
 /* llite/dcache.c */
 void ll_intent_release(struct lookup_intent *);
