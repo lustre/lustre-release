@@ -10,7 +10,7 @@ modulefs_DATA = osc.o
 EXTRA_PROGRAMS = osc
 
 LINX= obd_pack.c ll_pack.c
-osc_SOURCES =  obd_pack.c osc_request.c # super.c rw.c file.c dir.c sysctl.c super.c namei.c symlink.c
+osc_SOURCES = osc_request.c $(LINX)
 
 obd_pack.c: 
 	test -e obd_pack.c || ln -sf $(top_srcdir)/lib/obd_pack.c
