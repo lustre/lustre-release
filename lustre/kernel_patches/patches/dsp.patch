@@ -8,8 +8,8 @@
 
 Index: linux-2.4.20-rh/kernel/bootimg.c
 ===================================================================
---- linux-2.4.20-rh.orig/kernel/bootimg.c	2003-10-29 23:44:50.000000000 +0800
-+++ linux-2.4.20-rh/kernel/bootimg.c	2003-10-29 23:45:55.000000000 +0800
+--- linux-2.4.20-rh.orig/kernel/bootimg.c	2003-10-29 23:56:02.000000000 +0800
++++ linux-2.4.20-rh/kernel/bootimg.c	2003-10-29 23:56:17.000000000 +0800
 @@ -238,9 +238,20 @@
  	int error = -ENOMEM;
  
@@ -34,8 +34,8 @@ Index: linux-2.4.20-rh/kernel/bootimg.c
  	code = (relocate_and_jump_t) virt_to_phys((void *) code_page);
 Index: linux-2.4.20-rh/kernel/bootimg_pic.c
 ===================================================================
---- linux-2.4.20-rh.orig/kernel/bootimg_pic.c	2003-10-29 23:44:50.000000000 +0800
-+++ linux-2.4.20-rh/kernel/bootimg_pic.c	2003-10-29 23:45:56.000000000 +0800
+--- linux-2.4.20-rh.orig/kernel/bootimg_pic.c	2003-10-29 23:56:02.000000000 +0800
++++ linux-2.4.20-rh/kernel/bootimg_pic.c	2003-10-29 23:56:17.000000000 +0800
 @@ -69,7 +69,8 @@
  			for (j = i+1; j < dsc.pages; j++) {
  				table = dsc.page_dir+FROM_TABLE(j);
@@ -56,10 +56,24 @@ Index: linux-2.4.20-rh/kernel/bootimg_pic.c
  					break;
  				}
  			}
+Index: linux-2.4.20-rh/include/asm-i386/apic.h
+===================================================================
+--- linux-2.4.20-rh.orig/include/asm-i386/apic.h	2003-10-29 23:58:49.000000000 +0800
++++ linux-2.4.20-rh/include/asm-i386/apic.h	2003-10-29 23:59:40.000000000 +0800
+@@ -86,6 +86,9 @@
+ extern void apic_pm_unregister(struct pm_dev*);
+ 
+ extern int check_nmi_watchdog (void);
++extern void disable_apic_nmi_watchdog(void);
++
++
+ 
+ extern unsigned int nmi_watchdog;
+ #define NMI_NONE	0
 Index: linux-2.4.20-rh/include/linux/crash.h
 ===================================================================
---- linux-2.4.20-rh.orig/include/linux/crash.h	2003-10-29 23:44:49.000000000 +0800
-+++ linux-2.4.20-rh/include/linux/crash.h	2003-10-29 23:45:56.000000000 +0800
+--- linux-2.4.20-rh.orig/include/linux/crash.h	2003-10-29 23:56:02.000000000 +0800
++++ linux-2.4.20-rh/include/linux/crash.h	2003-10-29 23:56:17.000000000 +0800
 @@ -71,7 +71,7 @@
  #define CRASH_ZALLOC_PAGES 16*5*2	/* 2 to handle crash in crash */
  #define CRASH_LOW_WATER_PAGES 100
@@ -71,8 +85,8 @@ Index: linux-2.4.20-rh/include/linux/crash.h
  #define CRASH_CLEAR_RESERVED(addr) (clear_bit(PG_reserved,&mem_map[MAP_NR(addr)].flags))
 Index: linux-2.4.20-rh/arch/i386/kernel/crash.c
 ===================================================================
---- linux-2.4.20-rh.orig/arch/i386/kernel/crash.c	2003-10-29 23:44:49.000000000 +0800
-+++ linux-2.4.20-rh/arch/i386/kernel/crash.c	2003-10-29 23:45:56.000000000 +0800
+--- linux-2.4.20-rh.orig/arch/i386/kernel/crash.c	2003-10-29 23:56:02.000000000 +0800
++++ linux-2.4.20-rh/arch/i386/kernel/crash.c	2003-10-29 23:56:17.000000000 +0800
 @@ -9,6 +9,8 @@
  #include <linux/crash.h>
  #include <linux/reboot.h>
@@ -115,8 +129,8 @@ Index: linux-2.4.20-rh/arch/i386/kernel/crash.c
  
 Index: linux-2.4.20-rh/arch/i386/kernel/nmi.c
 ===================================================================
---- linux-2.4.20-rh.orig/arch/i386/kernel/nmi.c	2003-10-29 23:44:49.000000000 +0800
-+++ linux-2.4.20-rh/arch/i386/kernel/nmi.c	2003-10-29 23:45:56.000000000 +0800
+--- linux-2.4.20-rh.orig/arch/i386/kernel/nmi.c	2003-10-29 23:56:02.000000000 +0800
++++ linux-2.4.20-rh/arch/i386/kernel/nmi.c	2003-10-29 23:56:17.000000000 +0800
 @@ -138,7 +138,7 @@
  
  struct pm_dev *nmi_pmdev;
