@@ -52,9 +52,6 @@ void lustre_assert_wire_constants(void)
         LASSERT(OST_SAN_WRITE == 15);
         LASSERT(OST_SYNC == 16);
         LASSERT(OST_LAST_OPC == 18);
-        LASSERT(OST_FIRST_OPC == 0);
-        LASSERT(OBD_FL_INLINEDATA == 1);
-        LASSERT(OBD_FL_OBDMDEXISTS == 2);
         LASSERT(OBD_OBJECT_EOF == 0xffffffffffffffffULL);
         LASSERT(OST_REQ_HAS_OA1 == 1);
         LASSERT(MDS_GETATTR == 33);
@@ -71,7 +68,6 @@ void lustre_assert_wire_constants(void)
         LASSERT(MDS_SYNC == 44);
         LASSERT(MDS_DONE_WRITING == 45);
         LASSERT(MDS_LAST_OPC == 46);
-        LASSERT(MDS_FIRST_OPC == 33);
         LASSERT(REINT_SETATTR == 1);
         LASSERT(REINT_CREATE == 2);
         LASSERT(REINT_LINK == 3);
@@ -94,7 +90,12 @@ void lustre_assert_wire_constants(void)
         LASSERT(LDLM_BL_CALLBACK == 104);
         LASSERT(LDLM_CP_CALLBACK == 105);
         LASSERT(LDLM_LAST_OPC == 106);
-        LASSERT(LDLM_FIRST_OPC == 101);
+        LASSERT(LCK_EX == 1);
+        LASSERT(LCK_PW == 2);
+        LASSERT(LCK_PR == 3);
+        LASSERT(LCK_CW == 4);
+        LASSERT(LCK_CR == 5);
+        LASSERT(LCK_NL == 6);
         LASSERT(PTLBD_QUERY == 200);
         LASSERT(PTLBD_READ == 201);
         LASSERT(PTLBD_WRITE == 202);
@@ -102,8 +103,12 @@ void lustre_assert_wire_constants(void)
         LASSERT(PTLBD_CONNECT == 204);
         LASSERT(PTLBD_DISCONNECT == 205);
         LASSERT(PTLBD_LAST_OPC == 206);
-        LASSERT(PTLBD_FIRST_OPC == 200);
+        LASSERT(MGMT_CONNECT == 250);
+        LASSERT(MGMT_DISCONNECT == 251);
+        LASSERT(MGMT_EXCEPTION == 252);
         LASSERT(OBD_PING == 400);
+        LASSERT(OBD_LOG_CANCEL == 401);
+        LASSERT(OBD_LAST_OPC == 402);
         /* Sizes and Offsets */
 
 
@@ -204,6 +209,11 @@ void lustre_assert_wire_constants(void)
         LASSERT(OBD_MD_FLOSCOPQ == 4194304);
         LASSERT(OBD_MD_FLCOOKIE == 8388608);
         LASSERT(OBD_MD_FLGROUP == 16777216);
+        LASSERT(OBD_FL_INLINEDATA == 1);
+        LASSERT(OBD_FL_OBDMDEXISTS == 2);
+        LASSERT(OBD_FL_DELORPHAN == 4);
+        LASSERT(OBD_FL_NORPC == 8);
+        LASSERT(OBD_FL_IDONLY == 16);
 
         /* Checks for struct lov_mds_md_v1 */
         LASSERT((int)sizeof(struct lov_mds_md_v1) == 32);
@@ -281,6 +291,7 @@ void lustre_assert_wire_constants(void)
         LASSERT(OBD_BRW_WRITE == 2);
         LASSERT(OBD_BRW_CREATE == 4);
         LASSERT(OBD_BRW_SYNC == 8);
+        LASSERT(OBD_BRW_FROM_GRANT == 32);
 
         /* Checks for struct ost_body */
         LASSERT((int)sizeof(struct ost_body) == 168);
@@ -356,6 +367,7 @@ void lustre_assert_wire_constants(void)
         LASSERT(FMODE_EXEC == 4);
         LASSERT(MDS_OPEN_CREAT == 64);
         LASSERT(MDS_OPEN_EXCL == 128);
+        LASSERT(MDS_OPEN_TRUNC == 512);
         LASSERT(MDS_OPEN_APPEND == 1024);
         LASSERT(MDS_OPEN_SYNC == 4096);
         LASSERT(MDS_OPEN_DIRECTORY == 65536);
@@ -624,6 +636,7 @@ void lustre_assert_wire_constants(void)
         LASSERT(MDS_UNLINK_REC == 274801668);
         LASSERT(OBD_CFG_REC == 274857984);
         LASSERT(PTL_CFG_REC == 274923520);
+        LASSERT(LLOG_GEN_REC == 274989056);
         LASSERT(LLOG_HDR_MAGIC == 275010873);
         LASSERT(LLOG_LOGID_MAGIC == 275010874);
 
@@ -767,6 +780,8 @@ void lustre_assert_wire_constants(void)
         LASSERT(LLOG_ORIGIN_HANDLE_READ_HEADER == 503);
         LASSERT(LLOG_ORIGIN_HANDLE_WRITE_REC == 504);
         LASSERT(LLOG_ORIGIN_HANDLE_CLOSE == 505);
+        LASSERT(LLOG_ORIGIN_CONNECT == 506);
+        LASSERT(LLOG_CATINFO == 507);
 
         /* Checks for struct llogd_conn_body */
         LASSERT((int)sizeof(struct llogd_conn_body) == 40);
