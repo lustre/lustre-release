@@ -73,54 +73,63 @@ static int ll_readpage_26(struct file *file, struct page *page)
         RETURN(0);
 }
 
-void ll_end_writeback_26(struct inode *inode, struct page *page)
+void ll_complete_writepage_26(struct obd_client_page *ocp, int rc)
 {
-        int rc;
-        ENTRY;
-        LASSERT(PageWriteback(page));
-        rc = ll_clear_dirty_pages(ll_i2obdconn(inode),
+        struct page *page = ocp->ocp_page;
+        struct inode *inode = page->mapping->host;
+
+        LASSERT(page->private == (unsigned long)ocp);
+        LASSERT(PageLocked(page));
+
+        ll_page_acct(0, -1); /* io before dirty, this is so lame. */
+        rc = ll_clear_dirty_pages(ll_i2obdexp(inode),
                                   ll_i2info(inode)->lli_smd,
                                   page->index, page->index);
         LASSERT(rc == 0);
-        end_page_writeback(page);
-        EXIT;
+        ocp_free(page);
+
+        unlock_page(page);
+        page_cache_release(page);
 }
 
 static int ll_writepage_26(struct page *page, struct writeback_control *wbc)
 {
         struct inode *inode = page->mapping->host;
-        struct ll_inode_info *lli = ll_i2info(inode);
-        struct obdo oa;
         struct obd_export *exp;
         struct obd_client_page *ocp;
         int rc;
         ENTRY;
 
-#error "update this to look like ll_writepage_24"  
-
-        LASSERT(PageLocked(page));
-        LASSERT(!PageWriteback(page));
+        exp = ll_i2obdexp(inode);
+        if (exp == NULL)
+                RETURN(-EINVAL);
 
         ocp = ocp_alloc(page);
         if (IS_ERR(ocp)) 
-                GOTO(out, rc = PTR_ERR(ocp));
+                RETURN(PTR_ERR(ocp));
 
         ocp->ocp_callback = ll_complete_writepage_26;
+        ocp->ocp_off = (obd_off)page->index << PAGE_CACHE_SHIFT;
+        ocp->ocp_count = ll_ocp_write_count(inode, page);
         ocp->ocp_flag = OBD_BRW_CREATE|OBD_BRW_FROM_GRANT;
 
-        /* tell the vm that we're busy with the page */
-        SetPageWriteback(page);
-        unlock_page(page);
+        obd_brw_plug(OBD_BRW_WRITE, exp, ll_i2info(inode)->lli_smd, NULL);
 
-        /* XXX clean up the ocp? */ 
-        rc = ll_writepage_common(page);
-        if (rc)
-                RETURN(rc);
-        ll_local_cache_started_io(1);
+        page_cache_get(page);
+        rc = ll_start_ocp_io(exp, page);
+        if (rc == 0) {
+                ll_page_acct(0, 1);
+                ll_start_io_from_dirty(exp, inode, ll_complete_writepage_26);
+        } else {
+                ocp_free(page);
+                page_cache_release(page);
+        }
 
-        ll_writeback_from_dirty(inode);
+        obd_brw_unplug(OBD_BRW_WRITE, exp, ll_i2info(inode)->lli_smd, NULL);
 
-        RETURN(0);
+        if (rc != 0)
+                unlock_page(page);
+        RETURN(rc);
 }
 
 static int ll_writepages(struct address_space *mapping, 
