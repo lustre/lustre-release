@@ -964,17 +964,6 @@ int target_queue_final_reply(struct ptlrpc_request *req, int rc)
         return 1;
 }
 
-static void
-target_notified_reply_callback (struct ptlrpc_reply_state *rs)
-{
-        int n = rs->rs_nlocks;
-        
-        while (n-- > 0) 
-                ldlm_lock_decref (&rs->rs_locks[n], rs->rs_modes[n]);
-        rs->rs_nlocks = 0;
-        rs->rs_notified_callback = NULL;
-}
-
 int
 target_send_reply_msg (struct ptlrpc_request *req, int rc, int fail_id)
 {
@@ -1044,27 +1033,24 @@ target_send_reply(struct ptlrpc_request *req, int rc, int fail_id)
         LASSERT (rs->rs_srv_ni == sni);
 
         /* "fresh" reply */
+        LASSERT (!rs->rs_scheduled);
+        LASSERT (!rs->rs_scheduled_ever);
+        LASSERT (!rs->rs_handled);
+        LASSERT (!rs->rs_on_net);
         LASSERT (rs->rs_export == NULL);
-        LASSERT (rs->rs_notified_callback == NULL);
-        LASSERT (rs->rs_scheduled == 0 &&
-                 rs->rs_unlinked == 0 &&
-                 rs->rs_on_net == 0 &&
-                 list_empty(&rs->rs_obd_list) &&
-                 list_empty(&rs->rs_exp_list));
+        LASSERT (list_empty(&rs->rs_obd_list));
+        LASSERT (list_empty(&rs->rs_exp_list));
 
         exp = class_export_get (req->rq_export);
         obd = exp->exp_obd;
 
-        /* disably reply scheduling onto srv_reply_queue while I'm setting up */
+        /* disable reply scheduling onto srv_reply_queue while I'm setting up */
         rs->rs_scheduled = 1;
         rs->rs_on_net    = 1;
         rs->rs_xid       = req->rq_xid;
         rs->rs_transno   = req->rq_transno;
         rs->rs_export    = exp;
         
-        /* Hack to get past circular module dependency */
-        rs->rs_notified_callback = target_notified_reply_callback;
-
         spin_lock_irqsave (&obd->obd_uncommitted_replies_lock, flags);
 
         if (rs->rs_transno > obd->obd_last_committed) {
@@ -1083,7 +1069,9 @@ target_send_reply(struct ptlrpc_request *req, int rc, int fail_id)
         netrc = target_send_reply_msg (req, rc, fail_id);
 
         spin_lock_irqsave (&svc->srv_lock, flags);
-        
+
+        svc->srv_n_difficult_replies++;
+
         if (netrc != 0) /* error sending: reply is off the net */
                 rs->rs_on_net = 0;
 
