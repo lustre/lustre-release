@@ -1,4 +1,5 @@
-/*
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
  *  linux/fs/ext2/symlink.c
  *
  * This code is issued under the GNU General Public License.
@@ -13,7 +14,7 @@
  *
  *  ext2 symlink handling code
  *
- * Modified for OBDFS: 
+ * Modified for OBDFS:
  *  Copyright (C) 1999 Seagate Technology Inc. (author: braam@stelias.com)
  */
 
@@ -30,27 +31,44 @@
 static int ll_readlink(struct dentry *dentry, char *buffer, int buflen)
 {
         struct ll_sb_info *sbi = ll_i2sbi(dentry->d_inode);
-        struct ptlrpc_request *request;
-        char *tmp;
-        int rc, size;
+        struct ptlrpc_request *request = NULL;
+        struct inode *inode = dentry->d_inode;
+        struct ll_inode_info *lli = ll_i2info(inode);
+        int len = inode->i_size + 1;
+        char *symname;
+        int rc;
         ENTRY;
 
-        rc = mdc_getattr(&sbi->ll_mdc_conn, dentry->d_inode->i_ino, S_IFLNK,
-                         OBD_MD_LINKNAME, dentry->d_inode->i_size, &request);
-        if (rc) {
-                CERROR("failure %d inode %ld\n", rc,
-                       (long)dentry->d_inode->i_ino);
-                ptlrpc_free_req(request);
-                RETURN(rc);
+        /* on symlinks lli_open_sem protects lli_symlink_name allocation/data */
+        down(&lli->lli_open_sem);
+        if (lli->lli_symlink_name) {
+                symname = lli->lli_symlink_name;
+                CDEBUG(D_INODE, "using cached symlink %s\n", symname);
+                GOTO(out_readlink, rc = 0);
         }
 
-        tmp = lustre_msg_buf(request->rq_repmsg, 1);
-        size = MIN(request->rq_repmsg->buflens[1], buflen);
-        rc = copy_to_user(buffer, tmp, size);
-        if (rc == 0)
-                rc = size;
+        rc = mdc_getattr(&sbi->ll_mdc_conn, inode->i_ino, S_IFLNK,
+                         OBD_MD_LINKNAME, len, &request);
 
+        if (rc) {
+                CERROR("inode %d readlink: rc = %ld\n", rc, inode->i_ino);
+                GOTO(out_readlink_sem, rc);
+        }
+
+        symname = lustre_msg_buf(request->rq_repmsg, 1);
+
+        OBD_ALLOC(lli->lli_symlink_name, len);
+        /* do not return an error if we cannot cache the symlink locally */
+        if (lli->lli_symlink_name)
+                memcpy(lli->lli_symlink_name, symname, len);
+
+out_readlink:
+        rc = vfs_readlink(dentry, buffer, buflen, symname);
+
+out_readlink_sem:
+        up(&lli->lli_open_sem);
         ptlrpc_free_req(request);
+
         RETURN(rc);
 }
 

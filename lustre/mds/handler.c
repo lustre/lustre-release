@@ -443,7 +443,7 @@ int mds_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 
 static int mds_getattr_internal(struct mds_obd *mds, struct dentry *dentry,
                                 struct ptlrpc_request *req,
-                                int request_off, int reply_off)
+                                struct mds_body *reqbody, int reply_off)
 {
         struct mds_body *body;
         struct inode *inode = dentry->d_inode;
@@ -472,7 +472,7 @@ static int mds_getattr_internal(struct mds_obd *mds, struct dentry *dentry,
                         RETURN(rc);
                 }
                 body->valid |= OBD_MD_FLEASIZE;
-        } else if ((body->valid & OBD_MD_LINKNAME) && S_ISLNK(inode->i_mode)) {
+        } else if (S_ISLNK(inode->i_mode) && reqbody->valid & OBD_MD_LINKNAME) {
                 char *symname = lustre_msg_buf(req->rq_repmsg, reply_off + 1);
                 int len = req->rq_repmsg->buflens[reply_off + 1];
 
@@ -498,7 +498,7 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req)
         struct inode *dir;
         struct lustre_handle lockh;
         char *name;
-        int namelen, flags, lock_mode, rc = 0, old_offset = offset;
+        int namelen, flags, lock_mode, rc = 0;
         __u64 res_id[3] = {0, 0, 0};
         ENTRY;
 
@@ -553,7 +553,7 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req)
                 GOTO(out_create_dchild, rc = -ESTALE);
         }
 
-        rc = mds_getattr_internal(mds, dchild, req, old_offset, offset);
+        rc = mds_getattr_internal(mds, dchild, req, body, offset);
 
         EXIT;
 out_create_dchild:
@@ -592,7 +592,7 @@ static int mds_getattr(int offset, struct ptlrpc_request *req)
                 size[1] = mds->mds_max_mdsize;
         } else if (body->valid & OBD_MD_LINKNAME) {
                 bufcount = 2;
-                size[1] = inode->i_size;
+                size[1] = inode->i_size + 1;
         }
 
         rc = lustre_pack_msg(bufcount, size, NULL, &req->rq_replen,
@@ -603,7 +603,7 @@ static int mds_getattr(int offset, struct ptlrpc_request *req)
                 GOTO(out, rc = 0);
         }
 
-        req->rq_status = mds_getattr_internal(mds, de, req, offset, 0);
+        req->rq_status = mds_getattr_internal(mds, de, req, body, 0);
 
 out:
         l_dput(de);

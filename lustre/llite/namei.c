@@ -145,7 +145,7 @@ static struct dentry *ll_lookup2(struct inode *dir, struct dentry *dentry,
         struct ll_inode_md md;
         struct lustre_handle lockh;
         struct lookup_intent lookup_it = { IT_LOOKUP };
-        int err, offset, mode;
+        int err, offset;
         obd_id ino = 0;
 
         ENTRY;
@@ -168,49 +168,59 @@ static struct dentry *ll_lookup2(struct inode *dir, struct dentry *dentry,
 
         request = (struct ptlrpc_request *)it->it_data;
         if (it->it_disposition) {
+                int mode, easize = 0;
+                obd_flag valid;
+
                 offset = 1;
                 if (it->it_op & (IT_CREAT | IT_MKDIR | IT_SYMLINK | IT_MKNOD)) {
                         /* For create ops, we want the lookup to be negative */
                         if (!it->it_status)
                                 GOTO(negative, NULL);
-                } else if (it->it_op & (IT_GETATTR | IT_UNLINK |
-                                        IT_RMDIR | IT_SETATTR | IT_LOOKUP)) {
-                        /* For remove/check, we want the lookup to succeed */
+                } else if (it->it_op & (IT_GETATTR | IT_SETATTR | IT_LOOKUP)) {
+                        /* For check ops, we want the lookup to succeed */
                         it->it_data = NULL;
                         if (it->it_status)
                                 GOTO(neg_req, NULL);
                 } else if (it->it_op & IT_RENAME) {
+                        /* For rename, we want the lookup to succeed */
                         if (it->it_status) {
                                 it->it_data = NULL;
                                 GOTO(neg_req, NULL);
                         }
                         it->it_data = dentry;
+                } else if (it->it_op & (IT_UNLINK | IT_RMDIR)) {
+                        /* For remove ops, we want the lookup to succeed */
+                        it->it_data = NULL;
+                        if (it->it_status)
+                                GOTO(neg_req, NULL);
+                        goto iget;
                 } else if (it->it_op == IT_OPEN) {
                         it->it_data = NULL;
                         if (it->it_status && it->it_status != -EEXIST)
                                 GOTO(neg_req, NULL);
                 } else if (it->it_op == IT_RENAME2) {
-                        struct mds_body *body = 
+                        struct mds_body *body =
                                 lustre_msg_buf(request->rq_repmsg, offset);
                         it->it_data = NULL;
-                        if (body->valid == 0) 
+                        /* For rename2, this means the lookup is negative */
+                        if (body->valid == 0)
                                 GOTO(neg_req, NULL);
-                        GOTO(iget, NULL);
+                        goto iget; /* XXX not sure about this */
                 }
 
                 /* Do a getattr now that we have the lock */
-                if ((it->it_op == IT_UNLINK || it->it_op == IT_RMDIR) &&
-                    it->it_status == 0)
-                        /* the unlink/rmdir succeeded, there's nothing to
-                         * lookup */
-                        goto iget;
                 md.body = lustre_msg_buf(request->rq_repmsg, offset);
                 ino = md.body->fid1.id;
                 mode = md.body->mode;
+                valid = OBD_MD_FLNOTOBD | OBD_MD_FLEASIZE;
+                if (it->it_op == IT_READLINK) {
+                        valid |= OBD_MD_LINKNAME;
+                        easize = md.body->size;
+                }
                 ptlrpc_free_req(request);
                 request = NULL;
                 err = mdc_getattr(&sbi->ll_mdc_conn, ino, mode,
-                                  OBD_MD_FLNOTOBD|OBD_MD_FLEASIZE, 0, &request);
+                                  valid, easize, &request);
                 if (err) {
                         CERROR("failure %d inode %Ld\n", err, (long long)ino);
                         ptlrpc_free_req(request);
