@@ -62,25 +62,6 @@ static struct super_block *lustre_read_super(struct super_block *sb,
         RETURN(sb);
 }
 
-int lustre_remount_fs(struct super_block *sb, int *flags, char *data)
-{
-        struct ll_sb_info *sbi = ll_s2sbi(sb);
-        int err;
-        __u32 read_only;
-
-        if ((*flags & MS_RDONLY) != (sb->s_flags & MS_RDONLY)) {
-                read_only = *flags & MS_RDONLY;
-                err = obd_set_info(sbi->ll_mdc_exp, strlen("read-only"),
-                                   "read-only", sizeof(read_only), &read_only);
-                if (err) {
-                        CERROR("Failed to change the read-only flag during "
-                               "remount: %d\n", err);
-                        return err;
-                }
-        }
-        return 0;
-}
-
 static struct file_system_type lustre_lite_fs_type = {
         .owner          = THIS_MODULE,
         .name           = "lustre_lite",

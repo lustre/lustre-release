@@ -327,6 +327,7 @@ void ll_read_inode2(struct inode *inode, void *opaque);
 int ll_iocontrol(struct inode *inode, struct file *file,
                  unsigned int cmd, unsigned long arg);
 void ll_umount_begin(struct super_block *sb);
+int lustre_remount_fs(struct super_block *sb, int *flags, char *data);
 int ll_prep_inode(struct obd_export *exp, struct inode **inode,
                   struct ptlrpc_request *req, int offset, struct super_block *);
 void lustre_dump_dentry(struct dentry *, int recur);
@@ -368,9 +369,6 @@ void ll_try_done_writing(struct inode *inode);
 void ll_queue_done_writing(struct inode *inode);
 void ll_close_thread_shutdown(struct ll_close_queue *lcq);
 int ll_close_thread_start(struct ll_close_queue **lcq_ret);
-
-/* llite/super.c */
-int lustre_remount_fs(struct super_block *sb, int *flags, char *data);
 
 /* llite/llite_mmap.c */
 #if  (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
