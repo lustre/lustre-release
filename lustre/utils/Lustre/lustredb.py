@@ -66,19 +66,11 @@ class LustreDB:
     
     # Find the target_device for target on a node
     # node->profiles->device_refs->target
-    def get_target_device(self, target_uuid, node_name):
+    def get_node_tgt_dev(self, node_name, target_uuid):
         node_db = self.lookup_name(node_name)
         if not node_db:
             return None
-        prof_list = node_db.get_refs('profile')
-        for prof_uuid in prof_list:
-            prof_db = node_db.lookup(prof_uuid)
-            ref_list = prof_db.get_all_refs()
-            for ref in ref_list:
-                dev = self.lookup(ref[1])
-                if dev and dev.get_first_ref('target') == target_uuid:
-                    return ref[1]
-        return None
+        return self.get_tgt_dev(target_uuid)
 
     # get all network uuids for this node
     def get_networks(self):
@@ -90,6 +82,25 @@ class LustreDB:
             for net_uuid in net_list:
                 ret.append(net_uuid)
         return ret
+
+    def get_active_dev(self, tgtuuid):
+        tgt = self.lookup(tgtuuid)
+        tgt_dev_uuid =tgt.get_first_ref('active')
+        return tgt_dev_uuid
+
+    def get_tgt_dev(self, tgtuuid):
+        prof_list = self.get_refs('profile')
+        for prof_uuid in prof_list:
+            prof_db = self.lookup(prof_uuid)
+            if not prof_db:
+                panic("profile:", profile, "not found.")
+            for ref_class, ref_uuid in prof_db.get_all_refs(): 
+                if ref_class in ('osd', 'mdsdev'):
+                    devdb = self.lookup(ref_uuid)
+                    uuid = devdb.get_first_ref('target')
+                    if tgtuuid == uuid:
+                        return ref_uuid
+        return None
 
     # Change the current active device for a target
     def update_active(self, tgtuuid, new_uuid):
@@ -125,6 +136,10 @@ class LustreDB_XML(LustreDB):
     def _get_class(self):
         return self.dom_node.nodeName
 
+    def get_ref_type(self, ref_tag):
+        res = string.split(ref_tag, '_')
+        return res[0]
+
     #
     # [(ref_class, ref_uuid),]
     def _get_all_refs(self):
@@ -132,7 +147,7 @@ class LustreDB_XML(LustreDB):
         for n in self.dom_node.childNodes: 
             if n.nodeType == n.ELEMENT_NODE:
                 ref_uuid = self.xml_get_ref(n)
-                ref_class = n.nodeName
+                ref_class = self.get_ref_type(n.nodeName)
                 list.append((ref_class, ref_uuid))
                     
         list.sort()
@@ -326,6 +341,9 @@ class LustreDB_LDAP(LustreDB):
     def _get_class(self):
         return string.lower(self._attrs['objectClass'][0])
 
+    def get_ref_type(self, ref_tag):
+        return ref_tag[:-3]
+
     #
     # [(ref_class, ref_uuid),]
     def _get_all_refs(self):
@@ -333,7 +351,8 @@ class LustreDB_LDAP(LustreDB):
         for k in self._attrs.keys():
             if re.search('.*Ref', k):
                 for uuid in self._attrs[k]:
-                    list.append((k, uuid))
+                    ref_class = self.get_ref_type(k)
+                    list.append((ref_class, uuid))
         return list
 
     def _get_refs(self, tag):
@@ -360,7 +379,6 @@ class LustreDB_LDAP(LustreDB):
         ret = []
         uuids = []
         try:
-            print tgtuuid, newuuid
             self.l.modify_s(dn, [(ldap.MOD_REPLACE, "activeRef", newuuid)])
         except ldap.NO_SUCH_OBJECT, e:
             print e

@@ -30,85 +30,43 @@ import string, os
 import ldap
 import Lustre
 
+lactive_options = [
+    ('ldapurl',"LDAP server URL, eg. ldap://localhost", Lustre.Options.PARAM),
+    ('config', "Cluster config name used for LDAP query", Lustre.Options.PARAM),
+    ('old', "The old, failed node name", Lustre.Options.PARAM),
+    ('new', "The new node name", Lustre.Options.PARAM),
+    ]
 
-def usage():
-    print """usage: lactive --ldapurl <ldapurl> --old <name> --new <name>"""
-    sys.exit(1)
-    
-def parse_cmdline(argv):
-    short_opts = "h"
-    long_opts = ["help", "new=", "old=", "ldapurl=",]
-    opts = []
-    args = []
-    config = {}
+cl = Lustre.Options("lactive","", lactive_options)
+config, args = cl.parse(sys.argv[1:])
 
-    try:
-        opts, args = getopt.getopt(argv, short_opts, long_opts)
-    except getopt.error:
-        print "invalid opt"
-        usage()
-    
-    for o, a in opts:
-        if o in ("-h", "--help"):
-            usage()
-        if o in ("--old",):
-            config['old'] = a
-        if o in ("--new",):
-            config['new'] = a
-        if o in ("--ldapurl",):
-            config['ldapurl'] = a
+base = "config=%s,fs=lustre" % (config.config,)
+db = Lustre.LustreDB_LDAP('', {}, base=base, url = config.ldapurl)
 
-    return config
-
-def get_active(db, tgtuuid):
-    tgt = db.lookup(tgtuuid)
-    tgt_dev_uuid =tgt.get_first_ref('active')
-    return tgt_dev_uuid
-
-def get_inactive(db, tgtuuid):
-    prof_list = db.get_refs('profile')
-    for prof_uuid in prof_list:
-        prof_db = db.lookup(prof_uuid)
-        if not prof_db:
-            panic("profile:", profile, "not found.")
-        for ref_class, ref_uuid in prof_db.get_all_refs(): 
-            if ref_class in ('osdRef', 'mdsdevRef'):
-                devdb = db.lookup(ref_uuid)
-                uuid = devdb.get_first_ref('target')
-                if tgtuuid == uuid:
-                    return ref_uuid
-    return None
-
-
-config = parse_cmdline(sys.argv[1:])
-
-db = Lustre.LustreDB_LDAP('', {}, base="config=test23,fs=lustre",
-                          url = config['ldapurl'])
-
-old = db.lookup_name(config['old'])
-new = db.lookup_name(config['new'])
+old = db.lookup_name(config.old)
+new = db.lookup_name(config.new)
 
 print "old:", old.getUUID()
 print "new:",  new.getUUID()
 
 # find all the targets on the failed node and, change the active
-# pointers to point to the devices on the new node.  
+# pointers to point to the devices on the new node.
 prof_list = old.get_refs('profile')
 for prof_uuid in prof_list:
     prof_db = db.lookup(prof_uuid)
     if not prof_db:
         panic("profile:", profile, "not found.")
     for ref_class, ref_uuid in prof_db.get_all_refs(): 
-        if ref_class in ('osdRef', 'mdsdevRef'):
+        if ref_class in ('osd', 'mdsdev'):
             devdb = db.lookup(ref_uuid)
             tgtuuid = devdb.get_first_ref('target')
-            active_uuid = get_active(old, tgtuuid)
+            active_uuid = old.get_active_dev(tgtuuid)
             if ref_uuid != active_uuid:
                 continue
-            inactive_uuid = get_inactive(new, tgtuuid)
+            inactive_uuid = new.get_tgt_dev(tgtuuid)
             print ("%s: changing active %s:%s to %s:%s"
-                   % (tgtuuid, config['old'], active_uuid,
-                      config['new'], inactive_uuid))
+                   % (tgtuuid, config.old, active_uuid,
+                      config.new, inactive_uuid))
             db.update_active(tgtuuid, inactive_uuid)
 
 
