@@ -1296,10 +1296,10 @@ ksocknal_process_receive (ksock_sched_t *sched, long *irq_flags)
                 goto out;                       /* (later) */
 
         default:
+                LBUG ();
         }
 
         /* Not Reached */
-        LBUG ();
 
  out:
         spin_lock_irqsave (&sched->kss_lock, *irq_flags);
