@@ -265,7 +265,7 @@ static int mds_reint_create(struct mds_update_record *rec,
 
         if (rc) {
                 CERROR("error during create: %d\n", rc);
-                LBUG();
+                if (rc != -ENOSPC) LBUG();
                 GOTO(out_create_commit, rc);
         } else {
                 struct iattr iattr;
