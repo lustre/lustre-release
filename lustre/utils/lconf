@@ -604,8 +604,6 @@ def getText(node, tag, default=""):
 # Recusively search from node for a uuid
 def lookup(node, uuid):
     for n in node.childNodes:
-        # this service_id check is ugly. need some other way to
-        # differentiate between definitions and references
         if n.nodeType == n.ELEMENT_NODE:
             if getUUID(n) == uuid:
                 return n

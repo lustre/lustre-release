@@ -23,6 +23,7 @@
 #
 import sys, getopt
 import xml.dom.minidom
+from xml.dom.ext import PrettyPrint
 
 
 def usage():
@@ -33,12 +34,14 @@ Commands:
    When used on "host", the device will be initialized and the OST
    will be enabled. On client nodes, the OSC will be avaiable.
 
+--osc "device" "host" [lov_name]
+   Create an osc, and optionally add it to an lov.
+
 --mtpt "mds" "ost/lov-name" /mnt/point
    Creates a client mount point.
 
---lov "mds" "lov name" < "all-ost.xml"
+--lov lov_name mdc_name stripe_sz stripe_off pattern
    Produces a logical volum striped over the OSTs found in all-ost.xml.
-   (Not sure how all-ost.xml is created, exactly.)
 
 Options:
 --merge="xml file"  Add the new objects to an existing file
@@ -64,137 +67,116 @@ def new_name(base):
 def get_uuid(name):
     return "%s_UUID" % (name)
 
-# simple pretty print XML
-def newline(dom, node, ind = ""):
-    node.appendChild(dom.createTextNode("\n" + ind))
-def indent(dom, node, ind = "   "):
-    node.appendChild(dom.createTextNode(ind))
+def new_lustre(dom):
+    """Create a new empty lustre document"""
+    str = """<lustre> </lustre>"""
+    return dom.parseString(str)
 
-#
-# Create a new empty lustre document 
-def new_Lustre():
-    str = """<lustre>
-</lustre>"""
-    dom = xml.dom.minidom.parseString(str)
-    return dom
 
-def new_network(dom, net, hostname, port):
-    name = new_name('net')
-    uuid = get_uuid(name)
-    str = """
-   <network name = "%s" uuid = "%s" type="%s" >
-      <server>%s</server>
-      <port>%d</port>
-   </network> """ % (name, uuid, net, hostname, port)
-    node = xml.dom.minidom.parseString(str)
-    return node.getElementsByTagName("network")[0]
+class GenConfig:
+    doc = None
+    dom = None
+    def __init__(self, doc):
+        self.doc = doc
 
-#
-# Create new object the fast and easy way
-# (note: dom is not needed for this way)
-def new_node(dom, net, hostname, port):
-    uuid = get_uuid(hostname)
-    str ="""
-<node name="%s" uuid="%s">
-</node> """ % (hostname, uuid)
-    node = xml.dom.minidom.parseString(str)
-    node = node.getElementsByTagName("node")[0]
-    indent(dom, node)
-    node.appendChild(new_network(dom, net, hostname, port))
-    newline(dom, node)
-    return node
-#
-# Create a new object the "correct" way by using the DOM api.
-#
-def new_OBD(dom, name, fs, devname, format, dev_size=0, dev_file=""):
-    uuid = get_uuid(name)
+    def ref(self, type, uuid):
+        """ generate <[type]_ref uuidref="[uuid]"/> """
+        tag = "%s_ref" % (type)
+        ref = self.doc.createElement(tag)
+        ref.setAttribute("uuidref", uuid)
+        return ref
     
-    obd = dom.createElement("obd")
-    obd.setAttribute("name", name)
-    obd.setAttribute("uuid", uuid)
-    obd.setAttribute('type', 'obdfilter')
-    obd.appendChild(dom.createTextNode("\n  "))
-
-    fstype = dom.createElement("fstype")
-    txt= dom.createTextNode(fs)
-    fstype.appendChild(txt)
-    obd.appendChild(fstype)
+    def newService(self, tag, name, uuid):
+        """ create a new  service elmement, which requires name and uuid attributes """
+        new = self.doc.createElement(tag)
+        new.setAttribute("name", name);
+        new.setAttribute("uuid", uuid);
+        return new
     
-    dev = dom.createElement("device")
-    if (dev_size):
-        dev.setAttribute("size", "%s" % (dev_size))
-    txt = dom.createTextNode(devname)
-    dev.appendChild(txt)
-    newline(dom, obd, "  ")
-    obd.appendChild(dev)
-    newline(dom, obd, "   ")
-    fmt = dom.createElement("autoformat")
-    txt = dom.createTextNode(format)
-    fmt.appendChild(txt)
-    obd.appendChild(fmt)
-    newline(dom, obd)
+    def addText(self, node, str):
+        txt = self.doc.createTextNode(str)
+        node.appendChild(txt)
 
-    return obd
+    def addElement(self, node, tag, str=None):
+        """ create a new element and add it as a child to node. If str is passed,
+            a text node is created for the new element"""
+        new = self.doc.createElement(tag)
+        if str:
+            self.addText(new, str)
+        node.appendChild(new)
+        return new
 
-#
-# Create new object the fast and easy way
-# (note: dom is not needed for this way)
-def new_OSC(dom, osc, obd):
-    osc_uuid = get_uuid(osc)
-    obd_uuid = get_uuid(obd)
+    def network(self, name, uuid, net, hostname, port=0):
+        """create <network> node"""
+        network = self.newService("network", name, uuid)
+        network.setAttribute("type", net);
+        self.addElement(network, "server", hostname)
+        if port:
+            self.addElement(network, "port", "%d" %(port))
+        return network
 
-    osc_str ="""
-<osc name="%s" uuid="%s">
-   <service_id num="1" name="%s" uuid="%s"/>
-</osc> """ % (osc, osc_uuid, obd, obd_uuid)
-    osc = xml.dom.minidom.parseString(osc_str)
-    return osc.getElementsByTagName("osc")[0]
+    def node(self, name, uuid):
+        """ create a host """
+        node = self.newService("node", name, uuid)
+        return node
 
-#
-# Create new object the fast and easy way
-#
-def new_OST(dom, ost, host, port, obd):
-    ost_uuid = get_uuid(ost)
-    obd_uuid = get_uuid(obd)
+    def obd(self, name, uuid, fs, devname, format, dev_size=0, dev_file=""):
+        obd = self.newService("obd", name, uuid)
+        obd.setAttribute('type', 'obdfilter')
+        self.addElement(obd, "fstype", fs)
+        dev = self.addElement(obd, "device", devname)
+        if (dev_size):
+            dev.setAttribute("size", "%s" % (dev_size))
+        self.addElement(obd, "autoformat", format)
+        return obd
 
-    str ="""
-<ost name="%s" uuid="%s">
-   <network type="tcp">
-      <server>%s</server>
-      <port>%d</port>
-   </network>
-   <server_id num="1" name="%s" uuid="%s"/>
-</ost> """ % (ost, ost_uuid, host, port, obd, obd_uuid)
-    node = xml.dom.minidom.parseString(str)
-    return node.getElementsByTagName("ost")[0]
+    def osc(self, name, uuid, obd_uuid, net_uuid):
+        osc = self.newService("osc", name, uuid)
+        osc.appendChild(self.ref("network", net_uuid))
+        osc.appendChild(self.ref("obd", obd_uuid))
+        return osc
+
+    def ost(self, name, uuid, obd_uuid, net_uuid):
+        ost = self.newService("ost", name, uuid)
+        ost.appendChild(self.ref("network", net_uuid))
+        ost.appendChild(self.ref("obd", obd_uuid))
+        return ost
 
 #
 # Create a new obd, osc, and ost. Add them to the DOM.
 #
-def add_OST(dom, options, args):
+def add_OST(doc, options, args):
     # XXX need some error checking
+    gen = GenConfig(doc)
     devname = args[0]
     host = args[1]
-    size = args[2]
+    if len(args) > 2:
+        size = args[2]
+    else:
+        size = 0
+
+    lustre = doc.getElementsByTagName("lustre")[0]
 
     obdname = new_name("obd")
     oscname = new_name("osc")
     ostname = new_name("ost")
+    node_uuid = get_uuid(host)
+    net_uuid = get_uuid("net")
+    obd_uuid = get_uuid(obdname)
+    ost_uuid = get_uuid(ostname)
+    osc_uuid = get_uuid(oscname)
+
+    node = gen.node(host, node_uuid)
+    node.appendChild(gen.network(host, net_uuid, "tcp", host, port=2436))
+    obd = gen.obd(obdname, obd_uuid,  "extN", devname, "no", size)
+    ost = gen.ost(ostname, ost_uuid, obd_uuid, net_uuid)
+    osc = gen.osc(oscname, osc_uuid, obd_uuid, net_uuid)
     
-    node = new_node(dom, "tcp", host, 2436)
-    obd = new_OBD(dom, obdname, "extN", devname, "no", size)
-    osc = new_OSC(dom, oscname, obdname)
-    ost = new_OST(dom, ostname, host, 2020, obdname)
-    
-    lustre = dom.getElementsByTagName("lustre")[0]
     lustre.appendChild(node)
-    newline(dom, lustre)
     lustre.appendChild(obd)
-    newline(dom, lustre)    
     lustre.appendChild(osc)
-    newline(dom, lustre)    
     lustre.appendChild(ost)
-    newline(dom, lustre)    
+                   
 
 #
 # Command line processing
@@ -238,15 +220,15 @@ def main():
 
     if options.has_key('merge'):
         outFile = options['merge']
-        dom = xml.dom.minidom.parse(outFile)
+        doc = xml.dom.minidom.parse(outFile)
     else:
-        dom = new_Lustre()
+        doc = new_lustre(xml.dom.minidom)
 
     if options.has_key('output'):
         outFile = options['output']
 
     if options.has_key('ost'):
-        add_OST(dom, options, args)
+        add_OST(doc, options, args)
     elif options.has_key('mtpt'):
         print "--mtpt not implemented"
     elif options.has_key('lov'):
@@ -255,13 +237,12 @@ def main():
         print "Missing command"
         usage()
         sys.exit(1)
-        
 
     if outFile == '-':
-        print dom.toxml()
+        PrettyPrint(doc)
     else:
-        dom.writexml(open(outFile,"w"))
-    
+        PrettyPrint(doc, open(outFile,"w"))
 if __name__ == "__main__":
     main()
 
+    
