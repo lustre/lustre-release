@@ -8,13 +8,13 @@ MODULE = extN
 modulefs_DATA = extN.o
 EXTRA_PROGRAMS = extN
 
-EXTNP = htree-ext3-2.4.18.diff ext3-2.4.18-ino_sb_macro.diff
-EXTNP+= extN-misc-fixup.diff
+EXTNP = htree-ext3-2.4.18.diff linux-2.4.18ea-0.8.26.diff
+EXTNP+= ext3-2.4.18-ino_sb_macro.diff extN-misc-fixup.diff
 EXTNC = balloc.c bitmap.c dir.c file.c fsync.c ialloc.c inode.c ioctl.c
 EXTNC+= namei.c super.c symlink.c
 EXTNI = extN_fs.h extN_fs_i.h extN_fs_sb.h extN_jbd.h
-extN_SOURCES = $(EXTNC) $(EXTNI) # punch.c
-EXTRA_DIST = $(EXTNP)
+extN_SOURCES = $(EXTNC) $(EXTNI) xattr.c # punch.c
+EXTRA_DIST = $(EXTNP) extN-2.4.18-ino_sb_fixup.diff extN-2.4.18-exports.diff
 DISTCLEANFILES = $(EXTNC) $(EXTNI) patch-stamp *.orig *.rej
 SUB=-e "s/ext3/extN/g" -e "s/EXT3/EXTN/g"
 
