@@ -31,7 +31,7 @@
 #include <linux/obd_class.h>
 
 /* this lock protects ldlm_handle2lock's integrity */
-static spinlock_t ldlm_handle_lock = SPIN_LOCK_UNLOCKED;
+//static spinlock_t ldlm_handle_lock = SPIN_LOCK_UNLOCKED;
 
 /* lock types */
 char *ldlm_lockname[] = {
