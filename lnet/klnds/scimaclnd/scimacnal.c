@@ -38,6 +38,24 @@ kpr_nal_interface_t kscimacnal_router_interface = {
 };
 
 
+int kscimacnal_cmd (struct portal_ioctl_data *data, void *private)
+{
+        LASSERT (data != NULL);
+
+        switch (data->ioc_nal_cmd) {
+                case NAL_CMD_REGISTER_MYNID:
+                        if(kscimacnal_lib.ni.nid == data->ioc_nid) {
+                                break;
+                        }
+                        CDEBUG (D_IOCTL, "Can't change NID from "LPX64" to "LPX64")\n", kscimacnal_lib.ni.nid, data->ioc_nid);
+                        return(-EINVAL);
+                default:
+                        return(-EINVAL);
+        }
+
+        return(0);
+}
+
 static int kscimacnal_forward(nal_t   *nal,
                           int     id,
                           void    *args,  size_t args_len,
@@ -200,6 +218,16 @@ kscimacnal_initialize(void)
                 return (-ENOMEM);
         }
 
+        /* Init command interface */
+        rc = kportal_nal_register (SCIMACNAL, &kscimacnal_cmd, NULL);
+        if (rc != 0) {
+                CERROR ("Can't initialise command interface (rc = %d)\n", rc);
+                PtlNIFini(kscimacnal_ni);
+                mac_finish(machandle);
+                return (rc);
+        }
+
+
         PORTAL_SYMBOL_REGISTER(kscimacnal_ni);
 
         /* We're done now, it's OK for the RX callback to do stuff */
@@ -210,7 +238,7 @@ kscimacnal_initialize(void)
 
 
 MODULE_AUTHOR("Niklas Edmundsson <nikke@hpc2n.umu.se>");
-MODULE_DESCRIPTION("Kernel Scali ScaMAC SCI NAL v0.0");
+MODULE_DESCRIPTION("Kernel Scali ScaMAC SCI NAL v0.1");
 MODULE_LICENSE("GPL");
 
 module_init (kscimacnal_initialize);

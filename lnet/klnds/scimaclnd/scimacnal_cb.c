@@ -156,9 +156,15 @@ static void
 kscimacnal_txrelease(mac_mblk_t *msg, mac_msg_status_t status, void *context)
 {
         kscimacnal_tx_t *ktx = (kscimacnal_tx_t *)context;
-        int err=0;
+        int err=0, i;
         
         LASSERT (ktx != NULL);
+        /* Unmap any mapped pages */
+        for(i=0; i<ktx->ktx_nmapped; i++) {
+                kunmap(ktx->ktx_kpages[i]);
+        }
+
+        CDEBUG(D_NET, "kunmapped %d pages\n", ktx->ktx_nmapped);
 
         /* Euh, there is no feedback when transmission fails?! */
         switch(status) {
@@ -178,17 +184,21 @@ kscimacnal_txrelease(mac_mblk_t *msg, mac_msg_status_t status, void *context)
 
 /* Called by portals when it wants to send a message.
  * Since ScaMAC has it's own TX thread we don't bother setting up our own. */
-static int 
-kscimacnal_send(nal_cb_t        *nal,
-           void            *private,
-           lib_msg_t       *cookie,
-           ptl_hdr_t       *hdr,
-           int              type, 
-           ptl_nid_t        nid,
-           ptl_pid_t        pid,
-           unsigned int     payload_niov,
-           struct iovec    *payload_iov,
-           size_t           payload_len)
+
+/* FIXME: Read comments in qswnal_cb.c for _sendmsg and fix return-on-error
+ *        issues */
+static inline int 
+kscimacnal_sendmsg(nal_cb_t        *nal,
+                   void            *private,
+                   lib_msg_t       *cookie,
+                   ptl_hdr_t       *hdr,
+                   int              type, 
+                   ptl_nid_t        nid,
+                   ptl_pid_t        pid,
+                   unsigned int     payload_niov,
+                   struct iovec    *payload_iov,
+                   ptl_kiov_t      *payload_kiov,
+                   size_t           payload_len)
 {
         kscimacnal_tx_t    *ktx=NULL;
         kscimacnal_data_t  *ksci = nal->nal_data;
@@ -198,12 +208,18 @@ kscimacnal_send(nal_cb_t        *nal,
         unsigned long   physaddr;
         
 
-        CDEBUG(D_NET, "sending %d bytes from %p to nid 0x%Lx niov: %d\n",
-               payload_len, payload_iov, nid, payload_niov);
+        CDEBUG(D_NET, "sending %d bytes from %p/%p to nid 0x%Lx niov: %d\n",
+               payload_len, payload_iov, payload_kiov, nid, payload_niov);
 
+        /* Basic sanity checks */
         LASSERT(ksci != NULL);
-
         LASSERT(hdr != NULL);
+        LASSERT (payload_len == 0 || payload_niov > 0);
+        LASSERT (payload_niov <= PTL_MD_MAX_IOV);
+        /* It must be OK to kmap() if required */
+        LASSERT (payload_kiov == NULL || !in_interrupt ());
+        /* payload is either all vaddrs or all pages */
+        LASSERT (!(payload_kiov != NULL && payload_iov != NULL));
 
         /* Do real check if we can send this */
         if (buf_len > mac_get_mtusize(ksci->ksci_machandle)) {
@@ -218,6 +234,8 @@ kscimacnal_send(nal_cb_t        *nal,
         if (!ktx) {
                 return -ENOMEM;
         }
+
+        ktx->ktx_nmapped = 0; /* Start with no mapped pages :) */
 
         /* *SIGH* hdr is a stack variable in the calling function, so we
          * need to copy it to a buffer. Zerocopy magic (or is it just
@@ -235,19 +253,34 @@ kscimacnal_send(nal_cb_t        *nal,
         lastblk=msg;
 
         /* Allocate additional mblks for each iov as needed.
-         * Essentially lib_copy_iov2buf with a twist or two */
+         * Essentially lib_copy_(k)iov2buf with a twist or two */
         while (payload_len > 0)
         {
-                ptl_size_t nob;
+                ptl_size_t       nob;
+                char            *addr;
 
                 LASSERT (payload_niov > 0);
 
-                nob = MIN (payload_iov->iov_len, payload_len);
+                if(payload_iov != NULL) {
+                        nob = MIN (payload_iov->iov_len, payload_len);
+                        addr = payload_iov->iov_base;
+                }
+                else {
+                        nob = MIN (payload_kiov->kiov_len, payload_len);
+                        /* Bollocks. We need to handle paged IO for things to
+                         * work but there is no good way to do this. We
+                         * do it by kmap():ing all pages and keep them
+                         * mapped until scimac is done with them. */
+                        /* FIXME: kunmap() on error */
+                        addr = kmap(payload_kiov->kiov_page);
+                        ktx->ktx_kpages[ktx->ktx_nmapped++] = 
+                                payload_kiov->kiov_page;
+                }
+                /* We don't need a callback on the additional mblks,
+                 * since all release callbacks seems to be called when
+                 * the entire message has been sent */
+                newblk=mac_alloc_mblk(addr, nob, NULL, NULL);
 
-                /* We don't need a callback on the additional mblks, since
-                 * all release callbacks seems to be called when the entire
-                 * message has been sent */
-                newblk=mac_alloc_mblk(payload_iov->iov_base, nob, NULL, NULL);
                 if(!newblk) {
                         mac_free_msg(msg);
                         PORTAL_FREE(ktx, (sizeof(kscimacnal_tx_t)));
@@ -259,8 +292,15 @@ kscimacnal_send(nal_cb_t        *nal,
 
                 payload_len -= nob;
                 payload_niov--;
-                payload_iov++;
+                if(payload_iov != NULL) {
+                        payload_iov++;
+                }
+                else {
+                        payload_kiov++;
+                }
         }
+
+        CDEBUG(D_NET, "kmapped %d pages\n", ktx->ktx_nmapped);
 
         ktx->ktx_nal = nal;
         ktx->ktx_private = private;
@@ -279,6 +319,39 @@ kscimacnal_send(nal_cb_t        *nal,
         }
 
         return 0;
+}
+
+
+static int
+kscimacnal_send (nal_cb_t     *nal,
+                 void         *private,
+                 lib_msg_t    *cookie,
+                 ptl_hdr_t    *hdr,
+                 int           type,
+                 ptl_nid_t     nid,
+                 ptl_pid_t     pid,
+                 unsigned int  payload_niov,
+                 struct iovec *payload_iov,
+                 size_t        payload_nob)
+{
+        return (kscimacnal_sendmsg (nal, private, cookie, hdr, type, nid, pid,
+                                payload_niov, payload_iov, NULL, payload_nob));
+}
+
+static int
+kscimacnal_send_pages (nal_cb_t     *nal,
+                       void         *private,
+                       lib_msg_t    *cookie,
+                       ptl_hdr_t    *hdr,
+                       int           type,
+                       ptl_nid_t     nid,
+                       ptl_pid_t     pid,
+                       unsigned int  payload_niov,
+                       ptl_kiov_t   *payload_kiov,
+                       size_t        payload_nob)
+{
+        return (kscimacnal_sendmsg (nal, private, cookie, hdr, type, nid, pid,
+                                payload_niov, NULL, payload_kiov, payload_nob));
 }
 
 
@@ -366,19 +439,22 @@ kscimacnal_rx(mac_handle_t *handle, mac_mblk_t *msg, mac_msg_type_t type,
 
 
 /* Called by portals to process a recieved packet */
-static int kscimacnal_recv(nal_cb_t     *nal, 
-                      void         *private, 
-                      lib_msg_t    *cookie, 
-                      unsigned int  niov, 
-                      struct iovec *iov, 
-                      size_t        mlen, 
-                      size_t        rlen)
+inline static int 
+kscimacnal_recvmsg(nal_cb_t     *nal, 
+                   void         *private, 
+                   lib_msg_t    *cookie, 
+                   unsigned int  niov, 
+                   struct iovec *iov, 
+                   ptl_kiov_t   *kiov,
+                   size_t        mlen, 
+                   size_t        rlen)
 {
         kscimacnal_rx_t    *krx = private;
         mac_mblk_t      *mblk;
         void            *src;
         mac_size_t       pkt_len;
         ptl_size_t       iovused=0;
+        char            *base=NULL;
 
         LASSERT (krx != NULL);
         LASSERT (krx->msg != NULL);
@@ -393,6 +469,10 @@ static int kscimacnal_recv(nal_cb_t     *nal,
          */
         LASSERT (mlen==0 || mac_msg_size(krx->msg) >= sizeof(ptl_hdr_t)+rlen);
         LASSERT (mlen==0 || mlen <= rlen);
+        /* It must be OK to kmap() if required */
+        LASSERT (kiov == NULL || !in_interrupt ());
+        /* Either all pages or all vaddrs */
+        LASSERT (!(kiov != NULL && iov != NULL));
 
         PROF_START(memcpy);
 
@@ -407,35 +487,58 @@ static int kscimacnal_recv(nal_cb_t     *nal,
 
                 LASSERT(src != NULL);
 
-                /* Essentially lib_copy_buf2iov but with continuation support,
-                 * we "gracefully" thrash the argument vars ;) */
+                /* Essentially lib_copy_buf2(k)iov but with continuation
+                 * support, we "gracefully" thrash the argument vars ;) */
                 while (pkt_len > 0) {
-                        ptl_size_t nob;
+                        ptl_size_t  nob, len;
 
                         LASSERT (niov > 0);
 
-                        LASSERT(iovused < iov->iov_len);
+                        if(iov != NULL) {
+                                LASSERT(iovused < iov->iov_len);
+                                len = iov->iov_len;
+                                base = iov->iov_base;
+                        }
+                        else {
+                                LASSERT(iovused < kiov->kiov_len);
+                                len = kiov->kiov_len;
+                                if(base==NULL) {
+                                        /* New page */
+                                        base = kmap(kiov->kiov_page);
+                                }
+                        }
 
-                        nob = MIN (iov->iov_len-iovused, pkt_len);
-                        CDEBUG(D_NET, "iovbase: %p iovlen: %d src: %p  nob: %d "
+                        nob = MIN (len-iovused, pkt_len);
+                        CDEBUG(D_NET, "base: %p len: %d src: %p  nob: %d "
                                         "iovused: %d\n",
-                                        iov->iov_base, iov->iov_len,
-                                        src, nob, iovused);
+                                        base, len, src, nob, iovused);
 
-                        memcpy (iov->iov_base+iovused, src, nob);
+                        memcpy (base+iovused, src, nob);
                         pkt_len -= nob;
                         src += nob;
 
-                        if(nob+iovused < iov->iov_len) {
+                        if(nob+iovused < len) {
                                 /* We didn't use all of the iov */
                                 iovused+=nob;
                         }
                         else {
                                 niov--;
-                                iov++;
                                 iovused=0;
+                                if(iov != NULL) {
+                                        iov++;
+                                }
+                                else {
+                                        kunmap(kiov->kiov_page);
+                                        base=NULL;
+                                        kiov++;
+                                }
                         }
                 }
+        }
+        /* Just to make sure the last page is unmapped */
+        if(kiov!=NULL && base!=NULL) {
+                kunmap(kiov->kiov_page);
+                base=NULL;
         }
         PROF_FINISH(memcpy);
 
@@ -451,12 +554,38 @@ static int kscimacnal_recv(nal_cb_t     *nal,
 }
 
 
+static int
+kscimacnal_recv(nal_cb_t     *nal,
+             void         *private,
+             lib_msg_t    *cookie,
+             unsigned int  niov,
+             struct iovec *iov,
+             size_t        mlen,
+             size_t        rlen)
+{
+        return (kscimacnal_recvmsg (nal, private, cookie, niov, iov, NULL, mlen, rlen));
+}
+
+
+static int
+kscimacnal_recv_pages (nal_cb_t     *nal,
+                    void         *private,
+                    lib_msg_t    *cookie,
+                    unsigned int  niov,
+                    ptl_kiov_t   *kiov,
+                    size_t        mlen,
+                    size_t        rlen)
+{
+        return (kscimacnal_recvmsg (nal, private, cookie, niov, NULL, kiov, mlen, rlen));
+}
+
+
 nal_cb_t kscimacnal_lib = {
         nal_data:       &kscimacnal_data,               /* NAL private data */
         cb_send:         kscimacnal_send,
-        cb_send_pages:   NULL,                  /* Ignore for now */
+        cb_send_pages:   kscimacnal_send_pages,
         cb_recv:         kscimacnal_recv,
-        cb_recv_pages:   NULL,
+        cb_recv_pages:   kscimacnal_recv_pages,
         cb_read:         kscimacnal_read,
         cb_write:        kscimacnal_write,
         cb_malloc:       kscimacnal_malloc,
