@@ -839,14 +839,18 @@ def getDevice(obd):
     return dev.firstChild.data, size
 
 # Get the text content from the first matching child
+# If there is no content (or it is all whitespace), return
+# the default
 def getText(node, tag, default=""):
     list = node.getElementsByTagName(tag)
     if len(list) > 0:
         node = list[0]
         node.normalize()
-        return node.firstChild.data
-    else:
-        return default
+        if node.firstChild:
+            txt = string.strip(node.firstChild.data)
+            if txt:
+                return txt
+    return default
 
 def get_ost_net(node, uuid):
     ost = lookup(node, uuid)
@@ -1146,7 +1150,7 @@ def main():
 if __name__ == "__main__":
     try:
         main()
-    except LConfError, e:
+    except LconfError, e:
         print e
     except CommandError, e:
         e.dump()

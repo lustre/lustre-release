@@ -59,13 +59,13 @@ Commands:
    Nettype is either tcp, elan, or gm.
    Requires a node argument
 
---lov lov_name [mdc_name stripe_sz stripe_off pattern]
-   Creates a logical volume
-   When used with other commands, it specifics the lov to modify
-
 --mds device [size]
    Create a MDS using the device
    Requires --node 
+
+--lov lov_name [mdc_name stripe_sz stripe_off pattern]
+   Creates a logical volume
+   When used with other commands, it specifics the lov to modify
 
 --mdc mdc_name
    Configures a MDC for a node.
@@ -78,7 +78,7 @@ Commands:
    Requires --node
    If --lov lov_name is used, this device is added to lov. 
 
---mtpt /mnt/point mdc_name lov_name|osc_name 
+--mtpt /mnt/point mds_name lov_name|osc_name 
    Creates a client mount point.
    Requires --node
 
