@@ -183,7 +183,7 @@ extern int smfs_post_rec_create(struct inode *dir, struct dentry *dentry,
                                 void   *data1, void   *data2);
 /*kml.c*/
 int smfs_do_rec(struct inode *inode);
-int smfs_rec_cleanup(struct smfs_super_info *smfs_info);
+int smfs_rec_cleanup(struct super_block *sb);
 int smfs_rec_init(struct super_block *sb);
 
 extern int smfs_rec_unpack(struct smfs_proc_args *args, char *record,
@@ -194,9 +194,9 @@ extern smfs_pack_rec_func smfs_get_rec_pack_type(struct super_block *sb);
 
 
 /*mds_kml.c*/
-int mds_rec_pack_init(struct smfs_super_info *smsi);
+int mds_rec_pack_init(struct super_block *sb);
 /*ost_kml.c*/
-int ost_rec_pack_init(struct smfs_super_info *smsi);
+int ost_rec_pack_init(struct super_block *sb);
 
 /*smfs_llog.c*/
 extern int smfs_llog_setup(struct super_block *sb, struct vfsmount *mnt);
