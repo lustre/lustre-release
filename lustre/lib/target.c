@@ -32,6 +32,43 @@
 #include <linux/lustre_net.h>
 #include <linux/lustre_dlm.h>
 
+int target_handle_reconnect(struct lustre_handle *conn, struct obd_export *exp,
+                            char *cluuid)
+{
+        if (exp->exp_connection) {
+                struct lustre_handle *hdl;
+                hdl = &exp->exp_ldlm_data.led_import.imp_handle;
+                /* Might be a re-connect after a partition. */
+                if (!memcmp(conn, hdl, sizeof *conn)) {
+                        CERROR("%s reconnecting\n", cluuid);
+                        conn->addr = (__u64) (unsigned long)exp;
+                        conn->cookie = exp->exp_cookie;
+                        RETURN(EALREADY);
+                } else {
+                        CERROR("%s reconnecting from %s, "
+                               "handle mismatch (ours "LPX64"/"LPX64", "
+                               "theirs "LPX64"/"LPX64")\n", cluuid,
+                               exp->exp_connection->c_remote_uuid, hdl->addr,
+                               hdl->cookie, conn->addr, conn->cookie);
+                        /* XXX disconnect them here? */
+                        memset(conn, 0, sizeof *conn);
+                        /* This is a little scary, but right now we build this
+                         * file separately into each server module, so I won't
+                         * go _immediately_ to hell.
+                         */
+                        MOD_DEC_USE_COUNT;
+                        RETURN(-EALREADY);
+                }
+        }
+
+        conn->addr = (__u64) (unsigned long)exp;
+        conn->cookie = exp->exp_cookie;
+        CDEBUG(D_INFO, "existing export for UUID '%s' at %p\n", cluuid, exp);
+        CDEBUG(D_IOCTL,"connect: addr %Lx cookie %Lx\n",
+               (long long)conn->addr, (long long)conn->cookie);
+        RETURN(0);
+}
+
 int target_handle_connect(struct ptlrpc_request *req)
 {
         struct obd_device *target;
