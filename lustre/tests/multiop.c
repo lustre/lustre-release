@@ -22,6 +22,7 @@ char usage[] =
 "        c  close\n"
 "        _  wait for signal\n"
 "        r  read\n"
+"        s  stat\n"
 "        S  fstat\n"
 "        t  fchmod\n"
 "        w  write\n"
