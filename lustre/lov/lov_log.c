@@ -61,7 +61,7 @@ int lov_llog_open(struct obd_device *obd, struct obd_device *disk_obd,
 
 {
         struct lov_obd *lov = &obd->u.lov;
-        int i, rc;
+        int i, rc = 0;
 
         ENTRY;
         for (i = 0; i < lov->desc.ld_tgt_count; i++) {
