@@ -27,6 +27,8 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- hold NS lock when calling handle_ast_error->del_waiting_lock (5746)
 	- fix setattr mtime regression from lovcleanup merge (4829, 5669)
 	- workaround for 2.6 crash in ll_unhash_aliases (5687, 5210)
+	- small ext3 extents cleanups and fixes (5733)
+	- improved mballoc code, several small races and bugs fixed (5733, 5638)
        * miscellania
 	- service request history (4965)
 	- put {ll,lov,osc}_async_page structs in a single slab (4699)

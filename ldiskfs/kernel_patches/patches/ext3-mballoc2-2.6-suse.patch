@@ -1,8 +1,8 @@
 Index: linux-2.6.5-sles9/fs/ext3/mballoc.c
 ===================================================================
---- linux-2.6.5-sles9.orig/fs/ext3/mballoc.c	2003-01-30 13:24:37.000000000 +0300
-+++ linux-2.6.5-sles9/fs/ext3/mballoc.c	2004-11-09 02:34:25.181340632 +0300
-@@ -0,0 +1,1441 @@
+--- linux-2.6.5-sles9.orig/fs/ext3/mballoc.c	2005-02-17 22:07:57.023609040 +0300
++++ linux-2.6.5-sles9/fs/ext3/mballoc.c	2005-02-23 01:56:19.101662000 +0300
+@@ -0,0 +1,1835 @@
 +/*
 + * Copyright (c) 2003, Cluster File Systems, Inc, info@clusterfs.com
 + * Written by Alex Tomas <alex@clusterfs.com>
@@ -39,17 +39,27 @@ Index: linux-2.6.5-sles9/fs/ext3/mballoc.c
 +
 +/*
 + * TODO:
-+ *   - do not scan from the beginning, try to remember first free block
-+ *   - mb_mark_used_* may allocate chunk right after splitting buddy
++ *   - track min/max extents in each group for better group selection
++ *   - is it worthwhile to use buddies directly if req is 2^N blocks?
++ *   - mb_mark_used() may allocate chunk right after splitting buddy
 + *   - special flag to advice allocator to look for requested + N blocks
 + *     this may improve interaction between extents and mballoc
++ *   - tree of groups sorted by number of free blocks
++ *   - percpu reservation code (hotpath)
++ *   - error handling
 + */
 +
 +/*
 + * with AGRESSIVE_CHECK allocator runs consistency checks over
-+ * structures. this checks slow things down a lot
++ * structures. these checks slow things down a lot
 + */
 +#define AGGRESSIVE_CHECK__
++
++/*
++ * with MBALLOC_STATS allocator will collect stats that will be
++ * shown at umount. The collecting costs though!
++ */
++#define MBALLOC_STATS
 +
 +/*
 + */
@@ -66,60 +76,75 @@ Index: linux-2.6.5-sles9/fs/ext3/mballoc.c
 +#define EXT3_BUDDY_FILE		".buddy"
 +
 +/*
-+ * max. number of chunks to be tracked in ext3_free_extent struct
++ * How long mballoc can look for a best extent (in found extents)
 + */
-+#define MB_ARR_SIZE	32
++#define EXT3_MB_MAX_TO_SCAN	100
++
++/*
++ * This structure is on-disk description of a group for mballoc
++ */
++struct ext3_mb_group_descr {
++	__u16	mgd_first_free;		/* first free block in the group */
++	__u16	mgd_free;		/* number of free blocks in the group */
++	__u16	mgd_counters[16];	/* number of free blocks by order */
++};
++
++/*
++ * This structure is header of mballoc's file
++ */
++struct ext3_mb_grp_header {
++	__u32	mh_magic;
++};
++
++#define EXT3_MB_MAGIC_V1	0xbaad16fc
++
++
++struct ext3_free_extent {
++	__u16 fe_start;
++	__u16 fe_len;
++	__u16 fe_group;
++};
 +
 +struct ext3_allocation_context {
 +	struct super_block *ac_sb;
 +
 +	/* search goals */
-+	int ac_g_group;
-+	int ac_g_start;
-+	int ac_g_len;
-+	int ac_g_flags;
++struct ext3_free_extent ac_g_ex;
 +	
 +	/* the best found extent */
-+	int ac_b_group;
-+	int ac_b_start;
-+	int ac_b_len;
++	struct ext3_free_extent ac_b_ex;
 +	
 +	/* number of iterations done. we have to track to limit searching */
-+	int ac_repeats;
-+	int ac_groups_scanned;
-+	int ac_status;
++	unsigned long ac_ex_scanned;
++	__u16 ac_groups_scanned;
++	__u16 ac_found;
++	__u8 ac_status;	
++	__u8 ac_flags;		/* allocation hints */
++	__u8 ac_repeats;
 +};
 +
 +#define AC_STATUS_CONTINUE	1
 +#define AC_STATUS_FOUND		2
-+
++#define AC_STATUS_BREAK		3
 +
 +struct ext3_buddy {
-+	void *bd_bitmap;
-+	void *bd_buddy;
-+	int bd_blkbits;
 +	struct buffer_head *bd_bh;
 +	struct buffer_head *bd_bh2;
 +	struct ext3_buddy_group_blocks *bd_bd;
 +	struct super_block *bd_sb;
++	__u16 bd_blkbits;
++	__u16 bd_group;
 +};
-+
-+struct ext3_free_extent {
-+	int fe_start;
-+	int fe_len;
-+	unsigned char fe_orders[MB_ARR_SIZE];
-+	unsigned char fe_nums;
-+	unsigned char fe_back;
-+};
++#define EXT3_MB_BITMAP(e3b)	((e3b)->bd_bh->b_data)
++#define EXT3_MB_BUDDY(e3b)	((e3b)->bd_bh2->b_data)
 +
 +#define in_range(b, first, len)	((b) >= (first) && (b) <= (first) + (len) - 1)
 +
-+
 +int ext3_create (struct inode *, struct dentry *, int, struct nameidata *);
 +struct buffer_head * read_block_bitmap(struct super_block *, unsigned int);
-+void ext3_free_blocks_old(handle_t *, struct inode *, unsigned long, unsigned long);
 +int ext3_new_block_old(handle_t *, struct inode *, unsigned long, int *);
 +int ext3_mb_reserve_blocks(struct super_block *, int);
++void ext3_mb_release_blocks(struct super_block *, int);
 +void ext3_mb_poll_new_transaction(struct super_block *, handle_t *);
 +void ext3_mb_free_committed_blocks(struct super_block *);
 +
@@ -145,10 +170,22 @@ Index: linux-2.6.5-sles9/fs/ext3/mballoc.c
 +static inline void mb_set_bit(int bit, void *addr)
 +{
 +	mb_correct_addr_and_bit(bit,addr);
++	__set_bit(bit, addr);
++}
++
++static inline void mb_set_bit_atomic(int bit, void *addr)
++{
++	mb_correct_addr_and_bit(bit,addr);
 +	set_bit(bit, addr);
 +}
 +
 +static inline void mb_clear_bit(int bit, void *addr)
++{
++	mb_correct_addr_and_bit(bit,addr);
++	__clear_bit(bit, addr);
++}
++
++static inline void mb_clear_bit_atomic(int bit, void *addr)
 +{
 +	mb_correct_addr_and_bit(bit,addr);
 +	clear_bit(bit, addr);
@@ -157,9 +194,9 @@ Index: linux-2.6.5-sles9/fs/ext3/mballoc.c
 +static inline void *mb_find_buddy(struct ext3_buddy *e3b, int order, int *max)
 +{
 +	int i = 1;
-+	void *bb;
++	char *bb;
 +
-+	J_ASSERT(e3b->bd_bitmap != e3b->bd_buddy);
++	J_ASSERT(EXT3_MB_BITMAP(e3b) != EXT3_MB_BUDDY(e3b));
 +	J_ASSERT(max != NULL);
 +
 +	if (order > e3b->bd_blkbits + 1)
@@ -168,19 +205,21 @@ Index: linux-2.6.5-sles9/fs/ext3/mballoc.c
 +	/* at order 0 we see each particular block */
 +	*max = 1 << (e3b->bd_blkbits + 3);
 +	if (order == 0)
-+		return e3b->bd_bitmap;
++		return EXT3_MB_BITMAP(e3b);
 +
-+	bb = e3b->bd_buddy;
++	bb = EXT3_MB_BUDDY(e3b);
 +	*max = *max >> 1;
 +	while (i < order) {
 +		bb += 1 << (e3b->bd_blkbits - i);
 +		i++;
 +		*max = *max >> 1;
 +	}
++	J_ASSERT((unsigned) (bb - (char *) EXT3_MB_BUDDY(e3b)) <
++			e3b->bd_sb->s_blocksize);
 +	return bb;
 +}
 +
-+static int ext3_mb_load_desc(struct super_block *sb, int group,
++static int ext3_mb_load_buddy(struct super_block *sb, int group,
 +				struct ext3_buddy *e3b)
 +{
 +	struct ext3_sb_info *sbi = EXT3_SB(sb);
@@ -191,7 +230,7 @@ Index: linux-2.6.5-sles9/fs/ext3/mballoc.c
 +	/* load bitmap */
 +	e3b->bd_bh = sb_getblk(sb, sbi->s_buddy_blocks[group]->bb_bitmap);
 +	if (e3b->bd_bh == NULL) {
-+		ext3_error(sb, "ext3_mb_load_desc",
++		ext3_error(sb, "ext3_mb_load_buddy",
 +				"can't get block for buddy bitmap\n");
 +		goto out;
 +	}
@@ -204,7 +243,7 @@ Index: linux-2.6.5-sles9/fs/ext3/mballoc.c
 +	/* load buddy */
 +	e3b->bd_bh2 = sb_getblk(sb, sbi->s_buddy_blocks[group]->bb_buddy);
 +	if (e3b->bd_bh2 == NULL) {
-+		ext3_error(sb, "ext3_mb_load_desc",
++		ext3_error(sb, "ext3_mb_load_buddy",
 +				"can't get block for buddy bitmap\n");
 +		goto out;
 +	}
@@ -214,11 +253,10 @@ Index: linux-2.6.5-sles9/fs/ext3/mballoc.c
 +	}
 +	J_ASSERT(buffer_uptodate(e3b->bd_bh2));
 +
-+	e3b->bd_bitmap = e3b->bd_bh->b_data;
-+	e3b->bd_buddy = e3b->bd_bh2->b_data;
 +	e3b->bd_blkbits = sb->s_blocksize_bits;
 +	e3b->bd_bd = sbi->s_buddy_blocks[group];
 +	e3b->bd_sb = sb;
++	e3b->bd_group = group;
 +
 +	return 0;
 +out:
@@ -277,7 +315,7 @@ Index: linux-2.6.5-sles9/fs/ext3/mballoc.c
 +
 +			for (j = 0; j < (1 << order); j++) {
 +				k = (i * (1 << order)) + j;
-+				J_ASSERT(mb_test_bit(k, e3b->bd_bitmap));
++				J_ASSERT(mb_test_bit(k, EXT3_MB_BITMAP(e3b)));
 +			}
 +			count++;
 +		}
@@ -319,10 +357,10 @@ Index: linux-2.6.5-sles9/fs/ext3/mballoc.c
 +	int order = 1;
 +	void *bb;
 +
-+	J_ASSERT(e3b->bd_bitmap != e3b->bd_buddy);
++	J_ASSERT(EXT3_MB_BITMAP(e3b) != EXT3_MB_BUDDY(e3b));
 +	J_ASSERT(block < (1 << (e3b->bd_blkbits + 3)));
 +
-+	bb = e3b->bd_buddy;
++	bb = EXT3_MB_BUDDY(e3b);
 +	while (order <= e3b->bd_blkbits + 1) {
 +		block = block >> 1;
 +		if (mb_test_bit(block, bb)) {
@@ -348,7 +386,7 @@ Index: linux-2.6.5-sles9/fs/ext3/mballoc.c
 +			cur += 32;
 +			continue;
 +		}
-+		mb_clear_bit(cur, bm);
++		mb_clear_bit_atomic(cur, bm);
 +		cur++;
 +	}
 +}
@@ -366,7 +404,7 @@ Index: linux-2.6.5-sles9/fs/ext3/mballoc.c
 +			cur += 32;
 +			continue;
 +		}
-+		mb_set_bit(cur, bm);
++		mb_set_bit_atomic(cur, bm);
 +		cur++;
 +	}
 +}
@@ -377,12 +415,17 @@ Index: linux-2.6.5-sles9/fs/ext3/mballoc.c
 +	void *buddy, *buddy2;
 +
 +	mb_check_buddy(e3b);
++
++	e3b->bd_bd->bb_free += count;
++	if (first < e3b->bd_bd->bb_first_free)
++		e3b->bd_bd->bb_first_free = first;
++
 +	while (count-- > 0) {
 +		block = first++;
 +		order = 0;
 +
-+		J_ASSERT(!mb_test_bit(block, e3b->bd_bitmap));
-+		mb_set_bit(block, e3b->bd_bitmap);
++		J_ASSERT(!mb_test_bit(block, EXT3_MB_BITMAP(e3b)));
++		mb_set_bit(block, EXT3_MB_BITMAP(e3b));
 +		e3b->bd_bd->bb_counters[order]++;
 +
 +		/* start of the buddy */
@@ -422,64 +465,23 @@ Index: linux-2.6.5-sles9/fs/ext3/mballoc.c
 +	return 0;
 +}
 +
-+/*
-+ * returns 1 if out extent is enough to fill needed space
-+ */
-+int mb_make_backward_extent(struct ext3_free_extent *in,
-+				struct ext3_free_extent *out, int needed)
++static int mb_find_extent(struct ext3_buddy *e3b, int order, int block,
++				int needed, struct ext3_free_extent *ex)
 +{
-+	int i;
-+
-+	J_ASSERT(in);
-+	J_ASSERT(out);
-+	J_ASSERT(in->fe_nums < MB_ARR_SIZE);
-+
-+	out->fe_len = 0;
-+	out->fe_start = in->fe_start + in->fe_len;
-+	out->fe_nums = 0;
-+
-+	/* for single-chunk extent we need not back order
-+	 * also, if an extent doesn't fill needed space
-+	 * then it makes no sense to try back order becase
-+	 * if we select this extent then it'll be use as is */
-+	if (in->fe_nums < 2 || in->fe_len < needed)
-+		return 0;
-+
-+	i = in->fe_nums - 1;
-+	while (i >= 0 && out->fe_len < needed) {
-+		out->fe_len += (1 << in->fe_orders[i]);
-+		out->fe_start -= (1 << in->fe_orders[i]);
-+		i--;
-+	}
-+	/* FIXME: in some situation fe_orders may be too small to hold
-+	 * all the buddies */
-+	J_ASSERT(out->fe_len >= needed);
-+	
-+	for (i++; i < in->fe_nums; i++)
-+		out->fe_orders[out->fe_nums++] = in->fe_orders[i];
-+	J_ASSERT(out->fe_nums < MB_ARR_SIZE);
-+	out->fe_back = 1;
-+
-+	return 1;
-+}
-+
-+int mb_find_extent(struct ext3_buddy *e3b, int order, int block,
-+			int needed, struct ext3_free_extent *ex)
-+{
-+	int space = needed;
 +	int next, max, ord;
 +	void *buddy;
 +
 +	J_ASSERT(ex != NULL);
 +
-+	ex->fe_nums = 0;
-+	ex->fe_len = 0;
-+	
 +	buddy = mb_find_buddy(e3b, order, &max);
 +	J_ASSERT(buddy);
 +	J_ASSERT(block < max);
-+	if (!mb_test_bit(block, buddy))
-+		goto nofree;
++	if (!mb_test_bit(block, buddy)) {
++		ex->fe_len = 0;
++		ex->fe_start = 0;
++		ex->fe_group = 0;
++		return 0;
++	}
 +
 +	if (order == 0) {
 +		/* find actual order */
@@ -487,96 +489,41 @@ Index: linux-2.6.5-sles9/fs/ext3/mballoc.c
 +		block = block >> order;
 +	}
 +
-+	ex->fe_orders[ex->fe_nums++] = order;
 +	ex->fe_len = 1 << order;
 +	ex->fe_start = block << order;
-+	ex->fe_back = 0;
++	ex->fe_group = e3b->bd_group;
 +
-+	while ((space = space - (1 << order)) > 0) {
-+
-+		buddy = mb_find_buddy(e3b, order, &max);
-+		J_ASSERT(buddy);
++	while ((buddy = mb_find_buddy(e3b, order, &max))) {
 +
 +		if (block + 1 >= max)
 +			break;
 +
 +		next = (block + 1) * (1 << order);
-+		if (!mb_test_bit(next, e3b->bd_bitmap))
++		if (!mb_test_bit(next, EXT3_MB_BITMAP(e3b)))
 +			break;
 +
 +		ord = mb_find_order_for_block(e3b, next);
 +
-+		if ((1 << ord) >= needed) {
-+			/* we dont want to coalesce with self-enough buddies */
-+			break;
-+		}
 +		order = ord;
 +		block = next >> order;
 +		ex->fe_len += 1 << order;
-+
-+		if (ex->fe_nums < MB_ARR_SIZE)
-+			ex->fe_orders[ex->fe_nums++] = order;
 +	}
 +
-+nofree:
 +	J_ASSERT(ex->fe_start + ex->fe_len <= (1 << (e3b->bd_blkbits + 3)));
 +	return ex->fe_len;
 +}
 +
-+static int mb_mark_used_backward(struct ext3_buddy *e3b,
-+					struct ext3_free_extent *ex, int len)
++static int mb_mark_used(struct ext3_buddy *e3b, struct ext3_free_extent *ex)
 +{
-+	int start = ex->fe_start, len0 = len;
++	int start = ex->fe_start;
++	int len = ex->fe_len;
 +	int ord, mlen, max, cur;
++	int len0 = len;
 +	void *buddy;
 +
-+	start = ex->fe_start + ex->fe_len - 1;
-+	while (len) {
-+		ord = mb_find_order_for_block(e3b, start);
-+		if (((start >> ord) << ord) == (start - (1 << ord) + 1) &&
-+				len >= (1 << ord)) {
-+			/* the whole chunk may be allocated at once! */
-+			mlen = 1 << ord;
-+			buddy = mb_find_buddy(e3b, ord, &max);
-+			J_ASSERT((start >> ord) < max);
-+			mb_clear_bit(start >> ord, buddy);
-+			e3b->bd_bd->bb_counters[ord]--;
-+			start -= mlen;
-+			len -= mlen;
-+			J_ASSERT(len >= 0);
-+			J_ASSERT(start >= 0);
-+			continue;
-+		}
-+
-+		/* we have to split large buddy */
-+		J_ASSERT(ord > 0);
-+		buddy = mb_find_buddy(e3b, ord, &max);
-+		mb_clear_bit(start >> ord, buddy);
-+		e3b->bd_bd->bb_counters[ord]--;
-+
-+		ord--;
-+		cur = (start >> ord) & ~1U;
-+		buddy = mb_find_buddy(e3b, ord, &max);
-+		mb_set_bit(cur, buddy);
-+		mb_set_bit(cur + 1, buddy);
-+		e3b->bd_bd->bb_counters[ord]++;
-+		e3b->bd_bd->bb_counters[ord]++;
-+	}
-+
-+	/* now drop all the bits in bitmap */
-+	mb_clear_bits(e3b->bd_bitmap, ex->fe_start + ex->fe_len - len0, len0);
-+
-+	mb_check_buddy(e3b);
-+
-+	return 0;
-+}
-+
-+static int mb_mark_used_forward(struct ext3_buddy *e3b,
-+				struct ext3_free_extent *ex, int len)
-+{
-+	int start = ex->fe_start, len0 = len;
-+	int ord, mlen, max, cur;
-+	void *buddy;
++	e3b->bd_bd->bb_free -= len;
++	if (e3b->bd_bd->bb_first_free == start)
++		e3b->bd_bd->bb_first_free += len;
 +
 +	while (len) {
 +		ord = mb_find_order_for_block(e3b, start);
@@ -610,112 +557,218 @@ Index: linux-2.6.5-sles9/fs/ext3/mballoc.c
 +	}
 +
 +	/* now drop all the bits in bitmap */
-+	mb_clear_bits(e3b->bd_bitmap, ex->fe_start, len0);
++	mb_clear_bits(EXT3_MB_BITMAP(e3b), ex->fe_start, len0);
 +
 +	mb_check_buddy(e3b);
 +
 +	return 0;
 +}
 +
-+int inline mb_mark_used(struct ext3_buddy *e3b,
-+			struct ext3_free_extent *ex, int len)
++/*
++ * Must be called under group lock!
++ */
++static void ext3_mb_use_best_found(struct ext3_allocation_context *ac,
++					struct ext3_buddy *e3b)
 +{
-+	int err;
-+
-+	J_ASSERT(ex);
-+	if (ex->fe_back == 0)
-+		err = mb_mark_used_forward(e3b, ex, len);
-+	else
-+		err = mb_mark_used_backward(e3b, ex, len);
-+	return err;
++	ac->ac_b_ex.fe_len = min(ac->ac_b_ex.fe_len, ac->ac_g_ex.fe_len);
++	mb_mark_used(e3b, &ac->ac_b_ex);
++	ac->ac_status = AC_STATUS_FOUND;
 +}
 +
-+int ext3_mb_new_in_group(struct ext3_allocation_context *ac,
-+				struct ext3_buddy *e3b, int group)
++/*
++ * The routine checks whether found extent is good enough. If it is,
++ * then the extent gets marked used and flag is set to the context
++ * to stop scanning. Otherwise, the extent is compared with the
++ * previous found extent and if new one is better, then it's stored
++ * in the context. Later, the best found extent will be used, if
++ * mballoc can't find good enough extent.
++ *
++ * FIXME: real allocation policy is to be designed yet!
++ */
++static void ext3_mb_measure_extent(struct ext3_allocation_context *ac,
++					struct ext3_free_extent *ex,
++					struct ext3_buddy *e3b)
 +{
-+	struct super_block *sb = ac->ac_sb;
-+	int err, gorder, max, i;
-+	struct ext3_free_extent curex;
++	int factor = EXT3_SB(ac->ac_sb)->s_mb_factor;
++	struct ext3_free_extent *bex = &ac->ac_b_ex;
++	int diff = ac->ac_g_ex.fe_len - ex->fe_len;
 +
-+	/* let's know order of allocation */
-+	gorder = 0;
-+	while (ac->ac_g_len > (1 << gorder))
-+		gorder++;
++	J_ASSERT(ex->fe_len > 0);
++	J_ASSERT(ex->fe_len < (1 << ac->ac_sb->s_blocksize_bits) * 8);
++	J_ASSERT(ex->fe_start < (1 << ac->ac_sb->s_blocksize_bits) * 8);
 +
-+	if ((ac->ac_g_flags & 1) && ac->ac_g_group == group) {
-+		/* someone asks for space at this specified block
-+		 * probably he wants to merge it into existing extent */
-+		if (mb_test_bit(ac->ac_g_start, e3b->bd_bitmap)) {
-+			/* good. at least one block is free */
-+			max = mb_find_extent(e3b, 0, ac->ac_g_start,
-+						ac->ac_g_len, &curex);
-+			max = min(curex.fe_len, ac->ac_g_len);
-+			mb_mark_used(e3b, &curex, max);
-+			
-+			ac->ac_b_group = group;
-+			ac->ac_b_start = curex.fe_start;
-+			ac->ac_b_len = max;
-+			ac->ac_status = AC_STATUS_FOUND;
-+			err = 0;
-+			goto out;
-+		}
-+		/* don't try to find goal anymore */
-+		ac->ac_g_flags &= ~1;
++	ac->ac_found++;
++
++	/*
++	 * The special case - take what you catch first
++	 */
++	if (ac->ac_flags & EXT3_MB_HINT_FIRST) {
++		*bex = *ex;
++		ext3_mb_use_best_found(ac, e3b);
++		return;
 +	}
 +
-+	i = 0;
-+	while (1) {
-+		i = find_next_bit(e3b->bd_bitmap, sb->s_blocksize * 8, i);
-+		if (i >= sb->s_blocksize * 8)
-+			break;
-+
-+		max = mb_find_extent(e3b, 0, i, ac->ac_g_len, &curex);
-+		if (max >= ac->ac_g_len) {
-+			max = min(curex.fe_len, ac->ac_g_len);
-+			mb_mark_used(e3b, &curex, max);
-+			
-+			ac->ac_b_group = group;
-+			ac->ac_b_start = curex.fe_start;
-+			ac->ac_b_len = max;
-+			ac->ac_status = AC_STATUS_FOUND;
-+			break;
-+		}
-+		i += max;
++	/*
++	 * Let's check whether the chuck is good enough
++	 */
++	if (ex->fe_len >= ac->ac_g_ex.fe_len) {
++		*bex = *ex;
++		ext3_mb_use_best_found(ac, e3b);
++		return;
 +	}
++
++	/*
++	 * If the request is vey large, then it makes sense to use large
++	 * chunks for it. Even if they don't satisfy whole request.
++	 */
++	if (ex->fe_len > 1000) {
++		*bex = *ex;
++		ext3_mb_use_best_found(ac, e3b);
++		return;
++	}
++
++	/*
++	 * Sometimes it's worty to take close chunk
++	 */
++	if (factor && (ac->ac_g_ex.fe_len * 100) / (diff * 100) >= factor) {
++		*bex = *ex;
++		ext3_mb_use_best_found(ac, e3b);
++		return;
++	}
++
++	/*
++	 * If this is first found extent, just store it in the context
++	 */
++	if (bex->fe_len == 0) {
++		*bex = *ex;
++		return;
++	}
++
++	/*
++	 * If new found extent is better, store it in the context
++	 * FIXME: possible the policy should be more complex?
++	 */
++	if (ex->fe_len > bex->fe_len) {
++		*bex = *ex;
++	}
++
++	/*
++	 * We don't want to scan for a whole year
++	 */
++	if (ac->ac_found > EXT3_MB_MAX_TO_SCAN)
++		ac->ac_status = AC_STATUS_BREAK;
++}
++
++static int ext3_mb_try_best_found(struct ext3_allocation_context *ac,
++					struct ext3_buddy *e3b)
++{
++	struct ext3_free_extent ex = ac->ac_b_ex;
++	int group = ex.fe_group, max, err;
++
++	J_ASSERT(ex.fe_len > 0);
++	err = ext3_mb_load_buddy(ac->ac_sb, group, e3b);
++	if (err)
++		return err;
++
++	ext3_lock_group(ac->ac_sb, group);
++	max = mb_find_extent(e3b, 0, ex.fe_start, ex.fe_len, &ex);
++	
++	if (max > 0)
++		ext3_mb_use_best_found(ac, e3b);
++
++	ext3_unlock_group(ac->ac_sb, group);
++
++	if (ac->ac_status == AC_STATUS_FOUND)
++		ext3_mb_dirty_buddy(e3b);
++	ext3_mb_release_desc(e3b);
 +
 +	return 0;
-+
-+out:
-+	return err;
 +}
 +
-+int mb_good_group(struct ext3_allocation_context *ac, int group, int cr)
++static int ext3_mb_find_by_goal(struct ext3_allocation_context *ac,
++				struct ext3_buddy *e3b)
 +{
-+	struct ext3_group_desc *gdp;
-+	int free_blocks;
++	int group = ac->ac_g_ex.fe_group, max, err;
++	struct ext3_free_extent ex;
 +
-+	gdp = ext3_get_group_desc(ac->ac_sb, group, NULL);
-+	if (!gdp)
++	err = ext3_mb_load_buddy(ac->ac_sb, group, e3b);
++	if (err)
++		return err;
++
++	ext3_lock_group(ac->ac_sb, group);
++	max = mb_find_extent(e3b, 0, ac->ac_g_ex.fe_start,
++				ac->ac_g_ex.fe_len, &ex);
++	
++	if (max > 0) {
++		J_ASSERT(ex.fe_len > 0);
++		J_ASSERT(ex.fe_group == ac->ac_g_ex.fe_group);
++		J_ASSERT(ex.fe_start == ac->ac_g_ex.fe_start);
++		ac->ac_b_ex = ex;
++		ext3_mb_use_best_found(ac, e3b);
++	}
++	ext3_unlock_group(ac->ac_sb, group);
++
++	if (ac->ac_status == AC_STATUS_FOUND)
++		ext3_mb_dirty_buddy(e3b);
++	ext3_mb_release_desc(e3b);
++
++	return 0;
++}
++/*
++ * The routine scans the group and measures all found extents.
++ * In order to optimize scanning, caller must pass number of
++ * free blocks in the group, so the routine can upper limit.
++ */
++static void ext3_mb_scan_group(struct ext3_allocation_context *ac,
++				struct ext3_buddy *e3b)
++{
++	struct super_block *sb = ac->ac_sb;
++	void *bitmap = EXT3_MB_BITMAP(e3b);
++	struct ext3_free_extent ex;
++	int i, free;
++
++	free = e3b->bd_bd->bb_free;
++	J_ASSERT(free > 0);
++
++	i = e3b->bd_bd->bb_first_free;
++
++	while (free && ac->ac_status != AC_STATUS_FOUND) {
++		i = find_next_bit(bitmap, sb->s_blocksize * 8, i);
++		if (i >= sb->s_blocksize * 8) {
++			J_ASSERT(free == 0);
++			break;
++		}
++
++		mb_find_extent(e3b, 0, i, ac->ac_g_ex.fe_len, &ex);
++		J_ASSERT(ex.fe_len > 0);
++		J_ASSERT(free >= ex.fe_len);
++
++		ext3_mb_measure_extent(ac, &ex, e3b);
++
++		i += ex.fe_len;
++		free -= ex.fe_len;
++	}
++}
++
++static int ext3_mb_good_group(struct ext3_allocation_context *ac,
++				int group, int cr)
++{
++	int free;
++
++	J_ASSERT(cr >= 0 && cr < 3);
++
++	free = EXT3_SB(ac->ac_sb)->s_buddy_blocks[group]->bb_free;
++	if (free == 0)
 +		return 0;
-+	free_blocks = le16_to_cpu(gdp->bg_free_blocks_count);
-+	if (free_blocks == 0)
-+		return 0;
 +
-+	/* someone wants this block very much */
-+	if ((ac->ac_g_flags & 1) && ac->ac_g_group == group)
-+		return 1;
-+
-+	/* FIXME: I'd like to take fragmentation into account here */
 +	if (cr == 0) {
-+		if (free_blocks >= ac->ac_g_len >> 1)
++		if (free >= ac->ac_g_ex.fe_len >> 1)
 +			return 1;
 +	} else if (cr == 1) {
-+		if (free_blocks >= ac->ac_g_len >> 2)
++		if (free >= ac->ac_g_ex.fe_len >> 2)
 +			return 1;
 +	} else if (cr == 2) {
 +		return 1;
-+	} else {
-+		BUG();
 +	}
 +	return 0;
 +}
@@ -759,7 +812,13 @@ Index: linux-2.6.5-sles9/fs/ext3/mballoc.c
 +	sbi = EXT3_SB(sb);
 +	es = EXT3_SB(sb)->s_es;
 +
-+	if (!(flags & 2)) {
++	/*
++	 * We can't allocate > group size
++	 */
++	if (*len >= EXT3_BLOCKS_PER_GROUP(sb) - 10)
++		*len = EXT3_BLOCKS_PER_GROUP(sb) - 10;
++
++	if (!(flags & EXT3_MB_HINT_RESERVED)) {
 +		/* someone asks for non-reserved blocks */
 +		BUG_ON(*len > 1);
 +		err = ext3_mb_reserve_blocks(sb, 1);
@@ -790,62 +849,137 @@ Index: linux-2.6.5-sles9/fs/ext3/mballoc.c
 +			EXT3_BLOCKS_PER_GROUP(sb));
 +
 +	/* set up allocation goals */
-+	ac.ac_b_group = ac.ac_b_start = ac.ac_b_len = 0;
-+	ac.ac_status = 0;
++	ac.ac_b_ex.fe_group = 0;
++	ac.ac_b_ex.fe_start = 0;
++	ac.ac_b_ex.fe_len = 0;
++	ac.ac_status = AC_STATUS_CONTINUE;
 +	ac.ac_groups_scanned = 0;
++	ac.ac_ex_scanned = 0;
++	ac.ac_found = 0;
 +	ac.ac_sb = inode->i_sb;
-+	ac.ac_g_group = group;
-+	ac.ac_g_start = block;
-+	ac.ac_g_len = *len;
-+	ac.ac_g_flags = flags;
++	ac.ac_g_ex.fe_group = group;
++	ac.ac_g_ex.fe_start = block;
++	ac.ac_g_ex.fe_len = *len;
++	ac.ac_flags = flags;
 +
-+	/* loop over the groups */
-+	for (cr = 0; cr < 3 && ac.ac_status != AC_STATUS_FOUND; cr++) {
++	/*
++	 * Sometimes, caller may want to merge even small number
++	 * of blocks to an existing extent
++	 */
++	if (ac.ac_flags & EXT3_MB_HINT_MERGE) {
++		err = ext3_mb_find_by_goal(&ac, &e3b);
++		if (err)
++			goto out_err;
++		if (ac.ac_status == AC_STATUS_FOUND)
++			goto found;
++	}
++
++	/*
++	 * FIXME
++	 * If requested chunk is power of 2 length, we can try
++	 * to exploit buddy nature to speed allocation up
++	 */
++
++
++	/*
++	 * Let's just scan groups to find more-less suitable blocks
++	 */
++	cr = 0;
++repeat:
++	for (; cr < 3 && ac.ac_status == AC_STATUS_CONTINUE; cr++) {
 +		for (i = 0; i < EXT3_SB(sb)->s_groups_count; group++, i++) {
 +			if (group == EXT3_SB(sb)->s_groups_count)
 +				group = 0;
 +
 +			/* check is group good for our criteries */
-+			if (!mb_good_group(&ac, group, cr))
++			if (!ext3_mb_good_group(&ac, group, cr))
 +				continue;
 +
-+			err = ext3_mb_load_desc(ac.ac_sb, group, &e3b);
++			err = ext3_mb_load_buddy(ac.ac_sb, group, &e3b);
 +			if (err)
 +				goto out_err;
 +
 +			ext3_lock_group(sb, group);
-+			if (!mb_good_group(&ac, group, cr)) {
++			if (!ext3_mb_good_group(&ac, group, cr)) {
 +				/* someone did allocation from this group */
 +				ext3_unlock_group(sb, group);
 +				ext3_mb_release_desc(&e3b);
 +				continue;
 +			}
 +
-+			err = ext3_mb_new_in_group(&ac, &e3b, group);
++			ext3_mb_scan_group(&ac, &e3b);
 +			ext3_unlock_group(sb, group);
++
 +			if (ac.ac_status == AC_STATUS_FOUND)
 +				ext3_mb_dirty_buddy(&e3b);
 +			ext3_mb_release_desc(&e3b);
++
 +			if (err)
 +				goto out_err;
-+			if (ac.ac_status == AC_STATUS_FOUND)
++			if (ac.ac_status != AC_STATUS_CONTINUE)
 +				break;
 +		}
 +	}
 +
++	if (ac.ac_status == AC_STATUS_BREAK &&
++			!(ac.ac_flags & EXT3_MB_HINT_FIRST)) {
++		/*
++		 * We've been searching too long. Let's try to allocate
++		 * the best chunk we've found so far
++		 */
++		printk(KERN_ERR "EXT3-fs: too long searching (%d/%d)\n",
++				ac.ac_b_ex.fe_len, ac.ac_g_ex.fe_len);
++		ext3_mb_try_best_found(&ac, &e3b);
++		if (ac.ac_status != AC_STATUS_FOUND) {
++			/*
++			 * Someone more lucky has already allocated it.
++			 * The only thing we can do is just take first
++			 * found block(s)
++			 */
++			printk(KERN_ERR "EXT3-fs: and someone won our chunk\n");
++			ac.ac_b_ex.fe_group = 0;
++			ac.ac_b_ex.fe_start = 0;
++			ac.ac_b_ex.fe_len = 0;
++			ac.ac_status = AC_STATUS_CONTINUE;
++			ac.ac_flags |= EXT3_MB_HINT_FIRST;
++			cr = 2;
++			goto repeat;
++		}
++	}
++
 +	if (ac.ac_status != AC_STATUS_FOUND) {
-+		/* unfortunately, we can't satisfy this request */
-+		J_ASSERT(ac.ac_b_len == 0);
++		/*
++		 * We aren't lucky definitely
++		 */
++		J_ASSERT(ac.ac_b_ex.fe_len == 0);
 +		DQUOT_FREE_BLOCK(inode, *len);
 +		*errp = -ENOSPC;
 +		block = 0;
++#if 1
++		printk(KERN_ERR "EXT3-fs: cant allocate: status %d, flags %d\n",
++			ac.ac_status, ac.ac_flags);
++		printk(KERN_ERR "EXT3-fs: goal %d, best found %d/%d/%d, cr %d\n",
++			ac.ac_g_ex.fe_len, ac.ac_b_ex.fe_group,
++			ac.ac_b_ex.fe_start, ac.ac_b_ex.fe_len, cr);
++		printk(KERN_ERR "EXT3-fs: %lu block reserved, %d found\n",
++			sbi->s_blocks_reserved, ac.ac_found);
++		printk("EXT3-fs: groups: ");
++		for (i = 0; i < EXT3_SB(sb)->s_groups_count; i++)
++			printk("%d: %d ", i,
++				sbi->s_buddy_blocks[i]->bb_free);
++		printk("\n");
++#endif
 +		goto out;
 +	}
 +
++found:
++	J_ASSERT(ac.ac_b_ex.fe_len > 0);
++
 +	/* good news - free block(s) have been found. now it's time
 +	 * to mark block(s) in good old journaled bitmap */
-+	block = ac.ac_b_group * EXT3_BLOCKS_PER_GROUP(sb)
-+			+ ac.ac_b_start + le32_to_cpu(es->s_first_data_block);
++	block = ac.ac_b_ex.fe_group * EXT3_BLOCKS_PER_GROUP(sb)
++			+ ac.ac_b_ex.fe_start
++			+ le32_to_cpu(es->s_first_data_block);
 +
 +	/* we made a desicion, now mark found blocks in good old
 +	 * bitmap to be journaled */
@@ -853,7 +987,7 @@ Index: linux-2.6.5-sles9/fs/ext3/mballoc.c
 +	ext3_debug("using block group %d(%d)\n",
 +			ac.ac_b_group.group, gdp->bg_free_blocks_count);
 +
-+	bitmap_bh = read_block_bitmap(sb, ac.ac_b_group);
++	bitmap_bh = read_block_bitmap(sb, ac.ac_b_ex.fe_group);
 +	if (!bitmap_bh) {
 +		*errp = -EIO;
 +		goto out_err;
@@ -865,7 +999,7 @@ Index: linux-2.6.5-sles9/fs/ext3/mballoc.c
 +		goto out_err;
 +	}
 +
-+	gdp = ext3_get_group_desc(sb, ac.ac_b_group, &gdp_bh);
++	gdp = ext3_get_group_desc(sb, ac.ac_b_ex.fe_group, &gdp_bh);
 +	if (!gdp) {
 +		*errp = -EIO;
 +		goto out_err;
@@ -875,8 +1009,9 @@ Index: linux-2.6.5-sles9/fs/ext3/mballoc.c
 +	if (err)
 +		goto out_err;
 +
-+	block = ac.ac_b_start + ac.ac_b_group * EXT3_BLOCKS_PER_GROUP(sb)
-+				+ le32_to_cpu(es->s_first_data_block);
++	block = ac.ac_b_ex.fe_group * EXT3_BLOCKS_PER_GROUP(sb)
++			+ ac.ac_b_ex.fe_start
++			+ le32_to_cpu(es->s_first_data_block);
 +
 +	if (block == le32_to_cpu(gdp->bg_block_bitmap) ||
 +	    block == le32_to_cpu(gdp->bg_inode_bitmap) ||
@@ -885,18 +1020,18 @@ Index: linux-2.6.5-sles9/fs/ext3/mballoc.c
 +		ext3_error(sb, "ext3_new_block",
 +			    "Allocating block in system zone - "
 +			    "block = %u", block);
-+#if 0
++#if AGGRESSIVE_CHECK
 +	for (i = 0; i < ac.ac_b_len; i++)
-+		J_ASSERT(!mb_test_bit(ac.ac_b_start + i, bitmap_bh->b_data));
++		J_ASSERT(!mb_test_bit(ac.ac_b_ex.fe_start + i, bitmap_bh->b_data));
 +#endif
-+	mb_set_bits(bitmap_bh->b_data, ac.ac_b_start, ac.ac_b_len);
++	mb_set_bits(bitmap_bh->b_data, ac.ac_b_ex.fe_start, ac.ac_b_ex.fe_len);
 +
-+	ext3_lock_group(sb, ac.ac_b_group);
++	spin_lock(sb_bgl_lock(sbi, ac.ac_b_ex.fe_group));
 +	gdp->bg_free_blocks_count =
-+			cpu_to_le16(le16_to_cpu(gdp->bg_free_blocks_count) - 
-+					ac.ac_b_len);
-+	ext3_unlock_group(sb, ac.ac_b_group);
-+	percpu_counter_mod(&sbi->s_freeblocks_counter, -ac.ac_b_len);
++			cpu_to_le16(le16_to_cpu(gdp->bg_free_blocks_count)
++					- ac.ac_b_ex.fe_len);
++	spin_unlock(sb_bgl_lock(sbi, ac.ac_b_ex.fe_group));
++	percpu_counter_mod(&sbi->s_freeblocks_counter, - ac.ac_b_ex.fe_len);
 +
 +	err = ext3_journal_dirty_metadata(handle, bitmap_bh);
 +	if (err)
@@ -910,10 +1045,11 @@ Index: linux-2.6.5-sles9/fs/ext3/mballoc.c
 +	brelse(bitmap_bh);
 +
 +	/* drop non-allocated, but dquote'd blocks */
-+	J_ASSERT(*len >= ac.ac_b_len);
-+	DQUOT_FREE_BLOCK(inode, *len - ac.ac_b_len);
++	J_ASSERT(*len >= ac.ac_b_ex.fe_len);
++	DQUOT_FREE_BLOCK(inode, *len - ac.ac_b_ex.fe_len);
 +
-+	*len = ac.ac_b_len;
++	*len = ac.ac_b_ex.fe_len;
++	J_ASSERT(*len > 0);
 +	J_ASSERT(block != 0);
 +	goto out;
 +
@@ -928,7 +1064,7 @@ Index: linux-2.6.5-sles9/fs/ext3/mballoc.c
 +	*errp = err;
 +	block = 0;
 +out:
-+	if (!(flags & 2)) {
++	if (!(flags & EXT3_MB_HINT_RESERVED)) {
 +		/* block wasn't reserved before and we reserved it
 +		 * at the beginning of allocation. it doesn't matter
 +		 * whether we allocated anything or we failed: time
@@ -937,42 +1073,175 @@ Index: linux-2.6.5-sles9/fs/ext3/mballoc.c
 +		 * path only, here is single block always */
 +		ext3_mb_release_blocks(sb, 1);
 +	}
++#ifdef MBALLOC_STATS
++	if (ac.ac_g_ex.fe_len > 1) {
++		spin_lock(&sbi->s_bal_lock);
++		sbi->s_bal_reqs++;
++		sbi->s_bal_allocated += *len;
++		if (*len >= ac.ac_g_ex.fe_len)
++			sbi->s_bal_success++;
++		sbi->s_bal_ex_scanned += ac.ac_found;
++		if (ac.ac_g_ex.fe_start == ac.ac_b_ex.fe_start &&
++				ac.ac_g_ex.fe_group == ac.ac_b_ex.fe_group)
++			sbi->s_bal_goals++;
++		if (ac.ac_found > EXT3_MB_MAX_TO_SCAN)
++			sbi->s_bal_breaks++;
++		spin_unlock(&sbi->s_bal_lock);
++	}
++#endif
 +	return block;
 +}
 +
-+int ext3_mb_generate_buddy(struct super_block *sb, int group)
++int ext3_mb_get_descr_loc(struct ext3_buddy *e3b, struct buffer_head **bh,
++				struct ext3_mb_group_descr **grp)
 +{
++	struct super_block *sb = e3b->bd_sb;
++	struct ext3_sb_info *sbi = EXT3_SB(sb);
++	int descr_per_block, err, offset;
++	struct ext3_mb_grp_header *hdr;
++	unsigned long block;
++
++	descr_per_block = (sb->s_blocksize - sizeof(struct ext3_mb_grp_header))
++				/ sizeof(struct ext3_mb_group_descr);
++	block = e3b->bd_group / descr_per_block;
++	*bh = ext3_bread(NULL, sbi->s_buddy, block, 0, &err);
++	if (*bh == NULL) {
++		printk(KERN_ERR "EXT3-fs: cant getblk descr for group %d: %d\n",
++				e3b->bd_group, err);
++		return err;
++	}
++
++	hdr = (struct ext3_mb_grp_header *) (*bh)->b_data;
++	if (hdr->mh_magic != EXT3_MB_MAGIC_V1) {
++		printk(KERN_ERR "EXT3-fs: invalid magic in group %d!\n",
++				e3b->bd_group);
++		brelse(*bh);
++		*bh = NULL;
++		return -EIO;
++	}
++
++	offset = e3b->bd_group % descr_per_block
++			* sizeof(struct ext3_mb_group_descr)
++			+ sizeof(struct ext3_mb_grp_header);
++	*grp = (struct ext3_mb_group_descr *) ((*bh)->b_data + offset);
++
++	return 0;
++}
++
++int ext3_mb_load_descr(struct ext3_buddy *e3b)
++{
++	struct ext3_mb_group_descr *grp;
++	struct ext3_group_desc *gdp;
 +	struct buffer_head *bh;
-+	int i, err, count = 0;
-+	struct ext3_buddy e3b;
++	int err, i;
++
++	err = ext3_mb_get_descr_loc(e3b, &bh, &grp);
++	if (err)
++		return err;
 +	
-+	err = ext3_mb_load_desc(sb, group, &e3b);
++	e3b->bd_bd->bb_first_free = grp->mgd_first_free;
++	e3b->bd_bd->bb_free = grp->mgd_free;
++	for (i = 0; i < e3b->bd_blkbits; i++) {
++		J_ASSERT(i < 16);
++		e3b->bd_bd->bb_counters[i] = grp->mgd_counters[i];
++	}
++	brelse(bh);
++
++	/* additional checks against old group descriptor */
++	gdp = ext3_get_group_desc(e3b->bd_sb, e3b->bd_group, NULL);
++	if (!gdp)
++		return -EIO;
++	if (e3b->bd_bd->bb_free != le16_to_cpu(gdp->bg_free_blocks_count)) {
++		printk(KERN_ERR "EXT3-fs: mbgroup %d corrupted (%d != %d)\n",
++			e3b->bd_group, e3b->bd_bd->bb_free,
++			le16_to_cpu(gdp->bg_free_blocks_count));
++		BUG();
++		return -ENODATA;
++	}
++
++	return 0;
++}
++
++
++int ext3_mb_update_descr(struct ext3_buddy *e3b)
++{
++	struct ext3_mb_group_descr *grp;
++	struct ext3_group_desc *ogdp;
++	struct buffer_head *bh;
++	handle_t *handle;
++	int err, i;
++
++	/* additional checks against old group descriptor */
++	ogdp = ext3_get_group_desc(e3b->bd_sb, e3b->bd_group, NULL);
++	if (!ogdp)
++		return -EIO;
++	if (e3b->bd_bd->bb_free != le16_to_cpu(ogdp->bg_free_blocks_count)) {
++		printk(KERN_ERR "EXT3-fs: mbgroup %d corrupted (%d != %d)\n",
++			e3b->bd_group, e3b->bd_bd->bb_free,
++			le16_to_cpu(ogdp->bg_free_blocks_count));
++		BUG();
++		return -ENODATA;
++	}
++
++	err = ext3_mb_get_descr_loc(e3b, &bh, &grp);
++	if (err)
++		return err;
++	
++	handle = journal_start(EXT3_SB(e3b->bd_sb)->s_journal, 1);
++	if (IS_ERR(handle)) {
++		err = PTR_ERR(handle);
++		handle = NULL;
++		goto out;
++	}
++
++	err = ext3_journal_get_write_access(handle, bh);
 +	if (err)
 +		goto out;
-+	memset(e3b.bd_bh->b_data, 0, sb->s_blocksize);
-+	memset(e3b.bd_bh2->b_data, 0, sb->s_blocksize);
-+
-+	bh = read_block_bitmap(sb, group);
-+	if (bh == NULL) {
-+		err = -EIO; 
-+		goto out2;
++	grp->mgd_first_free = e3b->bd_bd->bb_first_free;
++	grp->mgd_free = e3b->bd_bd->bb_free;
++	for (i = 0; i < e3b->bd_blkbits; i++) {
++		J_ASSERT(i < 16);
++		grp->mgd_counters[i] = e3b->bd_bd->bb_counters[i];
 +	}
++	err = ext3_journal_dirty_metadata(handle, bh);
++	if (err)
++		goto out;
++	err = 0;
++out:
++	brelse(bh);
++	if (handle)
++		ext3_journal_stop(handle);
++	return err;
++}
++
++int ext3_mb_generate_buddy(struct ext3_buddy *e3b)
++{
++	struct super_block *sb = e3b->bd_sb;
++	struct buffer_head *bh;
++	int i, count = 0;
++	
++	memset(e3b->bd_bh->b_data, 0, sb->s_blocksize);
++	memset(e3b->bd_bh2->b_data, 0, sb->s_blocksize);
++
++	bh = read_block_bitmap(sb, e3b->bd_group);
++	if (bh == NULL)
++		return -EIO; 
++
++	/* mb_free_blocks will set real free */
++	e3b->bd_bd->bb_first_free = 1 << 15;
 +
 +	/* loop over the blocks, and create buddies for free ones */
 +	for (i = 0; i < sb->s_blocksize * 8; i++) {
 +		if (!mb_test_bit(i, (void *) bh->b_data)) {
-+			mb_free_blocks(&e3b, i, 1);
++			mb_free_blocks(e3b, i, 1);
 +			count++;
 +		}
 +	}
 +	brelse(bh);
-+	mb_check_buddy(&e3b);
-+	ext3_mb_dirty_buddy(&e3b);
++	mb_check_buddy(e3b);
++	ext3_mb_dirty_buddy(e3b);
 +
-+out2:
-+	ext3_mb_release_desc(&e3b);
-+out:
-+	return err;
++	return 0;
 +}
 +
 +EXPORT_SYMBOL(ext3_mb_new_blocks);
@@ -981,83 +1250,143 @@ Index: linux-2.6.5-sles9/fs/ext3/mballoc.c
 +	(EXT3_DATA_TRANS_BLOCKS + 3 + EXT3_INDEX_EXTRA_TRANS_BLOCKS +	\
 +		2 * EXT3_SINGLEDATA_TRANS_BLOCKS)
 +
-+int ext3_mb_init_backend(struct super_block *sb)
++int ext3_mb_init_backend(struct super_block *sb, int *created)
 +{
++	int err, i, len, descr_per_block, buddy_offset, size;
 +	struct inode *root = sb->s_root->d_inode;
 +	struct ext3_sb_info *sbi = EXT3_SB(sb);
++	struct ext3_mb_grp_header *hdr;
++	struct buffer_head *bh = NULL;
++	unsigned long block;
 +	struct dentry *db;
++	handle_t *handle;
 +	tid_t target;
-+	int err, i;
 +
-+	sbi->s_buddy_blocks = kmalloc(sizeof(struct ext3_buddy_group_blocks *) *
-+					sbi->s_groups_count, GFP_KERNEL);
++	*created = 0;
++	len = sizeof(struct ext3_buddy_group_blocks *) * sbi->s_groups_count;
++	sbi->s_buddy_blocks = kmalloc(len, GFP_KERNEL);
 +	if (sbi->s_buddy_blocks == NULL) {
-+		printk("EXT3-fs: can't allocate mem for buddy maps\n");
++		printk(KERN_ERR "EXT3-fs: cant allocate mem for buddy\n");
 +		return -ENOMEM;
 +	}
-+	memset(sbi->s_buddy_blocks, 0,
-+		sizeof(struct ext3_buddy_group_blocks *) * sbi->s_groups_count);
++	memset(sbi->s_buddy_blocks, 0, len);
 +	sbi->s_buddy = NULL;
 +
 +	down(&root->i_sem);
-+	db = lookup_one_len(EXT3_BUDDY_FILE, sb->s_root,
-+				strlen(EXT3_BUDDY_FILE));
++	len = strlen(EXT3_BUDDY_FILE);
++	db = lookup_one_len(EXT3_BUDDY_FILE, sb->s_root, len);
 +	if (IS_ERR(db)) {
 +		err = PTR_ERR(db);
-+		printk("EXT3-fs: can't lookup buddy file: %d\n", err);
++		printk(KERN_ERR "EXT3-fs: cant lookup buddy: %d\n", err);
++		up(&root->i_sem);
 +		goto out;
 +	}
 +
-+	if (db->d_inode != NULL) {
-+		sbi->s_buddy = igrab(db->d_inode);
-+		goto map;
++	if (db->d_inode == NULL) {
++		err = ext3_create(root, db, S_IFREG, NULL);
++		if (err) {
++			printk(KERN_ERR "EXT3-fs: cant create buddy: %d\n", err);
++			up(&root->i_sem);
++			goto out;
++		}
++		db->d_inode->i_flags |= S_IMMUTABLE | S_NOATIME;
++		*created = 1;
++		printk("EXT3-fs: no buddy file, regenerate\n");
++	}
++	up(&root->i_sem);
++	sbi->s_buddy = igrab(db->d_inode);
++
++	/* calculate needed size */
++	descr_per_block = (sb->s_blocksize - sizeof(struct ext3_mb_grp_header))
++				/ sizeof(struct ext3_mb_group_descr);
++	buddy_offset = (sbi->s_groups_count + descr_per_block - 1)
++				 / descr_per_block;
++	len = sbi->s_groups_count * sb->s_blocksize * 2 +
++			buddy_offset * sb->s_blocksize;
++	if (len != i_size_read(sbi->s_buddy)) {
++		printk("EXT3-fs: wrong i_size (%u != %u), regenerate\n",
++			(unsigned) len, (unsigned) i_size_read(sbi->s_buddy));
++		*created = 1;
 +	}
 +
-+	err = ext3_create(root, db, S_IFREG, NULL);
-+	if (err) {
-+		printk("error while creation buddy file: %d\n", err);
-+	} else {
-+		sbi->s_buddy = igrab(db->d_inode);
++	/* read/create mb group descriptors */
++	for (i = 0; i < buddy_offset; i++) {
++		handle = ext3_journal_start(sbi->s_buddy, MB_CREDITS);
++		if (IS_ERR(handle)) {
++			printk(KERN_ERR "EXT3-fs: cant start transaction\n");
++			err = PTR_ERR(handle);
++			goto err_out;
++		}
++		
++		bh = ext3_bread(handle, sbi->s_buddy, i, 1, &err);
++		if (bh == NULL) {
++			printk(KERN_ERR "EXT3-fs: cant getblk grp: %d\n", err);
++			goto err_out;
++		}
++		hdr = (struct ext3_mb_group_hdr *) bh->b_data;
++		if (hdr->mh_magic != EXT3_MB_MAGIC_V1) {
++			err = ext3_journal_get_write_access(handle, bh);
++			if (err)
++				goto err_out;
++			*created = 1;
++			printk("EXT3-fs: invalid header 0x%x in %d, regenerate\n", hdr->mh_magic, i);
++			hdr->mh_magic = EXT3_MB_MAGIC_V1;
++			err = ext3_journal_dirty_metadata(handle, bh);
++			if (err)
++				goto err_out;
++		}
++		brelse(bh);
++		ext3_journal_stop(handle);
 +	}
 +
-+map:
++	len = sizeof(struct ext3_buddy_group_blocks);
++	len += sizeof(unsigned) * (sb->s_blocksize_bits + 2);
 +	for (i = 0; i < sbi->s_groups_count; i++) {
-+		struct buffer_head *bh = NULL;
-+		handle_t *handle;
 +
-+		sbi->s_buddy_blocks[i] =
-+			kmalloc(sizeof(struct ext3_buddy_group_blocks),
-+					GFP_KERNEL);
++		sbi->s_buddy_blocks[i] = kmalloc(len, GFP_KERNEL);
 +		if (sbi->s_buddy_blocks[i] == NULL) {
-+			printk("EXT3-fs: can't allocate mem for buddy\n");
++			printk(KERN_ERR "EXT3-fs: cant allocate mem for buddy\n");
 +			err = -ENOMEM;
 +			goto out2;
 +		}
++		memset(sbi->s_buddy_blocks[i], 0, len);
 +
 +		handle = ext3_journal_start(sbi->s_buddy, MB_CREDITS);
 +		if (IS_ERR(handle)) {
++			printk(KERN_ERR "EXT3-fs: cant start transaction\n");
 +			err = PTR_ERR(handle);
 +			goto out2;
 +		}
 +		
 +		/* allocate block for bitmap */
-+		bh = ext3_getblk(handle, sbi->s_buddy, i * 2, 1, &err);
++		block = buddy_offset + i * 2;
++		bh = ext3_getblk(handle, sbi->s_buddy, block, 1, &err);
 +		if (bh == NULL) {
-+			printk("can't get block for buddy bitmap: %d\n", err);
++			printk(KERN_ERR "EXT3-fs: cant getblk bitmap: %d\n", err);
 +			goto out2;
 +		}
 +		sbi->s_buddy_blocks[i]->bb_bitmap = bh->b_blocknr;
 +		brelse(bh);
 +
 +		/* allocate block for buddy */
-+		bh = ext3_getblk(handle, sbi->s_buddy, i * 2 + 1, 1, &err);
++		block = buddy_offset + i * 2 + 1;
++		bh = ext3_getblk(handle, sbi->s_buddy, block, 1, &err);
 +		if (bh == NULL) {
-+			printk("can't get block for buddy: %d\n", err);
++			printk(KERN_ERR "EXT3-fs: cant getblk for buddy: %d\n", err);
 +			goto out2;
 +		}
 +		sbi->s_buddy_blocks[i]->bb_buddy = bh->b_blocknr;
 +		brelse(bh);
++
++		size = (block + 1) << sbi->s_buddy->i_blkbits;
++		if (size > sbi->s_buddy->i_size) {
++			*created = 1;
++			EXT3_I(sbi->s_buddy)->i_disksize = size;
++			i_size_write(sbi->s_buddy, size);
++			mark_inode_dirty(sbi->s_buddy);
++		}
 +		ext3_journal_stop(handle);
++
 +		spin_lock_init(&sbi->s_buddy_blocks[i]->bb_lock);
 +		sbi->s_buddy_blocks[i]->bb_md_cur = NULL;
 +		sbi->s_buddy_blocks[i]->bb_tid = 0;
@@ -1069,8 +1398,30 @@ Index: linux-2.6.5-sles9/fs/ext3/mballoc.c
 +out2:
 +	dput(db);
 +out:
-+	up(&root->i_sem);
 +	return err;
++
++err_out:
++	return err;
++}
++
++int ext3_mb_write_descriptors(struct super_block *sb)
++{
++	struct ext3_sb_info *sbi = EXT3_SB(sb);
++	struct ext3_buddy e3b;
++	int ret = 0, i, err;
++
++	for (i = 0; i < sbi->s_groups_count; i++) {
++		if (sbi->s_buddy_blocks[i] == NULL)
++			continue;
++
++		err = ext3_mb_load_buddy(sb, i, &e3b);
++		if (err == 0) {
++			ext3_mb_update_descr(&e3b);
++			ext3_mb_release_desc(&e3b);
++		} else
++			ret = err;
++	}
++	return ret;
 +}
 +
 +int ext3_mb_release(struct super_block *sb)
@@ -1091,9 +1442,12 @@ Index: linux-2.6.5-sles9/fs/ext3/mballoc.c
 +	ext3_mb_free_committed_blocks(sb);
 +
 +	if (sbi->s_buddy_blocks) {
-+		for (i = 0; i < sbi->s_groups_count; i++)
-+			if (sbi->s_buddy_blocks[i])
-+				kfree(sbi->s_buddy_blocks[i]);
++		ext3_mb_write_descriptors(sb);
++		for (i = 0; i < sbi->s_groups_count; i++) {
++			if (sbi->s_buddy_blocks[i] == NULL)
++				continue;
++			kfree(sbi->s_buddy_blocks[i]);
++		}
 +		kfree(sbi->s_buddy_blocks);
 +	}
 +	if (sbi->s_buddy)
@@ -1101,32 +1455,62 @@ Index: linux-2.6.5-sles9/fs/ext3/mballoc.c
 +	if (sbi->s_blocks_reserved)
 +		printk("ext3-fs: %ld blocks being reserved at umount!\n",
 +				sbi->s_blocks_reserved);
++#ifdef MBALLOC_STATS
++	printk("EXT3-fs: mballoc: %lu blocks %lu reqs (%lu success)\n",
++		sbi->s_bal_allocated, sbi->s_bal_reqs, sbi->s_bal_success);
++	printk("EXT3-fs: mballoc: %lu extents scanned, %lu goal hits, %lu breaks\n",
++		sbi->s_bal_ex_scanned, sbi->s_bal_goals, sbi->s_bal_breaks);
++#endif
 +	return 0;
 +}
 +
-+int ext3_mb_init(struct super_block *sb)
++int ext3_mb_init(struct super_block *sb, int needs_recovery)
 +{
-+	struct ext3_super_block *es;
-+	int i;
++	struct ext3_buddy e3b;
++	int i, err, created;
 +
 +	if (!test_opt(sb, MBALLOC))
 +		return 0;
 +
 +	/* init file for buddy data */
 +	clear_opt(EXT3_SB(sb)->s_mount_opt, MBALLOC);
-+	if (ext3_mb_init_backend(sb))
-+		return 0;
++	if ((err = ext3_mb_init_backend(sb, &created)))
++		return err;
 +
-+	es = EXT3_SB(sb)->s_es;
-+	for (i = 0; i < EXT3_SB(sb)->s_groups_count; i++)
-+		ext3_mb_generate_buddy(sb, i);
++repeat:
++	for (i = 0; i < EXT3_SB(sb)->s_groups_count; i++) {
++		err = ext3_mb_load_buddy(sb, i, &e3b);
++		if (err) {
++			/* FIXME: release backend */
++			return err;
++		}
++		if (created || needs_recovery)
++			ext3_mb_generate_buddy(&e3b);
++		else
++			err = ext3_mb_load_descr(&e3b);
++		ext3_mb_release_desc(&e3b);
++		if (err == -ENODATA) {
++			created = 1;
++			goto repeat;
++		}
++	}
++	if (created || needs_recovery)
++		printk(KERN_ERR "EXT3-fs: generated buddies for %lu groups\n",
++				EXT3_SB(sb)->s_groups_count);
 +	spin_lock_init(&EXT3_SB(sb)->s_reserve_lock);
 +	spin_lock_init(&EXT3_SB(sb)->s_md_lock);
 +	INIT_LIST_HEAD(&EXT3_SB(sb)->s_active_transaction);
 +	INIT_LIST_HEAD(&EXT3_SB(sb)->s_closed_transaction);
 +	INIT_LIST_HEAD(&EXT3_SB(sb)->s_committed_transaction);
 +	set_opt(EXT3_SB(sb)->s_mount_opt, MBALLOC);
-+	printk("EXT3-fs: mballoc enabled\n");
++
++#ifdef MBALLOC_STATS
++	spin_lock_init(&EXT3_SB(sb)->s_bal_lock);
++#define	MBALLOC_INFO	" (stats)"
++#else
++#define	MBALLOC_INFO	""
++#endif
++	printk("EXT3-fs: mballoc enabled%s\n", MBALLOC_INFO);
 +	return 0;
 +}
 +
@@ -1158,7 +1542,7 @@ Index: linux-2.6.5-sles9/fs/ext3/mballoc.c
 +		mb_debug("gonna free %u blocks in group %u (0x%p):",
 +				md->num, md->group, md);
 +
-+		err = ext3_mb_load_desc(sb, md->group, &e3b);
++		err = ext3_mb_load_buddy(sb, md->group, &e3b);
 +		BUG_ON(err != 0);
 +
 +		/* there are blocks to put in buddy to make them really free */
@@ -1263,7 +1647,8 @@ Index: linux-2.6.5-sles9/fs/ext3/mballoc.c
 +}
 +
 +void ext3_mb_free_blocks(handle_t *handle, struct inode *inode,
-+			unsigned long block, unsigned long count, int metadata)
++			unsigned long block, unsigned long count,
++			int metadata, int *freed)
 +{
 +	struct buffer_head *bitmap_bh = NULL;
 +	struct ext3_group_desc *gdp;
@@ -1276,6 +1661,7 @@ Index: linux-2.6.5-sles9/fs/ext3/mballoc.c
 +	struct ext3_buddy e3b;
 +	int err = 0, ret;
 +
++	*freed = 0;
 +	sb = inode->i_sb;
 +	if (!sb) {
 +		printk ("ext3_free_blocks: nonexistent device");
@@ -1345,7 +1731,7 @@ Index: linux-2.6.5-sles9/fs/ext3/mballoc.c
 +	if (err)
 +		goto error_return;
 +
-+	err = ext3_mb_load_desc(sb, block_group, &e3b);
++	err = ext3_mb_load_buddy(sb, block_group, &e3b);
 +	if (err)
 +		goto error_return;
 +
@@ -1356,18 +1742,18 @@ Index: linux-2.6.5-sles9/fs/ext3/mballoc.c
 +	} else { 
 +		ext3_lock_group(sb, block_group);
 +		mb_free_blocks(&e3b, bit, count);
-+		gdp->bg_free_blocks_count =
-+			cpu_to_le16(le16_to_cpu(gdp->bg_free_blocks_count) + count);
 +		ext3_unlock_group(sb, block_group);
-+		percpu_counter_mod(&sbi->s_freeblocks_counter, count);
 +	}
++	spin_lock(sb_bgl_lock(sbi, block_group));
++	gdp->bg_free_blocks_count =
++		cpu_to_le16(le16_to_cpu(gdp->bg_free_blocks_count) + count);
++	spin_unlock(sb_bgl_lock(sbi, block_group));
 +	
 +	ext3_mb_dirty_buddy(&e3b);
 +	ext3_mb_release_desc(&e3b);
 +
-+	/* FIXME: undo logic will be implemented later and another way */
 +	mb_clear_bits(bitmap_bh->b_data, bit, count);
-+	DQUOT_FREE_BLOCK(inode, count);
++	*freed = count;
 +
 +	/* We dirtied the bitmap block */
 +	BUFFER_TRACE(bitmap_bh, "dirtied bitmap block");
@@ -1420,7 +1806,7 @@ Index: linux-2.6.5-sles9/fs/ext3/mballoc.c
 +}
 +
 +int ext3_new_block(handle_t *handle, struct inode *inode,
-+			unsigned long goal, int *errp)
++		unsigned long goal, int *errp)
 +{
 +	int ret, len;
 +
@@ -1435,19 +1821,27 @@ Index: linux-2.6.5-sles9/fs/ext3/mballoc.c
 +}
 +
 +
++extern void ext3_free_blocks_old(handle_t *, struct inode *,
++				unsigned long, unsigned long);
 +void ext3_free_blocks(handle_t *handle, struct inode * inode,
 +			unsigned long block, unsigned long count, int metadata)
 +{
++	int freed;
++
 +	if (!test_opt(inode->i_sb, MBALLOC))
 +		ext3_free_blocks_old(handle, inode, block, count);
-+	else
-+		ext3_mb_free_blocks(handle, inode, block, count, metadata);
++	else {
++		ext3_mb_free_blocks(handle, inode, block, count, metadata, &freed);
++		if (freed)
++			DQUOT_FREE_BLOCK(inode, freed);
++	}
 +	return;
 +}
++
 Index: linux-2.6.5-sles9/fs/ext3/super.c
 ===================================================================
---- linux-2.6.5-sles9.orig/fs/ext3/super.c	2004-11-09 02:23:21.597220752 +0300
-+++ linux-2.6.5-sles9/fs/ext3/super.c	2004-11-09 02:26:12.572228600 +0300
+--- linux-2.6.5-sles9.orig/fs/ext3/super.c	2005-02-23 01:47:15.291333736 +0300
++++ linux-2.6.5-sles9/fs/ext3/super.c	2005-02-23 01:48:54.515249408 +0300
 @@ -389,6 +389,7 @@
  	struct ext3_super_block *es = sbi->s_es;
  	int i;
@@ -1456,47 +1850,54 @@ Index: linux-2.6.5-sles9/fs/ext3/super.c
   	ext3_ext_release(sb);
  	ext3_xattr_put_super(sb);
  	journal_destroy(sbi->s_journal);
-@@ -542,7 +543,7 @@
+@@ -540,6 +541,7 @@
  	Opt_commit, Opt_journal_update, Opt_journal_inum,
  	Opt_abort, Opt_data_journal, Opt_data_ordered, Opt_data_writeback,
  	Opt_ignore, Opt_barrier, Opt_iopen, Opt_noiopen, Opt_iopen_nopriv,
--	Opt_err, Opt_extents, Opt_extdebug
-+	Opt_err, Opt_extents, Opt_extdebug, Opt_mballoc,
++	Opt_mballoc, Opt_mbfactor,
+ 	Opt_err, Opt_extents, Opt_extdebug
  };
  
- static match_table_t tokens = {
-@@ -589,6 +590,7 @@
+@@ -587,6 +589,8 @@
  	{Opt_iopen_nopriv, "iopen_nopriv"},
  	{Opt_extents, "extents"},
  	{Opt_extdebug, "extdebug"},
 +	{Opt_mballoc, "mballoc"},
++	{Opt_mballoc, "mbfactor=%u"},
  	{Opt_err, NULL}
  };
  
-@@ -810,6 +812,9 @@
+@@ -808,6 +812,16 @@
  		case Opt_extdebug:
  			set_opt (sbi->s_mount_opt, EXTDEBUG);
  			break;
 +		case Opt_mballoc:
 +			set_opt (sbi->s_mount_opt, MBALLOC);
 +			break;
++		case Opt_mbfactor:
++			if (match_int(&args[0], &option))
++				return 0;
++			if (option < 0)
++				return 0;
++			sbi->s_mb_factor = option;
++			break;
  		default:
  			printk (KERN_ERR
  				"EXT3-fs: Unrecognized mount option \"%s\" "
-@@ -1463,7 +1468,8 @@
+@@ -1461,7 +1475,8 @@
  		ext3_count_dirs(sb));
  
   	ext3_ext_init(sb);
 - 
-+	ext3_mb_init(sb);
++	ext3_mb_init(sb, needs_recovery);
 +
  	return 0;
  
  failed_mount3:
 Index: linux-2.6.5-sles9/fs/ext3/Makefile
 ===================================================================
---- linux-2.6.5-sles9.orig/fs/ext3/Makefile	2004-11-09 02:23:21.593221360 +0300
-+++ linux-2.6.5-sles9/fs/ext3/Makefile	2004-11-09 02:26:12.572228600 +0300
+--- linux-2.6.5-sles9.orig/fs/ext3/Makefile	2005-02-23 01:02:37.405434272 +0300
++++ linux-2.6.5-sles9/fs/ext3/Makefile	2005-02-23 01:48:54.517249104 +0300
 @@ -5,7 +5,7 @@
  obj-$(CONFIG_EXT3_FS) += ext3.o
  
@@ -1509,7 +1910,7 @@ Index: linux-2.6.5-sles9/fs/ext3/Makefile
 Index: linux-2.6.5-sles9/fs/ext3/balloc.c
 ===================================================================
 --- linux-2.6.5-sles9.orig/fs/ext3/balloc.c	2004-11-03 08:36:51.000000000 +0300
-+++ linux-2.6.5-sles9/fs/ext3/balloc.c	2004-11-09 02:26:53.078070776 +0300
++++ linux-2.6.5-sles9/fs/ext3/balloc.c	2005-02-23 01:48:54.520248648 +0300
 @@ -78,7 +78,7 @@
   *
   * Return buffer_head on success or NULL in case of failure.
@@ -1539,8 +1940,8 @@ Index: linux-2.6.5-sles9/fs/ext3/balloc.c
  	struct buffer_head *bitmap_bh = NULL;
 Index: linux-2.6.5-sles9/fs/ext3/namei.c
 ===================================================================
---- linux-2.6.5-sles9.orig/fs/ext3/namei.c	2004-11-09 02:18:27.616912552 +0300
-+++ linux-2.6.5-sles9/fs/ext3/namei.c	2004-11-09 02:26:12.580227384 +0300
+--- linux-2.6.5-sles9.orig/fs/ext3/namei.c	2005-02-23 01:01:46.551165296 +0300
++++ linux-2.6.5-sles9/fs/ext3/namei.c	2005-02-23 01:48:54.523248192 +0300
 @@ -1640,7 +1640,7 @@
   * If the create succeeds, we fill in the inode information
   * with d_instantiate(). 
@@ -1552,8 +1953,8 @@ Index: linux-2.6.5-sles9/fs/ext3/namei.c
  	handle_t *handle; 
 Index: linux-2.6.5-sles9/fs/ext3/inode.c
 ===================================================================
---- linux-2.6.5-sles9.orig/fs/ext3/inode.c	2004-11-09 02:23:21.592221512 +0300
-+++ linux-2.6.5-sles9/fs/ext3/inode.c	2004-11-09 02:26:12.587226320 +0300
+--- linux-2.6.5-sles9.orig/fs/ext3/inode.c	2005-02-23 01:02:37.404434424 +0300
++++ linux-2.6.5-sles9/fs/ext3/inode.c	2005-02-23 01:48:54.529247280 +0300
 @@ -572,7 +572,7 @@
  		ext3_journal_forget(handle, branch[i].bh);
  	}
@@ -1592,9 +1993,9 @@ Index: linux-2.6.5-sles9/fs/ext3/inode.c
  				/*
 Index: linux-2.6.5-sles9/fs/ext3/extents.c
 ===================================================================
---- linux-2.6.5-sles9.orig/fs/ext3/extents.c	2004-11-09 02:25:56.143726112 +0300
-+++ linux-2.6.5-sles9/fs/ext3/extents.c	2004-11-09 02:26:12.591225712 +0300
-@@ -740,7 +740,7 @@
+--- linux-2.6.5-sles9.orig/fs/ext3/extents.c	2005-02-23 01:02:37.396435640 +0300
++++ linux-2.6.5-sles9/fs/ext3/extents.c	2005-02-23 01:48:54.533246672 +0300
+@@ -774,7 +774,7 @@
  		for (i = 0; i < depth; i++) {
  			if (!ablocks[i])
  				continue;
@@ -1603,7 +2004,7 @@ Index: linux-2.6.5-sles9/fs/ext3/extents.c
  		}
  	}
  	kfree(ablocks);
-@@ -1391,7 +1391,7 @@
+@@ -1431,7 +1431,7 @@
  			path->p_idx->ei_leaf);
  	bh = sb_find_get_block(tree->inode->i_sb, path->p_idx->ei_leaf);
  	ext3_forget(handle, 1, tree->inode, bh, path->p_idx->ei_leaf);
@@ -1612,7 +2013,7 @@ Index: linux-2.6.5-sles9/fs/ext3/extents.c
  	return err;
  }
  
-@@ -1879,10 +1879,12 @@
+@@ -1919,10 +1919,12 @@
  	int needed = ext3_remove_blocks_credits(tree, ex, from, to);
  	handle_t *handle = ext3_journal_start(tree->inode, needed);
  	struct buffer_head *bh;
@@ -1626,7 +2027,7 @@ Index: linux-2.6.5-sles9/fs/ext3/extents.c
  	if (from >= ex->ee_block && to == ex->ee_block + ex->ee_len - 1) {
  		/* tail removal */
  		unsigned long num, start;
-@@ -1894,7 +1896,7 @@
+@@ -1934,7 +1936,7 @@
  			bh = sb_find_get_block(tree->inode->i_sb, start + i);
  			ext3_forget(handle, 0, tree->inode, bh, start + i);
  		}
@@ -1637,8 +2038,8 @@ Index: linux-2.6.5-sles9/fs/ext3/extents.c
  			from, to, ex->ee_block, ex->ee_len);
 Index: linux-2.6.5-sles9/fs/ext3/xattr.c
 ===================================================================
---- linux-2.6.5-sles9.orig/fs/ext3/xattr.c	2004-11-09 02:22:55.777146000 +0300
-+++ linux-2.6.5-sles9/fs/ext3/xattr.c	2004-11-09 02:26:12.593225408 +0300
+--- linux-2.6.5-sles9.orig/fs/ext3/xattr.c	2005-02-23 01:01:52.387278072 +0300
++++ linux-2.6.5-sles9/fs/ext3/xattr.c	2005-02-23 01:48:54.537246064 +0300
 @@ -1366,7 +1366,7 @@
  			new_bh = sb_getblk(sb, block);
  			if (!new_bh) {
@@ -1668,26 +2069,32 @@ Index: linux-2.6.5-sles9/fs/ext3/xattr.c
  	} else {
 Index: linux-2.6.5-sles9/include/linux/ext3_fs.h
 ===================================================================
---- linux-2.6.5-sles9.orig/include/linux/ext3_fs.h	2004-11-09 02:25:17.238640584 +0300
-+++ linux-2.6.5-sles9/include/linux/ext3_fs.h	2004-11-09 02:26:12.596224952 +0300
-@@ -57,6 +57,8 @@
+--- linux-2.6.5-sles9.orig/include/linux/ext3_fs.h	2005-02-23 01:02:37.414432904 +0300
++++ linux-2.6.5-sles9/include/linux/ext3_fs.h	2005-02-23 01:48:54.539245760 +0300
+@@ -57,6 +57,14 @@
  #define ext3_debug(f, a...)	do {} while (0)
  #endif
  
 +#define EXT3_MULTIBLOCK_ALLOCATOR	1
 +
++#define EXT3_MB_HINT_MERGE		1
++#define EXT3_MB_HINT_RESERVED		2
++#define EXT3_MB_HINT_METADATA		4
++#define EXT3_MB_HINT_FIRST		8
++#define EXT3_MB_HINT_BEST		16
++
  /*
   * Special inodes numbers
   */
-@@ -339,6 +341,7 @@
+@@ -339,6 +347,7 @@
  #define EXT3_MOUNT_IOPEN_NOPRIV		0x80000	/* Make iopen world-readable */
  #define EXT3_MOUNT_EXTENTS		0x100000/* Extents support */
  #define EXT3_MOUNT_EXTDEBUG		0x200000/* Extents debug */
-+#define EXT3_MOUNT_MBALLOC		0x400000/* Buddy allocation support */
++#define EXT3_MOUNT_MBALLOC		0x100000/* Buddy allocation support */
  
  /* Compatibility, for having both ext2_fs.h and ext3_fs.h included at once */
  #ifndef clear_opt
-@@ -698,7 +701,7 @@
+@@ -698,7 +707,7 @@
  extern unsigned long ext3_bg_num_gdb(struct super_block *sb, int group);
  extern int ext3_new_block (handle_t *, struct inode *, unsigned long, int *);
  extern void ext3_free_blocks (handle_t *, struct inode *, unsigned long,
@@ -1696,24 +2103,48 @@ Index: linux-2.6.5-sles9/include/linux/ext3_fs.h
  extern unsigned long ext3_count_free_blocks (struct super_block *);
  extern void ext3_check_blocks_bitmap (struct super_block *);
  extern struct ext3_group_desc * ext3_get_group_desc(struct super_block * sb,
-@@ -743,6 +746,13 @@
- extern int ext3_ioctl (struct inode *, struct file *, unsigned int,
- 		       unsigned long);
+@@ -820,6 +829,37 @@
+ extern int ext3_ext_ioctl(struct inode *inode, struct file *filp,
+ 			  unsigned int cmd, unsigned long arg);
  
 +/* mballoc.c */
-+extern int ext3_mb_init(struct super_block *sb);
-+extern int ext3_mb_new_blocks(handle_t *handle, struct inode *inode,
-+			      unsigned long goal,int *len, int flags,int *errp);
-+extern int ext3_mb_release(struct super_block *sb);
++extern int ext3_mb_init(struct super_block *, int);
++extern int ext3_mb_release(struct super_block *);
++extern int ext3_mb_new_blocks(handle_t *, struct inode *, unsigned long, int *, int, int *);
++extern int ext3_mb_reserve_blocks(struct super_block *, int);
 +extern void ext3_mb_release_blocks(struct super_block *, int);
 +
- /* namei.c */
- extern int ext3_orphan_add(handle_t *, struct inode *);
- extern int ext3_orphan_del(handle_t *, struct inode *);
++/* writeback.c */
++extern int ext3_wb_writepages(struct address_space *, struct writeback_control *);
++extern int ext3_wb_prepare_write(struct file *file, struct page *page,
++			      unsigned from, unsigned to);
++extern int ext3_wb_commit_write(struct file *, struct page *, unsigned, unsigned);
++extern int ext3_wb_writepage(struct page *, struct writeback_control *);
++extern int ext3_wb_invalidatepage(struct page *, unsigned long);
++extern int ext3_wb_releasepage(struct page *, int);
++extern int ext3_wb_block_truncate_page(handle_t *, struct page *, struct address_space *, loff_t);
++extern void ext3_wb_init(struct super_block *);
++extern void ext3_wb_release(struct super_block *);
++
++/* writeback.c */
++extern int ext3_wb_writepages(struct address_space *, struct writeback_control *);
++extern int ext3_wb_prepare_write(struct file *file, struct page *page,
++			      unsigned from, unsigned to);
++extern int ext3_wb_commit_write(struct file *, struct page *, unsigned, unsigned);
++extern int ext3_wb_writepage(struct page *, struct writeback_control *);
++extern int ext3_wb_invalidatepage(struct page *, unsigned long);
++extern int ext3_wb_releasepage(struct page *, int);
++extern int ext3_wb_block_truncate_page(handle_t *, struct page *, struct address_space *, loff_t);
++extern void ext3_wb_init(struct super_block *);
++extern void ext3_wb_release(struct super_block *);
++
+ #endif	/* __KERNEL__ */
+ 
+ #define EXT3_IOC_CREATE_INUM			_IOW('f', 5, long)
 Index: linux-2.6.5-sles9/include/linux/ext3_fs_sb.h
 ===================================================================
---- linux-2.6.5-sles9.orig/include/linux/ext3_fs_sb.h	2004-11-09 02:20:51.598024096 +0300
-+++ linux-2.6.5-sles9/include/linux/ext3_fs_sb.h	2004-11-09 02:28:18.753046200 +0300
+--- linux-2.6.5-sles9.orig/include/linux/ext3_fs_sb.h	2005-02-23 01:01:48.242908112 +0300
++++ linux-2.6.5-sles9/include/linux/ext3_fs_sb.h	2005-02-23 01:48:54.541245456 +0300
 @@ -23,10 +23,30 @@
  #define EXT_INCLUDE
  #include <linux/blockgroup_lock.h>
@@ -1731,21 +2162,21 @@ Index: linux-2.6.5-sles9/include/linux/ext3_fs_sb.h
 +	struct list_head list;
 +};
 +
-+#define EXT3_BB_MAX_ORDER	14
-+
 +struct ext3_buddy_group_blocks {
-+	sector_t	bb_bitmap;
-+	sector_t	bb_buddy;
++	__u32		bb_bitmap;
++	__u32		bb_buddy;
 +	spinlock_t	bb_lock;
-+	unsigned 	bb_counters[EXT3_BB_MAX_ORDER];
++	unsigned long 	bb_tid;
 +	struct ext3_free_metadata *bb_md_cur;
-+	unsigned long bb_tid;
++	unsigned short	bb_first_free;
++	unsigned short	bb_free;
++	unsigned 	bb_counters[];
 +};
 +
  /*
   * third extended-fs super-block data in memory
   */
-@@ -78,6 +98,17 @@
+@@ -78,6 +98,27 @@
  	struct timer_list turn_ro_timer;	/* For turning read-only (crash simulation) */
  	wait_queue_head_t ro_wait_queue;	/* For people waiting for the fs to go read-only */
  #endif
@@ -1760,6 +2191,16 @@ Index: linux-2.6.5-sles9/include/linux/ext3_fs_sb.h
 +	struct list_head s_committed_transaction;
 +	spinlock_t s_md_lock;
 +	tid_t s_last_transaction;
++	int s_mb_factor;
++
++	/* stats for buddy allocator */
++	spinlock_t s_bal_lock;
++	unsigned long s_bal_reqs;	/* number of reqs with len > 1 */
++	unsigned long s_bal_success;	/* we found long enough chunks */
++	unsigned long s_bal_allocated;	/* in blocks */
++	unsigned long s_bal_ex_scanned;	/* total extents scanned */
++	unsigned long s_bal_goals;	/* goal hits */
++	unsigned long s_bal_breaks;	/* too long searches */
  };
  
  #endif	/* _LINUX_EXT3_FS_SB */

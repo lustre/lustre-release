@@ -706,10 +706,11 @@ static int ext3_ext_find_goal(struct inode *inode, struct ext3_ext_path *path,
 
 static int ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
                                   struct ext3_ext_path *path,
-                                  struct ext3_extent *newex, int exist)
+                                  struct ext3_ext_cache *cex)
 {
         struct inode *inode = tree->inode;
         struct bpointers *bp = tree->private;
+        struct ext3_extent nex;
         int count, err, goal;
         unsigned long pblock;
         unsigned long tgen;
@@ -721,19 +722,19 @@ static int ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
         EXT_ASSERT(i == path->p_depth);
         EXT_ASSERT(path[i].p_hdr);
 
-        if (exist) {
+       	if (cex->ec_type == EXT3_EXT_CACHE_EXTENT) {
                 err = EXT_CONTINUE;
                 goto map;
         }
 
         if (bp->create == 0) {
                 i = 0;
-                if (newex->ee_block < bp->start)
-                        i = bp->start - newex->ee_block;
-                if (i >= newex->ee_len)
+                if (cex->ec_block < bp->start)
+                        i = bp->start - cex->ec_block;
+                if (i >= cex->ec_len)
                         CERROR("nothing to do?! i = %d, e_num = %u\n",
-                                        i, newex->ee_len);
-                for (; i < newex->ee_len && bp->num; i++) {
+                                        i, cex->ec_len);
+                for (; i < cex->ec_len && bp->num; i++) {
                         *(bp->created) = 0;
                         bp->created++;
                         *(bp->blocks) = 0;
@@ -757,34 +758,44 @@ static int ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
                 return PTR_ERR(handle);
         }
 
+        ext3_down_truncate_sem(inode);
         if (tgen != EXT_GENERATION(tree)) {
                 /* the tree has changed. so path can be invalid at moment */
                 lock_24kernel();
                 journal_stop(handle);
                 unlock_24kernel();
-                ext3_down_truncate_sem(inode);
                 return EXT_REPEAT;
         }
 
-        ext3_down_truncate_sem(inode);
-        count = newex->ee_len;
-        goal = ext3_ext_find_goal(inode, path, newex->ee_block, &aflags);
+        count = cex->ec_len;
+        goal = ext3_ext_find_goal(inode, path, cex->ec_block, &aflags);
         aflags |= 2; /* block have been already reserved */
         pblock = ext3_mb_new_blocks(handle, inode, goal, &count, aflags, &err);
         if (!pblock)
                 goto out;
-        EXT_ASSERT(count <= newex->ee_len);
+        EXT_ASSERT(count <= cex->ec_len);
 
         /* insert new extent */
-        newex->ee_start = pblock;
-        newex->ee_len = count;
-        err = ext3_ext_insert_extent(handle, tree, path, newex);
+        nex.ee_block = cex->ec_block;
+        nex.ee_start = pblock;
+        nex.ee_len = count;
+        err = ext3_ext_insert_extent(handle, tree, path, &nex);
         if (err)
                 goto out;
 
+        /*
+         * Putting len of the actual extent we just inserted,
+         * we are asking ext3_ext_walk_space() to continue 
+         * scaning after that block
+         */
+        cex->ec_len = nex.ee_len;
+        cex->ec_start = nex.ee_start;
+        BUG_ON(nex.ee_len == 0);
+        BUG_ON(nex.ee_block != cex->ec_block);
+
         /* correct on-disk inode size */
-        if (newex->ee_len > 0) {
-                new_i_size = (loff_t) newex->ee_block + newex->ee_len;
+        if (nex.ee_len > 0) {
+                new_i_size = (loff_t) nex.ee_block + nex.ee_len;
                 new_i_size = new_i_size << inode->i_blkbits;
                 if (new_i_size > EXT3_I(inode)->i_disksize) {
                         EXT3_I(inode)->i_disksize = new_i_size;
@@ -804,19 +815,22 @@ map:
                         CERROR("initial space: %lu:%u\n",
                                 bp->start, bp->init_num);
                         CERROR("current extent: %u/%u/%u %d\n",
-                                newex->ee_block, newex->ee_len,
-                                newex->ee_start, exist);
+                                cex->ec_block, cex->ec_len,
+                                cex->ec_start, cex->ec_type);
                 }
                 i = 0;
-                if (newex->ee_block < bp->start)
-                        i = bp->start - newex->ee_block;
-                if (i >= newex->ee_len)
+                if (cex->ec_block < bp->start)
+                        i = bp->start - cex->ec_block;
+                if (i >= cex->ec_len)
                         CERROR("nothing to do?! i = %d, e_num = %u\n",
-                                        i, newex->ee_len);
-                for (; i < newex->ee_len && bp->num; i++) {
-                        *(bp->created) = (exist == 0 ? 1 : 0);
+                                        i, cex->ec_len);
+                for (; i < cex->ec_len && bp->num; i++) {
+                        if (cex->ec_type == EXT3_EXT_CACHE_EXTENT)
+                                *(bp->created) = 0;
+                        else
+                                *(bp->created) = 1;
                         bp->created++;
-                        *(bp->blocks) = newex->ee_start + i;
+                        *(bp->blocks) = cex->ec_start + i;
                         bp->blocks++;
                         bp->num--;
                         bp->start++;
