@@ -17,7 +17,7 @@ EXTN_EXTRA = include/linux/xattr.h include/linux/extN_xattr.h fs/extN/xattr.c
 extN_SOURCES = $(EXTNC) $(EXTNI) xattr.c # punch.c
 extN_DEPENDENCIES = patch-stamp
 EXTRA_DIST = $(EXTNP) extN-2.4.18-ino_sb_fixup.diff extN-2.4.18-exports.diff
-DISTCLEANFILES = $(EXTNC) $(EXTNI) patch-stamp *.orig *.rej
+DISTCLEANFILES = $(extN_SOURCES) patch-stamp *.orig *.rej
 SUB=-e "s/ext3/extN/g" -e "s/EXT3/EXTN/g"
 
 include $(top_srcdir)/Rules
