@@ -56,6 +56,7 @@ $(VERSIONED) : %.lyx: %.lin Makefile
 
 .tex.dvi:
 	$(LATEX) $<
+	$(LATEX) $<
 
 .dvi.ps:
 	$(DVIPS) $< -o $@
