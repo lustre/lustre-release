@@ -875,11 +875,16 @@ void ll_umount_begin(struct super_block *sb)
         struct ll_sb_info *sbi = ll_s2sbi(sb);
         struct obd_device *obd;
         struct obd_ioctl_data ioc_data = { 0 };
-
         ENTRY;
         CDEBUG(D_VFSTRACE, "VFS Op:\n");
 
         obd = class_conn2obd(&sbi->ll_mdc_conn);
+        if (obd == NULL) {
+                CERROR("Invalid MDC connection handle "LPX64"\n",
+                       sbi->ll_mdc_conn.cookie);
+                EXIT;
+                return;
+        }
         obd->obd_no_recov = 1;
         obd_iocontrol(IOC_OSC_SET_ACTIVE, &sbi->ll_mdc_conn, sizeof ioc_data,
                       &ioc_data, NULL);
