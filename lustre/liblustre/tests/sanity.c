@@ -146,6 +146,7 @@ static void pages_io(int xfer, loff_t pos)
                 }
 	}
         printf("succefully write %d pages(%d per xfer)\n", _npages, xfer);
+
         memset(_buffer, 0, sizeof(_buffer));
 
         /* read */
@@ -323,7 +324,7 @@ void t12()
         ENTRY("empty directory readdir");
 
         t_mkdir(dir);
-        fd = t_opendir(dir);
+        fd = t_open(dir);
         t_ls(fd, buf, sizeof(buf));
         t_close(fd);
         t_rmdir(dir);
@@ -346,7 +347,7 @@ void t13()
                 sprintf(name, "%s%s%05d", dir, prefix, i);
                 t_touch(name);
         }
-        fd = t_opendir(dir);
+        fd = t_open(dir);
         t_ls(fd, buf, sizeof(buf));
         t_close(fd);
         printf("Cleanup...\n");
@@ -374,7 +375,7 @@ void t14()
                 sprintf(name, "%s%s%05d", dir, prefix, i);
                 t_touch(name);
         }
-        fd = t_opendir(dir);
+        fd = t_open(dir);
         t_ls(fd, buf, sizeof(buf));
         t_close(fd);
         printf("Cleanup...\n");
