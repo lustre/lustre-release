@@ -163,6 +163,10 @@ int client_obd_connect(struct lustre_handle *conn, struct obd_device *obd,
         request->rq_connection->c_level = LUSTRE_CONN_FULL;
         cli->cl_import.imp_handle = *(struct lustre_handle *)request->rq_repmsg;
 
+        recovd_conn_manage(cli->cl_import.imp_connection,
+                           ptlrpc_recovd, ll_recover);
+
+
         EXIT;
 out_req:
         ptlrpc_free_req(request);

@@ -165,6 +165,9 @@ EXPORT_SYMBOL(lustre_msg_size);
 EXPORT_SYMBOL(lustre_unpack_msg);
 EXPORT_SYMBOL(lustre_msg_buf);
 
+EXPORT_SYMBOL(ll_recover);
+
+
 MODULE_AUTHOR("Cluster File Systems, Inc <info@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre Request Processor v1.0");
 MODULE_LICENSE("GPL");

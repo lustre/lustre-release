@@ -131,8 +131,6 @@ static struct super_block * ll_read_super(struct super_block *sb,
                 CERROR("cannot connect to %s: rc = %d\n", mdc, err);
                 GOTO(out_free, sb = NULL);
         }
-        recovd_conn_manage(obd->u.cli.cl_import.imp_connection,
-                           ptlrpc_recovd, ll_recover);
         
 #warning Peter: is this the right place to raise the connection level?
         sbi2mdc(sbi)->cl_import.imp_connection->c_level = LUSTRE_CONN_FULL;
@@ -147,8 +145,6 @@ static struct super_block * ll_read_super(struct super_block *sb,
                 CERROR("cannot connect to %s: rc = %d\n", osc, err);
                 GOTO(out_mdc, sb = NULL);
         }
-        recovd_conn_manage(obd->u.cli.cl_import.imp_connection,
-                           ptlrpc_recovd, ll_recover);
 
         /* XXX: need to store the last_* values somewhere */
         err = mdc_getstatus(&sbi->ll_mdc_conn, &rootfid, &last_committed,

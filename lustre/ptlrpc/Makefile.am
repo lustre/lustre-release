@@ -9,6 +9,6 @@ MODULE = ptlrpc
 modulefs_DATA = ptlrpc.o
 EXTRA_PROGRAMS = ptlrpc
 
-ptlrpc_SOURCES = recovd.c connection.c rpc.c events.c service.c client.c niobuf.c pack_generic.c
+ptlrpc_SOURCES = recovd.c recover.c connection.c rpc.c events.c service.c client.c niobuf.c pack_generic.c
 
 include $(top_srcdir)/Rules

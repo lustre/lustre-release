@@ -44,4 +44,6 @@ int recovd_cleanup(struct recovd_obd *mgr);
 
 extern struct recovd_obd *ptlrpc_recovd;
 
+int ll_recover(struct recovd_data *rd, int phase);
+
 #endif

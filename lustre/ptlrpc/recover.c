@@ -23,6 +23,8 @@
 #include <linux/lustre_lite.h>
 #include <linux/lustre_ha.h>
 
+#if 0
+/* FIXME: reference to mdc_getstatus causes dependency problems */
 static int ll_reconnect(struct ll_sb_info *sbi)
 {
         struct ll_fid rootfid;
@@ -49,6 +51,7 @@ static int ll_reconnect(struct ll_sb_info *sbi)
  out_disc:
         return err;
 }
+#endif
 
 static int ll_recover_upcall(struct ptlrpc_connection *conn)
 {

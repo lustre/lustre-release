@@ -14,7 +14,7 @@ page.c:
 
 
 LINX=page.c
-llite_SOURCES = dcache.c recover.c commit_callback.c super.c rw.c
+llite_SOURCES = dcache.c commit_callback.c super.c rw.c
 llite_SOURCES += file.c dir.c sysctl.c namei.c symlink.c $(LINX)
 llite_SOURCES += lov_pack.c
 
