@@ -219,6 +219,10 @@ static int get_obd_uuids(DIR *dir, char *dname, struct find_param *param)
                                 break;
                         }
                 }
+                if (param->obdindex == OBD_NOT_FOUND) {
+                        printf("unknown obduuid: %s\n", param->obduuid);
+                        return EINVAL;
+                }
         } else if (!param->quiet) {
                 printf("OBDS:\n");
                 for (i = 0, uuidp = param->uuids; i < obdcount; i++, uuidp++)
@@ -231,21 +235,23 @@ static int get_obd_uuids(DIR *dir, char *dname, struct find_param *param)
 void lov_dump_user_lmm_v1(struct lov_user_md_v1 *lum, char *dname, char *fname,
                           int obdindex, int quiet, int header, int body)
 {
-        int i;
+        int i, obdstripe = 0;
 
         if (obdindex != OBD_NOT_FOUND) {
                 for (i = 0; i < lum->lmm_stripe_count; i++) {
                         if (obdindex == lum->lmm_objects[i].l_ost_idx) {
                                 printf("%s/%s\n", dname, fname);
+                                obdstripe = 1;
                                 break;
                         }
                 }
         } else if (!quiet) {
                 printf("%s/%s\n", dname, fname);
+                obdstripe = 1;
         }
 
-        if (header) {
-                printf("lmm_magic:          0x%80X\n",  lum->lmm_magic);
+        if (header && (obdstripe == 1)) {
+                printf("lmm_magic:          0x%08X\n",  lum->lmm_magic);
                 printf("lmm_object_gr:      "LPX64"\n", lum->lmm_object_gr);
                 printf("lmm_object_id:      "LPX64"\n", lum->lmm_object_id);
                 printf("lmm_stripe_count:   %u\n", (int)lum->lmm_stripe_count);
@@ -256,15 +262,17 @@ void lov_dump_user_lmm_v1(struct lov_user_md_v1 *lum, char *dname, char *fname,
         if (body) {
                 long long oid;
 
-                if (!quiet)
+                if ((!quiet) && (obdstripe == 1))
                         printf("\tobdidx\t\t objid\t\tobjid\t\t group\n");
 
                 for (i = 0; i < lum->lmm_stripe_count; i++) {
                         int idx = lum->lmm_objects[i].l_ost_idx;
                         oid = lum->lmm_objects[i].l_object_id;
-                        printf("\t%6u\t%14llu\t%#13llx\t%14lld%s\n", idx, oid,
-                               oid, (long long)lum->lmm_objects[i].l_object_gr,
-                               obdindex == idx ? " *" : "");
+                        if ((obdindex == OBD_NOT_FOUND) || (obdindex == idx))
+                                printf("\t%6u\t%14llu\t%#13llx\t%14lld%s\n",
+                                       idx, oid, oid, 
+                                       (long long)lum->lmm_objects[i].l_object_gr,
+                                       obdindex == idx ? " *" : "");
                 }
                 printf("\n");
         }
