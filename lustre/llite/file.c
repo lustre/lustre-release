@@ -63,7 +63,7 @@ static int ll_file_open(struct inode *inode, struct file *file)
         struct lov_stripe_md *lsm = NULL;
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct ll_inode_info *lli = ll_i2info(inode);
-        int rc;
+        int rc = 0;
         ENTRY;
 
         LASSERT(!file->private_data);
