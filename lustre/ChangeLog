@@ -15,8 +15,8 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 2004-02-06  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.0.4
        * kernel patches
+	- fix truncated write corruption (2366)
 	- fix for failed assertion in iopen_connect_dentry (1792,2517)
-
 
 2004-01-27  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.0.3

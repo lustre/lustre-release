@@ -29,3 +29,4 @@ gfp_memalloc-2.4.24.patch
 ext3-xattr-ptr-arith-fix.patch
 kernel_text_address-2.4.20-vanilla.patch 
 procfs-ndynamic-2.4.21-suse2.patch 
+ext3-truncate-buffer-head.patch

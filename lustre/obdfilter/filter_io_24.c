@@ -124,7 +124,7 @@ static int filter_direct_io(int rw, struct dentry *dchild, struct kiobuf *iobuf,
         }
         up(&exp->exp_obd->u.filter.fo_alloc_lock);
 
-        filter_tally_write(&obd->u.filter, iobuf->maplist, iobuf->nr_pages, 
+        filter_tally_write(&obd->u.filter, iobuf->maplist, iobuf->nr_pages,
                            iobuf->blocks, blocks_per_page);
 
         if (attr->ia_size > inode->i_size)
@@ -148,6 +148,14 @@ static int filter_direct_io(int rw, struct dentry *dchild, struct kiobuf *iobuf,
 
         check_pending_bhs(iobuf->blocks, iobuf->nr_pages, inode->i_dev,
                           1 << inode->i_blkbits);
+
+        rc = filemap_fdatasync(inode->i_mapping);
+        if (rc == 0)
+                rc = fsync_inode_data_buffers(inode);
+        if (rc == 0)
+                rc = filemap_fdatawait(inode->i_mapping);
+        if (rc < 0)
+                GOTO(cleanup, rc);
 
         rc = brw_kiovec(WRITE, 1, &iobuf, inode->i_dev, iobuf->blocks,
                         1 << inode->i_blkbits);

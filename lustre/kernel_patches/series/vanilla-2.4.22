@@ -32,3 +32,4 @@ gfp_memalloc-2.4.22.patch
 ext3-xattr-ptr-arith-fix.patch
 3.5G-address-space-2.4.22-vanilla.patch
 procfs-ndynamic-2.4.patch
+ext3-truncate-buffer-head.patch

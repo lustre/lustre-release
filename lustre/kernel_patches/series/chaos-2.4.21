@@ -31,3 +31,4 @@ gfp_memalloc-2.4.21-chaos.patch
 ext3-xattr-ptr-arith-fix.patch
 kernel_text_address-2.4.18-chaos.patch
 pagecache-lock-2.4.21-chaos.patch 
+ext3-truncate-buffer-head.patch
