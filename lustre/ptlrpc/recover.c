@@ -61,9 +61,7 @@ int ptlrpc_reconnect_import(struct obd_import *imp)
         struct ptlrpc_request *req;
         struct lustre_handle old_hdl;
         __u64 committed_before_reconnect = imp->imp_peer_committed_transno;
-
-        CERROR("reconnect handle "LPX64"\n",
-               imp->imp_dlm_handle.cookie);
+        ENTRY;
 
         req = ptlrpc_prep_req(imp, imp->imp_connect_op, 3, size, tmp);
         if (!req)

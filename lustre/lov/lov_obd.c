@@ -2242,13 +2242,8 @@ static int lov_statfs(struct obd_device *obd, struct obd_statfs *osfs,
                 err = obd_statfs(class_conn2obd(&lov->tgts[i].conn), &lov_sfs,
                                  max_age);
                 if (err) {
-                        if (lov->tgts[i].active) {
-                                CERROR("error: statfs OSC %s on OST idx %d: "
-                                       "err = %d\n",
-                                       lov->tgts[i].uuid.uuid, i, err);
-                                if (!rc)
-                                        rc = err;
-                        }
+                        if (lov->tgts[i].active && !rc)
+                                rc = err;
                         continue;
                 }
 

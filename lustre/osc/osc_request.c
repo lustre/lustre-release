@@ -1688,10 +1688,8 @@ static int osc_statfs(struct obd_device *obd, struct obd_statfs *osfs,
         request->rq_replen = lustre_msg_size(1, &size);
 
         rc = ptlrpc_queue_wait(request);
-        if (rc) {
-                CERROR("%s failed: rc = %d\n", __FUNCTION__, rc);
+        if (rc)
                 GOTO(out, rc);
-        }
 
         msfs = lustre_swab_repbuf(request, 0, sizeof(*msfs),
                                   lustre_swab_obd_statfs);
