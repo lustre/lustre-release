@@ -134,7 +134,6 @@ run_one() {
     # Pretty tests run faster.
     echo -n '=====' $testnum: $message
     local suffixlen=`echo -n $2 | awk '{print 65 - length($0)}'`
-    local suffixlen=$((65 - `echo -n $2 | wc -c | awk '{print $1}'`))
     printf ' %.*s\n' $suffixlen $EQUALS
 
     test_${testnum} || error "test_$testnum failed with $?"
