@@ -15,11 +15,9 @@ TEXEXPAND = texexpand
 SUFFIXES = .lin .lyx .pdf .ps .sgml .html .txt .tex .fig .eps .dvi
 
 if DOC
-  DOCS = lustre.pdf lustre-HOWTO.txt
-  HOWTODOC = lustre-HOWTO.txt
+  DOCS = lustre.pdf
 else
   DOCS =
-  HOWTODOC =
 endif
 
 IMAGES := $(patsubst %.fig,%.eps,$(wildcard *.fig))
@@ -28,12 +26,12 @@ LYXFILES= $(filter-out $(patsubst %.lin,%.lyx,$(wildcard *.lin)),\
 
 MAINTAINERCLEANFILES =  $(IMAGES) $(DOCS) $(VERSIONED)
 CLEANFILES = *.aux *.tex doc.old/*.aux doc.old/*.tex *.eps *.log *.pdf
-VERSIONED = lustre-HOWTO.lyx lustre.lyx doc.old/lustre-HOWTO.lyx doc.old/lustre.lyx
+VERSIONED = lustre.lyx doc.old/lustre.lyx
 GENERATED = $(VERSIONED) lustre-full.tex lustre-chbar.tex
 
 EXTRA_DIST = chbar.sh postbar tex2pdf $(DOCS) $(IMAGES) $(LYXFILES) lustre.bib
 
-all: $(HOWTODOC)
+all:
 docs: $(DOCS)
 
 # These variables are set by lbuild/check-build.
@@ -79,7 +77,7 @@ $(VERSIONED) : %.lyx: %.lin Makefile
 .ps.pdf:
 	$(PS2PDF) $< $@
 
-lustre.tex lustre.pdf lustre.txt lustre.html: $(IMAGES) $(LYXFILES) lustre-HOWTO.lyx
+lustre.tex lustre.pdf lustre.txt lustre.html: $(IMAGES) $(LYXFILES)
 .fig.eps:
 	-fig2dev -L eps $< > $@
 
@@ -105,8 +103,6 @@ lustre-chbar-nopdf.tex: lustre-chbar.tex
 %-chbar.tex: chbar.sh postbar doc.old/%-full.tex %-full.tex
 	$(SHELL) $(srcdir)/chbar.sh doc.old/$*-full.tex $*-full.tex | $(srcdir)/postbar > $@
 
-# This rule needs to come before the next %-full.tex rule.
-doc.old/lustre.tex: doc.old/lustre-HOWTO.lyx
 doc.old/%-full.tex: doc.old/%.tex
 	cd doc.old && $(TEXEXPAND) -texinputs=. -output=$*-full.tex $*.tex
 
@@ -115,7 +111,7 @@ doc.old/%-full.tex: doc.old/%.tex
 	$(TEXEXPAND) -texinputs=. -texinputs=$(srcdir) -output=$@ $<
 
 # Check out the old directory if it doesn't exist.
-doc.old/lustre.lin doc.old/lustre-HOWTO.lin:
+doc.old/lustre.lin:
 	@if test "X$(OLD)" = X; then \
 	  echo "You must populate doc.old or specify a CVS tag like OLD=v0_5_1"; \
 	  exit 1; \
