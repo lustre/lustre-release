@@ -91,6 +91,11 @@ void mds_ext2_delete_inode(struct inode *inode)
         mds_ext2_fs_ops.cl_delete_inode(inode);
 }
 
+int mds_ext2_journal_data(struct inode *inode, struct file *filp)
+{
+        return 0;
+}
+
 struct mds_fs_operations mds_ext2_fs_ops = {
         fs_start:       mds_ext2_start,
         fs_commit:      mds_ext2_stop,
@@ -100,4 +105,5 @@ struct mds_fs_operations mds_ext2_fs_ops = {
         fs_readpage:    mds_ext2_readpage,
         fs_delete_inode:mds_ext2_delete_inode,
         cl_delete_inode:clear_inode,
+        fs_journal_data:mds_ext2_journal_data,
 };

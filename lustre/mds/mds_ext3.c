@@ -140,7 +140,7 @@ static ssize_t mds_ext3_readpage(struct file *file, char *buf, size_t count,
 
 struct mds_fs_operations mds_ext3_fs_ops;
 
-void mds_ext3_delete_inode(struct inode * inode)
+void mds_ext3_delete_inode(struct inode *inode)
 {
         void *handle;
 
@@ -164,6 +164,13 @@ void mds_ext3_delete_inode(struct inode * inode)
                 mds_ext3_fs_ops.cl_delete_inode(inode);
 }
 
+int mds_ext3_journal_data(struct inode *inode, struct file *filp)
+{
+        EXT3_I(inode)->i_flags |= EXT3_JOURNAL_DATA_FL;
+
+        return 0;
+}
+
 struct mds_fs_operations mds_ext3_fs_ops = {
         fs_start:       mds_ext3_start,
         fs_commit:      mds_ext3_commit,
@@ -173,4 +180,5 @@ struct mds_fs_operations mds_ext3_fs_ops = {
         fs_readpage:    mds_ext3_readpage,
         fs_delete_inode:mds_ext3_delete_inode,
         cl_delete_inode:clear_inode,
+        fs_journal_data:mds_ext3_journal_data,
 };
