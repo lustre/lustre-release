@@ -33,14 +33,20 @@
 #include <linux/obd_lov.h>
 #include <linux/lustre_lib.h>
 
-/* lov_unpackdesc() is in lov/lov_pack.c */
-
-void lov_packdesc(struct lov_desc *ld)
+void le_lov_desc_to_cpu (struct lov_desc *ld)
 {
-        ld->ld_tgt_count = HTON__u32(ld->ld_tgt_count);
-        ld->ld_default_stripe_count = HTON__u32(ld->ld_default_stripe_count);
-        ld->ld_default_stripe_size = HTON__u32(ld->ld_default_stripe_size);
-        ld->ld_pattern = HTON__u32(ld->ld_pattern);
+        ld->ld_tgt_count = le32_to_cpu (ld->ld_tgt_count);
+        ld->ld_default_stripe_count = le32_to_cpu (ld->ld_default_stripe_count);
+        ld->ld_default_stripe_size = le32_to_cpu (ld->ld_default_stripe_size);
+        ld->ld_pattern = le32_to_cpu (ld->ld_pattern);
+}
+
+void cpu_to_le_lov_desc (struct lov_desc *ld)
+{
+        ld->ld_tgt_count = cpu_to_le32 (ld->ld_tgt_count);
+        ld->ld_default_stripe_count = cpu_to_le32 (ld->ld_default_stripe_count);
+        ld->ld_default_stripe_size = cpu_to_le32 (ld->ld_default_stripe_size);
+        ld->ld_pattern = cpu_to_le32 (ld->ld_pattern);
 }
 
 int mds_set_lovdesc(struct obd_device *obd, struct lov_desc *desc,
@@ -52,6 +58,7 @@ int mds_set_lovdesc(struct obd_device *obd, struct lov_desc *desc,
         int tgt_count;
         int rc;
         int i;
+        struct lov_desc *disk_desc;
         ENTRY;
 
         tgt_count = desc->ld_tgt_count;
@@ -76,36 +83,42 @@ int mds_set_lovdesc(struct obd_device *obd, struct lov_desc *desc,
                 RETURN(-EINVAL);
         }
 
-        memcpy(&mds->mds_lov_desc, desc, sizeof *desc);
-        mds->mds_has_lov_desc = 1;
-        /* XXX the MDS should not really know about this */
-        mds->mds_max_mdsize = lov_mds_md_size(desc->ld_tgt_count);
+        OBD_ALLOC (disk_desc, sizeof (*disk_desc));
+        if (disk_desc == NULL) {
+                CERROR ("Can't allocate disk_desc\n");
+                RETURN (-ENOMEM);
+        }
 
-        lov_packdesc(desc);
+        *disk_desc = *desc;
+        cpu_to_le_lov_desc (disk_desc);
 
+        rc = 0;
         push_ctxt(&saved, &mds->mds_ctxt, NULL);
+
+#warning FIXME: if there is an existing LOVDESC, verify new tgt_count > old
         f = filp_open("LOVDESC", O_CREAT|O_RDWR, 0644);
         if (IS_ERR(f)) {
                 CERROR("Cannot open/create LOVDESC file\n");
                 GOTO(out, rc = PTR_ERR(f));
         }
 
-#warning FIXME: if there is an existing LOVDESC, verify new tgt_count > old
-        rc = lustre_fwrite(f, (char *)desc, sizeof(*desc), &f->f_pos);
+        rc = lustre_fwrite(f, (char *)disk_desc, sizeof(*disk_desc), &f->f_pos);
         if (filp_close(f, 0))
                 CERROR("Error closing LOVDESC file\n");
         if (rc != sizeof(*desc)) {
                 CERROR("Cannot open/create LOVDESC file\n");
-                GOTO(out, rc = PTR_ERR(f));
+                if (rc >= 0)
+                        rc = -EIO;
+                GOTO(out, rc);
         }
 
+#warning FIXME: if there is an existing LOVTGTS, verify existing UUIDs same
         f = filp_open("LOVTGTS", O_CREAT|O_RDWR, 0644);
         if (IS_ERR(f)) {
                 CERROR("Cannot open/create LOVTGTS file\n");
                 GOTO(out, rc = PTR_ERR(f));
         }
 
-#warning FIXME: if there is an existing LOVTGTS, verify existing UUIDs same
         rc = 0;
         for (i = 0; i < tgt_count ; i++) {
                 rc = lustre_fwrite(f, uuidarray[i].uuid,
@@ -116,14 +129,21 @@ int mds_set_lovdesc(struct obd_device *obd, struct lov_desc *desc,
                         if (rc >= 0)
                                 rc = -EIO;
                         break;
-                } else
-                        rc = 0;
+                }
+                rc = 0;
         }
         if (filp_close(f, 0))
                 CERROR("Error closing LOVTGTS file\n");
 
+        memcpy(&mds->mds_lov_desc, desc, sizeof *desc);
+        mds->mds_has_lov_desc = 1;
+        /* XXX the MDS should not really know about this */
+        mds->mds_max_mdsize = lov_mds_md_size(desc->ld_tgt_count);
+
 out:
         pop_ctxt(&saved, &mds->mds_ctxt, NULL);
+        OBD_FREE (disk_desc, sizeof (*disk_desc));
+
         RETURN(rc);
 }
 
@@ -150,6 +170,9 @@ int mds_get_lovdesc(struct mds_obd *mds, struct lov_desc *desc)
                 GOTO(out, rc = -EIO);
         } else
                 rc = 0;
+
+        le_lov_desc_to_cpu (desc);              /* convert to my byte order */
+
         EXIT;
 out:
         pop_ctxt(&saved, &mds->mds_ctxt, NULL);
@@ -192,7 +215,7 @@ out:
 }
 
 int mds_iocontrol(unsigned int cmd, struct lustre_handle *conn,
-                          int len, void *karg, void *uarg)
+                  int len, void *karg, void *uarg)
 {
         struct obd_device *obd = class_conn2obd(conn);
         struct obd_ioctl_data *data = karg;
@@ -236,16 +259,22 @@ int mds_iocontrol(unsigned int cmd, struct lustre_handle *conn,
                         CERROR("UUID array size too small\n");
                         RETURN(-ENOSPC);
                 }
-                rc = mds_get_lovtgts(&obd->u.mds, desc->ld_tgt_count, uuidarray);
+                rc = mds_get_lovtgts(&obd->u.mds, desc->ld_tgt_count,
+                                     uuidarray);
 
                 RETURN(rc);
 
-            case OBD_IOC_SET_READONLY:
+        case OBD_IOC_SET_READONLY:
                 CERROR("setting device %s read-only\n",
                        ll_bdevname(obd->u.mds.mds_sb->s_dev));
 #ifdef CONFIG_DEV_RDONLY
                 dev_set_rdonly(obd->u.mds.mds_sb->s_dev, 2);
 #endif
+                RETURN(0);
+
+        case OBD_IOC_ABORT_RECOVERY:
+                CERROR("aborting recovery for device %s\n", obd->obd_name);
+                target_abort_recovery(obd);
                 RETURN(0);
 
         default:
