@@ -41,11 +41,11 @@ static int mds_reint_setattr(struct mds_update_record *rec,
 {
         struct mds_obd *mds = &req->rq_obd->u.mds;
         struct dentry *de;
+        int rc = 0;
 
         de = mds_fid2dentry(mds, rec->ur_fid1, NULL);
         if (IS_ERR(de) || OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_SETATTR)) {
-                req->rq_status = -ESTALE;
-                RETURN(0);
+                GOTO(out_setattr, rc = -ESTALE);
         }
 
         CDEBUG(D_INODE, "ino %ld\n", de->d_inode->i_ino);
@@ -53,10 +53,14 @@ static int mds_reint_setattr(struct mds_update_record *rec,
         OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_SETATTR_WRITE,
                        de->d_inode->i_sb->s_dev);
 
-        req->rq_status = mds_fs_setattr(mds, de, NULL, &rec->ur_iattr);
+        rc = mds_fs_setattr(mds, de, NULL, &rec->ur_iattr);
+
+        EXIT;
 
         l_dput(de);
-        RETURN(0);
+out_setattr:
+        req->rq_status = rc;
+        return(0);
 }
 
 static int mds_reint_create(struct mds_update_record *rec,

@@ -427,6 +427,8 @@ out:
         return 0;
 }
 
+#define LAST_RCVD "last_rcvd"
+
 static int mds_prep(struct obd_device *obddev)
 {
         struct obd_run_ctxt saved;
@@ -437,54 +439,41 @@ static int mds_prep(struct obd_device *obddev)
         __u64 mount_count;
         int rc;
 
-        mds->mds_service = ptlrpc_init_svc(128 * 1024,
-                                           MDS_REQUEST_PORTAL, MDC_REPLY_PORTAL,
-                                           "self", mds_handle);
-
-        if (!mds->mds_service) {
-                CERROR("failed to start service\n");
-                RETURN(-EINVAL);
-        }
-
-        rc = ptlrpc_start_thread(obddev, mds->mds_service, "lustre_mds");
-        if (rc) {
-                CERROR("cannot start thread\n");
-                GOTO(err_svc, rc);
-        }
-
         push_ctxt(&saved, &mds->mds_ctxt);
         rc = simple_mkdir(current->fs->pwd, "ROOT", 0700);
         if (rc && rc != -EEXIST) {
-                CERROR("cannot create ROOT directory\n");
-                GOTO(err_svc, rc);
+                CERROR("cannot create ROOT directory: rc = %d\n", rc);
+                GOTO(err_pop, rc);
         }
-        f = filp_open("ROOT", O_RDONLY, 0); 
-        if (!f || IS_ERR(f)) { 
-                CERROR("cannot open ROOT\n"); 
+        f = filp_open("ROOT", O_RDONLY, 0);
+        if (IS_ERR(f)) {
+                rc = PTR_ERR(f);
+                CERROR("cannot open ROOT: rc = %d\n", rc);
                 LBUG();
+                GOTO(err_pop, rc);
         }
-        
+
         mds->mds_rootfid.id = f->f_dentry->d_inode->i_ino;
         mds->mds_rootfid.generation = f->f_dentry->d_inode->i_generation;
         mds->mds_rootfid.f_type = S_IFDIR;
 
         rc = filp_close(f, 0);
-        if (rc) { 
-                CERROR("cannot close ROOT\n"); 
+        if (rc) {
+                CERROR("cannot close ROOT: rc = %d\n", rc);
                 LBUG();
         }
 
         rc = simple_mkdir(current->fs->pwd, "FH", 0700);
         if (rc && rc != -EEXIST) {
-                CERROR("cannot create FH directory\n");
-                GOTO(err_svc, rc);
+                CERROR("cannot create FH directory: rc = %d\n", rc);
+                GOTO(err_pop, rc);
         }
 
         f = filp_open("mount_count", O_RDWR | O_CREAT, 0644);
         if (IS_ERR(f)) {
-                CERROR("cannot open/create mount_count file, rc = %ld\n",
-                       PTR_ERR(f));
-                GOTO(err_svc, rc = PTR_ERR(f));
+                rc = PTR_ERR(f);
+                CERROR("cannot open/create mount_count file, rc = %d\n", rc);
+                GOTO(err_pop, rc = PTR_ERR(f));
         }
         rc = lustre_fread(f, (char *)&mount_count, sizeof(mount_count), &off);
         if (rc == 0) {
@@ -513,8 +502,9 @@ static int mds_prep(struct obd_device *obddev)
 
         f = filp_open("last_rcvd", O_RDWR | O_CREAT, 0644);
         if (IS_ERR(f)) {
-                CERROR("cannot open/create last_rcvd file\n");
-                GOTO(err_svc, rc = PTR_ERR(f));
+                rc = PTR_ERR(f);
+                CERROR("cannot open/create %s file: rc = %d\n", LAST_RCVD, rc);
+                GOTO(err_pop, rc);
         }
         mds->mds_rcvd_filp = f;
         pop_ctxt(&saved);
@@ -528,19 +518,45 @@ static int mds_prep(struct obd_device *obddev)
          * a modified copy of the original superblock method table.
          *
          * We still assume that there is only a single MDS client filesystem
-         * type, as we don't have access to the mds struct in * delete_inode.
+         * type, as we don't have access to the mds struct in delete_inode
+         * and store the client delete_inode method in a global table.  This
+         * will only become a problem when multiple MDSs are running on a
+         * single host with different client filesystems.
          */
         OBD_ALLOC(s_ops, sizeof(*s_ops));
+        if (!s_ops)
+                GOTO(err_filp, rc = -ENOMEM);
+
         memcpy(s_ops, mds->mds_sb->s_op, sizeof(*s_ops));
         mds->mds_fsops->cl_delete_inode = s_ops->delete_inode;
         s_ops->delete_inode = mds->mds_fsops->fs_delete_inode;
         mds->mds_sb->s_op = s_ops;
+
+        mds->mds_service = ptlrpc_init_svc(128 * 1024,
+                                           MDS_REQUEST_PORTAL, MDC_REPLY_PORTAL,
+                                           "self", mds_handle);
+
+        if (!mds->mds_service) {
+                CERROR("failed to start service\n");
+                GOTO(err_filp, rc = -EINVAL);
+        }
+
+        rc = ptlrpc_start_thread(obddev, mds->mds_service, "lustre_mds");
+        if (rc) {
+                CERROR("cannot start thread\n");
+                GOTO(err_svc, rc);
+        }
 
         RETURN(0);
 
 err_svc:
         rpc_unregister_service(mds->mds_service);
         OBD_FREE(mds->mds_service, sizeof(*mds->mds_service));
+err_filp:
+        if (filp_close(f, 0))
+                CERROR("can't close %s after error\n", LAST_RCVD);
+err_pop:
+        pop_ctxt(&saved);
 
         return rc;
 }
@@ -551,7 +567,7 @@ static int mds_setup(struct obd_device *obddev, obd_count len, void *buf)
         struct obd_ioctl_data* data = buf;
         struct mds_obd *mds = &obddev->u.mds;
         struct vfsmount *mnt;
-        int err = 0;
+        int rc = 0;
         ENTRY;
 
 #ifdef CONFIG_DEV_RDONLY
@@ -568,28 +584,29 @@ static int mds_setup(struct obd_device *obddev, obd_count len, void *buf)
                 mds->mds_fsops = &mds_ext2_fs_ops;
         else {
                 CERROR("unsupported MDS filesystem type %s\n", mds->mds_fstype);
-                GOTO(err_kfree, (err = -EPERM));
+                GOTO(err_kfree, rc = -EPERM);
         }
 
         MOD_INC_USE_COUNT;
         mnt = do_kern_mount(mds->mds_fstype, 0, data->ioc_inlbuf1, NULL);
         if (IS_ERR(mnt)) {
-                CERROR("do_kern_mount failed: %d\n", err);
-                GOTO(err_dec, err = PTR_ERR(mnt));
+                rc = PTR_ERR(mnt);
+                CERROR("do_kern_mount failed: rc = %d\n", rc);
+                GOTO(err_dec, rc);
         }
 
         mds->mds_sb = mnt->mnt_root->d_inode->i_sb;
         if (!mds->mds_sb)
-                GOTO(err_put, (err = -ENODEV));
+                GOTO(err_put, rc = -ENODEV);
 
         mds->mds_vfsmnt = mnt;
         mds->mds_ctxt.pwdmnt = mnt;
         mds->mds_ctxt.pwd = mnt->mnt_root;
         mds->mds_ctxt.fs = KERNEL_DS;
 
-        err = mds_prep(obddev);
-        if (err)
-                GOTO(err_put, err);
+        rc = mds_prep(obddev);
+        if (rc)
+                GOTO(err_put, rc);
 
         RETURN(0);
 
@@ -602,7 +619,7 @@ err_dec:
         MOD_DEC_USE_COUNT;
 err_kfree:
         kfree(mds->mds_fstype);
-        return err;
+        return rc;
 }
 
 static int mds_cleanup(struct obd_device * obddev)
