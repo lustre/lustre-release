@@ -3,8 +3,8 @@
 # This code is issued under the GNU General Public License.
 # See the file COPYING in this distribution
 
-# ../ for <portals/*.h>, ../../ for <config.h>
-COMPILE = $(CC) -Wall -g -I$(srcdir)/../include -I$(srcdir)/../../include
+# $(srcdir)/../ for <portals/*.h>, ../../ for generated <config.h>
+COMPILE = $(CC) -Wall -g -I$(srcdir)/../include -I../../include
 LINK = $(CC) -o $@
 
 if LIBLUSTRE

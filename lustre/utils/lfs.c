@@ -86,7 +86,6 @@ static int lfs_setstripe(int argc, char **argv)
         long st_size;
         int  st_offset, st_count;
         char *end;
-        struct stat statbuf;
 
         if (argc != 5)
                 return CMD_HELP;
