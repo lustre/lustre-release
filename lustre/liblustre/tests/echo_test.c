@@ -40,18 +40,23 @@ struct pingcli_args {
         int size;
 };
 /*      bug #4615       */
+#if 0
 char *portals_id2str(int nal, ptl_process_id_t id, char *str)
 {
         switch(nal){
         case TCPNAL:
                 /* userspace NAL */
+        case IIBNAL:
+        case VIBNAL:
+        case OPENIBNAL:
+        case RANAL:
         case SOCKNAL:
                 snprintf(str, PTL_NALFMT_SIZE - 1, "%u:%u.%u.%u.%u,%u",
                          (__u32)(id.nid >> 32), HIPQUAD((id.nid)) , id.pid);
                 break;
         case QSWNAL:
         case GMNAL:
-        case IBNAL:
+        case LONAL:
                 snprintf(str, PTL_NALFMT_SIZE - 1, "%u:%u,%u",
                          (__u32)(id.nid >> 32), (__u32)id.nid, id.pid);
                 break;
@@ -62,6 +67,7 @@ char *portals_id2str(int nal, ptl_process_id_t id, char *str)
         }
         return str;
 }
+#endif
 
 static int liblustre_ioctl(int dev_id, unsigned int opc, void *ptr)
 {

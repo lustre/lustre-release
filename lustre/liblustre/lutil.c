@@ -44,8 +44,7 @@
 void portals_debug_dumplog(void){};
 #endif
 
-unsigned int portal_subsystem_debug = ~0 - (S_PORTALS | S_QSWNAL | S_SOCKNAL |
-                                            S_GMNAL | S_OPENIBNAL);
+unsigned int portal_subsystem_debug = ~0 - S_NAL;
 unsigned int portal_debug = 0;
 
 struct task_struct     *current;
