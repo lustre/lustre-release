@@ -97,9 +97,9 @@ void remove_io_handler (io_handler i)
 
 static void set_flag(io_handler n,fd_set *fds)
 {
-    if (n->type & READ_HANDLER) FD_SET(n->fd,fds);
-    if (n->type & WRITE_HANDLER) FD_SET(n->fd,fds+1);
-    if (n->type & EXCEPTION_HANDLER) FD_SET(n->fd,fds+2);
+    if (n->type & READ_HANDLER) FD_SET(n->fd, &fds[0]);
+    if (n->type & WRITE_HANDLER) FD_SET(n->fd,&fds[1]);
+    if (n->type & EXCEPTION_HANDLER) FD_SET(n->fd, &fds[2]);
 }
 
 
@@ -126,9 +126,9 @@ void select_timer_block(when until)
         timeout_pointer=&timeout;
     } else timeout_pointer=0;
 
-    FD_ZERO(fds);
-    FD_ZERO(fds+1);
-    FD_ZERO(fds+2);
+    FD_ZERO(&fds[0]);
+    FD_ZERO(&fds[1]);
+    FD_ZERO(&fds[2]);
     for (k=&io_handlers;*k;){
         if ((*k)->disabled){
             j=*k;
@@ -140,14 +140,15 @@ void select_timer_block(when until)
 	    k=&(*k)->next;
 	}
     }
-    result=select(FD_SETSIZE,fds,fds+1,fds+2,timeout_pointer);
+
+    result=select(FD_SETSIZE, &fds[0], &fds[1], &fds[2], timeout_pointer);
 
     if (result > 0)
         for (j=io_handlers;j;j=j->next){
             if (!(j->disabled) && 
-                ((FD_ISSET(j->fd,fds) && (j->type & READ_HANDLER)) ||
-                 (FD_ISSET(j->fd,fds+1) && (j->type & WRITE_HANDLER)) ||
-                 (FD_ISSET(j->fd,fds+2) && (j->type & EXCEPTION_HANDLER)))){
+                ((FD_ISSET(j->fd, &fds[0]) && (j->type & READ_HANDLER)) ||
+                 (FD_ISSET(j->fd, &fds[1]) && (j->type & WRITE_HANDLER)) ||
+                 (FD_ISSET(j->fd, &fds[2]) && (j->type & EXCEPTION_HANDLER)))){
                 if (!(*j->function)(j->argument))
                     j->disabled=1;
             }

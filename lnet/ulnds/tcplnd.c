@@ -2,6 +2,7 @@
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
  *  Copyright (c) 2002 Cray Inc.
+ *  Copyright (c) 2003 Cluster File Systems, Inc.
  *
  *   This file is part of Portals, http://www.sf.net/projects/sandiaportals/
  *
@@ -50,7 +51,6 @@
  *
  * sends a packet to the peer, after insuring that a connection exists
  */
-#warning FIXME: "param 'type' is newly added, make use of it!!"
 int tcpnal_send(nal_cb_t *n,
 		void *private,
 		lib_msg_t *cookie,
@@ -163,15 +163,15 @@ finalize:
  */
 static int from_connection(void *a, void *d)
 {
-        connection c = d;
-        bridge b=a;
-        ptl_hdr_t hdr;
+    connection c = d;
+    bridge b = a;
+    ptl_hdr_t hdr;
 
-        if (read_connection(c, (unsigned char *)&hdr, sizeof(hdr))){
-                lib_parse(b->nal_cb, &hdr, c);
-                return(1);
-        }
-        return(0);
+    if (read_connection(c, (unsigned char *)&hdr, sizeof(hdr))){
+        lib_parse(b->nal_cb, &hdr, c);
+        return(1);
+    }
+    return(0);
 }
 
 
