@@ -1387,4 +1387,3 @@ if __name__ == "__main__":
         print e
     except CommandError, e:
         e.dump()
-        
