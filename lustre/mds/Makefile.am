@@ -9,7 +9,7 @@ MODULE = mds
 modulefs_DATA = mds.o mds_extN.o # mds_ext2.o mds_ext3.o
 EXTRA_PROGRAMS = mds mds_extN # mds_ext2 mds_ext3
 
-LINX= mds_updates.c simple.c ll_pack.c lov_pack.c
+LINX= mds_updates.c simple.c ll_pack.c lov_pack.c target.c
 
 ll_pack.c: 
 	test -e ll_pack.c || ln -sf $(top_srcdir)/lib/ll_pack.c
@@ -19,8 +19,10 @@ simple.c:
 	test -e simple.c || ln -sf $(top_srcdir)/lib/simple.c
 lov_pack.c: 
 	test -e lov_pack.c || ln -sf $(top_srcdir)/lib/lov_pack.c
+target.c: 
+	test -e target.c || ln -sf $(top_srcdir)/lib/target.c
 
-mds_SOURCES = mds_lov.c handler.c mds_reint.c mds_fs.c $(LINX) ../lib/target.c
+mds_SOURCES = mds_lov.c handler.c mds_reint.c mds_fs.c $(LINX)
 
 include $(top_srcdir)/Rules
 
