@@ -2,7 +2,7 @@
 
 config=${1:-mcr.xml}
 
-LMC="../utils/lmc -m $config"
+LMC="../utils/lmc"
 
 # TCP/IP servers
 SERVERS="ba-ost-1  ba-ost-2"
@@ -26,20 +26,20 @@ h2ip () {
 [ -f $config ] && rm $config
 
 # Client node
-${LMC} --node client --net '*' elan || exit 1
+${LMC} -o $config --add net --node client --nid '*' --nettype elan || exit 1
 # Router node
-${LMC} --router --node $ROUTER --tcpbuf $TCPBUF --net `h2ip $ROUTER`  tcp || exit 1
-${LMC} --node $ROUTER --net `h2elan $ROUTER` elan|| exit 1
-${LMC} --node $ROUTER --route elan `h2elan $ROUTER` `h2elan $CLIENT_LO` `h2elan $CLIENT_HI` || exit 2
+${LMC} -m $config --add net --router --node $ROUTER --tcpbuf $TCPBUF --nid `h2ip $ROUTER` --nettype tcp || exit 1
+${LMC} -m $config --add net --node $ROUTER --nid `h2elan $ROUTER` --nettype elan|| exit 1
+${LMC} -m $config --add route --node $ROUTER --nettype elan --gw `h2elan $ROUTER` --lo `h2elan $CLIENT_LO` --hi `h2elan $CLIENT_HI` || exit 2
 
 for s in $SERVERS
  do
    # server node
-   ${LMC} --node $s --tcpbuf $TCPBUF --net $s tcp || exit 1
+   ${LMC} -m $config --add net --node $s --tcpbuf $TCPBUF --nid $s --nettype tcp || exit 1
    # route to server
-   ${LMC} --node $ROUTER --route tcp `h2ip $ROUTER` $s || exit 2
+   ${LMC} -m $config --add route --node $ROUTER --nettype tcp --gw `h2ip $ROUTER` --lo $s || exit 2
    # the device on the server
-   ${LMC} --node $s --obdtype=obdecho --ost || exit 3
-   # attach to the device on the client (this would normally be a moun)
-   ${LMC} --node client --osc  OSC_$s || exit 4
+   ${LMC} -m $config --add ost --node $s --obdtype=obdecho || exit 3
+   # attach to the device on the client (this would normally be a mount)
+   ${LMC} -m $config --add oscref --node client --osc  OSC_$s || exit 4
 done
