@@ -276,6 +276,15 @@ send_mem\SpecialChar ~
 nagle\SpecialChar ~
 [on/off] Enable/disable nagle; omitting the argument will cause the
  default value to be printed.
+\layout Description
+
+fail\SpecialChar ~
+nid|all\SpecialChar ~
+[count] Fail/restore communications.
+ Ommiting tha count implies fail indefinitely, count of zero indicates that
+ communication should be restored.
+ A non-zero count indicates the number of portals messages to be dropped
+ after which the communication is restored.
 \end_deeper 
 \layout Description
 
@@ -297,6 +306,9 @@ device This will select the specified OBD device.
 \layout Description
 
 device_list Show all the devices.
+\layout Description
+
+lustre_build_version Print the Lustre build version.
 \end_deeper 
 \layout Description
 
@@ -340,13 +352,13 @@ detach Remove driver (and name and UUID) from the current device.
 
 lov_setconfig\SpecialChar ~
 lov-uuid\SpecialChar ~
-default-stripe-count\SpecialChar ~
+stripe-count\SpecialChar ~
 default-stripe-size\SpecialChar ~
 offset\SpecialChar ~
 pattern\SpecialChar ~
 UUID1\SpecialChar ~
-[U
-UID2...] Write LOV configuration to an MDS device.
+[UUID2...]
+ Write LOV configuration to an MDS device.
 \layout Description
 
 lov_getconfig\SpecialChar ~
@@ -405,7 +417,18 @@ create\SpecialChar ~
 \layout Description
 
 destroy\SpecialChar ~
-<objid> Destroy an OST object.
+<num>\SpecialChar ~
+starting\SpecialChar ~
+at\SpecialChar ~
+<objid> Destroy <
+\emph on 
+num
+\emph default 
+> number of objects starting from the object with object id <
+\emph on 
+objid
+\emph default 
+>.
 \layout Description
 
 test_getattr\SpecialChar ~
@@ -479,6 +502,30 @@ dump_ldlm Dump all lock manager state, this is very useful for debugging
 newconn\SpecialChar ~
 <olduuid>\SpecialChar ~
 [newuuid]
+\layout Description
+
+get_stripe show stripe info for an echo client object.
+\layout Description
+
+set_stripe\SpecialChar ~
+<objid>[\SpecialChar ~
+width!count[@offset]\SpecialChar ~
+[:id:id....] set stripe info for an echo
+ client
+\layout Description
+
+unset_stripe\SpecialChar ~
+<objid> unset stripe info for an echo client object.
+\layout Description
+
+newconn\SpecialChar ~
+<old_uuid>\SpecialChar ~
+<new_uuid> Delete the old connection and establish a new
+ connection to a new server as in the case of a fail-over
+\layout Description
+
+fail_conn\SpecialChar ~
+<uuid> Force a connection to fail, used to simulate failure
 \end_deeper 
 \layout Description
 
