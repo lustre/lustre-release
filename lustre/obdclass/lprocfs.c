@@ -698,6 +698,7 @@ struct proc_dir_entry* lprocfs_add_dir(struct proc_dir_entry *root,
         struct proc_dir_entry* new_entry = 0;
         char temp_string[MAX_STRING_SIZE];
         char* my_str;
+        char* mover_str;
 
         /*
          * Remove trailing escaping character
@@ -718,9 +719,13 @@ struct proc_dir_entry* lprocfs_add_dir(struct proc_dir_entry *root,
                 temp_string[strlen(string) + 1] = '\0';
         }
 
-        my_str = strtok(temp_string, tok);
-
+        
+        
+        
         new_root=root;
+        /*
+         * Obsoleted: Use of strtok
+        my_str=strtok(temp_string, tok); 
         while (my_str != NULL) {
                 temp_entry = lprocfs_srch(new_root, my_str);
                 if (temp_entry == 0) {
@@ -732,10 +737,31 @@ struct proc_dir_entry* lprocfs_add_dir(struct proc_dir_entry *root,
                         }
                         return new_entry;
                 }
-
+                
                 new_root=temp_entry;
-                my_str=strtok(NULL, tok);
+                my_str=strtok(NULL, tok); 
+          
+       }
+        */
+       
+        /* Using strsep() instead */
+        mover_str=temp_string;
+        while ((my_str=strsep(&mover_str, tok))!=NULL) {
+                if(!*my_str) continue;
+                temp_entry = lprocfs_srch(new_root, my_str);
+                if (temp_entry == 0) {
+                        new_entry = lprocfs_mkdir(my_str, new_root);
+                        if (new_entry == 0) {
+                                CERROR("! Did not create new dir %s !!\n",
+                                       my_str);
+                                return 0;
+                        }
+                        return new_entry;
+                }
+                
+                new_root=temp_entry;
         }
+
 
         return new_root;
 }
