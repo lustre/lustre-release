@@ -1,6 +1,6 @@
  fs/ext3/ialloc.c            |    5 +++--
  fs/ext3/inode.c             |    2 +-
- fs/ext3/namei.c             |   38 ++++++++++++++++++++++++++++++++++----
+ fs/ext3/namei.c             |   43 +++++++++++++++++++++++++++++++++++++------
  include/asm-alpha/fcntl.h   |    1 +
  include/asm-arm/fcntl.h     |    1 +
  include/asm-cris/fcntl.h    |    1 +
@@ -17,10 +17,10 @@
  include/asm-sparc/fcntl.h   |    1 +
  include/asm-sparc64/fcntl.h |    1 +
  include/linux/ext3_fs.h     |    2 +-
- 19 files changed, 54 insertions(+), 8 deletions(-)
+ 19 files changed, 57 insertions(+), 10 deletions(-)
 
---- linux-2.4.18/fs/ext3/ialloc.c~ext3-extents-oflag-2.4.18-chaos	2003-09-08 23:12:48.000000000 +0400
-+++ linux-2.4.18-alexey/fs/ext3/ialloc.c	2003-09-08 23:12:56.000000000 +0400
+--- linux-2.4.18-chaos/fs/ext3/ialloc.c~ext3-extents-oflag-2.4.18-chaos	2003-10-08 10:29:12.000000000 +0400
++++ linux-2.4.18-chaos-alexey/fs/ext3/ialloc.c	2003-10-08 10:29:30.000000000 +0400
 @@ -331,7 +331,8 @@ int ext3_itable_block_used(struct super_
   */
  struct inode * ext3_new_inode (handle_t *handle,
@@ -40,14 +40,34 @@
  		EXT3_I(inode)->i_flags |= EXT3_EXTENTS_FL;
  	ei->i_depth = 0;
  	sema_init(&ei->i_ext_sem, 1);
---- linux-2.4.18/fs/ext3/namei.c~ext3-extents-oflag-2.4.18-chaos	2003-09-08 23:12:28.000000000 +0400
-+++ linux-2.4.18-alexey/fs/ext3/namei.c	2003-09-08 23:12:56.000000000 +0400
-@@ -1225,7 +1225,36 @@ static int ext3_create (struct inode * d
+--- linux-2.4.18-chaos/fs/ext3/namei.c~ext3-extents-oflag-2.4.18-chaos	2003-10-08 10:29:11.000000000 +0400
++++ linux-2.4.18-chaos-alexey/fs/ext3/namei.c	2003-10-08 10:36:33.000000000 +0400
+@@ -1204,7 +1204,9 @@ static int ext3_add_nondir(handle_t *han
+ }
+ 
+ static struct inode * ext3_new_inode_wantedi(handle_t *handle, struct inode *dir,
+-						int mode, struct dentry *dentry)
++						int mode, struct dentry *dentry,
++						struct lookup_intent *it)
++
+ {
+ 	unsigned long inum = 0;
+ 
+@@ -1213,7 +1215,7 @@ static struct inode * ext3_new_inode_wan
+ 			(struct dentry_params *) dentry->d_fsdata;
+ 		inum = param->p_inum;
+ 	}
+-	return ext3_new_inode(handle, dir, mode, inum);
++	return ext3_new_inode(handle, dir, mode, inum, it);
+ }
+ 
+ /*
+@@ -1238,7 +1240,35 @@ static int ext3_create (struct inode * d
+ 	if (IS_SYNC(dir))
  		handle->h_sync = 1;
  
- 	inode = ext3_new_inode (handle, dir, mode,
--				(unsigned long)dentry->d_fsdata);
-+				(unsigned long)dentry->d_fsdata, NULL);
+-	inode = ext3_new_inode_wantedi (handle, dir, mode, dentry);
++	inode = ext3_new_inode_wantedi (handle, dir, mode, dentry, NULL);
 +	err = PTR_ERR(inode);
 +	if (!IS_ERR(inode)) {
 +		inode->i_op = &ext3_file_inode_operations;
@@ -75,39 +95,38 @@
 +	if (IS_SYNC(dir))
 +		handle->h_sync = 1;
 +
-+	inode = ext3_new_inode (handle, dir, mode,
-+				(unsigned long)dentry->d_fsdata, it);
++	inode = ext3_new_inode_wantedi (handle, dir, mode, dentry, it);
  	err = PTR_ERR(inode);
  	if (!IS_ERR(inode)) {
  		inode->i_op = &ext3_file_inode_operations;
-@@ -1254,7 +1283,7 @@ static int ext3_mknod (struct inode * di
+@@ -1266,7 +1296,7 @@ static int ext3_mknod (struct inode * di
+ 	if (IS_SYNC(dir))
  		handle->h_sync = 1;
  
- 	inode = ext3_new_inode (handle, dir, mode,
--				(unsigned long)dentry->d_fsdata);
-+				(unsigned long)dentry->d_fsdata, NULL);
+-	inode = ext3_new_inode_wantedi (handle, dir, mode, dentry);
++	inode = ext3_new_inode_wantedi (handle, dir, mode, dentry, NULL);
  	err = PTR_ERR(inode);
  	if (!IS_ERR(inode)) {
  		init_special_inode(inode, mode, rdev);
-@@ -1285,7 +1314,7 @@ static int ext3_mkdir(struct inode * dir
+@@ -1296,7 +1326,7 @@ static int ext3_mkdir(struct inode * dir
+ 	if (IS_SYNC(dir))
  		handle->h_sync = 1;
  
- 	inode = ext3_new_inode (handle, dir, S_IFDIR | mode,
--				(unsigned long)dentry->d_fsdata);
-+				(unsigned long)dentry->d_fsdata, NULL);
+-	inode = ext3_new_inode_wantedi (handle, dir, S_IFDIR | mode, dentry);
++	inode = ext3_new_inode_wantedi (handle, dir, S_IFDIR|mode, dentry, NULL);
  	err = PTR_ERR(inode);
  	if (IS_ERR(inode))
  		goto out_stop;
-@@ -1678,7 +1707,7 @@ static int ext3_symlink (struct inode * 
+@@ -1688,7 +1718,7 @@ static int ext3_symlink (struct inode * 
+ 	if (IS_SYNC(dir))
  		handle->h_sync = 1;
  
- 	inode = ext3_new_inode (handle, dir, S_IFLNK|S_IRWXUGO,
--				(unsigned long)dentry->d_fsdata);
-+				(unsigned long)dentry->d_fsdata, NULL);
+-	inode = ext3_new_inode_wantedi (handle, dir, S_IFLNK|S_IRWXUGO, dentry);
++	inode = ext3_new_inode_wantedi (handle, dir, S_IFLNK|S_IRWXUGO, dentry,NULL);
  	err = PTR_ERR(inode);
  	if (IS_ERR(inode))
  		goto out_stop;
-@@ -1882,6 +1911,7 @@ end_rename:
+@@ -1892,6 +1922,7 @@ end_rename:
   * directories can handle most operations...
   */
  struct inode_operations ext3_dir_inode_operations = {
@@ -115,8 +134,8 @@
  	create:		ext3_create,		/* BKL held */
  	lookup:		ext3_lookup,		/* BKL held */
  	link:		ext3_link,		/* BKL held */
---- linux-2.4.18/include/asm-alpha/fcntl.h~ext3-extents-oflag-2.4.18-chaos	2003-07-28 17:52:07.000000000 +0400
-+++ linux-2.4.18-alexey/include/asm-alpha/fcntl.h	2003-09-08 23:12:56.000000000 +0400
+--- linux-2.4.18-chaos/include/asm-alpha/fcntl.h~ext3-extents-oflag-2.4.18-chaos	2003-07-28 17:52:07.000000000 +0400
++++ linux-2.4.18-chaos-alexey/include/asm-alpha/fcntl.h	2003-10-08 10:29:30.000000000 +0400
 @@ -22,6 +22,7 @@
  #define O_LARGEFILE	0400000 /* will be set by the kernel on every open */
  #define O_ATOMICLOOKUP	01000000 /* do atomic file lookup */
@@ -125,8 +144,8 @@
  
  #define F_DUPFD		0	/* dup */
  #define F_GETFD		1	/* get close_on_exec */
---- linux-2.4.18/include/asm-arm/fcntl.h~ext3-extents-oflag-2.4.18-chaos	2003-07-28 17:52:07.000000000 +0400
-+++ linux-2.4.18-alexey/include/asm-arm/fcntl.h	2003-09-08 23:12:56.000000000 +0400
+--- linux-2.4.18-chaos/include/asm-arm/fcntl.h~ext3-extents-oflag-2.4.18-chaos	2003-07-28 17:52:07.000000000 +0400
++++ linux-2.4.18-chaos-alexey/include/asm-arm/fcntl.h	2003-10-08 10:29:30.000000000 +0400
 @@ -21,6 +21,7 @@
  #define O_DIRECT	0200000	/* direct disk access hint - currently ignored */
  #define O_LARGEFILE	0400000
@@ -135,8 +154,8 @@
  
  #define F_DUPFD		0	/* dup */
  #define F_GETFD		1	/* get close_on_exec */
---- linux-2.4.18/include/asm-cris/fcntl.h~ext3-extents-oflag-2.4.18-chaos	2001-02-09 03:32:44.000000000 +0300
-+++ linux-2.4.18-alexey/include/asm-cris/fcntl.h	2003-09-08 23:12:56.000000000 +0400
+--- linux-2.4.18-chaos/include/asm-cris/fcntl.h~ext3-extents-oflag-2.4.18-chaos	2001-02-09 03:32:44.000000000 +0300
++++ linux-2.4.18-chaos-alexey/include/asm-cris/fcntl.h	2003-10-08 10:29:30.000000000 +0400
 @@ -22,6 +22,7 @@
  #define O_LARGEFILE	0100000
  #define O_DIRECTORY	0200000	/* must be a directory */
@@ -145,8 +164,8 @@
  
  #define F_DUPFD		0	/* dup */
  #define F_GETFD		1	/* get f_flags */
---- linux-2.4.18/include/asm-i386/fcntl.h~ext3-extents-oflag-2.4.18-chaos	2003-07-28 17:52:09.000000000 +0400
-+++ linux-2.4.18-alexey/include/asm-i386/fcntl.h	2003-09-08 23:12:56.000000000 +0400
+--- linux-2.4.18-chaos/include/asm-i386/fcntl.h~ext3-extents-oflag-2.4.18-chaos	2003-07-28 17:52:09.000000000 +0400
++++ linux-2.4.18-chaos-alexey/include/asm-i386/fcntl.h	2003-10-08 10:29:30.000000000 +0400
 @@ -21,6 +21,7 @@
  #define O_DIRECTORY	0200000	/* must be a directory */
  #define O_NOFOLLOW	0400000 /* don't follow links */
@@ -155,8 +174,8 @@
  
  #define F_DUPFD		0	/* dup */
  #define F_GETFD		1	/* get close_on_exec */
---- linux-2.4.18/include/asm-ia64/fcntl.h~ext3-extents-oflag-2.4.18-chaos	2003-07-28 17:52:09.000000000 +0400
-+++ linux-2.4.18-alexey/include/asm-ia64/fcntl.h	2003-09-08 23:12:56.000000000 +0400
+--- linux-2.4.18-chaos/include/asm-ia64/fcntl.h~ext3-extents-oflag-2.4.18-chaos	2003-07-28 17:52:09.000000000 +0400
++++ linux-2.4.18-chaos-alexey/include/asm-ia64/fcntl.h	2003-10-08 10:29:30.000000000 +0400
 @@ -29,6 +29,7 @@
  #define O_DIRECTORY	0200000	/* must be a directory */
  #define O_NOFOLLOW	0400000 /* don't follow links */
@@ -165,8 +184,8 @@
  
  #define F_DUPFD		0	/* dup */
  #define F_GETFD		1	/* get close_on_exec */
---- linux-2.4.18/include/asm-m68k/fcntl.h~ext3-extents-oflag-2.4.18-chaos	2000-11-28 05:00:49.000000000 +0300
-+++ linux-2.4.18-alexey/include/asm-m68k/fcntl.h	2003-09-08 23:12:56.000000000 +0400
+--- linux-2.4.18-chaos/include/asm-m68k/fcntl.h~ext3-extents-oflag-2.4.18-chaos	2000-11-28 05:00:49.000000000 +0300
++++ linux-2.4.18-chaos-alexey/include/asm-m68k/fcntl.h	2003-10-08 10:29:30.000000000 +0400
 @@ -20,6 +20,7 @@
  #define O_NOFOLLOW	0100000	/* don't follow links */
  #define O_DIRECT	0200000	/* direct disk access hint - currently ignored */
@@ -175,8 +194,8 @@
  
  #define F_DUPFD		0	/* dup */
  #define F_GETFD		1	/* get close_on_exec */
---- linux-2.4.18/include/asm-mips64/fcntl.h~ext3-extents-oflag-2.4.18-chaos	2003-07-28 17:52:15.000000000 +0400
-+++ linux-2.4.18-alexey/include/asm-mips64/fcntl.h	2003-09-08 23:12:56.000000000 +0400
+--- linux-2.4.18-chaos/include/asm-mips64/fcntl.h~ext3-extents-oflag-2.4.18-chaos	2003-07-28 17:52:15.000000000 +0400
++++ linux-2.4.18-chaos-alexey/include/asm-mips64/fcntl.h	2003-10-08 10:29:30.000000000 +0400
 @@ -27,6 +27,7 @@
  #define O_DIRECTORY	0x10000	/* must be a directory */
  #define O_NOFOLLOW	0x20000	/* don't follow links */
@@ -185,8 +204,8 @@
  
  #define O_NDELAY	O_NONBLOCK
  
---- linux-2.4.18/include/asm-mips/fcntl.h~ext3-extents-oflag-2.4.18-chaos	2003-07-28 17:52:14.000000000 +0400
-+++ linux-2.4.18-alexey/include/asm-mips/fcntl.h	2003-09-08 23:12:56.000000000 +0400
+--- linux-2.4.18-chaos/include/asm-mips/fcntl.h~ext3-extents-oflag-2.4.18-chaos	2003-07-28 17:52:14.000000000 +0400
++++ linux-2.4.18-chaos-alexey/include/asm-mips/fcntl.h	2003-10-08 10:29:30.000000000 +0400
 @@ -27,6 +27,7 @@
  #define O_DIRECTORY	0x10000	/* must be a directory */
  #define O_NOFOLLOW	0x20000	/* don't follow links */
@@ -195,8 +214,8 @@
  
  #define O_NDELAY	O_NONBLOCK
  
---- linux-2.4.18/include/asm-parisc/fcntl.h~ext3-extents-oflag-2.4.18-chaos	2000-12-05 23:29:39.000000000 +0300
-+++ linux-2.4.18-alexey/include/asm-parisc/fcntl.h	2003-09-08 23:12:56.000000000 +0400
+--- linux-2.4.18-chaos/include/asm-parisc/fcntl.h~ext3-extents-oflag-2.4.18-chaos	2000-12-05 23:29:39.000000000 +0300
++++ linux-2.4.18-chaos-alexey/include/asm-parisc/fcntl.h	2003-10-08 10:29:30.000000000 +0400
 @@ -19,6 +19,7 @@
  #define O_NOCTTY	00400000 /* not fcntl */
  #define O_DSYNC		01000000 /* HPUX only */
@@ -205,8 +224,8 @@
  
  #define FASYNC		00020000 /* fcntl, for BSD compatibility */
  #define O_DIRECT	00040000 /* direct disk access hint - currently ignored */
---- linux-2.4.18/include/asm-ppc/fcntl.h~ext3-extents-oflag-2.4.18-chaos	2003-07-28 17:52:15.000000000 +0400
-+++ linux-2.4.18-alexey/include/asm-ppc/fcntl.h	2003-09-08 23:12:56.000000000 +0400
+--- linux-2.4.18-chaos/include/asm-ppc/fcntl.h~ext3-extents-oflag-2.4.18-chaos	2003-07-28 17:52:15.000000000 +0400
++++ linux-2.4.18-chaos-alexey/include/asm-ppc/fcntl.h	2003-10-08 10:29:30.000000000 +0400
 @@ -24,6 +24,7 @@
  #define O_LARGEFILE     0200000
  #define O_DIRECT	0400000	/* direct disk access hint */
@@ -215,8 +234,8 @@
  
  #define F_DUPFD		0	/* dup */
  #define F_GETFD		1	/* get close_on_exec */
---- linux-2.4.18/include/asm-s390/fcntl.h~ext3-extents-oflag-2.4.18-chaos	2003-07-28 17:52:15.000000000 +0400
-+++ linux-2.4.18-alexey/include/asm-s390/fcntl.h	2003-09-08 23:12:56.000000000 +0400
+--- linux-2.4.18-chaos/include/asm-s390/fcntl.h~ext3-extents-oflag-2.4.18-chaos	2003-07-28 17:52:15.000000000 +0400
++++ linux-2.4.18-chaos-alexey/include/asm-s390/fcntl.h	2003-10-08 10:29:30.000000000 +0400
 @@ -28,6 +28,7 @@
  #define O_DIRECTORY	0200000	/* must be a directory */
  #define O_NOFOLLOW	0400000 /* don't follow links */
@@ -225,8 +244,8 @@
  
  #define F_DUPFD		0	/* dup */
  #define F_GETFD		1	/* get close_on_exec */
---- linux-2.4.18/include/asm-s390x/fcntl.h~ext3-extents-oflag-2.4.18-chaos	2003-07-28 17:52:15.000000000 +0400
-+++ linux-2.4.18-alexey/include/asm-s390x/fcntl.h	2003-09-08 23:12:56.000000000 +0400
+--- linux-2.4.18-chaos/include/asm-s390x/fcntl.h~ext3-extents-oflag-2.4.18-chaos	2003-07-28 17:52:15.000000000 +0400
++++ linux-2.4.18-chaos-alexey/include/asm-s390x/fcntl.h	2003-10-08 10:29:30.000000000 +0400
 @@ -28,6 +28,7 @@
  #define O_DIRECTORY	0200000	/* must be a directory */
  #define O_NOFOLLOW	0400000 /* don't follow links */
@@ -235,8 +254,8 @@
  
  #define F_DUPFD		0	/* dup */
  #define F_GETFD		1	/* get close_on_exec */
---- linux-2.4.18/include/asm-sh/fcntl.h~ext3-extents-oflag-2.4.18-chaos	2003-07-28 17:52:15.000000000 +0400
-+++ linux-2.4.18-alexey/include/asm-sh/fcntl.h	2003-09-08 23:12:56.000000000 +0400
+--- linux-2.4.18-chaos/include/asm-sh/fcntl.h~ext3-extents-oflag-2.4.18-chaos	2003-07-28 17:52:15.000000000 +0400
++++ linux-2.4.18-chaos-alexey/include/asm-sh/fcntl.h	2003-10-08 10:29:30.000000000 +0400
 @@ -21,6 +21,7 @@
  #define O_DIRECTORY	0200000	/* must be a directory */
  #define O_NOFOLLOW	0400000 /* don't follow links */
@@ -245,8 +264,8 @@
  
  #define F_DUPFD		0	/* dup */
  #define F_GETFD		1	/* get close_on_exec */
---- linux-2.4.18/include/asm-sparc64/fcntl.h~ext3-extents-oflag-2.4.18-chaos	2003-07-28 17:52:16.000000000 +0400
-+++ linux-2.4.18-alexey/include/asm-sparc64/fcntl.h	2003-09-08 23:12:56.000000000 +0400
+--- linux-2.4.18-chaos/include/asm-sparc64/fcntl.h~ext3-extents-oflag-2.4.18-chaos	2003-07-28 17:52:16.000000000 +0400
++++ linux-2.4.18-chaos-alexey/include/asm-sparc64/fcntl.h	2003-10-08 10:29:30.000000000 +0400
 @@ -22,6 +22,7 @@
  #define O_LARGEFILE	0x40000
  #define O_ATOMICLOOKUP	0x80000 /* do atomic file lookup */
@@ -255,8 +274,8 @@
  
  
  #define F_DUPFD		0	/* dup */
---- linux-2.4.18/include/asm-sparc/fcntl.h~ext3-extents-oflag-2.4.18-chaos	2003-07-28 17:52:16.000000000 +0400
-+++ linux-2.4.18-alexey/include/asm-sparc/fcntl.h	2003-09-08 23:12:56.000000000 +0400
+--- linux-2.4.18-chaos/include/asm-sparc/fcntl.h~ext3-extents-oflag-2.4.18-chaos	2003-07-28 17:52:16.000000000 +0400
++++ linux-2.4.18-chaos-alexey/include/asm-sparc/fcntl.h	2003-10-08 10:29:30.000000000 +0400
 @@ -22,6 +22,7 @@
  #define O_LARGEFILE	0x40000
  #define O_ATOMICLOOKUP	0x80000 /* do atomic file lookup */
@@ -265,8 +284,8 @@
  
  #define F_DUPFD		0	/* dup */
  #define F_GETFD		1	/* get close_on_exec */
---- linux-2.4.18/include/linux/ext3_fs.h~ext3-extents-oflag-2.4.18-chaos	2003-09-08 23:12:48.000000000 +0400
-+++ linux-2.4.18-alexey/include/linux/ext3_fs.h	2003-09-08 23:12:56.000000000 +0400
+--- linux-2.4.18-chaos/include/linux/ext3_fs.h~ext3-extents-oflag-2.4.18-chaos	2003-10-08 10:29:12.000000000 +0400
++++ linux-2.4.18-chaos-alexey/include/linux/ext3_fs.h	2003-10-08 10:29:30.000000000 +0400
 @@ -641,7 +641,7 @@ extern int ext3_sync_file (struct file *
  
  /* ialloc.c */
@@ -276,8 +295,8 @@
  extern void ext3_free_inode (handle_t *, struct inode *);
  extern struct inode * ext3_orphan_get (struct super_block *, unsigned long);
  extern unsigned long ext3_count_free_inodes (struct super_block *);
---- linux-2.4.18/fs/ext3/inode.c~ext3-extents-oflag-2.4.18-chaos	2003-09-08 23:12:48.000000000 +0400
-+++ linux-2.4.18-alexey/fs/ext3/inode.c	2003-09-08 23:13:15.000000000 +0400
+--- linux-2.4.18-chaos/fs/ext3/inode.c~ext3-extents-oflag-2.4.18-chaos	2003-10-08 10:29:12.000000000 +0400
++++ linux-2.4.18-chaos-alexey/fs/ext3/inode.c	2003-10-08 10:29:30.000000000 +0400
 @@ -2204,7 +2204,7 @@ void ext3_truncate_thread(struct inode *
  	if (IS_ERR(handle))
  		goto out_truncate;
