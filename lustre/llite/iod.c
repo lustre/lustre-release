@@ -24,6 +24,13 @@
  *  to force writeback.. the throttling in prepare_write and kupdate's usual
  *  writeback pressure got rid of our thread, but the file name remains.
  */
+
+/* UML seems to have problems with GPLONLY, in ways that I don't understand */
+#ifdef __arch_um__
+# define rb_insert_color GPLONLY_rb_insert_color
+# define rb_erase GPLONLY_rb_erase
+#endif
+
 #include <linux/version.h>
 #include <linux/config.h>
 #include <linux/module.h>
