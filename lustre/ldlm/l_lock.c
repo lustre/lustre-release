@@ -20,6 +20,8 @@
  *
  */
 
+#define DEBUG_SUBSYSTEM S_LDLM
+#ifdef __KERNEL__
 #include <linux/config.h>
 #include <linux/kernel.h>
 #include <linux/mm.h>
@@ -39,8 +41,9 @@
 #include <linux/mm.h>
 #include <linux/pagemap.h>
 #include <linux/smp_lock.h>
-
-#define DEBUG_SUBSYSTEM S_LDLM
+#else 
+#include <liblustre.h>
+#endif
 
 #include <linux/obd_class.h>
 #include <linux/lustre_lib.h>
