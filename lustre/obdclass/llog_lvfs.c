@@ -336,7 +336,7 @@ static int llog_lvfs_next_block(struct llog_handle *loghandle, int *cur_idx,
                 ppos = *cur_offset;
                 rc = fsfilt_read_record(loghandle->lgh_ctxt->loc_exp->exp_obd,
                                         loghandle->lgh_file, buf, len,
-                                        cur_offset);
+                                        &ppos);
 
                 if (rc) {
                         CERROR("Cant read llog block at log id "LPU64
@@ -344,11 +344,12 @@ static int llog_lvfs_next_block(struct llog_handle *loghandle, int *cur_idx,
                                loghandle->lgh_id.lgl_oid,
                                loghandle->lgh_id.lgl_ogen,
                                *cur_offset);
-                         RETURN(rc);
+                        RETURN(rc);
                 }
 
-                /* put number of readed bytes in rc to make code simpler */
-                rc = *cur_offset - ppos;
+                /* put number of bytes read into rc to make code simpler */
+                rc = ppos - *cur_offset;
+                *cur_offset = ppos;
 
                 if (rc == 0) /* end of file, nothing to do */
                         RETURN(0);
@@ -357,7 +358,7 @@ static int llog_lvfs_next_block(struct llog_handle *loghandle, int *cur_idx,
                         CERROR("Invalid llog block at log id "LPU64"/%u offset "
                                LPU64"\n", loghandle->lgh_id.lgl_oid,
                                loghandle->lgh_id.lgl_ogen, *cur_offset);
-                         RETURN(-EINVAL);
+                        RETURN(-EINVAL);
                 }
 
                 tail = buf + rc - sizeof(struct llog_rec_tail);

@@ -192,40 +192,27 @@ int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         }
 
         atomic_set(&obd->obd_refcount, 0);
-
-        err = obd_setup(obd, sizeof(*lcfg), lcfg);
-        if (err) {
-                RETURN(err);
-        }
-        
-        obd->obd_type->typ_refcnt++;
-        obd->obd_set_up = 1;
-
+ 
         exp = class_new_export(obd);
-        if (exp == NULL) {
-                GOTO(err_cleanup, err = -ENOMEM);
-        }
+        if (exp == NULL) 
+                RETURN(err);
         memcpy(&exp->exp_client_uuid, &obd->obd_uuid, 
                sizeof(exp->exp_client_uuid));
         obd->obd_self_export = exp;
         class_export_put(exp);
 
-        if (OBT(obd) && OBP(obd, postsetup)) {
-                err = obd_postsetup(obd);
-                if (err) 
-                        GOTO(err_exp, err);
-        } 
+        err = obd_setup(obd, sizeof(*lcfg), lcfg);
+        if (err) 
+                GOTO(err_exp, err);
+        
+        obd->obd_type->typ_refcnt++;
+        obd->obd_set_up = 1;
 
         RETURN(err);
 
 err_exp:
         class_unlink_export(obd->obd_self_export);
         obd->obd_self_export = NULL;
-err_cleanup:
-        obd->obd_stopping = 1;
-        obd_cleanup(obd, 0);
-        obd->obd_set_up = obd->obd_stopping = 0;
-        obd->obd_type->typ_refcnt--;
         RETURN(err);
 }
 
