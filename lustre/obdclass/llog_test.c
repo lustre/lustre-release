@@ -489,6 +489,42 @@ parse_out:
         RETURN(rc);
 }
 
+static int llog_test_7(struct obd_device *obd)
+{
+        struct llog_ctxt *ctxt = llog_get_context(obd, LLOG_TEST_ORIG_CTXT);
+        struct llog_handle *llh;
+        struct llog_create_rec lcr;
+        char name[10];
+        int rc;
+        ENTRY;
+
+        sprintf(name, "%x", llog_test_rand+2);
+        CWARN("7: create a log with name: %s\n", name);
+        LASSERT(ctxt);
+
+        rc = llog_create(ctxt, &llh, NULL, name);
+        if (rc) {
+                CERROR("7: llog_create with name %s failed: %d\n", name, rc);
+                RETURN(rc);
+        }
+        llog_init_handle(llh, LLOG_F_IS_PLAIN, &uuid);
+
+        lcr.lcr_hdr.lrh_len = lcr.lcr_tail.lrt_len = cpu_to_le32(sizeof(lcr));
+        lcr.lcr_hdr.lrh_type = cpu_to_le32(OST_SZ_REC);
+        rc = llog_write_rec(llh,  &lcr.lcr_hdr, NULL, 0, NULL, -1);
+        if (rc) {
+                CERROR("7: write one log record failed: %d\n", rc);
+                RETURN(rc);
+        }
+
+        rc = llog_destroy(llh);
+        if (rc) 
+                CERROR("7: llog_destroy failed: %d\n", rc);
+        else
+                llog_free_handle(llh); 
+        RETURN(rc);
+}
+
 /* -------------------------------------------------------------------------
  * Tests above, boring obd functions below
  * ------------------------------------------------------------------------- */
@@ -526,6 +562,10 @@ static int llog_run_tests(struct obd_device *obd)
                 GOTO(cleanup, rc);
 
         rc = llog_test_6(obd, name);
+        if (rc)
+                GOTO(cleanup, rc);
+
+        rc = llog_test_7(obd);
         if (rc)
                 GOTO(cleanup, rc);
 
