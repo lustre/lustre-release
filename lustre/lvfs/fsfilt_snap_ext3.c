@@ -49,6 +49,7 @@
 #include <linux/module.h>
 #include <linux/iobuf.h>
 #endif
+#include <linux/lustre_smfs.h>
 #include <linux/lustre_snap.h>
 
 /* For snapfs in EXT3 flags --- FIXME will find other ways to store it*/
@@ -857,16 +858,24 @@ static int fsfilt_ext3_is_indirect(struct inode *inode)
  * return value:        postive:        indirect ino number
  *                      negative or 0:  error
  */
-static ino_t fsfilt_ext3_get_indirect_ino(struct inode *primary, int index)
+static ino_t fsfilt_ext3_get_indirect_ino(struct super_block *sb, 
+                                          ino_t primary_ino, int index)
 {
         char buf[EXT3_MAX_SNAP_DATA];
+        struct inode *primary = NULL;
         struct snap_ea *snaps;
         ino_t ino = 0;
         int err;
         ENTRY;                                                                                                                                                                                             
         if (index < 0 || index > EXT3_MAX_SNAPS || !primary)
                 RETURN(0);
-                                                                                                                                                                                                     
+        primary = iget(sb, primary_ino);   
+       
+        if (!primary) {
+                err = -EIO;
+                CERROR("attribute read error=%d", err);
+                GOTO (err_free, ino = err); 
+        }                                                                                                                                                                                              
         err = ext3_xattr_get(primary, EXT3_SNAP_INDEX, EXT3_SNAP_ATTR,
                              buf, EXT3_MAX_SNAP_DATA);
         if (err == -ENOATTR) {
@@ -880,6 +889,8 @@ static ino_t fsfilt_ext3_get_indirect_ino(struct inode *primary, int index)
         CDEBUG(D_INODE, "snap ino for %ld at index %d is %lu\n",
                primary->i_ino, index, ino);
 err_free:
+        if (primary)
+                iput(primary); 
         RETURN(ino);
 }
                                                                                                                                                                                                      
@@ -1555,7 +1566,44 @@ static int fsfilt_ext3_set_snap_info(struct inode *inode, void *key,
         }
         RETURN(-EINVAL);
 }
+static int fsfilt_ext3_dir_ent_size(char *name)
+{
+        if (name) {
+                return EXT3_DIR_REC_LEN(strlen(name));
+        }
+        return 0;
+}
 
+static int fsfilt_ext3_set_dir_ent(struct super_block *sb, char *name, 
+                                   char *buf, int buf_off, int nlen, size_t count)
+{
+        int rc = 0; 
+        ENTRY;
+        if (buf_off == 0 && nlen == 0) {
+                struct ext3_dir_entry_2 *de = (struct ext3_dir_entry_2 *)buf;  
+                LASSERT(count == PAGE_CACHE_SIZE);
+                de->rec_len = count;
+                de->inode = 0;
+                RETURN(rc);
+        } else {
+                struct ext3_dir_entry_2 *de, *de1; 
+                de = (struct ext3_dir_entry_2 *)(buf + buf_off - nlen); 
+                de1 = (struct ext3_dir_entry_2 *)(buf + buf_off); 
+                int rlen, nlen;
+ 
+                LASSERT(nlen == EXT3_DIR_REC_LEN_DE(de));
+                
+                rlen = le16_to_cpu(de->rec_len);
+                de->rec_len = cpu_to_le16(nlen);
+                
+                de1->rec_len = cpu_to_le16(rlen - nlen);
+                de1->name_len = strlen(name);
+                memcpy (de1->name, name, de->name_len);
+                nlen = EXT3_DIR_REC_LEN_DE(de1); 
+                RETURN(nlen);
+        }        
+
+}
 struct fsfilt_operations fsfilt_ext3_snap_ops = {
         .fs_type                = "ext3_snap",
         .fs_owner               = THIS_MODULE,
@@ -1572,7 +1620,10 @@ struct fsfilt_operations fsfilt_ext3_snap_ops = {
         .fs_copy_block          = fsfilt_ext3_copy_block,
         .fs_set_snap_info       = fsfilt_ext3_set_snap_info,
         .fs_get_snap_info       = fsfilt_ext3_get_snap_info,
+        .fs_dir_ent_size        = fsfilt_ext3_dir_ent_size,
+        .fs_set_dir_ent         = fsfilt_ext3_set_dir_ent,
 };
+
 
 static int __init fsfilt_ext3_snap_init(void)
 {

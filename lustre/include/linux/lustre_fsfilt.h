@@ -134,26 +134,36 @@ struct fsfilt_operations {
         int     (* fs_is_indirect)(struct inode *inode);
         
         struct inode * (* fs_create_indirect)(struct inode *pri, int index,
-                                              unsigned int gen, struct inode *parent,
+                                              unsigned int gen, 
+                                              struct inode *parent,
                                               int del);
         struct inode * (* fs_get_indirect)(struct inode *pri, int *table,
                                           int slot);
-        ino_t   (* fs_get_indirect_ino)(struct inode *pri, int index);
+        ino_t   (* fs_get_indirect_ino)(struct super_block *sb, ino_t pri, 
+                                        int index);
         int     (* fs_destroy_indirect)(struct inode *pri, int index,
                                         struct inode *next_ind);
         int     (* fs_restore_indirect)(struct inode *pri, int index);
         int     (* fs_iterate)(struct super_block *sb,
                               int (*repeat)(struct inode *inode, void *priv),
                               struct inode **start, void *priv, int flag);
-        int     (* fs_copy_block)(struct inode *dst, struct inode *src, int blk);
+        int     (* fs_copy_block)(struct inode *dst, struct inode *src, 
+                                  int blk);
         int     (* fs_set_indirect)(struct inode *pri, int index,
                                     ino_t ind_ino, ino_t parent_ino);
-        int     (* fs_snap_feature)(struct super_block *sb, int feature, int op);
-        int     (* fs_set_snap_info)(struct inode *inode, void* key, __u32 keylen, 
-                                     void *val, __u32 *vallen); 
-        int     (* fs_get_snap_info)(struct inode *inode, void* key, __u32 keylen, 
-                                     void *val, __u32 *vallen); 
+        int     (* fs_snap_feature)(struct super_block *sb, int feature, 
+                                    int op);
+        int     (* fs_set_snap_info)(struct inode *inode, void* key, 
+                                     __u32 keylen, void *val, __u32 *vallen); 
+        int     (* fs_get_snap_info)(struct inode *inode, void* key, 
+                                     __u32 keylen, void *val, __u32 *vallen); 
         int     (* fs_set_snap_item)(struct super_block *sb, char *name);
+        int     (* fs_read_dotsnap_dir_page)(struct file *file, char *buf, 
+                                             size_t count, loff_t *ppos);
+        int     (* fs_dir_ent_size)(char *name);
+        int     (* fs_set_dir_ent)(struct super_block *sb, char *name, 
+                                   char *buf, int buf_off, int nlen, 
+                                   size_t count);
 };
 
 extern int fsfilt_register_ops(struct fsfilt_operations *fs_ops);

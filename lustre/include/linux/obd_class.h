@@ -1154,7 +1154,6 @@ static inline int obd_init_ea_size(struct obd_export *exp, int size, int size2)
         rc = OBP(exp->exp_obd, init_ea_size)(exp, size, size2);
         RETURN(rc);
 }
-
 static inline int md_getstatus(struct obd_export *exp, struct ll_fid *fid)
 {
         int rc;

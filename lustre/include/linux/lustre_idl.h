@@ -515,7 +515,8 @@ struct ll_fid {
         __u32 generation;
         __u32 f_type;
         __u32 mds;
-        __u32 padding;
+        __u16 snap_index;
+        __u16 padding;
 };
 
 struct mea_old {

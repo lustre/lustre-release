@@ -76,7 +76,8 @@ static void *fsfilt_smfs_brw_start(int objcount, struct fsfilt_objinfo *fso,
                 return NULL;
 
         cache_inode = I2CI(fso->fso_dentry->d_inode);
-         cache_dentry = pre_smfs_dentry(NULL, cache_inode, fso->fso_dentry);
+        cache_dentry = pre_smfs_dentry(NULL, cache_inode, fso->fso_dentry, 
+                                       NULL);
 
         if (!cache_dentry)
                 GOTO(exit, rc = ERR_PTR(-ENOMEM));
@@ -170,7 +171,7 @@ static int fsfilt_smfs_setattr(struct dentry *dentry, void *handle,
 
         cache_inode = I2CI(dentry->d_inode);
 
-        cache_dentry = pre_smfs_dentry(NULL, cache_inode, dentry);
+        cache_dentry = pre_smfs_dentry(NULL, cache_inode, dentry, NULL);
         if (!cache_dentry)
                 GOTO(exit, rc = -ENOMEM);
 
@@ -395,11 +396,28 @@ static ssize_t fsfilt_smfs_readpage(struct file *file, char *buf,
         *cache_ppos = *off;
 
         pre_smfs_inode(file->f_dentry->d_inode, cache_inode);
-
+#if CONFIG_SNAPFS
+        /*readdir page*/
+        if (smfs_dotsnap_inode(file->f_dentry->d_inode)) {
+                struct fsfilt_operations *snapops = 
+                                        I2SNAPOPS(file->f_dentry->d_inode);
+                
+                LASSERT(S_ISDIR(file->f_dentry->d_inode->i_mode));
+                
+                rc = snapops->fs_read_dotsnap_dir_page(sfi->c_file, buf, count, 
+                                                       cache_ppos); 
+                
+        } else {
+                if (cache_fsfilt->fs_readpage)
+                        rc = cache_fsfilt->fs_readpage(sfi->c_file, buf, count,
+                                                       cache_ppos);
+        }
+#else
         if (cache_fsfilt->fs_readpage)
                 rc = cache_fsfilt->fs_readpage(sfi->c_file, buf, count,
                                                cache_ppos);
 
+#endif
         *off = *cache_ppos;
         post_smfs_inode(file->f_dentry->d_inode, cache_inode);
         duplicate_file(file, sfi->c_file);

@@ -36,8 +36,8 @@
 #include <linux/lustre_idl.h>
 #include <linux/lustre_fsfilt.h>
 
-#include <linux/lustre_snap.h>
 #include <linux/lustre_smfs.h>
+#include <linux/lustre_snap.h>
 
 #include "smfs_internal.h"
 #define SNAPTABLE_SIZE(size) (sizeof(struct snap_table) + size * sizeof(struct snap)) 
@@ -123,7 +123,6 @@ static int smfs_init_cowed_dir(struct super_block *sb, struct dentry* cowed_dir)
         snap_info->sn_cowed_dentry = dentry;
         RETURN(rc);
 }
-#define DOT_SNAP_NAME          ".snap"
 static int smfs_init_dotinfo(struct super_block *sb)
 {
         struct snap_info *snap_info = S2SNAPI(sb);
@@ -315,27 +314,62 @@ int smfs_cow_cleanup(struct super_block *sb)
         RETURN(0);
 }
 
+static int smfs_dotsnap_dir_size(struct inode *inode)
+{
+        struct snap_info *snap_info = S2SNAPI(inode->i_sb);
+        struct fsfilt_operations *snapops = snap_info->snap_cache_fsfilt; 
+        struct snap_table *stbl = snap_info->sntbl;
+        int size = 0, dir_size = 0, blocks;
+        int i = 0;
+        ENTRY;
+
+        for (i = 0; i < stbl->sntbl_count; i++) {
+                size += snapops->fs_dir_ent_size(stbl->sntbl_items[i].sn_name);
+        }
+        /*FIXME this is only for ext3 dir format, may need fix for other FS*/ 
+        blocks = (size + inode->i_sb->s_blocksize - 1) >> 
+                                inode->i_sb->s_blocksize_bits; 
+        
+        dir_size = blocks * inode->i_sb->s_blocksize; 
+        RETURN(dir_size); 
+
+} 
 /*FIXME Note indirect and primary inode 
 * should be recorgnized here*/
-int smfs_init_snap_inode_info(struct inode *inode, int flags)
+int smfs_init_snap_inode_info(struct inode *inode, 
+                              struct snap_inode_info *sn_info) 
 {
+        struct smfs_inode_info *smi = I2SMI(inode);
         int vallen, rc = 0;
         ENTRY;
 
-        if (SMFS_DO_COW(S2SMI(inode->i_sb)) &&
-            (flags & SM_DO_COW)) {
+        LASSERT(sn_info && smi);
+        smi->sm_sninfo.sn_flags = sn_info->sn_flags;
+        smi->sm_sninfo.sn_gen = sn_info->sn_gen;
+        smi->sm_sninfo.sn_index = sn_info->sn_index; 
+
+        if (smfs_dotsnap_inode(inode)) {
+                struct snap_table *stbl= S2SNAPI(inode->i_sb)->sntbl;
+                int size = 0;
+                /*init dot_snap inode info*/
+                size = smfs_dotsnap_dir_size(inode); 
+                inode->i_size = (loff_t)size;                   
+                inode->i_nlink = stbl->sntbl_count + 2;
+                inode->i_uid = 0;
+                inode->i_gid = 0;
+        } else if (SMFS_DO_COW(S2SMI(inode->i_sb)) && 
+                   (smi->smi_flags & SM_DO_COW) &&
+                   smfs_primary_inode(inode)) {
                 struct snap_inode_info *sni_info = I2SNAPI(inode);
                 struct fsfilt_operations *snapops = I2SNAPOPS(inode);
                 
-                sni_info->sn_flags = flags;
                 vallen = sizeof(sni_info->sn_gen);
-
+                
                 rc = snapops->fs_get_snap_info(inode, SNAP_GENERATION,
                                                strlen(SNAP_GENERATION),
                                                &sni_info->sn_gen, &vallen);               
         } 
         RETURN(rc);                                              
-         
 }
 /* latest snap: returns 
    -  the index of the latest snapshot before NOW
@@ -490,7 +524,7 @@ static int link_cowed_inode(struct inode *inode)
                 LASSERT(dchild->d_inode == inode);
                 GOTO(out_dput, rc = 0);
         }
-        tmp = pre_smfs_dentry(NULL, inode, cowed_dir);
+        tmp = pre_smfs_dentry(NULL, inode, cowed_dir, NULL);
         /* link() is semanticaly-wrong for S_IFDIR, so we set S_IFREG
          * for linking and return real mode back then -bzzz */
         mode = inode->i_mode;
@@ -533,7 +567,7 @@ int snap_do_cow(struct inode *inode, struct dentry *dparent, int del)
 	ind = snapops->fs_create_indirect(inode, snap.sn_index, snap.sn_gen, 
                                           dparent->d_inode, del);
 	if(ind && IS_ERR(ind)) {
-                CERROR("Create ind inode %lu index %d gen %d del %d\n rc%u\n",
+                CERROR("Create ind inode %lu index %d gen %d del %d rc%lu\n",
                         inode->i_ino, snap.sn_index, snap.sn_gen, del,
                         PTR_ERR(ind));
 		RETURN(PTR_ERR(ind));
@@ -547,6 +581,7 @@ int snap_do_cow(struct inode *inode, struct dentry *dparent, int del)
                 
                 I2SMI(ind)->sm_sninfo.sn_flags = 0;
                 I2SMI(ind)->sm_sninfo.sn_gen = snap.sn_gen;
+                I2SMI(ind)->sm_sninfo.sn_index = snap.sn_index;
                 
                 iput(ind);
         }
@@ -751,58 +786,103 @@ exit:
         RETURN(rc);
 }
 EXPORT_SYMBOL(smfs_cow_write);
-
+/*lookup inode in dotsnap inode */
+static int smfs_dotsnap_lookup(struct inode *dir, struct dentry *dentry)
+{ 
+        if (dentry->d_name.len == 1 && 
+            !strcmp(dentry->d_name.name, ".")) {
+                d_add(dentry, iget(dir->i_sb, dir->i_ino));
+        } else if (dentry->d_name.len == 2 && 
+                   !strcmp(dentry->d_name.name, "..")) {
+                struct inode *inode;
+                struct dentry *dparent = dentry->d_parent;                                                                                                                                                                                       
+                if (dparent->d_inode) {
+                        inode = iget(dir->i_sb, dparent->d_inode->i_ino);
+                        if (inode) {
+                                if (!is_bad_inode(inode))
+                                        d_add(dentry, inode);
+                                else
+                                        iput(inode);
+                        }
+                }
+        } else {
+                /*find the name from the snaptable*/
+                struct fsfilt_operations *snapops = I2SNAPOPS(dir);
+                struct snap_table *table = S2SNAPI(dir->i_sb)->sntbl; 
+                struct inode *inode;
+                int i = 0, index = -1;
+                for (i = 0; i < table->sntbl_count; i++) {
+                        char *name = table->sntbl_items[i].sn_name;
+                        if ((dentry->d_name.len == strlen(name)) &&
+                            (memcmp(dentry->d_name.name, name,
+                                    dentry->d_name.len) == 0)) {
+                                index = table->sntbl_items[i].sn_index;
+                                break;
+                        }
+                }
+                if (index != -1) {
+                       CERROR("No such %s in this .snap dir \n", 
+                               dentry->d_name.name);
+                       RETURN(-ENOENT);
+                }
+                inode = snapops->fs_get_indirect(dir, NULL, index);
+                d_add(dentry, inode);
+        } 
+        RETURN(0);
+}
 int smfs_cow_lookup(struct inode *inode, struct dentry *dentry, void *data1,
                     void *data2)
 {
         struct snap_info *snap_info = S2SNAPI(inode->i_sb);
-        struct fsfilt_operations *snapops = snap_info->snap_fsfilt;
-        struct dentry *dparent = dentry->d_parent;
-        struct clonefs_info *clone_info=(struct clonefs_info*)dparent->d_fsdata;
-        int rc = 0;
- 
-        if (clone_info && clone_info->clone_flags && SM_CLONE_FS) {
-                struct inode *ind_inode = NULL;
-                struct inode *cache_ind = NULL;
-                struct dentry *cache_dentry = NULL;
-                struct dentry *cache_parent = NULL;
-                struct inode *cache_inode;
-                struct dentry *tmp;
-                rc = 1;
- 
-                ind_inode = snapops->fs_get_indirect(inode, NULL, clone_info->clone_index);
-                if (!ind_inode) 
-                        RETURN(-ENOENT);
-                
-                if (!(cache_ind = I2CI(ind_inode)))
-                        GOTO(exit, rc = -ENOENT);
+        struct snap_dot_info *dot_info = snap_info->sn_dot_info;
+        int rc = 0, index = 0;
+        ENTRY;
 
-                cache_parent=pre_smfs_dentry(NULL, cache_ind, dentry->d_parent);
-                cache_dentry=pre_smfs_dentry(cache_parent, NULL, dentry);
-
-                tmp = cache_ind->i_op->lookup(cache_ind, cache_dentry);
+        LASSERT(dot_info != NULL); 
+        LASSERT(data1 != NULL); 
         
-                if (IS_ERR(tmp))
-                        GOTO(exit, rc = -ENOENT);
-
-                if ((cache_inode = tmp ? tmp->d_inode : cache_dentry->d_inode)) {
-                        if (IS_ERR(cache_inode)) {
-                                dentry->d_inode = cache_inode;
-                                GOTO(exit, rc = -ENOENT);
-                        }
-                        inode = iget4(inode->i_sb, cache_inode->i_ino, NULL,
-                                      &I2SMI(inode)->smi_flags);
-                } else {
-                        d_add(dentry, NULL);
-                        GOTO(exit, rc = -ENOENT);
-                }
-                d_add(dentry, inode);
-exit:
-                iput(ind_inode);
-                post_smfs_dentry(cache_dentry);
-                post_smfs_dentry(cache_parent);
+        index = *(int *)data1; 
+ 
+        if (smfs_primary_inode(inode) && 
+            dentry->d_name.len == dot_info->dot_name_len &&
+            memcmp(dentry->d_name.name, dot_info->dot_name, 
+                   strlen(dot_info->dot_name)) == 0) {
+                struct inode *dot_inode = NULL; 
+                
+                dot_inode = smfs_get_inode(inode->i_sb, inode->i_ino, inode,
+                                           DOT_SNAP_INDEX);
+                d_add(dentry, dot_inode);
+                rc = 1;
                 RETURN(rc);
+        }
+        if (smfs_dotsnap_inode(inode)) {
+                rc = smfs_dotsnap_lookup(inode, dentry);
+                if (rc == 0)
+                        rc = 1;
+                RETURN(rc);                
         } 
+        if (index > 0) {
+                /*HERE: will replace ino in dentry->d_name according to index*/ 
+                struct fsfilt_operations *snapops = I2SNAPOPS(inode);
+                char *name = (char *)dentry->d_name.name;
+                unsigned long ino, hash, ind_ino; 
+                int len = sizeof(ind_ino);
+                 
+                ino = simple_strtoul(name, 0, 0);         
+
+                ind_ino = snapops->fs_get_indirect_ino(inode->i_sb, ino, index);
+                
+                snprintf(name, strlen(name), "0x%lx", ind_ino);                 
+                
+                hash = init_name_hash();
+                while (len--) {
+                        unsigned char c; 
+                        c = *(const unsigned char *)name++;
+                        if (c == '\0') break;
+                        hash = partial_name_hash(c, hash);
+                }
+                dentry->d_name.hash = end_name_hash(hash);
+        }        
         RETURN(rc);         
 }
 

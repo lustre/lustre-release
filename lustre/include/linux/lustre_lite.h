@@ -90,6 +90,9 @@ struct ll_inode_info {
         /* this lock protects s_d_w and p_w_ll */
         spinlock_t              lli_lock;
         int                     lli_send_done_writing;
+        
+        int                     lli_snap_index;
+        
         struct list_head        lli_pending_write_llaps;
 
         struct list_head        lli_close_item;
@@ -153,6 +156,7 @@ static inline void ll_inode2fid(struct ll_fid *fid, struct inode *inode)
         mdc_pack_fid(fid, inode->i_ino, inode->i_generation,
                      inode->i_mode & S_IFMT);
         LASSERT(ll_i2info(inode));
+        fid->snap_index = ll_i2info(inode)->lli_snap_index,
         fid->mds = ll_i2info(inode)->lli_mds;
 }
 

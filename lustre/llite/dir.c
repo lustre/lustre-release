@@ -50,6 +50,8 @@
 #include <linux/lustre_mds.h>
 #include <linux/lustre_lite.h>
 #include <linux/lustre_dlm.h>
+#include <linux/lustre_smfs.h>
+#include <linux/lustre_snap.h>
 #include "llite_internal.h"
 
 typedef struct ext2_dir_entry_2 ext2_dirent;
@@ -347,12 +349,27 @@ int ll_readdir(struct file * filp, void * dirent, filldir_t filldir)
                         if (de->inode) {
                                 int over;
                                 unsigned char d_type = DT_UNKNOWN;
-
+                                
+                                
                                 rc = 0; /* no error if we return something */
                                 if (types && de->file_type < EXT2_FT_MAX)
                                         d_type = types[de->file_type];
 
                                 offset = (char *)de - kaddr;
+#ifdef CONFIG_SNAPFS                               
+                                /*FIXME-WANGDI will get dot info from MDS*/ 
+                                if ((n << PAGE_CACHE_SHIFT | offset)  == 0) {
+                                        int off =n << PAGE_CACHE_SHIFT | offset;
+                                        over = filldir(dirent, DOT_SNAP_NAME,
+                                                       strlen(DOT_SNAP_NAME), 
+                                                       off, -1, 0); 
+                                        if (over) {
+                                                ext2_put_page(page);
+                                                GOTO(done, rc);        
+                                        }
+                                }  
+                                offset+=EXT2_DIR_REC_LEN(strlen(DOT_SNAP_NAME));     
+#endif                   
                                 over = filldir(dirent, de->name, de->name_len,
                                                (n<<PAGE_CACHE_SHIFT) | offset,
                                                le32_to_cpu(de->inode), d_type);

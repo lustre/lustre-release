@@ -27,8 +27,9 @@
 #define __LUSTRE_SMFS_H
 
 struct snap_inode_info {
-	int sn_flags;		/* the flags indicated inode type */
+	int sn_flags;		/*the flags indicated inode type */
 	int sn_gen; 	        /*the inode generation*/
+        int sn_index;           /*the inode snap_index*/
 };
 struct smfs_inode_info {
         struct inode *smi_inode;
@@ -367,13 +368,54 @@ static inline void d_unalloc(struct dentry *dentry)
         dput(dentry); /* this will free the dentry memory */
 }
 
+static inline int smfs_get_dentry_name_index(struct dentry *dentry,
+                                             struct qstr  *str,
+                                             int *index)
+{
+        char *name = (char *)dentry->d_name.name;
+        unsigned long hash;
+        unsigned char c;
+        char *str_name;
+        int len = 0, name_len = 0;
+
+        name_len = dentry->d_name.len;
+        if (!name_len)
+                return 0;
+        hash = init_name_hash();
+        while (name_len--) {
+                c = *(const unsigned char *)name++;
+                if (c == ':' || c == '\0')
+                        break;
+                hash = partial_name_hash(c, hash);
+                len ++;
+        }
+        str->hash = end_name_hash(hash);
+        OBD_ALLOC(str_name, len + 1);
+        memcpy(str_name, dentry->d_name.name, len);
+        str->len = len; 
+        str->name = str_name;
+        if (index && c == ':') {
+                *index = simple_strtoul(name, 0, 0);         
+        }
+        return 0;
+}
+
+static inline void smfs_free_dentry_name(struct qstr *str)
+{
+        OBD_FREE(str->name, str->len + 1);
+}
+
 static inline struct dentry *pre_smfs_dentry(struct dentry *parent_dentry,
                                              struct inode *cache_inode,
-                                             struct dentry *dentry)
+                                             struct dentry *dentry,
+                                             int           *index)
 {
         struct dentry *cache_dentry = NULL;
-
-        cache_dentry = d_alloc(parent_dentry, &dentry->d_name);
+        struct qstr   name; 
+        
+        smfs_get_dentry_name_index(dentry, &name, index);       
+        cache_dentry = d_alloc(parent_dentry, &name);
+        smfs_free_dentry_name(&name);
         if (!cache_dentry)
                 RETURN(NULL);
         if (!parent_dentry)
@@ -451,6 +493,7 @@ static inline int smfs_do_cow(struct inode *inode)
         return 0;
 }
 
+
 /* XXX BUG 3188 -- must return to one set of opcodes */
 #define SMFS_TRANS_OP(inode, op)                \
 {                                               \
@@ -474,4 +517,8 @@ extern int smfs_rec_unpack(struct smfs_proc_args *args, char *record,
 
 extern int smfs_post_setup(struct super_block *sb, struct vfsmount *mnt);
 extern int smfs_post_cleanup(struct super_block *sb);
+extern struct inode *smfs_get_inode (struct super_block *sb, ino_t hash,
+                                     struct inode *dir, int index);
+
+extern int is_smfs_sb(struct super_block *sb);
 #endif /* _LUSTRE_SMFS_H */

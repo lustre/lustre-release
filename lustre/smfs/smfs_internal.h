@@ -157,6 +157,8 @@ extern int smfs_removexattr(struct dentry *dentry, const char *name);
 extern int smfs_open(struct inode * inode, struct file * filp);
 extern int smfs_release(struct inode * inode, struct file * filp);
 /*inode.c*/
+struct inode *smfs_get_inode(struct super_block *sb, ino_t hash, 
+                             struct inode *dir, int index);
 extern struct super_operations smfs_super_ops;
 /*symlink.c*/
 extern struct inode_operations smfs_sym_iops;
@@ -316,7 +318,8 @@ do {                                                                           \
 #if CONFIG_SNAPFS
 extern int smfs_cow_init(struct super_block *sb);
 extern int smfs_cow_cleanup(struct super_block *sb);
-extern int smfs_init_snap_inode_info(struct inode *inode, int flags);
+extern int smfs_init_snap_inode_info(struct inode *inode, 
+                                     struct snap_inode_info *sn_info); 
 #else
 #define SMFS_PRE_COW(dir, dentry, new_dir, new_dentry, op, name, rc, label)                 
 #endif 

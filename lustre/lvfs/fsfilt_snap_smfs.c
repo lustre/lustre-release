@@ -105,7 +105,8 @@ static struct inode*  fsfilt_smfs_get_indirect(struct inode *inode,
       
         if (cache_ind_inode && !IS_ERR(cache_ind_inode)){ 
                 /*FIXME: get indirect inode set_cow flags*/ 
-                ind_inode = iget4(inode->i_sb, cache_ind_inode->i_ino, NULL, 0);
+                ind_inode = smfs_get_inode(inode->i_sb, cache_ind_inode->i_ino,
+                                           inode, slot);
         }    
         RETURN(ind_inode);
 }
@@ -194,25 +195,20 @@ static int fsfilt_smfs_is_indirect(struct inode *inode)
         
         RETURN(rc);
 }
-static ino_t fsfilt_smfs_get_indirect_ino(struct inode *inode, int index)
+static ino_t fsfilt_smfs_get_indirect_ino(struct super_block *sb, ino_t ino, 
+                                          int index)
 {
-        struct fsfilt_operations *snap_fsfilt = I2SNAPCOPS(inode);
-        struct inode *cache_inode = NULL;
+        struct fsfilt_operations *snap_fsfilt = S2SNAPI(sb)->snap_cache_fsfilt;
+        struct super_block       *csb = S2CSB(sb);
         int    rc = -EIO;
         ENTRY;
 
         if (snap_fsfilt == NULL)
                 RETURN(rc);
 
-        cache_inode = I2CI(inode);
-        if (!cache_inode)
-                RETURN(rc);
-
-        pre_smfs_inode(inode, cache_inode);
         if (snap_fsfilt->fs_get_indirect_ino)
-                rc = snap_fsfilt->fs_get_indirect_ino(cache_inode, index);
-        post_smfs_inode(inode, cache_inode);
-        
+                rc = snap_fsfilt->fs_get_indirect_ino(csb, ino, index);
+         
         RETURN(rc);
 }
 
@@ -368,6 +364,40 @@ static int fsfilt_smfs_get_snap_info(struct inode *inode, void *key,
         
         RETURN(rc);
 }
+
+static int fsfilt_smfs_read_dotsnap_dir_page(struct file *file, char *buf,
+                                             size_t count, loff_t *off)
+{
+        struct inode *inode = file->f_dentry->d_inode;
+        struct fsfilt_operations *snap_cops = I2SNAPCOPS(inode);
+        struct snap_table *stbl = S2SNAPI(inode->i_sb)->sntbl;
+        int    i = 0, size = 0, off_count = 0, buf_off = 0, rc = 0;
+        ENTRY;
+
+        /*Get the offset of dir ent*/
+        while (size < *off && off_count < stbl->sntbl_count) {
+                char *name = stbl->sntbl_items[i].sn_name;
+                size +=snap_cops->fs_dir_ent_size(name);
+                off_count ++;
+        }
+        for (i = off_count; i < stbl->sntbl_count; i++) {
+                char *name = stbl->sntbl_items[i].sn_name;
+                rc = snap_cops->fs_set_dir_ent(inode->i_sb, name, buf, buf_off, 
+                                               rc, count);
+                if (rc < 0)
+                        break;
+
+                buf_off += rc;
+
+                if (buf_off >= count) 
+                        break;
+        }
+        if (rc > 0) 
+                rc = 0; 
+
+        RETURN(rc); 
+}
+
 struct fsfilt_operations fsfilt_smfs_snap_ops = {
         .fs_type                = "smfs_snap",
         .fs_owner               = THIS_MODULE,
@@ -384,6 +414,7 @@ struct fsfilt_operations fsfilt_smfs_snap_ops = {
         .fs_copy_block          = fsfilt_smfs_copy_block,
         .fs_set_snap_info       = fsfilt_smfs_set_snap_info,
         .fs_get_snap_info       = fsfilt_smfs_get_snap_info,
+        .fs_read_dotsnap_dir_page = fsfilt_smfs_read_dotsnap_dir_page,
 };
 
 

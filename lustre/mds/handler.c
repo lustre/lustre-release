@@ -52,10 +52,13 @@
 #include <linux/obd_ost.h>
 #include <linux/lustre_mds.h>
 #include <linux/lustre_fsfilt.h>
-#include <linux/lustre_snap.h>
 #include <linux/lprocfs_status.h>
 #include <linux/lustre_commit_confd.h>
 
+#ifdef CONFIG_SNAPFS
+#include <linux/lustre_smfs.h>
+#include <linux/lustre_snap.h>
+#endif
 #include "mds_internal.h"
 
 static int mds_intent_policy(struct ldlm_namespace *ns,
@@ -295,8 +298,17 @@ struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
 
         if (ino == 0)
                 RETURN(ERR_PTR(-ESTALE));
-
+       
+#ifdef CONFIG_SNAPFS
+        if (is_smfs_sb(mds->mds_sb)) {
+                snprintf(fid_name, sizeof(fid_name), "0x%lx:%lx", ino, 
+                         fid->snap_index);
+        } else {
+                snprintf(fid_name, sizeof(fid_name), "0x%lx", ino);
+        }
+#else
         snprintf(fid_name, sizeof(fid_name), "0x%lx", ino);
+#endif 
 
         CDEBUG(D_DENTRY, "--> mds_fid2dentry: ino/gen %lu/%u, sb %p\n",
                ino, generation, mds->mds_sb);
@@ -883,14 +895,6 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req,
                 CERROR("Can't unpack name\n");
                 GOTO(cleanup, rc = -EFAULT);
         }
-#if CONFIG_SNAPFS
-        clone_info = lustre_swab_reqbuf(req, offset + 2, sizeof(*clone_info), 
-                                        lustre_swab_clonefs_info);
-        if (clone_info) {
-                CDEBUG(D_INFO,"getattr name %s clone_info index %d \n", name,
-                       clone_info->clone_index);
-        }
-#endif
         namesize = req->rq_reqmsg->buflens[offset + 1];
 
         LASSERT (offset == 0 || offset == 2);

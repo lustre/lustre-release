@@ -48,7 +48,7 @@ static int smfs_readlink(struct dentry *dentry, char *buffer, int buflen)
         if (!cache_inode)
                 RETURN(-ENOENT);
 
-        cache_dentry = pre_smfs_dentry(NULL, cache_inode, dentry);
+        cache_dentry = pre_smfs_dentry(NULL, cache_inode, dentry, NULL);
         if (!cache_dentry)
                 GOTO(exit, rc = -ENOMEM);
         if (cache_inode->i_op && cache_inode->i_op->readlink)
@@ -69,7 +69,7 @@ static int smfs_follow_link(struct dentry *dentry, struct nameidata *nd)
         if (!cache_inode)
                 RETURN(-ENOENT);
 
-        cache_dentry = pre_smfs_dentry(NULL, cache_inode, dentry);
+        cache_dentry = pre_smfs_dentry(NULL, cache_inode, dentry, NULL);
         if (!cache_dentry)
                 GOTO(exit, rc = -ENOMEM);
 

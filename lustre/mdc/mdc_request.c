@@ -1244,7 +1244,6 @@ struct obd_ops mdc_obd_ops = {
         .o_connect       = client_connect_import,
         .o_disconnect    = client_disconnect_export,
         .o_iocontrol     = mdc_iocontrol,
-        .o_set_info      = mdc_set_info,
         .o_statfs        = mdc_statfs,
         .o_pin           = mdc_pin,
         .o_unpin         = mdc_unpin,

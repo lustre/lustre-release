@@ -36,7 +36,8 @@
 #include <linux/obd_class.h>
 #include <linux/lustre_mds.h>
 #include <linux/lustre_dlm.h>
-#include <linux/lustre_snap.h>
+//#include <linux/lustre_smfs.h>
+//#include <linux/lustre_snap.h>
 #include <linux/lprocfs_status.h>
 #include "mdc_internal.h"
 
@@ -174,23 +175,6 @@ int mdc_change_cbdata(struct obd_export *exp, struct ll_fid *fid,
         return 0;
 }
 
-#if CONFIG_SNAPFS
-int mdc_set_clone_info(struct obd_export *exp, struct lustre_msg *msg, 
-                       int offset)
-{
-        struct client_obd *cli_obd = &exp->exp_obd->u.cli;
-        struct clonefs_info *cl_info;
-        ENTRY;
-        
-        if (cli_obd->cl_clone_info) { 
-                cl_info = (struct clonefs_info *)lustre_msg_buf(msg, offset, 
-                                                                 sizeof (*cl_info));
-                memcpy(cl_info, cli_obd->cl_clone_info, sizeof(*cl_info));
-        }
-        RETURN(0);        
-} 
-#endif
-
 /* We always reserve enough space in the reply packet for a stripe MD, because
  * we don't know in advance the file type. */
 int mdc_enqueue(struct obd_export *exp,
@@ -260,15 +244,9 @@ int mdc_enqueue(struct obd_export *exp,
 
                 if (it->it_op & IT_GETATTR)
                         policy.l_inodebits.bits = MDS_INODELOCK_UPDATE;
-#if CONFIG_SNAPFS                
-                size[4] = sizeof(struct clonefs_info); 
-                req = ptlrpc_prep_req(class_exp2cliimp(exp), LDLM_ENQUEUE, 5,
-                                      size, NULL);
-#else
                 req = ptlrpc_prep_req(class_exp2cliimp(exp), LDLM_ENQUEUE, 4,
                                       size, NULL);
 
-#endif
                 if (!req)
                         RETURN(-ENOMEM);
 
@@ -278,9 +256,6 @@ int mdc_enqueue(struct obd_export *exp,
 
                 /* pack the intended request */
                 mdc_getattr_pack(req->rq_reqmsg, valid, 2, it->it_flags, data);
-#if CONFIG_SNAPFS               
-                mdc_set_clone_info(exp, req->rq_reqmsg, 4); 
-#endif                 
                 /* get ready for the reply */
                 reply_buffers = 3;
                 req->rq_replen = lustre_msg_size(3, repsize);

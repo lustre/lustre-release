@@ -87,7 +87,10 @@ static int ll_test_inode(struct inode *inode, void *opaque)
 
         if (ll_i2info(inode)->lli_mds != md->body->mds)
                 return 0;
-
+#ifdef CONFIG_SNAPFS
+        if (ll_i2info(inode)->lli_snap_index != md->body->fid1.snap_index)
+                return 0;
+#endif
         /* Apply the attributes in 'opaque' to this inode */
         ll_update_inode(inode, md);
         return 1;

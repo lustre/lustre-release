@@ -52,6 +52,7 @@ struct ll_sb_info {
         int                       ll_gns_state;
         struct timer_list         ll_gns_timer;
         struct list_head          ll_gns_sbi_head;
+        void                     *ll_dot_snap_info; 
 };
 
 #define LL_GNS_STATE_IDLE     1100

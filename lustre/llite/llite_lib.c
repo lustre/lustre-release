@@ -32,6 +32,7 @@
 #include <linux/lustre_ha.h>
 #include <linux/lustre_dlm.h>
 #include <linux/lprocfs_status.h>
+#include <linux/lustre_smfs.h>
 #include <linux/lustre_snap.h>
 #include "llite_internal.h"
 
@@ -180,7 +181,6 @@ int lustre_common_fill_super(struct super_block *sb, char *mdc, char *osc)
         sbi->ll_osc_exp = class_conn2export(&osc_conn);
 
         lustre_init_ea_size(sbi);
-
         err = md_getstatus(sbi->ll_mdc_exp, &rootfid);
         if (err) {
                 CERROR("cannot mds_connect: rc = %d\n", err);
@@ -1256,7 +1256,8 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
 
         if (body->valid & OBD_MD_FLSIZE)
                 set_bit(LLI_F_HAVE_MDS_SIZE_LOCK, &lli->lli_flags);
-
+        
+        lli->lli_snap_index = body->fid1.snap_index;
         lli->lli_mds = body->mds;
         inode->i_dev = (kdev_t) body->mds;
         LASSERT(body->mds < 1000);

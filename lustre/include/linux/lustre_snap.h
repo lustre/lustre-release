@@ -165,10 +165,11 @@ struct snap_table {
 	struct  snap  	sntbl_items[0];
 };
 
+#define DOT_NAME_MAX_LEN 32 
 struct snap_dot_info {
-         char *dot_name;
-         int   dot_name_len;
-         int   dot_snap_enable;
+        char    *dot_name;
+        int     dot_name_len;
+        int     dot_snap_enable; 
 };
 
 struct snap_info {
@@ -180,7 +181,6 @@ struct snap_info {
         struct snap_table        *sntbl;
         struct dentry            *sn_cowed_dentry;
         struct snap_dot_info     *sn_dot_info;
-
 };
 
 extern int smfs_add_snap_item(struct super_block *sb, char *name);
@@ -196,4 +196,35 @@ int smfs_cow(struct inode *dir, struct dentry *dentry,
 int smfs_cow_write(struct inode *inode, struct dentry *dentry, void *data1,
                    void *data2);
 struct inode* smfs_cow_get_ind(struct inode *inode, int index);
+
+
+#define DOT_SNAP_NAME          ".snap"
+#define DOT_SNAP_INDEX         0xffff
+static inline int smfs_primary_inode(struct inode *inode)
+{
+        struct snap_inode_info *sn_info = &I2SMI(inode)->sm_sninfo;
+
+        if (sn_info->sn_index == 0)
+                return 1; 
+        return 0; 
+}
+static inline int smfs_dotsnap_inode(struct inode *inode)
+{
+        struct snap_inode_info *sn_info = &I2SMI(inode)->sm_sninfo;
+
+        if (sn_info->sn_index == DOT_SNAP_INDEX)
+                return 1; 
+        return 0; 
+}
+static inline int smfs_under_dotsnap_inode(struct inode *inode)
+{
+        struct snap_inode_info *sn_info = &I2SMI(inode)->sm_sninfo;
+        
+        if (sn_info->sn_index > 0 && sn_info->sn_index != DOT_SNAP_INDEX)
+                return 1;
+        return 0; 
+}
+
+
+
 #endif /*_LUSTRE_SNAP_H*/
