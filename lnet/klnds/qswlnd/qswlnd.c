@@ -213,7 +213,6 @@ kqswnal_finalise (void)
 		/* fall through */
 
 	case KQN_INIT_DATA:
-		LASSERT(list_empty(&kqswnal_data.kqn_activetxds));
 		break;
 
 	case KQN_INIT_NOTHING:
@@ -248,12 +247,22 @@ kqswnal_finalise (void)
 
 	if (kqswnal_data.kqn_eptx != NULL)
 		ep_free_xmtr (kqswnal_data.kqn_eptx);
+
+	/* freeing the xmtr completes all txs pdq */
+	LASSERT(list_empty(&kqswnal_data.kqn_activetxds));
 #else
 	if (kqswnal_data.kqn_eprx_small != NULL)
 		ep_remove_large_rcvr (kqswnal_data.kqn_eprx_small);
 
 	if (kqswnal_data.kqn_eprx_large != NULL)
 		ep_remove_large_rcvr (kqswnal_data.kqn_eprx_large);
+
+	/* wait for transmits to complete */
+	while (!list_empty(&kqswnal_data.kqn_activetxds)) {
+		CWARN("waiting for active transmits to complete\n");
+		set_current_state(TASK_UNINTERRUPTIBLE);
+		schedule_timeout(HZ);
+	}
 
 	if (kqswnal_data.kqn_eptx != NULL)
 		ep_free_large_xmtr (kqswnal_data.kqn_eptx);
