@@ -38,7 +38,6 @@
 static DECLARE_MUTEX(pinger_sem);
 static struct list_head pinger_imports = LIST_HEAD_INIT(pinger_imports);
 
-#ifdef __KERNEL__
 static struct ptlrpc_thread *pinger_thread = NULL;
 
 int ptlrpc_ping(struct obd_import *imp) 
@@ -67,6 +66,7 @@ int ptlrpc_ping(struct obd_import *imp)
         RETURN(rc);
 }
 
+#ifdef __KERNEL__
 static int ptlrpc_pinger_main(void *arg)
 {
         struct ptlrpc_svc_data *data = (struct ptlrpc_svc_data *)arg;
@@ -279,7 +279,8 @@ void ptlrpc_pinger_wake_up()
 #endif
 }
 
-#else
+#else /* !__KERNEL__ */
+
 /* XXX
  * the current implementation of pinger in liblustre is not optimized
  */
@@ -288,42 +289,32 @@ static struct pinger_data {
         int             pd_recursion;
         unsigned long   pd_this_ping;
         unsigned long   pd_next_ping;
-        struct ptlrpc_request_set *pd_set;
+        int             pd_force_check;
 } pinger_args;
 
 static int pinger_check_rpcs(void *arg)
 {
         unsigned long curtime = time(NULL);
-        struct ptlrpc_request *req;
-        struct ptlrpc_request_set *set;
         struct list_head *iter;
         struct pinger_data *pd = &pinger_args;
-        int rc;
 
         /* prevent recursion */
         if (pd->pd_recursion++) {
                 CDEBUG(D_HA, "pinger: recursion! quit\n");
-                LASSERT(pd->pd_set);
                 pd->pd_recursion--;
                 return 0;
         }
 
         /* have we reached ping point? */
-        if (!pd->pd_set && pd->pd_next_ping > curtime) {
+        if (pd->pd_next_ping > curtime && !pd->pd_force_check) {
                 pd->pd_recursion--;
                 return 0;
         }
 
-        /* if we have rpc_set already, continue processing it */
-        if (pd->pd_set) {
-                LASSERT(pd->pd_this_ping);
-                set = pd->pd_set;
-                goto do_check_set;
-        }
+        if (pd->pd_force_check)
+                pd->pd_force_check = 0;
 
         pd->pd_this_ping = curtime;
-        pd->pd_set = ptlrpc_prep_set();
-        set = pd->pd_set;
 
         /* add rpcs into set */
         down(&pinger_sem);
@@ -331,95 +322,50 @@ static int pinger_check_rpcs(void *arg)
                 struct obd_import *imp =
                         list_entry(iter, struct obd_import,
                                    imp_pinger_chain);
-                int generation, level;
+                int level, force;
                 unsigned long flags;
 
-                if (imp->imp_next_ping <= pd->pd_this_ping) {
-                        /* Add a ping. */
-                        spin_lock_irqsave(&imp->imp_lock, flags);
-                        generation = imp->imp_generation;
-                        level = imp->imp_state;
-                        spin_unlock_irqrestore(&imp->imp_lock, flags);
 
-                        if (level != LUSTRE_IMP_FULL) {
-                                CDEBUG(D_HA,
-                                       "not pinging %s (in recovery)\n",
-                                       imp->imp_target_uuid.uuid);
-                                continue;
+                spin_lock_irqsave(&imp->imp_lock, flags);
+                level = imp->imp_state;
+                force = imp->imp_force_verify;
+                if (force)
+                        imp->imp_force_verify = 0;
+                spin_unlock_irqrestore(&imp->imp_lock, flags);
+
+                if (imp->imp_next_ping <= pd->pd_this_ping || force) {
+                        if (level == LUSTRE_IMP_DISCON) {
+                                /* wait at least a timeout before 
+                                   trying recovery again. */
+                                imp->imp_next_ping = time(NULL) + 
+                                        (obd_timeout * HZ);
+                                ptlrpc_initiate_recovery(imp);
+                        } 
+                        else if (level != LUSTRE_IMP_FULL ||
+                                 imp->imp_obd->obd_no_recov) {
+                                CDEBUG(D_HA, 
+                                       "not pinging %s (in recovery "
+                                       " or recovery disabled: %s)\n",
+                                       imp->imp_target_uuid.uuid,
+                                       ptlrpc_import_state_name(level));
+                        } 
+                        else if (imp->imp_pingable || force) {
+                                ptlrpc_ping(imp);
                         }
 
-                        req = ptlrpc_prep_req(imp, OBD_PING, 0, NULL,
-                                              NULL);
-                        if (!req) {
-                                CERROR("out of memory\n");
-                                break;
-                        }
-                        req->rq_no_resend = 1;
-                        req->rq_replen = lustre_msg_size(0, NULL);
-                        req->rq_send_state = LUSTRE_IMP_FULL;
-                        req->rq_phase = RQ_PHASE_RPC;
-                        req->rq_import_generation = generation;
-                        ptlrpc_set_add_req(set, req);
                 } else {
-                        CDEBUG(D_HA, "don't need to ping %s (%lu > "
-                               "%lu)\n", imp->imp_target_uuid.uuid,
-                               imp->imp_next_ping, pd->pd_this_ping);
+                        if (imp->imp_pingable) {
+                                CDEBUG(D_HA, "don't need to ping %s "
+                                       "(%lu > %lu)\n", 
+                                       imp->imp_target_uuid.uuid,
+                                       imp->imp_next_ping, pd->pd_this_ping);
+                        }
                 }
         }
-        pd->pd_this_ping = curtime;
+
         up(&pinger_sem);
 
-        /* Might be empty, that's OK. */
-        if (set->set_remaining == 0)
-                CDEBUG(D_HA, "nothing to ping\n");
-
-        list_for_each(iter, &set->set_requests) {
-                struct ptlrpc_request *req =
-                        list_entry(iter, struct ptlrpc_request,
-                                   rq_set_chain);
-                DEBUG_REQ(D_HA, req, "pinging %s->%s",
-                          req->rq_import->imp_obd->obd_uuid.uuid,
-                          req->rq_import->imp_target_uuid.uuid);
-                (void)ptl_send_rpc(req);
-        }
-
-do_check_set:
-        rc = ptlrpc_check_set(set);
-
-        /* not finished, and we are not expired, simply return */
-        if (!rc && curtime < pd->pd_this_ping + obd_timeout) {
-                CDEBUG(D_HA, "not finished, but also not expired\n");
-                pd->pd_recursion--;
-                return 0;
-        }
-
-        /* Expire all the requests that didn't come back. */
-        down(&pinger_sem);
-        list_for_each(iter, &set->set_requests) {
-                req = list_entry(iter, struct ptlrpc_request,
-                                 rq_set_chain);
-
-                if (req->rq_replied)
-                        continue;
-
-                req->rq_phase = RQ_PHASE_COMPLETE;
-                set->set_remaining--;
-                /* If it was disconnected, don't sweat it. */
-                if (list_empty(&req->rq_import->imp_pinger_chain)) {
-                        ptlrpc_unregister_reply(req);
-                        continue;
-                }
-
-                CDEBUG(D_HA, "pinger initiate expire_one_request\n");
-                ptlrpc_expire_one_request(req);
-        }
-        up(&pinger_sem);
-
-        ptlrpc_set_destroy(set);
-        pd->pd_set = NULL;
-
-        pd->pd_next_ping = pd->pd_this_ping + obd_timeout;
-        pd->pd_this_ping = 0; /* XXX for debug */
+        pd->pd_next_ping = pd->pd_this_ping + (obd_timeout * HZ);
 
         CDEBUG(D_HA, "finished a round ping\n");
         pd->pd_recursion--;
@@ -451,8 +397,7 @@ void ptlrpc_pinger_sending_on_import(struct obd_import *imp)
 {
         down(&pinger_sem);
         imp->imp_next_ping = time(NULL) + obd_timeout;
-        if (pinger_args.pd_set == NULL &&
-            pinger_args.pd_next_ping > imp->imp_next_ping) {
+        if (pinger_args.pd_next_ping > imp->imp_next_ping) {
                 CDEBUG(D_HA, "set next ping to %ld(cur %ld)\n",
                         imp->imp_next_ping, time(NULL));
                 pinger_args.pd_next_ping = imp->imp_next_ping;
@@ -495,8 +440,6 @@ int ptlrpc_pinger_del_import(struct obd_import *imp)
 
 void ptlrpc_pinger_wake_up()
 {
-#ifdef ENABLE_PINGER
-        /* XXX force pinger to run, if needed */
-#endif
+        pinger_args.pd_force_check = 1;
 }
 #endif /* !__KERNEL__ */

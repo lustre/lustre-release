@@ -27,8 +27,6 @@ SYSIO_LIBS = $(SYSIO)/drivers/native/libsysio_native.a \
              $(SYSIO)/src/libsysio.a \
              $(SYSIO)/dev/stdfd/libsysio_stdfd.a
 
-#SYSIO_LIBS = $(SYSIO)/lib/libsysio.a
-
 lib_LIBRARIES = liblustre.a
 noinst_LIBRARIES = libllite.a
 
