@@ -31,20 +31,20 @@
 #include <linux/init.h>
 #include <linux/ext3_fs.h>
 #include <linux/ext3_jbd.h>
-#include <../fs/ext3/xattr.h>
+#include <linux/ext3_xattr.h>
 #include <linux/kp30.h>
 #include <linux/lustre_fsfilt.h>
 #include <linux/obd.h>
 #include <linux/module.h>
 
-static struct fsfilt_fs_operations fsfilt_ext3_fs_ops;
 static kmem_cache_t *fcb_cache;
 static int fcb_cache_count;
 
 struct fsfilt_cb_data {
-        struct journal_callback cb_jcb;
-        struct obd_device *cb_obd;
-        __u64 cb_last_rcvd;
+        struct journal_callback cb_jcb; /* data private to jbd */
+        fsfilt_cb_t cb_func;            /* MDS/OBD completion function */
+        struct obd_device *cb_obd;      /* MDS/OBD completion device */
+        __u64 cb_last_rcvd;             /* MDS/OST last committed operation */
 };
 
 #define EXT3_XATTR_INDEX_LUSTRE         5
@@ -109,7 +109,7 @@ static int fsfilt_ext3_commit(struct inode *inode, void *handle)
 }
 
 static int fsfilt_ext3_setattr(struct dentry *dentry, void *handle,
-                            struct iattr *iattr)
+                               struct iattr *iattr)
 {
         struct inode *inode = dentry->d_inode;
         int rc;
@@ -126,7 +126,7 @@ static int fsfilt_ext3_setattr(struct dentry *dentry, void *handle,
 }
 
 static int fsfilt_ext3_set_md(struct inode *inode, void *handle,
-                           struct lov_mds_md *lmm, int lmm_size)
+                              void *lmm, int lmm_size)
 {
         int rc;
 
@@ -138,8 +138,8 @@ static int fsfilt_ext3_set_md(struct inode *inode, void *handle,
         up(&inode->i_sem);
 
         if (rc) {
-                CERROR("error adding objectid "LPX64" to inode %lu: rc = %d\n",
-                       lmm->lmm_object_id, inode->i_ino, rc);
+                CERROR("error adding MD data to inode %lu: rc = %d\n",
+                       inode->i_ino, rc);
                 if (rc != -ENOSPC) LBUG();
         }
         return rc;
@@ -166,10 +166,6 @@ static int fsfilt_ext3_get_md(struct inode *inode, void *lmm, int size)
                 memset(lmm, 0, size);
                 return (rc == -ENODATA) ? 0 : rc;
         }
-
-        /* This field is byteswapped because it appears in the
-         * catalogue.  All others are opaque to the MDS */
-        lmm->lmm_object_id = le64_to_cpu(lmm->lmm_object_id);
 
         return rc;
 }
@@ -201,21 +197,20 @@ static ssize_t fsfilt_ext3_readpage(struct file *file, char *buf, size_t count,
         return rc;
 }
 
-static void fsfilt_ext3_callback_status(struct journal_callback *jcb, int error)
+static void fsfilt_ext3_cb_func(struct journal_callback *jcb, int error)
 {
         struct fsfilt_cb_data *fcb = (struct fsfilt_cb_data *)jcb;
 
-        CDEBUG(D_EXT2, "got callback for last_rcvd "LPD64": rc = %d\n",
-               fcb->cb_last_rcvd, error);
-        if (!error && fcb->cb_last_rcvd > fcb->cb_obd->mds_last_committed)
-                fcb->cb_obd->mds_last_committed = fcb->cb_last_rcvd;
+        fcb->cb_func(fcb->cb_obd, fcb->cb_last_rcvd, error);
 
         kmem_cache_free(fcb_cache, fcb);
         --fcb_cache_count;
 }
 
-static int fsfilt_ext3_set_last_rcvd(struct obd_device *obd, void *handle)
+static int fsfilt_ext3_set_last_rcvd(struct obd_device *obd, __u64 last_rcvd,
+                                     void *handle, fsfilt_cb_t cb_func)
 {
+#ifdef HAVE_JOURNAL_CALLBACK_STATUS
         struct fsfilt_cb_data *fcb;
 
         fcb = kmem_cache_alloc(fcb_cache, GFP_NOFS);
@@ -223,20 +218,18 @@ static int fsfilt_ext3_set_last_rcvd(struct obd_device *obd, void *handle)
                 RETURN(-ENOMEM);
 
         ++fcb_cache_count;
+        fcb->cb_func = cb_func;
         fcb->cb_obd = obd;
-        fcb->cb_last_rcvd = obd->mds_last_rcvd;
+        fcb->cb_last_rcvd = last_rcvd;
 
-#ifdef HAVE_JOURNAL_CALLBACK_STATUS
-        CDEBUG(D_EXT2, "set callback for last_rcvd: "LPD64"\n",
-               fcb->cb_last_rcvd);
+        CDEBUG(D_EXT2, "set callback for last_rcvd: "LPD64"\n", last_rcvd);
         lock_kernel();
         /* Note that an "incompatible pointer" warning here is OK for now */
-        journal_callback_set(handle, fsfilt_ext3_callback_status,
+        journal_callback_set(handle, fsfilt_ext3_cb_func,
                              (struct journal_callback *)fcb);
         unlock_kernel();
 #else
 #warning "no journal callback kernel patch, faking it..."
-        {
         static long next = 0;
 
         if (time_after(jiffies, next)) {
@@ -244,7 +237,7 @@ static int fsfilt_ext3_set_last_rcvd(struct obd_device *obd, void *handle)
                 next = jiffies + 300 * HZ;
         }
 
-        fsfilt_ext3_callback_status((struct journal_callback *)fcb, 0);
+        cb_func(obd, last_rcvd, 0);
 #endif
 
         return 0;
@@ -276,7 +269,8 @@ static int fsfilt_ext3_statfs(struct super_block *sb, struct statfs *sfs)
         return rc;
 }
 
-static struct fsfilt_fs_operations fsfilt_ext3_fs_ops = {
+static struct fsfilt_operations fsfilt_ext3_fs_ops = {
+        fs_type:                "ext3",
         fs_owner:               THIS_MODULE,
         fs_start:               fsfilt_ext3_start,
         fs_commit:              fsfilt_ext3_commit,
@@ -284,8 +278,6 @@ static struct fsfilt_fs_operations fsfilt_ext3_fs_ops = {
         fs_set_md:              fsfilt_ext3_set_md,
         fs_get_md:              fsfilt_ext3_get_md,
         fs_readpage:            fsfilt_ext3_readpage,
-        fs_delete_inode:        fsfilt_ext3_delete_inode,
-        cl_delete_inode:        clear_inode,
         fs_journal_data:        fsfilt_ext3_journal_data,
         fs_set_last_rcvd:       fsfilt_ext3_set_last_rcvd,
         fs_statfs:              fsfilt_ext3_statfs,
@@ -304,7 +296,7 @@ static int __init fsfilt_ext3_init(void)
                 GOTO(out, rc = -ENOMEM);
         }
 
-        rc = fsfilt_register_fs_type(&fsfilt_ext3_fs_ops, "ext3");
+        rc = fsfilt_register_fs_type(&fsfilt_ext3_fs_ops);
 
         if (rc)
                 kmem_cache_destroy(fcb_cache);
