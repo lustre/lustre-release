@@ -477,11 +477,14 @@ lgmnal_small_tx_callback(gm_port_t *gm_port, void *context, gm_status_t status)
 		/*
 		 *	do a resend on the dropped ones
 		 */
-		CDEBUG(D_ERROR, "send stxd [%p] was dropped resending\n", context);
-		gm_send_to_peer_with_callback(nal_data->gm_port, stxd->buffer, stxd->gm_size, stxd->msg_size, stxd->gm_priority, stxd->gm_target_node, lgmnal_small_tx_callback, context);
+			CDEBUG(D_ERROR, "send stxd [%p] was dropped resending\n", context);
+			LGMNAL_GM_LOCK(nal_data);
+			gm_send_to_peer_with_callback(nal_data->gm_port, stxd->buffer, stxd->gm_size, stxd->msg_size, stxd->gm_priority, stxd->gm_target_node, lgmnal_small_tx_callback, context);
+			LGMNAL_GM_UNLOCK(nal_data);
 		
 		return;
   		case(GM_TIMED_OUT):
+  		case(GM_SEND_TIMED_OUT):
 		/*
 		 *	drop these ones
 		 */
@@ -510,7 +513,6 @@ lgmnal_small_tx_callback(gm_port_t *gm_port, void *context, gm_status_t status)
   		case(GM_INTERNAL_ERROR):
   		case(GM_UNATTACHED):
   		case(GM_UNSUPPORTED_DEVICE):
-  		case(GM_SEND_TIMED_OUT):
   		case(GM_SEND_REJECTED):
   		case(GM_SEND_TARGET_PORT_CLOSED):
   		case(GM_SEND_TARGET_NODE_UNREACHABLE):
