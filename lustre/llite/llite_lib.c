@@ -103,7 +103,12 @@ int lustre_common_fill_super(struct super_block *sb, char *mdc, char *osc)
         mdc_init_ea_size(obd, osc);
 
         err = obd_connect(&mdc_conn, obd, &sbi->ll_sb_uuid);
-        if (err) {
+        if (err == -EBUSY) {
+                CERROR("An MDS (mdc %s) is performing recovery, of which this"
+                       " client is not a part.  Please wait for recovery to "
+                       "complete, abort, or time out.\n", mdc);
+                GOTO(out, err);
+        } else if (err) {
                 CERROR("cannot connect to %s: rc = %d\n", mdc, err);
                 GOTO(out, err);
         }
@@ -130,7 +135,12 @@ int lustre_common_fill_super(struct super_block *sb, char *mdc, char *osc)
         }
 
         err = obd_connect(&osc_conn, obd, &sbi->ll_sb_uuid);
-        if (err) {
+        if (err == -EBUSY) {
+                CERROR("An OST (osc %s) is performing recovery, of which this"
+                       " client is not a part.  Please wait for recovery to "
+                       "complete, abort, or time out.\n", osc);
+                GOTO(out, err);
+        } else if (err) {
                 CERROR("cannot connect to %s: rc = %d\n", osc, err);
                 GOTO(out_mdc, err);
         }

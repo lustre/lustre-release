@@ -19,6 +19,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- fix a rare lock re-ordering bug, which caused deadlock (2322)
 	- fix i_sem/journal inversion in fsfilt_ext3_write_record (2306)
 	- protect MDS inode fsdata with stronger locking (2313)
+	- better error messages when a client is rejected during recovery (1505)
        * miscellania
 	- allow configurable automake binary, for testing new versions
 	- small update to the lfs documentation
