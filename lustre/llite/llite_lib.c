@@ -135,6 +135,7 @@ int ll_fill_super(struct super_block *sb, void *data, int silent)
         struct lustre_handle mdc_conn = {0, };
         struct lustre_md md;
         class_uuid_t uuid;
+        kdev_t devno;
 
         ENTRY;
 
@@ -192,6 +193,13 @@ int ll_fill_super(struct super_block *sb, void *data, int silent)
         sb->s_blocksize_bits = log2(osfs.os_bsize);
         sb->s_magic = LL_SUPER_MAGIC;
         sb->s_maxbytes = PAGE_CACHE_MAXBYTES;
+        
+        devno = get_uuid2int(sbi2mdc(sbi)->cl_import->imp_target_uuid.uuid, 
+                             strlen(sbi2mdc(sbi)->cl_import->imp_target_uuid.uuid));
+        write_lock(&file_systems_lock);
+        sb->s_type->fs_flags = FS_REQUIRES_DEV;
+        write_unlock(&file_systems_lock);
+        sb->s_dev = devno;
 
         obd = class_name2obd(osc);
         if (!obd) {
@@ -274,6 +282,10 @@ void ll_put_super(struct super_block *sb)
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op: sb %p\n", sb);
+        write_lock(&file_systems_lock);
+        sb->s_type->fs_flags = 0;
+        write_unlock(&file_systems_lock);
+        
         list_del(&sbi->ll_conn_chain);
         obd_disconnect(sbi->ll_osc_exp, 0);
 
@@ -312,8 +324,8 @@ struct inode *ll_inode_from_lock(struct ldlm_lock *lock)
 {
         struct inode *inode;
         l_lock(&lock->l_resource->lr_namespace->ns_lock);
-        if (lock->l_data)
-                inode = igrab(lock->l_data);
+        if (lock->l_ast_data)
+                inode = igrab(lock->l_ast_data);
         else
                 inode = NULL;
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
@@ -322,8 +334,8 @@ struct inode *ll_inode_from_lock(struct ldlm_lock *lock)
 
 static int null_if_equal(struct ldlm_lock *lock, void *data)
 {
-        if (data == lock->l_data)
-                lock->l_data = NULL;
+        if (data == lock->l_ast_data)
+                lock->l_ast_data = NULL;
 
         if (lock->l_req_mode != lock->l_granted_mode)
                 return LDLM_ITER_STOP;
@@ -904,7 +916,7 @@ int ll_prep_inode(struct obd_export *exp, struct inode **inode,
         } else {
                 LASSERT(sb);
                 *inode = ll_iget(sb, md.body->ino, &md);
-                if (!*inode) {
+                if (*inode == NULL || is_bad_inode(*inode)) {
                         /* free the lsm if we allocated one above */
                         if (md.lsm != NULL)
                                 obd_free_memmd(exp, &md.lsm);

@@ -102,11 +102,12 @@ static int osc_rpcd_check(struct osc_rpcd_ctl *orc)
                 req = list_entry(pos, struct ptlrpc_request, rq_set_chain);
                 list_del_init(&req->rq_set_chain);
                 ptlrpc_set_add_req(orc->orc_set, req);
+                rc = 1; /* need to calculate its timeout */
         }
         spin_unlock_irqrestore(&orc->orc_set->set_new_req_lock, flags);
 
         if (orc->orc_set->set_remaining) {
-                rc = ptlrpc_check_set(orc->orc_set);
+                rc = rc | ptlrpc_check_set(orc->orc_set);
 
                 /* XXX our set never completes, so we prune the completed
                  * reqs after each iteration. boy could this be smarter. */
