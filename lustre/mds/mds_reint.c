@@ -1431,8 +1431,10 @@ int mds_create_local_dentry(struct mds_update_record *rec,
         }
 
         if (IS_ERR(child)) {
-                CERROR("can't get victim: %d\n", (int) PTR_ERR(child));
-                GOTO(cleanup, rc = PTR_ERR(child));
+                rc = PTR_ERR(child);
+                if (rc != -ENOENT || !(rec->ur_mode & MDS_MODE_REPLAY))
+                        CERROR("can't get victim: %d\n", rc);
+                GOTO(cleanup, rc);
         }
         cleanup_phase = 2;
 
