@@ -74,7 +74,6 @@ static struct osc_rpcd_ctl {
 static DECLARE_MUTEX(osc_rpcd_sem);
 static int osc_rpcd_users = 0;
 
-#ifdef __KERNEL__
 void osc_rpcd_add_req(struct ptlrpc_request *req)
 {
         struct osc_rpcd_ctl *orc = &osc_orc;
@@ -123,80 +122,6 @@ static int osc_rpcd_check(struct osc_rpcd_ctl *orc)
         RETURN(rc);
 }
 
-#else
-
-static int osc_rpcd_check(struct osc_rpcd_ctl *orc)
-{
-        struct list_head *tmp, *pos;
-        struct ptlrpc_request *req;
-        unsigned long flags;
-        int rc = 0;
-        ENTRY;
-
-        spin_lock_irqsave(&orc->orc_set->set_new_req_lock, flags);
-        list_for_each_safe(pos, tmp, &orc->orc_set->set_new_requests) {
-                req = list_entry(pos, struct ptlrpc_request, rq_set_chain);
-                list_del_init(&req->rq_set_chain);
-                ptlrpc_set_add_req(orc->orc_set, req);
-        }
-        spin_unlock_irqrestore(&orc->orc_set->set_new_req_lock, flags);
-
-        if (orc->orc_set->set_remaining) {
-                rc = ptlrpc_check_set(orc->orc_set);
-
-                /* XXX our set never completes, so we prune the completed
-                 * reqs after each iteration. boy could this be smarter. */
-                list_for_each_safe(pos, tmp, &orc->orc_set->set_requests) {
-                        req = list_entry(pos, struct ptlrpc_request, 
-                                         rq_set_chain);
-                        if (req->rq_phase != RQ_PHASE_COMPLETE)
-                                continue;
-
-                        list_del_init(&req->rq_set_chain);
-                        req->rq_set = NULL;
-                        ptlrpc_req_finished (req);
-
-                        /* if some req get finished, we should return 
-                         * success */
-                        if (rc >= 0)
-                                rc = 1;
-                }
-        }
-
-        RETURN(rc);
-}
-
-extern int ptlrpc_set_send_new(struct ptlrpc_request_set *set);
-
-void osc_rpcd_add_req(struct ptlrpc_request *req)
-{
-        struct osc_rpcd_ctl *orc = &osc_orc;
-        unsigned long flags;
-
-        spin_lock_irqsave(&orc->orc_set->set_new_req_lock, flags);
-        ptlrpc_set_add_req(orc->orc_set, req);
-        spin_unlock_irqrestore(&orc->orc_set->set_new_req_lock, flags);
-
-        if (ptlrpc_set_send_new(orc->orc_set)) {
-                /* XXX promptly handle error here */
-                CERROR("ERROR!\n");
-        }
-}
-
-void osc_rpcd_wait_io()
-{
-        struct osc_rpcd_ctl *orc = &osc_orc;
-        struct l_wait_info lwi;
-        int timeout;
-
-        timeout = ptlrpc_set_next_timeout(orc->orc_set) * HZ;
-        lwi = LWI_TIMEOUT(timeout, ptlrpc_expired_set, orc->orc_set);
-        l_wait_event(orc->orc_waitq, osc_rpcd_check(orc), &lwi);
-}
-
-#endif
-
-             
 #ifdef __KERNEL__
 /* ptlrpc's code paths like to execute in process context, so we have this
  * thread which spins on a set which contains the io rpcs.  llite specifies
@@ -245,6 +170,24 @@ static int osc_rpcd(void *arg)
         complete(&orc->orc_finishing);
         return 0;
 }
+#else
+static int osc_rpcd_recurred = 0;
+static void *osc_rpcd_callback;
+
+int osc_check_async_rpcs(void *arg)
+{
+        struct osc_rpcd_ctl *orc = arg;
+        int                  rc = 0;
+
+        /* single threaded!! */
+        osc_rpcd_recurred++;
+
+        if (osc_rpcd_recurred == 1)
+                rc = osc_rpcd_check(orc);
+
+        osc_rpcd_recurred--;
+        return rc;
+}
 #endif
 
 int osc_rpcd_addref(void)
@@ -276,6 +219,9 @@ int osc_rpcd_addref(void)
         }
 
         wait_for_completion(&orc->orc_starting);
+#else
+        osc_rpcd_callback =
+                liblustre_register_wait_callback(&osc_check_async_rpcs, orc);
 #endif
 out:
         up(&osc_rpcd_sem);
@@ -292,6 +238,8 @@ void osc_rpcd_decref(void)
                 wake_up(&orc->orc_waitq);
 #ifdef __KERNEL__
                 wait_for_completion(&orc->orc_finishing);
+#else
+                liblustre_deregister_wait_callback(osc_rpcd_callback);
 #endif
                 ptlrpc_set_destroy(orc->orc_set);
         }
