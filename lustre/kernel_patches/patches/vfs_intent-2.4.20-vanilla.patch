@@ -1846,16 +1846,17 @@ Index: lum/include/linux/fs_struct.h
 Index: lum/include/linux/mount.h
 ===================================================================
 --- lum.orig/include/linux/mount.h	2004-02-27 01:29:07.000000000 -0500
-+++ lum/include/linux/mount.h	2004-02-27 01:47:39.000000000 -0500
-@@ -29,6 +29,7 @@
++++ lum/include/linux/mount.h	2004-03-01 15:58:42.000000000 -0500
+@@ -29,6 +29,8 @@
  	int mnt_flags;
  	char *mnt_devname;		/* Name of device e.g. /dev/dsk/hda1 */
  	struct list_head mnt_list;
 +        struct list_head mnt_lustre_list; /* GNS mount list */
++        unsigned long mnt_last_used;      /* for GNS auto-umount (jiffies) */
  };
  
  static inline struct vfsmount *mntget(struct vfsmount *mnt)
-@@ -39,6 +40,7 @@
+@@ -39,6 +41,7 @@
  }
  
  extern void __mntput(struct vfsmount *mnt);
