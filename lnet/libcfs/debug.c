@@ -805,8 +805,6 @@ portals_debug_msg(int subsys, int mask, char *file, const char *fn,
                               subsys, mask, smp_processor_id(),
                               tv.tv_sec, tv.tv_usec, stack, current->pid);
         max_nob -= prefix_nob;
-        if(*(format + strlen(format) - 1) != '\n')
-                *(format + strlen(format)) = '\n';
 
 #if defined(__arch_um__) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,4,20))
         msg_nob = snprintf(debug_buf + debug_off + prefix_nob, max_nob,
