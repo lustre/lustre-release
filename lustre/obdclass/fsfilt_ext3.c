@@ -66,6 +66,8 @@ static void *fsfilt_ext3_start(struct inode *inode, int op)
 
         switch(op) {
         case FSFILT_OP_RMDIR:
+                /* The MDS does a compound unlink + truncate */
+                nblocks += EXT3_DELETE_TRANS_BLOCKS;
         case FSFILT_OP_UNLINK:
                 nblocks += EXT3_DELETE_TRANS_BLOCKS;
                 break;
