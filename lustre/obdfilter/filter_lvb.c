@@ -36,20 +36,15 @@
 
 #include "filter_internal.h"
 
-struct filter_lvb {
-        __u64 flvb_size;
-        __u64 flvb_time;
-};
-
 static int filter_lvbo_init(struct ldlm_resource *res)
 {
         int rc;
-        struct filter_lvb *lvb = NULL;
+        struct ost_lvb *lvb = NULL;
         struct obd_device *obd;
         struct obdo *oa = NULL;
         struct dentry *dentry;
         ENTRY;
-        
+
         LASSERT(res);
 
         /* we only want lvb's for object resources */
@@ -67,7 +62,6 @@ static int filter_lvbo_init(struct ldlm_resource *res)
 
         res->lr_lvb_data = lvb;
         res->lr_lvb_len = sizeof(*lvb);
-        
 
         obd = res->lr_namespace->ns_lvbp;
         LASSERT(obd); /* not supposed to fail */
@@ -75,7 +69,7 @@ static int filter_lvbo_init(struct ldlm_resource *res)
         oa = obdo_alloc();
         if (!oa)
                 GOTO(out, rc = -ENOMEM);
-        
+
         oa->o_id = res->lr_name.name[0];
         oa->o_gr = 0;
         dentry = filter_oa2dentry(obd, oa);
@@ -85,10 +79,10 @@ static int filter_lvbo_init(struct ldlm_resource *res)
         /* Limit the valid bits in the return data to what we actually use */
         oa->o_valid = OBD_MD_FLID;
         obdo_from_inode(oa, dentry->d_inode, FILTER_VALID_FLAGS);
-        f_dput(dentry); 
+        f_dput(dentry);
 
-        lvb->flvb_size = dentry->d_inode->i_size;
-        lvb->flvb_time = dentry->d_inode->i_mtime;
+        lvb->lvb_size = dentry->d_inode->i_size;
+        lvb->lvb_time = dentry->d_inode->i_mtime;
 
  out:
         if (oa)
