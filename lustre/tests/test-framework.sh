@@ -60,9 +60,6 @@ zconf_mount() {
     fi
 
     [ -d /r ] && $LCTL modules > /r/tmp/ogdb-`hostname`
-
-    echo $TIMEOUT > /proc/sys/lustre/timeout
-    echo $UPCALL > /proc/sys/lustre/upcall
 }
 
 zconf_umount() {

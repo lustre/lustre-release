@@ -589,8 +589,8 @@ static int llog_test_setup(struct obd_device *obd, obd_count len, void *buf)
 
         tgt = class_name2obd(lcfg->lcfg_inlbuf1);
         if (!tgt || !tgt->obd_attached || !tgt->obd_set_up) {
-                CERROR("target device not attached or not set up (%d/%s)\n",
-                       lcfg->lcfg_dev, lcfg->lcfg_inlbuf1);
+                CERROR("target device not attached or not set up (%s)\n",
+                       lcfg->lcfg_inlbuf1);
                 RETURN(-EINVAL);
         }
 

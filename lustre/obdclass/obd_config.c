@@ -483,6 +483,22 @@ int class_process_config(struct lustre_cfg *lcfg)
                 class_del_profile(lcfg->lcfg_inlbuf1);
                 GOTO(out, err = 0);
         }
+        case LCFG_SET_TIMEOUT: {
+                CDEBUG(D_IOCTL, "changing lustre timeout from %d to %d\n", 
+                       obd_timeout,
+                       lcfg->lcfg_num);
+                obd_timeout = lcfg->lcfg_num;
+                GOTO(out, err = 0);
+        }
+        case LCFG_SET_UPCALL: {
+                CDEBUG(D_IOCTL, "setting lustre ucpall to: %s\n", 
+                       lcfg->lcfg_inlbuf1);
+                if (lcfg->lcfg_inllen1 > sizeof obd_lustre_upcall)
+                        GOTO(out, err = -EINVAL);
+                memcpy(obd_lustre_upcall, lcfg->lcfg_inlbuf1, 
+                       lcfg->lcfg_inllen1);
+                GOTO(out, err = 0);
+        }
 	}
 	
 
@@ -638,6 +654,8 @@ static int class_config_dump_handler(struct llog_handle * handle,
                                lcfg->lcfg_nid);
                 if (lcfg->lcfg_nal)
                         CDEBUG(D_INFO, "         nal: %x\n", lcfg->lcfg_nal);
+                if (lcfg->lcfg_num)
+                        CDEBUG(D_INFO, "         nal: %x\n", lcfg->lcfg_num);
                 if (lcfg->lcfg_inlbuf1)
                         CDEBUG(D_INFO, "     inlbuf1: %s\n",lcfg->lcfg_inlbuf1);
                 if (lcfg->lcfg_inlbuf2)
