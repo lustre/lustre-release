@@ -1413,7 +1413,7 @@ static int filter_cleanup(struct obd_device *obd)
 
 /* nearly identical to mds_connect */
 static int filter_connect(struct lustre_handle *conn, struct obd_device *obd,
-                          struct obd_uuid *cluuid)
+                          struct obd_uuid *cluuid, struct obd_connect_data *data)
 {
         struct obd_export *exp;
         struct filter_export_data *fed;
@@ -1432,6 +1432,7 @@ static int filter_connect(struct lustre_handle *conn, struct obd_device *obd,
         LASSERT(exp != NULL);
 
         fed = &exp->exp_filter_data;
+        exp->exp_connect_flags = data->ocd_connect_flags;
 
         spin_lock_init(&fed->fed_lock);
 

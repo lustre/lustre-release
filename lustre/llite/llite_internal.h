@@ -369,6 +369,9 @@ void ll_queue_done_writing(struct inode *inode);
 void ll_close_thread_shutdown(struct ll_close_queue *lcq);
 int ll_close_thread_start(struct ll_close_queue **lcq_ret);
 
+/* llite/super.c */
+int lustre_remount_fs(struct super_block *sb, int *flags, char *data);
+
 /* llite/llite_mmap.c */
 #if  (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 typedef struct rb_root  rb_root_t;

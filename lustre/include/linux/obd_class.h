@@ -454,8 +454,9 @@ static inline int obd_setattr(struct obd_export *exp, struct obdo *obdo,
         RETURN(rc);
 }
 
-static inline int obd_connect(struct lustre_handle *conn,
-                              struct obd_device *obd, struct obd_uuid *cluuid)
+static inline int obd_connect(struct lustre_handle *conn, struct obd_device *obd,
+                              struct obd_uuid *cluuid,
+                              struct obd_connect_data *data)
 {
         int rc;
         ENTRY;
@@ -464,7 +465,7 @@ static inline int obd_connect(struct lustre_handle *conn,
         OBD_CHECK_OP(obd, connect, -EOPNOTSUPP);
         OBD_COUNTER_INCREMENT(obd, connect);
 
-        rc = OBP(obd, connect)(conn, obd, cluuid);
+        rc = OBP(obd, connect)(conn, obd, cluuid, data);
         RETURN(rc);
 }
 

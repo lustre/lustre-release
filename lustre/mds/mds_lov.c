@@ -175,7 +175,8 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
                 RETURN(-ENOTCONN);
         }
 
-        rc = obd_connect(&conn, mds->mds_osc_obd, &obd->obd_uuid);
+        rc = obd_connect(&conn, mds->mds_osc_obd, &obd->obd_uuid,
+                         NULL /* obd_connect_data */);
         if (rc) {
                 CERROR("MDS cannot connect to LOV %s (%d)\n", lov_name, rc);
                 mds->mds_osc_obd = ERR_PTR(rc);

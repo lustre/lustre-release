@@ -193,6 +193,23 @@ static inline void lustre_msg_set_op_flags(struct lustre_msg *msg, int flags)
 //#define MSG_CONNECT_PEER        0x8
 #define MSG_CONNECT_LIBCLIENT   0x10
 
+/* Connect flags */
+
+#define OBD_CONNECT_RDONLY 0x1
+
+#define OBD_CONNECT_SUPPORTED (OBD_CONNECT_RDONLY)
+
+/* This structure is used for both request and reply.
+ *  
+ * If we eventually have separate connect data for different types, which we
+ * almost certainly will, then perhaps we stick a union in here. */
+struct obd_connect_data {
+        __u64 ocd_connect_flags;
+        __u64 padding[8];
+};
+
+extern void lustre_swab_connect(struct obd_connect_data *ocd);
+
 /*
  *   OST requests: OBDO & OBD request records
  */
@@ -435,6 +452,7 @@ typedef enum {
         MDS_UNPIN        = 43,
         MDS_SYNC         = 44,
         MDS_DONE_WRITING = 45,
+        MDS_SET_INFO     = 46,
         MDS_LAST_OPC
 } mds_cmd_t;
 

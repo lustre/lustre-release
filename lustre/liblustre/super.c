@@ -1346,7 +1346,7 @@ llu_fsswop_mount(const char *source,
         }
 
         /* setup mdc */
-        err = obd_connect(&mdc_conn, obd, &sbi->ll_sb_uuid);
+        err = obd_connect(&mdc_conn, obd, &sbi->ll_sb_uuid, NULL /* ocd */);
         if (err) {
                 CERROR("cannot connect to %s: rc = %d\n", mdc, err);
                 GOTO(out_free, err);
@@ -1368,7 +1368,7 @@ llu_fsswop_mount(const char *source,
                 GOTO(out_mdc, err = -EINVAL);
         }
 
-        err = obd_connect(&osc_conn, obd, &sbi->ll_sb_uuid);
+        err = obd_connect(&osc_conn, obd, &sbi->ll_sb_uuid, NULL /* ocd */);
         if (err) {
                 CERROR("cannot connect to %s: rc = %d\n", osc, err);
                 GOTO(out_mdc, err);

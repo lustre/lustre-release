@@ -810,6 +810,7 @@ main(int argc, char **argv)
         CHECK_VALUE(MDS_UNPIN);
         CHECK_VALUE(MDS_SYNC);
         CHECK_VALUE(MDS_DONE_WRITING);
+        CHECK_VALUE(MDS_SET_INFO);
         CHECK_VALUE(MDS_LAST_OPC);
 
         CHECK_VALUE(REINT_SETATTR);

@@ -2973,16 +2973,6 @@ static int osc_llog_finish(struct obd_device *obd, int count)
 }
 
 
-static int osc_connect(struct lustre_handle *exph,
-                       struct obd_device *obd, struct obd_uuid *cluuid)
-{
-        int rc;
-
-        rc = client_connect_import(exph, obd, cluuid);
-
-        return rc;
-}
-
 static int osc_disconnect(struct obd_export *exp)
 {
         struct obd_device *obd = class_exp2obd(exp);
@@ -3110,7 +3100,7 @@ struct obd_ops osc_obd_ops = {
         .o_owner                = THIS_MODULE,
         .o_setup                = osc_setup,
         .o_cleanup              = osc_cleanup,
-        .o_connect              = osc_connect,
+        .o_connect              = client_connect_import,
         .o_disconnect           = osc_disconnect,
         .o_statfs               = osc_statfs,
         .o_packmd               = osc_packmd,
@@ -3148,7 +3138,7 @@ struct obd_ops osc_obd_ops = {
 struct obd_ops sanosc_obd_ops = {
         .o_owner                = THIS_MODULE,
         .o_cleanup              = client_obd_cleanup,
-        .o_connect              = osc_connect,
+        .o_connect              = client_connect_import,
         .o_disconnect           = client_disconnect_export,
         .o_statfs               = osc_statfs,
         .o_packmd               = osc_packmd,

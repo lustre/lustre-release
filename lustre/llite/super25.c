@@ -105,7 +105,8 @@ struct super_operations lustre_super_operations =
         .clear_inode   = ll_clear_inode,
         .put_super     = lustre_put_super,
         .statfs        = ll_statfs,
-        .umount_begin  = ll_umount_begin
+        .umount_begin  = ll_umount_begin,
+        .remount_fs    = lustre_remount_fs,
 };
 
 

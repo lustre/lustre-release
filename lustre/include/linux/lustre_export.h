@@ -64,6 +64,7 @@ struct obd_export {
         time_t                    exp_last_request_time;
         spinlock_t                exp_lock; /* protects flags int below */
         /* ^ protects exp_outstanding_replies too */
+        __u64                     exp_connect_flags;
         int                       exp_flags;
         unsigned int              exp_failed:1,
                                   exp_replay_needed:1,

@@ -903,6 +903,9 @@ int mds_open(struct mds_update_record *rec, int offset,
                         GOTO(cleanup, rc = -ENOENT);
                 }
 
+                if (req->rq_export->exp_connect_flags & OBD_CONNECT_RDONLY)
+                        GOTO(cleanup, rc = -EROFS);
+
                 intent_set_disposition(rep, DISP_OPEN_CREATE);
                 handle = fsfilt_start(obd, dparent->d_inode, FSFILT_OP_CREATE,
                                       NULL);
@@ -976,6 +979,10 @@ int mds_open(struct mds_update_record *rec, int offset,
                 rc = ll_permission(dchild->d_inode, acc_mode, NULL);
                 if (rc != 0)
                         GOTO(cleanup, rc);
+
+                if ((req->rq_export->exp_connect_flags & OBD_CONNECT_RDONLY) &&
+                    (acc_mode & MAY_WRITE))
+                        GOTO(cleanup, rc = -EROFS);
 
                 /* Can't write to a read-only file */
                 if (IS_RDONLY(dchild->d_inode) && (acc_mode & MAY_WRITE) != 0)

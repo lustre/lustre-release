@@ -4,7 +4,7 @@
  *  lustre/mds/handler.c
  *  Lustre Metadata Server (mds) request handler
  *
- *  Copyright (c) 2001-2003 Cluster File Systems, Inc.
+ *  Copyright (c) 2001-2005 Cluster File Systems, Inc.
  *   Author: Peter Braam <braam@clusterfs.com>
  *   Author: Andreas Dilger <adilger@clusterfs.com>
  *   Author: Phil Schwan <phil@clusterfs.com>
@@ -245,7 +245,7 @@ struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
  * on the server, etc.
  */
 static int mds_connect(struct lustre_handle *conn, struct obd_device *obd,
-                       struct obd_uuid *cluuid)
+                       struct obd_uuid *cluuid, struct obd_connect_data *data)
 {
         struct obd_export *exp;
         struct mds_export_data *med; /*  */
@@ -279,6 +279,8 @@ static int mds_connect(struct lustre_handle *conn, struct obd_device *obd,
         exp = class_conn2export(conn);
         LASSERT(exp);
         med = &exp->exp_mds_data;
+
+        exp->exp_connect_flags = data->ocd_connect_flags;
 
         OBD_ALLOC(mcd, sizeof(*mcd));
         if (!mcd) {
@@ -1068,6 +1070,44 @@ static char *reint_names[] = {
         [REINT_OPEN]    "open",
 };
 
+static int mds_set_info(struct obd_export *exp, struct ptlrpc_request *req)
+{
+        char *key;
+        __u32 *val;
+        int keylen, rc = 0;
+        ENTRY;
+
+        key = lustre_msg_buf(req->rq_reqmsg, 0, 1);
+        if (key == NULL) {
+                DEBUG_REQ(D_HA, req, "no set_info key");
+                RETURN(-EFAULT);
+        }
+        keylen = req->rq_reqmsg->buflens[0];
+
+        val = lustre_msg_buf(req->rq_reqmsg, 1, sizeof(*val));
+        if (val == NULL) {
+                DEBUG_REQ(D_HA, req, "no set_info val");
+                RETURN(-EFAULT);
+        }
+
+        rc = lustre_pack_reply(req, 0, NULL, NULL);
+        if (rc)
+                RETURN(rc);
+        req->rq_repmsg->status = 0;
+
+        if (keylen < strlen("read-only") ||
+            memcmp(key, "read-only", keylen) != 0)
+                RETURN(-EINVAL);
+
+        if (*val)
+                exp->exp_connect_flags |= OBD_CONNECT_RDONLY;
+        else
+                exp->exp_connect_flags &= ~OBD_CONNECT_RDONLY;
+
+        RETURN(0);
+}
+
+
 int mds_handle(struct ptlrpc_request *req)
 {
         int should_process, fail = OBD_FAIL_MDS_ALL_REPLY_NET;
@@ -1252,6 +1292,11 @@ int mds_handle(struct ptlrpc_request *req)
                 DEBUG_REQ(D_INODE, req, "sync");
                 OBD_FAIL_RETURN(OBD_FAIL_MDS_SYNC_NET, 0);
                 rc = mds_sync(req);
+                break;
+
+        case MDS_SET_INFO:
+                DEBUG_REQ(D_INODE, req, "set_info");
+                rc = mds_set_info(req->rq_export, req);
                 break;
 
         case OBD_PING:

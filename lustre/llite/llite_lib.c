@@ -3,7 +3,7 @@
  *
  * Lustre Light Super operations
  *
- *  Copyright (c) 2002, 2003 Cluster File Systems, Inc.
+ *  Copyright (c) 2002-2005 Cluster File Systems, Inc.
  *
  *   This file is part of Lustre, http://www.lustre.org.
  *
@@ -132,6 +132,7 @@ int lustre_common_fill_super(struct super_block *sb, char *mdc, char *osc)
         struct lustre_handle osc_conn = {0, };
         struct lustre_handle mdc_conn = {0, };
         struct lustre_md md;
+        struct obd_connect_data *data = NULL;
         kdev_t devno;
         int err;
         ENTRY;
@@ -142,6 +143,10 @@ int lustre_common_fill_super(struct super_block *sb, char *mdc, char *osc)
                 RETURN(-EINVAL);
         }
 
+        OBD_ALLOC(data, sizeof(*data));
+        if (data == NULL)
+                RETURN(-ENOMEM);
+
         if (proc_lustre_fs_root) {
                 err = lprocfs_register_mountpoint(proc_lustre_fs_root, sb,
                                                   osc, mdc);
@@ -149,7 +154,10 @@ int lustre_common_fill_super(struct super_block *sb, char *mdc, char *osc)
                         CERROR("could not register mount in /proc/lustre");
         }
 
-        err = obd_connect(&mdc_conn, obd, &sbi->ll_sb_uuid);
+        if (sb->s_flags & MS_RDONLY)
+                data->ocd_connect_flags |= OBD_CONNECT_RDONLY;
+
+        err = obd_connect(&mdc_conn, obd, &sbi->ll_sb_uuid, data);
         if (err == -EBUSY) {
                 CERROR("An MDS (mdc %s) is performing recovery, of which this"
                        " client is not a part.  Please wait for recovery to "
@@ -183,7 +191,7 @@ int lustre_common_fill_super(struct super_block *sb, char *mdc, char *osc)
                 GOTO(out_mdc, err);
         }
 
-        err = obd_connect(&osc_conn, obd, &sbi->ll_sb_uuid);
+        err = obd_connect(&osc_conn, obd, &sbi->ll_sb_uuid, data);
         if (err == -EBUSY) {
                 CERROR("An OST (osc %s) is performing recovery, of which this"
                        " client is not a part.  Please wait for recovery to "
@@ -262,6 +270,8 @@ int lustre_common_fill_super(struct super_block *sb, char *mdc, char *osc)
 #endif
 
         sb->s_root = d_alloc_root(root);
+        if (data != NULL)
+                OBD_FREE(data, sizeof(*data));
         RETURN(err);
 
 out_root:
@@ -272,6 +282,8 @@ out_osc:
 out_mdc:
         obd_disconnect(sbi->ll_mdc_exp);
 out:
+        if (data != NULL)
+                OBD_FREE(data, sizeof(*data));
         lprocfs_unregister_mountpoint(sbi);
         RETURN(err);
 }
@@ -566,7 +578,7 @@ int lustre_process_log(struct lustre_mount_data *lmd, char * profile,
         if (err)
                 GOTO(out_cleanup, err);
 
-        err = obd_connect(&mdc_conn, obd, &mdc_uuid);
+        err = obd_connect(&mdc_conn, obd, &mdc_uuid, NULL /* ocd */);
         if (err) {
                 CERROR("cannot connect to %s: rc = %d\n", lmd->lmd_mds, err);
                 GOTO(out_cleanup, err);

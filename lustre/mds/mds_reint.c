@@ -4,7 +4,7 @@
  *  linux/mds/mds_reint.c
  *  Lustre Metadata Server (mds) reintegration routines
  *
- *  Copyright (C) 2002, 2003 Cluster File Systems, Inc.
+ *  Copyright (C) 2002-2005 Cluster File Systems, Inc.
  *   Author: Peter Braam <braam@clusterfs.com>
  *   Author: Andreas Dilger <adilger@clusterfs.com>
  *   Author: Phil Schwan <phil@clusterfs.com>
@@ -390,10 +390,13 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
 
         MDS_CHECK_RESENT(req, reconstruct_reint_setattr(rec, offset, req));
 
-        if (rec->ur_iattr.ia_valid & ATTR_FROM_OPEN) {
+        if (rec->ur_iattr.ia_valid & ATTR_FROM_OPEN ||
+            (req->rq_export->exp_connect_flags & OBD_CONNECT_RDONLY)) {
                 de = mds_fid2dentry(mds, rec->ur_fid1, NULL);
                 if (IS_ERR(de))
                         GOTO(cleanup, rc = PTR_ERR(de));
+                if (req->rq_export->exp_connect_flags & OBD_CONNECT_RDONLY)
+                        GOTO(cleanup, rc = -EROFS);
         } else {
                 de = mds_fid2locked_dentry(obd, rec->ur_fid1, NULL, LCK_PW,
                                            &lockh, NULL, 0);
@@ -587,6 +590,12 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
         cleanup_phase = 2; /* child dentry */
 
         OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_CREATE_WRITE, dir->i_sb);
+
+        if (req->rq_export->exp_connect_flags & OBD_CONNECT_RDONLY) {
+                if (dchild->d_inode)
+                        GOTO(cleanup, rc = -EEXIST);
+                GOTO(cleanup, rc = -EROFS);
+        }
 
         if (dir->i_mode & S_ISGID) {
                 if (S_ISDIR(rec->ur_mode))
@@ -1236,7 +1245,22 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
 
         cleanup_phase = 2; /* dchild has a lock */
 
-        /* Step 4: Get a lock on the ino to sync with creation WRT inode
+        /* We have to do these checks ourselves, in case we are making an
+         * orphan.  The client tells us whether rmdir() or unlink() was called,
+         * so we need to return appropriate errors (bug 72). */
+        if ((rec->ur_mode & S_IFMT) == S_IFDIR) {
+                if (!S_ISDIR(child_inode->i_mode))
+                        GOTO(cleanup, rc = -ENOTDIR);
+        } else {
+                if (S_ISDIR(child_inode->i_mode))
+                        GOTO(cleanup, rc = -EISDIR);
+        }
+
+        /* Check for EROFS after we check ENODENT, ENOTDIR, and EISDIR */
+        if (req->rq_export->exp_connect_flags & OBD_CONNECT_RDONLY)
+                GOTO(cleanup, rc = -EROFS);
+
+        /* Step 3: Get a lock on the ino to sync with creation WRT inode
          * reuse (see bug 2029). */
         rc = mds_lock_new_child(obd, child_inode, &child_reuse_lockh);
         if (rc != ELDLM_OK)
@@ -1272,17 +1296,6 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                         mds_pack_md(obd, req->rq_repmsg, offset + 1, body,
                                     child_inode, MDS_PACK_MD_LOCK);
                 }
-        }
-
-        /* We have to do these checks ourselves, in case we are making an
-         * orphan.  The client tells us whether rmdir() or unlink() was called,
-         * so we need to return appropriate errors (bug 72). */
-        if ((rec->ur_mode & S_IFMT) == S_IFDIR) {
-                if (!S_ISDIR(child_inode->i_mode))
-                        GOTO(cleanup, rc = -ENOTDIR);
-        } else {
-                if (S_ISDIR(child_inode->i_mode))
-                        GOTO(cleanup, rc = -EISDIR);
         }
 
         /* Step 4: Do the unlink: we already verified ur_mode above (bug 72) */
@@ -1482,6 +1495,9 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
 
         /* Step 4: Do it. */
         OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_LINK_WRITE, de_src->d_inode->i_sb);
+
+        if (req->rq_export->exp_connect_flags & OBD_CONNECT_RDONLY)
+                GOTO(cleanup, rc = -EROFS);
 
         handle = fsfilt_start(obd, de_tgt_dir->d_inode, FSFILT_OP_LINK, NULL);
         if (IS_ERR(handle)) {
@@ -1760,6 +1776,9 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
         if (old_inode->i_ino == de_srcdir->d_inode->i_ino ||
             old_inode->i_ino == de_tgtdir->d_inode->i_ino)
                 GOTO(cleanup, rc = -EINVAL);
+
+        if (req->rq_export->exp_connect_flags & OBD_CONNECT_RDONLY)
+                GOTO(cleanup, rc = -EROFS);
 
         if (new_inode == NULL)
                 goto no_unlink;

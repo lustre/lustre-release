@@ -240,6 +240,7 @@ struct opt_map {
 static const struct opt_map opt_map[] = {
   { "defaults", 0, 0, 0         },      /* default options */
   { "rw",       1, 1, MS_RDONLY },      /* read-write */
+  { "ro",       0, 0, MS_RDONLY },      /* read-only */
   { "exec",     0, 1, MS_NOEXEC },      /* permit execution of binaries */
   { "noexec",   0, 0, MS_NOEXEC },      /* don't execute binaries */
   { "suid",     0, 1, MS_NOSUID },      /* honor suid executables */

@@ -54,7 +54,7 @@
 
 /* obd methods */
 static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
-                       struct obd_uuid *cluuid)
+                       struct obd_uuid *cluuid, struct obd_connect_data *data)
 {
         struct ptlrpc_request *req = NULL;
         struct lov_obd *lov = &obd->u.lov;
@@ -111,7 +111,7 @@ static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
                         continue;
                 }
 
-                rc = obd_connect(&conn, tgt_obd, &lov_osc_uuid);
+                rc = obd_connect(&conn, tgt_obd, &lov_osc_uuid, data);
                 if (rc) {
                         CERROR("Target %s connect error %d\n", tgt_uuid->uuid,
                                rc);

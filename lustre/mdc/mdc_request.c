@@ -669,18 +669,43 @@ out:
 int mdc_set_info(struct obd_export *exp, obd_count keylen,
                  void *key, obd_count vallen, void *val)
 {
+        struct obd_import *imp = class_exp2cliimp(exp);
         int rc = -EINVAL;
 
         if (keylen == strlen("initial_recov") &&
             memcmp(key, "initial_recov", strlen("initial_recov")) == 0) {
-                struct obd_import *imp = exp->exp_obd->u.cli.cl_import;
                 if (vallen != sizeof(int))
                         RETURN(-EINVAL);
                 imp->imp_initial_recov = *(int *)val;
                 CDEBUG(D_HA, "%s: set imp_no_init_recov = %d\n",
-                       exp->exp_obd->obd_name,
-                       imp->imp_initial_recov);
+                       exp->exp_obd->obd_name, imp->imp_initial_recov);
                 RETURN(0);
+        }
+        if (keylen == strlen("read-only") &&
+            memcmp(key, "read-only", strlen("read-only")) == 0) {
+                struct ptlrpc_request *req;
+                int size[2] = {keylen, vallen};
+                char *bufs[2] = {key, val};
+
+                if (vallen != sizeof(int))
+                        RETURN(-EINVAL);
+
+                if (*((int *)val)) {
+                        imp->imp_connect_data.ocd_connect_flags |=
+                                OBD_CONNECT_RDONLY;
+                } else {
+                        imp->imp_connect_data.ocd_connect_flags &=
+                                ~OBD_CONNECT_RDONLY;
+                }
+
+                req = ptlrpc_prep_req(imp, MDS_SET_INFO, 2, size, bufs);
+                if (req == NULL)
+                        RETURN(-ENOMEM);
+
+                req->rq_replen = lustre_msg_size(0, NULL);
+                rc = ptlrpc_queue_wait(req);
+                ptlrpc_req_finished(req);
+                RETURN(rc);
         }
         
         RETURN(rc);

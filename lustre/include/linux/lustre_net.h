@@ -740,7 +740,7 @@ ptlrpc_rs_decref(struct ptlrpc_reply_state *rs)
 int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf);
 int client_obd_cleanup(struct obd_device * obddev);
 int client_connect_import(struct lustre_handle *conn, struct obd_device *obd,
-                          struct obd_uuid *cluuid);
+                          struct obd_uuid *cluuid, struct obd_connect_data *);
 int client_disconnect_export(struct obd_export *exp);
 
 /* ptlrpc/pinger.c */

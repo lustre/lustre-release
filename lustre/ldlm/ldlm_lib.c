@@ -234,8 +234,8 @@ int client_obd_cleanup(struct obd_device *obddev)
 }
 
 int client_connect_import(struct lustre_handle *dlm_handle,
-                          struct obd_device *obd,
-                          struct obd_uuid *cluuid)
+                          struct obd_device *obd, struct obd_uuid *cluuid,
+                          struct obd_connect_data *data)
 {
         struct client_obd *cli = &obd->u.cli;
         struct obd_import *imp = cli->cl_import;
@@ -266,6 +266,8 @@ int client_connect_import(struct lustre_handle *dlm_handle,
                 GOTO(out_ldlm, rc);
 
         exp->exp_connection = ptlrpc_connection_addref(imp->imp_connection);
+        if (data)
+                memcpy(&imp->imp_connect_data, data, sizeof(*data));
         rc = ptlrpc_connect_import(imp, NULL);
         if (rc != 0) {
                 LASSERT (imp->imp_state == LUSTRE_IMP_DISCON);
@@ -394,6 +396,8 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         char *str, *tmp;
         int rc = 0, abort_recovery;
         unsigned long flags;
+        struct obd_connect_data *data;
+        int size = sizeof(*data);
         ENTRY;
 
         OBD_RACE(OBD_FAIL_TGT_CONN_RACE); 
@@ -452,7 +456,11 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
 
         memcpy(&conn, tmp, sizeof conn);
 
-        rc = lustre_pack_reply(req, 0, NULL, NULL);
+        data = lustre_swab_reqbuf(req, 3, sizeof(*data), lustre_swab_connect);
+        if (data == NULL)
+                GOTO(out, rc = -EPROTO);
+
+        rc = lustre_pack_reply(req, 1, &size, NULL);
         if (rc)
                 GOTO(out, rc);
 
@@ -501,10 +509,15 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
                         rc = -EBUSY;
                 } else {
  dont_check_exports:
-                        rc = obd_connect(&conn, target, &cluuid);
+                        rc = obd_connect(&conn, target, &cluuid, data);
                 }
         }
 
+        /* Return only the parts of obd_connect_data that we understand, so the
+         * client knows that we don't understand the rest. */
+        data->ocd_connect_flags &= OBD_CONNECT_SUPPORTED;
+        memcpy(lustre_msg_buf(req->rq_repmsg, 0, sizeof(*data)), data,
+               sizeof(*data));
 
         /* If all else goes well, this is our RPC return code. */
         req->rq_status = 0;

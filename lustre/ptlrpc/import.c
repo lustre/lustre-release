@@ -251,11 +251,13 @@ int ptlrpc_connect_import(struct obd_import *imp, char * new_uuid)
         __u64 committed_before_reconnect = 0;
         struct ptlrpc_request *request;
         int size[] = {sizeof(imp->imp_target_uuid),
-                                 sizeof(obd->obd_uuid),
-                                 sizeof(imp->imp_dlm_handle)};
+                      sizeof(obd->obd_uuid),
+                      sizeof(imp->imp_dlm_handle),
+                      sizeof(imp->imp_connect_data)};
         char *tmp[] = {imp->imp_target_uuid.uuid,
                        obd->obd_uuid.uuid,
-                       (char *)&imp->imp_dlm_handle};
+                       (char *)&imp->imp_dlm_handle,
+                       (char *)&imp->imp_connect_data};
         struct ptlrpc_connect_async_args *aa;
         unsigned long flags;
 
@@ -322,7 +324,7 @@ int ptlrpc_connect_import(struct obd_import *imp, char * new_uuid)
 
         }
 
-        request = ptlrpc_prep_req(imp, imp->imp_connect_op, 3, size, tmp);
+        request = ptlrpc_prep_req(imp, imp->imp_connect_op, 4, size, tmp);
         if (!request)
                 GOTO(out, rc = -ENOMEM);
 
@@ -331,7 +333,8 @@ int ptlrpc_connect_import(struct obd_import *imp, char * new_uuid)
 #endif
 
         request->rq_send_state = LUSTRE_IMP_CONNECTING;
-        request->rq_replen = lustre_msg_size(0, NULL);
+        size[0] = sizeof(struct obd_connect_data);
+        request->rq_replen = lustre_msg_size(1, size);
         request->rq_interpret_reply = ptlrpc_connect_interpret;
 
         LASSERT (sizeof (*aa) <= sizeof (request->rq_async_args));
