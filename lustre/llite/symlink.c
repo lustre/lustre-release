@@ -89,20 +89,20 @@ static int ll_follow_link(struct dentry *dentry, struct nameidata *nd,
         struct inode *inode = dentry->d_inode;
         struct ll_inode_info *lli = ll_i2info(inode);
         struct ptlrpc_request *request;
+        int op, mode;
         char *symname;
         int rc;
         ENTRY;
 
-        /* we got here from a lookup up to the symlink that we hit */
-        if (it->it_lock_mode) {
-                struct lustre_handle *handle =
-                        (struct lustre_handle *)it->it_lock_handle;
-                ldlm_lock_decref(handle, it->it_lock_mode);
-                it->it_lock_mode = 0;
-                memset(handle, 0, sizeof(*handle));
-        }
+        op = it->it_op;
+        mode = it->it_mode;
 
+        ll_intent_release(dentry, it);
         down(&lli->lli_open_sem);
+
+        it->it_op = op;
+        it->it_mode = mode;
+
         rc = ll_readlink_internal(inode, &request, &symname);
         if (rc)
                 GOTO(out, rc);
