@@ -1,10 +1,10 @@
  fs/inode.c         |    1 
- fs/namei.c         |   66 ++++++++++++++++++++++++++++++++++++++---------------
+ fs/namei.c         |   65 +++++++++++++++++++++++++++++++++++++++--------------
  include/linux/fs.h |   11 ++++----
- 3 files changed, 54 insertions(+), 24 deletions(-)
+ 3 files changed, 54 insertions(+), 23 deletions(-)
 
---- linux-2.4.18/fs/namei.c~vfs-pdirops-2.4.18-chaos	2003-09-01 14:58:03.000000000 +0400
-+++ linux-2.4.18-alexey/fs/namei.c	2003-09-01 17:56:10.000000000 +0400
+--- linux-2.4.18-chaos/fs/namei.c~vfs-pdirops-2.4.18-chaos	2003-09-16 23:33:47.000000000 +0400
++++ linux-2.4.18-chaos-alexey/fs/namei.c	2003-09-17 00:18:45.000000000 +0400
 @@ -101,6 +101,36 @@ void intent_release(struct lookup_intent
  
  }
@@ -42,20 +42,20 @@
  /* In order to reduce some races, while at the same time doing additional
   * checking and hopefully speeding things up, we copy filenames to the
   * kernel data space before using them..
-@@ -302,10 +332,10 @@ static struct dentry *real_lookup(struct
- {
+@@ -303,10 +333,11 @@ static struct dentry *real_lookup(struct
  	struct dentry * result;
  	struct inode *dir = parent->d_inode;
-+	void *lock;
+         int counter = 0;
++ 	void *lock;
  
  again:
--
++ 	lock = lock_dir(dir, name);
+         counter++;
 -	down(&dir->i_sem);
-+	lock = lock_dir(dir, name);
  	/*
  	 * First re-do the cached lookup just in case it was created
  	 * while we waited for the directory semaphore..
-@@ -329,7 +359,7 @@ again:
+@@ -330,7 +361,7 @@ again:
  			else
  				result = dentry;
  		}
@@ -64,7 +64,7 @@
  		return result;
  	}
  
-@@ -337,7 +367,7 @@ again:
+@@ -338,7 +369,7 @@ again:
  	 * Uhhuh! Nasty case: the cache was re-populated while
  	 * we waited on the semaphore. Need to revalidate.
  	 */
@@ -73,7 +73,7 @@
  	if (result->d_op && result->d_op->d_revalidate) {
  		if (!result->d_op->d_revalidate(result, flags) && !d_invalidate(result)) {
  			dput(result);
-@@ -1234,13 +1264,13 @@ struct file *filp_open(const char * path
+@@ -1240,13 +1271,13 @@ struct file *filp_open(const char * path
  		goto exit;
  
  	dir = nd.dentry;
@@ -89,7 +89,7 @@
  		goto exit;
  	}
  
-@@ -1249,7 +1279,7 @@ do_last:
+@@ -1255,7 +1286,7 @@ do_last:
  	if (!dentry->d_inode) {
  		error = vfs_create_it(dir->d_inode, dentry,
  				   mode & ~current->fs->umask, &it);
@@ -98,7 +98,7 @@
  		dput(nd.dentry);
  		nd.dentry = dentry;
  		if (error)
-@@ -1264,7 +1294,7 @@ do_last:
+@@ -1270,7 +1301,7 @@ do_last:
  	/*
  	 * It already exists.
  	 */
@@ -107,7 +107,7 @@
  
  	error = -EEXIST;
  	if (flag & O_EXCL)
-@@ -1344,7 +1374,7 @@ do_link:
+@@ -1350,7 +1381,7 @@ do_link:
  		goto exit;
  	}
  	dir = nd.dentry;
@@ -116,7 +116,7 @@
  	dentry = lookup_hash_it(&nd.last, nd.dentry, &it);
  	putname(nd.last.name);
  	goto do_last;
-@@ -1357,7 +1387,7 @@ static struct dentry *lookup_create(stru
+@@ -1363,7 +1394,7 @@ static struct dentry *lookup_create(stru
  {
  	struct dentry *dentry;
  
@@ -125,7 +125,7 @@
  	dentry = ERR_PTR(-EEXIST);
  	if (nd->last_type != LAST_NORM)
  		goto fail;
-@@ -1446,7 +1476,7 @@ asmlinkage long sys_mknod(const char * f
+@@ -1452,7 +1483,7 @@ asmlinkage long sys_mknod(const char * f
  		}
  		dput(dentry);
  	}
@@ -134,7 +134,7 @@
  out2:
  	path_release(&nd);
  out:
-@@ -1509,7 +1539,7 @@ asmlinkage long sys_mkdir(const char * p
+@@ -1515,7 +1546,7 @@ asmlinkage long sys_mkdir(const char * p
  					  mode & ~current->fs->umask);
  			dput(dentry);
  		}
@@ -143,10 +143,10 @@
  out2:
  		path_release(&nd);
  out:
-@@ -1619,14 +1649,14 @@ asmlinkage long sys_rmdir(const char * p
-  		if (error != -EOPNOTSUPP)
-  			goto exit1;
-  	}
+@@ -1625,14 +1656,14 @@ asmlinkage long sys_rmdir(const char * p
+ 		if (error != -EOPNOTSUPP)
+ 			goto exit1;
+ 	}
 -	down(&nd.dentry->d_inode->i_sem);
 +	nd.lock = lock_dir(nd.dentry->d_inode, &nd.last);
  	dentry = lookup_hash_it(&nd.last, nd.dentry, NULL);
@@ -160,16 +160,16 @@
  exit1:
  	path_release(&nd);
  exit:
-@@ -1685,7 +1715,7 @@ asmlinkage long sys_unlink(const char * 
-  		if (error != -EOPNOTSUPP)
-  			goto exit1;
-  	}
+@@ -1691,7 +1722,7 @@ asmlinkage long sys_unlink(const char * 
+ 		if (error != -EOPNOTSUPP)
+ 			goto exit1;
+ 	}
 -	down(&nd.dentry->d_inode->i_sem);
 +	nd.lock = lock_dir(nd.dentry->d_inode, &nd.last);
  	dentry = lookup_hash_it(&nd.last, nd.dentry, NULL);
  	error = PTR_ERR(dentry);
  	if (!IS_ERR(dentry)) {
-@@ -1696,7 +1726,7 @@ asmlinkage long sys_unlink(const char * 
+@@ -1702,7 +1733,7 @@ asmlinkage long sys_unlink(const char * 
  	exit2:
  		dput(dentry);
  	}
@@ -178,7 +178,7 @@
  exit1:
  	path_release(&nd);
  exit:
-@@ -1766,7 +1796,7 @@ asmlinkage long sys_symlink(const char *
+@@ -1772,7 +1803,7 @@ asmlinkage long sys_symlink(const char *
  			error = vfs_symlink(nd.dentry->d_inode, dentry, from);
  			dput(dentry);
  		}
@@ -187,7 +187,7 @@
  	out2:
  		path_release(&nd);
  	out:
-@@ -1858,7 +1888,7 @@ asmlinkage long sys_link(const char * ol
+@@ -1864,7 +1895,7 @@ asmlinkage long sys_link(const char * ol
  			error = vfs_link(old_nd.dentry, nd.dentry->d_inode, new_dentry);
  			dput(new_dentry);
  		}
@@ -196,8 +196,8 @@
  out_release:
  		path_release(&nd);
  out:
---- linux-2.4.18/include/linux/fs.h~vfs-pdirops-2.4.18-chaos	2003-09-01 14:58:03.000000000 +0400
-+++ linux-2.4.18-alexey/include/linux/fs.h	2003-09-01 16:36:16.000000000 +0400
+--- linux-2.4.18-chaos/include/linux/fs.h~vfs-pdirops-2.4.18-chaos	2003-09-16 23:33:47.000000000 +0400
++++ linux-2.4.18-chaos-alexey/include/linux/fs.h	2003-09-17 00:16:08.000000000 +0400
 @@ -21,6 +21,7 @@
  #include <linux/cache.h>
  #include <linux/stddef.h>
@@ -222,7 +222,7 @@
  
  #define IS_DEADDIR(inode)	((inode)->i_flags & S_DEAD)
  
-@@ -490,6 +493,7 @@ struct inode {
+@@ -491,6 +494,7 @@ struct inode {
  	atomic_t		i_writecount;
  	unsigned int		i_attr_flags;
  	__u32			i_generation;
@@ -230,7 +230,7 @@
  	union {
  		struct minix_inode_info		minix_i;
  		struct ext2_inode_info		ext2_i;
-@@ -713,6 +717,7 @@ struct nameidata {
+@@ -714,6 +718,7 @@ struct nameidata {
  	unsigned int flags;
  	int last_type;
  	struct lookup_intent *intent;
@@ -238,7 +238,7 @@
  };
  
  #define DQUOT_USR_ENABLED	0x01		/* User diskquotas enabled */
-@@ -1610,12 +1615,6 @@ static inline struct dentry *get_parent(
+@@ -1611,12 +1616,6 @@ static inline struct dentry *get_parent(
  	return dget(dentry->d_parent);
  }
  
@@ -251,8 +251,8 @@
  /*
   * Whee.. Deadlock country. Happily there are only two VFS
   * operations that does this..
---- linux-2.4.18/fs/inode.c~vfs-pdirops-2.4.18-chaos	2003-09-01 14:58:03.000000000 +0400
-+++ linux-2.4.18-alexey/fs/inode.c	2003-09-01 16:36:16.000000000 +0400
+--- linux-2.4.18-chaos/fs/inode.c~vfs-pdirops-2.4.18-chaos	2003-09-16 23:33:48.000000000 +0400
++++ linux-2.4.18-chaos-alexey/fs/inode.c	2003-09-16 23:47:45.000000000 +0400
 @@ -119,6 +119,7 @@ static struct inode *alloc_inode(struct 
  		mapping->host = inode;
  		mapping->gfp_mask = GFP_HIGHUSER;

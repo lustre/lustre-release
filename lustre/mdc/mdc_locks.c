@@ -140,9 +140,9 @@ void mdc_set_lock_data(__u64 *l, void *data)
         LASSERT(lock != NULL);
         l_lock(&lock->l_resource->lr_namespace->ns_lock);
 #if !defined(LIBLUSTRE)
-        if (lock->l_data && lock->l_data != data) {
+        if (lock->l_ast_data && lock->l_ast_data != data) {
                 struct inode *new_inode = data;
-                struct inode *old_inode = lock->l_data;
+                struct inode *old_inode = lock->l_ast_data;
                 unsigned long state = old_inode->i_state & I_FREEING;
                 CERROR("Found existing inode %p/%lu/%u state %lu in lock: "
                        "setting data to %p/%lu/%u\n", old_inode,
@@ -151,7 +151,7 @@ void mdc_set_lock_data(__u64 *l, void *data)
                 LASSERT(state);
         }
 #endif
-        lock->l_data = data;
+        lock->l_ast_data = data;
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
         LDLM_LOCK_PUT(lock);
 
@@ -184,8 +184,8 @@ int mdc_enqueue(struct obd_export *exp,
                 int lock_mode,
                 struct mdc_op_data *data,
                 struct lustre_handle *lockh,
-                char *tgt,
-                int tgtlen,
+                void *lmm,
+                int lmmsize,
                 ldlm_completion_callback cb_completion,
                 ldlm_blocking_callback cb_blocking,
                 void *cb_data)
@@ -218,8 +218,8 @@ int mdc_enqueue(struct obd_export *exp,
                 size[2] = sizeof(struct mds_rec_create);
                 size[3] = data->namelen + 1;
                 size[4] = obddev->u.cli.cl_max_mds_easize;
-                req = ptlrpc_prep_req(class_exp2cliimp(exp), LDLM_ENQUEUE, 5,
-                                      size, NULL);
+                req = ptlrpc_prep_req(class_exp2cliimp(exp), LDLM_ENQUEUE, 
+                                      5, size, NULL);
                 if (!req)
                         RETURN(-ENOMEM);
 
@@ -234,7 +234,7 @@ int mdc_enqueue(struct obd_export *exp,
                 /* pack the intended request */
                 mdc_open_pack(req, 2, data, it->it_create_mode, 0, 
                               LTIME_S(CURRENT_TIME),
-                              it->it_flags, tgt, tgtlen);
+                              it->it_flags, lmm, lmmsize);
                 /* get ready for the reply */
                 reply_buffers = 3;
                 req->rq_replen = lustre_msg_size(3, repsize);
@@ -401,6 +401,7 @@ EXPORT_SYMBOL(mdc_enqueue);
  */
 int mdc_intent_lock(struct obd_export *exp, struct ll_uctxt *uctxt,
                     struct ll_fid *pfid, const char *name, int len,
+                    void *lmm, int lmmsize,
                     struct ll_fid *cfid, struct lookup_intent *it, int flags,
                     struct ptlrpc_request **reqp,
                     ldlm_blocking_callback cb_blocking)
@@ -452,7 +453,8 @@ int mdc_intent_lock(struct obd_export *exp, struct ll_uctxt *uctxt,
                 mdc_fid2mdc_op_data(&op_data, uctxt, pfid, cfid, name, len, 0);
 
                 rc = mdc_enqueue(exp, LDLM_PLAIN, it, it_to_lock_mode(it),
-                                 &op_data, &lockh, NULL, 0, ldlm_completion_ast,
+                                 &op_data, &lockh, lmm, lmmsize, 
+                                 ldlm_completion_ast,
                                  cb_blocking, NULL);
                 if (rc < 0)
                         RETURN(rc);
@@ -525,7 +527,7 @@ int mdc_intent_lock(struct obd_export *exp, struct ll_uctxt *uctxt,
         /* If we already have a matching lock, then cancel the new
          * one.  We have to set the data here instead of in
          * mdc_enqueue, because we need to use the child's inode as
-         * the l_data to match, and that's not available until
+         * the l_ast_data to match, and that's not available until
          * intent_finish has performed the iget().) */
         lock = ldlm_handle2lock(&lockh);
         if (lock) {

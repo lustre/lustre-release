@@ -47,12 +47,6 @@
 # include <liblustre.h>
 #endif
 
-#include <linux/kp30.h>
-#include <linux/lustre_mds.h> /* for mds_objid */
-#include <linux/obd_ost.h>
-#include <linux/lustre_commit_confd.h>
-#include <linux/obd_lov.h>
-
 #ifndef  __CYGWIN__
 # include <linux/ctype.h>
 # include <linux/init.h>
@@ -60,32 +54,80 @@
 # include <ctype.h>
 #endif
 
-#include <linux/lustre_ha.h>
-#include <linux/obd_support.h> /* for OBD_FAIL_CHECK */
-#include <linux/lustre_lite.h> /* for ll_i2info */
-#include <portals/lib-types.h> /* for PTL_MD_MAX_IOV */
-#include <linux/lprocfs_status.h>
+#include <linux/obd_class.h>
 #include "osc_internal.h"
 
-struct osc_created {
-        wait_queue_head_t osccd_waitq;       /* the daemon sleeps on this */
-        wait_queue_head_t osccd_ctl_waitq;   /* insmod rmmod sleep on this */
-        spinlock_t osccd_lock;
-        int osccd_flags;
-        struct task_struct *osccd_thread;
-        struct list_head osccd_queue_list_head;
-        struct list_head osccd_work_list_head;
-};
+#define OSCC_FLAG_RECOVERING 1
+#define OSCC_FLAG_CREATING   2
 
+static int osc_interpret_create(struct ptlrpc_request *request, void *data,
+                                int rc)
+{
+        struct osc_creator *oscc;
+        struct ost_body *body;
+        ENTRY;
 
-#define OSCCD_STOPPING          0x1
-#define OSCCD_STOPPED           0x2
-#define OSCCD_RUNNING           0x4
-#define OSCCD_KICKED            0x8
-#define OSCCD_PRECREATED         0x10
+        body = lustre_swab_repbuf(request, 0, sizeof(*body),
+                                  lustre_swab_ost_body);
+        if (body == NULL)
+                RETURN(-EPROTO);
 
+        oscc = request->rq_async_args.pointer_arg[0];
+        spin_lock(&oscc->oscc_lock);
+        oscc->oscc_status = rc;
+        oscc->oscc_last_id = body->oa.o_id;
+        oscc->oscc_flags &= ~OSCC_FLAG_CREATING;
+        spin_unlock(&oscc->oscc_lock);
 
-static struct osc_created osc_created;
+        CDEBUG(D_INFO, "preallocated through id "LPU64" (last used "LPU64")\n",
+               oscc->oscc_last_id, oscc->oscc_next_id);
+
+        wake_up(&oscc->oscc_waitq);
+        RETURN(0);
+}
+
+static int oscc_internal_create(struct osc_creator *oscc)
+{
+        struct ptlrpc_request *request;
+        struct ost_body *body;
+        int size = sizeof(*body);
+        ENTRY;
+
+        spin_lock(&oscc->oscc_lock);
+        if (oscc->oscc_flags & OSCC_FLAG_CREATING) {
+                spin_unlock(&oscc->oscc_lock);
+                RETURN(0);
+        }
+        oscc->oscc_flags |= OSCC_FLAG_CREATING;
+        spin_unlock(&oscc->oscc_lock);
+
+        request = ptlrpc_prep_req(class_exp2cliimp(oscc->oscc_exp), OST_CREATE,
+                                  1, &size, NULL);
+        if (request == NULL) {
+                spin_lock(&oscc->oscc_lock);
+                oscc->oscc_flags &= ~OSCC_FLAG_CREATING;
+                spin_unlock(&oscc->oscc_lock);
+                RETURN(-ENOMEM);
+        }
+
+        request->rq_request_portal = OST_CREATE_PORTAL; //XXX FIXME bug 249
+        body = lustre_msg_buf(request->rq_reqmsg, 0, sizeof(*body));
+
+        spin_lock(&oscc->oscc_lock);
+        body->oa.o_id = oscc->oscc_last_id + oscc->oscc_grow_count;
+        body->oa.o_valid |= OBD_MD_FLID;
+        CDEBUG(D_INFO, "preallocating through id "LPU64" (last used "LPU64")\n",
+               body->oa.o_id, oscc->oscc_next_id);
+        spin_unlock(&oscc->oscc_lock);
+
+        request->rq_replen = lustre_msg_size(1, &size);
+
+        request->rq_async_args.pointer_arg[0] = oscc;
+        request->rq_interpret_reply = osc_interpret_create;
+        osc_rpcd_add_req(request);
+
+        RETURN(0);
+}
 
 static int oscc_has_objects(struct osc_creator *oscc, int count)
 {
@@ -93,35 +135,27 @@ static int oscc_has_objects(struct osc_creator *oscc, int count)
         spin_lock(&oscc->oscc_lock);
         rc = ((__s64)(oscc->oscc_last_id - oscc->oscc_next_id) >= count);
         spin_unlock(&oscc->oscc_lock);
+
+        if (rc == 0)
+                oscc_internal_create(oscc);
+
         return rc;
 }
 
-static int oscc_precreate(struct osc_creator *oscc, struct osc_created *osccd,
-                          int wait)
+static int oscc_precreate(struct osc_creator *oscc, int wait)
 {
-        int rc = 0;
         struct l_wait_info lwi = { 0 };
+        int rc = 0;
         ENTRY;
 
         if (oscc_has_objects(oscc, oscc->oscc_kick_barrier))
                 RETURN(0);
 
-        spin_lock(&osccd->osccd_lock);
-        spin_lock(&oscc->oscc_lock);
-        if (list_empty(&oscc->oscc_list)) {
-                list_add(&oscc->oscc_list, &osccd->osccd_queue_list_head);
-                osccd->osccd_flags |= OSCCD_KICKED;
-                wake_up(&osccd->osccd_waitq);
-        }
-        spin_unlock(&oscc->oscc_lock);
-        spin_unlock(&osccd->osccd_lock);
-
         /* an MDS using this call may time out on this. This is a
-         *  recovery style wait.
-         */
+         *  recovery style wait. */
         if (wait)
-                rc = l_wait_event(oscc->oscc_waitq, oscc_has_objects(oscc, 1),
-                                  &lwi);
+                rc = l_wait_event(oscc->oscc_waitq,
+                                  oscc_has_objects(oscc, 1), &lwi);
         if (rc || !wait)
                 RETURN(rc);
 
@@ -136,10 +170,8 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
 {
         struct lov_stripe_md *lsm;
         struct osc_creator *oscc = &exp->u.eu_osc_data.oed_oscc;
-        struct osc_created *osccd = oscc->oscc_osccd;
         int try_again = 1, rc = 0;
         ENTRY;
-
         LASSERT(oa);
         LASSERT(ea);
 
@@ -160,12 +192,10 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                         RETURN(0);
                 rc = osc_real_create(oscc->oscc_exp, oa, ea, NULL);
 
-                spin_lock(&osccd->osccd_lock);
                 spin_lock(&oscc->oscc_lock);
                 oscc->oscc_status = rc;
                 oscc->oscc_last_id = oscc->oscc_next_id - 1;
                 spin_unlock(&oscc->oscc_lock);
-                spin_unlock(&osccd->osccd_lock);
 
 		RETURN(rc);
 	}
@@ -181,7 +211,7 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                         try_again = 0;
                 }
                 spin_unlock(&oscc->oscc_lock);
-                rc = oscc_precreate(oscc, osccd, try_again);
+                rc = oscc_precreate(oscc, try_again);
         }
 
         if (rc == 0)
@@ -189,93 +219,6 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
         else if (*ea == NULL)
                 obd_free_memmd(exp, &lsm);
         RETURN(rc);
-}
-
-void osccd_do_create(struct osc_created *osccd)
-{
-        struct list_head *tmp;
-
- next:
-        spin_lock(&osccd->osccd_lock);
-        list_for_each (tmp, &osccd->osccd_queue_list_head) {
-                int rc;
-                struct osc_creator *oscc = list_entry(tmp, struct osc_creator,
-                                                      oscc_list);
-                list_del_init(&oscc->oscc_list);
-                list_add(&oscc->oscc_list, &osccd->osccd_work_list_head);
-                spin_lock(&oscc->oscc_lock);
-		oscc->oscc_oa.o_id = oscc->oscc_last_id + oscc->oscc_grow_count;
-		oscc->oscc_oa.o_valid |= OBD_MD_FLID;
-                spin_unlock(&oscc->oscc_lock);
-                spin_unlock(&osccd->osccd_lock);
-
-                rc = osc_real_create(oscc->oscc_exp, &oscc->oscc_oa,
-                                     &oscc->oscc_ea, NULL);
-
-                /* This is not used and leaked, so might as well free
-                 * it now.*/
-                if (rc == 0 && oscc->oscc_ea != NULL) 
-                        obd_free_memmd(oscc->oscc_exp, &oscc->oscc_ea);
-
-                spin_lock(&osccd->osccd_lock);
-                spin_lock(&oscc->oscc_lock);
-                list_del_init(&oscc->oscc_list);
-                oscc->oscc_status = rc;
-                oscc->oscc_last_id = oscc->oscc_oa.o_id;
-                spin_unlock(&oscc->oscc_lock);
-                spin_unlock(&osccd->osccd_lock);
-
-                CDEBUG(D_INFO, "preallocated through id "LPU64" (last used "
-                       LPU64")\n", oscc->oscc_last_id, oscc->oscc_next_id);
-                wake_up(&oscc->oscc_waitq);
-                goto next;
-        }
-        spin_unlock(&osccd->osccd_lock);
-}
-
-static int osccd_main(void *arg)
-{
-        struct osc_created *osccd = (struct osc_created *)arg;
-        unsigned long flags;
-        ENTRY;
-
-        lock_kernel();
-        kportal_daemonize("lustre_created");
-
-        SIGNAL_MASK_LOCK(current, flags);
-        sigfillset(&current->blocked);
-        RECALC_SIGPENDING;
-        SIGNAL_MASK_UNLOCK(current, flags);
-
-        unlock_kernel();
-
-        /* Record that the  thread is running */
-        osccd->osccd_flags =  OSCCD_RUNNING;
-        wake_up(&osccd->osccd_ctl_waitq);
-
-        /* And now, loop forever on requests */
-        while (1) {
-                struct l_wait_info lwi = { 0 };
-                l_wait_event(osccd->osccd_waitq,
-                             osccd->osccd_flags & (OSCCD_STOPPING|OSCCD_KICKED),
-                             &lwi);
-
-                spin_lock(&osccd->osccd_lock);
-                if (osccd->osccd_flags & OSCCD_STOPPING) {
-                        spin_unlock(&osccd->osccd_lock);
-                        EXIT;
-                        break;
-                }
-                osccd->osccd_flags &= ~OSCCD_KICKED;
-                spin_unlock(&osccd->osccd_lock);
-                osccd_do_create(osccd);
-        }
-
-        osccd->osccd_thread = NULL;
-        osccd->osccd_flags = OSCCD_STOPPED;
-        wake_up(&osccd->osccd_ctl_waitq);
-        CDEBUG(D_NET, "commit callback daemon exiting %d\n", current->pid);
-        RETURN(0);
 }
 
 void oscc_init(struct lustre_handle *exph)
@@ -292,52 +235,12 @@ void oscc_init(struct lustre_handle *exph)
         init_waitqueue_head(&oed->oed_oscc.oscc_waitq);
         spin_lock_init(&oed->oed_oscc.oscc_lock);
         oed->oed_oscc.oscc_exp = exp;
-        oed->oed_oscc.oscc_osccd = &osc_created;
-        oed->oed_oscc.oscc_kick_barrier = 50;
-        oed->oed_oscc.oscc_grow_count = 100;
-        oed->oed_oscc.oscc_initial_create_count = 100;
+        oed->oed_oscc.oscc_kick_barrier = 1000;
+        oed->oed_oscc.oscc_grow_count = 2000;
+        oed->oed_oscc.oscc_initial_create_count = 2000;
 
         oed->oed_oscc.oscc_next_id = 2;
         oed->oed_oscc.oscc_last_id = 1;
         /* XXX the export handle should give the oscc the last object */
         /* oed->oed_oscc.oscc_last_id = exph->....; */
-}
-
-int osccd_setup(void)
-{
-        struct osc_created *osccd = &osc_created;
-        int rc;
-        struct l_wait_info lwi = { 0 };
-        ENTRY;
-
-        INIT_LIST_HEAD(&osccd->osccd_queue_list_head);
-        INIT_LIST_HEAD(&osccd->osccd_work_list_head);
-        init_waitqueue_head(&osccd->osccd_ctl_waitq);
-        init_waitqueue_head(&osccd->osccd_waitq);
-        spin_lock_init(&osccd->osccd_lock);
-        rc = kernel_thread(osccd_main, osccd,
-                           CLONE_VM | CLONE_FS | CLONE_FILES);
-        if (rc < 0) {
-                CERROR("cannot start thread\n");
-                RETURN(rc);
-        }
-        l_wait_event(osccd->osccd_ctl_waitq, osccd->osccd_flags & OSCCD_RUNNING,
-                     &lwi);
-        RETURN(0);
-}
-
-int osccd_cleanup(void)
-{
-        struct osc_created *osccd = &osc_created;
-        struct l_wait_info lwi = { 0 };
-        ENTRY;
-
-        spin_lock(&osccd->osccd_lock);
-        osccd->osccd_flags = OSCCD_STOPPING;
-        spin_unlock(&osccd->osccd_lock);
-
-        wake_up(&osccd->osccd_waitq);
-        l_wait_event(osccd->osccd_ctl_waitq,
-                     osccd->osccd_flags & OSCCD_STOPPED, &lwi);
-        RETURN(0);
 }
