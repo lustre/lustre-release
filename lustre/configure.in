@@ -23,7 +23,7 @@ AC_ARG_ENABLE(doc, [  --disable-doc skip creation of pdf documentation],
 			    ENABLE_DOC=0
 			fi
 		   ],
-		   [ ENABLE_DOC=1 ])
+		   [ ENABLE_DOC=0 ])
 AM_CONDITIONAL(DOC, test x$ENABLE_DOC = x1)
 AC_SUBST(ENABLE_DOC)
 
