@@ -11,8 +11,8 @@
  * by Peter Braam <braam@clusterfs.com>
  */
 
-static char rcsid[] __attribute ((unused)) = "$Id: echo.c,v 1.23 2002/08/19 21:51:33 adilger Exp $";
-#define OBDECHO_VERSION "$Revision: 1.23 $"
+static char rcsid[] __attribute ((unused)) = "$Id: echo.c,v 1.24 2002/08/19 23:45:00 adilger Exp $";
+#define OBDECHO_VERSION "$Revision: 1.24 $"
 
 #define EXPORT_SYMTAB
 
@@ -130,6 +130,8 @@ static int echo_getattr(struct lustre_handle *conn, struct obdo *oa,
         return 0;
 }
 
+#define DESC_PRIV 0x10293847
+
 int echo_preprw(int cmd, struct lustre_handle *conn, int objcount,
                 struct obd_ioobj *obj, int niocount, struct niobuf_remote *nb,
                 struct niobuf_local *res, void **desc_private)
@@ -145,14 +147,14 @@ int echo_preprw(int cmd, struct lustre_handle *conn, int objcount,
         CDEBUG(D_PAGE, "%s %d obdos with %d IOs\n",
                cmd == OBD_BRW_READ ? "reading" : "writing", objcount, niocount);
 
+        *desc_private = (void *)DESC_PRIV;
+
         for (i = 0; i < objcount; i++, obj++) {
                 int j;
 
                 for (j = 0 ; j < obj->ioo_bufcnt ; j++, nb++, r++) {
-                        unsigned long address;
-
-                        address = __get_free_pages(GFP_KERNEL, 0);
-                        if (!address) {
+                        r->page = alloc_pages(GFP_KERNEL, 0);
+                        if (!r->page) {
                                 CERROR("can't get page %d/%d for id "LPU64"\n",
                                        j, obj->ioo_bufcnt, obj->ioo_id);
                                 GOTO(preprw_cleanup, rc = -ENOMEM);
@@ -160,10 +162,11 @@ int echo_preprw(int cmd, struct lustre_handle *conn, int objcount,
                         echo_pages++;
 
                         r->offset = nb->offset;
-                        r->page = virt_to_page(address);
                         r->addr = kmap(r->page);
                         r->len = nb->len;
 
+                        CDEBUG(D_PAGE, "$$$$ get page %p, addr %p@"LPU64"\n",
+                               r->page, r->addr, r->offset);
                         if (cmd & OBD_BRW_READ)
                                 page_debug_setup(r->addr, r->len, r->offset,
                                                  obj->ioo_id);
@@ -207,26 +210,29 @@ int echo_commitrw(int cmd, struct lustre_handle *conn, int objcount,
                 RETURN(-EINVAL);
         }
 
+        LASSERT(desc_private == (void *)DESC_PRIV);
+
         for (i = 0; i < objcount; i++, obj++) {
                 int j;
 
                 for (j = 0 ; j < obj->ioo_bufcnt ; j++, r++) {
                         struct page *page = r->page;
-                        unsigned long addr;
+                        void *addr;
 
-                        if (!page ||
-                            !(addr = (unsigned long)page_address(page)) ||
+                        if (!page || !(addr = page_address(page)) ||
                             !kern_addr_valid(addr)) {
 
                                 CERROR("bad page "LPU64":%p, buf %d/%d\n",
-                                       obj->ioo_id, page, j,obj->ioo_bufcnt);
+                                       obj->ioo_id, page, j, obj->ioo_bufcnt);
                                 GOTO(commitrw_cleanup, rc = -EFAULT);
                         }
 
                         atomic_inc (&echo_page_rws);
 
+                        CDEBUG(D_PAGE, "$$$$ use page %p, addr %p@"LPU64"\n",
+                               r->page, addr, r->offset);
                         if (cmd & OBD_BRW_WRITE)
-                                page_debug_check("echo", (void *)addr,PAGE_SIZE,
+                                page_debug_check("echo", addr, r->len,
                                                  r->offset, obj->ioo_id);
 
                         kunmap(page);

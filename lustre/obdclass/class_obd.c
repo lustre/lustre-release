@@ -508,24 +508,18 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 off = data->ioc_offset;
 
                 for (j = 0, pgp = pga; j < pages; j++, off += PAGE_SIZE, pgp++){
-                        unsigned long to;
-
-                        to = __get_free_pages(GFP_KERNEL, 0);
-                        if (!to) {
+                        pgp->pg = alloc_pages(GFP_KERNEL, 0);
+                        if (!pgp->pg) {
                                 CERROR("no memory for brw pages\n");
                                 GOTO(brw_cleanup, err = -ENOMEM);
                         }
-                        pgp->pg = virt_to_page(to);
                         pgp->count = PAGE_SIZE;
                         pgp->off = off;
                         pgp->flag = 0;
 
                         if (rw == OBD_BRW_WRITE) {
-                                void *addr = kmap(pgp->pg);
-
-                                LASSERT(addr == (void *)to);
-
-                                page_debug_setup(addr, PAGE_SIZE, off, id);
+                                page_debug_setup(kmap(pgp->pg), pgp->count,
+                                                 pgp->off, id);
                                 kunmap(pgp->pg);
                         }
                 }
