@@ -185,11 +185,11 @@ struct obd_ops echo_obd_ops = {
         o_commitrw:    echo_commitrw,
 };
 
-#define OBDECHO_VERSION "$Revision: 1.15 $
+#define OBDECHO_VERSION "$Revision: 1.16 $"
 
 static int __init obdecho_init(void)
 {
-        printk(KERN_INFO "Echo OBD driver " OBDECHO_VERSION " braam@clusterfs.com\n");
+        printk(KERN_INFO "Echo OBD driver " OBDECHO_VERSION " info@clusterfs.com\n");
 
         return class_register_type(&echo_obd_ops, OBD_ECHO_DEVICENAME);
 }
