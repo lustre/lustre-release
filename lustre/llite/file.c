@@ -466,8 +466,8 @@ ll_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
                 }
         }
 
-        CDEBUG(D_INFO, "Writing inode %ld, "LPD64" bytes, offset "LPD64"\n",
-               inode->i_ino, count, *ppos);
+        CDEBUG(D_INFO, "Writing inode %ld, %ld bytes, offset "LPD64"\n",
+               inode->i_ino, (long)count, *ppos);
 
         retval = generic_file_write(file, buf, count, ppos);
 
