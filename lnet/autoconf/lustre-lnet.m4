@@ -6,7 +6,7 @@
 AC_DEFUN([LP_CHECK_GCC_VERSION],
 [AC_MSG_CHECKING([compiler version])
 PTL_CC_VERSION=`$CC --version | awk '/^gcc/{print $ 3}'`
-PTL_MIN_CC_VERSION="3.2.3"
+PTL_MIN_CC_VERSION="3.2.2"
 v2n() {
 	awk -F. '{printf "%d\n", (($ 1)*100+($ 2))*100+($ 3)}'
 }
