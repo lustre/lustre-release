@@ -220,50 +220,6 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
                 GOTO(out, err);
         }
 
-        case OBD_IOC_LIST: {
-                int i;
-                char *buf2 = data->ioc_bulk;
-                int remains = data->ioc_inllen1;
-
-                if (!data->ioc_inlbuf1) {
-                        CERROR("No buffer passed!\n");
-                        GOTO(out, err = -EINVAL);
-                }
-
-
-                for (i = 0 ; i < MAX_OBD_DEVICES ; i++) {
-                        int l;
-                        char *status;
-                        struct obd_device *obd = &obd_dev[i];
-
-                        if (!obd->obd_type)
-                                continue;
-                        if (obd->obd_stopping)
-                                status = "ST";
-                        else if (obd->obd_set_up)
-                                status = "UP";
-                        else if (obd->obd_attached)
-                                status = "AT";
-                        else
-                                status = "-";
-                        l = snprintf(buf2, remains, "%2d %s %s %s %s %d\n",
-                                     i, status, obd->obd_type->typ_name,
-                                     obd->obd_name, obd->obd_uuid.uuid,
-                                     obd->obd_type->typ_refcnt);
-                        buf2 +=l;
-                        remains -=l;
-                        if (remains <= 0) {
-                                CERROR("not enough space for device listing\n");
-                                break;
-                        }
-                }
-
-                err = copy_to_user((void *)arg, data, len);
-                if (err)
-                        err = -EFAULT;
-                GOTO(out, err);
-        }
-
         case OBD_GET_VERSION:
                 if (!data->ioc_inlbuf1) {
                         CERROR("No buffer passed in ioctl\n");

@@ -60,6 +60,9 @@
 #include <stdio.h>
 
 #define SHMEM_STATS 1
+#define MAX_STRING_SIZE 128
+#define DEVICES_LIST "/proc/fs/lustre/devices"
+
 #if SHMEM_STATS
 # include <sys/ipc.h>
 # include <sys/shm.h>
@@ -774,26 +777,25 @@ int jt_get_version(int argc, char **argv)
 int jt_obd_list(int argc, char **argv)
 {
         int rc;
-        char buf[OBD_MAX_IOCTL_BUFFER];
-        struct obd_ioctl_data *data = (struct obd_ioctl_data *)buf;
-
+        char buf[MAX_STRING_SIZE];
+        FILE *fp = fopen(DEVICES_LIST, "r");
+                                                                                                                                               
+        if (fp == NULL) {
+                fprintf(stderr, "error: %s: %s could not open file " 
+                        DEVICES_LIST " .\n",
+                        jt_cmdname(argv[0]), strerror(rc =  errno));
+                return rc;
+        }
+                                                                                                                                               
         if (argc != 1)
                 return CMD_HELP;
-
-        memset(buf, 0, sizeof(buf));
-        data->ioc_version = OBD_IOCTL_VERSION;
-        data->ioc_inllen1 = sizeof(buf) - size_round(sizeof(*data));
-        data->ioc_len = obd_ioctl_packlen(data);
-
-        rc = l2_ioctl(OBD_DEV_ID, OBD_IOC_LIST, data);
-        if (rc < 0)
-                fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
-                        strerror(rc = errno));
-        else {
-                printf("%s", data->ioc_bulk);
-        }
-
-        return rc;
+                                                                                                                                               
+        while (fgets(buf, sizeof(buf), fp) != NULL)
+                printf("%s", buf);
+                                                                                                                                               
+        fclose(fp);
+                                                                                                                                               
+        return 0;
 }
 
 /* Get echo client's stripe meta-data for the given object
