@@ -580,6 +580,6 @@ int Parser_quit(int argc, char **argv)
 {
 	argc = argc;
 	argv = argv;
-	exit(0);
+	done = 1; 
 	return 0;
 }

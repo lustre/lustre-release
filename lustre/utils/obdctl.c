@@ -115,10 +115,34 @@ char * obdo_print(struct obdo *obd)
         return strdup(buf);
 }
 
+static int do_disconnect()
+{
+        struct obd_ioctl_data data;
+        int rc;
+
+        if (connid == -1)
+                return 0;
+
+        IOCINIT(data);
+
+        rc = ioctl(fd, OBD_IOC_DISCONNECT , &data);
+        if (rc < 0) {
+                printf("Device: %x %s\n", OBD_IOC_DISCONNECT, strerror(errno));
+                return 0;
+        } else {
+                printf("Disconnected connid %d\n", connid);
+        }
+        connid = -1;
+
+        return 0;
+}
+
 static int jt_device(int argc, char **argv)
 {
         struct obd_ioctl_data data;
         int rc;
+
+        do_disconnect();
 
         memset(&data, 0, sizeof(data));
         if ( argc != 2 ) {
@@ -145,26 +169,6 @@ static int jt_device(int argc, char **argv)
                 printf("Device: %x %s\n", OBD_IOC_DEVICE, strerror(errno));
                 return 1;
         }
-
-        return 0;
-}
-
-static int do_disconnect()
-{
-        struct obd_ioctl_data data;
-        int rc;
-        
-        if (connid == -1) 
-                return 0;
-
-        IOCINIT(data);
-
-        rc = ioctl(fd, OBD_IOC_DISCONNECT , &data);
-        if (rc < 0) {
-                printf("Device: %x %s\n", OBD_IOC_DISCONNECT, strerror(errno));
-                return 0;
-        }
-        connid = -1;
 
         return 0;
 }
