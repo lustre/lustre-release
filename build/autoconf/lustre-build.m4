@@ -27,9 +27,8 @@ case x$with_sysio in
 		AC_CHECK_FILE([$srcdir/libsysio/src/rmdir.c],[],[
 			AC_MSG_ERROR([A complete internal libsysio was not found.])
 		])
-		AC_CONFIG_SUBDIRS(libsysio)
 		LIBSYSIO_SUBDIR="libsysio"
-		SYSIO='$(top_srcdir)/libsysio'
+		SYSIO="$PWD/libsysio"
 		;;
 	xno)
 		AC_MSG_RESULT([disabled])
@@ -40,7 +39,7 @@ case x$with_sysio in
 			AC_MSG_ERROR([A complete (built) external libsysio was not found.])
 		])
 		SYSIO=$with_sysio
-		enable_sysio="yes"
+		with_sysio="yes"
 		;;
 esac
 AC_SUBST(LIBSYSIO_SUBDIR)
@@ -382,6 +381,16 @@ LB_CONFIG_TESTS
 LB_CONFIG_MODULES
 
 LC_CONFIG_LIBLUSTRE
+
+# this lets lustre cancel libsysio, per-branch or if liblustre is
+# disabled
+if text x$LIBSYSIO_SUBDIR = xlibsysio ; then
+	if test x$with_sysio = xyes ; then
+		AC_CONFIG_SUBDIRS(libsysio)
+	else
+		LIBSYSIO_SUBDIR=
+	fi
+fi
 
 LP_CONFIGURE
 LC_CONFIGURE
