@@ -120,11 +120,21 @@ int connmgr_iocontrol(long cmd, struct lustre_handle *hdl, int len, void *karg,
                 goto out;
         }
 
-        /* else (NEWCONN) */
-        if (conn->c_recovd_data.rd_phase != RD_PREPARING)
-                GOTO(out, rc = -EALREADY);
 
+        /* else (NEWCONN) */
         spin_lock(&conn->c_lock);
+
+        /* whatever happens, reset the INVALID flag */
+        conn->c_flags &= ~CONN_INVALID;
+
+        /* XXX is this a good check?  should we allow readdressing of
+         * XXX conns that aren't in recovery?
+         */
+        if (conn->c_recovd_data.rd_phase != RD_PREPARING) {
+                spin_unlock(&conn->c_lock);
+                GOTO(out, rc = -EALREADY);
+        }
+
         if (data->ioc_inllen2) {
                 CERROR("conn %p UUID change %s -> %s\n",
                        conn, conn->c_remote_uuid, data->ioc_inlbuf2);

@@ -68,6 +68,8 @@
 #define OST_MAXREQSIZE	(8 * 1024)
 #endif
 
+#define CONN_INVALID 1
+
 struct ptlrpc_connection {
         struct list_head        c_link;
         struct lustre_peer      c_peer;
@@ -98,6 +100,7 @@ struct ptlrpc_connection {
         struct list_head        c_imports;
         struct list_head        c_exports;
         struct list_head        c_sb_chain;
+        __u32                   c_flags; /* can we indicate INVALID elsewhere? */
 };
 
 struct ptlrpc_client {
@@ -130,11 +133,9 @@ struct ptlrpc_client {
 struct ptlrpc_request { 
         int rq_type; /* one of PTL_RPC_MSG_* */
         struct list_head rq_list;
-        struct list_head rq_multi;
         struct obd_device *rq_obd;
         int rq_status;
         int rq_flags; 
-        __u32 rq_connid;
         atomic_t rq_refcount;
 
         int rq_reqlen;
@@ -145,23 +146,18 @@ struct ptlrpc_request {
         __u64 rq_transno;
         __u64 rq_xid;
 
-        char *rq_bulkbuf;
-        int rq_bulklen;
-
         int rq_level;
-        time_t rq_time;
         time_t rq_timeout;
         //        void * rq_reply_handle;
         wait_queue_head_t rq_wait_for_rep;
 
         /* incoming reply */
         ptl_md_t rq_reply_md;
-        ptl_handle_md_t rq_reply_md_h;
+        ptl_handle_md_t rq_reply_md_h; /* we can lose this: set, never read */
         ptl_handle_me_t rq_reply_me_h;
 
         /* outgoing req/rep */
         ptl_md_t rq_req_md;
-        ptl_handle_md_t rq_req_md_h;
 
         struct lustre_peer rq_peer; /* XXX see service.c can this be factored away? */
         struct obd_export *rq_export;

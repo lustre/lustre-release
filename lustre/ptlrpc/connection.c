@@ -84,6 +84,7 @@ struct ptlrpc_connection *ptlrpc_get_connection(struct lustre_peer *peer,
         c->c_generation = 1;
         c->c_epoch = 1;
         c->c_bootcount = 0;
+        c->c_flags = 0;
         if (uuid)
                 strcpy(c->c_remote_uuid, uuid);
         INIT_LIST_HEAD(&c->c_delayed_head);

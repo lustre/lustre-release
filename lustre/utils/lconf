@@ -52,6 +52,7 @@ config.xml          Lustre configuration in xml format.
 --get <url>         URL to fetch a config file
 --node <nodename>   Load config for <nodename>
 -d | --cleanup      Cleans up config. (Shutdown)
+-f | --force        Unmount with \"umount -f\" during shutdown
 -v | --verbose      Print system commands as they are run
 -h | --help         Print this help 
 --gdb               Prints message after creating gdb module script
@@ -86,6 +87,7 @@ class Config:
         self._gdb = 0
         self._nomod = 0
         self._nosetup = 0
+        self._force = 0
         # parameters
         self._modules = None
         self._node = None
@@ -122,6 +124,10 @@ class Config:
     def nosetup(self, flag = None):
         if flag: self._nosetup = flag
         return self._nosetup
+
+    def force(self, flag = None):
+        if flag: self._force = flag
+        return self._flag
 
     def node(self, val = None):
         if val: self._node = val
@@ -1053,7 +1059,10 @@ class Mountpoint(Module):
 
     def cleanup(self):
         self.info(self.path, self.mds_uuid,self.lov_uuid)
-        (rc, out) = run("umount", self.path)
+        if config.force():
+            (rc, out) = run("umount -f", self.path)
+        else:
+            (rc, out) = run("umount", self.path)
         if rc:
             log("umount failed, cleanup will most likely not work.")
         l = lookup(self.dom_node.parentNode, self.lov_uuid)
@@ -1474,18 +1483,20 @@ def parse_cmdline(argv):
             config.portals =  a
         if o == "--lustre":
             config.lustre  = a
-        if o  == "--reformat":
+        if o == "--reformat":
             config.reformat(1)
-        if o  == "--node":
+        if o == "--node":
             config.node(a)
-        if o  == "--gdb":
+        if o == "--gdb":
             config.gdb(1)
-        if o  == "--nomod":
+        if o == "--nomod":
             config.nomod(1)
-        if o  == "--nosetup":
+        if o == "--nosetup":
             config.nosetup(1)
-        if o  == "--dump":
+        if o == "--dump":
             config.dump_file(a)
+        if o in ("--force", "-f"):
+            config.force(1)
     return args
 
 def fetch(url):

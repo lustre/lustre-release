@@ -172,7 +172,6 @@ struct ptlrpc_request *ptlrpc_prep_req(struct obd_import *imp, int opcode,
         request->rq_connection = ptlrpc_connection_addref(conn);
 
         INIT_LIST_HEAD(&request->rq_list);
-        INIT_LIST_HEAD(&request->rq_multi);
         /*
          * This will be reduced once when the sender is finished (waiting for
          * reply, f.e.), once when the request has been committed and is
@@ -231,7 +230,6 @@ void ptlrpc_free_req(struct ptlrpc_request *request)
         }
 
         ptlrpc_put_connection(request->rq_connection);
-        list_del(&request->rq_multi);
         OBD_FREE(request, sizeof(*request));
         EXIT;
 }
@@ -447,10 +445,10 @@ static int expired_request(void *data)
         struct ptlrpc_request *req = data;
         
         ENTRY;
-        CERROR("req timeout on connid %d xid %Ld portal %d op %d\n",
-               req->rq_connid, (unsigned long long)req->rq_xid,
-               req->rq_import->imp_client->cli_request_portal,
-               req->rq_reqmsg->opc);
+        CERROR("req xid "LPD64" op %d: timeout on conn to %s:%d\n",
+               (unsigned long long)req->rq_xid, req->rq_reqmsg->opc,
+               req->rq_connection->c_remote_uuid,
+               req->rq_import->imp_client->cli_request_portal);
         req->rq_flags |= PTL_RPC_FL_TIMEOUT;
         if (!req->rq_import->imp_connection->c_recovd_data.rd_recovd)
                 RETURN(1);
@@ -490,32 +488,57 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
 
         /* XXX probably both an import and connection level are needed */
         if (req->rq_level > conn->c_level) { 
-                CERROR("pid %d waiting for recovery (%d > %d) on conn %p(%s)\n", 
-                       current->pid, req->rq_level, conn->c_level, conn,
-                       conn->c_remote_uuid);
-
                 spin_lock(&conn->c_lock);
+                if (conn->c_flags & CONN_INVALID) {
+                        /* being torn down by "umount -f" */
+                        CERROR("req xid "LPD64" op %d to %s:%d: CONN_INVALID\n",
+                               (unsigned long long)req->rq_xid,
+                               req->rq_reqmsg->opc,
+                               req->rq_connection->c_remote_uuid,
+                               req->rq_import->imp_client->cli_request_portal);
+                        spin_unlock(&conn->c_lock);
+                        RETURN(-EIO);
+                }
                 list_del(&req->rq_list);
                 list_add_tail(&req->rq_list, &conn->c_delayed_head);
                 spin_unlock(&conn->c_lock);
 
+                CERROR("req xid "LPD64" op %d to %s:%d: waiting for recovery "
+                       "(%d < %d)\n",
+                       (unsigned long long)req->rq_xid, req->rq_reqmsg->opc,
+                       req->rq_connection->c_remote_uuid,
+                       req->rq_import->imp_client->cli_request_portal,
+                       req->rq_level, conn->c_level);
+
                 lwi = LWI_INTR(NULL, NULL);
                 rc = l_wait_event(req->rq_wait_for_rep,
-                                  req->rq_level <= conn->c_level, &lwi);
+                                  (req->rq_level <= conn->c_level) ||
+                                  (req->rq_flags & PTL_RPC_FL_ERR), &lwi);
 
                 spin_lock(&conn->c_lock);
                 list_del_init(&req->rq_list);
                 spin_unlock(&conn->c_lock);
 
+                if (req->rq_flags & PTL_RPC_FL_ERR)
+                        RETURN(-EIO);
+
                 if (rc)
                         RETURN(rc);
-
+                
                 CERROR("process %d resumed\n", current->pid);
         }
  resend:
-        req->rq_time = CURRENT_TIME;
         req->rq_timeout = obd_timeout;
         spin_lock(&conn->c_lock);
+        if (conn->c_flags & CONN_INVALID) {
+                CERROR("req xid "LPD64" op %d to %s:%d: CONN_INVALID\n",
+                       (unsigned long long)req->rq_xid, req->rq_reqmsg->opc,
+                       req->rq_connection->c_remote_uuid,
+                       req->rq_import->imp_client->cli_request_portal);
+                spin_unlock(&conn->c_lock); /* being torn down by "umount -f" */
+                RETURN(-EIO);
+        }
+        
         list_del(&req->rq_list);
         list_add_tail(&req->rq_list, &conn->c_sending_head);
         spin_unlock(&conn->c_lock);
@@ -599,7 +622,6 @@ int ptlrpc_replay_req(struct ptlrpc_request *req)
                req->rq_xid, req->rq_reqmsg->opc, req->rq_level,
                req->rq_connection->c_level);
 
-        req->rq_time = CURRENT_TIME;
         req->rq_timeout = obd_timeout;
         req->rq_reqmsg->addr = req->rq_import->imp_handle.addr;
         req->rq_reqmsg->cookie = req->rq_import->imp_handle.cookie;

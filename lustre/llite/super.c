@@ -524,6 +524,42 @@ static void ll_read_inode2(struct inode *inode, void *opaque)
         }
 }
 
+static inline void invalidate_request_list(struct list_head *req_list)
+{
+        struct list_head *tmp, *n;
+        list_for_each_safe(tmp, n, req_list) {
+                struct ptlrpc_request *req = 
+                        list_entry(tmp, struct ptlrpc_request, rq_list);
+                CERROR("invalidating req xid %d op %d to %s:%d\n",
+                       (unsigned long long)req->rq_xid, req->rq_reqmsg->opc,
+                       req->rq_connection->c_remote_uuid,
+                       req->rq_import->imp_client->cli_request_portal);
+                req->rq_flags |= PTL_RPC_FL_ERR;
+                wake_up(&req->rq_wait_for_rep);
+        }
+}
+
+void ll_umount_begin(struct super_block *sb)
+{
+        struct ll_sb_info *sbi = ll_s2sbi(sb);
+        struct list_head *ctmp;
+
+        ENTRY;
+       
+        list_for_each(ctmp, &sbi->ll_conn_chain) {
+                struct ptlrpc_connection *conn;
+                conn = list_entry(ctmp, struct ptlrpc_connection, c_sb_chain);
+
+                spin_lock(&conn->c_lock);
+                conn->c_flags |= CONN_INVALID;
+                invalidate_request_list(&conn->c_sending_head);
+                invalidate_request_list(&conn->c_delayed_head);
+                spin_unlock(&conn->c_unlock);
+        }
+
+        EXIT;
+}
+
 /* exported operations */
 struct super_operations ll_super_operations =
 {
@@ -531,7 +567,8 @@ struct super_operations ll_super_operations =
         clear_inode: ll_clear_inode,
         delete_inode: ll_delete_inode,
         put_super: ll_put_super,
-        statfs: ll_statfs
+        statfs: ll_statfs,
+        umount_begin: ll_umount_begin
 };
 
 struct file_system_type lustre_lite_fs_type = {

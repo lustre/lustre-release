@@ -1,28 +1,39 @@
 #!/bin/sh
 
-set -vx
-
-SRCDIR="`dirname $0`"
-. $SRCDIR/common.sh
+fail() { 
+	echo "ERROR: $1" 1>&2
+	[ $2 ] && RC=$2 || RC=1
+	exit $RC
+}
 
 test_fail() {
+        oldtimeout=`cat /proc/sys/lustre/timeout`
+        echo $TIMEOUT > /proc/sys/lustre/timeout
 	echo $1 > /proc/sys/lustre/fail_loc
 	shift
 	$* &
-	sleep 1
+	sleep $TIMEOUT
+        sleep 2 # fudge
 	kill -9 $!
 
+        echo $oldtimeout > /proc/sys/lustre/timeout
         echo 0 > /proc/sys/lustre/fail_loc
-        umount /mnt/lustre || fail "cannot unmount /mnt/lustre"
-        mount -t lustre_lite -o device=`$OBDCTL name2dev OSCDEV` none /mnt/lustre || fail "cannot remount device '`$OBDCTL name2dev OSCDEV`' on /mnt/lustre"
+        umount -f /mnt/lustre || fail "cannot unmount /mnt/lustre"
+        mount -t lustre_lite -o "osc=$OSC,mdc=$MDC" none /mnt/lustre || \
+           fail "cannot remount $OSC/$MDC on /mnt/lustre"
 }
 
-[ -c /dev/request ] || mknod /dev/request c 10 244
+set -vx
+
+LCTL=../utils/lctl
+OSC=OSC_localhost_UUID
+MDC=MDC_client1_UUID
+TIMEOUT=5 # complete in finite time
 
 [ "`mount | grep /mnt/lustre`" ] || echo | sh llmount.sh || exit -1
 
 # GETATTR_NET - ls will hang on the getattr
-test_fail 0x102 ls -l /mnt/lustre
+# test_fail 0x102 ls -l /mnt/lustre
 
 # READPAGE_NET - ls will hang reading in new pages (lost+found is not in cache)
 test_fail 0x104 ls /mnt/lustre
