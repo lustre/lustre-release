@@ -273,37 +273,23 @@ static int osc_destroy(struct obd_conn *conn, struct obdo *oa)
 int osc_sendpage(struct obd_conn *conn, struct ptlrpc_request *req,
                  struct niobuf *dst, struct niobuf *src)
 {
-        if (conn->oc_id != -1) {
+        struct ptlrpc_client *cl = osc_con2cl(conn);
+
+        if (cl->cli_obd) {
                 /* local sendpage */
                 memcpy((char *)(unsigned long)dst->addr,
                        (char *)(unsigned long)src->addr, src->len);
         } else {
-                struct ptlrpc_client *cl = osc_con2cl(conn);
                 struct ptlrpc_bulk_desc *bulk;
-		char *buf;
                 int rc;
 
                 bulk = ptlrpc_prep_bulk(&cl->cli_server);
                 if (bulk == NULL)
                         return -ENOMEM;
 
-                spin_lock(&cl->cli_lock);
-                bulk->b_xid = cl->cli_xid++;
-                spin_unlock(&cl->cli_lock);
-
-		OBD_ALLOC(buf, src->len);
-		if (!buf) {
-                        OBD_FREE(bulk, sizeof(*bulk));
-			return -ENOMEM;
-                }
-
-                memcpy(buf, (char *)(unsigned long)src->addr, src->len);
-
-                bulk->b_buf = buf;
+                bulk->b_buf = (void *)(unsigned long)src->addr;
                 bulk->b_buflen = src->len;
-                /* FIXME: maybe we should add an XID to struct niobuf? */
-                bulk->b_xid = (__u32)(unsigned long)src->page;
-
+                bulk->b_xid = dst->xid;
 		rc = ptlrpc_send_bulk(bulk, OSC_BULK_PORTAL);
                 if (rc != 0) {
                         CERROR("send_bulk failed: %d\n", rc);
@@ -320,7 +306,6 @@ int osc_sendpage(struct obd_conn *conn, struct ptlrpc_request *req,
                 }
 
                 OBD_FREE(bulk, sizeof(*bulk));
-                OBD_FREE(buf, src->len);
         }
 
         return 0;
@@ -429,11 +414,11 @@ int osc_brw_write(struct obd_conn *conn, obd_count num_oa, struct obdo **oa,
                   obd_off *offset, obd_flag *flags)
 {
 	struct ptlrpc_client *cl = osc_con2cl(conn);
-        struct ptlrpc_request *request;
+        struct ptlrpc_request *request, *req2 = NULL;
 	struct obd_ioobj ioo;
 	struct niobuf src;
 	int pages, rc, i, j, n, size1, size2 = 0; 
-	void *ptr1, *ptr2;
+	void *ptr1, *ptr2, *reqbuf;
 
 	size1 = num_oa * sizeof(ioo); 
         pages = 0;
@@ -447,6 +432,11 @@ int osc_brw_write(struct obd_conn *conn, obd_count num_oa, struct obdo **oa,
 		CERROR("cannot pack req!\n"); 
 		return -ENOMEM;
 	}
+        OBD_ALLOC(reqbuf, request->rq_reqlen);
+        if (reqbuf == NULL) {
+                CERROR("cannot make duplicate buffer\n");
+                return -ENOMEM;
+        }
         request->rq_req.ost->cmd = OBD_BRW_WRITE;
 
 	n = 0;
@@ -461,6 +451,7 @@ int osc_brw_write(struct obd_conn *conn, obd_count num_oa, struct obdo **oa,
 		}
 	}
 
+        memcpy(reqbuf, request->rq_reqbuf, request->rq_reqlen);
 	request->rq_replen = sizeof(struct ptlrep_hdr) +
                 sizeof(struct ost_rep) + pages * sizeof(struct niobuf);
 	rc = ptlrpc_queue_wait(cl, request);
@@ -477,6 +468,7 @@ int osc_brw_write(struct obd_conn *conn, obd_count num_oa, struct obdo **oa,
                 goto out;
         }
 
+        n = 0;
         for (i = 0; i < num_oa; i++) {
                 for (j = 0; j < oa_bufs[i]; j++) {
 			struct niobuf *dst;
@@ -488,13 +480,17 @@ int osc_brw_write(struct obd_conn *conn, obd_count num_oa, struct obdo **oa,
 		}
 	}
 
-        /* Reuse the request structure for the completion request. */
-        OBD_FREE(request->rq_rephdr, request->rq_replen);
-        request->rq_rephdr = NULL;
-        request->rq_repbuf = NULL;
-	request->rq_reqhdr->opc = OST_BRW_COMPLETE;
-	request->rq_replen = sizeof(struct ptlrep_hdr) + sizeof(struct ost_rep);
-	rc = ptlrpc_queue_wait(cl, request);
+        ptr2 = ost_rep_buf2(request->rq_rep.ost);
+	req2 = ptlrpc_prep_req(cl, OST_BRW_COMPLETE, size1, ptr1,
+                               request->rq_rep.ost->buflen2, ptr2);
+	if (!req2) { 
+		CERROR("cannot pack second request!\n"); 
+		return -ENOMEM;
+	}
+
+	req2->rq_reqhdr->opc = OST_BRW_COMPLETE;
+	req2->rq_replen = sizeof(struct ptlrep_hdr) + sizeof(struct ost_rep);
+	rc = ptlrpc_queue_wait(cl, req2);
 	if (rc) { 
 		EXIT;
 		goto out;
@@ -503,6 +499,8 @@ int osc_brw_write(struct obd_conn *conn, obd_count num_oa, struct obdo **oa,
  out:
 	if (request->rq_rephdr)
 		OBD_FREE(request->rq_rephdr, request->rq_replen);
+	if (req2 && req2->rq_rephdr)
+		OBD_FREE(req2->rq_rephdr, req2->rq_replen);
 	n = 0;
         for (i = 0; i < num_oa; i++) {
                 for (j = 0; j < oa_bufs[i]; j++) {
@@ -511,6 +509,8 @@ int osc_brw_write(struct obd_conn *conn, obd_count num_oa, struct obdo **oa,
 		}
 	}
 
+        if (req2)
+                ptlrpc_free_req(req2);
 	ptlrpc_free_req(request);
 	return 0;
 }
