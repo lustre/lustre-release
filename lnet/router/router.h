@@ -54,6 +54,7 @@ typedef struct
         atomic_t                kpre_weight;
         int                     kpre_gateway_alive;
 	int                     kpre_gateway_nalid;
+        int                     kpre_refcount;
 	ptl_nid_t           	kpre_gateway_nid;
 	ptl_nid_t           	kpre_lo_nid;
         ptl_nid_t               kpre_hi_nid;
@@ -72,8 +73,8 @@ extern void kpr_proc_fini (void);
 
 extern int kpr_add_route (int gateway_nal, ptl_nid_t gateway_nid, 
                           ptl_nid_t lo_nid, ptl_nid_t hi_nid);
-extern int kpr_del_route (ptl_nid_t nid);
-extern int kpr_set_route (ptl_nid_t nid, int alive);
+extern int kpr_del_route (ptl_nid_t gw, ptl_nid_t lo, ptl_nid_t hi);
+extern int kpr_set_route (ptl_nid_t gw, int alive);
 extern int kpr_get_route (int idx, int *gateway_nal, ptl_nid_t *gateway_nid, 
                           ptl_nid_t *lo_nid, ptl_nid_t *hi_nid, int *alive);
 
