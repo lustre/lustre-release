@@ -1003,7 +1003,7 @@ extern int lookup_symbol(unsigned long address, char *buf, int buflen);
 const char *kallsyms_lookup(unsigned long addr,
                             unsigned long *symbolsize,
                             unsigned long *offset,
-                            char **modname, char *namebuf);
+                            char **modname, char *namebuf)
 {
         int rc = lookup_symbol(addr, namebuf, 128);
         if (rc == -ENOSYS)
