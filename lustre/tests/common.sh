@@ -41,10 +41,14 @@ do_insmod() {
 	MODULE=$1
 	BASE=`echo $MODULE | sed -e "s^.*/^^" -e "s/\.o$//"`
 
-	[ "$MODULE" ] || fail "usage: $0 <module>"
-	[ -f $MODULE ] || echo "$0: module '$MODULE' not found" 1>&2
-	lsmod | grep -q "\<$BASE\>" && return 0
-	insmod  $MODULE
+	if [ "$USEDEV" = "yes" ]; then
+		[ "$MODULE" ] || fail "usage: $0 <module>"
+		[ -f $MODULE ] || echo "$0: module '$MODULE' not found" 1>&2
+		lsmod | grep -q "\<$BASE\>" && return 0
+		insmod  $MODULE
+        else
+		insmod $BASE
+	fi
 }
 
 do_rmmod() {
@@ -201,17 +205,15 @@ setup_portals() {
 
 	[ -c /dev/portals ] || mknod /dev/portals c 10 240
 
-	if [  "$USEDEV" = "yes" ]; then
-	    do_insmod $PORTALS/linux/oslib/portals.o || exit -1
+  	do_insmod $PORTALS/linux/oslib/portals.o || exit -1
 
-	    case $NETWORK in
-	    elan)  do_insmod $PORTALS/linux/qswnal/kqswnal.o || exit -1
+	case $NETWORK in
+	elan)  do_insmod $PORTALS/linux/qswnal/kqswnal.o || exit -1
 		    ;;
-	    tcp)   do_insmod $PORTALS/linux/socknal/ksocknal.o || exit -1
+	tcp)   do_insmod $PORTALS/linux/socknal/ksocknal.o || exit -1
 		   ;;
-	    *) 	fail "$0: unknown NETWORK '$NETWORK'" ;;
-	    esac
-	fi
+	*) 	fail "$0: unknown NETWORK '$NETWORK'" ;;
+	esac
 
 	start_acceptor
 
@@ -232,26 +234,24 @@ EOF
 setup_lustre() {
 	[ -c /dev/obd ] || mknod /dev/obd c 10 241
 
-	if [ "$USEDEV" = "yes" ]; then
-	    do_insmod $LUSTRE/obdclass/obdclass.o || exit -1
-	    do_insmod $LUSTRE/ptlrpc/ptlrpc.o || exit -1
-	    do_insmod $LUSTRE/ldlm/ldlm.o || exit -1
-	    do_insmod $LUSTRE/extN/extN.o || \
+	do_insmod $LUSTRE/obdclass/obdclass.o || exit -1
+	do_insmod $LUSTRE/ptlrpc/ptlrpc.o || exit -1
+	do_insmod $LUSTRE/ldlm/ldlm.o || exit -1
+	do_insmod $LUSTRE/extN/extN.o || \
 		echo "info: can't load extN.o module, not fatal if using ext3"
-	    do_insmod $LUSTRE/mds/mds.o || exit -1
-	    #do_insmod $LUSTRE/mds/mds_ext2.o || exit -1
-	    #do_insmod $LUSTRE/mds/mds_ext3.o || exit -1
-	    do_insmod $LUSTRE/mds/mds_extN.o || \
+	do_insmod $LUSTRE/mds/mds.o || exit -1
+	#do_insmod $LUSTRE/mds/mds_ext2.o || exit -1
+	#do_insmod $LUSTRE/mds/mds_ext3.o || exit -1
+	do_insmod $LUSTRE/mds/mds_extN.o || \
 		echo "info: can't load mds_extN.o module, needs extN.o"
-	    do_insmod $LUSTRE/obdecho/obdecho.o || exit -1
-	    #do_insmod $LUSTRE/obdext2/obdext2.o || exit -1
-	    do_insmod $LUSTRE/obdfilter/obdfilter.o || exit -1
-		do_insmod $LUSTRE/ost/ost.o || exit -1
-	    do_insmod $LUSTRE/osc/osc.o || exit -1
-	    do_insmod $LUSTRE/mdc/mdc.o || exit -1
+	do_insmod $LUSTRE/obdecho/obdecho.o || exit -1
+	#do_insmod $LUSTRE/obdext2/obdext2.o || exit -1
+	do_insmod $LUSTRE/obdfilter/obdfilter.o || exit -1
+	do_insmod $LUSTRE/ost/ost.o || exit -1
+	do_insmod $LUSTRE/osc/osc.o || exit -1
+	do_insmod $LUSTRE/mdc/mdc.o || exit -1
 		do_insmod $LUSTRE/lov/lov.o || exit -1
-	    do_insmod $LUSTRE/llite/llite.o || exit -1
-	fi 
+        do_insmod $LUSTRE/llite/llite.o || exit -1
 
         echo "$R/tmp/lustre-log" > /proc/sys/portals/debug_path
 
@@ -537,6 +537,7 @@ cleanup_portals() {
 	do_rmmod kptlrouter
 	do_rmmod kqswnal
 	do_rmmod ksocknal
+        do_rmmod kptlrouter
 	do_rmmod portals
 }
 
