@@ -333,19 +333,16 @@ int client_disconnect_export(struct obd_export *exp, int failover)
  * -------------------------------------------------------------------------- */
 
 int target_handle_reconnect(struct lustre_handle *conn, struct obd_export *exp,
-                            struct obd_uuid *cluuid)
+                            struct obd_uuid *cluuid, int initial_conn)
 {
-        if (exp->exp_connection) {
+        if (exp->exp_connection && !initial_conn) {
                 struct lustre_handle *hdl;
                 hdl = &exp->exp_imp_reverse->imp_remote_handle;
                 /* Might be a re-connect after a partition. */
-#warning "FIXME ASAP"
-                memcpy(&hdl->cookie, &conn->cookie, sizeof(conn->cookie));
-                if (1 || !memcmp(&conn->cookie, &hdl->cookie, sizeof conn->cookie)) {
+                if (!memcmp(&conn->cookie, &hdl->cookie, sizeof conn->cookie)) {
                         CERROR("%s reconnecting\n", cluuid->uuid);
                         conn->cookie = exp->exp_handle.h_cookie;
-                        /*RETURN(EALREADY);*/
-                        RETURN(0);
+                        RETURN(EALREADY);
                 } else {
                         CERROR("%s reconnecting from %s, "
                                "handle mismatch (ours "LPX64", theirs "
@@ -377,6 +374,7 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         char *str, *tmp;
         int rc = 0, abort_recovery;
         unsigned long flags;
+        int initial_conn = 0;
         ENTRY;
 
         OBD_RACE(OBD_FAIL_TGT_CONN_RACE); 
@@ -444,6 +442,9 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         if (obd_uuid_equals(&cluuid, &target->obd_uuid))
                 goto dont_check_exports;
 
+        if (lustre_msg_get_op_flags(req->rq_reqmsg) & MSG_CONNECT_INITIAL)
+                initial_conn = 1;
+
         spin_lock(&target->obd_dev_lock);
         list_for_each(p, &target->obd_exports) {
                 export = list_entry(p, struct obd_export, exp_obd_chain);
@@ -451,7 +452,8 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
                         spin_unlock(&target->obd_dev_lock);
                         LASSERT(export->exp_obd == target);
 
-                        rc = target_handle_reconnect(&conn, export, &cluuid);
+                        rc = target_handle_reconnect(&conn, export, &cluuid,
+                                                     initial_conn);
                         break;
                 }
                 export = NULL;
@@ -459,15 +461,16 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         /* If we found an export, we already unlocked. */
         if (!export) {
                 spin_unlock(&target->obd_dev_lock);
-        } else if (req->rq_reqmsg->conn_cnt == 1) {
+        } else if (req->rq_reqmsg->conn_cnt == 1 && !initial_conn) {
                 CERROR("%s reconnected with 1 conn_cnt; cookies not random?\n",
                        cluuid.uuid);
-#warning "FIXME ASAP"
-                /*GOTO(out, rc = -EALREADY);*/
+                GOTO(out, rc = -EALREADY);
         }
 
         /* Tell the client if we're in recovery. */
         /* If this is the first client, start the recovery timer */
+        CWARN("%s: connection from %s %s\n", target->obd_name, cluuid.uuid,
+              target->obd_recovering ? "(recovering)" : "");
         if (target->obd_recovering) {
                 lustre_msg_add_op_flags(req->rq_repmsg, MSG_CONNECT_RECOVERING);
                 target_start_recovery_timer(target, handler);
@@ -516,14 +519,15 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         LASSERT(export != NULL);
 
         spin_lock_irqsave(&export->exp_lock, flags);
-#warning "FIXME ASAP"
-        if (0 && export->exp_conn_cnt >= req->rq_reqmsg->conn_cnt) {
+        if (initial_conn) {
+                req->rq_repmsg->conn_cnt = export->exp_conn_cnt + 1;
+        } else if (export->exp_conn_cnt >= req->rq_reqmsg->conn_cnt) {
                 CERROR("%s: already connected at a higher conn_cnt: %d > %d\n",
                        cluuid.uuid, export->exp_conn_cnt, 
                        req->rq_reqmsg->conn_cnt);
                 spin_unlock_irqrestore(&export->exp_lock, flags);
                 GOTO(out, rc = -EALREADY);
-        }
+        } 
         export->exp_conn_cnt = req->rq_reqmsg->conn_cnt;
         spin_unlock_irqrestore(&export->exp_lock, flags);
 

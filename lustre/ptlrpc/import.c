@@ -255,14 +255,13 @@ int ptlrpc_connect_import(struct obd_import *imp, char * new_uuid)
 
         IMPORT_SET_STATE_NOLOCK(imp, LUSTRE_IMP_CONNECTING);
 
-        imp->imp_conn_cnt++;
         imp->imp_resend_replay = 0;
 
         if (imp->imp_remote_handle.cookie == 0) {
                 initial_connect = 1;
         } else {
                 committed_before_reconnect = imp->imp_peer_committed_transno;;
-
+                imp->imp_conn_cnt++;
         }
 
 
@@ -322,8 +321,11 @@ int ptlrpc_connect_import(struct obd_import *imp, char * new_uuid)
         aa->pcaa_peer_committed = committed_before_reconnect;
         aa->pcaa_initial_connect = initial_connect;
 
-        if (aa->pcaa_initial_connect)
-                imp->imp_replayable = 1;
+        if (aa->pcaa_initial_connect) {
+                lustre_msg_add_op_flags(request->rq_reqmsg, 
+                                        MSG_CONNECT_INITIAL);
+                imp->imp_replayable = 1; 
+        }
 
         ptlrpcd_add_req(request);
         rc = 0;
@@ -366,6 +368,10 @@ static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
                 } else {
                         imp->imp_replayable = 0;
                 }
+                LASSERTF(imp->imp_conn_cnt < request->rq_repmsg->conn_cnt,
+                         "imp conn_cnt %d req conn_cnt %d", 
+                         imp->imp_conn_cnt, request->rq_repmsg->conn_cnt);
+                imp->imp_conn_cnt = request->rq_repmsg->conn_cnt;
                 imp->imp_remote_handle = request->rq_repmsg->handle;
                 IMPORT_SET_STATE(imp, LUSTRE_IMP_FULL);
                 GOTO(finish, rc = 0);
@@ -412,6 +418,7 @@ static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
                 imp->imp_last_replay_transno = 0;
                 IMPORT_SET_STATE(imp, LUSTRE_IMP_REPLAY);
         } else {
+                CWARN("oops! we get evicted from %s\n", imp->imp_target_uuid.uuid);
                 imp->imp_remote_handle = request->rq_repmsg->handle;
                 IMPORT_SET_STATE(imp, LUSTRE_IMP_EVICTED);
         }
