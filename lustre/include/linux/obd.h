@@ -36,6 +36,7 @@ struct brw_page {
 struct lov_oinfo { /* per-child structure */
         __u64 loi_id;              /* object ID on the target OST */
         __u64 loi_size;            /* size of this object on the target OST */
+        struct lustre_handle *loi_handle; /* handle for object on OST */
         int loi_ost_idx;           /* OST stripe index in lmd_objects array */
 };
 
@@ -95,6 +96,7 @@ struct filter_obd {
         struct file_operations *fo_fop;
         struct inode_operations *fo_iop;
         struct address_space_operations *fo_aops;
+        struct list_head fo_export_list;
 };
 
 struct mds_server_data;
@@ -273,15 +275,15 @@ struct obd_ops {
         int (*o_getattr)(struct lustre_handle *conn, struct obdo *oa,
                          struct lov_stripe_md *ea);
         int (*o_open)(struct lustre_handle *conn, struct obdo *oa,
-                      struct lov_stripe_md *);
+                      struct lov_stripe_md *ea);
         int (*o_close)(struct lustre_handle *conn, struct obdo *oa,
-                       struct lov_stripe_md *);
+                       struct lov_stripe_md *ea);
         int (*o_brw)(int rw, struct lustre_handle *conn,
-                     struct lov_stripe_md *md, obd_count oa_bufs,
+                     struct lov_stripe_md *ea, obd_count oa_bufs,
                      struct brw_page *pgarr, brw_callback_t callback,
                      struct io_cb_data *data);
         int (*o_punch)(struct lustre_handle *conn, struct obdo *tgt,
-                       struct lov_stripe_md *md, obd_size count,
+                       struct lov_stripe_md *ea, obd_size count,
                        obd_off offset);
         int (*o_sync)(struct lustre_handle *conn, struct obdo *tgt,
                       obd_size count, obd_off offset);
