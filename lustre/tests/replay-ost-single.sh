@@ -56,7 +56,16 @@ setup() {
     start ost --reformat $OSTLCONFARGS
     [ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
     start mds --reformat $MDSLCONFARGS
-    grep " $MOUNT " /proc/mounts || zconf_mount `hostname` $MOUNT
+
+    if [ -z "`grep " $MOUNT " /proc/mounts`" ]; then
+	# test "-1" needed during initial client->OST connection
+	log "== test 00: target handle mismatch (bug 5317) === `date +%H:%M:%S`"
+
+	#define OBD_FAIL_OST_ALL_REPLY_NET       0x211
+	do_facet ost "sysctl -w lustre.fail_loc=0x80000211"
+
+	zconf_mount `hostname` $MOUNT && df $MOUNT && pass || error "mount fail"
+    fi
 }
 
 mkdir -p $DIR

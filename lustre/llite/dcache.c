@@ -41,7 +41,7 @@ static void ll_release(struct dentry *de)
         ENTRY;
         LASSERT(de != NULL);
         lld = ll_d2d(de);
-        if (lld == NULL) {
+        if (lld == NULL) { /* NFS copies the de->d_op methods (bug 4655) */
                 EXIT;
                 return;
         }

@@ -121,8 +121,6 @@ int lustre_common_fill_super(struct super_block *sb, char *mdc, char *osc)
                         CERROR("could not register mount in /proc/lustre");
         }
 
-        mdc_init_ea_size(obd, osc);
-
         err = obd_connect(&mdc_conn, obd, &sbi->ll_sb_uuid);
         if (err == -EBUSY) {
                 CERROR("An MDS (mdc %s) is performing recovery, of which this"
@@ -168,6 +166,8 @@ int lustre_common_fill_super(struct super_block *sb, char *mdc, char *osc)
                 GOTO(out_mdc, err);
         }
         sbi->ll_osc_exp = class_conn2export(&osc_conn);
+
+        mdc_init_ea_size(sbi->ll_mdc_exp, sbi->ll_osc_exp);
 
         if (!ll_async_page_slab) {
                 ll_async_page_slab_size =

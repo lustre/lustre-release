@@ -648,7 +648,7 @@ static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         case OBD_IOC_LLOG_PRINT: {
                 ctxt = llog_get_context(obd, LLOG_CONFIG_REPL_CTXT);
                 rc = llog_ioctl(ctxt, cmd, data);
-                
+
                 GOTO(out, rc);
         }
 #endif
@@ -913,39 +913,35 @@ err_rpc_lock:
         RETURN(rc);
 }
 
-int mdc_init_ea_size(struct obd_device *obd, char *lov_name)
+/* Initialize the maximum LOV EA and cookie sizes.  This allows
+ * us to make MDS RPCs with large enough reply buffers to hold the
+ * maximum-sized (= maximum striped) EA and cookie without having to
+ * calculate this (via a call into the LOV + OSCs) each time we make an RPC. */
+int mdc_init_ea_size(struct obd_export *mdc_exp, struct obd_export *lov_exp)
 {
+        struct obd_device *obd = mdc_exp->exp_obd;
         struct client_obd *cli = &obd->u.cli;
-        struct obd_device *lov_obd;
-        struct obd_export *exp;
-        struct lustre_handle conn;
+        struct lov_stripe_md lsm = { .lsm_magic = LOV_MAGIC };
         struct lov_desc desc;
-        int valsize;
-        int rc;
+        __u32 valsize = sizeof(desc);
+        int rc, size;
+        ENTRY;
 
-        lov_obd = class_name2obd(lov_name);
-        if (!lov_obd) {
-                CERROR("MDC cannot locate LOV %s!\n", lov_name);
-                RETURN(-ENOTCONN);
-        }
-
-        rc = obd_connect(&conn, lov_obd, &obd->obd_uuid);
-        if (rc) {
-                CERROR("MDC failed connect to LOV %s (%d)\n", lov_name, rc);
-                RETURN(rc);
-        }
-        exp = class_conn2export(&conn);
-
-        valsize = sizeof(desc);
-        rc = obd_get_info(exp, strlen("lovdesc") + 1, "lovdesc",
+        rc = obd_get_info(lov_exp, strlen("lovdesc") + 1, "lovdesc",
                           &valsize, &desc);
-        if (rc == 0) {
-                cli->cl_max_mds_easize = obd_size_diskmd(exp, NULL);
-                cli->cl_max_mds_cookiesize = desc.ld_tgt_count *
-                        sizeof(struct llog_cookie);
-        }
-        obd_disconnect(exp, 0);
-        RETURN(rc);
+        if (rc < 0)
+                RETURN(rc);
+
+        lsm.lsm_stripe_count = desc.ld_tgt_count;
+        size = obd_size_diskmd(lov_exp, &lsm);
+        if (cli->cl_max_mds_easize < size)
+                cli->cl_max_mds_easize = size;
+
+        size = desc.ld_tgt_count * sizeof(struct llog_cookie);
+        if (cli->cl_max_mds_cookiesize < size)
+                cli->cl_max_mds_cookiesize = size;
+
+        RETURN(0);
 }
 
 static int mdc_precleanup(struct obd_device *obd, int flags)

@@ -1345,9 +1345,6 @@ llu_fsswop_mount(const char *source,
                 GOTO(out_free, err = -EINVAL);
         }
 
-        if (mdc_init_ea_size(obd, osc))
-                GOTO(out_free, err = -EINVAL);
-
         /* setup mdc */
         err = obd_connect(&mdc_conn, obd, &sbi->ll_sb_uuid);
         if (err) {
@@ -1377,6 +1374,8 @@ llu_fsswop_mount(const char *source,
                 GOTO(out_mdc, err);
         }
         sbi->ll_osc_exp = class_conn2export(&osc_conn);
+
+        mdc_init_ea_size(sbi->ll_mdc_exp, sbi->ll_osc_exp);
 
         err = mdc_getstatus(sbi->ll_mdc_exp, &rootfid);
         if (err) {
