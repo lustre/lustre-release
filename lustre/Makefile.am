@@ -18,6 +18,10 @@ SUBDIRS = lvfs portals obdclass include $(DIRS24) mds utils obdfilter mdc osc os
 SUBDIRS+= llite obdecho lov cobd tests doc scripts conf ptlrpc
 endif
 
+if SNAPFS
+SUBDIRS+= snapfs
+endif
+
 DIST_SUBDIRS = $(SUBDIRS) liblustre
 EXTRA_DIST = BUGS FDL Rules kernel_patches
 

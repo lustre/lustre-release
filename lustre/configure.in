@@ -38,6 +38,11 @@ else
 fi
 AC_SUBST(SYSIO)
 
+# snap compilation 
+AC_ARG_ENABLE(snapfs, [ --enable-snapfs build snapfs])
+AM_CONDITIONAL(SNAPFS, test x$enable_snapfs = xyes)
+
+
 sinclude(portals/build.m4)
 sinclude(portals/archdep.m4)
 
@@ -60,5 +65,6 @@ AC_OUTPUT([Makefile lvfs/Makefile portals/Makefile portals/Kernelenv \
 	  lov/Makefile osc/Makefile mdc/Makefile mds/Makefile ost/Makefile \
 	  cobd/Makefile ptlbd/Makefile conf/Makefile  tests/Makefile \
 	  utils/Makefile utils/Lustre/Makefile obdfilter/Makefile \
-          obdclass/Makefile include/Makefile include/linux/Makefile llite/Makefile doc/Makefile scripts/Makefile \
+          obdclass/Makefile snapfs/Makefile snapfs/utils/Makefile \
+	  include/Makefile include/linux/Makefile llite/Makefile doc/Makefile scripts/Makefile \
 	  scripts/lustre.spec])
