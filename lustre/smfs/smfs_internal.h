@@ -66,4 +66,9 @@ extern int sm_debug_level;
 extern int sm_inodes;
 extern long sm_kmemory;
 extern int sm_stack;
-#endif /* __LINUX_SNAPFS_H */
+/*dir.c*/
+extern struct inode_operations smfs_dir_iops; 
+extern struct file_operations smfs_dir_fops; 
+/*inode.c*/
+extern void duplicate_inode(struct inode *cache_inode, struct inode *inode);
+#endif /* __LINUX_SMFS_H */

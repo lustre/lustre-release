@@ -14,7 +14,7 @@
 #include <linux/string.h>
 #include "smfs_internal.h" 
 
-static void duplicate_inode(struct inode *cache_inode, struct inode *inode)
+void duplicate_inode(struct inode *cache_inode, struct inode *inode)
 {
 	
 	inode->i_mode = cache_inode->i_mode;
