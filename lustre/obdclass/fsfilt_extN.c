@@ -4,7 +4,7 @@
  *  lustre/lib/fsfilt_extN.c
  *  Lustre filesystem abstraction routines
  *
- *  Copyright (C) 2002 Cluster File Systems, Inc.
+ *  Copyright (C) 2002, 2003 Cluster File Systems, Inc.
  *   Author: Andreas Dilger <adilger@clusterfs.com>
  *
  *   This file is part of Lustre, http://www.lustre.org.
@@ -124,6 +124,8 @@ static void *fsfilt_extN_start(struct inode *inode, int op)
  * objcount inode blocks
  * 1 superblock
  * 2 * EXTN_SINGLEDATA_TRANS_BLOCKS for the quota files
+ * 
+ * 1 EXTN_DATA_TRANS_BLOCKS for the last_rcvd update.
  */
 static int fsfilt_extN_credits_needed(int objcount, struct fsfilt_objinfo *fso)
 {
@@ -153,6 +155,9 @@ static int fsfilt_extN_credits_needed(int objcount, struct fsfilt_objinfo *fso)
                 ngdblocks = EXTN_SB(sb)->s_gdb_count;
 
         needed += nbitmaps + ngdblocks;
+        
+        /* last_rcvd update */
+        needed += EXTN_DATA_TRANS_BLOCKS;
 
 #ifdef CONFIG_QUOTA
         /* We assume that there will be 1 bit set in s_dquot.flags for each
@@ -351,26 +356,55 @@ static int fsfilt_extN_get_md(struct inode *inode, void *lmm, int lmm_size)
 }
 
 static ssize_t fsfilt_extN_readpage(struct file *file, char *buf, size_t count,
-                                    loff_t *offset)
+                                    loff_t *off)
 {
         struct inode *inode = file->f_dentry->d_inode;
         int rc = 0;
 
         if (S_ISREG(inode->i_mode))
-                rc = file->f_op->read(file, buf, count, offset);
+                rc = file->f_op->read(file, buf, count, off);
         else {
-                struct buffer_head *bh;
+                const int blkbits = inode->i_sb->s_blocksize_bits;
+                const int blksize = inode->i_sb->s_blocksize;
 
-                /* FIXME: this assumes the blocksize == count, but the calling
-                 *        function will detect this as an error for now */
-                bh = extN_bread(NULL, inode,
-                                *offset >> inode->i_sb->s_blocksize_bits,
-                                0, &rc);
+                CDEBUG(D_EXT2, "reading "LPSZ" at dir %lu+%llu\n",
+                       count, inode->i_ino, *off);
+                while (count > 0) {
+                        struct buffer_head *bh;
 
-                if (bh) {
-                        memcpy(buf, bh->b_data, inode->i_blksize);
-                        brelse(bh);
-                        rc = inode->i_blksize;
+                        bh = NULL;
+                        if (*off < inode->i_size) {
+                                int err = 0;
+
+                                bh = extN_bread(NULL, inode, *off >> blkbits,
+                                                0, &err);
+
+                                CDEBUG(D_EXT2, "read %u@%llu\n", blksize, *off);
+
+                                if (bh) {
+                                        memcpy(buf, bh->b_data, blksize);
+                                        brelse(bh);
+                                } else if (err) {
+                                        /* XXX in theory we should just fake
+                                         * this buffer and continue like ext3,
+                                         * especially if this is a partial read
+                                         */
+                                        CERROR("error read dir %lu+%llu: %d\n",
+                                               inode->i_ino, *off, err);
+                                        RETURN(err);
+                                }
+                        }
+                        if (!bh) {
+                                struct extN_dir_entry_2 *fake = (void *)buf;
+
+                                CDEBUG(D_EXT2, "fake %u@%llu\n", blksize, *off);
+                                memset(fake, 0, sizeof(*fake));
+                                fake->rec_len = cpu_to_le32(blksize);
+                        }
+                        count -= blksize;
+                        buf += blksize;
+                        *off += blksize;
+                        rc += blksize;
                 }
         }
 
@@ -390,7 +424,6 @@ static void fsfilt_extN_cb_func(struct journal_callback *jcb, int error)
 static int fsfilt_extN_set_last_rcvd(struct obd_device *obd, __u64 last_rcvd,
                                      void *handle, fsfilt_cb_t cb_func)
 {
-#ifdef HAVE_JOURNAL_CALLBACK_STATUS
         struct fsfilt_cb_data *fcb;
 
         fcb = kmem_cache_alloc(fcb_cache, GFP_NOFS);
@@ -408,17 +441,6 @@ static int fsfilt_extN_set_last_rcvd(struct obd_device *obd, __u64 last_rcvd,
         journal_callback_set(handle, fsfilt_extN_cb_func,
                              (struct journal_callback *)fcb);
         unlock_kernel();
-#else
-#warning "no journal callback kernel patch, faking it..."
-        static long next = 0;
-
-        if (time_after(jiffies, next)) {
-                CERROR("no journal callback kernel patch, faking it...\n");
-                next = jiffies + 300 * HZ;
-        }
-
-        cb_func(obd, last_rcvd, 0);
-#endif
 
         return 0;
 }
@@ -451,6 +473,11 @@ static int fsfilt_extN_statfs(struct super_block *sb, struct obd_statfs *osfs)
         return rc;
 }
 
+static int fsfilt_extN_sync(struct super_block *sb)
+{
+        return extN_force_commit(sb);
+}
+
 static struct fsfilt_operations fsfilt_extN_ops = {
         fs_type:                "extN",
         fs_owner:               THIS_MODULE,
@@ -464,6 +491,7 @@ static struct fsfilt_operations fsfilt_extN_ops = {
         fs_journal_data:        fsfilt_extN_journal_data,
         fs_set_last_rcvd:       fsfilt_extN_set_last_rcvd,
         fs_statfs:              fsfilt_extN_statfs,
+        fs_sync:                fsfilt_extN_sync,
 };
 
 static int __init fsfilt_extN_init(void)

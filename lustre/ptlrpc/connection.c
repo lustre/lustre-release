@@ -32,18 +32,20 @@ static struct list_head conn_unused_list;
 
 /* If UUID is NULL, c->c_remote_uuid must be all zeroes
  * If UUID is non-NULL, c->c_remote_uuid must match. */
-static int match_connection_uuid(struct ptlrpc_connection *c, obd_uuid_t uuid)
+static int match_connection_uuid(struct ptlrpc_connection *c, struct obd_uuid *uuid)
 {
-        obd_uuid_t zero_uuid = {0};
+        struct obd_uuid zero_uuid;
+        memset(&zero_uuid, 0, sizeof(zero_uuid));
 
         if (uuid)
-                return memcmp(c->c_remote_uuid, uuid, sizeof(uuid));
+                return memcmp(c->c_remote_uuid.uuid, uuid->uuid, 
+                              sizeof(uuid->uuid));
 
-        return memcmp(c->c_remote_uuid, zero_uuid, sizeof(zero_uuid));
+        return memcmp(c->c_remote_uuid.uuid, &zero_uuid, sizeof(zero_uuid));
 }
 
 struct ptlrpc_connection *ptlrpc_get_connection(struct lustre_peer *peer,
-                                                obd_uuid_t uuid)
+                                                struct obd_uuid *uuid)
 {
         struct list_head *tmp, *pos;
         struct ptlrpc_connection *c;
@@ -83,8 +85,8 @@ struct ptlrpc_connection *ptlrpc_get_connection(struct lustre_peer *peer,
         c->c_epoch = 1;
         c->c_bootcount = 0;
         c->c_flags = 0;
-        if (uuid)
-                strcpy(c->c_remote_uuid, uuid);
+        if (uuid->uuid)
+                obd_str2uuid(&c->c_remote_uuid, uuid->uuid);
         INIT_LIST_HEAD(&c->c_imports);
         INIT_LIST_HEAD(&c->c_exports);
         INIT_LIST_HEAD(&c->c_sb_chain);
@@ -160,7 +162,7 @@ void ptlrpc_cleanup_connection(void)
         list_for_each_safe(tmp, pos, &conn_list) {
                 c = list_entry(tmp, struct ptlrpc_connection, c_link);
                 CERROR("Connection %p/%s has refcount %d (nid=%lu)\n",
-                       c, c->c_remote_uuid, atomic_read(&c->c_refcount),
+                       c, c->c_remote_uuid.uuid, atomic_read(&c->c_refcount),
                        (unsigned long)c->c_peer.peer_nid);
                 list_del(&c->c_link);
                 OBD_FREE(c, sizeof(*c));

@@ -1,12 +1,24 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Copyright (C) 2002 Cluster File Systems, Inc.
+ * Copyright (C) 2002, 2003 Cluster File Systems, Inc.
+ *   Author: Phil Schwan <phil@clusterfs.com>
+ *   Author: Peter Braam <braam@clusterfs.com>
  *
- * This code is issued under the GNU General Public License.
- * See the file COPYING in this distribution
+ *   This file is part of Lustre, http://www.lustre.org.
  *
- * by Cluster File Systems, Inc.
+ *   Lustre is free software; you can redistribute it and/or
+ *   modify it under the terms of version 2 of the GNU General Public
+ *   License as published by the Free Software Foundation.
+ *
+ *   Lustre is distributed in the hope that it will be useful,
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   GNU General Public License for more details.
+ *
+ *   You should have received a copy of the GNU General Public License
+ *   along with Lustre; if not, write to the Free Software
+ *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
 #define DEBUG_SUBSYSTEM S_LDLM
@@ -22,58 +34,59 @@ static struct proc_dir_entry *ldlm_ns_proc_dir = NULL;
 
 int ldlm_proc_setup(struct obd_device *obd)
 {
+        int rc;
         ENTRY;
         LASSERT(ldlm_ns_proc_dir == NULL);
-        ldlm_ns_proc_dir = obd->obd_type->typ_procroot;
+        rc = lprocfs_obd_attach(obd, 0);
+        if (rc) {
+                CERROR("LProcFS failed in ldlm-init\n");
+                RETURN(rc);
+        }
+        ldlm_ns_proc_dir = obd->obd_proc_entry;
         RETURN(0);
 }
 
 void ldlm_proc_cleanup(struct obd_device *obd)
 {
-        ldlm_ns_proc_dir = NULL;
+        if (ldlm_ns_proc_dir) {
+                lprocfs_obd_detach(obd);
+                ldlm_ns_proc_dir = NULL;
+        }
 }
 
 static int lprocfs_uint_rd(char *page, char **start, off_t off,
                            int count, int *eof, void *data)
 {
         unsigned int *temp = (unsigned int *)data;
-        int len;
-        len = snprintf(page, count, "%u\n", *temp);
-        return len;
+        return snprintf(page, count, "%u\n", *temp);
 }
 
-#define MAX_STRING_SIZE 100
+#define MAX_STRING_SIZE 128
 void ldlm_proc_namespace(struct ldlm_namespace *ns)
 {
         struct lprocfs_vars lock_vars[2];
-        char lock_names[MAX_STRING_SIZE + 1];
+        char lock_name[MAX_STRING_SIZE + 1];
+
+        lock_name[MAX_STRING_SIZE] = '\0';
 
         memset(lock_vars, 0, sizeof(lock_vars));
-        snprintf(lock_names, MAX_STRING_SIZE, "%s/resource_count", ns->ns_name);
-        lock_names[MAX_STRING_SIZE] = '\0';
-        lock_vars[0].name = lock_names;
-        lock_vars[0].read_fptr = lprocfs_ll_rd;
-        lock_vars[0].write_fptr = NULL;
+        lock_vars[0].read_fptr = lprocfs_rd_u64;
+
+        lock_vars[0].name = lock_name;
+
+        snprintf(lock_name, MAX_STRING_SIZE, "%s/resource_count", ns->ns_name);
+
         lock_vars[0].data = &ns->ns_resources;
         lprocfs_add_vars(ldlm_ns_proc_dir, lock_vars, 0);
 
-        memset(lock_vars, 0, sizeof(lock_vars));
-        snprintf(lock_names, MAX_STRING_SIZE, "%s/lock_count", ns->ns_name);
-        lock_names[MAX_STRING_SIZE] = '\0';
-        lock_vars[0].name = lock_names;
-        lock_vars[0].read_fptr = lprocfs_ll_rd;
-        lock_vars[0].write_fptr = NULL;
+        snprintf(lock_name, MAX_STRING_SIZE, "%s/lock_count", ns->ns_name);
         lock_vars[0].data = &ns->ns_locks;
         lprocfs_add_vars(ldlm_ns_proc_dir, lock_vars, 0);
 
-        memset(lock_vars, 0, sizeof(lock_vars));
-        snprintf(lock_names, MAX_STRING_SIZE, "%s/lock_unused_count",
+        snprintf(lock_name, MAX_STRING_SIZE, "%s/lock_unused_count",
                  ns->ns_name);
-        lock_names[MAX_STRING_SIZE] = '\0';
-        lock_vars[0].name = lock_names;
-        lock_vars[0].read_fptr = lprocfs_uint_rd;
-        lock_vars[0].write_fptr = NULL;
         lock_vars[0].data = &ns->ns_nr_unused;
+        lock_vars[0].read_fptr = lprocfs_uint_rd;
         lprocfs_add_vars(ldlm_ns_proc_dir, lock_vars, 0);
 }
 #undef MAX_STRING_SIZE
@@ -136,7 +149,9 @@ extern struct ldlm_lock *ldlm_lock_get(struct ldlm_lock *lock);
 
 /* If 'local_only' is true, don't try to tell the server, just cleanup.
  * This is currently only used for recovery, and we make certain assumptions
- * as a result--notably, that we shouldn't cancel locks with refs. -phil */
+ * as a result--notably, that we shouldn't cancel locks with refs. -phil
+ *
+ * Called with the ns_lock held. */
 static void cleanup_resource(struct ldlm_resource *res, struct list_head *q,
                              int local_only)
 {
@@ -156,7 +171,9 @@ static void cleanup_resource(struct ldlm_resource *res, struct list_head *q,
                          * will go away ... */
                         lock->l_flags |= LDLM_FL_CBPENDING;
                         /* ... without sending a CANCEL message. */
-                        lock->l_flags |= LDLM_FL_CANCELING;
+                        lock->l_flags |= LDLM_FL_LOCAL_ONLY;
+                        /* ... and without calling the cancellation callback */
+                        lock->l_flags |= LDLM_FL_CANCEL;
                         LDLM_LOCK_PUT(lock);
                         continue;
                 }
@@ -177,7 +194,7 @@ static void cleanup_resource(struct ldlm_resource *res, struct list_head *q,
                                 ldlm_lock_cancel(lock);
                 } else {
                         LDLM_DEBUG(lock, "Freeing a lock still held by a "
-                                   "client node.\n");
+                                   "client node");
 
                         ldlm_resource_unlink_lock(lock);
                         ldlm_lock_destroy(lock);
@@ -256,13 +273,13 @@ int ldlm_client_free(struct obd_export *exp)
         RETURN(0);
 }
 
-static __u32 ldlm_hash_fn(struct ldlm_resource *parent, __u64 *name)
+static __u32 ldlm_hash_fn(struct ldlm_resource *parent, struct ldlm_res_id name)
 {
         __u32 hash = 0;
         int i;
 
         for (i = 0; i < RES_NAME_SIZE; i++)
-                hash += name[i];
+                hash += name.name[i];
 
         hash += (__u32)((unsigned long)parent >> 4);
 
@@ -293,9 +310,9 @@ static struct ldlm_resource *ldlm_resource_new(void)
 
 /* Args: locked namespace
  * Returns: newly-allocated, referenced, unlocked resource */
-static struct ldlm_resource *ldlm_resource_add(struct ldlm_namespace *ns,
-                                               struct ldlm_resource *parent,
-                                               __u64 *name, __u32 type)
+static struct ldlm_resource *
+ldlm_resource_add(struct ldlm_namespace *ns, struct ldlm_resource *parent,
+                  struct ldlm_res_id name, __u32 type)
 {
         struct list_head *bucket;
         struct ldlm_resource *res;
@@ -317,7 +334,7 @@ static struct ldlm_resource *ldlm_resource_add(struct ldlm_namespace *ns,
         spin_unlock(&ns->ns_counter_lock);
 
         l_lock(&ns->ns_lock);
-        memcpy(res->lr_name, name, sizeof(res->lr_name));
+        memcpy(&res->lr_name, &name, sizeof(res->lr_name));
         res->lr_namespace = ns;
         ns->ns_refcount++;
 
@@ -341,9 +358,9 @@ static struct ldlm_resource *ldlm_resource_add(struct ldlm_namespace *ns,
 /* Args: unlocked namespace
  * Locks: takes and releases ns->ns_lock and res->lr_lock
  * Returns: referenced, unlocked ldlm_resource or NULL */
-struct ldlm_resource *ldlm_resource_get(struct ldlm_namespace *ns,
-                                        struct ldlm_resource *parent,
-                                        __u64 *name, __u32 type, int create)
+struct ldlm_resource *
+ldlm_resource_get(struct ldlm_namespace *ns, struct ldlm_resource *parent,
+                  struct ldlm_res_id name, __u32 type, int create)
 {
         struct list_head *bucket, *tmp;
         struct ldlm_resource *res = NULL;
@@ -358,7 +375,7 @@ struct ldlm_resource *ldlm_resource_get(struct ldlm_namespace *ns,
         list_for_each(tmp, bucket) {
                 res = list_entry(tmp, struct ldlm_resource, lr_hash);
 
-                if (memcmp(res->lr_name, name, sizeof(res->lr_name)) == 0) {
+                if (memcmp(&res->lr_name, &name, sizeof(res->lr_name)) == 0) {
                         ldlm_resource_getref(res);
                         l_unlock(&ns->ns_lock);
                         RETURN(res);
@@ -451,12 +468,17 @@ void ldlm_resource_add_lock(struct ldlm_resource *res, struct list_head *head,
         l_lock(&res->lr_namespace->ns_lock);
 
         ldlm_resource_dump(res);
-        CDEBUG(D_OTHER, "About to grant this lock:\n");
+        CDEBUG(D_OTHER, "About to add this lock:\n");
         ldlm_lock_dump(D_OTHER, lock);
+
+        if (lock->l_destroyed) {
+                CDEBUG(D_OTHER, "Lock destroyed, not adding to resource\n");
+                return;
+        }
 
         LASSERT(list_empty(&lock->l_res_link));
 
-        list_add(&lock->l_res_link, head);
+        list_add_tail(&lock->l_res_link, head);
         l_unlock(&res->lr_namespace->ns_lock);
 }
 
@@ -470,7 +492,7 @@ void ldlm_resource_unlink_lock(struct ldlm_lock *lock)
 void ldlm_res2desc(struct ldlm_resource *res, struct ldlm_resource_desc *desc)
 {
         desc->lr_type = res->lr_type;
-        memcpy(desc->lr_name, res->lr_name, sizeof(desc->lr_name));
+        memcpy(&desc->lr_name, &res->lr_name, sizeof(desc->lr_name));
         memcpy(desc->lr_version, res->lr_version, sizeof(desc->lr_version));
 }
 
@@ -517,9 +539,9 @@ void ldlm_resource_dump(struct ldlm_resource *res)
                 LBUG();
 
         snprintf(name, sizeof(name), "%Lx %Lx %Lx",
-                 (unsigned long long)res->lr_name[0],
-                 (unsigned long long)res->lr_name[1],
-                 (unsigned long long)res->lr_name[2]);
+                 (unsigned long long)res->lr_name.name[0],
+                 (unsigned long long)res->lr_name.name[1],
+                 (unsigned long long)res->lr_name.name[2]);
 
         CDEBUG(D_OTHER, "--- Resource: %p (%s) (rc: %d)\n", res, name,
                atomic_read(&res->lr_refcount));

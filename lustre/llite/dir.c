@@ -22,7 +22,7 @@
  *  and moved here. AV
  *
  *  Adapted for Lustre Light
- *  Copyright (C) 2002, Cluster File Systems, Inc.
+ *  Copyright (C) 2002-2003, Cluster File Systems, Inc.
  *
  */
 
@@ -76,6 +76,11 @@ static int ll_dir_readpage(struct file *file, struct page *page)
         ENTRY;
 
         if ((inode->i_size + PAGE_CACHE_SIZE - 1) >> PAGE_SHIFT <= page->index){
+                /* XXX why do we need this exactly, and why do we think that
+                 *     an all-zero directory page is useful?
+                 */
+                CERROR("memsetting dir page %lu to zero (size %lld)\n",
+                       page->index, inode->i_size);
                 memset(kmap(page), 0, PAGE_CACHE_SIZE);
                 kunmap(page);
                 GOTO(readpage_out, rc);
@@ -86,7 +91,7 @@ static int ll_dir_readpage(struct file *file, struct page *page)
         request = (struct ptlrpc_request *)it.it_data;
         if (request)
                 ptlrpc_req_finished(request);
-        if (rc != ELDLM_OK) {
+        if (rc < 0) {
                 CERROR("lock enqueue: err: %d\n", rc);
                 unlock_page(page);
                 RETURN(rc);
@@ -118,7 +123,8 @@ static int ll_dir_readpage(struct file *file, struct page *page)
                 SetPageUptodate(page);
 
         unlock_page(page);
-        rc = ll_unlock(LCK_PR, &lockh);
+        ll_unlock(LCK_PR, &lockh);
+        mdc_put_rpc_lock(&mdc_rpc_lock, &it);
         if (rc != ELDLM_OK)
                 CERROR("ll_unlock: err: %d\n", rc);
         return rc;
@@ -206,7 +212,7 @@ static void ext2_check_page(struct page *page)
                 limit = dir->i_size & ~PAGE_CACHE_MASK;
                 if (limit & (chunk_size - 1)) {
                         CERROR("limit %d dir size %lld index %ld\n",
-                                        limit, dir->i_size, page->index);
+                               limit, dir->i_size, page->index);
                         goto Ebadsize;
                 }
                 for (offs = limit; offs<PAGE_CACHE_SIZE; offs += chunk_size) {
@@ -263,8 +269,8 @@ Espan:
         // error = "inode out of bounds";
 bad_entry:
         CERROR("ext2_check_page: bad entry in directory #%lu: %s - "
-                "offset=%lu, inode=%lu, rec_len=%d, name_len=%d",
-                dir->i_ino, error, (page->index<<PAGE_CACHE_SHIFT)+offs,
+                "offset=%lu+%u, inode=%lu, rec_len=%d, name_len=%d",
+                dir->i_ino, error, (page->index<<PAGE_CACHE_SHIFT), offs,
                 (unsigned long) le32_to_cpu(p->inode),
                 rec_len, p->name_len);
         goto fail;
@@ -281,7 +287,7 @@ fail:
         LBUG();
 }
 
-static struct page * ll_get_page(struct inode *dir, unsigned long n)
+static struct page *ll_get_dir_page(struct inode *dir, unsigned long n)
 {
         struct address_space *mapping = dir->i_mapping;
         struct page *page = read_cache_page(mapping, n,
@@ -397,8 +403,10 @@ int ll_readdir(struct file * filp, void * dirent, filldir_t filldir)
                 char *kaddr, *limit;
                 ext2_dirent *de;
                 struct page *page;
-                
-                page = ll_get_page(inode, n);
+
+                CDEBUG(D_EXT2, "reading %lu of dir %lu page %lu, size %llu\n",
+                       PAGE_CACHE_SIZE, inode->i_ino, n, inode->i_size);
+                page = ll_get_dir_page(inode, n);
 
                 /* size might have been updated by mdc_readpage */
                 npages = dir_pages(inode);
@@ -422,8 +430,8 @@ int ll_readdir(struct file * filp, void * dirent, filldir_t filldir)
 
                                 offset = (char *)de - kaddr;
                                 over = filldir(dirent, de->name, de->name_len,
-                                                (n<<PAGE_CACHE_SHIFT) | offset,
-                                                le32_to_cpu(de->inode), d_type);
+                                               (n<<PAGE_CACHE_SHIFT) | offset,
+                                               le32_to_cpu(de->inode), d_type);
                                 if (over) {
                                         ext2_put_page(page);
                                         GOTO(done,0);
@@ -468,7 +476,7 @@ struct ext2_dir_entry_2 * ext2_find_entry (struct inode * dir,
         n = start;
         do {
                 char *kaddr;
-                page = ll_get_page(dir, n);
+                page = ll_get_dir_page(dir, n);
                 if (!IS_ERR(page)) {
                         kaddr = page_address(page);
                         de = (ext2_dirent *) kaddr;
@@ -493,7 +501,7 @@ found:
 
 struct ext2_dir_entry_2 * ext2_dotdot (struct inode *dir, struct page **p)
 {
-        struct page *page = ll_get_page(dir, 0);
+        struct page *page = ll_get_dir_page(dir, 0);
         ext2_dirent *de = NULL;
 
         if (!IS_ERR(page)) {
@@ -559,7 +567,7 @@ int ll_add_link (struct dentry *dentry, struct inode *inode)
 
         /* We take care of directory expansion in the same loop */
         for (n = 0; n <= npages; n++) {
-                page = ll_get_page(dir, n);
+                page = ll_get_dir_page(dir, n);
                 err = PTR_ERR(page);
                 if (IS_ERR(page))
                         goto out;
@@ -711,7 +719,7 @@ int ext2_empty_dir (struct inode * inode)
         for (i = 0; i < npages; i++) {
                 char *kaddr;
                 ext2_dirent * de;
-                page = ll_get_page(inode, i);
+                page = ll_get_dir_page(inode, i);
 
                 if (IS_ERR(page))
                         continue;

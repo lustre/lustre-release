@@ -4,7 +4,7 @@
 %define linuxdir @LINUX@
 %define portalsdir @PORTALS@
 %define portalslibdir @PORTALSLIB@
-Release: 0208282230chaos
+Release: 0301070810ltutor3
 
 Summary: Lustre Lite File System
 Name: lustre-lite
@@ -43,6 +43,14 @@ Group: Documentation
 %description -n lustre-doc
 Documentation and sample configuration files for Lustre
 
+%package -n lustre-ldap
+Summary: Configures openldap server for LDAP Lustre config database
+Group: Configuration
+Requires: openldap-servers, openldap-clients, python-ldap, 4Suite
+
+%description -n lustre-ldap
+Configures openldap server for LDAP Lustre config database
+
 %prep
 %setup -qn lustre-%{version}
 
@@ -62,10 +70,17 @@ rm -f lustre-source
 ln -s $RPM_BUILD_ROOT/usr/src lustre-source
 make distdir distdir=lustre-source/lustre-%{version}
 
+# ldap database directory
+mkdir -p $RPM_BUILD_ROOT/var/lib/ldap/lustre
+
 %files
 %attr(-, root, root) /usr/sbin/lmc
 %attr(-, root, root) /usr/sbin/lctl
 %attr(-, root, root) /usr/sbin/lconf
+%attr(-, root, root) /usr/sbin/llanalyze
+%attr(-, root, root) /usr/sbin/lfind
+%attr(-, root, root) /usr/sbin/lstripe
+%attr(-, root, root) /usr/sbin/mcreate
 %attr(-, root, root) /usr/lib/lustre/examples/llmount.sh
 %attr(-, root, root) /usr/lib/lustre/examples/llmountcleanup.sh
 %attr(-, root, root) /usr/lib/lustre/examples/llecho.sh
@@ -104,6 +119,14 @@ make distdir distdir=lustre-source/lustre-%{version}
 %files -n lustre-source
 %attr(-, root, root) /usr/src/lustre-%{version}
 
+%files -n lustre-ldap
+%attr(-, root, root) /etc/openldap/slapd-lustre.conf
+%attr(-, root, root) /etc/openldap/schema/lustre.schema
+%attr(-, root, root) /usr/lib/lustre/lustre2ldif.xsl
+%attr(-, root, root) /usr/lib/lustre/top.ldif
+%dir /var/lib/ldap/lustre
+%attr(700, ldap, ldap) /var/lib/ldap/lustre
+
 %post
 if [ ! -e /dev/obd ]; then
    mknod /dev/obd c 10 241
@@ -121,6 +144,20 @@ grep -q '/dev/lustre' /etc/modules.conf || \
 
 %postun
 depmod -ae || exit 0
+
+%post -n lustre-ldap
+if ! grep -q slapd-lustre /etc/openldap/slapd.conf; then 
+  echo "include /etc/openldap/slapd-lustre.conf" >> /etc/openldap/slapd.conf
+fi
+
+%postun -n lustre-ldap
+slapd=/etc/openldap/slapd.conf
+if grep -q slapd-lustre $slapd; then 
+   tmp=/tmp/lustre-ldap.$$
+   sed "/slapd-lustre/d" $slapd >> $tmp
+   cp $tmp $slapd
+   rm $tmp
+fi
 
 %clean
 #rm -rf $RPM_BUILD_ROOT

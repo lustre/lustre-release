@@ -1,3 +1,43 @@
+TBD
+	* version v0_5_20
+	* bug fixes
+	 - Fix ldlm_lock_match on the MDS to avoid matching remote locks (592)
+	 - Fix fsfilt_extN_readpage() to read a full page of directory
+	   entries, or fake the remainder if PAGE_SIZE != blocksize (500)
+         - Avoid extra mdc_getattr() in ll_intent_lock when possible (534, 604)
+	 - Fix imbalanced LOV object allocation and out-of-bound access (469)
+	 - Most intent operations were removed, in favour of a new RPC mode
+	   that does a single RPC to the server and bypasses most of the VFS
+	 - All LDLM resource ID arrays were removed in favour of ldlm_res_id
+	 - Aggressively cancel local locks on DLM servers
+	 - mds_reint_unlink sends EA to the client if it's the last nlink.
+	   client uses that EA to unlink OST objects.
+	 - mds_reint_{rename,unlink,link} were rewritten to take ordered locks
+	 - recursive symlinks were fixed (439)
+	 - fixed NULL deref in DEBUG_REQ
+	 - filter_update_lastobjid no longer calls sync, which annoyed extN
+	 - fixed multi-client small-writes to a single file problem (445)
+	 - fixed mtime updates during file writes (607)
+	 - fixed vector writes on obdfilter causing problems when ENOSPC (670)
+	 - fixed bug in obd_brw_read/write() (under guise of testing 367)
+	 - fixed Linux OST size reporting problem (444, 656)
+	 - OST now updates object mtime with writes or setattr (607, 619)
+	 - client verifies file size before zeroing page past EOF (445)
+	 - OST now writes last allocated objid to disk with allocation (108)
+	 - LOV on echo now works (409)
+	 * protocol changes
+	 - mds_reint_unlink sends a new buffer, with the EA included.  this
+	   buffer is only valid if body->valid & OBD_MD_FLEASIZE, which is only
+	   set if a regular file was being unlinked, and it was the last link
+	 - use PtlGet from the target for bulk writes (315)
+	 - OST now updates object mtime with writes or setattr (607, 619)
+	 - LDLM now has a grant-time callback to revalidate locked items, if
+	   necessary (604)
+	 - Many MDS operations were reorganized to combat race conditions
+	* other changes
+	 - Merge b_intel branch (updated lprocfs code) - now at /proc/fs/lustre
+	 - configure check to avoid gcc version 2.96 20000731-2.96-98) (606)
+
 2003-01-06  Andreas Dilger  <adilger@clusterfs.com>
 	* version v0_5_19
 	* bug fixes

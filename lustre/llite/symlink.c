@@ -101,8 +101,8 @@ static int ll_follow_link(struct dentry *dentry, struct nameidata *nd,
         }
 
         down(&lli->lli_open_sem);
-
         rc = ll_readlink_internal(inode, &request, &symname);
+        up(&lli->lli_open_sem);
         if (rc)
                 GOTO(out, rc);
 
@@ -113,15 +113,16 @@ static int ll_follow_link(struct dentry *dentry, struct nameidata *nd,
 
         rc = vfs_follow_link_it(nd, symname, it);
  out:
-        up(&lli->lli_open_sem);
         ptlrpc_req_finished(request);
 
         RETURN(rc);
 }
 
+extern int ll_inode_revalidate(struct dentry *dentry);
 extern int ll_setattr(struct dentry *de, struct iattr *attr);
 struct inode_operations ll_fast_symlink_inode_operations = {
         readlink:       ll_readlink,
         setattr:        ll_setattr,
-        follow_link2:    ll_follow_link
+        follow_link2:   ll_follow_link,
+        revalidate:     ll_inode_revalidate
 };

@@ -18,7 +18,7 @@
  *   along with Lustre; if not, write to the Free Software
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * Basic Lustre library routines. 
+ * Basic Lustre library routines.
  *
  */
 
@@ -59,20 +59,22 @@ struct obd_export;
 int target_handle_connect(struct ptlrpc_request *req);
 int target_handle_disconnect(struct ptlrpc_request *req);
 int target_handle_reconnect(struct lustre_handle *conn, struct obd_export *exp,
-                            char *cluuid);
+                            struct obd_uuid *cluuid);
 int client_obd_connect(struct lustre_handle *conn, struct obd_device *obd,
-                       obd_uuid_t cluuid, struct recovd_obd *recovd,
+                       struct obd_uuid *cluuid, struct recovd_obd *recovd,
                        ptlrpc_recovery_cb_t recover);
 int client_obd_disconnect(struct lustre_handle *conn);
 int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf);
 int client_obd_cleanup(struct obd_device * obddev);
-struct client_obd *client_conn2cli(struct lustre_handle *conn); 
-struct obd_device *client_tgtuuid2obd(char *tgtuuid);
+struct client_obd *client_conn2cli(struct lustre_handle *conn);
+struct obd_device *client_tgtuuid2obd(struct obd_uuid *tgtuuid);
 
 int target_revoke_connection(struct recovd_data *rd, int phase);
 
+int obd_self_statfs(struct obd_device *dev, struct statfs *sfs);
+
 /* l_lock.c */
-struct lustre_lock { 
+struct lustre_lock {
         int l_depth;
         struct task_struct *l_owner;
         struct semaphore l_sem;
@@ -131,9 +133,9 @@ static inline void ll_sleep(int t)
 /* FIXME: This needs to validate pointers and cookies */
 static inline void *lustre_handle2object(struct lustre_handle *handle)
 {
-        if (handle) 
+        if (handle)
                 return (void *)(unsigned long)(handle->addr);
-        return NULL; 
+        return NULL;
 }
 
 static inline void ldlm_object2handle(void *object, struct lustre_handle *handle)
@@ -279,7 +281,7 @@ static inline int obd_ioctl_is_invalid(struct obd_ioctl_data *data)
                 printk("OBD ioctl: inlbuf3 not 0 terminated\n");
                 return 1;
         }
-#endif 
+#endif
         return 0;
 }
 
@@ -457,8 +459,16 @@ static inline int obd_ioctl_getdata(char **buf, int *len, void *arg)
 #define OBD_IOC_RECOVD_FAILCONN        _IOWR('f', 136, long)
 
 #define OBD_IOC_DEC_FS_USE_COUNT       _IO  ('f', 139      )
+#define OBD_IOC_NO_TRANSNO             _IOW ('f', 140, long)
+#define OBD_IOC_SET_READONLY           _IOW ('f', 141, long)
 
 #define OBD_GET_VERSION                _IOWR ('f', 144, long)
+
+#define ECHO_IOC_GET_STRIPE            _IOWR('f', 200, long)
+#define ECHO_IOC_SET_STRIPE            _IOWR('f', 201, long)
+#define ECHO_IOC_ENQUEUE               _IOWR('f', 202, long)
+#define ECHO_IOC_CANCEL                _IOWR('f', 203, long)
+
 
 /*
  * l_wait_event is a flexible sleeping function, permitting simple caller
@@ -466,7 +476,7 @@ static inline int obd_ioctl_getdata(char **buf, int *len, void *arg)
  * be performed in the event of either exception.
  *
  * Common usage looks like this:
- * 
+ *
  * struct l_wait_info lwi = LWI_TIMEOUT_INTR(timeout, timeout_handler,
  *                                           intr_handler, callback_data);
  * rc = l_wait_event(waitq, condition, &lwi);

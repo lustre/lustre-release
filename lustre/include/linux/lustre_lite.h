@@ -62,7 +62,9 @@ struct ll_inode_info {
 #endif
 };
 
-
+/* interpet return codes from intent lookup */
+#define LL_LOOKUP_POSITIVE 1
+#define LL_LOOKUP_NEGATIVE 2
 
 #define LL_SUPER_MAGIC 0x0BD00BD0
 
@@ -73,7 +75,7 @@ struct ll_inode_info {
 #define LL_SBI_NOLCK   0x1
 
 struct ll_sb_info {
-        obd_uuid_t                ll_sb_uuid;
+        struct obd_uuid           ll_sb_uuid;
         struct lustre_handle      ll_mdc_conn;
         struct lustre_handle      ll_osc_conn;
         struct proc_dir_entry*    ll_proc_root;
@@ -120,6 +122,28 @@ static inline struct ll_sb_info *ll_i2sbi(struct inode *inode)
         return ll_s2sbi(inode->i_sb);
 }
 
+static inline void d_unhash_aliases(struct inode *inode)
+{
+        struct dentry *dentry = NULL;
+        struct list_head *tmp;
+        struct ll_sb_info *sbi = ll_i2sbi(inode);
+        ENTRY;
+
+        CDEBUG(D_INODE, "marking dentries for ino %lx/%x invalid\n",
+               inode->i_ino, inode->i_generation);
+
+        spin_lock(&dcache_lock);
+        list_for_each(tmp, &inode->i_dentry) {
+                dentry = list_entry(tmp, struct dentry, d_alias);
+
+                list_del_init(&dentry->d_hash);
+                dentry->d_flags |= DCACHE_LUSTRE_INVALID;
+                list_add(&dentry->d_hash, &sbi->ll_orphan_dentry_list);
+        }
+
+        spin_unlock(&dcache_lock);
+        EXIT;
+}
 
 // FIXME: replace the name of this with LL_I to conform to kernel stuff
 // static inline struct ll_inode_info *LL_I(struct inode *inode)
@@ -169,7 +193,6 @@ int ll_intent_lock(struct inode *parent, struct dentry **,
 
 /* dcache.c */
 void ll_intent_release(struct dentry *, struct lookup_intent *);
-int ll_set_dd(struct dentry *de);
 
 /****
 
@@ -220,14 +243,15 @@ extern struct inode_operations ll_dir_inode_operations;
 /* file.c */
 extern struct file_operations ll_file_operations;
 extern struct inode_operations ll_file_inode_operations;
+extern struct inode_operations ll_special_inode_operations;
 struct ldlm_lock;
-int ll_lock_callback(struct ldlm_lock *, struct ldlm_lock_desc *, void *data,
-                     __u32 data_len, int flag);
+int ll_lock_callback(struct ldlm_lock *, struct ldlm_lock_desc *, void *data, int flag);
 int ll_size_lock(struct inode *, struct lov_stripe_md *, obd_off start,
                  int mode, struct lustre_handle *);
 int ll_size_unlock(struct inode *, struct lov_stripe_md *, int mode,
                    struct lustre_handle *);
-int ll_file_size(struct inode *inode, struct lov_stripe_md *md);
+int ll_file_size(struct inode *inode, struct lov_stripe_md *md,
+                 struct lustre_handle *);
 int ll_create_objects(struct super_block *sb, obd_id id, uid_t uid,
                       gid_t gid, struct lov_stripe_md **lsmp);
 
@@ -237,7 +261,7 @@ struct page *ll_getpage(struct inode *inode, unsigned long offset,
 void ll_truncate(struct inode *inode);
 
 /* super.c */
-void ll_update_inode(struct inode *, struct mds_body *);
+void ll_update_inode(struct inode *, struct mds_body *, struct lov_mds_md *);
 
 /* symlink.c */
 extern struct inode_operations ll_fast_symlink_inode_operations;

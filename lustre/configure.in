@@ -1,7 +1,7 @@
 AC_INIT
 AC_CANONICAL_SYSTEM
 
-# Copyright (C) 2001  Cluster File Systems, Inc.
+# Copyright (C) 2001-2003 Cluster File Systems, Inc.
 #
 # This code is issued under the GNU General Public License.
 # See the file COPYING in this distribution
@@ -9,7 +9,29 @@ AC_CANONICAL_SYSTEM
 # Automake variables.  Steal the version number from lustre.spec.in.
 AM_INIT_AUTOMAKE(lustre, builtin([esyscmd], [sed -ne '/^%define version /{ s/.*version //; p; q; }' scripts/lustre.spec.in]))
 #AM_MAINTAINER_MODE
+
 AC_PROG_CC
+AC_MSG_CHECKING(for buggy compiler)
+CC_VERSION=`$CC -v 2>&1 | grep "^gcc version"`
+bad_cc() {
+	echo
+	echo "   '$CC_VERSION'"
+	echo "  has been known to generate bad code, "
+	echo "  please get an updated compiler."
+	AC_MSG_ERROR(sorry)
+}
+case "$CC_VERSION" in 
+	# ost_pack_niobuf putting 64bit NTOH temporaries on the stack
+	# without "sub    $0xc,%esp" to protect the stack from being
+	# stomped on by interrupts (bug 606)
+	"gcc version 2.96 20000731 (Red Hat Linux 7.1 2.96-98)")
+		bad_cc
+		;;
+	*)
+		AC_MSG_RESULT(no known problems)
+		;;
+esac
+
 AC_PROG_RANLIB
 
 # 

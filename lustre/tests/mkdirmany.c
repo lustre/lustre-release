@@ -27,7 +27,7 @@ int main(int argc, char ** argv)
 
         for (i=0 ; i < count ; i++) {
                 sprintf(dirname, "%s-%d", argv[1], i);
-                rc = mkdir(dirname, S_IFREG| 0444);
+                rc = mkdir(dirname, 0444);
                 if (rc) {
                         printf("mkdir(%s) error: %s\n",
                                dirname, strerror(errno));

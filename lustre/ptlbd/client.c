@@ -1,7 +1,8 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (c) 2002 Cluster File Systems, Inc.
+ *  Copyright (c) 2002, 2003 Cluster File Systems, Inc.
+ *   Author: Zach Brown <zab@clusterfs.com>
  *
  *   This file is part of Lustre, http://www.lustre.org.
  *
@@ -36,7 +37,7 @@ static int ptlbd_cl_setup(struct obd_device *obddev, obd_count len, void *buf)
         struct ptlbd_obd *ptlbd = &obddev->u.ptlbd;
         struct obd_import *imp = &ptlbd->bd_import;
         struct obd_ioctl_data* data = buf;
-        obd_uuid_t server_uuid;
+        struct obd_uuid server_uuid;
         ENTRY;
 
         if ( ptlbd->bd_import.imp_connection != NULL )
@@ -52,10 +53,9 @@ static int ptlbd_cl_setup(struct obd_device *obddev, obd_count len, void *buf)
                 RETURN(-EINVAL);
         }
 
-        memcpy(server_uuid, data->ioc_inlbuf1, MIN(data->ioc_inllen1,
-                                                   sizeof(server_uuid)));
+        obd_str2uuid(&server_uuid, data->ioc_inlbuf1);
 
-        imp->imp_connection = ptlrpc_uuid_to_connection(server_uuid);
+        imp->imp_connection = ptlrpc_uuid_to_connection(&server_uuid);
         if (!imp->imp_connection)
                 RETURN(-ENOENT);
 
@@ -69,7 +69,6 @@ static int ptlbd_cl_setup(struct obd_device *obddev, obd_count len, void *buf)
         INIT_LIST_HEAD(&imp->imp_chain);
         imp->imp_last_xid = 0;
         imp->imp_max_transno = 0;
-        imp->imp_peer_last_xid = 0;
         imp->imp_peer_committed_transno = 0;
         imp->imp_level = LUSTRE_CONN_FULL;
 
@@ -95,7 +94,7 @@ static int ptlbd_cl_cleanup(struct obd_device *obddev)
 
 #if 0
 static int ptlbd_cl_connect(struct lustre_handle *conn, struct obd_device *obd,
-                        obd_uuid_t cluuid, struct recovd_obd *recovd,
+                        struct obd_uuid cluuid, struct recovd_obd *recovd,
                         ptlrpc_recovery_cb_t recover)
 {
         struct ptlbd_obd *ptlbd = &obd->u.ptlbd;
@@ -104,7 +103,7 @@ static int ptlbd_cl_connect(struct lustre_handle *conn, struct obd_device *obd,
         ENTRY;
 
         rc = class_connect(conn, obd, cluuid);
-        if (rc) 
+        if (rc)
                 RETURN(rc);
 
         INIT_LIST_HEAD(&imp->imp_chain);
@@ -130,9 +129,10 @@ static struct obd_ops ptlbd_cl_obd_ops = {
 
 int ptlbd_cl_init(void)
 {
-        extern struct lprocfs_vars status_class_var[];
+        struct lprocfs_static_vars lvars;
 
-        return class_register_type(&ptlbd_cl_obd_ops, status_class_var,
+        lprocfs_init_vars(&lvars);
+        return class_register_type(&ptlbd_cl_obd_ops, lvars.module_vars,
                                    OBD_PTLBD_CL_DEVICENAME);
 }
 

@@ -23,6 +23,8 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
+#error "FIXME: this needs to be updated to match fsfilt_extN.c"
+
 #define DEBUG_SUBSYSTEM S_FILTER
 
 #include <linux/fs.h>
@@ -269,6 +271,11 @@ static int fsfilt_ext3_statfs(struct super_block *sb, struct statfs *sfs)
         return rc;
 }
 
+static int fsfilt_ext3_sync(struct super_block *sb)
+{
+        return ext3_force_commit(sb);
+}
+
 static struct fsfilt_operations fsfilt_ext3_ops = {
         fs_type:                "ext3",
         fs_owner:               THIS_MODULE,
@@ -281,6 +288,7 @@ static struct fsfilt_operations fsfilt_ext3_ops = {
         fs_journal_data:        fsfilt_ext3_journal_data,
         fs_set_last_rcvd:       fsfilt_ext3_set_last_rcvd,
         fs_statfs:              fsfilt_ext3_statfs,
+        fs_sync:                fsfilt_ext3_sync,
 };
 
 static int __init fsfilt_ext3_init(void)

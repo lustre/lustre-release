@@ -1,7 +1,7 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (c) 2001, 2002 Cluster File Systems, Inc.
+ *  Copyright (c) 2001-2003 Cluster File Systems, Inc.
  *
  *   This file is part of Lustre, http://www.lustre.org.
  *
@@ -36,6 +36,8 @@ kmem_cache_t *import_cachep = NULL;
 kmem_cache_t *export_cachep = NULL;
 
 int (*ptlrpc_put_connection_superhack)(struct ptlrpc_connection *c);
+void (*ptlrpc_abort_inflight_superhack)(struct obd_import *imp,
+                                        int dying_import);
 
 /*
  * support functions: we could use inter-module communication, but this
@@ -87,7 +89,7 @@ int class_register_type(struct obd_ops *ops, struct lprocfs_vars *vars,
                         char *name)
 {
         struct obd_type *type;
-        int rc;
+        int rc = 0;
         ENTRY;
 
         LASSERT(strnlen(name, 1024) < 1024);    /* sanity check */
@@ -111,10 +113,13 @@ int class_register_type(struct obd_ops *ops, struct lprocfs_vars *vars,
         strcpy(type->typ_name, name);
         list_add(&type->typ_chain, &obd_types);
 
-        rc = lprocfs_reg_class(type, vars, type);
-        if (rc != 0) {
+        type->typ_procroot = lprocfs_register(type->typ_name, proc_lustre_root,
+                                              vars, type);
+        if (IS_ERR(type->typ_procroot)) {
+                rc = PTR_ERR(type->typ_procroot);
+                type->typ_procroot = NULL;
                 list_del(&type->typ_chain);
-                GOTO(failed, rc);
+                GOTO (failed, rc);
         }
 
         RETURN (0);
@@ -144,8 +149,11 @@ int class_unregister_type(char *name)
                 OBD_FREE(type->typ_ops, sizeof(*type->typ_ops));
                 RETURN(-EBUSY);
         }
-        if(type->typ_procroot)
-                lprocfs_dereg_class(type);
+
+        if (type->typ_procroot) {
+                lprocfs_remove(type->typ_procroot);
+                type->typ_procroot = NULL;
+        }
 
         list_del(&type->typ_chain);
         OBD_FREE(type->typ_name, strlen(name) + 1);
@@ -174,14 +182,14 @@ int class_name2dev(char *name)
         return res;
 }
 
-int class_uuid2dev(char *uuid)
+int class_uuid2dev(struct obd_uuid *uuid)
 {
         int res = -1;
         int i;
 
         for (i = 0; i < MAX_OBD_DEVICES; i++) {
                 struct obd_device *obd = &obd_dev[i];
-                if (strncmp(uuid, obd->obd_uuid, sizeof(obd->obd_uuid)) == 0) {
+                if (strncmp(uuid->uuid, obd->obd_uuid.uuid, sizeof(obd->obd_uuid.uuid)) == 0) {
                         res = i;
                         return res;
                 }
@@ -191,13 +199,13 @@ int class_uuid2dev(char *uuid)
 }
 
 
-struct obd_device *class_uuid2obd(char *uuid)
+struct obd_device *class_uuid2obd(struct obd_uuid *uuid)
 {
         int i;
 
         for (i = 0; i < MAX_OBD_DEVICES; i++) {
                 struct obd_device *obd = &obd_dev[i];
-                if (strncmp(uuid, obd->obd_uuid, sizeof(obd->obd_uuid)) == 0)
+                if (strncmp(uuid->uuid, obd->obd_uuid.uuid, sizeof(obd->obd_uuid.uuid)) == 0)
                         return obd;
         }
 
@@ -353,6 +361,12 @@ void class_destroy_export(struct obd_export *exp)
                 ptlrpc_put_connection_superhack(exp->exp_connection);
         }
 
+        /* Abort any inflight DLM requests and NULL out their (about to be
+         * freed) import. */
+        if (exp->exp_ldlm_data.led_import.imp_obd)
+                ptlrpc_abort_inflight_superhack(&exp->exp_ldlm_data.led_import,
+                                                1);
+
         exp->exp_cookie = DEAD_HANDLE_MAGIC;
         kmem_cache_free(export_cachep, exp);
 
@@ -362,7 +376,7 @@ void class_destroy_export(struct obd_export *exp)
 /* a connection defines an export context in which preallocation can
    be managed. */
 int class_connect(struct lustre_handle *conn, struct obd_device *obd,
-                  obd_uuid_t cluuid)
+                  struct obd_uuid *cluuid)
 {
         struct obd_export * export;
         if (conn == NULL) {
@@ -375,12 +389,18 @@ int class_connect(struct lustre_handle *conn, struct obd_device *obd,
                 return -EINVAL;
         }
 
+        if (cluuid == NULL) {
+                LBUG();
+                return -EINVAL;
+        }
+
         export = class_new_export(obd);
         if (!export)
                 return -ENOMEM;
 
         conn->addr = (__u64) (unsigned long)export;
         conn->cookie = export->exp_cookie;
+        memcpy(&export->exp_client_uuid, cluuid, sizeof(export->exp_client_uuid));
 
         CDEBUG(D_IOCTL, "connect: addr %Lx cookie %Lx\n",
                (long long)conn->addr, (long long)conn->cookie);
@@ -427,7 +447,7 @@ void class_disconnect_all(struct obd_device *obddev)
                         CERROR("force disconnecting %s:%s export %p\n",
                                export->exp_obd->obd_type->typ_name,
                                export->exp_connection ?
-                               (char *)export->exp_connection->c_remote_uuid :
+                               (char *)export->exp_connection->c_remote_uuid.uuid :
                                "<unconnected>", export);
                         rc = obd_disconnect(&conn);
                         if (rc < 0) {

@@ -60,6 +60,8 @@ static int obd_sctl_reset( ctl_table * table, int write, struct file
 #define OBD_TIMEOUT         6       /* RPC timeout before recovery/intr */
 /* XXX move to /proc/sys/lustre/recovery? */
 #define OBD_UPCALL          7       /* path to recovery upcall */
+/* XXX temporary, as we play with sync osts.. */
+#define OBD_SYNCFILTER      8
 
 #define OBD_VARS_SLOT       2
 
@@ -72,6 +74,8 @@ static ctl_table obd_table[] = {
         /* XXX need to lock so we avoid update races with the recovery upcall! */
         {OBD_UPCALL, "recovery_upcall", obd_recovery_upcall, 128, 0644, NULL,
          &proc_dostring, &sysctl_string },
+        {OBD_SYNCFILTER, "filter_sync_on_commit", &obd_sync_filter, sizeof(int),
+                0644, NULL, &proc_dointvec},
 	{ 0 }
 };
 

@@ -18,6 +18,7 @@ EXTN_FIXES = patch-2.4.18-chaos22
 EXTNP = htree-ext3-2.4.18.diff linux-2.4.18ea-0.8.26.diff
 EXTNP+= ext3-2.4.18-ino_sb_macro.diff extN-misc-fixup.diff extN-noread.diff
 EXTNP+= extN-wantedi.diff
+#EXTNP+= extN-iget-debug.diff
 EXTNC = balloc.c bitmap.c dir.c file.c fsync.c ialloc.c inode.c ioctl.c
 EXTNC+= namei.c super.c symlink.c
 EXTNI = extN_fs.h extN_fs_i.h extN_fs_sb.h extN_jbd.h quotaops.h
@@ -107,18 +108,21 @@ patch-stamp: sed-stamp $(EXTNP)
 	list='$(EXTN_EXTRA)'; for f in $$list; do $(RM) $(top_builddir)/$$f; done
 	if [ -f $(srcdir)/extN.patch-$(RELEASE) ]; then                       \
 	  echo "applying patch $(srcdir)/extN.patch-$(RELEASE)";              \
-	  (cd $(top_builddir) && patch -p0) < $(srcdir)/extN.patch-$(RELEASE);  \
+	  (cd $(top_builddir) && patch -p0) < $(srcdir)/extN.patch-$(RELEASE);\
 	else                                                                  \
-	  echo "If first patch fails, read NOTE in extN/Makefile.am";         \
 	  list='$(EXTNP)'; \
-	  sed '/i_version/q' $(extN_orig)/namei.c | tail -2 |          \
-	    grep extN_mark_inode_dirty >/dev/null && list="$(EXTN_FIXES) $$list"; \
+	  grep -q "err = extN_mark_inode_dirty" $(extN_orig)/namei.c ||       \
+	    list="ext3-use-after-free.diff $$list";                           \
+	  sed '/i_version/q' $(extN_orig)/namei.c | tail -2 |                 \
+	    grep -q extN_mark_inode_dirty && list="$(EXTN_FIXES) $$list";     \
+	  grep -q "if (do_sync_supers)" $(extN_orig)/super.c &&               \
+	    list="ext3-unmount_sync.diff $$list";                             \
 	  for p in $$list; do                                                 \
 	    echo "applying patch $$p";                                        \
 	    sed $(SUB) $(srcdir)/$$p |                                        \
-	      (cd $(top_builddir) && patch -p1) || exit $$?;                    \
+	      (cd $(top_builddir) && patch -p1) || exit $$?;                  \
 	  done;                                                               \
-	  echo "It is OK if the next patch says it is already applied";       \
+	  echo "It is OK if the next patch says it is skipping this patch";   \
 	  echo "applying patch $(srcdir)/extN-2.4.18-exports.diff";           \
 	  (cd $(top_builddir) &&                                              \
 	    patch -N -p1) < $(srcdir)/extN-2.4.18-exports.diff;               \

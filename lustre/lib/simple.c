@@ -1,15 +1,24 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  lib/simple.c
+ * Copyright (C) 2002, 2003 Cluster File Systems, Inc.
+ *  Author: Peter Braam <braam@clusterfs.com>
+ *  Aurhot: Andreas Dilger <adilger@clusterfs.com>
  *
- * Copyright (C) 2002  Cluster File Systems, Inc.
+ *   This file is part of Lustre, http://www.lustre.org.
  *
- * This code is issued under the GNU General Public License.
- * See the file COPYING in this distribution
+ *   Lustre is free software; you can redistribute it and/or
+ *   modify it under the terms of version 2 of the GNU General Public
+ *   License as published by the Free Software Foundation.
  *
- * by Peter Braam <braam@clusterfs.com>
- * and Andreas Dilger <adilger@clusterfs.com>
+ *   Lustre is distributed in the hope that it will be useful,
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   GNU General Public License for more details.
+ *
+ *   You should have received a copy of the GNU General Public License
+ *   along with Lustre; if not, write to the Free Software
+ *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
 #define EXPORT_SYMTAB
@@ -71,6 +80,8 @@ void push_ctxt(struct obd_run_ctxt *save, struct obd_run_ctxt *new_ctx,
                 current->fsuid = uc->ouc_fsuid;
                 current->fsgid = uc->ouc_fsgid;
                 current->cap_effective = uc->ouc_cap;
+                if (uc->ouc_suppgid != -1)
+                        current->groups[current->ngroups++] = uc->ouc_suppgid;
         }
         set_fs(new_ctx->fs);
         set_fs_pwd(current->fs, new_ctx->pwdmnt, new_ctx->pwd);
@@ -115,6 +126,9 @@ void pop_ctxt(struct obd_run_ctxt *saved, struct obd_run_ctxt *new_ctx,
                 current->fsuid = saved->fsuid;
                 current->fsgid = saved->fsgid;
                 current->cap_effective = saved->cap;
+
+                if (uc->ouc_suppgid != -1)
+                        current->ngroups--;
         }
 
         /*
@@ -135,7 +149,6 @@ struct dentry *simple_mknod(struct dentry *dir, char *name, int mode)
         ASSERT_KERNEL_CTXT("kernel doing mknod outside kernel context\n");
         CDEBUG(D_INODE, "creating file %*s\n", (int)strlen(name), name);
 
-        down(&dir->d_inode->i_sem);
         dchild = lookup_one_len(name, dir, strlen(name));
         if (IS_ERR(dchild))
                 GOTO(out_up, dchild);
@@ -151,14 +164,12 @@ struct dentry *simple_mknod(struct dentry *dir, char *name, int mode)
         if (err)
                 GOTO(out_err, err);
 
-        up(&dir->d_inode->i_sem);
         RETURN(dchild);
 
 out_err:
         dput(dchild);
         dchild = ERR_PTR(err);
 out_up:
-        up(&dir->d_inode->i_sem);
         return dchild;
 }
 
@@ -171,7 +182,6 @@ struct dentry *simple_mkdir(struct dentry *dir, char *name, int mode)
 
         ASSERT_KERNEL_CTXT("kernel doing mkdir outside kernel context\n");
         CDEBUG(D_INODE, "creating directory %*s\n", (int)strlen(name), name);
-        down(&dir->d_inode->i_sem);
         dchild = lookup_one_len(name, dir, strlen(name));
         if (IS_ERR(dchild))
                 GOTO(out_up, dchild);
@@ -187,14 +197,12 @@ struct dentry *simple_mkdir(struct dentry *dir, char *name, int mode)
         if (err)
                 GOTO(out_err, err);
 
-        up(&dir->d_inode->i_sem);
         RETURN(dchild);
 
 out_err:
         dput(dchild);
         dchild = ERR_PTR(err);
 out_up:
-        up(&dir->d_inode->i_sem);
         return dchild;
 }
 

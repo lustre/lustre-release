@@ -3,15 +3,23 @@
  *
  * Portal-RPC reconnection and replay operations, for use in recovery.
  *
- * This code is issued under the GNU General Public License.
- * See the file COPYING in this distribution
+ *  Copyright (c) 2002, 2003 Cluster File Systems, Inc.
+ *   Author: Mike Shaver <shaver@clusterfs.com>
  *
- * Copyright (C) 1996 Peter J. Braam <braam@stelias.com>
- * Copyright (C) 1999 Stelias Computing Inc. <braam@stelias.com>
- * Copyright (C) 1999 Seagate Technology Inc.
- * Copyright (C) 2001 Mountain View Data, Inc.
- * Copyright (C) 2002 Cluster File Systems, Inc.
+ *   This file is part of Lustre, http://www.lustre.org.
  *
+ *   Lustre is free software; you can redistribute it and/or
+ *   modify it under the terms of version 2 of the GNU General Public
+ *   License as published by the Free Software Foundation.
+ *
+ *   Lustre is distributed in the hope that it will be useful,
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   GNU General Public License for more details.
+ *
+ *   You should have received a copy of the GNU General Public License
+ *   along with Lustre; if not, write to the Free Software
+ *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
 #include <linux/config.h>
@@ -30,18 +38,18 @@ int ptlrpc_reconnect_import(struct obd_import *imp, int rq_opc,
         struct obd_device *obd = imp->imp_obd;
         struct client_obd *cli = &obd->u.cli;
         int size[] = { sizeof(cli->cl_target_uuid), sizeof(obd->obd_uuid) };
-        char *tmp[] = {cli->cl_target_uuid, obd->obd_uuid };
+        char *tmp[] = {cli->cl_target_uuid.uuid, obd->obd_uuid.uuid};
         struct ptlrpc_connection *conn = imp->imp_connection;
-        struct lustre_handle old_hdl;
-        struct ptlrpc_request *request;
+        struct ptlrpc_request *req;
         struct obd_export *ldlmexp;
+        struct lustre_handle old_hdl;
         int rc;
 
-        request = ptlrpc_prep_req(imp, rq_opc, 2, size, tmp);
-        if (!request)
+        req = ptlrpc_prep_req(imp, rq_opc, 2, size, tmp);
+        if (!req)
                 RETURN(-ENOMEM);
-        request->rq_level = LUSTRE_CONN_NEW;
-        request->rq_replen = lustre_msg_size(0, NULL);
+        req->rq_level = LUSTRE_CONN_NEW;
+        req->rq_replen = lustre_msg_size(0, NULL);
         /*
          * This address is the export that represents our client-side LDLM
          * service (for ASTs).  We should only have one on this list, so we
@@ -51,58 +59,59 @@ int ptlrpc_reconnect_import(struct obd_import *imp, int rq_opc,
          */
         ldlmexp = list_entry(obd->obd_exports.next, struct obd_export,
                              exp_obd_chain);
-        request->rq_reqmsg->addr = (__u64)(unsigned long)ldlmexp;
-        request->rq_reqmsg->cookie = ldlmexp->exp_cookie;
-        rc = ptlrpc_queue_wait(request);
-        switch (rc) {
-            case EALREADY:
-            case -EALREADY:
-                /* already connected! */
+        req->rq_reqmsg->addr = (__u64)(unsigned long)ldlmexp;
+        req->rq_reqmsg->cookie = ldlmexp->exp_cookie;
+        rc = ptlrpc_queue_wait(req);
+        if (rc) {
+                CERROR("cannot connect to %s@%s: rc = %d\n",
+                       cli->cl_target_uuid.uuid, conn->c_remote_uuid.uuid, rc);
+                GOTO(out_disc, rc);
+        }
+        if (lustre_msg_get_op_flags(req->rq_repmsg) & MSG_CONNECT_RECONNECT) {
                 memset(&old_hdl, 0, sizeof(old_hdl));
-                if (!memcmp(&old_hdl.addr, &request->rq_repmsg->addr,
+                if (!memcmp(&old_hdl.addr, &req->rq_repmsg->addr,
                             sizeof (old_hdl.addr)) &&
-                    !memcmp(&old_hdl.cookie, &request->rq_repmsg->cookie,
+                    !memcmp(&old_hdl.cookie, &req->rq_repmsg->cookie,
                             sizeof (old_hdl.cookie))) {
-                        CERROR("%s@%s didn't like our handle "LPX64"/"LPX64", failed\n",
-                               cli->cl_target_uuid, conn->c_remote_uuid,
+                        CERROR("%s@%s didn't like our handle "LPX64"/"LPX64
+                               ", failed\n", cli->cl_target_uuid.uuid,
+                               conn->c_remote_uuid.uuid,
                                (__u64)(unsigned long)ldlmexp,
                                ldlmexp->exp_cookie);
                         GOTO(out_disc, rc = -ENOTCONN);
                 }
 
-                old_hdl.addr = request->rq_repmsg->addr;
-                old_hdl.cookie = request->rq_repmsg->cookie;
+                old_hdl.addr = req->rq_repmsg->addr;
+                old_hdl.cookie = req->rq_repmsg->cookie;
                 if (memcmp(&imp->imp_handle, &old_hdl, sizeof(old_hdl))) {
-                        CERROR("%s@%s changed handle from "LPX64"/"LPX64" to "LPX64"/"LPX64"; "
+                        CERROR("%s@%s changed handle from "LPX64"/"LPX64
+                               " to "LPX64"/"LPX64"; "
                                "copying, but this may foreshadow disaster\n",
-                               cli->cl_target_uuid, conn->c_remote_uuid,
+                               cli->cl_target_uuid.uuid, 
+                               conn->c_remote_uuid.uuid,
                                old_hdl.addr, old_hdl.cookie,
                                imp->imp_handle.addr, imp->imp_handle.cookie);
-                        imp->imp_handle.addr = request->rq_repmsg->addr;
-                        imp->imp_handle.cookie = request->rq_repmsg->cookie;
-                        GOTO(out_disc, rc = EALREADY);
+                        imp->imp_handle.addr = req->rq_repmsg->addr;
+                        imp->imp_handle.cookie = req->rq_repmsg->cookie;
+                        GOTO(out_disc, rc = 0);
                 }
 
                 CERROR("reconnected to %s@%s after partition\n",
-                       cli->cl_target_uuid, conn->c_remote_uuid);
-                GOTO(out_disc, rc = EALREADY);
-            case 0:
-                old_hdl = imp->imp_handle;
-                imp->imp_handle.addr = request->rq_repmsg->addr;
-                imp->imp_handle.cookie = request->rq_repmsg->cookie;
-                CERROR("now connected to %s@%s ("LPX64"/"LPX64", was "LPX64"/"LPX64")!\n",
-                       cli->cl_target_uuid, conn->c_remote_uuid,
-                       imp->imp_handle.addr, imp->imp_handle.cookie,
-                       old_hdl.addr, old_hdl.cookie);
+                       cli->cl_target_uuid.uuid, conn->c_remote_uuid.uuid);
                 GOTO(out_disc, rc = 0);
-            default:
-                CERROR("cannot connect to %s@%s: rc = %d\n",
-                       cli->cl_target_uuid, conn->c_remote_uuid, rc);
-                GOTO(out_disc, rc = -ENOTCONN); /* XXX preserve rc? */
         }
 
+        old_hdl = imp->imp_handle;
+        imp->imp_handle.addr = req->rq_repmsg->addr;
+        imp->imp_handle.cookie = req->rq_repmsg->cookie;
+        CERROR("reconnected to %s@%s ("LPX64"/"LPX64", was "LPX64"/"
+               LPX64")!\n", cli->cl_target_uuid.uuid, conn->c_remote_uuid.uuid,
+               imp->imp_handle.addr, imp->imp_handle.cookie,
+               old_hdl.addr, old_hdl.cookie);
+        GOTO(out_disc, rc = 0);
+
  out_disc:
-        *reqptr = request;
+        *reqptr = req;
         return rc;
 }
 
@@ -114,7 +123,7 @@ int ptlrpc_run_recovery_upcall(struct ptlrpc_connection *conn)
 
         ENTRY;
         argv[0] = obd_recovery_upcall;
-        argv[1] = conn->c_remote_uuid;
+        argv[1] = conn->c_remote_uuid.uuid;
         argv[2] = NULL;
 
         envp[0] = "HOME=/";
@@ -156,7 +165,7 @@ int ptlrpc_replay(struct obd_import *imp)
         ptlrpc_free_committed(imp);
 
         CDEBUG(D_HA, "import %p from %s has committed "LPD64"\n",
-               imp, imp->imp_obd->u.cli.cl_target_uuid, committed);
+               imp, imp->imp_obd->u.cli.cl_target_uuid.uuid, committed);
 
         list_for_each(tmp, &imp->imp_replay_list) {
                 req = list_entry(tmp, struct ptlrpc_request, rq_list);

@@ -65,7 +65,7 @@ struct ptlrpc_service *
 ptlrpc_init_svc(__u32 nevents, __u32 nbufs,
                 __u32 bufsize, __u32 max_req_size,
                 int req_portal, int rep_portal,
-                obd_uuid_t uuid, svc_handler_t handler, char *name)
+                struct obd_uuid *uuid, svc_handler_t handler, char *name)
 {
         int err;
         int rc, i;
@@ -91,9 +91,10 @@ ptlrpc_init_svc(__u32 nevents, __u32 nbufs,
         service->srv_req_portal = req_portal;
         service->srv_handler = handler;
 
-        err = kportal_uuid_to_peer(uuid, &service->srv_self);
+        err = kportal_uuid_to_peer(uuid->uuid, &service->srv_self);
         if (err) {
-                CERROR("%s: cannot get peer for uuid '%s'\n", name, uuid);
+                CERROR("%s: cannot get peer for uuid '%s'\n", name, 
+                       uuid->uuid);
                 OBD_FREE(service, sizeof(*service));
                 RETURN(NULL);
         }
@@ -165,13 +166,13 @@ static int handle_incoming_request(struct obd_device *obddev,
 
         if (request->rq_reqlen < sizeof(struct lustre_msg)) {
                 CERROR("incomplete request (%d): ptl %d from "LPX64" xid "
-                       LPD64"\n",
+                       LPU64"\n",
                        request->rq_reqlen, svc->srv_req_portal,
                        event->initiator.nid, request->rq_xid);
                 goto out;
         }
 
-        CDEBUG(D_RPCTRACE, "Handling RPC pid:xid:nid:opc %d:"LPX64":"LPX64":%d\n",
+        CDEBUG(D_RPCTRACE, "Handling RPC pid:xid:nid:opc %d:"LPU64":"LPX64":%d\n",
                NTOH__u32(request->rq_reqmsg->status),
                request->rq_xid,
                event->initiator.nid,

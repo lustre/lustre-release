@@ -56,6 +56,7 @@ struct fsfilt_operations {
         int     (* fs_set_last_rcvd)(struct obd_device *obd, __u64 last_rcvd,
                                      void *handle, fsfilt_cb_t cb_func);
         int     (* fs_statfs)(struct super_block *sb, struct obd_statfs *osfs);
+        int     (* fs_sync)(struct super_block *sb);
 };
 
 extern int fsfilt_register_ops(struct fsfilt_operations *fs_ops);
@@ -144,6 +145,11 @@ static inline int fsfilt_statfs(struct obd_device *obd, struct super_block *fs,
                                 struct obd_statfs *osfs)
 {
         return obd->obd_fsops->fs_statfs(fs, osfs);
+}
+
+static inline int fsfilt_sync(struct obd_device *obd, struct super_block *fs)
+{
+        return obd->obd_fsops->fs_sync(fs);
 }
 
 #endif /* __KERNEL__ */

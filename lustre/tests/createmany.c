@@ -8,15 +8,23 @@
 #include <unistd.h>
 #include <stdlib.h>
 
+void usage(char *prog)
+{
+	printf("usage: %s {-o|-m} filenamefmt count\n", prog);
+	printf("       %s {-o|-m} filenamefmt -seconds\n", prog);
+	printf("       %s {-o|-m} filenamefmt start count\n", prog);
+}
+
 int main(int argc, char ** argv)
 {
         int i, rc = 0, do_open;
+        char format[4096], *fmt;
         char filename[4096];
-        long int start, last, end, count;
+        long start, last, end;
+	long begin = 0, count;
 
-        if (argc != 4) {
-                printf("Usage %s <-o|-m> filenamebase <count|-time>\n",
-                       argv[0]);
+        if (argc < 4 || argc > 5) {
+		usage(argv[0]);
                 return 1;
         }
 
@@ -25,8 +33,7 @@ int main(int argc, char ** argv)
         } else if (strcmp(argv[1], "-m") == 0) {
                 do_open = 0;
         } else {
-                printf("Usage %s {-o|-m} filenamebase <count|-time>\n",
-                       argv[0]);
+		usage(argv[0]);
                 return 1;
         }
 
@@ -37,18 +44,29 @@ int main(int argc, char ** argv)
 
         start = last = time(0);
 
-        end = strtol(argv[3], NULL, 0);
+	if (argc == 4) {
+		end = strtol(argv[3], NULL, 0);
+		if (end > 0) {
+			count = end;
+			end = -1UL >> 1;
+		} else {
+			end = start - end;
+			count = -1UL >> 1;
+		}
+	} else {
+		end = -1UL >> 1;
+		begin = strtol(argv[3], NULL, 0);
+		count = strtol(argv[4], NULL, 0);
+	}
 
-        if (end > 0) {
-                count = end;
-                end = -1UL >> 1;
-        } else {
-                end = start - end;
-                count = -1UL >> 1;
-        }
-
-        for (i = 0; i < count && time(0) < end; i++) {
-                sprintf(filename, "%s%d", argv[2], i);
+	if (strchr(argv[2], '%'))
+		fmt = argv[2];
+	else {
+		sprintf(format, "%s%%d", argv[2]);
+		fmt = format;
+	}
+        for (i = 0; i < count && time(0) < end; i++, begin++) {
+                sprintf(filename, fmt, begin);
                 if (do_open) {
                         int fd = open(filename, O_CREAT|O_RDWR, 0644);
                         if (fd < 0) {

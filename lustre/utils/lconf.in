@@ -25,9 +25,14 @@
 # Based in part on the XML obdctl modifications done by Brian Behlendorf 
 
 import sys, getopt, types
-import string, os, stat, popen2, socket, time, random, fcntl, FCNTL, select
+import string, os, stat, popen2, socket, time, random, fcntl, select
 import re, exceptions
 import xml.dom.minidom
+
+if sys.version[0] == '1':
+    from FCNTL import F_GETFL, F_SETFL
+else:
+    from fcntl import F_GETFL, F_SETFL
 
 # Global parameters
 TCP_ACCEPTOR = ''
@@ -72,7 +77,7 @@ config.xml          Lustre configuration in xml format.
                     Levels are aproximatly like:
                             10 - network
                             20 - device, ldlm
-                            30 - obd, mdd
+                            30 - osd, mdd
                             40 - mds, ost
                             50 - mdc, osc
                             60 - lov
@@ -294,8 +299,8 @@ class LCTLInterface:
                 raise CommandError('lctl', "unable to find lctl binary.")
 
     def set_nonblock(self, fd):
-        fl = fcntl.fcntl(fd, FCNTL.F_GETFL)
-        fcntl.fcntl(fd, FCNTL.F_SETFL, fl | os.O_NDELAY)
+        fl = fcntl.fcntl(fd, F_GETFL)
+        fcntl.fcntl(fd, F_SETFL, fl | os.O_NDELAY)
 
     def run(self, cmds):
         """
@@ -464,8 +469,8 @@ class LCTLInterface:
         cmds = """
   ignore_errors
   device $%s
-  cleanup
-  detach %s
+  cleanup %s
+  detach
   quit""" % (name, ('', 'force')[config.force()])
         self.run(cmds)
 
@@ -575,23 +580,20 @@ def is_block(path):
 
 # build fs according to type
 # fixme: dangerous
-def mkfs(fstype, dev):
+def mkfs(dev, devsize, fstype):
+    block_cnt = ''
+    if devsize:
+        # devsize is in 1k, and fs block count is in 4k
+        block_cnt = devsize/4
+
     if(fstype in ('ext3', 'extN')):
-        mkfs = 'mkfs.ext2 -j -b 4096'
+        mkfs = 'mkfs.ext2 -j -b 4096 -F '
     elif (fstype == 'reiserfs'):
-        mkfs = 'mkfs.reiserfs -f'
+        mkfs = 'mkreiserfs -ff'
     else:
         print 'unsupported fs type: ', fstype
-    if not is_block(dev):
-        if(fstype in ('ext3', 'extN')):
-            force = '-F'
-        elif (fstype == 'reiserfs'):
-            force = ''
-        else:
-            print 'unsupported fs type: ', fstype
-    else:
-        force = ''
-    (ret, out) = run (mkfs, force, dev)
+
+    (ret, out) = run (mkfs, dev, block_cnt)
     if ret:
         panic("Unable to build fs:", dev)
     # enable hash tree indexing on fsswe
@@ -676,7 +678,7 @@ def block_dev(dev, size, fstype, format):
     if not is_block(dev):
         dev = init_loop(dev, size, fstype)
     if config.reformat() or (need_format(fstype, dev) and format == 'yes'):
-        mkfs(fstype, dev)
+        mkfs(dev, size, fstype)
 
 #    else:
 #        panic("device:", dev,
@@ -869,14 +871,13 @@ class Network(Module):
             if not self.nid:
                 panic("unable to set nid for", self.net_type, self.nid)
             debug("nid:", self.nid)
-
         self.add_portals_module("linux/oslib", 'portals')
         if node_needs_router():
             self.add_portals_module("linux/router", 'kptlrouter')
         if self.net_type == 'tcp':
             self.add_portals_module("linux/socknal", 'ksocknal')
         if self.net_type == 'toe':
-            self.add_portals_odule("/linux/toenal", 'ktoenal')
+            self.add_portals_module("/linux/toenal", 'ktoenal')
         if self.net_type == 'elan':
             self.add_portals_module("/linux/rqswnal", 'kqswnal')
         if self.net_type == 'gm':
@@ -897,7 +898,7 @@ class Network(Module):
             lctl.add_route(net_type, gw, lo, hi)
             if net_type in ('tcp', 'toe') and net_type == self.net_type and hi == '':
                 srvdb = self.db.nid2server(lo)
-                if not srv:
+                if not srvdb:
                     panic("no server for nid", lo)
                 else:
                     srv = Network(srvdb)
@@ -905,14 +906,15 @@ class Network(Module):
 
             
         lctl.network(self.net_type, self.nid)
-        lctl.newdev(attach = "ptlrpc RPCDEV RPCDEV_UUID")
+        if not is_prepared("RPCDEV_UUID"):
+            lctl.newdev(attach = "ptlrpc RPCDEV RPCDEV_UUID")
 
     def cleanup(self):
         self.info(self.net_type, self.nid, self.port)
         for net_type, gw, lo, hi in self.db.get_route_tbl():
             if self.net_type in ('tcp', 'toe') and hi == '':
                 srvdb = self.db.nid2server(lo)
-                if not srv:
+                if not srvdb:
                     panic("no server for nid", lo)
                 else:
                     srv = Network(srvdb)
@@ -930,9 +932,10 @@ class Network(Module):
                 cleanup_error(e.rc)
               
         try:
-            lctl.cleanup("RPCDEV", "RPCDEV_UUID")
+            if is_prepared("RPCDEV_UUID"):
+                lctl.cleanup("RPCDEV", "RPCDEV_UUID")
         except CommandError, e:
-            print "cleanup failed: ", self.name
+            print "cleanup failed: RPCDEV"
             e.dump()
             cleanup_error(e.rc)
         try:
@@ -959,6 +962,8 @@ class LDLM(Module):
 class LOV(Module):
     def __init__(self,db):
         Module.__init__(self, 'LOV', db)
+        self.add_lustre_module('mdc', 'mdc')
+        self.add_lustre_module('lov', 'lov')
         self.mds_uuid = self.db.get_first_ref('mds')
         mds= self.db.lookup(self.mds_uuid)
         self.mds_name = mds.getName()
@@ -967,66 +972,49 @@ class LOV(Module):
         self.pattern = self.db.get_val_int('stripepattern', 0)
         self.devlist = self.db.get_refs('obd')
         self.stripe_cnt = self.db.get_val_int('stripecount', len(self.devlist))
-        self.add_lustre_module('mdc', 'mdc')
-        self.add_lustre_module('lov', 'lov')
-
+        self.osclist = []
+        for obd_uuid in self.devlist:
+            obd = self.db.lookup(obd_uuid)
+            osc = get_osc(obd, self.name)
+            if osc:
+                self.osclist.append(osc)
+            else:
+                panic('osc not found:', obd_uuid)
+            
     def prepare(self):
         if is_prepared(self.uuid):
             return
-        for obd_uuid in self.devlist:
-            obd = self.db.lookup(obd_uuid)
-            osc = get_osc(obd)
-            if osc:
-                try:
-                    # Ignore connection failures, because the LOV will DTRT with
-                    # an unconnected OSC.
-                    osc.prepare(ignore_connect_failure=1)
-                except CommandError:
-                    print "Error preparing OSC %s (inactive)\n" % osc_uuid
-            else:
-                panic('osc not found:', osc_uuid)
-        mdc_uuid = prepare_mdc(self.db, self.mds_uuid)
+        for osc in self.osclist:
+            try:
+                # Ignore connection failures, because the LOV will DTRT with
+                # an unconnected OSC.
+                osc.prepare(ignore_connect_failure=1)
+            except CommandError:
+                print "Error preparing OSC %s (inactive)\n" % osc.uuid
+        self.mdc_uuid = prepare_mdc(self.db, self.name, self.mds_uuid)
         self.info(self.mds_uuid, self.stripe_cnt, self.stripe_sz,
                   self.stripe_off, self.pattern, self.devlist, self.mds_name)
         lctl.newdev(attach="lov %s %s" % (self.name, self.uuid),
-                    setup ="%s" % (mdc_uuid))
+                    setup ="%s" % (self.mdc_uuid))
 
     def cleanup(self):
-        if not is_prepared(self.uuid):
-            return
-        for obd_uuid in self.devlist:
-            obd = self.db.lookup(obd_uuid)
-            osc = get_osc(obd)
-            if osc:
-                osc.cleanup()
-            else:
-                panic('osc not found:', osc_uuid)
-        Module.cleanup(self)
-        cleanup_mdc(self.db, self.mds_uuid)
-
+        if is_prepared(self.uuid):
+            Module.cleanup(self)
+        for osc in self.osclist:
+            osc.cleanup()
+        cleanup_mdc(self.db, self.name, self.mds_uuid)
 
     def load_module(self):
-        for obd_uuid in self.devlist:
-            obd = self.db.lookup(obd_uuid)
-            osc = get_osc(obd)
-            if osc:
-                osc.load_module()
-                break
-            else:
-                panic('osc not found:', osc_uuid)
+        for osc in self.osclist:
+            osc.load_module()
+            break
         Module.load_module(self)
-
 
     def cleanup_module(self):
         Module.cleanup_module(self)
-        for obd_uuid in self.devlist:
-            obd = self.db.lookup(obd_uuid)
-            osc = get_osc(obd)
-            if osc:
-                osc.cleanup_module()
-                break
-            else:
-                panic('osc not found:', osc_uuid)
+        for osc in self.osclist:
+            osc.cleanup_module()
+            break
 
 class LOVConfig(Module):
     def __init__(self,db):
@@ -1055,7 +1043,7 @@ class MDSDEV(Module):
         self.size = self.db.get_val_int('devsize', 0)
         self.fstype = self.db.get_val('fstype', '')
         # overwrite the orignal MDSDEV name and uuid with the MDS name and uuid
-        self.uuid = self.db.get_first_ref('mds')
+        self.uuid = self.db.get_first_ref('target')
         mds = self.db.lookup(self.uuid)
         self.name = mds.getName()
         self.lovconfig_uuids = mds.get_refs('lovconfig')
@@ -1090,60 +1078,26 @@ class MDSDEV(Module):
                 print "cleanup failed: ", self.name
                 e.dump()
                 cleanup_error(e.rc)
-        if not is_prepared(self.uuid):
-            return
-        Module.cleanup(self)
+        if is_prepared(self.uuid):
+            Module.cleanup(self)
         clean_loop(self.devname)
 
-# Very unusual case, as there is no MDC element in the XML anymore
-# Builds itself from an MDS node
-class MDC(Module):
-    def __init__(self,db):
-        self.mds_uuid = db.getUUID()
-        self.mds_name = db.getName()
-        self.db = db
-        node_name =  config.select(self.mds_name)
-        if node_name:
-            self.mdd_uuid = self.db.get_mdd(node_name, self.mds_uuid)
-        else:
-            self.mdd_uuid = db.get_first_ref('active')
-        if not self.mdd_uuid:
-            panic("No MDSDEV found for MDS service:", self.mds_name)
-        self.module_name = 'MDC'
-        self.kmodule_list = []
-        self._server = None
-        self._connected = 0
-
-        host = socket.gethostname()
-        self.name = 'MDC_%s' % (self.mds_name)
-        self.uuid = '%s_%05x_%05x' % (self.name, int(random.random() * 1048576),
-                                      int(random.random() * 1048576))
-
-        self.lookup_server(self.mdd_uuid)
-        self.add_lustre_module('mdc', 'mdc')
-
-    def prepare(self):
-        if is_prepared(self.uuid):
-            return
-        self.info(self.mds_uuid)
-        srv = self.get_server()
-        lctl.connect(srv.net_type, srv.nid, srv.port, srv.uuid, srv.send_mem, srv.recv_mem)
-        lctl.newdev(attach="mdc %s %s" % (self.name, self.uuid),
-                        setup ="%s %s" %(self.mds_uuid, srv.uuid))
-            
-class OBD(Module):
+class OSD(Module):
     def __init__(self, db):
-        Module.__init__(self, 'OBD', db)
-        self.obdtype = self.db.get_val('obdtype')
+        Module.__init__(self, 'OSD', db)
+        self.osdtype = self.db.get_val('osdtype')
         self.devname = self.db.get_val('devpath', '')
         self.size = self.db.get_val_int('devsize', 0)
         self.fstype = self.db.get_val('fstype', '')
-        self.active_target = self.db.get_first_ref('active')
+        self.uuid = self.db.get_first_ref('target')
+        ost = self.db.lookup(self.uuid)
+        self.name = ost.getName()
         # FIXME: if fstype not set, then determine based on kernel version
         self.format = self.db.get_val('autoformat', 'yes')
         if self.fstype == 'extN':
             self.add_lustre_module('extN', 'extN') 
-        self.add_lustre_module(self.obdtype, self.obdtype)
+        self.add_lustre_module('ost', 'ost')
+        self.add_lustre_module(self.osdtype, self.osdtype)
         if self.fstype:
             self.add_lustre_module('obdclass' , 'fsfilt_%s' % (self.fstype))
 
@@ -1153,20 +1107,105 @@ class OBD(Module):
     def prepare(self):
         if is_prepared(self.uuid):
             return
-        self.info(self.obdtype, self.devname, self.size, self.fstype, self.format)
-        if self.obdtype == 'obdecho':
+        self.info(self.osdtype, self.devname, self.size, self.fstype, self.format)
+        if self.osdtype == 'obdecho':
             blkdev = ''
         else:
             blkdev = block_dev(self.devname, self.size, self.fstype, self.format)
-        lctl.newdev(attach="%s %s %s" % (self.obdtype, self.name, self.uuid),
+        lctl.newdev(attach="%s %s %s" % (self.osdtype, self.name, self.uuid),
                     setup ="%s %s" %(blkdev, self.fstype))
+        if not is_prepared('OSS_UUID'):
+            lctl.newdev(attach="ost %s %s" % ('OSS', 'OSS_UUID'),
+                        setup ="")
+
     def cleanup(self):
-        if not is_prepared(self.uuid):
-            return
-        Module.cleanup(self)
-        if not self.obdtype == 'obdecho':
+        if is_prepared('OSS_UUID'):
+            try:
+                lctl.cleanup("OSS", "OSS_UUID")
+            except CommandError, e:
+                print "cleanup failed: ", self.name
+                e.dump()
+                cleanup_error(e.rc)
+        if is_prepared(self.uuid):
+            Module.cleanup(self)
+        if not self.osdtype == 'obdecho':
             clean_loop(self.devname)
 
+# Generic client module, used by OSC and MDC
+class Client(Module):
+    def __init__(self, db, module, owner, target_name, target_uuid):
+        self.target_name = target_name
+        self.target_uuid = target_uuid
+        self.db = db
+        node_name =  config.select(target_name)
+        if node_name:
+            self.tgt_dev_uuid = self.db.get_target_device(node_name, target_uuid)
+        else:
+            self.tgt_dev_uuid = db.get_first_ref('active')
+        if not self.tgt_dev_uuid:
+            panic("No target device found for target:", target_name)
+        self.kmodule_list = []
+        self._server = None
+        self._connected = 0
+
+        self.module = module
+        self.module_name = string.upper(module)
+        self.name = '%s_%s_%s' % (self.module_name, owner, target_name)
+        self.uuid = '%05x_%s_%05x' % (int(random.random() * 1048576), self.name,
+                                      int(random.random() * 1048576))
+        self.uuid = self.uuid[0:36]
+        self.lookup_server(self.tgt_dev_uuid)
+        self.add_lustre_module(module, module)
+
+    def prepare(self, ignore_connect_failure = 0):
+        if is_prepared(self.uuid):
+            return
+        self.info(self.target_uuid)
+        srv = self.get_server()
+        try:
+            if local_net(srv):
+                #debug("LOCAL NET")
+                lctl.connect(srv.net_type, srv.nid, srv.port, srv.uuid, srv.send_mem, srv.recv_mem)
+            else:
+                #debug("NOT LOCAL NET")
+                r =  find_route(srv)
+                if r:
+                    lctl.add_route_host(r[0], srv.uuid, r[1], r[2])
+                else:
+                    panic ("no route to",  srv.nid)
+        except CommandError:
+            if (ignore_connect_failure == 0):
+                pass
+        lctl.newdev(attach="%s %s %s" % (self.module, self.name, self.uuid),
+                        setup ="%s %s" %(self.target_uuid, srv.uuid))
+
+    def cleanup(self):
+        srv = self.get_server()
+        if local_net(srv):
+            Module.cleanup(self)
+        else:
+            self.info(self.targt_uuid)
+            r =  find_route(srv)
+            if r:
+                try:
+                    lctl.del_route_host(r[0], srv.uuid, r[1], r[2])
+                except CommandError, e:
+                    print "del_route failed: ", self.name
+                    e.dump()
+                    cleanup_error(e.rc)
+            Module.cleanup(self)
+
+
+
+class MDC(Client):
+    def __init__(self, db, owner, target_name, target_uuid):
+         Client.__init__(self, db, 'mdc', owner, target_name, target_uuid)
+
+class OSC(Client):
+    def __init__(self, db, owner, target_name, target_uuid):
+         Client.__init__(self, db, 'osc', owner, target_name, target_uuid)
+
+            
 class COBD(Module):
     def __init__(self, db):
         Module.__init__(self, 'COBD', db)
@@ -1184,28 +1223,15 @@ class COBD(Module):
         lctl.newdev(attach="cobd %s %s" % (self.name, self.uuid),
                     setup ="%s %s" %(self.real_uuid, self.cache_uuid))
 
-class OST(Module):
-    def __init__(self,db):
-        Module.__init__(self, 'OST', db)
-        self.obd_uuid = self.db.get_first_ref('obd')
-        self.add_lustre_module('ost', 'ost')
-
-    def prepare(self):
-        if is_prepared(self.uuid):
-            return
-        self.info(self.obd_uuid)
-        lctl.newdev(attach="ost %s %s" % (self.name, self.uuid),
-                    setup ="%s" % (self.obd_uuid))
-
 
 # virtual interface for  OSC and LOV
 class VOSC(Module):
-    def __init__(self,db):
+    def __init__(self,db, owner):
         Module.__init__(self, 'VOSC', db)
         if db.get_class() == 'lov':
             self.osc = LOV(db)
         else:
-            self.osc = get_osc(db)
+            self.osc = get_osc(db, owner)
     def get_uuid(self):
         return self.osc.uuid
     def prepare(self):
@@ -1216,61 +1242,13 @@ class VOSC(Module):
         self.osc.load_module()
     def cleanup_module(self):
         self.osc.cleanup_module()
-        
+    def need_mdc(self):
+        return self.db.get_class() != 'lov'
+    def get_mdc_uuid(self):
+        if self.db.get_class() == 'lov':
+            return self.osc.mdc_uuid
+        return ''
 
-class OSC(Module):
-    def __init__(self, db, obd_name, obd_uuid, ost_uuid):
-        self.db = db
-        self.module_name = 'OSC'
-        self.name = 'OSC_%s' % (obd_name)
-        self.uuid = '%s_%05x' % (self.name, int(random.random() * 1048576))
-        self.kmodule_list = []
-        self._server = None
-        self._connected = 0
-
-        self.obd_uuid = obd_uuid
-        self.ost_uuid = ost_uuid
-        debug("OSC:", obd_uuid, ost_uuid)
-        self.lookup_server(self.ost_uuid)
-        self.add_lustre_module('osc', 'osc')
-
-    def prepare(self, ignore_connect_failure = 0):
-        if is_prepared(self.uuid):
-            return
-        self.info(self.obd_uuid, self.ost_uuid)
-        srv = self.get_server()
-        try:
-            if local_net(srv):
-                lctl.connect(srv.net_type, srv.nid, srv.port, srv.uuid, srv.send_mem, srv.recv_mem)
-            else:
-                r =  find_route(srv)
-                if r:
-                    lctl.add_route_host(r[0], srv.uuid, r[1], r[2])
-                else:
-                    panic ("no route to",  srv.nid)
-        except CommandError:
-            if (ignore_connect_failure == 0):
-                pass
-            
-        lctl.newdev(attach="osc %s %s" % (self.name, self.uuid),
-                    setup ="%s %s" %(self.obd_uuid, srv.uuid))
-
-    def cleanup(self):
-        srv = self.get_server()
-        if local_net(srv):
-            Module.cleanup(self)
-        else:
-            self.info(self.obd_uuid, self.ost_uuid)
-            r =  find_route(srv)
-            if r:
-                try:
-                    lctl.del_route_host(r[0], srv.uuid, r[1], r[2])
-                except CommandError, e:
-                    print "del_route failed: ", self.name
-                    e.dump()
-                    cleanup_error(e.rc)
-            Module.cleanup(self)
-            
 
 class ECHO_CLIENT(Module):
     def __init__(self,db):
@@ -1278,7 +1256,7 @@ class ECHO_CLIENT(Module):
         self.add_lustre_module('obdecho', 'obdecho')
         self.obd_uuid = self.db.get_first_ref('obd')
         obd = self.db.lookup(self.obd_uuid)
-        self.osc = VOSC(obd)
+        self.osc = VOSC(obd, self.name)
 
     def prepare(self):
         if is_prepared(self.uuid):
@@ -1290,8 +1268,8 @@ class ECHO_CLIENT(Module):
                     setup = self.osc.get_uuid())
 
     def cleanup(self):
-        if not is_prepared(self.uuid):
-            return
+        if is_prepared(self.uuid):
+            Module.cleanup(self)
         self.osc.cleanup()
 
     def load_module(self):
@@ -1308,18 +1286,22 @@ class Mountpoint(Module):
         self.path = self.db.get_val('path')
         self.mds_uuid = self.db.get_first_ref('mds')
         self.obd_uuid = self.db.get_first_ref('obd')
-        self.add_lustre_module('mdc', 'mdc')
-        self.add_lustre_module('llite', 'llite')
         obd = self.db.lookup(self.obd_uuid)
-        self.osc = VOSC(obd)
+        self.vosc = VOSC(obd, self.name)
+        if self.vosc.need_mdc():
+            self.add_lustre_module('mdc', 'mdc')
+        self.add_lustre_module('llite', 'llite')
 
 
     def prepare(self):
-        self.osc.prepare()
-        mdc_uuid = prepare_mdc(self.db, self.mds_uuid)
+        self.vosc.prepare()
+        if self.vosc.need_mdc():
+            mdc_uuid = prepare_mdc(self.db, self.name,  self.mds_uuid)
+        else:
+            mdc_uuid = self.vosc.get_mdc_uuid()
         self.info(self.path, self.mds_uuid, self.obd_uuid)
         cmd = "mount -t lustre_lite -o osc=%s,mdc=%s none %s" % \
-              (self.osc.get_uuid(), mdc_uuid, self.path)
+              (self.vosc.get_uuid(), mdc_uuid, self.path)
         run("mkdir", self.path)
         ret, val = run(cmd)
         if ret:
@@ -1338,26 +1320,20 @@ class Mountpoint(Module):
         if fs_is_mounted(self.path):
             panic("fs is still mounted:", self.path)
 
-        self.osc.cleanup()
-        cleanup_mdc(self.db, self.mds_uuid)
+        self.vosc.cleanup()
+        if self.vosc.need_mdc():
+            cleanup_mdc(self.db, self.name, self.mds_uuid)
 
     def load_module(self):
-        self.osc.load_module()
+        self.vosc.load_module()
         Module.load_module(self)
     def cleanup_module(self):
         Module.cleanup_module(self)
-        self.osc.cleanup_module()
+        self.vosc.cleanup_module()
 
 
 # ============================================================
 # XML processing and query
-
-# OSC is no longer in the xml, so we have to fake it.
-# this is getting ugly and begging for another refactoring
-def get_osc(obd_dom):
-    obd = OBD(obd_dom)
-    osc = OSC(obd_dom, obd.name, obd.uuid, obd.active_target)
-    return osc
 
 class LustreDB:
     def lookup(self, uuid):
@@ -1419,10 +1395,10 @@ class LustreDB:
         return ost.lookup(uuid)
 
     def nid2server(self, nid):
-        netlist = self.parent.parent.attrs['network']
+        netlist = self.lookup_class('network')
         for net_db in netlist:
             if net_db.get_val('nid') == nid: 
-                return net
+                return net_db
         return None
     
     # the tag name is the service type
@@ -1438,7 +1414,7 @@ class LustreDB:
             ret = 10
         elif type in ('device', 'ldlm'):
             ret = 20
-        elif type in ('obd', 'mdd', 'cobd'):
+        elif type in ('osd', 'mdd', 'cobd'):
             ret = 30
         elif type in ('mdsdev','ost'):
             ret = 40
@@ -1470,23 +1446,33 @@ class LustreDB:
         list.sort()
         return list
 
-    # Find the mdsdev attached to node_name that points to
-    # mds_uuid
-    # node->profiles->mdsdev_refs->mds
-    def get_mdd(self, node_name, mds_uuid):
+    # Find the target_device for target on a node
+    # node->profiles->device_refs->target
+    def get_target_device(self, node_name, target_uuid):
         node_db = self.lookup_name(node_name)
         if not node_db:
             return None
         prof_list = node_db.get_refs('profile')
         for prof_uuid in prof_list:
             prof_db = node_db.lookup(prof_uuid)
-            mdd_list = prof_db.get_refs('mdsdev')
-            for mdd_uuid in mdd_list:
-                mdd = self.lookup(mdd_uuid)
-                if mdd.get_first_ref('mds') == mds_uuid:
-                    return mdd_uuid
+            ref_list = prof_db.get_all_refs()
+            for ref in ref_list:
+                dev = self.lookup(ref[1])
+                if dev and dev.get_first_ref('target') == target_uuid:
+                    return ref[1]
         return None
-        
+
+    # get all network uuids for this node
+    def get_networks(self):
+        ret = []
+        prof_list = self.get_refs('profile')
+        for prof_uuid in prof_list:
+            prof_db = self.lookup(prof_uuid)
+            net_list = prof_db.get_refs('network')
+            debug("get_networks():", prof_uuid, net_list)
+            for net_uuid in net_list:
+                ret.append(net_uuid)
+        return ret
 
 class LustreDB_XML(LustreDB):
     def __init__(self, dom, root_node):
@@ -1599,24 +1585,24 @@ class LustreDB_XML(LustreDB):
         """ Return the routes as a list of tuples of the form:
         [(type, gw, lo, hi),]"""
         res = []
-        tbl = self.dom_node.getElementsByTagName('route_tbl')
+        tbl = self.dom_node.getElementsByTagName('routetbl')
         for t in tbl:
             routes = t.getElementsByTagName('route')
             for r in routes:
                 lo = self.xmlattr(r, 'lo')
-                hi = self.xmlattr(r, 'hi', '')
+                hi = self.xmlattr(r, 'hi')
                 res.append((type, gw, lo, hi))
         return res
 
     def get_route_tbl(self):
         ret = []
-        tbls = self.dom_node.getElementsByTagName('route_tbl')
+        tbls = self.dom_node.getElementsByTagName('routetbl')
         for tbl in tbls:
             for r in tbl.getElementsByTagName('route'):
                 net_type = self.xmlattr(r, 'type')
                 gw = self.xmlattr(r, 'gw')
                 lo = self.xmlattr(r, 'lo')
-                hi = self.xmlattr(r,'hi', '')
+                hi = self.xmlattr(r, 'hi')
                 ret.append((net_type, gw, lo, hi))
         return ret
 
@@ -1652,7 +1638,7 @@ class LustreDB_LDAP(LustreDB):
             self.l.protocol_version=ldap.VERSION3
             # user and pw only needed if modifying db
             self.l.bind_s("", "", ldap.AUTH_SIMPLE);
-        except ldap.LDAPerror, e:
+        except ldap.LDAPError, e:
             panic(e)
             # FIXME, do something useful here
 
@@ -1749,28 +1735,27 @@ class LustreDB_LDAP(LustreDB):
 # MDC UUID hack - 
 # FIXME: clean this mess up!
 #
-saved_mdc = {}
-def prepare_mdc(db, mds_uuid):
-    global saved_mdc
+# OSC is no longer in the xml, so we have to fake it.
+# this is getting ugly and begging for another refactoring
+def get_osc(ost_db, owner):
+    osc = OSC(ost_db, owner, ost_db.getName(), ost_db.getUUID())
+    return osc
+
+def get_mdc(db, owner, mds_uuid):
     mds_db = db.lookup(mds_uuid);
     if not mds_db:
         panic("no mds:", mds_uuid)
-    if saved_mdc.has_key(mds_uuid):
-        return saved_mdc[mds_uuid]
-    mdc = MDC(mds_db)
+    mdc = MDC(mds_db, owner, mds_db.getName(), mds_uuid)
+    return mdc
+
+def prepare_mdc(db, owner, mds_uuid):
+    mdc = get_mdc(db, owner, mds_uuid)
     mdc.prepare()
-    saved_mdc[mds_uuid] = mdc.uuid
     return mdc.uuid
 
-def cleanup_mdc(db, mds_uuid):
-    global saved_mdc
-    mds_db = db.lookup(mds_uuid);
-    if not mds_db:
-        panic("no mds:", mds_uuid)
-    if not saved_mdc.has_key(mds_uuid):
-        mdc = MDC(mds_db)
-        mdc.cleanup()
-        saved_mdc[mds_uuid] = mdc.uuid
+def cleanup_mdc(db, owner, mds_uuid):
+    mdc = get_mdc(db, owner, mds_uuid)
+    mdc.cleanup()
         
 
 ############################################################
@@ -1780,13 +1765,13 @@ routes = []
 local_node = []
 router_flag = 0
 
-def init_node(node_db):
-    global local_node, router_flag
-    netlist = node_db.lookup_class('network')
-    for db in netlist:
-        type = db.get_val('nettype')
-        gw = db.get_val('nid')
-        local_node.append((type, gw))
+def add_local_interfaces(node_db):
+    global local_node
+    debug("add_local")
+    for netuuid in node_db.get_networks():
+        net = node_db.lookup(netuuid)
+        debug("add_local", netuuid)
+        local_node.append((net.get_val('nettype'), net.get_val('nid')))
 
 def node_needs_router():
     return router_flag
@@ -1800,20 +1785,26 @@ def init_route_config(lustre):
     for node_db in list:
         if node_db.get_val_int('router', 0):
             router_flag = 1
+            #debug("init_route_config: found router", node_db.getName())
             for (local_type, local_nid) in local_node:
+                #debug("init_route_config:", local_type, local_nid)
                 gw = None
-                netlist = node_db.lookup_class('network')
-                for db in netlist:
-                    if local_type == db.get_val('type'):
-                        gw = db.get_val('server')
+                for netuuid in node_db.get_networks():
+                    db = node_db.lookup(netuuid)
+                    if local_type == db.get_val('nettype'):
+                        gw = db.get_val('nid')
                         break
+                #debug("init_route_config: gw is", gw)
                 if not gw:
                     continue
-                for db in netlist:
-                    if local_type != db.get_val('type'):
+                for netuuid in node_db.get_networks():
+                    db = node_db.lookup(netuuid)
+                    #debug("init_route_config: tbl: ", db.get_route_tbl())
+                    if local_type != db.get_val('nettype'):
                         for route in db.get_routes(local_type, gw):
                             routes.append(route)
-    
+    #debug("init_route_config routes:", routes)
+
 
 def local_net(net):
     global local_node
@@ -1830,19 +1821,18 @@ def find_route(net):
     to = net.nid
     debug ('looking for route to', to_type,to)
     for r in routes:
+        #debug("find_route: ", r)
         if  r[2] == to:
             return r
     return None
            
-    
 
 ############################################################
 # lconf level logic
 # Start a service.
-def startService(db, module_flag):
+def newService(db):
     type = db.get_class()
     debug('Service:', type, db.getName(), db.getUUID())
-    # there must be a more dynamic way of doing this...
     n = None
     if type == 'ldlm':
         n = LDLM(db)
@@ -1850,39 +1840,19 @@ def startService(db, module_flag):
         n = LOV(db)
     elif type == 'network':
         n = Network(db)
-    elif type == 'obd':
-        n = OBD(db)
+    elif type == 'osd':
+        n = OSD(db)
     elif type == 'cobd':
         n = COBD(db)
-    elif type == 'ost':
-        n = OST(db)
     elif type == 'mdsdev':
         n = MDSDEV(db)
-    elif type == 'osc':
-        n = VOSC(db)
-    elif type == 'mdc':
-        n = MDC(db)
     elif type == 'mountpoint':
         n = Mountpoint(db)
     elif type == 'echoclient':
         n = ECHO_CLIENT(db)
     else:
         panic ("unknown service type:", type)
-
-    if module_flag:
-        if config.nomod():
-            return
-        if config.cleanup():
-            n.cleanup_module()
-        else:
-            n.load_module()
-    else:
-        if config.nosetup():
-            return
-        if config.cleanup():
-            n.cleanup()
-        else:
-            n.prepare()
+    return n
 
 #
 # Prepare the system to run lustre using a particular profile
@@ -1892,15 +1862,35 @@ def startService(db, module_flag):
 #  * make sure partitions are in place and prepared
 #  * initialize devices with lctl
 # Levels is important, and needs to be enforced.
-def startProfile(prof_db, module_flag):
-    if not prof_db:
-        panic("profile:", profile, "not found.")
-    services = prof_db.getServices()
-    if config.cleanup():
-        services.reverse()
+def for_each_profile(db, prof_list, operation):
+    for prof_uuid in prof_list:
+        prof_db = db.lookup(prof_uuid)
+        if not prof_db:
+            panic("profile:", profile, "not found.")
+        services = prof_db.getServices()
+        operation(services)
+        
+def doSetup(services):
     for s in services:
-        startService(s[1], module_flag)
+        n = newService(s[1])
+        n.prepare()
+    
+def doModules(services):
+    for s in services:
+        n = newService(s[1])
+        n.load_module()
 
+def doCleanup(services):
+    services.reverse()
+    for s in services:
+        n = newService(s[1])
+        n.cleanup()
+
+def doUnloadModules(services):
+    services.reverse()
+    for s in services:
+        n = newService(s[1])
+        n.cleanup_module()
 
 #
 # Load profile for 
@@ -1921,32 +1911,38 @@ def doHost(lustreDB, hosts):
     timeout = node_db.get_val_int('timeout', 0)
 
     if not router_flag:
-        init_node(node_db)
+        add_local_interfaces(node_db)
         init_route_config(lustreDB)
 
     # Two step process: (1) load modules, (2) setup lustre
     # if not cleaning, load modules first.
-    module_flag = not config.cleanup()
     prof_list = node_db.get_refs('profile')
-    for prof_uuid in prof_list:
-        prof_db = node_db.lookup(prof_uuid)
-        startProfile(prof_db, module_flag)
 
-    if not config.cleanup():
+    if config.cleanup():
+        if config.force():
+            # the command line can override this value
+            timeout = 5
+        sys_set_timeout(timeout)
+        sys_set_recovery_upcall(recovery_upcall)
+
+        for_each_profile(node_db, prof_list, doCleanup)
+        for_each_profile(node_db, prof_list, doUnloadModules)
+
+    else:
+        for_each_profile(node_db, prof_list, doModules)
+
         sys_set_debug_path()
         script = config.gdb_script()
         run(lctl.lctl, ' modules >', script)
         if config.gdb():
-            # dump /tmp/ogdb and sleep/pause here
             log ("The GDB module script is in", script)
+            # pause, so user has time to break and
+            # load the script
             time.sleep(5)
         sys_set_timeout(timeout)
         sys_set_recovery_upcall(recovery_upcall)
-            
-    module_flag = not module_flag
-    for prof_uuid in prof_list:
-        prof_db = node_db.lookup(prof_uuid)
-        startProfile(prof_db, module_flag)
+
+        for_each_profile(node_db, prof_list, doSetup)
 
 ############################################################
 # Command line processing

@@ -3,10 +3,22 @@
  *
  * Lustre Light Super operations
  *
- * This code is issued under the GNU General Public License.
- * See the file COPYING in this distribution
+ *  Copyright (c) 2002, 2003 Cluster File Systems, Inc.
  *
- * Copryright (C) 2002 Cluster File Systems, Inc.
+ *   This file is part of Lustre, http://www.lustre.org.
+ *
+ *   Lustre is free software; you can redistribute it and/or
+ *   modify it under the terms of version 2 of the GNU General Public
+ *   License as published by the Free Software Foundation.
+ *
+ *   Lustre is distributed in the hope that it will be useful,
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   GNU General Public License for more details.
+ *
+ *   You should have received a copy of the GNU General Public License
+ *   along with Lustre; if not, write to the Free Software
+ *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
 #define DEBUG_SUBSYSTEM S_LLITE
@@ -27,11 +39,16 @@ extern struct address_space_operations ll_aops;
 extern struct address_space_operations ll_dir_aops;
 struct super_operations ll_super_operations;
 
+/* /proc/lustre/llite root that tracks llite mount points */
+struct proc_dir_entry *proc_lustre_fs_root;
+/* lproc_llite.c */
+extern int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
+                                       struct super_block *sb,
+                                       char *osc, char *mdc);
+
 extern int ll_recover(struct recovd_data *, int);
 extern int ll_commitcbd_setup(struct ll_sb_info *);
 extern int ll_commitcbd_cleanup(struct ll_sb_info *);
-
-extern void ll_proc_namespace(struct super_block* sb, char* osc, char* mdc);
 
 static char *ll_read_opt(const char *opt, char *data)
 {
@@ -110,6 +127,7 @@ static struct super_block *ll_read_super(struct super_block *sb,
         struct ptlrpc_connection *mdc_conn;
         struct ll_read_inode2_cookie lic;
         class_uuid_t uuid;
+        struct obd_uuid param_uuid;
 
         ENTRY;
 
@@ -120,7 +138,7 @@ static struct super_block *ll_read_super(struct super_block *sb,
         INIT_LIST_HEAD(&sbi->ll_conn_chain);
         INIT_LIST_HEAD(&sbi->ll_orphan_dentry_list);
         generate_random_uuid(uuid);
-        class_uuid_unparse(uuid, sbi->ll_sb_uuid);
+        class_uuid_unparse(uuid, &sbi->ll_sb_uuid);
 
         sb->u.generic_sbp = sbi;
 
@@ -136,13 +154,14 @@ static struct super_block *ll_read_super(struct super_block *sb,
                 GOTO(out_free, sb = NULL);
         }
 
-        obd = class_uuid2obd(mdc);
+        strncpy(param_uuid.uuid, mdc, sizeof(param_uuid.uuid));
+        obd = class_uuid2obd(&param_uuid);
         if (!obd) {
                 CERROR("MDC %s: not setup or attached\n", mdc);
                 GOTO(out_free, sb = NULL);
         }
 
-        err = obd_connect(&sbi->ll_mdc_conn, obd, sbi->ll_sb_uuid,
+        err = obd_connect(&sbi->ll_mdc_conn, obd, &sbi->ll_sb_uuid,
                           ptlrpc_recovd, ll_recover);
         if (err) {
                 CERROR("cannot connect to %s: rc = %d\n", mdc, err);
@@ -152,13 +171,14 @@ static struct super_block *ll_read_super(struct super_block *sb,
         mdc_conn = sbi2mdc(sbi)->cl_import.imp_connection;
         list_add(&mdc_conn->c_sb_chain, &sbi->ll_conn_chain);
 
-        obd = class_uuid2obd(osc);
+        strncpy(param_uuid.uuid, osc, sizeof(param_uuid.uuid));
+        obd = class_uuid2obd(&param_uuid);
         if (!obd) {
                 CERROR("OSC %s: not setup or attached\n", osc);
                 GOTO(out_mdc, sb = NULL);
         }
 
-        err = obd_connect(&sbi->ll_osc_conn, obd, sbi->ll_sb_uuid,
+        err = obd_connect(&sbi->ll_osc_conn, obd, &sbi->ll_sb_uuid,
                           ptlrpc_recovd, ll_recover);
         if (err) {
                 CERROR("cannot connect to %s: rc = %d\n", osc, err);
@@ -215,7 +235,13 @@ static struct super_block *ll_read_super(struct super_block *sb,
 
         ptlrpc_req_finished(request);
         request = NULL;
-        ll_proc_namespace(sb, osc, mdc);
+
+        if (proc_lustre_fs_root) {
+                err = lprocfs_register_mountpoint(proc_lustre_fs_root, sb,
+                                                  osc, mdc);
+                if (err < 0)
+                        CERROR("could not register mount in /proc/lustre");
+        }
 
 out_dev:
         if (mdc)
@@ -257,8 +283,10 @@ static void ll_put_super(struct super_block *sb)
          */
         mdc_getstatus(&sbi->ll_mdc_conn, &rootfid);
 
-        lprocfs_dereg_mnt(sbi->ll_proc_root);
-        sbi->ll_proc_root = NULL;
+        if (sbi->ll_proc_root) {
+                lprocfs_remove(sbi->ll_proc_root);
+                sbi->ll_proc_root = NULL;
+        }
 
         obd_disconnect(&sbi->ll_mdc_conn);
 
@@ -303,13 +331,15 @@ static void ll_clear_inode(struct inode *inode)
                 obd_free_memmd(&sbi->ll_osc_conn, &lli->lli_smd);
 
         if (lli->lli_symlink_name) {
-                OBD_FREE(lli->lli_symlink_name,strlen(lli->lli_symlink_name)+1);
+                OBD_FREE(lli->lli_symlink_name,
+                         strlen(lli->lli_symlink_name) + 1);
                 lli->lli_symlink_name = NULL;
         }
 
         EXIT;
 }
 
+#if 0
 static void ll_delete_inode(struct inode *inode)
 {
         ENTRY;
@@ -335,19 +365,21 @@ static void ll_delete_inode(struct inode *inode)
                 oa->o_id = lsm->lsm_object_id;
                 obdo_from_inode(oa, inode, OBD_MD_FLID | OBD_MD_FLTYPE);
 
-                err = obd_destroy(ll_i2obdconn(inode), oa, lsm);
+                err = obd_destroy(ll_i2obdconn(inode), oa, lsm, NULL);
                 obdo_free(oa);
                 if (err)
-                        CDEBUG(D_SUPER, "obd destroy objid "LPX64" error %d\n",
-                               lsm->lsm_object_id, err);
+                        CDEBUG(D_INODE,
+                               "inode %lu obd_destroy objid "LPX64" error %d\n",
+                               inode->i_ino, lsm->lsm_object_id, err);
         }
 out:
         clear_inode(inode);
         EXIT;
 }
+#endif
 
 /* like inode_setattr, but doesn't mark the inode dirty */
-static int ll_attr2inode(struct inode * inode, struct iattr * attr, int trunc)
+static int ll_attr2inode(struct inode *inode, struct iattr *attr, int trunc)
 {
         unsigned int ia_valid = attr->ia_valid;
         int error = 0;
@@ -393,11 +425,30 @@ int ll_inode_setattr(struct inode *inode, struct iattr *attr, int do_trunc)
          */
         attr->ia_valid &= ~ATTR_SIZE;
         if (attr->ia_valid) {
-                err = mdc_setattr(&sbi->ll_mdc_conn, inode, attr, &request);
+                err = mdc_setattr(&sbi->ll_mdc_conn, inode, attr, NULL, 0,
+                                  &request);
                 if (err)
-                        CERROR("mdc_setattr fails (%d)\n", err);
+                        CERROR("mdc_setattr fails: err = %d\n", err);
 
                 ptlrpc_req_finished(request);
+                if (S_ISREG(inode->i_mode) && attr->ia_valid & ATTR_MTIME_SET) {
+                        struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
+                        struct obdo oa;
+                        int err2;
+
+                        CDEBUG(D_INODE, "set mtime on OST inode %lu to %lu\n",
+                               inode->i_ino, attr->ia_mtime);
+                        oa.o_id = lsm->lsm_object_id;
+                        oa.o_mode = S_IFREG;
+                        oa.o_valid = OBD_MD_FLID |OBD_MD_FLTYPE |OBD_MD_FLMTIME;
+                        oa.o_mtime = attr->ia_mtime;
+                        err2 = obd_setattr(&sbi->ll_osc_conn, &oa, lsm, NULL);
+                        if (err2) {
+                                CERROR("obd_setattr fails: rc=%d\n", err);
+                                if (!err)
+                                        err = err2;
+                        }
+                }
         }
 
         RETURN(err);
@@ -461,8 +512,14 @@ out:
         RETURN(rc);
 }
 
-void ll_update_inode(struct inode *inode, struct mds_body *body)
+void ll_update_inode(struct inode *inode, struct mds_body *body,
+                     struct lov_mds_md *lmm)
 {
+        struct ll_inode_info *lli = ll_i2info(inode);
+
+        if (lmm != NULL)
+                obd_unpackmd(ll_i2obdconn(inode), &lli->lli_smd, lmm);
+
         if (body->valid & OBD_MD_FLID)
                 inode->i_ino = body->ino;
         if (body->valid & OBD_MD_FLATIME)
@@ -489,6 +546,8 @@ void ll_update_inode(struct inode *inode, struct mds_body *body)
                 inode->i_rdev = body->rdev;
         if (body->valid & OBD_MD_FLSIZE)
                 inode->i_size = body->size;
+        if (body->valid & OBD_MD_FLBLOCKS)
+                inode->i_blocks = body->blocks;
 }
 
 static void ll_read_inode2(struct inode *inode, void *opaque)
@@ -501,18 +560,16 @@ static void ll_read_inode2(struct inode *inode, void *opaque)
         sema_init(&lli->lli_open_sem, 1);
         atomic_set(&lli->lli_open_count, 0);
 
-        /* core attributes first */
-        ll_update_inode(inode, body);
-
         LASSERT(!lli->lli_smd);
-        if (lic && lic->lic_lmm)
-                obd_unpackmd(ll_i2obdconn(inode), &lli->lli_smd, lic->lic_lmm);
+
+        /* core attributes first */
+        ll_update_inode(inode, body, lic ? lic->lic_lmm : NULL);
 
         /* Get the authoritative file size */
         if (lli->lli_smd && (inode->i_mode & S_IFREG)) {
                 int rc;
                 LASSERT(lli->lli_smd->lsm_object_id != 0);
-                rc = ll_file_size(inode, lli->lli_smd);
+                rc = ll_file_size(inode, lli->lli_smd, NULL);
                 if (rc) {
                         CERROR("ll_file_size: %d\n", rc);
                         ll_clear_inode(inode);
@@ -536,6 +593,7 @@ static void ll_read_inode2(struct inode *inode, void *opaque)
                 inode->i_op = &ll_fast_symlink_inode_operations;
                 EXIT;
         } else {
+                inode->i_op = &ll_special_inode_operations;
                 init_special_inode(inode, inode->i_mode, inode->i_rdev);
                 EXIT;
         }
@@ -549,7 +607,7 @@ static inline void invalidate_request_list(struct list_head *req_list)
                         list_entry(tmp, struct ptlrpc_request, rq_list);
                 CERROR("invalidating req xid "LPU64" op %d to %s:%d\n",
                        req->rq_xid, req->rq_reqmsg->opc,
-                       req->rq_connection->c_remote_uuid,
+                       req->rq_connection->c_remote_uuid.uuid,
                        req->rq_import->imp_client->cli_request_portal);
                 req->rq_flags |= PTL_RPC_FL_ERR;
                 wake_up(&req->rq_wait_for_rep);
@@ -584,7 +642,7 @@ struct super_operations ll_super_operations =
 {
         read_inode2: ll_read_inode2,
         clear_inode: ll_clear_inode,
-        delete_inode: ll_delete_inode,
+        //        delete_inode: ll_delete_inode,
         put_super: ll_put_super,
         statfs: ll_statfs,
         umount_begin: ll_umount_begin
@@ -599,12 +657,16 @@ static struct file_system_type lustre_lite_fs_type = {
 
 static int __init init_lustre_lite(void)
 {
-        printk(KERN_INFO "Lustre Lite 0.5.14, info@clusterfs.com\n");
+        printk(KERN_INFO "Lustre Lite Client File System; "
+               "info@clusterfs.com\n");
         ll_file_data_slab = kmem_cache_create("ll_file_data",
                                               sizeof(struct ll_file_data), 0,
                                               SLAB_HWCACHE_ALIGN, NULL, NULL);
         if (ll_file_data_slab == NULL)
                 return -ENOMEM;
+
+        proc_lustre_fs_root = proc_lustre_root ? proc_mkdir("llite", proc_lustre_root) : NULL;
+
         return register_filesystem(&lustre_lite_fs_type);
 }
 
@@ -612,10 +674,15 @@ static void __exit exit_lustre_lite(void)
 {
         unregister_filesystem(&lustre_lite_fs_type);
         kmem_cache_destroy(ll_file_data_slab);
+
+        if (proc_lustre_fs_root) {
+                lprocfs_remove(proc_lustre_fs_root);
+                proc_lustre_fs_root = NULL;
+        }
 }
 
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
-MODULE_DESCRIPTION("Lustre Lite Client File System v1.0");
+MODULE_DESCRIPTION("Lustre Lite Client File System");
 MODULE_LICENSE("GPL");
 
 module_init(init_lustre_lite);

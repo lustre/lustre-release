@@ -3,7 +3,7 @@
  *
  * Lustre Lite I/O Page Cache
  *
- *  Copyright (c) 2001, 2002 Cluster File Systems, Inc.
+ *  Copyright (c) 2001-2003 Cluster File Systems, Inc.
  *
  *   This file is part of Lustre, http://www.lustre.org.
  *
@@ -120,7 +120,7 @@ static int ll_brw(int cmd, struct inode *inode, struct page *page, int create)
         pg.flag = create ? OBD_BRW_CREATE : 0;
 
         set->brw_callback = ll_brw_sync_wait;
-        rc = obd_brw(cmd, ll_i2obdconn(inode), lsm, 1, &pg, set);
+        rc = obd_brw(cmd, ll_i2obdconn(inode), lsm, 1, &pg, set, NULL);
         if (rc) {
                 if (rc != -EIO)
                         CERROR("error from obd_brw: rc = %d\n", rc);
@@ -195,7 +195,7 @@ void ll_truncate(struct inode *inode)
 
         /* truncate == punch from new size to absolute end of file */
         err = obd_punch(ll_i2obdconn(inode), &oa, lsm, inode->i_size,
-                        OBD_OBJECT_EOF);
+                        OBD_OBJECT_EOF, NULL);
         if (err)
                 CERROR("obd_truncate fails (%d) ino %lu\n", err, inode->i_ino);
         else
@@ -232,10 +232,24 @@ static int ll_prepare_write(struct file *file, struct page *page, unsigned from,
         if (from == 0 && to == PAGE_SIZE)
                 RETURN(0);
 
-        /* We are writing to a new page, no need to read old data */
+        /* If are writing to a new page, no need to read old data.  If we
+         * haven't already gotten the file size in ll_file_write() since
+         * we got our extent lock, we need to verify it here before we
+         * overwrite some other node's write (bug 445).
+         */
         if (inode->i_size <= offset) {
-                memset(addr, 0, PAGE_SIZE);
-                GOTO(prepare_done, rc=0);
+                if (!S_ISBLK(inode->i_mode) && !(file->f_flags & O_APPEND)) {
+                        struct ll_file_data *fd = file->private_data;
+                        struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
+
+                        rc = ll_file_size(inode, lsm, &fd->fd_osthandle);
+                        if (rc)
+                                GOTO(prepare_done, rc);
+                }
+                if (inode->i_size <= offset) {
+                        memset(addr, 0, PAGE_SIZE);
+                        GOTO(prepare_done, rc=0);
+                }
         }
 
         rc = ll_brw(OBD_BRW_READ, inode, page, 0);
@@ -244,7 +258,9 @@ static int ll_prepare_write(struct file *file, struct page *page, unsigned from,
  prepare_done:
         if (!rc)
                 SetPageUptodate(page);
-
+        else
+                kunmap (page);
+        
         return rc;
 }
 
@@ -307,7 +323,7 @@ static int ll_commit_write(struct file *file, struct page *page,
                pg.off, pg.count);
 
         set->brw_callback = ll_brw_sync_wait;
-        rc = obd_brw(OBD_BRW_WRITE, ll_i2obdconn(inode), md, 1, &pg, set);
+        rc = obd_brw(OBD_BRW_WRITE, ll_i2obdconn(inode), md, 1, &pg, set, NULL);
         if (rc)
                 CERROR("error from obd_brw: rc = %d\n", rc);
         else {
@@ -368,7 +384,7 @@ static int ll_direct_IO(int rw, struct inode *inode, struct kiobuf *iobuf,
 
         set->brw_callback = ll_brw_sync_wait;
         rc = obd_brw(rw == WRITE ? OBD_BRW_WRITE : OBD_BRW_READ,
-                     ll_i2obdconn(inode), lsm, bufs_per_obdo, pga, set);
+                     ll_i2obdconn(inode), lsm, bufs_per_obdo, pga, set, NULL);
         if (rc)
                 CERROR("error from obd_brw: rc = %d\n", rc);
         else {

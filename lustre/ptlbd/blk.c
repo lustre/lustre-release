@@ -1,7 +1,8 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (c) 2002 Cluster File Systems, Inc.
+ *  Copyright (c) 2002, 2003 Cluster File Systems, Inc.
+ *   Author: Zach Brown <zab@clusterfs.com>
  *
  *   This file is part of Lustre, http://www.lustre.org.
  *
@@ -49,6 +50,7 @@
 #define LOCAL_END_REQUEST
 #include <linux/blk.h>
 #include <linux/blkdev.h>
+#include <linux/blkpg.h>
 #include <linux/devfs_fs_kernel.h>
 
 static int ptlbd_size_size[PTLBD_MAX_MINOR];
@@ -106,6 +108,7 @@ static int ptlbd_ioctl(struct inode *inode, struct file *file,
                 unsigned int cmd, unsigned long arg)
 {
         struct ptlbd_obd *ptlbd;
+        int ret;
 
         if ( ! capable(CAP_SYS_ADMIN) )
                 RETURN(-EPERM);
@@ -114,9 +117,16 @@ static int ptlbd_ioctl(struct inode *inode, struct file *file,
         if ( IS_ERR(ptlbd) )
                 RETURN( PTR_ERR(ptlbd) );
 
-        /* XXX getattr{,64} */
+        switch(cmd) {
+                case BLKFLSBUF:
+                        ret = blk_ioctl(inode->i_rdev, cmd, arg);
+                        break;
+                default:
+                        ret = -EINVAL;
+                        break;
+        }
 
-        RETURN(-EINVAL);
+        RETURN(ret);
 }
 
 static int ptlbd_release(struct inode *inode, struct file *file)

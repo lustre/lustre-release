@@ -25,77 +25,28 @@
 #include <linux/lustre_fsfilt.h>
 #include <linux/lprocfs_status.h>
 
-int rd_uuid(char *page, char **start, off_t off, int count, int *eof,
-            void *data)
+#ifndef LPROCFS
+struct lprocfs_vars lprocfs_mds_obd_vars[]  = { {0} };
+struct lprocfs_vars lprocfs_mds_module_vars[] = { {0} };
+struct lprocfs_vars lprocfs_mdt_obd_vars[] = { {0} };
+struct lprocfs_vars lprocfs_mdt_module_vars[] = { {0} };
+
+#else
+
+static inline
+int lprocfs_mds_statfs(void *data, struct statfs *sfs)
 {
-        struct obd_device* temp = (struct obd_device*)data;
-        return snprintf(page, count, "%s\n", temp->obd_uuid);
+        struct obd_device* dev = (struct obd_device*) data;
+        struct mds_obd *mds = &dev->u.mds;
+        return vfs_statfs(mds->mds_sb, sfs);
 }
 
-int rd_blksize(char *page, char **start, off_t off, int count, int *eof,
-               void *data)
-{
-        struct obd_device* temp = (struct obd_device*)data;
-        struct mds_obd *mds = &temp->u.mds;
-        struct statfs mystats;
-        int rc;
-
-        rc = vfs_statfs(mds->mds_sb, &mystats);
-        if (rc) {
-                CERROR("mds: statfs failed: rc %d\n", rc);
-                return 0;
-        }
-        return snprintf(page, count, LPU64"\n", (__u64)(mystats.f_bsize));
-}
-
-int rd_kbtotal(char *page, char **start, off_t off, int count, int *eof,
-               void *data)
-{
-        struct obd_device* temp = (struct obd_device*)data;
-        struct mds_obd *mds = &temp->u.mds;
-        struct statfs mystats;
-        int rc;
-        __u32 blk_size;
-        __u64 result;
-
-        rc = vfs_statfs(mds->mds_sb, &mystats);
-        if (rc) {
-                CERROR("mds: statfs failed: rc %d\n", rc);
-                return 0;
-        }
-
-        blk_size = mystats.f_bsize;
-        blk_size >>= 10;
-        result = mystats.f_blocks;
-        while(blk_size >>= 1)
-                result <<= 1;
-
-        return snprintf(page, count, LPU64"\n", result);
-}
-
-int rd_kbfree(char *page, char **start, off_t off, int count, int *eof,
-              void *data)
-{
-        struct obd_device* temp = (struct obd_device*)data;
-        struct mds_obd *mds = &temp->u.mds;
-        struct statfs mystats;
-        int rc;
-        __u32 blk_size;
-        __u64 result;
-
-        rc = vfs_statfs(mds->mds_sb, &mystats);
-        if (rc) {
-                CERROR("mds: statfs failed: rc %d\n", rc);
-                return 0;
-        }
-        blk_size = mystats.f_bsize;
-        blk_size >>= 10;
-        result = mystats.f_blocks;
-        while (blk_size >>= 1)
-                result <<= 1;
-
-        return snprintf(page, count, LPU64"\n", result);
-}
+DEFINE_LPROCFS_STATFS_FCT(rd_blksize,     lprocfs_mds_statfs);
+DEFINE_LPROCFS_STATFS_FCT(rd_kbytestotal, lprocfs_mds_statfs);
+DEFINE_LPROCFS_STATFS_FCT(rd_kbytesfree,  lprocfs_mds_statfs);
+DEFINE_LPROCFS_STATFS_FCT(rd_filestotal,  lprocfs_mds_statfs);
+DEFINE_LPROCFS_STATFS_FCT(rd_filesfree,   lprocfs_mds_statfs);
+DEFINE_LPROCFS_STATFS_FCT(rd_filegroups,  lprocfs_mds_statfs);
 
 int rd_fstype(char *page, char **start, off_t off, int count, int *eof,
               void *data)
@@ -105,66 +56,40 @@ int rd_fstype(char *page, char **start, off_t off, int count, int *eof,
         return snprintf(page, count, "%s\n", obd->obd_fsops->fs_type);
 }
 
-int rd_filestotal(char *page, char **start, off_t off, int count, int *eof,
-                  void *data)
-{
-        struct obd_device* temp = (struct obd_device*)data;
-        struct mds_obd *mds = &temp->u.mds;
-        struct statfs mystats;
-        int rc;
 
-        rc = vfs_statfs(mds->mds_sb, &mystats);
-        if (rc) {
-                CERROR("mds: statfs failed: rc %d\n", rc);
-                return 0;
-        }
-        return snprintf(page, count, LPU64"\n", (__u64)(mystats.f_files));
-}
-
-int rd_filesfree(char *page, char **start, off_t off, int count, int *eof,
-                 void *data)
-{
-        struct obd_device* temp = (struct obd_device*)data;
-        struct mds_obd *mds = &temp->u.mds;
-        struct statfs mystats;
-        int rc, len = 0;
-
-        rc = vfs_statfs(mds->mds_sb, &mystats);
-        if (rc) {
-                CERROR("mds: statfs failed: rc %d\n", rc);
-                return 0;
-        }
-
-        len += snprintf(page, count, LPU64"\n", (__u64)(mystats.f_ffree));
-        return len;
-}
-
-int rd_filegroups(char *page, char **start, off_t off, int count, int *eof,
-                  void *data)
-{
-        return 0;
-}
-struct lprocfs_vars status_var_nm_1[]={
-        {"status/uuid", rd_uuid, 0, 0},
-        {"status/blocksize",rd_blksize, 0, 0},
-        {"status/kbytestotal",rd_kbtotal, 0, 0},
-        {"status/kbytesfree", rd_kbfree, 0, 0},
-        {"status/fstype", rd_fstype, 0, 0},
-        {"status/filestotal", rd_filestotal, 0, 0},
-        {"status/filesfree", rd_filesfree, 0, 0},
-        {"status/filegroups", rd_filegroups, 0, 0},
-        {0}
+struct lprocfs_vars lprocfs_mds_obd_vars[] = {
+        { "uuid",       lprocfs_rd_uuid, 0, 0 },
+        { "blocksize",  rd_blksize,      0, 0 },
+        { "bytestotal", rd_kbytestotal,  0, 0 },
+        { "kbytesfree", rd_kbytesfree,   0, 0 },
+        { "fstype",     rd_fstype,       0, 0 },
+        { "filestotal", rd_filestotal,   0, 0 },
+        { "filesfree",  rd_filesfree,    0, 0 },
+        { "filegroups", rd_filegroups,   0, 0 },
+        { 0 }
 };
 
-int rd_numrefs(char *page, char **start, off_t off, int count, int *eof,
-               void *data)
-{
-        struct obd_type *class = (struct obd_type*)data;
-
-        return snprintf(page, count, "%d\n", class->typ_refcnt);
-}
-
-struct lprocfs_vars status_class_var[]={
-        {"status/num_refs", rd_numrefs, 0, 0},
-        {0}
+struct lprocfs_vars lprocfs_mds_module_vars[] = {
+        { "num_refs",   lprocfs_rd_numrefs, 0, 0 },
+        { 0 }
 };
+
+struct lprocfs_vars lprocfs_mdt_obd_vars[] = {
+        { "uuid",       lprocfs_rd_uuid, 0, 0 },
+        { 0 }
+};
+
+struct lprocfs_vars lprocfs_mdt_module_vars[] = {
+        { "num_refs",   lprocfs_rd_numrefs, 0, 0 },
+        { 0 }
+};
+
+#endif
+struct lprocfs_static_vars lprocfs_array_vars[] = { {lprocfs_mds_module_vars,
+                                                     lprocfs_mds_obd_vars},
+                                                    {lprocfs_mdt_module_vars,
+                                                     lprocfs_mdt_obd_vars}};
+
+LPROCFS_INIT_MULTI_VARS(lprocfs_array_vars,
+                        (sizeof(lprocfs_array_vars)/
+                         sizeof(struct lprocfs_static_vars))) 

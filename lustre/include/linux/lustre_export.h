@@ -23,11 +23,17 @@ struct lov_export_data {
 };
 
 struct ost_export_data {
-        __u8 oed_uuid[37]; /* client UUID */
+        struct obd_uuid oed_uuid; /* client UUID */
+};
+
+struct ec_export_data { /* echo client */
+        struct list_head eced_open_head;
+        struct list_head eced_locks;
 };
 
 struct obd_export {
         __u64                     exp_cookie;
+        struct obd_uuid           exp_client_uuid;
         struct list_head          exp_obd_chain;
         struct list_head          exp_conn_chain;
         struct obd_device        *exp_obd;
@@ -38,6 +44,7 @@ struct obd_export {
                 struct filter_export_data eu_filter_data;
                 struct lov_export_data    eu_lov_data;
                 struct ost_export_data    eu_ost_data;
+                struct ec_export_data     eu_ec_data;
         } u;
 };
 
@@ -45,6 +52,7 @@ struct obd_export {
 #define exp_lov_data    u.eu_lov_data
 #define exp_filter_data u.eu_filter_data
 #define exp_ost_data    u.eu_ost_data
+#define exp_ec_data     u.eu_ec_data
 
 extern struct obd_export *class_conn2export(struct lustre_handle *conn);
 extern struct obd_device *class_conn2obd(struct lustre_handle *conn);

@@ -10,7 +10,7 @@ MODULE = mds
 modulefs_DATA = mds.o
 EXTRA_PROGRAMS = mds
 
-LINX= mds_updates.c simple.c target.c
+LINX= mds_updates.c mds_open.c simple.c target.c
 
 mds_updates.c: 
 	test -e mds_updates.c || ln -sf $(top_srcdir)/lib/mds_updates.c

@@ -47,22 +47,47 @@
  */
 
 #define LDLM_NUM_THREADS        4
-#define LDLM_NEVENTS    1024
-#define LDLM_NBUFS      100
+#define LDLM_NEVENT_MAX 8192UL
+#define LDLM_NEVENTS    min(num_physpages / 64, LDLM_NEVENT_MAX)
+#define LDLM_NBUF_MAX   256UL
+#define LDLM_NBUFS      min(LDLM_NEVENTS / 16, LDLM_NBUF_MAX)
 #define LDLM_BUFSIZE    (8 * 1024)
 #define LDLM_MAXREQSIZE 1024
 
 #define MDT_NUM_THREADS 8
-#define MDS_NEVENTS     1024
-#define MDS_NBUFS       100
+#define MDS_NEVENT_MAX  8192UL
+#define MDS_NEVENTS     min(num_physpages / 64, MDS_NEVENT_MAX)
+#define MDS_NBUF_MAX    512UL
+#define MDS_NBUFS       min(MDS_NEVENTS / 16, MDS_NBUF_MAX)
 #define MDS_BUFSIZE     (8 * 1024)
-#define MDS_MAXREQSIZE  1024
+/* Assume file name length = FNAME_MAX = 256 (true for extN).
+ *        path name length = PATH_MAX = 4096
+ *        LOV MD size max  = EA_MAX = 4000
+ * symlink:  FNAME_MAX + PATH_MAX  <- largest
+ * link:     FNAME_MAX + PATH_MAX  (mds_rec_link < mds_rec_create)
+ * rename:   FNAME_MAX + FNAME_MAX
+ * open:     FNAME_MAX + EA_MAX
+ *
+ * MDS_MAXREQSIZE ~= 4736 bytes =
+ * lustre_msg + ldlm_request + mds_body + mds_rec_create + FNAME_MAX + PATH_MAX
+ *
+ * Realistic size is about 512 bytes (20 character name + 128 char symlink),
+ * except in the open case where there are a large number of OSTs in a LOV.
+ */
+#define MDS_MAXREQSIZE  (5 * 1024)
 
 #define OST_NUM_THREADS 6
-#define OST_NEVENTS     min(num_physpages / 16, 32768UL)
-#define OST_NBUFS       min(OST_NEVENTS / 128, 1280UL)
-#define OST_BUFSIZE     ((OST_NEVENTS > 4096UL ? 32 : 8) * 1024)
-#define OST_MAXREQSIZE  (8 * 1024)
+#define OST_NEVENT_MAX  32768UL
+#define OST_NEVENTS     min(num_physpages / 16, OST_NEVENT_MAX)
+#define OST_NBUF_MAX    1280UL
+#define OST_NBUFS       min(OST_NEVENTS / 64, OST_NBUF_MAX)
+#define OST_BUFSIZE     (8 * 1024)
+/* OST_MAXREQSIZE ~= 1896 bytes =
+ * lustre_msg + obdo + 16 * obd_ioobj + 64 * niobuf_remote
+ *
+ * single object with 16 pages is 576 bytes
+ */
+#define OST_MAXREQSIZE  (2 * 1024)
 
 #define PTLBD_NUM_THREADS        4
 #define PTLBD_NEVENTS    1024
@@ -75,8 +100,8 @@
 struct ptlrpc_connection {
         struct list_head        c_link;
         struct lustre_peer      c_peer;
-        __u8                    c_local_uuid[37];  /* XXX do we need this? */
-        __u8                    c_remote_uuid[37];
+        struct obd_uuid         c_local_uuid;  /* XXX do we need this? */
+        struct obd_uuid         c_remote_uuid;
 
         __u32                   c_generation;  /* changes upon new connection */
         __u32                   c_epoch;       /* changes when peer changes */
@@ -160,19 +185,25 @@ struct ptlrpc_request {
         struct ptlrpc_service *rq_svc;
 
         void (*rq_replay_cb)(struct ptlrpc_request *);
+        void  *rq_replay_data;
 };
 
 #define DEBUG_REQ(level, req, fmt, args...)                                    \
 do {                                                                           \
 CDEBUG(level,                                                                  \
        "@@@ " fmt " req@%p x"LPD64"/t"LPD64" o%d->%s:%d lens %d/%d ref %d fl " \
-       "%x\n" ,  ## args, req, req->rq_xid, req->rq_reqmsg->transno,           \
+       "%x/%x/%x rc %x\n" ,  ## args, req, req->rq_xid,                        \
+       req->rq_reqmsg ? req->rq_reqmsg->transno : -1,                          \
        req->rq_reqmsg ? req->rq_reqmsg->opc : -1,                              \
-       req->rq_connection ? (char *)req->rq_connection->c_remote_uuid : "<?>", \
+       req->rq_connection ?                                                    \
+          (char *)req->rq_connection->c_remote_uuid.uuid : "<?>",              \
        (req->rq_import && req->rq_import->imp_client) ?                        \
            req->rq_import->imp_client->cli_request_portal : -1,                \
        req->rq_reqlen, req->rq_replen,                                         \
-       atomic_read (&req->rq_refcount), req->rq_flags);                        \
+       atomic_read (&req->rq_refcount), req->rq_flags,                         \
+       req->rq_reqmsg ? req->rq_reqmsg->flags : 0,                             \
+       req->rq_repmsg ? req->rq_repmsg->flags : 0,                             \
+       req->rq_status);                                                        \
 } while (0)
 
 struct ptlrpc_bulk_page {
@@ -277,9 +308,9 @@ typedef void (*bulk_callback_t)(struct ptlrpc_bulk_desc *, void *);
 typedef int (*svc_handler_t)(struct ptlrpc_request *req);
 
 /* rpc/connection.c */
-void ptlrpc_readdress_connection(struct ptlrpc_connection *, obd_uuid_t uuid);
+void ptlrpc_readdress_connection(struct ptlrpc_connection *, struct obd_uuid *uuid);
 struct ptlrpc_connection *ptlrpc_get_connection(struct lustre_peer *peer,
-                                                obd_uuid_t uuid);
+                                                struct obd_uuid *uuid);
 int ptlrpc_put_connection(struct ptlrpc_connection *c);
 struct ptlrpc_connection *ptlrpc_connection_addref(struct ptlrpc_connection *);
 void ptlrpc_init_connection(void);
@@ -288,8 +319,10 @@ void ptlrpc_cleanup_connection(void);
 /* rpc/niobuf.c */
 int ptlrpc_check_bulk_sent(struct ptlrpc_bulk_desc *bulk);
 int ptlrpc_check_bulk_received(struct ptlrpc_bulk_desc *bulk);
-int ptlrpc_send_bulk(struct ptlrpc_bulk_desc *);
-int ptlrpc_register_bulk(struct ptlrpc_bulk_desc *);
+int ptlrpc_bulk_put(struct ptlrpc_bulk_desc *);
+int ptlrpc_bulk_get(struct ptlrpc_bulk_desc *);
+int ptlrpc_register_bulk_put(struct ptlrpc_bulk_desc *);
+int ptlrpc_register_bulk_get(struct ptlrpc_bulk_desc *);
 int ptlrpc_abort_bulk(struct ptlrpc_bulk_desc *bulk);
 struct obd_brw_set *obd_brw_set_new(void);
 void obd_brw_set_add(struct obd_brw_set *, struct ptlrpc_bulk_desc *);
@@ -305,8 +338,8 @@ void ptlrpc_link_svc_me(struct ptlrpc_request_buffer_desc *rqbd);
 void ptlrpc_init_client(int req_portal, int rep_portal, char *name,
                         struct ptlrpc_client *);
 void ptlrpc_cleanup_client(struct obd_import *imp);
-__u8 *ptlrpc_req_to_uuid(struct ptlrpc_request *req);
-struct ptlrpc_connection *ptlrpc_uuid_to_connection(obd_uuid_t uuid);
+struct obd_uuid *ptlrpc_req_to_uuid(struct ptlrpc_request *req);
+struct ptlrpc_connection *ptlrpc_uuid_to_connection(struct obd_uuid *uuid);
 
 int ll_brw_sync_wait(struct obd_brw_set *, int phase);
 
@@ -314,22 +347,25 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req);
 void ptlrpc_continue_req(struct ptlrpc_request *req);
 int ptlrpc_replay_req(struct ptlrpc_request *req);
 void ptlrpc_restart_req(struct ptlrpc_request *req);
-void ptlrpc_abort_inflight(struct obd_import *imp);
+void ptlrpc_abort_inflight(struct obd_import *imp, int dying_import);
 
 struct ptlrpc_request *ptlrpc_prep_req(struct obd_import *imp, int opcode,
                                        int count, int *lengths, char **bufs);
 void ptlrpc_free_req(struct ptlrpc_request *request);
 void ptlrpc_req_finished(struct ptlrpc_request *request);
+struct ptlrpc_request *ptlrpc_request_addref(struct ptlrpc_request *req);
 struct ptlrpc_bulk_desc *ptlrpc_prep_bulk(struct ptlrpc_connection *);
 void ptlrpc_free_bulk(struct ptlrpc_bulk_desc *bulk);
 struct ptlrpc_bulk_page *ptlrpc_prep_bulk_page(struct ptlrpc_bulk_desc *desc);
 void ptlrpc_free_bulk_page(struct ptlrpc_bulk_page *page);
+void ptlrpc_retain_replayable_request(struct ptlrpc_request *req,
+                                      struct obd_import *imp);
 
 /* rpc/service.c */
 struct ptlrpc_service *
 ptlrpc_init_svc(__u32 nevents, __u32 nbufs, __u32 bufsize, __u32 max_req_size,
                 int req_portal, int rep_portal,
-                obd_uuid_t uuid, svc_handler_t, char *name);
+                struct obd_uuid *uuid, svc_handler_t, char *name);
 void ptlrpc_stop_all_threads(struct ptlrpc_service *svc);
 int ptlrpc_start_thread(struct obd_device *dev, struct ptlrpc_service *svc,
                         char *name);

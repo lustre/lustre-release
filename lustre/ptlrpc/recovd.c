@@ -29,7 +29,8 @@ static void d_c_l(struct list_head *head)
                 struct ptlrpc_connection *conn =
                         list_entry(tmp, struct ptlrpc_connection,
                                    c_recovd_data.rd_managed_chain);
-                CDEBUG(D_HA, "   %p = %s (%d/%d)\n", conn, conn->c_remote_uuid,
+                CDEBUG(D_HA, "   %p = %s (%d/%d)\n", conn, 
+                       conn->c_remote_uuid.uuid,
                        conn->c_recovd_data.rd_phase,
                        conn->c_recovd_data.rd_next_phase);
         }
@@ -56,13 +57,13 @@ void recovd_conn_manage(struct ptlrpc_connection *conn,
         if (!list_empty(&rd->rd_managed_chain)) {
                 if (rd->rd_recovd == recovd && rd->rd_recover == recover) {
                         CDEBUG(D_HA, "conn %p/%s already setup for recovery\n",
-                               conn, conn->c_remote_uuid);
+                               conn, conn->c_remote_uuid.uuid);
                         EXIT;
                         return;
                 }
                 CDEBUG(D_HA,
                        "conn %p/%s has recovery items %p/%p, making %p/%p\n",
-                       conn, conn->c_remote_uuid, rd->rd_recovd, rd->rd_recover,
+                       conn, conn->c_remote_uuid.uuid, rd->rd_recovd, rd->rd_recover,
                        recovd, recover);
                 spin_lock(&rd->rd_recovd->recovd_lock);
                 list_del_init(&rd->rd_managed_chain);
@@ -115,21 +116,21 @@ void recovd_conn_fail(struct ptlrpc_connection *conn)
         spin_lock(&recovd->recovd_lock);
         if (rd->rd_phase == RD_TROUBLED || rd->rd_phase == RD_PREPARING) {
                 CDEBUG(D_HA, "connection %p to %s already in recovery\n",
-                       conn, conn->c_remote_uuid);
+                       conn, conn->c_remote_uuid.uuid);
                 spin_unlock(&recovd->recovd_lock);
                 EXIT;
                 return;
         }
 
         CERROR("connection %p to %s (%08x %08lx %08lx) failed\n", conn,
-               conn->c_remote_uuid, conn->c_peer.peer_nid,
+               conn->c_remote_uuid.uuid, conn->c_peer.peer_nid,
                conn->c_peer.peer_ni.nal_idx, conn->c_peer.peer_ni.handle_idx);
         list_del(&rd->rd_managed_chain);
         list_add_tail(&rd->rd_managed_chain, &recovd->recovd_troubled_items);
         if (rd->rd_phase != RD_IDLE) {
                 CDEBUG(D_HA,
                        "connection %p to %s failed in recovery: restarting\n",
-                       conn, conn->c_remote_uuid);
+                       conn, conn->c_remote_uuid.uuid);
                 /* XXX call callback with PHASE_FAILED? */
                 rd->rd_next_phase = RD_TROUBLED;
         }
@@ -148,7 +149,7 @@ void recovd_conn_fixed(struct ptlrpc_connection *conn)
         ENTRY;
 
         CDEBUG(D_HA, "connection %p (now to %s) fixed\n",
-               conn, conn->c_remote_uuid);
+               conn, conn->c_remote_uuid.uuid);
         spin_lock(&rd->rd_recovd->recovd_lock);
         list_del(&rd->rd_managed_chain);
         rd->rd_phase = RD_IDLE;

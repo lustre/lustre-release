@@ -49,7 +49,7 @@ case ${host_cpu} in
 
 	ia64 )
 	AC_MSG_RESULT($host_cpu)
-        KCFLAGS='-g -O2 -Wall -Wstrict-prototypes -Wno-trigraphs -fno-strict-aliasing -fno-common -pipe -ffixed-r13 -mfixed-range=f10-f15,f32-f127 -falign-functions=32 -mb-step'
+        KCFLAGS='-gstabs -O2 -Wall -Wstrict-prototypes -Wno-trigraphs -fno-strict-aliasing -fno-common -pipe -ffixed-r13 -mfixed-range=f10-f15,f32-f127 -falign-functions=32 -mb-step'
 	KCPPFLAGS='-D__KERNEL__ -DMODULE'
         MOD_LINK=elf64_ia64
 ;;

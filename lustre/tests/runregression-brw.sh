@@ -1,16 +1,15 @@
 #!/bin/sh
-export PATH=/sbin:/usr/sbin:$PATH
-
 SRCDIR="`dirname $0`/"
-. $SRCDIR/common.sh
+export PATH=/sbin:/usr/sbin:$SRCDIR:$PATH
 
+LOOPS=${LOOPS:-1}
 COUNT=${COUNT:-1000000}
 COUNT_10=`expr $COUNT / 10`
 COUNT_100=`expr $COUNT / 100`
 
 ENDRUN=endrun-`hostname`
 
-ECHONAME="`$OBDCTL device_list 2> /dev/null | awk '/ echo_client / { print $4 }' | tail -1`"
+ECHONAME="`lctl device_list 2> /dev/null | awk '/ echo_client / { print $4 }' | tail -1`"
 
 if [ -z "$ECHONAME" ]; then
 	echo "$0: needs an ECHO_CLIENT set up first" 1>&2
@@ -18,7 +17,7 @@ if [ -z "$ECHONAME" ]; then
 fi
 
 cleanup () {
-	$OBDCTL --device \$$ECHONAME destroy $OID
+	lctl --device \$$ECHONAME destroy $OID
 }
 	
 runthreads() {
@@ -42,7 +41,7 @@ runthreads() {
 		;;
 	esac
 
-	$OBDCTL --threads $THR v \$$ECHONAME $DO $CNT $RW $V $PGS $OID || exit 1
+	lctl --threads $THR v \$$ECHONAME $DO $CNT $RW $V $PGS $OID || exit 1
 
 	if [ -e $ENDRUN ]; then
 		rm $ENDRUN
@@ -51,15 +50,15 @@ runthreads() {
 	fi
 }
 
-[ -z "$OID" ] && OID=`$OBDCTL --device \\$$ECHONAME create 1 | awk '/is object id/ { print $6 }'`
+[ -z "$OID" ] && OID=`lctl --device \\$$ECHONAME create 1 | awk '/is object id/ { print $6 }'` && echo "created object $OID"
 [ -z "$OID" ] && echo "error creating object" 1>&2 && exit 1
 
 # TODO: obdctl needs to check on the progress of each forked thread
 #       (IPC SHM, sockets?) to see if it hangs.
-while date; do
+for i in `seq $LOOPS`; do
 	PG=1
-	PGVW=16
-	PGVR=16
+	PGVW=${PGVW:-16}
+	PGVR=${PGVR:-16}
 
 	# We use '--threads 1 X' instead of '--device X' so that
 	# obdctl can monitor the forked thread for progress (TODO).

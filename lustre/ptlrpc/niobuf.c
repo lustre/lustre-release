@@ -1,7 +1,7 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (C) 2002 Cluster File Systems, Inc.
+ *  Copyright (c) 2002, 2003 Cluster File Systems, Inc.
  *
  *   This file is part of Lustre, http://www.lustre.org.
  *
@@ -28,7 +28,8 @@
 #include <linux/obd.h>
 
 extern ptl_handle_eq_t request_out_eq, reply_in_eq, reply_out_eq,
-        bulk_source_eq, bulk_sink_eq;
+        bulk_put_source_eq, bulk_put_sink_eq, 
+        bulk_get_source_eq, bulk_get_sink_eq;
 
 static int ptl_send_buf(struct ptlrpc_request *request,
                         struct ptlrpc_connection *conn, int portal)
@@ -113,7 +114,7 @@ ptlrpc_put_bulk_iov (struct ptlrpc_bulk_desc *desc, struct iovec *iov)
         OBD_FREE (iov, desc->bd_page_count * sizeof (struct iovec));
 }
 
-int ptlrpc_send_bulk(struct ptlrpc_bulk_desc *desc)
+int ptlrpc_bulk_put(struct ptlrpc_bulk_desc *desc)
 {
         int rc;
         struct list_head *tmp, *next;
@@ -129,7 +130,7 @@ int ptlrpc_send_bulk(struct ptlrpc_bulk_desc *desc)
         desc->bd_md.start = iov;
         desc->bd_md.niov = 0;
         desc->bd_md.length = 0;
-        desc->bd_md.eventq = bulk_source_eq;
+        desc->bd_md.eventq = bulk_put_source_eq;
         desc->bd_md.threshold = 2; /* SENT and ACK */
         desc->bd_md.options = PTL_MD_OP_PUT | PTL_MD_IOV;
         desc->bd_md.user_ptr = desc;
@@ -194,7 +195,87 @@ int ptlrpc_send_bulk(struct ptlrpc_bulk_desc *desc)
         RETURN(0);
 }
 
-int ptlrpc_register_bulk(struct ptlrpc_bulk_desc *desc)
+int ptlrpc_bulk_get(struct ptlrpc_bulk_desc *desc)
+{
+        int rc;
+        struct list_head *tmp, *next;
+        ptl_process_id_t remote_id;
+        __u32 xid = 0;
+        struct iovec *iov;
+        ENTRY;
+
+        iov = ptlrpc_get_bulk_iov (desc);
+        if (iov == NULL)
+                RETURN (-ENOMEM);
+
+        desc->bd_md.start = iov;
+        desc->bd_md.niov = 0;
+        desc->bd_md.length = 0;
+        desc->bd_md.eventq = bulk_get_sink_eq;
+        desc->bd_md.threshold = 2; /* SENT and REPLY */
+        desc->bd_md.options = PTL_MD_OP_GET | PTL_MD_IOV;
+        desc->bd_md.user_ptr = desc;
+
+        atomic_set(&desc->bd_source_callback_count, 2);
+
+        list_for_each_safe(tmp, next, &desc->bd_page_list) {
+                struct ptlrpc_bulk_page *bulk;
+                bulk = list_entry(tmp, struct ptlrpc_bulk_page, bp_link);
+
+                LASSERT(desc->bd_md.niov < desc->bd_page_count);
+
+                if (desc->bd_md.niov == 0)
+                        xid = bulk->bp_xid;
+                LASSERT(xid == bulk->bp_xid);   /* should all be the same */
+
+                iov[desc->bd_md.niov].iov_base = bulk->bp_buf;
+                iov[desc->bd_md.niov].iov_len = bulk->bp_buflen;
+                if (iov[desc->bd_md.niov].iov_len <= 0) {
+                        CERROR("bad bp_buflen[%d] @ %p: %d\n", desc->bd_md.niov,
+                               bulk->bp_buf, bulk->bp_buflen);
+                        CERROR("desc: xid %u, pages %d, ptl %d, ref %d\n",
+                               xid, desc->bd_page_count, desc->bd_portal,
+                               atomic_read(&desc->bd_refcount));
+                        LBUG();
+                }
+                desc->bd_md.niov++;
+                desc->bd_md.length += bulk->bp_buflen;
+        }
+
+        LASSERT(desc->bd_md.niov == desc->bd_page_count);
+        LASSERT(desc->bd_md.niov != 0);
+
+        rc = PtlMDBind(desc->bd_connection->c_peer.peer_ni, desc->bd_md,
+                       &desc->bd_md_h);
+
+        ptlrpc_put_bulk_iov (desc, iov); /*move down to reduce latency to send*/
+
+        if (rc != PTL_OK) {
+                CERROR("PtlMDBind failed: %d\n", rc);
+                LBUG();
+                RETURN(rc);
+        }
+
+        remote_id.nid = desc->bd_connection->c_peer.peer_nid;
+        remote_id.pid = 0;
+
+        CDEBUG(D_NET, "Sending %u pages %u bytes to portal %d nid "LPX64" pid "
+               "%d xid %d\n", desc->bd_md.niov, desc->bd_md.length,
+               desc->bd_portal, remote_id.nid, remote_id.pid, xid);
+
+        rc = PtlGet(desc->bd_md_h, remote_id, desc->bd_portal, 0, xid, 0);
+        if (rc != PTL_OK) {
+                CERROR("PtlGet("LPU64", %d, %d) failed: %d\n",
+                       remote_id.nid, desc->bd_portal, xid, rc);
+                PtlMDUnlink(desc->bd_md_h);
+                LBUG();
+                RETURN(rc);
+        }
+
+        RETURN(0);
+}
+
+static int ptlrpc_register_bulk_shared(struct ptlrpc_bulk_desc *desc)
 {
         struct list_head *tmp, *next;
         int rc;
@@ -217,9 +298,7 @@ int ptlrpc_register_bulk(struct ptlrpc_bulk_desc *desc)
         desc->bd_md.niov = 0;
         desc->bd_md.length = 0;
         desc->bd_md.threshold = 1;
-        desc->bd_md.options = PTL_MD_OP_PUT | PTL_MD_IOV;
         desc->bd_md.user_ptr = desc;
-        desc->bd_md.eventq = bulk_sink_eq;
 
         list_for_each_safe(tmp, next, &desc->bd_page_list) {
                 struct ptlrpc_bulk_page *bulk;
@@ -274,6 +353,22 @@ int ptlrpc_register_bulk(struct ptlrpc_bulk_desc *desc)
         ptlrpc_abort_bulk(desc);
 
         return rc;
+}
+
+int ptlrpc_register_bulk_get(struct ptlrpc_bulk_desc *desc)
+{
+        desc->bd_md.options = PTL_MD_OP_GET | PTL_MD_IOV;
+        desc->bd_md.eventq = bulk_get_source_eq;
+
+        return ptlrpc_register_bulk_shared(desc);
+}
+
+int ptlrpc_register_bulk_put(struct ptlrpc_bulk_desc *desc)
+{
+        desc->bd_md.options = PTL_MD_OP_PUT | PTL_MD_IOV;
+        desc->bd_md.eventq = bulk_put_sink_eq;
+
+        return ptlrpc_register_bulk_shared(desc);
 }
 
 int ptlrpc_abort_bulk(struct ptlrpc_bulk_desc *desc)
@@ -356,14 +451,13 @@ int ptlrpc_error(struct ptlrpc_service *svc, struct ptlrpc_request *req)
         int rc;
         ENTRY;
 
-        if (req->rq_repmsg) {
-                CERROR("req already has repmsg\n");
-                LBUG();
+        if (!req->rq_repmsg) {
+                rc = lustre_pack_msg(0, NULL, NULL, &req->rq_replen,
+                                     &req->rq_repmsg);
+                if (rc)
+                        RETURN(rc);
         }
 
-        rc = lustre_pack_msg(0, NULL, NULL, &req->rq_replen, &req->rq_repmsg);
-        if (rc)
-                RETURN(rc);
 
         req->rq_type = PTL_RPC_MSG_ERR;
 
@@ -390,7 +484,7 @@ int ptl_send_rpc(struct ptlrpc_request *request)
         source_id.pid = PTL_PID_ANY;
 
         /* add a ref, which will be balanced in request_out_callback */
-        atomic_inc(&request->rq_refcount);
+        ptlrpc_request_addref(request);
         if (request->rq_replen != 0) {
                 if (request->rq_reply_md.start != NULL) {
                         rc = PtlMEUnlink(request->rq_reply_me_h);

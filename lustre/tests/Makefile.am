@@ -22,11 +22,12 @@ noinst_SCRIPTS += fs.sh intent-test.sh intent-test2.sh leak_finder.pl \
 	ostreq.sh runfailure-client-mds-recover.sh runfailure-mds \
 	runfailure-net runfailure-ost runiozone runregression-net.sh \
 	runtests runvmstat snaprun.sh tbox.sh  common.sh
-noinst_PROGRAMS = openunlink testreq truncate directio openme writeme mcreate
+noinst_PROGRAMS = openunlink testreq truncate directio openme writeme open_delay
 noinst_PROGRAMS += munlink tchmod toexcl fsx test_brw openclose createdestroy
-noinst_PROGRAMS += stat createmany statmany mkdirmany multifstat
+noinst_PROGRAMS += stat createmany statmany mkdirmany multifstat createtest
 # noinst_PROGRAMS += ldaptest 
 noinst_PROGRAMS += checkstat wantedi
+sbin_PROGRAMS = mcreate
 
 # ldaptest_SOURCES = ldaptest.c
 tchmod_SOURCES = tchmod.c
@@ -50,5 +51,7 @@ mkdirmany_SOURCES = mkdirmany.c
 multifstat_SOURCES = multifstat.c
 checkstat_SOURCES = checkstat.c
 wantedi_SOURCES = wantedi.c
+createtest_SOURCES = createtest.c
+open_delay_SOURCES = open_delay.c
 
 include $(top_srcdir)/Rules

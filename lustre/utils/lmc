@@ -65,18 +65,18 @@ Object creation command summary:
 
 -add ost
   --node node_name
-  --obd obd_name 
+  --ost ost_name 
   --lov lov_name 
   --dev path
   --size size
   --fstype extN|ext3
-  --obduuid uuid
+  --ostuuid uuid
   
 --add mtpt  - Mountpoint
   --node node_name
   --path /mnt/point
   --mds mds_name
-  --obd obd_name OR --lov lovname
+  --ost ost_name OR --lov lov_name
 """
     sys.exit(1)
 
@@ -217,18 +217,19 @@ class GenConfig:
         ldlm = self.newService("ldlm", name, uuid)
         return ldlm
 
-    def obd(self, name, uuid, fs, obdtype, devname, format, ost_uuid, dev_size=0):
-        obd = self.newService("obd", name, uuid)
-        obd.setAttribute('obdtype', obdtype)
-        obd.appendChild(self.ref("active", ost_uuid))
+    def osd(self, name, uuid, fs, osdtype, devname, format, ost_uuid, net_uuid, dev_size=0):
+        osd = self.newService("osd", name, uuid)
+        osd.setAttribute('osdtype', osdtype)
+        osd.appendChild(self.ref("target", ost_uuid))
+        osd.appendChild(self.ref("network", net_uuid))
         if fs:
-            self.addElement(obd, "fstype", fs)
+            self.addElement(osd, "fstype", fs)
         if devname:
-            dev = self.addElement(obd, "devpath", devname)
-            self.addElement(obd, "autoformat", format)
+            dev = self.addElement(osd, "devpath", devname)
+            self.addElement(osd, "autoformat", format)
             if dev_size:
-                self.addElement(obd, "devsize", "%s" % (dev_size))
-        return obd
+                self.addElement(osd, "devsize", "%s" % (dev_size))
+        return osd
 
     def cobd(self, name, uuid, real_uuid, cache_uuid):
         cobd = self.newService("cobd", name, uuid)
@@ -236,18 +237,21 @@ class GenConfig:
         cobd.appendChild(self.ref("cacheobd",cache_uuid))
         return cobd
 
-    def ost(self, name, uuid, obd_uuid, net_uuid):
+    def ost(self, name, uuid, osd_uuid):
         ost = self.newService("ost", name, uuid)
-        ost.appendChild(self.ref("network", net_uuid))
-        ost.appendChild(self.ref("obd", obd_uuid))
+        ost.appendChild(self.ref("active", osd_uuid))
         return ost
+
+    def oss(self, name, uuid):
+        oss = self.newService("oss", name, uuid)
+        return oss
 
     def lov(self, name, uuid, mds_uuid, stripe_sz, stripe_cnt, pattern):
         lov = self.newService("lov", name, uuid)
         lov.appendChild(self.ref("mds", mds_uuid))
-        lov.setAttribute("stripesize", stripe_sz)
-        lov.setAttribute("stripecount", stripe_cnt)
-        lov.setAttribute("stripepattern", pattern)
+        lov.setAttribute("stripesize", str(stripe_sz))
+        lov.setAttribute("stripecount", str(stripe_cnt))
+        lov.setAttribute("stripepattern", str(pattern))
         return lov
 
     def lovconfig(self, name, uuid, lov_uuid):
@@ -269,7 +273,7 @@ class GenConfig:
         if dev_size:
                 self.addElement(mdd, "devsize", "%s" % (dev_size))
         mdd.appendChild(self.ref("network", net_uuid))
-        mdd.appendChild(self.ref("mds", mds_uuid))
+        mdd.appendChild(self.ref("target", mds_uuid))
         return mdd
 
     def mountpoint(self, name, uuid, mds_uuid, osc_uuid, path):
@@ -345,6 +349,17 @@ def get_net_uuid(lustre, node_name):
 def lov_add_obd(gen, lov, osc_uuid):
     lov.appendChild(gen.ref("obd", osc_uuid))
                             
+def ref_exists(profile, uuid):
+    elist = profile.childNodes
+    for e in elist:
+        if e.nodeType == e.ELEMENT_NODE:
+            ref = e.getAttribute('uuidref')
+            if ref == uuid:
+                return 1
+    return 0
+        
+# ensure that uuid is not already in the profile
+# return true if uuid is added
 def node_add_profile(gen, node, ref, uuid):
     refname = "%s_ref" % "profile"
     ret = node.getElementsByTagName(refname)
@@ -352,7 +367,12 @@ def node_add_profile(gen, node, ref, uuid):
         error('node has no profile ref:', node)
     prof_uuid = ret[0].getAttribute('uuidref')
     profile = lookup(node.parentNode, prof_uuid)
+    if not profile:
+        error("no profile found:", prof_uuid)
+    if ref_exists(profile, uuid):
+        return 0
     profile.appendChild(gen.ref(ref, uuid))
+    return 1
     
 def get_attr(dom_node, attr, default=""):
     v = dom_node.getAttribute(attr)
@@ -400,7 +420,7 @@ def add_net(gen, lustre, options):
     nid = get_option(options, 'nid')
     net_type = get_option(options, 'nettype')
 
-    if net_type == 'tcp':
+    if net_type in ('tcp', 'toe'):
         port = get_option_int(options, 'port', DEFAULT_PORT)
         tcpbuf = get_option_int(options, 'tcpbuf', 0)
     elif net_type in ('elan', 'gm'):
@@ -476,9 +496,9 @@ def add_mds(gen, lustre, options):
 def add_ost(gen, lustre, options):
     node_name = get_option(options, 'node')
     lovname = get_option(options, 'lov', '')
-    obdtype = get_option(options, 'obdtype', 'obdfilter')
+    osdtype = get_option(options, 'osdtype', 'obdfilter', deprecated_tag="obdtype")
 
-    if obdtype == 'obdecho':
+    if osdtype == 'obdecho':
         fstype = ''
         devname = ''
         size = 0
@@ -488,38 +508,45 @@ def add_ost(gen, lustre, options):
         size = get_option(options, 'size', 0)
         fstype = get_option(options, 'fstype', 'extN')
         
-    obdname = get_option(options, 'obd', 'OBD_'+ node_name)
-    obdname = new_name(obdname)
-    ostname = new_name('OST_'+ obdname)
-    if options.has_key('obduuid'):
-        obd_uuid = options['obduuid']
-        obd = lookup(lustre, obd_uuid)
-        if obd:
-            error("Duplicate OBD UUID:", obd_uuid)
+    ostname = get_option(options, 'ost', '', deprecated_tag='obd')
+    if not ostname:
+        ostname = new_name('OST_'+ node_name)
+
+    osdname = new_name("OSD_" + ostname)
+    osd_uuid = get_option(options, 'osduuid', '', deprecated_tag = 'obduuid')
+    if osd_uuid and lookup(lustre, osd_uuid):
+            error("Duplicate OBD UUID:", osd_uuid)
     else:
-        obd_uuid = new_uuid(obdname)
-    ost_uuid = new_uuid(ostname)
+        osd_uuid = new_uuid(osdname)
+
+    ost_uuid = name2uuid(lustre, ostname, fatal=0)
+    if not ost_uuid:
+        ost_uuid = new_uuid(ostname)
+        ost = gen.ost(ostname, ost_uuid, osd_uuid)
+        lustre.appendChild(ost)
+        if lovname:
+            lov = findByName(lustre, lovname, "lov")
+            if not lov:
+                error('add_ost:', '"'+lovname+'"', "lov element not found.")
+            lov_add_obd(gen, lov, ost_uuid)
 
     net_uuid = get_net_uuid(lustre, node_name)
     if not net_uuid:
-        error("NODE: ", node_name, "not found")
+        error("NODE: No net network interface for", node_name, "found")
     
-    obd = gen.obd(obdname, obd_uuid, fstype, obdtype, devname, get_format_flag(options), ost_uuid,
-                  size)
-    ost = gen.ost(ostname, ost_uuid, obd_uuid, net_uuid)
-    
-    if lovname:
-        lov = findByName(lustre, lovname, "lov")
-        if not lov:
-            error('add_ost:', '"'+lovname+'"', "lov element not found.")
-        lov_add_obd(gen, lov, obd_uuid)
+    osd = gen.osd(osdname, osd_uuid, fstype, osdtype, devname, get_format_flag(options), ost_uuid,
+                  net_uuid, size)
 
     node = findByName(lustre, node_name, "node")
-    node_add_profile(gen, node, 'obd', obd_uuid)
-    node_add_profile(gen, node, 'ost', ost_uuid)
 
-    lustre.appendChild(obd)
-    lustre.appendChild(ost)
+##     if node_add_profile(gen, node, 'oss', oss_uuid):
+##         ossname = 'OSS'
+##         oss_uuid = new_uuid(ossname)
+##         oss = gen.oss(ossname, oss_uuid)
+##         lustre.appendChild(oss)
+
+    node_add_profile(gen, node, 'osd', osd_uuid)
+    lustre.appendChild(osd)
 
                    
 def add_cobd(gen, lustre, options):
@@ -542,7 +569,7 @@ def add_cobd(gen, lustre, options):
 def add_echo_client(gen, lustre, options):
     """ add an echo client to the profile for this node. """
     node_name = get_option(options, 'node')
-    lov_name = get_option(options, 'obd')
+    lov_name = get_option(options, 'ost')
 
     node = findByName(lustre, node_name, 'node')
 
@@ -552,7 +579,7 @@ def add_echo_client(gen, lustre, options):
 
     lov_uuid = name2uuid(lustre, lov_name, tag='lov', fatal=0)
     if not lov_uuid:
-        lov_uuid = name2uuid(lustre, lov_name, tag='obd', fatal=1)
+        lov_uuid = name2uuid(lustre, lov_name, tag='ost', fatal=1)
 
     echo = gen.echo_client(echoname, echo_uuid, lov_uuid)
     lustre.appendChild(echo)
@@ -567,9 +594,9 @@ def add_lov(gen, lustre, options):
         warning("name:", lov_orig, "already used. using:", name)
 
     mds_name = get_option(options, 'mds')
-    stripe_sz = get_option(options, 'stripe_sz')
-    stripe_cnt = get_option(options, 'stripe_cnt', 0)
-    pattern = get_option(options, 'stripe_pattern', 0)
+    stripe_sz = get_option_int(options, 'stripe_sz')
+    stripe_cnt = get_option_int(options, 'stripe_cnt', 0)
+    pattern = get_option_int(options, 'stripe_pattern', 0)
     uuid = new_uuid(name)
 
     ret = findByName(lustre, name, "lov")
@@ -597,9 +624,9 @@ def add_mtpt(gen, lustre, options):
     mds_name = get_option(options, 'mds')
     lov_name = get_option(options, 'lov', '')
     if lov_name == '':
-        lov_name = get_option(options, 'obd', '')
+        lov_name = get_option(options, 'ost', '', deprecated_tag='obd')
         if lov_name == '':
-            error("--add mtpt requires either --lov lov_name or --obd obd_name")
+            error("--add mtpt requires either --lov lov_name or --ost ost_name")
 
     name = new_name('MNT_'+ node_name)
 
@@ -610,7 +637,7 @@ def add_mtpt(gen, lustre, options):
     mds_uuid = name2uuid(lustre, mds_name, tag='mds')
     lov_uuid = name2uuid(lustre, lov_name, tag='lov', fatal=0)
     if not lov_uuid:
-        lov_uuid = name2uuid(lustre, lov_name, tag='obd', fatal=1)
+        lov_uuid = name2uuid(lustre, lov_name, tag='ost', fatal=1)
 
     uuid = new_uuid(name)
     mtpt = gen.mountpoint(name, uuid, mds_uuid, lov_uuid, path)
@@ -620,6 +647,7 @@ def add_mtpt(gen, lustre, options):
     node_add_profile(gen, node, "mountpoint", uuid)
     lustre.appendChild(mtpt)
 
+# obsolete, leaving behind for reference 
 def add_oscref(gen, lustre, options):
     """ create mtpt on a node """
     node_name = get_option(options, 'node')
@@ -644,30 +672,37 @@ def has_option(options, tag):
         return 1
     return 0
 
-def get_option(options, tag, default = None):
+def get_option(options, tag, default = None, deprecated_tag=None):
     """Look for tag in options hash and return the value if set. If not
     set, then if return default it is set, otherwise exception."""
     if options.has_key(tag):
         return options[tag]
+    elif deprecated_tag and options.has_key(deprecated_tag):
+            warning('--'+deprecated_tag, " is deprecated, please use:", '--'+tag)
+            return options[deprecated_tag]
     elif default != None:
         return default
     else:
-        raise OptionError("--add %s requires --%s value" % (options['add'], tag))
+        raise OptionError("--add %s requires --%s <value>" % (options['add'], tag))
         # this exception should print an error like '--add blah requires --<tag> value'
 
 def get_option_int(options, tag, default = None):
     """Return an integer option.  Raise exception if the value is not an int"""
     val = get_option(options, tag, default)
-    return int(val)
+    try:
+        n = int(val)
+    except ValueError:
+        raise OptionError("--%s <num> (value must be integer)" % (tag))        
+    return n
 
 def parse_cmdline(argv):
     short_opts = "ho:i:m:"
     long_opts = ["add=", "node=", "nettype=", "nid=", "tcpbuf=", "port=",
                  "echo_client=", "stripe_sz=", "stripe_cnt=", "stripe_pattern=",
                  "mds=", "route", "router", "merge=", "format", "reformat", "output=",
-                 "dev=", "size=", "obd=", "obdtype=", "obduuid=", "in=",
-                 "path=", "help", "batch=", "lov=", "gw=", "lo=", "hi=",
-                 "oscref", "osc=", "real_obd=", "cache_obd=", "fstype=",
+                 "dev=", "size=", "obd=", "ost=", "obdtype=", "osdtype=", "obduuid=", "in=",
+                 "osduuid=", "path=", "help", "batch=", "lov=", "gw=", "lo=", "hi=",
+                 "osc=", "real_obd=", "cache_obd=", "fstype=",
                  "timeout=", "recovery_upcall="]
     opts = []
     args = []
@@ -692,6 +727,8 @@ def parse_cmdline(argv):
             options['mds'] = a
         if o == "--obd":
             options['obd'] = a
+        if o == "--ost":
+            options['ost'] = a
 
         # node options
         if o == "--timeout":
@@ -728,10 +765,14 @@ def parse_cmdline(argv):
             options['osc'] = a
         if o == "--obdtype":
             options['obdtype'] = a
+        if o == "--osdtype":
+            options['osdtype'] = a
         if o == "--fstype":
             options['fstype'] = a
         if o == "--obduuid":
             options['obduuid'] = a
+        if o == "--osduuid":
+            options['osduuid'] = a
 
         # lov options
         if o == "--stripe_sz":
@@ -763,6 +804,7 @@ def parse_cmdline(argv):
         if o == "--format":
             options['format'] = 1
         if o  == "--reformat":
+            warning("the lmc --reformat option is not supported. Use lconf --reformat")
             options['reformat'] = 1
         if o  == "--batch":
             options['batch'] = a
@@ -816,8 +858,6 @@ def add(devtype, gen, lustre, options):
         add_node(gen, lustre, options)
     elif devtype == 'echo_client':
         add_echo_client(gen, lustre, options)
-    elif devtype == 'oscref':
-        add_oscref(gen, lustre, options)
     elif devtype == 'cobd':
         add_cobd(gen, lustre, options)
     else:

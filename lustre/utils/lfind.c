@@ -11,7 +11,6 @@
 #include <errno.h>
 #include <sys/ioctl.h>
 #include <sys/types.h>
-#define	printk printf
 #include <linux/lustre_lib.h>
 #include <linux/lustre_lite.h>
 #include <linux/obd_lov.h>
@@ -34,14 +33,14 @@ char *		shortOpts = "ho:qv";
 char *		usageMsg = "[ --obd <obd uuid> | --query ] <dir|file> ...";
 
 int		max_ost_count = MAX_LOV_UUID_COUNT;
-obd_uuid_t *	obduuid;
+struct obd_uuid *	obduuid;
 __u32		obdcount;
 __u32		obdindex;
 char *		buf;
 int		buflen;
 struct obd_ioctl_data data;
 struct lov_desc desc;
-obd_uuid_t *	uuids;
+struct obd_uuid *	uuids;
 int		uuidslen;
 int		cfglen;
 struct lov_mds_md *lmm;
@@ -74,7 +73,7 @@ main (int argc, char **argv) {
 				exit(1);
 			}
 
-			obduuid = (obd_uuid_t *)optarg;
+			obduuid = (struct obd_uuid *)optarg;
 			break;
 		case 'h':
 			usage(stdout);
@@ -155,7 +154,7 @@ init()
 	}
 
 	lmm = (struct lov_mds_md *)buf;
-	uuids = (obd_uuid_t *)buf;
+	uuids = (struct obd_uuid *)buf;
 }
 
 void
@@ -261,7 +260,7 @@ processFile(const char *path, const struct stat *sp, int flag, struct FTW *ftwp)
 __u32
 getobdindex(const char *path)
 {
-	obd_uuid_t *uuidp;
+	struct obd_uuid *uuidp;
 	int fd;
 	int rc;
 	int i;

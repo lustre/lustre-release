@@ -31,3 +31,5 @@ setuid
 multifstat
 checkstat
 wantedi
+createtest
+open_delay

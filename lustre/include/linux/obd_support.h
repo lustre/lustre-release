@@ -35,6 +35,7 @@ extern int obd_memmax;
 extern unsigned long obd_fail_loc;
 extern unsigned long obd_timeout;
 extern char obd_recovery_upcall[128];
+extern unsigned long obd_sync_filter;
 
 #define OBD_FAIL_MDS                     0x100
 #define OBD_FAIL_MDS_HANDLE_UNPACK       0x101
@@ -68,6 +69,8 @@ extern char obd_recovery_upcall[128];
 #define OBD_FAIL_MDS_STATFS_PACK         0x11d
 #define OBD_FAIL_MDS_STATFS_NET          0x11e
 #define OBD_FAIL_MDS_GETATTR_NAME_NET    0x11f
+#define OBD_FAIL_MDS_ALL_REPLY_NET       0x120
+#define OBD_FAIL_MDS_ALL_REQUEST_NET     0x121
 
 #define OBD_FAIL_OST                     0x200
 #define OBD_FAIL_OST_CONNECT_NET         0x201
@@ -108,8 +111,9 @@ extern char obd_recovery_upcall[128];
 #define OBD_FAIL_MDS_ALL_NET 0x01000000
 #define OBD_FAIL_OST_ALL_NET 0x02000000
 
-#define OBD_FAIL_CHECK(id)   ((obd_fail_loc & OBD_FAIL_MASK_LOC) == (id) &&  \
-                              ((obd_fail_loc & (OBD_FAILED | OBD_FAIL_ONCE))!=\
+#define OBD_FAIL_CHECK(id)   (((obd_fail_loc & OBD_FAIL_MASK_LOC) ==           \
+                              ((id) & OBD_FAIL_MASK_LOC)) &&                   \
+                              ((obd_fail_loc & (OBD_FAILED | OBD_FAIL_ONCE))!= \
                                 (OBD_FAILED | OBD_FAIL_ONCE)))
 
 #define OBD_FAIL_RETURN(id, ret)                                             \

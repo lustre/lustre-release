@@ -13,3 +13,11 @@
  		goto out_journal;
  	}
  	EXTN_SB(sb)->journal_bdev = bdev;
+@@ -1560,6 +1560,7 @@
+ 	unlock_kernel();
+ 	return ret;
+ }
++EXPORT_SYMBOL(extN_force_commit); /* here to avoid potential patch collisions */
+ 
+ /*
+  * Ext3 always journals updates to the superblock itself, so we don't

@@ -124,7 +124,7 @@ command_t cmdlist[] = {
          "type specific device configuration information\n"
          "usage: setup <args...>"},
         {"cleanup", jt_obd_cleanup, 0, "cleanup previously setup device\n"
-         "usage: cleanup"},
+         "usage: cleanup [force]"},
         {"detach", jt_obd_detach, 0,
          "remove driver (and name and uuid) from current device\n"
          "usage: detach"},
@@ -164,6 +164,15 @@ command_t cmdlist[] = {
         {"test_brw", jt_obd_test_brw, 0,
          "do <num> bulk read/writes (<npages> per I/O, on OST object <objid>)\n"
          "usage: test_brw [t]<num> [write [verbose [npages [[t]objid]]]]"},
+        {"get_stripe", jt_obd_get_stripe, 0,
+         "show stripe info for an echo client object\n"
+         "usage: get_stripe objid\n"},
+        {"set_stripe", jt_obd_set_stripe, 0,
+         "set stripe info for an echo client object\n"
+         "usage: set_stripe objid[=width!count[@offset][:id:id...]\n"},
+        {"unset_stripe", jt_obd_unset_stripe, 0,
+         "unset stripe info for an echo client object\n"
+         "usage: unset_stripe objid\n"},
         {"test_ldlm", jt_obd_test_ldlm, 0,
          "perform lock manager test\n"
          "usage: test_ldlm"},
@@ -180,6 +189,12 @@ command_t cmdlist[] = {
         {"newconn", jt_obd_newconn, 0, "newconn <olduuid> [newuuid]"},
         {"failconn", jt_obd_failconn, 0, "failconn <uuid>"},
         {"lookup", jt_obd_mdc_lookup, 0, "usage: lookup <directory> <file>"},
+        {"notransno", jt_obd_no_transno, 0,
+         "disable sending of committed-transno updates\n"
+         "usage: notransno"},
+        {"readonly", jt_obd_set_readonly, 0,
+         "disable writes to the underlying device\n"
+         "usage: readonly"},
 
         /* Debug commands */
         {"======== debug =========", jt_noop, 0, "debug"},

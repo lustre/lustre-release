@@ -1,17 +1,26 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  linux/mds/mds_fs.c
- *
+ *  mds/mds_fs.c
  *  Lustre Metadata Server (MDS) filesystem interface code
  *
- *  Copyright (C) 2002 Cluster File Systems, Inc.
+ *  Copyright (C) 2002, 2003 Cluster File Systems, Inc.
+ *   Author: Andreas Dilger <adilger@clusterfs.com>
  *
- *  This code is issued under the GNU General Public License.
- *  See the file COPYING in this distribution
+ *   This file is part of Lustre, http://www.lustre.org.
  *
- *  by Andreas Dilger <adilger@clusterfs.com>
+ *   Lustre is free software; you can redistribute it and/or
+ *   modify it under the terms of version 2 of the GNU General Public
+ *   License as published by the Free Software Foundation.
  *
+ *   Lustre is distributed in the hope that it will be useful,
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   GNU General Public License for more details.
+ *
+ *   You should have received a copy of the GNU General Public License
+ *   along with Lustre; if not, write to the Free Software
+ *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
 #define EXPORT_SYMTAB
@@ -79,8 +88,8 @@ int mds_client_add(struct mds_obd *mds, struct mds_export_data *med, int cl_off)
 
                 push_ctxt(&saved, &mds->mds_ctxt, NULL);
                 written = lustre_fwrite(mds->mds_rcvd_filp,
-                                                (char *)med->med_mcd,
-                                                sizeof(*med->med_mcd), &off);
+                                        (char *)med->med_mcd,
+                                        sizeof(*med->med_mcd), &off);
                 pop_ctxt(&saved, &mds->mds_ctxt, NULL);
 
                 if (written != sizeof(*med->med_mcd)) {
@@ -133,6 +142,10 @@ int mds_client_free(struct obd_export *exp)
                        med->med_mcd->mcd_uuid, med->med_off);
         }
 
+        if (med->med_last_reply) {
+                OBD_FREE(med->med_last_reply, med->med_last_replen);
+                med->med_last_reply = NULL;
+        }
         OBD_FREE(med->med_mcd, sizeof(*med->med_mcd));
 
         return 0;
@@ -177,7 +190,7 @@ static int mds_read_last_rcvd(struct obd_device *obddev, struct file *f)
         }
 
         CDEBUG(D_INODE, "last_rcvd has size %lu (msd + %lu clients)\n",
-               last_rcvd_size, (last_rcvd_size - sizeof *msd) / sizeof *mcd);
+               last_rcvd_size, (last_rcvd_size - MDS_LR_CLIENT)/MDS_LR_SIZE);
 
         /*
          * When we do a clean MDS shutdown, we save the last_rcvd into
@@ -232,6 +245,8 @@ static int mds_read_last_rcvd(struct obd_device *obddev, struct file *f)
                                 break;
                         }
 
+                        memcpy(&exp->exp_client_uuid.uuid, mcd->mcd_uuid,
+                               sizeof exp->exp_client_uuid.uuid);
                         med = &exp->exp_mds_data;
                         med->med_mcd = mcd;
                         mds_client_add(mds, med, cl_off);
@@ -255,11 +270,12 @@ static int mds_read_last_rcvd(struct obd_device *obddev, struct file *f)
                         mds->mds_last_rcvd = last_rcvd;
         }
 
-        mds->mds_last_committed = mds->mds_last_rcvd;
+        obddev->obd_last_committed = mds->mds_last_rcvd;
         if (mds->mds_recoverable_clients) {
                 CERROR("RECOVERY: %d recoverable clients, last_rcvd "LPU64"\n",
                        mds->mds_recoverable_clients, mds->mds_last_rcvd);
-                mds->mds_next_recovery_transno = mds->mds_last_committed + 1;
+                mds->mds_next_recovery_transno = obddev->obd_last_committed + 1;
+                obddev->obd_flags |= OBD_RECOVERING;
         }
 
         if (mcd)

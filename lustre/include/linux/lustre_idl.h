@@ -47,7 +47,15 @@
 /*
  *  GENERAL STUFF
  */
-typedef __u8 obd_uuid_t[37];
+struct obd_uuid {
+        __u8 uuid[37];
+};
+
+static inline void obd_str2uuid(struct obd_uuid *uuid, char *tmp)
+{
+        strncpy(uuid->uuid, tmp, sizeof(uuid->uuid));
+        uuid->uuid[sizeof(uuid->uuid) - 1] = '\0';
+}
 
 /* FOO_REQUEST_PORTAL is for incoming requests on the FOO
  * FOO_REPLY_PORTAL   is for incoming replies on the FOO
@@ -75,6 +83,7 @@ typedef __u8 obd_uuid_t[37];
 #define PTLBD_REQUEST_PORTAL           19
 #define PTLBD_REPLY_PORTAL             20
 #define PTLBD_BULK_PORTAL              21
+#define MDS_GETATTR_PORTAL      22
 
 #define SVC_KILLED               1
 #define SVC_EVENT                2
@@ -133,9 +142,6 @@ struct lustre_msg {
 #define MSG_LAST_REPLAY        1
 #define MSG_RESENT             2
 
-/* XXX horrible interim hack -- see bug 578 */
-#define MSG_REPLAY_IN_PROGRESS 4
-
 static inline int lustre_msg_get_flags(struct lustre_msg *msg)
 {
         return (msg->flags & MSG_GEN_FLAG_MASK);
@@ -157,14 +163,24 @@ static inline int lustre_msg_get_op_flags(struct lustre_msg *msg)
         return (msg->flags >> MSG_OP_FLAG_SHIFT);
 }
 
-static inline void lustre_msg_set_op_flags(struct lustre_msg *msg, int flags)
+static inline void lustre_msg_add_op_flags(struct lustre_msg *msg, int flags)
 {
-        msg->flags &= ~MSG_OP_FLAG_MASK;
         msg->flags |= ((flags & MSG_GEN_FLAG_MASK) << MSG_OP_FLAG_SHIFT);
 }
 
-#define CONNMGR_REPLY	0
-#define CONNMGR_CONNECT	1
+static inline void lustre_msg_set_op_flags(struct lustre_msg *msg, int flags)
+{
+        msg->flags &= ~MSG_OP_FLAG_MASK;
+        lustre_msg_add_op_flags(msg, flags);
+}
+
+/*
+ * Flags for all connect opcodes (MDS_CONNECT, OST_CONNECT)
+ */
+
+#define MSG_CONNECT_RECOVERING 0x1
+#define MSG_CONNECT_RECONNECT  0x2
+#define MSG_CONNECT_REPLAYABLE  0x4
 
 /*
  *   OST requests: OBDO & OBD request records
@@ -305,16 +321,6 @@ struct niobuf_remote {
         __u32 flags;
 };
 
-#define CONNMGR_REPLY	0
-#define CONNMGR_CONNECT	1
-
-struct connmgr_body {
-        __u64 conn;
-        __u64 conn_token;
-        __u32 generation;
-        obd_uuid_t conn_uuid;
-};
-
 /* request structure for OST's */
 
 #define OST_REQ_HAS_OA1  0x1
@@ -328,24 +334,33 @@ struct ost_body {
  */
 
 /* opcodes */
-#define MDS_GETATTR    1
-#define MDS_OPEN       2
-#define MDS_CLOSE      3
-#define MDS_REINT      4
-#define MDS_READPAGE   6
-#define MDS_CONNECT    7
-#define MDS_DISCONNECT 8
-#define MDS_GETSTATUS  9
-#define MDS_STATFS     10
-#define MDS_GETLOVINFO 11
-#define MDS_GETATTR_NAME 12
+#define MDS_GETATTR      1
+#define MDS_GETATTR_NAME 2
+#define MDS_CLOSE        3
+#define MDS_REINT        4
+#define MDS_READPAGE     6
+#define MDS_CONNECT      7
+#define MDS_DISCONNECT   8
+#define MDS_GETSTATUS    9
+#define MDS_STATFS       10
+#define MDS_GETLOVINFO   11
 
 #define REINT_SETATTR  1
 #define REINT_CREATE   2
 #define REINT_LINK     3
 #define REINT_UNLINK   4
 #define REINT_RENAME   5
-#define REINT_MAX      5
+#define REINT_OPEN     6
+#define REINT_MAX      6
+
+#define IT_INTENT_EXEC   1
+#define IT_OPEN_LOOKUP  (1 << 1)
+#define IT_OPEN_NEG     (1 << 2)
+#define IT_OPEN_POS     (1 << 3)
+#define IT_OPEN_CREATE  (1 << 4)
+#define IT_OPEN_OPEN    (1 << 5)
+
+#define IT_UNLINK (1<<8)
 
 #define REINT_OPCODE_MASK 0xff /* opcodes must fit into this mask */
 #define REINT_REPLAYING 0x1000 /* masked into the opcode to indicate replay */
@@ -383,6 +398,7 @@ struct mds_body {
         struct ll_fid  fid2;
         struct lustre_handle handle;
         __u64          size;
+        __u64          blocks; /* XID, in the case of MDS_READPAGE */
         __u32          ino;   /* make this a __u64 */
         __u32          valid;
         __u32          fsuid;
@@ -398,6 +414,7 @@ struct mds_body {
         __u32          rdev;
         __u32          nlink;
         __u32          generation;
+        __u32          suppgid;
 };
 
 /* This is probably redundant with OBD_MD_FLEASIZE, but we need an audit */
@@ -426,6 +443,7 @@ struct mds_rec_setattr {
         __u64           sa_atime;
         __u64           sa_mtime;
         __u64           sa_ctime;
+        __u32           sa_suppgid;
 };
 
 struct mds_rec_create {
@@ -433,7 +451,7 @@ struct mds_rec_create {
         __u32           cr_fsuid;
         __u32           cr_fsgid;
         __u32           cr_cap;
-        __u32           cr_reserved;
+        __u32           cr_flags; /* for use with open */
         __u32           cr_mode;
         struct ll_fid   cr_fid;
         struct ll_fid   cr_replayfid;
@@ -441,6 +459,7 @@ struct mds_rec_create {
         __u32           cr_gid;
         __u64           cr_time;
         __u64           cr_rdev;
+        __u32           cr_suppgid;
 };
 
 struct mds_rec_link {
@@ -448,6 +467,7 @@ struct mds_rec_link {
         __u32           lk_fsuid;
         __u32           lk_fsgid;
         __u32           lk_cap;
+        __u32           lk_suppgid;
         struct ll_fid   lk_fid1;
         struct ll_fid   lk_fid2;
 };
@@ -459,6 +479,7 @@ struct mds_rec_unlink {
         __u32           ul_cap;
         __u32           ul_reserved;
         __u32           ul_mode;
+        __u32           ul_suppgid;
         struct ll_fid   ul_fid1;
         struct ll_fid   ul_fid2;
 };
@@ -487,7 +508,7 @@ struct lov_desc {
         __u64 ld_default_stripe_size;      /* in bytes */
         __u64 ld_default_stripe_offset;    /* in bytes */
         __u32 ld_pattern;                  /* RAID 0,1 etc */
-        obd_uuid_t ld_uuid;
+        struct obd_uuid ld_uuid;
 };
 
 /*
@@ -502,6 +523,10 @@ struct lov_desc {
 
 #define RES_NAME_SIZE 3
 #define RES_VERSION_SIZE 4
+
+struct ldlm_res_id {
+        __u64 name[RES_NAME_SIZE];
+};
 
 /* lock types */
 typedef enum {
@@ -526,7 +551,7 @@ struct ldlm_intent {
  * below, we're probably fine. */
 struct ldlm_resource_desc {
         __u32 lr_type;
-        __u64 lr_name[RES_NAME_SIZE];
+        struct ldlm_res_id lr_name;
         __u32 lr_version[RES_VERSION_SIZE];
 };
 
@@ -548,7 +573,7 @@ struct ldlm_request {
 struct ldlm_reply {
         __u32 lock_flags;
         __u32 lock_mode;
-        __u64 lock_resource_name[RES_NAME_SIZE];
+        struct ldlm_res_id lock_resource_name;
         struct lustre_handle lock_handle;
         struct ldlm_extent lock_extent;   /* XXX make this policy 1 &2 */
         __u64  lock_policy_res1;

@@ -1,7 +1,8 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (C) 2002 Cluster File Systems, Inc. <adilger@clusterfs.com>
+ *  Copyright (C) 2002, 2003 Cluster File Systems, Inc.
+ *   Author: Andreas Dilger <adilger@clusterfs.com>
  *
  *   This file is part of Lustre, http://www.lustre.org.
  *
@@ -260,13 +261,14 @@ int lov_setstripe(struct lustre_handle *conn, struct lov_stripe_md **lsmp,
                 RETURN(-EINVAL);
         }
         if (lmm.lmm_stripe_count > lov->desc.ld_tgt_count) {
-                CERROR("stripe count %d more than OST count %d\n",
-                       (int)lmm.lmm_stripe_count, lov->desc.ld_tgt_count);
+                CERROR("stripe count %u more than OST count %d\n",
+                       lmm.lmm_stripe_count, lov->desc.ld_tgt_count);
                 RETURN(-EINVAL);
         }
-        if (lmm.lmm_stripe_offset >= lov->desc.ld_tgt_count) {
-                CERROR("stripe offset %d more than max OST index %d\n",
-                       (int)lmm.lmm_stripe_count, lov->desc.ld_tgt_count);
+        if (lmm.lmm_stripe_offset >= lov->desc.ld_tgt_count &&
+            lmm.lmm_stripe_offset != 0xffffffff) {
+                CERROR("stripe offset %u more than max OST index %d\n",
+                       lmm.lmm_stripe_offset, lov->desc.ld_tgt_count);
                 RETURN(-EINVAL);
         }
         if (lmm.lmm_stripe_size & (PAGE_SIZE - 1)) {
@@ -274,7 +276,7 @@ int lov_setstripe(struct lustre_handle *conn, struct lov_stripe_md **lsmp,
                        lmm.lmm_stripe_size, PAGE_SIZE);
                 RETURN(-EINVAL);
         }
-        if (lmm.lmm_stripe_size * lmm.lmm_stripe_count > ~0UL) {
+        if ((__u64)lmm.lmm_stripe_size * lmm.lmm_stripe_count > ~0UL) {
                 CERROR("stripe width %ux%u > %lu on 32-bit system\n",
                        lmm.lmm_stripe_size, (int)lmm.lmm_stripe_count, ~0UL);
                 RETURN(-EINVAL);
@@ -288,7 +290,6 @@ int lov_setstripe(struct lustre_handle *conn, struct lov_stripe_md **lsmp,
                 RETURN(-ENOMEM);
 
         lsm->lsm_magic = LOV_MAGIC;
-        /* This is all validated in lov_create() */
         lsm->lsm_stripe_count = stripe_count;
         lsm->lsm_stripe_offset = lmm.lmm_stripe_offset;
         lsm->lsm_stripe_size = lmm.lmm_stripe_size;

@@ -6,10 +6,12 @@ KFLAGS:=
 CPPFLAGS = $(HAVE_LIBREADLINE)
 obdctl_LDADD := $(LIBREADLINE)
 lctl_LDADD := $(LIBREADLINE) -lptlctl
-sbin_PROGRAMS = lctl lfind lstripe obdctl
-sbin_SCRIPTS = lconf lmc
+sbin_PROGRAMS = lctl lfind lstripe obdctl obdio obdbarrier obdstat
+sbin_SCRIPTS = lconf lmc llanalyze
 obdctl_SOURCES = parser.c obdctl.c obd.c parser.h obdctl.h
 lctl_SOURCES = parser.c obd.c lctl.c parser.h
+obdio_SOURCES = obdio.c obdiolib.c obdiolib.h
+obdbarrier_SOURCES = obdbarrier.c obdiolib.c obdiolib.h
 lfind_SOURCES = lfind.c
 lstripe_SOURCES = lstripe.c
 lfind_CPPFLAGS = -D_XOPEN_SOURCE=500

@@ -15,13 +15,17 @@
 
 /******************  Functions ******************/
 
-void usage(char *pgm)
+void usage(char *prog)
 {
-	fprintf(stderr, "usage: %s <filename> <stripe size> <start stripe> <stripe count>\n", pgm);
+	fprintf(stderr, "usage: %s <filename> <stripe size> <stripe start> "
+			"<stripe count>\n", prog);
 
-	fprintf(stderr, "\tstripe size: number of bytes in each stripe\n");
-	fprintf(stderr, "\tstripe start: OST index which holds first stripe\n");
-	fprintf(stderr, "\tstripe count: number of OSTs to stripe over\n");
+	fprintf(stderr,
+		"\tstripe size: number of bytes in each stripe (0 default)\n");
+	fprintf(stderr,
+		"\tstripe start: OST index of first stripe (-1 default)\n");
+	fprintf(stderr,
+		"\tstripe count: number of OSTs to stripe over (0 default)\n");
 }
 
 int create_file(char *name, long stripe_size, int stripe_offset,
@@ -60,21 +64,45 @@ int main(int argc, char *argv[])
 	long st_size;
 	int  st_offset,
 	     st_count;
+	char *end;
 
 	/*  Check to make sure we have enough parameters  */
 	if (argc != 5) {
 		usage(argv[0]);
-		return(-1);
+		return 1;
 	}
 
 	/* Get the stripe size */
-	st_size = atol(argv[2]);
+	st_size = strtoul(argv[2], &end, 0);
+	if (*end != '\0') {
+		fprintf(stderr, "bad stripe size '%s'\n", argv[2]);
+		usage(argv[0]);
+		return 2;
+	}
+
+	/*
+	if (st_size & 4095) {
+		fprintf(stderr, "stripe size must be multiple of page size\n");
+		usage(argv[0]);
+		return 3;
+	}
+	*/
 
 	/* Get the stripe offset*/
-	st_offset = atoi(argv[3]);
+	st_offset = strtoul(argv[3], &end, 0);
+	if (*end != '\0') {
+		fprintf(stderr, "bad stripe offset '%s'\n", argv[3]);
+		usage(argv[0]);
+		return 4;
+	}
 
 	/* Get the stripe count */
-	st_count = atoi(argv[4]);
+	st_count = strtoul(argv[4], &end, 0);
+	if (*end != '\0') {
+		fprintf(stderr, "bad stripe count '%s'\n", argv[4]);
+		usage(argv[0]);
+		return 5;
+	}
 
 	/*  Create the file, as specified.  Return and display any errors.  */
 	result = create_file(argv[1], st_size, st_offset, st_count);

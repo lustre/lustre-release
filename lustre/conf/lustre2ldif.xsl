@@ -184,6 +184,10 @@ networkRef: <value-of select="@uuidref"/>
 mdsRef: <value-of select="@uuidref"/>
 </template>
 
+<template match="mdsdev_ref">
+mdsdevRef: <value-of select="@uuidref"/>
+</template>
+
 <template match="mountpoint_ref">
 mountpointRef: <value-of select="@uuidref"/>
 </template>

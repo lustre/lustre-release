@@ -1,7 +1,7 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (C) 2001, 2002 Cluster File Systems, Inc.
+ *  Copyright (C) 2001-2003 Cluster File Systems, Inc.
  *
  *   This file is part of Lustre, http://www.lustre.org.
  *
@@ -44,13 +44,16 @@
 #include <linux/lprocfs_status.h>
 #endif
 
-
 /* OBD Device Declarations */
 #define MAX_OBD_DEVICES 128
 extern struct obd_device obd_dev[MAX_OBD_DEVICES];
 
-#define OBD_ATTACHED 0x1
-#define OBD_SET_UP   0x2
+#define OBD_ATTACHED       0x01
+#define OBD_SET_UP         0x02
+#define OBD_RECOVERING     0x04
+#define OBD_ABORT_RECOVERY 0x08
+#define OBD_REPLAYABLE     0x10
+#define OBD_NO_TRANSNO     0x20 /* XXX needs better name */
 
 /* OBD Operations Declarations */
 
@@ -104,7 +107,8 @@ do {                                                            \
                                                                 \
         exp = class_conn2export(conn);                          \
         if (!(exp)) {                                           \
-                CERROR("No export\n");                          \
+                CERROR("No export for conn "LPX64":"LPX64"\n",  \
+                       conn->addr, conn->cookie);               \
                 RETURN(-EINVAL);                                \
         }                                                       \
                                                                 \
@@ -276,7 +280,8 @@ static inline int obd_free_memmd(struct lustre_handle *conn,
 }
 
 static inline int obd_create(struct lustre_handle *conn, struct obdo *obdo,
-                             struct lov_stripe_md **ea)
+                             struct lov_stripe_md **ea,
+                             struct obd_trans_info *oti)
 {
         struct obd_export *exp;
         int rc;
@@ -285,12 +290,13 @@ static inline int obd_create(struct lustre_handle *conn, struct obdo *obdo,
         OBD_CHECK_SETUP(conn, exp);
         OBD_CHECK_OP(exp->exp_obd, create);
 
-        rc = OBP(exp->exp_obd, create)(conn, obdo, ea);
+        rc = OBP(exp->exp_obd, create)(conn, obdo, ea, oti);
         RETURN(rc);
 }
 
 static inline int obd_destroy(struct lustre_handle *conn, struct obdo *obdo,
-                              struct lov_stripe_md *ea)
+                              struct lov_stripe_md *ea,
+                              struct obd_trans_info *oti)
 {
         struct obd_export *exp;
         int rc;
@@ -299,7 +305,7 @@ static inline int obd_destroy(struct lustre_handle *conn, struct obdo *obdo,
         OBD_CHECK_SETUP(conn, exp);
         OBD_CHECK_OP(exp->exp_obd, destroy);
 
-        rc = OBP(exp->exp_obd, destroy)(conn, obdo, ea);
+        rc = OBP(exp->exp_obd, destroy)(conn, obdo, ea, oti);
         RETURN(rc);
 }
 
@@ -318,7 +324,8 @@ static inline int obd_getattr(struct lustre_handle *conn, struct obdo *obdo,
 }
 
 static inline int obd_close(struct lustre_handle *conn, struct obdo *obdo,
-                            struct lov_stripe_md *ea)
+                            struct lov_stripe_md *ea,
+                            struct obd_trans_info *oti)
 {
         struct obd_export *exp;
         int rc;
@@ -327,12 +334,12 @@ static inline int obd_close(struct lustre_handle *conn, struct obdo *obdo,
         OBD_CHECK_SETUP(conn, exp);
         OBD_CHECK_OP(exp->exp_obd, close);
 
-        rc = OBP(exp->exp_obd, close)(conn, obdo, ea);
+        rc = OBP(exp->exp_obd, close)(conn, obdo, ea, oti);
         RETURN(rc);
 }
 
 static inline int obd_open(struct lustre_handle *conn, struct obdo *obdo,
-                           struct lov_stripe_md *ea)
+                           struct lov_stripe_md *ea, struct obd_trans_info *oti)
 {
         struct obd_export *exp;
         int rc;
@@ -341,12 +348,13 @@ static inline int obd_open(struct lustre_handle *conn, struct obdo *obdo,
         OBD_CHECK_SETUP(conn, exp);
         OBD_CHECK_OP(exp->exp_obd, open);
 
-        rc = OBP(exp->exp_obd, open)(conn, obdo, ea);
+        rc = OBP(exp->exp_obd, open)(conn, obdo, ea, oti);
         RETURN(rc);
 }
 
 static inline int obd_setattr(struct lustre_handle *conn, struct obdo *obdo,
-                              struct lov_stripe_md *ea)
+                              struct lov_stripe_md *ea,
+                              struct obd_trans_info *oti)
 {
         struct obd_export *exp;
         int rc;
@@ -355,12 +363,12 @@ static inline int obd_setattr(struct lustre_handle *conn, struct obdo *obdo,
         OBD_CHECK_SETUP(conn, exp);
         OBD_CHECK_OP(exp->exp_obd, setattr);
 
-        rc = OBP(exp->exp_obd, setattr)(conn, obdo, ea);
+        rc = OBP(exp->exp_obd, setattr)(conn, obdo, ea, oti);
         RETURN(rc);
 }
 
 static inline int obd_connect(struct lustre_handle *conn,
-                              struct obd_device *obd, obd_uuid_t cluuid,
+                              struct obd_device *obd, struct obd_uuid *cluuid,
                               struct recovd_obd *recovd,
                               ptlrpc_recovery_cb_t recover)
 {
@@ -401,8 +409,8 @@ static inline int obd_statfs(struct lustre_handle *conn,struct obd_statfs *osfs)
 }
 
 static inline int obd_punch(struct lustre_handle *conn, struct obdo *oa,
-                            struct lov_stripe_md *ea,
-                            obd_size start, obd_size end)
+                            struct lov_stripe_md *ea, obd_size start,
+                            obd_size end, struct obd_trans_info *oti)
 {
         struct obd_export *exp;
         int rc;
@@ -411,13 +419,14 @@ static inline int obd_punch(struct lustre_handle *conn, struct obdo *oa,
         OBD_CHECK_SETUP(conn, exp);
         OBD_CHECK_OP(exp->exp_obd, punch);
 
-        rc = OBP(exp->exp_obd, punch)(conn, oa, ea, start, end);
+        rc = OBP(exp->exp_obd, punch)(conn, oa, ea, start, end, oti);
         RETURN(rc);
 }
 
 static inline int obd_brw(int cmd, struct lustre_handle *conn,
                           struct lov_stripe_md *ea, obd_count oa_bufs,
-                          struct brw_page *pg, struct obd_brw_set *set)
+                          struct brw_page *pg, struct obd_brw_set *set,
+                          struct obd_trans_info *oti)
 {
         struct obd_export *exp;
         int rc;
@@ -431,14 +440,15 @@ static inline int obd_brw(int cmd, struct lustre_handle *conn,
                 LBUG();
         }
 
-        rc = OBP(exp->exp_obd, brw)(cmd, conn, ea, oa_bufs, pg, set);
+        rc = OBP(exp->exp_obd, brw)(cmd, conn, ea, oa_bufs, pg, set, oti);
         RETURN(rc);
 }
 
 static inline int obd_preprw(int cmd, struct lustre_handle *conn,
                              int objcount, struct obd_ioobj *obj,
                              int niocount, struct niobuf_remote *remote,
-                             struct niobuf_local *local, void **desc_private)
+                             struct niobuf_local *local, void **desc_private,
+                             struct obd_trans_info *oti)
 {
         struct obd_export *exp;
         int rc;
@@ -448,14 +458,14 @@ static inline int obd_preprw(int cmd, struct lustre_handle *conn,
         OBD_CHECK_OP(exp->exp_obd, preprw);
 
         rc = OBP(exp->exp_obd, preprw)(cmd, conn, objcount, obj, niocount,
-                                       remote, local, desc_private);
+                                       remote, local, desc_private, oti);
         RETURN(rc);
 }
 
 static inline int obd_commitrw(int cmd, struct lustre_handle *conn,
                                int objcount, struct obd_ioobj *obj,
                                int niocount, struct niobuf_local *local,
-                               void *desc_private)
+                               void *desc_private, struct obd_trans_info *oti)
 {
         struct obd_export *exp;
         int rc;
@@ -465,7 +475,7 @@ static inline int obd_commitrw(int cmd, struct lustre_handle *conn,
         OBD_CHECK_OP(exp->exp_obd, commitrw);
 
         rc = OBP(exp->exp_obd, commitrw)(cmd, conn, objcount, obj, niocount,
-                                         local, desc_private);
+                                         local, desc_private, oti);
         RETURN(rc);
 }
 
@@ -554,7 +564,7 @@ static inline void obd_oa2handle(struct lustre_handle *handle, struct obdo *oa)
 
 static inline void obd_handle2oa(struct obdo *oa, struct lustre_handle *handle)
 {
-        if (handle->addr) {
+        if (handle && handle->addr) {
                 struct lustre_handle *oa_handle = obdo_handle(oa);
                 memcpy(oa_handle, handle, sizeof(*handle));
                 oa->o_valid |= OBD_MD_FLHANDLE;
@@ -714,7 +724,7 @@ static inline void obdo_to_inode(struct inode *dst, struct obdo *src,
                 dst->i_atime = src->o_atime;
         if (valid & OBD_MD_FLMTIME)
                 dst->i_mtime = src->o_mtime;
-        if (valid & OBD_MD_FLCTIME)
+        if (valid & OBD_MD_FLCTIME && src->o_ctime > dst->i_ctime)
                 dst->i_ctime = src->o_ctime;
         if (valid & OBD_MD_FLSIZE)
                 dst->i_size = src->o_size;
@@ -835,21 +845,23 @@ static inline int obdo_cmp_md(struct obdo *dst, struct obdo *src,
 /* I'm as embarrassed about this as you are.
  *
  * <shaver> // XXX do not look into _superhack with remaining eye
- * <shaver> // XXX if this were any uglier, I'd get my own show on MTV */ 
+ * <shaver> // XXX if this were any uglier, I'd get my own show on MTV */
 extern int (*ptlrpc_put_connection_superhack)(struct ptlrpc_connection *c);
+extern void (*ptlrpc_abort_inflight_superhack)(struct obd_import *imp,
+                                               int dying_import);
 
-int class_register_type(struct obd_ops *ops, struct lprocfs_vars* vars, 
+int class_register_type(struct obd_ops *ops, struct lprocfs_vars* vars,
                         char *nm);
 int class_unregister_type(char *nm);
 int class_name2dev(char *name);
-int class_uuid2dev(char *uuid);
-struct obd_device *class_uuid2obd(char *uuid);
+int class_uuid2dev(struct obd_uuid *uuid);
+struct obd_device *class_uuid2obd(struct obd_uuid *uuid);
 struct obd_export *class_new_export(struct obd_device *obddev);
 struct obd_type *class_get_type(char *name);
 void class_put_type(struct obd_type *type);
 void class_destroy_export(struct obd_export *exp);
 int class_connect(struct lustre_handle *conn, struct obd_device *obd,
-                  obd_uuid_t cluuid);
+                  struct obd_uuid *cluuid);
 int class_disconnect(struct lustre_handle *conn);
 void class_disconnect_all(struct obd_device *obddev);
 
@@ -872,6 +884,17 @@ void statfs_unpack(struct statfs *sfs, struct obd_statfs *osfs);
 void obd_statfs_pack(struct obd_statfs *tgt, struct obd_statfs *src);
 void obd_statfs_unpack(struct obd_statfs *tgt, struct obd_statfs *src);
 
+
+struct obd_class_user_state {
+        struct obd_device     *ocus_current_obd;
+        struct list_head       ocus_conns;
+};
+
+struct obd_class_user_conn {
+        struct list_head       ocuc_chain;
+        struct lustre_handle   ocuc_conn;
+};
+
 #endif
 
 /* sysctl.c */
@@ -880,6 +903,6 @@ extern void obd_sysctl_clean (void);
 
 /* uuid.c  */
 typedef __u8 class_uuid_t[16];
-//int class_uuid_parse(obd_uuid_t in, class_uuid_t out);
-void class_uuid_unparse(class_uuid_t in, obd_uuid_t out);
-#endif /* __LINUX_CLASS_OBD_H */
+//int class_uuid_parse(struct obd_uuid in, class_uuid_t out);
+void class_uuid_unparse(class_uuid_t in, struct obd_uuid *out);
+#endif /* __LINUX_OBD_CLASS_H */

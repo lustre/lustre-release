@@ -100,6 +100,9 @@ int lustre_unpack_msg(struct lustre_msg *m, int len)
 
         if (len < required_len) {
                 CERROR("len: %d, required_len %d\n", len, required_len);
+                CERROR("bufcount: %d\n", m->bufcount);
+                for (i = 0; i < m->bufcount; i++)
+                        CERROR("buffer %d length %d\n", i, m->buflens[i]);
                 RETURN(-EINVAL);
         }
 
@@ -117,15 +120,15 @@ void *lustre_msg_buf(struct lustre_msg *m, int n)
         }
 
         if (n < 0 || n >= m->bufcount) {
-                CERROR("referencing bad sub buffer in %p (want %d, count %d)!\n",
-                       m, n, m->bufcount);
+                CERROR("referencing bad sub buffer in %p (want %d, count "
+                       "%d)!\n", m, n, m->bufcount);
                 LBUG();
                 return NULL;
         }
 
         if (m->buflens[n] == 0) {
-                CERROR("zero-length buffer requested for buffer %d in %p\n", n,
-                       m);
+                CERROR("zero-length buffer requested for buffer %d in %p\n",
+                       n, m);
                 return NULL;
         }
 

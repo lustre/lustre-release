@@ -27,10 +27,40 @@
 #define OBD_FILTER_DEVICENAME "obdfilter"
 #endif
 
+#define FILTER_LR_SERVER_SIZE    512
+
+#define FILTER_LR_CLIENT_START   8192
+#define FILTER_LR_CLIENT_SIZE    128
+
+#define FILTER_MOUNT_RECOV 2
+#define FILTER_RECOVERY_TIMEOUT (obd_timeout * 5 * HZ / 2) /* *waves hands* */
+
+/* Data stored per server at the head of the last_rcvd file.  In le32 order. */
+struct filter_server_data {
+        __u8  fsd_uuid[37];        /* server UUID */
+        __u8  fsd_uuid_padding[3]; /* unused */
+        __u64 fsd_last_objid;      /* last completed transaction ID */
+        __u64 fsd_last_rcvd;       /* last completed transaction ID */
+        __u64 fsd_mount_count;     /* FILTER incarnation number */
+        __u8  fsd_padding[FILTER_LR_SERVER_SIZE - 64]; /*  */
+};
+
+/* Data stored per client in the last_rcvd file.  In le32 order. */
+struct filter_client_data {
+        __u8  fcd_uuid[37];        /* client UUID */
+        __u8  fcd_uuid_padding[3]; /* unused */
+        __u64 fcd_last_rcvd;       /* last completed transaction ID */
+        __u64 fcd_mount_count;     /* FILTER incarnation number */
+        __u64 fcd_last_xid;        /* client RPC xid for the last transaction */
+        __u8  fcd_padding[FILTER_LR_CLIENT_SIZE - 64]; 
+};
+
 /* In-memory access to client data from OST struct */
 struct filter_export_data {
         struct list_head  fed_open_head; /* files to close on disconnect */
         spinlock_t        fed_lock;      /* protects fed_open_head */
+        struct filter_client_data  *fed_fcd;
+        int               fed_lr_off;
 };
 
 /* file data for open files on OST */
@@ -46,5 +76,6 @@ struct filter_dentry_data {
 };
 
 #define FILTER_FLAG_DESTROY 0x0001      /* destroy dentry on last file close */
+
 
 #endif

@@ -24,109 +24,161 @@
 #ifndef _LPROCFS_SNMP_H
 #define _LPROCFS_SNMP_H
 
-
-#ifndef LPROC_SNMP
-#define LPROC_SNMP
-#endif
-
+#include <linux/autoconf.h>
 #include <linux/proc_fs.h>
 
-typedef enum {
-        E_LPROC_OK = 0
-} lproc_error_t;
+#ifndef LPROCFS
+#ifdef  CONFIG_PROC_FS  /* Ensure that /proc is configured */
+#define LPROCFS
+#endif
+#endif
 
-struct lprocfs_vars{
-
-        char* name;
-        read_proc_t* read_fptr;
-        write_proc_t* write_fptr;
-        void* data;
+struct lprocfs_vars {
+        char *name;
+        read_proc_t *read_fptr;
+        write_proc_t *write_fptr;
+        void *data;
 };
 
-#ifdef LPROC_SNMP
+struct lprocfs_static_vars {
+        struct lprocfs_vars *module_vars;
+        struct lprocfs_vars *obd_vars;
+};
 
-struct proc_dir_entry* lprocfs_mkdir(const char *dname,
-                                     struct proc_dir_entry *parent);
-struct proc_dir_entry* lprocfs_srch(struct proc_dir_entry *head,
-                                    const char *name);
-void lprocfs_remove_all(struct proc_dir_entry *root);
-struct proc_dir_entry* lprocfs_new_dir(struct proc_dir_entry *root,
-                                       const char *string,
-                                       const char *tok);
-int lprocfs_new_vars(struct proc_dir_entry *root, struct lprocfs_vars *list,
-                     const char *tok, void *data);
+/* class_obd.c */
+extern struct proc_dir_entry *proc_lustre_root;
 
-int lprocfs_add_vars(struct proc_dir_entry *root, struct lprocfs_vars *var,
-                     void *data);
-int lprocfs_reg_obd(struct obd_device *device, struct lprocfs_vars *list,
-                    void *data);
-int lprocfs_dereg_obd(struct obd_device *device);
-struct proc_dir_entry* lprocfs_reg_mnt(char *mnt_name);
-int lprocfs_dereg_mnt(struct proc_dir_entry *root);
+extern void lprocfs_init_vars(struct lprocfs_static_vars *var);
+extern void lprocfs_init_multi_vars(unsigned int idx, 
+                                    struct lprocfs_static_vars *var);
 
-int lprocfs_reg_class(struct obd_type *type, struct lprocfs_vars *list,
-                      void *data);
-int lprocfs_dereg_class(struct obd_type *class);
-int lprocfs_reg_main(void);
-int lprocfs_dereg_main(void);
-int lprocfs_ll_rd(char *page, char **start, off_t off, int count, int *eof,
-                  void *data);
+#define LPROCFS_INIT_MULTI_VARS(array, size)                              \
+void lprocfs_init_multi_vars(unsigned int idx,                            \
+                             struct lprocfs_static_vars *x)               \
+{                                                                         \
+   struct lprocfs_static_vars *glob = (struct lprocfs_static_vars*)array; \
+   LASSERT(glob != 0);                                                    \
+   LASSERT(idx < (unsigned int)(size));                                   \
+   x->module_vars = glob[idx].module_vars;                                \
+   x->obd_vars = glob[idx].obd_vars;                                      \
+}                                                                         \
+
+#define LPROCFS_INIT_VARS(vclass, vinstance)           \
+void lprocfs_init_vars(struct lprocfs_static_vars *x)  \
+{                                                      \
+        x->module_vars = vclass;                       \
+        x->obd_vars = vinstance;                       \
+}                                                      \
+
+#ifdef LPROCFS
+/* lprocfs_status.c */
+extern int lprocfs_add_vars(struct proc_dir_entry *root,
+                            struct lprocfs_vars *var,
+                            void *data);
+
+extern struct proc_dir_entry *lprocfs_register(const char *name,
+                                               struct proc_dir_entry *parent,
+                                               struct lprocfs_vars *list,
+                                               void *data);
+
+extern void lprocfs_remove(struct proc_dir_entry *root);
+
+struct obd_device;
+extern int lprocfs_obd_attach(struct obd_device *dev, struct lprocfs_vars *list);
+extern int lprocfs_obd_detach(struct obd_device *dev);
+
+/* Generic callbacks */
+
+extern int lprocfs_rd_u64(char *page, char **start, off_t off,
+                          int count, int *eof, void *data);
+extern int lprocfs_rd_uuid(char *page, char **start, off_t off,
+                           int count, int *eof, void *data);
+extern int lprocfs_rd_name(char *page, char **start, off_t off,
+                           int count, int *eof, void *data);
+extern int lprocfs_rd_server_uuid(char *page, char **start, off_t off,
+                                  int count, int *eof, void *data);
+extern int lprocfs_rd_conn_uuid(char *page, char **start, off_t off,
+                                int count, int *eof, void *data);
+extern int lprocfs_rd_numrefs(char *page, char **start, off_t off,
+                              int count, int *eof, void *data);
+
+/* Statfs helpers */
+struct statfs;
+extern int lprocfs_rd_blksize(char *page, char **start, off_t off,
+                              int count, int *eof, struct statfs *sfs);
+extern int lprocfs_rd_kbytestotal(char *page, char **start, off_t off,
+                                  int count, int *eof, struct statfs *sfs);
+extern int lprocfs_rd_kbytesfree(char *page, char **start, off_t off,
+                                 int count, int *eof, struct statfs *sfs);
+extern int lprocfs_rd_filestotal(char *page, char **start, off_t off,
+                                 int count, int *eof, struct statfs *sfs);
+extern int lprocfs_rd_filesfree(char *page, char **start, off_t off,
+                                int count, int *eof, struct statfs *sfs);
+extern int lprocfs_rd_filegroups(char *page, char **start, off_t off,
+                                 int count, int *eof, struct statfs *sfs);
+
+#define DEFINE_LPROCFS_STATFS_FCT(fct_name, get_statfs_fct)      \
+int fct_name(char *page, char **start, off_t off,                \
+             int count, int *eof, void *data)                    \
+{                                                                \
+        struct statfs sfs;                                       \
+        int rc = get_statfs_fct((struct obd_device*)data, &sfs); \
+        return (rc==0                                            \
+                ? lprocfs_##fct_name (page, start, off, count, eof, &sfs) \
+                : rc);                                       \
+}
+
 #else
 
-
+static inline struct proc_dir_entry *
+lprocfs_register(const char *name, struct proc_dir_entry *parent,
+                 struct lprocfs_vars *list, void *data) { return NULL; }
 static inline int lprocfs_add_vars(struct proc_dir_entry *root,
-				   struct lprocfs_vars *var, void *data)
-{
-        return 0;
-}
+                                   struct lprocfs_vars *var,
+                                   void *data) { return 0; }
+static inline void lprocfs_remove(struct proc_dir_entry *root) {};
+struct obd_device;
+static inline int lprocfs_obd_attach(struct obd_device *dev,
+                                     struct lprocfs_vars *list) { return 0; }
+static inline int lprocfs_obd_detach(struct obd_device *dev)  { return 0; }
+static inline int lprocfs_rd_u64(char *page, char **start, off_t off,
+                                 int count, int *eof, void *data) { return 0; }
+static inline int lprocfs_rd_uuid(char *page, char **start, off_t off,
+                                  int count, int *eof, void *data) { return 0; }
+static inline int lprocfs_rd_name(char *page, char **start, off_t off,
+                                  int count, int *eof, void *data) { return 0; }
+static inline int lprocfs_rd_server_uuid(char *page, char **start, off_t off,
+                                         int count, int *eof, void *data) { return 0; }
+static inline int lprocfs_rd_conn_uuid(char *page, char **start, off_t off,
+                                       int count, int *eof, void *data) { return 0; }
+static inline int lprocfs_rd_numrefs(char *page, char **start, off_t off,
+                                     int count, int *eof, void *data) { return 0; }
 
-static inline int lprocfs_reg_obd(struct obd_device* device,
-				  struct lprocfs_vars* list, void* data)
-{
-        return 0;
-}
+/* Statfs helpers */
+struct statfs;
+static inline
+int lprocfs_rd_blksize(char *page, char **start, off_t off,
+                       int count, int *eof, struct statfs *sfs) { return 0; }
+static inline
+int lprocfs_rd_kbytestotal(char *page, char **start, off_t off,
+                           int count, int *eof, struct statfs *sfs) { return 0; }
+static inline
+int lprocfs_rd_kbytesfree(char *page, char **start, off_t off,
+                          int count, int *eof, struct statfs *sfs) { return 0; }
+static inline
+int lprocfs_rd_filestotal(char *page, char **start, off_t off,
+                          int count, int *eof, struct statfs *sfs) { return 0; }
+static inline
+int lprocfs_rd_filesfree(char *page, char **start, off_t off,
+                         int count, int *eof, struct statfs *sfs)  { return 0; }
+static inline
+int lprocfs_rd_filegroups(char *page, char **start, off_t off,
+                          int count, int *eof, struct statfs *sfs) { return 0; }
 
-static inline int lprocfs_dereg_obd(struct obd_device* device)
-{
-        return 0;
-}
+#define DEFINE_LPROCFS_STATFS_FCT(fct_name, get_statfs_fct)  \
+int fct_name(char *page, char **start, off_t off,            \
+             int count, int *eof, void *data) { *eof = 1; return 0; }
 
-static inline struct proc_dir_entry* lprocfs_reg_mnt(char *name)
-{
-        return NULL;
-}
-
-static inline int lprocfs_dereg_mnt(struct proc_dir_entry* root)
-{
-        return 0;
-}
-
-static inline int lprocfs_reg_class(struct obd_type* type,
-                                    struct lprocfs_vars* list, void* data)
-{
-        return 0;
-}
-
-static inline int lprocfs_dereg_class(struct obd_type* class)
-{
-        return 0;
-}
-
-static inline int lprocfs_reg_main(void)
-{
-        return 0;
-}
-
-static inline int lprocfs_dereg_main(void)
-{
-        return 0;
-}
-
-static inline int lprocfs_ll_rd(char *page, char **start, off_t off,
-                                int count, int *eof, void *data)
-{
-        return 0;
-}
-#endif /* LPROC_SNMP */
+#endif /* LPROCFS */
 
 #endif /* LPROCFS_SNMP_H */

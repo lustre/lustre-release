@@ -1,0 +1,59 @@
+From adilger@clusterfs.com Mon Dec  2 10:26:44 2002
+Date: Mon, 2 Dec 2002 10:26:44 -0700
+From: Andreas Dilger <adilger@clusterfs.com>
+To: Lustre LLNL Mailing list <lc-lustre@llnl.gov>,
+	Lustre Development Mailing List <lustre-devel@lists.sourceforge.net>
+Subject: Re: data corrupting bug in 2.4.20 ext3, data=journal
+Message-ID: <20021202102644.H1422@schatzie.adilger.int>
+Mail-Followup-To: Lustre LLNL Mailing list <lc-lustre@llnl.gov>,
+	Lustre Development Mailing List <lustre-devel@lists.sourceforge.net>
+Mime-Version: 1.0
+Content-Type: text/plain; charset=us-ascii
+Content-Disposition: inline
+User-Agent: Mutt/1.2.5.1i
+X-GPG-Key: 1024D/0D35BED6
+X-GPG-Fingerprint: 7A37 5D79 BF1B CECA D44F  8A29 A488 39F5 0D35 BED6
+Status: RO
+Content-Length: 1160
+Lines: 39
+
+Here is the new-improved fix for the ext3 discarding data at umount bug
+discovered late last week.  To be used instead of the previous ext3 fix.
+
+Sadly, this is completely unrelated to the problems Mike is having with
+ext3 under UML, since it is an unmount-time problem.
+
+----- Forwarded message from "Stephen C. Tweedie" <sct@redhat.com> -----
+The attached patch seems to fix things for me.
+
+Cheers,
+ Stephen
+
+
+--- linux-2.4-ext3merge/fs/ext3/super.c.=K0027=.orig	2002-12-02 15:35:13.000000000 +0000
++++ linux-2.4-ext3merge/fs/ext3/super.c	2002-12-02 15:35:14.000000000 +0000
+@@ -1640,7 +1640,12 @@
+ 	sb->s_dirt = 0;
+ 	target = log_start_commit(EXT3_SB(sb)->s_journal, NULL);
+ 
+-	if (do_sync_supers) {
++	/*
++	 * Tricky --- if we are unmounting, the write really does need
++	 * to be synchronous.  We can detect that by looking for NULL in
++	 * sb->s_root.
++	 */
++	if (do_sync_supers || !sb->s_root) {
+ 		unlock_super(sb);
+ 		log_wait_commit(EXT3_SB(sb)->s_journal, target);
+ 		lock_super(sb);
+
+
+----- End forwarded message -----
+
+Cheers, Andreas
+--
+Andreas Dilger
+http://sourceforge.net/projects/ext2resize/
+http://www-mddsp.enel.ucalgary.ca/People/adilger/
+
+

@@ -511,24 +511,18 @@
  static struct buffer_head * ext3_find_entry (struct dentry *dentry,
  					struct ext3_dir_entry_2 ** res_dir)
  {
-@@ -119,10 +564,76 @@
+@@ -119,10 +564,70 @@
  	int num = 0;
  	int nblocks, i, err;
  	struct inode *dir = dentry->d_parent->d_inode;
-+	int namelen;
-+	const u8 *name;
-+	unsigned blocksize;
 +	ext3_dirent *de, *top;
  
  	*res_dir = NULL;
  	sb = dir->i_sb;
-+	blocksize = sb->s_blocksize;
-+	namelen = dentry->d_name.len;
-+	name = dentry->d_name.name;
-+	if (namelen > EXT3_NAME_LEN)
++	if (dentry->d_name.len > EXT3_NAME_LEN)
 +		return NULL;
 +	if (ext3_dx && is_dx(dir)) {
-+		u32 hash = dx_hash (name, namelen);
++		u32 hash = dx_hash(dentry->d_name.name, dentry->d_name.len);
 +		struct dx_frame frames[2], *frame;
 +		if (!(frame = dx_probe (dir, hash, frames)))
 +			return NULL;
@@ -537,10 +531,10 @@
 +		if (!(bh = ext3_bread (NULL,dir, block, 0, &err)))
 +			goto dxfail;
 +		de = (ext3_dirent *) bh->b_data;
-+		top = (ext3_dirent *) ((char *) de + blocksize -
++		top = (ext3_dirent *) ((char *) de + sb->s_blocksize -
 +				EXT3_DIR_REC_LEN(0));
 +		for (; de < top; de = ext3_next_entry(de))
-+			if (ext3_match (namelen, name, de)) {
++			if (ext3_match(dentry->d_name.len, dentry->d_name.name, de)) {
 +				if (!ext3_check_dir_entry("ext3_find_entry",
 +					  dir, de, bh,
 +					  (block<<EXT3_BLOCK_SIZE_BITS(sb))
@@ -588,7 +582,7 @@
  	nblocks = dir->i_size >> EXT3_BLOCK_SIZE_BITS(sb);
  	start = dir->u.ext3_i.i_dir_start_lookup;
  	if (start >= nblocks)
-@@ -237,6 +748,92 @@
+@@ -237,6 +748,90 @@
  		de->file_type = ext3_type_by_mode[(mode & S_IFMT)>>S_SHIFT];
  }
  
@@ -613,11 +607,9 @@
 +			struct buffer_head **bh,struct dx_frame *frame,
 +			u32 hash, int *error)
 +{
-+	unsigned blocksize = dir->i_sb->s_blocksize;
-+	unsigned count, continued;
++	unsigned count;
 +	struct buffer_head *bh2;
 +	u32 newblock;
-+	unsigned MAX_DX_MAP = PAGE_CACHE_SIZE/EXT3_DIR_REC_LEN(1) + 1;
 +	u32 hash2;
 +	struct dx_map_entry *map;
 +	char *data1 = (*bh)->b_data, *data2, *data3;
@@ -639,14 +631,14 @@
 +
 +	data2 = bh2->b_data;
 +
-+	map = kmalloc(sizeof(*map) * MAX_DX_MAP, GFP_KERNEL);
++	map = kmalloc(sizeof(*map) * PAGE_CACHE_SIZE/EXT3_DIR_REC_LEN(1) + 1,
++		      GFP_KERNEL);
 +	if (!map)
 +		panic("no memory for do_split\n");
-+	count = dx_make_map ((ext3_dirent *) data1, blocksize, map);
++	count = dx_make_map((ext3_dirent *)data1, dir->i_sb->s_blocksize, map);
 +	split = count/2; // need to adjust to actual middle
 +	dx_sort_map (map, count);
 +	hash2 = map[split].hash;
-+	continued = hash2 == map[split - 1].hash;
 +	dxtrace(printk("Split block %i at %x, %i/%i\n",
 +		dx_get_block(frame->at), hash2, split, count-split));
 +
@@ -656,10 +648,10 @@
 +	de = dx_copy_dirents (data1, data3, map, split);
 +	memcpy(data1, data3, (char *) de + de->rec_len - data3);
 +	de = (ext3_dirent *) ((char *) de - data3 + data1); // relocate de
-+	de->rec_len = cpu_to_le16(data1 + blocksize - (char *) de);
-+	de2->rec_len = cpu_to_le16(data2 + blocksize - (char *) de2);
-+	dxtrace(dx_show_leaf ((ext3_dirent *) data1, blocksize, 1));
-+	dxtrace(dx_show_leaf ((ext3_dirent *) data2, blocksize, 1));
++	de->rec_len = cpu_to_le16(data1 + dir->i_sb->s_blocksize - (char *)de);
++	de2->rec_len = cpu_to_le16(data2 + dir->i_sb->s_blocksize-(char *)de2);
++	dxtrace(dx_show_leaf((ext3_dirent *)data1, dir->i_sb->s_blocksize, 1));
++	dxtrace(dx_show_leaf((ext3_dirent *)data2, dir->i_sb->s_blocksize, 1));
 +
 +	/* Which block gets the new entry? */
 +	if (hash >= hash2)
@@ -667,7 +659,7 @@
 +		swap(*bh, bh2);
 +		de = de2;
 +	}
-+	dx_insert_block (frame, hash2 + continued, newblock);
++	dx_insert_block(frame, hash2 + (hash2 == map[split-1].hash), newblock);
 +	ext3_journal_dirty_metadata (handle, bh2);
 +	brelse (bh2);
 +	ext3_journal_dirty_metadata (handle, frame->bh);
@@ -681,17 +673,12 @@
  /*
   *	ext3_add_entry()
   *
-@@ -251,6 +844,7 @@
- /*
-  * AKPM: the journalling code here looks wrong on the error paths
-  */
-+
- static int ext3_add_entry (handle_t *handle, struct dentry *dentry,
+@@ -255,118 +849,278 @@
  	struct inode *inode)
  {
-@@ -258,117 +852,281 @@
- 	const char *name = dentry->d_name.name;
- 	int namelen = dentry->d_name.len;
+ 	struct inode *dir = dentry->d_parent->d_inode;
+-	const char *name = dentry->d_name.name;
+-	int namelen = dentry->d_name.len;
  	unsigned long offset;
 -	unsigned short rec_len;
  	struct buffer_head * bh;
@@ -700,15 +687,15 @@
 +	ext3_dirent *de;
 +	struct super_block * sb = dir->i_sb;
  	int	retval;
-+	unsigned short reclen = EXT3_DIR_REC_LEN(namelen);
++	unsigned short reclen = EXT3_DIR_REC_LEN(dentry->d_name.len);
  
 -	sb = dir->i_sb;
-+	unsigned blocksize = sb->s_blocksize;
 +	unsigned nlen, rlen;
 +	u32 block, blocks;
 +	char *top;
  
- 	if (!namelen)
+-	if (!namelen)
++	if (!dentry->d_name.len)
  		return -EINVAL;
 -	bh = ext3_bread (handle, dir, 0, 0, &retval);
 -	if (!bh)
@@ -734,7 +721,7 @@
 +		u32 hash;
 +		char *data1;
 +
-+		hash = dx_hash(name, namelen);
++		hash = dx_hash(dentry->d_name.name, dentry->d_name.len);
 +		/* FIXME: do something if dx_probe() fails here */
 +		frame = dx_probe(dir, hash, frames);
 +		entries = frame->entries;
@@ -748,7 +735,7 @@
 +
 +		data1 = bh->b_data;
 +		de = (ext3_dirent *) data1;
-+		top = data1 + (0? 200: blocksize);
++		top = data1 + (0? 200: sb->s_blocksize);
 +		while ((char *) de < top)
 +		{
 +			/* FIXME: check EEXIST and dir */
@@ -777,7 +764,7 @@
 +				goto dxfail2;
 +			node2 = (struct dx_node *)(bh2->b_data);
 +			entries2 = node2->entries;
-+			node2->fake.rec_len = cpu_to_le16(blocksize);
++			node2->fake.rec_len = cpu_to_le16(sb->s_blocksize);
 +			node2->fake.inode = 0;
 +			BUFFER_TRACE(frame->bh, "get_write_access");
 +			ext3_journal_get_write_access(handle, frame->bh);
@@ -878,14 +865,14 @@
 +		if(!bh)
 +			return retval;
 +		de = (ext3_dirent *)bh->b_data;
-+		top = bh->b_data + blocksize - reclen;
++		top = bh->b_data + sb->s_blocksize - reclen;
 +		while ((char *) de <= top) {
 +			if (!ext3_check_dir_entry("ext3_add_entry", dir, de,
 +						  bh, offset)) {
 +				brelse (bh);
 +				return -EIO;
 +			}
-+			if (ext3_match (namelen, name, de)) {
++			if (ext3_match(dentry->d_name.len,dentry->d_name.name,de)) {
  				brelse (bh);
  				return -EEXIST;
 -		}
@@ -934,7 +921,7 @@
 -			ext3_journal_dirty_metadata(handle, bh);
 +			nlen = EXT3_DIR_REC_LEN(de->name_len);
 +			rlen = le16_to_cpu(de->rec_len);
-+			if ((de->inode? rlen - nlen: rlen) >= reclen)
++			if ((de->inode ? rlen - nlen: rlen) >= reclen)
 +				goto add;
 +			de = (ext3_dirent *)((char *)de + rlen);
 +			offset += rlen;
@@ -948,7 +935,7 @@
 +		return retval;
 +	de = (ext3_dirent *) bh->b_data;
 +	de->inode = 0;
-+	de->rec_len = cpu_to_le16(rlen = blocksize);
++	de->rec_len = cpu_to_le16(rlen = sb->s_blocksize);
 +	nlen = 0;
 +	goto add;
 +
@@ -968,8 +955,8 @@
 +		ext3_set_de_type(dir->i_sb, de, inode->i_mode);
 +	} else
 +		de->inode = 0;
-+	de->name_len = namelen;
-+	memcpy (de->name, name, namelen);
++	de->name_len = dentry->d_name.len;
++	memcpy (de->name, dentry->d_name.name, dentry->d_name.len);
 +	/*
 +	 * XXX shouldn't update any times until successful
 +	 * completion of syscall, but too many callers depend
@@ -1020,16 +1007,16 @@
 +
 +		/* The 0th block becomes the root, move the dirents out */
 +		de = (ext3_dirent *) &root->info;
-+		len = ((char *) root) + blocksize - (char *) de;
++		len = ((char *) root) + sb->s_blocksize - (char *) de;
 +		memcpy (data1, de, len);
 +		de = (ext3_dirent *) data1;
 +		top = data1 + len;
 +		while (((char *) de2=(char*)de+le16_to_cpu(de->rec_len)) < top)
 +			de = de2;
-+		de->rec_len = cpu_to_le16(data1 + blocksize - (char *) de);
++		de->rec_len = cpu_to_le16(data1 + sb->s_blocksize - (char *)de);
 +		/* Initialize the root; the dot dirents already exist */
 +		de = (ext3_dirent *) (&root->dotdot);
-+		de->rec_len = cpu_to_le16(blocksize - EXT3_DIR_REC_LEN(2));
++		de->rec_len = cpu_to_le16(sb->s_blocksize-EXT3_DIR_REC_LEN(2));
 +		memset (&root->info, 0, sizeof(root->info));
 +		root->info.info_length = sizeof(root->info);
 +		entries = root->entries;
@@ -1038,7 +1025,7 @@
 +		dx_set_limit (entries, dx_root_limit(dir, sizeof(root->info)));
 +
 +		/* Initialize as for dx_probe */
-+		hash = dx_hash (name, namelen);
++		hash = dx_hash (dentry->d_name.name, dentry->d_name.len);
 +		frame = frames;
 +		frame->entries = entries;
 +		frame->at = entries;
@@ -1060,10 +1047,7 @@
 +	return -ENOENT;
  }
  
-+
  /*
-  * ext3_delete_entry deletes a directory entry by merging it with the
-  * previous entry
 @@ -451,7 +1212,8 @@
  	struct inode * inode;
  	int err;

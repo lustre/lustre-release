@@ -1,7 +1,7 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (C) 2001, 2002 Cluster File Systems, Inc.
+ *  Copyright (C) 2001-2003 Cluster File Systems, Inc.
  *   Author: Peter J. Braam <braam@clusterfs.com>
  *   Author: Phil Schwan <phil@clusterfs.com>
  *   Author: Mike Shaver <shaver@clusterfs.com>
@@ -40,7 +40,7 @@ struct client_obd *client_conn2cli(struct lustre_handle *conn)
         return &export->exp_obd->u.cli;
 }
 
-struct obd_device *client_tgtuuid2obd(char *tgtuuid)
+struct obd_device *client_tgtuuid2obd(struct obd_uuid *tgtuuid)
 {
         int i;
 
@@ -49,8 +49,8 @@ struct obd_device *client_tgtuuid2obd(char *tgtuuid)
                 if ((strcmp(obd->obd_type->typ_name, LUSTRE_OSC_NAME) == 0) ||
                     (strcmp(obd->obd_type->typ_name, LUSTRE_MDC_NAME) == 0)) {
                         struct client_obd *cli = &obd->u.cli;
-                        if (strncmp(tgtuuid, cli->cl_target_uuid,
-                                    sizeof(cli->cl_target_uuid)) == 0)
+                        if (strncmp(tgtuuid->uuid, cli->cl_target_uuid.uuid,
+                                    sizeof(cli->cl_target_uuid.uuid)) == 0)
                                 return obd;
                 }
         }
@@ -65,7 +65,7 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         char *name;
         struct client_obd *cli = &obddev->u.cli;
         struct obd_import *imp = &cli->cl_import;
-        obd_uuid_t server_uuid;
+        struct obd_uuid server_uuid;
         ENTRY;
 
         if (obddev->obd_type->typ_ops->o_brw) {
@@ -100,11 +100,11 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
 
         sema_init(&cli->cl_sem, 1);
         cli->cl_conn_count = 0;
-        memcpy(cli->cl_target_uuid, data->ioc_inlbuf1, data->ioc_inllen1);
-        memcpy(server_uuid, data->ioc_inlbuf2, MIN(data->ioc_inllen2,
+        memcpy(cli->cl_target_uuid.uuid, data->ioc_inlbuf1, data->ioc_inllen1);
+        memcpy(server_uuid.uuid, data->ioc_inlbuf2, MIN(data->ioc_inllen2,
                                                    sizeof(server_uuid)));
 
-        imp->imp_connection = ptlrpc_uuid_to_connection(server_uuid);
+        imp->imp_connection = ptlrpc_uuid_to_connection(&server_uuid);
         if (!imp->imp_connection)
                 RETURN(-ENOENT);
 
@@ -134,17 +134,18 @@ int client_obd_cleanup(struct obd_device * obddev)
 }
 
 int client_obd_connect(struct lustre_handle *conn, struct obd_device *obd,
-                       obd_uuid_t cluuid, struct recovd_obd *recovd,
+                       struct obd_uuid *cluuid, struct recovd_obd *recovd,
                        ptlrpc_recovery_cb_t recover)
 {
         struct client_obd *cli = &obd->u.cli;
         struct ptlrpc_request *request;
         int rc, size[] = {sizeof(cli->cl_target_uuid),
                           sizeof(obd->obd_uuid) };
-        char *tmp[] = {cli->cl_target_uuid, obd->obd_uuid};
+        char *tmp[] = {cli->cl_target_uuid.uuid, obd->obd_uuid.uuid};
         int rq_opc = (obd->obd_type->typ_ops->o_brw) ? OST_CONNECT :MDS_CONNECT;
         struct ptlrpc_connection *c;
         struct obd_import *imp = &cli->cl_import;
+        int msg_flags;
 
         ENTRY;
         down(&cli->cl_sem);
@@ -166,7 +167,6 @@ int client_obd_connect(struct lustre_handle *conn, struct obd_device *obd,
         INIT_LIST_HEAD(&imp->imp_chain);
         imp->imp_last_xid = 0;
         imp->imp_max_transno = 0;
-        imp->imp_peer_last_xid = 0;
         imp->imp_peer_committed_transno = 0;
 
         request = ptlrpc_prep_req(&cli->cl_import, rq_opc, 2, size, tmp);
@@ -187,8 +187,11 @@ int client_obd_connect(struct lustre_handle *conn, struct obd_device *obd,
         if (rc)
                 GOTO(out_req, rc);
 
-        if (rq_opc == MDS_CONNECT)
+        msg_flags = lustre_msg_get_op_flags(request->rq_repmsg);
+        if (rq_opc == MDS_CONNECT || msg_flags & MSG_CONNECT_REPLAYABLE) {
                 imp->imp_flags |= IMP_REPLAYABLE;
+                CDEBUG(D_HA, "connected to replayable target: %s\n", cli->cl_target_uuid.uuid);
+        }
         imp->imp_level = LUSTRE_CONN_FULL;
         imp->imp_handle.addr = request->rq_repmsg->addr;
         imp->imp_handle.cookie = request->rq_repmsg->cookie;
@@ -248,10 +251,12 @@ int client_obd_disconnect(struct lustre_handle *conn)
         if (cli->cl_conn_count)
                 GOTO(out_no_disconnect, rc = 0);
 
-        ldlm_namespace_free(obd->obd_namespace);
-        obd->obd_namespace = NULL;
-        request = ptlrpc_prep_req(&cli->cl_import, rq_opc, 0, NULL,
-                                  NULL);
+        if (obd->obd_namespace != NULL) {
+                ldlm_cli_cancel_unused(obd->obd_namespace, NULL, 0);
+                ldlm_namespace_free(obd->obd_namespace);
+                obd->obd_namespace = NULL;
+        }
+        request = ptlrpc_prep_req(&cli->cl_import, rq_opc, 0, NULL, NULL);
         if (!request)
                 GOTO(out_req, rc = -ENOMEM);
 

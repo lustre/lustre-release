@@ -1,7 +1,7 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (C) 2002 Cluster File Systems, Inc.
+ *  Copyright (c) 2002, 2003 Cluster File Systems, Inc.
  *
  *   This file is part of Lustre, http://www.lustre.org.
  *
@@ -32,13 +32,9 @@
 #include <linux/init.h>
 #include <linux/lprocfs_status.h>
 
-
-
 extern int ptlrpc_init_portals(void);
 extern void ptlrpc_exit_portals(void);
 
-extern struct lprocfs_vars status_var_nm_1[];
-extern struct lprocfs_vars status_class_var[];
 
 int connmgr_setup(struct obd_device *obddev, obd_count len, void *buf)
 {
@@ -83,8 +79,8 @@ int connmgr_iocontrol(unsigned int cmd, struct lustre_handle *hdl, int len,
                                   c_recovd_data.rd_managed_chain);
 
                 LASSERT(conn->c_recovd_data.rd_recovd == recovd); /* sanity */
-
-                if (!strcmp(conn->c_remote_uuid, data->ioc_inlbuf1))
+#warning check buffer overflow in next line
+                if (!strcmp(conn->c_remote_uuid.uuid, data->ioc_inlbuf1))
                         break;
                 conn = NULL;
         }
@@ -99,7 +95,8 @@ int connmgr_iocontrol(unsigned int cmd, struct lustre_handle *hdl, int len,
 
                         LASSERT(conn->c_recovd_data.rd_recovd == recovd);
 
-                        if (!strcmp(conn->c_remote_uuid, data->ioc_inlbuf1))
+#warning check buffer overflow in next line
+                        if (!strcmp(conn->c_remote_uuid.uuid, data->ioc_inlbuf1))
                                 break;
                         conn = NULL;
                 }
@@ -111,9 +108,6 @@ int connmgr_iocontrol(unsigned int cmd, struct lustre_handle *hdl, int len,
                 spin_unlock(&recovd->recovd_lock);
                 recovd_conn_fail(conn);
                 spin_lock(&recovd->recovd_lock);
-
-                /* Jump straight to the "failed" phase of recovery. */
-                conn->c_recovd_data.rd_phase = RD_FAILED;
                 goto out;
         }
 
@@ -134,13 +128,13 @@ int connmgr_iocontrol(unsigned int cmd, struct lustre_handle *hdl, int len,
 
         if (data->ioc_inllen2) {
                 CERROR("conn %p UUID change %s -> %s\n",
-                       conn, conn->c_remote_uuid, data->ioc_inlbuf2);
-                strcpy(conn->c_remote_uuid, data->ioc_inlbuf2);
+                       conn, conn->c_remote_uuid.uuid, data->ioc_inlbuf2);
+                obd_str2uuid(&conn->c_remote_uuid, data->ioc_inlbuf2);
         } else {
                 CERROR("conn %p UUID %s reconnected\n", conn,
-                       conn->c_remote_uuid);
+                       conn->c_remote_uuid.uuid);
         }
-        ptlrpc_readdress_connection(conn, conn->c_remote_uuid);
+        ptlrpc_readdress_connection(conn, &conn->c_remote_uuid);
         spin_unlock(&conn->c_lock);
 
         conn->c_recovd_data.rd_phase = RD_PREPARED;
@@ -151,7 +145,7 @@ int connmgr_iocontrol(unsigned int cmd, struct lustre_handle *hdl, int len,
 }
 
 static int connmgr_connect(struct lustre_handle *conn, struct obd_device *src,
-                           obd_uuid_t cluuid, struct recovd_obd *recovd,
+                           struct obd_uuid *cluuid, struct recovd_obd *recovd,
                            ptlrpc_recovery_cb_t recover)
 {
         return class_connect(conn, src, cluuid);
@@ -159,12 +153,15 @@ static int connmgr_connect(struct lustre_handle *conn, struct obd_device *src,
 
 int connmgr_attach(struct obd_device *dev, obd_count len, void *data)
 {
-        return lprocfs_reg_obd(dev, status_var_nm_1, dev);
+        struct lprocfs_static_vars lvars;
+
+        lprocfs_init_vars(&lvars);
+        return lprocfs_obd_attach(dev, lvars.obd_vars);
 }
 
 int conmgr_detach(struct obd_device *dev)
 {
-        return lprocfs_dereg_obd(dev);
+        return lprocfs_obd_detach(dev);
 }
 
 /* use obd ops to offer management infrastructure */
@@ -181,17 +178,23 @@ static struct obd_ops recovd_obd_ops = {
 
 static int __init ptlrpc_init(void)
 {
+        struct lprocfs_static_vars lvars;
         int rc;
+        ENTRY;
+
         rc = ptlrpc_init_portals();
         if (rc)
                 RETURN(rc);
         ptlrpc_init_connection();
-        rc = class_register_type(&recovd_obd_ops, status_class_var,
+
+        lprocfs_init_vars(&lvars);
+        rc = class_register_type(&recovd_obd_ops, lvars.module_vars,
                                  LUSTRE_HA_NAME);
         if (rc)
                 RETURN(rc);
         ptlrpc_put_connection_superhack = ptlrpc_put_connection;
-        return 0;
+        ptlrpc_abort_inflight_superhack = ptlrpc_abort_inflight;
+        RETURN(0);
 }
 
 static void __exit ptlrpc_exit(void)
@@ -218,8 +221,10 @@ EXPORT_SYMBOL(ptlrpc_init_connection);
 EXPORT_SYMBOL(ptlrpc_cleanup_connection);
 
 /* niobuf.c */
-EXPORT_SYMBOL(ptlrpc_send_bulk);
-EXPORT_SYMBOL(ptlrpc_register_bulk);
+EXPORT_SYMBOL(ptlrpc_bulk_put);
+EXPORT_SYMBOL(ptlrpc_bulk_get);
+EXPORT_SYMBOL(ptlrpc_register_bulk_put);
+EXPORT_SYMBOL(ptlrpc_register_bulk_get);
 EXPORT_SYMBOL(ptlrpc_abort_bulk);
 EXPORT_SYMBOL(ptlrpc_reply);
 EXPORT_SYMBOL(ptlrpc_error);
@@ -242,12 +247,14 @@ EXPORT_SYMBOL(ptlrpc_restart_req);
 EXPORT_SYMBOL(ptlrpc_prep_req);
 EXPORT_SYMBOL(ptlrpc_free_req);
 EXPORT_SYMBOL(ptlrpc_req_finished);
+EXPORT_SYMBOL(ptlrpc_request_addref);
 EXPORT_SYMBOL(ptlrpc_prep_bulk);
 EXPORT_SYMBOL(ptlrpc_free_bulk);
 EXPORT_SYMBOL(ptlrpc_prep_bulk_page);
 EXPORT_SYMBOL(ptlrpc_free_bulk_page);
 EXPORT_SYMBOL(ll_brw_sync_wait);
 EXPORT_SYMBOL(ptlrpc_abort_inflight);
+EXPORT_SYMBOL(ptlrpc_retain_replayable_request);
 
 /* service.c */
 EXPORT_SYMBOL(ptlrpc_init_svc);
@@ -268,8 +275,8 @@ EXPORT_SYMBOL(ptlrpc_replay);
 EXPORT_SYMBOL(ptlrpc_resend);
 EXPORT_SYMBOL(ptlrpc_wake_delayed);
 
-MODULE_AUTHOR("Cluster File Systems, Inc <info@clusterfs.com>");
-MODULE_DESCRIPTION("Lustre Request Processor v1.0");
+MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
+MODULE_DESCRIPTION("Lustre Request Processor");
 MODULE_LICENSE("GPL");
 
 module_init(ptlrpc_init);
