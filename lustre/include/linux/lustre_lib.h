@@ -36,7 +36,7 @@
 inline void lustre_put_page(struct page *page);
 struct page *lustre_get_page_read(struct inode *dir, unsigned long index);
 struct page *lustre_get_page_write(struct inode *dir, unsigned long index);
-int lustre_commit_page(struct page *page, unsigned from, unsigned to);
+int lustre_commit_write(struct page *page, unsigned from, unsigned to);
 void set_page_clean(struct page *page);
 void set_page_dirty(struct page *page);
 
@@ -44,6 +44,11 @@ void set_page_dirty(struct page *page);
 struct obd_run_ctxt;
 void push_ctxt(struct obd_run_ctxt *save, struct obd_run_ctxt *new);
 void pop_ctxt(struct obd_run_ctxt *saved);
+#ifdef CTXT_DEBUG
+#define OBD_SET_CTXT_MAGIC(ctxt) (ctxt)->magic = OBD_RUN_CTXT_MAGIC
+#else
+#define OBD_SET_CTXT_MAGIC(magic) do {} while(0)
+#endif
 struct dentry *simple_mkdir(struct dentry *dir, char *name, int mode);
 int lustre_fread(struct file *file, char *str, int len, loff_t *off);
 int lustre_fwrite(struct file *file, const char *str, int len, loff_t *off);
@@ -64,6 +69,12 @@ static inline void ll_sleep(int t)
         set_current_state(TASK_RUNNING);
 }
 #endif
+
+struct obd_statfs;
+struct statfs;
+
+void obd_statfs_pack(struct obd_statfs *osfs, struct statfs *sfs);
+void obd_statfs_unpack(struct obd_statfs *osfs, struct statfs *sfs);
 
 #include <linux/portals_lib.h>
 
