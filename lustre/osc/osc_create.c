@@ -216,6 +216,11 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
         if ((oa->o_valid & OBD_MD_FLGROUP) && (oa->o_gr != 0))
                 RETURN(osc_real_create(exp, oa, ea, oti));
 
+        if ((oa->o_valid & OBD_MD_FLFLAGS) &&
+            oa->o_flags == OBD_FL_RECREATE_OBJS) { 
+                RETURN(osc_real_create(exp, oa, ea, oti));
+        }
+
         lsm = *ea;
         if (lsm == NULL) {
                 rc = obd_alloc_memmd(exp, &lsm);
