@@ -1881,13 +1881,13 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
                         } else {
                                 CERROR("Serious error: objid %*s already "
                                        "exists; is this filesystem corrupt?\n",
-                                        dchild->d_name.len, dchild->d_name.name);
+                                       dchild->d_name.len, dchild->d_name.name);
                         }
                         GOTO(cleanup, rc = -EEXIST);
                 }
 
-                handle = fsfilt_start(obd, dparent->d_inode,
-                                      FSFILT_OP_CREATE_LOG, NULL);
+                handle = fsfilt_start_log(obd, dparent->d_inode,
+                                          FSFILT_OP_CREATE, NULL, 1);
                 if (IS_ERR(handle))
                         GOTO(cleanup, rc = PTR_ERR(handle));
                 cleanup_phase = 3;
@@ -2053,7 +2053,7 @@ static int filter_destroy(struct obd_export *exp, struct obdo *oa,
                 goto acquire_locks;
         }
 
-        handle = fsfilt_start(obd, dparent->d_inode, FSFILT_OP_UNLINK_LOG, oti);
+        handle = fsfilt_start_log(obd, dparent->d_inode,FSFILT_OP_UNLINK,oti,1);
         if (IS_ERR(handle))
                 GOTO(cleanup, rc = PTR_ERR(handle));
         cleanup_phase = 3;

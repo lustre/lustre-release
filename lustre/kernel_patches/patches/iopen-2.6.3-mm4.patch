@@ -15,7 +15,7 @@ Index: linux-2.6.3-mm4/Documentation/filesystems/ext2.txt
  
  sb=n				Use alternate superblock at this location.
  
-+iopen				Makes an invisible pseudo-directory called 
++iopen				Makes an invisible pseudo-directory called
 +				__iopen__ available in the root directory
 +				of the filesystem.  Allows open-by-inode-
 +				number.  i.e., inode 3145 can be accessed
@@ -59,16 +59,14 @@ Index: linux-2.6.3-mm4/fs/ext3/iopen.c
 ===================================================================
 --- linux-2.6.3-mm4.orig/fs/ext3/iopen.c	2004-03-08 14:58:44.413198848 +0800
 +++ linux-2.6.3-mm4/fs/ext3/iopen.c	2004-03-08 14:58:44.576174072 +0800
-@@ -0,0 +1,223 @@
-+
-+
+@@ -0,0 +1,218 @@
 +/*
 + * linux/fs/ext3/iopen.c
 + *
 + * Special support for open by inode number
 + *
 + * Copyright (C) 2001 by Theodore Ts'o (tytso@alum.mit.edu).
-+ * 
++ *
 + * This file may be redistributed under the terms of the GNU General
 + * Public License.
 + */
@@ -90,12 +88,13 @@ Index: linux-2.6.3-mm4/fs/ext3/iopen.c
 +/*
 + * This implements looking up an inode by number.
 + */
-+static struct dentry *iopen_lookup(struct inode * dir, struct dentry *dentry, struct nameidata *nd)
++static struct dentry *iopen_lookup(struct inode *dir, struct dentry *dentry,
++				   struct nameidata *nd)
 +{
 +	struct inode * inode;
 +	unsigned long ino;
-+        struct list_head *lp;
-+        struct dentry *alternate;
++	struct list_head *lp;
++	struct dentry *alternate;
 +	char buf[IOPEN_NAME_LEN];
 +	
 +	if (dentry->d_name.len >= IOPEN_NAME_LEN)
@@ -111,10 +110,7 @@ Index: linux-2.6.3-mm4/fs/ext3/iopen.c
 +	else
 +		ino = simple_strtoul(buf, 0, 0);
 +
-+	if ((ino != EXT3_ROOT_INO &&
-+	     //ino != EXT3_ACL_IDX_INO &&
-+	     //ino != EXT3_ACL_DATA_INO &&
-+	     ino < EXT3_FIRST_INO(dir->i_sb)) ||
++	if ((ino != EXT3_ROOT_INO && ino < EXT3_FIRST_INO(dir->i_sb)) ||
 +	    ino > le32_to_cpu(EXT3_SB(dir->i_sb)->s_es->s_inodes_count))
 +		return ERR_PTR(-ENOENT);
 +
@@ -126,24 +122,24 @@ Index: linux-2.6.3-mm4/fs/ext3/iopen.c
 +		return ERR_PTR(-ENOENT);
 +	}
 +
-+        /* preferrably return a connected dentry */
-+        spin_lock(&dcache_lock);
-+        list_for_each(lp, &inode->i_dentry) {
-+                alternate = list_entry(lp, struct dentry, d_alias);
-+                assert(!(alternate->d_flags & DCACHE_DISCONNECTED));
-+        }
++	/* preferrably return a connected dentry */
++	spin_lock(&dcache_lock);
++	list_for_each(lp, &inode->i_dentry) {
++		alternate = list_entry(lp, struct dentry, d_alias);
++		assert(!(alternate->d_flags & DCACHE_DISCONNECTED));
++	}
 +
-+        if (!list_empty(&inode->i_dentry)) {
-+                alternate = list_entry(inode->i_dentry.next, 
-+                                       struct dentry, d_alias);
-+                dget_locked(alternate);
-+                alternate->d_vfs_flags |= DCACHE_REFERENCED;
-+                iput(inode);
-+                spin_unlock(&dcache_lock);
-+                return alternate;
-+        }
-+        dentry->d_flags |= DCACHE_DISCONNECTED;
-+        spin_unlock(&dcache_lock);
++	if (!list_empty(&inode->i_dentry)) {
++		alternate = list_entry(inode->i_dentry.next,
++				       struct dentry, d_alias);
++		dget_locked(alternate);
++		alternate->d_vfs_flags |= DCACHE_REFERENCED;
++		iput(inode);
++		spin_unlock(&dcache_lock);
++		return alternate;
++	}
++	dentry->d_flags |= DCACHE_DISCONNECTED;
++	spin_unlock(&dcache_lock);
 +
 +	d_add(dentry, inode);
 +	return NULL;
@@ -157,7 +153,7 @@ Index: linux-2.6.3-mm4/fs/ext3/iopen.c
 +{
 +	const unsigned char *old_name, *new_name;
 +
-+	memcpy(dentry->d_iname, target->d_iname, DNAME_INLINE_LEN); 
++	memcpy(dentry->d_iname, target->d_iname, DNAME_INLINE_LEN);
 +	old_name = target->d_name.name;
 +	new_name = dentry->d_name.name;
 +	if (old_name == target->d_iname)
@@ -171,37 +167,36 @@ Index: linux-2.6.3-mm4/fs/ext3/iopen.c
 +
 +struct dentry *iopen_connect_dentry(struct dentry *de, struct inode *inode)
 +{
-+        struct dentry *tmp, *goal = NULL;
-+        struct list_head *lp;
++	struct dentry *tmp, *goal = NULL;
++	struct list_head *lp;
 +
-+        /* preferrably return a connected dentry */
-+        spin_lock(&dcache_lock);
-+        /* verify this dentry is really new */
-+        assert(!de->d_inode);
-+        assert(list_empty(&de->d_subdirs));
-+        assert(list_empty(&de->d_alias));
++	/* preferrably return a connected dentry */
++	spin_lock(&dcache_lock);
++	/* verify this dentry is really new */
++	assert(!de->d_inode);
++	assert(list_empty(&de->d_subdirs));
++	assert(list_empty(&de->d_alias));
 +
++	list_for_each(lp, &inode->i_dentry) {
++		tmp = list_entry(lp, struct dentry, d_alias);
++		if (tmp->d_flags & DCACHE_DISCONNECTED) {
++			assert(tmp->d_alias.next == &inode->i_dentry);
++			assert(tmp->d_alias.prev == &inode->i_dentry);
++			goal = tmp;
++			dget_locked(goal);
++			break;
++		}
++	}
++	spin_unlock(&dcache_lock);
 +
-+        list_for_each(lp, &inode->i_dentry) {
-+                tmp = list_entry(lp, struct dentry, d_alias);
-+                if (tmp->d_flags & DCACHE_DISCONNECTED) {
-+                        assert(tmp->d_alias.next == &inode->i_dentry);
-+                        assert(tmp->d_alias.prev == &inode->i_dentry);
-+                        goal = tmp;
-+                        dget_locked(goal);
-+                        break;
-+                }
-+        }
-+        spin_unlock(&dcache_lock);
++	if (!goal)
++		return NULL;
 +
-+        if (!goal)
-+                return NULL; 
-+
-+        goal->d_flags &= ~DCACHE_DISCONNECTED;
++	goal->d_flags &= ~DCACHE_DISCONNECTED;
 +	d_rehash(de);
 +	d_move(goal, de);
 +
-+        return goal;
++	return goal;
 +}
 +
 +/*
@@ -243,7 +238,7 @@ Index: linux-2.6.3-mm4/fs/ext3/iopen.c
 +
 +	inode = iget(dir->i_sb, EXT3_BAD_INO);
 +
-+	if (!inode) 
++	if (!inode)
 +		return 0;
 +	d_add(dentry, inode);
 +	return 1;
@@ -272,7 +267,7 @@ Index: linux-2.6.3-mm4/fs/ext3/iopen.c
 +	EXT3_I(inode)->i_dtime = 0;
 +	inode->i_blksize = PAGE_SIZE;	/* This is the optimal IO size
 +					 * (for stat), not the fs block
-+					 * size */  
++					 * size */
 +	inode->i_blocks = 0;
 +	inode->i_version = 1;
 +	inode->i_generation = 0;
@@ -292,9 +287,9 @@ Index: linux-2.6.3-mm4/fs/ext3/iopen.h
 + * iopen.h
 + *
 + * Special support for opening files by inode number.
-+ * 
++ *
 + * Copyright (C) 2001 by Theodore Ts'o (tytso@alum.mit.edu).
-+ * 
++ *
 + * This file may be redistributed under the terms of the GNU General
 + * Public License.
 + */
@@ -320,13 +315,13 @@ Index: linux-2.6.3-mm4/fs/ext3/namei.c
  #endif
  
 +struct dentry *iopen_connect_dentry(struct dentry *de, struct inode *inode);
-+ 
++
  static struct dentry *ext3_lookup(struct inode * dir, struct dentry *dentry, struct nameidata *nd)
  {
  	struct inode * inode;
  	struct ext3_dir_entry_2 * de;
  	struct buffer_head * bh;
-+  	struct dentry *alternate = NULL;
++	struct dentry *alternate = NULL;
  
  	if (dentry->d_name.len > EXT3_NAME_LEN)
  		return ERR_PTR(-ENAMETOOLONG);

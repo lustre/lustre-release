@@ -347,28 +347,26 @@ static int ptlrpc_recover_import_no_retry(struct obd_import *imp,
         spin_lock_irqsave(&imp->imp_lock, flags);
         if (imp->imp_state != LUSTRE_IMP_DISCON) {
                 in_recovery = 1;
-        } 
+        }
         spin_unlock_irqrestore(&imp->imp_lock, flags);
 
         if (in_recovery == 1)
                 RETURN(-EALREADY);
 
-        
         rc = ptlrpc_connect_import(imp, new_uuid);
         if (rc)
                 RETURN(rc);
 
-        CDEBUG(D_ERROR, "%s: recovery started, waiting\n", 
+        CDEBUG(D_ERROR, "%s: recovery started, waiting\n",
                imp->imp_target_uuid.uuid);
 
         lwi = LWI_TIMEOUT(MAX(obd_timeout * HZ, 1), NULL, NULL);
-        rc = l_wait_event(imp->imp_recovery_waitq, 
+        rc = l_wait_event(imp->imp_recovery_waitq,
                           !ptlrpc_import_in_recovery(imp), &lwi);
-        CDEBUG(D_ERROR, "%s: recovery finished\n", 
+        CDEBUG(D_ERROR, "%s: recovery finished\n",
                imp->imp_target_uuid.uuid);
 
         RETURN(rc);
-        
 }
 
 void ptlrpc_fail_export(struct obd_export *exp)

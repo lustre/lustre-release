@@ -479,10 +479,10 @@ struct obd_device {
         __u64                  obd_last_committed;
         struct fsfilt_operations *obd_fsops;
         spinlock_t              obd_osfs_lock;
-        struct llog_ctxt        *obd_llog_ctxt[LLOG_MAX_CTXTS];
         struct obd_statfs       obd_osfs;
         unsigned long           obd_osfs_age;
         struct obd_run_ctxt     obd_ctxt;
+        struct llog_ctxt        *obd_llog_ctxt[LLOG_MAX_CTXTS];
         struct obd_device       *obd_observer;
         struct obd_export       *obd_self_export;
 

@@ -8,10 +8,10 @@
  include/linux/ext3_fs.h            |    2 
  8 files changed, 318 insertions(+), 2 deletions(-)
 
-Index: linux-2.4.22-uml/Documentation/filesystems/ext2.txt
+Index: lum/Documentation/filesystems/ext2.txt
 ===================================================================
---- linux-2.4.22-uml.orig/Documentation/filesystems/ext2.txt	2001-07-11 16:44:45.000000000 -0600
-+++ linux-2.4.22-uml/Documentation/filesystems/ext2.txt	2004-01-30 14:18:10.000000000 -0700
+--- lum.orig/Documentation/filesystems/ext2.txt	2001-07-11 16:44:45.000000000 -0600
++++ lum/Documentation/filesystems/ext2.txt	2004-03-09 16:46:38.000000000 -0700
 @@ -35,6 +35,22 @@
  
  sb=n				Use alternate superblock at this location.
@@ -35,10 +35,10 @@ Index: linux-2.4.22-uml/Documentation/filesystems/ext2.txt
  grpquota,noquota,quota,usrquota	Quota options are silently ignored by ext2.
  
  
-Index: linux-2.4.22-uml/fs/ext3/Makefile
+Index: lum/fs/ext3/Makefile
 ===================================================================
---- linux-2.4.22-uml.orig/fs/ext3/Makefile	2004-01-30 14:17:58.000000000 -0700
-+++ linux-2.4.22-uml/fs/ext3/Makefile	2004-01-30 14:18:10.000000000 -0700
+--- lum.orig/fs/ext3/Makefile	2004-01-30 14:54:50.000000000 -0700
++++ lum/fs/ext3/Makefile	2004-03-09 16:46:39.000000000 -0700
 @@ -11,7 +11,7 @@
  
  export-objs := ext3-exports.o
@@ -48,10 +48,10 @@ Index: linux-2.4.22-uml/fs/ext3/Makefile
  		ioctl.o namei.o super.o symlink.o hash.o ext3-exports.o
  obj-m    := $(O_TARGET)
  
-Index: linux-2.4.22-uml/fs/ext3/inode.c
+Index: lum/fs/ext3/inode.c
 ===================================================================
---- linux-2.4.22-uml.orig/fs/ext3/inode.c	2004-01-30 14:17:59.000000000 -0700
-+++ linux-2.4.22-uml/fs/ext3/inode.c	2004-01-30 14:18:10.000000000 -0700
+--- lum.orig/fs/ext3/inode.c	2004-01-30 14:54:55.000000000 -0700
++++ lum/fs/ext3/inode.c	2004-03-09 16:46:41.000000000 -0700
 @@ -31,6 +31,7 @@
  #include <linux/highuid.h>
  #include <linux/quotaops.h>
@@ -70,11 +70,11 @@ Index: linux-2.4.22-uml/fs/ext3/inode.c
  	if(ext3_get_inode_loc(inode, &iloc))
  		goto bad_inode;
  	bh = iloc.bh;
-Index: linux-2.4.22-uml/fs/ext3/iopen.c
+Index: lum/fs/ext3/iopen.c
 ===================================================================
---- linux-2.4.22-uml.orig/fs/ext3/iopen.c	2004-01-30 14:18:10.000000000 -0700
-+++ linux-2.4.22-uml/fs/ext3/iopen.c	2004-01-30 14:18:10.000000000 -0700
-@@ -0,0 +1,258 @@
+--- lum.orig/fs/ext3/iopen.c	2004-03-09 16:46:37.000000000 -0700
++++ lum/fs/ext3/iopen.c	2004-03-09 16:48:03.000000000 -0700
+@@ -0,0 +1,282 @@
 +/*
 + * linux/fs/ext3/iopen.c
 + *
@@ -211,12 +211,23 @@ Index: linux-2.4.22-uml/fs/ext3/iopen.c
 +
 +/* This function is spliced into ext3_lookup and does the move of a
 + * disconnected dentry (if it exists) to a connected dentry.
-+ * Caller must hold dcache_lock.
 + */
-+struct dentry *iopen_connect_dentry(struct dentry *de, struct inode *inode)
++struct dentry *iopen_connect_dentry(struct dentry *dentry, struct inode *inode,
++				    int rehash)
 +{
 +	struct dentry *tmp, *goal = NULL;
 +	struct list_head *lp;
++
++	/* verify this dentry is really new */
++	assert(dentry->d_inode == NULL);
++	assert(list_empty(&dentry->d_alias));		/* d_instantiate */
++	if (rehash)
++		assert(list_empty(&dentry->d_hash));	/* d_rehash */
++	assert(list_empty(&dentry->d_subdirs));
++
++	spin_lock(&dcache_lock);
++	if (!inode)
++		goto do_rehash;
 +
 +	/* preferrably return a connected dentry */
 +	list_for_each(lp, &inode->i_dentry) {
@@ -231,27 +242,40 @@ Index: linux-2.4.22-uml/fs/ext3/iopen.c
 +	}
 +
 +	if (!goal)
-+		return NULL;
++		goto do_instantiate;
 +
 +	/* Move the goal to the de hash queue - like d_move() */
 +	goal->d_flags &= ~DCACHE_NFSD_DISCONNECTED;
 +	list_del_init(&goal->d_hash);
 +
 +	list_del(&goal->d_child);
-+	list_del(&de->d_child);
++	list_del(&dentry->d_child);
 +
 +	/* Switch the parents and the names.. */
-+	switch_names(goal, de);
-+	do_switch(goal->d_parent, de->d_parent);
-+	do_switch(goal->d_name.len, de->d_name.len);
-+	do_switch(goal->d_name.hash, de->d_name.hash);
++	switch_names(goal, dentry);
++	do_switch(goal->d_parent, dentry->d_parent);
++	do_switch(goal->d_name.len, dentry->d_name.len);
++	do_switch(goal->d_name.hash, dentry->d_name.hash);
 +
 +	/* And add them back to the (new) parent lists */
 +	list_add(&goal->d_child, &goal->d_parent->d_subdirs);
-+	list_add(&de->d_child, &de->d_parent->d_subdirs);
++	list_add(&dentry->d_child, &dentry->d_parent->d_subdirs);
 +	__d_rehash(goal, 0);
++	spin_unlock(&dcache_lock);
++	iput(inode);
 +
 +	return goal;
++
++	/* d_add(), but don't drop dcache_lock before adding dentry to inode */
++do_instantiate:
++	list_add(&dentry->d_alias, &inode->i_dentry);	/* d_instantiate */
++	dentry->d_inode = inode;
++do_rehash:
++	if (rehash)
++		__d_rehash(dentry, 0);			/* d_rehash */
++	spin_unlock(&dcache_lock);
++
++	return NULL;
 +}
 +
 +/*
@@ -333,10 +357,10 @@ Index: linux-2.4.22-uml/fs/ext3/iopen.c
 +
 +	return 1;
 +}
-Index: linux-2.4.22-uml/fs/ext3/iopen.h
+Index: lum/fs/ext3/iopen.h
 ===================================================================
---- linux-2.4.22-uml.orig/fs/ext3/iopen.h	2004-01-30 14:18:10.000000000 -0700
-+++ linux-2.4.22-uml/fs/ext3/iopen.h	2004-01-30 14:18:10.000000000 -0700
+--- lum.orig/fs/ext3/iopen.h	2004-03-09 16:46:37.000000000 -0700
++++ lum/fs/ext3/iopen.h	2004-03-09 16:48:03.000000000 -0700
 @@ -0,0 +1,15 @@
 +/*
 + * iopen.h
@@ -351,12 +375,12 @@ Index: linux-2.4.22-uml/fs/ext3/iopen.h
 +
 +extern int ext3_check_for_iopen(struct inode *dir, struct dentry *dentry);
 +extern int ext3_iopen_get_inode(struct inode *inode);
-+extern struct dentry *iopen_connect_dentry(struct dentry *de,
-+					   struct inode *inode);
-Index: linux-2.4.22-uml/fs/ext3/namei.c
++extern struct dentry *iopen_connect_dentry(struct dentry *dentry,
++					   struct inode *inode, int rehash);
+Index: lum/fs/ext3/namei.c
 ===================================================================
---- linux-2.4.22-uml.orig/fs/ext3/namei.c	2004-01-30 14:17:59.000000000 -0700
-+++ linux-2.4.22-uml/fs/ext3/namei.c	2004-01-30 14:19:44.000000000 -0700
+--- lum.orig/fs/ext3/namei.c	2004-01-30 14:54:53.000000000 -0700
++++ lum/fs/ext3/namei.c	2004-03-09 16:49:25.000000000 -0700
 @@ -35,7 +35,7 @@
  #include <linux/string.h>
  #include <linux/locks.h>
@@ -366,12 +390,7 @@ Index: linux-2.4.22-uml/fs/ext3/namei.c
  
  /*
   * define how far ahead to read directories while searching them.
-@@ -927,10 +927,14 @@
- 	struct inode * inode;
- 	struct ext3_dir_entry_2 * de;
- 	struct buffer_head * bh;
-+	struct dentry *alternate = NULL;
- 
+@@ -931,6 +931,9 @@
  	if (dentry->d_name.len > EXT3_NAME_LEN)
  		return ERR_PTR(-ENAMETOOLONG);
  
@@ -381,41 +400,67 @@ Index: linux-2.4.22-uml/fs/ext3/namei.c
  	bh = ext3_find_entry(dentry, &de);
  	inode = NULL;
  	if (bh) {
-@@ -942,7 +946,28 @@
+@@ -942,8 +945,8 @@
  			return ERR_PTR(-EACCES);
  		}
  	}
 -	d_add(dentry, inode);
+-	return NULL;
 +
-+	/* verify this dentry is really new */
-+	assert(!dentry->d_inode);
-+	assert(list_empty(&dentry->d_alias));		/* d_instantiate */
-+	assert(list_empty(&dentry->d_hash));		/* d_rehash */
-+	assert(list_empty(&dentry->d_subdirs));
-+
-+	spin_lock(&dcache_lock);
-+	if (inode && (alternate = iopen_connect_dentry(dentry, inode))) {
-+		spin_unlock(&dcache_lock);
-+		iput(inode);
-+		return alternate;
-+	}
-+
-+	/* d_add(), but don't drop dcache_lock before adding dentry to inode */
-+	if (inode)					/* d_instantiate */
-+		list_add(&dentry->d_alias, &inode->i_dentry);
-+	dentry->d_inode = inode;
-+
-+	__d_rehash(dentry, 0);				/* d_rehash */
-+	spin_unlock(&dcache_lock);
-+
- 	return NULL;
++	return iopen_connect_dentry(dentry, inode, 1);
  }
  
-Index: linux-2.4.22-uml/fs/ext3/super.c
+ #define S_SHIFT 12
+@@ -1932,10 +1935,6 @@
+ 			      inode->i_nlink);
+ 	inode->i_version = ++event;
+ 	inode->i_nlink = 0;
+-	/* There's no need to set i_disksize: the fact that i_nlink is
+-	 * zero will ensure that the right thing happens during any
+-	 * recovery. */
+-	inode->i_size = 0;
+ 	ext3_orphan_add(handle, inode);
+ 	dir->i_nlink--;
+ 	inode->i_ctime = dir->i_ctime = dir->i_mtime = CURRENT_TIME;
+@@ -2086,6 +2085,23 @@
+ 	return err;
+ }
+ 
++/* Like ext3_add_nondir() except for call to iopen_connect_dentry */
++static int ext3_add_link(handle_t *handle, struct dentry *dentry,
++			 struct inode *inode)
++{
++	int err = ext3_add_entry(handle, dentry, inode);
++	if (!err) {
++		err = ext3_mark_inode_dirty(handle, inode);
++		if (err == 0) {
++			(void)iopen_connect_dentry(dentry, inode, 0);
++			return 0;
++		}
++	}
++	ext3_dec_count(handle, inode);
++	iput(inode);
++	return err;
++}
++
+ static int ext3_link (struct dentry * old_dentry,
+ 		struct inode * dir, struct dentry *dentry)
+ {
+@@ -2113,7 +2129,8 @@
+ 	ext3_inc_count(handle, inode);
+ 	atomic_inc(&inode->i_count);
+ 
+-	err = ext3_add_nondir(handle, dentry, inode);
++	err = ext3_add_link(handle, dentry, inode);
++	ext3_orphan_del(handle, inode);
+ 	ext3_journal_stop(handle, dir);
+ 	return err;
+ }
+Index: lum/fs/ext3/super.c
 ===================================================================
---- linux-2.4.22-uml.orig/fs/ext3/super.c	Sun Nov 16 01:19:22 2003
-+++ linux-2.4.22-uml/fs/ext3/super.c	Sun Nov 16 01:27:31 2003
-@@ -839,6 +839,18 @@
+--- lum.orig/fs/ext3/super.c	2004-01-30 14:54:53.000000000 -0700
++++ lum/fs/ext3/super.c	2004-03-09 16:46:45.000000000 -0700
+@@ -742,6 +742,18 @@
  		         || !strcmp (this_char, "quota")
  		         || !strcmp (this_char, "usrquota"))
  			/* Don't do anything ;-) */ ;
@@ -434,10 +479,10 @@ Index: linux-2.4.22-uml/fs/ext3/super.c
  		else if (!strcmp (this_char, "journal")) {
  			/* @@@ FIXME */
  			/* Eventually we will want to be able to create
-Index: linux-2.4.22-uml/include/linux/ext3_fs.h
+Index: lum/include/linux/ext3_fs.h
 ===================================================================
---- linux-2.4.22-uml.orig/include/linux/ext3_fs.h	2004-01-30 14:17:59.000000000 -0700
-+++ linux-2.4.22-uml/include/linux/ext3_fs.h	2004-01-30 14:18:10.000000000 -0700
+--- lum.orig/include/linux/ext3_fs.h	2004-01-30 14:54:53.000000000 -0700
++++ lum/include/linux/ext3_fs.h	2004-03-09 16:46:46.000000000 -0700
 @@ -322,6 +322,8 @@
  #define EXT3_MOUNT_UPDATE_JOURNAL	0x1000	/* Update the journal format */
  #define EXT3_MOUNT_NO_UID32		0x2000  /* Disable 32-bit UIDs */

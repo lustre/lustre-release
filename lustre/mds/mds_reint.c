@@ -1198,8 +1198,11 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                 rc = vfs_rmdir(dparent->d_inode, dchild);
                 break;
         case S_IFREG: {
-                handle = fsfilt_start(obd, dparent->d_inode,
-                                      FSFILT_OP_UNLINK_LOG, NULL);
+                struct lov_mds_md *lmm = lustre_msg_buf(req->rq_repmsg,
+                                                        offset + 1, 0);
+                handle = fsfilt_start_log(obd, dparent->d_inode,
+                                          FSFILT_OP_UNLINK, NULL,
+                                          le32_to_cpu(lmm->lmm_stripe_count));
                 if (IS_ERR(handle))
                         GOTO(cleanup, rc = PTR_ERR(handle));
 

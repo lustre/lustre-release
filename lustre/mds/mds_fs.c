@@ -138,6 +138,7 @@ int mds_client_free(struct obd_export *exp, int clear_client)
                med->med_idx, med->med_off, med->med_mcd->mcd_uuid);
 
         LASSERT(bitmap);
+
         /* Clear the bit _after_ zeroing out the client so we don't
            race with mds_client_add and zero out new clients.*/
         if (!test_bit(med->med_idx, bitmap)) {
@@ -402,10 +403,15 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
 
         dentry = lookup_one_len("__iopen__", current->fs->pwd,
                                 strlen("__iopen__"));
-        if (IS_ERR(dentry) || !dentry->d_inode) {
-                rc = (IS_ERR(dentry)) ? PTR_ERR(dentry): -ENOENT;
-                CERROR("cannot open iopen FH directory: rc = %d\n", rc);
+        if (IS_ERR(dentry)) {
+                rc = PTR_ERR(dentry);
+                CERROR("cannot lookup __iopen__ directory: rc = %d\n", rc);
                 GOTO(err_pop, rc);
+        }
+        if (!dentry->d_inode) {
+                rc = -ENOENT;
+                CERROR("__iopen__ directory has no inode? rc = %d\n", rc);
+                GOTO(err_fid, rc);
         }
         mds->mds_fid_de = dentry;
 
@@ -589,9 +595,9 @@ int mds_obd_create(struct obd_export *exp, struct obdo *oa,
 
         handle = fsfilt_start(exp->exp_obd, mds->mds_objects_dir->d_inode,
                               FSFILT_OP_RENAME, NULL);
-        if (IS_ERR(handle)) 
+        if (IS_ERR(handle))
                 GOTO(out_dput, rc = PTR_ERR(handle));
-        
+
         lock_kernel();
         rc = vfs_rename(mds->mds_objects_dir->d_inode, filp->f_dentry,
                         mds->mds_objects_dir->d_inode, new_child);
@@ -646,8 +652,10 @@ int mds_obd_destroy(struct obd_export *exp, struct obdo *oa,
                 GOTO(out_dput, rc = IS_ERR(de) ? PTR_ERR(de) : -ENOENT);
         }
 
-        handle = fsfilt_start(obd, mds->mds_objects_dir->d_inode,
-                              FSFILT_OP_UNLINK_LOG, oti);
+        /* Stripe count is 1 here since this is some MDS specific stuff
+           that is unlinked, not spanned across multiple OSTs */
+        handle = fsfilt_start_log(obd, mds->mds_objects_dir->d_inode,
+                                  FSFILT_OP_UNLINK, oti, 1);
         if (IS_ERR(handle)) {
                 GOTO(out_dput, rc = PTR_ERR(handle));
         }

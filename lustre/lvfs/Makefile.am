@@ -34,6 +34,9 @@ fsfilt_ext3_SOURCES = fsfilt_ext3.c lvfs_internal.h
 endif
 endif
 
+fsfilt_extN.c: fsfilt_ext3.c
+	sed -e "s/EXT3/EXTN/g" -e "s/ext3/extN/g" $< > $@
+
 include $(top_srcdir)/Rules
 
 if LINUX25

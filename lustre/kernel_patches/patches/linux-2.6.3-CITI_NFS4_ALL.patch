@@ -5336,7 +5336,7 @@ diff -puN /dev/null include/linux/sunrpc/svcauth_gss.h
 + * Bruce Fields <bfields@umich.edu>
 + * Copyright (c) 2002 The Regents of the Unviersity of Michigan
 + *
-+ * $Id: linux-2.6.3-CITI_NFS4_ALL.patch,v 1.2 2004/03/17 01:04:13 nic Exp $
++ * Id: linux-2.6.3-CITI_NFS4_ALL.patch,v 1.2.4.1 2004/03/17 23:55:23 adilger Exp $
 + *
 + */
 +
