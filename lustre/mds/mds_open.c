@@ -126,7 +126,7 @@ int mds_open(struct mds_update_record *rec, int offset,
         /* Negative dentry, just create the file */
         if (dchild->d_inode) { 
                 up(&dir->i_sem);
-		if ((rec->ur_flags & (O_CREATE|O_EXCL)) == (O_CREATE|O_EXCL))
+		if ((rec->ur_flags & (O_CREAT|O_EXCL)) == (O_CREAT|O_EXCL))
  			GOTO(out_ldput, rc = -EEXIST);
         } else if ((rec->ur_flags & O_CREAT) && !dchild->d_inode) {
                 int err;
