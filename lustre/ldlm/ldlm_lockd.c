@@ -223,10 +223,14 @@ static void waiting_locks_callback(unsigned long unused)
  * lock.  We add it to the pending-callback chain, and schedule the lock-timeout
  * timer to fire appropriately.  (We round up to the next second, to avoid
  * floods of timer firings during periods of high lock contention and traffic).
+ *
+ * Called with the namespace lock held.
  */
 static int ldlm_add_waiting_lock(struct ldlm_lock *lock)
 {
         unsigned long timeout_rounded;
+
+        l_check_ns_lock(lock->l_resource->lr_namespace);
 
         spin_lock_bh(&waiting_locks_spinlock);
         if (!list_empty(&lock->l_pending_chain)) {
@@ -253,10 +257,14 @@ static int ldlm_add_waiting_lock(struct ldlm_lock *lock)
  * Remove a lock from the pending list, likely because it had its cancellation
  * callback arrive without incident.  This adjusts the lock-timeout timer if
  * needed.  Returns 0 if the lock wasn't pending after all, 1 if it was.
+ *
+ * Called with namespace lock held.
  */
 int ldlm_del_waiting_lock(struct ldlm_lock *lock)
 {
         struct list_head *list_next;
+
+        l_check_ns_lock(lock->l_resource->lr_namespace);
 
         if (lock->l_export == NULL) {
                 /* We don't have a "waiting locks list" on clients. */
@@ -379,8 +387,8 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
         if (lock->l_granted_mode != lock->l_req_mode) {
                 /* this blocking AST will be communicated as part of the
                  * completion AST instead */
-                l_unlock(&lock->l_resource->lr_namespace->ns_lock);
                 LDLM_DEBUG(lock, "lock not granted, not sending blocking AST");
+                l_unlock(&lock->l_resource->lr_namespace->ns_lock);
                 RETURN(0);
         }
 
@@ -696,8 +704,10 @@ existing_lock:
         /* The LOCK_CHANGED code in ldlm_lock_enqueue depends on this
          * ldlm_reprocess_all.  If this moves, revisit that code. -phil */
         if (lock) {
+                l_lock(&lock->l_resource->lr_namespace->ns_lock);
                 LDLM_DEBUG(lock, "server-side enqueue handler, sending reply"
                            "(err=%d, rc=%d)", err, rc);
+                l_unlock(&lock->l_resource->lr_namespace->ns_lock);
 
                 if (rc == 0) {
                         down(&lock->l_resource->lr_lvb_sem);
@@ -804,8 +814,10 @@ int ldlm_handle_cancel(struct ptlrpc_request *req)
                                   dlm_req->lock_handle1.cookie);
                 req->rq_status = ESTALE;
         } else {
-                LDLM_DEBUG(lock, "server-side cancel handler START");
                 res = lock->l_resource;
+                l_lock(&res->lr_namespace->ns_lock);
+                LDLM_DEBUG(lock, "server-side cancel handler START");
+                l_unlock(&res->lr_namespace->ns_lock);
                 if (res && res->lr_namespace->ns_lvbo &&
                     res->lr_namespace->ns_lvbo->lvbo_update) {
                         (void)res->lr_namespace->ns_lvbo->lvbo_update
@@ -813,9 +825,11 @@ int ldlm_handle_cancel(struct ptlrpc_request *req)
                                 //(res, req->rq_reqmsg, 1);
                 }
 
+                l_lock(&res->lr_namespace->ns_lock);
                 ldlm_lock_cancel(lock);
                 if (ldlm_del_waiting_lock(lock))
                         CDEBUG(D_DLMTRACE, "cancelled waiting lock %p\n", lock);
+                l_unlock(&res->lr_namespace->ns_lock);
                 req->rq_status = rc;
         }
 
@@ -824,7 +838,9 @@ int ldlm_handle_cancel(struct ptlrpc_request *req)
 
         if (lock) {
                 ldlm_reprocess_all(lock->l_resource);
+                l_lock(&lock->l_resource->lr_namespace->ns_lock);
                 LDLM_DEBUG(lock, "server-side cancel handler END");
+                l_unlock(&lock->l_resource->lr_namespace->ns_lock);
                 LDLM_LOCK_PUT(lock);
         }
 

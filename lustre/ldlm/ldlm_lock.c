@@ -436,9 +436,9 @@ void ldlm_lock_addref_internal(struct ldlm_lock *lock, __u32 mode)
         if (mode & (LCK_EX | LCK_CW | LCK_PW))
                 lock->l_writers++;
         lock->l_last_used = jiffies;
-        l_unlock(&lock->l_resource->lr_namespace->ns_lock);
         LDLM_LOCK_GET(lock);
         LDLM_DEBUG(lock, "ldlm_lock_addref(%s)", ldlm_lockname[mode]);
+        l_unlock(&lock->l_resource->lr_namespace->ns_lock);
 }
 
 void ldlm_lock_decref_internal(struct ldlm_lock *lock, __u32 mode)
@@ -446,9 +446,9 @@ void ldlm_lock_decref_internal(struct ldlm_lock *lock, __u32 mode)
         struct ldlm_namespace *ns;
         ENTRY;
 
-        LDLM_DEBUG(lock, "ldlm_lock_decref(%s)", ldlm_lockname[mode]);
         ns = lock->l_resource->lr_namespace;
         l_lock(&ns->ns_lock);
+        LDLM_DEBUG(lock, "ldlm_lock_decref(%s)", ldlm_lockname[mode]);
         if (mode & (LCK_NL | LCK_CR | LCK_PR)) {
                 LASSERT(lock->l_readers > 0);
                 lock->l_readers--;
@@ -518,8 +518,8 @@ void ldlm_lock_decref_and_cancel(struct lustre_handle *lockh, __u32 mode)
 
         LASSERT(lock != NULL);
 
-        LDLM_DEBUG(lock, "ldlm_lock_decref(%s)", ldlm_lockname[mode]);
         l_lock(&lock->l_resource->lr_namespace->ns_lock);
+        LDLM_DEBUG(lock, "ldlm_lock_decref(%s)", ldlm_lockname[mode]);
         lock->l_flags |= LDLM_FL_CBPENDING;
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
         ldlm_lock_decref_internal(lock, mode);
@@ -694,13 +694,15 @@ int ldlm_lock_match(struct ldlm_namespace *ns, int flags,
                                      (lock->l_flags & LDLM_FL_CAN_MATCH), &lwi);
                 }
         }
-        if (rc)
+        if (rc) {
+                l_lock(&ns->ns_lock);
                 LDLM_DEBUG(lock, "matched ("LPU64" "LPU64")",
                            type == LDLM_PLAIN ? res_id->name[2] :
                                 policy->l_extent.start,
                            type == LDLM_PLAIN ? res_id->name[3] :
                                 policy->l_extent.end);
-        else if (!(flags & LDLM_FL_TEST_LOCK)) /* less verbose for test-only */
+                l_unlock(&ns->ns_lock);
+        } else if (!(flags & LDLM_FL_TEST_LOCK)) { /*less verbose for test-only*/
                 LDLM_DEBUG_NOLOCK("not matched ns %p type %u mode %u res "
                                   LPU64"/"LPU64" ("LPU64" "LPU64")", ns,
                                   type, mode, res_id->name[0], res_id->name[1],
@@ -708,7 +710,7 @@ int ldlm_lock_match(struct ldlm_namespace *ns, int flags,
                                         policy->l_extent.start,
                                   type == LDLM_PLAIN ? res_id->name[3] :
                                         policy->l_extent.end);
-
+        }
         if (old_lock)
                 LDLM_LOCK_PUT(old_lock);
         if (flags & LDLM_FL_TEST_LOCK && rc)
@@ -1020,15 +1022,12 @@ void ldlm_lock_cancel(struct ldlm_lock *lock)
         struct ldlm_namespace *ns;
         ENTRY;
 
-        /* There's no race between calling this and taking the ns lock below;
-         * a lock can only be put on the waiting list once, because it can only
-         * issue a blocking AST once. */
+        l_lock(&ns->ns_lock);
         ldlm_del_waiting_lock(lock);
 
         res = lock->l_resource;
         ns = res->lr_namespace;
 
-        l_lock(&ns->ns_lock);
         /* Please do not, no matter how tempting, remove this LBUG without
          * talking to me first. -phik */
         if (lock->l_readers || lock->l_writers) {
