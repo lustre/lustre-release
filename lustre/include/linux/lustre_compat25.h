@@ -47,7 +47,7 @@
 #define TryLockPage(page)                TestSetPageLocked(page)
 #define filemap_fdatasync(mapping)       filemap_fdatawrite(mapping)
 #define Page_Uptodate(page)              PageUptodate(page)
-#define ClearPageLaunder(page)           do {} while(0)
+#define ll_redirty_page(page)           set_page_dirty(page)
 
 #define KDEVT_INIT(val)                 (val)
 
@@ -189,6 +189,12 @@ static inline int clear_page_dirty_for_io(struct page *page)
                 return 1;
         }
         return 0;
+}
+
+static inline void ll_redirty_page(struct page *page)
+{
+        SetPageDirty(page);
+        ClearPageLaunder(page);
 }
 
 static inline void __d_drop(struct dentry *dentry)
