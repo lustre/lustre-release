@@ -34,6 +34,10 @@ replay_barrier() {
     lctl mark "REPLAY BARRIER"
 }
 
+mds_evict_client() {
+    cat /proc/fs/lustre/mdc/*_MNT_*/uuid > /proc/fs/lustre/mds/mds1/evict_client
+}
+
 fail() {
     local facet=$1
     stop $facet --force --failover --nomod
