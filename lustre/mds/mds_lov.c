@@ -600,19 +600,21 @@ int mds_dt_synchronize(void *data)
         OBD_FREE(mlsi, sizeof(*mlsi));
 
         mds = &obd->u.mds;
+        down(&mds->mds_orphan_recovery_sem);
+
         uuid = &watched->u.cli.cl_import->imp_target_uuid;
 
         group = FILTER_GROUP_FIRST_MDS + mds->mds_num;
         rc = obd_set_info(watched->obd_self_export, strlen("mds_conn"),
                           "mds_conn", sizeof(group), &group);
         if (rc)
-                RETURN(rc);
+                GOTO(cleanup, rc);
 
         old_count = mds->mds_dt_desc.ld_tgt_count;
 
         rc = mds_dt_update_desc(obd, mds->mds_dt_exp);
         if (rc)
-                RETURN(rc);
+                GOTO(cleanup, rc);
 
         count = mds->mds_dt_desc.ld_tgt_count;
         LASSERT(count >= old_count);
@@ -621,13 +623,13 @@ int mds_dt_synchronize(void *data)
         rc = obd_get_info(watched->obd_self_export, strlen("last_id"),
                           "last_id", &vallen, &vals[1]);
         if (rc)
-                RETURN(rc);
+                GOTO(cleanup, rc);
 
         vals[0] = index;
         rc = mds_dt_set_info(obd->obd_self_export, strlen("next_id"),
                              "next_id", 2, vals);
         if (rc)
-                RETURN(rc);
+                GOTO(cleanup, rc);
 
         obd_llog_finish(obd, &obd->obd_llogs, old_count);
         obd_llog_cat_initialize(obd, &obd->obd_llogs, count, name);
@@ -639,7 +641,7 @@ int mds_dt_synchronize(void *data)
         if (rc != 0) {
                 CERROR("%s: failed at llog_origin_connect: %d\n", 
                        obd->obd_name, rc);
-                RETURN(rc);
+                GOTO(cleanup, rc);
         }
         
         CWARN("MDS %s: %s now active, resetting orphans\n",
@@ -649,10 +651,13 @@ int mds_dt_synchronize(void *data)
         if (rc != 0) {
                 CERROR("%s: failed at mds_dt_clearorphans(): %d\n", 
                        obd->obd_name, rc);
-                RETURN(rc);
+                GOTO(cleanup, rc);
         }
+        rc = 0;
 
-        RETURN(0);
+cleanup:
+        up(&mds->mds_orphan_recovery_sem);
+        RETURN(rc);
 }
 
 int mds_dt_start_synchronize(struct obd_device *obd,
