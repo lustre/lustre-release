@@ -45,6 +45,16 @@ AC_SUBST(LINUX)
 
 sinclude(archdep.m4)
 
+AC_MSG_CHECKING(if you are running linux 2.5...)
+if test -e $LINUX/include/linux/namei.h ; then
+	linux25=yes
+	AC_MSG_RESULT(yes)
+else
+	linux25=no
+	AC_MSG_RESULT(no)
+fi
+AM_CONDITIONAL(LINUX25, test x$linux25 = xyes)
+
 KINCFLAGS='-I. -I$(top_srcdir)/include -I$(PORTALS)/include -I$(LINUX)/include'
 CPPFLAGS="$KINCFLAGS $ARCHCPPFLAGS"
 

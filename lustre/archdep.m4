@@ -1,19 +1,3 @@
-AC_MSG_CHECKING(if you are running linux 2.5...)
-if test -e $LINUX/include/linux/namei.h ; then
-	linux25=yes
-        DIRS24="mds"
-        FSMOD="mds_ext3"
-	AC_MSG_RESULT(yes)
-else
-	linux25=no
-        DIRS24="mds extN"
-        FSMOD="mds_extN"
-	AC_MSG_RESULT(no)
-fi
-AC_SUBST(DIRS24)
-AC_SUBST(FSMOD)
-## AM_CONDITIONAL(LINUX25, test x$linux25 = xyes)
-
 AC_MSG_CHECKING(if you are running user mode linux for $host_alias..)
 if test -e $LINUX/include/asm-um ; then
 if test  X`ls -id $LINUX/include/asm | awk '{print $1}'` = X`ls -id $LINUX/include/asm-um | awk '{print $1}'` ; then

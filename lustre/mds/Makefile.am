@@ -5,7 +5,11 @@
 
 DEFS= 
 
-MODS=@FSMOD@
+if LINUX25
+FSMOD = mds_ext3
+else
+FSMOD = mds_extN
+endif
 
 MODULE = mds
 modulefs_DATA = mds.o $(MODS).o
@@ -27,4 +31,3 @@ target.c:
 mds_SOURCES = mds_lov.c handler.c mds_reint.c mds_fs.c $(LINX)
 
 include $(top_srcdir)/Rules
-

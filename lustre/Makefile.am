@@ -5,6 +5,11 @@
 
 AUTOMAKE_OPTIONS = foreign
 
+if LINUX25
+DIRS24 = mds
+else
+DIRS24 = extN mds
+endif
 
 # NOTE: keep extN before mds
 SUBDIRS = lov utils obdclass ldlm ptlrpc lib obdecho mdc osc ost llite 
