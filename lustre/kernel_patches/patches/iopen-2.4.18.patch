@@ -58,9 +58,7 @@
  	bh = iloc.bh;
 --- /dev/null	2002-08-31 07:31:37.000000000 +0800
 +++ linux-2.4.18-chaos52-root/fs/ext3/iopen.c	2003-06-03 17:10:55.000000000 +0800
-@@ -0,0 +1,240 @@
-+
-+
+@@ -0,0 +1,259 @@
 +/*
 + * linux/fs/ext3/iopen.c
 + *
@@ -70,6 +68,25 @@
 + * 
 + * This file may be redistributed under the terms of the GNU General
 + * Public License.
++ *
++ *
++ * Invariants:
++ *   - there is only ever a single DCACHE_NFSD_DISCONNECTED dentry alias
++ *     for an inode at one time.
++ *   - there are never both connected and DCACHE_NFSD_DISCONNECTED dentry
++ *     aliases on an inode at the same time.
++ *
++ * If we have any connected dentry aliases for an inode, use one of those
++ * in iopen_lookup().  Otherwise, we instantiate a single NFSD_DISCONNECTED
++ * dentry for this inode, which thereafter will be found by the dcache
++ * when looking up this inode number in __iopen__, so we don't return here
++ * until it is gone.
++ *
++ * If we get an inode via a regular name lookup, then we "rename" the
++ * NFSD_DISCONNECTED dentry to the proper name and parent.  This ensures
++ * existing users of the disconnected dentry will continue to use the same
++ * dentry as the connected users, and there will never be both kinds of
++ * dentry aliases at one time.
 + */
 +
 +#include <linux/sched.h>
@@ -90,12 +107,12 @@
 +/*
 + * This implements looking up an inode by number.
 + */
-+static struct dentry *iopen_lookup(struct inode * dir, struct dentry *dentry)
++static struct dentry *iopen_lookup(struct inode *dir, struct dentry *dentry)
 +{
-+	struct inode * inode;
++	struct inode *inode;
 +	unsigned long ino;
-+        struct list_head *lp;
-+        struct dentry *alternate;
++	struct list_head *lp;
++	struct dentry *alternate;
 +	char buf[IOPEN_NAME_LEN];
 +	
 +	if (dentry->d_name.len >= IOPEN_NAME_LEN)
@@ -126,24 +143,24 @@
 +		return ERR_PTR(-ENOENT);
 +	}
 +
-+        /* preferrably return a connected dentry */
-+        spin_lock(&dcache_lock);
-+        list_for_each(lp, &inode->i_dentry) {
-+                alternate = list_entry(lp, struct dentry, d_alias);
-+                assert(!(alternate->d_flags & DCACHE_NFSD_DISCONNECTED));
-+        }
++	/* preferrably return a connected dentry */
++	spin_lock(&dcache_lock);
++	list_for_each(lp, &inode->i_dentry) {
++		alternate = list_entry(lp, struct dentry, d_alias);
++		assert(!(alternate->d_flags & DCACHE_NFSD_DISCONNECTED));
++	}
 +
-+        if (!list_empty(&inode->i_dentry)) {
-+                alternate = list_entry(inode->i_dentry.next, 
-+                                       struct dentry, d_alias);
-+                dget_locked(alternate);
-+                alternate->d_vfs_flags |= DCACHE_REFERENCED;
-+                iput(inode);
-+                spin_unlock(&dcache_lock);
-+                return alternate;
-+        }
-+        dentry->d_flags |= DCACHE_NFSD_DISCONNECTED;
-+        spin_unlock(&dcache_lock);
++	if (!list_empty(&inode->i_dentry)) {
++		alternate = list_entry(inode->i_dentry.next, 
++				       struct dentry, d_alias);
++		dget_locked(alternate);
++		alternate->d_vfs_flags |= DCACHE_REFERENCED;
++		iput(inode);
++		spin_unlock(&dcache_lock);
++		return alternate;
++	}
++	dentry->d_flags |= DCACHE_NFSD_DISCONNECTED;
++	spin_unlock(&dcache_lock);
 +
 +	d_add(dentry, inode);
 +	return NULL;
@@ -153,7 +170,7 @@
 +	__typeof__ (x) __tmp = x; \
 +	x = y; y = __tmp; } while (0)
 +
-+static inline void switch_names(struct dentry * dentry, struct dentry * target)
++static inline void switch_names(struct dentry *dentry, struct dentry *target)
 +{
 +	const unsigned char *old_name, *new_name;
 +
@@ -168,38 +185,40 @@
 +	dentry->d_name.name = old_name;
 +}
 +
-+
++/* This function is spliced into ext3_lookup and does the move of a
++ * disconnected dentry (if it exists) to a connected dentry.
++ */
 +struct dentry *iopen_connect_dentry(struct dentry *de, struct inode *inode)
 +{
-+        struct dentry *tmp, *goal = NULL;
-+        struct list_head *lp;
++	struct dentry *tmp, *goal = NULL;
++	struct list_head *lp;
 +
-+        /* preferrably return a connected dentry */
-+        spin_lock(&dcache_lock);
-+        /* verify this dentry is really new */
-+        assert(!de->d_inode);
-+        assert(list_empty(&de->d_subdirs));
-+        assert(list_empty(&de->d_alias));
++	/* preferrably return a connected dentry */
++	spin_lock(&dcache_lock);
++	/* verify this dentry is really new */
++	assert(!de->d_inode);
++	assert(list_empty(&de->d_subdirs));
++	assert(list_empty(&de->d_alias));
 +
 +
-+        list_for_each(lp, &inode->i_dentry) {
-+                tmp = list_entry(lp, struct dentry, d_alias);
-+                if (tmp->d_flags & DCACHE_NFSD_DISCONNECTED) {
-+                        assert(tmp->d_alias.next == &inode->i_dentry);
-+                        assert(tmp->d_alias.prev == &inode->i_dentry);
-+                        goal = tmp;
-+                        dget_locked(goal);
-+                        break;
-+                }
-+        }
++	list_for_each(lp, &inode->i_dentry) {
++		tmp = list_entry(lp, struct dentry, d_alias);
++		if (tmp->d_flags & DCACHE_NFSD_DISCONNECTED) {
++			assert(tmp->d_alias.next == &inode->i_dentry);
++			assert(tmp->d_alias.prev == &inode->i_dentry);
++			goal = tmp;
++			dget_locked(goal);
++			break;
++		}
++	}
 +
-+        if (!goal) { 
-+                spin_unlock(&dcache_lock);
-+                return NULL; 
-+        }
++	if (!goal) { 
++		spin_unlock(&dcache_lock);
++		return NULL; 
++	}
 +
-+        /* Move the goal to the de hash queue */
-+        goal->d_flags &= ~DCACHE_NFSD_DISCONNECTED;
++	/* Move the goal to the de hash queue - like d_move() */
++	goal->d_flags &= ~DCACHE_NFSD_DISCONNECTED;
 +	list_del(&goal->d_hash);
 +	list_add(&goal->d_hash, &de->d_hash);
 +
@@ -215,9 +234,9 @@
 +	/* And add them back to the (new) parent lists */
 +	list_add(&goal->d_child, &goal->d_parent->d_subdirs);
 +	list_add(&de->d_child, &de->d_parent->d_subdirs);
++	spin_unlock(&dcache_lock);
 +
-+        spin_unlock(&dcache_lock);
-+        return goal;
++	return goal;
 +}
 +
 +/*
@@ -248,9 +267,9 @@
 + * This function is spliced into ext3_lookup and returns 1 the file
 + * name is __iopen__ and dentry has been filled in appropriately.
 + */
-+int ext3_check_for_iopen(struct inode * dir, struct dentry *dentry)
++int ext3_check_for_iopen(struct inode *dir, struct dentry *dentry)
 +{
-+	struct inode * inode;
++	struct inode *inode;
 +
 +	if (dir->i_ino != EXT3_ROOT_INO ||
 +	    !test_opt(dir->i_sb, IOPEN) ||
@@ -270,7 +289,7 @@
 + * number is the one for /__iopen__, in which case the inode is filled
 + * in appropriately.  Otherwise, this fuction returns 0.
 + */
-+int ext3_iopen_get_inode(struct inode * inode)
++int ext3_iopen_get_inode(struct inode *inode)
 +{
 +	if (inode->i_ino != EXT3_BAD_INO)
 +		return 0;
@@ -301,7 +320,7 @@
 +}
 --- /dev/null	2002-08-31 07:31:37.000000000 +0800
 +++ linux-2.4.18-chaos52-root/fs/ext3/iopen.h	2003-06-03 17:10:55.000000000 +0800
-@@ -0,0 +1,15 @@
+@@ -0,0 +1,13 @@
 +/*
 + * iopen.h
 + *
@@ -313,10 +332,8 @@
 + * Public License.
 + */
 +
-+extern int ext3_check_for_iopen(struct inode * dir, struct dentry *dentry);
-+extern int ext3_iopen_get_inode(struct inode * inode);
-+
-+
++extern int ext3_check_for_iopen(struct inode *dir, struct dentry *dentry);
++extern int ext3_iopen_get_inode(struct inode *inode);
 --- linux-2.4.18-chaos52/fs/ext3/namei.c~iopen-2.4.18	2003-06-03 17:10:20.000000000 +0800
 +++ linux-2.4.18-chaos52-root/fs/ext3/namei.c	2003-06-03 17:10:55.000000000 +0800
 @@ -34,6 +34,7 @@
@@ -338,13 +355,13 @@
  	struct inode * inode;
  	struct ext3_dir_entry_2 * de;
  	struct buffer_head * bh;
-+        struct dentry *alternate = NULL;
++	struct dentry *alternate = NULL;
  
  	if (dentry->d_name.len > EXT3_NAME_LEN)
  		return ERR_PTR(-ENAMETOOLONG);
  
-+        if (ext3_check_for_iopen(dir, dentry))
-+                return NULL;
++	if (ext3_check_for_iopen(dir, dentry))
++		return NULL;
 +
  	bh = ext3_find_entry(dentry, &de);
  	inode = NULL;
@@ -353,11 +370,11 @@
  		if (!inode)
  			return ERR_PTR(-EACCES);
  	}
-+                
-+        if (inode && (alternate = iopen_connect_dentry(dentry, inode))) {
-+                iput(inode);
-+                return alternate;
-+        }
++
++	if (inode && (alternate = iopen_connect_dentry(dentry, inode))) {
++		iput(inode);
++		return alternate;
++	}
 +
  	d_add(dentry, inode);
  	return NULL;
@@ -388,8 +405,8 @@
  #define EXT3_MOUNT_UPDATE_JOURNAL	0x1000	/* Update the journal format */
  #define EXT3_MOUNT_NO_UID32		0x2000  /* Disable 32-bit UIDs */
  #define EXT3_MOUNT_INDEX		0x4000  /* Enable directory index */
-+#define EXT3_MOUNT_IOPEN                0x8000  /* Allow access via iopen */
-+#define EXT3_MOUNT_IOPEN_NOPRIV        0x10000  /* Make iopen world-readable */
++#define EXT3_MOUNT_IOPEN		0x8000	/* Allow access via iopen */
++#define EXT3_MOUNT_IOPEN_NOPRIV		0x10000	/* Make iopen world-readable */
  #define EXT3_MOUNT_ASYNCDEL	       0x20000  /* Delayed deletion */
  
  /* Compatibility, for having both ext2_fs.h and ext3_fs.h included at once */
