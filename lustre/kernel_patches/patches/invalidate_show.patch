@@ -10,14 +10,15 @@
  {
  	struct list_head *next;
  	int busy = 0, count = 0;
-@@ -631,6 +579,10 @@ static int invalidate_list(struct list_h
+@@ -631,6 +579,11 @@ static int invalidate_list(struct list_h
  			count++;
  			continue;
  		}
 +		if (show)
-+			printk(KERN_ERR "inode busy: %s: %d (count %ld)\n",
-+			       kdevname(sb->s_dev), inode->i_ino,
-+			       atomic_read(&inode->i_count));
++			printk(KERN_ERR
++			       "inode busy: dev %s:%lu (%p) mode %o count %u\n",
++			       kdevname(sb->s_dev), inode->i_ino, inode,
++			       inode->i_mode, atomic_read(&inode->i_count));
  		busy = 1;
  	}
  	/* only unused inodes may be cached with i_count zero */
