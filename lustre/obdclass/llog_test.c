@@ -172,11 +172,11 @@ static int llog_test_3(struct obd_device *obd, struct llog_handle *llh)
         if ((rc = verify_handle("3a", llh, num_recs)))
                 RETURN(rc);
 
-        CERROR("3b: write 10 cfg log records with 12 byte bufs\n");
+        CERROR("3b: write 10 cfg log records with 8 bytes bufs\n");
         for (i = 0; i < 10; i++) {
                 struct llog_rec_hdr hdr;
-                char buf[12];
-                hdr.lrh_len = cpu_to_le32(12);
+                char buf[8];
+                hdr.lrh_len = cpu_to_le32(8);
                 hdr.lrh_type = cpu_to_le32(OBD_CFG_REC);
                 memset(buf, 0, sizeof buf);
                 rc = llog_write_rec(llh, &hdr, NULL, 0, buf, -1);
