@@ -66,10 +66,10 @@ do {                                                                    \
  *     LOVs properly.  For now lov_mds_md_size() just assumes one obd_id
  *     per stripe.
  */
-int lov_packmd(struct lustre_handle *conn, struct lov_mds_md **lmmp,
+int lov_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
                struct lov_stripe_md *lsm)
 {
-        struct obd_device *obd = class_conn2obd(conn);
+        struct obd_device *obd = class_exp2obd(exp);
         struct lov_obd *lov = &obd->u.lov;
         struct lov_oinfo *loi;
         struct lov_mds_md *lmm;
@@ -219,10 +219,9 @@ int lov_alloc_memmd(struct lov_stripe_md **lsmp, int stripe_count)
         (*lsmp)->lsm_stripe_count = stripe_count;
         (*lsmp)->lsm_maxbytes = LUSTRE_STRIPE_MAXBYTES * stripe_count;
 
-        for (i = 0, loi = (*lsmp)->lsm_oinfo; i < stripe_count; i++, loi++){
-                loi->loi_dirty_ot = &loi->loi_dirty_ot_inline;
-                ot_init(loi->loi_dirty_ot);
-        }
+        for (i = 0, loi = (*lsmp)->lsm_oinfo; i < stripe_count; i++, loi++)
+                loi_init(loi);
+
         return lsm_size;
 }
 
@@ -235,10 +234,10 @@ void lov_free_memmd(struct lov_stripe_md **lsmp)
 /* Unpack LOV object metadata from disk storage.  It is packed in LE byte
  * order and is opaque to the networking layer.
  */
-int lov_unpackmd(struct lustre_handle *conn, struct lov_stripe_md **lsmp,
+int lov_unpackmd(struct obd_export *exp, struct lov_stripe_md **lsmp,
                  struct lov_mds_md *lmm, int lmm_bytes)
 {
-        struct obd_device *obd = class_conn2obd(conn);
+        struct obd_device *obd = class_exp2obd(exp);
         struct lov_obd *lov = &obd->u.lov;
         struct lov_stripe_md *lsm;
         struct lov_oinfo *loi;
@@ -316,10 +315,10 @@ int lov_unpackmd(struct lustre_handle *conn, struct lov_stripe_md **lsmp,
  * lmm_stripe_offset, and lmm_stripe_pattern.  lmm_magic must be LOV_MAGIC.
  * @lsmp is a pointer to an in-core stripe MD that needs to be filled in.
  */
-int lov_setstripe(struct lustre_handle *conn, struct lov_stripe_md **lsmp,
+int lov_setstripe(struct obd_export *exp, struct lov_stripe_md **lsmp,
                   struct lov_mds_md *lmmu)
 {
-        struct obd_device *obd = class_conn2obd(conn);
+        struct obd_device *obd = class_exp2obd(exp);
         struct lov_obd *lov = &obd->u.lov;
         struct lov_mds_md lmm;
         int stripe_count;
@@ -381,7 +380,7 @@ int lov_setstripe(struct lustre_handle *conn, struct lov_stripe_md **lsmp,
  * the maximum number of OST indices which will fit in the user buffer.
  * lmm_magic must be LOV_MAGIC.
  */
-int lov_getstripe(struct lustre_handle *conn, struct lov_stripe_md *lsm,
+int lov_getstripe(struct obd_export *exp, struct lov_stripe_md *lsm,
                   struct lov_mds_md *lmmu)
 {
         struct lov_mds_md lmm, *lmmk = NULL;
@@ -398,7 +397,7 @@ int lov_getstripe(struct lustre_handle *conn, struct lov_stripe_md *lsm,
         if (lmm.lmm_magic != LOV_MAGIC)
                 RETURN(-EINVAL);
 
-        rc = lov_packmd(conn, &lmmk, lsm);
+        rc = lov_packmd(exp, &lmmk, lsm);
         if (rc < 0)
                 RETURN(rc);
         /* Bug 1185 FIXME: convert lmmk to big-endian before copy to userspace */
@@ -411,7 +410,7 @@ int lov_getstripe(struct lustre_handle *conn, struct lov_stripe_md *lsm,
         else if (copy_to_user(lmmu, lmmk, lmm_size))
                 rc = -EFAULT;
 
-        obd_free_diskmd (conn, &lmmk);
+        obd_free_diskmd(exp, &lmmk);
 
         RETURN(rc);
 }
