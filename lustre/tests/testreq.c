@@ -33,6 +33,7 @@
 #include <getopt.h>
 #undef _GNU_SOURCE
 
+#include <liblustre.h>
 #include <linux/lustre_mds.h>
 
 static void usage(char *argv0, int status)
