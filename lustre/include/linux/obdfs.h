@@ -1,4 +1,4 @@
-#include <../obd/linux/sym_obd.h>
+#include <../obd/linux/sim_obd.h>
 
 
 struct obdfs_sb_info {

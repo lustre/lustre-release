@@ -25,7 +25,7 @@
 #include <linux/vmalloc.h>
 #include <asm/segment.h>
 
-#include <../obd/linux/sym_obd.h>
+#include <../obd/linux/sim_obd.h>
 #include <obdfs.h>
 
 /* DEBUGGING! */

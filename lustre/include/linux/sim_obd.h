@@ -1,12 +1,12 @@
-#ifndef __LINUX_SYM_OBD_H
-#define __LINUX_SYM_OBD_H
+#ifndef __LINUX_SIM_OBD_H
+#define __LINUX_SIM_OBD_H
 
 #include <linux/fs.h>
 #include <linux/ext2_fs.h>
 #include <linux/malloc.h>
 #include <linux/vmalloc.h>
 
-#define SYM_OBD_DEBUG
+#define SIM_OBD_DEBUG
 
 /*
  * Debug code
@@ -29,7 +29,7 @@ extern int obd_print_entry;
 #define D_IOCTL    1024 /* ioctl related information */
 #define D_BLOCKS   2048 /* ext2 block allocation */
  
-#ifdef SYM_OBD_DEBUG
+#ifdef SIM_OBD_DEBUG
 #define CDEBUG(mask, format, a...)					\
         do {								\
 	if (obd_debug_level & mask) {					\
@@ -45,13 +45,13 @@ extern int obd_print_entry;
         if (obd_print_entry)						      \
                 printk("Process %d leaving %s\n", current->pid, __FUNCTION__)
 
-#else /* SYM_OBD_DEBUG */
+#else /* SIM_OBD_DEBUG */
 
 #       define CDEBUG ;
 #       define ENTRY ;
 #       define EXIT ;
 
-#endif /* SYM_OBD_DEBUG */
+#endif /* SIM_OBD_DEBUG */
 
 
 
@@ -222,6 +222,7 @@ int obd_ioctl (struct inode * inode, struct file * filp, unsigned int cmd,
 
 /* super.c */
 #define ext2_warning obd_warning
+#undef ext2_error
 #define ext2_error obd_warning
 #define ext2_panic obd_warning
 
@@ -256,4 +257,4 @@ extern struct inode_operations ext2_file_inode_operations;
 /* super.c */
 extern struct super_operations ext2_sops;
 
-#endif /* __LINUX_SYM_OBD_H */
+#endif /* __LINUX_SIM_OBD_H */

@@ -11,7 +11,7 @@
 #include <asm/uaccess.h>
 #include <linux/utsname.h>
 
-#include <linux/sym_obd.h>
+#include <linux/sim_obd.h>
 #include <linux/presto.h>
 #include <linux/obd_psdev.h>
 #include <linux/presto_upcall.h>
