@@ -49,12 +49,17 @@ int main(int argc, char **argv)
                 exit(1);
         }
 
+#if 0
         fprintf(stderr, "unlinking\n");
         rc = unlink(argv[1]);
         if (rc) {
                 fprintf(stderr, "unlink %s\n", strerror(errno));
                 exit(1);
         }
+#else
+        printf("unlink %s and press enter\n", argv[1]);
+        getc(stdin);
+#endif
 
         fprintf(stderr, "reading\n");
         rc = read(fd, buf, strlen(T1) + 1);
