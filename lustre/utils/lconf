@@ -1002,7 +1002,8 @@ class MDC(Module):
 
         host = socket.gethostname()
         self.name = 'MDC_%s' % (self.mds.name)
-        self.uuid = '%s_%05x_UUID' % (self.name , int(random.random() * 100000))
+        self.uuid = '%s_%05x_%05x' % (self.name, int(random.random() * 1048576),
+                                      int(random.random() * 1048576))
 
         self.lookup_server(self.mds.uuid)
         self.add_module('lustre/mdc', 'mdc')
