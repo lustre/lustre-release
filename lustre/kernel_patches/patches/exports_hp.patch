@@ -9,7 +9,7 @@
 
 --- linux-2.4.20/fs/ext3/Makefile~exports_hp	Sat Apr  5 03:55:19 2003
 +++ linux-2.4.20-braam/fs/ext3/Makefile	Sat Apr  5 03:56:03 2003
-@@ -9,8 +9,8 @@
+@@ -9,6 +9,8 @@
  
  O_TARGET := ext3.o
  
