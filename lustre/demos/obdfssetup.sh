@@ -1,9 +1,6 @@
 #! /bin/bash
 # Utility script for configuring a simple OBDFS mount
-
 OBDDIR="`dirname $0`/.."
-[ "$OBDDIR" = "./.." ] && OBDDIR=".."
-
 .  $OBDDIR/demos/config.sh
 
 $OBDDIR/demos/basesetup.sh

@@ -1,28 +1,25 @@
 #!/bin/sh
 # Script to remove the loopback device and temp file created in newtest.sh
 OBDDIR="`dirname $0`/.."
-
-[ "$OBDDIR" = "./.." ] && OBDDIR=".."
-
 . $OBDDIR/demos/config.sh
 
 
-mount | grep $MNTOBD > /dev/null 2>&1
-if [ x$? = x0 ]; then 
+mount | grep "$MNTOBD " > /dev/null 2>&1
+if [ x$? = x0 ]; then
     echo "Stuff still mounted on $MNTOBD"
-    exit 
+    exit 1
 fi
 
-mount | grep $MNTSNAP > /dev/null 2>&1
-if [ x$? = x0 ]; then 
+mount | grep "$MNTSNAP " > /dev/null 2>&1
+if [ x$? = x0 ]; then
     echo "Stuff still mounted on $MNTSNAP"
-    exit 
+    exit 2
 fi
 
-mount | grep $MNTSNAP > /dev/null 2>&1
-if [ x$? = x0 ]; then 
+mount | grep "$MNTSNAP2 " > /dev/null 2>&1
+if [ x$? = x0 ]; then
     echo "Stuff still mounted on $MNTSNAP2"
-    exit 
+    exit 3
 fi
 
 

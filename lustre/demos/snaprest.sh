@@ -2,7 +2,6 @@
 # Utility script to test restoring a previous snapshot.  This will destroy
 # the "current" snapshot and restore the old one in its place.
 OBDDIR="`dirname $0`/.."
-[ "$OBDDIR" = "./.." ] && OBDDIR=".."
 . $OBDDIR/demos/config.sh
 
 [ ! -d $MNTSNAP/lost+found ] && echo "need to run snapsetup.sh first" && exit 1
@@ -10,13 +9,13 @@ OBDDIR="`dirname $0`/.."
 plog umount $MNTSNAP
 plog umount $MNTOBD
 
-mount | grep $MNTOBD > /dev/null 2>&1
+mount | grep "$MNTOBD " > /dev/null 2>&1
 if [ x$? = x0 ]; then 
     echo "Stuff still mounted on $MNTOBD; clean up first."
     exit 
 fi
 
-mount | grep $MNTSNAP > /dev/null 2>&1
+mount | grep "$MNTSNAP " > /dev/null 2>&1
 if [ x$? = x0 ]; then 
     echo "Stuff still mounted on $MNTSNAP; clean up first."
     exit 

@@ -2,7 +2,6 @@
 # Utility script to test deleting a snapshot that has been previously
 # created as the setup.sh script does.
 OBDDIR="`dirname $0`/.."
-[ "$OBDDIR" = "" ] && OBDDIR=".."
 . $OBDDIR/demos/config.sh
 
 [ ! -d $MNTSNAP/lost+found ] && echo "need to run obdsetup.sh first" && exit 1

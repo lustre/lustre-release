@@ -1,7 +1,6 @@
 #! /bin/bash
 # Utility script for cleaning up snapshots and removing modules.
 OBDDIR="`dirname $0`/.."
-[ "$OBDDIR" = "" ] && OBDDIR=".."
 . $OBDDIR/demos/config.sh
 
 plog umount $MNTOBD
@@ -20,4 +19,5 @@ EOF
 
 rmmod obdsnap
 
+rm $SNAPTABLE
 $OBDDIR/demos/obdfsclean.sh

@@ -1,7 +1,6 @@
 #!/bin/sh
 # Utility script for creating a third snapshot.
 OBDDIR="`dirname $0`/.."
-[ "$OBDDIR" = "" ] && OBDDIR=".."
 . $OBDDIR/demos/config.sh
 
 [ ! -d $MNTSNAP/lost+found ] && $OBDDIR/demos/snapsetup.sh

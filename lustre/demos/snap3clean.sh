@@ -1,7 +1,6 @@
 #!/bin/sh
 # Utility script for cleaning up a third snapshot created by setup3.sh
 OBDDIR="`dirname $0`/.."
-[ "$OBDDIR" = "" ] && OBDDIR=".."
 . $OBDDIR/demos/config.sh
 
 plog umount $MNTSNAP2

@@ -386,7 +386,7 @@ sub SnapRestore {
     my $restoreto = shift;
     my $snaptable = shift;
     my $tableno = shift;
-    my $key;
+    my $restoretime;
 
     # don't do anything until connected
     if (!defined($::client_id)) {
@@ -405,24 +405,24 @@ sub SnapRestore {
     }
    
     my $table = ReadSnapShotTable($snaptable);
-    $key = FindSnapInTable($table, $restoreto);
-    if ( ! defined $table->{0} || ! defined $key ) {
+    $restoretime = FindSnapInTable($table, $restoreto);
+    if ( ! defined $table->{0} || ! defined $restoretime ) {
 	PrintSnapShotTable($table);
 	print "No current or $restoreto slot in this table\n";
 	return;
     }
 
     my $currentindex = $table->{0};
-    if (  $table->{$key} == $currentindex ) {
+    if (  $table->{$restoretime} == $currentindex ) {
 	print "You should not restore to the current snapshot\n";
 	return;
     }
     
     # swap the entries for 0 and $restoreto
-    my $tmp = $table->{$key};
-    $table->{$key} = $table->{0};
+    my $tmp = $table->{$restoretime};
+    $table->{$restoretime} = $table->{0};
     $table->{0} = $tmp;
-    PrintSnapShotTable($table);
+    # PrintSnapShotTable($table);
 
     # write it back
     WriteSnapShotTable($snaptable, $table);
@@ -446,13 +446,13 @@ sub SnapRestore {
 	print STDERR "ioctl failed: $!\n";
     } elsif ($rc eq "0 but true") {
 	print "Snaprestore finished (success)\n";
-	delete $table->{$restoreto};
+	delete $table->{$restoretime} if defined $restoretime;
 	# write it back
 	WriteSnapShotTable($snaptable, $table);
 	
 	# set it in the kernel
 	SnapSetTable($tableno, $snaptable);
-	PrintSnapShotTable($table);
+	# PrintSnapShotTable($table);
 
     } else {
 	print "ioctl returned error code $rc.\n";
@@ -463,10 +463,10 @@ sub FindSnapInTable {
     my $table = shift;
     my $snapno =shift;
 
-    foreach my $key ( keys %{$table} ) {
-	if ( $table->{$key} == $snapno) { 
-	    print "Found key $key for snapno $snapno\n";
-	    return $key;
+    foreach my $restoretime ( keys %{$table} ) {
+	if ( $table->{$restoretime} == $snapno) { 
+	    print "Found key $restoretime for snapno $snapno\n";
+	    return $restoretime;
 	}
     }
     undef;

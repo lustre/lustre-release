@@ -2,7 +2,6 @@
 # Utility script to perform minor modifications to the read-write mounted
 # snapshot in order to demonstrate the changes w.r.t. the read-only snapshot
 OBDDIR="`dirname $0`/.."
-[ "$OBDDIR" = "" ] && OBDDIR=".."
 . $OBDDIR/demos/config.sh
 
 plog chmod 777 $MNTOBD			# change attributes on an existing file

@@ -1,7 +1,6 @@
 #!/bin/sh
 # Utility script for cleaning up a simple OBDFS mounted filesystem
 OBDDIR="`dirname $0`/.."
-
 . $OBDDIR/demos/config.sh
 
 umount $MNTOBD

@@ -1,7 +1,6 @@
 #! /bin/sh
 # Get the locations for the files from a single place to avoid confusion
 OBDDIR="`dirname $0`/.."
-[ "$OBDDIR" = "./.." ] && OBDDIR=".."
 
 # source config info
 . $OBDDIR/demos/config.sh
@@ -26,7 +25,7 @@ if [ "$LOOPDEV" -a "`losetup $LOOPDEV 2> /dev/null`" ]; then
     echo "You need to clean up $LOOPDEV (via cleanup.sh),"
     echo "or you can change which device is used in demos/config.sh" 1>&2
     # undo previous
-    rm $TMPFILE
+    [ "$TMPFILE" ] && rm $TMPFILE
     exit 2
 fi
 
@@ -42,6 +41,6 @@ if [ "$BASEDEV" ]; then
 else
     echo "\$BASEDEV not defined in demos/config.sh.  Please fix!"
     [ "$LOOPDEV" ] && losetup -d $LOOPDEV 
-    rm $TMPFILE
+    [ "$TMPFILE" ] && rm $TMPFILE
     exit 3
 fi

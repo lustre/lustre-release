@@ -3,13 +3,11 @@
 # not already mounted on /mnt/obd, we call the basic OBD setup script to
 # create and mount a filesystem for us.
 OBDDIR="`dirname $0`/.."
-
 . $OBDDIR/demos/config.sh
 
 
 # prepare the snapshot drive with a file to be COW'd
-
-mount | grep $MNTOBD > /dev/null 2>&1
+mount | grep "$MNTOBD " > /dev/null 2>&1
 if [ x$? = x0 ]; then 
     echo "Stuff still mounted on $MNTOBD; clean up first."
     exit 
