@@ -154,7 +154,7 @@ out:
         RETURN(rc);
 }
 
-int mds_iocontrol(long cmd, struct lustre_handle *conn,
+int mds_iocontrol(unsigned int cmd, struct lustre_handle *conn,
                           int len, void *karg, void *uarg)
 {
         struct obd_device *obd = class_conn2obd(conn);
