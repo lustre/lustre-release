@@ -171,21 +171,42 @@ id
  ElanID or IP address as used by Portals.
  If 
 \emph on 
-host_name
+nid
 \emph default 
- is '*', then the local address while be substituted when the node is configured
- with lconf.
+ is '*', then the local address of the interface with specified 
+\series bold 
+nettype 
+\series default 
+is will be substituted when the node is configured with lconf.
+ An 
+\emph on 
+nid
+\emph default 
+ of 
+\emph on 
+'*'
+\emph default 
+ should be used only for the generic 
+\emph on 
+client
+\emph default 
+ configuration.
 \layout Description
 
 --router Optional flag to mark this node as a router
 \layout Description
 
---profile Optional flag to mark this node as a profile node.
- This is automatically true if the the 
-\emph on 
---nid
-\emph default 
- argument contains a '*'.
+--profile\SpecialChar ~
+[not\SpecialChar ~
+implemented] Optional flag to mark this node as a profile node.
+ This would be very useful to configure several client nodes in large clusters.
+ It will allow user to define 
+\series bold 
+profiles
+\series default 
+ for the various client configurations, and then load the correct profile
+ on the client nodes using lconf.
+ 
 \layout Description
 
 --port\SpecialChar ~
@@ -238,10 +259,12 @@ mds_name
 \begin_deeper 
 \layout Description
 
---lov_<name>
+--lov\SpecialChar ~
+<name>
 \layout Description
 
---mds_<name>
+--mds\SpecialChar ~
+<name>
 \layout Description
 
 --stripe_sz\SpecialChar ~
@@ -373,7 +396,7 @@ nid.
 \layout Description
 
 --add\SpecialChar ~
-echo-client Used for testing
+echo-client Used for testing purpose only
 \begin_deeper 
 \layout Description
 
