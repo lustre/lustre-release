@@ -25,8 +25,12 @@ char usage[] =
 "        c  close\n"
 "        _  wait for signal\n"
 "        R  reference entire mmap-ed region\n"
+"        r  read\n"
 "        s  stat\n"
-"        S  fstat\n";
+"        S  fstat\n"
+"        t  fchmod\n"
+"        w  write\n"
+"        z  seek to zero\n";
 
 void null_handler(int unused) { }
 
@@ -36,7 +40,7 @@ int main(int argc, char **argv)
         struct stat st;
 	size_t mmap_len, i;
 	unsigned char *mmap_ptr = NULL, junk = 0;
-        int fd;
+        int fd = -1;
 
         if (argc != 3) {
                 fprintf(stderr, usage, argv[0]);
@@ -49,19 +53,15 @@ int main(int argc, char **argv)
 
         for (commands = argv[2]; *commands; commands++) {
                 switch (*commands) {
-                case 'o':
-                        fd = open(fname, O_RDONLY);
-                        if (fd == -1) {
-                                perror("open(O_RDONLY)");
-                                exit(1);
-                        }
+                case '_':
+                        pause();
                         break;
-                case 'O':
-                        fd = open(fname, O_CREAT|O_RDWR, 0644);
-                        if (fd == -1) {
-                                perror("open(O_RDWR|O_CREAT");
+                case 'c':
+                        if (close(fd) == -1) {
+                                perror("close");
                                 exit(1);
                         }
+			fd = -1;
                         break;
                 case 'm':
                         if (mknod(fname, S_IFREG | 0644, 0) == -1) {
@@ -78,20 +78,32 @@ int main(int argc, char **argv)
 				exit(1);
 			}
 			break;
-                case 'u':
-                        if (unlink(fname) == -1) {
-                                perror("unlink");
+                case 'O':
+                        fd = open(fname, O_CREAT|O_RDWR, 0644);
+                        if (fd == -1) {
+                                perror("open(O_RDWR|O_CREAT");
                                 exit(1);
                         }
                         break;
-                case 'c':
-                        if (close(fd) == -1) {
-                                perror("close");
+                case 'o':
+                        fd = open(fname, O_RDONLY);
+                        if (fd == -1) {
+                                perror("open(O_RDONLY)");
                                 exit(1);
                         }
                         break;
-                case '_':
-                        pause();
+		case 'r': {
+			char buf;
+			if (read(fd, &buf, 1) == -1) {
+				perror("read");
+				exit(1);
+			}
+		}
+                case 'S':
+                        if (fstat(fd, &st) == -1) {
+                                perror("fstat");
+                                exit(1);
+                        }
                         break;
 		case 'R':
 			for (i = 0; i < mmap_len && mmap_ptr; i += 4096)
@@ -103,15 +115,33 @@ int main(int argc, char **argv)
                                 exit(1);
                         }
                         break;
-                case 'S':
-                        if (fstat(fd, &st) == -1) {
-                                perror("fstat");
+                case 't': 
+                        if (fchmod(fd, 0) == -1) {
+                                perror("fchmod");
+                                exit(1);
+                        }
+                        break;
+                case 'u':
+                        if (unlink(fname) == -1) {
+                                perror("unlink");
                                 exit(1);
                         }
                         break;
 		case 'U':
 			if (munmap(mmap_ptr, mmap_len)) {
 				perror("munmap");
+				exit(1);
+			}
+			break;
+		case 'w':
+			if (write(fd, "w", 1) == -1) {
+				perror("write");
+				exit(1);
+			}
+			break;
+		case 'z':
+			if (lseek(fd, 0, SEEK_SET) == -1) {
+				perror("lseek");
 				exit(1);
 			}
 			break;
