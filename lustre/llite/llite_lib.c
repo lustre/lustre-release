@@ -534,15 +534,15 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
 
         /* We mark all of the fields "set" so MDS/OST does not re-set them */
         if (attr->ia_valid & ATTR_CTIME) {
-                attr->ia_ctime = CURRENT_SECONDS;
+                attr->ia_ctime = CURRENT_TIME;
                 attr->ia_valid |= ATTR_CTIME_SET;
         }
         if (!(ia_valid & ATTR_ATIME_SET) && (attr->ia_valid & ATTR_ATIME)) {
-                attr->ia_atime = CURRENT_SECONDS;
+                attr->ia_atime = CURRENT_TIME;
                 attr->ia_valid |= ATTR_ATIME_SET;
         }
         if (!(ia_valid & ATTR_MTIME_SET) && (attr->ia_valid & ATTR_MTIME)) {
-                attr->ia_mtime = CURRENT_SECONDS;
+                attr->ia_mtime = CURRENT_TIME;
                 attr->ia_valid |= ATTR_MTIME_SET;
         }
 
@@ -591,7 +591,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                         /* from sys_utime() */
                         if (!(ia_valid & (ATTR_MTIME_SET | ATTR_ATIME_SET))) {
                                 if (current->fsuid != inode->i_uid &&
-                                    (rc = permission(inode, MAY_WRITE)) != 0)
+                                    (rc = ll_permission(inode, MAY_WRITE, NULL)) != 0)
                                         RETURN(rc);
                         } else {
 				/* from inode_change_ok() */
@@ -862,12 +862,12 @@ void ll_read_inode2(struct inode *inode, void *opaque)
 
 int it_disposition(struct lookup_intent *it, int flag)
 {
-        return it->it_disposition & flag;
+        return it->d.lustre.it_disposition & flag;
 }
 
 void it_set_disposition(struct lookup_intent *it, int flag)
 {
-        it->it_disposition |= flag;
+        it->d.lustre.it_disposition |= flag;
 }
 
 void ll_umount_begin(struct super_block *sb)
