@@ -62,6 +62,24 @@ extern unsigned int portal_stack;
 extern unsigned int portal_debug;
 extern unsigned int portal_printk;
 extern unsigned int portal_cerror;
+
+#include <asm/types.h>
+struct ptldebug_header {
+        __u32 ph_len;
+        __u32 ph_flags;
+        __u32 ph_subsys;
+        __u32 ph_mask;
+        __u32 ph_cpu_id;
+        __u32 ph_sec;
+        __u64 ph_usec;
+        __u32 ph_stack;
+        __u32 ph_pid;
+        __u32 ph_extern_pid;
+        __u32 ph_line_num;
+} __attribute__((packed));
+
+#define PH_FLAG_FIRST_RECORD 1
+
 /* Debugging subsystems (32 bits, non-overlapping) */
 #define S_UNDEFINED   0x00000001
 #define S_MDC         0x00000002
