@@ -159,7 +159,7 @@ int ptlrpc_replay(struct obd_import *imp)
         struct list_head *tmp, *pos;
         struct ptlrpc_request *req;
         struct ptlrpc_connection *conn = imp->imp_connection;
-        int committed = imp->imp_peer_committed_transno;
+        __u64 committed = imp->imp_peer_committed_transno;
         ENTRY;
 
         spin_lock(&imp->imp_lock);
