@@ -41,6 +41,7 @@
 # include <limits.h>
 # include <time.h>
 # include <strings.h>
+# include <sys/time.h>
 #endif
 #include <fcntl.h>
 #include <sys/mman.h>
@@ -64,6 +65,7 @@
 
 struct log_entry {
 	int	operation;
+	struct timeval tv;
 	int	args[3];
 };
 
@@ -173,11 +175,12 @@ prterr(char *prefix)
 
 
 void
-log4(int operation, int arg0, int arg1, int arg2)
+log4(int operation, int arg0, int arg1, int arg2, struct timeval *tv)
 {
 	struct log_entry *le;
 
 	le = &oplog[logptr];
+	le->tv = *tv;
 	le->operation = operation;
 	if (closeopen)
 		le->operation = ~ le->operation;
@@ -209,8 +212,9 @@ logdump(void)
 		int opnum;
 
 		opnum = i+1 + (logcount/LOGSIZE)*LOGSIZE;
-		prt("%d(%d mod 256): ", opnum, opnum%256);
 		lp = &oplog[i];
+		prt("%d(%d mod 256): %lu.%lu ", opnum, opnum%256,
+		    lp->tv.tv_sec, lp->tv.tv_usec);
 		if ((closeopen = lp->operation < 0))
 			lp->operation = ~ lp->operation;
 
@@ -424,24 +428,26 @@ check_trunc_hack(void)
 void
 doread(unsigned offset, unsigned size)
 {
+	struct timeval t;
 	off_t ret;
 	unsigned iret;
 
 	offset -= offset % readbdy;
+	gettimeofday(&t, NULL);
 	if (size == 0) {
 		if (!quiet && testcalls > simulatedopcount)
 			prt("skipping zero size read\n");
-		log4(OP_SKIPPED, OP_READ, offset, size);
+		log4(OP_SKIPPED, OP_READ, offset, size, &t);
 		return;
 	}
 	if (size + offset > file_size) {
 		if (!quiet && testcalls > simulatedopcount)
 			prt("skipping seek/read past end of file\n");
-		log4(OP_SKIPPED, OP_READ, offset, size);
+		log4(OP_SKIPPED, OP_READ, offset, size, &t);
 		return;
 	}
 
-	log4(OP_READ, offset, size, 0);
+	log4(OP_READ, offset, size, 0, &t);
 
 	if (testcalls <= simulatedopcount)
 		return;
@@ -452,8 +458,9 @@ doread(unsigned offset, unsigned size)
 		        (monitorstart == -1 ||
 			 (offset + size > monitorstart &&
 			  (monitorend == -1 || offset <= monitorend))))))
-		prt("%lu read\t0x%x thru\t0x%x\t(0x%x bytes)\n", testcalls,
-		    offset, offset + size - 1, size);
+		prt("%lu %lu.%lu read\t0x%x thru\t0x%x\t(0x%x bytes)\n",
+		    testcalls, t.tv_sec, t.tv_usec, offset, offset + size - 1,
+		    size);
 	ret = lseek(fd, (off_t)offset, SEEK_SET);
 	if (ret == (off_t)-1) {
 		prterr("doread: lseek");
@@ -475,25 +482,27 @@ doread(unsigned offset, unsigned size)
 void
 domapread(unsigned offset, unsigned size)
 {
+	struct timeval t;
 	unsigned pg_offset;
 	unsigned map_size;
 	char    *p;
 
 	offset -= offset % readbdy;
+	gettimeofday(&t, NULL);
 	if (size == 0) {
 		if (!quiet && testcalls > simulatedopcount)
 			prt("skipping zero size read\n");
-		log4(OP_SKIPPED, OP_MAPREAD, offset, size);
+		log4(OP_SKIPPED, OP_MAPREAD, offset, size, &t);
 		return;
 	}
 	if (size + offset > file_size) {
 		if (!quiet && testcalls > simulatedopcount)
 			prt("skipping seek/read past end of file\n");
-		log4(OP_SKIPPED, OP_MAPREAD, offset, size);
+		log4(OP_SKIPPED, OP_MAPREAD, offset, size, &t);
 		return;
 	}
 
-	log4(OP_MAPREAD, offset, size, 0);
+	log4(OP_MAPREAD, offset, size, 0, &t);
 
 	if (testcalls <= simulatedopcount)
 		return;
@@ -504,14 +513,14 @@ domapread(unsigned offset, unsigned size)
 		        (monitorstart == -1 ||
 			 (offset + size > monitorstart &&
 			  (monitorend == -1 || offset <= monitorend))))))
-		prt("%lu mapread\t0x%x thru\t0x%x\t(0x%x bytes)\n", testcalls,
-		    offset, offset + size - 1, size);
+		prt("%lu %lu.%lu mapread\t0x%x thru\t0x%x\t(0x%x bytes)\n",
+		    testcalls, t.tv_sec, t.tv_usec, offset, offset + size - 1,
+		    size);
 
 	pg_offset = offset & page_mask;
 	map_size  = pg_offset + size;
 
-	if ((p = (char *)mmap(0, map_size, PROT_READ, MAP_FILE |
-MAP_SHARED, fd,
+	if ((p = (char *)mmap(0, map_size, PROT_READ, MAP_FILE | MAP_SHARED, fd,
 			      (off_t)(offset - pg_offset))) == (char *)-1) {
 	        prterr("domapread: mmap");
 		report_failure(190);
@@ -541,18 +550,20 @@ gendata(char *original_buf, char *good_buf, unsigned offset, unsigned size)
 void
 dowrite(unsigned offset, unsigned size)
 {
+	struct timeval t;
 	off_t ret;
 	unsigned iret;
 
 	offset -= offset % writebdy;
+	gettimeofday(&t, NULL);
 	if (size == 0) {
 		if (!quiet && testcalls > simulatedopcount)
 			prt("skipping zero size write\n");
-		log4(OP_SKIPPED, OP_WRITE, offset, size);
+		log4(OP_SKIPPED, OP_WRITE, offset, size, &t);
 		return;
 	}
 
-	log4(OP_WRITE, offset, size, file_size);
+	log4(OP_WRITE, offset, size, file_size, &t);
 
 	gendata(original_buf, good_buf, offset, size);
 	if (file_size < offset + size) {
@@ -574,8 +585,9 @@ dowrite(unsigned offset, unsigned size)
 		        (monitorstart == -1 ||
 			 (offset + size > monitorstart &&
 			  (monitorend == -1 || offset <= monitorend))))))
-		prt("%lu write\t0x%x thru\t0x%x\t(0x%x bytes)\n", testcalls,
-		    offset, offset + size - 1, size);
+		prt("%lu %lu.%lu write\t0x%x thru\t0x%x\t(0x%x bytes)\n",
+		    testcalls, t.tv_sec, t.tv_usec, offset, offset + size - 1,
+		    size);
 	ret = lseek(fd, (off_t)offset, SEEK_SET);
 	if (ret == (off_t)-1) {
 		prterr("dowrite: lseek");
@@ -596,21 +608,23 @@ dowrite(unsigned offset, unsigned size)
 void
 domapwrite(unsigned offset, unsigned size)
 {
+	struct timeval t;
 	unsigned pg_offset;
 	unsigned map_size;
 	off_t    cur_filesize;
 	char    *p;
 
 	offset -= offset % writebdy;
+	gettimeofday(&t, NULL);
 	if (size == 0) {
 		if (!quiet && testcalls > simulatedopcount)
 			prt("skipping zero size write\n");
-		log4(OP_SKIPPED, OP_MAPWRITE, offset, size);
+		log4(OP_SKIPPED, OP_MAPWRITE, offset, size, &t);
 		return;
 	}
 	cur_filesize = file_size;
 
-	log4(OP_MAPWRITE, offset, size, 0);
+	log4(OP_MAPWRITE, offset, size, 0, &t);
 
 	gendata(original_buf, good_buf, offset, size);
 	if (file_size < offset + size) {
@@ -632,8 +646,9 @@ domapwrite(unsigned offset, unsigned size)
 		        (monitorstart == -1 ||
 			 (offset + size > monitorstart &&
 			  (monitorend == -1 || offset <= monitorend))))))
-		prt("%lu mapwrite\t0x%x thru\t0x%x\t(0x%x bytes)\n", testcalls,
-		    offset, offset + size - 1, size);
+		prt("%lu %lu.%lu mapwrite\t0x%x thru\t0x%x\t(0x%x bytes)\n",
+		    testcalls, t.tv_sec, t.tv_usec, offset, offset + size - 1,
+		    size);
 
 	if (file_size > cur_filesize) {
 	        if (ftruncate(fd, file_size) == -1) {
@@ -665,16 +680,18 @@ domapwrite(unsigned offset, unsigned size)
 void
 dotruncate(unsigned size)
 {
+	struct timeval t;
 	int oldsize = file_size;
 
 	size -= size % truncbdy;
+	gettimeofday(&t, NULL);
 	if (size > biggest) {
 		biggest = size;
 		if (!quiet && testcalls > simulatedopcount)
 			prt("truncating to largest ever: 0x%x\n", size);
 	}
 
-	log4(OP_TRUNCATE, size, (unsigned)file_size, 0);
+	log4(OP_TRUNCATE, size, (unsigned)file_size, 0, &t);
 
 	if (size > file_size)
 		memset(good_buf + file_size, '\0', size - file_size);
@@ -686,8 +703,8 @@ dotruncate(unsigned size)
 	if ((progressinterval && testcalls % progressinterval == 0) ||
 	    (debug && (monitorstart == -1 || monitorend == -1 ||
 		       size <= monitorend)))
-		prt("%lu trunc\tfrom 0x%x to 0x%x\n", testcalls, oldsize,
-size);
+		prt("%lu %lu.%lu trunc\tfrom 0x%x to 0x%x\n",
+		    testcalls, t.tv_sec, t.tv_usec, oldsize, size);
 	if (ftruncate(fd, (off_t)size) == -1) {
 	        prt("ftruncate1: %x\n", size);
 		prterr("dotruncate: ftruncate");
@@ -725,11 +742,16 @@ writefileimage()
 void
 docloseopen(void)
 {
+	struct timeval t;
+
 	if (testcalls <= simulatedopcount)
 		return;
 
+	log4(OP_CLOSEOPEN, file_size, (unsigned)file_size, 0, &t);
+
+	gettimeofday(&t, NULL);
 	if (debug)
-		prt("%lu close/open\n", testcalls);
+		prt("%lu %lu.%lu close/open\n", testcalls, t.tv_sec, t.tv_usec);
 	if (close(fd)) {
 		prterr("docloseopen: close");
 		report_failure(180);
