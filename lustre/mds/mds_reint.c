@@ -1505,15 +1505,14 @@ static int mds_reint_unlink_remote(struct mds_update_record *rec, int offset,
                           (unsigned) dchild->d_inum,
                           (unsigned) dchild->d_generation);
 
-        /* time to drop i_nlink on remote MDS */ 
+        /* time to drop i_nlink on remote MDS */
+        memset(&op_data, 0, sizeof(op_data));
         op_data.fid1.mds = dchild->d_mdsnum;
         op_data.fid1.id = dchild->d_inum;
         op_data.fid1.generation = dchild->d_generation;
         op_data.create_mode = rec->ur_mode;
         if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY)
                 op_data.create_mode |= MDS_MODE_REPLAY;
-        op_data.namelen = 0;
-        op_data.name = NULL;
         rc = md_unlink(mds->mds_lmv_exp, &op_data, &request);
         cleanup_phase = 2;
         if (request) {
