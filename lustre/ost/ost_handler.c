@@ -382,7 +382,7 @@ static int ost_brw_write(struct ptlrpc_request *req)
                 bulk->b_page = lnb->page;
                 bulk->b_flags = lnb->flags;
                 bulk->b_dentry = lnb->dentry;
-                bulk->b_buflen = PAGE_SIZE;
+                bulk->b_buflen = lnb->len;
                 bulk->b_cb = NULL;
 
                 /* this advances remote_nb */

@@ -1179,7 +1179,7 @@ static int filter_preprw(int cmd, struct lustre_handle *conn,
                         r->addr = page_address(page);
                         r->offset = b->offset;
                         r->page = page;
-                        r->len = PAGE_SIZE;
+                        r->len = b->len;
                 }
         }
 
@@ -1285,7 +1285,7 @@ static int filter_commitrw(int cmd, struct lustre_handle *conn,
 
                         if (cmd & OBD_BRW_WRITE) {
                                 int err = filter_commit_write(page, 0,
-                                                              PAGE_SIZE, 0);
+                                                              r->len, 0);
 
                                 if (!rc)
                                         rc = err;
