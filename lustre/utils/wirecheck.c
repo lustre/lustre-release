@@ -108,7 +108,7 @@ check_obdo(void)
         CHECK_MEMBER(obdo, o_nlink);
         CHECK_MEMBER(obdo, o_generation);
         CHECK_MEMBER(obdo, o_valid);
-        CHECK_MEMBER(obdo, o_obdflags);
+        CHECK_MEMBER(obdo, o_misc);
         CHECK_MEMBER(obdo, o_easize);
         CHECK_MEMBER(obdo, o_inline);
 
@@ -124,7 +124,6 @@ check_obdo(void)
         CHECK_VALUE(OBD_MD_FLUID);
         CHECK_VALUE(OBD_MD_FLGID);
         CHECK_VALUE(OBD_MD_FLFLAGS);
-        CHECK_VALUE(OBD_MD_FLOBDFLG);
         CHECK_VALUE(OBD_MD_FLNLINK);
         CHECK_VALUE(OBD_MD_FLGENER);
         CHECK_VALUE(OBD_MD_FLINLINE);
@@ -204,8 +203,8 @@ check_niobuf_remote(void)
 
         CHECK_VALUE(OBD_BRW_READ);
         CHECK_VALUE(OBD_BRW_WRITE);
-        CHECK_VALUE(OBD_BRW_CREATE);
         CHECK_VALUE(OBD_BRW_SYNC);
+        CHECK_VALUE(OBD_BRW_FROM_GRANT);
 }
 
 void
