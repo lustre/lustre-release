@@ -1916,12 +1916,14 @@ test_54d() {
 run_test 54d "fifo device works in lustre ======================"
 
 check_fstype() {
-	grep -q $FSTYPE /proc/filesystems && return 0
+	grep -q $FSTYPE /proc/filesystems && return 1
 	modprobe $FSTYPE
-	grep -q $FSTYPE /proc/filesystems && return 0
+	grep -q $FSTYPE /proc/filesystems && return 1
 	insmod ../$FSTYPE/$FSTYPE.o
-	grep -q $FSTYPE /proc/filesystems && return 0
-	return 1
+	grep -q $FSTYPE /proc/filesystems && return 1
+	insmod ../$FSTYPE/$FSTYPE.ko
+	grep -q $FSTYPE /proc/filesystems && return 1
+	return 0
 }
 
 test_55() {
