@@ -1,7 +1,7 @@
 Index: linux-2.4.19.SuSE/include/linux/jbd.h
 ===================================================================
 --- linux-2.4.19.SuSE.orig/include/linux/jbd.h	Sun Nov 16 13:51:03 2003
-+++ linux-2.4.19.SuSE/include/linux/jbd.h	Sun Nov 16 14:58:06 2003
++++ linux-2.4.19.SuSE/include/linux/jbd.h	Sun Nov 16 15:10:48 2003
 @@ -283,6 +283,13 @@
  	return bh->b_private;
  }
@@ -53,7 +53,7 @@ Index: linux-2.4.19.SuSE/include/linux/jbd.h
 Index: linux-2.4.19.SuSE/fs/jbd/checkpoint.c
 ===================================================================
 --- linux-2.4.19.SuSE.orig/fs/jbd/checkpoint.c	Mon Feb 25 11:38:08 2002
-+++ linux-2.4.19.SuSE/fs/jbd/checkpoint.c	Sun Nov 16 14:58:06 2003
++++ linux-2.4.19.SuSE/fs/jbd/checkpoint.c	Sun Nov 16 15:10:48 2003
 @@ -594,7 +594,8 @@
  	J_ASSERT (transaction->t_log_list == NULL);
  	J_ASSERT (transaction->t_checkpoint_list == NULL);
@@ -67,16 +67,8 @@ Index: linux-2.4.19.SuSE/fs/jbd/checkpoint.c
 Index: linux-2.4.19.SuSE/fs/jbd/commit.c
 ===================================================================
 --- linux-2.4.19.SuSE.orig/fs/jbd/commit.c	Mon Jan 27 05:08:04 2003
-+++ linux-2.4.19.SuSE/fs/jbd/commit.c	Sun Nov 16 14:58:06 2003
-@@ -47,6 +47,7 @@
- 	struct buffer_head *wbuf[64];
- 	int bufs;
- 	int flags;
-+	int unlocked;
- 	int err;
- 	unsigned long blocknr;
- 	char *tagp = NULL;
-@@ -485,7 +486,7 @@
++++ linux-2.4.19.SuSE/fs/jbd/commit.c	Sun Nov 16 15:13:53 2003
+@@ -485,7 +485,7 @@
             transaction's t_log_list queue, and metadata buffers are on
             the t_iobuf_list queue.
  
@@ -85,16 +77,23 @@ Index: linux-2.4.19.SuSE/fs/jbd/commit.c
  	   less likely to be woken up until all IOs have completed, and
  	   so we incur less scheduling load.
  	*/
-@@ -576,6 +577,7 @@
+@@ -576,8 +576,10 @@
  
  	jbd_debug(3, "JBD: commit phase 6\n");
  
-+	unlocked = 0;
- 	if (is_journal_aborted(journal))
+-	if (is_journal_aborted(journal))
++	if (is_journal_aborted(journal)) {
++		unlock_journal(journal);
  		goto skip_commit;
++	}
  
-@@ -589,7 +591,7 @@
+ 	/* Done it all: now write the commit record.  We should have
+ 	 * cleaned up our previous buffers by now, so if we are in abort
+@@ -587,9 +589,10 @@
+ 	descriptor = journal_get_descriptor_buffer(journal);
+ 	if (!descriptor) {
  		__journal_abort_hard(journal);
++		unlock_journal(journal);
  		goto skip_commit;
  	}
 -	
@@ -102,7 +101,7 @@ Index: linux-2.4.19.SuSE/fs/jbd/commit.c
  	/* AKPM: buglet - add `i' to tmp! */
  	for (i = 0; i < jh2bh(descriptor)->b_size; i += 512) {
  		journal_header_t *tmp =
-@@ -600,6 +602,7 @@
+@@ -600,6 +603,7 @@
  	}
  
  	unlock_journal(journal);
@@ -110,7 +109,7 @@ Index: linux-2.4.19.SuSE/fs/jbd/commit.c
  	JBUFFER_TRACE(descriptor, "write commit block");
  	{
  		struct buffer_head *bh = jh2bh(descriptor);
-@@ -610,7 +613,6 @@
+@@ -610,14 +614,32 @@
  		put_bh(bh);		/* One for getblk() */
  		journal_unlock_journal_head(descriptor);
  	}
@@ -118,10 +117,12 @@ Index: linux-2.4.19.SuSE/fs/jbd/commit.c
  
  	/* End of a transaction!  Finally, we can do checkpoint
             processing: any buffers committed as a result of this
-@@ -619,6 +621,31 @@
+            transaction can be removed from any checkpoint list it was on
+            before. */
  
- skip_commit:
- 
+-skip_commit:
++skip_commit: /* The journal should be unlocked by now. */
++
 +	/* Call any callbacks that had been registered for handles in this
 +	 * transaction.  It is up to the callback to free any allocated
 +	 * memory.
@@ -129,11 +130,6 @@ Index: linux-2.4.19.SuSE/fs/jbd/commit.c
 +	if (!list_empty(&commit_transaction->t_jcb)) {
 +		struct list_head *p, *n;
 +		int error = is_journal_aborted(journal);
-+
-+		if (!unlocked) {
-+			unlock_journal(journal);
-+			unlocked = 1;
-+		}
 +
 +		list_for_each_safe(p, n, &commit_transaction->t_jcb) {
 +			struct journal_callback *jcb;
@@ -144,16 +140,14 @@ Index: linux-2.4.19.SuSE/fs/jbd/commit.c
 +		}
 +	}
 +
-+	if (unlocked)
-+		lock_journal(journal);
-+
++	lock_journal(journal);
+ 
  	jbd_debug(3, "JBD: commit phase 7\n");
  
- 	J_ASSERT(commit_transaction->t_sync_datalist == NULL);
 Index: linux-2.4.19.SuSE/fs/jbd/journal.c
 ===================================================================
 --- linux-2.4.19.SuSE.orig/fs/jbd/journal.c	Mon Jan 27 05:08:00 2003
-+++ linux-2.4.19.SuSE/fs/jbd/journal.c	Sun Nov 16 14:58:06 2003
++++ linux-2.4.19.SuSE/fs/jbd/journal.c	Sun Nov 16 15:10:48 2003
 @@ -59,6 +59,7 @@
  #endif
  EXPORT_SYMBOL(journal_flush);
@@ -165,7 +159,7 @@ Index: linux-2.4.19.SuSE/fs/jbd/journal.c
 Index: linux-2.4.19.SuSE/fs/jbd/transaction.c
 ===================================================================
 --- linux-2.4.19.SuSE.orig/fs/jbd/transaction.c	Sun Nov 16 01:45:26 2003
-+++ linux-2.4.19.SuSE/fs/jbd/transaction.c	Sun Nov 16 14:58:31 2003
++++ linux-2.4.19.SuSE/fs/jbd/transaction.c	Sun Nov 16 15:15:34 2003
 @@ -58,6 +58,7 @@
  	transaction->t_state = T_RUNNING;
  	transaction->t_tid = journal->j_transaction_sequence++;
@@ -174,7 +168,23 @@ Index: linux-2.4.19.SuSE/fs/jbd/transaction.c
  
  	/* Set up the commit timer for the new transaction. */
  	J_ASSERT (!journal->j_commit_timer_active);
-@@ -202,6 +203,20 @@
+@@ -91,7 +92,14 @@
+ 	transaction_t *transaction;
+ 	int needed;
+ 	int nblocks = handle->h_buffer_credits;
+-	
++
++	if (nblocks > journal->j_max_transaction_buffers) {
++		jbd_debug(1, "JBD: %s wants too many credits (%d > %d)\n",
++			  current->comm, nblocks,
++			  journal->j_max_transaction_buffers);
++		return -ENOSPC;
++	}
++
+ 	jbd_debug(3, "New handle %p going live.\n", handle);
+ 
+ repeat:
+@@ -202,6 +210,20 @@
  	return 0;
  }
  
@@ -195,7 +205,7 @@ Index: linux-2.4.19.SuSE/fs/jbd/transaction.c
  /*
   * Obtain a new handle.  
   *
-@@ -228,14 +243,11 @@
+@@ -228,14 +250,11 @@
  		handle->h_ref++;
  		return handle;
  	}
@@ -212,7 +222,7 @@ Index: linux-2.4.19.SuSE/fs/jbd/transaction.c
  	current->journal_info = handle;
  
  	err = start_this_handle(journal, handle);
-@@ -334,14 +346,11 @@
+@@ -334,14 +353,11 @@
  	
  	if (is_journal_aborted(journal))
  		return ERR_PTR(-EIO);
@@ -229,7 +239,7 @@ Index: linux-2.4.19.SuSE/fs/jbd/transaction.c
  	current->journal_info = handle;
  
  	err = try_start_this_handle(journal, handle);
-@@ -1321,6 +1330,28 @@
+@@ -1321,6 +1337,28 @@
  #endif
  
  /*
@@ -258,7 +268,7 @@ Index: linux-2.4.19.SuSE/fs/jbd/transaction.c
   * All done for a particular handle.
   *
   * There is not much action needed here.  We just return any remaining
-@@ -1385,7 +1416,10 @@
+@@ -1385,7 +1423,10 @@
  			wake_up(&journal->j_wait_transaction_locked);
  	}
  
