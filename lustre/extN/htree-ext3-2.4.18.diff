@@ -48,7 +48,7 @@
  
  /*
   * define how far ahead to read directories while searching them.
-@@ -38,6 +42,432 @@
+@@ -38,6 +42,433 @@
  #define NAMEI_RA_SIZE        (NAMEI_RA_CHUNKS * NAMEI_RA_BLOCKS)
  #define NAMEI_RA_INDEX(c,b)  (((c) * NAMEI_RA_BLOCKS) + (b))
  
@@ -419,12 +419,13 @@
 +{
 +	int count = 0;
 +	char *base = (char *) de;
-+	while ((char *) de < base + size)
-+	{
-+		map[count].hash = dx_hash (de->name, de->name_len);
-+		map[count].offs = (u32) ((char *) de - base);
++	while ((char *) de < base + size) {
++		if (de->name_len && de->inode) {
++			map[count].hash = dx_hash (de->name, de->name_len);
++			map[count].offs = (u32) ((char *) de - base);
++			count++;
++		}
 +		de = (ext3_dirent *) ((char *) de + le16_to_cpu(de->rec_len));
-+		count++;
 +	}
 +	return count;
 +}
