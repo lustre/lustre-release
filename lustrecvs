@@ -23,11 +23,8 @@ Usage: $progname lustretag
 EOF
 }
 
-# portalstag="HEAD"
 buildtag="HEAD"
-portalstag="HEAD"
 lustretag="$1"
-libsysiotag="head_0607"
 
 case "$lustretag" in
     '')
@@ -43,16 +40,8 @@ case "$lustretag" in
     # this is the branch table
     # keep this list sorted alphabetically!
 
-    b1_4_bgl)
-	portalstag="b1_4_bgl"
-	;;
-
-    b_newsysio | b_sec)
-        libsysiotag="head_0809"
-	;;
-
-    b_port_step)
-        portalstag="b_port_step"
+    *)
+        buildtag="HEAD"
 	;;
 
 esac
@@ -78,6 +67,9 @@ cvs_cmd ()
 }
 
 cvs_cmd build lustre-build "$buildtag"
-cvs_cmd libsysio libsysio "$libsysiotag"
-cvs_cmd portals portals "$portalstag"
-cvs_cmd lustre lustre-core "$lustretag"
+
+if [ -f build/buildcvs ] ; then
+    . build/buildcvs
+else
+    fatal 1 "build/buildcvs does not exist; not updating other modules."
+fi
