@@ -45,9 +45,6 @@
 
 #if LWT_SUPPORT
 
-#define LWT_MEMORY              (1<<20)         /* 1Mb of trace memory */
-#define LWT_MAX_CPUS             4
-
 int         lwt_enabled;
 int         lwt_pages_per_cpu;
 lwt_cpu_t   lwt_cpus[LWT_MAX_CPUS];
@@ -123,7 +120,8 @@ lwt_control (int enable, int clear)
 }
 
 int
-lwt_snapshot (int *ncpu, int *total_size, void *user_ptr, int user_size)
+lwt_snapshot (cycles_t *now, int *ncpu, int *total_size, 
+              void *user_ptr, int user_size)
 {
         const int    events_per_page = PAGE_SIZE / sizeof(lwt_event_t);
         const int    bytes_per_page = events_per_page * sizeof(lwt_event_t);
@@ -136,7 +134,8 @@ lwt_snapshot (int *ncpu, int *total_size, void *user_ptr, int user_size)
 
         *ncpu = num_online_cpus();
         *total_size = num_online_cpus() * lwt_pages_per_cpu * bytes_per_page;
-
+        *now = get_cycles();
+        
         if (user_ptr == NULL)
                 return (0);
 
