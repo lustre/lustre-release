@@ -1,6 +1,7 @@
 #!/bin/sh
 
 LUSTRE_MOUNT_POINT=${LUSTRE_MOUNT_POINT:-"/mnt/lustre"}
+LIBLUSTRE_USE_ZCONF="no"
 LUSTRE_CONFIG_FILE=${LUSTRE_CONFIG_FILE:-"/tmp/DUMP_FILE"}
 LD_PRELOAD=${LD_PRELOAD:-"/usr/lib/liblustre.so"}
 

@@ -191,6 +191,8 @@ int main(int argc, char * const argv[])
 {
         int c;
 
+        setenv("LIBLUSTRE_USE_ZCONF", "no", 1);
+
         while ((c = getopt(argc, argv, "s:b:f:c:")) != -1) {
                 switch (c) {
                 case 's':
@@ -203,7 +205,7 @@ int main(int argc, char * const argv[])
                         strcpy(failover_script, optarg);
                         break;
                 case 'c':
-                        setenv("LUSTRE_CONFIG_FILE", optarg, 1);
+                        setenv("LIBLUSTRE_CONFIG_FILE", optarg, 1);
                         break;
                 default:
                         usage(argv[0]);

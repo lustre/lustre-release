@@ -309,10 +309,12 @@ int main(int argc, char * argv[])
         int c;
         char cmd[1024];
 
+        setenv("LIBLUSTRE_USE_ZCONF", "no", 1);
+
         while ((c = getopt(argc, argv, "c:s:")) != -1) {
                 switch (c) {
                 case 'c':
-                        setenv("LUSTRE_CONFIG_FILE", optarg, 1);
+                        setenv("LIBLUSTRE_CONFIG_FILE", optarg, 1);
                         break;
                 case 's':
                         strcpy(mds_server, optarg);
