@@ -1,3 +1,11 @@
+2002-07-25  Peter J. Braam  <braam@clusterfs.com>
+
+	* version 0_5_1 with some initial stability, 
+	* locking on MD and file I/O. 
+	* documentation updates
+	* several bug fixes since 0.5.0
+	* small changes in wire protocol
+
 2002-07-18  Phil Schwan  <phil@clusterfs.com>
         * version v0_4_5
         * delivered as Lustre Light Alpha
