@@ -249,7 +249,7 @@ static int fsfilt_extN_setattr(struct dentry *dentry, void *handle,
          * time), so we assert we never change the MDS file size from zero.
          */
         if (iattr->ia_valid & ATTR_SIZE) {
-                CERROR("hmm, setting %*s file size to "LPU64"\n",
+                CERROR("hmm, setting %*s file size to %lld\n",
                        dentry->d_name.len, dentry->d_name.name, iattr->ia_size);
                 LASSERT(iattr->ia_size == 0);
 #if 0
