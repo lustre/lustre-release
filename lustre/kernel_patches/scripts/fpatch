@@ -1,0 +1,53 @@
+#!/bin/sh
+
+#
+# Add a file to a patch.
+#
+
+. patchfns >/dev/null || . /usr/lib/patch-scripts/patchfns >/dev/null || { \
+	echo "Impossible to find my library 'patchfns'."
+	echo "Check your install, or go to the right directory"
+	exit 1
+}
+
+usage()
+{
+	echo "Usage: fpatch patchname filename"
+	echo "       fpatch filename"
+	exit 1
+}
+
+if [ $# == 1 ]
+then
+	PATCH_NAME=$(top_patch)
+	FILENAME=$1
+elif [ $# == 2 ]
+then
+	PATCH_NAME=$(stripit $1)
+	FILENAME=$2
+else
+	usage
+fi
+
+
+if is_applied_last $PATCH_NAME
+then
+	true
+else
+	if is_applied $PATCH_NAME
+	then
+		echo $PATCH_NAME is not the last-applied patch
+		exit 1
+	else
+		echo $PATCH_NAME >> $DB
+	fi
+fi
+
+if file_in_patch $FILENAME $PATCH_NAME
+then
+	echo File $FILENAME is already in patch $PATCH_NAME
+	exit 1
+fi
+
+install_file_in_patch $FILENAME $PATCH_NAME
+

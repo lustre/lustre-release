@@ -1,0 +1,31 @@
+
+
+
+ 0 files changed
+
+--- linux-2.4.18-17.8.0/arch/um/kernel/mem.c~uml_no_panic	2002-12-06 14:52:30.000000000 -0800
++++ linux-2.4.18-17.8.0-zab/arch/um/kernel/mem.c	2002-12-06 14:52:30.000000000 -0800
+@@ -559,7 +559,9 @@ struct mem_region *page_region(struct pa
+ 			return(region);
+ 		}
+ 	}
+-	panic("No region found for page");
++//	panic("No region found for page");
++	printk(KERN_ERR "no region foudn for page %p\n, returning NULL\n", 
++			page);
+ 	return(NULL);
+ }
+ 
+@@ -581,7 +583,9 @@ unsigned long region_pa(void *virt)
+ 		   (addr <= region->start + region->len))
+ 			return(mk_phys(addr - region->start, i));
+ 	}
+-	panic("region_pa : no region for virtual address");
++	//panic("region_pa : no region for virtual address");
++	printk(KERN_ERR "no region for virtual address %lu, return pa 0\n",
++			addr);
+ 	return(0);
+ }
+ 
+
+_

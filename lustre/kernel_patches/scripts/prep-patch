@@ -1,0 +1,18 @@
+#!/bin/sh
+
+. patchfns >/dev/null || . /usr/lib/patch-scripts/patchfns >/dev/null || { \
+	echo "Impossible to find my library 'patchfns'."
+	echo "Check your install, or go to the right directory"
+	exit 1
+}
+
+if [ $# -ne 1 ]
+then
+	echo "Usage prep-patch patchname"
+	exit 1
+fi
+
+PATCHNAME=$(stripit $1)
+
+xcb -s 2 < $P/patches/$PATCHNAME.patch
+head -2 $P/txt/$PATCHNAME.txt | tail -1 | tr -d '\n' | xcb -s 1

@@ -1,0 +1,18 @@
+
+
+
+ 0 files changed
+
+--- linux-2.4.18-17.8.0/include/asm-um/pgtable.h~uml_compile_fixes	2002-12-06 15:46:21.000000000 -0800
++++ linux-2.4.18-17.8.0-zab/include/asm-um/pgtable.h	2002-12-06 15:46:21.000000000 -0800
+@@ -200,7 +200,7 @@ static inline void pgd_clear(pgd_t * pgd
+  * called on a highmem page.
+  */
+ 
+-#define page_address(page) ({ if (!(page)->virtual) BUG(); (page)->virtual; })
++//#define page_address(page) ({ if (!(page)->virtual) BUG(); (page)->virtual; })
+ #define pages_to_mb(x) ((x) >> (20-PAGE_SHIFT))
+ 
+ extern struct page *pte_mem_map(pte_t pte);
+
+_
