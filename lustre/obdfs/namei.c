@@ -459,7 +459,7 @@ static struct inode *obdfs_new_inode(struct inode *dir, int mode)
 		return ERR_PTR(-ENOMEM);
 	}
 
-	/* Send a hint to the create method on the type of file created */
+	/* Send a hint to the create method on the type of file to create */
 	oa->o_mode = mode;
 	oa->o_valid |= OBD_MD_FLMODE;
 
@@ -480,8 +480,6 @@ static struct inode *obdfs_new_inode(struct inode *dir, int mode)
 		return ERR_PTR(-EIO);
 	}
 
-	inode->i_mode = mode; /* XXX not sure if we need this or iget does it */
-
 	if (!list_empty(&inode->i_dentry)) {
 		CDEBUG(D_INODE, "New inode (%ld) has aliases!\n", inode->i_ino);
 		IOPS(dir, destroy)(IID(dir), oa);
@@ -490,9 +488,8 @@ static struct inode *obdfs_new_inode(struct inode *dir, int mode)
 		EXIT;
 		return ERR_PTR(-EIO);
 	}
-
-	INIT_LIST_HEAD(&OBDFS_LIST(inode));
 	obdo_free(oa);
+	INIT_LIST_HEAD(&OBDFS_LIST(inode));
 
 	EXIT;
 	return inode;

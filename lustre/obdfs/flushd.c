@@ -120,7 +120,7 @@ static int pupdate(void *unused)
 
 	printk("pupdate() activated...\n");
 
-	/* sigstop and sigcont will stop and wakeup kupdate */
+	/* sigstop and sigcont will stop and wakeup pupdate */
 	spin_lock_irq(&tsk->sigmask_lock);
 	sigfillset(&tsk->blocked);
 	siginitsetinv(&tsk->blocked, sigmask(SIGCONT) | sigmask(SIGSTOP));

@@ -130,7 +130,6 @@ static struct super_block * obdfs_read_super(struct super_block *sb,
         struct inode *root = 0; 
 	struct obdfs_sb_info *sbi = (struct obdfs_sb_info *)(&sb->u.generic_sbp);
 	struct obd_device *obddev;
-        int error = 0;
 	char *device = NULL;
 	char *version = NULL;
 	int devno;
@@ -190,45 +189,39 @@ static struct super_block * obdfs_read_super(struct super_block *sb,
 	sbi->osi_ops = sbi->osi_obd->obd_type->typ_ops;
 	
 	sbi->osi_conn.oc_dev = obddev;
-        error  = sbi->osi_ops->o_connect(&sbi->osi_conn);
-	if ( error ) {
+        err = sbi->osi_ops->o_connect(&sbi->osi_conn);
+	if ( err ) {
 		printk("OBDFS: cannot connect to %s\n", device);
-		goto error;
+		goto ERR;
 	}
 
 	INIT_LIST_HEAD(&sbi->osi_list);
 
 	sbi->osi_super = sb;
 
-	error = sbi->osi_ops->o_get_info(&sbi->osi_conn,
-					 strlen("blocksize"), 
-					 "blocksize", 
-					 &scratch, (void *)&blocksize);
-	if ( error ) {
+	err = sbi->osi_ops->o_get_info(&sbi->osi_conn, strlen("blocksize"),
+				       "blocksize", &scratch,
+				       (void *)&blocksize);
+	if ( err ) {
 		printk("Getinfo call to drive failed (blocksize)\n");
-		goto error;
+		goto ERR;
 	}
 
-	error = sbi->osi_ops->o_get_info(&sbi->osi_conn,
-					 strlen("blocksize_bits"), 
-					 "blocksize_bits", 
-					 &scratch, (void *)&blocksize_bits);
-	if ( error ) {
+	err = sbi->osi_ops->o_get_info(&sbi->osi_conn, strlen("blocksize_bits"),
+				       "blocksize_bits", &scratch,
+				       (void *)&blocksize_bits);
+	if ( err ) {
 		printk("Getinfo call to drive failed (blocksize_bits)\n");
-		goto error;
+		goto ERR;
 	}
 
-	error = sbi->osi_ops->o_get_info(&sbi->osi_conn,
-					 strlen("root_ino"), 
-					 "root_ino", 
-					 &scratch, (void *)&root_ino);
-	if ( error ) {
+	err = sbi->osi_ops->o_get_info(&sbi->osi_conn, strlen("root_ino"), 
+				       "root_ino", &scratch, (void *)&root_ino);
+	if ( err ) {
 		printk("Getinfo call to drive failed (root_ino)\n");
-		goto error;
+		goto ERR;
 	}
 	
-
-
         lock_super(sb);
 	
         sb->s_blocksize = blocksize;
@@ -236,17 +229,18 @@ static struct super_block * obdfs_read_super(struct super_block *sb,
         sb->s_magic = OBDFS_SUPER_MAGIC;
         sb->s_op = &obdfs_super_operations;
 
+	/* XXX how to get "sb->s_flags |= MS_RDONLY" here for snapshots? */
+
 	/* make root inode */
 	root = iget(sb, root_ino);
         if (!root || is_bad_inode(root)) {
 	    printk("OBDFS: bad iget for root\n");
 	    sb->s_dev = 0;
-	    error = ENOENT;
+	    err = -ENOENT;
 	    unlock_super(sb);
-	    goto error;
+	    goto ERR;
 	} 
 	
-
 	printk("obdfs_read_super: sbdev %d, rootino: %ld, dev %s, "
 	       "minor: %d, blocksize: %ld, blocksize bits %ld\n", 
 	       sb->s_dev, root->i_ino, device, MINOR(devno), 
@@ -256,7 +250,7 @@ static struct super_block * obdfs_read_super(struct super_block *sb,
 	EXIT;  
         return sb;
 
- error:
+ERR:
 	EXIT;  
 	MOD_DEC_USE_COUNT;
 	if (sbi) {
@@ -295,11 +289,14 @@ static void obdfs_put_super(struct super_block *sb)
 void inline obdfs_from_inode(struct obdo *oa, struct inode *inode)
 {
 	obdo_from_inode(oa, inode);
+
+	CDEBUG(D_INODE, "oinfo flags 0x%08x\n", OBDFS_INFO(inode)->oi_flags);
 	if (obdfs_has_inline(inode)) {
 		struct obdfs_inode_info *oinfo = OBDFS_INFO(inode);
 
+		CDEBUG(D_INODE, "inode %ld has inline data\n", inode->i_ino);
 		memcpy(oa->o_inline, oinfo->oi_inline, OBD_INLINESZ);
-		oa->o_flags |= OBD_FL_INLINEDATA;
+		oa->o_obdflags |= OBD_FL_INLINEDATA;
 	}
 }
 
@@ -319,7 +316,6 @@ void obdfs_read_inode(struct inode *inode)
 {
 	struct obdo *oa;
 	int err;
-	struct obdfs_inode_info *ii;
 
 	ENTRY;
 	oa = obdo_alloc();
@@ -330,9 +326,8 @@ void obdfs_read_inode(struct inode *inode)
 	}
 	oa->o_valid = ~OBD_MD_FLOBDMD;
 	oa->o_id = inode->i_ino;
-	ii = (struct obdfs_inode_info *)(&inode->u.generic_ip);
-	INIT_LIST_HEAD(&ii->oi_pages);
 
+	INIT_LIST_HEAD(&OBDFS_INFO(inode)->oi_pages);
 	
 	err = IOPS(inode, getattr)(IID(inode), oa);
 	if (err) {

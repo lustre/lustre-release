@@ -4,7 +4,8 @@ OBDDIR="`dirname $0`/.."
 . $OBDDIR/demos/config.sh
 
 plog umount $MNTOBD
-plog killall pupd	# stop the OBDFS flush daemon
+killall -STOP pupd	# stop the OBDFS flush daemon (both signals required)
+plog killall pupd
 rmmod obdfs
 
 plog log "CLEANUP/DETACH"

@@ -266,7 +266,7 @@ static inline void obdo_from_iattr(struct obdo *oa, struct iattr *attr)
 
 static __inline__ void obdo_cpy_md(struct obdo *dst, struct obdo *src)
 {
-	CDEBUG(D_INODE, "flags 0x%x\n", src->o_valid);
+	CDEBUG(D_INODE, "src obdo flags 0x%x\n", src->o_valid);
 	if ( src->o_valid & OBD_MD_FLATIME ) 
 		dst->o_atime = src->o_atime;
 	if ( src->o_valid & OBD_MD_FLMTIME ) 
@@ -303,7 +303,7 @@ static __inline__ void obdo_cpy_md(struct obdo *dst, struct obdo *src)
 
 static __inline__ void obdo_from_inode(struct obdo *dst, struct inode *src)
 {
-	CDEBUG(D_INODE, "flags 0x%08x\n", dst->o_valid);
+	CDEBUG(D_INODE, "dst obdo flags 0x%08x\n", dst->o_valid);
 	if ( dst->o_valid & OBD_MD_FLID )
 		dst->o_id = src->i_ino;
 	if ( dst->o_valid & OBD_MD_FLATIME )
@@ -335,7 +335,7 @@ static __inline__ void obdo_from_inode(struct obdo *dst, struct inode *src)
 static __inline__ void obdo_to_inode(struct inode *dst, struct obdo *src)
 {
 
-	CDEBUG(D_INODE, "flags 0x%08x\n", src->o_valid);
+	CDEBUG(D_INODE, "src obdo flags 0x%08x\n", src->o_valid);
 	if ( src->o_valid & OBD_MD_FLID )
 		dst->i_ino = src->o_id;
 	if ( src->o_valid & OBD_MD_FLATIME ) 
