@@ -48,7 +48,7 @@ static struct timer_list waiting_locks_timer;
 static void waiting_locks_callback(unsigned long unused)
 {
         struct list_head *liter, *n;
-        
+
         spin_lock_bh(&waiting_locks_spinlock);
         list_for_each_safe(liter, n, &waiting_locks_list) {
                 struct ldlm_lock *l = list_entry(liter, struct ldlm_lock,
@@ -72,14 +72,14 @@ static int ldlm_add_waiting_lock(struct ldlm_lock *lock)
 {
         unsigned long timeout_rounded;
         ENTRY;
-        
+
         LASSERT(list_empty(&lock->l_pending_chain));
-        
+
         spin_lock_bh(&waiting_locks_spinlock);
         lock->l_callback_timeout = jiffies + (obd_timeout * HZ);
-        
+
         timeout_rounded = round_timeout(lock->l_callback_timeout);
-        
+
         if (timeout_rounded < waiting_locks_timer.expires ||
             !timer_pending(&waiting_locks_timer)) {
                 mod_timer(&waiting_locks_timer, timeout_rounded);
@@ -99,7 +99,7 @@ int ldlm_del_waiting_lock(struct ldlm_lock *lock)
         struct list_head *list_next;
 
         ENTRY;
-        
+
         spin_lock_bh(&waiting_locks_spinlock);
 
         if (list_empty(&lock->l_pending_chain)) {
@@ -230,7 +230,7 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req)
                 }
         }
 
-        /* XXX notice that this lock has no callback data: of course the 
+        /* XXX notice that this lock has no callback data: of course the
            export would be exactly what we may want to use here... */
         lock = ldlm_lock_create(obddev->obd_namespace,
                                 &dlm_req->lock_handle2,
@@ -369,7 +369,7 @@ int ldlm_handle_cancel(struct ptlrpc_request *req)
                 ldlm_reprocess_all(lock->l_resource);
                 LDLM_DEBUG(lock, "server-side cancel handler END");
                 LDLM_LOCK_PUT(lock);
-        } 
+        }
 
         RETURN(0);
 }
@@ -378,17 +378,8 @@ static int ldlm_handle_bl_callback(struct ptlrpc_request *req)
 {
         struct ldlm_request *dlm_req;
         struct ldlm_lock *lock;
-        int rc, do_ast;
+        int do_ast;
         ENTRY;
-
-        OBD_FAIL_RETURN(OBD_FAIL_OSC_LOCK_BL_REPLY, 0);
-
-        rc = lustre_pack_msg(0, NULL, NULL, &req->rq_replen, &req->rq_repmsg);
-        if (rc)
-                RETURN(-ENOMEM);
-        rc = ptlrpc_reply(req->rq_svc, req);
-        if (rc)
-                RETURN(rc);
 
         OBD_FAIL_RETURN(OBD_FAIL_OSC_LOCK_BL_AST, 0);
 
@@ -430,15 +421,9 @@ static int ldlm_handle_cp_callback(struct ptlrpc_request *req)
         struct list_head ast_list = LIST_HEAD_INIT(ast_list);
         struct ldlm_request *dlm_req;
         struct ldlm_lock *lock;
-        int rc;
         ENTRY;
 
-        rc = lustre_pack_msg(0, NULL, NULL, &req->rq_replen, &req->rq_repmsg);
-        if (rc)
-                RETURN(-ENOMEM);
-        rc = ptlrpc_reply(req->rq_svc, req);
-        if (rc)
-                RETURN(rc);
+        OBD_FAIL_RETURN(OBD_FAIL_OSC_LOCK_CP_AST, 0);
 
         dlm_req = lustre_msg_buf(req->rq_reqmsg, 0);
 
@@ -487,14 +472,14 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
 
         rc = lustre_unpack_msg(req->rq_reqmsg, req->rq_reqlen);
         if (rc) {
-                CERROR("lustre_ldlm: Invalid request\n");
-                GOTO(out, rc);
+                CERROR("lustre_ldlm: Invalid request: %d\n", rc);
+                RETURN(rc);
         }
 
         if (req->rq_export == NULL) {
                 CERROR("lustre_dlm: operation %d with missing/invalid export\n",
                        req->rq_reqmsg->opc);
-                GOTO(out, rc = -ENOTCONN);
+                RETURN(-ENOTCONN);
         }
 
         switch (req->rq_reqmsg->opc) {
@@ -502,23 +487,18 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
                 CDEBUG(D_INODE, "blocking ast\n");
                 OBD_FAIL_RETURN(OBD_FAIL_LDLM_BL_CALLBACK, 0);
                 rc = ldlm_handle_bl_callback(req);
-                break;
+                RETURN(rc);
         case LDLM_CP_CALLBACK:
                 CDEBUG(D_INODE, "completion ast\n");
                 OBD_FAIL_RETURN(OBD_FAIL_LDLM_CP_CALLBACK, 0);
                 rc = ldlm_handle_cp_callback(req);
-                break;
-
-        default:
-                rc = ptlrpc_error(req->rq_svc, req);
                 RETURN(rc);
+        default:
+                CERROR("invalid opcode %d\n", req->rq_reqmsg->opc);
+                RETURN(-EINVAL);
         }
 
-        EXIT;
-out:
-        if (rc)
-                RETURN(ptlrpc_error(req->rq_svc, req));
-        return 0;
+        RETURN(0);
 }
 
 
@@ -582,10 +562,11 @@ static int ldlm_setup(struct obd_device *obddev, obd_count len, void *buf)
         if (rc != 0)
                 GOTO(out_dec, rc);
         */
-        ldlm->ldlm_service = ptlrpc_init_svc(LDLM_NEVENTS, LDLM_NBUFS,
-                                             LDLM_BUFSIZE, LDLM_MAXREQSIZE,
-                                             LDLM_REQUEST_PORTAL, LDLM_REPLY_PORTAL, 
-                                             "self", ldlm_callback_handler, "ldlm");
+        ldlm->ldlm_service =
+                ptlrpc_init_svc(LDLM_NEVENTS, LDLM_NBUFS, LDLM_BUFSIZE,
+                                LDLM_MAXREQSIZE, LDLM_REQUEST_PORTAL,
+                                LDLM_REPLY_PORTAL, "self",
+                                ldlm_callback_handler, "ldlm");
         if (!ldlm->ldlm_service)
                 GOTO(out_dec, rc = -ENOMEM);
 
@@ -611,10 +592,10 @@ static int ldlm_setup(struct obd_device *obddev, obd_count len, void *buf)
  out_thread:
         ptlrpc_stop_all_threads(ldlm->ldlm_service);
         ptlrpc_unregister_service(ldlm->ldlm_service);
-        /* 
+        /*
  out_proc:
-        
-         ldlm_proc_cleanup(obddev); 
+
+         ldlm_proc_cleanup(obddev);
         */
  out_dec:
         MOD_DEC_USE_COUNT;
@@ -684,7 +665,7 @@ EXPORT_SYMBOL(ldlm_handle_enqueue);
 EXPORT_SYMBOL(ldlm_handle_cancel);
 EXPORT_SYMBOL(ldlm_handle_convert);
 EXPORT_SYMBOL(ldlm_register_intent);
-EXPORT_SYMBOL(ldlm_unregister_intent); 
+EXPORT_SYMBOL(ldlm_unregister_intent);
 EXPORT_SYMBOL(ldlm_lockname);
 EXPORT_SYMBOL(ldlm_typename);
 EXPORT_SYMBOL(ldlm_handle2lock);

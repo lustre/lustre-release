@@ -853,6 +853,10 @@ struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
                         ldlm_resource_add_lock(res, res->lr_converting.prev,
                                                lock);
                 else {
+                        /* This should never happen, because of the way the
+                         * server handles conversions. */
+                        LBUG();
+
                         res->lr_tmp = &rpc_list;
                         ldlm_grant_lock(lock);
                         res->lr_tmp = NULL;
