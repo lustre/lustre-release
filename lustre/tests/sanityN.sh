@@ -237,6 +237,7 @@ test_11() {
 	mkdir $DIR1/d11
 	multiop $DIR1/d11/f O_c &
 	MULTIPID=$!
+	usleep 200
 	cp -p /bin/ls $DIR1/d11/f
 	$DIR2/d11/f
 	RC=$?
