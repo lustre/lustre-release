@@ -413,15 +413,15 @@ static int libcfs_ioctl(struct inode *inode, struct file *file,
                 portals_debug_mark_buffer(data->ioc_inlbuf1);
                 RETURN(0);
 #if LWT_SUPPORT
-        case IOC_PORTAL_LWT_CONTROL: 
+        case IOC_PORTAL_LWT_CONTROL:
                 err = lwt_control (data->ioc_flags, data->ioc_misc);
                 break;
-                
+
         case IOC_PORTAL_LWT_SNAPSHOT: {
                 cycles_t   now;
                 int        ncpu;
                 int        total_size;
-                
+
                 err = lwt_snapshot (&now, &ncpu, &total_size,
                                     data->ioc_pbuf1, data->ioc_plen1);
                 data->ioc_nid = now;
@@ -437,7 +437,7 @@ static int libcfs_ioctl(struct inode *inode, struct file *file,
                         err = -EFAULT;
                 break;
         }
-                
+
         case IOC_PORTAL_LWT_LOOKUP_STRING:
                 err = lwt_lookup_string (&data->ioc_count, data->ioc_pbuf1,
                                          data->ioc_pbuf2, data->ioc_plen2);
@@ -456,7 +456,7 @@ static int libcfs_ioctl(struct inode *inode, struct file *file,
                         break;
                 }
 
-                if (copy_from_user(&pcfg, (void *)data->ioc_pbuf1, 
+                if (copy_from_user(&pcfg, (void *)data->ioc_pbuf1,
                                    sizeof(pcfg))) {
                         err = -EFAULT;
                         break;
@@ -467,7 +467,7 @@ static int libcfs_ioctl(struct inode *inode, struct file *file,
                 err = libcfs_nal_cmd(&pcfg);
 
                 if (err == 0 &&
-                    copy_to_user((char *)data->ioc_pbuf1, &pcfg, 
+                    copy_to_user((char *)data->ioc_pbuf1, &pcfg,
                                  sizeof (pcfg)))
                         err = -EFAULT;
                 break;
