@@ -26,11 +26,13 @@ libcfs_LDADD := $(EXTRA_KLIBS)
 
 plist_DATA := Info.plist
 
-install-data-hook: fix-kext-ownership
+install_data_hook := fix-kext-ownership
 
 endif
 
 endif
+
+install-data-hook: $(install_data_hook)
 
 EXTRA_DIST := Info.plist
 
