@@ -27,7 +27,7 @@ struct ldlm_namespace *ldlm_namespace_new(struct obd_device *obddev,
                 LBUG();
                 RETURN(NULL);
         }
-        OBD_ALLOC(ns->ns_hash, sizeof(*ns->ns_hash) * RES_HASH_SIZE);
+        ns->ns_hash = vmalloc(sizeof(*ns->ns_hash) * RES_HASH_SIZE);
         if (!ns->ns_hash) {
                 OBD_FREE(ns, sizeof(*ns));
                 LBUG();
@@ -99,7 +99,7 @@ int ldlm_namespace_free(struct ldlm_namespace *ns)
                 }
         }
 
-        OBD_FREE(ns->ns_hash, sizeof(struct list_head) * RES_HASH_SIZE);
+        vfree(ns->ns_hash);
         OBD_FREE(ns, sizeof(*ns));
 
         return ELDLM_OK;
