@@ -4,7 +4,7 @@ config=local.xml
 LMC=../utils/lmc
 
 # create nodes
-${LMC} -o $config --node localhost --net uml1 tcp 
+${LMC} -o $config --node localhost --net localhost tcp 
 
 # configure mds server
 ${LMC} -m $config --format  --node localhost --mds mds1 /tmp/mds1 50000
