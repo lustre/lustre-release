@@ -7,8 +7,8 @@ l-mpm/Documentation/networking/netconsole.txt |   57 +++++++++++
 
 Index: linux-2.6.0-test6/drivers/net/Makefile
 ===================================================================
---- linux-2.6.0-test6.orig/drivers/net/Makefile	2003-10-09 20:52:35.179433584 +0800
-+++ linux-2.6.0-test6/drivers/net/Makefile	2003-10-09 20:53:06.776630080 +0800
+--- linux-2.6.0-test6.orig/drivers/net/Makefile	2003-10-12 13:12:25.000000000 +0800
++++ linux-2.6.0-test6/drivers/net/Makefile	2003-10-12 13:12:36.000000000 +0800
 @@ -109,6 +109,7 @@
  endif
  # Must come after all NICs it might use
@@ -19,8 +19,8 @@ Index: linux-2.6.0-test6/drivers/net/Makefile
  obj-$(CONFIG_DE600) += de600.o
 Index: linux-2.6.0-test6/net/Kconfig
 ===================================================================
---- linux-2.6.0-test6.orig/net/Kconfig	2003-10-09 20:52:27.745563704 +0800
-+++ linux-2.6.0-test6/net/Kconfig	2003-10-09 20:53:06.777629928 +0800
+--- linux-2.6.0-test6.orig/net/Kconfig	2003-10-12 13:12:24.000000000 +0800
++++ linux-2.6.0-test6/net/Kconfig	2003-10-12 13:12:36.000000000 +0800
 @@ -671,6 +671,6 @@
  source "net/bluetooth/Kconfig"
  
@@ -31,8 +31,8 @@ Index: linux-2.6.0-test6/net/Kconfig
  endmenu
 Index: linux-2.6.0-test6/Documentation/networking/netconsole.txt
 ===================================================================
---- linux-2.6.0-test6.orig/Documentation/networking/netconsole.txt	2003-10-09 20:53:06.756633120 +0800
-+++ linux-2.6.0-test6/Documentation/networking/netconsole.txt	2003-10-09 20:53:06.777629928 +0800
+--- linux-2.6.0-test6.orig/Documentation/networking/netconsole.txt	2003-10-12 13:12:36.000000000 +0800
++++ linux-2.6.0-test6/Documentation/networking/netconsole.txt	2003-10-12 13:12:36.000000000 +0800
 @@ -0,0 +1,57 @@
 +
 +started by Ingo Molnar <mingo@redhat.com>, 2001.09.17
@@ -93,8 +93,8 @@ Index: linux-2.6.0-test6/Documentation/networking/netconsole.txt
 +only IP networks, UDP packets and ethernet devices are supported.
 Index: linux-2.6.0-test6/drivers/net/Kconfig
 ===================================================================
---- linux-2.6.0-test6.orig/drivers/net/Kconfig	2003-10-09 20:52:02.395417512 +0800
-+++ linux-2.6.0-test6/drivers/net/Kconfig	2003-10-09 20:53:06.779629624 +0800
+--- linux-2.6.0-test6.orig/drivers/net/Kconfig	2003-10-12 13:12:22.000000000 +0800
++++ linux-2.6.0-test6/drivers/net/Kconfig	2003-10-12 13:12:36.000000000 +0800
 @@ -2444,6 +2444,13 @@
  config NET_POLL_CONTROLLER
  	def_bool KGDB
@@ -111,9 +111,9 @@ Index: linux-2.6.0-test6/drivers/net/Kconfig
  source "drivers/net/pcmcia/Kconfig"
 Index: linux-2.6.0-test6/drivers/net/netconsole.c
 ===================================================================
---- linux-2.6.0-test6.orig/drivers/net/netconsole.c	2003-10-09 20:53:06.756633120 +0800
-+++ linux-2.6.0-test6/drivers/net/netconsole.c	2003-10-09 20:53:06.780629472 +0800
-@@ -0,0 +1,197 @@
+--- linux-2.6.0-test6.orig/drivers/net/netconsole.c	2003-10-12 13:12:36.000000000 +0800
++++ linux-2.6.0-test6/drivers/net/netconsole.c	2003-10-12 18:54:01.775464816 +0800
+@@ -0,0 +1,216 @@
 +/*
 + *  linux/drivers/net/netconsole.c
 + *
@@ -200,6 +200,8 @@ Index: linux-2.6.0-test6/drivers/net/netconsole.c
 +#define MAX_SEND_BUFFER_LEN (MAX_PRINT_CHUNK + 200)
 +
 +static char send_buf[MAX_SEND_BUFFER_LEN];
++static char send_cache[MAX_PRINT_CHUNK];
++static unsigned int send_cache_pos = 0;
 +
 +static void send_msg_buffer(struct netpoll *np, const char *msg, int len)
 +{
@@ -213,45 +215,62 @@ Index: linux-2.6.0-test6/drivers/net/netconsole.c
 +        put_unaligned(htonl(reply.nr), (u32 *) (send_buf + 1));
 +        put_unaligned(htonl(reply.code), (u32 *) (send_buf + 5));
 +        put_unaligned(htonl(reply.info), (u32 *) (send_buf+ 9));
-+		
++
 +	memcpy(send_buf + 1 + sizeof(reply_t), msg, len);
 +	netpoll_send_udp(np, send_buf, len + 1 + sizeof(reply_t));
 +	return;
 +}
-+
 +static void write_msg(struct console *con, const char *msg, unsigned int len)
 +{
-+	int frag, left;
++	unsigned long total_len = send_cache_pos + len;
++	unsigned long left_len = len;
 +	unsigned long flags;
 +
 +	if (!sysrq_mode)
 +		return;
 +	if (!np.dev)
 +		return;
-+	local_irq_save(flags);
-+
-+	for(left = len; left; ) {
-+		frag = min(left, MAX_PRINT_CHUNK);
-+		send_msg_buffer(&np, msg, frag);
-+		msg += frag;
-+		left -= frag;
++	while (total_len >=  MAX_PRINT_CHUNK){
++		unsigned long send_len = MAX_PRINT_CHUNK - send_cache_pos; 
++		memcpy(send_cache + send_cache_pos, msg, send_len);
++		local_irq_save(flags);
++#if 0
++		for(left = send_len; left; ) {
++			frag = min(left, MAX_PRINT_CHUNK);
++			send_msg_buffer(&np, send_buffer, frag);
++			msg += frag;
++			left -= frag;
++		}
++#endif
++		send_msg_buffer(&np, send_cache, MAX_PRINT_CHUNK);
++		send_cache_pos = 0;
++		local_irq_restore(flags);
++		total_len -= MAX_PRINT_CHUNK;
++		left_len -= send_len; 
 +	}
-+
-+	local_irq_restore(flags);
++	if (left_len > 0){
++		memcpy(send_cache + send_cache_pos, msg + (len -left_len), left_len);
++		send_cache_pos += left_len;
++	}
 +}
 +void netconsole_do_sysrq()
 +{
 +        struct pt_regs regs;
-+	char tmp[200];
++	unsigned long flags;	
 +	
 +	handle_sysrq_progress = 1; 
 +	Set_Sysrq_mode();
 +	get_current_regs(&regs);
 +	handle_sysrq((int)req.from, &regs, NULL);
++	
++	if (send_cache_pos != 0){
++		local_irq_save(flags);
++		send_msg_buffer(&np, send_cache, send_cache_pos);
++		send_cache_pos = 0;
++		local_irq_restore(flags);
++	} 
 +
-+	sprintf(tmp, "SYSRQ command %d \n", req.from);
-+	write_msg(NULL, tmp, strlen(tmp));
-+	handle_sysrq_progress = 0; 
++	handle_sysrq_progress = 0;
 +	Clear_Sysrq_mode();
 +}
 +static void rx_hook(struct netpoll *np, int port, char *msg, int len)
@@ -313,8 +332,8 @@ Index: linux-2.6.0-test6/drivers/net/netconsole.c
 +module_exit(cleanup_netconsole);
 Index: linux-2.6.0-test6/arch/i386/kernel/irq.c
 ===================================================================
---- linux-2.6.0-test6.orig/arch/i386/kernel/irq.c	2003-10-09 20:52:27.749563096 +0800
-+++ linux-2.6.0-test6/arch/i386/kernel/irq.c	2003-10-09 20:53:06.781629320 +0800
+--- linux-2.6.0-test6.orig/arch/i386/kernel/irq.c	2003-10-12 13:12:24.000000000 +0800
++++ linux-2.6.0-test6/arch/i386/kernel/irq.c	2003-10-12 13:12:36.000000000 +0800
 @@ -45,6 +45,7 @@
  #include <asm/desc.h>
  #include <asm/irq.h>
@@ -343,8 +362,8 @@ Index: linux-2.6.0-test6/arch/i386/kernel/irq.c
  
 Index: linux-2.6.0-test6/arch/i386/kernel/i386_ksyms.c
 ===================================================================
---- linux-2.6.0-test6.orig/arch/i386/kernel/i386_ksyms.c	2003-10-09 20:52:02.013475576 +0800
-+++ linux-2.6.0-test6/arch/i386/kernel/i386_ksyms.c	2003-10-09 20:56:19.104391816 +0800
+--- linux-2.6.0-test6.orig/arch/i386/kernel/i386_ksyms.c	2003-10-12 13:12:22.000000000 +0800
++++ linux-2.6.0-test6/arch/i386/kernel/i386_ksyms.c	2003-10-12 13:12:36.000000000 +0800
 @@ -34,7 +34,7 @@
  #include <asm/nmi.h>
  #include <asm/edd.h>
@@ -369,8 +388,8 @@ Index: linux-2.6.0-test6/arch/i386/kernel/i386_ksyms.c
  #endif
 Index: linux-2.6.0-test6/include/asm/netconsole.h
 ===================================================================
---- linux-2.6.0-test6.orig/include/asm/netconsole.h	2003-10-09 20:53:06.757632968 +0800
-+++ linux-2.6.0-test6/include/asm/netconsole.h	2003-10-09 20:53:06.782629168 +0800
+--- linux-2.6.0-test6.orig/include/asm/netconsole.h	2003-10-12 13:12:36.000000000 +0800
++++ linux-2.6.0-test6/include/asm/netconsole.h	2003-10-12 13:12:36.000000000 +0800
 @@ -0,0 +1,6 @@
 +extern unsigned int netconsole_sysrq_req;
 +extern void netconsole_do_sysrq();
@@ -380,8 +399,8 @@ Index: linux-2.6.0-test6/include/asm/netconsole.h
 +#endif
 Index: linux-2.6.0-test6/net/core/dev.c
 ===================================================================
---- linux-2.6.0-test6.orig/net/core/dev.c	2003-10-09 20:52:27.748563248 +0800
-+++ linux-2.6.0-test6/net/core/dev.c	2003-10-09 20:53:06.783629016 +0800
+--- linux-2.6.0-test6.orig/net/core/dev.c	2003-10-12 13:12:24.000000000 +0800
++++ linux-2.6.0-test6/net/core/dev.c	2003-10-12 13:12:36.000000000 +0800
 @@ -109,6 +109,7 @@
  #include <linux/wireless.h>		/* Note : will define WIRELESS_EXT */
  #include <net/iw_handler.h>
