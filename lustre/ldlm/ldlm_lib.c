@@ -298,6 +298,11 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         if (rc && rc != EALREADY)
                 GOTO(out, rc);
 
+        /* XXX track this all the time? */
+        if (target->obd_recovering) {
+                target->obd_connected_clients++;
+        }
+
         req->rq_repmsg->handle = conn;
 
         /* If the client and the server are the same node, we will already
@@ -549,8 +554,9 @@ static void process_recovery_queue(struct obd_device *obd)
                 list_del_init(&req->rq_list);
                 spin_unlock_bh(&obd->obd_processing_task_lock);
 
-                DEBUG_REQ(D_ERROR, req, "processing: ");
+                DEBUG_REQ(D_HA, req, "processing: ");
                 (void)obd->obd_recovery_handler(req);
+                obd->obd_reintegrated_requests++;
                 reset_recovery_timer(obd);
                 /* bug 1580: decide how to properly sync() in recovery */
                 //mds_fsync_super(mds->mds_sb);
