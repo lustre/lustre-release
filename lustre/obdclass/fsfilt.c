@@ -6,9 +6,6 @@
 #include <linux/module.h>
 #include <linux/kmod.h>
 #include <linux/slab.h>
-#include <linux/extN_fs.h>
-#include <linux/extN_jbd.h>
-#include <linux/extN_xattr.h>
 #include <linux/kp30.h>
 #include <linux/lustre_fsfilt.h>
 
