@@ -92,6 +92,7 @@ lgmnal_alloc_stxd(lgmnal_data_t *nal_data)
 	LGMNAL_PRINT(LGMNAL_DEBUG_VV, ("total number of send tokens available is [%d]\n", ntx));
 	
 	nstx = ntx/2;
+	nstx = 10;
 
 	LGMNAL_PRINT(LGMNAL_DEBUG_VV, ("Allocated [%d] send tokens to small messages\n", nstx));
 
@@ -290,6 +291,7 @@ lgmnal_alloc_srxd(lgmnal_data_t *nal_data)
 	LGMNAL_PRINT(LGMNAL_DEBUG_VV, ("total number of receive tokens available is [%d]\n", nrx));
 	
 	nsrx = nrx/2;
+	nsrx = 10;
 
 	LGMNAL_PRINT(LGMNAL_DEBUG_VV, ("Allocated [%d] receive tokens to small messages\n", nsrx));
 
