@@ -428,7 +428,7 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
 
         memcpy(&conn, tmp, sizeof conn);
 
-        rc = lustre_pack_reply (req, 0, NULL, NULL);
+        rc = lustre_pack_reply(req, 0, NULL, NULL);
         if (rc)
                 GOTO(out, rc);
 
@@ -549,7 +549,7 @@ int target_handle_disconnect(struct ptlrpc_request *req)
         int rc;
         ENTRY;
 
-        rc = lustre_pack_reply (req, 0, NULL, NULL);
+        rc = lustre_pack_reply(req, 0, NULL, NULL);
         if (rc)
                 RETURN(rc);
 
@@ -606,7 +606,7 @@ static void abort_recovery_queue(struct obd_device *obd)
                 DEBUG_REQ(D_ERROR, req, "aborted:");
                 req->rq_status = -ENOTCONN;
                 req->rq_type = PTL_RPC_MSG_ERR;
-                rc = lustre_pack_reply (req, 0, NULL, NULL);
+                rc = lustre_pack_reply(req, 0, NULL, NULL);
                 if (rc == 0) {
                         ptlrpc_reply(req);
                 } else {
@@ -900,8 +900,8 @@ int target_queue_final_reply(struct ptlrpc_request *req, int rc)
 
         if (rc) {
                 /* Just like ptlrpc_error, but without the sending. */
-                rc = lustre_pack_reply (req, 0, NULL, NULL);
-                LASSERT (rc == 0);              /* XXX handle this */
+                rc = lustre_pack_reply(req, 0, NULL, NULL);
+                LASSERT(rc == 0); /* XXX handle this */
                 req->rq_type = PTL_RPC_MSG_ERR;
         }
 
@@ -1109,6 +1109,5 @@ target_send_reply(struct ptlrpc_request *req, int rc, int fail_id)
 
 int target_handle_ping(struct ptlrpc_request *req)
 {
-        return lustre_pack_reply (req, 0, NULL, NULL);
+        return lustre_pack_reply(req, 0, NULL, NULL);
 }
-
