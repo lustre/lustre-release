@@ -29,7 +29,7 @@ int ptl_init;
 unsigned int portal_subsystem_debug = ~0 - (S_PORTALS | S_QSWNAL | S_SOCKNAL |
                                             S_GMNAL | S_IBNAL);
 unsigned int portal_debug = (D_WARNING | D_DLMTRACE | D_ERROR | D_EMERG | D_HA |
-                             D_RPCTRACE | D_VFSTRACE | D_MALLOC);
+                             D_RPCTRACE | D_VFSTRACE);
 unsigned int portal_cerror = 1;
 unsigned int portal_printk;
 unsigned int portal_stack;
