@@ -12,7 +12,7 @@ export PATH=/sbin:/usr/sbin:$SRCDIR:$PATH
 
 ERROR=
 SRC=/etc
-COUNT=1000
+[ "$COUNT" ] || COUNT=1000
 
 setup_opts $@
 
