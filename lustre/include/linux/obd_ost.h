@@ -34,11 +34,4 @@
 #define LUSTRE_SANOSC_NAME "sanosc"
 #define LUSTRE_SANOST_NAME "sanost"
 
-/* ost/ost_pack.c */
-void ost_pack_niobuf(struct niobuf_remote *nb, __u64 offset, __u32 len,
-                     __u32 flags, __u32 xid);
-void ost_unpack_niobuf(struct niobuf_remote *dst, struct niobuf_remote *src);
-void ost_pack_ioo(struct obd_ioobj *ioo, struct lov_stripe_md *lsm, int bufcnt);
-void ost_unpack_ioo(struct obd_ioobj *dst, struct obd_ioobj *src);
-
 #endif
