@@ -23,7 +23,7 @@
  */
 
 #define EXPORT_SYMTAB
-#define DEBUG_SUBSYSTEM S_RPC /* S_MGMT */
+#define DEBUG_SUBSYSTEM S_MGMT
 #include <linux/module.h>
 #include <linux/init.h>
 
@@ -33,7 +33,7 @@
 #define MGMT_NEVENTS     1024UL
 #define MGMT_NBUFS       128UL
 #define MGMT_BUFSIZE     8192
-#define MGMT_MAXREQSIZE  128
+#define MGMT_MAXREQSIZE  512
 #define MGMT_NUM_THREADS 4
 #define MGMT_DEVICE_NAME "mgmt"
 
@@ -111,7 +111,7 @@ static int mgmt_setup(struct obd_device *obd, obd_count len, void *buf)
         RETURN(0);
 }
 
-static int mgmt_cleanup(struct obd_device *obd, int force, int failover)
+static int mgmt_cleanup(struct obd_device *obd, int flags)
 {
         ENTRY;
         
@@ -126,9 +126,11 @@ static int mgmt_cleanup(struct obd_device *obd, int force, int failover)
 }
 
 static struct obd_ops mgmt_obd_ops = {
-        o_owner:   THIS_MODULE,
-        o_setup:   mgmt_setup,
-        o_cleanup: mgmt_cleanup
+        o_owner:      THIS_MODULE,
+        o_setup:      mgmt_setup,
+        o_cleanup:    mgmt_cleanup,
+        o_connect:    class_connect,
+        o_disconnect: class_disconnect
 };
 
 static int __init mgmt_init(void)
