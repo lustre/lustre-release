@@ -413,7 +413,7 @@ static inline int obd_cancel(struct lustre_handle *conn, __u32 mode,
         struct obd_export *export;
         OBD_CHECK_SETUP(conn, export);
         OBD_CHECK_OP(export->export_obd,cancel);
-        
+
         rc = OBP(export->export_obd, cancel)(conn, mode, lockh);
         RETURN(rc);
 }
@@ -436,7 +436,7 @@ static inline int obdo_has_inline(struct obdo *obdo)
 #ifdef __KERNEL__
 /* support routines */
 extern kmem_cache_t *obdo_cachep;
-static __inline__ struct obdo *obdo_alloc(void)
+static inline struct obdo *obdo_alloc(void)
 {
         struct obdo *oa = NULL;
 
@@ -447,7 +447,7 @@ static __inline__ struct obdo *obdo_alloc(void)
 
         return oa;
 }
-static __inline__ void obdo_free(struct obdo *oa)
+static inline void obdo_free(struct obdo *oa)
 {
         if (!oa)
                 return;
@@ -496,7 +496,7 @@ static inline void obdo_from_iattr(struct obdo *oa, struct iattr *attr)
 static inline void iattr_from_obdo(struct iattr *attr, struct obdo *oa)
 {
         unsigned int ia_valid = oa->o_valid;
-        
+
         memset(attr, 0, sizeof(*attr));
         if (ia_valid & OBD_MD_FLATIME) {
                 attr->ia_atime = oa->o_atime;
@@ -535,7 +535,7 @@ static inline void iattr_from_obdo(struct iattr *attr, struct obdo *oa)
 /* WARNING: the file systems must take care not to tinker with
    attributes they don't manage (such as blocks). */
 
-static __inline__ void obdo_from_inode(struct obdo *dst, struct inode *src)
+static inline void obdo_from_inode(struct obdo *dst, struct inode *src)
 {
         if ( dst->o_valid & OBD_MD_FLID )
                 dst->o_id = src->i_ino;
@@ -565,7 +565,7 @@ static __inline__ void obdo_from_inode(struct obdo *dst, struct inode *src)
                 dst->o_generation = src->i_generation;
 }
 
-static __inline__ void obdo_to_inode(struct inode *dst, struct obdo *src)
+static inline void obdo_to_inode(struct inode *dst, struct obdo *src)
 {
 
         if ( src->o_valid & OBD_MD_FLID )
@@ -598,7 +598,7 @@ static __inline__ void obdo_to_inode(struct inode *dst, struct obdo *src)
 
 #endif 
 
-static __inline__ void obdo_cpy_md(struct obdo *dst, struct obdo *src)
+static inline void obdo_cpy_md(struct obdo *dst, struct obdo *src)
 {
 #ifdef __KERNEL__
         CDEBUG(D_INODE, "src obdo %Ld valid 0x%x, dst obdo %Ld\n",
@@ -644,8 +644,8 @@ static __inline__ void obdo_cpy_md(struct obdo *dst, struct obdo *src)
 
 
 /* returns FALSE if comparison (by flags) is same, TRUE if changed */
-static __inline__ int obdo_cmp_md(struct obdo *dst, struct obdo *src,
-                                  obd_flag compare)
+static inline int obdo_cmp_md(struct obdo *dst, struct obdo *src,
+                              obd_flag compare)
 {
         int res = 0;
 

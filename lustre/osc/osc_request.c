@@ -881,7 +881,7 @@ static void __exit osc_exit(void)
         class_unregister_type(LUSTRE_OSC_NAME);
 }
 
-MODULE_AUTHOR("Peter J. Braam <braam@clusterfs.com>");
+MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre Object Storage Client (OSC) v1.0");
 MODULE_LICENSE("GPL");
 

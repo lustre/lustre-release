@@ -479,7 +479,7 @@ int init_obdfs(void)
 {
         //int err;
 
-        printk(KERN_INFO "OBDFS v0.1, braam@stelias.com\n");
+        printk(KERN_INFO "OBDFS v0.1, info@clusterfs.com\n");
 
         obdfs_sysctl_init();
 

@@ -298,7 +298,7 @@ static void __exit mds_ext3_exit(void)
         }
 }
 
-MODULE_AUTHOR("Cluster File Systems, Inc. <adilger@clusterfs.com>");
+MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre MDS ext3 Filesystem Helper v0.1");
 MODULE_LICENSE("GPL");
 

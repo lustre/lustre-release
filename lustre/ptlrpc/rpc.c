@@ -204,9 +204,9 @@ EXPORT_SYMBOL(lustre_msg_size);
 EXPORT_SYMBOL(lustre_unpack_msg);
 EXPORT_SYMBOL(lustre_msg_buf);
 
-MODULE_AUTHOR("Peter J. Braam <braam@clusterfs.com>");
+MODULE_AUTHOR("Cluster File Systems, Inc <info@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre Request Processor v1.0");
-MODULE_LICENSE("GPL"); 
+MODULE_LICENSE("GPL");
 
 module_init(ptlrpc_init);
 module_exit(ptlrpc_exit);

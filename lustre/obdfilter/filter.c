@@ -1425,7 +1425,7 @@ static struct obd_ops filter_obd_ops = {
 
 static int __init obdfilter_init(void)
 {
-        printk(KERN_INFO "Filtering OBD driver  v0.001, braam@clusterfs.com\n");
+        printk(KERN_INFO "Filtering OBD driver  v0.001, info@clusterfs.com\n");
         return class_register_type(&filter_obd_ops, OBD_FILTER_DEVICENAME);
 }
 
@@ -1434,7 +1434,7 @@ static void __exit obdfilter_exit(void)
         class_unregister_type(OBD_FILTER_DEVICENAME);
 }
 
-MODULE_AUTHOR("Peter J. Braam <braam@clusterfs.com>");
+MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre Filtering OBD driver v1.0");
 MODULE_LICENSE("GPL");
 

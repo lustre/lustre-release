@@ -577,7 +577,7 @@ struct obd_ops lov_obd_ops = {
 static int __init lov_init(void)
 {
         printk(KERN_INFO "Lustre Logical Object Volume driver " LOV_VERSION
-               ", phil@clusterfs.com\n");
+               ", info@clusterfs.com\n");
         return class_register_type(&lov_obd_ops, OBD_LOV_DEVICENAME);
 }
 
@@ -586,7 +586,7 @@ static void __exit lov_exit(void)
         class_unregister_type(OBD_LOV_DEVICENAME);
 }
 
-MODULE_AUTHOR("Phil Schwan <phil@clusterfs.com>");
+MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre Logical Object Volume OBD driver v0.1");
 MODULE_LICENSE("GPL");
 
