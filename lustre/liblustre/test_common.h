@@ -1,6 +1,10 @@
 #ifndef __TEST_COMMON__H
 #define __TEST_COMMON__H
 
+#define ENV_LUSTRE_MNTPNT               "LIBLUSTRE_MOUNT_POINT"
+#define ENV_LUSTRE_MNTTGT               "LIBLUSTRE_MOUNT_TARGET"
+#define ENV_LUSTRE_DUMPFILE             "LIBLUSTRE_DUMPFILE"
+
 extern int exit_on_err;
 
 void t_touch(const char *path);

@@ -301,34 +301,48 @@ extern void __liblustre_cleanup_(void);
 
 void usage(const char *cmd)
 {
-        printf("Usage: %s -s server_name [-c config_file]\n", cmd);
+        printf("Usage: \t%s -s mds_hostname --target mdsnid:/mdsname/profile\n", cmd);
+        printf("       \t%s -s mds_hostname --dumpfile dumpfile\n", cmd);
+        exit(-1);
 }
 
 int main(int argc, char * argv[])
 {
-        int c;
+        int opt_index, c;
         char cmd[1024];
+        static struct option long_opts[] = {
+                {"target", 1, 0, 0},
+                {"dumpfile", 1, 0, 0},
+                {0, 0, 0, 0}
+        };
 
-        setenv("LIBLUSTRE_USE_ZCONF", "no", 1);
+        if (argc < 3)
+                usage(argv[0]);
 
-        while ((c = getopt(argc, argv, "c:s:")) != -1) {
+        while ((c = getopt_long(argc, argv, "s:", long_opts, &opt_index)) != -1) {
                 switch (c) {
-                case 'c':
-                        setenv("LIBLUSTRE_CONFIG_FILE", optarg, 1);
+                case 0: {
+                        if (!optarg[0])
+                                usage(argv[0]);
+
+                        if (!strcmp(long_opts[opt_index].name, "target")) {
+                                setenv(ENV_LUSTRE_MNTTGT, optarg, 1);
+                        } else if (!strcmp(long_opts[opt_index].name, "dumpfile")) {
+                                setenv(ENV_LUSTRE_DUMPFILE, optarg, 1);
+                        } else
+                                usage(argv[0]);
                         break;
+                }
                 case 's':
                         strcpy(mds_server, optarg);
                         break;
                 default:
                         usage(argv[0]);
-                        exit(-1);
                 }
         }
 
-        if (argc < 2 || optind != argc) {
+        if (optind != argc)
                 usage(argv[0]);
-                exit(-1);
-        }
 
         sprintf(cmd, "ssh %s cat /dev/null", mds_server);
         if (system(cmd)) {
