@@ -49,7 +49,7 @@ class Options:
     def init_values(self):
         values = {}
         for opt in self.options:
-            values[self.long(opt)] = self.default(opt)
+            values[self.key(opt)] = self.default(opt)
         return values
 
     def long(self, option):
@@ -57,6 +57,10 @@ class Options:
         if n < 0: return option[0]
         else:     return option[0][0:n]
 
+    def key(self, option):
+        key = self.long(option)
+        return string.replace(key, '-', '_')
+        
     def short(self, option):
         n = string.find(option[0], ',')
         if n < 0: return ''
@@ -102,9 +106,10 @@ class Options:
                     raise error.OptionError("option: '%s' expects integer value, got '%s' "  % (o,a))
             else:
                 val = 1
-            values[self.long(option)] = val
+            values[self.key(option)] = val
         return values
                 
+        
     class option_wrapper:
         def __init__(self, values):
             self.__dict__['values'] = values
