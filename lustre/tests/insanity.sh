@@ -8,7 +8,7 @@ LUSTRE=${LUSTRE:-`dirname $0`/..}
 
 init_test_env $@
 
-. ${CONFIG:=$LUSTRE/tests/cfg/insanity-local.sh}
+. ${CONFIG:=$LUSTRE/tests/cfg/insanity-lmv.sh}
 
 ALWAYS_EXCEPT="10"
 
