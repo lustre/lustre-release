@@ -392,7 +392,8 @@ int echo_commitrw(int cmd, struct obd_export *export, struct obdo *oa,
         LASSERT(oti == NULL || oti->oti_handle == (void *)DESC_PRIV);
 
         for (i = 0; i < objcount; i++, obj++) {
-                int verify = obj->ioo_id != ECHO_PERSISTENT_OBJID;
+                int verify = (rc == 0 &&
+                              obj->ioo_id != ECHO_PERSISTENT_OBJID);
                 int j;
 
                 for (j = 0 ; j < obj->ioo_bufcnt ; j++, r++) {
