@@ -8,10 +8,13 @@
 
 #define DEBUG_SUBSYSTEM S_LOG
 
+#ifndef EXPORT_SYMTAB
+#define EXPORT_SYMTAB
+#endif
+
 #include <linux/fs.h>
 #include <linux/obd_class.h>
 #include <linux/lustre_log.h>
-#include <linux/lustre_mds.h>   /* for LUSTRE_MDC/MDS_NAME */
 #include <portals/list.h>
 #include "llog_internal.h"
 
@@ -142,41 +145,7 @@ out:
 
 }
 
-struct llog_ctxt* push_llog_ioctl_ctxt(struct obd_device *obd, 
-                                       struct obd_run_ctxt *saved)
-{
-        struct llog_ctxt *ctxt = NULL;
- 
-        if (!strcmp(obd->obd_type->typ_name, LUSTRE_MDS_NAME)) {
-                ctxt = obd->obd_llog_ctxt[LLOG_CONFIG_ORIG_CTXT];
-                push_ctxt(saved, &ctxt->loc_exp->exp_obd->obd_ctxt, NULL);
-        }
-        /* FIXME: obdfilter is not ready. */
-#if 0
-        else if (!strcmp(obd->obd_type->typ_name, "obdfilter")) {
-                ctxt = obd->obd_llog_ctxt[LLOG_SIZE_ORIG_CTXT];
-                push_ctxt(saved, &ctxt->loc_exp->exp_obd->obd_ctxt, NULL);
-        }
-#endif
-        else if (!strcmp(obd->obd_type->typ_name, LUSTRE_MDC_NAME)) {
-                ctxt = obd->obd_llog_ctxt[LLOG_CONFIG_REPL_CTXT];
-        }
-
-        return ctxt;
-}
-
-void pop_llog_ioctl_ctxt(struct obd_device *obd,
-                         struct obd_run_ctxt *saved,
-                         struct llog_ctxt *ctxt)
-{
-        if (!strcmp(obd->obd_type->typ_name, LUSTRE_MDS_NAME) ||
-            !strcmp(obd->obd_type->typ_name, "obdfilter"))
-                pop_ctxt(saved, &ctxt->loc_exp->exp_obd->obd_ctxt, NULL);
-
-}
-
-int llog_ioctl(struct llog_ctxt *ctxt, int cmd, 
-               struct obd_ioctl_data *data, void *arg, int len)
+int llog_ioctl(struct llog_ctxt *ctxt, int cmd, struct obd_ioctl_data *data)
 {
         struct llog_logid logid;
         int err = 0;
@@ -226,9 +195,6 @@ int llog_ioctl(struct llog_ctxt *ctxt, int cmd,
                 if (remains <= 0) 
                         CERROR("not enough space for log header info\n");
 
-                err = copy_to_user(arg, data, len);
-                if (err)
-                        err = -EFAULT;
                 GOTO(out_close, err);
         }
         case OBD_IOC_LLOG_PRINT: {
@@ -237,9 +203,6 @@ int llog_ioctl(struct llog_ctxt *ctxt, int cmd,
                 if (err == -LLOG_EEMPTY)
                         err = 0;
 
-                err = copy_to_user(arg, data, len);
-                if (err)
-                        err = -EFAULT;
                 GOTO(out_close, err);
         }
         case OBD_IOC_LLOG_CANCEL: {
@@ -285,3 +248,47 @@ out_close:
 out:
         RETURN(err);
 }
+EXPORT_SYMBOL(llog_ioctl);
+
+int llog_catlog_list(struct obd_device *obd, int count, 
+                     struct obd_ioctl_data *data)
+{
+        int size, i;
+        struct llog_logid *idarray, *id;
+        char name[32] = "CATLIST";
+        char *out;
+        int l, remains, rc = 0;
+        
+        size = sizeof(*idarray) * count;
+        
+        OBD_ALLOC(idarray, size);
+        if (!idarray)
+                RETURN(-ENOMEM);
+        memset(idarray, 0, size);
+        
+        rc = llog_get_cat_list(obd, obd, name, count, idarray);
+        if (rc) {
+                OBD_FREE(idarray, size);
+                RETURN(rc);
+        }
+        
+        out = data->ioc_bulk;
+        remains = data->ioc_inllen1;
+        id = idarray;
+        for (i = 0; i < count; i++) {
+                l = snprintf(out, remains, 
+                             "catalog log: #%llx#%llx#%08x\n",
+                             id->lgl_oid, id->lgl_ogr, id->lgl_ogen);
+                id++;
+                out += l;
+                remains -= l;
+                if (remains <= 0) {
+                        CWARN("not enough memory for catlog list\n");
+                        break;
+                }
+        }
+        OBD_FREE(idarray, size);
+        RETURN(0);
+
+}
+EXPORT_SYMBOL(llog_catlog_list);
