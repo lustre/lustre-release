@@ -5,16 +5,16 @@
  fs/open.c                 |  126 +++++++++++++++--
  fs/proc/base.c            |    3 
  fs/stat.c                 |   26 ++-
- include/linux/dcache.h    |   53 +++++++
+ include/linux/dcache.h    |   54 +++++++
  include/linux/fs.h        |   30 +++-
  include/linux/fs_struct.h |    4 
  kernel/exit.c             |    3 
  kernel/fork.c             |    3 
  kernel/ksyms.c            |    1 
- 13 files changed, 537 insertions(+), 98 deletions(-)
+ 13 files changed, 538 insertions(+), 98 deletions(-)
 
---- kernel-2.4.20-6chaos_18_7/fs/exec.c~vfs_intent_2.4.20_chaos	2003-06-19 11:06:09.000000000 -0600
-+++ kernel-2.4.20-6chaos_18_7-braam/fs/exec.c	2003-07-12 15:14:02.000000000 -0600
+--- kernel-2.4.20-6chaos_18_7/fs/exec.c~vfs_intent_2.4.20_chaos	Thu Jun 19 10:06:09 2003
++++ kernel-2.4.20-6chaos_18_7-shaver/fs/exec.c	Wed Jul 16 04:21:21 2003
 @@ -113,8 +113,9 @@ asmlinkage long sys_uselib(const char * 
  	struct file * file;
  	struct nameidata nd;
@@ -74,8 +74,8 @@
  		goto close_fail;
  
  	retval = binfmt->core_dump(signr, regs, file);
---- kernel-2.4.20-6chaos_18_7/fs/dcache.c~vfs_intent_2.4.20_chaos	2003-05-15 21:14:24.000000000 -0600
-+++ kernel-2.4.20-6chaos_18_7-braam/fs/dcache.c	2003-07-12 15:14:02.000000000 -0600
+--- kernel-2.4.20-6chaos_18_7/fs/dcache.c~vfs_intent_2.4.20_chaos	Thu May 15 20:14:24 2003
++++ kernel-2.4.20-6chaos_18_7-shaver/fs/dcache.c	Wed Jul 16 04:21:21 2003
 @@ -186,6 +186,13 @@ int d_invalidate(struct dentry * dentry)
  		spin_unlock(&dcache_lock);
  		return 0;
@@ -113,8 +113,8 @@
  }
  
  #define do_switch(x,y) do { \
---- kernel-2.4.20-6chaos_18_7/fs/namespace.c~vfs_intent_2.4.20_chaos	2003-05-15 21:14:25.000000000 -0600
-+++ kernel-2.4.20-6chaos_18_7-braam/fs/namespace.c	2003-07-12 15:14:02.000000000 -0600
+--- kernel-2.4.20-6chaos_18_7/fs/namespace.c~vfs_intent_2.4.20_chaos	Thu May 15 20:14:25 2003
++++ kernel-2.4.20-6chaos_18_7-shaver/fs/namespace.c	Wed Jul 16 04:21:21 2003
 @@ -99,6 +99,7 @@ static void detach_mnt(struct vfsmount *
  {
  	old_nd->dentry = mnt->mnt_mountpoint;
@@ -228,8 +228,8 @@
  	path_release(&new_nd);
  out0:
  	unlock_kernel();
---- kernel-2.4.20-6chaos_18_7/fs/namei.c~vfs_intent_2.4.20_chaos	2003-05-15 21:14:25.000000000 -0600
-+++ kernel-2.4.20-6chaos_18_7-braam/fs/namei.c	2003-07-12 15:19:01.000000000 -0600
+--- kernel-2.4.20-6chaos_18_7/fs/namei.c~vfs_intent_2.4.20_chaos	Thu May 15 20:14:25 2003
++++ kernel-2.4.20-6chaos_18_7-shaver/fs/namei.c	Wed Jul 16 04:21:21 2003
 @@ -94,6 +94,13 @@
   * XEmacs seems to be relying on it...
   */
@@ -1031,8 +1031,8 @@
  	if (page) {
  		kunmap(page);
  		page_cache_release(page);
---- kernel-2.4.20-6chaos_18_7/fs/open.c~vfs_intent_2.4.20_chaos	2003-06-24 10:11:51.000000000 -0600
-+++ kernel-2.4.20-6chaos_18_7-braam/fs/open.c	2003-07-12 15:21:35.000000000 -0600
+--- kernel-2.4.20-6chaos_18_7/fs/open.c~vfs_intent_2.4.20_chaos	Tue Jun 24 09:11:51 2003
++++ kernel-2.4.20-6chaos_18_7-shaver/fs/open.c	Wed Jul 16 04:21:21 2003
 @@ -19,6 +19,8 @@
  #include <asm/uaccess.h>
  
@@ -1359,8 +1359,8 @@
  /*
   * Find an empty file descriptor entry, and mark it busy.
   */
---- kernel-2.4.20-6chaos_18_7/fs/stat.c~vfs_intent_2.4.20_chaos	2003-05-15 21:14:25.000000000 -0600
-+++ kernel-2.4.20-6chaos_18_7-braam/fs/stat.c	2003-07-12 15:29:57.000000000 -0600
+--- kernel-2.4.20-6chaos_18_7/fs/stat.c~vfs_intent_2.4.20_chaos	Thu May 15 20:14:25 2003
++++ kernel-2.4.20-6chaos_18_7-shaver/fs/stat.c	Wed Jul 16 04:21:21 2003
 @@ -17,21 +17,23 @@
   * Revalidate the inode. This is required for proper NFS attribute caching.
   */
@@ -1437,8 +1437,8 @@
  			UPDATE_ATIME(inode);
  			error = inode->i_op->readlink(nd.dentry, buf, bufsiz);
  		}
---- kernel-2.4.20-6chaos_18_7/fs/proc/base.c~vfs_intent_2.4.20_chaos	2003-06-23 06:49:00.000000000 -0600
-+++ kernel-2.4.20-6chaos_18_7-braam/fs/proc/base.c	2003-07-12 15:14:02.000000000 -0600
+--- kernel-2.4.20-6chaos_18_7/fs/proc/base.c~vfs_intent_2.4.20_chaos	Mon Jun 23 05:49:00 2003
++++ kernel-2.4.20-6chaos_18_7-shaver/fs/proc/base.c	Wed Jul 16 04:21:21 2003
 @@ -465,6 +465,9 @@ static int proc_pid_follow_link(struct d
  
  	error = inode->u.proc_i.op.proc_get_link(inode, &nd->dentry, &nd->mnt);
@@ -1449,12 +1449,14 @@
  out:
  	return error;
  }
---- kernel-2.4.20-6chaos_18_7/include/linux/dcache.h~vfs_intent_2.4.20_chaos	2003-06-24 11:31:16.000000000 -0600
-+++ kernel-2.4.20-6chaos_18_7-braam/include/linux/dcache.h	2003-07-12 15:14:02.000000000 -0600
-@@ -7,6 +7,44 @@
+--- kernel-2.4.20-6chaos_18_7/include/linux/dcache.h~vfs_intent_2.4.20_chaos	Tue Jun 24 10:31:16 2003
++++ kernel-2.4.20-6chaos_18_7-shaver/include/linux/dcache.h	Wed Jul 16 04:22:30 2003
+@@ -6,6 +6,45 @@
+ #include <asm/atomic.h>
  #include <linux/mount.h>
  #include <linux/kernel.h>
- 
++#include <linux/string.h>
++
 +#define IT_OPEN     0x0001
 +#define IT_CREAT    0x0002
 +#define IT_READDIR  0x0004
@@ -1492,11 +1494,10 @@
 +	it->it_flags = flags;
 +}
 +
-+
+ 
  /*
   * linux/include/linux/dcache.h
-  *
-@@ -96,8 +134,22 @@ struct dentry_operations {
+@@ -96,8 +135,22 @@ struct dentry_operations {
  	int (*d_delete)(struct dentry *);
  	void (*d_release)(struct dentry *);
  	void (*d_iput)(struct dentry *, struct inode *);
@@ -1519,7 +1520,7 @@
  /* the dentry parameter passed to d_hash and d_compare is the parent
   * directory of the entries to be compared. It is used in case these
   * functions need any directory specific information for determining
-@@ -129,6 +181,7 @@ d_iput:		no		no		yes
+@@ -129,6 +182,7 @@ d_iput:		no		no		yes
  					 * s_nfsd_free_path semaphore will be down
  					 */
  #define DCACHE_REFERENCED	0x0008  /* Recently used, don't discard. */
@@ -1527,8 +1528,8 @@
  
  extern spinlock_t dcache_lock;
  
---- kernel-2.4.20-6chaos_18_7/include/linux/fs.h~vfs_intent_2.4.20_chaos	2003-07-12 15:12:12.000000000 -0600
-+++ kernel-2.4.20-6chaos_18_7-braam/include/linux/fs.h	2003-07-12 15:14:02.000000000 -0600
+--- kernel-2.4.20-6chaos_18_7/include/linux/fs.h~vfs_intent_2.4.20_chaos	Wed Jul 16 04:21:20 2003
++++ kernel-2.4.20-6chaos_18_7-shaver/include/linux/fs.h	Wed Jul 16 04:21:21 2003
 @@ -337,6 +337,9 @@ extern void set_bh_page(struct buffer_he
  #define ATTR_MTIME_SET	256
  #define ATTR_FORCE	512	/* Not a change, but a change it */
@@ -1640,8 +1641,8 @@
  extern int page_readlink(struct dentry *, char *, int);
  extern int page_follow_link(struct dentry *, struct nameidata *);
  extern struct inode_operations page_symlink_inode_operations;
---- kernel-2.4.20-6chaos_18_7/include/linux/fs_struct.h~vfs_intent_2.4.20_chaos	2003-06-24 11:31:16.000000000 -0600
-+++ kernel-2.4.20-6chaos_18_7-braam/include/linux/fs_struct.h	2003-07-12 15:14:02.000000000 -0600
+--- kernel-2.4.20-6chaos_18_7/include/linux/fs_struct.h~vfs_intent_2.4.20_chaos	Tue Jun 24 10:31:16 2003
++++ kernel-2.4.20-6chaos_18_7-shaver/include/linux/fs_struct.h	Wed Jul 16 04:21:21 2003
 @@ -37,10 +37,12 @@ static inline void set_fs_root(struct fs
  	write_lock(&fs->lock);
  	old_root = fs->root;
@@ -1668,8 +1669,8 @@
  		dput(old_pwd);
  		mntput(old_pwdmnt);
  	}
---- kernel-2.4.20-6chaos_18_7/kernel/ksyms.c~vfs_intent_2.4.20_chaos	2003-07-12 15:12:25.000000000 -0600
-+++ kernel-2.4.20-6chaos_18_7-braam/kernel/ksyms.c	2003-07-12 15:14:02.000000000 -0600
+--- kernel-2.4.20-6chaos_18_7/kernel/ksyms.c~vfs_intent_2.4.20_chaos	Wed Jul 16 04:21:20 2003
++++ kernel-2.4.20-6chaos_18_7-shaver/kernel/ksyms.c	Wed Jul 16 04:21:21 2003
 @@ -299,6 +299,7 @@ EXPORT_SYMBOL(read_cache_page);
  EXPORT_SYMBOL(set_page_dirty);
  EXPORT_SYMBOL(vfs_readlink);
@@ -1678,8 +1679,8 @@
  EXPORT_SYMBOL(page_readlink);
  EXPORT_SYMBOL(page_follow_link);
  EXPORT_SYMBOL(page_symlink_inode_operations);
---- kernel-2.4.20-6chaos_18_7/kernel/fork.c~vfs_intent_2.4.20_chaos	2003-06-19 11:06:09.000000000 -0600
-+++ kernel-2.4.20-6chaos_18_7-braam/kernel/fork.c	2003-07-12 15:14:02.000000000 -0600
+--- kernel-2.4.20-6chaos_18_7/kernel/fork.c~vfs_intent_2.4.20_chaos	Thu Jun 19 10:06:09 2003
++++ kernel-2.4.20-6chaos_18_7-shaver/kernel/fork.c	Wed Jul 16 04:21:21 2003
 @@ -385,10 +385,13 @@ static inline struct fs_struct *__copy_f
  		fs->umask = old->umask;
  		read_lock(&old->lock);
@@ -1694,8 +1695,8 @@
  			fs->altrootmnt = mntget(old->altrootmnt);
  			fs->altroot = dget(old->altroot);
  		} else {
---- kernel-2.4.20-6chaos_18_7/kernel/exit.c~vfs_intent_2.4.20_chaos	2003-06-19 11:06:09.000000000 -0600
-+++ kernel-2.4.20-6chaos_18_7-braam/kernel/exit.c	2003-07-12 15:14:02.000000000 -0600
+--- kernel-2.4.20-6chaos_18_7/kernel/exit.c~vfs_intent_2.4.20_chaos	Thu Jun 19 10:06:09 2003
++++ kernel-2.4.20-6chaos_18_7-shaver/kernel/exit.c	Wed Jul 16 04:21:21 2003
 @@ -241,11 +241,14 @@ static inline void __put_fs_struct(struc
  {
  	/* No need to hold fs->lock if we are killing it */
