@@ -32,6 +32,9 @@
 #include <linux/obd_class.h>
 #include <linux/obd_lov.h>
 #include <linux/lustre_lib.h>
+#include <linux/lustre_fsfilt.h>
+
+#include "mds_internal.h"
 
 void le_lov_desc_to_cpu (struct lov_desc *ld)
 {
@@ -182,7 +185,8 @@ out:
         return rc;
 }
 
-int mds_get_lovtgts(struct mds_obd *mds, int tgt_count,struct obd_uuid *uuidarray)
+int mds_get_lovtgts(struct mds_obd *mds, int tgt_count,
+                    struct obd_uuid *uuidarray)
 {
         struct obd_run_ctxt saved;
         struct file *f;
