@@ -11,7 +11,6 @@ GetOptions("pid=i" => \$pid,
            "noclass!" => \$noclass,
            "nonet!" => \$nonet);
 
-print "pid: $pid, nodlm $nodlm nonet $nonet trace $trace\n";
 
 
 $subsys->{UNDEFINED} = 0;
@@ -63,10 +62,10 @@ sub extractpid
 {
     $line = shift;
 #    print "$_\n";
-    if ($line =~ m/\(\) ([0-9]*)\+[0-9]*\):/) {
+    if ($line =~ m/\(\) ([0-9]*)\+[0-9]*\)$/) {
 	return $1;
     }
-    if ($line =~ m/\(\) ([0-9]*) \| [0-9]*\+[0-9]*\):/) {
+    if ($line =~ m/\(\) ([0-9]*) \| [0-9]*\+[0-9]*\)$/) {
 	return $1;
     }
 }
@@ -75,9 +74,30 @@ sub extracthostpid
 {
     $line = shift;
 #    print "$_\n";
-    if ($line =~ m/\(\) [0-9]* \| ([0-9]*)\+[0-9]*\):/) {
+    if ($line =~ m/\(\) [0-9]* \| ([0-9]*)\+[0-9]*\)$/) {
 	return $1;
     }
+}
+
+sub entering_rpc
+{
+	$_ = shift;
+	$entering_rpc  = /Handling RPC/;
+	if($entering_rpc) {
+		$oldpid=$pid;
+		$pid = extractpid($_);
+		$leaving_rpc = 0;
+	}
+}
+
+sub leaving_rpc
+{
+	$_ = shift;
+	$leaving_rpc  = /Handled RPC/;
+	if($leaving_rpc) {
+		$pid = $oldpid; 
+		$entering_rpc = 0;
+	}
 }
 
 sub entering
@@ -107,8 +127,13 @@ sub getmask
 sub setcolor
 {
     my $linemask = shift;
+    my $line = shift;
     if ($linemask == $masks->{TRACE}) {
-        print color("yellow on_black");
+        if(leaving($line)){
+           print color("yellow on_black");
+        } else {
+           print color("green on_black");
+        }
     }
     if ($linemask == $masks->{DLMTRACE}) {
         print color("magenta on_black");
@@ -220,7 +245,27 @@ sub unmatched_intents {
     }
 }
 
-while (<STDIN>) {
+sub usage
+{
+   print "Usage : llanalyze LOGFILE\n";
+   exit;
+}
+
+if ($ARGV[0]) {
+    if(!open(LOG, "<$ARGV[0]")){
+      print "Cannot open $ARGV[0]\n";
+      exit;
+    }
+} else {
+    usage();
+}
+$width = 0;
+if ($ARGV[1]) {
+   $width = $ARGV[1];
+}
+
+print "pid: $pid, nodlm $nodlm nonet $nonet trace $trace\n";
+while (<LOG>) {
     $linepid = extractpid($_);
     $linehpid = extracthostpid($_);
     $linemask = getmask($_);
@@ -241,7 +286,7 @@ while (<STDIN>) {
     }
 
     if ( !$pid || $linepid == $pid || $linehpid == $pid) {
-        next if ($rpctrace && $linemask != $masks->{RPCTRACE});
+        next if (!$entering_rpc && $rpctrace && $linemask != $masks->{RPCTRACE});
         next if ($trace && $linemask != $masks->{TRACE});
 
 
@@ -257,12 +302,17 @@ while (<STDIN>) {
                     $linesubsys == $subsys->{SOCKNAL} ||
                     $linesubsys == $subsys->{QSWNAL} ||
                     $linesubsys == $subsys->{GMNAL}));
-
+	if(!$entering_rpc) {entering_rpc($_);}
+	if(!$leaving_rpc) {leaving_rpc($_);}
 
 #        printf "sub/mask: %s - %s\n", getsubsys($_), getmask($_);
-        if (!$silent) { 
-            setcolor($linemask);
-            printf("%s%s", $prefix->{$linepid}, $_);
+        if (!$silent) {
+            setcolor($linemask, $_);
+            my $string = $prefix->{$linepid}.$_;
+            if($width){ 
+               $string = substr($string, 0, $width)."\n";
+            }
+            printf("%s", $string);
             print color("reset");
         }
             #        last if $count++ > 100;
