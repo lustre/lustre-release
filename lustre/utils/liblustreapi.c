@@ -259,7 +259,7 @@ void lov_dump_user_lmm_v1(struct lov_user_md_v1 *lum, char *dname, char *fname,
                         int idx = lum->lmm_objects[i].l_ost_idx;
                         oid = lum->lmm_objects[i].l_object_id;
                         printf("\t%6u\t%14llu\t%#13llx\t%14lld%s\n", idx, oid,
-                               oid, lum->lmm_objects[i].l_object_gr,
+                               oid, (long long)lum->lmm_objects[i].l_object_gr,
                                obdindex == idx ? " *" : "");
                 }
                 printf("\n");

@@ -816,8 +816,8 @@ portals_debug_msg(int subsys, int mask, char *file, const char *fn,
                            current->thread.mode.tt.extern_pid, file, line, fn);
 #else
         msg_nob = snprintf(debug_buf + debug_off + prefix_nob, max_nob,
-                           ":(%s:%d:%s()) ",
-                           file, line, fn);
+                           "%d:(%s:%d:%s()) ",
+                           current->pid, file, line, fn);
 #endif
 
         va_start(ap, format);

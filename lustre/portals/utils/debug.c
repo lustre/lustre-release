@@ -538,6 +538,7 @@ int jt_dbg_modules(int argc, char **argv)
         } *mp, mod_paths[] = {
                 {"portals", "lustre/portals/libcfs"},
                 {"ksocknal", "lustre/portals/knals/socknal"},
+                {"kptlrouter", "lustre/portals/router"},
                 {"lvfs", "lustre/lvfs"},
                 {"obdclass", "lustre/obdclass"},
                 {"llog_test", "lustre/obdclass"},
