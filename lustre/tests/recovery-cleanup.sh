@@ -3,23 +3,29 @@
 set -ex
 
 LUSTRE=${LUSTRE:-`dirname $0`/..}
+LTESTDIR=${LTESTDIR:-"$LUSTRE/../ltest"}
 PATH=$PATH:$LUSTRE/utils:$LUSTRE/tests
 
-. $LUSTRE/../ltest/functional/llite/common/common.sh
+. $LTESTDIR/functional/llite/common/common.sh
+
+# Allow us to override the setup if we already have a mounted system by
+# setting SETUP=" " and CLEANUP=" "
+SETUP=${SETUP:-"setup"}
+CLEANUP=${CLEANUP:-"cleanup"}
 
 PDSH='pdsh -S -w'
 
 # XXX I wish all this stuff was in some default-config.sh somewhere
 MDSNODE=${MDSNODE:-mdev6}
 OSTNODE=${OSTNODE:-mdev7}
-CLIENT=${CLIENTNODE:-mdev8}
+CLIENT=${CLIENT:-mdev8}
 NETWORKTYPE=${NETWORKTYPE:-tcp}
 MOUNTPT=${MOUNTPT:-/mnt/lustre}
-CONFIG=recovery-small.xml
-MDSDEV=/tmp/mds
-OSTDEV=/tmp/ost
-MDSSIZE=100000
-OSTSIZE=100000
+CONFIG=${CONFIG:-recovery-cleanup.xml}
+MDSDEV=${MDSDEV:-/tmp/mds}
+OSTDEV=${OSTDEV:-/tmp/ost}
+MDSSIZE=${MDSSIZE:-100000}
+OSTSIZE=${OSTSIZE:-100000}
 
 do_mds() {
     $PDSH $MDSNODE "PATH=\$PATH:$LUSTRE/utils:$LUSTRE/tests; cd $PWD; $@"
@@ -99,7 +105,7 @@ wait_for_timeout() {
 
 try_to_cleanup() {
     kill -INT $!
-    unmount_client --force
+    unmount_client --force --dump /tmp/client-cleanup-`date +%s`.log
     mount_client --timeout=${TIMEOUT:-5} --recovery_upcall=/bin/true
 }
 
@@ -108,7 +114,8 @@ if [ ! -z "$ONLY" ]; then
     exit $?
 fi
 
-setup
+$SETUP
+
 drop_request "mcreate /mnt/lustre/1" & wait_for_timeout
 try_to_cleanup
 
@@ -131,4 +138,4 @@ try_to_cleanup
 drop_request "munlink /mnt/lustre/link1" & wait_for_timeout
 try_to_cleanup
 
-cleanup
+$CLEANUP '--dump /tmp/`hostname`-cleanup.log'
