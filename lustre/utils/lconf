@@ -477,6 +477,32 @@ def block_dev(dev, size, fstype, format):
         mkfs(fstype, dev)
     return dev
 
+def get_local_address(net_type):
+    """Return the local address for the network type."""
+    local = ""
+    if net_type == 'tcp':
+        # host `hostname`
+        host = socket.gethostname()
+        local = socket.gethostbyname(host)
+    elif net_type == 'elan':
+        # awk '/NodeId/ { print $2 }' '/proc/elan/device0/position'
+        try:
+            fp = open('/proc/elan/device0/position', 'r')
+            lines = fp.readlines()
+            fp.close()
+            for l in lines:
+                a = string.split(l)
+                if a[0] == 'NodeId':
+                    local = a[1]
+                    break
+        except IOError, e:
+            log(e)
+    elif net_type == 'gm':
+        fixme("automatic local address for GM")
+    return local
+        
+        
+
 # ============================================================
 # Classes to prepare and cleanup the various objects
 #
@@ -555,6 +581,8 @@ class Network(Module):
         self.port = int(getText(node, 'port', 0))
         self.send_buf = int(getText(node, 'send_buf', 0))
         self.read_buf = int(getText(node, 'read_buf', 0))
+        if not self.nid or self.nid == '*':
+            self.nid = get_local_address(self.net_type)
 
         self.add_module('portals')
         if self.net_type == 'tcp':
@@ -590,7 +618,6 @@ class LDLM(Module):
     def __init__(self,node):
         Module.__init__(self, 'LDLM', node)
         self.add_module('ldlm')
-        self.add_module('extN') # yuck, fix dupe handling and move this
     def prepare(self):
         self.info()
         lctl.newdev(attach="ldlm %s %s" % (self.name, self.uuid),
@@ -634,6 +661,8 @@ class MDS(Module):
         self.devname, self.size = getDevice(node)
         self.fstype = getText(node, 'fstype')
         self.format = getText(node, 'autoformat', "no")
+        if self.fstype == 'extN':
+            self.add_module('extN') 
         self.add_module('mds')
         self.add_module('mds_%s' % (self.fstype))
             
@@ -681,6 +710,8 @@ class OBD(Module):
         self.devname, self.size = getDevice(node)
         self.fstype = getText(node, 'fstype')
         self.format = getText(node, 'autoformat', 'yes')
+        if self.fstype == 'extN':
+            self.add_module('extN') 
         self.add_module(self.obdtype)
 
     # need to check /proc/mounts and /etc/mtab before
