@@ -451,7 +451,6 @@ set_peer(char *hostname, struct lustre_mount_data *lmd)
                 return 1;
 
         case IIBNAL:
-        case VIBNAL:
                 if (lmd->lmd_server_nid != PTL_NID_ANY)
                         break;
                 if (ptl_parse_nid (&nid, hostname) != 0) {
@@ -465,6 +464,7 @@ set_peer(char *hostname, struct lustre_mount_data *lmd)
         case SOCKNAL:
         case TCPNAL:
         case OPENIBNAL:
+        case VIBNAL:
         case RANAL:
                 if (lmd->lmd_server_nid == PTL_NID_ANY) {
                         if (ptl_parse_nid (&nid, hostname) != 0) {
