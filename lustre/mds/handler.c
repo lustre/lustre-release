@@ -1627,7 +1627,6 @@ static int mdt_obj_create(struct ptlrpc_request *req)
         ENTRY;
        
         DEBUG_REQ(D_HA, req, "create remote object");
-
         parent_inode = mds->mds_unnamed_dir->d_inode;
 
         body = lustre_swab_reqbuf(req, 0, sizeof(*body),
@@ -1650,17 +1649,19 @@ static int mdt_obj_create(struct ptlrpc_request *req)
         uc.luc_uid = body->oa.o_uid;
         uc.luc_fsuid = body->oa.o_uid;
         uc.luc_fsgid = body->oa.o_gid;
+
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, &uc);
-        
         repbody = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*repbody));
 
         /* in REPLAY case inum should be given (client or other MDS fills it) */
         if (body->oa.o_id && ((body->oa.o_flags & OBD_FL_RECREATE_OBJS) ||
             (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY))) {
-                /* this is re-create request from MDS holding directory name.
-                 * we have to lookup given ino/gen first. if it exists
-                 * (good case) then there is nothing to do. if it does not then
-                 * we have to recreate it */
+                /*
+                 * this is re-create request from MDS holding directory name.
+                 * we have to lookup given ino/gen first. if it exists (good
+                 * case) then there is nothing to do. if it does not then we
+                 * have to recreate it.
+                 */
                 id_ino(&id) = body->oa.o_id;
                 id_gen(&id) = body->oa.o_generation;
  
@@ -1691,6 +1692,12 @@ static int mdt_obj_create(struct ptlrpc_request *req)
 
                         repbody->oa.o_fid = id_fid(&sid);
                         repbody->oa.o_mds = id_group(&sid);
+                        LASSERT(id_fid(&sid) != 0);
+
+                        /* 
+                         * here we could use fid passed in body->oa.o_fid and
+                         * thus avoid mds_read_inode_sid().
+                         */
                         cr_inum = new->d_inode->i_ino;
                         GOTO(cleanup, rc = 0);
                 }
@@ -1727,15 +1734,16 @@ repeat:
         if ((lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) ||
             (body->oa.o_flags & OBD_FL_RECREATE_OBJS)) {
                 LASSERT(body->oa.o_id != 0);
+                dp.p_inum = body->oa.o_id;
                 DEBUG_REQ(D_HA, req, "replay create obj %lu/%lu",
                           (unsigned long)body->oa.o_id,
                           (unsigned long)body->oa.o_generation);
-                dp.p_inum = body->oa.o_id;
         }
 
         rc = vfs_mkdir(parent_inode, new, body->oa.o_mode);
         if (rc == 0) {
-                if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
+                if ((body->oa.o_flags & OBD_FL_RECREATE_OBJS) ||
+                    lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
                         new->d_inode->i_generation = body->oa.o_generation;
                         mark_inode_dirty(new->d_inode);
                         
@@ -1764,13 +1772,14 @@ repeat:
                 repbody->oa.o_generation = new->d_inode->i_generation;
                 repbody->oa.o_valid |= OBD_MD_FLID | OBD_MD_FLGENER | OBD_MD_FID;
 
-                if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
-                        /* building lustre_id on passed @oa. */
+                if ((body->oa.o_flags & OBD_FL_RECREATE_OBJS) ||
+                    lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
                         id_group(&id) = mds->mds_num;
                 
                         LASSERT(body->oa.o_fid != 0);
                         id_fid(&id) = body->oa.o_fid;
 
+                        LASSERT(body->oa.o_id != 0);
                         id_ino(&id) = repbody->oa.o_id;
                         id_gen(&id) = repbody->oa.o_generation;
                 
@@ -1783,6 +1792,10 @@ repeat:
                          */
                         mds_set_last_fid(obd, id_fid(&id));
                 } else {
+                        /*
+                         * allocate new sid, as object is created from scratch
+                         * and this is not replay.
+                         */
                         down(&new->d_inode->i_sem);
                         rc = mds_alloc_inode_sid(obd, new->d_inode, handle, &id);
                         up(&new->d_inode->i_sem);

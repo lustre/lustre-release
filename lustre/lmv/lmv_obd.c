@@ -1588,7 +1588,8 @@ int lmv_obd_create_single(struct obd_export *exp, struct obdo *oa,
         LASSERT(ea == NULL);
         LASSERT(oa->o_mds < lmv->desc.ld_tgt_count);
 
-        rc = obd_create(lmv->tgts[oa->o_mds].ltd_exp, oa, &obj_mdp, oti);
+        rc = obd_create(lmv->tgts[oa->o_mds].ltd_exp,
+                        oa, &obj_mdp, oti);
 
         RETURN(rc);
 }

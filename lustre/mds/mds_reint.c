@@ -800,9 +800,18 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                                 oa->o_fid = id_fid(rec->ur_id2);
                                 oa->o_generation = id_gen(rec->ur_id2);
                                 oa->o_flags |= OBD_FL_RECREATE_OBJS;
+
+                                /* 
+                                 * fid should be defined here. It should be
+                                 * passedfrom client.
+                                 */
+                                LASSERT(oa->o_fid != 0);
                         }
 
-                        /* before obd_create() is called, o_fid is not known. */
+                        /* 
+                         * before obd_create() is called, o_fid is not known if
+                         * this is not recovery of cause.
+                         */
                         rc = obd_create(mds->mds_lmv_exp, oa, NULL, NULL);
                         if (rc) {
                                 CERROR("can't create remote inode: %d\n", rc);
@@ -812,6 +821,8 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                                 obdo_free(oa);
                                 GOTO(cleanup, rc);
                         }
+
+                        LASSERT(oa->o_fid != 0);
                         
                         /* now, add new dir entry for it */
                         handle = fsfilt_start(obd, dir, FSFILT_OP_MKDIR, NULL);
