@@ -126,15 +126,6 @@ void select_timer_block(when until)
         timeout_pointer=&timeout;
     } else timeout_pointer=0;
 
-
-    /* FIXME
-     * temporarily add timer for endless waiting problem.
-     * FIXME
-     */
-    timeout.tv_sec = 1;
-    timeout.tv_usec = 0;
-    timeout_pointer=&timeout;
-
     FD_ZERO(&fds[0]);
     FD_ZERO(&fds[1]);
     FD_ZERO(&fds[2]);

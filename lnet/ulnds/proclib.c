@@ -43,24 +43,24 @@
 /* the following functions are stubs to satisfy the nal definition
    without doing anything particularily useful*/
 
-static int nal_write(nal_cb_t *nal,
-                     void *private,
-                     user_ptr dst_addr,
-                     void *src_addr,
-                     size_t len)
+static ptl_err_t nal_write(nal_cb_t *nal,
+                           void *private,
+                           user_ptr dst_addr,
+                           void *src_addr,
+                           size_t len)
 {
     memcpy(dst_addr, src_addr, len);
-    return 0;
+    return PTL_OK;
 }
 
-static int nal_read(nal_cb_t * nal,
-                    void *private,
-		    void *dst_addr,
-		    user_ptr src_addr,
-		    size_t len)
+static ptl_err_t nal_read(nal_cb_t * nal,
+                          void *private,
+                          void *dst_addr,
+                          user_ptr src_addr,
+                          size_t len)
 {
 	memcpy(dst_addr, src_addr, len);
-	return 0;
+	return PTL_OK;
 }
 
 static void *nal_malloc(nal_cb_t *nal,
