@@ -560,8 +560,10 @@ int mds_init_ucred(struct lvfs_ucred *ucred, struct mds_req_sec_desc *rsd)
 
                 ginfo = ucred->luc_ginfo;
                 while (cur < rsd->rsd_ngroups) {
-                        if (groups_search(ginfo, rsd->rsd_groups[cur]))
-                                GROUP_AT(gnew, set++) = rsd->rsd_groups[cur];
+                        if (groups_search(ginfo, rsd->rsd_groups[cur])) {
+                                GROUP_AT(gnew, set) = rsd->rsd_groups[cur];
+				set++;
+			}
                         cur++;
                 }
                 gnew->ngroups = set;
