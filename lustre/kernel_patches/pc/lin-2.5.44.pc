@@ -1,6 +1,7 @@
 arch/um/kernel/mem.c
 fs/Config.help
 fs/Config.in
+fs/dcache.c
 fs/driverfs/inode.c
 fs/ext3/file.c
 fs/ext3/ialloc.c
@@ -16,6 +17,8 @@ fs/Makefile
 fs/mbcache.c
 fs/namei.c
 fs/nfsd/vfs.c
+fs/open.c
+fs/stat.c
 fs/sysfs/inode.c
 include/linux/dcache.h
 include/linux/ext3_fs.h
