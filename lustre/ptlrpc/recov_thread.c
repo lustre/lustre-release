@@ -357,6 +357,9 @@ static int log_commit_thread(void *arg)
                         llcd_put(llcd);
         }
 
+        spin_lock(&lcm->lcm_thread_lock);
+        list_del(&lcd->lcd_lcm_list);
+        spin_unlock(&lcm->lcm_thread_lock);
         OBD_FREE(lcd, sizeof(*lcd));
 
         spin_lock(&lcm->lcm_thread_lock);
