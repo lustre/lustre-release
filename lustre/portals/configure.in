@@ -13,7 +13,6 @@ AM_INIT_AUTOMAKE(portals, builtin([esyscmd], [sed -ne '/.*define IVERSION /{ s/.
 
 sinclude(build.m4)
 sinclude(archdep.m4)
-sinclude(portalsconf.m4)
 
 if test x$enable_inkernel = xyes ; then
 cp Kernelenv.mk Kernelenv.in
