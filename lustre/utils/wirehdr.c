@@ -4,7 +4,9 @@
 #include <linux/lustre_idl.h>
 
 #undef LASSERT
+#undef LASSERTF
 #define LASSERT(cond) if (!(cond)) { printf("failed " #cond "\n"); ret = 1; }
+#define LASSERTF(cond, fmt, arg) if (!(cond)) { printf("failed '" #cond "'" fmt, arg);ret = 1;}
 
 int ret;
 
