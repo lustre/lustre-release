@@ -15,6 +15,7 @@ tbd  Cluster File Systems, Inc. <info@clusterfs.com>
 	- correct journal credits calculated for CANCEL_UNLINK_LOG (2931)
 	- hold dentry reference for closed log files for unlink (2325)
 	- reserve space for all logs during transactions (2059)
+	- don't evict page beyond end of stripe extent (2925)
 
 2004-03-04  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.0

@@ -312,7 +312,7 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
         int rc;
 
         /* NB 1 request reference will be taken away by ll_intent_lock()
-         * when I return 
+         * when I return
          * Note: libsysio require the inode must be generated here
          */
         if ((it->it_op & IT_CREAT) || !it_disposition(it, DISP_LOOKUP_NEG)) {
@@ -352,7 +352,7 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
                         rc = llu_glimpse_size(inode, &lvb);
                         if (rc) {
                                 I_RELE(inode);
-                                RETURN(-EIO);
+                                RETURN(rc);
                         }
                         lli->lli_st_size = lvb.lvb_size;
                 }

@@ -368,8 +368,15 @@ void ll_pgcache_remove_extent(struct inode *inode, struct lov_stripe_md *lsm,
          * lockers handled correctly.  fixes from bug 20 will make it
          * more efficient by associating locks with pages and with
          * batching writeback under the lock explicitly. */
-        for (i = start, j = start % count ; i <= end;
+        for (i = start, j = start % count; i <= end;
              j++, i++, tmpex.l_extent.start += PAGE_CACHE_SIZE) {
+                if (j == count) {
+                        CDEBUG(D_PAGE, "skip index %lu to %lu\n", i, i + skip);
+                        i += skip;
+                        j = 0;
+                        if (i > end)
+                                break;
+                }
                 LASSERTF(tmpex.l_extent.start< lock->l_policy_data.l_extent.end,
                          LPU64" >= "LPU64" start %lu i %lu end %lu\n",
                          tmpex.l_extent.start, lock->l_policy_data.l_extent.end,
@@ -389,8 +396,9 @@ void ll_pgcache_remove_extent(struct inode *inode, struct lov_stripe_md *lsm,
 
                 page = find_get_page(inode->i_mapping, i);
                 if (page == NULL)
-                        goto next_index;
-                LL_CDEBUG_PAGE(D_PAGE, page, "locking page\n");
+                        continue;
+                LL_CDEBUG_PAGE(D_PAGE, page, "lock page idx %lu ext "LPU64"\n",
+                               i, tmpex.l_extent.start);
                 lock_page(page);
 
                 /* page->mapping to check with racing against teardown */
@@ -425,13 +433,11 @@ void ll_pgcache_remove_extent(struct inode *inode, struct lov_stripe_md *lsm,
                 }
                 unlock_page(page);
                 page_cache_release(page);
-
-        next_index:
-                if (j == count) {
-                        i += skip;
-                        j = 0;
-                }
         }
+        LASSERTF(tmpex.l_extent.start <= lock->l_policy_data.l_extent.end,
+                 "loop too long "LPU64" != "LPU64" start %lu i %lu end %lu\n",
+                 tmpex.l_extent.start, lock->l_policy_data.l_extent.end,
+                 start, i, end);
         EXIT;
 }
 
@@ -615,9 +621,9 @@ int ll_glimpse_size(struct inode *inode, struct ost_lvb *lvb)
                          LCK_PR, &flags, ll_extent_lock_callback,
                          ldlm_completion_ast, ll_glimpse_callback, inode,
                          sizeof(*lvb), lustre_swab_ost_lvb, &lockh);
-        if (rc > 0) {
+        if (rc != 0) {
                 CERROR("obd_enqueue returned rc %d, returning -EIO\n", rc);
-                RETURN(-EIO);
+                RETURN(rc > 0 ? -EIO : rc);
         }
 
         lvb->lvb_size = lov_merge_size(lli->lli_smd, 0);
@@ -810,10 +816,9 @@ static ssize_t ll_file_write(struct file *file, const char *buf, size_t count,
         retval = generic_file_write(file, buf, count, ppos);
 
 out:
-        /* XXX errors? */
-        lprocfs_counter_add(ll_i2sbi(inode)->ll_stats, LPROC_LL_WRITE_BYTES,
-                            retval);
         ll_extent_unlock(fd, inode, lsm, LCK_PW, &lockh);
+        lprocfs_counter_add(ll_i2sbi(inode)->ll_stats, LPROC_LL_WRITE_BYTES,
+                            retval > 0 ? retval : 0);
         RETURN(retval);
 }
 
@@ -1255,6 +1260,7 @@ int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
         struct inode *inode = dentry->d_inode;
         struct ll_inode_info *lli;
         struct lov_stripe_md *lsm;
+        int rc;
         ENTRY;
 
         if (!inode) {
@@ -1273,7 +1279,7 @@ int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
                 struct ll_sb_info *sbi = ll_i2sbi(dentry->d_inode);
                 struct ll_fid fid;
                 unsigned long valid = 0;
-                int rc, ealen = 0;
+                int ealen = 0;
 
                 if (S_ISREG(inode->i_mode)) {
                         ealen = obd_size_diskmd(sbi->ll_osc_exp, NULL);
@@ -1301,12 +1307,11 @@ int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
          * the file */
         {
                 struct ost_lvb lvb;
-                ldlm_error_t err;
 
-                err = ll_glimpse_size(inode, &lvb);
+                rc = ll_glimpse_size(inode, &lvb);
                 inode->i_size = lvb.lvb_size;
         }
-        RETURN(0);
+        RETURN(rc);
 }
 
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
