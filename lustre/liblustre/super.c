@@ -87,6 +87,14 @@ void llu_update_inode(struct inode *inode, struct mds_body *body,
                 lli->lli_st_size = body->size;
         if (body->valid & OBD_MD_FLBLOCKS)
                 lli->lli_st_blocks = body->blocks;
+
+        /* fillin fid */
+        if (body->valid & OBD_MD_FLID)
+                lli->lli_fid.id = body->ino;
+        if (body->valid & OBD_MD_FLGENER)
+                lli->lli_fid.generation = body->generation;
+        if (body->valid & OBD_MD_FLTYPE)
+                lli->lli_fid.f_type = body->mode & S_IFMT;
 }
 
 void obdo_to_inode(struct inode *dst, struct obdo *src, obd_flag valid)
@@ -239,7 +247,7 @@ static int llu_iop_lookup(struct pnode *pnode,
         struct mds_body *body;
         unsigned long valid;
         char *pname;
-        int rc;
+        int rc, easize;
         struct ll_read_inode2_cookie lic = {.lic_body = NULL, .lic_lsm = NULL};
 
         /* the mount root inode have no name, so don't call
@@ -263,9 +271,16 @@ static int llu_iop_lookup(struct pnode *pnode,
         pname[name->len] = 0;
 
         valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLSIZE;
+
+        /* FIXME before getattr_name, we don't know whether
+         * the inode we are finding is regular or not, so here
+         * we blindly require server feed in EA data */
+        easize = obd_size_diskmd(&sbi->ll_osc_conn, NULL);
+        valid |= OBD_MD_FLEASIZE;
+
         rc = mdc_getattr_name(&sbi->ll_mdc_conn, fid,
                               pname, name->len + 1,
-                              valid, 0, &request);
+                              valid, easize, &request);
         if (rc < 0) {
                 CERROR("mdc_getattr_name: %d\n", rc);
                 rc = -ENOENT;
@@ -309,10 +324,12 @@ static int llu_iop_lookup(struct pnode *pnode,
         }
 
         llu_update_inode(*inop, body, lic.lic_lsm);
-                
-        rc = llu_inode_getattr(*inop, llu_i2info(*inop)->lli_smd, NULL);
-        if (rc)
-                _sysio_i_gone(*inop);
+
+        if (llu_i2info(*inop)->lli_smd) {
+                rc = llu_inode_getattr(*inop, llu_i2info(*inop)->lli_smd, NULL);
+                if (rc)
+                        _sysio_i_gone(*inop);
+        }
 
 out:
         ptlrpc_req_finished(request);
