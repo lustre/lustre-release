@@ -395,7 +395,8 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
 
         /* NB 1 request reference will be taken away by ll_intent_lock()
          * when I return */
-        if (!it_disposition(it, DISP_LOOKUP_NEG)) {
+        /* XXX libsysio require the inode must be generated here XXX */
+        if ((it->it_op & IT_CREAT) || !it_disposition(it, DISP_LOOKUP_NEG)) {
                 struct lustre_md md;
                 struct llu_inode_info *lli;
                 ENTRY;
@@ -439,6 +440,8 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
                 ENTRY;
         }
 
+        if (inode && (it->it_op & (IT_OPEN | IT_GETATTR)))
+                LL_SAVE_INTENT(inode, it);
 /*
         dentry->d_op = &ll_d_ops;
         ll_set_dd(dentry);
