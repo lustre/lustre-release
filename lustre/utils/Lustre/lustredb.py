@@ -298,7 +298,7 @@ class LustreDB_LDAP(LustreDB):
             # user and pw only needed if modifying db
             self.l.bind_s(self._user, self._pw, ldap.AUTH_SIMPLE);
         except ldap.LDAPError, e:
-            raise Lustre.LconfError('Unable to connection to ldap server')
+            raise Lustre.LconfError('Unable to connect to ldap server')
 
         try:
             self._name, self._attrs = self.l.search_s(self._base,
