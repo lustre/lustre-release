@@ -9,3 +9,6 @@ TAGS
 openunlink
 testreq
 truncate
+directio
+openme
+writeme
