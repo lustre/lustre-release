@@ -31,6 +31,7 @@ build_obj_list ../mdc libmdc.a
 build_obj_list ../ldlm libldlm.a
 build_obj_list ../ptlrpc libptlrpc.a
 build_obj_list ../obdclass liblustreclass.a
+build_obj_list ../lvfs liblvfs.a
 
 # portals components libs
 build_obj_list ../portals/utils libptlctl.a
