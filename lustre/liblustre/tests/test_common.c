@@ -181,6 +181,18 @@ int t_open(const char *path)
         return fd;
 }
 
+int t_opendir(const char *path)
+{
+        int fd;
+
+        fd = open(path, O_RDONLY);
+        if (fd < 0) {
+                printf("opendir(%s) error: %s\n", path, strerror(errno));
+                EXIT_RET(fd);
+        }
+        return fd;
+}
+
 void t_close(int fd)
 {
         int rc;
@@ -300,4 +312,17 @@ void t_ls(int fd, char *buf, int size)
 		printf("getdents error %d\n", rc);
 		EXIT(-1);
 	}
+}
+
+char *safe_strncpy(char *dst, char *src, int max_size)
+{
+       int src_size;
+       src_size=strlen(src);
+       if (src_size >= max_size) {
+	 src_size=max_size-1;
+       }
+       memcpy(dst, src, src_size);
+       dst[src_size]=0;
+
+       return(dst);
 }

@@ -1,45 +1,53 @@
 ## Liblustre excecutables & libraries Makefile
-DEFS=
 
-CFLAGS := -g -Wall -I$(top_srcdir)/utils -I$(top_srcdir)/portals/include \
-          -I$(top_srcdir)/portals/unals -I$(SYSIO)/include \
-          -I/opt/lam/include -L/opt/lam/lib
-
-KFLAGS:=
-CPPFLAGS = $(HAVE_EFENCE) -D_LARGEFILE64_SOURCE=1
-LIBS = $(LIBEFENCE)
-
+AM_CPPFLAGS = -I$(SYSIO)/include -I/opt/lam/include $(LLCPPFLAGS) -I$(top_srcdir)/portals/unals
+AM_CFLAGS = $(LLCFLAGS)
+LIBS = $(LIBEFENCE) $(LIBREADLINE)
 
 LLIB_EXEC= ../liblustre.a -lpthread
 
+if LIBLUSTRE
 noinst_LIBRARIES = libtestcommon.a
-libtestcommon_a_SOURCES = test_common.c
+def_tests = echo_test sanity recovery_small replay_single replay_ost_single
 
-bin_PROGRAMS = echo_test sanity recovery_small replay_single test_lock_cancel \
-    replay_ost_single
+if MPITESTS
+bin_PROGRAMS = $(def_tests) test_lock_cancel
+else
+bin_PROGRAMS = $(def_tests)
+endif
+endif # LIBLUSTRE
+
+libtestcommon_a_SOURCES = test_common.c test_common.h
 
 echo_test_SOURCES = echo_test.c  ../../utils/parser.c ../../utils/obd.c ../../utils/lustre_cfg.c
+echo_test_CFLAGS = $(LL_CFLAGS)
 echo_test_LDADD = ../liblsupport.a $(LIBREADLINE) -lpthread 
-echo_test_DEPENDENCIES=$(top_srcdir)/liblustre/liblsupport.a
+echo_test_DEPENDENCIES=$(top_builddir)/liblustre/liblsupport.a
 
 sanity_SOURCES = sanity.c
+sanity_CFLAGS = $(LL_CFLAGS)
 sanity_LDADD := ./libtestcommon.a $(LLIB_EXEC)
-sanity_DEPENDENCIES = $(top_srcdir)/liblustre/liblustre.a ./libtestcommon.a
+sanity_DEPENDENCIES = $(top_builddir)/liblustre/liblustre.a ./libtestcommon.a
 
 recovery_small_SOURCES = recovery_small.c
+recovery_small_CFLAGS = $(LL_CFLAGS)
 recovery_small_LDADD := ./libtestcommon.a $(LLIB_EXEC) 
-recovery_small_DEPENDENCIES = $(top_srcdir)/liblustre/liblustre.a
+recovery_small_DEPENDENCIES = $(top_builddir)/liblustre/liblustre.a
 
 replay_single_SOURCES = replay_single.c
+replay_single_CFLAGS = $(LL_CFLAGS)
 replay_single_LDADD := ./libtestcommon.a $(LLIB_EXEC)
-replay_single_DEPENDENCIES = $(top_srcdir)/liblustre/liblustre.a
-
-test_lock_cancel_SOURCES = test_lock_cancel.c
-test_lock_cancel_LDADD :=  $(LLIB_EXEC) -lmpi -llam
+replay_single_DEPENDENCIES = $(top_builddir)/liblustre/liblustre.a
 
 replay_ost_single_SOURCES = replay_ost_single.c
+replay_ost_single_CFLAGS = $(LL_CFLAGS)
 replay_ost_single_LDADD := ./libtestcommon.a $(LLIB_EXEC)
-replay_ost_single_DEPENDENCIES = $(top_srcdir)/liblustre/liblustre.a
+replay_ost_single_DEPENDENCIES = $(top_builddir)/liblustre/liblustre.a
 
-include $(top_srcdir)/Rules
+if MPITESTS
+test_lock_cancel_SOURCES = test_lock_cancel.c
+test_lock_cancel_CFLAGS = $(LL_CFLAGS) -I/opt/lam/include -L/opt/lam/lib
+test_lock_cancel_LDADD :=  $(LLIB_EXEC) -lmpi -llam
+endif
+
 
