@@ -87,6 +87,7 @@ Commands:
    When used on "host", the device will be initialized and the OST
    will be enabled. On client nodes, the OSC will be avaiable.
    Requires --node
+   Optional --obduuid Specifies the UUID used for the obd. 
    If --lov lov_name is used, this device is added to lov. 
 
 --mtpt /mnt/point mds_name lov_name|osc_name 
@@ -109,7 +110,7 @@ Options:
 
 def error(*args):
     msg = string.join(map(str,args))
-    print msg
+    print "Error: ", msg
     sys.exit(1)
     
 #
@@ -519,7 +520,6 @@ def add_ost(gen, lustre, options, args):
 
     if options.has_key('obdtype'):
         obdtype = options['obdtype']
-
     if obdtype == 'obdecho':
         fstype = ''
     else:
@@ -532,7 +532,13 @@ def add_ost(gen, lustre, options, args):
     obdname = new_name('OBD_'+ node_name)
     oscname = new_name('OSC_'+ node_name)
     ostname = new_name('OST_'+ node_name)
-    obd_uuid = new_uuid(obdname)
+    if options.has_key('obduuid'):
+        obd_uuid = options['obduuid']
+        obd = lookup(lustre, obd_uuid)
+        if obd:
+            error("Duplicate OBD UUID:", obd_uuid)
+    else:
+        obd_uuid = new_uuid(obdname)
     ost_uuid = new_uuid(ostname)
     osc_uuid = new_uuid(oscname)
 
@@ -645,7 +651,7 @@ def parse_cmdline(argv):
     short_opts = "ho:i:m:"
     long_opts = ["ost", "osc", "mtpt", "lov=", "node=", "mds=", "net", "tcpbuf=",
                  "route", "router", "merge=", "format", "reformat", "output=",
-                 "obdtype=", "in=", "help", "batch="]
+                 "obdtype=", "obduuid=", "in=", "help", "batch="]
     opts = []
     args = []
     options = {}
@@ -656,10 +662,7 @@ def parse_cmdline(argv):
         usage()
 
     for o, a in opts:
-        if o in ("-h", "--help"):
-            usage()
-        if o in ("-o", "--output"):
-            options['output'] = a
+        # Commands to create new devices
         if o == "--ost":
             options['ost'] = 1
         if o == "--osc":
@@ -678,12 +681,22 @@ def parse_cmdline(argv):
             options['router'] = 1
         if o == "--lov":
             options['lov'] = a
-        if o in ("-m", "--merge"):
-            options['merge'] = a
+
+        # Options for commands
         if o == "--obdtype":
             options['obdtype'] = a
+        if o == "--obduuid":
+            options['obduuid'] = a
         if o == "--tcpbuf":
             options['tcpbuf'] = a
+
+        # lmc options
+        if o in ("-h", "--help"):
+            usage()
+        if o in ("-o", "--output"):
+            options['output'] = a
+        if o in ("-m", "--merge"):
+            options['merge'] = a
         if o == "--format":
             options['format'] = 1
         if o  == "--reformat":
