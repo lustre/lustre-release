@@ -1,0 +1,65 @@
+In this document I will try to draw the data structures and how they
+interrelate in the Portals 3 reference implementation.  It is probably
+best shown with a drawing, so there may be an additional xfig or
+Postscript figure.
+
+
+MEMORY POOLS:
+------------
+
+First, a digression on memory allocation in the library.  As mentioned
+in the NAL Writer's Guide, the library does not link against any
+standard C libraries and as such is unable to dynamically allocate
+memory on its own.  It requires that the NAL implement a method
+for allocation that is appropriate for the protection domain in
+which the library lives.  This is only called when a network
+interface is initialized to allocate the Portals object pools.
+
+These pools are preallocate blocks of objects that the library
+can rapidly make active and manage with a minimum of overhead.
+It is also cuts down on overhead for setting up structures
+since the NAL->malloc() callback does not need to be called
+for each object.
+
+The objects are maintained on a per-object type singly linked free
+list and contain a pointer to the next free object.  This pointer
+is NULL if the object is not on the free list and is non-zero
+if it is on the list.  The special sentinal value of 0xDEADBEEF
+is used to mark the end of the free list since NULL could
+indicate that the last object in the list is not free.
+
+When one of the lib_*_alloc() functions is called, the library
+returns the head of the free list and advances the head pointer
+to the next item on the list.  The special case of 0xDEADBEEF is
+checked and a NULL pointer is returned if there are no more
+objects of this type available.   The lib_*_free() functions
+are even simpler -- check to ensure that the object is not already
+free, set its next pointer to the current head and then set
+the head to be this newly freed object.
+
+Since C does not have templates, I did the next best thing and wrote
+the memory pool allocation code as a macro that expands based on the
+type of the argument.  The mk_alloc(T) macro expands to
+write the _lib_T_alloc() and lib_T_free() functions.
+It requires that the object have a pointer of the type T named
+"next_free".  There are also functions that map _lib_T_alloc()
+to lib_T_alloc() so that the library can add some extra
+functionality to the T constructor.
+
+
+
+LINKED LISTS:
+------------
+
+Many of the active Portals objects are stored in doubly linked lists
+when they are active.  These are always implemented with the pointer
+to the next object and a pointer to the next pointer of the
+previous object.  This avoids the "dummy head" object or
+special cases for inserting at the beginning or end of the list.
+The pointer manipulations are a little hairy at times, but
+I hope that they are understandable.
+
+The actual linked list code is implemented as macros in <lib-p30.h>,
+although the object has to know about 
+
+
