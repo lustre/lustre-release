@@ -3,7 +3,7 @@
 # This code is issued under the GNU General Public License.
 # See the file COPYING in this distribution
 
-DEFS:= 
+DEFS= 
 MODULE = ldlm
 modulefs_DATA = ldlm.o
 EXTRA_PROGRAMS = ldlm

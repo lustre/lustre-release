@@ -3,7 +3,7 @@
 # This code is issued under the GNU General Public License.
 # See the file COPYING in this distribution
 
-DEFS:= 
+DEFS= 
 MODULE = obdfilter
 modulefs_DATA = obdfilter.o
 EXTRA_PROGRAMS = obdfilter

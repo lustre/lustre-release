@@ -3,7 +3,7 @@
 # This code is issued under the GNU General Public License.
 # See the file COPYING in this distribution
 
-DEFS:= 
+DEFS= 
 
 MODULE = mds
 modulefs_DATA = mds.o mds_extN.o # mds_ext2.o mds_ext3.o

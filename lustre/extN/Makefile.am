@@ -3,7 +3,7 @@
 # This code is issued under the GNU General Public License.
 # See the file COPYING in this distribution
 
-DEFS:=-DEXPORT_SYMTAB
+DEFS=-DEXPORT_SYMTAB
 MODULE = extN
 modulefs_DATA = extN.o
 EXTRA_PROGRAMS = extN

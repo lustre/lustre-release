@@ -3,7 +3,7 @@
 # This code is issued under the GNU General Public License.
 # See the file COPYING in this distribution
 
-DEFS:= 
+DEFS= 
 MODULE = obdecho
 modulefs_DATA = obdecho.o
 EXTRA_PROGRAMS = obdecho

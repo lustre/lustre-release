@@ -1,5 +1,5 @@
-DEFS:=
-CPPFLAGS := -I. -I$(PORTALS)/include -I$(top_srcdir)/include -D_LARGEFILE64_SOURCE
+DEFS=
+CPPFLAGS = -I. -I$(PORTALS)/include -I$(top_srcdir)/include -D_LARGEFILE64_SOURCE
 CFLAGS := -g -Wall
 # LDADD = -lldap
 # LDADD := -lreadline -ltermcap # -lefence
