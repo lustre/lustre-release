@@ -510,6 +510,10 @@ int lustre_fill_super(struct super_block *sb, void *data, int silent)
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op: sb %p\n", sb);
+        if (lmd == NULL) {
+                CERROR("lustre_mount_data is NULL: check that /sbin/mount.lustre exists?\n");
+                RETURN(-EINVAL);
+        }
         sbi = lustre_init_sbi(sb);
         if (!sbi)
                 RETURN(-ENOMEM);
