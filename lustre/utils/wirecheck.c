@@ -747,7 +747,7 @@ main(int argc, char **argv)
         char gccinfo[80];
 
         system_string("uname -a", unameinfo, sizeof(unameinfo));
-        system_string("gcc -v 2>&1 | tail -1", gccinfo, sizeof(gccinfo));
+        system_string(CC " -v 2>&1 | tail -1", gccinfo, sizeof(gccinfo));
 
         printf ("void lustre_assert_wire_constants(void)\n"
                 "{\n"
