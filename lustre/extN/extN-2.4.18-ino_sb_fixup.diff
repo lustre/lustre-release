@@ -22,7 +22,7 @@
  #define EXTN_BLOCK_SIZE_BITS(s)		((s)->s_blocksize_bits)
 @@ -447,7 +447,9 @@
  #define NEXT_ORPHAN(inode) EXTN_I(inode)->i_dtime
- static inline inode *orphan_list_entry(l)
+ static inline struct inode *orphan_list_entry(struct list_head *l)
  {
 -	return list_entry(l, struct inode, u.extN_i.i_orphan);
 +	return ((struct inode *)((char *)l -
