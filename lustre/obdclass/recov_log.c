@@ -28,6 +28,10 @@
 
 #define DEBUG_SUBSYSTEM S_UNDEFINED
 
+#ifndef EXPORT_SYMTAB
+#define EXPORT_SYMTAB
+#endif
+
 #include <linux/fs.h>
 #include <linux/obd_class.h>
 #include <linux/lustre_log.h>
@@ -54,6 +58,7 @@ struct llog_handle *llog_alloc_handle(void)
 
         RETURN(loghandle);
 }
+EXPORT_SYMBOL(llog_alloc_handle);
 
 void llog_free_handle(struct llog_handle *loghandle)
 {
@@ -64,6 +69,7 @@ void llog_free_handle(struct llog_handle *loghandle)
         OBD_FREE(loghandle->lgh_hdr, LLOG_CHUNK_SIZE);
         OBD_FREE(loghandle, sizeof(*loghandle));
 }
+EXPORT_SYMBOL(llog_free_handle);
 
 /* Create a new log handle and add it to the open list.
  * This log handle will be closed when all of the records in it are removed.
@@ -145,6 +151,7 @@ struct llog_handle *llog_new_log(struct llog_handle *cathandle,
 
         RETURN(loghandle);
 }
+EXPORT_SYMBOL(llog_new_log);
 
 /* Assumes caller has already pushed us into the kernel context. */
 int llog_init_catalog(struct llog_handle *cathandle, struct obd_uuid *tgtuuid)
@@ -189,6 +196,7 @@ write_hdr:      llh->llh_hdr.lth_type = LLOG_CATALOG_MAGIC;
         up(&cathandle->lgh_lock);
         RETURN(rc);
 }
+EXPORT_SYMBOL(llog_init_catalog);
 
 /* Return the currently active log handle.  If the current log handle doesn't
  * have enough space left for the current record, start a new one.
@@ -198,7 +206,8 @@ write_hdr:      llh->llh_hdr.lth_type = LLOG_CATALOG_MAGIC;
  *
  * Assumes caller has already pushed us into the kernel context and is locking.
  */
-struct llog_handle *llog_current_log(struct llog_handle *cathandle, int reclen)
+static struct llog_handle *llog_current_log(struct llog_handle *cathandle,
+                                            int reclen)
 {
         struct llog_handle *loghandle = NULL;
         ENTRY;
@@ -324,6 +333,7 @@ out:
         up(&loghandle->lgh_lock);
         RETURN(rc);
 }
+EXPORT_SYMBOL(llog_add_record);
 
 /* Remove a log entry from the catalog.
  * Assumes caller has already pushed us into the kernel context and is locking.
@@ -356,12 +366,13 @@ int llog_delete_log(struct llog_handle *cathandle,struct llog_handle *loghandle)
         }
         RETURN(rc);
 }
+EXPORT_SYMBOL(llog_delete_log);
 
 /* Assumes caller has already pushed us into the kernel context and is locking.
  * We return a lock on the handle to ensure nobody yanks it from us.
  */
-struct llog_handle *llog_id2handle(struct llog_handle *cathandle,
-                                   struct llog_cookie *logcookie)
+static struct llog_handle *llog_id2handle(struct llog_handle *cathandle,
+                                          struct llog_cookie *logcookie)
 {
         struct llog_handle *loghandle;
         struct llog_logid *lgl = &logcookie->lgc_lgl;
@@ -454,8 +465,10 @@ int llog_cancel_records(struct llog_handle *cathandle, int count,
 
         RETURN(rc);
 }
+EXPORT_SYMBOL(llog_cancel_records);
 
 int llog_close_log(struct llog_handle *cathandle, struct llog_handle *loghandle)
 {
         return loghandle->lgh_log_close(cathandle, loghandle);
 }
+EXPORT_SYMBOL(llog_close_log);
