@@ -185,7 +185,7 @@ struct obd_ops echo_obd_ops = {
         o_commitrw:    echo_commitrw,
 };
 
-#define OBDECHO_VERSION "$Version$
+#define OBDECHO_VERSION "$Version:$
 
 static int __init obdecho_init(void)
 {
