@@ -105,13 +105,15 @@ static int llog_test_1(struct obd_device *obd, char * name)
 /* Test named-log reopen; returns opened log on success */
 static int llog_test_2(struct obd_device *obd, char * name, struct llog_handle **llh)
 {
+        struct llog_handle *loghandle;
+        struct llog_logid logid;
         int rc;
         ENTRY;
 
-        CERROR("2: re-open a log with name: %s\n", name);
+        CERROR("2a: re-open a log with name: %s\n", name);
         rc = llog_create(obd, llh, NULL, name);
         if (rc) {
-                CERROR("2: re-open log with name %s failed: %d\n", name, rc);
+                CERROR("2a: re-open log with name %s failed: %d\n", name, rc);
                 RETURN(rc);
         }
         llog_init_handle(*llh, LLOG_F_IS_PLAIN, &uuid);
@@ -119,6 +121,32 @@ static int llog_test_2(struct obd_device *obd, char * name, struct llog_handle *
         if ((rc = verify_handle("2", *llh, 1)))
                 RETURN(rc);
 
+        CERROR("2b: create a log without specified NAME & LOGID\n");
+        rc = llog_create(obd, &loghandle, NULL, NULL);
+        if (rc) {
+                CERROR("2b: create log failed\n");
+                RETURN(rc);
+        }
+        llog_init_handle(loghandle, LLOG_F_IS_PLAIN, &uuid);
+        logid = loghandle->lgh_id;
+        llog_close(loghandle);
+
+        CERROR("2b: re-open the log by LOGID\n");
+        rc = llog_create(obd, &loghandle, &logid, NULL);
+        if (rc) {
+                CERROR("2b: re-open log by LOGID failed\n");
+                RETURN(rc);
+        }
+        llog_init_handle(loghandle, LLOG_F_IS_PLAIN, &uuid);
+
+        CERROR("2b: destroy this log\n");
+        rc = llog_destroy(loghandle);
+        if (rc) {
+                CERROR("2b: destroy log failed\n");
+                RETURN(rc);
+        }
+        llog_free_handle(loghandle);
+        
         RETURN(rc);
 }
 
@@ -365,7 +393,7 @@ static int llog_test_5(struct obd_device *obd)
                 GOTO(out, rc);
         }
 
-        CERROR("5b: print the catalog entries.. we expect 2\n");
+        CERROR("5b: print the catalog entries.. we expect 1\n");
         rc = llog_process(llh, (llog_cb_t)cat_print_cb, "test 5");
         if (rc) {
                 CERROR("5b: process with cat_print_cb failed: %d\n", rc);
