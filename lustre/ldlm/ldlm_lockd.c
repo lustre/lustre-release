@@ -191,8 +191,6 @@ static int ldlm_setup(struct obd_device *obddev, obd_count len, void *data)
                                              LDLM_REPLY_PORTAL,
                                              "self", ldlm_handle);
 
-        rpc_register_service(ldlm->ldlm_service, "self");
-
         err = ptlrpc_start_thread(obddev, ldlm->ldlm_service, "lustre_dlm");
         if (err)
                 CERROR("cannot start thread\n");
