@@ -891,6 +891,11 @@ ksocknal_queue_tx_locked (ksock_tx_t *tx, ksock_conn_t *conn)
 
         spin_lock_irqsave (&sched->kss_lock, flags);
 
+        conn->ksnc_tx_deadline = jiffies + 
+                                 ksocknal_data.ksnd_io_timeout * HZ;
+        mb();
+        /* Extend deadline BEFORE tx is enqueued */
+
         list_add_tail (&tx->tx_list, &conn->ksnc_tx_queue);
                 
         if (conn->ksnc_tx_ready &&      /* able to send */
