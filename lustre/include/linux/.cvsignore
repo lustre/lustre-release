@@ -12,3 +12,4 @@ extN_fs_sb.h
 extN_jbd.h
 extN_xattr.h
 xattr.h
+lustre_build_version.h
