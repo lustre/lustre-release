@@ -45,6 +45,7 @@ void lustre_assert_wire_constants(void);
 void ptlrpc_lprocfs_register_service(struct obd_device *obddev,
                                      struct ptlrpc_service *svc);
 void ptlrpc_lprocfs_unregister_service(struct ptlrpc_service *svc);
+void ptlrpc_lprocfs_rpc_sent(struct ptlrpc_request *req);
 
 /* recovd_thread.c */
 int llog_init_commit_master(void);
