@@ -93,7 +93,7 @@ for (my $i=1; $i<=$num_threads; $i++) {
 # Wait for all our threads to finish.
 my $child = 0;
 do {
-    $child = waitpid(-1, WNOHANG);
+    $child = waitpid(-1, 0);
 } until $child > 0;
 sleep 1;
 
