@@ -746,7 +746,8 @@ static inline int obdo_cmp_md(struct obdo *dst, struct obdo *src,
  * <shaver> // XXX if this were any uglier, I'd get my own show on MTV */ 
 extern int (*ptlrpc_put_connection_superhack)(struct ptlrpc_connection *c);
 
-int class_register_type(struct obd_ops *ops, lprocfs_vars_t* vars, char *nm);
+int class_register_type(struct obd_ops *ops, struct lprocfs_vars* vars, 
+                        char *nm);
 int class_unregister_type(char *nm);
 int class_name2dev(char *name);
 int class_uuid2dev(char *uuid);

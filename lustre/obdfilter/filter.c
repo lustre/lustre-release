@@ -32,8 +32,8 @@
 #include <linux/stringify.h>
 #include <linux/lprocfs_status.h>
 
-extern lprocfs_vars_t status_class_var[];
-extern lprocfs_vars_t status_var_nm_1[];
+extern struct lprocfs_vars status_class_var[];
+extern struct lprocfs_vars status_var_nm_1[];
 
 static kmem_cache_t *filter_open_cache;
 static kmem_cache_t *filter_dentry_cache;
@@ -1762,7 +1762,8 @@ int filter_attach(struct obd_device *dev,
 {
 
         int rc;
-        rc = lprocfs_reg_obd(dev, (lprocfs_vars_t*)status_var_nm_1, (void*)dev);
+        rc = lprocfs_reg_obd(dev, (struct lprocfs_vars*)status_var_nm_1, 
+                             (void*)dev);
         return rc; 
 }
 
@@ -1819,7 +1820,7 @@ static int __init obdfilter_init(void)
         }
 
         return class_register_type(&filter_obd_ops, 
-                                   (lprocfs_vars_t*)status_class_var,
+                                   (struct lprocfs_vars*)status_class_var,
                                    OBD_FILTER_DEVICENAME);
 }
 

@@ -37,8 +37,8 @@
 #define REQUEST_MINOR 244
 
 extern int mds_queue_req(struct ptlrpc_request *);
-extern lprocfs_vars_t status_var_nm_1[];
-extern lprocfs_vars_t status_class_var[];
+extern struct lprocfs_vars status_var_nm_1[];
+extern struct lprocfs_vars status_class_var[];
 
 /* should become mdc_getinfo() */
 int mdc_getstatus(struct lustre_handle *conn, struct ll_fid *rootfid)
@@ -774,7 +774,8 @@ int mdc_attach(struct obd_device *dev,
                    obd_count len, void *data)
 {
         int rc;
-        rc = lprocfs_reg_obd(dev, (lprocfs_vars_t*)status_var_nm_1, (void*)dev);
+        rc = lprocfs_reg_obd(dev, (struct lprocfs_vars*)status_var_nm_1, 
+			     (void*)dev);
         return rc; 
 }
 
@@ -799,7 +800,7 @@ static int __init ptlrpc_request_init(void)
 {
         int rc;
         rc = class_register_type(&mdc_obd_ops, 
-                                 (lprocfs_vars_t*)status_class_var, 
+                                 (struct lprocfs_vars*)status_class_var, 
                                  LUSTRE_MDC_NAME);
         if(rc)
                 RETURN(rc);

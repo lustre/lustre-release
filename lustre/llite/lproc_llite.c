@@ -53,7 +53,7 @@ int rd_blksize(char* page, char **start, off_t off,
         return len;
 
 }
-int rd_blktotal(char* page, char **start, off_t off,
+int rd_kbytestotal(char* page, char **start, off_t off,
                 int count, int *eof, void *data)
 {
         int len=0;
@@ -78,8 +78,8 @@ int rd_blkfree(char* page, char **start, off_t off,
         
 }
 
-int rd_kbfree(char* page, char **start, off_t off,
-              int count, int *eof, void *data)
+int rd_kbytesfree(char* page, char **start, off_t off,
+                  int count, int *eof, void *data)
 {
         int len=0;
         struct super_block *sb=(struct super_block*)data;
@@ -161,14 +161,13 @@ int rd_dev_uuid(char* page, char **start, off_t off,
 }
 
 
-lprocfs_vars_t status_var_nm_1[]={
+struct lprocfs_vars status_var_nm_1[]={
         {"status/uuid", rd_uuid, 0},
         {"status/mntpt_path", rd_path, 0},
         {"status/fs_type", rd_fstype, 0},
         {"status/blocksize",rd_blksize, 0},
-        {"status/blockstotal",rd_blktotal, 0},
-        {"status/blocksfree",rd_blkfree, 0},
-        {"status/kbytesfree", rd_kbfree, 0},
+        {"status/kbytestotal",rd_kbytestotal, 0},
+        {"status/kbytesfree", rd_kbytesfree, 0},
         {"status/filestotal", rd_filestotal, 0},
         {"status/filesfree", rd_filesfree, 0},
         {"status/filegroups", rd_filegroups, 0},

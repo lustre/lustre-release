@@ -160,7 +160,7 @@ int rd_filesets(char* page, char **start, off_t off,
 {
         return 0;
 }
-lprocfs_vars_t status_var_nm_1[]={
+struct lprocfs_vars status_var_nm_1[]={
         {"status/uuid", rd_uuid, 0},
         {"status/f_blocksize",rd_blksize, 0},
         {"status/f_blockstotal",rd_blktotal, 0},
@@ -181,7 +181,7 @@ int rd_numdevices(char* page, char **start, off_t off,
         return len;
 }
 
-lprocfs_vars_t status_class_var[]={
+struct lprocfs_vars status_class_var[]={
         {"status/num_devices", rd_numdevices, 0},
         {0}
 };

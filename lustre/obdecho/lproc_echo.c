@@ -46,7 +46,7 @@ int rd_fstype(char* page, char **start, off_t off,
 }
 
 
-lprocfs_vars_t status_var_nm_1[]={
+struct lprocfs_vars status_var_nm_1[]={
         {"status/uuid", rd_uuid, 0},
         {"status/fstype", rd_fstype, 0},
         {0}
@@ -61,7 +61,7 @@ int rd_numdevices(char* page, char **start, off_t off,
         return len;
 }
 
-lprocfs_vars_t status_class_var[]={
+struct lprocfs_vars status_class_var[]={
         {"status/num_devices", rd_numdevices, 0},
         {0}
 };

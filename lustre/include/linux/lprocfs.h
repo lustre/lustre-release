@@ -35,15 +35,9 @@ typedef enum lprofilers {
         e_specific
 } lprofilers_e;
 
-typedef struct lprocfs_vars{
-        char* name;
-        read_proc_t* read_fptr;
-        write_proc_t* write_fptr;
-} lprocfs_vars_t;
-
 typedef struct lprocfs_group {
         char** dir_namespace;
-        lprocfs_vars_t* count_func_namespace;
+        struct lprocfs_vars* count_func_namespace;
         lprofilers_e prof_type;
 } lprocfs_group_t;
 
@@ -575,7 +569,7 @@ struct proc_dir_entry* lprocfs_mkinitdir(struct obd_device* device);
 int lprocfs_get_idx(struct namespace_index* class, const char* dir_name);
 unsigned int lprocfs_add_var(struct obd_device* device,
                              struct proc_dir_entry* root,
-                             lprocfs_vars_t* variable,
+                             struct lprocfs_vars* variable,
                              int dir_arr_index,
                              int cnt_arr_index,
                              unsigned int cnt_arr_size,

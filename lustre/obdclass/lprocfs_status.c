@@ -43,8 +43,6 @@
  */
 char tok[] = {'/', (char)0};
 
-
-
 /*
  * Externs
  */
@@ -92,16 +90,17 @@ void lprocfs_remove_all(struct proc_dir_entry* root)
 
         struct proc_dir_entry *temp=root;
         struct proc_dir_entry* rm_entry;
+        struct proc_dir_entry* parent=root->parent;
 
         while(1){
 
                 while(temp->subdir){
                         temp=temp->subdir;
-        }
+                }
                 rm_entry=temp;
                 temp=temp->parent;
                 remove_proc_entry(rm_entry->name, rm_entry->parent);
-                if(temp==root->parent) break;
+                if(temp==parent) break;
 
         }
 
@@ -119,16 +118,8 @@ struct proc_dir_entry* lprocfs_new_dir(struct proc_dir_entry* root,
         char* my_str;
         char* mover_str;
 
-        /*
-         * Remove trailing escaping character
-         */
-        memset(temp_string, 0, MAX_STRING_SIZE);
-        if (strlen(string) >= MAX_STRING_SIZE) {
-                CDEBUG(D_OTHER, "Directory namespace too long");
-                return 0;
-        }
        
-        strcpy(temp_string, string);
+        strncpy(temp_string, string, MAX_STRING_SIZE-1);
         temp_string[strlen(string) + 1] = '\0';
         
         new_root=root;
@@ -156,7 +147,7 @@ struct proc_dir_entry* lprocfs_new_dir(struct proc_dir_entry* root,
 }
 
 int lprocfs_new_vars(struct proc_dir_entry* root,
-                     lprocfs_vars_t* list,
+                     struct lprocfs_vars* list,
                      const char* tok, 
                      void* data)
 {
@@ -176,8 +167,8 @@ int lprocfs_new_vars(struct proc_dir_entry* root,
                         return -EINVAL;
                 }
                 /* Convert the last element into a leaf-node */
-                memset(temp_string, 0, MAX_STRING_SIZE);
-                strcpy(temp_string, temp_root->name);
+               
+                strncpy(temp_string, temp_root->name, MAX_STRING_SIZE-1);
                 temp_string[strlen(temp_root->name) + 1] = '\0';
                 new_parent=temp_root->parent;
                 if (new_parent != 0){
@@ -201,7 +192,7 @@ int lprocfs_new_vars(struct proc_dir_entry* root,
  */
 
 int lprocfs_add_vars(struct proc_dir_entry* root,
-                     lprocfs_vars_t* var, 
+                     struct lprocfs_vars* var, 
                      void* data)
 {
             
@@ -212,7 +203,7 @@ int lprocfs_add_vars(struct proc_dir_entry* root,
 }
 
 int lprocfs_reg_obd(struct obd_device* device, 
-                    lprocfs_vars_t* list, 
+                    struct lprocfs_vars* list, 
                     void* data)
 {
         
@@ -262,7 +253,7 @@ int lprocfs_dereg_mnt(struct proc_dir_entry* root)
 }
 
 int lprocfs_reg_class(struct obd_type* type,
-                      lprocfs_vars_t* list, 
+                      struct lprocfs_vars* list, 
                       void* data)
 {
         struct proc_dir_entry* root;

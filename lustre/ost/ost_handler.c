@@ -40,8 +40,8 @@
 #include <linux/init.h>
 #include <linux/lprocfs_status.h>
 
-extern lprocfs_vars_t status_var_nm_1[];
-extern lprocfs_vars_t status_class_var[];
+extern struct lprocfs_vars status_var_nm_1[];
+extern struct lprocfs_vars status_class_var[];
 
 static int ost_destroy(struct ptlrpc_request *req)
 {
@@ -675,7 +675,8 @@ int ost_attach(struct obd_device *dev,
         /*  lprocfs_reg_dev(dev, (lprocfs_group_t*)lprocfs_ptlrpc_nm,
                         sizeof(struct lprofiler_ptlrpc));
         */
-        lprocfs_reg_obd(dev, (lprocfs_vars_t*)status_var_nm_1, (void*)dev);
+        lprocfs_reg_obd(dev, (struct lprocfs_vars*)status_var_nm_1, 
+                        (void*)dev);
         return 0; 
 }
 
@@ -702,7 +703,7 @@ static int __init ost_init(void)
         int rc;
 
         rc = class_register_type(&ost_obd_ops,
-                                 (lprocfs_vars_t*)status_class_var, 
+                                 (struct lprocfs_vars*)status_class_var, 
                                  LUSTRE_OST_NAME);
         if (rc) RETURN(rc);
 

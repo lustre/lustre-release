@@ -49,8 +49,8 @@ extern int mds_update_last_rcvd(struct mds_obd *mds, void *handle,
                                 struct ptlrpc_request *req);
 static int mds_cleanup(struct obd_device * obddev);
 
-extern lprocfs_vars_t status_var_nm_1[];
-extern lprocfs_vars_t status_class_var[];
+extern struct lprocfs_vars status_var_nm_1[];
+extern struct lprocfs_vars status_class_var[];
 
 inline struct mds_obd *mds_req2mds(struct ptlrpc_request *req)
 {
@@ -1461,7 +1461,8 @@ int mds_attach(struct obd_device *dev,
                obd_count len, void *data)
 {
         int rc;
-        rc = lprocfs_reg_obd(dev, (lprocfs_vars_t*)status_var_nm_1, (void*)dev);
+        rc = lprocfs_reg_obd(dev, (struct lprocfs_vars*)status_var_nm_1, 
+                             (void*)dev);
         return rc; 
 }
 
@@ -1555,7 +1556,8 @@ static int __init mds_init(void)
         if (mds_file_cache == NULL)
                 return -ENOMEM;
 
-        class_register_type(&mds_obd_ops, (lprocfs_vars_t*)status_class_var, 
+        class_register_type(&mds_obd_ops, 
+                            (struct lprocfs_vars*)status_class_var, 
                             LUSTRE_MDS_NAME);
         class_register_type(&mdt_obd_ops, 0, LUSTRE_MDT_NAME);
 

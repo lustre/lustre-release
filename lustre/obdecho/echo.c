@@ -12,8 +12,8 @@
  * and Andreas Dilger <adilger@clusterfs.com>
  */
 
-static char rcsid[] __attribute ((unused)) = "$Id: echo.c,v 1.43 2002/11/02 01:09:28 braam Exp $";
-#define OBDECHO_VERSION "$Revision: 1.43 $"
+static char rcsid[] __attribute ((unused)) = "$Id: echo.c,v 1.44 2002/11/02 02:41:31 thantry Exp $";
+#define OBDECHO_VERSION "$Revision: 1.44 $"
 
 #define EXPORT_SYMTAB
 
@@ -46,8 +46,8 @@ static atomic_t echo_getattrs;
 #define ECHO_PROC_STAT "sys/obdecho"
 #define ECHO_INIT_OBJID 0x1000000000000000ULL
 
-extern lprocfs_vars_t status_var_nm_1[];
-extern lprocfs_vars_t status_class_var[];
+extern struct lprocfs_vars status_var_nm_1[];
+extern struct lprocfs_vars status_class_var[];
 
 int echo_proc_read(char *page, char **start, off_t off, int count, int *eof,
                    void *data)
@@ -433,7 +433,8 @@ int echo_attach(struct obd_device *dev,
                    obd_count len, void *data)
 {
         int rc;
-        rc = lprocfs_reg_obd(dev, (lprocfs_vars_t*)status_var_nm_1, (void*)dev);
+        rc = lprocfs_reg_obd(dev, (struct lprocfs_vars*)status_var_nm_1, 
+                             (void*)dev);
         return rc; 
 }
 
@@ -473,7 +474,7 @@ static int __init obdecho_init(void)
 
         echo_proc_init();
         rc = class_register_type(&echo_obd_ops, 
-                                 (lprocfs_vars_t*)status_class_var, 
+                                 (struct lprocfs_vars*)status_class_var, 
                                  OBD_ECHO_DEVICENAME);
         if (rc) RETURN(rc);
         

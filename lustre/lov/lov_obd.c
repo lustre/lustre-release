@@ -29,8 +29,8 @@
 #include <asm/div64.h>
 #include <linux/lprocfs_status.h>
 
-extern lprocfs_vars_t status_var_nm_1[];
-extern lprocfs_vars_t status_class_var[];
+extern struct lprocfs_vars status_var_nm_1[];
+extern struct lprocfs_vars status_class_var[];
 
 static kmem_cache_t *lov_file_cache;
 
@@ -1324,7 +1324,8 @@ int lov_attach(struct obd_device *dev,
                obd_count len, void *data)
 {
         int rc;
-        rc = lprocfs_reg_obd(dev, (lprocfs_vars_t*)status_var_nm_1, (void*)dev);
+        rc = lprocfs_reg_obd(dev, (struct lprocfs_vars*)status_var_nm_1, 
+                             (void*)dev);
         return rc; 
 }
 
@@ -1373,7 +1374,7 @@ static int __init lov_init(void)
                 RETURN(-ENOMEM);
 
         rc = class_register_type(&lov_obd_ops,
-                                 (lprocfs_vars_t*)status_class_var,
+                                 (struct lprocfs_vars*)status_class_var,
                                  OBD_LOV_DEVICENAME);
         if (rc) RETURN(rc);
         

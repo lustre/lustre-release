@@ -40,7 +40,7 @@ extern int rd_dev_name(char* page, char **start, off_t off,
                     int count, int *eof, void *data);
 
 
-extern lprocfs_vars_t status_var_nm_1[];
+extern struct lprocfs_vars status_var_nm_1[];
 
 static char *ll_read_opt(const char *opt, char *data)
 {
@@ -124,7 +124,7 @@ static struct super_block * ll_read_super(struct super_block *sb,
         /* Lprocfs variables */
         char mnt_name[100];
         char uuid_name[100];
-        lprocfs_vars_t d_vars[3];
+        struct lprocfs_vars d_vars[3];
         
 
 
@@ -247,10 +247,12 @@ static struct super_block * ll_read_super(struct super_block *sb,
                 goto out_dev;
 
         /* Add the static configuration info */
-        lprocfs_add_vars(sbi->ll_mnt_root, (lprocfs_vars_t*)status_var_nm_1,
+        lprocfs_add_vars(sbi->ll_mnt_root, 
+                         (struct lprocfs_vars*)status_var_nm_1,
                          (void*)sb);
 
          /* Add the dynamic configuration stuff */
+        
         /* MDC */
         obd = class_uuid2obd(mdc);
         
@@ -263,36 +265,40 @@ static struct super_block * ll_read_super(struct super_block *sb,
         d_vars[0].write_fptr=0;
         d_vars[0].name=(char*)mnt_name;
          
-        memset(uuid_name, '\0', strlen(uuid_name));
-        sprintf(uuid_name, "status/%s/uuid", obd->obd_type->typ_name);
+        
+        snprintf(uuid_name, strlen(uuid_name), "status/%s/uuid", 
+                 obd->obd_type->typ_name);
         d_vars[1].read_fptr=rd_dev_uuid;
         d_vars[1].write_fptr=0;
         d_vars[1].name=(char*)uuid_name;
         
-        err=lprocfs_add_vars(sbi->ll_mnt_root, (lprocfs_vars_t*)d_vars, 
+        err=lprocfs_add_vars(sbi->ll_mnt_root, (struct lprocfs_vars* )d_vars, 
                              (void*)obd);
         if (err) {
                 CDEBUG(D_OTHER, "Unable to add fs proc dynamic variables");
         }
 
+        
         /* OSC or LOV*/
         obd = class_uuid2obd(osc);
         /* Reuse mnt_name */
-        memset(mnt_name, '\0', strlen(mnt_name));
-        sprintf(mnt_name, "status/%s/common_name", obd->obd_type->typ_name);
+      
+        snprintf(mnt_name, strlen(mnt_name), "status/%s/common_name", 
+                 obd->obd_type->typ_name);
 
         memset(d_vars, 0, sizeof(d_vars));
         d_vars[0].read_fptr=rd_dev_name;
         d_vars[0].write_fptr=0;
         d_vars[0].name=(char*)mnt_name;
          
-        memset(uuid_name, '\0', strlen(uuid_name));
-        sprintf(uuid_name, "status/%s/uuid", obd->obd_type->typ_name);
+        
+        snprintf(uuid_name, strlen(uuid_name), "status/%s/uuid", 
+                 obd->obd_type->typ_name);
         d_vars[1].read_fptr=rd_dev_uuid;
         d_vars[1].write_fptr=0;
         d_vars[1].name=(char*)uuid_name;
         
-        err=lprocfs_add_vars(sbi->ll_mnt_root, (lprocfs_vars_t*)d_vars, 
+        err=lprocfs_add_vars(sbi->ll_mnt_root, (struct lprocfs_vars* )d_vars, 
                              (void*)obd);        
         if (err) {
                 CDEBUG(D_OTHER, "Unable to add fs proc dynamic variables");

@@ -37,8 +37,8 @@
 extern int ptlrpc_init_portals(void);
 extern void ptlrpc_exit_portals(void);
 
-extern lprocfs_vars_t status_var_nm_1[];
-extern lprocfs_vars_t status_class_var[];
+extern struct lprocfs_vars status_var_nm_1[];
+extern struct lprocfs_vars status_class_var[];
 
 int connmgr_setup(struct obd_device *obddev, obd_count len, void *buf)
 {
@@ -170,7 +170,8 @@ int connmgr_attach(struct obd_device *dev,
                    obd_count len, void *data)
 {
         int rc;
-        rc = lprocfs_reg_obd(dev, (lprocfs_vars_t*)status_var_nm_1, (void*)dev);
+        rc = lprocfs_reg_obd(dev, (struct lprocfs_vars*)status_var_nm_1, 
+                             (void*)dev);
         return rc; 
 }
 
@@ -200,7 +201,7 @@ static int __init ptlrpc_init(void)
                 RETURN(rc);
         ptlrpc_init_connection();
         rc = class_register_type(&recovd_obd_ops, 
-                                 (lprocfs_vars_t*)status_class_var,
+                                 (struct lprocfs_vars*)status_class_var,
                                  LUSTRE_HA_NAME);
         if (rc) 
                 RETURN(rc);
