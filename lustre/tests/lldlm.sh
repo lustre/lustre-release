@@ -6,9 +6,9 @@ SRCDIR="`dirname $0`"
 setup_ldlm
 
 mknod /dev/obd c 10 241
-echo 8191 > /proc/sys/portals/debug
+echo 0xffffffff > /proc/sys/portals/debug
 
-$R/usr/src/obd/utils/obdctl <<EOF
+$OBDCTL <<EOF
 device 0
 attach ldlm
 setup

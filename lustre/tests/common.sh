@@ -55,6 +55,7 @@ setup() {
     [ -c /dev/portals ] || mknod /dev/portals c 10 240
 
     insmod $R/usr/src/portals/linux/oslib/portals.o || exit -1
+    insmod $R/usr/src/portals/linux/qswnal/kqswnal.o
     insmod $R/usr/src/portals/linux/socknal/ksocknal.o || exit -1
 
     $ACCEPTOR 1234 &

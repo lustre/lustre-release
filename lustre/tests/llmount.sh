@@ -3,11 +3,13 @@
 SRCDIR="`dirname $0`"
 . $SRCDIR/common.sh
 
+NETWORK=tcp
+
 setup
 
 $PTLCTL <<EOF
+setup $NETWORK
 mynid localhost
-setup tcp
 connect localhost 1234
 add_uuid self
 add_uuid mds

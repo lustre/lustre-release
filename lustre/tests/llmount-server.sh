@@ -5,34 +5,26 @@ export PATH=/sbin:/usr/sbin:$PATH
 SRCDIR="`dirname $0`"
 . $SRCDIR/common.sh
 
-mknod /dev/portals c 10 240
+NETWORK=elan
+LOCALHOST=5
+SERVER=5
 
-insmod $R/usr/src/portals/linux/oslib/portals.o
-# insmod $R/usr/src/portals/linux/socknal/ksocknal.o
-insmod $R/usr/src/portals/linux/qswnal/kqswnal.o
-
-# $R/usr/src/portals/linux/utils/acceptor 1234 &
+setup
 
 $PTLCTL <<EOF
-mynid
-setup elan
-connect 5
+setup $NETWORK
+mynid $LOCALHOST
+connect $LOCALHOST
 add_uuid self
+add_uuid mds
+add_uuid ost
 EOF
-
-insmod $R/usr/src/obd/rpc/ptlrpc.o
-insmod $R/usr/src/obd/class/obdclass.o 
-insmod $R/usr/src/obd/ext2obd/obdext2.o
-insmod $R/usr/src/obd/ost/ost.o
-insmod $R/usr/src/obd/mds/mds.o
 
 tmp_fs ext2 /tmp/ost 10000
 OST=${LOOPDEV}
 MDSFS=ext2
 tmp_fs ${MDSFS} /tmp/mds 10000
 MDS=${LOOPDEV}
-
-mknod /dev/obd c 10 241
 
 $OBDCTL <<EOF
 device 0
