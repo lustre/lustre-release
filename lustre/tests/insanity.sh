@@ -39,6 +39,15 @@ fail_client() {
     echo $ret
 }
 
+shutdown_client() {
+    client=$1
+    if [ "$FAILURE_MODE" = HARD ]; then
+       $POWER_DOWN $client
+    elif [ "$FAILURE_MODE" = SOFT ]; then
+       stop $facet --force --nomod
+    fi
+}
+
 fail_clients() {
     num=$1
     if [ -z "$num" -o $num -gt $((FAIL_NUM - DOWN_NUM)) ]; then
@@ -65,7 +74,7 @@ fail_clients() {
 
 reintegrate_clients() {
     for client in $DOWN_CLIENTS; do
-	wait_for $client
+	wait_for_host $client
 	$PDSH $client "$LCONF --node client --select mds_svc=`facet_active mds` $CLIENTOPTS $XMLCONFIG"
     done
     DOWN_CLIENTS=""
@@ -96,7 +105,7 @@ setup() {
     wait_for mds
     start mds $MDSLCONFARGS ${REFORMAT}
     while ! $PDSH $HOST "ls -ld $LUSTRE"; do sleep 5; done
-    do_node $CLIENTS lconf --node client_facet --ptldebug $PTLDEBUG \
+    do_node $CLIENTS lconf --node client_facet \
 	--select mds_service=$ACTIVEMDS $XMLCONFIG
 }
 
@@ -116,13 +125,6 @@ cleanup() {
     stop ost2 ${FORCE} --dump cleanup.log
 }
 
-wait_for() {
-   facet=$1
-   HOST=`facet_active_host $facet`
-   check_network  $HOST 900
-   while ! $PDSH $HOST "ls -ld $LUSTRE"; do sleep 5; done
-}
-
 client_df() {
     $PDSH $CLIENTS "df $MOUNT" | dshbak -c
 }
@@ -132,22 +134,6 @@ trap exit INT
 client_mkdirs() {
    $PDSH $CLIENTLIST "mkdir $MOUNT/\`hostname\`; ls $MOUNT/\`hostname\` > /dev/null"
 }
-
-facet_failover() {
-    facet=$1
-    echo "Failing $facet node `facet_active_host $facet`"
-    shutdown_facet $facet
-    sleep 2
-    reboot_facet $facet
-    client_df &
-    DFPID=$!
-    change_active $facet
-    TO=`facet_active_host $facet`
-    echo "Failover MDS to $TO"
-    wait_for $facet
-    start $facet
-}
-
 
 clients_recover_osts() {
     facet=$1
@@ -291,7 +277,7 @@ test_4() {
 
     #Reintegration
     echo "Reintegrating OST"
-    reboot_node ost1
+    reboot_facet ost1
     wait_for ost1
     start ost1
     
@@ -319,7 +305,7 @@ test_5() {
     #OST Portion
     echo "Failing OST"
     shutdown_facet ost1
-    reboot_node ost1
+    reboot_facet ost1
     
     #Check FS
     echo "Test Lustre stability after OST failure"
@@ -328,7 +314,7 @@ test_5() {
     #OST Portion
     echo "Failing OST"
     shutdown_node ost2
-    reboot_node ost2
+    reboot_facet ost2
 
     #Check FS
     echo "Test Lustre stability after OST failure"
@@ -360,7 +346,7 @@ test_6() {
     #OST Portion
     echo "Failing OST"
     shutdown_node ost1
-    reboot_node ost1
+    reboot_facet ost1
 
     #Check FS
     echo "Test Lustre stability after OST failure"
@@ -469,7 +455,7 @@ test_8() {
     #OST Portion
     echo "Failing OST"
     shutdown_node ost1
-    reboot_node ost1
+    reboot_facet ost1
 
     #Check FS
     echo "Test Lustre stability after OST failure"

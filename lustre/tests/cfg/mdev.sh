@@ -1,12 +1,9 @@
-# oldstyle
-MDSNODE=${MDSNODE:-`hostname`}
-OSTNODE=${OSTNODE:-`hostname`}
 
-mds_HOST=${mds_HOST:-$MDSNODE}
-mdsfailover_HOST=${mdsfailover_HOST}
-ost_HOST=${ost_HOST:-$OSTNODE}
-ost2_HOST=${ost2_HOST:-$ost_HOST}
-client_HOST=${client_HOST:-"'*'"}
+mds_HOST=${mds_HOST:-mdev4}
+mdsfailover_HOST=${mdsfailover_HOST:-mdev5}
+ost_HOST=${ost_HOST:-mdev2}
+ost2_HOST=${ost2_HOST:-mdev3}
+client_HOST=${client_HOST:-client}
 NETTYPE=${NETTYPE:-tcp}
 
 MOUNT=${MOUNT:-"/mnt/lustre"}
@@ -15,12 +12,12 @@ MOUNT2=${MOUNT2:-"/mnt/lustre2"}
 DIR=${DIR:-$MOUNT}
 DIR2=${DIR2:-$MOUNT1}
 PTLDEBUG=${PTLDEBUG:-0}
-PDSH=${PDSH:-no_dsh}
+PDSH=${PDSH:-pdsh -S -w}
 
-MDSDEV=${MDSDEV:-$ROOT/tmp/mds-`hostname`}
-MDSSIZE=${MDSSIZE:-10000}
-OSTDEV=${OSTDEV:-$ROOT/tmp/ost-`hostname`}
-OSTSIZE=${OSTSIZE:-10000}
+MDSDEV=${MDSDEV:-/dev/sda1}
+MDSSIZE=${MDSSIZE:-50000}
+OSTDEV=${OSTDEV:-/tmp/ost-`hostname`}
+OSTSIZE=${OSTSIZE:-20000}
 FSTYPE=${FSTYPE:-ext3}
 TIMEOUT=${TIMEOUT:-10}
 UPCALL=${UPCALL:-$PWD/replay-single-upcall.sh}

@@ -47,7 +47,7 @@ cleanup() {
 }
 
 if [ "$ONLY" == "cleanup" ]; then
-    sysctl -w portals.debug=0
+    sysctl -w portals.debug=0 || true
     cleanup
     exit
 fi
