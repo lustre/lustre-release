@@ -1,7 +1,0 @@
-fs/ext3/balloc.c
-fs/ext3/file.c
-fs/ext3/fsync.c
-fs/ext3/ialloc.c
-fs/ext3/inode.c
-fs/ext3/namei.c
-fs/ext3/super.c
