@@ -78,7 +78,7 @@ AC_SUBST(demodir)
 
 AC_OUTPUT(Makefile lib/Makefile ldlm/Makefile obdecho/Makefile ptlrpc/Makefile \
 	osc/Makefile mdc/Makefile mds/Makefile ost/Makefile utils/Makefile \
-	tests/Makefile obdfilter/Makefile obdclass/Makefile obdext2/Makefile \
+	tests/Makefile obdfilter/Makefile obdclass/Makefile \
 	llite/Makefile obdfs/Makefile demos/Makefile \
 	doc/Makefile scripts/Makefile scripts/lustre.spec \
 	extN/Makefile)
