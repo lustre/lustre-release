@@ -3,7 +3,7 @@
 # This code is issued under the GNU General Public License.
 # See the file COPYING in this distribution
 
-include ../Kernelenv
+include $(obj)/../Kernelenv
 
 obj-y += kptlrouter.o
 kptlrouter-objs    := router.o proc.o

@@ -2,3 +2,4 @@
 Makefile
 Makefile.in
 link-stamp
+.*.o.cmd

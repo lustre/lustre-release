@@ -55,7 +55,7 @@ kpr_control_interface_t kpr_control_interface = {
 int
 kpr_register_nal (kpr_nal_interface_t *nalif, void **argp)
 {
-	long		   flags;
+	unsigned long      flags;
 	struct list_head  *e;
 	kpr_nal_entry_t   *ne;
 
@@ -98,7 +98,7 @@ kpr_register_nal (kpr_nal_interface_t *nalif, void **argp)
 void
 kpr_shutdown_nal (void *arg)
 {
-	long             flags;
+	unsigned long    flags;
 	kpr_nal_entry_t *ne = (kpr_nal_entry_t *)arg;
 
         CDEBUG (D_OTHER, "Shutting down NAL %d\n", ne->kpne_interface.kprni_nalid);
@@ -123,7 +123,7 @@ kpr_shutdown_nal (void *arg)
 void
 kpr_deregister_nal (void *arg)
 {
-	long              flags;
+	unsigned long     flags;
 	kpr_nal_entry_t  *ne = (kpr_nal_entry_t *)arg;
 
         CDEBUG (D_OTHER, "Deregister NAL %d\n", ne->kpne_interface.kprni_nalid);
@@ -296,7 +296,7 @@ int
 kpr_add_route (int gateway_nalid, ptl_nid_t gateway_nid, ptl_nid_t lo_nid,
                ptl_nid_t hi_nid)
 {
-	long	           flags;
+	unsigned long	   flags;
 	struct list_head  *e;
 	kpr_route_entry_t *re;
 
@@ -345,7 +345,7 @@ kpr_add_route (int gateway_nalid, ptl_nid_t gateway_nid, ptl_nid_t lo_nid,
 int
 kpr_del_route (ptl_nid_t nid)
 {
-	long	           flags;
+	unsigned long	   flags;
 	struct list_head  *e;
 
         CDEBUG(D_OTHER, "Del route "LPX64"\n", nid);
