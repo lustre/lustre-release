@@ -33,10 +33,12 @@
 #include <linux/ext3_fs.h>
 #include <linux/ext3_jbd.h>
 #include <linux/ext3_extents.h>
-#include <linux/locks.h>
 #include <linux/version.h>
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+#include <linux/locks.h>
 #include <linux/ext3_xattr.h>
+#include <linux/module.h>
+#include <linux/iobuf.h>
 #else
 #include <ext3/xattr.h>
 #endif
@@ -45,10 +47,6 @@
 #include <linux/lustre_fsfilt.h>
 #include <linux/obd.h>
 #include <linux/obd_class.h>
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-#include <linux/module.h>
-#include <linux/iobuf.h>
-#endif
 #include <linux/lustre_smfs.h>
 #include <linux/lustre_snap.h>
 
@@ -79,6 +77,64 @@
                                                                                                                                                                                                      
 #define SNAP_EA_INO_BLOCK_SIZE(size)   (((size)-sizeof(ino_t)*2)/2)
 #define SNAP_EA_PARENT_OFFSET(size)    (sizeof(ino_t)*2 + SNAP_EA_INO_BLOCK_SIZE((size)))
+
+#define EXT3_JOURNAL_START(sb, handle, blocks, rc)              \
+do {                                                            \
+        journal_t *journal;                                     \
+        journal = EXT3_SB(sb)->s_journal;                       \
+        lock_kernel();                                          \
+        handle = journal_start(journal, 1);                     \
+        unlock_kernel();                                        \
+        if(IS_ERR(handle)) {                                    \
+                CERROR("can't start transaction\n");            \
+                rc = PTR_ERR(handle);                           \
+        } else                                                  \
+                rc = 0;                                         \
+} while(0)
+
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+static inline void double_lock_inode(struct inode *i1, struct inode *i2)
+{
+        if (i1 == i2)
+                down(&i1->i_sem);
+	else
+                double_down(&i1->i_sem, &i2->i_sem);
+}
+static inline void double_unlock_inode(struct inode *i1, struct inode *i2)
+{
+        if (i1 == i2)
+                up(&i1->i_sem);
+        else 
+	        double_up(&i1->i_sem, &i2->i_sem);
+}
+#else
+static inline void double_lock_inode(struct inode *i1, struct inode *i2)
+{
+       struct semaphore *s1 = &i1->i_sem;
+       struct semaphore *s2 = &i2->i_sem;
+
+       if (s1 != s2) {
+               if ((unsigned long) s1 < (unsigned long) s2) {
+                       struct semaphore *tmp = s2;
+                       s2 = s1; s1 = tmp;
+               }
+               down(s1);
+       }
+       down(s2);
+}
+
+static inline void double_unlock_inode(struct inode *i1, struct inode *i2)
+{
+       struct semaphore *s1 = &i1->i_sem;
+       struct semaphore *s2 = &i2->i_sem;
+
+       up(s1);
+       if (s1 != s2)
+               up(s2);
+}
+
+#endif
 
 /* helper functions to manipulate field 'parent' in snap_ea */
 static inline int
@@ -173,7 +229,7 @@ static int fsfilt_ext3_set_indirect(struct inode *pri, int index, ino_t ind_ino,
 {
 	char buf[EXT3_MAX_SNAP_DATA];
 	struct snap_ea *snaps;
-	int err = 0, inlist = 1;
+	int rc = 0, inlist = 1;
 	int ea_size;
 	handle_t *handle = NULL;
         ENTRY;
@@ -185,9 +241,9 @@ static int fsfilt_ext3_set_indirect(struct inode *pri, int index, ino_t ind_ino,
 		RETURN(-EINVAL);
 	/* need lock the list before get_attr() to avoid race */
 	/* read ea at first */
- 	err = ext3_xattr_get(pri, EXT3_SNAP_INDEX ,EXT3_SNAP_ATTR,
+ 	rc = ext3_xattr_get(pri, EXT3_SNAP_INDEX ,EXT3_SNAP_ATTR,
 		                          buf, EXT3_MAX_SNAP_DATA);
-	if (err == -ENODATA || err == -ENOATTR) {
+	if (rc == -ENODATA || rc == -ENODATA) {
 		CDEBUG(D_INODE, "no extended attributes - zeroing\n");
 		memset(buf, 0, EXT3_MAX_SNAP_DATA);
 		/* XXX
@@ -195,27 +251,27 @@ static int fsfilt_ext3_set_indirect(struct inode *pri, int index, ino_t ind_ino,
 	 	 * So take care of snap ea of primary inodes very carefully.
 	 	 * Is it right in snapfs EXT3, check it later?
 		 */
-		inlist = 0; 
-	} else if (err < 0 || err > EXT3_MAX_SNAP_DATA) {
-		GOTO(out_unlock, err);
+		inlist = 0;
+                rc = 0; 
+	} else if (rc < 0 || rc > EXT3_MAX_SNAP_DATA) {
+		GOTO(out_unlock, rc);
 	}
+        EXT3_JOURNAL_START(pri->i_sb, handle, SNAP_SETIND_TRANS_BLOCKS, rc); 
+        if(rc) 
+		GOTO(out_unlock, rc = PTR_ERR(handle));
 	
-	handle = ext3_journal_start(pri, SNAP_SETIND_TRANS_BLOCKS);
-	if(!handle)
-		GOTO(out_unlock, err = PTR_ERR(handle));
-	
-	snaps = (struct snap_ea *)buf;
+        snaps = (struct snap_ea *)buf;
 	snaps->ino[index] = cpu_to_le32 (ind_ino);
 	ea_size = EXT3_MAX_SNAP_DATA;
 
 	set_parent_ino(snaps, ea_size, index, cpu_to_le32(parent_ino));
 
-	err = ext3_xattr_set(handle, pri, EXT3_SNAP_INDEX, EXT3_SNAP_ATTR,
-			             buf, EXT3_MAX_SNAP_DATA, 0);
+	rc = ext3_xattr_set_handle(handle, pri, EXT3_SNAP_INDEX,EXT3_SNAP_ATTR,
+			            buf, EXT3_MAX_SNAP_DATA, 0);
 	ext3_mark_inode_dirty(handle, pri);
-	ext3_journal_stop(handle, pri);
+	journal_stop(handle);
 out_unlock:
-	return err;
+	RETURN(rc);
 }
 
 static int ext3_set_generation(struct inode *inode, unsigned long gen)
@@ -223,20 +279,20 @@ static int ext3_set_generation(struct inode *inode, unsigned long gen)
         handle_t *handle;
         int err = 0;
         ENTRY;
-                                                                                                                                                                                             
-        handle = ext3_journal_start(inode, EXT3_XATTR_TRANS_BLOCKS);
-        if( !handle )
-                RETURN(-EINVAL);
-
-        err = ext3_xattr_set(handle, inode, EXT3_SNAP_INDEX, 
-                             EXT3_SNAP_GENERATION,
-                             (char*)&gen, sizeof(int), 0);
+       
+        EXT3_JOURNAL_START(inode->i_sb, handle, EXT3_XATTR_TRANS_BLOCKS, err);
+        if(err)
+                RETURN(err);
+        
+        err = ext3_xattr_set_handle(handle, inode, EXT3_SNAP_INDEX, 
+                                    EXT3_SNAP_GENERATION, (char*)&gen, 
+                                    sizeof(int), 0);
         if (err < 0) {
                 CERROR("ino %lu, set_ext_attr err %d\n", inode->i_ino, err);
                 RETURN(err);
         }
         
-        ext3_journal_stop(handle, inode);
+        journal_stop(handle);
         RETURN(0);
 }
 
@@ -256,14 +312,17 @@ static void ext3_copy_meta(handle_t *handle, struct inode *dst, struct inode *sr
 	dst->i_mtime = src->i_mtime;
 	dst->i_ctime = src->i_ctime;
 //	dst->i_version = src->i_version;
-	dst->i_attr_flags = src->i_attr_flags;
+	
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+        dst->i_attr_flags = src->i_attr_flags;
+#endif
 	dst->i_generation = src->i_generation;
-	dst->u.ext3_i.i_dtime = src->u.ext3_i.i_dtime;
-	dst->u.ext3_i.i_flags = src->u.ext3_i.i_flags | EXT3_COW_FL;
+        EXT3_I(dst)->i_dtime = EXT3_I(src)->i_dtime;
+	EXT3_I(dst)->i_flags = EXT3_I(src)->i_flags | EXT3_COW_FL;
 #ifdef EXT3_FRAGMENTS
-	dst->u.ext3_i.i_faddr = src->u.ext3_i.i_faddr;
-	dst->u.ext3_i.i_frag_no = src->u.ext3_i.i_frag_no;
-	dst->u.ext3_i.i_frag_size = src->u.ext3_i.i_frag_size;
+        EXT3_I(dst)->i_faddr = EXT3_I(src)->i_faddr;
+        EXT3_I(dst)->i_frag_no = EXT3_I(src)->i_frag_no;
+        EXT3_I(dst)->i_frag_size = EXT3_I(src)->i_frag_size;
 #endif
 	if ((size = ext3_xattr_list(src, NULL, 0)) > 0) {
 		char names[size];
@@ -300,8 +359,9 @@ static void ext3_copy_meta(handle_t *handle, struct inode *dst, struct inode *sr
                         if (ext3_xattr_get(src, EXT3_SNAP_INDEX,
 					   EXT3_SNAP_ATTR, buf, attrlen) < 0)
 				continue;	
-			if (ext3_xattr_set(handle, dst, EXT3_SNAP_INDEX,
-					   EXT3_SNAP_ATTR, buf, attrlen, 0) < 0)
+			if (ext3_xattr_set_handle(handle, dst, EXT3_SNAP_INDEX,
+					          EXT3_SNAP_ATTR, buf, attrlen, 
+                                                  0) < 0)
 				break;
 			OBD_FREE(buf, attrlen);
 			name += namelen + 1; /* skip name and trailing NUL */
@@ -350,7 +410,7 @@ static int ext3_copy_reg_block(struct inode *dst, struct inode *src, int blk)
                 rc = 1;
 dst_page_unlock:
         kunmap(dst_page);
-        UnlockPage(dst_page);
+        unlock_page(dst_page);
         page_cache_release(dst_page);
 src_page_unlock:
         kunmap(src_page);
@@ -362,10 +422,11 @@ static int ext3_copy_dir_block(struct inode *dst, struct inode *src, int blk)
         struct buffer_head *bh_dst = NULL, *bh_src = NULL;
         int rc = 0;
         handle_t *handle = NULL;
-        ENTRY;                                                                                                                                                                                             
-        handle = ext3_journal_start(dst, SNAP_COPYBLOCK_TRANS_BLOCKS);
-        if( !handle )
-                RETURN(-EINVAL);
+        ENTRY;   
+
+        EXT3_JOURNAL_START(dst->i_sb, handle, SNAP_COPYBLOCK_TRANS_BLOCKS, rc);
+        if(rc)
+                RETURN(rc);
                                                                                                                                                                                                      
         bh_src = ext3_bread(handle, src, blk, 0, &rc);
         if (!bh_src) {
@@ -389,7 +450,7 @@ exit_relese:
         if (bh_src) brelse(bh_src);
         if (bh_dst) brelse(bh_dst);
         if (handle)
-                ext3_journal_stop(handle, dst);
+                journal_stop(handle);
         RETURN(rc);
 }
 /* fsfilt_ext3_copy_block - copy one data block from inode @src to @dst.
@@ -430,7 +491,9 @@ static inline int ext3_has_ea(struct inode *inode)
 static void fs_flushinval_pages(handle_t *handle, struct inode* inode)
 {
         if (inode->i_blocks > 0 && inode->i_mapping) {
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
                 fsync_inode_data_buffers(inode);
+#endif
                 truncate_inode_pages(inode->i_mapping, 0);
         }
 }
@@ -500,6 +563,7 @@ static handle_t * ext3_copy_data(handle_t *handle, struct inode *dst,
 {
 	unsigned long blocks, blk, cur_blks;
 	int low_credits, save_ref;
+        int err = 0;
         ENTRY;
 
 	blocks =(src->i_size + src->i_sb->s_blocksize-1) >>
@@ -527,7 +591,7 @@ static handle_t * ext3_copy_data(handle_t *handle, struct inode *dst,
 					ext3_orphan_add(handle, dst);
 					*has_orphan = 1;
 				}
-				dst->u.ext3_i.i_disksize =
+				EXT3_I(dst)->i_disksize =
 					blk * dst->i_sb->s_blocksize;
 				dst->i_blocks = cur_blks;
 				dst->i_mtime = CURRENT_TIME;
@@ -538,17 +602,14 @@ static handle_t * ext3_copy_data(handle_t *handle, struct inode *dst,
 				 */
 				save_ref = handle->h_ref;
 				handle->h_ref = 1;
-				if( ext3_journal_stop(handle, dst) ){
+				if(journal_stop(handle) ){
 					CERROR("fail to stop journal\n");
 					handle = NULL;
 					break;
 				}
-				handle = ext3_journal_start(dst,
-						low_credits + needed);
-				if( !handle ){
-					CERROR("fail to restart handle\n");
-					break;
-				}
+                                EXT3_JOURNAL_START(dst->i_sb, handle, 
+                                                   low_credits + needed, err);
+                                if(err) break;
 				handle->h_ref = save_ref;
 			}
 		}
@@ -557,7 +618,7 @@ static handle_t * ext3_copy_data(handle_t *handle, struct inode *dst,
 		cur_blks += dst->i_sb->s_blocksize / 512;
 	}
 	
-        dst->i_size = dst->u.ext3_i.i_disksize = src->i_size;
+        dst->i_size = EXT3_I(dst)->i_disksize = src->i_size;
 	RETURN(handle);
 }
 /*Here delete the data of that pri inode 
@@ -568,15 +629,14 @@ static int ext3_throw_inode_data(handle_t *handle, struct inode *inode)
 {	
         struct inode *tmp = NULL;
         ENTRY;
-        
         tmp = ext3_new_inode(handle, inode, (int)inode->i_mode, 0);
         if(tmp) { 
                 CERROR("ext3_new_inode error\n");
                 RETURN(-EIO);
         }                
-	double_down(&inode->i_sem, &tmp->i_sem);
+	double_lock_inode(inode, tmp);
         ext3_migrate_data(handle, tmp, inode);
-	double_up(&inode->i_sem, &tmp->i_sem);
+	double_unlock_inode(inode, tmp);
         tmp->i_nlink = 0;
         iput(tmp);	
         RETURN(0);
@@ -603,11 +663,11 @@ static struct inode* fsfilt_ext3_create_indirect(struct inode *pri, int index,
 {
 	struct inode *ind = NULL;
 	handle_t *handle = NULL;
-	int err = 0;
+        int err = 0;
 	int has_orphan = 0;
         ENTRY;
         
-	if( pri == pri->i_sb->u.ext3_sb.s_journal_inode ){
+	if( pri == EXT3_SB(pri->i_sb)->s_journal_inode ){
 		CERROR("TRY TO COW JOUNRAL\n");
 		RETURN(ERR_PTR(-EINVAL));
 	}
@@ -615,12 +675,11 @@ static struct inode* fsfilt_ext3_create_indirect(struct inode *pri, int index,
 	       pri->i_ino, index, del ? "deleting" : "preserve");
 
 	ind = fsfilt_ext3_get_indirect(pri, NULL, index);
-
-	handle = ext3_journal_start(pri, SNAP_CREATEIND_TRANS_BLOCKS);
-	if( !handle ) {
-                CERROR("handle not NULL\n");
-		RETURN(ERR_PTR(-EINVAL));
-        }
+        
+        EXT3_JOURNAL_START(pri->i_sb, handle, SNAP_CREATEIND_TRANS_BLOCKS,
+                           err);
+        if(err) 
+                RETURN(ERR_PTR(err));
 	/* XXX ? We should pass an err argument to get_indirect and precisely
  	 * detect the errors, for some errors, we should exit right away.
  	 */
@@ -639,7 +698,7 @@ static struct inode* fsfilt_ext3_create_indirect(struct inode *pri, int index,
                                 GOTO(exit, err);
                         pri->i_nlink = 1;
 		}
-		pri->u.ext3_i.i_dtime = CURRENT_TIME;
+		EXT3_I(pri)->i_dtime = LTIME_S(CURRENT_TIME);
 		ext3_mark_inode_dirty(handle, pri);
 		GOTO(exit, err=0);
 	}
@@ -653,6 +712,7 @@ static struct inode* fsfilt_ext3_create_indirect(struct inode *pri, int index,
 	
         /* XXX: check this, ext3_new_inode, the first arg should be "dir" */ 
 	ind = ext3_new_inode(handle, pri, (int)pri->i_mode, 0);
+
 	if (IS_ERR(ind))
 		GOTO(exit, err);
 	CDEBUG(D_INODE, "got new inode %lu\n", ind->i_ino);
@@ -696,11 +756,11 @@ static struct inode* fsfilt_ext3_create_indirect(struct inode *pri, int index,
 				GOTO(exit_unlock, err= -EINVAL);
 		}
 
-		pri->u.ext3_i.i_flags |= EXT3_DEL_FL;
-		ind->u.ext3_i.i_flags |= EXT3_COW_FL;
+		EXT3_I(pri)->i_flags |= EXT3_DEL_FL;
+		EXT3_I(ind)->i_flags |= EXT3_COW_FL;
 		if(S_ISREG(pri->i_mode)) pri->i_nlink = 1;
-		pri->u.ext3_i.i_dtime = CURRENT_TIME;
-		//pri->u.ext3_i.i_generation++;
+		EXT3_I(pri)->i_dtime = LTIME_S(CURRENT_TIME);
+		//EXT3_I(pri)->i_generation++;
 		ext3_mark_inode_dirty(handle, pri);
 		ext3_mark_inode_dirty(handle, ind);
 		up(&ind->i_sem);
@@ -743,8 +803,8 @@ static struct inode* fsfilt_ext3_create_indirect(struct inode *pri, int index,
 			}
 		}
 		/* set cow flag for ind */
-		ind->u.ext3_i.i_flags |= EXT3_COW_FL;
-		pri->u.ext3_i.i_flags &= ~EXT3_COW_FL;
+		EXT3_I(ind)->i_flags |= EXT3_COW_FL;
+		EXT3_I(pri)->i_flags &= ~EXT3_COW_FL;
 
 		ext3_mark_inode_dirty(handle, pri);
 		ext3_mark_inode_dirty(handle, ind);
@@ -758,10 +818,10 @@ static struct inode* fsfilt_ext3_create_indirect(struct inode *pri, int index,
 	if (!EXT3_HAS_COMPAT_FEATURE(pri->i_sb,
 	                             EXT3_FEATURE_COMPAT_SNAPFS)) {
 		lock_super(pri->i_sb);
-		ext3_journal_get_write_access(handle, pri->i_sb->u.ext3_sb.s_sbh);
-		pri->i_sb->u.ext3_sb.s_es->s_feature_compat |=
+		ext3_journal_get_write_access(handle, EXT3_SB(pri->i_sb)->s_sbh);
+		EXT3_SB(pri->i_sb)->s_es->s_feature_compat |=
 			cpu_to_le32(EXT3_FEATURE_COMPAT_SNAPFS);
-		ext3_journal_dirty_metadata(handle, pri->i_sb->u.ext3_sb.s_sbh);
+		ext3_journal_dirty_metadata(handle, EXT3_SB(pri->i_sb)->s_sbh);
 		pri->i_sb->s_dirt = 1;
 		unlock_super(pri->i_sb);
 	}
@@ -770,7 +830,7 @@ static struct inode* fsfilt_ext3_create_indirect(struct inode *pri, int index,
 		       ind->i_ino, ind->i_nlink);
 		ext3_orphan_del(handle, ind);
 	}
-	ext3_journal_stop(handle, pri);
+	journal_stop(handle);
 
 	RETURN(ind);
 
@@ -784,7 +844,7 @@ exit:
 		ext3_orphan_del(handle, ind);
 	}
 	iput(ind);
-	ext3_journal_stop(handle, pri);
+	journal_stop(handle);
         
         RETURN(ERR_PTR(err));
 }
@@ -797,24 +857,20 @@ static int fsfilt_ext3_snap_feature (struct super_block *sb, int feature, int op
 	
 	switch (op) {
                 case SNAP_SET_FEATURE:
-                        handle = ext3_journal_start(sb->s_root->d_inode, 1);
-                        lock_super(sb);
-                        ext3_journal_get_write_access(handle, EXT3_SB(sb)->s_sbh);
-                        SB_FEATURE_COMPAT(sb) |= cpu_to_le32(feature);
-                        sb->s_dirt = 1;
-                        ext3_journal_dirty_metadata(handle, EXT3_SB(sb)->s_sbh);
-                        unlock_super(sb);
-                        ext3_journal_stop(handle, sb->s_root->d_inode);
-                        break;
                 case SNAP_CLEAR_FEATURE:
-                        handle = ext3_journal_start(sb->s_root->d_inode, 1);
+                        EXT3_JOURNAL_START(sb, handle, 1, rc);
+                        if(rc)
+                                RETURN(rc);
                         lock_super(sb);
                         ext3_journal_get_write_access(handle, EXT3_SB(sb)->s_sbh);
-                        SB_FEATURE_COMPAT(sb) &= ~cpu_to_le32(feature);
-                        ext3_journal_dirty_metadata(handle, EXT3_SB(sb)->s_sbh);
+                        if (op == SNAP_SET_FEATURE) 
+                                SB_FEATURE_COMPAT(sb) |= cpu_to_le32(feature);
+                        else 
+                                SB_FEATURE_COMPAT(sb) &= ~cpu_to_le32(feature);
                         sb->s_dirt = 1;
+                        ext3_journal_dirty_metadata(handle, EXT3_SB(sb)->s_sbh);
                         unlock_super(sb);
-                        ext3_journal_stop(handle, sb->s_root->d_inode);
+                        journal_stop(handle);
                         break;
                 case SNAP_HAS_FEATURE:
                         /*FIXME should lock super or not*/
@@ -878,8 +934,8 @@ static ino_t fsfilt_ext3_get_indirect_ino(struct super_block *sb,
         }                                                                                                                                                                                              
         err = ext3_xattr_get(primary, EXT3_SNAP_INDEX, EXT3_SNAP_ATTR,
                              buf, EXT3_MAX_SNAP_DATA);
-        if (err == -ENOATTR) {
-                GOTO(err_free, ino = -ENOATTR);
+        if (err == -ENODATA) {
+                GOTO(err_free, ino = -ENODATA);
         } else if (err < 0) {
                 CERROR(" attribute read error err=%d\n", err);
                 GOTO(err_free, ino = err);
@@ -928,9 +984,6 @@ static int ext3_migrate_block(handle_t *handle, struct inode * dst,
 	int i1_d=0, i1_s=0, i2_d=0, i2_s=0, i3_d=0, i3_s=0;
 	int addr_per_block = EXT3_ADDR_PER_BLOCK(src->i_sb);
 	int addr_per_block_bits = EXT3_ADDR_PER_BLOCK_BITS(src->i_sb);
-	unsigned long blksz = src->i_sb->s_blocksize;
-	kdev_t ddev = dst->i_dev;
-	kdev_t sdev = src->i_dev;
 	int physical = 0;
         ENTRY;        
 
@@ -972,18 +1025,18 @@ static int ext3_migrate_block(handle_t *handle, struct inode * dst,
 			else 
 				RETURN(0);
 		}
-		if(block_bmap(bread(ddev, i1_d, blksz), block)) 
+		if(block_bmap(sb_bread(dst->i_sb, i1_d), block)) 
 			RETURN(0);
 
 		i1_s = inode_bmap (src, EXT3_IND_BLOCK);
 		if( !i1_s)	RETURN(0);
 
-		physical = block_bmap(bread(sdev, i1_s, blksz), block);
+		physical = block_bmap(sb_bread(src->i_sb, i1_s), block);
 
 		if( physical) {
-			block_setbmap(handle, bread(ddev, i1_d, blksz),block,
+			block_setbmap(handle, sb_bread(dst->i_sb, i1_d),block,
                                       physical); 
-			block_setbmap(handle, bread(sdev, i1_s, blksz),block,0);
+			block_setbmap(handle, sb_bread(src->i_sb, i1_s),block,0);
 			RETURN(1); 
 		}
 		else 
@@ -1003,41 +1056,41 @@ static int ext3_migrate_block(handle_t *handle, struct inode * dst,
 			else 
 				RETURN(0);
 		}
-		i2_d = block_bmap (bread (ddev, i1_d, blksz),
+		i2_d = block_bmap (sb_bread (dst->i_sb, i1_d),
 				block >> addr_per_block_bits);
 
 		if (!i2_d) {
 			
 			if(!i1_s) 	RETURN(0);
 
-			physical = block_bmap(bread (sdev, i1_s, blksz),
+			physical = block_bmap(sb_bread (src->i_sb, i1_s),
 				               block >> addr_per_block_bits);
 			if(physical) {
-				block_setbmap(handle, bread (ddev, i1_d,blksz), 
+				block_setbmap(handle, sb_bread(dst->i_sb, i1_d), 
 					      block >> addr_per_block_bits, 
                                               physical);
-				block_setbmap(handle, bread (sdev, i1_s,blksz), 
+				block_setbmap(handle, sb_bread(src->i_sb, i1_s), 
 					      block >> addr_per_block_bits, 0);
 				RETURN(1);
 			}
 			else
 				RETURN(0);
 		}
-		physical = block_bmap(bread (ddev, i2_d, blksz),
+		physical = block_bmap(sb_bread(dst->i_sb, i2_d),
 				      block & (addr_per_block - 1));
 		if(physical) 
 				RETURN(0);
 		else {
-			i2_s = 	block_bmap (bread (sdev, i1_s, blksz),
+			i2_s = 	block_bmap (sb_bread(src->i_sb, i1_s),
 				block >> addr_per_block_bits);
 			if(!i2_s) 	RETURN(0);
 	
-			physical = block_bmap(bread (sdev, i2_s, blksz),
+			physical = block_bmap(sb_bread(src->i_sb, i2_s),
 				   block & (addr_per_block - 1));
 			if(physical) {
-				block_setbmap(handle, bread (ddev, i2_d, blksz),
+				block_setbmap(handle, sb_bread(dst->i_sb, i2_d),
 				   block & (addr_per_block - 1), physical);
-				block_setbmap(handle, bread (sdev, i2_s, blksz),
+				block_setbmap(handle, sb_bread(src->i_sb, i2_s),
 				   block & (addr_per_block - 1), 0);
 				RETURN(1);
 			}
@@ -1056,41 +1109,41 @@ static int ext3_migrate_block(handle_t *handle, struct inode * dst,
 		else 
 			RETURN(0);
 	}
-	i2_d = block_bmap(bread (ddev, i1_d, blksz),
+	i2_d = block_bmap(sb_bread (dst->i_sb, i1_d),
 			   block >> (addr_per_block_bits * 2));
 
-	if(i1_s) i2_s = block_bmap(bread(sdev, i1_s, blksz),
+	if(i1_s) i2_s = block_bmap(sb_bread(src->i_sb, i1_s),
 			           block >> (addr_per_block_bits * 2));
 
 	if (!i2_d) {
 		if( !i1_s) 	RETURN(0);
 		
-                physical = block_bmap(bread (sdev, i1_s, blksz),
+                physical = block_bmap(sb_bread (src->i_sb, i1_s),
 			               block >> (addr_per_block_bits * 2));
 		if(physical) {
-			block_setbmap(handle, bread (ddev, i1_d, blksz),
+			block_setbmap(handle, sb_bread (dst->i_sb, i1_d),
 				      block >> (addr_per_block_bits * 2), physical);
-			block_setbmap(handle, bread (sdev, i1_s, blksz),
+			block_setbmap(handle, sb_bread (src->i_sb, i1_s),
 				      block >> (addr_per_block_bits * 2), 0);
 			RETURN(1);
 		}
 		else
 			RETURN(0);
 	}
-	i3_d = block_bmap (bread (ddev, i2_d, blksz),
+	i3_d = block_bmap (sb_bread (dst->i_sb, i2_d),
 			(block >> addr_per_block_bits) & (addr_per_block - 1));
-	if( i2_s) i3_s = block_bmap (bread (sdev, i2_s, blksz),
+	if( i2_s) i3_s = block_bmap (sb_bread (src->i_sb, i2_s),
 			(block >> addr_per_block_bits) & (addr_per_block - 1));
 	
 	if (!i3_d) {
 		if (!i2_s)	RETURN(0);	
-		physical = block_bmap (bread (sdev, i2_s, blksz),
+		physical = block_bmap (sb_bread (src->i_sb, i2_s),
 			(block >> addr_per_block_bits) & (addr_per_block - 1));
 		if( physical) {
-			block_setbmap (handle, bread (ddev, i2_d, blksz),
+			block_setbmap (handle, sb_bread (dst->i_sb, i2_d),
 			               (block >> addr_per_block_bits) & 
                                        (addr_per_block - 1), physical);
-			block_setbmap (handle, bread (sdev, i2_s, blksz),
+			block_setbmap (handle, sb_bread (src->i_sb, i2_s),
 			               (block >> addr_per_block_bits) & 
                                        (addr_per_block - 1),0);
 			RETURN(1);
@@ -1098,19 +1151,19 @@ static int ext3_migrate_block(handle_t *handle, struct inode * dst,
 		else
 			RETURN(0);
 	}
-	physical = block_bmap (bread (ddev, i3_d, blksz),
+	physical = block_bmap (sb_bread (dst->i_sb, i3_d),
 			   block & (addr_per_block - 1)) ;
 	if(physical)    
                 RETURN(0);
 	else {
 		if(!i3_s)	
                         RETURN(0);	
-		physical = block_bmap(bread(sdev, i3_s, blksz),
+		physical = block_bmap(sb_bread(src->i_sb, i3_s),
 			              block & (addr_per_block - 1));
 		if(physical) {
-			block_setbmap (handle, bread (ddev, i3_d, blksz),
+			block_setbmap (handle, sb_bread (dst->i_sb, i3_d),
 			               block & (addr_per_block - 1), physical);
-			block_setbmap (handle, bread (sdev, i3_s, blksz),
+			block_setbmap (handle, sb_bread (src->i_sb, i3_s),
 			               block & (addr_per_block - 1), 0); 
 			RETURN(1);
 		}
@@ -1202,13 +1255,12 @@ static int fsfilt_ext3_destroy_indirect(struct inode *pri, int index,
 	struct inode *ind;
 	int save = 0, i=0, err = 0;
 	handle_t *handle=NULL;
-	time_t ctime;
         ENTRY;
 
 	if (index < 0 || index > EXT3_MAX_SNAPS)
 		RETURN(0);
 
-	if( pri == pri->i_sb->u.ext3_sb.s_journal_inode ){
+	if( pri == EXT3_SB(pri->i_sb)->s_journal_inode ){
 		CERROR("TRY TO DESTROY JOURNAL'S IND\n");
 		RETURN(-EINVAL);
 	}
@@ -1237,11 +1289,11 @@ static int fsfilt_ext3_destroy_indirect(struct inode *pri, int index,
 
 	CDEBUG(D_INODE, "iget ind %lu, ref count = %d\n", 
 	       ind->i_ino, atomic_read(&ind->i_count));
-
-	handle = ext3_journal_start(pri, SNAP_DESTROY_TRANS_BLOCKS);
-	if (!handle) {
+        
+        EXT3_JOURNAL_START(pri->i_sb, handle, SNAP_DESTROY_TRANS_BLOCKS, err);
+	if (err) {
 		iput(ind);
-		RETURN(-EINVAL);
+		RETURN(err);
 	}
 	/* if it's block level cow, first copy the blocks back */	
   	if (EXT3_HAS_COMPAT_FEATURE(pri->i_sb, EXT3_FEATURE_COMPAT_BLOCKCOW) &&
@@ -1252,7 +1304,7 @@ static int fsfilt_ext3_destroy_indirect(struct inode *pri, int index,
 			next_ind = pri;
 			down(&ind->i_sem);
 		} else {
-			double_down(&next_ind->i_sem, &ind->i_sem);
+			double_lock_inode(next_ind, ind);
 		}
 		blocks = (next_ind->i_size + next_ind->i_sb->s_blocksize-1) 
 			  >> next_ind->i_sb->s_blocksize_bits;
@@ -1275,8 +1327,7 @@ static int fsfilt_ext3_destroy_indirect(struct inode *pri, int index,
 		if (next_ind == pri) 
 			up(&ind->i_sem);
 		else 
-			double_up(&next_ind->i_sem, &ind->i_sem);
-
+                        double_unlock_inode(next_ind, ind);
 	}
 	
 	CDEBUG(D_INODE, "delete indirect ino %lu\n", ind->i_ino);
@@ -1298,7 +1349,7 @@ static int fsfilt_ext3_destroy_indirect(struct inode *pri, int index,
 	 * Otherwise, if we are deleting the last indirect inode remove the
 	 * snaptable from the inode.	XXX
 	 */
-	if (!save && pri->u.ext3_i.i_dtime) {
+	if (!save && EXT3_I(pri)->i_dtime) {
 		CDEBUG(D_INODE, "deleting primary %lu\n", pri->i_ino);
 		pri->i_nlink = 0;
 		/* reset err to 0 now */
@@ -1306,15 +1357,12 @@ static int fsfilt_ext3_destroy_indirect(struct inode *pri, int index,
 	} else {
 		CDEBUG(D_INODE, "%s redirector table\n", 
                        save ? "saving" : "deleting");
-		/* XXX: since set ea will modify i_ctime of pri, 
-			so save/restore i_ctime. Need this necessary ? */
-		ctime = pri->i_ctime;	
-		err = ext3_xattr_set(handle, pri, EXT3_SNAP_INDEX, EXT3_SNAP_ATTR,
-				     save ? buf : NULL, EXT3_MAX_SNAP_DATA, 0);
-		pri->i_ctime = ctime;
+		err = ext3_xattr_set_handle(handle, pri, EXT3_SNAP_INDEX, 
+                                            EXT3_SNAP_ATTR, save ? buf : NULL, 
+                                            EXT3_MAX_SNAP_DATA, 0);
 		ext3_mark_inode_dirty(handle, pri);
 	}
-	ext3_journal_stop(handle, pri);
+	journal_stop(handle);
 	
         RETURN(err);
 }
@@ -1330,7 +1378,7 @@ static int fsfilt_ext3_restore_indirect(struct inode *pri, int index)
 	if (index < 0 || index > EXT3_MAX_SNAPS)
 		RETURN(-EINVAL);
 
-	if( pri == pri->i_sb->u.ext3_sb.s_journal_inode ){
+	if( pri == EXT3_SB(pri->i_sb)->s_journal_inode ){
 		CERROR("TRY TO RESTORE JOURNAL\n");
 		RETURN(-EINVAL);
 	}
@@ -1343,9 +1391,9 @@ static int fsfilt_ext3_restore_indirect(struct inode *pri, int index)
 
 	CDEBUG(D_INODE, "restore ino %lu to %lu\n", pri->i_ino, ind->i_ino);
 
-	handle = ext3_journal_start(pri, SNAP_RESTORE_TRANS_BLOCKS);
-	if( !handle )
-		RETURN(-EINVAL);
+        EXT3_JOURNAL_START(pri->i_sb, handle, SNAP_RESTORE_TRANS_BLOCKS, err); 
+	if(err)
+		RETURN(err);
 	/* first destroy all the data blocks in primary inode */
 	/* XXX: check this, ext3_new_inode, the first arg should be "dir" */
         err = ext3_throw_inode_data(handle, pri);
@@ -1353,15 +1401,15 @@ static int fsfilt_ext3_restore_indirect(struct inode *pri, int index)
 		CERROR("restore_indirect, new_inode err\n");
                 RETURN(err);
         }	
-	double_down(&pri->i_sem, &ind->i_sem);
+	double_lock_inode(pri, ind);
 	ext3_migrate_data(handle, pri, ind);
-	pri->u.ext3_i.i_flags &= ~EXT3_COW_FL;
+	EXT3_I(pri)->i_flags &= ~EXT3_COW_FL;
 	ext3_mark_inode_dirty(handle, pri);
-	double_up(&pri->i_sem, &ind->i_sem);
+	double_unlock_inode(pri, ind);
 	iput(ind);
         
         //fsfilt_ext3_destroy_indirect(pri, index);
-	ext3_journal_stop(handle, pri);
+	journal_stop(handle);
 	
         RETURN(err);
 }
@@ -1432,51 +1480,47 @@ static int ext3_iterate_all(struct super_block *sb,
 	ibase = gstart * EXT3_INODES_PER_GROUP(sb);
 	for (gnum = gstart; gnum < EXT3_SB(sb)->s_groups_count;
 	     gnum++, ibase += EXT3_INODES_PER_GROUP(sb)) {
+		struct buffer_head *bitmap_bh = NULL;
 		struct ext3_group_desc * gdp;
-		int bitmap_nr, ibyte;
-		char *bitmap;
-
+                ino_t  ino;
+                
 		gdp = ext3_get_group_desc (sb, gnum, NULL);
 		if (!gdp || le16_to_cpu(gdp->bg_free_inodes_count) ==
 		    EXT3_INODES_PER_GROUP(sb))
 			continue;
+                bitmap_bh = read_inode_bitmap(sb, gnum);
 
-		bitmap_nr = ext3_load_inode_bitmap(sb, gnum);
-		if (bitmap_nr < 0)
-			continue;
-
-		bitmap = EXT3_SB(sb)->s_inode_bitmap[bitmap_nr]->b_data;
-		for (ibyte = istart >> 3; ibyte < EXT3_INODES_PER_GROUP(sb) >> 3;
-		     ibyte++) {
-			int i, bit;
-
-			if (!bitmap[ibyte])
-				continue;
-
-			/* FIXME need to verify if bit endianness will
-			 *       work properly here for all architectures.
-			 */
-			for (i = 1, bit = 1; i <= 8; i++, bit <<= 1) {
-				ino_t ino = ibase + (ibyte << 3) + i;
-
-				if ((bitmap[ibyte] & bit) == 0)
+                if (!bitmap_bh)
+                        continue;
+                ino = 0;
+repeat:
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
+                ino = find_next_bit((unsigned long *)bitmap_bh->b_data, 
+                                    EXT3_INODES_PER_GROUP(sb), ino);
+#else
+                ino = find_next_bit((unsigned long *)bitmap_bh->b_data, 
+                                    EXT3_INODES_PER_GROUP(sb), ino);
+#warning"FIXME-WANGDI need to port find_next_bit to 2.4" 
+#endif                
+                if (ino < EXT3_INODES_PER_GROUP(sb)) { 
+                        ino_t inum = ino + gnum * EXT3_INODES_PER_GROUP(sb) + 1;
+                        if (*start) {
+			        if (inum < (*start)->i_ino)
 					continue;
-				if (*start) {
-					if (ino < (*start)->i_ino)
-						continue;
-				} else {
-					*start = iget(sb, ino);
-					if (!*start) 
-						GOTO(exit, err = -ENOMEM);
-					if (is_bad_inode(*start)) 
-						GOTO(exit, err = -EIO);
-				}
-				if ((err = (*repeat)(*start, priv)) != 0)
-					GOTO(exit, err);
-				iput(*start);
-				*start = NULL;
+			} else {
+				*start = iget(sb, inum);
+				if (!*start) 
+					GOTO(exit, err = -ENOMEM);
+				if (is_bad_inode(*start)) 
+					GOTO(exit, err = -EIO);
 			}
-		}
+			if ((err = (*repeat)(*start, priv)) != 0)
+				GOTO(exit, err);
+			iput(*start);
+			*start = NULL;
+                        if (++ino < EXT3_INODES_PER_GROUP(sb))
+                                goto repeat;
+                }
 		istart = 0;
 	}
 exit:
@@ -1523,7 +1567,7 @@ static int fsfilt_ext3_get_snap_info(struct inode *inode, void *key,
                 
                 rc = ext3_xattr_get(inode, EXT3_SNAP_INDEX,EXT3_SNAP_GENERATION,
                                     (char *)val, *vallen);
-                if (rc == -ENOATTR) {
+                if (rc == -ENODATA) {
                         *((__u32 *)val) = 0; 
                         *vallen = sizeof(int);
                         rc = 0;
@@ -1548,13 +1592,13 @@ static int fsfilt_ext3_set_snap_info(struct inode *inode, void *key,
         if (keylen >= strlen(SNAPTABLE_INFO) 
             && strcmp(key, SNAPTABLE_INFO) == 0) {
                 handle_t *handle;
- 
-                handle = ext3_journal_start(inode, EXT3_XATTR_TRANS_BLOCKS);
-                if( !handle )
-                        RETURN(-EINVAL);
-                rc = ext3_xattr_set(handle, inode, EXT3_SNAP_INDEX, 
-                                    EXT3_SNAPTABLE_EA, val, *vallen, 0); 
-	        ext3_journal_stop(handle, inode);
+                EXT3_JOURNAL_START(inode->i_sb, handle, 
+                                   EXT3_XATTR_TRANS_BLOCKS, rc); 
+                if(rc)
+                        RETURN(rc);
+                rc = ext3_xattr_set_handle(handle, inode, EXT3_SNAP_INDEX, 
+                                           EXT3_SNAPTABLE_EA, val, *vallen, 0); 
+	        journal_stop(handle);
                 
                 RETURN(rc);
         } else if (keylen >= strlen(SNAP_GENERATION) 

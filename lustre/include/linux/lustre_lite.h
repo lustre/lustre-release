@@ -156,7 +156,6 @@ static inline void ll_inode2fid(struct ll_fid *fid, struct inode *inode)
         mdc_pack_fid(fid, inode->i_ino, inode->i_generation,
                      inode->i_mode & S_IFMT);
         LASSERT(ll_i2info(inode));
-        fid->snap_index = ll_i2info(inode)->lli_snap_index,
         fid->mds = ll_i2info(inode)->lli_mds;
 }
 

@@ -1257,9 +1257,10 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
         if (body->valid & OBD_MD_FLSIZE)
                 set_bit(LLI_F_HAVE_MDS_SIZE_LOCK, &lli->lli_flags);
         
-        lli->lli_snap_index = body->fid1.snap_index;
         lli->lli_mds = body->mds;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         inode->i_dev = (kdev_t) body->mds;
+#endif
         LASSERT(body->mds < 1000);
 }
 

@@ -238,8 +238,6 @@ static void setup_sm_sb_ops(struct super_block *cache_sb, struct super_block *sb
         memset(sops, 0, sizeof (struct super_operations));
 
         if (cache_sb->s_op) {
-                if (cache_sb->s_op->read_inode)
-                        sops->read_inode = smfs_sops->read_inode;
                 if (cache_sb->s_op->dirty_inode)
                         sops->dirty_inode = smfs_sops->dirty_inode;
                 if (cache_sb->s_op->write_inode)
@@ -262,16 +260,18 @@ static void setup_sm_sb_ops(struct super_block *cache_sb, struct super_block *sb
                         sops->remount_fs = smfs_sops->remount_fs;
                 if (cache_sb->s_op->umount_begin)
                         sops->umount_begin = smfs_sops->umount_begin;
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
                 if (cache_sb->s_op->fh_to_dentry)
                         sops->fh_to_dentry = smfs_sops->fh_to_dentry;
                 if (cache_sb->s_op->dentry_to_fh)
                         sops->dentry_to_fh = smfs_sops->dentry_to_fh;
                 if (cache_sb->s_op->show_options)
                         sops->show_options = smfs_sops->show_options;
-
+                sops->read_inode2 = smfs_sops->read_inode2;
+#endif
                 /* FIXME-WANGDI we need this method to clear the cache inode. */
                 sops->clear_inode = smfs_sops->clear_inode;
-                sops->read_inode2 = smfs_sops->read_inode2;
         }
 
         lock_kernel();
@@ -322,78 +322,4 @@ void sm_set_sb_ops(struct super_block *cache_sb, struct super_block *sb)
         sb->s_op = cache_sops(smb);
         return;
 }
-struct smfs_hook_ops *smfs_alloc_hook_ops(char *name, smfs_hook_func pre_hook, 
-                                       smfs_hook_func post_hook)
-{
-        struct smfs_hook_ops *smfs_hops = NULL;
-        
-        ENTRY;
-        OBD_ALLOC(smfs_hops, sizeof(struct smfs_hook_ops));
 
-        if (!smfs_hops)
-                RETURN(NULL);
- 
-        OBD_ALLOC(smfs_hops->smh_name, strlen(name) + 1);
-        
-        if (!smfs_hops->smh_name) { 
-                OBD_FREE(smfs_hops, sizeof(struct smfs_hook_ops));
-                RETURN(NULL);
-        }
-        
-        memcpy(smfs_hops->smh_name, name, strlen(name));  
-       
-        smfs_hops->smh_post_op = post_hook;  
-        smfs_hops->smh_pre_op = pre_hook;  
-        
-        RETURN(smfs_hops); 
-}
-
-void smfs_free_hook_ops(struct smfs_hook_ops *hops)
-{
-        if (hops) {
-                if (hops->smh_name){
-                        OBD_FREE(hops->smh_name, strlen(hops->smh_name) + 1);
-                }
-                OBD_FREE(hops, sizeof(struct smfs_hook_ops));
-        }
-}
-
-int smfs_register_hook_ops(struct super_block *sb, 
-                           struct smfs_hook_ops *smh_ops)
-{
-        struct smfs_super_info *smb = S2SMI(sb);
-        struct list_head *hlist = &smb->smsi_hook_list;
-        struct list_head *p;
-        ENTRY;
- 
-        list_for_each(p, hlist) {
-                struct smfs_hook_ops *found;               
-                found = list_entry(p, struct smfs_hook_ops, smh_list);
-                if (!strcmp(found->smh_name, smh_ops->smh_name)) {
-                        CWARN("hook ops %s list  reregister\n", smh_ops->smh_name);
-                        RETURN(0);
-                }
-        }
-	list_add(&smh_ops->smh_list, hlist);
-        RETURN(0);
-} 
-struct smfs_hook_ops  *smfs_unregister_hook_ops(struct super_block *sb, 
-                                                char *name)
-{
-        struct smfs_super_info *smb = S2SMI(sb);
-        struct list_head *hlist = &smb->smsi_hook_list;
-        struct list_head *p;
-        ENTRY;      
- 
-        list_for_each(p, hlist) {
- 		struct smfs_hook_ops *found;
-
-                found = list_entry(p, typeof(*found), smh_list);
-                if (!memcmp(found->smh_name, name, strlen(name))) {
-                        list_del(p);
-                        RETURN(found);
-                }
-        } 
-        RETURN(NULL);
-}
-                        

@@ -363,16 +363,8 @@ static int cmobd_write_main(void *arg)
         ENTRY;
 
         lock_kernel();
-        /* vv ptlrpc_daemonize(); vv */
-        exit_mm(current);
-
-        current->session = 1;
-        current->pgrp = 1;
-        current->tty = NULL;
-
-        exit_files(current);
-        reparent_to_init();
-        /* ^^ ptlrpc_daemonize(); ^^ */
+        
+        ptlrpc_daemonize();
 
         SIGNAL_MASK_LOCK(current, flags);
         sigfillset(&current->blocked);

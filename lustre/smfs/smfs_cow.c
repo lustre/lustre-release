@@ -84,7 +84,7 @@ static int smfs_init_snaptabe(struct super_block *sb)
                                        strlen(SNAPTABLE_INFO), 
                                        snap_table, &table_size);       
         if (rc < 0) {
-                if (rc == -ENOATTR) {
+                if (rc == -ENODATA) {
                         snap_table->sntbl_count = 0;
                         CDEBUG(D_INFO, "No snaptable here\n");
                         RETURN(0);
@@ -380,7 +380,7 @@ void snap_last(struct super_block *sb, struct snap *snap)
 {
 	struct snap_info *snap_info = S2SNAPI(sb);
 	struct snap_table *table = snap_info->sntbl;
-        time_t now = CURRENT_TIME;
+        time_t now = LTIME_S(CURRENT_TIME);
 	int i ;
 
 	ENTRY;
@@ -442,7 +442,7 @@ int smfs_add_snap_item(struct super_block *sb, char *name)
         snap_item = &snap_table->sntbl_items[count];
 
 	/*add item in snap_table set generation*/
-	snap_item->sn_time = CURRENT_TIME;
+	snap_item->sn_time = LTIME_S(CURRENT_TIME);
 	/* find table index */
 	index = get_index_of_item(snap_table, name);
         if (index < 0) 

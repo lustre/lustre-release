@@ -829,9 +829,9 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 struct mds_body *body;
 
                 created = 1;
-                LTIME_S(iattr.ia_atime) = LTIME_S(rec->ur_time);
-                LTIME_S(iattr.ia_ctime) = LTIME_S(rec->ur_time);
-                LTIME_S(iattr.ia_mtime) = LTIME_S(rec->ur_time);
+                LTIME_S(iattr.ia_atime) = rec->ur_time;
+                LTIME_S(iattr.ia_ctime) = rec->ur_time;
+                LTIME_S(iattr.ia_mtime) = rec->ur_time;
                 iattr.ia_uid = rec->_ur_fsuid;
                 if (dir->i_mode & S_ISGID)
                         iattr.ia_gid = dir->i_gid;
@@ -1845,8 +1845,8 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                 int err;
 
                 iattr.ia_valid = ATTR_MTIME | ATTR_CTIME;
-                LTIME_S(iattr.ia_mtime) = LTIME_S(rec->ur_time);
-                LTIME_S(iattr.ia_ctime) = LTIME_S(rec->ur_time);
+                LTIME_S(iattr.ia_mtime) = rec->ur_time;
+                LTIME_S(iattr.ia_ctime) = rec->ur_time;
 
                 err = fsfilt_setattr(obd, dparent, handle, &iattr, 0);
                 if (err)

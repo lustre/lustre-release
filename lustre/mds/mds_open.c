@@ -1039,9 +1039,9 @@ got_child:
                 }
 
                 created = 1;
-                LTIME_S(iattr.ia_atime) = LTIME_S(rec->ur_time);
-                LTIME_S(iattr.ia_ctime) = LTIME_S(rec->ur_time);
-                LTIME_S(iattr.ia_mtime) = LTIME_S(rec->ur_time);
+                LTIME_S(iattr.ia_atime) = rec->ur_time;
+                LTIME_S(iattr.ia_ctime) = rec->ur_time;
+                LTIME_S(iattr.ia_mtime) = rec->ur_time;
 
                 iattr.ia_uid = rec->_ur_fsuid;
                 if (dparent->d_inode->i_mode & S_ISGID)
@@ -1314,11 +1314,11 @@ int mds_mfd_close(struct ptlrpc_request *req, struct obd_device *obd,
                  * it is more out-of-date than the specified limit.  If we
                  * are already going to write out the atime then do it anyway.
                  * */
-                if ((LTIME_S(request_body->atime) >
+                if ((request_body->atime >
                      LTIME_S(inode->i_atime) + MAX_ATIME_DIFF) ||
                     (iattr.ia_valid != 0 &&
-                     LTIME_S(request_body->atime) > LTIME_S(inode->i_atime))) {
-                        LTIME_S(iattr.ia_atime) = LTIME_S(request_body->atime);
+                     request_body->atime > LTIME_S(inode->i_atime))) {
+                        LTIME_S(iattr.ia_atime) = request_body->atime;
                         iattr.ia_valid |= ATTR_ATIME;
                 }
         }

@@ -299,16 +299,7 @@ struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
         if (ino == 0)
                 RETURN(ERR_PTR(-ESTALE));
        
-#ifdef CONFIG_SNAPFS
-        if (is_smfs_sb(mds->mds_sb)) {
-                snprintf(fid_name, sizeof(fid_name), "0x%lx:%lx", ino, 
-                         fid->snap_index);
-        } else {
-                snprintf(fid_name, sizeof(fid_name), "0x%lx", ino);
-        }
-#else
         snprintf(fid_name, sizeof(fid_name), "0x%lx", ino);
-#endif 
 
         CDEBUG(D_DENTRY, "--> mds_fid2dentry: ino/gen %lu/%u, sb %p\n",
                ino, generation, mds->mds_sb);

@@ -128,11 +128,10 @@ int smfs_register_hook_ops(struct super_block *sb,
 
 struct smfs_hook_ops *smfs_unregister_hook_ops(struct super_block *sb, 
                                                char *name);
-/*super.c*/
-extern int init_smfs(void);
-extern int cleanup_smfs(void);
-extern void smfs_put_super(struct super_block *sb);
+/*smfs_lib.c*/
+void smfs_put_super(struct super_block *sb);
 extern struct super_block *smfs_get_sb_by_path(char *path, int len);
+int smfs_fill_super(struct super_block *sb, void *data, int silent);
 /*sysctl.c*/
 extern int sm_debug_level;
 extern int sm_inodes;
@@ -159,7 +158,9 @@ extern int smfs_release(struct inode * inode, struct file * filp);
 /*inode.c*/
 struct inode *smfs_get_inode(struct super_block *sb, ino_t hash, 
                              struct inode *dir, int index);
+
 extern struct super_operations smfs_super_ops;
+
 /*symlink.c*/
 extern struct inode_operations smfs_sym_iops;
 extern struct file_operations smfs_sym_fops;

@@ -49,11 +49,10 @@ int cmobd_setattr_reint(struct obd_device *obd, struct ptlrpc_request *req)
         if (rec->sa_valid & ATTR_FROM_OPEN) 
                 req->rq_request_portal = MDS_SETATTR_PORTAL; //XXX FIXME bug 249
 
-        if (rec->sa_valid & (ATTR_MTIME | ATTR_CTIME))
+        if (rec->sa_valid & (ATTR_MTIME | ATTR_CTIME)) 
                 CDEBUG(D_INODE, "setting mtime %lu, ctime %lu\n",
-                       LTIME_S(((time_t)rec->sa_mtime)), 
-                       LTIME_S(((time_t)rec->sa_ctime)));
-        
+                       ((time_t)rec->sa_mtime), 
+                       ((time_t)rec->sa_ctime));
         size[0] = sizeof(struct mds_body);
         req->rq_replen = lustre_msg_size(1, size);
 

@@ -70,12 +70,6 @@ void mds_pack_dentry2body(struct mds_body *b, struct dentry *dentry)
 void mds_pack_inode2fid(struct obd_device *obd, struct ll_fid *fid,
                                 struct inode *inode)
 {
-#ifdef CONFIG_SNAPFS
-        if (is_smfs_sb(inode->i_sb)) {
-                struct smfs_inode_info *sm_info = I2SMI(inode);
-                fid->snap_index = sm_info->sm_sninfo.sn_index;
-        }
-#endif
         fid->id = inode->i_ino;
         fid->generation = inode->i_generation;
         fid->f_type = (S_IFMT & inode->i_mode);

@@ -75,7 +75,8 @@ static struct inode* fsfilt_smfs_create_indirect(struct inode *inode,
         
         if (cache_ind_inode && !IS_ERR(cache_ind_inode)){ 
                 /*FIXME: get indirect inode set_cow flags*/ 
-                ind_inode = iget4(inode->i_sb, cache_ind_inode->i_ino, NULL, 0);
+                ind_inode = smfs_get_inode(inode->i_sb, cache_ind_inode->i_ino, 
+                                           inode, 0);
         }    
         RETURN(ind_inode);
 }
