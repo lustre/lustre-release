@@ -17,6 +17,7 @@
 
 #include <linux/module.h>
 #include <linux/pagemap.h>
+#include <linux/obd_class.h>
 #include <linux/lustre_dlm.h>
 #include <linux/obd_filter.h>
 #include <linux/ext3_jbd.h>
