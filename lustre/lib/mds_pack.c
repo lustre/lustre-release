@@ -34,7 +34,6 @@
 #include <linux/delay.h>
 #include <linux/skbuff.h>
 #include <linux/proc_fs.h>
-#include <linux/vmalloc.h>
 #include <linux/fs.h>
 #include <linux/poll.h>
 #include <linux/init.h>
@@ -60,7 +59,7 @@ int mds_pack_req(char *name, int namelen, char *tgt, int tgtlen,
 	*len = sizeof(**hdr) + size_round(namelen) + size_round(tgtlen) + 
 		sizeof(**req); 
 
-	*buf = kmalloc(*len, GFP_KERNEL);
+	OBD_ALLOC(*buf, *len);
 	if (!*buf) {
 		EXIT;
 		return -ENOMEM;
@@ -149,7 +148,7 @@ int mds_pack_rep(char *name, int namelen, char *tgt, int tgtlen,
 	*len = sizeof(**hdr) + size_round(namelen) + size_round(tgtlen) + 
 		sizeof(**rep); 
 
-	*buf = kmalloc(*len, GFP_KERNEL);
+	OBD_ALLOC(*buf, *len);
 	if (!*buf) {
 		EXIT;
 		return -ENOMEM;

@@ -56,7 +56,7 @@ static char *obdfs_read_opt(const char *opt, char *data)
                 return NULL;
 
         value++;
-        OBD_ALLOC(retval, char *, strlen(value) + 1);
+        OBD_ALLOC(retval, strlen(value) + 1);
         if ( !retval ) {
                 printk(KERN_ALERT __FUNCTION__ ": out of memory!\n");
                 return NULL;

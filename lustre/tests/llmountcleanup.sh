@@ -28,8 +28,8 @@ rmmod mds
 rmmod osc
 rmmod ost
 rmmod obdext2
-rmmod obdclass
 rmmod ptlrpc
+rmmod obdclass
 
 $R/usr/src/portals/linux/utils/ptlctl <<EOF
 setup tcp

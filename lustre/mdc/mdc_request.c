@@ -1,5 +1,22 @@
-/*
- * Copryright (C) 2001 Cluster File Systems, Inc.
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
+ *
+ * Copyright (C) 2001, 2002 Cluster File Systems, Inc.
+ *
+ *   This file is part of Portals, http://www.sf.net/projects/lustre/
+ *
+ *   Portals is free software; you can redistribute it and/or
+ *   modify it under the terms of version 2 of the GNU General Public
+ *   License as published by the Free Software Foundation.
+ *
+ *   Portals is distributed in the hope that it will be useful,
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   GNU General Public License for more details.
+ *
+ *   You should have received a copy of the GNU General Public License
+ *   along with Portals; if not, write to the Free Software
+ *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
  */
 
@@ -22,7 +39,6 @@
 #include <linux/fs.h>
 #include <linux/stat.h>
 #include <asm/uaccess.h>
-#include <linux/vmalloc.h>
 #include <asm/segment.h>
 #include <linux/miscdevice.h>
 
@@ -38,13 +54,14 @@ extern int mds_queue_req(struct ptlrpc_request *);
 /* FIXME: this belongs in some sort of service struct */
 static int mdc_xid = 0;
 
-struct ptlrpc_request *mds_prep_req(int opcode, int namelen, char *name, int tgtlen, char *tgt)
+struct ptlrpc_request *mds_prep_req(int opcode, int namelen, char *name,
+                                    int tgtlen, char *tgt)
 {
 	struct ptlrpc_request *request;
 	int rc;
 	ENTRY; 
 
-	request = (struct ptlrpc_request *)kmalloc(sizeof(*request), GFP_KERNEL); 
+	OBD_ALLOC(request, sizeof(*request));
 	if (!request) { 
 		printk("mds_prep_req: request allocation out of memory\n");
 		return NULL;
@@ -113,7 +130,7 @@ static int mds_queue_wait(struct ptlrpc_request *req, struct lustre_peer *peer)
 
 void mdc_free_req(struct ptlrpc_request *request)
 {
-	kfree(request);
+	OBD_FREE(request, sizeof(*request));
 }
 
 int mdc_getattr(struct lustre_peer *peer, ino_t ino, int type, int valid, 
@@ -215,7 +232,7 @@ int mdc_reint(struct lustre_peer *peer, struct ptlrpc_request *request)
 
 
 static int request_ioctl(struct inode *inode, struct file *file, 
-		       unsigned int cmd, unsigned long arg)
+                         unsigned int cmd, unsigned long arg)
 {
 	int err;
 	struct lustre_peer peer, *peer_ptr = NULL;
@@ -245,8 +262,11 @@ static int request_ioctl(struct inode *inode, struct file *file,
 		struct ptlrep_hdr *hdr = NULL;
 		printk("-- getting attr for ino 2\n"); 
 		err = mdc_getattr(peer_ptr, 2, S_IFDIR, ~0, NULL, &hdr);
-		if (hdr)
-			kfree(hdr);
+		if (hdr) {
+                        /* FIXME: there must be a better way to get the size */
+			OBD_FREE(hdr, sizeof(struct ptlrep_hdr) +
+                                 sizeof(struct mds_rep));
+                }
 		printk("-- done err %d\n", err);
 		break;
 	}
@@ -254,7 +274,7 @@ static int request_ioctl(struct inode *inode, struct file *file,
 	case IOC_REQUEST_READPAGE: { 
 		struct ptlrep_hdr *hdr = NULL;
 		char *buf;
-		buf = kmalloc(PAGE_SIZE, GFP_KERNEL); 
+		OBD_ALLOC(buf, PAGE_SIZE);
 		if (!buf) { 
 			err = -ENOMEM;
 			break;
@@ -265,10 +285,11 @@ static int request_ioctl(struct inode *inode, struct file *file,
 		if (!err) { 
 			printk("-- status: %d\n", hdr->status); 
 			err = hdr->status;
-			if (hdr) 
-				kfree(hdr);
+                        if (hdr)
+                                OBD_FREE(hdr, sizeof(struct ptlrep_hdr) +
+                                         sizeof(struct mds_rep));
 		}
-		kfree(buf); 
+		OBD_FREE(buf, PAGE_SIZE);
 		break;
 	}
 
@@ -288,7 +309,8 @@ static int request_ioctl(struct inode *inode, struct file *file,
 			printk("-- status: %d\n", hdr->status); 
 			err = hdr->status;
 		} else {
-			kfree(hdr); 
+                        OBD_FREE(hdr, sizeof(struct ptlrep_hdr) +
+                                 sizeof(struct mds_rep));
 		}
 		break;
 	}
@@ -312,7 +334,8 @@ static int request_ioctl(struct inode *inode, struct file *file,
 			printk("-- status: %d\n", hdr->status); 
 			err = hdr->status;
 		}
-		kfree(hdr); 
+                OBD_FREE(hdr, sizeof(struct ptlrep_hdr) +
+                         sizeof(struct mds_rep));
 		break;
 	}
 

@@ -47,7 +47,7 @@ static int mds_queue_req(struct ptlrpc_request *req)
 		return -1;
 	}
 
-	srv_req = kmalloc(sizeof(*srv_req), GFP_KERNEL);
+	OBD_ALLOC(srv_req, sizeof(*srv_req));
 	if (!srv_req) { 
 		EXIT;
 		return -ENOMEM;
@@ -60,7 +60,7 @@ static int mds_queue_req(struct ptlrpc_request *req)
 
 	/* move the request buffer */
 	srv_req->rq_reqbuf = req->rq_reqbuf;
-	srv_req->rq_reqlen    = req->rq_reqlen;
+	srv_req->rq_reqlen = req->rq_reqlen;
 	srv_req->rq_obd = MDS;
 
 	/* remember where it came from */
@@ -89,24 +89,25 @@ int mds_sendpage(struct ptlrpc_request *req, struct file *file,
 	} else {
 		char *buf;
 
-		buf = kmalloc(PAGE_SIZE, GFP_KERNEL);
-		if (!buf) {
+		OBD_ALLOC(buf, PAGE_SIZE);
+		if (!buf)
 			return -ENOMEM;
-		}
 
 		set_fs(KERNEL_DS); 
 		rc = generic_file_read(file, buf, PAGE_SIZE, &offset); 
 		set_fs(oldfs);
 
-		if (rc != PAGE_SIZE) 
+		if (rc != PAGE_SIZE) {
+                        OBD_FREE(buf, PAGE_SIZE);
 			return -EIO;
+                }
 
 		req->rq_bulkbuf = buf;
 		req->rq_bulklen = PAGE_SIZE;
 		rc = ptl_send_buf(req, &req->rq_peer, MDS_BULK_PORTAL, 0);
 		init_waitqueue_head(&req->rq_wait_for_bulk);
 		sleep_on(&req->rq_wait_for_bulk);
-		kfree(buf);
+                OBD_FREE(buf, PAGE_SIZE);
 		req->rq_bulklen = 0; /* FIXME: eek. */
 	}
 
@@ -134,7 +135,7 @@ int mds_reply(struct ptlrpc_request *req)
 		req->rq_replen = 0;
 
 		/* free the request buffer */
-		kfree(req->rq_reqbuf);
+		OBD_FREE(req->rq_reqbuf, req->rq_reqlen);
 		req->rq_reqbuf = NULL;
 
 		/* wake up the client */ 
@@ -151,7 +152,7 @@ int mds_error(struct ptlrpc_request *req)
 
 	ENTRY;
 
-	hdr = kmalloc(sizeof(*hdr), GFP_KERNEL);
+	OBD_ALLOC(hdr, sizeof(*hdr));
 	if (!hdr) { 
 		EXIT;
 		return -ENOMEM;
@@ -170,7 +171,8 @@ int mds_error(struct ptlrpc_request *req)
 	return mds_reply(req);
 }
 
-struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid, struct vfsmount **mnt)
+struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
+                              struct vfsmount **mnt)
 {
 	/* stolen from NFS */ 
 	struct super_block *sb = mds->mds_sb; 
@@ -572,8 +574,7 @@ static int mds_setup(struct obd_device *obddev, obd_count len,
 
 	err = kportal_uuid_to_peer("self", &peer);
 	if (err == 0) {
-		mds->mds_service = kmalloc(sizeof(*mds->mds_service),
-						  GFP_KERNEL);
+		OBD_ALLOC(mds->mds_service, sizeof(*mds->mds_service));
 		if (mds->mds_service == NULL)
 			return -ENOMEM;
 		mds->mds_service->srv_buf_size = 64 * 1024;
@@ -611,6 +612,9 @@ static int mds_cleanup(struct obd_device * obddev)
 
 	MDS = NULL;
 	mds_stop_srv_thread(mds);
+        rpc_unregister_service(mds->mds_service);
+        OBD_FREE(mds->mds_service, sizeof(*mds->mds_service));
+
         sb = mds->mds_sb;
         if (!mds->mds_sb){
                 EXIT;

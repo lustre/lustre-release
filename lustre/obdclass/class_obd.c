@@ -42,7 +42,6 @@
 #include <linux/delay.h>
 #include <linux/skbuff.h>
 #include <linux/proc_fs.h>
-#include <linux/vmalloc.h>
 #include <linux/fs.h>
 #include <linux/poll.h>
 #include <linux/init.h>
@@ -725,7 +724,6 @@ int obd_register_type(struct obd_ops *ops, char *nm)
 {
         struct obd_type *type;
 
-
         if (obd_init_magic != 0x11223344) {
                 printk(__FUNCTION__ ": bad magic for type\n");
                 EXIT;
@@ -738,7 +736,7 @@ int obd_register_type(struct obd_ops *ops, char *nm)
                 return -EEXIST;
         }
         
-        OBD_ALLOC(type, struct obd_type * , sizeof(*type));
+        OBD_ALLOC(type, sizeof(*type));
         if ( !type ) {
                 EXIT;
                 return -ENOMEM;
@@ -784,7 +782,6 @@ static struct file_operations obd_psdev_fops = {
         open: obd_class_open,        /* open */
         release: obd_class_release,     /* release */
 };
-
 
 /* modules setup */
 #define OBD_MINOR 241
@@ -840,7 +837,7 @@ EXPORT_SYMBOL(obdo_cachep);
 /* EXPORT_SYMBOL(gen_multi_attach); */
 EXPORT_SYMBOL(gen_multi_setup);
 EXPORT_SYMBOL(gen_multi_cleanup);
-
+EXPORT_SYMBOL(obd_memory);
 
 #ifdef MODULE
 int init_module(void)

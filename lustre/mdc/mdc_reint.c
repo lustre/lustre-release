@@ -1,5 +1,22 @@
-/*
- * Copryright (C) 2001 Cluster File Systems, Inc.
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
+ *
+ * Copyright (C) 2001, 2002 Cluster File Systems, Inc.
+ *
+ *   This file is part of Portals, http://www.sf.net/projects/lustre/
+ *
+ *   Portals is free software; you can redistribute it and/or
+ *   modify it under the terms of version 2 of the GNU General Public
+ *   License as published by the Free Software Foundation.
+ *
+ *   Portals is distributed in the hope that it will be useful,
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   GNU General Public License for more details.
+ *
+ *   You should have received a copy of the GNU General Public License
+ *   along with Portals; if not, write to the Free Software
+ *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
  */
 
@@ -22,7 +39,6 @@
 #include <linux/fs.h>
 #include <linux/stat.h>
 #include <asm/uaccess.h>
-#include <linux/vmalloc.h>
 #include <asm/segment.h>
 #include <linux/miscdevice.h>
 
@@ -32,7 +48,8 @@
 #include <linux/lustre_mds.h>
 
 extern int mdc_reint(struct lustre_peer *peer, struct ptlrpc_request *request);
-extern struct ptlrpc_request *mds_prep_req(int opcode, int namelen, char *name, int tgtlen, char *tgt);
+extern struct ptlrpc_request *mds_prep_req(int opcode, int namelen, char *name,
+                                           int tgtlen, char *tgt);
 
 int mdc_setattr(struct lustre_peer *peer, 
 		struct inode *inode, struct iattr *iattr,
@@ -102,7 +119,7 @@ int mdc_create(struct lustre_peer *peer,
 		*hdr = request->rq_rephdr;
 	}
 
-	kfree(request); 
+        OBD_FREE(request, sizeof(*request));
 	return rc;
 }
 
@@ -136,7 +153,7 @@ int mdc_unlink(struct lustre_peer *peer,
 		*hdr = request->rq_rephdr;
 	}
 
-	kfree(request); 
+        OBD_FREE(request, sizeof(*request));
 	return rc;
 }
 
@@ -170,7 +187,7 @@ int mdc_link(struct lustre_peer *peer, struct dentry *src,
 		*hdr = request->rq_rephdr;
 	}
 
-	kfree(request); 
+        OBD_FREE(request, sizeof(*request));
 	return rc;
 }
 
@@ -206,6 +223,6 @@ int mdc_rename(struct lustre_peer *peer, struct inode *src,
 		*hdr = request->rq_rephdr;
 	}
 
-	kfree(request); 
+        OBD_FREE(request, sizeof(*request));
 	return rc;
 }

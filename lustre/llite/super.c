@@ -28,7 +28,6 @@
 #include <linux/fs.h>
 #include <linux/stat.h>
 #include <asm/uaccess.h>
-#include <linux/vmalloc.h>
 #include <asm/segment.h>
 
 #include <linux/obd_support.h>
@@ -57,7 +56,7 @@ static char *ll_read_opt(const char *opt, char *data)
 	}
 
         value++;
-        OBD_ALLOC(retval, char *, strlen(value) + 1);
+        OBD_ALLOC(retval, strlen(value) + 1);
         if ( !retval ) {
                 printk(KERN_ALERT __FUNCTION__ ": out of memory!\n");
                 return NULL;
@@ -168,7 +167,9 @@ static struct super_block * ll_read_super(struct super_block *sb,
         
 ERR:
 	if (hdr)
-		kfree(hdr);
+                /* FIXME: sigh, another stupid hardcoded size */
+                OBD_FREE(hdr, sizeof(struct ptlrep_hdr) +
+                         sizeof(struct mds_rep));
         if (device)
                 OBD_FREE(device, strlen(device) + 1);
         if (version)

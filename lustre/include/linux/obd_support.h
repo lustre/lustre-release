@@ -9,16 +9,15 @@
 
 #include <linux/autoconf.h>
 #include <linux/slab.h>
-#include <linux/vmalloc.h>
 
-
-
-#define obd_unlock_page(page)   do {    if (PageLocked(page)) { \
-                        UnlockPage(page);\
-                } else {\
-                        printk("file %s, line %d: expecting locked page\n",\
-                               __FILE__, __LINE__); \
-                }                       \
+#define obd_unlock_page(page)                                           \
+do {                                                                    \
+        if (PageLocked(page)) {                                         \
+                UnlockPage(page);                                       \
+        } else {                                                        \
+                printk("file %s, line %d: expecting locked page\n",     \
+                       __FILE__, __LINE__);                             \
+        }                                                               \
 } while(0)
 
 /*
@@ -160,31 +159,26 @@ static inline void obd_iput(struct inode *inode)
 
 #endif /* EXT2_OBD_DEBUG */
 
-
-
-#define OBD_ALLOC(ptr, cast, size)                                      \
-do {                                                                    \
-        ptr = kmalloc((unsigned long) size, GFP_KERNEL);        \
-        obd_memory += size;                                             \
-        CDEBUG(D_MALLOC, "kmalloced: %d at %x (tot %ld).\n",            \
-                       (int) size, (int) ptr, obd_memory);             \
-        if (ptr == 0) {                                                 \
-                printk("kernel malloc returns 0 at %s:%d\n",            \
-                       __FILE__, __LINE__);                             \
-        } else {                                                        \
-                memset(ptr, 0, size);                                   \
-        }                                                               \
+#define OBD_ALLOC(ptr, size)                                    \
+do {                                                            \
+        (ptr) = kmalloc((unsigned long)(size), GFP_KERNEL);     \
+        obd_memory += (size);                                   \
+        CDEBUG(D_MALLOC, "kmalloced: %ld at %x (tot %ld).\n",   \
+               (long)(size), (int)(ptr), obd_memory);           \
+        if (ptr == NULL) {                                      \
+                printk("kernel malloc failed at %s:%d\n",       \
+                       __FILE__, __LINE__);                     \
+        } else {                                                \
+                memset((ptr), 0, (size));                       \
+        }                                                       \
 } while (0)
 
-#define OBD_FREE(ptr,size)                                   \
+#define OBD_FREE(ptr, size)                                  \
 do {                                                         \
         kfree((ptr));                                        \
-        obd_memory -= size;                                  \
+        obd_memory -= (size);                                \
         CDEBUG(D_MALLOC, "kfreed: %d at %x (tot %ld).\n",    \
-               (int) size, (int) ptr, obd_memory);           \
+               (int)(size), (int)(ptr), obd_memory);         \
 } while (0)
 
-
-
 #endif
-

@@ -34,7 +34,6 @@
 #include <linux/delay.h>
 #include <linux/skbuff.h>
 #include <linux/proc_fs.h>
-#include <linux/vmalloc.h>
 #include <linux/fs.h>
 #include <linux/poll.h>
 #include <linux/init.h>
@@ -61,7 +60,7 @@ int ost_pack_req(char *buf1, int buflen1, char *buf2, int buflen2,
 	*len = sizeof(**hdr) + size_round(buflen1) + size_round(buflen2) + 
 		sizeof(**req); 
 
-	*buf = kmalloc(*len, GFP_KERNEL);
+	OBD_ALLOC(*buf, *len);
 	if (!*buf) {
 		EXIT;
 		return -ENOMEM;
@@ -137,7 +136,7 @@ int ost_pack_rep(void *buf1, __u32 buflen1, void *buf2, __u32 buflen2,
 	*len = sizeof(**hdr) + size_round(buflen1) + size_round(buflen2) + 
 		sizeof(**rep); 
 
-	*buf = kmalloc(*len, GFP_KERNEL);
+	OBD_ALLOC(*buf, *len);
 	if (!*buf) {
 		EXIT;
 		return -ENOMEM;

@@ -43,7 +43,7 @@ static int request_callback(ptl_event_t *ev, void *data)
         ENTRY;
 
         if (ev->type == PTL_EVENT_SENT) {
-                kfree(ev->mem_desc.start);
+                OBD_FREE(ev->mem_desc.start, ev->mem_desc.length);
         } else if (ev->type == PTL_EVENT_PUT) {
                 rpc->rq_repbuf = ev->mem_desc.start + ev->offset;
                 wake_up_interruptible(&rpc->rq_wait_for_rep);
@@ -169,7 +169,7 @@ int ptl_send_rpc(struct ptlrpc_request *request, struct lustre_peer *peer)
                 return -EINVAL;
         }
 
-        request->rq_repbuf = kmalloc(request->rq_replen, GFP_KERNEL); 
+        OBD_ALLOC(request->rq_repbuf, request->rq_replen);
         if (!request->rq_repbuf) { 
                 EXIT;
                 return -ENOMEM;
@@ -239,7 +239,7 @@ int rpc_register_service(struct ptlrpc_service *service, char *uuid)
                 return -EINVAL;
         }
 
-        service->srv_buf = kmalloc(service->srv_buf_size, GFP_KERNEL);
+        OBD_ALLOC(service->srv_buf, service->srv_buf_size);
         if (service->srv_buf == NULL) {
                 printk(__FUNCTION__ ": no memory\n");
                 return -ENOMEM;
@@ -298,7 +298,7 @@ int rpc_unregister_service(struct ptlrpc_service *service)
         if (rc)
                 printk(__FUNCTION__ ": PtlMEUnlink failed: %d\n", rc);
 
-        kfree(service->srv_buf);
+        OBD_FREE(service->srv_buf, service->srv_buf_size);
         return 0;
 }
 
@@ -338,6 +338,8 @@ static int __init ptlrpc_init(void)
 static void __exit ptlrpc_exit(void)
 {
         PtlEQFree(req_eq);
+        PtlEQFree(bulk_source_eq);
+        PtlEQFree(bulk_sink_eq);
 
         inter_module_put(LUSTRE_NAL "_ni");
 

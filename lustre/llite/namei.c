@@ -104,7 +104,9 @@ static struct dentry *ll_lookup(struct inode * dir, struct dentry *dentry)
         }
 
 	inode = iget4(dir->i_sb, ino, NULL, rep);
-	kfree(hdr); 
+
+        /* FIXME: this is not the right way to get this size */
+        OBD_FREE(hdr, sizeof(struct ptlrep_hdr) + sizeof(struct mds_rep));
 
 	if (!inode) 
 		return ERR_PTR(-EACCES);

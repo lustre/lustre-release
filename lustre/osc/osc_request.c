@@ -32,7 +32,6 @@
 #include <linux/fs.h>
 #include <linux/stat.h>
 #include <asm/uaccess.h>
-#include <linux/vmalloc.h>
 #include <asm/segment.h>
 #include <linux/miscdevice.h>
 
@@ -53,7 +52,7 @@ struct ptlrpc_request *ost_prep_req(int opcode, int buflen1, char *buf1,
 	int rc;
 	ENTRY; 
 
-	request = (struct ptlrpc_request *)kmalloc(sizeof(*request), GFP_KERNEL); 
+	OBD_ALLOC(request, sizeof(*request));
 	if (!request) { 
 		printk("osc_prep_req: request allocation out of memory\n");
 		return NULL;
@@ -132,7 +131,7 @@ extern int osc_queue_wait(struct obd_conn *conn, struct ptlrpc_request *req)
 
 static void osc_free_req(struct ptlrpc_request *request)
 {
-	kfree(request);
+	OBD_FREE(request, sizeof(*request));
 }
 
 static int osc_connect(struct obd_conn *conn)
@@ -431,7 +430,7 @@ int osc_brw(int rw, struct obd_conn *conn, obd_count num_oa,
 
  out:
 	if (request->rq_rephdr)
-		kfree(request->rq_rephdr);
+		OBD_FREE(request->rq_rephdr, request->rq_replen);
 	n = 0;
 	for (i=0; i < num_oa; i++) { 
 		for (j = 0 ; j < oa_bufs[i] ; j++) { 

@@ -87,7 +87,7 @@ int gen_connect (struct obd_conn *conn)
 {
         struct obd_client * cli;
 
-        OBD_ALLOC(cli, struct obd_client *, sizeof(struct obd_client));
+        OBD_ALLOC(cli, sizeof(struct obd_client));
         if ( !cli ) {
                 printk(__FUNCTION__ ": no memory! (minor %d)\n", 
                        conn->oc_dev->obd_minor);

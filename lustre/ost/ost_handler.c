@@ -49,7 +49,7 @@ static int ost_queue_req(struct obd_device *obddev, struct ptlrpc_request *req)
 		return -1;
 	}
 
-	srv_req = kmalloc(sizeof(*srv_req), GFP_KERNEL); 
+	OBD_ALLOC(srv_req, sizeof(*srv_req));
 	if (!srv_req) { 
 		EXIT;
 		return -ENOMEM;
@@ -94,7 +94,7 @@ int ost_reply(struct obd_device *obddev, struct ptlrpc_request *req)
 		req->rq_replen = 0;
 
 		/* free the request buffer */
-		kfree(req->rq_reqbuf);
+		OBD_FREE(req->rq_reqbuf, req->rq_reqlen);
 		req->rq_reqbuf = NULL;
 
 		/* wake up the client */ 
@@ -111,7 +111,7 @@ int ost_error(struct obd_device *obddev, struct ptlrpc_request *req)
 
 	ENTRY;
 
-	hdr = kmalloc(sizeof(*hdr), GFP_KERNEL);
+	OBD_ALLOC(hdr, sizeof(*hdr));
 	if (!hdr) { 
 		EXIT;
 		return -ENOMEM;
@@ -420,7 +420,6 @@ int ost_handle(struct obd_device *obddev, struct ptlrpc_request *req)
 
 	case OST_CONNECT:
 		CDEBUG(D_INODE, "connect\n");
-		printk("----> connect \n"); 
 		rc = ost_connect(ost, req);
 		break;
 	case OST_DISCONNECT:
@@ -474,31 +473,19 @@ int ost_main(void *arg)
 	struct obd_device *obddev = (struct obd_device *) arg;
 	struct ost_obd *ost = &obddev->u.ost;
 	ENTRY;
-	printk("---> %d\n", __LINE__);
-
 
 	lock_kernel();
-	printk("---> %d\n", __LINE__);
 	daemonize();
-	printk("---> %d\n", __LINE__);
 	spin_lock_irq(&current->sigmask_lock);
-	printk("---> %d\n", __LINE__);
 	sigfillset(&current->blocked);
-	printk("---> %d\n", __LINE__);
 	recalc_sigpending(current);
-	printk("---> %d\n", __LINE__);
 	spin_unlock_irq(&current->sigmask_lock);
-	printk("---> %d\n", __LINE__);
 
-	printk("---> %d\n", __LINE__);
 	sprintf(current->comm, "lustre_ost");
-	printk("---> %d\n", __LINE__);
 
 	/* Record that the  thread is running */
 	ost->ost_thread = current;
-	printk("---> %d\n", __LINE__);
 	wake_up(&ost->ost_done_waitq); 
-	printk("---> %d\n", __LINE__);
 
 	/* XXX maintain a list of all managed devices: insert here */
 
@@ -581,15 +568,11 @@ static void ost_start_srv_thread(struct obd_device *obd)
 	ENTRY;
 
 	init_waitqueue_head(&ost->ost_waitq);
-	printk("---> %d\n", __LINE__);
 	init_waitqueue_head(&ost->ost_done_waitq);
-	printk("---> %d\n", __LINE__);
 	kernel_thread(ost_main, (void *)obd, 
 		      CLONE_VM | CLONE_FS | CLONE_FILES);
-	printk("---> %d\n", __LINE__);
 	while (!ost->ost_thread) 
 		sleep_on(&ost->ost_done_waitq);
-	printk("---> %d\n", __LINE__);
 	EXIT;
 }
 
@@ -636,8 +619,7 @@ static int ost_setup(struct obd_device *obddev, obd_count len,
 
 	err = kportal_uuid_to_peer("self", &peer);
 	if (err == 0) {
-		ost->ost_service = kmalloc(sizeof(*ost->ost_service),
-					   GFP_KERNEL);
+		OBD_ALLOC(ost->ost_service, sizeof(*ost->ost_service));
 		if (ost->ost_service == NULL)
 			return -ENOMEM;
 		ost->ost_service->srv_buf_size = 64 * 1024;
@@ -674,9 +656,9 @@ static int ost_cleanup(struct obd_device * obddev)
                 return -EBUSY;
         }
 
-	rpc_unregister_service(ost->ost_service);
-
 	ost_stop_srv_thread(ost);
+	rpc_unregister_service(ost->ost_service);
+        OBD_FREE(ost->ost_service, sizeof(*ost->ost_service));
 
 	if (!list_empty(&ost->ost_reqs)) {
 		// XXX reply with errors and clean up
