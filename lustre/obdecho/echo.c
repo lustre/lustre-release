@@ -33,12 +33,12 @@ static struct obdo OA;
 static obd_count GEN;
 static long echo_pages = 0;
 
-static int echo_connect(struct obd_conn *conn, struct obd_device *obd)
+static int echo_connect(struct lustre_handle *conn, struct obd_device *obd)
 {
         int rc;
 
         MOD_INC_USE_COUNT;
-        rc = gen_connect(conn, obd);
+        rc = class_connect(conn, obd);
 
         if (rc)
                 MOD_DEC_USE_COUNT;
@@ -46,18 +46,18 @@ static int echo_connect(struct obd_conn *conn, struct obd_device *obd)
         return rc;
 }
 
-static int echo_disconnect(struct obd_conn *conn)
+static int echo_disconnect(struct lustre_handle *conn)
 {
         int rc;
 
-        rc = gen_disconnect(conn);
+        rc = class_disconnect(conn);
         if (!rc)
                 MOD_DEC_USE_COUNT;
 
         return rc;
 }
 
-static int echo_getattr(struct obd_conn *conn, struct obdo *oa)
+static int echo_getattr(struct lustre_handle *conn, struct obdo *oa)
 {
         memcpy(oa, &OA, sizeof(*oa));
         oa->o_mode = ++GEN;
@@ -65,7 +65,7 @@ static int echo_getattr(struct obd_conn *conn, struct obdo *oa)
         return 0;
 }
 
-int echo_preprw(int cmd, struct obd_conn *conn, int objcount,
+int echo_preprw(int cmd, struct lustre_handle *conn, int objcount,
                 struct obd_ioobj *obj, int niocount, struct niobuf_remote *nb,
                 struct niobuf_local *res, void **desc_private)
 {
@@ -122,7 +122,7 @@ preprw_cleanup:
         return rc;
 }
 
-int echo_commitrw(int cmd, struct obd_conn *conn, int objcount,
+int echo_commitrw(int cmd, struct lustre_handle *conn, int objcount,
                   struct obd_ioobj *obj, int niocount, struct niobuf_local *res,
                   void *desc_private)
 {
@@ -190,13 +190,13 @@ static int __init obdecho_init(void)
 {
         printk(KERN_INFO "Echo OBD driver  v0.001, braam@clusterfs.com\n");
 
-        return obd_register_type(&echo_obd_ops, OBD_ECHO_DEVICENAME);
+        return class_register_type(&echo_obd_ops, OBD_ECHO_DEVICENAME);
 }
 
 static void __exit obdecho_exit(void)
 {
         CERROR("%ld prep/commitrw pages leaked\n", echo_pages);
-        obd_unregister_type(OBD_ECHO_DEVICENAME);
+        class_unregister_type(OBD_ECHO_DEVICENAME);
 }
 
 MODULE_AUTHOR("Cluster Filesystems Inc. <info@clusterfs.com>");

@@ -324,10 +324,10 @@ out:
         return 0;
 }
 
-static int ldlm_iocontrol(long cmd, struct obd_conn *conn, int len, void *karg,
+static int ldlm_iocontrol(long cmd, struct lustre_handle *conn, int len, void *karg,
                           void *uarg)
 {
-        struct obd_device *obddev = gen_conn2obd(conn);
+        struct obd_device *obddev = class_conn2obd(conn);
         struct ptlrpc_connection *connection;
         int err;
         ENTRY;
@@ -425,14 +425,14 @@ struct obd_ops ldlm_obd_ops = {
         o_iocontrol:   ldlm_iocontrol,
         o_setup:       ldlm_setup,
         o_cleanup:     ldlm_cleanup,
-        o_connect:     gen_connect,
-        o_disconnect:  gen_disconnect
+        o_connect:     class_connect,
+        o_disconnect:  class_disconnect
 };
 
 
 static int __init ldlm_init(void)
 {
-        int rc = obd_register_type(&ldlm_obd_ops, OBD_LDLM_DEVICENAME);
+        int rc = class_register_type(&ldlm_obd_ops, OBD_LDLM_DEVICENAME);
         if (rc != 0)
                 return rc;
 
@@ -455,7 +455,7 @@ static int __init ldlm_init(void)
 
 static void __exit ldlm_exit(void)
 {
-        obd_unregister_type(OBD_LDLM_DEVICENAME);
+        class_unregister_type(OBD_LDLM_DEVICENAME);
         if (kmem_cache_destroy(ldlm_resource_slab) != 0)
                 CERROR("couldn't free ldlm resource slab\n");
         if (kmem_cache_destroy(ldlm_lock_slab) != 0)

@@ -180,7 +180,7 @@ static int handle_incoming_request(struct obd_device *obddev,
          * We don't know how to find that from here. */
         peer.peer_ni = svc->srv_self.peer_ni;
 
-        request.rq_export = gen_client((struct obd_conn *) request.rq_reqmsg); 
+        request.rq_export = class_conn2export((struct lustre_handle *) request.rq_reqmsg); 
 
         if (request.rq_export) {
                 request.rq_connection = request.rq_export->export_connection;

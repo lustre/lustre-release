@@ -22,6 +22,14 @@ struct obd_type {
         int  typ_refcnt;
 };
 
+
+/* Individual type definitions */
+
+struct ext2_obd {
+        struct super_block *e2_sb;
+        struct vfsmount *e2_vfsmnt;
+};
+
 #define OBD_RUN_CTXT_MAGIC      0xC0FFEEAA
 #define OBD_CTXT_DEBUG          /* development-only debugging */
 struct obd_run_ctxt {
@@ -31,21 +39,6 @@ struct obd_run_ctxt {
 #ifdef OBD_CTXT_DEBUG
         __u32            magic;
 #endif
-};
-
-
-
-struct obd_conn {
-        __u64 addr;
-        __u64 cookie;
-        struct obd_device *oc_dev;
-};
-
-/* Individual type definitions */
-
-struct ext2_obd {
-        struct super_block *e2_sb;
-        struct vfsmount *e2_vfsmnt;
 };
 
 struct filter_obd {
@@ -86,7 +79,7 @@ struct mds_obd {
         struct ptlrpc_service *mds_service;
         struct ptlrpc_client *mds_ldlm_client; /* to be an LDLM client */
         struct ptlrpc_connection *mds_ldlm_conn; /* to be an LDLM client */
-        struct obd_conn mds_connh; /* to be one's on DLM client */
+        struct lustre_handle mds_connh; /* to be one's on DLM client */
 
         char *mds_fstype;
         struct super_block *mds_sb;
@@ -155,7 +148,7 @@ struct snap_obd {
 
 struct ost_obd {
         struct ptlrpc_service *ost_service;
-        struct obd_conn ost_conn;   /* the local connection to the OBD */
+        struct lustre_handle ost_conn;   /* the local connection to the OBD */
 };
 
 
@@ -170,7 +163,7 @@ struct lov_obd {
 
 #if 0
         int lov_count;
-        struct obd_conn *lov_targets;
+        struct lustre_handle *lov_targets;
 #endif
 };
 
@@ -186,7 +179,7 @@ struct obd_device {
         int obd_flags;
         struct proc_dir_entry *obd_proc_entry;
         int obd_multi_count;
-        struct obd_conn obd_multi_conn[MAX_MULTI];
+        struct lustre_handle obd_multi_conn[MAX_MULTI];
         unsigned int obd_gen_last_id;
         unsigned long obd_gen_prealloc_quota;
         //        struct obd_device *obd_target; /* for anything that simply layers */ 
@@ -212,57 +205,57 @@ struct obd_device {
 };
 
 struct obd_ops {
-        int (*o_iocontrol)(long cmd, struct obd_conn *, int len, void *karg,
+        int (*o_iocontrol)(long cmd, struct lustre_handle *, int len, void *karg,
                            void *uarg);
-        int (*o_get_info)(struct obd_conn *, obd_count keylen, void *key,
+        int (*o_get_info)(struct lustre_handle *, obd_count keylen, void *key,
                           obd_count *vallen, void **val);
-        int (*o_set_info)(struct obd_conn *, obd_count keylen, void *key,
+        int (*o_set_info)(struct lustre_handle *, obd_count keylen, void *key,
                           obd_count vallen, void *val);
         int (*o_attach)(struct obd_device *dev, obd_count len, void *data);
         int (*o_detach)(struct obd_device *dev);
         int (*o_setup) (struct obd_device *dev, obd_count len, void *data);
         int (*o_cleanup)(struct obd_device *dev);
-        int (*o_connect)(struct obd_conn *conn, struct obd_device *src);
-        int (*o_disconnect)(struct obd_conn *conn);
+        int (*o_connect)(struct lustre_handle *conn, struct obd_device *src);
+        int (*o_disconnect)(struct lustre_handle *conn);
 
 
-        int (*o_statfs)(struct obd_conn *conn, struct statfs *statfs);
-        int (*o_preallocate)(struct obd_conn *, obd_count *req, obd_id *ids);
-        int (*o_create)(struct obd_conn *conn,  struct obdo *oa);
-        int (*o_destroy)(struct obd_conn *conn, struct obdo *oa);
-        int (*o_setattr)(struct obd_conn *conn, struct obdo *oa);
-        int (*o_getattr)(struct obd_conn *conn, struct obdo *oa);
-        int (*o_open)(struct obd_conn *conn, struct obdo *oa);
-        int (*o_close)(struct obd_conn *conn, struct obdo *oa);
-        int (*o_brw)(int rw, struct obd_conn *conn, obd_count num_oa,
+        int (*o_statfs)(struct lustre_handle *conn, struct statfs *statfs);
+        int (*o_preallocate)(struct lustre_handle *, obd_count *req, obd_id *ids);
+        int (*o_create)(struct lustre_handle *conn,  struct obdo *oa);
+        int (*o_destroy)(struct lustre_handle *conn, struct obdo *oa);
+        int (*o_setattr)(struct lustre_handle *conn, struct obdo *oa);
+        int (*o_getattr)(struct lustre_handle *conn, struct obdo *oa);
+        int (*o_open)(struct lustre_handle *conn, struct obdo *oa);
+        int (*o_close)(struct lustre_handle *conn, struct obdo *oa);
+        int (*o_brw)(int rw, struct lustre_handle *conn, obd_count num_oa,
                      struct obdo **oa, obd_count *oa_bufs, struct page **buf,
                      obd_size *count, obd_off *offset, obd_flag *flags,
                      void *);
-        int (*o_punch)(struct obd_conn *conn, struct obdo *tgt, obd_size count,
+        int (*o_punch)(struct lustre_handle *conn, struct obdo *tgt, obd_size count,
                        obd_off offset);
-        int (*o_sync)(struct obd_conn *conn, struct obdo *tgt, obd_size count,
+        int (*o_sync)(struct lustre_handle *conn, struct obdo *tgt, obd_size count,
                       obd_off offset);
-        int (*o_migrate)(struct obd_conn *conn, struct obdo *dst,
+        int (*o_migrate)(struct lustre_handle *conn, struct obdo *dst,
                          struct obdo *src, obd_size count, obd_off offset);
-        int (*o_copy)(struct obd_conn *dstconn, struct obdo *dst,
-                      struct obd_conn *srconn, struct obdo *src,
+        int (*o_copy)(struct lustre_handle *dstconn, struct obdo *dst,
+                      struct lustre_handle *srconn, struct obdo *src,
                       obd_size count, obd_off offset);
-        int (*o_iterate)(struct obd_conn *conn, int (*)(obd_id, obd_gr, void *),
+        int (*o_iterate)(struct lustre_handle *conn, int (*)(obd_id, obd_gr, void *),
                          obd_id *startid, obd_gr group, void *data);
-        int (*o_preprw)(int cmd, struct obd_conn *conn,
+        int (*o_preprw)(int cmd, struct lustre_handle *conn,
                         int objcount, struct obd_ioobj *obj,
                         int niocount, struct niobuf_remote *remote,
                         struct niobuf_local *local, void **desc_private);
-        int (*o_commitrw)(int cmd, struct obd_conn *conn,
+        int (*o_commitrw)(int cmd, struct lustre_handle *conn,
                           int objcount, struct obd_ioobj *obj,
                           int niocount, struct niobuf_local *local,
                           void *desc_private);
-        int (*o_enqueue)(struct obd_conn *conn,
+        int (*o_enqueue)(struct lustre_handle *conn,
                          struct lustre_handle *parent_lock, __u64 *res_id,
                          __u32 type, void *cookie, int cookielen, __u32 mode,
                          int *flags, void *cb, void *data, int datalen,
                          struct lustre_handle *lockh);
-        int (*o_cancel)(struct obd_conn *, __u32 mode, struct lustre_handle *);
+        int (*o_cancel)(struct lustre_handle *, __u32 mode, struct lustre_handle *);
 };
 
 #endif

@@ -43,7 +43,7 @@ int target_handle_connect(struct ptlrpc_request *req)
 {
         struct obd_device *target;
         struct obd_export *export;
-        struct obd_conn conn;
+        struct lustre_handle conn;
         char *uuid;
         int rc, i;
         ENTRY;
@@ -55,7 +55,7 @@ int target_handle_connect(struct ptlrpc_request *req)
                 RETURN(-EINVAL);
         }
 
-        i = obd_class_uuid2dev(uuid);
+        i = class_uuid2dev(uuid);
         if (i == -1) {
                 req->rq_status = -ENODEV;
                 RETURN(-NODEV);
@@ -78,7 +78,7 @@ int target_handle_connect(struct ptlrpc_request *req)
         req->rq_repmsg->addr = conn.addr;
         req->rq_repmsg->cookie = conn.cookie;
 
-        export = gen_client(&conn); 
+        export = class_conn2export(&conn); 
         if (!export)
                 LBUG();
 
@@ -90,7 +90,7 @@ int target_handle_connect(struct ptlrpc_request *req)
 
 int target_handle_disconnect(struct ptlrpc_request *req)
 {
-        struct obd_conn *conn = (struct obd_conn *)req->rq_reqmsg;
+        struct lustre_handle *conn = (struct lustre_handle *)req->rq_reqmsg;
         int rc;
         ENTRY;
 

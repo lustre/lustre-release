@@ -137,44 +137,44 @@ int mds_lock_callback(struct lustre_handle *lockh, struct ldlm_lock_desc *desc,
 int mds_reint(int offset, struct ptlrpc_request *req);
 
 /* mdc/mdc_request.c */
-static inline struct mdc_obd *mdc_conn2mdc(struct obd_conn *conn)
+static inline struct mdc_obd *mdc_conn2mdc(struct lustre_handle *conn)
 {
-        return &gen_conn2obd(conn)->u.mdc;
+        return &class_conn2obd(conn)->u.mdc;
 }
 
-int mdc_enqueue(struct obd_conn *conn, int lock_type, struct lookup_intent *it, 
+int mdc_enqueue(struct lustre_handle *conn, int lock_type, struct lookup_intent *it, 
                 int lock_mode, struct inode *dir, struct dentry *de,
                 struct lustre_handle *h, __u64 id, char *tgt, int tgtlen,
                 void *data, int datalen);
-int mdc_getstatus(struct obd_conn *conn,
+int mdc_getstatus(struct lustre_handle *conn,
                 struct ll_fid *rootfid, __u64 *last_committed, __u64 *last_rcvd,
                 __u32 *last_xid, struct ptlrpc_request **);
-int mdc_getattr(struct obd_conn *conn,
+int mdc_getattr(struct lustre_handle *conn,
                 ino_t ino, int type, unsigned long valid, size_t ea_size,
                 struct ptlrpc_request **request);
-int mdc_statfs(struct obd_conn *conn,
+int mdc_statfs(struct lustre_handle *conn,
                struct statfs *sfs, struct ptlrpc_request **request);
-int mdc_setattr(struct obd_conn *conn,
+int mdc_setattr(struct lustre_handle *conn,
                 struct inode *, struct iattr *iattr, struct ptlrpc_request **);
-int mdc_open(struct obd_conn *conn,
+int mdc_open(struct lustre_handle *conn,
              ino_t ino, int type, int flags, struct obdo *obdo, __u64 cookie, 
              __u64 *fh, struct ptlrpc_request **request);
-int mdc_close(struct obd_conn *conn,
+int mdc_close(struct lustre_handle *conn,
               ino_t ino, int type, __u64 fh,  struct ptlrpc_request **req);
-int mdc_readpage(struct obd_conn *conn, ino_t ino,
+int mdc_readpage(struct lustre_handle *conn, ino_t ino,
                  int type, __u64 offset, char *addr, struct ptlrpc_request **);
-int mdc_create(struct obd_conn *conn,
+int mdc_create(struct lustre_handle *conn,
                struct inode *dir, const char *name, int namelen, 
                const char *tgt, int tgtlen, int mode, __u32 uid, __u32 gid,
                __u64 time, __u64 rdev, struct obdo *obdo,
                struct ptlrpc_request **);
-int mdc_unlink(struct obd_conn *conn,
+int mdc_unlink(struct lustre_handle *conn,
                struct inode *dir, struct inode *child, const char *name,
                int namelen, struct ptlrpc_request **);
-int mdc_link(struct obd_conn *conn,
+int mdc_link(struct lustre_handle *conn,
              struct dentry *src, struct inode *dir, const char *name,
              int namelen, struct ptlrpc_request **);
-int mdc_rename(struct obd_conn *conn,
+int mdc_rename(struct lustre_handle *conn,
                struct inode *src, struct inode *tgt, const char *old,
                int oldlen, const char *new, int newlen,
                struct ptlrpc_request **);

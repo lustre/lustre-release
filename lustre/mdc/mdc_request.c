@@ -34,7 +34,7 @@
 extern int mds_queue_req(struct ptlrpc_request *);
 
 
-int mdc_getstatus(struct obd_conn *conn, struct ll_fid *rootfid,
+int mdc_getstatus(struct lustre_handle *conn, struct ll_fid *rootfid,
                   __u64 *last_committed, __u64 *last_rcvd,
                   __u32 *last_xid, struct ptlrpc_request **request)
 {
@@ -80,7 +80,7 @@ int mdc_getstatus(struct obd_conn *conn, struct ll_fid *rootfid,
 }
 
 
-int mdc_getattr(struct obd_conn *conn,
+int mdc_getattr(struct lustre_handle *conn,
                 ino_t ino, int type, unsigned long valid, size_t ea_size,
                 struct ptlrpc_request **request)
 {
@@ -159,13 +159,13 @@ static int mdc_lock_callback(struct lustre_handle *lockh, struct ldlm_lock_desc 
         RETURN(0);
 }
 
-int mdc_enqueue(struct obd_conn *conn, int lock_type, struct lookup_intent *it, 
+int mdc_enqueue(struct lustre_handle *conn, int lock_type, struct lookup_intent *it, 
                 int lock_mode, struct inode *dir, struct dentry *de,
                 struct lustre_handle *lockh, __u64 id, char *tgt, int tgtlen,
                 void *data, int datalen)
 {
         struct ptlrpc_request *req;
-        struct obd_device *obddev = gen_conn2obd(conn);
+        struct obd_device *obddev = class_conn2obd(conn);
         struct mdc_obd *mdc = mdc_conn2mdc(conn);
         __u64 res_id[RES_NAME_SIZE] = {dir->i_ino};
         int size[5] = {sizeof(struct ldlm_request), sizeof(struct ldlm_intent)};
@@ -354,7 +354,7 @@ int mdc_enqueue(struct obd_conn *conn, int lock_type, struct lookup_intent *it,
         RETURN(0);
 }
 
-int mdc_open(struct obd_conn *conn, ino_t ino, int type, int flags,
+int mdc_open(struct lustre_handle *conn, ino_t ino, int type, int flags,
              struct obdo *obdo,
              __u64 cookie, __u64 *fh, struct ptlrpc_request **request)
 {
@@ -402,7 +402,7 @@ int mdc_open(struct obd_conn *conn, ino_t ino, int type, int flags,
         return rc;
 }
 
-int mdc_close(struct obd_conn *conn, 
+int mdc_close(struct lustre_handle *conn, 
               ino_t ino, int type, __u64 fh, struct ptlrpc_request **request)
 {
         struct mdc_obd *mdc = mdc_conn2mdc(conn);
@@ -431,7 +431,7 @@ int mdc_close(struct obd_conn *conn,
         return rc;
 }
 
-int mdc_readpage(struct obd_conn *conn, ino_t ino, int type, __u64 offset,
+int mdc_readpage(struct lustre_handle *conn, ino_t ino, int type, __u64 offset,
                  char *addr, struct ptlrpc_request **request)
 {
         struct mdc_obd *mdc = mdc_conn2mdc(conn);
@@ -490,7 +490,7 @@ int mdc_readpage(struct obd_conn *conn, ino_t ino, int type, __u64 offset,
         return rc;
 }
 
-int mdc_statfs(struct obd_conn *conn, struct statfs *sfs,
+int mdc_statfs(struct lustre_handle *conn, struct statfs *sfs,
                struct ptlrpc_request **request)
 {
         struct mdc_obd *mdc = mdc_conn2mdc(conn);
@@ -522,7 +522,7 @@ out:
         return rc;
 }
 
-static int mdc_ioctl(long cmd, struct obd_conn *conn, int len, void *karg,
+static int mdc_ioctl(long cmd, struct lustre_handle *conn, int len, void *karg,
                      void *uarg)
 {
 #if 0
@@ -727,7 +727,7 @@ static int mdc_cleanup(struct obd_device * obddev)
         return 0;
 }
 
-static int mdc_connect(struct obd_conn *conn, struct obd_device *obd)
+static int mdc_connect(struct lustre_handle *conn, struct obd_device *obd)
 {
         struct mdc_obd *mdc = &obd->u.mdc;
         struct ptlrpc_request *request;
@@ -742,7 +742,7 @@ static int mdc_connect(struct obd_conn *conn, struct obd_device *obd)
                 RETURN(-ENOMEM);
 
         MOD_INC_USE_COUNT;
-        rc = gen_connect(conn, obd);
+        rc = class_connect(conn, obd);
         if (rc) 
                 GOTO(out, rc);
 
@@ -769,10 +769,10 @@ static int mdc_connect(struct obd_conn *conn, struct obd_device *obd)
         return rc;
 }
 
-static int mdc_disconnect(struct obd_conn *conn)
+static int mdc_disconnect(struct lustre_handle *conn)
 {
         struct mdc_obd *mdc = mdc_conn2mdc(conn);
-        struct obd_device *obd = gen_conn2obd(conn);
+        struct obd_device *obd = class_conn2obd(conn);
         struct ptlrpc_request *request;
         int rc;
         ENTRY;
@@ -788,7 +788,7 @@ static int mdc_disconnect(struct obd_conn *conn)
         rc = ptlrpc_queue_wait(request);
         if (rc) 
                 GOTO(out, rc);
-        rc = gen_disconnect(conn);
+        rc = class_disconnect(conn);
         if (!rc)
                 MOD_DEC_USE_COUNT;
  out:
@@ -806,12 +806,12 @@ struct obd_ops mdc_obd_ops = {
 
 static int __init ptlrpc_request_init(void)
 {
-        return obd_register_type(&mdc_obd_ops, LUSTRE_MDC_NAME);
+        return class_register_type(&mdc_obd_ops, LUSTRE_MDC_NAME);
 }
 
 static void __exit ptlrpc_request_exit(void)
 {
-        obd_unregister_type(LUSTRE_MDC_NAME);
+        class_unregister_type(LUSTRE_MDC_NAME);
 }
 
 MODULE_AUTHOR("Cluster File Systems <info@clusterfs.com>");

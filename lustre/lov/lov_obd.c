@@ -20,12 +20,12 @@
 extern struct obd_device obd_dev[MAX_OBD_DEVICES];
 
 /* obd methods */
-static int lov_connect(struct obd_conn *conn)
+static int lov_connect(struct lustre_handle *conn)
 {
         int rc;
 
         MOD_INC_USE_COUNT;
-        rc = gen_connect(conn);
+        rc = class_connect(conn);
 
         if (rc)
                 MOD_DEC_USE_COUNT;
@@ -33,11 +33,11 @@ static int lov_connect(struct obd_conn *conn)
         return rc;
 }
 
-static int lov_disconnect(struct obd_conn *conn)
+static int lov_disconnect(struct lustre_handle *conn)
 {
         int rc;
 
-        rc = gen_disconnect(conn);
+        rc = class_disconnect(conn);
         if (!rc)
                 MOD_DEC_USE_COUNT;
 
@@ -45,24 +45,24 @@ static int lov_disconnect(struct obd_conn *conn)
         return rc;
 }
 
-static int lov_getattr(struct obd_conn *conn, struct obdo *oa)
+static int lov_getattr(struct lustre_handle *conn, struct obdo *oa)
 {
         int rc;
         ENTRY;
 
-        if (!gen_client(conn))
+        if (!class_conn2export(conn))
                 RETURN(-EINVAL);
 
         rc = obd_getattr(&conn->oc_dev->obd_multi_conn[0], oa);
         RETURN(rc);
 }
 
-static int lov_setattr(struct obd_conn *conn, struct obdo *oa)
+static int lov_setattr(struct lustre_handle *conn, struct obdo *oa)
 {
         int rc, retval, i;
         ENTRY;
 
-        if (!gen_client(conn))
+        if (!class_conn2export(conn))
                 RETURN(-EINVAL);
 
         for (i = 0; i < conn->oc_dev->obd_multi_count; i++) {
@@ -76,12 +76,12 @@ static int lov_setattr(struct obd_conn *conn, struct obdo *oa)
         RETURN(rc);
 }
 
-static int lov_open(struct obd_conn *conn, struct obdo *oa)
+static int lov_open(struct lustre_handle *conn, struct obdo *oa)
 {
         int rc, retval, i;
         ENTRY;
 
-        if (!gen_client(conn))
+        if (!class_conn2export(conn))
                 RETURN(-EINVAL);
 
         for (i = 0; i < conn->oc_dev->obd_multi_count; i++) {
@@ -95,12 +95,12 @@ static int lov_open(struct obd_conn *conn, struct obdo *oa)
         RETURN(rc);
 }
 
-static int lov_close(struct obd_conn *conn, struct obdo *oa)
+static int lov_close(struct lustre_handle *conn, struct obdo *oa)
 {
         int rc, retval, i;
         ENTRY;
 
-        if (!gen_client(conn))
+        if (!class_conn2export(conn))
                 RETURN(-EINVAL);
 
         for (i = 0; i < conn->oc_dev->obd_multi_count; i++) {
@@ -114,14 +114,14 @@ static int lov_close(struct obd_conn *conn, struct obdo *oa)
         RETURN(rc);
 }
 
-static int lov_create(struct obd_conn *conn, struct obdo *oa)
+static int lov_create(struct lustre_handle *conn, struct obdo *oa)
 {
         int rc, retval, i, offset;
         struct obdo tmp;
         struct lov_md md;
         ENTRY;
 
-        if (!gen_client(conn))
+        if (!class_conn2export(conn))
                 RETURN(-EINVAL);
 
         md.lmd_object_id = oa->o_id;
@@ -148,7 +148,7 @@ static int lov_create(struct obd_conn *conn, struct obdo *oa)
         return rc;
 }
 
-static int lov_destroy(struct obd_conn *conn, struct obdo *oa)
+static int lov_destroy(struct lustre_handle *conn, struct obdo *oa)
 {
         int rc, retval, i, offset;
         struct obdo tmp;
@@ -156,7 +156,7 @@ static int lov_destroy(struct obd_conn *conn, struct obdo *oa)
         struct lov_object_id lov_id;
         ENTRY;
 
-        if (!gen_client(conn))
+        if (!class_conn2export(conn))
                 RETURN(-EINVAL);
 
         md = (struct lov_md *)oa->o_inline;
@@ -185,13 +185,13 @@ static int lov_destroy(struct obd_conn *conn, struct obdo *oa)
 /* FIXME: maybe we'll just make one node the authoritative attribute node, then
  * we can send this 'punch' to just the authoritative node and the nodes
  * that the punch will affect. */
-static int lov_punch(struct obd_conn *conn, struct obdo *oa,
+static int lov_punch(struct lustre_handle *conn, struct obdo *oa,
                      obd_size count, obd_off offset)
 {
         int rc, retval, i;
         ENTRY;
 
-        if (!gen_client(conn))
+        if (!class_conn2export(conn))
                 RETURN(-EINVAL);
 
         for (i = 0; i < conn->oc_dev->obd_multi_count; i++) {
@@ -234,7 +234,7 @@ static int lov_read_check_status(struct lov_callback_data *cb_data)
 }
 
 /* buffer must lie in user memory here */
-static int lov_brw(int cmd, struct obd_conn *conn, obd_count num_oa,
+static int lov_brw(int cmd, struct lustre_handle *conn, obd_count num_oa,
                    struct obdo **oa,
                    obd_count *oa_bufs, struct page **buf,
                    obd_size *count, obd_off *offset, obd_flag *flags,
@@ -249,7 +249,7 @@ static int lov_brw(int cmd, struct obd_conn *conn, obd_count num_oa,
         if (num_oa != 1)
                 LBUG();
 
-        if (!gen_client(conn))
+        if (!class_conn2export(conn))
                 RETURN(-EINVAL);
 
         OBD_ALLOC(cb_data, sizeof(*cb_data));
@@ -319,7 +319,7 @@ static void lov_write_finished(struct ptlrpc_bulk_desc *desc, void *data)
 }
 
 /* buffer must lie in user memory here */
-static int filter_write(struct obd_conn *conn, struct obdo *oa, char *buf,
+static int filter_write(struct lustre_handle *conn, struct obdo *oa, char *buf,
                          obd_size *count, obd_off offset)
 {
         int err;
@@ -327,7 +327,7 @@ static int filter_write(struct obd_conn *conn, struct obdo *oa, char *buf,
         unsigned long retval;
 
         ENTRY;
-        if (!gen_client(conn)) {
+        if (!class_conn2export(conn)) {
                 CDEBUG(D_IOCTL, "invalid client %u\n", conn->oc_id);
                 EXIT;
                 return -EINVAL;
@@ -356,7 +356,7 @@ static int filter_write(struct obd_conn *conn, struct obdo *oa, char *buf,
         return err;
 }
 
-static int lov_enqueue(struct obd_conn *conn, struct ldlm_namespace *ns,
+static int lov_enqueue(struct lustre_handle *conn, struct ldlm_namespace *ns,
                        struct ldlm_handle *parent_lock, __u64 *res_id,
                        __u32 type, struct ldlm_extent *extent, __u32 mode,
                        int *flags, void *data, int datalen,
@@ -365,7 +365,7 @@ static int lov_enqueue(struct obd_conn *conn, struct ldlm_namespace *ns,
         int rc;
         ENTRY;
 
-        if (!gen_client(conn))
+        if (!class_conn2export(conn))
                 RETURN(-EINVAL);
 
         rc = obd_enqueue(&conn->oc_dev->obd_multi_conn[0], ns, parent_lock,
@@ -374,13 +374,13 @@ static int lov_enqueue(struct obd_conn *conn, struct ldlm_namespace *ns,
         RETURN(rc);
 }
 
-static int lov_cancel(struct obd_conn *conn, __u32 mode,
+static int lov_cancel(struct lustre_handle *conn, __u32 mode,
                       struct ldlm_handle *lockh)
 {
         int rc;
         ENTRY;
 
-        if (!gen_client(conn))
+        if (!class_conn2export(conn))
                 RETURN(-EINVAL);
 
         rc = obd_cancel(&conn->oc_dev->obd_multi_conn[0], oa);
@@ -389,8 +389,8 @@ static int lov_cancel(struct obd_conn *conn, __u32 mode,
 #endif
 
 struct obd_ops lov_obd_ops = {
-        o_setup:       gen_multi_setup,
-        o_cleanup:     gen_multi_cleanup,
+        o_setup:       class_multi_setup,
+        o_cleanup:     class_multi_cleanup,
         o_create:      lov_create,
         o_connect:     lov_connect,
         o_disconnect:  lov_disconnect,
@@ -414,12 +414,12 @@ static int __init lov_init(void)
 {
         printk(KERN_INFO "Lustre Logical Object Volume driver " LOV_VERSION
                ", phil@clusterfs.com\n");
-        return obd_register_type(&lov_obd_ops, OBD_LOV_DEVICENAME);
+        return class_register_type(&lov_obd_ops, OBD_LOV_DEVICENAME);
 }
 
 static void __exit lov_exit(void)
 {
-        obd_unregister_type(OBD_LOV_DEVICENAME);
+        class_unregister_type(OBD_LOV_DEVICENAME);
 }
 
 MODULE_AUTHOR("Phil Schwan <phil@clusterfs.com>");

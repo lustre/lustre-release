@@ -46,7 +46,7 @@ int connmgr_setup(struct obd_device *obddev, obd_count len, void *buf)
         if (err)
                 GOTO(err_free, err);
 
-        recovd->recovd_service = ptlrpc_init_svc(128 * 1024,
+        recovd->recovd_service = ptlrpc_init_svc(16* 1024,
                                                  CONNMGR_REQUEST_PORTAL,
                                                  CONNMGR_REPLY_PORTAL,
                                                  "self", connmgr_handle);
@@ -98,10 +98,10 @@ int connmgr_cleanup(struct obd_device *dev)
 }
 
 
-int connmgr_iocontrol(long cmd, struct obd_conn *conn, int len, void *karg,
+int connmgr_iocontrol(long cmd, struct lustre_handle *conn, int len, void *karg,
                       void *uarg)
 {
-        struct obd_device *obd = gen_conn2obd(conn);
+        struct obd_device *obd = class_conn2obd(conn);
         struct recovd_obd *recovd = &obd->u.recovd;
 
         ENTRY;
@@ -131,13 +131,13 @@ static int __init ptlrpc_init(void)
         if (rc) 
                 RETURN(rc);
         ptlrpc_init_connection();
-        obd_register_type(&recovd_obd_ops, LUSTRE_HA_NAME);
+        class_register_type(&recovd_obd_ops, LUSTRE_HA_NAME);
         return 0;
 }
 
 static void __exit ptlrpc_exit(void)
 {
-        obd_unregister_type(LUSTRE_HA_NAME);
+        class_unregister_type(LUSTRE_HA_NAME);
         ptlrpc_exit_portals();
         ptlrpc_cleanup_connection();
 }

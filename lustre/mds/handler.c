@@ -151,12 +151,12 @@ struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
         return result;
 }
 
-static int mds_connect(struct obd_conn *conn, struct obd_device *obd)
+static int mds_connect(struct lustre_handle *conn, struct obd_device *obd)
 {
         int rc;
 
         MOD_INC_USE_COUNT;
-        rc = gen_connect(conn, obd);
+        rc = class_connect(conn, obd);
 
         if (rc)
                 MOD_DEC_USE_COUNT;
@@ -164,11 +164,11 @@ static int mds_connect(struct obd_conn *conn, struct obd_device *obd)
         return rc;
 }
 
-static int mds_disconnect(struct obd_conn *conn)
+static int mds_disconnect(struct lustre_handle *conn)
 {
         int rc;
 
-        rc = gen_disconnect(conn);
+        rc = class_disconnect(conn);
         if (!rc)
                 MOD_DEC_USE_COUNT;
 
@@ -928,10 +928,10 @@ static int mds_setup(struct obd_device *obddev, obd_count len, void *buf)
         if (rc)
                 GOTO(err_thread, rc);
 
-        rc = gen_connect(&mds->mds_connh, obddev);
+        rc = class_connect(&mds->mds_connh, obddev);
         if (rc)
                 GOTO(err_thread, rc);
-        export = gen_client(&mds->mds_connh);
+        export = class_conn2export(&mds->mds_connh);
         if (!export)
                 LBUG();
         export->export_connection = mds->mds_ldlm_conn;
@@ -964,7 +964,7 @@ static int mds_cleanup(struct obd_device * obddev)
         struct mds_obd *mds = &obddev->u.mds;
 
         ENTRY;
-        gen_disconnect(&mds->mds_connh);
+        class_disconnect(&mds->mds_connh);
 
 
         if ( !list_empty(&obddev->obd_exports) ) {
@@ -1025,7 +1025,7 @@ static int __init mds_init(void)
         inter_module_register("mds_reint", THIS_MODULE, &mds_reint);
         inter_module_register("mds_getattr_name", THIS_MODULE,
                               &mds_getattr_name);
-        obd_register_type(&mds_obd_ops, LUSTRE_MDS_NAME);
+        class_register_type(&mds_obd_ops, LUSTRE_MDS_NAME);
         return 0;
 }
 
@@ -1033,7 +1033,7 @@ static void __exit mds_exit(void)
 {
         inter_module_unregister("mds_reint");
         inter_module_unregister("mds_getattr_name");
-        obd_unregister_type(LUSTRE_MDS_NAME);
+        class_unregister_type(LUSTRE_MDS_NAME);
 }
 
 MODULE_AUTHOR("Cluster File Systems <info@clusterfs.com>");

@@ -49,27 +49,9 @@
 
 #ifdef CONFIG_PROC_FS
 extern struct proc_dir_entry proc_root;
-
 static struct proc_dir_entry *proc_lustre_dir_entry = 0;
 static struct proc_dir_entry *proc_lustre_obd_dir_entry = 0;
 
-static struct proc_dir_entry *
-proc_lustre_mkdir(const char* dname, struct proc_dir_entry *parent)
-{
-	struct proc_dir_entry *child_dir_entry;
-
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2,3,0)	/*0x20300 */
-	child_dir_entry = proc_mkdir(dname, parent);
-#else
-	child_dir_entry = create_proc_entry(dname,
-					    S_IFDIR | S_IRUGO | S_IXUGO,
-					    &proc_root);
-#endif
-	if (!child_dir_entry)
-                CERROR("lustre: failed to create /proc entry %s\n", dname);
-	
-	return child_dir_entry;
-}
 
 static int read_lustre_status(char *page, char **start, off_t offset,
 			      int count, int *eof, void *data)
@@ -77,7 +59,7 @@ static int read_lustre_status(char *page, char **start, off_t offset,
 	struct obd_device * obddev = (struct obd_device *) data;
 	int p;
 
-	p = sprintf(&page[0], "/dev/obd%d: ", obddev->obd_minor);
+	p = sprintf(&page[0], "device %d: ", obddev->obd_minor);
 	
         if  (obddev->obd_flags & OBD_ATTACHED) {
                 p += sprintf(&page[p], ", attached(%s)", 
@@ -102,7 +84,7 @@ static int read_lustre_status(char *page, char **start, off_t offset,
                 free_page((unsigned long) pathpage);
         }
         
-        /* print connections */
+        /* print exports */
         {
                 struct list_head * lh;
                 struct obd_export * export=0;
@@ -112,8 +94,8 @@ static int read_lustre_status(char *page, char **start, off_t offset,
                         p += sprintf(&page[p],
                                      ((export==0) ? ", connections(" : ",") );
                         export = list_entry(lh, struct obd_export, export_chain);
-                        p += sprintf(&page[p], "%d", export->export_id);
-                } /* while */
+                        p += sprintf(&page[p], "%p", export);
+                } 
                 if (export!=0) { /* there was at least one export */
                         p += sprintf(&page[p], ")");
                 }
@@ -138,21 +120,20 @@ proc_lustre_register_obd_device(struct obd_device *obd)
 	struct proc_dir_entry *obd_status = 0;
 
 	if (!proc_lustre_dir_entry) {
-		proc_lustre_dir_entry = 
-			proc_lustre_mkdir("lustre", &proc_root);
-		if (!proc_lustre_dir_entry)
+		proc_lustre_dir_entry = proc_mkdir("lustre", &proc_root);
+		if (IS_ERR(proc_lustre_dir_entry))
 			return 0;
 	
 		proc_lustre_obd_dir_entry = 
-			proc_lustre_mkdir("obd", proc_lustre_dir_entry);
-		if (!proc_lustre_obd_dir_entry)
+			proc_mkdir("obd", proc_lustre_dir_entry);
+		if (IS_ERR(proc_lustre_obd_dir_entry))
 			return 0;
 	}
 
 	sprintf(obdname, "%d", obd->obd_minor);
 
-	obd_dir =  proc_lustre_mkdir(obdname, proc_lustre_obd_dir_entry);
-	
+
+	obd_dir =  proc_mkdir(obdname, proc_lustre_obd_dir_entry);
         if (obd_dir) 
 		obd_status = create_proc_entry("status", S_IRUSR | S_IFREG, obd_dir);
 

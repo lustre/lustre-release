@@ -40,7 +40,7 @@
 
 static int ost_destroy(struct ptlrpc_request *req)
 {
-        struct obd_conn *conn = (struct obd_conn *)req->rq_reqmsg;
+        struct lustre_handle *conn = (struct lustre_handle *)req->rq_reqmsg;
         struct ost_body *body;
         int rc, size = sizeof(*body);
         ENTRY;
@@ -57,7 +57,7 @@ static int ost_destroy(struct ptlrpc_request *req)
 
 static int ost_getattr(struct ptlrpc_request *req)
 {
-        struct obd_conn *conn = (struct obd_conn *)req->rq_reqmsg;
+        struct lustre_handle *conn = (struct lustre_handle *)req->rq_reqmsg;
         struct ost_body *body, *repbody;
         int rc, size = sizeof(*body);
         ENTRY;
@@ -76,7 +76,7 @@ static int ost_getattr(struct ptlrpc_request *req)
 
 static int ost_open(struct ptlrpc_request *req)
 {
-        struct obd_conn *conn = (struct obd_conn *)req->rq_reqmsg;
+        struct lustre_handle *conn = (struct lustre_handle *)req->rq_reqmsg;
         struct ost_body *body, *repbody;
         int rc, size = sizeof(*body);
         ENTRY;
@@ -95,7 +95,7 @@ static int ost_open(struct ptlrpc_request *req)
 
 static int ost_close(struct ptlrpc_request *req)
 {
-        struct obd_conn *conn = (struct obd_conn *)req->rq_reqmsg;
+        struct lustre_handle *conn = (struct lustre_handle *)req->rq_reqmsg;
         struct ost_body *body, *repbody;
         int rc, size = sizeof(*body);
         ENTRY;
@@ -114,7 +114,7 @@ static int ost_close(struct ptlrpc_request *req)
 
 static int ost_create(struct ptlrpc_request *req)
 {
-        struct obd_conn *conn = (struct obd_conn *)req->rq_reqmsg;
+        struct lustre_handle *conn = (struct lustre_handle *)req->rq_reqmsg;
         struct ost_body *body, *repbody;
         int rc, size = sizeof(*body);
         ENTRY;
@@ -133,7 +133,7 @@ static int ost_create(struct ptlrpc_request *req)
 
 static int ost_punch(struct ptlrpc_request *req)
 {
-        struct obd_conn *conn = (struct obd_conn *)req->rq_reqmsg;
+        struct lustre_handle *conn = (struct lustre_handle *)req->rq_reqmsg;
         struct ost_body *body, *repbody;
         int rc, size = sizeof(*body);
         ENTRY;
@@ -153,7 +153,7 @@ static int ost_punch(struct ptlrpc_request *req)
 
 static int ost_setattr(struct ptlrpc_request *req)
 {
-        struct obd_conn *conn = (struct obd_conn *)req->rq_reqmsg;
+        struct lustre_handle *conn = (struct lustre_handle *)req->rq_reqmsg;
         struct ost_body *body, *repbody;
         int rc, size = sizeof(*body);
         ENTRY;
@@ -172,7 +172,7 @@ static int ost_setattr(struct ptlrpc_request *req)
 
 static int ost_get_info(struct ptlrpc_request *req)
 {
-        struct obd_conn *conn = (struct obd_conn *)req->rq_reqmsg;
+        struct lustre_handle *conn = (struct lustre_handle *)req->rq_reqmsg;
         struct ost_body *body;
         int rc, size[2] = {sizeof(*body)};
         char *bufs[2] = {NULL, NULL}, *ptr;
@@ -196,7 +196,7 @@ static int ost_get_info(struct ptlrpc_request *req)
 
 static int ost_brw_read(struct ptlrpc_request *req)
 {
-        struct obd_conn *conn = (struct obd_conn *)req->rq_reqmsg;
+        struct lustre_handle *conn = (struct lustre_handle *)req->rq_reqmsg;
         struct ptlrpc_bulk_desc *desc;
         void *tmp1, *tmp2, *end2;
         struct niobuf_remote *remote_nb;
@@ -284,7 +284,7 @@ out:
 
 static int ost_brw_write(struct ptlrpc_request *req)
 {
-        struct obd_conn *conn = (struct obd_conn *)req->rq_reqmsg;
+        struct lustre_handle *conn = (struct lustre_handle *)req->rq_reqmsg;
         struct ptlrpc_bulk_desc *desc;
         struct niobuf_remote *remote_nb;
         struct niobuf_local *local_nb, *lnb;
@@ -603,13 +603,13 @@ static struct obd_ops ost_obd_ops = {
 
 static int __init ost_init(void)
 {
-        obd_register_type(&ost_obd_ops, LUSTRE_OST_NAME);
+        class_register_type(&ost_obd_ops, LUSTRE_OST_NAME);
         return 0;
 }
 
 static void __exit ost_exit(void)
 {
-        obd_unregister_type(LUSTRE_OST_NAME);
+        class_unregister_type(LUSTRE_OST_NAME);
 }
 
 MODULE_AUTHOR("Peter J. Braam <braam@clusterfs.com>");

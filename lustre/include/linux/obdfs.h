@@ -12,8 +12,124 @@
 #ifndef _OBDFS_H
 #define _OBDFS_H
 #include <linux/obd_class.h>
-#include <linux/obdo.h>
 #include <linux/list.h>
+
+static __inline__ struct obdo *obdo_fromid(struct lustre_handle *conn, obd_id id,
+                                           obd_mode mode, obd_flag valid)
+{
+        struct obdo *oa;
+        int err;
+
+        ENTRY;
+        oa = obdo_alloc();
+        if ( !oa ) {
+                RETURN(ERR_PTR(-ENOMEM));
+        }
+
+        oa->o_id = id;
+        oa->o_mode = mode;
+        oa->o_valid = valid;
+        if ((err = obd_getattr(conn, oa))) {
+                obdo_free(oa);
+                RETURN(ERR_PTR(err));
+        }
+        RETURN(oa);
+}
+
+
+struct obdfs_inode_info {
+        int              oi_flags;
+        struct list_head oi_inodes;
+        struct list_head oi_pages;
+        char             oi_inline[OBD_INLINESZ];
+};
+
+struct obdfs_sb_info {
+        struct list_head         osi_list;      /* list of supers */
+        struct lustre_handle          osi_conn;
+        struct super_block      *osi_super;
+        struct obd_device       *osi_obd;
+        ino_t                    osi_rootino;   /* number of root inode */
+        int                      osi_minor;     /* minor of /dev/obdX */
+        struct list_head         osi_inodes;    /* list of dirty inodes */
+        unsigned long            osi_cache_count;
+        struct semaphore         osi_list_mutex;
+};
+
+
+static inline struct obdfs_inode_info *obdfs_i2info(struct inode *inode)
+{
+        return (struct obdfs_inode_info *)&(inode->u.generic_ip);
+}
+
+static inline int obdfs_has_inline(struct inode *inode)
+{
+        return (obdfs_i2info(inode)->oi_flags & OBD_FL_INLINEDATA);
+}
+
+static void inline obdfs_from_inode(struct obdo *oa, struct inode *inode)
+{
+        struct obdfs_inode_info *oinfo = obdfs_i2info(inode);
+
+        CDEBUG(D_INFO, "src inode %ld, dst obdo %ld valid 0x%08x\n",
+               inode->i_ino, (long)oa->o_id, oa->o_valid);
+        obdo_from_inode(oa, inode);
+	if (S_ISCHR(inode->i_mode) || S_ISBLK(inode->i_mode)) {
+                CDEBUG(D_INODE, "copying device %x from inode to obdo\n",
+		       inode->i_rdev);
+		*((obd_rdev *)oa->o_inline) = kdev_t_to_nr(inode->i_rdev);
+                oa->o_obdflags |= OBD_FL_INLINEDATA;
+                oa->o_valid |= OBD_MD_FLINLINE;
+	} else if (obdfs_has_inline(inode)) {
+                CDEBUG(D_INODE, "copying inline data from inode to obdo\n");
+                memcpy(oa->o_inline, oinfo->oi_inline, OBD_INLINESZ);
+                oa->o_obdflags |= OBD_FL_INLINEDATA;
+                oa->o_valid |= OBD_MD_FLINLINE;
+        }
+} /* obdfs_from_inode */
+
+static void inline obdfs_to_inode(struct inode *inode, struct obdo *oa)
+{
+        struct obdfs_inode_info *oinfo = obdfs_i2info(inode);
+
+        CDEBUG(D_INFO, "src obdo %ld valid 0x%08x, dst inode %ld\n",
+               (long)oa->o_id, oa->o_valid, inode->i_ino);
+
+        obdo_to_inode(inode, oa);
+
+        if (obdo_has_inline(oa)) {
+		if (S_ISCHR(inode->i_mode) || S_ISBLK(inode->i_mode) ||
+		    S_ISFIFO(inode->i_mode)) {
+			obd_rdev rdev = *((obd_rdev *)oa->o_inline);
+			CDEBUG(D_INODE,
+			       "copying device %x from obdo to inode\n", rdev);
+			init_special_inode(inode, inode->i_mode, rdev);
+		} else {
+			CDEBUG(D_INFO, "copying inline from obdo to inode\n");
+			memcpy(oinfo->oi_inline, oa->o_inline, OBD_INLINESZ);
+		}
+                oinfo->oi_flags |= OBD_FL_INLINEDATA;
+        }
+} /* obdfs_to_inode */
+
+#define NOLOCK 0
+#define LOCKED 1
+
+#ifdef OPS
+#warning "*** WARNING redefining OPS"
+#else
+#define OPS(sb,op) ((struct obdfs_sb_info *)(& (sb)->u.generic_sbp))->osi_ops->o_ ## op
+#define IOPS(inode,op) ((struct obdfs_sb_info *)(&(inode)->i_sb->u.generic_sbp))->osi_ops->o_ ## op
+#endif
+
+#ifdef ID
+#warning "*** WARNING redefining ID"
+#else
+#define ID(sb) (&((struct obdfs_sb_info *)( &(sb)->u.generic_sbp))->osi_conn)
+#define IID(inode) (&((struct obdfs_sb_info *)( &(inode)->i_sb->u.generic_sbp))->osi_conn)
+#endif
+
+#define OBDFS_SUPER_MAGIC 0x4711
 
 /* super.c */ 
 struct obdfs_pgrq {
@@ -107,59 +223,6 @@ static void inline obdfs_set_size (struct inode *inode, obd_size size)
        inode->i_blocks = (inode->i_size + inode->i_sb->s_blocksize - 1) >>
                inode->i_sb->s_blocksize_bits;
 } /* obdfs_set_size */
-
-
-#if 0   /* PAGE CACHE DISABLED */
-
-#define obd_down(mutex) {                                               \
-        /* CDEBUG(D_INFO, "get lock\n"); */                             \
-        obdfs_mutex_start = jiffies;                                    \
-        down(mutex);                                                    \
-        if (jiffies - obdfs_mutex_start)                                \
-                CDEBUG(D_CACHE, "waited on mutex %ld jiffies\n",        \
-                       jiffies - obdfs_mutex_start);                    \
-}
-
-#define obd_up(mutex) {                                                 \
-        up(mutex);                                                      \
-        if (jiffies - obdfs_mutex_start > 1)                            \
-                CDEBUG(D_CACHE, "held mutex for %ld jiffies\n",         \
-                       jiffies - obdfs_mutex_start);                    \
-        /* CDEBUG(D_INFO, "free lock\n"); */                            \
-}
-
-/* We track if a page has been added to the OBD page cache by stting a
- * flag on the page.  We have chosen a bit that will hopefully not be
- * used for a while.
- */
-#define PG_obdcache 29
-#define OBDAddCachePage(page)   test_and_set_bit(PG_obdcache, &(page)->flags)
-#define OBDClearCachePage(page) clear_bit(PG_obdcache, &(page)->flags)
-
-static inline void obdfs_print_plist(struct inode *inode) 
-{
-        struct list_head *page_list = obdfs_iplist(inode);
-        struct list_head *tmp;
-
-        CDEBUG(D_INFO, "inode %ld: page", inode->i_ino);
-        /* obd_down(&obdfs_i2sbi(inode)->osi_list_mutex); */
-        if (list_empty(page_list)) {
-                CDEBUG(D_INFO, " list empty\n");
-                obd_up(&obdfs_i2sbi(inode)->osi_list_mutex);
-                return;
-        }
-
-        tmp = page_list;
-        while ( (tmp = tmp->next) != page_list) {
-                struct obdfs_pgrq *pgrq;
-                pgrq = list_entry(tmp, struct obdfs_pgrq, rq_plist);
-                CDEBUG(D_INFO, " %p", pgrq->rq_page);
-        }
-        CDEBUG(D_INFO, "\n");
-        /* obd_up(&obdfs_i2sbi(inode)->osi_list_mutex); */
-}
-#endif
-
 
 #endif
 

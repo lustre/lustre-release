@@ -5,21 +5,139 @@
  * This code is issued under the GNU General Public License.
  * See the file COPYING in this distribution
  *
- * These are the only exported functions; they provide the simulated object-
- * oriented disk.
+ * These are the only exported functions, they provide some generic
+ * infrastructure for managing object devices
  *
  */
 
 #define DEBUG_SUBSYSTEM S_CLASS
-
+#include <linux/module.h>
 #include <linux/obd_class.h>
 #include <linux/random.h>
 #include <linux/slab.h>
 
+extern struct list_head obd_types; 
 extern struct obd_device obd_dev[MAX_OBD_DEVICES];
 kmem_cache_t *obdo_cachep = NULL;
 kmem_cache_t *export_cachep = NULL;
 kmem_cache_t *import_cachep = NULL;
+
+/*
+ * support functions: we could use inter-module communication, but this
+ * is more portable to other OS's
+ */
+static struct obd_type *class_search_type(char *nm)
+{
+        struct list_head *tmp;
+        struct obd_type *type;
+        CDEBUG(D_INFO, "SEARCH %s\n", nm);
+
+        tmp = &obd_types;
+        while ( (tmp = tmp->next) != &obd_types ) {
+                type = list_entry(tmp, struct obd_type, typ_chain);
+                CDEBUG(D_INFO, "TYP %s\n", type->typ_name);
+                if (strlen(type->typ_name) == strlen(nm) &&
+                    strcmp(type->typ_name, nm) == 0 ) {
+                        return type;
+                }
+        }
+        return NULL;
+}
+
+struct obd_type *class_nm_to_type(char *nm)
+{
+        struct obd_type *type = class_search_type(nm);
+
+#ifdef CONFIG_KMOD
+        if ( !type ) {
+                if ( !request_module(nm) ) {
+                        CDEBUG(D_INFO, "Loaded module '%s'\n", nm);
+                        type = obd_search_type(nm);
+                } else {
+                        CDEBUG(D_INFO, "Can't load module '%s'\n", nm);
+                }
+        }
+#endif
+        return type;
+}
+
+int class_register_type(struct obd_ops *ops, char *nm)
+{
+        struct obd_type *type;
+
+        ENTRY;
+
+        if (class_nm_to_type(nm)) {
+                CDEBUG(D_IOCTL, "Type %s already registered\n", nm);
+                RETURN(-EEXIST);
+        }
+
+        OBD_ALLOC(type, sizeof(*type));
+        if (!type)
+                RETURN(-ENOMEM);
+        INIT_LIST_HEAD(&type->typ_chain);
+        MOD_INC_USE_COUNT;
+        list_add(&type->typ_chain, obd_types.next);
+        type->typ_ops = ops;
+        type->typ_name = nm;
+        RETURN(0);
+}
+
+int class_unregister_type(char *nm)
+{
+        struct obd_type *type = class_nm_to_type(nm);
+
+        ENTRY;
+
+        if ( !type ) {
+                MOD_DEC_USE_COUNT;
+                CERROR("unknown obd type\n");
+                RETURN(-EINVAL);
+        }
+
+        if ( type->typ_refcnt ) {
+                MOD_DEC_USE_COUNT;
+                CERROR("type %s has refcount (%d)\n", nm, type->typ_refcnt);
+                RETURN(-EBUSY);
+        }
+
+        list_del(&type->typ_chain);
+        OBD_FREE(type, sizeof(*type));
+        MOD_DEC_USE_COUNT;
+        RETURN(0);
+} /* class_unregister_type */
+
+int class_name2dev(char *name)
+{
+        int res = -1;
+        int i;
+
+        for (i=0; i < MAX_OBD_DEVICES; i++) {
+                struct obd_device *obd = &obd_dev[i];
+                if (obd->obd_name && strcmp(name, obd->obd_name) == 0) {
+                        res = i;
+                        return res;
+                }
+        }
+
+        return res;
+}
+
+int class_uuid2dev(char *name)
+{
+        int res = -1;
+        int i;
+
+        for (i=0; i < MAX_OBD_DEVICES; i++) {
+                struct obd_device *obd = &obd_dev[i];
+                if (obd->obd_name && strncmp(name, obd->obd_uuid, 37) == 0) {
+                        res = i;
+                        return res;
+                }
+        }
+
+        return res;
+}
 
 void obd_cleanup_caches(void)
 {
@@ -82,9 +200,8 @@ int obd_init_caches(void)
 
 }
 
-
 /* map connection to client */
-struct obd_export *gen_client(struct obd_conn *conn)
+struct obd_export *class_conn2export(struct lustre_handle *conn)
 {
         struct obd_export * export;
 
@@ -103,20 +220,21 @@ struct obd_export *gen_client(struct obd_conn *conn)
         if (export->export_cookie != conn->cookie)
                 return NULL;
         return export;
-} /* gen_client */
+} /* class_conn2export */
 
-struct obd_device *gen_conn2obd(struct obd_conn *conn)
+struct obd_device *class_conn2obd(struct lustre_handle *conn)
 {
         struct obd_export *export;
-        export = gen_client(conn); 
+        export = class_conn2export(conn); 
         if (export) 
                 return export->export_obd;
         fixme();
         return NULL;
 }
 
-/* a connection defines a context in which preallocation can be managed. */
-int gen_connect (struct obd_conn *conn, struct obd_device *obd)
+/* a connection defines an export context in which preallocation can
+   be managed. */
+int class_connect (struct lustre_handle *conn, struct obd_device *obd)
 {
         struct obd_export * export;
 
@@ -140,15 +258,14 @@ int gen_connect (struct obd_conn *conn, struct obd_device *obd)
         conn->addr = (__u64) (unsigned long)export;
         conn->cookie = export->export_cookie;
         return 0;
-} /* gen_connect */
+} /* class_connect */
 
-
-int gen_disconnect(struct obd_conn *conn)
+int class_disconnect(struct lustre_handle *conn)
 {
         struct obd_export * export;
         ENTRY;
 
-        if (!(export = gen_client(conn))) {
+        if (!(export = class_conn2export(conn))) {
                 fixme();
                 CDEBUG(D_IOCTL, "disconnect: attempting to free "
                        "nonexistent client %Lx\n", conn->addr);
@@ -162,7 +279,7 @@ int gen_disconnect(struct obd_conn *conn)
 
 /* FIXME: Data is a space- or comma-separated list of device IDs.  This will
  * have to change. */
-int gen_multi_setup(struct obd_device *obddev, uint32_t len, void *data)
+int class_multi_setup(struct obd_device *obddev, uint32_t len, void *data)
 {
         int count, rc;
         char *p;
@@ -211,13 +328,13 @@ int gen_multi_setup(struct obd_device *obddev, uint32_t len, void *data)
  *    close all connections to lower devices
  *    needed for forced unloads of OBD client drivers
  */
-int gen_multi_cleanup(struct obd_device *obddev)
+int class_multi_cleanup(struct obd_device *obddev)
 {
         int i;
 
         for (i = 0; i < obddev->obd_multi_count; i++) {
                 int rc;
-                struct obd_device *obd = gen_conn2obd(&obddev->obd_multi_conn[i]);
+                struct obd_device *obd = class_conn2obd(&obddev->obd_multi_conn[i]);
 
                 if (!obd) { 
                         CERROR("no such device [i %d]\n", i); 
@@ -231,92 +348,3 @@ int gen_multi_cleanup(struct obd_device *obddev)
         return 0;
 }
 
-
-/*
- *    forced cleanup of the device:
- *    - remove connections from the device
- *    - cleanup the device afterwards
- */
-int gen_cleanup(struct obd_device * obddev)
-{
-        struct list_head * lh, * tmp;
-        struct obd_export * export;
-
-        ENTRY;
-
-        lh = tmp = &obddev->obd_exports;
-        while ((tmp = tmp->next) != lh) {
-                export = list_entry(tmp, struct obd_export, export_chain);
-                CDEBUG(D_INFO, "Disconnecting obd_connection %d, at %p\n",
-                       export->export_id, export);
-        }
-        return 0;
-} /* sim_cleanup_device */
-
-void lck_page(struct page *page)
-{
-        while (TryLockPage(page))
-                ___wait_on_page(page);
-}
-
-int gen_copy_data(struct obd_conn *dst_conn, struct obdo *dst,
-                  struct obd_conn *src_conn, struct obdo *src,
-                  obd_size count, obd_off offset)
-{
-        struct page *page;
-        unsigned long index = 0;
-        int err = 0;
-
-        ENTRY;
-        CDEBUG(D_INFO, "src: ino %Ld blocks %Ld, size %Ld, dst: ino %Ld\n",
-               (unsigned long long)src->o_id, (unsigned long long)src->o_blocks,
-               (unsigned long long)src->o_size, (unsigned long long)dst->o_id);
-        page = alloc_page(GFP_USER);
-        if (page == NULL)
-                RETURN(-ENOMEM);
-
-        lck_page(page);
-
-        /* XXX with brw vector I/O, we could batch up reads and writes here,
-         *     all we need to do is allocate multiple pages to handle the I/Os
-         *     and arrays to handle the request parameters.
-         */
-        while (index < ((src->o_size + PAGE_SIZE - 1) >> PAGE_SHIFT)) {
-                obd_count        num_oa = 1;
-                obd_count        num_buf = 1;
-                obd_size         brw_count = PAGE_SIZE;
-                obd_off          brw_offset = (page->index) << PAGE_SHIFT;
-                obd_flag         flagr = 0;
-                obd_flag         flagw = OBD_BRW_CREATE;
-
-                page->index = index;
-                err = obd_brw(OBD_BRW_READ, src_conn, num_oa, &src, &num_buf,
-			      &page, &brw_count, &brw_offset, &flagr, NULL);
-
-                if ( err ) {
-                        EXIT;
-                        break;
-                }
-                CDEBUG(D_INFO, "Read page %ld ...\n", page->index);
-
-                err = obd_brw(OBD_BRW_WRITE, dst_conn, num_oa, &dst, &num_buf,
-			      &page, &brw_count, &brw_offset, &flagw, NULL);
-
-                /* XXX should handle dst->o_size, dst->o_blocks here */
-                if ( err ) {
-                        EXIT;
-                        break;
-                }
-
-                CDEBUG(D_INFO, "Wrote page %ld ...\n", page->index);
-
-                index++;
-        }
-        dst->o_size = src->o_size;
-        dst->o_blocks = src->o_blocks;
-        dst->o_valid |= (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS);
-        UnlockPage(page);
-        __free_page(page);
-
-        RETURN(err);
-}

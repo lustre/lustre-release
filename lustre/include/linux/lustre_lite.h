@@ -20,7 +20,6 @@
 #include <linux/lustre_net.h>
 #include <linux/lustre_mds.h>
 #include <linux/lustre_ha.h>
-#include <linux/obdo.h>
 
 extern kmem_cache_t *ll_file_data_slab;
 struct ll_file_data {
@@ -56,8 +55,8 @@ struct ll_inode_info {
 #define LL_COMMITCBD_RUNNING   0x4
 
 struct ll_sb_info {
-        struct obd_conn           ll_mdc_conn;
-        struct obd_conn           ll_osc_conn;
+        struct lustre_handle           ll_mdc_conn;
+        struct lustre_handle           ll_osc_conn;
         ino_t                     ll_rootino; /* number of root inode */
 
         wait_queue_head_t         ll_commitcbd_waitq;
@@ -75,14 +74,14 @@ static inline struct ll_sb_info *ll_s2sbi(struct super_block *sb)
         return (struct ll_sb_info *)(sb->u.generic_sbp);
 }
 
-static inline struct obd_conn *ll_s2obdconn(struct super_block *sb)
+static inline struct lustre_handle *ll_s2obdconn(struct super_block *sb)
 {
         return &(ll_s2sbi(sb))->ll_osc_conn;
 }
 
 static inline struct mdc_obd *sbi2mdc(struct ll_sb_info *sbi)
 {
-        struct obd_device *obd = gen_conn2obd(&sbi->ll_mdc_conn);
+        struct obd_device *obd = class_conn2obd(&sbi->ll_mdc_conn);
         return &obd->u.mdc;
 }
 
@@ -102,7 +101,7 @@ static inline int ll_has_inline(struct inode *inode)
 }
 
 
-static inline struct obd_conn *ll_i2obdconn(struct inode *inode)
+static inline struct lustre_handle *ll_i2obdconn(struct inode *inode)
 {
         return ll_s2obdconn(inode->i_sb);
 }

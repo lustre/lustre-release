@@ -203,7 +203,7 @@ struct ptlrpc_bulk_desc {
         struct ptlrpc_connection *b_connection;
         struct ptlrpc_client *b_client;
         __u32 b_portal;
-        struct obd_conn b_conn;
+        struct lustre_handle b_conn;
         void (*b_cb)(struct ptlrpc_bulk_desc *, void *);
         void *b_cb_data;
 

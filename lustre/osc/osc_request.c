@@ -33,23 +33,23 @@ static void osc_obd2cl(struct obd_device *obd, struct ptlrpc_client **cl,
         *connection = osc->osc_conn;
 }
 
-static void osc_con2cl(struct obd_conn *conn, struct ptlrpc_client **cl,
+static void osc_con2cl(struct lustre_handle *conn, struct ptlrpc_client **cl,
                        struct ptlrpc_connection **connection)
 {
-        struct osc_obd *osc = &gen_conn2obd(conn)->u.osc;
+        struct osc_obd *osc = &class_conn2obd(conn)->u.osc;
         *cl = osc->osc_client;
         *connection = osc->osc_conn;
 }
 
-static void osc_con2dlmcl(struct obd_conn *conn, struct ptlrpc_client **cl,
+static void osc_con2dlmcl(struct lustre_handle *conn, struct ptlrpc_client **cl,
                           struct ptlrpc_connection **connection)
 {
-        struct osc_obd *osc = &gen_conn2obd(conn)->u.osc;
+        struct osc_obd *osc = &class_conn2obd(conn)->u.osc;
         *cl = osc->osc_ldlm_client;
         *connection = osc->osc_conn;
 }
 
-static int osc_connect(struct obd_conn *conn, struct obd_device *obd)
+static int osc_connect(struct lustre_handle *conn, struct obd_device *obd)
 {
         struct osc_obd *osc = &obd->u.osc;
         struct obd_import *import;
@@ -65,7 +65,7 @@ static int osc_connect(struct obd_conn *conn, struct obd_device *obd)
                 RETURN(-ENOMEM);
                   
         MOD_INC_USE_COUNT;
-        rc = gen_connect(conn, obd);
+        rc = class_connect(conn, obd);
         if (rc) 
                 GOTO(out, rc);
 
@@ -96,12 +96,12 @@ static int osc_connect(struct obd_conn *conn, struct obd_device *obd)
         return rc;
 }
 
-static int osc_disconnect(struct obd_conn *conn)
+static int osc_disconnect(struct lustre_handle *conn)
 {
         struct ptlrpc_request *request;
         struct ptlrpc_client *cl;
         struct ptlrpc_connection *connection;
-        struct osc_obd *osc = &gen_conn2obd(conn)->u.osc;
+        struct osc_obd *osc = &class_conn2obd(conn)->u.osc;
         int rc;
         ENTRY;
 
@@ -115,7 +115,7 @@ static int osc_disconnect(struct obd_conn *conn)
         rc = ptlrpc_queue_wait(request);
         if (rc) 
                 GOTO(out, rc);
-        rc = gen_disconnect(conn);
+        rc = class_disconnect(conn);
         if (!rc)
                 MOD_DEC_USE_COUNT;
 
@@ -124,11 +124,11 @@ static int osc_disconnect(struct obd_conn *conn)
         return rc;
 }
 
-static int osc_getattr(struct obd_conn *conn, struct obdo *oa)
+static int osc_getattr(struct lustre_handle *conn, struct obdo *oa)
 {
         struct ptlrpc_request *request;
         struct ptlrpc_client *cl;
-        struct osc_obd *osc = &gen_conn2obd(conn)->u.osc;
+        struct osc_obd *osc = &class_conn2obd(conn)->u.osc;
         struct ptlrpc_connection *connection;
         struct ost_body *body;
         int rc, size = sizeof(*body);
@@ -164,11 +164,11 @@ static int osc_getattr(struct obd_conn *conn, struct obdo *oa)
         return 0;
 }
 
-static int osc_open(struct obd_conn *conn, struct obdo *oa)
+static int osc_open(struct lustre_handle *conn, struct obdo *oa)
 {
         struct ptlrpc_request *request;
         struct ptlrpc_client *cl;
-        struct osc_obd *osc = &gen_conn2obd(conn)->u.osc;
+        struct osc_obd *osc = &class_conn2obd(conn)->u.osc;
         struct ptlrpc_connection *connection;
         struct ost_body *body;
         int rc, size = sizeof(*body);
@@ -202,11 +202,11 @@ static int osc_open(struct obd_conn *conn, struct obdo *oa)
         return 0;
 }
 
-static int osc_close(struct obd_conn *conn, struct obdo *oa)
+static int osc_close(struct lustre_handle *conn, struct obdo *oa)
 {
         struct ptlrpc_request *request;
         struct ptlrpc_client *cl;
-        struct osc_obd *osc = &gen_conn2obd(conn)->u.osc;
+        struct osc_obd *osc = &class_conn2obd(conn)->u.osc;
         struct ptlrpc_connection *connection;
         struct ost_body *body;
         int rc, size = sizeof(*body);
@@ -239,11 +239,11 @@ static int osc_close(struct obd_conn *conn, struct obdo *oa)
         return 0;
 }
 
-static int osc_setattr(struct obd_conn *conn, struct obdo *oa)
+static int osc_setattr(struct lustre_handle *conn, struct obdo *oa)
 {
         struct ptlrpc_request *request;
         struct ptlrpc_client *cl;
-        struct osc_obd *osc = &gen_conn2obd(conn)->u.osc;
+        struct osc_obd *osc = &class_conn2obd(conn)->u.osc;
         struct ptlrpc_connection *connection;
         struct ost_body *body;
         int rc, size = sizeof(*body);
@@ -269,12 +269,12 @@ static int osc_setattr(struct obd_conn *conn, struct obdo *oa)
         return 0;
 }
 
-static int osc_create(struct obd_conn *conn, struct obdo *oa)
+static int osc_create(struct lustre_handle *conn, struct obdo *oa)
 {
         struct ptlrpc_request *request;
         struct ptlrpc_client *cl;
         struct ptlrpc_connection *connection;
-        struct osc_obd *osc = &gen_conn2obd(conn)->u.osc;
+        struct osc_obd *osc = &class_conn2obd(conn)->u.osc;
         struct ost_body *body;
         struct mds_objid *objid;
         struct lov_object_id *lov_id;
@@ -318,13 +318,13 @@ static int osc_create(struct obd_conn *conn, struct obdo *oa)
         return 0;
 }
 
-static int osc_punch(struct obd_conn *conn, struct obdo *oa, obd_size count,
+static int osc_punch(struct lustre_handle *conn, struct obdo *oa, obd_size count,
                      obd_off offset)
 {
         struct ptlrpc_request *request;
         struct ptlrpc_client *cl;
         struct ptlrpc_connection *connection;
-        struct osc_obd *osc = &gen_conn2obd(conn)->u.osc;
+        struct osc_obd *osc = &class_conn2obd(conn)->u.osc;
         struct ost_body *body;
         int rc, size = sizeof(*body);
         ENTRY;
@@ -360,12 +360,12 @@ static int osc_punch(struct obd_conn *conn, struct obdo *oa, obd_size count,
         return 0;
 }
 
-static int osc_destroy(struct obd_conn *conn, struct obdo *oa)
+static int osc_destroy(struct lustre_handle *conn, struct obdo *oa)
 {
         struct ptlrpc_request *request;
         struct ptlrpc_client *cl;
         struct ptlrpc_connection *connection;
-        struct osc_obd *osc = &gen_conn2obd(conn)->u.osc;
+        struct osc_obd *osc = &class_conn2obd(conn)->u.osc;
         struct ost_body *body;
         int rc, size = sizeof(*body);
         ENTRY;
@@ -422,14 +422,14 @@ static void brw_read_finish(struct ptlrpc_bulk_desc *desc, void *data)
         OBD_FREE(cb_data, sizeof(*cb_data));
 }
 
-static int osc_brw_read(struct obd_conn *conn, obd_count num_oa,
+static int osc_brw_read(struct lustre_handle *conn, obd_count num_oa,
                         struct obdo **oa, obd_count *oa_bufs, struct page **buf,
                         obd_size *count, obd_off *offset, obd_flag *flags,
                         bulk_callback_t callback)
 {
         struct ptlrpc_client *cl;
         struct ptlrpc_connection *connection;
-        struct osc_obd *osc = &gen_conn2obd(conn)->u.osc;
+        struct osc_obd *osc = &class_conn2obd(conn)->u.osc;
         struct ptlrpc_request *request;
         struct ost_body *body;
         struct list_head *tmp;
@@ -527,7 +527,7 @@ static void brw_write_finish(struct ptlrpc_bulk_desc *desc, void *data)
         EXIT;
 }
 
-static int osc_brw_write(struct obd_conn *conn, obd_count num_oa,
+static int osc_brw_write(struct lustre_handle *conn, obd_count num_oa,
                          struct obdo **oa, obd_count *oa_bufs,
                          struct page **pagearray, obd_size *count,
                          obd_off *offset, obd_flag *flags,
@@ -537,7 +537,7 @@ static int osc_brw_write(struct obd_conn *conn, obd_count num_oa,
         struct ptlrpc_connection *connection;
         struct ptlrpc_request *request;
         struct ptlrpc_bulk_desc *desc;
-        struct osc_obd *osc = &gen_conn2obd(conn)->u.osc;
+        struct osc_obd *osc = &class_conn2obd(conn)->u.osc;
         struct obd_ioobj ioo;
         struct ost_body *body;
         struct niobuf_local *local;
@@ -654,7 +654,7 @@ static int osc_brw_write(struct obd_conn *conn, obd_count num_oa,
         return rc;
 }
 
-static int osc_brw(int cmd, struct obd_conn *conn, obd_count num_oa,
+static int osc_brw(int cmd, struct lustre_handle *conn, obd_count num_oa,
                    struct obdo **oa, obd_count *oa_bufs, struct page **buf,
                    obd_size *count, obd_off *offset, obd_flag *flags,
                    void *callback)
@@ -670,13 +670,13 @@ static int osc_brw(int cmd, struct obd_conn *conn, obd_count num_oa,
                                     offset, flags, (bulk_callback_t)callback);
 }
 
-static int osc_enqueue(struct obd_conn *oconn,
+static int osc_enqueue(struct lustre_handle *oconn,
                        struct lustre_handle *parent_lock, __u64 *res_id,
                        __u32 type, void *extentp, int extent_len, __u32 mode,
                        int *flags, void *callback, void *data, int datalen,
                        struct lustre_handle *lockh)
 {
-        struct obd_device *obddev = gen_conn2obd(oconn);
+        struct obd_device *obddev = class_conn2obd(oconn);
         struct osc_obd *osc = &obddev->u.osc;
         struct ptlrpc_connection *conn;
         struct ptlrpc_client *cl;
@@ -735,7 +735,7 @@ static int osc_enqueue(struct obd_conn *oconn,
         return rc;
 }
 
-static int osc_cancel(struct obd_conn *oconn, __u32 mode,
+static int osc_cancel(struct lustre_handle *oconn, __u32 mode,
                       struct lustre_handle *lockh)
 {
         ENTRY;
@@ -830,7 +830,7 @@ static int osc_cleanup(struct obd_device * obddev)
 }
 
 #if 0
-static int osc_statfs(struct obd_conn *conn, struct statfs *sfs);
+static int osc_statfs(struct lustre_handle *conn, struct statfs *sfs);
 {
         struct ptlrpc_request *request;
         struct ptlrpc_client *cl;
@@ -880,12 +880,12 @@ struct obd_ops osc_obd_ops = {
 
 static int __init osc_init(void)
 {
-        return obd_register_type(&osc_obd_ops, LUSTRE_OSC_NAME);
+        return class_register_type(&osc_obd_ops, LUSTRE_OSC_NAME);
 }
 
 static void __exit osc_exit(void)
 {
-        obd_unregister_type(LUSTRE_OSC_NAME);
+        class_unregister_type(LUSTRE_OSC_NAME);
 }
 
 MODULE_AUTHOR("Peter J. Braam <braam@clusterfs.com>");

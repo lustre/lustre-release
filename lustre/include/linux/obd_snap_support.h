@@ -60,8 +60,8 @@ struct snap_table {
 };
 
 struct snap_iterdata {
-	struct obd_conn *conn;
-	struct obd_conn *ch_conn;
+	struct lustre_handle *conn;
+	struct lustre_handle *ch_conn;
 	int index;
 	int previndex;
 	int currentindex;
@@ -69,11 +69,11 @@ struct snap_iterdata {
 	time_t prevtime;
 };
 
-inline struct obd_conn *child_conn(struct obd_conn *conn);
+inline struct lustre_handle *child_conn(struct lustre_handle *conn);
 int snap_deleteobj(obd_id id, obd_gr group, void *data);
 int snap_restoreobj(obd_id id, obd_gr group, void *data);
 int snap_printobj(obd_id id, obd_gr group, void *data);
-int snap_iocontrol(int cmd, struct obd_conn *conn, int len, void *karg, void *uarg);
+int snap_iocontrol(int cmd, struct lustre_handle *conn, int len, void *karg, void *uarg);
 
 /* In the future, this function may have to deal with offsets into the obdmd.
  * Currently, we assume we have the whole obdmd struct.
