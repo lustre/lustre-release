@@ -83,10 +83,10 @@ static void setup_sm_symlink_ops(struct inode *cache_inode,
 }
 
 static void setup_sm_file_ops(struct inode *cache_inode, 
-		       struct inode *inode,
-		       struct inode_operations *cache_iops,
-		       struct file_operations *cache_fops,
-		       struct address_space_operations *cache_aops)
+		       	      struct inode *inode,
+		       	      struct inode_operations *cache_iops,
+		              struct file_operations *cache_fops,
+		              struct address_space_operations *cache_aops)
 {
 	
 	struct smfs_super_info *smb;
@@ -246,12 +246,10 @@ void sm_set_inode_ops(struct inode *cache_inode, struct inode *inode)
                 inode->i_op = cache_diops(&smfs_operations);
                 inode->i_fop = cache_dfops(&smfs_operations);
         } else if (S_ISREG(inode->i_mode)) {
-                if (!cache_fiops(&smfs_operations)) {
-		        setup_sm_file_ops(cache_inode, inode,
-                                              &smfs_file_iops,
-                                              &smfs_file_fops,
-                                              &smfs_file_aops);
-                }
+	        setup_sm_file_ops(cache_inode, inode,
+                                  &smfs_file_iops,
+                                  &smfs_file_fops,
+                                  &smfs_file_aops);
                 CDEBUG(D_INODE, "inode %lu, i_op at %p\n",
                        inode->i_ino, inode->i_op);
                 inode->i_fop = cache_ffops(&smfs_operations);
@@ -261,10 +259,9 @@ void sm_set_inode_ops(struct inode *cache_inode, struct inode *inode)
                                                                                                                                                                                                      
         }
         else if (S_ISLNK(inode->i_mode)) {
-                if (!cache_siops(&smfs_operations)) {
-                        setup_sm_symlink_ops(cache_inode, inode,
-                                &smfs_sym_iops, &smfs_sym_fops);
-                }
+                setup_sm_symlink_ops(cache_inode, inode,
+                                     &smfs_sym_iops, 
+				     &smfs_sym_fops);
                 inode->i_op = cache_siops(&smfs_operations);
                 inode->i_fop = cache_sfops(&smfs_operations);
                 CDEBUG(D_INODE, "inode %lu, i_op at %p\n",
@@ -278,12 +275,8 @@ void sm_set_sb_ops (struct super_block *cache_sb,
 
 	smb = S2SMI(sb); 
 	
-	if (smb->ops_check & SB_OPS_CHECK) 
-		return; 
-	smb->ops_check |= SB_OPS_CHECK;
-	if (!cache_sops(&smfs_operations)) {
-		setup_sm_sb_ops(cache_sb, sb, &smfs_super_ops);	
-	}
+	setup_sm_sb_ops(cache_sb, sb, &smfs_super_ops);	
+	
 	sb->s_op = cache_sops(&smfs_operations);
 	return;	
 }

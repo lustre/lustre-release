@@ -70,7 +70,7 @@ static int set_loop_fd(char *dev_path, char *loop_dev)
 
 	if (!fd) RETURN(-EINVAL);
 	
-	filp = filp_open(dev_path, 0, 0);
+	filp = filp_open(dev_path, FMODE_WRITE, 0);
 	if (!filp || !S_ISREG(filp->f_dentry->d_inode->i_mode)) 
 		RETURN(-EINVAL);
 	
@@ -109,7 +109,7 @@ static int set_loop_fd(char *dev_path, char *loop_dev)
 #define SIZE(a) (sizeof(a)/sizeof(a[0]))
 static char *find_unused_and_set_loop_device(char *dev_path)
 {
-        char *loop_formats[] = { "/dev/loop%d", "/dev/loop/%d" };
+        char *loop_formats[] = { "/dev/loop/%d", "/dev/loop%d"};
         struct loop_info loopinfo;
 	struct nameidata nd;
 	struct dentry *dentry;
@@ -125,7 +125,7 @@ static char *find_unused_and_set_loop_device(char *dev_path)
                        	
 			if (path_init(dev, LOOKUP_FOLLOW, &nd)) {
                 		error = path_walk(dev, &nd);
-                		if (error) {
+                		if (error && error != -ENOENT) {
 					path_release(&nd);
                         		SM_FREE(dev, strlen(loop_formats[i]) + 1); 
 					RETURN(NULL);
@@ -140,7 +140,7 @@ static char *find_unused_and_set_loop_device(char *dev_path)
 					      (unsigned long)&loopinfo);
 			path_release(&nd);
                         
-			if (error == ENXIO) {
+			if (error == -ENXIO) {
 				/*find unused loop and set dev_path to loopdev*/
 				error = set_loop_fd(dev_path, dev);
 				if (error) {
@@ -163,8 +163,8 @@ static char *parse_path2dev(struct super_block *sb, char *dev_path)
 	char *name = NULL;
 	int  error = 0;
 
-	if (path_init(name, LOOKUP_FOLLOW, &nd)) {
-     		error = path_walk(name, &nd);
+	if (path_init(dev_path, LOOKUP_FOLLOW, &nd)) {
+     		error = path_walk(dev_path, &nd);
      		if (error) {
 			path_release(&nd);
 			RETURN(NULL);
@@ -287,13 +287,14 @@ smfs_read_super(
         }
 
 	root_ino = bottom_root->d_inode->i_ino;
+	root_inode = iget(sb, root_ino);
 	smi = I2SMI(root_inode);
 	/*FIXME Intialize smi here*/
 	
 	CDEBUG(D_SUPER, "readinode %p, root ino %ld, root inode at %p\n",
 	       sb->s_op->read_inode, root_ino, root_inode);
 	
-	sb->s_root = d_alloc_root(bottom_root->d_inode);
+	sb->s_root = d_alloc_root(root_inode);
 	
 	if (!sb->s_root) {
 		GOTO(out_err, err=-EINVAL);
@@ -303,6 +304,8 @@ smfs_read_super(
                 (ulong) sb, (ulong) &sb->u.generic_sbp);
  	
  out_err:
+	if (root_inode)
+		iput(root_inode);
 	cleanup_option();
 	if (err)
 		return NULL;
