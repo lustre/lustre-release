@@ -423,8 +423,8 @@ class LCTLInterface:
         """ set mynid """
         cmds =  """
   network %s
-  mynid %s %s
-  quit """ % (net, netid, nid)
+  mynid %s
+  quit """ % (net, nid)
         self.run(cmds)
 
     # add an interface
@@ -1304,12 +1304,6 @@ class Network(Module):
                 else:
                     netmask = ""
                 lctl.add_interface(self.net_type, ip, netmask)
-        lctl.newnet(self.netid, self.net_type)
-        if not (config.record and self.generic_nid):
-            lctl.network(self.net_type, self.netid, self.nid)
-        bindaddrlist = self.db.get_bindaddrlist(self.netid)
-        for bindaddr in bindaddrlist:
-            lctl.bind(self.net_type, self.netid, bindaddr)
         if self.net_type == 'elan':
             sys_optimize_elan()
         if self.port and  node_is_router():

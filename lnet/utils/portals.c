@@ -1196,14 +1196,13 @@ int jt_ptl_shownid(int argc, char **argv)
 int jt_ptl_mynid(int argc, char **argv)
 {
         int rc;
-        int netid;
         char hostname[1024];
         char *nidstr;
         struct portals_cfg pcfg;
         ptl_nid_t mynid;
 
-        if (argc > 3) {
-                fprintf(stderr, "usage: %s [netid [NID]]\n", argv[0]);
+        if (argc > 2) {
+                fprintf(stderr, "usage: %s [NID]\n", argv[0]);
                 fprintf(stderr, "NID defaults to the primary IP address of the machine.\n");
                 return 0;
         }
@@ -1211,8 +1210,8 @@ int jt_ptl_mynid(int argc, char **argv)
         if (!g_nal_is_set())
                 return -1;
 
-        if (argc >= 3)
-                nidstr = argv[2];
+        if (argc >= 2)
+                nidstr = argv[1];
         else if (gethostname(hostname, sizeof(hostname)) != 0) {
                 fprintf(stderr, "gethostname failed: %s\n",
                         strerror(errno));
@@ -1220,14 +1219,6 @@ int jt_ptl_mynid(int argc, char **argv)
         }
         else
                 nidstr = hostname;
-
-        if (argc >= 2)
-                if (ptl_parse_size (&netid, argv[1]) != 0) {
-                        fprintf (stderr, "Can't parse netid %s\n", argv[1]);
-                                return (-1);
-                }
-        else
-                netid = PTL_NETID_ANY;
 
         rc = ptl_parse_nid (&mynid, nidstr);
         if (rc != 0) {
@@ -1237,7 +1228,6 @@ int jt_ptl_mynid(int argc, char **argv)
         
         PCFG_INIT(pcfg, NAL_CMD_REGISTER_MYNID);
         pcfg.pcfg_nid = mynid;
-        pcfg.pcfg_netid = netid;
 
         rc = pcfg_ioctl(&pcfg);
         if (rc < 0)
