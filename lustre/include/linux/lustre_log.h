@@ -121,7 +121,7 @@ int llog_obd_origin_add(struct llog_ctxt *ctxt,
 
 int llog_cat_initialize(struct obd_device *obd, int count);
 int obd_llog_init(struct obd_device *obd, struct obd_device *disk_obd,
-                  int count, struct llog_logid *logid);
+                  int count, struct llog_catid *logid);
 
 int obd_llog_finish(struct obd_device *obd, int count);
 
@@ -134,7 +134,8 @@ int llog_catlog_list(struct obd_device *obd, int count,
 int llog_initiator_connect(struct llog_ctxt *ctxt);
 int llog_receptor_accept(struct llog_ctxt *ctxt, struct obd_import *imp);
 int llog_origin_connect(struct llog_ctxt *ctxt, int count,
-                        struct llog_logid *logid, struct llog_gen *gen);
+                        struct llog_logid *logid, struct llog_gen *gen,
+                        struct obd_uuid *uuid);
 int llog_handle_connect(struct ptlrpc_request *req);
 
 /* recov_thread.c */
@@ -143,7 +144,8 @@ int llog_obd_repl_cancel(struct llog_ctxt *ctxt,
                          struct llog_cookie *cookies, int flags);
 int llog_obd_repl_sync(struct llog_ctxt *ctxt, struct obd_export *exp);
 int llog_repl_connect(struct llog_ctxt *ctxt, int count,
-                      struct llog_logid *logid, struct llog_gen *gen);
+                      struct llog_logid *logid, struct llog_gen *gen,
+                      struct obd_uuid *uuid);
 
 struct llog_operations {
         int (*lop_write_rec)(struct llog_handle *loghandle,
@@ -169,15 +171,15 @@ struct llog_operations {
         int (*lop_cancel)(struct llog_ctxt *ctxt, struct lov_stripe_md *lsm,
                           int count, struct llog_cookie *cookies, int flags);
         int (*lop_connect)(struct llog_ctxt *ctxt, int count,
-                           struct llog_logid *logid, struct llog_gen *gen);
+                           struct llog_logid *logid, struct llog_gen *gen,
+                           struct obd_uuid *uuid);
         /* XXX add 2 more: commit callbacks and llog recovery functions */
 };
 
 /* llog_lvfs.c */
-int llog_get_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
-                      char *name, int count, struct llog_logid *idarray);
 extern struct llog_operations llog_lvfs_ops;
-
+int llog_get_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
+                      char *name, int count, struct llog_catid *idarray);
 
 struct llog_ctxt {
         int                      loc_idx; /* my index the obd array of ctxt's */
@@ -222,7 +224,7 @@ static inline int llog_obd2ops(struct llog_ctxt *ctxt,
 {
        if (ctxt == NULL)
                 return -ENOTCONN;
-        
+
         *lop = ctxt->loc_logops;
         if (*lop == NULL)
                 return -EOPNOTSUPP;
@@ -269,10 +271,10 @@ static inline int llog_write_rec(struct llog_handle *handle,
                 RETURN(-EOPNOTSUPP);
 
         if (buf)
-                buflen = le32_to_cpu(rec->lrh_len) + sizeof(struct llog_rec_hdr)
+                buflen = rec->lrh_len + sizeof(struct llog_rec_hdr)
                                 + sizeof(struct llog_rec_tail);
         else
-                buflen = le32_to_cpu(rec->lrh_len);
+                buflen = rec->lrh_len;
         LASSERT(size_round(buflen) == buflen);
 
         rc = lop->lop_write_rec(handle, rec, logcookies, numcookies, buf, idx);
@@ -368,7 +370,8 @@ static inline int llog_create(struct llog_ctxt *ctxt, struct llog_handle **res,
 }
 
 static inline int llog_connect(struct llog_ctxt *ctxt, int count,
-                               struct llog_logid *logid, struct llog_gen *gen)
+                               struct llog_logid *logid, struct llog_gen *gen,
+                               struct obd_uuid *uuid)
 {
         struct llog_operations *lop;
         int rc;
@@ -380,7 +383,7 @@ static inline int llog_connect(struct llog_ctxt *ctxt, int count,
         if (lop->lop_connect == NULL)
                 RETURN(-EOPNOTSUPP);
 
-        rc = lop->lop_connect(ctxt, count, logid, gen);
+        rc = lop->lop_connect(ctxt, count, logid, gen, uuid);
         RETURN(rc);
 }
 
