@@ -471,9 +471,9 @@ static int mds_setup(struct obd_device *obddev, obd_count len, void *buf)
          * Replace the client filesystem delete_inode method with our own,
          * so that we can clear the object ID before the inode is deleted.
          * The fs_delete_inode method will call cl_delete_inode for us.
-         */
         mds->mds_fsops->cl_delete_inode = mds->mds_sb->s_op->delete_inode;
         mds->mds_sb->s_op->delete_inode = mds->mds_fsops->fs_delete_inode;
+         */
 
         mds->mds_ctxt.pwdmnt = mnt;
         mds->mds_ctxt.pwd = mnt->mnt_root;
