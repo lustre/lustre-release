@@ -36,6 +36,9 @@
 
 kmem_cache_t *ll_file_data_slab;
 
+LIST_HEAD(ll_super_blocks);
+spinlock_t ll_sb_lock = SPIN_LOCK_UNLOCKED;
+
 extern struct address_space_operations ll_aops;
 extern struct address_space_operations ll_dir_aops;
 
@@ -248,6 +251,7 @@ void lustre_dump_inode(struct inode *inode)
 {
         struct list_head *tmp;
         int dentry_count = 0;
+        BDEVNAME_DECLARE_STORAGE(buf);
 
         LASSERT(inode != NULL);
 
@@ -255,7 +259,7 @@ void lustre_dump_inode(struct inode *inode)
                 dentry_count++;
 
         CERROR("inode %p dump: dev=%s:%lu, mode=%o, count=%u, %d dentries\n",
-               inode, kdevname(inode->i_sb->s_dev), inode->i_ino,
+               inode, ll_bdevname(inode->i_sb, buf), inode->i_ino,
                inode->i_mode, atomic_read(&inode->i_count), dentry_count);
 }
 
@@ -783,6 +787,31 @@ void lustre_put_super(struct super_block *sb)
         EXIT;
 } /* lustre_put_super */
 
+#ifdef HAVE_REGISTER_CACHE
+#include <linux/cache_def.h>
+#ifdef HAVE_CACHE_RETURN_INT
+static int
+#else
+static void
+#endif
+ll_shrink_cache(int priority, unsigned int gfp_mask)
+{
+        struct ll_sb_info *sbi;
+        int count = 0;
+
+        list_for_each_entry(sbi, &ll_super_blocks, ll_list)
+                count += llap_shrink_cache(sbi, priority);
+
+#ifdef HAVE_CACHE_RETURN_INT
+        return count;
+#endif
+}
+
+struct cache_definition ll_cache_definition = {
+        .name = "llap_cache",
+        .shrink = ll_shrink_cache
+};
+#endif /* HAVE_REGISTER_CACHE */
 
 struct inode *ll_inode_from_lock(struct ldlm_lock *lock)
 {

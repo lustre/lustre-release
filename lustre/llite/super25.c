@@ -144,12 +144,18 @@ static int __init init_lustre_lite(void)
         proc_lustre_fs_root = proc_lustre_root ?
                               proc_mkdir("llite", proc_lustre_root) : NULL;
 
+        ll_register_cache(&ll_cache_definition);
+
         rc = register_filesystem(&lustre_lite_fs_type);
-        if (!rc) {
+        if (rc == 0)
                 rc = register_filesystem(&lustre_fs_type);
-                if (rc)
-                        unregister_filesystem(&lustre_fs_type);
+        if (rc) {
+                /* This is safe even if lustre_lite_fs_type isn't registered */
+                unregister_filesystem(&lustre_lite_fs_type);
+                ll_unregister_cache(&ll_cache_definition);
         }
+
+
         return rc;
 }
 
@@ -157,6 +163,9 @@ static void __exit exit_lustre_lite(void)
 {
         unregister_filesystem(&lustre_fs_type);
         unregister_filesystem(&lustre_lite_fs_type);
+
+        ll_unregister_cache(&ll_cache_definition);
+
         ll_destroy_inodecache();
         LASSERTF(kmem_cache_destroy(ll_file_data_slab) == 0,
                  "couldn't destroy ll_file_data slab\n");

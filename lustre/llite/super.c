@@ -40,14 +40,6 @@
 extern struct address_space_operations ll_aops;
 extern struct address_space_operations ll_dir_aops;
 
-LIST_HEAD(ll_super_blocks);
-spinlock_t ll_sb_lock = SPIN_LOCK_UNLOCKED;
-
-static struct cache_definition llap_cache_definition = {
-        "llap_cache",
-        ll_shrink_cache
-};
-
 static struct super_block *ll_read_super(struct super_block *sb,
                                          void *data, int silent)
 {
@@ -109,15 +101,20 @@ static int __init init_lustre_lite(void)
         if (ll_file_data_slab == NULL)
                 return -ENOMEM;
 
-        proc_lustre_fs_root = proc_lustre_root ? proc_mkdir("llite", proc_lustre_root) : NULL;
+        proc_lustre_fs_root = proc_lustre_root ?
+                              proc_mkdir("llite", proc_lustre_root) : NULL;
 
-        register_cache(&llap_cache_definition);
+        ll_register_cache(&ll_cache_definition);
 
         rc = register_filesystem(&lustre_lite_fs_type);
         if (rc == 0)
                 rc = register_filesystem(&lustre_fs_type);
-        if (rc)
+        if (rc) {
+                /* This is safe even if lustre_lite_fs_type isn't registered */
                 unregister_filesystem(&lustre_lite_fs_type);
+                ll_unregister_cache(&ll_cache_definition);
+        }
+
         return rc;
 }
 
@@ -126,7 +123,7 @@ static void __exit exit_lustre_lite(void)
         unregister_filesystem(&lustre_lite_fs_type);
         unregister_filesystem(&lustre_fs_type);
 
-        unregister_cache(&llap_cache_definition);
+        ll_unregister_cache(&ll_cache_definition);
 
         LASSERTF(kmem_cache_destroy(ll_file_data_slab) == 0,
                  "couldn't destroy ll_file_data slab\n");

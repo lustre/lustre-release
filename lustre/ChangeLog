@@ -1,28 +1,31 @@
 tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.1
        * bug fixes
-        - don't keep a lock reference when lock is not granted (4238)
-        - unsafe list practices (rarely) led to infinite eviction loop (4908)
+	- don't keep a lock reference when lock is not granted (4238)
+	- unsafe list practices (rarely) led to infinite eviction loop (4908)
 	- add per-fs limit of Lustre pages in page cache, avoid OOM (4699)
-        - drop import inflight refcount on signal_completed_replay error (5255)
-        - unlock page after async write error during send (3677)
-        - handle missing objects in filter_preprw_read properly (5265)
+	- drop import inflight refcount on signal_completed_replay error (5255)
+	- unlock page after async write error during send (3677)
+	- handle missing objects in filter_preprw_read properly (5265)
 	- no transno return for symlink open, don't save no-trasno open (3440)
 	- don't try to complete elan receive that already failed (4012)
 	- free RPC server reply state on error (5406)
+	- clean up thread from ptlrpc_start_thread() on error (5160)
        * miscellania
-        - service request history (4965)
-        - put {ll,lov,osc}_async_page structs in a single slab (4699)
-        - create an "evict_client" /proc entry on OSTs, like the MDS has
-        - fix ppc64/x86_64 spec to use %{_libdir} instead of /usr/lib (5389)
+	- service request history (4965)
+	- put {ll,lov,osc}_async_page structs in a single slab (4699)
+	- create an "evict_client" /proc entry on OSTs, like the MDS has
+	- fix mount usage message, return errors per mount(8)
+	- change grep [] to grep "[]" in tests so they work in more UMLs
+	- fix ppc64/x86_64 spec to use %{_libdir} instead of /usr/lib (5389)
 
 2004-11-23  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.0
        * bug fixes
-        - send OST transaction number in read/write reply to free req (4966)
-        - don't ASSERT in ptl_send_rpc() if we run out of memory (5119)
-        - lock /proc/sys/portals/routes internal state, avoiding oops (4827)
-        - the watchdog thread now runs as interruptible (5246)
+	- send OST transaction number in read/write reply to free req (4966)
+	- don't ASSERT in ptl_send_rpc() if we run out of memory (5119)
+	- lock /proc/sys/portals/routes internal state, avoiding oops (4827)
+	- the watchdog thread now runs as interruptible (5246)
 	- flock/lockf fixes (but it's still disabled, pending 5135)
 	- don't use EXT3 constants in llite code (5094)
 	- memory shortage at startup could cause assertion (5176)
@@ -586,7 +589,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- return 0 from revalidate2 if ll_intent_lock returns -EINTR (912)
 	- fix leak in bulk IO when only partially completed (899, 900, 926)
 	- fix O_DIRECT for ia64 (55)
-        - (almost) eliminate Lustre-kernel-thread effects on load average (722)
+	- (almost) eliminate Lustre-kernel-thread effects on load average (722)
 	- C-z after timeout could hang a process forever; fixed (977)
        * Features
 	- client-side I/O cache (678, 924, 929, 941, 970)
@@ -600,7 +603,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	 - Fix ldlm_lock_match on the MDS to avoid matching remote locks (592)
 	 - Fix fsfilt_extN_readpage() to read a full page of directory
 	   entries, or fake the remainder if PAGE_SIZE != blocksize (500)
-         - Avoid extra mdc_getattr() in ll_intent_lock when possible (534, 604)
+	 - Avoid extra mdc_getattr() in ll_intent_lock when possible (534, 604)
 	 - Fix imbalanced LOV object allocation and out-of-bound access (469)
 	 - Most intent operations were removed, in favour of a new RPC mode
 	   that does a single RPC to the server and bypasses most of the VFS
@@ -734,12 +737,12 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	  - properly abstracted the echo client
 	  - OSC locked 1 byte too many; fixed
 	  - rewrote brw callback code:
-	    - fixed recovery bugs related to LOVs (306)
-	    - fixed too-many-pages-in-one-write crash (191)
-	    - fixed (again) crash in sync_io_timeout (214)
-	    - probably fixed callback-related race (385)
+	  - fixed recovery bugs related to LOVs (306)
+	  - fixed too-many-pages-in-one-write crash (191)
+	  - fixed (again) crash in sync_io_timeout (214)
+	  - probably fixed callback-related race (385)
 	* protocol change
-          - Add capability to MDS protocol
+	  - Add capability to MDS protocol
 	  - LDLM cancellations and callbacks on different portals
 
 2002-10-28  Andreas Dilger  <adilger@clusterfs.com>

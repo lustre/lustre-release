@@ -61,7 +61,7 @@ for OSC in /proc/fs/lustre/osc/OSC*MNT*; do
 done
 if [ -z "$OSCFULL" ]; then
 	echo "no OSTs are close to full"
-	grep [0-9] /proc/fs/lustre/osc/OSC*MNT*/{kbytesavail,cur*} |tee -a $LOG
+	grep "[0-9]" /proc/fs/lustre/osc/OSC*MNT*/{kbytesavail,cur*} |tee -a $LOG
 	SUCCESS=0
 fi
 

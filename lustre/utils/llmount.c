@@ -115,21 +115,20 @@ update_mtab_entry(char *spec, char *mtpt, char *type, char *opts,
         mnt.mnt_freq = freq;
         mnt.mnt_passno = pass;
 
-        if (!nomtab) {
-                fp = setmntent(MOUNTED, "a+");
-                if (fp == NULL) {
-                        fprintf(stderr, "%s: setmntent(%s): %s:",
-                                progname, MOUNTED, strerror (errno));
+        fp = setmntent(MOUNTED, "a+");
+        if (fp == NULL) {
+                fprintf(stderr, "%s: setmntent(%s): %s:",
+                        progname, MOUNTED, strerror (errno));
+                rc = 16;
+        } else {
+                if ((addmntent(fp, &mnt)) == 1) {
+                        fprintf(stderr, "%s: addmntent: %s:",
+                                progname, strerror (errno));
                         rc = 16;
-                } else {
-                        if ((addmntent(fp, &mnt)) == 1) {
-                                fprintf(stderr, "%s: addmntent: %s:",
-                                        progname, strerror (errno));
-                                rc = 16;
-                        }
-                        endmntent(fp);
                 }
+                endmntent(fp);
         }
+
         return rc;
 }
 
@@ -578,7 +577,7 @@ int main(int argc, char *const argv[])
         progname = strrchr(argv[0], '/');
         progname = progname ? progname + 1 : argv[0];
 
-        while ((opt = getopt_long(argc, argv, "fno:v", long_opt, NULL)) != EOF){
+        while ((opt = getopt_long(argc, argv, "fhno:v" ,long_opt,NULL)) != EOF){
                 switch (opt) {
                 case 1:
                         ++force;
@@ -629,7 +628,7 @@ int main(int argc, char *const argv[])
                 printf("source = %s, target = %s\n", source, target);
         }
 
-        if (check_mtab_entry(source, target, "lustre"))
+        if (!force && check_mtab_entry(source, target, "lustre"))
                 exit(32);
 
         init_options(&lmd);
@@ -661,7 +660,7 @@ int main(int argc, char *const argv[])
                         fprintf(stderr, "Are the lustre modules loaded?\n"
                              "Check /etc/modules.conf and /proc/filesystems\n");
                 rc = 32;
-        } else {
+        } else if (!nomtab) {
                 rc = update_mtab_entry(source, target, "lustre", options,0,0,0);
         }
         return rc;

@@ -49,10 +49,10 @@ static inline int mds_orphan_open_dec_test(struct inode *inode)
 }
 
 #define mds_inode_is_orphan(inode)  ((inode)->i_flags & 0x4000000)
-#define mds_inode_set_orphan(inode)                                     \
-do {                                                                    \
-        (inode)->i_flags |= 0x4000000;                                  \
-        CDEBUG(D_VFSTRACE, "setting orphan flag on inode %p\n", inode); \
+#define mds_inode_set_orphan(inode)                                        \
+do {                                                                       \
+        (inode)->i_flags |= 0x4000000;                                     \
+        CDEBUG(D_VFSTRACE, "setting orphan flag on inode %p\n", inode);    \
 } while (0)
 #define mds_inode_unset_orphan(inode)                                      \
 do {                                                                       \
@@ -61,18 +61,18 @@ do {                                                                       \
 } while (0)
 #endif /* __KERNEL__ */
 
-#define MDS_CHECK_RESENT(req, reconstruct)                                     \
-{                                                                              \
-        if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT) {               \
-                struct mds_client_data *mcd =                                  \
-                        req->rq_export->exp_mds_data.med_mcd;                  \
-                if (mcd->mcd_last_xid == req->rq_xid) {                        \
-                        reconstruct;                                           \
-                        RETURN(req->rq_repmsg->status);                        \
-                }                                                              \
-                DEBUG_REQ(D_HA, req, "no reply for RESENT req (have "LPD64")", \
-                          mcd->mcd_last_xid);                                  \
-        }                                                                      \
+#define MDS_CHECK_RESENT(req, reconstruct)                                    \
+{                                                                             \
+        if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT) {              \
+                struct mds_client_data *mcd =                                 \
+                        req->rq_export->exp_mds_data.med_mcd;                 \
+                if (mcd->mcd_last_xid == req->rq_xid) {                       \
+                        reconstruct;                                          \
+                        RETURN(req->rq_repmsg->status);                       \
+                }                                                             \
+                DEBUG_REQ(D_HA, req, "no reply for RESENT req (have "LPD64")",\
+                          mcd->mcd_last_xid);                                 \
+        }                                                                     \
 }
 
 /* mds/mds_reint.c */

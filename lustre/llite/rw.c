@@ -459,14 +459,6 @@ int llap_shrink_cache(struct ll_sb_info *sbi, int shrink_fraction)
         return count;
 }
 
-void ll_shrink_cache(int priority, unsigned int gfp_mask)
-{
-        struct ll_sb_info *sbi;
-
-        list_for_each_entry(sbi, &ll_super_blocks, ll_list)
-                llap_shrink_cache(sbi, priority);
-}
-
 struct ll_async_page *llap_from_page(struct page *page, unsigned origin)
 {
         struct ll_async_page *llap;

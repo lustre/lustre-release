@@ -7,9 +7,6 @@
 
 #include <linux/lustre_debug.h>
 
-extern struct list_head ll_super_blocks;
-extern spinlock_t ll_sb_lock;
-
 /* default to about 40meg of readahead on a given system.  That much tied
  * up in 512k readahead requests serviced at 40ms each is about 1GB/s. */
 #define SBI_DEFAULT_READAHEAD_MAX (40UL << (20 - PAGE_CACHE_SHIFT))
@@ -153,6 +150,14 @@ enum {
 };
 extern char *llap_origins[];
 
+#ifdef HAVE_REGISTER_CACHE
+#define ll_register_cache(cache) register_cache(cache)
+#define ll_unregister_cache(cache) unregister_cache(cache)
+#else
+#define ll_register_cache(cache) do {} while (0)
+#define ll_unregister_cache(cache) do {} while (0)
+#endif
+
 /* llite/lproc_llite.c */
 int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
                                 struct super_block *sb, char *osc, char *mdc);
@@ -182,7 +187,7 @@ int ll_writepage(struct page *page);
 void ll_inode_fill_obdo(struct inode *inode, int cmd, struct obdo *oa);
 void ll_ap_completion(void *data, int cmd, struct obdo *oa, int rc);
 int llap_shrink_cache(struct ll_sb_info *sbi, int shrink_fraction);
-void ll_shrink_cache(int priority, unsigned int gfp_mask);
+extern struct cache_definition ll_cache_definition;
 void ll_removepage(struct page *page);
 int ll_readpage(struct file *file, struct page *page);
 struct ll_async_page *llap_from_cookie(void *cookie);

@@ -708,10 +708,10 @@ static obd_count cksum_blocks(int nob, obd_count page_count,
                         off += CHECKSUM_CHUNK;
                         count -= CHECKSUM_CHUNK;
                 }
-                nob -= pga->count;
-                page_count--;
                 kunmap(pga->pg);
 
+                nob -= pga->count;
+                page_count--;
                 pga++;
         }
 
@@ -906,7 +906,7 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, struct obdo *oa,
                 if ((cksum_missed & (-cksum_missed)) == cksum_missed)
                         CERROR("Request checksum %u from "LPX64", no reply\n",
                                cksum_missed,
-                               req->rq_import->imp_connection->c_peer.peer_nid);
+                               req->rq_import->imp_connection->c_peer.peer_id.nid);
         }
 #endif
         RETURN(0);

@@ -354,7 +354,7 @@ cancel_lru_locks() {
 	for d in /proc/fs/lustre/ldlm/namespaces/$1*; do
 		echo clear > $d/lru_size
 	done
-	grep [0-9] /proc/fs/lustre/ldlm/namespaces/$1*/lock_unused_count /dev/null
+	grep "[0-9]" /proc/fs/lustre/ldlm/namespaces/$1*/lock_unused_count /dev/null
 }
 
 test_17() { # bug 3513, 3667

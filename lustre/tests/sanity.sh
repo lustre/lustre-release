@@ -927,7 +927,7 @@ cancel_lru_locks() {
 	for d in /proc/fs/lustre/ldlm/namespaces/$1*; do
 		echo clear > $d/lru_size
 	done
-	grep [0-9] /proc/fs/lustre/ldlm/namespaces/$1*/lock_unused_count /dev/null
+	grep "[0-9]" /proc/fs/lustre/ldlm/namespaces/$1*/lock_unused_count /dev/null
 }
 
 test_29() {
@@ -1451,7 +1451,7 @@ test_42a() {
 	stop_writeback
 	sync; sleep 1; sync # just to be safe
 	BEFOREWRITES=`count_ost_writes`
-	grep [0-9] /proc/fs/lustre/osc/OSC*MNT*/cur_grant_bytes
+	grep "[0-9]" /proc/fs/lustre/osc/OSC*MNT*/cur_grant_bytes
 	dd if=/dev/zero of=$DIR/f42a bs=1024 count=100
 	AFTERWRITES=`count_ost_writes`
 	[ $BEFOREWRITES -eq $AFTERWRITES ] || \

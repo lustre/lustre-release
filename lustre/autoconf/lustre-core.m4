@@ -216,6 +216,34 @@ LB_LINUX_TRY_COMPILE([
 ])
 
 #
+# LC_FUNC_REGISTER_CACHE
+#
+# if register_cache() is defined by kernel
+#
+AC_DEFUN([LC_FUNC_REGISTER_CACHE],
+[AC_MSG_CHECKING([if kernel defines register_cache()])
+LB_LINUX_TRY_COMPILE([
+	#include <linux/list.h>
+	#include <linux/cache_def.h>
+],[
+	struct cache_definition cache;
+],[
+	AC_MSG_RESULT([yes])
+	AC_DEFINE(HAVE_REGISTER_CACHE, 1, [register_cache found])
+	AC_MSG_CHECKING([if kernel expects return from cache shrink function])
+	HAVE_CACHE_RETURN_INT="`grep -c 'int.*shrink' $LINUX/include/linux/cache_def.h`"
+	if test "$HAVE_CACHE_RETURN_INT" != 0 ; then
+		AC_DEFINE(HAVE_CACHE_RETURN_INT, 1, [kernel expects return from shrink_cache])
+		AC_MSG_RESULT(yes)
+	else
+		AC_MSG_RESULT(no)
+	fi
+],[
+	AC_MSG_RESULT([no])
+])
+])
+
+#
 # LC_CONFIG_BACKINGFS
 #
 # whether to use extN or ldiskfs instead of ext3
@@ -334,6 +362,7 @@ LC_FUNC_PDE
 LC_FUNC_DIRECT_IO
 LC_HEADER_MM_INLINE
 LC_STRUCT_INODE
+LC_FUNC_REGISTER_CACHE
 ])
 
 #
