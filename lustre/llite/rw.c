@@ -31,52 +31,7 @@
 
 #include <linux/lustre_mds.h>
 #include <linux/lustre_lite.h>
-
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,4,10))
-/*
- * Add a page to the dirty page list.
- */
-void __set_page_dirty(struct page *page)
-{
-        struct address_space *mapping;
-        spinlock_t *pg_lock;
-
-        pg_lock = PAGECACHE_LOCK(page);
-        spin_lock(pg_lock);
-
-        mapping = page->mapping;
-        spin_lock(&mapping->page_lock);
-
-        list_del(&page->list);
-        list_add(&page->list, &mapping->dirty_pages);
-
-        spin_unlock(&mapping->page_lock);
-        spin_unlock(pg_lock);
-
-        if (mapping->host)
-                mark_inode_dirty_pages(mapping->host);
-}
-#else
-/*
- * Add a page to the dirty page list.
- */
-void set_page_dirty(struct page *page)
-{
-        if (!test_and_set_bit(PG_dirty, &page->flags)) {
-                struct address_space *mapping = page->mapping;
-
-                if (mapping) {
-                        spin_lock(&pagecache_lock);
-                        list_del(&page->list);
-                        list_add(&page->list, &mapping->dirty_pages);
-                        spin_unlock(&pagecache_lock);
-
-                        if (mapping->host)
-                                mark_inode_dirty_pages(mapping->host);
-                }
-        }
-}
-#endif
+#include <linux/lustre_lib.h>
 
 inline struct obdo * ll_oa_from_inode(struct inode *inode, unsigned long valid)
 {
@@ -131,30 +86,6 @@ inline struct obdo * ll_oa_from_inode(struct inode *inode, unsigned long valid)
         return oa;
 } /* ll_oa_from_inode */
 
-
-
-/*
- * Remove page from dirty list
- */
-void __set_page_clean(struct page *page)
-{
-        struct address_space *mapping = page->mapping;
-        struct inode *inode;
-        
-        if (!mapping)
-                return;
-
-        list_del(&page->list);
-        list_add(&page->list, &mapping->clean_pages);
-
-        inode = mapping->host;
-        if (list_empty(&mapping->dirty_pages)) { 
-                CDEBUG(D_INODE, "inode clean\n");
-                inode->i_state &= ~I_DIRTY_PAGES;
-        }
-        EXIT;
-}
-
 /* SYNCHRONOUS I/O to object storage for an inode */
 static int ll_brw(int rw, struct inode *inode, struct page *page, int create)
 {
@@ -177,10 +108,6 @@ static int ll_brw(int rw, struct inode *inode, struct page *page, int create)
         obdo_free(oa);
         RETURN(err);
 } /* ll_brw */
-
-extern void set_page_clean(struct page *);
-
-
 
 /* returns the page unlocked, but with a reference */
 static int ll_readpage(struct file *file, struct page *page)
@@ -306,11 +233,10 @@ static int ll_commit_write(struct file *file, struct page *page,
                       &bufs_per_obdo, &page, &count, &offset, &flags);
         kunmap(page);
 
-        if (offset + to > inode->i_size) {
+        if ((iattr.ia_size = offset + to) > inode->i_size) {
+                /* do NOT truncate when writing in the middle of a file */
+                inode->i_size = iattr.ia_size;
                 iattr.ia_valid = ATTR_SIZE;
-                iattr.ia_size = offset + to;
-                /* do NOT truncate */
-                inode->i_size = offset + to;
 #if 0
                 err = ll_inode_setattr(inode, &iattr, 0);
                 if (err) {
@@ -348,7 +274,8 @@ void ll_truncate(struct inode *inode)
         return;
 } /* ll_truncate */
 
-int ll_direct_IO(int rw, struct inode * inode, struct kiobuf * iobuf, unsigned long blocknr, int blocksize)
+int ll_direct_IO(int rw, struct inode *inode, struct kiobuf *iobuf,
+                 unsigned long blocknr, int blocksize)
 {
         int i;
         obd_count        num_obdo = 1;
@@ -357,23 +284,17 @@ int ll_direct_IO(int rw, struct inode * inode, struct kiobuf * iobuf, unsigned l
         obd_size         *count = NULL;
         obd_off          *offset = NULL;
         obd_flag         *flags = NULL;
-        int              err = 0;
+        int              rc = 0;
 
         ENTRY;
 
-        OBD_ALLOC(count, sizeof(obd_size) * bufs_per_obdo); 
-        if (!count)
-                GOTO(out, err=-ENOMEM); 
+        OBD_ALLOC(count, sizeof(obd_size) * bufs_per_obdo);
+        OBD_ALLOC(offset, sizeof(obd_off) * bufs_per_obdo);
+        OBD_ALLOC(flags, sizeof(obd_flag) * bufs_per_obdo);
+        if (!count || !offset || !flags)
+                GOTO(out, rc = -ENOMEM);
 
-        OBD_ALLOC(offset, sizeof(obd_off) * bufs_per_obdo); 
-        if (!offset)
-                GOTO(out, err=-ENOMEM); 
-
-        OBD_ALLOC(flags, sizeof(obd_flag) * bufs_per_obdo); 
-        if (!flags)
-                GOTO(out, err=-ENOMEM); 
-
-        for (i = 0 ; i < bufs_per_obdo ; i++) { 
+        for (i = 0 ; i < bufs_per_obdo ; i++) {
                 count[i] = PAGE_SIZE;
                 offset[i] = ((obd_off)(iobuf->maplist[i])->index) << PAGE_SHIFT;
                 flags[i] = OBD_BRW_CREATE;
@@ -381,23 +302,19 @@ int ll_direct_IO(int rw, struct inode * inode, struct kiobuf * iobuf, unsigned l
 
         oa = ll_oa_from_inode(inode, OBD_MD_FLNOTOBD);
         if (!oa)
-                RETURN(-ENOMEM);
+                GOTO(out, rc = -ENOMEM);
 
-        err = obd_brw(rw, ll_i2obdconn(inode), num_obdo, &oa, &bufs_per_obdo,
-                      iobuf->maplist, count, offset, flags);
-        if (err == 0)
-                err = bufs_per_obdo * PAGE_SIZE;
+        rc = obd_brw(rw, ll_i2obdconn(inode), num_obdo, &oa, &bufs_per_obdo,
+                     iobuf->maplist, count, offset, flags);
+        if (rc == 0)
+                rc = bufs_per_obdo * PAGE_SIZE;
 
  out:
-        if (oa) 
-                obdo_free(oa);
-        if (flags) 
-                OBD_FREE(flags, sizeof(obd_flag) * bufs_per_obdo); 
-        if (count) 
-                OBD_FREE(count, sizeof(obd_count) * bufs_per_obdo); 
-        if (offset) 
-                OBD_FREE(offset, sizeof(obd_off) * bufs_per_obdo); 
-        RETURN(err);
+        obdo_free(oa);
+        OBD_FREE(flags, sizeof(obd_flag) * bufs_per_obdo);
+        OBD_FREE(offset, sizeof(obd_off) * bufs_per_obdo);
+        OBD_FREE(count, sizeof(obd_count) * bufs_per_obdo);
+        RETURN(rc);
 }
 
 

@@ -85,6 +85,52 @@ inline void set_page_clean(struct page *page)
         }
 }
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,4,10))
+/*
+ * Add a page to the dirty page list.
+ */
+void __set_page_dirty(struct page *page)
+{
+        struct address_space *mapping;
+        spinlock_t *pg_lock;
+
+        pg_lock = PAGECACHE_LOCK(page);
+        spin_lock(pg_lock);
+
+        mapping = page->mapping;
+        spin_lock(&mapping->page_lock);
+
+        list_del(&page->list);
+        list_add(&page->list, &mapping->dirty_pages);
+
+        spin_unlock(&mapping->page_lock);
+        spin_unlock(pg_lock);
+
+        if (mapping->host)
+                mark_inode_dirty_pages(mapping->host);
+}
+#else
+/*
+ * Add a page to the dirty page list.
+ */
+void set_page_dirty(struct page *page)
+{
+        if (!test_and_set_bit(PG_dirty, &page->flags)) {
+                struct address_space *mapping = page->mapping;
+
+                if (mapping) {
+                        spin_lock(&pagecache_lock);
+                        list_del(&page->list);
+                        list_add(&page->list, &mapping->dirty_pages);
+                        spin_unlock(&pagecache_lock);
+
+                        if (mapping->host)
+                                mark_inode_dirty_pages(mapping->host);
+                }
+        }
+}
+#endif
+
 inline void lustre_put_page(struct page *page)
 {
         kunmap(page);
@@ -110,6 +156,7 @@ struct page *lustre_get_page_read(struct inode *inode, unsigned long index)
                         CERROR("page index %lu has error\n", index);
                         GOTO(err_page, rc = -EIO);
                 }
+                kmap(page);
         }
         return page;
 
@@ -127,8 +174,6 @@ struct page *lustre_get_page_write(struct inode *inode, unsigned long index)
         page = grab_cache_page(mapping, index); /* locked page */
 
         if (!IS_ERR(page)) {
-                kmap(page);
-
                 /* Note: Called with "O" and "PAGE_SIZE" this is essentially
                  * a no-op for most filesystems, because we write the whole
                  * page.  For partial-page I/O this will read in the page.
@@ -146,11 +191,13 @@ struct page *lustre_get_page_write(struct inode *inode, unsigned long index)
                         LBUG();
                         GOTO(err_unlock, rc = -EIO);
                 }
+
+                kmap(page);
         }
         return page;
 
 err_unlock:
-        UnlockPage(page);
+        unlock_page(page);
         lustre_put_page(page);
         return ERR_PTR(rc);
 }
