@@ -103,6 +103,7 @@ int target_handle_connect(struct ptlrpc_request *req)
         dlmimp->imp_handle.addr = req->rq_reqmsg->addr;
         dlmimp->imp_handle.cookie = req->rq_reqmsg->cookie;
         dlmimp->imp_obd = /* LDLM! */ NULL;
+        dlmimp->imp_recover = NULL;
         INIT_LIST_HEAD(&dlmimp->imp_replay_list);
         INIT_LIST_HEAD(&dlmimp->imp_sending_list);
         INIT_LIST_HEAD(&dlmimp->imp_delayed_list);
