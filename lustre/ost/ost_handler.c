@@ -630,7 +630,8 @@ static int ost_setup(struct obd_device *obddev, obd_count len, void *buf)
                 GOTO(error_dec, err = -EINVAL);
         }
 
-        obddev->obd_namespace = ldlm_namespace_new(LDLM_NAMESPACE_SERVER);
+        obddev->obd_namespace =
+                ldlm_namespace_new("ost", LDLM_NAMESPACE_SERVER);
         if (obddev->obd_namespace == NULL)
                 LBUG();
 

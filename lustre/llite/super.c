@@ -257,19 +257,20 @@ static void ll_clear_inode(struct inode *inode)
 static void ll_delete_inode(struct inode *inode)
 {
         if (S_ISREG(inode->i_mode)) { 
-                int err; 
-                struct obdo *oa; 
+                int err;
+                struct obdo *oa;
                 oa = ll_i2info(inode)->lli_obdo;
 
-                if (!oa) {
-                        CERROR("no memory\n");
-                        GOTO(out, -ENOMEM);
-                }
+                if (!oa)
+                        GOTO(out, -EINVAL);
+
+                if (oa->o_id == 0)
+                        /* No obdo was ever created */
+                        GOTO(out, 0);
 
                 err = obd_destroy(ll_i2obdconn(inode), oa);
                 CDEBUG(D_INODE, "obd destroy of %Ld error %d\n",
                        (unsigned long long)oa->o_id, err);
-                obdo_free(oa);
         }
 out:
         clear_inode(inode);

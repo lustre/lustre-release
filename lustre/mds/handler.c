@@ -260,7 +260,7 @@ static int mds_disconnect(struct mds_obd *mds, struct ptlrpc_request *req)
 }
 
 int mds_lock_callback(struct ldlm_lock *lock, struct ldlm_lock *new,
-                      void *data, int data_len)
+                      void *data, int data_len, struct ptlrpc_request **reqp)
 {
         ENTRY;
 
@@ -317,6 +317,7 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req)
         rc = ldlm_local_lock_match(mds->mds_local_namespace, res_id, LDLM_PLAIN,
                                    NULL, 0, lock_mode, &lockh);
         if (rc == 0) {
+                LDLM_DEBUG_NOLOCK("enqueue res %Lu", res_id[0]);
                 rc = ldlm_cli_enqueue(mds->mds_ldlm_client, mds->mds_ldlm_conn,
                                       NULL, mds->mds_local_namespace, NULL,
                                       res_id, LDLM_PLAIN, NULL, 0, lock_mode,
@@ -326,6 +327,9 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req)
                         CERROR("lock enqueue: err: %d\n", rc);
                         GOTO(out_create_de, rc = -EIO);
                 }
+        } else {
+                lock = lustre_handle2object(&lockh);
+                LDLM_DEBUG(lock, "matched");
         }
         ldlm_lock_dump((void *)(unsigned long)lockh.addr);
 
@@ -882,14 +886,16 @@ static int mds_setup(struct obd_device *obddev, obd_count len, void *buf)
                 GOTO(err_thread, rc);
         }
 
-        obddev->obd_namespace = ldlm_namespace_new(LDLM_NAMESPACE_SERVER);
+        obddev->obd_namespace =
+                ldlm_namespace_new("mds_server", LDLM_NAMESPACE_SERVER);
         if (obddev->obd_namespace == NULL) {
                 LBUG();
                 mds_cleanup(obddev);
                 GOTO(err_thread, rc);
         }
 
-        mds->mds_local_namespace = ldlm_namespace_new(LDLM_NAMESPACE_CLIENT);
+        mds->mds_local_namespace =
+                ldlm_namespace_new("mds_client", LDLM_NAMESPACE_CLIENT);
         if (mds->mds_local_namespace == NULL) {
                 LBUG();
                 mds_cleanup(obddev);

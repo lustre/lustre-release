@@ -55,13 +55,16 @@ static int ldlm_intent_policy(struct ldlm_lock *lock, void *req_cookie,
                 struct ldlm_reply *rep;
                 struct ldlm_namespace *ns = lock->l_resource->lr_namespace;
                 __u32 type = lock->l_resource->lr_type;
-                __u64 new_resid[3] = {0, 0, 0};
+                __u64 new_resid[3] = {0, 0, 0}, old_res;
                 int bufcount, rc, size[3] = {sizeof(struct ldlm_reply),
                                              sizeof(struct mds_body),
                                              sizeof(struct obdo)};
 
                 it->opc = NTOH__u64(it->opc);
 
+                LDLM_DEBUG(lock, "intent policy, opc: %Ld", it->opc);
+
+                /* prepare reply */
                 switch(it->opc) {
                 case IT_GETATTR:
                         /* Note that in the negative case you may be returning
@@ -76,8 +79,12 @@ static int ldlm_intent_policy(struct ldlm_lock *lock, void *req_cookie,
                 case IT_RENAME:
                         bufcount = 3;
                         break;
-                default:
+                case IT_UNLINK:
                         bufcount = 2;
+                        size[1] = sizeof(struct obdo); 
+                        break;
+                default:
+                        LBUG();
                 }
 
                 rc = lustre_pack_msg(bufcount, size, NULL, &req->rq_replen,
@@ -89,6 +96,8 @@ static int ldlm_intent_policy(struct ldlm_lock *lock, void *req_cookie,
 
                 rep = lustre_msg_buf(req->rq_repmsg, 0);
                 rep->lock_policy_res1 = 1;
+
+                /* execute policy */
                 switch ( it->opc ) {
                 case IT_CREAT:
                 case IT_CREAT|IT_OPEN:
@@ -97,6 +106,7 @@ static int ldlm_intent_policy(struct ldlm_lock *lock, void *req_cookie,
                 case IT_SYMLINK:
                 case IT_MKNOD:
                 case IT_LINK:
+                case IT_UNLINK:
                 case IT_RENAME2:
                         if (mds_reint_p == NULL)
                                 mds_reint_p =
@@ -140,13 +150,16 @@ static int ldlm_intent_policy(struct ldlm_lock *lock, void *req_cookie,
                         LBUG();
                 }
 
+                if (it->opc == IT_UNLINK || it->opc == IT_RMDIR)
+                        RETURN(ELDLM_LOCK_ABORTED);
+
                 mds_rep = lustre_msg_buf(req->rq_repmsg, 1);
                 rep->lock_policy_res2 = req->rq_status;
                 new_resid[0] = mds_rep->ino;
+                old_res = lock->l_resource->lr_name[0];
 
                 CDEBUG(D_INFO, "remote intent: locking %d instead of"
-                       "%ld\n", mds_rep->ino,
-                       (long)lock->l_resource->lr_name[0]);
+                       "%ld\n", mds_rep->ino, (long)old_res);
                 ldlm_resource_put(lock->l_resource);
 
                 lock->l_resource =
@@ -155,6 +168,8 @@ static int ldlm_intent_policy(struct ldlm_lock *lock, void *req_cookie,
                         LBUG();
                         RETURN(-ENOMEM);
                 }
+                LDLM_DEBUG(lock, "intent policy, old res %ld",
+                           (long)old_res);
                 RETURN(ELDLM_LOCK_CHANGED);
         } else {
                 int size = sizeof(struct ldlm_reply);
@@ -247,21 +262,25 @@ void ldlm_lock_addref(struct ldlm_lock *lock, __u32 mode)
         spin_unlock(&lock->l_lock);
 }
 
-void ldlm_send_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock *new)
+int ldlm_send_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock *new)
 {
+        struct ptlrpc_request *req = NULL;
         ENTRY;
 
         spin_lock(&lock->l_lock);
         if (lock->l_flags & LDLM_FL_AST_SENT) {
-                EXIT;
-                return;
+                RETURN(0);
         }
 
         lock->l_flags |= LDLM_FL_AST_SENT;
-        spin_unlock(&lock->l_lock);
 
-        lock->l_blocking_ast(lock, new, lock->l_data, lock->l_data_len);
-        EXIT;
+        lock->l_blocking_ast(lock, new, lock->l_data, lock->l_data_len, &req);
+        spin_unlock(&lock->l_lock);
+        if (req != NULL) {
+                struct list_head *list = lock->l_resource->lr_tmp;
+                list_add(&req->rq_multi, list);
+        }
+        RETURN(1);
 }
 
 /* Args: unlocked lock */
@@ -280,7 +299,7 @@ void ldlm_lock_decref(struct ldlm_lock *lock, __u32 mode)
         if (!lock->l_readers && !lock->l_writers &&
             lock->l_flags & LDLM_FL_DYING) {
                 /* Read this lock its rights. */
-                if (!lock->l_resource->lr_namespace->ns_local) {
+                if (!lock->l_resource->lr_namespace->ns_client) {
                         CERROR("LDLM_FL_DYING set on non-local lock!\n");
                         LBUG();
                 }
@@ -288,14 +307,16 @@ void ldlm_lock_decref(struct ldlm_lock *lock, __u32 mode)
                 CDEBUG(D_INFO, "final decref done on dying lock, "
                        "calling callback.\n");
                 spin_unlock(&lock->l_lock);
+                /* This function pointer is unfortunately overloaded.  This
+                 * call will not result in an RPC. */
                 lock->l_blocking_ast(lock, NULL, lock->l_data,
-                                     lock->l_data_len);
+                                     lock->l_data_len, NULL);
         } else
                 spin_unlock(&lock->l_lock);
         EXIT;
 }
 
-/* Args: locked lock */
+/* Args: unlocked lock */
 static int _ldlm_lock_compat(struct ldlm_lock *lock, int send_cbs,
                              struct list_head *queue)
 {
@@ -325,6 +346,10 @@ static int _ldlm_lock_compat(struct ldlm_lock *lock, int send_cbs,
                 CDEBUG(D_OTHER, "compat function failed and lock modes incompat\n");
                 if (send_cbs && child->l_blocking_ast != NULL) {
                         CDEBUG(D_OTHER, "incompatible; sending blocking AST.\n");
+                        /* It's very difficult to actually send the AST from
+                         * here, because we'd have to drop the lock before going
+                         * to sleep to wait for the reply.  Instead we build the
+                         * packet and send it later. */
                         ldlm_send_blocking_ast(child, lock);
                 }
         }
@@ -358,8 +383,8 @@ void ldlm_grant_lock(struct ldlm_resource *res, struct ldlm_lock *lock)
                 res->lr_most_restr = lock->l_granted_mode;
 
         if (lock->l_completion_ast)
-                lock->l_completion_ast(lock, NULL,
-                                       lock->l_data, lock->l_data_len);
+                lock->l_completion_ast(lock, NULL, lock->l_data,
+                                       lock->l_data_len, NULL);
         EXIT;
 }
 
@@ -477,7 +502,7 @@ ldlm_error_t ldlm_local_lock_enqueue(struct lustre_handle *lockh,
 
         lock = lustre_handle2object(lockh);
         res = lock->l_resource;
-        local = res->lr_namespace->ns_local;
+        local = res->lr_namespace->ns_client;
         spin_lock(&res->lr_lock);
 
         lock->l_blocking_ast = blocking;
@@ -492,7 +517,7 @@ ldlm_error_t ldlm_local_lock_enqueue(struct lustre_handle *lockh,
                         res = lock->l_resource;
                         *flags |= LDLM_FL_LOCK_CHANGED;
                 }
-                if (rc < 0) {
+                if (rc == ELDLM_LOCK_ABORTED) {
                         /* Abort. */
                         ldlm_resource_put(lock->l_resource);
                         ldlm_lock_free(lock);
@@ -562,6 +587,8 @@ static int ldlm_reprocess_queue(struct ldlm_resource *res,
                 struct ldlm_lock *pending;
                 pending = list_entry(tmp, struct ldlm_lock, l_res_link);
 
+                CDEBUG(D_INFO, "Reprocessing lock %p\n", pending);
+
                 /* the resource lock protects ldlm_lock_compat */
                 if (ldlm_lock_compat(pending, 1))
                         RETURN(1);
@@ -579,15 +606,37 @@ static int ldlm_reprocess_queue(struct ldlm_resource *res,
 /* Must be called with resource->lr_lock not taken. */
 void ldlm_reprocess_all(struct ldlm_resource *res)
 {
+        struct list_head rpc_list, *tmp, *pos;
+
+        INIT_LIST_HEAD(&rpc_list);
+
         /* Local lock trees don't get reprocessed. */
-        if (res->lr_namespace->ns_local)
+        if (res->lr_namespace->ns_client)
                 return;
 
         spin_lock(&res->lr_lock);
+        res->lr_tmp = &rpc_list;
+
         ldlm_reprocess_queue(res, &res->lr_converting);
         if (list_empty(&res->lr_converting))
                 ldlm_reprocess_queue(res, &res->lr_waiting);
+
+        res->lr_tmp = NULL;
         spin_unlock(&res->lr_lock);
+
+        list_for_each_safe(tmp, pos, &rpc_list) {
+                int rc;
+                struct ptlrpc_request *req =
+                        list_entry(tmp, struct ptlrpc_request, rq_multi);
+
+                CDEBUG(D_INFO, "Sending callback.\n");
+
+                rc = ptlrpc_queue_wait(req);
+                rc = ptlrpc_check_status(req, rc);
+                ptlrpc_free_req(req);
+                if (rc)
+                        CERROR("Callback send failed: %d\n", rc);
+        }
 }
 
 /* Must be called with lock and lock->l_resource unlocked */
@@ -632,7 +681,7 @@ struct ldlm_resource *ldlm_local_lock_convert(struct lustre_handle *lockh,
         list_del_init(&lock->l_res_link);
 
         /* If this is a local resource, put it on the appropriate list. */
-        if (res->lr_namespace->ns_local) {
+        if (res->lr_namespace->ns_client) {
                 if (*flags & LDLM_FL_BLOCK_CONV)
                         ldlm_resource_add_lock(res, res->lr_converting.prev,
                                                lock);
@@ -670,7 +719,8 @@ void ldlm_lock_dump(struct ldlm_lock *lock)
 
         CDEBUG(D_OTHER, "  -- Lock dump: %p (%s)\n", lock, ver);
         CDEBUG(D_OTHER, "  Parent: %p\n", lock->l_parent);
-        CDEBUG(D_OTHER, "  Resource: %p\n", lock->l_resource);
+        CDEBUG(D_OTHER, "  Resource: %p (%Ld)\n", lock->l_resource,
+               lock->l_resource->lr_name[0]);
         CDEBUG(D_OTHER, "  Requested mode: %d, granted mode: %d\n",
                (int)lock->l_req_mode, (int)lock->l_granted_mode);
         CDEBUG(D_OTHER, "  Readers: %u ; Writers; %u\n",

@@ -92,6 +92,7 @@ struct ptlrpc_bulk_desc *ptlrpc_prep_bulk(struct ptlrpc_connection *conn)
         OBD_ALLOC(bulk, sizeof(*bulk));
         if (bulk != NULL) {
                 bulk->b_connection = ptlrpc_connection_addref(conn);
+                atomic_set(&bulk->b_pages_remaining, 0);
                 init_waitqueue_head(&bulk->b_waitq);
                 INIT_LIST_HEAD(&bulk->b_page_list);
         }
@@ -183,6 +184,7 @@ struct ptlrpc_request *ptlrpc_prep_req(struct ptlrpc_client *cl,
         request->rq_reqmsg->target_id = HTON__u32(cl->cli_target_devno);
 
         INIT_LIST_HEAD(&request->rq_list);
+        INIT_LIST_HEAD(&request->rq_multi);
 
         /* this will be dec()d once in req_finished, once in free_committed */
         atomic_set(&request->rq_refcount, 2);
@@ -232,7 +234,7 @@ void ptlrpc_free_req(struct ptlrpc_request *request)
         }
 
         ptlrpc_put_connection(request->rq_connection);
-
+        list_del(&request->rq_multi);
         OBD_FREE(request, sizeof(*request));
         EXIT;
 }
@@ -314,8 +316,12 @@ int ptlrpc_check_status(struct ptlrpc_request *req, int err)
         }
 
         if (req->rq_repmsg->status != 0) {
-                CERROR("req->rq_repmsg->status is %d\n",
-                       req->rq_repmsg->status);
+                if (req->rq_repmsg->status < 0)
+                        CERROR("req->rq_repmsg->status is %d\n",
+                               req->rq_repmsg->status);
+                else
+                        CDEBUG(D_INFO, "req->rq_repmsg->status is %d\n",
+                               req->rq_repmsg->status);
                 /* XXX: translate this error from net to host */
                 RETURN(req->rq_repmsg->status);
         }

@@ -196,7 +196,8 @@ static void ll_update_atime(struct inode *inode)
 }
 
 static int ll_lock_callback(struct ldlm_lock *lock, struct ldlm_lock *new,
-                            void *data, __u32 data_len)
+                            void *data, __u32 data_len,
+                            struct ptlrpc_request **reqp)
 {
         struct inode *inode = lock->l_data;
         ENTRY;

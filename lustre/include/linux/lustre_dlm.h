@@ -78,11 +78,12 @@ static inline int lockmode_compat(ldlm_mode_t exist, ldlm_mode_t new)
 */
 
 struct ldlm_namespace {
-        struct ptlrpc_client ns_client; /* used for revocation callbacks */
-        __u32                 ns_local; /* is this a local lock tree? */
+        char                 *ns_name;
+        struct ptlrpc_client  ns_rpc_client; /* used for revocation callbacks */
+        __u32                 ns_client; /* is this a client-side lock tree? */
         struct list_head     *ns_hash; /* hash table for ns */
         __u32                 ns_refcount; /* count of resources in the hash */
-        struct list_head     ns_root_list; /* all root resources in ns */
+        struct list_head      ns_root_list; /* all root resources in ns */
         spinlock_t            ns_lock; /* protects hash, refcount, list */
 };
 
@@ -99,7 +100,8 @@ struct ldlm_namespace {
 struct ldlm_lock;
 
 typedef int (*ldlm_lock_callback)(struct ldlm_lock *lock, struct ldlm_lock *new,
-                                  void *data, __u32 data_len);
+                                  void *data, __u32 data_len,
+                                  struct ptlrpc_request **req);
 
 struct ldlm_lock {
         struct ldlm_resource *l_resource;
@@ -167,6 +169,7 @@ struct ldlm_resource {
         __u32                  lr_version[RES_VERSION_SIZE];
         __u32                  lr_refcount;
         spinlock_t             lr_lock; /* protects lists, refcount */
+        void                  *lr_tmp;
 };
 
 static inline struct ldlm_extent *ldlm_res2extent(struct ldlm_resource *res)
@@ -175,6 +178,23 @@ static inline struct ldlm_extent *ldlm_res2extent(struct ldlm_resource *res)
 }
 
 extern struct obd_ops ldlm_obd_ops;
+
+#define LDLM_DEBUG(lock, format, a...)                          \
+do {                                                            \
+        CDEBUG(D_DLMTRACE, "### " format                        \
+               " (%s: lock %p mode %d/%d on res %Lu (rc %d) "   \
+               " type %d remote %Lx)\n", ## a,                  \
+               lock->l_resource->lr_namespace->ns_name, lock,   \
+               lock->l_granted_mode, lock->l_req_mode,          \
+               lock->l_resource->lr_name[0],                    \
+               lock->l_resource->lr_refcount,                   \
+               lock->l_resource->lr_type,                       \
+               lock->l_remote_handle.addr);                     \
+} while (0)
+
+#define LDLM_DEBUG_NOLOCK(format, a...)                 \
+        CDEBUG(D_DLMTRACE, "### " format "\n", ## a);
+
 
 /* ldlm_extent.c */
 int ldlm_extent_compat(struct ldlm_lock *, struct ldlm_lock *);
@@ -211,10 +231,10 @@ void ldlm_lock_dump(struct ldlm_lock *lock);
 int ldlm_test(struct obd_device *device, struct ptlrpc_connection *conn);
 
 /* resource.c */
-struct ldlm_namespace *ldlm_namespace_new(__u32 local);
+struct ldlm_namespace *ldlm_namespace_new(char *name, __u32 local);
 int ldlm_namespace_free(struct ldlm_namespace *ns);
 
-/* resourc.c - internal */
+/* resource.c - internal */
 struct ldlm_resource *ldlm_resource_get(struct ldlm_namespace *ns,
                                         struct ldlm_resource *parent,
                                         __u64 *name, __u32 type, int create);
@@ -241,11 +261,10 @@ int ldlm_cli_enqueue(struct ptlrpc_client *cl,
                      __u32 data_len,
                      struct lustre_handle *lockh);
 int ldlm_cli_callback(struct ldlm_lock *lock, struct ldlm_lock *new,
-                      void *data, __u32 data_len);
+                      void *data, __u32 data_len, struct ptlrpc_request **reqp);
 int ldlm_cli_convert(struct ptlrpc_client *, struct lustre_handle *,
                      int new_mode, int *flags);
 int ldlm_cli_cancel(struct ptlrpc_client *, struct ldlm_lock *);
-
 
 #endif /* __KERNEL__ */
 

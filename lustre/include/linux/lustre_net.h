@@ -141,6 +141,7 @@ struct ptlrpc_client {
 struct ptlrpc_request { 
         int rq_type; /* one of PTL_RPC_REQUEST, PTL_RPC_REPLY, PTL_RPC_BULK */
         struct list_head rq_list;
+        struct list_head rq_multi;
         struct obd_device *rq_obd;
         int rq_status;
         int rq_flags; 

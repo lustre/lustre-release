@@ -15,7 +15,7 @@
 
 kmem_cache_t *ldlm_resource_slab, *ldlm_lock_slab;
 
-struct ldlm_namespace *ldlm_namespace_new(__u32 local)
+struct ldlm_namespace *ldlm_namespace_new(char *name, __u32 client)
 {
         struct ldlm_namespace *ns = NULL;
         struct list_head *bucket;
@@ -32,14 +32,20 @@ struct ldlm_namespace *ldlm_namespace_new(__u32 local)
                 GOTO(out, ns);
         }
 
-        ptlrpc_init_client(NULL, NULL,
-                           LDLM_REQUEST_PORTAL, LDLM_REPLY_PORTAL,
-                           &ns->ns_client);
+        OBD_ALLOC(ns->ns_name, strlen(name) + 1);
+        if (!ns->ns_name) {
+                LBUG();
+                GOTO(out, ns);
+        }
+        strcpy(ns->ns_name, name);
+
+        ptlrpc_init_client(NULL, NULL, LDLM_REQUEST_PORTAL, LDLM_REPLY_PORTAL,
+                           &ns->ns_rpc_client);
 
         INIT_LIST_HEAD(&ns->ns_root_list);
         ns->ns_lock = SPIN_LOCK_UNLOCKED;
         ns->ns_refcount = 0;
-        ns->ns_local = local;
+        ns->ns_client = client;
 
         for (bucket = ns->ns_hash + RES_HASH_SIZE - 1; bucket >= ns->ns_hash;
              bucket--)
@@ -49,6 +55,8 @@ struct ldlm_namespace *ldlm_namespace_new(__u32 local)
  out: 
         if (ns && ns->ns_hash)
                 vfree(ns->ns_hash);
+        if (ns && ns->ns_name)
+                OBD_FREE(ns->ns_name, strlen(name) + 1);
         if (ns) 
                 OBD_FREE(ns, sizeof(*ns));
         return NULL;
@@ -57,7 +65,7 @@ struct ldlm_namespace *ldlm_namespace_new(__u32 local)
 static int cleanup_resource(struct ldlm_resource *res, struct list_head *q)
 {
         struct list_head *tmp, *pos;
-        int rc = 0, client = res->lr_namespace->ns_local;
+        int rc = 0, client = res->lr_namespace->ns_client;
         ENTRY;
 
         list_for_each_safe(tmp, pos, q) {
@@ -117,7 +125,8 @@ int ldlm_namespace_free(struct ldlm_namespace *ns)
         }
 
         vfree(ns->ns_hash /* , sizeof(struct list_head) * RES_HASH_SIZE */);
-        ptlrpc_cleanup_client(&ns->ns_client); 
+        ptlrpc_cleanup_client(&ns->ns_rpc_client); 
+        OBD_FREE(ns->ns_name, strlen(ns->ns_name) + 1);
         OBD_FREE(ns, sizeof(*ns));
 
         return ELDLM_OK;
@@ -310,8 +319,10 @@ void ldlm_resource_add_lock(struct ldlm_resource *res, struct list_head *head,
 /* Must be called with resource->lr_lock taken */
 void ldlm_resource_del_lock(struct ldlm_lock *lock)
 {
-        list_del_init(&lock->l_res_link);
-        lock->l_resource->lr_refcount--;
+        if (!list_empty(&lock->l_res_link)) {
+                list_del_init(&lock->l_res_link);
+                lock->l_resource->lr_refcount--;
+        }
 }
 
 int ldlm_get_resource_handle(struct ldlm_resource *res, struct lustre_handle *h)
@@ -341,7 +352,8 @@ void ldlm_resource_dump(struct ldlm_resource *res)
                  (unsigned long long)res->lr_name[2]);
 
         CDEBUG(D_OTHER, "--- Resource: %p (%s)\n", res, name);
-        CDEBUG(D_OTHER, "Namespace: %p\n", res->lr_namespace);
+        CDEBUG(D_OTHER, "Namespace: %p (%s)\n", res->lr_namespace,
+               res->lr_namespace->ns_name);
         CDEBUG(D_OTHER, "Parent: %p, root: %p\n", res->lr_parent, res->lr_root);
 
         CDEBUG(D_OTHER, "Granted locks:\n");

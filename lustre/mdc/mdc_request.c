@@ -125,7 +125,8 @@ int mdc_getattr(struct obd_conn *conn,
 }
 
 static int mdc_lock_callback(struct ldlm_lock *lock, struct ldlm_lock *new,
-                             void *data, int data_len)
+                             void *data, int data_len,
+                             struct ptlrpc_request **req)
 {
         int rc;
         struct inode *inode = data;
@@ -172,6 +173,10 @@ int mdc_enqueue(struct obd_conn *conn, int lock_type, struct lookup_intent *it,
         struct ldlm_reply *dlm_rep;
         struct ldlm_intent *lit;
         ENTRY;
+
+#warning FIXME: Andreas, the sgid directory stuff also goes here, but check again on mds
+
+        LDLM_DEBUG_NOLOCK("mdsintent %d dir %ld", it->it_op, dir->i_ino);
 
         switch (it->it_op) { 
         case IT_MKDIR:
@@ -235,6 +240,24 @@ int mdc_enqueue(struct obd_conn *conn, int lock_type, struct lookup_intent *it,
                 size[0] = sizeof(struct ldlm_reply);
                 size[1] = sizeof(struct mds_body);
                 req->rq_replen = lustre_msg_size(2, size);
+        } else if ( it->it_op == IT_UNLINK ) {
+                size[2] = sizeof(struct mds_rec_unlink);
+                size[3] = de->d_name.len + 1;
+                req = ptlrpc_prep_req(mdc->mdc_ldlm_client, mdc->mdc_conn,
+                                      LDLM_ENQUEUE, 4, size, NULL);
+                if (!req)
+                        RETURN(-ENOMEM);
+
+                /* pack the intent */
+                lit = lustre_msg_buf(req->rq_reqmsg, 1);
+                lit->opc = NTOH__u64((__u64)it->it_op);
+
+                /* pack the intended request */
+                mds_unlink_pack(req, 2, dir, NULL, de->d_name.name, 
+                                de->d_name.len);
+                size[0] = sizeof(struct ldlm_reply);
+                size[1] = sizeof(struct obdo);
+                req->rq_replen = lustre_msg_size(2, size);
         } else if ( it->it_op == IT_GETATTR || it->it_op == IT_RENAME ||
                     it->it_op == IT_OPEN ) {
                 size[2] = sizeof(struct mds_body);
@@ -293,8 +316,10 @@ int mdc_enqueue(struct obd_conn *conn, int lock_type, struct lookup_intent *it,
                               obddev->obd_namespace, NULL, res_id, lock_type,
                               NULL, 0, lock_mode, &flags,
                               (void *)mdc_lock_callback, data, datalen, lockh);
-
-        if (rc != 0) {
+        if (rc == -ENOENT) {
+                lock_mode = 0;
+                memset(lockh, 0, sizeof(*lockh));
+        } else if (rc != 0) {
                 CERROR("ldlm_cli_enqueue: %d\n", rc);
                 RETURN(rc);
         }
@@ -316,6 +341,7 @@ int mdc_open(struct obd_conn *conn, ino_t ino, int type, int flags,
         struct mds_body *body;
         int rc, size[2] = {sizeof(*body)}, bufcount = 1;
         struct ptlrpc_request *req;
+        ENTRY;
 
         if (obdo != NULL) {
                 bufcount = 2;
@@ -686,7 +712,8 @@ static int mdc_connect(struct obd_conn *conn)
 
         ENTRY;
 
-        conn->oc_dev->obd_namespace = ldlm_namespace_new(LDLM_NAMESPACE_CLIENT);
+        conn->oc_dev->obd_namespace =
+                ldlm_namespace_new("mdc", LDLM_NAMESPACE_CLIENT);
         if (conn->oc_dev->obd_namespace == NULL)
                 RETURN(-ENOMEM);
 

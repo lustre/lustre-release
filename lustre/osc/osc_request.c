@@ -755,7 +755,8 @@ static int osc_setup(struct obd_device *obddev, obd_count len, void *buf)
         if (!osc->osc_conn)
                 RETURN(-ENOENT);
 
-        obddev->obd_namespace = ldlm_namespace_new(LDLM_NAMESPACE_CLIENT);
+        obddev->obd_namespace =
+                ldlm_namespace_new("osc", LDLM_NAMESPACE_CLIENT);
         if (obddev->obd_namespace == NULL)
                 GOTO(out_conn, rc = -ENOMEM);
 

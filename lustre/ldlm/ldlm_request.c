@@ -40,6 +40,7 @@ int ldlm_cli_enqueue(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
                 GOTO(out, rc);
 
         lock = lustre_handle2object(lockh);
+        LDLM_DEBUG(lock, "client-side enqueue START");
 
         if (req == NULL) {
                 req = ptlrpc_prep_req(cl, conn, LDLM_ENQUEUE, 1, &size, NULL);
@@ -80,6 +81,8 @@ int ldlm_cli_enqueue(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
                 ldlm_resource_put(lock->l_resource);
                 spin_unlock(&lock->l_resource->lr_lock);
                 ldlm_lock_free(lock);
+                if (rc == ELDLM_LOCK_ABORTED)
+                        rc = 0;
                 GOTO(out, rc);
         }
 
@@ -111,6 +114,7 @@ int ldlm_cli_enqueue(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
                         LBUG();
                         RETURN(-ENOMEM);
                 }
+                LDLM_DEBUG(lock, "client-side enqueue, new resource");
         }
 
         if (!req_passed_in)
@@ -119,6 +123,7 @@ int ldlm_cli_enqueue(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
         rc = ldlm_local_lock_enqueue(lockh, cookie, cookielen, flags, callback,
                                      callback);
 
+        LDLM_DEBUG(lock, "client-side enqueue END");
         if (*flags & (LDLM_FL_BLOCK_WAIT | LDLM_FL_BLOCK_GRANTED |
                       LDLM_FL_BLOCK_CONV)) {
                 /* Go to sleep until the lock is granted. */
@@ -136,16 +141,17 @@ int ldlm_cli_enqueue(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
 }
 
 int ldlm_cli_callback(struct ldlm_lock *lock, struct ldlm_lock *new,
-                      void *data, __u32 data_len)
+                      void *data, __u32 data_len, struct ptlrpc_request **reqp)
 {
         struct ldlm_request *body;
         struct ptlrpc_request *req;
-        struct ptlrpc_client *cl = &lock->l_resource->lr_namespace->ns_client;
+        struct ptlrpc_client *cl =
+                &lock->l_resource->lr_namespace->ns_rpc_client;
         int rc, size = sizeof(*body);
         ENTRY;
 
-        req = ptlrpc_prep_req(cl, lock->l_connection, LDLM_CALLBACK, 1, &size,
-                              NULL);
+        req = ptlrpc_prep_req(cl, lock->l_connection, LDLM_CALLBACK, 1,
+                              &size, NULL);
         if (!req)
                 GOTO(out, rc = -ENOMEM);
 
@@ -162,11 +168,18 @@ int ldlm_cli_callback(struct ldlm_lock *lock, struct ldlm_lock *new,
                 ldlm_object2handle(new, &body->lock_handle2);
         }
 
+        LDLM_DEBUG(lock, "server preparing %s AST",
+                   new == NULL ? "completion" : "blocked");
+
         req->rq_replen = lustre_msg_size(0, NULL);
 
-        rc = ptlrpc_queue_wait(req);
-        rc = ptlrpc_check_status(req, rc);
-        ptlrpc_free_req(req);
+        if (reqp == NULL) {
+                rc = ptlrpc_queue_wait(req);
+                rc = ptlrpc_check_status(req, rc);
+                ptlrpc_free_req(req);
+        } else {
+                *reqp = req;
+        }
 
         EXIT;
  out:
@@ -186,6 +199,8 @@ int ldlm_cli_convert(struct ptlrpc_client *cl, struct lustre_handle *lockh,
 
         lock = lustre_handle2object(lockh);
         *flags = 0;
+
+        LDLM_DEBUG(lock, "client-side convert");
 
         req = ptlrpc_prep_req(cl, lock->l_connection, LDLM_CONVERT, 1, &size,
                               NULL);
@@ -228,12 +243,13 @@ int ldlm_cli_convert(struct ptlrpc_client *cl, struct lustre_handle *lockh,
 
 int ldlm_cli_cancel(struct ptlrpc_client *cl, struct ldlm_lock *lock)
 {
-        struct ldlm_request *body;
         struct ptlrpc_request *req;
+        struct ldlm_request *body;
         struct ldlm_resource *res;
         int rc, size = sizeof(*body);
         ENTRY;
 
+        LDLM_DEBUG(lock, "client-side cancel");
         req = ptlrpc_prep_req(cl, lock->l_connection, LDLM_CANCEL, 1, &size,
                               NULL);
         if (!req)

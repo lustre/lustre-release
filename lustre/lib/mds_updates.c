@@ -189,7 +189,8 @@ void mds_unlink_pack(struct ptlrpc_request *req, int offset,
 
         rec->ul_opcode = HTON__u32(REINT_UNLINK);
         ll_inode2fid(&rec->ul_fid1, inode);
-        ll_inode2fid(&rec->ul_fid2, child);
+        if (child) 
+                ll_inode2fid(&rec->ul_fid2, child);
 
         tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1);
         LOGL0(name, namelen, tmp);

@@ -105,10 +105,11 @@ int ll_lock(struct inode *dir, struct dentry *dentry,
                 err = mdc_enqueue(&sbi->ll_mdc_conn, LDLM_MDSINTENT,
                                   it, LCK_PW, dir, dentry, lockh, 0, NULL, 0,
                                   dir, sizeof(*dir));
-        else if (it->it_op & (IT_READDIR | IT_GETATTR | IT_OPEN))
+        else if (it->it_op & (IT_READDIR | IT_GETATTR | IT_OPEN | IT_UNLINK))
                 err = mdc_enqueue(&sbi->ll_mdc_conn, LDLM_MDSINTENT,
                                   it, LCK_PR, dir, dentry, lockh, 0, NULL, 0,
                                   dir, sizeof(*dir));
+
         else
                 LBUG();
 
@@ -152,7 +153,7 @@ static struct dentry *ll_lookup2(struct inode * dir, struct dentry *dentry,
              it->it_disposition && !it->it_status)
                 GOTO(negative, NULL);
 
-        if ( (it->it_op & (IT_GETATTR)) &&
+        if ( (it->it_op & (IT_GETATTR | IT_UNLINK)) &&
              it->it_disposition && it->it_status)
                 GOTO(negative, NULL);
 
@@ -170,6 +171,21 @@ static struct dentry *ll_lookup2(struct inode * dir, struct dentry *dentry,
                         RETURN(ERR_PTR(-abs(err)));
                 }
                 offset = 0;
+        } else if (it->it_op == IT_UNLINK) { 
+                struct obdo *obdo;
+                request = (struct ptlrpc_request *)it->it_data;
+                obdo = lustre_msg_buf(request->rq_repmsg, 1);
+                inode = new_inode(dir->i_sb);
+                ll_i2info(inode)->lli_obdo = obdo_alloc();
+
+                /* XXX fix mem allocation error */
+                memcpy(ll_i2info(inode)->lli_obdo, obdo, sizeof(*obdo));
+
+                if (!inode) 
+                        GOTO(out_req, -ENOMEM);
+                inode->i_mode= S_IFREG;
+                inode->i_nlink = 1;
+                GOTO(out_req, 0);
         } else {
                 struct mds_body *body;
 
@@ -196,6 +212,7 @@ static struct dentry *ll_lookup2(struct inode * dir, struct dentry *dentry,
         if (it->it_op & IT_RENAME)
                 it->it_data = dentry;
 
+ out_req:
         ptlrpc_free_req(request);
         if (!inode)
                 RETURN(ERR_PTR(-ENOMEM));
@@ -516,6 +533,11 @@ static int ll_unlink(struct inode * dir, struct dentry *dentry)
         struct ext2_dir_entry_2 * de;
         struct page * page;
         int err = -ENOENT;
+
+        if (dentry->d_it && dentry->d_it->it_disposition) { 
+                inode->i_nlink = 0;
+                GOTO(out, err=0);
+        }
 
         de = ext2_find_entry (dir, dentry, &page);
         if (!de)

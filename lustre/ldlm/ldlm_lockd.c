@@ -21,21 +21,11 @@ extern kmem_cache_t *ldlm_lock_slab;
 extern int (*mds_reint_p)(int offset, struct ptlrpc_request *req);
 extern int (*mds_getattr_name_p)(int offset, struct ptlrpc_request *req);
 
-#define LOOPBACK(x) (((x) & cpu_to_be32(0xff000000)) == cpu_to_be32(0x7f000000))
-
-static int is_local_conn(struct ptlrpc_connection *conn)
-{
-        ENTRY;
-        if (conn == NULL)
-                RETURN(1);
-
-        RETURN(LOOPBACK(conn->c_peer.peer_nid));
-}
-
 /* _ldlm_callback and local_callback setup the variables then call this common
  * code */
 static int common_callback(struct ldlm_lock *lock, struct ldlm_lock *new,
-                           ldlm_mode_t mode, void *data, __u32 data_len)
+                           ldlm_mode_t mode, void *data, __u32 data_len,
+                           struct ptlrpc_request **reqp)
 {
         ENTRY;
 
@@ -66,24 +56,13 @@ static int common_callback(struct ldlm_lock *lock, struct ldlm_lock *new,
                                "callback (%p).\n", lock->l_blocking_ast);
                         if (lock->l_blocking_ast != NULL)
                                 lock->l_blocking_ast(lock, new, lock->l_data,
-                                                     lock->l_data_len);
+                                                     lock->l_data_len, reqp);
                 } else {
                         CDEBUG(D_INFO, "Lock still has references; lock will be"
                                " cancelled later.\n");
                 }
         }
         RETURN(0);
-}
-
-/* FIXME: I think that this is no longer necessary. */
-static int local_callback(struct ldlm_lock *l, struct ldlm_lock *new,
-                          void *data, __u32 data_len)
-{
-        struct ldlm_lock *lock;
-        /* the 'remote handle' is the lock in the FS's namespace */
-        lock = lustre_handle2object(&l->l_remote_handle);
-
-        return common_callback(lock, new, l->l_granted_mode, data, data_len);
 }
 
 static int _ldlm_enqueue(struct obd_device *obddev, struct ptlrpc_service *svc,
@@ -100,11 +79,7 @@ static int _ldlm_enqueue(struct obd_device *obddev, struct ptlrpc_service *svc,
         void *cookie;
         ENTRY;
 
-        /* Is this lock managed locally? */
-        if (is_local_conn(req->rq_connection))
-                callback = local_callback;
-        else
-                callback = ldlm_cli_callback;
+        callback = ldlm_cli_callback;
 
         dlm_req = lustre_msg_buf(req->rq_reqmsg, 0);
         if (dlm_req->lock_desc.l_resource.lr_type == LDLM_MDSINTENT) {
@@ -134,6 +109,9 @@ static int _ldlm_enqueue(struct obd_device *obddev, struct ptlrpc_service *svc,
         if (err != ELDLM_OK)
                 GOTO(out, err);
 
+        lock = lustre_handle2object(&lockh);
+        LDLM_DEBUG(lock, "server-side enqueue handler");
+
         flags = dlm_req->lock_flags;
         err = ldlm_local_lock_enqueue(&lockh, cookie, cookielen, &flags,
                                       callback, callback);
@@ -144,7 +122,6 @@ static int _ldlm_enqueue(struct obd_device *obddev, struct ptlrpc_service *svc,
         dlm_rep->lock_flags = flags;
 
         memcpy(&dlm_rep->lock_handle, &lockh, sizeof(lockh));
-        lock = lustre_handle2object(&lockh);
         if (dlm_req->lock_desc.l_resource.lr_type == LDLM_EXTENT)
                 memcpy(&dlm_rep->lock_extent, &lock->l_extent,
                        sizeof(lock->l_extent));
@@ -174,6 +151,7 @@ static int _ldlm_convert(struct ptlrpc_service *svc, struct ptlrpc_request *req)
         struct ldlm_request *dlm_req;
         struct ldlm_reply *dlm_rep;
         struct ldlm_resource *res;
+        struct ldlm_lock *lock;
         int rc, size = sizeof(*dlm_rep);
         ENTRY;
 
@@ -185,6 +163,9 @@ static int _ldlm_convert(struct ptlrpc_service *svc, struct ptlrpc_request *req)
         dlm_req = lustre_msg_buf(req->rq_reqmsg, 0);
         dlm_rep = lustre_msg_buf(req->rq_repmsg, 0);
         dlm_rep->lock_flags = dlm_req->lock_flags;
+
+        lock = lustre_handle2object(&dlm_req->lock_handle1);
+        LDLM_DEBUG(lock, "server-side convert handler");
 
         res = ldlm_local_lock_convert(&dlm_req->lock_handle1,
                                       dlm_req->lock_desc.l_req_mode,
@@ -214,6 +195,7 @@ static int _ldlm_cancel(struct ptlrpc_service *svc, struct ptlrpc_request *req)
         dlm_req = lustre_msg_buf(req->rq_reqmsg, 0);
 
         lock = lustre_handle2object(&dlm_req->lock_handle1);
+        LDLM_DEBUG(lock, "server-side cancel handler");
         res = ldlm_local_lock_cancel(lock);
         req->rq_status = 0;
         if (ptlrpc_reply(svc, req) != 0)
@@ -249,8 +231,15 @@ static int _ldlm_callback(struct ptlrpc_service *svc,
         lock1 = lustre_handle2object(&dlm_req->lock_handle1);
         lock2 = lustre_handle2object(&dlm_req->lock_handle2);
 
+        LDLM_DEBUG(lock1, "client %s callback handler START",
+                   lock2 == NULL ? "completion" : "blocked");
+
         common_callback(lock1, lock2, dlm_req->lock_desc.l_granted_mode, NULL,
-                        0);
+                        0, NULL);
+
+        LDLM_DEBUG_NOLOCK("client %s callback handler END",
+                   lock2 == NULL ? "completion" : "blocked");
+
         RETURN(0);
 }
 

@@ -14,7 +14,8 @@
 #include <linux/lustre_dlm.h>
 
 static int ldlm_test_callback(struct ldlm_lock *lock, struct ldlm_lock *new,
-                               void *data, __u32 data_len)
+                              void *data, __u32 data_len,
+                              struct ptlrpc_request **reqp)
 {
         printk("ldlm_test_callback: lock=%p, new=%p\n", lock, new);
         return 0;
@@ -29,7 +30,7 @@ int ldlm_test_basics(struct obd_device *obddev)
         struct lustre_handle lockh_1, lockh_2;
         int flags;
 
-        ns = ldlm_namespace_new(LDLM_NAMESPACE_SERVER);
+        ns = ldlm_namespace_new("test_server", LDLM_NAMESPACE_SERVER);
         if (ns == NULL)
                 LBUG();
 
@@ -75,7 +76,7 @@ int ldlm_test_extents(struct obd_device *obddev)
         ldlm_error_t err;
         int flags;
 
-        ns = ldlm_namespace_new(LDLM_NAMESPACE_SERVER);
+        ns = ldlm_namespace_new("test_server", LDLM_NAMESPACE_SERVER);
         if (ns == NULL)
                 LBUG();
 

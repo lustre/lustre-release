@@ -100,20 +100,23 @@ static int mds_extN_setattr(struct dentry *dentry, void *handle,
 static int mds_extN_set_obdo(struct inode *inode, void *handle,
                              struct obdo *obdo)
 {
-        struct mds_objid *data = (struct mds_objid *)obdo->o_inline;
+        struct mds_objid *data; 
         int rc;
 
-        data->mo_magic = cpu_to_le64(XATTR_MDS_MO_MAGIC);
+
 
         lock_kernel();
         down(&inode->i_sem);
         if (obdo == NULL)
                 rc = extN_xattr_set(handle, inode, EXTN_XATTR_INDEX_LUSTRE,
                                     XATTR_LUSTRE_MDS_OBJID, NULL, 0, 0);
-        else
+        else { 
+                data = (struct mds_objid *)obdo->o_inline;       
+                data->mo_magic = cpu_to_le64(XATTR_MDS_MO_MAGIC);
                 rc = extN_xattr_set(handle, inode, EXTN_XATTR_INDEX_LUSTRE,
                                     XATTR_LUSTRE_MDS_OBJID, obdo->o_inline,
                                     OBD_INLINESZ, XATTR_CREATE);
+        }
         up(&inode->i_sem);
         unlock_kernel();
 
@@ -139,8 +142,8 @@ static int mds_extN_get_obdo(struct inode *inode, struct obdo *obdo)
         unlock_kernel();
 
         if (rc < 0) {
-                CERROR("error getting EA %s from MDS inode %ld: rc = %d\n",
-                       XATTR_LUSTRE_MDS_OBJID, inode->i_ino, rc);
+                CDEBUG(D_INFO, "error getting EA %s from MDS inode %ld: "
+                       "rc = %d\n", XATTR_LUSTRE_MDS_OBJID, inode->i_ino, rc);
                 obdo->o_id = 0;
         } else if (data->mo_magic != cpu_to_le64(XATTR_MDS_MO_MAGIC)) {
                 CERROR("MDS object id %Ld has bad magic %Lx\n",
