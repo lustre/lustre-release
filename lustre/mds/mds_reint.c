@@ -108,7 +108,7 @@ static int mds_reint_create(struct mds_update_record *rec,
         struct dentry *de = NULL;
         struct mds_rep *rep = req->rq_rep.mds;
         struct dentry *dchild = NULL;
-        int rc;
+        int rc = 0;
         ENTRY;
 
         de = mds_fid2dentry(&req->rq_obd->u.mds, rec->ur_fid1, NULL);
