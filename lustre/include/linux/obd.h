@@ -220,6 +220,8 @@ struct obd_device {
         struct list_head obd_exports;
         struct list_head obd_imports;
         struct ldlm_namespace *obd_namespace;
+        /* a spinlock is OK for what we do now, may need a semaphore later */
+        spinlock_t obd_dev_lock;
         union {
                 struct ext2_obd ext2;
                 struct filter_obd filter;
@@ -304,9 +306,14 @@ struct obd_ops {
         int (*o_cancel)(struct lustre_handle *, struct lov_stripe_md *md, __u32 mode, struct lustre_handle *);
 };
 
-/* FIXME: for 64-bit arch */
+#if BITS_PER_LONG > 32
+#define LPU64 "%lu"
+#define LPD64 "%ld"
+#define LPX64 "%lx"
+#else
 #define LPU64 "%Lu"
 #define LPD64 "%Ld"
 #define LPX64 "%Lx"
+#endif
 
 #endif

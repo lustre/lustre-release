@@ -274,23 +274,30 @@ static int mds_connect(struct lustre_handle *conn, struct obd_device *obd,
 
         MOD_INC_USE_COUNT;
 
+        spin_lock(&obd->obd_dev_lock);
         list_for_each(p, &obd->obd_exports) {
                 exp = list_entry(p, struct obd_export, exp_chain);
                 mcd = exp->exp_mds_data.med_mcd;
                 if (!memcmp(cluuid, mcd->mcd_uuid, sizeof(mcd->mcd_uuid))) {
-                        CDEBUG(D_INFO, "existing export for UUID '%s' at %p\n",
-                               cluuid, exp);
                         LASSERT(exp->exp_obd == obd);
 
                         exp->exp_rconnh.addr = conn->addr;
                         exp->exp_rconnh.cookie = conn->cookie;
                         conn->addr = (__u64) (unsigned long)exp;
                         conn->cookie = exp->exp_cookie;
+                        spin_unlock(&obd->obd_dev_lock);
+                        CDEBUG(D_INFO, "existing export for UUID '%s' at %p\n",
+                               cluuid, exp);
                         CDEBUG(D_IOCTL,"connect: addr %Lx cookie %Lx\n",
                                (long long)conn->addr, (long long)conn->cookie);
                         RETURN(0);
                 }
         }
+        spin_unlock(&obd->obd_dev_lock);
+        /* XXX There is a small race between checking the list and adding a
+         * new connection for the same UUID, but the real threat (list
+         * corruption when multiple different clients connect) is solved.
+         */
         rc = class_connect(conn, obd, cluuid);
         if (rc)
                 GOTO(out_dec, rc);
@@ -322,12 +329,7 @@ out_dec:
 
 static int mds_disconnect(struct lustre_handle *conn)
 {
-        struct obd_export *exp;
         int rc;
-
-        exp = class_conn2export(conn);
-        if (!exp)
-                RETURN(-EINVAL);
 
         rc = class_disconnect(conn);
         if (!rc)

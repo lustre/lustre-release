@@ -285,7 +285,9 @@ struct obd_export *class_new_export(struct obd_device *obddev)
         /* XXX should these be in MDS and LDLM init functions? */
         INIT_LIST_HEAD(&export->exp_mds_data.med_open_head);
         INIT_LIST_HEAD(&export->exp_ldlm_data.led_held_locks);
+        spin_lock(&obddev->obd_dev_lock);
         list_add(&export->exp_chain, &export->exp_obd->obd_exports);
+        spin_unlock(&obddev->obd_dev_lock);
         return export;
 }
 
@@ -294,9 +296,9 @@ void class_destroy_export(struct obd_export *exp)
         int rc;
         ENTRY;
 
-        //spin_lock(&exp->exp_connection->c_lock);
+        spin_lock(&exp->exp_obd->obd_dev_lock);
         list_del(&exp->exp_chain);
-        //spin_unlock(&exp->exp_connection->c_lock);
+        spin_unlock(&exp->exp_obd->obd_dev_lock);
 
         /* XXXshaver these bits want to be hung off the export, instead of
          * XXXshaver hard-coded here.
@@ -380,16 +382,35 @@ int class_disconnect(struct lustre_handle *conn)
 
 void class_disconnect_all(struct obd_device *obddev)
 {
-        struct list_head *tmp, *next;
+        struct list_head *tmp;
+        int again = 1;
 
-        list_for_each_safe(tmp, next, &obddev->obd_exports) {
-                struct obd_export *export;
-                struct lustre_handle conn;
+        while (again) {
+                spin_lock(&obddev->obd_dev_lock);
+                if (!list_empty(&obddev->obd_exports)) {
+                        struct obd_export *export;
+                        struct lustre_handle conn;
+                        int rc;
 
-                export = list_entry(tmp, struct obd_export, exp_chain);
-                conn.addr = (__u64) (unsigned long)export;
-                conn.cookie = export->exp_cookie;
-                obd_disconnect(&conn);
+                        export = list_entry(tmp, struct obd_export, exp_chain);
+                        CERROR("force disconnecting export %p\n", export);
+                        conn.addr = (__u64)(unsigned long)export;
+                        conn.cookie = export->exp_cookie;
+                        spin_unlock(&obddev->obd_dev_lock);
+                        rc = obd_disconnect(&conn);
+                        if (rc < 0) {
+                                /* AED: not so sure about this...  We can't
+                                 * loop here forever, yet we shouldn't leak
+                                 * exports on a struct we will soon destroy.
+                                 */
+                                CERROR("destroy export %p with err: rc = %d\n",
+                                       export, rc);
+                                class_destroy_export(export);
+                        }
+                } else {
+                        spin_unlock(&obddev->obd_dev_lock);
+                        again = 0;
+                }
         }
 }
 
