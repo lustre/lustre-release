@@ -19,7 +19,7 @@ h2elan () {
     echo $1 | sed 's/[^0-9]*//g'
 }
 
-h2ip () {
+h2tcp () {
     echo "${1}"
 }
 
@@ -28,7 +28,7 @@ h2ip () {
 # Client node
 ${LMC} --add net --node client --nid '*' --nettype elan || exit 1
 # Router node
-${LMC} --add net --router --node $ROUTER --tcpbuf $TCPBUF --nid `h2ip $ROUTER` --nettype tcp || exit 1
+${LMC} --add net --router --node $ROUTER --tcpbuf $TCPBUF --nid `h2tcp $ROUTER` --nettype tcp || exit 1
 ${LMC} --add net --node $ROUTER --nid `h2elan $ROUTER` --nettype elan|| exit 1
 ${LMC} -m $config --add route --node $ROUTER --nettype elan --gw `h2elan $ROUTER` --lo `h2elan $CLIENT_LO` --hi `h2elan $CLIENT_HI` || exit 2
 
@@ -37,7 +37,7 @@ for s in $SERVERS
    # server node
    ${LMC} --add net --node $s --tcpbuf $TCPBUF --nid $s --nettype tcp || exit 1
    # route to server
-   ${LMC} --add route --node $ROUTER --nettype tcp --gw `h2ip $ROUTER` --lo $s || exit 2
+   ${LMC} --add route --node $ROUTER --nettype tcp --gw `h2tcp $ROUTER` --lo $s || exit 2
    # the device on the server
    ${LMC} --add ost --node $s --obd obd_$s --obdtype=obdecho || exit 3
    # attach to the device on the client (this would normally be a mount)

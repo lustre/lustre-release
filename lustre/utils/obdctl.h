@@ -27,7 +27,7 @@
 #define _OBDCTL_H_
 
 int do_disconnect(char *func, int verbose);
-int obd_initialize(int argc, char **argv);
+ int obd_initialize(int argc, char **argv);
 void obd_cleanup(int argc, char **argv);
 
 int jt_opt_device(int argc, char **argv);
@@ -65,5 +65,8 @@ int jt_obd_newconn(int argc, char **argv);
 int jt_obd_failconn(int argc, char **argv);
 int jt_obd_mdc_lookup(int argc, char **argv);
 int jt_get_version(int argc, char **argv);
+int jt_obd_add_uuid(int argc, char **argv);
+int jt_obd_close_uuid(int argc, char **argv);
+int jt_obd_del_uuid(int argc, char **argv);
 
 #endif
