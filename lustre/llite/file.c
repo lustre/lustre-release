@@ -134,14 +134,18 @@ int ll_size_lock(struct inode *inode, struct lov_stripe_md *lsm, __u64 start,
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct ldlm_extent extent;
         struct lustre_handle *lockhs = NULL;
-        int rc, flags = 0;
+        int rc, flags = 0, stripe_count;
 
         if (sbi->ll_flags & LL_SBI_NOLCK) {
                 *lockhs_p = NULL;
                 RETURN(0);
         }
 
-        OBD_ALLOC(lockhs, lsm->lsm_stripe_count * sizeof(*lockhs));
+        stripe_count = lsm->lsm_stripe_count;
+        if (!stripe_count)
+                stripe_count = 1;
+
+        OBD_ALLOC(lockhs, stripe_count * sizeof(*lockhs));
         if (lockhs == NULL)
                 RETURN(-ENOMEM);
 
@@ -153,7 +157,7 @@ int ll_size_lock(struct inode *inode, struct lov_stripe_md *lsm, __u64 start,
                          inode, sizeof(*inode), lockhs);
         if (rc != ELDLM_OK) {
                 CERROR("lock enqueue: %d\n", rc);
-                OBD_FREE(lockhs, lsm->lsm_stripe_count * sizeof(*lockhs));
+                OBD_FREE(lockhs, stripe_count * sizeof(*lockhs));
         } else
                 *lockhs_p = lockhs;
         RETURN(rc);
@@ -163,7 +167,7 @@ int ll_size_unlock(struct inode *inode, struct lov_stripe_md *lsm, int mode,
                    struct lustre_handle *lockhs)
 {
         struct ll_sb_info *sbi = ll_i2sbi(inode);
-        int rc;
+        int rc, stripe_count;
 
         if (sbi->ll_flags & LL_SBI_NOLCK)
                 RETURN(0);
@@ -179,7 +183,11 @@ int ll_size_unlock(struct inode *inode, struct lov_stripe_md *lsm, int mode,
                 LBUG();
         }
 
-        OBD_FREE(lockhs, lsm->lsm_stripe_count * sizeof(*lockhs));
+        stripe_count = lsm->lsm_stripe_count;
+        if (!stripe_count)
+                stripe_count = 1;
+
+        OBD_FREE(lockhs, stripe_count * sizeof(*lockhs));
         RETURN(rc);
 }
 
