@@ -69,7 +69,7 @@ static void abort_inflight_for_import(struct obd_import *imp)
         }
 }
 
-static void prepare_ost(struct obd_import *imp)
+static void prepare_osc(struct obd_import *imp)
 {
         int rc;
         struct ldlm_namespace *ns = imp->imp_obd->obd_namespace;
@@ -109,6 +109,12 @@ static void prepare_ost(struct obd_import *imp)
         }
 }
 
+static void prepare_mdc(struct obd_import *imp)
+{
+        struct ldlm_namespace *ns = imp->imp_obd->obd_namespace;
+        ldlm_cli_cancel_unused(ns, NULL, 1 /* local only */);
+}
+
 static int ll_prepare_recovery(struct ptlrpc_connection *conn)
 {
         struct list_head *tmp;
@@ -118,15 +124,22 @@ static int ll_prepare_recovery(struct ptlrpc_connection *conn)
                                                     imp_chain);
 
                 if (imp->imp_obd->obd_type->typ_ops->o_brw)
-                        prepare_ost(imp);
+                        prepare_osc(imp);
+                else
+                        prepare_mdc(imp);
         }
 
         return ptlrpc_run_recovery_upcall(conn);
 }
 
-static void reconnect_ost(struct obd_import *imp)
+static void reconnect_osc(struct obd_import *imp)
 {
         (void)ptlrpc_reconnect_import(imp, OST_CONNECT);
+}
+
+static int reconnect_mdc(struct obd_import *imp)
+{
+        return ptlrpc_reconnect_import(imp, MDS_CONNECT);
 }
 
 static int ll_reconnect(struct ptlrpc_connection *conn)
@@ -145,12 +158,11 @@ static int ll_reconnect(struct ptlrpc_connection *conn)
                                                     imp_chain);
                 if (imp->imp_obd->obd_type->typ_ops->o_brw) {
                         /* XXX what to do if we fail? */
-                        reconnect_ost(imp);
+                        reconnect_osc(imp);
                 } else {
-                        int rc = ptlrpc_reconnect_import(imp, MDS_CONNECT);
+                        int rc = reconnect_mdc(imp);
                         if (!rc) {
                                 need_replay = 1;
-                                /* XXX obd_cancel_unused */
                         }
                         /* make sure we don't try to replay for dead imps?
                          *

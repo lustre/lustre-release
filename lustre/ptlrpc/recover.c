@@ -108,11 +108,12 @@ int ptlrpc_run_recovery_upcall(struct ptlrpc_connection *conn)
         RETURN(0);
 }
 
-#define REPLAY_COMMITTED     0 /* Fully processed (commit + reply) */
-#define REPLAY_REPLAY        1 /* Forced-replay (e.g. open) */
+#define REPLAY_COMMITTED     0 /* Fully processed (commit + reply). */
+#define REPLAY_REPLAY        1 /* Forced-replay (e.g. open). */
 #define REPLAY_RESEND        2 /* Resend required. */
-#define REPLAY_RESEND_IGNORE 3 /* Resend, ignore the reply (already saw it) */
+#define REPLAY_RESEND_IGNORE 3 /* Resend, ignore the reply (already saw it). */
 #define REPLAY_RESTART       4 /* Have to restart the call, sorry! */
+#define REPLAY_NO_STATE      5 /* Request doesn't change MDS state: skip. */
 
 static int replay_state(struct ptlrpc_request *req, __u64 last_xid)
 {
@@ -123,6 +124,12 @@ static int replay_state(struct ptlrpc_request *req, __u64 last_xid)
         /* Uncommitted request */
         if (req->rq_xid > last_xid) {
                 if (req->rq_flags & PTL_RPC_FL_REPLIED) {
+                        if (req->rq_transno == 0) {
+                                /* If no transno was returned, no state was
+                                   altered on the MDS. */
+                                return REPLAY_NO_STATE;
+                        }
+
                         /* Saw reply, so resend and ignore new reply. */
                         return REPLAY_RESEND_IGNORE;
                 }
@@ -141,7 +148,8 @@ static int replay_state(struct ptlrpc_request *req, __u64 last_xid)
 
 static char *replay_state2str(int state) {
         static char *state_strings[] = {
-                "COMMITTED", "REPLAY", "RESEND", "RESEND_IGNORE", "RESTART"
+                "COMMITTED", "REPLAY", "RESEND", "RESEND_IGNORE", "RESTART",
+                "NO_STATE"
         };
         static char *unknown_state = "UNKNOWN";
 
@@ -203,6 +211,11 @@ int ptlrpc_replay(struct ptlrpc_connection *conn)
 
                     case REPLAY_COMMITTED:
                         DEBUG_REQ(D_HA, req, "COMMITTED:");
+                        /* XXX commit now? */
+                        break;
+
+                    case REPLAY_NO_STATE:
+                        DEBUG_REQ(D_HA, req, "NO_STATE:");
                         /* XXX commit now? */
                         break;
 

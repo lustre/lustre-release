@@ -40,6 +40,7 @@ typedef enum {
 #define LDLM_FL_WAIT_NOREPROC  (1 << 7)
 #define LDLM_FL_CANCEL         (1 << 8)
 #define LDLM_FL_REPLAY         (1 << 9)
+#define LDLM_FL_INTENT_ONLY    (1 << 10) /* don't grant lock, just do intent */
 
 #define LDLM_CB_BLOCKING    1
 #define LDLM_CB_CANCELING   2

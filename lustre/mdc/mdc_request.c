@@ -196,6 +196,176 @@ static int mdc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
         RETURN(0);
 }
 
+struct create_replay_data {
+        struct super_block *sb;
+        u32                 generation;
+};
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+static int create_replay_find_inode(struct inode *inode, unsigned long ino,
+                                    void *opaque)
+#else
+static int create_replay_find_inode(struct inode *inode, void *opaque)
+#endif
+{
+        struct ptlrpc_request *req = opaque;
+        struct create_replay_data *saved;
+        struct mds_body *body;
+        
+        saved = lustre_msg_buf(req->rq_reqmsg, 5); /* lock with intent */
+        
+        if (saved->generation != inode->i_generation) {
+                CDEBUG(D_HA,
+                       "generation mismatch for ino %u: saved %u != inode %u\n",
+                       inode->i_ino, saved->generation, inode->i_generation);
+                return 0;
+        }
+
+        body = lustre_msg_buf(req->rq_repmsg, 1);
+
+        /* XXX do I need more out of ll_update_inode? */
+        CDEBUG(D_HA, "updating inode %u generation %u to %u\n",
+               inode->i_ino, inode->i_generation, body->generation);
+
+        inode->i_generation = body->generation;
+
+        return 1;
+}
+
+static void fixup_req_for_recreate(struct ptlrpc_request *fixreq,
+                                   struct ptlrpc_request *req,
+                                   struct inode *inode)
+{
+        struct ldlm_request *lockreq; 
+        struct mds_rec_link *rec; /* representative, two-fid op structure */
+        int opc;
+
+        if (fixreq->rq_import != req->rq_import) {
+                DEBUG_REQ(D_HA, fixreq, "import mismatch, skipping");
+                return;
+        }
+
+        DEBUG_REQ(D_HA, fixreq, "fixing");
+        
+        /* XXX check replay_state to see if we'll actually replay. */
+
+        /* We only care about LDLM_ENQUEUE and MDS_REINT requests. */
+        if (fixreq->rq_reqmsg->opc == LDLM_ENQUEUE) {
+                lockreq = lustre_msg_buf(fixreq->rq_reqmsg, 0);
+
+                if (lockreq->lock_desc.l_resource.lr_type != LDLM_MDSINTENT) {
+                        DEBUG_REQ(D_HA, fixreq, "non-intent lock, skipping");
+                        return;
+                }
+
+                if (fixreq->rq_reqmsg->bufcount < 2) {
+                        DEBUG_REQ(D_HA, fixreq,
+                                  "short intent (probably readdir), skipping");
+                        return;
+                }
+
+                /* XXX endianness is probably very very wrong here. Very. */
+                rec = lustre_msg_buf(fixreq->rq_reqmsg, 2);
+        } else if (fixreq->rq_reqmsg->opc == MDS_REINT) {
+                rec = lustre_msg_buf(fixreq->rq_reqmsg, 0);
+        } else if (fixreq->rq_reqmsg->opc == MDS_OPEN) {
+                struct mds_body *body = lustre_msg_buf(fixreq->rq_reqmsg, 0);
+                DEBUG_REQ(D_HA, fixreq, "fixing fid1: %u -> %u",
+                          body->fid1.generation, inode->i_generation);
+                body->fid1.generation = inode->i_generation;
+                return;
+        } else {
+                DEBUG_REQ(D_HA, fixreq, "not a replayable request, skipping");
+                return;
+        }
+        
+        if (rec->lk_fid1.id == inode->i_ino) {
+                DEBUG_REQ(D_HA, fixreq, "fixing fid1: %u -> %u",
+                          rec->lk_fid1.generation, inode->i_generation);
+                rec->lk_fid1.generation = inode->i_generation;
+        }
+        
+        /* Some ops have two FIDs. ZZZ We rely on the identical
+         * placement of that second FID in all such ops' messages.
+         */
+        opc = rec->lk_opcode & REINT_OPCODE_MASK;
+        if ((opc == REINT_LINK || opc == REINT_UNLINK ||
+             opc == REINT_RENAME) &&
+            rec->lk_fid2.id == inode->i_ino) {
+                DEBUG_REQ(D_HA, fixreq, "fixing fid2: %u -> %u",
+                          rec->lk_fid2.generation, inode->i_generation);
+                rec->lk_fid2.generation = inode->i_generation;
+        }
+}
+
+static void mdc_replay_create(struct ptlrpc_request *req)
+{
+        struct create_replay_data *saved;
+        struct mds_body *body;
+        struct inode *inode;
+        struct list_head *tmp;
+
+        if (req->rq_reqmsg->opc == MDS_REINT)
+                LBUG(); /* XXX don't handle the non-intent case yet */
+
+        body = lustre_msg_buf(req->rq_repmsg, 1);
+        saved = lustre_msg_buf(req->rq_reqmsg, 5); /* lock with intent */
+
+        CDEBUG(D_HA, "create of inode %d replayed; gen %u -> %u\n",
+               body->fid1.id, saved->generation, body->generation);
+        /* XXX cargo-culted right out of ll_iget */
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+        inode = iget4(saved->sb, body->fid1.id, create_replay_find_inode, req);
+#else
+        {
+                extern int ll_read_inode2(struct inode *inode, void *opaque);
+                inode = iget5_locked(saved->sb, body->fid1.id,
+                                     create_replay_find_inode, req);
+
+                if (!inode)
+                        LBUG(); /* XXX ick */
+                
+                if (inode->i_state & I_NEW)
+                        unlock_new_inode(inode);
+        }
+#endif
+
+        /* Now that we've updated the generation, we need to go and find all
+         * the other requests that refer to this file and will be replayed,
+         * and teach them about our new generation.
+         */
+        list_for_each(tmp, &req->rq_connection->c_sending_head) {
+                struct ptlrpc_request *fixreq =
+                        list_entry(tmp, struct ptlrpc_request, rq_list);
+
+                fixup_req_for_recreate(fixreq, req, inode);
+        }
+
+        list_for_each(tmp, &req->rq_connection->c_delayed_head) {
+                struct ptlrpc_request *fixreq =
+                        list_entry(tmp, struct ptlrpc_request, rq_list);
+
+                fixup_req_for_recreate(fixreq, req, inode);
+        }
+}
+
+void mdc_store_create_replay_data(struct ptlrpc_request *req,
+                                  struct super_block *sb)
+{
+        struct create_replay_data *saved = 
+                lustre_msg_buf(req->rq_reqmsg, 5);
+        struct mds_body *body = lustre_msg_buf(req->rq_repmsg, 1);
+
+
+        if (req->rq_reqmsg->opc == MDS_REINT)
+                LBUG(); /* XXX don't handle the non-intent case yet */
+
+        saved->generation = body->generation;
+        saved->sb = sb; /* XXX is this safe? */
+
+        req->rq_replay_cb = mdc_replay_create;
+}
+
 int mdc_enqueue(struct lustre_handle *conn, int lock_type,
                 struct lookup_intent *it, int lock_mode, struct inode *dir,
                 struct dentry *de, struct lustre_handle *lockh,
@@ -204,13 +374,14 @@ int mdc_enqueue(struct lustre_handle *conn, int lock_type,
         struct ptlrpc_request *req;
         struct obd_device *obddev = class_conn2obd(conn);
         __u64 res_id[RES_NAME_SIZE] = {dir->i_ino};
-        int size[5] = {sizeof(struct ldlm_request), sizeof(struct ldlm_intent)};
+        int size[6] = {sizeof(struct ldlm_request), sizeof(struct ldlm_intent)};
         int rc, flags = 0;
         int repsize[3] = {sizeof(struct ldlm_reply),
                           sizeof(struct mds_body),
                           obddev->u.cli.cl_max_mds_easize};
         struct ldlm_reply *dlm_rep;
         struct ldlm_intent *lit;
+        struct ldlm_request *lockreq;
         ENTRY;
 
         LDLM_DEBUG_NOLOCK("mdsintent %s dir %ld", ldlm_it2str(it->it_op),
@@ -234,7 +405,8 @@ int mdc_enqueue(struct lustre_handle *conn, int lock_type,
                 size[2] = sizeof(struct mds_rec_create);
                 size[3] = de->d_name.len + 1;
                 size[4] = tgtlen + 1;
-                req = ptlrpc_prep_req(class_conn2cliimp(conn), LDLM_ENQUEUE, 5,
+                size[5] = sizeof(struct create_replay_data);
+                req = ptlrpc_prep_req(class_conn2cliimp(conn), LDLM_ENQUEUE, 6,
                                       size, NULL);
                 if (!req)
                         RETURN(-ENOMEM);
@@ -356,6 +528,10 @@ int mdc_enqueue(struct lustre_handle *conn, int lock_type,
                 CERROR("ldlm_cli_enqueue: %d\n", rc);
                 RETURN(rc);
         }
+
+        /* On replay, we don't want the lock granted. */
+        lockreq = lustre_msg_buf(req->rq_reqmsg, 0);
+        lockreq->lock_flags |= LDLM_FL_INTENT_ONLY;
 
         dlm_rep = lustre_msg_buf(req->rq_repmsg, 0);
         it->it_disposition = (int) dlm_rep->lock_policy_res1;
@@ -594,6 +770,8 @@ EXPORT_SYMBOL(mdc_readpage);
 EXPORT_SYMBOL(mdc_setattr);
 EXPORT_SYMBOL(mdc_close);
 EXPORT_SYMBOL(mdc_open);
+
+EXPORT_SYMBOL(mdc_store_create_replay_data);
 
 module_init(ptlrpc_request_init);
 module_exit(ptlrpc_request_exit);

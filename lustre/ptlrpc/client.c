@@ -649,15 +649,13 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
 
 int ptlrpc_replay_req(struct ptlrpc_request *req)
 {
-        int rc = 0, old_level;
+        int rc = 0, old_level, old_status;
         // struct ptlrpc_client *cli = req->rq_import->imp_client;
         struct l_wait_info lwi;
         ENTRY;
 
         init_waitqueue_head(&req->rq_wait_for_rep);
-        CDEBUG(D_NET, "req "LPD64" opc %d level %d, conn level %d\n",
-               req->rq_xid, req->rq_reqmsg->opc, req->rq_level,
-               req->rq_connection->c_level);
+        DEBUG_REQ(D_NET, req, "");
 
         req->rq_timeout = obd_timeout;
         req->rq_reqmsg->addr = req->rq_import->imp_handle.addr;
@@ -665,6 +663,7 @@ int ptlrpc_replay_req(struct ptlrpc_request *req)
 
         /* temporarily set request to RECOVD level (reset at out:) */
         old_level = req->rq_level;
+        old_status = req->rq_repmsg->status;
         req->rq_level = LUSTRE_CONN_RECOVD;
         rc = ptl_send_rpc(req);
         if (rc) {
@@ -700,15 +699,9 @@ int ptlrpc_replay_req(struct ptlrpc_request *req)
         if (req->rq_replay_cb)
                 req->rq_replay_cb(req);
 
-        if (req->rq_repmsg->status == 0) {
-                CDEBUG(D_NET, "--> buf %p len %d status %d\n", req->rq_repmsg,
-                       req->rq_replen, req->rq_repmsg->status);
-        } else {
-                CERROR("recovery failed: "); 
-                CERROR("req "LPD64" opc %d level %d, conn level %d\n", 
-                       req->rq_xid, req->rq_reqmsg->opc, req->rq_level,
-                       req->rq_connection->c_level);
-                LBUG();
+        if (req->rq_repmsg->status != old_status) {
+                DEBUG_REQ(D_HA, req, "status %d, old was %d",
+                          req->rq_repmsg->status, old_status);
         }
 
  out:

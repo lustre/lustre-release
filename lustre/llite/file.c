@@ -105,10 +105,8 @@ static int ll_file_open(struct inode *inode, struct file *file)
                       file->f_flags, lsm, &fd->fd_mdshandle, &req);
         fd->fd_req = req;
 
-        /* We don't call ptlrpc_req_finished here, because the request is
-         * preserved until we see a matching close, at which point it is
-         * released (and likely freed).  (See ll_file_release.)
-         */
+        /* This is the "reply" refcount. */
+        ptlrpc_req_finished(req);
         if (rc)
                 GOTO(out_req, -abs(rc));
         if (!fd->fd_mdshandle.addr ||

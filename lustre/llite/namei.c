@@ -218,6 +218,7 @@ static struct dentry *ll_lookup2(struct inode *dir, struct dentry *dentry,
                 ino = lic.lic_body->fid1.id;
                 mode = lic.lic_body->mode;
                 if (it->it_op & (IT_CREAT | IT_MKDIR | IT_SYMLINK | IT_MKNOD)) {
+                        mdc_store_create_replay_data(request, dir->i_sb);
                         /* For create ops, we want the lookup to be negative,
                          * unless the create failed in a way that indicates
                          * that the file is already there */
