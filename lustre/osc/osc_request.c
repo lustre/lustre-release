@@ -433,7 +433,6 @@ static int osc_brw_read(struct lustre_handle *conn, struct lov_stripe_md *md,
         /* Callbacks cause asynchronous handling. */
         rc = callback(data, 0, CB_PHASE_START); 
 
-        EXIT;
 out_req:
         ptlrpc_req_finished(request);
         RETURN(rc);
@@ -441,7 +440,7 @@ out_req:
         /* Clean up on error. */
 out_unmap:
         while (mapped-- > 0)
-                kunmap(page_array[mapped]);
+                kunmap(pga[mapped]);
         OBD_FREE(cb_data, sizeof(*cb_data));
 out_desc:
         ptlrpc_bulk_decref(desc);
@@ -552,15 +551,14 @@ static int osc_brw_write(struct lustre_handle *conn, struct lov_stripe_md *md,
         /* Callbacks cause asynchronous handling. */
         rc = callback(data, 0, CB_PHASE_START);
 
-        EXIT;
 out_req:
         ptlrpc_req_finished(request);
-        return rc;
+        RETURN(rc);
 
         /* Clean up on error. */
 out_unmap:
         while (mapped-- > 0)
-                kunmap(pagearray[mapped]);
+                kunmap(pga[mapped]);
 
         OBD_FREE(local, page_count * sizeof(*local));
 out_cb:
