@@ -796,6 +796,10 @@ ksocknal_create_conn (ksock_route_t *route, struct socket *sock,
         peer->ksnp_last_alive = jiffies;
         peer->ksnp_error = 0;
 
+        /* Set the deadline for the outgoing HELLO to drain */
+        conn->ksnc_tx_deadline = jiffies +
+                                 ksocknal_data.ksnd_io_timeout * HZ;
+
         list_add (&conn->ksnc_list, &peer->ksnp_conns);
         atomic_inc (&conn->ksnc_refcount);
 
@@ -827,7 +831,9 @@ ksocknal_create_conn (ksock_route_t *route, struct socket *sock,
         write_unlock_irqrestore (&ksocknal_data.ksnd_global_lock, flags);
 
         if (rc != 0)
-                CERROR ("Closed %d stale conns to "LPX64"\n", rc, nid);
+                CERROR ("Closed %d stale conns to nid "LPX64" ip %d.%d.%d.%d\n",
+                        rc, conn->ksnc_peer->ksnp_nid,
+                        HIPQUAD(conn->ksnc_ipaddr));
 
         if (bind_irq)                           /* irq binding required */
                 ksocknal_bind_irq (irq);
@@ -836,8 +842,8 @@ ksocknal_create_conn (ksock_route_t *route, struct socket *sock,
         ksocknal_data_ready (sock->sk, 0);
         ksocknal_write_space (sock->sk);
 
-        CDEBUG(D_IOCTL, "conn [%p] registered for nid "LPX64"\n",
-               conn, conn->ksnc_peer->ksnp_nid);
+        CDEBUG(D_IOCTL, "conn [%p] registered for nid "LPX64" ip %d.%d.%d.%d\n",
+               conn, conn->ksnc_peer->ksnp_nid, HIPQUAD(conn->ksnc_ipaddr));
 
         ksocknal_put_conn (conn);
         return (0);
@@ -847,7 +853,7 @@ void
 ksocknal_close_conn_locked (ksock_conn_t *conn, int error)
 {
         /* This just does the immmediate housekeeping, and queues the
-         * connection for the reaper to terminate. 
+         * connection for the reaper to terminate.
          * Caller holds ksnd_global_lock exclusively in irq context */
         ksock_peer_t   *peer = conn->ksnc_peer;
         ksock_route_t  *route;
@@ -991,8 +997,8 @@ ksocknal_destroy_conn (ksock_conn_t *conn)
                 lib_finalize (&ksocknal_lib, NULL, conn->ksnc_cookie);
 #else
                 CERROR ("Refusing to complete a partial receive from "
-                        LPX64", ip %08x\n", conn->ksnc_peer->ksnp_nid,
-                        conn->ksnc_ipaddr);
+                        LPX64", ip %d.%d.%d.%d:%d\n", conn->ksnc_peer->ksnp_nid,
+                        HIPQUAD(conn->ksnc_ipaddr), conn->ksnc_port);
                 CERROR ("This may hang communications and "
                         "prevent modules from unloading\n");
 #endif
