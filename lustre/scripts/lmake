@@ -6,7 +6,7 @@ KERNELDIR=
 TARGET=
 # Not sure what to put here
 # TARGET_ARCH=$(shell uname -m | sed -e s/i.86/i386/ -e s/sun4u/sparc64/ -e s/arm.*/arm/ -e s/sa110/arm/)
-TARGET_ARCH="i386"
+TARGET_ARCH=
 TARGET_CONFIG=
 JOBS=1
 CONFIGURE_FLAGS=
@@ -208,10 +208,11 @@ load_target()
     [ -r "$SERIES_FILE" ] || \
 	fatal 1 "Target $TARGET's series $SERIES missing from $TOPDIR/kernel_patches/series."
 
-    CONFIG_TARGET="$TARGET${TARGET_ARCH:+-$TARGET_ARCH}${TARGET_CONFIG:+-$TARGET_CONFIG}"
+    TARGET_ARCH=${TARGET_ARCH:-$BASE_ARCHS}
+    CONFIG_TARGET="$TARGET-${TARGET_ARCH}${TARGET_CONFIG:+-$TARGET_CONFIG}"
     CONFIG_FILE="$TOPDIR/kernel_patches/kernel_configs/kernel-$VERSION-$CONFIG_TARGET.config"
-    [ -r "$CONFIG_FILE" ] || \
-	fatal 1 "Target $TARGET's config file $CONFIG missing from $TOPDIR/kernel_patches/configs."
+    [ -r "$CONFIG_FILE" ] ||
+	fatal 1 "Target $TARGET's config file $CONFIG_FILE missing from $TOPDIR/kernel_patches/configs."
 
     if [ "$EXTRA_VERSION_save" ] ; then
 	EXTRA_VERSION="$EXTRA_VERSION_save"
