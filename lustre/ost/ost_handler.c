@@ -208,6 +208,34 @@ static int ost_create(struct ost_obd *ost, struct ptlrpc_request *req)
 	return 0;
 }
 
+static int ost_punch(struct ost_obd *ost, struct ptlrpc_request *req)
+{
+	struct obd_conn conn; 
+	int rc;
+
+	ENTRY;
+	
+	conn.oc_id = req->rq_req.ost->connid;
+	conn.oc_dev = ost->ost_tgt;
+
+	rc = ost_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep.ost,
+			  &req->rq_replen, &req->rq_repbuf); 
+	if (rc) { 
+		CERROR("cannot pack reply\n"); 
+		return rc;
+	}
+
+	memcpy(&req->rq_rep.ost->oa, &req->rq_req.ost->oa, sizeof(req->rq_req.ost->oa));
+
+	req->rq_rep.ost->result =ost->ost_tgt->obd_type->typ_ops->o_punch
+		(&conn, &req->rq_rep.ost->oa, 
+		 req->rq_rep.ost->oa.o_size,
+		 req->rq_rep.ost->oa.o_blocks); 
+
+	EXIT;
+	return 0;
+}
+
 
 static int ost_setattr(struct ost_obd *ost, struct ptlrpc_request *req)
 {
@@ -450,6 +478,10 @@ int ost_handle(struct obd_device *obddev, struct ptlrpc_request *req)
 	case OST_BRW:
 		CDEBUG(D_INODE, "brw\n");
 		rc = ost_brw(ost, req);
+		break;
+	case OST_PUNCH:
+		CDEBUG(D_INODE, "punch\n");
+		rc = ost_punch(ost, req);
 		break;
 	default:
 		req->rq_status = -ENOTSUPP;

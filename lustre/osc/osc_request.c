@@ -281,6 +281,39 @@ static int osc_create(struct obd_conn *conn, struct obdo *oa)
 	return 0;
 }
 
+static int osc_punch(struct obd_conn *conn, struct obdo *oa, obd_size count, obd_off offset)
+{
+	struct ptlrpc_request *request;
+	int rc; 
+
+	if (!oa) { 
+		CERROR("oa NULL\n"); 
+	}
+	request = ost_prep_req(OST_PUNCH, 0, NULL, 0, NULL);
+	if (!request) { 
+		CERROR("cannot pack req!\n"); 
+		return -ENOMEM;
+	}
+	
+	memcpy(&request->rq_req.ost->oa, oa, sizeof(*oa));
+	request->rq_req.ost->oa.o_valid = ~0;
+	request->rq_req.ost->oa.o_size = offset;
+	request->rq_req.ost->oa.o_blocks = count;
+	request->rq_replen = 
+		sizeof(struct ptlrep_hdr) + sizeof(struct ost_rep);
+	
+	rc = osc_queue_wait(conn, request);
+	if (rc) { 
+		EXIT;
+		goto out;
+	}
+	memcpy(oa, &request->rq_rep.ost->oa, sizeof(*oa));
+
+ out:
+	osc_free_req(request);
+	return 0;
+}
+
 static int osc_destroy(struct obd_conn *conn, struct obdo *oa)
 {
 	struct ptlrpc_request *request;
@@ -459,7 +492,8 @@ struct obd_ops osc_obd_ops = {
 	o_setattr: osc_setattr,
 	o_connect: osc_connect,
 	o_disconnect: osc_disconnect,
-	o_brw: osc_brw
+	o_brw: osc_brw,
+	o_punch: osc_punch
 };
 
 static int __init osc_init(void)

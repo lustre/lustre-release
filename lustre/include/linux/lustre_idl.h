@@ -55,6 +55,7 @@
 #define OST_GET_INFO   6
 #define OST_CONNECT    7
 #define OST_DISCONNECT 8
+#define OST_PUNCH      9
 
 /* packet types */
 #define OST_TYPE_REQ 1
