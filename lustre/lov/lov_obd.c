@@ -317,7 +317,10 @@ static int lov_getattr(struct lustre_handle *conn, struct obdo *oa,
                         obd_id id = oa->o_id;
                         memcpy(oa, &tmp, sizeof(tmp));
                         oa->o_id = id;
+                } else {
+                        oa->o_size += tmp.o_size;
                 }
+
         }
         RETURN(rc);
 }
@@ -436,8 +439,8 @@ __u64 lov_offset(struct lov_stripe_md *md, __u64 in, int i)
                 return 0xffffffffffffffff;
         }
 
-        if ( (i+1) * ssz < off ) 
-                out += ssz;
+        if ( (i+1) * ssz <= off ) 
+                out += (i+1) * ssz;
         else if ( i * ssz > off ) 
                 out += 0;
         else 
@@ -583,7 +586,7 @@ static inline int lov_brw(int cmd, struct lustre_handle *conn,
 
                 shift = stripeinfo[which].index;
                 ioarr[shift + stripeinfo[which].subcount] = pga[i];
-                pga[i].off = lov_offset(md, pga[i].pg->index * PAGE_SIZE, which);
+                ioarr[shift + stripeinfo[which].subcount].off = lov_offset(md, pga[i].pg->index * PAGE_SIZE, which);
                 stripeinfo[which].subcount++;
         }
         
