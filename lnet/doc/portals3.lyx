@@ -7,8 +7,6 @@
 {\begin{quote}\textbf{Discussion}: \slshape}%
 {\end{quote}}
 \pagestyle{myheadings}
-\markboth{$Revision: 1.1.8.1 $\hfil$Date: 2003/05/23 07:02:29 $}%
-{$Date: 2003/05/23 07:02:29 $\hfil$Revision: 1.1.8.1 $}
 \end_preamble
 \language american
 \inputencoding auto

@@ -116,7 +116,7 @@ do {                                                                          \
              portal_subsystem_debug & (1 << (DEBUG_SUBSYSTEM >> 24))))        \
                 portals_debug_msg(DEBUG_SUBSYSTEM, mask,                      \
                                   __FILE__, __FUNCTION__, __LINE__,           \
-                                  CDEBUG_STACK(), format , ## a);             \
+                                  CDEBUG_STACK(), format, ## a);              \
 } while (0)
 
 #define CWARN(format, a...) CDEBUG(D_WARNING, format, ## a)
@@ -216,23 +216,25 @@ extern void kportal_assertion_failed(char *expr,char *file,char *func,int line);
 #endif
 
 #ifdef __arch_um__
-#define LBUG()                                                          \
+#define LBUG_WITH_LOC(file, func, line)                                 \
 do {                                                                    \
         CEMERG("LBUG - trying to dump log to /tmp/lustre-log\n");       \
         portals_debug_dumplog();                                        \
-        portals_run_lbug_upcall(__FILE__, __FUNCTION__, __LINE__);      \
+        portals_run_lbug_upcall(file, func, line);                      \
         panic("LBUG");                                                  \
 } while (0)
 #else
-#define LBUG()                                                          \
+#define LBUG_WITH_LOC(file, func, line)                                 \
 do {                                                                    \
         CEMERG("LBUG\n");                                               \
         portals_debug_dumplog();                                        \
-        portals_run_lbug_upcall(__FILE__, __FUNCTION__, __LINE__);      \
+        portals_run_lbug_upcall(file, func, line);                      \
         set_task_state(current, TASK_UNINTERRUPTIBLE);                  \
         schedule();                                                     \
 } while (0)
 #endif /* __arch_um__ */
+
+#define LBUG() LBUG_WITH_LOC(__FILE__, __FUNCTION__, __LINE__)
 
 /*
  * Memory

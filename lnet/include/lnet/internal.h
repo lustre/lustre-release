@@ -1,6 +1,3 @@
-/*
-** $Id: internal.h,v 1.1.8.1 2003/05/23 07:02:35 adilger Exp $
-*/
 #ifndef _P30_INTERNAL_H_
 #define _P30_INTERNAL_H_
 

@@ -1,6 +1,3 @@
-/*
-** $Id: nal.h,v 1.1.8.1 2003/05/23 07:02:36 adilger Exp $
-*/
 #ifndef _NAL_H_
 #define _NAL_H_
 

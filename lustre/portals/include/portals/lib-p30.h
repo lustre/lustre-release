@@ -170,10 +170,10 @@ lib_msg_free (nal_cb_t *nal, lib_msg_t *msg)
 
 #else
 
-extern kmem_cache_t *ptl_md_slab; 
-extern kmem_cache_t *ptl_msg_slab; 
-extern kmem_cache_t *ptl_me_slab; 
-extern kmem_cache_t *ptl_eq_slab; 
+extern kmem_cache_t *ptl_md_slab;
+extern kmem_cache_t *ptl_msg_slab;
+extern kmem_cache_t *ptl_me_slab;
+extern kmem_cache_t *ptl_eq_slab;
 extern atomic_t      md_in_use_count;
 extern atomic_t      msg_in_use_count;
 extern atomic_t      me_in_use_count;
@@ -246,7 +246,7 @@ static inline lib_msg_t *
 lib_msg_alloc(nal_cb_t *nal)
 {
         /* ALWAYS called with statelock held */
-        lib_msg_t *msg = kmem_cache_alloc(ptl_msg_slab, GFP_ATOMIC); 
+        lib_msg_t *msg = kmem_cache_alloc(ptl_msg_slab, GFP_ATOMIC);
 
         if (msg == NULL)
                 return (NULL);

@@ -237,7 +237,8 @@ int portals_do_debug_dumplog(void *arg)
         file = filp_open(debug_file_name, O_CREAT|O_TRUNC|O_RDWR, 0644);
 
         if (!file || IS_ERR(file)) {
-                CERROR("cannot open %s for dumping", debug_file_name);
+                CERROR("cannot open %s for dumping: %ld\n", debug_file_name,
+                       PTR_ERR(file));
                 GOTO(out, PTR_ERR(file));
         } else {
                 printk(KERN_ALERT "dumping log to %s ... writing ...\n",
@@ -274,7 +275,7 @@ int portals_debug_daemon(void *arg)
         void *journal_info;
         mm_segment_t oldfs;
         unsigned long force_flush = 0;
-        unsigned long size;
+        unsigned long size, off, flags;
         int rc;
 
         kportal_daemonize("ldebug_daemon");
@@ -295,7 +296,17 @@ int portals_debug_daemon(void *arg)
 
         debug_daemon_state.overlapped = 0;
         debug_daemon_state.stopped = 0;
+
+        spin_lock_irqsave(&portals_debug_lock, flags);
+        off = atomic_read(&debug_off_a) + 1;
+        if (debug_wrapped)
+                off = (off >= debug_size)? 0 : off;
+        else
+                off = 0;
+        atomic_set(&debug_daemon_next_write, off);
         atomic_set(&debug_daemon_state.paused, 0);
+        spin_unlock_irqrestore(&portals_debug_lock, flags);
+
         oldfs = get_fs();
         set_fs(KERNEL_DS);
         while (1) {
@@ -430,8 +441,6 @@ int portals_debug_daemon_start(char *file, unsigned int size)
 
         init_waitqueue_head(&debug_daemon_state.lctl);
         init_waitqueue_head(&debug_daemon_state.daemon);
-
-        atomic_set(&debug_daemon_next_write, atomic_read(&debug_off_a));
 
         daemon_file_size_limit = size << 20;
 
