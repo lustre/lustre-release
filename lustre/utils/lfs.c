@@ -43,6 +43,7 @@ extern int op_create_file(char *name, long stripe_size, int stripe_offset,
 extern int op_find(char *path, struct obd_uuid *obduuid, int recursive,
                 int verbose, int quiet);
 extern int op_check(int type_num, char **obd_type_p, char *dir);
+extern int op_catinfo(char *dir, char *keyword, char *node_name);
 
 /* all functions */
 static int lfs_setstripe(int argc, char **argv);
@@ -50,24 +51,32 @@ static int lfs_find(int argc, char **argv);
 static int lfs_getstripe(int argc, char **argv);
 static int lfs_osts(int argc, char **argv);
 static int lfs_check(int argc, char **argv);
+static int lfs_catinfo(int argc, char **argv);
 
 /* all avaialable commands */
 command_t cmdlist[] = {
         {"setstripe", lfs_setstripe, 0,
-         "blah...\n"
+         "To create a new file with a specific striping pattern.\n"
          "usage: setstripe <filename> <stripe size> <stripe start> <stripe count>\n"
          "\tstripe size:  Number of bytes in each stripe (0 default)\n"
          "\tstripe start: OST index of first stripe (-1 default)\n"
          "\tstripe count: Number of OSTs to stripe over (0 default)"},
         {"find", lfs_find, 0,
-         "blah...\n"
+         "To list the extended attributes for a given filename or files in a directory "
+         "or recursively for all files in a directory tree.\n"
          "usage: find [--obd <uuid>] [--quiet | --verbose] [--recursive] <dir|file> ..."},
         {"getstripe", lfs_getstripe, 0,
-         "blah...\n"
+         "To list the striping pattern for given filename.\n"
          "usage:getstripe <filename>"},
         {"check", lfs_check, 0, 
-         "blah...\n"
+         "Display the status of MDS or OSTs (as specified in the command) "
+         "or all the servers (MDS and OSTs).\n"
          "usage: check <osts|mds|servers>"},
+        {"catinfo", lfs_catinfo, 0,
+         "Show information of specified type logs.\n"
+         "usage: catinfo <keyword> [node name]"
+         "keywords are one of followings: config, deletions.\n"
+         "client node name must be provided when use keyword config."},
         {"osts", lfs_osts, 0, "osts"},
         {"help", Parser_help, 0, "help"},
         {"exit", Parser_quit, 0, "quit"},
@@ -282,6 +291,45 @@ static int lfs_check(int argc, char **argv)
                                                                                                                              
         return rc;
 
+}
+
+static int lfs_catinfo(int argc, char **argv)
+{
+        FILE *fp;
+        struct mntent *mnt = NULL;
+        int rc;
+        
+        if (argc < 2 || (!strcmp(argv[1],"config") && argc < 3))
+                return CMD_HELP;
+
+        if (strcmp(argv[1], "config") && strcmp(argv[1], "deletions"))
+                return CMD_HELP;
+
+        fp = setmntent(MOUNTED, "r");
+        if (fp == NULL) {
+                 fprintf(stderr, "setmntent(%s): %s:", MOUNTED, 
+                         strerror(errno));
+        } else {
+                mnt = getmntent(fp);
+                while (feof(fp) == 0 && ferror(fp) == 0) {
+                        if (strcmp(mnt->mnt_type, "lustre_lite") == 0) 
+                                break;
+                        mnt = getmntent(fp);
+                }
+                endmntent(fp);
+        }
+
+        if (mnt) {
+                if (argc == 3)
+                        rc = op_catinfo(mnt->mnt_dir, argv[1], argv[2]);
+                else
+                        rc = op_catinfo(mnt->mnt_dir, argv[1], NULL);
+        } else {
+                fprintf(stderr, "no lustre_lite mounted.\n");
+                rc = -1;
+        }
+
+        return rc;
 }
 
 int main(int argc, char **argv)

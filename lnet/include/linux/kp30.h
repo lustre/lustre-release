@@ -71,6 +71,7 @@ extern unsigned int portal_cerror;
 #define D_HA        (1 << 19) /* recovery and failover */
 #define D_RPCTRACE  (1 << 20) /* for distributed debugging */
 #define D_VFSTRACE  (1 << 21)
+#define D_READA     (1 << 22) /* read-ahead */
 
 #ifdef __KERNEL__
 # include <linux/sched.h> /* THREAD_SIZE */
@@ -279,10 +280,6 @@ do {                                                                          \
 
 #define PORTAL_VMALLOC_SIZE        16384
 
-#ifndef GFP_MEMALLOC
-#define GFP_MEMALLOC 0
-#endif
-
 #define PORTAL_ALLOC_GFP(ptr, size, mask)                                 \
 do {                                                                      \
         LASSERT (!in_interrupt());                                        \
@@ -304,10 +301,10 @@ do {                                                                      \
 } while (0)
 
 #define PORTAL_ALLOC(ptr, size) \
-        PORTAL_ALLOC_GFP(ptr, size, (GFP_KERNEL | GFP_MEMALLOC))
+        PORTAL_ALLOC_GFP(ptr, size, GFP_NOFS)
 
 #define PORTAL_ALLOC_ATOMIC(ptr, size) \
-        PORTAL_ALLOC_GFP(ptr, size, (GFP_ATOMIC | GFP_MEMALLOC))
+        PORTAL_ALLOC_GFP(ptr, size, GFP_ATOMIC)
 
 #define PORTAL_FREE(ptr, size)                                          \
 do {                                                                    \

@@ -281,3 +281,230 @@ int llog_origin_handle_cancel(struct ptlrpc_request *req)
 }
 EXPORT_SYMBOL(llog_origin_handle_cancel);
 #endif
+
+static int llog_catinfo_config(struct obd_device *obd, char *buf, int buf_len, 
+                               char *client)
+{
+        struct mds_obd *mds = &obd->u.mds;
+        struct llog_ctxt *ctxt = llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
+        struct obd_run_ctxt saved;
+        struct llog_handle *handle = NULL;
+        char name[4][64];
+        int rc, i, l, remains = buf_len;
+        char *out = buf;
+        
+        if (ctxt == NULL || mds == NULL)
+                RETURN(-EOPNOTSUPP);
+
+        push_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_ctxt, NULL);
+        
+        sprintf(name[0], "%s", mds->mds_profile);
+        sprintf(name[1], "%s-clean", mds->mds_profile);
+        sprintf(name[2], "%s", client);
+        sprintf(name[3], "%s-clean", client);
+        
+        for (i = 0; i < 4; i++) {
+                int index, uncanceled = 0;
+                rc = llog_create(ctxt, &handle, NULL, name[i]);
+                if (rc)
+                        GOTO(out_pop, rc);
+                rc = llog_init_handle(handle, 0, NULL);
+                if (rc) {
+                        llog_close(handle);
+                        GOTO(out_pop, rc = -ENOENT);
+                }
+                
+                for (index = 1; index < (LLOG_BITMAP_BYTES * 8); index ++) {
+                        if (ext2_test_bit(index, handle->lgh_hdr->llh_bitmap))
+                                uncanceled++;
+                }
+                
+                l = snprintf(out, remains, "[Log Name]: %s\nLog Size: "LPD64"\n"
+                             "Last Index: %d\nUncanceled Records: %d\n\n",
+                             name[i], 
+                             handle->lgh_file->f_dentry->d_inode->i_size,
+                             handle->lgh_last_idx,
+                             uncanceled);
+                out += l;
+                remains -= l;
+
+                llog_close(handle);
+                if (remains <= 0)
+                        break;
+        }
+out_pop:
+        pop_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_ctxt, NULL);
+        RETURN(rc);
+}
+
+struct cb_data {
+        struct llog_ctxt *ctxt;
+        char *out;
+        int  remains;
+        int  init;
+};
+
+static int llog_catinfo_cb(struct llog_handle *cat, 
+                           struct llog_rec_hdr *rec, void *data)
+{
+        static char *out = NULL;
+        static int remains = 0;
+        struct llog_ctxt *ctxt;
+        struct llog_handle *handle;
+        struct llog_logid *logid;
+        struct llog_logid_rec *lir;
+        int l, rc, index, count = 0;
+        struct cb_data *cbd = (struct cb_data*)data;
+
+        if (cbd->init) {
+                out = cbd->out;
+                remains = cbd->remains;
+                cbd->init = 0;
+        }
+        ctxt = cbd->ctxt;
+
+        if (!(cat->lgh_hdr->llh_flags & cpu_to_le32(LLOG_F_IS_CAT)))
+                RETURN(-EINVAL);
+        
+        lir = (struct llog_logid_rec *)rec;
+        logid = &lir->lid_id;
+        rc = llog_create(ctxt, &handle, logid, NULL);
+        if (rc)
+                RETURN(-EINVAL);
+        rc = llog_init_handle(handle, 0, NULL);
+        if (rc)
+                GOTO(out_close, rc);
+        
+        for (index = 1; index < (LLOG_BITMAP_BYTES * 8); index++) {
+                if (ext2_test_bit(index, handle->lgh_hdr->llh_bitmap))
+                        count++;
+        }
+
+        l = snprintf(out, remains, "\t[Log ID]: #"LPX64"#"LPX64"#%08x\n"
+                     "\tLog Size: "LPD64"\n\tLast Index: %d\n"
+                     "\tUncanceled Records: %d\n",
+                     logid->lgl_oid, logid->lgl_ogr, logid->lgl_ogen,
+                     handle->lgh_file->f_dentry->d_inode->i_size,
+                     handle->lgh_last_idx, count);
+        out += l;
+        remains -= l;
+        cbd->out = out;
+        cbd->remains = remains;
+        if (remains <= 0) {
+                CWARN("Not enough memory\n");
+                rc = -ENOMEM;
+        }
+        
+out_close:
+        llog_close(handle);
+        RETURN(rc);
+}
+                
+static int llog_catinfo_deletions(struct obd_device *obd, char *buf, 
+                                  int buf_len)
+{
+        struct mds_obd *mds = &obd->u.mds;
+        struct llog_handle *handle;
+        struct obd_run_ctxt saved;
+        int size, i, count;
+        struct llog_logid *idarray, *id;
+        char name[32] = "CATLIST";
+        int rc;
+        struct cb_data data;
+        struct llog_ctxt *ctxt = llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
+ 
+        if (ctxt == NULL || mds == NULL)
+                RETURN(-EOPNOTSUPP);
+       
+        count = mds->mds_lov_desc.ld_tgt_count;
+        size = sizeof(*idarray) * count;
+        
+        OBD_ALLOC(idarray, size);
+        if (!idarray)
+                RETURN(-ENOMEM);
+        memset(idarray, 0, size);
+        
+        rc = llog_get_cat_list(obd, obd, name, count, idarray);
+        if (rc) 
+                GOTO(out_free, rc);
+
+        push_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_ctxt, NULL);
+        
+        id = idarray;
+        data.ctxt = ctxt;
+        data.out = buf;
+        data.remains = buf_len;
+        for (i = 0; i < count; i++) {
+                int l, index, uncanceled = 0;
+                rc = llog_create(ctxt, &handle, id, NULL);
+                if (rc)
+                        GOTO(out_pop, rc);
+                rc = llog_init_handle(handle, 0, NULL);
+                if (rc) {
+                        llog_close(handle);
+                        GOTO(out_pop, rc = -ENOENT);
+                }
+                for (index = 1; index < (LLOG_BITMAP_BYTES * 8); index++) {
+                        if (ext2_test_bit(index, handle->lgh_hdr->llh_bitmap))
+                                uncanceled++;
+                }
+                l = snprintf(data.out, data.remains, 
+                             "\n[Catlog ID]: #"LPX64"#"LPX64"#%08x  "
+                             "[Log Count]: %d\n",
+                             id->lgl_oid, id->lgl_ogr, id->lgl_ogen,
+                             uncanceled);
+                
+                data.out += l;
+                data.remains -= l;
+                data.init = 1;
+                
+                llog_process(handle, llog_catinfo_cb, &data);
+                llog_close(handle);
+                
+                if (data.remains <= 0)
+                        break;
+        }
+out_pop:
+        pop_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_ctxt, NULL);
+out_free:
+        OBD_FREE(idarray, size);
+        RETURN(rc);
+}
+        
+int llog_catinfo(struct ptlrpc_request *req)
+{
+        struct obd_export *exp = req->rq_export;
+        struct obd_device *obd = exp->exp_obd;
+        char *keyword;
+        char *buf, *reply;
+        int rc, buf_len = LLOG_CHUNK_SIZE;
+
+        OBD_ALLOC(buf, buf_len);
+        if (buf == NULL)
+                return -ENOMEM;
+        memset(buf, 0, buf_len);
+
+        keyword = lustre_msg_string(req->rq_reqmsg, 0, 0);
+
+        if (strcmp(keyword, "config") == 0) {
+                char *client = lustre_msg_string(req->rq_reqmsg, 1, 0);
+                rc = llog_catinfo_config(obd, buf, buf_len, client);
+        } else if (strcmp(keyword, "deletions") == 0) {
+                rc = llog_catinfo_deletions(obd, buf, buf_len);
+        } else {
+                rc = -EOPNOTSUPP;
+        }
+
+        rc = lustre_pack_reply(req, 1, &buf_len, NULL);
+        if (rc)
+                GOTO(out_free, rc = -ENOMEM);
+
+        reply = lustre_msg_buf(req->rq_repmsg, 0, buf_len);
+        if (strlen(buf) == 0)
+                sprintf(buf, "%s", "No log informations\n");
+        memcpy(reply, buf, buf_len);
+        
+out_free:
+        OBD_FREE(buf, buf_len);
+        return rc;
+}

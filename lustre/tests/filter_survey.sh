@@ -14,7 +14,7 @@ export PATH=$SRCDIR/../utils:/sbin:/usr/sbin::$PATH
 
 tmp_dir=""
 echo_base="f_s_$$"
-echo_objs=""
+last_filter="-1"
 
 die() {
 	echo $* 1>&2
@@ -23,12 +23,13 @@ die() {
 
 cleanup() {
 	[ ! -z "$tmp_dir" ] && [ -d $tmp_dir ] && rm -rf $tmp_dir
-	[ -z "$echo_objs" ] && exit 0
-	for obj in $echo_objs; do
-		echo cleaning up $obj
+	[ "$last_filter" = "-1" ] && exit 0
+	for i in `seq 0 $last_filter`; do
+		local name="${echo_names[$i]}"
+		echo cleaning up $name
 # I can't believe leading whitespace matters here.
 lctl << EOF
-device $obj
+cfg_device $name
 cleanup
 detach
 quit
@@ -52,7 +53,6 @@ sep4="||||"
 # build up echo_clients attached to the given filters and record
 # their names and obj numbers for later use and teardown
 #
-last_filter="-1"
 [ -z "$FILTER_NAMES" ] && die "please specify filter names to run against"
 for fn in $FILTER_NAMES; do
 	if not_a_filter $fn; then
@@ -63,7 +63,6 @@ lctl << EOF
 	newdev
 	attach echo_client $en ${en}_uuid
 	setup $fn
-	probe
 	quit
 EOF
 	[ $? -eq 0 ] || die "error setting up echo_client (is obdecho loaded?)"
