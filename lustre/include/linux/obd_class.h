@@ -13,7 +13,7 @@
 #include <linux/obd_rpc.h>
 
 
-#define OBD_PSDEV_MAJOR 120
+#define OBD_PSDEV_MAJOR 186
 #define MAX_OBD_DEVICES 8
 #define MAX_MULTI 16
 

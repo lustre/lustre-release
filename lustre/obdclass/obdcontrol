@@ -91,7 +91,7 @@ use IO::Handle;
 
 my ($file);
 
-GetOptions("f!" => \$file, "device=s" => \$::device, "fs=s" => $::filesystem) || die "Getoptions";
+GetOptions("f!" => \$file, "device=s" => \$::device, ) || die "Getoptions";
 
 
 # get a console for the app
@@ -147,7 +147,6 @@ my $term, $attribs;
 # Get going....
 
 Device($::device);
-Filesystem($::filesystem);
 
 sub readl {
     if ( $file ) {
@@ -235,17 +234,6 @@ sub execute_line {
     return (&{$commands{$cmd}->{func}}(@arg));
 }
 
-# set the object store in the ext2 formatted block device
-sub Filesystem {
-    my $filesystem = shift;
-    $filesystem = "/dev/loop0" unless $filesystem;
-    
-    $::filesystem = $filesystem;
-    if (!defined($::st = stat($filesystem))) {
-	die "Unable to stat $filesystem.\n";
-    }
-    print "Filesystem now $filesystem\n";
-}
 
 # select the OBD device we talk to
 sub Device {
@@ -271,6 +259,9 @@ sub Attach {
     my $type = shift;
     my $data;
     my $datalen = 0;
+
+    if ( ! $type ) {
+	print "Usage \"attach type (ext2_obd)\"; 
 
     if ($type eq "obdscsi" ) {
 	my $adapter = shift;
@@ -696,7 +687,8 @@ sub Setup {
 
     if ( $type eq "ext2_obd" ) {
 	my $dev = shift;
-	$dev = $::st->rdev() unless $dev;
+	my $st = stat($dev);
+	$dev = $st->rdev() unless $dev;
 	$data = pack("i", $dev);
 	$datalen = 4;
     }

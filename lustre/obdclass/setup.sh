@@ -1,4 +1,9 @@
 #! /bin/bash
+if [ -f /tmp/fs ]; then 
+    echo "/tmp/fs exists; I'm unwilling to overwrite it"
+    exit
+fi
+
 dd if=/dev/zero of=/tmp/fs bs=1k count=10k
 
 #insmod loop
