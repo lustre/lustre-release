@@ -140,6 +140,8 @@ static ssize_t smfs_write (struct file *filp, const char *buf,
 	struct  inode *inode = dentry->d_inode;
         struct  file open_file;
 	struct  dentry open_dentry;
+	loff_t  tmp_ppos;
+	loff_t  *cache_ppos;
 	int 	rc = 0;
 	
 	ENTRY;
@@ -149,13 +151,19 @@ static ssize_t smfs_write (struct file *filp, const char *buf,
         if (!cache_inode)
                 RETURN(-ENOENT);
 	
+	if (ppos != &(filp->f_pos)) {
+		cache_ppos = &tmp_ppos;	
+	} else {
+		cache_ppos = &open_file.f_pos; 
+	}
+	*cache_ppos = *ppos;
+	
 	smfs_prepare_cachefile(inode, filp, cache_inode, 
 			       &open_file, &open_dentry);
-	
 	if (cache_inode->i_fop->write)
-		rc = cache_inode->i_fop->write(&open_file, buf, count, &open_file.f_pos);
+		rc = cache_inode->i_fop->write(&open_file, buf, count, cache_ppos);
 	
-	*ppos = open_file.f_pos;
+	*ppos = *cache_ppos;
 	duplicate_inode(cache_inode, inode);
 	smfs_update_file(filp, &open_file);
 
@@ -168,7 +176,7 @@ int smfs_ioctl(struct inode * inode, struct file * filp,
 	struct  dentry *dentry = filp->f_dentry;
         struct  file open_file;
 	struct  dentry open_dentry;
-	ssize_t rc;
+	ssize_t rc = 0;
 	
 	ENTRY;
 	
@@ -195,7 +203,9 @@ static ssize_t smfs_read (struct file *filp, char *buf,
 	struct  inode *inode = dentry->d_inode;
         struct  file open_file;
 	struct  dentry open_dentry;
-	ssize_t rc;
+	loff_t  tmp_ppos;
+	loff_t  *cache_ppos;
+	ssize_t rc = 0;
 	
 	ENTRY;
 	
@@ -203,13 +213,22 @@ static ssize_t smfs_read (struct file *filp, char *buf,
         if (!cache_inode)
                 RETURN(-ENOENT);
 
+	if (ppos != &(filp->f_pos)) {
+		cache_ppos = &tmp_ppos;	
+	} else {
+		cache_ppos = &open_file.f_pos; 
+	}
+	*cache_ppos = *ppos;
+	
+	
 	smfs_prepare_cachefile(inode, filp, cache_inode, 
 			       &open_file, &open_dentry);
+
 	
 	if (cache_inode->i_fop->read)
-		rc = cache_inode->i_fop->read(&open_file, buf, count, &open_file.f_pos);
+		rc = cache_inode->i_fop->read(&open_file, buf, count, cache_ppos);
     
-	*ppos = open_file.f_pos;
+	*ppos = *cache_ppos;
 	duplicate_inode(cache_inode, inode);
 	smfs_update_file(filp, &open_file);
 	RETURN(rc);
@@ -223,7 +242,7 @@ static loff_t smfs_llseek(struct file *file,
 	struct  dentry *dentry = file->f_dentry;
         struct  file open_file;
 	struct  dentry open_dentry;
-	ssize_t rc;
+	ssize_t rc = 0;
 	
 	ENTRY;
 	
@@ -236,7 +255,7 @@ static loff_t smfs_llseek(struct file *file,
 	
 	if (cache_inode->i_fop->llseek)
 		rc = cache_inode->i_fop->llseek(&open_file, offset, origin);
-	
+
 	duplicate_inode(cache_inode, dentry->d_inode);
 	smfs_update_file(file, &open_file);
 		
