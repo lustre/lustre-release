@@ -31,6 +31,7 @@
 #include <sys/wait.h>
 #include <sys/stat.h>
 #include <stdio.h>
+#include <stdarg.h>
 #include <signal.h>
 #define printk printf
 
@@ -246,116 +247,271 @@ static int do_disconnect(char *func, int verbose)
 
 extern command_t cmdlist[];
 
-/* Given a XML document and the root of a mds branch do the setup */
+static int xml_command(char *cmd, ...) {
+        va_list args;
+        char *arg, *cmds[8];
+        int i = 1, j;
+       
+        cmds[0] = cmd; 
+        va_start(args, cmd);
+
+        while (((arg = va_arg(args, char *)) != NULL) && (i < 8)) {
+                cmds[i] = arg;
+                i++;
+        }
+
+        va_end(args);
+
+        printf("obdctl > ");
+        for (j = 0; j < i; j++)
+          printf("%s ", cmds[j]);
+
+        printf("\n");
+
+        return Parser_execarg(i, cmds, cmdlist);
+}
+
+static network_t *xml_network(xmlDocPtr doc, xmlNodePtr root) {
+        xmlNodePtr cur = root->xmlChildrenNode;
+        network_t *net;
+        
+        if ((net = (network_t *)calloc(1, sizeof(network_t))) == NULL) {
+                printf("error: unable to malloc network_t\n");
+                return NULL;
+        }
+        
+        net->type = xmlGetProp(root, "type");
+        if (net->type == NULL) {
+                printf("error: type attrib required (tcp, elan, myrinet)\n");
+                free(net);
+                return NULL;
+        }
+
+        while (cur != NULL) {
+                if (!xmlStrcmp(cur->name, "server"))
+                        net->server = xmlNodeGetContent(cur);
+
+                if (!xmlStrcmp(cur->name, "port"))
+                        net->port = atoi(xmlNodeGetContent(cur));
+
+                cur = cur->next;
+        } 
+
+        if (net->server == NULL) {
+                printf("error: <server> tag required\n");
+                free(net);
+                return NULL;
+        }
+        
+        return net;
+}
+
 static int xml_mds(xmlDocPtr doc, xmlNodePtr root, 
                    char *serv_id, char *serv_uuid) {
         xmlNodePtr cur = root->xmlChildrenNode;
         char *fstype = NULL, *device = NULL;
-        char *newdev[1] = { "newdev" };
-        char *attach[3] = { "attach", "mds", "MDSDEV" };
-        char *setup[3] = { "setup", NULL, NULL };
         int rc;
 
+        printf("--- Setting up MDS ---\n");
         while (cur != NULL) {
                 if (!xmlStrcmp(cur->name, "fstype"))
-                        fstype = cur->content;
+                        fstype = xmlNodeGetContent(cur);
 
                 if (!xmlStrcmp(cur->name, "device"))
-                        device = cur->content;
-        } 
-
-        if ((fstype == NULL) || (device == NULL))
-                return -1;
-
-        /* Invoke commands as if passed interactively */
-        rc = jt_newdev(1, newdev);
-        if (rc != 0)
-                return rc;
-        
-        rc = jt_attach(3, attach);
-        if (rc != 0)
-                return rc;
-
-        setup[1] = device;
-        setup[2] = fstype;
-        rc = jt_setup(3, setup);
-        if (rc != 0)
-                return rc;
-
-        return 0;
-}
-        
-/* Given a XML document and the root of a obd branch do the setup */
-static int xml_obd(xmlDocPtr doc, xmlNodePtr root, 
-                   char *serv_id, char *serv_uuid) {
-        /* FIXME: Fill in the guts... */
-        return 0;
-}
-
-/* Given a XML document and the root of a ost branch do the setup */
-static int xml_ost(xmlDocPtr doc, xmlNodePtr root, 
-                   char *serv_id, char *serv_uuid) {
-        /* FIXME: Fill in the guts... */
-        return 0;
-}
-
-/* Given a XML document and the root of a osc branch do the setup */
-static int xml_osc(xmlDocPtr doc, xmlNodePtr root, 
-                   char *serv_id, char *serv_uuid) {
-        xmlNodePtr cur = root->xmlChildrenNode;
-        char *type = NULL, *address = NULL;
-        char *newdev[1] = { "newdev" };
-        char *attach[3] = { "attach", "osc", "OSCDEV" };
-        char *setup[2] = { "setup", "-1" };
-        int rc;
-
-        while (cur != NULL) {
-                if (!xmlStrcmp(cur->name, "network")) {
-                        type = xmlGetProp(cur, "type");
-                        if (type == NULL)
-                                return -1;
-
-                        address = xmlGetProp(cur, "address");
-                        if (address == NULL)
-                                return -1;
-
-                        /* FIXME: Do the portals setup here as well? */
-                }
-                        
+                        device = xmlNodeGetContent(cur);
+ 
                 cur = cur->next;
         } 
 
-        /* Invoke commands as if passed interactively */
-        rc = jt_newdev(1, newdev);
-        if (rc != 0)
+        if ((fstype == NULL) || (device == NULL)) {
+                printf("error: <fstype> and <device> tags required\n");
+                return -1;
+        }
+
+        if ((rc = xml_command("newdev", NULL)) != 0)
                 return rc;
-        
-        rc = jt_attach(2, attach);
-        if (rc != 0)
+
+        if ((rc = xml_command("attach", "mds", "MDSDEV", NULL)) != 0)
                 return rc;
+
+        if ((rc = xml_command("setup", device, fstype, NULL)) != 0)
+                return rc;
+
+        return 0;
+}
         
-        rc = jt_setup(1, setup);
-        if (rc != 0)
+static int xml_obd(xmlDocPtr doc, xmlNodePtr root, 
+                   char *serv_id, char *serv_uuid) {
+        xmlNodePtr cur = root->xmlChildrenNode;
+        char *obdtype, *format = NULL, *fstype = NULL, *device = NULL;
+        int rc;
+
+        obdtype = xmlGetProp(root, "type");
+        printf("--- Setting up OBD ---\n");
+
+        while (cur != NULL) {
+                if (!xmlStrcmp(cur->name, "fstype"))
+                        fstype = xmlNodeGetContent(cur);
+
+                if (!xmlStrcmp(cur->name, "device"))
+                        device = xmlNodeGetContent(cur);
+ 
+                if (!xmlStrcmp(cur->name, "autoformat"))
+                        format = xmlNodeGetContent(cur);
+
+                cur = cur->next;
+        } 
+
+        if ((obdtype == NULL) || (fstype == NULL) || (device == NULL)) {
+                printf("error: 'type' attrib and <fstype> and <device> tags required\n");
+                return -1;
+        }
+
+        /* FIXME: Building and configuring loopback devices should go here
+         * but is currently unsupported.  You'll have to use the scripts
+         * for now until support is added, or specify a real device.
+         */
+        
+        if ((rc = xml_command("newdev", NULL)) != 0)
+                return rc;
+
+        if ((rc = xml_command("attach", obdtype, "OBDDEV", NULL)) != 0)
+                return rc;
+
+        if ((rc = xml_command("setup", device, fstype, NULL)) != 0)
                 return rc;
 
         return 0;
 }
 
-/* Given a XML document and the root of a lov branch do the setup */
+static int xml_ost(xmlDocPtr doc, xmlNodePtr root, 
+                   char *serv_id, char *serv_uuid) {
+        int rc;
+
+        printf("--- Setting up OST ---\n");
+        if ((rc = xml_command("newdev", NULL)) != 0)
+                return rc;
+
+        if ((rc = xml_command("attach", "ost", "OSTDEV", NULL)) != 0)
+                return rc;
+
+        if ((rc = xml_command("setup", "$OBDDEV", NULL)) != 0)
+                return rc;
+
+        return 0;
+}
+
+static int xml_osc(xmlDocPtr doc, xmlNodePtr root, 
+                   char *serv_id, char *serv_uuid) {
+        xmlNodePtr cur = root->xmlChildrenNode;
+        network_t *net = NULL;
+        int rc = 0;
+
+        printf("--- Setting up OSC ---\n");
+        while (cur != NULL) {
+                if (!xmlStrcmp(cur->name, "network")) {
+                        net = xml_network(doc, cur);
+                        if (net == NULL)
+                                return -1;
+                }
+                cur = cur->next;
+        } 
+
+        if (net == NULL) {
+                printf("error: <network> tag required\n");
+                return -1;
+        }
+
+        if ((rc = xml_command("newdev", NULL)) != 0) {
+                rc = -1;
+                goto xml_osc_error;
+        }
+
+        if ((rc = xml_command("attach", "osc", "OSCDEV", NULL)) != 0) {
+                rc = -1;
+                goto xml_osc_error;
+        }
+
+        if ((rc = xml_command("setup", "OSTDEV", net->server, NULL)) != 0) {
+                rc = -1;
+                goto xml_osc_error;
+        }
+
+xml_osc_error:
+        free(net);
+        return rc;
+}
+
+static int xml_mdc(xmlDocPtr doc, xmlNodePtr root, 
+                   char *serv_id, char *serv_uuid) {
+        xmlNodePtr cur = root->xmlChildrenNode;
+        network_t *net = NULL;
+        int rc = 0;
+
+        printf("--- Setting up MDC ---\n");
+        while (cur != NULL) {
+                if (!xmlStrcmp(cur->name, "network")) {
+                        net = xml_network(doc, cur);
+                        if (net == NULL)
+                                return -1;
+                }
+                cur = cur->next;
+        } 
+
+        if (net == NULL) {
+                printf("error: <network> tag required\n");
+                return -1;
+        }
+
+        if ((rc = xml_command("newdev", NULL)) != 0) {
+                rc = -1;
+                goto xml_mdc_error;
+        }
+
+        if ((rc = xml_command("attach", "mdc", "MDCDEV", NULL)) != 0) {
+                rc = -1;
+                goto xml_mdc_error;
+        }
+
+        if ((rc = xml_command("setup", "MDSDEV", net->server, NULL)) != 0) {
+                rc = -1;
+                goto xml_mdc_error;
+        }
+
+xml_mdc_error:
+        free(net);
+        return rc;
+}
+
 static int xml_lov(xmlDocPtr doc, xmlNodePtr root, 
                    char *serv_id, char *serv_uuid) {
-        /* FIXME: Fill in the guts... */
+        printf("--- Setting up LOV ---\n");
         return 0;
 }
 
-/* Given a XML document and the root of a router branch do the setup */
 static int xml_router(xmlDocPtr doc, xmlNodePtr root, 
                    char *serv_id, char *serv_uuid) {
-        /* FIXME: Fill in the guts... */
+        printf("--- Setting up ROUTER ---\n");
         return 0;
 }
 
-/* Given a XML document and service id/uuid setup the service */
+static int xml_ldlm(xmlDocPtr doc, xmlNodePtr root, 
+                   char *serv_id, char *serv_uuid) {
+        int rc;
+
+        printf("--- Setting up LDLM ---\n");
+        if ((rc = xml_command("newdev", NULL)) != 0)
+                return rc;
+
+        if ((rc = xml_command("attach", "ldlm", "LDLMDEV", NULL)) != 0)
+                return rc;
+
+        if ((rc = xml_command("setup", NULL)) != 0)
+                return rc;
+
+        return 0;
+}
+
 static int xml_service(xmlDocPtr doc, xmlNodePtr root, 
                        int serv_num, char *serv_id, char *serv_uuid) {
         xmlNodePtr cur = root;
@@ -372,31 +528,36 @@ static int xml_service(xmlDocPtr doc, xmlNodePtr root,
                 }
 
                 if (!xmlStrcmp(cur->name, "mds"))
-                        rc = xml_mds(doc, cur, serv_id, serv_uuid);
+                        return xml_mds(doc, cur, serv_id, serv_uuid);
                 else if (!xmlStrcmp(cur->name, "obd"))
-                        rc = xml_obd(doc, cur, serv_id, serv_uuid);
+                        return xml_obd(doc, cur, serv_id, serv_uuid);
                 else if (!xmlStrcmp(cur->name, "ost"))
-                        rc = xml_ost(doc, cur, serv_id, serv_uuid);
+                        return xml_ost(doc, cur, serv_id, serv_uuid);
                 else if (!xmlStrcmp(cur->name, "osc"))
-                        rc = xml_osc(doc, cur, serv_id, serv_uuid);
+                        return xml_osc(doc, cur, serv_id, serv_uuid);
+                else if (!xmlStrcmp(cur->name, "mdc"))
+                        return xml_mdc(doc, cur, serv_id, serv_uuid);
                 else if (!xmlStrcmp(cur->name, "lov"))
-                        rc = xml_lov(doc, cur, serv_id, serv_uuid);
+                        return xml_lov(doc, cur, serv_id, serv_uuid);
                 else if (!xmlStrcmp(cur->name, "router"))
-                        rc = xml_router(doc, cur, serv_id, serv_uuid);
+                        return xml_router(doc, cur, serv_id, serv_uuid);
+                else if (!xmlStrcmp(cur->name, "ldlm"))
+                        return xml_ldlm(doc, cur, serv_id, serv_uuid);
                 else
                         return -1;        
 
                 cur = cur->next;
         }
 
-        return rc; 
+        printf("error: No XML config branch for id=%s uuid=%s\n",
+                serv_id, serv_uuid); 
+        return -1; 
 }
 
-/* Given a XML document and profile id/uuid setup the profile */
 static int xml_profile(xmlDocPtr doc, xmlNodePtr root, 
                        int prof_num, char *prof_id, char *prof_uuid) {
         xmlNodePtr parent, cur = root;
-        char *id, *uuid;
+        char *id, *uuid, *srv_id, *srv_uuid;
         int rc = 0, num;
 
         while (cur != NULL) {
@@ -424,10 +585,12 @@ static int xml_profile(xmlDocPtr doc, xmlNodePtr root,
                         if (!xmlStrcmp(cur->name, "service_id")) {
                                 num = atoi(xmlGetProp(cur, "num"));
                                 rc = xml_service(doc, root, num,
-                                                 xmlGetProp(cur, "id"),
-                                                 xmlGetProp(cur, "uuid"));
-                                if (rc != 0)
+                                        srv_id = xmlGetProp(cur, "id"),
+                                        srv_uuid = xmlGetProp(cur, "uuid"));
+                                if (rc != 0) {
+                                        printf("error: service config\n");
                                         return rc;
+                                }
                         }
 
                         cur = cur->next;
@@ -517,7 +680,8 @@ static int do_xml(char *func, char *file)
     
         /* FIXME: Merge all the text nodes under each branch and 
          *        prune empty nodes.  Just to make the parsing more
-         *        tolerant. 
+         *        tolerant, the exact location of nested tags isn't
+         *        critical for this.
          */
         
         rc = xml_node(doc, cur->xmlChildrenNode);
