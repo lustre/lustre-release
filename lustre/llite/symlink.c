@@ -83,8 +83,7 @@ static int ll_readlink(struct dentry *dentry, char *buffer, int buflen)
         RETURN(rc);
 }
 
-static int ll_follow_link(struct dentry *dentry, struct nameidata *nd,
-                          struct lookup_intent *it)
+static int ll_follow_link(struct dentry *dentry, struct nameidata *nd)
 {
         struct inode *inode = dentry->d_inode;
         struct ll_inode_info *lli = ll_i2info(inode);
@@ -93,12 +92,10 @@ static int ll_follow_link(struct dentry *dentry, struct nameidata *nd,
         char *symname;
         ENTRY;
 
-        if (it != NULL) {
-                op = it->it_op;
-                mode = it->it_mode;
+        op = nd->it.it_op;
+        mode = nd->it.it_mode;
 
-                ll_intent_release(dentry, it);
-        }
+        ll_intent_release(dentry, &nd->it);
 
         down(&lli->lli_open_sem);
 
@@ -106,12 +103,10 @@ static int ll_follow_link(struct dentry *dentry, struct nameidata *nd,
         if (rc)
                 GOTO(out, rc);
 
-        if (it != NULL) {
-                it->it_op = op;
-                it->it_mode = mode;
-        }
+        nd->it.it_op = op;
+        nd->it.it_mode = mode;
 
-        rc = vfs_follow_link_it(nd, symname, it);
+        rc = vfs_follow_link(nd, symname);
  out:
         up(&lli->lli_open_sem);
         ptlrpc_req_finished(request);
