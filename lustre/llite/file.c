@@ -157,7 +157,7 @@ int ll_size_lock(struct inode *inode, struct lov_stripe_md *lsm, __u64 start,
                 RETURN(-ENOMEM);
 
         extent.start = start;
-        extent.end = ~0;
+        extent.end = OBD_PUNCH_EOF;
 
         rc = obd_enqueue(&sbi->ll_osc_conn, lsm, NULL, LDLM_EXTENT, &extent,
                          sizeof(extent), mode, &flags, ll_lock_callback,

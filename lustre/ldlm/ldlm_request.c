@@ -211,9 +211,13 @@ int ldlm_cli_enqueue(struct lustre_handle *connh,
         body = lustre_msg_buf(req->rq_reqmsg, 0);
         ldlm_lock2desc(lock, &body->lock_desc);
         /* Phil: make this part of ldlm_lock2desc */
-        if (type == LDLM_EXTENT)
+        if (type == LDLM_EXTENT) {
                 memcpy(&body->lock_desc.l_extent, cookie,
                        sizeof(body->lock_desc.l_extent));
+                CDEBUG(D_INFO, "extent in body: "LPU64" -> "LPU64"\n",
+                           body->lock_desc.l_extent.start,
+                           body->lock_desc.l_extent.end);
+        }
         body->lock_flags = *flags;
 
         memcpy(&body->lock_handle1, lockh, sizeof(*lockh));

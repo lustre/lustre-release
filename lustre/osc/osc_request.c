@@ -623,10 +623,13 @@ static int osc_enqueue(struct lustre_handle *connh, struct lov_stripe_md *lsm,
         int rc;
         ENTRY;
 
-        /* Filesystem locks are given a bit of special treatment: first we
+        /* Filesystem locks are given a bit of special treatment: if
+         * this is not a file size lock (which has end == -1), we
          * fixup the lock to start and end on page boundaries. */
-        extent->start &= PAGE_MASK;
-        extent->end = (extent->end + PAGE_SIZE - 1) & PAGE_MASK;
+        if (extent->end != OBD_PUNCH_EOF) {
+                extent->start &= PAGE_MASK;
+                extent->end = (extent->end + PAGE_SIZE - 1) & PAGE_MASK;
+        }
 
         /* Next, search for already existing extent locks that will cover us */
         rc = ldlm_lock_match(obddev->obd_namespace, res_id, type, extent,
