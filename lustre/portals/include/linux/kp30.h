@@ -285,7 +285,7 @@ do {                                                                      \
         if ((size) > PORTAL_VMALLOC_SIZE)                                 \
                 (ptr) = vmalloc(size);                                    \
         else                                                              \
-                (ptr) = kmalloc((size), GFP_NOFS);                        \
+                (ptr) = kmalloc((size), (GFP_KERNEL | GFP_MEMALLOC));     \
         if ((ptr) == NULL)                                                \
                 CERROR("PORTALS: out of memory at %s:%d (tried to alloc '"\
                        #ptr "' = %d)\n", __FILE__, __LINE__, (int)(size));\
@@ -317,7 +317,7 @@ do {                                                                    \
 #define PORTAL_SLAB_ALLOC(ptr, slab, size)                                \
 do {                                                                      \
         LASSERT(!in_interrupt());                                         \
-        (ptr) = kmem_cache_alloc((slab), SLAB_KERNEL);                    \
+        (ptr) = kmem_cache_alloc((slab), (SLAB_KERNEL | SLAB_MEMALLOC));  \
         if ((ptr) == NULL) {                                              \
                 CERROR("PORTALS: out of memory at %s:%d (tried to alloc"  \
                        " '" #ptr "' from slab '" #slab "')\n", __FILE__,  \
