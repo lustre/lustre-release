@@ -677,9 +677,11 @@ class Network(Module):
         ret = self.dom_node.getElementsByTagName('route_tbl')
         for a in ret:
             for r in a.getElementsByTagName('route'):
+                net_type = get_attr(r, 'net_type')
+                gw = get_attr(r, 'gw')
                 lo = get_attr(r, 'lo')
                 hi = get_attr(r,'hi', '')
-                lctl.add_route(self.net_type, self.nid, lo, hi)
+                lctl.add_route(net_type, gw, lo, hi)
                 if self.net_type == 'tcp' and hi == '':
                     srv = nid2server(self.dom_node.parentNode.parentNode, lo)
                     if not srv:
@@ -1087,11 +1089,12 @@ def get_routes(type, gw, dom_net):
         [(type, gw, lo, hi),]"""
     res = []
     tbl = dom_net.getElementsByTagName('route_tbl')
-    routes = tbl[0].getElementsByTagName('route')
-    for r in routes:
-        lo = get_attr(r, 'lo')
-        hi = get_attr(r, 'hi', '')
-        res.append((type, gw, lo, hi))
+    for t in tbl:
+        routes = t.getElementsByTagName('route')
+        for r in routes:
+            lo = get_attr(r, 'lo')
+            hi = get_attr(r, 'hi', '')
+            res.append((type, gw, lo, hi))
     return res
     
 

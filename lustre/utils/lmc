@@ -210,9 +210,11 @@ class GenConfig:
             
         return network
 
-    def route(self, lo, hi):
+    def route(self, net_type, gw, lo, hi):
         """ create one entry for the route table """
         ref = self.doc.createElement('route')
+        ref.setAttribute("type", net_type)
+        ref.setAttribute("gw", gw)
         ref.setAttribute("lo", lo)
         if hi:
             ref.setAttribute("hi", hi)
@@ -460,14 +462,13 @@ def add_route(gen, lustre, options, args):
         error (node_name, " not found.")
     
     netlist = node.getElementsByTagName('network')
-    for net in netlist:
-        if get_attr(net, 'type') == net_type:
-            rlist = net.getElementsByTagName('route_tbl')
-            if len(rlist) > 0:
-                rtbl = rlist[0]
-            else:
-                rtbl = gen.addElement(net, 'route_tbl')
-            rtbl.appendChild(gen.route(lo, hi))
+    net = netlist[0]
+    rlist = net.getElementsByTagName('route_tbl')
+    if len(rlist) > 0:
+        rtbl = rlist[0]
+    else:
+        rtbl = gen.addElement(net, 'route_tbl')
+    rtbl.appendChild(gen.route(net_type, gw, lo, hi))
 
 
 def add_mds(gen, lustre, options, args):
