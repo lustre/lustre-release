@@ -1,16 +1,7 @@
- fs/dcache.c            |   20 ++
- fs/exec.c              |   18 +-
- fs/namei.c             |  378 ++++++++++++++++++++++++++++++++++++++++++-------
- fs/nfsd/vfs.c          |    2 
- fs/open.c              |  125 +++++++++++++---
- fs/stat.c              |    8 -
- include/linux/dcache.h |   31 ++++
- include/linux/fs.h     |   32 +++-
- kernel/ksyms.c         |    1 
- 9 files changed, 528 insertions(+), 87 deletions(-)
+ 0 files changed
 
---- kernel-2.4.20/fs/dcache.c~vfs_intent-2.4.20-rh	2003-05-24 01:56:40.000000000 -0400
-+++ kernel-2.4.20-root/fs/dcache.c	2003-05-24 02:04:49.000000000 -0400
+--- linux-2.4.20-rh/fs/dcache.c~vfs_intent-2.4.20-rh	2003-04-11 14:04:58.000000000 +0800
++++ linux-2.4.20-rh-root/fs/dcache.c	2003-06-09 23:18:07.000000000 +0800
 @@ -186,6 +186,13 @@ int d_invalidate(struct dentry * dentry)
  		spin_unlock(&dcache_lock);
  		return 0;
@@ -56,8 +47,8 @@
  }
  
  #define do_switch(x,y) do { \
---- kernel-2.4.20/fs/namei.c~vfs_intent-2.4.20-rh	2003-05-24 01:56:25.000000000 -0400
-+++ kernel-2.4.20-root/fs/namei.c	2003-06-02 00:30:50.000000000 -0400
+--- linux-2.4.20-rh/fs/namei.c~vfs_intent-2.4.20-rh	2003-04-11 14:04:57.000000000 +0800
++++ linux-2.4.20-rh-root/fs/namei.c	2003-06-09 23:18:07.000000000 +0800
 @@ -94,6 +94,13 @@
   * XEmacs seems to be relying on it...
   */
@@ -909,8 +900,8 @@
  	if (page) {
  		kunmap(page);
  		page_cache_release(page);
---- kernel-2.4.20/fs/nfsd/vfs.c~vfs_intent-2.4.20-rh	2003-05-24 01:56:21.000000000 -0400
-+++ kernel-2.4.20-root/fs/nfsd/vfs.c	2003-05-24 02:04:49.000000000 -0400
+--- linux-2.4.20-rh/fs/nfsd/vfs.c~vfs_intent-2.4.20-rh	2003-04-11 14:04:48.000000000 +0800
++++ linux-2.4.20-rh-root/fs/nfsd/vfs.c	2003-06-09 23:18:07.000000000 +0800
 @@ -1293,7 +1293,7 @@ nfsd_rename(struct svc_rqst *rqstp, stru
  			err = nfserr_perm;
  	} else
@@ -920,8 +911,8 @@
  	if (!err && EX_ISSYNC(tfhp->fh_export)) {
  		nfsd_sync_dir(tdentry);
  		nfsd_sync_dir(fdentry);
---- kernel-2.4.20/fs/open.c~vfs_intent-2.4.20-rh	2003-05-24 01:56:24.000000000 -0400
-+++ kernel-2.4.20-root/fs/open.c	2003-05-24 02:04:49.000000000 -0400
+--- linux-2.4.20-rh/fs/open.c~vfs_intent-2.4.20-rh	2003-04-11 14:04:57.000000000 +0800
++++ linux-2.4.20-rh-root/fs/open.c	2003-06-09 23:18:07.000000000 +0800
 @@ -19,6 +19,8 @@
  #include <asm/uaccess.h>
  
@@ -1241,8 +1232,8 @@
  /*
   * Find an empty file descriptor entry, and mark it busy.
   */
---- kernel-2.4.20/fs/stat.c~vfs_intent-2.4.20-rh	2003-05-24 01:56:40.000000000 -0400
-+++ kernel-2.4.20-root/fs/stat.c	2003-05-24 02:04:49.000000000 -0400
+--- linux-2.4.20-rh/fs/stat.c~vfs_intent-2.4.20-rh	2003-04-11 14:05:08.000000000 +0800
++++ linux-2.4.20-rh-root/fs/stat.c	2003-06-09 23:18:07.000000000 +0800
 @@ -110,11 +110,13 @@ static int do_getattr(struct vfsmount *m
  int vfs_stat(char *name, struct kstat *stat)
  {
@@ -1273,8 +1264,8 @@
  		path_release(&nd);
  	}
  	return error;
---- kernel-2.4.20/include/linux/dcache.h~vfs_intent-2.4.20-rh	2003-05-24 01:56:37.000000000 -0400
-+++ kernel-2.4.20-root/include/linux/dcache.h	2003-06-02 00:31:32.000000000 -0400
+--- linux-2.4.20-rh/include/linux/dcache.h~vfs_intent-2.4.20-rh	2003-04-12 15:46:39.000000000 +0800
++++ linux-2.4.20-rh-root/include/linux/dcache.h	2003-06-09 23:18:07.000000000 +0800
 @@ -7,6 +7,28 @@
  #include <linux/mount.h>
  #include <linux/kernel.h>
@@ -1336,8 +1327,8 @@
  
  extern spinlock_t dcache_lock;
  
---- kernel-2.4.20/include/linux/fs.h~vfs_intent-2.4.20-rh	2003-05-24 02:04:48.000000000 -0400
-+++ kernel-2.4.20-root/include/linux/fs.h	2003-06-02 00:31:47.000000000 -0400
+--- linux-2.4.20-rh/include/linux/fs.h~vfs_intent-2.4.20-rh	2003-05-30 02:07:39.000000000 +0800
++++ linux-2.4.20-rh-root/include/linux/fs.h	2003-06-09 23:18:07.000000000 +0800
 @@ -337,6 +337,8 @@ extern void set_bh_page(struct buffer_he
  #define ATTR_MTIME_SET	256
  #define ATTR_FORCE	512	/* Not a change, but a change it */
@@ -1441,7 +1432,7 @@
  
  extern void inode_init_once(struct inode *);
  extern void iput(struct inode *);
-@@ -1497,6 +1523,8 @@ extern struct file_operations generic_ro
+@@ -1495,6 +1521,8 @@ extern struct file_operations generic_ro
  
  extern int vfs_readlink(struct dentry *, char *, int, const char *);
  extern int vfs_follow_link(struct nameidata *, const char *);
@@ -1450,8 +1441,8 @@
  extern int page_readlink(struct dentry *, char *, int);
  extern int page_follow_link(struct dentry *, struct nameidata *);
  extern struct inode_operations page_symlink_inode_operations;
---- kernel-2.4.20/kernel/ksyms.c~vfs_intent-2.4.20-rh	2003-05-24 02:04:49.000000000 -0400
-+++ kernel-2.4.20-root/kernel/ksyms.c	2003-05-24 02:04:49.000000000 -0400
+--- linux-2.4.20-rh/kernel/ksyms.c~vfs_intent-2.4.20-rh	2003-05-30 02:07:42.000000000 +0800
++++ linux-2.4.20-rh-root/kernel/ksyms.c	2003-06-09 23:18:07.000000000 +0800
 @@ -298,6 +298,7 @@ EXPORT_SYMBOL(read_cache_page);
  EXPORT_SYMBOL(set_page_dirty);
  EXPORT_SYMBOL(vfs_readlink);
@@ -1460,8 +1451,8 @@
  EXPORT_SYMBOL(page_readlink);
  EXPORT_SYMBOL(page_follow_link);
  EXPORT_SYMBOL(page_symlink_inode_operations);
---- kernel-2.4.20/fs/exec.c~vfs_intent-2.4.20-rh	2003-05-24 01:56:40.000000000 -0400
-+++ kernel-2.4.20-root/fs/exec.c	2003-05-24 02:04:49.000000000 -0400
+--- linux-2.4.20-rh/fs/exec.c~vfs_intent-2.4.20-rh	2003-04-13 10:07:02.000000000 +0800
++++ linux-2.4.20-rh-root/fs/exec.c	2003-06-09 23:18:07.000000000 +0800
 @@ -114,8 +114,9 @@ asmlinkage long sys_uselib(const char * 
  	struct file * file;
  	struct nameidata nd;
@@ -1522,5 +1513,17 @@
  		goto close_fail;
  
  	retval = binfmt->core_dump(signr, regs, file);
+--- linux-2.4.20-rh/fs/proc/base.c~vfs_intent-2.4.20-rh	2003-06-09 23:16:51.000000000 +0800
++++ linux-2.4.20-rh-root/fs/proc/base.c	2003-06-09 23:18:52.000000000 +0800
+@@ -464,6 +464,9 @@ static int proc_pid_follow_link(struct d
+ 
+ 	error = inode->u.proc_i.op.proc_get_link(inode, &nd->dentry, &nd->mnt);
+ 	nd->last_type = LAST_BIND;
++
++        if (nd->it != NULL)
++                nd->it->it_int_flags |= IT_FL_FOLLOWED;
+ out:
+ 	return error;
+ }
 
 _
