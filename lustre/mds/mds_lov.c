@@ -417,8 +417,8 @@ int mds_lov_connect(struct obd_device *obd)
                                   "last_id", &size, mds->mds_lov_objids);
                 if (!rc) {
                         for (i = 0; i < mds->mds_lov_desc.ld_tgt_count; i++)
-                                CERROR("got last object "LPU64" from OST %d\n",
-                                       mds->mds_lov_objids[i], i);
+                                CWARN("got last object "LPU64" from OST %d\n",
+                                      mds->mds_lov_objids[i], i);
                         mds->mds_lov_objids_valid = 1;
                         rc = mds_lov_write_objids(obd);
                         if (rc)
