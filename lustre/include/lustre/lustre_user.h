@@ -33,6 +33,14 @@
 /* for statfs() */
 #define LL_SUPER_MAGIC 0x0BD00BD0
 
+#ifndef EXT3_IOC_GETFLAGS
+#define	EXT3_IOC_GETFLAGS		_IOR('f', 1, long)
+#define	EXT3_IOC_SETFLAGS		_IOW('f', 2, long)
+#define	EXT3_IOC_GETVERSION		_IOR('f', 3, long)
+#define	EXT3_IOC_SETVERSION		_IOW('f', 4, long)
+#define	EXT3_IOC_GETVERSION_OLD		_IOR('v', 1, long)
+#define	EXT3_IOC_SETVERSION_OLD		_IOW('v', 2, long)
+#endif
 #define LL_IOC_GETFLAGS                 _IOR ('f', 151, long)
 #define LL_IOC_SETFLAGS                 _IOW ('f', 152, long)
 #define LL_IOC_CLRFLAGS                 _IOW ('f', 153, long)
