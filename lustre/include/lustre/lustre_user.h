@@ -76,16 +76,22 @@ struct lov_user_md_v1 {           /* LOV EA user data (host-endian) */
 
 #if defined(__x86_64__) || defined(__ia64__) || defined(__ppc64__)
 typedef struct stat     lstat_t;
-#else
+#define HAVE_LOV_USER_MDS_DATA
+#elif defined(__USE_LARGEFILE64) || defined(__KERNEL__)
 typedef struct stat64   lstat_t;
+#define HAVE_LOV_USER_MDS_DATA
 #endif
 
+/* Compile with -D_LARGEFILE64_SOURCE or -D_GNU_SOURCE (or #define) to
+ * use this.  It is unsafe to #define those values in this header as it
+ * is possible the application has already #included <sys/stat.h>. */
+#ifdef HAVE_LOV_USER_MDS_DATA
 #define lov_user_mds_data lov_user_mds_data_v1
 struct lov_user_mds_data_v1 {
         lstat_t lmd_st;                 /* MDS stat struct */
         struct lov_user_md_v1 lmd_lmm;  /* LOV EA user data */
 } __attribute__((packed));
-
+#endif
 
 struct ll_recreate_obj {
         __u64 lrc_id;
