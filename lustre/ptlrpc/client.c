@@ -561,6 +561,8 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
                 req->rq_flags &= ~PTL_RPC_FL_RESEND;
                 CDEBUG(D_OTHER, "resending req %p xid "LPD64"\n",
                        req, req->rq_xid);
+                /* we'll get sent again, so balance 2nd request_out_callback */
+                atomic_inc(&req->rq_refcount);
                 goto resend;
         }
 
@@ -625,6 +627,9 @@ int ptlrpc_replay_req(struct ptlrpc_request *req)
         req->rq_timeout = obd_timeout;
         req->rq_reqmsg->addr = req->rq_import->imp_handle.addr;
         req->rq_reqmsg->cookie = req->rq_import->imp_handle.cookie;
+
+        /* add a ref, which will again be balanced in request_out_callback */
+        atomic_inc(&req->rq_refcount);
         rc = ptl_send_rpc(req);
         if (rc) {
                 CERROR("error %d, opcode %d\n", rc, req->rq_reqmsg->opc);
@@ -634,7 +639,7 @@ int ptlrpc_replay_req(struct ptlrpc_request *req)
         }
 
         CDEBUG(D_OTHER, "-- sleeping\n");
-        lwi = LWI_INTR(NULL, NULL);
+        lwi = LWI_INTR(NULL, NULL); /* XXX needs timeout, nested recovery */
         l_wait_event(req->rq_wait_for_rep, ptlrpc_check_reply(req), &lwi);
         CDEBUG(D_OTHER, "-- done\n");
 

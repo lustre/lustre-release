@@ -73,7 +73,6 @@ void recovd_conn_fail(struct ptlrpc_connection *conn)
         EXIT;
 }
 
-/* this function must be called with recovd->recovd_lock held */
 void recovd_conn_fixed(struct ptlrpc_connection *conn)
 {
         struct recovd_data *rd = &conn->c_recovd_data;
