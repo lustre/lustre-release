@@ -508,11 +508,11 @@ class Module:
                     panic('module not found:', mod)
                 (rc, out)  = run('/sbin/insmod', module)
                 if rc:
-                    raise CommandError("insmod failed:", module)
+                    raise CommandError, "insmod failed: %s" %(module)
             else:
                 (rc, out) = run('/sbin/modprobe', mod)
                 if rc:
-                    raise CommandError("modprobe failed:", module)
+                    raise CommandError, "modprobe failed: %s" %(module)
             
     def cleanup_module(self):
         """Unload the modules in the list in reverse order."""
