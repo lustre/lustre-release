@@ -199,7 +199,7 @@ int mds_open(struct mds_update_record *rec, int offset,
         mfd = kmem_cache_alloc(mds_file_cache, GFP_KERNEL);
         if (!mfd) {
                 CERROR("mds: out of memory\n");
-                GOTO(out_step_4, req->rq_status = -ENOMEM);
+                GOTO(out_step_4, rc = -ENOMEM);
         }
 
         /* dentry_open does a dput(de) and mntput(mds->mds_vfsmnt) on error */
@@ -233,6 +233,12 @@ int mds_open(struct mds_update_record *rec, int offset,
         l_dput(dchild);
  out_step_2:
         l_dput(parent);
-        ldlm_lock_decref(&parent_lockh, parent_mode);
+        if (rc) {
+                ldlm_lock_decref(&parent_lockh, parent_mode);
+        } else {
+                memcpy(&req->rq_ack_locks[0].lock, &parent_lockh,
+                       sizeof(parent_lockh));
+                req->rq_ack_locks[0].mode = parent_mode;
+        }
         RETURN(rc);
 }
