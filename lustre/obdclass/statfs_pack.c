@@ -28,11 +28,11 @@
 #define EXPORT_SYMTAB
 #ifndef __KERNEL__
 #include <liblustre.h>
-#endif
-
+#else
 #include <linux/version.h>
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 #include <asm/statfs.h>
+#endif
 #endif
 
 #include <linux/lustre_export.h>
