@@ -312,7 +312,7 @@ static int fsfilt_ext3_commit_async(struct inode *inode, void *h,
 
 static int fsfilt_ext3_commit_wait(struct inode *inode, void *h)
 {
-        tid_t tid = (tid_t) h;
+        tid_t tid = (tid_t)(long)h;
 
         CDEBUG(D_INODE, "commit wait: %lu\n", (unsigned long) tid);
 	if (is_journal_aborted(EXT3_JOURNAL(inode)))
