@@ -80,9 +80,7 @@ extern unsigned int portal_printk;
 #define D_RPCTRACE  (1 << 20) /* for distributed debugging */
 #define D_VFSTRACE  (1 << 21)
 
-#ifndef THREAD_SIZE
-#define THREAD_SIZE 8192
-#endif
+#include <linux/sched.h> /* THREAD_SIZE */
 #ifdef  __arch_ia64__
 #define CDEBUG_STACK(var) (&var & (THREAD_SIZE - 1))
 #else
@@ -618,10 +616,6 @@ extern void kportal_blockallsigs (void);
     printf ("%02x:%06x (@%lu %s:%s,l. %d %d %lu): " format,                    \
             (subsys) >> 24, (mask), (long)time(0), file, fn, line,            \
             getpid() , stack, ## a);
-#endif
-
-#ifndef CURRENT_TIME
-# define CURRENT_TIME time(0)
 #endif
 
 #include <linux/portals_lib.h>

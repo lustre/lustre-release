@@ -45,6 +45,7 @@
 #include <portals/lib-p30.h>
 #include <portals/p30.h>
 #include <linux/kp30.h>
+#include <linux/kernel_compat.h>
 
 #define PORTAL_MINOR 240
 
@@ -85,10 +86,10 @@ kportal_blockallsigs ()
 {
         unsigned long  flags;
 
-        spin_lock_irqsave (&current->sigmask_lock, flags);
+        SIGNAL_MASK_LOCK(current, flags);
         siginitsetinv (&current->blocked, 0);
-        recalc_sigpending (current);
-        spin_unlock_irqrestore (&current->sigmask_lock, flags);
+        RECALC_SIGPENDING();
+        SIGNAL_MASK_UNLOCK(current, flags);
 }
 
 /* called when opening /dev/device */

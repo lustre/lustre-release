@@ -48,6 +48,7 @@
 # define DEBUG_SUBSYSTEM S_PORTALS
 
 #include <linux/kp30.h>
+#include <linux/kernel_compat.h>
 
 #define DEBUG_OVERFLOW 1024
 static char *debug_buf = NULL;
@@ -233,7 +234,7 @@ int portals_do_debug_dumplog(void *arg)
         reparent_to_init();
         journal_info = current->journal_info;
         current->journal_info = NULL;
-        sprintf(debug_file_name, "%s.%ld", debug_file_path, CURRENT_TIME);
+        sprintf(debug_file_name, "%s.%ld", debug_file_path, CURRENT_SECONDS);
         file = filp_open(debug_file_name, O_CREAT|O_TRUNC|O_RDWR, 0644);
 
         if (!file || IS_ERR(file)) {
@@ -663,8 +664,8 @@ __s32 portals_debug_copy_to_user(char *buf, unsigned long len)
 
 /* FIXME: I'm not very smart; someone smarter should make this better. */
 void
-portals_debug_msg (int subsys, int mask, char *file, char *fn, int line,
-                   unsigned long stack, const char *format, ...)
+portals_debug_msg (int subsys, int mask, char *file, const char *fn, 
+                   const int line, unsigned long stack, const char *format, ...)
 {
         va_list       ap;
         unsigned long flags;
@@ -794,7 +795,7 @@ void portals_run_lbug_upcall(char * file, const char *fn, const int line)
         argv[0] = portals_upcall;
         argv[1] = "LBUG";
         argv[2] = file;
-        argv[3] = fn;
+        argv[3] = (char *)fn;
         argv[4] = buf;
         argv[5] = NULL;
 
@@ -802,7 +803,7 @@ void portals_run_lbug_upcall(char * file, const char *fn, const int line)
         envp[1] = "PATH=/sbin:/bin:/usr/sbin:/usr/bin";
         envp[2] = NULL;
 
-        rc = call_usermodehelper(argv[0], argv, envp);
+        rc = USERMODEHELPER(argv[0], argv, envp);
         if (rc < 0) {
                 CERROR("Error invoking lbug upcall %s %s %s %s %s: %d; check "
                        "/proc/sys/portals/upcall\n",                
