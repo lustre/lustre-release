@@ -2731,7 +2731,8 @@ kibnal_arp_callback (ibat_stat_t arprc, ibat_arp_data_t *arp_data, void *arg)
         LASSERT (conn->ibc_state == IBNAL_CONN_ACTIVE_ARP);
 
         conn->ibc_connvars->cv_arprc = arprc;
-        conn->ibc_connvars->cv_arp = *arp_data;
+        if (arprc == ibat_stat_ok)
+                conn->ibc_connvars->cv_arp = *arp_data;
         
         /* connd takes over my ref on conn */
         spin_lock_irqsave(&kibnal_data.kib_connd_lock, flags);
