@@ -1445,7 +1445,7 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
                 list_del_init(&oap->oap_urgent_item);
 
                 if (page_count == 0)
-                        starting_offset = (oap->oap_obj_off + oap->oap_page_off) &
+                        starting_offset = (oap->oap_obj_off +oap->oap_page_off)&
                                           (PTLRPC_MAX_BRW_SIZE - 1);
 
                 /* ask the caller for the size of the io as the rpc leaves. */
@@ -2956,18 +2956,18 @@ static int osc_llog_init(struct obd_device *obd, struct obd_device *tgt,
 static int osc_llog_finish(struct obd_device *obd, int count)
 {
         struct llog_ctxt *ctxt;
-        int rc = 0;
+        int rc = 0, rc2 = 0;
         ENTRY;
 
         ctxt = llog_get_context(obd, LLOG_UNLINK_ORIG_CTXT);
-        if (ctxt) 
+        if (ctxt)
                 rc = llog_cleanup(ctxt);
-        if (rc)
-                RETURN(rc);
-        
+
         ctxt = llog_get_context(obd, LLOG_SIZE_REPL_CTXT);
-        if (ctxt) 
-                rc = llog_cleanup(ctxt);
+        if (ctxt)
+                rc2 = llog_cleanup(ctxt);
+        if (!rc)
+                rc = rc2;
 
         RETURN(rc);
 }

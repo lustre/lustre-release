@@ -231,7 +231,7 @@ static int filter_client_free(struct obd_export *exp)
 
         if (fed->fed_fcd == NULL)
                 RETURN(0);
-        
+
         if (exp->exp_flags & OBD_OPT_FAILOVER)
                 GOTO(free, 0);
 
@@ -1288,7 +1288,7 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
                               obd->obd_name,
                               lustre_cfg_string(lcfg, 1),
                               obd->obd_recoverable_clients,
-                              (obd->obd_recoverable_clients == 1) 
+                              (obd->obd_recoverable_clients == 1)
                               ? "client" : "clients",
                               (int)(OBD_RECOVERY_TIMEOUT / HZ) / 60,
                               (int)(OBD_RECOVERY_TIMEOUT / HZ) % 60,
@@ -1354,7 +1354,7 @@ static int filter_cleanup(struct obd_device *obd)
         ll_sbdev_type save_dev;
         int must_relock = 0;
         ENTRY;
-        
+
         if (obd->obd_fail)
                 CERROR("%s: shutting down for failover; client state will"
                        " be preserved.\n", obd->obd_name);
@@ -1392,22 +1392,22 @@ static int filter_cleanup(struct obd_device *obd)
                 unlock_kernel();
                 must_relock++;
         }
-        
+
         mntput(filter->fo_vfsmnt);
         //destroy_buffers(filter->fo_sb->s_dev);
         filter->fo_sb = NULL;
-        
+
         obd_llog_finish(obd, 0);
 
         ll_clear_rdonly(save_dev);
-        
+
         if (must_relock)
                 lock_kernel();
 
         fsfilt_put_ops(obd->obd_fsops);
 
         LCONSOLE_INFO("OST %s has stopped.\n", obd->obd_name);
-        
+
         RETURN(0);
 }
 
@@ -1582,7 +1582,7 @@ static int filter_destroy_export(struct obd_export *exp)
                 filter_client_free(exp);
 
         filter_grant_discard(exp);
-        
+
         if (!(exp->exp_flags & OBD_OPT_FORCE))
                 filter_grant_sanity_check(exp->exp_obd, __FUNCTION__);
 
@@ -2422,9 +2422,9 @@ int filter_iocontrol(unsigned int cmd, struct obd_export *exp,
                        ll_bdevname(sb, tmp));
 
                 handle = fsfilt_start(obd, inode, FSFILT_OP_MKNOD, NULL);
-                if (!IS_ERR(handle)) 
+                if (!IS_ERR(handle))
                         rc = fsfilt_commit(obd, inode, handle, 1);
-                
+
                 CDEBUG(D_HA, "syncing ost %s\n", obd->obd_name);
                 rc = fsfilt_sync(obd, obd->u.filter.fo_sb);
 
@@ -2495,14 +2495,20 @@ static int filter_llog_init(struct obd_device *obd, struct obd_device *tgt,
 
 static int filter_llog_finish(struct obd_device *obd, int count)
 {
-        int rc;
+        struct llog_ctxt *ctxt;
+        int rc = 0, rc2 = 0;
         ENTRY;
 
-        rc = llog_cleanup(llog_get_context(obd, LLOG_UNLINK_REPL_CTXT));
-        if (rc)
-                RETURN(rc);
+        ctxt = llog_get_context(obd, LLOG_UNLINK_REPL_CTXT);
+        if (ctxt)
+                rc = llog_cleanup(ctxt);
 
-        rc = llog_cleanup(llog_get_context(obd, LLOG_SIZE_ORIG_CTXT));
+        ctxt = llog_get_context(obd, LLOG_SIZE_ORIG_CTXT);
+        if (ctxt)
+                rc2 = llog_cleanup(ctxt);
+        if (!rc)
+                rc = rc2;
+
         RETURN(rc);
 }
 
@@ -2579,7 +2585,7 @@ static int __init obdfilter_init(void)
         lprocfs_init_vars(filter, &lvars);
 
         OBD_ALLOC(obdfilter_created_scratchpad,
-                  OBDFILTER_CREATED_SCRATCHPAD_ENTRIES * 
+                  OBDFILTER_CREATED_SCRATCHPAD_ENTRIES *
                   sizeof(*obdfilter_created_scratchpad));
         if (obdfilter_created_scratchpad == NULL)
                 return -ENOMEM;
@@ -2597,7 +2603,7 @@ static int __init obdfilter_init(void)
                 class_unregister_type(OBD_FILTER_DEVICENAME);
 out:
                 OBD_FREE(obdfilter_created_scratchpad,
-                         OBDFILTER_CREATED_SCRATCHPAD_ENTRIES * 
+                         OBDFILTER_CREATED_SCRATCHPAD_ENTRIES *
                          sizeof(*obdfilter_created_scratchpad));
         }
         return rc;
@@ -2608,7 +2614,7 @@ static void __exit obdfilter_exit(void)
         class_unregister_type(OBD_FILTER_SAN_DEVICENAME);
         class_unregister_type(OBD_FILTER_DEVICENAME);
         OBD_FREE(obdfilter_created_scratchpad,
-                 OBDFILTER_CREATED_SCRATCHPAD_ENTRIES * 
+                 OBDFILTER_CREATED_SCRATCHPAD_ENTRIES *
                  sizeof(*obdfilter_created_scratchpad));
 }
 
