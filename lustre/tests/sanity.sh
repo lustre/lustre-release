@@ -13,6 +13,8 @@ start() {
 }
 START=start
 
+
+
 echo '== touch .../f ; rm .../f ======================== test 0'
 touch /mnt/lustre/f
 rm /mnt/lustre/f
@@ -198,19 +200,92 @@ cat /mnt/lustre/d21/dangle
 $CLEAN
 $START
 
-# echo '== unpack tar archive as nonroot user =========== test 22'
-echo '== please fix test 22'
-# mkdir /mnt/lustre/d22
-# chown 4711 /mnt/lustre/d22
-# (./setuid 4711 ; tar cf - /etc/hosts /etc/sysconfig/network | tar xfC - /mnt/lustre/d22 ; ./setuid 0)
-# ls -lR /mnt/lustre/d22/etc
-# $CLEAN
-# $START
+echo '== unpack tar archive as nonroot user =========== test 22'
+mkdir /mnt/lustre/d22
+chown 4711 /mnt/lustre/d22
+sudo -u \#4711 tar cf - /etc/hosts /etc/sysconfig/network | tar xfC - /mnt/lustre/d22
+ls -lR /mnt/lustre/d22/etc
+$CLEAN
+$START
 
 echo '== O_CREAT|O_EXCL in subdir ===================== test 23'
 mkdir /mnt/lustre/d23
 ./toexcl /mnt/lustre/d23/f23
 ./toexcl /mnt/lustre/d23/f23
+$CLEAN
+$START
+
+echo '== rename sanity ============================= test24'
+echo '-- same directory rename'
+echo '-- test 24-R1: touch a ; rename a b'
+mkdir /mnt/lustre/R1
+touch /mnt/lustre/R1/f
+mv /mnt/lustre/R1/f /mnt/lustre/R1/g
+$CLEAN
+$START
+
+echo '-- test 24-R2: touch a b ; rename a b;'
+mkdir /mnt/lustre/R2
+touch /mnt/lustre/R2/{f,g}
+mv /mnt/lustre/R2/f /mnt/lustre/R2/g
+$CLEAN
+$START
+
+echo '-- test 24-R3: mkdir a  ; rename a b;'
+mkdir /mnt/lustre/R3
+mkdir /mnt/lustre/R3/f
+mv /mnt/lustre/R3/f /mnt/lustre/R3/g
+$CLEAN
+$START
+
+echo '-- test 24-R4: mkdir a b ; rename a b;'
+mkdir /mnt/lustre/R4
+mkdir /mnt/lustre/R4/{f,g}
+perl -e 'rename "/mnt/lustre/R3/f", "/mnt/lustre/R3/g";'
+$CLEAN
+$START
+
+echo '-- cross directory renames --' 
+echo '-- test 24-R5: touch a ; rename a b'
+mkdir /mnt/lustre/R5{a,b}
+touch /mnt/lustre/R5a/f
+mv /mnt/lustre/R5a/f /mnt/lustre/R5b/g
+$CLEAN
+$START
+
+echo '-- test 24-R6: touch a ; rename a b'
+mkdir /mnt/lustre/R6{a,b}
+touch /mnt/lustre/R6a/f /mnt/lustre/R6b/g
+mv /mnt/lustre/R6a/f /mnt/lustre/R6b/g
+$CLEAN
+$START
+
+echo '-- test 24-R7: touch a ; rename a b'
+mkdir /mnt/lustre/R7{a,b}
+mkdir /mnt/lustre/R7a/f
+mv /mnt/lustre/R7a/f /mnt/lustre/R7b/g
+$CLEAN
+$START
+
+echo '-- test 24-R8: touch a ; rename a b'
+mkdir /mnt/lustre/R8{a,b}
+mkdir /mnt/lustre/R8a/f /mnt/lustre/R8b/g
+perl -e 'rename "/mnt/lustre/R8a/f", "/mnt/lustre/R8b/g";'
+$CLEAN
+$START
+
+echo "-- rename error cases"
+echo "-- test 24-R9 target error: touch f ; mkdir a ; rename f a"
+mkdir /mnt/lustre/R9
+mkdir /mnt/lustre/R9/a
+touch /mnt/lustre/R9/f
+perl -e 'rename "/mnt/lustre/R9/f", "/mnt/lustre/R9/a";'
+$CLEAN
+$START
+
+echo "--test 24-R10 source does not exist" 
+mkdir /mnt/lustre/R10
+mv /mnt/lustre/R10/f /mnt/lustre/R10/g 
 $CLEAN
 $START
 
