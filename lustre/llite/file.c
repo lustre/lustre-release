@@ -117,7 +117,7 @@ static int ll_file_release(struct inode *inode, struct file *file)
                 GOTO(out_fd, abs(rc));
         }
 
-        if (file->f_flags & FMODE_WRITE) {
+        if (file->f_mode & FMODE_WRITE) {
                 struct iattr attr;
                 attr.ia_valid = ATTR_MTIME | ATTR_CTIME | ATTR_ATIME | ATTR_SIZE;
                 attr.ia_mtime = inode->i_mtime;
