@@ -149,6 +149,7 @@ start_acceptor() {
 	$ACCEPTOR $PORT
 	;;
     *) 	fail "$0: unknown NETWORK '$NETWORK'" ;;
+    esac
 
 }
 
@@ -197,7 +198,7 @@ setup_portals() {
 
 	[ -c /dev/portals ] || mknod /dev/portals c 10 240
 
-	if [  "$USEDEV" = "yes ]; then
+	if [  "$USEDEV" = "yes" ]; then
 	    do_insmod $PORTALS/linux/oslib/portals.o || exit -1
 
 	    case $NETWORK in
@@ -206,7 +207,8 @@ setup_portals() {
 	    tcp)   do_insmod $PORTALS/linux/socknal/ksocknal.o || exit -1
 		   ;;
 	    *) 	fail "$0: unknown NETWORK '$NETWORK'" ;;
-	esac
+	    esac
+	fi
 
 	start_acceptor
 
@@ -221,7 +223,7 @@ setup_portals() {
 	add_uuid $DLM
 	add_uuid self
 	quit
-	EOF
+EOF
 }
 
 setup_lustre() {
