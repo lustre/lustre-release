@@ -778,7 +778,7 @@ int ll_readpage(struct file *filp, struct page *page)
 
         if (rc == 0) {
                 static unsigned long next_print;
-                CDEBUG(D_INODE, "didn't match a lock");
+                CDEBUG(D_INODE, "didn't match a lock\n");
                 if (time_after(jiffies, next_print)) {
                         next_print = jiffies + 30 * HZ;
                         CERROR("not covered by a lock (mmap?).  check debug "
