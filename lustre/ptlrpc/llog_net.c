@@ -32,12 +32,18 @@
 #define EXPORT_SYMTAB
 #endif
 
+#ifdef __KERNEL__
 #include <linux/fs.h>
+#else
+#include <liblustre.h>
+#endif
+
 #include <linux/obd_class.h>
 #include <linux/lustre_log.h>
 #include <portals/list.h>
 #include <linux/lvfs.h>
 
+#ifdef __KERNEL__
 
 /* This is a callback from the llog_* functions.
  * Assumes caller has already pushed us into the kernel context. */
@@ -145,3 +151,10 @@ struct llog_operations llog_net_ops = {
 };
 
 EXPORT_SYMBOL(llog_lvfs_ops);
+
+#else /* !__KERNEL__ */
+int llog_initiator_connect(struct obd_device *obd)
+{
+        return 0;
+}
+#endif

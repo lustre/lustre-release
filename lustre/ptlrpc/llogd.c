@@ -29,11 +29,18 @@
 #define EXPORT_SYMTAB
 #endif
 
+#ifdef __KERNEL__
 #include <linux/fs.h>
+#else
+#include <liblustre.h>
+#endif
+
 #include <linux/obd_class.h>
 #include <linux/lustre_log.h>
 #include <linux/lustre_net.h>
 #include <portals/list.h>
+
+#ifdef __KERNEL__
 
 int llogd_init(struct ptlrpc_request *req)
 {
@@ -289,3 +296,23 @@ int llogd_client_close(struct obd_export *exp, struct llog_desc **desc,
         OBD_FREE(*bitmap, LLOG_BITMAP_BYTES);
         RETURN(0);
 }
+
+#else /* !__KERNEL__ */
+
+int llogd_client_init(struct obd_export *exp, char * logname, 
+                      struct llog_desc **desc, __u32 **bitmap)
+{
+        return 0;
+}
+int llogd_client_close(struct obd_export *exp, struct llog_desc **desc, 
+                       __u32 **bitmap)
+{
+        return 0;
+}
+int llogd_client_next_block(struct obd_export *exp, struct llog_desc *desc, 
+                            char * buf, int buf_size)
+{
+        return 0;
+}
+
+#endif

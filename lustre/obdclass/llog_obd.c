@@ -12,11 +12,18 @@
 #define EXPORT_SYMTAB
 #endif
 
+#ifdef __KERNEL__
 #include <linux/fs.h>
+#else
+#include <liblustre.h>
+#endif
+
 #include <linux/obd_class.h>
 #include <linux/lustre_log.h>
 #include <portals/list.h>
 #include "llog_internal.h"
+
+#ifdef __KERNEL__
 
 /* helper functions for calling the llog obd methods */
 
@@ -219,3 +226,28 @@ int llog_cat_initialize(struct obd_device *obd, int count)
         RETURN(rc);
 }
 EXPORT_SYMBOL(llog_cat_initialize);
+
+#else /* !__KERNEL__ */
+
+int obd_llog_setup(struct obd_device *obd, struct obd_device *disk_obd,
+                   int index, int count, struct llog_logid *logid)
+{
+        return 0;
+}
+int llog_obd_cleanup(struct obd_device *obd)
+{
+        return 0;
+}
+int llog_obd_setup_logid(struct obd_device *obd, struct obd_device *disk_obd,
+                         int index, int count, struct llog_logid *logid)
+{
+        return 0;
+}
+int llog_obd_origin_add(struct obd_export *exp,
+                    int index,
+                    struct llog_rec_hdr *rec, struct lov_stripe_md *lsm,
+                    struct llog_cookie *logcookies, int numcookies)
+{
+        return 0;
+}
+#endif

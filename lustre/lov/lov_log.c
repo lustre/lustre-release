@@ -33,6 +33,7 @@
 #include <linux/slab.h>
 #include <linux/pagemap.h>
 #include <asm/div64.h>
+#include <linux/seq_file.h>
 #else
 #include <liblustre.h>
 #endif
@@ -47,10 +48,11 @@
 #include <linux/obd_class.h>
 #include <linux/obd_lov.h>
 #include <linux/obd_ost.h>
-#include <linux/seq_file.h>
 #include <linux/lprocfs_status.h>
 
 #include "lov_internal.h"
+
+#ifdef __KERNEL__
 
 int lov_llog_setup(struct obd_device *obd, struct obd_device *disk_obd,
                    int index, int count ,struct llog_logid *logids)
@@ -143,3 +145,32 @@ int lov_llog_repl_cancel(struct obd_device *obd, struct lov_stripe_md *lsm,
         }
         RETURN(rc);
 }
+
+#else /* !__KERNEL__ */
+
+int lov_llog_setup(struct obd_device *obd, struct obd_device *disk_obd,
+                   int index, int count ,struct llog_logid *logids)
+{
+        return 0;
+}
+
+int lov_llog_cleanup(struct obd_device *obd)
+{
+        return 0;
+}
+
+int lov_llog_origin_add(struct obd_export *exp,
+                        int index,
+                        struct llog_rec_hdr *rec, struct lov_stripe_md *lsm,
+                        struct llog_cookie *logcookies, int numcookies)
+{
+        return 0;
+}
+
+/* the replicators commit callback */
+int lov_llog_repl_cancel(struct obd_device *obd, struct lov_stripe_md *lsm,
+                          int count, struct llog_cookie *cookies, int flags)
+{
+        return 0;
+}
+#endif
