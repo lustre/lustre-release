@@ -15,7 +15,7 @@ TEXEXPAND = texexpand
 SUFFIXES = .lin .lyx .pdf .ps .sgml .html .txt .tex .fig .eps .dvi
 
 if DOC
-  DOCS = lustre.pdf
+  DOCS = lustre.pdf recovery-manual.pdf
 else
   DOCS =
 endif
@@ -77,7 +77,7 @@ $(VERSIONED) : %.lyx: %.lin Makefile
 .ps.pdf:
 	$(PS2PDF) $< $@
 
-lustre.tex lustre.pdf lustre.txt lustre.html: $(IMAGES) $(LYXFILES)
+lustre.tex lustre.pdf recovery-manual.pdf lustre.txt lustre.html: $(IMAGES) $(LYXFILES)
 .fig.eps:
 	-fig2dev -L eps $< > $@
 
