@@ -40,4 +40,53 @@ void ptlrpc_daemonize(void);
 
 int ptlrpc_request_handle_eviction(struct ptlrpc_request *);
 
+void ptlrpc_lprocfs_register_service(struct obd_device *obddev,
+                                     struct ptlrpc_service *svc);
+void ptlrpc_lprocfs_unregister_service(struct ptlrpc_service *svc);
+
+
+static inline int opcode_offset(__u32 opc) {
+        if (opc < OST_LAST_OPC) {
+                 /* OST opcode */
+                return (opc - OST_FIRST_OPC);
+        } else if (opc < MDS_LAST_OPC) {
+                /* MDS opcode */
+                return (opc - MDS_FIRST_OPC +
+                        (OST_LAST_OPC - OST_FIRST_OPC));
+        } else if (opc < LDLM_LAST_OPC) {
+                /* LDLM Opcode */
+                return (opc - LDLM_FIRST_OPC + 
+                        (MDS_LAST_OPC - MDS_FIRST_OPC) + 
+                        (OST_LAST_OPC - OST_FIRST_OPC));
+        } else if (opc < PTLBD_LAST_OPC) {
+                /* Portals Block Device */
+                return (opc - PTLBD_FIRST_OPC + 
+                        (LDLM_LAST_OPC - LDLM_FIRST_OPC) +
+                        (MDS_LAST_OPC - MDS_FIRST_OPC) +
+                        (OST_LAST_OPC - OST_FIRST_OPC));
+        } else if (opc == OBD_PING) {
+                /* OBD Ping */
+                return (opc - OBD_PING + 
+                        (PTLBD_LAST_OPC - PTLBD_FIRST_OPC) +
+                        (LDLM_LAST_OPC - LDLM_FIRST_OPC) +
+                        (MDS_LAST_OPC - MDS_FIRST_OPC) +
+                        (OST_LAST_OPC - OST_FIRST_OPC));
+        } else { 
+                /* Unknown Opcode */
+                return -1;
+        }
+}
+
+#define LUSTRE_MAX_OPCODES (1 + (PTLBD_LAST_OPC - PTLBD_FIRST_OPC) \
+                              + (LDLM_LAST_OPC - LDLM_FIRST_OPC)   \
+                              + (MDS_LAST_OPC - MDS_FIRST_OPC)     \
+                              + (OST_LAST_OPC - OST_FIRST_OPC))
+
+enum {
+        PTLRPC_REQWAIT_CNTR = 0,
+        PTLRPC_SVCEQDEPTH_CNTR = 1,
+        PTLRPC_SVCIDLETIME_CNTR = 2,
+        PTLRPC_LAST_CNTR    = 3
+};
+
 #endif /* PTLRPC_INTERNAL_H */
