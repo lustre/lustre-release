@@ -64,8 +64,8 @@ config.xml          Lustre configuration in xml format.
 --nosetup           Skip device setup/cleanup step.
 --reformat          Reformat all devices (without question)
 --dump <file>       Dump the kernel debug log before portals is unloaded
---startlevel <num>  Specify the level of services to start with (default 0)
---endlevel <num>    Specify the level of services to end with (default 100)
+--minlevel <num>    Specify the minimum level of services to configure/cleanup (default 0)
+--maxlevel <num>    Specify the maximum level of services to configure/cleanup (default 100)
                     Levels are aproximatly like:
                             10 - network
                             20 - device, ldlm
@@ -106,8 +106,8 @@ class Config:
         self._debug_path = '/tmp/lustre-log'
         self._dump_file = None
         self._src_dir = None
-	self._start_level = 0
-	self._end_level = 100
+	self._minlevel = 0
+	self._maxlevel = 100
 
     def verbose(self, flag = None):
         if flag: self._verbose = flag
@@ -169,13 +169,13 @@ class Config:
         if val: self._dump_file = val
         return self._dump_file
 
-    def startlevel(self, val = None):
-        if val: self._start_level = int(val)
-        return self._start_level
+    def minlevel(self, val = None):
+        if val: self._minlevel = int(val)
+        return self._minlevel
 
-    def endlevel(self, val = None):
-        if val: self._end_level = int(val)
-        return self._end_level
+    def maxlevel(self, val = None):
+        if val: self._maxlevel = int(val)
+        return self._maxlevel
 
 
 
@@ -645,10 +645,13 @@ def is_prepared(uuid):
     """Return true if a device exists for the uuid"""
     # expect this format:
     # 1 UP ldlm ldlm ldlm_UUID 2
-    out = lctl.device_list()
-    for s in out:
-        if uuid == string.split(s)[4]:
-            return 1
+    try:
+        out = lctl.device_list()
+        for s in out:
+            if uuid == string.split(s)[4]:
+                return 1
+    except CommandError, e:
+        e.dump()
     return 0
     
 
@@ -1304,7 +1307,7 @@ def getServiceLevel(dom_node):
     elif type in ('mountpoint',):
         ret = 70
 
-    if ret < config.startlevel() or ret > config.endlevel():
+    if ret < config.minlevel() or ret > config.maxlevel():
         ret = 0 
     return ret
 
@@ -1551,7 +1554,7 @@ def parse_cmdline(argv):
     long_opts = ["ldap", "reformat", "lustre=", "verbose", "gdb",
                  "portals=", "makeldiff", "cleanup", "noexec",
                  "help", "node=", "nomod", "nosetup",
-                 "dump=", "force", "startlevel=", "endlevel="]
+                 "dump=", "force", "minlevel=", "maxlevel="]
     opts = []
     args = []
     try:
@@ -1588,10 +1591,10 @@ def parse_cmdline(argv):
             config.dump_file(a)
         if o in ("-f", "--force"):
             config.force(1)
-	if o in ("--startlevel",):
-		config.startlevel(a)
-        if o in ("--endlevel",):
-                config.endlevel(a)
+	if o in ("--minlevel",):
+		config.minlevel(a)
+        if o in ("--maxlevel",):
+                config.maxlevel(a)
 
     return args
 
