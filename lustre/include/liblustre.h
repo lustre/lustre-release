@@ -36,9 +36,10 @@
 #endif
 #ifdef HAVE_SYS_IOCTL_H
 # include <sys/ioctl.h>
-#else
+#endif
+#ifndef _IOWR
 # include "ioctl.h"
-#endif /* !HAVE_SYS_IOCTL_H */
+#endif
 
 #include <stdio.h>
 #include <sys/ioctl.h>
