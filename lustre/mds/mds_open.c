@@ -107,6 +107,7 @@ int mds_open(struct mds_update_record *rec, int offset,
                 RETURN(rc);
         }
         dir = parent->d_inode;
+        body->flags |= IT_OPEN_LOOKUP;
 
         down(&dir->i_sem);
         dchild = lookup_one_len(lustre_msg_buf(req->rq_reqmsg, 3),
@@ -116,11 +117,17 @@ int mds_open(struct mds_update_record *rec, int offset,
                 GOTO(out_unlock, rc = PTR_ERR(dchild));
         }
 
+        if (dchild->d_inode) 
+                body->flags |= IT_OPEN_POS;
+        else 
+                body->flags |= IT_OPEN_NEG;
+
         /* Negative dentry, just create the file */
         if ((rec->ur_flags & O_CREAT) && !dchild->d_inode) {
                 int err;
                 void *handle;
                 mds_start_transno(mds);
+                body->flags |= IT_OPEN_CREATE;
                 handle = fsfilt_start(obd, dir, FSFILT_OP_CREATE);
                 if (IS_ERR(handle)) {
                         rc = PTR_ERR(handle);
@@ -155,6 +162,7 @@ int mds_open(struct mds_update_record *rec, int offset,
         if (!S_ISREG(dchild->d_inode->i_mode))
                 GOTO(out_ldput, rc = 0);
 
+        body->flags |= IT_OPEN_OPEN;
         mfd = kmem_cache_alloc(mds_file_cache, GFP_KERNEL);
         if (!mfd) {
                 CERROR("mds: out of memory\n");
