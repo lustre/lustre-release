@@ -134,7 +134,7 @@ static char *cmdname(char *func)
         return func;
 }
 
-#define difftime(a, b)					        \
+#define difftime(a, b)                                          \
         ((double)(a)->tv_sec - (b)->tv_sec +                    \
          ((double)((a)->tv_usec - (b)->tv_usec) / 1000000))
 
@@ -440,7 +440,7 @@ static int jt_attach(int argc, char **argv)
         IOCINIT(data);
 
         if (argc != 2 && argc != 3) {
-                fprintf(stderr, "usage: %s type [data]\n", cmdname(argv[0]));
+                fprintf(stderr, "usage: %s type [name [uuid]]\n", cmdname(argv[0]));
                 return -1;
         }
 
@@ -467,6 +467,43 @@ static int jt_attach(int argc, char **argv)
         if (rc < 0)
                 fprintf(stderr, "error: %s: %x %s\n", cmdname(argv[0]),
                         OBD_IOC_ATTACH, strerror(rc = errno));
+
+        return rc;
+}
+
+static int jt_name2dev(int argc, char **argv)
+{
+        struct obd_ioctl_data data;
+        int rc;
+
+        IOCINIT(data);
+
+        if (argc != 2) { 
+                fprintf(stderr, "usage: %s name\n", cmdname(argv[0]));
+                return -1;
+        }
+
+        data.ioc_inllen1 =  strlen(argv[1]) + 1;
+        data.ioc_inlbuf1 = argv[1];
+
+        printf("%s: len %d addr %p name %s\n",
+               cmdname(argv[0]), data.ioc_len, buf,
+               MKSTR(data.ioc_inlbuf1));
+
+        if (obd_ioctl_pack(&data, &buf, max)) {
+                fprintf(stderr, "error: %s: invalid ioctl\n", cmdname(argv[0]));
+                return -2;
+        }
+        printf("%s: len %d addr %p raw %p name %s and %s\n",
+               cmdname(argv[0]), data.ioc_len, buf, rawbuf,
+               MKSTR(data.ioc_inlbuf1), &buf[516]);
+
+        rc = ioctl(fd, OBD_IOC_NAME2DEV , buf);
+        if (rc < 0)
+                fprintf(stderr, "error: %s: %x %s\n", cmdname(argv[0]),
+                        OBD_IOC_NAME2DEV, strerror(rc = errno));
+        memcpy((char *)(&data), buf, sizeof(data));
+        printf("device set to %d (name %s)\n", data.ioc_dev, argv[1]);
 
         return rc;
 }
@@ -827,7 +864,8 @@ command_t cmdlist[] = {
                 "--threads <threads> <devno> <command [args ...]>"},
 
         /* Device configuration commands */
-        {"device", jt_device, 0, "set current device (args device no)"},
+        {"device", jt_device, 0, "set current device (args device_no name)"},
+        {"name2dev", jt_name2dev, 0, "set device by name (args name)"},
         {"attach", jt_attach, 0, "name the type of device (args: type data"},
         {"setup", jt_setup, 0, "setup device (args: <blkdev> [data]"},
         {"detach", jt_detach, 0, "detach the current device (arg: )"},

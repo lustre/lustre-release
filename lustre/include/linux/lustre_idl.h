@@ -549,6 +549,7 @@ static inline int obd_ioctl_getdata(char *buf, char *end, void *arg)
 #define OBD_IOC_MODULE_DEBUG           _IOWR('f', 26, long)
 #define OBD_IOC_BRW_READ               _IOWR('f', 27, long)
 #define OBD_IOC_BRW_WRITE              _IOWR('f', 28, long)
+#define OBD_IOC_NAME2DEV               _IOWR('f', 29, long)
 
 #define OBD_IOC_DEC_FS_USE_COUNT       _IO  ('f', 32      )
 

@@ -151,6 +151,9 @@ struct osc_obd {
 #define MAX_MULTI       16
 struct obd_device {
         struct obd_type *obd_type;
+        char *obd_name;
+        __u8 obd_uuid[37];
+
         int obd_minor;
         int obd_flags;
         int obd_refcnt;

@@ -87,6 +87,23 @@ static int obd_class_release(struct inode * inode, struct file * file)
         RETURN(0);
 }
 
+static int obd_class_name2dev(char *name)
+{
+        int res = -1;
+        int i;
+
+        for (i=0; i < MAX_OBD_DEVICES; i++) { 
+                struct obd_device *obd = &obd_dev[i];
+                if (obd->obd_name && 
+                    strcmp(name, obd->obd_name) == 0) {
+                        res = i; 
+                        return res;
+                }
+        }
+                
+        return res;
+}
+
 /* 
  * support functions: we could use inter-module communication, but this 
  * is more portable to other OS's
@@ -167,6 +184,27 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 RETURN(0);
         }
 
+        case OBD_IOC_NAME2DEV: { 
+                int dev;
+                if (!data->ioc_inlbuf1) { 
+                        CERROR("No name passed!\n");
+                        RETURN(-EINVAL);
+                }
+                CDEBUG(D_IOCTL, "device name %s\n", data->ioc_inlbuf1);
+                dev = obd_class_name2dev(data->ioc_inlbuf1);
+                data->ioc_dev= dev;
+                if (dev == -1) { 
+                        CERROR("No device for name %s!\n", data->ioc_inlbuf1);
+                        RETURN(-EINVAL);
+                }
+
+                CDEBUG(D_IOCTL, "device name %s, dev %d\n", data->ioc_inlbuf1, 
+                       dev);
+                filp->private_data = &obd_dev[data->ioc_dev];
+                err = copy_to_user((int *)arg, data, sizeof(*data));
+                RETURN(err);
+        }
+
         case OBD_IOC_ATTACH: {
                 struct obd_type *type;
 
@@ -194,8 +232,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 
                 /* do the attach */
                 if (OBT(obd) && OBP(obd, attach))
-                        err = OBP(obd, attach)(obd, sizeof(*data), data);
-
+                        err = OBP(obd,attach)(obd, sizeof(*data), data);
                 if (err) {
                         obd->obd_type = NULL;
                 } else {
@@ -205,6 +242,16 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                                obd->obd_minor, data->ioc_inlbuf1);
                         obd->obd_proc_entry = 
                                 proc_lustre_register_obd_device(obd);
+                        if (data->ioc_inlbuf2) { 
+                                int len = strlen(data->ioc_inlbuf2);
+                                OBD_ALLOC(obd->obd_name, len + 1); 
+                                if (!obd->obd_name) { 
+                                        CERROR("no memory\n"); 
+                                        LBUG();
+                                }
+                                memcpy(obd->obd_name, data->ioc_inlbuf2, len+1);
+                        }
+
                         MOD_INC_USE_COUNT;
                 }
 
@@ -230,6 +277,11 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                         CERROR("OBD device %d has hanging requests\n",
                                obd->obd_minor);
                         RETURN(-EBUSY);
+                }
+                
+                if (obd->obd_name) { 
+                        OBD_FREE(obd->obd_name, strlen(obd->obd_name)+ 1);
+                        obd->obd_name = NULL;
                 }
 
                 if (obd->obd_proc_entry)
