@@ -339,17 +339,28 @@ int ptl_send_rpc(struct ptlrpc_request *request, struct lustre_peer *peer)
  * it finishes processing an event.  This ensures the ref count is
  * decremented and that the rpc ring buffer cycles properly.
  */ 
-int ptl_received_rpc(struct ptlrpc_service *service) 
+int ptl_handled_rpc(struct ptlrpc_service *service, void *start) 
 {
-        int rc, index;
+        int rc, index = 0;
 
         spin_lock(&service->srv_lock);
-        index = service->srv_md_active;
+        /* XXX this is wrong must find index on which request arrived!!!*/ 
+        while (index < service->srv_ring_length) {
+                if ( service->srv_md[index].start == start) 
+                        break;
+                index++;
+        }
+        if (index == service->srv_ring_length)
+                BUG();
+
         CDEBUG(D_INFO, "MD index=%d Ref Count=%d\n", index,
                service->srv_ref_count[index]);
         service->srv_ref_count[index]--;
 
-        if ((service->srv_ref_count[index] <= 0) &&
+        if (service->srv_ref_count[index] < 0)
+                BUG();
+        
+        if ((service->srv_ref_count[index] == 0) &&
             (service->srv_me_h[index] == 0)) {
 
                 /* Replace the unlinked ME and MD */

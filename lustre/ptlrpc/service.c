@@ -33,6 +33,7 @@
 #include <linux/lustre_net.h>
 
 extern int server_request_callback(ptl_event_t *ev, void *data);
+extern int ptl_handled_rpc(struct ptlrpc_service *service, void *start);
 
 static int ptlrpc_check_event(struct ptlrpc_service *svc)
 {
@@ -174,11 +175,13 @@ static int ptlrpc_main(void *arg)
 
                 if (svc->srv_flags & SVC_EVENT) { 
                         struct ptlrpc_request request;
+                        void *start;
                         svc->srv_flags = SVC_RUNNING; 
 
                         /* FIXME: If we move to an event-driven model,
                          * we should put the request on the stack of
                          * mds_handle instead. */
+                        start = svc->srv_ev.mem_desc.start;
                         memset(&request, 0, sizeof(request));
                         request.rq_obd = obddev;
                         request.rq_reqbuf = (svc->srv_ev.mem_desc.start +
@@ -195,7 +198,7 @@ static int ptlrpc_main(void *arg)
 
                         spin_unlock(&svc->srv_lock);
                         rc = svc->srv_handler(obddev, svc, &request);
-                        ptl_received_rpc(svc);
+                        ptl_handled_rpc(svc, start);
                         continue;
                 }
 

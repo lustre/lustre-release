@@ -97,6 +97,7 @@ struct ptlrpc_client {
 
 struct ptlrpc_request { 
         int rq_type; /* one of PTL_RPC_REQUEST, PTL_RPC_REPLY, PTL_RPC_BULK */
+        spinlock_t rq_lock;
 	struct list_head rq_list;
 	struct obd_device *rq_obd;
 	int rq_status;
@@ -207,7 +208,6 @@ int ptlrpc_reply(struct obd_device *obddev, struct ptlrpc_service *svc,
 int ptlrpc_error(struct obd_device *obddev, struct ptlrpc_service *svc,
                  struct ptlrpc_request *req);
 int ptl_send_rpc(struct ptlrpc_request *request, struct lustre_peer *peer);
-int ptl_received_rpc(struct ptlrpc_service *service);
 
 /* rpc/client.c */
 int ptlrpc_connect_client(int dev, char *uuid, int req_portal, int rep_portal, 
