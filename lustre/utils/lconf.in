@@ -25,7 +25,7 @@
 # Based in part on the XML obdctl modifications done by Brian Behlendorf 
 
 import sys, getopt, types
-import string, os, stat, popen2, socket, time, random
+import string, os, stat, popen2, socket, time, random, fcntl, select
 import re, exceptions
 import xml.dom.minidom
 
@@ -294,6 +294,10 @@ class LCTLInterface:
             else:
                 raise CommandError('lctl', "unable to find lctl binary.")
 
+    def set_nonblock(self, fd):
+        fl = fcntl.fcntl(fd, fcntl.F_GETFL)
+        fcntl.fcntl(fd, fcntl.F_SETFL, fl | os.O_NDELAY)
+
     def run(self, cmds):
         """
         run lctl
@@ -305,19 +309,40 @@ class LCTLInterface:
         """
         debug("+", self.lctl, cmds)
         if config.noexec(): return (0, [])
-        p = popen2.Popen3(self.lctl, 1)
-        p.tochild.write(cmds + "\n")
-        p.tochild.close()
-        out = p.fromchild.readlines()
-        err = p.childerr.readlines()
-        ret = p.wait()
+
+        child = popen2.Popen3(self.lctl, 1) # Capture stdout and stderr from command
+        child.tochild.write(cmds + "\n")
+        child.tochild.close()
+
+        # From "Python Cookbook" from O'Reilly
+        outfile = child.fromchild
+        self.set_nonblock(outfile.fileno())
+        errfile = child.childerr
+        self.set_nonblock(errfile.fileno())
+
+        outdata = errdata = ''
+        outeof = erreof = 0
+        while 1:
+            ready = select.select([outfd,errfd],[],[]) # Wait for input
+            if outfd in ready[0]:
+                outchunk = outfile.read()
+                if outchunk == '': outeof = 1
+                outdata = outdata + outchunk
+            if errfd in ready[0]:
+                errchunk = errfile.read()
+                if errchunk == '': erreof = 1
+                errdata = errdata + errchunk
+            if outeof and erreof: break
+        # end of "borrowed" code
+
+        ret = child.wait()
         if os.WIFEXITED(ret):
             rc = os.WEXITSTATUS(ret)
         else:
             rc = 0
-        if rc or len(err):
-            raise CommandError(self.lctl, err, rc)
-        return rc, out
+        if rc or len(errdata):
+            raise CommandError(self.lctl, errdata, rc)
+        return rc, outdata
 
     def runcmd(self, *args):
         """
@@ -2114,7 +2139,11 @@ def main():
         if not os.access(args[0], os.R_OK):
             print 'File not found or readable:', args[0]
             sys.exit(1)
-        dom = xml.dom.minidom.parse(args[0])
+        try:
+            dom = xml.dom.minidom.parse(args[0])
+        except Exception:
+            panic("%s does not appear to be a config file." % (args[0]))
+            sys.exit(1) # make sure to die here, even in debug mode.
         db = LustreDB_XML(dom.documentElement, dom.documentElement)
     elif config.ldapurl():
         if not config.config_name():
