@@ -422,3 +422,56 @@ out:
         free(uuidarray);
         return rc;
 }
+
+int jt_lcfg_mount_option(int argc, char **argv)
+{
+        int rc;
+        struct lustre_cfg lcfg;
+
+        LCFG_INIT(lcfg, LCFG_MOUNTOPT);
+
+        if (argc != 4)
+                return CMD_HELP;
+
+        /* profile name */
+        lcfg.lcfg_inllen1 = strlen(argv[1]) + 1;
+        lcfg.lcfg_inlbuf1 = argv[1];
+        /* osc name */
+        lcfg.lcfg_inllen2 = strlen(argv[2]) + 1;
+        lcfg.lcfg_inlbuf2 = argv[2];
+        /* mdc name */
+        lcfg.lcfg_inllen3 = strlen(argv[3]) + 1;
+        lcfg.lcfg_inlbuf3 = argv[3];
+
+        rc = lcfg_ioctl(argv[0], OBD_DEV_ID, &lcfg);
+        if (rc < 0) {
+                fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
+                        strerror(rc = errno));
+        }
+
+        return rc;
+}
+
+int jt_lcfg_del_mount_option(int argc, char **argv)
+{
+        int rc;
+        struct lustre_cfg lcfg;
+
+        LCFG_INIT(lcfg, LCFG_DEL_MOUNTOPT);
+
+        if (argc != 2)
+                return CMD_HELP;
+
+        /* profile name */
+        lcfg.lcfg_inllen1 = strlen(argv[1]) + 1;
+        lcfg.lcfg_inlbuf1 = argv[1];
+
+        rc = lcfg_ioctl(argv[0], OBD_DEV_ID, &lcfg);
+        if (rc < 0) {
+                fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
+                        strerror(rc = errno));
+        }
+
+        return rc;
+}
+

@@ -324,6 +324,70 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
         RETURN(err);
 }
 
+LIST_HEAD(lustre_profile_list);
+
+struct lustre_profile *class_get_profile(char * prof)
+{
+        struct lustre_profile *lprof;
+        
+        list_for_each_entry(lprof, &lustre_profile_list, lp_list) {
+                if (!strcmp(lprof->lp_profile, prof)) {
+                        RETURN(lprof);
+                }
+        }
+        RETURN(NULL);
+}
+
+int class_add_profile(int proflen, char *prof, 
+                      int osclen, char *osc, 
+                      int mdclen, char *mdc)
+{
+        struct lustre_profile *lprof;
+        int err = 0;
+
+        OBD_ALLOC(lprof, sizeof(*prof));
+        if (lprof == NULL)
+                GOTO(out, err = -ENOMEM);
+        INIT_LIST_HEAD(&lprof->lp_list);
+
+        LASSERT(proflen == (strlen(prof) + 1));
+        OBD_ALLOC(lprof->lp_profile, proflen);
+        if (lprof->lp_profile == NULL)
+                GOTO(out, err = -ENOMEM);
+        memcpy(lprof->lp_profile, prof, proflen);
+        
+        LASSERT(osclen == (strlen(osc) + 1));
+        OBD_ALLOC(lprof->lp_osc, osclen);
+        if (lprof->lp_profile == NULL)
+                GOTO(out, err = -ENOMEM);
+        memcpy(lprof->lp_osc, osc, osclen);
+
+        LASSERT(mdclen == (strlen(mdc) + 1));
+        OBD_ALLOC(lprof->lp_mdc, mdclen);
+        if (lprof->lp_mdc == NULL)
+                GOTO(out, err = -ENOMEM);
+        memcpy(lprof->lp_mdc, mdc, mdclen);
+
+        list_add(&lprof->lp_list, &lustre_profile_list);
+
+out:
+        RETURN(err);
+}
+
+void class_del_profile(char *prof)
+{
+        struct lustre_profile *lprof;
+        
+        lprof = class_get_profile(prof);
+        if (lprof) {
+                list_del(&lprof->lp_list);
+                OBD_FREE(lprof->lp_profile, strlen(lprof->lp_profile) + 1);
+                OBD_FREE(lprof->lp_osc, strlen(lprof->lp_osc) + 1);
+                OBD_FREE(lprof->lp_mdc, strlen(lprof->lp_mdc) + 1);
+                OBD_FREE(lprof, sizeof *lprof);
+        }
+}
+
 int class_process_config(int len, char *data)
 {
         char *buf;
@@ -334,7 +398,7 @@ int class_process_config(int len, char *data)
         lustre_cfg_getdata(&buf, len, data);
         lcfg = (struct lustre_cfg* ) buf;
 
-        CERROR("processing cmd: %x\n", lcfg->lcfg_command);
+        CDEBUG(D_IOCTL, "processing cmd: %x\n", lcfg->lcfg_command);
 
         /* Commands that don't need a device */
 	switch(lcfg->lcfg_command) {
@@ -358,6 +422,23 @@ int class_process_config(int len, char *data)
 
                 err = class_del_uuid(lcfg->lcfg_inlbuf1);
                 GOTO(out, err);
+        }
+        case LCFG_MOUNTOPT: {
+                CDEBUG(D_IOCTL, "mountopt: profile %s osc %s mdc %s\n", 
+                       lcfg->lcfg_inlbuf1, lcfg->lcfg_inlbuf2, lcfg->lcfg_inlbuf3);
+                /* set these mount options somewhere, so ll_fill_super
+                 * can find them. */
+                err = class_add_profile(lcfg->lcfg_inllen1, lcfg->lcfg_inlbuf1, 
+                                        lcfg->lcfg_inllen2, lcfg->lcfg_inlbuf2, 
+                                        lcfg->lcfg_inllen3, lcfg->lcfg_inlbuf3);
+                GOTO(out, err);
+        }
+        case LCFG_DEL_MOUNTOPT: {
+                CDEBUG(D_IOCTL, "mountopt: profile %s\n", lcfg->lcfg_inlbuf1);
+                /* set these mount options somewhere, so ll_fill_super
+                 * can find them. */
+                class_del_profile(lcfg->lcfg_inlbuf1);
+                GOTO(out, err = 0);
         }
 	}
 	

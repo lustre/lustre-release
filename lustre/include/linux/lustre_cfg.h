@@ -33,6 +33,8 @@ enum lcfg_command_type {
         LCFG_LOV_SET_CONFIG = 0x00cf005,
         LCFG_ADD_UUID       = 0x00cf006,
         LCFG_DEL_UUID       = 0x00cf007,
+        LCFG_MOUNTOPT       = 0x00cf008,
+        LCFG_DEL_MOUNTOPT   = 0x00cf009,
 };
 
 struct lustre_cfg {
