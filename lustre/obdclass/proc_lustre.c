@@ -189,14 +189,14 @@ void proc_lustre_remove_obd_entry(const char* name, struct obd_device *obd)
 			
 		obd_entry = obd_dir;
 		obd_dir = obd_dir->parent;
-	
-		/* If /proc/lustre/obd/XXX or /proc/lustre/obd or
-		 * /proc/lustre are being removed, then reset 
+
+		/* If /proc/lustre/obd/foo or /proc/lustre/obd or
+		 * /proc/lustre is being removed, then reset
 		 * internal variables
 		 */
-		
-		if (obd_entry == obd->obd_proc_entry) 
-			obd->obd_proc_entry=0; /* /proc/lustre/obd/XXX */
+
+		if (obd_entry == obd->obd_proc_entry)
+			obd->obd_proc_entry=0; /* /proc/lustre/obd/foo */
 		else 
 			if (obd_entry == proc_lustre_obd_dir_entry)
 				proc_lustre_obd_dir_entry=0;

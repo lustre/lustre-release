@@ -235,7 +235,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 
                 /* have we attached a type to this device */
                 if (obd->obd_flags & OBD_ATTACHED) {
-                        CERROR("OBD: Device %d already typed as  %s.\n",
+                        CERROR("OBD: Device %d already typed as %s.\n",
                                obd->obd_minor, MKSTR(obd->obd_type->typ_name));
                         RETURN(-EBUSY);
                 }
@@ -261,7 +261,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 if (err) {
                         obd->obd_type = NULL;
                 } else {
-                        obd->obd_flags |=  OBD_ATTACHED;
+                        obd->obd_flags |= OBD_ATTACHED;
                         type->typ_refcnt++;
                         CDEBUG(D_IOCTL, "OBD: dev %d attached type %s\n",
                                obd->obd_minor, data->ioc_inlbuf1);
@@ -303,8 +303,8 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                                obd->obd_minor);
                         RETURN(-EBUSY);
                 }
-                
-                if (obd->obd_name) { 
+
+                if (obd->obd_name) {
                         OBD_FREE(obd->obd_name, strlen(obd->obd_name)+ 1);
                         obd->obd_name = NULL;
                 }
@@ -550,11 +550,11 @@ int obd_register_type(struct obd_ops *ops, char *nm)
                 RETURN(-EINVAL);
         }
 
-        if  ( obd_nm_to_type(nm) ) {
+        if (obd_nm_to_type(nm)) {
                 CDEBUG(D_IOCTL, "Type %s already registered\n", nm);
                 RETURN(-EEXIST);
         }
-        
+
         OBD_ALLOC(type, sizeof(*type));
         if (!type)
                 RETURN(-ENOMEM);
@@ -565,7 +565,7 @@ int obd_register_type(struct obd_ops *ops, char *nm)
         type->typ_name = nm;
         RETURN(0);
 }
-        
+
 int obd_unregister_type(char *nm)
 {
         struct obd_type *type = obd_nm_to_type(nm);
