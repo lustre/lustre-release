@@ -297,11 +297,11 @@
 +			if (!dentry->d_op->d_revalidate_it(dentry, 0, NULL, it)) {
 +				struct dentry *new;
 +				err = permission(dentry->d_parent->d_inode,
-+						MAY_EXEC);
++						 MAY_EXEC);
 +				if (err)
 +					break;
 +				new = real_lookup(dentry->d_parent,
-+						&dentry->d_name, 0, NULL);
++						  &dentry->d_name, 0, it);
 +				d_invalidate(dentry);
 +				dput(dentry);
 +				if (IS_ERR(new)) {
@@ -607,12 +607,16 @@
  	if (IS_ERR(dentry))
  		goto fail;
  	if (!is_dir && nd->last.name[nd->last.len] && !dentry->d_inode)
-@@ -1278,7 +1416,16 @@ asmlinkage long sys_mknod(const char * f
+@@ -1278,7 +1416,20 @@ asmlinkage long sys_mknod(const char * f
  	error = path_lookup(tmp, LOOKUP_PARENT, &nd);
  	if (error)
  		goto out;
 -	dentry = lookup_create(&nd, 0);
 +
++	if (nd.last_type != LAST_NORM) {
++		error = -EEXIST;
++		goto out2;
++	}
 +	if (nd.dentry->d_inode->i_op->mknod_raw) {
 +		struct inode_operations *op = nd.dentry->d_inode->i_op;
 +		error = op->mknod_raw(&nd, mode, dev);
@@ -633,11 +637,15 @@
  	path_release(&nd);
  out:
  	putname(tmp);
-@@ -1346,7 +1494,14 @@ asmlinkage long sys_mkdir(const char * p
+@@ -1346,7 +1494,20 @@ asmlinkage long sys_mkdir(const char * p
  		error = path_lookup(tmp, LOOKUP_PARENT, &nd);
  		if (error)
  			goto out;
 -		dentry = lookup_create(&nd, 1);
++		if (nd.last_type != LAST_NORM) {
++			error = -EEXIST;
++			goto out2;
++		}
 +		if (nd.dentry->d_inode->i_op->mkdir_raw) {
 +			struct inode_operations *op = nd.dentry->d_inode->i_op;
 +			error = op->mkdir_raw(&nd, mode);
@@ -692,11 +700,15 @@
  	error = PTR_ERR(dentry);
  	if (!IS_ERR(dentry)) {
  		/* Why not before? Because we want correct error value */
-@@ -1581,15 +1752,23 @@ asmlinkage long sys_symlink(const char *
+@@ -1581,15 +1752,27 @@ asmlinkage long sys_symlink(const char *
  		error = path_lookup(to, LOOKUP_PARENT, &nd);
  		if (error)
  			goto out;
 -		dentry = lookup_create(&nd, 0);
++		if (nd.last_type != LAST_NORM) {
++			error = -EEXIST;
++			goto out2;
++		}
 +		if (nd.dentry->d_inode->i_op->symlink_raw) {
 +			struct inode_operations *op = nd.dentry->d_inode->i_op;
 +			error = op->symlink_raw(&nd, from);
@@ -718,11 +730,15 @@
  		putname(to);
  	}
  	putname(from);
-@@ -1665,7 +1844,14 @@ asmlinkage long sys_link(const char * ol
+@@ -1665,7 +1844,18 @@ asmlinkage long sys_link(const char * ol
  		error = -EXDEV;
  		if (old_nd.mnt != nd.mnt)
  			goto out_release;
 -		new_dentry = lookup_create(&nd, 0);
++		if (nd.last_type != LAST_NORM) {
++			error = -EEXIST;
++			goto out2;
++		}
 +		if (nd.dentry->d_inode->i_op->link_raw) {
 +			struct inode_operations *op = nd.dentry->d_inode->i_op;
 +			error = op->link_raw(&old_nd, &nd);
@@ -898,7 +914,7 @@
  	int retval = 0;
  	int mnt_flags = 0;
  
-@@ -725,10 +732,11 @@ long do_mount(char * dev_name, char * di
+@@ -725,9 +732,11 @@ long do_mount(char * dev_name, char * di
  	flags &= ~(MS_NOSUID|MS_NOEXEC|MS_NODEV);
  
  	/* ... and get the mountpoint */
@@ -908,11 +924,10 @@
 +	if (retval) {
 +		intent_release(&it);
  		return retval;
--
 +	}
+
  	if (flags & MS_REMOUNT)
  		retval = do_remount(&nd, flags & ~MS_REMOUNT, mnt_flags,
- 				    data_page);
 @@ -739,6 +747,8 @@ long do_mount(char * dev_name, char * di
  	else
  		retval = do_add_mount(&nd, type_page, flags, mnt_flags,
@@ -1168,7 +1183,7 @@
 -	error = __user_walk(filename, LOOKUP_POSITIVE | LOOKUP_FOLLOW |
 -		      LOOKUP_DIRECTORY | LOOKUP_NOALT, &nd);
 +	error = __user_walk_it(filename, LOOKUP_POSITIVE | LOOKUP_FOLLOW |
-+		      LOOKUP_DIRECTORY | LOOKUP_NOALT, &nd, &it);
++			       LOOKUP_DIRECTORY | LOOKUP_NOALT, &nd, &it);
  	if (error)
  		goto out;
  
@@ -1361,7 +1376,7 @@
   */
 --- linux-2.4.22-ac1/fs/stat.c~vfs_intent-2.4.22-rh	2003-09-25 14:16:27.000000000 +0400
 +++ linux-2.4.22-ac1-alexey/fs/stat.c	2003-09-25 14:42:46.000000000 +0400
-@@ -17,10 +17,14 @@
+@@ -17,10 +17,12 @@
   * Revalidate the inode. This is required for proper NFS attribute caching.
   */
  static __inline__ int
@@ -1370,8 +1385,6 @@
  {
  	struct inode * inode = dentry->d_inode;
 -	if (inode->i_op && inode->i_op->revalidate)
-+	if (!inode)
-+		return -ENOENT;
 +	if (inode->i_op && inode->i_op->revalidate_it)
 +		return inode->i_op->revalidate_it(dentry, it);
 +	else if (inode->i_op && inode->i_op->revalidate)
@@ -1630,7 +1643,7 @@
  #define ATTR_ATTR_FLAG	1024
 +#define ATTR_RAW	0x0800	/* file system, not vfs will massage attrs */
 +#define ATTR_FROM_OPEN	0x1000	/* called from open path, ie O_TRUNC */
-+#define ATTR_CTIME_SET 0x2000
++#define ATTR_CTIME_SET	0x2000
  
  /*
   * This is the Inode Attributes structure, used for notify_change().  It

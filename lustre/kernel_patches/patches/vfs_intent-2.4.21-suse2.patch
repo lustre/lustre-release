@@ -309,11 +309,11 @@ Index: linux-2.4.21-x86_64/fs/namei.c
 +			if (!dentry->d_op->d_revalidate_it(dentry, 0, NULL, it)) {
 +				struct dentry *new;
 +				err = permission(dentry->d_parent->d_inode,
-+						MAY_EXEC);
++						 MAY_EXEC);
 +				if (err)
 +					break;
 +				new = real_lookup(dentry->d_parent,
-+						&dentry->d_name, 0, NULL);
++						  &dentry->d_name, 0, it);
 +				d_invalidate(dentry);
 +				dput(dentry);
 +				if (IS_ERR(new)) {
@@ -332,8 +332,8 @@ Index: linux-2.4.21-x86_64/fs/namei.c
  		dput(dentry);
  		break;
  	}
-+ 	if (err)
-+ 		intent_release(it);
++	if (err)
++		intent_release(it);
  	path_release(nd);
  return_err:
  	return err;
@@ -938,7 +938,7 @@ Index: linux-2.4.21-x86_64/fs/namespace.c
  	int retval = 0;
  	int mnt_flags = 0;
  
-@@ -725,10 +732,11 @@
+@@ -725,9 +732,11 @@
  	flags &= ~(MS_NOSUID|MS_NOEXEC|MS_NODEV);
  
  	/* ... and get the mountpoint */
@@ -948,11 +948,10 @@ Index: linux-2.4.21-x86_64/fs/namespace.c
 +	if (retval) {
 +		intent_release(&it);
  		return retval;
--
 +	}
+ 
  	if (flags & MS_REMOUNT)
  		retval = do_remount(&nd, flags & ~MS_REMOUNT, mnt_flags,
- 				    data_page);
 @@ -739,6 +747,8 @@
  	else
  		retval = do_add_mount(&nd, type_page, flags, mnt_flags,
@@ -1210,7 +1209,7 @@ Index: linux-2.4.21-x86_64/fs/open.c
 -	error = __user_walk(filename, LOOKUP_POSITIVE | LOOKUP_FOLLOW |
 -		      LOOKUP_DIRECTORY | LOOKUP_NOALT, &nd);
 +	error = __user_walk_it(filename, LOOKUP_POSITIVE | LOOKUP_FOLLOW |
-+		      LOOKUP_DIRECTORY | LOOKUP_NOALT, &nd, &it);
++			       LOOKUP_DIRECTORY | LOOKUP_NOALT, &nd, &it);
  	if (error)
  		goto out;
  
@@ -1678,7 +1677,7 @@ Index: linux-2.4.21-x86_64/include/linux/fs.h
  #define ATTR_ATTR_FLAG	1024
 +#define ATTR_RAW	0x0800	/* file system, not vfs will massage attrs */
 +#define ATTR_FROM_OPEN	0x1000	/* called from open path, ie O_TRUNC */
-+#define ATTR_CTIME_SET 0x2000
++#define ATTR_CTIME_SET	0x2000
  
  /*
   * This is the Inode Attributes structure, used for notify_change().  It
