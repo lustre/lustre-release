@@ -171,6 +171,8 @@ KINCFLAGS="$CRAY_PORTALS_INCLUDE $CRAY_PORTALS_COMMANDLINE \
 	-I\$(top_srcdir)/portals/include"
 if test $host_cpu != "lib" ; then 
     KINCFLAGS="$KINCFLAGS -I$LINUX/include -I$LINUX/include"
+else
+    KINCFLAGS="$KINCFLAGS -I\$(top_srcdir)/utils -I\$(top_srcdir)/portals/unals"
 fi
 CPPFLAGS="$KINCFLAGS $ARCHCPPFLAGS"
 
@@ -342,6 +344,9 @@ AC_SUBST(SCIMACNAL)
 
 CFLAGS="$KCFLAGS"
 CPPFLAGS="$KINCFLAGS $KCPPFLAGS $MFLAGS $enable_zerocopy $enable_affinity $with_quadrics $with_gm $with_scamac $with_ib"
+if test $host_cpu == "lib" ; then 
+CPPFLAGS="$CPPFLAGS -fPIC -D_LARGEFILE64_SOURCE=1 -g"
+fi
 
 AM_CONDITIONAL(LIBLUSTRE, test x$host_cpu = xlib)
 AC_SUBST(MOD_LINK)
