@@ -260,7 +260,6 @@ static int ost_connect(struct ost_obd *ost, struct ptlrpc_request *req)
 	return 0;
 }
 
-
 static int ost_disconnect(struct ost_obd *ost, struct ptlrpc_request *req)
 {
 	struct obd_conn conn; 
@@ -312,115 +311,85 @@ static int ost_get_info(struct ost_obd *ost, struct ptlrpc_request *req)
 	return 0;
 }
 
-
-#if 0
-static struct page * ext2_get_page(struct inode *dir, unsigned long n)
+int ost_brw(struct ost_obd *obddev, struct ptlrpc_request *req)
 {
-	struct address_space *mapping = dir->i_mapping;
-	struct page *page = read_cache_page(mapping, n,
-				(filler_t*)mapping->a_ops->readpage, NULL);
-	if (!IS_ERR(page)) {
-		wait_on_page(page);
-		kmap(page);
-		if (!Page_Uptodate(page))
-			goto fail;
-		if (!PageChecked(page))
-			ext2_check_page(page);
-		if (PageError(page))
-			goto fail;
-	}
-	return page;
-
-fail:
-	ext2_put_page(page);
-	return ERR_PTR(-EIO);
-}
-
-static inline void ext2_put_page(struct page *page)
-{
-	kunmap(page);
-	page_cache_release(page);
-}
-
-/* Releases the page */
-void ext2_set_link(struct inode *dir, struct ext2_dir_entry_2 *de,
-			struct page *page, struct inode *inode)
-{
-	unsigned from = (char *) de - (char *) page_address(page);
-	unsigned to = from + le16_to_cpu(de->rec_len);
-	int err;
-
-	lock_page(page);
-	err = page->mapping->a_ops->prepare_write(NULL, page, from, to);
-	if (err)
-		BUG();
-	de->inode = cpu_to_le32(inode->i_ino);
-	ext2_set_de_type (de, inode);
-	dir->i_mtime = dir->i_ctime = CURRENT_TIME;
-	err = ext2_commit_chunk(page, from, to);
-	UnlockPage(page);
-	ext2_put_page(page);
-}
-
-static int ext2_commit_chunk(struct page *page, unsigned from, unsigned to)
-{
-	struct inode *dir = page->mapping->host;
-	int err = 0;
-	dir->i_version = ++event;
-	SetPageUptodate(page);
-	set_page_clean(page);
-
-	//page->mapping->a_ops->commit_write(NULL, page, from, to);
-	//if (IS_SYNC(dir))
-	//	err = waitfor_one_page(page);
-	return err;
-}
-
-#endif
-
-int ost_prepw(struct ost_obd *obddev, struct ptlrpc_request *req)
-{
-#if 0
 	struct obd_conn conn; 
 	int rc;
-	int i, j, n;
-	int objcount;
-	void *tmp;
-	struct niobuf **nb;
-	struct obd_ioo **ioo;
+	int i, j;
+	int objcount, niocount;
+	char *tmp1, *tmp2, *end2;
+	char *res;
+	int cmd;
+	struct niobuf *nb, *src, *dst;
+	struct obd_ioobj *ioo;
+	struct ost_req *r = req->rq_req.ost;
 
 	ENTRY;
 	
-	tmp1 = ost_req_buf1(req);
-	tmp2 = ost_req_buf2(req);
-	objcount = req->buflen1 / sizeof(**ioo); 
-
-	n = 0;
-	for (i=0 ; i<objcount ; i++) { 
-		obd_unpack_ioo
+	tmp1 = ost_req_buf1(r);
+	tmp2 = ost_req_buf2(r);
+	end2 = tmp2 + req->rq_req.ost->buflen2;
+	objcount = r->buflen1 / sizeof(*ioo); 
+	niocount = r->buflen2 / sizeof(*nb); 
+	cmd = r->cmd;
 
 	conn.oc_id = req->rq_req.ost->connid;
-	conn.oc_dev = ost->ost_tgt;
+	conn.oc_dev = req->rq_ost->ost_tgt;
 
-	rc = ost_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep,
+	rc = ost_pack_rep(NULL, niocount, NULL, 0, 
+			  &req->rq_rephdr, &req->rq_rep.ost,
 			  &req->rq_replen, &req->rq_repbuf); 
 	if (rc) { 
 		printk("ost_create: cannot pack reply\n"); 
 		return rc;
 	}
+	res = ost_rep_buf1(req->rq_rep.ost); 
 
-	memcpy(&req->rq_rep.ost->oa, &req->rq_req.ost->oa, sizeof(req->rq_req.ost->oa));
+	for (i=0; i < objcount; i++) { 
+		ost_unpack_ioo((void *)&tmp1, &ioo);
+		if (tmp2 + ioo->ioo_bufcnt > end2) { 
+			rc = -EFAULT;
+			break; 
+		}
+		for (j = 0 ; j < ioo->ioo_bufcnt ; j++) { 
+			ost_unpack_niobuf((void *)&tmp2, &nb); 
+		}
+	}
 
-	req->rq_rep.ost->result =ost->ost_tgt->obd_type->typ_ops->o_create
-		(&conn, &req->rq_rep.ost->oa); 
+	/* The unpackers move tmp1 and tmp2, so reset them before using */
+	tmp1 = ost_req_buf1(r);
+	tmp2 = ost_req_buf2(r);
+	req->rq_rep.ost->result = 
+		req->rq_ost->ost_tgt->obd_type->typ_ops->o_preprw
+		(cmd, &conn, objcount, (struct obd_ioobj *)tmp1, 
+		 niocount, (struct niobuf *)tmp2, (struct niobuf *)res); 
+
+	if (cmd == OBD_BRW_WRITE) { 
+		for (i=0; i<niocount; i++) { 
+			src = &((struct niobuf *)tmp2)[i];
+			dst = &((struct niobuf *)res)[i];
+			memcpy((void *)(unsigned long)dst->addr, 
+			       (void *)(unsigned long)src->addr, 
+			       src->len);
+		}
+	} else { 
+		for (i=0; i<niocount; i++) { 
+			dst = &((struct niobuf *)tmp2)[i];
+			src = &((struct niobuf *)res)[i];
+			memcpy((void *)(unsigned long)dst->addr, 
+			       (void *)(unsigned long)src->addr, 
+			       PAGE_SIZE); 
+		}
+	}
+
+	req->rq_rep.ost->result = 
+		req->rq_ost->ost_tgt->obd_type->typ_ops->o_commitrw
+		(cmd, &conn, objcount, (struct obd_ioobj *)tmp1, 
+		 niocount, (struct niobuf *)res); 
 
 	EXIT;
 	return 0;
-#endif
-	return -ENOTSUPP;
-
 }
-
 
 int ost_handle(struct obd_device *obddev, struct ptlrpc_request *req)
 {
@@ -478,9 +447,9 @@ int ost_handle(struct obd_device *obddev, struct ptlrpc_request *req)
 		CDEBUG(D_INODE, "setattr\n");
 		rc = ost_setattr(ost, req);
 		break;
-	case OST_PREPW:
-		CDEBUG(D_INODE, "prepw\n");
-		rc = ost_prepw(ost, req);
+	case OST_BRW:
+		CDEBUG(D_INODE, "brw\n");
+		rc = ost_brw(ost, req);
 		break;
 	default:
 		req->rq_status = -ENOTSUPP;

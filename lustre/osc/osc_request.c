@@ -1,6 +1,17 @@
-/*
+/* 
  * Copryright (C) 2001 Cluster File Systems, Inc.
  *
+ *  This code is issued under the GNU General Public License.
+ *  See the file COPYING in this distribution
+ *
+ *  Author Peter Braam <braam@clusterfs.com>
+ * 
+ *  This server is single threaded at present (but can easily be multi
+ *  threaded). For testing and management it is treated as an
+ *  obd_device, although it does not export a full OBD method table
+ *  (the requests are coming in over the wire, so object target
+ *  modules do not have a full method table.)
+ * 
  */
 
 #define EXPORT_SYMTAB
@@ -337,13 +348,14 @@ int osc_brw(int rw, struct obd_conn *conn, obd_count num_oa,
 		size2 += oa_bufs[i] * sizeof(src);
 	}
 
-	request = ost_prep_req(OST_PREPW, size1, NULL, size2, NULL);
+	request = ost_prep_req(OST_BRW, size1, NULL, size2, NULL);
 	if (!request) { 
 		printk("osc_connect: cannot pack req!\n"); 
 		return -ENOMEM;
 	}
 
 	n = 0;
+	request->rq_req.ost->cmd = rw;
 	ptr1 = ost_req_buf1(request->rq_req.ost);
 	ptr2 = ost_req_buf2(request->rq_req.ost);
 	for (i=0; i < num_oa; i++) { 
@@ -355,17 +367,24 @@ int osc_brw(int rw, struct obd_conn *conn, obd_count num_oa,
 		}
 	}
 
+	request->rq_replen = 
+		sizeof(struct ptlrep_hdr) + sizeof(struct ost_rep) + size2;
+
 	rc = osc_queue_wait(conn, request);
 	if (rc) { 
 		EXIT;
 		goto out;
 	}
 
+#if 0
 	ptr2 = ost_rep_buf2(request->rq_rep.ost); 
 	if (request->rq_rep.ost->buflen2 != n * sizeof(struct niobuf)) { 
 		printk(__FUNCTION__ ": buffer length wrong\n"); 
 		goto out;
 	}
+
+	if (rw == OBD_BRW_READ)
+		goto out;
 
 	for (i=0; i < num_oa; i++) { 
 		for (j = 0 ; j < oa_bufs[i] ; j++) { 
@@ -377,7 +396,7 @@ int osc_brw(int rw, struct obd_conn *conn, obd_count num_oa,
 			n++;
 		}
 	}
-	//ost_complete_brw(rep); 
+#endif
 
  out:
 	if (request->rq_rephdr)
@@ -407,7 +426,8 @@ struct obd_ops osc_obd_ops = {
 	o_getattr: osc_getattr,
 	o_setattr: osc_setattr,
 	o_connect: osc_connect,
-	o_disconnect: osc_disconnect
+	o_disconnect: osc_disconnect,
+	o_brw: osc_brw
 };
 
 static int __init osc_init(void)

@@ -259,9 +259,8 @@ out:
 	return error;
 }
 
-int ll_setattr(struct dentry *de, struct iattr *attr)
+int ll_inode_setattr(struct inode *inode, struct iattr *attr)
 {
-        struct inode *inode = de->d_inode;
 	struct ptlrep_hdr *hdr = NULL;
         struct ll_sb_info *sbi =
 		(struct ll_sb_info *)(&inode->i_sb->u.generic_sbp);
@@ -278,9 +277,12 @@ int ll_setattr(struct dentry *de, struct iattr *attr)
 
         EXIT;
         return err;
-} /* ll_setattr */
+}
 
-
+int ll_setattr(struct dentry *de, struct iattr *attr)
+{
+	return ll_inode_setattr(de->d_inode, attr);
+}
 
 static int ll_statfs(struct super_block *sb, struct statfs *buf)
 {

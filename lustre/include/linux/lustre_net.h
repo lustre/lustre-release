@@ -27,6 +27,8 @@
 #include <portals/p30.h>
 #include <linux/lustre_idl.h>
 
+/* FOO_REQUEST_PORTAL receives requests for the FOO subsystem.
+ * FOO_REPLY_PORTAL receives replies _from_ the FOO subsystem. */
 #define OSC_REQUEST_PORTAL 1
 #define OSC_REPLY_PORTAL   2
 #define MDS_REQUEST_PORTAL 3

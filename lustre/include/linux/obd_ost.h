@@ -74,6 +74,7 @@ void ost_pack_niobuf(void **tmp, void *addr, __u64 offset, __u32 len,
                    __u32 flags);
 void ost_unpack_niobuf(void **tmp, struct niobuf **nbp);
 void ost_pack_ioo(void **tmp, struct obdo *oa, int bufcnt);
+void ost_unpack_ioo(void **tmp, struct obd_ioobj **ioop);
 void *ost_req_buf2(struct ost_req *req);
 void *ost_req_buf1(struct ost_req *req);
 void *ost_rep_buf2(struct ost_rep *rep);

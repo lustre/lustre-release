@@ -46,16 +46,15 @@
  *   OST requests: OBDO & OBD request records
  */
 
-
 /* opcodes */
-#define OST_GET_INFO  6
-#define OST_CONNECT  7
+#define OST_GETATTR    1
+#define OST_SETATTR    2
+#define OST_BRW        3
+#define OST_CREATE     4
+#define OST_DESTROY    5
+#define OST_GET_INFO   6
+#define OST_CONNECT    7
 #define OST_DISCONNECT 8
-#define OST_GETATTR  1
-#define OST_SETATTR  2
-#define OST_PREPW    3
-#define OST_CREATE   4
-#define OST_DESTROY  5
 
 /* packet types */
 #define OST_TYPE_REQ 1
@@ -196,6 +195,7 @@ struct niobuf {
         __u64 offset; 
         __u32 len;
         __u32 flags;
+        void *page;
 };
 
 struct mds_req {

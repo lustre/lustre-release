@@ -245,7 +245,7 @@ void ost_unpack_niobuf(void **tmp, struct niobuf **nbp)
 
         *nbp = *tmp;
 
-        nb->addr = NTOH__u64((__u64)(unsigned long)nb->addr); 
+        nb->addr = NTOH__u64(nb->addr); 
         nb->offset = NTOH__u64(nb->offset); 
         nb->len = NTOH__u32(nb->len); 
         nb->flags = NTOH__u32(nb->flags); 

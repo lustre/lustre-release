@@ -225,7 +225,7 @@ int obdfs_writepage(struct page *page)
         ENTRY;
 	printk("---> writepage called ino %ld!\n", inode->i_ino);
 	BUG();
-	rc = obdfs_brw(WRITE, inode, page, 1);
+	rc = obdfs_brw(OBD_BRW_WRITE, inode, page, 1);
 	if ( !rc ) {
 		set_page_clean(page);
 	} else {
@@ -430,8 +430,8 @@ int obdfs_do_vec_wr(struct inode **inodes, obd_count num_io,
                 printk("\n");
         }
 
-        err = obd_brw(WRITE, IID(inodes[0]), num_obdos, obdos,
-                                  oa_bufs, pages, counts, offsets, flags);
+        err = obd_brw(OBD_BRW_WRITE, IID(inodes[0]), num_obdos, obdos,
+		      oa_bufs, pages, counts, offsets, flags);
 
         CDEBUG(D_INFO, "BRW done\n");
         /* release the pages from the page cache */
@@ -547,7 +547,7 @@ int obdfs_do_writepage(struct page *page, int sync)
         ENTRY;
         /* PDEBUG(page, "WRITEPAGE"); */
         if ( sync )
-                err = obdfs_brw(WRITE, inode, page, 1);
+                err = obdfs_brw(OBD_BRW_WRITE, inode, page, 1);
         else {
                 err = obdfs_add_page_to_cache(inode, page);
                 CDEBUG(D_INFO, "DO_WR ino: %ld, page %p, err %d, uptodate %d\n",

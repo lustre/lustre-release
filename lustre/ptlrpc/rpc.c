@@ -163,6 +163,12 @@ int ptl_send_rpc(struct ptlrpc_request *request, struct lustre_peer *peer)
 
         ENTRY;
 
+        if (request->rq_replen == 0) {
+                printk(__FUNCTION__ ": request->rq_replen is 0!\n");
+                EXIT;
+                return -EINVAL;
+        }
+
         request->rq_repbuf = kmalloc(request->rq_replen, GFP_KERNEL); 
         if (!request->rq_repbuf) { 
                 EXIT;
@@ -293,6 +299,7 @@ int rpc_unregister_service(struct ptlrpc_service *service)
                 printk(__FUNCTION__ ": PtlMEUnlink failed: %d\n", rc);
 
         kfree(service->srv_buf);
+        return 0;
 }
 
 static int req_init_portals(void)

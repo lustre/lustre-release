@@ -106,10 +106,10 @@ extern void proc_lustre_remove_obd_entry(const char* name, struct obd_device *ob
  *  ======== OBD Operations Declarations ===========
  */
 
-#define OBD_BRW_READ    (READ)
-#define OBD_BRW_WRITE   (WRITE)
-#define OBD_BRW_RWMASK  (READ | WRITE)
-#define OBD_BRW_CREATE  (0x00000010UL)
+#define OBD_BRW_READ    1
+#define OBD_BRW_WRITE   2
+#define OBD_BRW_RWMASK  OBD_BRW_READ | OBD_BRW_WRITE
+#define OBD_BRW_CREATE  4
 
 struct obd_ops {
         int (*o_iocontrol)(int cmd, struct obd_conn *, int len, void *karg,
@@ -148,14 +148,13 @@ struct obd_ops {
                       obd_size count, obd_off offset);
         int (*o_iterate)(struct obd_conn *conn, int (*)(obd_id, obd_gr, void *),
                          obd_id *startid, obd_gr group, void *data);
-#if 0
-	int (*o_dmaread)(struct obd_conn *conn, int count, struct obd_buf **dest, 
-			 struct obd_bufref **source); 
-	int (*o_pre_dmawrite)(struct obd_conn *conn, int count, struct obd_buf **dstbufs, 
-			 struct obd_bufref **dest); 
-	int (*o_dmawrite)(struct obd_conn *conn, int count, struct obd_buf **dstbufs, 
-			 struct obd_buf **dest); 
-#endif
+	int (*o_preprw)(int cmd, struct obd_conn *conn, 
+			int objcount, struct obd_ioobj *obj, 
+			int niocount, struct niobuf *nb, 
+			struct niobuf *res);
+	int (*o_commitrw)(int cmd, struct obd_conn *conn, 
+			  int objcount, struct obd_ioobj *obj, 
+			  int niocount, struct niobuf *res);
 };
 
 struct obd_request {
@@ -203,18 +202,18 @@ static inline int obd_check_conn(struct obd_conn *conn)
 #define OBT(dev)        dev->obd_type->typ_ops
 #define OBP(dev,op)     dev->obd_type->typ_ops->o_ ## op
 
-#define OBD_CHECK_OP(conn,op)					\
-do {								\
-        int rc = obd_check_conn(conn);				\
-        if (rc) {						\
-		printk("obd: error in operation: " #op "\n");	\
-		return rc;					\
-	}							\
-        if (!OBP(conn->oc_dev,op)) {				\
-		printk("obd_" #op ": dev %d no operation\n",	\
-		       conn->oc_dev->obd_minor);		\
-		return -EOPNOTSUPP;				\
-	}							\
+#define OBD_CHECK_OP(conn,op)                                   \
+do {                                                            \
+        int rc = obd_check_conn(conn);                          \
+        if (rc) {                                               \
+		printk("obd: error in operation: " #op "\n");   \
+		return rc;                                      \
+	}                                                       \
+        if (!OBP(conn->oc_dev,op)) {                            \
+		printk("obd_" #op ": dev %d no operation\n",    \
+		       conn->oc_dev->obd_minor);                \
+		return -EOPNOTSUPP;                             \
+	}                                                       \
 } while (0)
 
 static inline int obd_get_info(struct obd_conn *conn, obd_count keylen, void *key,
@@ -345,12 +344,7 @@ static inline int obd_brw(int rw, struct obd_conn *conn, obd_count num_oa,
 	return rc;
 }
 
-
 #endif 
-
-/* This value is not arbitrarily chosen.  KIO_STATIC_PAGES from linux/iobuf.h */
-#define MAX_IOVEC       (KIO_STATIC_PAGES - 1)
-
 
 /*
  *  ======== OBD Metadata Support  ===========

@@ -45,7 +45,13 @@ static int mds_reint_setattr(struct mds_update_record *rec, struct ptlrpc_reques
 	}
 
 	printk("mds_setattr: ino %ld\n", de->d_inode->i_ino);
-	req->rq_rephdr->status = notify_change(de, &rec->ur_iattr);
+	if ( de->d_inode->i_op->setattr ) {
+		req->rq_rephdr->status =
+			de->d_inode->i_op->setattr(de, &rec->ur_iattr);
+	} else { 
+		req->rq_rephdr->status =
+			inode_setattr(de->d_inode, &rec->ur_iattr);
+	}
 
 	dput(de);
 	EXIT;

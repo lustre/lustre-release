@@ -9,7 +9,10 @@ MODULE = llight
 modulefs_DATA = llight.o
 EXTRA_PROGRAMS = llight
 
+page.c: 
+	ln -s ../lib/page.c
 
-llight_SOURCES =  super.c rw.c file.c dir.c sysctl.c namei.c symlink.c
+
+llight_SOURCES =  page.c super.c rw.c file.c dir.c sysctl.c namei.c symlink.c
 
 include $(top_srcdir)/Rules

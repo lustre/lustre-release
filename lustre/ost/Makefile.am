@@ -10,8 +10,10 @@ EXTRA_PROGRAMS = ost
 
 obd_pack.c: 
 	ln -s ../lib/obd_pack.c .
+page.c:
+	ln -s ../lib/page.c
 
-ost_SOURCES = obd_pack.c ost_handler.c
+ost_SOURCES = page.c obd_pack.c ost_handler.c
 
 include $(top_srcdir)/Rules
 

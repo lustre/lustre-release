@@ -31,6 +31,16 @@
 # include <string.h>
 #endif
 
+#ifdef __KERNEL__
+/* page.c */
+inline void lustre_put_page(struct page *page);
+struct page * lustre_get_page(struct inode *dir, unsigned long n);
+void lustre_prepare_page(unsigned from, unsigned to, struct page *page);
+int lustre_commit_page(struct page *page, unsigned from, unsigned to);
+#endif
+
+
+/* macros */ 
 #undef MIN
 #define MIN(a,b) (((a)<(b)) ? (a): (b))
 #undef MAX

@@ -160,6 +160,9 @@ void obdfs_dequeue_pages(struct inode *inode)
         EXIT;
 }
 
+/* This value is not arbitrarily chosen.  KIO_STATIC_PAGES from linux/iobuf.h */
+#define MAX_IOVEC       (KIO_STATIC_PAGES - 1)
+
 /* Remove writeback requests for the superblock */
 int obdfs_flush_reqs(struct list_head *inode_list, unsigned long check_time)
 {

@@ -181,10 +181,6 @@ struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid, struct vf
 	struct list_head *lp;
 	struct dentry *result;
 
-	if (mnt) { 
-		*mnt = mntget(mds->mds_vfsmnt);
-	}
-
 	if (ino == 0)
 		return ERR_PTR(-ESTALE);
 
@@ -239,8 +235,7 @@ static inline void mds_get_objid(struct inode *inode, __u64 *id)
 
 int mds_getattr(struct ptlrpc_request *req)
 {
-	struct dentry *de = mds_fid2dentry(req->rq_obd, &req->rq_req.mds->fid1, 
-					   NULL);
+	struct dentry *de;
 	struct inode *inode;
 	struct mds_rep *rep;
 	int rc;
@@ -257,7 +252,8 @@ int mds_getattr(struct ptlrpc_request *req)
 	req->rq_rephdr->seqno = req->rq_reqhdr->seqno;
 	rep = req->rq_rep.mds;
 
-	if (!de) { 
+	de = mds_fid2dentry(req->rq_obd, &req->rq_req.mds->fid1, NULL);
+	if (IS_ERR(de)) { 
 		EXIT;
 		req->rq_rephdr->status = -ENOENT;
 		return 0;
@@ -282,14 +278,12 @@ int mds_getattr(struct ptlrpc_request *req)
 int mds_readpage(struct ptlrpc_request *req)
 {
 	struct vfsmount *mnt;
-	struct dentry *de = mds_fid2dentry(req->rq_obd, &req->rq_req.mds->fid1, 
-					   &mnt);
+	struct dentry *de;
 	struct file *file; 
 	struct niobuf *niobuf; 
 	struct mds_rep *rep;
 	int rc;
 	
-	printk("mds_readpage: ino %ld\n", de->d_inode->i_ino);
 	rc = mds_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep.mds, 
 			  &req->rq_replen, &req->rq_repbuf);
 	if (rc) { 
@@ -302,11 +296,14 @@ int mds_readpage(struct ptlrpc_request *req)
 	req->rq_rephdr->seqno = req->rq_reqhdr->seqno;
 	rep = req->rq_rep.mds;
 
+	de = mds_fid2dentry(req->rq_obd, &req->rq_req.mds->fid1, &mnt);
 	if (IS_ERR(de)) { 
 		EXIT;
 		req->rq_rephdr->status = PTR_ERR(de); 
 		return 0;
 	}
+
+	printk("mds_readpage: ino %ld\n", de->d_inode->i_ino);
 
 	file = dentry_open(de, mnt, O_RDONLY | O_LARGEFILE); 
 	/* note: in case of an error, dentry_open puts dentry */

@@ -2,8 +2,7 @@
  * Lustre Light I/O Page Cache
  *
  * Copyright (C) 2002, Cluster File Systems, Inc. 
-*/
-
+ */
 
 #include <linux/config.h>
 #include <linux/kernel.h>
@@ -31,6 +30,8 @@
 #include <linux/lustre_idl.h>
 #include <linux/lustre_mds.h>
 #include <linux/lustre_light.h>
+
+int ll_inode_setattr(struct inode *inode, struct iattr *attr);
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,4,10))
 /*
@@ -126,7 +127,6 @@ static void inline ll_oa_from_inode(struct obdo *oa, struct inode *inode)
 
 
 
-
 /*
  * Remove page from dirty list
  */
@@ -147,14 +147,6 @@ void __set_page_clean(struct page *page)
 		inode->i_state &= ~I_DIRTY_PAGES;
 	}
 	EXIT;
-}
-
-inline void set_page_clean(struct page *page)
-{
-	if (PageDirty(page)) { 
-		ClearPageDirty(page);
-		__set_page_clean(page);
-	}
 }
 
 /* SYNCHRONOUS I/O to object storage for an inode -- object attr will be updated too */
@@ -201,6 +193,8 @@ static int ll_commit_page(struct page *page, int create, int from, int to)
         obd_off          offset = (((obd_off)page->index) << PAGE_SHIFT);
         obd_flag         flags = create ? OBD_BRW_CREATE : 0;
         int              err;
+	struct iattr     iattr;
+	loff_t           pos = ((loff_t)page->index << PAGE_CACHE_SHIFT) + to;
 
         ENTRY;
         oa = obdo_alloc();
@@ -214,11 +208,23 @@ static int ll_commit_page(struct page *page, int create, int from, int to)
 	CDEBUG(D_INODE, "commit_page writing (at %d) to %d, count %Ld\n", 
 	       from, to, count);
 
-        err = obd_brw(WRITE, IID(inode), num_obdo, &oa, &bufs_per_obdo,
-                               &page, &count, &offset, &flags);
+        err = obd_brw(OBD_BRW_WRITE, IID(inode), num_obdo, &oa, &bufs_per_obdo,
+		      &page, &count, &offset, &flags);
         if ( !err ) {
                 SetPageUptodate(page);
 		set_page_clean(page);
+	}
+
+	if (pos > inode->i_size) {
+		iattr.ia_valid = ATTR_SIZE;
+		iattr.ia_size = inode->i_size;
+		err = ll_inode_setattr(inode, &iattr);
+		if (err) {
+			printk("mds_inode_setattr failed; do something dramatic.\n");
+			obdo_free(oa);
+			EXIT;
+			return -EIO;
+		}
 	}
 
         //if ( !err )
@@ -355,7 +361,7 @@ int ll_do_writepage(struct page *page, int sync)
         ENTRY;
         /* PDEBUG(page, "WRITEPAGE"); */
 	/* XXX everything is synchronous now */
-	err = ll_brw(WRITE, inode, page, 1);
+	err = ll_brw(OBD_BRW_WRITE, inode, page, 1);
 
         if ( !err ) {
                 SetPageUptodate(page);
@@ -375,7 +381,6 @@ int ll_writepage(struct page *page)
 	struct inode *inode = page->mapping->host;
         ENTRY;
 	printk("---> writepage called ino %ld!\n", inode->i_ino);
-	BUG();
         rc = ll_do_writepage(page, 1);
 	if ( !rc ) {
 		set_page_clean(page);
