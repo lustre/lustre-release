@@ -25,7 +25,7 @@ Index: linux-2.4.19/fs/ext3/namei.c
 @@ -1813,20 +1813,19 @@
  {
  	struct list_head *prev;
-         struct ext3_inode_info *ei = EXT3_I(inode);
+ 	struct ext3_inode_info *ei = EXT3_I(inode);
 -	struct ext3_sb_info *sbi;
 +	struct ext3_sb_info *sbi = EXT3_SB(inode->i_sb);
  	unsigned long ino_next;
@@ -33,15 +33,15 @@ Index: linux-2.4.19/fs/ext3/namei.c
  	int err = 0;
  
 -	lock_super(inode->i_sb);
-+        down(&sbi->s_orphan_lock);
-         if (list_empty(&ei->i_orphan)) {
++	down(&sbi->s_orphan_lock);
+ 	if (list_empty(&ei->i_orphan)) {
 -		unlock_super(inode->i_sb);
-+                up(&sbi->s_orphan_lock);
++		up(&sbi->s_orphan_lock);
  		return 0;
  	}
  
  	ino_next = NEXT_ORPHAN(inode);
-         prev = ei->i_orphan.prev;
+ 	prev = ei->i_orphan.prev;
 -	sbi = EXT3_SB(inode->i_sb);
  
  	jbd_debug(4, "remove inode %lu from orphan list\n", inode->i_ino);

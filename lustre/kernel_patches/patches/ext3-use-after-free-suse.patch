@@ -38,7 +38,7 @@ Index: linux-2.4.19/fs/ext3/namei.c
 @@ -2039,7 +2040,6 @@
  		inode->i_size = l-1;
  	}
-         EXT3_I(inode)->i_disksize = inode->i_size;
+ 	EXT3_I(inode)->i_disksize = inode->i_size;
 -	ext3_mark_inode_dirty(handle, inode);
  	err = ext3_add_nondir(handle, dentry, inode);
  out_stop:
