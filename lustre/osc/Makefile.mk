@@ -6,5 +6,5 @@
 include $(src)/../portals/Kernelenv
 
 obj-y += osc.o
-osc-objs := osc_request.o lproc_osc.o osc_lib.o osc_rpcd.o osc_create.o
+osc-objs := osc_request.o lproc_osc.o osc_lib.o osc_create.o
 
