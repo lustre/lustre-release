@@ -36,7 +36,7 @@
 /* XXX ugh */
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
  #include <linux/ext3_xattr.h>
-#else 
+#else
  #include <linux/../../fs/ext3/xattr.h>
 #endif
 #include <linux/kp30.h>
@@ -322,20 +322,22 @@ static int fsfilt_ext3_iocontrol(struct inode * inode, struct file *file,
 {
         int rc = 0;
         ENTRY;
-        
+
         if (inode->i_fop->ioctl)
                 rc = inode->i_fop->ioctl(inode, file, cmd, arg);
         else
                 RETURN(-ENOTTY);
-        
+
         RETURN(rc);
 }
 
+#undef INLINE_EA
 static int fsfilt_ext3_set_md(struct inode *inode, void *handle,
                               void *lmm, int lmm_size)
 {
         int rc;
 
+#ifdef INLINE_EA  /* can go away before 1.0 - just for testing bug 2097 now */
         /* Nasty hack city - store stripe MD data in the block pointers if
          * it will fit, because putting it in an EA currently kills the MDS
          * performance.  We'll fix this with "fast EAs" in the future.
@@ -345,27 +347,28 @@ static int fsfilt_ext3_set_md(struct inode *inode, void *handle,
                 unsigned old_size = EXT3_I(inode)->i_data[0];
                 if (old_size != 0) {
                         LASSERT(old_size < sizeof(EXT3_I(inode)->i_data));
-                        CERROR("setting EA on %lu again... interesting\n",
-                               inode->i_ino);
+                        CERROR("setting EA on %lu/%u again... interesting\n",
+                               inode->i_ino, inode->i_generation);
                 }
 
                 EXT3_I(inode)->i_data[0] = cpu_to_le32(lmm_size);
                 memcpy(&EXT3_I(inode)->i_data[1], lmm, lmm_size);
                 mark_inode_dirty(inode);
                 return 0;
-        } else {
-                lock_kernel();
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-                rc = ext3_xattr_set(handle, inode, EXT3_XATTR_INDEX_LUSTRE,
-                                    XATTR_LUSTRE_MDS_OBJID, lmm, lmm_size, 0);
-#else
-                rc = ext3_xattr_set_handle(handle, inode, 
-                                           EXT3_XATTR_INDEX_LUSTRE,
-                                           XATTR_LUSTRE_MDS_OBJID, lmm, 
-                                           lmm_size, 0);
-#endif
-                unlock_kernel();
         }
+#endif
+        if (EXT3_I(inode)->i_file_acl /* || large inode EA flag */)
+                CERROR("setting EA on %lu/%u again... interesting\n",
+                       inode->i_ino, inode->i_generation);
+        lock_kernel();
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+        rc = ext3_xattr_set(handle, inode, EXT3_XATTR_INDEX_LUSTRE,
+                            XATTR_LUSTRE_MDS_OBJID, lmm, lmm_size, 0);
+#else
+        rc = ext3_xattr_set_handle(handle, inode, EXT3_XATTR_INDEX_LUSTRE,
+                                   XATTR_LUSTRE_MDS_OBJID, lmm, lmm_size, 0);
+#endif
+        unlock_kernel();
 
         if (rc)
                 CERROR("error adding MD data to inode %lu: rc = %d\n",
@@ -377,19 +380,53 @@ static int fsfilt_ext3_get_md(struct inode *inode, void *lmm, int lmm_size)
 {
         int rc;
 
+        down(&inode->i_sem);
+        lock_kernel();
+        /* Keep support for reading "inline EAs" until we convert
+         * users over to new format entirely.  See bug 841/2097. */
         if (inode->i_blocks == 0 && EXT3_I(inode)->i_data[0]) {
-                int size = le32_to_cpu(EXT3_I(inode)->i_data[0]);
+                unsigned size = le32_to_cpu(EXT3_I(inode)->i_data[0]);
+                void *handle;
+
                 LASSERT(size < sizeof(EXT3_I(inode)->i_data));
                 if (lmm) {
-                        if (size > lmm_size)
+                        if (size > lmm_size) {
+                                CERROR("inline EA on %lu/%u bad size %u > %u\n",
+                                       inode->i_ino, inode->i_generation,
+                                       size, lmm_size);
                                 return -ERANGE;
+                        }
                         memcpy(lmm, &EXT3_I(inode)->i_data[1], size);
                 }
+
+#ifndef INLINE_EA
+                /* migrate LOV EA data to external block - keep same format */
+                CWARN("DEBUG: migrate inline EA for inode %lu/%u to block\n",
+                      inode->i_ino, inode->i_generation);
+
+                handle = journal_start(EXT3_JOURNAL(inode),
+                                       EXT3_XATTR_TRANS_BLOCKS);
+                if (!IS_ERR(handle)) {
+                        int err;
+                        rc = fsfilt_ext3_set_md(inode, handle,
+                                                &EXT3_I(inode)->i_data[1],size);
+                        if (rc == 0) {
+                                memset(EXT3_I(inode)->i_data, 0,
+                                       sizeof(EXT3_I(inode)->i_data));
+                                mark_inode_dirty(inode);
+                        }
+                        err = journal_stop(handle);
+                        if (err && rc == 0)
+                                rc = err;
+                } else {
+                        rc = PTR_ERR(handle);
+                }
+#endif
+                up(&inode->i_sem);
+                unlock_kernel();
                 return size;
         }
 
-        down(&inode->i_sem);
-        lock_kernel();
         rc = ext3_xattr_get(inode, EXT3_XATTR_INDEX_LUSTRE,
                             XATTR_LUSTRE_MDS_OBJID, lmm, lmm_size);
         unlock_kernel();
@@ -527,7 +564,7 @@ static int fsfilt_ext3_sync(struct super_block *sb)
 }
 
 extern int ext3_prep_san_write(struct inode *inode, long *blocks,
-			       int nblocks, loff_t newsize);
+                               int nblocks, loff_t newsize);
 static int fsfilt_ext3_prep_san_write(struct inode *inode, long *blocks,
                                       int nblocks, loff_t newsize)
 {

@@ -305,11 +305,13 @@ static int fsfilt_extN_setattr(struct dentry *dentry, void *handle,
         return rc;
 }
 
+#undef INLINE_EA
 static int fsfilt_extN_set_md(struct inode *inode, void *handle,
                               void *lmm, int lmm_size)
 {
         int rc;
 
+#ifdef INLINE_EA
         /* Nasty hack city - store stripe MD data in the block pointers if
          * it will fit, because putting it in an EA currently kills the MDS
          * performance.  We'll fix this with "fast EAs" in the future.
@@ -319,20 +321,28 @@ static int fsfilt_extN_set_md(struct inode *inode, void *handle,
                 unsigned old_size = EXTN_I(inode)->i_data[0];
                 if (old_size != 0) {
                         LASSERT(old_size < sizeof(EXTN_I(inode)->i_data));
-                        CERROR("setting EA on %lu again... interesting\n",
-                               inode->i_ino);
+                        CERROR("setting EA on %lu/%u again... interesting\n",
+                               inode->i_ino, inode->i_generation);
                 }
 
                 EXTN_I(inode)->i_data[0] = cpu_to_le32(lmm_size);
                 memcpy(&EXTN_I(inode)->i_data[1], lmm, lmm_size);
                 mark_inode_dirty(inode);
                 return 0;
-        } else {
-                lock_kernel();
-                rc = extN_xattr_set(handle, inode, EXTN_XATTR_INDEX_LUSTRE,
-                                    XATTR_LUSTRE_MDS_OBJID, lmm, lmm_size, 0);
-                unlock_kernel();
         }
+#endif
+        if (EXTN_I(inode)->i_file_acl /* || large inode EA flag */)
+                CERROR("setting EA on %lu/%u again... interesting\n",
+                       inode->i_ino, inode->i_generation);
+        lock_kernel();
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+        rc = extN_xattr_set(handle, inode, EXTN_XATTR_INDEX_LUSTRE,
+                            XATTR_LUSTRE_MDS_OBJID, lmm, lmm_size, 0);
+#else
+        rc = extN_xattr_set_handle(handle, inode, EXTN_XATTR_INDEX_LUSTRE,
+                                   XATTR_LUSTRE_MDS_OBJID, lmm, lmm_size, 0);
+#endif
+        unlock_kernel();
 
         if (rc)
                 CERROR("error adding MD data to inode %lu: rc = %d\n",
@@ -344,19 +354,53 @@ static int fsfilt_extN_get_md(struct inode *inode, void *lmm, int lmm_size)
 {
         int rc;
 
+        down(&inode->i_sem);
+        lock_kernel();
+        /* Keep support for reading "inline EAs" until we convert
+         * users over to new format entirely.  See bug 841/2097. */
         if (inode->i_blocks == 0 && EXTN_I(inode)->i_data[0]) {
-                int size = le32_to_cpu(EXTN_I(inode)->i_data[0]);
+                unsigned size = le32_to_cpu(EXTN_I(inode)->i_data[0]);
+                void *handle;
+
                 LASSERT(size < sizeof(EXTN_I(inode)->i_data));
                 if (lmm) {
-                        if (size > lmm_size)
+                        if (size > lmm_size) {
+                                CERROR("inline EA on %lu/%u bad size %u > %u\n",
+                                       inode->i_ino, inode->i_generation,
+                                       size, lmm_size);
                                 return -ERANGE;
+                        }
                         memcpy(lmm, &EXTN_I(inode)->i_data[1], size);
                 }
+
+#ifndef INLINE_EA
+                /* migrate LOV EA data to external block - keep same format */
+                CWARN("DEBUG: migrate inline EA for inode %lu/%u to block\n",
+                      inode->i_ino, inode->i_generation);
+
+                handle = journal_start(EXTN_JOURNAL(inode),
+                                       EXTN_XATTR_TRANS_BLOCKS);
+                if (!IS_ERR(handle)) {
+                        int err;
+                        rc = fsfilt_extN_set_md(inode, handle,
+                                                &EXTN_I(inode)->i_data[1],size);
+                        if (rc == 0) {
+                                memset(EXTN_I(inode)->i_data, 0,
+                                       sizeof(EXTN_I(inode)->i_data));
+                                mark_inode_dirty(inode);
+                        }
+                        err = journal_stop(handle);
+                        if (err && rc == 0)
+                                rc = err;
+                } else {
+                        rc = PTR_ERR(handle);
+                }
+#endif
+                up(&inode->i_sem);
+                unlock_kernel();
                 return size;
         }
 
-        down(&inode->i_sem);
-        lock_kernel();
         rc = extN_xattr_get(inode, EXTN_XATTR_INDEX_LUSTRE,
                             XATTR_LUSTRE_MDS_OBJID, lmm, lmm_size);
         unlock_kernel();
@@ -503,7 +547,7 @@ static int fsfilt_extN_sync(struct super_block *sb)
 }
 
 extern int extN_prep_san_write(struct inode *inode, long *blocks,
-			       int nblocks, loff_t newsize);
+                               int nblocks, loff_t newsize);
 static int fsfilt_extN_prep_san_write(struct inode *inode, long *blocks,
                                       int nblocks, loff_t newsize)
 {
