@@ -2600,7 +2600,7 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
         struct ldlm_intent *it;
         struct mds_obd *mds = &req->rq_export->exp_obd->u.mds;
         struct ldlm_reply *rep;
-        struct lustre_handle lockh = { 0 };
+        struct lustre_handle lockh[2] = {{0}, {0}};
         struct ldlm_lock *new_lock;
         int getattr_part = MDS_INODELOCK_UPDATE;
         int rc, repsize[4] = { sizeof(struct ldlm_reply),
@@ -2637,7 +2637,7 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
         intent_set_disposition(rep, DISP_IT_EXECD);
 
         fixup_handle_for_resent_req(req, MDS_REQ_INTENT_LOCKREQ_OFF,
-                                    lock, &lockh);
+                                    lock, lockh);
 
         /* execute policy */
         switch ((long)it->opc) {
@@ -2645,7 +2645,7 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
         case IT_CREAT|IT_OPEN:
                 /* XXX swab here to assert that an mds_open reint
                  * packet is following */
-                rep->lock_policy_res2 = mds_reint(req, offset, &lockh);
+                rep->lock_policy_res2 = mds_reint(req, offset, lockh);
 #if 0
                 /* We abort the lock if the lookup was negative and
                  * we did not make it to the OPEN portion */
@@ -2656,7 +2656,7 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
 #endif
                 /* IT_OPEN may return lock on cross-node dentry
                  * that we want to hold during attr retrival -bzzz */
-                if (rc != 0 || lockh.cookie == 0)
+                if (rc != 0 || lockh[0].cookie == 0)
                         RETURN(ELDLM_LOCK_ABORTED);
                 break;
         case IT_LOOKUP:
@@ -2665,7 +2665,7 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
         case IT_GETATTR:
                 getattr_part |= MDS_INODELOCK_LOOKUP;
         case IT_READDIR:
-                rep->lock_policy_res2 = mds_getattr_name(req, offset, &lockh,
+                rep->lock_policy_res2 = mds_getattr_name(req, offset, lockh,
                                                          getattr_part);
                 /* FIXME: LDLM can set req->rq_status. MDS sets
                    policy_res{1,2} with disposition and status.
@@ -2683,7 +2683,7 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
                 }
                 break;
         case IT_UNLINK:
-                rc = mds_lock_and_check_slave(offset, req, &lockh);
+                rc = mds_lock_and_check_slave(offset, req, lockh);
                 if ((rep->lock_policy_res2 = rc)) {
                         if (rc == ENOLCK)
                                 rep->lock_policy_res2 = 0;
@@ -2701,7 +2701,7 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
          * drop it below anyways because lock replay is done separately by the
          * client afterwards.  For regular RPCs we want to give the new lock to
          * the client instead of whatever lock it was about to get. */
-        new_lock = ldlm_handle2lock(&lockh);
+        new_lock = ldlm_handle2lock(&lockh[0]);
         if (new_lock == NULL && (flags & LDLM_FL_INTENT_ONLY))
                 RETURN(0);
 
