@@ -514,10 +514,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu\n", inode->i_ino);
-
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
         lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_SETATTR);
-#endif
 
         if (ia_valid & ATTR_SIZE) {
                 if (attr->ia_size > ll_file_maxbytes(inode)) {
@@ -624,8 +621,12 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                  * o_append users on other nodes. */
                 if (extent.start == 0)
                         ast_flags = LDLM_AST_DISCARD_DATA;
+                /* bug 1639: avoid write/truncate i_sem/DLM deadlock */
+                LASSERT(atomic_read(&inode->i_sem.count) == 0);
+                up(&inode->i_sem);
                 rc = ll_extent_lock_no_validate(NULL, inode, lsm, LCK_PW,
                                                 &extent, &lockh, ast_flags);
+                down(&inode->i_sem);
                 if (rc != ELDLM_OK) {
                         if (rc > 0)
                                 RETURN(-ENOLCK);
@@ -832,7 +833,13 @@ void ll_read_inode2(struct inode *inode, void *opaque)
 
         LASSERT(!lli->lli_smd);
 
-        /* core attributes from the MDS first */
+        /* Core attributes from the MDS first.  This is a new inode, and
+         * the VFS doesn't zero times in the core inode so we have to do
+         * it ourselves.  They will be overwritten by either MDS or OST
+         * attributes - we just need to make sure they aren't newer. */
+        LTIME_S(inode->i_mtime) = 0;
+        LTIME_S(inode->i_atime) = 0;
+        LTIME_S(inode->i_ctime) = 0;
         ll_update_inode(inode, md->body, md->lsm);
 
         /* OIDEBUG(inode); */
@@ -892,6 +899,13 @@ void ll_umount_begin(struct super_block *sb)
                       &ioc_data, NULL);
 
         obd = class_conn2obd(&sbi->ll_osc_conn);
+        if (obd == NULL) {
+                CERROR("Invalid LOV connection handle "LPX64"\n",
+                       sbi->ll_osc_conn.cookie);
+                EXIT;
+                return;
+        }
+
         obd->obd_no_recov = 1;
         obd_iocontrol(IOC_OSC_SET_ACTIVE, &sbi->ll_osc_conn, sizeof ioc_data,
                       &ioc_data, NULL);
