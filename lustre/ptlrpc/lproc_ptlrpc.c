@@ -99,11 +99,10 @@ void ptlrpc_lprocfs_register_service(struct obd_device *obddev,
         struct proc_dir_entry   *svc_procroot;
         struct lprocfs_counters *svc_cntrs;
         int i, rc;
-        unsigned int svc_counter_config = LPROCFS_CNTR_EXTERNALLOCK | 
-                LPROCFS_CNTR_AVGMINMAX | LPROCFS_CNTR_STDDEV;
+        unsigned int svc_counter_config = LPROCFS_CNTR_AVGMINMAX | LPROCFS_CNTR_STDDEV;
 
-        LASSERT(svc->svc_procroot == NULL);
-        LASSERT(svc->svc_counters == NULL);
+        LASSERT(svc->srv_procroot == NULL);
+        LASSERT(svc->srv_counters == NULL);
 
         svc_procroot = lprocfs_register(svc->srv_name, obddev->obd_proc_entry,
                                         NULL, NULL);
@@ -118,19 +117,15 @@ void ptlrpc_lprocfs_register_service(struct obd_device *obddev,
         }
  
         LPROCFS_COUNTER_INIT(&svc_cntrs->cntr[PTLRPC_REQWAIT_CNTR], 
-                             svc_counter_config, &svc->srv_lock, 
+                             svc_counter_config, NULL, 
                              "req_waittime", "cycles");
         LPROCFS_COUNTER_INIT(&svc_cntrs->cntr[PTLRPC_SVCEQDEPTH_CNTR], 
-                             svc_counter_config, &svc->srv_lock, 
+                             svc_counter_config, NULL, 
                              "svc_eqdepth", "reqs");
-        /* no stddev on idletime */
-        LPROCFS_COUNTER_INIT(&svc_cntrs->cntr[PTLRPC_SVCIDLETIME_CNTR],
-                             (LPROCFS_CNTR_EXTERNALLOCK | LPROCFS_CNTR_AVGMINMAX),
-                             &svc->srv_lock, "svc_idletime", "cycles");
         for (i=0; i < LUSTRE_MAX_OPCODES; i++) {
                 __u32 opcode = ll_rpc_opcode_table[i].opcode;
                 LPROCFS_COUNTER_INIT(&svc_cntrs->cntr[PTLRPC_LAST_CNTR+i], 
-                                     svc_counter_config, &svc->srv_lock,
+                                     svc_counter_config, NULL,
                                      ll_opcode2str(opcode), "cycles");
         }
         rc = lprocfs_register_counters(svc_procroot, "service_stats", 
@@ -139,20 +134,45 @@ void ptlrpc_lprocfs_register_service(struct obd_device *obddev,
                 lprocfs_remove(svc_procroot);
                 lprocfs_free_counters(svc_cntrs);
         } else {
-                svc->svc_procroot = svc_procroot;
-                svc->svc_counters = svc_cntrs;
+                svc->srv_procroot = svc_procroot;
+                svc->srv_counters = svc_cntrs;
         }
 }
 
 void ptlrpc_lprocfs_unregister_service(struct ptlrpc_service *svc)
 {
-        if (svc->svc_procroot) {
-                lprocfs_remove(svc->svc_procroot);
-                svc->svc_procroot = NULL;
+        if (svc->srv_procroot != NULL) {
+                lprocfs_remove(svc->srv_procroot);
+                svc->srv_procroot = NULL;
         }
-        if (svc->svc_counters) {
-                lprocfs_free_counters(svc->svc_counters);
-                svc->svc_counters = NULL;
+        if (svc->srv_counters) {
+                lprocfs_free_counters(svc->srv_counters);
+                svc->srv_counters = NULL;
+        }
+}
+
+void ptlrpc_lprocfs_do_request_stat (struct ptlrpc_request *req,
+                                     cycles_t work_start,
+                                     cycles_t work_end) 
+{
+        int                    opc_offset = opcode_offset(req->rq_reqmsg->opc);
+        struct ptlrpc_service *svc = req->rq_srv_ni->sni_service;
+
+        LASSERT (svc != NULL);
+        LASSERT (svc->srv_counters != NULL);
+        
+        /* req_waittime */
+        LPROCFS_COUNTER_INCR(&svc->srv_counters->cntr[PTLRPC_REQWAIT_CNTR],
+                             (work_start - req->rq_arrival_time));
+
+        /* svc_eqdepth */
+        LPROCFS_COUNTER_INCR(&svc->srv_counters->cntr[PTLRPC_SVCEQDEPTH_CNTR],
+                             svc->srv_n_queued_reqs);
+
+        if (opc_offset >= 0) {
+                LASSERT(opc_offset < LUSTRE_MAX_OPCODES);
+                LPROCFS_COUNTER_INCR(&svc->srv_counters->cntr[PTLRPC_LAST_CNTR+opc_offset], 
+                                     work_end - work_start);
         }
 }
 #endif /* LPROCFS */
