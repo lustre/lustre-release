@@ -271,4 +271,35 @@ test_10() {
 }
 run_test 10 "use lmc with the same name for node and mds"
 
+test_11() {
+        OLDXMLCONFIG=$XMLCONFIG
+        XMLCONFIG="conf11.xml"
+
+        [ -f "$XMLCONFIG" ] && rm -f $XMLCONFIG
+        add_mds mds --dev $MDSDEV --size $MDSSIZE
+        add_ost ost --dev $OSTDEV --size $OSTSIZE
+        add_client client mds --path $MOUNT --ost ost_svc || return $?
+        echo "Default lov config success!"
+        
+        [ -f "$XMLCONFIG" ] && rm -f $XMLCONFIG
+        add_mds mds --dev $MDSDEV --size $MDSSIZE
+        add_ost ost --dev $OSTDEV --size $OSTSIZE
+        add_client client mds --path $MOUNT && return $?
+        echo "--add mtpt with neither --lov nor --ost will return error"
+
+        echo ""
+        echo "Success!"
+        XMLCONFIG=$OLDXMLCONFIG
+}
+run_test 11 "use default lov configuration (should return error)"
+
+test_12() {
+	setup
+	$LCTL --device 1 probe
+	$LCTL --device 2 probe
+	check_mount
+	cleanup
+}
+run_test 12 "enable local rpc, then cleanup"
+	
 equals_msg "Done"

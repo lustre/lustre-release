@@ -253,6 +253,8 @@ extern int currentfs_is_under_dotsnap(struct dentry *de);
 /* cache.c */
 inline void snap_free_cache(struct snap_cache *cache);
 struct snap_cache *snap_find_cache(kdev_t dev);
+typedef int (*snap_cache_cb_t)(struct snap_cache*, void *in, unsigned long *out);
+int snap_cache_process(snap_cache_cb_t cb, void* in, unsigned long* out);
 
 /* snaptable.c */
 extern struct snap_table snap_tables[SNAP_MAX_TABLES];
@@ -280,9 +282,8 @@ int snap_set_indirect(struct inode *pri, ino_t ind_ino,
 extern struct super_operations currentfs_super_ops;
 void cleanup_filter_info_cache(void);
 int init_filter_info_cache(void);
-void init_filter_data(struct inode *inode, struct snapshot_operations *snapops,
-		     int flag);
-
+extern void init_filter_data(struct inode *inode, int flag);
+extern void set_filter_ops(struct snap_cache *cache, struct inode *inode);
 /* dir.c */
 extern struct inode_operations currentfs_dir_iops;
 extern struct file_operations currentfs_dir_fops;
@@ -326,7 +327,6 @@ struct filter_fs {
 #define FILTER_FS_EXT3 1
 #define FILTER_FS_REISER 2
 extern struct filter_fs filter_oppar[FILTER_FS_TYPES];
-
 struct filter_fs *filter_get_filter_fs(const char *cache_type);
 inline struct super_operations *filter_c2usops(struct filter_fs *cache);
 inline struct inode_operations *filter_c2ufiops(struct filter_fs *cache);
@@ -336,12 +336,16 @@ inline struct super_operations *filter_c2csops(struct filter_fs *cache);
 inline struct inode_operations *filter_c2cfiops(struct filter_fs *cache);
 inline struct inode_operations *filter_c2cdiops(struct filter_fs *cache);
 inline struct inode_operations *filter_c2csiops(struct filter_fs *cache);
+inline struct file_operations *filter_c2udfops(struct filter_fs *cache);
 inline struct file_operations *filter_c2cffops(struct filter_fs *cache);
 inline struct file_operations *filter_c2cdfops(struct filter_fs *cache);
 inline struct file_operations *filter_c2csfops(struct filter_fs *cache);
+inline struct file_operations *filter_c2uffops(struct filter_fs *cache);
+inline struct file_operations *filter_c2usfops(struct filter_fs *cache);
 inline struct dentry_operations *filter_c2cdops(struct filter_fs *cache);
 inline struct dentry_operations *filter_c2udops(struct filter_fs *cache);
 inline struct address_space_operations *filter_c2cfaops(struct filter_fs *cache);
+inline struct address_space_operations *filter_c2ufaops(struct filter_fs *cache);
 /* for snapfs */
 inline struct snapshot_operations *filter_c2csnapops(struct filter_fs *cache);
 

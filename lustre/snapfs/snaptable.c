@@ -42,7 +42,7 @@ int snap_index2slot(struct snap_table *snap_table, int snap_index)
 {
 	int slot;
 
-	for ( slot=0 ; slot<snap_table->tbl_count ; slot++ )
+	for ( slot=0 ; slot < snap_table->tbl_count ; slot++ )
 		if ( snap_table->snap_items[slot].index == snap_index )
 			return slot;
 	return -1;
@@ -133,12 +133,12 @@ int snap_print_table(struct ioc_snap_tbl_data *data, char *buf, int *buflen)
 	
 	table = &snap_tables[tableno];
 	stbl_out = (struct ioc_snap_tbl_data *)buf;
-	stbl_out->count = table->tbl_count;
+	stbl_out->count = table->tbl_count - 1;
 	stbl_out->no = tableno;	
 	buf_ptr = (char*)stbl_out->snaps; 
 	nleft -= buf_ptr - buf; 
-	for (i = 0; i < table->tbl_count; i++) {
-		memcpy(buf_ptr, &table->snap_items[i+1], sizeof(struct snap));
+	for (i = 1; i < table->tbl_count; i++) {
+		memcpy(buf_ptr, &table->snap_items[i], sizeof(struct snap));
 		
 		nleft -= sizeof(struct snap);
 		if(nleft < 0) { 
@@ -205,35 +205,35 @@ static int snaptable_add_item(struct ioc_snap_tbl_data *data)
 	/* XXX Is down this sema necessary*/
 	down_interruptible(&table->tbl_sema);
 
-	/*add item in snap_table*/
-	table->snap_items[count+1].gen = table->generation;
-	table->snap_items[count+1].time = CURRENT_TIME;
+	/*add item in snap_table set generation*/
+	table->snap_items[count].gen = table->generation + 1;
+	table->snap_items[count].time = CURRENT_TIME;
 	/* find table index */
 	index = get_index_of_item(table, data->snaps[0].name);
 	if (index < 0)
-		RETURN(-EINVAL);
+		GOTO(exit, rc = -EINVAL);
 	
-	table->snap_items[count+1].index = index;
-	table->snap_items[count+1].flags = 0;
-	memcpy(&table->snap_items[count + 1].name[0], 
+	table->snap_items[count].index = index;
+	table->snap_items[count].flags = 0;
+	memcpy(&table->snap_items[count].name[0], 
 	       data->snaps[0].name, SNAP_MAX_NAMELEN);
 	/* we will write the whole snap_table to disk */
 	SNAP_ALLOC(disk_snap_table, sizeof(struct snap_disk_table));
 	if (!disk_snap_table)
-		RETURN(-ENOMEM);
+		GOTO(exit, rc = -ENOMEM);
 	disk_snap_table->magic = cpu_to_le32((__u32)DISK_SNAP_TABLE_MAGIC);
 	disk_snap_table->count = cpu_to_le32((__u32)table->tbl_count);
-	disk_snap_table->generation = cpu_to_le32((__u32)table->generation);
+	disk_snap_table->generation = cpu_to_le32((__u32)table->generation + 1);
 	memset(&disk_snap_table->snap_items[0], 0, 
 	       SNAP_MAX * sizeof(struct snap_disk));
 	
-	for (i = 1; i <= count + 1; i++) {
+	for (i = 1; i <= count; i++) {
 		struct snap *item = &table->snap_items[i];
-		disk_snap_table->snap_items[i].time = cpu_to_le64((__u64)item->time);
-		disk_snap_table->snap_items[i].gen = cpu_to_le32((__u32)item->gen);
-		disk_snap_table->snap_items[i].flags = cpu_to_le32((__u32)item->flags);
-		disk_snap_table->snap_items[i].index = cpu_to_le32((__u32)item->index);
-		memcpy(&disk_snap_table->snap_items[i].name , item->name, SNAP_MAX_NAMELEN);
+		disk_snap_table->snap_items[i-1].time = cpu_to_le64((__u64)item->time);
+		disk_snap_table->snap_items[i-1].gen = cpu_to_le32((__u32)item->gen);
+		disk_snap_table->snap_items[i-1].flags = cpu_to_le32((__u32)item->flags);
+		disk_snap_table->snap_items[i-1].index = cpu_to_le32((__u32)item->index);
+		memcpy(&disk_snap_table->snap_items[i-1].name , item->name, SNAP_MAX_NAMELEN);
 	}
 	rc = snapops->set_meta_attr(cache->cache_sb, DISK_SNAPTABLE_ATTR,
 				    (char*)disk_snap_table, sizeof(struct snap_disk_table));
@@ -241,10 +241,9 @@ static int snaptable_add_item(struct ioc_snap_tbl_data *data)
 	SNAP_FREE(disk_snap_table, sizeof(struct snap_disk_table));
 	table->tbl_count++;
 	table->generation++;
-	
+exit:
 	up(&table->tbl_sema);
-	
-	return 0;
+	RETURN(rc);
 }
 
 static int delete_inode(struct inode *primary, void *param)
@@ -438,7 +437,9 @@ int snapfs_read_snaptable(struct snap_cache *cache, int tableno)
 
 	memset(table, 0, sizeof(struct snap_table));
         init_MUTEX(&table->tbl_sema); 
-	
+
+	/*Initialized table */
+	table->tbl_count = 1;
 	rc = snapops->get_meta_attr(cache->cache_sb, DISK_SNAPTABLE_ATTR,
 			       (char*)disk_snap_table, &size);
 	if (rc < 0) {
@@ -451,7 +452,7 @@ int snapfs_read_snaptable(struct snap_cache *cache, int tableno)
 		RETURN(rc);
 	}
 	table->generation = le32_to_cpu(disk_snap_table->generation);
-	table->tbl_count = le32_to_cpu(disk_snap_table->count);
+	table->tbl_count += le32_to_cpu(disk_snap_table->count);
 	for ( i = 0; i < disk_snap_table->count; i++) {
 		struct snap *item = &table->snap_items[i + 1];
 		item->time = le64_to_cpu(disk_snap_table->snap_items[i].time);
@@ -709,7 +710,7 @@ int snap_get_index_from_name(int tableno, char *name)
 	int slot;
 
 	if ( tableno < 0 || tableno > SNAP_MAX_TABLES ) {
-		CDEBUG(D_SNAP, ": invalid table number %d\n", tableno);
+		CERROR("invalid table number %d\n", tableno);
 		return -EINVAL;
 	}
 
