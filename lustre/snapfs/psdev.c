@@ -115,17 +115,17 @@ static int __init snapfs_init(void)
 {
 	int err;
 	if ( (err = init_snap_psdev()) ) {
-		printk("Error initializing snap_psdev, %d\n", err);
+		CERROR("Error initializing snap_psdev, %d\n", err);
 		return -EINVAL;
 	}
 
 	if ( (err = init_snapfs()) ) {
-		printk("Error initializing snapfs, %d\n", err);
+		CERROR("Error initializing snapfs, %d\n", err);
 		return -EINVAL;
 	}
 
 	if ( (err = init_snapfs_proc_sys()) ) {
-		printk("Error initializing snapfs proc sys, %d\n", err);
+		CERROR("Error initializing snapfs proc sys, %d\n", err);
 		return -EINVAL;
 	}
 	
