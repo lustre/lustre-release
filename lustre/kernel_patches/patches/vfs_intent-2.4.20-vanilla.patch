@@ -1,4 +1,5 @@
  fs/dcache.c            |   20 ++
+ fs/exec.c              |    2 
  fs/namei.c             |  345 +++++++++++++++++++++++++++++++++++++++++--------
  fs/nfsd/vfs.c          |    2 
  fs/open.c              |  126 +++++++++++++++--
@@ -6,7 +7,7 @@
  include/linux/dcache.h |   28 +++
  include/linux/fs.h     |   31 ++++
  kernel/ksyms.c         |    1 
- 8 files changed, 493 insertions(+), 84 deletions(-)
+ 9 files changed, 494 insertions(+), 85 deletions(-)
 
 --- linux-2.4.20/fs/dcache.c~vfs_intent-2.4.20-vanilla	Wed Apr  2 23:27:59 2003
 +++ linux-2.4.20-braam/fs/dcache.c	Wed Apr  2 23:27:59 2003
@@ -55,6 +56,17 @@
  }
  
  #define do_switch(x,y) do { \
+--- linux-2.4.20/fs/exec.c~vfs_intent-2.4.20-vanilla	Thu Nov 28 16:53:15 2002
++++ linux-2.4.20/fs/exec.c	Mon Apr  7 16:55:21 2003
+@@ -989,7 +989,7 @@ int do_coredump(long signr, struct pt_re
+ 		goto close_fail;
+ 	if (!file->f_op->write)
+ 		goto close_fail;
+-	if (do_truncate(file->f_dentry, 0) != 0)
++	if (do_truncate(file->f_dentry, 0, 0) != 0)
+ 		goto close_fail;
+ 
+ 	retval = binfmt->core_dump(signr, regs, file);
 --- linux-2.4.20/fs/namei.c~vfs_intent-2.4.20-vanilla	Wed Apr  2 23:27:59 2003
 +++ linux-2.4.20-braam/fs/namei.c	Wed Apr  2 23:27:59 2003
 @@ -94,6 +94,13 @@
@@ -342,6 +354,24 @@
  }
  
  /* SMP-safe */
+@@ -751,6 +818,17 @@ walk_init_root(const char *name, struct 
+ }
+ 
+ /* SMP-safe */
++int path_lookup_it(const char *path, unsigned flags, struct nameidata *nd,
++		   struct lookup_intent *it)
++{
++	int error = 0;
++	if (path_init(path, flags, nd))
++		error = path_walk_it(path, nd, it);
++	return error;
++}
++
++
++/* SMP-safe */
+ int path_lookup(const char *path, unsigned flags, struct nameidata *nd)
+ {
+ 	int error = 0;
 @@ -767,7 +844,8 @@ int path_init(const char *name, unsigned
   * needs parent already locked. Doesn't follow mounts.
   * SMP-safe.
