@@ -67,6 +67,7 @@ struct ptlrpc_connection *ptlrpc_get_connection(struct lustre_peer *peer)
         c->c_epoch = 1;
         c->c_bootcount = 0;
         atomic_set(&c->c_refcount, 1);
+        spin_lock_init(&c->c_lock);
 
         memcpy(&c->c_peer, peer, sizeof(c->c_peer));
         list_add(&c->c_link, &conn_list);

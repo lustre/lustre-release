@@ -51,7 +51,6 @@ void ptlrpc_init_client(struct lustre_ha_mgr *mgr, int req_portal,
                         int rep_portal, struct ptlrpc_client *cl)
 {
         memset(cl, 0, sizeof(*cl));
-        spin_lock_init(&cl->cli_lock);
         cl->cli_ha_mgr = mgr;
         if (mgr)
                 llite_ha_conn_manage(mgr, cl);
