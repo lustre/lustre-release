@@ -717,7 +717,7 @@ int mds_commitrw(int cmd, struct obd_export *exp, struct obdo *oa,
                                 ((char *) de + DIR_REC_LEN(de->namelen));
                         entries++;
                 }
-                kunmap(buf);
+                kunmap(lnb->page);
         }
 
         for (i = 0, lnb = res; i < obj->ioo_bufcnt; i++, lnb++)
