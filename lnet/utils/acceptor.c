@@ -13,6 +13,11 @@
 #include <unistd.h>
 #include <syslog.h>
 #include <errno.h>
+#ifdef HAVE_LIBWRAP
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <tcpd.h>
+#endif
 
 #include <portals/api-support.h>
 #include <portals/list.h>
@@ -25,6 +30,12 @@
 #endif 
 
 #define PROGNAME "acceptor"
+
+#ifdef HAVE_LIBWRAP
+/* needed because libwrap declares these as externs */
+int     allow_severity = LOG_INFO;
+int     deny_severity = LOG_WARNING;
+#endif
 
 void create_pidfile(char *name, int port)
 {
@@ -276,7 +287,11 @@ int main(int argc, char **argv)
                 int cfd;
                 struct portal_ioctl_data data;
                 struct portals_cfg pcfg;
-                
+#ifdef HAVE_LIBWRAP
+                struct request_info request;
+                char addrstr[INET_ADDRSTRLEN];
+#endif
+               
                 cfd = accept(fd, (struct sockaddr *)&clntaddr, &len);
                 if ( cfd < 0 ) {
                         perror("accept");
@@ -284,6 +299,19 @@ int main(int argc, char **argv)
                         continue;
                 }
 
+#ifdef HAVE_LIBWRAP
+                /* libwrap access control */
+                request_init(&request, RQ_DAEMON, "lustre", RQ_FILE, cfd, 0);
+                sock_host(&request);
+                if (!hosts_access(&request)) {
+                        inet_ntop(AF_INET, &clntaddr.sin_addr,
+                                  addrstr, INET_ADDRSTRLEN);
+                        syslog(LOG_WARNING, "Unauthorized access from %s:%hd\n",
+                               addrstr, ntohs(clntaddr.sin_port));
+                        close (cfd);
+                        continue;
+                }
+#endif
                 show_connection (cfd, clntaddr.sin_addr.s_addr);
 
                 PCFG_INIT(pcfg, NAL_CMD_REGISTER_PEER_FD);
