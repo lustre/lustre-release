@@ -279,15 +279,16 @@ err_unlock:
 int lustre_commit_write(struct page *page, unsigned from, unsigned to)
 {
         struct inode *inode = page->mapping->host;
-        int err = 0;
+        int err;
 
-        SetPageUptodate(page);
-        set_page_clean(page);
-
-        page->mapping->a_ops->commit_write(NULL, page, from, to);
-        if (IS_SYNC(inode))
+        err = page->mapping->a_ops->commit_write(NULL, page, from, to);
+        if (!err && IS_SYNC(inode))
                 err = waitfor_one_page(page);
-        UnlockPage(page);
+
+        //SetPageUptodate(page); // the client commit_write will do this
+
+        SetPageReferenced(page);
+        unlock_page(page);
         lustre_put_page(page);
         return err;
 }
