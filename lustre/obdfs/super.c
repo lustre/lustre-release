@@ -35,6 +35,7 @@
 struct list_head obdfs_super_list;
 struct super_operations obdfs_super_operations;
 long obdfs_cache_count = 0;
+long obdfs_mutex_start = 0;
 long obd_memory = 0;
 
 static char *obdfs_read_opt(const char *opt, char *data)
@@ -307,8 +308,7 @@ static void obdfs_read_inode(struct inode *inode)
 		EXIT;
 	} else {
 		init_special_inode(inode, inode->i_mode,
-				   /* XXX need to fill in the ext2 side */
-				   ((long *)obdfs_i2info(inode)->oi_inline)[0]);
+				   ((int *)obdfs_i2info(inode)->oi_inline)[0]);
 	}
 
 	return;
@@ -390,6 +390,7 @@ static void obdfs_delete_inode(struct inode *inode)
 	oa->o_valid = OBD_MD_FLNOTOBD;
 	obdfs_from_inode(oa, inode);
 
+	ODEBUG(oa);
 	err = IOPS(inode, destroy)(IID(inode), oa);
 	obdo_free(oa);
 

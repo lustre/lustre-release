@@ -257,7 +257,7 @@ static struct page *obdfs_add_entry (struct inode * dir,
 				EXIT;
 				return NULL;
 			}
-			PDEBUG(page, "new directory page");
+			/* PDEBUG(page, "new directory page"); */
 			if (dir->i_size <= offset) {
 				if (dir->i_size == 0) {
 					*err = -ENOENT;
@@ -275,7 +275,7 @@ static struct page *obdfs_add_entry (struct inode * dir,
 				mark_inode_dirty(dir);
 			} else {
 
-				ext2_debug ("skipping to next block\n");
+				CDEBUG(D_INFO, "skipping to next block\n");
 
 				de = (struct ext2_dir_entry_2 *) page_address(page);
 			}
@@ -346,7 +346,6 @@ static struct page *obdfs_add_entry (struct inode * dir,
 		}
 		offset += le16_to_cpu(de->rec_len);
 		de = (struct ext2_dir_entry_2 *) ((char *) de + le16_to_cpu(de->rec_len));
-		
 	}
 
 	UnlockPage(page);
@@ -556,6 +555,7 @@ int obdfs_mknod (struct inode * dir, struct dentry *dentry, int mode, int rdev)
 	struct inode * inode;
 	struct page *page;
 	struct ext2_dir_entry_2 * de;
+	struct obdfs_inode_info *oinfo;
 	int err;
 
         ENTRY;
@@ -567,6 +567,10 @@ int obdfs_mknod (struct inode * dir, struct dentry *dentry, int mode, int rdev)
 
 	inode->i_uid = current->fsuid;
 	init_special_inode(inode, mode, rdev);
+	oinfo = obdfs_i2info(inode);
+	((obd_count *)oinfo->oi_inline)[0] = rdev;
+	oinfo->oi_flags |= OBD_FL_INLINEDATA;
+
 	page = obdfs_add_entry (dir, dentry->d_name.name, dentry->d_name.len, &de, &err);
 	if (!page)
 		goto out_no_entry;

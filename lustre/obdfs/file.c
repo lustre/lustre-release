@@ -80,7 +80,7 @@ struct file_operations obdfs_file_operations = {
 	NULL,			/* readdir - bad */
 	NULL,			/* poll */
 	NULL,			/* ioctl */
-	generic_file_mmap, 
+	generic_file_mmap,	/* mmap */
 	NULL,			/* open */
 	NULL,			/* flush */
 	NULL,			/* release */

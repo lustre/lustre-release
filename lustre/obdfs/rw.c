@@ -121,8 +121,8 @@ inline void obdfs_pgrq_del(struct obdfs_pgrq *pgrq)
 	--obdfs_cache_count;
 	CDEBUG(D_INFO, "deleting page %p from list [count %ld]\n",
 	       pgrq->rq_page, obdfs_cache_count);
-	OBDClearCachePage(pgrq->rq_page);
 	list_del(&pgrq->rq_plist);
+	OBDClearCachePage(pgrq->rq_page);
 	kmem_cache_free(obdfs_pgrq_cachep, pgrq);
 }
 
@@ -141,46 +141,6 @@ void obdfs_cleanup_pgrqcache(void)
 
 	EXIT;
 } /* obdfs_cleanup_wreqcache */
-
-
-/*
- * See whether a specific page in the page cache.
- * Called with the list lock held.
- */
-#ifdef PG_obdcache
-#define obdfs_find_in_page_list(inode, page) OBDAddCachePage(page)
-#else
-static int obdfs_find_in_page_list(struct inode *inode, struct page *page)
-{
-	struct list_head *page_list = obdfs_iplist(inode);
-	struct list_head *tmp;
-
-	ENTRY;
-
-	CDEBUG(D_INFO, "looking for inode %ld page %p\n", inode->i_ino, page);
-	OIDEBUG(inode);
-
-	if (list_empty(page_list)) {
-		CDEBUG(D_INFO, "empty list\n");
-		EXIT;
-		return 0;
-	}
-	tmp = page_list;
-	while ( (tmp = tmp->next) != page_list ) {
-		struct obdfs_pgrq *pgrq;
-
-		pgrq = list_entry(tmp, struct obdfs_pgrq, rq_plist);
-		if (pgrq->rq_page == page) {
-			CDEBUG(D_INFO, "found page %p in list\n", page);
-			EXIT;
-			return 1;
-		}
-	} 
-
-	EXIT;
-	return 0;
-} /* obdfs_find_in_page_list */
-#endif
 
 
 /* called with the list lock held */
@@ -238,7 +198,7 @@ int obdfs_do_vec_wr(struct inode **inodes, obd_count num_io,
 
 	CDEBUG(D_INFO, "writing %d page(s), %d obdo(s) in vector\n",
 	       num_io, num_obdos);
-	{ /* DEBUGGING */
+	if (obd_debug_level & D_INFO) { /* DEBUGGING */
 		int i;
 		printk("OBDOS: ");
 		for (i = 0; i < num_obdos; i++)
@@ -253,7 +213,7 @@ int obdfs_do_vec_wr(struct inode **inodes, obd_count num_io,
 	err = IOPS(inodes[0], brw)(WRITE, IID(inodes[0]), num_obdos, obdos,
 				  oa_bufs, bufs, counts, offsets, flags);
 
-	CDEBUG(D_CACHE, "BRW done\n");
+	CDEBUG(D_INFO, "BRW done\n");
 	/* release the pages from the page cache */
 	while ( num_io > 0 ) {
 		--num_io;
@@ -263,7 +223,7 @@ int obdfs_do_vec_wr(struct inode **inodes, obd_count num_io,
 		put_page(pages[num_io]);
 		/* PDEBUG(pages[num_io], "do_vec_wr"); */
 	}
-	CDEBUG(D_CACHE, "put_page done\n");
+	CDEBUG(D_INFO, "put_page done\n");
 
 	while ( num_obdos > 0) {
 		--num_obdos;
@@ -271,69 +231,76 @@ int obdfs_do_vec_wr(struct inode **inodes, obd_count num_io,
 		obdfs_to_inode(inodes[num_obdos], obdos[num_obdos]);
 		obdo_free(obdos[num_obdos]);
 	}
-	CDEBUG(D_CACHE, "obdo_free done\n");
+	CDEBUG(D_INFO, "obdo_free done\n");
 	EXIT;
 	return err;
 }
 
 
 /*
- * Add a page to the write request cache list for later writing
+ * Add a page to the write request cache list for later writing.
  * ASYNCHRONOUS write method.
  */
 static int obdfs_add_page_to_cache(struct inode *inode, struct page *page)
 {
-	int res = 0;
-
+	int err = 0;
 	ENTRY;
 
-	/* If this page isn't already in the inode page list, add it */
-	obd_down(&obdfs_i2sbi(inode)->osi_list_mutex);
-	if ( !obdfs_find_in_page_list(inode, page) ) {
+	/* The PG_obdcache bit is cleared by obdfs_pgrq_del() BEFORE the page
+	 * is written, so at worst we will write the page out twice.
+	 *
+	 * If the page has the PG_obdcache bit set, then the inode MUST be
+	 * on the superblock dirty list so we don't need to check this.
+	 * Dirty inodes are removed from the superblock list ONLY when they
+	 * don't have any more cached pages.  It is possible to have an inode
+	 * with no dirty pages on the superblock list, but not possible to
+	 * have an inode with dirty pages NOT on the superblock dirty list.
+	 */
+	if (!OBDAddCachePage(page)) {
 		struct obdfs_pgrq *pgrq;
 		pgrq = kmem_cache_alloc(obdfs_pgrq_cachep, SLAB_KERNEL);
 		if (!pgrq) {
+			OBDClearCachePage(page);
 			EXIT;
-			obd_up(&obdfs_i2sbi(inode)->osi_list_mutex);
 			return -ENOMEM;
 		}
+		/* not really necessary since we set all pgrq fields here
 		memset(pgrq, 0, sizeof(*pgrq)); 
+		*/
 		
 		pgrq->rq_page = page;
 		pgrq->rq_jiffies = jiffies;
 		get_page(pgrq->rq_page);
+
+		obd_down(&obdfs_i2sbi(inode)->osi_list_mutex);
 		list_add(&pgrq->rq_plist, obdfs_iplist(inode));
 		obdfs_cache_count++;
-		CDEBUG(D_INFO,
-		       "added inode %ld page %p, pgrq: %p, cache count [%ld]\n",
-		       inode->i_ino, page, pgrq, obdfs_cache_count);
+
+		/* If inode isn't already on superblock inodes list, add it.
+		 *
+		 * We increment the reference count on the inode to keep it
+		 * from being freed from memory.  This _should_ be an iget()
+		 * with an iput() in both flush_reqs() and put_inode(), but
+		 * since put_inode() is called from iput() we can't call iput()
+		 * again there.  Instead we just increment/decrement i_count,
+		 * which is mostly what iget/iput do for an inode in memory.
+		 */
+		if ( list_empty(obdfs_islist(inode)) ) {
+			inode->i_count++;
+			CDEBUG(D_INFO,
+			       "adding inode %ld to superblock list %p\n",
+			       inode->i_ino, obdfs_slist(inode));
+			list_add(obdfs_islist(inode), obdfs_slist(inode));
+		}
+		obd_up(&obdfs_i2sbi(inode)->osi_list_mutex);
 	}
 
-	/* If inode isn't already on the superblock inodes list, add it,
-	 * and increase ref count on inode so it doesn't disappear on us.
-	 *
-	 * We increment the reference count on the inode to keep it from
-	 * being freed from memory.  This _should_ be an iget() with an
-	 * iput() in both flush_reqs() and put_inode(), but since put_inode()
-	 * is called from iput() we can't call iput() again there.  Instead
-	 * we just increment/decrement i_count, which is essentially what
-	 * iget/iput do for an inode already in memory.
-	 */
-	if ( list_empty(obdfs_islist(inode)) ) {
-		inode->i_count++;
-		CDEBUG(D_INFO, "adding inode %ld to superblock list %p\n",
-		       inode->i_ino, obdfs_slist(inode));
-		list_add(obdfs_islist(inode), obdfs_slist(inode));
-	}
-	obd_up(&obdfs_i2sbi(inode)->osi_list_mutex);
-
-	/* XXX For testing purposes, we write out the page here.
-	 *     In the future, a flush daemon will write out the page.
-	res = obdfs_flush_reqs(obdfs_slist(inode), ~0UL);
+	/* XXX For testing purposes, we can write out the page here.
+	err = obdfs_flush_reqs(obdfs_slist(inode), ~0UL);
 	 */
 
 	EXIT;
-	return res;
+	return err;
 } /* obdfs_add_page_to_cache */
 
 
@@ -500,7 +467,7 @@ void obdfs_truncate(struct inode *inode)
 		oa->o_valid = OBD_MD_FLNOTOBD;
 		obdfs_from_inode(oa, inode);
 
-		CDEBUG(D_PUNCH, "calling punch for %ld (%Lu bytes at 0)\n",
+		CDEBUG(D_INFO, "calling punch for %ld (%Lu bytes at 0)\n",
 		       (long)oa->o_id, oa->o_size);
 		err = IOPS(inode, punch)(IID(inode), oa, oa->o_size, 0);
 

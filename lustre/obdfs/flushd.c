@@ -34,9 +34,9 @@ struct {
 	int interval; /* jiffies delay between pupdate flushes */
 	int age_buffer;  /* Time for normal buffer to age before we flush it */
 	int age_super;  /* Time for superblock to age before we flush it */
-} pupd_prm = {40, 500, 64, 256, 5*HZ, 30*HZ, 5*HZ };
+} pupd_prm = {40, 1024, 64, 256, 1*HZ, 30*HZ, 5*HZ };
 
-/* Called with the superblock list lock */
+/* Called with the superblock list lock held */
 static int obdfs_enqueue_pages(struct inode *inode, struct obdo **obdo,
 			       int nr_slots, struct page **pages, char **bufs,
 			       obd_size *counts, obd_off *offsets,
@@ -110,6 +110,7 @@ void obdfs_dequeue_pages(struct inode *inode)
 {
 	struct list_head *tmp;
 
+	ENTRY;
 	obd_down(&obdfs_i2sbi(inode)->osi_list_mutex);
 	tmp = obdfs_islist(inode);
 	if ( list_empty(tmp) ) {
@@ -140,6 +141,7 @@ void obdfs_dequeue_pages(struct inode *inode)
 
 	/* decrement inode reference for page cache */
 	inode->i_count--;
+	EXIT;
 }
 
 /* Remove writeback requests for the superblock */
@@ -171,7 +173,7 @@ int obdfs_flush_reqs(struct list_head *inode_list, unsigned long check_time)
 
 	obd_down(&sbi->osi_list_mutex);
 	if ( list_empty(inode_list) ) {
-		CDEBUG(D_CACHE, "list empty: memory %ld\n", obd_memory);
+		CDEBUG(D_INFO, "list empty\n");
 		obd_up(&sbi->osi_list_mutex);
 		EXIT;
 		return 0;
@@ -221,12 +223,14 @@ int obdfs_flush_reqs(struct list_head *inode_list, unsigned long check_time)
 				err = res;
 				EXIT;
 				goto BREAK;
-			} else if (res) {
-				num_io += res;
-				total_io += res;
-				bufs_per_obdo[num_obdos] = res;
-				num_obdos++;
 			}
+			if (res == 0)
+				continue;
+
+			num_io += res;
+			total_io += res;
+			bufs_per_obdo[num_obdos] = res;
+			num_obdos++;
 
 			if ( num_io == MAX_IOVEC ) {
 				obd_up(&sbi->osi_list_mutex);
@@ -236,7 +240,8 @@ int obdfs_flush_reqs(struct list_head *inode_list, unsigned long check_time)
 						      offsets, flags);
 				if ( err ) {
 					CDEBUG(D_INODE,
-						"fatal: unable to do vec_wr (err %d)\n", err);
+					       "fatal: do_vec_wr err=%d\n",
+					       err);
 					EXIT;
 					goto ERR;
 				}
@@ -372,30 +377,36 @@ static int pupdate(void *unused)
 		obdfs_flush_dirty_inodes(jiffies - pupd_prm.age_super);
 		 */
 		dirty_limit = nr_free_buffer_pages() * pupd_prm.nfract / 100;
-		CDEBUG(D_CACHE, "dirty_limit %ld, cache_count %ld, wrote %d\n",
-		       dirty_limit, obdfs_cache_count, wrote);
 
 		if (obdfs_cache_count > dirty_limit) {
 			interval = 0;
 			if ( wrote < pupd_prm.ndirty )
 				age >>= 1;
-			CDEBUG(D_CACHE, "age %ld, interval %d\n",
-				age, interval);
+			CDEBUG(D_CACHE, "wrote %d, age %ld, interval %d\n",
+				wrote, age, interval);
 		} else {
 			if ( wrote < pupd_prm.ndirty >> 1 &&
 			     obdfs_cache_count < dirty_limit / 2) {
 				interval = pupd_prm.interval;
 				age = pupd_prm.age_buffer;
+				CDEBUG(D_INFO,
+				       "wrote %d, age %ld, interval %d\n",
+				       wrote, age, interval);
 			} else if (obdfs_cache_count > dirty_limit / 2) {
 				interval >>= 1;
 				if ( wrote < pupd_prm.ndirty )
 					age >>= 1;
-				CDEBUG(D_CACHE, "age %ld, interval %d\n",
-				       age, interval);
+				CDEBUG(D_CACHE,
+				       "wrote %d, age %ld, interval %d\n",
+				       wrote, age, interval);
 			}
 		}
 
 		wrote = obdfs_flush_dirty_pages(jiffies - age);
+		if (wrote)
+			CDEBUG(D_CACHE,
+			       "dirty_limit %ld, cache_count %ld, wrote %d\n",
+			       dirty_limit, obdfs_cache_count, wrote);
 	}
 }
 

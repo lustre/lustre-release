@@ -79,7 +79,7 @@ struct inode_operations obdfs_dir_inode_operations = {
 	NULL,			/* get_block */
 	obdfs_readpage,		/* readpage */
 	obdfs_writepage,	/* writepage */
-	NULL,			/* truncate */
+	obdfs_truncate,		/* truncate */
 	NULL,			/* permission */
 	NULL			/* revalidate */
 };
