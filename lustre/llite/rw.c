@@ -111,9 +111,10 @@ static int ll_brw(int cmd, struct inode *inode, struct page *page, int create)
 
         set->brw_callback = ll_brw_sync_wait;
         rc = obd_brw(cmd, ll_i2obdconn(inode), lsm, 1, &pg, set);
-        if (rc)
-                CERROR("error from obd_brw: rc = %d\n", rc);
-        else {
+        if (rc) {
+                if (rc != -EIO)
+                        CERROR("error from obd_brw: rc = %d\n", rc);
+        } else {
                 rc = ll_brw_sync_wait(set, CB_PHASE_START);
                 if (rc)
                         CERROR("error from callback: rc = %d\n", rc);

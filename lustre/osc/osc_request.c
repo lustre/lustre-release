@@ -963,9 +963,12 @@ static int osc_recover(struct obd_import *imp, int phase)
                 RETURN(0);
             }
             case PTLRPC_RECOVD_PHASE_RECOVER:
+                imp->imp_flags &= ~IMP_INVALID;
                 rc = ptlrpc_reconnect_import(imp, OST_CONNECT);
-                if (rc)
+                if (rc) {
+                        imp->imp_flags |= IMP_INVALID;
                         RETURN(rc);
+                }
                 set_osc_active(imp, 1 /* active */);
                 RETURN(0);
             default:

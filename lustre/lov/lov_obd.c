@@ -1112,6 +1112,8 @@ static inline int lov_brw(int cmd, struct lustre_handle *conn,
 
         for (i = 0, loi = lsm->lsm_oinfo, si_last = si = stripeinfo;
              i < stripe_count; i++, loi++, si_last = si, si++) {
+                if (lov->tgts[loi->loi_ost_idx].active == 0)
+                        GOTO(out_ioarr, rc = -EIO);
                 if (i > 0)
                         si->index = si_last->index + si_last->bufct;
                 si->lsm.lsm_object_id = loi->loi_id;
@@ -1134,12 +1136,14 @@ static inline int lov_brw(int cmd, struct lustre_handle *conn,
 
                 if (si->bufct) {
                         LASSERT(shift < oa_bufs);
-                        /* XXX handle error returns here */
-                        obd_brw(cmd, &lov->tgts[si->ost_idx].conn,
-                                &si->lsm, si->bufct, &ioarr[shift], set);
+                        rc = obd_brw(cmd, &lov->tgts[si->ost_idx].conn,
+                                     &si->lsm, si->bufct, &ioarr[shift], set);
+                        if (rc)
+                                GOTO(out_ioarr, rc);
                 }
         }
 
+ out_ioarr:
         OBD_FREE(ioarr, sizeof(*ioarr) * oa_bufs);
  out_where:
         OBD_FREE(where, sizeof(*where) * oa_bufs);
@@ -1158,6 +1162,7 @@ static int lov_enqueue(struct lustre_handle *conn, struct lov_stripe_md *lsm,
         struct obd_export *export = class_conn2export(conn);
         struct lov_obd *lov;
         struct lov_oinfo *loi;
+        struct lov_stripe_md submd;
         int rc = 0, i;
         ENTRY;
 
@@ -1172,16 +1177,22 @@ static int lov_enqueue(struct lustre_handle *conn, struct lov_stripe_md *lsm,
                 RETURN(-EINVAL);
         }
 
-        /* XXX assert that we're not in recovery */
+        /* we should never be asked to replay a lock. */
+
+        LASSERT((*flags & LDLM_FL_REPLAY) == 0);
 
         if (!export || !export->exp_obd)
                 RETURN(-ENODEV);
+
+        memset(lockhs, 0, sizeof(*lockhs) * lsm->lsm_stripe_count);
 
         lov = &export->exp_obd->u.lov;
         for (i = 0,loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count; i++,loi++) {
                 struct ldlm_extent *extent = (struct ldlm_extent *)cookie;
                 struct ldlm_extent sub_ext;
-                struct lov_stripe_md submd;
+
+                if (lov->tgts[loi->loi_ost_idx].active == 0)
+                        continue;
 
                 *flags = 0;
                 sub_ext.start = lov_stripe_offset(lsm, extent->start, i);
@@ -1200,11 +1211,31 @@ static int lov_enqueue(struct lustre_handle *conn, struct lov_stripe_md *lsm,
                                  parent_lock, type, &sub_ext, sizeof(sub_ext),
                                  mode, flags, cb, data, datalen, &(lockhs[i]));
                 // XXX add a lock debug statement here
-                if (rc) {
+                if (rc && lov->tgts[loi->loi_ost_idx].active) {
                         CERROR("Error enqueue objid "LPX64" subobj "LPX64
                                " on OST idx %d: rc = %d\n", lsm->lsm_object_id,
                                loi->loi_id, loi->loi_ost_idx, rc);
-                        memset(&(lockhs[i]), 0, sizeof(lockhs[i]));
+                        goto out_locks;
+                }
+        }
+
+        RETURN(0);
+
+ out_locks:
+        for (i--, loi = &lsm->lsm_oinfo[i]; i >= 0; i--, loi--) {
+                int err;
+                
+                if (lov->tgts[loi->loi_ost_idx].active == 0)
+                        continue;
+
+                submd.lsm_object_id = loi->loi_id;
+                submd.lsm_stripe_count = 0;
+                err = obd_cancel(&lov->tgts[loi->loi_ost_idx].conn, &submd,
+                                 mode, &lockhs[i]);
+                if (err) {
+                        CERROR("Error cancelling objid "LPX64" subobj "LPX64
+                               " on OST idx %d after enqueue error: rc = %d\n",
+                               loi->loi_id, loi->loi_ost_idx, err);
                 }
         }
         RETURN(rc);
@@ -1236,18 +1267,25 @@ static int lov_cancel(struct lustre_handle *conn, struct lov_stripe_md *lsm,
         lov = &export->exp_obd->u.lov;
         for (i = 0,loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count; i++,loi++) {
                 struct lov_stripe_md submd;
+                int err;
+
+                if (lov->tgts[loi->loi_ost_idx].active == 0)
+                        continue;
 
                 if (lockhs[i].addr == 0)
                         continue;
 
                 submd.lsm_object_id = loi->loi_id;
                 submd.lsm_stripe_count = 0;
-                rc = obd_cancel(&lov->tgts[loi->loi_ost_idx].conn, &submd,
+                err = obd_cancel(&lov->tgts[loi->loi_ost_idx].conn, &submd,
                                 mode, &lockhs[i]);
-                if (rc)
+                if (err && lov->tgts[loi->loi_ost_idx].active) {
                         CERROR("Error cancel objid "LPX64" subobj "LPX64
                                " on OST idx %d: rc = %d\n", lsm->lsm_object_id,
-                               loi->loi_id, loi->loi_ost_idx, rc);
+                               loi->loi_id, loi->loi_ost_idx, err);
+                        if (!rc)
+                                rc = err;
+                }
         }
         RETURN(rc);
 }
@@ -1258,7 +1296,7 @@ static int lov_cancel_unused(struct lustre_handle *conn,
         struct obd_export *export = class_conn2export(conn);
         struct lov_obd *lov;
         struct lov_oinfo *loi;
-        int rc = 0, i;
+        int rc = 0, i, err;
         ENTRY;
 
         if (!lsm) {
@@ -1275,13 +1313,17 @@ static int lov_cancel_unused(struct lustre_handle *conn,
 
                 submd.lsm_object_id = loi->loi_id;
                 submd.lsm_stripe_count = 0;
-                rc = obd_cancel_unused(&lov->tgts[loi->loi_ost_idx].conn,
+                err = obd_cancel_unused(&lov->tgts[loi->loi_ost_idx].conn,
                                        &submd, flags);
-                if (rc)
+                if (err && lov->tgts[loi->loi_ost_idx].active) {
                         CERROR("Error cancel unused objid "LPX64" subobj "LPX64
                                " on OST idx %d: rc = %d\n", lsm->lsm_object_id,
-                               loi->loi_id, loi->loi_ost_idx, rc);
+                               loi->loi_id, loi->loi_ost_idx, err);
+                        if (!rc)
+                                rc = err;
+                }
         }
+
         RETURN(rc);
 }
 
