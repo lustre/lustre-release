@@ -20,11 +20,10 @@ Index: linux-2.4.18-chaos52/fs/exec.c
  	struct file * file;
  	struct nameidata nd;
  	int error;
--
--	error = user_path_walk(library, &nd);
 +	struct lookup_intent it = { .it_op = IT_OPEN,
 +	                                     .it_flags = FMODE_READ|FMODE_EXEC };
-+					     
+ 
+-	error = user_path_walk(library, &nd);
 +	error = user_path_walk_it(library, &nd, &it);
  	if (error)
  		goto out;
@@ -330,7 +329,7 @@ Index: linux-2.4.18-chaos52/fs/namei.c
  	UPDATE_ATIME(dentry->d_inode);
 -	err = dentry->d_inode->i_op->follow_link(dentry, nd);
 +	nd->intent = it;
-+        err = dentry->d_inode->i_op->follow_link(dentry, nd);
++	err = dentry->d_inode->i_op->follow_link(dentry, nd);
  	current->link_count--;
  	return err;
  loop:
@@ -822,13 +821,13 @@ Index: linux-2.4.18-chaos52/fs/namei.c
  		if (error)
  			goto out;
 -		dentry = lookup_create(&nd, 1);
-+ 		if (nd.dentry->d_inode->i_op->mkdir_raw) {
-+ 			struct inode_operations *op = nd.dentry->d_inode->i_op;
-+ 			error = op->mkdir_raw(&nd, mode);
-+ 			/* the file system wants to use normal vfs path now */
-+ 			if (error != -EOPNOTSUPP)
-+ 				goto out2;
-+ 		}
++		if (nd.dentry->d_inode->i_op->mkdir_raw) {
++			struct inode_operations *op = nd.dentry->d_inode->i_op;
++			error = op->mkdir_raw(&nd, mode);
++			/* the file system wants to use normal vfs path now */
++			if (error != -EOPNOTSUPP)
++				goto out2;
++		}
 +		dentry = lookup_create(&nd, 1, NULL);
  		error = PTR_ERR(dentry);
  		if (!IS_ERR(dentry)) {
@@ -845,14 +844,14 @@ Index: linux-2.4.18-chaos52/fs/namei.c
  			error = -EBUSY;
  			goto exit1;
  	}
-+ 	if (nd.dentry->d_inode->i_op->rmdir_raw) {
-+ 		struct inode_operations *op = nd.dentry->d_inode->i_op;
++	if (nd.dentry->d_inode->i_op->rmdir_raw) {
++		struct inode_operations *op = nd.dentry->d_inode->i_op;
 +
-+ 		error = op->rmdir_raw(&nd);
-+ 		/* the file system wants to use normal vfs path now */
-+ 		if (error != -EOPNOTSUPP)
-+ 			goto exit1;
-+ 	}
++		error = op->rmdir_raw(&nd);
++		/* the file system wants to use normal vfs path now */
++		if (error != -EOPNOTSUPP)
++			goto exit1;
++	}
  	down(&nd.dentry->d_inode->i_sem);
 -	dentry = lookup_hash(&nd.last, nd.dentry);
 +	dentry = lookup_hash_it(&nd.last, nd.dentry, NULL);
@@ -863,13 +862,13 @@ Index: linux-2.4.18-chaos52/fs/namei.c
  	error = -EISDIR;
  	if (nd.last_type != LAST_NORM)
  		goto exit1;
-+ 	if (nd.dentry->d_inode->i_op->unlink_raw) {
-+ 		struct inode_operations *op = nd.dentry->d_inode->i_op;
-+ 		error = op->unlink_raw(&nd);
-+ 		/* the file system wants to use normal vfs path now */
-+ 		if (error != -EOPNOTSUPP)
-+ 			goto exit1;
-+ 	}
++	if (nd.dentry->d_inode->i_op->unlink_raw) {
++		struct inode_operations *op = nd.dentry->d_inode->i_op;
++		error = op->unlink_raw(&nd);
++		/* the file system wants to use normal vfs path now */
++		if (error != -EOPNOTSUPP)
++			goto exit1;
++	}
  	down(&nd.dentry->d_inode->i_sem);
 -	dentry = lookup_hash(&nd.last, nd.dentry);
 +	dentry = lookup_hash_it(&nd.last, nd.dentry, NULL);
@@ -940,14 +939,14 @@ Index: linux-2.4.18-chaos52/fs/namei.c
  	if (newnd.last_type != LAST_NORM)
  		goto exit2;
  
-+ 	if (old_dir->d_inode->i_op->rename_raw) {
++	if (old_dir->d_inode->i_op->rename_raw) {
 +		lock_kernel();
-+ 		error = old_dir->d_inode->i_op->rename_raw(&oldnd, &newnd);
++		error = old_dir->d_inode->i_op->rename_raw(&oldnd, &newnd);
 +		unlock_kernel();
-+ 		/* the file system wants to use normal vfs path now */
-+ 		if (error != -EOPNOTSUPP)
-+ 			goto exit2;
-+ 	}
++		/* the file system wants to use normal vfs path now */
++		if (error != -EOPNOTSUPP)
++			goto exit2;
++	}
 +
  	double_lock(new_dir, old_dir);
  
@@ -1531,22 +1530,22 @@ Index: linux-2.4.18-chaos52/include/linux/dcache.h
 +
 +
 +struct lustre_intent_data {
-+        int       it_disposition;
-+        int       it_status;
-+        __u64     it_lock_handle;
-+        void     *it_data;
-+        int       it_lock_mode;
++	int       it_disposition;
++	int       it_status;
++	__u64     it_lock_handle;
++	void     *it_data;
++	int       it_lock_mode;
 +	int it_int_flags;
 +};
 +struct lookup_intent {
-+        int     it_magic;
-+        void    (*it_op_release)(struct lookup_intent *);
-+        int     it_op;
++	int     it_magic;
++	void    (*it_op_release)(struct lookup_intent *);
++	int     it_op;
 +	int     it_flags;
 +	int     it_create_mode;
-+        union {
-+                struct lustre_intent_data lustre;
-+        } d;
++	union {
++		struct lustre_intent_data lustre;
++	} d;
 +};
 +
 +static inline void intent_init(struct lookup_intent *it, int op, int flags)
@@ -1670,7 +1669,7 @@ Index: linux-2.4.18-chaos52/include/linux/fs.h
  	int (*revalidate) (struct dentry *);
 +	int (*revalidate_it) (struct dentry *, struct lookup_intent *);
  	int (*setattr) (struct dentry *, struct iattr *);
-+ 	int (*setattr_raw) (struct inode *, struct iattr *);
++	int (*setattr_raw) (struct inode *, struct iattr *);
  	int (*getattr) (struct dentry *, struct iattr *);
  };
  
