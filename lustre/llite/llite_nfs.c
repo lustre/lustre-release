@@ -37,6 +37,19 @@ __u32 get_uuid2int(const char *name, int len)
         return (key0 << 1);
 }
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+static int ll_nfs_test_inode(struct inode *inode, unsigned long ino, void *opaque)
+#else
+static int ll_nfs_test_inode(struct inode *inode, void *opaque)
+#endif
+{
+        struct ll_fid *iid = opaque;
+
+        if (inode->i_ino == iid->id && inode->i_generation == iid->generation)
+                return 1;
+
+        return 0;
+}
 static struct inode * search_inode_for_lustre(struct super_block *sb,
                                               unsigned long ino,
                                               unsigned long generation,
@@ -48,8 +61,9 @@ static struct inode * search_inode_for_lustre(struct super_block *sb,
         unsigned long valid = 0;
         int eadatalen = 0, rc;
         struct inode *inode = NULL;
+        struct ll_fid iid = { .id = ino, .generation = generation };
 
-        inode = ILOOKUP(sb, ino, NULL, NULL);
+        inode = ILOOKUP(sb, ino, ll_nfs_test_inode, &iid);
 
         if (inode)
                 return inode;
