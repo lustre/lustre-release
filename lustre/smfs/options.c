@@ -9,9 +9,6 @@
 #include <linux/fs.h>
 #include <linux/slab.h>
 #include <linux/string.h>
-#include <linux/jbd.h>
-#include <linux/ext3_fs.h>
-#include <linux/snap.h>
 #include <linux/errno.h>
 #include "smfs_internal.h" 
 
