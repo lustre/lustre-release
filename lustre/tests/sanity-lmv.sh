@@ -39,6 +39,7 @@ SOCKETSERVER=${SOCKETSERVER:-socketserver}
 SOCKETCLIENT=${SOCKETCLIENT:-socketclient}
 IOPENTEST1=${IOPENTEST1:-iopentest1}
 IOPENTEST2=${IOPENTEST2:-iopentest2}
+PTLDEBUG=${PTLDEBUG:-0}
 
 if [ $UID -ne 0 ]; then
 	RUNAS_ID="$UID"
@@ -95,7 +96,7 @@ run_one() {
 	if ! mount | grep -q $DIR; then
 		$START
 	fi
-	echo -1 >/proc/sys/portals/debug	
+	echo $PTLDEBUG >/proc/sys/portals/debug	
 	log "== test $1: $2"
 	export TESTNAME=test_$1
 	test_$1 || error "test_$1: exit with rc=$?"
