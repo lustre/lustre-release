@@ -57,9 +57,12 @@ sub get_latest_mtime
 				($hours,$min,$sec)=split(":",$time[3]);
 				($mday, $mon, $year)=($time[2],$time[1],
 								$time[4]);
+				$secs=0;
 				$mon=$months{$mon};
-				$secs=timelocal($sec,$min,$hours,$mday,
+				if($mon>0 && $mon<13){
+					$secs=timelocal($sec,$min,$hours,$mday,
 							$mon,$year);
+				}
 				if($secs>$last_mtime){
 					$last_mtime=$secs;
 					$show_last=$hours.$min.$sec.
