@@ -185,7 +185,9 @@ static int ext2_commit_chunk(struct page *page, unsigned from, unsigned to)
         loff_t new_size = (page->index << PAGE_CACHE_SHIFT) + to;
         int err = 0;
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         dir->i_version = ++event;
+#endif
         if (new_size > dir->i_size)
                 dir->i_size = new_size;
         SetPageUptodate(page);
