@@ -37,16 +37,48 @@ static int llog_test_rand;
 static struct obd_uuid uuid = { .uuid = "test_uuid" };
 static struct llog_logid cat_logid;
 
+static int verify_handle(char * test, struct llog_handle *llh, int num_recs)
+{
+        int i;
+        if (llh->lgh_last_idx != num_recs - 1) {
+                CERROR("%s: handle->last_idx is %d, expected %d after write\n",
+                       test, llh->lgh_last_idx, num_recs - 1);
+                RETURN(-ERANGE);
+        }
+        if (llh->lgh_hdr->llh_count != num_recs) {
+                CERROR("%s: header->count is %d, expected %d after write\n",
+                       test, llh->lgh_hdr->llh_count, num_recs);
+                RETURN(-ERANGE);
+        }
+        for (i = 0; i < num_recs; i++) {
+                if (!ext2_test_bit(i, llh->lgh_hdr->llh_bitmap)) {
+                        CERROR("%s: bit %d not set after %d writes\n", 
+                               test, i, num_recs);
+                        RETURN(-ERANGE);
+                }
+        }
+        for (i = num_recs; i < LLOG_BITMAP_BYTES * 8; i++) {
+                if (ext2_test_bit(i, llh->lgh_hdr->llh_bitmap)) {
+                        CERROR("%s: bit %d is set, but should not be\n", 
+                               test, i);
+                        RETURN(-ERANGE);
+                }
+        }
+        RETURN(0);
+}
+
 /* Test named-log create/open, close */
 static int llog_test_1(struct obd_device *obd)
 {
         struct llog_handle *llh;
         char name[10];
         int rc;
+        int rc2;
         ENTRY;
 
-        CERROR("1a: create a log with a name\n");
         sprintf(name, "%x", llog_test_rand);
+        CERROR("1a: create a log with name: %s\n", name);
+
         rc = llog_create(obd, &llh, NULL, name);
         if (rc) {
                 CERROR("1a: llog_create with name %s failed: %d\n", name, rc);
@@ -54,26 +86,17 @@ static int llog_test_1(struct obd_device *obd)
         }
         llog_init_handle(llh, LLOG_F_IS_PLAIN, &uuid);
 
-        if (llh->lgh_last_idx != 0) {
-                CERROR("1a: handle->last_idx is %d, expected 0 after create\n",
-                       llh->lgh_last_idx);
-                GOTO(out, rc = -ERANGE);
-        }
-        if (!ext2_test_bit(0, llh->lgh_hdr->llh_bitmap)) {
-                CERROR("3: first bit in bitmap should be set after write\n");
-                RETURN(-ERANGE);
-        }
-        if (llh->lgh_hdr->llh_count != 1) {
-                CERROR("1a: header->count is %d, expected 1 after create\n",
-                       llh->lgh_hdr->llh_count);
-                GOTO(out, rc = -ERANGE);
-        }
+        if ((rc = verify_handle("1", llh, 1)))
+                GOTO(out, rc);
 
  out:
         CERROR("1b: close newly-created log\n");
-        rc = llog_close(llh);
-        if (rc)
-                CERROR("1b: close log %s failed: %d\n", name, rc);
+        rc2 = llog_close(llh);
+        if (rc2) {
+                CERROR("1b: close log %s failed: %d\n", name, rc2);
+                if (rc == 0)
+                        rc = rc2;
+        }
         RETURN(rc);
 }
 
@@ -84,8 +107,8 @@ static int llog_test_2(struct obd_device *obd, struct llog_handle **llh)
         int rc;
         ENTRY;
 
-        CERROR("2: re-open a log with a name\n");
         sprintf(name, "%x", llog_test_rand);
+        CERROR("2: re-open a log with name: %s\n", name);
         rc = llog_create(obd, llh, NULL, name);
         if (rc) {
                 CERROR("2: re-open log with name %s failed: %d\n", name, rc);
@@ -93,20 +116,8 @@ static int llog_test_2(struct obd_device *obd, struct llog_handle **llh)
         }
         llog_init_handle(*llh, LLOG_F_IS_PLAIN, &uuid);
 
-        if ((*llh)->lgh_last_idx != 0) {
-                CERROR("2: handle->last_idx is %d, expected 1 after reopen\n",
-                       (*llh)->lgh_last_idx);
-                RETURN(-ERANGE);
-        }
-        if (!ext2_test_bit(0, (*llh)->lgh_hdr->llh_bitmap)) {
-                CERROR("3: first bit in bitmap should be set after write\n");
-                RETURN(-ERANGE);
-        }
-        if ((*llh)->lgh_hdr->llh_count != 1) {
-                CERROR("2: header->count is %d, expected 1 after reopen\n",
-                       (*llh)->lgh_hdr->llh_count);
-                RETURN(-ERANGE);
-        }
+        if ((rc = verify_handle("2", *llh, 1)))
+                RETURN(rc);
 
         RETURN(rc);
 }
@@ -116,6 +127,7 @@ static int llog_test_3(struct obd_device *obd, struct llog_handle *llh)
 {
         struct llog_rec_hdr rec;
         int rc, i;
+        int num_recs = 1;       /* 1 for the header */
         ENTRY;
 
         rec.lrh_len = LLOG_MIN_REC_SIZE;
@@ -123,58 +135,45 @@ static int llog_test_3(struct obd_device *obd, struct llog_handle *llh)
 
         CERROR("3a: write one log record\n");
         rc = llog_write_rec(llh, &rec, NULL, 0, NULL, -1);
+        num_recs++;
         if (rc) {
                 CERROR("3a: write one log record failed: %d\n", rc);
                 RETURN(rc);
         }
 
-        if (llh->lgh_last_idx != 1) {
-                CERROR("3: handle->last_idx is %d, expected 1 after write\n",
-                       llh->lgh_last_idx);
-                RETURN(-ERANGE);
-        }
-        if (llh->lgh_hdr->llh_count != 2) {
-                CERROR("3: header->count is %d, expected 2 after write\n",
-                       llh->lgh_hdr->llh_count);
-                RETURN(-ERANGE);
-        }
-        if (!ext2_test_bit(1, llh->lgh_hdr->llh_bitmap)) {
-                CERROR("3: bit 1 in bitmap should be set after write\n");
-                RETURN(-ERANGE);
-        }
+        if ((rc = verify_handle("3a", llh, num_recs)))
+                RETURN(rc);
 
-        CERROR("3b: write 1000 more log records\n");
-        for (i = 0; i < 1000; i++) {
-                rc = llog_write_rec(llh, &rec, NULL, 0, NULL, -1);
+        CERROR("3b: write 10 log records with 16 byte bufs\n");
+        for (i = 0; i < 10; i++) {
+                char buf[16];
+                rec.lrh_len = 16;
+                memset(buf, 0, sizeof buf);
+                rc = llog_write_rec(llh, &rec, NULL, 0, buf, -1);
                 if (rc) {
-                        CERROR("3b: write 1000 records failed at #%d: %d\n",
+                        CERROR("3b: write 10 records failed at #%d: %d\n",
                                i + 1, rc);
                         RETURN(rc);
                 }
         }
+        num_recs += i;
+        
+        if ((rc = verify_handle("3b", llh, num_recs)))
+                RETURN(rc);
+        
+        CERROR("3c: write 1000 more log records\n");
+        for (i = 0; i < 1000; i++) {
+                rc = llog_write_rec(llh, &rec, NULL, 0, NULL, -1);
+                if (rc) {
+                        CERROR("3c: write 1000 records failed at #%d: %d\n",
+                               i + 1, rc);
+                        RETURN(rc);
+                }
+        }
+        num_recs += i;
 
-        if (llh->lgh_last_idx != 1001) {
-                CERROR("3: handle->last_idx is %d, expected 1001 after write\n",
-                       llh->lgh_last_idx);
-                RETURN(-ERANGE);
-        }
-        if (llh->lgh_hdr->llh_count != 1002) {
-                CERROR("3: header->count is %d, expected 1001 after write\n",
-                       llh->lgh_hdr->llh_count);
-                RETURN(-ERANGE);
-        }
-        for (i = 0; i < 1002; i++) {
-                if (!ext2_test_bit(i, llh->lgh_hdr->llh_bitmap)) {
-                        CERROR("3: bit %d not set after 1001 writes\n", i);
-                        RETURN(-ERANGE);
-                }
-        }
-        for (i = 1002; i < LLOG_BITMAP_BYTES * 8; i++) {
-                if (ext2_test_bit(i, llh->lgh_hdr->llh_bitmap)) {
-                        CERROR("3: bit %d is set, but should not be\n", i);
-                        RETURN(-ERANGE);
-                }
-        }
+        if ((rc = verify_handle("3c", llh, num_recs)))
+                RETURN(rc);
 
         RETURN(rc);
 }
@@ -193,8 +192,8 @@ static int llog_test_4(struct obd_device *obd)
         rec.lrh_len = LLOG_MIN_REC_SIZE;
         rec.lrh_type = 0xf00f00;
 
-        CERROR("4a: create a catalog log with a name\n");
         sprintf(name, "%x", llog_test_rand+1);
+        CERROR("4a: create a catalog log with name: %s\n", name);
         rc = llog_create(obd, &llh, NULL, name);
         if (rc) {
                 CERROR("1a: llog_create with name %s failed: %d\n", name, rc);
