@@ -1525,11 +1525,11 @@ class MDSDEV(Module):
                 stripe_count = len(lov.devlist)
             if stripe_count > 77:
                 self.inode_size = 4096
-            elif stripe_count > 35:
+            elif stripe_count > 34:
                 self.inode_size = 2048
             elif stripe_count > 13:
                 self.inode_size = 1024
-            elif stripe_count > 3:
+            elif stripe_count > 2:
                 self.inode_size = 512
             else:
                 self.inode_size = 256
