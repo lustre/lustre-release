@@ -31,6 +31,8 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- improved mballoc code, several small races and bugs fixed (5733, 5638)
 	- kernel version 43: fix remove_suid bugs in both 2.4 and 2.6 (5695)
 	- avoid needless client->OST connect, fix handle mismatch (5317)
+	- fix DLM error path that led to out-of-sync client, long delays (5779)
+	- support common vfs-enforced mount options (nodev,nosuid,noexec) (5637)
        * miscellania
 	- service request history (4965)
 	- put {ll,lov,osc}_async_page structs in a single slab (4699)
