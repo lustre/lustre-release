@@ -384,7 +384,7 @@ int osc_brw_read(struct obd_conn *conn, obd_count num_oa, struct obdo **oa,
                         bulk[n]->b_buflen = PAGE_SIZE;
                         bulk[n]->b_portal = OST_BULK_PORTAL;
                         ost_pack_niobuf(&ptr2, bulk[n]->b_buf, offset[n],
-                                        count[n], flags[n]);
+                                        count[n], flags[n], bulk[n]->b_xid);
                         n++;
                 }
         }
@@ -456,7 +456,7 @@ int osc_brw_write(struct obd_conn *conn, obd_count num_oa, struct obdo **oa,
 		ost_pack_ioo(&ptr1, oa[i], oa_bufs[i]); 
                 for (j = 0; j < oa_bufs[i]; j++) {
                         ost_pack_niobuf(&ptr2, kmap(buf[n]), offset[n],
-                                        count[n], flags[n]);
+                                        count[n], flags[n], 0);
 			n++;
 		}
 	}

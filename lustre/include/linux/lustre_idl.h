@@ -202,6 +202,7 @@ struct niobuf {
         __u64 offset; 
         __u32 len;
         __u32 flags;
+        __u32 xid;
         void *page;
 };
 

@@ -236,7 +236,7 @@ void ost_unpack_ioo(void **tmp, struct obd_ioobj **ioop)
 }
 
 void ost_pack_niobuf(void **tmp, void *addr, __u64 offset, __u32 len, 
-                   __u32 flags)
+                     __u32 flags, __u32 xid)
 {
         struct niobuf *ioo = *tmp;
         char *c = *tmp;
@@ -245,6 +245,7 @@ void ost_pack_niobuf(void **tmp, void *addr, __u64 offset, __u32 len,
         ioo->offset = NTOH__u64(offset); 
         ioo->len = NTOH__u32(len); 
         ioo->flags = NTOH__u32(flags); 
+        ioo->xid = NTOH__u32(xid);
         *tmp = c + sizeof(*ioo); 
 }
 

@@ -371,9 +371,6 @@ int ost_brw(struct ost_obd *obddev, struct ptlrpc_request *req)
 		barrier();
 	} else {
                 for (i = 0; i < niocount; i++) {
-                        struct ptlrpc_service *srv =
-                                req->rq_obd->u.ost.ost_service;
-
                         bulk = ptlrpc_prep_bulk(&req->rq_peer);
                         if (bulk == NULL) {
                                 CERROR("cannot alloc bulk desc\n");
@@ -381,12 +378,9 @@ int ost_brw(struct ost_obd *obddev, struct ptlrpc_request *req)
                                 goto out;
                         }
 
-                        spin_lock(&srv->srv_lock);
-                        bulk->b_xid = srv->srv_xid++;
-                        spin_unlock(&srv->srv_lock);
-
 			src = &((struct niobuf *)tmp2)[i];
 
+                        bulk->b_xid = src->xid;
                         bulk->b_buf = (void *)(unsigned long)src->addr;
                         bulk->b_buflen = PAGE_SIZE;
                         rc = ptlrpc_send_bulk(bulk, OST_BULK_PORTAL);
@@ -403,6 +397,7 @@ int ost_brw(struct ost_obd *obddev, struct ptlrpc_request *req)
                         }
 
                         OBD_FREE(bulk, sizeof(*bulk));
+                        bulk = NULL;
                 }
 
 #if 0

@@ -48,7 +48,7 @@ int ost_pack_rep(char *buf1, int buflen1, char *buf2, int buflen2,
 int ost_unpack_rep(char *buf, int len, struct ptlrep_hdr **hdr, union ptl_rep *rep);
 
 void ost_pack_niobuf(void **tmp, void *addr, __u64 offset, __u32 len, 
-                   __u32 flags);
+                     __u32 flags, __u32 xid);
 void ost_unpack_niobuf(void **tmp, struct niobuf **nbp);
 void ost_pack_ioo(void **tmp, struct obdo *oa, int bufcnt);
 void ost_unpack_ioo(void **tmp, struct obd_ioobj **ioop);
