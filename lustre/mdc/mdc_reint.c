@@ -20,6 +20,7 @@
  */
 
 #define EXPORT_SYMTAB
+#define DEBUG_SUBSYSTEM S_MDC
 
 #ifdef __KERNEL__
 #include <linux/config.h>
@@ -28,8 +29,6 @@
 #else
 #include <liblustre.h>
 #endif
-
-#define DEBUG_SUBSYSTEM S_MDC
 
 #include <linux/obd_class.h>
 #include <linux/lustre_mds.h>
