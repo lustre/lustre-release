@@ -249,7 +249,9 @@ static void ll_clear_inode(struct inode *inode)
                 struct lov_stripe_md *md = lli->lli_smd;
 
                 if (md) {
-                        OBD_FREE(md, md->lmd_easize); 
+                        int size = sizeof(*md) + 
+                                md->lmd_stripe_count * sizeof(struct lov_oinfo);
+                        OBD_FREE(md, size); 
                         lli->lli_smd = NULL;
                 }
                 if (lli->lli_symlink_name) {
