@@ -6,5 +6,5 @@ EXTRA_PROGRAMS = kibnal
 
 
 DEFS =
-CPPFLAGS=@CPPFLAGS@ @with_@
+CPPFLAGS=@CPPFLAGS@ @with_ib@
 kibnal_SOURCES = ibnal.h ibnal.c ibnal_cb.c
