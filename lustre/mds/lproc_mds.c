@@ -56,7 +56,7 @@ static int lprocfs_mds_rd_recovery_status(char *page, char **start, off_t off,
                 connected = obd->obd_connected_clients,
                 max_recoverable = obd->obd_max_recoverable_clients,
                 recoverable = obd->obd_recoverable_clients,
-                completed = recoverable - max_recoverable,
+                completed = max_recoverable - recoverable,
                 queue_len = obd->obd_requests_queued_for_recovery,
                 replayed = obd->obd_replayed_requests;
         __u64 next_transno = obd->obd_next_recovery_transno;
