@@ -197,8 +197,7 @@ static int fsfilt_extN_credits_needed(int objcount, struct fsfilt_objinfo *fso)
  * the pages have been written.
  */
 static void *fsfilt_extN_brw_start(int objcount, struct fsfilt_objinfo *fso,
-                                   int niocount, struct niobuf_remote *nb,
-                                   void *desc_private)
+                                   int niocount, void *desc_private)
 {
         journal_t *journal;
         handle_t *handle;
