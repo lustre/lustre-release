@@ -123,7 +123,8 @@ static void filter_grant_incoming(struct obd_export *exp, struct obdo *oa)
         /* Add some margin, since there is a small race if other RPCs arrive
          * out-or-order and have already consumed some grant.  We want to
          * leave this here in case there is a large error in accounting. */
-        CDEBUG(oa->o_grant > fed->fed_grant + 2084 * 1024 ? D_ERROR : D_CACHE,
+        CDEBUG(oa->o_grant > fed->fed_grant + FILTER_GRANT_CHUNK ?
+               D_ERROR : D_CACHE,
                "%s: cli %s reports granted: "LPU64" dropped: %u, local: %lu\n",
                obd->obd_name, exp->exp_client_uuid.uuid, oa->o_grant,
                oa->o_dropped, fed->fed_grant);
@@ -143,6 +144,8 @@ out:
         oa->o_valid &= ~OBD_MD_FLGRANT;
 }
 
+#define GRANT_FOR_LLOG 16
+
 /* Figure out how much space is available between what we've granted
  * and what remains in the filesystem.  Compensate for ext3 indirect
  * block overhead when computing how much free space is left ungranted.
@@ -150,25 +153,30 @@ out:
  * Caller must hold obd_osfs_lock. */
 obd_size filter_grant_space_left(struct obd_export *exp)
 {
-        /* XXX I disabled statfs caching as it only creates extra problems now.
-          -- green*/
         struct obd_device *obd = exp->exp_obd;
         int blockbits = obd->u.filter.fo_sb->s_blocksize_bits;
-        unsigned long max_age = jiffies /*- HZ */+1;
         obd_size tot_granted = obd->u.filter.fo_tot_granted, left = 0;
-        int rc;
+        int rc, statfs_done = 0;
 
+        if (time_before(obd->obd_osfs_age, jiffies - HZ)) {
 restat:
-        rc = fsfilt_statfs(obd, obd->u.filter.fo_sb, max_age);
-        if (rc) /* N.B. statfs can't really fail, just for correctness */
-                RETURN(0);
+                rc = fsfilt_statfs(obd, obd->u.filter.fo_sb, jiffies + 1);
+                if (rc) /* N.B. statfs can't really fail */
+                        RETURN(0);
+                statfs_done = 1;
+        }
 
         left = obd->obd_osfs.os_bavail -
                 (obd->obd_osfs.os_bavail >> (blockbits - 3)); /* (d)indirect */
-        if (left > 16) {                                   /* space for llog */
-                left = (left - 16) << blockbits;
+        if (left > GRANT_FOR_LLOG) {
+                left = (left - GRANT_FOR_LLOG) << blockbits;
         } else {
                 left = 0 /* << blockbits */;
+        }
+
+        if (!statfs_done && left < 32 * FILTER_GRANT_CHUNK + tot_granted) {
+                CDEBUG(D_CACHE, "fs has no space left and statfs too old\n");
+                goto restat;
         }
 
         if (left >= tot_granted) {
@@ -188,12 +196,6 @@ restat:
                         spin_lock(&obd->obd_osfs_lock);
                 }
                 left = 0;
-        }
-
-        if (left < FILTER_GRANT_CHUNK && time_after(jiffies,obd->obd_osfs_age)){
-                CDEBUG(D_CACHE, "fs has no space left and statfs too old\n");
-                max_age = jiffies;
-                goto restat;
         }
 
         CDEBUG(D_CACHE, "%s: cli %s free: "LPU64" avail: "LPU64" grant "LPU64
@@ -433,8 +435,9 @@ static int filter_grant_check(struct obd_export *exp, int objcount,
 
                         if (rnb[n].flags & OBD_BRW_FROM_GRANT) {
                                 if (fed->fed_grant < used + bytes) {
-                                        CERROR("cli %s claims %ld+%d GRANT, "
-                                               "not enough grant %ld, idx %d\n",
+                                        CERROR("%s: cli %s claims %ld+%d GRANT,"
+                                               " no such grant %ld, idx %d\n",
+                                               exp->exp_obd->obd_name,
                                                exp->exp_client_uuid.uuid,
                                                used, bytes, fed->fed_grant, n);
                                 } else {
@@ -463,7 +466,7 @@ static int filter_grant_check(struct obd_export *exp, int objcount,
                          * ignore this error. */
                         lnb[n].rc = -ENOSPC;
                         rnb[n].flags &= OBD_BRW_GRANTED;
-                        CDEBUG(D_INODE, "%s: cli %s idx %d no space for %d\n",
+                        CDEBUG(D_CACHE, "%s: cli %s idx %d no space for %d\n",
                                exp->exp_obd->obd_name,
                                exp->exp_client_uuid.uuid, n, bytes);
                 }
@@ -480,10 +483,18 @@ static int filter_grant_check(struct obd_export *exp, int objcount,
         fed->fed_pending += used;
         exp->exp_obd->u.filter.fo_tot_pending += used;
 
-        CDEBUG(ungranted > PAGE_SIZE ? D_ERROR : D_CACHE,
+        CDEBUG(D_CACHE,
                "%s: cli %s used: %ld ungranted: %ld grant: %ld dirty: %ld\n",
                exp->exp_obd->obd_name, exp->exp_client_uuid.uuid, used,
                ungranted, fed->fed_grant, fed->fed_dirty);
+
+        /* Rough calc in case we don't refresh cached statfs data */
+        used = (used + ungranted + 1 ) >>
+                exp->exp_obd->u.filter.fo_sb->s_blocksize_bits;
+        if (exp->exp_obd->obd_osfs.os_bavail > used)
+                exp->exp_obd->obd_osfs.os_bavail -= used;
+        else
+                exp->exp_obd->obd_osfs.os_bavail = 0;
 
         return rc;
 }
