@@ -506,7 +506,7 @@ int jt_dev_lov_config(int argc, char **argv)
 
         if (strlen(argv[1]) > sizeof(uuid_t) - 1) { 
                 fprintf(stderr, "lov_config: no %dB memory for uuid's\n", 
-                        size);
+                        strlen(argv[1]));
                 return -ENOMEM;
         }
             
@@ -666,7 +666,7 @@ int jt_dev_getattr(int argc, char **argv)
 
 int jt_dev_test_getattr(int argc, char **argv) 
 {
-        int rc;
+        int rc = 0;
         struct obd_ioctl_data data;
         struct timeval start, next_time;
         int i, count, next_count;
@@ -721,7 +721,7 @@ int jt_dev_test_getattr(int argc, char **argv)
 
 int jt_dev_test_brw(int argc, char **argv) 
 {
-        int rc;
+        int rc = 0;
         struct obd_ioctl_data data;
         struct timeval start, next_time;
         char *bulk, *b;

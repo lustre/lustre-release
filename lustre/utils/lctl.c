@@ -270,7 +270,7 @@ int jt_opt_threads(int argc, char **argv)
         int threads, next_thread;
         int verbose;
         int i, j;
-        int rc;
+        int rc = 0;
 
         if (argc < 5) {
                 fprintf(stderr,

@@ -112,7 +112,6 @@ int mds_get_lovtgts(struct obd_device *obd, int tgt_count, uuid_t *uuidarray)
         struct file *f;
         int rc;
         int rc2;
-        int count;
 
         push_ctxt(&saved, &mds->mds_ctxt);
         f = filp_open("LOVTGTS", O_RDONLY, 0644);
@@ -127,12 +126,13 @@ int mds_get_lovtgts(struct obd_device *obd, int tgt_count, uuid_t *uuidarray)
         if (rc2)
                 CERROR("Error closing LOVTGTS file: rc = %d\n", rc2);
 
-        if (rc != count * sizeof(uuid_t)) {
+        if (rc != tgt_count * sizeof(uuid_t)) {
                 CERROR("Error reading LOVTGTS file: rc = %d\n", rc);
                 if (rc >= 0)
                         rc = -EIO;
                 GOTO(out, rc);
-        }
+        } else 
+                rc = 0;
         EXIT;
 out:
         pop_ctxt(&saved);

@@ -345,7 +345,7 @@ static int mds_getlovinfo(struct ptlrpc_request *req)
         rc = mds_get_lovtgts(req->rq_obd, tgt_count,
                              lustre_msg_buf(req->rq_repmsg, 1));
         if (rc) {
-                CERROR("get_lovtgts error %d", rc);
+                CERROR("get_lovtgts error %d\n", rc);
                 req->rq_status = rc;
                 RETURN(0);
         }

@@ -1437,7 +1437,7 @@ static int jt_lov_config(int argc, char **argv)
 
         if (strlen(argv[1]) > sizeof(uuid_t) - 1) { 
                 fprintf(stderr, "lov_config: no %dB memory for uuid's\n", 
-                        size);
+                        strlen(argv[1]));
                 return -ENOMEM;
         }
             

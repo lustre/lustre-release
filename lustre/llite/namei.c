@@ -138,7 +138,7 @@ static struct dentry *ll_lookup2(struct inode * dir, struct dentry *dentry,
         struct lustre_handle lockh;
         int err, type, offset;
         struct lookup_intent lookup_it = { IT_LOOKUP };
-        obd_id ino;
+        obd_id ino = 0;
 
         ENTRY;
 
@@ -380,7 +380,7 @@ static int ll_create(struct inode * dir, struct dentry * dentry, int mode)
         }
 
         if (dentry->d_it->it_disposition) {
-                struct ll_inode_info *ii = ll_i2info(inode);
+                ii = ll_i2info(inode);
                 ii->lli_flags |= OBD_FL_CREATEONOPEN;
                 memcpy(&ii->lli_intent_lock_handle,
                        dentry->d_it->it_lock_handle,

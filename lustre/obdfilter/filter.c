@@ -717,7 +717,6 @@ static int filter_pgcache_brw(int cmd, struct lustre_handle *conn,
 {
         struct obd_run_ctxt      saved;
         struct super_block      *sb;
-        int                      onum;          /* index to oas */
         int                      pnum;          /* index to pages (bufs) */
         unsigned long            retval;
         int                      error;
@@ -741,9 +740,9 @@ static int filter_pgcache_brw(int cmd, struct lustre_handle *conn,
 
         /* count doubles as retval */
         for (pg = 0; pg < oa_bufs; pg++) {
-                CDEBUG(D_INODE, "OP %d obdo no/pno: (%d,%d) (%ld,%ld) "
+                CDEBUG(D_INODE, "OP %d obdo pgno: (%d) (%ld,%ld) "
                        "off count (%Ld,%Ld)\n",
-                       cmd, onum, pnum, file->f_dentry->d_inode->i_ino,
+                       cmd, pnum, file->f_dentry->d_inode->i_ino,
                        (unsigned long)offset[pnum] >> PAGE_CACHE_SHIFT,
                        (unsigned long long)offset[pnum],
                        (unsigned long long)count[pnum]);

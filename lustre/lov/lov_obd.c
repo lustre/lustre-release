@@ -192,7 +192,7 @@ static inline int lov_stripe_md_size(struct obd_device *obd)
 
 static int lov_create(struct lustre_handle *conn, struct obdo *oa, struct lov_stripe_md **ea)
 {
-        int rc, i;
+        int rc = 0, i;
         struct obdo tmp;
         struct obd_export *export = class_conn2export(conn);
         struct lov_obd *lov;
@@ -253,7 +253,7 @@ static int lov_create(struct lustre_handle *conn, struct obdo *oa, struct lov_st
 static int lov_destroy(struct lustre_handle *conn, struct obdo *oa, 
 struct lov_stripe_md *ea)
 {
-        int rc, i;
+        int rc = 0, i;
         struct obdo tmp;
         struct obd_export *export = class_conn2export(conn);
         struct lov_obd *lov;

@@ -375,7 +375,7 @@ def prepare_mdc(node):
 def prepare_mountpoint(node):
     name, uuid, oscuuid, mdcuuid, mtpt = getMTPTInfo(node)
     print 'MTPT:', name, uuid, oscuuid, mdcuuid, mtpt
-    cmd = "mount -t lustre_lite -o ost=%s,mds=%s none %s" % \
+    cmd = "echo mount -t lustre_lite -o ost=%s,mds=%s none %s" % \
           (oscuuid, mdcuuid, mtpt)
     run("mkdir", mtpt)
     run(cmd)

@@ -1,6 +1,6 @@
 DEFS=
 
-CFLAGS:=-g -I. -I/usr/include/libxml2 -I/usr/include/glib-1.2 -I$(PORTALS)/include \
+CFLAGS:=-g -O2 -I. -I/usr/include/libxml2 -I/usr/include/glib-1.2 -I$(PORTALS)/include \
 -I/usr/lib/glib/include -I$(srcdir)/../include -Wall
 KFLAGS:=
 CPPFLAGS =
