@@ -265,6 +265,8 @@ int ll_direct_IO(int rw, struct inode *inode, struct kiobuf *iobuf,
          * instead of "blocknr" because ->index contains garbage.
          */
         for (i = 0; i < bufs_per_obdo; i++, blocknr++) {
+                iobuf->maplist[i]->index = blocknr; /* XXX blksz = PAGE_SIZE? */
+
                 pga[i].pg = iobuf->maplist[i];
                 pga[i].count = PAGE_SIZE;
                 pga[i].off = (obd_off)blocknr << PAGE_SHIFT;
