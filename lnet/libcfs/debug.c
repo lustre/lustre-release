@@ -777,6 +777,8 @@ portals_debug_msg(int subsys, int mask, char *file, const char *fn,
                         debug_daemon_state.overlapped = 1;
                         ap = NULL;
                         format = "DEBUG MARKER: Debug buffer overlapped\n";
+                        printk(KERN_ERR "LustreError: debug daemon buffer "
+                               "overlapped");
                 } else  /* More space just became available */
                         debug_daemon_state.overlapped = 0;
         }
