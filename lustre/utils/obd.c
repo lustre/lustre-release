@@ -813,7 +813,7 @@ int jt_obd_create(int argc, char **argv)
                 data.ioc_obdo1.o_uid = 0;
                 data.ioc_obdo1.o_gid = 0;
                 data.ioc_obdo1.o_valid = OBD_MD_FLTYPE | OBD_MD_FLMODE |
-                                OBD_MD_FLID | OBD_MD_FDUID | OBD_MD_FLGID;;
+                                OBD_MD_FLID | OBD_MD_FLUID | OBD_MD_FLGID;;
 
                 rc = ioctl(fd, OBD_IOC_CREATE, &data);
                 SHMEM_BUMP();
