@@ -593,12 +593,15 @@ static int osc_enqueue(struct lustre_handle *connh, struct lov_stripe_md *md,
                        struct lustre_handle *parent_lock, 
                        __u32 type, void *extentp, int extent_len, __u32 mode,
                        int *flags, void *callback, void *data, int datalen,
-                       struct lustre_handle *lockhs)
+                       struct lustre_handle *lockh)
 {
         __u64 res_id[RES_NAME_SIZE] = { md->lmd_object_id };
         struct obd_device *obddev = class_conn2obd(connh);
         struct ldlm_extent *extent = extentp;
-        int rc, i;
+        struct ldlm_lock *lock;
+        struct inode *inode = data;
+        struct ll_inode_info *lli = ll_i2info(inode);
+        int rc;
         __u32 mode2;
 
         /* Filesystem locks are given a bit of special treatment: first we
@@ -609,7 +612,7 @@ static int osc_enqueue(struct lustre_handle *connh, struct lov_stripe_md *md,
         /* Next, search for already existing extent locks that will cover us */
         //osc_con2dlmcl(conn, &cl, &connection, &rconn);
         rc = ldlm_lock_match(obddev->obd_namespace, res_id, type, extent,
-                             sizeof(extent), mode, lockhs);
+                             sizeof(extent), mode, lockh);
         if (rc == 1) {
                 /* We already have a lock, and it's referenced */
                 return 0;
@@ -625,19 +628,19 @@ static int osc_enqueue(struct lustre_handle *connh, struct lov_stripe_md *md,
                 mode2 = LCK_PW;
 
         rc = ldlm_lock_match(obddev->obd_namespace, res_id, type, extent,
-                             sizeof(extent), mode2, lockhs);
+                             sizeof(extent), mode2, lockh);
         if (rc == 1) {
                 int flags;
                 /* FIXME: This is not incredibly elegant, but it might
                  * be more elegant than adding another parameter to
                  * lock_match.  I want a second opinion. */
-                ldlm_lock_addref(lockhs, mode);
-                ldlm_lock_decref(lockhs, mode2);
+                ldlm_lock_addref(lockh, mode);
+                ldlm_lock_decref(lockh, mode2);
 
                 if (mode == LCK_PR)
                         return 0;
 
-                rc = ldlm_cli_convert(lockhs, mode, &flags);
+                rc = ldlm_cli_convert(lockh, mode, &flags);
                 if (rc)
                         LBUG();
 
@@ -647,28 +650,20 @@ static int osc_enqueue(struct lustre_handle *connh, struct lov_stripe_md *md,
         rc = ldlm_cli_enqueue(connh, NULL, obddev->obd_namespace,
                               parent_lock, res_id, type, extent,
                               sizeof(extent), mode, flags, ldlm_completion_ast,
-                              callback, data, datalen, lockhs);
+                              callback, data, datalen, lockh);
         if (rc)
                 return rc;
 
         /* This code must change if we ever stop passing an inode in as data */
         /* This is ldlm and llite code.  It makes me sad that it's in
          * osc_request.c --phil */
-        l_lock(&obddev->obd_namespace->ns_lock);
-        for (i = 0; i < md->lmd_stripe_count; i++) {
-                struct ldlm_lock *lock = ldlm_handle2lock(&(lockhs[i]));
-                struct inode *inode = data;
-                struct ll_inode_info *lli = ll_i2info(inode);
-
-                if (!lock) {
-                        CERROR("invalid lock in array\n");
-                        continue;
-                }
-
+        lock = ldlm_handle2lock(&lockh);
+        if (lock) {
                 /* Lock already has an extra ref from handle2lock */
+                l_lock(&obddev->obd_namespace->ns_lock);
                 list_add(&lock->l_inode_link, &lli->lli_osc_locks);
+                l_unlock(&obddev->obd_namespace->ns_lock);
         }
-        l_unlock(&obddev->obd_namespace->ns_lock);
 
         return rc;
 }

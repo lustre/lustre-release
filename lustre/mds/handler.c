@@ -421,12 +421,26 @@ static int mds_getlovinfo(struct ptlrpc_request *req)
 int mds_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                      void *data, __u32 data_len)
 {
-        struct lustre_handle lockh;
+        int do_ast;
         ENTRY;
 
-        ldlm_lock2handle(lock, &lockh);
-        if (ldlm_cli_cancel(&lockh) < 0)
-                LBUG();
+        l_lock(&lock->l_resource->lr_namespace->ns_lock);
+        lock->l_flags |= LDLM_FL_CBPENDING;
+        do_ast = (!lock->l_readers && !lock->l_writers);
+        l_unlock(&lock->l_resource->lr_namespace->ns_lock);
+
+        if (do_ast) {
+                struct lustre_handle lockh;
+                int rc;
+
+                LDLM_DEBUG(lock, "already unused, calling ldlm_cli_cancel");
+                ldlm_lock2handle(lock, &lockh);
+                rc = ldlm_cli_cancel(&lockh);
+                if (rc < 0)
+                        CERROR("ldlm_cli_cancel: %d\n", rc);
+        } else
+                LDLM_DEBUG(lock, "Lock still has references, will be"
+                           "cancelled later");
         RETURN(0);
 }
 
@@ -565,14 +579,16 @@ static int mds_getattr(int offset, struct ptlrpc_request *req)
         struct dentry *de;
         struct inode *inode;
         struct mds_body *body;
-        int rc, size[2] = {sizeof(*body)}, bufcount = 1;
+        int rc = 0, size[2] = {sizeof(*body)}, bufcount = 1;
         ENTRY;
 
         body = lustre_msg_buf(req->rq_reqmsg, offset);
         push_ctxt(&saved, &mds->mds_ctxt);
         de = mds_fid2dentry(mds, &body->fid1, NULL);
-        if (IS_ERR(de))
+        if (IS_ERR(de)) {
+                req->rq_status = -ENOENT;
                 GOTO(out_pop, rc = -ENOENT);
+        }
 
         inode = de->d_inode;
         if (S_ISREG(body->fid1.f_type)) {
@@ -586,18 +602,18 @@ static int mds_getattr(int offset, struct ptlrpc_request *req)
         rc = lustre_pack_msg(bufcount, size, NULL, &req->rq_replen,
                              &req->rq_repmsg);
         if (rc || OBD_FAIL_CHECK(OBD_FAIL_MDS_GETATTR_PACK)) {
-                CERROR("mds: out of memory\n");
-                GOTO(out, rc);
+                CERROR("out of memory or FAIL_MDS_GETATTR_PACK\n");
+                req->rq_status = rc;
+                GOTO(out, rc = 0);
         }
 
-        rc = mds_getattr_internal(mds, de, req, offset, 0);
+        req->rq_status = mds_getattr_internal(mds, de, req, offset, 0);
 
 out:
         l_dput(de);
 out_pop:
         pop_ctxt(&saved);
-        req->rq_status = rc;
-        RETURN(0);
+        RETURN(rc);
 }
 
 static int mds_statfs(struct ptlrpc_request *req)

@@ -397,13 +397,10 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
         struct mds_obd *mds = mds_req2mds(req);
         struct obd_device *obd = req->rq_export->exp_obd;
         char *name;
-        int namelen;
         struct inode *dir, *inode;
-        int lock_mode;
         struct lustre_handle lockh, child_lockh;
         void *handle;
-        int rc = 0;
-        int err;
+        int namelen, lock_mode, err, rc = 0;
         ENTRY;
 
         /* a name was supplied by the client; fid1 is the directory */

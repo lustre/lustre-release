@@ -450,8 +450,8 @@ static int ldlm_lock_compat_list(struct ldlm_lock *lock, int send_cbs,
                 rc = 0;
 
                 if (send_cbs && child->l_blocking_ast != NULL) {
-                        CDEBUG(D_OTHER, "incompatible; sending blocking "
-                               "AST.\n");
+                        CDEBUG(D_OTHER, "lock %p incompatible; sending "
+                               "blocking AST.\n", child);
                         ldlm_add_ast_work_item(child, lock);
                 }
         }

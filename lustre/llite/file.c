@@ -73,7 +73,7 @@ static int ll_file_open(struct inode *inode, struct file *file)
                         }
                         md = lli->lli_smd;
                 }
-                if (lli->lli_smd && lli->lli_smd->lmd_object_id == 0)
+                if (lli->lli_smd->lmd_object_id == 0)
                         LBUG();
                 up(&lli->lli_open_sem);
         }
@@ -94,8 +94,6 @@ static int ll_file_open(struct inode *inode, struct file *file)
                 CERROR("mdc_open didn't assign fd_mdshandle\n");
                 /* XXX handle this how, abort or is it non-fatal? */
         }
-        if (!fd->fd_mdshandle)
-                CERROR("mdc_open didn't assign fd_mdshandle\n");
 
         if (oa == NULL && (oa = obdo_alloc()) == NULL)
                 GOTO(out_mdc, rc = -EINVAL);
@@ -366,7 +364,7 @@ ll_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
                                   ll_lock_callback, inode, sizeof(*inode),
                                   lockhs);
                 if (err != ELDLM_OK) {
-                        OBD_FREE(lockhs, md->lmd_stripe_count * sizeof(*lockhs));
+                        OBD_FREE(lockhs, md->lmd_stripe_count *sizeof(*lockhs));
                         CERROR("lock enqueue: err: %d\n", err);
                         RETURN(err);
                 }
@@ -380,7 +378,7 @@ ll_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
         if (!(fd->fd_flags & LL_FILE_IGNORE_LOCK)) {
                 err = obd_cancel(&sbi->ll_osc_conn, md, LCK_PW, lockhs);
                 if (err != ELDLM_OK) {
-                        OBD_FREE(lockhs, md->lmd_stripe_count * sizeof(*lockhs));
+                        OBD_FREE(lockhs, md->lmd_stripe_count *sizeof(*lockhs));
                         CERROR("lock cancel: err: %d\n", err);
                         RETURN(err);
                 }

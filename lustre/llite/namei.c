@@ -133,12 +133,13 @@ static struct dentry *ll_lookup2(struct inode * dir, struct dentry *dentry,
                                  struct lookup_intent *it)
 {
         struct ptlrpc_request *request = NULL;
+        struct ptlrpc_request *getattr_req = NULL;
         struct inode * inode = NULL;
         struct ll_sb_info *sbi = ll_i2sbi(dir);
         struct ll_inode_md md;
         struct lustre_handle lockh;
-        int err, offset;
         struct lookup_intent lookup_it = { IT_LOOKUP };
+        int err, offset, mode;
         obd_id ino = 0;
 
         ENTRY;
@@ -195,6 +196,27 @@ static struct dentry *ll_lookup2(struct inode * dir, struct dentry *dentry,
                         it->it_data = NULL;
                         GOTO(out_req, NULL);
                 }
+
+                /* Do a getattr now that we have the lock */
+                if ((it->it_op == IT_UNLINK || it->it_op == IT_RMDIR) &&
+                    it->it_status == 0)
+                        /* the unlink/rmdir succeeded, there's nothing to
+                         * lookup */
+                        goto iget;
+                md.body = lustre_msg_buf(request->rq_repmsg, offset);
+                ino = md.body->fid1.id;
+                mode = md.body->mode;
+                ptlrpc_free_req(request);
+                request = NULL;
+                err = mdc_getattr(&sbi->ll_mdc_conn, ino, mode,
+                                  OBD_MD_FLNOTOBD|OBD_MD_FLEASIZE, 0, &request);
+                if (err) {
+                        CERROR("failure %d inode %Ld\n", err, (long long)ino);
+                        ptlrpc_free_req(request);
+#warning FIXME: must release lock here
+                        RETURN(ERR_PTR(-abs(err)));
+                }
+                offset = 0;
         } else {
                 struct ll_inode_info *lli = ll_i2info(dir);
                 int type;
@@ -215,6 +237,7 @@ static struct dentry *ll_lookup2(struct inode * dir, struct dentry *dentry,
                 }
         }
 
+ iget:
         md.body = lustre_msg_buf(request->rq_repmsg, offset);
         if (S_ISREG(md.body->mode)) {
                 if (request->rq_repmsg->bufcount < offset + 1)
@@ -236,6 +259,7 @@ static struct dentry *ll_lookup2(struct inode * dir, struct dentry *dentry,
         EXIT;
  neg_req:
         ptlrpc_free_req(request);
+        ptlrpc_free_req(getattr_req);
  negative:
         dentry->d_op = &ll_d_ops;
         d_add(dentry, inode);
