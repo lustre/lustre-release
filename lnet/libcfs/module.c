@@ -52,11 +52,12 @@
 #define PORTAL_MINOR 240
 
 struct nal_cmd_handler {
+        int                  nch_number;
         nal_cmd_handler_fn  *nch_handler;
         void                *nch_private;
 };
 
-static struct nal_cmd_handler nal_cmd[NAL_MAX_NR + 1];
+static struct nal_cmd_handler nal_cmd[16];
 static DECLARE_MUTEX(nal_cmd_sem);
 
 #ifdef PORTAL_DEBUG
@@ -245,23 +246,53 @@ static inline void freedata(void *data, int len)
         PORTAL_FREE(data, len);
 }
 
+struct nal_cmd_handler *
+libcfs_find_nal_cmd_handler(int nal)
+{
+        int    i;
+
+        for (i = 0; i < sizeof(nal_cmd)/sizeof(nal_cmd[0]); i++)
+                if (nal_cmd[i].nch_handler != NULL &&
+                    nal_cmd[i].nch_number == nal)
+                        return (&nal_cmd[i]);
+
+        return (NULL);
+}
+
 int
 libcfs_nal_cmd_register(int nal, nal_cmd_handler_fn *handler, void *private)
 {
-        int rc = 0;
+        struct nal_cmd_handler *cmd;
+        int                     i;
+        int                     rc;
 
         CDEBUG(D_IOCTL, "Register NAL %d, handler: %p\n", nal, handler);
 
-        if (nal > 0  && nal <= NAL_MAX_NR) {
-                down(&nal_cmd_sem);
-                if (nal_cmd[nal].nch_handler != NULL)
-                        rc = -EBUSY;
-                else {
-                        nal_cmd[nal].nch_handler = handler;
-                        nal_cmd[nal].nch_private = private;
-                }
-                up(&nal_cmd_sem);
+        down(&nal_cmd_sem);
+
+        if (libcfs_find_nal_cmd_handler(nal) != NULL) {
+                up (&nal_cmd_sem);
+                return (-EBUSY);
         }
+
+        cmd = NULL;
+        for (i = 0; i < sizeof(nal_cmd)/sizeof(nal_cmd[0]); i++)
+                if (nal_cmd[i].nch_handler == NULL) {
+                        cmd = &nal_cmd[i];
+                        break;
+                }
+        
+        if (cmd == NULL) {
+                rc = -EBUSY;
+        } else {
+                rc = 0;
+                cmd->nch_number = nal;
+                cmd->nch_handler = handler;
+                cmd->nch_private = private;
+        }
+
+        up(&nal_cmd_sem);
+
         return rc;
 }
 EXPORT_SYMBOL(libcfs_nal_cmd_register);
@@ -269,14 +300,15 @@ EXPORT_SYMBOL(libcfs_nal_cmd_register);
 void
 libcfs_nal_cmd_unregister(int nal)
 {
+        struct nal_cmd_handler *cmd;
+
         CDEBUG(D_IOCTL, "Unregister NAL %d\n", nal);
 
-        LASSERT(nal > 0 && nal <= NAL_MAX_NR);
-        LASSERT(nal_cmd[nal].nch_handler != NULL);
-
         down(&nal_cmd_sem);
-        nal_cmd[nal].nch_handler = NULL;
-        nal_cmd[nal].nch_private = NULL;
+        cmd = libcfs_find_nal_cmd_handler(nal);
+        LASSERT (cmd != NULL);
+        cmd->nch_handler = NULL;
+        cmd->nch_private = NULL;
         up(&nal_cmd_sem);
 }
 EXPORT_SYMBOL(libcfs_nal_cmd_unregister);
@@ -284,16 +316,17 @@ EXPORT_SYMBOL(libcfs_nal_cmd_unregister);
 int
 libcfs_nal_cmd(struct portals_cfg *pcfg)
 {
+        struct nal_cmd_handler *cmd;
         __u32 nal = pcfg->pcfg_nal;
         int   rc = -EINVAL;
         ENTRY;
 
         down(&nal_cmd_sem);
-        if (nal > 0 && nal <= NAL_MAX_NR && 
-            nal_cmd[nal].nch_handler != NULL) {
+        cmd = libcfs_find_nal_cmd_handler(nal);
+        if (cmd != NULL) {
                 CDEBUG(D_IOCTL, "calling handler nal: %d, cmd: %d\n", nal, 
                        pcfg->pcfg_command);
-                rc = nal_cmd[nal].nch_handler(pcfg, nal_cmd[nal].nch_private);
+                rc = cmd->nch_handler(pcfg, cmd->nch_private);
         }
         up(&nal_cmd_sem);
 
