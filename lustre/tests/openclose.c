@@ -2,6 +2,9 @@
  * vim:expandtab:shiftwidth=8:tabstop=8:
  */
 
+/* for O_DIRECT */
+#define _GNU_SOURCE
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -14,10 +17,6 @@
 #include <sys/ioctl.h>
 
 #include <linux/lustre_lite.h>
-
-#ifndef O_DIRECT
-# define O_DIRECT         040000 /* direct disk access hint */
-#endif
 
 int main(int argc, char *argv[])
 {
