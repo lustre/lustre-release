@@ -74,7 +74,7 @@ static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
                 GOTO(out, rc = -EINVAL);
         }
 
-        mdc->cl_max_mdsize = sizeof(struct lov_mds_md) +
+        mdc->cl_max_mds_easize = sizeof(struct lov_mds_md) +
                 desc->ld_tgt_count * sizeof(struct lov_object_id);
 
         if (memcmp(obd->obd_uuid, desc->ld_uuid, sizeof(desc->ld_uuid))) {
@@ -238,7 +238,7 @@ static int lov_create(struct lustre_handle *conn, struct obdo *oa,
         }
 
         md = *ea;
-        md->lmd_easize = lov_mds_md_size(export->exp_obd);
+        md->lmd_mds_easize = lov_mds_md_size(export->exp_obd);
         md->lmd_object_id = oa->o_id;
         if (!md->lmd_stripe_count)
                 md->lmd_stripe_count = lov->desc.ld_default_stripe_count;
@@ -674,8 +674,8 @@ static int lov_enqueue(struct lustre_handle *conn, struct lov_stripe_md *md,
                         continue;
 
                 submd.lmd_object_id = md->lmd_oinfo[i].loi_id;
-                submd.lmd_easize = sizeof(struct lov_mds_md);
-                submd.lmd_stripe_count = md->lmd_stripe_count;
+                submd.lmd_mds_easize = sizeof(struct lov_mds_md);
+                submd.lmd_stripe_count = 0;
                 /* XXX submd is not fully initialized here */
                 rc = obd_enqueue(&(lov->tgts[i].conn), &submd, parent_lock,
                                  type, &sub_ext, sizeof(sub_ext), mode,
@@ -713,7 +713,8 @@ static int lov_cancel(struct lustre_handle *conn, struct lov_stripe_md *md,
                         continue;
 
                 submd.lmd_object_id = md->lmd_oinfo[i].loi_id;
-                submd.lmd_easize = sizeof(struct lov_mds_md);
+                submd.lmd_mds_easize = sizeof(struct lov_mds_md);
+                submd.lmd_stripe_count = 0;
                 rc = obd_cancel(&lov->tgts[i].conn, &submd, mode, &lockhs[i]);
                 if (rc)
                         CERROR("Error cancel object "LPD64" subobj "LPD64"\n",

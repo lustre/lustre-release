@@ -183,7 +183,7 @@ static int osc_create(struct lustre_handle *conn, struct obdo *oa,
                 OBD_ALLOC(*ea, oa->o_easize);
                 if (!*ea)
                         RETURN(-ENOMEM);
-                (*ea)->lmd_easize = oa->o_easize;
+                (*ea)->lmd_mds_easize = oa->o_easize;
         }
 
         request = ptlrpc_prep_req(class_conn2cliimp(conn), OST_CREATE, 1, &size,
@@ -520,9 +520,9 @@ static int osc_brw_write(struct lustre_handle *conn, struct lov_stripe_md *md,
                 local[mapped].addr = kmap(pga[mapped].pg);
 
                 CDEBUG(D_INFO, "kmap(pg) = %p ; pg->flags = %lx ; pg->count = "
-                       "%d ; pg->virtual = %p ; page %d of %d\n",
+                       "%d ; page %d of %d\n",
                        local[mapped].addr, pga[mapped].pg->flags,
-                       page_count(pga[mapped].pg), pga[mapped].pg->virtual,
+                       page_count(pga[mapped].pg), 
                        mapped, page_count - 1);
 
                 local[mapped].offset = pga[mapped].off;

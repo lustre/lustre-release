@@ -61,7 +61,7 @@ static int ll_file_open(struct inode *inode, struct file *file)
                                 RETURN(-ENOMEM);
                         }
                         oa->o_mode = S_IFREG | 0600;
-                        oa->o_easize = mdc->cl_max_mdsize;
+                        oa->o_easize = mdc->cl_max_mds_easize;
                         oa->o_id = inode->i_ino;
                         oa->o_valid = OBD_MD_FLMODE | OBD_MD_FLEASIZE |
                                         OBD_MD_FLID;

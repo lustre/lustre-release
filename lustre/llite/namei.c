@@ -467,7 +467,7 @@ static int ll_create(struct inode * dir, struct dentry * dentry, int mode)
 
 out_destroy:
         if (smd) {
-                oa.o_easize = smd->lmd_easize;
+                oa.o_easize = smd->lmd_mds_easize;
                 oa.o_valid |= OBD_MD_FLEASIZE;
                 err = obd_destroy(ll_i2obdconn(dir), &oa, smd);
                 if (err)

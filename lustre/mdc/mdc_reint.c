@@ -92,7 +92,7 @@ int mdc_create(struct lustre_handle *conn,
                                dir->i_ino, namelen, name); 
                         LBUG();
                 }
-                size[2] = smd->lmd_easize;
+                size[2] = smd->lmd_mds_easize;
                 bufcount = 3;
         } else if (S_ISLNK(mode)) {
                 size[2] = tgtlen + 1;

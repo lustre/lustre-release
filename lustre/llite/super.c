@@ -89,6 +89,17 @@ static void ll_options(char *options, char **ost, char **mds, int *flags)
 #ifndef log2
 #define log2(n) ffz(~(n))
 #endif
+inline int ll_mds_easize(struct super_block *sb)
+{
+        struct client_obd *mdc = sbi2mdc(ll_s2sbi(sb));
+        return mdc->cl_max_mds_easize;
+}
+
+inline int ll_lov_easize(struct lov_stripe_md *md) 
+{
+        return sizeof(*md) + md->lmd_stripe_count * 
+                sizeof(struct lov_oinfo);
+}
 
 static struct super_block * ll_read_super(struct super_block *sb,
                                           void *data, int silent)
@@ -257,8 +268,7 @@ static void ll_clear_inode(struct inode *inode)
                 char *symlink_name = lli->lli_symlink_name;
 
                 if (md) {
-                        int size = sizeof(*md) +
-                                md->lmd_stripe_count * sizeof(struct lov_oinfo);
+                        int size = ll_lov_easize(md);
                         OBD_FREE(md, size);
                         lli->lli_smd = NULL;
                 }
@@ -290,7 +300,7 @@ static void ll_delete_inode(struct inode *inode)
                         GOTO(out, -ENOMEM);
 
                 oa->o_id = md->lmd_object_id;
-                oa->o_easize = md->lmd_easize;
+                oa->o_easize = md->lmd_mds_easize;
                 oa->o_mode = inode->i_mode;
                 oa->o_valid = OBD_MD_FLID | OBD_MD_FLEASIZE | OBD_MD_FLMODE;
 
@@ -411,11 +421,6 @@ out:
         RETURN(rc);
 }
 
-inline int ll_stripe_mds_md_size(struct super_block *sb)
-{
-        struct client_obd *mdc = sbi2mdc(ll_s2sbi(sb));
-        return mdc->cl_max_mdsize;
-}
 
 static void ll_read_inode2(struct inode *inode, void *opaque)
 {
@@ -457,13 +462,12 @@ static void ll_read_inode2(struct inode *inode, void *opaque)
         if (md && md->md && md->md->lmd_stripe_count) {
                 struct lov_mds_md *smd = md->md;
                 int size;
-                if (md->md->lmd_easize != ll_stripe_mds_md_size(inode->i_sb)) {
+                if (md->md->lmd_easize != ll_mds_easize(inode->i_sb)) {
                         CERROR("Striping metadata size error %ld\n",
                                inode->i_ino);
                         LBUG();
                 }
-                size = sizeof(*lli->lli_smd) +
-                        md->md->lmd_stripe_count * sizeof(struct lov_oinfo);
+                size = ll_lov_easize(lli->lli_smd);
                 OBD_ALLOC(lli->lli_smd, size);
                 if (!lli->lli_smd) {
                         CERROR("No memory for %d\n", size);

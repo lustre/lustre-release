@@ -40,7 +40,7 @@ struct lov_oinfo { /* per-child structure */
 
 struct lov_stripe_md {
         __u32 lmd_magic;
-        __u32 lmd_easize;          /* packed size for MDS of ea */
+        __u32 lmd_mds_easize;      /* packed size for MDS of ea */
         __u64 lmd_object_id;       /* lov object id */
         __u64 lmd_stripe_offset;   /* offset of the stripe */ 
         __u64 lmd_stripe_size;     /* size of the stripe */
@@ -105,7 +105,7 @@ struct client_obd {
         struct semaphore     cl_sem;
         int                  cl_conn_count;
         __u8                 cl_target_uuid[37]; /* XXX -> lustre_name */
-        int                  cl_max_mdsize;
+        int                  cl_max_mds_easize;
 };
 
 struct mds_obd {

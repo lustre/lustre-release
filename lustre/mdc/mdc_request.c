@@ -129,7 +129,7 @@ int mdc_getattr(struct lustre_handle *conn,
         if (S_ISREG(type)) {
                 struct client_obd *mdc = &class_conn2obd(conn)->u.cli;
                 bufcount = 2;
-                size[1] = mdc->cl_max_mdsize;
+                size[1] = mdc->cl_max_mds_easize;
         } else if (valid & OBD_MD_LINKNAME) {
                 bufcount = 2;
                 size[1] = ea_size;
@@ -195,7 +195,7 @@ int mdc_enqueue(struct lustre_handle *conn, int lock_type,
         int rc, flags;
         int repsize[3] = {sizeof(struct ldlm_reply),
                           sizeof(struct mds_body),
-                          obddev->u.cli.cl_max_mdsize};
+                          obddev->u.cli.cl_max_mds_easize};
         struct ldlm_reply *dlm_rep;
         struct ldlm_intent *lit;
         ENTRY;
@@ -358,7 +358,7 @@ int mdc_open(struct lustre_handle *conn, obd_id ino, int type, int flags,
 
         if (smd != NULL) {
                 bufcount = 2;
-                size[1] = smd->lmd_easize;
+                size[1] = smd->lmd_mds_easize;
         }
 
         req = ptlrpc_prep_req(class_conn2cliimp(conn), MDS_OPEN, bufcount, size,

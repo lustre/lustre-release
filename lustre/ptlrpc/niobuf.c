@@ -195,6 +195,11 @@ int ptlrpc_register_bulk(struct ptlrpc_bulk_desc *desc)
         ptl_process_id_t source_id;
         ENTRY;
 
+        if (desc->bd_page_count > PTL_MD_MAX_IOV) { 
+                CERROR("iov longer than %d not supported\n", PTL_MD_MAX_IOV);
+                RETURN(-EINVAL);
+        }
+
         iov = ptlrpc_get_bulk_iov (desc);
         if (iov == NULL)
                 return (-ENOMEM);
