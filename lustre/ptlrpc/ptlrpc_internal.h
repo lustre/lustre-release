@@ -36,6 +36,12 @@ void ptlrpc_daemonize(void);
 
 void ptlrpc_request_handle_notconn(struct ptlrpc_request *);
 void lustre_assert_wire_constants(void);
+int ptlrpc_import_in_recovery(struct obd_import *imp);
+int ptlrpc_set_import_discon(struct obd_import *imp);
+void ptlrpc_handle_failed_import(struct obd_import *imp);
+int ptlrpc_import_recovery_state_machine(struct obd_import *imp);
+int ptlrpc_replay_next(struct obd_import *imp);
+
 
 #ifdef __KERNEL__
 void ptlrpc_lprocfs_register_service(struct proc_dir_entry *proc_entry,
