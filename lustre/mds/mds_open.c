@@ -129,7 +129,12 @@ int mds_open(struct mds_update_record *rec, int offset,
 		if ((rec->ur_flags & (O_CREAT|O_EXCL)) == (O_CREAT|O_EXCL)) { 
                         mds_pack_inode2fid(&body->fid1, dchild->d_inode);
                         mds_pack_inode2body(body, dchild->d_inode);
- 			GOTO(out_ldput, rc = -EEXIST);
+                        if (S_ISREG(dchild->d_inode->i_mode))
+                                rc = mds_pack_md(obd, req->rq_repmsg, 3, body,
+                                                 dchild->d_inode);
+                        if (rc == 0)
+                                rc = -EEXIST;
+ 			GOTO(out_ldput, rc);
                 }
         } else if ((rec->ur_flags & O_CREAT) && !dchild->d_inode) {
                 int err;
@@ -156,7 +161,7 @@ int mds_open(struct mds_update_record *rec, int offset,
                 }
         } else if (!dchild->d_inode) {
                 up(&dir->i_sem);
-                GOTO(out_ldput, rc = -ENOENT);
+                GOTO(out_ldput, rc = 0);
         } 
 
         /*
