@@ -475,9 +475,9 @@ int ll_read_inode2(struct inode *inode, void *opaque)
         struct mds_body *body = lic->lic_body;
         struct ll_inode_info *lli = ll_i2info(inode);
         ENTRY;
-        
+
         sema_init(&lli->lli_open_sem, 1);
-        
+
         /* core attributes first */
         ll_update_inode(inode, body);
 
@@ -486,6 +486,9 @@ int ll_read_inode2(struct inode *inode, void *opaque)
                 struct lov_mds_md *lmm = lic->lic_lmm;
                 int size;
 
+                /* XXX This should probably not be an error in the future,
+                 *     when we allow LOV OSTs to be added.
+                 */
                 if (lmm->lmm_easize != ll_mds_easize(inode->i_sb)) {
                         CERROR("Striping metadata size error %ld\n",
                                inode->i_ino);
@@ -530,7 +533,7 @@ int ll_read_inode2(struct inode *inode, void *opaque)
                 inode->i_op = &ll_fast_symlink_inode_operations;
                 EXIT;
         } else {
-                init_special_inode(inode, inode->i_mode, 
+                init_special_inode(inode, inode->i_mode,
                                    kdev_t_to_nr(inode->i_rdev));
                 EXIT;
         }

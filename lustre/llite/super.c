@@ -82,7 +82,7 @@ static void ll_options(char *options, char **ost, char **mds, int *flags)
                 CDEBUG(D_SUPER, "this_char %s\n", this_char);
                 if ( (!*ost && (*ost = ll_read_opt("osc", this_char)))||
                      (!*mds && (*mds = ll_read_opt("mdc", this_char)))||
-                     (!(*flags & LL_SBI_NOLCK) && ((*flags) = (*flags) | 
+                     (!(*flags & LL_SBI_NOLCK) && ((*flags) = (*flags) |
                       ll_set_opt("nolock", this_char, LL_SBI_NOLCK))) )
                         continue;
         }
@@ -476,9 +476,9 @@ static void ll_read_inode2(struct inode *inode, void *opaque)
         struct mds_body *body = lic->lic_body;
         struct ll_inode_info *lli = ll_i2info(inode);
         ENTRY;
-        
+
         sema_init(&lli->lli_open_sem, 1);
-        
+
         /* core attributes first */
         ll_update_inode(inode, body);
 
@@ -487,6 +487,9 @@ static void ll_read_inode2(struct inode *inode, void *opaque)
                 struct lov_mds_md *lmm = lic->lic_lmm;
                 int size;
 
+                /* XXX This should probably not be an error in the future,
+                 *     when we allow LOV OSTs to be added.
+                 */
                 if (lmm->lmm_easize != ll_mds_easize(inode->i_sb)) {
                         CERROR("Striping metadata size error %ld\n",
                                inode->i_ino);
@@ -540,7 +543,7 @@ static inline void invalidate_request_list(struct list_head *req_list)
 {
         struct list_head *tmp, *n;
         list_for_each_safe(tmp, n, req_list) {
-                struct ptlrpc_request *req = 
+                struct ptlrpc_request *req =
                         list_entry(tmp, struct ptlrpc_request, rq_list);
                 CERROR("invalidating req xid "LPD64" op %d to %s:%d\n",
                        (unsigned long long)req->rq_xid, req->rq_reqmsg->opc,
@@ -557,7 +560,7 @@ void ll_umount_begin(struct super_block *sb)
         struct list_head *ctmp;
 
         ENTRY;
-       
+
         list_for_each(ctmp, &sbi->ll_conn_chain) {
                 struct ptlrpc_connection *conn;
                 conn = list_entry(ctmp, struct ptlrpc_connection, c_sb_chain);
