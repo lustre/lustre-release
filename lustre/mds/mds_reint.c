@@ -655,9 +655,6 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                                inode->i_ino, inode->i_generation);
                 } else {
                         struct lustre_handle child_ino_lockh;
-                        struct ldlm_res_id child_res_id =
-                             { .name = { inode->i_ino, 0 } };
-                        int lock_flags = 0;
 
                         CDEBUG(D_INODE, "created ino %lu with gen %x\n",
                                inode->i_ino, inode->i_generation);
@@ -668,12 +665,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                          * in unlink, to avoid replay problems if this reply
                          * makes it out to the client but the unlink's does not.
                          * See bug 2029 for more detail.*/
-                        rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace,
-                                              child_res_id, LDLM_PLAIN, NULL,
-                                              LCK_EX, &lock_flags,
-                                              mds_blocking_ast,
-                                              ldlm_completion_ast, NULL, NULL,
-                                              NULL, 0, NULL, &child_ino_lockh);
+                        rc = mds_lock_new_child(obd, inode, &child_ino_lockh);
                         if (rc != ELDLM_OK) {
                                 CERROR("error locking for unlink/create sync: "
                                        "%d\n", rc);
