@@ -611,12 +611,13 @@ def getServices(lustreNode, profileNode):
     list.sort()
     return list
 
-def getProfile(lustreNode, profile):
-    profList = lustreNode.getElementsByTagName('profile')
-    for prof in profList:
-        if getName(prof) == profile:
-            return prof
+def getByName(lustreNode, tag, name):
+    ndList = lustreNode.getElementsByTagName(tag)
+    for nd in ndList:
+        if getName(nd) == name:
+            return nd
     return None
+    
 
 # ============================================================
 # lconf type level logic
@@ -655,8 +656,7 @@ def startService(node):
 #  * make sure partitions are in place and prepared
 #  * initialize devices with lctl
 # Levels is important, and needs to be enforced.
-def startProfile(lustreNode, profile):
-    profileNode = getProfile(lustreNode, profile)
+def startProfile(lustreNode, profileNode):
     if not profileNode:
         panic("profile:", profile, "not found.")
     services = getServices(lustreNode, profileNode)
@@ -689,14 +689,27 @@ def stopService(node):
         cleanup_mountpoint(node)
 
 # Shutdown services in reverse order than they were started
-def cleanupProfile(lustreNode, profile):
-    profileNode = getProfile(lustreNode, profile)
+def cleanupProfile(lustreNode, profileNode):
     if not profileNode:
         panic("profile:", profile, "not found.")
     services = getServices(lustreNode, profileNode)
     services.reverse()
     for s in services:
         stopService(s[1])
+
+
+def doHost(lustreNode, hostname, cleanFlag):
+    node = getByName(lustreNode, 'node', hostname)
+    if not node:
+        node = getByName(lustreNode, 'node', 'localhost')
+        if not node:
+            panic("no node for ", hostname)
+    reflist = node.getElementsByTagName('profile_ref')
+    for r in reflist:
+        if cleanFlag:
+            cleanupProfile(lustreNode, lookup(lustreNode, getRef(r)))
+        else:
+            startProfile(lustreNode,  lookup(lustreNode, getRef(r)))
 
 #
 # Command line processing
@@ -750,10 +763,14 @@ def main():
         usage()
         fixme("ldap not implemented yet")
 
-    if options.has_key('cleanup'):
-        cleanupProfile(dom.childNodes[0], 'local-profile')
-    else:
-        startProfile(dom.childNodes[0], 'local-profile')
+    if not options.has_key('hostname'):
+        ret, host = run('hostname')
+        if ret:
+            panic("unable to determine hostname")
+        options['hostname'] = host
+
+    doHost(dom.childNodes[0], options['hostname'], options.has_key('cleanup') )
+
     
 # 
 # try a different traceback style. (dare ya to try this in java)
