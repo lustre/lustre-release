@@ -97,7 +97,7 @@ static int ptlbd_open(struct inode *inode, struct file  *file)
 
         if ( IS_ERR(ptlbd) )
                 RETURN(PTR_ERR(ptlbd));
-        if ( ptlbd->bd_import.imp_connection == NULL )
+        if ( ptlbd->bd_import->imp_connection == NULL )
                 RETURN(-ENODEV);
 
         ptlbd->refcount++;
