@@ -104,99 +104,81 @@ in_list()
         return 1
 }
 
-# read line from stdin 
-read_ln()
-{
-        local substr=$1
-	local default_value
-        local answer 
-
-	unset ANS
-	
-	[ $# -gt 1 ] && default_value=$2
-	[ $# -gt 2 ] && answer=$3
-        
-        while [ -z "$ANS" ]; do 
-	        echo -n "$substr"
-		[ "$default_value" ] && echo -n " ($default_value)"
-		echo -n ": "
-                read ANS  
-                [ -z "$ANS" -a "$default_value" ] && ANS=$default_value
-                if [ "$ANS" -a "$answer" ] ; then
-			in_list "$ANS" "$ANSWER" || ANS=""
-                fi
-        done
-
-        return 0  
-}
 
 #ask user some questions to add a device 
 add_device()
 {
-        local first 
-        local hostname 
-
-        [ $# -gt 2 ] && first=$3
-
-        if [ -z "$first" ] ; then 
-                read_ln "Do you want to add another $1 (yes/no)?" "no" "$ANSWER"
-        else
-                ANS="yes"
-        fi
-        
-        [ "$ANS" = "no" ] && return 1 
+	local hostnames
+	local device
 
 	echo "Creating $1 \"$1$2\"..."
-	read_ln "Please enter $1$2's hostname"
-	hostname=$ANS
-	read_ln "Please enter $1$2's device"
+	echo -n "Please enter the hostname(s) for $1$2: "
+	read hostnames
 
-        device=$ANS
+	if [ -z "$hostnames" ] ; then
+	    return 1
+	fi
 
-        DEVICE="$hostname:$device:$2:$1$2"
+	for hostname in $hostnames ; do
+	    device=
+	    while [ -z "$device" ] ; do
+		echo -n "Please enter the $1$2 device for ${hostname}: "
+		read device
+	    done
+	    newdev="$hostname:$device:$2:$1$2:$CURRENT_MDS:$CURRENT_LOV"
+	    DEVICE_LIST="$DEVICE_LIST $newdev"
+	done
 
         return 0 
 }
 
+cur_mds_id=1
+
 # get mds information
 add_mds()
 {
-        local id=1
-        local host_name
+	CURRENT_LOV=
+	CURRENT_MDS=
+	add_device "mds" "$cur_mds_id" || return 1
+	CURRENT_LOV="lov$cur_mds_id"
+	CURRENT_MDS="mds$cur_mds_id"
 
-        while :; do
-                add_device "mds" "$id" "first" || break 
-                in_list "$DEVICE" "$MDS_LIST" && continue
-                MDS_LIST="$MDS_LIST $DEVICE"   #add mds to MDS_LIST
-                ((id++))
-                break 
-        done
+	DEVICE_LIST="$DEVICE_LIST *:*:lov:$CURRENT_LOV:$CURRENT_MDS:"
 
+	(( cur_mds_id++ ))
         return 0
 }
+
+cur_ost_id=1
 
 # ask user to add ost 
 add_ost()
 {
-        local first="first"
-        local id=1
+	# We have to add one...
+	while ! add_device "ost" "$cur_ost_id" ; do
+	    true
+	done
 
-        while :; do
-                add_device "ost" "$id" "$first" || break 
-                in_list "$DEVICE" "$OST_LIST" && continue
-                OST_LIST="$OST_LIST $DEVICE"   #add ost to MDS_LIST
-                ((id++))
-                first=""
+	(( cur_ost_id++ ))
+
+	# ...and maybe more
+	while add_device "ost" "$cur_ost_id" ; do
+		(( cur_ost_id++ ))
         done
-
         return 0
 }
+
+cur_cli_id=1
 
 # ask user to add client to lustre
 add_client()
 {
-	read_ln "Please enter the mountpoint for your clients" "$DEFAULT_MNTPT"
-	CLIENT_LIST="*:$ANS:client:client"
+	echo -n "Please enter the clients' mountpoint (/mnt/lustre): "
+	read mtpt
+	[ -z "$mtpt" ] && mtpt="/mnt/lustre"
+	newdev="*:$mtpt:client:client$cur_cli_id:$CURRENT_MDS:$CURRENT_LOV"
+	DEVICE_LIST="$DEVICE_LIST $newdev"
+	(( cur_cli_id++ ))
         return 0
 }
 
@@ -224,49 +206,49 @@ get_name_in_list()
 	DEVICE=$(echo $1 | awk -F: '{ print $2 }')
 	DEVICE_ID=$(echo $1 | awk -F: '{ print $3 }')
 	DEVICE_NAME=$(echo $1 | awk -F: '{ print $4 }')
+	DEVICE_MDS=$(echo $1 | awk -F: '{ print $5 }')
+	DEVICE_LOV=$(echo $1 | awk -F: '{ print $6 }')
 }
 
 # following user input to create xml config file 
 create_config()
 {
-        local mds_name
         local config_file=$1 
 
-        for mds in $MDS_LIST ; do 
-		get_name_in_list $mds
+	for device in $DEVICE_LIST ; do
+		get_name_in_list $device
 		echo -n " $DEVICE_NAME"
-		add_node "$HOST_NAME" "$config_file" || return 1
-                $LMC -m "$config_file" --add mds --node "$HOST_NAME" \
-                     --mds "$DEVICE_NAME" \
-                     --nid "$HOST_NAME"  --fstype "$DEFAULT_FSTYPE" \
-                     --dev "$DEVICE" || return 1
-
-                mds_name="$DEVICE_NAME"
-        done
-
-	#add lov information FIXME --stripe_sz and 
-        #--stripe_cnt should be input by user
-	echo -n " lov1"
-	$LMC -m "$config_file" --add lov --lov lov1 --mds "$mds_name" \
-             --stripe_sz "$STRIPE_SIZE" --stripe_cnt "$STRIPE_CNT" \
-             --stripe_pattern "$STRIPE_PATTERN" || return 1 
-        
-	for ost in $OST_LIST ; do
-		get_name_in_list $ost
-		echo -n " $DEVICE_NAME"
-		add_node "$HOST_NAME" "$config_file" || return 1
-                $LMC -m "$config_file" --add ost --node "$HOST_NAME" \
-                     --ost "$DEVICE_NAME" \
-                     --lov lov1 --fstype "$DEFAULT_FSTYPE" \
-                     --dev "$DEVICE" || return 1
-	done
-
-        for client in $CLIENT_LIST ; do
-             	get_name_in_list $client 
-		echo -n " $DEVICE_NAME"
-		add_node "client" "$config_file" || return 1
-		$LMC -m "$config_file" --add mtpt --nod client \
-		    --mds "$mds_name" --lov lov1 --path "$DEVICE" || return 1
+		case $DEVICE_NAME in
+		    mds*)
+			add_node "$HOST_NAME" "$config_file" || return 1
+			$LMC -m "$config_file" --add mds --node "$HOST_NAME" \
+			    --mds "$DEVICE_NAME" \
+			    --nid "$HOST_NAME"  --fstype "$DEFAULT_FSTYPE" \
+			    --dev "$DEVICE" || return 1
+			;;
+		    lov*)
+			$LMC -m "$config_file" --add lov \
+			    --lov "$DEVICE_NAME" \
+			    --mds "$DEVICE_MDS" \
+			    --stripe_sz "$STRIPE_SIZE" \
+			    --stripe_cnt "$STRIPE_CNT" \
+			    --stripe_pattern "$STRIPE_PATTERN" || return 1
+			;;
+		    ost*)
+			add_node "$HOST_NAME" "$config_file" || return 1
+			$LMC -m "$config_file" --add ost --node "$HOST_NAME" \
+			    --ost "$DEVICE_NAME" \
+			    --lov "$DEVICE_LOV" --fstype "$DEFAULT_FSTYPE" \
+			    --dev "$DEVICE" || return 1
+			;;
+		    client*)
+			add_node "$DEVICE_NAME" "$config_file" || return 1
+			$LMC -m "$config_file" --add mtpt \
+			    --node "$DEVICE_NAME" \
+			    --mds "$DEVICE_MDS" \
+			    --lov "$DEVICE_LOV" --path "$DEVICE" || return 1
+			;;
+		esac
         done
 	echo
         return 0 
@@ -293,17 +275,15 @@ This script will help you create a Lustre configuration file.
 
 EOF
 
-#add mds to lustre
-unset $MDS_LIST
-add_mds || fatal 1 "Cannot add mds to your lustre"
+CURRENT_LOV=
+MDS_LIST=
+OST_LIST=
+CLIENT_LIST=
 
-#add ost to lustre
-unset $OST_LIST
-add_ost || fatal 1 "Cannot add ost to your lustre"
-
-#add client to lustre
-unset $CLIENT_LIST
-add_client || fatal 1 "Cannot add client to your lustre"
+while add_mds ; do
+   add_ost
+   add_client
+done
 
 rm -f "$TMP_CONFIG_FILE"
 echo -n "Saving configuration to $CONFIG_FILE:"
