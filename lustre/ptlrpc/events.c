@@ -161,14 +161,14 @@ static int bulk_sink_callback(ptl_event_t *ev, void *data)
                 if (bulk->b_buf != ev->mem_desc.start + ev->offset)
                         CERROR("bulkbuf != mem_desc -- why?\n");
                 desc->b_finished_count++;
+                if (bulk->b_cb != NULL)
+                        bulk->b_cb(bulk);
                 if (desc->b_finished_count == desc->b_page_count) {
                         desc->b_flags |= PTL_BULK_FL_RCVD;
                         wake_up_interruptible(&desc->b_waitq);
                         if (desc->b_cb != NULL)
                                 desc->b_cb(desc);
                 }
-                if (bulk->b_cb != NULL)
-                        bulk->b_cb(bulk);
         } else {
                 CERROR("Unexpected event type!\n");
                 LBUG();
