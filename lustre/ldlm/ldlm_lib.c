@@ -510,7 +510,7 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         LASSERT(export != NULL);
 
         /* request from liblustre? */
-        if (lustre_msg_get_op_flags(req->rq_reqmsg) | MSG_CONNECT_LIBCLIENT)
+        if (lustre_msg_get_op_flags(req->rq_reqmsg) & MSG_CONNECT_LIBCLIENT)
                 export->exp_libclient = 1;
 
         if (req->rq_connection != NULL)
