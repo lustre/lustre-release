@@ -76,7 +76,8 @@ int tcpnal_send(nal_cb_t *n,
 
     if (!(c=force_tcp_connection((manager)b->lower,
                                  PNAL_IP(nid,b),
-                                 PNAL_PORT(nid,pid)))) 
+                                 PNAL_PORT(nid,pid),
+                                 b->local))) 
         return(1);
 
 #if 0

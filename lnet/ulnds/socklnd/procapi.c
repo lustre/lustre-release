@@ -32,11 +32,33 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+#ifndef __CYGWIN__
+#include <syscall.h>
+#endif
+#include <sys/socket.h>
 #include <procbridge.h>
 #include <pqtimer.h>
 #include <dispatch.h>
 #include <errno.h>
 
+
+/* XXX CFS workaround, to give a chance to let nal thread wake up
+ * from waiting in select
+ */
+static int procbridge_notifier_handler(void *arg)
+{
+    static char buf[8];
+    procbridge p = (procbridge) arg;
+
+    syscall(SYS_read, p->notifier[1], buf, sizeof(buf));
+    return 1;
+}
+
+void procbridge_wakeup_nal(procbridge p)
+{
+    static char buf[8];
+    syscall(SYS_write, p->notifier[0], buf, sizeof(buf));
+}
 
 /* Function: forward
  * Arguments: nal_t *nal: pointer to my top-side nal structure
@@ -79,6 +101,7 @@ static int procbridge_shutdown(nal_t *n, int ni)
     procbridge p=(procbridge)b->local;
 
     p->nal_flags |= NAL_FLAG_STOPPING;
+    procbridge_wakeup_nal(p);
 
     do {
         pthread_mutex_lock(&p->mutex);
@@ -212,6 +235,19 @@ nal_t *procbridge_interface(int num_interface,
     p->nal_flags = 0;
     pthread_mutex_init(&p->nal_cb_lock, 0);
 
+    /* initialize notifier */
+    if (socketpair(AF_UNIX, SOCK_STREAM, 0, p->notifier)) {
+        perror("socketpair failed");
+        return NULL;
+    }
+
+    if (!register_io_handler(p->notifier[1], READ_HANDLER,
+                procbridge_notifier_handler, p)) {
+        perror("fail to register notifier handler");
+        return NULL;
+    }
+
+    /* create nal thread */
     if (pthread_create(&p->t, NULL, nal_thread, &args)) {
         perror("nal_init: pthread_create");
         return(NULL);

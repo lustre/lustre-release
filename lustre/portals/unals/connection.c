@@ -309,7 +309,8 @@ tcpnal_hello (int sockfd, ptl_nid_t *nid, int type, __u64 incarnation)
  */
 connection force_tcp_connection(manager m,
                                 unsigned int ip,
-                                unsigned short port)
+                                unsigned short port,
+                                procbridge pb)
 {
     connection conn;
     struct sockaddr_in addr;
@@ -357,6 +358,10 @@ connection force_tcp_connection(manager m,
             exit(-1);
 
         conn = allocate_connection(m, ip, port, fd);
+
+        /* let nal thread know this event right away */
+        if (conn)
+                procbridge_wakeup_nal(pb);
     }
 
     pthread_mutex_unlock(&m->conn_lock);
