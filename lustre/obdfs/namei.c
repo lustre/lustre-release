@@ -79,7 +79,7 @@ static struct page * obdfs_find_entry (struct inode * dir,
 	unsigned long offset;
 	struct page * page;
 	ENTRY;
-	CDEBUG(D_INODE, "find entry for %*s\n", namelen, name);
+	CDEBUG(D_INFO, "find entry for %*s\n", namelen, name);
 
 	*res_dir = NULL;
 	sb = dir->i_sb;
@@ -87,7 +87,7 @@ static struct page * obdfs_find_entry (struct inode * dir,
 	if (namelen > EXT2_NAME_LEN)
 		return NULL;
 
-	CDEBUG(D_INODE, "dirsize is %Ld\n", dir->i_size);
+	CDEBUG(D_INFO, "dirsize is %Ld\n", dir->i_size);
 
 	page = 0;
 	offset = 0;
@@ -98,7 +98,7 @@ static struct page * obdfs_find_entry (struct inode * dir,
 		page = obdfs_getpage(dir, offset, 0, lock);
 
 		if ( !page ) {
-			CDEBUG(D_INODE, "No page, offset %lx\n", offset);
+			CDEBUG(D_INFO, "No page, offset %lx\n", offset);
 			return NULL;
 		}
 
@@ -108,7 +108,7 @@ static struct page * obdfs_find_entry (struct inode * dir,
 			/* this code is executed quadratically often */
 			/* do minimal checking `by hand' */
 			int de_len;
-			/* CDEBUG(D_INODE, "Entry %p len %d, page at %#lx - %#lx , offset %lx\n",
+			/* CDEBUG(D_INFO, "Entry %p len %d, page at %#lx - %#lx , offset %lx\n",
 			       de, le16_to_cpu(de->rec_len), page_address(page),
 			       page_address(page) + PAGE_SIZE, offset); */
 
@@ -132,17 +132,17 @@ static struct page * obdfs_find_entry (struct inode * dir,
 			offset += de_len;
 			de = (struct ext2_dir_entry_2 *)
 				((char *) de + de_len);
-			/* CDEBUG(D_INODE, "Next while %lx\n", offset); */
+			/* CDEBUG(D_INFO, "Next while %lx\n", offset); */
 		}
 		if ( lock ) 
 			UnlockPage(page);
 		page_cache_release(page);
 		page = NULL;
-		CDEBUG(D_INODE, "Next for %lx\n", offset);
+		CDEBUG(D_INFO, "Next for %lx\n", offset);
 	}
 
 failure:
-	CDEBUG(D_INODE, "Negative case, page %p, offset %ld\n", page, offset);
+	CDEBUG(D_INFO, "Negative case, page %p, offset %ld\n", page, offset);
 	if (page) {
 		if (lock) 
 			UnlockPage(page);
@@ -166,7 +166,7 @@ struct dentry *obdfs_lookup(struct inode *dir, struct dentry *dentry)
 				&de, LOCKED);
 	inode = NULL;
 	if ( !page ) 
-		CDEBUG(D_INODE, "No page - negative entry.\n");
+		CDEBUG(D_INFO, "No page - negative entry.\n");
 	if ( page && !de ) {
 		CDEBUG(D_INODE, "Danger: PAGE but de.\n");
 		return ERR_PTR(-ENOENT);
@@ -221,12 +221,14 @@ static struct page *obdfs_add_entry (struct inode * dir,
 	*err = -EINVAL;
 	*res_dir = NULL;
 	if (!dir || !dir->i_nlink) {
+		CDEBUG(D_INODE, "bad directory\n");
 		EXIT;
 		return NULL;
 	}
 	sb = dir->i_sb;
 
 	if (!namelen) { 
+		CDEBUG(D_INODE, "bad directory\n");
 		EXIT;
 		return NULL;
 	}
@@ -246,13 +248,13 @@ static struct page *obdfs_add_entry (struct inode * dir,
 		return NULL;
 	}
 	rec_len = EXT2_DIR_REC_LEN(namelen);
-	/* CDEBUG(D_INODE, "reclen: %d\n", rec_len); */
+	/* CDEBUG(D_INFO, "reclen: %d\n", rec_len); */
 	PDEBUG(page, "starting search");
 	offset = 0;
 	de = (struct ext2_dir_entry_2 *) page_address(page);
 	*err = -ENOSPC;
 	while (1) {
-		/* CDEBUG(D_INODE,
+		/* CDEBUG(D_INFO,
 		       "Entry at %p, (page at %#lx - %#lx), offset %ld\n",
 		       de, page_address(page), page_address(page) + PAGE_SIZE,
 		       offset); */
@@ -272,7 +274,7 @@ static struct page *obdfs_add_entry (struct inode * dir,
 					return NULL;
 				}
 
-				CDEBUG(D_INODE, "creating next block\n");
+				CDEBUG(D_INFO, "creating next block\n");
 
 				de = (struct ext2_dir_entry_2 *) page_address(page);
 				de->inode = 0;
@@ -295,7 +297,7 @@ static struct page *obdfs_add_entry (struct inode * dir,
 			EXIT;
 			return NULL;
 		}
-		CDEBUG(D_INODE, "\n");
+		CDEBUG(D_INFO, "\n");
 		if (ext2_match (namelen, name, de)) {
 				*err = -EEXIST;
 				UnlockPage(page);
@@ -303,24 +305,24 @@ static struct page *obdfs_add_entry (struct inode * dir,
 				EXIT;
 				return NULL;
 		}
-		/* CDEBUG(D_INODE, "Testing for enough space at de %p\n", de);*/
+		/* CDEBUG(D_INFO, "Testing for enough space at de %p\n", de);*/
 		if ( (le32_to_cpu(de->inode) == 0 && le16_to_cpu(de->rec_len) >= rec_len) ||
 		     (le16_to_cpu(de->rec_len) >= EXT2_DIR_REC_LEN(de->name_len) + rec_len)) {
 			offset += le16_to_cpu(de->rec_len);
-			/* CDEBUG(D_INODE,
+			/* CDEBUG(D_INFO,
 			       "Found enough space de %p, offset %#lx\n",
 			       de, offset); */
 			if (le32_to_cpu(de->inode)) {
-				/*CDEBUG(D_INODE, "Insert new in %p\n", de);*/
+				/*CDEBUG(D_INFO, "Insert new in %p\n", de);*/
 				de1 = (struct ext2_dir_entry_2 *) ((char *) de +
 					EXT2_DIR_REC_LEN(de->name_len));
-				/*CDEBUG(D_INODE, "-- de1 at %p\n", de1);*/
+				/*CDEBUG(D_INFO, "-- de1 at %p\n", de1);*/
 				de1->rec_len = cpu_to_le16(le16_to_cpu(de->rec_len) -
 					EXT2_DIR_REC_LEN(de->name_len));
 				de->rec_len = cpu_to_le16(EXT2_DIR_REC_LEN(de->name_len));
 				de = de1;
 			}
-			/* CDEBUG(D_INODE,
+			/* CDEBUG(D_INFO,
 			       "Reclen adjusted; copy %d bytes to %p, "
 			       "page at %#lx EOP at %#lx\n",
 			       namelen, de->name, page_address(page),
@@ -877,7 +879,7 @@ int obdfs_symlink (struct inode * dir, struct dentry *dentry,
 	oinfo = obdfs_i2info(inode);
 
 	if (l >= sizeof(oinfo->oi_inline)) {
-		CDEBUG(D_INODE, "l=%d, normal symlink\n", l);
+		CDEBUG(D_INFO, "l=%d, normal symlink\n", l);
 
 		name_page = obdfs_getpage(inode, 0, 1, LOCKED);
 		if (!name_page) {
@@ -892,7 +894,7 @@ int obdfs_symlink (struct inode * dir, struct dentry *dentry,
 		link = oinfo->oi_inline;
 		oinfo->oi_flags |= OBD_FL_INLINEDATA;
 
-		CDEBUG(D_INODE, "l=%d, fast symlink\n", l);
+		CDEBUG(D_INFO, "l=%d, fast symlink\n", l);
 	}
 	i = 0;
 	while (i < inode->i_sb->s_blocksize - 1 && (c = *(symname++)))
@@ -1083,11 +1085,11 @@ int obdfs_rename (struct inode * old_dir, struct dentry *old_dentry,
 	if ( old_page != new_page ) {
 		unsigned long index = old_page->index;
 		/* lock the old_page and release unlocked copy */
-		CDEBUG(D_INODE, "old_page at %p\n", old_page);
+		CDEBUG(D_INFO, "old_page at %p\n", old_page);
 		page_cache_release(old_page);
 		old_page = obdfs_getpage(old_dir, index << PAGE_SHIFT, 0,
 					 LOCKED);
-		CDEBUG(D_INODE, "old_page at %p\n", old_page);
+		CDEBUG(D_INFO, "old_page at %p\n", old_page);
 		err = obdfs_do_writepage(old_dir, old_page, IS_SYNC(old_dir));
 		/* XXX handle err */
 	}

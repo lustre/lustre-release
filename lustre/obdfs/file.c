@@ -57,11 +57,11 @@ static ssize_t
 obdfs_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 {
 	ssize_t retval;
-	CDEBUG(D_INODE, "Writing inode %ld, %d bytes, offset %ld\n", file->f_dentry->d_inode->i_ino, count, (long)*ppos);
+	CDEBUG(D_INFO, "Writing inode %ld, %d bytes, offset %ld\n", file->f_dentry->d_inode->i_ino, count, (long)*ppos);
 
 	retval = generic_file_write(file, buf, count,
 				    ppos, obdfs_write_one_page);
-	CDEBUG(D_INODE, "Wrote %d\n", retval);
+	CDEBUG(D_INFO, "Wrote %d\n", retval);
 	if (retval > 0) {
 		struct inode *inode = file->f_dentry->d_inode;
 		remove_suid(inode);

@@ -40,7 +40,7 @@ static char *obdfs_read_opt(const char *opt, char *data)
 	char *value;
 	char *retval;
 
-	CDEBUG(D_SUPER, "option: %s, data %s\n", opt, data);
+	CDEBUG(D_INFO, "option: %s, data %s\n", opt, data);
 	if ( strncmp(opt, data, strlen(opt)) )
 		return NULL;
 
@@ -55,7 +55,7 @@ static char *obdfs_read_opt(const char *opt, char *data)
 	}
 	
 	memcpy(retval, value, strlen(value)+1);
-	CDEBUG(D_SUPER, "Assigned option: %s, value %s\n", opt, retval);
+	CDEBUG(D_INFO, "Assigned option: %s, value %s\n", opt, retval);
 	return retval;
 }
 
@@ -69,7 +69,7 @@ static void obdfs_options(char *options, char **dev, char **vers)
 	for (this_char = strtok (options, ",");
 	     this_char != NULL;
 	     this_char = strtok (NULL, ",")) {
-		CDEBUG(D_SUPER, "this_char %s\n", this_char);
+		CDEBUG(D_INFO, "this_char %s\n", this_char);
 		if ( (!*dev && (*dev = obdfs_read_opt("device", this_char)))||
 		     (!*vers && (*vers = obdfs_read_opt("version", this_char))) )
 			continue;
@@ -221,7 +221,7 @@ static struct super_block * obdfs_read_super(struct super_block *sb,
 	    goto ERR;
 	} 
 	
-	CDEBUG(D_SUPER, "obdfs_read_super: sbdev %d, rootino: %ld, dev %s, "
+	CDEBUG(D_INFO, "obdfs_read_super: sbdev %d, rootino: %ld, dev %s, "
 	       "minor: %d, blocksize: %ld, blocksize bits %ld\n", 
 	       sb->s_dev, root->i_ino, device, MINOR(devno), 
 	       blocksize, blocksize_bits);
@@ -358,8 +358,7 @@ static void obdfs_put_inode(struct inode *inode)
 	obd_down(&obdfs_i2sbi(inode)->osi_list_mutex);
 	tmp = obdfs_islist(inode);
 	if ( list_empty(tmp) ) {
-		CDEBUG(D_INODE, __FUNCTION__ ": no dirty pages for inode %ld\n",
-		       inode->i_ino);
+		CDEBUG(D_INFO, "no dirty pages for inode %ld\n", inode->i_ino);
 		obd_up(&obdfs_i2sbi(inode)->osi_list_mutex);
 		EXIT;
 		return;
