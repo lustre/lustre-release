@@ -80,7 +80,9 @@ static int ptlrpc_pinger_main(void *arg)
         RECALC_SIGPENDING;
         SIGNAL_MASK_UNLOCK(current, flags);
 
-        THREAD_NAME(current->comm, "%s", data->name);
+        LASSERTF(strlen(data->name) < sizeof(current->comm),
+                 "name %d > len %d\n",strlen(data->name),sizeof(current->comm));
+        THREAD_NAME(current->comm, sizeof(current->comm) - 1, "%s", data->name);
         unlock_kernel();
 
         /* Record that the thread is running */
