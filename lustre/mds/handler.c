@@ -1171,7 +1171,6 @@ static char *reint_names[] = {
 
 static int mdt_obj_create(struct ptlrpc_request *req)
 {
-        unsigned int tmpname = ll_insecure_random_int();
         struct ldlm_res_id res_id = { .name = {0} };
         struct obd_export *exp = req->rq_export;
         struct obd_device *obd = exp->exp_obd;
@@ -1184,6 +1183,7 @@ static int mdt_obj_create(struct ptlrpc_request *req)
         struct obd_run_ctxt saved;
         ldlm_policy_data_t policy;
         int mealen, flags = 0;
+        unsigned int tmpname;
         struct obd_ucred uc;
         struct dentry *new;
         struct mea *mea;
@@ -1207,12 +1207,22 @@ static int mdt_obj_create(struct ptlrpc_request *req)
 
         repbody = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*repbody));
 
+repeat:
         handle = fsfilt_start(obd, parent_inode, FSFILT_OP_MKDIR, NULL);
         LASSERT(!IS_ERR(handle));
 
+        tmpname = ll_insecure_random_int();
         sprintf(fidname, "%u", tmpname);
         new = simple_mkdir(mds->mds_objects_dir, fidname,
                         body->oa.o_mode, 1);
+        if (IS_ERR(new)) {
+                CERROR("%s: can't create new inode %s) for mkdir: %d\n",
+                       obd->obd_name, fidname, (int) PTR_ERR(new));
+                if (PTR_ERR(new) == -EEXIST) {
+                        fsfilt_commit(obd, parent_inode, handle, 0);
+                        goto repeat;
+                }
+        }
         LASSERT(!IS_ERR(new));
         LASSERT(new->d_inode != NULL);
 

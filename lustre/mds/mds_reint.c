@@ -1314,7 +1314,7 @@ int mds_create_local_dentry(struct mds_update_record *rec,
 
         if (new_child->d_inode != NULL) {
                 /* nice. we've already have local dentry! */
-                CERROR("found dentry in FIDS/: %u/%u\n", 
+                CDEBUG(D_OTHER, "found dentry in FIDS/: %u/%u\n", 
                        (unsigned) new_child->d_inode->i_ino,
                        (unsigned) new_child->d_inode->i_generation);
                 rec->ur_fid1->id = fids_dir->i_ino;

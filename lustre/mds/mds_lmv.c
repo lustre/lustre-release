@@ -618,7 +618,7 @@ int mds_commitrw(int cmd, struct obd_export *exp, struct obdo *oa,
 
         for (i = 0, lnb = res; i < obj->ioo_bufcnt; i++, lnb++)
                 __free_page(lnb->page);
-        f_dput(res->dentry);
+        l_dput(res->dentry);
 
         RETURN(rc);
 }
