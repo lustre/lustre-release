@@ -15,17 +15,17 @@ usage (char *argv0, int help)
 
 	if (progname == NULL)
 		progname = argv0;
-	
+
 	fprintf (help ? stdout : stderr,
 		 "Usage: %s [flags] file[s]\n",
 		 progname);
-	
+
 	if (!help)
 	{
 		fprintf (stderr, "   or try '-h' for help\n");
 		exit (1);
 	}
-	
+
 	printf ("Check given files have...\n");
 	printf (" -p    permission       file must have required permissions\n");
 	printf (" -t    dir|file|link    file must be of the specified type\n");
@@ -55,7 +55,7 @@ main (int argc, char **argv)
 	long long     size = -1;
 	int           follow = 0;
 	char         *term;
-   
+
 	while ((c = getopt (argc, argv, "p:t:l:s:u:g:avfh")) != -1)
 		switch (c)
 		{
@@ -92,7 +92,7 @@ main (int argc, char **argv)
 				}
 			} else {
 				struct passwd *pw = getpwnam (optarg);
-				
+
 				if (pw == NULL)
 				{
 					fprintf (stderr, "Can't find user %s\n", optarg);
@@ -113,7 +113,7 @@ main (int argc, char **argv)
 				}
 			} else {
 				struct group *gr = getgrnam (optarg);
-				
+
 				if (gr == NULL)
 				{
 					fprintf (stderr, "Can't find group %s\n", optarg);
@@ -122,7 +122,7 @@ main (int argc, char **argv)
 				uid = gr->gr_gid;
 			}
 			break;
-			
+
 		case 't':
 			type = optarg;
 			break;
@@ -134,33 +134,33 @@ main (int argc, char **argv)
 		case 'v':
 			verbose++;
 			break;
-			
+
 		case 'f':
 			follow++;
 			break;
-			
+
 		case 'h':
 			usage (argv[0], 1);
 			return (0);
-	 
+
 		default:
 			usage (argv[0], 0);
 		}
 
 	if (optind == argc)
 		usage (argv[0], 0);
-	
+
 	do
 	{
 		char *fname = argv[optind];
 		int rc = follow ? stat64 (fname, &buf) : lstat64 (fname, &buf);
-      
+
 		if (rc != 0)
 		{
 			if (!(absent && errno == ENOENT))
 			{
 				if (verbose)
-					printf ("Can't %sstat %s: %s\n", 
+					printf ("Can't %sstat %s: %s\n",
 						follow ? "" : "l",
 						fname, strerror (errno));
 				return (1);
@@ -177,38 +177,38 @@ main (int argc, char **argv)
 				printf ("%s exists\n", fname);
 			return (1);
 		}
-		
+
 		if (type != NULL)
 		{
-			if (!strcmp (type, "d") || 
+			if (!strcmp (type, "d") ||
 			    !strcmp (type, "dir"))
 			{
 				if (!S_ISDIR (buf.st_mode))
 				{
 					if (verbose)
-						printf ("%s is not a directory\n", 
+						printf ("%s is not a directory\n",
 							 fname);
 					return (1);
 				}
 			}
-			else if (!strcmp (type, "f") || 
+			else if (!strcmp (type, "f") ||
 				 !strcmp (type, "file"))
 			{
 				if (!S_ISREG (buf.st_mode))
 				{
 					if (verbose)
-						printf ("%s is not a regular file\n", 
+						printf ("%s is not a regular file\n",
 							fname);
 					return (1);
 				}
 			}
-			else if (!strcmp (type, "l") || 
+			else if (!strcmp (type, "l") ||
 				 !strcmp (type, "link"))
 			{
 				if (!S_ISLNK (buf.st_mode))
 				{
 					if (verbose)
-						printf ("%s is not a link\n", 
+						printf ("%s is not a link\n",
 							fname);
 					return (1);
 				}
@@ -218,7 +218,7 @@ main (int argc, char **argv)
 				fprintf (stderr, "Can't parse file type %s\n", type);
 				return (1);
 			}
-			
+
 			if (verbose)
 				printf ("%s has type %s OK\n", fname, type);
 		}
@@ -247,11 +247,11 @@ main (int argc, char **argv)
 						fname, (long long)buf.st_size, size);
 				return (1);
 			}
-			
+
 			if (verbose)
 				printf ("%s has size %Ld OK\n", fname, size);
 		}
-		
+
 		if (checklink != NULL)
 		{
 			static char lname[4<<10];
@@ -265,7 +265,7 @@ main (int argc, char **argv)
 						fname, strerror (errno));
 				return (1);
 			}
-			
+
 			lname[rc] = 0;
 			if (strcmp (checklink, lname))
 			{
@@ -274,7 +274,7 @@ main (int argc, char **argv)
 						fname, lname, checklink);
 				return (1);
 			}
-			
+
 			if (verbose)
 				printf ("%s links to %s OK\n", fname, checklink);
 		}
@@ -288,12 +288,12 @@ main (int argc, char **argv)
 						fname, (long)buf.st_uid, (long)uid);
 				return (1);
 			}
-			
+
 			if (verbose)
 				printf ("%s is owned by user #%ld OK\n",
 					fname, (long)uid);
 		}
-		
+
 		if (gid != (gid_t)-1)
 		{
 			if (buf.st_gid != gid)
@@ -303,13 +303,12 @@ main (int argc, char **argv)
 						fname, (long)buf.st_gid, (long)gid);
 				return (1);
 			}
-			
+
 			if (verbose)
 				printf ("%s is owned by group #%ld OK\n",
 					fname, (long)gid);
 		}
-		
 	} while (++optind < argc);
-	
+
 	return (0);
 }
