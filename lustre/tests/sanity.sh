@@ -711,6 +711,7 @@ test_24q() {
 	DIRINO=`ls -lid $DIR/R13a | awk '{ print $1 }'`
 	multiop $DIR/R13b D_c &
 	MULTIPID=$!
+	usleep 500
 
 	mrename $DIR/R13a $DIR/R13b
 	$CHECKSTAT -a $DIR/R13a || error
