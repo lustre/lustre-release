@@ -26,7 +26,7 @@ device 0
 attach mds MDSDEV
 setup ${MDS} ${MDSFS}
 device 1
-attach obdext2 OBDEXT2DEV
+attach obdext2 OBDDEV
 setup ${OST}
 device 2
 attach ost OSTDEV
