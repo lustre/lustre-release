@@ -62,11 +62,8 @@ sub extractpid
 {
     $line = shift;
 #    print "$_\n";
-    if ($line =~ m/\(\) ([0-9]*)\+[0-9]*\)$/) {
-	return $1;
-    }
-    if ($line =~ m/\(\) ([0-9]*) \| [0-9]*\+[0-9]*\)$/) {
-	return $1;
+    if ($line =~ m/\d+:\d+:\d+:\d+\.\d+:\d+:\d+:*$/) {
+	return $6;
     }
 }
 
@@ -74,8 +71,8 @@ sub extracthostpid
 {
     $line = shift;
 #    print "$_\n";
-    if ($line =~ m/\(\) [0-9]* \| ([0-9]*)\+[0-9]*\)$/) {
-	return $1;
+    if ($line =~ m/\d+:\d+:\d+:\d+\.\d+:\d+:\d+:\d+:*$/) {
+	return $7;
     }
 }
 
