@@ -11,7 +11,7 @@
 int main(int argc, char ** argv)
 {
         int i, count, iter;
-        long int start, last, rc = 0;
+        long int start, end, last, rc = 0;
 
         if (argc != 4) {
                 printf("Usage %s filenamebase file_count iterations\n",
@@ -31,7 +31,14 @@ int main(int argc, char ** argv)
 
         start = last = time(0);
 
-        for (i = 0; i < iter; i++) {
+        if (iter < 0) {
+                end = start - iter;
+                iter = -1UL >> 1;
+        } else {
+                end = -1UL >> 1;
+        }
+
+        for (i = 0; i < iter && last < end; i++) {
                 struct stat buf;
                 char filename[4096];
                 int tmp;
@@ -46,7 +53,7 @@ int main(int argc, char ** argv)
                         break;
                 }
 
-		if ((i % 10000) == 0) {
+                if ((i % 10000) == 0) {
                         printf(" - stat %d (time %ld ; total %ld ; last %ld)\n",
                                i, time(0), time(0) - start, time(0) - last);
                         last = time(0);
@@ -57,4 +64,4 @@ int main(int argc, char ** argv)
                time(0) - start, ((float)i / (time(0) - start)));
 
         exit(rc);
-} 
+}
