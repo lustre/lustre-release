@@ -639,7 +639,7 @@ sub parse_file
 	    $linecnt++;
 	    my @parsed_line = get_parsed_line($file, $linecnt, $_, $sline);
 	    next if ($#parsed_line == 0);
-	    last if ($linecnt > $eline);
+	    last if ($eline && ($linecnt > $eline));
 	    next if (ignore_conditions(\@parsed_line, $pid, 
 				      $rpctrace, $trace, $nodlm,
 				      $noclass, $nonet));
@@ -1003,7 +1003,7 @@ sub get_parsed_line()
     my $linecnt = shift;
     my $in_line = shift;
     my $sline = shift;
-    if ($linecnt < $sline) {
+    if (($sline) && ($linecnt < $sline)) {
 	return 0;
     }
     if ($in_line =~ /$REGEX/) {
