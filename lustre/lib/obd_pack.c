@@ -263,8 +263,5 @@ void ost_unpack_niobuf(void **tmp, struct niobuf **nbp)
         nb->len = NTOH__u32(nb->len); 
         nb->flags = NTOH__u32(nb->flags); 
 
-        if ((nb->offset >> 32) != 0)
-                BUG();
-
         *tmp = c + sizeof(*nb); 
 }
