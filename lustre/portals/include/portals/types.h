@@ -153,17 +153,6 @@ typedef void (*ptl_eq_handler_t)(ptl_event_t *event);
 #define PTL_EQ_HANDLER_NONE NULL
 
 typedef struct {
-        volatile ptl_seq_t sequence;
-        ptl_size_t size;
-        ptl_event_t *base;
-        ptl_handle_any_t cb_eq_handle;
-} ptl_eq_t;
-
-typedef struct {
-        ptl_eq_t *eq;
-} ptl_ni_t;
-
-typedef struct {
 	int max_mes;
 	int max_mds;
 	int max_eqs;
