@@ -406,6 +406,13 @@ static int ptlrpc_check_reply(struct ptlrpc_request *req)
                 DEBUG_REQ(D_NET, req, "REPLIED:");
                 GOTO(out, rc = 1);
         }
+        
+        if (req->rq_net_err && !req->rq_timedout) {
+                spin_unlock_irqrestore (&req->rq_lock, flags);
+                ptlrpc_expire_one_request(req); 
+                spin_lock_irqsave (&req->rq_lock, flags);
+                GOTO(out, rc = 0);
+        }
 
         if (req->rq_err) {
                 DEBUG_REQ(D_ERROR, req, "ABORTED:");
@@ -583,7 +590,7 @@ static int ptlrpc_send_new_req(struct ptlrpc_request *req)
         rc = ptl_send_rpc(req);
         if (rc) {
                 DEBUG_REQ(D_HA, req, "send failed (%d); expect timeout", rc);
-                req->rq_timeout = 1;
+                req->rq_net_err = 1;
                 RETURN(rc);
         }
         RETURN(0);
@@ -656,6 +663,10 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
                 }
 
                 if (req->rq_phase == RQ_PHASE_RPC) {
+                        if (req->rq_net_err && !req->rq_timedout) {
+                                ptlrpc_expire_one_request(req); 
+                                continue;
+                        }
                         if (req->rq_waiting || req->rq_resend) {
                                 int status;
 
@@ -713,7 +724,7 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
                                         DEBUG_REQ(D_HA, req, "send failed (%d)",
                                                   rc);
                                         force_timer_recalc = 1;
-                                        req->rq_timeout = 0;
+                                        req->rq_net_err = 1;
                                 }
                                 /* need to reset the timeout */
                                 force_timer_recalc = 1;
@@ -1203,10 +1214,11 @@ void ptlrpc_resend_req(struct ptlrpc_request *req)
 
         spin_lock_irqsave (&req->rq_lock, flags);
         req->rq_resend = 1;
+        req->rq_net_err = 0;
         req->rq_timedout = 0;
         if (req->rq_bulk) {
                 __u64 old_xid = req->rq_xid;
-                
+
                 /* ensure previous bulk fails */
                 req->rq_xid = ptlrpc_next_xid();
                 CDEBUG(D_HA, "resend bulk old x"LPU64" new x"LPU64"\n",

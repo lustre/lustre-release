@@ -57,7 +57,7 @@ void request_out_callback(ptl_event_t *ev)
                  * like failing sends in client.c does currently...  */
 
                 spin_lock_irqsave(&req->rq_lock, flags);
-                req->rq_timeout = 0;
+                req->rq_net_err = 1;
                 spin_unlock_irqrestore(&req->rq_lock, flags);
                 
                 ptlrpc_wake_client_req(req);

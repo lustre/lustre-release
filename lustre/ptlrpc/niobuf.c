@@ -458,6 +458,7 @@ int ptl_send_rpc(struct ptlrpc_request *request)
         request->rq_replied = 0;
         request->rq_err = 0;
         request->rq_timedout = 0;
+        request->rq_net_err = 0;
         request->rq_resend = 0;
         request->rq_restart = 0;
         spin_unlock_irqrestore (&request->rq_lock, flags);

@@ -267,7 +267,7 @@ struct ptlrpc_request {
         unsigned int rq_intr:1, rq_replied:1, rq_err:1,
                 rq_timedout:1, rq_resend:1, rq_restart:1, rq_replay:1,
                 rq_no_resend:1, rq_waiting:1, rq_receiving_reply:1,
-                rq_no_delay:1;
+                rq_no_delay:1, rq_net_err:1;
         int rq_phase;
         /* client-side refcount for SENT race */
         atomic_t rq_refcount;
