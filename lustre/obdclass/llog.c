@@ -108,7 +108,7 @@ EXPORT_SYMBOL(llog_cancel_rec);
 int llog_init_handle(struct llog_handle *handle, int flags,
                      struct obd_uuid *uuid)
 {
-        int rc; 
+        int rc;
         struct llog_log_hdr *llh;
         ENTRY;
         LASSERT(handle->lgh_hdr == NULL);
@@ -123,10 +123,10 @@ int llog_init_handle(struct llog_handle *handle, int flags,
                 LASSERT(llh->llh_flags == flags);
                 LASSERT(obd_uuid_equals(uuid, &llh->llh_tgtuuid));
                 RETURN(0);
-        } else if (rc != LLOG_EEMPTY) { 
+        } else if (rc != LLOG_EEMPTY) {
                 GOTO(out, rc);
         }
-        
+
         llh->llh_hdr.lrh_type = LLOG_HDR_MAGIC;
         llh->llh_hdr.lrh_len = llh->llh_tail.lrt_len = LLOG_CHUNK_SIZE;
         llh->llh_hdr.lrh_index = llh->llh_tail.lrt_index = 0;
@@ -135,12 +135,12 @@ int llog_init_handle(struct llog_handle *handle, int flags,
         memcpy(&llh->llh_tgtuuid, uuid, sizeof(llh->llh_tgtuuid));
         llh->llh_bitmap_offset = offsetof(typeof(*llh), llh_bitmap);
 
-        if (llh->llh_flags & LLOG_F_IS_CAT)
+        if (flags & LLOG_F_IS_CAT)
                 INIT_LIST_HEAD(&handle->u.chd.chd_head);
-        if (llh->llh_flags & LLOG_F_IS_PLAIN) {
+        else if (llh->llh_flags & LLOG_F_IS_PLAIN)
                 INIT_LIST_HEAD(&handle->u.phd.phd_entry);
-                handle->lgh_last_idx = 1;
-        }
+        else
+                LBUG();
  out:
         if (rc)
                 OBD_FREE(llh, sizeof(*llh));
