@@ -89,6 +89,8 @@ int ll_start_readpage_24(struct ll_file_data *fd, struct obd_export *exp,
 
         rc = obd_brw_async_ocp(OBD_BRW_READ, exp, &oa, 
                                ll_i2info(inode)->lli_smd, NULL, ocp, NULL);
+        if (rc)
+                ocp_free(page);
         RETURN(rc);
 }
 
@@ -122,6 +124,7 @@ void ll_start_readahead(struct ll_file_data *fd, struct obd_export *exp,
                 }
                 /* make sure we didn't race with other teardown/readers */
                 if (!page->mapping || Page_Uptodate(page)) {
+                        unlock_page(page);
                         page_cache_release(page);
                         continue;
                 }
@@ -136,6 +139,7 @@ void ll_start_readahead(struct ll_file_data *fd, struct obd_export *exp,
                                     &page_extent, sizeof(page_extent), LCK_PR, 
                                     &flags, inode, &match_lockh);
                 if (!matched) {
+                        unlock_page(page);
                         page_cache_release(page);
                         break;
                 }
@@ -149,6 +153,7 @@ void ll_start_readahead(struct ll_file_data *fd, struct obd_export *exp,
 
                 rc = ll_start_readpage_24(fd, exp, inode, page);
                 if (rc != 0) {
+                        unlock_page(page);
                         page_cache_release(page);
                         break;
                 }
@@ -181,13 +186,12 @@ static int ll_readpage_24(struct file *file, struct page *page)
                 memset(kmap(page), 0, PAGE_SIZE);
                 kunmap(page);
                 SetPageUptodate(page);
-                unlock_page(page);
-                RETURN(rc);
+                GOTO(out, rc = 0);
         }
 
         exp = ll_i2obdexp(inode);
         if (exp == NULL)
-                RETURN(-EINVAL);
+                GOTO(out, rc = -EINVAL);
 
         page_extent.start = (__u64)page->index << PAGE_CACHE_SHIFT;
         page_extent.end = page_extent.start + PAGE_CACHE_SIZE - 1;
@@ -224,7 +228,12 @@ static int ll_readpage_24(struct file *file, struct page *page)
         if (matched)
                 obd_cancel(&ll_i2sbi(inode)->ll_osc_conn, 
                            ll_i2info(inode)->lli_smd, LCK_PR, &match_lockh);
+
         class_export_put(exp);
+
+out:
+        if (rc)
+                unlock_page(page);
         RETURN(rc);
 }
 
