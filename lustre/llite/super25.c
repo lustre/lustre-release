@@ -20,6 +20,7 @@
 #include <linux/lustre_dlm.h>
 #include <linux/init.h>
 #include <linux/fs.h>
+#include <linux/lprocfs_status.h>
 
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
 kmem_cache_t *ll_file_data_slab;
@@ -33,6 +34,8 @@ extern int ll_recover(struct recovd_data *, int);
 extern int ll_commitcbd_setup(struct ll_sb_info *);
 extern int ll_commitcbd_cleanup(struct ll_sb_info *);
 int ll_read_inode2(struct inode *inode, void *opaque);
+
+extern void ll_proc_namespace(struct super_block* sb, char* osc, char* mdc)
 
 static char *ll_read_opt(const char *opt, char *data)
 {
@@ -219,7 +222,7 @@ static int ll_fill_super(struct super_block *sb, void *data, int silent)
 
         ptlrpc_req_finished(request);
         request = NULL;
-
+        ll_proc_namespace(sb, osc, mdc)
 out_dev:
         if (mdc)
                 OBD_FREE(mdc, strlen(mdc) + 1);
@@ -265,6 +268,9 @@ static void ll_put_super(struct super_block *sb)
          *     which we can call for other reasons as well.
          */
         mdc_getstatus(&sbi->ll_mdc_conn, &rootfid);
+
+        lprocfs_dereg_mnt(sbi->ll_proc_root);
+        sbi->ll_proc_root = NULL;
 
         obd_disconnect(&sbi->ll_mdc_conn);
         OBD_FREE(sbi, sizeof(*sbi));
