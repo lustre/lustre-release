@@ -23,7 +23,8 @@ EXTNI = extN_fs.h extN_fs_i.h extN_fs_sb.h extN_jbd.h
 EXTN_EXTRA = include/linux/xattr.h include/linux/extN_xattr.h fs/extN/xattr.c
 extN_SOURCES = $(EXTNC) xattr.c # punch.c
 extN_DEPENDENCIES = patch-stamp
-EXTRA_DIST = $(EXTNP) extN-2.4.18-ino_sb_fixup.diff extN-2.4.18-exports.diff \
+EXTRA_DIST = $(EXTNP) $(EXTN_FIXES) \
+	extN-2.4.18-ino_sb_fixup.diff extN-2.4.18-exports.diff \
 	$(wildcard extN.patch-*)
 DISTCLEANFILES = -r $(extN_SOURCES) sed-stamp patch-stamp *.orig *.rej
 SUB=-e "s/ext3/extN/g" -e "s/EXT3/EXTN/g"
