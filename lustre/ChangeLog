@@ -1,4 +1,27 @@
 tbd         Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 1.0.2
+       * bug fixes
+	- fix obvious semaphore misuse in as-yet-unused setattr path (2348)
+	- remove the most blatant lies from BUILDING file (2371)
+	- change default debug level to reasonable production setting
+	- reduce client side cache size to reduce cache flush time
+	- reduce max RPCs in flight to avoid unnecessary file fragmentation
+	- sync writes completed after process exits caused crashes (2319)
+	- maintain correct mount count on the MDS (2356)
+	- backout 1557, because 2316 wasn't really fixed
+	- better file I/O statistics gathering in /proc
+	- don't take unnecessary, deadlock-inducing bug in readpage (2383)
+	- another kernel patch to fix zero-copy TCP function export
+	- don't take duplicate lock when processing re-sent getattr (2420)
+	- lctl uses obd_self_export instead of creating new conn (2353)
+	- MDS/OST recovery case which requires object creation asserted (2425)
+	- move lfs from /usr/sbin to /usr/bin in packages
+	- fix race between mds_client_add and mds_client_free (2417)
+	- use kmalloc instead of slabs in portals (2430)
+	- don't create duplicate records when a failover MDS is present (2442)
+	- remove unnecessary mount age check (2332)
+
+2003-12-13  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.0.1
        * bug fixes
 	- remove now-unused request->rq_obd (278)
