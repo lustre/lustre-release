@@ -158,6 +158,8 @@ int ptlrpc_register_bulk(struct ptlrpc_bulk_desc *desc)
         int rc;
         ENTRY;
 
+        atomic_set(&desc->b_finished_count, desc->b_page_count);
+
         list_for_each_safe(tmp, next, &desc->b_page_list) {
                 struct ptlrpc_bulk_page *bulk;
                 bulk = list_entry(tmp, struct ptlrpc_bulk_page, b_link);

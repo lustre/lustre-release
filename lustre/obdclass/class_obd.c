@@ -515,8 +515,9 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 
                 EXIT;
         brw_cleanup:
-                while (pages-- > 0)
-                        __free_pages(bufs[pages], 0);
+                i = pages;
+                while (i-- > 0)
+                        __free_pages(bufs[i], 0);
         brw_free:
                 OBD_FREE(bufs, pages * sizeof(*bufs));
                 OBD_FREE(counts, pages * sizeof(*counts));

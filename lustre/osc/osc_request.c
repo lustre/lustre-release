@@ -469,6 +469,7 @@ static void brw_write_finish(struct ptlrpc_bulk_desc *desc, void *data)
 {
         struct osc_brw_cb_data *cb_data = data;
         int i;
+        ENTRY;
 
         if (desc->b_flags & PTL_RPC_FL_INTR)
                 CERROR("got signal\n");
@@ -482,6 +483,7 @@ static void brw_write_finish(struct ptlrpc_bulk_desc *desc, void *data)
         ptlrpc_free_req(cb_data->req);
 
         OBD_FREE(cb_data, sizeof(*cb_data));
+        EXIT;
 }
 
 static int osc_brw_write(struct obd_conn *conn, obd_count num_oa,

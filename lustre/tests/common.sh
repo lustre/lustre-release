@@ -199,8 +199,8 @@ setup_lustre() {
 	do_insmod $LUSTRE/extN/extN.o || \
 		echo "info: can't load extN.o module, not fatal if using ext3"
 	do_insmod $LUSTRE/mds/mds.o || exit -1
-	do_insmod $LUSTRE/mds/mds_ext2.o || exit -1
-	do_insmod $LUSTRE/mds/mds_ext3.o || exit -1
+	#do_insmod $LUSTRE/mds/mds_ext2.o || exit -1
+	#do_insmod $LUSTRE/mds/mds_ext3.o || exit -1
 	do_insmod $LUSTRE/mds/mds_extN.o || \
 		echo "info: can't load mds_extN.o module, needs extN.o"
 	do_insmod $LUSTRE/obdecho/obdecho.o || exit -1

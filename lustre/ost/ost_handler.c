@@ -319,6 +319,10 @@ static int ost_brw_read(struct ost_obd *obddev, struct ptlrpc_request *req)
         if (rc)
                 GOTO(out_bulk, rc);
 
+        wait_event_interruptible(desc->b_waitq, ptlrpc_check_bulk_sent(desc));
+        if (desc->b_flags & PTL_RPC_FL_INTR)
+                rc = -EINTR;
+
         /* The unpackers move tmp1 and tmp2, so reset them before using */
         tmp1 = lustre_msg_buf(req->rq_reqmsg, 1);
         tmp2 = lustre_msg_buf(req->rq_reqmsg, 2);
@@ -358,7 +362,9 @@ static int ost_brw_write_cb(struct ptlrpc_bulk_page *bulk)
 
 static void ost_brw_write_finished_cb(struct ptlrpc_bulk_desc *desc, void *data)
 {
+        ENTRY;
         ptlrpc_free_bulk(desc);
+        EXIT;
 }
 
 static int ost_brw_write(struct ost_obd *obddev, struct ptlrpc_request *req)

@@ -144,6 +144,9 @@ static void __exit ptlrpc_exit(void)
         ptlrpc_cleanup_connection();
 }
 
+/* events.c */
+EXPORT_SYMBOL(ptlrpc_check_bulk_sent);
+
 /* connmgr.c */
 EXPORT_SYMBOL(ptlrpc_connmgr);
 EXPORT_SYMBOL(connmgr_connect);
