@@ -80,8 +80,7 @@ int filter_log_sz_change(struct llog_handle *cathandle,
         lsc->lsc_fid = *mds_fid;
         lsc->lsc_io_epoch = io_epoch;
 
-        rc = llog_cat_add_rec(cathandle, &lsc->lsc_hdr, logcookie,
-                              NULL, NULL, NULL);
+        rc = llog_cat_add_rec(cathandle, &lsc->lsc_hdr, logcookie, NULL);
         OBD_FREE(lsc, sizeof(*lsc));
 
         if (rc > 0) {

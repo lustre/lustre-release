@@ -94,14 +94,15 @@ static int cat_cancel_cb(struct llog_handle *cathandle,
 {
         struct llog_logid_rec *lir = (struct llog_logid_rec *)rec;
         struct llog_handle *loghandle;
-        int rc;
+        struct llog_log_hdr *llh;
+        int rc, index;
         ENTRY;
 
         if (rec->lrh_type != LLOG_LOGID_MAGIC) {
                 CERROR("invalid record in catalog\n");
                 RETURN(-EINVAL);
         }
-        CDEBUG(D_HA, "processing log "LPX64":%x at index %u of catalog "LPX64"\n",
+        CWARN("processing log "LPX64":%x at index %u of catalog "LPX64"\n",
                lir->lid_id.lgl_oid, lir->lid_id.lgl_ogen,
                rec->lrh_index, cathandle->lgh_id.lgl_oid);
 
@@ -112,8 +113,26 @@ static int cat_cancel_cb(struct llog_handle *cathandle,
                 RETURN(rc);
         }
 
-        if (cathandle->lgh_last_idx == loghandle->u.phd.phd_cookie.lgc_index)
-                cathandle->u.chd.chd_current_log = loghandle;
+        llh = loghandle->lgh_hdr;
+        if ((llh->llh_flags & LLOG_F_ZAP_WHEN_EMPTY) &&
+            (llh->llh_count == 1)) {
+                rc = llog_destroy(loghandle);
+                if (rc)
+                        CERROR("failure destroying log in postsetup: %d\n", rc);
+                LASSERT(rc == 0);
+
+                index = loghandle->u.phd.phd_cookie.lgc_index;
+                llog_free_handle(loghandle);
+
+                LASSERT(index);
+                llog_cat_set_first_idx(cathandle, index);
+                rc = llog_cancel_rec(cathandle, index);
+                if (rc == 0)
+                        CWARN("cancel log "LPX64":%x at index %u of catalog "
+                              LPX64"\n", lir->lid_id.lgl_oid,
+                              lir->lid_id.lgl_ogen, rec->lrh_index,
+                              cathandle->lgh_id.lgl_oid);
+        }
 
         RETURN(rc);
 }
