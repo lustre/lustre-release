@@ -80,8 +80,8 @@ diff -u -r1.1.1.1 linux/net/netsyms.c
  EXPORT_SYMBOL(tcp_write_xmit);
 
 diff -u -r1.1.1.1 linux/net/core/skbuff.c
---- linux/net/core/net/core/skbuff.c	2 Aug 2002 10:59:32 -0000	1.1.1.1
-+++ linux/net/core/net/core/skbuff.c	2 Aug 2002 14:07:13 -0000
+--- linux/net/core/skbuff.c	2 Aug 2002 10:59:32 -0000	1.1.1.1
++++ linux/net/core/skbuff.c	2 Aug 2002 14:07:13 -0000
 @@ -208,6 +208,8 @@
  	atomic_set(&(skb_shinfo(skb)->dataref), 1);
  	skb_shinfo(skb)->nr_frags = 0;
@@ -157,8 +157,8 @@ diff -u -r1.1.1.1 linux/net/core/skbuff.c
 
  nodata:
 diff -u -r1.1.1.1 linux/net/ipv4/tcp.c
---- linux/net/ipv4/net/ipv4/tcp.c	2 Aug 2002 10:59:34 -0000	1.1.1.1
-+++ linux/net/ipv4/net/ipv4/tcp.c	2 Aug 2002 14:36:30 -0000
+--- linux/net/ipv4/tcp.c	2 Aug 2002 10:59:34 -0000	1.1.1.1
++++ linux/net/ipv4/tcp.c	2 Aug 2002 14:36:30 -0000
 @@ -745,7 +745,7 @@
  	goto out;
  }
@@ -264,7 +264,7 @@ diff -u -r1.1.1.1 linux/net/ipv4/tcp.c
 +	long timeo;
 +
 +	BUG_TRAP (len > 0);
-+	BUG_TRAP ((flags & (MSG_OOB | MSG_PEEK | MSG_TRUNC)) == 0);
++	/*BUG_TRAP ((flags & (MSG_OOB | MSG_PEEK | MSG_TRUNC)) == 0);*/
 +
 +	lock_sock(sk);
 +
@@ -453,24 +453,3 @@ diff -u -r1.1.1.1 linux/net/ipv4/tcp.c
  }
 
  /*
-
-
-
-
-------=_NextPart_000_00A5_01C29D5C.787B8C30
-Content-Type: application/ms-tnef;
-	name="winmail.dat"
-Content-Transfer-Encoding: base64
-Content-Disposition: attachment;
-	filename="winmail.dat"
-
-eJ8+IgATAQaQCAAEAAAAAAABAAEAAQeQBgAIAAAA5AQAAAAAAADoAAEIgAcAGAAAAElQTS5NaWNy
-b3NvZnQgTWFpbC5Ob3RlADEIAQ2ABAACAAAAAgACAAEDkAYAJAEAAAkAAAACAR0MAQAAAB0AAABT
-TVRQOkVSSUNAQkFSVE9OU09GVFdBUkUuQ09NAAAAAAsAAQ4BAAAAAwAUDgEAAAACAfgPAQAAABAA
-AAAqejobp4bREYPyAKDJDOioAgH6DwEAAAAQAAAAKno6G6eG0RGD8gCgyQzoqAIB+w8BAAAATgAA
-AAAAAAA4obsQBeUQGqG7CAArKlbCAABtc3BzdC5kbGwAAAAAAE5JVEH5v7gBAKoAN9luAAAARDpc
-aG9tZVxtcy1tYWlsXGVyaWMucHN0AAAAAwD+DwUAAAADAA00/TcAAAIBfwABAAAAMQAAADAwMDAw
-MDAwMkE3QTNBMUJBNzg2RDExMTgzRjIwMEEwQzkwQ0U4QTgwNEQwMTAwMQAAAADQQA==
-
-------=_NextPart_000_00A5_01C29D5C.787B8C30--
-
