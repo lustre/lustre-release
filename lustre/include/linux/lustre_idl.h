@@ -41,6 +41,7 @@
  * - ioctl's
  */ 
 
+
 /* 
  *   OST requests: OBDO & OBD request records
  */
@@ -194,16 +195,10 @@ struct obd_bufref {
 #define MDS_TYPE_ERR 3
 
 #define MDS_GETATTR   1
-#define MDS_SETATTR   2
+#define MDS_REINT     2
 #define MDS_READPAGE  3
-#define MDS_CREATE    4
-#define MDS_LINK      5
-#define MDS_SYMLINK   6
-#define MDS_MKNOD     7
-#define MDS_MKDIR     8
-#define MDS_UNLINK    9
-#define MDS_RMDIR    10
-#define MDS_RENAME   11
+
+#define REINT_SETATTR 1
 
 struct mds_req_hdr { 
 	__u32 opc;
@@ -212,7 +207,7 @@ struct mds_req_hdr {
 	__u32 type;
 };
 
-struct lustre_fid { 
+struct ll_fid { 
 	__u64 id;
 	__u32 generation;
 	__u32 f_type;
@@ -230,10 +225,11 @@ struct mds_rep_hdr {
 };
 
 struct mds_req_packed {
-	struct lustre_fid        fid1;
-	struct lustre_fid        fid2;
+	struct ll_fid        fid1;
+	struct ll_fid        fid2;
         int                        namelen;
         int                        tgtlen;
+        __u32                       opcode;
         __u32                       valid;
         __u32 			    mode;
         __u32                       uid;
@@ -248,13 +244,11 @@ struct mds_req_packed {
         __u32                       ino;
         __u32                       nlink;
         __u32                       generation;
-        __u32  		            name_offset;
-        __u32                       tgt_offset;
 };
 
 struct mds_rep_packed {
-	struct lustre_fid        fid1;
-	struct lustre_fid        fid2;
+	struct ll_fid        fid1;
+	struct ll_fid        fid2;
         int                        namelen;
         int                        tgtlen;
         __u32                       valid;
@@ -271,9 +265,41 @@ struct mds_rep_packed {
         __u32                       ino;
         __u32                       nlink;
         __u32                       generation;
-        __u32 		            name_offset;
-        __u32                       tgt_offset;
 };
+
+
+struct mds_rec_setattr { 
+        __u32           sa_len;
+        __u32           sa_opcode;
+	struct ll_fid   sa_fid;
+	__u32	        sa_valid;
+	__u32		sa_mode;
+	__u32		sa_uid;
+	__u32		sa_gid;
+	__u64		sa_size;
+	__u64		sa_atime;
+	__u64		sa_mtime;
+	__u64		sa_ctime;
+	__u32 	        sa_attr_flags;
+};
+
+#ifdef __KERNEL__ 
+
+static inline void ll_ino2fid(struct ll_fid *fid, ino_t ino, __u32 generation, int type)
+{
+        fid->id = HTON__u64((__u64)ino);
+        fid->generation = HTON__u32(generation);
+        fid->f_type = HTON__u32(type);
+}
+
+static inline void ll_inode2fid(struct ll_fid *fid, struct inode *inode)
+{
+        fid->id = HTON__u64((__u64)inode->i_ino);
+        fid->generation = HTON__u32(inode->i_generation);
+        fid->f_type = HTON__u32(inode->i_mode & S_IFMT);
+}
+
+#endif 
 
 /* 
  *   OBD IOCTLS

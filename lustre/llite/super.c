@@ -90,160 +90,99 @@ static struct super_block * ll_read_super(struct super_block *sb,
 {
         struct inode *root = 0; 
         struct ll_sb_info *sbi = (struct ll_sb_info *)(&sb->u.generic_sbp);
-        struct obd_device *obddev;
 	char *device = NULL;
         char *version = NULL;
-	int root_ino = 2;
 	int connected = 0;
         int devno;
         int err;
 	struct mds_rep *rep; 
 	struct mds_rep_hdr *hdr = NULL; 
-        
 
         ENTRY;
         MOD_INC_USE_COUNT; 
+
         memset(sbi, 0, sizeof(*sbi));
-        
-        CDEBUG(D_INFO, "\n"); 
+
         ll_options(data, &device, &version);
         if ( !device ) {
                 printk(__FUNCTION__ ": no device\n");
-                EXIT;
+		sb = NULL; 
                 goto ERR;
         }
 
 	devno = simple_strtoul(device, NULL, 0);
-        CDEBUG(D_INFO, "\n"); 
         if ( devno >= MAX_OBD_DEVICES ) {
-                printk(__FUNCTION__ ": device of %s too high (%d)\n", device, devno);
-                EXIT;
+                printk(__FUNCTION__ ": device of %s too high\n", device);
+		sb = NULL; 
                 goto ERR;
         } 
 
-        CDEBUG(D_INFO, "\n"); 
-
-        obddev = &obd_dev[devno];
-        sbi->ll_conn.oc_dev = obddev;
-        CDEBUG(D_INFO, "\n"); 
-
+        sbi->ll_conn.oc_dev = &obd_dev[devno];
         err = obd_connect(&sbi->ll_conn);
-        CDEBUG(D_INFO, "\n"); 
         if ( err ) {
-                printk("OBDFS: cannot connect to %s\n", device);
-                EXIT;
+                printk(__FUNCTION__ "cannot connect to %s\n", device);
+		sb = NULL; 
                 goto ERR;
         }
 	connected = 1;
-
-        /* list of dirty inodes, and a mutex to hold while modifying it */
-        INIT_LIST_HEAD(&sbi->ll_inodes);
-        init_MUTEX (&sbi->ll_list_mutex);
 
         sbi->ll_super = sb;
 	sbi->ll_rootino = 2;
 
 	sb->s_maxbytes = 1LL << 36;
-	printk("Max bytes: %Lx\n", sb->s_maxbytes);
         sb->s_blocksize = PAGE_SIZE;
         sb->s_blocksize_bits = (unsigned char)PAGE_SHIFT;
         sb->s_magic = LL_SUPER_MAGIC;
         sb->s_op = &ll_super_operations;
 
         /* make root inode */
-	err = mdc_getattr(root_ino, S_IFDIR, OBD_MD_FLNOTOBD|OBD_MD_FLBLOCKS, 
-			 &rep, &hdr);
+	err = mdc_getattr(sbi->ll_rootino, S_IFDIR, 
+			  OBD_MD_FLNOTOBD|OBD_MD_FLBLOCKS, 
+			  &rep, &hdr);
         if (err) {
-                printk(__FUNCTION__ ": mds_getattr failed %d\n", err);
-		if (rep)
-			kfree(rep);
-                EXIT;
+                printk(__FUNCTION__ ": mds_getattr failed for root %d\n", err);
+		sb = NULL; 
                 goto ERR;
         }
                          
-        root = iget4(sb, root_ino, NULL, rep);
-	kfree(hdr);
-        if (!root) {
+        root = iget4(sb, sbi->ll_rootino, NULL, rep);
+        if (root) {
+		sb->s_root = d_alloc_root(root);
+	} else {
             printk("lustre_light: bad iget4 for root\n");
-            sb->s_dev = 0;
-            err = -ENOENT;
-            EXIT;
+	    sb = NULL; 
             goto ERR;
         } 
         
-        sb->s_root = d_alloc_root(root);
-        OBD_FREE(device, strlen(device) + 1);
-        if (version)
-                OBD_FREE(version, strlen(version) + 1);
-        EXIT;  
-        return sb;
-
 ERR:
-        MOD_DEC_USE_COUNT;
+	if (hdr)
+		kfree(hdr);
         if (device)
                 OBD_FREE(device, strlen(device) + 1);
         if (version)
                 OBD_FREE(version, strlen(version) + 1);
-	if (connected) 
+	if (!sb && connected) 
 		obd_disconnect(&sbi->ll_conn);
 
-        if (sbi) {
-                sbi->ll_super = NULL;
-        }
-        if (root) {
+        if (!sb && root) {
                 iput(root);
         }
-        sb->s_dev = 0;
-        return NULL;
-} /* ll_read_super */
+	if (!sb) 
+		MOD_DEC_USE_COUNT;
 
+	EXIT;
+        return sb;
+} /* ll_read_super */
 
 static void ll_put_super(struct super_block *sb)
 {
-        struct ll_sb_info *sbi;
-
         ENTRY;
-        sb->s_dev = 0;
-        
-        sbi = (struct ll_sb_info *) &sb->u.generic_sbp;
+
         obd_disconnect(ID(sb));
-        
-        printk(KERN_INFO "OBDFS: Bye bye.\n");
 
         MOD_DEC_USE_COUNT;
         EXIT;
 } /* ll_put_super */
-
-void ll_do_change_inode(struct inode *inode, int valid)
-{
-        struct obdo *oa;
-        int err;
-        
-        ENTRY;
-
-        oa = obdo_alloc();
-        if ( !oa ) {
-                printk(__FUNCTION__ ": obdo_alloc failed\n");
-                EXIT;
-                return;
-        }
-
-        oa->o_valid = OBD_MD_FLNOTOBD & (valid | OBD_MD_FLID);
-        ll_from_inode(oa, inode);
-	oa->o_mode = inode->i_mode;
-        err = obd_setattr(IID(inode), oa);
-
-        if ( err )
-                printk(__FUNCTION__ ": obd_setattr fails (%d)\n", err);
-
-        EXIT;
-        obdo_free(oa);
-} /* ll_write_inode */
-
-void ll_change_inode(struct inode *inode, int mask)
-{
-	return ll_do_change_inode(inode, OBD_MD_FLNLINK); 
-}
 
 
 extern void write_inode_pages(struct inode *);
@@ -265,50 +204,7 @@ static void ll_put_inode(struct inode *inode)
         EXIT;
 } /* ll_put_inode */
 
-
-static void ll_delete_inode(struct inode *inode)
-{
-	ll_do_change_inode(inode, ~0);
-	clear_inode(inode); 
-}
-#if 0
-{
-        struct obdo *oa;
-        int err;
-
-        ENTRY;
-        if (IOPS(inode, destroy) == NULL) {
-                printk(KERN_ERR __FUNCTION__ ": no destroy method!\n");
-                EXIT;
-                return;
-        }
-
-        oa = obdo_alloc();
-        if ( !oa ) {
-                printk(__FUNCTION__ ": obdo_alloc failed\n");
-                EXIT;
-                return;
-        }
-        oa->o_valid = OBD_MD_FLNOTOBD;
-        ll_from_inode(oa, inode);
-
-	/* XXX how do we know that this inode is now clean? */
-	printk("delete_inode ------> link %d\n", inode->i_nlink);
-        ODEBUG(oa);
-        err = IOPS(inode, destroy)(IID(inode), oa);
-        obdo_free(oa);
-        clear_inode(inode);
-        if (err) {
-                printk(__FUNCTION__ ": obd_destroy fails (%d)\n", err);
-                EXIT;
-                return;
-        }
-
-        EXIT;
-} /* ll_delete_inode */
-#endif
-
-
+/* like inode_setattr, but doesn't mark the inode dirty */ 
 static int ll_attr2inode(struct inode * inode, struct iattr * attr)
 {
 	unsigned int ia_valid = attr->ia_valid;
@@ -319,7 +215,6 @@ static int ll_attr2inode(struct inode * inode, struct iattr * attr)
 		if (error)
 			goto out;
 	}
-
 	if (ia_valid & ATTR_UID)
 		inode->i_uid = attr->ia_uid;
 	if (ia_valid & ATTR_GID)
@@ -342,28 +237,19 @@ out:
 int ll_setattr(struct dentry *de, struct iattr *attr)
 {
         struct inode *inode = de->d_inode;
-        struct obdo *oa;
-        int err;
+	struct mds_rep_hdr *hdr = NULL;
+	int err;
 
         ENTRY;
 
-        oa = obdo_alloc();
-        if ( !oa ) {
-                printk(__FUNCTION__ ": obdo_alloc failed\n");
-                return -ENOMEM;
-        }
-
+	/* change incore inode */
 	ll_attr2inode(inode, attr);
-        oa->o_id = inode->i_ino;
-	oa->o_mode = inode->i_mode;
-        obdo_from_iattr(oa, attr);
-        err = obd_setattr(IID(inode), oa);
 
+	err = mdc_setattr(inode, attr, NULL, &hdr); 
         if ( err )
-                printk(__FUNCTION__ ": obd_setattr fails (%d)\n", err);
+                printk(__FUNCTION__ ": ll_setattr fails (%d)\n", err);
 
         EXIT;
-        obdo_free(oa);
         return err;
 } /* ll_setattr */
 

@@ -488,8 +488,8 @@ got_it:
 	err = ext2_commit_chunk(page, from, to);
 
 	// change_inode happens with the commit_chunk
-        // ll_change_inode(dir);
-	/* OFFSET_CACHE */
+	/* XXX OFFSET_CACHE */
+
 out_unlock:
 	UnlockPage(page);
 out_page:

@@ -3,8 +3,10 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <string.h>
+
 #define IOC_REQUEST_GETATTR		_IOWR('f', 30, long)
 #define IOC_REQUEST_READPAGE		_IOWR('f', 31, long)
+#define IOC_REQUEST_SETATTR		_IOWR('f', 32, long)
 
 int main(int argc, char **argv)
 {
@@ -26,6 +28,10 @@ int main(int argc, char **argv)
 
 	printf("readpage test... ");
 	rc = ioctl(fd, IOC_REQUEST_READPAGE, NULL); 
+	printf("result: %d\n", rc); 
+
+	printf("setattr test... ");
+	rc = ioctl(fd, IOC_REQUEST_SETATTR, NULL); 
 	printf("result: %d\n", rc); 
 	return 0;
 }

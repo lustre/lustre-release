@@ -1,13 +1,7 @@
 /*
- * OBDFS Super operations
+ * Lustre Light I/O Page Cache
  *
- * This code is issued under the GNU General Public License.
- * See the file COPYING in this distribution
- *
- * Copyright (C) 1996, 1997, Olaf Kirch <okir@monad.swb.de>
- * Copryright (C) 1999 Stelias Computing Inc, 
- *                (author Peter J. Braam <braam@stelias.com>)
- * Copryright (C) 1999 Seagate Technology Inc.
+ * Copyright (C) 2002, Cluster File Systems, Inc. 
 */
 
 
@@ -37,14 +31,6 @@
 #include <linux/lustre_idl.h>
 #include <linux/lustre_mds.h>
 #include <linux/lustre_light.h>
-
-void ll_change_inode(struct inode *inode);
-
-static int cache_writes = 0;
-
-
-/* page cache support stuff */ 
-
 
 /*
  * Add a page to the dirty page list.
@@ -284,231 +270,6 @@ int ll_prepare_write(struct file *file, struct page *page, unsigned from, unsign
 }
 
 
-
-
-
-
-static kmem_cache_t *ll_pgrq_cachep = NULL;
-
-int ll_init_pgrqcache(void)
-{
-        ENTRY;
-        if (ll_pgrq_cachep == NULL) {
-                CDEBUG(D_CACHE, "allocating ll_pgrq_cache\n");
-                ll_pgrq_cachep = kmem_cache_create("ll_pgrq",
-                                                      sizeof(struct ll_pgrq),
-                                                      0, SLAB_HWCACHE_ALIGN,
-                                                      NULL, NULL);
-                if (ll_pgrq_cachep == NULL) {
-                        EXIT;
-                        return -ENOMEM;
-                } else {
-                        CDEBUG(D_CACHE, "allocated cache at %p\n",
-                               ll_pgrq_cachep);
-                }
-        } else {
-                CDEBUG(D_CACHE, "using existing cache at %p\n",
-                       ll_pgrq_cachep);
-        }
-        EXIT;
-        return 0;
-} /* ll_init_wreqcache */
-
-inline void ll_pgrq_del(struct ll_pgrq *pgrq)
-{
-        --ll_cache_count;
-        CDEBUG(D_INFO, "deleting page %p from list [count %ld]\n",
-               pgrq->rq_page, ll_cache_count);
-        list_del(&pgrq->rq_plist);
-        OBDClearCachePage(pgrq->rq_page);
-        kmem_cache_free(ll_pgrq_cachep, pgrq);
-}
-
-void ll_cleanup_pgrqcache(void)
-{
-        ENTRY;
-        if (ll_pgrq_cachep != NULL) {
-                CDEBUG(D_CACHE, "destroying ll_pgrqcache at %p, count %ld\n",
-                       ll_pgrq_cachep, ll_cache_count);
-                if (kmem_cache_destroy(ll_pgrq_cachep))
-                        printk(KERN_INFO __FUNCTION__
-                               ": unable to free all of cache\n");
-                ll_pgrq_cachep = NULL;
-        } else
-                printk(KERN_INFO __FUNCTION__ ": called with NULL pointer\n");
-
-        EXIT;
-} /* ll_cleanup_wreqcache */
-
-
-/* called with the list lock held */
-static struct page *ll_find_page_index(struct inode *inode,
-                                          unsigned long index)
-{
-        struct list_head *page_list = ll_iplist(inode);
-        struct list_head *tmp;
-        struct page *page;
-
-        ENTRY;
-
-        CDEBUG(D_INFO, "looking for inode %ld pageindex %ld\n",
-               inode->i_ino, index);
-        OIDEBUG(inode);
-
-        if (list_empty(page_list)) {
-                EXIT;
-                return NULL;
-        }
-        tmp = page_list;
-        while ( (tmp = tmp->next) != page_list ) {
-                struct ll_pgrq *pgrq;
-
-                pgrq = list_entry(tmp, struct ll_pgrq, rq_plist);
-                page = pgrq->rq_page;
-                if (index == page->index) {
-                        CDEBUG(D_INFO,
-                               "INDEX SEARCH found page %p, index %ld\n",
-                               page, index);
-                        EXIT;
-                        return page;
-                }
-        } 
-
-        EXIT;
-        return NULL;
-} /* ll_find_page_index */
-
-
-/* call and free pages from Linux page cache: called with io lock on inodes */
-int ll_do_vec_wr(struct inode **inodes, obd_count num_io,
-                    obd_count num_obdos, struct obdo **obdos,
-                    obd_count *oa_bufs, struct page **pages, char **bufs,
-                    obd_size *counts, obd_off *offsets, obd_flag *flags)
-{
-        int err;
-
-        ENTRY;
-
-        CDEBUG(D_INFO, "writing %d page(s), %d obdo(s) in vector\n",
-               num_io, num_obdos);
-        if (obd_debug_level & D_INFO) { /* DEBUGGING */
-                int i;
-                printk("OBDOS: ");
-                for (i = 0; i < num_obdos; i++)
-                        printk("%ld:0x%p ", (long)obdos[i]->o_id, obdos[i]);
-
-                printk("\nPAGES: ");
-                for (i = 0; i < num_io; i++)
-                        printk("0x%p ", pages[i]);
-                printk("\n");
-        }
-
-        err = obd_brw(WRITE, IID(inodes[0]), num_obdos, obdos,
-                                  oa_bufs, pages, counts, offsets, flags);
-
-        CDEBUG(D_INFO, "BRW done\n");
-        /* release the pages from the page cache */
-        while ( num_io > 0 ) {
-                --num_io;
-                CDEBUG(D_INFO, "calling put_page for %p, index %ld\n",
-                       pages[num_io], pages[num_io]->index);
-                /* PDEBUG(pages[num_io], "do_vec_wr"); */
-                put_page(pages[num_io]);
-                /* PDEBUG(pages[num_io], "do_vec_wr"); */
-        }
-        CDEBUG(D_INFO, "put_page done\n");
-
-        while ( num_obdos > 0) {
-                --num_obdos;
-                CDEBUG(D_INFO, "free obdo %ld\n",(long)obdos[num_obdos]->o_id);
-                /* copy o_blocks to i_blocks */
-		ll_set_size (inodes[num_obdos], obdos[num_obdos]->o_size);
-                //ll_to_inode(inodes[num_obdos], obdos[num_obdos]);
-                obdo_free(obdos[num_obdos]);
-        }
-        CDEBUG(D_INFO, "obdo_free done\n");
-        EXIT;
-        return err;
-}
-
-
-/*
- * Add a page to the write request cache list for later writing.
- * ASYNCHRONOUS write method.
- */
-static int ll_add_page_to_cache(struct inode *inode, struct page *page)
-{
-        int err = 0;
-        ENTRY;
-
-        /* The PG_obdcache bit is cleared by ll_pgrq_del() BEFORE the page
-         * is written, so at worst we will write the page out twice.
-         *
-         * If the page has the PG_obdcache bit set, then the inode MUST be
-         * on the superblock dirty list so we don't need to check this.
-         * Dirty inodes are removed from the superblock list ONLY when they
-         * don't have any more cached pages.  It is possible to have an inode
-         * with no dirty pages on the superblock list, but not possible to
-         * have an inode with dirty pages NOT on the superblock dirty list.
-         */
-        if (!OBDAddCachePage(page)) {
-                struct ll_pgrq *pgrq;
-                pgrq = kmem_cache_alloc(ll_pgrq_cachep, SLAB_KERNEL);
-                if (!pgrq) {
-                        OBDClearCachePage(page);
-                        EXIT;
-                        return -ENOMEM;
-                }
-                /* not really necessary since we set all pgrq fields here
-                memset(pgrq, 0, sizeof(*pgrq)); 
-                */
-                
-                pgrq->rq_page = page;
-                pgrq->rq_jiffies = jiffies;
-                get_page(pgrq->rq_page);
-
-                obd_down(&ll_i2sbi(inode)->ll_list_mutex);
-                list_add(&pgrq->rq_plist, ll_iplist(inode));
-                ll_cache_count++;
-		//printk("-- count %d\n", ll_cache_count);
-
-                /* If inode isn't already on superblock inodes list, add it.
-                 *
-                 * We increment the reference count on the inode to keep it
-                 * from being freed from memory.  This _should_ be an iget()
-                 * with an iput() in both flush_reqs() and put_inode(), but
-                 * since put_inode() is called from iput() we can't call iput()
-                 * again there.  Instead we just increment/decrement i_count,
-                 * which is mostly what iget/iput do for an inode in memory.
-                 */
-                if ( list_empty(ll_islist(inode)) ) {
-                        atomic_inc(&inode->i_count);
-                        CDEBUG(D_INFO,
-                               "adding inode %ld to superblock list %p\n",
-                               inode->i_ino, ll_slist(inode));
-                        list_add(ll_islist(inode), ll_slist(inode));
-                }
-                obd_up(&ll_i2sbi(inode)->ll_list_mutex);
-
-        }
-
-        /* XXX For testing purposes, we can write out the page here.
-        err = ll_flush_reqs(ll_slist(inode), ~0UL);
-         */
-
-        EXIT;
-        return err;
-} /* ll_add_page_to_cache */
-
-void rebalance(void)
-{
-	if (ll_cache_count > 60000) {
-		printk("-- count %ld\n", ll_cache_count);
-		//ll_flush_dirty_pages(~0UL);
-		printk("-- count %ld\n", ll_cache_count);
-	}
-}
-
 /* select between SYNC and ASYNC I/O methods */
 int ll_do_writepage(struct page *page, int sync)
 {
@@ -517,14 +278,9 @@ int ll_do_writepage(struct page *page, int sync)
 
         ENTRY;
         /* PDEBUG(page, "WRITEPAGE"); */
-        if ( sync )
-                err = ll_brw(WRITE, inode, page, 1);
-        else {
-                err = ll_add_page_to_cache(inode, page);
-                CDEBUG(D_INFO, "DO_WR ino: %ld, page %p, err %d, uptodate %d\n",
-                       inode->i_ino, page, err, Page_Uptodate(page));
-        }
-                
+	/* XXX everything is synchronous now */
+	err = ll_brw(WRITE, inode, page, 1);
+
         if ( !err ) {
                 SetPageUptodate(page);
 		set_page_clean(page);
@@ -575,10 +331,7 @@ int ll_commit_write(struct file *file, struct page *page, unsigned from, unsigne
 	CDEBUG(D_INODE, "commit write ino %ld (end at %Ld) from %d to %d ,ind %ld\n",
 	       inode->i_ino, len, from, to, page->index);
 
-
-	if (cache_writes == 0) { 
-		rc = ll_commit_page(page, 1, from, to);
-	}
+	rc = ll_commit_page(page, 1, from, to);
 
         if (len > inode->i_size) {
 		ll_set_size(inode, len);
@@ -673,14 +426,6 @@ struct page *ll_getpage(struct inode *inode, unsigned long offset,
                 EXIT;
                 return page;
         } 
-
-
-#ifdef EXT2_OBD_DEBUG
-        if ((obd_debug_level & D_INFO) && ll_find_page_index(inode, index)) {
-                CDEBUG(D_INFO, "OVERWRITE: found dirty page %p, index %ld\n",
-                       page, page->index);
-        }
-#endif
 
         err = ll_brw(READ, inode, page, create);
 

@@ -55,15 +55,12 @@ void ext2_set_link(struct inode *dir, struct ext2_dir_entry_2 *de,
 static inline void ext2_inc_count(struct inode *inode)
 {
 	inode->i_nlink++;
-	ll_change_inode(inode);
 }
 
 /* postpone the disk update until the inode really goes away */ 
 static inline void ext2_dec_count(struct inode *inode)
 {
 	inode->i_nlink--;
-	if (inode->i_nlink > 0) 
-		ll_change_inode(inode);
 }
 
 static inline int ext2_add_nondir(struct dentry *dentry, struct inode *inode)
@@ -217,7 +214,6 @@ static int ll_mknod (struct inode * dir, struct dentry *dentry, int mode, int rd
 	int err = PTR_ERR(inode);
 	if (!IS_ERR(inode)) {
 		init_special_inode(inode, mode, rdev);
-		ll_change_inode(inode);
 		err = ext2_add_nondir(dentry, inode);
 	}
 	return err;
@@ -254,7 +250,6 @@ static int ll_symlink (struct inode * dir, struct dentry * dentry,
 		memcpy(oinfo->lli_inline, symname, l);
 		inode->i_size = l-1;
 	}
-	ll_change_inode(inode);
 
 	err = ext2_add_nondir(dentry, inode);
 out:

@@ -131,7 +131,7 @@ int mds_error(struct mds_request *req)
 	return mds_reply(req);
 }
 
-static struct dentry *mds_fid2dentry(struct mds_obd *mds, struct lustre_fid *fid, struct vfsmount **mnt)
+struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid, struct vfsmount **mnt)
 {
 
 	/* iget isn't really right if the inode is currently unallocated!!
@@ -145,7 +145,8 @@ static struct dentry *mds_fid2dentry(struct mds_obd *mds, struct lustre_fid *fid
 	 */
 	struct super_block *sb = mds->mds_sb; 
 	unsigned long ino = fid->id;
-	__u32 generation = fid->generation;
+	//__u32 generation = fid->generation;
+	__u32 generation = 0;
 	struct inode *inode;
 	struct list_head *lp;
 	struct dentry *result;
@@ -277,7 +278,7 @@ int mds_readpage(struct mds_request *req)
 		return 0;
 	}
 		
-	niobuf = (struct niobuf *)req->rq_req->tgt;
+	niobuf = mds_req_tgt(req->rq_req);
 
 	/* to make this asynchronous make sure that the handling function 
 	   doesn't send a reply when this function completes. Instead a 
@@ -290,7 +291,20 @@ int mds_readpage(struct mds_request *req)
 	return 0;
 }
 
+int mds_reint(struct mds_request *req)
+{
+	int opc = NTOH__u32(req->rq_req->opcode);
+	
+	switch (opc) { 
+	case REINT_SETATTR: 
+		return mds_reint_setattr(req);
+	default: 
+		printk(__FUNCTION__ "opcode %d not handled.\n", opc); 
+		return -EINVAL;
+	}
 
+	return 0; 
+}
 
 //int mds_handle(struct mds_conn *conn, int len, char *buf)
 int mds_handle(struct mds_request *req)
@@ -329,32 +343,10 @@ int mds_handle(struct mds_request *req)
 		rc = mds_readpage(req);
 		break;
 
-	case MDS_SETATTR:
-		return mds_getattr(req);
-
-	case MDS_CREATE:
-		return mds_getattr(req);
-
-	case MDS_MKDIR:
-		return mds_getattr(req);
-
-	case MDS_RMDIR:
-		return mds_getattr(req);
-
-	case MDS_SYMLINK:
-		return mds_getattr(req);
- 
-	case MDS_LINK:
-		return mds_getattr(req);
-  
-	case MDS_MKNOD:
-		return mds_getattr(req);
-
-	case MDS_UNLINK:
-		return mds_getattr(req);
-
-	case MDS_RENAME:
-		return mds_getattr(req);
+	case MDS_REINT:
+		CDEBUG(D_INODE, "reint\n");
+		rc = mds_reint(req);
+		break;
 
 	default:
 		return mds_error(req);

@@ -38,7 +38,6 @@
 #include <linux/lustre_light.h>
 
 extern int ll_setattr(struct dentry *de, struct iattr *attr);
-void ll_change_inode(struct inode *inode);
 
 static inline void ll_remove_suid(struct inode *inode)
 {
@@ -52,7 +51,6 @@ static inline void ll_remove_suid(struct inode *inode)
         if (mode && !capable(CAP_FSETID)) {
                 inode->i_mode &= ~mode;
 		// XXX careful here - we cannot change the size
-                //ll_change_inode(inode);
         }
 }
 

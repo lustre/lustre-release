@@ -11,8 +11,10 @@ EXTRA_PROGRAMS = mds
 
 mds_pack.c: 
 	ln -s ../lib/mds_pack.c .
+mds_updates.c: 
+	ln -s ../lib/mds_updates.c .
 
-mds_SOURCES = mds_pack.c handler.c 
+mds_SOURCES = mds_pack.c handler.c mds_reint.c mds_updates.c
 
 include $(top_srcdir)/Rules
 

@@ -35,7 +35,7 @@
 
 extern int mds_queue_req(struct mds_request *);
 
-struct mds_request *mds_prep_req(int size, int opcode, int namelen, char *name, int tgtlen, char *tgt)
+struct mds_request *mds_prep_req(int opcode, int namelen, char *name, int tgtlen, char *tgt)
 {
 	struct mds_request *request;
 	int rc;
@@ -54,6 +54,9 @@ struct mds_request *mds_prep_req(int size, int opcode, int namelen, char *name, 
 		printk("llight request: cannot pack request %d\n", rc); 
 		return NULL;
 	}
+	printk("--> mds_prep_req: len %d, req %p, tgtlen %d\n", 
+	       request->rq_reqlen, request->rq_req, 
+	       request->rq_req->tgtlen);
 	request->rq_reqhdr->opc = opcode;
 
 	EXIT;
@@ -83,8 +86,10 @@ static int mds_queue_wait(struct mds_request *req)
 
 	mds_unpack_rep(req->rq_repbuf, req->rq_replen, &req->rq_rephdr, 
 		       &req->rq_rep); 
-	printk("-->mdc_queue_wait: buf %p len %d status %d\n", 
-	       req->rq_repbuf, req->rq_replen, req->rq_rephdr->status); 
+	if ( req->rq_rephdr->status == 0 )
+		printk("-->mdc_queue_wait: buf %p len %d status %d\n", 
+		       req->rq_repbuf, req->rq_replen, 
+		       req->rq_rephdr->status); 
 
 	EXIT;
 	return req->rq_rephdr->status;
@@ -101,15 +106,14 @@ int mdc_getattr(ino_t ino, int type, int valid,
 	struct mds_request *request;
 	int rc; 
 
-	request = mds_prep_req(sizeof(*request), MDS_GETATTR, 
-			       0, NULL, 0, NULL); 
+	request = mds_prep_req(MDS_GETATTR, 0, NULL, 0, NULL); 
 	if (!request) { 
 		printk("llight request: cannot pack\n");
 		return -ENOMEM;
 	}
 
-	request->rq_req->fid1.id = ino;
-	request->rq_req->fid1.f_type = type;
+	ll_ino2fid(&request->rq_req->fid1, ino, 0, type);
+
 	request->rq_req->valid = valid;
 
 	rc = mds_queue_wait(request);
@@ -143,8 +147,7 @@ int mdc_readpage(ino_t ino, int type, __u64 offset, char *addr,
 
 	printk("mdc_readpage: inode: %ld\n", ino); 
 
-	request = mds_prep_req(sizeof(*request), MDS_READPAGE, 
-			       0, NULL,
+	request = mds_prep_req(MDS_READPAGE, 0, NULL,
 			       sizeof(struct niobuf), (char *)&niobuf);
 	if (!request) { 
 		printk("mdc request: cannot pack\n");
@@ -176,6 +179,18 @@ int mdc_readpage(ino_t ino, int type, __u64 offset, char *addr,
 	return rc;
 }
 
+int mdc_reint(struct mds_request *request)
+{
+	int rc; 
+
+	rc = mds_queue_wait(request);
+	if (rc) { 
+		printk("mdc request: error in handling %d\n", rc); 
+	}
+
+	return rc;
+}
+
 
 static int request_ioctl(struct inode *inode, struct file *file, 
 		       unsigned int cmd, unsigned long arg)
@@ -201,16 +216,17 @@ static int request_ioctl(struct inode *inode, struct file *file,
 	
 	switch (cmd) {
 	case IOC_REQUEST_GETATTR: { 
-		struct mds_rep_hdr *hdr;
+		struct mds_rep_hdr *hdr = NULL;
 		printk("-- getting attr for ino 2\n"); 
 		err = mdc_getattr(2, S_IFDIR, ~0, NULL, &hdr);
-		kfree(hdr);
+		if (hdr)
+			kfree(hdr);
 		printk("-- done err %d\n", err);
 		break;
 	}
 
 	case IOC_REQUEST_READPAGE: { 
-		struct mds_rep_hdr *hdr;
+		struct mds_rep_hdr *hdr = NULL;
 		char *buf;
 		buf = kmalloc(PAGE_SIZE, GFP_KERNEL); 
 		if (!buf) { 
@@ -223,11 +239,33 @@ static int request_ioctl(struct inode *inode, struct file *file,
 		if (!err) { 
 			printk("-- status: %d\n", hdr->status); 
 			err = hdr->status;
-			kfree(hdr);
+			if (hdr) 
+				kfree(hdr);
 		}
 		kfree(buf); 
 		break;
 	}
+
+	case IOC_REQUEST_SETATTR: { 
+		struct inode inode;
+		struct mds_rep_hdr *hdr;
+		struct iattr iattr; 
+
+		inode.i_ino = 2;
+		iattr.ia_mode = 040777;
+		iattr.ia_atime = 0;
+		iattr.ia_valid = ATTR_MODE | ATTR_ATIME;
+
+		err = mdc_setattr(&inode, &iattr, NULL, &hdr);
+		printk("-- done err %d\n", err);
+		if (!err) { 
+			printk("-- status: %d\n", hdr->status); 
+			err = hdr->status;
+		}
+		kfree(hdr); 
+		break;
+	}
+
 	default:		
 		err = -EINVAL;
 		EXIT;
@@ -268,6 +306,7 @@ MODULE_LICENSE("GPL");
 
 EXPORT_SYMBOL(mdc_getattr); 
 EXPORT_SYMBOL(mdc_readpage); 
+EXPORT_SYMBOL(mdc_setattr); 
 
 module_init(mds_request_init);
 module_exit(mds_request_exit);

@@ -80,10 +80,11 @@ struct mds_request {
 
 /* more or less identical to the packed structure, except for the pointers */
 struct mds_req {
-	struct lustre_fid        fid1;
-	struct lustre_fid        fid2;
+	struct ll_fid        fid1;
+	struct ll_fid        fid2;
         int                        namelen;
         int                        tgtlen;
+        __u32                       opcode;
         __u32                       valid;
         __u32 			    mode;
         __u32                       uid;
@@ -98,14 +99,12 @@ struct mds_req {
         __u32                       ino;
         __u32                       nlink;
         __u32                       generation;
-        char 		           *name;
-        char                       *tgt;
 };
 
 /* more or less identical to the packed structure, except for the pointers */
 struct mds_rep {
-	struct lustre_fid        fid1;
-	struct lustre_fid        fid2;
+	struct ll_fid        fid1;
+	struct ll_fid        fid2;
         int                        namelen;
         int                        tgtlen;
         __u32                       valid;
@@ -122,20 +121,31 @@ struct mds_rep {
         __u32                       ino;
         __u32                       nlink;
         __u32                       generation;
-        char 		           *name;
-        char                       *tgt;
 };
 
 
 /* mds/mds_pack.c */
+void *mds_req_tgt(struct mds_req *req);
 int mds_pack_req(char *name, int namelen, char *tgt, int tgtlen, struct mds_req_hdr **hdr, struct mds_req **req, int *len, char **buf);
 int mds_unpack_req(char *buf, int len, struct mds_req_hdr **hdr, struct mds_req **req);
 int mds_pack_rep(char *name, int namelen, char *tgt, int tgtlen, struct mds_rep_hdr **hdr, struct mds_rep **rep, int *len, char **buf);
 int mds_unpack_rep(char *buf, int len, struct mds_rep_hdr **hdr, struct mds_rep **rep);
 
+/* mds/mds_reint.c  */
+int mds_reint_setattr(struct mds_request *req);
+
+/* lib/mds_updates.c */
+void mds_setattr_unpack(struct mds_rec_setattr *rec, struct iattr *attr);
+void mds_setattr_pack(struct mds_rec_setattr *rec, struct inode *inode, struct iattr *iattr);
+
+/* mds/handler.c */
+struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid, struct vfsmount **mnt);
+
 
 /* llight/request.c */
 int mdc_getattr(ino_t ino, int type, int valid, 
+		struct mds_rep  **mds_reply, struct mds_rep_hdr **hdr);
+int mdc_setattr(struct inode *inode, struct iattr *iattr, 
 		struct mds_rep  **mds_reply, struct mds_rep_hdr **hdr);
 int mdc_readpage(ino_t ino, int type, __u64 offset, char *addr, 
                  struct mds_rep  **rep, struct mds_rep_hdr **hdr);
@@ -148,7 +158,8 @@ int mdc_readpage(ino_t ino, int type, __u64 offset, char *addr,
 
 #define IOC_REQUEST_GETATTR		_IOWR('f', 30, long)
 #define IOC_REQUEST_READPAGE		_IOWR('f', 31, long)
-#define IOC_REQUEST_MAX_NR               31
+#define IOC_REQUEST_SETATTR		_IOWR('f', 32, long)
+#define IOC_REQUEST_MAX_NR               32
 
 #endif
 
