@@ -1,7 +1,7 @@
 #ifndef _OBD_SUPPORT
 #define _OBD_SUPPORT
 #include <linux/autoconf.h>
-#include <linux/malloc.h>
+#include <linux/slab.h>
 #include <linux/vmalloc.h>
 
 #define MIN(a,b) (((a)<(b)) ? (a): (b))

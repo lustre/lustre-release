@@ -37,7 +37,7 @@
 #include <linux/kmod.h>   /* for request_module() */
 #include <linux/sched.h>
 #include <linux/lp.h>
-#include <linux/malloc.h>
+#include <linux/slab.h>
 #include <linux/ioport.h>
 #include <linux/fcntl.h>
 #include <linux/delay.h>
