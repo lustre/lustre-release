@@ -116,6 +116,7 @@ extern unsigned int obd_sync_filter;
 #define OBD_FAIL_OSC_BRW_WRITE_BULK      0x402
 #define OBD_FAIL_OSC_LOCK_BL_AST         0x403
 #define OBD_FAIL_OSC_LOCK_CP_AST         0x404
+#define OBD_FAIL_OSC_MATCH               0x405
 
 #define OBD_FAIL_PTLRPC                  0x500
 #define OBD_FAIL_PTLRPC_ACK              0x501

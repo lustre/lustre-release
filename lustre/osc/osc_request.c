@@ -2211,14 +2211,16 @@ static int osc_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
 }
 
 static int osc_match(struct obd_export *exp, struct lov_stripe_md *lsm,
-                       __u32 type, void *extentp, int extent_len, __u32 mode,
-                       int *flags, void *data, struct lustre_handle *lockh)
+                     __u32 type, void *extentp, int extent_len, __u32 mode,
+                     int *flags, void *data, struct lustre_handle *lockh)
 {
         struct ldlm_res_id res_id = { .name = {lsm->lsm_object_id} };
         struct obd_device *obd = exp->exp_obd;
         struct ldlm_extent *extent = extentp;
         int rc;
         ENTRY;
+
+        OBD_FAIL_RETURN(OBD_FAIL_OSC_MATCH, -EIO);
 
         /* Filesystem lock extents are extended to page boundaries so that
          * dealing with the page cache is a little smoother */

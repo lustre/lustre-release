@@ -1564,6 +1564,18 @@ test_61() {
 }
 run_test 61 "mmap() writes don't make sync hang =========="
 
+# bug 2330 - insufficient obd_match error checking causes LBUG
+test_62() {
+        f="$DIR/f62"
+        echo foo > $f
+        cancel_lru_locks OSC
+        echo 0x405 > /proc/sys/lustre/fail_loc
+        cat $f && error # expect -EIO
+        multiop $f Owc && error
+        echo 0 > /proc/sys/lustre/fail_loc
+}
+run_test 62 "verify obd_match failure doesn't LBUG (should -EIO)"
+
 # on the LLNL clusters, runas will still pick up root's $TMP settings,
 # which will not be writable for the runas user, and then you get a CVS
 # error message with a corrupt path string (CVS bug) and panic.
