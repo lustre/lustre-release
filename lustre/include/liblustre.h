@@ -143,7 +143,9 @@ extern int init_obdclass(void);
 extern int ptlrpc_init(void);
 extern int ldlm_init(void);
 extern int osc_init(void);
+extern int lov_init(void);
 extern int echo_client_init(void);
+
 
 
 /* general stuff */
