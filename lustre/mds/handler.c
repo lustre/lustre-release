@@ -1967,13 +1967,8 @@ static int mdt_cleanup(struct obd_device *obd, int flags)
         struct mds_obd *mds = &obd->u.mds;
         ENTRY;
 
-        ptlrpc_stop_all_threads(mds->mds_readpage_service);
         ptlrpc_unregister_service(mds->mds_readpage_service);
-
-        ptlrpc_stop_all_threads(mds->mds_setattr_service);
         ptlrpc_unregister_service(mds->mds_setattr_service);
-
-        ptlrpc_stop_all_threads(mds->mds_service);
         ptlrpc_unregister_service(mds->mds_service);
 
         lprocfs_obd_cleanup(obd);

@@ -1424,9 +1424,7 @@ static int ldlm_cleanup(int force)
         }
         OBD_FREE(blp, sizeof(*blp));
 
-        ptlrpc_stop_all_threads(ldlm_state->ldlm_cb_service);
         ptlrpc_unregister_service(ldlm_state->ldlm_cb_service);
-        ptlrpc_stop_all_threads(ldlm_state->ldlm_cancel_service);
         ptlrpc_unregister_service(ldlm_state->ldlm_cancel_service);
         ldlm_proc_cleanup();
 

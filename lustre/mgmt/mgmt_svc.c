@@ -116,7 +116,6 @@ static int mgmt_cleanup(struct obd_device *obd, int flags)
         if (!mgmt_initialized)
                 RETURN(-ENOENT);
 
-        ptlrpc_stop_all_threads(mgmt_service);
         ptlrpc_unregister_service(mgmt_service);
         
         mgmt_initialized = 0;

@@ -909,6 +909,7 @@ int ptlrpc_unregister_service(struct ptlrpc_service *service)
         struct l_wait_info    lwi;
         struct list_head     *tmp;
 
+        ptlrpc_stop_all_threads(service);
         LASSERT(list_empty(&service->srv_threads));
 
         spin_lock (&ptlrpc_all_services_lock);

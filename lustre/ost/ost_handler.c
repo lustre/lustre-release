@@ -1186,10 +1186,7 @@ static int ost_cleanup(struct obd_device *obd, int flags)
         }
         spin_unlock_bh(&obd->obd_processing_task_lock);
 
-        ptlrpc_stop_all_threads(ost->ost_service);
         ptlrpc_unregister_service(ost->ost_service);
-
-        ptlrpc_stop_all_threads(ost->ost_create_service);
         ptlrpc_unregister_service(ost->ost_create_service);
 
         lprocfs_obd_cleanup(obd);

@@ -85,7 +85,6 @@ static int ptlbd_sv_cleanup(struct obd_device *obd, int flags)
 
         /* XXX check for state */
 
-        ptlrpc_stop_all_threads(ptlbd->ptlbd_service);
         ptlrpc_unregister_service(ptlbd->ptlbd_service);
         if ( ! IS_ERR(ptlbd->filp) )
                 filp_close(ptlbd->filp, NULL);
