@@ -164,8 +164,8 @@ static struct dentry *ll_lookup2(struct inode *dir, struct dentry *dentry,
                 dentry->d_it = it;
         }
 
-        CDEBUG(D_INFO, "name: %*s, intent op: %d\n", dentry->d_name.len,
-               dentry->d_name.name, it->it_op);
+        CDEBUG(D_INFO, "name: %*s, intent: %s\n", dentry->d_name.len,
+               dentry->d_name.name, ldlm_it2str(it->it_op));
 
         if (dentry->d_name.len > EXT2_NAME_LEN)
                 RETURN(ERR_PTR(-ENAMETOOLONG));

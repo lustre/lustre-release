@@ -1,11 +1,22 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * This code is issued under the GNU General Public License.
- * See the file COPYING in this distribution
+ *  Copyright (c) 2001, 2002 Cluster File Systems, Inc.
  *
- * Copyright (C) 2001, 2002 Cluster File Systems, Inc.
+ *   This file is part of Lustre, http://www.lustre.org.
  *
+ *   Lustre is free software; you can redistribute it and/or
+ *   modify it under the terms of version 2 of the GNU General Public
+ *   License as published by the Free Software Foundation.
+ *
+ *   Lustre is distributed in the hope that it will be useful,
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   GNU General Public License for more details.
+ *
+ *   You should have received a copy of the GNU General Public License
+ *   along with Lustre; if not, write to the Free Software
+ *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
 #include <linux/fs.h>
@@ -52,8 +63,13 @@ int ll_revalidate2(struct dentry *de, int flags, struct lookup_intent *it)
         struct obd_device *obddev;
         ENTRY;
 
-        if (it)
-                RETURN(0); /* lookups will have NULL it */
+        /* right now we're only interested in IT_OPEN and IT_LOOKUP */
+        if (it) {
+                CDEBUG(D_INFO, "name: %*s, intent: %s\n", de->d_name.len,
+                       de->d_name.name, ldlm_it2str(it->it_op));
+                if (!(it->it_op & IT_OPEN))
+                        RETURN(0);
+        }
 
         if (!de->d_inode)
                 RETURN(0);
@@ -74,6 +90,15 @@ int ll_revalidate2(struct dentry *de, int flags, struct lookup_intent *it)
                 ldlm_lock_decref(&lockh, LCK_PW);
                 RETURN(1);
         }
+
+        /* If we're acting on an IT_OPEN intent and the file is already open,
+         * we won't get called in lookup2 if we return 0, so return 1.
+         *
+         * This is a temporary fix for bug 618962, but is one of the causes of
+         * 619078. */
+        CDEBUG(D_INFO, "d_count: %d\n", atomic_read(&de->d_count));
+        if (atomic_read(&de->d_count) > 0)
+                RETURN(1);
 
         RETURN(0);
 }

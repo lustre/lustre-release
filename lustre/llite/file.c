@@ -120,9 +120,7 @@ static int ll_file_open(struct inode *inode, struct file *file)
 
         file->private_data = fd;
 
-        EXIT;
-
-        return 0;
+        RETURN(0);
 out_mdc:
         mdc_close(&sbi->ll_mdc_conn, inode->i_ino,
                   S_IFREG, &fd->fd_mdshandle, &req);
