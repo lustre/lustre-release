@@ -2,16 +2,11 @@
 # suggested boilerplate for test script
 
 LCONF=${LCONF:-../utils/lconf}
-NAME=${NAME:-local2}
+NAME=${NAME:-local2-hack}
 
 config=$NAME.xml
-mkconfig=./$NAME.sh
 
-if [ ! -f $config -o $mkconfig -nt $config ]; then
-   sh $mkconfig $config || exit 1
-fi
-
-${LCONF} -v --reformat --gdb $config || exit 2
+${LCONF}  --reformat --gdb $config || exit 2
 
 ../utils/lctl <<EOF
 newdev

@@ -135,7 +135,8 @@ sub generate_ver($$$)
       localtime($mtime);
     $year += 1900;
     $mon++;
-    my $show_last = $year . $mon . $mday . $hour . $min . $sec;
+    my $show_last = sprintf("%04d%02d%02d%02d%02d%02d", $year, $mon, $mday,
+                            $hour, $min, $sec);
 
     print "#define BUILD_VERSION \"";
     if ($pristine) {
