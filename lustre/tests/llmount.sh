@@ -2,7 +2,7 @@
 # suggested boilerplate for test script
 
 LCONF=../utils/lconf
-NAME=local
+NAME=${NAME:-local}
 
 config=$NAME.xml
 mkconfig=./$NAME.sh

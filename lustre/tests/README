@@ -1,100 +1,82 @@
-A variety of tests can be run or environments set up. 
-
-1. runregression-net
-
-Usage on server:
-   llsetup.sh  marcus-echo-server.cfg
-
-with marcus-echo-server.cfg:
-
-   NETWORK=elan
-   LOCALHOST=4
-   SERVER=4
-   SETUP_OST=y
-   OSTTYPE=obdecho
-
-
-Usage on client: 
-runregression-net  marcus-echo-client.cfg
-
-with marcus-echo-client.cfg:
-
-   NETWORK=elan
-   LOCALHOST=5
-   SERVER=4
-   SETUP_OSC=y
-
-If things are alright it goes through all the tests single threaded,
-multithreaded, getattr and brw (both read and write).
-
-2. How to build .cfg scripts:
-The various .cfg scripts in the tests/ directory can be used as building
-blocks for full configurations.  For example, the above configurations are:
-
-   cat elan-server.cfg obdecho.cfg > marcus-echo-server.cfg
-   cat elan-client.cfg client-echo.cfg > marcus-echo-client.cfg
-
-You _could_ specify multiple .cfg files as the parameters to llsetup if
-you are doing something uncommon, but it is probably just easer to build
-a whole config file in one shot, edit it as needed, and use that file instead.
+1. How to build .xml configs:
+The various .xml configs in the tests/ directory are built by running the
+corresponding .sh script.  The .sh script runs a series of lmc (Lustre make
+config) commands in order to build up an XML file.  It is much easier to
+simply edit a .sh script and rebuild your XML config file than trying to
+edit the XML directly.  For example, the above configurations are:
 
 For a loopback setup with a mounted filesystem, you could do something like:
 
-   cat net-local.cfg mds.cfg obdext2.cfg client-mount.cfg > uml.cfg
+   sh local.sh
+   ../utils/lconf --reformat local.xml
 
-The order of the specified .cfg files does not matter.
+This will configure an MDS, an OBD/OST, and a filesystem client all running
+on the same system and communicating over the TCP loopback interface.  If
+the --reformat option is given, then the OST and MDS devices will be
+formatted.  This is required the first time you set up the system, or if
+you think you have corrupted the filesystems after you hit a bug.
 
-Since the .cfg script is a shell script, you can add conditional setup in
-case you want to avoid changing your configuration if you need to run on
-a different host.  You could, for example, have marcus-echo-server.cfg:
+A more complex configuration, using a separate host for each of the MDS,
+OBD/OST, and filesystem client functions is in uml.sh.  It configures 3
+systems, and the OST system (uml2) serves up multiple OST devices, and
+the client accesses these via a logical object volume (LOV) driver (which
+essentially stripes both of the OST devices into a single storage device.
 
-   NETWORK=elan
-   HOST=`hostname | sed "s/\..*//"`
-   case $HOST in
-   dev*) LOCALHOST=`echo $HOST | sed "s/dev//"`
-         SERVER=$LOCALHOST
-	 NETWORK=elan ;;
-   *)    LOCALHOST=$HOST
-         SERVER=$LOCALHOST
-         NETWORK=tcp ;;
-   esac
-   SETUP_OST=y
-   OSTTYPE=obdecho
+This configuration could be run on any 3 systems with the following commands:
 
-You would, of course, need a marcus-echo-client.cfg to match.
+    sh uml.sh
+    system1# ../utils/lconf --reformat --node uml1 uml.xml
+    system2# ../utils/lconf --reformat --node uml2 uml.xml
+    system3# ../utils/lconf --node uml3 uml.xml
+
+The "--node <name>" parameter tells lconf to use the configuration for
+the node "name" in the XML configuration file.  The internals of lconf
+and portals handle the configuration details for setting up netowrking.
+
+A variety of tests can be run or environments set up.  The most common way
+to build XML configuration
+
+2. runregression-net.sh and runregression-brw.sh
+
+This test performs raw block and attribute requests against a real or
+"null" OST device.  It is useful for generating isolated load on the
+OST device, while avoiding the need to run tests through the filesystem.
+This can be useful for testing the network part of Lustre in isolation,
+or doing RPC and bulk I/O performance tests against an OST.
+
+If things are alright it goes through a series of tests single threaded,
+multithreaded, using getattr and brw (both read and write, with single
+page and vector I/O, doing basic data checking of each page).
+
+You can create a simple echo client by running the "llecho.sh" to
+run the tests locally (over TCP loopback), or edit llecho.sh to
+specify the SERVER and CLIENT names.  You would then set up as normal:
+
+    # for a single system, or for a remote server
+    server# ../utils/lconf echo.xml
+
+Launch the test script via:
+
+    client# sh runregression-net.sh echo.xml
 
 3. runtests
 
-The runtests script does a series of simple file-based tests using
-a filesystem.  You need to use a configuration which includes a real
-OST and MDS setup, and an OSC mount.  For example, a configuration
-marcus-obd-server.cfg:
+The runtests script does a series of simple file-based tests using a
+filesystem.  You need to have an XML file as appropriate for your setup
+(one or more hosts, including an MDS, one or more OSTs, and a mountpoint).
+If the MDS and/or OST is on a remote machine, configure them first:
 
-   SETUP_MDS=y
-   NETWORK=elan
-   LOCALHOST=4
-   SERVER=4
-   MDSFS=ext3
-   MDSDEV=/tmp/mds
-   MDSSIZE=10000
-   OSTDEV=/tmp/ost
-   OSTSIZE=10000
-   OSTFS=ext2
-   OSTTYPE=obdext2
-   SETUP_OST=y
-   SETUP_LDLM=y
+    ../utils/lconf --reformat <conf>.xml
 
-As with the echo test, you run "sh llsetup.sh marcus-obd-server.cfg" on
-the server to configure it.
+On the client machine, the runtests script needs the XML configuration
+file as a command-line parameter, as it mounts and unmounts the filesystem
+several times during the test in order to verify that the data is still
+there as expected (ensures that it makes it to disk instead of just into
+the filesystem cache).  If you are running on only a single machine, you
+can just use runtests directly.  If this is only a client machine, the
+--reformat parameter is not needed (it will not do anything).
 
-For marcus-obd-client.cfg you only need to include the client data:
+    sh runtests [--reformat] <conf>.xml
 
-   NETWORK=elan
-   LOCALHOST=5
-   SERVER=4
-   SETUP_OSC=y
-   OSCMT=/mnt/lustre
-   SETUP_MOUNT=y
-   SETUP_LDLM=y
-
-You run the test via "sh runtests marcus-obd-client.cfg".
+This creates a few simple files and directories first, and then untars
+a copy of the /etc filesystem into the Lustre filesystem.
