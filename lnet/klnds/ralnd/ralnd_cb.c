@@ -1970,7 +1970,7 @@ kranal_scheduler (void *arg)
                                 if (rc != -EAGAIN) {
                                         /* All done with this conn */
                                         spin_lock_irqsave(&dev->rad_lock, flags);
-                                        list_del(&conn->rac_schedlist);
+                                        list_del_init(&conn->rac_schedlist);
                                         spin_unlock_irqrestore(&dev->rad_lock, flags);
 
                                         kranal_conn_decref(conn);
