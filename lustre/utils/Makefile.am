@@ -5,7 +5,8 @@ CFLAGS:=-g -O2 -I. -I/usr/include/libxml2 -I/usr/include/glib-1.2 -I$(PORTALS)/i
 -I/usr/lib/glib/include -I$(srcdir)/../include -Wall
 KFLAGS:=
 CPPFLAGS =
-LDADD := -lncurses -lxml2 # -lefence
+obdctl_LDADD := -lncurses -lxml2 # -lefence
+lctl_LDADD := -lncurses
 sbin_PROGRAMS = obdctl lctl 
 obdctl_SOURCES = parser.c obdctl.c parser.h
 lctl_SOURCES = parser.c network.c device.c debug.c lctl.c lctl.h parser.h

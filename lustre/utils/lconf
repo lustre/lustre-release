@@ -44,6 +44,7 @@ def usage():
     print """usage: lconf config.xml
 
 config.xml          Lustre configuration in xml format.
+--get <url>         URL to fetch a config file
 -v | --verbose      Print system commands as they are run
 -d | --debug        Print system commands, but does not run them
 --host <hostname>   Load config for <hostname>
@@ -204,7 +205,7 @@ class LCTLInterface:
 def run(*args):
     cmd = string.join(map(str,args))
     debug ("+", cmd)
-    if isnotouch(): return ([], 0)
+    if isnotouch(): return (0, [])
     f = os.popen(cmd + ' 2>&1')
     out = f.readlines()
     ret = f.close()
@@ -218,7 +219,7 @@ def run(*args):
 def run_daemon(*args):
     cmd = string.join(map(str,args))
     debug ("+", cmd)
-    if isnotouch(): return ([], 0)
+    if isnotouch(): return 0
     f = os.popen(cmd + ' 2>&1')
     ret = f.close()
     if ret:
@@ -392,7 +393,7 @@ def prepare_mdc(node):
 def prepare_mountpoint(node):
     name, uuid, oscuuid, mdcuuid, mtpt = getMTPTInfo(node)
     print 'MTPT:', name, uuid, oscuuid, mdcuuid, mtpt
-    cmd = "echo mount -t lustre_lite -o ost=%s,mds=%s none %s" % \
+    cmd = "mount -t lustre_lite -o ost=%s,mds=%s none %s" % \
           (oscuuid, mdcuuid, mtpt)
     run("mkdir", mtpt)
     run(cmd)
@@ -635,18 +636,20 @@ def getServiceType(node):
 #  net,devices,ldlm:1, obd, mdd:2  mds,ost:3 osc,mdc:4 mounts:5
 def getServiceLevel(node):
     type = getServiceType(node)
-    if type in ('network', 'device', 'ldlm'):
+    if type in ('network',):
         return 1
-    elif type in ('obd', 'mdd'):
+    if type in ('device', 'ldlm'):
         return 2
-    elif type in ('mds','ost'):
+    elif type in ('obd', 'mdd'):
         return 3
-    elif type in ('mdc','osc'):
+    elif type in ('mds','ost'):
         return 4
-    elif type in ('lov',):
+    elif type in ('mdc','osc'):
         return 5
-    elif type in ('mountpoint',):
+    elif type in ('lov',):
         return 6
+    elif type in ('mountpoint',):
+        return 7
     return 0
 
 #
@@ -658,7 +661,8 @@ def getServices(lustreNode, profileNode):
         if n.nodeType == n.ELEMENT_NODE:
             servNode = lookup(lustreNode, getRef(n))
             if not servNode:
-                panic('service not found: ' + getName(n))
+                print n
+                panic('service not found: ' + getRef(n))
             level = getServiceLevel(servNode)
             list.append((level, servNode))
     list.sort()
@@ -773,7 +777,7 @@ def parse_cmdline(argv):
     short_opts = "hdv"
     long_opts = ["ldap", "reformat", "lustre=", "verbose",
                  "portals=", "makeldiff", "cleanup", "iam=",
-                 "help", "debug", "host="]
+                 "help", "debug", "host=", "get="]
     opts = []
     args = []
     global options
@@ -801,9 +805,20 @@ def parse_cmdline(argv):
             options['reformat'] = 1
         if o  == "--host":
             options['hostname'] = [a]
+        if o  == "--get":
+            options['url'] = a
     return args
 
-#
+def fetch(url):
+    import urllib
+    data = ""
+    try:
+        s = urllib.urlopen(url)
+        data = s.read()
+    except:
+        usage()
+    return data
+
 # Initialize or shutdown lustre according to a configuration file
 #   * prepare the system for lustre
 #   * configure devices with lctl
@@ -815,6 +830,9 @@ def main():
     args = parse_cmdline(sys.argv[1:])
     if len(args) > 0:
         dom = xml.dom.minidom.parse(args[0])
+    elif options.has_key('url'):
+        xmldata = fetch(options['url'])
+        dom = xml.dom.minidom.parseString(xmldata)
     else:
         usage()
 
@@ -823,8 +841,9 @@ def main():
         if ret:
             print "unable to determine hostname"
         else:
-            options['hostname'] = [host]
+            options['hostname'] = [string.strip(host[0])] 
         options['hostname'].append('localhost')
+    print "configuring for host: ", options['hostname']
     doHost(dom.childNodes[0], options['hostname'], options.has_key('cleanup') )
 
 if __name__ == "__main__":
