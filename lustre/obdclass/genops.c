@@ -76,13 +76,15 @@ int class_register_type(struct obd_ops *ops, char *nm)
         }
 
         OBD_ALLOC(type, sizeof(*type));
+        OBD_ALLOC(type->typ_ops, sizeof(*type->typ_ops));
+        OBD_ALLOC(type->typ_name, strlen(nm) + 1);
         if (!type)
                 RETURN(-ENOMEM);
         INIT_LIST_HEAD(&type->typ_chain);
         MOD_INC_USE_COUNT;
         list_add(&type->typ_chain, &obd_types);
-        type->typ_ops = ops;
-        type->typ_name = nm;
+        memcpy(type->typ_ops, ops, sizeof(*type->typ_ops));
+        strcpy(type->typ_name, nm);
         RETURN(0);
 }
 
@@ -99,10 +101,16 @@ int class_unregister_type(char *nm)
 
         if (type->typ_refcnt) {
                 CERROR("type %s has refcount (%d)\n", nm, type->typ_refcnt);
+                /* This is a bad situation, let's make the best of it */
+                /* Remove ops, but leave the name for debugging */
+                OBD_FREE(type->typ_ops, sizeof(*type->typ_ops));
                 RETURN(-EBUSY);
         }
 
         list_del(&type->typ_chain);
+        OBD_FREE(type->typ_name, strlen(nm) + 1);
+        if (type->typ_ops != NULL)
+                OBD_FREE(type->typ_ops, sizeof(*type->typ_ops));
         OBD_FREE(type, sizeof(*type));
         MOD_DEC_USE_COUNT;
         RETURN(0);
