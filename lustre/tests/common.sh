@@ -21,6 +21,15 @@ else
 	echo "Cannot find /dev/loop0 or /dev/loop/0" 1>&2 && exit -1
 fi
 
+do_insmod() {
+	MODULE=$LUSTRE/$1
+
+	[ "$MODULE" ] || fail "usage: $0 <module>"
+	[ -f $MODULE ] || fail "$0: module '$MODULE' not found"
+
+	lsmod | grep -q `basename $MODULE` || insmod $MODULE || exit -1
+}
+
 # Return the next unused loop device on stdout and in the $LOOPDEV
 # environment variable.
 next_loop_dev() {
@@ -46,7 +55,11 @@ new_fs () {
 	MKFSOPT="-b 4096"
 
 	[ "$1" = "ext3" ] && MKFS="mkfs.ext2 -j"
-	[ "$1" = "extN" ] && MKFS="mkfs.ext2 -j" && EFILE="$1_ext3.gz"
+	if [ "$1" = "extN" ]; then
+		MKFS="mkfs.ext2 -j"
+		EFILE="$1_ext3.gz"
+		do_insmod extN/extN.o
+	fi
 
 	if [ -b "$2" ]; then
 		[ $# -lt 2 -o $# -gt 3 ] && \
@@ -78,10 +91,12 @@ new_fs () {
 }
 
 # Set up to use an existing filesystem.  We take the same parameters as
-# new_fs, even though we only use the <file> parameter, to make it easy
-# to convert between new_fs and old_fs in testing scripts.
+# new_fs, even though we only use the <fstype> and <file> parameters, to
+# make it easy to convert between new_fs and old_fs in testing scripts.
 old_fs () {
 	[ -e $2 ] || exit -1
+
+	[ "$1" = "extN" ] && do_insmod extN/extN.o
 
 	if [ -b "$2" ]; then
 		LOOPDEV=$2	# Not really a loop device
@@ -119,15 +134,6 @@ setup_opts() {
 	[ -z "$MDS_RSH" ] && MDS_RSH="eval"
 	[ -z "$OST_RSH" ] && OST_RSH="eval"
 	[ -z "$OSC_RSH" ] && OSC_RSH="eval"
-}
-
-do_insmod() {
-	MODULE=$LUSTRE/$1
-
-	[ "$MODULE" ] || fail "usage: $0 <module>"
-	[ -f $MODULE ] || fail "$0: module '$MODULE' not found"
-
-	lsmod | grep -q `basename $MODULE` || insmod $MODULE || exit -1
 }
 
 setup_portals() {
