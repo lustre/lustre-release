@@ -26,8 +26,9 @@ struct obd_import {
         int                       imp_flags;
         int                       imp_level;
         __u64                     imp_last_xid;
+        __u64                     imp_max_transno;
         __u64                     imp_peer_last_xid;
-        __u64                     imp_peer_committed_xid;
+        __u64                     imp_peer_committed_transno;
 
         /* Protects flags, level, *_xid, request_list */
         spinlock_t                imp_lock;
