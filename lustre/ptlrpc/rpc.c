@@ -272,6 +272,8 @@ EXPORT_SYMBOL(lustre_msg_buf);
 EXPORT_SYMBOL(ptlrpc_run_recovery_upcall);
 EXPORT_SYMBOL(ptlrpc_reconnect_import);
 EXPORT_SYMBOL(ptlrpc_replay);
+EXPORT_SYMBOL(ptlrpc_resend);
+EXPORT_SYMBOL(ptlrpc_wake_delayed);
 
 MODULE_AUTHOR("Cluster File Systems, Inc <info@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre Request Processor v1.0");

@@ -79,7 +79,6 @@ struct ptlrpc_connection *ptlrpc_get_connection(struct lustre_peer *peer,
         if (c == NULL)
                 GOTO(out, c);
 
-        c->c_level = LUSTRE_CONN_NEW;
         c->c_generation = 1;
         c->c_epoch = 1;
         c->c_bootcount = 0;

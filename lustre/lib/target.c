@@ -101,8 +101,7 @@ int target_handle_connect(struct ptlrpc_request *req)
         dlmimp->imp_handle.cookie = req->rq_reqmsg->cookie;
         dlmimp->imp_obd = /* LDLM! */ NULL;
         spin_lock_init(&dlmimp->imp_lock);
-        
-        req->rq_connection->c_level = LUSTRE_CONN_FULL;
+        dlmimp->imp_level = LUSTRE_CONN_FULL;
 out:
         req->rq_status = rc;
         RETURN(rc);
@@ -149,7 +148,6 @@ static int target_fence_failed_connection(struct ptlrpc_connection *conn)
 {
         ENTRY;
 
-        conn->c_level = LUSTRE_CONN_RECOVD;
         conn->c_recovd_data.rd_phase = RD_PREPARED;
 
         RETURN(0);

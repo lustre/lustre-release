@@ -90,7 +90,9 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         if (!imp->imp_connection)
                 RETURN(-ENOENT);
         
-        INIT_LIST_HEAD(&imp->imp_request_list);
+        INIT_LIST_HEAD(&imp->imp_replay_list);
+        INIT_LIST_HEAD(&imp->imp_sending_list);
+        INIT_LIST_HEAD(&imp->imp_delayed_list);
         spin_lock_init(&imp->imp_lock);
 
         ptlrpc_init_client(rq_portal, rp_portal, name,
@@ -161,16 +163,17 @@ int client_obd_connect(struct lustre_handle *conn, struct obd_device *obd,
         request->rq_reqmsg->cookie = conn->cookie;
         c = class_conn2export(conn)->exp_connection =
                 ptlrpc_connection_addref(request->rq_connection);
+        list_add(&imp->imp_chain, &c->c_imports);
         recovd_conn_manage(c, recovd, recover);
 
+        imp->imp_level = LUSTRE_CONN_CON;
         rc = ptlrpc_queue_wait(request);
         if (rc)
                 GOTO(out_req, rc);
 
         if (rq_opc == MDS_CONNECT)
                 imp->imp_flags |= IMP_REPLAYABLE;
-        list_add(&imp->imp_chain, &c->c_imports);
-        c->c_level = LUSTRE_CONN_FULL;
+        imp->imp_level = LUSTRE_CONN_FULL;
         imp->imp_handle.addr = request->rq_repmsg->addr;
         imp->imp_handle.cookie = request->rq_repmsg->cookie;
 

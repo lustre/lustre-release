@@ -646,3 +646,157 @@ int ldlm_cli_cancel_unused(struct ldlm_namespace *ns, __u64 *res_id,
 
         return ELDLM_OK;
 }
+
+/* Lock iterators. */
+
+int ldlm_resource_foreach(struct ldlm_resource *res, ldlm_iterator_t iter,
+                          void *closure)
+{
+        struct list_head *tmp, *next;
+        struct ldlm_lock *lock;
+        int rc = LDLM_ITER_CONTINUE;
+        struct ldlm_namespace *ns = res->lr_namespace;
+
+        ENTRY;
+
+        if (!res)
+                RETURN(LDLM_ITER_CONTINUE);
+
+        l_lock(&ns->ns_lock);
+        list_for_each_safe(tmp, next, &res->lr_granted) {
+                lock = list_entry(tmp, struct ldlm_lock, l_res_link);
+
+                if (iter(lock, closure) == LDLM_ITER_STOP)
+                        GOTO(out, rc = LDLM_ITER_STOP);
+        }
+
+        list_for_each_safe(tmp, next, &res->lr_converting) {
+                lock = list_entry(tmp, struct ldlm_lock, l_res_link);
+
+                if (iter(lock, closure) == LDLM_ITER_STOP)
+                        GOTO(out, rc = LDLM_ITER_STOP);
+        }
+
+        list_for_each_safe(tmp, next, &res->lr_waiting) {
+                lock = list_entry(tmp, struct ldlm_lock, l_res_link);
+
+                if (iter(lock, closure) == LDLM_ITER_STOP)
+                        GOTO(out, rc = LDLM_ITER_STOP);
+        }
+ out:
+        l_unlock(&ns->ns_lock);
+        RETURN(rc);
+}
+
+struct iter_helper_data {
+        ldlm_iterator_t iter;
+        void *closure;
+};
+
+static int ldlm_iter_helper(struct ldlm_lock *lock, void *closure)
+{
+        struct iter_helper_data *helper = closure;
+        return helper->iter(lock, helper->closure);
+}
+
+int ldlm_namespace_foreach(struct ldlm_namespace *ns, ldlm_iterator_t iter,
+                           void *closure)
+{
+        int i, rc = LDLM_ITER_CONTINUE;
+        struct iter_helper_data helper = { iter: iter, closure: closure };
+        
+        l_lock(&ns->ns_lock);
+        for (i = 0; i < RES_HASH_SIZE; i++) {
+                struct list_head *tmp, *next;
+                list_for_each_safe(tmp, next, &(ns->ns_hash[i])) {
+                        struct ldlm_resource *res = 
+                                list_entry(tmp, struct ldlm_resource, lr_hash);
+
+                        ldlm_resource_getref(res);
+                        rc = ldlm_resource_foreach(res, ldlm_iter_helper,
+                                                   &helper);
+                        ldlm_resource_put(res);
+                        if (rc == LDLM_ITER_STOP)
+                                GOTO(out, rc);
+                }
+        }
+ out:
+        l_unlock(&ns->ns_lock);
+        RETURN(rc);
+}
+
+/* Lock replay */
+
+static int ldlm_chain_lock_for_replay(struct ldlm_lock *lock, void *closure)
+{
+        struct list_head *list = closure;
+
+        /* we use l_pending_chain here, because it's unused on clients. */
+        list_add(&lock->l_pending_chain, list);
+        return LDLM_ITER_CONTINUE;
+}
+
+static int replay_one_lock(struct obd_import *imp, struct ldlm_lock *lock,
+                           int last)
+{
+        struct ptlrpc_request *req;
+        struct ldlm_request *body;
+        struct ldlm_reply *reply;
+        int rc, size;
+        int flags = LDLM_FL_REPLAY;
+
+        flags |= lock->l_flags & 
+                (LDLM_FL_BLOCK_GRANTED|LDLM_FL_BLOCK_CONV|LDLM_FL_BLOCK_WAIT);
+
+        size = sizeof(*body);
+        req = ptlrpc_prep_req(imp, LDLM_ENQUEUE, 1, &size, NULL);
+        if (!req)
+                RETURN(-ENOMEM);
+        
+        body = lustre_msg_buf(req->rq_reqmsg, 0);
+        ldlm_lock2desc(lock, &body->lock_desc);
+        body->lock_flags = flags;
+
+        ldlm_lock2handle(lock, &body->lock_handle1);
+        size = sizeof(*reply);
+        req->rq_replen = lustre_msg_size(1, &size);
+
+        if (last)
+                req->rq_reqmsg->flags |= MSG_LAST_REPLAY;
+
+        LDLM_DEBUG(lock, "replaying lock:");
+        rc = ptlrpc_queue_wait(req);
+        if (rc != ELDLM_OK)
+                GOTO(out, rc);
+
+        reply = lustre_msg_buf(req->rq_repmsg, 0);
+        memcpy(&lock->l_remote_handle, &reply->lock_handle,
+               sizeof(lock->l_remote_handle));
+        LDLM_DEBUG(lock, "replayed lock:");
+ out:
+        ptlrpc_req_finished(req);
+        RETURN(rc);
+}
+
+int ldlm_replay_locks(struct obd_import *imp)
+{
+        struct ldlm_namespace *ns = imp->imp_obd->obd_namespace;
+        struct list_head list, *pos, *next;
+        struct ldlm_lock *lock;
+        int rc = 0;
+        
+        ENTRY;
+        INIT_LIST_HEAD(&list);
+
+        l_lock(&ns->ns_lock);
+        (void)ldlm_namespace_foreach(ns, ldlm_chain_lock_for_replay, &list);
+
+        list_for_each_safe(pos, next, &list) {
+                lock = list_entry(pos, struct ldlm_lock, l_pending_chain);
+                rc = replay_one_lock(imp, lock, (next == &list));
+                if (rc)
+                        break; /* or try to do the rest? */
+        }
+        l_unlock(&ns->ns_lock);
+        RETURN(rc);
+}

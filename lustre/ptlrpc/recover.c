@@ -110,8 +110,6 @@ int ptlrpc_run_recovery_upcall(struct ptlrpc_connection *conn)
         int rc;
 
         ENTRY;
-        conn->c_level = LUSTRE_CONN_RECOVD;
-
         argv[0] = obd_recovery_upcall;
         argv[1] = conn->c_remote_uuid;
         argv[2] = NULL;
@@ -138,159 +136,140 @@ int ptlrpc_run_recovery_upcall(struct ptlrpc_connection *conn)
         RETURN(0);
 }
 
-#define REPLAY_COMMITTED     0 /* Fully processed (commit + reply). */
-#define REPLAY_REPLAY        1 /* Forced-replay (e.g. open). */
-#define REPLAY_RESEND        2 /* Resend required. */
-#define REPLAY_RESEND_IGNORE 3 /* Resend, ignore the reply (already saw it). */
-#define REPLAY_RESTART       4 /* Have to restart the call, sorry! */
-
-static int replay_state(struct ptlrpc_request *req, __u64 committed)
+int ptlrpc_replay(struct obd_import *imp, int send_last_flag)
 {
-        /* This request must always be replayed. */
-        if (req->rq_flags & PTL_RPC_FL_REPLAY)
-                return REPLAY_REPLAY;
-
-        /* Uncommitted request */
-        if (req->rq_transno > committed) {
-                if (req->rq_flags & PTL_RPC_FL_REPLIED) {
-                        /* Saw reply, so resend and ignore new reply. */
-                        return REPLAY_RESEND_IGNORE;
-                }
-
-                /* Didn't see reply either, so resend. */
-                return REPLAY_RESEND;
-        }
-
-        /* This request has been committed and we saw the reply.  Goodbye! */
-        if (req->rq_flags & PTL_RPC_FL_REPLIED)
-                return REPLAY_COMMITTED;
-
-        /* Request committed, but we didn't see the reply: have to restart. */
-        return REPLAY_RESTART;
-}
-
-static char *replay_state2str(int state) {
-        static char *state_strings[] = {
-                "COMMITTED", "REPLAY", "RESEND", "RESEND_IGNORE", "RESTART",
-        };
-        static char *unknown_state = "UNKNOWN";
-
-        if (state < 0 || 
-            state > (sizeof(state_strings) / sizeof(state_strings[0]))) {
-                return unknown_state;
-        }
-
-        return state_strings[state];
-}
-
-int ptlrpc_replay(struct obd_import *imp, int unreplied_only)
-{
-        int rc = 0, state;
+        int rc = 0;
         struct list_head *tmp, *pos;
         struct ptlrpc_request *req;
-        struct ptlrpc_connection *conn = imp->imp_connection;
         __u64 committed = imp->imp_peer_committed_transno;
         ENTRY;
+
+        /* It might have committed some after we last spoke, so make sure we
+         * get rid of them now.
+         */
+        ptlrpc_free_committed(imp);
 
         spin_lock(&imp->imp_lock);
 
         CDEBUG(D_HA, "import %p from %s has committed "LPD64"\n",
                imp, imp->imp_obd->u.cli.cl_target_uuid, committed);
 
-        list_for_each(tmp, &imp->imp_request_list) {
+        list_for_each(tmp, &imp->imp_replay_list) {
                 req = list_entry(tmp, struct ptlrpc_request, rq_list);
-                state = replay_state(req, committed);
-                DEBUG_REQ(D_HA, req, "SENDING: %s: ", replay_state2str(state));
+                DEBUG_REQ(D_HA, req, "RETAINED: ");
         }
 
-        list_for_each(tmp, &conn->c_delayed_head) {
-                req = list_entry(tmp, struct ptlrpc_request, rq_list);
-                state = replay_state(req, committed);
-                DEBUG_REQ(D_HA, req, "DELAYED: %s: ", replay_state2str(state));
-        }
-
-        list_for_each_safe(tmp, pos, &imp->imp_request_list) { 
+        list_for_each_safe(tmp, pos, &imp->imp_replay_list) { 
                 req = list_entry(tmp, struct ptlrpc_request, rq_list);
 
-                if (unreplied_only) {
-                        if (!(req->rq_flags & PTL_RPC_FL_REPLIED)) {
-                                DEBUG_REQ(D_HA, req, "UNREPLIED:");
-                                ptlrpc_restart_req(req);
-                        }
-                        continue;
-                }
-
-                state = replay_state(req, committed);
-
-                if (req->rq_transno == imp->imp_max_transno) {
+                if (req->rq_transno == imp->imp_max_transno &&
+                    send_last_flag) {
                         req->rq_reqmsg->flags |= MSG_LAST_REPLAY;
-                        DEBUG_REQ(D_HA, req, "last for replay");
-                        LASSERT(state != REPLAY_COMMITTED);
+                        DEBUG_REQ(D_HA, req, "LAST_REPLAY:");
+                } else {
+                        DEBUG_REQ(D_HA, req, "REPLAY:");
                 }
 
-                switch (state) {
-                    case REPLAY_REPLAY:
-                        DEBUG_REQ(D_HA, req, "REPLAY:");
-                        rc = ptlrpc_replay_req(req);
-#if 0
-#error We should not hold a spinlock over such a lengthy operation.
-#error If necessary, drop spinlock, do operation, re-get spinlock, restart loop.
-#error If we need to avoid re-processint items, then delete them from the list
-#error as they are replayed and re-add at the tail of this list, so the next
-#error item to process will always be at the head of the list.
-#endif
-                        if (rc) {
-                                CERROR("recovery replay error %d for req %Ld\n",
-                                       rc, req->rq_xid);
-                                GOTO(out, rc);
-                        }
+                rc = ptlrpc_replay_req(req);
+                req->rq_reqmsg->flags &= ~MSG_LAST_REPLAY;
+
+                if (rc) {
+                        CERROR("recovery replay error %d for req %Ld\n",
+                               rc, req->rq_xid);
+                        GOTO(out, rc);
+                }
+        }
+
+ out:
+        spin_unlock(&imp->imp_lock);
+        return rc;
+}
+
+#define NO_RESEND     0 /* No action required. */
+#define RESEND        1 /* Resend required. */
+#define RESEND_IGNORE 2 /* Resend, ignore the reply (already saw it). */
+#define RESTART       3 /* Have to restart the call, sorry! */
+
+static int resend_type(struct ptlrpc_request *req, __u64 committed)
+{
+        if (req->rq_transno < committed) {
+                if (req->rq_flags & PTL_RPC_FL_REPLIED) {
+                        /* Saw the reply and it was committed, no biggie. */
+                        DEBUG_REQ(D_HA, req, "NO_RESEND");
+                        return NO_RESEND;
+                }
+                /* Request committed, but no reply: have to restart. */
+                return RESTART;
+        }
+
+        if (req->rq_flags & PTL_RPC_FL_REPLIED) {
+                /* Saw reply, so resend and ignore new reply. */
+                return RESEND_IGNORE;
+        }
+
+        /* Didn't see reply either, so resend. */
+        return RESEND;
+
+}
+
+int ptlrpc_resend(struct obd_import *imp)
+{
+        int rc = 0, type;
+        struct list_head *tmp, *pos;
+        struct ptlrpc_request *req;
+        __u64 committed = imp->imp_peer_committed_transno;
+
+        ENTRY;
+
+        spin_lock(&imp->imp_lock);
+        list_for_each(tmp, &imp->imp_sending_list) {
+                req = list_entry(tmp, struct ptlrpc_request, rq_list);
+                DEBUG_REQ(D_HA, req, "SENDING: ");
+        }
+
+        list_for_each_safe(tmp, pos, &imp->imp_sending_list) {
+                req = list_entry(tmp, struct ptlrpc_request, rq_list);
+                
+                switch(resend_type(req, committed)) {
+                    case NO_RESEND:
                         break;
 
-                    case REPLAY_COMMITTED:
-                        DEBUG_REQ(D_ERROR, req, "COMMITTED:");
-                        /* XXX commit now? */
-                        break;
-
-                    case REPLAY_RESEND_IGNORE:
-                        DEBUG_REQ(D_HA, req, "RESEND_IGNORE:");
-                        rc = ptlrpc_replay_req(req); 
-                        if (rc) {
-                                CERROR("request resend error %d for req %Ld\n",
-                                       rc, req->rq_xid); 
-                                GOTO(out, rc);
-                        }
-                        break;
-
-                    case REPLAY_RESTART:
+                    case RESTART:
                         DEBUG_REQ(D_HA, req, "RESTART:");
                         ptlrpc_restart_req(req);
                         break;
 
-                    case REPLAY_RESEND:
+                    case RESEND_IGNORE:
+                        DEBUG_REQ(D_HA, req, "RESEND_IGNORE:");
+                        rc = ptlrpc_replay_req(req);
+                        if (rc) {
+                                DEBUG_REQ(D_ERROR, req, "error %d resending:",
+                                          rc);
+                                ptlrpc_restart_req(req); /* might as well */
+                        }
+                        break;
+
+                    case RESEND:
                         DEBUG_REQ(D_HA, req, "RESEND:");
                         ptlrpc_resend_req(req);
                         break;
-
+                        
                     default:
                         LBUG();
                 }
-
         }
+}
 
-        conn->c_level = LUSTRE_CONN_FULL;
-        recovd_conn_fixed(conn);
+void ptlrpc_wake_delayed(struct obd_import *imp)
+{
+        struct list_head *tmp, *pos;
+        struct ptlrpc_request *req;
 
-        CERROR("recovery complete on conn %p(%s), waking delayed reqs\n",
-               conn, conn->c_remote_uuid);
-        /* Finally, continue processing requests that blocked for recovery. */
-        list_for_each_safe(tmp, pos, &conn->c_delayed_head) { 
+        spin_lock(&imp->imp_lock);
+        list_for_each_safe(tmp, pos, &imp->imp_delayed_list) {
                 req = list_entry(tmp, struct ptlrpc_request, rq_list);
-                DEBUG_REQ(D_HA, req, "WAKING: ");
-                ptlrpc_continue_req(req);
+                DEBUG_REQ(D_HA, req, "waking:");
+                wake_up(&req->rq_wait_for_rep);
         }
-
-        EXIT;
- out:
-        spin_unlock(&conn->c_lock);
-        return rc;
+        spin_unlock(&imp->imp_lock);
 }

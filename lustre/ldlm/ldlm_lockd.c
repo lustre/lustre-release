@@ -157,8 +157,7 @@ static int ldlm_server_blocking_ast(struct ldlm_lock *lock,
         ldlm_add_waiting_lock(lock);
         (void)ptl_send_rpc(req);
 
-        /* no commit, and no waiting for reply, so 2x decref now */
-        ptlrpc_req_finished(req);
+        /* not waiting for reply */
         ptlrpc_req_finished(req);
 
         RETURN(rc);
@@ -191,8 +190,8 @@ static int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags)
         req->rq_replen = 0; /* no reply needed */
 
         (void)ptl_send_rpc(req);
-        /* no commit, and no waiting for reply, so 2x decref now */
-        ptlrpc_req_finished(req);
+
+        /* not waiting for reply */
         ptlrpc_req_finished(req);
 
         RETURN(rc);
@@ -778,6 +777,9 @@ EXPORT_SYMBOL(ldlm_namespace_cleanup);
 EXPORT_SYMBOL(ldlm_namespace_free);
 EXPORT_SYMBOL(ldlm_namespace_dump);
 EXPORT_SYMBOL(ldlm_cancel_locks_for_export);
+EXPORT_SYMBOL(ldlm_replay_locks);
+EXPORT_SYMBOL(ldlm_resource_foreach);
+EXPORT_SYMBOL(ldlm_namespace_foreach);
 EXPORT_SYMBOL(l_lock);
 EXPORT_SYMBOL(l_unlock);
 

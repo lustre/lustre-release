@@ -150,13 +150,13 @@ struct ldlm_lock {
         ldlm_mode_t           l_req_mode;
         ldlm_mode_t           l_granted_mode;
 
-        ldlm_completion_callback    l_completion_ast;
-        ldlm_blocking_callback    l_blocking_ast;
+        ldlm_completion_callback l_completion_ast;
+        ldlm_blocking_callback   l_blocking_ast;
 
         struct obd_export    *l_export;
         struct lustre_handle *l_connh;
         __u32                 l_flags;
-        struct lustre_handle   l_remote_handle;
+        struct lustre_handle  l_remote_handle;
         void                 *l_data;
         __u32                 l_data_len;
         struct ldlm_extent    l_extent;
@@ -279,6 +279,22 @@ do {                                                                          \
 
 #define LDLM_DEBUG_NOLOCK(format, a...)                 \
         CDEBUG(D_DLMTRACE, "### " format "\n" , ## a)
+
+/*
+ * Iterators.
+ */
+
+#define LDLM_ITER_CONTINUE 0 /* keep iterating */
+#define LDLM_ITER_STOP     1 /* stop iterating */
+
+typedef int (*ldlm_iterator_t)(struct ldlm_lock *, void *);
+
+int ldlm_resource_foreach(struct ldlm_resource *res, ldlm_iterator_t iter,
+                          void *closure);
+int ldlm_namespace_foreach(struct ldlm_namespace *ns, ldlm_iterator_t iter,
+                           void *closure);
+
+int ldlm_replay_locks(struct obd_import *imp);
 
 /* ldlm_extent.c */
 int ldlm_extent_compat(struct ldlm_lock *, struct ldlm_lock *);

@@ -40,6 +40,7 @@
 #include <linux/kp30.h>
 #include <linux/lustre_mds.h> /* for mds_objid */
 #include <linux/obd_ost.h>
+#include <linux/obd_lov.h> /* for IOC_LOV_SET_OSC_ACTIVE */
 #include <linux/ctype.h>
 #include <linux/init.h>
 #include <linux/lustre_ha.h>
@@ -51,12 +52,12 @@
 extern struct lprocfs_vars status_var_nm_1[];
 extern struct lprocfs_vars status_class_var[];
 
-int osc_attach(struct obd_device *dev, obd_count len, void *data)
+static int osc_attach(struct obd_device *dev, obd_count len, void *data)
 {
         return lprocfs_reg_obd(dev, status_var_nm_1, dev);
 }
 
-int osc_detach(struct obd_device *dev)
+static int osc_detach(struct obd_device *dev)
 {
         return lprocfs_dereg_obd(dev);
 }
@@ -878,12 +879,111 @@ out:
         return err;
 }
 
+static void set_osc_active(struct obd_import *imp, int active)
+{
+        struct obd_device *notify_obd = imp->imp_obd->u.cli.cl_containing_lov;
+
+        if (notify_obd == NULL)
+                return;
+
+        /* How gross is _this_? */
+        if (!list_empty(&notify_obd->obd_exports)) {
+                int rc;
+                struct lustre_handle fakeconn;
+                struct obd_ioctl_data ioc_data;
+                struct obd_export *exp =
+                        list_entry(notify_obd->obd_exports.next,
+                                   struct obd_export, exp_obd_chain);
+
+                fakeconn.addr = (__u64)(unsigned long)exp;
+                fakeconn.cookie = exp->exp_cookie;
+                ioc_data.ioc_inlbuf1 = imp->imp_obd->obd_uuid;
+                ioc_data.ioc_offset = active;
+                rc = obd_iocontrol(IOC_LOV_SET_OSC_ACTIVE, &fakeconn,
+                                   sizeof ioc_data, &ioc_data, NULL);
+                if (rc)
+                        CERROR("disabling %s on LOV %p/%s: %d\n",
+                               imp->imp_obd->obd_uuid, notify_obd,
+                               notify_obd->obd_uuid, rc);
+        } else {
+                CDEBUG(D_HA, "No exports for obd %p/%s, can't notify about "
+                       "%p\n", notify_obd, notify_obd->obd_uuid,
+                       imp->imp_obd->obd_uuid);
+        }
+}
+
+
+/* XXX looks a lot like super.c:invalidate_request_list, don't it? */
+static void abort_inflight_for_import(struct obd_import *imp)
+{
+        struct list_head *tmp, *n;
+
+        /* Make sure that no new requests get processed for this import.
+         * ptlrpc_queue_wait must (and does) hold imp_lock while testing this
+         * flag and then putting requests on sending_list or delayed_list.
+         */
+        spin_lock(&imp->imp_lock);
+        imp->imp_flags |= IMP_INVALID;
+        spin_unlock(&imp->imp_lock);
+
+        list_for_each_safe(tmp, n, &imp->imp_sending_list) {
+                struct ptlrpc_request *req =
+                        list_entry(tmp, struct ptlrpc_request, rq_list);
+
+                DEBUG_REQ(D_HA, req, "inflight");
+                req->rq_flags |= PTL_RPC_FL_ERR;
+                wake_up(&req->rq_wait_for_rep);
+        }
+
+        list_for_each_safe(tmp, n, &imp->imp_delayed_list) {
+                struct ptlrpc_request *req =
+                        list_entry(tmp, struct ptlrpc_request, rq_list);
+
+                DEBUG_REQ(D_HA, req, "aborting waiting req");
+                req->rq_flags |= PTL_RPC_FL_ERR;
+                wake_up(&req->rq_wait_for_rep);
+        }
+}
+
+static int osc_recover(struct obd_import *imp, int phase)
+{
+        int rc;
+        ENTRY;
+
+        switch(phase) {
+            case PTLRPC_RECOVD_PHASE_PREPARE: {
+                struct ldlm_namespace *ns = imp->imp_obd->obd_namespace;
+                ldlm_namespace_cleanup(ns, 1 /* no network ops */);
+                abort_inflight_for_import(imp);
+                set_osc_active(imp, 0 /* inactive */);
+                RETURN(0);
+            }
+            case PTLRPC_RECOVD_PHASE_RECOVER:
+                rc = ptlrpc_reconnect_import(imp, OST_CONNECT);
+                if (rc)
+                        RETURN(rc);
+                set_osc_active(imp, 1 /* active */);
+                RETURN(0);
+            default:
+                RETURN(-EINVAL);
+        }
+}
+
+static int osc_connect(struct lustre_handle *conn, struct obd_device *obd,
+                       obd_uuid_t cluuid, struct recovd_obd *recovd,
+                       ptlrpc_recovery_cb_t recover)
+{
+        struct obd_import *imp = &obd->u.cli.cl_import;
+        imp->imp_recover = osc_recover;
+        return client_obd_connect(conn, obd, cluuid, recovd, recover);
+}
+
 struct obd_ops osc_obd_ops = {
         o_attach:       osc_attach,
         o_detach:       osc_detach,
         o_setup:        client_obd_setup,
         o_cleanup:      client_obd_cleanup,
-        o_connect:      client_obd_connect,
+        o_connect:      osc_connect,
         o_disconnect:   client_obd_disconnect,
         o_statfs:       osc_statfs,
         o_packmd:       osc_packmd,

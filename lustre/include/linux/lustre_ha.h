@@ -54,6 +54,8 @@ extern struct recovd_obd *ptlrpc_recovd;
 
 int ptlrpc_run_recovery_upcall(struct ptlrpc_connection *conn);
 int ptlrpc_reconnect_import(struct obd_import *imp, int rq_opc);
-int ptlrpc_replay(struct obd_import *imp, int unreplied_only);
-
+int ptlrpc_replay(struct obd_import *imp, int send_last_flag);
+int ptlrpc_resend(struct obd_import *imp);
+void ptlrpc_free_committed(struct obd_import *imp);
+void ptlrpc_wake_delayed(struct obd_import *imp);
 #endif

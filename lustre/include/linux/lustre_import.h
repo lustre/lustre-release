@@ -15,13 +15,23 @@
 #define IMP_INVALID       1
 #define IMP_REPLAYABLE    2
 
+typedef int (*import_recover_t)(struct obd_import *imp, int phase);
+
 #include <linux/lustre_idl.h>
 struct obd_import {
+        import_recover_t          imp_recover;
         struct ptlrpc_connection *imp_connection;
         struct ptlrpc_client     *imp_client;
         struct lustre_handle      imp_handle;
         struct list_head          imp_chain;
-        struct list_head          imp_request_list;
+
+        /* Lists of requests that are retained for replay, waiting for a reply,
+         * or waiting for recovery to complete, respectively.
+         */
+        struct list_head          imp_replay_list;
+        struct list_head          imp_sending_list;
+        struct list_head          imp_delayed_list;
+
         struct obd_device        *imp_obd;
         int                       imp_flags;
         int                       imp_level;
@@ -30,7 +40,7 @@ struct obd_import {
         __u64                     imp_peer_last_xid;
         __u64                     imp_peer_committed_transno;
 
-        /* Protects flags, level, *_xid, request_list */
+        /* Protects flags, level, *_xid, *_list */
         spinlock_t                imp_lock;
 };
 

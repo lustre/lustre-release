@@ -72,7 +72,6 @@ struct ptlrpc_connection {
         __u8                    c_local_uuid[37];  /* XXX do we need this? */
         __u8                    c_remote_uuid[37];
 
-        int                     c_level;
         __u32                   c_generation;  /* changes upon new connection */
         __u32                   c_epoch;       /* changes when peer changes */
         __u32                   c_bootcount;   /* peer's boot count */

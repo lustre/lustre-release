@@ -619,21 +619,73 @@ out:
 
         return rc;
 }
-int mdc_attach(struct obd_device *dev, obd_count len, void *data)
+
+static int mdc_attach(struct obd_device *dev, obd_count len, void *data)
 {
         return lprocfs_reg_obd(dev, status_var_nm_1, dev);
 }
 
-int mdc_detach(struct obd_device *dev)
+static int mdc_detach(struct obd_device *dev)
 {
         return lprocfs_dereg_obd(dev);
 }
+
+static int mdc_recover(struct obd_import *imp, int phase)
+{
+        int rc;
+        ENTRY;
+
+        switch(phase) {
+            case PTLRPC_RECOVD_PHASE_PREPARE:
+                ldlm_cli_cancel_unused(imp->imp_obd->obd_namespace,
+                                       NULL, LDLM_FL_LOCAL_ONLY);
+                RETURN(0);
+            case PTLRPC_RECOVD_PHASE_RECOVER:
+                rc = ptlrpc_reconnect_import(imp, MDS_CONNECT);
+                if (rc == EALREADY)
+                        RETURN(ptlrpc_replay(imp, 0));
+                if (rc)
+                        RETURN(rc);
+
+                rc = ptlrpc_replay(imp, 0 /* no last flag*/);
+                if (rc)
+                        RETURN(rc);
+
+                rc = ldlm_replay_locks(imp);
+                if (rc)
+                        RETURN(rc);
+
+                spin_lock(&imp->imp_lock);
+                imp->imp_level = LUSTRE_CONN_FULL;
+                spin_unlock(&imp->imp_lock);
+
+                ptlrpc_wake_delayed(imp);
+
+                rc = ptlrpc_resend(imp);
+                if (rc)
+                        RETURN(rc);
+
+                RETURN(0);
+            default:
+                RETURN(-EINVAL);
+        }
+}
+
+static int mdc_connect(struct lustre_handle *conn, struct obd_device *obd,
+                       obd_uuid_t cluuid, struct recovd_obd *recovd,
+                       ptlrpc_recovery_cb_t recover)
+{
+        struct obd_import *imp = &obd->u.cli.cl_import;
+        imp->imp_recover = mdc_recover;
+        return client_obd_connect(conn, obd, cluuid, recovd, recover);
+}
+
 struct obd_ops mdc_obd_ops = {
         o_attach: mdc_attach,
         o_detach: mdc_detach,
         o_setup:   client_obd_setup,
         o_cleanup: client_obd_cleanup,
-        o_connect: client_obd_connect,
+        o_connect: mdc_connect,
         o_disconnect: client_obd_disconnect,
         o_statfs: mdc_statfs,
 };
