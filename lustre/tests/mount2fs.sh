@@ -8,7 +8,7 @@ LMC=${LMC-../utils/lmc}
 TMP=${TMP:-/tmp}
 
 MDSDEV=${MDSDEV:-$TMP/mds1-`hostname`}
-MDSDEV2=${MDSDEV:-$TMP/mds2-`hostname`}
+MDSDEV2=${MDSDEV2:-$TMP/mds2-`hostname`}
 MDSSIZE=50000
 FSTYPE=${FSTYPE:-ext3}
 
