@@ -281,9 +281,6 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req)
                            "(err=%d)", err);
         req->rq_status = err;
 
-        if (ptlrpc_reply(req->rq_svc, req))
-                LBUG();
-
         if (lock) {
                 if (!err)
                         ldlm_reprocess_all(lock->l_resource);
@@ -322,8 +319,6 @@ int ldlm_handle_convert(struct ptlrpc_request *req)
                         CDEBUG(D_DLMTRACE, "converted waiting lock %p\n", lock);
                 req->rq_status = 0;
         }
-        if (ptlrpc_reply(req->rq_svc, req) != 0)
-                LBUG();
 
         if (lock) {
                 ldlm_reprocess_all(lock->l_resource);

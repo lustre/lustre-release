@@ -532,23 +532,17 @@ static int ost_handle(struct ptlrpc_request *req)
                 CDEBUG(D_INODE, "enqueue\n");
                 OBD_FAIL_RETURN(OBD_FAIL_LDLM_ENQUEUE, 0);
                 rc = ldlm_handle_enqueue(req);
-                if (rc)
-                        break;
-                RETURN(0);
+                break;
         case LDLM_CONVERT:
                 CDEBUG(D_INODE, "convert\n");
                 OBD_FAIL_RETURN(OBD_FAIL_LDLM_CONVERT, 0);
                 rc = ldlm_handle_convert(req);
-                if (rc)
-                        break;
-                RETURN(0);
+                break;
         case LDLM_CANCEL:
                 CDEBUG(D_INODE, "cancel\n");
                 OBD_FAIL_RETURN(OBD_FAIL_LDLM_CANCEL, 0);
                 rc = ldlm_handle_cancel(req);
-                if (rc)
-                        break;
-                RETURN(0);
+                break;
         case LDLM_BL_CALLBACK:
         case LDLM_CP_CALLBACK:
                 CDEBUG(D_INODE, "callback\n");
