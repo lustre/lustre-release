@@ -276,7 +276,7 @@ int ptlrpc_reply(struct ptlrpc_service *svc, struct ptlrpc_request *req)
         //req->rq_repmsg->conn = req->rq_connection->c_remote_conn;
         //req->rq_repmsg->token = req->rq_connection->c_remote_token;
         req->rq_repmsg->status = HTON__u32(req->rq_status);
-        req->rq_reqmsg->type = HTON__u32(req->rq_type);
+        req->rq_repmsg->type = HTON__u32(req->rq_type);
         return ptl_send_buf(req, req->rq_connection, svc->srv_rep_portal);
 }
 
