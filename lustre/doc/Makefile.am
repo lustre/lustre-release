@@ -40,7 +40,7 @@ $(GENERATED) : %.lyx: %.lin Makefile
 .lyx.html:
 	@$(LYX2HTML) $< || printf "\n*** Warning: not creating HTML docs; install lyx to rectify this\n"
 
-lustre.pdf: $(IMAGES)
+lustre.pdf lustre.txt lustre.html: $(IMAGES) lustre-HOWTO.lyx
 .fig.eps:
 	-fig2dev -L eps $< > $@
 
