@@ -53,7 +53,7 @@ int main(int argc, char** argv)
 {
         int    fd;
         int    flags=0;
-        mode_t mode=0;
+        mode_t mode=0644;
         char*  fname=NULL;
         int    mode_set=0;
         int    flag_set=0;
@@ -131,7 +131,7 @@ int main(int argc, char** argv)
         }
 
 
-        if (mode_set)
+        if (flags & O_CREAT)
                 fd = open(fname, flags, mode);
         else
                 fd = open(fname, flags);
