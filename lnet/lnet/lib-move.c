@@ -588,6 +588,18 @@ lib_extract_kiov (int dst_niov, ptl_kiov_t *dst,
         }
 }
 
+#ifndef __KERNEL__
+#if !defined(kmap)
+#define kmap(page) ((page)->addr)
+#endif
+#if !defined(kunmap)
+#define kunmap(page) do {} while(0)
+#endif
+#if !defined(page_address)
+#define page_address(page) ((page)->page_address)
+#endif
+#endif
+
 ptl_err_t
 lib_lo_rxkiov(lib_nal_t    *nal,
               void         *private,
