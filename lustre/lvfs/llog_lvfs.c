@@ -914,8 +914,8 @@ int llog_lvfs_prev_block(struct llog_handle *loghandle,
         return 0;
 }
 
-int llog_lvfs_next_block(struct llog_handle *loghandle, 
-                         int next_idx, void *buf, int len)
+int llog_lvfs_next_block(struct llog_handle *h, int *curr_idx,
+                         int next_idx, __u64 *offset, void *buf, int len)
 {
         LBUG();
         return 0;
