@@ -212,17 +212,6 @@ static inline void cond_resched(void)
 #define PageWriteback(page) 0
 #define end_page_writeback(page)
 
-static inline int mapping_mapped(struct address_space *mapping)
-{
-        return mapping->i_mmap_shared ? 1 : 0;
-}
-
-#ifdef ZAP_PAGE_RANGE_VMA
-#define ll_zap_page_range(vma, addr, len)  zap_page_range(vma, addr, len)
-#else
-#define ll_zap_page_range(vma, addr, len)  zap_page_range(vma->vm_mm, addr, len)
-#endif
-
 #endif /* end of 2.4 compat macros */
 
 #ifdef HAVE_PAGE_LIST

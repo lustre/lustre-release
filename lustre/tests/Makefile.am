@@ -24,12 +24,10 @@ noinst_PROGRAMS += wantedi statone runas openfile getdents mkdirdeep o_directory
 noinst_PROGRAMS += small_write multiop sleeptest ll_sparseness_verify cmknod
 noinst_PROGRAMS += ll_sparseness_write mrename ll_dirstripe_verify mkdirmany rmdirmany
 noinst_PROGRAMS += openfilleddirunlink rename_many memhog iopentest1 iopentest2
-noinst_PROGRAMS += mmap_sanity
 # noinst_PROGRAMS += ldaptest copy_attr
 bin_PROGRAMS = mcreate munlink
 endif # TESTS
 
-mmap_sanity_SOURCES= mmap_sanity.c
 stat_SOURCES = stat.c stat_fs.h
 mkdirdeep_LDADD=-L$(top_builddir)/portals/utils -lptlctl $(LIBREADLINE)
 #write_append_truncate_CC=mpicc

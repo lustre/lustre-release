@@ -19,7 +19,6 @@
 	- replace some LBUG about llog ops with error handling (3841)
 	- don't match INVALID dentries from d_lookup and spin (3784)
 	- hold dcache_lock while marking dentries INVALID and hashing (4255)
-	- basic mmap support (3918)
        * miscellania
 	- add libwrap support for the TCP acceptor (3996)
 	- add /proc/sys/portals/routes for non-root route listing (3994)

@@ -90,7 +90,6 @@ struct ptldebug_header {
 #define D_RPCTRACE    0x00100000 /* for distributed debugging */
 #define D_VFSTRACE    0x00200000
 #define D_READA       0x00400000 /* read-ahead */
-#define D_MMAP        0x00800000
 
 #ifdef __KERNEL__
 # include <linux/sched.h> /* THREAD_SIZE */
