@@ -420,6 +420,7 @@ struct lov_tgt_desc {
 struct lov_obd {
         spinlock_t lov_lock;
         struct lov_desc desc;
+        struct semaphore lov_llog_sem;
         int bufsize;
         int refcount;
         int lo_catalog_loaded:1;

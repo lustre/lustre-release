@@ -500,6 +500,7 @@ static int lov_setup(struct obd_device *obd, obd_count len, void *buf)
         CDEBUG(D_CONFIG, "tgts: %p bufsize: 0x%x\n", lov->tgts, lov->bufsize);
         lov->desc = *desc;
         spin_lock_init(&lov->lov_lock);
+        sema_init(&lov->lov_llog_sem, 1);
 
         RETURN(0);
 }
