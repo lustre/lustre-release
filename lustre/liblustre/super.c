@@ -360,11 +360,57 @@ static int llu_iop_getattr(struct pnode *pno,
         return 0;
 }
 
+int llu_mdc_cancel_unused(struct lustre_handle *conn,
+                          struct llu_inode_info *lli,
+                          int flags)
+{
+        struct ldlm_res_id res_id =
+                { .name = {lli->lli_st_ino, lli->lli_st_generation} };
+        struct obd_device *obddev = class_conn2obd(conn);
+        ENTRY;
+        RETURN(ldlm_cli_cancel_unused(obddev->obd_namespace, &res_id, flags));
+}
+
+static void llu_clear_inode(struct inode *inode)
+{
+        struct llu_sb_info *sbi = llu_i2sbi(inode);
+        struct llu_inode_info *lli = llu_i2info(inode);
+        int rc;
+        ENTRY;
+
+        CDEBUG(D_INODE, "clear inode: %lu\n", lli->lli_st_ino);
+        rc = llu_mdc_cancel_unused(&sbi->ll_mdc_conn, lli,
+                                   LDLM_FL_NO_CALLBACK);
+        if (rc < 0) {
+                CERROR("ll_mdc_cancel_unused: %d\n", rc);
+                /* XXX FIXME do something dramatic */
+        }
+
+        if (lli->lli_smd) {
+                rc = obd_cancel_unused(&sbi->ll_osc_conn, lli->lli_smd, 0);
+                if (rc < 0) {
+                        CERROR("obd_cancel_unused: %d\n", rc);
+                        /* XXX FIXME do something dramatic */
+                }
+        }
+
+        if (lli->lli_smd)
+                obd_free_memmd(&sbi->ll_osc_conn, &lli->lli_smd);
+
+        if (lli->lli_symlink_name) {
+                OBD_FREE(lli->lli_symlink_name,
+                         strlen(lli->lli_symlink_name) + 1);
+                lli->lli_symlink_name = NULL;
+        }
+
+        EXIT;
+}
+
 void llu_iop_gone(struct inode *inode)
 {
         struct llu_inode_info *lli = llu_i2info(inode);
 
-        /* FIXME do proper cleanup here */
+        llu_clear_inode(inode);
 
         OBD_FREE(lli, sizeof(*lli));
 }
