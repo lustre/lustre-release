@@ -258,7 +258,7 @@ static inline struct page *alloc_pages(mask,foo)
         if (!pg)
                 return NULL;
 #ifdef MAP_ANONYMOUS
-        pg->addr = mmap(0, PAGE_SIZE, PROT_WRITE, MAP_ANONYMOUS, 0, 0);
+        pg->addr = mmap(0, PAGE_SIZE, PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, 0, 0);
 #else
         pg->addr = malloc(PAGE_SIZE);
 #endif
