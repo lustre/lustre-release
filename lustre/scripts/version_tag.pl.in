@@ -18,7 +18,7 @@ sub get_tag()
     my $tagfile = new IO::File;
     if (!$tagfile->open("CVS/Tag")) {
         my $verfile = new IO::File;
-        if (!$verfile->open("portals/include/config.h")) {
+        if (!$verfile->open("include/config.h")) {
           return "UNKNOWN";
         }
         while(defined($line = <$verfile>)) {
