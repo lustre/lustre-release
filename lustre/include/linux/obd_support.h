@@ -73,11 +73,11 @@ extern int obd_print_entry;
 		char *uptodate = (Page_Uptodate(page)) ? "yes" : "no";\
 		char *locked = (PageLocked(page)) ? "yes" : "no";\
 		int count = page->count.counter;\
-                long offset = page->offset;\
+                long index = page->index;\
 		\
 		CDEBUG(D_IOCTL, " ** %s, cmd: %s, off %ld, uptodate: %s, "\
 		       "locked: %s, cnt %d page %p pages %ld** \n", __FUNCTION__,\
-		       cmd, offset, uptodate, locked, count, page, (!page->mapping) ? -1 : page->mapping->nrpages);\
+		       cmd, index, uptodate, locked, count, page, (!page->mapping) ? -1 : page->mapping->nrpages);\
 	} else { CDEBUG(D_IOCTL, "** %s, no page\n", __FUNCTION__); }}
 
 

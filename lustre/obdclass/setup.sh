@@ -1,6 +1,9 @@
 #! /bin/bash
 insmod loop
 losetup /dev/loop0 /tmp/fs
+
+mke2fs /dev/loop0
+
 insmod ../class/obdclass.o
 insmod ../ext2obd/obdext2.o
 insmod ../obdfs/obdfs.o

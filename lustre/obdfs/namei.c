@@ -86,7 +86,7 @@ struct page * obdfs_find_entry (struct inode * dir,
 	if (namelen > EXT2_NAME_LEN)
 		return NULL;
 
-	CDEBUG(D_INODE, "dirsize is %ld\n", dir->i_size);
+	CDEBUG(D_INODE, "dirsize is %Ld\n", dir->i_size);
 
 	page = 0;
 	offset = 0;
@@ -1068,11 +1068,11 @@ int obdfs_rename (struct inode * old_dir, struct dentry *old_dentry,
 		}
 	}
 	if ( old_page != new_page ) {
-		unsigned long offset = old_page->offset;
+		unsigned long index = old_page->index;
 		/* lock the old_page and release unlocked copy */
 		CDEBUG(D_INODE, "old_page at %p\n", old_page);
 		page_cache_release(old_page);
-		old_page = obdfs_getpage(old_dir, offset, 0, LOCKED);
+		old_page = obdfs_getpage(old_dir, index >> PAGE_SHIFT, 0, LOCKED);
 		CDEBUG(D_INODE, "old_page at %p\n", old_page);
 		iops(old_dir)->o_brw(WRITE, iid(old_dir), old_dir, old_page,0);
 	}

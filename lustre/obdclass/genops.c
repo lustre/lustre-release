@@ -202,19 +202,19 @@ void lck_page(struct page *page)
 int gen_copy_data(struct obd_conn *conn, obdattr *src, obdattr *tgt)
 {
 	struct page *page;
-	unsigned long offset = 0;
+	unsigned long index = 0;
 	int rc;
 
-	page = __get_pages(GFP_USER, 0);
+	page = alloc_page(GFP_USER);
 	if ( !page ) 
 		return -ENOMEM;
 
 	
 	lck_page(page);
 	
-	while (offset < src->i_size) {
+	while (index < src->i_size / PAGE_SIZE) {
 		
-		page->offset = offset;
+		page->index = index;
 		rc = OBP(conn->oc_dev, brw)(READ, conn, src, page, 0);
 
 		if ( rc != PAGE_SIZE ) 
@@ -224,7 +224,7 @@ int gen_copy_data(struct obd_conn *conn, obdattr *src, obdattr *tgt)
 		if ( rc != PAGE_SIZE)
 			break;
 		
-		offset += rc;
+		index ++;
 	}
 	tgt->i_size = src->i_size;
 	tgt->i_blocks = src->i_blocks;
