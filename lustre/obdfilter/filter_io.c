@@ -164,8 +164,9 @@ static int lustre_commit_write(struct niobuf_local *lnb)
 
         LASSERT(to <= PAGE_SIZE);
         err = page->mapping->a_ops->commit_write(NULL, page, from, to);
+#warning 2.4 folks: wait_on_page_locked does NOT return its error here.
         if (!err && IS_SYNC(inode))
-                err = wait_on_page_locked(page);
+                wait_on_page_locked(page);
         //SetPageUptodate(page); // the client commit_write will do this
 
         SetPageReferenced(page);
@@ -191,7 +192,7 @@ int filter_get_page_write(struct inode *inode, struct niobuf_local *lnb,
 
         /* This page is currently locked, so get a temporary page instead. */
         if (page == NULL) {
-                CDEBUG(D_ERROR,"ino %lu page %ld locked\n", inode->i_ino,index);
+                CDEBUG(D_INFO, "ino %lu page %ld locked\n", inode->i_ino,index);
                 page = alloc_pages(GFP_KERNEL, 0); /* locked page */
                 if (page == NULL) {
                         CERROR("no memory for a temp page\n");
@@ -201,11 +202,10 @@ int filter_get_page_write(struct inode *inode, struct niobuf_local *lnb,
                 lnb->page = page;
                 lnb->flags |= N_LOCAL_TEMP_PAGE;
         } else if (!IS_ERR(page)) {
+                unsigned from = lnb->offset & ~PAGE_MASK, to = from + lnb->len;
                 (*pglocked)++;
 
-                rc = mapping->a_ops->prepare_write(NULL, page,
-                                                   lnb->offset & ~PAGE_MASK,
-                                                   lnb->len);
+                rc = mapping->a_ops->prepare_write(NULL, page, from, to);
                 if (rc) {
                         if (rc != -ENOSPC)
                                 CERROR("page index %lu, rc = %d\n", index, rc);
