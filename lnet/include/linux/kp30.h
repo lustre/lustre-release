@@ -295,7 +295,6 @@ do {                                                                      \
                        #ptr "' = %d)\n", __FILE__, __LINE__, (int)(size));\
                 CERROR("PORTALS: %d total bytes allocated by portals\n",  \
                        atomic_read(&portal_kmemory));                     \
-                show_mem();                                               \
         } else {                                                          \
                 portal_kmem_inc((ptr), (size));                           \
                 memset((ptr), 0, (size));                                 \
@@ -335,7 +334,6 @@ do {                                                                      \
                        __LINE__);                                         \
                 CERROR("PORTALS: %d total bytes allocated by portals\n",  \
                        atomic_read(&portal_kmemory));                     \
-                show_mem();                                               \
         } else {                                                          \
                 portal_kmem_inc((ptr), (size));                           \
                 memset((ptr), 0, (size));                                 \
