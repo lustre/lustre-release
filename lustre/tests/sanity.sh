@@ -302,7 +302,7 @@ $START
 
 echo "--test 24-R10 source does not exist" 
 mkdir $MOUNT/R10
-mv $MOUNT/R10/f $MOUNT/R10/g 
+! mv $MOUNT/R10/f $MOUNT/R10/g 
 $CLEAN
 $START
 
