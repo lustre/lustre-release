@@ -237,20 +237,39 @@ test_17() {
 }
 run_test 17 "timeout bulk get, evict client (2732)"
 
-test_18() {
+test_18a() {
+    do_facet client mkdir -p $MOUNT/$tdir
+    f=$MOUNT/$tdir/$tfile
+
+    cancel_lru_locks OSC
+    pgcache_empty || return 1
+
+    # 1 stripe on ost2
+    lfs setstripe $f $((128 * 1024)) 1 1
+
+    do_facet client cp /etc/termcap $f
+    sync
+    local osc2_dev=`$LCTL device_list | \
+	awk '(/ost2.*client_facet/){print $4}' `
+    $LCTL --device %$osc2_dev deactivate
+    # my understanding is that there should be nothing in the page
+    # cache after the client reconnects?     
+    rc=0
+    pgcache_empty || rc=2
+    $LCTL --device %$osc2_dev activate
+    rm -f $f
+    return $rc
+}
+run_test 18a "manual ost invalidate clears page cache immediately"
+
+test_18b() {
 # OBD_FAIL_PTLRPC_BULK_PUT_NET|OBD_FAIL_ONCE
     do_facet client mkdir -p $MOUNT/$tdir
     f=$MOUNT/$tdir/$tfile
     f2=$MOUNT/$tdir/${tfile}-2
 
     cancel_lru_locks OSC
-    for a in /proc/fs/lustre/llite/*/dump_page_cache; do
-        if [ `wc -l $a | awk '{print $1}'` -gt 1 ]; then
-                echo there is still data in page cache $a ?
-                cat $a;
-                return 1;
-        fi
-    done
+    pgcache_empty || return 1
 
     # shouldn't have to set stripe size of count==1
     lfs setstripe $f $((128 * 1024)) 0 1
@@ -264,17 +283,15 @@ test_18() {
     sync
     sysctl -w lustre.fail_loc=0
     # allow recovery to complete
-    sleep 10
+    sleep $((TIMEOUT + 2))
     # my understanding is that there should be nothing in the page
     # cache after the client reconnects?     
-    for a in /proc/fs/lustre/llite/*/dump_page_cache; do
-        if [ `wc -l $a | awk '{print $1}'` -gt 1 ]; then
-                echo there is still data in page cache $a ?
-                cat $a;
-                return 1;
-        fi
-    done
+    rc=0
+    pgcache_empty || rc=2
+    rm -f $f $f2
+    return $rc
 }
-run_test 18 "eviction and reconnect clears page cache (2766)"
+run_test 18b "eviction and reconnect clears page cache (2766)"
+
 
 $CLEANUP
