@@ -46,8 +46,13 @@ int create_file(char *name, long stripe_size, int stripe_offset,
 			name, strerror(errno));
 		result = -errno;
 	} else if (ioctl(fd, LL_IOC_LOV_SETSTRIPE, &a_striping)) {
+		char *errmsg = "stripe already set";
+
+		if (errno != EEXIST && errno != EALREADY)
+			errmsg = strerror(errno);
+
 		fprintf(stderr, "\nError on ioctl for '%s' (%d): %s\n",
-			name, fd, strerror(errno));
+			name, fd, errmsg);
 		result = -errno;
 	} else if (close(fd) < 0) {
 		fprintf(stderr, "\nError on close for '%s' (%d): %s\n",
