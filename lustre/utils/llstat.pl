@@ -70,9 +70,10 @@ sub readstat()
 		    printf "%10s", "stddev";
 		}
                 printf "\n";
+		$| = 1;
 	    }
 	    elsif ($cumulcount!=0) {
-		printf "%-25s %-10Lu %-10Lu %-10Lu",
+		printf "%-25s %-10lu %-10lu %-10lu",
 		       $name, $diff, ($diff/$tdiff), $cumulcount;
 		
 		if (defined($sum)) {
@@ -83,7 +84,7 @@ sub readstat()
 			$sum = $sum/$mhz;
 			$max = $max/$mhz;
 		    }
-		    printf "%-8s %10Lu %12.2f %10Lu", $unit, $min, ($sum/$cumulcount), $max;
+		    printf "%-8s %10lu %12.2f %10lu", $unit, $min, ($sum/$cumulcount), $max;
 		    if (defined($sumsquare)) {
 			my $s = $sumsquare - (($sum_orig*$sum_orig)/$cumulcount);
 			if ($s >= 0) {
@@ -97,6 +98,7 @@ sub readstat()
 		    }
 		}
 		printf "\n";
+		$| = 1;
 	    }
 	}
 	else {

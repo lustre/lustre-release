@@ -26,11 +26,12 @@
 
 #ifdef __KERNEL__
 # include <linux/module.h>
-#else 
+#else
 # include <liblustre.h>
 #endif
 #include <linux/obd.h>
 #include <linux/obd_ost.h>
+#include <linux/lustre_mgmt.h>
 #include <linux/lustre_net.h>
 #include <linux/lustre_dlm.h>
 
@@ -42,19 +43,27 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         struct obd_import *imp;
         struct obd_uuid server_uuid;
         int rq_portal, rp_portal, connect_op;
-        char *name;
+        char *name = obddev->obd_type->typ_name;
         ENTRY;
 
-        if (obddev->obd_type->typ_ops->o_brw) {
+        /* In a more perfect world, we would hang a ptlrpc_client off of
+         * obd_type and just use the values from there. */
+        if (!strcmp(name, LUSTRE_OSC_NAME)) {
                 rq_portal = OST_REQUEST_PORTAL;
                 rp_portal = OSC_REPLY_PORTAL;
-                name = "osc";
                 connect_op = OST_CONNECT;
-        } else {
+        } else if (!strcmp(name, LUSTRE_MDC_NAME)) {
                 rq_portal = MDS_REQUEST_PORTAL;
                 rp_portal = MDC_REPLY_PORTAL;
-                name = "mdc";
                 connect_op = MDS_CONNECT;
+        } else if (!strcmp(name, LUSTRE_MGMTCLI_NAME)) {
+                rq_portal = MGMT_REQUEST_PORTAL;
+                rp_portal = MGMT_REPLY_PORTAL;
+                connect_op = MGMT_CONNECT;
+        } else {
+                CERROR("unknown client OBD type \"%s\", can't setup\n",
+                       name);
+                RETURN(-EINVAL);
         }
 
         if (data->ioc_inllen1 < 1) {
@@ -82,6 +91,11 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         memcpy(server_uuid.uuid, data->ioc_inlbuf2, MIN(data->ioc_inllen2,
                                                         sizeof(server_uuid)));
 
+        init_MUTEX(&cli->cl_dirty_sem);
+        cli->cl_dirty = 0;
+        cli->cl_dirty_granted = 0;
+        cli->cl_ost_can_grant = 1;
+
         conn = ptlrpc_uuid_to_connection(&server_uuid);
         if (conn == NULL)
                 RETURN(-ENOENT);
@@ -99,23 +113,66 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         imp->imp_obd = obddev;
         imp->imp_connect_op = connect_op;
         imp->imp_generation = 0;
+        INIT_LIST_HEAD(&imp->imp_pinger_chain);
         memcpy(imp->imp_target_uuid.uuid, data->ioc_inlbuf1, data->ioc_inllen1);
         class_import_put(imp);
 
         cli->cl_import = imp;
         cli->cl_max_mds_easize = sizeof(struct lov_mds_md);
+        cli->cl_max_mds_cookiesize = sizeof(struct llog_cookie);
         cli->cl_sandev = to_kdev_t(0);
+
+        /* Register with management client if we need to. */
+        if (data->ioc_inllen3 > 0) {
+                char *mgmt_name = data->ioc_inlbuf3;
+                int rc;
+                struct obd_device *mgmt_obd;
+                mgmtcli_register_for_events_t register_f;
+
+                CDEBUG(D_HA, "%s registering with %s for events about %s\n",
+                       obddev->obd_name, mgmt_name, server_uuid.uuid);
+
+                mgmt_obd = class_name2obd(mgmt_name);
+                if (!mgmt_obd) {
+                        CERROR("can't find mgmtcli %s to register\n",
+                               mgmt_name);
+                        class_destroy_import(imp);
+                        RETURN(-ENOENT);
+                }
+                
+                register_f = inter_module_get("mgmtcli_register_for_events");
+                if (!register_f) {
+                        CERROR("can't i_m_g mgmtcli_register_for_events\n");
+                        class_destroy_import(imp);
+                        RETURN(-ENOSYS);
+                }
+                
+                rc = register_f(mgmt_obd, obddev, &imp->imp_target_uuid);
+                inter_module_put("mgmtcli_register_for_events");
+
+                if (!rc)
+                        cli->cl_mgmtcli_obd = mgmt_obd;
+
+                RETURN(rc);
+        }
 
         RETURN(0);
 }
 
-int client_obd_cleanup(struct obd_device *obddev, int force, int failover)
+int client_obd_cleanup(struct obd_device *obddev, int flags)
 {
-        struct client_obd *client = &obddev->u.cli;
+        struct client_obd *cli = &obddev->u.cli;
 
-        if (!client->cl_import)
+        if (!cli->cl_import)
                 RETURN(-EINVAL);
-        class_destroy_import(client->cl_import);
-        client->cl_import = NULL;
+        if (cli->cl_mgmtcli_obd) {
+                mgmtcli_deregister_for_events_t dereg_f;
+                
+                dereg_f = inter_module_get("mgmtcli_deregister_for_events");
+                dereg_f(cli->cl_mgmtcli_obd, obddev);
+                inter_module_put("mgmtcli_deregister_for_events");
+        }
+        class_destroy_import(cli->cl_import);
+        cli->cl_import = NULL;
         RETURN(0);
 }

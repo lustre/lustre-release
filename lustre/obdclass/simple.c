@@ -141,7 +141,6 @@ void pop_ctxt(struct obd_run_ctxt *saved, struct obd_run_ctxt *new_ctx,
                 current->fsgid = saved->ouc.ouc_fsgid;
                 current->cap_effective = saved->ouc.ouc_cap;
                 current->ngroups = saved->ngroups;
-
                 current->groups[0] = saved->ouc.ouc_suppgid1;
                 current->groups[1] = saved->ouc.ouc_suppgid2;
         }
@@ -169,7 +168,7 @@ struct dentry *simple_mknod(struct dentry *dir, char *name, int mode)
         ASSERT_KERNEL_CTXT("kernel doing mknod outside kernel context\n");
         CDEBUG(D_INODE, "creating file %*s\n", (int)strlen(name), name);
 
-        dchild = lookup_one_len(name, dir, strlen(name));
+        dchild = ll_lookup_one_len(name, dir, strlen(name));
         if (IS_ERR(dchild))
                 GOTO(out_up, dchild);
 
@@ -203,7 +202,7 @@ struct dentry *simple_mkdir(struct dentry *dir, char *name, int mode)
 
         ASSERT_KERNEL_CTXT("kernel doing mkdir outside kernel context\n");
         CDEBUG(D_INODE, "creating directory %*s\n", (int)strlen(name), name);
-        dchild = lookup_one_len(name, dir, strlen(name));
+        dchild = ll_lookup_one_len(name, dir, strlen(name));
         if (IS_ERR(dchild))
                 GOTO(out_up, dchild);
 

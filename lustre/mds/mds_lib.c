@@ -57,17 +57,15 @@ void mds_pack_inode2fid(struct ll_fid *fid, struct inode *inode)
         fid->f_type = (S_IFMT & inode->i_mode);
 }
 
+/* Note that we can copy all of the fields, just some will not be "valid" */
 void mds_pack_inode2body(struct mds_body *b, struct inode *inode)
 {
-        b->valid = OBD_MD_FLID | OBD_MD_FLATIME | OBD_MD_FLMTIME |
-                OBD_MD_FLCTIME | OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
-                OBD_MD_FLUID | OBD_MD_FLGID | OBD_MD_FLTYPE | OBD_MD_FLMODE |
-                OBD_MD_FLNLINK | OBD_MD_FLGENER;
+        b->valid = OBD_MD_FLID | OBD_MD_FLCTIME | OBD_MD_FLUID | OBD_MD_FLGID |
+                OBD_MD_FLTYPE | OBD_MD_FLMODE | OBD_MD_FLNLINK | OBD_MD_FLGENER;
 
-        /* The MDS file size isn't authoritative for regular files, so don't
-         * even pretend. */
-        if (S_ISREG(inode->i_mode))
-                b->valid &= ~(OBD_MD_FLSIZE | OBD_MD_FLBLOCKS);
+        if (!S_ISREG(inode->i_mode))
+                b->valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS | OBD_MD_FLATIME |
+                            OBD_MD_FLMTIME;
 
         b->ino = inode->i_ino;
         b->atime = LTIME_S(inode->i_atime);
@@ -80,10 +78,12 @@ void mds_pack_inode2body(struct mds_body *b, struct inode *inode)
         b->gid = inode->i_gid;
         b->flags = inode->i_flags;
         b->rdev = b->rdev;
-        b->nlink = inode->i_nlink;
+        /* Return the correct link count for orphan inodes */
+        b->nlink = mds_inode_is_orphan(inode) ? 0 : inode->i_nlink;
         b->generation = inode->i_generation;
         b->suppgid = -1;
 }
+
 /* unpacking */
 static int mds_setattr_unpack(struct ptlrpc_request *req, int offset,
                               struct mds_update_record *r)
@@ -92,8 +92,8 @@ static int mds_setattr_unpack(struct ptlrpc_request *req, int offset,
         struct mds_rec_setattr *rec;
         ENTRY;
 
-        rec = lustre_swab_reqbuf (req, offset, sizeof (*rec),
-                                  lustre_swab_mds_rec_setattr);
+        rec = lustre_swab_reqbuf(req, offset, sizeof(*rec),
+                                 lustre_swab_mds_rec_setattr);
         if (rec == NULL)
                 RETURN (-EFAULT);
 
@@ -120,9 +120,14 @@ static int mds_setattr_unpack(struct ptlrpc_request *req, int offset,
                 if (r->ur_eadata == NULL)
                         RETURN (-EFAULT);
                 r->ur_eadatalen = req->rq_reqmsg->buflens[offset + 1];
-        } else {
-                r->ur_eadata = NULL;
-                r->ur_eadatalen = 0;
+        }
+
+        if (req->rq_reqmsg->bufcount > offset + 2) {
+                r->ur_logcookies = lustre_msg_buf(req->rq_reqmsg, offset + 2,0);
+                if (r->ur_eadata == NULL)
+                        RETURN (-EFAULT);
+
+                r->ur_cookielen = req->rq_reqmsg->buflens[offset + 2];
         }
 
         RETURN(0);
@@ -172,9 +177,6 @@ static int mds_create_unpack(struct ptlrpc_request *req, int offset,
                 if (r->ur_tgt == NULL)
                         RETURN (-EFAULT);
                 r->ur_tgtlen = req->rq_reqmsg->buflens[offset + 2];
-        } else {
-                r->ur_tgt = NULL;
-                r->ur_tgtlen = 0;
         }
         RETURN(0);
 }
