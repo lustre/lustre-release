@@ -189,20 +189,21 @@ do {                                                                          \
 #define CDEBUG_MAX_LIMIT 600
 #define CDEBUG_LIMIT(cdebug_mask, cdebug_format, a...)                        \
 do {                                                                          \
-        static unsigned long cdebug_next;                                     \
-        static int cdebug_count, cdebug_delay = 1;                            \
+        static unsigned long cdebug_next = 0;                                 \
+        static int cdebug_count = 0, cdebug_delay = 1;                        \
                                                                               \
         CHECK_STACK(CDEBUG_STACK);                                            \
         if (time_after(jiffies, cdebug_next)) {                               \
-                portals_debug_msg(DEBUG_SUBSYSTEM, cdebug_mask, __FILE__,     \
-                                  __FUNCTION__, __LINE__, CDEBUG_STACK,       \
-                                  cdebug_format, ## a);                       \
                 if (cdebug_count) {                                           \
                         portals_debug_msg(DEBUG_SUBSYSTEM, cdebug_mask,       \
                                           __FILE__, __FUNCTION__, __LINE__,   \
-                                          CDEBUG_STACK, cdebug_format, ## a); \
+                                          0, "skipped %d similar messages\n", \
+                                          cdebug_count);                      \
                         cdebug_count = 0;                                     \
                 }                                                             \
+                portals_debug_msg(DEBUG_SUBSYSTEM, cdebug_mask, __FILE__,     \
+                                  __FUNCTION__, __LINE__, CDEBUG_STACK,       \
+                                  cdebug_format, ## a);                       \
                 if (time_after(jiffies, cdebug_next+(CDEBUG_MAX_LIMIT+10)*HZ))\
                         cdebug_delay = cdebug_delay > 8 ? cdebug_delay/8 : 1; \
                 else                                                          \
