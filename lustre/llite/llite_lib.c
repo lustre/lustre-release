@@ -1154,14 +1154,6 @@ int ll_statfs(struct super_block *sb, struct kstatfs *sfs)
         return 0;
 }
 
-void dump_lsm(int level, struct lov_stripe_md *lsm)
-{
-        CDEBUG(level, "objid "LPX64", maxbytes "LPX64", magic 0x%08X, "
-               "stripe_size %u, stripe_count %u\n",
-               lsm->lsm_object_id, lsm->lsm_maxbytes, lsm->lsm_magic,
-               lsm->lsm_stripe_size, lsm->lsm_stripe_count);
-}
-
 void ll_update_inode(struct inode *inode, struct mds_body *body,
                      struct lov_stripe_md *lsm)
 {
