@@ -268,6 +268,10 @@ ext2_iozone_prepare() {
 		echo "iozone binary not found in PATH"
 		return 1
 	fi
+	if ! iozone -i 0 -w -+o -s 1k -r 1k -f /dev/null > /dev/null; then
+		echo "iozone doesn't support -+o"
+		return 1
+	fi
 	if ! which mke2fs; then
 		echo "mke2fs binary not found in PATH"
 		return 1
@@ -312,12 +316,12 @@ ext2_iozone_start() {
 
 	case "$wor" in
 		w) args="-i 0 -w" ;;
-		r) args="-i 1 -w" ;;
+		r) args="-i 1" ;;
 		*) die "asked to do io with $wor?"
 	esac
 
 	echo iozone "$args -r ${iosize}k -s $(($io_len / $threads))k \
-			-t $threads -x -I -f $f"
+			-t $threads -+o -x -I -f $f"
 }
 ext2_iozone_result() {
 	local output=$1
@@ -339,15 +343,8 @@ ext2_iozone_result() {
 			{print $'$(($field + 2))'}' $output` / 1024
 }
 ext2_iozone_cleanup() {
-	local id=$1
-	local wor=$2
-	local f="$tmpdir/mount_$id/iozone"
-
-	case "$wor" in
-		w) ;;
-		r) rm -f $f ;;
-		*) die "asked to do io with $wor?"
-	esac
+	# the final read w/o -w removed the file
+	local nothing=0
 }
 ext2_iozone_finish() {
 	local index=$1
@@ -509,7 +506,7 @@ echo_filter_start() {
 	local id=$4
 
 	local name="echo_$id"
-	local len_pages=$(($io_len / $(($page_size / 1024)) ))
+	local len_pages=$(($io_len / $(($page_size / 1024)) / $threads ))
 	local size_pages=$(($iosize / $(($page_size / 1024)) ))
 
 	case "$wor" in
@@ -519,7 +516,7 @@ echo_filter_start() {
 	esac
 
 	echo lctl --threads $threads v "\$"$name \
-		test_brw 1 $wor v $len_pages t${running_oids[$i]} p$size_pages
+		test_brw 1 $wor v $len_pages t${running_oids[$id]} p$size_pages
 }
 echo_filter_result() {
 	local output=$1
@@ -543,8 +540,8 @@ echo_filter_cleanup() {
 		*) die "asked to do io with $wor?"
 	esac
 
-	lctl --device "\$"$name destroy ${running_oids[$i]} $threads
-	unset running_oids[$i]
+	lctl --device "\$"$name destroy ${running_oids[$id]} $threads
+	unset running_oids[$id]
 }
 echo_filter_finish() {
 	local index=$1
