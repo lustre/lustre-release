@@ -215,7 +215,6 @@ struct llite_file_opcode {
         { LPROC_LL_LLSEEK,         LPROCFS_TYPE_REGS, "seek" },
         { LPROC_LL_FSYNC,          LPROCFS_TYPE_REGS, "fsync" },
         /* inode operation */
-        { LPROC_LL_SETATTR_RAW,    LPROCFS_TYPE_REGS, "setattr_raw" },
         { LPROC_LL_SETATTR,        LPROCFS_TYPE_REGS, "setattr" },
         { LPROC_LL_TRUNC,          LPROCFS_TYPE_REGS, "punch" },
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
