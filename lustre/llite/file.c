@@ -272,9 +272,13 @@ static int ll_file_release(struct inode *inode, struct file *file)
         if (rc)
                 GOTO(out_mdc, rc = -abs(rc));
 
+#if 0
+#error "This should only be done on the node that already has the EOF lock"
+#error "and only in the case where the file size actually changed.  For now"
+#error "we don't care about the size on the MDS, since we never use it (the"
+#error "OST always has the authoritative size and we don't even use the MDS."
         /* If this fails and we goto out_fd, the file size on the MDS is out of
          * date.  Is that a big deal? */
-#warning "FIXME: don't do this if the file is unlinked already"
         if (file->f_mode & FMODE_WRITE) {
                 struct lustre_handle *lockhs;
 
@@ -310,6 +314,7 @@ static int ll_file_release(struct inode *inode, struct file *file)
                                 rc = rc2;
                 }
         }
+#endif
 
 out_mdc:
         rc2 = mdc_close(&sbi->ll_mdc_conn, inode->i_ino,
