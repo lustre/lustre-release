@@ -1,5 +1,5 @@
  fs/dcache.c            |   20 ++
- fs/exec.c              |    2 
+ fs/exec.c              |   18 +-
  fs/namei.c             |  345 +++++++++++++++++++++++++++++++++++++++++--------
  fs/nfsd/vfs.c          |    2 
  fs/open.c              |  126 +++++++++++++++--
@@ -58,6 +58,58 @@
  #define do_switch(x,y) do { \
 --- linux-2.4.20/fs/exec.c~vfs_intent-2.4.20-vanilla	Thu Nov 28 16:53:15 2002
 +++ linux-2.4.20/fs/exec.c	Mon Apr  7 16:55:21 2003
+@@ -103,13 +103,18 @@ static inline void put_binfmt(struct lin
+  *
+  * Also note that we take the address to load from from the file itself.
+  */
++extern struct file *dentry_open_it(struct dentry *dentry, struct vfsmount *mnt,
++				   int flags, struct lookup_intent *it);
++int path_lookup_it(const char *path, unsigned flags, struct nameidata *nd,
++		   struct lookup_intent *it);
+ asmlinkage long sys_uselib(const char * library)
+ {
+ 	struct file * file;
+ 	struct nameidata nd;
+ 	int error;
++	struct lookup_intent it = { .it_op = IT_OPEN, .it_flags = O_RDONLY };
+ 
+-	error = user_path_walk(library, &nd);
++	error = user_path_walk_it(library, &nd, &it);
+ 	if (error)
+ 		goto out;
+ 
+@@ -121,7 +126,8 @@ asmlinkage long sys_uselib(const char * 
+ 	if (error)
+ 		goto exit;
+ 
+-	file = dentry_open(nd.dentry, nd.mnt, O_RDONLY);
++	file = dentry_open_it(nd.dentry, nd.mnt, O_RDONLY, &it);
++	intent_release(nd.dentry, &it);
+ 	error = PTR_ERR(file);
+ 	if (IS_ERR(file))
+ 		goto out;
+@@ -350,8 +356,9 @@ struct file *open_exec(const char *name)
+ 	struct inode *inode;
+ 	struct file *file;
+ 	int err = 0;
++	struct lookup_intent it = { .it_op = IT_OPEN, .it_flags = O_RDONLY };
+ 
+-	err = path_lookup(name, LOOKUP_FOLLOW|LOOKUP_POSITIVE, &nd);
++	err = path_lookup_it(name, LOOKUP_FOLLOW|LOOKUP_POSITIVE, &nd, &it);
+ 	file = ERR_PTR(err);
+ 	if (!err) {
+ 		inode = nd.dentry->d_inode;
+@@ -363,7 +370,9 @@ struct file *open_exec(const char *name)
+ 				err = -EACCES;
+ 			file = ERR_PTR(err);
+ 			if (!err) {
+-				file = dentry_open(nd.dentry, nd.mnt, O_RDONLY);
++				file = dentry_open_it(nd.dentry, nd.mnt,
++						      O_RDONLY, &it);
++				intent_release(nd.dentry, &it);
+ 				if (!IS_ERR(file)) {
+ 					err = deny_write_access(file);
+ 					if (err) {
 @@ -989,7 +989,7 @@ int do_coredump(long signr, struct pt_re
  		goto close_fail;
  	if (!file->f_op->write)
