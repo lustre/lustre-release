@@ -1,7 +1,7 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  linux/mds/handler.c
+ *  obd/rpc/recovd.c
  *
  *  Lustre High Availability Daemon
  *
@@ -21,27 +21,27 @@
 #include <linux/lustre_lite.h>
 #include <linux/lustre_ha.h>
 
-struct connmgr_obd *ptlrpc_connmgr;
+struct recovd_obd *ptlrpc_connmgr;
 
-void connmgr_cli_manage(struct connmgr_obd *mgr, struct ptlrpc_client *cli)
+void connmgr_cli_manage(struct recovd_obd *recovd, struct ptlrpc_client *cli)
 {
         ENTRY;
-        cli->cli_ha_mgr = mgr;
-        spin_lock(&mgr->mgr_lock);
-        list_add(&cli->cli_ha_item, &mgr->mgr_connections_lh);
-        spin_unlock(&mgr->mgr_lock);
+        cli->cli_recovd = recovd;
+        spin_lock(&recovd->recovd_lock);
+        list_add(&cli->cli_ha_item, &recovd->recovd_connections_lh);
+        spin_unlock(&recovd->recovd_lock);
         EXIT;
 }
 
 void connmgr_cli_fail(struct ptlrpc_client *cli)
 {
         ENTRY;
-        spin_lock(&cli->cli_ha_mgr->mgr_lock);
-        cli->cli_ha_mgr->mgr_flags |= SVC_HA_EVENT;
+        spin_lock(&cli->cli_recovd->recovd_lock);
+        cli->cli_recovd->recovd_flags |= SVC_HA_EVENT;
         list_del(&cli->cli_ha_item);
-        list_add(&cli->cli_ha_item, &cli->cli_ha_mgr->mgr_troubled_lh);
-        spin_unlock(&cli->cli_ha_mgr->mgr_lock);
-        wake_up(&cli->cli_ha_mgr->mgr_waitq);
+        list_add(&cli->cli_ha_item, &cli->cli_recovd->recovd_troubled_lh);
+        spin_unlock(&cli->cli_recovd->recovd_lock);
+        wake_up(&cli->cli_recovd->recovd_waitq);
         EXIT;
 }
 
@@ -69,7 +69,7 @@ static void connmgr_unpack_body(struct ptlrpc_request *req)
         b->generation = NTOH__u32(b->generation);
 }
 
-int connmgr_connect(struct connmgr_obd *mgr, struct ptlrpc_connection *conn)
+int connmgr_connect(struct recovd_obd *recovd, struct ptlrpc_connection *conn)
 {
         struct ptlrpc_request *req;
         struct ptlrpc_client *cl;
@@ -77,11 +77,11 @@ int connmgr_connect(struct connmgr_obd *mgr, struct ptlrpc_connection *conn)
         int rc, size = sizeof(*body);
         ENTRY;
 
-        if (!mgr) {
+        if (!recovd) {
                 CERROR("no manager\n");
                 LBUG();
         }
-        cl = mgr->mgr_client;
+        cl = recovd->recovd_client;
 
         req = ptlrpc_prep_req(cl, conn, CONNMGR_CONNECT, 1, &size, NULL);
         if (!req)
@@ -99,7 +99,8 @@ int connmgr_connect(struct connmgr_obd *mgr, struct ptlrpc_connection *conn)
         if (!rc) {
                 connmgr_unpack_body(req);
                 body = lustre_msg_buf(req->rq_repmsg, 0);
-                CDEBUG(D_NET, "mode: %o\n", body->generation);
+                CDEBUG(D_NET, "remote generation: %o\n", body->generation);
+                conn->c_level = LUSTRE_CONN_CON;
                 conn->c_remote_conn = body->conn;
                 conn->c_remote_token = body->conn_token;
         }
@@ -135,6 +136,7 @@ static int connmgr_handle_connect(struct ptlrpc_request *req)
         body->conn = (__u64)(unsigned long)req->rq_connection;
         body->conn_token = req->rq_connection->c_token;
 
+        req->rq_connection->c_level = LUSTRE_CONN_CON;
         RETURN(0);
 }
 
@@ -150,7 +152,7 @@ int connmgr_handle(struct obd_device *dev, struct ptlrpc_service *svc,
                 GOTO(out, rc);
         }
 
-        if (req->rq_reqmsg->type != PTL_RPC_REQUEST) {
+        if (req->rq_reqmsg->type != NTOH__u32(PTL_RPC_MSG_REQUEST)) {
                 CERROR("wrong packet type sent %d\n",
                        req->rq_reqmsg->type);
                 GOTO(out, rc = -EINVAL);
@@ -158,8 +160,7 @@ int connmgr_handle(struct obd_device *dev, struct ptlrpc_service *svc,
 
         switch (req->rq_reqmsg->opc) {
         case CONNMGR_CONNECT:
-                CDEBUG(D_INODE, "connect\n");
-                OBD_FAIL_RETURN(OBD_FAIL_MDS_GETATTR_NET, 0);
+                CDEBUG(D_INODE, "connmgr connect\n");
                 rc = connmgr_handle_connect(req);
                 break;
 
@@ -180,75 +181,73 @@ out:
         return 0;
 }
 
-static int recovd_check_event(struct connmgr_obd *mgr)
+static int recovd_check_event(struct recovd_obd *recovd)
 {
         int rc = 0;
         ENTRY;
 
-        spin_lock(&mgr->mgr_lock);
+        spin_lock(&recovd->recovd_lock);
 
-        if (!(mgr->mgr_flags & MGR_WORKING) &&
-            !list_empty(&mgr->mgr_troubled_lh)) {
+        if (!(recovd->recovd_flags & MGR_WORKING) &&
+            !list_empty(&recovd->recovd_troubled_lh)) {
 
                 CERROR("connection in trouble - state: WORKING, upcall\n");
-                mgr->mgr_flags = MGR_WORKING;
+                recovd->recovd_flags = MGR_WORKING;
 
-                mgr->mgr_waketime = CURRENT_TIME;
-                mgr->mgr_timeout = 5 * HZ;
-                schedule_timeout(mgr->mgr_timeout);
-
+                recovd->recovd_waketime = CURRENT_TIME;
+                recovd->recovd_timeout = 5 * HZ;
+                schedule_timeout(recovd->recovd_timeout);
         }
 
-        if (mgr->mgr_flags & MGR_WORKING &&
-            CURRENT_TIME <= mgr->mgr_waketime + mgr->mgr_timeout) {
+        if (recovd->recovd_flags & MGR_WORKING &&
+            CURRENT_TIME <= recovd->recovd_waketime + recovd->recovd_timeout) {
                 CERROR("WORKING: new event\n");
 
-                mgr->mgr_waketime = CURRENT_TIME;
-                schedule_timeout(mgr->mgr_timeout);
+                recovd->recovd_waketime = CURRENT_TIME;
+                schedule_timeout(recovd->recovd_timeout);
         }
 
-        if (mgr->mgr_flags & MGR_STOPPING) {
+        if (recovd->recovd_flags & MGR_STOPPING) {
                 CERROR("ha mgr stopping\n");
                 rc = 1;
         }
 
-        spin_unlock(&mgr->mgr_lock);
+        spin_unlock(&recovd->recovd_lock);
         RETURN(rc);
 }
 
-static int recovd_handle_event(struct connmgr_obd *mgr)
+static int recovd_handle_event(struct recovd_obd *recovd)
 {
-        spin_lock(&mgr->mgr_lock);
+        spin_lock(&recovd->recovd_lock);
 
-        if (!(mgr->mgr_flags & MGR_WORKING) &&
-            !list_empty(&mgr->mgr_troubled_lh)) {
+        if (!(recovd->recovd_flags & MGR_WORKING) &&
+            !list_empty(&recovd->recovd_troubled_lh)) {
 
                 CERROR("connection in trouble - state: WORKING, upcall\n");
-                mgr->mgr_flags = MGR_WORKING;
+                recovd->recovd_flags = MGR_WORKING;
 
 
                 connmgr_upcall();
-                mgr->mgr_waketime = CURRENT_TIME;
-                mgr->mgr_timeout = 5 * HZ;
-                schedule_timeout(mgr->mgr_timeout);
+                recovd->recovd_waketime = CURRENT_TIME;
+                recovd->recovd_timeout = 5 * HZ;
+                schedule_timeout(recovd->recovd_timeout);
         }
 
-        if (mgr->mgr_flags & MGR_WORKING &&
-            CURRENT_TIME <= mgr->mgr_waketime + mgr->mgr_timeout) {
+        if (recovd->recovd_flags & MGR_WORKING &&
+            CURRENT_TIME <= recovd->recovd_waketime + recovd->recovd_timeout) {
                 CERROR("WORKING: new event\n");
 
-                mgr->mgr_waketime = CURRENT_TIME;
-                schedule_timeout(mgr->mgr_timeout);
+                recovd->recovd_waketime = CURRENT_TIME;
+                schedule_timeout(recovd->recovd_timeout);
         }
 
-        spin_unlock(&mgr->mgr_lock);
+        spin_unlock(&recovd->recovd_lock);
         return 0;
 }
 
 static int recovd_main(void *arg)
 {
-        struct connmgr_thread *data = (struct connmgr_thread *)arg;
-        struct connmgr_obd *mgr = data->mgr;
+        struct recovd_obd *recovd = (struct recovd_obd *)arg;
 
         ENTRY;
 
@@ -259,70 +258,67 @@ static int recovd_main(void *arg)
         recalc_sigpending(current);
         spin_unlock_irq(&current->sigmask_lock);
 
-        sprintf(current->comm, data->name);
+        sprintf(current->comm, "lustre_recovd");
 
         /* Record that the  thread is running */
-        mgr->mgr_thread = current;
-        mgr->mgr_flags = MGR_RUNNING;
-        wake_up(&mgr->mgr_ctl_waitq);
+        recovd->recovd_thread = current;
+        recovd->recovd_flags = MGR_RUNNING;
+        wake_up(&recovd->recovd_ctl_waitq);
 
         /* And now, loop forever on requests */
         while (1) {
-                wait_event_interruptible(mgr->mgr_waitq,
-                                         recovd_check_event(mgr));
+                wait_event_interruptible(recovd->recovd_waitq,
+                                         recovd_check_event(recovd));
 
-                spin_lock(&mgr->mgr_lock);
-                if (mgr->mgr_flags & MGR_STOPPING) {
-                        spin_unlock(&mgr->mgr_lock);
+                spin_lock(&recovd->recovd_lock);
+                if (recovd->recovd_flags & MGR_STOPPING) {
+                        spin_unlock(&recovd->recovd_lock);
                         CERROR("lustre_hamgr quitting\n");
                         EXIT;
                         break;
                 }
 
-                recovd_handle_event(mgr);
-                spin_unlock(&mgr->mgr_lock);
+                recovd_handle_event(recovd);
+                spin_unlock(&recovd->recovd_lock);
         }
 
-        mgr->mgr_thread = NULL;
-        mgr->mgr_flags = MGR_STOPPED;
-        wake_up(&mgr->mgr_ctl_waitq);
+        recovd->recovd_thread = NULL;
+        recovd->recovd_flags = MGR_STOPPED;
+        wake_up(&recovd->recovd_ctl_waitq);
         CDEBUG(D_NET, "mgr exiting process %d\n", current->pid);
         RETURN(0);
 }
 
-int recovd_setup(struct connmgr_obd *mgr)
+int recovd_setup(struct recovd_obd *recovd)
 {
-        struct connmgr_thread d;
         int rc;
         ENTRY;
 
-        INIT_LIST_HEAD(&mgr->mgr_connections_lh);
-        INIT_LIST_HEAD(&mgr->mgr_troubled_lh);
-        spin_lock_init(&mgr->mgr_lock);
+        INIT_LIST_HEAD(&recovd->recovd_connections_lh);
+        INIT_LIST_HEAD(&recovd->recovd_troubled_lh);
+        spin_lock_init(&recovd->recovd_lock);
 
-        d.mgr = mgr;
-        d.name = "lustre_recovd";
+        init_waitqueue_head(&recovd->recovd_waitq);
+        init_waitqueue_head(&recovd->recovd_recovery_waitq);
+        init_waitqueue_head(&recovd->recovd_ctl_waitq);
 
-        init_waitqueue_head(&mgr->mgr_waitq);
-        init_waitqueue_head(&mgr->mgr_ctl_waitq);
-
-        rc = kernel_thread(recovd_main, (void *) &d,
+        rc = kernel_thread(recovd_main, (void *)recovd,
                            CLONE_VM | CLONE_FS | CLONE_FILES);
         if (rc < 0) {
                 CERROR("cannot start thread\n");
                 RETURN(-EINVAL);
         }
-        wait_event(mgr->mgr_ctl_waitq, mgr->mgr_flags & MGR_RUNNING);
+        wait_event(recovd->recovd_ctl_waitq, recovd->recovd_flags & MGR_RUNNING);
 
         RETURN(0);
 }
 
-int recovd_cleanup(struct connmgr_obd *mgr)
+int recovd_cleanup(struct recovd_obd *recovd)
 {
-        mgr->mgr_flags = MGR_STOPPING;
+        recovd->recovd_flags = MGR_STOPPING;
 
-        wake_up(&mgr->mgr_waitq);
-        wait_event_interruptible(mgr->mgr_ctl_waitq,
-                                 (mgr->mgr_flags & MGR_STOPPED));
+        wake_up(&recovd->recovd_waitq);
+        wait_event_interruptible(recovd->recovd_ctl_waitq,
+                                 (recovd->recovd_flags & MGR_STOPPED));
         RETURN(0);
 }
