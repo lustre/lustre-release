@@ -320,8 +320,8 @@ class LCTLInterface:
     def disconnect(self, net, nid, port, servuuid):
         cmds =  """
   network %s
-  del_uuid %s
   disconnect %s 
+  del_uuid %s
   quit""" % (net, nid, servuuid)
         self.run(cmds)
 
