@@ -135,7 +135,7 @@ typedef struct {
         struct timeval     arrival_time;
 
         volatile ptl_seq_t sequence;
-} __attribute__((packed)) ptl_event_t;
+} ptl_event_t;
 #ifdef __CYGWIN__
 #pragma pop
 #endif
