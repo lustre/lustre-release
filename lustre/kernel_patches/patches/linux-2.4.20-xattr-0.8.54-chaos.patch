@@ -5507,7 +5507,7 @@
  	ret += shrink_dcache_memory(DEF_PRIORITY, gfp_mask);
  	ret += shrink_icache_memory(DEF_PRIORITY, gfp_mask);
 -	// ret += shrink_other_caches(DEF_PRIORITY, gfp_mask); 
-+	ret += shrink_other_caches(DEF_PRIORITY, gfp_mask); 
++	shrink_other_caches(DEF_PRIORITY, gfp_mask); 
  #ifdef CONFIG_QUOTA
  	ret += shrink_dqcache_memory(DEF_PRIORITY, gfp_mask);
  #endif
