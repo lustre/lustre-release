@@ -200,7 +200,7 @@ command_t cmdlist[] = {
          "usage: modules <path>"},
         {"panic", jt_dbg_panic, 0, "force the kernel to panic\n"
          "usage: panic"},
-         
+
         /* User interface commands */
         {"======= control ========", jt_noop, 0, "control commands"},
         {"help", Parser_help, 0, "help"},
@@ -211,7 +211,7 @@ command_t cmdlist[] = {
 
 
 
-int main(int argc, char **argv) 
+int main(int argc, char **argv)
 {
         int rc;
 
