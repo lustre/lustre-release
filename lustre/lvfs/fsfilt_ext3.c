@@ -779,7 +779,7 @@ static int fsfilt_ext3_setup(struct super_block *sb)
         EXT3_SB(sb)->dx_unlock = fsfilt_ext3_dx_unlock;
 #endif
 #ifdef S_PDIROPS
-        CERROR("Enabling PDIROPS\n");
+        CWARN("Enabling PDIROPS\n");
         set_opt(EXT3_SB(sb)->s_mount_opt, PDIROPS);
         sb->s_flags |= S_PDIROPS;
 #endif
