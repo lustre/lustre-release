@@ -96,6 +96,34 @@ int op_create_file(char *name, long stripe_size, int stripe_offset,
         return rc;
 }
 
+int op_setstripe_dir(char *path, long stripe_size, int stripe_offset,
+                     int stripe_count)
+{
+        struct lov_user_md lum = { 0 };
+        int rc = 0;
+        DIR * dir;
+
+        /*  Initialize IOCTL striping pattern structure  */
+        lum.lmm_magic = LOV_USER_MAGIC;
+        lum.lmm_stripe_size = stripe_size;
+        lum.lmm_stripe_offset = stripe_offset;
+        lum.lmm_stripe_count = stripe_count;
+
+        dir = opendir(path);
+        if (dir == NULL) {
+                err_msg("\"%.40s\" opendir failed", path);
+                rc = -errno;
+        } else {
+                if (ioctl(dirfd(dir), LL_IOC_LOV_SETSTRIPE, &lum)) {
+                        fprintf(stderr, "error on ioctl for '%s': %s\n",
+                                path, strerror(errno));
+                        rc = -errno;
+                }
+                close(dir);
+        }
+
+        return rc;
+}
 
 struct find_param {
         int     recursive;
@@ -337,6 +365,30 @@ static int process_dir(DIR *dir, char *dname, struct find_param *param)
                 if (rc)
                         return rc;
         }
+
+        /* retrieve dir's stripe info */
+        strncpy((char *)param->lum, dname, param->buflen);
+        rc = ioctl(dirfd(dir), LL_IOC_LOV_GETSTRIPE, (void *)param->lum);
+        if (rc) {
+                if (errno == ENODATA) {
+                        if (!param->obduuid && !param->quiet)
+                                fprintf(stderr,
+                                        "%s/%s has no stripe info\n",
+                                        dname, "");
+                        rc = 0;
+                } else if (errno == EISDIR) {
+                        fprintf(stderr, "process_file on directory %s/%s!\n",
+                                dname, "");
+                        /* add fname to directory list; */
+                        rc = errno;
+                } else {
+                        err_msg("IOC_MDC_GETSTRIPE ioctl failed");
+                        rc = errno;
+                }
+                return rc;
+        }
+
+        lov_dump_user_lmm(param, dname, "");
 
         /* Handle the contents of the directory */
         while ((dirp = readdir64(dir)) != NULL) {
