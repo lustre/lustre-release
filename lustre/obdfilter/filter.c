@@ -165,6 +165,7 @@ static void filter_prep(struct obd_device *obddev)
                 }
         }
         obddev->u.filter.fo_lastino = lastino;
+        filp_close(file, 0); 
 
  out:
         pop_ctxt(&saved);
