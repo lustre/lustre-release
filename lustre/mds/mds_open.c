@@ -575,7 +575,7 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
                 mfd = NULL;
         }
 
-#warning "XXX fixme"
+        /* #warning "XXX fixme" bug 2991 */
         /* Here it used to LASSERT(mfd) if exp_outstanding_reply != NULL.
          * Now that exp_outstanding_reply is a list, it's just using mfd != NULL
          * to detect a re-open */
