@@ -139,7 +139,7 @@ kportal_add_route(int gateway_nalid, ptl_nid_t gateway_nid, ptl_nid_t lo_nid,
 }
 
 static int
-kportal_del_route(ptl_nid_t target)
+kportal_del_route(ptl_nid_t gw, ptl_nid_t lo, ptl_nid_t hi)
 {
         int rc;
         kpr_control_interface_t *ci;
@@ -148,14 +148,14 @@ kportal_del_route(ptl_nid_t target)
         if (ci == NULL)
                 return (-ENODEV);
 
-        rc = ci->kprci_del_route (target);
+        rc = ci->kprci_del_route (gw, lo, hi);
 
         PORTAL_SYMBOL_PUT(kpr_control_interface);
         return (rc);
 }
 
 static int
-kportal_set_route(ptl_nid_t target, int alive)
+kportal_set_route(ptl_nid_t gw, int alive)
 {
         int rc;
         kpr_control_interface_t *ci;
@@ -164,7 +164,7 @@ kportal_set_route(ptl_nid_t target, int alive)
         if (ci == NULL)
                 return (-ENODEV);
 
-        rc = ci->kprci_set_route (target, alive);
+        rc = ci->kprci_set_route (gw, alive);
 
         PORTAL_SYMBOL_PUT(kpr_control_interface);
         return (rc);
@@ -386,16 +386,17 @@ static int kportal_ioctl(struct inode *inode, struct file *file,
 
         case IOC_PORTAL_ADD_ROUTE:
                 CDEBUG(D_IOCTL, "Adding route: [%d] "LPU64" : "LPU64" - "LPU64"\n",
-                       data->ioc_nal, data->ioc_nid, data->ioc_nid2,
-                       data->ioc_nid3);
+                       data->ioc_nal, data->ioc_nid, 
+                       data->ioc_nid2, data->ioc_nid3);
                 err = kportal_add_route(data->ioc_nal, data->ioc_nid,
-                                        MIN (data->ioc_nid2, data->ioc_nid3),
-                                        MAX (data->ioc_nid2, data->ioc_nid3));
+                                        data->ioc_nid2, data->ioc_nid3);
                 break;
 
         case IOC_PORTAL_DEL_ROUTE:
-                CDEBUG (D_IOCTL, "Removing routes via "LPU64"\n", data->ioc_nid);
-                err = kportal_del_route (data->ioc_nid);
+                CDEBUG (D_IOCTL, "Removing routes via "LPU64" : "LPU64" - "LPU64"\n",
+                        data->ioc_nid, data->ioc_nid2, data->ioc_nid3);
+                err = kportal_del_route (data->ioc_nid,
+                                         data->ioc_nid2, data->ioc_nid3);
                 break;
 
         case IOC_PORTAL_SET_ROUTE:
