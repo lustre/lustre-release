@@ -232,7 +232,10 @@ class LustreDB_XML(LustreDB):
     def getUUID(self):
         return self.xml_get_uuid(self.dom_node)
 
-    def get_routes(self, type, gw):
+    # Convert routes from the router to a route that will be used
+    # on the local system.  The network type and gw are changed to the
+    # interface on the router the local system will connect to.
+    def get_local_routes(self, type, gw):
         """ Return the routes as a list of tuples of the form:
         [(type, gw, lo, hi),]"""
         res = []
@@ -244,7 +247,8 @@ class LustreDB_XML(LustreDB):
                 if type != net_type:
                     lo = self.xmlattr(r, 'lo')
                     hi = self.xmlattr(r, 'hi')
-                    res.append((type, gw, lo, hi))
+                    tgt_cluster_id = self.xmlattr(r, 'tgtclusterid')
+                    res.append((type, gw, tgt_cluster_id, lo, hi))
         return res
 
     def get_route_tbl(self):
@@ -252,9 +256,11 @@ class LustreDB_XML(LustreDB):
         for r in self.dom_node.getElementsByTagName('route'):
             net_type = self.xmlattr(r, 'type')
             gw = self.xmlattr(r, 'gw')
+            gw_cluster_id = self.xmlattr(r, 'gwclusterid')
+            tgt_cluster_id = self.xmlattr(r, 'tgtclusterid')
             lo = self.xmlattr(r, 'lo')
             hi = self.xmlattr(r, 'hi')
-            ret.append((net_type, gw, lo, hi))
+            ret.append((net_type, gw, gw_cluster_id, tgt_cluster_id, lo, hi))
         return ret
 
     def _update_active(self, tgt, new):
