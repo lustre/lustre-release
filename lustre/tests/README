@@ -1,0 +1,98 @@
+A variety of tests can be run or environments set up. 
+
+1. runregression-net
+
+Usage on server:
+   llsetup.sh  marcus-echo-server.cfg
+
+with marcus-echo-server.cfg:
+
+   NETWORK=elan
+   LOCALHOST=4
+   SERVER=4
+   SETUP_OST=y
+   OSTTYPE=obdecho
+
+
+Usage on client: 
+runregression-net  marcus-echo-client.cfg
+
+with marcus-echo-client.cfg:
+
+   NETWORK=elan
+   LOCALHOST=5
+   SERVER=4
+   SETUP_OSC=y
+
+If things are alright it goes through all the tests single threaded,
+multithreaded, getattr and brw (both read and write).
+
+2. How to build .cfg scripts:
+The various .cfg scripts in the tests/ directory can be used as building
+blocks for full configurations.  For example, the above configurations are:
+
+   cat elan-server.cfg obdecho.cfg > marcus-echo-server.cfg
+   cat elan-client.cfg client-echo.cfg > marcus-echo-client.cfg
+
+You _could_ specify multiple .cfg files as the parameters to llsetup if
+you are doing something uncommon, but it is probably just easer to build
+a whole config file in one shot, edit it as needed, and use that file instead.
+
+For a loopback setup with a mounted filesystem, you could do something like:
+
+   cat net-local.cfg mds.cfg obdext2.cfg client-mount.cfg > uml.cfg
+
+The order of the specified .cfg files does not matter.
+
+Since the .cfg script is a shell script, you can add conditional setup in
+case you want to avoid changing your configuration if you need to run on
+a different host.  You could, for example, have marcus-echo-server.cfg:
+
+   NETWORK=elan
+   HOST=`hostname | sed "s/\..*//"`
+   case $HOST in
+   dev*) LOCALHOST=`echo $HOST | sed "s/dev//"`
+         SERVER=$LOCALHOST
+	 NETWORK=elan ;;
+   *)    LOCALHOST=$HOST
+         SERVER=$LOCALHOST
+         NETWORK=tcp ;;
+   esac
+   SETUP_OST=y
+   OSTTYPE=obdecho
+
+You would, of course, need a marcus-echo-client.cfg to match.
+
+3. runtests
+
+The runtests script does a series of simple file-based tests using
+a filesystem.  You need to use a configuration which includes a real
+OST and MDS setup, and an OSC mount.  For example, a configuration
+marcus-obd-server.cfg:
+
+   SETUP_MDS=y
+   NETWORK=elan
+   LOCALHOST=4
+   SERVER=4
+   MDSFS=ext3
+   MDSDEV=/tmp/mds
+   MDSSIZE=10000
+   OSTDEV=/tmp/ost
+   OSTSIZE=10000
+   OSTFS=ext2
+   OSTTYPE=obdext2
+   SETUP_OST=y
+
+As with the echo test, you run "sh llsetup.sh marcus-obd-server.cfg" on
+the server to configure it.
+
+For marcus-obd-client.cfg you only need to include the client data:
+
+   NETWORK=elan
+   LOCALHOST=5
+   SERVER=4
+   SETUP_OSC=y
+   OSCMT=/mnt/lustre
+   SETUP_MOUNT=y
+
+You run the test via "sh runtests marcus-obd-client.cfg".
