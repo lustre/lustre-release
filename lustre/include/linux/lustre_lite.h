@@ -59,9 +59,19 @@ struct ll_sb_info {
 };
 
 
+static inline struct ll_sb_info *ll_s2sbi(struct super_block *sb)
+{
+        return (struct ll_sb_info *)(sb->u.generic_sbp);
+}
+
+static inline struct obd_conn *ll_s2obdconn(struct super_block *sb)
+{
+        return &(ll_s2sbi(sb))->ll_conn;
+}
+
 static inline struct ll_sb_info *ll_i2sbi(struct inode *inode)
 {
-        return (struct ll_sb_info *) (inode->i_sb->u.generic_sbp);
+        return ll_s2sbi(inode->i_sb);
 }
 
 static inline struct ll_inode_info *ll_i2info(struct inode *inode)
@@ -77,7 +87,7 @@ static inline int ll_has_inline(struct inode *inode)
 
 static inline struct obd_conn *ll_i2obdconn(struct inode *inode)
 {
-        return &(ll_i2sbi(inode))->ll_conn;
+        return ll_s2obdconn(inode->i_sb);
 }
 
 static inline void ll_ino2fid(struct ll_fid *fid, ino_t ino, __u32 generation,
