@@ -630,7 +630,7 @@ EXPORT_SYMBOL(class_rconn2export);
 EXPORT_SYMBOL(class_conn2obd);
 EXPORT_SYMBOL(class_disconnect);
 EXPORT_SYMBOL(class_disconnect_all);
-EXPORT_SYMBOL(class_uuid_parse);
+//EXPORT_SYMBOL(class_uuid_parse);
 EXPORT_SYMBOL(class_uuid_unparse);
 //EXPORT_SYMBOL(class_multi_setup);
 //EXPORT_SYMBOL(class_multi_cleanup);
