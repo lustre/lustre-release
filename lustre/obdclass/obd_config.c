@@ -271,6 +271,12 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
                         }
         }
 
+        if (OBT(obd) && OBP(obd, pre_cleanup)) {
+                err = obd_pre_cleanup(obd, flags);
+                if (err) 
+                        RETURN(err);
+        }
+        
         if (atomic_read(&obd->obd_refcount) == 1 ||
             flags & OBD_OPT_FORCE) {
                 /* this will stop new connections, and need to
@@ -542,8 +548,12 @@ int class_config_parse_llog(struct obd_export *exp, char *name,
         struct llog_handle *llh;
         struct obd_device *obd = exp->exp_obd;
         int rc, rc2;
+        ENTRY;
 
-        obd->obd_log_exp = class_export_get(exp);
+        if (obd->obd_log_exp == NULL) {
+                CERROR("No log export on obd:%s\n", obd->obd_name);
+                RETURN(-ENOTCONN);
+        }
 
         rc = llog_create(obd, &llh, NULL, name);
         if (rc) {
@@ -562,8 +572,6 @@ parse_out:
         if (rc == 0)
                 rc = rc2;
 
-        class_export_put(obd->obd_log_exp);
-        obd->obd_log_exp = NULL;
         RETURN(rc);
 
 }
