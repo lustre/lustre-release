@@ -202,7 +202,7 @@ int lprocfs_rd_name(char *page, char **start, off_t off, int count,
 }
 
 int lprocfs_rd_blksize(char *page, char **start, off_t off, int count,
-                       int *eof, struct statfs *sfs)
+                       int *eof, struct kstatfs *sfs)
 {
         LASSERT(sfs != NULL);
         *eof = 1;
@@ -210,7 +210,7 @@ int lprocfs_rd_blksize(char *page, char **start, off_t off, int count,
 }
 
 int lprocfs_rd_kbytestotal(char *page, char **start, off_t off, int count,
-                           int *eof, struct statfs *sfs)
+                           int *eof, struct kstatfs *sfs)
 {
         __u32 blk_size;
         __u64 result;
@@ -227,7 +227,7 @@ int lprocfs_rd_kbytestotal(char *page, char **start, off_t off, int count,
 }
 
 int lprocfs_rd_kbytesfree(char *page, char **start, off_t off, int count,
-                          int *eof, struct statfs *sfs)
+                          int *eof, struct kstatfs *sfs)
 {
         __u32 blk_size;
         __u64 result;
@@ -244,23 +244,23 @@ int lprocfs_rd_kbytesfree(char *page, char **start, off_t off, int count,
 }
 
 int lprocfs_rd_filestotal(char *page, char **start, off_t off, int count,
-                          int *eof, struct statfs *sfs)
+                          int *eof, struct kstatfs *sfs)
 {
         LASSERT(sfs != NULL);
         *eof = 1;
-        return snprintf(page, count, "%ld\n", sfs->f_files);
+        return snprintf(page, count, LPD64"\n", (__u64)sfs->f_files);
 }
 
 int lprocfs_rd_filesfree(char *page, char **start, off_t off, int count,
-                         int *eof, struct statfs *sfs)
+                         int *eof, struct kstatfs *sfs)
 {
         LASSERT(sfs != NULL);
         *eof = 1;
-        return snprintf(page, count, "%ld\n", sfs->f_ffree);
+        return snprintf(page, count, LPD64"\n", (__u64)sfs->f_ffree);
 }
 
 int lprocfs_rd_filegroups(char *page, char **start, off_t off, int count,
-                          int *eof, struct statfs *sfs)
+                          int *eof, struct kstatfs *sfs)
 {
         *eof = 1;
         return snprintf(page, count, "unimplemented\n");
@@ -339,21 +339,21 @@ struct lprocfs_stats *lprocfs_alloc_stats(unsigned int num)
         if (num == 0)
                 return NULL;
 
-        OBD_ALLOC(stats, offsetof(typeof(*stats), ls_percpu[smp_num_cpus]));
+        OBD_ALLOC(stats, offsetof(typeof(*stats), ls_percpu[num_online_cpus()]));
         if (stats == NULL)
                 return NULL;
 
         percpusize = L1_CACHE_ALIGN(offsetof(typeof(*percpu), lp_cntr[num]));
-        stats->ls_percpu_size = smp_num_cpus * percpusize;
+        stats->ls_percpu_size = num_online_cpus() * percpusize;
         OBD_ALLOC(stats->ls_percpu[0], stats->ls_percpu_size);
         if (stats->ls_percpu[0] == NULL) {
                 OBD_FREE(stats, offsetof(typeof(*stats),
-                                         ls_percpu[smp_num_cpus]));
+                                         ls_percpu[num_online_cpus()]));
                 return NULL;
         }
 
         stats->ls_num = num;
-        for (i = 1; i < smp_num_cpus; i++)
+        for (i = 1; i < num_online_cpus(); i++)
                 stats->ls_percpu[i] = (void *)(stats->ls_percpu[i - 1]) +
                         percpusize;
 
@@ -366,7 +366,7 @@ void lprocfs_free_stats(struct lprocfs_stats *stats)
                 return;
 
         OBD_FREE(stats->ls_percpu[0], stats->ls_percpu_size);
-        OBD_FREE(stats, offsetof(typeof(*stats), ls_percpu[smp_num_cpus]));
+        OBD_FREE(stats, offsetof(typeof(*stats), ls_percpu[num_online_cpus()]));
 }
 
 /* Reset counter under lock */
@@ -415,7 +415,7 @@ static int lprocfs_stats_seq_show(struct seq_file *p, void *v)
        }
        idx = cntr - &(stats->ls_percpu[0])->lp_cntr[0];
 
-       for (i = 0; i < smp_num_cpus; i++) {
+       for (i = 0; i < num_online_cpus(); i++) {
                struct lprocfs_counter *percpu_cntr =
                        &(stats->ls_percpu[i])->lp_cntr[idx];
                int centry;
@@ -508,7 +508,7 @@ void lprocfs_counter_init(struct lprocfs_stats *stats, int index,
         int i;
 
         LASSERT(stats != NULL);
-        for (i = 0; i < smp_num_cpus; i++) {
+        for (i = 0; i < num_online_cpus(); i++) {
                 c = &(stats->ls_percpu[i]->lp_cntr[index]);
                 c->lc_config = conf;
                 c->lc_min = ~(__u64)0;

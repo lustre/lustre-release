@@ -22,15 +22,13 @@
 #define DEBUG_SUBSYSTEM S_LLITE
 
 #include <linux/version.h>
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
-#include <asm/statfs.h>
-#endif
 #include <linux/lustre_lite.h>
 #include <linux/lprocfs_status.h>
 
 #include "llite_internal.h"
 
 /* /proc/lustre/llite mount point registration */
+struct proc_dir_entry *proc_lustre_fs_root;
 
 #ifndef LPROCFS
 int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
@@ -45,7 +43,7 @@ void lprocfs_unregister_mountpoint(struct ll_sb_info *sbi){}
 int fct_name(char *page, char **start, off_t off,                         \
              int count, int *eof, void *data)                             \
 {                                                                         \
-        struct statfs sfs;                                                \
+        struct kstatfs sfs;                                                \
         int rc;                                                           \
         LASSERT(data != NULL);                                            \
         rc = get_statfs_fct((struct super_block*)data, &sfs);             \
@@ -69,7 +67,7 @@ int rd_path(char *page, char **start, off_t off, int count, int *eof,
         return 0;
 }
 
-int rd_fstype(char *page, char **start, off_t off, int count, int *eof,
+static int rd_fstype(char *page, char **start, off_t off, int count, int *eof,
               void *data)
 {
         struct super_block *sb = (struct super_block*)data;
@@ -89,7 +87,7 @@ int rd_sb_uuid(char *page, char **start, off_t off, int count, int *eof,
         return snprintf(page, count, "%s\n", ll_s2sbi(sb)->ll_sb_uuid.uuid);
 }
 
-struct lprocfs_vars lprocfs_obd_vars[] = {
+static struct lprocfs_vars lprocfs_obd_vars[] = {
         { "uuid",        rd_sb_uuid,     0, 0 },
         { "mntpt_path",  rd_path,        0, 0 },
         { "fstype",      rd_fstype,      0, 0 },
@@ -99,8 +97,10 @@ struct lprocfs_vars lprocfs_obd_vars[] = {
         { "filestotal",  rd_filestotal,  0, 0 },
         { "filesfree",   rd_filesfree,   0, 0 },
         { "filegroups",  rd_filegroups,  0, 0 },
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         { "dirty_pages", ll_rd_dirty_pages, 0, 0},
         { "max_dirty_pages", ll_rd_max_dirty_pages, ll_wr_max_dirty_pages, 0},
+#endif
         { 0 }
 };
 

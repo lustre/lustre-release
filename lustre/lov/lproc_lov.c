@@ -30,8 +30,8 @@
 #include <linux/seq_file.h>
 
 #ifndef LPROCFS
-struct lprocfs_vars lprocfs_module_vars[] = { {0} };
-struct lprocfs_vars lprocfs_obd_vars[] = { {0} };
+static struct lprocfs_vars lprocfs_module_vars[] = { {0} };
+static struct lprocfs_vars lprocfs_obd_vars[] = { {0} };
 #else
 
 DEFINE_LPROCFS_STATFS_FCT(rd_blksize,     obd_self_statfs);
@@ -196,7 +196,7 @@ struct lprocfs_vars lprocfs_obd_vars[] = {
         { 0 }
 };
 
-struct lprocfs_vars lprocfs_module_vars[] = {
+static struct lprocfs_vars lprocfs_module_vars[] = {
         { "num_refs",     lprocfs_rd_numrefs, 0, 0 },
         { 0 }
 };
@@ -209,4 +209,4 @@ struct file_operations ll_proc_target_fops = {
 };
 
 #endif /* LPROCFS */
-LPROCFS_INIT_VARS(lprocfs_module_vars, lprocfs_obd_vars)
+LPROCFS_INIT_VARS(lov, lprocfs_module_vars, lprocfs_obd_vars)

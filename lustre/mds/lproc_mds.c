@@ -37,7 +37,7 @@ struct lprocfs_vars lprocfs_mdt_module_vars[] = { {0} };
 
 #else
 
-static inline int lprocfs_mds_statfs(void *data, struct statfs *sfs)
+static inline int lprocfs_mds_statfs(void *data, struct kstatfs *sfs)
 {
         struct obd_device* dev = (struct obd_device*) data;
         struct mds_obd *mds;
@@ -54,7 +54,7 @@ DEFINE_LPROCFS_STATFS_FCT(rd_filestotal,  lprocfs_mds_statfs);
 DEFINE_LPROCFS_STATFS_FCT(rd_filesfree,   lprocfs_mds_statfs);
 DEFINE_LPROCFS_STATFS_FCT(rd_filegroups,  lprocfs_mds_statfs);
 
-int rd_fstype(char *page, char **start, off_t off, int count, int *eof,
+static int rd_fstype(char *page, char **start, off_t off, int count, int *eof,
               void *data)
 {
         struct obd_device *obd = (struct obd_device *)data;
