@@ -56,7 +56,7 @@ lvfs-sources:
 	$(MAKE) sources -C lvfs
 
 modules: lustre_build_version $(DEP) $(LDISKFS) lvfs-sources
-	$(MAKE) $(ARCH_UM) -C $(LINUX) -f $(PWD)/kernel-tests/Makefile LUSTRE_LINUX_CONFIG=$(LINUX_CONFIG) $(MODULE_TARGET)=$(PWD) -o tmp_include_depends -o scripts -o include/config/MARKER $@
+	$(MAKE) $(ARCH_UM) CC=$(CC) -C $(LINUX) -f $(PWD)/kernel-tests/Makefile LUSTRE_LINUX_CONFIG=$(LINUX_CONFIG) $(MODULE_TARGET)=$(PWD) -o tmp_include_depends -o scripts -o include/config/MARKER $@
 
 endif # MODULES
 
