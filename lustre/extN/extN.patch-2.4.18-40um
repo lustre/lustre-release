@@ -1,5 +1,5 @@
---- extN/extN.orig/balloc.c	Tue Sep 24 15:41:40 2002
-+++ extN/balloc.c	Tue Sep 24 22:07:38 2002
+--- extN/extN.orig/balloc.c	Wed Sep 25 11:51:33 2002
++++ extN/balloc.c	Wed Sep 25 14:22:53 2002
 @@ -46,18 +46,18 @@
  	unsigned long desc;
  	struct extN_group_desc * gdp;
@@ -168,6 +168,15 @@
  		return -EIO;
  	
  	/*
+@@ -275,7 +273,7 @@
+ 		return;
+ 	}
+ 	lock_super (sb);
+-	es = sb->u.extN_sb.s_es;
++	es = EXTN_SB(sb)->s_es;
+ 	if (block < le32_to_cpu(es->s_first_data_block) || 
+ 	    (block + count) > le32_to_cpu(es->s_blocks_count)) {
+ 		extN_error (sb, "extN_free_blocks",
 @@ -304,7 +302,7 @@
  	if (bitmap_nr < 0)
  		goto error_return;
@@ -177,6 +186,18 @@
  	gdp = extN_get_group_desc (sb, block_group, &gd_bh);
  	if (!gdp)
  		goto error_return;
+@@ -312,9 +310,9 @@
+ 	if (in_range (le32_to_cpu(gdp->bg_block_bitmap), block, count) ||
+ 	    in_range (le32_to_cpu(gdp->bg_inode_bitmap), block, count) ||
+ 	    in_range (block, le32_to_cpu(gdp->bg_inode_table),
+-		      sb->u.extN_sb.s_itb_per_group) ||
++		      EXTN_SB(sb)->s_itb_per_group) ||
+ 	    in_range (block + count - 1, le32_to_cpu(gdp->bg_inode_table),
+-		      sb->u.extN_sb.s_itb_per_group))
++		      EXTN_SB(sb)->s_itb_per_group))
+ 		extN_error (sb, "extN_free_blocks",
+ 			    "Freeing blocks in system zones - "
+ 			    "Block = %lu, count = %lu",
 @@ -340,8 +338,8 @@
  	if (err)
  		goto error_return;
@@ -257,6 +278,15 @@
  	if (fatal) goto out;
  
  	tmp = j + i * EXTN_BLOCKS_PER_GROUP(sb)
+@@ -684,7 +682,7 @@
+ 	if (tmp == le32_to_cpu(gdp->bg_block_bitmap) ||
+ 	    tmp == le32_to_cpu(gdp->bg_inode_bitmap) ||
+ 	    in_range (tmp, le32_to_cpu(gdp->bg_inode_table),
+-		      sb->u.extN_sb.s_itb_per_group))
++		      EXTN_SB(sb)->s_itb_per_group))
+ 		extN_error (sb, "extN_new_block",
+ 			    "Allocating block in system zone - "
+ 			    "block = %u", tmp);
 @@ -796,7 +794,7 @@
  	if (!fatal) fatal = err;
  	
@@ -330,8 +360,8 @@
  			if (!block_in_use (le32_to_cpu(gdp->bg_inode_table) + j,
  							sb, bh->b_data))
  				extN_error (sb, "extN_check_blocks_bitmap",
---- extN/extN.orig/dir.c	Tue Sep 24 15:41:40 2002
-+++ extN/dir.c	Tue Sep 24 22:07:38 2002
+--- extN/extN.orig/dir.c	Wed Sep 25 11:51:33 2002
++++ extN/dir.c	Wed Sep 25 11:53:07 2002
 @@ -52,7 +52,7 @@
  	else if (((char *) de - bh->b_data) + rlen > dir->i_sb->s_blocksize)
  		error_msg = "directory entry across blocks";
@@ -341,8 +371,8 @@
  		error_msg = "inode out of bounds";
  
  	if (error_msg != NULL)
---- extN/extN.orig/ialloc.c	Tue Sep 24 15:41:40 2002
-+++ extN/ialloc.c	Tue Sep 24 22:07:38 2002
+--- extN/extN.orig/ialloc.c	Wed Sep 25 11:51:33 2002
++++ extN/ialloc.c	Wed Sep 25 11:53:07 2002
 @@ -17,6 +17,7 @@
  #include <linux/jbd.h>
  #include <linux/extN_fs.h>
@@ -645,8 +675,8 @@
  				     EXTN_INODES_PER_GROUP(sb) / 8);
  		if (le16_to_cpu(gdp->bg_free_inodes_count) != x)
  			extN_error (sb, "extN_check_inodes_bitmap",
---- extN/extN.orig/inode.c	Tue Sep 24 15:41:40 2002
-+++ extN/inode.c	Tue Sep 24 22:07:38 2002
+--- extN/extN.orig/inode.c	Wed Sep 25 11:51:33 2002
++++ extN/inode.c	Wed Sep 25 11:53:07 2002
 @@ -39,6 +39,18 @@
   */
  #undef SEARCH_FROM_ZERO
@@ -1246,8 +1276,8 @@
  
  	journal_unlock_updates(journal);
  
---- extN/extN.orig/ioctl.c	Tue Sep 24 15:41:40 2002
-+++ extN/ioctl.c	Tue Sep 24 22:07:38 2002
+--- extN/extN.orig/ioctl.c	Wed Sep 25 11:51:33 2002
++++ extN/ioctl.c	Wed Sep 25 11:53:07 2002
 @@ -18,13 +18,14 @@
  int extN_ioctl (struct inode * inode, struct file * filp, unsigned int cmd,
  		unsigned long arg)
@@ -1298,8 +1328,8 @@
  			return ret;
  		}
  #endif
---- extN/extN.orig/namei.c	Tue Sep 24 15:41:40 2002
-+++ extN/namei.c	Tue Sep 24 22:07:38 2002
+--- extN/extN.orig/namei.c	Wed Sep 25 11:51:34 2002
++++ extN/namei.c	Wed Sep 25 14:24:17 2002
 @@ -16,6 +16,10 @@
   *        David S. Miller (davem@caip.rutgers.edu), 1995
   *  Directory entry file type support and forward compatibility hooks
@@ -2562,6 +2592,19 @@
  		inode->i_op = &page_symlink_inode_operations;
  		inode->i_mapping->a_ops = &extN_aops;
  		/*
+@@ -929,10 +1692,10 @@
+ 			goto out_no_entry;
+ 	} else {
+ 		inode->i_op = &extN_fast_symlink_inode_operations;
+-		memcpy((char*)&inode->u.extN_i.i_data,symname,l);
++		memcpy((char*)&EXTN_I(inode)->i_data,symname,l);
+ 		inode->i_size = l-1;
+ 	}
+-	inode->u.extN_i.i_disksize = inode->i_size;
++	EXTN_I(inode)->i_disksize = inode->i_size;
+ 	extN_mark_inode_dirty(handle, inode);
+ 	err = extN_add_nondir(handle, dentry, inode);
+ out_stop:
 @@ -959,7 +1722,8 @@
  	if (inode->i_nlink >= EXTN_LINK_MAX)
  		return -EMLINK;
@@ -2600,8 +2643,8 @@
  			extN_mark_inode_dirty(handle, new_dir);
  		}
  	}
---- extN/extN.orig/super.c	Tue Sep 24 15:41:40 2002
-+++ extN/super.c	Tue Sep 24 22:07:38 2002
+--- extN/extN.orig/super.c	Wed Sep 25 11:51:34 2002
++++ extN/super.c	Wed Sep 25 11:53:07 2002
 @@ -24,6 +24,7 @@
  #include <linux/jbd.h>
  #include <linux/extN_fs.h>
@@ -2754,8 +2797,8 @@
  }
  
  EXPORT_SYMBOL(extN_bread);
---- extN/extN.orig/symlink.c	Tue Sep 24 15:41:40 2002
-+++ extN/symlink.c	Tue Sep 24 22:07:38 2002
+--- extN/extN.orig/symlink.c	Wed Sep 25 11:51:34 2002
++++ extN/symlink.c	Wed Sep 25 11:53:07 2002
 @@ -23,14 +23,14 @@
  
  static int extN_readlink(struct dentry *dentry, char *buffer, int buflen)
@@ -2775,9 +2818,18 @@
  }
  
  struct inode_operations extN_fast_symlink_inode_operations = {
---- extN/extN.orig-include/extN_fs.h	Tue Sep 24 15:41:40 2002
-+++ include/linux/extN_fs.h	Tue Sep 24 22:07:38 2002
-@@ -58,8 +58,6 @@
+--- extN/extN-include.orig/extN_fs.h	Wed Sep 25 11:51:34 2002
++++ include/linux/extN_fs.h	Wed Sep 25 14:13:38 2002
+@@ -17,6 +17,8 @@
+ #define _LINUX_EXTN_FS_H
+ 
+ #include <linux/types.h>
++#include <linux/extN_fs_sb.h>
++#include <linux/extN_fs_i.h>
+ 
+ /*
+  * The second extended filesystem constants/structures
+@@ -58,8 +60,6 @@
   */
  #define	EXTN_BAD_INO		 1	/* Bad blocks inode */
  #define EXTN_ROOT_INO		 2	/* Root inode */
@@ -2786,7 +2838,7 @@
  #define EXTN_BOOT_LOADER_INO	 5	/* Boot loader inode */
  #define EXTN_UNDEL_DIR_INO	 6	/* Undelete directory inode */
  #define EXTN_RESIZE_INO		 7	/* Reserved group descriptors inode */
-@@ -84,23 +82,25 @@
+@@ -84,23 +84,25 @@
  #define EXTN_MIN_BLOCK_SIZE		1024
  #define	EXTN_MAX_BLOCK_SIZE		4096
  #define EXTN_MIN_BLOCK_LOG_SIZE		  10
@@ -2807,8 +2859,8 @@
 -#define	EXTN_ADDR_PER_BLOCK_BITS(s)	((s)->u.extN_sb.s_addr_per_block_bits)
 -#define EXTN_INODE_SIZE(s)		((s)->u.extN_sb.s_inode_size)
 -#define EXTN_FIRST_INO(s)		((s)->u.extN_sb.s_first_ino)
-+#define EXTN_SB(sb)	(&((sb)->u.extN_sb))
-+#define EXTN_I(inode)	(&((inode)->u.extN_i))
++#define EXTN_SB(sb)	((struct extN_sb_info *)&((sb)->u.generic_sbp))
++#define EXTN_I(inode)	((struct extN_inode_info *)&((inode)->u.generic_ip))
 +
 +#define EXTN_BLOCK_SIZE(s)		((s)->s_blocksize)
 +#define EXTN_BLOCK_SIZE_BITS(s)		((s)->s_blocksize_bits)
@@ -2827,7 +2879,7 @@
  #define EXTN_INODE_SIZE(s)	(((s)->s_rev_level == EXTN_GOOD_OLD_REV) ? \
  				 EXTN_GOOD_OLD_INODE_SIZE : \
  				 (s)->s_inode_size)
-@@ -108,6 +108,7 @@
+@@ -108,6 +110,7 @@
  				 EXTN_GOOD_OLD_FIRST_INO : \
  				 (s)->s_first_ino)
  #endif
@@ -2835,7 +2887,7 @@
  
  /*
   * Macro-instructions used to manage fragments
-@@ -116,36 +117,14 @@
+@@ -116,36 +119,14 @@
  #define	EXTN_MAX_FRAG_SIZE		4096
  #define EXTN_MIN_FRAG_LOG_SIZE		  10
  #ifdef __KERNEL__
@@ -2874,7 +2926,7 @@
   * Structure of a blocks group descriptor
   */
  struct extN_group_desc
-@@ -163,15 +142,13 @@
+@@ -163,15 +144,13 @@
  /*
   * Macro-instructions used to manage group descriptors
   */
@@ -2894,7 +2946,7 @@
  #endif
  
  /*
-@@ -339,12 +316,13 @@
+@@ -339,12 +318,13 @@
    #define EXTN_MOUNT_WRITEBACK_DATA	0x0C00	/* No data ordering */
  #define EXTN_MOUNT_UPDATE_JOURNAL	0x1000	/* Update the journal format */
  #define EXTN_MOUNT_NO_UID32		0x2000  /* Disable 32-bit UIDs */
@@ -2909,7 +2961,7 @@
  					 EXTN_MOUNT_##opt)
  #else
  #define EXT2_MOUNT_NOLOAD		EXTN_MOUNT_NOLOAD
-@@ -441,17 +419,11 @@
+@@ -441,17 +421,13 @@
  /*EC*/	__u32	s_reserved[197];	/* Padding to the end of the block */
  };
  
@@ -2927,12 +2979,14 @@
 +#define NEXT_ORPHAN(inode) EXTN_I(inode)->i_dtime
 +static inline struct inode *orphan_list_entry(struct list_head *l)
 +{
-+	return list_entry(l, struct inode, u.extN_i.i_orphan);
++	return ((struct inode *)((char *)l -
++		(unsigned long)(offsetof(struct inode, u.generic_ip) +
++				offsetof(struct extN_inode_info, i_orphan))));
 +}
  
  /*
   * Codes for operating systems
-@@ -512,7 +484,7 @@
+@@ -512,7 +488,7 @@
  #define EXTN_FEATURE_INCOMPAT_RECOVER		0x0004 /* Needs recovery */
  #define EXTN_FEATURE_INCOMPAT_JOURNAL_DEV	0x0008 /* Journal device */
  
@@ -2941,7 +2995,7 @@
  #define EXTN_FEATURE_INCOMPAT_SUPP	(EXTN_FEATURE_INCOMPAT_FILETYPE| \
  					 EXTN_FEATURE_INCOMPAT_RECOVER)
  #define EXTN_FEATURE_RO_COMPAT_SUPP	(EXTN_FEATURE_RO_COMPAT_SPARSE_SUPER| \
-@@ -575,6 +547,24 @@
+@@ -575,6 +551,24 @@
  #define EXTN_DIR_ROUND			(EXTN_DIR_PAD - 1)
  #define EXTN_DIR_REC_LEN(name_len)	(((name_len) + 8 + EXTN_DIR_ROUND) & \
  					 ~EXTN_DIR_ROUND)
@@ -2966,7 +3020,7 @@
  
  #ifdef __KERNEL__
  /*
-@@ -587,6 +577,24 @@
+@@ -587,6 +581,24 @@
  	unsigned long block_group;
  };
  
@@ -2991,7 +3045,7 @@
  /*
   * Function prototypes
   */
-@@ -628,6 +636,7 @@
+@@ -628,6 +640,7 @@
  extern unsigned long extN_count_free (struct buffer_head *, unsigned);
  
  /* inode.c */
@@ -2999,8 +3053,8 @@
  extern struct buffer_head * extN_getblk (handle_t *, struct inode *, long, int, int *);
  extern struct buffer_head * extN_bread (handle_t *, struct inode *, int, int, int *);
  
---- extN/extN.orig-include/extN_jbd.h	Tue Sep 24 15:41:41 2002
-+++ include/linux/extN_jbd.h	Tue Sep 24 22:07:38 2002
+--- extN/extN-include.orig/extN_jbd.h	Wed Sep 25 11:51:34 2002
++++ include/linux/extN_jbd.h	Wed Sep 25 11:53:07 2002
 @@ -30,13 +30,19 @@
  
  #define EXTN_SINGLEDATA_TRANS_BLOCKS	8
@@ -3041,7 +3095,7 @@
  	return 0;
  }
 --- /dev/null	Tue Aug  6 08:46:29 2002
-+++ include/linux/xattr.h	Tue Sep 24 21:43:47 2002
++++ include/linux/xattr.h	Wed Sep 25 11:51:34 2002
 @@ -0,0 +1,15 @@
 +/*
 +  File: linux/xattr.h
@@ -3059,7 +3113,7 @@
 +
 +#endif	/* _LINUX_XATTR_H */
 --- /dev/null	Tue Aug  6 08:46:29 2002
-+++ include/linux/extN_xattr.h	Tue Sep 24 21:43:47 2002
++++ include/linux/extN_xattr.h	Wed Sep 25 11:51:34 2002
 @@ -0,0 +1,155 @@
 +/*
 +  File: linux/extN_xattr.h
@@ -3217,7 +3271,7 @@
 +#endif  /* __KERNEL__ */
 +
 --- /dev/null	Tue Aug  6 08:46:29 2002
-+++ extN/xattr.c	Tue Sep 24 21:43:47 2002
++++ extN/xattr.c	Wed Sep 25 11:51:34 2002
 @@ -0,0 +1,1247 @@
 +/*
 + * linux/fs/extN/xattr.c

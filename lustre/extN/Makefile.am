@@ -62,6 +62,7 @@ diff:
 	  test $$? -le 1 || exit 1;                                           \
 	done
 	mv -f extN.patchT $(srcdir)/extN.patch-$(RELEASE)
+	echo "Don't forget to add $(srcdir)/extN.patch-$(RELEASE) to CVS!"
 .PHONY: diff
 
 # Just do the SUB transformation on all our source files.
