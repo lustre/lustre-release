@@ -116,7 +116,8 @@ void *lustre_msg_buf(struct lustre_msg *m, int n)
         }
 
         if (n < 0 || n >= m->bufcount) {
-                CERROR("referencing bad sub buffer!\n");
+                CERROR("referencing bad sub buffer (requested %d, count is "
+                       "%d)!\n", n, m->bufcount);
                 LBUG();
                 return NULL;
         }
