@@ -312,8 +312,10 @@ int llu_pb_revalidate(struct pnode *pnode, int flags, struct lookup_intent *it)
 
         ll_i2uctxt(&ctxt, pnode->p_parent->p_base->pb_ino, pb->pb_ino);
 
-        rc = mdc_intent_lock(exp, &ctxt, &pfid, pb->pb_name.name, pb->pb_name.len,
-                             &cfid, it, flags, &req, llu_mdc_blocking_ast);
+        rc = mdc_intent_lock(exp, &ctxt, &pfid,
+                             pb->pb_name.name, pb->pb_name.len,
+                             NULL, 0, &cfid, it, flags, &req,
+                             llu_mdc_blocking_ast);
         /* If req is NULL, then mdc_intent_lock only tried to do a lock match;
          * if all was well, it will return 1 if it found locks, 0 otherwise. */
         if (req == NULL && rc >= 0)
@@ -477,7 +479,8 @@ static int llu_lookup_it(struct inode *parent, struct pnode *pnode,
         rc = mdc_intent_lock(llu_i2mdcexp(parent), &ctxt, &pfid,
                              pnode->p_base->pb_name.name,
                              pnode->p_base->pb_name.len,
-                             NULL, it, flags, &req, llu_mdc_blocking_ast);
+                             NULL, 0, NULL, it, flags, &req,
+                             llu_mdc_blocking_ast);
         if (rc < 0)
                 GOTO(out, rc);
         
