@@ -239,20 +239,18 @@ test_7() {
 run_test 7 "create open write rename |X| create-old-name read"
 
 test_8() {
-    keepopen.py $MOUNTPT/f8 &
+    mcreate $MOUNTPT/f8 
+    multiop $MOUNTPT/f8 o_Sc &
     pid=$!
-    # wait until keepopen has created the file
-    while [ ! -e $MOUNTPT/f8 ]; do sleep 1; done
-    mcreate $MOUNTPT/f8b
+    # give multiop a chance to open
+    sleep 1 
     rm -f $MOUNTPT/f8
     replay_barrier mds
     kill -USR1 $pid
-    wait $pid || return 6
+    wait $pid || return 1
 
     fail mds
-    [ -e $MOUNTPT/f8 ] && return 7
-    rm $MOUNTPT/f8b
-    [ -e $MOUNTPT/f8b ] && return 8
+    [ -e $MOUNTPT/f8 ] && return 2
     return 0
 }
 run_test 8 "open, unlink |X| close"
