@@ -40,3 +40,4 @@ opendirunlink
 runas
 openfile
 unlinkmany
+fchdir_test
