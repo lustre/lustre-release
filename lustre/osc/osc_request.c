@@ -20,7 +20,6 @@
 #define DEBUG_SUBSYSTEM S_OSC
 
 #include <linux/module.h>
-#include <linux/random.h>
 #include <linux/lustre_dlm.h>
 #include <linux/obd_ost.h>
 
@@ -558,7 +557,6 @@ int osc_brw(int rw, struct obd_conn *conn, obd_count num_oa,
 static int osc_setup(struct obd_device *obddev, obd_count len, void *buf)
 {
         struct osc_obd *osc = &obddev->u.osc;
-        __u32 ns_id;
         int rc;
         ENTRY;
 
@@ -579,19 +577,9 @@ static int osc_setup(struct obd_device *obddev, obd_count len, void *buf)
         ptlrpc_init_client(NULL, LDLM_REQUEST_PORTAL, LDLM_REPLY_PORTAL,
                            osc->osc_ldlm_client);
 
-        get_random_bytes(&ns_id, sizeof(ns_id));
-        rc = ldlm_cli_namespace_new(obddev, osc->osc_ldlm_client, osc->osc_conn,
-                                    ns_id);
-        if (rc) {
-                CERROR("Couldn't create new namespace %u: %d\n", ns_id, rc);
-                GOTO(out_ldlm_client, rc);
-        }
-
         MOD_INC_USE_COUNT;
         RETURN(0);
 
- out_ldlm_client:
-        OBD_FREE(osc->osc_ldlm_client, sizeof(*osc->osc_ldlm_client));
  out_client:
         OBD_FREE(osc->osc_client, sizeof(*osc->osc_client));
  out_conn:

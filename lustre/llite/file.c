@@ -43,7 +43,8 @@
 
 int ll_inode_setattr(struct inode *inode, struct iattr *attr, int do_trunc);
 extern int ll_setattr(struct dentry *de, struct iattr *attr);
-extern inline struct obdo * ll_oa_from_inode(struct inode *inode, int valid);
+extern inline struct obdo * ll_oa_from_inode(struct inode *inode,
+                                             unsigned long valid);
 
 static int ll_file_open(struct inode *inode, struct file *file)
 {
