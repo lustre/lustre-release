@@ -635,6 +635,11 @@ static int fsfilt_ext3_sync(struct super_block *sb)
         return ext3_force_commit(sb);
 }
 
+#ifndef EXT3_EXT_CACHE_NO       /* we need this for struct ext3_ext_cache */
+#undef EXT3_MULTIBLOCK_ALLOCATOR
+#warning "kernel code has old extents/mballoc patch, disabling"
+#endif
+
 #ifdef EXT3_MULTIBLOCK_ALLOCATOR
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 #define ext3_up_truncate_sem(inode)  up_write(&EXT3_I(inode)->truncate_sem);
