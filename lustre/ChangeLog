@@ -1,3 +1,17 @@
+2002-09-09  Andreas Dilger  <adilger@clusterfs.com>
+	* version 0_5_7
+	* documentation updates
+	* bug fixes and cleanups
+	  - configuration tools
+	  - LOV
+	  - imports/exports
+	  - 64-bit compile warnings
+	  - 64-bit internal statfs data
+	  - many more
+	* test_brw on persistent OST devices
+	* MDS recovery
+	* lprocfs (disabled)
+
 2002-09-04  Andreas Dilger  <adilger@clusterfs.com>
 	* version 0_5_6
 	* documentation updates
