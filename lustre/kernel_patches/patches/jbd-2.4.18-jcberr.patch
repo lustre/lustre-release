@@ -1,6 +1,8 @@
---- lum/include/linux/jbd.h.orig	Tue Apr 16 14:27:25 2002
-+++ lum/include/linux/jbd.h	Wed Apr 24 05:19:00 2002
-@@ -249,6 +249,13 @@
+Index: linux-2.4.19.SuSE/include/linux/jbd.h
+===================================================================
+--- linux-2.4.19.SuSE.orig/include/linux/jbd.h	Sun Nov 16 13:51:03 2003
++++ linux-2.4.19.SuSE/include/linux/jbd.h	Sun Nov 16 14:58:06 2003
+@@ -283,6 +283,13 @@
  	return bh->b_private;
  }
  
@@ -14,7 +16,7 @@
  struct jbd_revoke_table_s;
  
  /* The handle_t type represents a single atomic update being performed
-@@ -279,6 +285,12 @@
+@@ -313,6 +320,12 @@
  	   operations */
  	int			h_err;
  
@@ -27,7 +29,7 @@
  	/* Flags */
  	unsigned int	h_sync:		1;	/* sync-on-close */
  	unsigned int	h_jdata:	1;	/* force data journaling */
-@@ -398,6 +410,10 @@
+@@ -432,6 +445,10 @@
  
  	/* How many handles used this transaction? */
  	int t_handle_count;
@@ -38,7 +40,7 @@
  };
  
  
-@@ -646,6 +662,9 @@
+@@ -676,6 +693,9 @@
  extern int	 journal_try_to_free_buffers(journal_t *, struct page *, int);
  extern int	 journal_stop(handle_t *);
  extern int	 journal_flush (journal_t *);
@@ -48,8 +50,10 @@
  
  extern void	 journal_lock_updates (journal_t *);
  extern void	 journal_unlock_updates (journal_t *);
---- linux/fs/jbd/checkpoint.c.orig	Tue Feb 26 17:07:38 2002
-+++ linux/fs/jbd/checkpoint.c	Thu May 16 13:35:44 2002
+Index: linux-2.4.19.SuSE/fs/jbd/checkpoint.c
+===================================================================
+--- linux-2.4.19.SuSE.orig/fs/jbd/checkpoint.c	Mon Feb 25 11:38:08 2002
++++ linux-2.4.19.SuSE/fs/jbd/checkpoint.c	Sun Nov 16 14:58:06 2003
 @@ -594,7 +594,8 @@
  	J_ASSERT (transaction->t_log_list == NULL);
  	J_ASSERT (transaction->t_checkpoint_list == NULL);
@@ -60,8 +64,10 @@
  	J_ASSERT (transaction->t_journal->j_committing_transaction !=
  					transaction);
  	
---- lum/fs/jbd/commit.c.orig	Tue Feb 26 17:07:38 2002
-+++ lum/fs/jbd/commit.c	Thu May 16 13:54:39 2002
+Index: linux-2.4.19.SuSE/fs/jbd/commit.c
+===================================================================
+--- linux-2.4.19.SuSE.orig/fs/jbd/commit.c	Mon Jan 27 05:08:04 2003
++++ linux-2.4.19.SuSE/fs/jbd/commit.c	Sun Nov 16 14:58:06 2003
 @@ -47,6 +47,7 @@
  	struct buffer_head *wbuf[64];
  	int bufs;
@@ -70,7 +76,7 @@
  	int err;
  	unsigned long blocknr;
  	char *tagp = NULL;
-@@ -475,7 +476,7 @@
+@@ -485,7 +486,7 @@
             transaction's t_log_list queue, and metadata buffers are on
             the t_iobuf_list queue.
  
@@ -79,7 +85,7 @@
  	   less likely to be woken up until all IOs have completed, and
  	   so we incur less scheduling load.
  	*/
-@@ -566,6 +567,7 @@
+@@ -576,6 +577,7 @@
  
  	jbd_debug(3, "JBD: commit phase 6\n");
  
@@ -87,7 +93,7 @@
  	if (is_journal_aborted(journal))
  		goto skip_commit;
  
-@@ -579,7 +581,7 @@
+@@ -589,7 +591,7 @@
  		__journal_abort_hard(journal);
  		goto skip_commit;
  	}
@@ -96,7 +102,7 @@
  	/* AKPM: buglet - add `i' to tmp! */
  	for (i = 0; i < jh2bh(descriptor)->b_size; i += 512) {
  		journal_header_t *tmp =
-@@ -590,6 +592,7 @@
+@@ -600,6 +602,7 @@
  	}
  
  	unlock_journal(journal);
@@ -104,7 +110,7 @@
  	JBUFFER_TRACE(descriptor, "write commit block");
  	{
  		struct buffer_head *bh = jh2bh(descriptor);
-@@ -600,7 +603,6 @@
+@@ -610,7 +613,6 @@
  		put_bh(bh);		/* One for getblk() */
  		journal_unlock_journal_head(descriptor);
  	}
@@ -112,7 +118,7 @@
  
  	/* End of a transaction!  Finally, we can do checkpoint
             processing: any buffers committed as a result of this
-@@ -609,6 +611,31 @@
+@@ -619,6 +621,31 @@
  
  skip_commit:
  
@@ -144,9 +150,11 @@
  	jbd_debug(3, "JBD: commit phase 7\n");
  
  	J_ASSERT(commit_transaction->t_sync_datalist == NULL);
---- lum/fs/jbd/journal.c.orig	Fri Apr 12 10:27:52 2002
-+++ lum/fs/jbd/journal.c	Wed Apr 24 05:18:49 2002
-@@ -58,6 +58,7 @@
+Index: linux-2.4.19.SuSE/fs/jbd/journal.c
+===================================================================
+--- linux-2.4.19.SuSE.orig/fs/jbd/journal.c	Mon Jan 27 05:08:00 2003
++++ linux-2.4.19.SuSE/fs/jbd/journal.c	Sun Nov 16 14:58:06 2003
+@@ -59,6 +59,7 @@
  #endif
  EXPORT_SYMBOL(journal_flush);
  EXPORT_SYMBOL(journal_revoke);
@@ -154,17 +162,19 @@
  
  EXPORT_SYMBOL(journal_init_dev);
  EXPORT_SYMBOL(journal_init_inode);
---- lum/fs/jbd/transaction.c.orig	Fri Apr 12 10:27:52 2002
-+++ lum/fs/jbd/transaction.c	Wed Apr 24 05:31:14 2002
-@@ -57,6 +57,7 @@
+Index: linux-2.4.19.SuSE/fs/jbd/transaction.c
+===================================================================
+--- linux-2.4.19.SuSE.orig/fs/jbd/transaction.c	Sun Nov 16 01:45:26 2003
++++ linux-2.4.19.SuSE/fs/jbd/transaction.c	Sun Nov 16 14:58:31 2003
+@@ -58,6 +58,7 @@
  	transaction->t_state = T_RUNNING;
  	transaction->t_tid = journal->j_transaction_sequence++;
- 	transaction->t_expires = jiffies + journal->j_commit_interval;
+ 	transaction->t_expires = jiffies + bdflush_interval();
 +	INIT_LIST_HEAD(&transaction->t_jcb);
  
  	/* Set up the commit timer for the new transaction. */
  	J_ASSERT (!journal->j_commit_timer_active);
-@@ -201,6 +202,20 @@
+@@ -202,6 +203,20 @@
  	return 0;
  }
  
@@ -185,7 +195,7 @@
  /*
   * Obtain a new handle.  
   *
-@@ -227,14 +242,11 @@
+@@ -228,14 +243,11 @@
  		handle->h_ref++;
  		return handle;
  	}
@@ -202,7 +212,7 @@
  	current->journal_info = handle;
  
  	err = start_this_handle(journal, handle);
-@@ -333,14 +345,11 @@
+@@ -334,14 +346,11 @@
  	
  	if (is_journal_aborted(journal))
  		return ERR_PTR(-EIO);
@@ -219,7 +229,7 @@
  	current->journal_info = handle;
  
  	err = try_start_this_handle(journal, handle);
-@@ -1328,6 +1337,28 @@
+@@ -1321,6 +1330,28 @@
  #endif
  
  /*
@@ -248,7 +258,7 @@
   * All done for a particular handle.
   *
   * There is not much action needed here.  We just return any remaining
-@@ -1393,7 +1423,10 @@
+@@ -1385,7 +1416,10 @@
  			wake_up(&journal->j_wait_transaction_locked);
  	}
  

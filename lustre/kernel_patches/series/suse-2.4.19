@@ -5,6 +5,7 @@ vfs_intent-2.4.19-suse.patch
 invalidate_show.patch
 export-truncate.patch
 iod-stock-24-exports-2.4.19-suse.patch 
+jbd-2.4.18-jcberr.patch
 ext-2.4-patch-1-chaos.patch 
 ext-2.4-patch-2.patch
 ext-2.4-patch-3.patch
