@@ -3,11 +3,12 @@
  fs/namei.c             |  378 +++++++++++++++++++++++++++++++++++++++++--------
  fs/nfsd/vfs.c          |    2 
  fs/open.c              |  120 +++++++++++++--
+ fs/proc/base.c         |    1 
  fs/stat.c              |    8 -
  include/linux/dcache.h |   31 ++++
  include/linux/fs.h     |   28 +++
  kernel/ksyms.c         |    1 
- 9 files changed, 522 insertions(+), 85 deletions(-)
+ 10 files changed, 522 insertions(+), 85 deletions(-)
 
 --- linux-2.4.18-61chaos/fs/dcache.c~vfs_intent-2.4.18-18	Sun Jun  1 21:55:14 2003
 +++ linux-2.4.18-61chaos-root/fs/dcache.c	Sun Jun  1 21:59:04 2003
@@ -1527,3 +1528,15 @@
  EXPORT_SYMBOL(page_symlink_inode_operations);
 
 _
+--- linux/fs/proc/base.c.old	Sat Jun  7 00:55:09 2003
++++ linux/fs/proc/base.c	Sat Jun  7 00:55:33 2003
+@@ -465,6 +465,9 @@
+ 
+ 	error = inode->u.proc_i.op.proc_get_link(inode, &nd->dentry, &nd->mnt);
+ 	nd->last_type = LAST_BIND;
++
++        if (nd->it != NULL)
++                nd->it->it_int_flags |= IT_FL_FOLLOWED;
+ out:
+ 	return error;
+ }
