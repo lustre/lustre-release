@@ -390,8 +390,8 @@ llu_fsswop_mount(const char *source,
         struct obd_uuid param_uuid;
         class_uuid_t uuid;
         struct obd_device *obd;
-        char *osc="lov1_UUID";
-        char *mdc="853fe49c56_MDC_lov1_mds1_704cccf8fd";
+        char *osc=mount_option.osc_uuid;
+        char *mdc=mount_option.mdc_uuid;
         int err = -EINVAL;
 
         ENTRY;
@@ -488,6 +488,9 @@ llu_fsswop_mount(const char *source,
                 _sysio_pb_gone(rootpb);
 		goto out_inode;
         }
+
+        /* not clear why we need this XXX */
+        P_REF((*mntp)->mnt_root);
 
         ptlrpc_req_finished(request);
         request = NULL;

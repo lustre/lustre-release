@@ -116,12 +116,67 @@ int init_lib_portals()
 
 extern int class_handle_ioctl(struct obd_class_user_state *ocus, unsigned int cmd, unsigned long arg);
 
+struct mount_option_s mount_option = {NULL, NULL};
+
+/* FIXME simple arg parser FIXME */
+void parse_mount_options(void *arg)
+{
+        char *buf = NULL;
+        struct obd_ioctl_data *data;
+        char *ptr, *comma, *eq, **tgt, *v;
+        int len;
+
+        if (obd_ioctl_getdata(&buf, &len, arg)) {
+                CERROR("OBD ioctl: data error\n");
+                return;
+        }
+        data = (struct obd_ioctl_data *)buf;
+        ptr = data->ioc_inlbuf1;
+        printf("mount option: %s\n", ptr);
+
+        while (ptr) {
+                eq = strchr(ptr, '=');
+                if (!eq)
+                        return;
+
+                *eq = 0;
+                if (!strcmp("osc", ptr))
+                        tgt = &mount_option.osc_uuid;
+                else if (!strcmp("mdc", ptr))
+                        tgt = &mount_option.mdc_uuid;
+                else {
+                        printf("Unknown mount option %s\n", ptr);
+                        return;
+                }
+
+                v = eq + 1;
+                comma = strchr(v, ',');
+                if (comma) {
+                        *comma = 0;
+                        ptr = comma + 1;
+                } else
+                        ptr = NULL;
+
+                *tgt = malloc(strlen(v)+1);
+                strcpy(*tgt, v);
+        }
+
+        if (buf)
+                obd_ioctl_freedata(buf, len);
+}
+
 int lib_ioctl(int dev_id, int opc, void * ptr)
 {
         int rc;
 
 	if (dev_id == OBD_DEV_ID) {
                 struct obd_ioctl_data *ioc = ptr;
+
+                if (opc == OBD_IOC_MOUNTOPT) {
+                        parse_mount_options(ptr);
+                        return 0;
+                }
+
 		rc = class_handle_ioctl(&ocus, opc, (unsigned long)ptr);
 
 		/* you _may_ need to call obd_ioctl_unpack or some

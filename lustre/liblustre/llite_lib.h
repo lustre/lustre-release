@@ -88,8 +88,16 @@ static inline struct lustre_handle *llu_i2obdconn(struct inode *inode)
 }
 
 
+struct mount_option_s
+{
+	char *mdc_uuid;
+	char *osc_uuid;
+};
+
 /* llite_lib.c */
 void generate_random_uuid(unsigned char uuid_out[16]);
+
+extern struct mount_option_s mount_option;
 
 /* super.c */
 void llu_update_inode(struct inode *inode, struct mds_body *body,

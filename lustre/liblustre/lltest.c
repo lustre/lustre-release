@@ -58,6 +58,7 @@
 #include <sysio.h>
 #include <mount.h>
 
+
 /*
  * Get stats of file and file system.
  *
@@ -75,6 +76,7 @@ extern int portal_debug;
 extern int portal_subsystem_debug;
 
 char* files[] = {"/dir1", "/dir1/file1", "/dir1/file2", "/dir1/dir2", "/dir1/dir2/file3"};
+
 int
 main(int argc, char * const argv[])
 {
@@ -140,5 +142,6 @@ main(int argc, char * const argv[])
 	 */
 	_sysio_shutdown();
 
+	printf("complete successfully\n");
 	return 0;
 }
