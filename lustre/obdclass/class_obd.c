@@ -622,6 +622,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                                 memcpy(obd->obd_uuid, data->ioc_inlbuf3, len);
                         }
                         /* Get the LprocFS namespace for this device class */
+                        /*
                         l_idx = lprocfs_get_nm(data->ioc_inlbuf1, obd_nm);
                         if (l_idx < 0) {
                                 CERROR("Non-existent device class"
@@ -630,6 +631,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                                 lprocfs_reg_dev(obd, obd_nm[l_idx].obd_names,
                                                 obd_nm[l_idx].cntr_blk_sz);
                         }
+                        */
                         MOD_INC_USE_COUNT;
                 }
 
