@@ -1343,7 +1343,7 @@ static int osc_send_oap_rpc(struct client_obd *cli, int cmd,
                page_count, aa, cli->cl_brw_in_flight);
 
         request->rq_interpret_reply = brw_interpret_oap;
-        osc_rpcd_add_req(request);
+        ptlrpcd_add_req(request);
         RETURN(1);
 }
 
@@ -2625,7 +2625,7 @@ static int osc_lock_contains(struct obd_export *exp, struct lov_stripe_md *lsm,
 }
 
 static int osc_invalidate_import(struct obd_device *obd,
-                                  struct obd_import *imp)
+                                 struct obd_import *imp)
 {
         LASSERT(imp->imp_obd == obd);
         /* this used to try and tear down queued pages, but it was
@@ -2639,13 +2639,13 @@ int osc_setup(struct obd_device *obd, obd_count len, void *buf)
 {
         int rc;
         
-        rc = osc_rpcd_addref();
+        rc = ptlrpcd_addref();
         if (rc)
                 return rc;
 
         rc = client_obd_setup(obd, len, buf);
         if (rc)
-                osc_rpcd_decref();
+                ptlrpcd_decref();
         RETURN(rc);
 }
 
@@ -2654,7 +2654,7 @@ int osc_cleanup(struct obd_device *obd, int flags)
         int rc;
 
         rc = client_obd_cleanup(obd, flags);
-        osc_rpcd_decref();
+        ptlrpcd_decref();
         RETURN(rc);
 }
 

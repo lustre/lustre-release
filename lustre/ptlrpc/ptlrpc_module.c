@@ -188,6 +188,11 @@ EXPORT_SYMBOL(ptlrpc_pinger_add_import);
 EXPORT_SYMBOL(ptlrpc_pinger_del_import);
 EXPORT_SYMBOL(ptlrpc_pinger_sending_on_import);
 
+/* ptlrpcd.c */
+EXPORT_SYMBOL(ptlrpcd_addref);
+EXPORT_SYMBOL(ptlrpcd_decref);
+EXPORT_SYMBOL(ptlrpcd_add_req);
+
 /* lproc_ptlrpc.c */
 EXPORT_SYMBOL(ptlrpc_lprocfs_register_obd);
 EXPORT_SYMBOL(ptlrpc_lprocfs_unregister_obd);

@@ -11,12 +11,14 @@ LDLMSOURCES= $(top_srcdir)/ldlm/l_lock.c $(top_srcdir)/ldlm/ldlm_lock.c \
    $(top_srcdir)/ldlm/ldlm_flock.c $(top_srcdir)/ldlm/ldlm_request.c    \
    $(top_srcdir)/ldlm/ldlm_lockd.c $(top_srcdir)/ldlm/ldlm_internal.h
 
+COMMON_SOURCES =  client.c recover.c connection.c niobuf.c pack_generic.c \
+    events.c ptlrpc_module.c service.c pinger.c recov_thread.c llog_net.c \
+    llog_client.c import.c ptlrpcd.c $(LDLMSOURCES)
+
 if LIBLUSTRE
 
 lib_LIBRARIES = libptlrpc.a
-libptlrpc_a_SOURCES = client.c niobuf.c pack_generic.c recover.c connection.c \
-ptlrpc_module.c events.c service.c pinger.c import.c \
-recov_thread.c llog_net.c llog_client.c $(LDLMSOURCES)
+libptlrpc_a_SOURCES = $(COMMON_SOURCES)
 
 else
 
@@ -24,10 +26,8 @@ MODULE = ptlrpc
 modulefs_DATA = ptlrpc.o
 EXTRA_PROGRAMS = ptlrpc
 
-ptlrpc_SOURCES = recover.c connection.c ptlrpc_module.c events.c service.c \
-   client.c niobuf.c pack_generic.c lproc_ptlrpc.c pinger.c                \
-   ptlrpc_internal.h recov_thread.c import.c llog_net.c llog_server.c      \
-   llog_client.c $(LDLMSOURCES)
+ptlrpc_SOURCES = $(COMMON_SOURCES) lproc_ptlrpc.c ptlrpc_internal.h \
+    llog_server.c
 endif
 
 ptlrpc_DEPENDENCIES=symlinks

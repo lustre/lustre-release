@@ -132,7 +132,7 @@ static int oscc_internal_create(struct osc_creator *oscc)
 
         request->rq_async_args.pointer_arg[0] = oscc;
         request->rq_interpret_reply = osc_interpret_create;
-        osc_rpcd_add_req(request);
+        ptlrpcd_add_req(request);
 
         RETURN(0);
 }

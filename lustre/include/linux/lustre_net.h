@@ -551,6 +551,11 @@ int client_disconnect_export(struct obd_export *exp, int failover);
 int ptlrpc_pinger_add_import(struct obd_import *imp);
 int ptlrpc_pinger_del_import(struct obd_import *imp);
 
+/* ptlrpc/ptlrpcd.c */
+void ptlrpcd_add_req(struct ptlrpc_request *req);
+int ptlrpcd_addref(void);
+void ptlrpcd_decref(void);
+
 /* ptlrpc/lproc_ptlrpc.c */
 #ifdef __KERNEL__
 void ptlrpc_lprocfs_register_obd(struct obd_device *obddev);

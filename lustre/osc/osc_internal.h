@@ -50,9 +50,6 @@ void oscc_init(struct obd_export *exp);
 
 extern atomic_t osc_max_rpcs_in_flight;
 extern atomic_t osc_max_pages_per_rpc;
-int osc_rpcd_addref(void);
-int osc_rpcd_decref(void);
-void osc_rpcd_add_req(struct ptlrpc_request *req);
 
 #ifdef __KERNEL__
 
