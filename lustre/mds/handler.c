@@ -981,7 +981,7 @@ int mds_handle(struct ptlrpc_request *req)
         if (req->rq_reqmsg->opc != MDS_CONNECT && req->rq_export == NULL)
                 GOTO(out, rc = -ENOTCONN);
 
-        LASSERT(!strcmp(req->rq_obd->obd_type->typ_name, "mds"));
+        LASSERT(!strcmp(req->rq_obd->obd_type->typ_name, LUSTRE_MDT_NAME));
 
         switch (req->rq_reqmsg->opc) {
         case MDS_CONNECT:
@@ -1166,11 +1166,9 @@ static int mds_recover(struct obd_device *obddev)
         return rc;
 }
 
-#define MDS_NUM_THREADS 8
 /* mount the file system (secretly) */
 static int mds_setup(struct obd_device *obddev, obd_count len, void *buf)
 {
-        int i;
         struct obd_ioctl_data* data = buf;
         struct mds_obd *mds = &obddev->u.mds;
         struct vfsmount *mnt;
@@ -1205,46 +1203,24 @@ static int mds_setup(struct obd_device *obddev, obd_count len, void *buf)
                 CERROR("MDS filesystem method init failed: rc = %d\n", rc);
                 GOTO(err_put, rc);
         }
-#warning move this to module init
-        mds->mds_service = ptlrpc_init_svc(MDS_NEVENTS, MDS_NBUFS,
-                                           MDS_BUFSIZE, MDS_MAXREQSIZE,
-                                           MDS_REQUEST_PORTAL, MDC_REPLY_PORTAL,
-                                           "self", mds_handle, "mds");
-        if (!mds->mds_service) {
-                CERROR("failed to start service\n");
-                GOTO(err_fs, rc = -EINVAL);
-        }
 
         obddev->obd_namespace =
                 ldlm_namespace_new("mds_server", LDLM_NAMESPACE_SERVER);
         if (obddev->obd_namespace == NULL) {
                 mds_cleanup(obddev);
-                GOTO(err_svc, rc = -ENOMEM);
+                GOTO(err_fs, rc = -ENOMEM);
         }
 
-        for (i = 0; i < MDS_NUM_THREADS; i++) {
-                char name[32];
-                sprintf(name, "lustre_MDS_%02d", i);
-                rc = ptlrpc_start_thread(obddev, mds->mds_service, name);
-                if (rc) {
-                        CERROR("cannot start MDS thread #%d: rc %d\n", i, rc);
-                        GOTO(err_thread, rc);
-                }
-        }
 
         rc = mds_recover(obddev);
         if (rc)
-                GOTO(err_thread, rc);
+                GOTO(err_fs, rc);
 
         ptlrpc_init_client(LDLM_REQUEST_PORTAL, LDLM_REPLY_PORTAL,
                            "mds_ldlm_client", &obddev->obd_ldlm_client);
 
         RETURN(0);
 
-err_thread:
-        ptlrpc_stop_all_threads(mds->mds_service);
-err_svc:
-        ptlrpc_unregister_service(mds->mds_service);
 err_fs:
         mds_fs_cleanup(obddev);
 err_put:
@@ -1265,9 +1241,6 @@ static int mds_cleanup(struct obd_device *obddev)
         struct mds_obd *mds = &obddev->u.mds;
         struct obd_run_ctxt saved;
         ENTRY;
-
-        ptlrpc_stop_all_threads(mds->mds_service);
-        ptlrpc_unregister_service(mds->mds_service);
 
         sb = mds->mds_sb;
         if (!mds->mds_sb)
@@ -1449,6 +1422,59 @@ static int ldlm_intent_policy(struct ldlm_lock *lock, void *req_cookie,
 }
 
 
+#define MDT_NUM_THREADS 8
+static int mdt_setup(struct obd_device *obddev, obd_count len, void *buf)
+{
+        int i;
+        //        struct obd_ioctl_data* data = buf;
+        struct mds_obd *mds = &obddev->u.mds;
+        int rc = 0;
+        ENTRY;
+
+        MOD_INC_USE_COUNT;
+
+        mds->mds_service = ptlrpc_init_svc(MDS_NEVENTS, MDS_NBUFS,
+                                           MDS_BUFSIZE, MDS_MAXREQSIZE,
+                                           MDS_REQUEST_PORTAL, MDC_REPLY_PORTAL,
+                                           "self", mds_handle, "mds");
+        if (!mds->mds_service) {
+                CERROR("failed to start service\n");
+                GOTO(err_dec, rc = -EINVAL);
+        }
+
+        for (i = 0; i < MDT_NUM_THREADS; i++) {
+                char name[32];
+                sprintf(name, "lustre_MDT_%02d", i);
+                rc = ptlrpc_start_thread(obddev, mds->mds_service, name);
+                if (rc) {
+                        CERROR("cannot start MDT thread #%d: rc %d\n", i, rc);
+                        GOTO(err_thread, rc);
+                }
+        }
+
+        RETURN(0);
+
+err_thread:
+        ptlrpc_stop_all_threads(mds->mds_service);
+        ptlrpc_unregister_service(mds->mds_service);
+err_dec:
+        MOD_DEC_USE_COUNT;
+        RETURN(rc);
+}
+
+
+static int mdt_cleanup(struct obd_device *obddev)
+{
+        struct mds_obd *mds = &obddev->u.mds;
+        ENTRY;
+
+        ptlrpc_stop_all_threads(mds->mds_service);
+        ptlrpc_unregister_service(mds->mds_service);
+
+        MOD_DEC_USE_COUNT;
+        RETURN(0);
+}
+
 extern int mds_iocontrol(long cmd, struct lustre_handle *conn,
                          int len, void *karg, void *uarg);
 
@@ -1461,6 +1487,12 @@ static struct obd_ops mds_obd_ops = {
         o_iocontrol:   mds_iocontrol
 };
 
+static struct obd_ops mdt_obd_ops = {
+        o_setup:       mdt_setup,
+        o_cleanup:     mdt_cleanup,
+};
+
+
 static int __init mds_init(void)
 {
         mds_file_cache = kmem_cache_create("ll_mds_file_data",
@@ -1470,6 +1502,7 @@ static int __init mds_init(void)
                 return -ENOMEM;
 
         class_register_type(&mds_obd_ops, LUSTRE_MDS_NAME);
+        class_register_type(&mdt_obd_ops, LUSTRE_MDT_NAME);
         ldlm_register_intent(ldlm_intent_policy);
         return 0;
 }

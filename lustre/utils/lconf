@@ -410,6 +410,14 @@ class LCTLInterface:
   quit""" % (dump_file)
         self.run(cmds)
 
+    # get list of devices
+    def device_list(self):
+        cmds = """
+  device_list
+  quit"""
+        rc, out = self.run(cmds)
+        return out
+
 # ============================================================
 # Various system-level functions
 # (ideally moved to their own module)
@@ -623,7 +631,17 @@ def get_local_address(net_type, wildcard):
         fixme("automatic local address for GM")
     return local
         
-        
+
+def is_prepared(uuid):
+    """Return true if a device exists for the uuid"""
+    # expect this format:
+    # 1 UP ldlm ldlm ldlm_UUID 2
+    out = lctl.device_list()
+    for s in out:
+        if uuid == string.split(s)[4]:
+            return 1
+    return 0
+    
 
 # ============================================================
 # Classes to prepare and cleanup the various objects
@@ -778,7 +796,7 @@ class Network(Module):
 
             
         lctl.network(self.net_type, self.nid)
-        lctl.newdev(attach = "ptlrpc RPCDEV")
+        lctl.newdev(attach = "ptlrpc RPCDEV RPCDEV_UUID")
 
     def cleanup(self):
         self.info(self.net_type, self.nid, self.port)
@@ -806,7 +824,7 @@ class Network(Module):
                     cleanup_error(e.rc)
               
         try:
-            lctl.cleanup("RPCDEV", "")
+            lctl.cleanup("RPCDEV", "RPCDEV_UUID")
         except CommandError, e:
             print "cleanup failed: ", self.name
             e.dump()
@@ -930,9 +948,19 @@ class MDS(Module):
     def prepare(self):
         self.info(self.devname, self.fstype, self.format)
         blkdev = block_dev(self.devname, self.size, self.fstype, self.format)
+        if not is_prepared('MDT_UUID'):
+            lctl.newdev(attach="mdt %s %s" % ('MDT', 'MDT_UUID'),
+                        setup ="")
         lctl.newdev(attach="mds %s %s" % (self.name, self.uuid),
                     setup ="%s %s" %(blkdev, self.fstype))
     def cleanup(self):
+        if is_prepared('MDT_UUID'):
+            try:
+                lctl.cleanup("MDT", "MDT_UUID")
+            except CommandError, e:
+                print "cleanup failed: ", self.name
+                e.dump()
+                cleanup_error(e.rc)
         Module.cleanup(self)
         clean_loop(self.devname)
 
