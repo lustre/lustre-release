@@ -864,7 +864,6 @@ static int echo_client_prep_commit(struct obd_export *exp, int rw,
                 GOTO(out, ret = -ENOMEM);
 
         obdo_to_ioobj(oa, &ioo);
-        ioo.ioo_bufcnt = npages;
 
         off = offset;
 
@@ -879,6 +878,7 @@ static int echo_client_prep_commit(struct obd_export *exp, int rw,
 
                 /* XXX this can't be the best.. */
                 memset(oti, 0, sizeof(*oti));
+                ioo.ioo_bufcnt = npages;
 
                 ret = obd_preprw(rw, exp, oa, 1, &ioo, npages, rnb, lnb, oti);
                 if (ret != 0)
