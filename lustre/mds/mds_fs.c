@@ -101,39 +101,11 @@ int mds_client_add(struct obd_device *obd, struct mds_obd *mds,
                 struct obd_run_ctxt saved;
                 loff_t off = med->med_off;
                 struct file *file = mds->mds_rcvd_filp;
-                void *handle;
-                int rc, err;
+                int rc;
 
                 push_ctxt(&saved, &obd->obd_ctxt, NULL);
-                /* We need to start a transaction here first, to avoid a
-                 * possible ordering deadlock on last_rcvd->i_sem and the
-                 * journal lock. In most places we start the journal handle
-                 * first (because we do compound transactions), and then
-                 * later do the write into last_rcvd, which gets i_sem.
-                 *
-                 * Without this transaction, clients connecting at the same
-                 * time other MDS operations are ongoing get last_rcvd->i_sem
-                 * first (in generic_file_write()) and start the journal
-                 * transaction afterwards, and can deadlock with other ops.
-                 *
-                 * We use FSFILT_OP_SETATTR because it is smallest, but all
-                 * ops include enough space for the last_rcvd update so we
-                 * could use any of them, or maybe an FSFILT_OP_NONE is best?
-                 */
-                handle = fsfilt_start(obd, file->f_dentry->d_inode,
-                                      FSFILT_OP_SETATTR, NULL);
-                if (IS_ERR(handle)) {
-                        rc = PTR_ERR(handle);
-                        CERROR("unable to start transaction: rc %d\n", rc);
-                } else {
-                        rc = fsfilt_write_record(obd, file, med->med_mcd,
-                                                 sizeof(*med->med_mcd),
-                                                 &off, 1);
-                        err = fsfilt_commit(obd, file->f_dentry->d_inode,
-                                            handle, 1);
-                        if (rc == 0)
-                                rc = err;
-                }
+                rc = fsfilt_write_record(obd, file, med->med_mcd,
+                                         sizeof(*med->med_mcd), &off, 1);
                 pop_ctxt(&saved, &obd->obd_ctxt, NULL);
 
                 if (rc)
@@ -175,9 +147,8 @@ int mds_client_free(struct obd_export *exp, int clear_client)
         if (clear_client) {
                 memset(&zero_mcd, 0, sizeof zero_mcd);
                 push_ctxt(&saved, &obd->obd_ctxt, NULL);
-                rc = fsfilt_write_record(obd, mds->mds_rcvd_filp,
-                                              &zero_mcd, sizeof(zero_mcd),
-                                              &med->med_off, 1);
+                rc = fsfilt_write_record(obd, mds->mds_rcvd_filp, &zero_mcd,
+                                         sizeof(zero_mcd), &med->med_off, 1);
                 pop_ctxt(&saved, &obd->obd_ctxt, NULL);
 
                 CDEBUG(rc == 0 ? D_INFO : D_ERROR,

@@ -21,6 +21,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- protect MDS inode fsdata with stronger locking (2313)
 	- better error messages when a client is rejected during recovery (1505)
 	- avoid cancelling locks which were never granted, after failure (2330)
+	- fix i_sem/journal inversion in mds_client_add (2333)
        * miscellania
 	- allow configurable automake binary, for testing new versions
 	- small update to the lfs documentation
