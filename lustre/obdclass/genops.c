@@ -52,7 +52,7 @@ struct obd_type *class_nm_to_type(char *nm)
         if ( !type ) {
                 if ( !request_module(nm) ) {
                         CDEBUG(D_INFO, "Loaded module '%s'\n", nm);
-                        type = obd_search_type(nm);
+                        type = class_search_type(nm);
                 } else {
                         CDEBUG(D_INFO, "Can't load module '%s'\n", nm);
                 }
@@ -297,7 +297,7 @@ int class_multi_setup(struct obd_device *obddev, uint32_t len, void *data)
                 if (tmp < 0 || tmp >= MAX_OBD_DEVICES) { 
                         CERROR("Trying to sub dev %d  - dev no too large\n", 
                                tmp);
-                        GOTO(err_disconnect, rc); 
+                        GOTO(err_disconnect, rc  = -EINVAL); 
                 }
 
                 rc = obd_connect(&obddev->obd_multi_conn[count], &obd_dev[tmp]);

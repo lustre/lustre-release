@@ -744,12 +744,12 @@ static int mdc_connect(struct lustre_handle *conn, struct obd_device *obd)
         MOD_INC_USE_COUNT;
         rc = class_connect(conn, obd);
         if (rc) 
-                GOTO(out, rc);
+                RETURN(rc); 
 
         request = ptlrpc_prep_req(mdc->mdc_client, mdc->mdc_conn,
                                   MDS_CONNECT, 1, &size, &tmp);
         if (!request)
-                RETURN(-ENOMEM);
+                GOTO(out_disco, -ENOMEM);
 
         request->rq_replen = lustre_msg_size(0, NULL);
 
@@ -762,8 +762,11 @@ static int mdc_connect(struct lustre_handle *conn, struct obd_device *obd)
         mdc->mdc_connh.cookie = request->rq_repmsg->cookie;
 
         EXIT;
+
  out:
         ptlrpc_free_req(request);
+ out_disco:
+        class_disconnect(conn);
         if (rc) 
                 MOD_DEC_USE_COUNT;
         return rc;

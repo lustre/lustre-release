@@ -67,13 +67,13 @@ static int osc_connect(struct lustre_handle *conn, struct obd_device *obd)
         MOD_INC_USE_COUNT;
         rc = class_connect(conn, obd);
         if (rc) 
-                GOTO(out, rc);
+                RETURN(rc); 
 
         osc_obd2cl(obd, &cl, &connection);
         request = ptlrpc_prep_req(osc->osc_client, osc->osc_conn, 
                                   OST_CONNECT, 1, &size, &tmp);
         if (!request)
-                RETURN(-ENOMEM);
+                GOTO(out_disco, -ENOMEM);
 
         request->rq_replen = lustre_msg_size(0, NULL);
 
@@ -91,6 +91,8 @@ static int osc_connect(struct lustre_handle *conn, struct obd_device *obd)
         EXIT;
  out:
         ptlrpc_free_req(request);
+ out_disco:
+        class_disconnect(conn); 
         if (rc)
                 MOD_DEC_USE_COUNT;
         return rc;
