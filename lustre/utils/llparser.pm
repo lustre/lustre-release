@@ -90,6 +90,7 @@ sub create_links {
 
 sub parse_file {
     my %hasharray;
+    my $pid = shift;
     $backref = 0;
     $treeparent = 0;
     $numchildren = 0;
@@ -97,9 +98,10 @@ sub parse_file {
     $next = 0;
     $pidhead = 0;
 			
-    while(<>){
+    LINE : while(<>){
 	if (/$REGEX/) {
 	    @parsed_line=($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $treeparent, $numchildren, $youngestchild, $pidhead, $next, $backref);
+            next LINE if ($parsed_line[$e_pid] != $pid && $pid);
 	    if (!exists($hasharray{$parsed_line[$e_pid]})) {
 		# Push a marker for the beginning of this PID
     		my @marker_line;
