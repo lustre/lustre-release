@@ -350,7 +350,7 @@ static void brw_finish(struct ptlrpc_bulk_desc *desc, void *data)
         EXIT;
 }
 
-static int osc_brw_read(struct lustre_handle *conn, struct lov_stripe_md *md,
+static int osc_brw_read(struct lustre_handle *conn, struct lov_stripe_md *lsm,
                         obd_count page_count, struct brw_page *pga,
                         brw_callback_t callback, struct io_cb_data *data)
 {
@@ -392,7 +392,7 @@ static int osc_brw_read(struct lustre_handle *conn, struct lov_stripe_md *md,
 
         iooptr = lustre_msg_buf(request->rq_reqmsg, 1);
         nioptr = lustre_msg_buf(request->rq_reqmsg, 2);
-        ost_pack_ioo(&iooptr, md, page_count);
+        ost_pack_ioo(&iooptr, lsm, page_count);
         /* end almost identical to brw_write case */
 
         spin_lock(&connection->c_lock);
