@@ -21,42 +21,42 @@ case ${host_cpu} in
 ;;
 	i*86 )
 	AC_MSG_RESULT($host_cpu)
-        KCFLAGS='-g -Wall -Wstrict-prototypes -pipe'
+        KCFLAGS='-g -O2 -Wall -Wstrict-prototypes -pipe'
         KCPPFLAGS='-D__KERNEL__ -DMODULE '
         MOD_LINK=elf_i386
 ;;
 
 	alphaev6 )
 	AC_MSG_RESULT($host_cpu)
-        KCFLAGS='-g -O2  -Wall -Wstrict-prototypes -Wno-trigraphs -O2 -fomit-frame-pointer -fno-strict-aliasing -fno-common -pipe -mno-fp-regs -ffixed-8 -mcpu=ev5 -Wa,-mev6'
+        KCFLAGS='-g -O2  -Wall -Wstrict-prototypes -Wno-trigraphs -fomit-frame-pointer -fno-strict-aliasing -fno-common -pipe -mno-fp-regs -ffixed-8 -mcpu=ev5 -Wa,-mev6'
         KCPPFLAGS='-D__KERNEL__ -DMODULE '
         MOD_LINK=elf64alpha
 ;;
 
 	alphaev67 )
 	AC_MSG_RESULT($host_cpu)
-        KCFLAGS='-g -O2  -Wall -Wstrict-prototypes -Wno-trigraphs -O2 -fomit-frame-pointer -fno-strict-aliasing -fno-common -pipe -mno-fp-regs -ffixed-8 -mcpu=ev5 -Wa,-mev6'
+        KCFLAGS='-g -O2  -Wall -Wstrict-prototypes -Wno-trigraphs -fomit-frame-pointer -fno-strict-aliasing -fno-common -pipe -mno-fp-regs -ffixed-8 -mcpu=ev5 -Wa,-mev6'
         KCPPFLAGS='-D__KERNEL__ -DMODULE '
         MOD_LINK=elf64alpha
 ;;
 
 	alpha* )
 	AC_MSG_RESULT($host_cpu)
-        KCFLAGS='-g -O2  -Wall -Wstrict-prototypes -Wno-trigraphs -O2 -fomit-frame-pointer -fno-strict-aliasing -fno-common -pipe -mno-fp-regs -ffixed-8 -mcpu=ev5 -Wa,-mev5'
+        KCFLAGS='-g -O2  -Wall -Wstrict-prototypes -Wno-trigraphs -fomit-frame-pointer -fno-strict-aliasing -fno-common -pipe -mno-fp-regs -ffixed-8 -mcpu=ev5 -Wa,-mev5'
         KCPPFLAGS='-D__KERNEL__ -DMODULE '
         MOD_LINK=elf64alpha
 ;;
 
 	ia64 )
 	AC_MSG_RESULT($host_cpu)
-        KCFLAGS='-Wall -Wstrict-prototypes -Wno-trigraphs -g -O2 -fno-strict-aliasing -fno-common -pipe -ffixed-r13 -mfixed-range=f10-f15,f32-f127 -falign-functions=32 -mb-step'
+        KCFLAGS='-g -O2 -Wall -Wstrict-prototypes -Wno-trigraphs -fno-strict-aliasing -fno-common -pipe -ffixed-r13 -mfixed-range=f10-f15,f32-f127 -falign-functions=32 -mb-step'
 	KCPPFLAGS='-D__KERNEL__ -DMODULE'
         MOD_LINK=elf64_ia64
 ;;
 
 	sparc64 )
 	AC_MSG_RESULT($host_cpu)
-        KCFLAGS='-Wall -Wstrict-prototypes -Wno-trigraphs -O2 -fomit-frame-pointer -fno-strict-aliasing -fno-common -Wno-unused -m64 -pipe -mno-fpu -mcpu=ultrasparc -mcmodel=medlow -ffixed-g4 -fcall-used-g5 -fcall-used-g7 -Wno-sign-compare -Wa,--undeclared-regs'
+        KCFLAGS='-O2 -Wall -Wstrict-prototypes -Wno-trigraphs -fomit-frame-pointer -fno-strict-aliasing -fno-common -Wno-unused -m64 -pipe -mno-fpu -mcpu=ultrasparc -mcmodel=medlow -ffixed-g4 -fcall-used-g5 -fcall-used-g7 -Wno-sign-compare -Wa,--undeclared-regs'
         KCPPFLAGS='-D__KERNEL__'
         MOD_LINK=elf64_sparc
 
@@ -64,7 +64,7 @@ case ${host_cpu} in
 
 	powerpc )
 	AC_MSG_RESULT($host_cpu)
-        KCFLAGS='-Wall -Wstrict-prototypes -Wno-trigraphs -O2 -fomit-frame-pointer -fno-strict-aliasing -fno-common -D__powerpc__ -fsigned-char -msoft-float -pipe -ffixed-r2 -Wno-uninitialized -mmultiple -mstring'
+        KCFLAGS='-O2 -Wall -Wstrict-prototypes -Wno-trigraphs -fomit-frame-pointer -fno-strict-aliasing -fno-common -D__powerpc__ -fsigned-char -msoft-float -pipe -ffixed-r2 -Wno-uninitialized -mmultiple -mstring'
         KCPPFLAGS='-D__KERNEL__'
         MOD_LINK=elf32ppclinux
 ;;
