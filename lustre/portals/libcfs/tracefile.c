@@ -593,7 +593,7 @@ static int tracefiled(void *arg)
                 filp = NULL;
                 down_read(&tracefile_sem);
                 if (tracefile != NULL) {
-                        filp = filp_open(tracefile, O_CREAT|O_RDWR|O_APPEND,
+                        filp = filp_open(tracefile, O_CREAT|O_RDWR|O_APPEND|O_LARGEFILE,
                                         0600);
                         if (IS_ERR(filp)) {
                                 printk("couldn't open %s: %ld\n", tracefile,
