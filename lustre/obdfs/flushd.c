@@ -44,11 +44,10 @@ struct {
 				each time we call refill */
 	int nref_dirt; /* Dirty buffer threshold for activating bdflush
 			  when trying to refill buffers. */
-	int interval; /* jiffies delay between kupdate flushes */
+	int interval; /* jiffies delay between pupdate flushes */
 	int age_buffer;  /* Time for normal buffer to age before we flush it */
 	int age_super;  /* Time for superblock to age before we flush it */
-/* } pupd_prm = {40, 500, 64, 256, 5*HZ, 30*HZ, 5*HZ };  */
-} pupd_prm = {40, 500, 64, 256, 10*HZ, 30*HZ, 5*HZ }; 
+} pupd_prm = {40, 500, 64, 256, 2*HZ, 30*HZ, 5*HZ };
 
 /* Called with the superblock list lock */
 static int obdfs_enqueue_pages(struct inode *inode, struct obdo **obdo,
@@ -327,10 +326,7 @@ static int pupdate(void *unused)
 		/* asynchronous setattr etc for the future ...
 		flush_inodes();
 		 */
-		/* we don't currently check the time on the pages
 		obdfs_flush_dirty_pages(1); 
-		 */
-		obdfs_flush_dirty_pages(0); 
 	}
 }
 
