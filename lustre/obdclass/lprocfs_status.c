@@ -39,6 +39,7 @@
 
 #include <linux/obd_class.h>
 #include <linux/lprocfs_status.h>
+#include <linux/lustre_fsfilt.h>
 
 #ifdef LPROCFS
 
@@ -191,7 +192,7 @@ int lprocfs_rd_uuid(char *page, char **start, off_t off, int count,
 }
 
 int lprocfs_rd_name(char *page, char **start, off_t off, int count,
-                    int *eof, void *data)
+                    int *eof, void* data)
 {
         struct obd_device *dev = (struct obd_device *)data;
 
@@ -201,66 +202,92 @@ int lprocfs_rd_name(char *page, char **start, off_t off, int count,
         return snprintf(page, count, "%s\n", dev->obd_name);
 }
 
-int lprocfs_rd_blksize(char *page, char **start, off_t off, int count,
-                       int *eof, struct kstatfs *sfs)
+int lprocfs_rd_fstype(char *page, char **start, off_t off, int count, int *eof,
+                      void *data)
 {
-        LASSERT(sfs != NULL);
-        *eof = 1;
-        return snprintf(page, count, "%lu\n", sfs->f_bsize);
+        struct obd_device *obd = (struct obd_device *)data;
+
+        LASSERT(obd != NULL);
+        LASSERT(obd->obd_fsops != NULL);
+        LASSERT(obd->obd_fsops->fs_type != NULL);
+        return snprintf(page, count, "%s\n", obd->obd_fsops->fs_type);
+}
+
+int lprocfs_rd_blksize(char *page, char **start, off_t off, int count,
+                       int *eof, void *data)
+{
+        struct obd_statfs osfs;
+        int rc = obd_statfs(data, &osfs, jiffies - HZ);
+        if (!rc) {
+                *eof = 1;
+                rc = snprintf(page, count, "%u\n", osfs.os_bsize);
+        }
+        return rc;
 }
 
 int lprocfs_rd_kbytestotal(char *page, char **start, off_t off, int count,
-                           int *eof, struct kstatfs *sfs)
+                           int *eof, void *data)
 {
-        __u32 blk_size;
-        __u64 result;
+        struct obd_statfs osfs;
+        int rc = obd_statfs(data, &osfs, jiffies - HZ);
+        if (!rc) {
+                __u32 blk_size = osfs.os_bsize >> 10;
+                __u64 result = osfs.os_blocks;
 
-        LASSERT(sfs != NULL);
-        blk_size = sfs->f_bsize >> 10;
-        result = sfs->f_blocks;
+                while (blk_size >>= 1)
+                        result <<= 1;
 
-        while (blk_size >>= 1)
-                result <<= 1;
-
-        *eof = 1;
-        return snprintf(page, count, LPU64"\n", result);
+                *eof = 1;
+                rc = snprintf(page, count, LPU64"\n", result);
+        }
+        return rc;
 }
 
 int lprocfs_rd_kbytesfree(char *page, char **start, off_t off, int count,
-                          int *eof, struct kstatfs *sfs)
+                          int *eof, void *data)
 {
-        __u32 blk_size;
-        __u64 result;
+        struct obd_statfs osfs;
+        int rc = obd_statfs(data, &osfs, jiffies - HZ);
+        if (!rc) {
+                __u32 blk_size = osfs.os_bsize >> 10;
+                __u64 result = osfs.os_bfree;
 
-        LASSERT(sfs != NULL);
-        blk_size = sfs->f_bsize >> 10;
-        result = sfs->f_bfree;
+                while (blk_size >>= 1)
+                        result <<= 1;
 
-        while (blk_size >>= 1)
-                result <<= 1;
-
-        *eof = 1;
-        return snprintf(page, count, LPU64"\n", result);
+                *eof = 1;
+                rc = snprintf(page, count, LPU64"\n", result);
+        }
+        return rc;
 }
 
 int lprocfs_rd_filestotal(char *page, char **start, off_t off, int count,
-                          int *eof, struct kstatfs *sfs)
+                          int *eof, void *data)
 {
-        LASSERT(sfs != NULL);
-        *eof = 1;
-        return snprintf(page, count, LPD64"\n", (__u64)sfs->f_files);
+        struct obd_statfs osfs;
+        int rc = obd_statfs(data, &osfs, jiffies - HZ);
+        if (!rc) {
+                *eof = 1;
+                rc = snprintf(page, count, LPU64"\n", osfs.os_files);
+        }
+
+        return rc;
 }
 
 int lprocfs_rd_filesfree(char *page, char **start, off_t off, int count,
-                         int *eof, struct kstatfs *sfs)
+                         int *eof, void *data)
 {
-        LASSERT(sfs != NULL);
-        *eof = 1;
-        return snprintf(page, count, LPD64"\n", (__u64)sfs->f_ffree);
+        struct obd_statfs osfs;
+        int rc = obd_statfs(data, &osfs, jiffies - HZ);
+        if (!rc) {
+                *eof = 1;
+                rc = snprintf(page, count, LPU64"\n", osfs.os_ffree);
+        }
+        return rc;
 }
 
 int lprocfs_rd_filegroups(char *page, char **start, off_t off, int count,
-                          int *eof, struct kstatfs *sfs)
+                          int *eof, void *data)
 {
         *eof = 1;
         return snprintf(page, count, "unimplemented\n");
@@ -635,6 +662,7 @@ EXPORT_SYMBOL(lprocfs_free_obd_stats);
 EXPORT_SYMBOL(lprocfs_rd_u64);
 EXPORT_SYMBOL(lprocfs_rd_uuid);
 EXPORT_SYMBOL(lprocfs_rd_name);
+EXPORT_SYMBOL(lprocfs_rd_fstype);
 EXPORT_SYMBOL(lprocfs_rd_server_uuid);
 EXPORT_SYMBOL(lprocfs_rd_conn_uuid);
 EXPORT_SYMBOL(lprocfs_rd_numrefs);

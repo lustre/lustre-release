@@ -37,36 +37,8 @@ struct lprocfs_vars lprocfs_mdt_module_vars[] = { {0} };
 
 #else
 
-static inline int lprocfs_mds_statfs(void *data, struct kstatfs *sfs)
-{
-        struct obd_device* dev = (struct obd_device*) data;
-        struct mds_obd *mds;
-
-        LASSERT(dev != NULL);
-        mds = &dev->u.mds;
-        return vfs_statfs(mds->mds_sb, sfs);
-}
-
-DEFINE_LPROCFS_STATFS_FCT(rd_blksize,     lprocfs_mds_statfs);
-DEFINE_LPROCFS_STATFS_FCT(rd_kbytestotal, lprocfs_mds_statfs);
-DEFINE_LPROCFS_STATFS_FCT(rd_kbytesfree,  lprocfs_mds_statfs);
-DEFINE_LPROCFS_STATFS_FCT(rd_filestotal,  lprocfs_mds_statfs);
-DEFINE_LPROCFS_STATFS_FCT(rd_filesfree,   lprocfs_mds_statfs);
-DEFINE_LPROCFS_STATFS_FCT(rd_filegroups,  lprocfs_mds_statfs);
-
-static int rd_fstype(char *page, char **start, off_t off, int count, int *eof,
-              void *data)
-{
-        struct obd_device *obd = (struct obd_device *)data;
-
-        LASSERT(obd != NULL);
-        LASSERT(obd->obd_fsops != NULL);
-        LASSERT(obd->obd_fsops->fs_type != NULL);
-        return snprintf(page, count, "%s\n", obd->obd_fsops->fs_type);
-}
-
-int lprocfs_mds_rd_mntdev(char *page, char **start, off_t off, int count,
-                          int *eof, void *data)
+static int lprocfs_mds_rd_mntdev(char *page, char **start, off_t off, int count,
+                                 int *eof, void *data)
 {
         struct obd_device* obd = (struct obd_device *)data;
 
@@ -78,30 +50,30 @@ int lprocfs_mds_rd_mntdev(char *page, char **start, off_t off, int count,
 }
 
 struct lprocfs_vars lprocfs_mds_obd_vars[] = {
-        { "uuid",       lprocfs_rd_uuid, 0, 0 },
-        { "blocksize",  rd_blksize,      0, 0 },
-        { "kbytestotal",rd_kbytestotal,  0, 0 },
-        { "kbytesfree", rd_kbytesfree,   0, 0 },
-        { "fstype",     rd_fstype,       0, 0 },
-        { "filestotal", rd_filestotal,   0, 0 },
-        { "filesfree",  rd_filesfree,    0, 0 },
-        { "filegroups", rd_filegroups,   0, 0 },
-        { "mntdev",     lprocfs_mds_rd_mntdev,    0, 0 },
+        { "uuid",         lprocfs_rd_uuid,        0, 0 },
+        { "blocksize",    lprocfs_rd_blksize,     0, 0 },
+        { "kbytestotal",  lprocfs_rd_kbytestotal, 0, 0 },
+        { "kbytesfree",   lprocfs_rd_kbytesfree,  0, 0 },
+        { "fstype",       lprocfs_rd_fstype,      0, 0 },
+        { "filestotal",   lprocfs_rd_filestotal,  0, 0 },
+        { "filesfree",    lprocfs_rd_filesfree,   0, 0 },
+        //{ "filegroups",   lprocfs_rd_filegroups,  0, 0 },
+        { "mntdev",       lprocfs_mds_rd_mntdev,  0, 0 },
         { 0 }
 };
 
 struct lprocfs_vars lprocfs_mds_module_vars[] = {
-        { "num_refs",   lprocfs_rd_numrefs, 0, 0 },
+        { "num_refs",     lprocfs_rd_numrefs,     0, 0 },
         { 0 }
 };
 
 struct lprocfs_vars lprocfs_mdt_obd_vars[] = {
-        { "uuid",       lprocfs_rd_uuid, 0, 0 },
+        { "uuid",         lprocfs_rd_uuid,        0, 0 },
         { 0 }
 };
 
 struct lprocfs_vars lprocfs_mdt_module_vars[] = {
-        { "num_refs",   lprocfs_rd_numrefs, 0, 0 },
+        { "num_refs",     lprocfs_rd_numrefs,     0, 0 },
         { 0 }
 };
 
