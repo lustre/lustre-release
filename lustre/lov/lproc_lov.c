@@ -107,18 +107,6 @@ static int lov_rd_activeobd(char *page, char **start, off_t off, int count,
         return snprintf(page, count, "%u\n", desc->ld_active_tgt_count);
 }
 
-static int lov_rd_mdc(char *page, char **start, off_t off, int count, int *eof,
-                      void *data)
-{
-        struct obd_device *dev = (struct obd_device*) data;
-        struct lov_obd *lov;
-
-        LASSERT(dev != NULL);
-        lov = &dev->u.lov;
-        *eof = 1;
-        return snprintf(page, count, "%s\n", lov->mdcobd->obd_name);
-}
-
 static int lov_rd_desc_uuid(char *page, char **start, off_t off, int count,
                             int *eof, void *data)
 {
@@ -128,7 +116,7 @@ static int lov_rd_desc_uuid(char *page, char **start, off_t off, int count,
         LASSERT(dev != NULL);
         lov = &dev->u.lov;
         *eof = 1;
-        return snprintf(page, count, "%s\n", lov->desc_uuid.uuid);
+        return snprintf(page, count, "%s\n", lov->desc.ld_uuid.uuid);
 }
 
 static void *lov_tgt_seq_start(struct seq_file *p, loff_t *pos)
@@ -199,7 +187,6 @@ struct lprocfs_vars lprocfs_obd_vars[] = {
         { "blocksize",    lprocfs_rd_blksize,     0, 0 },
         { "kbytestotal",  lprocfs_rd_kbytestotal, 0, 0 },
         { "kbytesfree",   lprocfs_rd_kbytesfree,  0, 0 },
-        { "target_mdc",   lov_rd_mdc,             0, 0 },
         { "desc_uuid",    lov_rd_desc_uuid,       0, 0 },
         { 0 }
 };

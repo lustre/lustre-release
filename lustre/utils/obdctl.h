@@ -77,6 +77,7 @@ int jt_obd_close_uuid(int argc, char **argv);
 int jt_cfg_record(int argc, char **argv);
 int jt_cfg_endrecord(int argc, char **argv);
 int jt_cfg_parse(int argc, char **argv);
+int jt_cfg_dump_log(int argc, char **argv);
 
 
 int lcfg_ioctl(char * func, int dev_id, struct lustre_cfg *lcfg);
@@ -91,7 +92,7 @@ int jt_lcfg_attach(int argc, char **argv);
 int jt_lcfg_setup(int argc, char **argv);
 int jt_lcfg_add_uuid(int argc, char **argv);
 int jt_lcfg_del_uuid(int argc, char **argv);
-int jt_lcfg_lov_setconfig(int argc, char **argv);
+int jt_lcfg_lov_setup(int argc, char **argv);
 int jt_lcfg_mount_option(int argc, char **argv);
 int jt_lcfg_del_mount_option(int argc, char **argv);
 #endif
