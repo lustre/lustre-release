@@ -30,6 +30,9 @@
 #include <linux/lustre_mds.h>
 #include <linux/obd_class.h>
 
+/* this lock protects ldlm_handle2lock's integrity */
+static spinlock_t ldlm_handle_lock = SPIN_LOCK_UNLOCKED;
+
 /* lock types */
 char *ldlm_lockname[] = {
         [0] "--",
@@ -152,15 +155,18 @@ void ldlm_lock_put(struct ldlm_lock *lock)
                 LDLM_LOCK_PUT(lock->l_parent);
 
         if (lock->l_refc == 0 && (lock->l_flags & LDLM_FL_DESTROYED)) {
+                LDLM_DEBUG(lock, "final lock_put on destroyed lock, freeing");
+
+                spin_lock(&ldlm_handle_lock);
                 spin_lock(&ns->ns_counter_lock);
                 ns->ns_locks--;
                 spin_unlock(&ns->ns_counter_lock);
 
                 lock->l_resource = NULL;
-                LDLM_DEBUG(lock, "final lock_put on destroyed lock, freeing");
                 if (lock->l_export && lock->l_export->exp_connection)
                         ptlrpc_put_connection(lock->l_export->exp_connection);
                 kmem_cache_free(ldlm_lock_slab, lock);
+                spin_unlock(&ldlm_handle_lock);
                 CDEBUG(D_MALLOC, "kfreed 'lock': %d at %p (tot 0).\n",
                        sizeof(*lock), lock);
         }
@@ -220,11 +226,10 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_lock *parent,
         if (resource == NULL)
                 LBUG();
 
+        spin_lock(&ldlm_handle_lock);
         lock = kmem_cache_alloc(ldlm_lock_slab, SLAB_KERNEL);
         if (lock == NULL)
                 RETURN(NULL);
-        CDEBUG(D_MALLOC, "kmalloced 'lock': %d at "
-               "%p (tot %d).\n", sizeof(*lock), lock, 1);
 
         memset(lock, 0, sizeof(*lock));
         get_random_bytes(&lock->l_random, sizeof(__u64));
@@ -249,8 +254,11 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_lock *parent,
                 list_add(&lock->l_childof, &parent->l_children);
                 l_unlock(&parent->l_resource->lr_namespace->ns_lock);
         }
-        /* this is the extra refcount, to prevent the lock
-           evaporating */
+        spin_unlock(&ldlm_handle_lock);
+
+        CDEBUG(D_MALLOC, "kmalloced 'lock': %d at "
+               "%p (tot %d).\n", sizeof(*lock), lock, 1);
+        /* this is the extra refcount, to prevent the lock from evaporating */
         LDLM_LOCK_GET(lock);
         RETURN(lock);
 }
@@ -315,21 +323,22 @@ struct ldlm_lock *ldlm_handle2lock(struct lustre_handle *handle)
                 RETURN(NULL);
         }
 
+        spin_lock(&ldlm_handle_lock);
         lock = (struct ldlm_lock *)(unsigned long)(handle->addr);
         if (!kmem_cache_validate(ldlm_lock_slab, (void *)lock)) {
                 CERROR("bogus lock %p\n", lock);
-                RETURN(NULL);
+                GOTO(out2, retval);
         }
 
         if (!lock->l_resource) {
                 CERROR("trying to lock bogus resource: lock %p\n", lock);
                 LDLM_DEBUG(lock, "ldlm_handle2lock(%p)", lock);
-                RETURN(NULL);
+                GOTO(out2, retval);
         }
         if (!lock->l_resource->lr_namespace) {
                 CERROR("trying to lock bogus namespace: lock %p\n", lock);
                 LDLM_DEBUG(lock, "ldlm_handle2lock(%p)", lock);
-                RETURN(NULL);
+                GOTO(out2, retval);
         }
         l_lock(&lock->l_resource->lr_namespace->ns_lock);
         if (lock->l_random != handle->cookie) {
@@ -350,6 +359,8 @@ struct ldlm_lock *ldlm_handle2lock(struct lustre_handle *handle)
         EXIT;
  out:
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
+ out2:
+        spin_unlock(&ldlm_handle_lock);
         return retval;
 }
 
