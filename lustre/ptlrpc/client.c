@@ -32,8 +32,7 @@
 #include <linux/obd_class.h>
 #include <linux/lustre_net.h>
 
-int ptlrpc_enqueue(struct ptlrpc_client *peer, 
-                     struct ptlrpc_request *req)
+int ptlrpc_enqueue(struct ptlrpc_client *peer, struct ptlrpc_request *req)
 {
 	struct ptlrpc_request *srv_req;
 	
@@ -68,7 +67,7 @@ int ptlrpc_enqueue(struct ptlrpc_client *peer,
 
 int ptlrpc_connect_client(int dev, char *uuid, int req_portal, int rep_portal, 
                           req_pack_t req_pack, rep_unpack_t rep_unpack,
-			      struct ptlrpc_client *cl)
+                          struct ptlrpc_client *cl)
 {
         int err; 
 
@@ -162,6 +161,27 @@ static int ptlrpc_check_reply(struct ptlrpc_request *req)
         return 0;
 }
 
+/* Abort this request and cleanup any resources associated with it. */
+int ptlrpc_abort(struct ptlrpc_request *request)
+{
+        /* First remove the MD for the reply; in theory, this means
+         * that we can tear down the buffer safely. */
+        PtlMEUnlink(request->rq_reply_me_h);
+        PtlMDUnlink(request->rq_reply_md_h);
+        OBD_FREE(request->rq_repbuf, request->rq_replen);
+        request->rq_repbuf = NULL;
+        request->rq_replen = 0;
+
+        if (request->rq_bulklen != 0) {
+                PtlMEUnlink(request->rq_bulk_me_h);
+                PtlMDUnlink(request->rq_bulk_md_h);
+                /* FIXME: wake whoever's sleeping on this bulk sending to let
+                 * -them- clean it up. */
+        }
+
+        return 0;
+}
+
 int ptlrpc_queue_wait(struct ptlrpc_client *cl, struct ptlrpc_request *req)
                              
 {
@@ -192,6 +212,8 @@ int ptlrpc_queue_wait(struct ptlrpc_client *cl, struct ptlrpc_request *req)
         CDEBUG(0, "-- done\n");
         
         if (req->rq_flags == PTL_RPC_INTR) { 
+                /* Clean up the dangling reply buffers */
+                ptlrpc_abort(req);
                 EXIT;
                 return -EINTR;
         }
