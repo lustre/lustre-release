@@ -2,8 +2,8 @@
 
 Index: linux-2.4.20-rh/fs/dcache.c
 ===================================================================
---- linux-2.4.20-rh.orig/fs/dcache.c	2003-07-29 11:36:40.000000000 +0800
-+++ linux-2.4.20-rh/fs/dcache.c	2003-07-30 17:56:16.000000000 +0800
+--- linux-2.4.20-rh.orig/fs/dcache.c	2003-08-08 13:50:29.000000000 +0800
++++ linux-2.4.20-rh/fs/dcache.c	2003-08-08 15:47:41.000000000 +0800
 @@ -186,6 +186,13 @@
  		spin_unlock(&dcache_lock);
  		return 0;
@@ -43,8 +43,8 @@ Index: linux-2.4.20-rh/fs/dcache.c
  #define do_switch(x,y) do { \
 Index: linux-2.4.20-rh/fs/namei.c
 ===================================================================
---- linux-2.4.20-rh.orig/fs/namei.c	2003-07-29 11:36:22.000000000 +0800
-+++ linux-2.4.20-rh/fs/namei.c	2003-07-30 18:00:29.000000000 +0800
+--- linux-2.4.20-rh.orig/fs/namei.c	2003-08-08 13:50:29.000000000 +0800
++++ linux-2.4.20-rh/fs/namei.c	2003-08-08 15:47:41.000000000 +0800
 @@ -94,6 +94,13 @@
   * XEmacs seems to be relying on it...
   */
@@ -848,8 +848,8 @@ Index: linux-2.4.20-rh/fs/namei.c
  		page_cache_release(page);
 Index: linux-2.4.20-rh/fs/open.c
 ===================================================================
---- linux-2.4.20-rh.orig/fs/open.c	2003-07-29 11:36:22.000000000 +0800
-+++ linux-2.4.20-rh/fs/open.c	2003-07-30 17:56:16.000000000 +0800
+--- linux-2.4.20-rh.orig/fs/open.c	2003-08-08 13:50:29.000000000 +0800
++++ linux-2.4.20-rh/fs/open.c	2003-08-08 15:47:41.000000000 +0800
 @@ -19,6 +19,8 @@
  #include <asm/uaccess.h>
  
@@ -1178,8 +1178,8 @@ Index: linux-2.4.20-rh/fs/open.c
   */
 Index: linux-2.4.20-rh/fs/stat.c
 ===================================================================
---- linux-2.4.20-rh.orig/fs/stat.c	2003-07-29 11:36:40.000000000 +0800
-+++ linux-2.4.20-rh/fs/stat.c	2003-07-30 17:56:16.000000000 +0800
+--- linux-2.4.20-rh.orig/fs/stat.c	2003-08-08 13:50:29.000000000 +0800
++++ linux-2.4.20-rh/fs/stat.c	2003-08-08 15:47:41.000000000 +0800
 @@ -17,10 +17,12 @@
   * Revalidate the inode. This is required for proper NFS attribute caching.
   */
@@ -1261,8 +1261,8 @@ Index: linux-2.4.20-rh/fs/stat.c
  		}
 Index: linux-2.4.20-rh/include/linux/dcache.h
 ===================================================================
---- linux-2.4.20-rh.orig/include/linux/dcache.h	2003-07-29 11:36:22.000000000 +0800
-+++ linux-2.4.20-rh/include/linux/dcache.h	2003-07-30 17:58:24.000000000 +0800
+--- linux-2.4.20-rh.orig/include/linux/dcache.h	2003-08-08 13:50:29.000000000 +0800
++++ linux-2.4.20-rh/include/linux/dcache.h	2003-08-08 15:47:41.000000000 +0800
 @@ -6,6 +6,52 @@
  #include <asm/atomic.h>
  #include <linux/mount.h>
@@ -1349,8 +1349,8 @@ Index: linux-2.4.20-rh/include/linux/dcache.h
  
 Index: linux-2.4.20-rh/include/linux/fs.h
 ===================================================================
---- linux-2.4.20-rh.orig/include/linux/fs.h	2003-07-30 17:56:12.000000000 +0800
-+++ linux-2.4.20-rh/include/linux/fs.h	2003-07-30 17:57:05.000000000 +0800
+--- linux-2.4.20-rh.orig/include/linux/fs.h	2003-08-08 15:47:37.000000000 +0800
++++ linux-2.4.20-rh/include/linux/fs.h	2003-08-08 15:47:41.000000000 +0800
 @@ -338,6 +338,9 @@
  #define ATTR_MTIME_SET	256
  #define ATTR_FORCE	512	/* Not a change, but a change it */
@@ -1464,8 +1464,8 @@ Index: linux-2.4.20-rh/include/linux/fs.h
  extern struct inode_operations page_symlink_inode_operations;
 Index: linux-2.4.20-rh/kernel/ksyms.c
 ===================================================================
---- linux-2.4.20-rh.orig/kernel/ksyms.c	2003-07-30 17:56:14.000000000 +0800
-+++ linux-2.4.20-rh/kernel/ksyms.c	2003-07-30 17:56:17.000000000 +0800
+--- linux-2.4.20-rh.orig/kernel/ksyms.c	2003-08-08 15:47:39.000000000 +0800
++++ linux-2.4.20-rh/kernel/ksyms.c	2003-08-08 15:47:41.000000000 +0800
 @@ -298,6 +298,7 @@
  EXPORT_SYMBOL(set_page_dirty);
  EXPORT_SYMBOL(vfs_readlink);
@@ -1476,15 +1476,16 @@ Index: linux-2.4.20-rh/kernel/ksyms.c
  EXPORT_SYMBOL(page_symlink_inode_operations);
 Index: linux-2.4.20-rh/fs/exec.c
 ===================================================================
---- linux-2.4.20-rh.orig/fs/exec.c	2003-07-29 11:36:40.000000000 +0800
-+++ linux-2.4.20-rh/fs/exec.c	2003-07-30 17:56:17.000000000 +0800
+--- linux-2.4.20-rh.orig/fs/exec.c	2003-08-08 13:50:29.000000000 +0800
++++ linux-2.4.20-rh/fs/exec.c	2003-08-08 15:51:20.000000000 +0800
 @@ -114,8 +114,9 @@
  	struct file * file;
  	struct nameidata nd;
  	int error;
-+	struct lookup_intent it = { .it_op = IT_OPEN, .it_flags = O_RDONLY };
- 
+-
 -	error = user_path_walk(library, &nd);
++	struct lookup_intent it = { .it_op = IT_OPEN, 
++				    .it_flags = FMODE_READ|FMODE_EXEC };
 +	error = user_path_walk_it(library, &nd, &it);
  	if (error)
  		goto out;
@@ -1503,9 +1504,10 @@ Index: linux-2.4.20-rh/fs/exec.c
  	struct inode *inode;
  	struct file *file;
  	int err = 0;
-+	struct lookup_intent it = { .it_op = IT_OPEN, .it_flags = O_RDONLY };
- 
+-
 -	err = path_lookup(name, LOOKUP_FOLLOW|LOOKUP_POSITIVE, &nd);
++	struct lookup_intent it = { .it_op = IT_OPEN, 
++				    .it_flags = FMODE_READ|FMODE_EXEC };
 +	err = path_lookup_it(name, LOOKUP_FOLLOW|LOOKUP_POSITIVE, &nd, &it);
  	file = ERR_PTR(err);
  	if (!err) {
@@ -1539,8 +1541,8 @@ Index: linux-2.4.20-rh/fs/exec.c
  	retval = binfmt->core_dump(signr, regs, file);
 Index: linux-2.4.20-rh/fs/proc/base.c
 ===================================================================
---- linux-2.4.20-rh.orig/fs/proc/base.c	2003-07-29 11:36:40.000000000 +0800
-+++ linux-2.4.20-rh/fs/proc/base.c	2003-07-30 17:56:17.000000000 +0800
+--- linux-2.4.20-rh.orig/fs/proc/base.c	2003-08-08 13:50:29.000000000 +0800
++++ linux-2.4.20-rh/fs/proc/base.c	2003-08-08 15:47:41.000000000 +0800
 @@ -494,6 +494,9 @@
  
  	error = inode->u.proc_i.op.proc_get_link(inode, &nd->dentry, &nd->mnt);
