@@ -1,25 +1,28 @@
 
 
 
- fs/ext3/Makefile   |    2 ++
+ fs/ext3/Makefile   |    4 +++-
  fs/ext3/super.c    |    2 +-
  include/linux/fs.h |    1 +
- kernel/ksyms.c     |    4 ++++
- 4 files changed, 8 insertions(+), 1 deletion(-)
+ kernel/ksyms.c     |    5 +++++
+ 4 files changed, 10 insertions(+), 2 deletions(-)
 
---- linux-2.4.20-hp4_pnnl1/fs/ext3/Makefile~exports_hp	Tue Apr  1 20:36:07 2003
-+++ linux-2.4.20-hp4_pnnl1-braam/fs/ext3/Makefile	Tue Apr  1 20:36:07 2003
-@@ -9,6 +9,8 @@
+--- linux-2.4.20/fs/ext3/Makefile~exports_hp	Sat Apr  5 03:55:19 2003
++++ linux-2.4.20-braam/fs/ext3/Makefile	Sat Apr  5 03:56:03 2003
+@@ -9,8 +9,10 @@
  
  O_TARGET := ext3.o
  
-+export-objs :=	super.o
++export-objs :=	super.o inode.o
 +
  obj-y    := balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o \
- 		ioctl.o namei.o super.o symlink.o
+-		ioctl.o namei.o super.o symlink.o
++		ioctl.o namei.o super.o symlink.o 
  obj-m    := $(O_TARGET)
---- linux-2.4.20-hp4_pnnl1/fs/ext3/super.c~exports_hp	Tue Apr  1 20:36:07 2003
-+++ linux-2.4.20-hp4_pnnl1-braam/fs/ext3/super.c	Tue Apr  1 20:36:07 2003
+ 
+ include $(TOPDIR)/Rules.make
+--- linux-2.4.20/fs/ext3/super.c~exports_hp	Sat Apr  5 03:55:19 2003
++++ linux-2.4.20-braam/fs/ext3/super.c	Sat Apr  5 03:55:19 2003
 @@ -1769,7 +1769,7 @@ static void __exit exit_ext3_fs(void)
  	unregister_filesystem(&ext3_fs_type);
  }
@@ -29,9 +32,9 @@
  
  MODULE_AUTHOR("Remy Card, Stephen Tweedie, Andrew Morton, Andreas Dilger, Theodore Ts'o and others");
  MODULE_DESCRIPTION("Second Extended Filesystem with journaling extensions");
---- linux-2.4.20-hp4_pnnl1/include/linux/fs.h~exports_hp	Tue Apr  1 20:36:07 2003
-+++ linux-2.4.20-hp4_pnnl1-braam/include/linux/fs.h	Tue Apr  1 20:36:52 2003
-@@ -1020,6 +1020,7 @@ extern int unregister_filesystem(struct 
+--- linux-2.4.20/include/linux/fs.h~exports_hp	Sat Apr  5 03:55:19 2003
++++ linux-2.4.20-braam/include/linux/fs.h	Sat Apr  5 03:55:19 2003
+@@ -1005,6 +1005,7 @@ extern int unregister_filesystem(struct 
  extern struct vfsmount *kern_mount(struct file_system_type *);
  extern int may_umount(struct vfsmount *);
  extern long do_mount(char *, char *, char *, unsigned long, void *);
@@ -39,14 +42,15 @@
  
  #define kern_umount mntput
  
---- linux-2.4.20-hp4_pnnl1/kernel/ksyms.c~exports_hp	Tue Apr  1 20:36:07 2003
-+++ linux-2.4.20-hp4_pnnl1-braam/kernel/ksyms.c	Tue Apr  1 20:36:07 2003
-@@ -308,6 +308,10 @@ EXPORT_SYMBOL(dcache_dir_fsync);
+--- linux-2.4.20/kernel/ksyms.c~exports_hp	Sat Apr  5 03:55:19 2003
++++ linux-2.4.20-braam/kernel/ksyms.c	Sat Apr  5 03:55:19 2003
+@@ -284,6 +284,11 @@ EXPORT_SYMBOL(dcache_dir_fsync);
  EXPORT_SYMBOL(dcache_readdir);
  EXPORT_SYMBOL(dcache_dir_ops);
  
 +/* lustre */
 +EXPORT_SYMBOL(pagecache_lock_cacheline);
++EXPORT_SYMBOL(panic_notifier_list);
 +EXPORT_SYMBOL(do_kern_mount);
 +
  /* for stackable file systems (lofs, wrapfs, cryptfs, etc.) */
