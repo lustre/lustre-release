@@ -52,7 +52,7 @@ struct llog_handle *llog_cat_new_log(struct llog_handle *cathandle,
         ENTRY;
 
         /* does this need a tgt uuid */
-        rc = llog_create(cathandle->lgh_obd, &loghandle, NULL);
+        rc = llog_create(cathandle->lgh_obd, &loghandle, NULL, NULL);
         if (rc)
                 RETURN(ERR_PTR(rc));
 
@@ -129,7 +129,7 @@ int llog_cat_id2handle(struct llog_handle *cathandle, struct llog_handle **res,
                 }
         }
 
-        rc = llog_open(cathandle->lgh_obd, &loghandle, logid, NULL);
+        rc = llog_create(cathandle->lgh_obd, &loghandle, logid, NULL);
         if (rc) {
                 CERROR("error opening log id "LPX64":%x: rc %d\n",
                        logid->lgl_oid, logid->lgl_ogen, rc);

@@ -318,12 +318,13 @@ static int llog_lvfs_next_block(struct llog_handle *loghandle, int cur_idx,
 /* This is a callback from the llog_* functions.
  * Assumes caller has already pushed us into the kernel context. */
 static int llog_lvfs_create(struct obd_device *obd, struct llog_handle **res,
-                            char *name)
+                            struct llog_logid *logid, char *name)
 {
         char logname[24];
         struct llog_handle *handle;
+        struct l_dentry *dchild;
         struct obdo *oa = NULL;
-        int rc, open_flags = O_RDWR | O_CREAT | O_LARGEFILE;
+        int rc, cleanup_phase = 1, open_flags = O_RDWR | O_CREAT | O_LARGEFILE;
         ENTRY;
 
         handle = llog_alloc_handle();
@@ -331,63 +332,6 @@ static int llog_lvfs_create(struct obd_device *obd, struct llog_handle **res,
                 RETURN(-ENOMEM);
         *res = handle;
 
-        if (name) {
-                LASSERT(strlen(name) <= 18);
-                sprintf(logname, "LOGS/%s", name);
-
-                handle->lgh_file = l_filp_open(logname, open_flags, 0644);
-                if (IS_ERR(handle->lgh_file)) {
-                        rc = PTR_ERR(handle->lgh_file);
-                        CERROR("logfile creation %s: %d\n", logname, rc);
-                        GOTO(out_handle, rc);
-                }
-                handle->lgh_id.lgl_oid =
-                        handle->lgh_file->f_dentry->d_inode->i_ino;
-                handle->lgh_id.lgl_ogen =
-                        handle->lgh_file->f_dentry->d_inode->i_generation;
-        } else {
-                struct l_dentry *de;
-                oa = obdo_alloc();
-                if (!oa) 
-                        GOTO(out_handle, rc = -ENOMEM);
-                /* XXX */
-                oa->o_gr = 1;
-                oa->o_valid = OBD_MD_FLGROUP;
-                rc = obd_create(obd->obd_log_exp, oa, NULL, NULL);
-                if (rc) 
-                        GOTO(out_handle, rc);
-                de = obd_lvfs_fid2dentry(obd->obd_log_exp, oa->o_id, oa->o_gr);
-                if (IS_ERR(de))
-                        GOTO(out_handle, rc = PTR_ERR(de));
-                handle->lgh_file = l_dentry_open(&obd->obd_ctxt, de,
-                                                 open_flags);
-                if (IS_ERR(handle->lgh_file))
-                        GOTO(out_handle, rc = PTR_ERR(handle->lgh_file));
-                handle->lgh_id.lgl_oid = oa->o_id;
-                handle->lgh_id.lgl_ogr = oa->o_gr;
-        }
-
-        handle->lgh_obd = obd;
-        RETURN(rc);
-
-out_handle:
-        obdo_free(oa);
-        llog_free_handle(handle);
-        return rc;
-}
-
-static int llog_lvfs_open(struct obd_device *obd, struct llog_handle **res, 
-                          struct llog_logid *logid, char *name)
-{
-        struct llog_handle *loghandle;
-        struct l_dentry *dchild = NULL;
-        int rc, cleanup_phase = 1;
-        ENTRY;
-
-        *res = loghandle = llog_alloc_handle();
-        if (loghandle == NULL)
-                RETURN(-ENOMEM);
-        loghandle->lgh_obd = obd;
 
         if (logid != NULL) {
                 dchild = obd_lvfs_fid2dentry(obd->obd_log_exp, logid->lgl_oid,
@@ -408,45 +352,62 @@ static int llog_lvfs_open(struct obd_device *obd, struct llog_handle **res,
                         GOTO(cleanup, rc);
                 }
 
-                loghandle->lgh_file = l_dentry_open(&obd->obd_ctxt, dchild,
+                handle->lgh_file = l_dentry_open(&obd->obd_ctxt, dchild,
                                                     O_RDWR | O_LARGEFILE);
-                if (IS_ERR(loghandle->lgh_file)) {
-                        rc = PTR_ERR(loghandle->lgh_file);
+                if (IS_ERR(handle->lgh_file)) {
+                        rc = PTR_ERR(handle->lgh_file);
                         CERROR("error opening logfile "LPX64":"LPX64": rc %d\n",
                                logid->lgl_oid, logid->lgl_ogr, rc);
                         GOTO(cleanup, rc);
                 }
-        } else if (name != NULL) {
-                char logname[24];
-                int open_flags = O_RDWR | O_LARGEFILE;
+        } else if (name) {
                 LASSERT(strlen(name) <= 18);
                 sprintf(logname, "LOGS/%s", name);
-
-                loghandle->lgh_file = l_filp_open(logname, open_flags, 0644);
-                if (IS_ERR(loghandle->lgh_file)) {
-                        rc = PTR_ERR(loghandle->lgh_file);
-                        CERROR("logfile open by name %s: %d\n", logname, rc);
+                
+                handle->lgh_file = l_filp_open(logname, open_flags, 0644);
+                if (IS_ERR(handle->lgh_file)) {
+                        rc = PTR_ERR(handle->lgh_file);
+                        CERROR("logfile creation %s: %d\n", logname, rc);
                         GOTO(cleanup, rc);
                 }
+                handle->lgh_id.lgl_oid =
+                        handle->lgh_file->f_dentry->d_inode->i_ino;
+                handle->lgh_id.lgl_ogen =
+                        handle->lgh_file->f_dentry->d_inode->i_generation;
         } else {
-                LBUG();
+                oa = obdo_alloc();
+                if (!oa) 
+                        GOTO(cleanup, rc = -ENOMEM);
+                /* XXX */
+                oa->o_gr = 1;
+                oa->o_valid = OBD_MD_FLGROUP;
+                rc = obd_create(obd->obd_log_exp, oa, NULL, NULL);
+                if (rc) 
+                        GOTO(cleanup, rc);
+                dchild = obd_lvfs_fid2dentry(obd->obd_log_exp, oa->o_id, oa->o_gr);
+                if (IS_ERR(dchild))
+                        GOTO(cleanup, rc = PTR_ERR(dchild));
+                cleanup_phase = 2;
+                handle->lgh_file = l_dentry_open(&obd->obd_ctxt, dchild, open_flags);
+                if (IS_ERR(handle->lgh_file))
+                        GOTO(cleanup, rc = PTR_ERR(handle->lgh_file));
+                handle->lgh_id.lgl_oid = oa->o_id;
+                handle->lgh_id.lgl_ogr = oa->o_gr;
         }
 
-        loghandle->lgh_id.lgl_oid =
-                loghandle->lgh_file->f_dentry->d_inode->i_ino;
-        loghandle->lgh_id.lgl_ogen =
-                loghandle->lgh_file->f_dentry->d_inode->i_generation;
-
-        RETURN(0);
- cleanup:
+        handle->lgh_obd = obd;
+        RETURN(rc);
+cleanup:
         switch (cleanup_phase) {
         case 2:
                 l_dput(dchild);
         case 1:
-                llog_free_handle(loghandle);
+                llog_free_handle(handle);
         }
+        obdo_free(oa);
         return rc;
 }
+
 
 static int llog_lvfs_close(struct llog_handle *handle)
 {
@@ -764,7 +725,6 @@ out_handle:
 struct llog_operations llog_lvfs_ops = {
         lop_write_rec:   llog_lvfs_write_rec,
         lop_next_block:  llog_lvfs_next_block,
-        lop_open:        llog_lvfs_open,
         lop_read_header: llog_lvfs_read_header,
         lop_create:      llog_lvfs_create,
         lop_destroy:     llog_lvfs_destroy,
