@@ -1,3 +1,4 @@
+configurable-x86-stack-2.4.20-rh.patch
 mcore-2.4.20-8.patch
 dsp.patch
 dev_read_only_2.4.20-rh.patch
