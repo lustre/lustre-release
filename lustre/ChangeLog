@@ -1,6 +1,29 @@
 tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.1
        * bug fixes
+        - don't LASSERT in ll_release on NULL lld with NFS export (4655, 5760)
+        - hold NS lock when calling handle_ast_error->del_waiting_lock (5746)
+        - fix setattr mtime regression from lovcleanup merge (4829, 5669)
+        - workaround for 2.6 crash in ll_unhash_aliases (5687, 5210)
+        - small ext3 extents cleanups and fixes (5733)
+        - improved mballoc code, several small races and bugs fixed (5733, 5638)
+        - kernel version 43: fix remove_suid bugs in both 2.4 and 2.6 (5695)
+        - avoid needless client->OST connect, fix handle mismatch (5317)
+        - fix DLM error path that led to out-of-sync client, long delays (5779)
+        - support common vfs-enforced mount options (nodev,nosuid,noexec) (5637)
+        - fix several locking issues related to i_size (5492,5624,5654,5672)
+	- don't move pending lock onto export if it is already evicted (5683)
+	- fix kernel oops when creating .foo in unlinked directory (5548)
+       * miscellania
+        - fix lustre/lustrefs init scripts for SuSE (patch from Scali, 5702)
+        - don't hold the pinger_sem in ptlrpc_pinger_sending_on_import
+        - change obd_increase_kms to obd_adjust_kms (up or down) (5654)
+	- lconf, lmc search both /usr/lib and /usr/lib64 for Python libs (5800)
+        - by default create 1 inode per 4kB space on MDS, per 16kB on OSTs
+
+2005-02-18  Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 1.4.0.10 (1.4.1 release candidate 1)
+       * bug fixes
 	- don't keep a lock reference when lock is not granted (4238)
 	- unsafe list practices (rarely) led to infinite eviction loop (4908)
 	- add per-fs limit of Lustre pages in page cache, avoid OOM (4699)
@@ -23,19 +46,6 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- fix incorrect LASSERT in mds_getattr_name (5635)
 	- export a proc file for general "ping" checking (5628)
 	- fix "lfs check" to not block when the MDS is down (5628)
-	- don't LASSERT in ll_release on NULL lld with NFS export (4655, 5760)
-	- hold NS lock when calling handle_ast_error->del_waiting_lock (5746)
-	- fix setattr mtime regression from lovcleanup merge (4829, 5669)
-	- workaround for 2.6 crash in ll_unhash_aliases (5687, 5210)
-	- small ext3 extents cleanups and fixes (5733)
-	- improved mballoc code, several small races and bugs fixed (5733, 5638)
-	- kernel version 43: fix remove_suid bugs in both 2.4 and 2.6 (5695)
-	- avoid needless client->OST connect, fix handle mismatch (5317)
-	- fix DLM error path that led to out-of-sync client, long delays (5779)
-	- support common vfs-enforced mount options (nodev,nosuid,noexec) (5637)
-	- fix several locking issues related to i_size (5492,5624,5654,5672)
-	- don't move pending lock onto export if it is already evicted (5683)
-	- fix kernel oops when creating .foo in unlinked directory (5548)
        * miscellania
 	- service request history (4965)
 	- put {ll,lov,osc}_async_page structs in a single slab (4699)
@@ -48,11 +58,6 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- align r/w RPCs to PTLRPC_MAX_BRW_SIZE boundaries for performance
 	- allow readahead allocations to fail when low on memory (5383)
 	- mmap locking landed again, after considerable improvement (2828)
-	- fix lustre/lustrefs init scripts for SuSE (patch from Scali, 5702)
-	- don't hold the pinger_sem in ptlrpc_pinger_sending_on_import
-	- change obd_increase_kms to obd_adjust_kms (up or down) (5654)
-	- lconf, lmc search both /usr/lib and /usr/lib64 for Python libs (5800)
-	- by default create 1 inode per 4kB space on MDS, per 16kB on OSTs
 
 2004-11-23  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.0
