@@ -49,23 +49,6 @@ static int expired_completion_wait(void *data)
         RETURN(0);
 }
 
-#if 0
-static int expired_completion_wait(void *data)
-{
-        struct ldlm_lock *lock = data;
-        struct ptlrpc_connection *conn =
-                class_conn2cliimp(lock->l_connh)->imp_connection;
-
-        if (!conn) {
-                CERROR("lock %p has NULL import connection\n", lock);
-                RETURN(1);
-        }
-
-        class_signal_connection_failure(conn);
-        RETURN(0);
-}
-#endif
-
 int ldlm_completion_ast(struct ldlm_lock *lock, int flags)
 {
         struct l_wait_info lwi =

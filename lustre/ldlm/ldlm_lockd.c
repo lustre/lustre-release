@@ -56,8 +56,8 @@ static void waiting_locks_callback(unsigned long unused)
                                                  l_pending_chain);
                 if (l->l_callback_timeout > jiffies)
                         break;
-                LDLM_DEBUG(l, "timer expired, recovering conn %p",
-                           l->l_export->exp_connection);
+                LDLM_DEBUG(l, "timer expired, recovering exp %p on conn %p",
+                           l->l_export, l->l_export->exp_connection);
                 recovd_conn_fail(l->l_export->exp_connection);
         }
         spin_unlock_bh(&waiting_locks_spinlock);
@@ -707,7 +707,9 @@ EXPORT_SYMBOL(ldlm_regression_start);
 EXPORT_SYMBOL(ldlm_regression_stop);
 EXPORT_SYMBOL(ldlm_lock_dump);
 EXPORT_SYMBOL(ldlm_namespace_new);
+EXPORT_SYMBOL(ldlm_namespace_cleanup);
 EXPORT_SYMBOL(ldlm_namespace_free);
+EXPORT_SYMBOL(ldlm_namespace_dump);
 EXPORT_SYMBOL(ldlm_cancel_locks_for_export);
 EXPORT_SYMBOL(l_lock);
 EXPORT_SYMBOL(l_unlock);

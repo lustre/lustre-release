@@ -192,7 +192,6 @@ void ldlm_lock_destroy(struct ldlm_lock *lock)
         if (lock->l_readers || lock->l_writers) {
                 LDLM_DEBUG(lock, "lock still has references");
                 ldlm_lock_dump(lock);
-                LBUG();
         }
 
         if (!list_empty(&lock->l_res_link)) {
@@ -862,7 +861,7 @@ void ldlm_cancel_locks_for_export(struct obd_export *exp)
                 struct ldlm_resource *res;
                 lock = list_entry(iter, struct ldlm_lock, l_export_chain);
                 res = ldlm_resource_getref(lock->l_resource);
-                LDLM_DEBUG(lock, "cancelling lock for export %p", exp);
+                LDLM_DEBUG(lock, "export %p", exp);
                 ldlm_lock_cancel(lock);
                 ldlm_reprocess_all(res);
                 ldlm_resource_put(res);

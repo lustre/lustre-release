@@ -120,9 +120,9 @@ struct ldlm_namespace *ldlm_namespace_new(char *name, __u32 client)
 
 extern struct ldlm_lock *ldlm_lock_get(struct ldlm_lock *lock);
 
-/* If 'local' is true, don't try to tell the server, just cleanup. */
+/* If 'local_only' is true, don't try to tell the server, just cleanup. */
 static void cleanup_resource(struct ldlm_resource *res, struct list_head *q,
-                             int local)
+                             int local_only)
 {
         struct list_head *tmp, *pos;
         int rc = 0, client = res->lr_namespace->ns_client;
@@ -136,13 +136,13 @@ static void cleanup_resource(struct ldlm_resource *res, struct list_head *q,
                 if (client) {
                         struct lustre_handle lockh;
                         ldlm_lock2handle(lock, &lockh);
-                        if (!local) {
+                        if (!local_only) {
                                 rc = ldlm_cli_cancel(&lockh);
                                 if (rc)
                                         CERROR("ldlm_cli_cancel: %d\n", rc);
                         }
                         /* Force local cleanup on errors, too. */
-                        if (local || rc != ELDLM_OK)
+                        if (local_only || rc != ELDLM_OK)
                                 ldlm_lock_cancel(lock);
                 } else {
                         LDLM_DEBUG(lock, "Freeing a lock still held by a "
@@ -155,7 +155,7 @@ static void cleanup_resource(struct ldlm_resource *res, struct list_head *q,
         }
 }
 
-int ldlm_namespace_cleanup(struct ldlm_namespace *ns, int local)
+int ldlm_namespace_cleanup(struct ldlm_namespace *ns, int local_only)
 {
         int i;
 
@@ -167,11 +167,11 @@ int ldlm_namespace_cleanup(struct ldlm_namespace *ns, int local)
                         res = list_entry(tmp, struct ldlm_resource, lr_hash);
                         ldlm_resource_getref(res);
 
-                        cleanup_resource(res, &res->lr_granted, local);
-                        cleanup_resource(res, &res->lr_converting, local);
-                        cleanup_resource(res, &res->lr_waiting, local);
+                        cleanup_resource(res, &res->lr_granted, local_only);
+                        cleanup_resource(res, &res->lr_converting, local_only);
+                        cleanup_resource(res, &res->lr_waiting, local_only);
 
-                        if (!ldlm_resource_put(res)) {
+                        if (!ldlm_resource_put(res) && !local_only) {
                                 CERROR("Resource refcount nonzero (%d) after "
                                        "lock cleanup; forcing cleanup.\n",
                                        atomic_read(&res->lr_refcount));
