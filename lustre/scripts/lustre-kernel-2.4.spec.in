@@ -751,8 +751,8 @@ exit 0
 %doc lustre/linux/Documentation/*
 
 %files -n lustre-lite-utils
-%doc lustre/COPYING lustre/BUGS lustre/ChangeLog lustre/README lustre/doc/lustre.pdf
 %defattr(-, root, root)
+%doc lustre/COPYING lustre/BUGS lustre/ChangeLog lustre/README lustre/doc/lustre.pdf
 %{_sbindir}/*
 %{_bindir}/*
 %{_libdir}/lustre/python
