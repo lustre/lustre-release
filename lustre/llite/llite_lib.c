@@ -298,7 +298,7 @@ void ll_lli_init(struct ll_inode_info *lli)
         sema_init(&lli->lli_open_sem, 1);
         lli->lli_flags = 0;
         lli->lli_maxbytes = PAGE_CACHE_MAXBYTES;
-        spin_lock_init(&lli->lock);
+        spin_lock_init(&lli->lli_lock);
         INIT_LIST_HEAD(&lli->lli_pending_write_llaps);
 }
 
