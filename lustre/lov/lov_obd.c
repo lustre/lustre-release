@@ -15,6 +15,7 @@
 
 #include <linux/module.h>
 #include <linux/obd_class.h>
+#include <linux/obd_lov.h>
 
 extern struct obd_device obd_dev[MAX_OBD_DEVICES];
 
@@ -115,65 +116,70 @@ static int lov_close(struct obd_conn *conn, struct obdo *oa)
 
 static int lov_create(struct obd_conn *conn, struct obdo *oa)
 {
-        int rc, i;
+        int rc, retval, i, offset;
+        struct obdo tmp;
+        struct lov_md md;
         ENTRY;
 
         if (!gen_client(conn))
                 RETURN(-EINVAL);
 
-        for (i = 0; i < conn->oc_dev->obd_multi_count; i++)
-                rc = obd_create(&conn->oc_dev->obd_multi_conn[i], oa);
+        md.lmd_object_id = oa->o_id;
+        md.lmd_stripe_count = conn->oc_dev->obd_multi_count;
+
+        memset(oa->o_inline, 0, sizeof(oa->o_inline));
+        offset = sizeof(md);
+        for (i = 0; i < md.lmd_stripe_count; i++) {
+                struct lov_object_id lov_id;
+                rc = obd_create(&conn->oc_dev->obd_multi_conn[i], &tmp);
+                if (i == 0) {
+                        memcpy(oa, &tmp, sizeof(tmp));
+                        retval = rc;
+                } else if (retval != rc)
+                        CERROR("return codes didn't match (%d, %d)\n",
+                               retval, rc);
+                lov_id = (struct lov_object_id *)(oa->o_inline + offset);
+                lov_id->l_device_id = i;
+                lov_id->l_object_id = tmp.o_id;
+                offset += sizeof(*lov_id);
+        }
+        memcpy(oa->o_inline, &md, sizeof(md));
 
         return rc;
 }
 
-static int filter_destroy(struct obd_conn *conn, struct obdo *oa)
+static int lov_destroy(struct obd_conn *conn, struct obdo *oa)
 {
-#if 0
-        struct obd_device * obddev;
-        struct obd_client * cli;
-        struct inode * inode;
-        struct file *dir;
-        struct file *object;
-        int rc;
-        struct obd_run_ctxt saved;
+        int rc, retval, i, offset;
+        struct obdo tmp;
+        struct lov_md *md;
+        struct lov_object_id lov_id;
+        ENTRY;
 
-        if (!(cli = gen_client(conn))) {
-                CERROR("invalid client %u\n", conn->oc_id);
-                EXIT;
-                return -EINVAL;
+        if (!gen_client(conn))
+                RETURN(-EINVAL);
+
+        md = (struct lov_md *)oa->o_inline;
+
+        memcpy(&tmp, oa, sizeof(tmp));
+
+        offset = sizeof(md);
+        for (i = 0; i < md->lmd_stripe_count; i++) {
+                struct lov_object_id *lov_id;
+                lov_id = (struct lov_object_id *)(oa->o_inline + offset);
+
+                tmp.o_id = lov_id->l_object_id;
+
+                rc = obd_destroy(&conn->oc_dev->obd_multi_conn[i], &tmp);
+                if (i == 0)
+                        retval = rc;
+                else if (retval != rc)
+                        CERROR("return codes didn't match (%d, %d)\n",
+                               retval, rc);
+                offset += sizeof(*lov_id);
         }
 
-        obddev = conn->oc_dev;
-        object = filter_obj_open(obddev, oa->o_id, oa->o_mode);
-        if (!object || IS_ERR(object)) {
-                EXIT;
-                return -ENOENT;
-        }
-
-        inode = object->f_dentry->d_inode;
-        inode->i_nlink = 1;
-        inode->i_mode = 010000;
-
-        push_ctxt(&saved, &obddev->u.filter.fo_ctxt);
-        dir = filter_parent(oa->o_id, oa->o_mode);
-        if (IS_ERR(dir)) {
-                rc = PTR_ERR(dir);
-                EXIT;
-                goto out;
-        }
-        dget(dir->f_dentry);
-        dget(object->f_dentry);
-        rc = vfs_unlink(dir->f_dentry->d_inode, object->f_dentry);
-
-        filp_close(dir, 0);
-        filp_close(object, 0);
-out:
-        pop_ctxt(&saved);
-        EXIT;
         return rc;
-#endif
-        return 0;
 }
 
 /* FIXME: maybe we'll just make one node the authoritative attribute node, then
@@ -200,17 +206,73 @@ static int lov_punch(struct obd_conn *conn, struct obdo *oa,
         RETURN(rc);
 }
 
-/* buffer must lie in user memory here */
-static int lov_read(struct obd_conn *conn, struct obdo *oa, char *buf,
-                    obd_size *count, obd_off offset)
+struct lov_callback_data {
+        atomic_t count;
+        wait_queue_head waitq;
+};
+
+static void lov_read_callback(struct ptlrpc_bulk_desc *desc, void *data)
 {
-        int rc, i;
+        struct lov_callback_data *cb_data = data;
+
+        if (atomic_dec_and_test(&cb_data->count))
+                wake_up(&cb_data->waitq);
+}
+
+static int lov_read_check_status(struct lov_callback_data *cb_data)
+{
+        ENTRY;
+        if (sigismember(&(current->pending.signal), SIGKILL) ||
+            sigismember(&(current->pending.signal), SIGTERM) ||
+            sigismember(&(current->pending.signal), SIGINT)) {
+                cb_data->flags |= PTL_RPC_FL_INTR;
+                RETURN(1);
+        }
+        if (atomic_read(&cb_data->count) == 0)
+                RETURN(1);
+        RETURN(0);
+}
+
+/* buffer must lie in user memory here */
+static int lov_brw(int cmd, struct obd_conn *conn, obd_count num_oa,
+                   struct obdo **oa,
+                   obd_count *oa_bufs, struct page **buf,
+                   obd_size *count, obd_off *offset, obd_flag *flags,
+                   bulk_callback_t callback, void *data)
+{
+        int rc, i, page_array_offset = 0;
         obd_off off = offset;
         obd_size retval = 0;
+        struct lov_callback_data *cb_data;
         ENTRY;
+
+        if (num_oa != 1)
+                LBUG();
 
         if (!gen_client(conn))
                 RETURN(-EINVAL);
+
+        OBD_ALLOC(cb_data, sizeof(*cb_data));
+        if (cb_data == NULL) {
+                LBUG();
+                RETURN(-ENOMEM);
+        }
+        INIT_WAITQUEUE_HEAD(&cb_data->waitq);
+        atomic_set(&cb_data->count, 0);
+
+        for (i = 0; i < oa_bufs[0]; i++) {
+                struct page *current_page = buf[i];
+
+                struct lov_md *md = (struct lov_md *)oa[i]->inline;
+                int bufcount = oa_bufs[i];
+                // md->lmd_stripe_count
+
+                for (k = page_array_offset; k < bufcount + page_array_offset;
+                     k++) {
+                        
+                }
+                page_array_offset += bufcount;
+
 
         while (off < offset + count) {
                 int stripe, conn;
@@ -221,12 +283,13 @@ static int lov_read(struct obd_conn *conn, struct obdo *oa, char *buf,
                 if (size > *count)
                         size = *count;
 
-
                 conn = stripe % conn->oc_dev->obd_multi_count;
 
                 tmp = size;
-                rc = obd_read(&conn->oc_dev->obd_multi_conn[conn], oa, buf,
-                              &size, off);
+                atomic_inc(&cb_data->count);
+                rc = obd_brw(cmd, &conn->oc_dev->obd_multi_conn[conn],
+                             num_oa, oa, buf,
+                              &size, off, lov_read_callback, cb_data);
                 if (rc == 0)
                         retval += size;
                 else {
@@ -239,17 +302,28 @@ static int lov_read(struct obd_conn *conn, struct obdo *oa, char *buf,
                 buf += size;
         }
 
+        wait_event_interruptible(&cb_data->waitq,
+                                 lov_read_check_status(cb_data));
+        if (cb_data->flags & PTL_RPC_FL_INTR)
+                rc = -EINTR;
+
+        /* FIXME: The error handling here sucks */
         *count = retval;
+        OBD_FREE(cb_data, sizeof(*cb_data));
         RETURN(rc);
 }
 
+static void lov_write_finished(struct ptlrpc_bulk_desc *desc, void *data)
+{
+        
+}
 
 /* buffer must lie in user memory here */
 static int filter_write(struct obd_conn *conn, struct obdo *oa, char *buf,
                          obd_size *count, obd_off offset)
 {
         int err;
-        struct file * file;
+        struct file *file;
         unsigned long retval;
 
         ENTRY;
@@ -312,22 +386,25 @@ static int lov_cancel(struct obd_conn *conn, __u32 mode,
         rc = obd_cancel(&conn->oc_dev->obd_multi_conn[0], oa);
         RETURN(rc);
 }
+#endif
 
 struct obd_ops lov_obd_ops = {
         o_setup:       gen_multi_setup,
         o_cleanup:     gen_multi_cleanup,
         o_create:      lov_create,
-        o_destroy:     lov_destroy,
+        o_connect:     lov_connect,
+        o_disconnect:  lov_disconnect,
         o_getattr:     lov_getattr,
         o_setattr:     lov_setattr,
         o_open:        lov_open,
         o_close:       lov_close,
-        o_connect:     lov_connect,
-        o_disconnect:  lov_disconnect,
+#if 0
+        o_destroy:     lov_destroy,
         o_brw:         lov_pgcache_brw,
         o_punch:       lov_punch,
         o_enqueue:     lov_enqueue,
         o_cancel:      lov_cancel
+#endif
 };
 
 

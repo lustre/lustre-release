@@ -22,6 +22,7 @@
 #include <linux/extN_xattr.h>
 #include <linux/lustre_mds.h>
 #include <linux/module.h>
+#include <linux/obd_lov.h>
 
 static struct mds_fs_operations mds_extN_fs_ops;
 static kmem_cache_t *jcb_cache;
@@ -34,10 +35,8 @@ struct mds_cb_data {
 };
 
 struct mds_objid {
-        __u16 mo_magic;
-        __u8  mo_unused;
-        __u8  mo_ost;
-        __u64 mo_id;
+        __u64 mo_magic;
+        struct lov_md mo_lov_md;
 };
 
 #define EXTN_XATTR_INDEX_LUSTRE         5
@@ -103,65 +102,75 @@ static int mds_extN_setattr(struct dentry *dentry, void *handle,
                 return inode_setattr(inode, iattr);
 }
 
-static int mds_extN_set_objid(struct inode *inode, void *handle, obd_id id)
+static int mds_extN_set_obdo(struct inode *inode, void *handle,
+                             struct obdo *obdo)
 {
-        struct mds_objid data;
+        struct mds_objid *data = (struct mds_objid *)obdo->o_inline;
         int rc;
 
-        data.mo_magic = cpu_to_le16(XATTR_MDS_MO_MAGIC);
-        data.mo_unused = 0;
-        data.mo_ost = 0;  /* FIXME: store OST index here */
-        data.mo_id = cpu_to_le64(id);
+        data->mo_magic = cpu_to_le64(XATTR_MDS_MO_MAGIC);
 
         lock_kernel();
         down(&inode->i_sem);
-        if (id == 0) {
+        if (obdo == NULL)
                 rc = extN_xattr_set(handle, inode, EXTN_XATTR_INDEX_LUSTRE,
                                     XATTR_LUSTRE_MDS_OBJID, NULL, 0, 0);
-        } else {
+        else
                 rc = extN_xattr_set(handle, inode, EXTN_XATTR_INDEX_LUSTRE,
-                                    XATTR_LUSTRE_MDS_OBJID, &data,
-                                    sizeof(struct mds_objid), XATTR_CREATE);
-        }
+                                    XATTR_LUSTRE_MDS_OBJID, obdo->o_inline,
+                                    OBD_INLINESZ, XATTR_CREATE);
         up(&inode->i_sem);
         unlock_kernel();
 
         if (rc)
                 CERROR("error adding objectid %Ld to inode %ld\n",
-                       (unsigned long long)id, inode->i_ino);
+                       (unsigned long long)obdo->o_id, inode->i_ino);
         return rc;
 }
 
-static int mds_extN_get_objid(struct inode *inode, obd_id *id)
+static int mds_extN_get_obdo(struct inode *inode, struct obdo *obdo)
 {
+        char *buf;
         struct mds_objid data;
-        int rc;
+        struct lov_object_id *lov_ids;
+        int rc, size;
 
         lock_kernel();
         down(&inode->i_sem);
         rc = extN_xattr_get(inode, EXTN_XATTR_INDEX_LUSTRE,
                             XATTR_LUSTRE_MDS_OBJID, &data,
                             sizeof(struct mds_objid));
+        size = sizeof(struct mds_objid) + data.mo_lov_md.lmd_stripe_count *
+                sizeof(*lov_ids);
+        OBD_ALLOC(buf, size);
+        if (buf == NULL)
+                LBUG();
+        rc = extN_xattr_get(inode, EXTN_XATTR_INDEX_LUSTRE,
+                            XATTR_LUSTRE_MDS_OBJID, buf, size);
         up(&inode->i_sem);
         unlock_kernel();
+
+        if (size > OBD_INLINESZ)
+                LBUG();
 
         if (rc < 0) {
                 CERROR("error getting EA %s from MDS inode %ld: rc = %d\n",
                        XATTR_LUSTRE_MDS_OBJID, inode->i_ino, rc);
-                *id = 0;
-        } else if (data.mo_magic != cpu_to_le16(XATTR_MDS_MO_MAGIC)) {
-                CERROR("MDS object id %Ld has bad magic %x\n",
-                       (unsigned long long)le64_to_cpu(data.mo_id),
-                       le16_to_cpu(data.mo_magic));
+                obdo->o_id = 0;
+        } else if (data.mo_magic != cpu_to_le64(XATTR_MDS_MO_MAGIC)) {
+                CERROR("MDS object id %Ld has bad magic %Lx\n",
+                       (unsigned long long)obdo->o_id,
+                       (unsigned long long)le64_to_cpu(data.mo_magic));
                 rc = -EINVAL;
         } else {
-                *id = le64_to_cpu(data.mo_id);
-                /* FIXME: will actually use data.mo_ost at some point */
-                if (data.mo_ost)
-                        CERROR("MDS objid %Ld with ost index %d!\n",
-                               *id, data.mo_ost);
+                /* This field is byteswapped because it appears in the
+                 * catalogue.  All others are opaque to the MDS */
+                obdo->o_id = le64_to_cpu(data.mo_lov_md.lmd_object_id);
+                memcpy(obdo->o_inline, buf + sizeof(data), size);
         }
 
+#warning FIXME: pass this buffer to caller for transmission when size exceeds OBD_INLINESZ
+        OBD_FREE(buf, size);
         return rc;
 }
 
@@ -202,8 +211,8 @@ static void mds_extN_delete_inode(struct inode *inode)
                         EXIT;
                         return;
                 }
-                if (mds_extN_set_objid(inode, handle, 0))
-                        CERROR("error clearing objid on %ld\n", inode->i_ino);
+                if (mds_extN_set_obdo(inode, handle, NULL))
+                        CERROR("error clearing obdo on %ld\n", inode->i_ino);
 
                 if (mds_extN_fs_ops.cl_delete_inode)
                         mds_extN_fs_ops.cl_delete_inode(inode);
@@ -286,8 +295,8 @@ static struct mds_fs_operations mds_extN_fs_ops = {
         fs_start:               mds_extN_start,
         fs_commit:              mds_extN_commit,
         fs_setattr:             mds_extN_setattr,
-        fs_set_objid:           mds_extN_set_objid,
-        fs_get_objid:           mds_extN_get_objid,
+        fs_set_obdo:            mds_extN_set_obdo,
+        fs_get_obdo:            mds_extN_get_obdo,
         fs_readpage:            mds_extN_readpage,
         fs_delete_inode:        mds_extN_delete_inode,
         cl_delete_inode:        clear_inode,

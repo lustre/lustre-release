@@ -5,10 +5,10 @@
 
 DEFS :=
 
-#MODULE = lov
-#modulefs_DATA = lov.o
-#EXTRA_PROGRAMS = lov
+MODULE = lov
+modulefs_DATA = lov.o
+EXTRA_PROGRAMS = lov
 
-#lov_SOURCES = lov_obd.c
+lov_SOURCES = lov_obd.c
 
 include $(top_srcdir)/Rules

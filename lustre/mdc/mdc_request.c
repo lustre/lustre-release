@@ -95,7 +95,10 @@ int mdc_getattr(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
         ll_ino2fid(&body->fid1, ino, 0, type);
         body->valid = valid;
 
-        if (valid & OBD_MD_LINKNAME) {
+        if (S_ISREG(type)) {
+                bufcount = 2;
+                size[1] = sizeof(struct obdo);
+        } else if (valid & OBD_MD_LINKNAME) {
                 bufcount = 2;
                 size[1] = ea_size;
         }
@@ -134,7 +137,7 @@ int mdc_open(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
         body = lustre_msg_buf(req->rq_reqmsg, 0);
         ll_ino2fid(&body->fid1, ino, 0, type);
         body->flags = HTON__u32(flags);
-        body->objid = cookie; 
+        body->extra = cookie;
 
         req->rq_replen = lustre_msg_size(1, &size);
 
@@ -144,7 +147,7 @@ int mdc_open(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
         if (!rc) {
                 mds_unpack_rep_body(req);
                 body = lustre_msg_buf(req->rq_repmsg, 0);
-                *fh = body->objid;
+                *fh = body->extra;
         }
 
         EXIT;
@@ -166,7 +169,7 @@ int mdc_close(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
 
         body = lustre_msg_buf(req->rq_reqmsg, 0);
         ll_ino2fid(&body->fid1, ino, 0, type);
-        body->objid = fh;
+        body->extra = fh;
 
         req->rq_level = LUSTRE_CONN_FULL;
         req->rq_replen = lustre_msg_size(0, NULL);
@@ -347,7 +350,7 @@ static int request_ioctl(struct inode *inode, struct file *file,
                 err = mdc_create(&cl, conn, &inode,
                                  "foofile", strlen("foofile"),
                                  NULL, 0, 0100707, 47114711,
-                                 11, 47, 0, &request);
+                                 11, 47, 0, NULL, &request);
                 CERROR("-- done err %d\n", err);
 
                 GOTO(out, err);

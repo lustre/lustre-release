@@ -356,11 +356,9 @@ static int ost_brw_write_cb(struct ptlrpc_bulk_page *bulk)
         RETURN(rc);
 }
 
-static int ost_brw_write_finished_cb(struct ptlrpc_bulk_desc *desc)
+static void ost_brw_write_finished_cb(struct ptlrpc_bulk_desc *desc, void *data)
 {
         ptlrpc_free_bulk(desc);
-
-        return 0;
 }
 
 static int ost_brw_write(struct ost_obd *obddev, struct ptlrpc_request *req)

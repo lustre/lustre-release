@@ -169,7 +169,7 @@ static int obdfs_brw(int rw, struct inode *inode, struct page *page, int create)
         obdfs_from_inode(oa, inode);
 
         err = obd_brw(rw, IID(inode), num_obdo, &oa, &bufs_per_obdo,
-                       &page, &count, &offset, &flags);
+                       &page, &count, &offset, &flags, NULL);
         //if ( !err )
         //      obdfs_to_inode(inode, oa); /* copy o_blocks to i_blocks */
 
@@ -205,7 +205,7 @@ static int obdfs_commit_page(struct page *page, int create, int from, int to)
                from, to, (unsigned long long)count);
 
         err = obd_brw(WRITE, IID(inode), num_obdo, &oa, &bufs_per_obdo,
-                               &page, &count, &offset, &flags);
+                               &page, &count, &offset, &flags, NULL);
         if ( !err ) {
                 SetPageUptodate(page);
                 set_page_clean(page);

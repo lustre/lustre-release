@@ -16,16 +16,6 @@
 // XXX - add transaction sequence numbers
 
 #define EXPORT_SYMTAB
-
-#include <linux/version.h>
-#include <linux/module.h>
-#include <linux/fs.h>
-#include <linux/stat.h>
-#include <linux/locks.h>
-#include <linux/quotaops.h>
-#include <asm/unistd.h>
-#include <asm/uaccess.h>
-
 #define DEBUG_SUBSYSTEM S_MDS
 
 #include <linux/obd_support.h>
@@ -261,7 +251,7 @@ static int mds_reint_create(struct mds_update_record *rec,
         case S_IFBLK:
         case S_IFIFO:
         case S_IFSOCK: {
-                int rdev = rec->ur_id;
+                int rdev = rec->ur_rdev;
                 handle = mds_fs_start(mds, dir, MDS_FSOP_MKNOD);
                 if (!handle)
                         GOTO(out_create_dchild, PTR_ERR(handle));
@@ -285,7 +275,9 @@ static int mds_reint_create(struct mds_update_record *rec,
 
                 CDEBUG(D_INODE, "created ino %ld\n", dchild->d_inode->i_ino);
                 if (type == S_IFREG) {
-                        rc = mds_fs_set_objid(mds, inode, handle, rec->ur_id);
+                        struct obdo *obdo;
+                        obdo = lustre_msg_buf(req->rq_reqmsg, 2);
+                        rc = mds_fs_set_obdo(mds, inode, handle, obdo);
                         if (rc)
                                 CERROR("error %d setting objid for %ld\n",
                                        rc, inode->i_ino);
@@ -526,7 +518,8 @@ static int mds_reint_rename(struct mds_update_record *rec,
         handle = mds_fs_start(mds, de_tgtdir->d_inode, MDS_FSOP_RENAME);
         if (!handle)
                 GOTO(out_rename_denew, rc = PTR_ERR(handle));
-        rc = vfs_rename(de_srcdir->d_inode, de_old, de_tgtdir->d_inode, de_new);
+        rc = vfs_rename(de_srcdir->d_inode, de_old, de_tgtdir->d_inode, de_new,
+                        NULL);
 
         if (!rc)
                 rc = mds_update_last_rcvd(mds, handle, req);

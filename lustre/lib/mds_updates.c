@@ -50,7 +50,7 @@ static void mds_pack_body(struct mds_body *b)
 
         mds_pack_fid(&b->fid1);
         mds_pack_fid(&b->fid2);
-        b->objid = HTON__u64(b->objid);
+        b->extra = HTON__u64(b->extra);
         b->size = HTON__u64(b->size);
         b->valid = HTON__u32(b->valid);
         b->mode = HTON__u32(b->mode);
@@ -83,13 +83,13 @@ void mds_pack_rep_body(struct ptlrpc_request *req)
 
 /* packing of MDS records */
 void mds_create_pack(struct mds_rec_create *rec, struct inode *inode,
-                     __u32 mode, __u64 id, __u32 uid, __u32 gid, __u64 time)
+                     __u32 mode, __u64 rdev, __u32 uid, __u32 gid, __u64 time)
 {
         /* XXX do something about time, uid, gid */
         rec->cr_opcode = HTON__u32(REINT_CREATE);
         ll_inode2fid(&rec->cr_fid, inode);
         rec->cr_mode = HTON__u32(mode);
-        rec->cr_id = HTON__u64(id);
+        rec->cr_rdev = HTON__u64(rdev);
         rec->cr_uid = HTON__u32(uid);
         rec->cr_gid = HTON__u32(gid);
         rec->cr_time = HTON__u64(time);
@@ -151,7 +151,7 @@ static void mds_unpack_body(struct mds_body *b)
 
         mds_unpack_fid(&b->fid1);
         mds_unpack_fid(&b->fid2);
-        b->objid = NTOH__u64(b->objid);
+        b->extra = NTOH__u64(b->extra);
         b->size = NTOH__u64(b->size);
         b->valid = NTOH__u32(b->valid);
         b->mode = NTOH__u32(b->mode);
@@ -212,13 +212,13 @@ static int mds_create_unpack(struct ptlrpc_request *req,
         struct mds_rec_create *rec = lustre_msg_buf(req->rq_reqmsg, 0);
         ENTRY;
 
-        if (req->rq_reqmsg->bufcount != 3 ||
+        if (req->rq_reqmsg->bufcount < 2 ||
             req->rq_reqmsg->buflens[0] != sizeof(*rec))
                 RETURN(-EFAULT);
 
         r->ur_fid1 = &rec->cr_fid;
         r->ur_mode = NTOH__u32(rec->cr_mode);
-        r->ur_id = NTOH__u64(rec->cr_id);
+        r->ur_rdev = NTOH__u64(rec->cr_rdev);
         r->ur_uid = NTOH__u32(rec->cr_uid);
         r->ur_gid = NTOH__u32(rec->cr_gid);
         r->ur_time = NTOH__u64(rec->cr_time);
@@ -226,8 +226,10 @@ static int mds_create_unpack(struct ptlrpc_request *req,
         r->ur_name = lustre_msg_buf(req->rq_reqmsg, 1);
         r->ur_namelen = req->rq_reqmsg->buflens[1];
 
-        r->ur_tgt = lustre_msg_buf(req->rq_reqmsg, 2);
-        r->ur_tgtlen = req->rq_reqmsg->buflens[2];
+        if (S_ISLNK(r->ur_mode)) {
+                r->ur_tgt = lustre_msg_buf(req->rq_reqmsg, 2);
+                r->ur_tgtlen = req->rq_reqmsg->buflens[2];
+        }
         RETURN(0);
 }
 

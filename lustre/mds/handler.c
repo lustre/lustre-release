@@ -22,8 +22,8 @@
 #include <linux/module.h>
 #include <linux/lustre_mds.h>
 
-static
-int mds_sendpage(struct ptlrpc_request *req, struct file *file, __u64 offset)
+static int mds_sendpage(struct ptlrpc_request *req, struct file *file,
+                        __u64 offset)
 {
         int rc = 0;
         mm_segment_t oldfs = get_fs();
@@ -58,12 +58,19 @@ int mds_sendpage(struct ptlrpc_request *req, struct file *file, __u64 offset)
         desc->b_portal = MDS_BULK_PORTAL;
 
         rc = ptlrpc_send_bulk(desc);
+        if (rc)
+                GOTO(cleanup_buf, rc);
+
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_SENDPAGE)) {
                 CERROR("obd_fail_loc=%x, fail operation rc=%d\n",
                        OBD_FAIL_MDS_SENDPAGE, rc);
                 ptlrpc_abort_bulk(desc);
                 GOTO(cleanup_buf, rc);
         }
+
+        wait_event_interruptible(desc->b_waitq, ptlrpc_check_bulk_sent(desc));
+        if (desc->b_flags & PTL_RPC_FL_INTR)
+                GOTO(cleanup_buf, rc = -EINTR);
 
         EXIT;
  cleanup_buf:
@@ -193,14 +200,13 @@ int mds_connect(struct ptlrpc_request *req)
         RETURN(0);
 }
 
-static
-int mds_getattr(struct ptlrpc_request *req)
+static int mds_getattr(struct ptlrpc_request *req)
 {
         struct dentry *de;
         struct inode *inode;
         struct mds_body *body;
         struct mds_obd *mds = &req->rq_obd->u.mds;
-        int rc, size[2] = {sizeof(*body)}, count = 1;
+        int rc, size[2] = {sizeof(*body)}, bufcount = 1;
         ENTRY;
 
         body = lustre_msg_buf(req->rq_reqmsg, 0);
@@ -209,13 +215,17 @@ int mds_getattr(struct ptlrpc_request *req)
                 req->rq_status = -ENOENT;
                 RETURN(0);
         }
+
         inode = de->d_inode;
-        if (body->valid & OBD_MD_LINKNAME) {
-                count = 2;
+        if (S_ISREG(body->fid1.f_type)) {
+                bufcount = 2;
+                size[1] = sizeof(struct obdo);
+        } else if (body->valid & OBD_MD_LINKNAME) {
+                bufcount = 2;
                 size[1] = inode->i_size;
         }
 
-        rc = lustre_pack_msg(count, size, NULL, &req->rq_replen,
+        rc = lustre_pack_msg(bufcount, size, NULL, &req->rq_replen,
                              &req->rq_repmsg);
         if (rc || OBD_FAIL_CHECK(OBD_FAIL_MDS_GETATTR_PACK)) {
                 CERROR("mds: out of memory\n");
@@ -250,15 +260,17 @@ int mds_getattr(struct ptlrpc_request *req)
         body->size = inode->i_size;
         body->mode = inode->i_mode;
         body->nlink = inode->i_nlink;
+        body->valid = ~0; /* FIXME: should be more selective */
+
         if (S_ISREG(inode->i_mode)) {
-                rc = mds_fs_get_objid(mds, inode, &body->objid);
+                rc = mds_fs_get_obdo(mds, inode,
+                                     lustre_msg_buf(req->rq_repmsg, 1));
                 if (rc < 0) {
                         req->rq_status = rc;
-                        CERROR("readlink failed: %d\n", rc);
+                        CERROR("mds_fs_get_objid failed: %d\n", rc);
                         GOTO(out, 0);
                 }
         }
-        body->valid = ~0; /* FIXME: should be more selective */
  out:
         l_dput(de);
         RETURN(0);
@@ -301,7 +313,7 @@ int mds_open(struct ptlrpc_request *req)
         list_for_each(tmp, &mci->mci_open_head) { 
                 struct mds_file_data *fd;
                 fd = list_entry(tmp, struct mds_file_data, mfd_list);
-                if (body->objid == fd->mfd_clientfd && 
+                if (body->extra == fd->mfd_clientfd && 
                     body->fid1.id == fd->mfd_file->f_dentry->d_inode->i_ino) { 
                         CERROR("Re opening %Ld\n", body->fid1.id);
                         RETURN(0);
@@ -331,11 +343,11 @@ int mds_open(struct ptlrpc_request *req)
 
         file->private_data = mfd;
         mfd->mfd_file = file;
-        mfd->mfd_clientfd = body->objid;
+        mfd->mfd_clientfd = body->extra;
         list_add(&mfd->mfd_list, &mci->mci_open_head); 
 
         body = lustre_msg_buf(req->rq_repmsg, 0);
-        body->objid = (__u64) (unsigned long)file;
+        body->extra = (__u64) (unsigned long)file;
         RETURN(0);
 }
 
@@ -364,7 +376,7 @@ int mds_close(struct ptlrpc_request *req)
                 RETURN(0);
         }
 
-        file = (struct file *)(unsigned long)body->objid;
+        file = (struct file *)(unsigned long)body->extra;
         if (!file->f_dentry) 
                 LBUG();
         mfd = (struct mds_file_data *)file->private_data;

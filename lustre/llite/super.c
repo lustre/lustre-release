@@ -88,6 +88,7 @@ static struct super_block * ll_read_super(struct super_block *sb,
         __u64 last_committed, last_rcvd;
         __u32 last_xid;
         struct ptlrpc_request *request = NULL;
+        struct ll_inode_md md;
 
         ENTRY;
         MOD_INC_USE_COUNT;
@@ -185,8 +186,10 @@ static struct super_block * ll_read_super(struct super_block *sb,
                 GOTO(out_mdc, sb = NULL);
         }
 
-        root = iget4(sb, sbi->ll_rootino, NULL,
-                     lustre_msg_buf(request->rq_repmsg, 0));
+        md.body = lustre_msg_buf(request->rq_repmsg, 0);
+        md.obdo = NULL;
+        root = iget4(sb, sbi->ll_rootino, NULL, &md);
+                     
         if (root) {
                 sb->s_root = d_alloc_root(root);
         } else {
@@ -237,14 +240,28 @@ static void ll_put_super(struct super_block *sb)
         EXIT;
 } /* ll_put_super */
 
-
-extern inline struct obdo * ll_oa_from_inode(struct inode *inode, int valid);
+static void ll_clear_inode(struct inode *inode)
+{
+        if (atomic_read(&inode->i_count) == 0) {
+                struct obdo *oa = ll_i2info(inode)->lli_obdo;
+                if (oa) {
+                        obdo_free(oa);
+                        ll_i2info(inode)->lli_obdo = NULL;
+                }
+                if (ll_i2info(inode)->lli_symlink_name) {
+                        OBD_FREE(ll_i2info(inode)->lli_symlink_name,
+                                 strlen(ll_i2info(inode)->lli_symlink_name)+ 1);
+                        ll_i2info(inode)->lli_symlink_name = NULL;
+                }
+        }
+}
 
 static void ll_delete_inode(struct inode *inode)
 {
-        if (S_ISREG(inode->i_mode)) {
-                int err;
-                struct obdo *oa = ll_oa_from_inode(inode, OBD_MD_FLNOTOBD);
+        if (S_ISREG(inode->i_mode)) { 
+                int err; 
+                struct obdo *oa; 
+                oa = ll_i2info(inode)->lli_obdo;
 
                 if (!oa) {
                         CERROR("no memory\n");
@@ -349,8 +366,9 @@ static int ll_statfs(struct super_block *sb, struct statfs *buf)
         RETURN(err);
 }
 
-static void inline ll_to_inode(struct inode *dst, struct mds_body *body)
+static void inline ll_to_inode(struct inode *dst, struct ll_inode_md *md)
 {
+        struct mds_body *body = md->body;
         struct ll_inode_info *ii = ll_i2info(dst);
 
         /* core attributes first */
@@ -378,8 +396,10 @@ static void inline ll_to_inode(struct inode *dst, struct mds_body *body)
                 dst->i_generation = body->generation;
 
         /* this will become more elaborate for striping etc */ 
-        if (body->valid & OBD_MD_FLOBJID) 
-                ii->lli_objid = body->objid;
+        if (md->obdo != NULL) {
+                ii->lli_obdo = obdo_alloc();
+                memcpy(ii->lli_obdo, md->obdo, sizeof(*md->obdo));
+        }
 #if 0
 
         if (obdo_has_inline(oa)) {
@@ -400,10 +420,10 @@ static void inline ll_to_inode(struct inode *dst, struct mds_body *body)
 
 static inline void ll_read_inode2(struct inode *inode, void *opaque)
 {
-        struct mds_body *body = opaque; 
+        struct ll_inode_md *md = opaque;
         
         ENTRY;
-        ll_to_inode(inode, body); 
+        ll_to_inode(inode, md);
 
         /* OIDEBUG(inode); */
 
@@ -433,6 +453,7 @@ static inline void ll_read_inode2(struct inode *inode, void *opaque)
 struct super_operations ll_super_operations =
 {
         read_inode2: ll_read_inode2,
+        clear_inode: ll_clear_inode,
         delete_inode: ll_delete_inode,
         put_super: ll_put_super,
         statfs: ll_statfs

@@ -295,14 +295,14 @@ static inline int obd_punch(struct obd_conn *conn, struct obdo *tgt,
 static inline int obd_brw(int rw, struct obd_conn *conn, obd_count num_oa,
                           struct obdo **oa, obd_count *oa_bufs,
                           struct page **buf, obd_size *count, obd_off *offset,
-                          obd_flag *flags)
+                          obd_flag *flags, void *callback)
 {
         int rc;
         OBD_CHECK_SETUP(conn);
         OBD_CHECK_OP(conn,brw);
 
         rc = OBP(conn->oc_dev, brw)(rw, conn, num_oa, oa, oa_bufs, buf,
-                                    count, offset, flags);
+                                    count, offset, flags, callback);
         RETURN(rc);
 }
 
@@ -403,6 +403,8 @@ static __inline__ struct obdo *obdo_alloc(void)
         struct obdo *oa = NULL;
 
         oa = kmem_cache_alloc(obdo_cachep, SLAB_KERNEL);
+        if (oa == NULL)
+                LBUG();
         memset(oa, 0, sizeof (*oa));
 
         return oa;

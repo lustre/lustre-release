@@ -28,7 +28,7 @@ extern ptl_handle_eq_t request_out_eq, reply_in_eq, reply_out_eq,
         bulk_source_eq, bulk_sink_eq;
 static ptl_process_id_t local_id = {PTL_ID_ANY, PTL_ID_ANY};
 
-static int ptlrpc_check_bulk_sent(struct ptlrpc_bulk_desc *bulk)
+int ptlrpc_check_bulk_sent(struct ptlrpc_bulk_desc *bulk)
 {
         ENTRY;
 
@@ -109,6 +109,8 @@ int ptlrpc_send_bulk(struct ptlrpc_bulk_desc *desc)
         ptl_process_id_t remote_id;
         ENTRY;
 
+        atomic_set(&desc->b_finished_count, desc->b_page_count);
+
         list_for_each_safe(tmp, next, &desc->b_page_list) {
                 /* only request an ACK for the last page */
                 int ack = (next == &desc->b_page_list);
@@ -139,18 +141,13 @@ int ptlrpc_send_bulk(struct ptlrpc_bulk_desc *desc)
                 rc = PtlPut(bulk->b_md_h, (ack ? PTL_ACK_REQ : PTL_NOACK_REQ),
                             remote_id, desc->b_portal, 0, bulk->b_xid, 0, 0);
                 if (rc != PTL_OK) {
-                        CERROR("PtlPut(%Lu, %d, %d) failed: %d\n", remote_id.nid,
-                               desc->b_portal, bulk->b_xid, rc);
+                        CERROR("PtlPut(%Lu, %d, %d) failed: %d\n",
+                               remote_id.nid, desc->b_portal, bulk->b_xid, rc);
                         PtlMDUnlink(bulk->b_md_h);
                         LBUG();
                         RETURN(rc);
                 }
         }
-
-        wait_event_interruptible(desc->b_waitq, ptlrpc_check_bulk_sent(desc));
-
-        if (desc->b_flags & PTL_RPC_FL_INTR)
-                RETURN(-EINTR);
 
         RETURN(0);
 }
@@ -254,7 +251,6 @@ int ptlrpc_error(struct ptlrpc_service *svc, struct ptlrpc_request *req)
 
 int ptl_send_rpc(struct ptlrpc_request *request)
 {
-        ptl_process_id_t local_id;
         int rc;
         char *repbuf;
 
@@ -281,9 +277,6 @@ int ptl_send_rpc(struct ptlrpc_request *request)
                 LBUG();
                 RETURN(ENOMEM);
         }
-
-        local_id.nid = PTL_ID_ANY;
-        local_id.pid = PTL_ID_ANY;
 
         down(&request->rq_client->cli_rpc_sem);
 

@@ -6,8 +6,8 @@
 DEFS:= 
 
 MODULE = mds
-modulefs_DATA = mds.o mds_ext2.o mds_ext3.o mds_extN.o
-EXTRA_PROGRAMS = mds mds_ext2 mds_ext3 mds_extN
+modulefs_DATA = mds.o mds_extN.o # mds_ext2.o mds_ext3.o
+EXTRA_PROGRAMS = mds mds_extN # mds_ext2 mds_ext3
 
 LINX=mds_updates.c simple.c
 mds_updates.c: 

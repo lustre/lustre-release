@@ -24,7 +24,7 @@
 
 #include <linux/lustre_net.h>
 
-extern int request_in_callback(ptl_event_t *ev, void *data);
+extern int request_in_callback(ptl_event_t *ev);
 extern int ptl_handled_rpc(struct ptlrpc_service *service, void *start);
 
 static int ptlrpc_check_event(struct ptlrpc_service *svc,
@@ -101,7 +101,7 @@ ptlrpc_init_svc(__u32 bufsize, int req_portal, int rep_portal, char *uuid,
         service->srv_ring_length = RPC_RING_LENGTH;
 
         rc = PtlEQAlloc(service->srv_self.peer_ni, 128, request_in_callback,
-                        service, &(service->srv_eq_h));
+                        &(service->srv_eq_h));
 
         if (rc != PTL_OK) {
                 CERROR("PtlEQAlloc failed: %d\n", rc);

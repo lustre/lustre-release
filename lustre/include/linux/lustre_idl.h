@@ -61,24 +61,6 @@ struct lustre_msg {
         __u32   buflens[0];
 };
 
-struct niobuf_remote {
-        __u64 offset;
-        __u32 len;
-        __u32 xid;
-        __u32 flags;
-};
-
-struct niobuf_local {
-        __u64 offset;
-        __u32 len;
-        __u32 xid;
-        __u32 flags;
-        void *addr;
-        struct page *page;
-        void *target_private;
-        struct dentry *dentry;
-};
-
 #define N_LOCAL_TEMP_PAGE 0x00000001
 
 /*
@@ -114,8 +96,8 @@ typedef uint32_t        obd_rdev;
 typedef uint32_t        obd_flag;
 typedef uint32_t        obd_count;
 
-#define OBD_FL_INLINEDATA       (0x00000001UL)
-#define OBD_FL_OBDMDEXISTS      (0x00000002UL)
+#define OBD_FL_INLINEDATA       (0x00000001)
+#define OBD_FL_OBDMDEXISTS      (0x00000002)
 
 #define OBD_INLINESZ    60
 #define OBD_OBDMDSZ     60
@@ -166,6 +148,31 @@ struct obdo {
 #define OBD_MD_FLNOTOBD (~(OBD_MD_FLOBDMD | OBD_MD_FLOBDFLG | OBD_MD_FLBLOCKS |\
                            OBD_MD_LINKNAME))
 
+struct obd_ioobj {
+        obd_id    ioo_id;
+        obd_gr    ioo_gr;
+        __u32     ioo_type;
+        __u32     ioo_bufcnt;
+};
+
+struct niobuf_remote {
+        __u64 offset;
+        __u32 len;
+        __u32 xid;
+        __u32 flags;
+};
+
+struct niobuf_local {
+        __u64 offset;
+        __u32 len;
+        __u32 xid;
+        __u32 flags;
+        void *addr;
+        struct page *page;
+        void *target_private;
+        struct dentry *dentry;
+};
+
 /* request structure for OST's */
 
 #define OST_REQ_HAS_OA1  0x1
@@ -174,13 +181,6 @@ struct ost_body {
         __u32   connid;
         __u32   data;
         struct  obdo oa;
-};
-
-struct obd_ioobj {
-        obd_id    ioo_id;
-        obd_gr    ioo_gr;
-        __u32     ioo_type;
-        __u32     ioo_bufcnt;
 };
 
 /*
@@ -213,8 +213,8 @@ struct ll_fid {
 struct mds_body {
         struct ll_fid  fid1;
         struct ll_fid  fid2;
-        __u64          objid;
         __u64          size;
+        __u64          extra;
         __u32          valid;
         __u32          mode;
         __u32          uid;
@@ -257,8 +257,7 @@ struct mds_rec_create {
         __u32           cr_gid;
         __u64           cr_time;
         __u32           cr_mode;
-        /* overloaded: id for create, tgtlen for symlink, rdev for mknod */
-        __u64           cr_id;
+        __u64           cr_rdev;
 };
 
 struct mds_rec_link {

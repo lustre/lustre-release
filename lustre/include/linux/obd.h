@@ -159,13 +159,22 @@ struct osc_obd {
         struct ptlrpc_connection *osc_conn;
 };
 
+typedef __u8 uuid_t[37];
+
+#define MAX_MULTI       16
 struct lov_obd {
+        __u32 lov_default_count;
+        __u32 lov_default_pattern;
+        __u32 lov_default_size;
+        uuid_t lov_service_uuids[MAX_MULTI];
+
+#if 0
         int lov_count;
         struct obd_conn *lov_targets;
+#endif
 };
 
 /* corresponds to one of the obd's */
-#define MAX_MULTI       16
 struct obd_device {
         struct obd_type *obd_type;
         char *obd_name;
@@ -231,7 +240,8 @@ struct obd_ops {
                        obd_size *count, obd_off offset);
         int (*o_brw)(int rw, struct obd_conn *conn, obd_count num_oa,
                      struct obdo **oa, obd_count *oa_bufs, struct page **buf,
-                     obd_size *count, obd_off *offset, obd_flag *flags);
+                     obd_size *count, obd_off *offset, obd_flag *flags,
+                     void *);
         int (*o_punch)(struct obd_conn *conn, struct obdo *tgt, obd_size count,
                        obd_off offset);
         int (*o_sync)(struct obd_conn *conn, struct obdo *tgt, obd_size count,
@@ -251,6 +261,7 @@ struct obd_ops {
                           int objcount, struct obd_ioobj *obj,
                           int niocount, struct niobuf_local *local,
                           void *desc_private);
+
         int (*o_enqueue)(struct obd_conn *conn, struct ldlm_namespace *ns,
                          struct ldlm_handle *parent_lock, __u64 *res_id,
                          __u32 type, struct ldlm_extent *, __u32 mode,

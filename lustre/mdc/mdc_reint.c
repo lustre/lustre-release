@@ -74,27 +74,40 @@ int mdc_setattr(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
 
 int mdc_create(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
                struct inode *dir, const char *name, int namelen,
-               const char *tgt, int tgtlen, int mode, __u64 id, __u32 uid,
-               __u32 gid, __u64 time, struct ptlrpc_request **request)
+               const char *tgt, int tgtlen, int mode, __u32 uid,
+               __u32 gid, __u64 time, __u64 rdev, struct obdo *obdo,
+               struct ptlrpc_request **request)
 {
         struct mds_rec_create *rec;
         struct ptlrpc_request *req;
-        int rc, size[3] = {sizeof(*rec), namelen + 1, tgtlen + 1};
-        char *tmp;
-        int level;
+        int rc, size[3] = {sizeof(*rec), namelen + 1, 0};
+        char *tmp, *bufs[3] = {NULL, NULL, NULL};
+        int level, bufcount = 2;
         ENTRY;
 
-        req = ptlrpc_prep_req(cl, conn, MDS_REINT, 3, size, NULL);
+        if (S_ISREG(mode)) {
+                size[2] = sizeof(*obdo);
+                bufs[2] = (char *)obdo;
+                bufcount = 3;
+        } else if (S_ISLNK(mode)) {
+                size[2] = tgtlen + 1;
+                bufcount = 3;
+        }
+
+        req = ptlrpc_prep_req(cl, conn, MDS_REINT, bufcount, size, bufs);
         if (!req)
                 RETURN(-ENOMEM);
 
         rec = lustre_msg_buf(req->rq_reqmsg, 0);
-        mds_create_pack(rec, dir, mode, id, uid, gid, time);
+        mds_create_pack(rec, dir, mode, rdev, uid, gid, time);
 
         tmp = lustre_msg_buf(req->rq_reqmsg, 1);
         LOGL0(name, namelen, tmp);
 
-        if (tgt) {
+        if (S_ISREG(mode)) {
+                tmp = lustre_msg_buf(req->rq_reqmsg, 2);
+                memcpy(tmp, obdo, sizeof(*obdo));
+        } else if (S_ISLNK(mode)) {
                 tmp = lustre_msg_buf(req->rq_reqmsg, 2);
                 LOGL0(tgt, tgtlen, tmp);
         }

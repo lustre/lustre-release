@@ -29,6 +29,11 @@ struct ll_file_data {
         __u32 fd_flags;
 };
 
+struct ll_inode_md {
+        struct mds_body *body;
+        struct obdo *obdo;
+};
+
 #define LL_IOC_GETFLAGS                 _IOR ('f', 151, long)
 #define LL_IOC_SETFLAGS                 _IOW ('f', 152, long)
 #define LL_IOC_CLRFLAGS                 _IOW ('f', 153, long)
@@ -38,7 +43,8 @@ struct ll_file_data {
 #define LL_INLINESZ      60
 struct ll_inode_info {
         int              lli_flags;
-        __u64            lli_objid; 
+        struct obdo     *lli_obdo;
+        char            *lli_symlink_name;
         char             lli_inline[LL_INLINESZ];
 };
 

@@ -690,6 +690,7 @@ static int filter_destroy(struct obd_conn *conn, struct obdo *oa)
         inode->i_mode = S_IFREG;
 
         push_ctxt(&saved, &obddev->u.filter.fo_ctxt);
+
         rc = vfs_unlink(dir_dentry->d_inode, object_dentry);
         pop_ctxt(&saved);
         CDEBUG(D_INODE, "put child %p, count = %d\n", object_dentry,
@@ -792,7 +793,7 @@ static int filter_write(struct obd_conn *conn, struct obdo *oa, char *buf,
 static int filter_pgcache_brw(int rw, struct obd_conn *conn, obd_count num_oa,
                                struct obdo **oa, obd_count *oa_bufs,
                                struct page **pages, obd_size *count,
-                               obd_off *offset, obd_flag *flags)
+                               obd_off *offset, obd_flag *flags, void *callback)
 {
         struct obd_run_ctxt      saved;
         struct super_block      *sb;

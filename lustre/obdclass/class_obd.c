@@ -511,7 +511,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 }
 
                 err = obd_brw(rw, conns, num, obdos, oa_bufs, bufs,
-                              counts, offsets, flags);
+                              counts, offsets, flags, NULL);
 
                 EXIT;
         brw_cleanup:

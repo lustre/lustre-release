@@ -43,7 +43,7 @@ struct mds_update_record {
         int ur_tgtlen;
         char *ur_tgt;
         struct iattr ur_iattr;
-        __u64 ur_id;
+        __u64 ur_rdev;
         __u32 ur_mode;
         __u32 ur_uid;
         __u32 ur_gid;
@@ -132,8 +132,8 @@ int mdc_readpage(struct ptlrpc_client *, struct ptlrpc_connection *, ino_t ino,
                  int type, __u64 offset, char *addr, struct ptlrpc_request **);
 int mdc_create(struct ptlrpc_client *, struct ptlrpc_connection *,
                struct inode *dir, const char *name, int namelen, 
-               const char *tgt, int tgtlen, 
-               int mode, __u64 id, __u32 uid, __u32 gid, __u64 time, 
+               const char *tgt, int tgtlen, int mode, __u32 uid, __u32 gid,
+               __u64 time, __u64 rdev, struct obdo *obdo,
                struct ptlrpc_request **);
 int mdc_unlink(struct ptlrpc_client *, struct ptlrpc_connection *,
                struct inode *dir, struct inode *child, const char *name,
@@ -156,8 +156,9 @@ struct mds_fs_operations {
         int     (* fs_commit)(struct inode *inode, void *handle);
         int     (* fs_setattr)(struct dentry *dentry, void *handle,
                                struct iattr *iattr);
-        int     (* fs_set_objid)(struct inode *inode, void *handle, obd_id id);
-        int     (* fs_get_objid)(struct inode *inode, obd_id *id);
+        int     (* fs_set_obdo)(struct inode *inode, void *handle,
+                                struct obdo *obdo);
+        int     (* fs_get_obdo)(struct inode *inode, struct obdo *obdo);
         ssize_t (* fs_readpage)(struct file *file, char *buf, size_t count,
                                 loff_t *offset);
         void    (* fs_delete_inode)(struct inode *inode);
@@ -196,16 +197,16 @@ static inline int mds_fs_setattr(struct mds_obd *mds, struct dentry *dentry,
         return mds->mds_fsops->fs_setattr(dentry, handle, iattr);
 }
 
-static inline int mds_fs_set_objid(struct mds_obd *mds, struct inode *inode,
-                                   void *handle, __u64 id)
+static inline int mds_fs_set_obdo(struct mds_obd *mds, struct inode *inode,
+                                  void *handle, struct obdo *obdo)
 {
-        return mds->mds_fsops->fs_set_objid(inode, handle, id);
+        return mds->mds_fsops->fs_set_obdo(inode, handle, obdo);
 }
 
-static inline int mds_fs_get_objid(struct mds_obd *mds, struct inode *inode,
-                                    __u64 *id)
+static inline int mds_fs_get_obdo(struct mds_obd *mds, struct inode *inode,
+                                  struct obdo *obdo)
 {
-        return mds->mds_fsops->fs_get_objid(inode, id);
+        return mds->mds_fsops->fs_get_obdo(inode, obdo);
 }
 
 static inline ssize_t mds_fs_readpage(struct mds_obd *mds, struct file *file,

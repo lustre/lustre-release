@@ -95,10 +95,10 @@ static struct dentry *ll_lookup(struct inode * dir, struct dentry *dentry)
         struct ptlrpc_request *request = NULL;
         struct inode * inode = NULL;
         struct ll_sb_info *sbi = ll_i2sbi(dir);
-        int err;
-        int type;
+        struct ll_inode_md md;
+        int err, type;
         ino_t ino;
-        
+
         ENTRY;
         if (dentry->d_name.len > EXT2_NAME_LEN)
                 RETURN(ERR_PTR(-ENAMETOOLONG));
@@ -115,8 +115,18 @@ static struct dentry *ll_lookup(struct inode * dir, struct dentry *dentry)
                 RETURN(ERR_PTR(-abs(err)));
         }
 
-        inode = iget4(dir->i_sb, ino, ll_find_inode,
-                      lustre_msg_buf(request->rq_repmsg, 0));
+        if (S_ISREG(type)) {
+                if (request->rq_repmsg->bufcount < 2 ||
+                    request->rq_repmsg->buflens[1] != sizeof(struct obdo))
+                        LBUG();
+
+                md.obdo = lustre_msg_buf(request->rq_repmsg, 1);
+        } else
+                md.obdo = NULL;
+
+        md.body = lustre_msg_buf(request->rq_repmsg, 0);
+
+        inode = iget4(dir->i_sb, ino, ll_find_inode, &md);
 
         ptlrpc_free_req(request);
         if (!inode) 
@@ -130,7 +140,7 @@ static struct dentry *ll_lookup(struct inode * dir, struct dentry *dentry)
 
 static struct inode *ll_create_node(struct inode *dir, const char *name, 
                                     int namelen, const char *tgt, int tgtlen, 
-                                    int mode, __u64 id)
+                                    int mode, __u64 extra, struct obdo *obdo)
 {
         struct inode *inode;
         struct ptlrpc_request *request = NULL;
@@ -138,12 +148,13 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
         int err;
         time_t time = CURRENT_TIME;
         struct ll_sb_info *sbi = ll_i2sbi(dir);
+        struct ll_inode_md md;
 
         ENTRY;
 
         err = mdc_create(&sbi->ll_mds_client, sbi->ll_mds_conn, dir, name,
-                         namelen, tgt, tgtlen, mode, id,  current->fsuid,
-                         current->fsgid, time, &request);
+                         namelen, tgt, tgtlen, mode, current->fsuid,
+                         current->fsgid, time, extra, obdo, &request);
         if (err) { 
                 inode = ERR_PTR(err);
                 GOTO(out, err);
@@ -151,16 +162,16 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
         body = lustre_msg_buf(request->rq_repmsg, 0);
         body->valid = (__u32)OBD_MD_FLNOTOBD;
 
-        body->objid = id; 
         body->nlink = 1;
         body->atime = body->ctime = body->mtime = time;
         body->uid = current->fsuid;
         body->gid = current->fsgid;
         body->mode = mode;
-        CDEBUG(D_INODE, "-- new_inode: objid %lld, ino %d, mode %o\n",
-               (unsigned long long)body->objid, body->ino, body->mode); 
 
-        inode = iget4(dir->i_sb, body->ino, ll_find_inode, body);
+        md.body = body;
+        md.obdo = obdo;
+
+        inode = iget4(dir->i_sb, body->ino, ll_find_inode, &md);
         if (IS_ERR(inode)) {
                 CERROR("new_inode -fatal:  %ld\n", PTR_ERR(inode));
                 inode = ERR_PTR(-EIO);
@@ -249,7 +260,7 @@ static int ll_create (struct inode * dir, struct dentry * dentry, int mode)
 {
         int err, rc;
         struct obdo oa;
-        struct inode * inode;
+        struct inode *inode;
 
         memset(&oa, 0, sizeof(oa));
         oa.o_valid = OBD_MD_FLMODE;
@@ -263,8 +274,8 @@ static int ll_create (struct inode * dir, struct dentry * dentry, int mode)
         mode = mode | S_IFREG;
         CDEBUG(D_DENTRY, "name %s mode %o o_id %lld\n",
                dentry->d_name.name, mode, (unsigned long long)oa.o_id);
-        inode = ll_create_node(dir, dentry->d_name.name, dentry->d_name.len,
-                               NULL, 0, mode, oa.o_id);
+        inode = ll_create_node(dir, dentry->d_name.name, dentry->d_name.len, 
+                               NULL, 0, mode, 0, &oa);
 
 	if (IS_ERR(inode)) {
 		rc = PTR_ERR(inode);
@@ -290,11 +301,12 @@ out_destroy:
 } /* ll_create */
 
 
-static int ll_mknod (struct inode * dir, struct dentry *dentry, int mode, int rdev)
+static int ll_mknod (struct inode * dir, struct dentry *dentry, int mode,
+                     int rdev)
 {
         struct inode * inode = ll_create_node(dir, dentry->d_name.name, 
                                               dentry->d_name.len, NULL, 0,
-                                              mode, 0);
+                                              mode, rdev, NULL);
         int err = PTR_ERR(inode);
         if (!IS_ERR(inode)) {
                 init_special_inode(inode, mode, rdev);
@@ -316,7 +328,7 @@ static int ll_symlink (struct inode * dir, struct dentry * dentry,
 
         inode = ll_create_node(dir, dentry->d_name.name, 
                                dentry->d_name.len, symname, l,
-                               S_IFLNK | S_IRWXUGO, 0);
+                               S_IFLNK | S_IRWXUGO, 0, NULL);
         err = PTR_ERR(inode);
         if (IS_ERR(inode))
                 return err;
@@ -376,7 +388,7 @@ static int ll_mkdir(struct inode * dir, struct dentry * dentry, int mode)
 
         inode = ll_create_node (dir, dentry->d_name.name, 
                                 dentry->d_name.len, NULL, 0, 
-                                S_IFDIR | mode, 0);
+                                S_IFDIR | mode, 0, NULL);
         err = PTR_ERR(inode);
         if (IS_ERR(inode))
                 goto out_dir;

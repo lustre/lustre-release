@@ -197,13 +197,14 @@ struct ptlrpc_bulk_desc {
         struct ptlrpc_connection *b_connection;
         struct ptlrpc_client *b_client;
         __u32 b_portal;
-        int (*b_cb)(struct ptlrpc_bulk_desc *);
         struct obd_conn b_conn;
+        void (*b_cb)(struct ptlrpc_bulk_desc *, void *);
+        void *b_cb_data;
 
         wait_queue_head_t b_waitq;
         struct list_head b_page_list;
         __u32 b_page_count;
-        __u32 b_finished_count;
+        atomic_t b_finished_count;
         void *b_desc_private;
 };
 
@@ -245,6 +246,8 @@ struct ptlrpc_service {
                            struct ptlrpc_request *req);
 };
 
+typedef void (*bulk_callback_t)(struct ptlrpc_bulk_desc *, void *);
+
 typedef int (*svc_handler_t)(struct obd_device *obddev,
                              struct ptlrpc_service *svc,
                              struct ptlrpc_request *req);
@@ -258,6 +261,7 @@ void ptlrpc_init_connection(void);
 void ptlrpc_cleanup_connection(void);
 
 /* rpc/niobuf.c */
+int ptlrpc_check_bulk_sent(struct ptlrpc_bulk_desc *bulk);
 int ptlrpc_send_bulk(struct ptlrpc_bulk_desc *);
 int ptlrpc_register_bulk(struct ptlrpc_bulk_desc *);
 int ptlrpc_abort_bulk(struct ptlrpc_bulk_desc *bulk);

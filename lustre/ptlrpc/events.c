@@ -32,7 +32,7 @@ static const ptl_handle_ni_t *socknal_nip = NULL, *qswnal_nip = NULL;
 /*
  *  Free the packet when it has gone out
  */
-static int request_out_callback(ptl_event_t *ev, void *data)
+static int request_out_callback(ptl_event_t *ev)
 {
         ENTRY;
 
@@ -49,7 +49,7 @@ static int request_out_callback(ptl_event_t *ev, void *data)
 /*
  *  Free the packet when it has gone out
  */
-static int reply_out_callback(ptl_event_t *ev, void *data)
+static int reply_out_callback(ptl_event_t *ev)
 {
         ENTRY;
 
@@ -67,7 +67,7 @@ static int reply_out_callback(ptl_event_t *ev, void *data)
 /*
  * Wake up the thread waiting for the reply once it comes in.
  */
-static int reply_in_callback(ptl_event_t *ev, void *data)
+static int reply_in_callback(ptl_event_t *ev)
 {
         struct ptlrpc_request *rpc = ev->mem_desc.user_ptr;
         ENTRY;
@@ -85,9 +85,9 @@ static int reply_in_callback(ptl_event_t *ev, void *data)
         RETURN(1);
 }
 
-int request_in_callback(ptl_event_t *ev, void *data)
+int request_in_callback(ptl_event_t *ev)
 {
-        struct ptlrpc_service *service = data;
+        struct ptlrpc_service *service = ev->mem_desc.user_ptr;
         int index;
 
         if (ev->rlength != ev->mlength)
@@ -130,7 +130,7 @@ int request_in_callback(ptl_event_t *ev, void *data)
         return 0;
 }
 
-static int bulk_source_callback(ptl_event_t *ev, void *data)
+static int bulk_source_callback(ptl_event_t *ev)
 {
         struct ptlrpc_bulk_page *bulk = ev->mem_desc.user_ptr;
         struct ptlrpc_bulk_desc *desc = bulk->b_desc;
@@ -140,8 +140,14 @@ static int bulk_source_callback(ptl_event_t *ev, void *data)
                 CDEBUG(D_NET, "got SENT event\n");
         } else if (ev->type == PTL_EVENT_ACK) {
                 CDEBUG(D_NET, "got ACK event\n");
-                desc->b_flags |= PTL_BULK_FL_SENT;
-                wake_up_interruptible(&desc->b_waitq);
+                if (bulk->b_cb != NULL)
+                        bulk->b_cb(bulk);
+                if (atomic_dec_and_test(&desc->b_finished_count)) {
+                        desc->b_flags |= PTL_BULK_FL_SENT;
+                        wake_up_interruptible(&desc->b_waitq);
+                        if (desc->b_cb != NULL)
+                                desc->b_cb(desc, desc->b_cb_data);
+                }
         } else {
                 CERROR("Unexpected event type!\n");
                 LBUG();
@@ -150,7 +156,7 @@ static int bulk_source_callback(ptl_event_t *ev, void *data)
         RETURN(1);
 }
 
-static int bulk_sink_callback(ptl_event_t *ev, void *data)
+static int bulk_sink_callback(ptl_event_t *ev)
 {
         struct ptlrpc_bulk_page *bulk = ev->mem_desc.user_ptr;
         struct ptlrpc_bulk_desc *desc = bulk->b_desc;
@@ -159,14 +165,13 @@ static int bulk_sink_callback(ptl_event_t *ev, void *data)
         if (ev->type == PTL_EVENT_PUT) {
                 if (bulk->b_buf != ev->mem_desc.start + ev->offset)
                         CERROR("bulkbuf != mem_desc -- why?\n");
-                desc->b_finished_count++;
                 if (bulk->b_cb != NULL)
                         bulk->b_cb(bulk);
-                if (desc->b_finished_count == desc->b_page_count) {
+                if (atomic_dec_and_test(&desc->b_finished_count)) {
                         desc->b_flags |= PTL_BULK_FL_RCVD;
                         wake_up_interruptible(&desc->b_waitq);
                         if (desc->b_cb != NULL)
-                                desc->b_cb(desc);
+                                desc->b_cb(desc, desc->b_cb_data);
                 }
         } else {
                 CERROR("Unexpected event type!\n");
@@ -194,23 +199,23 @@ int ptlrpc_init_portals(void)
         else
                 ni = *socknal_nip;
 
-        rc = PtlEQAlloc(ni, 128, request_out_callback, NULL, &request_out_eq);
+        rc = PtlEQAlloc(ni, 128, request_out_callback, &request_out_eq);
         if (rc != PTL_OK)
                 CERROR("PtlEQAlloc failed: %d\n", rc);
 
-        rc = PtlEQAlloc(ni, 128, reply_out_callback, NULL, &reply_out_eq);
+        rc = PtlEQAlloc(ni, 128, reply_out_callback, &reply_out_eq);
         if (rc != PTL_OK)
                 CERROR("PtlEQAlloc failed: %d\n", rc);
 
-        rc = PtlEQAlloc(ni, 128, reply_in_callback, NULL, &reply_in_eq);
+        rc = PtlEQAlloc(ni, 128, reply_in_callback, &reply_in_eq);
         if (rc != PTL_OK)
                 CERROR("PtlEQAlloc failed: %d\n", rc);
 
-        rc = PtlEQAlloc(ni, 128, bulk_source_callback, NULL, &bulk_source_eq);
+        rc = PtlEQAlloc(ni, 128, bulk_source_callback, &bulk_source_eq);
         if (rc != PTL_OK)
                 CERROR("PtlEQAlloc failed: %d\n", rc);
 
-        rc = PtlEQAlloc(ni, 128, bulk_sink_callback, NULL, &bulk_sink_eq);
+        rc = PtlEQAlloc(ni, 128, bulk_sink_callback, &bulk_sink_eq);
         if (rc != PTL_OK)
                 CERROR("PtlEQAlloc failed: %d\n", rc);
 

@@ -33,59 +33,6 @@
 #include <linux/lustre_lite.h>
 #include <linux/lustre_lib.h>
 
-inline struct obdo * ll_oa_from_inode(struct inode *inode, unsigned long valid)
-{
-        struct ll_inode_info *oinfo = ll_i2info(inode);
-        struct obdo *oa = obdo_alloc();
-        if ( !oa ) {
-                CERROR("no memory to allocate obdo!\n"); 
-                return NULL;
-        }
-        oa->o_valid = valid;
-
-        if ( valid & OBD_MD_FLID )
-                oa->o_id = oinfo->lli_objid;
-        if ( valid & OBD_MD_FLATIME )
-                oa->o_atime = inode->i_atime;
-        if ( valid & OBD_MD_FLMTIME )
-                oa->o_mtime = inode->i_mtime;
-        if ( valid & OBD_MD_FLCTIME )
-                oa->o_ctime = inode->i_ctime;
-        if ( valid & OBD_MD_FLSIZE )
-                oa->o_size = inode->i_size;
-        if ( valid & OBD_MD_FLBLOCKS )   /* allocation of space */
-                oa->o_blocks = inode->i_blocks;
-        if ( valid & OBD_MD_FLBLKSZ )
-                oa->o_blksize = inode->i_blksize;
-        if ( valid & OBD_MD_FLMODE )
-                oa->o_mode = inode->i_mode;
-        if ( valid & OBD_MD_FLUID )
-                oa->o_uid = inode->i_uid;
-        if ( valid & OBD_MD_FLGID )
-                oa->o_gid = inode->i_gid;
-        if ( valid & OBD_MD_FLFLAGS )
-                oa->o_flags = inode->i_flags;
-        if ( valid & OBD_MD_FLNLINK )
-                oa->o_nlink = inode->i_nlink;
-        if ( valid & OBD_MD_FLGENER ) 
-                oa->o_generation = inode->i_generation;
-
-        CDEBUG(D_INFO, "src inode %ld, dst obdo %ld valid 0x%08lx\n",
-               inode->i_ino, (long)oa->o_id, valid);
-#if 0
-        /* this will transfer metadata for the logical object to 
-           the oa: that metadata could contain the constituent objects
-        */
-        if (ll_has_inline(inode)) {
-                CDEBUG(D_INODE, "copying inline data from inode to obdo\n");
-                memcpy(oa->o_inline, oinfo->lli_inline, OBD_INLINESZ);
-                oa->o_obdflags |= OBD_FL_INLINEDATA;
-                oa->o_valid |= OBD_MD_FLINLINE;
-        }
-#endif
-        return oa;
-} /* ll_oa_from_inode */
-
 /* SYNCHRONOUS I/O to object storage for an inode */
 static int ll_brw(int rw, struct inode *inode, struct page *page, int create)
 {
@@ -98,14 +45,9 @@ static int ll_brw(int rw, struct inode *inode, struct page *page, int create)
         int              err;
         ENTRY;
 
-        oa = ll_oa_from_inode(inode, OBD_MD_FLNOTOBD);
-        if (!oa)
-                RETURN(-ENOMEM);
-
+        oa = ll_i2info(inode)->lli_obdo;
         err = obd_brw(rw, ll_i2obdconn(inode), num_obdo, &oa, &bufs_per_obdo,
-                      &page, &count, &offset, &flags);
-
-        obdo_free(oa);
+                      &page, &count, &offset, &flags, NULL);
         RETURN(err);
 } /* ll_brw */
 
@@ -217,9 +159,7 @@ static int ll_commit_write(struct file *file, struct page *page,
         struct iattr     iattr;
 
         ENTRY;
-        oa = ll_oa_from_inode(inode, OBD_MD_FLNOTOBD);
-        if (! oa )
-                RETURN(-ENOMEM);
+        oa = ll_i2info(inode)->lli_obdo;
 
         SetPageUptodate(page);
 
@@ -230,7 +170,7 @@ static int ll_commit_write(struct file *file, struct page *page,
                from, to, (unsigned long long)count);
 
         err = obd_brw(OBD_BRW_WRITE, ll_i2obdconn(inode), num_obdo, &oa,
-                      &bufs_per_obdo, &page, &count, &offset, &flags);
+                      &bufs_per_obdo, &page, &count, &offset, &flags, NULL);
         kunmap(page);
 
         if ((iattr.ia_size = offset + to) > inode->i_size) {
@@ -246,7 +186,6 @@ static int ll_commit_write(struct file *file, struct page *page,
 #endif
         }
 
-        obdo_free(oa);
         RETURN(err);
 } /* ll_commit_write */
 
@@ -256,16 +195,11 @@ void ll_truncate(struct inode *inode)
         int err;
         ENTRY;
 
-        oa = ll_oa_from_inode(inode, OBD_MD_FLNOTOBD);
-        if ( !oa ) {
-                CERROR("no memory to allocate obdo!\n");
-                return; 
-        } 
+        oa = ll_i2info(inode)->lli_obdo;
         
         CDEBUG(D_INFO, "calling punch for %ld (%Lu bytes at 0)\n",
                (long)oa->o_id, (unsigned long long)oa->o_size);
         err = obd_punch(ll_i2obdconn(inode), oa, oa->o_size, 0);
-        obdo_free(oa);
 
         if (err) {
                 CERROR("obd_truncate fails (%d)\n", err);
@@ -308,20 +242,21 @@ int ll_direct_IO(int rw, struct inode *inode, struct kiobuf *iobuf,
                 flags[i] = OBD_BRW_CREATE;
         }
 
-        oa = ll_oa_from_inode(inode, OBD_MD_FLNOTOBD);
+        oa = ll_i2info(inode)->lli_obdo;
         if (!oa)
                 GOTO(out, rc = -ENOMEM);
-
         rc = obd_brw(rw, ll_i2obdconn(inode), num_obdo, &oa, &bufs_per_obdo,
-                     iobuf->maplist, count, offset, flags);
-        if (rc == 0)
+                      iobuf->maplist, count, offset, flags, NULL);
+        if (rc == 0) 
                 rc = bufs_per_obdo * PAGE_SIZE;
 
  out:
-        obdo_free(oa);
-        OBD_FREE(flags, sizeof(obd_flag) * bufs_per_obdo);
-        OBD_FREE(offset, sizeof(obd_off) * bufs_per_obdo);
-        OBD_FREE(count, sizeof(obd_count) * bufs_per_obdo);
+        if (flags) 
+                OBD_FREE(flags, sizeof(obd_flag) * bufs_per_obdo); 
+        if (count) 
+                OBD_FREE(count, sizeof(obd_count) * bufs_per_obdo); 
+        if (offset) 
+                OBD_FREE(offset, sizeof(obd_off) * bufs_per_obdo); 
         RETURN(rc);
 }
 

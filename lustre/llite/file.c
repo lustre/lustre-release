@@ -30,8 +30,6 @@
 
 int ll_inode_setattr(struct inode *inode, struct iattr *attr, int do_trunc);
 extern int ll_setattr(struct dentry *de, struct iattr *attr);
-extern inline struct obdo * ll_oa_from_inode(struct inode *inode,
-                                             unsigned long valid);
 
 static int ll_file_open(struct inode *inode, struct file *file)
 {
@@ -61,14 +59,15 @@ static int ll_file_open(struct inode *inode, struct file *file)
                 CERROR("mdc_open didn't assign fd_mdshandle\n");
                 /* XXX handle this how, abort or is it non-fatal? */
         }
+        if (!fd->fd_mdshandle)
+                CERROR("mdc_open didn't assign fd_mdshandle\n");
 
-        oa = ll_oa_from_inode(inode, (OBD_MD_FLMODE | OBD_MD_FLID));
+        oa = ll_i2info(inode)->lli_obdo;
         if (oa == NULL) {
                 LBUG();
                 GOTO(out_mdc, rc = -ENOMEM);
         }
         rc = obd_open(ll_i2obdconn(inode), oa);
-        obdo_free(oa);
         if (rc) {
                 GOTO(out_mdc, rc = -abs(rc));
         }
@@ -106,16 +105,14 @@ static int ll_file_release(struct inode *inode, struct file *file)
                 GOTO(out, rc = -EINVAL);
         }
 
-        oa = ll_oa_from_inode(inode, (OBD_MD_FLMODE | OBD_MD_FLID));
+        oa = ll_i2info(inode)->lli_obdo;
         if (oa == NULL) {
                 LBUG();
                 GOTO(out_fd, rc = -ENOENT);
         }
         rc = obd_close(ll_i2obdconn(inode), oa);
-        obdo_free(oa);
-        if (rc) {
+        if (rc)
                 GOTO(out_fd, abs(rc));
-        }
 
         if (file->f_mode & FMODE_WRITE) {
                 struct iattr attr;

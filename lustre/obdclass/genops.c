@@ -238,7 +238,7 @@ int gen_copy_data(struct obd_conn *dst_conn, struct obdo *dst,
                 page->index = index;
                 err = OBP(src_conn->oc_dev, brw)(READ, src_conn, num_oa, &src,
                                                  &num_buf, &page, &brw_count,
-                                                 &brw_offset, &flagr);
+                                                 &brw_offset, &flagr, NULL);
 
                 if ( err ) {
                         EXIT;
@@ -248,7 +248,7 @@ int gen_copy_data(struct obd_conn *dst_conn, struct obdo *dst,
 
                 err = OBP(dst_conn->oc_dev, brw)(WRITE, dst_conn, num_oa, &dst,
                                                  &num_buf, &page, &brw_count,
-                                                 &brw_offset, &flagw);
+                                                 &brw_offset, &flagw, NULL);
 
                 /* XXX should handle dst->o_size, dst->o_blocks here */
                 if ( err ) {
