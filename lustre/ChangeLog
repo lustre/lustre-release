@@ -4,6 +4,7 @@ tbd  Cluster File Systems, Inc. <info@clusterfs.com>
 	- clear page cache after eviction (2766)
 	- deal with strange write() on x86-64 (3043)
 	- don't dereference NULL peer_ni in ldlm_handle_ast_error (3258)
+	- clear page->private before handing to FS (3119)
 
 tbd  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.2
