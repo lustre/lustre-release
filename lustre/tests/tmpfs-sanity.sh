@@ -6,6 +6,31 @@ fail()
 	exit 1
 }
 
+check_xattr()
+{
+	name=$1
+	value=$2
+	file="$3"
+	
+	if test "x$value" != "x<deleted>"; then
+		res=`$getattr -n $name $file 2>/dev/null | grep -v "^#" | sed 's/\"//g'`
+	
+		if test "x$res" = "x$name=$value"; then
+			return 0
+		else
+			return 1
+		fi
+	else
+		res=`$getattr -d -m ".*" $file 2>/dev/null | grep -v "^#" | sed 's/\"//g'`
+		
+		if echo $res | grep $name > /dev/null 2>&1; then
+			return 1
+		else
+			return 0
+		fi
+	fi
+}
+
 test_del_xattr()
 {
 	name=$1
@@ -53,41 +78,22 @@ test_list_xattr()
 	`$setattr -n list_name1 -v list_value1 $file 2>/dev/null`
 	`$setattr -n list_name2 -v list_value2 $file 2>/dev/null`
 
-	nr=`$getattr -d -m ".*" $file 2>/dev/null | grep -v "^#" | \
-grep list_name | wc -l | tr --delete [[:blank:]]`
+	values=`$getattr -d -m ".*" $file 2>/dev/null | grep -v "^#" | \
+grep list_name | sed 's/\"//g'`
 
-	if test "x$nr" = "x3"; then
-		echo "done"
-		return 0
-	else
-		echo "failed"
-		retrun 1
-	fi
-}
-
-check_xattr()
-{
-	name=$1
-	value=$2
-	file="$3"
+	i=0
 	
-	if test "x$value" != "x<deleted>"; then
-		res=`$getattr -n $name $file 2>/dev/null | grep -v "^#" | sed 's/\"//g'`
-	
-		if test "x$res" = "x$name=$value"; then
-			return 0
-		else
+	for chunk in $values; do
+		if test "x$chunk" != "xlist_name$i=list_value$i"; then
+			echo "failed"
 			return 1
 		fi
-	else
-		res=`$getattr -d -m ".*" $file 2>/dev/null | grep -v "^#" | sed 's/\"//g'`
 		
-		if echo $res | grep $name > /dev/null 2>&1; then
-			return 1
-		else
-			return 0
-		fi
-	fi
+		let i=$i+1
+	done
+		
+	echo "done"
+	return 0
 }
 
 # check each function related to xattrs
