@@ -93,8 +93,8 @@ int fill_page_with_path(struct dentry *dentry, struct vfsmount *mnt,
 int ll_dir_process_mount_object(struct dentry *dentry, struct vfsmount *mnt)
 {
         struct ll_sb_info *sbi;
-        struct file *mntinfo_fd;
-        struct page *datapage, *pathpage;
+        struct file *mntinfo_fd = NULL;
+        struct page *datapage = NULL, *pathpage;
         struct address_space *mapping;
         struct ll_dentry_data *lld = dentry->d_fsdata;
         struct dentry *dchild, *tmp_dentry;
@@ -179,11 +179,11 @@ int ll_dir_process_mount_object(struct dentry *dentry, struct vfsmount *mnt)
         fput(mntinfo_fd);
         mntinfo_fd = NULL;
 
-        argv[0] = "/usr/local/bin/phikmount.sh";
+        argv[0] = "/usr/lib/lustre/gns-upcall.sh";
         argv[1] = p;
         argv[2] = path;
         argv[3] = NULL;
-        rc = call_usermodehelper(argv[0], argv, NULL);
+        rc = USERMODEHELPER(argv[0], argv, NULL);
 
         if (rc != 0) {
                 CERROR("GNS mount failed: %d\n", rc);
@@ -247,7 +247,7 @@ int ll_gns_umount_all(struct ll_sb_info *sbi, int timeout)
 {
         struct list_head kill_list = LIST_HEAD_INIT(kill_list);
         struct page *page = NULL;
-        char *kpage, *path;
+        char *kpage = NULL, *path;
         int rc;
         ENTRY;
 
