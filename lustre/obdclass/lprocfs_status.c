@@ -91,7 +91,8 @@ void lprocfs_remove_all(struct proc_dir_entry* root)
                 rm_entry = temp;
                 temp = temp->parent;
                 remove_proc_entry(rm_entry->name, rm_entry->parent);
-                if (temp == parent) break;
+                if (temp == parent)
+                        break;
         }
 }
 
@@ -111,7 +112,7 @@ struct proc_dir_entry* lprocfs_new_dir(struct proc_dir_entry* root,
         new_root = root;
         mover_str = temp_string;
         while ((my_str = strsep(&mover_str, tok))) {
-                if(!*my_str)
+                if (!*my_str)
                         continue;
                 CDEBUG(D_OTHER, "SEARCH= %s\t, ROOT=%s\n", my_str,
                        new_root->name);
@@ -120,7 +121,7 @@ struct proc_dir_entry* lprocfs_new_dir(struct proc_dir_entry* root,
                         CDEBUG(D_OTHER, "Adding: %s\n", my_str);
                         temp_entry = lprocfs_mkdir(my_str, new_root);
                         if (temp_entry == NULL) {
-                                CDEBUG(D_OTHER, 
+                                CDEBUG(D_OTHER,
                                        "! Did not create new dir %s !!\n",
                                        my_str);
                                 return temp_entry;
@@ -131,8 +132,7 @@ struct proc_dir_entry* lprocfs_new_dir(struct proc_dir_entry* root,
         return new_root;
 }
 
-int lprocfs_new_vars(struct proc_dir_entry* root, 
-                     struct lprocfs_vars* list,
+int lprocfs_new_vars(struct proc_dir_entry* root, struct lprocfs_vars* list,
                      const char* tok, void* data)
 {
         struct proc_dir_entry *temp_root;
@@ -188,9 +188,9 @@ int lprocfs_reg_obd(struct obd_device *device, struct lprocfs_vars *list,
 {
         struct proc_dir_entry* this_dev_root;
         int retval;
-        
-        if(lprocfs_srch(device->obd_type->typ_procroot, device->obd_name)){
-                CDEBUG(D_OTHER, "Device with name [%s] exists!", 
+
+        if (lprocfs_srch(device->obd_type->typ_procroot, device->obd_name)) {
+                CDEBUG(D_OTHER, "Device with name [%s] exists!",
                                 device->obd_name);
                 return 0;
         }
@@ -227,7 +227,7 @@ int lprocfs_dereg_obd(struct obd_device* device)
 
 struct proc_dir_entry* lprocfs_reg_mnt(char* mnt_name)
 {
-        if(lprocfs_srch(proc_lustre_fs_root, mnt_name)){
+        if (lprocfs_srch(proc_lustre_fs_root, mnt_name)) {
                 CDEBUG(D_OTHER, "Mount with same name exists!");
                 return 0;
         }
@@ -236,7 +236,7 @@ struct proc_dir_entry* lprocfs_reg_mnt(char* mnt_name)
 
 int lprocfs_dereg_mnt(struct proc_dir_entry* root)
 {
-        if(root == NULL){
+        if (root == NULL) {
                 CDEBUG(D_OTHER, "Non-existent root!");
                 return 0;
         }
@@ -247,7 +247,6 @@ int lprocfs_dereg_mnt(struct proc_dir_entry* root)
 int lprocfs_reg_class(struct obd_type* type, struct lprocfs_vars* list,
                       void* data)
 {
-        
         struct proc_dir_entry* root;
         int retval;
         root = lprocfs_mkdir(type->typ_name, proc_lustre_dev_root);
@@ -259,7 +258,7 @@ int lprocfs_reg_class(struct obd_type* type, struct lprocfs_vars* list,
 
 int lprocfs_dereg_class(struct obd_type* class)
 {
-        if(class == NULL){
+        if (class == NULL) {
                 CDEBUG(D_OTHER, "Non-existent class");
                 return 0;
         }
@@ -269,6 +268,7 @@ int lprocfs_dereg_class(struct obd_type* class)
         return 0;
 
 }
+
 int lprocfs_reg_main()
 {
         proc_lustre_root = lprocfs_mkdir("lustre", &proc_root);
