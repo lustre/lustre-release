@@ -1,3 +1,15 @@
+diff -urNp linux-700/arch/i386/config.in linux-720/arch/i386/config.in
+--- linux-700/arch/i386/config.in
++++ linux-720/arch/i386/config.in
+@@ -9,8 +9,6 @@ define_bool CONFIG_SBUS n
+  
+ define_bool CONFIG_UID16 y
+  
++define_bool CONFIG_KALLSYMS y
++
+ mainmenu_option next_comment
+ comment 'Code maturity level options'
+ bool 'Prompt for development and/or incomplete code/drivers' CONFIG_EXPERIMENTAL
 diff -urNp linux-700/arch/i386/kernel/process.c linux-720/arch/i386/kernel/process.c
 --- linux-700/arch/i386/kernel/process.c	
 +++ linux-720/arch/i386/kernel/process.c	
