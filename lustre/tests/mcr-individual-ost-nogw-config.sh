@@ -22,7 +22,7 @@ save_cmd() {
 [ -f $config ] && rm $config
 
 # Client node
-${LMC} --node client --tcpbuf $TCPBUF --net '*' tcp || exit 1
+${LMC} --add net --node client --tcpbuf $TCPBUF --nid '*' --nettype tcp || exit 1
 
 # this is crude, but effective
 let server_per_gw=($SERVER_CNT / $GW_CNT )
@@ -34,11 +34,11 @@ do
       echo "server: $server"
       OST=ba$server
       # server node
-      ${LMC} --node $OST --tcpbuf $TCPBUF --net $OST tcp || exit 1
+      ${LMC} --add net --node $OST --tcpbuf $TCPBUF --nid $OST --nettype tcp || exit 1
       # the device on the server
-      ${LMC} --node $OST --obdtype=obdecho --ost || exit 3
+      ${LMC} --add ost --node $OST --obd obd_$OST --obdtype=obdecho || exit 3
       # osc on client
-      ${LMC} --node client --osc OSC_$OST
+      ${LMC} --add oscref --node client --osc OSC_obd_$OST
       let server=$server+1 
 done
 
