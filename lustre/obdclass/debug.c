@@ -31,8 +31,8 @@ int dump_ioo(struct obd_ioobj *ioo)
 
 int dump_lniobuf(struct niobuf_local *nb)
 {
-        CERROR("niobuf_local: addr=%p, offset="LPD64", len=%d, xid=%d, page=%p\n",
-               nb->addr, nb->offset, nb->len, nb->xid, nb->page);
+        CERROR("niobuf_local: offset="LPD64", len=%d, xid=%d, page=%p\n",
+               nb->offset, nb->len, nb->xid, nb->page);
         CERROR("nb->page: index = %ld\n", nb->page ? nb->page->index : -1);
 
         return -EINVAL;
