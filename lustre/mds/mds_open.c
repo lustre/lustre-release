@@ -68,6 +68,7 @@ void reconstruct_open(struct mds_update_record *rec, struct ptlrpc_request *req)
         struct ldlm_reply *rep = lustre_msg_buf(req->rq_repmsg, 0);
         struct mds_body *body = lustre_msg_buf(req->rq_repmsg, 1);
         int disp;
+        ENTRY;
 
         /* copy rc, transno and disp; steal locks */
 
