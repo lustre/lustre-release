@@ -77,7 +77,7 @@ sed-stamp:
 	done
 	list='$(EXTNI)'; for i in $$list; do                                  \
 	  s=`echo $$i | sed "s/extN/ext3/"`;                                  \
-	  echo "creating extN.orig-include/$$i";                              \
+	  echo "creating extN-include.orig/$$i";                              \
 	  sed $(SUB) $(LINUX)/include/linux/$$s > extN-include.orig/$$i;      \
 	done
 	echo timestamp > $@
@@ -104,8 +104,7 @@ patch-stamp: sed-stamp $(EXTNP)
 	  for p in $$list; do                                                 \
 	    echo "applying patch $$p";                                        \
 	    sed $(SUB) $(srcdir)/$$p |                                        \
-	      (cd $(top_srcdir) && patch -p1) ||                              \
-	      echo "error: read NOTE in extN/Makefile.am" 1>&2 && exit $$?;   \
+	      (cd $(top_srcdir) && patch -p1) || exit $$?;                    \
 	  done;                                                               \
 	  echo "It is OK if the next patch says it is already applied";       \
 	  echo "applying patch $(srcdir)/extN-2.4.18-exports.diff";           \
