@@ -5,4 +5,7 @@ configure
 Makefile
 Makefile.in
 .deps
+tags
 TAGS
+OBD-HOWTO.html
+OBD-HOWTO.txt

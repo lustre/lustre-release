@@ -5,4 +5,5 @@ configure
 Makefile
 Makefile.in
 .deps
+tags
 TAGS
