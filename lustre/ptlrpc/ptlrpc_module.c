@@ -144,7 +144,6 @@ EXPORT_SYMBOL(ptlrpc_cleanup_client);
 EXPORT_SYMBOL(ptlrpc_req_to_uuid);
 EXPORT_SYMBOL(ptlrpc_uuid_to_connection);
 EXPORT_SYMBOL(ptlrpc_queue_wait);
-EXPORT_SYMBOL(ptlrpc_continue_req);
 EXPORT_SYMBOL(ptlrpc_replay_req);
 EXPORT_SYMBOL(ptlrpc_restart_req);
 EXPORT_SYMBOL(ptlrpc_prep_req);
