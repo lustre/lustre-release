@@ -22,10 +22,10 @@ CLIENT=${CLIENT:-mdev8}
 NETWORKTYPE=${NETWORKTYPE:-tcp}
 MOUNTPT=${MOUNTPT:-/mnt/lustre}
 CONFIG=${CONFIG:-recovery-cleanup.xml}
-MDSDEV=${MDSDEV:-/tmp/mds-`hostname`}
+MDSDEV=${MDSDEV:-/tmp/mds1-`hostname`}
 MDSSIZE=${MDSSIZE:-100000}
 FSTYPE=${FSTYPE:-ext3}
-OSTDEV=${OSTDEV:-/tmp/ost-`hostname`}
+OSTDEV=${OSTDEV:-/tmp/ost1-`hostname`}
 OSTSIZE=${OSTSIZE:-100000}
 
 do_mds() {
