@@ -22,10 +22,6 @@ case "$lustretag" in
 	portalstag="b1_2"
 	;;
 
-    b1_4 | b1_4_*)
-	portalstag="b1_4_bgl"
-	;;
-
     b_cmd*)
     	portalstag="$lustretag"
 	;;
