@@ -454,22 +454,21 @@ int obdfs_create (struct inode * dir, struct dentry * dentry, int mode)
 	struct page *page;
 	struct ext2_dir_entry_2 * de;
 	int err = -EIO;
-	ino_t ino;
+	objid id;
 
         ENTRY;
 
 	/*
 	 * N.B. Several error exits in ext2_new_inode don't set err.
 	 */
-	ino = iops(dir)->o_create(iid(dir), 0, &err);
+	err = iops(dir)->o_create(iid(dir), 0, &id);
 	if ( err ) 
 		return err;
-	err = -EIO;
-	inode =  iget(dir->i_sb, ino);
+	inode =  iget(dir->i_sb, (ino_t)id);
 	if (!inode || !list_empty(&inode->i_dentry)) {
-		CDEBUG(D_INODE, "No inode, ino %ld\n", ino);
+		CDEBUG(D_INODE, "No inode, ino %ld\n", id);
 		EXIT;
-		return err;
+		return -EIO;
 	}
 
 	inode->i_op = &obdfs_file_inode_operations;
@@ -505,21 +504,21 @@ int obdfs_mknod (struct inode * dir, struct dentry *dentry, int mode, int rdev)
 	struct inode * inode;
 	struct page *page;
 	struct ext2_dir_entry_2 * de;
-	int err = -EIO;
+	int err;
 
-	ino_t ino;
+	objid id;
 
         ENTRY;
 
 	/*
 	 * N.B. Several error exits in ext2_new_inode don't set err.
 	 */
-	ino = iops(dir)->o_create(iid(dir), 0, &err);
-	if ( ino == -1 ) 
-		return -1;
-	inode =  iget(dir->i_sb, ino);
-	if (!inode)
+	err = iops(dir)->o_create(iid(dir), 0, &id);
+	if ( err ) 
 		return err;
+	inode =  iget(dir->i_sb, (ino_t)id);
+	if (!inode)
+		return -EIO;
 
 	inode->i_uid = current->fsuid;
 	init_special_inode(inode, mode, rdev);
@@ -558,7 +557,7 @@ int obdfs_mkdir(struct inode * dir, struct dentry * dentry, int mode)
 	struct page *page, *inode_page;
 	struct ext2_dir_entry_2 * de;
 	int err;
-	ino_t ino;
+	objid id;
 
 	ENTRY;
 
@@ -566,13 +565,12 @@ int obdfs_mkdir(struct inode * dir, struct dentry * dentry, int mode)
 	if (dir->i_nlink >= EXT2_LINK_MAX)
 		goto out;
 
-	err = -EIO;
-	ino = iops(dir)->o_create(iid(dir), 0, &err);
-	if ( ino == -1 ) 
-		return -1;
-	inode =  iget(dir->i_sb, ino);
-	if (!inode)
+	err = iops(dir)->o_create(iid(dir), 0, &id);
+	if ( err ) 
 		return err;
+	inode =  iget(dir->i_sb, (ino_t)id);
+	if (!inode)
+		return -EIO;
 
 
 	inode->i_op = &obdfs_dir_inode_operations;
@@ -837,18 +835,18 @@ int obdfs_symlink (struct inode * dir, struct dentry *dentry, const char * symna
 	char * link;
 	int i, l, err = -EIO;
 	char c;
-	ino_t ino;
+	objid id;
 
         ENTRY;
 	/*
 	 * N.B. Several error exits in ext2_new_inode don't set err.
 	 */
-	ino = iops(dir)->o_create(iid(dir), 0, &err);
-	if ( ino == -1 )  {
+	err = iops(dir)->o_create(iid(dir), 0, &id);
+	if ( err )  {
 		EXIT;
-		return -1;
+		return err;
 	}
-	inode =  iget(dir->i_sb, ino);
+	inode =  iget(dir->i_sb, (ino_t)id);
 	if (!inode) {
 		EXIT;
 		return err;

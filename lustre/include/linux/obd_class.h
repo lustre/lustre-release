@@ -84,17 +84,17 @@ struct obd_ops {
 	int (*o_setattr)(struct obd_conn *, obdattr *oa);
 	int (*o_getattr)(struct obd_conn *, obdattr *oa);
 	int (*o_statfs)(struct obd_conn *, struct statfs *statfs);
-	int (*o_create)(struct obd_conn *, int prealloc_ino, int *er);
+	int (*o_create)(struct obd_conn *, int prealloc_obj, objid *id);
 	int (*o_destroy)(struct obd_conn *, obdattr *oa);
-	int (*o_read)(struct obd_conn *, obdattr *ino, char *buf, unsigned long *count, loff_t offset);
+	int (*o_read)(struct obd_conn *, obdattr *oa, char *buf, unsigned long *count, loff_t offset);
 	int (*o_read2)(struct obd_conn *, obdattr *oa, char *buf, unsigned long *count, loff_t offset);
 	int (*o_write)(struct obd_conn *, obdattr *oa, char *buf, unsigned long *count, loff_t offset);
-	int (*o_brw)(int rw, struct obd_conn * conn, obdattr *obj, struct page *page, int create);
+	int (*o_brw)(int rw, struct obd_conn * conn, obdattr *oa, struct page *page, int create);
 	int (*o_preallocate)(struct obd_conn *, unsigned long *req, long inodes[32]);
-	int  (*o_get_info)(struct obd_conn *, int keylen, void *key, int *vallen, void **val);
-	int  (*o_set_info)(struct obd_conn *, int keylen, void *key, int vallen, void *val);
-	int (*o_migrate)(struct obd_conn *, obdattr *src, obdattr *dst);
-	int (*o_copy)(struct obd_conn *dev, obdattr *source, obdattr *target);
+	int (*o_get_info)(struct obd_conn *, int keylen, void *key, int *vallen, void **val);
+	int (*o_set_info)(struct obd_conn *, int keylen, void *key, int vallen, void *val);
+	int (*o_migrate)(struct obd_conn *, obdattr *dst, obdattr *src);
+	int (*o_copy)(struct obd_conn *dev, obdattr *dst, obdattr *src);
 	int (*o_iocontrol)(int cmd, struct obd_conn *, int len, void *karg, void *uarg);
 	int (*o_iterate)(struct obd_conn *, int (*)(objid, void *), objid, void *);
 
@@ -166,7 +166,7 @@ struct oic_attr_s {
 struct ioc_mv_s {
 	unsigned int conn_id;
 	objid  src;
-	objid  tgt;
+	objid  dst;
 };
 
 struct oic_rw_s {

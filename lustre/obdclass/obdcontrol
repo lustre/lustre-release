@@ -103,7 +103,7 @@ my $arg;
 my %commands =
     ('device' => {func => "Device", doc => "device <dev>: open another OBD device"},
      'create' => {func => "Create", doc => "create: creates a new inode"},
-     'attach' => {func => "Attach", doc => "attach { ext2_obd | snap_obd snapdev snapidx tableno | scsi_obd adapter bus tid lun" },
+     'attach' => {func => "Attach", doc => "attach { ext2_obd | snap_obd snapdev snapidx tableno | scsi_obd adapter bus tid lun }" },
      'detach' => {func => "Detach", doc => "detach this device"},
      'testext2iterator' => {func => "TestExt2Iterator", doc => "test ext2 iterator function"},
      'snapset' => {func => "SnapSetTable", doc => "snapset <tableno> <file>: set the table (created with snaptable) as table #tableno" },
@@ -648,8 +648,11 @@ sub WriteSnapShotTable {
 sub Copy {
     my $err = 0;
     my $srcid = shift;
-    my $tgtid = shift;
-    my $data = pack("III", $::client_id, $srcid, $tgtid);
+    my $dstid = shift;
+
+    # Note: _copy IOCTL takes parameters as dst, src.
+    #       Copy function takes parameters as src, dst.
+    my $data = pack("III", $::client_id, $dstid, $srcid);
     my $datalen = 12;
 
     my $packed = pack("ip", $datalen, $data);
@@ -667,8 +670,11 @@ sub Copy {
 sub Migrate {
     my $err = 0;
     my $srcid = shift;
-    my $tgtid = shift;
-    my $data = pack("III", $::client_id, $srcid, $tgtid);
+    my $dstid = shift;
+
+    # Note: _migr IOCTL takes parameters as dst, src.
+    #       Migrate function takes parameters as src, dst.
+    my $data = pack("III", $::client_id, $dstid, $srcid);
     my $datalen = 12;
 
     my $packed = pack("ip", $datalen, $data);

@@ -154,9 +154,9 @@ static int getdata(int len, void **data)
 static int obd_class_ioctl (struct inode * inode, struct file * filp, 
 			    unsigned int cmd, unsigned long arg)
 {
-	int err, i_ino, dev;
 	struct obd_device *obddev;
 	struct obd_conn conn;
+	int err, dev;
 	long int cli_id; /* connect, disconnect */
 
 	if (!inode)
@@ -289,7 +289,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 		/* have we attached a type to this device */
 		if ( !obddev->obd_type ) {
 			CDEBUG(D_IOCTL, "OBD Device %d has no type.\n", dev);
-			return -EINVAL;
+			return -ENODEV;
 		}
 
 		/* get main structure */
@@ -322,7 +322,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 		/* have we attached a type to this device */
 		if ( !obddev->obd_type ) {
 			CDEBUG(D_IOCTL, "OBD Device %d has no type.\n", dev);
-			return -EINVAL;
+			return -ENODEV;
 		}
 
 		/* get main structure */
@@ -353,7 +353,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 			int part_datalen;
 			void *part_data;
 		} input;
-		obdattr *srcoa, *tgtoa;
+		obdattr *src, *dst;
 
 		if ( (!(obddev->obd_flags & OBD_SET_UP)) ||
 		     (!(obddev->obd_flags & OBD_ATTACHED))) {
@@ -374,23 +374,23 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 			return -EOPNOTSUPP;
 
 		/* do the partition */
-		CDEBUG(D_IOCTL, "Copy %d, type %s src %ld tgt %ld\n", dev, 
-		       obddev->obd_type->typ_name, mvdata.src, mvdata.tgt);
+		CDEBUG(D_IOCTL, "Copy %d, type %s dst %ld src %ld\n", dev, 
+		       obddev->obd_type->typ_name, mvdata.dst, mvdata.src);
 
 		conn.oc_id = mvdata.conn_id;
-		srcoa = obd_oa_fromid(&conn, mvdata.src);
-		if ( !srcoa ) 
+		src = obd_oa_fromid(&conn, mvdata.src);
+		if ( !src ) 
 			return -ENOENT;
-		tgtoa = obd_oa_fromid(&conn, mvdata.tgt);
-		if ( ! tgtoa ) {
-			obd_free_oa(srcoa);
+		dst = obd_oa_fromid(&conn, mvdata.dst);
+		if ( ! dst ) {
+			obd_free_oa(src);
 			return -ENOENT;
 		}
 
-		err = OBP(obddev, copy)(&conn, srcoa, tgtoa);
+		err = OBP(obddev, copy)(&conn, dst, src);
 
-		obd_free_oa(srcoa);
-		obd_free_oa(tgtoa);
+		obd_free_oa(src);
+		obd_free_oa(dst);
 		return err;
 	}
 	case OBD_IOC_MIGR: {
@@ -399,7 +399,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 			int part_datalen;
 			void *part_data;
 		} input;
-		obdattr *srcoa, *tgtoa;
+		obdattr *src, *dst;
 
 		if ( (!(obddev->obd_flags & OBD_SET_UP)) ||
 		     (!(obddev->obd_flags & OBD_ATTACHED))) {
@@ -422,27 +422,27 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 			return -EOPNOTSUPP;
 
 		/* do the partition */
-		CDEBUG(D_IOCTL, "Migrate %d, type %s conn %d src %ld tgt %ld\n",
+		CDEBUG(D_IOCTL, "Migrate %d, type %s conn %d src %ld dst %ld\n",
 		       dev, obddev->obd_type->typ_name, mvdata.conn_id,
-		       mvdata.src, mvdata.tgt);
+		       mvdata.src, mvdata.dst);
 
 
-		if ( ! (srcoa = obd_empty_oa()) ) 
+		if ( ! (src = obd_empty_oa()) ) 
 			return -ENOMEM;
-		if ( ! (tgtoa = obd_empty_oa()) ) {
-			obd_free_oa(srcoa);
+		if ( ! (dst = obd_empty_oa()) ) {
+			obd_free_oa(src);
 			return -ENOMEM;
 		}
 
-		srcoa->i_ino = mvdata.src;
-		tgtoa->i_ino = mvdata.tgt;
+		src->i_ino = mvdata.src;
+		dst->i_ino = mvdata.dst;
 
 		conn.oc_id = mvdata.conn_id;
 
-		err = OBP(obddev, migrate)(&conn, tgtoa, srcoa);
+		err = OBP(obddev, migrate)(&conn, dst, src);
 
-		obd_free_oa(srcoa);
-		obd_free_oa(tgtoa);
+		obd_free_oa(src);
+		obd_free_oa(dst);
 		return err;
 	}
 
@@ -514,7 +514,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 		if (!obddev->obd_type) {
 			CDEBUG(D_IOCTL, "OBD Device %d has no type.\n", dev);
 			EXIT;
-			return -EINVAL;
+			return -ENODEV;
 		}
 
 		if ( !obddev->obd_type->typ_refcnt ) {
@@ -560,8 +560,9 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 		if ( !OBT(obddev) || !OBP(obddev, connect) )
 			return -EOPNOTSUPP;
 		
-		if (OBP(obddev, connect)(&conn))
-			return -EINVAL;
+		err = OBP(obddev, connect)(&conn);
+		if ( err )
+			return err;
 
 		return copy_to_user((int *)arg, &conn.oc_id,
 				    sizeof(int));
@@ -570,7 +571,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 		/* frees data structures */
 		/* has this minor been registered? */
 		if (!obddev->obd_type)
-			return -EINVAL;
+			return -ENODEV;
 
 		get_user(cli_id, (int *) arg);
 		conn.oc_id = cli_id;
@@ -587,7 +588,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 		 * superblock that it needs. */
 		/* has this minor been registered? */
 		if (!obddev->obd_type)
-			return -EINVAL;
+			return -ENODEV;
 
 		if (!obddev->u.ext2.ext2_sb || !obddev->u.ext2.ext2_sb->s_dev) {
 			CDEBUG(D_IOCTL, "fatal: device not initialized.\n");
@@ -604,6 +605,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 	}
 	case OBD_IOC_CREATE: {
 		struct oic_create_s foo;
+		objid id;
 
 		if ( copy_from_user(&foo, (const void *)arg, sizeof(foo)) )
 			return -EFAULT;
@@ -619,14 +621,15 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 		if ( !OBT(obddev) || !OBP(obddev, create) )
 			return -EOPNOTSUPP;
 
-		i_ino = OBP(obddev, create)(&conn, foo.prealloc, &err);
+		err = OBP(obddev, create)(&conn, foo.prealloc, &id);
 		if (err) {
 			CDEBUG(D_IOCTL, "create: obd_inode_new failure\n");
 			/* 0 is the only error value */
-			return put_user(0, (int *) arg);
+			put_user(0, (int *) arg);
+			return err;
 		}
 
-		return put_user(i_ino, (int *) arg);
+		return put_user(id, (int *) arg);
 	}
 	case OBD_IOC_DESTROY: {
 		struct destroy_s {
@@ -640,7 +643,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 
 		/* has this minor been registered? */
 		if (!obddev->obd_type)
-			return -EINVAL;
+			return -ENODEV;
 
 		copy_from_user(&destroy, (int *)arg, sizeof(struct destroy_s));
 		if ( !OBT(obddev) || !OBP(obddev, destroy) )
@@ -661,7 +664,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 
 		/* has this minor been registered? */
 		if (!obddev->obd_type)
-			return -EINVAL;
+			return -ENODEV;
 
 		err = copy_from_user(&foo, (int *)arg, sizeof(foo));
 		if (err)
@@ -765,7 +768,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 
 		/* has this minor been registered? */
 		if (!obddev->obd_type)
-			return -EINVAL;
+			return -ENODEV;
 
 		err = copy_from_user(&prealloc, (int *)arg, sizeof(prealloc));
 		if (err) 
@@ -795,7 +798,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 
 		/* has this minor been registered? */
 		if (!obddev->obd_type)
-			return -EINVAL;
+			return -ENODEV;
 
 		tmp = (void *)arg + sizeof(unsigned int);
 		get_user(conn_id, (int *) arg);
