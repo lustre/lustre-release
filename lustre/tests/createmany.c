@@ -58,7 +58,7 @@ int main(int argc, char ** argv)
                 }
 		if ((i % 10000) == 0) {
                         printf(" - created %d (time %ld ; total %ld ; last %ld)\n",
-                               i, time(0), time(0) - start, last);
+                               i, time(0), time(0) - start, time(0) - last);
                         last = time(0);
                 }
         }
