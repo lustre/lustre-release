@@ -431,7 +431,7 @@ int mdc_intent_lock(struct obd_export *exp, struct ll_uctxt *uctxt,
         ENTRY;
         LASSERT(it);
 
-        CDEBUG(D_DLMTRACE, "name: %*s in inode "LPU64", intent: %s flags %#o\n",
+        CDEBUG(D_DLMTRACE, "name: %.*s in inode "LPU64", intent: %s flags %#o\n",
                len, name, pfid->id, ldlm_it2str(it->it_op), it->it_flags);
 
         if (cfid && (it->it_op == IT_LOOKUP || it->it_op == IT_GETATTR)) {
@@ -579,7 +579,7 @@ int mdc_intent_lock(struct obd_export *exp, struct ll_uctxt *uctxt,
                                sizeof(lockh));
                 }
         }
-        CDEBUG(D_DENTRY, "D_IT dentry %*s intent: %s status %d disp %x rc %d\n",
+        CDEBUG(D_DENTRY, "D_IT dentry %.*s intent: %s status %d disp %x rc %d\n",
                len, name, ldlm_it2str(it->it_op), it->d.lustre.it_status,
                it->d.lustre.it_disposition, rc);
 
