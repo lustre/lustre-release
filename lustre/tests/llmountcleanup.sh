@@ -11,12 +11,16 @@ if [ "$PORTALS" ]; then
   portals_opt="--portals=$PORTALS"
 fi
 
+if [ "$LUSTRE" ]; then
+  lustre_opt="--lustre=$LUSTRE"
+fi
+
 if [ ! -f $config ]; then
    sh $mkconfig $config || exit 1
 fi
 
 sync; sleep 2; sync
-${LCONF} $portals_opt --cleanup --dump $TMP/debug $config
+${LCONF} $portals_opt $lustre_opt --cleanup --dump $TMP/debug $config
 rc=$?
 BUSY=`dmesg | grep -i destruct`
 if [ "$BUSY" ]; then
