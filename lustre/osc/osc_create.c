@@ -172,7 +172,7 @@ static int oscc_wait_for_objects(struct osc_creator *oscc, int count)
         spin_unlock(&oscc->oscc_lock);
 
         osc_invalid = oscc->oscc_obd->u.cli.cl_import->imp_invalid;
-                      
+
         return have_objs || ost_full || osc_invalid;
 }
 

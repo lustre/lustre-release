@@ -1251,9 +1251,9 @@ int mds_mfd_close(struct ptlrpc_request *req, struct obd_device *obd,
                 if (req != NULL && req->rq_repmsg != NULL &&
                     (reply_body->valid & OBD_MD_FLEASIZE) &&
                     mds_log_op_unlink(obd, pending_child->d_inode,
-                                                lmm, req->rq_repmsg->buflens[1],
-                                                lustre_msg_buf(req->rq_repmsg, 2, 0),
-                                                req->rq_repmsg->buflens[2], &lcl) > 0) {
+                                      lmm, req->rq_repmsg->buflens[1],
+                                      lustre_msg_buf(req->rq_repmsg, 2, 0),
+                                      req->rq_repmsg->buflens[2], &lcl) > 0) {
                         reply_body->valid |= OBD_MD_FLCOOKIE;
                 }
 

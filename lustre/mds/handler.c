@@ -827,7 +827,7 @@ int mds_check_mds_num(struct obd_device *obd, struct inode* inode,
         struct mea *mea = NULL;
         int mea_size, rc = 0;
         ENTRY;
-                                                                                                                                                                                                     
+
         rc = mds_get_lmv_attr(obd, inode, &mea, &mea_size);
         if (rc)
                 RETURN(rc);
@@ -843,7 +843,7 @@ int mds_check_mds_num(struct obd_device *obd, struct inode* inode,
                         rc = -ERESTART;
                 }
         }
-                                                                                                                                                                                                     
+
         if (mea)
                 OBD_FREE(mea, mea_size);
         RETURN(rc);

@@ -1297,12 +1297,21 @@ int ll_file_flock(struct file *file, int cmd, struct file_lock *file_lock)
 
         switch (cmd) {
         case F_SETLKW:
+#ifdef F_SETLKW64
+        case F_SETLKW64:
+#endif
                 flags = 0;
                 break;
         case F_SETLK:
+#ifdef F_SETLK64
+        case F_SETLK64:
+#endif
                 flags = LDLM_FL_BLOCK_NOWAIT;
                 break;
         case F_GETLK:
+#ifdef F_GETLK64
+        case F_GETLK64:
+#endif
                 flags = LDLM_FL_TEST_LOCK;
                 /* Save the old mode so that if the mode in the lock changes we
                  * can decrement the appropriate reader or writer refcount. */
@@ -1318,7 +1327,8 @@ int ll_file_flock(struct file *file, int cmd, struct file_lock *file_lock)
                flags, mode, flock.l_flock.start, flock.l_flock.end);
 
         obddev = md_get_real_obd(sbi->ll_mdc_exp, NULL, 0);
-        rc = ldlm_cli_enqueue(sbi->ll_mdc_exp, NULL, obddev->obd_namespace,
+        rc = ldlm_cli_enqueue(obddev->obd_self_export, NULL,
+                              obddev->obd_namespace,
                               res_id, LDLM_FLOCK, &flock, mode, &flags,
                               NULL, ldlm_flock_completion_ast, NULL, file_lock,
                               NULL, 0, NULL, &lockh);
@@ -1430,7 +1440,7 @@ struct file_operations ll_file_operations = {
         .sendfile       = generic_file_sendfile,
 #endif
         .fsync          = ll_fsync,
-        //.lock           ll_file_flock
+        .lock           = ll_file_flock
 };
 
 struct inode_operations ll_file_inode_operations = {

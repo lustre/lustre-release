@@ -85,7 +85,7 @@ static int lov_llog_origin_add(struct llog_ctxt *ctxt, struct llog_rec_hdr *rec,
         down(&lov->lov_llog_sem);
         for (i = 0,loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count; i++,loi++) {
                 struct obd_device *child =
-                        lov->tgts[loi->loi_ost_idx].ltd_exp->exp_obd; 
+                        lov->tgts[loi->loi_ost_idx].ltd_exp->exp_obd;
                 struct llog_ctxt *cctxt;
                 cctxt = llog_get_context(&child->obd_llogs, ctxt->loc_idx);
 

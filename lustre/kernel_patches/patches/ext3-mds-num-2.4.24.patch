@@ -9,7 +9,7 @@ Index: linux-2.4.24/fs/ext3/namei.c
 +		unsigned type = de->file_type;
 +		__u32 *mds;
 +		mds = (__u32 *)((char *) de + EXT3_DIR_REC_LEN(de->name_len));
-+                if ((type & 128) && EXT3_HAS_INCOMPAT_FEATURE(dir->i_sb,
++		if ((type & 128) && EXT3_HAS_INCOMPAT_FEATURE(dir->i_sb,
 +				EXT3_FEATURE_INCOMPAT_MDSNUM) &&
 +				mds[0] != EXT3_SB(dir->i_sb)->s_mdsnum) {
 +			struct ext3_super_block *es;
@@ -56,7 +56,7 @@ Index: linux-2.4.24/fs/ext3/namei.c
  	char		*top;
  	
  	reclen = EXT3_DIR_REC_LEN(namelen);
-+        if (EXT3_HAS_INCOMPAT_FEATURE(sb, EXT3_FEATURE_INCOMPAT_MDSNUM)
++	if (EXT3_HAS_INCOMPAT_FEATURE(sb, EXT3_FEATURE_INCOMPAT_MDSNUM)
 +			&& (dentry->d_flags & DCACHE_CROSS_REF)
 +			&& (dentry->d_mdsnum != EXT3_SB(sb)->s_mdsnum))
 +		reclen += 8; /* we need space to store mds num */

@@ -699,7 +699,7 @@ llog_object_create_generic(struct llog_ctxt *ctxt, struct llog_logid *lgh_id)
                 OBD_ALLOC(oa, sizeof(*oa));
                 if (!oa)
                         RETURN(ERR_PTR(-ENOMEM));
-                
+
                 oa->o_gr = FILTER_GROUP_LLOG;
                 oa->o_valid = OBD_MD_FLGENER | OBD_MD_FLGROUP;
                 rc = obd_create(ctxt->loc_exp, oa, NULL, NULL);

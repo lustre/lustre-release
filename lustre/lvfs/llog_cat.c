@@ -625,8 +625,7 @@ int llog_catalog_cleanup(struct llog_ctxt *ctxt)
         cathandle = ctxt->loc_handle;
         if (cathandle)
                 llog_cat_put(ctxt->loc_handle);
- 
-//        OBD_FREE(ctxt, sizeof(*ctxt));
+
         return 0;
 }
 EXPORT_SYMBOL(llog_catalog_cleanup);

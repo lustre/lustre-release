@@ -497,11 +497,11 @@ int lmv_intent_lookup(struct obd_export *exp, struct ll_uctxt *uctxt,
                         lmv_put_obj(obj);
                 }
                 mds = rpfid.mds;
-                
+
                 CDEBUG(D_OTHER, "revalidate lookup for %lu/%lu/%lu to %d MDS\n",
                        (unsigned long)cfid->mds, (unsigned long)cfid->id,
                        (unsigned long)cfid->generation, mds);
-                
+
                 rc = md_intent_lock(lmv->tgts[mds].ltd_exp, uctxt, pfid, name,
                                     len, lmm, lmmsize, cfid, it, flags,
                                     reqp, cb_blocking);

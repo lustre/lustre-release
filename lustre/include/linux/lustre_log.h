@@ -501,7 +501,7 @@ static inline void llog_create_lock_free(struct llog_create_locks *lcl)
         int size, offset = offsetof(struct llog_create_locks, lcl_locks);
         int i;
         ENTRY;
-                                                                                                                             
+
         for (i = 0; i < lcl->lcl_count; i ++) {
                 if (lcl->lcl_locks[i] != NULL) {
 #ifdef __KERNEL__

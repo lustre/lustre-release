@@ -1691,7 +1691,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                                                  rec->ur_namelen, &child_lockh,
                                                  &dchild, LCK_EX,
                                                  MDS_INODELOCK_LOOKUP |
-                                                   MDS_INODELOCK_UPDATE, NULL);
+                                                 MDS_INODELOCK_UPDATE, NULL);
         }
         if (rc)
                 GOTO(cleanup, rc);

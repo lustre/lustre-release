@@ -188,7 +188,7 @@ int mds_get_lmv_attr(struct obd_device *obd, struct inode *inode,
 		*mea = NULL;
 	} else
                 rc = 0;
-                        
+
 	RETURN(rc);
 }
 

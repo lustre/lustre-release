@@ -633,7 +633,7 @@ int mds_obd_create(struct obd_export *exp, struct obdo *oa,
         down(&parent_inode->i_sem);
         if (oa->o_id) {
                 namelen = ll_fid2str(fidname, oa->o_id, oa->o_generation);
- 
+
                 dchild = lookup_one_len(fidname, mds->mds_objects_dir, namelen);
                 if (IS_ERR(dchild))
                         GOTO(out_pop, rc = PTR_ERR(dchild));
