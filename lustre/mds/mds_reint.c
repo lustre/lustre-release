@@ -1903,7 +1903,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
         MDS_CHECK_RESENT(req, mds_reconstruct_generic(req));
 
         if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
-                DEBUG_REQ(D_HA, req, "unlink replay\n");
+                DEBUG_REQ(D_HA, req, "unlink replay");
                 LASSERT(offset == 1); /* should not come from intent */
                 memcpy(lustre_msg_buf(req->rq_repmsg, 2, 0),
                        lustre_msg_buf(req->rq_reqmsg, offset + 2, 0),
