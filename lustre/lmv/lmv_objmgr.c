@@ -297,7 +297,9 @@ lmv_create_obj(struct obd_export *exp, struct lustre_id *id, struct mea *mea)
         CDEBUG(D_OTHER, "get mea for "DLID4" and create lmv obj\n",
                OLID4(id));
 
-        if (!mea) {
+        md.mea = NULL;
+	
+        if (mea != NULL) {
                 __u64 valid;
                 
                 CDEBUG(D_OTHER, "mea isn't passed in, get it now\n");
@@ -320,7 +322,7 @@ lmv_create_obj(struct obd_export *exp, struct lustre_id *id, struct mea *mea)
                         GOTO(cleanup, obj = ERR_PTR(rc));
                 }
 
-                if (!md.mea)
+                if (md.mea == NULL)
                         GOTO(cleanup, obj = ERR_PTR(-ENODATA));
                         
                 mea = md.mea;
@@ -333,7 +335,11 @@ lmv_create_obj(struct obd_export *exp, struct lustre_id *id, struct mea *mea)
                        OLID4(id));
                 GOTO(cleanup, obj = ERR_PTR(-ENOMEM));
         }
-        EXIT;
+	
+	if (md.mea != NULL)
+		obd_free_memmd(exp, (struct lov_stripe_md **)&md.mea);
+        
+	EXIT;
 cleanup:
         if (req)
                 ptlrpc_req_finished(req);
