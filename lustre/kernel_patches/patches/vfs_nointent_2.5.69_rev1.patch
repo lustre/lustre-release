@@ -1,11 +1,11 @@
  fs/exec.c          |    2 -
- fs/namei.c         |   82 +++++++++++++++++++++++++++++++++++++++++++++++------
- fs/open.c          |   73 ++++++++++++++++++++++++++++++++++++++++-------
- include/linux/fs.h |    9 +++++
- 4 files changed, 145 insertions(+), 21 deletions(-)
+ fs/namei.c         |   75 +++++++++++++++++++++++++++++++++++++++++++++++++----
+ fs/open.c          |   73 ++++++++++++++++++++++++++++++++++++++++++++-------
+ include/linux/fs.h |    9 +++++-
+ 4 files changed, 142 insertions(+), 17 deletions(-)
 
---- uml-2.5/fs/namei.c~vfs_nointent_2.5.69_rev1	2003-06-01 22:02:20.000000000 -0600
-+++ uml-2.5-braam/fs/namei.c	2003-06-01 22:19:39.000000000 -0600
+--- uml-2.5/fs/namei.c~vfs_nointent_2.5.69_rev1	2003-06-02 02:03:34.000000000 -0600
++++ uml-2.5-braam/fs/namei.c	2003-06-02 02:13:05.000000000 -0600
 @@ -1260,7 +1260,7 @@ int may_open(struct nameidata *nd, int a
  		if (!error) {
  			DQUOT_INIT(inode);
@@ -82,26 +82,23 @@
  
  	name = getname(pathname);
  	if(IS_ERR(name))
-@@ -1681,8 +1702,18 @@ asmlinkage long sys_rmdir(const char __u
+@@ -1681,6 +1702,16 @@ asmlinkage long sys_rmdir(const char __u
  			error = -EBUSY;
  			goto exit1;
  	}
-+
-+	if (nd.dentry->d_inode->i_op->rmdir_raw) {
-+		struct inode_operations *op = nd.dentry->d_inode->i_op;
-+
-+		error = op->rmdir_raw(&nd);
-+		/* the file system wants to use normal vfs path now */
-+		if (error != -EOPNOTSUPP)
-+			goto exit1;
-+	}
-+
++ 
++ 	if (nd.dentry->d_inode->i_op->rmdir_raw) {
++ 		struct inode_operations *op = nd.dentry->d_inode->i_op;
++ 
++ 		error = op->rmdir_raw(&nd);
++ 		/* the file system wants to use normal vfs path now */
++ 		if (error != -EOPNOTSUPP)
++ 			goto exit1;
++ 	}
++ 
  	down(&nd.dentry->d_inode->i_sem);
--	dentry = lookup_hash(&nd.last, nd.dentry);
-+	dentry = lookup_hash(&nd.last, nd.dentry, &nd.it);
+ 	dentry = lookup_hash(&nd.last, nd.dentry, &nd);
  	error = PTR_ERR(dentry);
- 	if (!IS_ERR(dentry)) {
- 		error = vfs_rmdir(nd.dentry->d_inode, dentry);
 @@ -1737,6 +1768,7 @@ asmlinkage long sys_unlink(const char __
  	struct dentry *dentry;
  	struct nameidata nd;
@@ -110,23 +107,20 @@
  
  	name = getname(pathname);
  	if(IS_ERR(name))
-@@ -1748,8 +1780,15 @@ asmlinkage long sys_unlink(const char __
+@@ -1748,6 +1780,13 @@ asmlinkage long sys_unlink(const char __
  	error = -EISDIR;
  	if (nd.last_type != LAST_NORM)
  		goto exit1;
-+	if (nd.dentry->d_inode->i_op->unlink_raw) {
-+		struct inode_operations *op = nd.dentry->d_inode->i_op;
-+		error = op->unlink_raw(&nd);
-+		/* the file system wants to use normal vfs path now */
-+		if (error != -EOPNOTSUPP)
-+			goto exit1;
-+	}
++ 	if (nd.dentry->d_inode->i_op->unlink_raw) {
++ 		struct inode_operations *op = nd.dentry->d_inode->i_op;
++ 		error = op->unlink_raw(&nd);
++ 		/* the file system wants to use normal vfs path now */
++ 		if (error != -EOPNOTSUPP)
++ 			goto exit1;
++ 	}
  	down(&nd.dentry->d_inode->i_sem);
--	dentry = lookup_hash(&nd.last, nd.dentry);
-+	dentry = lookup_hash(&nd.last, nd.dentry, NULL);
+ 	dentry = lookup_hash(&nd.last, nd.dentry, &nd);
  	error = PTR_ERR(dentry);
- 	if (!IS_ERR(dentry)) {
- 		/* Why not before? Because we want correct error value */
 @@ -1815,10 +1854,18 @@ asmlinkage long sys_symlink(const char _
  	if (!IS_ERR(to)) {
  		struct dentry *dentry;
@@ -204,33 +198,21 @@
  
  	error = path_lookup(oldname, LOOKUP_PARENT, &oldnd);
  	if (error)
-@@ -2097,9 +2156,15 @@ static inline int do_rename(const char *
+@@ -2097,6 +2156,13 @@ static inline int do_rename(const char *
  	if (newnd.last_type != LAST_NORM)
  		goto exit2;
  
-+	if (old_dir->d_inode->i_op->rename_raw) {
-+		error = old_dir->d_inode->i_op->rename_raw(&oldnd, &newnd);
-+		/* the file system wants to use normal vfs path now */
-+		if (error != -EOPNOTSUPP)
-+			goto exit2;
-+	}
++ 	if (old_dir->d_inode->i_op->rename_raw) {
++ 		error = old_dir->d_inode->i_op->rename_raw(&oldnd, &newnd);
++ 		/* the file system wants to use normal vfs path now */
++ 		if (error != -EOPNOTSUPP)
++ 			goto exit2;
++ 	}
++
  	trap = lock_rename(new_dir, old_dir);
  
--	old_dentry = lookup_hash(&oldnd.last, old_dir);
-+	old_dentry = lookup_hash(&oldnd.last, old_dir, &oldnd.it);
- 	error = PTR_ERR(old_dentry);
- 	if (IS_ERR(old_dentry))
- 		goto exit3;
-@@ -2119,7 +2184,7 @@ static inline int do_rename(const char *
- 	error = -EINVAL;
- 	if (old_dentry == trap)
- 		goto exit4;
--	new_dentry = lookup_hash(&newnd.last, new_dir);
-+	new_dentry = lookup_hash(&newnd.last, new_dir, &newnd.it);
- 	error = PTR_ERR(new_dentry);
- 	if (IS_ERR(new_dentry))
- 		goto exit4;
-@@ -2128,8 +2193,7 @@ static inline int do_rename(const char *
+ 	old_dentry = lookup_hash(&oldnd.last, old_dir, &oldnd);
+@@ -2128,8 +2194,7 @@ static inline int do_rename(const char *
  	if (new_dentry == trap)
  		goto exit5;
  
@@ -241,7 +223,7 @@
  	dput(new_dentry);
  exit4:
 --- uml-2.5/fs/open.c~vfs_nointent_2.5.69_rev1	2003-06-01 21:54:37.000000000 -0600
-+++ uml-2.5-braam/fs/open.c	2003-06-01 22:06:02.000000000 -0600
++++ uml-2.5-braam/fs/open.c	2003-06-02 02:10:20.000000000 -0600
 @@ -75,9 +75,10 @@ out:
  	return error;
  }
@@ -380,11 +362,11 @@
  	down(&inode->i_sem);
  	error = notify_change(dentry, &newattrs);
  	up(&inode->i_sem);
---- uml-2.5/include/linux/fs.h~vfs_nointent_2.5.69_rev1	2003-06-01 00:13:35.000000000 -0600
-+++ uml-2.5-braam/include/linux/fs.h	2003-06-01 22:06:02.000000000 -0600
+--- uml-2.5/include/linux/fs.h~vfs_nointent_2.5.69_rev1	2003-06-02 01:59:43.000000000 -0600
++++ uml-2.5-braam/include/linux/fs.h	2003-06-02 02:10:20.000000000 -0600
 @@ -737,13 +737,20 @@ struct inode_operations {
  	struct dentry * (*lookup_it) (struct inode *,struct dentry *,
- 					struct lookup_intent *);
+ 					struct nameidata *);
  	int (*link) (struct dentry *,struct inode *,struct dentry *);
 +	int (*link_raw) (struct nameidata *,struct nameidata *);
  	int (*unlink) (struct inode *,struct dentry *);
@@ -413,7 +395,7 @@
  extern struct file *filp_open(const char *, int, int);
  extern struct file * dentry_open(struct dentry *, struct vfsmount *, int);
 --- uml-2.5/fs/exec.c~vfs_nointent_2.5.69_rev1	2003-05-31 22:26:50.000000000 -0600
-+++ uml-2.5-braam/fs/exec.c	2003-06-01 22:06:02.000000000 -0600
++++ uml-2.5-braam/fs/exec.c	2003-06-02 02:10:20.000000000 -0600
 @@ -1353,7 +1353,7 @@ int do_coredump(long signr, int exit_cod
  		goto close_fail;
  	if (!file->f_op->write)
