@@ -189,6 +189,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 			return -EBUSY;
 		}
 
+		ENTRY;
 		/* get data structures */
 		err = copy_from_user(&input, (void *)arg, sizeof(input));
 		if ( err ) {
@@ -196,12 +197,14 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 			return err;
 		}
 
+		ENTRY;
 		err = getdata(input->att_typelen + 1, &input->att_type);
 		if ( err ) {
 			EXIT;
 			return err;
 		}
 
+		ENTRY;
 		/* find the type */
 		type = obd_nm_to_type(input->att_type);
 		OBD_FREE(input->att_type, input->att_typelen + 1);

@@ -73,6 +73,24 @@ extern int obd_print_entry;
 		       inode->u.ext2_i.i_data[8], inode->u.ext2_i.i_data[9]);\
 	}
 
+#define ODEBUG(obdo) { \
+		printk("]]%s line %d[[  id %Ld, atm %Ld, mtim %Ld, ctm %Ld, size %Ld, blocks %Ld\n",\
+		       __FUNCTION__ , __LINE__, \
+		       obdo->o_ino, obdo->o_atime, obdo->o_mtime,\
+		       obdo->o_ctime, obdo->o_size, obdo->o_blocks);\
+		printk("]]%s line %d[[  mode %o, uid %d, gid %d, flg %0x, obdflg %0x, nlnk %d, valid %0x\n", \
+		       __FUNCTION__ , __LINE__, \
+		       obdo->o_mode, obdo->o_uid, obdo->o_gid,\
+		       obdo->o_flags, obdo->o_obdflags, obdo->o_nlink,\
+		       obdo->o_valid);\
+		printk("blk: %d %d %d %d %d %d %d %d %d %d\n",\
+		       ((long)obdo->o_inline)[0], ((long)obdo->o_inline)[1],\
+		       ((long)obdo->o_inline)[2], ((long)obdo->o_inline)[3],\
+		       ((long)obdo->o_inline)[4], ((long)obdo->o_inline)[5],\
+		       ((long)obdo->o_inline)[6], ((long)obdo->o_inline)[7],\
+		       ((long)obdo->o_inline)[8], ((long)obdo->o_inline)[9]);\
+	}
+
 
 #define PDEBUG(page,cmd)	{if (page){\
 		char *uptodate = (Page_Uptodate(page)) ? "yes" : "no";\

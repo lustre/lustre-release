@@ -89,12 +89,12 @@ use Term::ReadLine;
 use IO::Handle;
 
 
-# NOTE long long are layed out in memory as follows:
+# NOTE long long are layed out in ia32 memory as follows:
 # u = 0xaaaabbbbccccdddd has ccccdddd at &u and aaaabbbb 4 bytes on
 # this may be different on other architectures
 
-# we use 32 bit integers for all 64 quantities in this program
-# #define OBD_INLINESZ	60
+# we use 32-bit integers for all 64-bit quantities in this program
+# #define OBD_INLINESZ	64
 # #define OBD_OBDMDSZ	64
 # /* Note: 64-bit types are 64-bit aligned in structure */
 # struct obdo {
@@ -121,7 +121,7 @@ use IO::Handle;
 
 sub obdo_pack {
     my $obdo = shift;
-    pack "LL LL LL LL LL LL LL L L L L L L L L 60c 64c L L L", 
+    pack "LL LL LL LL LL LL LL L L L L L L L L a60 a64 L L L", 
     $obdo->{id}, 0, 
     $obdo->{gr}, 0, 
     $obdo->{atime}, 0, 
@@ -133,8 +133,8 @@ sub obdo_pack {
     $obdo->{mode},
     $obdo->{uid},
     $obdo->{gid},
-    $obdo->{flag},
-    $obdo->{obdoflags},
+    $obdo->{flags},
+    $obdo->{obdflags},
     $obdo->{nlink}, 	
     $obdo->{valid},	
     $obdo->{inline},
@@ -158,18 +158,21 @@ sub obdo_unpack {
     $obdo->{mode},
     $obdo->{uid},
     $obdo->{gid},
-    $obdo->{flag},
-    $obdo->{obdoflags},
+    $obdo->{flags},
+    $obdo->{obdflags},
     $obdo->{nlink}, 	
     $obdo->{valid},	
     $obdo->{inline},
-    $obdo->{obdmd}) = unpack $offset . "xL4x L4x L4x L4x L4x L4x L4x L L L L L L L L 60c 64c", $buf;
+    $obdo->{obdmd}) = unpack "x${offset}Lx4 Lx4 Lx4 Lx4 Lx4 Lx4 Lx4 L L L L L L L L a60 a64", $buf;
+    $obdo;
 }
 
 sub obdo_print {
 
-    printf "id: %d\ngrp: %d\natime: %s\natime: %s\nmtime: %s\nctime: %s\nsize: %d\nblocks: %d\nblksize: %d\nmode: %x\nuid: %d\ngid: %d\nflag: %x\nobdflag: %x\nnlink: %d\nvalid: %x\ninline: %s\obdmd: %s\n", 
-   $obdo->{id},
+    my $obdo = shift;
+
+    printf "id: %d\ngrp: %d\natime: %s\nmtime: %s\nctime: %s\nsize: %d\nblocks: %d\nblksize: %d\nmode: %x\nuid: %d\ngid: %d\nflags: %x\nobdflags: %x\nnlink: %d\nvalid: %x\ninline: %s\nobdmd: %s\n", 
+    $obdo->{id},
     $obdo->{gr},
     $obdo->{atime},
     $obdo->{mtime},
@@ -180,40 +183,13 @@ sub obdo_print {
     $obdo->{mode},
     $obdo->{uid},
     $obdo->{gid},
-    $obdo->{flag},
-    $obdo->{obdoflags},
+    $obdo->{flags},
+    $obdo->{obdflags},
     $obdo->{nlink}, 	
     $obdo->{valid},	
     $obdo->{inline},
     $obdo->{obdmd};
 }
-
-
-# XXXXXXXXXXXXXXXXXX
-# test here
-
-   $obdo->{id}= 1;
-    $obdo->{gr}= 2;
-    $obdo->{atime}= 3;
-    $obdo->{mtime}= 4;
-    $obdo->{ctime}= 5;
-    $obdo->{size}= 6;
-    $obdo->{blocks}= 7;
-    $obdo->{blksize}= 8;
-    $obdo->{mode}= 9;
-    $obdo->{uid}= 10;
-    $obdo->{gid}= 11;
-    $obdo->{flag}= 12;
-    $obdo->{obdoflags}= ;
-    $obdo->{nlink}= ; 	
-    $obdo->{valid}= ;	
-    $obdo->{inline}= ;
-    $obdo->{obdmd};
-
-# print, pack and unpack and print
-
-print "XXXXXXXX testing done\n";
-exit;
 
 
 my ($file);
