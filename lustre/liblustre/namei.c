@@ -53,7 +53,7 @@ static void llu_mdc_lock_set_inode(struct lustre_handle *lockh,
         EXIT;
 }
 
-static int pnode_revalidate_finish(int flag, struct ptlrpc_request *request,
+static int pnode_revalidate_finish(struct ptlrpc_request *request,
                                    struct inode *parent, struct pnode *pnode,
                                    struct lookup_intent *it, int offset,
                                    obd_id ino)
@@ -70,8 +70,8 @@ static int pnode_revalidate_finish(int flag, struct ptlrpc_request *request,
         /* NB 1 request reference will be taken away by ll_intent_lock()
          * when I return */
 
-        if ((flag & LL_LOOKUP_NEGATIVE) != 0)
-                GOTO (out, rc = -ENOENT);
+        if (it_disposition(it, DISP_LOOKUP_NEG))
+                RETURN(-ENOENT);
 
         /* We only get called if the mdc_enqueue() called from
          * ll_intent_lock() was successful.  Therefore the mds_body is
@@ -113,7 +113,7 @@ static int pnode_revalidate_finish(int flag, struct ptlrpc_request *request,
             llu_i2info(pb->pb_ino)->lli_smd != lsm)
                 obd_free_memmd (&sbi->ll_osc_conn, &lsm);
 
-        llu_mdc_lock_set_inode((struct lustre_handle *)it->it_lock_handle,
+        llu_mdc_lock_set_inode((struct lustre_handle *)&it->d.lustre.it_lock_handle,
                                pb->pb_ino);
  out:
         RETURN(rc);
@@ -179,7 +179,7 @@ int llu_pb_revalidate(struct pnode *pnode, int flags, struct lookup_intent *it)
                 if (lli->lli_it) {
                         CERROR("inode %lu still have intent %p(opc 0x%x), release it\n",
                                         lli->lli_st_ino, lli->lli_it, lli->lli_it->it_op);
-                        ll_intent_release(pb->pb_ino, lli->lli_it);
+                        ll_intent_release(lli->lli_it);
                 }
         }
 
@@ -197,13 +197,13 @@ int llu_pb_revalidate(struct pnode *pnode, int flags, struct lookup_intent *it)
 
                 rc = ldlm_lock_match(obddev->obd_namespace,
                                      LDLM_FL_BLOCK_GRANTED, &res_id,
-                                     LDLM_PLAIN, NULL, 0, LCK_PR, &lockh);
+                                     LDLM_PLAIN, NULL, 0, LCK_PR, inode, &lockh);
                 if (rc) {
                         /* de->d_flags &= ~DCACHE_LUSTRE_INVALID; */
                         if (it && it->it_op == IT_GETATTR) {
-                                memcpy(it->it_lock_handle, &lockh,
+                                memcpy(&it->d.lustre.it_lock_handle, &lockh,
                                        sizeof(lockh));
-                                it->it_lock_mode = LCK_PR;
+                                it->d.lustre.it_lock_mode = LCK_PR;
                                 LL_SAVE_INTENT(inode, it);
                         } else {
                                 ldlm_lock_decref(&lockh, LCK_PR);
@@ -212,13 +212,13 @@ int llu_pb_revalidate(struct pnode *pnode, int flags, struct lookup_intent *it)
                 }
                 rc = ldlm_lock_match(obddev->obd_namespace,
                                      LDLM_FL_BLOCK_GRANTED, &res_id,
-                                     LDLM_PLAIN, NULL, 0, LCK_PW, &lockh);
+                                     LDLM_PLAIN, NULL, 0, LCK_PW, inode, &lockh);
                 if (rc) {
                         /* de->d_flags &= ~DCACHE_LUSTRE_INVALID; */
                         if (it && it->it_op == IT_GETATTR) {
-                                memcpy(it->it_lock_handle, &lockh,
+                                memcpy(&it->d.lustre.it_lock_handle, &lockh,
                                        sizeof(lockh));
-                                it->it_lock_mode = LCK_PW;
+                                it->d.lustre.it_lock_mode = LCK_PW;
                                 LL_SAVE_INTENT(inode, it);
                         } else {
                                 ldlm_lock_decref(&lockh, LCK_PW);
@@ -232,10 +232,11 @@ int llu_pb_revalidate(struct pnode *pnode, int flags, struct lookup_intent *it)
                 RETURN(0);
         }
 
-        rc = llu_intent_lock(pb->pb_parent->pb_ino, pnode, it, pnode_revalidate_finish);
+        rc = llu_intent_lock(pb->pb_parent->pb_ino, pnode, it, flags,
+                             pnode_revalidate_finish);
         if (rc < 0) {
                 CERROR("ll_intent_lock: rc %d : it->it_status %d\n", rc,
-                       it->it_status);
+                       it->d.lustre.it_status);
                 RETURN(0);
         }
         /* unfortunately ll_intent_lock may cause a callback and revoke our
@@ -249,88 +250,54 @@ int llu_pb_revalidate(struct pnode *pnode, int flags, struct lookup_intent *it)
         RETURN(1);
 }
 
-struct inode *llu_iget(struct filesys *fs, struct ll_read_inode2_cookie *lic)
+struct inode *llu_iget(struct filesys *fs, obd_id ino, struct lustre_md *md)
 {
         struct inode *inode;
-        struct mds_body *body = lic->lic_body;
 
         /* FIXME need to find the if the inode existed or not FIXME */
 
-        inode = llu_new_inode(fs, body->ino, body->mode);
+        inode = llu_new_inode(fs, md->body->ino, md->body->mode);
         if (!inode) {
                 CERROR("can't allocate new inode\n");
                 return NULL;
         }
 
-        llu_update_inode(inode, body, lic->lic_lsm);
+        llu_update_inode(inode, md->body, md->lsm);
 
         return inode;
 }
 
 static int
-llu_lookup2_finish(int flag, struct ptlrpc_request *request,
+llu_lookup2_finish(struct ptlrpc_request *request,
                    struct inode *parent, struct pnode *pnode,
                    struct lookup_intent *it, int offset, obd_id ino)
 {
         struct llu_sb_info *sbi = llu_i2sbi(parent);
         struct inode *inode = NULL;
-        struct ll_read_inode2_cookie lic = {.lic_body = NULL, .lic_lsm = NULL};
+        int rc;
 
         /* NB 1 request reference will be taken away by ll_intent_lock()
          * when I return */
 
-        /* if (!(flag & LL_LOOKUP_NEGATIVE)) { */
+        /* if (!it_disposition(it, DISP_LOOKUP_NEG)) { */
         /* XXX libsysio require the inode must be generated here XXX */
-        if ((it->it_op & IT_CREAT) || !(flag & LL_LOOKUP_NEGATIVE)) {
+        if ((it->it_op & IT_CREAT) || !it_disposition(it, DISP_LOOKUP_NEG)) {
+                struct lustre_md md;
                 ENTRY;
 
-                /* We only get called if the mdc_enqueue() called from
-                 * ll_intent_lock() was successful.  Therefore the mds_body
-                 * is present and correct, and the eadata is present if
-                 * body->eadatasize != 0 (but still opaque, so only
-                 * obd_unpackmd() can check the size) */
-                lic.lic_body = lustre_msg_buf(request->rq_repmsg, offset,
-                                              sizeof (*lic.lic_body));
-                LASSERT (lic.lic_body != NULL);
-                LASSERT_REPSWABBED (request, offset);
+                rc = mdc_req2lustre_md(request, offset, &sbi->ll_osc_conn, &md);
+                if (rc) 
+                        RETURN(rc);
 
-                if (S_ISREG(lic.lic_body->mode) &&
-                    (lic.lic_body->valid & OBD_MD_FLEASIZE)) {
-                        struct lov_mds_md    *lmm;
-                        int                   lmm_size;
-                        int                   rc;
-
-                        lmm_size = lic.lic_body->eadatasize;
-                        if (lmm_size == 0) {
-                                CERROR("OBD_MD_FLEASIZE set but "
-                                       "eadatasize 0\n");
-                                RETURN (-EPROTO);
-                        }
-                        lmm = lustre_msg_buf(request->rq_repmsg, offset + 1,
-                                             lmm_size);
-                        LASSERT(lmm != NULL);
-                        LASSERT_REPSWABBED (request, offset + 1);
-
-                        rc = obd_unpackmd(&sbi->ll_osc_conn,
-                                          &lic.lic_lsm, lmm, lmm_size);
-                        if (rc < 0) {
-                                CERROR ("Error %d unpacking eadata\n", rc);
-                                RETURN (rc);
-                        }
-                        LASSERT (rc >= sizeof (*lic.lic_lsm));
-                }
-
-                /* Both ENOMEM and an RPC timeout are possible in ll_iget; which
-                 * to pick?  A more generic EIO?  -phik */
-                inode = llu_iget(pnode->p_mount->mnt_fs, &lic);
+                inode = llu_iget(pnode->p_mount->mnt_fs, ino, &md);
                 if (!inode) {
                         /* free the lsm if we allocated one above */
-                        if (lic.lic_lsm != NULL)
-                                obd_free_memmd(&sbi->ll_osc_conn, &lic.lic_lsm);
+                        if (md.lsm != NULL)
+                                obd_free_memmd(&sbi->ll_osc_conn, &md.lsm);
                         RETURN(-ENOMEM);
-                } else if (lic.lic_lsm != NULL &&
-                           llu_i2info(inode)->lli_smd != lic.lic_lsm) {
-                        obd_free_memmd(&sbi->ll_osc_conn, &lic.lic_lsm);
+                } else if (md.lsm != NULL &&
+                           llu_i2info(inode)->lli_smd != md.lsm) {
+                        obd_free_memmd(&sbi->ll_osc_conn, &md.lsm);
                 }
 
                 /* If this is a stat, get the authoritative file size */
@@ -352,11 +319,6 @@ llu_lookup2_finish(int flag, struct ptlrpc_request *request,
 
                 /* dentry = *de = ll_find_alias(inode, dentry); */
 
-                /* We asked for a lock on the directory, and may have been
-                 * granted a lock on the inode.  Just in case, fixup the data
-                 * pointer. */
-                llu_mdc_lock_set_inode((struct lustre_handle*)it->it_lock_handle,
-                                       inode);
         } else {
                 ENTRY;
         }
@@ -383,7 +345,8 @@ static int llu_lookup2(struct inode *parent, struct pnode *pnode,
                dentry->d_name.name, parent->i_ino, LL_IT2STR(it));
          */
 
-        rc = llu_intent_lock(parent, pnode, it, llu_lookup2_finish);
+        rc = llu_intent_lock(parent, pnode, it, 0/*XXX check this*/,
+                             llu_lookup2_finish);
         if (rc < 0) {
                 CDEBUG(D_INFO, "ll_intent_lock: %d\n", rc);
         }
@@ -434,7 +397,7 @@ translate_lookup_intent(struct intent *intent, const char *path)
          * more check later */
         if (it->it_flags & O_CREAT) {
                 it->it_op |= IT_CREAT;
-                it->it_mode = *((int*)intent->int_arg1);
+                it->it_create_mode = *((int*)intent->int_arg1);
         }
 
         if (intent->int_opmask & INT_GETATTR)
