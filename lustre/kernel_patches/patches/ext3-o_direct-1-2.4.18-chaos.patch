@@ -189,10 +189,10 @@
                  if (blocks[i] != 0)
                          continue;
  
--                rc = ext3_get_block_handle(handle, inode, iblock, &dummy, 1);
-+                rc = ext3_get_block_handle(handle, inode, iblock, &dummy, 1, 1);
+-                rc = ext3_get_block_handle(handle, inode, iblock, &bh, 1);
++                rc = ext3_get_block_handle(handle, inode, iblock, &bh, 1, 1);
                  if (rc) {
-                         printk(KERN_INFO "ext3_map_inode_page: error reading "
-                                "block %ld\n", iblock);
+                         printk(KERN_INFO "ext3_map_inode_page: error %d "
+                                "allocating block %ld\n", rc, iblock);
 
 _
