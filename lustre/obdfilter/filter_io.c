@@ -659,7 +659,7 @@ int filter_commitrw(int cmd, struct obd_export *exp, struct obdo *oa,
                         }
 
                         if (time_after(jiffies, lnb->start + 15 * HZ))
-                                CERROR("slow commitrw %lusi (%lus)\n",
+                                CERROR("slow commitrw %lus (%lus)\n",
                                        (jiffies - lnb->start) / HZ,
                                        (jiffies - now) / HZ);
 
