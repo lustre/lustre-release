@@ -168,9 +168,9 @@ fi
 
 KINCFLAGS="$CRAY_PORTALS_INCLUDE $CRAY_PORTALS_COMMANDLINE \
 	-I\$(top_srcdir)/include \
-	-I\$(top_srcdir)/portals/include -I$LINUX/include"
+	-I\$(top_srcdir)/portals/include"
 if test $host_cpu != "lib" ; then 
-    KINCFLAGS="$KINCFLAGS -I$LINUX/include"
+    KINCFLAGS="$KINCFLAGS -I$LINUX/include -I$LINUX/include"
 fi
 CPPFLAGS="$KINCFLAGS $ARCHCPPFLAGS"
 
