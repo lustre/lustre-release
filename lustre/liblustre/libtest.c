@@ -10,7 +10,7 @@
 #include <liblustre.h>
 #include <linux/obd.h>
 #include <linux/obd_class.h>
-#include <../user/procbridge/procbridge.h>
+#include <portals/procbridge.h>
 
 ptl_handle_ni_t         tcpnal_ni;
 
