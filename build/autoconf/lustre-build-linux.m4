@@ -4,7 +4,7 @@
 # Set things accordingly for a 2.5 kernel
 #
 AC_DEFUN([LB_LINUX_VERSION],
-[AC_CHECK_FILE([$LINUX/include/linux/namei.h],
+[LB_CHECK_FILE([$LINUX/include/linux/namei.h],
 	[
         	linux25="yes"
 		KMODEXT=".ko"
@@ -122,9 +122,9 @@ AC_ARG_WITH([linux-config],
 	[LINUX_CONFIG=$LINUX_OBJ/.config])
 AC_SUBST(LINUX_CONFIG)
 
-AC_CHECK_FILE([/boot/kernel.h],
+LB_CHECK_FILE([/boot/kernel.h],
 	[KERNEL_SOURCE_HEADER='/boot/kernel.h'],
-	[AC_CHECK_FILE([/var/adm/running-kernel.h],
+	[LB_CHECK_FILE([/var/adm/running-kernel.h],
 		[KERNEL_SOURCE_HEADER='/var/adm/running-kernel.h'])])
 
 AC_ARG_WITH([kernel-source-header],
@@ -133,11 +133,11 @@ AC_ARG_WITH([kernel-source-header],
 	[KERNEL_SOURCE_HEADER=$with_kernel_source_header])
 
 # ------------ .config exists ----------------
-AC_CHECK_FILE([$LINUX_CONFIG],[],
+LB_CHECK_FILE([$LINUX_CONFIG],[],
 	[AC_MSG_ERROR([Kernel config could not be found.  If you are building from a kernel-source rpm consult build/README.kernel-source])])
 
 # ----------- make dep run? ------------------
-AC_CHECK_FILES([$LINUX_OBJ/include/linux/autoconf.h
+LB_CHECK_FILES([$LINUX_OBJ/include/linux/autoconf.h
 		$LINUX_OBJ/include/linux/version.h
 		$LINUX/include/linux/config.h],[],
 	[AC_MSG_ERROR([Run make config in $LINUX.])])
@@ -153,7 +153,7 @@ if grep rhconfig $LINUX_OBJ/include/linux/version.h >/dev/null ; then
 	# This is a clean kernel-source tree, we need to
 	# enable extensive workarounds to get this to build
 	# modules
-	AC_CHECK_FILE([$KERNEL_SOURCE_HEADER],
+	LB_CHECK_FILE([$KERNEL_SOURCE_HEADER],
 		[if test $KERNEL_SOURCE_HEADER = '/boot/kernel.h' ; then
 			AC_MSG_WARN([Using /boot/kernel.h from RUNNING kernel.])
 			AC_MSG_WARN([If this is not what you want, use --with-kernel-source-header.])

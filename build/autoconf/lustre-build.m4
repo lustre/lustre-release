@@ -27,6 +27,37 @@ AC_SUBST(lb_target_os)
 ])
 
 #
+# LB_CHECK_FILE
+#
+# Check for file existance even when cross compiling
+#
+AC_DEFUN([LB_CHECK_FILE],
+[AS_VAR_PUSHDEF([lb_File], [lb_cv_file_$1])dnl
+AC_CACHE_CHECK([for $1], lb_File,
+[if test -r "$1"; then
+  AS_VAR_SET(lb_File, yes)
+else
+  AS_VAR_SET(lb_File, no)
+fi])
+AS_IF([test AS_VAR_GET(lb_File) = yes], [$2], [$3])[]dnl
+AS_VAR_POPDEF([lb_File])dnl
+])# LB_CHECK_FILE
+
+#
+# LB_CHECK_FILES
+#
+# LB_CHECK_FILE over multiple files
+#
+AC_DEFUN([LB_CHECK_FILES],
+[AC_FOREACH([AC_FILE_NAME], [$1],
+  [LB_CHECK_FILE(AC_FILE_NAME,
+                 [AC_DEFINE_UNQUOTED(AS_TR_CPP(HAVE_[]AC_FILE_NAME), 1,
+                                    [Define to 1 if you have the
+                                     file `]AC_File['.])
+$2],
+                 [$3])])])
+
+#
 # LB_PATH_LIBSYSIO
 #
 # Handle internal/external libsysio
@@ -50,7 +81,7 @@ enable_sysio="$with_sysio"
 case x$with_sysio in
 	xyes)
 		AC_MSG_RESULT([internal])
-		AC_CHECK_FILE([$srcdir/libsysio/src/rmdir.c],[],[
+		LB_CHECK_FILE([$srcdir/libsysio/src/rmdir.c],[],[
 			AC_MSG_ERROR([A complete internal libsysio was not found.])
 		])
 		LIBSYSIO_SUBDIR="libsysio"
@@ -61,7 +92,7 @@ case x$with_sysio in
 		;;
 	*)
 		AC_MSG_RESULT([$with_sysio])
-		AC_CHECK_FILE([$with_sysio/lib/libsysio.a],[],[
+		LB_CHECK_FILE([$with_sysio/lib/libsysio.a],[],[
 			AC_MSG_ERROR([A complete (built) external libsysio was not found.])
 		])
 		SYSIO=$with_sysio
