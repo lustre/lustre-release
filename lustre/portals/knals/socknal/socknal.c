@@ -56,7 +56,7 @@ static ctl_table ksocknal_ctl_table[] = {
          &ksocknal_data.ksnd_eager_ack, sizeof (int),
          0644, NULL, &proc_dointvec},
 #if SOCKNAL_ZC
-        {SOCKNAL_SYSCTL_EAGER_ACK, "zero_copy", 
+        {SOCKNAL_SYSCTL_ZERO_COPY, "zero_copy", 
          &ksocknal_data.ksnd_zc_min_frag, sizeof (int),
          0644, NULL, &proc_dointvec},
 #endif
@@ -996,15 +996,10 @@ ksocknal_destroy_conn (ksock_conn_t *conn)
         /* complete current receive if any */
         switch (conn->ksnc_rx_state) {
         case SOCKNAL_RX_BODY:
-#if 0
-                lib_finalize (&ksocknal_lib, NULL, conn->ksnc_cookie);
-#else
-                CERROR ("Refusing to complete a partial receive from "
-                        LPX64", ip %08x\n", conn->ksnc_peer->ksnp_nid,
-                        conn->ksnc_ipaddr);
-                CERROR ("This may hang communications and "
-                        "prevent modules from unloading\n");
-#endif
+                CERROR ("Completing partial receive from "LPX64
+                        ", ip %08x, with error\n", 
+                        conn->ksnc_peer->ksnp_nid, conn->ksnc_ipaddr);
+                lib_finalize (&ksocknal_lib, NULL, conn->ksnc_cookie, PTL_FAIL);
                 break;
         case SOCKNAL_RX_BODY_FWD:
                 ksocknal_fmb_callback (conn->ksnc_cookie, -ECONNABORTED);

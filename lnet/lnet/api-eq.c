@@ -81,12 +81,6 @@ int PtlEQGet(ptl_handle_eq_t eventq, ptl_event_t * ev)
 
         *ev = *new_event;
 
-        /* Set the unlinked_me interface number if there is one to pass
-         * back, since the NAL hasn't a clue what it is and therefore can't
-         * set it. */
-        if (!PtlHandleEqual (ev->unlinked_me, PTL_HANDLE_NONE))
-                ev->unlinked_me.nal_idx = eventq.nal_idx;
-        
         /* ensure event is delivered correctly despite possible 
            races with lib_finalize */
         if (eq->sequence != new_event->sequence) {

@@ -326,43 +326,6 @@ do {                                                                    \
                s, (ptr), atomic_read(&portal_kmemory));                 \
 } while (0)
 
-#ifndef SLAB_MEMALLOC
-#define SLAB_MEMALLOC 0
-#endif
-
-#define PORTAL_SLAB_ALLOC(ptr, slab, size)                                \
-do {                                                                      \
-        LASSERT(!in_interrupt());                                         \
-        (ptr) = kmem_cache_alloc((slab), (SLAB_KERNEL | SLAB_MEMALLOC));  \
-        if ((ptr) == NULL) {                                              \
-                CERROR("PORTALS: out of memory at %s:%d (tried to alloc"  \
-                       " '" #ptr "' from slab '" #slab "')\n", __FILE__,  \
-                       __LINE__);                                         \
-                CERROR("PORTALS: %d total bytes allocated by portals\n",  \
-                       atomic_read(&portal_kmemory));                     \
-        } else {                                                          \
-                portal_kmem_inc((ptr), (size));                           \
-                memset((ptr), 0, (size));                                 \
-        }                                                                 \
-        CDEBUG(D_MALLOC, "kmalloced '" #ptr "': %d at %p (tot %d).\n",    \
-               (int)(size), (ptr), atomic_read(&portal_kmemory));         \
-} while (0)
-
-#define PORTAL_SLAB_FREE(ptr, slab, size)                               \
-do {                                                                    \
-        int s = (size);                                                 \
-        if ((ptr) == NULL) {                                            \
-                CERROR("PORTALS: free NULL '" #ptr "' (%d bytes) at "   \
-                       "%s:%d\n", s, __FILE__, __LINE__);               \
-                break;                                                  \
-        }                                                               \
-        memset((ptr), 0x5a, s);                                         \
-        kmem_cache_free((slab), ptr);                                   \
-        portal_kmem_dec((ptr), s);                                      \
-        CDEBUG(D_MALLOC, "kfreed '" #ptr "': %d at %p (tot %d).\n",     \
-               s, (ptr), atomic_read (&portal_kmemory));                \
-} while (0)
-
 /* ------------------------------------------------------------------- */
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))

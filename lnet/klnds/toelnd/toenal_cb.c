@@ -37,7 +37,7 @@ long       ktoenal_packets_transmitted;
  *  LIB functions follow
  *
  */
-int
+ptl_err_t
 ktoenal_read(nal_cb_t *nal, void *private, void *dst_addr,
               user_ptr src_addr, size_t len)
 {
@@ -45,10 +45,10 @@ ktoenal_read(nal_cb_t *nal, void *private, void *dst_addr,
                nal->ni.nid, (long)len, src_addr, dst_addr);
 
         memcpy( dst_addr, src_addr, len );
-        return 0;
+        return PTL_OK;
 }
 
-int
+ptl_err_t
 ktoenal_write(nal_cb_t *nal, void *private, user_ptr dst_addr,
                void *src_addr, size_t len)
 {
@@ -56,20 +56,7 @@ ktoenal_write(nal_cb_t *nal, void *private, user_ptr dst_addr,
                nal->ni.nid, (long)len, src_addr, dst_addr);
 
         memcpy( dst_addr, src_addr, len );
-        return 0;
-}
-
-int 
-ktoenal_callback (nal_cb_t * nal, void *private, lib_eq_t *eq,
-			 ptl_event_t *ev)
-{
-        CDEBUG(D_NET, LPX64": callback eq %p ev %p\n",
-               nal->ni.nid, eq, ev);
-
-        if (eq->event_callback != NULL) 
-                eq->event_callback(ev);
-
-        return 0;
+        return PTL_OK;
 }
 
 void *
@@ -322,7 +309,8 @@ ktoenal_process_transmit (ksock_conn_t *conn, unsigned long *irq_flags)
                 {
                         ksock_ltx_t *ltx = KSOCK_TX_2_KSOCK_LTX (tx);
 
-                        lib_finalize (&ktoenal_lib, ltx->ltx_private, ltx->ltx_cookie);
+                        lib_finalize (&ktoenal_lib, ltx->ltx_private, 
+                                      ltx->ltx_cookie, PTL_OK);
 
                         spin_lock_irqsave (&ktoenal_data.ksnd_sched_lock, *irq_flags);
                         
@@ -400,10 +388,11 @@ ktoenal_launch_packet (ksock_conn_t *conn, ksock_tx_t *tx)
         spin_unlock_irqrestore (&ktoenal_data.ksnd_sched_lock, flags);
 }
 
-int
+ptl_err_t
 ktoenal_send(nal_cb_t *nal, void *private, lib_msg_t *cookie,
               ptl_hdr_t *hdr, int type, ptl_nid_t nid, ptl_pid_t pid,
-              unsigned int payload_niov, struct iovec *payload_iov, size_t payload_len)
+              unsigned int payload_niov, struct iovec *payload_iov, 
+             size_t payload_off, size_t payload_len)
 {
         ptl_nid_t     gatewaynid;
         ksock_conn_t *conn;
@@ -427,6 +416,9 @@ ktoenal_send(nal_cb_t *nal, void *private, lib_msg_t *cookie,
                payload_niov > 0 ? payload_iov[0].iov_base : NULL,
                (int)(payload_niov > 0 ? payload_iov[0].iov_len : 0), nid, pid);
 
+        /* XXX not implemented read-only iov with offset */
+        LBUG();
+        
         if ((conn = ktoenal_get_conn (nid)) == NULL)
         {
                 /* It's not a peer; try to find a gateway */
@@ -435,14 +427,14 @@ ktoenal_send(nal_cb_t *nal, void *private, lib_msg_t *cookie,
                 if (rc != 0)
                 {
                         CERROR ("Can't route to "LPX64": router error %d\n", nid, rc);
-                        return (-1);
+                        return (PTL_FAIL);
                 }
 
                 if ((conn = ktoenal_get_conn (gatewaynid)) == NULL)
                 {
                         CERROR ("Can't route to "LPX64": gateway "LPX64" is not a peer\n", 
                                 nid, gatewaynid);
-                        return (-1);
+                        return (PTL_FAIL);
                 }
         }
 
@@ -457,7 +449,7 @@ ktoenal_send(nal_cb_t *nal, void *private, lib_msg_t *cookie,
         {
                 CERROR ("Can't allocate tx desc\n");
                 ktoenal_put_conn (conn);
-                return (-1);
+                return (PTL_FAIL);
         }
         
         /* Init common (to sends and forwards) packet part */
@@ -483,7 +475,7 @@ ktoenal_send(nal_cb_t *nal, void *private, lib_msg_t *cookie,
         }
 
         ktoenal_launch_packet (conn, &ltx->ltx_tx);
-        return (0);
+        return (PTL_OK);
 }
 
 void
@@ -893,7 +885,7 @@ ktoenal_process_receive (ksock_conn_t *conn, unsigned long *irq_flags)
 
         case SOCKNAL_RX_BODY:
                 atomic_inc (&ktoenal_packets_received);
-                lib_finalize(&ktoenal_lib, NULL, conn->ksnc_cookie); /* packet is done now */
+                lib_finalize(&ktoenal_lib, NULL, conn->ksnc_cookie, PTL_OK); /* packet is done now */
                 /* Fall through */
 
         case SOCKNAL_RX_SLOP:
@@ -934,13 +926,17 @@ ktoenal_process_receive (ksock_conn_t *conn, unsigned long *irq_flags)
                 list_add_tail (&conn->ksnc_rx_list, &ktoenal_data.ksnd_rx_conns);
 }
 
-int
+ptl_err_t
 ktoenal_recv(nal_cb_t *nal, void *private, lib_msg_t *msg,
-             unsigned int niov, struct iovec *iov, size_t mlen, size_t rlen)
+             unsigned int niov, struct iovec *iov, 
+             size_t offset, size_t mlen, size_t rlen)
 {
         ksock_conn_t *conn = (ksock_conn_t *)private;
         int           i;
 
+        /* XXX not implemented read-only iov with offset */
+        LBUG();
+        
         conn->ksnc_cookie = msg;
 
         LASSERT (niov <= PTL_MD_MAX_IOV);
@@ -954,7 +950,7 @@ ktoenal_recv(nal_cb_t *nal, void *private, lib_msg_t *msg,
         conn->ksnc_rx_nob_wanted = mlen;
         conn->ksnc_rx_nob_left   = rlen;
 
-        return (rlen);
+        return (PTL_OK);
 }
 
 int
@@ -1192,7 +1188,6 @@ nal_cb_t ktoenal_lib = {
         cb_recv:         ktoenal_recv,
         cb_read:         ktoenal_read,
         cb_write:        ktoenal_write,
-        cb_callback:     ktoenal_callback,
         cb_malloc:       ktoenal_malloc,
         cb_free:         ktoenal_free,
         cb_printf:       ktoenal_printf,

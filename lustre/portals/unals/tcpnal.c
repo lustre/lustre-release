@@ -55,70 +55,69 @@
  *
  * sends a packet to the peer, after insuring that a connection exists
  */
-int tcpnal_send(nal_cb_t *n,
-		void *private,
-		lib_msg_t *cookie,
-		ptl_hdr_t *hdr,
-		int type,
-		ptl_nid_t nid,
-		ptl_pid_t pid,
-                unsigned int niov,
-                struct iovec *iov,
-		size_t len)
+ptl_err_t tcpnal_send(nal_cb_t *n,
+                      void *private,
+                      lib_msg_t *cookie,
+                      ptl_hdr_t *hdr,
+                      int type,
+                      ptl_nid_t nid,
+                      ptl_pid_t pid,
+                      unsigned int niov,
+                      struct iovec *iov,
+                      size_t offset,
+                      size_t len)
 {
     connection c;
     bridge b=(bridge)n->nal_data;
     struct iovec tiov[257];
     static pthread_mutex_t send_lock = PTHREAD_MUTEX_INITIALIZER;
-    int   rc;
+    ptl_err_t rc = PTL_OK;
+    int   sysrc;
     int   total;
+    int   ntiov;
     int i;
 
     if (!(c=force_tcp_connection((manager)b->lower,
                                  PNAL_IP(nid,b),
                                  PNAL_PORT(nid,pid),
-                                 b->local))) 
-        return(1);
+                                 b->local)))
+        return(PTL_FAIL);
 
-#if 0
     /* TODO: these results should be checked. furthermore, provision
        must be made for the SIGPIPE which is delivered when
        writing on a tcp socket which has closed underneath
        the application. there is a linux flag in the sendmsg
        call which turns off the signally behaviour, but its
        nonstandard */
-    syscall(SYS_write, c->fd,hdr,sizeof(ptl_hdr_t));
-    LASSERT (niov <= 1);
-    if (len) syscall(SYS_write, c->fd,iov[0].iov_base,len);
-#else
+
     LASSERT (niov <= 256);
 
     tiov[0].iov_base = hdr;
     tiov[0].iov_len = sizeof(ptl_hdr_t);
+    ntiov = 1 + lib_extract_iov(256, &tiov[1], niov, iov, offset, len);
 
-    if (niov > 0)
-            memcpy(&tiov[1], iov, niov * sizeof(struct iovec));
     pthread_mutex_lock(&send_lock);
 #if 1
-    for (i = total = 0; i <= niov; i++)
+    for (i = total = 0; i <= ntiov; i++)
             total += tiov[i].iov_len;
     
-    rc = syscall(SYS_writev, c->fd, tiov, niov+1);
-    if (rc != total) {
+    sysrc = syscall(SYS_writev, c->fd, tiov, ntiov);
+    if (sysrc != total) {
             fprintf (stderr, "BAD SEND rc %d != %d, errno %d\n",
                      rc, total, errno);
-            abort();
+            rc = PTL_FAIL;
     }
 #else
-    for (i = total = 0; i <= niov; i++) {
+    for (i = total = 0; i <= ntiov; i++) {
             rc = send(c->fd, tiov[i].iov_base, tiov[i].iov_len, 0);
             
             if (rc != tiov[i].iov_len) {
                     fprintf (stderr, "BAD SEND rc %d != %d, errno %d\n",
                              rc, tiov[i].iov_len, errno);
-                    abort();
+                    rc = PTL_FAIL;
+                    break;
             }
-            total != rc;
+            total += rc;
     }
 #endif
 #if 0
@@ -131,10 +130,14 @@ int tcpnal_send(nal_cb_t *n,
              total, niov + 1);
 #endif
     pthread_mutex_unlock(&send_lock);
-#endif
-    lib_finalize(n, private, cookie);
-        
-    return(0);
+
+    if (rc == PTL_OK) {
+            /* NB the NAL only calls lib_finalize() if it returns PTL_OK
+             * from cb_send() */
+            lib_finalize(n, private, cookie, PTL_OK);
+    }
+
+    return(rc);
 }
 
 
@@ -151,15 +154,18 @@ int tcpnal_send(nal_cb_t *n,
  * blocking read of the requested data. must drain out the
  * difference of mainpulated and requested lengths from the network
  */
-int tcpnal_recv(nal_cb_t *n,
-		void *private,
-		lib_msg_t *cookie,
-                unsigned int niov,
-                struct iovec *iov,
-		size_t mlen,
-		size_t rlen)
+ptl_err_t tcpnal_recv(nal_cb_t *n,
+                      void *private,
+                      lib_msg_t *cookie,
+                      unsigned int niov,
+                      struct iovec *iov,
+                      size_t offset,
+                      size_t mlen,
+                      size_t rlen)
 
 {
+    struct iovec tiov[256];
+    int ntiov;
     int i;
 
     if (!niov)
@@ -169,16 +175,19 @@ int tcpnal_recv(nal_cb_t *n,
     LASSERT(rlen);
     LASSERT(rlen >= mlen);
 
+    ntiov = lib_extract_iov(256, tiov, niov, iov, offset, mlen);
+    
     /* FIXME
      * 1. Is this effecient enough? change to use readv() directly?
      * 2. need check return from read_connection()
      * - MeiJia
      */
-    for (i = 0; i < niov; i++)
-        read_connection(private, iov[i].iov_base, iov[i].iov_len);
+    for (i = 0; i < ntiov; i++)
+        read_connection(private, tiov[i].iov_base, tiov[i].iov_len);
 
 finalize:
-    lib_finalize(n, private, cookie);
+    /* FIXME; we always assume success here... */
+    lib_finalize(n, private, cookie, PTL_OK);
 
     if (mlen!=rlen){
         char *trash=malloc(rlen-mlen);
@@ -188,7 +197,7 @@ finalize:
         free(trash);
     }
 
-    return(rlen);
+    return(PTL_OK);
 }
 
 
