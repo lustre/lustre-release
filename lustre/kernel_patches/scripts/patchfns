@@ -152,7 +152,7 @@ warn_top_current()
 {
 	if top_is_current
 	then
-		echo "Warning: Top patch is not up-to-date"
+#		echo "Warning: Top patch is not up-to-date"
 	fi
 }
 
