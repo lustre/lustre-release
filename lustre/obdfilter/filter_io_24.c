@@ -311,7 +311,6 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
         if (time_after(jiffies, now + 15 * HZ))
                 CERROR("slow direct_io %lus\n", (jiffies - now) / HZ);
 
-        filter_grant_commit(exp, niocount, res);
         err = fsfilt_commit_wait(obd, inode, wait_handle);
         if (err)
                 rc = err;
@@ -321,6 +320,8 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
                 CERROR("slow commitrw commit %lus\n", (jiffies - now) / HZ);
 
 cleanup:
+        filter_grant_commit(exp, niocount, res);
+
         switch (cleanup_phase) {
         case 2:
                 pop_ctxt(&saved, &obd->obd_ctxt, NULL);
