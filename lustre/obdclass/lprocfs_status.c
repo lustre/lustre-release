@@ -70,16 +70,20 @@ int lprocfs_add_vars(struct proc_dir_entry *root, struct lprocfs_vars *list,
 
         while (list->name != NULL) {
                 struct proc_dir_entry *cur_root, *proc;
-                char *pathcopy, *cur, *next;
+                char *pathcopy, *cur, *next, pathbuf[64];
                 int pathsize = strlen(list->name) + 1;
 
                 proc = NULL;
                 cur_root = root;
 
                 /* need copy of path for strsep */
-                OBD_ALLOC(pathcopy, pathsize);
-                if (pathcopy == NULL)
-                        return -ENOMEM;
+                if (strlen(list->name) > sizeof[pathbuf] - 1) {
+                        OBD_ALLOC(pathcopy, pathsize);
+                        if (pathcopy == NULL)
+                                return -ENOMEM;
+                } else {
+                        pathcopy = pathbuf;
+                }
 
                 next = pathcopy;
                 strcpy(pathcopy, list->name);
@@ -103,6 +107,7 @@ int lprocfs_add_vars(struct proc_dir_entry *root, struct lprocfs_vars *list,
                         }
                 }
 
+                if (pathcopy != pathbuf)
                 OBD_FREE(pathcopy, pathsize);
 
                 if (cur_root == NULL || proc == NULL) {
