@@ -19,6 +19,7 @@ typedef enum {
         ELDLM_OK = 0,
 
         ELDLM_LOCK_CHANGED = 300,
+        ELDLM_LOCK_ABORTED = 301,
 
         ELDLM_NAMESPACE_EXISTS = 400,
         ELDLM_BAD_NAMESPACE    = 401
@@ -117,6 +118,8 @@ struct ldlm_lock {
         struct ldlm_handle    l_remote_handle;
         void                 *l_data;
         __u32                 l_data_len;
+        void                 *l_cookie;
+        int                   l_cookie_len;
         struct ldlm_extent    l_extent;
         //void                 *l_event;
         //XXX cluster_host    l_holder;
@@ -133,9 +136,7 @@ struct ldlm_lock {
 };
 
 typedef int (*ldlm_res_compat)(struct ldlm_lock *child, struct ldlm_lock *new);
-typedef int (*ldlm_res_policy)(struct ldlm_resource *parent,
-                               struct ldlm_extent *req_ex,
-                               struct ldlm_extent *new_ex,
+typedef int (*ldlm_res_policy)(struct ldlm_lock *lock, void *req_cookie,
                                ldlm_mode_t mode, void *data);
 
 #define LDLM_PLAIN       0
@@ -189,8 +190,7 @@ extern struct obd_ops ldlm_obd_ops;
 
 /* ldlm_extent.c */
 int ldlm_extent_compat(struct ldlm_lock *, struct ldlm_lock *);
-int ldlm_extent_policy(struct ldlm_resource *, struct ldlm_extent *,
-                       struct ldlm_extent *, ldlm_mode_t, void *);
+int ldlm_extent_policy(struct ldlm_lock *, void *, ldlm_mode_t, void *);
 
 /* ldlm_lock.c */
 void ldlm_lock_free(struct ldlm_lock *lock);
@@ -199,7 +199,7 @@ void ldlm_lock_addref(struct ldlm_lock *lock, __u32 mode);
 void ldlm_lock_decref(struct ldlm_lock *lock, __u32 mode);
 void ldlm_grant_lock(struct ldlm_resource *res, struct ldlm_lock *lock);
 int ldlm_local_lock_match(struct ldlm_namespace *ns, __u64 *res_id, __u32 type,
-                          struct ldlm_extent *extent, ldlm_mode_t mode,
+                          void *cookie, int cookielen, ldlm_mode_t mode,
                           struct ldlm_handle *lockh);
 ldlm_error_t ldlm_local_lock_create(struct ldlm_namespace *ns,
                                     struct ldlm_handle *parent_lock_handle,
@@ -209,7 +209,7 @@ ldlm_error_t ldlm_local_lock_create(struct ldlm_namespace *ns,
                                     __u32 data_len,
                                     struct ldlm_handle *lockh);
 ldlm_error_t ldlm_local_lock_enqueue(struct ldlm_handle *lockh,
-                                     struct ldlm_extent *req_ex,
+                                     void *cookie, int cookie_len,
                                      int *flags,
                                      ldlm_lock_callback completion,
                                      ldlm_lock_callback blocking);
@@ -237,11 +237,12 @@ void ldlm_resource_dump(struct ldlm_resource *res);
 
 /* ldlm_request.c */
 int ldlm_cli_enqueue(struct ptlrpc_client *cl, struct ptlrpc_connection *peer,
+                     struct ptlrpc_request *req,
                      struct ldlm_namespace *ns,
                      struct ldlm_handle *parent_lock_handle,
                      __u64 *res_id,
                      __u32 type,
-                     struct ldlm_extent *req_ex,
+                     void *cookie, int cookielen,
                      ldlm_mode_t mode,
                      int *flags,
                      void *data,

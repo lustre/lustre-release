@@ -46,9 +46,6 @@ struct ll_sb_info {
         struct obd_conn           ll_osc_conn;
         ino_t                     ll_rootino; /* number of root inode */
 
-        struct ldlm_namespace    *ll_mds_namespace;
-        struct ldlm_namespace    *ll_ost_namespace;
-
         wait_queue_head_t         ll_commitcbd_waitq;
         wait_queue_head_t         ll_commitcbd_ctl_waitq;
         int                       ll_commitcbd_flags;
