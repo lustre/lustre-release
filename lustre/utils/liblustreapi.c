@@ -220,7 +220,7 @@ static int get_obd_uuids(DIR *dir, char *dname, struct find_param *param)
                         }
                 }
                 if (param->obdindex == OBD_NOT_FOUND) {
-                        printf("unknown obduuid: %s\n", param->obduuid);
+                        printf("unknown obduuid: %s\n", param->obduuid->uuid);
                         return EINVAL;
                 }
         } else if (!param->quiet) {
