@@ -246,9 +246,9 @@ ksocknal_send_iov (ksock_conn_t *conn, ksock_tx_t *tx)
                 CDEBUG(D_NET, "vaddr %p, page %p->%p + offset %x for %d\n",
                        (void *)vaddr, page, page_address(page), offset, zcsize);
 
-                if (zcsize < fragsize) {
-                        fragsize = zcsize;
+                if (fragsize > zcsize) {
                         more = 1;
+                        fragsize = zcsize;
                 }
 
                 rc = tcp_sendpage_zccd(sock, page, offset, zcsize, 
@@ -281,15 +281,14 @@ ksocknal_send_iov (ksock_conn_t *conn, ksock_tx_t *tx)
 
         tx->tx_resid -= rc;
 
-        if (rc < fragsize) {
-                /* didn't send whole frag */
+        if (rc < iov->iov_len) {
+                /* didn't send whole iov entry... */
                 iov->iov_base = (void *)(vaddr + rc);
-                iov->iov_len  = fragsize - rc;
-                return (-EAGAIN);
+                iov->iov_len -= rc;
+                /* ...but did we send everything we tried to send? */
+                return ((rc == fragsize) ? 1 : -EAGAIN);
         }
 
-        /* everything went */
-        LASSERT (rc == fragsize);
         tx->tx_iov++;
         tx->tx_niov--;
         return (1);
