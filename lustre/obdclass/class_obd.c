@@ -395,22 +395,26 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                  *        for example offset and count are not per-obdo.
                  */
                 struct obd_conn conns[2];
-                struct obdo     *obdos[2];
-                obd_count       oa_bufs[2];
+                struct obdo     *obdos[2] = { NULL, NULL };
+                obd_count       oa_bufs[2] = { 0, 0 };
                 struct page     **bufs = NULL;
                 obd_size        *counts = NULL;
                 obd_off         *offsets = NULL;
                 obd_flag        *flags = NULL;
+                int             num = 1;
                 int             pages;
                 int             i, j;
 
-                oa_bufs[0] = data->ioc_plen1 / PAGE_SIZE;
-                oa_bufs[1] = data->ioc_plen2 / PAGE_SIZE;
-                pages = oa_bufs[0] + oa_bufs[1];
+                pages = oa_bufs[0] = data->ioc_plen1 / PAGE_SIZE;
+                if (data->ioc_obdo2.o_id) {
+                        num = 2;
+                        oa_bufs[1] = data->ioc_plen2 / PAGE_SIZE;
+                        pages += oa_bufs[1];
+                }
 
-                CDEBUG(D_INODE, "BRW %s with %d+%d pages\n",
+                CDEBUG(D_INODE, "BRW %s with %dx%d pages\n",
                        rw == OBD_BRW_READ ? "read" : "write",
-                       oa_bufs[0], oa_bufs[1]);
+                       num, oa_bufs[0]);
                 bufs = kmalloc(pages * sizeof(struct page *), GFP_KERNEL);
                 counts = kmalloc(pages * sizeof(obd_size), GFP_KERNEL);
                 offsets = kmalloc(pages * sizeof(obd_off), GFP_KERNEL);
@@ -423,10 +427,10 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 }
 
                 obdos[0] = &data->ioc_obdo1;
-                obdos[1] = &data->ioc_obdo2;
+                if (num > 1)
+                        obdos[1] = &data->ioc_obdo2;
 
-                pages = 0;
-                for (i = 0; i < 2; i++) {
+                for (i = 0, pages = 0; i < num; i++) {
                         unsigned long off;
                         void *from;
 
@@ -458,7 +462,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                         }
                 }
 
-                err = obd_brw(rw, conns, 2, obdos, oa_bufs, bufs,
+                err = obd_brw(rw, conns, num, obdos, oa_bufs, bufs,
                               counts, offsets, flags);
 
                 EXIT;
