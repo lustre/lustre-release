@@ -22,3 +22,4 @@ ext3-unmount_sync.patch
 ext3-use-after-free.patch
 extN-wantedi.patch
 extN-san.patch
+uml-patch-2.4.20-tmp
