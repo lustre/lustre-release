@@ -1,16 +1,16 @@
- fs/dcache.c            |    8 +
- fs/exec.c              |   20 ++
+ fs/dcache.c            |   20 ++
+ fs/exec.c              |   18 +-
  fs/namei.c             |  338 ++++++++++++++++++++++++++++++++++++++++---------
  fs/nfsd/vfs.c          |    2 
- fs/open.c              |  140 ++++++++++++++++----
+ fs/open.c              |  120 +++++++++++++++--
  fs/stat.c              |    8 -
- include/linux/dcache.h |   26 +++
- include/linux/fs.h     |   29 +++-
+ include/linux/dcache.h |   28 ++++
+ include/linux/fs.h     |   27 +++
  kernel/ksyms.c         |    1 
- 9 files changed, 480 insertions(+), 92 deletions(-)
+ 9 files changed, 478 insertions(+), 84 deletions(-)
 
---- linux-2.4.18-18.8.0-l11/fs/dcache.c~vfs_intent-2.4.18-18	Mon Feb 17 13:49:42 2003
-+++ linux-2.4.18-18.8.0-l11-phil/fs/dcache.c	Mon Feb 17 13:49:42 2003
+--- linux-2.4.18-18.8.0-l12/fs/dcache.c~vfs_intent-2.4.18-18	Wed Feb 26 16:54:17 2003
++++ linux-2.4.18-18.8.0-l12-phil/fs/dcache.c	Wed Feb 26 17:31:36 2003
 @@ -186,6 +186,13 @@ int d_invalidate(struct dentry * dentry)
  		spin_unlock(&dcache_lock);
  		return 0;
@@ -33,8 +33,31 @@
  	INIT_LIST_HEAD(&dentry->d_hash);
  	INIT_LIST_HEAD(&dentry->d_lru);
  	INIT_LIST_HEAD(&dentry->d_subdirs);
---- linux-2.4.18-18.8.0-l11/fs/namei.c~vfs_intent-2.4.18-18	Mon Feb 17 13:49:42 2003
-+++ linux-2.4.18-18.8.0-l11-phil/fs/namei.c	Mon Feb 17 13:49:42 2003
+@@ -859,13 +867,19 @@ void d_delete(struct dentry * dentry)
+  * Adds a dentry to the hash according to its name.
+  */
+  
+-void d_rehash(struct dentry * entry)
++void __d_rehash(struct dentry * entry, int lock)
+ {
+ 	struct list_head *list = d_hash(entry->d_parent, entry->d_name.hash);
+ 	if (!list_empty(&entry->d_hash)) BUG();
+-	spin_lock(&dcache_lock);
++	if (lock) spin_lock(&dcache_lock);
+ 	list_add(&entry->d_hash, list);
+-	spin_unlock(&dcache_lock);
++	if (lock) spin_unlock(&dcache_lock);
++}
++EXPORT_SYMBOL(__d_rehash);
++
++void d_rehash(struct dentry * entry)
++{
++	__d_rehash(entry, 1);
+ }
+ 
+ #define do_switch(x,y) do { \
+--- linux-2.4.18-18.8.0-l12/fs/namei.c~vfs_intent-2.4.18-18	Wed Feb 26 16:54:17 2003
++++ linux-2.4.18-18.8.0-l12-phil/fs/namei.c	Wed Feb 26 16:54:17 2003
 @@ -94,6 +94,13 @@
   * XEmacs seems to be relying on it...
   */
@@ -838,8 +861,8 @@
  	if (page) {
  		kunmap(page);
  		page_cache_release(page);
---- linux-2.4.18-18.8.0-l11/fs/nfsd/vfs.c~vfs_intent-2.4.18-18	Mon Feb 17 13:49:42 2003
-+++ linux-2.4.18-18.8.0-l11-phil/fs/nfsd/vfs.c	Mon Feb 17 13:49:42 2003
+--- linux-2.4.18-18.8.0-l12/fs/nfsd/vfs.c~vfs_intent-2.4.18-18	Wed Feb 26 16:54:17 2003
++++ linux-2.4.18-18.8.0-l12-phil/fs/nfsd/vfs.c	Wed Feb 26 16:54:17 2003
 @@ -1298,7 +1298,7 @@ nfsd_rename(struct svc_rqst *rqstp, stru
  			err = nfserr_perm;
  	} else
@@ -849,8 +872,8 @@
  	unlock_kernel();
  	if (!err && EX_ISSYNC(tfhp->fh_export)) {
  		nfsd_sync_dir(tdentry);
---- linux-2.4.18-18.8.0-l11/fs/open.c~vfs_intent-2.4.18-18	Mon Feb 17 13:49:42 2003
-+++ linux-2.4.18-18.8.0-l11-phil/fs/open.c	Mon Feb 17 14:35:53 2003
+--- linux-2.4.18-18.8.0-l12/fs/open.c~vfs_intent-2.4.18-18	Wed Feb 26 16:54:17 2003
++++ linux-2.4.18-18.8.0-l12-phil/fs/open.c	Wed Feb 26 16:54:17 2003
 @@ -19,6 +19,8 @@
  #include <asm/uaccess.h>
  
@@ -927,7 +950,7 @@
  out_putf:
  	fput(file);
  out:
-@@ -260,14 +273,16 @@ asmlinkage long sys_utime(char * filenam
+@@ -260,11 +273,13 @@ asmlinkage long sys_utime(char * filenam
  	struct inode * inode;
  	struct iattr newattrs;
  
@@ -937,17 +960,11 @@
  		goto out;
  	inode = nd.dentry->d_inode;
  
--	error = -EROFS;
--	if (IS_RDONLY(inode))
--		goto dput_and_out;
 +	/* this is safe without a Lustre lock because it only depends
 +	   on the super block */
-+	error = -EROFS;
-+	if (IS_RDONLY(inode))
-+		goto dput_and_out;
- 
- 	/* Don't worry, the checks are done in inode_change_ok() */
- 	newattrs.ia_valid = ATTR_CTIME | ATTR_MTIME | ATTR_ATIME;
+ 	error = -EROFS;
+ 	if (IS_RDONLY(inode))
+ 		goto dput_and_out;
 @@ -279,11 +294,29 @@ asmlinkage long sys_utime(char * filenam
  			goto dput_and_out;
  
@@ -979,7 +996,7 @@
  	error = notify_change(nd.dentry, &newattrs);
  dput_and_out:
  	path_release(&nd);
-@@ -304,16 +337,18 @@ asmlinkage long sys_utimes(char * filena
+@@ -304,12 +337,14 @@ asmlinkage long sys_utimes(char * filena
  	struct inode * inode;
  	struct iattr newattrs;
  
@@ -990,19 +1007,11 @@
  		goto out;
  	inode = nd.dentry->d_inode;
  
--	error = -EROFS;
--	if (IS_RDONLY(inode))
--		goto dput_and_out;
--
 +	/* this is safe without a Lustre lock because it only depends
 +	   on the super block */
-+	error = -EROFS;
-+	if (IS_RDONLY(inode))
-+		goto dput_and_out;
-+
- 	/* Don't worry, the checks are done in inode_change_ok() */
- 	newattrs.ia_valid = ATTR_CTIME | ATTR_MTIME | ATTR_ATIME;
- 	if (utimes) {
+ 	error = -EROFS;
+ 	if (IS_RDONLY(inode))
+ 		goto dput_and_out;
 @@ -324,7 +359,20 @@ asmlinkage long sys_utimes(char * filena
  		newattrs.ia_atime = times[0].tv_sec;
  		newattrs.ia_mtime = times[1].tv_sec;
@@ -1176,8 +1185,8 @@
  /*
   * Find an empty file descriptor entry, and mark it busy.
   */
---- linux-2.4.18-18.8.0-l11/fs/stat.c~vfs_intent-2.4.18-18	Mon Feb 17 13:49:42 2003
-+++ linux-2.4.18-18.8.0-l11-phil/fs/stat.c	Mon Feb 17 14:35:59 2003
+--- linux-2.4.18-18.8.0-l12/fs/stat.c~vfs_intent-2.4.18-18	Wed Feb 26 16:54:17 2003
++++ linux-2.4.18-18.8.0-l12-phil/fs/stat.c	Wed Feb 26 16:54:17 2003
 @@ -104,10 +104,12 @@ int vfs_stat(char *name, struct kstat *s
  {
  	struct nameidata nd;
@@ -1206,9 +1215,9 @@
  		path_release(&nd);
  	}
  	return error;
---- linux-2.4.18-18.8.0-l11/fs/exec.c~vfs_intent-2.4.18-18	Mon Feb 17 13:49:42 2003
-+++ linux-2.4.18-18.8.0-l11-phil/fs/exec.c	Mon Feb 17 13:54:55 2003
-@@ -103,13 +104,18 @@ static inline void put_binfmt(struct lin
+--- linux-2.4.18-18.8.0-l12/fs/exec.c~vfs_intent-2.4.18-18	Wed Feb 26 16:54:17 2003
++++ linux-2.4.18-18.8.0-l12-phil/fs/exec.c	Wed Feb 26 16:54:17 2003
+@@ -103,13 +103,18 @@ static inline void put_binfmt(struct lin
   *
   * Also note that we take the address to load from from the file itself.
   */
@@ -1228,7 +1237,7 @@
  	if (error)
  		goto out;
  
-@@ -121,7 +127,8 @@ asmlinkage long sys_uselib(const char * 
+@@ -121,7 +126,8 @@ asmlinkage long sys_uselib(const char * 
  	if (error)
  		goto exit;
  
@@ -1238,7 +1247,7 @@
  	error = PTR_ERR(file);
  	if (IS_ERR(file))
  		goto out;
-@@ -350,8 +357,9 @@ struct file *open_exec(const char *name)
+@@ -350,8 +356,9 @@ struct file *open_exec(const char *name)
  	struct inode *inode;
  	struct file *file;
  	int err = 0;
@@ -1249,7 +1258,7 @@
  	file = ERR_PTR(err);
  	if (!err) {
  		inode = nd.dentry->d_inode;
-@@ -363,7 +372,8 @@ struct file *open_exec(const char *name)
+@@ -363,7 +370,8 @@ struct file *open_exec(const char *name)
  				err = -EACCES;
  			file = ERR_PTR(err);
  			if (!err) {
@@ -1259,7 +1268,7 @@
  				if (!IS_ERR(file)) {
  					err = deny_write_access(file);
  					if (err) {
-@@ -976,7 +986,7 @@ int do_coredump(long signr, struct pt_re
+@@ -976,7 +984,7 @@ int do_coredump(long signr, struct pt_re
  		goto close_fail;
  	if (!file->f_op->write)
  		goto close_fail;
@@ -1268,8 +1277,8 @@
  		goto close_fail;
  
  	retval = binfmt->core_dump(signr, regs, file);
---- linux-2.4.18-18.8.0-l11/include/linux/dcache.h~vfs_intent-2.4.18-18	Mon Feb 17 13:49:42 2003
-+++ linux-2.4.18-18.8.0-l11-phil/include/linux/dcache.h	Mon Feb 17 14:36:39 2003
+--- linux-2.4.18-18.8.0-l12/include/linux/dcache.h~vfs_intent-2.4.18-18	Wed Feb 26 16:54:17 2003
++++ linux-2.4.18-18.8.0-l12-phil/include/linux/dcache.h	Wed Feb 26 17:01:30 2003
 @@ -6,6 +6,25 @@
  #include <asm/atomic.h>
  #include <linux/mount.h>
@@ -1304,7 +1313,7 @@
  	unsigned long d_vfs_flags;
  	void * d_fsdata;		/* fs-specific data */
  	void * d_extra_attributes;	/* TUX-specific data */
-@@ -91,8 +111,13 @@ struct dentry_operations {
+@@ -91,8 +111,15 @@ struct dentry_operations {
  	int (*d_delete)(struct dentry *);
  	void (*d_release)(struct dentry *);
  	void (*d_iput)(struct dentry *, struct inode *);
@@ -1314,11 +1323,13 @@
  
 +/* defined in fs/namei.c */
 +extern void intent_release(struct dentry *de, struct lookup_intent *it);
++/* defined in fs/dcache.c */
++extern void __d_rehash(struct dentry * entry, int lock);
 +
  /* the dentry parameter passed to d_hash and d_compare is the parent
   * directory of the entries to be compared. It is used in case these
   * functions need any directory specific information for determining
-@@ -124,6 +149,7 @@ d_iput:		no		no		yes
+@@ -124,6 +151,7 @@ d_iput:		no		no		yes
  					 * s_nfsd_free_path semaphore will be down
  					 */
  #define DCACHE_REFERENCED	0x0008  /* Recently used, don't discard. */
@@ -1326,8 +1337,8 @@
  
  extern spinlock_t dcache_lock;
  
---- linux-2.4.18-18.8.0-l11/include/linux/fs.h~vfs_intent-2.4.18-18	Mon Feb 17 13:49:42 2003
-+++ linux-2.4.18-18.8.0-l11-phil/include/linux/fs.h	Mon Feb 17 14:43:20 2003
+--- linux-2.4.18-18.8.0-l12/include/linux/fs.h~vfs_intent-2.4.18-18	Wed Feb 26 16:54:17 2003
++++ linux-2.4.18-18.8.0-l12-phil/include/linux/fs.h	Wed Feb 26 17:31:42 2003
 @@ -338,6 +338,8 @@ extern void set_bh_page(struct buffer_he
  #define ATTR_MTIME_SET	256
  #define ATTR_FORCE	512	/* Not a change, but a change it */
@@ -1425,8 +1436,8 @@
  extern int page_readlink(struct dentry *, char *, int);
  extern int page_follow_link(struct dentry *, struct nameidata *);
  extern struct inode_operations page_symlink_inode_operations;
---- linux-2.4.18-18.8.0-l11/kernel/ksyms.c~vfs_intent-2.4.18-18	Mon Feb 17 13:49:42 2003
-+++ linux-2.4.18-18.8.0-l11-phil/kernel/ksyms.c	Mon Feb 17 13:49:42 2003
+--- linux-2.4.18-18.8.0-l12/kernel/ksyms.c~vfs_intent-2.4.18-18	Wed Feb 26 16:54:17 2003
++++ linux-2.4.18-18.8.0-l12-phil/kernel/ksyms.c	Wed Feb 26 16:54:17 2003
 @@ -293,6 +293,7 @@ EXPORT_SYMBOL(read_cache_page);
  EXPORT_SYMBOL(set_page_dirty);
  EXPORT_SYMBOL(vfs_readlink);
@@ -1435,5 +1446,3 @@
  EXPORT_SYMBOL(page_readlink);
  EXPORT_SYMBOL(page_follow_link);
  EXPORT_SYMBOL(page_symlink_inode_operations);
-
-_
