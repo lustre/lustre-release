@@ -46,7 +46,7 @@ int mds_client_add(struct mds_export_data *med, int cl_off)
 {
         if (cl_off == -1) {
                 unsigned long *word;
-                int bit;
+                int bit, bits_per_word = sizeof(*word) * 8;
 
         repeat:
                 word = last_rcvd_slots;
@@ -63,7 +63,7 @@ int mds_client_add(struct mds_export_data *med, int cl_off)
                         LBUG();
                         goto repeat;
                 }
-                cl_off = (word - last_rcvd_slots) * sizeof(*word) + bit;
+                cl_off = (word - last_rcvd_slots) * bits_per_word + bit;
         } else {
                 /* test_and_set_bit can handle cl_off > sizeof(long), so there's
                  * no need to frob it */
@@ -85,7 +85,7 @@ int mds_client_free(struct obd_export *exp)
 {
         struct mds_export_data *med = &exp->exp_mds_data;
         unsigned long *word;
-        int bit;
+        int bit, bits_per_word = sizeof(*word) * 8;
 
         if (!med->med_mcd)
                 RETURN(0);
@@ -93,8 +93,8 @@ int mds_client_free(struct obd_export *exp)
         CDEBUG(D_INFO, "freeing client at offset %d with UUID '%s'\n",
                med->med_off, med->med_mcd->mcd_uuid);
 
-        word = last_rcvd_slots + med->med_off / sizeof(unsigned long);
-        bit = med->med_off % sizeof(unsigned long);
+        word = last_rcvd_slots + med->med_off / bits_per_word;
+        bit = med->med_off % bits_per_word;
 
         if (!test_and_clear_bit(bit, word)) {
                 CERROR("bit %d already clear in word %d - bad bad\n",
