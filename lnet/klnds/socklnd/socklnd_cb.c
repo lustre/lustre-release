@@ -1180,6 +1180,9 @@ ksocknal_fmb_callback (void *arg, int error)
                 CDEBUG (D_NET, "routed packet from "LPX64" to "LPX64": OK\n",
                         NTOH__u64 (hdr->src_nid), NTOH__u64 (hdr->dest_nid));
 
+        /* drop peer ref taken on init */
+        ksocknal_put_peer (fmb->fmb_peer);
+        
         spin_lock_irqsave (&fmp->fmp_lock, flags);
 
         list_add (&fmb->fmb_list, &fmp->fmp_idle_fmbs);
@@ -1192,9 +1195,6 @@ ksocknal_fmb_callback (void *arg, int error)
 
         spin_unlock_irqrestore (&fmp->fmp_lock, flags);
 
-        /* drop peer ref taken on init */
-        ksocknal_put_peer (fmb->fmb_peer);
-        
         if (conn == NULL)
                 return;
 
