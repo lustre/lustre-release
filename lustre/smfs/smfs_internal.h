@@ -70,6 +70,11 @@ extern int sm_stack;
 /*dir.c*/
 extern struct inode_operations smfs_dir_iops; 
 extern struct file_operations smfs_dir_fops; 
+extern int smfs_prepare_dentry(struct dentry *dentry, 
+			       struct dentry *parent,
+			       struct qstr *name);
+
+void smfs_clear_dentry(struct dentry *dentry);
 /*inode.c*/
 extern void duplicate_inode(struct inode *cache_inode, struct inode *inode);
 /*file.c*/
