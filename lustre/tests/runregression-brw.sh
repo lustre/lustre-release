@@ -69,46 +69,36 @@ while date; do
 	runthreads 1 test_brw_read 10000000 -30 $PG
 
 	[ "$PGVW" ] && runthreads 1 test_brw_write 1000000 -30 $PGVW
-	[ "$PGVW" ] && runthreads 1 test_brw_read 16000000 -30 $PG
 	[ "$PGVR" ] && runthreads 1 test_brw_read 1000000 -30 $PGVR
 
 	runthreads 2 test_brw_write 10000000 -30 $PG
 	runthreads 2 test_brw_read 10000000 -30 $PG
 
 	[ "$PGVW" ] && runthreads 2 test_brw_write 1000000 -30 $PGVW
-	[ "$PGVW" ] && runthreads 1 test_brw_read 16000000 -30 $PG
 	[ "$PGVR" ] && runthreads 2 test_brw_read 1000000 -30 $PGVR
 
 	runthreads 10 test_brw_write 1000000 -30 $PG
-	runthreads 1 test_brw_read 16000000 -30 $PG
 	runthreads 10 test_brw_read 1000000 -30 $PG
 
 	[ "$PGVW" ] && runthreads 10 test_brw_write 100000 -60 $PGVW
-	[ "$PGVW" ] && runthreads 1 test_brw_read 1600000 -30 $PG
 	[ "$PGVR" ] && runthreads 10 test_brw_read 100000 -60 $PGVR
 
 	runthreads 32 test_brw_write 1000000 -30 $PG
-	runthreads 1 test_brw_read 16000000 -30 $PG
 	runthreads 32 test_brw_read 1000000 -30 $PG
 
 	[ "$PGVW" ] && runthreads 32 test_brw_write 100000 -60 $PGVW
-	[ "$PGVW" ] && runthreads 1 test_brw_read 1600000 -30 $PG
 	[ "$PGVR" ] && runthreads 32 test_brw_read 100000 -60 $PGVR
 
 	runthreads 64 test_brw_write 1000000 -30 $PG
-	runthreads 1 test_brw_read 16000000 -30 $PG
 	runthreads 64 test_brw_read 1000000 -30 $PG
 
 	[ "$PGVW" ] && runthreads 64 test_brw_write 100000 -60 $PGVW
-	[ "$PGVW" ] && runthreads 1 test_brw_read 1600000 -30 $PG
 	[ "$PGVR" ] && runthreads 64 test_brw_read 100000 -60 $PGVR
 
 	runthreads 100 test_brw_write 100000 -60 $PG
-	runthreads 1 test_brw_read 1600000 -30 $PG
 	runthreads 100 test_brw_read 100000 -60 $PG
 
 	[ "$PGVW" ] && runthreads 100 test_brw_write 100000 -60 $PGVW
-	[ "$PGVW" ] && runthreads 1 test_brw_read 1600000 -30 $PG
 	[ "$PGVR" ] && runthreads 100 test_brw_read 100000 -60 $PGVR
 done
 
