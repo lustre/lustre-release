@@ -325,7 +325,7 @@ static int ost_brw_read(struct ost_obd *obddev, struct ptlrpc_request *req)
                 wait_event_interruptible(bulk->b_waitq,
                                          ptlrpc_check_bulk_sent(bulk));
 
-                if (bulk->b_flags == PTL_RPC_INTR)
+                if (bulk->b_flags & PTL_RPC_FL_INTR)
                         GOTO(out, 0);
 
                 OBD_FREE(bulk, sizeof(*bulk));
@@ -486,7 +486,7 @@ static int ost_handle(struct obd_device *obddev, struct ptlrpc_service *svc,
                 GOTO(out, rc);
         }
 
-        if (req->rq_reqmsg->type != PTL_RPC_REQUEST) {
+        if (req->rq_reqmsg->type != PTL_RPC_MSG_REQUEST) {
                 CERROR("lustre_mds: wrong packet type sent %d\n",
                        req->rq_reqmsg->type);
                 GOTO(out, rc = -EINVAL);

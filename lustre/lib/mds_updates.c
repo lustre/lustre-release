@@ -34,14 +34,22 @@
 #include <linux/obd_support.h>
 #include <linux/lustre_lib.h>
 #include <linux/lustre_mds.h>
+#include <linux/lustre_lite.h>
 
-void mds_pack_body(struct ptlrpc_request *req)
+void mds_pack_fid(struct ll_fid *fid)
 {
-        struct mds_body *b = lustre_msg_buf(req->rq_reqmsg, 0);
+        fid->id = HTON__u64(fid->id);
+        fid->generation = HTON__u32(fid->generation);
+        fid->f_type = HTON__u32(fid->f_type);
+}
+
+static void mds_pack_body(struct mds_body *b)
+{
         if (b == NULL)
                 LBUG();
 
-        /* fid1/fid2 are already packed by another function */
+        mds_pack_fid(&b->fid1);
+        mds_pack_fid(&b->fid2);
         b->objid = HTON__u64(b->objid);
         b->size = HTON__u64(b->size);
         b->valid = HTON__u32(b->valid);
@@ -58,6 +66,19 @@ void mds_pack_body(struct ptlrpc_request *req)
         b->nlink = HTON__u32(b->nlink);
         b->generation = HTON__u32(b->generation);
 }
+
+void mds_pack_req_body(struct ptlrpc_request *req) 
+{
+        struct mds_body *b = lustre_msg_buf(req->rq_reqmsg, 0);
+        mds_pack_body(b);
+}
+
+void mds_pack_rep_body(struct ptlrpc_request *req) 
+{
+        struct mds_body *b = lustre_msg_buf(req->rq_repmsg, 0);
+        mds_pack_body(b);
+}
+
 
 /* packing of MDS records */
 void mds_create_pack(struct mds_rec_create *rec, struct inode *inode,
@@ -115,12 +136,20 @@ void mds_rename_pack(struct mds_rec_rename *rec, struct inode *srcdir,
 }
 
 /* unpacking */
-void mds_unpack_body(struct ptlrpc_request *req)
+void mds_unpack_fid(struct ll_fid *fid)
 {
-        struct mds_body *b = lustre_msg_buf(req->rq_repmsg, 0);
+        fid->id = NTOH__u64(fid->id);
+        fid->generation = NTOH__u32(fid->generation);
+        fid->f_type = NTOH__u32(fid->f_type);
+}
+
+static void mds_unpack_body(struct mds_body *b)
+{
         if (b == NULL)
                 LBUG();
 
+        mds_unpack_fid(&b->fid1);
+        mds_unpack_fid(&b->fid2);
         b->objid = NTOH__u64(b->objid);
         b->size = NTOH__u64(b->size);
         b->valid = NTOH__u32(b->valid);
@@ -136,6 +165,19 @@ void mds_unpack_body(struct ptlrpc_request *req)
         b->ino = NTOH__u32(b->ino);
         b->nlink = NTOH__u32(b->nlink);
         b->generation = NTOH__u32(b->generation);
+}
+
+
+void mds_unpack_req_body(struct ptlrpc_request *req) 
+{
+        struct mds_body *b = lustre_msg_buf(req->rq_reqmsg, 0);
+        mds_unpack_body(b);
+}
+
+void mds_unpack_rep_body(struct ptlrpc_request *req) 
+{
+        struct mds_body *b = lustre_msg_buf(req->rq_repmsg, 0);
+        mds_unpack_body(b);
 }
 
 static int mds_setattr_unpack(struct ptlrpc_request *req,

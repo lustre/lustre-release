@@ -77,6 +77,7 @@ struct mds_obd {
         struct mds_fs_operations *mds_fsops;
         struct file *mds_last_rcvd;
         __u64 mds_mount_count;
+        struct ll_fid mds_rootfid;
 };
 
 struct ldlm_obd {
@@ -97,18 +98,19 @@ struct echo_obd {
         struct address_space_operations *eo_aops;
 };
 
-struct connmgr_obd {
-        time_t                mgr_waketime;
-        time_t                mgr_timeout;
-        struct ptlrpc_service *mgr_service;
-        struct ptlrpc_client  *mgr_client;
-        __u32                  mgr_flags; 
-        spinlock_t             mgr_lock;
-        struct list_head      mgr_connections_lh; /* connections managed by the mgr */
-        struct list_head      mgr_troubled_lh; /* connections in trouble */
-        wait_queue_head_t     mgr_ctl_waitq;
-        wait_queue_head_t     mgr_waitq;
-        struct task_struct    *mgr_thread;
+struct recovd_obd {
+        time_t                recovd_waketime;
+        time_t                recovd_timeout;
+        struct ptlrpc_service *recovd_service;
+        struct ptlrpc_client  *recovd_client;
+        __u32                  recovd_flags; 
+        spinlock_t             recovd_lock;
+        struct list_head      recovd_connections_lh; /* connections managed by the mgr */
+        struct list_head      recovd_troubled_lh; /* connections in trouble */
+        wait_queue_head_t     recovd_recovery_waitq;
+        wait_queue_head_t     recovd_ctl_waitq;
+        wait_queue_head_t     recovd_waitq;
+        struct task_struct    *recovd_thread;
 };
 
 struct trace_obd {
@@ -169,7 +171,7 @@ struct obd_device {
                 struct osc_obd osc;
                 struct ldlm_obd ldlm;
                 struct echo_obd echo;
-                struct connmgr_obd mgr;
+                struct recovd_obd recovd;
                 struct trace_obd trace;
 #if 0
                 struct raid1_obd raid1;

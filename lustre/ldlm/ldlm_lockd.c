@@ -184,7 +184,7 @@ static int ldlm_handle(struct obd_device *dev, struct ptlrpc_service *svc,
                 GOTO(out, rc);
         }
 
-        if (req->rq_reqmsg->type != PTL_RPC_REQUEST) {
+        if (req->rq_reqmsg->type != PTL_RPC_MSG_REQUEST) {
                 CERROR("lustre_ldlm: wrong packet type sent %d\n",
                        req->rq_reqmsg->type);
                 GOTO(out, rc = -EINVAL);

@@ -83,6 +83,7 @@ static struct super_block * ll_read_super(struct super_block *sb,
         char *version = NULL;
         int devno;
         int err;
+        struct ll_fid rootfid;
         struct ptlrpc_request *request = NULL;
 
         ENTRY;
@@ -131,7 +132,16 @@ static struct super_block * ll_read_super(struct super_block *sb,
                 GOTO(out_disc, sb = NULL);
         }
 
-        sbi->ll_rootino = 2;
+        sbi->ll_mds_conn->c_level = LUSTRE_CONN_FULL;
+
+        err= mdc_connect(&sbi->ll_mds_client, sbi->ll_mds_conn, 
+                    &rootfid, &request); 
+        CERROR("rootfid %Ld\n", rootfid.id);
+        if (err) { 
+                CERROR("cannot mds_connect %d\n", err);
+                GOTO(out_disc, sb = NULL);
+        }
+        sbi->ll_rootino = rootfid.id;
 
         sb->s_maxbytes = 1LL << 36;
         sb->s_blocksize = PAGE_SIZE;

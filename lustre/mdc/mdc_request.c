@@ -28,13 +28,14 @@
 #define DEBUG_SUBSYSTEM S_MDC
 
 #include <linux/lustre_mds.h>
+#include <linux/lustre_lite.h>
 
 #define REQUEST_MINOR 244
 
 extern int mds_queue_req(struct ptlrpc_request *);
 
 int mdc_connect(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
-                ino_t ino, int type, int valid, struct ptlrpc_request **request)
+                struct ll_fid *rootfid, struct ptlrpc_request **request)
 {
         struct ptlrpc_request *req;
         struct mds_body *body;
@@ -46,18 +47,19 @@ int mdc_connect(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
                 GOTO(out, rc = -ENOMEM);
 
         body = lustre_msg_buf(req->rq_reqmsg, 0);
-        ll_ino2fid(&body->fid1, ino, 0, type);
-        body->valid = valid;
-
         req->rq_replen = lustre_msg_size(1, &size);
 
+        mds_pack_req_body(req); 
         rc = ptlrpc_queue_wait(req);
         rc = ptlrpc_check_status(req, rc);
 
         if (!rc) {
-                mds_unpack_body(req);
+                mds_unpack_rep_body(req);
                 body = lustre_msg_buf(req->rq_repmsg, 0);
-                CDEBUG(D_NET, "mode: %o\n", body->mode);
+                memcpy(rootfid, &body->fid1, sizeof(*rootfid)); 
+
+                CDEBUG(D_NET, "root ino: %Ld\n", rootfid->id);
+                
         }
 
         EXIT;
@@ -89,7 +91,7 @@ int mdc_getattr(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
         rc = ptlrpc_check_status(req, rc);
 
         if (!rc) {
-                mds_unpack_body(req);
+                mds_unpack_rep_body(req);
                 body = lustre_msg_buf(req->rq_repmsg, 0);
                 CDEBUG(D_NET, "mode: %o\n", body->mode);
         }
@@ -122,7 +124,7 @@ int mdc_open(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
         rc = ptlrpc_check_status(req, rc);
 
         if (!rc) {
-                mds_unpack_body(req);
+                mds_unpack_rep_body(req);
                 body = lustre_msg_buf(req->rq_repmsg, 0);
                 *fh = body->objid;
         }
@@ -210,7 +212,7 @@ int mdc_readpage(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
                 GOTO(out, rc);
         }
 
-        mds_unpack_body(req);
+        mds_unpack_rep_body(req);
         EXIT;
 
  out:
@@ -363,11 +365,12 @@ MODULE_AUTHOR("Peter J. Braam <braam@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre MDS Request Tester v1.0");
 MODULE_LICENSE("GPL");
 
+EXPORT_SYMBOL(mdc_connect);
+EXPORT_SYMBOL(mdc_getattr);
 EXPORT_SYMBOL(mdc_create);
 EXPORT_SYMBOL(mdc_unlink);
 EXPORT_SYMBOL(mdc_rename);
 EXPORT_SYMBOL(mdc_link);
-EXPORT_SYMBOL(mdc_getattr);
 EXPORT_SYMBOL(mdc_readpage);
 EXPORT_SYMBOL(mdc_setattr);
 EXPORT_SYMBOL(mdc_close);

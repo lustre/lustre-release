@@ -42,6 +42,9 @@
  * - ioctl's
  */
 
+#define PTL_RPC_MSG_REQUEST 4711
+#define PTL_RPC_MSG_ERR 4712
+
 struct lustre_msg {
         __u64 conn;
         __u64 token;
@@ -256,23 +259,6 @@ struct mds_rec_rename {
         struct ll_fid   rn_fid2;
 };
 
-#ifdef __KERNEL__
-
-static inline void ll_ino2fid(struct ll_fid *fid, ino_t ino, __u32 generation,
-                              int type)
-{
-        fid->id = HTON__u64((__u64)ino);
-        fid->generation = HTON__u32(generation);
-        fid->f_type = HTON__u32(type);
-}
-
-static inline void ll_inode2fid(struct ll_fid *fid, struct inode *inode)
-{
-        ll_ino2fid(fid, inode->i_ino, inode->i_generation,
-                   inode->i_mode & S_IFMT);
-}
-
-#endif
 
 /*
  *   LDLM requests:

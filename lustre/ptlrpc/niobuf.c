@@ -38,12 +38,12 @@ int ptlrpc_check_bulk_sent(struct ptlrpc_bulk_desc *bulk)
 {
         ENTRY;
 
-        if (bulk->b_flags == PTL_BULK_SENT)
+        if (bulk->b_flags & PTL_BULK_FL_SENT)
                 RETURN(1);
 
         if (sigismember(&(current->pending.signal), SIGKILL) ||
             sigismember(&(current->pending.signal), SIGINT)) {
-                bulk->b_flags = PTL_RPC_INTR;
+                bulk->b_flags |= PTL_RPC_FL_INTR;
                 RETURN(1);
         }
 
@@ -62,21 +62,14 @@ static int ptl_send_buf(struct ptlrpc_request *request,
         request->rq_req_md.user_ptr = request;
 
         switch (request->rq_type) {
-        case PTL_RPC_BULK:
-                request->rq_req_md.start = request->rq_bulkbuf;
-                request->rq_req_md.length = request->rq_bulklen;
-                request->rq_req_md.eventq = bulk_source_eq;
-                request->rq_req_md.threshold = 2; /* SENT and ACK events */
-                ack = PTL_ACK_REQ;
-                break;
-        case PTL_RPC_REQUEST:
+        case PTL_RPC_TYPE_REQUEST:
                 request->rq_req_md.start = request->rq_reqmsg;
                 request->rq_req_md.length = request->rq_reqlen;
                 request->rq_req_md.eventq = request_out_eq;
                 request->rq_req_md.threshold = 1;
                 ack = PTL_NOACK_REQ;
                 break;
-        case PTL_RPC_REPLY:
+        case PTL_RPC_TYPE_REPLY:
                 request->rq_req_md.start = request->rq_repmsg;
                 request->rq_req_md.length = request->rq_replen;
                 request->rq_req_md.eventq = reply_out_eq;
@@ -206,7 +199,7 @@ int ptlrpc_abort_bulk(struct ptlrpc_bulk_desc *bulk)
 int ptlrpc_reply(struct ptlrpc_service *svc, struct ptlrpc_request *req)
 {
         /* FIXME: we need to increment the count of handled events */
-        req->rq_type = PTL_RPC_REPLY;
+        req->rq_type = PTL_RPC_TYPE_REPLY;
         req->rq_repmsg->conn = req->rq_connection->c_remote_conn;
         req->rq_repmsg->token = req->rq_connection->c_remote_token;
         req->rq_repmsg->xid = HTON__u32(req->rq_reqmsg->xid);
@@ -229,7 +222,7 @@ int ptlrpc_error(struct ptlrpc_service *svc, struct ptlrpc_request *req)
         if (rc)
                 RETURN(rc);
 
-        req->rq_repmsg->type = HTON__u32(PTL_RPC_ERR);
+        req->rq_repmsg->type = HTON__u32(PTL_RPC_MSG_ERR);
 
         rc = ptlrpc_reply(svc, req);
         RETURN(rc);
@@ -243,7 +236,7 @@ int ptl_send_rpc(struct ptlrpc_request *request)
 
         ENTRY;
 
-        if (NTOH__u32(request->rq_reqmsg->type) != PTL_RPC_REQUEST) {
+        if (NTOH__u32(request->rq_reqmsg->type) != PTL_RPC_MSG_REQUEST) {
                 CERROR("wrong packet type sent %d\n",
                        NTOH__u32(request->rq_reqmsg->type));
                 LBUG();
@@ -275,7 +268,7 @@ int ptl_send_rpc(struct ptlrpc_request *request)
                 GOTO(cleanup, rc);
         }
 
-        request->rq_type = PTL_RPC_REQUEST;
+        request->rq_type = PTL_RPC_TYPE_REQUEST;
         request->rq_reply_md.start = repbuf;
         request->rq_reply_md.length = request->rq_replen;
         request->rq_reply_md.threshold = 1;

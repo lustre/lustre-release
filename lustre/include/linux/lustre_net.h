@@ -64,10 +64,17 @@
 #define SVC_HA_EVENT 32
 #define SVC_SIGNAL   64
 
+
+#define LUSTRE_CONN_NEW    1
+#define LUSTRE_CONN_CON    2
+#define LUSTRE_CONN_RECOVD 3
+#define LUSTRE_CONN_FULL   4
+
 struct ptlrpc_connection {
         struct list_head c_link;
         struct lustre_peer c_peer;
 
+        int c_level;
         __u32 c_generation;  /* changes upon new connection */
         __u32 c_epoch;       /* changes when peer changes */
         __u32 c_bootcount;   /* peer's boot count */ 
@@ -94,18 +101,21 @@ struct ptlrpc_client {
         struct list_head cli_sent_head;
         struct list_head cli_ha_item; 
 
-        struct connmgr_obd *cli_ha_mgr;
+        struct recovd_obd *cli_recovd;
 };
 
-/* These do double-duty in rq_type and rq_flags */
-#define PTL_RPC_INTR    1
-#define PTL_RPC_REQUEST 2
-#define PTL_RPC_REPLY   3
-#define PTL_RPC_BULK    4
-#define PTL_RPC_SENT    5
-#define PTL_BULK_SENT   6
-#define PTL_BULK_RCVD   7
-#define PTL_RPC_ERR     8
+/* packet types */
+#define PTL_RPC_TYPE_REQUEST 2
+#define PTL_RPC_TYPE_REPLY   3
+
+/* state flags of requests */
+#define PTL_RPC_FL_INTR    1
+#define PTL_RPC_FL_REPLY   2
+#define PTL_RPC_FL_SENT    4
+#define PTL_BULK_FL_SENT   8
+#define PTL_BULK_FL_RCVD   16
+#define PTL_RPC_FL_ERR     32
+#define PTL_RPC_FL_TIMEOUT 64
 
 struct ptlrpc_request { 
         int rq_type; /* one of PTL_RPC_REQUEST, PTL_RPC_REPLY, PTL_RPC_BULK */
@@ -217,7 +227,7 @@ int ptl_send_rpc(struct ptlrpc_request *request);
 void ptlrpc_link_svc_me(struct ptlrpc_service *service, int i);
 
 /* rpc/client.c */
-void ptlrpc_init_client(struct connmgr_obd *, int req_portal, int rep_portal,
+void ptlrpc_init_client(struct recovd_obd *, int req_portal, int rep_portal,
                         struct ptlrpc_client *);
 struct ptlrpc_connection *ptlrpc_uuid_to_connection(char *uuid);
 int ptlrpc_queue_wait(struct ptlrpc_request *req);

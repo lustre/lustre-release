@@ -181,6 +181,10 @@ static int handle_incoming_request(struct obd_device *obddev,
                 }
                 ptlrpc_connection_addref(request.rq_connection);
         } else {
+                /*
+                  PHIL? should we perhaps only do this when 
+                   we get an incoming connmgr_connect request? 
+                */
                 request.rq_connection = ptlrpc_get_connection(&peer);
                 if (!request.rq_connection)
                         LBUG();

@@ -374,7 +374,7 @@ int osc_sendpage(struct obd_conn *conn, struct ptlrpc_request *req,
                 wait_event_interruptible(bulk->b_waitq,
                                          ptlrpc_check_bulk_sent(bulk));
 
-                if (bulk->b_flags == PTL_RPC_INTR) {
+                if (bulk->b_flags & PTL_RPC_FL_INTR) {
                         ptlrpc_free_bulk(bulk);
                         RETURN(-EINTR);
                 }

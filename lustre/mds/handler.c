@@ -78,7 +78,7 @@ int mds_sendpage(struct ptlrpc_request *req, struct file *file,
         wait_event_interruptible(bulk->b_waitq,
                                  ptlrpc_check_bulk_sent(bulk));
 
-        if (bulk->b_flags == PTL_RPC_INTR) {
+        if (bulk->b_flags & PTL_RPC_FL_INTR) {
                 rc = -EINTR;
                 GOTO(cleanup_buf, rc);
         }
@@ -153,6 +153,30 @@ struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
                 mntget(*mnt);
         result->d_flags |= DCACHE_NFSD_DISCONNECTED;
         return result;
+}
+
+int mds_connect(struct ptlrpc_request *req)
+{
+        struct mds_body *body;
+        struct mds_obd *mds = &req->rq_obd->u.mds;
+        int rc, size = sizeof(*body);
+        ENTRY;
+
+        rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repmsg);
+        if (rc || OBD_FAIL_CHECK(OBD_FAIL_MDS_CONNECT_PACK)) {
+                CERROR("mds: out of memory\n");
+                req->rq_status = -ENOMEM;
+                RETURN(0);
+        }
+
+        body = lustre_msg_buf(req->rq_reqmsg, 0);
+        mds_unpack_req_body(req); 
+        /* Anything we need to do here with the client's trans no or so? */
+
+        body = lustre_msg_buf(req->rq_repmsg, 0);
+        memcpy(&body->fid1, &mds->mds_rootfid  , sizeof(body->fid1)); 
+        mds_pack_rep_body(req);
+        RETURN(0);
 }
 
 int mds_getattr(struct ptlrpc_request *req)
@@ -340,13 +364,19 @@ int mds_handle(struct obd_device *dev, struct ptlrpc_service *svc,
                 GOTO(out, rc);
         }
 
-        if (req->rq_reqmsg->type != PTL_RPC_REQUEST) {
+        if (req->rq_reqmsg->type != PTL_RPC_MSG_REQUEST) {
                 CERROR("lustre_mds: wrong packet type sent %d\n",
                        req->rq_reqmsg->type);
                 GOTO(out, rc = -EINVAL);
         }
 
         switch (req->rq_reqmsg->opc) {
+        case MDS_CONNECT:
+                CDEBUG(D_INODE, "getattr\n");
+                OBD_FAIL_RETURN(OBD_FAIL_MDS_CONNECT_NET, 0);
+                rc = mds_connect(req);
+                break;
+
         case MDS_GETATTR:
                 CDEBUG(D_INODE, "getattr\n");
                 OBD_FAIL_RETURN(OBD_FAIL_MDS_GETATTR_NET, 0);
@@ -428,6 +458,22 @@ static int mds_prep(struct obd_device *obddev)
                 CERROR("cannot create ROOT directory\n");
                 GOTO(err_svc, rc);
         }
+        f = filp_open("ROOT", O_RDONLY, 0); 
+        if (!f || IS_ERR(f)) { 
+                CERROR("cannot open ROOT\n"); 
+                LBUG();
+        }
+        
+        mds->mds_rootfid.id = f->f_dentry->d_inode->i_ino;
+        mds->mds_rootfid.generation = f->f_dentry->d_inode->i_generation;
+        mds->mds_rootfid.f_type = S_IFDIR;
+
+        rc = filp_close(f, 0);
+        if (rc) { 
+                CERROR("cannot close ROOT\n"); 
+                LBUG();
+        }
+
         rc = simple_mkdir(current->fs->pwd, "FH", 0700);
         if (rc && rc != -EEXIST) {
                 CERROR("cannot create FH directory\n");

@@ -154,7 +154,7 @@ static int bulk_source_callback(ptl_event_t *ev, void *data)
                 CDEBUG(D_NET, "got SENT event\n");
         } else if (ev->type == PTL_EVENT_ACK) {
                 CDEBUG(D_NET, "got ACK event\n");
-                bulk->b_flags = PTL_BULK_SENT;
+                bulk->b_flags |= PTL_BULK_FL_SENT;
                 wake_up_interruptible(&bulk->b_waitq);
         } else {
                 CERROR("Unexpected event type!\n");
@@ -174,7 +174,7 @@ static int bulk_sink_callback(ptl_event_t *ev, void *data)
         if (ev->type == PTL_EVENT_PUT) {
                 if (bulk->b_buf != ev->mem_desc.start + ev->offset)
                         CERROR("bulkbuf != mem_desc -- why?\n");
-                bulk->b_flags = PTL_BULK_RCVD;
+                bulk->b_flags |= PTL_BULK_FL_RCVD;
                 if (bulk->b_cb != NULL)
                         bulk->b_cb(bulk, data);
                 wake_up_interruptible(&bulk->b_waitq);

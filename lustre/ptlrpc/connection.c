@@ -61,6 +61,7 @@ struct ptlrpc_connection *ptlrpc_get_connection(struct lustre_peer *peer)
         if (c == NULL)
                 GOTO(out, c);
 
+        c->c_level = LUSTRE_CONN_NEW;
         c->c_xid_in = 1;
         c->c_xid_out = 1;
         c->c_generation = 1;

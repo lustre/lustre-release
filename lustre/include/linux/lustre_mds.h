@@ -62,8 +62,10 @@ struct mds_update_record {
 int mds_reint_rec(struct mds_update_record *r, struct ptlrpc_request *req); 
 
 /* lib/mds_updates.c */
-void mds_pack_body(struct ptlrpc_request *);
-void mds_unpack_body(struct ptlrpc_request *);
+void mds_pack_req_body(struct ptlrpc_request *);
+void mds_pack_rep_body(struct ptlrpc_request *);
+void mds_unpack_req_body(struct ptlrpc_request *);
+void mds_unpack_rep_body(struct ptlrpc_request *);
 int mds_update_unpack(struct ptlrpc_request *, struct mds_update_record *);
 
 void mds_setattr_pack(struct mds_rec_setattr *, struct inode *, struct iattr *);
@@ -79,6 +81,8 @@ void mds_rename_pack(struct mds_rec_rename *, struct inode *srcdir,
 struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid, struct vfsmount **mnt);
 
 /* llight/request.c */
+int mdc_connect(struct ptlrpc_client *, struct ptlrpc_connection *, 
+                struct ll_fid *rootfid, struct ptlrpc_request **);
 int mdc_getattr(struct ptlrpc_client *, struct ptlrpc_connection *, ino_t ino,
                 int type, int valid, struct ptlrpc_request **);
 int mdc_setattr(struct ptlrpc_client *, struct ptlrpc_connection *,

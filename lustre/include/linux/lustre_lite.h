@@ -1,7 +1,7 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * object based disk file system
+ * lustre lite cluster file system
  * 
  * This code is issued under the GNU General Public License.
  * See the file COPYING in this distribution
@@ -78,6 +78,20 @@ static inline int ll_has_inline(struct inode *inode)
 static inline struct obd_conn *ll_i2obdconn(struct inode *inode)
 {
         return &(ll_i2sbi(inode))->ll_conn;
+}
+
+static inline void ll_ino2fid(struct ll_fid *fid, ino_t ino, __u32 generation,
+                              int type)
+{
+        fid->id = (__u64)ino;
+        fid->generation = generation;
+        fid->f_type = type;
+}
+
+static inline void ll_inode2fid(struct ll_fid *fid, struct inode *inode)
+{
+        ll_ino2fid(fid, inode->i_ino, inode->i_generation,
+                   inode->i_mode & S_IFMT);
 }
 
 /* dir.c */

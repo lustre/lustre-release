@@ -26,13 +26,13 @@
 
 #include <linux/lustre_ha.h>
 
-void ptlrpc_init_client(struct connmgr_obd *mgr, int req_portal,
+void ptlrpc_init_client(struct recovd_obd *recovd, int req_portal,
                         int rep_portal, struct ptlrpc_client *cl)
 {
         memset(cl, 0, sizeof(*cl));
-        cl->cli_ha_mgr = mgr;
-        if (mgr)
-                connmgr_cli_manage(mgr, cl);
+        cl->cli_recovd = recovd;
+        if (recovd)
+                connmgr_cli_manage(recovd, cl);
         cl->cli_obd = NULL;
         cl->cli_request_portal = req_portal;
         cl->cli_reply_portal = rep_portal;
@@ -107,13 +107,13 @@ struct ptlrpc_request *ptlrpc_prep_req(struct ptlrpc_client *cl,
         }
 
         request->rq_time = CURRENT_TIME;
-        request->rq_type = PTL_RPC_REQUEST;
+        request->rq_type = PTL_RPC_TYPE_REQUEST;
         request->rq_connection = ptlrpc_connection_addref(conn);
 
         request->rq_reqmsg->conn = (__u64)(unsigned long)conn->c_remote_conn;
         request->rq_reqmsg->token = conn->c_remote_token;
         request->rq_reqmsg->opc = HTON__u32(opcode);
-        request->rq_reqmsg->type = HTON__u32(request->rq_type);
+        request->rq_reqmsg->type = HTON__u32(PTL_RPC_MSG_REQUEST);
         INIT_LIST_HEAD(&request->rq_list);
 
         spin_lock(&conn->c_lock);
@@ -150,13 +150,14 @@ static int ptlrpc_check_reply(struct ptlrpc_request *req)
 
         schedule_timeout(3 * HZ);  /* 3 second timeout */
         if (req->rq_repmsg != NULL) {
-                req->rq_flags = PTL_RPC_REPLY;
+                req->rq_flags |= PTL_RPC_FL_REPLY;
                 GOTO(out, rc = 1);
         }
 
         if (CURRENT_TIME - req->rq_time >= 3) {
                 CERROR("-- REQ TIMEOUT --\n");
-                if (req->rq_client && req->rq_client->cli_ha_mgr)
+                req->rq_flags |= PTL_RPC_FL_TIMEOUT;
+                if (req->rq_client && req->rq_client->cli_recovd)
                         connmgr_cli_fail(req->rq_client);
                 return 0;
         }
@@ -164,7 +165,7 @@ static int ptlrpc_check_reply(struct ptlrpc_request *req)
         if (sigismember(&(current->pending.signal), SIGKILL) ||
             sigismember(&(current->pending.signal), SIGTERM) ||
             sigismember(&(current->pending.signal), SIGINT)) {
-                req->rq_flags = PTL_RPC_INTR;
+                req->rq_flags |= PTL_RPC_FL_INTR;
                 GOTO(out, rc = 1);
         }
 
@@ -189,6 +190,11 @@ int ptlrpc_check_status(struct ptlrpc_request *req, int err)
         if (req->rq_repmsg == NULL) {
                 CERROR("req->rq_repmsg == NULL\n");
                 RETURN(-ENOMEM);
+        }
+
+        if (req->rq_repmsg->type == NTOH__u32(PTL_RPC_MSG_ERR)) {
+                CERROR("req->rq_repmsg->type == PTL_RPC_MSG_ERR\n");
+                RETURN(-EINVAL);
         }
 
         if (req->rq_repmsg->status != 0) {
@@ -240,13 +246,13 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
         CDEBUG(D_OTHER, "-- done\n");
         ptlrpc_cleanup_request_buf(req);
         up(&req->rq_client->cli_rpc_sem);
-        if (req->rq_flags == PTL_RPC_INTR) {
+        if (req->rq_flags & PTL_RPC_FL_INTR) {
                 /* Clean up the dangling reply buffers */
                 ptlrpc_abort(req);
                 GOTO(out, rc = -EINTR);
         }
 
-        if (req->rq_flags != PTL_RPC_REPLY) {
+        if (! (req->rq_flags & PTL_RPC_FL_REPLY)) {
                 CERROR("Unknown reason for wakeup\n");
                 /* XXX Phil - I end up here when I kill obdctl */
                 ptlrpc_abort(req);
