@@ -514,7 +514,8 @@ static int kportal_ioctl(struct inode *inode, struct file *file,
                 break;
                 
         case IOC_PORTAL_LWT_SNAPSHOT:
-                err = lwt_snapshot (&data->ioc_count, &data->ioc_misc,
+                err = lwt_snapshot (&data->ioc_nid,
+                                    &data->ioc_count, &data->ioc_misc,
                                     data->ioc_pbuf1, data->ioc_plen1);
                 if (err == 0 &&
                     copy_to_user((char *)arg, data, sizeof (*data)))

@@ -690,7 +690,10 @@ char *portals_nid2str(int nal, ptl_nid_t nid, char *str);
 /******************************************************************************/
 /* Light-weight trace 
  * Support for temporary event tracing with minimal Heisenberg effect. */
-#define LWT_SUPPORT  1
+#define LWT_SUPPORT  0
+
+#define LWT_MEMORY   (64<<20)
+#define LWT_MAX_CPUS 4
 
 typedef struct {
         cycles_t    lwte_when;
@@ -728,7 +731,7 @@ extern void lwt_fini (void);
 extern int  lwt_lookup_string (int *size, char *knlptr,
                                char *usrptr, int usrsize);
 extern int  lwt_control (int enable, int clear);
-extern int  lwt_snapshot (int *ncpu, int *total_size,
+extern int  lwt_snapshot (cycles_t *now, int *ncpu, int *total_size,
                           void *user_ptr, int user_size);
 
 /* Note that we _don't_ define LWT_EVENT at all if LWT_SUPPORT isn't set.
