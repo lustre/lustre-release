@@ -215,6 +215,10 @@ int ptlrpc_abort_bulk(struct ptlrpc_bulk_desc *desc)
 
 int ptlrpc_reply(struct ptlrpc_service *svc, struct ptlrpc_request *req)
 {
+        if (req->rq_repmsg == NULL)
+                CERROR("bad: someone called ptlrpc_reply when they meant "
+                       "ptlrpc_error\n");
+
         /* FIXME: we need to increment the count of handled events */
         req->rq_type = PTL_RPC_TYPE_REPLY;
         //req->rq_repmsg->conn = req->rq_connection->c_remote_conn;

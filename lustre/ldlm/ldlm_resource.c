@@ -73,7 +73,7 @@ static void cleanup_resource(struct ldlm_resource *res, struct list_head *q)
         list_for_each_safe(tmp, pos, q) {
                 struct ldlm_lock *lock;
                 lock = list_entry(tmp, struct ldlm_lock, l_res_link);
-                ldlm_lock_get(lock);
+                LDLM_LOCK_GET(lock);
 
                 if (client) {
                         struct lustre_handle lockh;
@@ -90,7 +90,7 @@ static void cleanup_resource(struct ldlm_resource *res, struct list_head *q)
                         ldlm_resource_unlink_lock(lock);
                         ldlm_lock_destroy(lock);
                 }
-                ldlm_lock_put(lock);
+                LDLM_LOCK_PUT(lock);
         }
 
         return; 

@@ -112,7 +112,6 @@ struct ldlm_lock {
         struct list_head      l_children;
         struct list_head      l_childof;
         struct list_head      l_res_link; /*position in one of three res lists*/
-        atomic_t              l_refcount;
 
         ldlm_mode_t           l_req_mode;
         ldlm_mode_t           l_granted_mode;
@@ -196,17 +195,27 @@ extern char *ldlm_typename[];
 
 #define LDLM_DEBUG(lock, format, a...)                                  \
 do {                                                                    \
-        CDEBUG(D_DLMTRACE, "### " format                                \
-               " (%s: lock %p(rc=%d/%d,%d) mode %s/%s on res %Lu"       \
-               "(rc=%d) type %s remote %Lx)\n" , ## a,                  \
-               lock->l_resource->lr_namespace->ns_name, lock,           \
-               lock->l_refc, lock->l_readers, lock->l_writers,          \
-               ldlm_lockname[lock->l_granted_mode],                     \
-               ldlm_lockname[lock->l_req_mode],                         \
-               lock->l_resource->lr_name[0],                            \
-               atomic_read(&lock->l_resource->lr_refcount),             \
-               ldlm_typename[lock->l_resource->lr_type],                \
-               lock->l_remote_handle.addr);                             \
+        if (lock->l_resource == NULL)                                   \
+                CDEBUG(D_DLMTRACE, "### " format                        \
+                       " (UNKNOWN: lock %p(rc=%d/%d,%d) mode %s/%s on " \
+                       "res \?\? (rc=\?\?) type \?\?\? remote %Lx)\n" , \
+                       ## a, lock, lock->l_refc, lock->l_readers,       \
+                       lock->l_writers,                                 \
+                       ldlm_lockname[lock->l_granted_mode],             \
+                       ldlm_lockname[lock->l_req_mode],                 \
+                       lock->l_remote_handle.addr);                     \
+        else                                                            \
+                CDEBUG(D_DLMTRACE, "### " format                        \
+                       " (%s: lock %p(rc=%d/%d,%d) mode %s/%s on res "  \
+                       "%Lu (rc=%d) type %s remote %Lx)\n" , ## a,      \
+                       lock->l_resource->lr_namespace->ns_name, lock,   \
+                       lock->l_refc, lock->l_readers, lock->l_writers,  \
+                       ldlm_lockname[lock->l_granted_mode],             \
+                       ldlm_lockname[lock->l_req_mode],                 \
+                       lock->l_resource->lr_name[0],                    \
+                       atomic_read(&lock->l_resource->lr_refcount),     \
+                       ldlm_typename[lock->l_resource->lr_type],        \
+                       lock->l_remote_handle.addr);                     \
 } while (0)
 
 #define LDLM_DEBUG_NOLOCK(format, a...)                 \
@@ -220,6 +229,20 @@ int ldlm_extent_policy(struct ldlm_lock *, void *, ldlm_mode_t, void *);
 void ldlm_lock2handle(struct ldlm_lock *lock, struct lustre_handle *lockh);
 struct ldlm_lock *ldlm_handle2lock(struct lustre_handle *handle);
 void ldlm_lock2handle(struct ldlm_lock *lock, struct lustre_handle *lockh);
+
+#define LDLM_LOCK_PUT(lock)                     \
+do {                                            \
+        LDLM_DEBUG(lock, "put");                \
+        ldlm_lock_put(lock);                    \
+} while (0)
+
+#define LDLM_LOCK_GET(lock)                     \
+({                                              \
+        ldlm_lock_get(lock);                    \
+        LDLM_DEBUG(lock, "get");                \
+        lock;                                   \
+})
+
 void ldlm_lock_put(struct ldlm_lock *lock);
 void ldlm_lock_destroy(struct ldlm_lock *lock);
 void ldlm_lock2desc(struct ldlm_lock *lock, struct ldlm_lock_desc *desc);

@@ -86,18 +86,19 @@ static int ldlm_handle_enqueue(struct ptlrpc_request *req)
         lock->l_connection = ptlrpc_connection_addref(req->rq_connection);
         EXIT;
  out:
-        if (lock) {
-                LDLM_DEBUG(lock, "server-side enqueue handler, sending reply");
-                ldlm_lock_put(lock);
-        }
+        if (lock)
+                LDLM_DEBUG(lock, "server-side enqueue handler, sending reply"
+                           "(err=%d)", err);
         req->rq_status = err;
-        CDEBUG(D_INFO, "err = %d\n", err);
 
         if (ptlrpc_reply(req->rq_svc, req))
                 LBUG();
 
-        if (!err)
-                ldlm_reprocess_all(lock->l_resource);
+        if (lock) {
+                if (!err)
+                        ldlm_reprocess_all(lock->l_resource);
+                LDLM_LOCK_PUT(lock);
+        }
         LDLM_DEBUG_NOLOCK("server-side enqueue handler END (lock %p)", lock);
 
         return 0;
@@ -134,8 +135,8 @@ static int ldlm_handle_convert(struct ptlrpc_request *req)
 
         if (lock) {
                 ldlm_reprocess_all(lock->l_resource);
-                ldlm_lock_put(lock);
                 LDLM_DEBUG(lock, "server-side convert handler END");
+                LDLM_LOCK_PUT(lock);
         } else
                 LDLM_DEBUG_NOLOCK("server-side convert handler END");
 
@@ -147,7 +148,6 @@ static int ldlm_handle_cancel(struct ptlrpc_request *req)
         struct ldlm_request *dlm_req;
         struct ldlm_lock *lock;
         int rc;
-        char *ns_name;
         ENTRY;
 
         rc = lustre_pack_msg(0, NULL, NULL, &req->rq_replen, &req->rq_repmsg);
@@ -162,7 +162,6 @@ static int ldlm_handle_cancel(struct ptlrpc_request *req)
                 req->rq_status = ESTALE;
         } else {
                 LDLM_DEBUG(lock, "server-side cancel handler START");
-                ns_name = lock->l_resource->lr_namespace->ns_name;
                 ldlm_lock_cancel(lock);
                 req->rq_status = 0;
         }
@@ -172,9 +171,8 @@ static int ldlm_handle_cancel(struct ptlrpc_request *req)
 
         if (lock) {
                 ldlm_reprocess_all(lock->l_resource);
-                ldlm_lock_put(lock);
-                LDLM_DEBUG_NOLOCK("server-side cancel handler END (%s: lock "
-                                  "%p)", ns_name, lock);
+                LDLM_DEBUG(lock, "server-side cancel handler END");
+                LDLM_LOCK_PUT(lock);
         } else
                 LDLM_DEBUG_NOLOCK("server-side cancel handler END (lock %p)",
                                   lock);
@@ -240,9 +238,9 @@ static int ldlm_handle_callback(struct ptlrpc_request *req)
                         }
                 } else {
                         LDLM_DEBUG(lock, "Lock still has references, will be"
-                               " cancelled later");
+                                   " cancelled later");
                 }
-                ldlm_lock_put(lock);
+                LDLM_LOCK_PUT(lock);
         } else {
                 struct list_head rpc_list = LIST_HEAD_INIT(rpc_list);
 
@@ -264,7 +262,7 @@ static int ldlm_handle_callback(struct ptlrpc_request *req)
                 wake_up(&lock->l_waitq);
                 lock->l_resource->lr_tmp = NULL;
                 l_unlock(&lock->l_resource->lr_namespace->ns_lock);
-                ldlm_lock_put(lock);
+                LDLM_LOCK_PUT(lock);
 
                 ldlm_run_ast_work(&rpc_list);
         }

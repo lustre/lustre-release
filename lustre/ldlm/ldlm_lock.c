@@ -83,15 +83,17 @@ void ldlm_lock_put(struct ldlm_lock *lock)
 
         l_lock(nslock);
         lock->l_refc--;
-        //LDLM_DEBUG(lock, "after refc--");
+        LDLM_DEBUG(lock, "after refc--");
         if (lock->l_refc < 0)
                 LBUG();
 
         ldlm_resource_put(lock->l_resource);
         if (lock->l_parent)
-                ldlm_lock_put(lock->l_parent);
+                LDLM_LOCK_PUT(lock->l_parent);
 
         if (lock->l_refc == 0 && (lock->l_flags & LDLM_FL_DESTROYED)) {
+                lock->l_resource = NULL;
+                LDLM_DEBUG(lock, "final lock_put on destroyed lock, freeing");
                 if (lock->l_connection)
                         ptlrpc_put_connection(lock->l_connection);
                 CDEBUG(D_MALLOC, "kfreed 'lock': %d at %p (tot 1).\n",
@@ -132,7 +134,7 @@ void ldlm_lock_destroy(struct ldlm_lock *lock)
 
         lock->l_flags = LDLM_FL_DESTROYED;
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
-        ldlm_lock_put(lock);
+        LDLM_LOCK_PUT(lock);
         EXIT;
 }
 
@@ -176,7 +178,7 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_lock *parent,
         }
         /* this is the extra refcount, to prevent the lock
            evaporating */
-        ldlm_lock_get(lock);
+        LDLM_LOCK_GET(lock);
         RETURN(lock);
 }
 
@@ -223,7 +225,7 @@ void ldlm_lock2handle(struct ldlm_lock *lock, struct lustre_handle *lockh)
 
 struct ldlm_lock *ldlm_handle2lock(struct lustre_handle *handle)
 {
-        struct ldlm_lock *lock = NULL;
+        struct ldlm_lock *lock = NULL, *retval = NULL;
         ENTRY;
 
         if (!handle || !handle->addr)
@@ -235,16 +237,16 @@ struct ldlm_lock *ldlm_handle2lock(struct lustre_handle *handle)
 
         l_lock(&lock->l_resource->lr_namespace->ns_lock);
         if (lock->l_random != handle->cookie)
-                GOTO(out, handle = NULL);
+                GOTO(out, NULL);
 
         if (lock->l_flags & LDLM_FL_DESTROYED)
-                GOTO(out, handle = NULL);
+                GOTO(out, NULL);
 
-        ldlm_lock_get(lock);
+        retval = LDLM_LOCK_GET(lock);
         EXIT;
  out:
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
-        return lock;
+        return retval;
 }
 
 
@@ -431,7 +433,7 @@ static void ldlm_add_ast_work_item(struct ldlm_lock *lock,
         OBD_ALLOC(w, sizeof(*w));
         if (!w) {
                 LBUG();
-                return;
+                GOTO(out, 0);
         }
 
         if (new) {
@@ -440,7 +442,7 @@ static void ldlm_add_ast_work_item(struct ldlm_lock *lock,
                 ldlm_lock2desc(new, &w->w_desc);
         }
 
-        w->w_lock = ldlm_lock_get(lock);
+        w->w_lock = LDLM_LOCK_GET(lock);
         list_add(&w->w_list, lock->l_resource->lr_tmp);
  out:
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
@@ -453,7 +455,7 @@ void ldlm_lock_addref(struct lustre_handle *lockh, __u32 mode)
 
         lock = ldlm_handle2lock(lockh);
         ldlm_lock_addref_internal(lock, mode);
-        ldlm_lock_put(lock);
+        LDLM_LOCK_PUT(lock);
 }
 
 /* only called for local locks */
@@ -465,7 +467,7 @@ void ldlm_lock_addref_internal(struct ldlm_lock *lock, __u32 mode)
         else
                 lock->l_writers++;
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
-        ldlm_lock_get(lock);
+        LDLM_LOCK_GET(lock);
         LDLM_DEBUG(lock, "ldlm_lock_addref(%s)", ldlm_lockname[mode]);
 }
 
@@ -506,8 +508,8 @@ void ldlm_lock_decref(struct lustre_handle *lockh, __u32 mode)
         } else
                 l_unlock(&lock->l_resource->lr_namespace->ns_lock);
 
-        ldlm_lock_put(lock); /* matches the ldlm_lock_get in addref */
-        ldlm_lock_put(lock); /* matches the handle2lock above */
+        LDLM_LOCK_PUT(lock); /* matches the ldlm_lock_get in addref */
+        LDLM_LOCK_PUT(lock); /* matches the handle2lock above */
 
         EXIT;
 }
@@ -819,7 +821,7 @@ void ldlm_run_ast_work(struct list_head *rpc_list)
                 if (rc)
                         CERROR("Failed AST - should clean & disconnect "
                                "client\n");
-                ldlm_lock_put(w->w_lock);
+                LDLM_LOCK_PUT(w->w_lock);
                 list_del(&w->w_list);
                 OBD_FREE(w, sizeof(*w));
         }
@@ -852,7 +854,6 @@ void ldlm_reprocess_all(struct ldlm_resource *res)
         EXIT;
 }
 
-/* Must be called with lock and lock->l_resource unlocked */
 void ldlm_lock_cancel(struct ldlm_lock *lock)
 {
         struct ldlm_resource *res;
@@ -870,9 +871,9 @@ void ldlm_lock_cancel(struct ldlm_lock *lock)
         ldlm_resource_unlink_lock(lock);
         ldlm_lock_destroy(lock);
         l_unlock(&ns->ns_lock);
+        EXIT;
 }
 
-/* Must be called with lock and lock->l_resource unlocked */
 struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
                                         int *flags)
 {
