@@ -267,21 +267,23 @@ static inline void pre_smfs_inode(struct inode *inode,
 /* instantiate a file handle to the cache file */
 static inline void duplicate_file(struct file *dst_file, struct file *src_file)
 {
-        dst_file->f_pos = src_file->f_pos;
-        dst_file->f_mode = src_file->f_mode;
-        dst_file->f_flags = src_file->f_flags;
-        dst_file->f_owner  = src_file->f_owner;
-        dst_file->f_vfsmnt = src_file->f_vfsmnt;
+	if (dst_file && src_file) {
+		dst_file->f_pos = src_file->f_pos;
+		dst_file->f_mode = src_file->f_mode;
+		dst_file->f_flags = src_file->f_flags;
+		dst_file->f_owner  = src_file->f_owner;
+		dst_file->f_vfsmnt = src_file->f_vfsmnt;
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-        dst_file->f_reada = src_file->f_reada;
-        dst_file->f_ramax = src_file->f_ramax;
-        dst_file->f_raend = src_file->f_raend;
-        dst_file->f_ralen = src_file->f_ralen;
-        dst_file->f_rawin = src_file->f_rawin;
-#else
-        dst_file->f_ra = src_file->f_ra;
-#endif
+	#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+		dst_file->f_reada = src_file->f_reada;
+		dst_file->f_ramax = src_file->f_ramax;
+		dst_file->f_raend = src_file->f_raend;
+		dst_file->f_ralen = src_file->f_ralen;
+		dst_file->f_rawin = src_file->f_rawin;
+	#else
+		dst_file->f_ra = src_file->f_ra;
+	#endif
+	}
 }
 
 static inline void duplicate_sb(struct super_block *dst_sb,
