@@ -36,7 +36,7 @@
  #endif	/* _LINUX_EXTN_FS_SB */
 --- linux/fs/extN/super.c.orig	Wed Mar 12 14:05:30 2003
 +++ linux/fs/extN/super.c	Thu Mar 13 19:05:26 2003
-@@ -396,6 +396,200 @@
+@@ -396,6 +396,207 @@
  	}
  }
  
@@ -98,7 +98,7 @@
 +
 +			list_del_init(&inode->i_dentry);
 +			spin_unlock(&sbi->s_delete_lock);
-+			extN_debug("%s deleting inode %lu, %lu blocks\n",
++			printk(KERN_DEBUG "%s delete ino %lu blk %lu\n",
 +				   tsk->comm, inode->i_ino, blocks);
 +
 +			iput(inode);
@@ -212,8 +212,14 @@
 +	}
 +	J_ASSERT(new_inode != old_inode);
 +
-+	list_del(&EXTN_I(old_inode)->i_orphan);
-+	list_add(&EXTN_I(new_inode)->i_orphan, &sbi->s_orphan);
++	J_ASSERT(!list_empty(&EXTN_I(old_inode)->i_orphan));
++	/* Ugh.  We need to insert new_inode into the same spot on the list
++	 * as old_inode was, to ensure the in-memory orphan list is still
++	 * the same as the on-disk orphan list.
++	 */
++	EXTN_I(new_inode)->i_orphan = EXTN_I(old_inode)->i_orphan;
++	EXTN_I(new_inode)->i_orphan.next->prev = &EXTN_I(new_inode)->i_orphan;
++	EXTN_I(new_inode)->i_orphan.prev->next = &EXTN_I(new_inode)->i_orphan;
 +	EXTN_I(new_inode)->i_state |= EXTN_STATE_DELETE;
 +	up(&sbi->s_orphan_lock);
 +
@@ -222,6 +228,7 @@
 +	printk(KERN_DEBUG "delete inode %lu (%lu blocks) by thread\n",
 +	       new_inode->i_ino, blocks);
 +	spin_lock(&sbi->s_delete_lock);
++	J_ASSERT(list_empty(&new_inode->i_dentry));
 +	list_add_tail(&new_inode->i_dentry, &sbi->s_delete_list);
 +	sbi->s_delete_blocks += blocks;
 +	sbi->s_delete_inodes++;
