@@ -63,13 +63,13 @@
 +		bitmap_nr = load_inode_bitmap (sb, i);
 +		if (bitmap_nr < 0)
 +			goto fail;
-+                
++
 +		bh = sbi->s_inode_bitmap[bitmap_nr];
 +
 +		BUFFER_TRACE(bh, "get_write_access");
 +		err = extN_journal_get_write_access(handle, bh);
 +		if (err) goto fail;
-+                
++
 +		if (extN_set_bit(j, bh->b_data)) {
 +			printk(KERN_ERR "wantedi %d not available",
 +			       wantedi);
@@ -101,36 +101,38 @@
  		extN_error (sb, "extN_new_inode",
 --- lustre/extN-clean/ioctl.c	2002-12-28 23:56:42.000000000 -0500
 +++ lustre/extN/ioctl.c	2002-12-30 06:29:39.000000000 -0500
-@@ -24,7 +24,28 @@
+@@ -24,6 +24,31 @@
  	extN_debug ("cmd = %u, arg = %lu\n", cmd, arg);
  
  	switch (cmd) {
--	case EXTN_IOC_GETFLAGS:
-+        case EXTN_IOC_CREATE_INUM: {
-+                char name[32];
-+                struct dentry *dchild, *dparent;
-+                struct inode *ichild;
-+                int rc = 0;
++	case EXTN_IOC_CREATE_INUM: {
++		char name[32];
++		struct dentry *dchild, *dparent;
++		int rc = 0;
 +
-+                dparent = list_entry(inode->i_dentry.next, struct dentry,
-+                                     d_alias);
-+                snprintf(name, sizeof name, "%d", (int)arg);
-+                dchild = lookup_one_len(name, dparent, strlen(name));
-+                dchild->d_fsdata = (void *)(int)arg;
-+                rc = vfs_create(inode, dchild, 0644);
-+                if (rc) {
-+                        printk(KERN_ERR "vfs_create: %d\n", rc);
-+                } else if (dchild->d_inode->i_ino != (int)arg) {
-+                        rc = -EEXIST;
-+                }
-+                iput(ichild);
-+                dput(dchild);
-+                return rc;
-+        }
-+        case EXTN_IOC_GETFLAGS:
++		dparent = list_entry(inode->i_dentry.next, struct dentry,
++				     d_alias);
++		snprintf(name, sizeof name, "%lu", arg);
++		dchild = lookup_one_len(name, dparent, strlen(name));
++		if (dchild->d_inode) {
++			printk(KERN_ERR "%*s/%lu already exists (ino %lu)\n",
++			       dparent->d_name.len, dparent->d_name.name, arg,
++			       dchild->d_inode->i_ino);
++			rc = -EEXIST;
++		} else {
++			dchild->d_fsdata = (void *)arg;
++			rc = vfs_create(inode, dchild, 0644);
++			if (rc)
++				printk(KERN_ERR "vfs_create: %d\n", rc);
++			else if (dchild->d_inode->i_ino != arg)
++				rc = -EEXIST;
++		}
++		dput(dchild);
++		return rc;
++	}
+ 	case EXTN_IOC_GETFLAGS:
  		flags = ei->i_flags & EXTN_FL_USER_VISIBLE;
  		return put_user(flags, (int *) arg);
- 	case EXTN_IOC_SETFLAGS: {
 --- lustre/include/linux/extN_fs.h~	2002-12-30 06:01:43.000000000 -0500
 +++ lustre/include/linux/extN_fs.h	2002-12-30 06:02:51.000000000 -0500
 @@ -200,6 +200,7 @@
@@ -155,6 +157,6 @@
  
  #endif	/* __KERNEL__ */
  
-+#define EXTN_IOC_CREATE_INUM            _IOW('f', 5, long)
++#define EXTN_IOC_CREATE_INUM			_IOW('f', 5, long)
 +
  #endif	/* _LINUX_EXTN_FS_H */
