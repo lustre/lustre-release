@@ -573,6 +573,18 @@ gmnal_small_tx_callback(gm_port_t *gm_port, void *context, gm_status_t status)
 		default:
 			CDEBUG(D_ERROR, "Unknown send error\n");
 	}
+
+	/*
+	 *	TO DO
+	 *	If this is a large message init,
+	 *	we're not finished with the data yet,
+	 *	so can't call lib_finalise.
+	 *	However, we're also holding on to a 
+	 *	stxd here (to keep track of the source
+	 *	iovec only). Should use another structure
+	 *	to keep track of iovec and return stxd to 
+	 *	free list earlier.
+	 */
 	if (stxd->type == GMNAL_LARGE_MESSAGE_INIT) {
 		CDEBUG(D_INFO, "large transmit done\n");
 		return;
@@ -826,6 +838,9 @@ gmnal_large_rx(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie,
 	 *	get the data,
 	 *	tell the sender that we got the data
 	 *	then tell the receiver we got the data
+	 *	TO DO
+	 *	If the iovecs match, could interleave 
+	 *	gm_registers and gm_gets for each element
 	 */
 	nriov_dup = nriov;
 	riov_dup = riov;
@@ -963,8 +978,6 @@ gmnal_copyiov(int do_copy, gmnal_srxd_t *srxd, int nsiov,
 		 *	Set pointer in stxd to srxd so callback count in srxd
 		 *	can be decremented to find last callback to complete
 		 */
-		stxd = gmnal_get_stxd(nal_data, 1);
-		stxd->srxd = srxd;
 		CDEBUG(D_INFO, "gmnal_copyiov source node is G[%u]L[%d]\n", 
 		       srxd->gm_source_node, source_node);
 	}
@@ -976,6 +989,8 @@ gmnal_copyiov(int do_copy, gmnal_srxd_t *srxd, int nsiov,
 			ncalls++;
 			if (do_copy) {
 				CDEBUG(D_INFO, "slen>rlen\n");
+				stxd = gmnal_get_stxd(nal_data, 1);
+				stxd->srxd = srxd;
 				GMNAL_GM_LOCK(nal_data);
 				/* 
 				 *	funny business to get rid 
@@ -1002,6 +1017,8 @@ gmnal_copyiov(int do_copy, gmnal_srxd_t *srxd, int nsiov,
 			ncalls++;
 			if (do_copy) {
 				CDEBUG(D_INFO, "slen<rlen\n");
+				stxd = gmnal_get_stxd(nal_data, 1);
+				stxd->srxd = srxd;
 				GMNAL_GM_LOCK(nal_data);
 				sbuf_long = (unsigned long) sbuf;
 				remote_ptr = (gm_remote_ptr_t)sbuf_long;
@@ -1023,6 +1040,8 @@ gmnal_copyiov(int do_copy, gmnal_srxd_t *srxd, int nsiov,
 			ncalls++;
 			if (do_copy) {
 				CDEBUG(D_INFO, "rlen=slen\n");
+				stxd = gmnal_get_stxd(nal_data, 1);
+				stxd->srxd = srxd;
 				GMNAL_GM_LOCK(nal_data);
 				sbuf_long = (unsigned long) sbuf;
 				remote_ptr = (gm_remote_ptr_t)sbuf_long;
