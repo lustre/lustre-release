@@ -277,6 +277,7 @@ int recovd_setup(struct recovd_obd *recovd)
                    recovd->recovd_state == RECOVD_READY);
 
         ptlrpc_recovd = recovd;
+        class_signal_connection_failure = recovd_conn_fail;
 
         RETURN(0);
 }
