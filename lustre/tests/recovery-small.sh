@@ -134,4 +134,11 @@ drop_reply "cat /mnt/lustre/resolv.conf > /dev/null"
 drop_request "mv /mnt/lustre/resolv.conf /mnt/lustre/renamed"
 drop_reply "mv /mnt/lustre/renamed /mnt/lustre/renamed-again"
 
+drop_request "mlink /mnt/lustre/renamed-again /mnt/lustre/link1"
+drop_reply "mlink /mnt/lustre/renamed-again /mnt/lustre/link2"
+
+drop_request "munlink /mnt/lustre/link1"
+drop_reply "munlink /mnt/lustre/link2"
+
+
 cleanup
