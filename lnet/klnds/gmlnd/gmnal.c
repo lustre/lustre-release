@@ -100,7 +100,7 @@ kgmnal_rx_t *kgm_add_recv(kgmnal_data_t *data,int ndx)
         PORTAL_ALLOC(conn, sizeof(kgmnal_rx_t));
         /* Check for out of mem here */
         if (conn==NULL) {
-                        printk("kgm_add_recv: memory alloc failed\n");
+                        printk("LustreError: kgm_add_recv: memory alloc failed\n");
                         return NULL;
         }
 
@@ -184,7 +184,7 @@ kgmnal_initialize(void)
         /* Allocate transmit descriptors */
         PORTAL_ALLOC (kgmnal_data.kgm_trans, sizeof(kgmnal_tx_t)*TXMSGS);
         if (kgmnal_data.kgm_trans==NULL) {
-                printk("kgmnal: init: failed to allocate transmit "
+                printk("LustreError: kgmnal: init: failed to allocate transmit "
                        "descriptors\n");
                 return -1;
         }

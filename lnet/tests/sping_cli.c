@@ -219,11 +219,11 @@ pingcli_start(struct portal_ioctl_data *args)
         set_current_state (TASK_INTERRUPTIBLE);
         rc = schedule_timeout (20 * args->ioc_timeout);
         if (rc == 0) {
-                printk (" Time out on the server\n");
+                printk ("LustreError: Time out on the server\n");
                 pingcli_shutdown (2);
                 return NULL;
         } else
-                printk("Received respose from the server \n");
+                printk("Lustre: Received respose from the server \n");
 
 
         pingcli_shutdown (2);

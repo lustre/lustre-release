@@ -467,7 +467,7 @@ static int init_kportals_module(void)
 
         rc = portals_debug_init(5 * 1024 * 1024);
         if (rc < 0) {
-                printk(KERN_ERR "portals_debug_init: %d\n", rc);
+                printk(KERN_ERR "LustreError: portals_debug_init: %d\n", rc);
                 return (rc);
         }
 
@@ -524,7 +524,7 @@ static void exit_kportals_module(void)
 
         rc = portals_debug_cleanup();
         if (rc)
-                printk(KERN_ERR "portals_debug_cleanup: %d\n", rc);
+                printk(KERN_ERR "LustreError: portals_debug_cleanup: %d\n", rc);
 }
 
 EXPORT_SYMBOL(lib_dispatch);

@@ -322,7 +322,7 @@ kqswnal_finalise (void)
 
 	CDEBUG (D_MALLOC, "done kmem %d\n", atomic_read(&portal_kmemory));
 
-	printk (KERN_INFO "Routing QSW NAL unloaded (final mem %d)\n",
+	printk (KERN_INFO "Lustre: Routing QSW NAL unloaded (final mem %d)\n",
                 atomic_read(&portal_kmemory));
 }
 
@@ -630,7 +630,7 @@ kqswnal_initialise (void)
 	PORTAL_SYMBOL_REGISTER(kqswnal_ni);
 	kqswnal_data.kqn_init = KQN_INIT_ALL;
 
-	printk(KERN_INFO "Routing QSW NAL loaded on node %d of %d "
+	printk(KERN_INFO "Lustre: Routing QSW NAL loaded on node %d of %d "
 	       "(Routing %s, initial mem %d)\n", 
 	       kqswnal_data.kqn_elanid, kqswnal_data.kqn_nnodes,
 	       kpr_routing (&kqswnal_data.kqn_router) ? "enabled" : "disabled",

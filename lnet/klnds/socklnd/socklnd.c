@@ -160,7 +160,7 @@ ksocknal_bind_irq (unsigned int irq)
         snprintf (cmdline, sizeof (cmdline),
                   "echo %d > /proc/irq/%u/smp_affinity", 1 << info->ksni_sched, irq);
 
-        printk (KERN_INFO "Binding irq %u to CPU %d with cmd: %s\n",
+        printk (KERN_INFO "Lustre: Binding irq %u to CPU %d with cmd: %s\n",
                 irq, info->ksni_sched, cmdline);
 
         /* FIXME: Find a better method of setting IRQ affinity...
@@ -1349,7 +1349,7 @@ ksocknal_module_fini (void)
         CDEBUG(D_MALLOC, "after NAL cleanup: kmem %d\n",
                atomic_read (&portal_kmemory));
 
-        printk(KERN_INFO "Routing socket NAL unloaded (final mem %d)\n",
+        printk(KERN_INFO "Lustre: Routing socket NAL unloaded (final mem %d)\n",
                atomic_read(&portal_kmemory));
 }
 
@@ -1564,7 +1564,7 @@ ksocknal_module_init (void)
         /* flag everything initialised */
         ksocknal_data.ksnd_init = SOCKNAL_INIT_ALL;
 
-        printk(KERN_INFO "Routing socket NAL loaded (Routing %s, initial "
+        printk(KERN_INFO "Lustre: Routing socket NAL loaded (Routing %s, initial "
                "mem %d)\n",
                kpr_routing (&ksocknal_data.ksnd_router) ?
                "enabled" : "disabled", pkmem);

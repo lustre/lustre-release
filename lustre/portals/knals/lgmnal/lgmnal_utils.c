@@ -44,26 +44,26 @@ void lgmnal_print(const char *fmt, ...)
 
 
 	va_start(ap, fmt);
-	sprintf(fixedbuf, "LGMNAL::");
-	len = vsnprintf(fixedbuf+8, DEFAULT_LEN-8, fmt, ap);
-	if ((len+8) >= DEFAULT_LEN) {
-		PORTAL_ALLOC(varbuf, len+1+8);
+	sprintf(fixedbuf, "Lustre: LGMNAL::");
+	len = vsnprintf(fixedbuf+16, DEFAULT_LEN-16, fmt, ap);
+	if ((len+16) >= DEFAULT_LEN) {
+		PORTAL_ALLOC(varbuf, len+1+16);
 		if (!varbuf) {
-			printk("lgmnal_cb_printf Failed to malloc\n");
-			printk("Truncated message is\n");
+			printk("LustreError: lgmnal_cb_printf Failed to malloc\n");
+			printk("Lustre: Truncated message is\n");
 			printk(fixedbuf);
 			va_end(ap);
 			return;
 		}
-		sprintf(varbuf, "LGMNAL::");
-		len = vsnprintf(varbuf+8, len+1, fmt, ap);
+		sprintf(varbuf, "Lustre: LGMNAL::");
+		len = vsnprintf(varbuf+16, len+1, fmt, ap);
 	} else {
 		varbuf = fixedbuf;
 	}
 	va_end(ap);
 	printk(varbuf);
 	if (fixedbuf != varbuf)
-		PORTAL_FREE(varbuf, len+1+8);
+		PORTAL_FREE(varbuf, len+1+16);
 	return;
 }
 	

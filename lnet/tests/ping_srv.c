@@ -121,7 +121,7 @@ int pingsrv_thread(void *arg)
                 
                 
                 if(magic != 0xdeadbeef) {
-                        printk("Unexpected Packet to the server\n");
+                        printk("LustreError: Unexpected Packet to the server\n");
                         
                 } 
                 memcpy (server->in_buf, &ping_bulk_magic, sizeof(ping_bulk_magic));
@@ -183,7 +183,7 @@ static int pingsrv_callback(ptl_event_t *ev)
         }
         server->evnt = *ev;
         
-        printk ("received ping from nid "LPX64" "
+        printk ("Lustre: received ping from nid "LPX64" "
                "(off=%u rlen=%u mlen=%u head=%x seq=%d size=%d)\n",
                ev->initiator.nid, ev->offset, ev->rlength, ev->mlength,
                *((int *)(ev->mem_desc.start + ev->offset)),

@@ -438,7 +438,7 @@ ktoenal_module_fini (void)
         CDEBUG(D_MALLOC, "after NAL cleanup: kmem %d\n",
                atomic_read (&portal_kmemory));
 
-        printk(KERN_INFO "Routing socket NAL unloaded (final mem %d)\n",
+        printk(KERN_INFO "Lustre: Routing socket NAL unloaded (final mem %d)\n",
                atomic_read(&portal_kmemory));
 }
 
@@ -612,7 +612,7 @@ ktoenal_module_init (void)
         /* flag everything initialised */
         ktoenal_data.ksnd_init = SOCKNAL_INIT_ALL;
 
-	printk(KERN_INFO"Routing TOE NAL loaded (Routing %s, initial mem %d)\n",
+	printk(KERN_INFO "Lustre: Routing TOE NAL loaded (Routing %s, initial mem %d)\n",
 	       kpr_routing(&ktoenal_data.ksnd_router) ? "enabled" : "disabled",
                pkmem);
 

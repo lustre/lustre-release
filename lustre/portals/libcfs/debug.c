@@ -244,7 +244,7 @@ int portals_do_debug_dumplog(void *arg)
                        PTR_ERR(file));
                 GOTO(out, PTR_ERR(file));
         } else {
-                printk(KERN_ALERT "dumping log to %s ... writing ...\n",
+                printk(KERN_ALERT "LustreError: dumping log to %s ... writing ...\n",
                        debug_file_name);
         }
 
@@ -259,7 +259,7 @@ int portals_do_debug_dumplog(void *arg)
         } else {
                 rc = file->f_op->write(file, debug_buf, debug_off,&file->f_pos);
         }
-        printk("wrote %d bytes\n", rc);
+        printk("LustreError: wrote %d bytes\n", rc);
         set_fs(oldfs);
 
         rc = file->f_op->fsync(file, file->f_dentry, 1);
@@ -293,7 +293,7 @@ int portals_debug_daemon(void *arg)
                 CERROR("cannot open %s for logging", debug_daemon_file_path);
                 GOTO(out1, PTR_ERR(file));
         } else {
-                printk(KERN_ALERT "daemon dumping log to %s ... writing ...\n",
+                printk(KERN_ALERT "LustreError: daemon dumping log to %s ... writing ...\n",
                        debug_daemon_file_path);
         }
 
@@ -340,7 +340,7 @@ int portals_debug_daemon(void *arg)
                                                size, &file->f_pos);
                         if (rc < 0) {
                                 printk(KERN_ALERT
-                                           "Debug_daemon write error %d\n", rc);
+                                           "LustreError: Debug_daemon write error %d\n", rc);
                                 goto out;
                         }
                         start += rc;
@@ -362,7 +362,7 @@ int portals_debug_daemon(void *arg)
                         rc = file->f_op->fsync(file, file->f_dentry, 1);
                         if (rc < 0) {
                                 printk(KERN_ALERT
-                                       "Debug_daemon sync error %d\n", rc);
+                                       "LustreError: Debug_daemon sync error %d\n", rc);
                                 goto out;
                         }
                         if (debug_daemon_state.stopped)
@@ -406,12 +406,12 @@ void portals_debug_print(void)
 
         while (start1 < end1) {
                 int count = MIN(1024, end1 - start1);
-                printk("%*s", count, start1);
+                printk("LustreError: %*s", count, start1);
                 start1 += 1024;
         }
         while (start2 < end2) {
                 int count = MIN(1024, end2 - start2);
-                printk("%*s", count, start2);
+                printk("LustreError: %*s", count, start2);
                 start2 += 1024;
         }
 }
@@ -426,7 +426,7 @@ void portals_debug_dumplog(void)
         rc = kernel_thread(portals_do_debug_dumplog,
                            NULL, CLONE_VM | CLONE_FS | CLONE_FILES);
         if (rc < 0) {
-                printk(KERN_ERR "cannot start dump thread\n");
+                printk(KERN_ERR "LustreError: cannot start dump thread\n");
                 return;
         }
         sleep_on(&debug_ctlwq);
@@ -450,7 +450,7 @@ int portals_debug_daemon_start(char *file, unsigned int size)
         debug_daemon_state.lctl_event = 0;
         rc = kernel_thread(portals_debug_daemon, NULL, 0);
         if (rc < 0) {
-                printk(KERN_ERR "cannot start debug daemon thread\n");
+                printk(KERN_ERR "LustreError: cannot start debug daemon thread\n");
                 strncpy(debug_daemon_file_path, "\0", 1);
                 return rc;
         }
@@ -753,7 +753,7 @@ portals_debug_msg(int subsys, int mask, char *file, const char *fn,
         unsigned long debug_off;
 
         if (debug_buf == NULL) {
-                printk("portals_debug_msg: debug_buf is NULL!\n");
+                printk("LustreError: portals_debug_msg: debug_buf is NULL!\n");
                 return;
         }
 
@@ -784,7 +784,7 @@ portals_debug_msg(int subsys, int mask, char *file, const char *fn,
         max_nob = debug_size - debug_off + DEBUG_OVERFLOW;
         if (max_nob <= 0) {
                 spin_unlock_irqrestore(&portals_debug_lock, flags);
-                printk("logic error in portals_debug_msg: <0 bytes to write\n");
+                printk("LustreError: logic error in portals_debug_msg: <0 bytes to write\n");
                 return;
         }
 
@@ -828,11 +828,13 @@ portals_debug_msg(int subsys, int mask, char *file, const char *fn,
         /* Print to console, while msg is contiguous in debug_buf */
         /* NB safely terminated see above */
         if ((mask & D_EMERG) != 0)
-                printk(KERN_EMERG "%s", debug_buf + debug_off + prefix_nob);
+                printk(KERN_EMERG "LustreError: %s",
+                       debug_buf + debug_off + prefix_nob);
         if ((mask & D_ERROR) != 0)
-                printk(KERN_ERR   "%s", debug_buf + debug_off + prefix_nob);
+                printk(KERN_ERR   "LustreError: %s",
+                       debug_buf + debug_off + prefix_nob);
         else if (portal_printk)
-                printk("<%d>%s", portal_printk, debug_buf+debug_off+prefix_nob);
+                printk("<%d>LustreError: %s", portal_printk, debug_buf+debug_off+prefix_nob);
         base_offset = debug_off & 0xFFFF;
 
         debug_off += prefix_nob + msg_nob;
@@ -855,7 +857,7 @@ out:
 
 void portals_debug_set_level(unsigned int debug_level)
 {
-        printk("Setting portals debug level to %08x\n", debug_level);
+        printk("Lustre: Setting portals debug level to %08x\n", debug_level);
         portal_debug = debug_level;
 }
 

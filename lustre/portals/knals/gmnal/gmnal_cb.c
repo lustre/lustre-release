@@ -108,7 +108,7 @@ kgmnal_printf(nal_cb_t *nal, const char *fmt, ...)
                 vsnprintf( msg, sizeof(msg), fmt, ap );
                 va_end( ap );
 
-                printk("CPUId: %d %s",smp_processor_id(), msg);
+                printk("Lustre: CPUId: %d %s",smp_processor_id(), msg);
         }
 }
 
@@ -278,7 +278,7 @@ kgmnal_send(nal_cb_t        *nal,
         } else if (buf_len <= MSG_LEN_LARGE) {
                 buf_size = MSG_SIZE_LARGE;
         } else {
-                printk("kgmnal:request exceeds TX MTU size (%d).\n",
+                printk("LustreError: kgmnal:request exceeds TX MTU size (%d).\n",
                        MSG_SIZE_LARGE);
                 rc = -1;
                 goto send_exit;
