@@ -111,7 +111,7 @@
   */
 -static inline int do_follow_link(struct dentry *dentry, struct nameidata *nd)
 +static inline int do_follow_link(struct dentry *dentry, struct nameidata *nd, 
-+                                 struct lookup_intent *it)
++				 struct lookup_intent *it)
  {
  	int err;
  	if (current->link_count >= 5)
@@ -120,14 +120,14 @@
  	current->total_link_count++;
  	UPDATE_ATIME(dentry->d_inode);
 -	err = dentry->d_inode->i_op->follow_link(dentry, nd);
-+        if (dentry->d_inode->i_op->follow_link2)
-+                err = dentry->d_inode->i_op->follow_link2(dentry, nd, it);
-+        else 
-+                err = dentry->d_inode->i_op->follow_link(dentry, nd);
++	if (dentry->d_inode->i_op->follow_link2)
++		err = dentry->d_inode->i_op->follow_link2(dentry, nd, it);
++	else 
++		err = dentry->d_inode->i_op->follow_link(dentry, nd);
  	current->link_count--;
  	return err;
  loop:
-+        intent_release(dentry, it);
++	intent_release(dentry, it);
  	path_release(nd);
  	return -ELOOP;
  }
@@ -185,15 +185,14 @@
  			err = PTR_ERR(dentry);
  			if (IS_ERR(dentry))
  				break;
-@@ -594,8 +630,10 @@ last_component:
+@@ -594,8 +630,9 @@ last_component:
  			;
  		inode = dentry->d_inode;
  		if ((lookup_flags & LOOKUP_FOLLOW)
 -		    && inode && inode->i_op && inode->i_op->follow_link) {
 -			err = do_follow_link(dentry, nd);
 +		    && inode && inode->i_op && 
-+                    (inode->i_op->follow_link || 
-+                     inode->i_op->follow_link2)) {
++		    (inode->i_op->follow_link || inode->i_op->follow_link2)) {
 +			err = do_follow_link(dentry, nd, it);
  			dput(dentry);
  			if (err)
@@ -212,8 +211,8 @@
  		dput(dentry);
  		break;
  	}
-+        if (err)
-+                intent_release(nd->dentry, it);
++	if (err)
++		intent_release(nd->dentry, it);
  	path_release(nd);
  return_err:
  	return err;
@@ -365,7 +364,7 @@
  		goto exit_dput;
 -	if (dentry->d_inode->i_op && dentry->d_inode->i_op->follow_link)
 +	if (dentry->d_inode->i_op && (dentry->d_inode->i_op->follow_link || 
-+                                      dentry->d_inode->i_op->follow_link2))
++				      dentry->d_inode->i_op->follow_link2))
  		goto do_link;
  
  	dput(nd->dentry);
@@ -440,17 +439,17 @@
  		goto out;
 -	dentry = lookup_create(&nd, 0);
 +
-+        if (nd.dentry->d_inode->i_op->mknod2) {
-+                struct inode_operations *op = nd.dentry->d_inode->i_op;
-+                error = op->mknod2(nd.dentry->d_inode, 
-+                                   nd.last.name, 
-+                                   nd.last.len,
-+                                   mode, dev);
-+                /* the file system want to use normal vfs path now */
-+                if (error != -EOPNOTSUPP)
-+                        goto out2;
-+        }
-+        
++	if (nd.dentry->d_inode->i_op->mknod2) {
++		struct inode_operations *op = nd.dentry->d_inode->i_op;
++		error = op->mknod2(nd.dentry->d_inode, 
++				   nd.last.name, 
++				   nd.last.len,
++				   mode, dev);
++		/* the file system want to use normal vfs path now */
++		if (error != -EOPNOTSUPP)
++			goto out2;
++	}
++
 +	dentry = lookup_create(&nd, 0, &it);
  	error = PTR_ERR(dentry);
  
@@ -480,16 +479,16 @@
  		if (error)
  			goto out;
 -		dentry = lookup_create(&nd, 1);
-+                if (nd.dentry->d_inode->i_op->mkdir2) {
-+                        struct inode_operations *op = nd.dentry->d_inode->i_op;
-+                        error = op->mkdir2(nd.dentry->d_inode, 
-+                                           nd.last.name, 
-+                                           nd.last.len,
-+                                           mode);
-+                        /* the file system want to use normal vfs path now */
-+                        if (error != -EOPNOTSUPP)
-+                                goto out2;
-+                }
++		if (nd.dentry->d_inode->i_op->mkdir2) {
++			struct inode_operations *op = nd.dentry->d_inode->i_op;
++			error = op->mkdir2(nd.dentry->d_inode, 
++					   nd.last.name, 
++					   nd.last.len,
++					   mode);
++			/* the file system want to use normal vfs path now */
++			if (error != -EOPNOTSUPP)
++				goto out2;
++		}
 +		dentry = lookup_create(&nd, 1, &it);
  		error = PTR_ERR(dentry);
  		if (!IS_ERR(dentry)) {
@@ -518,15 +517,15 @@
  			error = -EBUSY;
  			goto exit1;
  	}
-+        if (nd.dentry->d_inode->i_op->rmdir2) {
-+                struct inode_operations *op = nd.dentry->d_inode->i_op;
-+                error = op->rmdir2(nd.dentry->d_inode, 
-+                                   nd.last.name, 
-+                                   nd.last.len);
-+                /* the file system want to use normal vfs path now */
-+                if (error != -EOPNOTSUPP)
-+                        goto exit1;
-+        }
++	if (nd.dentry->d_inode->i_op->rmdir2) {
++		struct inode_operations *op = nd.dentry->d_inode->i_op;
++		error = op->rmdir2(nd.dentry->d_inode, 
++				   nd.last.name, 
++				   nd.last.len);
++		/* the file system want to use normal vfs path now */
++		if (error != -EOPNOTSUPP)
++			goto exit1;
++	}
  	down(&nd.dentry->d_inode->i_sem);
 -	dentry = lookup_hash(&nd.last, nd.dentry);
 +	dentry = lookup_hash_it(&nd.last, nd.dentry, &it);
@@ -1290,24 +1289,24 @@
  	int (*link) (struct dentry *,struct inode *,struct dentry *);
 +	int (*link2) (struct inode *,struct inode *, const char *, int);
  	int (*unlink) (struct inode *,struct dentry *);
-+	int (*unlink2) (struct inode *, char *, int);
++	int (*unlink2) (struct inode *, const char *, int);
  	int (*symlink) (struct inode *,struct dentry *,const char *);
-+	int (*symlink2) (struct inode *,const char *, int, const char *);
++	int (*symlink2) (struct inode *, const char *, int, const char *);
  	int (*mkdir) (struct inode *,struct dentry *,int);
-+	int (*mkdir2) (struct inode *,char *, int,int);
++	int (*mkdir2) (struct inode *, const char *, int,int);
  	int (*rmdir) (struct inode *,struct dentry *);
-+	int (*rmdir2) (struct inode *, char *, int);
++	int (*rmdir2) (struct inode *, const char *, int);
  	int (*mknod) (struct inode *,struct dentry *,int,int);
-+	int (*mknod2) (struct inode *,char *, int,int,int);
++	int (*mknod2) (struct inode *, const char *, int,int,int);
  	int (*rename) (struct inode *, struct dentry *,
  			struct inode *, struct dentry *);
 +	int (*rename2) (struct inode *, struct inode *, 
-+			char *oldname, int oldlen, 
-+                        char *newname, int newlen);
++			const char *oldname, int oldlen, 
++			const char *newname, int newlen);
  	int (*readlink) (struct dentry *, char *,int);
  	int (*follow_link) (struct dentry *, struct nameidata *);
 +	int (*follow_link2) (struct dentry *, struct nameidata *, 
-+                            struct lookup_intent *it);
++			     struct lookup_intent *it);
  	void (*truncate) (struct inode *);
  	int (*permission) (struct inode *, int);
  	int (*revalidate) (struct dentry *);
@@ -1333,7 +1332,7 @@
  extern int vfs_readlink(struct dentry *, char *, int, const char *);
  extern int vfs_follow_link(struct nameidata *, const char *);
 +extern int vfs_follow_link_it(struct nameidata *, const char *, 
-+                              struct lookup_intent *it);
++			      struct lookup_intent *it);
  extern int page_readlink(struct dentry *, char *, int);
  extern int page_follow_link(struct dentry *, struct nameidata *);
  extern struct inode_operations page_symlink_inode_operations;
