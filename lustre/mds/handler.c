@@ -667,6 +667,7 @@ out:
 static int mds_open(struct ptlrpc_request *req)
 {
         struct dentry *de;
+        struct inode *inode;
         struct mds_body *body;
         struct file *file;
         struct vfsmount *mnt;
@@ -713,11 +714,12 @@ static int mds_open(struct ptlrpc_request *req)
                 RETURN(0);
         }
 
+        inode = de->d_inode;
+
         /* check if this inode has seen a delayed object creation */
         if (req->rq_reqmsg->bufcount > 1) {
                 void *handle;
                 struct lov_mds_md *lmm;
-                struct inode *inode = de->d_inode;
                 struct obd_run_ctxt saved;
                 struct obd_ucred uc;
                 int rc, rc2;
@@ -737,7 +739,7 @@ static int mds_open(struct ptlrpc_request *req)
                 if (!rc)
                         rc = mds_update_last_rcvd(mds, handle, req);
 
-                rc2 = mds_fs_commit(mds, de->d_inode, handle);
+                rc2 = mds_fs_commit(mds, inode, handle);
                 if (rc2 && !rc)
                         rc = rc2;
                 pop_ctxt(&saved);
@@ -764,6 +766,8 @@ out_md:
         list_add(&mfd->mfd_list, &med->med_open_head);
 
         body = lustre_msg_buf(req->rq_repmsg, 0);
+        mds_pack_inode2fid(&body->fid1, inode);
+        mds_pack_inode2body(body, inode);
         /* FIXME: need to have cookies involved here */
         body->extra = (__u64) (unsigned long)file;
         RETURN(0);
@@ -1117,7 +1121,7 @@ static int mds_setup(struct obd_device *obddev, obd_count len, void *buf)
 
         mds->mds_service = ptlrpc_init_svc(MDS_NEVENTS, MDS_NBUFS,
                                            MDS_BUFSIZE, MDS_MAXREQSIZE,
-                                           MDS_REQUEST_PORTAL, MDC_REPLY_PORTAL, 
+                                           MDS_REQUEST_PORTAL, MDC_REPLY_PORTAL,
                                            "self", mds_handle, "mds");
         if (!mds->mds_service) {
                 CERROR("failed to start service\n");
