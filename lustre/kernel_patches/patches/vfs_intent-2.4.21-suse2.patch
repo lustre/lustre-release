@@ -121,7 +121,7 @@ Index: linux-2.4.21-suse2/fs/exec.c
 Index: linux-2.4.21-suse2/fs/namei.c
 ===================================================================
 --- linux-2.4.21-suse2.orig/fs/namei.c	2004-01-10 12:06:40.000000000 +0300
-+++ linux-2.4.21-suse2/fs/namei.c	2004-01-10 12:44:04.000000000 +0300
++++ linux-2.4.21-suse2/fs/namei.c	2004-01-10 12:55:09.000000000 +0300
 @@ -94,6 +94,13 @@
   * XEmacs seems to be relying on it...
   */
@@ -335,7 +335,7 @@ Index: linux-2.4.21-suse2/fs/namei.c
  	path_release(nd);
  return_err:
  	return err;
-@@ -663,7 +721,7 @@
+@@ -663,13 +721,13 @@
  
  int link_path_walk(const char * name, struct nameidata *nd)
  {
@@ -344,19 +344,27 @@ Index: linux-2.4.21-suse2/fs/namei.c
  }
  
  static inline int __path_walk(const char * name, struct nameidata *nd)
-@@ -677,6 +735,11 @@
+ {
+ 	current->total_link_count = 0;
+-	return __link_path_walk(name, nd);
++	return __link_path_walk_it(name, nd, NULL);
+ }
+ 
+ int path_walk(const char * name, struct nameidata *nd)
+@@ -677,6 +735,12 @@
  	return __path_walk(name, nd);
  }
  
 +int path_walk_it(const char * name, struct nameidata *nd, struct lookup_intent *it)
 +{
-+	return __path_walk(name, nd, it);
++	current->total_link_count = 0;
++	return __link_path_walk_it(name, nd, it);
 +}
 +
  /* SMP-safe */
  /* returns 1 if everything is done */
  static int __emul_lookup_dentry(const char *name, struct nameidata *nd)
-@@ -759,6 +822,17 @@
+@@ -759,6 +823,17 @@
  }
  
  /* SMP-safe */
@@ -374,7 +382,7 @@ Index: linux-2.4.21-suse2/fs/namei.c
  int path_lookup(const char *path, unsigned flags, struct nameidata *nd)
  {
  	int error = 0;
-@@ -773,6 +847,7 @@
+@@ -773,6 +848,7 @@
  {
  	nd->last_type = LAST_ROOT; /* if there are only slashes... */
  	nd->flags = flags;
@@ -382,7 +390,7 @@ Index: linux-2.4.21-suse2/fs/namei.c
  	if (*name=='/')
  		return walk_init_root(name,nd);
  	read_lock(&current->fs->lock);
-@@ -787,7 +862,8 @@
+@@ -787,7 +863,8 @@
   * needs parent already locked. Doesn't follow mounts.
   * SMP-safe.
   */
@@ -392,7 +400,7 @@ Index: linux-2.4.21-suse2/fs/namei.c
  {
  	struct dentry * dentry;
  	struct inode *inode;
-@@ -810,13 +886,16 @@
+@@ -810,13 +887,16 @@
  			goto out;
  	}
  
@@ -410,7 +418,7 @@ Index: linux-2.4.21-suse2/fs/namei.c
  		dentry = inode->i_op->lookup(inode, new);
  		unlock_kernel();
  		if (!dentry)
-@@ -828,6 +907,12 @@
+@@ -828,6 +908,12 @@
  	return dentry;
  }
  
@@ -423,7 +431,7 @@ Index: linux-2.4.21-suse2/fs/namei.c
  /* SMP-safe */
  struct dentry * lookup_one_len(const char * name, struct dentry * base, int len)
  {
-@@ -849,7 +934,7 @@
+@@ -849,7 +935,7 @@
  	}
  	this.hash = end_name_hash(hash);
  
@@ -432,7 +440,7 @@ Index: linux-2.4.21-suse2/fs/namei.c
  access:
  	return ERR_PTR(-EACCES);
  }
-@@ -880,6 +965,23 @@
+@@ -880,6 +966,23 @@
  	return err;
  }
  
@@ -456,7 +464,7 @@ Index: linux-2.4.21-suse2/fs/namei.c
  /*
   * It's inline, so penalty for filesystems that don't use sticky bit is
   * minimal.
-@@ -977,7 +1079,8 @@
+@@ -977,7 +1080,8 @@
  	return retval;
  }
  
@@ -466,7 +474,7 @@ Index: linux-2.4.21-suse2/fs/namei.c
  {
  	int error;
  
-@@ -990,12 +1093,15 @@
+@@ -990,12 +1094,15 @@
  		goto exit_lock;
  
  	error = -EACCES;	/* shouldn't it be ENOSYS? */
@@ -484,7 +492,7 @@ Index: linux-2.4.21-suse2/fs/namei.c
  	unlock_kernel();
  exit_lock:
  	up(&dir->i_zombie);
-@@ -1004,6 +1110,11 @@
+@@ -1004,6 +1111,11 @@
  	return error;
  }
  
@@ -496,7 +504,7 @@ Index: linux-2.4.21-suse2/fs/namei.c
  /*
   *	open_namei()
   *
-@@ -1018,7 +1129,8 @@
+@@ -1018,7 +1130,8 @@
   * for symlinks (where the permissions are checked later).
   * SMP-safe
   */
@@ -506,7 +514,7 @@ Index: linux-2.4.21-suse2/fs/namei.c
  {
  	int acc_mode, error = 0;
  	struct inode *inode;
-@@ -1028,11 +1140,14 @@
+@@ -1028,11 +1141,14 @@
  
  	acc_mode = ACC_MODE(flag);
  
@@ -522,7 +530,7 @@ Index: linux-2.4.21-suse2/fs/namei.c
  		if (error)
  			return error;
  		dentry = nd->dentry;
-@@ -1042,6 +1157,10 @@
+@@ -1042,6 +1158,10 @@
  	/*
  	 * Create - we need to know the parent.
  	 */
@@ -533,7 +541,7 @@ Index: linux-2.4.21-suse2/fs/namei.c
  	error = path_lookup(pathname, LOOKUP_PARENT, nd);
  	if (error)
  		return error;
-@@ -1057,7 +1176,7 @@
+@@ -1057,7 +1177,7 @@
  
  	dir = nd->dentry;
  	down(&dir->d_inode->i_sem);
@@ -542,7 +550,7 @@ Index: linux-2.4.21-suse2/fs/namei.c
  
  do_last:
  	error = PTR_ERR(dentry);
-@@ -1066,11 +1185,12 @@
+@@ -1066,11 +1186,12 @@
  		goto exit;
  	}
  
@@ -556,7 +564,7 @@ Index: linux-2.4.21-suse2/fs/namei.c
  		up(&dir->d_inode->i_sem);
  #ifndef DENTRY_WASTE_RAM
  		if (error)
-@@ -1178,7 +1298,7 @@
+@@ -1178,7 +1299,7 @@
  		if (!error) {
  			DQUOT_INIT(inode);
  			
@@ -565,7 +573,7 @@ Index: linux-2.4.21-suse2/fs/namei.c
  		}
  		put_write_access(inode);
  		if (error)
-@@ -1190,8 +1310,10 @@
+@@ -1190,8 +1311,10 @@
  	return 0;
  
  exit_dput:
@@ -576,7 +584,7 @@ Index: linux-2.4.21-suse2/fs/namei.c
  	path_release(nd);
  	return error;
  
-@@ -1210,7 +1332,10 @@
+@@ -1210,7 +1333,10 @@
  	 * are done. Procfs-like symlinks just set LAST_BIND.
  	 */
  	UPDATE_ATIME(dentry->d_inode);
@@ -587,7 +595,7 @@ Index: linux-2.4.21-suse2/fs/namei.c
  	dput(dentry);
  	if (error)
  		return error;
-@@ -1232,13 +1357,20 @@
+@@ -1232,13 +1358,20 @@
  	}
  	dir = nd->dentry;
  	down(&dir->d_inode->i_sem);
@@ -610,7 +618,7 @@ Index: linux-2.4.21-suse2/fs/namei.c
  {
  	struct dentry *dentry;
  
-@@ -1246,7 +1378,7 @@
+@@ -1246,7 +1379,7 @@
  	dentry = ERR_PTR(-EEXIST);
  	if (nd->last_type != LAST_NORM)
  		goto fail;
@@ -619,7 +627,7 @@ Index: linux-2.4.21-suse2/fs/namei.c
  	if (IS_ERR(dentry))
  		goto fail;
  	if (!is_dir && nd->last.name[nd->last.len] && !dentry->d_inode)
-@@ -1302,7 +1434,16 @@
+@@ -1302,7 +1435,16 @@
  	error = path_lookup(tmp, LOOKUP_PARENT, &nd);
  	if (error)
  		goto out;
@@ -637,7 +645,7 @@ Index: linux-2.4.21-suse2/fs/namei.c
  	error = PTR_ERR(dentry);
  
  	if (!IS_POSIXACL(nd.dentry->d_inode))
-@@ -1324,6 +1465,7 @@
+@@ -1324,6 +1466,7 @@
  		dput(dentry);
  	}
  	up(&nd.dentry->d_inode->i_sem);
@@ -645,7 +653,7 @@ Index: linux-2.4.21-suse2/fs/namei.c
  	path_release(&nd);
  out:
  	putname(tmp);
-@@ -1371,7 +1513,14 @@
+@@ -1371,7 +1514,14 @@
  		error = path_lookup(tmp, LOOKUP_PARENT, &nd);
  		if (error)
  			goto out;
@@ -661,7 +669,7 @@ Index: linux-2.4.21-suse2/fs/namei.c
  		error = PTR_ERR(dentry);
  		if (!IS_ERR(dentry)) {
  			if (!IS_POSIXACL(nd.dentry->d_inode))
-@@ -1380,6 +1529,7 @@
+@@ -1380,6 +1530,7 @@
  			dput(dentry);
  		}
  		up(&nd.dentry->d_inode->i_sem);
@@ -669,7 +677,7 @@ Index: linux-2.4.21-suse2/fs/namei.c
  		path_release(&nd);
  out:
  		putname(tmp);
-@@ -1480,8 +1630,16 @@
+@@ -1480,8 +1631,16 @@
  			error = -EBUSY;
  			goto exit1;
  	}
@@ -687,7 +695,7 @@ Index: linux-2.4.21-suse2/fs/namei.c
  	error = PTR_ERR(dentry);
  	if (!IS_ERR(dentry)) {
  		error = vfs_rmdir(nd.dentry->d_inode, dentry);
-@@ -1539,8 +1697,15 @@
+@@ -1539,8 +1698,15 @@
  	error = -EISDIR;
  	if (nd.last_type != LAST_NORM)
  		goto exit1;
@@ -704,7 +712,7 @@ Index: linux-2.4.21-suse2/fs/namei.c
  	error = PTR_ERR(dentry);
  	if (!IS_ERR(dentry)) {
  		/* Why not before? Because we want correct error value */
-@@ -1607,15 +1772,23 @@
+@@ -1607,15 +1773,23 @@
  		error = path_lookup(to, LOOKUP_PARENT, &nd);
  		if (error)
  			goto out;
@@ -730,7 +738,7 @@ Index: linux-2.4.21-suse2/fs/namei.c
  		putname(to);
  	}
  	putname(from);
-@@ -1691,7 +1864,14 @@
+@@ -1691,7 +1865,14 @@
  		error = -EXDEV;
  		if (old_nd.mnt != nd.mnt)
  			goto out_release;
@@ -746,7 +754,7 @@ Index: linux-2.4.21-suse2/fs/namei.c
  		error = PTR_ERR(new_dentry);
  		if (!IS_ERR(new_dentry)) {
  			error = vfs_link(old_nd.dentry, nd.dentry->d_inode, new_dentry);
-@@ -1735,7 +1915,7 @@
+@@ -1735,7 +1916,7 @@
   *	   locking].
   */
  int vfs_rename_dir(struct inode *old_dir, struct dentry *old_dentry,
@@ -755,7 +763,7 @@ Index: linux-2.4.21-suse2/fs/namei.c
  {
  	int error;
  	struct inode *target;
-@@ -1814,7 +1994,7 @@
+@@ -1814,7 +1995,7 @@
  }
  
  int vfs_rename_other(struct inode *old_dir, struct dentry *old_dentry,
@@ -764,7 +772,7 @@ Index: linux-2.4.21-suse2/fs/namei.c
  {
  	int error;
  
-@@ -1902,9 +2082,18 @@
+@@ -1902,9 +2083,18 @@
  	if (newnd.last_type != LAST_NORM)
  		goto exit2;
  
@@ -784,7 +792,7 @@ Index: linux-2.4.21-suse2/fs/namei.c
  	error = PTR_ERR(old_dentry);
  	if (IS_ERR(old_dentry))
  		goto exit3;
-@@ -1920,16 +2109,16 @@
+@@ -1920,16 +2110,16 @@
  		if (newnd.last.name[newnd.last.len])
  			goto exit4;
  	}
@@ -803,7 +811,7 @@ Index: linux-2.4.21-suse2/fs/namei.c
  	dput(new_dentry);
  exit4:
  	dput(old_dentry);
-@@ -1980,20 +2169,26 @@
+@@ -1980,20 +2170,26 @@
  }
  
  static inline int
@@ -832,7 +840,7 @@ Index: linux-2.4.21-suse2/fs/namei.c
  out:
  	if (current->link_count || res || nd->last_type!=LAST_NORM)
  		return res;
-@@ -2017,7 +2212,13 @@
+@@ -2017,7 +2213,13 @@
  
  int vfs_follow_link(struct nameidata *nd, const char *link)
  {
@@ -847,7 +855,7 @@ Index: linux-2.4.21-suse2/fs/namei.c
  }
  
  /* get the link contents into pagecache */
-@@ -2059,7 +2260,7 @@
+@@ -2059,7 +2261,7 @@
  {
  	struct page *page = NULL;
  	char *s = page_getlink(dentry, &page);
@@ -976,7 +984,7 @@ Index: linux-2.4.21-suse2/fs/namespace.c
 Index: linux-2.4.21-suse2/fs/open.c
 ===================================================================
 --- linux-2.4.21-suse2.orig/fs/open.c	2003-10-28 21:33:59.000000000 +0300
-+++ linux-2.4.21-suse2/fs/open.c	2004-01-10 12:15:41.000000000 +0300
++++ linux-2.4.21-suse2/fs/open.c	2004-01-10 12:55:39.000000000 +0300
 @@ -19,6 +19,8 @@
  #include <asm/uaccess.h>
  
@@ -1543,7 +1551,7 @@ Index: linux-2.4.21-suse2/fs/stat.c
 Index: linux-2.4.21-suse2/include/linux/dcache.h
 ===================================================================
 --- linux-2.4.21-suse2.orig/include/linux/dcache.h	2003-11-11 03:44:28.000000000 +0300
-+++ linux-2.4.21-suse2/include/linux/dcache.h	2004-01-10 12:15:41.000000000 +0300
++++ linux-2.4.21-suse2/include/linux/dcache.h	2004-01-10 12:48:36.000000000 +0300
 @@ -7,6 +7,51 @@
  #include <linux/gdb.h>
  #include <linux/mount.h>
@@ -1630,7 +1638,7 @@ Index: linux-2.4.21-suse2/include/linux/dcache.h
 Index: linux-2.4.21-suse2/include/linux/fs.h
 ===================================================================
 --- linux-2.4.21-suse2.orig/include/linux/fs.h	2004-01-10 11:28:05.000000000 +0300
-+++ linux-2.4.21-suse2/include/linux/fs.h	2004-01-10 12:15:41.000000000 +0300
++++ linux-2.4.21-suse2/include/linux/fs.h	2004-01-10 12:48:36.000000000 +0300
 @@ -74,6 +74,7 @@
  
  #define FMODE_READ 1
