@@ -343,9 +343,15 @@ int mds_lov_set_nextid(struct obd_device *obd)
         // XXX CONFIG warning remove me when configuration is better
         mds->mds_lov_nextid_set = 1;
 out:
-        if (rc && mds->mds_lov_objids)
+        if (rc && mds->mds_lov_objids) {
+                /* Might as well crash here, until we figure out what to do.
+                 * If we OBD_FREE, we'll just LASSERT the next time through this
+                 * function. */
+                LBUG();
                 OBD_FREE(mds->mds_lov_objids,
                          mds->mds_lov_desc.ld_tgt_count * sizeof(obd_id));
+                mds->mds_lov_objids = NULL;
+        }
 
         up(&mds->mds_orphan_recovery_sem);
         RETURN(rc);
