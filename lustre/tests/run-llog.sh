@@ -3,7 +3,6 @@
 insmod ../obdclass/llog_test.o
 ../utils/lctl modules > /r/tmp/ogdb-localhost.localdomain
 echo "NOW reload debugging syms.."
-sleep 10
 
 ../utils/lctl <<EOF
 newdev
