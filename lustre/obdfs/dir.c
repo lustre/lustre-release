@@ -24,6 +24,9 @@
 #include <linux/fs.h>
 #include <linux/ext2_fs.h>
 #include <linux/pagemap.h>
+
+#define DEBUG_SUBSYSTEM S_OBDFS
+
 #include <linux/obd_support.h>
 #include <linux/locks.h>
 

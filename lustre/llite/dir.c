@@ -29,9 +29,12 @@
 #include <linux/ext2_fs.h>
 #include <linux/pagemap.h>
 #include <linux/mm.h>
-#include <linux/obd_support.h>
 #include <linux/locks.h>
 #include <asm/uaccess.h>
+
+#define DEBUG_SUBSYSTEM S_LLIGHT
+
+#include <linux/obd_support.h>
 #include <linux/lustre_lib.h>
 #include <linux/lustre_idl.h>
 #include <linux/lustre_mds.h>

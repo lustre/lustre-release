@@ -29,6 +29,9 @@
 #include <linux/fs.h>
 #include <linux/locks.h>
 #include <linux/quotaops.h>
+
+#define DEBUG_SUBSYSTEM S_LLIGHT
+
 #include <linux/obd_support.h>
 #include <linux/lustre_light.h>
 extern struct address_space_operations ll_aops;
@@ -163,7 +166,7 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
 	rep->nlink = 1;
 	rep->atime = rep->ctime = rep->mtime = time;
 	rep->mode = mode;
-        CDEBUG(D_LLIGHT, "-- new_inode: objid %lld, ino %d, mode %o\n",
+        CDEBUG(D_INODE, "-- new_inode: objid %lld, ino %d, mode %o\n",
 	       rep->objid, rep->ino, rep->mode); 
 
         inode = iget4(dir->i_sb, rep->ino, NULL, rep);
@@ -285,7 +288,7 @@ static int ll_create (struct inode * dir, struct dentry * dentry, int mode)
 	}
 
 	mode = mode | S_IFREG;
-        CDEBUG(D_LLIGHT, "name %s mode %o\n", dentry->d_name.name, mode);
+        CDEBUG(D_DENTRY, "name %s mode %o\n", dentry->d_name.name, mode);
 	inode = ll_create_node(dir, dentry->d_name.name, dentry->d_name.len, 
 			       NULL, 0,
 			       mode, oa.o_id);

@@ -30,6 +30,8 @@
 #include <asm/uaccess.h>
 #include <asm/segment.h>
 
+#define DEBUG_SUBSYSTEM S_LLIGHT
+
 #include <linux/obd_support.h>
 #include <linux/obd_class.h>
 #include <linux/lustre_light.h>
@@ -201,7 +203,6 @@ static void ll_put_super(struct super_block *sb)
 extern inline struct obdo * ll_oa_from_inode(struct inode *inode, int valid);
 static void ll_delete_inode(struct inode *inode)
 {
-
 	if (S_ISREG(inode->i_mode)) { 
 		int err; 
 		struct obdo *oa; 
@@ -211,7 +212,7 @@ static void ll_delete_inode(struct inode *inode)
 		}
 
 		err = obd_destroy(IID(inode), oa); 
-                CDEBUG(D_LLIGHT, "obd destroy of %Ld error %d\n",
+                CDEBUG(D_INODE, "obd destroy of %Ld error %d\n",
                        oa->o_id, err);
 		obdo_free(oa);
 	}

@@ -135,7 +135,7 @@ do {                                                            \
         CDEBUG(D_MALLOC, "kmalloced: %ld at %x (tot %ld).\n",   \
                (long)(size), (int)(ptr), obd_memory);           \
         if (ptr == NULL) {                                      \
-                printk("kernel malloc failed at %s:%d\n",       \
+                CERROR("kernel malloc failed at %s:%d\n",       \
                        __FILE__, __LINE__);                     \
         } else {                                                \
                 memset((ptr), 0, (size));                       \

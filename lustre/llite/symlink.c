@@ -25,10 +25,11 @@
 #include <linux/mm.h>
 #include <linux/stat.h>
 #include <linux/locks.h>
+
+#define DEBUG_SUBSYSTEM S_LLIGHT
+
 #include <linux/obd_support.h> /* for ENTRY and EXIT only */
 #include <linux/lustre_light.h>
-
-
 
 static int ll_fast_readlink(struct dentry *dentry, char *buffer, int buflen)
 {

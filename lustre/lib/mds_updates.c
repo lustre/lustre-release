@@ -27,13 +27,14 @@
 #include <linux/slab.h>
 #include <asm/segment.h>
 
+#define DEBUG_SUBSYSTEM S_MDS
+
 #include <linux/obd_support.h>
 #include <linux/lustre_lib.h>
 #include <linux/lustre_idl.h>
 #include <linux/lustre_light.h>
 
 /* packing of MDS records */
-
 void mds_create_pack(struct mds_rec_create *rec, struct inode *inode, const char *name, int namelen, __u32 mode, __u64 id, __u32 uid, __u32 gid, __u64 time, const char *tgt, int tgtlen)
 {
 	char *tmp = (char *)rec + sizeof(*rec); 

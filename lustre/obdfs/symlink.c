@@ -27,6 +27,9 @@
 #include <linux/mm.h>
 #include <linux/stat.h>
 #include <linux/locks.h>
+
+#define DEBUG_SUBSYSTEM S_OBDFS
+
 #include <linux/obd_support.h> /* for ENTRY and EXIT only */
 #include <linux/obdfs.h>
 

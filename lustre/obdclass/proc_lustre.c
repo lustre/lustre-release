@@ -42,9 +42,10 @@
 #include <linux/version.h>
 #include <linux/proc_fs.h>
 
+#define DEBUG_SUBSYSTEM S_CLASS
+
 #include <linux/obd_support.h>
 #include <linux/obd_class.h>
-
 
 #ifdef CONFIG_PROC_FS
 extern struct proc_dir_entry proc_root;

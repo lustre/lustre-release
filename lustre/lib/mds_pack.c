@@ -44,11 +44,12 @@
 #include <asm/poll.h>
 #include <asm/uaccess.h>
 
+#define DEBUG_SUBSYSTEM S_MDS
+
 #include <linux/obd_support.h>
 #include <linux/lustre_lib.h>
 #include <linux/lustre_idl.h>
 #include <linux/lustre_mds.h>
-
 
 int mds_pack_req(char *name, int namelen, char *tgt, int tgtlen, 
 		 struct ptlreq_hdr **hdr, struct mds_req **req, 

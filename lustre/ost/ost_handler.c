@@ -19,7 +19,6 @@
  * 
  */
 
-
 #define EXPORT_SYMTAB
 
 #include <linux/version.h>
@@ -30,6 +29,9 @@
 #include <linux/ext2_fs.h>
 #include <linux/quotaops.h>
 #include <asm/unistd.h>
+
+#define DEBUG_SUBSYSTEM S_OST
+
 #include <linux/obd_support.h>
 #include <linux/obd.h>
 #include <linux/obd_class.h>
@@ -55,7 +57,7 @@ static int ost_queue_req(struct obd_device *obddev, struct ptlrpc_request *req)
 		return -ENOMEM;
 	}
 
-        CDEBUG(D_OST, "---> OST at %d %p, incoming req %p, srv_req %p\n",
+        CDEBUG(0, "---> OST at %d %p, incoming req %p, srv_req %p\n",
 	       __LINE__, ost, req, srv_req);
 
 	memset(srv_req, 0, sizeof(*req)); 
@@ -252,7 +254,7 @@ static int ost_connect(struct ost_obd *ost, struct ptlrpc_request *req)
 
 	req->rq_rep.ost->result =ost->ost_tgt->obd_type->typ_ops->o_connect(&conn);
 
-        CDEBUG(D_OST, "ost_connect: rep buffer %p, id %d\n", req->rq_repbuf,
+        CDEBUG(0, "ost_connect: rep buffer %p, id %d\n", req->rq_repbuf,
 	       conn.oc_id);
 	req->rq_rep.ost->connid = conn.oc_id;
 	EXIT;
@@ -397,7 +399,7 @@ int ost_handle(struct obd_device *obddev, struct ptlrpc_request *req)
 	struct ptlreq_hdr *hdr;
 
 	ENTRY;
-        CDEBUG(D_OST, "req at %p\n", req);
+        CDEBUG(0, "req at %p\n", req);
 
 	hdr = (struct ptlreq_hdr *)req->rq_reqbuf;
 	if (NTOH__u32(hdr->type) != OST_TYPE_REQ) {

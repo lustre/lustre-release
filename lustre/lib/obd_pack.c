@@ -44,12 +44,13 @@
 #include <asm/poll.h>
 #include <asm/uaccess.h>
 
+#define DEBUG_SUBSYSTEM S_OST
+
 #include <linux/obd_support.h>
 #include <linux/obd_class.h>
 #include <linux/obd_ost.h>
 #include <linux/lustre_lib.h>
 #include <linux/lustre_idl.h>
-
 
 int ost_pack_req(char *buf1, int buflen1, char *buf2, int buflen2, 
 		 struct ptlreq_hdr **hdr, struct ost_req **req, 

@@ -14,7 +14,6 @@
  * 
  */
 
-
 #define EXPORT_SYMTAB
 
 #include <linux/version.h>
@@ -26,6 +25,9 @@
 #include <linux/quotaops.h>
 #include <asm/unistd.h>
 #include <asm/uaccess.h>
+
+#define DEBUG_SUBSYSTEM S_MDS
+
 #include <linux/obd_support.h>
 #include <linux/obd.h>
 #include <linux/lustre_lib.h>
@@ -53,7 +55,7 @@ static int mds_queue_req(struct ptlrpc_request *req)
 		return -ENOMEM;
 	}
 
-        CDEBUG(D_MDS, "---> MDS at %d %p, incoming req %p, srv_req %p\n",
+        CDEBUG(0, "---> MDS at %d %p, incoming req %p, srv_req %p\n",
 	       __LINE__, MDS, req, srv_req);
 
 	memset(srv_req, 0, sizeof(*req)); 
@@ -190,7 +192,7 @@ struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
 	if (inode == NULL)
 		return ERR_PTR(-ENOMEM);
 
-	CDEBUG(D_MDS, "--> mds_fid2dentry: sb %p\n", inode->i_sb); 
+	CDEBUG(D_DENTRY, "--> mds_fid2dentry: sb %p\n", inode->i_sb); 
 
 	if (is_bad_inode(inode)
 	    || (generation && inode->i_generation != generation)
@@ -311,7 +313,7 @@ int mds_readpage(struct ptlrpc_request *req)
 		return 0;
 	}
 
-        CDEBUG(D_MDS, "ino %ld\n", de->d_inode->i_ino);
+        CDEBUG(D_INODE, "ino %ld\n", de->d_inode->i_ino);
 
 	file = dentry_open(de, mnt, O_RDONLY | O_LARGEFILE); 
 	/* note: in case of an error, dentry_open puts dentry */

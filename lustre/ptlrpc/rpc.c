@@ -26,12 +26,12 @@
 #include <linux/module.h>
 #include <linux/kernel.h>
 
+#define DEBUG_SUBSYSTEM S_RPC
+
 #include <linux/obd_support.h>
 #include <linux/lustre_net.h>
 
 static ptl_handle_eq_t req_eq, bulk_source_eq, bulk_sink_eq;
-int obd_debug_level;
-int obd_print_entry;
 
 /*
  * 1. Free the request buffer after it has gone out on the wire

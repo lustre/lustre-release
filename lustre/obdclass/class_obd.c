@@ -52,6 +52,8 @@
 #include <asm/uaccess.h>
 #include <linux/miscdevice.h>
 
+#define DEBUG_SUBSYSTEM S_CLASS
+
 #include <linux/obd_support.h>
 #include <linux/obd_class.h>
 

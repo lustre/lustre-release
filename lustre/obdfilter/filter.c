@@ -19,6 +19,9 @@
 #include <linux/ext2_fs.h>
 #include <linux/quotaops.h>
 #include <asm/unistd.h>
+
+#define DEBUG_SUBSYSTEM S_FILTER
+
 #include <linux/obd_support.h>
 #include <linux/obd_class.h>
 #include <linux/obd_ext2.h>

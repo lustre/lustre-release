@@ -30,6 +30,9 @@
 #include <linux/fs.h>
 #include <linux/locks.h>
 #include <linux/quotaops.h>
+
+#define DEBUG_SUBSYSTEM S_OBDFS
+
 #include <linux/obd_support.h>
 #include <linux/obdfs.h>
 extern struct address_space_operations obdfs_aops;

@@ -32,6 +32,8 @@
 #include <linux/vmalloc.h>
 #include <asm/segment.h>
 
+#define DEBUG_SUBSYSTEM S_OBDFS
+
 #include <linux/obd_support.h>
 #include <linux/obd_class.h>
 #include <linux/obdfs.h>

@@ -34,6 +34,8 @@
 #include <linux/pagemap.h>
 #include <linux/smp_lock.h>
 
+#define DEBUG_SUBSYSTEM S_LLIGHT
+
 #include <linux/obd_support.h>
 #include <linux/lustre_light.h>
 

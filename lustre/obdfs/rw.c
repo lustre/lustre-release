@@ -33,6 +33,8 @@
 #include <linux/pagemap.h>
 #include <linux/smp_lock.h>
 
+#define DEBUG_SUBSYSTEM S_OBDFS
+
 #include <linux/obd_support.h>
 #include <linux/obd_ext2.h>
 #include <linux/obdfs.h>

@@ -42,6 +42,8 @@
 #include <asm/segment.h>
 #include <linux/miscdevice.h>
 
+#define DEBUG_SUBSYSTEM S_MDC
+
 #include <linux/obd_support.h>
 #include <linux/lustre_lib.h>
 #include <linux/lustre_idl.h>

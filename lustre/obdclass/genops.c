@@ -10,16 +10,16 @@
  *
  */
 
-
 #include <linux/mm.h>
 #include <linux/pagemap.h>
 #include <linux/fs.h>
 #include <linux/sched.h>
 #include <asm/uaccess.h>
 
+#define DEBUG_SUBSYSTEM S_CLASS
+
 #include <linux/obd_support.h>
 #include <linux/obd_class.h>
-
 
 extern struct obd_device obd_dev[MAX_OBD_DEVICES];
 kmem_cache_t *obdo_cachep = NULL;
