@@ -100,7 +100,6 @@ __init int ptlrpc_init(void)
 
 static void __exit ptlrpc_exit(void)
 {
-        class_unregister_type(LUSTRE_HA_NAME);
         ptlrpc_exit_portals();
         ptlrpc_cleanup_connection();
 }
