@@ -1,7 +1,7 @@
 void mdc_pack_req_body(struct ptlrpc_request *);
 void mdc_pack_rep_body(struct ptlrpc_request *);
 void mdc_readdir_pack(struct ptlrpc_request *req, __u64 offset, __u32 size,
-                      obd_id ino, int type);
+                      struct ll_fid *mdc_fid);
 void mdc_getattr_pack(struct ptlrpc_request *req, int valid, int offset,
                       int flags, struct mdc_op_data *data);
 void mdc_setattr_pack(struct ptlrpc_request *req,

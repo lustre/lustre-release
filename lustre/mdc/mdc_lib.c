@@ -30,7 +30,7 @@
 #include "mdc_internal.h"
 
 void mdc_readdir_pack(struct ptlrpc_request *req, __u64 offset, __u32 size,
-                      obd_id ino, int type)
+                      struct ll_fid *mdc_fid)
 {
         struct mds_body *b;
 
@@ -38,8 +38,7 @@ void mdc_readdir_pack(struct ptlrpc_request *req, __u64 offset, __u32 size,
         b->fsuid = current->fsuid;
         b->fsgid = current->fsgid;
         b->capability = current->cap_effective;
-        b->fid1.id = ino;
-        b->fid1.f_type = type;
+        b->fid1 = *mdc_fid;
         b->size = offset;                       /* !! */
         b->suppgid = -1;
         b->nlink = size;                        /* !! */
