@@ -5,7 +5,6 @@
  * User-level wrappers that dispatch across the protection boundaries
  *
  *  Copyright (c) 2001-2003 Cluster File Systems, Inc.
- *  Copyright (c) 2001-2002 Sandia National Laboratories
  *
  *   This file is part of Lustre, http://www.sf.net/projects/lustre/
  *

@@ -1,11 +1,7 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * api/api-ni.c
- * Network Interface code
- *
  *  Copyright (c) 2001-2003 Cluster File Systems, Inc.
- *  Copyright (c) 2001-2002 Sandia National Laboratories
  *
  *   This file is part of Lustre, http://www.sf.net/projects/lustre/
  *
