@@ -543,13 +543,27 @@ def block_dev(dev, size, fstype, format):
         
     return dev
 
-def get_local_address(net_type):
+def if2addr(iface):
+    """lookup IP address for an interface"""
+    rc, out = run("/sbin/ifconfig", iface)
+    if rc or not out:
+       return None
+    addr = string.split(out[1])[1]
+    ip = string.split(addr, ':')[1]
+    return ip
+
+def get_local_address(net_type, wildcard):
     """Return the local address for the network type."""
     local = ""
     if net_type == 'tcp':
-        # host `hostname`
-        host = socket.gethostname()
-        local = socket.gethostbyname(host)
+        if  ':' in wildcard:
+            iface, star = string.split(wildcard, ':')
+            local = if2addr(iface)
+            if not local:
+                panic ("unable to determine ip for:", wildcard)
+        else:
+            host = socket.gethostname()
+            local = socket.gethostbyname(host)
     elif net_type == 'elan':
         # awk '/NodeId/ { print $2 }' '/proc/elan/device0/position'
         try:
@@ -674,10 +688,11 @@ class Network(Module):
         self.port = get_text_int(dom_node, 'port', 0)
         self.send_mem = get_text_int(dom_node, 'send_mem', DEFAULT_TCPBUF)
         self.recv_mem = get_text_int(dom_node, 'recv_mem', DEFAULT_TCPBUF)
-        if self.nid == '*':
-            self.nid = get_local_address(self.net_type)
+        if '*' in self.nid:
+            self.nid = get_local_address(self.net_type, self.nid)
             if not self.nid:
-                panic("unable to set nid for", self.net_type)
+                panic("unable to set nid for", self.net_type, self.nid)
+            debug("nid:", self.nid)
 
         self.add_module('portals/linux/oslib/', 'portals')
 	if node_needs_router():
@@ -694,9 +709,9 @@ class Network(Module):
     def prepare(self):
         self.info(self.net_type, self.nid, self.port)
         if self.net_type == 'tcp':
-            ret = run_daemon(TCP_ACCEPTOR, '-s', self.send_mem, '-r', self.recv_mem, self.port)
+            ret, out = run(TCP_ACCEPTOR, '-s', self.send_mem, '-r', self.recv_mem, self.port)
             if ret:
-                raise CommandError(TCP_ACCEPTOR, 'failed', ret)
+                raise CommandError(TCP_ACCEPTOR, out, ret)
         ret = self.dom_node.getElementsByTagName('route_tbl')
         for a in ret:
             for r in a.getElementsByTagName('route'):
