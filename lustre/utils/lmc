@@ -699,7 +699,7 @@ def add_mds(gen, lustre, options):
 
 def add_mgmt(gen, lustre, options):
     node_name = get_option(options, 'node')
-    node_uuid = name2uuid(lustre, node_name, 'mode')
+    node_uuid = name2uuid(lustre, node_name, 'node')
     mgmt_name = get_option(options, 'mgmt')
     if not mgmt_name:
         mgmt_name = new_name('MGMT_' + node_name)
