@@ -101,7 +101,8 @@ out_lock:
         RETURN(rc);
 }
 
-static int mds_osc_destroy(struct mds_obd *mds, struct ptlrpc_request *request)
+static int mds_osc_destroy_orphan(struct mds_obd *mds, 
+                                  struct ptlrpc_request *request)
 {
         struct mds_body *body;
         struct lov_mds_md *lmm = NULL;
@@ -161,7 +162,7 @@ out_free_memmd:
         RETURN(rc);
 }
 
-static int mds_unlink(struct obd_device *obd, struct dentry *dchild,
+static int mds_unlink_orphan(struct obd_device *obd, struct dentry *dchild,
                       struct inode *inode, struct inode *pending_dir)
 {
         struct mds_obd *mds = &obd->u.mds;
@@ -218,7 +219,7 @@ static int mds_unlink(struct obd_device *obd, struct dentry *dchild,
                         GOTO(out_free_msg, rc);
                 }
         }
-        rc = mds_osc_destroy(mds, req);
+        rc = mds_osc_destroy_orphan(mds, req);
 out_free_msg:
         OBD_FREE(req->rq_repmsg, req->rq_replen);
         req->rq_repmsg = NULL;
@@ -286,7 +287,7 @@ int mds_cleanup_orphans(struct obd_device *obd)
                         GOTO(next, rc2 = 0);
                 }
 
-                rc2 = mds_unlink(obd, dchild, child_inode, pending_dir);
+                rc2 = mds_unlink_orphan(obd, dchild, child_inode, pending_dir);
                 if (rc2 == 0) {
                         item ++;
                         CWARN("removed orphan %s from MDS and OST\n",
