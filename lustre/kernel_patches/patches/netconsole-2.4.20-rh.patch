@@ -1,7 +1,7 @@
 Index: linux-2.4.20-rh/drivers/net/netconsole.c
 ===================================================================
 --- linux-2.4.20-rh.orig/drivers/net/netconsole.c	2003-07-22 16:02:23.000000000 +0800
-+++ linux-2.4.20-rh/drivers/net/netconsole.c	2003-10-30 11:47:46.000000000 +0800
++++ linux-2.4.20-rh/drivers/net/netconsole.c	2003-10-31 07:24:53.000000000 +0800
 @@ -12,6 +12,8 @@
   *
   * 2001-09-17    started by Ingo Molnar.
@@ -27,7 +27,7 @@ Index: linux-2.4.20-rh/drivers/net/netconsole.c
  
  #define MAX_UDP_CHUNK 1460
  #define MAX_PRINT_CHUNK (MAX_UDP_CHUNK-HEADER_LEN)
-@@ -188,6 +190,46 @@
+@@ -188,6 +190,42 @@
  	}
  }
  
@@ -50,11 +50,7 @@ Index: linux-2.4.20-rh/drivers/net/netconsole.c
 +		return;
 +	Set_Sysrq_mode();
 +	get_current_regs(&regs);
-+	if (req->from != 'c'){
-+		handle_sysrq((int)req->from, &regs, NULL);
-+	}else{
-+		printk(KERN_INFO"We still not implemented netdump in sysrq\n"); 
-+	}
++	handle_sysrq((int)req->from, &regs, NULL);
 +	Clear_Sysrq_mode();
 +}
 +static void netdump_poll(struct net_device *dev)
@@ -74,7 +70,7 @@ Index: linux-2.4.20-rh/drivers/net/netconsole.c
  static struct sk_buff * alloc_netconsole_skb(struct net_device *dev, int len, int reserve)
  {
  	int once = 1;
-@@ -209,7 +251,7 @@
+@@ -209,7 +247,7 @@
  				once = 0;
  			}
  			Dprintk("alloc skb: polling controller ...\n");
@@ -83,7 +79,7 @@ Index: linux-2.4.20-rh/drivers/net/netconsole.c
  			goto repeat;
  		}
  	}
-@@ -231,7 +273,7 @@
+@@ -231,7 +269,7 @@
  		spin_unlock(&dev->xmit_lock);
  
  		Dprintk("xmit skb: polling controller ...\n");
@@ -92,7 +88,7 @@ Index: linux-2.4.20-rh/drivers/net/netconsole.c
  		zap_completion_queue();
  		goto repeat_poll;
  	}
-@@ -426,18 +468,19 @@
+@@ -426,18 +464,19 @@
  static spinlock_t sequence_lock = SPIN_LOCK_UNLOCKED;
  static unsigned int log_offset;
  
@@ -114,7 +110,7 @@ Index: linux-2.4.20-rh/drivers/net/netconsole.c
  		unsigned long flags;
  
  		__save_flags(flags);
-@@ -567,8 +610,6 @@
+@@ -567,8 +606,6 @@
  	req_t *req;
  	struct net_device *dev;
  
@@ -123,7 +119,7 @@ Index: linux-2.4.20-rh/drivers/net/netconsole.c
  #if DEBUG
  	{
  		static int packet_count;
-@@ -722,8 +763,16 @@
+@@ -722,8 +759,16 @@
  	Dprintk("... netdump from:    %08x.\n", req->from);
  	Dprintk("... netdump to:      %08x.\n", req->to);
  
@@ -141,7 +137,7 @@ Index: linux-2.4.20-rh/drivers/net/netconsole.c
  	return NET_RX_DROP;
  }
  
-@@ -763,6 +812,7 @@
+@@ -763,6 +808,7 @@
  	kunmap_atomic(kaddr, KM_NETDUMP);
  }
  
@@ -149,7 +145,7 @@ Index: linux-2.4.20-rh/drivers/net/netconsole.c
  /*
   * This function waits for the client to acknowledge the receipt
   * of the netdump startup reply, with the possibility of packets
-@@ -792,7 +842,7 @@
+@@ -792,7 +838,7 @@
  		// wait 1 sec.
  		udelay(100);
  		Dprintk("handshake: polling controller ...\n");
@@ -158,7 +154,7 @@ Index: linux-2.4.20-rh/drivers/net/netconsole.c
  		zap_completion_queue();
  		req = get_new_req();
  		if (req)
-@@ -904,7 +954,7 @@
+@@ -904,7 +950,7 @@
  	while (netdump_mode) {
  		__cli();
  		Dprintk("main netdump loop: polling controller ...\n");
@@ -167,7 +163,7 @@ Index: linux-2.4.20-rh/drivers/net/netconsole.c
  		zap_completion_queue();
  #if !CLI
  		__sti();
-@@ -1009,6 +1059,32 @@
+@@ -1009,6 +1055,32 @@
  	printk("NETDUMP END!\n");
  	__restore_flags(flags);
  }
@@ -200,7 +196,7 @@ Index: linux-2.4.20-rh/drivers/net/netconsole.c
  
  static char *dev;
  static int netdump_target_eth_byte0 = 255;
-@@ -1087,11 +1163,12 @@
+@@ -1087,11 +1159,12 @@
  
  static struct console netconsole =
  	 { flags: CON_ENABLED, write: write_netconsole_msg };
@@ -214,20 +210,27 @@ Index: linux-2.4.20-rh/drivers/net/netconsole.c
  
  	printk(KERN_INFO "netlog: using network device <%s>\n", dev);
  	// this will be valid once the device goes up.
-@@ -1101,10 +1178,12 @@
+@@ -1101,10 +1174,6 @@
  		printk(KERN_ERR "netlog: network device %s does not exist, aborting.\n", dev);
  		return -1;
  	}
-+#if 0
- 	if (!ndev->poll_controller) {
- 		printk(KERN_ERR "netlog: %s's network driver does not implement netlogging yet, aborting.\n", dev);
- 		return -1;
- 	}
-+#endif
+-	if (!ndev->poll_controller) {
+-		printk(KERN_ERR "netlog: %s's network driver does not implement netlogging yet, aborting.\n", dev);
+-		return -1;
+-	}
  	in_dev = in_dev_get(ndev);
  	if (!in_dev) {
  		printk(KERN_ERR "netlog: network device %s is not an IP protocol device, aborting.\n", dev);
-@@ -1214,12 +1293,27 @@
+@@ -1137,8 +1206,6 @@
+ 	if (!netdump_target_ip && !netlog_target_ip && !syslog_target_ip) {
+ 		printk(KERN_ERR "netlog: target_ip parameter not specified, aborting.\n");
+ 		return -1;
+-	}
+-	if (netdump_target_ip) {
+ #define IP(x) ((unsigned char *)&netdump_target_ip)[x]
+ 		printk(KERN_INFO "netlog: using netdump target IP %u.%u.%u.%u\n",
+ 			IP(3), IP(2), IP(1), IP(0));
+@@ -1214,12 +1281,27 @@
  
  	mhz_cycles = (unsigned long long)mhz * 1000000ULL;
  	jiffy_cycles = (unsigned long long)mhz * (1000000/HZ);
@@ -258,7 +261,7 @@ Index: linux-2.4.20-rh/drivers/net/netconsole.c
  #define STARTUP_MSG "[...network console startup...]\n"
  	write_netconsole_msg(NULL, STARTUP_MSG, strlen(STARTUP_MSG));
  
-@@ -1230,7 +1324,11 @@
+@@ -1230,7 +1312,11 @@
  
  static void cleanup_netconsole(void)
  {
@@ -404,3 +407,16 @@ Index: linux-2.4.20-rh/arch/i386/kernel/i386_ksyms.c
  EXPORT_SYMBOL_GPL(show_mem);
  EXPORT_SYMBOL_GPL(show_state);
  EXPORT_SYMBOL_GPL(show_regs);
+Index: linux-2.4.20-rh/kernel/panic.c
+===================================================================
+--- linux-2.4.20-rh.orig/kernel/panic.c	2003-10-31 07:25:19.000000000 +0800
++++ linux-2.4.20-rh/kernel/panic.c	2003-10-31 07:25:59.000000000 +0800
+@@ -219,8 +219,6 @@
+ 	}
+ #endif
+ 
+-	if (netdump_func)
+-		BUG();
+ 	if (in_interrupt())
+ 		printk(KERN_EMERG "In interrupt handler - not syncing\n");
+ 	else if (!current->pid)
