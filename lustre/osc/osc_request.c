@@ -579,7 +579,7 @@ static int osc_setup(struct obd_device *obddev, obd_count len,
 
         OBD_ALLOC(osc->osc_peer, sizeof(*osc->osc_peer));
         if (osc->osc_peer == NULL)
-                return -ENOMEM;
+                RETURN(-ENOMEM);
 
         rc = ptlrpc_connect_client(dev, "ost",
                                    OST_REQUEST_PORTAL,
@@ -588,9 +588,9 @@ static int osc_setup(struct obd_device *obddev, obd_count len,
                                    ost_unpack_rep,
                                    osc->osc_peer);
 
-        MOD_INC_USE_COUNT;
-        EXIT;
-        return rc;
+        if (rc == 0)
+                MOD_INC_USE_COUNT;
+        RETURN(rc);
 } 
 
 static int osc_cleanup(struct obd_device * obddev)

@@ -102,9 +102,8 @@ int ptlrpc_connect_client(int dev, char *uuid, int req_portal, int rep_portal,
 
 	/* networked */
 	err = kportal_uuid_to_peer(uuid, &cl->cli_server);
-	if (err != 0) { 
-		CERROR("cannot find peer %s!", uuid); 
-	}
+        if (err != 0)
+                CERROR("cannot find peer %s!\n", uuid);
 
         return err;
 }

@@ -41,6 +41,7 @@ del_uuid ost
 quit
 EOF
 
+rmmod kqswnal
 rmmod ksocknal
 killall acceptor
 rmmod portals

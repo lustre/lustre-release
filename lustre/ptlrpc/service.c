@@ -351,10 +351,6 @@ int rpc_unregister_service(struct ptlrpc_service *service)
         int rc, i;
 
         for (i = 0; i < service->srv_ring_length; i++) {
-                rc = PtlMDUnlink(service->srv_md_h[i]);
-                if (rc)
-                        CERROR("PtlMDUnlink failed: %d\n", rc);
-        
                 rc = PtlMEUnlink(service->srv_me_h[i]);
                 if (rc)
                         CERROR("PtlMEUnlink failed: %d\n", rc);
