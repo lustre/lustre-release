@@ -9,7 +9,7 @@ MDSDEV=$TMP/mds1
 MDSSIZE=100000
 
 OSTDEV=$TMP/ost1
-OSTSIZE=250000
+OSTSIZE=400000
 
 kver=`uname -r | cut -d "." -f 1,2`
 
@@ -20,6 +20,7 @@ case $kver in
      exit 1
      ;;
 esac
+
 
 # create nodes
 ${LMC} -o $config --node localhost --net localhost tcp || exit 1

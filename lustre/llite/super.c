@@ -513,7 +513,7 @@ static void ll_read_inode2(struct inode *inode, void *opaque)
         /* Get the authoritative file size */
         if (lli->lli_smd && (inode->i_mode & S_IFREG)) {
                 int rc;
-
+                LASSERT(lli->lli_smd->lsm_object_id != 0);
                 rc = ll_file_size(inode, lli->lli_smd);
                 if (rc) {
                         CERROR("ll_file_size: %d\n", rc);

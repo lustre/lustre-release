@@ -69,16 +69,13 @@ void ll_intent_release(struct dentry *de, struct lookup_intent *it)
                         ldlm_lock_decref(handle, it->it_lock_mode);
         }
 
-        if (it->it_op == IT_RELEASED_MAGIC) {
+        if (!de->d_it || it->it_op == IT_RELEASED_MAGIC) {
                 EXIT; 
                 return;
         }
 
-        if (de->d_it && de->d_it == it) { 
-                de->d_it = NULL;
-                up(&ll_d2d(de)->lld_it_sem);
-                it->it_op = IT_RELEASED_MAGIC;
-        }
+        if (de->d_it == it)
+                LL_GET_INTENT(de, it);
 
         EXIT;
 }
@@ -141,7 +138,7 @@ int ll_revalidate2(struct dentry *de, int flags, struct lookup_intent *it)
         }
 
         if (it == NULL && ll_have_lock(de))
-                GOTO(out, rc = 0);
+                RETURN(1);
 
         rc = ll_intent_lock(de->d_parent->d_inode, &de, it, revalidate2_finish);
         if (rc < 0) {
@@ -154,10 +151,6 @@ int ll_revalidate2(struct dentry *de, int flags, struct lookup_intent *it)
         list_del_init(&de->d_hash);
         spin_unlock(&dcache_lock);
         d_rehash(de);
-
- out:
-        if (!it)
-                de->d_it = NULL;
 
         RETURN(1);
 }

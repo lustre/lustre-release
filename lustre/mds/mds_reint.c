@@ -120,8 +120,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
         } else {
                 de = mds_fid2dentry(mds, rec->ur_fid1, NULL);
                 if (!de || IS_ERR(de)) {
-                        LBUG();
-                        GOTO(out_setattr_de, rc = -ESTALE);
+                        GOTO(out_setattr_de, rc = PTR_ERR(de));
                 }
         }
         inode = de->d_inode;

@@ -239,9 +239,8 @@ struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
                        inode->i_ino, inode->i_nlink,
                        atomic_read(&inode->i_count), inode->i_generation,
                        generation);
-                LBUG();
                 iput(inode);
-                RETURN(ERR_PTR(-ESTALE));
+                RETURN(ERR_PTR(-ENOENT));
         }
 
         /* now to find a dentry. If possible, get a well-connected one */
@@ -549,7 +548,7 @@ int mds_pack_md(struct mds_obd *mds, struct ptlrpc_request *req,
         int rc;
 
         if (lmm_size == 0) {
-                CERROR("no space reserved for inode %u MD\n", inode->i_ino);
+                CDEBUG(D_INFO, "no space reserved for inode %u MD\n", inode->i_ino);
                 RETURN(0);
         }
 
@@ -571,7 +570,7 @@ int mds_pack_md(struct mds_obd *mds, struct ptlrpc_request *req,
          */
         if ((rc = mds_fs_get_md(mds, inode, lmm, lmm_size)) < 0) {
                 CDEBUG(D_INFO, "No md for ino %u: rc = %d\n", inode->i_ino, rc);
-        } else {
+        } else if (rc > 0) {
                 body->valid |= OBD_MD_FLEASIZE;
                 rc = 0;
         }
@@ -648,8 +647,7 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req)
         push_ctxt(&saved, &mds->mds_ctxt, &uc);
         de = mds_fid2dentry(mds, &body->fid1, NULL);
         if (IS_ERR(de)) {
-                LBUG();
-                GOTO(out_pre_de, rc = -ESTALE);
+                GOTO(out_pre_de, rc = -ENOENT);
         }
 
         dir = de->d_inode;
@@ -729,7 +727,7 @@ static int mds_getattr(int offset, struct ptlrpc_request *req)
                                 CERROR("error getting inode %u MD: rc = %d\n",
                                        inode->i_ino, rc);
                         size[bufcount] = 0;
-                } else if (rc < mds->mds_max_mdsize) {
+                } else if (rc > mds->mds_max_mdsize) {
                         size[bufcount] = 0;
                         CERROR("MD size %d larger than maximum possible %u\n",
                                rc, mds->mds_max_mdsize);

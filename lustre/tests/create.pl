@@ -4,7 +4,7 @@ my $mtpt = shift || usage();
 my $mount_count = shift || usage();
 my $i = shift || usage();
 my $files = 5;
-my $mcreate = 0; # should we use mcreate or open?
+my $mcreate = 1; # should we use mcreate or open?
 
 sub usage () {
     print "Usage: $0 <mount point prefix> <mount count> <iterations>\n";
@@ -21,14 +21,16 @@ sub do_open($) {
     if ($mcreate) {
         my $tmp = `./mcreate $path`;
         if ($tmp) {
+            print  "Creating [" . $$."]...\n";
             $tmp =~ /.*error: (.*)\n/;
-            print "Created  $path: $1\n";
+            print  "Create done [$$] $path: $!\n";
         } else {
-            print "Created  $path: Success\n";
+            print  "Create done [$$] $path: Success\n";
         }
     } else {
+        print  "Opening [" . $$."]...\n";
         open(FH, ">$path") || die "open($PATH): $!";
-        print "Opened   $path: Success\n";
+        print  "Open done [$$] $path: Success\n";
         close(FH) || die;
     }
 }
@@ -46,10 +48,11 @@ while ($i--) {
     }
     $d = int(rand() * $files);
     $path = "$mtpt$which/$d";
+    print  "Unlink start [" . $$."]...\n";
     if (unlink($path)) {
-        print "Unlinked $path: Success\n";
+        print  "Unlink done [$$] $path: Success\n";
     } else {
-        print "Unlinked $path: $!\n";
+        print  "Unlink done [$$] $path: $!\n";
     }
 }
 print "Done.\n";

@@ -1,4 +1,5 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * (visit-tags-table FILE)
  * vim:expandtab:shiftwidth=8:tabstop=8:
  */
 
@@ -45,6 +46,7 @@ typedef enum {
 #define LDLM_FL_NO_CALLBACK    (1 << 12) /* see ldlm_cli_cancel_unused */
 #define LDLM_FL_HAS_INTENT     (1 << 13) /* lock request has intent */
 #define LDLM_FL_REDUCE         (1 << 14) /* throw away unused locks */
+#define LDLM_FL_CANCELING      (1 << 15) /* lock is being canceled */
 
 #define LDLM_CB_BLOCKING    1
 #define LDLM_CB_CANCELING   2
@@ -233,8 +235,8 @@ extern char *ldlm_it2str(int it);
 do {                                                                          \
         if (lock->l_resource == NULL) {                                       \
                 CDEBUG(D_DLMTRACE, "### " format                              \
-                       " (UNKNOWN: lock %p(rc=%d/%d,%d) mode %s/%s on "       \
-                       "res \?\? (rc=\?\?) type \?\?\? remote "LPX64")\n"     \
+                       " ns: \?\? lock: %p lrc: %d/%d,%d mode: %s/%s "        \
+                       "res: \?\? rrc=\?\? type: \?\?\? remote: "LPX64")\n"   \
                        , ## a, lock, lock->l_refc, lock->l_readers,           \
                        lock->l_writers,                                       \
                        ldlm_lockname[lock->l_granted_mode],                   \
@@ -244,9 +246,9 @@ do {                                                                          \
         }                                                                     \
         if (lock->l_resource->lr_type == LDLM_EXTENT) {                       \
                 CDEBUG(D_DLMTRACE, "### " format                              \
-                       " (%s: lock %p(rc=%d/%d,%d) mode %s/%s on res "LPU64   \
-                       "/"LPU64" (rc=%d) type %s ["LPU64"->"LPU64"] remote "  \
-                       LPX64")\n" , ## a,                                     \
+                       " ns: %s lock: %p lrc: %d/%d,%d mode: %s/%s res: "LPU64   \
+                       "/"LPU64" rrc: %d type: %s ["LPU64"->"LPU64"] remote: "  \
+                       LPX64"\n" , ## a,                                     \
                        lock->l_resource->lr_namespace->ns_name, lock,         \
                        lock->l_refc, lock->l_readers, lock->l_writers,        \
                        ldlm_lockname[lock->l_granted_mode],                   \
@@ -261,8 +263,8 @@ do {                                                                          \
         }                                                                     \
         {                                                                     \
                 CDEBUG(D_DLMTRACE, "### " format                              \
-                       " (%s: lock %p(rc=%d/%d,%d) mode %s/%s on res "LPU64   \
-                       "/"LPU64" (rc=%d) type %s remote "LPX64")\n" , ## a,   \
+                       " ns: %s lock: %p lrc: %d/%d,%d mode: %s/%s res: "LPU64   \
+                       "/"LPU64" rrc: %d type: %s remote: "LPX64"\n" , ## a,   \
                        lock->l_resource->lr_namespace->ns_name, lock,         \
                        lock->l_refc, lock->l_readers, lock->l_writers,        \
                        ldlm_lockname[lock->l_granted_mode],                   \
@@ -294,14 +296,14 @@ void ldlm_register_intent(int (*arg)(struct ldlm_lock *lock, void *req_cookie,
                                      ldlm_mode_t mode, int flags, void *data));
 void ldlm_unregister_intent(void);
 void ldlm_lock2handle(struct ldlm_lock *lock, struct lustre_handle *lockh);
-struct ldlm_lock *__ldlm_handle2lock(struct lustre_handle *, int strict);
+struct ldlm_lock *__ldlm_handle2lock(struct lustre_handle *, int strict, int flags);
 void ldlm_lock2handle(struct ldlm_lock *lock, struct lustre_handle *lockh);
 void ldlm_cancel_callback(struct ldlm_lock *);
 int ldlm_lock_set_data(struct lustre_handle *, void *data, int datalen);
 
 static inline struct ldlm_lock *ldlm_handle2lock(struct lustre_handle *h)
 {
-        return __ldlm_handle2lock(h, 1);
+        return __ldlm_handle2lock(h, 1, 0);
 }
 
 #define LDLM_LOCK_PUT(lock)                     \

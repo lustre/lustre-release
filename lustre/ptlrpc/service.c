@@ -171,6 +171,13 @@ static int handle_incoming_request(struct obd_device *obddev,
                 goto out;
         }
 
+        CDEBUG(D_RPCTRACE, "Handling RPC pid:xid:nid:opc %d:"
+               LPX64":%x:%d\n", 
+               NTOH__u32(request->rq_reqmsg->status), 
+               request->rq_xid,
+               event->initiator.nid,
+               NTOH__u32(request->rq_reqmsg->opc));
+
         if (NTOH__u32(request->rq_reqmsg->type) != PTL_RPC_MSG_REQUEST) {
                 CERROR("wrong packet type received (type=%u)\n",
                        request->rq_reqmsg->type);

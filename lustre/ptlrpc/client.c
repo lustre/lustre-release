@@ -659,6 +659,15 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
         ENTRY;
 
         init_waitqueue_head(&req->rq_wait_for_rep);
+        req->rq_reqmsg->status = HTON__u32(current->pid); /* for distributed debugging */
+        CDEBUG(D_RPCTRACE, "Sending RPC pid:xid:nid:opc %d:"
+               LPX64":%x:%d\n", 
+               NTOH__u32(req->rq_reqmsg->status), 
+               req->rq_xid,
+               conn->c_peer.peer_nid,
+               NTOH__u32(req->rq_reqmsg->opc)
+               );
+
         //DEBUG_REQ(D_HA, req, "subsys: %s:", cli->cli_name);
 
         /* XXX probably both an import and connection level are needed */

@@ -72,7 +72,6 @@ static inline void ext2_dec_count(struct inode *inode)
 {
         inode->i_nlink--;
 }
-
 static inline int ext2_add_nondir(struct dentry *dentry, struct inode *inode)
 {
         int err;
@@ -367,7 +366,6 @@ int ll_intent_lock(struct inode *parent, struct dentry **de,
             it->it_op != IT_LOOKUP) {
                 LL_SAVE_INTENT(dentry, it);
         } else {
-                dentry->d_it = NULL;
                 CDEBUG(D_DENTRY,
                        "D_IT dentry %p fsdata %p intent: %s status %d\n",
                        dentry, ll_d2d(dentry), ldlm_it2str(it->it_op),
@@ -377,13 +375,13 @@ int ll_intent_lock(struct inode *parent, struct dentry **de,
         if (rc < 0 || it->it_op == IT_LOOKUP)
                 ll_intent_release(dentry, it);
 
-        return rc;
+        RETURN(rc);
 
  drop_req:
         ptlrpc_free_req(request);
  drop_lock:
 #warning FIXME: must release lock here
-        return rc;
+        RETURN(rc);
 }
 
 /* Search "inode"'s alias list for a dentry that has the same name and parent as

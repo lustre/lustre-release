@@ -1,7 +1,11 @@
 TBA
 	* bug fixes
 	  - fix many simultaneous client startup (392)
-	
+	  - fix dentry->d_it clobbering
+	  - credentials weren't being shipped for readdir/getattr operations
+	  - remove invalid assertions triggered during some concurrent MD
+	    updates
+
 2002-11-18  Phil Schwan  <phil@clusterfs.com>
 	* version v0_5_17
 	* bug fixes

@@ -106,15 +106,33 @@ void mds_getattr_pack(struct ptlrpc_request *req, int offset,
                       struct inode *inode,
                       const char *name, int namelen)
 {
-        struct mds_body *rec;
-        rec = lustre_msg_buf(req->rq_reqmsg, offset);
+        struct mds_body *b;
+        b = lustre_msg_buf(req->rq_reqmsg, offset);
 
-        ll_inode2fid(&rec->fid1, inode);
+        b->fsuid = HTON__u32(current->fsuid);
+        b->fsgid = HTON__u32(current->fsgid);
+        b->capability = HTON__u32(current->cap_effective);
+
+        ll_inode2fid(&b->fid1, inode);
         if (name) {
                 char *tmp;
                 tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1);
                 LOGL0(name, namelen, tmp);
         }
+}
+
+void mds_readdir_pack(struct ptlrpc_request *req, int offset,
+                      obd_id ino, int type)
+{
+        struct mds_body *b;
+
+        b = lustre_msg_buf(req->rq_reqmsg, offset);
+        b->fsuid = HTON__u32(current->fsuid);
+        b->fsgid = HTON__u32(current->fsgid);
+        b->capability = HTON__u32(current->cap_effective);
+        b->fid1.id = HTON__u64(ino);
+        b->fid1.f_type = HTON__u32(type);
+        b->size = HTON__u64(offset);
 }
 
 

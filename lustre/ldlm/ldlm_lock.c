@@ -335,8 +335,13 @@ void ldlm_lock2handle(struct ldlm_lock *lock, struct lustre_handle *lockh)
         lockh->cookie = lock->l_random;
 }
 
+/* 
+ * if flags: atomically get the lock and set the flags. 
+ * Return NULL if flag already set
+ */
+
 struct ldlm_lock *__ldlm_handle2lock(struct lustre_handle *handle,
-                                     int strict)
+                                     int strict, int flags)
 {
         struct ldlm_lock *lock = NULL, *retval = NULL;
         ENTRY;
@@ -352,8 +357,8 @@ struct ldlm_lock *__ldlm_handle2lock(struct lustre_handle *handle,
         }
 
         if (lock->l_random != handle->cookie) {
-                CERROR("bogus cookie: lock %p has "LPX64" vs. handle "LPX64"\n",
-                       lock, lock->l_random, handle->cookie);
+                //CERROR("bogus cookie: lock %p has "LPX64" vs. handle "LPX64"\n",
+                //       lock, lock->l_random, handle->cookie);
                 GOTO(out2, NULL);
         }
         if (!lock->l_resource) {
@@ -373,6 +378,12 @@ struct ldlm_lock *__ldlm_handle2lock(struct lustre_handle *handle,
                 //LDLM_DEBUG(lock, "ldlm_handle2lock(%p)", lock);
                 GOTO(out, NULL);
         }
+
+        if (flags && (lock->l_flags & flags)) 
+                GOTO(out, NULL);
+
+        if (flags)
+                lock->l_flags |= flags;
 
         retval = LDLM_LOCK_GET(lock);
         if (!retval)
@@ -463,7 +474,7 @@ int ldlm_cli_cancel_unused_resource(struct ldlm_namespace *ns,
 
 void ldlm_lock_decref(struct lustre_handle *lockh, __u32 mode)
 {
-        struct ldlm_lock *lock = __ldlm_handle2lock(lockh, 0);
+        struct ldlm_lock *lock = __ldlm_handle2lock(lockh, 0, 0);
         struct ldlm_namespace *ns;
         ENTRY;
 

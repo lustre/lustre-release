@@ -22,7 +22,7 @@
  *
  */
 
-#define DEBUG_SUBSYSTEM S_CLASS
+#define DEBUG_SUBSYSTEM S_RPC
 
 #include <linux/obd_support.h>
 #include <linux/lustre_net.h>

@@ -117,6 +117,8 @@ void mds_pack_rep_body(struct ptlrpc_request *);
 int mds_update_unpack(struct ptlrpc_request *, int offset,
                       struct mds_update_record *);
 
+void mds_readdir_pack(struct ptlrpc_request *req, int offset,
+                      obd_id ino, int type);
 void mds_getattr_pack(struct ptlrpc_request *req, int offset,
                       struct inode *inode, const char *name, int namelen);
 void mds_setattr_pack(struct ptlrpc_request *, int offset, struct inode *,

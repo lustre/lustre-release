@@ -157,13 +157,13 @@ static int mds_extN_get_md(struct inode *inode, struct lov_mds_md *lmm,int size)
 
         /* This gives us the MD size */
         if (lmm == NULL)
-                return rc;
+                return (rc == -ENODATA) ? 0 : rc;
 
         if (rc < 0) {
                 CDEBUG(D_INFO, "error getting EA %s from MDS inode %ld: "
                        "rc = %d\n", XATTR_LUSTRE_MDS_OBJID, inode->i_ino, rc);
                 memset(lmm, 0, size);
-                return rc;
+                return (rc == -ENODATA) ? 0 : rc;
         }
 
         /* This field is byteswapped because it appears in the

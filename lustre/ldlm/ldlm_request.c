@@ -434,14 +434,9 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
         int rc = 0, size = sizeof(*body);
         ENTRY;
 
-        lock = ldlm_handle2lock(lockh);
+        /* concurrent cancels on the same handle can happen */
+        lock = __ldlm_handle2lock(lockh, 0, LDLM_FL_CANCELING);
         if (!lock) {
-                /* It's possible that the decref that we did just before this
-                 * cancel was the last reader/writer, and caused a cancel before
-                 * we could call this function.  If we want to make this
-                 * impossible (by adding a dec_and_cancel() or similar), then
-                 * we can put the LBUG back. */
-                //LBUG();
                 RETURN(0);
         }
 

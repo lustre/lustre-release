@@ -550,7 +550,7 @@ static int osc_brw_write(struct lustre_handle *conn, struct lov_stripe_md *md,
 
         desc = ptlrpc_prep_bulk(connection);
         if (!desc)
-                GOTO(out_req, rc = -ENOMEM);
+               GOTO(out_req, rc = -ENOMEM);
         desc->bd_portal = OSC_BULK_PORTAL;
         desc->bd_ptl_ev_hdlr = osc_ptl_ev_hdlr;
         CDEBUG(D_PAGE, "desc = %p\n", desc);

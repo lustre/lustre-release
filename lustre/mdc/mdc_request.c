@@ -161,11 +161,6 @@ void d_delete_aliases(struct inode *inode)
         list_for_each(tmp, &inode->i_dentry) {
                 dentry = list_entry(tmp, struct dentry, d_alias);
 
-                //                if (atomic_read(&dentry->d_count))
-                //      continue;
-                //if (!list_empty(&dentry->d_lru))
-                //        continue;
-
                 list_del_init(&dentry->d_hash);
                 list_add(&dentry->d_hash, &sbi->ll_orphan_dentry_list);
         }
@@ -581,10 +576,7 @@ int mdc_readpage(struct lustre_handle *conn, obd_id ino, int type, __u64 offset,
                 GOTO(out2, rc);
         }
 
-        body = lustre_msg_buf(req->rq_reqmsg, 0);
-        body->fid1.id = ino;
-        body->fid1.f_type = type;
-        body->size = offset;
+        mds_readdir_pack(req, 0, ino, type);
 
         req->rq_replen = lustre_msg_size(1, &size);
         rc = ptlrpc_queue_wait(req);

@@ -186,9 +186,11 @@ void ll_truncate(struct inode *inode)
         /* truncate == punch from new size to absolute end of file */
         err = obd_punch(ll_i2obdconn(inode), &oa, lsm, inode->i_size,
                         OBD_OBJECT_EOF);
-        if (err)
-                CERROR("obd_truncate fails (%d)\n", err);
-        else
+        if (err) { 
+                LBUG();
+                CERROR("obd_truncate fails (%d) ino %ld\n", err,
+                       inode->i_ino);
+        } else
                 obdo_to_inode(inode, &oa, oa.o_valid);
 
         err = ll_size_unlock(inode, lsm, LCK_PW, lockhs);
