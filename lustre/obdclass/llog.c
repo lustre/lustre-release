@@ -94,9 +94,9 @@ int llog_cancel_rec(struct llog_handle *loghandle, int index)
 
         llh->llh_count = cpu_to_le32(le32_to_cpu(llh->llh_count) - 1);
 
-        if (le32_to_cpu(llh->llh_flags) & LLOG_F_ZAP_WHEN_EMPTY &&
-            le32_to_cpu(llh->llh_count) == 1 &&
-            loghandle->lgh_last_idx == (LLOG_BITMAP_BYTES * 8) - 1) {
+        if ((le32_to_cpu(llh->llh_flags) & LLOG_F_ZAP_WHEN_EMPTY) &&
+            (le32_to_cpu(llh->llh_count) == 1) &&
+            (loghandle->lgh_last_idx == (LLOG_BITMAP_BYTES * 8) - 1)) { 
                 rc = llog_destroy(loghandle);
                 if (rc)
                         CERROR("failure destroying log after last cancel: %d\n",

@@ -79,10 +79,9 @@ static struct llog_handle *llog_cat_new_log(struct llog_handle *cathandle)
                 CERROR("no free catalog slots for log...\n");
                 GOTO(out_destroy, rc = -ENOSPC);
         }
-
-        CDEBUG(D_HA, "new recovery log "LPX64": catalog index %u\n",
-               loghandle->lgh_id.lgl_oid, index);
-
+        CWARN("new recovery log "LPX64":%x for index %u of catalog "LPX64"\n",
+               loghandle->lgh_id.lgl_oid, loghandle->lgh_id.lgl_ogen, index,
+               cathandle->lgh_id.lgl_oid);
         /* build the record for this log in the catalog */
         rec.lid_hdr.lrh_len = cpu_to_le32(sizeof(rec));
         rec.lid_hdr.lrh_index = cpu_to_le32(index);
@@ -317,8 +316,9 @@ int llog_cat_process_cb(struct llog_handle *cat_llh, struct llog_rec_hdr *rec, v
                 CERROR("invalid record in catalog\n");
                 RETURN(-EINVAL);
         }
-        CERROR("processing log "LPX64" in catalog "LPX64"\n", 
-               lir->lid_id.lgl_oid, cat_llh->lgh_id.lgl_oid);
+        CWARN("processing log "LPX64":%x at index %u of catalog "LPX64"\n", 
+               lir->lid_id.lgl_oid, lir->lid_id.lgl_ogen,
+               le32_to_cpu(rec->lrh_index), cat_llh->lgh_id.lgl_oid);
 
         rc = llog_cat_id2handle(cat_llh, &llh, &lir->lid_id);
         if (rc) {
