@@ -890,6 +890,9 @@ test_45() {
     multiop $DIR/$tfile O_c &
     pid=$!
 
+    # allow the open to complete
+    usleep 500
+
     # This will cause the CLOSE to fail before even 
     # allocating a reply buffer
     $LCTL --device $mdcdev deactivate
