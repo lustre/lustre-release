@@ -28,7 +28,8 @@
 
 /* obd methods */
 static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
-                       obd_uuid_t cluuid)
+                       obd_uuid_t cluuid, struct recovd_obd *recovd,
+                       ptlrpc_recovery_cb_t recover)
 {
         struct ptlrpc_request *req = NULL;
         struct lov_obd *lov = &obd->u.lov;
@@ -47,7 +48,7 @@ static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
         }
 
         /* retrieve LOV metadata from MDS */
-        rc = obd_connect(&mdc_conn, lov->mdcobd, NULL);
+        rc = obd_connect(&mdc_conn, lov->mdcobd, NULL, recovd, recover);
         if (rc) {
                 CERROR("cannot connect to mdc: rc = %d\n", rc);
                 GOTO(out_conn, rc);
@@ -129,7 +130,8 @@ static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
                         CERROR("Target %s not set up\n", uuidarray[i]);
                         GOTO(out_disc, rc = -EINVAL);
                 }
-                rc = obd_connect(&lov->tgts[i].conn, tgt, NULL);
+                rc = obd_connect(&lov->tgts[i].conn, tgt, NULL, recovd,
+                                 recover);
                 if (rc) {
                         CERROR("Target %s connect error %d\n",
                                uuidarray[i], rc);

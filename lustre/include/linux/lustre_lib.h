@@ -49,11 +49,14 @@
 struct ptlrpc_request;
 struct obd_device;
 struct recovd_data;
+struct recovd_obd;
+#include <linux/lustre_ha.h>
 
 int target_handle_connect(struct ptlrpc_request *req);
 int target_handle_disconnect(struct ptlrpc_request *req);
 int client_obd_connect(struct lustre_handle *conn, struct obd_device *obd,
-                       obd_uuid_t cluuid);
+                       obd_uuid_t cluuid, struct recovd_obd *recovd,
+                       ptlrpc_recovery_cb_t recover);
 int client_obd_disconnect(struct lustre_handle *conn);
 int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf);
 int client_obd_cleanup(struct obd_device * obddev);

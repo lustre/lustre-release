@@ -143,7 +143,8 @@ static struct super_block * ll_read_super(struct super_block *sb,
                 GOTO(out_free, sb = NULL);
         }
 
-        err = obd_connect(&sbi->ll_mdc_conn, obd, sbi->ll_sb_uuid);
+        err = obd_connect(&sbi->ll_mdc_conn, obd, sbi->ll_sb_uuid,
+                          ptlrpc_recovd, ll_recover);
         if (err) {
                 CERROR("cannot connect to %s: rc = %d\n", mdc, err);
                 GOTO(out_free, sb = NULL);
@@ -153,8 +154,6 @@ static struct super_block * ll_read_super(struct super_block *sb,
         mdc_conn = sbi2mdc(sbi)->cl_import.imp_connection;
         mdc_conn->c_level = LUSTRE_CONN_FULL;
         list_add(&mdc_conn->c_sb_chain, &sbi->ll_conn_chain);
-        recovd_conn_manage(class_conn2export(&sbi->ll_mdc_conn)->exp_connection,
-                           ptlrpc_recovd, ll_recover);
 
         obd = class_uuid2obd(osc);
         if (!obd) {
@@ -162,13 +161,12 @@ static struct super_block * ll_read_super(struct super_block *sb,
                 GOTO(out_mdc, sb = NULL);
         }
 
-        err = obd_connect(&sbi->ll_osc_conn, obd, sbi->ll_sb_uuid);
+        err = obd_connect(&sbi->ll_osc_conn, obd, sbi->ll_sb_uuid,
+                          ptlrpc_recovd, ll_recover);
         if (err) {
                 CERROR("cannot connect to %s: rc = %d\n", osc, err);
                 GOTO(out_mdc, sb = NULL);
         }
-        recovd_conn_manage(class_conn2export(&sbi->ll_osc_conn)->exp_connection,
-                           ptlrpc_recovd, ll_recover);
 
         /* XXX: need to store the last_* values somewhere */
         err = mdc_getstatus(&sbi->ll_mdc_conn, &rootfid, &last_committed,

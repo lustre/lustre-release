@@ -28,6 +28,7 @@
 #include <linux/obd_class.h>
 #include <linux/lustre_lib.h>
 #include <linux/lustre_ha.h>
+#include <linux/lustre_net.h>
 #include <linux/init.h>
 
 extern int ptlrpc_init_portals(void);
@@ -153,13 +154,19 @@ int connmgr_iocontrol(long cmd, struct lustre_handle *hdl, int len, void *karg,
         RETURN(rc);
 }
 
+static int connmgr_connect(struct lustre_handle *conn, struct obd_device *src,
+                           obd_uuid_t cluuid, struct recovd_obd *recovd,
+                           ptlrpc_recovery_cb_t recover)
+{
+        return class_connect(conn, src, cluuid);
+}
 
 /* use obd ops to offer management infrastructure */
 static struct obd_ops recovd_obd_ops = {
         o_setup:       connmgr_setup,
         o_cleanup:     connmgr_cleanup,
         o_iocontrol:   connmgr_iocontrol,
-        o_connect:     class_connect,
+        o_connect:     connmgr_connect,
         o_disconnect:  class_disconnect
 };
 

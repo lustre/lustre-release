@@ -67,7 +67,8 @@ int target_handle_connect(struct ptlrpc_request *req)
         conn.addr = req->rq_reqmsg->addr;
         conn.cookie = req->rq_reqmsg->cookie;
 
-        rc = obd_connect(&conn, target, cluuid);
+        rc = obd_connect(&conn, target, cluuid, ptlrpc_recovd,
+                         target_revoke_connection);
         if (rc)
                 GOTO(out, rc);
 
@@ -90,8 +91,6 @@ int target_handle_connect(struct ptlrpc_request *req)
         list_add(&export->exp_conn_chain, &export->exp_connection->c_exports);
         spin_unlock(&export->exp_connection->c_lock);
 
-        recovd_conn_manage(export->exp_connection, ptlrpc_recovd,
-                           target_revoke_connection);
         dlmimp = &export->exp_ldlm_data.led_import;
         dlmimp->imp_connection = req->rq_connection;
         dlmimp->imp_client = &export->exp_obd->obd_ldlm_client;

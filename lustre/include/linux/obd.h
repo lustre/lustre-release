@@ -260,7 +260,8 @@ struct obd_ops {
         int (*o_setup) (struct obd_device *dev, obd_count len, void *data);
         int (*o_cleanup)(struct obd_device *dev);
         int (*o_connect)(struct lustre_handle *conn, struct obd_device *src,
-                         obd_uuid_t cluuid);
+                         obd_uuid_t cluuid, struct recovd_obd *recovd,
+                         ptlrpc_recovery_cb_t recover);
         int (*o_disconnect)(struct lustre_handle *conn);
 
 

@@ -273,14 +273,16 @@ static inline int obd_setattr(struct lustre_handle *conn, struct obdo *obdo,
 }
 
 static inline int obd_connect(struct lustre_handle *conn,
-                              struct obd_device *obd, obd_uuid_t cluuid)
+                              struct obd_device *obd, obd_uuid_t cluuid,
+                              struct recovd_obd *recovd,
+                              ptlrpc_recovery_cb_t recover)
 {
         int rc;
 
         OBD_CHECK_DEVSETUP(obd);
         OBD_CHECK_OP(obd, connect);
 
-        rc = OBP(obd, connect)(conn, obd, cluuid);
+        rc = OBP(obd, connect)(conn, obd, cluuid, recovd, recover);
         RETURN(rc);
 }
 

@@ -597,7 +597,7 @@ static int ost_setup(struct obd_device *obddev, obd_count len, void *buf)
                 GOTO(error_dec, err = -EINVAL);
         }
 
-        err = obd_connect(&ost->ost_conn, tgt, NULL);
+        err = obd_connect(&ost->ost_conn, tgt, NULL, NULL, NULL);
         if (err) {
                 CERROR("fail to connect to device %d\n", data->ioc_dev);
                 GOTO(error_dec, err = -EINVAL);

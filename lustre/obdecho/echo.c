@@ -12,8 +12,8 @@
  * and Andreas Dilger <adilger@clusterfs.com>
  */
 
-static char rcsid[] __attribute ((unused)) = "$Id: echo.c,v 1.38 2002/09/24 19:18:16 adilger Exp $";
-#define OBDECHO_VERSION "$Revision: 1.38 $"
+static char rcsid[] __attribute ((unused)) = "$Id: echo.c,v 1.39 2002/10/15 23:25:10 shaver Exp $";
+#define OBDECHO_VERSION "$Revision: 1.39 $"
 
 #define EXPORT_SYMTAB
 
@@ -91,7 +91,8 @@ void echo_proc_fini(void)
 }
 
 static int echo_connect(struct lustre_handle *conn, struct obd_device *obd,
-                        obd_uuid_t cluuid)
+                        obd_uuid_t cluuid, struct recovd_obd *recovd,
+                        ptlrpc_recovery_cb_t recover)
 {
         int rc;
 

@@ -113,7 +113,8 @@ int client_obd_cleanup(struct obd_device * obddev)
 }
 
 int client_obd_connect(struct lustre_handle *conn, struct obd_device *obd,
-                       obd_uuid_t cluuid)
+                       obd_uuid_t cluuid, struct recovd_obd *recovd,
+                       ptlrpc_recovery_cb_t recover)
 {
         struct client_obd *cli = &obd->u.cli;
         struct ptlrpc_request *request;
@@ -149,6 +150,7 @@ int client_obd_connect(struct lustre_handle *conn, struct obd_device *obd,
         request->rq_reqmsg->addr = conn->addr;
         request->rq_reqmsg->cookie = conn->cookie;
         c = class_conn2export(conn)->exp_connection = request->rq_connection;
+        recovd_conn_manage(c, recovd, recover);
 
         rc = ptlrpc_queue_wait(request);
         rc = ptlrpc_check_status(request, rc);

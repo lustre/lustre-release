@@ -51,6 +51,10 @@ void recovd_conn_manage(struct ptlrpc_connection *conn,
 {
         struct recovd_data *rd = &conn->c_recovd_data;
         ENTRY;
+        if (!recovd || !recover) {
+                EXIT;
+                return;
+        }
 
         if (!list_empty(&rd->rd_managed_chain)) {
                 if (rd->rd_recovd == recovd && rd->rd_recover == recover) {

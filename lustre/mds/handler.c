@@ -264,7 +264,8 @@ struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
  * on the server, etc.
  */
 static int mds_connect(struct lustre_handle *conn, struct obd_device *obd,
-                       obd_uuid_t cluuid)
+                       obd_uuid_t cluuid, struct recovd_obd *recovd,
+                       ptlrpc_recovery_cb_t recover)
 {
         struct obd_export *exp;
         struct mds_export_data *med;

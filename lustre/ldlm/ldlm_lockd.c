@@ -635,11 +635,18 @@ static int ldlm_cleanup(struct obd_device *obddev)
         RETURN(0);
 }
 
+static int ldlm_connect(struct lustre_handle *conn, struct obd_device *src,
+                        obd_uuid_t cluuid, struct recovd_obd *recovd,
+                        ptlrpc_recovery_cb_t recover)
+{
+        return class_connect(conn, src, cluuid);
+}
+
 struct obd_ops ldlm_obd_ops = {
         o_iocontrol:   ldlm_iocontrol,
         o_setup:       ldlm_setup,
         o_cleanup:     ldlm_cleanup,
-        o_connect:     class_connect,
+        o_connect:     ldlm_connect,
         o_disconnect:  class_disconnect
 };
 

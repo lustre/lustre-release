@@ -421,7 +421,6 @@ int class_connect(struct lustre_handle *conn, struct obd_device *obd,
         if (!export)
                 return -ENOMEM;
 
-
         conn->addr = (__u64) (unsigned long)export;
         conn->cookie = export->exp_cookie;
 

@@ -1,20 +1,20 @@
 <?xml version='1.0' encoding='UTF-8'?>
+<!DOCTYPE lustre>
 <lustre>
   <ldlm name='ldlm' uuid='ldlm_UUID'/>
-  <node name='localhost' uuid='localhost_UUID'>
+  <node uuid='localhost_UUID' name='localhost'>
     <profile>
       <ldlm_ref uuidref='ldlm_UUID'/>
       <network_ref uuidref='NET_localhost_tcp_UUID'/>
       <mds_ref uuidref='mds1_UUID'/>
-      <lov_ref uuidref='lov1_UUID'/>
+      <lovconfig_ref uuidref='LVCFG_lov1_UUID'/>
       <obd_ref uuidref='OBD_localhost_UUID'/>
       <ost_ref uuidref='OST_localhost_UUID'/>
       <obd_ref uuidref='OBD_localhost_2_UUID'/>
       <ost_ref uuidref='OST_localhost_2_UUID'/>
       <mountpoint_ref uuidref='MNT_localhost_UUID'/>
-      <mdc_ref uuidref='MDC_mds1_UUID'/>
     </profile>
-    <network name='NET_localhost_tcp' uuid='NET_localhost_tcp_UUID' type='tcp'>
+    <network type='tcp' uuid='NET_localhost_tcp_UUID' name='NET_localhost_tcp'>
       <server>localhost</server>
       <port>988</port>
     </network>
@@ -26,17 +26,17 @@
     <network_ref uuidref='NET_localhost_tcp_UUID'/>
     <node_ref uuidref='localhost_UUID'/>
   </mds>
-  <mdc name='MDC_mds1' uuid='MDC_mds1_UUID'>
+  <lov uuid='lov1_UUID' name='lov1'>
     <mds_ref uuidref='mds1_UUID'/>
-  </mdc>
-  <lov name='lov1' uuid='lov1_UUID'>
-    <mds_ref uuidref='mds1_UUID'/>
-    <devices stripeoffset='0' stripesize='4096' pattern='0'>
+    <devices pattern='0' stripesize='65536' stripecount='0'>
       <osc_ref uuidref='OSC_localhost_UUID'/>
       <osc_ref uuidref='OSC_localhost_2_UUID'/>
     </devices>
   </lov>
-  <obd uuid='OBD_localhost_UUID' name='OBD_localhost' type='obdfilter'>
+  <lovconfig uuid='LVCFG_lov1_UUID' name='LVCFG_lov1'>
+    <lov_ref uuidref='lov1_UUID'/>
+  </lovconfig>
+  <obd type='obdfilter' uuid='OBD_localhost_UUID' name='OBD_localhost'>
     <fstype>extN</fstype>
     <device size='100000'>/tmp/ost1</device>
     <autoformat>no</autoformat>
@@ -49,21 +49,21 @@
     <network_ref uuidref='NET_localhost_tcp_UUID'/>
     <obd_ref uuidref='OBD_localhost_UUID'/>
   </ost>
-  <obd name='OBD_localhost_2' uuid='OBD_localhost_2_UUID' type='obdfilter'>
+  <obd type='obdfilter' uuid='OBD_localhost_2_UUID' name='OBD_localhost_2'>
     <fstype>extN</fstype>
     <device size='100000'>/tmp/ost2</device>
     <autoformat>no</autoformat>
   </obd>
-  <osc name='OSC_localhost_2' uuid='OSC_localhost_2_UUID'>
+  <osc uuid='OSC_localhost_2_UUID' name='OSC_localhost_2'>
     <ost_ref uuidref='OST_localhost_2_UUID'/>
     <obd_ref uuidref='OBD_localhost_2_UUID'/>
   </osc>
-  <ost name='OST_localhost_2' uuid='OST_localhost_2_UUID'>
+  <ost uuid='OST_localhost_2_UUID' name='OST_localhost_2'>
     <network_ref uuidref='NET_localhost_tcp_UUID'/>
     <obd_ref uuidref='OBD_localhost_2_UUID'/>
   </ost>
   <mountpoint name='MNT_localhost' uuid='MNT_localhost_UUID'>
-    <mdc_ref uuidref='MDC_mds1_UUID'/>
+    <mds_ref uuidref='mds1_UUID'/>
     <osc_ref uuidref='lov1_UUID'/>
     <path>/mnt/lustre</path>
   </mountpoint>
