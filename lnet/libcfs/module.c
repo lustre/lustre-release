@@ -213,10 +213,14 @@ kportal_get_route(int index, __u32 *gateway_nalidp, ptl_nid_t *gateway_nidp,
 static int 
 kportal_router_cmd(struct portals_cfg *pcfg, void * private)
 {
-        int err;
+        int err = -EINVAL;
         ENTRY;
 
         switch(pcfg->pcfg_command) {
+        default:
+                CDEBUG(D_IOCTL, "Inappropriate cmd: %d\n", pcfg->pcfg_command);
+                break;
+                
         case NAL_CMD_ADD_ROUTE:
                 CDEBUG(D_IOCTL, "Adding route: [%d] "LPU64" : "LPU64" - "LPU64"\n",
                        pcfg->pcfg_nal, pcfg->pcfg_nid, 
