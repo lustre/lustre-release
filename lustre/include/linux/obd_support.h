@@ -126,7 +126,9 @@ do {                                                                         \
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 #define ll_bdevname(a) __bdevname((a))
+#define ll_lock_kernel lock_kernel()
 #else 
+#define ll_lock_kernel 
 #define ll_bdevname(a) bdevname((a))
 #endif
 

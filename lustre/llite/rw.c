@@ -33,8 +33,6 @@
 #include <linux/lustre_lite.h>
 #include <linux/lustre_lib.h>
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-
 /*
  * Remove page from dirty list
  */
@@ -46,7 +44,7 @@ static void __set_page_clean(struct page *page)
         if (!mapping)
                 return;
 
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,4,9))
+#if (LINUX_VERSION_CODE <= KERNEL_VERSION(2,5,0))
         spin_lock(&pagecache_lock);
 #endif
 
@@ -58,7 +56,7 @@ static void __set_page_clean(struct page *page)
                 CDEBUG(D_INODE, "inode clean\n");
                 inode->i_state &= ~I_DIRTY_PAGES;
         }
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,4,10))
+#if (LINUX_VERSION_CODE <= KERNEL_VERSION(2,5,0))
         spin_unlock(&pagecache_lock);
 #endif
         EXIT;
@@ -88,8 +86,13 @@ static int ll_brw(int cmd, struct inode *inode, struct page *page, int create)
                 RETURN(-ENOMEM);
 
         pg.pg = page;
-        pg.count = PAGE_SIZE;
         pg.off = ((obd_off)page->index) << PAGE_SHIFT;
+
+        if (cmd == OBD_BRW_WRITE && (pg.off + PAGE_SIZE > inode->i_size))
+                pg.count = inode->i_size % PAGE_SIZE; 
+        else
+                pg.count = PAGE_SIZE;
+
         pg.flag = create ? OBD_BRW_CREATE : 0;
 
         err = obd_brw(cmd, ll_i2obdconn(inode),lsm, 1, &pg, ll_sync_io_cb, cbd);
@@ -114,7 +117,7 @@ static int ll_readpage(struct file *file, struct page *page)
                 GOTO(readpage_out, rc);
         }
 
-        if (Page_Uptodate(page)) {
+        if (PageUptodate(page)) {
                 CERROR("Explain this please?\n");
                 GOTO(readpage_out, rc);
         }
@@ -129,6 +132,51 @@ static int ll_readpage(struct file *file, struct page *page)
         return 0;
 } /* ll_readpage */
 
+void ll_truncate(struct inode *inode)
+{
+        struct obdo oa = {0};
+        struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
+        struct lustre_handle *lockhs = NULL;
+        int err;
+        ENTRY;
+
+        if (!lsm) {
+                /* object not yet allocated */
+                inode->i_mtime = inode->i_ctime = CURRENT_TIME;
+                return;
+        }
+
+        oa.o_id = lsm->lsm_object_id;
+        oa.o_mode = inode->i_mode;
+        oa.o_valid = OBD_MD_FLID | OBD_MD_FLMODE | OBD_MD_FLTYPE;
+
+        CDEBUG(D_INFO, "calling punch for "LPX64" (all bytes after "LPD64")\n",
+               oa.o_id, inode->i_size);
+
+        err = ll_size_lock(inode, lsm, inode->i_size, LCK_PW, &lockhs);
+        if (err) {
+                CERROR("ll_size_lock failed: %d\n", err);
+                /* FIXME: What to do here?  It's too late to back out... */
+                LBUG();
+        }
+
+        /* truncate == punch from new size to absolute end of file */
+        err = obd_punch(ll_i2obdconn(inode), &oa, lsm, inode->i_size,
+                        OBD_OBJECT_EOF);
+        if (err)
+                CERROR("obd_truncate fails (%d)\n", err);
+        else
+                obdo_to_inode(inode, &oa, oa.o_valid);
+
+        err = ll_size_unlock(inode, lsm, LCK_PW, lockhs);
+        if (err)
+                CERROR("ll_size_unlock failed: %d\n", err);
+
+        EXIT;
+        return;
+} /* ll_truncate */
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 
 static int ll_prepare_write(struct file *file, struct page *page, unsigned from,
                             unsigned to)
@@ -154,7 +202,7 @@ static int ll_prepare_write(struct file *file, struct page *page, unsigned from,
         /* We are writing to a new page, no need to read old data */
         if (inode->i_size <= offset) {
                 memset(addr, 0, PAGE_SIZE);
-                goto prepare_done;
+                GOTO(prepare_done, rc=0);
         }
 
         rc = ll_brw(OBD_BRW_READ, inode, page, 0);
@@ -234,49 +282,6 @@ static int ll_commit_write(struct file *file, struct page *page,
         RETURN(err);
 } /* ll_commit_write */
 
-void ll_truncate(struct inode *inode)
-{
-        struct obdo oa = {0};
-        struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
-        struct lustre_handle *lockhs = NULL;
-        int err;
-        ENTRY;
-
-        if (!lsm) {
-                /* object not yet allocated */
-                inode->i_mtime = inode->i_ctime = CURRENT_TIME;
-                return;
-        }
-
-        oa.o_id = lsm->lsm_object_id;
-        oa.o_mode = inode->i_mode;
-        oa.o_valid = OBD_MD_FLID | OBD_MD_FLMODE | OBD_MD_FLTYPE;
-
-        CDEBUG(D_INFO, "calling punch for "LPX64" (all bytes after "LPD64")\n",
-               oa.o_id, inode->i_size);
-
-        err = ll_size_lock(inode, lsm, inode->i_size, LCK_PW, &lockhs);
-        if (err) {
-                CERROR("ll_size_lock failed: %d\n", err);
-                /* FIXME: What to do here?  It's too late to back out... */
-                LBUG();
-        }
-
-        /* truncate == punch from new size to absolute end of file */
-        err = obd_punch(ll_i2obdconn(inode), &oa, lsm, inode->i_size,
-                        OBD_OBJECT_EOF);
-        if (err)
-                CERROR("obd_truncate fails (%d)\n", err);
-        else
-                obdo_to_inode(inode, &oa, oa.o_valid);
-
-        err = ll_size_unlock(inode, lsm, LCK_PW, lockhs);
-        if (err)
-                CERROR("ll_size_unlock failed: %d\n", err);
-
-        EXIT;
-        return;
-} /* ll_truncate */
 
 static int ll_direct_IO(int rw, struct inode *inode, struct kiobuf *iobuf,
                         unsigned long blocknr, int blocksize)
@@ -370,15 +375,17 @@ int ll_flush_inode_pages(struct inode * inode)
         RETURN(err);
 }
 
+#endif
+
+
 struct address_space_operations ll_aops = {
         readpage: ll_readpage,
-        writepage: ll_writepage,
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,4,17))
+#if (LINUX_VERSION_CODE <= KERNEL_VERSION(2,5,0))
         direct_IO: ll_direct_IO,
-#endif
+        writepage: ll_writepage,
         sync_page: block_sync_page,
         prepare_write: ll_prepare_write,
         commit_write: ll_commit_write,
         bmap: NULL
-};
 #endif
+};

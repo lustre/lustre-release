@@ -1010,8 +1010,10 @@ static inline void lustre_put_page(struct page *page)
 #define PageUptodate(page) Page_Uptodate(page)
 #endif
 static struct page *
-lustre_get_page_read(struct inode *inode, unsigned long index)
+lustre_get_page_read(struct inode *inode, 
+                     struct niobuf_remote *rnb)
 {
+        unsigned long index = rnb->offset >> PAGE_SHIFT;
         struct address_space *mapping = inode->i_mapping;
         struct page *page;
         int rc;
@@ -1094,10 +1096,13 @@ static int lustre_commit_write(struct page *page, unsigned from, unsigned to)
         return err;
 }
 
-struct page *filter_get_page_write(struct inode *inode, unsigned long index,
+struct page *filter_get_page_write(struct inode *inode, 
+                                   struct niobuf_remote *rnb,
                                    struct niobuf_local *lnb, int *pglocked)
 {
+        unsigned long index = rnb->offset >> PAGE_SHIFT;
         struct address_space *mapping = inode->i_mapping;
+        
         struct page *page;
         int rc;
 
@@ -1126,6 +1131,8 @@ struct page *filter_get_page_write(struct inode *inode, unsigned long index,
                         LBUG();
                         GOTO(err, rc = -ENOMEM);
                 }
+                /* XXX debugging */
+                memset((void *)addr, 0xBA, PAGE_SIZE);
                 page = virt_to_page(addr);
                 kmap(page);
                 page->index = index;
@@ -1134,11 +1141,9 @@ struct page *filter_get_page_write(struct inode *inode, unsigned long index,
                 (*pglocked)++;
                 kmap(page);
 
-                /* Note: Called with "O" and "PAGE_SIZE" this is essentially
-                 * a no-op for most filesystems, because we write the whole
-                 * page.  For partial-page I/O this will read in the page.
-                 */
-                rc = mapping->a_ops->prepare_write(NULL, page, 0, PAGE_SIZE);
+                rc = mapping->a_ops->prepare_write(NULL, page, 
+                                                   rnb->offset % PAGE_SIZE, 
+                                                   rnb->len);
                 if (rc) {
                         CERROR("page index %lu, rc = %d\n", index, rc);
                         if (rc != -ENOSPC)
@@ -1206,8 +1211,8 @@ static int filter_preprw(int cmd, struct lustre_handle *conn,
         struct obd_run_ctxt saved;
         struct obd_device *obd;
         struct obd_ioobj *o = obj;
-        struct niobuf_remote *b = nb;
-        struct niobuf_local *r = res;
+        struct niobuf_remote *rnb = nb;
+        struct niobuf_local *lnb = res;
         void *journal_save = NULL;
         int pglocked = 0;
         int rc = 0;
@@ -1249,30 +1254,29 @@ static int filter_preprw(int cmd, struct lustre_handle *conn,
                         GOTO(out_clean, rc = -ENOENT);
                 }
 
-                for (j = 0; j < o->ioo_bufcnt; j++, b++, r++) {
-                        unsigned long index = b->offset >> PAGE_SHIFT;
+                for (j = 0; j < o->ioo_bufcnt; j++, rnb++, lnb++) {
                         struct page *page;
 
                         if (j == 0)
-                                r->dentry = dentry;
+                                lnb->dentry = dentry;
                         else
-                                r->dentry = dget(dentry);
+                                lnb->dentry = dget(dentry);
 
                         if (cmd & OBD_BRW_WRITE)
-                                page = filter_get_page_write(inode, index, r,
+                                page = filter_get_page_write(inode, rnb, lnb,
                                                              &pglocked);
                         else
-                                page = lustre_get_page_read(inode, index);
+                                page = lustre_get_page_read(inode, rnb);
 
                         if (IS_ERR(page)) {
                                 f_dput(dentry);
                                 GOTO(out_clean, rc = PTR_ERR(page));
                         }
 
-                        r->addr = page_address(page);
-                        r->offset = b->offset;
-                        r->page = page;
-                        r->len = b->len;
+                        lnb->addr = page_address(page);
+                        lnb->offset = rnb->offset;
+                        lnb->page = page;
+                        lnb->len = rnb->len;
                 }
         }
 
@@ -1287,13 +1291,13 @@ out_ctxt:
         pop_ctxt(&saved);
         RETURN(rc);
 out_clean:
-        while (r-- > res) {
+        while (lnb-- > res) {
                 CERROR("error cleanup on brw\n");
-                f_dput(r->dentry);
+                f_dput(lnb->dentry);
                 if (cmd & OBD_BRW_WRITE)
-                        filter_commit_write(r->page, 0, PAGE_SIZE, rc);
+                        filter_commit_write(lnb->page, 0, PAGE_SIZE, rc);
                 else
-                        lustre_put_page(r->page);
+                        lustre_put_page(lnb->page);
         }
         goto out_stop;
 }

@@ -728,8 +728,8 @@ struct file_operations ll_file_operations = {
 };
 
 struct inode_operations ll_file_inode_operations = {
-        truncate:   ll_truncate,
         setattr:    ll_setattr,
+        truncate:   ll_truncate,
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
         getattr: ll_getattr,
 #else
