@@ -43,6 +43,13 @@
  * - ioctl's
  */
 
+/*
+ *  GENERAL STUFF
+ */
+typedef __u8 uuid_t[37];
+
+
+
 #define PTL_RPC_MSG_REQUEST 4711
 #define PTL_RPC_MSG_ERR 4712
 
@@ -217,6 +224,7 @@ struct ost_body {
 #define MDS_DISCONNECT 8
 #define MDS_GETSTATUS  9
 #define MDS_STATFS     10
+#define MDS_LOVINFO    11
 
 #define REINT_SETATTR  1
 #define REINT_CREATE   2
@@ -230,6 +238,23 @@ struct ll_fid {
         __u64 id;
         __u32 generation;
         __u32 f_type;
+};
+
+
+#define MDS_STATUS_CONN 1
+#define MDS_STATUS_LOV 2
+
+struct mds_status_req { 
+        __u32  flags;
+        __u32  repbuf;
+};
+
+struct mds_conn_status { 
+        struct ll_fid rootfid;
+        __u64          xid;
+        __u64          last_committed;
+        __u64          last_rcvd;
+        /* XXX preallocated quota & obj fields here */
 };
 
 struct mds_body {
@@ -300,6 +325,19 @@ struct mds_rec_rename {
         struct ll_fid   rn_fid2;
 };
 
+
+/* 
+ *  LOV data structures
+ */
+
+#define LOV_RAID0  0
+struct lov_desc { 
+        __u32 ld_tgt_count; /* how many OBD's */
+        __u32 ld_default_stripecount;
+        __u32 ld_default_stripesize;   /* in bytes */
+        __u32 ld_pattern; /* RAID 0,1 etc */
+         uuid_t ld_uuid;
+}; 
 
 /*
  *   LDLM requests:
@@ -416,6 +454,7 @@ static inline int obd_ioctl_packlen(struct obd_ioctl_data *data)
         return len;
 }
 
+
 static inline int obd_ioctl_is_invalid(struct obd_ioctl_data *data)
 {
         if (data->ioc_len > (1<<30)) {
@@ -481,6 +520,7 @@ static inline int obd_ioctl_is_invalid(struct obd_ioctl_data *data)
                 printk("OBD ioctl: packlen exceeds ioc_len\n");
                 return 1;
         }
+#if 0 
         if (data->ioc_inllen1 &&
             data->ioc_bulk[data->ioc_inllen1 - 1] != '\0') {
                 printk("OBD ioctl: inlbuf1 not 0 terminated\n");
@@ -497,6 +537,7 @@ static inline int obd_ioctl_is_invalid(struct obd_ioctl_data *data)
                 printk("OBD ioctl: inlbuf3 not 0 terminated\n");
                 return 1;
         }
+#endif 
         return 0;
 }
 
@@ -535,39 +576,45 @@ static inline int obd_ioctl_pack(struct obd_ioctl_data *data, char **pbuf,
 
 
 /* buffer MUST be at least the size of obd_ioctl_hdr */
-static inline int obd_ioctl_getdata(char *buf, int *len, void *arg)
+static inline int obd_ioctl_getdata(char **buf, int *len, void *arg)
 {
-        struct obd_ioctl_hdr *hdr;
+        struct obd_ioctl_hdr hdr;
         struct obd_ioctl_data *data;
         int err;
         ENTRY;
 
-        hdr = (struct obd_ioctl_hdr *)buf;
-        data = (struct obd_ioctl_data *)buf;
 
-        err = copy_from_user(buf, (void *)arg, sizeof(*hdr));
+        err = copy_from_user(&hdr, (void *)arg, sizeof(hdr));
         if ( err ) {
                 EXIT;
                 return err;
         }
 
-        if (hdr->ioc_version != OBD_IOCTL_VERSION) {
+        if (hdr.ioc_version != OBD_IOCTL_VERSION) {
                 printk("OBD: version mismatch kernel vs application\n");
                 return -EINVAL;
         }
 
-        if (hdr->ioc_len > *len) {
+        if (hdr.ioc_len > *len) {
                 printk("OBD: user buffer exceeds kernel buffer\n");
                 return -EINVAL;
         }
 
-
-        if (hdr->ioc_len < sizeof(struct obd_ioctl_data)) {
+        if (hdr.ioc_len < sizeof(struct obd_ioctl_data)) {
                 printk("OBD: user buffer too small for ioctl\n");
                 return -EINVAL;
         }
 
-        err = copy_from_user(buf, (void *)arg, hdr->ioc_len);
+        OBD_ALLOC(*buf, hdr.ioc_len); 
+        if (!*buf) { 
+                CERROR("Cannot allocate control buffer of len %d\n",
+                       hdr.ioc_len); 
+                RETURN(-EINVAL);
+        }
+        *len = hdr.ioc_len;
+        data = (struct obd_ioctl_data *)*buf;
+
+        err = copy_from_user(*buf, (void *)arg, hdr.ioc_len);
         if ( err ) {
                 EXIT;
                 return err;
@@ -629,7 +676,8 @@ static inline int obd_ioctl_getdata(char *buf, int *len, void *arg)
 #define OBD_IOC_UUID2DEV               _IOWR('f', 130, long)
 
 #define OBD_IOC_RECOVD_NEWCONN         _IOWR('f', 131, long)
+#define OBD_IOC_LOV_CONFIG             _IOWR('f', 132, long)
 
-#define OBD_IOC_DEC_FS_USE_COUNT       _IO  ('f', 132      )
+#define OBD_IOC_DEC_FS_USE_COUNT       _IO  ('f', 133      )
 
 #endif

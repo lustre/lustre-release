@@ -9,6 +9,9 @@
 
 #define OBD_LOV_DEVICENAME "lov"
 
+void lov_unpackdesc(struct lov_desc *ld);
+void lov_packdesc(struct lov_desc *ld);
+
 struct lov_object_id { /* per-child structure */
         __u64 l_object_id;
         __u32 l_device_id;

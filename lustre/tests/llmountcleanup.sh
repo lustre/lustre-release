@@ -39,6 +39,7 @@ detach
 quit
 EOF
 
+rmmod lov
 rmmod obdecho
 rmmod mds_extN
 rmmod mds_ext3

@@ -14,7 +14,6 @@ AC_PROG_RANLIB
 
 # 
 # Check for required packages
-*
 
 AC_PATH_PROG([XML2_CONFIG], [xml2-config], [],)
 if test -z "$XML2_CONFIG"; then
@@ -89,7 +88,8 @@ AC_SUBST(docdir)
 demodir='$(docdir)/demo'
 AC_SUBST(demodir)
 
-AC_OUTPUT(Makefile lib/Makefile ldlm/Makefile obdecho/Makefile ptlrpc/Makefile \
+AC_OUTPUT(Makefile lov/Makefile lib/Makefile ldlm/Makefile \
+         obdecho/Makefile ptlrpc/Makefile \
 	osc/Makefile mdc/Makefile mds/Makefile ost/Makefile utils/Makefile \
 	tests/Makefile obdfilter/Makefile obdclass/Makefile \
 	llite/Makefile obdfs/Makefile demos/Makefile \

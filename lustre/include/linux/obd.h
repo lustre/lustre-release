@@ -152,19 +152,16 @@ struct ost_obd {
 };
 
 
-typedef __u8 uuid_t[37];
+struct lov_tgt_desc { 
+        uuid_t uuid;
+        struct lustre_handle conn; 
+};
 
-#define MAX_MULTI       16
 struct lov_obd {
-        __u32 lov_default_count;
-        __u32 lov_default_pattern;
-        __u32 lov_default_size;
-        uuid_t lov_service_uuids[MAX_MULTI];
-
-#if 0
-        int lov_count;
-        struct lustre_handle *lov_targets;
-#endif
+        struct obd_device *mdcobd;
+        struct lov_desc desc;
+        int bufsize; 
+        struct lov_tgt_desc *tgts;
 };
 
 /* corresponds to one of the obd's */
@@ -178,11 +175,6 @@ struct obd_device {
         int obd_minor;
         int obd_flags;
         struct proc_dir_entry *obd_proc_entry;
-        int obd_multi_count;
-        struct lustre_handle obd_multi_conn[MAX_MULTI];
-        unsigned int obd_gen_last_id;
-        unsigned long obd_gen_prealloc_quota;
-        //        struct obd_device *obd_target; /* for anything that simply layers */ 
         struct list_head obd_exports;
         struct list_head obd_imports;
         struct ldlm_namespace *obd_namespace;

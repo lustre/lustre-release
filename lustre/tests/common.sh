@@ -221,6 +221,7 @@ setup_lustre() {
 	do_insmod $LUSTRE/ost/ost.o || exit -1
 	do_insmod $LUSTRE/osc/osc.o || exit -1
 	do_insmod $LUSTRE/mdc/mdc.o || exit -1
+	do_insmod $LUSTRE/lov/lov.o || exit -1
 	do_insmod $LUSTRE/llite/llite.o || exit -1
 
         echo "$R/tmp/lustre-log" > /proc/sys/portals/debug_path
@@ -294,6 +295,25 @@ setup_mds() {
 	EOF
 }
 
+setup_mds_lov() { 
+
+	[ "$SETUP_MDS" = "y" ] || return 0
+
+        if [ -z "$LOVUUID" ]; then
+            echo "No LOV configured"
+            return
+        fi
+
+	$OBDCTL <<- EOF || return $?
+        name2dev MDSDEV
+        connect 
+        lovconfig ${LOVUUID} 1 4096 0 OSCUUID
+        disconnect
+	quit
+	EOF
+}
+
+
 setup_ost() {
 	[ "$SETUP_OST" = "y" ] || return 0
 
@@ -354,7 +374,7 @@ setup_ost() {
 }
 
 setup_server() {
-	setup_mds $1 && setup_ost $1
+	setup_mds $1 && setup_mds_lov $1 && setup_ost $1
 }
 
 setup_osc() {
@@ -371,7 +391,7 @@ setup_osc() {
 
 	$OBDCTL <<- EOF || return $rc
 	newdev
-	attach osc $THEOSC
+	attach osc $THEOSC ${THEOSC}-UUID
 	setup OBDUUID $OSTNODE
 	quit
 	EOF
@@ -392,12 +412,28 @@ setup_mdc() {
 
 	$OBDCTL <<- EOF || return $?
 	newdev
-	attach mdc $THEMDC
+	attach mdc $THEMDC  ${THEMDC}-UUID
 	setup MDSUUID $MDSNODE
 	quit
 	EOF
         done
 }
+
+setup_lov () { 
+	[ "$SETUP_MDC" != "y" ] && return 0
+
+        if [ -z "$LOVUUID" ]; then
+            echo "No LOV configured"
+            return
+        fi
+
+	$OBDCTL <<- EOF || return $?
+	newdev
+	attach lov LOVNAME  ${LOVUUID}
+	setup  MDCDEV-UUID
+	quit
+	EOF
+}        
 
 
 setup_mount() {
@@ -424,7 +460,7 @@ setup_mount() {
 }
 
 setup_client() {
-	setup_osc && setup_mdc && setup_mount
+	setup_osc && setup_mdc && setup_lov  && setup_mount
 }
 
 DEBUG_ON="echo 0xffffffff > /proc/sys/portals/debug"
@@ -476,6 +512,7 @@ cleanup_lustre() {
 	losetup -d ${LOOP}2
 
 	do_rmmod llite
+	do_rmmod lov
 	do_rmmod mdc
 
 	do_rmmod mds_extN

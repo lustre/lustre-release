@@ -113,30 +113,14 @@ static struct super_block * ll_read_super(struct super_block *sb,
                 GOTO(out_free, sb = NULL);
         }
 
-        devno = simple_strtoul(ost, NULL, 0);
-        if (devno >= MAX_OBD_DEVICES) {
-                CERROR("devno of %s too high\n", ost);
-                GOTO(out_free, sb = NULL);
-        }
-
-        err = obd_connect(&sbi->ll_osc_conn, &obd_dev[devno]);
-        if (err) {
-                CERROR("cannot connect to %s: rc = %d\n", ost, err);
-                GOTO(out_free, sb = NULL);
-        }
-
         devno = simple_strtoul(mds, NULL, 0);
         if (devno >= MAX_OBD_DEVICES) {
                 CERROR("devno of %s too high\n", mds);
                 GOTO(out_free, sb = NULL);
         }
 
-        err = obd_connect(&sbi->ll_mdc_conn, &obd_dev[devno]);
-        if (err) {
-                CERROR("cannot connect to %s: rc = %d\n", mds, err);
-                GOTO(out_free, sb = NULL);
-        }
-
+        /* First the MDS since an LOV requires an the MDC connection 
+           to find its descriptor */ 
 #if 0
         err = connmgr_connect(ptlrpc_connmgr, sbi->ll_mds_conn);
         if (err) {
@@ -145,7 +129,24 @@ static struct super_block * ll_read_super(struct super_block *sb,
         }
 #endif 
 
+        err = obd_connect(&sbi->ll_mdc_conn, &obd_dev[devno]);
+        if (err) {
+                CERROR("cannot connect to %s: rc = %d\n", mds, err);
+                GOTO(out_free, sb = NULL);
+        }
         sbi2mdc(sbi)->mdc_conn->c_level = LUSTRE_CONN_FULL;
+
+        /* now the OST, which could be an LOV */ 
+        devno = simple_strtoul(ost, NULL, 0);
+        if (devno >= MAX_OBD_DEVICES) {
+                CERROR("devno of %s too high\n", ost);
+                GOTO(out_free, sb = NULL);
+        }
+        err = obd_connect(&sbi->ll_osc_conn, &obd_dev[devno]);
+        if (err) {
+                CERROR("cannot connect to %s: rc = %d\n", ost, err);
+                GOTO(out_free, sb = NULL);
+        }
 
         /* XXX: need to store the last_* values somewhere */
         err = mdc_getstatus(&sbi->ll_mdc_conn,

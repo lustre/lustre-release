@@ -389,6 +389,14 @@ int Parser_help(int argc, char **argv)
         return 0;
 }  
 
+
+void Parser_printhelp(char *cmd)
+{
+        char *argv[] = { "help", cmd }; 
+        Parser_help(2, argv);
+}
+
+
 /*************************************************************************
  * COMMANDS                                                                 *
  *************************************************************************/ 

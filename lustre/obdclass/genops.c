@@ -139,6 +139,21 @@ int class_uuid2dev(char *name)
         return res;
 }
 
+
+struct obd_device *class_uuid2obd(char *name)
+{
+        int i;
+
+        for (i=0; i < MAX_OBD_DEVICES; i++) {
+                struct obd_device *obd = &obd_dev[i];
+                if (obd->obd_name && strncmp(name, obd->obd_uuid, 37) == 0) {
+                        return obd;
+                }
+        }
+
+        return NULL;
+}
+
 void obd_cleanup_caches(void)
 {
         int rc;
@@ -246,19 +261,15 @@ int class_connect (struct lustre_handle *conn, struct obd_device *obd)
 
         memset(export, 0, sizeof(*export));
         get_random_bytes(&export->export_cookie, sizeof(__u64));
-        /* XXX this should probably spinlocked? */
-        export->export_id = ++obd->obd_gen_last_id;
         export->export_obd = obd; 
         export->export_import.addr = conn->addr;
         export->export_import.cookie = conn->cookie;
         
         list_add(&(export->export_chain), export->export_obd->obd_exports.prev);
-
-        CDEBUG(D_INFO, "connect: new ID %u\n", export->export_id);
         conn->addr = (__u64) (unsigned long)export;
         conn->cookie = export->export_cookie;
         return 0;
-} /* class_connect */
+} 
 
 int class_disconnect(struct lustre_handle *conn)
 {
@@ -275,7 +286,9 @@ int class_disconnect(struct lustre_handle *conn)
         kmem_cache_free(export_cachep, export);
 
         RETURN(0);
-} /* gen_obd_disconnect */
+} 
+
+#if 0
 
 /* FIXME: Data is a space- or comma-separated list of device IDs.  This will
  * have to change. */
@@ -347,4 +360,4 @@ int class_multi_cleanup(struct obd_device *obddev)
         }
         return 0;
 }
-
+#endif

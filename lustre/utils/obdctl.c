@@ -1420,6 +1420,71 @@ static int jt_test_brw(int argc, char **argv)
         return rc;
 }
 
+static int jt_lov_config(int argc, char **argv)
+{
+        struct obd_ioctl_data data;
+        struct lov_desc desc; 
+        uuid_t *uuidarray;
+        int size, i;
+        IOCINIT(data);
+
+        if (argc <= 5 ){
+                Parser_printhelp("lovconfig"); 
+                return -1;
+        }
+
+        if (strlen(argv[1]) > sizeof(uuid_t) - 1) { 
+                fprintf(stderr, "lov_config: no %dB memory for uuid's\n", 
+                        size);
+                return -ENOMEM;
+        }
+            
+        memset(&desc, 0, sizeof(desc)); 
+        strcpy(desc.ld_uuid, argv[1]); 
+        desc.ld_default_stripecount = strtoul(argv[2], NULL, 0); 
+        desc.ld_default_stripesize = strtoul(argv[3], NULL, 0); 
+        desc.ld_pattern = strtoul(argv[4], NULL, 0); 
+        desc.ld_tgt_count = argc - 5;
+
+
+        size = sizeof(uuid_t) * desc.ld_tgt_count;
+        uuidarray = malloc(size);
+        if (!uuidarray) { 
+                fprintf(stderr, "lov_config: no %dB memory for uuid's\n", 
+                        size);
+                return -ENOMEM;
+        }
+        memset(uuidarray, 0, size); 
+        for (i=5 ; i < argc ; i++) { 
+                char *buf = (char *) (uuidarray + i -5 );
+                if (strlen(argv[i]) >= sizeof(uuid_t)) { 
+                        fprintf(stderr, "lov_config: arg %d (%s) too long\n",  
+                                i, argv[i]);
+                        free(uuidarray);
+                        return -EINVAL;
+                }
+                strcpy(buf, argv[i]); 
+        }
+
+        data.ioc_inllen1 = sizeof(desc); 
+        data.ioc_inlbuf1 = (char *)&desc;
+        data.ioc_inllen2 = size;
+        data.ioc_inlbuf2 = (char *)uuidarray;
+
+        if (obd_ioctl_pack(&data, &buf, max)) {
+                fprintf(stderr, "error: %s: invalid ioctl\n", cmdname(argv[0]));
+                return -EINVAL;
+        }
+
+        rc = ioctl(fd, OBD_IOC_LOV_CONFIG , buf);
+        if (rc < 0)
+                fprintf(stderr, "lov_config: error: %s: %s\n", 
+                        cmdname(argv[0]),strerror(rc = errno));
+        free(uuidarray);
+        return rc;
+}
+
+
 static int jt_test_ldlm(int argc, char **argv)
 {
         struct obd_ioctl_data data;
@@ -1470,6 +1535,8 @@ command_t cmdlist[] = {
                 "--threads <threads> <devno> <command [args ...]>"},
 
         /* Device configuration commands */
+        {"lovconfig", jt_lov_config, 0, "configure lov data on MDS "
+         "(usage: lov-uuid stripecount, stripesize, pattern, UUID1, [UUID2, ...])"}, 
         {"list", jt_list, 0, "list the devices (no args)"},
         {"newdev", jt_newdev, 0, "set device to a new unused obd (no args)"},
         {"device", jt_device, 0, "set current device (args device_no name)"},

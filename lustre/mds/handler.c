@@ -23,6 +23,8 @@
 #include <linux/module.h>
 #include <linux/lustre_mds.h>
 #include <linux/lustre_dlm.h>
+extern int mds_get_lovtgts(struct obd_device *obd, uuid_t *uuidarray);
+extern int mds_get_lovdesc(struct obd_device *obd, struct lov_desc *desc);
 extern int mds_update_last_rcvd(struct mds_obd *mds, void *handle,
                                 struct ptlrpc_request *req);
 static int mds_cleanup(struct obd_device * obddev);
@@ -194,8 +196,8 @@ static int mds_getstatus(struct ptlrpc_request *req)
 
         body = lustre_msg_buf(req->rq_reqmsg, 0);
         mds_unpack_body(body);
-        /* Anything we need to do here with the client's trans no or so? */
 
+        /* Anything we need to do here with the client's trans no or so? */
         body = lustre_msg_buf(req->rq_repmsg, 0);
         memcpy(&body->fid1, &mds->mds_rootfid, sizeof(body->fid1));
 
@@ -230,6 +232,48 @@ static int mds_getstatus(struct ptlrpc_request *req)
            mds_pack_rep_body converts it to network order */
         body->last_xid = le32_to_cpu(mcd->mcd_last_xid);
         mds_pack_rep_body(req);
+        RETURN(0);
+}
+
+static int mds_lovinfo(struct ptlrpc_request *req)
+{
+        struct mds_status_req *streq;
+        struct lov_desc *desc; 
+        int rc, size[2] = {sizeof(*desc)};
+        ENTRY;
+
+        streq = lustre_msg_buf(req->rq_reqmsg, 0); 
+        streq->flags = NTOH__u32(streq->flags); 
+        streq->repbuf = NTOH__u32(streq->repbuf); 
+        size[1] = streq->repbuf;
+
+        rc = lustre_pack_msg(2, size, NULL, &req->rq_replen, &req->rq_repmsg);
+        if (rc) { 
+                CERROR("mds: out of memory for message: size=%d\n", size[1]);
+                req->rq_status = -ENOMEM;
+                RETURN(0);
+        }
+
+        desc = lustre_msg_buf(req->rq_repmsg, 0); 
+        rc = mds_get_lovdesc(req->rq_obd, desc);
+        if (rc != 0 ) { 
+                CERROR("get_lovdesc error %d", rc);
+                req->rq_status = rc;
+                RETURN(0);
+        }
+
+        if (desc->ld_tgt_count * sizeof(uuid_t) > streq->repbuf) { 
+                CERROR("too many targets, enlarge client buffers\n");
+                req->rq_status = -ENOSPC;
+                RETURN(0);
+        }
+
+        rc = mds_get_lovtgts(req->rq_obd, lustre_msg_buf(req->rq_repmsg, 1));
+        if (rc) { 
+                CERROR("get_lovtgts error %d", rc);
+                req->rq_status = rc;
+                RETURN(0);
+        }
         RETURN(0);
 }
 
@@ -709,6 +753,11 @@ int mds_handle(struct ptlrpc_request *req)
                 rc = mds_getstatus(req);
                 break;
 
+        case MDS_LOVINFO:
+                CDEBUG(D_INODE, "lovinfo\n");
+                rc = mds_lovinfo(req);
+                break;
+
         case MDS_GETATTR:
                 CDEBUG(D_INODE, "getattr\n");
                 OBD_FAIL_RETURN(OBD_FAIL_MDS_GETATTR_NET, 0);
@@ -1012,12 +1061,16 @@ static int mds_cleanup(struct obd_device * obddev)
         RETURN(0);
 }
 
+extern int mds_iocontrol(long cmd, struct lustre_handle *conn, 
+                          int len, void *karg, void *uarg);
+
 /* use obd ops to offer management infrastructure */
 static struct obd_ops mds_obd_ops = {
         o_connect:     mds_connect,
         o_disconnect:  mds_disconnect,
         o_setup:       mds_setup,
         o_cleanup:     mds_cleanup,
+        o_iocontrol:   mds_iocontrol
 };
 
 static int __init mds_init(void)

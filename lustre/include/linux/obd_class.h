@@ -76,8 +76,9 @@ struct obd_export {
         struct list_head export_chain;
         struct obd_device *export_obd;
         struct ptlrpc_connection *export_connection;
-        unsigned int export_id;
         void *export_data; /* device specific data */
+        int export_desclen;
+        char *export_desc;
 };
 
 struct obd_import {
@@ -687,6 +688,7 @@ int class_register_type(struct obd_ops *ops, char *nm);
 int class_unregister_type(char *nm);
 int class_name2dev(char *name);
 int class_uuid2dev(char *name);
+struct obd_device *class_uuid2obd(char *name);
 int class_connect (struct lustre_handle *conn, struct obd_device *obd);
 int class_disconnect(struct lustre_handle *conn);
 struct obd_export *class_conn2export(struct lustre_handle *);

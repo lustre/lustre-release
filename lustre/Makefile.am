@@ -6,8 +6,8 @@
 AUTOMAKE_OPTIONS = foreign
 
 # NOTE: keep extN before mds
-SUBDIRS = utils obdclass ldlm ptlrpc llite lib obdecho mdc osc extN mds ost 
-SUBDIRS+=  tests obdfilter obdfs demos doc scripts 
+SUBDIRS = lov utils obdclass ldlm ptlrpc llite lib obdecho mdc osc extN 
+SUBDIRS+=  mds ost tests obdfilter obdfs demos doc scripts 
 EXTRA_DIST = BUGS FDL Rules include patches
 
 # We get the version from the spec file.

@@ -19,8 +19,8 @@
  * the obdtrace driver creates /proc/lustre/obd/<obdid>/stats entry.
  *
  * This file defines three functions 
- *               proc_lustre_register_obd_device()
- *               proc_lustre_release_obd_device()
+ *   proc_lustre_register_obd_device() - called at device attach time
+ *   proc_lustre_release_obd_device() - called at detach
  *               proc_lustre_remove_obd_entry() 
  * that dynamically create/delete /proc/lustre/obd entries:
  *
@@ -59,29 +59,14 @@ static int read_lustre_status(char *page, char **start, off_t offset,
 	struct obd_device * obddev = (struct obd_device *) data;
 	int p;
 
-	p = sprintf(&page[0], "device %d: ", obddev->obd_minor);
+	p = sprintf(&page[0], "device=%d\n", obddev->obd_minor);
+	p += sprintf(&page[0], "name=%s\n", MKSTR(obddev->obd_name));
+	p += sprintf(&page[0], "uuid=%s\n", obddev->obd_uuid); 
+        p += sprintf(&page[p], "attached=1\n");
+        p += sprintf(&page[0], "type=%s\n", MKSTR(obddev->obd_type->typ_name));
 	
-        if  (obddev->obd_flags & OBD_ATTACHED) {
-                p += sprintf(&page[p], ", attached(%s)", 
-                             obddev->obd_type->typ_name);
-        }
-        
         if  (obddev->obd_flags & OBD_SET_UP) {
-                struct dentry   *my_dentry;
-                struct vfsmount *root_mnt;
-                char *path;
-                char *pathpage;
-                
-                if (!(pathpage = (char*) __get_free_page(GFP_KERNEL)))
-                        return -ENOMEM;
-		
-                my_dentry = NULL;
-                root_mnt = mntget(current->fs->rootmnt);
-                path = d_path(my_dentry,root_mnt,pathpage,PAGE_SIZE);
-                
-                p += sprintf(&page[p], ", setup(%s)", path);
-                
-                free_page((unsigned long) pathpage);
+                p += sprintf(&page[p], "setup=1\n");
         }
         
         /* print exports */
@@ -104,7 +89,6 @@ static int read_lustre_status(char *page, char **start, off_t offset,
         p += sprintf(&page[p], "\n");
 
 	/* Compute eof and return value */
-
 	if (offset + count >= p) {
 		*eof=1;
 		return (p - offset);
@@ -125,17 +109,16 @@ proc_lustre_register_obd_device(struct obd_device *obd)
 			return 0;
 	
 		proc_lustre_obd_dir_entry = 
-			proc_mkdir("obd", proc_lustre_dir_entry);
+			proc_mkdir("devices", proc_lustre_dir_entry);
 		if (IS_ERR(proc_lustre_obd_dir_entry))
 			return 0;
 	}
-
-	sprintf(obdname, "%d", obd->obd_minor);
-
-
+	sprintf(obdname, "%s", obd->obd_name);
 	obd_dir =  proc_mkdir(obdname, proc_lustre_obd_dir_entry);
+
         if (obd_dir) 
-		obd_status = create_proc_entry("status", S_IRUSR | S_IFREG, obd_dir);
+		obd_status = create_proc_entry("status", S_IRUSR | S_IFREG, 
+                                               obd_dir);
 
 	if (obd_status) {
 		obd_status->read_proc = read_lustre_status;
