@@ -1,0 +1,9 @@
+diff -rupN --exclude='ide*' linux-2.4.20.orig/mm/filemap.c linux-2.4.20/mm/filemap.c
+--- linux-2.4.20.orig/mm/filemap.c	2002-11-29 01:53:15.000000000 +0200
++++ linux-2.4.20/mm/filemap.c	2004-02-20 13:52:26.990361912 +0200
+@@ -3195,3 +3195,5 @@ void __init page_cache_init(unsigned lon
+ 		panic("Failed to allocate page hash table\n");
+ 	memset((void *)page_hash_table, 0, PAGE_HASH_SIZE * sizeof(struct page *));
+ }
++
++EXPORT_SYMBOL(add_to_page_cache_unique);
