@@ -7,7 +7,7 @@ KFLAGS:=
 CPPFLAGS = $(HAVE_LIBREADLINE)
 obdctl_LDADD := $(LIBREADLINE) -lxml2 # -lefence
 lctl_LDADD := $(LIBREADLINE)
-sbin_PROGRAMS = lctl obdctl
+sbin_PROGRAMS = lctl
 obdctl_SOURCES = parser.c obdctl.c parser.h
 lctl_SOURCES = parser.c network.c device.c debug.c lctl.c lctl.h parser.h
 

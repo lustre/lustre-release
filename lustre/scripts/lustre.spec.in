@@ -62,7 +62,7 @@ find . -print | cpio -ap  $RPM_BUILD_ROOT/usr/src/lustre-%{version}
 
 
 %files
-%attr(-, root, root) /usr/sbin/obdctl
+#%attr(-, root, root) /usr/sbin/obdctl
 %attr(-, root, root) /usr/sbin/lctl
 %attr(-, root, root) /usr/sbin/llsetup.sh
 %attr(-, root, root) /usr/sbin/llrsetup.sh
