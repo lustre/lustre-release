@@ -53,7 +53,8 @@ int main (int argc, char **argv) {
 	memcpy(str2+(bytes/2), str, bytes);
 	str2[lbytes] = '\0';
 
-	printf("First  String: %s\nSecond String: %s\n", str, str2);
+	if (bytes < 320)
+		printf("First  String: %s\nSecond String: %s\n", str, str2);
 
 	fd = open(argv[1], O_CREAT|O_RDWR|O_TRUNC, 0700);
 	if (fd == -1) {
@@ -121,7 +122,8 @@ int main (int argc, char **argv) {
 	if (fd == -1)
 		return 1;
 
-	printf("%s\n%s\n", readbuf, str2);
+	if (bytes < 320)
+		printf("%s\n%s\n", readbuf, str2);
 	if (strcmp(readbuf, str2)) {
 		printf("No match!\n");
 		return 1;
