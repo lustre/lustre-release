@@ -9,7 +9,8 @@
  include/linux/namei.h  |    9 ++-
  kernel/ksyms.c         |    7 ++
  net/unix/af_unix.c     |    2 
- 11 files changed, 252 insertions(+), 61 deletions(-)
+ net/sunrpc/rpc_pipe.c  |    3 
+ 12 files changed, 252 insertions(+), 61 deletions(-)
 
 --- uml-2.5/fs/sysfs/inode.c~vfs_intent_2.5.69_rev1	2003-05-30 03:33:20.000000000 -0600
 +++ uml-2.5-braam/fs/sysfs/inode.c	2003-06-02 02:13:24.000000000 -0600
@@ -869,5 +870,34 @@
  		err = PTR_ERR(dentry);
  		if (IS_ERR(dentry))
  			goto out_mknod_unlock;
-
+ 
+--- uml-2.5/net/sunrpc/rpc_pipe.c	Tue Jun  3 14:33:00 2003
++++ uml-2.5/net/sunrpc/rpc_pipe.c	Tue Jun  3 14:33:38 2003
+@@ -566,7 +566,7 @@ rpc_lookup_negative(char *path, struct n
+ 		return ERR_PTR(error);
+ 	dir = nd->dentry->d_inode;
+ 	down(&dir->i_sem);
+-	dentry = lookup_hash(&nd->last, nd->dentry);
++	dentry = lookup_hash(&nd->last, nd->dentry, NULL);
+ 	if (IS_ERR(dentry))
+ 		goto out_err;
+ 	if (dentry->d_inode) {
+@@ -628,7 +628,7 @@ rpc_rmdir(char *path)
+ 		return error;
+ 	dir = nd.dentry->d_inode;
+ 	down(&dir->i_sem);
+-	dentry = lookup_hash(&nd.last, nd.dentry);
++	dentry = lookup_hash(&nd.last, nd.dentry, NULL);
+ 	if (IS_ERR(dentry)) {
+ 		error = PTR_ERR(dentry);
+ 		goto out_release;
+@@ -688,7 +688,7 @@ rpc_unlink(char *path)
+ 		return error;
+ 	dir = nd.dentry->d_inode;
+ 	down(&dir->i_sem);
+-	dentry = lookup_hash(&nd.last, nd.dentry);
++	dentry = lookup_hash(&nd.last, nd.dentry, NULL);
+ 	if (IS_ERR(dentry)) {
+ 		error = PTR_ERR(dentry);
+ 		goto out_release;
 _
