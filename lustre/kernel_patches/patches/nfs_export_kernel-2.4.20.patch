@@ -240,7 +240,7 @@ diff -uprN linux/fs/nfsd/nfsfh.c linux-2.4.20/fs/nfsd/nfsfh.c
  
 diff -uprN linux/fs/nfsd/vfs.c linux-2.4.20/fs/nfsd/vfs.c
 --- linux/fs/nfsd/vfs.c	2002-11-29 05:23:15.000000000 +0530
-+++ linux-2.4.20/fs/nfsd/vfs.c	2003-09-13 17:31:21.000000000 +0530
++++ linux-2.4.20/fs/nfsd/vfs.c	2003-09-17 16:03:09.000000000 +0530
 @@ -77,6 +77,133 @@ struct raparms {
  static struct raparms *		raparml;
  static struct raparms *		raparm_cache;
@@ -392,7 +392,7 @@ diff -uprN linux/fs/nfsd/vfs.c linux-2.4.20/fs/nfsd/vfs.c
  	}
  
 +	struct lookup_intent it;
-+	intent_init(&it, IT_OPEN, filp->f_flags);
++	intent_init(&it, IT_OPEN, filp->f_flags|filp->f_mode);
 +
 +	err = revalidate_it(dentry, &it);
 +	if (err)
