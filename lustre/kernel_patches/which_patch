@@ -1,11 +1,11 @@
 SERIES               MEMNONIC                  COMMENT
 
-hp-pnnl-2.4.20       linux-2.4.20-hp4_pnnl1    same as vanilla except uml
+hp-pnnl-2.4.20       linux-2.4.20-hp4_pnnl1    same as vanilla but no uml
 vanilla-2.4.20       linux-2.4.20              patch includes uml
 chaos-2.4.20         linux-chaos-2.4.20        same as rh-2.4.20-8
 rh-2.4.20            linux-rh-2.4.20-8         same as chaos-2.4.20
-rh-2.4.18-18         linux-rh-2.4.18-18        same as chaos except uml
-chaos                linux-chaos-2.4.18        same as rh-2.4.18-18 except uml
+rh-2.4.18-18         linux-rh-2.4.18-18        same as chaos but includes uml
+chaos                linux-chaos-2.4.18        same as rh-2.4.18-18 but no uml
 
 REVIEW:
 
