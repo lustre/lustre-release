@@ -954,10 +954,10 @@ def doHost(lustreNode, hosts, clean_flag):
 
     if not clean_flag:
         setDebugPath()
+        script = config.gdb_script()
+        run(lctl.lctl, ' modules >', script)
         if config.gdb():
             # dump /tmp/ogdb and sleep/pause here
-            script = config.gdb_script()
-            run(lctl.lctl, ' modules >', script)
             log ("The GDB module script is in", script)
             time.sleep(5)
             
