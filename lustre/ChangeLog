@@ -1,4 +1,10 @@
 tbd         Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 1.3.4
+       * bug fixes
+       * miscellania
+	- reorganization of lov code
+
+tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.8
        * bug fixes
 	- allocate qswnal tx descriptors singly to avoid fragmentation (4504)

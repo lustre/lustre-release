@@ -1005,7 +1005,7 @@ int ptlrpc_set_wait(struct ptlrpc_request_set *set)
         if (set->set_interpret != NULL) {
                 int (*interpreter)(struct ptlrpc_request_set *set,void *,int) =
                         set->set_interpret;
-                rc = interpreter (set, &set->set_args, rc);
+                rc = interpreter (set, set->set_arg, rc);
         }
 
         RETURN(rc);

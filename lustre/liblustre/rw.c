@@ -241,8 +241,6 @@ int llu_extent_lock(struct ll_file_data *fd, struct inode *inode,
             policy->l_extent.end == OBD_OBJECT_EOF)
                 lli->lli_st_size = lov_merge_size(lsm, 1);
 
-        //inode->i_mtime = lov_merge_mtime(lsm, inode->i_mtime);
-
         RETURN(rc);
 }
 

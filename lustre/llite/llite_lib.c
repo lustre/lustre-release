@@ -150,12 +150,6 @@ int lustre_common_fill_super(struct super_block *sb, char *mdc, char *osc)
         }
         sbi->ll_osc_exp = class_conn2export(&osc_conn);
 
-        /* need to do a statfs to initialize the per-OSC osfs cache -
-         * that is used by the OSC IO code to know the blocksize */
-        err = obd_statfs(obd, &osfs, jiffies - HZ);
-        if (err)
-                GOTO(out_mdc, err);
-
         err = mdc_getstatus(sbi->ll_mdc_exp, &rootfid);
         if (err) {
                 CERROR("cannot mds_connect: rc = %d\n", err);

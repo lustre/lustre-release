@@ -361,7 +361,7 @@ void ll_pgcache_remove_extent(struct inode *inode, struct lov_stripe_md *lsm,
         if (end < tmpex.l_extent.end >> PAGE_CACHE_SHIFT)
                 end = ~0;
 
-        i = (inode->i_size + PAGE_CACHE_SIZE-1) >> PAGE_CACHE_SHIFT;
+        i = inode->i_size ? (inode->i_size - 1) >> PAGE_CACHE_SHIFT : 0;
         if (i < end)
                 end = i;
 
@@ -650,7 +650,8 @@ int ll_glimpse_size(struct inode *inode)
 
         inode->i_size = lov_merge_size(lli->lli_smd, 0);
         inode->i_blocks = lov_merge_blocks(lli->lli_smd);
-        inode->i_mtime = lov_merge_mtime(lli->lli_smd, inode->i_mtime);
+        LTIME_S(inode->i_mtime) = lov_merge_mtime(lli->lli_smd,
+                                                  LTIME_S(inode->i_mtime));
 
         CDEBUG(D_DLMTRACE, "glimpse: size: %llu, blocks: %lu\n",
                inode->i_size, inode->i_blocks);
@@ -700,8 +701,9 @@ int ll_extent_lock(struct ll_file_data *fd, struct inode *inode,
                 inode->i_size = lov_merge_size(lsm, 1);
                 up(&inode->i_sem);
         }
-
-        //inode->i_mtime = lov_merge_mtime(lsm, inode->i_mtime);
+        if (rc > 0)
+                LTIME_S(inode->i_mtime) =
+                        lov_merge_mtime(lsm, LTIME_S(inode->i_mtime));
 
         RETURN(rc);
 }

@@ -201,7 +201,7 @@ struct ptlrpc_request_set {
         wait_queue_head_t *set_wakeup_ptr;
         struct list_head  set_requests;
         set_interpreter_func    set_interpret; /* completion callback */
-        union ptlrpc_async_args set_args; /* completion context */
+        void             *set_arg; /* completion context */
         /* locked so that any old caller can communicate requests to
          * the set holder who can then fold them into the lock-free set */
         spinlock_t        set_new_req_lock;

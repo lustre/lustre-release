@@ -295,7 +295,7 @@ int lov_alloc_memmd(struct lov_stripe_md **lsmp, int stripe_count, int pattern)
         (*lsmp)->lsm_magic = LOV_MAGIC;
         (*lsmp)->lsm_stripe_count = stripe_count;
         (*lsmp)->lsm_maxbytes = LUSTRE_STRIPE_MAXBYTES * stripe_count;
-        (*lsmp)->lsm_xfersize = PTLRPC_MTU * stripe_count;
+        (*lsmp)->lsm_xfersize = PTLRPC_MAX_BRW_SIZE * stripe_count;
         (*lsmp)->lsm_pattern = pattern;
         (*lsmp)->lsm_oinfo[0].loi_ost_idx = ~0;
 
