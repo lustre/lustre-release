@@ -26,3 +26,8 @@ llmount_SOURCES = llmount.c
 EXTRA_DIST = $(bin_SCRIPTS) $(sbin_SCRIPTS)
 
 include $(top_srcdir)/Rules
+
+wiretest.c: wirehdr.c wirecheck
+	cp wirehdr.c wiretest.c
+	./wirecheck >> $@
+
