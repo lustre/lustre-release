@@ -82,20 +82,18 @@ Index: linux-2.6.4-51.0/fs/namei.c
  
  	name = getname(pathname);
  	if(IS_ERR(name))
-@@ -1716,6 +1737,16 @@
+@@ -1716,6 +1737,14 @@
  			error = -EBUSY;
  			goto exit1;
  	}
-+ 
 + 	if (nd.dentry->d_inode->i_op->rmdir_raw) {
 + 		struct inode_operations *op = nd.dentry->d_inode->i_op;
-+ 
++
 + 		error = op->rmdir_raw(&nd);
 + 		/* the file system wants to use normal vfs path now */
 + 		if (error != -EOPNOTSUPP)
 + 			goto exit1;
 + 	}
-+ 
  	down(&nd.dentry->d_inode->i_sem);
  	dentry = lookup_hash(&nd.last, nd.dentry);
  	error = PTR_ERR(dentry);
