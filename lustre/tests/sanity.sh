@@ -1379,8 +1379,8 @@ trunc_test() {
 
 test_42c() {
         trunc_test 42c 1024
-        [ $BEFOREWRITES -ge $AFTERWRITES ] && \
-            error "beforewrites $BEFOREWRITES >= afterwrites $AFTERWRITES on truncate"
+        [ $BEFOREWRITES -eq $AFTERWRITES ] && \
+            error "beforewrites $BEFOREWRITES == afterwrites $AFTERWRITES on truncate"
         rm $file
 }
 run_test 42c "test partial truncate of file with cached dirty data"
