@@ -117,7 +117,7 @@ int class_handle_init(void)
 
         LASSERT(handle_hash == NULL);
 
-        OBD_ALLOC(handle_hash, sizeof(*handle_hash) * HANDLE_HASH_SIZE);
+        OBD_VMALLOC(handle_hash, sizeof(*handle_hash) * HANDLE_HASH_SIZE);
         if (handle_hash == NULL)
                 return -ENOMEM;
 
@@ -157,7 +157,7 @@ void class_handle_cleanup(void)
                 cleanup_all_handles();
         }
 
-        OBD_FREE(handle_hash, sizeof(*handle_hash) * HANDLE_HASH_SIZE);
+        OBD_VFREE(handle_hash, sizeof(*handle_hash) * HANDLE_HASH_SIZE);
         handle_hash = NULL;
 
         if (handle_count)
