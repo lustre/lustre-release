@@ -160,9 +160,9 @@ static void ll_writeback(struct inode *inode, struct ll_writeback_pages *llwp)
                 CERROR ("Can't create request set\n");
                 rc = -ENOMEM;
         } else {
-                rc = obd_brw_async (OBD_BRW_WRITE, ll_i2obdconn(inode),
-                                    ll_i2info(inode)->lli_smd, llwp->npgs, llwp->pga,
-                                    set, NULL);
+                rc = obd_brw_async(OBD_BRW_WRITE, ll_i2obdconn(inode),
+                                   ll_i2info(inode)->lli_smd, llwp->npgs,
+                                   llwp->pga, set, NULL);
                 if (rc == 0)
                         rc = ptlrpc_set_wait (set);
                 ptlrpc_set_destroy (set);
@@ -248,6 +248,11 @@ static int ll_alloc_brw(struct inode *inode, struct ll_writeback_pages *llwp)
         memset(llwp, 0, sizeof(struct ll_writeback_pages));
 
         llwp->max = inode->i_blksize >> PAGE_CACHE_SHIFT;
+        if (llwp->max == 0) {
+                CERROR("forcing llwp->max to 1.  blksize: %lu\n",
+                       inode->i_blksize);
+                llwp->max = 1;
+        }
         llwp->pga = kmalloc(llwp->max * sizeof(*llwp->pga), GFP_ATOMIC);
         if (llwp->pga == NULL)
                 RETURN(-ENOMEM);
