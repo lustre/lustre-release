@@ -625,6 +625,9 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 if ((rc = mds_try_to_split_dir(obd, dparent, &mea, 0))) {
                         if (rc > 0) {
                                 /* dir got splitted */
+                                CERROR("%s: splitted %lu/%u - %d\n",
+                                       obd->obd_name, dparent->d_inode->i_ino,
+                                       dparent->d_inode->i_generation, rc);
                                 GOTO(cleanup, rc = -ERESTART);
                         } else {
                                 /* error happened during spitting. */
@@ -677,6 +680,10 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                                                                NULL, nstripes))) {
                                         if (rc > 0) {
                                                 /* dir got splitted */
+                                        CERROR("%s: splitted %lu/%u - %d\n",
+                                               obd->obd_name,
+                                               dchild->d_inode->i_ino,
+                                               dchild->d_inode->i_generation, rc);
                                                 rc = 0;
                                         } else {
                                                 /* an error occured during

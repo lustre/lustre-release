@@ -1451,7 +1451,9 @@ repeat:
                 up(&new->d_inode->i_sem);
                 OBD_FREE(mea, mealen);
         } else if (rc == 0 && body->oa.o_easize) {
-                mds_try_to_split_dir(obd, new, NULL, body->oa.o_easize);
+                flags = mds_try_to_split_dir(obd, new, NULL, body->oa.o_easize);
+                CERROR("%s: splitted %lu/%u - %d\n", obd->obd_name,
+                       new->d_inode->i_ino, new->d_inode->i_generation, flags);
         }
 
 cleanup:

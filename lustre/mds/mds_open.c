@@ -974,6 +974,9 @@ got_child:
                 if ((rc = mds_try_to_split_dir(obd, dparent, &mea, 0))) {
                         if (rc > 0) {
                                 /* dir got splitted */
+                                CERROR("%s: splitted %lu/%u - %d\n", obd->obd_name,
+                                        dparent->d_inode->i_ino,
+                                        dparent->d_inode->i_generation, rc);
                                 GOTO(cleanup, rc = -ERESTART);
                         } else {
                                 /* error happened during spitting */
