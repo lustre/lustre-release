@@ -88,7 +88,7 @@ void portals_run_upcall(char **argv)
                        argc < 5 ? "" : ",", argc < 5 ? "" : argv[4],
                        argc < 6 ? "" : ",...");
         } else {
-                CERROR("Invoked portals upcall %s %s%s%s%s%s%s%s%s\n",
+                CWARN("Invoked portals upcall %s %s%s%s%s%s%s%s%s\n",
                        argv[0], argv[1],
                        argc < 3 ? "" : ",", argc < 3 ? "" : argv[2],
                        argc < 4 ? "" : ",", argc < 4 ? "" : argv[3],
