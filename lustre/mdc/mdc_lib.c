@@ -26,7 +26,6 @@
 #include <linux/lustre_idl.h>
 #include <linux/lustre_net.h>
 #include <linux/lustre_mds.h>
-#include <linux/lustre_lite.h>
 #include "mdc_internal.h"
 
 void mdc_readdir_pack(struct ptlrpc_request *req, __u64 offset, __u32 size,

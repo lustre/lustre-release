@@ -10,8 +10,35 @@
 #ifndef LLITE_INTERNAL_H
 #define LLITE_INTERNAL_H
 
+struct ll_sb_info {
+        struct obd_uuid           ll_sb_uuid;
+//        struct lustre_handle      ll_mdc_conn;
+        struct obd_export        *ll_mdc_exp;
+        struct obd_export        *ll_osc_exp;
+        struct proc_dir_entry*    ll_proc_root;
+        obd_id                    ll_rootino; /* number of root inode */
 
-struct ll_sb_info;
+        struct obd_uuid           ll_mds_uuid;
+        struct obd_uuid           ll_mds_peer_uuid;
+        struct lustre_mount_data *ll_lmd;
+        char                     *ll_instance; 
+
+        int                       ll_flags;
+        wait_queue_head_t         ll_commitcbd_waitq;
+        wait_queue_head_t         ll_commitcbd_ctl_waitq;
+        int                       ll_commitcbd_flags;
+        struct task_struct       *ll_commitcbd_thread;
+        time_t                    ll_commitcbd_waketime;
+        time_t                    ll_commitcbd_timeout;
+        spinlock_t                ll_commitcbd_lock;
+        struct list_head          ll_conn_chain; /* per-conn chain of SBs */
+
+        struct hlist_head         ll_orphan_dentry_list; /*please don't ask -p*/
+        struct ll_close_queue    *ll_lcq;
+
+        struct lprocfs_stats     *ll_stats; /* lprocfs stats counter */
+};
+
 struct lustre_handle;
 struct lov_stripe_md;
 
@@ -36,7 +63,6 @@ static inline struct inode *ll_info2i(struct ll_inode_info *lli)
 static inline void ll_i2uctxt(struct ll_uctxt *ctxt, struct inode *i1,
                               struct inode *i2)
 {
-
         LASSERT(i1);
         LASSERT(ctxt);
 
@@ -182,5 +208,79 @@ struct dentry *ll_fh_to_dentry(struct super_block *sb, __u32 *data, int len,
 int ll_dentry_to_fh(struct dentry *, __u32 *datap, int *lenp, int need_parent);
 /* llite/symlink.c */
 extern struct inode_operations ll_fast_symlink_inode_operations;
+
+/* generic */
+#define LL_SUPER_MAGIC 0x0BD00BD0
+
+#define LL_SBI_NOLCK            0x1
+#define LL_SBI_READAHEAD        0x2
+
+#if  (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
+#define    ll_s2sbi(sb)     ((struct ll_sb_info *)((sb)->s_fs_info))
+void __d_rehash(struct dentry * entry, int lock);
+static inline __u64 ll_ts2u64(struct timespec *time)
+{
+        __u64 t = time->tv_sec;
+        return t;
+}
+#else  /* 2.4 here */
+#define    ll_s2sbi(sb)     ((struct ll_sb_info *)((sb)->u.generic_sbp))
+static inline __u64 ll_ts2u64(time_t *time)
+{
+        return *time;
+}
+#endif 
+
+/* don't need an addref as the sb_info should be holding one */
+static inline struct obd_export *ll_s2obdexp(struct super_block *sb)
+{
+        return ll_s2sbi(sb)->ll_osc_exp;
+}
+
+/* don't need an addref as the sb_info should be holding one */
+static inline struct obd_export *ll_s2mdcexp(struct super_block *sb)
+{
+        return ll_s2sbi(sb)->ll_mdc_exp;
+}
+
+static inline struct client_obd *sbi2mdc(struct ll_sb_info *sbi)
+{
+        struct obd_device *obd = sbi->ll_mdc_exp->exp_obd;
+        if (obd == NULL)
+                LBUG();
+        return &obd->u.cli;
+}
+
+// FIXME: replace the name of this with LL_SB to conform to kernel stuff
+static inline struct ll_sb_info *ll_i2sbi(struct inode *inode)
+{
+        return ll_s2sbi(inode->i_sb);
+}
+
+static inline struct obd_export *ll_i2obdexp(struct inode *inode)
+{
+        return ll_s2obdexp(inode->i_sb);
+}
+
+static inline struct obd_export *ll_i2mdcexp(struct inode *inode)
+{
+        return ll_s2mdcexp(inode->i_sb);
+}
+
+static inline void ll_inode2fid(struct ll_fid *fid, struct inode *inode)
+{
+        mdc_pack_fid(fid, inode->i_ino, inode->i_generation,
+                     inode->i_mode & S_IFMT);
+}
+
+static inline int ll_mds_max_easize(struct super_block *sb)
+{
+        return sbi2mdc(ll_s2sbi(sb))->cl_max_mds_easize;
+}
+
+static inline __u64 ll_file_maxbytes(struct inode *inode)
+{
+        return ll_i2info(inode)->lli_maxbytes;
+}
 
 #endif /* LLITE_INTERNAL_H */

@@ -30,10 +30,10 @@
 # include <liblustre.h>
 #endif
 #include <linux/obd.h>
-#include <linux/obd_ost.h>
+#include <linux/obd_ost.h> /* for LUSTRE_OSC_NAME */
+#include <linux/lustre_mds.h> /* for LUSTRE_MDC_NAME */
 #include <linux/lustre_mgmt.h>
 #include <linux/lustre_dlm.h>
-#include <linux/lustre_mds.h>
 #include <linux/lustre_net.h>
 
 int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)

@@ -5,6 +5,8 @@
 #ifndef _MDS_INTERNAL_H
 #define _MDS_INTERNAL_H
 
+#include <linux/lustre_mds.h>
+
 struct mds_filter_data {
         __u64 io_epoch;
 };
