@@ -37,7 +37,7 @@
 
 extern struct address_space_operations ll_aops;
 extern struct address_space_operations ll_dir_aops;
-struct super_operations ll_super_operations;
+extern struct super_operations ll_super_operations;
 
 #ifndef log2
 #define log2(n) ffz(~(n))
@@ -315,12 +315,12 @@ void ll_put_super(struct super_block *sb)
 {
         struct ll_sb_info *sbi = ll_s2sbi(sb);
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+        struct obd_device *obd = class_conn2obd(&sbi->ll_mdc_conn);
         struct list_head *tmp, *next;
 #else
-        struct hlist_head *tmp, *next;
+        struct hlist_node *tmp, *next;
 #endif
         struct ll_fid rootfid;
-        struct obd_device *obd = class_conn2obd(&sbi->ll_mdc_conn);
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op: sb %p\n", sb);
@@ -807,7 +807,7 @@ void ll_read_inode2(struct inode *inode, void *opaque)
                 EXIT;
         } else {
                 inode->i_op = &ll_special_inode_operations;
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
                 init_special_inode(inode, inode->i_mode, 
                                    kdev_t_to_nr(inode->i_rdev));
 #else
