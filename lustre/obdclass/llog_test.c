@@ -34,6 +34,7 @@
 #include <linux/lustre_log.h>
 
 static int llog_test_rand;
+static struct obd_uuid uuid = { .uuid = "test_uuid" };
 
 /* Test named-log create/open, close */
 static int llog_test_1(struct obd_device *obd)
@@ -50,19 +51,20 @@ static int llog_test_1(struct obd_device *obd)
                 CERROR("1a: llog_create with name %s failed: %d\n", name, rc);
                 RETURN(rc);
         }
-        llog_init_handle(llh, LLOG_F_IS_PLAIN, "test");
+        llog_init_handle(llh, LLOG_F_IS_PLAIN, &uuid);
 
         if (llh->lgh_last_idx != 0) {
                 CERROR("1a: handle->last_idx is %d, expected 0 after create\n",
                        llh->lgh_last_idx);
-                RETURN(-ERANGE);
+                GOTO(out, rc = -ERANGE);
         }
         if (llh->lgh_hdr->llh_count != 0) {
                 CERROR("1a: header->count is %d, expected 0 after create\n",
                        llh->lgh_hdr->llh_count);
-                RETURN(-ERANGE);
+                GOTO(out, rc = -ERANGE);
         }
 
+ out:
         CERROR("1b: close newly-created log\n");
         rc = llog_close(llh);
         if (rc)
@@ -84,6 +86,7 @@ static int llog_test_2(struct obd_device *obd, struct llog_handle **llh)
                 CERROR("2: re-open log with name %s failed: %d\n", name, rc);
                 RETURN(rc);
         }
+        llog_init_handle(*llh, LLOG_F_IS_PLAIN, &uuid);
 
         if ((*llh)->lgh_last_idx != 0) {
                 CERROR("2: handle->last_idx is %d, expected 0 after reopen\n",
