@@ -5,6 +5,8 @@
 
 DEFS=
 
+CFLAGS = -DOBD_MAX_IOCTL_BUFFER=@OBD_BUFFER_SIZE@
+
 MODULE = cobd
 modulefs_DATA = cobd.o
 EXTRA_PROGRAMS = cobd
