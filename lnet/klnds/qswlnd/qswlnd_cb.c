@@ -1556,7 +1556,7 @@ kqswnal_recvmsg (nal_cb_t     *nal,
         LASSERT (mlen <= rlen);
         if (krx->krx_nob < KQSW_HDR_SIZE + mlen) {
                 CERROR("Bad message size: have %d, need %d + %d\n",
-                       krx->krx_nob, KQSW_HDR_SIZE, mlen);
+                       krx->krx_nob, (int)KQSW_HDR_SIZE, (int)mlen);
                 return (PTL_FAIL);
         }
 
@@ -1564,16 +1564,15 @@ kqswnal_recvmsg (nal_cb_t     *nal,
         LASSERT (kiov == NULL || !in_interrupt ());
         /* Either all pages or all vaddrs */
         LASSERT (!(kiov != NULL && iov != NULL));
-        
-        if (mlen != 0)
-        {
+
+        if (mlen != 0) {
                 page     = 0;
                 page_ptr = ((char *) page_address(krx->krx_pages[0])) +
                         KQSW_HDR_SIZE;
                 page_nob = PAGE_SIZE - KQSW_HDR_SIZE;
 
                 LASSERT (niov > 0);
-                
+
                 if (kiov != NULL) {
                         /* skip complete frags */
                         while (offset >= kiov->kiov_len) {
@@ -1582,7 +1581,8 @@ kqswnal_recvmsg (nal_cb_t     *nal,
                                 niov--;
                                 LASSERT (niov > 0);
                         }
-                        iov_ptr = ((char *)kmap (kiov->kiov_page)) + kiov->kiov_offset + offset;
+                        iov_ptr = ((char *)kmap (kiov->kiov_page)) +
+                                kiov->kiov_offset + offset;
                         iov_nob = kiov->kiov_len - offset;
                 } else {
                         /* skip complete frags */
