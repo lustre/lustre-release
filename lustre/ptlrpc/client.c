@@ -413,7 +413,7 @@ restart1:
                 if (req->rq_import != imp)
                         continue;
                 /* XXX we should make sure that nobody's sleeping on these! */
-                DEBUG_REQ(D_ERROR, req, "cleaning up from sending list");
+                DEBUG_REQ(D_HA, req, "cleaning up from sending list");
                 list_del_init(&req->rq_list);
                 req->rq_import = NULL;
                 spin_unlock(&conn->c_lock);
