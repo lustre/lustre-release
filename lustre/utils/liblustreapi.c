@@ -380,6 +380,26 @@ static int process_file(DIR *dir, char *dname, char *fname,
         return 0;
 }
 
+/* some 64bit libcs implement readdir64() by calling sys_getdents().  the
+ * kernel's sys_getdents() doesn't return d_type.  */
+unsigned char handle_dt_unknown(char *parent, char *entry)
+{
+        char path[PATH_MAX + 1];
+        int fd, ret;
+
+        ret = snprintf(path, PATH_MAX, "%s/%s", parent, entry);
+        if (ret >= PATH_MAX)
+                return DT_UNKNOWN;
+
+        fd = open(path, O_DIRECTORY|O_RDONLY);
+        if (fd < 0) {
+                if (errno == ENOTDIR)
+                        return DT_REG; /* kind of a lie */
+                return DT_UNKNOWN;
+        }
+        close(fd);
+        return DT_DIR;
+}
 
 static int process_dir(DIR *dir, char *dname, struct find_param *param)
 {
@@ -415,6 +435,9 @@ static int process_dir(DIR *dir, char *dname, struct find_param *param)
         while ((dirp = readdir64(dir)) != NULL) {
                 if (!strcmp(dirp->d_name, ".") || !strcmp(dirp->d_name, ".."))
                         continue;
+
+                if (dirp->d_type == DT_UNKNOWN)
+                        dirp->d_type = handle_dt_unknown(dname, dirp->d_name);
 
                 switch (dirp->d_type) {
                 case DT_UNKNOWN:
