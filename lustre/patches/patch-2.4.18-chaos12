@@ -605,13 +605,13 @@
  		}
  		/* This does the actual lookups.. */
 -		dentry = cached_lookup(nd->dentry, &this, LOOKUP_CONTINUE);
-+		dentry = cached_lookup(nd->dentry, &this, LOOKUP_CONTINUE, it);
++		dentry = cached_lookup(nd->dentry, &this, LOOKUP_CONTINUE, NULL);
  		if (!dentry) {
  			err = -EWOULDBLOCKIO;
  			if (atomic)
  				break;
 -			dentry = real_lookup(nd->dentry, &this, LOOKUP_CONTINUE);
-+			dentry = real_lookup(nd->dentry, &this, LOOKUP_CONTINUE, it);
++			dentry = real_lookup(nd->dentry, &this, LOOKUP_CONTINUE, NULL);
  			err = PTR_ERR(dentry);
  			if (IS_ERR(dentry))
  				break;
