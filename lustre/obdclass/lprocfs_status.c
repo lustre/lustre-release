@@ -684,6 +684,65 @@ int lprocfs_write_helper(const char *buffer, unsigned long count,
         return 0;
 }
 
+int lprocfs_obd_seq_create(struct obd_device *dev, char *name, mode_t mode, 
+                           struct file_operations *seq_fops, void *data)
+{
+        struct proc_dir_entry *entry;
+        ENTRY;
+
+        entry = create_proc_entry(name, mode, dev->obd_proc_entry);
+        if (entry == NULL)
+                RETURN(-ENOMEM);
+        entry->proc_fops = seq_fops;
+        entry->data = data;
+
+        RETURN(0);
+}
+EXPORT_SYMBOL(lprocfs_obd_seq_create);
+
+void lprocfs_oh_tally(struct obd_histogram *oh, unsigned int value)
+{
+        unsigned long flags;
+
+        if (value >= OBD_HIST_MAX)
+                value = OBD_HIST_MAX - 1;
+
+        spin_lock_irqsave(&oh->oh_lock, flags);
+        oh->oh_buckets[value]++;
+        spin_unlock_irqrestore(&oh->oh_lock, flags);
+}
+EXPORT_SYMBOL(lprocfs_oh_tally);
+
+void lprocfs_oh_tally_log2(struct obd_histogram *oh, unsigned int value)
+{
+        unsigned int val;
+
+        for (val = 0; ((1 << val) < value) && (val <= OBD_HIST_MAX); val++)
+                ;
+
+        lprocfs_oh_tally(oh, val);
+}
+EXPORT_SYMBOL(lprocfs_oh_tally_log2);
+
+unsigned long lprocfs_oh_sum(struct obd_histogram *oh)
+{
+        unsigned long ret = 0;
+        int i;
+
+        for (i = 0; i < OBD_HIST_MAX; i++)
+                ret +=  oh->oh_buckets[i];
+        return ret;
+}
+EXPORT_SYMBOL(lprocfs_oh_sum);
+
+void lprocfs_oh_clear(struct obd_histogram *oh)
+{
+        unsigned long flags;
+        spin_lock_irqsave(&oh->oh_lock, flags);
+        memset(oh->oh_buckets, 0, sizeof(oh->oh_buckets));
+        spin_unlock_irqrestore(&oh->oh_lock, flags);
+}
+EXPORT_SYMBOL(lprocfs_oh_clear);
 
 #endif /* LPROCFS*/
 

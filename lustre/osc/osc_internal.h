@@ -12,6 +12,7 @@
 
 #include <portals/lib-types.h> /* for PTL_MTU and PTL_MD_MAX_PAGES */
 
+
 /* bug 1578: negotiate BRW_MAX_SIZE with the OST, instead of hard-coding it */
 #define OSC_BRW_MAX_SIZE PTL_MTU
 #define OSC_BRW_MAX_IOV PTL_MD_MAX_PAGES
@@ -50,17 +51,9 @@ void oscc_init(struct obd_export *exp);
 void osc_adjust_cache(struct client_obd *cli);
 
 #ifdef __KERNEL__
-
 int lproc_osc_attach_seqstat(struct obd_device *dev);
-void lproc_osc_hist(struct osc_histogram *oh, unsigned int value);
-void lproc_osc_hist_pow2(struct osc_histogram *oh, unsigned int value);
-
-#else /* !__KERNEL__ */
-
-#define lproc_osc_attach_seqstat(dev) (0)
-#define lproc_osc_hist(o,v) do{}while(0)
-#define lproc_osc_hist_pow2(o, v) do{}while(0)
-
+#else
+static inline int lproc_osc_attach_seqstat(struct obd_device *dev) {}
 #endif
 
 #endif /* OSC_INTERNAL_H */

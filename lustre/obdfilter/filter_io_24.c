@@ -124,6 +124,9 @@ static int filter_direct_io(int rw, struct dentry *dchild, struct kiobuf *iobuf,
         }
         up(&exp->exp_obd->u.filter.fo_alloc_lock);
 
+        filter_tally_write(&obd->u.filter, iobuf->maplist, iobuf->nr_pages, 
+                           iobuf->blocks, blocks_per_page);
+
         if (attr->ia_size > inode->i_size)
                 attr->ia_valid |= ATTR_SIZE;
         rc = fsfilt_setattr(obd, dchild, oti->oti_handle, attr, 0);

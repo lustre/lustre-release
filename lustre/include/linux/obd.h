@@ -117,6 +117,13 @@ struct obd_sync_io_container {
         wait_queue_head_t osic_waitq;
 };
 
+/* if we find more consumers this could be generalized */
+#define OBD_HIST_MAX 32
+struct obd_histogram {
+        spinlock_t      oh_lock;
+        unsigned long   oh_buckets[OBD_HIST_MAX];
+};
+
 /* Individual type definitions */
 
 struct ost_server_data;
@@ -154,16 +161,16 @@ struct filter_obd {
         __u64               *fo_last_objids; //last created object ID for groups
 
         struct semaphore     fo_alloc_lock;
+
+        struct obd_histogram     fo_r_pages;
+        struct obd_histogram     fo_w_pages;
+        struct obd_histogram     fo_r_discont_pages;
+        struct obd_histogram     fo_w_discont_pages;
+        struct obd_histogram     fo_r_discont_blocks;
+        struct obd_histogram     fo_w_discont_blocks;
 };
 
 struct mds_server_data;
-
-/* if we find more consumers this could be generalized */
-#define OSC_HIST_MAX 32
-struct osc_histogram {
-        spinlock_t      oh_lock;
-        unsigned long   oh_buckets[OSC_HIST_MAX];
-};
 
 struct mdc_rpc_lock;
 struct client_obd {
@@ -202,10 +209,10 @@ struct client_obd {
         int                      cl_pending_r_pages;
         int                      cl_max_pages_per_rpc;
         int                      cl_max_rpcs_in_flight;
-        struct osc_histogram     cl_read_rpc_hist;
-        struct osc_histogram     cl_write_rpc_hist;
-        struct osc_histogram     cl_read_page_hist;
-        struct osc_histogram     cl_write_page_hist;
+        struct obd_histogram     cl_read_rpc_hist;
+        struct obd_histogram     cl_write_rpc_hist;
+        struct obd_histogram     cl_read_page_hist;
+        struct obd_histogram     cl_write_page_hist;
 
         struct mdc_rpc_lock     *cl_rpc_lock;
         struct mdc_rpc_lock     *cl_setattr_lock;

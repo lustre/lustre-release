@@ -258,6 +258,13 @@ extern int lprocfs_rd_filegroups(char *page, char **start, off_t off,
 
 extern int lprocfs_write_helper(const char *buffer, unsigned long count, 
                                 int *val);
+int lprocfs_obd_seq_create(struct obd_device *dev, char *name, mode_t mode, 
+                           struct file_operations *seq_fops, void *data);
+struct obd_histogram;
+void lprocfs_oh_tally(struct obd_histogram *oh, unsigned int value);
+void lprocfs_oh_tally_log2(struct obd_histogram *oh, unsigned int value);
+void lprocfs_oh_clear(struct obd_histogram *oh);
+unsigned long lprocfs_oh_sum(struct obd_histogram *oh);
 
 /* lprocfs_status.c: counter read/write functions */
 extern int lprocfs_counter_read(char *page, char **start, off_t off,

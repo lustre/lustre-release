@@ -151,5 +151,22 @@ int filter_san_setup(struct obd_device *obd, obd_count len, void *buf);
 int filter_san_preprw(int cmd, struct obd_export *, struct obdo *, int objcount,
                       struct obd_ioobj *, int niocount, struct niobuf_remote *);
 
+#ifdef __KERNEL__
+void filter_tally_write(struct filter_obd *filter, struct page **pages,
+                        int nr_pages, unsigned long *blocks, 
+                        int blocks_per_page);
+void filter_tally_read(struct filter_obd *filter, struct niobuf_local *lnb, 
+                       int niocount);
+int lproc_filter_attach_seqstat(struct obd_device *dev);
+#else
+static inline filter_tally_write(struct filter_obd *filter, 
+                                 struct page **pages, int nr_pages, 
+                                 unsigned long *blocks, int blocks_per_page) {}
+static inline void  filter_tally_read(struct filter_obd *filter, 
+                                      struct niobuf_local *lnb, int niocount)
+                                      {}
+static inline lproc_filter_attach_seqstat(struct obd_device *dev) {}
+#endif
+
 
 #endif

@@ -1329,15 +1329,16 @@ static int osc_send_oap_rpc(struct client_obd *cli, int cmd,
         INIT_LIST_HEAD(&rpc_list);
 
         if (cmd == OBD_BRW_READ)
-                lproc_osc_hist_pow2(&cli->cl_read_page_hist, page_count);
+                lprocfs_oh_tally_log2(&cli->cl_read_page_hist, page_count);
         else 
-                lproc_osc_hist_pow2(&cli->cl_write_page_hist, page_count);
+                lprocfs_oh_tally_log2(&cli->cl_write_page_hist, page_count);
 
         spin_lock(&cli->cl_loi_list_lock);
         if (cmd == OBD_BRW_READ)
-                lproc_osc_hist(&cli->cl_read_rpc_hist, cli->cl_brw_in_flight);
+                lprocfs_oh_tally(&cli->cl_read_rpc_hist, cli->cl_brw_in_flight);
         else 
-                lproc_osc_hist(&cli->cl_write_rpc_hist, cli->cl_brw_in_flight);
+                lprocfs_oh_tally(&cli->cl_write_rpc_hist, 
+                                 cli->cl_brw_in_flight);
 
         cli->cl_brw_in_flight++;
         CDEBUG(D_INODE, "req %p: %d pages, aa %p.  now %d in flight\n", request,

@@ -1119,6 +1119,12 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
         spin_lock_init(&filter->fo_objidlock);
         INIT_LIST_HEAD(&filter->fo_export_list);
         sema_init(&filter->fo_alloc_lock, 1);
+        spin_lock_init(&filter->fo_r_pages.oh_lock);
+        spin_lock_init(&filter->fo_w_pages.oh_lock);
+        spin_lock_init(&filter->fo_r_discont_pages.oh_lock);
+        spin_lock_init(&filter->fo_w_discont_pages.oh_lock);
+        spin_lock_init(&filter->fo_r_discont_blocks.oh_lock);
+        spin_lock_init(&filter->fo_w_discont_blocks.oh_lock);
 
         obd->obd_namespace = ldlm_namespace_new("filter-tgt",
                                                 LDLM_NAMESPACE_SERVER);
@@ -1248,7 +1254,8 @@ static int filter_attach(struct obd_device *obd, obd_count len, void *data)
                              LPROCFS_CNTR_AVGMINMAX, "read_bytes", "bytes");
         lprocfs_counter_init(obd->obd_stats, LPROC_FILTER_WRITE_BYTES,
                              LPROCFS_CNTR_AVGMINMAX, "write_bytes", "bytes");
-        return rc;
+
+        return lproc_filter_attach_seqstat(obd);
 }
 
 static int filter_detach(struct obd_device *dev)
