@@ -23,10 +23,18 @@
 lmc - lustre configurtion data  manager
 
  Basic plan for lmc usage:
-  lmc --output config.xml --node nodename nid nettype [port=2346]
-  lmc --merge config.xml  --lov lovname stripsize stripeoffset
-  lmc --merge config.xml  --ost /dev/name nodename lovname [size=9999]
-  lmc --merge config.xml  --mtpt /mnt/lustre lovname nodename
+# create nodes
+./lmc --output config.xml --node server --net server1 tcp 
+./lmc --merge config.xml  --node client --net client1 tcp
+
+# configure server
+./lmc --merge config.xml  --node server --mds /tmp/mds1
+./lmc --merge config.xml  --lov lov1 111 222 333
+./lmc --merge config.xml  --node server --lov lov1 --ost /dev/name [size=9999]
+
+# create client config
+./lmc --merge config.xml  --node client --mtpt /mnt/lustre MDC_server lov1
+
 """
 
 import sys, getopt, string
@@ -39,23 +47,32 @@ DEFAULT_PORT = 888 # XXX What is the right default acceptor port to use?
 def usage():
     print """usage: lmc [--node --ost | --mtpt | --lov] args
 Commands:
---node node_name hostname nettype [port]
-   Node_name is used to refer to this node during the configure process.
+--node node_name 
+   Node_name by itself it will create a new node. When used with other
+     commands it specifies the node to modify
+
+--net hostname nettype [port, recv_buf, send_buf]
    Nettype is either tcp, elan, or gm.
+   Requires a node argument
 
---lov lov_name mdc_name stripe_sz stripe_off pattern
-   Creates a logical volume 
+--lov lov_name [mdc_name stripe_sz stripe_off pattern]
+   Creates a logical volume
+   When used with other commands, it specifics the lov to modify
 
---mds node_name device [size]
+--mds device [size]
+   Create a MDS using the device
+   Requires --node 
 
---ost device node_name lov_name [size]
+--ost device [size]
    Creates an OBD/OST/OSC configuration triplet for a new device.
    When used on "host", the device will be initialized and the OST
    will be enabled. On client nodes, the OSC will be avaiable.
-   If lov_name is used, this device is added to lov. 
+   Requires --node
+   If --lov lov_name is used, this device is added to lov. 
 
---mtpt node_name mds_name lov_name /mnt/point
+--mtpt /mnt/point mdc_name lov_name|osc_name 
    Creates a client mount point.
+   Requires --node
 
 Options:
 --merge="xml file"  Add the new objects to an existing file
@@ -230,25 +247,39 @@ def lov_add_osc(gen, lov, osc_uuid):
     else:
         error("No devices element found for LOV:", lov)
                             
+def node_add_mnt(gen, node, mnt_uuid):
+    node.appendChild(gen.ref("mountpoint", mnt_uuid))
+                            
+def node_add_mds(gen, node, mds_uuid):
+    node.appendChild(gen.ref("mds", mds_uuid))
+                            
     
 #
 # Create a new obd, osc, and ost. Add them to the DOM.
 #
 def add_ost(gen, lustre, options, args):
-    if len(args) < 3:
+    if len(args) < 1:
         usage()
 
+    if options.has_key('node'):
+        node_name = options['node']
+    else:
+        error("--ost requires a --node argument")
+
+    if options.has_key('lov'):
+        lovname = options['lov']
+    else:
+        lovname = ''
+
     devname = args[0]
-    node_name = args[1]
-    lovname = args[2]
-    if len(args) > 3:
-        size = args[3]
+    if len(args) > 1:
+        size = args[1]
     else:
         size = 0
 
-    obdname = new_name(node_name+"_" + "obd")
-    oscname = new_name(node_name+"_"+"osc")
-    ostname = new_name(node_name+"_"+"ost")
+    obdname = new_name('OBD_'+ node_name)
+    oscname = new_name('OSC_'+ node_name)
+    ostname = new_name('OST_'+ node_name)
     obd_uuid = get_uuid(obdname)
     ost_uuid = get_uuid(ostname)
     osc_uuid = get_uuid(oscname)
@@ -257,57 +288,77 @@ def add_ost(gen, lustre, options, args):
     if not net_uuid:
         error("NODE: ", node_name, "not found")
     
-    lov = findByName(lustre, lovname, "lov")
-    if not lov:
-        error("LOV:", lovname, "not found.")
-
     obd = gen.obd(obdname, obd_uuid,  "extN", devname, "no", size)
     ost = gen.ost(ostname, ost_uuid, obd_uuid, net_uuid)
     osc = gen.osc(oscname, osc_uuid, obd_uuid, ost_uuid)
     
-    lov_add_osc(gen, lov, osc_uuid)
+    if lovname:
+        lov = findByName(lustre, lovname, "lov")
+        if not lov:
+            error("LOV:", lovname, "not found.")
+        lov_add_osc(gen, lov, osc_uuid)
+
     lustre.appendChild(obd)
     lustre.appendChild(osc)
     lustre.appendChild(ost)
                    
-def add_node(gen, lustre, options, args):
+def add_net(gen, lustre, options, args):
     """ create a node with a network config """
-    if len(args) < 3:
+    if len(args) < 2:
         usage()
 
-    name = args[0]
-    nid = args[1]
-    nettype = args[2]
+    node_name = options['node']
+    nid = args[0]
+    net_type = args[1]
 
-    if nettype == 'tcp':
-        if len(args) > 3:
-            port = int(args[3])
+    if net_type == 'tcp':
+        if len(args) > 2:
+            port = int(args[2])
         else:
             port = DEFAULT_PORT
-        
-    elif nettype in ('elan', 'gm'):
+        # add send, recv buffer size here
+    elif net_type in ('elan', 'gm'):
         port = 0
     else:
-        print "Unknown nettype: ", nettype
+        print "Unknown net_type: ", net_type
         sys.exit(2)
 
-    uuid = get_uuid(name)
-    node = gen.node(name, uuid)
-    net_name = name+"_net"
+    ret = findByName(lustre, node_name, "node")
+    if not ret:
+        uuid = get_uuid(node_name)
+        node = gen.node(node_name, uuid)
+    else:
+        node = ret
+    net_name = new_name('NET_'+ node_name +'_'+ net_type)
     net_uuid = get_uuid(net_name)
-    node.appendChild(gen.network(net_name, net_uuid, nid, nettype, port))
+    node.appendChild(gen.network(net_name, net_uuid, nid, net_type, port))
+    lustre.appendChild(node)
+
+def add_node(gen, lustre, options, args):
+    """ create a node with a network config """
+    if len(args) > 1:
+        usage()
+
+    node_name = options['node']
+
+    ret = findByName(lustre, node_name, "node")
+    if ret:
+        print "Node:", node_name, "exists."
+        return
+    uuid = get_uuid(node_name)
+    node = gen.node(node_name, uuid)
     lustre.appendChild(node)
 
 
 def add_lov(gen, lustre, options, args):
     """ create a lov """
-    if len(args) < 4:
+    if len(args) < 3:
         usage()
 
-    name = args[0]
-    stripe_sz = args[1]
-    stripe_off = args[2]
-    pattern = args[3]
+    name = options['lov']
+    stripe_sz = args[0]
+    stripe_off = args[1]
+    pattern = args[2]
 
     ret = findByName(lustre, name, "lov")
     if ret:
@@ -319,15 +370,19 @@ def add_lov(gen, lustre, options, args):
 
 def add_mtpt(gen, lustre, options, args):
     """ create mtpt on a node """
-    if len(args) < 4:
+    if len(args) < 3:
         usage()
 
-    node_name = args[0]
+    if options.has_key('node'):
+        node_name = options['node']
+    else:
+        error("--mtpt requires a --node argument")
+
+    path = args[0]
     mdc_name = args[1]
     lov_name = args[2]
-    path = args[3]
 
-    name = new_name(node_name + "_mtpt")
+    name = new_name('MNT_'+ node_name)
 
     ret = findByName(lustre, name, "mountpoint")
     if ret:
@@ -335,43 +390,57 @@ def add_mtpt(gen, lustre, options, args):
 
     ret = findByName(lustre, lov_name, "lov")
     if not ret:
-        error("LOV: ", lov_name, " not found.")
+        ret = findByName(lustre, lov_name, "osc")
+        if not ret:
+            error(lov_name, "not found.")
+        
     lov_uuid = ret.getAttribute("uuid")
 
     ret = findByName(lustre, mdc_name, "mdc")
     if not ret:
-        error("MDC: ", mdc_name, " not found.")
+        error("MDC: ", mdc_name, "not found.")
     mdc_uuid = ret.getAttribute("uuid")
 
     uuid = get_uuid(name)
     mtpt = gen.mountpoint(name, uuid, mdc_uuid, lov_uuid, path)
+    node = findByName(lustre, node_name, "node")
+    if not node:
+            error('node:',  node_name, "not found.")
+    node_add_mnt(gen, node, uuid)
     lustre.appendChild(mtpt)
 
 
 def add_mds(gen, lustre, options, args):
-    if len(args) < 3:
+    if len(args) < 1:
         usage()
 
-    node_name = args[0]
-    devname = args[1]
-    if len(args) > 3:
-        size = args[3]
+    if options.has_key('node'):
+        node_name = options['node']
+    else:
+        error("--mds requires a --node argument")
+
+    devname = args[0]
+    if len(args) > 1:
+        size = args[1]
     else:
         size = 0
 
-    ret = findByName(lustre, node_name, "node")
-
-    mds_name = new_name(node_name+"_" + "mds")
-    mdc_name = new_name(node_name+"_"+"mdc")
+    mds_name = new_name('MDS_'+ node_name)
+    mdc_name = new_name('MDC_'+ node_name)
     mds_uuid = get_uuid(mds_name)
     mdc_uuid = get_uuid(mdc_name)
+
+    node = findByName(lustre, node_name, "node")
+    if not node:
+        error('node:', node_name, 'not found')
+    node_add_mds(gen, node, mds_uuid)
 
     net_uuid = get_net_uuid(lustre, node_name)
     if not net_uuid:
         error("NODE: ", node_name, "not found")
 
 
-    mds = gen.mds(mds_name, mds_uuid, "extN", devname, "no", net_uuid)
+    mds = gen.mds(mds_name, mds_uuid, "extN", devname, "no", net_uuid, dev_size=size)
     mdc = gen.mdc(mdc_name, mdc_uuid, mds_uuid)
     lustre.appendChild(mds)
     lustre.appendChild(mdc)
@@ -382,8 +451,8 @@ def add_mds(gen, lustre, options, args):
 #
 
 def parse_cmdline(argv):
-    short_opts = "ho:i:"
-    long_opts = ["ost", "mtpt", "lov", "node", "mds",
+    short_opts = "ho:i:m:"
+    long_opts = ["ost", "mtpt", "lov=", "node=", "mds", "net",
                  "merge=", "format", "reformat", "output=",
                  "in=", "help"]
     opts = []
@@ -404,13 +473,15 @@ def parse_cmdline(argv):
             options['ost'] = 1
         if o == "--mds":
             options['mds'] = 1
-        if o == "--node":
-            options['node'] = 1
-        if o == "--lov":
-            options['lov'] = 1
+        if o == "--net":
+            options['net'] = 1
         if o == "--mtpt":
             options['mtpt'] = 1
-        if o == "--merge":
+        if o == "--node":
+            options['node'] = a
+        if o == "--lov":
+            options['lov'] = a
+        if o in ("-m", "--merge"):
             options['merge'] = a
         if o == "--format":
             options['format'] = 1
@@ -446,14 +517,16 @@ def main():
     gen = GenConfig(doc)
     if options.has_key('ost'):
         add_ost(gen, lustre, options, args)
-    elif options.has_key('node'):
-        add_node(gen, lustre, options, args)
     elif options.has_key('mtpt'):
         add_mtpt(gen, lustre, options, args)
-    elif options.has_key('lov'):
-        add_lov(gen, lustre, options, args)
     elif options.has_key('mds'):
         add_mds(gen, lustre, options, args)
+    elif options.has_key('net'):
+        add_net(gen, lustre, options, args)
+    elif options.has_key('lov'):
+        add_lov(gen, lustre, options, args)
+    elif options.has_key('node'):
+        add_node(gen, lustre, options, args)
     else:
         print "Missing command"
         usage()
