@@ -43,7 +43,7 @@ struct obd_import {
 
         struct obd_device        *imp_obd;
         struct semaphore          imp_recovery_sem;
-        enum lustre_imp_state      imp_state;
+        enum lustre_imp_state     imp_state;
         int                       imp_generation;
         __u32                     imp_conn_cnt;
         __u64                     imp_max_transno;
