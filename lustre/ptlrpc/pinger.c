@@ -85,10 +85,11 @@ static int ptlrpc_pinger_main(void *arg)
         spin_unlock_irqrestore(&current->sigmask_lock, flags);
 #endif
 
-#ifdef __arch_um__
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-        sprintf(current->comm, "%s|%d", data->name, current->thread.extern_pid);
-#endif
+#if defined(__arch_um__) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,4,20))
+        sprintf(current->comm, "%s|%d", data->name,current->thread.extern_pid);
+#elif defined(__arch_um__) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+        sprintf(current->comm, "%s|%d", data->name,
+                current->thread.mode.tt.extern_pid);
 #else
         strcpy(current->comm, data->name);
 #endif
