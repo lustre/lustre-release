@@ -453,8 +453,8 @@ EOF
 %if %{linux26}
 %if %{susebuild}
 /boot/Kerntypes-%{KVERREL}${flavor}
-/boot/symvers-%{KVERREL}-%{_target_cpu}${flavor}.gz
 %endif
+/boot/symvers-%{KVERREL}-%{_target_cpu}${flavor}.gz
 %endif
 EOF
 
