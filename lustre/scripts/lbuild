@@ -29,6 +29,8 @@ UP_ARCHS=
 
 DATE=$(date)
 
+RPMBUILD=
+
 cleanup()
 {
     true
@@ -147,6 +149,14 @@ check_options()
 #    TARGET_FILE="$TOPDIR/kernel_patches/targets/$TARGET.target"
 #    [ -r "$TARGET_FILE" ] || \
 #	usage 1 "Target '$TARGET' was not found."
+
+    RPMBUILD=`which rpmbuild`
+    if [ $? -ne 0 -o ! "$RPMBUILD" -o "$RPMBUILD" == "" ]; then
+	RPMBUILD=`which rpm`
+	if [ $? -ne 0 -o ! "$RPMBUILD" -o "$RPMBUILD" == "" ]; then
+	    usage 1 "Could not find binary for making rpms (tried rpmbuild and rpm)."
+	fi
+    fi
 }
 
 uniqify()
@@ -234,7 +244,7 @@ unpack_lustre()
 	untar "$LUSTRE"
 	[ -d lustre ] || ln -sf lustre* lustre
     else
-	cvs -d "$CVSROOT" -qz3 co -D "$DATE" "-r$TAG" -d "$DIRNAME" lustre || \
+	cvs -d "$CVSROOT" -qz3 co -r "$TAG" -d "$DIRNAME" lustre || \
 	    fatal 1 "There was an error checking out Lustre from CVS."
 	echo "Creating lustre tarball..."
 	tar zcf "$DIRNAME.tar.gz" "$DIRNAME" \
@@ -338,11 +348,11 @@ build()
 	targets="--target $arch $targets"
     done
 
-    rpmbuild $targets -bb lustre-kernel-2.4.spec \
+    $RPMBUILD $targets -bb lustre-kernel-2.4.spec \
 	--define "_topdir $TOPDIR" || \
 	fatal 1 "Error building rpms for $arch."
 
-    (( $DO_SRC )) && rpmbuild -bs lustre-kernel-2.4.spec \
+    (( $DO_SRC )) && $RPMBUILD -bs lustre-kernel-2.4.spec \
 	--define "_topdir $TOPDIR" || \
 	fatal 1 "Error building .src.rpm."
 }
