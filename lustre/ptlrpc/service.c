@@ -133,7 +133,6 @@ static int handle_incoming_request(struct obd_device *obddev,
                                    ptl_event_t *event)
 {
         struct ptlrpc_request request;
-        struct lustre_peer peer;
         void *start;
         int rc;
 
@@ -154,6 +153,13 @@ static int handle_incoming_request(struct obd_device *obddev,
                        request.rq_reqlen, svc->srv_req_portal,
                        event->initiator.nid, request.rq_xid);
                 spin_unlock(&svc->srv_lock);
+                RETURN(-EINVAL);
+        }
+
+        if (NTOH__u32(request.rq_reqmsg->type) != PTL_RPC_MSG_REQUEST) {
+                CERROR("wrong packet type received (type=%u)\n",
+                       request.rq_reqmsg->type);
+                LBUG();
                 RETURN(-EINVAL);
         }
 

@@ -849,12 +849,6 @@ int mds_handle(struct ptlrpc_request *req)
                 GOTO(out, rc);
         }
 
-        if (req->rq_reqmsg->type != PTL_RPC_MSG_REQUEST) {
-                CERROR("lustre_mds: wrong packet type sent %d\n",
-                       req->rq_reqmsg->type);
-                GOTO(out, rc = -EINVAL);
-        }
-
         if (req->rq_reqmsg->opc != MDS_CONNECT && req->rq_export == NULL)
                 GOTO(out, rc = -ENOTCONN);
 

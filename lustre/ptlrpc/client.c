@@ -167,7 +167,7 @@ struct ptlrpc_request *ptlrpc_prep_req(struct obd_import *imp, int opcode,
         }
 
         request->rq_level = LUSTRE_CONN_FULL;
-        request->rq_type = PTL_RPC_TYPE_REQUEST;
+        request->rq_type = PTL_RPC_MSG_REQUEST;
         request->rq_import = imp;
         request->rq_connection = ptlrpc_connection_addref(conn);
 
@@ -183,7 +183,6 @@ struct ptlrpc_request *ptlrpc_prep_req(struct obd_import *imp, int opcode,
         request->rq_reqmsg->magic = PTLRPC_MSG_MAGIC; 
         request->rq_reqmsg->version = PTLRPC_MSG_VERSION;
         request->rq_reqmsg->opc = HTON__u32(opcode);
-        request->rq_reqmsg->type = HTON__u32(PTL_RPC_MSG_REQUEST);
 
         ptlrpc_hdl2req(request, &imp->imp_handle);
         RETURN(request);
@@ -524,7 +523,7 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
         // up(&cli->cli_rpc_sem);
         if (req->rq_flags & PTL_RPC_FL_INTR) {
                 if (!(req->rq_flags & PTL_RPC_FL_TIMEOUT))
-                        LBUG(); /* should only be interrupted if we timed out. */
+                        LBUG(); /* should only be interrupted if we timed out */
                 /* Clean up the dangling reply buffers */
                 ptlrpc_abort(req);
                 GOTO(out, rc = -EINTR);
@@ -541,6 +540,14 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
                 CERROR("unpack_rep failed: %d\n", rc);
                 GOTO(out, rc);
         }
+        if (req->rq_repmsg->type != PTL_RPC_MSG_REPLY &&
+            req->rq_repmsg->type != PTL_RPC_MSG_ERR) {
+                CERROR("invalid packet type received (type=%u)\n",
+                       req->rq_repmsg->type);
+                LBUG();
+                GOTO(out, rc = -EINVAL);
+        }
+
         CDEBUG(D_NET, "got rep %Ld\n", req->rq_xid);
         if (req->rq_repmsg->status == 0)
                 CDEBUG(D_NET, "--> buf %p len %d status %d\n", req->rq_repmsg,

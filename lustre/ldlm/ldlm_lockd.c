@@ -466,11 +466,6 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
                 GOTO(out, rc);
         }
 
-        if (req->rq_reqmsg->type != PTL_RPC_MSG_REQUEST) {
-                CERROR("lustre_ldlm: wrong packet type sent %d\n",
-                       req->rq_reqmsg->type);
-                GOTO(out, rc = -EINVAL);
-        }
         switch (req->rq_reqmsg->opc) {
         case LDLM_BL_CALLBACK:
                 CDEBUG(D_INODE, "blocking ast\n");

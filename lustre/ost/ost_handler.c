@@ -172,7 +172,7 @@ static int ost_punch(struct ptlrpc_request *req)
 
         repbody = lustre_msg_buf(req->rq_repmsg, 0);
         memcpy(&repbody->oa, &body->oa, sizeof(body->oa));
-        req->rq_status = obd_punch(conn, &repbody->oa, NULL, 
+        req->rq_status = obd_punch(conn, &repbody->oa, NULL,
                                    repbody->oa.o_blocks, repbody->oa.o_size);
         RETURN(0);
 }
@@ -394,7 +394,8 @@ static int ost_brw_write(struct ptlrpc_request *req)
         ptlrpc_reply(req->rq_svc, req);
 
         lwi = LWI_TIMEOUT(obd_timeout * HZ, ost_bulk_timeout, desc);
-        rc = l_wait_event(desc->bd_waitq, desc->bd_flags & PTL_BULK_FL_RCVD, &lwi);
+        rc = l_wait_event(desc->bd_waitq, desc->bd_flags & PTL_BULK_FL_RCVD,
+                          &lwi);
         if (rc) {
                 if (rc != -ETIMEDOUT)
                         LBUG();
@@ -432,12 +433,6 @@ static int ost_handle(struct ptlrpc_request *req)
         if (rc || OBD_FAIL_CHECK(OBD_FAIL_OST_HANDLE_UNPACK)) {
                 CERROR("lustre_ost: Invalid request\n");
                 GOTO(out, rc);
-        }
-
-        if (req->rq_reqmsg->type != PTL_RPC_MSG_REQUEST) {
-                CERROR("lustre_ost: wrong packet type sent %d\n",
-                       req->rq_reqmsg->type);
-                GOTO(out, rc = -EINVAL);
         }
 
         if (req->rq_reqmsg->opc != OST_CONNECT &&
@@ -603,7 +598,7 @@ static int ost_setup(struct obd_device *obddev, obd_count len, void *buf)
         }
 
         ost->ost_service = ptlrpc_init_svc(64 * 1024, OST_REQUEST_PORTAL,
-                                           OSC_REPLY_PORTAL, "self",ost_handle, 
+                                           OSC_REPLY_PORTAL, "self", ost_handle,
                                            "ost");
         if (!ost->ost_service) {
                 CERROR("failed to start service\n");

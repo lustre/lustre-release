@@ -306,7 +306,7 @@ static int lov_getattr(struct lustre_handle *conn, struct obdo *oa,
         ENTRY;
 
         if (!md) {
-                CERROR("LOV requires striping ea for desctruction\n");
+                CERROR("LOV requires striping ea for destruction\n");
                 RETURN(-EINVAL);
         }
 

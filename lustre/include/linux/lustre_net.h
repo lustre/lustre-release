@@ -94,7 +94,7 @@ struct ptlrpc_client {
 #define PTL_RPC_FL_ALLOCREP  (1 << 12) /* reply buffer allocated */
 
 struct ptlrpc_request { 
-        int rq_type; /* one of PTL_RPC_REQUEST, PTL_RPC_REPLY, PTL_RPC_BULK */
+        int rq_type; /* one of PTL_RPC_MSG_* */
         struct list_head rq_list;
         struct list_head rq_multi;
         struct obd_device *rq_obd;

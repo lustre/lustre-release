@@ -87,11 +87,8 @@ typedef __u8 uuid_t[37];
 
 /* packet types */
 #define PTL_RPC_MSG_REQUEST 4711
-#define PTL_RPC_MSG_ERR 4712
-#define PTL_RPC_MSG_OK           0
-
-#define PTL_RPC_TYPE_REQUEST     2
-#define PTL_RPC_TYPE_REPLY       3
+#define PTL_RPC_MSG_ERR     4712
+#define PTL_RPC_MSG_REPLY   4713
 
 #define PTLRPC_MSG_MAGIC (cpu_to_le32(0x0BD00BD0))
 #define PTLRPC_MSG_VERSION (cpu_to_le32(0x00040001))
