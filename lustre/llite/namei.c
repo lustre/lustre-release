@@ -289,6 +289,10 @@ static struct dentry *ll_lookup2(struct inode *dir, struct dentry *dentry,
         ptlrpc_req_finished(request);
  negative:
         dentry->d_op = &ll_d_ops;
+        if (ll_d2d(dentry) == NULL) {
+                CERROR("allocating fsdata\n");
+                ll_set_dd(dentry);
+        }
         d_add(dentry, inode);
 
         if (it->it_status == 0) {
