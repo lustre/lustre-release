@@ -511,6 +511,7 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
                         goto local_cancel;
                 }
 
+        restart:
                 imp = class_exp2cliimp(lock->l_conn_export);
                 if (imp == NULL || imp->imp_invalid) {
                         CDEBUG(D_HA, "skipping cancel on invalid import %p\n",
@@ -521,6 +522,7 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
                 req = ptlrpc_prep_req(imp, LDLM_CANCEL, 1, &size, NULL);
                 if (!req)
                         GOTO(out, rc = -ENOMEM);
+                req->rq_no_resend = 1;
 
                 /* XXX FIXME bug 249 */
                 req->rq_request_portal = LDLM_CANCEL_REQUEST_PORTAL;
@@ -534,13 +536,17 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
 
                 rc = ptlrpc_queue_wait(req);
 
-                if (rc == ESTALE)
+                if (rc == ESTALE) {
                         CERROR("client/server (nid "LPU64") out of sync--not "
                                "fatal\n",
                                req->rq_import->imp_connection->c_peer.peer_nid);
-                else if (rc != ELDLM_OK)
+                } else if (rc == -ETIMEDOUT) {
+                        ptlrpc_req_finished(req);
+                        GOTO(restart, rc);
+                } else if (rc != ELDLM_OK) {
                         CERROR("Got rc %d from cancel RPC: canceling "
                                "anyway\n", rc);
+                }
 
                 ptlrpc_req_finished(req);
         local_cancel:
