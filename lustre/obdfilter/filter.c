@@ -1007,22 +1007,22 @@ static int filter_get_info(struct obd_conn *conn, obd_count keylen,
 
         if ( keylen == strlen("blocksize") &&
              memcmp(key, "blocksize", keylen) == 0 ) {
-                *vallen = sizeof(int);
-                *val = (void *)obddev->u.filter.fo_sb->s_blocksize;
+                *vallen = sizeof(long);
+                *val = (void *)(long)obddev->u.filter.fo_sb->s_blocksize;
                 RETURN(0);
         }
 
         if ( keylen == strlen("blocksize_bits") &&
              memcmp(key, "blocksize_bits", keylen) == 0 ){
-                *vallen = sizeof(int);
-                *val = (void *)(int)obddev->u.filter.fo_sb->s_blocksize_bits;
+                *vallen = sizeof(long);
+                *val = (void *)(long)obddev->u.filter.fo_sb->s_blocksize_bits;
                 RETURN(0);
         }
 
         if ( keylen == strlen("root_ino") &&
              memcmp(key, "root_ino", keylen) == 0 ){
-                *vallen = sizeof(int);
-                *val = (void *)(int) FILTER_ROOTINO;
+                *vallen = sizeof(long);
+                *val = (void *)(long)FILTER_ROOTINO;
                 RETURN(0);
         }
 

@@ -9,7 +9,6 @@
  * by Cluster File Systems, Inc.
  */
 
-#define EXPORT_SYMTAB
 #define DEBUG_SUBSYSTEM S_LDLM
 
 #include <linux/lustre_dlm.h>

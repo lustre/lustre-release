@@ -422,6 +422,17 @@ static void __exit ldlm_exit(void)
         kmem_cache_destroy(ldlm_lock_slab);
 }
 
+EXPORT_SYMBOL(ldlm_local_lock_match);
+EXPORT_SYMBOL(ldlm_lock_addref);
+EXPORT_SYMBOL(ldlm_lock_decref);
+EXPORT_SYMBOL(ldlm_cli_convert);
+EXPORT_SYMBOL(ldlm_cli_enqueue);
+EXPORT_SYMBOL(ldlm_handle2object);
+EXPORT_SYMBOL(ldlm_test);
+EXPORT_SYMBOL(ldlm_lock_dump);
+EXPORT_SYMBOL(ldlm_namespace_new);
+EXPORT_SYMBOL(ldlm_namespace_free);
+
 MODULE_AUTHOR("Cluster File Systems, Inc. <braam@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre Lock Management Module v0.1");
 MODULE_LICENSE("GPL");

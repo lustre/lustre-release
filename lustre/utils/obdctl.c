@@ -749,7 +749,10 @@ static int jt_test_getattr(int argc, char **argv)
         IOCINIT(data);
         count = strtoul(argv[1], NULL, 0);
 
-        verbose = get_verbose(argv[2]);
+        if (argc == 3)
+                verbose = get_verbose(argv[2]);
+        else
+                verbose = 1;
 
         data.ioc_obdo1.o_valid = 0xffffffff;
         data.ioc_obdo1.o_id = 2;

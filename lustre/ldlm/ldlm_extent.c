@@ -11,7 +11,6 @@
  * Phil Schwan <phil@clusterfs.com>
  */
 
-#define EXPORT_SYMTAB
 #define DEBUG_SUBSYSTEM S_LDLM
 
 #include <linux/lustre_dlm.h>

@@ -115,7 +115,6 @@ struct page *lustre_get_page_read(struct inode *inode, unsigned long index)
 
 err_page:
         lustre_put_page(page);
-err:
         return ERR_PTR(rc);
 }
 
@@ -153,7 +152,6 @@ struct page *lustre_get_page_write(struct inode *inode, unsigned long index)
 err_unlock:
         UnlockPage(page);
         lustre_put_page(page);
-err:
         return ERR_PTR(rc);
 }
 
