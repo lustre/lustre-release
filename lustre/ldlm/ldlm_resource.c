@@ -16,7 +16,8 @@
 
 kmem_cache_t *ldlm_resource_slab, *ldlm_lock_slab;
 
-struct ldlm_namespace *ldlm_namespace_new(struct obd_device *obddev)
+struct ldlm_namespace *ldlm_namespace_new(struct obd_device *obddev,
+                                          __u32 local)
 {
         struct ldlm_namespace *ns;
         struct list_head *bucket;
@@ -37,6 +38,7 @@ struct ldlm_namespace *ldlm_namespace_new(struct obd_device *obddev)
         INIT_LIST_HEAD(&ns->ns_root_list);
         ns->ns_lock = SPIN_LOCK_UNLOCKED;
         ns->ns_refcount = 0;
+        ns->ns_local = local;
 
         for (bucket = ns->ns_hash + RES_HASH_SIZE - 1; bucket >= ns->ns_hash;
              bucket--)
