@@ -186,7 +186,7 @@ static int lov_verify_lmm_v0(struct lov_mds_md_v0 *lmm, int lmm_bytes,
 
         if (lmm_bytes < lov_mds_md_v0_size(*stripe_count)) {
                 CERROR("LOV EA too small: %d, need %d\n",
-                       lmm_bytes, lov_mds_md_size(*stripe_count));
+                       lmm_bytes, lov_mds_md_v0_size(*stripe_count));
                 lov_dump_lmm_v0(D_WARNING, lmm);
                 return -EINVAL;
         }
@@ -238,9 +238,9 @@ static int lov_verify_lmm_v1(struct lov_mds_md_v1 *lmm, int lmm_bytes,
                 return -EINVAL;
         }
 
-        if (lmm_bytes < lov_mds_md_size(*stripe_count)) {
+        if (lmm_bytes < lov_mds_md_v1_size(*stripe_count)) {
                 CERROR("LOV EA too small: %d, need %d\n",
-                       lmm_bytes, lov_mds_md_size(*stripe_count));
+                       lmm_bytes, lov_mds_md_v1_size(*stripe_count));
                 lov_dump_lmm_v1(D_WARNING, lmm);
                 return -EINVAL;
         }
