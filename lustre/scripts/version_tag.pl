@@ -100,7 +100,7 @@ sub get_linuxdir()
     }
     while (defined($line = <$config>)) {
         chomp($line);
-        if ($line =~ /LINUX = (.*)/) {
+        if ($line =~ /LINUX :?= (.*)/) {
             $dir = $1;
             last;
         }
