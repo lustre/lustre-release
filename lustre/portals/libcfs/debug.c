@@ -953,7 +953,7 @@ extern int is_kernel_text_address(unsigned long addr);
 
 char *portals_debug_dumpstack(void)
 {
-        panic("LBUG");
+        asm("int $3");
 }
 
 #elif defined(__i386__)
