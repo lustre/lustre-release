@@ -6,26 +6,26 @@ export PATH=$PATH:/sbin:/usr/sbin
 # check if running in source directory
 # will probably need to create variable for each module.
 if [ -f $SRCDIR/Makefile.am ]; then
-    USEDEV=yes
-    PORTALS=$SRCDIR/../../portals
-    LUSTRE=$SRCDIR/..
+	USEDEV=yes
+	PORTALS=$SRCDIR/../../portals
+	LUSTRE=$SRCDIR/..
 
-    PTLCTL=$PORTALS/linux/utils/ptlctl
-    DBGCTL=$PORTALS/linux/utils/debugctl
-    ACCEPTOR=$PORTALS/linux/utils/acceptor
+	PTLCTL=$PORTALS/linux/utils/ptlctl
+	DBGCTL=$PORTALS/linux/utils/debugctl
+	ACCEPTOR=$PORTALS/linux/utils/acceptor
 
-    OBDCTL=$LUSTRE/utils/obdctl
+	OBDCTL=$LUSTRE/utils/obdctl
 else
-    USEDEV=no
-    # should have configure set the paths here
-    BINDIR=/usr/sbin
-    PORTALS=/lib/modules
-    LUSTRE=/lib/modules
+	USEDEV=no
+	# should have configure set the paths here
+	BINDIR=/usr/sbin
+	PORTALS=/lib/modules
+	LUSTRE=/lib/modules
 
-    PTLCTL=$BINDIR/ptlctl
-    DBGCTL=$BINDIR/debugctl
-    ACCEPTOR=$BINDIR/acceptor
-    OBDCTL=$BINDIR/obdctl
+	PTLCTL=$BINDIR/ptlctl
+	DBGCTL=$BINDIR/debugctl
+	ACCEPTOR=$BINDIR/acceptor
+	OBDCTL=$BINDIR/obdctl
 fi
 
 LOOPNUM=0; export LOOPNUM
@@ -47,7 +47,7 @@ do_insmod() {
 	if [ "$USEDEV" = "yes" ]; then
 		[ -f $MODULE ] || echo "$0: module '$MODULE' not found" 1>&2
 		insmod $MODULE
-        else
+	else
 		modprobe $BASE
 	fi
 }
@@ -148,14 +148,14 @@ list_mods() {
 # start acceptor for a given network and port.
 # not all networks need an acceptor
 start_acceptor() {
-    case $NETWORK in
-    elan)   [ "$PORT" ] && fail "$0: NETWORK is elan but PORT is set"
-	;;
-    tcp)    [ "$PORT" ] || fail "$0: NETWORK is tcp but PORT is not set"
-	$ACCEPTOR $PORT
-	;;
-    *) 	fail "$0: unknown NETWORK '$NETWORK'" ;;
-    esac
+	case $NETWORK in
+	elan)   [ "$PORT" ] && fail "$0: NETWORK is elan but PORT is set"
+		;;
+	tcp)    [ "$PORT" ] || fail "$0: NETWORK is tcp but PORT is not set"
+		$ACCEPTOR $PORT
+		;;
+	*) 	fail "$0: unknown NETWORK '$NETWORK'" ;;
+	esac
 
 }
 
@@ -164,9 +164,9 @@ start_acceptor() {
 # can even be sourced into the current shell environment.
 setup_opts() {
 	DEF=/etc/lustre/lustre.cfg
-        if [ "$#" = 0 -a -r $DEF ]; then
-             . $DEF && SETUP=y
-        fi
+	if [ "$#" = 0 -a -r $DEF ]; then
+		. $DEF && SETUP=y
+	fi
 
 	for CFG in "$@" ; do
 		case $CFG  in
@@ -188,10 +188,12 @@ setup_opts() {
 setup_variables() {
 	[ -z "$OSTNODE" ] && OSTNODE=$SERVER
 	[ -z "$MDSNODE" ] && MDSNODE=$SERVER
-        [ -z "$DLM" ] && DLM=$SERVER
+	[ -z "$DLM" ] && DLM=$SERVER
 }
 
 setup_portals() {
+	setup_variables
+
 	if grep -q portals /proc/modules; then
 		echo "$0: portals already appears to be set up, skipping"
 		return 0
@@ -201,8 +203,6 @@ setup_portals() {
 		echo "$0: NETWORK or LOCALHOST or SERVER is not set" 1>&2
 		exit -1
 	fi
-
-        setup_variables
 
 	[ -c /dev/portals ] || mknod /dev/portals c 10 240
 
@@ -252,15 +252,15 @@ setup_lustre() {
 	do_insmod $LUSTRE/osc/osc.o || exit -1
 	do_insmod $LUSTRE/mdc/mdc.o || exit -1
 		do_insmod $LUSTRE/lov/lov.o || exit -1
-        do_insmod $LUSTRE/llite/llite.o || exit -1
+	do_insmod $LUSTRE/llite/llite.o || exit -1
 
-        echo "$R/tmp/lustre-log" > /proc/sys/portals/debug_path
+	echo "$R/tmp/lustre-log" > /proc/sys/portals/debug_path
 
 	if $OBDCTL name2dev RPCDEV > /dev/null 2>&1; then
 		echo "$0: RPCDEV is already configured, skipping"
 		return 0
 	fi
-        list_mods
+	list_mods
 
 	$OBDCTL <<- EOF || return $?
 	newdev
@@ -328,16 +328,16 @@ setup_mds_lov() {
 
 	[ "$SETUP_MDS" = "y" ] || return 0
 
-        if [ -z "$LOVUUID" ]; then
-            echo "No LOV configured"
-            return
-        fi
+	if [ -z "$LOVUUID" ]; then
+		echo "No LOV configured"
+			return
+	fi
 
 	$OBDCTL <<- EOF || return $?
-        name2dev MDSDEV
-        connect 
-        lovconfig ${LOVUUID} 1 4096 0 OSCUUID
-        disconnect
+	name2dev MDSDEV
+	connect 
+	lovconfig ${LOVUUID} 1 4096 0 OSCUUID
+	disconnect
 	quit
 	EOF
 }
@@ -411,52 +411,50 @@ setup_server() {
 setup_osc() {
 	set -vx
 	[ "$SETUP_OSC" != "y" ] && return 0
-        [ "$OSC_NAMES" ] || OSC_NAMES=OSCDEV
+	[ "$OSC_NAMES" ] || OSC_NAMES=OSCDEV
 
-        for THEOSC in $OSC_NAMES ; do 
-            OSCDEVNO=`find_devno $THEOSC`
-	    if $OBDCTL name2dev $THEOSC > /dev/null 2>&1; then
-		echo "$0: OSCDEV is already configured"
-		return 0
-	    fi
+	for THEOSC in $OSC_NAMES ; do 
+		if $OBDCTL name2dev $THEOSC > /dev/null 2>&1; then
+			echo "$0: OSCDEV is already configured"
+			continue
+		fi
 
-	$OBDCTL <<- EOF || return $rc
-	newdev
-	attach osc $THEOSC ${THEOSC}-UUID
-	setup OBDUUID $OSTNODE
-	quit
-	EOF
-        done
+		$OBDCTL <<- EOF || return $rc
+		newdev
+		attach osc $THEOSC ${THEOSC}-UUID
+		setup OBDUUID $OSTNODE
+		quit
+		EOF
+	done
 }
 
 setup_mdc() {
 	set -vx
 	[ "$SETUP_MDC" != "y" ] && return 0
-        [ "$MDC_NAMES" ] || MDC_NAMES=MDCDEV
+	[ "$MDC_NAMES" ] || MDC_NAMES=MDCDEV
 
-        for THEMDC in $MDC_NAMES ; do 
-            MDCDEVNO=`find_devno $THEMDC`
-	if $OBDCTL name2dev $THEMDC > /dev/null 2>&1; then
-		echo "$0: MDCDEV is already configured"
-		return 0
-	fi
+	for THEMDC in $MDC_NAMES ; do 
+		if $OBDCTL name2dev $THEMDC > /dev/null 2>&1; then
+			echo "$0: MDCDEV is already configured"
+			continue
+		fi
 
-	$OBDCTL <<- EOF || return $?
-	newdev
-	attach mdc $THEMDC ${THEMDC}-UUID
-	setup MDSUUID $MDSNODE
-	quit
-	EOF
-        done
+		$OBDCTL <<- EOF || return $?
+		newdev
+		attach mdc $THEMDC ${THEMDC}-UUID
+		setup MDSUUID $MDSNODE
+		quit
+		EOF
+	done
 }
 
 setup_lov () { 
 	[ "$SETUP_MDC" != "y" ] && return 0
 
-        if [ -z "$LOVUUID" ]; then
-            echo "No LOV configured"
-            return
-        fi
+	if [ -z "$LOVUUID" ]; then
+		echo "No LOV configured"
+		return
+	fi
 
 	$OBDCTL <<- EOF || return $?
 	newdev
@@ -470,8 +468,8 @@ setup_lov () {
 setup_mount() {
 	set -vx
 	[ "$SETUP_MOUNT" != "y" ] && return 0
-        [ "$MDC_NAMES" ] || MDC_NAMES=MDCDEV
-        [ "$OSC_NAMES" ] || OSC_NAMES=OSCDEV
+	[ "$MDC_NAMES" ] || MDC_NAMES=MDCDEV
+	[ "$OSC_NAMES" ] || OSC_NAMES=OSCDEV
 	[ -z "$MOUNT_LIST" -a "$OSCMT" ] && MOUNT_LIST="MT" && MT="$OSCMT OSCDEV MDCDEV"
 
 	[ "$MOUNT_LIST" ] || fail "error: $0: MOUNT_LIST unset"
@@ -485,7 +483,7 @@ setup_mount() {
 
 		[ ! -d $MTPT ] && mkdir $MTPT
 		echo mount -t lustre_lite -o ost=${THEOSC}-UUID,mds=${THEMDC}-UUID none $MTPT
-                mount -t lustre_lite -o ost=${THEOSC}-UUID,mds=${THEMDC}-UUID none $MTPT
+		mount -t lustre_lite -o ost=${THEOSC}-UUID,mds=${THEMDC}-UUID none $MTPT
 	    done
 	done
 }
@@ -519,7 +517,7 @@ debug_client_on() {
 cleanup_portals() {
 	[ -z "$NETWORK" ] && NETWORK=tcp
 
-        setup_variables
+	setup_variables
 
 	$PTLCTL <<- EOF
 	setup $NETWORK
@@ -538,6 +536,7 @@ cleanup_portals() {
 	#do_rmmod kqswnal
 	do_rmmod ksocknal
 	do_rmmod kptlrouter
+
 	do_rmmod portals
 }
 
@@ -623,53 +622,53 @@ cleanup_server() {
 cleanup_mount() {
 	set -vx
 	[ "$SETUP_MOUNT" != "y" ] && return 0
-        [ "$MDC_NAMES" ] || MDC_NAMES=MDCDEV
-        [ "$OSC_NAMES" ] || OSC_NAMES=OSCDEV
+	[ "$MDC_NAMES" ] || MDC_NAMES=MDCDEV
+	[ "$OSC_NAMES" ] || OSC_NAMES=OSCDEV
 	[ -z "$MOUNT_LIST" -a "$OSCMT" ] && MOUNT_LIST="MT" && MT="$OSCMT OSCDEV MDCDEV"
 
 	[ "$MOUNT_LIST" ] || fail "error: $0: MOUNT_LIST unset"
 
 	for THEMOUNT in $MOUNT_LIST; do
-	    eval "echo \$$THEMOUNT" | while read MTPT THEOSC THEMDC; do
-                if [ "`mount | grep $MTPT`" ]; then
-                    umount $MTPT || fail "unable to unmount $MTPT"
-                fi
-            done
+		eval "echo \$$THEMOUNT" | while read MTPT THEOSC THEMDC; do
+			if [ "`mount | grep $MTPT`" ]; then
+				umount $MTPT || fail "unable to unmount $MTPT"
+			fi
+		done
 	done
 }
 
 cleanup_osc() {
 	[ "$SETUP" -a -z "$SETUP_OSC" ] && return 0
-        [ "$OSC_NAMES" ] || OSC_NAMES=OSCDEV
+	[ "$OSC_NAMES" ] || OSC_NAMES=OSCDEV
 
-        for THEOSC in $OSC_NAMES ; do 
-            OSCDEVNO=`find_devno $THEOSC`
-            if [ "$OSCDEVNO" ]; then
-		$OBDCTL <<- EOF
-		device $OSCDEVNO
-		cleanup
-		detach
-		quit
-		EOF
-            fi
-        done
+	for THEOSC in $OSC_NAMES ; do 
+		OSCDEVNO=`find_devno $THEOSC`
+		if [ "$OSCDEVNO" ]; then
+			$OBDCTL <<- EOF
+			device $OSCDEVNO
+			cleanup
+			detach
+			quit
+			EOF
+		fi
+	done
 }
 
 cleanup_mdc() {
 	[ "$SETUP" -a -z "$SETUP_MDC" ] && return 0
-        [ "$MDC_NAMES" ] || MDC_NAMES=MDCDEV
+	[ "$MDC_NAMES" ] || MDC_NAMES=MDCDEV
 
-        for THEMDC in $MDC_NAMES ; do 
-            MDCDEVNO=`find_devno $THEMDC`
-            if [ "$MDCDEVNO" ]; then
-		$OBDCTL <<- EOF
-		device $MDCDEVNO
-		cleanup
-		detach
-		quit
-		EOF
-            fi
-        done
+	for THEMDC in $MDC_NAMES ; do 
+		MDCDEVNO=`find_devno $THEMDC`
+		if [ "$MDCDEVNO" ]; then
+			$OBDCTL <<- EOF
+			device $MDCDEVNO
+			cleanup
+			detach
+			quit
+			EOF
+		fi
+	done
 }
 
 cleanup_rpc() {
@@ -689,7 +688,7 @@ cleanup_client() {
 }
 
 fail() { 
-    echo "ERROR: $1" 1>&2
-    [ $2 ] && RC=$2 || RC=1
-    exit $RC
+	echo "ERROR: $1" 1>&2
+	[ $2 ] && RC=$2 || RC=1
+	exit $RC
 }
