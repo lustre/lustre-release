@@ -322,7 +322,7 @@ int mds_lov_set_nextid(struct obd_device *obd)
         if (mds->mds_osc_obd == NULL)
                 mds_lov_connect(obd);
 
-#warning remove me when configuration is better
+        // XXX CONFIG remove me when configuration is better
         down(&mds->mds_orphan_recovery_sem);
         if (mds->mds_lov_nextid_set) {
                 up(&mds->mds_orphan_recovery_sem);
@@ -344,7 +344,7 @@ int mds_lov_set_nextid(struct obd_device *obd)
         if (rc < 0)
                 GOTO(out, rc);
 
-#warning remove me when configuration is better
+        // XXX CONFIG warning remove me when configuration is better
         mds->mds_lov_nextid_set = 1;
 out:
         if (rc && mds->mds_lov_objids)
@@ -427,8 +427,8 @@ int mds_lov_connect(struct obd_device *obd)
                 }
         }
 
-#warning LOV-OSC may not be used before this call completes!!!
-#warning this cannot be called here, because the osc is not set up
+        // XXX CONFIG LOV-OSC may not be used before this call completes!!!
+        // XXX CONFIG this cannot be called here, because the osc is not set up
         // rc = mds_lov_set_nextid(obd);
         RETURN(rc);
 }
@@ -542,7 +542,7 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 if (rc)
                         RETURN(rc);
 
-#warning this is here because the LOV is set up at an unexpected time
+                // XXX CONFIG this is here because the LOV is set up at an unexpected time
                 rc  = mds_post_mds_lovconf(obd);
                 if (rc)
                         RETURN(rc);
