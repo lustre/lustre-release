@@ -164,6 +164,8 @@ command_t cmdlist[] = {
          "usage: parse config-uuid-name"},
         {"dump_log", jt_cfg_dump_log, 0, "print log of recorded commands for this config to kernel debug log\n"
          "usage: dump_log config-uuid-name"},
+        {"clear_log", jt_cfg_clear_log, 0, "delete current config log of recorded commands\n"
+         "usage: clear_log config-name"},
 
         /* Device operations */
         {"=== device operations ==", jt_noop, 0, "device operations"},

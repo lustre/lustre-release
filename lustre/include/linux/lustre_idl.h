@@ -955,7 +955,7 @@ struct llog_gen_rec {
         struct llog_rec_tail    lgr_tail;
 };
 /* On-disk header structure of each log object, stored in little endian order */
-#define LLOG_CHUNK_SIZE         4096
+#define LLOG_CHUNK_SIZE         8192
 #define LLOG_HEADER_SIZE        (96)
 #define LLOG_BITMAP_BYTES       (LLOG_CHUNK_SIZE - LLOG_HEADER_SIZE)
 

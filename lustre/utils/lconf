@@ -399,6 +399,15 @@ class LCTLInterface:
         return rc, out
 
             
+    def clear_log(self, dev, log):
+        """ clear an existing log """
+        cmds =  """
+  device $%s
+  probe
+  clear_log %s
+  quit """ % (dev, log)
+        self.run(cmds)
+
     def network(self, net, nid):
         """ set mynid """
         cmds =  """
@@ -1459,12 +1468,14 @@ class MDSDEV(Module):
             client = VOSC(self.db.lookup(obd_uuid), client_uuid, self.name,
                           self.name)
             config.record = 1
+            lctl.clear_log(self.name, self.name)
             lctl.record(self.name, self.name)
             client.prepare()
             lctl.mount_option(self.name, client.get_name(), "")
             lctl.end_record()
 
             config.cleanup = 1
+            lctl.clear_log(self.name, self.name + '-clean')
             lctl.record(self.name, self.name + '-clean')
             client.cleanup()
             lctl.del_mount_option(self.name)
@@ -2656,6 +2667,7 @@ def main():
     if config.record:
         if not (config.record_device and config.record_log):
             panic("When recording, both --record_log and --record_device must be specified.")
+        lctl.clear_log(config.record_device, config.record_log)
         lctl.record(config.record_device, config.record_log)
 
     doHost(db, node_list)

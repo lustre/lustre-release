@@ -2011,7 +2011,7 @@ void lustre_assert_wire_constants(void)
                  (long long)(int)sizeof(((struct llog_gen_rec *)0)->lgr_tail));
 
         /* Checks for struct llog_log_hdr */
-        LASSERTF((int)sizeof(struct llog_log_hdr) == 4096, " found %lld\n",
+        LASSERTF((int)sizeof(struct llog_log_hdr) == 8192, " found %lld\n",
                  (long long)(int)sizeof(struct llog_log_hdr));
         LASSERTF(offsetof(struct llog_log_hdr, llh_hdr) == 0, " found %lld\n",
                  (long long)offsetof(struct llog_log_hdr, llh_hdr));
@@ -2051,9 +2051,9 @@ void lustre_assert_wire_constants(void)
                  (long long)(int)sizeof(((struct llog_log_hdr *)0)->llh_reserved));
         LASSERTF(offsetof(struct llog_log_hdr, llh_bitmap) == 88, " found %lld\n",
                  (long long)offsetof(struct llog_log_hdr, llh_bitmap));
-        LASSERTF((int)sizeof(((struct llog_log_hdr *)0)->llh_bitmap) == 4000, " found %lld\n",
+        LASSERTF((int)sizeof(((struct llog_log_hdr *)0)->llh_bitmap) == 8096, " found %lld\n",
                  (long long)(int)sizeof(((struct llog_log_hdr *)0)->llh_bitmap));
-        LASSERTF(offsetof(struct llog_log_hdr, llh_tail) == 4088, " found %lld\n",
+        LASSERTF(offsetof(struct llog_log_hdr, llh_tail) == 8184, " found %lld\n",
                  (long long)offsetof(struct llog_log_hdr, llh_tail));
         LASSERTF((int)sizeof(((struct llog_log_hdr *)0)->llh_tail) == 8, " found %lld\n",
                  (long long)(int)sizeof(((struct llog_log_hdr *)0)->llh_tail));

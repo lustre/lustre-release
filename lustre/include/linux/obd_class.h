@@ -44,7 +44,7 @@
 #include <linux/lprocfs_status.h>
 
 /* OBD Device Declarations */
-#define MAX_OBD_DEVICES 128
+#define MAX_OBD_DEVICES 256
 extern struct obd_device obd_dev[MAX_OBD_DEVICES];
 
 /* OBD Operations Declarations */

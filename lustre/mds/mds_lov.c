@@ -364,6 +364,27 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 RETURN(rc);
         }
 
+        case OBD_IOC_CLEAR_LOG: {
+                char *name = data->ioc_inlbuf1;
+                if (mds->mds_cfg_llh)
+                        RETURN(-EBUSY);
+
+                push_ctxt(&saved, &obd->obd_ctxt, NULL);
+                rc = llog_create(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT), 
+                                 &mds->mds_cfg_llh, NULL, name);
+                if (rc == 0) {
+                        llog_init_handle(mds->mds_cfg_llh, LLOG_F_IS_PLAIN,
+                                         NULL);
+
+                        rc = llog_destroy(mds->mds_cfg_llh);
+                        llog_free_handle(mds->mds_cfg_llh);
+                }
+                pop_ctxt(&saved, &obd->obd_ctxt, NULL);
+
+                mds->mds_cfg_llh = NULL;
+                RETURN(rc);
+        }
+
         case OBD_IOC_DORECORD: {
                 char *cfg_buf;
                 struct llog_rec_hdr rec;
@@ -449,13 +470,17 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         case OBD_IOC_LLOG_REMOVE: {
                 struct llog_ctxt *ctxt =
                         llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
+                int rc2;
 
                 obd_llog_finish(obd, mds->mds_lov_desc.ld_tgt_count);
                 push_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_ctxt, NULL);
                 rc = llog_ioctl(ctxt, cmd, data);
                 pop_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_ctxt, NULL);
                 llog_cat_initialize(obd, mds->mds_lov_desc.ld_tgt_count);
-
+                rc2 = obd_set_info(mds->mds_osc_exp, strlen("mds_conn"), "mds_conn",
+                          0, NULL);
+                if (!rc)
+                        rc = rc2;
                 RETURN(rc);
         }
         case OBD_IOC_LLOG_INFO:

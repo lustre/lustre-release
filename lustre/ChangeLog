@@ -7,6 +7,9 @@ tbd  Cluster File Systems, Inc. <info@clusterfs.com>
 	- del obd_self_export from work_list in class_disconnect_exports (2908)
 	- don't LBUG if MDS recovery times out during orphan cleanup (2530)
 	- swab reply message in mdc_close, other PPC fixes (2464)
+	- fix destroying of named logs (2325)
+	- overwrite old logs when running lconf --write_conf (2264)
+	- bump LLOG_CHUNKSIZE to 8k to allow for larger clusters (2306)
 
 2004-03-04  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.0
