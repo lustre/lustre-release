@@ -342,6 +342,8 @@ connection force_tcp_connection(manager m,
     int rport;
     ptl_nid_t peernid = PTL_NID_ANY;
 
+    port = tcpnal_acceptor_port;
+
     id[0] = ip;
     id[1] = port;
 
