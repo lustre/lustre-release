@@ -36,7 +36,6 @@
 #include <linux/lustre_mds.h>
 #include <linux/obd.h>
 #include <linux/module.h>
-#include <linux/obd_lov.h>
 
 static struct mds_fs_operations mds_ext3_fs_ops;
 static kmem_cache_t *mcb_cache;
@@ -129,15 +128,14 @@ static int mds_ext3_setattr(struct dentry *dentry, void *handle,
 }
 
 static int mds_ext3_set_md(struct inode *inode, void *handle,
-                           struct lov_mds_md *lmm)
+                           struct lov_mds_md *lmm, int lmm_size)
 {
         int rc;
 
         down(&inode->i_sem);
         lock_kernel();
         rc = ext3_xattr_set(handle, inode, EXT3_XATTR_INDEX_LUSTRE,
-                            XATTR_LUSTRE_MDS_OBJID, lmm,
-                            lmm ? lmm->lmm_easize : 0, 0);
+                            XATTR_LUSTRE_MDS_OBJID, lmm, lmm_size, 0);
         unlock_kernel();
         up(&inode->i_sem);
 
@@ -149,10 +147,9 @@ static int mds_ext3_set_md(struct inode *inode, void *handle,
         return rc;
 }
 
-static int mds_ext3_get_md(struct inode *inode, struct lov_mds_md *lmm)
+static int mds_ext3_get_md(struct inode *inode, struct lov_mds_md *lmm,int size)
 {
         int rc;
-        int size = lmm->lmm_easize;
 
         down(&inode->i_sem);
         lock_kernel();
