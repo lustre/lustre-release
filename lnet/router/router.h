@@ -93,9 +93,13 @@ extern void kpr_deregister_nal (void *arg);
 extern void kpr_proc_init (void);
 extern void kpr_proc_fini (void);
 
+extern unsigned int       kpr_routes_generation;
 extern unsigned long long kpr_fwd_bytes;
 extern unsigned long      kpr_fwd_packets;
 extern unsigned long      kpr_fwd_errors;
 extern atomic_t           kpr_queue_depth;
+
+extern struct list_head   kpr_routes;
+extern rwlock_t           kpr_rwlock;
 
 #endif /* _KPLROUTER_H */
