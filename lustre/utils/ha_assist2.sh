@@ -21,7 +21,7 @@ echo "- please supply a new mds"
 setup tcp
 close_uuid mds
 del_uuid mds
-connect dev5 2432
+connect dev5 988
 add_uuid mds
 quit
 EOF3

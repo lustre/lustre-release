@@ -4,7 +4,7 @@ SRCDIR="`dirname $0`/"
 . $SRCDIR/common.sh
 
 SERVER=localhost
-PORT=2432
+PORT=988
 
 $ACCEPTOR $PORT
 
