@@ -106,9 +106,8 @@ EXPORT_SYMBOL(llog_cat_new_log);
 /* Assumes caller has already pushed us into the kernel context and is locking.
  * We return a lock on the handle to ensure nobody yanks it from us.
  */
-int llog_cat_id2handle(struct llog_handle *cathandle,
-                                          struct llog_handle **res,
-                                          struct llog_logid *logid)
+int llog_cat_id2handle(struct llog_handle *cathandle, struct llog_handle **res,
+                       struct llog_logid *logid)
 {
         struct llog_handle *loghandle;
         int rc = 0;
@@ -130,7 +129,7 @@ int llog_cat_id2handle(struct llog_handle *cathandle,
                 }
         }
 
-        rc = llog_open(cathandle->lgh_obd, &loghandle, logid);
+        rc = llog_open(cathandle->lgh_obd, &loghandle, logid, NULL);
         if (rc) {
                 CERROR("error opening log id "LPX64":%x: rc %d\n",
                        logid->lgl_oid, logid->lgl_ogen, rc);
