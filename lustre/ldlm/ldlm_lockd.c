@@ -639,6 +639,8 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req,
 
         OBD_FAIL_TIMEOUT(OBD_FAIL_LDLM_ENQUEUE_BLOCKED, obd_timeout * 2);
         l_lock(&lock->l_resource->lr_namespace->ns_lock);
+        /* Don't enqueue a lock onto the export if it has already
+         * been evicted.  Cancel it now instead. (bug 3822) */
         if (req->rq_export->exp_failed) {
                 LDLM_ERROR(lock, "lock on destroyed export %p", req->rq_export);
                 l_unlock(&lock->l_resource->lr_namespace->ns_lock);
@@ -693,7 +695,12 @@ existing_lock:
         /* We never send a blocking AST until the lock is granted, but
          * we can tell it right now */
         l_lock(&lock->l_resource->lr_namespace->ns_lock);
-        if (lock->l_flags & LDLM_FL_AST_SENT) {
+        /* Don't move a pending lock onto the export if it has already
+         * been evicted.  Cancel it now instead. (bug 5683) */
+        if (req->rq_export->exp_failed) {
+                LDLM_ERROR(lock, "lock on destroyed export %p", req->rq_export);
+                rc = -ENOTCONN;
+        } else if (lock->l_flags & LDLM_FL_AST_SENT) {
                 dlm_rep->lock_flags |= LDLM_FL_AST_SENT;
                 if (lock->l_granted_mode == lock->l_req_mode)
                         ldlm_add_waiting_lock(lock);
