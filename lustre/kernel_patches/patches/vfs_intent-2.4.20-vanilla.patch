@@ -1,21 +1,19 @@
  fs/dcache.c               |   19 ++-
- fs/exec.c                 |   15 +-
- fs/namei.c                |  289 ++++++++++++++++++++++++++++++++++++++--------
+ fs/exec.c                 |   17 +-
+ fs/namei.c                |  291 +++++++++++++++++++++++++++++++++++++++-------
  fs/namespace.c            |   28 +++-
- fs/open.c                 |  123 ++++++++++++++++---
+ fs/open.c                 |  172 +++++++++++++++++++--------
  fs/stat.c                 |   50 +++++--
  include/linux/dcache.h    |   59 +++++++++
- include/linux/fs.h        |   30 ++++
+ include/linux/fs.h        |   32 ++++-
  include/linux/fs_struct.h |    4 
  kernel/exit.c             |    3 
  kernel/fork.c             |    3 
  kernel/ksyms.c            |    1 
- 12 files changed, 527 insertions(+), 97 deletions(-)
+ 12 files changed, 551 insertions(+), 128 deletions(-)
 
-Index: lum/fs/exec.c
-===================================================================
---- lum.orig/fs/exec.c	2003-08-07 05:11:15.000000000 -0600
-+++ lum/fs/exec.c	2003-08-30 07:20:56.000000000 -0600
+--- linux-2.4.20/fs/exec.c~vfs_intent-2.4.20-vanilla	2003-05-16 05:29:12.000000000 +0400
++++ linux-2.4.20-alexey/fs/exec.c	2003-09-11 19:36:34.000000000 +0400
 @@ -107,8 +107,10 @@ asmlinkage long sys_uselib(const char * 
  	struct file * file;
  	struct nameidata nd;
@@ -77,10 +75,8 @@ Index: lum/fs/exec.c
  		goto close_fail;
  
  	retval = binfmt->core_dump(signr, regs, file);
-Index: lum/fs/dcache.c
-===================================================================
---- lum.orig/fs/dcache.c	2003-08-07 05:11:15.000000000 -0600
-+++ lum/fs/dcache.c	2003-08-30 07:20:56.000000000 -0600
+--- linux-2.4.20/fs/dcache.c~vfs_intent-2.4.20-vanilla	2003-05-16 05:29:12.000000000 +0400
++++ linux-2.4.20-alexey/fs/dcache.c	2003-09-11 19:36:35.000000000 +0400
 @@ -181,6 +181,13 @@ int d_invalidate(struct dentry * dentry)
  		spin_unlock(&dcache_lock);
  		return 0;
@@ -118,10 +114,8 @@ Index: lum/fs/dcache.c
  }
  
  #define do_switch(x,y) do { \
-Index: lum/fs/namespace.c
-===================================================================
---- lum.orig/fs/namespace.c	2003-08-07 05:11:15.000000000 -0600
-+++ lum/fs/namespace.c	2003-08-30 07:20:56.000000000 -0600
+--- linux-2.4.20/fs/namespace.c~vfs_intent-2.4.20-vanilla	2003-05-16 05:29:12.000000000 +0400
++++ linux-2.4.20-alexey/fs/namespace.c	2003-09-11 19:36:35.000000000 +0400
 @@ -99,6 +99,7 @@ static void detach_mnt(struct vfsmount *
  {
  	old_nd->dentry = mnt->mnt_mountpoint;
@@ -235,10 +229,8 @@ Index: lum/fs/namespace.c
  	path_release(&new_nd);
  out0:
  	unlock_kernel();
-Index: lum/fs/namei.c
-===================================================================
---- lum.orig/fs/namei.c	2003-08-07 05:11:15.000000000 -0600
-+++ lum/fs/namei.c	2003-08-30 07:21:03.000000000 -0600
+--- linux-2.4.20/fs/namei.c~vfs_intent-2.4.20-vanilla	2003-05-16 05:29:12.000000000 +0400
++++ linux-2.4.20-alexey/fs/namei.c	2003-09-11 19:36:35.000000000 +0400
 @@ -94,6 +94,13 @@
   * XEmacs seems to be relying on it...
   */
@@ -963,10 +955,8 @@ Index: lum/fs/namei.c
  	if (page) {
  		kunmap(page);
  		page_cache_release(page);
-Index: lum/fs/open.c
-===================================================================
---- lum.orig/fs/open.c	2003-08-07 05:11:15.000000000 -0600
-+++ lum/fs/open.c	2003-08-30 07:20:56.000000000 -0600
+--- linux-2.4.20/fs/open.c~vfs_intent-2.4.20-vanilla	2003-05-16 05:29:13.000000000 +0400
++++ linux-2.4.20-alexey/fs/open.c	2003-09-11 19:36:35.000000000 +0400
 @@ -19,6 +19,8 @@
  #include <asm/uaccess.h>
  
@@ -1265,18 +1255,18 @@ Index: lum/fs/open.c
 -	error = -EROFS;
 -	if (IS_RDONLY(inode))
 -		goto dput_and_out;
--
+ 
 -	error = -EPERM;
 -	if (IS_IMMUTABLE(inode) || IS_APPEND(inode))
 -		goto dput_and_out;
++	error = chmod_common(nd.dentry, mode);
  
 -	if (mode == (mode_t) -1)
 -		mode = inode->i_mode;
 -	newattrs.ia_mode = (mode & S_IALLUGO) | (inode->i_mode & ~S_IALLUGO);
 -	newattrs.ia_valid = ATTR_MODE | ATTR_CTIME;
 -	error = notify_change(nd.dentry, &newattrs);
-+	error = chmod_common(nd.dentry, mode);
- 
+-
 -dput_and_out:
  	path_release(&nd);
  out:
@@ -1302,7 +1292,7 @@ Index: lum/fs/open.c
  	error = -EPERM;
  	if (IS_IMMUTABLE(inode) || IS_APPEND(inode))
  		goto out;
-@@ -638,6 +701,7 @@ asmlinkage long sys_fchown(unsigned int 
+@@ -642,6 +705,7 @@ struct file *filp_open(const char * file
  {
  	int namei_flags, error;
  	struct nameidata nd;
@@ -1310,7 +1300,7 @@ Index: lum/fs/open.c
  
  	namei_flags = flags;
  	if ((namei_flags+1) & O_ACCMODE)
-@@ -649,14 +714,15 @@ struct file *filp_open(const char * file
+@@ -649,14 +713,15 @@ struct file *filp_open(const char * file
  	if (namei_flags & O_TRUNC)
  		namei_flags |= 2;
  
@@ -1331,7 +1321,7 @@ Index: lum/fs/open.c
  {
  	struct file * f;
  	struct inode *inode;
-@@ -693,12 +759,15 @@ struct file *dentry_open(struct dentry *
+@@ -693,12 +758,15 @@ struct file *dentry_open(struct dentry *
  	}
  
  	if (f->f_op && f->f_op->open) {
@@ -1347,7 +1337,7 @@ Index: lum/fs/open.c
  	return f;
  
  cleanup_all:
-@@ -713,11 +782,17 @@ cleanup_all:
+@@ -713,11 +781,17 @@ cleanup_all:
  cleanup_file:
  	put_filp(f);
  cleanup_dentry:
@@ -1365,10 +1355,8 @@ Index: lum/fs/open.c
  /*
   * Find an empty file descriptor entry, and mark it busy.
   */
-Index: lum/fs/stat.c
-===================================================================
---- lum.orig/fs/stat.c	2003-08-07 05:11:15.000000000 -0600
-+++ lum/fs/stat.c	2003-08-30 07:20:56.000000000 -0600
+--- linux-2.4.20/fs/stat.c~vfs_intent-2.4.20-vanilla	2001-09-14 03:04:43.000000000 +0400
++++ linux-2.4.20-alexey/fs/stat.c	2003-09-11 19:36:35.000000000 +0400
 @@ -17,10 +17,12 @@
   * Revalidate the inode. This is required for proper NFS attribute caching.
   */
@@ -1526,10 +1514,8 @@ Index: lum/fs/stat.c
  		if (!err)
  			err = cp_new_stat64(dentry->d_inode, statbuf);
  		fput(f);
-Index: lum/include/linux/dcache.h
-===================================================================
---- lum.orig/include/linux/dcache.h	2003-08-07 05:11:15.000000000 -0600
-+++ lum/include/linux/dcache.h	2003-08-30 07:20:56.000000000 -0600
+--- linux-2.4.20/include/linux/dcache.h~vfs_intent-2.4.20-vanilla	2003-05-16 05:29:15.000000000 +0400
++++ linux-2.4.20-alexey/include/linux/dcache.h	2003-09-11 19:36:35.000000000 +0400
 @@ -7,6 +7,50 @@
  #include <linux/mount.h>
  #include <linux/kernel.h>
@@ -1612,10 +1598,8 @@ Index: lum/include/linux/dcache.h
  
  extern spinlock_t dcache_lock;
  
-Index: lum/include/linux/fs.h
-===================================================================
---- lum.orig/include/linux/fs.h	2003-08-30 07:20:55.000000000 -0600
-+++ lum/include/linux/fs.h	2003-08-30 07:20:56.000000000 -0600
+--- linux-2.4.20/include/linux/fs.h~vfs_intent-2.4.20-vanilla	2003-09-11 19:36:32.000000000 +0400
++++ linux-2.4.20-alexey/include/linux/fs.h	2003-09-11 19:37:23.000000000 +0400
 @@ -73,6 +73,7 @@ extern int leases_enable, dir_notify_ena
  
  #define FMODE_READ 1
@@ -1634,7 +1618,15 @@ Index: lum/include/linux/fs.h
  
  /*
   * This is the Inode Attributes structure, used for notify_change().  It
-@@ -542,6 +546,7 @@ struct file {
+@@ -471,6 +475,7 @@ struct inode {
+ 	struct pipe_inode_info	*i_pipe;
+ 	struct block_device	*i_bdev;
+ 	struct char_device	*i_cdev;
++	void			*i_filterdata;
+ 
+ 	unsigned long		i_dnotify_mask; /* Directory notify events */
+ 	struct dnotify_struct	*i_dnotify; /* for directory notifications */
+@@ -542,6 +547,7 @@ struct file {
  
  	/* needed for tty driver, and maybe others */
  	void			*private_data;
@@ -1642,7 +1634,7 @@ Index: lum/include/linux/fs.h
  
  	/* preallocated helper kiobuf to speedup O_DIRECT */
  	struct kiobuf		*f_iobuf;
-@@ -661,6 +666,7 @@ struct nameidata {
+@@ -661,6 +667,7 @@ struct nameidata {
  	struct qstr last;
  	unsigned int flags;
  	int last_type;
@@ -1650,7 +1642,7 @@ Index: lum/include/linux/fs.h
  };
  
  #define DQUOT_USR_ENABLED	0x01		/* User diskquotas enabled */
-@@ -794,7 +800,8 @@ extern int vfs_symlink(struct inode *, s
+@@ -794,7 +801,8 @@ extern int vfs_symlink(struct inode *, s
  extern int vfs_link(struct dentry *, struct inode *, struct dentry *);
  extern int vfs_rmdir(struct inode *, struct dentry *);
  extern int vfs_unlink(struct inode *, struct dentry *);
@@ -1660,7 +1652,7 @@ Index: lum/include/linux/fs.h
  
  /*
   * File types
-@@ -854,21 +861,32 @@ struct file_operations {
+@@ -854,21 +862,32 @@ struct file_operations {
  
  struct inode_operations {
  	int (*create) (struct inode *,struct dentry *,int);
@@ -1693,7 +1685,7 @@ Index: lum/include/linux/fs.h
  	int (*getattr) (struct dentry *, struct iattr *);
  	int (*setxattr) (struct dentry *, const char *, void *, size_t, int);
  	ssize_t (*getxattr) (struct dentry *, const char *, void *, size_t);
-@@ -1070,10 +1088,14 @@ static inline int get_lease(struct inode
+@@ -1070,10 +1089,14 @@ static inline int get_lease(struct inode
  
  asmlinkage long sys_open(const char *, int, int);
  asmlinkage long sys_close(unsigned int);	/* yes, it's really unsigned */
@@ -1709,7 +1701,7 @@ Index: lum/include/linux/fs.h
  extern int filp_close(struct file *, fl_owner_t id);
  extern char * getname(const char *);
  
-@@ -1335,6 +1357,7 @@ typedef int (*read_actor_t)(read_descrip
+@@ -1335,6 +1358,7 @@ typedef int (*read_actor_t)(read_descrip
  extern loff_t default_llseek(struct file *file, loff_t offset, int origin);
  
  extern int FASTCALL(__user_walk(const char *, unsigned, struct nameidata *));
@@ -1717,7 +1709,7 @@ Index: lum/include/linux/fs.h
  extern int FASTCALL(path_init(const char *, unsigned, struct nameidata *));
  extern int FASTCALL(path_walk(const char *, struct nameidata *));
  extern int FASTCALL(path_lookup(const char *, unsigned, struct nameidata *));
-@@ -1346,6 +1369,8 @@ extern struct dentry * lookup_one_len(co
+@@ -1346,6 +1370,8 @@ extern struct dentry * lookup_one_len(co
  extern struct dentry * lookup_hash(struct qstr *, struct dentry *);
  #define user_path_walk(name,nd)	 __user_walk(name, LOOKUP_FOLLOW|LOOKUP_POSITIVE, nd)
  #define user_path_walk_link(name,nd) __user_walk(name, LOOKUP_POSITIVE, nd)
@@ -1726,7 +1718,7 @@ Index: lum/include/linux/fs.h
  
  extern void iput(struct inode *);
  extern void force_delete(struct inode *);
-@@ -1455,6 +1480,8 @@ extern struct file_operations generic_ro
+@@ -1455,6 +1481,8 @@ extern struct file_operations generic_ro
  
  extern int vfs_readlink(struct dentry *, char *, int, const char *);
  extern int vfs_follow_link(struct nameidata *, const char *);
@@ -1735,10 +1727,8 @@ Index: lum/include/linux/fs.h
  extern int page_readlink(struct dentry *, char *, int);
  extern int page_follow_link(struct dentry *, struct nameidata *);
  extern struct inode_operations page_symlink_inode_operations;
-Index: lum/include/linux/fs_struct.h
-===================================================================
---- lum.orig/include/linux/fs_struct.h	2003-08-07 05:11:15.000000000 -0600
-+++ lum/include/linux/fs_struct.h	2003-08-30 07:20:56.000000000 -0600
+--- linux-2.4.20/include/linux/fs_struct.h~vfs_intent-2.4.20-vanilla	2001-07-14 02:10:44.000000000 +0400
++++ linux-2.4.20-alexey/include/linux/fs_struct.h	2003-09-11 19:36:35.000000000 +0400
 @@ -34,10 +34,12 @@ static inline void set_fs_root(struct fs
  	write_lock(&fs->lock);
  	old_root = fs->root;
@@ -1765,10 +1755,8 @@ Index: lum/include/linux/fs_struct.h
  		dput(old_pwd);
  		mntput(old_pwdmnt);
  	}
-Index: lum/kernel/ksyms.c
-===================================================================
---- lum.orig/kernel/ksyms.c	2003-08-30 07:20:55.000000000 -0600
-+++ lum/kernel/ksyms.c	2003-08-30 07:20:56.000000000 -0600
+--- linux-2.4.20/kernel/ksyms.c~vfs_intent-2.4.20-vanilla	2003-09-11 19:36:33.000000000 +0400
++++ linux-2.4.20-alexey/kernel/ksyms.c	2003-09-11 19:36:35.000000000 +0400
 @@ -269,6 +269,7 @@ EXPORT_SYMBOL(read_cache_page);
  EXPORT_SYMBOL(set_page_dirty);
  EXPORT_SYMBOL(vfs_readlink);
@@ -1777,10 +1765,8 @@ Index: lum/kernel/ksyms.c
  EXPORT_SYMBOL(page_readlink);
  EXPORT_SYMBOL(page_follow_link);
  EXPORT_SYMBOL(page_symlink_inode_operations);
-Index: lum/kernel/fork.c
-===================================================================
---- lum.orig/kernel/fork.c	2003-08-07 05:11:15.000000000 -0600
-+++ lum/kernel/fork.c	2003-08-30 07:20:56.000000000 -0600
+--- linux-2.4.20/kernel/fork.c~vfs_intent-2.4.20-vanilla	2003-05-16 05:29:15.000000000 +0400
++++ linux-2.4.20-alexey/kernel/fork.c	2003-09-11 19:36:35.000000000 +0400
 @@ -384,10 +384,13 @@ static inline struct fs_struct *__copy_f
  		fs->umask = old->umask;
  		read_lock(&old->lock);
@@ -1795,10 +1781,8 @@ Index: lum/kernel/fork.c
  			fs->altrootmnt = mntget(old->altrootmnt);
  			fs->altroot = dget(old->altroot);
  		} else {
-Index: lum/kernel/exit.c
-===================================================================
---- lum.orig/kernel/exit.c	2003-08-07 05:11:15.000000000 -0600
-+++ lum/kernel/exit.c	2003-08-30 07:20:56.000000000 -0600
+--- linux-2.4.20/kernel/exit.c~vfs_intent-2.4.20-vanilla	2003-05-16 05:29:15.000000000 +0400
++++ linux-2.4.20-alexey/kernel/exit.c	2003-09-11 19:36:35.000000000 +0400
 @@ -238,11 +238,14 @@ static inline void __put_fs_struct(struc
  {
  	/* No need to hold fs->lock if we are killing it */
@@ -1814,3 +1798,5 @@ Index: lum/kernel/exit.c
  			dput(fs->altroot);
  			mntput(fs->altrootmnt);
  		}
+
+_
