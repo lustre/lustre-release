@@ -248,19 +248,23 @@ test_1c() {
 	touch $DIR/1b1/file1
 	touch $DIR/1b1/file2
 
-	echo "3 files left"
+	ls $DIR/1b1/
+	log "3 files left"
 	rmdir $DIR/1b1 && error
 	rm -f $DIR/1b1/file0
 
-	echo "2 files left"
+	ls $DIR/1b1/
+	log "2 files left"
 	rmdir $DIR/1b1 && error
 	rm -f $DIR/1b1/file1
 
-	echo "1 files left"
+	ls $DIR/1b1/
+	log "1 files left"
 	rmdir $DIR/1b1 && error
 	rm -f $DIR/1b1/file2
 
-	echo "0 files left"
+	ls $DIR/1b1/
+	log "0 files left"
 	rmdir $DIR/1b1 || error
 }
 run_test 1c " remove splitted cross-node dir ============================="
