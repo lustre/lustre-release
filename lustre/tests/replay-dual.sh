@@ -62,8 +62,8 @@ fi
 start ost2 --reformat $OSTLCONFARGS 
 [ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
 start mds $MDSLCONFARGS --reformat
-zconf_mount $MOUNT
-zconf_mount $MOUNT2
+zconf_mount `hostname` $MOUNT
+zconf_mount `hostname` $MOUNT2
 
 echo $TIMEOUT > /proc/sys/lustre/timeout
 echo $UPCALL > /proc/sys/lustre/upcall
