@@ -39,7 +39,7 @@ setup() {
     start ost2 --reformat $OSTLCONFARGS 
     [ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
     start mds $MDSLCONFARGS --reformat
-    zconf_mount `hostname`  $MOUNT
+    grep " $MOUNT " /proc/mounts || zconf_mount `hostname`  $MOUNT
 }
 
 cleanup() {

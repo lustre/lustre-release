@@ -557,18 +557,18 @@ alloc_tf_buf(void)
 	max_tf_len = sprintf(tf_buf, "%u ", highest);
 }
 
-char * 
+char *
 fill_tf_buf(struct test_file *tf)
 {
 	if (tf_buf == NULL)
 		alloc_tf_buf();
 
-	sprintf(tf_buf,"%u ", tf - test_files);
+	sprintf(tf_buf,"%u ", (int)(tf - test_files));
 	return tf_buf;
 }
 
 void
-output_line(struct test_file *tf, int op, unsigned long offset, 
+output_line(struct test_file *tf, int op, unsigned long offset,
 		unsigned long size, struct timeval *tv)
 {
 	char *tf_num = "";
