@@ -66,7 +66,7 @@ int rprintf(int rank, int loop, const char *fmt, ...)
 int main(int argc, char *argv[])
 {
         int n, nloops = 0, fd;
-        int rank, ret;
+        int rank, size, ret;
         int chunk_size, append_size, trunc_offset;
         char append_buf[APPEND_SIZE_MAX];
         char chunk_buf[CHUNK_SIZE_MAX];
@@ -94,13 +94,13 @@ int main(int argc, char *argv[])
         if (error != MPI_SUCCESS)
                 rprintf(-1, -1, "MPI_Comm_rank failed: %d\n", error);
 
-        error = MPI_Comm_size(MPI_COMM_WORLD, &n);
+        error = MPI_Comm_size(MPI_COMM_WORLD, &size);
         if (error != MPI_SUCCESS)
                 rprintf(rank, -1, "MPI_Comm_size failed: %d\n", error);
 
-        if (n != 2)
-                rprintf(rank, -1, "%s: must run with 2 processes, not %d\n",
-                        prog, n);
+        if (size < 2)
+                rprintf(rank, -1, "%s: must run with at least 2 processes\n",
+                        prog);
 
         memset(append_buf, APPEND_CHAR, APPEND_SIZE_MAX);
         memset(chunk_buf, CHUNK_CHAR, CHUNK_SIZE_MAX);
@@ -164,7 +164,7 @@ int main(int argc, char *argv[])
                         rprintf(rank, n, "start MPI_Barrier: %d\n",error);
 
                 /* Do the race */
-                if (rank == n % 2) {
+                if (rank == n % size) {
                         //
                         done = 0;
                         do {
@@ -178,7 +178,7 @@ int main(int argc, char *argv[])
                                 }
                                 done += ret;
                         } while (done != append_size);
-                } else if (rank == 1 - n % 2) {
+                } else if (rank == (n + 1) % size) {
                         ret = truncate(fname, (off_t)trunc_offset);
                         if (ret != 0)
                                 rprintf(rank, n, "truncate @ %u: %s\n",
