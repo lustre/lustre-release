@@ -628,6 +628,7 @@ int ptlrpc_init_portals(void)
                 {GMNAL,     "gmnal"},
                 {OPENIBNAL, "openibnal"},
                 {IIBNAL,    "iibnal"},
+                {VIBNAL,    "vibnal"},
                 {TCPNAL,    "tcpnal"},
                 {LONAL,     "lonal"},
                 {RANAL,     "ranal"},

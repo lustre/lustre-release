@@ -456,12 +456,19 @@ class LCTLInterface:
   quit""" % (net_type,
              nid, hostaddr, port )
             self.run(cmds)
-        elif net_type in ('iib','vib') and not config.lctl_dump:
+        elif net_type in ('iib',) and not config.lctl_dump:
             cmds =  """
   network %s
   add_peer %s
   quit""" % (net_type,
              nid )
+            self.run(cmds)
+        elif net_type in ('vib',) and not config.lctl_dump:
+            cmds =  """
+  network %s
+  add_peer %s %s
+  quit""" % (net_type,
+             nid, hostaddr )
             self.run(cmds)
     
     def connect(self, srv):
