@@ -96,21 +96,21 @@ basetest() {
 }
 
 run_test() {
-         base=`basetest $1`
-         if [ ! -z $ONLY ]; then
+        base=`basetest $1`
+        if [ ! -z "$ONLY" ]; then
                  testname=ONLY_$1
                  if [ ${!testname}x != x ]; then
- 			run_one $1 "$2"
- 			return $?
+                     run_one $1 "$2"
+                     return $?
                  fi
                  testname=ONLY_$base
                  if [ ${!testname}x != x ]; then
-                         run_one $1 "$2"
-                         return $?
+                     run_one $1 "$2"
+                     return $?
                  fi
                  echo -n "."
                  return 0
- 	fi
+        fi
         testname=EXCEPT_$1
         if [ ${!testname}x != x ]; then
                  echo "skipping excluded test $1"
@@ -122,7 +122,8 @@ run_test() {
                  return 0
         fi
         run_one $1 "$2"
- 	return $?
+
+        return $?
 }
 
 EQUALS="======================================================================"
@@ -189,17 +190,50 @@ test_4() {
 run_test 4 "open |X| close"
 
 test_5() {
-    :
+    replay_barrier mds
+    mcreate $MOUNTPT/f5
+    local old_inum=`ls -i $MOUNTPT/f5 | awk '{print $1}'`
+    fail mds
+    local new_inum=`ls -i $MOUNTPT/f5 | awk '{print $1}'`
+
+    echo " old_inum == $old_inum, new_inum == $new_inum"
+    if [ $old_inum -eq $new_inum  ] ;
+    then
+        echo " old_inum and new_inum match"
+    else
+        echo "!!!! old_inum and new_inum NOT match"
+
+    fi
+    rm -f $MOUNTPT/f5
 }
 run_test 5 "|X| create (same inum/gen)"
 
 test_6() {
-    :
+    mcreate $MOUNTPT/f6
+    replay_barrier mds
+    mv $MOUNTPT/f6 $MOUNTPT/F6
+    rm -f $MOUNTPT/F6
+    fail mds
+    ls $MOUNTPT/f6 
+    ls $MOUNTPT/F6
+    rm -f  $MOUNTPT/f6
+    rm -f  $MOUNTPT/F6
+
 }
 run_test 6 "create |X| rename unlink"
 
 test_7() {
-    :
+    mcreate $MOUNTPT/f7
+    echo "old" > $MOUNTPT/f7
+    mv $MOUNTPT/f7 $MOUNTPT/F7
+    replay_barrier mds
+    mcreate $MOUNTPT/f7
+    echo "new" > $MOUNTPT/f7
+    cat $MOUNTPT/f7 | grep new 
+    cat $MOUNTPT/F7 | grep old
+    fail mds
+    cat $MOUNTPT/f7 | grep new
+    cat $MOUNTPT/F7 | grep old
 }
 run_test 7 "create open write rename |X| create-old-name read"
 
