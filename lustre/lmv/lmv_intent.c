@@ -233,7 +233,7 @@ int lmv_intent_getattr(struct obd_export *exp, struct lustre_id *pid,
         struct lmv_obd *lmv = &obd->u.lmv;
         struct mds_body *body = NULL;
         struct lustre_id rpid = *pid;
-        struct lmv_obj *obj, *obj2;
+        struct lmv_obj *obj = NULL, *obj2 = NULL;
         struct mea *mea;
         int rc = 0, mds;
         ENTRY;
@@ -243,6 +243,7 @@ int lmv_intent_getattr(struct obd_export *exp, struct lustre_id *pid,
                  * slaves if requested object is splitted directory */
                 CDEBUG(D_OTHER, "revalidate attrs for "DLID4"\n", OLID4(cid));
                 mds = id_group(cid);
+#if 0
                 obj = lmv_grab_obj(obd, cid);
                 if (obj) {
                         /* in fact, we need not this with current intent_lock(),
@@ -253,6 +254,7 @@ int lmv_intent_getattr(struct obd_export *exp, struct lustre_id *pid,
                         }
                         lmv_put_obj(obj);
                }
+#endif
         } else {
                 CDEBUG(D_OTHER, "INTENT getattr for %*s on "DLID4"\n",
                        len, name, OLID4(pid));
