@@ -1,11 +1,11 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  */
-#ifndef _KERNEL_COMPAT_H
-#define _KERNEL_COMPAT_H
+#ifndef _PORTALS_COMPAT_H
+#define _PORTALS_COMPAT_H
 
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0) || defined(CONFIG_RH_2_4_20)
 
 #define SIGNAL_MASK_LOCK(task, flags)         \
         spin_lock_irqsave( &task->sighand->siglock, flags)
@@ -41,4 +41,4 @@
 	sprintf(comm, fmt, ## a)
 #endif
 
-#endif /* _KERNEL_COMPAT_H */
+#endif /* _PORTALS_COMPAT_H */
