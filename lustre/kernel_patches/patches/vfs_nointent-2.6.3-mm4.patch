@@ -1,9 +1,9 @@
  0 files changed
 
-Index: linux-2.6.3-mm4/fs/namei.c
+Index: linux-2.6.3/fs/namei.c
 ===================================================================
---- linux-2.6.3-mm4.orig/fs/namei.c	2004-03-08 14:46:20.906229088 +0800
-+++ linux-2.6.3-mm4/fs/namei.c	2004-03-08 14:51:27.317647472 +0800
+--- linux-2.6.3.orig/fs/namei.c	2004-03-31 18:22:06.000000000 -0500
++++ linux-2.6.3/fs/namei.c	2004-03-31 18:23:05.000000000 -0500
 @@ -1277,7 +1277,7 @@
  		if (!error) {
  			DQUOT_INIT(inode);
@@ -220,10 +220,10 @@ Index: linux-2.6.3-mm4/fs/namei.c
  exit5:
  	dput(new_dentry);
  exit4:
-Index: linux-2.6.3-mm4/fs/open.c
+Index: linux-2.6.3/fs/open.c
 ===================================================================
---- linux-2.6.3-mm4.orig/fs/open.c	2004-03-08 14:46:21.050207200 +0800
-+++ linux-2.6.3-mm4/fs/open.c	2004-03-08 14:55:01.025158992 +0800
+--- linux-2.6.3.orig/fs/open.c	2004-03-31 18:22:06.000000000 -0500
++++ linux-2.6.3/fs/open.c	2004-03-31 20:18:47.000000000 -0500
 @@ -180,9 +180,10 @@
  	return error;
  }
@@ -316,26 +316,110 @@ Index: linux-2.6.3-mm4/fs/open.c
  dput_and_out:
  	path_release(&nd);
  out:
-@@ -636,6 +664,18 @@
- 	if (IS_RDONLY(inode))
- 		goto dput_and_out;
- 	
+@@ -585,27 +613,31 @@
+ 	return error;
+ }
+ 
+-asmlinkage long sys_fchmod(unsigned int fd, mode_t mode)
++int chmod_common(struct dentry *dentry, mode_t mode)
+ {
+-	struct inode * inode;
+-	struct dentry * dentry;
+-	struct file * file;
+-	int err = -EBADF;
++	struct inode *inode = dentry->d_inode;
+ 	struct iattr newattrs;
++	int err = -EROFS;
+ 
+-	file = fget(fd);
+-	if (!file)
++	if (IS_RDONLY(inode))
+ 		goto out;
+ 
+-	dentry = file->f_dentry;
+-	inode = dentry->d_inode;
 +	if (inode->i_op->setattr_raw) {
-+		struct inode_operations *op = nd.dentry->d_inode->i_op;
-+
 +		newattrs.ia_mode = mode;
 +		newattrs.ia_valid = ATTR_MODE | ATTR_CTIME;
 +		newattrs.ia_valid |= ATTR_RAW;
-+		error = op->setattr_raw(inode, &newattrs);
++		down(&inode->i_sem);
++		err = inode->i_op->setattr_raw(inode, &newattrs);
++		up(&inode->i_sem);
 +		/* the file system wants to use normal vfs path now */
-+		if (error != -EOPNOTSUPP)
-+			goto dput_and_out;
++		if (err != -EOPNOTSUPP)
++			goto out;
 +	}
-+
- 	error = -EPERM;
+ 
+-	err = -EROFS;
+-	if (IS_RDONLY(inode))
+-		goto out_putf;
+ 	err = -EPERM;
  	if (IS_IMMUTABLE(inode) || IS_APPEND(inode))
- 		goto dput_and_out;
-@@ -669,6 +709,18 @@
+-		goto out_putf;
++		goto out;
++
+ 	down(&inode->i_sem);
+ 	if (mode == (mode_t) -1)
+ 		mode = inode->i_mode;
+@@ -614,7 +646,22 @@
+ 	err = notify_change(dentry, &newattrs);
+ 	up(&inode->i_sem);
+ 
+-out_putf:
++out:
++	return err;
++}
++
++
++asmlinkage long sys_fchmod(unsigned int fd, mode_t mode)
++{
++	struct file * file;
++	int err = -EBADF;
++
++	file = fget(fd);
++	if (!file)
++		goto out;
++
++	err = chmod_common(file->f_dentry, mode);
++
+ 	fput(file);
+ out:
+ 	return err;
+@@ -623,32 +670,14 @@
+ asmlinkage long sys_chmod(const char __user * filename, mode_t mode)
+ {
+ 	struct nameidata nd;
+-	struct inode * inode;
+ 	int error;
+-	struct iattr newattrs;
+ 
+ 	error = user_path_walk(filename, &nd);
+ 	if (error)
+ 		goto out;
+-	inode = nd.dentry->d_inode;
+ 
+-	error = -EROFS;
+-	if (IS_RDONLY(inode))
+-		goto dput_and_out;
+-	
+-	error = -EPERM;
+-	if (IS_IMMUTABLE(inode) || IS_APPEND(inode))
+-		goto dput_and_out;
+-
+-	down(&inode->i_sem);
+-	if (mode == (mode_t) -1)
+-		mode = inode->i_mode;
+-	newattrs.ia_mode = (mode & S_IALLUGO) | (inode->i_mode & ~S_IALLUGO);
+-	newattrs.ia_valid = ATTR_MODE | ATTR_CTIME;
+-	error = notify_change(nd.dentry, &newattrs);
+-	up(&inode->i_sem);
++	error = chmod_common(nd.dentry, mode);
+ 
+-dput_and_out:
+ 	path_release(&nd);
+ out:
+ 	return error;
+@@ -669,6 +698,20 @@
  	if (IS_RDONLY(inode))
  		goto out;
  	error = -EPERM;
@@ -346,7 +430,9 @@ Index: linux-2.6.3-mm4/fs/open.c
 +		newattrs.ia_gid = group;
 +		newattrs.ia_valid = ATTR_UID | ATTR_GID;
 +		newattrs.ia_valid |= ATTR_RAW;
++		down(&inode->i_sem);
 +		error = op->setattr_raw(inode, &newattrs);
++		up(&inode->i_sem);
 +		/* the file system wants to use normal vfs path now */
 +		if (error != -EOPNOTSUPP)
 +			return error;
@@ -354,18 +440,22 @@ Index: linux-2.6.3-mm4/fs/open.c
  	if (IS_IMMUTABLE(inode) || IS_APPEND(inode))
  		goto out;
  	newattrs.ia_valid =  ATTR_CTIME;
-@@ -682,6 +734,7 @@
+@@ -680,9 +723,10 @@
+ 		newattrs.ia_valid |= ATTR_GID;
+ 		newattrs.ia_gid = group;
  	}
++	down(&inode->i_sem);
  	if (!S_ISDIR(inode->i_mode))
  		newattrs.ia_valid |= ATTR_KILL_SUID|ATTR_KILL_SGID;
+-	down(&inode->i_sem);
 +
- 	down(&inode->i_sem);
  	error = notify_change(dentry, &newattrs);
  	up(&inode->i_sem);
-Index: linux-2.6.3-mm4/fs/exec.c
+ out:
+Index: linux-2.6.3/fs/exec.c
 ===================================================================
---- linux-2.6.3-mm4.orig/fs/exec.c	2004-03-08 14:46:20.758251584 +0800
-+++ linux-2.6.3-mm4/fs/exec.c	2004-03-08 14:51:27.454626648 +0800
+--- linux-2.6.3.orig/fs/exec.c	2004-03-31 18:22:06.000000000 -0500
++++ linux-2.6.3/fs/exec.c	2004-03-31 18:23:05.000000000 -0500
 @@ -1408,7 +1408,7 @@
  		goto close_fail;
  	if (!file->f_op->write)
@@ -375,10 +465,10 @@ Index: linux-2.6.3-mm4/fs/exec.c
  		goto close_fail;
  
  	retval = binfmt->core_dump(signr, regs, file);
-Index: linux-2.6.3-mm4/include/linux/fs.h
+Index: linux-2.6.3/include/linux/fs.h
 ===================================================================
---- linux-2.6.3-mm4.orig/include/linux/fs.h	2004-03-08 14:46:21.391155368 +0800
-+++ linux-2.6.3-mm4/include/linux/fs.h	2004-03-08 14:56:25.775275016 +0800
+--- linux-2.6.3.orig/include/linux/fs.h	2004-03-31 18:22:06.000000000 -0500
++++ linux-2.6.3/include/linux/fs.h	2004-03-31 18:23:05.000000000 -0500
 @@ -843,13 +843,20 @@
  	int (*create) (struct inode *,struct dentry *,int, struct nameidata *);
  	struct dentry * (*lookup) (struct inode *,struct dentry *, struct nameidata *);
@@ -409,10 +499,10 @@ Index: linux-2.6.3-mm4/include/linux/fs.h
  extern struct file *filp_open(const char *, int, int);
  extern struct file * dentry_open(struct dentry *, struct vfsmount *, int);
  extern struct file * dentry_open_it(struct dentry *, struct vfsmount *, int, struct lookup_intent *);
-Index: linux-2.6.3-mm4/net/unix/af_unix.c
+Index: linux-2.6.3/net/unix/af_unix.c
 ===================================================================
---- linux-2.6.3-mm4.orig/net/unix/af_unix.c	2004-02-26 14:22:03.000000000 +0800
-+++ linux-2.6.3-mm4/net/unix/af_unix.c	2004-03-08 14:51:27.591605824 +0800
+--- linux-2.6.3.orig/net/unix/af_unix.c	2004-02-17 22:58:33.000000000 -0500
++++ linux-2.6.3/net/unix/af_unix.c	2004-03-31 18:23:05.000000000 -0500
 @@ -592,6 +592,7 @@
  	int err = 0;
  	
