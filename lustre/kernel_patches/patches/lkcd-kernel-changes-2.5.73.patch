@@ -1,13 +1,43 @@
---- linux-2.5.69/drivers/Makefile.kernel-changes	Sun May  4 16:53:37 2003
-+++ linux-2.5.69/drivers/Makefile	Mon Jun  2 17:39:46 2003
-@@ -50,3 +50,4 @@
+
+
+
+ arch/i386/Kconfig                           |   50 ++++++++++++++++++++++++++++
+ arch/i386/boot/Makefile                     |    1 
+ arch/i386/kernel/i386_ksyms.c               |   19 ++++++++++
+ arch/i386/kernel/nmi.c                      |    2 +
+ arch/i386/kernel/setup.c                    |   10 +++++
+ arch/i386/kernel/smp.c                      |   14 +++++++
+ arch/i386/kernel/traps.c                    |    2 +
+ arch/i386/mm/init.c                         |    6 +++
+ arch/s390/boot/Makefile                     |    2 -
+ arch/s390/boot/install.sh                   |   24 +++++++++----
+ drivers/Makefile                            |    1 
+ include/asm-i386/kmap_types.h               |    3 +
+ include/asm-i386/mach-default/irq_vectors.h |    1 
+ include/asm-i386/smp.h                      |    1 
+ include/linux/major.h                       |    2 +
+ include/linux/sysctl.h                      |    2 +
+ init/Makefile                               |    4 ++
+ init/main.c                                 |   10 +++++
+ init/version.c                              |    4 ++
+ kernel/ksyms.c                              |    8 ++++
+ kernel/panic.c                              |   17 +++++++++
+ kernel/sched.c                              |   22 ++++++++++++
+ lib/Kconfig                                 |   10 +++--
+ mm/page_alloc.c                             |    3 +
+ scripts/mkcompile_h                         |    4 +-
+ 25 files changed, 206 insertions(+), 16 deletions(-)
+
+--- linux-2.5.73/drivers/Makefile~lkcd-kernel-changes-2.5.73	2003-06-30 12:24:21.000000000 -0600
++++ linux-2.5.73-braam/drivers/Makefile	2003-06-30 12:37:53.000000000 -0600
+@@ -50,3 +50,4 @@ obj-$(CONFIG_ISDN_BOOL)		+= isdn/
  obj-$(CONFIG_MCA)		+= mca/
  obj-$(CONFIG_EISA)		+= eisa/
  obj-$(CONFIG_CPU_FREQ)		+= cpufreq/
 +obj-$(CONFIG_CRASH_DUMP)	+= dump/
---- linux-2.5.69/include/linux/major.h.kernel-changes	Sun May  4 16:53:08 2003
-+++ linux-2.5.69/include/linux/major.h	Mon Jun  2 17:39:46 2003
-@@ -156,6 +156,8 @@
+--- linux-2.5.73/include/linux/major.h~lkcd-kernel-changes-2.5.73	2003-06-30 12:24:21.000000000 -0600
++++ linux-2.5.73-braam/include/linux/major.h	2003-06-30 12:37:53.000000000 -0600
+@@ -157,6 +157,8 @@
  
  #define OSST_MAJOR		206	/* OnStream-SCx0 SCSI tape */
  
@@ -16,9 +46,9 @@
  #define IBM_TTY3270_MAJOR	227
  #define IBM_FS3270_MAJOR	228
  
---- linux-2.5.69/include/linux/sysctl.h.kernel-changes	Sun May  4 16:53:31 2003
-+++ linux-2.5.69/include/linux/sysctl.h	Mon Jun  2 17:39:46 2003
-@@ -130,6 +130,8 @@
+--- linux-2.5.73/include/linux/sysctl.h~lkcd-kernel-changes-2.5.73	2003-06-30 12:24:21.000000000 -0600
++++ linux-2.5.73-braam/include/linux/sysctl.h	2003-06-30 12:37:53.000000000 -0600
+@@ -130,6 +130,8 @@ enum
  	KERN_PIDMAX=55,		/* int: PID # limit */
    	KERN_CORE_PATTERN=56,	/* string: pattern for core-file names */
  	KERN_PANIC_ON_OOPS=57,  /* int: whether we will panic on an oops */
@@ -27,8 +57,8 @@
  };
  
  
---- linux-2.5.69/include/asm-i386/mach-default/irq_vectors.h.kernel-changes	Sun May  4 16:53:08 2003
-+++ linux-2.5.69/include/asm-i386/mach-default/irq_vectors.h	Mon Jun  2 17:39:46 2003
+--- linux-2.5.73/include/asm-i386/mach-default/irq_vectors.h~lkcd-kernel-changes-2.5.73	2003-06-30 12:24:21.000000000 -0600
++++ linux-2.5.73-braam/include/asm-i386/mach-default/irq_vectors.h	2003-06-30 12:37:53.000000000 -0600
 @@ -48,6 +48,7 @@
  #define INVALIDATE_TLB_VECTOR	0xfd
  #define RESCHEDULE_VECTOR	0xfc
@@ -37,9 +67,9 @@
  
  #define THERMAL_APIC_VECTOR	0xf0
  /*
---- linux-2.5.69/include/asm-i386/kmap_types.h.kernel-changes	Sun May  4 16:53:36 2003
-+++ linux-2.5.69/include/asm-i386/kmap_types.h	Mon Jun  2 17:39:46 2003
-@@ -24,7 +24,8 @@
+--- linux-2.5.73/include/asm-i386/kmap_types.h~lkcd-kernel-changes-2.5.73	2003-06-30 12:24:21.000000000 -0600
++++ linux-2.5.73-braam/include/asm-i386/kmap_types.h	2003-06-30 12:37:53.000000000 -0600
+@@ -24,7 +24,8 @@ D(10)	KM_IRQ0,
  D(11)	KM_IRQ1,
  D(12)	KM_SOFTIRQ0,
  D(13)	KM_SOFTIRQ1,
@@ -49,18 +79,18 @@
  };
  
  #undef D
---- linux-2.5.69/include/asm-i386/smp.h.kernel-changes	Sun May  4 16:53:32 2003
-+++ linux-2.5.69/include/asm-i386/smp.h	Mon Jun  2 17:39:46 2003
-@@ -39,6 +39,7 @@
+--- linux-2.5.73/include/asm-i386/smp.h~lkcd-kernel-changes-2.5.73	2003-06-30 12:24:21.000000000 -0600
++++ linux-2.5.73-braam/include/asm-i386/smp.h	2003-06-30 12:37:53.000000000 -0600
+@@ -39,6 +39,7 @@ extern int smp_num_siblings;
  extern int cpu_sibling_map[];
  
  extern void smp_flush_tlb(void);
 +extern void dump_send_ipi(void);
  extern void smp_message_irq(int cpl, void *dev_id, struct pt_regs *regs);
  extern void smp_send_reschedule(int cpu);
- extern void smp_send_reschedule_all(void);
---- linux-2.5.69/arch/i386/kernel/i386_ksyms.c.kernel-changes	Sun May  4 16:53:57 2003
-+++ linux-2.5.69/arch/i386/kernel/i386_ksyms.c	Mon Jun  2 17:39:46 2003
+ extern void smp_invalidate_rcv(void);		/* Process an NMI */
+--- linux-2.5.73/arch/i386/kernel/i386_ksyms.c~lkcd-kernel-changes-2.5.73	2003-06-30 12:24:21.000000000 -0600
++++ linux-2.5.73-braam/arch/i386/kernel/i386_ksyms.c	2003-06-30 12:37:53.000000000 -0600
 @@ -16,6 +16,7 @@
  #include <linux/tty.h>
  #include <linux/highmem.h>
@@ -77,7 +107,7 @@
  
  extern void dump_thread(struct pt_regs *, struct user *);
  extern spinlock_t rtc_lock;
-@@ -211,3 +213,20 @@
+@@ -208,3 +210,20 @@ EXPORT_SYMBOL(kmap_atomic_to_page);
  EXPORT_SYMBOL(edd);
  EXPORT_SYMBOL(eddnr);
  #endif
@@ -98,17 +128,17 @@
 +EXPORT_SYMBOL(touch_nmi_watchdog);
 +#endif
 +#endif
---- linux-2.5.69/arch/i386/kernel/nmi.c.kernel-changes	Sun May  4 16:53:31 2003
-+++ linux-2.5.69/arch/i386/kernel/nmi.c	Mon Jun  2 17:39:46 2003
-@@ -23,6 +23,7 @@
- #include <linux/mc146818rtc.h>
+--- linux-2.5.73/arch/i386/kernel/nmi.c~lkcd-kernel-changes-2.5.73	2003-06-30 12:24:21.000000000 -0600
++++ linux-2.5.73-braam/arch/i386/kernel/nmi.c	2003-06-30 12:39:00.000000000 -0600
+@@ -24,6 +24,7 @@
  #include <linux/kernel_stat.h>
  #include <linux/module.h>
+ #include <linux/nmi.h>
 +#include <linux/dump.h>
+ #include <linux/sysdev.h>
  
  #include <asm/smp.h>
- #include <asm/mtrr.h>
-@@ -404,6 +405,7 @@
+@@ -426,6 +427,7 @@ void nmi_watchdog_tick (struct pt_regs *
  			bust_spinlocks(1);
  			printk("NMI Watchdog detected LOCKUP on CPU%d, eip %08lx, registers:\n", cpu, regs->eip);
  			show_registers(regs);
@@ -116,9 +146,9 @@
  			printk("console shuts up ...\n");
  			console_silent();
  			spin_unlock(&nmi_print_lock);
---- linux-2.5.69/arch/i386/kernel/setup.c.kernel-changes	Sun May  4 16:53:14 2003
-+++ linux-2.5.69/arch/i386/kernel/setup.c	Mon Jun  2 17:39:46 2003
-@@ -431,6 +431,7 @@
+--- linux-2.5.73/arch/i386/kernel/setup.c~lkcd-kernel-changes-2.5.73	2003-06-30 12:24:21.000000000 -0600
++++ linux-2.5.73-braam/arch/i386/kernel/setup.c	2003-06-30 12:40:12.000000000 -0600
+@@ -438,6 +438,7 @@ static void __init setup_memory_region(v
  	print_memory_map(who);
  } /* setup_memory_region */
  
@@ -126,7 +156,7 @@
  
  static void __init parse_cmdline_early (char ** cmdline_p)
  {
-@@ -520,6 +521,9 @@
+@@ -531,6 +532,9 @@ static void __init parse_cmdline_early (
  		if (c == ' ' && !memcmp(from, "highmem=", 8))
  			highmem_pages = memparse(from+8, &from) >> PAGE_SHIFT;
  	
@@ -136,7 +166,7 @@
  		c = *(from++);
  		if (!c)
  			break;
-@@ -902,6 +906,8 @@
+@@ -913,6 +917,8 @@ static int __init noreplacement_setup(ch
  
  __setup("noreplacement", noreplacement_setup); 
  
@@ -145,19 +175,19 @@
  void __init setup_arch(char **cmdline_p)
  {
  	unsigned long max_low_pfn;
-@@ -959,6 +965,10 @@
- 	smp_alloc_memory(); /* AP processor realmode stacks in low memory*/
- #endif
- 	paging_init();
-+
+@@ -977,6 +983,10 @@ void __init setup_arch(char **cmdline_p)
+ 	generic_apic_probe(*cmdline_p);
+ #endif	
+ 
 +#ifdef CONFIG_CRASH_DUMP_SOFTBOOT
 +	crashdump_reserve(); /* Preserve crash dump state from prev boot */
 +#endif
++
  #ifdef CONFIG_ACPI_BOOT
  	/*
  	 * Parse the ACPI tables for possible boot-time SMP configuration.
---- linux-2.5.69/arch/i386/kernel/smp.c.kernel-changes	Mon Jun  2 17:39:29 2003
-+++ linux-2.5.69/arch/i386/kernel/smp.c	Mon Jun  2 17:39:46 2003
+--- linux-2.5.73/arch/i386/kernel/smp.c~lkcd-kernel-changes-2.5.73	2003-06-30 12:24:21.000000000 -0600
++++ linux-2.5.73-braam/arch/i386/kernel/smp.c	2003-06-30 12:37:53.000000000 -0600
 @@ -19,6 +19,7 @@
  #include <linux/mc146818rtc.h>
  #include <linux/cache.h>
@@ -166,7 +196,7 @@
  
  #include <asm/mtrr.h>
  #include <asm/pgalloc.h>
-@@ -144,6 +145,13 @@
+@@ -144,6 +145,13 @@ inline void __send_IPI_shortcut(unsigned
  	 */
  	cfg = __prepare_ICR(shortcut, vector);
  
@@ -180,7 +210,7 @@
  	/*
  	 * Send the IPI. The write to APIC_ICR fires this off.
  	 */
-@@ -450,6 +458,11 @@
+@@ -450,6 +458,11 @@ void flush_tlb_all(void)
  	on_each_cpu(do_flush_tlb_all, 0, 1, 1);
  }
  
@@ -192,13 +222,13 @@
  /*
   * this function sends a 'reschedule' IPI to another CPU.
   * it goes straight through and wastes no time serializing
-@@ -574,4 +587,3 @@
+@@ -589,4 +602,3 @@ asmlinkage void smp_call_function_interr
  		atomic_inc(&call_data->finished);
  	}
  }
 -
---- linux-2.5.69/arch/i386/kernel/traps.c.kernel-changes	Sun May  4 16:53:03 2003
-+++ linux-2.5.69/arch/i386/kernel/traps.c	Mon Jun  2 17:39:46 2003
+--- linux-2.5.73/arch/i386/kernel/traps.c~lkcd-kernel-changes-2.5.73	2003-06-30 12:24:21.000000000 -0600
++++ linux-2.5.73-braam/arch/i386/kernel/traps.c	2003-06-30 12:37:53.000000000 -0600
 @@ -25,6 +25,7 @@
  #include <linux/highmem.h>
  #include <linux/kallsyms.h>
@@ -207,7 +237,7 @@
  
  #ifdef CONFIG_EISA
  #include <linux/ioport.h>
-@@ -260,6 +261,7 @@
+@@ -258,6 +259,7 @@ void die(const char * str, struct pt_reg
  	handle_BUG(regs);
  	printk("%s: %04lx [#%d]\n", str, err & 0xffff, ++die_counter);
  	show_registers(regs);
@@ -215,9 +245,9 @@
  	bust_spinlocks(0);
  	spin_unlock_irq(&die_lock);
  	if (in_interrupt())
---- linux-2.5.69/arch/i386/mm/init.c.kernel-changes	Sun May  4 16:53:36 2003
-+++ linux-2.5.69/arch/i386/mm/init.c	Mon Jun  2 17:39:46 2003
-@@ -188,6 +188,12 @@
+--- linux-2.5.73/arch/i386/mm/init.c~lkcd-kernel-changes-2.5.73	2003-06-30 12:24:21.000000000 -0600
++++ linux-2.5.73-braam/arch/i386/mm/init.c	2003-06-30 12:41:12.000000000 -0600
+@@ -189,6 +189,12 @@ static inline int page_is_ram(unsigned l
  	return 0;
  }
  
@@ -227,19 +257,19 @@
 +	return (page_is_ram(pfn));
 +}
 +
- #if CONFIG_HIGHMEM
+ #ifdef CONFIG_HIGHMEM
  pte_t *kmap_pte;
  pgprot_t kmap_prot;
---- linux-2.5.69/arch/i386/boot/Makefile.kernel-changes	Sun May  4 16:53:13 2003
-+++ linux-2.5.69/arch/i386/boot/Makefile	Mon Jun  2 17:39:46 2003
-@@ -101,3 +101,4 @@
+--- linux-2.5.73/arch/i386/boot/Makefile~lkcd-kernel-changes-2.5.73	2003-06-30 12:24:21.000000000 -0600
++++ linux-2.5.73-braam/arch/i386/boot/Makefile	2003-06-30 12:37:53.000000000 -0600
+@@ -101,3 +101,4 @@ zlilo: $(BOOTIMAGE)
  
  install: $(BOOTIMAGE)
  	sh $(src)/install.sh $(KERNELRELEASE) $(BOOTIMAGE) System.map "$(INSTALL_PATH)"
 +	if [ -f init/kerntypes.o ]; then cp init/kerntypes.o $(INSTALL_PATH)/Kerntypes; fi
---- linux-2.5.69/arch/i386/Kconfig.kernel-changes	Mon Jun  2 17:39:29 2003
-+++ linux-2.5.69/arch/i386/Kconfig	Mon Jun  2 17:39:46 2003
-@@ -1460,6 +1460,56 @@
+--- linux-2.5.73/arch/i386/Kconfig~lkcd-kernel-changes-2.5.73	2003-06-30 12:24:21.000000000 -0600
++++ linux-2.5.73-braam/arch/i386/Kconfig	2003-06-30 12:37:53.000000000 -0600
+@@ -1347,6 +1347,56 @@ source "arch/i386/oprofile/Kconfig"
  
  menu "Kernel hacking"
  
@@ -296,16 +326,16 @@
  config DEBUG_KERNEL
  	bool "Kernel debugging"
  	help
---- linux-2.5.69/arch/s390/boot/Makefile.kernel-changes	Sun May  4 16:53:57 2003
-+++ linux-2.5.69/arch/s390/boot/Makefile	Mon Jun  2 17:39:46 2003
-@@ -16,4 +16,4 @@
+--- linux-2.5.73/arch/s390/boot/Makefile~lkcd-kernel-changes-2.5.73	2003-06-30 12:24:21.000000000 -0600
++++ linux-2.5.73-braam/arch/s390/boot/Makefile	2003-06-30 12:37:53.000000000 -0600
+@@ -16,4 +16,4 @@ $(obj)/image: vmlinux FORCE
  
  install: $(CONFIGURE) $(obj)/image
  	sh -x $(obj)/install.sh $(KERNELRELEASE) $(obj)/image \
 -	      System.map Kerntypes "$(INSTALL_PATH)"
 +	      System.map init/kerntypes.o "$(INSTALL_PATH)"
---- linux-2.5.69/arch/s390/boot/install.sh.kernel-changes	Sun May  4 16:53:32 2003
-+++ linux-2.5.69/arch/s390/boot/install.sh	Mon Jun  2 17:39:46 2003
+--- linux-2.5.73/arch/s390/boot/install.sh~lkcd-kernel-changes-2.5.73	2003-06-30 12:24:21.000000000 -0600
++++ linux-2.5.73-braam/arch/s390/boot/install.sh	2003-06-30 12:37:53.000000000 -0600
 @@ -16,7 +16,8 @@
  #   $1 - kernel version
  #   $2 - kernel image file
@@ -316,7 +346,7 @@
  #
  
  # User may have a custom install script
-@@ -26,13 +27,22 @@
+@@ -26,13 +27,22 @@ if [ -x /sbin/installkernel ]; then exec
  
  # Default install - same as make zlilo
  
@@ -345,9 +375,9 @@
 +if [ -f $4 ]; then
 +	cp $4 $5/Kerntypes
 +fi
---- linux-2.5.69/scripts/mkcompile_h.kernel-changes	Sun May  4 16:53:57 2003
-+++ linux-2.5.69/scripts/mkcompile_h	Mon Jun  2 17:39:46 2003
-@@ -33,7 +33,7 @@
+--- linux-2.5.73/scripts/mkcompile_h~lkcd-kernel-changes-2.5.73	2003-06-30 12:24:21.000000000 -0600
++++ linux-2.5.73-braam/scripts/mkcompile_h	2003-06-30 12:37:53.000000000 -0600
+@@ -33,7 +33,7 @@ UTS_VERSION="$UTS_VERSION `LANG=C date`"
  
  UTS_LEN=64
  UTS_TRUNCATE="sed -e s/\(.\{1,$UTS_LEN\}\).*/\1/"
@@ -356,7 +386,7 @@
  # Generate a temporary compile.h
  
  ( echo /\* This file is auto generated, version $VERSION \*/
-@@ -55,6 +55,8 @@
+@@ -55,6 +55,8 @@ UTS_TRUNCATE="sed -e s/\(.\{1,$UTS_LEN\}
    fi
  
    echo \#define LINUX_COMPILER \"`$CC -v 2>&1 | tail -1`\"
@@ -365,9 +395,9 @@
  ) > .tmpcompile
  
  # Only replace the real compile.h if the new one is different,
---- linux-2.5.69/kernel/ksyms.c.kernel-changes	Sun May  4 16:52:49 2003
-+++ linux-2.5.69/kernel/ksyms.c	Mon Jun  2 17:39:46 2003
-@@ -60,6 +60,8 @@
+--- linux-2.5.73/kernel/ksyms.c~lkcd-kernel-changes-2.5.73	2003-06-30 12:24:21.000000000 -0600
++++ linux-2.5.73-braam/kernel/ksyms.c	2003-06-30 12:41:57.000000000 -0600
+@@ -59,6 +59,8 @@
  #include <linux/backing-dev.h>
  #include <linux/percpu_counter.h>
  #include <asm/checksum.h>
@@ -376,18 +406,18 @@
  
  #if defined(CONFIG_PROC_FS)
  #include <linux/proc_fs.h>
-@@ -616,3 +618,9 @@
- EXPORT_SYMBOL(ptrace_notify);
+@@ -606,3 +608,9 @@ EXPORT_SYMBOL(ptrace_notify);
+ EXPORT_SYMBOL(console_printk);
  
- EXPORT_SYMBOL(current_kernel_time); 
+ EXPORT_SYMBOL(current_kernel_time);
 +
 +#ifdef CONFIG_CRASH_DUMP_MODULE
 +EXPORT_SYMBOL(min_low_pfn);
 +EXPORT_SYMBOL(dump_oncpu);
 +EXPORT_SYMBOL(dump_function_ptr);
 +#endif
---- linux-2.5.69/kernel/panic.c.kernel-changes	Mon Jun  2 17:39:29 2003
-+++ linux-2.5.69/kernel/panic.c	Mon Jun  2 17:42:07 2003
+--- linux-2.5.73/kernel/panic.c~lkcd-kernel-changes-2.5.73	2003-06-30 12:24:21.000000000 -0600
++++ linux-2.5.73-braam/kernel/panic.c	2003-06-30 12:37:53.000000000 -0600
 @@ -16,12 +16,16 @@
  #include <linux/init.h>
  #include <linux/sysrq.h>
@@ -405,7 +435,7 @@
  
  struct notifier_block *panic_notifier_list;
  
-@@ -54,6 +58,7 @@
+@@ -54,6 +58,7 @@ NORET_TYPE void panic(const char * fmt, 
  	va_start(args, fmt);
  	vsnprintf(buf, sizeof(buf), fmt, args);
  	va_end(args);
@@ -413,7 +443,7 @@
  	printk(KERN_EMERG "Kernel panic: %s\n",buf);
  	if (in_interrupt())
  		printk(KERN_EMERG "In interrupt handler - not syncing\n");
-@@ -76,6 +81,18 @@
+@@ -76,6 +81,18 @@ NORET_TYPE void panic(const char * fmt, 
  		 * We can't use the "normal" timers since we just panicked..
  	 	 */
  		printk(KERN_EMERG "Rebooting in %d seconds..",panic_timeout);
@@ -432,9 +462,9 @@
  		mdelay(panic_timeout*1000);
  		/*
  		 *	Should we run the reboot notifier. For the moment Im
---- linux-2.5.69/kernel/sched.c.kernel-changes	Sun May  4 16:53:37 2003
-+++ linux-2.5.69/kernel/sched.c	Mon Jun  2 17:39:46 2003
-@@ -39,6 +39,9 @@
+--- linux-2.5.73/kernel/sched.c~lkcd-kernel-changes-2.5.73	2003-06-30 12:24:21.000000000 -0600
++++ linux-2.5.73-braam/kernel/sched.c	2003-06-30 12:37:53.000000000 -0600
+@@ -40,6 +40,9 @@
  #define cpu_to_node_mask(cpu) (cpu_online_map)
  #endif
  
@@ -444,7 +474,7 @@
  /*
   * Convert user-nice values [ -20 ... 0 ... 19 ]
   * to static priority [ MAX_RT_PRIO..MAX_PRIO-1 ],
-@@ -1267,6 +1270,15 @@
+@@ -1249,6 +1252,15 @@ asmlinkage void schedule(void)
  	struct list_head *queue;
  	int idx;
  
@@ -460,7 +490,7 @@
  	/*
  	 * Test if we are atomic.  Since do_exit() needs to call into
  	 * schedule() atomically, we ignore that path for now.
-@@ -1355,6 +1367,16 @@
+@@ -1336,6 +1348,16 @@ switch_tasks:
  	preempt_enable_no_resched();
  	if (test_thread_flag(TIF_NEED_RESCHED))
  		goto need_resched;
@@ -477,9 +507,9 @@
  }
  
  #ifdef CONFIG_PREEMPT
---- linux-2.5.69/lib/Kconfig.kernel-changes	Sun May  4 16:53:32 2003
-+++ linux-2.5.69/lib/Kconfig	Mon Jun  2 17:39:46 2003
-@@ -17,14 +17,16 @@
+--- linux-2.5.73/lib/Kconfig~lkcd-kernel-changes-2.5.73	2003-06-30 12:24:21.000000000 -0600
++++ linux-2.5.73-braam/lib/Kconfig	2003-06-30 12:37:54.000000000 -0600
+@@ -17,14 +17,16 @@ config CRC32
  #
  config ZLIB_INFLATE
  	tristate
@@ -500,9 +530,9 @@
  
  endmenu
  
---- linux-2.5.69/mm/page_alloc.c.kernel-changes	Sun May  4 16:53:01 2003
-+++ linux-2.5.69/mm/page_alloc.c	Mon Jun  2 17:39:46 2003
-@@ -85,7 +85,8 @@
+--- linux-2.5.73/mm/page_alloc.c~lkcd-kernel-changes-2.5.73	2003-06-30 12:24:21.000000000 -0600
++++ linux-2.5.73-braam/mm/page_alloc.c	2003-06-30 12:37:54.000000000 -0600
+@@ -84,7 +84,8 @@ static void bad_page(const char *functio
  	page->mapping = NULL;
  }
  
@@ -512,9 +542,9 @@
  #define prep_compound_page(page, order) do { } while (0)
  #define destroy_compound_page(page, order) do { } while (0)
  #else
---- linux-2.5.69/init/Makefile.kernel-changes	Sun May  4 16:53:13 2003
-+++ linux-2.5.69/init/Makefile	Mon Jun  2 17:39:46 2003
-@@ -9,6 +9,9 @@
+--- linux-2.5.73/init/Makefile~lkcd-kernel-changes-2.5.73	2003-06-30 12:24:21.000000000 -0600
++++ linux-2.5.73-braam/init/Makefile	2003-06-30 12:37:54.000000000 -0600
+@@ -9,6 +9,9 @@ mounts-$(CONFIG_BLK_DEV_RAM)	+= do_mount
  mounts-$(CONFIG_BLK_DEV_INITRD)	+= do_mounts_initrd.o
  mounts-$(CONFIG_BLK_DEV_MD)	+= do_mounts_md.o
  
@@ -524,14 +554,14 @@
  # files to be removed upon make clean
  clean-files := ../include/linux/compile.h
  
-@@ -24,3 +27,4 @@
+@@ -24,3 +27,4 @@ $(obj)/version.o: include/linux/compile.
  include/linux/compile.h: FORCE
  	@echo '  CHK     $@'
  	@sh $(srctree)/scripts/mkcompile_h $@ "$(UTS_MACHINE)" "$(CONFIG_SMP)" "$(CC) $(CFLAGS)"
 +
---- linux-2.5.69/init/main.c.kernel-changes	Sun May  4 16:53:03 2003
-+++ linux-2.5.69/init/main.c	Mon Jun  2 17:39:46 2003
-@@ -100,6 +100,16 @@
+--- linux-2.5.73/init/main.c~lkcd-kernel-changes-2.5.73	2003-06-30 12:24:21.000000000 -0600
++++ linux-2.5.73-braam/init/main.c	2003-06-30 12:37:54.000000000 -0600
+@@ -101,6 +101,16 @@ extern void ipc_init(void);
  int system_running = 0;
  
  /*
@@ -548,8 +578,8 @@
   * Boot command-line arguments
   */
  #define MAX_INIT_ARGS 8
---- linux-2.5.69/init/version.c.kernel-changes	Sun May  4 16:53:14 2003
-+++ linux-2.5.69/init/version.c	Mon Jun  2 17:39:46 2003
+--- linux-2.5.73/init/version.c~lkcd-kernel-changes-2.5.73	2003-06-30 12:24:21.000000000 -0600
++++ linux-2.5.73-braam/init/version.c	2003-06-30 12:37:54.000000000 -0600
 @@ -10,6 +10,7 @@
  #include <linux/uts.h>
  #include <linux/utsname.h>
@@ -558,10 +588,12 @@
  
  #define version(a) Version_ ## a
  #define version_string(a) version(a)
-@@ -24,3 +25,6 @@
+@@ -24,3 +25,6 @@ struct new_utsname system_utsname = {
  const char *linux_banner = 
  	"Linux version " UTS_RELEASE " (" LINUX_COMPILE_BY "@"
  	LINUX_COMPILE_HOST ") (" LINUX_COMPILER ") " UTS_VERSION "\n";
 +
 +const char *LINUX_COMPILE_VERSION_ID = __stringify(LINUX_COMPILE_VERSION_ID);
 +LINUX_COMPILE_VERSION_ID_TYPE;
+
+_

@@ -1,0 +1,4 @@
+DESC
+the other part of lkcd's cvs tree, as mentioned in lkcd-cvs*.txt, is a 
+patch to the core kernel.
+EDESC

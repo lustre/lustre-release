@@ -30,6 +30,7 @@
 #include <linux/lustre_ha.h>
 #include <linux/lustre_dlm.h>
 #include <linux/init.h>
+#include <linux/statfs.h>
 #include <linux/fs.h>
 #include <linux/lprocfs_status.h>
 
@@ -291,7 +292,7 @@ out_free:
         goto out_dev;
 } /* ll_read_super */
 
-int ll_statfs(struct super_block *sb, struct statfs *sfs)
+int ll_statfs(struct super_block *sb, struct kstatfs *sfs)
 {
         struct ll_sb_info *sbi = ll_s2sbi(sb);
         struct obd_statfs osfs;
