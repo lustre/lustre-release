@@ -1,24 +1,40 @@
 #!/usr/bin/env python
-
+#
+# lmc - lustre configurtion data  manager
+#
 import sys, getopt
 import xml.dom.minidom
 
-#
-# Example of walking the tree
-#
-def handleLustre(lustre):
-    handleHost(lustre.getElementsByTagName("node"))
 
-def handleHost(hosts):
-    for host in hosts:
-        name = host.getAttribute("name")
-        uuid = host.getAttribute("uuid")
+def usage():
+    print """usage: lmc [--ost | --mtpt | --lov] cmd args
+Commands:
+--ost "device" "host" [size]
+   Creates an OBD/OST/OSC configuration triplet for a new device.
+   When used on "host", the device will be initialized and the OST
+   will be enabled. On client nodes, the OSC will be avaiable.
+
+--mtpt "mds" "ost/lov-name" /mnt/point
+   Creates a client mount point.
+
+--lov "mds" "lov name < "all-ost.xml"
+   Produces a logical volum striped over the OSTs found in all-ost.xml.
+   (Not sure how all-ost.xml is created, exactly.)
+
+Options:
+--merge="xml file"  Add the new objects to an existing file
+--format            Format the partitions if unformated
+--reformat          Reformat partitions (this should be an lconf arg,
+                    I think)
+(SCRIPT STILL UNDER DEVELOPMENT, MOST COMMANDS/OPTIONS UNIMPLEMENTED)
+"""
 
 #
 # manage names and uuids
 # need to initialize this by walking tree to ensure
 # no duplicate names or uuids are created.
 # this are just place holders for now.
+# consider changing this to be like OBD-dev-host
 name_ctr = 1
 def new_name(base):
     global name_ctr
@@ -105,12 +121,13 @@ def add_OST(dom, options, args):
     # XXX need some error checking
     devname = args[0]
     host = args[1]
+    size = args[2]
 
     obdname = new_name("obd")
     oscname = new_name("osc")
     ostname = new_name("ost")
     
-    obd = new_OBD(dom, obdname, "extN", devname, "no")
+    obd = new_OBD(dom, obdname, "extN", devname, "no", size)
     osc = new_OSC(dom, oscname, obdname)
     ost = new_OST(dom, ostname, host, 2020, obdname)
     
@@ -122,28 +139,6 @@ def add_OST(dom, options, args):
 #
 # Command line processing
 #
-def usage():
-    print """usage: lmc [--ost | --mtpt | --lov] cmd args
-Commands:
---ost "device" "host"
-   Creates an OBD/OST/OSC configuration triplet for a new device.
-   When used on "host", the device will be initialized and the OST
-   will be enabled. On client nodes, the OSC will be avaiable.
-
---mtpt "mds" "ost/lov-name" /mnt/point
-   Creates a client mount point.
-
---lov "mds" "lov name < "all-ost.xml"
-   Produces a logical volum striped over the OSTs found in all-ost.xml.
-   (Not sure how all-ost.xml is created, exactly.)
-
-Options:
---merge="xml file"  Add the new objects to an existing file
---format            Format the partitions if unformated
---reformat          Reformat partitions (this should be an lconf arg,
-                    I think)
-(SCRIPT STILL UNDER DEVELOPMENT, MOST COMMANDS/OPTIONS UNIMPLEMENTED)
-"""
 
 def cmdline(argv):
     short_opts = "ho:"
@@ -179,23 +174,23 @@ def cmdline(argv):
 
 def main():
     options, args = cmdline(sys.argv[1:])
+    outFile = '-'
 
     if options.has_key('merge'):
         outFile = options['merge']
         dom = xml.dom.minidom.parse(outFile)
     else:
-        if options.has_key('output'):
-            outFile = options['output']
-        else:
-            outFile = '-'
         dom = new_Lustre()
+
+    if options.has_key('output'):
+        outFile = options['output']
 
     if options.has_key('ost'):
         add_OST(dom, options, args)
     elif options.has_key('mtpt'):
         print "--mtpt not implemented"
     elif options.has_key('lov'):
-        print "--mtpt not implemented"
+        print "--lov not implemented"
     else:
         print "Missing command"
         usage()
@@ -209,3 +204,4 @@ def main():
     
 if __name__ == "__main__":
     main()
+

@@ -14,20 +14,20 @@
 <!ELEMENT lustre (node | profile | mountpoint | ldlm |
                   mds | mdc | obd | ost | osc | lov | router)*>
 
-<!ELEMENT profile (service_id | mountpoint_id)*>
+<!ELEMENT profile (service_id)*>
 <!ATTLIST profile %tag.attr;>
 <!ELEMENT mountpoint (path | fileset | mds_id | lov_id)*>
 <!ATTLIST mountpoint %tag.attr;>
-<!ELEMENT node (profile_id)>
+<!ELEMENT node (network*, profile_id)>
 <!ATTLIST node %tag.attr;>
 <!ELEMENT ldlm EMPTY>
 <!ATTLIST ldlm %tag.attr;>
 
 <!ELEMENT obd (fstype | device | autoformat)*>
 <!ATTLIST obd %tag.attr; type (obdfilter | obdext2 | obdecho) 'obdfilter'>
-<!ELEMENT ost (network | server_id | failover_id)*>
+<!ELEMENT ost (network_id | server_id | failover_id)*>
 <!ATTLIST ost %tag.attr;>
-<!ELEMENT mds (network | fstype | device | server_id | failover_id)*>
+<!ELEMENT mds (network_id | fstype | device | server_id | failover_id)*>
 <!ATTLIST mds %tag.attr;>
 
 <!ELEMENT osc (service_id)>
@@ -41,7 +41,11 @@
 
 <!-- basic elements -->
 <!ELEMENT network (server | port)*>
-<!ATTLIST network type (tcp | elan | myrinet) 'tcp'>
+<!ATTLIST network type (tcp | elan | myrinet) 'tcp'
+                  %tag.attr;>
+
+<!ELEMENT network_id    %tag.content;>
+<!ATTLIST network_id    %tag.attr;>
 
 <!ELEMENT fstype        %tag.content;>
 <!ELEMENT device        %tag.content;>
