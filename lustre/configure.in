@@ -55,7 +55,9 @@ else
 fi
 AM_CONDITIONAL(LINUX25, test x$linux25 = xyes)
 
-KINCFLAGS='-I. -I$(top_srcdir)/include -I$(PORTALS)/include -I$(LINUX)/include'
+# Changed by Amrut Joshi on 01/13/2003
+#KINCFLAGS='-I. -I$(top_srcdir)/include -I$(PORTALS)/include -I$(LINUX)/include'
+KINCFLAGS='-I$(top_srcdir)/include -I$(PORTALS)/include -I$(LINUX)/include'
 CPPFLAGS="$KINCFLAGS $ARCHCPPFLAGS"
 
 portalsdir_def='$(top_srcdir)/../portals'
