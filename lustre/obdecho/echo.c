@@ -38,20 +38,91 @@ static int echo_getattr(struct obd_conn *conn, struct obdo *oa)
         return 0;
 }
 
-/*
-static int echo_setattr(struct obd_conn *conn, struct obdo *oa)
+int echo_preprw(int cmd, struct obd_conn *conn, int objcount,
+                struct obd_ioobj *obj, int niocount, struct niobuf *nb, 
+                struct niobuf *res)
 {
-        memcpy(&OA, oa, sizeof(*oa));
+        int rc = 0;
+        int i;
 
-        return 0;
+        ENTRY;
+        memset(res, 0, sizeof(*res) * niocount);
+
+        for (i = 0; i < objcount; i++, obj++) { 
+                int j;
+
+                for (j = 0 ; j < obj->ioo_bufcnt ; j++, nb++, res++) { 
+                        unsigned long address;
+
+                        address = get_zeroed_page(GFP_KERNEL);
+                        if (!address) { 
+                                /* FIXME: cleanup old pages */
+                                EXIT; 
+                                rc = -ENOMEM; 
+                        }
+                        
+                        /*
+                        if (cmd == OBD_BRW_READ) {
+                                __u64 *data = address;
+
+                                data[0] = obj->ioo_id;
+                                data[1] = j;
+                                data[2] = nb->offset;
+                                data[3] = nb->len;
+                        }
+                        */
+                        
+                        res->addr = address;
+                        res->offset = nb->offset;
+                        res->page = virt_to_page(address);
+                        res->len = PAGE_SIZE;
+                        // r->flags
+                }
+        }
+
+        return rc;
 }
-*/
+
+int echo_commitrw(int cmd, struct obd_conn *conn, int objcount,
+                  struct obd_ioobj *obj, int niocount, struct niobuf *res)
+{
+        int i; 
+        int rc = 0;
+        ENTRY;
+
+        for (i = 0; i < objcount; i++, obj++) { 
+                int j;
+
+                for (j = 0 ; j < obj->ioo_bufcnt ; j++, res++) { 
+                        struct page *page;
+
+                        if (!res) {
+                                /* FIXME: cleanup remaining pages */
+                                CERROR("NULL buf, obj %Ld (%d), buf %d/%d\n",
+                                        obj->ioo_id, i, j, obj->ioo_bufcnt);
+                                rc = -EINVAL;
+                        }
+
+                        page = res->page;
+                        if (page || !VALID_PAGE(page)) {
+                                /* FIXME: cleanup remaining pages */
+                                CERROR("bad page %p, obj %Ld (%d), buf %d/%d\n",
+                                        page, obj->ioo_id, i, j, obj->ioo_bufcnt);
+                                rc = -EINVAL;
+                        }
+
+                        page_cache_release(page);
+                }
+        }
+        return rc;
+}
 
 struct obd_ops echo_obd_ops = {
         o_connect:     gen_connect,
         o_disconnect:  gen_disconnect,
         o_getattr:     echo_getattr,
-//        o_setattr:     echo_setattr,
+        o_preprw:      echo_preprw,
+        o_commitrw:    echo_commitrw,
 };
 
 
