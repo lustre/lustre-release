@@ -168,6 +168,10 @@ EXT2_DEV=${EXT2_DEV:-/tmp/SANITY.LOOP}
 touch $EXT2_DEV
 mke2fs -F $EXT2_DEV 1000 > /dev/null
 
+EXT3_DEV=${EXT3_DEV:-/tmp/SANITY_EXT3_DEV.LOOP}
+touch $EXT3_DEV
+mkfs.ext3 -F $EXT3_DEV 10000 > /dev/null
+
 test_0() {
 	touch $DIR/f
 	$CHECKSTAT -t file $DIR/f || error
@@ -1536,6 +1540,19 @@ test_54() {
       	$MUNLINK $DIR/socket
 }
 run_test 54 "unix damain socket test ==========================="
+
+test_55() {
+        rm -rf $DIR/d55
+        mkdir $DIR/d55
+        mount -t ext3 -o loop,iopen $EXT3_DEV $DIR/d55 || error
+        touch $DIR/d55/foo
+        $IOPENTEST1 $DIR/d55/foo $DIR/d55 || error
+        $IOPENTEST2 $DIR/d55 || error
+        echo "check for $EXT3_DEV. Please wait..."
+        rm -rf $DIR/d55/*
+        umount $DIR/d55 || error
+}
+run_test 55 "check iopen_connect_dentry()======================="
 
 test_59() {
 	echo "touch 130 files"
