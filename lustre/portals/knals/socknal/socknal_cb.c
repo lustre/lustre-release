@@ -2022,7 +2022,8 @@ ksocknal_sock_read (struct socket *sock, void *buffer, int nob)
 }
 
 int
-ksocknal_hello (struct socket *sock, ptl_nid_t *nid, int *type, __u64 *incarnation)
+ksocknal_hello (struct socket *sock, ptl_nid_t *nid, int *type,
+                __u64 *incarnation)
 {
         int                 rc;
         ptl_hdr_t           hdr;
@@ -2033,14 +2034,14 @@ ksocknal_hello (struct socket *sock, ptl_nid_t *nid, int *type, __u64 *incarnati
 
         memset (&hdr, 0, sizeof (hdr));
         hmv->magic         = __cpu_to_le32 (PORTALS_PROTO_MAGIC);
-        hmv->version_major = __cpu_to_le32 (PORTALS_PROTO_VERSION_MAJOR);
-        hmv->version_minor = __cpu_to_le32 (PORTALS_PROTO_VERSION_MINOR);
-        
+        hmv->version_major = __cpu_to_le16 (PORTALS_PROTO_VERSION_MAJOR);
+        hmv->version_minor = __cpu_to_le16 (PORTALS_PROTO_VERSION_MINOR);
+
         hdr.src_nid = __cpu_to_le64 (ksocknal_lib.ni.nid);
         hdr.type    = __cpu_to_le32 (PTL_MSG_HELLO);
 
         hdr.msg.hello.type = __cpu_to_le32 (*type);
-        hdr.msg.hello.incarnation = 
+        hdr.msg.hello.incarnation =
                 __cpu_to_le64 (ksocknal_data.ksnd_incarnation);
 
         /* Assume sufficient socket buffering for this message */
