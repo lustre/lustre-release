@@ -154,9 +154,11 @@ static struct dentry *ll_lookup2(struct inode * dir, struct dentry *dentry,
         if (dentry->d_name.len > EXT2_NAME_LEN)
                 RETURN(ERR_PTR(-ENAMETOOLONG));
 
-        if (it->it_op == IT_RENAME2)
+        if (it->it_op == IT_RENAME2) {
                 /* Set below to be the old dentry from the IT_RENAME intent */
                 inode = ((struct dentry *)(it->it_data))->d_inode;
+                LASSERT(inode);
+        }
 
         err = ll_lock(dir, dentry, it, &lockh);
         if (err < 0)
@@ -181,6 +183,7 @@ static struct dentry *ll_lookup2(struct inode * dir, struct dentry *dentry,
                                 it->it_data = NULL;
                                 GOTO(neg_req, NULL);
                         }
+                        LASSERT(dentry->d_inode);
                         it->it_data = dentry;
                 } else if (it->it_op == IT_OPEN) {
                         it->it_data = NULL;
@@ -224,10 +227,11 @@ static struct dentry *ll_lookup2(struct inode * dir, struct dentry *dentry,
         inode = iget4(dir->i_sb, ino, ll_find_inode, &md);
 
  out_req:
-        if (!inode || IS_ERR(inode)) {
+        LASSERT(!IS_ERR(inode));
+        if (!inode) {
                 ptlrpc_free_req(request);
                 ll_intent_release(dentry);
-                RETURN(inode ? (struct dentry *)inode : ERR_PTR(-ENOMEM));
+                RETURN(ERR_PTR(-ENOMEM));
         }
         EXIT;
  neg_req:
