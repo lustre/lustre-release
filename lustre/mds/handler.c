@@ -123,6 +123,7 @@ struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
 			inode->i_nlink, atomic_read(&inode->i_count),
 			inode->i_generation,
 			generation);
+                BUG();
 		iput(inode);
 		return ERR_PTR(-ESTALE);
 	}
@@ -239,8 +240,6 @@ int mds_open(struct ptlrpc_request *req)
 	}		
 	
 	rep->objid = (__u64) (unsigned long)file; 
-	//mds_get_objid(inode, &rep->objid);
-	dput(de); 
 	return 0;
 }
 
@@ -272,6 +271,7 @@ int mds_close(struct ptlrpc_request *req)
 	}
 
         file = (struct file *)(unsigned long) req->rq_req.mds->objid;
+
         req->rq_rephdr->status = filp_close(file, 0); 
 	dput(de); 
 	return 0;
@@ -388,6 +388,16 @@ int mds_handle(struct obd_device *dev, struct ptlrpc_service *svc,
 		CDEBUG(D_INODE, "reint\n");
 		rc = mds_reint(req);
 		break;
+
+        case MDS_OPEN:
+                CDEBUG(D_INODE, "open\n");
+                rc = mds_open(req);
+                break;
+
+        case MDS_CLOSE:
+                CDEBUG(D_INODE, "close\n");
+                rc = mds_close(req);
+                break;
 
 	default:
 		return ptlrpc_error(dev, svc, req);

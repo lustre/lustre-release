@@ -102,6 +102,7 @@ static int mds_reint_create(struct mds_update_record *rec,
 	de = mds_fid2dentry(&req->rq_obd->u.mds, rec->ur_fid1, NULL);
 	if (IS_ERR(de)) { 
 		req->rq_rephdr->status = -ESTALE;
+                BUG();
 		EXIT;
 		return 0;
 	}
@@ -113,6 +114,7 @@ static int mds_reint_create(struct mds_update_record *rec,
 		CERROR("child lookup error %d\n", rc);
 		dput(de); 
 		req->rq_rephdr->status = -ESTALE;
+                BUG();
 		EXIT;
 		return 0;
 	}
@@ -122,6 +124,7 @@ static int mds_reint_create(struct mds_update_record *rec,
 		       de->d_inode->i_ino, rec->ur_name);
 		dput(de); 
 		req->rq_rephdr->status = -EEXIST;
+                BUG();
 		EXIT;
 		return 0;
 	}
@@ -129,7 +132,6 @@ static int mds_reint_create(struct mds_update_record *rec,
 	switch (type) {
 	case S_IFREG: { 
 		rc = vfs_create(de->d_inode, dchild, rec->ur_mode);
-		
 		EXIT;
 		break;
 	}
@@ -182,6 +184,7 @@ static int mds_reint_unlink(struct mds_update_record *rec,
 
 	de = mds_fid2dentry(&req->rq_obd->u.mds, rec->ur_fid1, NULL);
 	if (IS_ERR(de)) { 
+                BUG();
 		req->rq_rephdr->status = -ESTALE;
 		EXIT;
 		return 0;
@@ -192,6 +195,7 @@ static int mds_reint_unlink(struct mds_update_record *rec,
 	rc = PTR_ERR(dchild);
 	if (IS_ERR(dchild)) { 
 		CERROR("child lookup error %d\n", rc);
+                BUG();
 		dput(de); 
 		req->rq_rephdr->status = -ESTALE;
 		EXIT;
@@ -201,6 +205,7 @@ static int mds_reint_unlink(struct mds_update_record *rec,
 	if (!dchild->d_inode) {
 		CERROR("child doesn't exist (dir %ld, name %s\n", 
 		       de->d_inode->i_ino, rec->ur_name);
+                BUG();
 		dput(de); 
 		req->rq_rephdr->status = -ESTALE;
 		EXIT;
@@ -244,7 +249,6 @@ static int mds_reint_link(struct mds_update_record *rec,
 
 	de_tgt_dir = mds_fid2dentry(&req->rq_obd->u.mds, rec->ur_fid2, NULL);
 	if (IS_ERR(de_tgt_dir)) { 
-		rc = -ESTALE;
 		EXIT;
 		goto out_link;
 	}
@@ -252,7 +256,7 @@ static int mds_reint_link(struct mds_update_record *rec,
 	dchild = lookup_one_len(rec->ur_name, de_tgt_dir, rec->ur_namelen - 1);
 	if (IS_ERR(dchild)) { 
 		CERROR("child lookup error %d\n", rc);
-		req->rq_rephdr->status = -ESTALE;
+                EXIT;
 		goto out_link;
 	}
 
@@ -264,13 +268,13 @@ static int mds_reint_link(struct mds_update_record *rec,
 	}
 
 	rc = vfs_link(de_src, de_tgt_dir->d_inode, dchild); 
+        EXIT;
 
  out_link:
 	req->rq_rephdr->status = rc;
 	l_dput(de_src);
 	l_dput(de_tgt_dir); 
 	l_dput(dchild); 
-	EXIT;
 	return 0;
 }
 
@@ -294,7 +298,6 @@ static int mds_reint_rename(struct mds_update_record *rec,
 
 	de_tgtdir = mds_fid2dentry(&req->rq_obd->u.mds, rec->ur_fid2, NULL);
 	if (IS_ERR(de_tgtdir)) { 
-		rc = -ESTALE;
 		EXIT;
 		goto out_rename;
 	}
@@ -302,16 +305,19 @@ static int mds_reint_rename(struct mds_update_record *rec,
 	de_old = lookup_one_len(rec->ur_name, de_srcdir, rec->ur_namelen - 1);
 	if (IS_ERR(de_old)) { 
 		CERROR("child lookup error %d\n", rc);
+                EXIT;
 		goto out_rename;
 	}
 
 	de_new = lookup_one_len(rec->ur_tgt, de_tgtdir, rec->ur_tgtlen - 1);
 	if (IS_ERR(de_new)) { 
 		CERROR("child lookup error %d\n", rc);
+                EXIT;
 		goto out_rename;
 	}
 
 	rc = vfs_rename(de_srcdir->d_inode, de_old, de_tgtdir->d_inode, de_new);
+        EXIT;
 
  out_rename:
 	req->rq_rephdr->status = rc;
@@ -319,7 +325,6 @@ static int mds_reint_rename(struct mds_update_record *rec,
 	l_dput(de_old); 
 	l_dput(de_tgtdir); 
 	l_dput(de_srcdir); 
-	EXIT;
 	return 0;
 }
 
@@ -355,8 +360,6 @@ int mds_reint_rec(struct mds_update_record *rec, struct ptlrpc_request *req)
 	req->rq_rephdr->xid = req->rq_reqhdr->xid;
 
 	rc = reinters[rec->ur_opcode](rec, req); 
-	req->rq_status = rc;
-
 	return rc;
 } 
 

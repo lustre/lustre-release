@@ -40,6 +40,7 @@
 #include <linux/lustre_light.h>
 
 extern int ll_setattr(struct dentry *de, struct iattr *attr);
+extern inline struct obdo * ll_oa_from_inode(struct inode *inode, int valid);
 
 static int ll_file_open(struct inode *inode, struct file *file)
 {
@@ -47,7 +48,7 @@ static int ll_file_open(struct inode *inode, struct file *file)
 	int flags = 0; 
 	struct ptlrpc_request *req;
 	struct ll_file_data *fd;
-	struct obdo oa; 
+	struct obdo *oa;
         struct ll_sb_info *sbi = ll_i2sbi(inode);
 	ENTRY;
 
@@ -57,11 +58,11 @@ static int ll_file_open(struct inode *inode, struct file *file)
 		goto out;
 	}
 
-	memset(&oa, 0, sizeof(oa)); 
-	oa.o_valid = OBD_MD_FLMODE | OBD_MD_FLID; 
-	oa.o_mode = inode->i_mode;
-	oa.o_id = HTON__u64((__u64)inode->i_ino);
-	rc = obd_open(ll_i2obdconn(inode),  &oa); 
+        oa = ll_oa_from_inode(inode, (OBD_MD_FLMODE | OBD_MD_FLID));
+        if (oa == NULL)
+                BUG();
+	rc = obd_open(ll_i2obdconn(inode), oa); 
+        obdo_free(oa);
 	if (rc) { 
 		if (rc > 0) 
 			rc = -rc;
@@ -94,7 +95,7 @@ static int ll_file_release(struct inode *inode, struct file *file)
 	int rc;
 	struct ptlrpc_request *req;
 	struct ll_file_data *fd;
-	struct obdo oa; 
+	struct obdo *oa;
         struct ll_sb_info *sbi = ll_i2sbi(inode);
 	ENTRY;
 
@@ -105,11 +106,11 @@ static int ll_file_release(struct inode *inode, struct file *file)
 		goto out;
 	}
 
-	memset(&oa, 0, sizeof(oa)); 
-	oa.o_valid = OBD_MD_FLMODE | OBD_MD_FLID; 
-	oa.o_mode = inode->i_mode;
-	oa.o_id = HTON__u64((__u64)inode->i_ino);
-	rc = obd_close(ll_i2obdconn(inode),  &oa); 
+        oa = ll_oa_from_inode(inode, (OBD_MD_FLMODE | OBD_MD_FLID));
+        if (oa == NULL)
+                BUG();
+	rc = obd_close(ll_i2obdconn(inode), oa); 
+        obdo_free(oa);
 	if (rc) { 
 		if (rc > 0) 
 			rc = -rc;

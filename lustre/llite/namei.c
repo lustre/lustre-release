@@ -101,6 +101,7 @@ static struct dentry *ll_lookup(struct inode * dir, struct dentry *dentry)
 			  OBD_MD_FLNOTOBD|OBD_MD_FLBLOCKS, &request);
         if ( err ) {
                 CERROR("obdo_fromid failed\n");
+                ptlrpc_free_req(request);
                 EXIT;
                 return ERR_PTR(-abs(err)); 
         }
@@ -149,7 +150,6 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
      	err = mdc_create(&sbi->ll_mds_client, dir, name, namelen, tgt, tgtlen,
 			 mode, id,  current->uid, current->gid, time, &request);
 	if (err) { 
-                ptlrpc_free_req(request);
                 inode = ERR_PTR(err);
                 EXIT;
                 goto out;
@@ -168,6 +168,7 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
         if (IS_ERR(inode)) {
                 CERROR("new_inode -fatal:  %ld\n", PTR_ERR(inode));
                 inode = ERR_PTR(-EIO);
+                BUG();
                 EXIT;
                 goto out;
         }
@@ -177,6 +178,7 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
 		       rep->ino, atomic_read(&inode->i_count), 
 		       inode->i_nlink);
                 iput(inode);
+                BUG();
                 inode = ERR_PTR(-EIO);
                 EXIT;
                 goto out;

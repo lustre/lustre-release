@@ -73,6 +73,7 @@ static int ll_dir_readpage(struct file *file, struct page *page)
 	}
 
 	if (Page_Uptodate(page)) {
+                CERROR("Explain this please?\n");
 		EXIT;
 		goto readpage_out;
 	}
@@ -83,11 +84,12 @@ static int ll_dir_readpage(struct file *file, struct page *page)
 			  buf, &request);
 	kunmap(page); 
         ptlrpc_free_req(request);
+        EXIT;
+
+ readpage_out:
         if ( !rc )
                 SetPageUptodate(page);
 
-        EXIT;
- readpage_out:
 	UnlockPage(page);
         return rc;
 } /* ll_dir_readpage */

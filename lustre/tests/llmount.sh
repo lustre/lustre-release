@@ -20,7 +20,7 @@ mke2fs -b 4096 -F /tmp/ost
 losetup ${LOOP}0 /tmp/ost || exit -1
 
 dd if=/dev/zero of=/tmp/mds bs=1024 count=10000
-mke2fs -b 4096 -F /tmp/mds
+mke2fs -b 4096 -N 150000 -F /tmp/mds
 losetup ${LOOP}1 /tmp/mds || exit -1
 
 mknod /dev/obd c 10 241

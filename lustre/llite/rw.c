@@ -188,40 +188,43 @@ extern void set_page_clean(struct page *);
 
 
 /* returns the page unlocked, but with a reference */
-int ll_readpage(struct file *file, struct page *page)
+static int ll_readpage(struct file *file, struct page *page)
 {
 	struct inode *inode = page->mapping->host;
-        int rc;
+        int rc = 0;
 
         ENTRY;
 
-	if ( ((inode->i_size + PAGE_CACHE_SIZE -1)>>PAGE_SHIFT) 
-	     <= page->index) {
+        if (!PageLocked(page))
+                BUG();
+
+	if ( ((inode->i_size + PAGE_CACHE_SIZE -1)>>PAGE_SHIFT)
+             <= page->index) {
 		memset(kmap(page), 0, PAGE_CACHE_SIZE);
 		kunmap(page);
+                EXIT;
 		goto readpage_out;
 	}
 
 	if (Page_Uptodate(page)) {
+                CERROR("Explain this please?\n");
 		EXIT;
 		goto readpage_out;
 	}
 
         rc = ll_brw(OBD_BRW_READ, inode, page, 0);
-        if ( rc ) {
-		EXIT; 
-		return rc;
-        } 
+        EXIT;
 
  readpage_out:
-	SetPageUptodate(page);
+        if (!rc)
+                SetPageUptodate(page);
 	UnlockPage(page);
-        EXIT;
         return 0;
 } /* ll_readpage */
 
 
-int ll_prepare_write(struct file *file, struct page *page, unsigned from, unsigned to)
+static int ll_prepare_write(struct file *file, struct page *page, unsigned from,
+                     unsigned to)
 {
         struct inode *inode = page->mapping->host;
         obd_off offset = ((obd_off)page->index) << PAGE_SHIFT;
@@ -230,6 +233,9 @@ int ll_prepare_write(struct file *file, struct page *page, unsigned from, unsign
         ENTRY; 
         
 	addr = kmap(page);
+        if (!PageLocked(page))
+                BUG();
+
         if (Page_Uptodate(page)) { 
                 EXIT;
 		goto prepare_done;
@@ -238,40 +244,45 @@ int ll_prepare_write(struct file *file, struct page *page, unsigned from, unsign
         if ( offset + from >= inode->i_size ) {
 		memset(addr, 0, PAGE_SIZE); 
                 EXIT;
-                return 0;
+                goto prepare_done;
         }
         
         rc = ll_brw(OBD_BRW_READ, inode, page, 0);
-        if ( !rc ) {
-                SetPageUptodate(page);
-        } 
 
  prepare_done:
-	set_page_dirty(page);
+        if ( !rc )
+                SetPageUptodate(page);
+
         EXIT;
         return rc;
 }
 
 /* returns the page unlocked, but with a reference */
-int ll_writepage(struct page *page)
+static int ll_writepage(struct page *page)
 {
         struct inode *inode = page->mapping->host;
         int err;
         ENTRY;
 
+        BUG();
+
+        if (!PageLocked(page))
+                BUG();
+
 	err = ll_brw(OBD_BRW_WRITE, inode, page, 1);
         if ( !err ) {
-                SetPageUptodate(page);
+                //SetPageUptodate(page);
 		set_page_clean(page);
 	} else {
 		CERROR("ll_brw failure %d\n", err);
 	}
+        UnlockPage(page); 
         EXIT;
 	return err;
 }
 
 /* SYNCHRONOUS I/O to object storage for an inode -- object attr will be updated too */
-int ll_commit_write(struct file *file, struct page *page, 
+static int ll_commit_write(struct file *file, struct page *page, 
 		    unsigned from, unsigned to)
 {
 	int create = 1;
@@ -291,15 +302,16 @@ int ll_commit_write(struct file *file, struct page *page,
 		return -ENOMEM;
 	}
 
+        if (!PageLocked(page))
+                BUG();
+        if (!Page_Uptodate(page))
+                BUG(); 
+
 	CDEBUG(D_INODE, "commit_page writing (at %d) to %d, count %Ld\n", 
 	       from, to, count);
 
         err = obd_brw(OBD_BRW_WRITE, ll_i2obdconn(inode), num_obdo, &oa,
                       &bufs_per_obdo, &page, &count, &offset, &flags);
-        if ( !err ) {
-                SetPageUptodate(page);
-		set_page_clean(page);
-	}
         kunmap(page);
 
 	if (offset + to > inode->i_size) {
