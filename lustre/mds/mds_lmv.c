@@ -899,7 +899,7 @@ int mds_lock_slave_objs(struct obd_device *obd, struct dentry *dentry,
                         struct lustre_handle **rlockh)
 {
         struct mds_obd *mds = &obd->u.mds;
-        struct mdc_op_data op_data;
+        struct mdc_op_data *op_data;
         struct lookup_intent it;
         struct mea *mea = NULL;
         int mea_size, rc;
@@ -942,28 +942,38 @@ int mds_lock_slave_objs(struct obd_device *obd, struct dentry *dentry,
                 GOTO(cleanup, rc = -ENOMEM);
 
         memset(*rlockh, 0, handle_size);
-        memset(&op_data, 0, sizeof(op_data));
+        OBD_ALLOC(op_data, sizeof(*op_data));
+        if (op_data == NULL) {
+                OBD_FREE(*rlockh, handle_size);
+                RETURN(-ENOMEM);
+        }
+        memset(op_data, 0, sizeof(*op_data));
 
-        op_data.mea1 = mea;
+        op_data->mea1 = mea;
         it.it_op = IT_UNLINK;
 
         rc = md_enqueue(mds->mds_lmv_exp, LDLM_IBITS, &it, LCK_EX,
-                        &op_data, *rlockh, NULL, 0, ldlm_completion_ast,
+                        op_data, *rlockh, NULL, 0, ldlm_completion_ast,
                         mds_blocking_ast, NULL);
+        OBD_FREE(op_data, sizeof(*op_data));
+        EXIT;
 cleanup:
         OBD_FREE(mea, mea_size);
-        RETURN(rc);
+        return rc;
 }
 
 void mds_unlock_slave_objs(struct obd_device *obd, struct dentry *dentry,
-                        struct lustre_handle *lockh)
+                           struct lustre_handle *lockh)
 {
         struct mds_obd *mds = &obd->u.mds;
         struct mea *mea = NULL;
         int mea_size, rc, i;
+        ENTRY;
 
-        if (lockh == NULL)
+        if (lockh == NULL) {
+                EXIT;
                 return;
+        }
 
 	LASSERT(mds->mds_lmv_obd != NULL);
         LASSERT(S_ISDIR(dentry->d_inode->i_mode));
@@ -971,6 +981,7 @@ void mds_unlock_slave_objs(struct obd_device *obd, struct dentry *dentry,
         rc = mds_get_lmv_attr(obd, dentry->d_inode, &mea, &mea_size);
         if (rc) {
                 CERROR("locks are leaked\n");
+                EXIT;
                 return;
         }
         LASSERT(mea_size != 0);
@@ -988,13 +999,14 @@ void mds_unlock_slave_objs(struct obd_device *obd, struct dentry *dentry,
 
         OBD_FREE(lockh, sizeof(struct lustre_handle) * mea->mea_count);
         OBD_FREE(mea, mea_size);
+        EXIT;
 }
 
 int mds_unlink_slave_objs(struct obd_device *obd, struct dentry *dentry)
 {
         struct mds_obd *mds = &obd->u.mds;
         struct ptlrpc_request *req = NULL;
-        struct mdc_op_data op_data;
+        struct mdc_op_data *op_data;
         struct mea *mea = NULL;
         int mea_size, rc;
         ENTRY;
@@ -1018,12 +1030,17 @@ int mds_unlink_slave_objs(struct obd_device *obd, struct dentry *dentry)
                 GOTO(cleanup, rc = 0);
 
         CDEBUG(D_OTHER, "%s: unlink slaves for %lu/%lu\n", obd->obd_name,
-               (unsigned long) dentry->d_inode->i_ino,
-               (unsigned long) dentry->d_inode->i_generation);
+               (unsigned long)dentry->d_inode->i_ino,
+               (unsigned long)dentry->d_inode->i_generation);
 
-        memset(&op_data, 0, sizeof(op_data));
-        op_data.mea1 = mea;
-        rc = md_unlink(mds->mds_lmv_exp, &op_data, &req);
+        OBD_ALLOC(op_data, sizeof(*op_data));
+        if (op_data == NULL)
+                RETURN(-ENOMEM);
+        
+        memset(op_data, 0, sizeof(*op_data));
+        op_data->mea1 = mea;
+        rc = md_unlink(mds->mds_lmv_exp, op_data, &req);
+        OBD_FREE(op_data, sizeof(*op_data));
         LASSERT(req == NULL);
         EXIT;
 cleanup:

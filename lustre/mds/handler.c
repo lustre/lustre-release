@@ -2069,9 +2069,9 @@ static char str[PTL_NALFMT_SIZE];
 int mds_handle(struct ptlrpc_request *req)
 {
         int should_process, fail = OBD_FAIL_MDS_ALL_REPLY_NET;
-        int rc = 0;
-        struct mds_obd *mds = NULL; /* quell gcc overwarning */
         struct obd_device *obd = NULL;
+        struct mds_obd *mds = NULL; /* quell gcc overwarning */
+        int rc = 0;
         ENTRY;
 
         OBD_FAIL_RETURN(OBD_FAIL_MDS_ALL_REQUEST_NET | OBD_FAIL_ONCE, 0);

@@ -1810,29 +1810,34 @@ static int mds_reint_unlink_remote(struct mds_update_record *rec,
         struct mds_obd *mds = mds_req2mds(req);
         struct ptlrpc_request *request = NULL;
         int rc = 0, cleanup_phase = 0;
-        struct mdc_op_data op_data;
+        struct mdc_op_data *op_data;
         void *handle;
         ENTRY;
 
         LASSERT(offset == 1 || offset == 3);
 
         /* time to drop i_nlink on remote MDS */
-        memset(&op_data, 0, sizeof(op_data));
-        mds_pack_dentry2id(obd, &op_data.id1, dchild, 1);
-        op_data.create_mode = rec->ur_mode;
+        OBD_ALLOC(op_data, sizeof(*op_data));
+        if (op_data == NULL)
+                RETURN(-ENOMEM);
+        
+        memset(op_data, 0, sizeof(*op_data));
+        mds_pack_dentry2id(obd, &op_data->id1, dchild, 1);
+        op_data->create_mode = rec->ur_mode;
 
         DEBUG_REQ(D_INODE, req, "unlink %*s (remote inode "DLID4")",
-                  rec->ur_namelen - 1, rec->ur_name, OLID4(&op_data.id1));
+                  rec->ur_namelen - 1, rec->ur_name, OLID4(&op_data->id1));
         
         if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
                 DEBUG_REQ(D_HA, req, "unlink %*s (remote inode "DLID4")",
-                          rec->ur_namelen - 1, rec->ur_name, OLID4(&op_data.id1));
+                          rec->ur_namelen - 1, rec->ur_name, OLID4(&op_data->id1));
         }
 
         if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY)
-                op_data.create_mode |= MDS_MODE_REPLAY;
+                op_data->create_mode |= MDS_MODE_REPLAY;
         
-        rc = md_unlink(mds->mds_lmv_exp, &op_data, &request);
+        rc = md_unlink(mds->mds_lmv_exp, op_data, &request);
+        OBD_FREE(op_data, sizeof(*op_data));
         cleanup_phase = 2;
 
         if (request) {
@@ -2255,7 +2260,7 @@ static int mds_reint_link_to_remote(struct mds_update_record *rec,
         struct dentry *de_tgt_dir = NULL;
         struct mds_obd *mds = mds_req2mds(req);
         int rc = 0, cleanup_phase = 0;
-        struct mdc_op_data op_data;
+        struct mdc_op_data *op_data;
         struct ptlrpc_request *request = NULL;
         int update_mode;
         ENTRY;
@@ -2273,10 +2278,15 @@ static int mds_reint_link_to_remote(struct mds_update_record *rec,
                 GOTO(cleanup, rc = PTR_ERR(de_tgt_dir));
         cleanup_phase = 1;
 
-        op_data.id1 = *(rec->ur_id1);
-        op_data.namelen = 0;
-        op_data.name = NULL;
-        rc = md_link(mds->mds_lmv_exp, &op_data, &request);
+        OBD_ALLOC(op_data, sizeof(*op_data));
+        if (op_data == NULL)
+                GOTO(cleanup, rc = -ENOMEM);
+
+        op_data->id1 = *(rec->ur_id1);
+        op_data->namelen = 0;
+        op_data->name = NULL;
+        rc = md_link(mds->mds_lmv_exp, op_data, &request);
+        OBD_FREE(op_data, sizeof(*op_data));
         if (rc)
                 GOTO(cleanup, rc);
 
@@ -2796,7 +2806,7 @@ static int mds_check_for_rename(struct obd_device *obd,
         struct mds_obd *mds = &obd->u.mds;
         struct lustre_handle *rlockh;
         struct ptlrpc_request *req;
-        struct mdc_op_data op_data;
+        struct mdc_op_data *op_data;
         struct lookup_intent it;
         int handle_size, rc = 0;
         ENTRY;
@@ -2816,13 +2826,19 @@ static int mds_check_for_rename(struct obd_device *obd,
                         RETURN(-ENOMEM);
 
                 memset(rlockh, 0, handle_size);
-                memset(&op_data, 0, sizeof(op_data));
-                mds_pack_dentry2id(obd, &op_data.id1, dentry, 1);
+                OBD_ALLOC(op_data, sizeof(*op_data));
+                if (op_data == NULL) {
+                        OBD_FREE(rlockh, handle_size);
+                        RETURN(-ENOMEM);
+                }
+                memset(op_data, 0, sizeof(*op_data));
+                mds_pack_dentry2id(obd, &op_data->id1, dentry, 1);
 
                 it.it_op = IT_UNLINK;
                 rc = md_enqueue(mds->mds_lmv_exp, LDLM_IBITS, &it, LCK_EX,
-                                &op_data, rlockh, NULL, 0, ldlm_completion_ast,
+                                op_data, rlockh, NULL, 0, ldlm_completion_ast,
                                 mds_blocking_ast, NULL);
+                OBD_FREE(op_data, sizeof(*op_data));
 
                 if (rc)
                         RETURN(rc);
@@ -3027,13 +3043,17 @@ static int mds_reint_rename_to_remote(struct mds_update_record *rec, int offset,
         struct mds_obd *mds = mds_req2mds(req);
         struct lustre_handle parent_lockh[2] = {{0}, {0}};
         struct lustre_handle child_lockh = {0};
-        struct mdc_op_data opdata;
+        struct mdc_op_data *op_data;
         int update_mode, rc = 0;
         ENTRY;
 
         CDEBUG(D_OTHER, "%s: move name %s onto another mds #%lu\n",
                obd->obd_name, rec->ur_name, (unsigned long)id_group(rec->ur_id2));
-        memset(&opdata, 0, sizeof(opdata));
+        
+        OBD_ALLOC(op_data, sizeof(*op_data));
+        if (op_data == NULL)
+                RETURN(-ENOMEM);
+        memset(op_data, 0, sizeof(*op_data));
 
         child_lockh.cookie = 0;
         rc = mds_get_parent_child_locked(obd, mds, rec->ur_id1, parent_lockh,
@@ -3055,9 +3075,10 @@ static int mds_reint_rename_to_remote(struct mds_update_record *rec, int offset,
         if (de_old->d_flags & DCACHE_CROSS_REF) {
                 LASSERT(de_old->d_inode == NULL);
                 CDEBUG(D_OTHER, "request to move remote name\n");
-                mds_pack_dentry2id(obd, &opdata.id1, de_old, 1);
+                mds_pack_dentry2id(obd, &op_data->id1, de_old, 1);
         } else if (de_old->d_inode == NULL) {
                 /* oh, source doesn't exist */
+                OBD_FREE(op_data, sizeof(*op_data));
                 GOTO(cleanup, rc = -ENOENT);
         } else {
                 struct lustre_id sid;
@@ -3065,9 +3086,9 @@ static int mds_reint_rename_to_remote(struct mds_update_record *rec, int offset,
                 
                 LASSERT(inode != NULL);
                 CDEBUG(D_OTHER, "request to move local name\n");
-                id_ino(&opdata.id1) = inode->i_ino;
-                id_group(&opdata.id1) = mds->mds_num;
-                id_gen(&opdata.id1) = inode->i_generation;
+                id_ino(&op_data->id1) = inode->i_ino;
+                id_group(&op_data->id1) = mds->mds_num;
+                id_gen(&op_data->id1) = inode->i_generation;
 
                 down(&inode->i_sem);
                 rc = mds_read_inode_sid(obd, inode, &sid);
@@ -3079,12 +3100,13 @@ static int mds_reint_rename_to_remote(struct mds_update_record *rec, int offset,
                         GOTO(cleanup, rc);
                 }
 
-                id_fid(&opdata.id1) = id_fid(&sid);
+                id_fid(&op_data->id1) = id_fid(&sid);
         }
 
-        opdata.id2 = *rec->ur_id2;
-        rc = md_rename(mds->mds_lmv_exp, &opdata, NULL, 0,
+        op_data->id2 = *rec->ur_id2;
+        rc = md_rename(mds->mds_lmv_exp, op_data, NULL, 0,
                        rec->ur_tgt, rec->ur_tgtlen - 1, &req2);
+        OBD_FREE(op_data, sizeof(*op_data));
        
         if (rc)
                 GOTO(cleanup, rc);
