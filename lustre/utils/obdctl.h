@@ -58,5 +58,6 @@ int jt_obd_dump_ldlm(int argc, char **argv);
 int jt_obd_lov_set_osc_active(int argc, char **argv);
 int jt_obd_newconn(int argc, char **argv);
 int jt_obd_failconn(int argc, char **argv);
+int jt_get_version(int argc, char **argv);
 
 #endif
