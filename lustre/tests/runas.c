@@ -19,7 +19,7 @@ Usage_and_abort()
        exit(-1);
 }
 
-// Usage: runas -u user_id [ -g grp_id ] "command_to_be_run"
+// Usage: runas -u user_id [ -g grp_id ] [--] command_to_be_run
 // return: the return value of "command_to_be_run"
 // NOTE: returning -1 might be the return code of this program itself or
 // the "command_to_be_run"
@@ -30,21 +30,21 @@ Usage_and_abort()
 int 
 main(int argc, char**argv)
 {
-        char command[1024];
-        char *cmd_ptr;
+        char **my_argv;
         int status;
         int c,i;
         int gid_is_set = 0;
         int uid_is_set = 0;
         uid_t user_id;
         gid_t grp_id;
+        pid_t child_pid;
 
         if(argc == 1) {
                 Usage_and_abort();
         }
 
         // get UID and GID
-        while ((c = getopt (argc, argv, "u:g:h")) != -1) {
+        while ((c = getopt (argc, argv, "+u:g:h")) != -1) {
                 switch (c) {
                 case 'u':
                         user_id = (uid_t)atoi(optarg);
@@ -79,12 +79,13 @@ main(int argc, char**argv)
                 Usage_and_abort();
         }
 
-
         // assemble the command
-        cmd_ptr = command ;
-        for (i = optind; i < argc; i++)
-                 cmd_ptr += sprintf(cmd_ptr,  "%s ", argv[i]);
-
+        my_argv = (char**)malloc(sizeof(char*)*(argc+1-optind));
+        for(i=optind; i< argc; i++) {
+                my_argv[i-optind] = argv[i];
+//                printf("%s\n",my_argv[i-optind]);
+        }
+        my_argv[i-optind]=NULL;
 
 #if DEBUG
   system("whoami");
@@ -94,7 +95,7 @@ main(int argc, char**argv)
         status = setregid(grp_id, grp_id );
         if( status == -1) {
                  fprintf(stderr, "Cannot change grp_ID to %d, errno=%d (%s)\n",
-	           grp_id, errno, strerror(errno) );
+                          grp_id, errno, strerror(errno) );
                  exit(-1);
         }
 
@@ -102,32 +103,24 @@ main(int argc, char**argv)
         status = setreuid(user_id, user_id );
         if(status == -1) {
                   fprintf(stderr,"Cannot change user_ID to %d, errno=%d (%s)\n",
-	            user_id, errno, strerror(errno) );
+                           user_id, errno, strerror(errno) );
                   exit(-1);
         }
 
-#if DEBUG
-  system("whoami");
-#endif
 
-        fprintf(stdout, "running as USER(%d), Grp (%d):  \"%s\" \n", 
-           user_id, grp_id, command );
+        fprintf(stderr, "running as USER(%d), Grp (%d):  ", 
+           user_id, grp_id );
 
-        // run the command
-        status = system(command);
+        for(i=0; i<argc-optind; i++)
+                 fprintf(stderr, " [%s]", my_argv[i]);
 
-        // pass the return code of command_to_be_run out of this wrapper
-        if (status == -1) {
-                 fprintf(stderr, "%s: system() command failed to run\n",
-                           argv[0]);
-        }
-        else{
-                 status = WEXITSTATUS(status);
-                 fprintf(stderr, "[%s #%d] \"%s\" returns %d (%s).\n", argv[0],
-                        user_id, argv[optind], status, strerror(status));
+        fprintf(stderr, "\n");
+        fflush(stderr);
 
-        }
+        // The command to be run
+        execvp(my_argv[0], my_argv);
+        fprintf(stderr, "execvp fails running %s\n", my_argv[0]);
+        exit(-1);
 
-        return(status);
 }
 
