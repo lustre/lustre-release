@@ -72,6 +72,7 @@ int ptlrpc_connect_client(int dev, char *uuid, int req_portal, int rep_portal,
         int err; 
 
         memset(cl, 0, sizeof(*cl));
+        spin_lock_init(&cl->cli_lock);
 	cl->cli_xid = 1;
 	cl->cli_obd = NULL; 
 	cl->cli_request_portal = req_portal;
@@ -106,6 +107,20 @@ int ptlrpc_connect_client(int dev, char *uuid, int req_portal, int rep_portal,
         return err;
 }
 
+struct ptlrpc_bulk_desc *ptlrpc_prep_bulk(struct lustre_peer *peer)
+{
+        struct ptlrpc_bulk_desc *bulk;
+
+        OBD_ALLOC(bulk, sizeof(*bulk));
+        if (bulk != NULL) {
+                memset(bulk, 0, sizeof(*bulk));
+                memcpy(&bulk->b_peer, peer, sizeof(*peer));
+                init_waitqueue_head(&bulk->b_waitq);
+        }
+
+        return bulk;
+}
+
 struct ptlrpc_request *ptlrpc_prep_req(struct ptlrpc_client *cl, 
                                        int opcode, int namelen, char *name,
                                        int tgtlen, char *tgt)
@@ -121,7 +136,10 @@ struct ptlrpc_request *ptlrpc_prep_req(struct ptlrpc_client *cl,
 	}
 
 	memset(request, 0, sizeof(*request));
+
+        spin_lock(&cl->cli_lock);
 	request->rq_xid = cl->cli_xid++;
+        spin_unlock(&cl->cli_lock);
 
 	rc = cl->cli_req_pack(name, namelen, tgt, tgtlen,
 			  &request->rq_reqhdr, &request->rq_req,
@@ -157,7 +175,6 @@ static int ptlrpc_check_reply(struct ptlrpc_request *req)
                 return 1;
         }
 
-        CERROR("no event yet\n"); 
         return 0;
 }
 
@@ -171,13 +188,6 @@ int ptlrpc_abort(struct ptlrpc_request *request)
         OBD_FREE(request->rq_repbuf, request->rq_replen);
         request->rq_repbuf = NULL;
         request->rq_replen = 0;
-
-        if (request->rq_bulklen != 0) {
-                PtlMEUnlink(request->rq_bulk_me_h);
-                PtlMDUnlink(request->rq_bulk_md_h);
-                /* FIXME: wake whoever's sleeping on this bulk sending to let
-                 * -them- clean it up. */
-        }
 
         return 0;
 }
@@ -201,14 +211,12 @@ int ptlrpc_queue_wait(struct ptlrpc_client *cl, struct ptlrpc_request *req)
 		rc = ptl_send_rpc(req, &cl->cli_server);
 	}
 	if (rc) { 
-		CERROR("error %d, opcode %d\n", rc, 
-		       req->rq_reqhdr->opc); 
+                CERROR("error %d, opcode %d\n", rc, req->rq_reqhdr->opc);
 		return -rc;
 	}
 
         CDEBUG(0, "-- sleeping\n");
-        wait_event_interruptible(req->rq_wait_for_rep, 
-                                 ptlrpc_check_reply(req));
+        wait_event_interruptible(req->rq_wait_for_rep, ptlrpc_check_reply(req));
         CDEBUG(0, "-- done\n");
         
         if (req->rq_flags == PTL_RPC_INTR) { 
@@ -224,7 +232,8 @@ int ptlrpc_queue_wait(struct ptlrpc_client *cl, struct ptlrpc_request *req)
                 return -EINTR;
         }
 
-	rc = cl->cli_rep_unpack(req->rq_repbuf, req->rq_replen, &req->rq_rephdr, &req->rq_rep);
+	rc = cl->cli_rep_unpack(req->rq_repbuf, req->rq_replen,
+                                &req->rq_rephdr, &req->rq_rep);
 	if (rc) {
 		CERROR("unpack_rep failed: %d\n", rc);
 		return rc;
@@ -232,9 +241,8 @@ int ptlrpc_queue_wait(struct ptlrpc_client *cl, struct ptlrpc_request *req)
         CERROR("got rep %d\n", req->rq_rephdr->xid);
 
 	if ( req->rq_rephdr->status == 0 )
-                CDEBUG(0, "--> buf %p len %d status %d\n",
-		       req->rq_repbuf, req->rq_replen, 
-		       req->rq_rephdr->status); 
+                CDEBUG(0, "--> buf %p len %d status %d\n", req->rq_repbuf,
+                       req->rq_replen, req->rq_rephdr->status);
 
 	EXIT;
 	return 0;

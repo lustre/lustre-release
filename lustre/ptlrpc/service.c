@@ -37,10 +37,8 @@ extern int server_request_callback(ptl_event_t *ev, void *data);
 static int ptlrpc_check_event(struct ptlrpc_service *svc)
 {
         
-        if (sigismember(&(current->pending.signal),
-                        SIGKILL) ||
-            sigismember(&(current->pending.signal),
-                        SIGINT)) { 
+        if (sigismember(&(current->pending.signal), SIGKILL) ||
+            sigismember(&(current->pending.signal), SIGINT)) { 
                 svc->srv_flags |= SVC_KILLED;
                 EXIT;
                 return 1;
@@ -80,14 +78,9 @@ static int ptlrpc_check_event(struct ptlrpc_service *svc)
         return 0;
 }
 
-struct ptlrpc_service *ptlrpc_init_svc(__u32 bufsize, 
-                                       int req_portal, 
-                                       int rep_portal, 
-                                       char *uuid, 
-                                       req_unpack_t unpack, 
-                                       rep_pack_t pack,
-                                       svc_handler_t handler
-                                       )
+struct ptlrpc_service *
+ptlrpc_init_svc(__u32 bufsize, int req_portal, int rep_portal, char *uuid,
+                req_unpack_t unpack, rep_pack_t pack, svc_handler_t handler)
 {
         int err;
         struct ptlrpc_service *svc;
@@ -215,7 +208,8 @@ void ptlrpc_stop_thread(struct ptlrpc_service *svc)
 	svc->srv_flags = SVC_STOPPING;
 
         wake_up(&svc->srv_waitq);
-        wait_event_interruptible(svc->srv_ctl_waitq,  (svc->srv_flags & SVC_STOPPED));
+        wait_event_interruptible(svc->srv_ctl_waitq, 
+                                 (svc->srv_flags & SVC_STOPPED));
 }
 
 int ptlrpc_start_thread(struct obd_device *dev, struct ptlrpc_service *svc,
@@ -336,8 +330,10 @@ int rpc_unregister_service(struct ptlrpc_service *service)
                 rc = PtlMEUnlink(service->srv_me_h[i]);
                 if (rc)
                         CERROR("PtlMEUnlink failed: %d\n", rc);
-        
-                OBD_FREE(service->srv_buf[i], service->srv_buf_size);                
+
+                if (service->srv_buf[i] != NULL)
+                        OBD_FREE(service->srv_buf[i], service->srv_buf_size);
+                service->srv_buf[i] = NULL;
         }
 
         rc = PtlEQFree(service->srv_eq_h);
