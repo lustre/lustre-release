@@ -53,7 +53,7 @@ static struct inode * search_inode_for_lustre(struct super_block *sb,
         inode = ilookup4(sb, ino, NULL, NULL);
         if (inode)
                 return inode;
-        if (S_ISREG(inode->i_mode)) {
+        if (S_ISREG(mode)) {
                 eadatalen = obd_size_diskmd(sbi->ll_osc_exp, NULL);
                 valid |= OBD_MD_FLEASIZE;
         }
@@ -64,13 +64,13 @@ static struct inode * search_inode_for_lustre(struct super_block *sb,
         rc = mdc_getattr(sbi->ll_mdc_exp, &fid, valid, eadatalen, &req);
         if (rc) {
                 CERROR("failure %d inode %lu\n", rc, ino);
-                RETURN(ERR_PTR(-abs(rc)));
+                return ERR_PTR(rc);
         }
 
         rc = get_inode_with_mdc_data(req, sb, 0, &md, &inode, valid);
         ptlrpc_req_finished(req);
-        if (rc) 
-                RETURN(ERR_PTR(-abs(rc)));
+        if (rc)
+                return ERR_PTR(rc);
         else
                 return inode;
 }
@@ -86,10 +86,11 @@ static struct dentry *ll_iget_for_nfs(struct super_block *sb, unsigned long ino,
 
         if (ino == 0)
                 return ERR_PTR(-ESTALE);
-        
+
         inode = search_inode_for_lustre(sb, ino, generation, mode);
-        if (inode == NULL)
-                return ERR_PTR(-ENOMEM);
+        if (IS_ERR(inode)) {
+                return ERR_PTR(-ESTALE);
+        }
         if (is_bad_inode(inode) 
             || (generation && inode->i_generation != generation)
             ){
@@ -134,22 +135,21 @@ struct dentry *ll_fh_to_dentry(struct super_block *sb, __u32 *data, int len,
                                int fhtype, int parent)
 {
         switch (fhtype) {
+                case 2:
+                        if (len < 5)
+                                break;
+                        if (parent)
+                                return ll_iget_for_nfs(sb, data[3], 0, data[4]);
                 case 1:
                         if (len < 3)
                                 break;
                         if (parent)
                                 break;
                         return ll_iget_for_nfs(sb, data[0], data[1], data[2]);
-                case 2:
-                        if (len < 5)
-                                break;
-                        if (parent)
-                                return ll_iget_for_nfs(sb, data[3], 0, data[4]);
-                        return ll_iget_for_nfs(sb, data[0], data[1], data[2]);
                 default: break;
         }
         return ERR_PTR(-EINVAL);
-}        
+}
 
 int ll_dentry_to_fh(struct dentry *dentry, __u32 *datap, int *lenp,
                     int need_parent)
