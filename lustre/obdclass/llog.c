@@ -47,11 +47,6 @@ struct llog_handle *llog_alloc_handle(void)
         if (loghandle == NULL)
                 RETURN(ERR_PTR(-ENOMEM));
 
-        OBD_ALLOC(loghandle->lgh_hdr, LLOG_CHUNK_SIZE);
-        if (loghandle->lgh_hdr == NULL) {
-                OBD_FREE(loghandle, sizeof(*loghandle));
-                RETURN(ERR_PTR(-ENOMEM));
-        }
         sema_init(&loghandle->lgh_lock, 1);
 
         RETURN(loghandle);
@@ -110,20 +105,21 @@ int llog_cancel_rec(struct llog_handle *loghandle, int index)
 }
 EXPORT_SYMBOL(llog_cancel_rec);
 
-int llog_init_handle(struct llog_handle *handle, int flags, struct obd_uuid *uuid)
+int llog_init_handle(struct llog_handle *handle, int flags,
+                     struct obd_uuid *uuid)
 {
         int rc; 
         struct llog_log_hdr *llh;
-
+        ENTRY;
         LASSERT(handle->lgh_hdr == NULL);
 
         OBD_ALLOC(llh, sizeof(*llh));
-        if (!llh)
+        if (llh == NULL)
                 RETURN(-ENOMEM);
 
         handle->lgh_hdr = llh;
-        rc = llog_lvfs_read_hdr(handle);
-        if (rc == 0) { 
+        rc = llog_read_header(handle);
+        if (rc == 0) {
                 LASSERT(llh->llh_flags == flags);
                 LASSERT(obd_uuid_equals(uuid, &llh->llh_tgtuuid));
                 RETURN(0);
@@ -149,8 +145,8 @@ int llog_init_handle(struct llog_handle *handle, int flags, struct obd_uuid *uui
         if (rc)
                 OBD_FREE(llh, sizeof(*llh));
         return(rc);
-
 }
+EXPORT_SYMBOL(llog_init_handle);
 
 int llog_process_log(struct llog_handle *loghandle, llog_cb_t cb, void *data)
 {
