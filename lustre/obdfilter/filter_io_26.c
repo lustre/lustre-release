@@ -97,7 +97,8 @@ static int filter_range_is_mapped(struct inode *inode, obd_size offset, int len)
 
 int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
                           struct obd_ioobj *obj, int niocount,
-                          struct niobuf_local *res, struct obd_trans_info *oti)
+                          struct niobuf_local *res, struct obd_trans_info *oti,
+                          int rc)
 {
         struct obd_device *obd = exp->exp_obd;
         struct obd_run_ctxt saved;
@@ -105,7 +106,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
         struct fsfilt_objinfo fso;
         struct iattr iattr = { .ia_valid = ATTR_SIZE, .ia_size = 0, };
         struct inode *inode = NULL;
-        int rc = 0, i, k, cleanup_phase = 0, err;
+        int i, k, cleanup_phase = 0, err;
         unsigned long now = jiffies; /* DEBUGGING OST TIMEOUTS */
         int blocks_per_page;
         struct dio_request *dreq;
@@ -114,6 +115,9 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
         LASSERT(oti != NULL);
         LASSERT(objcount == 1);
         LASSERT(current->journal_info == NULL);
+
+        if (rc != 0)
+                GOTO(cleanup, rc);
 
         inode = res->dentry->d_inode;
         blocks_per_page = PAGE_SIZE >> inode->i_blkbits;
