@@ -41,7 +41,7 @@ int main(int argc, char **argv)
                 return 1;
         }
 
-        printf("directio on %s for %dx%lu blocks \n", argv[1], blocks,
+        printf("directio on %s for %dx%lu bytes \n", argv[1], blocks,
                st.st_blksize);
 
         seek = (off64_t)seek_blocks * (off64_t)st.st_blksize;
@@ -75,5 +75,6 @@ int main(int argc, char **argv)
                 return 1;
         }
 
+	printf("PASS\n");
         return 0;
 }
