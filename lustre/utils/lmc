@@ -359,7 +359,7 @@ class GenConfig:
         return ldlm
 
     def osd(self, name, uuid, fs, osdtype, devname, format, ost_uuid,
-            node_uuid, dev_size=0, journal_size=0, inode_size=0, nspath=""):
+            node_uuid, dev_size=0, journal_size=0, inode_size=0, nspath="", mkfsoptions=""):
         osd = self.newService("osd", name, uuid)
         osd.setAttribute('osdtype', osdtype)
         osd.appendChild(self.ref("target", ost_uuid))
@@ -375,6 +375,8 @@ class GenConfig:
                 self.addElement(osd, "journalsize", "%s" % (journal_size))
             if inode_size:
                 self.addElement(osd, "inodesize", "%s" % (inode_size))
+            if mkfsoptions:
+                self.addElement(osd, "mkfsoptions", mkfsoptions)
         if nspath:
             self.addElement(osd, "nspath", nspath)
         return osd
@@ -748,12 +750,14 @@ def add_ost(gen, lustre, options):
         fstype = ''
         journal_size = ''
         inode_size = ''
+        mkfsoptions = ''
     else:
         devname = get_option(options, 'dev') # can be unset for bluearcs
         size = get_option(options, 'size')
         fstype = get_option(options, 'fstype')
         journal_size = get_option(options, 'journal_size')
         inode_size = get_option(options, 'inode_size')
+        mkfsoptions = get_option(options, 'mkfsoptions')
         
     nspath = get_option(options, 'nspath')
 
@@ -789,7 +793,7 @@ def add_ost(gen, lustre, options):
 
     osd = gen.osd(osdname, osd_uuid, fstype, osdtype, devname,
                   get_format_flag(options), ost_uuid, node_uuid, size,
-                  journal_size, inode_size, nspath)
+                  journal_size, inode_size, nspath, mkfsoptions)
 
     node = findByName(lustre, node_name, "node")
 

@@ -1550,7 +1550,7 @@ class OSD(Module):
         self.size = self.db.get_val_int('devsize', 0)
         self.journal_size = self.db.get_val_int('journalsize', 0)
         self.inode_size = self.db.get_val_int('inodesize', 0)
-        self.mkfsoptions = self.db.get_val_int('mkfsoptions', '')
+        self.mkfsoptions = self.db.get_val('mkfsoptions', '')
         self.fstype = self.db.get_val('fstype', '')
         self.nspath = self.db.get_val('nspath', '')
         target_uuid = self.db.get_first_ref('target')

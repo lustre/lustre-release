@@ -88,7 +88,7 @@ zconf_mount() {
        # this is so cheating
        $LCONF --nosetup --node client_facet $XMLCONFIG
        $LUSTRE/utils/llmount `facet_host mds`:/mds_svc/client_facet $mnt \
-            -o nettype=$NETTYPE 
+            -o nettype=$NETTYPE || return $?
     fi
 
     [ -d /r ] && $LCTL modules > /r/tmp/ogdb-`hostname`
