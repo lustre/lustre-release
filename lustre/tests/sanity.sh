@@ -203,69 +203,6 @@ test_0() {
 	$CHECKSTAT -a $DIR/f || error
 }
 run_test 0 "touch .../f ; rm .../f ============================="
-#bug3270 root_squash check
-mdsdevice(){
-        lctl << EOF
-        dl
-        quit
-EOF
-}
-mynidstr(){
-        lctl << EOF
-        network tcp
-        mynid
-        quit
-EOF
-}
-test_0a(){
-        mdsnum=`mdsdevice|awk ' $3=="mds" {print $1}'`
-	if [ ! -z "$mdsnum" ];then
-        mynid=`mynidstr|awk '{print $4}'`
-        mkdir $DIR/test_0a_dir1
-        touch $DIR/test_0a_file1
-        ln -s $DIR/test_0a_file1 $DIR/test_0a_filelink1
-       chmod 0777 $DIR
-        lctl << EOF
-        device $mdsnum 
-        root_squash 500:500
-        root_squash
-        quit
-EOF
-        mkdir $DIR/test_0a_dir2
-        touch $DIR/test_0a_file2
-        ln -s $DIR/test_0a_file2 $DIR/test_0a_filelink2
-        $CHECKSTAT -t dir   -u 500  $DIR/test_0a_dir2 || error
-        $CHECKSTAT -t file  -u 500  $DIR/test_0a_file2 || error
-        $CHECKSTAT -t link  -u 500  $DIR/test_0a_filelink2 || error
-        lctl << EOF
-        device $mdsnum 
-        root_squash 500:500 $mynid
-        root_squash
-        quit
-EOF
-        mkdir $DIR/test_0a_dir3
-        touch $DIR/test_0a_file3
-        ln -s $DIR/test_0a_file3 $DIR/test_0a_filelink3
-        $CHECKSTAT -t dir -u root  $DIR/test_0a_dir3 || error
-        $CHECKSTAT -t file -u root $DIR/test_0a_file3 || error
-        $CHECKSTAT -t link -u root $DIR/test_0a_filelink3 || error
-        lctl << EOF
-        device $mdsnum 
-        root_squash root:root
-        root_squash
-        quit
-EOF
-        mkdir $DIR/test_0a_dir4
-        touch $DIR/test_0a_file4
-        ln -s $DIR/test_0a_file4 $DIR/test_0a_filelink4
-        $CHECKSTAT -t dir -u root  $DIR/test_0a_dir4 || error
-        $CHECKSTAT -t file -u root $DIR/test_0a_file4 || error
-        $CHECKSTAT -t link -u root $DIR/test_0a_filelink4 || error
-        rm -rf $DIR/test_0a*
-	fi
-}
-
-run_test 0a "test root_squash ============================"
 
 test_1a() {
 	mkdir $DIR/d1

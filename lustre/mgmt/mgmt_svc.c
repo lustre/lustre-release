@@ -49,10 +49,27 @@ static int mgmt_ping(struct ptlrpc_request *req)
         return lustre_pack_msg(0, NULL, NULL, &req->rq_replen, &req->rq_repmsg);
 }
 
+static int mgmt_msg_check_version(struct lustre_msg *msg)
+{
+        if (lustre_msg_check_version(msg, LUSTRE_OBD_VERSION)) {
+                CERROR("bad opc %u version %08x, expecting %08x\n",
+                       msg->opc, msg->version, LUSTRE_OBD_VERSION);
+                return -EINVAL;
+        }
+
+        return 0;
+}
+
 static int mgmt_handler(struct ptlrpc_request *req)
 {
         int rc;
         ENTRY;
+
+        rc = mgmt_msg_check_version(req->rq_reqmsg);
+        if (rc) {
+                CERROR("MGMT drop mal-formed request\n");
+                RETURN(rc);
+        }
 
         switch (req->rq_reqmsg->opc) {
         case OBD_PING:

@@ -56,7 +56,7 @@ static inline void lmv_drop_intent_lock(struct lookup_intent *it)
                                  it->d.lustre.it_lock_mode);
 }
 
-int lmv_handle_remote_inode(struct obd_export *exp, struct ll_uctxt *uctxt,
+int lmv_handle_remote_inode(struct obd_export *exp,
                             void *lmm, int lmmsize, 
                             struct lookup_intent *it, int flags,
                             struct ptlrpc_request **reqp,
@@ -95,7 +95,7 @@ int lmv_handle_remote_inode(struct obd_export *exp, struct ll_uctxt *uctxt,
 
                 nfid = body->fid1;
                 it->d.lustre.it_disposition &= ~DISP_ENQ_COMPLETE;
-                rc = md_intent_lock(lmv->tgts[nfid.mds].ltd_exp, uctxt, &nfid,
+                rc = md_intent_lock(lmv->tgts[nfid.mds].ltd_exp, &nfid,
                                     NULL, 0, lmm, lmmsize, NULL, it, flags,
                                     &req, cb_blocking);
 
@@ -117,7 +117,7 @@ int lmv_handle_remote_inode(struct obd_export *exp, struct ll_uctxt *uctxt,
         RETURN(rc);
 }
 
-int lmv_intent_open(struct obd_export *exp, struct ll_uctxt *uctxt,
+int lmv_intent_open(struct obd_export *exp,
                     struct ll_fid *pfid, const char *name, int len,
                     void *lmm, int lmmsize, struct ll_fid *cfid,
                     struct lookup_intent *it, int flags,
@@ -151,7 +151,7 @@ repeat:
                 lmv_put_obj(obj);
         }
 
-        rc = md_intent_lock(lmv->tgts[rpfid.mds].ltd_exp, uctxt, &rpfid, name,
+        rc = md_intent_lock(lmv->tgts[rpfid.mds].ltd_exp, &rpfid, name,
                             len, lmm, lmmsize, cfid, it, flags, reqp,
                             cb_blocking);
         if (rc == -ERESTART) {
@@ -169,7 +169,7 @@ repeat:
 
         /* okay, MDS has returned success. Probably name has been resolved in
          * remote inode */
-        rc = lmv_handle_remote_inode(exp, uctxt, lmm, lmmsize, it,
+        rc = lmv_handle_remote_inode(exp, lmm, lmmsize, it,
                                      flags, reqp, cb_blocking);
         if (rc != 0) {
                 LASSERT(rc < 0);
@@ -219,7 +219,7 @@ repeat:
         RETURN(rc);
 }
 
-int lmv_intent_getattr(struct obd_export *exp, struct ll_uctxt *uctxt,
+int lmv_intent_getattr(struct obd_export *exp,
                        struct ll_fid *pfid, const char *name, int len,
                        void *lmm, int lmmsize, struct ll_fid *cfid,
                        struct lookup_intent *it, int flags,
@@ -250,7 +250,7 @@ int lmv_intent_getattr(struct obd_export *exp, struct ll_uctxt *uctxt,
                         mds = rpfid.mds;
                         lmv_put_obj(obj);
                 }
-                rc = md_intent_lock(lmv->tgts[mds].ltd_exp, uctxt, &rpfid, name,
+                rc = md_intent_lock(lmv->tgts[mds].ltd_exp, &rpfid, name,
                                     len, lmm, lmmsize, cfid, it, flags, reqp,
                                     cb_blocking);
                 if (obj && rc >= 0) {
@@ -290,7 +290,7 @@ int lmv_intent_getattr(struct obd_export *exp, struct ll_uctxt *uctxt,
                        (unsigned long)rpfid.generation);
         }
         
-        rc = md_intent_lock(lmv->tgts[mds].ltd_exp, uctxt, &rpfid, name,
+        rc = md_intent_lock(lmv->tgts[mds].ltd_exp, &rpfid, name,
                             len, lmm, lmmsize, NULL, it, flags, reqp,
                             cb_blocking);
         
@@ -301,7 +301,7 @@ int lmv_intent_getattr(struct obd_export *exp, struct ll_uctxt *uctxt,
 
         /* okay, MDS has returned success. probably name has been
          * resolved in remote inode */
-        rc = lmv_handle_remote_inode(exp, uctxt, lmm, lmmsize, it,
+        rc = lmv_handle_remote_inode(exp, lmm, lmmsize, it,
                                      flags, reqp, cb_blocking);
         if (rc < 0)
                 RETURN(rc);
@@ -352,7 +352,6 @@ int lmv_lookup_slaves(struct obd_export *exp, struct ptlrpc_request **reqp)
         struct lustre_handle *lockh;
         struct ldlm_lock *lock;
         struct mds_body *body2;
-        struct ll_uctxt uctxt;
         struct lmv_obj *obj;
         int i, rc = 0;
         ENTRY;
@@ -381,9 +380,6 @@ int lmv_lookup_slaves(struct obd_export *exp, struct ptlrpc_request **reqp)
                (unsigned long)body->fid1.id,
                (unsigned long)body->fid1.generation);
 
-        uctxt.gid1 = 0;
-        uctxt.gid2 = 0;
-
         lmv_lock_obj(obj);
         
         for (i = 0; i < obj->objcount; i++) {
@@ -402,7 +398,7 @@ int lmv_lookup_slaves(struct obd_export *exp, struct ptlrpc_request **reqp)
                 /* is obj valid? */
                 memset(&it, 0, sizeof(it));
                 it.it_op = IT_GETATTR;
-                rc = md_intent_lock(lmv->tgts[fid.mds].ltd_exp, &uctxt, &fid,
+                rc = md_intent_lock(lmv->tgts[fid.mds].ltd_exp, &fid,
                                     NULL, 0, NULL, 0, &fid, &it, 0, &req,
                                     lmv_dirobj_blocking_ast);
                 
@@ -425,7 +421,7 @@ int lmv_lookup_slaves(struct obd_export *exp, struct ptlrpc_request **reqp)
 
                 memset(&it, 0, sizeof(it));
                 it.it_op = IT_GETATTR;
-                rc = md_intent_lock(lmv->tgts[fid.mds].ltd_exp, &uctxt, &fid,
+                rc = md_intent_lock(lmv->tgts[fid.mds].ltd_exp, &fid,
                                     NULL, 0, NULL, 0, NULL, &it, 0, &req,
                                     lmv_dirobj_blocking_ast);
 
@@ -465,7 +461,7 @@ cleanup:
         RETURN(rc);
 }
 
-int lmv_intent_lookup(struct obd_export *exp, struct ll_uctxt *uctxt,
+int lmv_intent_lookup(struct obd_export *exp,
                       struct ll_fid *pfid, const char *name, int len,
                       void *lmm, int lmmsize, struct ll_fid *cfid,
                       struct lookup_intent *it, int flags,
@@ -502,7 +498,7 @@ int lmv_intent_lookup(struct obd_export *exp, struct ll_uctxt *uctxt,
                        (unsigned long)cfid->mds, (unsigned long)cfid->id,
                        (unsigned long)cfid->generation, mds);
 
-                rc = md_intent_lock(lmv->tgts[mds].ltd_exp, uctxt, pfid, name,
+                rc = md_intent_lock(lmv->tgts[mds].ltd_exp, pfid, name,
                                     len, lmm, lmmsize, cfid, it, flags,
                                     reqp, cb_blocking);
                 RETURN(rc);
@@ -525,7 +521,7 @@ repeat:
                 lmv_put_obj(obj);
         }
 
-        rc = md_intent_lock(lmv->tgts[mds].ltd_exp, uctxt, &rpfid, name,
+        rc = md_intent_lock(lmv->tgts[mds].ltd_exp, &rpfid, name,
                             len, lmm, lmmsize, NULL, it, flags, reqp,
                             cb_blocking);
         if (rc > 0) {
@@ -565,7 +561,7 @@ repeat:
 
         /* okay, MDS has returned success. probably name has been resolved in
          * remote inode */
-        rc = lmv_handle_remote_inode(exp, uctxt, lmm, lmmsize, it, flags,
+        rc = lmv_handle_remote_inode(exp, lmm, lmmsize, it, flags,
                                      reqp, cb_blocking);
 
         if (rc == 0 && (mea = body_of_splitted_dir(*reqp, 1))) {
@@ -585,7 +581,7 @@ repeat:
         RETURN(rc);
 }
 
-int lmv_intent_lock(struct obd_export *exp, struct ll_uctxt *uctxt,
+int lmv_intent_lock(struct obd_export *exp,
                     struct ll_fid *pfid, const char *name, int len,
                     void *lmm, int lmmsize, struct ll_fid *cfid,
                     struct lookup_intent *it, int flags,
@@ -608,15 +604,15 @@ int lmv_intent_lock(struct obd_export *exp, struct ll_uctxt *uctxt,
                 RETURN(rc);
 
         if (it->it_op == IT_LOOKUP)
-                rc = lmv_intent_lookup(exp, uctxt, pfid, name, len, lmm,
+                rc = lmv_intent_lookup(exp, pfid, name, len, lmm,
                                        lmmsize, cfid, it, flags, reqp,
                                        cb_blocking);
         else if (it->it_op & IT_OPEN)
-                rc = lmv_intent_open(exp, uctxt, pfid, name, len, lmm,
+                rc = lmv_intent_open(exp, pfid, name, len, lmm,
                                      lmmsize, cfid, it, flags, reqp,
                                      cb_blocking);
         else if (it->it_op == IT_GETATTR || it->it_op == IT_CHDIR)
-                rc = lmv_intent_getattr(exp, uctxt, pfid, name, len, lmm,
+                rc = lmv_intent_getattr(exp, pfid, name, len, lmm,
                                         lmmsize, cfid, it, flags, reqp,
                                         cb_blocking);
         else
@@ -635,7 +631,6 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct ptlrpc_request **reqp,
         struct ldlm_lock *lock;
         unsigned long size = 0;
         struct mds_body *body;
-        struct ll_uctxt uctxt;
         struct lmv_obj *obj;
         int master_lock_mode;
         int i, rc = 0;
@@ -649,8 +644,6 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct ptlrpc_request **reqp,
         obj = lmv_grab_obj(obd, mfid);
         LASSERT(obj != NULL);
 
-        uctxt.gid1 = 0;
-        uctxt.gid2 = 0;
         master_lock_mode = 0;
 
         lmv_lock_obj(obj);
@@ -693,7 +686,7 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct ptlrpc_request **reqp,
                 }
 
                 /* is obj valid? */
-                rc = md_intent_lock(lmv->tgts[fid.mds].ltd_exp, &uctxt, &fid,
+                rc = md_intent_lock(lmv->tgts[fid.mds].ltd_exp, &fid,
                                     NULL, 0, NULL, 0, &fid, &it, 0, &req, cb);
                 lockh = (struct lustre_handle *) &it.d.lustre.it_lock_handle;
                 if (rc > 0) {
@@ -714,7 +707,7 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct ptlrpc_request **reqp,
                 
                 memset(&it, 0, sizeof(it));
                 it.it_op = IT_GETATTR;
-                rc = md_intent_lock(lmv->tgts[fid.mds].ltd_exp, &uctxt, &fid,
+                rc = md_intent_lock(lmv->tgts[fid.mds].ltd_exp, &fid,
                                     NULL, 0, NULL, 0, NULL, &it, 0, &req, cb);
                 lockh = (struct lustre_handle *) &it.d.lustre.it_lock_handle;
                 LASSERT(rc <= 0);

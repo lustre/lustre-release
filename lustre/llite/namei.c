@@ -334,7 +334,6 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
 {
         struct dentry *save = dentry, *retval;
         struct ll_fid pfid;
-        struct ll_uctxt ctxt;
         struct it_cb_data icbd;
         struct ptlrpc_request *req = NULL;
         struct lookup_intent lookup_it = { .it_op = IT_LOOKUP };
@@ -359,9 +358,8 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
         icbd.icbd_childp = &dentry;
         icbd.icbd_parent = parent;
         ll_inode2fid(&pfid, parent);
-        ll_i2uctxt(&ctxt, parent, NULL);
 
-        rc = md_intent_lock(ll_i2mdcexp(parent), &ctxt, &pfid,
+        rc = md_intent_lock(ll_i2mdcexp(parent), &pfid,
                             dentry->d_name.name, dentry->d_name.len, NULL, 0,
                             NULL, it, flags, &req, ll_mdc_blocking_ast);
         if (rc < 0)
@@ -486,7 +484,7 @@ static int ll_create_it(struct inode *dir, struct dentry *dentry, int mode,
         if (rc)
                 RETURN(rc);
 
-        mdc_store_inode_generation(mdc_exp, request, 2, 1);
+        mdc_store_inode_generation(mdc_exp, request, MDS_REQ_INTENT_REC_OFF, 1);
         inode = ll_create_node(dir, dentry->d_name.name, dentry->d_name.len,
                                NULL, 0, mode, 0, it);
         if (IS_ERR(inode)) {

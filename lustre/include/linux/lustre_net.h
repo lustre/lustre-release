@@ -632,8 +632,9 @@ void ptlrpc_set_add_req(struct ptlrpc_request_set *, struct ptlrpc_request *);
 void ptlrpc_set_add_new_req(struct ptlrpc_request_set *,
                             struct ptlrpc_request *);
 
-struct ptlrpc_request *ptlrpc_prep_req(struct obd_import *imp, int opcode,
-                                       int count, int *lengths, char **bufs);
+struct ptlrpc_request *ptlrpc_prep_req(struct obd_import *imp, __u32 version,
+                                       int opcode, int count, int *lengths,
+                                       char **bufs);
 void ptlrpc_free_req(struct ptlrpc_request *request);
 void ptlrpc_req_finished(struct ptlrpc_request *request);
 void ptlrpc_req_finished_with_imp_lock(struct ptlrpc_request *request);
@@ -686,6 +687,7 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp);
 
 /* ptlrpc/pack_generic.c */
 int lustre_msg_swabbed(struct lustre_msg *msg);
+int lustre_msg_check_version(struct lustre_msg *msg, __u32 version);
 int lustre_pack_request(struct ptlrpc_request *, int count, int *lens,
                         char **bufs);
 int lustre_pack_reply(struct ptlrpc_request *, int count, int *lens,
@@ -703,10 +705,9 @@ void *lustre_swab_repbuf (struct ptlrpc_request *req, int n, int minlen,
 
 void lustre_init_msg (struct lustre_msg *msg, int count, 
                       int *lens, char **bufs);
-void *mdc_setattr_pack(struct lustre_msg *msg,
-                       struct mdc_op_data *data,
-                       struct iattr *iattr, void *ea, int ealen,
-		       void *ea2, int ea2len);
+void *mdc_setattr_pack(struct lustre_msg *msg, int offset,
+                       struct mdc_op_data *data, struct iattr *iattr,
+                       void *ea, int ealen, void *ea2, int ea2len);
 void *mdc_create_pack(struct lustre_msg *msg, int offset,
                       struct mdc_op_data *op_data, __u32 mode, __u64 rdev,
                       const void *data, int datalen);

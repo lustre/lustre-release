@@ -308,7 +308,8 @@ int ptlrpc_connect_import(struct obd_import *imp, char * new_uuid)
 
         }
 
-        request = ptlrpc_prep_req(imp, imp->imp_connect_op, 4, size, tmp);
+        request = ptlrpc_prep_req(imp, LUSTRE_OBD_VERSION,
+                                  imp->imp_connect_op, 4, size, tmp);
         if (!request)
                 GOTO(out, rc = -ENOMEM);
 
@@ -505,7 +506,7 @@ static int signal_completed_replay(struct obd_import *imp)
         LASSERT(atomic_read(&imp->imp_replay_inflight) == 0);
         atomic_inc(&imp->imp_replay_inflight);
 
-        req = ptlrpc_prep_req(imp, OBD_PING, 0, NULL, NULL);
+        req = ptlrpc_prep_req(imp, LUSTRE_OBD_VERSION, OBD_PING, 0, NULL, NULL);
         if (!req)
                 RETURN(-ENOMEM);
 
@@ -633,7 +634,8 @@ int ptlrpc_disconnect_import(struct obd_import *imp)
         }
         spin_unlock_irqrestore(&imp->imp_lock, flags);
 
-        request = ptlrpc_prep_req(imp, rq_opc, 0, NULL, NULL);
+        request = ptlrpc_prep_req(imp, LUSTRE_OBD_VERSION, rq_opc,
+                                  0, NULL, NULL);
         if (request) {
                 /* For non-replayable connections, don't attempt
                    reconnect if this fails */

@@ -116,6 +116,8 @@ check_obdo(void)
         CHECK_MEMBER(obdo, o_valid);
         CHECK_MEMBER(obdo, o_misc);
         CHECK_MEMBER(obdo, o_easize);
+        CHECK_MEMBER(obdo, o_mds);
+        CHECK_MEMBER(obdo, o_padding);
         CHECK_MEMBER(obdo, o_inline);
 
         CHECK_VALUE(OBD_MD_FLID);
@@ -260,9 +262,6 @@ check_mds_body(void)
         CHECK_MEMBER(mds_body, io_epoch);
         CHECK_MEMBER(mds_body, ino);
         CHECK_MEMBER(mds_body, valid);
-        CHECK_MEMBER(mds_body, fsuid);
-        CHECK_MEMBER(mds_body, fsgid);
-        CHECK_MEMBER(mds_body, capability);
         CHECK_MEMBER(mds_body, mode);
         CHECK_MEMBER(mds_body, uid);
         CHECK_MEMBER(mds_body, gid);
@@ -273,8 +272,8 @@ check_mds_body(void)
         CHECK_MEMBER(mds_body, rdev);
         CHECK_MEMBER(mds_body, nlink);
         CHECK_MEMBER(mds_body, generation);
-        CHECK_MEMBER(mds_body, suppgid);
         CHECK_MEMBER(mds_body, eadatasize);
+        CHECK_MEMBER(mds_body, mds);
 
         CHECK_VALUE(FMODE_READ);
         CHECK_VALUE(FMODE_WRITE);
@@ -295,10 +294,6 @@ check_mds_rec_setattr(void)
         BLANK_LINE();
         CHECK_STRUCT(mds_rec_setattr);
         CHECK_MEMBER(mds_rec_setattr, sa_opcode);
-        CHECK_MEMBER(mds_rec_setattr, sa_fsuid);
-        CHECK_MEMBER(mds_rec_setattr, sa_fsgid);
-        CHECK_MEMBER(mds_rec_setattr, sa_cap);
-        CHECK_MEMBER(mds_rec_setattr, sa_suppgid);
         CHECK_MEMBER(mds_rec_setattr, sa_valid);
         CHECK_MEMBER(mds_rec_setattr, sa_fid);
         CHECK_MEMBER(mds_rec_setattr, sa_mode);
@@ -317,16 +312,13 @@ check_mds_rec_create(void)
         BLANK_LINE();
         CHECK_STRUCT(mds_rec_create);
         CHECK_MEMBER(mds_rec_create, cr_opcode);
-        CHECK_MEMBER(mds_rec_create, cr_fsuid);
-        CHECK_MEMBER(mds_rec_create, cr_fsgid);
-        CHECK_MEMBER(mds_rec_create, cr_cap);
         CHECK_MEMBER(mds_rec_create, cr_flags);
         CHECK_MEMBER(mds_rec_create, cr_mode);
+        CHECK_MEMBER(mds_rec_create, cr_padding);
         CHECK_MEMBER(mds_rec_create, cr_fid);
         CHECK_MEMBER(mds_rec_create, cr_replayfid);
         CHECK_MEMBER(mds_rec_create, cr_time);
         CHECK_MEMBER(mds_rec_create, cr_rdev);
-        CHECK_MEMBER(mds_rec_create, cr_suppgid);
 }
 
 void
@@ -335,11 +327,7 @@ check_mds_rec_link(void)
         BLANK_LINE();
         CHECK_STRUCT(mds_rec_link);
         CHECK_MEMBER(mds_rec_link, lk_opcode);
-        CHECK_MEMBER(mds_rec_link, lk_fsuid);
-        CHECK_MEMBER(mds_rec_link, lk_fsgid);
-        CHECK_MEMBER(mds_rec_link, lk_cap);
-        CHECK_MEMBER(mds_rec_link, lk_suppgid1);
-        CHECK_MEMBER(mds_rec_link, lk_suppgid2);
+        CHECK_MEMBER(mds_rec_link, lk_padding);
         CHECK_MEMBER(mds_rec_link, lk_fid1);
         CHECK_MEMBER(mds_rec_link, lk_fid2);
         CHECK_MEMBER(mds_rec_link, lk_time);
@@ -351,10 +339,6 @@ check_mds_rec_unlink(void)
         BLANK_LINE();
         CHECK_STRUCT(mds_rec_unlink);
         CHECK_MEMBER(mds_rec_unlink, ul_opcode);
-        CHECK_MEMBER(mds_rec_unlink, ul_fsuid);
-        CHECK_MEMBER(mds_rec_unlink, ul_fsgid);
-        CHECK_MEMBER(mds_rec_unlink, ul_cap);
-        CHECK_MEMBER(mds_rec_unlink, ul_suppgid);
         CHECK_MEMBER(mds_rec_unlink, ul_mode);
         CHECK_MEMBER(mds_rec_unlink, ul_fid1);
         CHECK_MEMBER(mds_rec_unlink, ul_fid2);
@@ -367,11 +351,7 @@ check_mds_rec_rename(void)
         BLANK_LINE();
         CHECK_STRUCT(mds_rec_rename);
         CHECK_MEMBER(mds_rec_rename, rn_opcode);
-        CHECK_MEMBER(mds_rec_rename, rn_fsuid);
-        CHECK_MEMBER(mds_rec_rename, rn_fsgid);
-        CHECK_MEMBER(mds_rec_rename, rn_cap);
-        CHECK_MEMBER(mds_rec_rename, rn_suppgid1);
-        CHECK_MEMBER(mds_rec_rename, rn_suppgid2);
+        CHECK_MEMBER(mds_rec_rename, rn_padding);
         CHECK_MEMBER(mds_rec_rename, rn_fid1);
         CHECK_MEMBER(mds_rec_rename, rn_fid2);
         CHECK_MEMBER(mds_rec_rename, rn_time);

@@ -44,20 +44,18 @@ int ptlrpc_ping(struct obd_import *imp)
         int rc = 0;
         ENTRY;
 
-        req = ptlrpc_prep_req(imp, OBD_PING, 0, NULL,
-                              NULL);
+        req = ptlrpc_prep_req(imp, LUSTRE_OBD_VERSION, OBD_PING, 0, NULL, NULL);
         if (req) {
                 DEBUG_REQ(D_HA, req, "pinging %s->%s",
                           imp->imp_obd->obd_uuid.uuid,
                           imp->imp_target_uuid.uuid);
                 req->rq_no_resend = req->rq_no_delay = 1;
-                req->rq_replen = lustre_msg_size(0, 
-                                                 NULL);
+                req->rq_replen = lustre_msg_size(0, NULL);
                 ptlrpcd_add_req(req);
         } else {
                 CERROR("OOM trying to ping %s->%s\n",
-                          imp->imp_obd->obd_uuid.uuid,
-                          imp->imp_target_uuid.uuid);
+                       imp->imp_obd->obd_uuid.uuid,
+                       imp->imp_target_uuid.uuid);
                 rc = -ENOMEM;
         }
 

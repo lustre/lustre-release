@@ -491,7 +491,7 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
         int put_child = 1;
         ENTRY;
 
-        LASSERT(offset == 2);                  /* only called via intent */
+        LASSERT(offset == 3); /* only called via intent */
         rep = lustre_msg_buf(req->rq_repmsg, 0, sizeof (*rep));
         body = lustre_msg_buf(req->rq_repmsg, 1, sizeof (*body));
 
@@ -742,7 +742,7 @@ static int mds_open_by_fid(struct ptlrpc_request *req, struct ll_fid *fid,
         RETURN(rc);
 }
 
-int mds_pin(struct ptlrpc_request *req)
+int mds_pin(struct ptlrpc_request *req, int offset)
 {
         struct obd_device *obd = req->rq_export->exp_obd;
         struct mds_body *request_body, *reply_body;
@@ -750,7 +750,8 @@ int mds_pin(struct ptlrpc_request *req)
         int rc, size = sizeof(*reply_body);
         ENTRY;
 
-        request_body = lustre_msg_buf(req->rq_reqmsg, 0, sizeof(*request_body));
+        request_body = lustre_msg_buf(req->rq_reqmsg, offset,
+                                      sizeof(*request_body));
 
         rc = lustre_pack_reply(req, 1, &size, NULL);
         if (rc)
@@ -832,10 +833,10 @@ int mds_open(struct mds_update_record *rec, int offset,
         parent_lockh[0].cookie = 0;
         parent_lockh[1].cookie = 0;
 
-        if (offset == 2) { /* intent */
+        if (offset == 3) { /* intent */
                 rep = lustre_msg_buf(req->rq_repmsg, 0, sizeof (*rep));
                 body = lustre_msg_buf(req->rq_repmsg, 1, sizeof (*body));
-        } else if (offset == 0) { /* non-intent reint */
+        } else if (offset == 1) { /* non-intent reint */
                 body = lustre_msg_buf(req->rq_repmsg, 0, sizeof (*body));
         } else {
                 body = NULL;
@@ -868,7 +869,7 @@ int mds_open(struct mds_update_record *rec, int offset,
                 LASSERT(!rec->ur_fid2->id);
         }
 
-        LASSERT(offset == 2); /* If we got here, we must be called via intent */
+        LASSERT(offset == 3); /* If we got here, we must be called via intent */
 
         med = &req->rq_export->exp_mds_data;
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_OPEN_PACK)) {
@@ -1180,8 +1181,9 @@ got_child:
  * (it will not even _have_ an entry in last_rcvd anymore).
  *
  * Returns EAGAIN if the client needs to get more data and re-close. */
-int mds_mfd_close(struct ptlrpc_request *req, struct obd_device *obd,
-                  struct mds_file_data *mfd, int unlink_orphan)
+int mds_mfd_close(struct ptlrpc_request *req, int offset,
+                  struct obd_device *obd, struct mds_file_data *mfd,
+                  int unlink_orphan)
 {
         struct inode *inode = mfd->mfd_dentry->d_inode;
         char fidname[LL_FID_NAMELEN];
@@ -1197,7 +1199,7 @@ int mds_mfd_close(struct ptlrpc_request *req, struct obd_device *obd,
         ENTRY;
 
         if (req && req->rq_reqmsg != NULL)
-                request_body = lustre_msg_buf(req->rq_reqmsg, 0,
+                request_body = lustre_msg_buf(req->rq_reqmsg, offset,
                                               sizeof(*request_body));
         if (req && req->rq_repmsg != NULL)
                 reply_body = lustre_msg_buf(req->rq_repmsg, 0,
@@ -1361,7 +1363,7 @@ out:
         RETURN(rc);
 }
 
-int mds_close(struct ptlrpc_request *req)
+int mds_close(struct ptlrpc_request *req, int offset)
 {
         struct mds_export_data *med = &req->rq_export->exp_mds_data;
         struct obd_device *obd = req->rq_export->exp_obd;
@@ -1387,12 +1389,13 @@ int mds_close(struct ptlrpc_request *req)
         if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
                 DEBUG_REQ(D_HA, req, "close replay\n");
                 memcpy(lustre_msg_buf(req->rq_repmsg, 2, 0),
-                       lustre_msg_buf(req->rq_reqmsg, 1, 0),
+                       lustre_msg_buf(req->rq_reqmsg, offset + 1, 0),
                        req->rq_repmsg->buflens[2]);
         }
 
 
-        body = lustre_swab_reqbuf(req, 0, sizeof(*body), lustre_swab_mds_body);
+        body = lustre_swab_reqbuf(req, offset, sizeof(*body),
+                                  lustre_swab_mds_body);
         if (body == NULL) {
                 CERROR("Can't unpack body\n");
                 req->rq_status = -EFAULT;
@@ -1424,7 +1427,7 @@ int mds_close(struct ptlrpc_request *req)
         spin_unlock(&med->med_open_lock);
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-        req->rq_status = mds_mfd_close(req, obd, mfd, 1);
+        req->rq_status = mds_mfd_close(req, offset, obd, mfd, 1);
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_CLOSE_PACK)) {
@@ -1438,7 +1441,7 @@ int mds_close(struct ptlrpc_request *req)
         RETURN(0);
 }
 
-int mds_done_writing(struct ptlrpc_request *req)
+int mds_done_writing(struct ptlrpc_request *req, int offset)
 {
         struct mds_body *body;
         int rc, size = sizeof(struct mds_body);
@@ -1446,7 +1449,8 @@ int mds_done_writing(struct ptlrpc_request *req)
 
         MDS_CHECK_RESENT(req, mds_reconstruct_generic(req));
 
-        body = lustre_swab_reqbuf(req, 0, sizeof(*body), lustre_swab_mds_body);
+        body = lustre_swab_reqbuf(req, offset, sizeof(*body),
+                                  lustre_swab_mds_body);
         if (body == NULL) {
                 CERROR("Can't unpack body\n");
                 req->rq_status = -EFAULT;

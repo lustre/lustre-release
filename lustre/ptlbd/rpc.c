@@ -54,7 +54,7 @@ int ptlbd_send_rw_req(struct ptlbd_obd *ptlbd, ptlbd_cmd_t cmd,
         size[0] = sizeof(struct ptlbd_op);
         size[1] = page_count * sizeof(struct ptlbd_niob);
 
-        req = ptlrpc_prep_req(imp, cmd, 2, size, NULL);
+        req = ptlrpc_prep_req(imp, LUSTRE_PBD_VERSION, cmd, 2, size, NULL);
         if (!req)
                 RETURN(rc = 1);                  /* need to return error cnt */
 
@@ -127,7 +127,7 @@ int ptlbd_send_flush_req(struct ptlbd_obd *ptlbd, ptlbd_cmd_t cmd)
 
         size[0] = sizeof(struct ptlbd_op);
 
-        req = ptlrpc_prep_req(imp, cmd, 1, size, NULL);
+        req = ptlrpc_prep_req(imp, LUSTRE_PBD_VERSION, cmd, 1, size, NULL);
         if (!req)
                 RETURN(-ENOMEM); 
 

@@ -147,6 +147,7 @@ EXPORT_SYMBOL(ptlrpc_daemonize);
 
 /* pack_generic.c */
 EXPORT_SYMBOL(lustre_msg_swabbed);
+EXPORT_SYMBOL(lustre_msg_check_version);
 EXPORT_SYMBOL(lustre_pack_request);
 EXPORT_SYMBOL(lustre_pack_reply);
 EXPORT_SYMBOL(lustre_free_reply_state);
@@ -167,6 +168,7 @@ EXPORT_SYMBOL(lustre_swab_ost_last_id);
 EXPORT_SYMBOL(lustre_swab_ost_lvb);
 EXPORT_SYMBOL(lustre_swab_ll_fid);
 EXPORT_SYMBOL(lustre_swab_mds_status_req);
+EXPORT_SYMBOL(lustre_swab_mds_secdesc);
 EXPORT_SYMBOL(lustre_swab_mds_body);
 EXPORT_SYMBOL(lustre_swab_mds_rec_setattr);
 EXPORT_SYMBOL(lustre_swab_mds_rec_create);

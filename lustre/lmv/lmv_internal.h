@@ -72,22 +72,22 @@ struct lmv_obj *lmv_create_obj(struct obd_export *exp,
 
 int lmv_delete_obj(struct obd_export *exp, struct ll_fid *fid);
 
-int lmv_intent_lock(struct obd_export *, struct ll_uctxt *,
+int lmv_intent_lock(struct obd_export *,
                     struct ll_fid *, const char *, int, void *, int,
 		    struct ll_fid *, struct lookup_intent *, int,
 		    struct ptlrpc_request **, ldlm_blocking_callback);
 
-int lmv_intent_lookup(struct obd_export *, struct ll_uctxt *,
+int lmv_intent_lookup(struct obd_export *,
                       struct ll_fid *, const char *, int, void *, int,
 		      struct ll_fid *, struct lookup_intent *, int,
 		      struct ptlrpc_request **, ldlm_blocking_callback);
 
-int lmv_intent_getattr(struct obd_export *, struct ll_uctxt *,
+int lmv_intent_getattr(struct obd_export *,
                        struct ll_fid *, const char *, int, void *, int,
 		       struct ll_fid *, struct lookup_intent *, int,
 		       struct ptlrpc_request **, ldlm_blocking_callback);
 
-int lmv_intent_open(struct obd_export *, struct ll_uctxt *,
+int lmv_intent_open(struct obd_export *,
                     struct ll_fid *, const char *, int, void *, int,
 		    struct ll_fid *, struct lookup_intent *, int,
 		    struct ptlrpc_request **, ldlm_blocking_callback);

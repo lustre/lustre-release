@@ -135,9 +135,11 @@ int ptlbd_cl_connect(struct lustre_handle *conn, struct obd_device *obd,
                 RETURN(rc);
         exp = class_conn2export(conn);
 
-        request = ptlrpc_prep_req(imp, PTLBD_CONNECT, 3, size, tmp);
+        request = ptlrpc_prep_req(imp, LUSTRE_PBD_VERSION, PTLBD_CONNECT,
+                                  3, size, tmp);
         if (!request)
                 GOTO(out_disco, rc = -ENOMEM);
+
         request->rq_send_state = LUSTRE_IMP_NEW;
         request->rq_replen = lustre_msg_size(0, NULL);
 
@@ -176,7 +178,8 @@ int ptlbd_cl_disconnect(struct obd_export *exp, int failover)
         if (!obd)
                 RETURN(-EINVAL);
 
-        request = ptlrpc_prep_req(imp, PTLBD_DISCONNECT, 0, NULL, NULL);
+        request = ptlrpc_prep_req(imp, LUSTRE_PBD_VERSION, PTLBD_DISCONNECT,
+                                  0, NULL, NULL);
         if (!request)
                 GOTO(out_req, rc = -ENOMEM);
 

@@ -225,7 +225,6 @@ int ll_revalidate_it(struct dentry *de, int flags, struct nameidata *nd,
         int rc;
         struct ll_fid pfid, cfid;
         struct it_cb_data icbd;
-        struct ll_uctxt ctxt;
         struct ptlrpc_request *req = NULL;
         struct lookup_intent lookup_it = { .it_op = IT_LOOKUP };
         struct obd_export *exp;
@@ -260,11 +259,9 @@ int ll_revalidate_it(struct dentry *de, int flags, struct nameidata *nd,
         ll_frob_intent(&it, &lookup_it);
         LASSERT(it);
 
-        ll_i2uctxt(&ctxt, de->d_parent->d_inode, de->d_inode);
-
         if (it->it_op == IT_GETATTR) { /* We need to check for LOOKUP lock
                                           as well */
-                rc = md_intent_lock(exp, &ctxt, &pfid, de->d_name.name,
+                rc = md_intent_lock(exp, &pfid, de->d_name.name,
                                     de->d_name.len, NULL, 0, &cfid, &lookup_it,
                                     flags, &req, ll_mdc_blocking_ast);
                 /* If there was no lookup lock, no point in even checking for
@@ -285,7 +282,7 @@ int ll_revalidate_it(struct dentry *de, int flags, struct nameidata *nd,
                 ll_lookup_finish_locks(&lookup_it, de);
         }
 
-        rc = md_intent_lock(exp, &ctxt, &pfid, de->d_name.name, de->d_name.len,
+        rc = md_intent_lock(exp, &pfid, de->d_name.name, de->d_name.len,
                             NULL, 0, &cfid, it, flags, &req,
                             ll_mdc_blocking_ast);
         /* If req is NULL, then mdc_intent_lock only tried to do a lock match;

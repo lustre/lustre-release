@@ -923,7 +923,61 @@ static int ost_filter_recovery_request(struct ptlrpc_request *req,
         }
 }
 
+int ost_msg_check_version(struct lustre_msg *msg)
+{
+        int rc;
 
+        switch(msg->opc) {
+        case OST_CONNECT:
+        case OST_DISCONNECT:
+        case OBD_PING:
+                rc = lustre_msg_check_version(msg, LUSTRE_OBD_VERSION);
+                if (rc)
+                        CERROR("bad opc %u version %08x, expecting %08x\n",
+                               msg->opc, msg->version, LUSTRE_OBD_VERSION);
+                break;
+        case OST_CREATE:
+        case OST_DESTROY:
+        case OST_GETATTR:
+        case OST_SETATTR:
+        case OST_WRITE:
+        case OST_READ:
+        case OST_SAN_READ:
+        case OST_SAN_WRITE:
+        case OST_PUNCH:
+        case OST_STATFS:
+        case OST_SYNC:
+        case OST_SET_INFO:
+        case OST_GET_INFO:
+                rc = lustre_msg_check_version(msg, LUSTRE_OBD_VERSION);
+                if (rc)
+                        CERROR("bad opc %u version %08x, expecting %08x\n",
+                               msg->opc, msg->version, LUSTRE_OST_VERSION);
+                break;
+        case LDLM_ENQUEUE:
+        case LDLM_CONVERT:
+        case LDLM_CANCEL:
+        case LDLM_BL_CALLBACK:
+        case LDLM_CP_CALLBACK:
+                rc = lustre_msg_check_version(msg, LUSTRE_DLM_VERSION);
+                if (rc)
+                        CERROR("bad opc %u version %08x, expecting %08x\n",
+                               msg->opc, msg->version, LUSTRE_DLM_VERSION);
+                break;
+        case OBD_LOG_CANCEL:
+        case LLOG_ORIGIN_CONNECT:
+                rc = lustre_msg_check_version(msg, LUSTRE_LOG_VERSION);
+                if (rc)
+                        CERROR("bad opc %u version %08x, expecting %08x\n",
+                               msg->opc, msg->version, LUSTRE_LOG_VERSION);
+                break;
+        default:
+                CERROR("OST unexpected opcode %d\n", msg->opc);
+                rc = -ENOTSUPP;
+                break;
+        }
+        return rc;
+}
 
 int ost_handle(struct ptlrpc_request *req)
 {
@@ -934,6 +988,13 @@ int ost_handle(struct ptlrpc_request *req)
         ENTRY;
 
         LASSERT(current->journal_info == NULL);
+
+        rc = ost_msg_check_version(req->rq_reqmsg);
+        if (rc) {
+                CERROR("OST drop mal-formed request\n");
+                RETURN(rc);
+        }
+
         /* XXX identical to MDS */
         if (req->rq_reqmsg->opc != OST_CONNECT) {
                 struct obd_device *obd;

@@ -44,6 +44,14 @@ int lustre_msg_swabbed(struct lustre_msg *msg)
         return (msg->magic == __swab32(PTLRPC_MSG_MAGIC));
 }
 
+int lustre_msg_check_version(struct lustre_msg *msg, __u32 version)
+{
+        if (!lustre_msg_swabbed(msg))
+                return (msg->version & LUSTRE_VERSION_MASK) != version;
+
+        return (__swab32(msg->version) & LUSTRE_VERSION_MASK) != version;
+}
+
 void lustre_init_msg (struct lustre_msg *msg, int count, int *lens, char **bufs)
 {
         char *ptr;
@@ -199,7 +207,7 @@ int lustre_unpack_msg(struct lustre_msg *m, int len)
                 RETURN (-EINVAL);
         }
 
-        if (m->version != PTLRPC_MSG_VERSION) {
+        if ((m->version & ~LUSTRE_VERSION_MASK) != PTLRPC_MSG_VERSION) {
                 CERROR("wrong lustre_msg version %#08x\n", m->version);
                 RETURN (-EINVAL);
         }
@@ -385,15 +393,11 @@ void *mdc_create_pack(struct lustre_msg *msg, int offset,
         rec = lustre_msg_buf(msg, offset, sizeof (*rec));
 
         rec->cr_opcode = REINT_CREATE;
-        rec->cr_fsuid = current->fsuid;
-        rec->cr_fsgid = current->fsgid;
-        rec->cr_cap = current->cap_effective;
         rec->cr_fid = op_data->fid1;
         memset(&rec->cr_replayfid, 0, sizeof(rec->cr_replayfid));
         rec->cr_mode = mode;
         rec->cr_rdev = rdev;
         rec->cr_time = op_data->mod_time;
-        rec->cr_suppgid = op_data->ctxt.gid1;
 
         tmp = lustre_msg_buf(msg, offset + 1, op_data->namelen + 1);
         LOGL0(op_data->name, op_data->namelen, tmp);
@@ -405,17 +409,14 @@ void *mdc_create_pack(struct lustre_msg *msg, int offset,
         return ((void*)tmp + size_round(datalen));
 }
 
-void *mdc_setattr_pack(struct lustre_msg *msg, struct mdc_op_data *data,
-                       struct iattr *iattr, void *ea, int ealen,
-                       void *ea2, int ea2len)
+void *mdc_setattr_pack(struct lustre_msg *msg, int offset,
+                       struct mdc_op_data *data, struct iattr *iattr,
+                       void *ea, int ealen, void *ea2, int ea2len)
 {
-        struct mds_rec_setattr *rec = lustre_msg_buf(msg, 0, sizeof (*rec));
+        struct mds_rec_setattr *rec = lustre_msg_buf(msg, offset, sizeof(*rec));
         char *tmp = NULL;
 
         rec->sa_opcode = REINT_SETATTR;
-        rec->sa_fsuid = current->fsuid;
-        rec->sa_fsgid = current->fsgid;
-        rec->sa_cap = current->cap_effective;
         rec->sa_fid = data->fid1;
 
         if (iattr) {
@@ -428,14 +429,6 @@ void *mdc_setattr_pack(struct lustre_msg *msg, struct mdc_op_data *data,
                 rec->sa_mtime = LTIME_S(iattr->ia_mtime);
                 rec->sa_ctime = LTIME_S(iattr->ia_ctime);
                 rec->sa_attr_flags = iattr->ia_attr_flags;
-                if ((iattr->ia_valid & ATTR_GID) && in_group_p(iattr->ia_gid))
-                        rec->sa_suppgid = iattr->ia_gid;
-                else if ((iattr->ia_valid & ATTR_MODE) &&
-                         in_group_p(iattr->ia_gid))
-                        rec->sa_suppgid = data->ctxt.gid1;
-                else if ((iattr->ia_valid & (ATTR_MTIME|ATTR_CTIME)) &&
-                         data->ctxt.gid1 != -1)
-                        rec->sa_suppgid = data->ctxt.gid1;
         }
         tmp = (char*)rec + size_round(sizeof(*rec));
                 
@@ -465,11 +458,7 @@ void *mdc_unlink_pack(struct lustre_msg *msg, int offset,
         LASSERT (rec != NULL);
 
         rec->ul_opcode = REINT_UNLINK;
-        rec->ul_fsuid = current->fsuid;
-        rec->ul_fsgid = current->fsgid;
-        rec->ul_cap = current->cap_effective;
         rec->ul_mode = data->create_mode;
-        rec->ul_suppgid = data->ctxt.gid1;
         rec->ul_fid1 = data->fid1;
         rec->ul_fid2 = data->fid2;
         rec->ul_time = data->mod_time;
@@ -489,11 +478,6 @@ void *mdc_link_pack(struct lustre_msg *msg, int offset,
         rec = lustre_msg_buf(msg, offset, sizeof (*rec));
 
         rec->lk_opcode = REINT_LINK;
-        rec->lk_fsuid = current->fsuid;
-        rec->lk_fsgid = current->fsgid;
-        rec->lk_cap = current->cap_effective;
-        rec->lk_suppgid1 = data->ctxt.gid1;
-        rec->lk_suppgid2 = data->ctxt.gid2;
         rec->lk_fid1 = data->fid1;
         rec->lk_fid2 = data->fid2;
         rec->lk_time = data->mod_time;
@@ -515,17 +499,6 @@ void *mdc_rename_pack(struct lustre_msg *msg, int offset,
 
         /* XXX do something about time, uid, gid */
         rec->rn_opcode = REINT_RENAME;
-        rec->rn_fsuid = current->fsuid;
-        rec->rn_fsgid = current->fsgid;
-        rec->rn_cap = current->cap_effective;
-        if (in_group_p(data->ctxt.gid1))
-                rec->rn_suppgid1 = data->ctxt.gid1;
-        else
-                rec->rn_suppgid1 = -1;
-        if (in_group_p(data->ctxt.gid2))
-                rec->rn_suppgid2 = data->ctxt.gid2;
-        else
-                rec->rn_suppgid2 = -1;
         rec->rn_fid1 = data->fid1;
         rec->rn_fid2 = data->fid2;
         rec->rn_time = data->mod_time;
@@ -600,6 +573,47 @@ void lustre_swab_mds_status_req (struct mds_status_req *r)
         __swab32s (&r->repbuf);
 }
 
+/* 
+ * because sec_desc is variable buffer, we must check it by hand
+ */
+struct mds_req_sec_desc *lustre_swab_mds_secdesc(struct ptlrpc_request *req,
+                                                 int offset)
+{
+        struct mds_req_sec_desc *rsd;
+        struct lustre_msg *m;
+        __u32 i;
+
+        LASSERT_REQSWAB(req, offset);
+
+        m = req->rq_reqmsg;
+        rsd = lustre_msg_buf(m, offset, sizeof(*rsd));
+        if (!rsd)
+                return NULL;
+
+        if (lustre_msg_swabbed(m)) {
+                __swab32s(&rsd->rsd_uid);
+                __swab32s(&rsd->rsd_gid);
+                __swab32s(&rsd->rsd_fsuid);
+                __swab32s(&rsd->rsd_fsgid);
+                __swab32s(&rsd->rsd_cap);
+                __swab32s(&rsd->rsd_ngroups);
+        }
+
+        if (m->buflens[offset] !=
+            sizeof(*rsd) + rsd->rsd_ngroups * sizeof(__u32)) {
+                CERROR("bufflen %u while contains %u groups\n",
+                        m->buflens[offset], rsd->rsd_ngroups);
+                return NULL;
+        }
+
+        if (lustre_msg_swabbed(m)) {
+                for (i = 0; i < rsd->rsd_ngroups; i++)
+                        __swab32s(&rsd->rsd_groups[i]);
+        }
+
+        return rsd;
+}
+
 void lustre_swab_mds_body (struct mds_body *b)
 {
         lustre_swab_ll_fid (&b->fid1);
@@ -609,9 +623,6 @@ void lustre_swab_mds_body (struct mds_body *b)
         __swab64s (&b->blocks);
         __swab32s (&b->ino);
         __swab32s (&b->valid);
-        __swab32s (&b->fsuid);
-        __swab32s (&b->fsgid);
-        __swab32s (&b->capability);
         __swab32s (&b->mode);
         __swab32s (&b->uid);
         __swab32s (&b->gid);
@@ -622,8 +633,8 @@ void lustre_swab_mds_body (struct mds_body *b)
         __swab32s (&b->rdev);
         __swab32s (&b->nlink);
         __swab32s (&b->generation);
-        __swab32s (&b->suppgid);
         __swab32s (&b->eadatasize);
+        __swab32s (&b->mds);
 }
 void lustre_swab_clonefs_info (struct clonefs_info *clone)
 {
@@ -633,10 +644,6 @@ void lustre_swab_clonefs_info (struct clonefs_info *clone)
 void lustre_swab_mds_rec_setattr (struct mds_rec_setattr *sa)
 {
         __swab32s (&sa->sa_opcode);
-        __swab32s (&sa->sa_fsuid);
-        __swab32s (&sa->sa_fsgid);
-        __swab32s (&sa->sa_cap);
-        __swab32s (&sa->sa_suppgid);
         __swab32s (&sa->sa_valid);
         lustre_swab_ll_fid (&sa->sa_fid);
         __swab32s (&sa->sa_mode);
@@ -652,26 +659,17 @@ void lustre_swab_mds_rec_setattr (struct mds_rec_setattr *sa)
 void lustre_swab_mds_rec_create (struct mds_rec_create *cr)
 {
         __swab32s (&cr->cr_opcode);
-        __swab32s (&cr->cr_fsuid);
-        __swab32s (&cr->cr_fsgid);
-        __swab32s (&cr->cr_cap);
         __swab32s (&cr->cr_flags); /* for use with open */
         __swab32s (&cr->cr_mode);
         lustre_swab_ll_fid (&cr->cr_fid);
         lustre_swab_ll_fid (&cr->cr_replayfid);
         __swab64s (&cr->cr_time);
         __swab64s (&cr->cr_rdev);
-        __swab32s (&cr->cr_suppgid);
 }
 
 void lustre_swab_mds_rec_link (struct mds_rec_link *lk)
 {
         __swab32s (&lk->lk_opcode);
-        __swab32s (&lk->lk_fsuid);
-        __swab32s (&lk->lk_fsgid);
-        __swab32s (&lk->lk_cap);
-        __swab32s (&lk->lk_suppgid1);
-        __swab32s (&lk->lk_suppgid2);
         lustre_swab_ll_fid (&lk->lk_fid1);
         lustre_swab_ll_fid (&lk->lk_fid2);
 }
@@ -679,10 +677,6 @@ void lustre_swab_mds_rec_link (struct mds_rec_link *lk)
 void lustre_swab_mds_rec_unlink (struct mds_rec_unlink *ul)
 {
         __swab32s (&ul->ul_opcode);
-        __swab32s (&ul->ul_fsuid);
-        __swab32s (&ul->ul_fsgid);
-        __swab32s (&ul->ul_cap);
-        __swab32s (&ul->ul_suppgid);
         __swab32s (&ul->ul_mode);
         lustre_swab_ll_fid (&ul->ul_fid1);
         lustre_swab_ll_fid (&ul->ul_fid2);
@@ -691,11 +685,6 @@ void lustre_swab_mds_rec_unlink (struct mds_rec_unlink *ul)
 void lustre_swab_mds_rec_rename (struct mds_rec_rename *rn)
 {
         __swab32s (&rn->rn_opcode);
-        __swab32s (&rn->rn_fsuid);
-        __swab32s (&rn->rn_fsgid);
-        __swab32s (&rn->rn_cap);
-        __swab32s (&rn->rn_suppgid1);
-        __swab32s (&rn->rn_suppgid2);
         lustre_swab_ll_fid (&rn->rn_fid1);
         lustre_swab_ll_fid (&rn->rn_fid2);
 }
@@ -837,7 +826,7 @@ void lustre_swab_llogd_conn_body (struct llogd_conn_body *d)
 void lustre_assert_wire_constants(void)
 {
         /* Wire protocol assertions generated by 'wirecheck'
-         * running on Linux firefly.localdomain 2.6.7 #1 Wed Jun 16 10:50:27 EEST 2004 i686 i686 i386
+         * running on Linux build 2.4.24-cmd #1 SMP Wed Aug 18 14:24:44 MDT 2004 i686 i686 i386 GNU/L
          * with gcc version 3.3.3 20040412 (Red Hat Linux 3.3.3-7) */
 
 
@@ -1152,6 +1141,14 @@ void lustre_assert_wire_constants(void)
                  (long long)(int)offsetof(struct obdo, o_easize));
         LASSERTF((int)sizeof(((struct obdo *)0)->o_easize) == 4, " found %lld\n",
                  (long long)(int)sizeof(((struct obdo *)0)->o_easize));
+        LASSERTF((int)offsetof(struct obdo, o_mds) == 104, " found %lld\n",
+                 (long long)(int)offsetof(struct obdo, o_mds));
+        LASSERTF((int)sizeof(((struct obdo *)0)->o_mds) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct obdo *)0)->o_mds));
+        LASSERTF((int)offsetof(struct obdo, o_padding) == 108, " found %lld\n",
+                 (long long)(int)offsetof(struct obdo, o_padding));
+        LASSERTF((int)sizeof(((struct obdo *)0)->o_padding) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct obdo *)0)->o_padding));
         LASSERTF((int)offsetof(struct obdo, o_inline) == 112, " found %lld\n",
                  (long long)(int)offsetof(struct obdo, o_inline));
         LASSERTF((int)sizeof(((struct obdo *)0)->o_inline) == 64, " found %lld\n",
@@ -1398,7 +1395,7 @@ void lustre_assert_wire_constants(void)
                  (long long)(int)sizeof(((struct mds_status_req *)0)->repbuf));
 
         /* Checks for struct mds_body */
-        LASSERTF((int)sizeof(struct mds_body) == 152, " found %lld\n",
+        LASSERTF((int)sizeof(struct mds_body) == 136, " found %lld\n",
                  (long long)(int)sizeof(struct mds_body));
         LASSERTF((int)offsetof(struct mds_body, fid1) == 0, " found %lld\n",
                  (long long)(int)offsetof(struct mds_body, fid1));
@@ -1432,66 +1429,54 @@ void lustre_assert_wire_constants(void)
                  (long long)(int)offsetof(struct mds_body, valid));
         LASSERTF((int)sizeof(((struct mds_body *)0)->valid) == 4, " found %lld\n",
                  (long long)(int)sizeof(((struct mds_body *)0)->valid));
-        LASSERTF((int)offsetof(struct mds_body, fsuid) == 88, " found %lld\n",
-                 (long long)(int)offsetof(struct mds_body, fsuid));
-        LASSERTF((int)sizeof(((struct mds_body *)0)->fsuid) == 4, " found %lld\n",
-                 (long long)(int)sizeof(((struct mds_body *)0)->fsuid));
-        LASSERTF((int)offsetof(struct mds_body, fsgid) == 92, " found %lld\n",
-                 (long long)(int)offsetof(struct mds_body, fsgid));
-        LASSERTF((int)sizeof(((struct mds_body *)0)->fsgid) == 4, " found %lld\n",
-                 (long long)(int)sizeof(((struct mds_body *)0)->fsgid));
-        LASSERTF((int)offsetof(struct mds_body, capability) == 96, " found %lld\n",
-                 (long long)(int)offsetof(struct mds_body, capability));
-        LASSERTF((int)sizeof(((struct mds_body *)0)->capability) == 4, " found %lld\n",
-                 (long long)(int)sizeof(((struct mds_body *)0)->capability));
-        LASSERTF((int)offsetof(struct mds_body, mode) == 100, " found %lld\n",
+        LASSERTF((int)offsetof(struct mds_body, mode) == 88, " found %lld\n",
                  (long long)(int)offsetof(struct mds_body, mode));
         LASSERTF((int)sizeof(((struct mds_body *)0)->mode) == 4, " found %lld\n",
                  (long long)(int)sizeof(((struct mds_body *)0)->mode));
-        LASSERTF((int)offsetof(struct mds_body, uid) == 104, " found %lld\n",
+        LASSERTF((int)offsetof(struct mds_body, uid) == 92, " found %lld\n",
                  (long long)(int)offsetof(struct mds_body, uid));
         LASSERTF((int)sizeof(((struct mds_body *)0)->uid) == 4, " found %lld\n",
                  (long long)(int)sizeof(((struct mds_body *)0)->uid));
-        LASSERTF((int)offsetof(struct mds_body, gid) == 108, " found %lld\n",
+        LASSERTF((int)offsetof(struct mds_body, gid) == 96, " found %lld\n",
                  (long long)(int)offsetof(struct mds_body, gid));
         LASSERTF((int)sizeof(((struct mds_body *)0)->gid) == 4, " found %lld\n",
                  (long long)(int)sizeof(((struct mds_body *)0)->gid));
-        LASSERTF((int)offsetof(struct mds_body, mtime) == 112, " found %lld\n",
+        LASSERTF((int)offsetof(struct mds_body, mtime) == 100, " found %lld\n",
                  (long long)(int)offsetof(struct mds_body, mtime));
         LASSERTF((int)sizeof(((struct mds_body *)0)->mtime) == 4, " found %lld\n",
                  (long long)(int)sizeof(((struct mds_body *)0)->mtime));
-        LASSERTF((int)offsetof(struct mds_body, ctime) == 116, " found %lld\n",
+        LASSERTF((int)offsetof(struct mds_body, ctime) == 104, " found %lld\n",
                  (long long)(int)offsetof(struct mds_body, ctime));
         LASSERTF((int)sizeof(((struct mds_body *)0)->ctime) == 4, " found %lld\n",
                  (long long)(int)sizeof(((struct mds_body *)0)->ctime));
-        LASSERTF((int)offsetof(struct mds_body, atime) == 120, " found %lld\n",
+        LASSERTF((int)offsetof(struct mds_body, atime) == 108, " found %lld\n",
                  (long long)(int)offsetof(struct mds_body, atime));
         LASSERTF((int)sizeof(((struct mds_body *)0)->atime) == 4, " found %lld\n",
                  (long long)(int)sizeof(((struct mds_body *)0)->atime));
-        LASSERTF((int)offsetof(struct mds_body, flags) == 124, " found %lld\n",
+        LASSERTF((int)offsetof(struct mds_body, flags) == 112, " found %lld\n",
                  (long long)(int)offsetof(struct mds_body, flags));
         LASSERTF((int)sizeof(((struct mds_body *)0)->flags) == 4, " found %lld\n",
                  (long long)(int)sizeof(((struct mds_body *)0)->flags));
-        LASSERTF((int)offsetof(struct mds_body, rdev) == 128, " found %lld\n",
+        LASSERTF((int)offsetof(struct mds_body, rdev) == 116, " found %lld\n",
                  (long long)(int)offsetof(struct mds_body, rdev));
         LASSERTF((int)sizeof(((struct mds_body *)0)->rdev) == 4, " found %lld\n",
                  (long long)(int)sizeof(((struct mds_body *)0)->rdev));
-        LASSERTF((int)offsetof(struct mds_body, nlink) == 132, " found %lld\n",
+        LASSERTF((int)offsetof(struct mds_body, nlink) == 120, " found %lld\n",
                  (long long)(int)offsetof(struct mds_body, nlink));
         LASSERTF((int)sizeof(((struct mds_body *)0)->nlink) == 4, " found %lld\n",
                  (long long)(int)sizeof(((struct mds_body *)0)->nlink));
-        LASSERTF((int)offsetof(struct mds_body, generation) == 136, " found %lld\n",
+        LASSERTF((int)offsetof(struct mds_body, generation) == 124, " found %lld\n",
                  (long long)(int)offsetof(struct mds_body, generation));
         LASSERTF((int)sizeof(((struct mds_body *)0)->generation) == 4, " found %lld\n",
                  (long long)(int)sizeof(((struct mds_body *)0)->generation));
-        LASSERTF((int)offsetof(struct mds_body, suppgid) == 140, " found %lld\n",
-                 (long long)(int)offsetof(struct mds_body, suppgid));
-        LASSERTF((int)sizeof(((struct mds_body *)0)->suppgid) == 4, " found %lld\n",
-                 (long long)(int)sizeof(((struct mds_body *)0)->suppgid));
-        LASSERTF((int)offsetof(struct mds_body, eadatasize) == 144, " found %lld\n",
+        LASSERTF((int)offsetof(struct mds_body, eadatasize) == 128, " found %lld\n",
                  (long long)(int)offsetof(struct mds_body, eadatasize));
         LASSERTF((int)sizeof(((struct mds_body *)0)->eadatasize) == 4, " found %lld\n",
                  (long long)(int)sizeof(((struct mds_body *)0)->eadatasize));
+        LASSERTF((int)offsetof(struct mds_body, mds) == 132, " found %lld\n",
+                 (long long)(int)offsetof(struct mds_body, mds));
+        LASSERTF((int)sizeof(((struct mds_body *)0)->mds) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct mds_body *)0)->mds));
         LASSERTF(FMODE_READ == 1, " found %lld\n",
                  (long long)FMODE_READ);
         LASSERTF(FMODE_WRITE == 2, " found %lld\n",
@@ -1516,233 +1501,157 @@ void lustre_assert_wire_constants(void)
                  (long long)MDS_OPEN_HAS_EA);
 
         /* Checks for struct mds_rec_setattr */
-        LASSERTF((int)sizeof(struct mds_rec_setattr) == 96, " found %lld\n",
+        LASSERTF((int)sizeof(struct mds_rec_setattr) == 80, " found %lld\n",
                  (long long)(int)sizeof(struct mds_rec_setattr));
         LASSERTF((int)offsetof(struct mds_rec_setattr, sa_opcode) == 0, " found %lld\n",
                  (long long)(int)offsetof(struct mds_rec_setattr, sa_opcode));
         LASSERTF((int)sizeof(((struct mds_rec_setattr *)0)->sa_opcode) == 4, " found %lld\n",
                  (long long)(int)sizeof(((struct mds_rec_setattr *)0)->sa_opcode));
-        LASSERTF((int)offsetof(struct mds_rec_setattr, sa_fsuid) == 4, " found %lld\n",
-                 (long long)(int)offsetof(struct mds_rec_setattr, sa_fsuid));
-        LASSERTF((int)sizeof(((struct mds_rec_setattr *)0)->sa_fsuid) == 4, " found %lld\n",
-                 (long long)(int)sizeof(((struct mds_rec_setattr *)0)->sa_fsuid));
-        LASSERTF((int)offsetof(struct mds_rec_setattr, sa_fsgid) == 8, " found %lld\n",
-                 (long long)(int)offsetof(struct mds_rec_setattr, sa_fsgid));
-        LASSERTF((int)sizeof(((struct mds_rec_setattr *)0)->sa_fsgid) == 4, " found %lld\n",
-                 (long long)(int)sizeof(((struct mds_rec_setattr *)0)->sa_fsgid));
-        LASSERTF((int)offsetof(struct mds_rec_setattr, sa_cap) == 12, " found %lld\n",
-                 (long long)(int)offsetof(struct mds_rec_setattr, sa_cap));
-        LASSERTF((int)sizeof(((struct mds_rec_setattr *)0)->sa_cap) == 4, " found %lld\n",
-                 (long long)(int)sizeof(((struct mds_rec_setattr *)0)->sa_cap));
-        LASSERTF((int)offsetof(struct mds_rec_setattr, sa_suppgid) == 16, " found %lld\n",
-                 (long long)(int)offsetof(struct mds_rec_setattr, sa_suppgid));
-        LASSERTF((int)sizeof(((struct mds_rec_setattr *)0)->sa_suppgid) == 4, " found %lld\n",
-                 (long long)(int)sizeof(((struct mds_rec_setattr *)0)->sa_suppgid));
-        LASSERTF((int)offsetof(struct mds_rec_setattr, sa_valid) == 20, " found %lld\n",
+        LASSERTF((int)offsetof(struct mds_rec_setattr, sa_valid) == 4, " found %lld\n",
                  (long long)(int)offsetof(struct mds_rec_setattr, sa_valid));
         LASSERTF((int)sizeof(((struct mds_rec_setattr *)0)->sa_valid) == 4, " found %lld\n",
                  (long long)(int)sizeof(((struct mds_rec_setattr *)0)->sa_valid));
-        LASSERTF((int)offsetof(struct mds_rec_setattr, sa_fid) == 24, " found %lld\n",
+        LASSERTF((int)offsetof(struct mds_rec_setattr, sa_fid) == 8, " found %lld\n",
                  (long long)(int)offsetof(struct mds_rec_setattr, sa_fid));
         LASSERTF((int)sizeof(((struct mds_rec_setattr *)0)->sa_fid) == 24, " found %lld\n",
                  (long long)(int)sizeof(((struct mds_rec_setattr *)0)->sa_fid));
-        LASSERTF((int)offsetof(struct mds_rec_setattr, sa_mode) == 48, " found %lld\n",
+        LASSERTF((int)offsetof(struct mds_rec_setattr, sa_mode) == 32, " found %lld\n",
                  (long long)(int)offsetof(struct mds_rec_setattr, sa_mode));
         LASSERTF((int)sizeof(((struct mds_rec_setattr *)0)->sa_mode) == 4, " found %lld\n",
                  (long long)(int)sizeof(((struct mds_rec_setattr *)0)->sa_mode));
-        LASSERTF((int)offsetof(struct mds_rec_setattr, sa_uid) == 52, " found %lld\n",
+        LASSERTF((int)offsetof(struct mds_rec_setattr, sa_uid) == 36, " found %lld\n",
                  (long long)(int)offsetof(struct mds_rec_setattr, sa_uid));
         LASSERTF((int)sizeof(((struct mds_rec_setattr *)0)->sa_uid) == 4, " found %lld\n",
                  (long long)(int)sizeof(((struct mds_rec_setattr *)0)->sa_uid));
-        LASSERTF((int)offsetof(struct mds_rec_setattr, sa_gid) == 56, " found %lld\n",
+        LASSERTF((int)offsetof(struct mds_rec_setattr, sa_gid) == 40, " found %lld\n",
                  (long long)(int)offsetof(struct mds_rec_setattr, sa_gid));
         LASSERTF((int)sizeof(((struct mds_rec_setattr *)0)->sa_gid) == 4, " found %lld\n",
                  (long long)(int)sizeof(((struct mds_rec_setattr *)0)->sa_gid));
-        LASSERTF((int)offsetof(struct mds_rec_setattr, sa_attr_flags) == 60, " found %lld\n",
+        LASSERTF((int)offsetof(struct mds_rec_setattr, sa_attr_flags) == 44, " found %lld\n",
                  (long long)(int)offsetof(struct mds_rec_setattr, sa_attr_flags));
         LASSERTF((int)sizeof(((struct mds_rec_setattr *)0)->sa_attr_flags) == 4, " found %lld\n",
                  (long long)(int)sizeof(((struct mds_rec_setattr *)0)->sa_attr_flags));
-        LASSERTF((int)offsetof(struct mds_rec_setattr, sa_size) == 64, " found %lld\n",
+        LASSERTF((int)offsetof(struct mds_rec_setattr, sa_size) == 48, " found %lld\n",
                  (long long)(int)offsetof(struct mds_rec_setattr, sa_size));
         LASSERTF((int)sizeof(((struct mds_rec_setattr *)0)->sa_size) == 8, " found %lld\n",
                  (long long)(int)sizeof(((struct mds_rec_setattr *)0)->sa_size));
-        LASSERTF((int)offsetof(struct mds_rec_setattr, sa_atime) == 72, " found %lld\n",
+        LASSERTF((int)offsetof(struct mds_rec_setattr, sa_atime) == 56, " found %lld\n",
                  (long long)(int)offsetof(struct mds_rec_setattr, sa_atime));
         LASSERTF((int)sizeof(((struct mds_rec_setattr *)0)->sa_atime) == 8, " found %lld\n",
                  (long long)(int)sizeof(((struct mds_rec_setattr *)0)->sa_atime));
-        LASSERTF((int)offsetof(struct mds_rec_setattr, sa_mtime) == 80, " found %lld\n",
+        LASSERTF((int)offsetof(struct mds_rec_setattr, sa_mtime) == 64, " found %lld\n",
                  (long long)(int)offsetof(struct mds_rec_setattr, sa_mtime));
         LASSERTF((int)sizeof(((struct mds_rec_setattr *)0)->sa_mtime) == 8, " found %lld\n",
                  (long long)(int)sizeof(((struct mds_rec_setattr *)0)->sa_mtime));
-        LASSERTF((int)offsetof(struct mds_rec_setattr, sa_ctime) == 88, " found %lld\n",
+        LASSERTF((int)offsetof(struct mds_rec_setattr, sa_ctime) == 72, " found %lld\n",
                  (long long)(int)offsetof(struct mds_rec_setattr, sa_ctime));
         LASSERTF((int)sizeof(((struct mds_rec_setattr *)0)->sa_ctime) == 8, " found %lld\n",
                  (long long)(int)sizeof(((struct mds_rec_setattr *)0)->sa_ctime));
 
         /* Checks for struct mds_rec_create */
-        LASSERTF((int)sizeof(struct mds_rec_create) == 96, " found %lld\n",
+        LASSERTF((int)sizeof(struct mds_rec_create) == 80, " found %lld\n",
                  (long long)(int)sizeof(struct mds_rec_create));
         LASSERTF((int)offsetof(struct mds_rec_create, cr_opcode) == 0, " found %lld\n",
                  (long long)(int)offsetof(struct mds_rec_create, cr_opcode));
         LASSERTF((int)sizeof(((struct mds_rec_create *)0)->cr_opcode) == 4, " found %lld\n",
                  (long long)(int)sizeof(((struct mds_rec_create *)0)->cr_opcode));
-        LASSERTF((int)offsetof(struct mds_rec_create, cr_fsuid) == 4, " found %lld\n",
-                 (long long)(int)offsetof(struct mds_rec_create, cr_fsuid));
-        LASSERTF((int)sizeof(((struct mds_rec_create *)0)->cr_fsuid) == 4, " found %lld\n",
-                 (long long)(int)sizeof(((struct mds_rec_create *)0)->cr_fsuid));
-        LASSERTF((int)offsetof(struct mds_rec_create, cr_fsgid) == 8, " found %lld\n",
-                 (long long)(int)offsetof(struct mds_rec_create, cr_fsgid));
-        LASSERTF((int)sizeof(((struct mds_rec_create *)0)->cr_fsgid) == 4, " found %lld\n",
-                 (long long)(int)sizeof(((struct mds_rec_create *)0)->cr_fsgid));
-        LASSERTF((int)offsetof(struct mds_rec_create, cr_cap) == 12, " found %lld\n",
-                 (long long)(int)offsetof(struct mds_rec_create, cr_cap));
-        LASSERTF((int)sizeof(((struct mds_rec_create *)0)->cr_cap) == 4, " found %lld\n",
-                 (long long)(int)sizeof(((struct mds_rec_create *)0)->cr_cap));
-        LASSERTF((int)offsetof(struct mds_rec_create, cr_flags) == 16, " found %lld\n",
+        LASSERTF((int)offsetof(struct mds_rec_create, cr_flags) == 4, " found %lld\n",
                  (long long)(int)offsetof(struct mds_rec_create, cr_flags));
         LASSERTF((int)sizeof(((struct mds_rec_create *)0)->cr_flags) == 4, " found %lld\n",
                  (long long)(int)sizeof(((struct mds_rec_create *)0)->cr_flags));
-        LASSERTF((int)offsetof(struct mds_rec_create, cr_mode) == 20, " found %lld\n",
+        LASSERTF((int)offsetof(struct mds_rec_create, cr_mode) == 8, " found %lld\n",
                  (long long)(int)offsetof(struct mds_rec_create, cr_mode));
         LASSERTF((int)sizeof(((struct mds_rec_create *)0)->cr_mode) == 4, " found %lld\n",
                  (long long)(int)sizeof(((struct mds_rec_create *)0)->cr_mode));
-        LASSERTF((int)offsetof(struct mds_rec_create, cr_fid) == 24, " found %lld\n",
+        LASSERTF((int)offsetof(struct mds_rec_create, cr_padding) == 12, " found %lld\n",
+                 (long long)(int)offsetof(struct mds_rec_create, cr_padding));
+        LASSERTF((int)sizeof(((struct mds_rec_create *)0)->cr_padding) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct mds_rec_create *)0)->cr_padding));
+        LASSERTF((int)offsetof(struct mds_rec_create, cr_fid) == 16, " found %lld\n",
                  (long long)(int)offsetof(struct mds_rec_create, cr_fid));
         LASSERTF((int)sizeof(((struct mds_rec_create *)0)->cr_fid) == 24, " found %lld\n",
                  (long long)(int)sizeof(((struct mds_rec_create *)0)->cr_fid));
-        LASSERTF((int)offsetof(struct mds_rec_create, cr_replayfid) == 48, " found %lld\n",
+        LASSERTF((int)offsetof(struct mds_rec_create, cr_replayfid) == 40, " found %lld\n",
                  (long long)(int)offsetof(struct mds_rec_create, cr_replayfid));
         LASSERTF((int)sizeof(((struct mds_rec_create *)0)->cr_replayfid) == 24, " found %lld\n",
                  (long long)(int)sizeof(((struct mds_rec_create *)0)->cr_replayfid));
-        LASSERTF((int)offsetof(struct mds_rec_create, cr_time) == 72, " found %lld\n",
+        LASSERTF((int)offsetof(struct mds_rec_create, cr_time) == 64, " found %lld\n",
                  (long long)(int)offsetof(struct mds_rec_create, cr_time));
         LASSERTF((int)sizeof(((struct mds_rec_create *)0)->cr_time) == 8, " found %lld\n",
                  (long long)(int)sizeof(((struct mds_rec_create *)0)->cr_time));
-        LASSERTF((int)offsetof(struct mds_rec_create, cr_rdev) == 80, " found %lld\n",
+        LASSERTF((int)offsetof(struct mds_rec_create, cr_rdev) == 72, " found %lld\n",
                  (long long)(int)offsetof(struct mds_rec_create, cr_rdev));
         LASSERTF((int)sizeof(((struct mds_rec_create *)0)->cr_rdev) == 8, " found %lld\n",
                  (long long)(int)sizeof(((struct mds_rec_create *)0)->cr_rdev));
-        LASSERTF((int)offsetof(struct mds_rec_create, cr_suppgid) == 88, " found %lld\n",
-                 (long long)(int)offsetof(struct mds_rec_create, cr_suppgid));
-        LASSERTF((int)sizeof(((struct mds_rec_create *)0)->cr_suppgid) == 4, " found %lld\n",
-                 (long long)(int)sizeof(((struct mds_rec_create *)0)->cr_suppgid));
 
         /* Checks for struct mds_rec_link */
-        LASSERTF((int)sizeof(struct mds_rec_link) == 80, " found %lld\n",
+        LASSERTF((int)sizeof(struct mds_rec_link) == 64, " found %lld\n",
                  (long long)(int)sizeof(struct mds_rec_link));
         LASSERTF((int)offsetof(struct mds_rec_link, lk_opcode) == 0, " found %lld\n",
                  (long long)(int)offsetof(struct mds_rec_link, lk_opcode));
         LASSERTF((int)sizeof(((struct mds_rec_link *)0)->lk_opcode) == 4, " found %lld\n",
                  (long long)(int)sizeof(((struct mds_rec_link *)0)->lk_opcode));
-        LASSERTF((int)offsetof(struct mds_rec_link, lk_fsuid) == 4, " found %lld\n",
-                 (long long)(int)offsetof(struct mds_rec_link, lk_fsuid));
-        LASSERTF((int)sizeof(((struct mds_rec_link *)0)->lk_fsuid) == 4, " found %lld\n",
-                 (long long)(int)sizeof(((struct mds_rec_link *)0)->lk_fsuid));
-        LASSERTF((int)offsetof(struct mds_rec_link, lk_fsgid) == 8, " found %lld\n",
-                 (long long)(int)offsetof(struct mds_rec_link, lk_fsgid));
-        LASSERTF((int)sizeof(((struct mds_rec_link *)0)->lk_fsgid) == 4, " found %lld\n",
-                 (long long)(int)sizeof(((struct mds_rec_link *)0)->lk_fsgid));
-        LASSERTF((int)offsetof(struct mds_rec_link, lk_cap) == 12, " found %lld\n",
-                 (long long)(int)offsetof(struct mds_rec_link, lk_cap));
-        LASSERTF((int)sizeof(((struct mds_rec_link *)0)->lk_cap) == 4, " found %lld\n",
-                 (long long)(int)sizeof(((struct mds_rec_link *)0)->lk_cap));
-        LASSERTF((int)offsetof(struct mds_rec_link, lk_suppgid1) == 16, " found %lld\n",
-                 (long long)(int)offsetof(struct mds_rec_link, lk_suppgid1));
-        LASSERTF((int)sizeof(((struct mds_rec_link *)0)->lk_suppgid1) == 4, " found %lld\n",
-                 (long long)(int)sizeof(((struct mds_rec_link *)0)->lk_suppgid1));
-        LASSERTF((int)offsetof(struct mds_rec_link, lk_suppgid2) == 20, " found %lld\n",
-                 (long long)(int)offsetof(struct mds_rec_link, lk_suppgid2));
-        LASSERTF((int)sizeof(((struct mds_rec_link *)0)->lk_suppgid2) == 4, " found %lld\n",
-                 (long long)(int)sizeof(((struct mds_rec_link *)0)->lk_suppgid2));
-        LASSERTF((int)offsetof(struct mds_rec_link, lk_fid1) == 24, " found %lld\n",
+        LASSERTF((int)offsetof(struct mds_rec_link, lk_padding) == 4, " found %lld\n",
+                 (long long)(int)offsetof(struct mds_rec_link, lk_padding));
+        LASSERTF((int)sizeof(((struct mds_rec_link *)0)->lk_padding) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct mds_rec_link *)0)->lk_padding));
+        LASSERTF((int)offsetof(struct mds_rec_link, lk_fid1) == 8, " found %lld\n",
                  (long long)(int)offsetof(struct mds_rec_link, lk_fid1));
         LASSERTF((int)sizeof(((struct mds_rec_link *)0)->lk_fid1) == 24, " found %lld\n",
                  (long long)(int)sizeof(((struct mds_rec_link *)0)->lk_fid1));
-        LASSERTF((int)offsetof(struct mds_rec_link, lk_fid2) == 48, " found %lld\n",
+        LASSERTF((int)offsetof(struct mds_rec_link, lk_fid2) == 32, " found %lld\n",
                  (long long)(int)offsetof(struct mds_rec_link, lk_fid2));
         LASSERTF((int)sizeof(((struct mds_rec_link *)0)->lk_fid2) == 24, " found %lld\n",
                  (long long)(int)sizeof(((struct mds_rec_link *)0)->lk_fid2));
-        LASSERTF((int)offsetof(struct mds_rec_link, lk_time) == 72, " found %lld\n",
+        LASSERTF((int)offsetof(struct mds_rec_link, lk_time) == 56, " found %lld\n",
                  (long long)(int)offsetof(struct mds_rec_link, lk_time));
         LASSERTF((int)sizeof(((struct mds_rec_link *)0)->lk_time) == 8, " found %lld\n",
                  (long long)(int)sizeof(((struct mds_rec_link *)0)->lk_time));
 
         /* Checks for struct mds_rec_unlink */
-        LASSERTF((int)sizeof(struct mds_rec_unlink) == 80, " found %lld\n",
+        LASSERTF((int)sizeof(struct mds_rec_unlink) == 64, " found %lld\n",
                  (long long)(int)sizeof(struct mds_rec_unlink));
         LASSERTF((int)offsetof(struct mds_rec_unlink, ul_opcode) == 0, " found %lld\n",
                  (long long)(int)offsetof(struct mds_rec_unlink, ul_opcode));
         LASSERTF((int)sizeof(((struct mds_rec_unlink *)0)->ul_opcode) == 4, " found %lld\n",
                  (long long)(int)sizeof(((struct mds_rec_unlink *)0)->ul_opcode));
-        LASSERTF((int)offsetof(struct mds_rec_unlink, ul_fsuid) == 4, " found %lld\n",
-                 (long long)(int)offsetof(struct mds_rec_unlink, ul_fsuid));
-        LASSERTF((int)sizeof(((struct mds_rec_unlink *)0)->ul_fsuid) == 4, " found %lld\n",
-                 (long long)(int)sizeof(((struct mds_rec_unlink *)0)->ul_fsuid));
-        LASSERTF((int)offsetof(struct mds_rec_unlink, ul_fsgid) == 8, " found %lld\n",
-                 (long long)(int)offsetof(struct mds_rec_unlink, ul_fsgid));
-        LASSERTF((int)sizeof(((struct mds_rec_unlink *)0)->ul_fsgid) == 4, " found %lld\n",
-                 (long long)(int)sizeof(((struct mds_rec_unlink *)0)->ul_fsgid));
-        LASSERTF((int)offsetof(struct mds_rec_unlink, ul_cap) == 12, " found %lld\n",
-                 (long long)(int)offsetof(struct mds_rec_unlink, ul_cap));
-        LASSERTF((int)sizeof(((struct mds_rec_unlink *)0)->ul_cap) == 4, " found %lld\n",
-                 (long long)(int)sizeof(((struct mds_rec_unlink *)0)->ul_cap));
-        LASSERTF((int)offsetof(struct mds_rec_unlink, ul_suppgid) == 16, " found %lld\n",
-                 (long long)(int)offsetof(struct mds_rec_unlink, ul_suppgid));
-        LASSERTF((int)sizeof(((struct mds_rec_unlink *)0)->ul_suppgid) == 4, " found %lld\n",
-                 (long long)(int)sizeof(((struct mds_rec_unlink *)0)->ul_suppgid));
-        LASSERTF((int)offsetof(struct mds_rec_unlink, ul_mode) == 20, " found %lld\n",
+        LASSERTF((int)offsetof(struct mds_rec_unlink, ul_mode) == 4, " found %lld\n",
                  (long long)(int)offsetof(struct mds_rec_unlink, ul_mode));
         LASSERTF((int)sizeof(((struct mds_rec_unlink *)0)->ul_mode) == 4, " found %lld\n",
                  (long long)(int)sizeof(((struct mds_rec_unlink *)0)->ul_mode));
-        LASSERTF((int)offsetof(struct mds_rec_unlink, ul_fid1) == 24, " found %lld\n",
+        LASSERTF((int)offsetof(struct mds_rec_unlink, ul_fid1) == 8, " found %lld\n",
                  (long long)(int)offsetof(struct mds_rec_unlink, ul_fid1));
         LASSERTF((int)sizeof(((struct mds_rec_unlink *)0)->ul_fid1) == 24, " found %lld\n",
                  (long long)(int)sizeof(((struct mds_rec_unlink *)0)->ul_fid1));
-        LASSERTF((int)offsetof(struct mds_rec_unlink, ul_fid2) == 48, " found %lld\n",
+        LASSERTF((int)offsetof(struct mds_rec_unlink, ul_fid2) == 32, " found %lld\n",
                  (long long)(int)offsetof(struct mds_rec_unlink, ul_fid2));
         LASSERTF((int)sizeof(((struct mds_rec_unlink *)0)->ul_fid2) == 24, " found %lld\n",
                  (long long)(int)sizeof(((struct mds_rec_unlink *)0)->ul_fid2));
-        LASSERTF((int)offsetof(struct mds_rec_unlink, ul_time) == 72, " found %lld\n",
+        LASSERTF((int)offsetof(struct mds_rec_unlink, ul_time) == 56, " found %lld\n",
                  (long long)(int)offsetof(struct mds_rec_unlink, ul_time));
         LASSERTF((int)sizeof(((struct mds_rec_unlink *)0)->ul_time) == 8, " found %lld\n",
                  (long long)(int)sizeof(((struct mds_rec_unlink *)0)->ul_time));
 
         /* Checks for struct mds_rec_rename */
-        LASSERTF((int)sizeof(struct mds_rec_rename) == 80, " found %lld\n",
+        LASSERTF((int)sizeof(struct mds_rec_rename) == 64, " found %lld\n",
                  (long long)(int)sizeof(struct mds_rec_rename));
         LASSERTF((int)offsetof(struct mds_rec_rename, rn_opcode) == 0, " found %lld\n",
                  (long long)(int)offsetof(struct mds_rec_rename, rn_opcode));
         LASSERTF((int)sizeof(((struct mds_rec_rename *)0)->rn_opcode) == 4, " found %lld\n",
                  (long long)(int)sizeof(((struct mds_rec_rename *)0)->rn_opcode));
-        LASSERTF((int)offsetof(struct mds_rec_rename, rn_fsuid) == 4, " found %lld\n",
-                 (long long)(int)offsetof(struct mds_rec_rename, rn_fsuid));
-        LASSERTF((int)sizeof(((struct mds_rec_rename *)0)->rn_fsuid) == 4, " found %lld\n",
-                 (long long)(int)sizeof(((struct mds_rec_rename *)0)->rn_fsuid));
-        LASSERTF((int)offsetof(struct mds_rec_rename, rn_fsgid) == 8, " found %lld\n",
-                 (long long)(int)offsetof(struct mds_rec_rename, rn_fsgid));
-        LASSERTF((int)sizeof(((struct mds_rec_rename *)0)->rn_fsgid) == 4, " found %lld\n",
-                 (long long)(int)sizeof(((struct mds_rec_rename *)0)->rn_fsgid));
-        LASSERTF((int)offsetof(struct mds_rec_rename, rn_cap) == 12, " found %lld\n",
-                 (long long)(int)offsetof(struct mds_rec_rename, rn_cap));
-        LASSERTF((int)sizeof(((struct mds_rec_rename *)0)->rn_cap) == 4, " found %lld\n",
-                 (long long)(int)sizeof(((struct mds_rec_rename *)0)->rn_cap));
-        LASSERTF((int)offsetof(struct mds_rec_rename, rn_suppgid1) == 16, " found %lld\n",
-                 (long long)(int)offsetof(struct mds_rec_rename, rn_suppgid1));
-        LASSERTF((int)sizeof(((struct mds_rec_rename *)0)->rn_suppgid1) == 4, " found %lld\n",
-                 (long long)(int)sizeof(((struct mds_rec_rename *)0)->rn_suppgid1));
-        LASSERTF((int)offsetof(struct mds_rec_rename, rn_suppgid2) == 20, " found %lld\n",
-                 (long long)(int)offsetof(struct mds_rec_rename, rn_suppgid2));
-        LASSERTF((int)sizeof(((struct mds_rec_rename *)0)->rn_suppgid2) == 4, " found %lld\n",
-                 (long long)(int)sizeof(((struct mds_rec_rename *)0)->rn_suppgid2));
-        LASSERTF((int)offsetof(struct mds_rec_rename, rn_fid1) == 24, " found %lld\n",
+        LASSERTF((int)offsetof(struct mds_rec_rename, rn_padding) == 4, " found %lld\n",
+                 (long long)(int)offsetof(struct mds_rec_rename, rn_padding));
+        LASSERTF((int)sizeof(((struct mds_rec_rename *)0)->rn_padding) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct mds_rec_rename *)0)->rn_padding));
+        LASSERTF((int)offsetof(struct mds_rec_rename, rn_fid1) == 8, " found %lld\n",
                  (long long)(int)offsetof(struct mds_rec_rename, rn_fid1));
         LASSERTF((int)sizeof(((struct mds_rec_rename *)0)->rn_fid1) == 24, " found %lld\n",
                  (long long)(int)sizeof(((struct mds_rec_rename *)0)->rn_fid1));
-        LASSERTF((int)offsetof(struct mds_rec_rename, rn_fid2) == 48, " found %lld\n",
+        LASSERTF((int)offsetof(struct mds_rec_rename, rn_fid2) == 32, " found %lld\n",
                  (long long)(int)offsetof(struct mds_rec_rename, rn_fid2));
         LASSERTF((int)sizeof(((struct mds_rec_rename *)0)->rn_fid2) == 24, " found %lld\n",
                  (long long)(int)sizeof(((struct mds_rec_rename *)0)->rn_fid2));
-        LASSERTF((int)offsetof(struct mds_rec_rename, rn_time) == 72, " found %lld\n",
+        LASSERTF((int)offsetof(struct mds_rec_rename, rn_time) == 56, " found %lld\n",
                  (long long)(int)offsetof(struct mds_rec_rename, rn_time));
         LASSERTF((int)sizeof(((struct mds_rec_rename *)0)->rn_time) == 8, " found %lld\n",
                  (long long)(int)sizeof(((struct mds_rec_rename *)0)->rn_time));
@@ -2305,3 +2214,4 @@ void lustre_assert_wire_constants(void)
         LASSERTF((int)sizeof(((struct llogd_conn_body *)0)->lgdc_ctxt_idx) == 4, " found %lld\n",
                  (long long)(int)sizeof(((struct llogd_conn_body *)0)->lgdc_ctxt_idx));
 }
+

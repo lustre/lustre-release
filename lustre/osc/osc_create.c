@@ -110,7 +110,8 @@ static int oscc_internal_create(struct osc_creator *oscc)
         oscc->oscc_flags |= OSCC_FLAG_CREATING;
         spin_unlock(&oscc->oscc_lock);
 
-        request = ptlrpc_prep_req(oscc->oscc_obd->u.cli.cl_import, OST_CREATE,
+        request = ptlrpc_prep_req(oscc->oscc_obd->u.cli.cl_import,
+                                  LUSTRE_OBD_VERSION, OST_CREATE,
                                   1, &size, NULL);
         if (request == NULL) {
                 spin_lock(&oscc->oscc_lock);

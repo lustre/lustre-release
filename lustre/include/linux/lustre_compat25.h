@@ -31,6 +31,72 @@
 
 #include <linux/portals_compat25.h>
 
+/*
+ * groups_info related staff
+ */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,4)
+
+#define NGROUPS_SMALL           NGROUPS
+#define NGROUPS_PER_BLOCK       ((int)(EXEC_PAGESIZE / sizeof(gid_t)))
+struct group_info {
+        int        ngroups;
+        atomic_t   usage;
+        gid_t      small_block[NGROUPS_SMALL];
+        int        nblocks;
+        gid_t     *blocks[0];
+};
+#define current_ngroups current->ngroups
+                                                                           
+struct group_info *groups_alloc(int gidsetsize);
+void groups_free(struct group_info *ginfo);
+int groups_search(struct group_info *ginfo, gid_t grp);
+
+#define get_group_info(group_info)                              \
+        do {                                                    \
+                atomic_inc(&(group_info)->usage);               \
+        } while (0)
+
+#define put_group_info(group_info)                              \
+        do {                                                    \
+                if (atomic_dec_and_test(&(group_info)->usage))  \
+                        groups_free(group_info);                \
+        } while (0)
+
+#define groups_sort(gi) do {} while (0)
+
+#define GROUP_AT(gi, i) ((gi)->small_block[(i)])
+
+static inline int cleanup_group_info(void)
+{
+        /* Get rid of unneeded supplementary groups */
+        current->ngroups = 0;
+        memset(current->groups, 0, sizeof(current->groups));
+        return 0;
+}
+
+#else /* >= 2.6.4 */
+
+#define current_ngroups current->group_info->ngroups
+
+void groups_sort(struct group_info *ginfo);
+int groups_search(struct group_info *ginfo, gid_t grp);
+
+static inline int cleanup_group_info(void)
+{
+        struct group_info *ginfo;
+
+        ginfo = groups_alloc(0);
+        if (!ginfo)
+                return -ENOMEM;
+
+        set_current_groups(ginfo);
+        put_group_info(ginfo);
+
+        return 0;
+}
+#endif /* end of groups_info stuff */
+
+
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
 
 /*
@@ -83,21 +149,6 @@ static inline void lustre_daemonize_helper(void)
         else
                 CERROR("we aren't group leader\n");
         current->signal->tty = NULL;
-}
-
-static inline int cleanup_group_info(void)
-{
-        struct group_info *ginfo;
-
-        ginfo = groups_alloc(2);
-        if (!ginfo)
-                return -ENOMEM;
-
-        ginfo->ngroups = 0;
-        set_current_groups(ginfo);
-        put_group_info(ginfo);
-
-        return 0;
 }
 
 #define smp_num_cpus    NR_CPUS
@@ -169,14 +220,6 @@ static inline void lustre_daemonize_helper(void)
         current->session = 1;
         current->pgrp = 1;
         current->tty = NULL;
-}
-
-static inline int cleanup_group_info(void)
-{
-        /* Get rid of unneeded supplementary groups */
-        current->ngroups = 0;
-        memset(current->groups, 0, sizeof(current->groups));
-        return 0;
 }
 
 #ifndef HAVE_COND_RESCHED

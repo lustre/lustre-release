@@ -393,7 +393,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
         int rc = 0, cleanup_phase = 0, err, locked = 0;
         ENTRY;
 
-        LASSERT(offset == 0);
+        LASSERT(offset == 1);
 
         DEBUG_REQ(D_INODE, req, "setattr "LPU64"/%u %x", rec->ur_fid1->id,
                   rec->ur_fid1->generation, rec->ur_iattr.ia_valid);
@@ -553,7 +553,7 @@ static void reconstruct_reint_create(struct mds_update_record *rec, int offset,
         LASSERT(!IS_ERR(child));
         if ((child->d_flags & DCACHE_CROSS_REF)) {
                 LASSERTF(child->d_inode == NULL, "BUG 3869\n");
-                body = lustre_msg_buf(req->rq_repmsg, offset, sizeof (*body));
+                body = lustre_msg_buf(req->rq_repmsg, 0, sizeof (*body));
                 mds_pack_dentry2fid(&body->fid1, child);
                 mds_pack_dentry2body(body, child);
                 body->valid |= OBD_MD_MDS;
@@ -563,7 +563,7 @@ static void reconstruct_reint_create(struct mds_update_record *rec, int offset,
                           rec->ur_name, rec->ur_mode);
                 LASSERTF(child->d_inode != NULL, "BUG 3869\n");
         } else {
-                body = lustre_msg_buf(req->rq_repmsg, offset, sizeof (*body));
+                body = lustre_msg_buf(req->rq_repmsg, 0, sizeof (*body));
                 mds_pack_inode2fid(req2obd(req), &body->fid1, child->d_inode);
                 mds_pack_inode2body(req2obd(req), body, child->d_inode);
         }
@@ -591,7 +591,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
         int mea_size;
         ENTRY;
 
-        LASSERT(offset == 0);
+        LASSERT(offset == 1);
         LASSERT(!strcmp(req->rq_export->exp_obd->obd_type->typ_name, LUSTRE_MDS_NAME));
 
         DEBUG_REQ(D_INODE, req, "parent "LPU64"/%u name %s mode %o",
@@ -773,8 +773,8 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                         LASSERT(rc == 0);
 
                         /* fill reply */
-                        body = lustre_msg_buf(req->rq_repmsg,
-                                              offset, sizeof (*body));
+                        body = lustre_msg_buf(req->rq_repmsg, 0,
+                                              sizeof (*body));
                         body->valid |= OBD_MD_FLID | OBD_MD_MDS;
                         body->fid1.id = oa->o_id;
                         body->fid1.mds = i;
@@ -882,7 +882,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 else
                         MDS_UPDATE_COUNTER(mds, MDS_CREATE_COUNT);
 
-                body = lustre_msg_buf(req->rq_repmsg, offset, sizeof (*body));
+                body = lustre_msg_buf(req->rq_repmsg, 0, sizeof (*body));
                 mds_pack_inode2fid(obd, &body->fid1, inode);
                 mds_pack_inode2body(obd, body, inode);
         }
@@ -1564,7 +1564,7 @@ static int mds_reint_unlink_remote(struct mds_update_record *rec, int offset,
         void *handle;
         ENTRY;
 
-        LASSERT(offset == 0 || offset == 2);
+        LASSERT(offset == 1 || offset == 3);
 
         DEBUG_REQ(D_INODE, req, "unlink %*s (remote inode %u/%u/%u)",
                   rec->ur_namelen - 1, rec->ur_name, (unsigned)dchild->d_mdsnum,
@@ -1641,7 +1641,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
         int update_mode;
         ENTRY;
 
-        LASSERT(offset == 0 || offset == 2);
+        LASSERT(offset == 1 || offset == 3);
 
         DEBUG_REQ(D_INODE, req, "parent ino "LPU64"/%u, child %s",
                   rec->ur_fid1->id, rec->ur_fid1->generation, rec->ur_name);
@@ -1650,9 +1650,10 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
 
         if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
                 DEBUG_REQ(D_HA, req, "unlink replay\n");
-                memcpy(lustre_msg_buf(req->rq_repmsg, offset + 2, 0),
-                       lustre_msg_buf(req->rq_reqmsg, 2, 0),
-                       req->rq_repmsg->buflens[offset + 2]);
+                LASSERT(offset == 1); /* should not come from intent */
+                memcpy(lustre_msg_buf(req->rq_repmsg, 2, 0),
+                       lustre_msg_buf(req->rq_reqmsg, offset + 2, 0),
+                       req->rq_repmsg->buflens[2]);
         }
 
         MDS_UPDATE_COUNTER(mds, MDS_UNLINK_COUNT);
@@ -1759,8 +1760,10 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
         OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_UNLINK_WRITE, dparent->d_inode->i_sb);
 
         /* ldlm_reply in buf[0] if called via intent */
-        if (offset)
+        if (offset == 3)
                 offset = 1;
+        else
+                offset = 0;
 
         body = lustre_msg_buf(req->rq_repmsg, offset, sizeof (*body));
         LASSERT(body != NULL);
@@ -2101,7 +2104,7 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
         int update_mode = 0;
         ENTRY;
 
-        LASSERT(offset == 0);
+        LASSERT(offset == 1);
 
         DEBUG_REQ(D_INODE, req, "original "LPU64"/%u to "LPU64"/%u %s",
                   rec->ur_fid1->id, rec->ur_fid1->generation,
@@ -2742,7 +2745,7 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
         void *handle = NULL;
         ENTRY;
 
-        LASSERT(offset == 0);
+        LASSERT(offset == 1);
 
         DEBUG_REQ(D_INODE, req, "parent "LPU64"/%u %s to "LPU64"/%u %s",
                   rec->ur_fid1->id, rec->ur_fid1->generation, rec->ur_name,
@@ -2753,7 +2756,7 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
         if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
                 DEBUG_REQ(D_HA, req, "rename replay\n");
                 memcpy(lustre_msg_buf(req->rq_repmsg, 2, 0),
-                       lustre_msg_buf(req->rq_reqmsg, 3, 0),
+                       lustre_msg_buf(req->rq_reqmsg, offset + 3, 0),
                        req->rq_repmsg->buflens[2]);
         }
 

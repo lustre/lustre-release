@@ -103,7 +103,7 @@ static int mds_rec_setattr_pack(char *buffer, struct dentry *dentry,
         msg = (struct lustre_msg *)(buffer + sizeof(*mkpi));
         lustre_init_msg(msg, mkpi->mpi_bufcount, mkpi->mpi_size, NULL);
 
-        tmp = mdc_setattr_pack(msg, &op_data, iattr, ea, ealen, NULL, 0);
+        tmp = mdc_setattr_pack(msg, 0, &op_data, iattr, ea, ealen, NULL, 0);
 
         /*There are maybe some better ways
          *to set the time attr FIXME WANGDI later

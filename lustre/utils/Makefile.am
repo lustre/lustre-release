@@ -8,7 +8,7 @@ AM_LDFLAGS := -L$(top_builddir)/portals/utils
 
 if UTILS
 rootsbin_SCRIPTS = mount.lustre
-sbin_PROGRAMS = lctl obdio obdbarrier lload wirecheck wiretest llmount
+sbin_PROGRAMS = lctl obdio obdbarrier lload wirecheck wiretest llmount l_getgroups
 sbin_SCRIPTS = lconf lmc llanalyze llstat.pl llobdstat.pl lactive load_ldap.sh lrun
 sbin_SCRIPTS += lwizard
 bin_SCRIPTS = lfind lstripe
@@ -32,6 +32,7 @@ obdbarrier_SOURCES = obdbarrier.c obdiolib.c obdiolib.h
 lfs_SOURCES = lfs.c 
 llmount_SOURCES = llmount.c 
 llmount_LDADD = $(LIBREADLINE) -lptlctl
+l_getgroups_SOURCES = l_getgroups.c
 
 EXTRA_DIST = $(bin_SCRIPTS) $(sbin_SCRIPTS)
 

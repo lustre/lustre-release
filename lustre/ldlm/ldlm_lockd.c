@@ -394,7 +394,8 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
 #endif
 
         req = ptlrpc_prep_req(lock->l_export->exp_imp_reverse,
-                              LDLM_BL_CALLBACK, 1, &size, NULL);
+                              LUSTRE_DLM_VERSION, LDLM_BL_CALLBACK,
+                              1, &size, NULL);
         if (req == NULL) {
                 l_unlock(&lock->l_resource->lr_namespace->ns_lock);
                 RETURN(-ENOMEM);
@@ -454,7 +455,8 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
         }
 
         req = ptlrpc_prep_req(lock->l_export->exp_imp_reverse,
-                              LDLM_CP_CALLBACK, buffers, size, NULL);
+                              LUSTRE_DLM_VERSION, LDLM_CP_CALLBACK,
+                              buffers, size, NULL);
         if (req == NULL)
                 RETURN(-ENOMEM);
 
@@ -506,7 +508,8 @@ int ldlm_server_glimpse_ast(struct ldlm_lock *lock, void *data)
         LASSERT(lock != NULL);
 
         req = ptlrpc_prep_req(lock->l_export->exp_imp_reverse,
-                              LDLM_GL_CALLBACK, 1, &size, NULL);
+                              LUSTRE_DLM_VERSION, LDLM_GL_CALLBACK,
+                              1, &size, NULL);
         if (req == NULL)
                 RETURN(-ENOMEM);
 
@@ -550,7 +553,8 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req,
 
         LDLM_DEBUG_NOLOCK("server-side enqueue handler START");
 
-        dlm_req = lustre_swab_reqbuf (req, 0, sizeof (*dlm_req),
+        dlm_req = lustre_swab_reqbuf (req, MDS_REQ_INTENT_LOCKREQ_OFF,
+                                      sizeof (*dlm_req),
                                       lustre_swab_ldlm_request);
         if (dlm_req == NULL) {
                 CERROR ("Can't unpack dlm_req\n");
@@ -947,6 +951,43 @@ int ldlm_bl_to_thread(struct ldlm_namespace *ns, struct ldlm_lock_desc *ld,
         RETURN(0);
 }
 
+static int ldlm_msg_check_version(struct lustre_msg *msg)
+{
+        int rc;
+
+        switch (msg->opc) {
+        case LDLM_ENQUEUE:
+        case LDLM_CONVERT:
+        case LDLM_CANCEL:
+        case LDLM_BL_CALLBACK:
+        case LDLM_CP_CALLBACK:
+        case LDLM_GL_CALLBACK:
+                rc = lustre_msg_check_version(msg, LUSTRE_DLM_VERSION);
+                if (rc)
+                        CERROR("bad opc %u version %08x, expecting %08x\n",
+                               msg->opc, msg->version, LUSTRE_DLM_VERSION);
+                break;
+        case OBD_LOG_CANCEL:
+        case LLOG_ORIGIN_HANDLE_OPEN:
+        case LLOG_ORIGIN_HANDLE_NEXT_BLOCK:
+        case LLOG_ORIGIN_HANDLE_PREV_BLOCK:
+        case LLOG_ORIGIN_HANDLE_READ_HEADER:
+        case LLOG_ORIGIN_HANDLE_CLOSE:
+        case LLOG_CATINFO:
+                rc = lustre_msg_check_version(msg, LUSTRE_LOG_VERSION);
+                if (rc)
+                        CERROR("bad opc %u version %08x, expecting %08x\n",
+                               msg->opc, msg->version, LUSTRE_LOG_VERSION);
+                break;
+        default:
+                CERROR("LDLM unknown opcode %d\n", msg->opc);
+                rc = -ENOTSUPP;
+                break;
+        }
+
+        return rc;
+}
+
 static int ldlm_callback_handler(struct ptlrpc_request *req)
 {
         struct ldlm_namespace *ns;
@@ -955,6 +996,12 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
         char str[PTL_NALFMT_SIZE];
         int rc;
         ENTRY;
+
+        rc = ldlm_msg_check_version(req->rq_reqmsg);
+        if (rc) {
+                CERROR("LDLM_CB drop mal-formed request\n");
+                RETURN(rc);
+        }
 
         /* Requests arrive in sender's byte order.  The ptlrpc service
          * handler has already checked and, if necessary, byte-swapped the
@@ -1094,6 +1141,12 @@ static int ldlm_cancel_handler(struct ptlrpc_request *req)
 {
         int rc = 0;
         ENTRY;
+
+        rc = ldlm_msg_check_version(req->rq_reqmsg);
+        if (rc) {
+                CERROR("LDLM_CL drop mal-formed request\n");
+                RETURN(rc);
+        }
 
         /* Requests arrive in sender's byte order.  The ptlrpc service
          * handler has already checked and, if necessary, byte-swapped the

@@ -181,8 +181,9 @@ void ptlrpc_free_bulk(struct ptlrpc_bulk_desc *desc)
         EXIT;
 }
 
-struct ptlrpc_request *ptlrpc_prep_req(struct obd_import *imp, int opcode,
-                                       int count, int *lengths, char **bufs)
+struct ptlrpc_request *ptlrpc_prep_req(struct obd_import *imp, __u32 version,
+                                       int opcode, int count, int *lengths,
+                                       char **bufs)
 {
         struct ptlrpc_request *request;
         int rc;
@@ -202,6 +203,7 @@ struct ptlrpc_request *ptlrpc_prep_req(struct obd_import *imp, int opcode,
                 OBD_FREE(request, sizeof(*request));
                 RETURN(NULL);
         }
+        request->rq_reqmsg->version |= version;
 
         if (imp->imp_server_timeout)
                 request->rq_timeout = obd_timeout / 2;

@@ -798,8 +798,6 @@ struct obd_ops {
          */
 };
 
-struct ll_uctxt;
-
 struct md_ops {
         int (*m_getstatus)(struct obd_export *, struct ll_fid *);
         int (*m_change_cbdata)(struct obd_export *, struct ll_fid *,
@@ -824,7 +822,7 @@ struct md_ops {
         int (*m_getattr_name)(struct obd_export *, struct ll_fid *,
                               char *, int, unsigned long,
                               unsigned int, struct ptlrpc_request **);
-        int (*m_intent_lock)(struct obd_export *, struct ll_uctxt *,
+        int (*m_intent_lock)(struct obd_export *,
                              struct ll_fid *, const char *, int,
                              void *, int, struct ll_fid *,
                              struct lookup_intent *, int,

@@ -235,7 +235,7 @@ int ldlm_cli_enqueue(struct obd_export *exp,
         struct ldlm_lock *lock;
         struct ldlm_request *body;
         struct ldlm_reply *reply;
-        int rc, size[2] = {sizeof(*body), lvb_len}, req_passed_in = 1;
+        int rc, size[3] = {0, sizeof(*body), lvb_len}, req_passed_in = 1;
         int is_replay = *flags & LDLM_FL_REPLAY;
         int cleanup_phase = 0;
         ENTRY;
@@ -276,16 +276,22 @@ int ldlm_cli_enqueue(struct obd_export *exp,
         cleanup_phase = 2;
 
         if (req == NULL) {
-                req = ptlrpc_prep_req(class_exp2cliimp(exp), LDLM_ENQUEUE, 1,
-                                      size, NULL);
+                req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_DLM_VERSION,
+                                      LDLM_ENQUEUE, 2, size, NULL);
                 if (req == NULL)
                         GOTO(cleanup, rc = -ENOMEM);
                 req_passed_in = 0;
-        } else if (req->rq_reqmsg->buflens[0] != sizeof(*body))
-                LBUG();
+        }
+
+        LASSERTF(req->rq_reqmsg->buflens[MDS_REQ_INTENT_LOCKREQ_OFF] ==
+                 sizeof(*body), "buflen[%d] = %d, not %d\n",
+                 MDS_REQ_INTENT_LOCKREQ_OFF,
+                 req->rq_reqmsg->buflens[MDS_REQ_INTENT_LOCKREQ_OFF],
+                 sizeof(*body));
 
         /* Dump lock data into the request buffer */
-        body = lustre_msg_buf(req->rq_reqmsg, 0, sizeof (*body));
+        body = lustre_msg_buf(req->rq_reqmsg, MDS_REQ_INTENT_LOCKREQ_OFF,
+                              sizeof (*body));
         ldlm_lock2desc(lock, &body->lock_desc);
         body->lock_flags = *flags;
 
@@ -293,11 +299,8 @@ int ldlm_cli_enqueue(struct obd_export *exp,
 
         /* Continue as normal. */
         if (!req_passed_in) {
-                int buffers = 1;
-                if (lvb_len > 0)
-                        buffers = 2;
                 size[0] = sizeof(*reply);
-                req->rq_replen = lustre_msg_size(buffers, size);
+                req->rq_replen = lustre_msg_size(1 + (lvb_len > 0), size);
         }
         lock->l_conn_export = exp;
         lock->l_export = NULL;
@@ -481,7 +484,7 @@ int ldlm_cli_convert(struct lustre_handle *lockh, int new_mode, int *flags)
         LDLM_DEBUG(lock, "client-side convert");
 
         req = ptlrpc_prep_req(class_exp2cliimp(lock->l_conn_export),
-                              LDLM_CONVERT, 1, &size, NULL);
+                              LUSTRE_DLM_VERSION, LDLM_CONVERT, 1, &size, NULL);
         if (!req)
                 GOTO(out, rc = -ENOMEM);
 
@@ -559,7 +562,8 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
                         goto local_cancel;
                 }
 
-                req = ptlrpc_prep_req(imp, LDLM_CANCEL, 1, &size, NULL);
+                req = ptlrpc_prep_req(imp, LUSTRE_DLM_VERSION, LDLM_CANCEL,
+                                      1, &size, NULL);
                 if (!req)
                         GOTO(out, rc = -ENOMEM);
                 req->rq_no_resend = 1;
@@ -954,7 +958,7 @@ static int replay_one_lock(struct obd_import *imp, struct ldlm_lock *lock)
         struct ldlm_request *body;
         struct ldlm_reply *reply;
         int buffers = 1;
-        int size[2];
+        int size[2] = {0, sizeof(*body)};
         int flags;
 
         /*
@@ -980,15 +984,15 @@ static int replay_one_lock(struct obd_import *imp, struct ldlm_lock *lock)
         else
                 flags = LDLM_FL_REPLAY;
 
-        size[0] = sizeof(*body);
-        req = ptlrpc_prep_req(imp, LDLM_ENQUEUE, 1, size, NULL);
+        req = ptlrpc_prep_req(imp, LUSTRE_DLM_VERSION, LDLM_ENQUEUE,
+                              2, size, NULL);
         if (!req)
                 RETURN(-ENOMEM);
 
         /* We're part of recovery, so don't wait for it. */
         req->rq_send_state = LUSTRE_IMP_REPLAY_LOCKS;
 
-        body = lustre_msg_buf(req->rq_reqmsg, 0, sizeof (*body));
+        body = lustre_msg_buf(req->rq_reqmsg, 1, sizeof (*body));
         ldlm_lock2desc(lock, &body->lock_desc);
         body->lock_flags = flags;
 

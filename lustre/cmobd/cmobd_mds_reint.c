@@ -156,8 +156,8 @@ int cmobd_reint_mds(struct obd_device *obd, void* record)
         mkpi = (struct mds_kml_pack_info *)record; 
        
         req = ptlrpc_prep_req(class_exp2cliimp(cmobd->cm_master_exp), 
-                              MDS_REINT, mkpi->mpi_bufcount, mkpi->mpi_size, 
-                              NULL);
+                              LUSTRE_MDS_VERSION, MDS_REINT,
+                              mkpi->mpi_bufcount, mkpi->mpi_size, NULL);
         if (req == NULL)
                 RETURN(-ENOMEM);
         record += sizeof(*mkpi);

@@ -75,7 +75,8 @@ static int llog_client_open(struct llog_ctxt *ctxt, struct llog_handle **res,
                 bufcount++;
         }
 
-        req = ptlrpc_prep_req(imp, LLOG_ORIGIN_HANDLE_OPEN, bufcount, size,tmp);
+        req = ptlrpc_prep_req(imp, LUSTRE_LOG_VERSION, LLOG_ORIGIN_HANDLE_OPEN,
+                              bufcount, size,tmp);
         if (!req)
                 GOTO(err_free, rc = -ENOMEM);
 
@@ -115,11 +116,12 @@ static int llog_client_prev_block(struct llog_handle *loghandle,
         int repsize[2] = {sizeof (*body)};
         int rc;
         ENTRY;
-                                                                                                                             
-        req = ptlrpc_prep_req(imp, LLOG_ORIGIN_HANDLE_PREV_BLOCK, 1,&size,NULL);
+
+        req = ptlrpc_prep_req(imp, LUSTRE_LOG_VERSION,
+                              LLOG_ORIGIN_HANDLE_PREV_BLOCK, 1, &size, NULL);
         if (!req)
                 GOTO(out, rc = -ENOMEM);
-                                                                                                                             
+
         body = lustre_msg_buf(req->rq_reqmsg, 0, sizeof (*body));
         body->lgd_logid = loghandle->lgh_id;
         body->lgd_ctxt_idx = loghandle->lgh_ctxt->loc_idx - 1;
@@ -127,27 +129,26 @@ static int llog_client_prev_block(struct llog_handle *loghandle,
         body->lgd_index = prev_idx;
         body->lgd_len = len;
         repsize[1] = len;
-                                                                                                                             
+
         req->rq_replen = lustre_msg_size(2, repsize);
         rc = ptlrpc_queue_wait(req);
         if (rc)
                 GOTO(out, rc);
-                                                                                                                             
+
         body = lustre_swab_repbuf(req, 0, sizeof(*body),
                                  lustre_swab_llogd_body);
         if (body == NULL) {
                 CERROR ("Can't unpack llogd_body\n");
                 GOTO(out, rc =-EFAULT);
         }
-                                                                                                                             
+
         ptr = lustre_msg_buf(req->rq_repmsg, 1, len);
         if (ptr == NULL) {
                 CERROR ("Can't unpack bitmap\n");
                 GOTO(out, rc =-EFAULT);
         }
-                                                                                                                             
+
         memcpy(buf, ptr, len);
-                                                                                                                             
 out:
         if (req)
                 ptlrpc_req_finished(req);
@@ -167,7 +168,8 @@ static int llog_client_next_block(struct llog_handle *loghandle,
         int rc;
         ENTRY;
 
-        req = ptlrpc_prep_req(imp, LLOG_ORIGIN_HANDLE_NEXT_BLOCK, 1,&size,NULL);
+        req = ptlrpc_prep_req(imp, LUSTRE_LOG_VERSION,
+                              LLOG_ORIGIN_HANDLE_NEXT_BLOCK, 1, &size, NULL);
         if (!req)
                 GOTO(out, rc = -ENOMEM);
 
@@ -223,7 +225,8 @@ static int llog_client_read_header(struct llog_handle *handle)
         int rc;
         ENTRY;
 
-        req = ptlrpc_prep_req(imp, LLOG_ORIGIN_HANDLE_READ_HEADER,1,&size,NULL);
+        req = ptlrpc_prep_req(imp, LUSTRE_LOG_VERSION,
+                              LLOG_ORIGIN_HANDLE_READ_HEADER, 1, &size, NULL);
         if (!req)
                 GOTO(out, rc = -ENOMEM);
 

@@ -49,6 +49,7 @@
 
 #include <linux/obd.h>
 #include <linux/lustre_lib.h>
+#include <linux/lustre_mds.h>   /* for mds_grp_hash_entry */
 
 atomic_t obd_memory;
 int obd_memmax;
@@ -65,13 +66,52 @@ int obd_memmax;
 # define ASSERT_KERNEL_CTXT(msg) do {} while(0)
 #endif
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,0))
-#define current_ngroups current->group_info->ngroups
-#define current_groups current->group_info->small_block
+static void push_group_info(struct lvfs_run_ctxt *save,
+                            struct group_info *ginfo)
+{
+        if (!ginfo) {
+                save->ngroups = current_ngroups;
+                current_ngroups = 0;
+        } else {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,4)
+                task_lock(current);
+                save->group_info = current->group_info;
+                current->group_info = group_info;
+                task_unlock(current);
 #else
-#define current_ngroups current->ngroups
-#define current_groups current->groups
+                LASSERT(ginfo->ngroups <= NGROUPS);
+                /* save old */
+                save->group_info.ngroups = current->ngroups;
+                if (current->ngroups)
+                        memcpy(save->group_info.small_block, current->groups,
+                               current->ngroups);
+                /* push new */
+                current->ngroups = ginfo->ngroups;
+                if (ginfo->ngroups)
+                        memcpy(current->groups, ginfo->small_block,
+                               current->ngroups);
 #endif
+        }
+}
+
+static void pop_group_info(struct lvfs_run_ctxt *save,
+                           struct group_info *ginfo)
+{
+        if (!ginfo) {
+                current_ngroups = save->ngroups;
+        } else {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,4)
+                task_lock(current);
+                current->group_info = save->group_info;
+                task_unlock(current);
+#else
+                current->ngroups = ginfo->ngroups;
+                if (current->ngroups)
+                        memcpy(current->groups, save->group_info.small_block,
+                               current->ngroups);
+#endif
+        }
+}
 
 /* push / pop to root of obd store */
 void push_ctxt(struct lvfs_run_ctxt *save, struct lvfs_run_ctxt *new_ctx,
@@ -110,18 +150,12 @@ void push_ctxt(struct lvfs_run_ctxt *save, struct lvfs_run_ctxt *new_ctx,
                 save->luc.luc_fsuid = current->fsuid;
                 save->luc.luc_fsgid = current->fsgid;
                 save->luc.luc_cap = current->cap_effective;
-                save->luc.luc_suppgid1 = current_groups[0];
-                save->luc.luc_suppgid2 = current_groups[1];
 
                 current->fsuid = uc->luc_fsuid;
                 current->fsgid = uc->luc_fsgid;
                 current->cap_effective = uc->luc_cap;
-                current_ngroups = 0;
 
-                if (uc->luc_suppgid1 != -1)
-                        current_groups[current_ngroups++] = uc->luc_suppgid1;
-                if (uc->luc_suppgid2 != -1)
-                        current_groups[current_ngroups++] = uc->luc_suppgid2;
+                push_group_info(save, uc->luc_ginfo);
         }
         set_fs(new_ctx->fs);
         set_fs_pwd(current->fs, new_ctx->pwdmnt, new_ctx->pwd);
@@ -173,9 +207,8 @@ void pop_ctxt(struct lvfs_run_ctxt *saved, struct lvfs_run_ctxt *new_ctx,
                 current->fsuid = saved->luc.luc_fsuid;
                 current->fsgid = saved->luc.luc_fsgid;
                 current->cap_effective = saved->luc.luc_cap;
-                current_ngroups = saved->ngroups;
-                current_groups[0] = saved->luc.luc_suppgid1;
-                current_groups[1] = saved->luc.luc_suppgid2;
+
+                pop_group_info(saved, uc->luc_ginfo);
         }
 
         /*

@@ -620,7 +620,8 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                         GOTO(out_ping, rc = -ENODEV);
                 }
                 cli = &obd->u.cli;
-                req = ptlrpc_prep_req(cli->cl_import, OBD_PING, 0, NULL, NULL);
+                req = ptlrpc_prep_req(cli->cl_import, LUSTRE_OBD_VERSION,
+                                      OBD_PING, 0, NULL, NULL);
                 if (!req)
                         GOTO(out_ping, rc = -ENOMEM);
 
@@ -661,10 +662,12 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                         bufs[1] = NULL;
                 }
                 size = data->ioc_plen1;
-                req = ptlrpc_prep_req(sbi2mdc(sbi)->cl_import, LLOG_CATINFO,
+                req = ptlrpc_prep_req(sbi2mdc(sbi)->cl_import,
+                                      LUSTRE_LOG_VERSION, LLOG_CATINFO,
                                       2, lens, bufs);
                 if (!req)
                         GOTO(out_catinfo, rc = -ENOMEM);
+
                 req->rq_replen = lustre_msg_size(1, &size);
 
                 rc = ptlrpc_queue_wait(req);

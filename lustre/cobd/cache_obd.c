@@ -1141,7 +1141,7 @@ static int cobd_md_enqueue(struct obd_export *exp, int lock_type,
                           cb_data);
 }
 
-static int cobd_md_intent_lock(struct obd_export *exp, struct ll_uctxt *uctxt,
+static int cobd_md_intent_lock(struct obd_export *exp,
                                struct ll_fid *pfid, const char *name, int len,
                                void *lmm, int lmmsize,
                                struct ll_fid *cfid, struct lookup_intent *it,
@@ -1157,7 +1157,7 @@ static int cobd_md_intent_lock(struct obd_export *exp, struct ll_uctxt *uctxt,
                 return -EINVAL;
         }
         cobd_exp = cobd_get_exp(obd);
-        return md_intent_lock(cobd_exp, uctxt, pfid, name, len, lmm, lmmsize,
+        return md_intent_lock(cobd_exp, pfid, name, len, lmm, lmmsize,
                               cfid, it, lookup_flags, reqp, cb_blocking);
 }
 

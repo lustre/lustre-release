@@ -21,15 +21,13 @@
 #ifndef MDC_INTERNAL_H
 #define MDC_INTERNAL_H
 
-void mdc_getattr_pack(struct lustre_msg *msg, int valid, int offset,
-                      int flags, struct mdc_op_data *data);
+void mdc_getattr_pack(struct lustre_msg *msg, int offset,
+                      int valid, int flags, struct mdc_op_data *data);
 void mdc_open_pack(struct lustre_msg *msg, int offset,
                    struct mdc_op_data *op_data, __u32 mode, __u64 rdev,
                    __u32 flags, const void *lmm, int lmmlen);
-void mdc_pack_req_body(struct ptlrpc_request *);
-void mdc_pack_rep_body(struct ptlrpc_request *);
-void mdc_readdir_pack(struct ptlrpc_request *req, __u64 offset, __u32 size,
-                      struct ll_fid *mdc_fid);
+void mdc_readdir_pack(struct ptlrpc_request *req, int req_offset,
+                      __u64 offset, __u32 size, struct ll_fid *mdc_fid);
 void mdc_close_pack(struct ptlrpc_request *req, int offset, struct obdo *oa,
 		    int valid, struct obd_client_handle *och);
 

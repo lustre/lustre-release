@@ -1295,7 +1295,7 @@ static inline int md_getattr_name(struct obd_export *exp, struct ll_fid *fid,
         RETURN(rc);
 }
 
-static inline int md_intent_lock(struct obd_export *exp, struct ll_uctxt *uctxt,
+static inline int md_intent_lock(struct obd_export *exp,
                                  struct ll_fid *pfid, const char *name,
                                  int len, void *lmm, int lmmsize,
                                  struct ll_fid *cfid, struct lookup_intent *it,
@@ -1306,7 +1306,7 @@ static inline int md_intent_lock(struct obd_export *exp, struct ll_uctxt *uctxt,
         ENTRY;
         EXP_CHECK_MD_OP(exp, intent_lock);
         MD_COUNTER_INCREMENT(exp->exp_obd, intent_lock);
-        rc = MDP(exp->exp_obd, intent_lock)(exp, uctxt, pfid, name, len,
+        rc = MDP(exp->exp_obd, intent_lock)(exp, pfid, name, len,
                                             lmm, lmmsize, cfid, it, flags,
                                             reqp, cb_blocking);
         RETURN(rc);

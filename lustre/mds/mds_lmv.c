@@ -1016,10 +1016,18 @@ int mds_lock_and_check_slave(int offset, struct ptlrpc_request *req,
         struct dentry *dentry = NULL;
         struct lvfs_run_ctxt saved;
         int cleanup_phase = 0;
+        struct mds_req_sec_desc *rsd;
         struct mds_body *body;
         struct lvfs_ucred uc;
         int rc, update_mode;
         ENTRY;
+
+        rsd = lustre_swab_mds_secdesc(req, MDS_REQ_SECDESC_OFF);
+        if (!rsd) {
+                CERROR("Can't unpack security desc\n");
+                GOTO(cleanup, rc = -EFAULT);
+        }
+        mds_squash_root(&obd->u.mds, rsd, &req->rq_peer.peer_id.nid); 
 
         body = lustre_swab_reqbuf(req, offset, sizeof(*body),
                                   lustre_swab_mds_body);
@@ -1041,11 +1049,12 @@ int mds_lock_and_check_slave(int offset, struct ptlrpc_request *req,
 
         LASSERT(S_ISDIR(dentry->d_inode->i_mode));
 
-        uc.luc_fsuid = body->fsuid;
-        uc.luc_fsgid = body->fsgid;
-        uc.luc_cap = body->capability;
-        uc.luc_suppgid1 = body->suppgid;
-        uc.luc_suppgid2 = -1;
+        rc = mds_init_ucred(&uc, rsd);
+        if (rc) {
+                CERROR("can't init ucred\n");
+                GOTO(cleanup, rc);
+        }
+
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, &uc);
 
         rc = 0;
@@ -1059,6 +1068,7 @@ cleanup:
                         ldlm_lock_decref(lockh, LCK_EX);
                 l_dput(dentry);
                 pop_ctxt(&saved, &obd->obd_lvfs_ctxt, &uc);
+                mds_exit_ucred(&uc);
         default:
                 break;
         }

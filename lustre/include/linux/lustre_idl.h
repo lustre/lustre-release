@@ -129,9 +129,13 @@
 
 
 #define PTLRPC_MSG_VERSION  0x00000003
-#define LUSTRE_MDS_VERSION  (0x00040000|PTLRPC_MSG_VERSION)
-#define LUSTRE_OST_VERSION  (0x00040000|PTLRPC_MSG_VERSION)
-#define LUSTRE_DLM_VERSION  (0x00040000|PTLRPC_MSG_VERSION)
+#define LUSTRE_VERSION_MASK 0xffff0000
+#define LUSTRE_OBD_VERSION  0x00010000
+#define LUSTRE_MDS_VERSION  0x00020000
+#define LUSTRE_OST_VERSION  0x00030000
+#define LUSTRE_DLM_VERSION  0x00040000
+#define LUSTRE_LOG_VERSION  0x00050000
+#define LUSTRE_PBD_VERSION  0x00060000
 
 /* initial pid  */
 #define LUSTRE_PTL_PID          999999
@@ -466,6 +470,38 @@ extern void lustre_swab_ost_lvb(struct ost_lvb *);
  *   MDS REQ RECORDS
  */
 
+/* offsets in the request */
+#define MDS_REQ_SECDESC_OFF             0
+#define MDS_REQ_REC_OFF                 1
+
+#define MDS_REQ_INTENT_LOCKREQ_OFF      1
+#define MDS_REQ_INTENT_IT_OFF           2
+#define MDS_REQ_INTENT_REC_OFF          3
+
+/* maximum supplementary groups */
+#define LUSTRE_MAX_GROUPS               128
+
+/* 
+ * security descriptor in mds request
+ *
+ * note gid & cap might need be removed later:
+ *  - cap should be obtained on mds
+ *  - gid is actually not used.
+ */
+struct mds_req_sec_desc {
+        __u32           rsd_uid;
+        __u32           rsd_gid;
+        __u32           rsd_fsuid;
+        __u32           rsd_fsgid;
+        __u32           rsd_cap;
+        __u32           rsd_ngroups;
+        __u32           rsd_groups[0];
+};
+
+struct ptlrpc_request;
+struct mds_req_sec_desc *lustre_swab_mds_secdesc(struct ptlrpc_request *req,
+                                                 int offset);
+
 /* opcodes */
 typedef enum {
         MDS_GETATTR      = 33,
@@ -562,9 +598,6 @@ struct mds_body {
         __u64          io_epoch;
         __u32          ino;   /* make this a __u64 */
         __u32          valid;
-        __u32          fsuid;
-        __u32          fsgid;
-        __u32          capability;
         __u32          mode;
         __u32          uid;
         __u32          gid;
@@ -575,7 +608,6 @@ struct mds_body {
         __u32          rdev;
         __u32          nlink; /* #bytes to read in the case of MDS_READPAGE */
         __u32          generation;
-        __u32          suppgid;
         __u32          eadatasize;
         __u32          mds;
 };
@@ -588,15 +620,9 @@ struct lustre_md {
         struct mea *mea;
 };
 
-struct ll_uctxt {
-        __u32 gid1;
-        __u32 gid2;
-};
-
 struct mdc_op_data {
         struct ll_fid fid1;
         struct ll_fid fid2;
-        struct ll_uctxt ctxt;
         __u64 mod_time;
         const char *name;
         int namelen;
@@ -610,10 +636,6 @@ struct mdc_op_data {
 
 struct mds_rec_setattr {
         __u32           sa_opcode;
-        __u32           sa_fsuid;
-        __u32           sa_fsgid;
-        __u32           sa_cap;
-        __u32           sa_suppgid;
         __u32           sa_valid;
         struct ll_fid   sa_fid;
         __u32           sa_mode;
@@ -653,28 +675,20 @@ extern void lustre_swab_mds_rec_setattr (struct mds_rec_setattr *sa);
 
 struct mds_rec_create {
         __u32           cr_opcode;
-        __u32           cr_fsuid;
-        __u32           cr_fsgid;
-        __u32           cr_cap;
         __u32           cr_flags; /* for use with open */
         __u32           cr_mode;
+        __u32           cr_padding;
         struct ll_fid   cr_fid;
         struct ll_fid   cr_replayfid;
         __u64           cr_time;
         __u64           cr_rdev;
-        __u32           cr_suppgid;
-        __u32           cr_packing;
 };
 
 extern void lustre_swab_mds_rec_create (struct mds_rec_create *cr);
 
 struct mds_rec_link {
         __u32           lk_opcode;
-        __u32           lk_fsuid;
-        __u32           lk_fsgid;
-        __u32           lk_cap;
-        __u32           lk_suppgid1;
-        __u32           lk_suppgid2;
+        __u32           lk_padding;
         struct ll_fid   lk_fid1;
         struct ll_fid   lk_fid2;
         __u64           lk_time;
@@ -684,10 +698,6 @@ extern void lustre_swab_mds_rec_link (struct mds_rec_link *lk);
 
 struct mds_rec_unlink {
         __u32           ul_opcode;
-        __u32           ul_fsuid;
-        __u32           ul_fsgid;
-        __u32           ul_cap;
-        __u32           ul_suppgid;
         __u32           ul_mode;
         struct ll_fid   ul_fid1;
         struct ll_fid   ul_fid2;
@@ -698,11 +708,7 @@ extern void lustre_swab_mds_rec_unlink (struct mds_rec_unlink *ul);
 
 struct mds_rec_rename {
         __u32           rn_opcode;
-        __u32           rn_fsuid;
-        __u32           rn_fsgid;
-        __u32           rn_cap;
-        __u32           rn_suppgid1;
-        __u32           rn_suppgid2;
+        __u32           rn_padding;
         struct ll_fid   rn_fid1;
         struct ll_fid   rn_fid2;
         __u64           rn_time;

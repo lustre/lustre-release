@@ -341,7 +341,8 @@ static int log_commit_thread(void *arg)
                                 continue;
                         }
 
-                        request = ptlrpc_prep_req(import, OBD_LOG_CANCEL, 1,
+                        request = ptlrpc_prep_req(import, LUSTRE_LOG_VERSION,
+                                                  OBD_LOG_CANCEL, 1,
                                                   &llcd->llcd_cookiebytes,
                                                   bufs);
                         up(&llcd->llcd_ctxt->loc_sem);

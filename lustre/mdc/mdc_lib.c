@@ -39,35 +39,17 @@
 #endif
 #endif
 
-void mdc_readdir_pack(struct ptlrpc_request *req, __u64 offset, __u32 size,
-                      struct ll_fid *mdc_fid)
+void mdc_readdir_pack(struct ptlrpc_request *req, int req_offset,
+                      __u64 offset, __u32 size, struct ll_fid *mdc_fid)
 {
         struct mds_body *b;
 
-        b = lustre_msg_buf(req->rq_reqmsg, 0, sizeof (*b));
-        b->fsuid = current->fsuid;
-        b->fsgid = current->fsgid;
-        b->capability = current->cap_effective;
+        b = lustre_msg_buf(req->rq_reqmsg, req_offset, sizeof (*b));
         b->fid1 = *mdc_fid;
         b->size = offset;                       /* !! */
-        b->suppgid = -1;
         b->nlink = size;                        /* !! */
 }
 
-static void mdc_pack_body(struct mds_body *b)
-{
-        LASSERT (b != NULL);
-
-        b->fsuid = current->fsuid;
-        b->fsgid = current->fsgid;
-        b->capability = current->cap_effective;
-}
-
-void mdc_pack_req_body(struct ptlrpc_request *req)
-{
-        struct mds_body *b = lustre_msg_buf(req->rq_reqmsg, 0, sizeof (*b));
-        mdc_pack_body(b);
-}
 static __u32 mds_pack_open_flags(__u32 flags)
 {
         return
@@ -93,9 +75,6 @@ void mdc_open_pack(struct lustre_msg *msg, int offset,
 
         /* XXX do something about time, uid, gid */
         rec->cr_opcode = REINT_OPEN;
-        rec->cr_fsuid = current->fsuid;
-        rec->cr_fsgid = current->fsgid;
-        rec->cr_cap = current->cap_effective;
         if (op_data != NULL)
                 rec->cr_fid = op_data->fid1;
         memset(&rec->cr_replayfid, 0, sizeof(rec->cr_replayfid));
@@ -103,7 +82,6 @@ void mdc_open_pack(struct lustre_msg *msg, int offset,
         rec->cr_flags = mds_pack_open_flags(flags);
         rec->cr_rdev = rdev;
         rec->cr_time = op_data->mod_time;
-        rec->cr_suppgid = op_data->ctxt.gid1;
 
         if (op_data->name) {
                 tmp = lustre_msg_buf(msg, offset + 1,
@@ -117,18 +95,15 @@ void mdc_open_pack(struct lustre_msg *msg, int offset,
                 memcpy (tmp, lmm, lmmlen);
         }
 }
-void mdc_getattr_pack(struct lustre_msg *msg, int valid, int offset,
+
+void mdc_getattr_pack(struct lustre_msg *msg, int offset, int valid,
                       int flags, struct mdc_op_data *data)
 {
         struct mds_body *b;
         b = lustre_msg_buf(msg, offset, sizeof (*b));
 
-        b->fsuid = current->fsuid;
-        b->fsgid = current->fsgid;
-        b->capability = current->cap_effective;
         b->valid = valid;
         b->flags = flags;
-        b->suppgid = data->ctxt.gid1;
 
         b->fid1 = data->fid1;
         b->fid2 = data->fid2;
@@ -145,7 +120,7 @@ void mdc_close_pack(struct ptlrpc_request *req, int offset, struct obdo *oa,
 {
         struct mds_body *body;
 
-        body = lustre_msg_buf(req->rq_reqmsg, 0, sizeof(*body));
+        body = lustre_msg_buf(req->rq_reqmsg, offset, sizeof(*body));
 
         mdc_pack_fid(&body->fid1, oa->o_id, 0, oa->o_mode);
         memcpy(&body->handle, &och->och_fh, sizeof(body->handle));

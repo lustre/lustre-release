@@ -159,26 +159,6 @@ static inline void ll_inode2fid(struct ll_fid *fid, struct inode *inode)
         fid->mds = ll_i2info(inode)->lli_mds;
 }
 
-static inline void ll_i2uctxt(struct ll_uctxt *ctxt, struct inode *i1,
-                              struct inode *i2)
-{
-        LASSERT(i1);
-        LASSERT(ctxt);
-
-        if (in_group_p(i1->i_gid))
-                ctxt->gid1 = i1->i_gid;
-        else
-                ctxt->gid1 = -1;
-
-        if (i2) {
-                if (in_group_p(i2->i_gid))
-                        ctxt->gid2 = i2->i_gid;
-                else
-                        ctxt->gid2 = -1;
-        } else
-                ctxt->gid2 = 0;
-}
-
 static inline void 
 ll_prepare_mdc_op_data(struct mdc_op_data *data, struct inode *i1,
                        struct inode *i2, const char *name, int namelen,
@@ -186,7 +166,6 @@ ll_prepare_mdc_op_data(struct mdc_op_data *data, struct inode *i1,
 {
         LASSERT(i1);
 
-        ll_i2uctxt(&data->ctxt, i1, i2);
         ll_inode2fid(&data->fid1, i1);
 
         /* it could be directory with mea */

@@ -52,6 +52,118 @@
 #include <linux/lustre_smfs.h>
 #include <linux/lustre_snap.h>
 
+#include "mds_internal.h"
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,4)
+struct group_info *groups_alloc(int ngroups)
+{
+        struct group_info *ginfo;
+
+        LASSERT(ngroups <= NGROUPS_SMALL);
+
+        OBD_ALLOC(ginfo, sizeof(*ginfo) + 1 * sizeof(gid_t *));
+        if (!ginfo)
+                return NULL;
+        ginfo->ngroups = ngroups;
+        ginfo->nblocks = 1;
+        ginfo->blocks[0] = ginfo->small_block;
+        atomic_set(&ginfo->usage, 1);
+
+        return ginfo;
+}
+
+void groups_free(struct group_info *ginfo)
+{
+        LASSERT(ginfo->ngroups <= NGROUPS_SMALL);
+        LASSERT(ginfo->nblocks == 1);
+        LASSERT(ginfo->blocks[0] == ginfo->small_block);
+
+        OBD_FREE(ginfo, sizeof(*ginfo) + 1 * sizeof(gid_t *));
+}
+
+/* for 2.4 the group number is small, so simply search the
+ * whole array.
+ */
+int groups_search(struct group_info *ginfo, gid_t grp)
+{
+        int i;
+
+        if (!ginfo)
+                return 0;
+
+        for (i = 0; i < ginfo->ngroups; i++)
+                if (GROUP_AT(ginfo, i) == grp)
+                        return 1;
+        return 0;
+}
+
+#else /* >= 2.6.4 */
+
+void groups_sort(struct group_info *ginfo)
+{
+        int base, max, stride;
+        int gidsetsize = ginfo->ngroups;
+
+        for (stride = 1; stride < gidsetsize; stride = 3 * stride + 1)
+                ; /* nothing */
+        stride /= 3;
+
+        while (stride) {
+                max = gidsetsize - stride;
+                for (base = 0; base < max; base++) {
+                        int left = base;
+                        int right = left + stride;
+                        gid_t tmp = GROUP_AT(ginfo, right);
+                                                                                                    
+                        while (left >= 0 && GROUP_AT(ginfo, left) > tmp) {
+                                GROUP_AT(ginfo, right) =
+                                    GROUP_AT(ginfo, left);
+                                right = left;
+                                left -= stride;
+                        }
+                        GROUP_AT(ginfo, right) = tmp;
+                }
+                stride /= 3;
+        }
+}
+
+int groups_search(struct group_info *ginfo, gid_t grp)
+{
+        int left, right;
+
+        if (!ginfo)
+                return 0;
+
+        left = 0;
+        right = ginfo->ngroups;
+        while (left < right) {
+                int mid = (left + right) / 2;
+                int cmp = grp - GROUP_AT(ginfo, mid);
+                if (cmp > 0)
+                        left = mid + 1;
+                else if (cmp < 0)
+                        right = mid;
+                else
+                        return 1;
+        }
+        return 0;
+}
+
+#endif
+
+void groups_from_buffer(struct group_info *ginfo, __u32 *gids)
+{
+        int i, ngroups = ginfo->ngroups;
+
+        for (i = 0; i < ginfo->nblocks; i++) {
+                int count = min(NGROUPS_PER_BLOCK, ngroups);
+
+                memcpy(ginfo->blocks[i], gids, count * sizeof(__u32));
+                gids += NGROUPS_PER_BLOCK;
+                ngroups -= count;
+        }
+}
+
 void mds_pack_dentry2fid(struct ll_fid *fid, struct dentry *dentry)
 {
         fid->id = dentry->d_inum;
@@ -70,6 +182,10 @@ void mds_pack_dentry2body(struct mds_body *b, struct dentry *dentry)
 void mds_pack_inode2fid(struct obd_device *obd, struct ll_fid *fid,
                                 struct inode *inode)
 {
+        if (!obd || !fid || !inode) {
+                printk("obd %p, fid %p, inode %p\n", obd, fid, inode);
+                LBUG();
+        }
         fid->id = inode->i_ino;
         fid->generation = inode->i_generation;
         fid->f_type = (S_IFMT & inode->i_mode);
@@ -109,7 +225,6 @@ void mds_pack_inode2body(struct obd_device *obd, struct mds_body *b,
                 b->nlink = inode->i_nlink;
         }
         b->generation = inode->i_generation;
-        b->suppgid = -1;
         b->mds = obd->u.mds.mds_num;
 }
 
@@ -126,11 +241,6 @@ static int mds_setattr_unpack(struct ptlrpc_request *req, int offset,
         if (rec == NULL)
                 RETURN (-EFAULT);
 
-        r->_ur_fsuid = rec->sa_fsuid;
-        r->_ur_fsgid = rec->sa_fsgid;
-        r->_ur_cap = rec->sa_cap;
-        r->_ur_suppgid1 = rec->sa_suppgid;
-        r->_ur_suppgid2 = -1;
         r->ur_fid1 = &rec->sa_fid;
         attr->ia_valid = rec->sa_valid;
         attr->ia_mode = rec->sa_mode;
@@ -173,17 +283,12 @@ static int mds_create_unpack(struct ptlrpc_request *req, int offset,
         if (rec == NULL)
                 RETURN (-EFAULT);
 
-        r->_ur_fsuid = rec->cr_fsuid;
-        r->_ur_fsgid = rec->cr_fsgid;
-        r->_ur_cap = rec->cr_cap;
         r->ur_fid1 = &rec->cr_fid;
         r->ur_fid2 = &rec->cr_replayfid;
         r->ur_mode = rec->cr_mode;
         r->ur_rdev = rec->cr_rdev;
         r->ur_time = rec->cr_time;
         r->ur_flags = rec->cr_flags;
-        r->_ur_suppgid1 = rec->cr_suppgid;
-        r->_ur_suppgid2 = -1;
 
         LASSERT_REQSWAB (req, offset + 1);
         r->ur_name = lustre_msg_string (req->rq_reqmsg, offset + 1, 0);
@@ -229,11 +334,6 @@ static int mds_link_unpack(struct ptlrpc_request *req, int offset,
         if (rec == NULL)
                 RETURN (-EFAULT);
 
-        r->_ur_fsuid = rec->lk_fsuid;
-        r->_ur_fsgid = rec->lk_fsgid;
-        r->_ur_cap = rec->lk_cap;
-        r->_ur_suppgid1 = rec->lk_suppgid1;
-        r->_ur_suppgid2 = rec->lk_suppgid2;
         r->ur_fid1 = &rec->lk_fid1;
         r->ur_fid2 = &rec->lk_fid2;
         r->ur_time = rec->lk_time;
@@ -257,12 +357,7 @@ static int mds_unlink_unpack(struct ptlrpc_request *req, int offset,
         if (rec == NULL)
                 RETURN(-EFAULT);
 
-        r->_ur_fsuid = rec->ul_fsuid;
-        r->_ur_fsgid = rec->ul_fsgid;
-        r->_ur_cap = rec->ul_cap;
         r->ur_mode = rec->ul_mode;
-        r->_ur_suppgid1 = rec->ul_suppgid;
-        r->_ur_suppgid2 = -1;
         r->ur_fid1 = &rec->ul_fid1;
         r->ur_fid2 = &rec->ul_fid2;
         r->ur_time = rec->ul_time;
@@ -282,15 +377,10 @@ static int mds_rename_unpack(struct ptlrpc_request *req, int offset,
         ENTRY;
 
         rec = lustre_swab_reqbuf (req, offset, sizeof (*rec),
-                                  lustre_swab_mds_rec_unlink);
+                                  lustre_swab_mds_rec_rename);
         if (rec == NULL)
                 RETURN(-EFAULT);
 
-        r->_ur_fsuid = rec->rn_fsuid;
-        r->_ur_fsgid = rec->rn_fsgid;
-        r->_ur_cap = rec->rn_cap;
-        r->_ur_suppgid1 = rec->rn_suppgid1;
-        r->_ur_suppgid2 = rec->rn_suppgid2;
         r->ur_fid1 = &rec->rn_fid1;
         r->ur_fid2 = &rec->rn_fid2;
         r->ur_time = rec->rn_time;
@@ -320,17 +410,12 @@ static int mds_open_unpack(struct ptlrpc_request *req, int offset,
         if (rec == NULL)
                 RETURN (-EFAULT);
 
-        r->_ur_fsuid = rec->cr_fsuid;
-        r->_ur_fsgid = rec->cr_fsgid;
-        r->_ur_cap = rec->cr_cap;
         r->ur_fid1 = &rec->cr_fid;
         r->ur_fid2 = &rec->cr_replayfid;
         r->ur_mode = rec->cr_mode;
         r->ur_rdev = rec->cr_rdev;
         r->ur_time = rec->cr_time;
         r->ur_flags = rec->cr_flags;
-        r->_ur_suppgid1 = rec->cr_suppgid;
-        r->_ur_suppgid2 = -1;
 
         LASSERT_REQSWAB (req, offset + 1);
         r->ur_name = lustre_msg_string (req->rq_reqmsg, offset + 1, 0);
@@ -388,4 +473,116 @@ int mds_update_unpack(struct ptlrpc_request *req, int offset,
         rec->ur_opcode = opcode;
         rc = mds_unpackers[opcode](req, offset, rec);
         RETURN(rc);
+}
+
+static inline void drop_ucred_ginfo(struct lvfs_ucred *ucred)
+{
+        if (ucred->luc_ginfo) {
+                put_group_info(ucred->luc_ginfo);
+                ucred->luc_ginfo = NULL;
+        }
+}
+
+/*
+ * root could set any group_info if we allowed setgroups, while
+ * normal user only could 'reduce' their group members -- which
+ * is somewhat expensive.
+ */
+int mds_init_ucred(struct lvfs_ucred *ucred, struct mds_req_sec_desc *rsd)
+{
+        struct group_info *gnew;
+
+        ENTRY;
+        LASSERT(ucred);
+        LASSERT(rsd);
+
+        ucred->luc_fsuid = rsd->rsd_fsuid;
+        ucred->luc_fsgid = rsd->rsd_fsgid;
+        ucred->luc_cap = rsd->rsd_cap;
+        ucred->luc_uid = rsd->rsd_uid;
+        ucred->luc_ghash = mds_get_group_entry(NULL, rsd->rsd_uid);
+        ucred->luc_ginfo = NULL;
+
+        if (ucred->luc_ghash && ucred->luc_ghash->ge_group_info) {
+                ucred->luc_ginfo = ucred->luc_ghash->ge_group_info;
+                get_group_info(ucred->luc_ginfo);
+        }
+
+        /* everything is done if we don't allow setgroups */
+        if (!mds_allow_setgroups())
+                RETURN(0);
+
+        if (rsd->rsd_ngroups > LUSTRE_MAX_GROUPS) {
+                CERROR("client provide too many groups: %d\n",
+                rsd->rsd_ngroups);
+                drop_ucred_ginfo(ucred);
+                mds_put_group_entry(NULL, ucred->luc_ghash);
+                RETURN(-EFAULT);
+        }
+
+        if (ucred->luc_uid == 0) {
+                if (rsd->rsd_ngroups == 0) {
+                        drop_ucred_ginfo(ucred);
+                        RETURN(0);
+                }
+
+                gnew = groups_alloc(rsd->rsd_ngroups);
+                if (!gnew) {
+                        CERROR("out of memory\n");
+                        drop_ucred_ginfo(ucred);
+                        mds_put_group_entry(NULL, ucred->luc_ghash);
+                        RETURN(-ENOMEM);
+                }
+                groups_from_buffer(gnew, rsd->rsd_groups);
+                /* can't rely on client to sort them */
+                groups_sort(gnew);
+
+                drop_ucred_ginfo(ucred);
+                ucred->luc_ginfo = gnew;
+        } else {
+                struct group_info *ginfo;
+                __u32 set = 0, cur = 0;
+
+                /* if no group info in hash, we don't
+                 * bother createing new
+                 */
+                if (!ucred->luc_ginfo)
+                        RETURN(0);
+
+                /* Note: freeing a group_info count on 'nblocks' instead of
+                 * 'ngroups', thus we can safely alloc enough buffer and reduce
+                 * and ngroups number later.
+                 */
+                gnew = groups_alloc(rsd->rsd_ngroups);
+                if (!gnew) {
+                        CERROR("out of memory\n");
+                        drop_ucred_ginfo(ucred);
+                        mds_put_group_entry(NULL, ucred->luc_ghash);
+                        RETURN(-ENOMEM);
+                }
+
+                ginfo = ucred->luc_ginfo;
+                while (cur < rsd->rsd_ngroups) {
+                        if (groups_search(ginfo, rsd->rsd_groups[cur]))
+                                GROUP_AT(gnew, set++) = rsd->rsd_groups[cur];
+                        cur++;
+                }
+                gnew->ngroups = set;
+
+                put_group_info(ucred->luc_ginfo);
+                ucred->luc_ginfo = gnew;
+        }
+        RETURN(0);
+}
+
+void mds_exit_ucred(struct lvfs_ucred *ucred)
+{
+        ENTRY;
+
+        if (ucred->luc_ginfo)
+                put_group_info(ucred->luc_ginfo);
+        if (ucred->luc_ghash)
+                mds_put_group_entry(NULL, ucred->luc_ghash);
+
+        EXIT;
 }

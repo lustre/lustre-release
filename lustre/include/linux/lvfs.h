@@ -6,6 +6,7 @@
 #define LL_FID_NAMELEN	(16 + 1 + 8 + 1)
 
 #if defined __KERNEL__
+#include <linux/lustre_compat25.h>
 #include <linux/lvfs_linux.h>
 #endif 
 
@@ -13,13 +14,16 @@
 #include <lvfs_user_fs.h>
 #endif
 
+struct mds_grp_hash_entry;
+
 /* simple.c */
 struct lvfs_ucred {
+        struct mds_grp_hash_entry *luc_ghash;
+        struct group_info *luc_ginfo;
         __u32 luc_fsuid;
         __u32 luc_fsgid;
         __u32 luc_cap;
-        __u32 luc_suppgid1;
-        __u32 luc_suppgid2;
+        __u32 luc_uid;
 };
 
 struct lvfs_callback_ops {
@@ -29,15 +33,20 @@ struct lvfs_callback_ops {
 #define OBD_RUN_CTXT_MAGIC      0xC0FFEEAA
 #define OBD_CTXT_DEBUG          /* development-only debugging */
 struct lvfs_run_ctxt {
-        struct vfsmount *pwdmnt;
-        struct dentry   *pwd;
-        mm_segment_t     fs;
-        struct lvfs_ucred luc;
-        int              ngroups;
+        struct vfsmount	        *pwdmnt;
+        struct dentry           *pwd;
+        mm_segment_t             fs;
+        struct lvfs_ucred        luc;
         struct lvfs_callback_ops cb_ops;
+        int                      ngroups;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,4)
+        struct group_info       *group_info;
+#else
+        struct group_info        group_info;
+#endif
 #ifdef OBD_CTXT_DEBUG
-	int 		 pid;
-        __u32            magic;
+        int                      pid;
+        __u32                    magic;
 #endif
 };
 

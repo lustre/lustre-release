@@ -1682,6 +1682,15 @@ class MDSDEV(Module):
                         setup ="%s %s %s %s %s %s" %(realdev, self.fstype, 
                                                self.name, mountfsoptions,
                                                self.master_mds, self.cachetype))
+
+            if development_mode():
+                procentry = "/proc/fs/lustre/mds/grp_hash_upcall"
+                upcall = os.path.abspath(os.path.dirname(sys.argv[0]) + "/l_getgroups")
+                if not (os.access(procentry, os.R_OK) and os.access(upcall, os.R_OK)):
+                    print "MDS Warning: failed to set group-hash upcall"
+                else:
+                    run("echo ", upcall, " > ", procentry)
+
         except CommandError, e:
             if e.rc == 2:
                 panic("MDS is missing the config log. Need to run " +

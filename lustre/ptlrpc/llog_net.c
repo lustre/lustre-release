@@ -79,12 +79,12 @@ int llog_origin_connect(struct llog_ctxt *ctxt, int count,
         LASSERT(ctxt->loc_imp);
         imp = ctxt->loc_imp;
 
-        request = ptlrpc_prep_req(imp, LLOG_ORIGIN_CONNECT, 1, &size, NULL);
+        request = ptlrpc_prep_req(imp, LUSTRE_LOG_VERSION, LLOG_ORIGIN_CONNECT,
+                                  1, &size, NULL);
         if (!request)
                 RETURN(-ENOMEM);
 
         req_body = lustre_msg_buf(request->rq_reqmsg, 0, sizeof(*req_body));
-
         req_body->lgdc_gen = ctxt->loc_gen;
         req_body->lgdc_logid = ctxt->loc_handle->lgh_id;
         req_body->lgdc_ctxt_idx = ctxt->loc_idx + 1;

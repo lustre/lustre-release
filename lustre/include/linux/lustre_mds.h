@@ -75,8 +75,7 @@ struct mds_update_record {
 #define _ur_fsuid    ur_uc.luc_fsuid
 #define _ur_fsgid    ur_uc.luc_fsgid
 #define _ur_cap      ur_uc.luc_cap
-#define _ur_suppgid1 ur_uc.luc_suppgid1
-#define _ur_suppgid2 ur_uc.luc_suppgid2
+#define _ur_uid      ur_uc.luc_uid
 
 /* i_attr_flags holds the open count in the inode in 2.4 */
 //XXX Alex implement on 2.4 with i_attr_flags and find soln for 2.5 please
@@ -158,6 +157,32 @@ struct mds_file_data {
         struct dentry        *mfd_dentry;
 };
 
+/* group hash table */
+struct mds_grp_hash_entry {
+        struct list_head        ge_hash;
+        struct group_info      *ge_group_info;
+        uid_t                   ge_uid;
+        int                     ge_flags;
+        atomic_t                ge_refcount;
+        wait_queue_head_t       ge_waitq;
+        long                    ge_acquisition_time;
+        unsigned long           ge_acquire_expire;
+        unsigned long           ge_expire;
+};
+
+#define MDSGRP_HASH_SIZE        (128)
+#define MDSGRP_HASH_INDEX(id)   ((id) & (MDSGRP_HASH_SIZE - 1))
+#define MDSGRP_UPCALL_MAXPATH   (1024)
+
+struct mds_grp_hash {
+        struct list_head        gh_table[MDSGRP_HASH_SIZE];
+        spinlock_t              gh_lock;
+        char                    gh_upcall[MDSGRP_UPCALL_MAXPATH];
+        int                     gh_entry_expire;
+        int                     gh_acquire_expire;
+        unsigned int            gh_allow_setgroups:1;
+};
+
 /* mds/mds_reint.c  */
 int mds_reint_rec(struct mds_update_record *r, int offset,
                   struct ptlrpc_request *req, struct lustre_handle *);
@@ -186,8 +211,7 @@ int it_open_error(int phase, struct lookup_intent *it);
 int mdc_set_lock_data(struct obd_export *exp, __u64 *lockh, void *data);
 int mdc_change_cbdata(struct obd_export *exp, struct ll_fid *fid, 
                       ldlm_iterator_t it, void *data);
-int mdc_intent_lock(struct obd_export *exp, struct ll_uctxt *, 
-                    struct ll_fid *parent, 
+int mdc_intent_lock(struct obd_export *exp, struct ll_fid *parent, 
                     const char *name, int len, void *lmm, int lmmsize,
                     struct ll_fid *child,
                     struct lookup_intent *, int, 
@@ -206,6 +230,8 @@ int mdc_enqueue(struct obd_export *exp,
                 void *cb_data);
 
 /* mdc/mdc_request.c */
+int mdc_get_secdesc_size(void);
+void mdc_pack_secdesc(struct ptlrpc_request *req, int size);
 int mdc_req2lustre_md(struct obd_export *exp_mdc, struct ptlrpc_request *req, 
                       unsigned int offset, struct obd_export *exp_osc, 
                       struct lustre_md *md);
