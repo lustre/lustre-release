@@ -824,7 +824,7 @@ int jt_obd_create(int argc, char **argv)
                 }
 
                 if (be_verbose(verbose, &next_time, i, &next_count, count))
-                        printf("%s: #%d is object id %Ld\n", cmdname(argv[0]),
+                        printf("%s: #%d is object id 0x%Lx\n", cmdname(argv[0]),
                                i, (long long)data.ioc_obdo1.o_id);
         }
         return rc;
@@ -898,7 +898,7 @@ int jt_obd_getattr(int argc, char **argv)
                 return CMD_HELP;
 
         IOCINIT(data);
-        data.ioc_obdo1.o_id = strtoul(argv[1], &end, 0);
+        data.ioc_obdo1.o_id = strtoull(argv[1], &end, 0);
         if (*end) {
                 fprintf(stderr, "error: %s: invalid objid '%s'\n",
                         cmdname(argv[0]), argv[1]);
@@ -1044,7 +1044,7 @@ int jt_obd_test_brw(int argc, char **argv)
         }
         if (argc >= 6) {
                 if (argv[5][0] == 't')
-                        objid = strtoul(argv[5] + 1, &end, 0) + thread;
+                        objid = strtoull(argv[5] + 1, &end, 0) + thread;
                 else
                         objid = strtoull(argv[5], &end, 0);
                 if (*end) {
