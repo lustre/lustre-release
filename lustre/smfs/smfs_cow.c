@@ -646,6 +646,33 @@ exit:
 }
 EXPORT_SYMBOL(smfs_cow_write);
 
+struct inode *smfs_cow_get_ind(struct inode *inode, int index)
+{
+        struct snap_info *snap_info = S2SNAPI(inode->i_sb);
+        struct fsfilt_operations *snapops = snap_info->snap_fsfilt; 
+        struct snap_table *table = snap_info->sntbl;
+        long block=(index << PAGE_CACHE_SHIFT) >> inode->i_sb->s_blocksize_bits;
+        int slot;
+
+        ENTRY; 
+        for (slot = table->sntbl_count - 1; slot >= 0; slot--) {
+                struct address_space_operations *aops = inode->i_mapping->a_ops;
+                struct inode *cache_inode = NULL;
+                int index = 0;
+
+                index = table->sntbl_items[slot].sn_index;
+                cache_inode = snapops->fs_get_indirect(inode, NULL, index);
+                                                                                                                                                                                                     
+                if (!cache_inode )  continue;
+                                                                                                                                                                                                     
+                if (aops->bmap(cache_inode->i_mapping, block))
+                       RETURN(cache_inode); 
+                iput(cache_inode);
+        }
+
+        RETURN(NULL);
+}
+EXPORT_SYMBOL(smfs_cow_get_ind);
 typedef int (*cow_funcs)(struct inode *dir, struct dentry *dentry, 
                          void *new_dir, void *new_dentry);
 

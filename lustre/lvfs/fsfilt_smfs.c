@@ -340,7 +340,27 @@ fsfilt_smfs_getpage(struct inode *inode, long int index)
 
         if (!cache_fsfilt->fs_getpage)
                 RETURN(ERR_PTR(-ENOSYS));
-
+#if CONFIG_SNAPFS
+        if (SMFS_DO_COW(S2SMI(inode->i_sb))) {
+                struct address_space_operations *aops = 
+                                cache_inode->i_mapping->a_ops;
+                if (aops->bmap(cache_inode->i_mapping, index)) {
+                        struct inode *ind_inode = NULL;
+                        struct inode *cache_ind = NULL;
+                        struct page  *page = NULL;
+                        
+                        ind_inode = smfs_cow_get_ind(inode, index);
+                        if (!ind_inode) {
+                                RETURN(ERR_PTR(-EIO));
+                        }
+                        cache_ind = I2CI(ind_inode);
+                        /*FIXME cow inode should be bottom fs inode */         
+                        page = cache_fsfilt->fs_getpage(cache_ind, index);
+                        iput(ind_inode); 
+                        RETURN(page);
+                } 
+        }
+#endif
         return cache_fsfilt->fs_getpage(cache_inode, index);
 }
 

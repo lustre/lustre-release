@@ -334,27 +334,27 @@ static int ext3_copy_reg_block(struct inode *dst, struct inode *src, int blk)
         if (dst_page == NULL)
                 GOTO(src_page_unlock, rc = -ENOMEM);
         kmap(dst_page);
-        
-        /*FIXME: should use mapping ops or block_prepare_write to prepare the block*/ 
-        rc = block_prepare_write(dst_page, 0, PAGE_CACHE_SIZE, ext3_get_block);
-        if (rc) {
-                CERROR("inode %lu, prepare write rc=%d \n", dst->i_ino, rc);
-                GOTO(dst_page_unlock, rc);
-        }
-                                                                                                                                                                                                     
+
+        rc = dst->i_mapping->a_ops->prepare_write(NULL, dst_page, 0, 
+                                                  PAGE_CACHE_SIZE - 1);
+        if (rc)
+                GOTO(dst_page_unlock, rc = -EFAULT);
         memcpy(page_address(dst_page), page_address(src_page), PAGE_CACHE_SIZE);
-                                                                                                                                                                                                     
-        generic_commit_write(NULL, dst_page, 0, PAGE_CACHE_SIZE);
-
+        
+        flush_dcache_page(dst_page);
+        
+        rc = dst->i_mapping->a_ops->commit_write(NULL, dst_page, 0, 
+                                                 PAGE_CACHE_SIZE - 1);
+        if (!rc)
+                rc = 1;
 dst_page_unlock:
-       kunmap(dst_page);
-       UnlockPage(dst_page);
-       page_cache_release(dst_page);
+        kunmap(dst_page);
+        UnlockPage(dst_page);
+        page_cache_release(dst_page);
 src_page_unlock:
-       kunmap(src_page);
-       page_cache_release(src_page);
-
-       RETURN(rc);
+        kunmap(src_page);
+        page_cache_release(src_page);
+        RETURN(rc);
 }
 static int ext3_copy_dir_block(struct inode *dst, struct inode *src, int blk)
 {
