@@ -166,11 +166,14 @@ command_t cmdlist[] = {
          "usage: test_ldlm"},
         {"ldlm_regress_start", jt_obd_ldlm_regress_start, 0,
          "start lock manager stress test\n"
-         "usage: %s [numthreads [refheld [numres [numext]]]]"},
+         "usage: ldlm_regress_start [numthreads [refheld [numres [numext]]]]"},
         {"ldlm_regress_stop", jt_obd_ldlm_regress_stop, 0,
          "stop lock manager stress test (no args)\n"},
         {"dump_ldlm", jt_obd_dump_ldlm, 0,
          "dump all lock manager state (no args)"},
+        {"lov_set_osc_active", jt_obd_lov_set_osc_active, 0,
+         "(de)activate an OSC in a LOV\n"
+         "usage: lov_set_osc_active <OSC UUID> <1|0 (active|inactive)>"},
         {"newconn", jt_obd_newconn, 0, "newconn <olduuid> [newuuid]"},
         {"failconn", jt_obd_failconn, 0, "failconn <uuid>"},
 

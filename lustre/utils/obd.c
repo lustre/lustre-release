@@ -40,6 +40,7 @@
 #include <linux/lustre_lib.h>
 #include <linux/lustre_idl.h>
 #include <linux/lustre_dlm.h>
+#include <linux/obd_lov.h>
 
 #include <unistd.h>
 #include <sys/un.h>
@@ -1414,6 +1415,35 @@ int jt_obd_ldlm_regress_stop(int argc, char **argv)
         if (rc)
                 fprintf(stderr, "error: %s: test failed: %s\n",
                         cmdname(argv[0]), strerror(rc = errno));
+        return rc;
+}
+
+int jt_obd_lov_set_osc_active(int argc, char **argv)
+{
+        struct obd_ioctl_data data;
+        int rc;
+
+        IOCINIT(data);
+        if (argc != 3)
+                return CMD_HELP;
+
+        data.ioc_inlbuf1 = argv[1];
+        data.ioc_inllen1 = strlen(argv[1]) + 1;
+
+        /* reuse offset for 'active' */
+        data.ioc_offset = atoi(argv[2]);
+
+        if (obd_ioctl_pack(&data, &buf, max)) {
+                fprintf(stderr, "error: %s: invalid ioctl\n", cmdname(argv[0]));
+                return -2;
+        }
+
+        rc = ioctl(fd, IOC_LOV_SET_OSC_ACTIVE, buf);
+
+        if (rc)
+                fprintf(stderr, "error: %s: failed: %s\n",
+                        cmdname(argv[0]), strerror(rc = errno));
+
         return rc;
 }
 

@@ -194,6 +194,7 @@ struct lov_obd {
         struct obd_device *mdcobd;
         struct lov_desc desc;
         int bufsize;
+        int refcount;
         struct lov_tgt_desc *tgts;
 };
 

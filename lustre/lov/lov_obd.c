@@ -37,8 +37,7 @@ static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
         struct lov_desc *desc = &lov->desc;
         struct lustre_handle mdc_conn;
         obd_uuid_t *uuidarray;
-        int rc, rc2;
-        int i;
+        int rc, rc2, i;
 
         MOD_INC_USE_COUNT;
         rc = class_connect(conn, obd, cluuid);
@@ -46,6 +45,12 @@ static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
                 MOD_DEC_USE_COUNT;
                 RETURN(rc);
         }
+
+        /* We don't want to actually do the underlying connections more than
+         * once, so keep track. */
+        lov->refcount++;
+        if (lov->refcount > 1)
+                RETURN(0);
 
         /* retrieve LOV metadata from MDS */
         rc = obd_connect(&mdc_conn, lov->mdcobd, NULL, recovd, recover);
@@ -117,10 +122,10 @@ static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
         }
 
         uuidarray = lustre_msg_buf(req->rq_repmsg, 1);
-        for (i = 0 ; i < desc->ld_tgt_count; i++)
+        for (i = 0; i < desc->ld_tgt_count; i++)
                 memcpy(lov->tgts[i].uuid, uuidarray[i], sizeof(*uuidarray));
 
-        for (i = 0 ; i < desc->ld_tgt_count; i++) {
+        for (i = 0; i < desc->ld_tgt_count; i++) {
                 struct obd_device *tgt = class_uuid2obd(uuidarray[i]);
                 if (!tgt) {
                         CERROR("Target %s not attached\n", uuidarray[i]);
@@ -137,6 +142,8 @@ static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
                                uuidarray[i], rc);
                         GOTO(out_disc, rc);
                 }
+                desc->ld_active_tgt_count++;
+                lov->tgts[i].active = 1;
         }
 
  out:
@@ -145,6 +152,8 @@ static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
 
  out_disc:
         while (i-- > 0) {
+                desc->ld_active_tgt_count--;
+                lov->tgts[i].active = 0;
                 rc2 = obd_disconnect(&lov->tgts[i].conn);
                 if (rc2)
                         CERROR("LOV Target %s disconnect error: rc = %d\n",
@@ -160,13 +169,25 @@ static int lov_disconnect(struct lustre_handle *conn)
 {
         struct obd_device *obd = class_conn2obd(conn);
         struct lov_obd *lov = &obd->u.lov;
-        int rc;
-        int i;
+        int rc, i;
 
         if (!lov->tgts)
                 goto out_local;
 
-        for (i = 0 ; i < lov->desc.ld_tgt_count; i++) {
+        /* Only disconnect the underlying laters on the final disconnect. */
+        lov->refcount--;
+        if (lov->refcount != 0)
+                goto out_local;
+
+        for (i = 0; i < lov->desc.ld_tgt_count; i++) {
+                if (!lov->tgts[i].active) {
+                        CERROR("Skipping disconnect for inactive OSC %s\n",
+                               lov->tgts[i].uuid);
+                        continue;
+                }
+
+                lov->desc.ld_active_tgt_count--;
+                lov->tgts[i].active = 0;
                 rc = obd_disconnect(&lov->tgts[i].conn);
                 if (rc) {
                         CERROR("Target %s disconnect error %d\n",
@@ -182,6 +203,64 @@ static int lov_disconnect(struct lustre_handle *conn)
         rc = class_disconnect(conn);
         if (!rc)
                 MOD_DEC_USE_COUNT;
+        return rc;
+}
+
+/* Error codes:
+ *
+ *  -EINVAL  : UUID can't be found in the LOV's target list
+ *  -ENOTCONN: The UUID is found, but the target connection is bad (!)
+ *  -EBADF   : The UUID is found, but the OBD is the wrong type (!)
+ *  -EALREADY: The OSC is already marked (in)active
+ */
+static int lov_set_osc_active(struct lov_obd *lov, obd_uuid_t uuid,
+                              int activate)
+{
+        struct obd_device *obd;
+        int i, rc = 0;
+        ENTRY;
+
+        CDEBUG(D_INFO, "Searching in lov %p for uuid %s (activate=%d)\n",
+               lov, uuid, activate);
+
+        spin_lock(&lov->lov_lock);
+        for (i = 0; i < lov->desc.ld_tgt_count; i++)
+                if (strncmp(uuid, lov->tgts[i].uuid,
+                            sizeof(lov->tgts[i].uuid)) == 0)
+                        break;
+
+        if (i == lov->desc.ld_tgt_count)
+                GOTO(out, rc = -EINVAL);
+
+        obd = class_conn2obd(&lov->tgts[i].conn);
+        if (obd == NULL) {
+                LBUG();
+                GOTO(out, rc = -ENOTCONN);
+        }
+
+        CDEBUG(D_INFO, "Found OBD %p type %s\n", obd, obd->obd_type->typ_name);
+        if (strcmp(obd->obd_type->typ_name, "osc") != 0) {
+                LBUG();
+                GOTO(out, rc = -EBADF);
+        }
+
+        if (lov->tgts[i].active == activate) {
+                CDEBUG(D_INFO, "OBD %p already %sactive!\n", obd,
+                       activate ? "" : "in");
+                GOTO(out, rc = -EALREADY);
+        }
+
+        CDEBUG(D_INFO, "Marking OBD %p %sactive\n", obd, activate ? "" : "in");
+
+        lov->tgts[i].active = activate;
+        if (activate)
+                lov->desc.ld_active_tgt_count++;
+        else
+                lov->desc.ld_active_tgt_count--;
+
+        EXIT;
+ out:
+        spin_unlock(&lov->lov_lock);
         return rc;
 }
 
@@ -202,6 +281,7 @@ static int lov_setup(struct obd_device *obd, obd_count len, void *buf)
                 RETURN(-EINVAL);
         }
 
+        spin_lock_init(&lov->lov_lock);
         lov->mdcobd = class_uuid2obd(data->ioc_inlbuf1);
         if (!lov->mdcobd) {
                 CERROR("LOV %s cannot locate MDC %s\n", obd->obd_uuid,
@@ -221,9 +301,7 @@ static int lov_create(struct lustre_handle *conn, struct obdo *oa,
         struct lov_stripe_md *lsm;
         struct lov_oinfo *loi;
         struct obdo *tmp;
-        int sub_offset, stripe_offset;
-        int ost_count;
-        int rc = 0, i;
+        int sub_offset, stripe_offset, ost_count, ost_idx, i, rc = 0;
         ENTRY;
 
         LASSERT(ea);
@@ -235,16 +313,19 @@ static int lov_create(struct lustre_handle *conn, struct obdo *oa,
         if (!tmp)
                 RETURN(-ENOMEM);
 
-
         lov = &export->exp_obd->u.lov;
-        ost_count = lov->desc.ld_tgt_count;
+
+        spin_lock(&lov->lov_lock);
+        ost_count = lov->desc.ld_active_tgt_count;
         oa->o_easize = lov_stripe_md_size(ost_count);
 
         lsm = *ea;
         if (!lsm) {
                 OBD_ALLOC(lsm, oa->o_easize);
-                if (!lsm)
+                if (!lsm) {
+                        spin_unlock(&lov->lov_lock);
                         GOTO(out_tmp, rc = -ENOMEM);
+                }
         }
 
         LASSERT(oa->o_valid & OBD_MD_FLID);
@@ -253,6 +334,8 @@ static int lov_create(struct lustre_handle *conn, struct obdo *oa,
         lsm->lsm_object_id = oa->o_id;
         if (!lsm->lsm_stripe_count)
                 lsm->lsm_stripe_count = lov->desc.ld_default_stripe_count;
+        if (lsm->lsm_stripe_count > ost_count)
+                lsm->lsm_stripe_count = ost_count;
 
         if (!lsm->lsm_stripe_size)
                 lsm->lsm_stripe_size = lov->desc.ld_default_stripe_size;
@@ -260,9 +343,24 @@ static int lov_create(struct lustre_handle *conn, struct obdo *oa,
         lsm->lsm_ost_count = ost_count;
         stripe_offset = (((int)lsm->lsm_object_id * lsm->lsm_stripe_count) %
                          ost_count);
-        sub_offset = ((int)lsm->lsm_object_id*lsm->lsm_stripe_count/ost_count)%
-                        lsm->lsm_stripe_count;
+        sub_offset = ((int)lsm->lsm_object_id*lsm->lsm_stripe_count/ost_count) %
+                lsm->lsm_stripe_count;
+        /* We don't use lsm_stripe_offset anywhere else, so it's not clear why
+         * we save it. -phil */
         lsm->lsm_stripe_offset = stripe_offset + sub_offset;
+
+        /* Pick the OSTs before we release the lock */
+        ost_idx = lsm->lsm_stripe_offset;
+        for (i = 0,loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count; i++,loi++) {
+                do {
+                        ost_idx = (ost_idx + 1) % lov->desc.ld_tgt_count;
+                } while (!lov->tgts[ost_idx].active);
+                CDEBUG(D_INFO, "Using ost_idx %d (uuid %s)\n", ost_idx,
+                       lov->tgts[ost_idx].uuid);
+                loi->loi_ost_idx = ost_idx;
+        }
+
+        spin_unlock(&lov->lov->lock);
 
         CDEBUG(D_INODE, "allocating %d subobjs for objid "LPX64" at idx %d\n",
                lsm->lsm_stripe_count,lsm->lsm_object_id,lsm->lsm_stripe_offset);
@@ -270,8 +368,8 @@ static int lov_create(struct lustre_handle *conn, struct obdo *oa,
         for (i = 0,loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count; i++,loi++) {
                 struct lov_stripe_md obj_md;
                 struct lov_stripe_md *obj_mdp = &obj_md;
-                int ost_idx = (((sub_offset + i) % lsm->lsm_stripe_count) +
-                               stripe_offset) % ost_count;
+
+                ost_idx = loi->loi_ost_idx;
 
                 /* create data objects with "parent" OA */
                 memcpy(tmp, oa, sizeof(*tmp));
@@ -284,7 +382,6 @@ static int lov_create(struct lustre_handle *conn, struct obdo *oa,
                 }
                 loi->loi_id = tmp->o_id;
                 loi->loi_size = tmp->o_size;
-                loi->loi_ost_idx = ost_idx;
                 CDEBUG(D_INODE, "objid "LPX64" has subobj "LPX64" at idx %d\n",
                        lsm->lsm_object_id, loi->loi_id, ost_idx);
         }
@@ -986,7 +1083,7 @@ static int lov_statfs(struct lustre_handle *conn, struct obd_statfs *osfs)
         lov = &export->exp_obd->u.lov;
 
         /* We only get block data from the OBD */
-        for (i = 0 ; i < lov->desc.ld_tgt_count; i++) {
+        for (i = 0; i < lov->desc.ld_tgt_count; i++) {
                 int err;
 
                 err = obd_statfs(&lov->tgts[i].conn, &lov_sfs);
@@ -1018,6 +1115,32 @@ static int lov_statfs(struct lustre_handle *conn, struct obd_statfs *osfs)
         RETURN(rc);
 }
 
+static int lov_iocontrol(long cmd, struct lustre_handle *conn, int len,
+                         void *karg, void *uarg)
+{
+        struct obd_device *obddev = class_conn2obd(conn);
+        struct obd_ioctl_data *data = karg;
+        int rc;
+        ENTRY;
+
+        if (_IOC_TYPE(cmd) != IOC_LOV_TYPE ||
+            _IOC_NR(cmd) < IOC_LOV_MIN_NR || _IOC_NR(cmd) > IOC_LOV_MAX_NR) {
+                CDEBUG(D_IOCTL, "invalid ioctl (type %ld, nr %ld, size %ld)\n",
+                       _IOC_TYPE(cmd), _IOC_NR(cmd), _IOC_SIZE(cmd));
+                RETURN(-EINVAL);
+        }
+
+        switch (cmd) {
+        case IOC_LOV_SET_OSC_ACTIVE:
+                rc = lov_set_osc_active(&obddev->u.lov, data->ioc_inlbuf1,
+                                        data->ioc_offset);
+                break;
+        default:
+                RETURN(-EINVAL);
+        }
+
+        RETURN(rc);
+}
 
 struct obd_ops lov_obd_ops = {
         o_setup:       lov_setup,
@@ -1034,7 +1157,8 @@ struct obd_ops lov_obd_ops = {
         o_punch:       lov_punch,
         o_enqueue:     lov_enqueue,
         o_cancel:      lov_cancel,
-        o_cancel_unused: lov_cancel_unused
+        o_cancel_unused: lov_cancel_unused,
+        o_iocontrol:   lov_iocontrol
 };
 
 

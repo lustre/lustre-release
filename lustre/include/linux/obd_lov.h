@@ -25,4 +25,10 @@ static inline int lov_mds_md_size(int stripes)
 }
 
 #endif
+
+#define IOC_LOV_TYPE                   'g'
+#define IOC_LOV_MIN_NR                 50
+#define IOC_LOV_SET_OSC_ACTIVE         _IOWR('g', 50, long)
+#define IOC_LOV_MAX_NR                 50
+
 #endif

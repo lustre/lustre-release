@@ -109,7 +109,7 @@ int ll_revalidate2(struct dentry *de, int flags, struct lookup_intent *it)
          * This is a temporary fix for bug 618962, but is one of the causes of
          * 619078. */
         CDEBUG(D_INFO, "d_count: %d\n", atomic_read(&de->d_count));
-        if (it && atomic_read(&de->d_count) > 0) {
+        if (it && atomic_read(&de->d_count) > 1) {
                 CDEBUG(D_INFO, "returning 1 for %*s during %s because d_count "
                        "is %d\n", de->d_name.len, de->d_name.name,
                        ldlm_it2str(it->it_op), atomic_read(&de->d_count));
