@@ -1,4 +1,10 @@
+AC_ARG_WITH(lib, [  --with-lib compile lustre library], host_cpu="lib")
+
 AC_MSG_CHECKING(if you are running user mode linux for $host_cpu ...)
+if test $host_cpu = "lib" ; then 
+        host_cpu="lib"
+	AC_MSG_RESULT(no building Lustre library)
+else
 if test -e $LINUX/include/asm-um ; then
 if test  X`ls -id $LINUX/include/asm/ | awk '{print $1}'` = X`ls -id $LINUX/include/asm-um | awk '{print $1}'` ; then
 	host_cpu="um";
@@ -10,13 +16,28 @@ fi
 else 
         AC_MSG_RESULT(no (asm-um missing))
 fi
+fi
 
 AC_MSG_CHECKING(setting make flags system architecture: )
 case ${host_cpu} in
+	lib )
+	AC_MSG_RESULT($host_cpu)
+	KCFLAGS='-g -Wall '
+	KCPPFLAGS='-D__arch_lib__ '
+        MOD_LINK=elf_i386
+;;
 	um )
 	AC_MSG_RESULT($host_cpu)
 	KCFLAGS='-g -Wall -pipe -Wno-trigraphs -Wstrict-prototypes -fno-strict-aliasing -fno-common '
-	KCPPFLAGS='-D__KERNEL__ -U__i386__ -Ui386 -DUM_FASTCALL -D__arch_um__ -DSUBARCH="i386" -DNESTING=0 -D_LARGEFILE64_SOURCE  -Derrno=kernel_errno -DPATCHLEVEL=4 -DMODULE -I$(LINUX)/arch/um/include '
+        case ${linux25} in
+                yes )
+                KCPPFLAGS='-D__KERNEL__ -U__i386__ -Ui386 -DUM_FASTCALL -D__arch_um__ -DSUBARCH="i386" -DNESTING=0 -D_LARGEFILE64_SOURCE  -Derrno=kernel_errno -DPATCHLEVEL=4 -DMODULE -I$(LINUX)/arch/um/include -I$(LINUX)/arch/um/kernel/tt/include -O2 -nostdinc -iwithprefix include -DKBUILD_BASENAME=$(MODULE) -DKBUILD_MODNAME=$(MODULE) '
+        ;;
+                * )
+		KCPPFLAGS='-D__KERNEL__ -U__i386__ -Ui386 -DUM_FASTCALL -D__arch_um__ -DSUBARCH="i386" -DNESTING=0 -D_LARGEFILE64_SOURCE  -Derrno=kernel_errno -DPATCHLEVEL=4 -DMODULE -I$(LINUX)/arch/um/include '
+	;;
+	esac
+
         MOD_LINK=elf_i386
 ;;
 	i*86 )

@@ -12,6 +12,9 @@
  */
 
 #define DEBUG_SUBSYSTEM S_LDLM
+#ifndef __KERNEL__
+#include <liblustre.h>
+#endif
 
 #include <linux/lustre_dlm.h>
 
