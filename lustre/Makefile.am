@@ -16,7 +16,7 @@ SUBDIRS = $(DIRS24) obdclass utils ptlrpc ldlm lib obdfilter mdc osc ost llite
 SUBDIRS+= obdecho lov tests doc scripts 
 
 DIST_SUBDIRS = $(SUBDIRS)
-EXTRA_DIST = BUGS FDL Rules include patches archdep.m4
+EXTRA_DIST = BUGS FDL Rules include archdep.m4
 
 # We get the version from the spec file.
 CONFIGURE_DEPENDENCIES = scripts/lustre.spec.in
