@@ -237,7 +237,8 @@ int portals_do_debug_dumplog(void *arg)
         file = filp_open(debug_file_name, O_CREAT|O_TRUNC|O_RDWR, 0644);
 
         if (!file || IS_ERR(file)) {
-                CERROR("cannot open %s for dumping", debug_file_name);
+                CERROR("cannot open %s for dumping: %ld\n", debug_file_name,
+                       PTR_ERR(file));
                 GOTO(out, PTR_ERR(file));
         } else {
                 printk(KERN_ALERT "dumping log to %s ... writing ...\n",
