@@ -22,10 +22,20 @@ struct lmv_obj {
 };
 
 int lmv_dirobj_blocking_ast(struct ldlm_lock *,
-                            struct ldlm_lock_desc *, void *, int);
-struct lmv_obj *lmv_grab_obj(struct obd_device *obd,
-                             struct ll_fid *fid, int create);
+                            struct ldlm_lock_desc *,
+			    void *, int);
+
 void lmv_put_obj(struct lmv_obj *obj);
+struct lmv_obj *lmv_get_obj(struct lmv_obj *obj);
+
+int lmv_setup_mgr(struct obd_device *obd);
+void lmv_cleanup_mgr(struct obd_device *obd);
+
+struct lmv_obj *lmv_grab_obj(struct obd_device *obd,
+			     struct ll_fid *fid);
+
+int lmv_create_obj(struct obd_export *exp, struct ll_fid *fid,
+		   struct mea *mea);
 
 int lmv_intent_lock(struct obd_export *, struct ll_uctxt *,
                     struct ll_fid *, const char *, int, void *, int,
@@ -43,13 +53,12 @@ int lmv_intent_open(struct obd_export *, struct ll_uctxt *,
                     struct ll_fid *, const char *, int, void *, int,
 		    struct ll_fid *, struct lookup_intent *, int,
 		    struct ptlrpc_request **, ldlm_blocking_callback);
-int lmv_create_obj_from_attrs(struct obd_export *, struct ll_fid *,
-				struct mea *);
+
 int lmv_check_connect(struct obd_device *obd);
 int lmv_revalidate_slaves(struct obd_export *, struct ptlrpc_request **,
                           struct ll_fid *, struct lookup_intent *, int,
 			  ldlm_blocking_callback cb_blocking);
-void lmv_cleanup_objs(struct obd_device *obd);
+
 int lmv_get_mea_and_update_object(struct obd_export *, struct ll_fid *);
 
 static inline struct mea * 

@@ -416,13 +416,12 @@ static int lmv_iocontrol(unsigned int cmd, struct obd_export *exp,
 
 static int lmv_setup(struct obd_device *obd, obd_count len, void *buf)
 {
-        struct lustre_cfg *lcfg = buf;
+        int i, rc = 0;
         struct lmv_desc *desc;
-        struct lmv_obd *lmv = &obd->u.lmv;
         struct obd_uuid *uuids;
         struct lmv_tgt_desc *tgts;
-        int i;
-        int rc = 0;
+        struct lustre_cfg *lcfg = buf;
+        struct lmv_obd *lmv = &obd->u.lmv;
         ENTRY;
 
         if (lcfg->lcfg_inllen1 < 1) {
@@ -453,7 +452,7 @@ static int lmv_setup(struct obd_device *obd, obd_count len, void *buf)
         OBD_ALLOC(lmv->tgts, lmv->bufsize);
         if (lmv->tgts == NULL) {
                 CERROR("Out of memory\n");
-                RETURN(-EINVAL);
+                RETURN(-ENOMEM);
         }
 
         lmv->desc = *desc;
@@ -462,10 +461,17 @@ static int lmv_setup(struct obd_device *obd, obd_count len, void *buf)
         for (i = 0, tgts = lmv->tgts; i < desc->ld_tgt_count; i++, tgts++)
                 tgts->uuid = uuids[i];
         
+        lmv->max_cookiesize = 0;
+
         lmv->max_easize = sizeof(struct ll_fid) *
                 desc->ld_tgt_count + sizeof(struct mea);
         
-        lmv->max_cookiesize = 0;
+        rc = lmv_setup_mgr(obd);
+        if (rc) {
+                CERROR("Can't setup LMV object manager, "
+                       "error %d.\n", rc);
+                OBD_FREE(lmv->tgts, lmv->bufsize);
+        }
 
         RETURN(rc);
 }
@@ -505,7 +511,7 @@ static int lmv_cleanup(struct obd_device *obd, int flags)
 {
         struct lmv_obd *lmv = &obd->u.lmv;
         ENTRY;
-        lmv_cleanup_objs(obd);
+        lmv_cleanup_mgr(obd);
         OBD_FREE(lmv->tgts, lmv->bufsize);
         RETURN(0);
 }
@@ -525,39 +531,42 @@ static int lmv_getstatus(struct obd_export *exp, struct ll_fid *fid)
 }
 
 static int lmv_getattr(struct obd_export *exp, struct ll_fid *fid,
-                unsigned long valid, unsigned int ea_size,
-                struct ptlrpc_request **request)
+                       unsigned long valid, unsigned int ea_size,
+                       struct ptlrpc_request **request)
 {
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
         int rc, i = fid->mds;
         struct lmv_obj *obj;
         ENTRY;
+
         rc = lmv_check_connect(obd);
         if (rc)
                 RETURN(rc);
-        obj = lmv_grab_obj(obd, fid, 0);
+
+        obj = lmv_grab_obj(obd, fid);
+        
         CDEBUG(D_OTHER, "GETATTR for %lu/%lu/%lu %s\n",
-               (unsigned long) fid->mds,
-               (unsigned long) fid->id,
-               (unsigned long) fid->generation,
-               obj ? "(splitted)" : "");
+               (unsigned long)fid->mds, (unsigned long)fid->id,
+               (unsigned long)fid->generation, obj ? "(splitted)" : "");
 
         LASSERT(fid->mds < lmv->desc.ld_tgt_count);
         rc = md_getattr(lmv->tgts[i].ltd_exp, fid,
-                             valid, ea_size, request);
+                        valid, ea_size, request);
         if (rc == 0 && obj) {
-                /* we have to loop over dirobjs here and gather attrs
-                 * for all the slaves */
+                /* we have to loop over dirobjs here and gather attrs for all
+                 * the slaves. */
 #warning "attrs gathering here"
         }
-        lmv_put_obj(obj);
+
+        if (obj)
+                lmv_put_obj(obj);
+        
         RETURN(rc);
 }
 
-static int lmv_change_cbdata(struct obd_export *exp,
-                                 struct ll_fid *fid, 
-                                 ldlm_iterator_t it, void *data)
+static int lmv_change_cbdata(struct obd_export *exp, struct ll_fid *fid, 
+                             ldlm_iterator_t it, void *data)
 {
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
@@ -567,12 +576,16 @@ static int lmv_change_cbdata(struct obd_export *exp,
         rc = lmv_check_connect(obd);
         if (rc)
                 RETURN(rc);
+        
         CDEBUG(D_OTHER, "CBDATA for %lu/%lu/%lu\n",
-               (unsigned long) fid->mds,
-               (unsigned long) fid->id,
+               (unsigned long) fid->mds, (unsigned long) fid->id,
                (unsigned long) fid->generation);
+        
         LASSERT(fid->mds < lmv->desc.ld_tgt_count);
-        rc = md_change_cbdata(lmv->tgts[fid->mds].ltd_exp, fid, it, data);
+
+        rc = md_change_cbdata(lmv->tgts[fid->mds].ltd_exp,
+                              fid, it, data);
+        
         RETURN(rc);
 }
 
@@ -598,7 +611,7 @@ static int lmv_change_cbdata_name(struct obd_export *exp, struct ll_fid *pfid,
 
         /* this is default mds for directory name belongs to */
         mds = pfid->mds;
-        obj = lmv_grab_obj(obd, pfid, 0);
+        obj = lmv_grab_obj(obd, pfid);
         if (obj) {
                 /* directory is splitted. look for right mds for this name */
                 mds = raw_name2idx(obj->objcount, name, len);
@@ -673,8 +686,8 @@ int lmv_get_mea_and_update_object(struct obd_export *exp, struct ll_fid *fid)
         if (md.mea == NULL)
                 GOTO(cleanup, rc = -ENODATA);
 
-        rc = lmv_create_obj_from_attrs(exp, fid, md.mea);
-        obd_free_memmd(exp, (struct lov_stripe_md **) &md.mea);
+        rc = lmv_create_obj(exp, fid, md.mea);
+        obd_free_memmd(exp, (struct lov_stripe_md **)&md.mea);
 
 cleanup:
         if (req)
@@ -700,7 +713,7 @@ int lmv_create(struct obd_export *exp, struct mdc_op_data *op_data,
         if (!lmv->desc.ld_active_tgt_count)
                 RETURN(-EIO);
 repeat:
-        obj = lmv_grab_obj(obd, &op_data->fid1, 0);
+        obj = lmv_grab_obj(obd, &op_data->fid1);
         if (obj) {
                 mds = raw_name2idx(obj->objcount, op_data->name,
                                    op_data->namelen);
@@ -777,13 +790,15 @@ int lmv_enqueue_slaves(struct obd_export *exp, int locktype,
                 memset(&data2, 0, sizeof(data2));
                 data2.fid1 = mea->mea_fids[i];
                 mds = data2.fid1.mds;
+                
                 rc = md_enqueue(lmv->tgts[mds].ltd_exp, locktype, it, lockmode,
                                 &data2, lockh + i, lmm, lmmsize, cb_completion,
                                 cb_blocking, cb_data);
+                
                 CDEBUG(D_OTHER, "take lock on slave %lu/%lu/%lu -> %d/%d\n",
-                       (unsigned long) mea->mea_fids[i].mds,
-                       (unsigned long) mea->mea_fids[i].id,
-                       (unsigned long) mea->mea_fids[i].generation,
+                       (unsigned long)mea->mea_fids[i].mds,
+                       (unsigned long)mea->mea_fids[i].id,
+                       (unsigned long)mea->mea_fids[i].generation,
                        rc, it->d.lustre.it_status);
                 if (rc)
                         GOTO(cleanup, rc);
@@ -833,7 +848,7 @@ int lmv_enqueue(struct obd_export *exp, int lock_type,
         }
 
         if (data->namelen) {
-                obj = lmv_grab_obj(obd, &data->fid1, 0);
+                obj = lmv_grab_obj(obd, &data->fid1);
                 if (obj) {
                         /* directory is splitted. look for
                          * right mds for this name */
@@ -868,7 +883,7 @@ int lmv_getattr_name(struct obd_export *exp, struct ll_fid *fid,
 	if (rc)
 		RETURN(rc);
 repeat:
-        obj = lmv_grab_obj(obd, fid, 0);
+        obj = lmv_grab_obj(obd, fid);
         if (obj) {
                 /* directory is splitted. look for right mds for this name */
                 mds = raw_name2idx(obj->objcount, filename, namelen - 1);
@@ -930,7 +945,7 @@ int lmv_link(struct obd_export *exp, struct mdc_op_data *data,
 		RETURN(rc);
         if (data->namelen != 0) {
                 /* usual link request */
-                obj = lmv_grab_obj(obd, &data->fid1, 0);
+                obj = lmv_grab_obj(obd, &data->fid1);
                 if (obj) {
                         rc = raw_name2idx(obj->objcount, data->name,
                                           data->namelen);
@@ -1000,7 +1015,7 @@ int lmv_rename(struct obd_export *exp, struct mdc_op_data *data,
                 goto request;
         }
 
-        obj = lmv_grab_obj(obd, &data->fid1, 0);
+        obj = lmv_grab_obj(obd, &data->fid1);
         if (obj) {
                 /* directory is already splitted, so we have to forward
                  * request to the right MDS */
@@ -1010,10 +1025,10 @@ int lmv_rename(struct obd_export *exp, struct mdc_op_data *data,
                        (unsigned long) obj->objs[mds].fid.mds,
                        (unsigned long) obj->objs[mds].fid.id,
                        (unsigned long) obj->objs[mds].fid.generation);
+                lmv_put_obj(obj);
         }
-        lmv_put_obj(obj);
 
-        obj = lmv_grab_obj(obd, &data->fid2, 0);
+        obj = lmv_grab_obj(obd, &data->fid2);
         if (obj) {
                 /* directory is already splitted, so we have to forward
                  * request to the right MDS */
@@ -1023,8 +1038,8 @@ int lmv_rename(struct obd_export *exp, struct mdc_op_data *data,
                        (unsigned long) obj->objs[mds].fid.mds,
                        (unsigned long) obj->objs[mds].fid.id,
                        (unsigned long) obj->objs[mds].fid.generation);
+                lmv_put_obj(obj);
         }
-        lmv_put_obj(obj);
         
         mds = data->fid1.mds;
 
@@ -1035,8 +1050,8 @@ request:
 }
 
 int lmv_setattr(struct obd_export *exp, struct mdc_op_data *data,
-                struct iattr *iattr, void *ea, int ealen, void *ea2, int ea2len,
-                struct ptlrpc_request **request)
+                struct iattr *iattr, void *ea, int ealen, void *ea2,
+                int ea2len, struct ptlrpc_request **request)
 {
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
@@ -1050,7 +1065,7 @@ int lmv_setattr(struct obd_export *exp, struct mdc_op_data *data,
 	if (rc)
 		RETURN(rc);
 
-        obj = lmv_grab_obj(obd, &data->fid1, 0);
+        obj = lmv_grab_obj(obd, &data->fid1);
         CDEBUG(D_OTHER, "SETATTR for %lu/%lu/%lu, valid 0x%x%s\n",
                (unsigned long) data->fid1.mds,
                (unsigned long) data->fid1.id,
@@ -1101,8 +1116,8 @@ int lmv_sync(struct obd_export *exp, struct ll_fid *fid,
         RETURN(rc);
 }
 
-int lmv_dirobj_blocking_ast(struct ldlm_lock *lock,
-                            struct ldlm_lock_desc *desc, void *data, int flag)
+int lmv_dirobj_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
+                            void *data, int flag)
 {
         struct lustre_handle lockh;
         struct lmv_obj *obj;
@@ -1121,17 +1136,15 @@ int lmv_dirobj_blocking_ast(struct ldlm_lock *lock,
         case LDLM_CB_CANCELING:
                 /* time to drop cached attrs for dirobj */
                 obj = lock->l_ast_data;
-                if (!obj)
-                        break;
-
-                CDEBUG(D_OTHER, "cancel %s on %lu/%lu, master %lu/%lu/%lu\n",
-                       lock->l_resource->lr_name.name[3] == 1 ?
-                                "LOOKUP" : "UPDATE",
-                       (unsigned long) lock->l_resource->lr_name.name[0],
-                       (unsigned long) lock->l_resource->lr_name.name[1],
-                       (unsigned long) obj->fid.mds,
-                       (unsigned long) obj->fid.id,
-                       (unsigned long) obj->fid.generation);
+                if (obj) {
+                        CDEBUG(D_OTHER, "cancel %s on %lu/%lu, master %lu/%lu/%lu\n",
+                               lock->l_resource->lr_name.name[3] == 1 ? "LOOKUP" : "UPDATE",
+                               (unsigned long)lock->l_resource->lr_name.name[0],
+                               (unsigned long)lock->l_resource->lr_name.name[1],
+                               (unsigned long)obj->fid.mds, (unsigned long)obj->fid.id,
+                               (unsigned long)obj->fid.generation);
+                        lmv_put_obj(obj);
+                }
                 break;
         default:
                 LBUG();
@@ -1177,7 +1190,7 @@ int lmv_readpage(struct obd_export *exp, struct ll_fid *mdc_fid,
                (unsigned long) rfid.id,
                (unsigned long) rfid.generation);
 
-        obj = lmv_grab_obj(obd, mdc_fid, 0);
+        obj = lmv_grab_obj(obd, mdc_fid);
         if (obj) {
                 /* find dirobj containing page with requested offset */
                 /* FIXME: what about protecting cached attrs here? */
@@ -1187,22 +1200,21 @@ int lmv_readpage(struct obd_export *exp, struct ll_fid *mdc_fid,
                         offset -= obj->objs[i].size;
                 }
                 rfid = obj->objs[i].fid;
+                lmv_put_obj(obj);
+                
                 CDEBUG(D_OTHER, "forward to %lu/%lu/%lu with offset %lu\n",
-                       (unsigned long) rfid.mds,
-                       (unsigned long) rfid.id,
-                       (unsigned long) rfid.generation,
-                       (unsigned long) offset);
+                       (unsigned long)rfid.mds, (unsigned long)rfid.id,
+                       (unsigned long)rfid.generation, (unsigned long)offset);
         }
-        rc = md_readpage(lmv->tgts[rfid.mds].ltd_exp, &rfid, offset, page, request);
-        if (rc == 0 && !fid_equal(&rfid, mdc_fid)) {
-                /* this page isn't from master object. to avoid
-                 * ./.. duplication in directory, we have to remove them
-                 * from all slave objects */
+        rc = md_readpage(lmv->tgts[rfid.mds].ltd_exp, &rfid, offset,
+                         page, request);
+        
+        if (rc == 0 && !fid_equal(&rfid, mdc_fid))
+                /* this page isn't from master object. To avoid "." and ".." 
+                 * duplication in directory, we have to remove them from all
+                 * slave objects */
                 lmv_remove_dots(page);
-        }
-      
-        lmv_put_obj(obj);
-
+        
         RETURN(rc);
 }
 
@@ -1258,7 +1270,8 @@ int lmv_unlink(struct obd_export *exp, struct mdc_op_data *data,
                 RETURN(rc);
         } else if (data->namelen != 0) {
                 struct lmv_obj *obj;
-                obj = lmv_grab_obj(obd, &data->fid1, 0);
+                
+                obj = lmv_grab_obj(obd, &data->fid1);
                 if (obj) {
                         i = raw_name2idx(obj->objcount, data->name,
                                          data->namelen);
@@ -1553,7 +1566,7 @@ int lmv_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
 }
 
 int lmv_unpackmd(struct obd_export *exp, struct lov_stripe_md **mem_tgt,
-                        struct lov_mds_md *disk_src, int mdsize)
+                 struct lov_mds_md *disk_src, int mdsize)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct lmv_obd *lmv = &obd->u.lmv;
@@ -1587,8 +1600,8 @@ int lmv_unpackmd(struct obd_export *exp, struct lov_stripe_md **mem_tgt,
 }
 
 int lmv_brw(int rw, struct obd_export *exp, struct obdo *oa,
-                struct lov_stripe_md *ea, obd_count oa_bufs,
-                struct brw_page *pgarr, struct obd_trans_info *oti)
+            struct lov_stripe_md *ea, obd_count oa_bufs,
+            struct brw_page *pgarr, struct obd_trans_info *oti)
 {
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
