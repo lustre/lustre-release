@@ -555,11 +555,9 @@ static int osc_brw_read(struct lustre_handle *conn, struct lov_stripe_md *md,
                 RETURN(0);
 
         l_wait_event_killable(desc->b_waitq, ptlrpc_check_bulk_received(desc));
+        rc = desc->b_flags & PTL_RPC_FL_INTR ? -EINTR : 0;
         ptlrpc_bulk_decref(desc);
-        if (desc->b_flags & PTL_RPC_FL_INTR)
-                RETURN(-EINTR);
-
-        RETURN(0);
+        RETURN(rc);
 
         /* Clean up on error. */
  out_unmap:
