@@ -1013,7 +1013,6 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
          * inode ourselves so we can call obdo_from_inode() always. */
         if (ia_valid & (lsm ? ~(ATTR_SIZE | ATTR_FROM_OPEN | ATTR_RAW) : ~0)) {
                 struct lustre_md md;
-                int save_valid;
                 ll_prepare_mdc_op_data(&op_data, inode, NULL, NULL, 0, 0);
 
                 rc = mdc_setattr(sbi->ll_mdc_exp, &op_data,
@@ -1037,10 +1036,8 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                  *
                  * NB: ATTR_SIZE will only be set at this point if the size
                  * resides on the MDS, ie, this file has no objects. */
-                save_valid = attr->ia_valid;
                 attr->ia_valid &= ~ATTR_SIZE;
                 inode_setattr(inode, attr);
-                attr->ia_valid = save_valid;
 
                 ll_update_inode(inode, md.body, md.lsm);
                 ptlrpc_req_finished(request);

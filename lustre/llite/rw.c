@@ -288,7 +288,8 @@ static int ll_ap_make_ready(void *data, int cmd)
  *
  * 1) Further extending writes may have landed in the page cache
  *    since a partial write first queued this page requiring us
- *    to write more from the page cache.
+ *    to write more from the page cache.  (No further races are possible, since
+ *    by the time this is called, the page is locked.)
  * 2) We might have raced with truncate and want to avoid performing
  *    write RPCs that are just going to be thrown away by the
  *    truncate's punch on the storage targets.
@@ -298,10 +299,11 @@ static int ll_ap_make_ready(void *data, int cmd)
  */
 static int ll_ap_refresh_count(void *data, int cmd)
 {
+        struct ll_inode_info *lli;
         struct ll_async_page *llap;
         struct lov_stripe_md *lsm;
         struct page *page;
-        __u64 kms;
+        __u64 kms, retval;
         ENTRY;
 
         /* readpage queues with _COUNT_STABLE, shouldn't get here. */
@@ -312,8 +314,12 @@ static int ll_ap_refresh_count(void *data, int cmd)
                 RETURN(PTR_ERR(llap));
 
         page = llap->llap_page;
-        lsm = ll_i2info(page->mapping->host)->lli_smd;
+        lli = ll_i2info(page->mapping->host);
+        lsm = lli->lli_smd;
+
+        down(&lli->lli_size_sem);
         kms = lov_merge_size(lsm, 1);
+        up(&lli->lli_size_sem);
 
         /* catch race with truncate */
         if (((__u64)page->index << PAGE_SHIFT) >= kms)
@@ -811,7 +817,7 @@ void ll_removepage(struct page *page)
         EXIT;
 }
 
-static int ll_page_matches(struct page *page)
+static int ll_page_matches(struct page *page, int readahead)
 {
         struct lustre_handle match_lockh = {0};
         struct inode *inode = page->mapping->host;
@@ -822,7 +828,9 @@ static int ll_page_matches(struct page *page)
         page_extent.l_extent.start = (__u64)page->index << PAGE_CACHE_SHIFT;
         page_extent.l_extent.end =
                 page_extent.l_extent.start + PAGE_CACHE_SIZE - 1;
-        flags = LDLM_FL_CBPENDING | LDLM_FL_BLOCK_GRANTED | LDLM_FL_TEST_LOCK;
+        flags = LDLM_FL_TEST_LOCK;
+        if (!readahead)
+                flags |= LDLM_FL_CBPENDING | LDLM_FL_BLOCK_GRANTED;
         matches = obd_match(ll_i2sbi(inode)->ll_osc_exp,
                             ll_i2info(inode)->lli_smd, LDLM_EXTENT,
                             &page_extent, LCK_PR | LCK_PW, &flags, inode,
@@ -963,7 +971,7 @@ static int ll_readahead(struct ll_readahead_state *ras,
                         goto next_page;
 
                 /* bail when we hit the end of the lock. */
-                if ((rc = ll_page_matches(page)) <= 0) {
+                if ((rc = ll_page_matches(page, 1)) <= 0) {
                         LL_CDEBUG_PAGE(D_READA | D_PAGE, page,
                                        "lock match failed: rc %d\n", rc);
                         ll_ra_stats_inc(mapping, RA_STAT_FAILED_MATCH);
@@ -1197,7 +1205,7 @@ int ll_readpage(struct file *filp, struct page *page)
                 GOTO(out_oig, rc = 0);
         }
 
-        rc = ll_page_matches(page);
+        rc = ll_page_matches(page, 0);
         if (rc < 0) {
                 LL_CDEBUG_PAGE(D_ERROR, page, "lock match failed: rc %d\n", rc);
                 GOTO(out, rc);
