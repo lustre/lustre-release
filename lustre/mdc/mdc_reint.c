@@ -108,8 +108,7 @@ int mdc_create(struct lustre_handle *conn,
                         name, namelen, NULL, 0);
 
         if (S_ISREG(mode)) {
-                tmp = lustre_msg_buf(req->rq_reqmsg, 2);
-                memcpy(tmp, smd, smd->lmd_easize);
+                lov_packmd(lustre_msg_buf(req->rq_reqmsg, 2), smd);
         } else if (S_ISLNK(mode)) {
                 tmp = lustre_msg_buf(req->rq_reqmsg, 2);
                 LOGL0(tgt, tgtlen, tmp);
