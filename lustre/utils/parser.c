@@ -43,7 +43,6 @@ extern void add_history(char *);
 
 static command_t * top_level;           /* Top level of commands, initialized by
                                     * InitParser                              */
-static command_t * match_tbl;           /* Command completion against this table */
 static char * parser_prompt = NULL;/* Parser prompt, set by InitParser      */
 static int done;                   /* Set to 1 if user types exit or quit   */
 
@@ -184,23 +183,25 @@ static int process(char *s, char ** next, command_t *lookup,
 }
 
 #ifdef HAVE_LIBREADLINE
-static char * command_generator(const char * text, int state) 
+static command_t * match_tbl;   /* Command completion against this table */
+
+static char * command_generator(const char * text, int state)
 {
         static int index,
                 len;
         char       *name;
 
         /* Do we have a match table? */
-        if (!match_tbl) 
+        if (!match_tbl)
                 return NULL;
-    
+
         /* If this is the first time called on this word, state is 0 */
         if (!state) {
                 index = 0;
                 len = (int)strlen(text);
         }
 
-        /* Return the next name in the command list that paritally matches test */
+        /* Return next name in the command list that paritally matches test */
         while ( (name = (match_tbl + index)->pc_name) ) {
                 index++;
 
@@ -214,7 +215,7 @@ static char * command_generator(const char * text, int state)
 }
 
 /* probably called by readline */
-static char **command_completion(char * text, int start, int end) 
+static char **command_completion(char * text, int start, int end)
 {
         command_t         * table;
         char        * pos;
