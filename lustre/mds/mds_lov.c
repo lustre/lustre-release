@@ -846,7 +846,7 @@ int mds_revalidate_lov_ea(struct obd_device *obd, struct inode *inode,
         struct lov_stripe_md *lsm = NULL;
         struct obdo *oa;
         struct obd_trans_info oti = {0};
-        unsigned valid = 0;
+        obd_valid valid = 0;
         int lmm_size = 0, lsm_size = 0, err, rc;
         void *handle;
         ENTRY;

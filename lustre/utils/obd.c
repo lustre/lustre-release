@@ -1406,7 +1406,7 @@ int jt_obd_getattr(int argc, char **argv)
         }
         /* to help obd filter */
         data.ioc_obdo1.o_mode = 0100644;
-        data.ioc_obdo1.o_valid = 0xffffffff;
+        data.ioc_obdo1.o_valid = (obd_valid)~0ULL;
         printf("%s: object id "LPX64"\n", jt_cmdname(argv[0]),data.ioc_obdo1.o_id);
 
         IOC_PACK(argv[0], data);
@@ -1473,7 +1473,7 @@ int jt_obd_test_getattr(int argc, char **argv)
         for (i = 1, next_count = verbose; i <= count; i++) {
                 data.ioc_obdo1.o_id = objid;
                 data.ioc_obdo1.o_mode = S_IFREG;
-                data.ioc_obdo1.o_valid = 0xffffffffffffffff;
+                data.ioc_obdo1.o_valid = (obd_valid)~0ULL;
                 IOC_PACK(argv[0], data);
                 rc = l2_ioctl(OBD_DEV_ID, OBD_IOC_GETATTR, &data);
                 shmem_bump();

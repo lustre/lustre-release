@@ -118,7 +118,8 @@ static int lprocfs_rd_group(char *page, char **start, off_t off,
         struct mds_obd *mds = &obd->u.mds;
 
         *eof = 1;
-        return snprintf(page, count, "%lu\n", (unsigned long)mds->mds_num);
+        return snprintf(page, count, "%lu\n",
+                        (unsigned long)mds->mds_num);
 }
 
 struct lprocfs_vars lprocfs_mds_obd_vars[] = {
