@@ -36,7 +36,6 @@ struct obd_import {
         struct obd_device        *imp_obd;
         int                       imp_flags;
         int                       imp_level;
-        __u64                     imp_last_bulk_xid;
         __u64                     imp_max_transno;
         __u64                     imp_peer_committed_transno;
 

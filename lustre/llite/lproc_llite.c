@@ -116,11 +116,10 @@ int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
         name[MAX_STRING_SIZE] = '\0';
         lvars[0].name = name;
 
-        
         LASSERT(sbi != NULL);
         LASSERT(mdc != NULL);
         LASSERT(osc != NULL);
-        
+
         /* Mount info */
         snprintf(name, MAX_STRING_SIZE, "fs%llu", mnt_instance);
 
@@ -137,10 +136,9 @@ int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
                 RETURN(err);
 
         /* MDC info */
-        
         strncpy(uuid.uuid, mdc, sizeof(uuid.uuid));
         obd = class_uuid2obd(&uuid);
-        
+
         LASSERT(obd != NULL);
         LASSERT(obd->obd_type != NULL);
         LASSERT(obd->obd_type->typ_name != NULL);
