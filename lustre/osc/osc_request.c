@@ -712,7 +712,6 @@ static int osc_brw_prep_request(int cmd, struct obd_import *imp,struct obdo *oa,
         struct ost_body         *body;
         struct obd_ioobj        *ioobj;
         struct niobuf_remote    *niobuf;
-        unsigned long            flags;
         int                      niocount;
         int                      size[3];
         int                      i;
@@ -2768,7 +2767,7 @@ static int osc_set_info(struct obd_export *exp, obd_count keylen,
             memcmp(key, "growth_count", strlen("growth_count")) == 0) {
                 if (vallen != sizeof(int))
                         RETURN(-EINVAL);
-		obd->u.cli.cl_oscc.oscc_grow_count = *((int*)val);
+		obd->u.cli.cl_oscc.oscc_max_grow_count = *((int*)val);
                 RETURN(0);
         }
 

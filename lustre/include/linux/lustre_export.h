@@ -30,8 +30,8 @@ struct osc_creator {
         obd_id                  oscc_last_id;//last available pre-created object
         obd_id                  oscc_next_id;// what object id to give out next
         obd_id                  oscc_gr;
-        int                     oscc_initial_create_count;
         int                     oscc_grow_count;
+        int                     oscc_max_grow_count;
         int                     oscc_kick_barrier;
         struct osc_created     *oscc_osccd;
         struct obdo             oscc_oa;

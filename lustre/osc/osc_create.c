@@ -124,6 +124,12 @@ static int oscc_internal_create(struct osc_creator *oscc)
 
         spin_lock(&oscc->oscc_lock);
         body->oa.o_id = oscc->oscc_last_id + oscc->oscc_grow_count;
+        /* probably we should take frequence of request into account? -bzzz */
+        if (oscc->oscc_grow_count < oscc->oscc_max_grow_count) {
+                oscc->oscc_grow_count *= 2;
+                if (oscc->oscc_grow_count > oscc->oscc_max_grow_count)
+                        oscc->oscc_grow_count = oscc->oscc_max_grow_count;
+        }
         body->oa.o_gr = oscc->oscc_gr;
         LASSERT(body->oa.o_gr > 0);
         body->oa.o_valid |= OBD_MD_FLID | OBD_MD_FLGROUP;
@@ -345,8 +351,8 @@ void oscc_init(struct obd_device *obd)
         spin_lock_init(&oscc->oscc_lock);
         oscc->oscc_obd = obd;
         oscc->oscc_kick_barrier = 100;
-        oscc->oscc_grow_count = 2000;
-        oscc->oscc_initial_create_count = 2000;
+        oscc->oscc_grow_count = 36;
+        oscc->oscc_max_grow_count = 2000;
 
         oscc->oscc_next_id = 2;
         oscc->oscc_last_id = 1;
