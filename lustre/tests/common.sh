@@ -326,14 +326,13 @@ setup_mds() {
 
 	$OBDCTL <<- EOF || return $?
 	newdev
-	attach mds MDSDEV MDSUUID  
+	attach mds MDSDEV MDSUUID
 	setup ${MDS} ${MDSFS}
 	quit
 	EOF
 }
 
 setup_mds_lov() { 
-
 	[ "$SETUP_MDS" = "y" ] || return 0
 
 	if [ -z "$LOVUUID" ]; then
@@ -344,7 +343,7 @@ setup_mds_lov() {
 	$OBDCTL <<- EOF || return $?
 	name2dev MDSDEV
 	connect 
-	lovconfig ${LOVUUID} 1 4096 0 OSCUUID
+	lovconfig ${LOVUUID} 1 4096 0 OSCDEV-`hostname`
 	disconnect
 	quit
 	EOF
@@ -417,7 +416,6 @@ setup_server() {
 }
 
 setup_osc() {
-	set -vx
 	[ "$SETUP_OSC" != "y" ] && return 0
 	[ "$OSC_NAMES" ] || OSC_NAMES=OSCDEV
 
@@ -429,7 +427,7 @@ setup_osc() {
 
 		$OBDCTL <<- EOF || return $rc
 		newdev
-		attach osc $THEOSC ${THEOSC}-UUID
+		attach osc $THEOSC ${THEOSC}-`hostname`
 		setup OBDUUID $OSTNODE
 		quit
 		EOF
@@ -437,7 +435,6 @@ setup_osc() {
 }
 
 setup_mdc() {
-	set -vx
 	[ "$SETUP_MDC" != "y" ] && return 0
 	[ "$MDC_NAMES" ] || MDC_NAMES=MDCDEV
 
@@ -449,7 +446,7 @@ setup_mdc() {
 
 		$OBDCTL <<- EOF || return $?
 		newdev
-		attach mdc $THEMDC ${THEMDC}-UUID
+		attach mdc $THEMDC ${THEMDC}-`hostname`
 		setup MDSUUID $MDSNODE
 		quit
 		EOF
@@ -466,15 +463,14 @@ setup_lov () {
 
 	$OBDCTL <<- EOF || return $?
 	newdev
-	attach lov LOVNAME  ${LOVUUID}
-	setup MDCDEV-UUID
+	attach lov LOVNAME ${LOVUUID}
+	setup MDCDEV-`hostname`
 	quit
 	EOF
 }        
 
 
 setup_mount() {
-	set -vx
 	[ "$SETUP_MOUNT" != "y" ] && return 0
 	[ "$MDC_NAMES" ] || MDC_NAMES=MDCDEV
 	[ "$OSC_NAMES" ] || OSC_NAMES=OSCDEV
@@ -490,8 +486,8 @@ setup_mount() {
 		fi
 
 		[ ! -d $MTPT ] && mkdir $MTPT
-		echo mount -t lustre_lite -o osc=${THEOSC}-UUID,mdc=${THEMDC}-UUID none $MTPT
-                mount -t lustre_lite -o osc=${THEOSC}-UUID,mdc=${THEMDC}-UUID none $MTPT
+		echo mount -t lustre_lite -o osc=${THEOSC}-`hostname`,mdc=${THEMDC}-`hostname` none $MTPT
+		mount -t lustre_lite -o osc=${THEOSC}-`hostname`,mdc=${THEMDC}-`hostname` none $MTPT
 	    done
 	done
 }
@@ -545,7 +541,7 @@ cleanup_portals() {
 	do_rmmod ksocknal
 	do_rmmod kptlrouter
 
-        [ -z "$TIME" ] || $DBGCTL debug_kernel /tmp/debug.3.$TIME
+        [ "$TIME" ] && $DBGCTL debug_kernel $R/tmp/debug.3.$TIME
 
 	do_rmmod portals
 }
@@ -630,7 +626,6 @@ cleanup_server() {
 }
 
 cleanup_mount() {
-	set -vx
 	[ "$SETUP_MOUNT" != "y" ] && return 0
 	[ "$MDC_NAMES" ] || MDC_NAMES=MDCDEV
 	[ "$OSC_NAMES" ] || OSC_NAMES=OSCDEV
