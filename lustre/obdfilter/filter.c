@@ -76,8 +76,9 @@ static int filter_prep(struct obd_device *obddev)
                 CERROR("cannot open/create P: rc = %d\n", rc);
                 GOTO(out_O, rc);
         }
-        CDEBUG(D_INODE, "putting P: %p, count = %d\n", dentry,dentry->d_count.counter-1);
-        l_dput(dentry);
+        CDEBUG(D_INODE, "putting P: %p, count = %d\n", dentry,
+               atomic_read(&dentry->d_count) - 1);
+        dput(dentry);
         dentry = simple_mkdir(current->fs->pwd, "D", 0700);
         CDEBUG(D_INODE, "got/created D: %p\n", dentry);
         if (IS_ERR(dentry)) {
@@ -85,8 +86,9 @@ static int filter_prep(struct obd_device *obddev)
                 CERROR("cannot open/create D: rc = %d\n", rc);
                 GOTO(out_O, rc);
         }
-        CDEBUG(D_INODE, "putting D: %p, count = %d\n", dentry,dentry->d_count.counter-1);
-        l_dput(dentry);
+        CDEBUG(D_INODE, "putting D: %p, count = %d\n", dentry,
+               atomic_read(&dentry->d_count) - 1);
+        dput(dentry);
 
         /*
          * Create directories and/or get dentries for each object type.
@@ -162,19 +164,19 @@ static int filter_prep(struct obd_device *obddev)
 
 out_O_mode:
         while (--mode >= 0) {
-                if (filter->fo_dentry_O_mode[mode]) {
+                struct dentry *dentry = filter->fo_dentry_O_mode[mode];
+                if (dentry) {
                         CDEBUG(D_INODE, "putting O/%s: %p, count = %d\n",
-                               obd_type_by_mode[mode],
-                               filter->fo_dentry_O_mode[mode],
-                               filter->fo_dentry_O_mode[mode]->d_count.counter-1);
-                        l_dput(filter->fo_dentry_O_mode[mode]);
+                               obd_type_by_mode[mode], dentry,
+                               atomic_read(&dentry->d_count) - 1);
+                        dput(dentry);
                         filter->fo_dentry_O_mode[mode] = NULL;
                 }
         }
 out_O:
         CDEBUG(D_INODE, "putting O: %p, count = %d\n", filter->fo_dentry_O,
-               filter->fo_dentry_O->d_count.counter);
-        l_dput(filter->fo_dentry_O);
+               atomic_read(&filter->fo_dentry_O->d_count) - 1);
+        dput(filter->fo_dentry_O);
         filter->fo_dentry_O = NULL;
         goto out;
 }
@@ -205,18 +207,18 @@ static void filter_post(struct obd_device *obddev)
                 CERROR("OBD filter: cannot close status file: rc = %ld\n", rc);
 
         for (mode = 0; mode < (S_IFMT >> S_SHIFT); mode++) {
-                if (filter->fo_dentry_O_mode[mode]) {
+                struct dentry *dentry = filter->fo_dentry_O_mode[mode];
+                if (dentry) {
                         CDEBUG(D_INODE, "putting O/%s: %p, count = %d\n",
-                               obd_type_by_mode[mode],
-                               filter->fo_dentry_O_mode[mode],
-                               filter->fo_dentry_O_mode[mode]->d_count.counter-1);
-                        l_dput(filter->fo_dentry_O_mode[mode]);
+                               obd_type_by_mode[mode], dentry,
+                               atomic_read(&dentry->d_count) - 1);
+                        dput(dentry);
                         filter->fo_dentry_O_mode[mode] = NULL;
                 }
         }
         CDEBUG(D_INODE, "putting O: %p, count = %d\n", filter->fo_dentry_O,
-               filter->fo_dentry_O->d_count.counter);
-        l_dput(filter->fo_dentry_O);
+               atomic_read(&filter->fo_dentry_O->d_count) - 1);
+        dput(filter->fo_dentry_O);
 out:
         pop_ctxt(&saved);
 }
@@ -265,7 +267,8 @@ static struct dentry *filter_fid2dentry(struct obd_device *obddev,
                name);
         dchild = lookup_one_len(name, dparent, len);
         CDEBUG(D_INODE, "got child obj O/%s/%s: %p, count = %d\n",
-               obd_mode_to_type(type), name, dchild, dchild->d_count.counter);
+               obd_mode_to_type(type), name, dchild,
+               atomic_read(&dchild->d_count));
 
         if (IS_ERR(dchild)) {
                 CERROR("child lookup error %ld\n", PTR_ERR(dchild));
@@ -337,10 +340,11 @@ static struct inode *filter_inode_from_obj(struct obd_device *obddev,
         lock_kernel();
         inode = iget(dentry->d_inode->i_sb, dentry->d_inode->i_ino);
         unlock_kernel();
-        CDEBUG(D_INODE, "put child %p, count = %d\n", dentry, dentry->d_count.counter-1);
-        l_dput(dentry);
+        CDEBUG(D_INODE, "put child %p, count = %d\n", dentry,
+               atomic_read(&dentry->d_count) - 1);
+        dput(dentry);
         CDEBUG(D_INODE, "got inode %p (%ld), count = %d\n", inode, inode->i_ino,
-               inode->i_count.counter);
+               atomic_read(&inode->i_count));
         return inode;
 }
 
@@ -443,8 +447,6 @@ static int filter_cleanup(struct obd_device * obddev)
 
         shrink_dcache_parent(sb->s_root);
         unlock_kernel();
-        CDEBUG(D_INODE, "putting sb->s_root: count = %d\n",
-               sb->s_root->d_count.counter-1);
         mntput(obddev->u.filter.fo_vfsmnt);
         obddev->u.filter.fo_sb = 0;
         kfree(obddev->u.filter.fo_fstype);
@@ -499,7 +501,8 @@ static inline void filter_from_inode(struct obdo *oa, struct inode *inode)
 
 static int filter_getattr(struct obd_conn *conn, struct obdo *oa)
 {
-        struct inode *inode;
+        struct obd_device *obddev;
+        struct dentry *dentry;
         ENTRY;
 
         if (!gen_client(conn)) {
@@ -507,26 +510,27 @@ static int filter_getattr(struct obd_conn *conn, struct obdo *oa)
                 RETURN(-EINVAL);
         }
 
-        inode = filter_inode_from_obj(conn->oc_dev, oa->o_id, oa->o_mode);
-        if (!inode)
-                RETURN(-ENOENT);
+        obddev = conn->oc_dev;
+        dentry = filter_fid2dentry(obddev, filter_parent(obddev, oa->o_mode),
+                                   oa->o_id, oa->o_mode);
+        if (IS_ERR(dentry))
+                RETURN(PTR_ERR(dentry));
 
         oa->o_valid &= ~OBD_MD_FLID;
-        filter_from_inode(oa, inode);
+        filter_from_inode(oa, dentry->d_inode);
 
-        CDEBUG(D_INODE, "put inode %p (%ld), count = %d, nlink = %d\n", inode,
-               inode->i_ino, inode->i_count.counter - 1, inode->i_nlink);
-        iput(inode);
+        dput(dentry);
         RETURN(0);
 }
 
 static int filter_setattr(struct obd_conn *conn, struct obdo *oa)
 {
         struct obd_run_ctxt saved;
-        struct inode *inode;
+        struct obd_device *obddev;
+        struct dentry *dentry;
         struct iattr iattr;
+        struct inode *inode;
         int rc;
-        struct dentry de;
         ENTRY;
 
         if (!gen_client(conn)) {
@@ -534,20 +538,22 @@ static int filter_setattr(struct obd_conn *conn, struct obdo *oa)
                 RETURN(-EINVAL);
         }
 
-        inode = filter_inode_from_obj(conn->oc_dev, oa->o_id, oa->o_mode);
-        if (!inode)
-                RETURN(-ENOENT);
+        obddev = conn->oc_dev;
+        dentry = filter_fid2dentry(obddev, filter_parent(obddev, oa->o_mode),
+                                   oa->o_id, oa->o_mode);
+        if (IS_ERR(dentry))
+                RETURN(PTR_ERR(dentry));
 
+        inode = dentry->d_inode;
         iattr_from_obdo(&iattr, oa);
         iattr.ia_mode &= ~S_IFMT;
         iattr.ia_mode |= S_IFREG;
-        de.d_inode = inode;
         lock_kernel();
         if (iattr.ia_mode & ATTR_SIZE)
                 down(&inode->i_sem);
         push_ctxt(&saved, &conn->oc_dev->u.filter.fo_ctxt);
         if (inode->i_op->setattr)
-                rc = inode->i_op->setattr(&de, &iattr);
+                rc = inode->i_op->setattr(dentry, &iattr);
         else
                 rc = inode_setattr(inode, &iattr);
         pop_ctxt(&saved);
@@ -555,15 +561,16 @@ static int filter_setattr(struct obd_conn *conn, struct obdo *oa)
                 up(&inode->i_sem);
         unlock_kernel();
 
-        CDEBUG(D_INODE, "put inode %p (%ld), count = %d, nlink = %d\n", inode,
-               inode->i_ino, inode->i_count.counter - 1, inode->i_nlink);
-        iput(inode);
+        CDEBUG(D_INODE, "put dentry %p, count = %d\n", inode,
+               atomic_read(&dentry->d_count) - 1);
+        dput(dentry);
         RETURN(rc);
 }
 
 static int filter_open(struct obd_conn *conn, struct obdo *oa)
 {
-        struct inode *inode;
+        struct obd_device *obddev;
+        struct dentry *dentry;
         /* ENTRY; */
 
         if (!gen_client(conn)) {
@@ -571,16 +578,19 @@ static int filter_open(struct obd_conn *conn, struct obdo *oa)
                 RETURN(-EINVAL);
         }
 
-        inode = filter_inode_from_obj(conn->oc_dev, oa->o_id, oa->o_mode);
-        if (!inode)
-                RETURN(-ENOENT);
+        obddev = conn->oc_dev;
+        dentry = filter_fid2dentry(obddev, filter_parent(obddev, oa->o_mode),
+                                   oa->o_id, oa->o_mode);
+        if (IS_ERR(dentry))
+                RETURN(PTR_ERR(dentry));
 
         return 0;
 } /* filter_open */
 
 static int filter_close(struct obd_conn *conn, struct obdo *oa)
 {
-        struct inode *inode;
+        struct obd_device *obddev;
+        struct dentry *dentry;
         /* ENTRY; */
 
         if (!gen_client(conn)) {
@@ -588,18 +598,18 @@ static int filter_close(struct obd_conn *conn, struct obdo *oa)
                 RETURN(-EINVAL);
         }
 
-        inode = filter_inode_from_obj(conn->oc_dev, oa->o_id, oa->o_mode);
-        if (!inode)
-                RETURN(-ENOENT);
+        obddev = conn->oc_dev;
+        dentry = filter_fid2dentry(obddev, filter_parent(obddev, oa->o_mode),
+                                   oa->o_id, oa->o_mode);
+        if (IS_ERR(dentry))
+                RETURN(PTR_ERR(dentry));
 
-        CDEBUG(D_INODE, "put inode %p (%ld), count = %d, nlink = %d\n", inode,
-               inode->i_ino, inode->i_count.counter - 1, inode->i_nlink);
-        iput(inode);  /* for the close */
-        CDEBUG(D_INODE, "objid #%ld has %d links, %d count after close\n",
-               inode->i_ino, inode->i_nlink, inode->i_count.counter - 1);
-        CDEBUG(D_INODE, "put inode %p (%ld), count = %d, nlink = %d\n", inode,
-               inode->i_ino, inode->i_count.counter - 1, inode->i_nlink);
-        iput(inode);  /* for this call */
+        CDEBUG(D_INODE, "put dentry %p, count = %d\n", dentry,
+               atomic_read(&dentry->d_count) - 1);
+        dput(dentry);  /* for the close */
+        CDEBUG(D_INODE, "put dentry %p, count = %d\n", dentry,
+               atomic_read(&dentry->d_count) - 1);
+        dput(dentry);  /* for this call */
         return 0;
 } /* filter_close */
 
@@ -681,8 +691,8 @@ static int filter_destroy(struct obd_conn *conn, struct obdo *oa)
         rc = vfs_unlink(dir_dentry->d_inode, object_dentry);
         pop_ctxt(&saved);
         CDEBUG(D_INODE, "put child %p, count = %d\n", object_dentry,
-               object_dentry->d_count.counter-1);
-        l_dput(object_dentry);
+               atomic_read(&object_dentry->d_count) - 1);
+        dput(object_dentry);
 
         EXIT;
 out:
@@ -963,7 +973,7 @@ static int filter_commitrw(int cmd, struct obd_conn *conn,
                         CDEBUG(D_INODE, "put inode %p (%ld), count = %d, nlink = %d\n",
                                page->mapping->host,
                                page->mapping->host->i_ino,
-                               page->mapping->host->i_count.counter - 1,
+                               atomic_read(&page->mapping->host->i_count) - 1,
                                page->mapping->host->i_nlink);
                         iput(page->mapping->host);
                 }
