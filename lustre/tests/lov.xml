@@ -78,7 +78,7 @@
 
   <mountpoint name="mtpt1" uuid="mtpt1-UUID">
     <path>/mnt/lov1</path>
-    <mds_ref uuidref="mds1-UUID"/>
+    <mdc_ref uuidref="mdc1-UUID"/>
     <lov_ref uuidref="lov1-UUID"/>
   </mountpoint>
 

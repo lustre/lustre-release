@@ -370,10 +370,10 @@ def prepare_mdc(node):
                 setup ="%s %s" %(mdsuuid, netuuid))
 
 def prepare_mountpoint(node):
-    name, uuid, oscuuid, mdsuuid, mtpt = getMTPTInfo(node)
-    print 'MTPT:', name, uuid, oscuuid, mdsuuid, mtpt
+    name, uuid, oscuuid, mdcuuid, mtpt = getMTPTInfo(node)
+    print 'MTPT:', name, uuid, oscuuid, mdcuuid, mtpt
     cmd = "mount -t lustre_lite -o ost=%s,mds=%s none %s" % \
-          (oscuuid, mdsuuid, mtpt)
+          (oscuuid, mdcuuid, mtpt)
     run("mkdir", mtpt)
     run(cmd)
 # ============================================================
@@ -451,8 +451,8 @@ def cleanup_osc(node):
         print "cleanup failed: ", name
 
 def cleanup_mountpoint(node):
-    name, uuid, oscuuid, mdsuuid, mtpt = getMTPTInfo(node)
-    print 'MTPT:', name, uuid, oscuuid, mdsuuid, mtpt
+    name, uuid, oscuuid, mdcuuid, mtpt = getMTPTInfo(node)
+    print 'MTPT:', name, uuid, oscuuid, mdcuuid, mtpt
     run("umount", mtpt)
 
 # ============================================================
@@ -553,11 +553,11 @@ def getOSCInfo(node):
 def getMTPTInfo(node):
     name, uuid = getNodeAttr(node)
     path = getText(node, 'path')
-    ref = node.getElementsByTagName('mds_ref')[0]
-    mdsuuid = ref.getAttribute('uuidref')
+    ref = node.getElementsByTagName('mdc_ref')[0]
+    mdcuuid = ref.getAttribute('uuidref')
     ref = node.getElementsByTagName('lov_ref')[0]
     lovuuid = ref.getAttribute('uuidref')
-    return (name, uuid, mdsuuid, lovuuid, path)
+    return (name, uuid, lovuuid, mdcuuid, path)
 
     
 # Get the text content from the first matching child
