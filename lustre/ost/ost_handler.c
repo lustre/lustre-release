@@ -519,7 +519,7 @@ static int ost_setup(struct obd_device *obddev, obd_count len,
 	ost->ost_thread = NULL;
 	ost->ost_flags = 0;
 
-	spin_lock_init(&obddev->u.ost.fo_lock);
+	spin_lock_init(&obddev->u.ost.ost_lock);
 
 	ost_start_srv_thread(obddev);
 

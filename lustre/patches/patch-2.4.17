@@ -1,0 +1,39 @@
+--- linux/kernel/ksyms.c.lustre-orig	Sun Jan 20 17:47:43 2002
++++ linux/kernel/ksyms.c	Sun Jan 20 17:34:49 2002
+@@ -280,6 +280,13 @@
+ EXPORT_SYMBOL(lock_page);
+ EXPORT_SYMBOL(unlock_page);
+ 
++/* Lustre symbols */
++EXPORT_SYMBOL(do_kern_mount);
++EXPORT_SYMBOL(do_umount);
++EXPORT_SYMBOL(sys_mkdir);
++EXPORT_SYMBOL(sys_rmdir);
++EXPORT_SYMBOL(sys_unlink);
++
+ /* device registration */
+ EXPORT_SYMBOL(register_chrdev);
+ EXPORT_SYMBOL(unregister_chrdev);
+--- linux/include/linux/fs.h.lustre-orig	Sun Jan 20 17:32:26 2002
++++ linux/include/linux/fs.h	Sun Jan 20 17:45:27 2002
+@@ -984,6 +984,8 @@
+ extern int may_umount(struct vfsmount *);
+ extern long do_mount(char *, char *, char *, unsigned long, void *);
+ 
++struct vfsmount *do_kern_mount(char *type, int flags, char *name, void *data);
++int do_umount(struct vfsmount *mnt, int flags);
+ #define kern_umount mntput
+ 
+ extern int vfs_statfs(struct super_block *, struct statfs *);
+@@ -1043,6 +1045,11 @@
+ 	return 0;
+ }
+ 
++/* fs/namei.c */ 
++asmlinkage long sys_mkdir(const char * pathname, int mode);
++asmlinkage long sys_rmdir(const char * pathname);
++asmlinkage long sys_unlink(const char * pathname);
++
+ /* fs/open.c */
+ 
+ asmlinkage long sys_open(const char *, int, int);

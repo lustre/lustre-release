@@ -25,6 +25,7 @@
 #include <linux/ext2_fs.h>
 #include <linux/quotaops.h>
 #include <asm/unistd.h>
+#include <asm/uaccess.h>
 #include <linux/obd_support.h>
 #include <linux/obd.h>
 #include <linux/lustre_lib.h>
@@ -387,7 +388,7 @@ static int mds_setup(struct obd_device *obddev, obd_count len,
 	mds->mds_ctxt.fs = KERNEL_DS;
 	MDS = mds;
 
-	spin_lock_init(&obddev->u.mds.fo_lock);
+	spin_lock_init(&obddev->u.mds.mds_lock);
 
 	mds_start_srv_thread(mds);
 
