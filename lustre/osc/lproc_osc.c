@@ -307,46 +307,6 @@ static struct lprocfs_vars lprocfs_module_vars[] = {
         { 0 }
 };
 
-void lproc_osc_hist(struct osc_histogram *oh, unsigned int value)
-{
-        unsigned long flags;
-
-        if (value >= OSC_HIST_MAX)
-                value = OSC_HIST_MAX - 1;
-
-        spin_lock_irqsave(&oh->oh_lock, flags);
-        oh->oh_buckets[value]++;
-        spin_unlock_irqrestore(&oh->oh_lock, flags);
-}
-
-void lproc_osc_hist_pow2(struct osc_histogram *oh, unsigned int value)
-{
-        unsigned int pow;
-
-        for (pow = 0; ((1 << pow) < value) && (pow <= OSC_HIST_MAX); pow++)
-                ;
-
-        lproc_osc_hist(oh, pow);
-}
-
-static unsigned long lproc_oh_sum(struct osc_histogram *oh)
-{
-        unsigned long ret = 0;
-        int i;
-
-        for (i = 0; i < OSC_HIST_MAX; i++)
-                ret +=  oh->oh_buckets[i];
-        return ret;
-}
-
-static void lproc_clear_oh(struct osc_histogram *oh)
-{
-        unsigned long flags;
-        spin_lock_irqsave(&oh->oh_lock, flags);
-        memset(oh->oh_buckets, 0, sizeof(oh->oh_buckets));
-        spin_unlock_irqrestore(&oh->oh_lock, flags);
-}
-
 #define pct(a,b) (b ? a * 100 / b : 0)
 
 static int osc_rpc_stats_seq_show(struct seq_file *seq, void *v)
@@ -376,12 +336,12 @@ static int osc_rpc_stats_seq_show(struct seq_file *seq, void *v)
         seq_printf(seq, "pages per rpc         rpcs   %% cum %% |");
         seq_printf(seq, "       rpcs   %% cum %%\n");
 
-        read_tot = lproc_oh_sum(&cli->cl_read_page_hist);
-        write_tot = lproc_oh_sum(&cli->cl_write_page_hist);
+        read_tot = lprocfs_oh_sum(&cli->cl_read_page_hist);
+        write_tot = lprocfs_oh_sum(&cli->cl_write_page_hist);
 
         read_cum = 0;
         write_cum = 0;
-        for (i = 0; i < OSC_HIST_MAX; i++) {
+        for (i = 0; i < OBD_HIST_MAX; i++) {
                 unsigned long r = cli->cl_read_page_hist.oh_buckets[i];
                 unsigned long w = cli->cl_write_page_hist.oh_buckets[i];
                 read_cum += r;
@@ -399,12 +359,12 @@ static int osc_rpc_stats_seq_show(struct seq_file *seq, void *v)
         seq_printf(seq, "rpcs in flight        rpcs   %% cum %% |");
         seq_printf(seq, "       rpcs   %% cum %%\n");
 
-        read_tot = lproc_oh_sum(&cli->cl_read_rpc_hist);
-        write_tot = lproc_oh_sum(&cli->cl_write_rpc_hist);
+        read_tot = lprocfs_oh_sum(&cli->cl_read_rpc_hist);
+        write_tot = lprocfs_oh_sum(&cli->cl_write_rpc_hist);
 
         read_cum = 0;
         write_cum = 0;
-        for (i = 0; i < OSC_HIST_MAX; i++) {
+        for (i = 0; i < OBD_HIST_MAX; i++) {
                 unsigned long r = cli->cl_read_rpc_hist.oh_buckets[i];
                 unsigned long w = cli->cl_write_rpc_hist.oh_buckets[i];
                 read_cum += r;
@@ -466,10 +426,10 @@ static ssize_t osc_rpc_stats_seq_write(struct file *file, const char *buf,
         struct obd_device *dev = seq->private;
         struct client_obd *cli = &dev->u.cli;
 
-        lproc_clear_oh(&cli->cl_read_rpc_hist);
-        lproc_clear_oh(&cli->cl_write_rpc_hist);
-        lproc_clear_oh(&cli->cl_read_page_hist);
-        lproc_clear_oh(&cli->cl_write_page_hist);
+        lprocfs_oh_clear(&cli->cl_read_rpc_hist);
+        lprocfs_oh_clear(&cli->cl_write_rpc_hist);
+        lprocfs_oh_clear(&cli->cl_read_page_hist);
+        lprocfs_oh_clear(&cli->cl_write_page_hist);
 
         return len;
 }
@@ -484,16 +444,8 @@ struct file_operations osc_rpc_stats_fops = {
 
 int lproc_osc_attach_seqstat(struct obd_device *dev)
 {
-        struct proc_dir_entry *entry;
-        ENTRY;
-
-        entry = create_proc_entry("rpc_stats", 0444, dev->obd_proc_entry);
-        if (entry == NULL)
-                RETURN(-ENOMEM);
-        entry->proc_fops = &osc_rpc_stats_fops;
-        entry->data = dev;
-
-        RETURN(0);
+        return lprocfs_obd_seq_create(dev, "rpc_stats", 0444, 
+                                      &osc_rpc_stats_fops, dev);
 }
 
 

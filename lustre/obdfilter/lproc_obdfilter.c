@@ -24,6 +24,7 @@
 #include <linux/version.h>
 #include <linux/lprocfs_status.h>
 #include <linux/obd.h>
+#include <linux/seq_file.h>
 
 #include "filter_internal.h"
 
@@ -74,6 +75,225 @@ static struct lprocfs_vars lprocfs_module_vars[] = {
         { "num_refs",     lprocfs_rd_numrefs,       0, 0 },
         { 0 }
 };
+
+void filter_tally_write(struct filter_obd *filter, struct page **pages,
+                     int nr_pages, unsigned long *blocks, int blocks_per_page)
+{
+        struct page *last_page = NULL;
+        unsigned long *last_block = NULL;
+        unsigned long discont_pages = 0;
+        unsigned long discont_blocks = 0;
+        int i;
+
+        if (nr_pages == 0)
+                return;
+
+        lprocfs_oh_tally_log2(&filter->fo_w_pages, nr_pages);
+
+        while (nr_pages-- > 0) {
+                if (last_page && (*pages)->index != (last_page->index + 1))
+                        discont_pages++;
+                last_page = *pages;
+                pages++;
+                for (i = 0; i < blocks_per_page; i++) {
+                        if (last_block && *blocks != (*last_block + 1))
+                                discont_blocks++;
+                        last_block = blocks++;
+                }
+        }
+
+        lprocfs_oh_tally(&filter->fo_w_discont_pages, discont_pages);
+        lprocfs_oh_tally(&filter->fo_w_discont_blocks, discont_blocks);
+}
+
+void filter_tally_read(struct filter_obd *filter, struct niobuf_local *lnb, 
+                       int niocount)
+{
+        struct niobuf_local *end;
+        struct page *last_page = NULL;
+        unsigned long discont_pages = 0;
+        unsigned long discont_blocks = 0;
+
+        if (niocount == 0)
+                return;
+
+        for (end = lnb + niocount; lnb < end && lnb->page; lnb++) {
+                struct page *page = lnb->page;
+                if (last_page) {
+                       if (page->index != (last_page->index + 1))
+                                discont_pages++;
+                        /* XXX not so smart for now */
+                        if ((page->buffers && last_page->buffers) &&
+                            (page->buffers->b_blocknr != 
+                             (last_page->buffers->b_blocknr + 1)))
+                                discont_blocks++;
+                }
+                last_page = page;
+        }
+
+        lprocfs_oh_tally_log2(&filter->fo_r_pages, niocount);
+        lprocfs_oh_tally(&filter->fo_r_discont_pages, discont_pages);
+        lprocfs_oh_tally(&filter->fo_r_discont_blocks, discont_blocks);
+}
+
+#define pct(a,b) (b ? a * 100 / b : 0)
+
+static int filter_brw_stats_seq_show(struct seq_file *seq, void *v)
+{
+        struct timeval now;
+        struct obd_device *dev = seq->private;
+        struct filter_obd *filter = &dev->u.filter;
+        unsigned long read_tot = 0, write_tot = 0, read_cum, write_cum;
+        int i;
+
+        do_gettimeofday(&now);
+
+        /* this sampling races with updates */
+
+        seq_printf(seq, "snapshot_time:         %lu:%lu (secs:usecs)\n",
+                   now.tv_sec, now.tv_usec);
+
+        seq_printf(seq, "\n\t\t\tread\t\t\twrite\n");
+        seq_printf(seq, "pages per brw         brws   %% cum %% |");
+        seq_printf(seq, "       rpcs   %% cum %%\n");
+
+        read_tot = lprocfs_oh_sum(&filter->fo_r_pages);
+        write_tot = lprocfs_oh_sum(&filter->fo_w_pages);
+
+        read_cum = 0;
+        write_cum = 0;
+        for (i = 0; i < OBD_HIST_MAX; i++) {
+                unsigned long r = filter->fo_r_pages.oh_buckets[i];
+                unsigned long w = filter->fo_w_pages.oh_buckets[i];
+                read_cum += r;
+                write_cum += w;
+                seq_printf(seq, "%d:\t\t%10lu %3lu %3lu   | %10lu %3lu %3lu\n", 
+                                 1 << i, r, pct(r, read_tot), 
+                                 pct(read_cum, read_tot), w, 
+                                 pct(w, write_tot),
+                                 pct(write_cum, write_tot));
+                if (read_cum == read_tot && write_cum == write_tot)
+                        break;
+        }
+
+        seq_printf(seq, "\n\t\t\tread\t\t\twrite\n");
+        seq_printf(seq, "discont pages        rpcs   %% cum %% |");
+        seq_printf(seq, "       rpcs   %% cum %%\n");
+
+        read_tot = lprocfs_oh_sum(&filter->fo_r_discont_pages);
+        write_tot = lprocfs_oh_sum(&filter->fo_w_discont_pages);
+
+        read_cum = 0;
+        write_cum = 0;
+
+        for (i = 0; i < OBD_HIST_MAX; i++) {
+                unsigned long r = filter->fo_r_discont_pages.oh_buckets[i];
+                unsigned long w = filter->fo_w_discont_pages.oh_buckets[i];
+                read_cum += r;
+                write_cum += w;
+                seq_printf(seq, "%d:\t\t%10lu %3lu %3lu   | %10lu %3lu %3lu\n", 
+                                 i, r, pct(r, read_tot), 
+                                 pct(read_cum, read_tot), w, 
+                                 pct(w, write_tot),
+                                 pct(write_cum, write_tot));
+                if (read_cum == read_tot && write_cum == write_tot)
+                        break;
+        }
+
+        seq_printf(seq, "\n\t\t\tread\t\t\twrite\n");
+        seq_printf(seq, "discont blocks        rpcs   %% cum %% |");
+        seq_printf(seq, "       rpcs   %% cum %%\n");
+
+        read_tot = lprocfs_oh_sum(&filter->fo_r_discont_blocks);
+        write_tot = lprocfs_oh_sum(&filter->fo_w_discont_blocks);
+
+        read_cum = 0;
+        write_cum = 0;
+        for (i = 0; i < OBD_HIST_MAX; i++) {
+                unsigned long r = filter->fo_r_discont_blocks.oh_buckets[i];
+                unsigned long w = filter->fo_w_discont_blocks.oh_buckets[i];
+                read_cum += r;
+                write_cum += w;
+                seq_printf(seq, "%d:\t\t%10lu %3lu %3lu   | %10lu %3lu %3lu\n", 
+                                 i, r, pct(r, read_tot), 
+                                 pct(read_cum, read_tot), w, 
+                                 pct(w, write_tot),
+                                 pct(write_cum, write_tot));
+                if (read_cum == read_tot && write_cum == write_tot)
+                        break;
+        }
+
+        return 0;
+}
+#undef pct
+
+static void *filter_brw_stats_seq_start(struct seq_file *p, loff_t *pos)
+{
+        if (*pos == 0)
+                return (void *)1;
+        return NULL;
+}
+static void *filter_brw_stats_seq_next(struct seq_file *p, void *v, loff_t *pos)
+{
+        ++*pos;
+        return NULL;
+}
+static void filter_brw_stats_seq_stop(struct seq_file *p, void *v)
+{
+}
+struct seq_operations filter_brw_stats_seq_sops = {
+        .start = filter_brw_stats_seq_start,
+        .stop = filter_brw_stats_seq_stop,
+        .next = filter_brw_stats_seq_next,
+        .show = filter_brw_stats_seq_show,
+};
+
+static int filter_brw_stats_seq_open(struct inode *inode, struct file *file)
+{
+        struct proc_dir_entry *dp = inode->u.generic_ip;
+        struct seq_file *seq;
+        int rc;
+ 
+        rc = seq_open(file, &filter_brw_stats_seq_sops);
+        if (rc)
+                return rc;
+        seq = file->private_data;
+        seq->private = dp->data;
+        return 0;
+}
+
+static ssize_t filter_brw_stats_seq_write(struct file *file, const char *buf,
+                                       size_t len, loff_t *off)
+{
+        struct seq_file *seq = file->private_data;
+        struct obd_device *dev = seq->private;
+        struct filter_obd *filter = &dev->u.filter;
+
+        lprocfs_oh_clear(&filter->fo_r_pages);
+        lprocfs_oh_clear(&filter->fo_w_pages);
+        lprocfs_oh_clear(&filter->fo_r_discont_pages);
+        lprocfs_oh_clear(&filter->fo_w_discont_pages);
+        lprocfs_oh_clear(&filter->fo_r_discont_blocks);
+        lprocfs_oh_clear(&filter->fo_w_discont_blocks);
+
+        return len;
+}
+
+struct file_operations filter_brw_stats_fops = {
+        .open    = filter_brw_stats_seq_open,
+        .read    = seq_read,
+        .write   = filter_brw_stats_seq_write,
+        .llseek  = seq_lseek,
+        .release = seq_release,
+};
+
+int lproc_filter_attach_seqstat(struct obd_device *dev)
+{
+        return lprocfs_obd_seq_create(dev, "brw_stats", 0444, 
+                                      &filter_brw_stats_fops, dev);
+}
+
+
 
 #endif /* LPROCFS */
 LPROCFS_INIT_VARS(filter,lprocfs_module_vars, lprocfs_obd_vars)
