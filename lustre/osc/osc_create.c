@@ -274,7 +274,7 @@ void oscc_init(struct lustre_handle *exph)
         memset(oed, 0, sizeof(*oed));
         INIT_LIST_HEAD(&oed->oed_oscc.oscc_list);
         init_waitqueue_head(&oed->oed_oscc.oscc_waitq);
-        spin_lock_init(&oscc->oscc_lock);
+        spin_lock_init(&oed->oed_oscc.oscc_lock);
         oed->oed_oscc.oscc_exph = exph;
         oed->oed_oscc.oscc_osccd = &osc_created;
         oed->oed_oscc.oscc_kick_barrier = 50;
