@@ -511,30 +511,28 @@ static int lov_punch(struct lustre_handle *conn, struct obdo *oa,
 }
 
 struct lov_callback_data {
-        atomic_t count;
-        struct io_cb_data *cbd;
-        brw_callback_t cb;
-        int err;
+        struct io_cb_data cbd;
+        brw_callback_t    cb;
 };
 
-int lov_osc_brw_callback(void *data, int err, int phase)
+int lov_osc_brw_callback(struct io_cb_data *data, int err, int phase)
 {
-        struct lov_callback_data *d = data;
+        struct lov_callback_data *lovcbd = (struct lov_callback_data *)data;
         int ret = 0;
         ENTRY; 
 
-        if (phase == CB_PHASE_START) { 
+        if (phase == CB_PHASE_START)
                 RETURN(0);
-        } else if (phase == CB_PHASE_FINISH) { 
+
+        if (phase == CB_PHASE_FINISH) { 
                 if (err) 
-                        d->err = err;
-                if (atomic_dec_and_test(&d->count)) { 
-                        ret = d->cb(d->cbd, 0, d->err); 
-                }
+                        lovcbd->cbd.err = err;
+                if (atomic_dec_and_test(&lovcbd->cbd.refcount))
+                        ret = lovcbd->cb(&lovcbd->cbd, 0, lovcbd->cbd.err); 
                 RETURN(ret);
-        } else 
-                LBUG();
-        EXIT;
+        }
+
+        LBUG();
         return 0;
 }
 
@@ -542,7 +540,7 @@ static inline int lov_brw(int cmd, struct lustre_handle *conn,
                           struct lov_stripe_md *md, 
                           obd_count oa_bufs,
                           struct brw_page *pga,
-                          brw_callback_t callback, void *data)
+                          brw_callback_t callback, struct io_cb_data *data)
 {
         int stripe_count = md->lmd_stripe_count;
         struct obd_export *export = class_conn2export(conn);
@@ -598,18 +596,18 @@ static inline int lov_brw(int cmd, struct lustre_handle *conn,
                 stripeinfo[which].subcount++;
         }
         
+        lov_cb_data->cbd = *data;
         lov_cb_data->cb = callback;
-        lov_cb_data->cbd = data;
-        atomic_set(&lov_cb_data->count, oa_bufs);
+        atomic_set(&lov_cb_data->cbd.refcount, oa_bufs);
         for (i=0 ; i < stripe_count ; i++) { 
                 int shift = stripeinfo[i].index;
 
                 obd_brw(cmd, &lov->tgts[i].conn, &stripeinfo[i].md, 
                         stripeinfo[i].bufct, &ioarr[shift], 
-                        lov_osc_brw_callback,  &lov_cb_data);
+                        lov_osc_brw_callback, (struct io_cb_data *)lov_cb_data);
         }
 
-        rc = callback(lov_cb_data, 0, CB_PHASE_START);
+        rc = callback((struct io_cb_data *)lov_cb_data, 0, CB_PHASE_START);
 
         RETURN(rc);
 }

@@ -48,26 +48,61 @@
 #include <linux/obd_class.h>
 #include <linux/lustre_net.h>
 #include <linux/lustre_lib.h>
+#include <linux/lustre_ha.h>
 
-
-int ll_sync_io_cb(void *data, int err, int phase)
+static int sync_io_timeout(void *data)
 {
-        struct io_cb_data *d = data;
+        struct io_cb_data *cbd = data;
+        struct ptlrpc_bulk_desc *desc = cbd->desc;
+
+        ENTRY;
+        desc->b_connection->c_level = LUSTRE_CONN_RECOVD;
+        desc->b_flags |= PTL_RPC_FL_TIMEOUT;
+        if (desc->b_client && desc->b_client->cli_recovd) {
+                /* XXXshaver Do we need a resend strategy, or do we just
+                 * XXXshaver return -ERESTARTSYS and punt it?
+                 */
+#if 0
+                recovd_cli_fail(desc->b_client);
+#endif
+        }
+
+        /* We go back to sleep, until we're resumed or interrupted. */
+        RETURN(0);
+}
+
+static int sync_io_intr(void *data)
+{
+        struct io_cb_data *cbd = data;
+        struct ptlrpc_bulk_desc *desc = cbd->desc;
+
+        ENTRY;
+        desc->b_flags |= PTL_RPC_FL_INTR;
+        RETURN(1); /* ignored, as of this writing */
+}
+
+int ll_sync_io_cb(struct io_cb_data *data, int err, int phase)
+{
         int ret;
         ENTRY; 
 
         if (phase == CB_PHASE_START) { 
-                ret = l_wait_event_killable(d->waitq, d->complete);
-                if (atomic_dec_and_test(&d->refcount))
-                        OBD_FREE(d, sizeof(*d));
+#warning shaver hardcoded timeout
+                struct l_wait_info lwi;
+                lwi = LWI_TIMEOUT_INTR(100, sync_io_timeout,
+                                       SIGTERM | SIGKILL | SIGINT, sync_io_intr,
+                                       data);
+                ret = l_wait_event(data->waitq, data->complete, &lwi);
+                if (atomic_dec_and_test(&data->refcount))
+                        OBD_FREE(data, sizeof(*data));
                 if (ret == -ERESTARTSYS)
                         return ret;
         } else if (phase == CB_PHASE_FINISH) { 
-                d->err = err;
-                d->complete = 1;
-                wake_up(&d->waitq); 
-                if (atomic_dec_and_test(&d->refcount))
-                        OBD_FREE(d, sizeof(*d));
+                data->err = err;
+                data->complete = 1;
+                wake_up(&data->waitq); 
+                if (atomic_dec_and_test(&data->refcount))
+                        OBD_FREE(data, sizeof(*data));
                 return err;
         } else 
                 LBUG();
@@ -75,7 +110,7 @@ int ll_sync_io_cb(void *data, int err, int phase)
         return 0;
 }
 
-struct  io_cb_data *ll_init_cb(void)
+struct io_cb_data *ll_init_cb(void)
 {
         struct io_cb_data *d;
 

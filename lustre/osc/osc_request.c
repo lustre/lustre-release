@@ -25,8 +25,7 @@
 #include <linux/obd_ost.h>
 #include <linux/obd_lov.h>
 #include <linux/init.h>
-
-
+#include <linux/lustre_ha.h>
 
 static int osc_getattr(struct lustre_handle *conn, struct obdo *oa, 
                        struct lov_stripe_md *md)
@@ -319,9 +318,9 @@ static void brw_finish(struct ptlrpc_bulk_desc *desc, void *data)
         int err = 0;
         ENTRY;
 
-        if (desc->b_flags & PTL_RPC_FL_INTR) {
-                err = -ERESTARTSYS;
-                CERROR("got signal\n");
+        if (desc->b_flags & PTL_RPC_FL_TIMEOUT) {
+                err = (desc->b_flags & PTL_RPC_FL_INTR ? -ERESTARTSYS : 
+                       -ETIMEDOUT);
         }
 
         if (cb_data->callback)
@@ -339,7 +338,9 @@ static void brw_finish(struct ptlrpc_bulk_desc *desc, void *data)
         EXIT;
 }
 
-static int osc_brw_read(struct lustre_handle *conn, struct lov_stripe_md *md, obd_count page_count, struct brw_page *pga, brw_callback_t callback, void *data)
+static int osc_brw_read(struct lustre_handle *conn, struct lov_stripe_md *md,
+                        obd_count page_count, struct brw_page *pga,
+                        brw_callback_t callback, struct io_cb_data *data)
 {
         struct ptlrpc_connection *connection = client_conn2cli(conn)->cl_conn;
         struct ptlrpc_request *request = NULL;
@@ -453,7 +454,7 @@ out_unmap:
 static int osc_brw_write(struct lustre_handle *conn,
                          struct lov_stripe_md *md, obd_count page_count,
                          struct brw_page *pga,
-                         brw_callback_t callback, void *data)
+                         brw_callback_t callback, struct io_cb_data *data)
 {
         struct ptlrpc_connection *connection = client_conn2cli(conn)->cl_conn;
         struct ptlrpc_request *request = NULL;
@@ -581,7 +582,7 @@ out_cb:
 static int osc_brw(int cmd, struct lustre_handle *conn,
                    struct lov_stripe_md *md, obd_count page_count,
                    struct brw_page *pagear, brw_callback_t callback, 
-                   void *data) 
+                   struct io_cb_data *data) 
 {
         if (cmd & OBD_BRW_WRITE)
                 return osc_brw_write(conn, md, page_count, pagear, callback, data);

@@ -23,7 +23,8 @@ struct obd_type {
         int  typ_refcnt;
 };
 
-typedef int (*brw_callback_t)(void *, int err, int phase);
+struct io_cb_data;
+typedef int (*brw_callback_t)(struct io_cb_data *, int err, int phase);
 struct brw_page { 
         struct page *pg;
         obd_size count;
@@ -206,6 +207,7 @@ struct obd_device {
         } u;
 };
 
+struct io_cb_data;
 
 struct obd_ops {
         int (*o_iocontrol)(long cmd, struct lustre_handle *, int len,
@@ -241,7 +243,7 @@ struct obd_ops {
         int (*o_brw)(int rw, struct lustre_handle *conn,
                      struct lov_stripe_md *md, obd_count oa_bufs,
                      struct brw_page *pgarr, brw_callback_t callback, 
-                     void * data);
+                     struct io_cb_data *data);
         int (*o_punch)(struct lustre_handle *conn, struct obdo *tgt,
                        struct lov_stripe_md *md, obd_size count,
                        obd_off offset);

@@ -269,6 +269,7 @@ static int ptlrpc_check_reply(struct ptlrpc_request *req)
                 GOTO(out, rc = 1);
         }
 
+#if 0
         if (req->rq_flags & PTL_RPC_FL_RESEND) { 
                 if (l_killable_pending(current)) {
                         CERROR("-- INTR --\n");
@@ -278,6 +279,7 @@ static int ptlrpc_check_reply(struct ptlrpc_request *req)
                 CERROR("-- RESEND --\n");
                 GOTO(out, rc = 1);
         }
+#endif
 
         if (req->rq_flags & PTL_RPC_FL_RECOVERY) { 
                 CERROR("-- RESTART --\n");
@@ -470,9 +472,38 @@ void ptlrpc_restart_req(struct ptlrpc_request *req)
         EXIT;
 }
 
+static int expired_request(void *data)
+{
+        struct ptlrpc_request *req = data;
+        
+        ENTRY;
+        req->rq_timeout = 0;
+        req->rq_connection->c_level = LUSTRE_CONN_RECOVD;
+        req->rq_flags |= PTL_RPC_FL_TIMEOUT;
+        /* Activate the recovd for this client, if there is one. */
+        if (req->rq_client && req->rq_client->cli_recovd)
+                recovd_cli_fail(req->rq_client);
+
+        /* If this request is for recovery or other primordial tasks,
+         * don't go back to sleep.
+         */
+        if (req->rq_level < LUSTRE_CONN_FULL)
+                RETURN(1);
+        RETURN(0);
+}
+
+static int interrupted_request(void *data)
+{
+        struct ptlrpc_request *req = data;
+        ENTRY;
+        req->rq_flags |= PTL_RPC_FL_INTR;
+        RETURN(1); /* ignored, as of this writing */
+}
+
 int ptlrpc_queue_wait(struct ptlrpc_request *req)
 {
-        int rc = 0, timeout;
+        int rc = 0;
+        struct l_wait_info lwi;
         struct ptlrpc_client *cli = req->rq_client;
         ENTRY;
 
@@ -485,16 +516,22 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
         if (req->rq_level > req->rq_connection->c_level) { 
                 CERROR("process %d waiting for recovery (%d > %d)\n", 
                        current->pid, req->rq_level, req->rq_connection->c_level);
+
                 spin_lock(&cli->cli_lock);
                 list_del_init(&req->rq_list);
                 list_add_tail(&req->rq_list, &cli->cli_delayed_head);
                 spin_unlock(&cli->cli_lock);
-                l_wait_event_killable
-                        (req->rq_wait_for_rep, 
-                         req->rq_level <= req->rq_connection->c_level);
+
+#warning shaver: what happens when we get interrupted during this wait?
+                lwi = LWI_INTR(SIGTERM | SIGKILL | SIGINT, NULL, NULL);
+                l_wait_event(req->rq_wait_for_rep,
+                             req->rq_level <= req->rq_connection->c_level,
+                             &lwi);
+
                 spin_lock(&cli->cli_lock);
                 list_del_init(&req->rq_list);
                 spin_unlock(&cli->cli_lock);
+
                 CERROR("process %d resumed\n", current->pid);
         }
  resend:
@@ -516,22 +553,23 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
         spin_unlock(&cli->cli_lock);
 
         CDEBUG(D_OTHER, "-- sleeping\n");
-        /*
-         * req->rq_timeout gets reset in the timeout case, and
-         * l_wait_event_timeout is a macro, so save the timeout value here.
-         */
-        timeout = req->rq_timeout * HZ;
-        l_wait_event_timeout(req->rq_wait_for_rep, ptlrpc_check_reply(req),
-                             timeout);
+        lwi = LWI_TIMEOUT_INTR(req->rq_timeout * HZ, expired_request,
+                               SIGKILL | SIGTERM | SIGINT, interrupted_request,
+                               req);
+        l_wait_event(req->rq_wait_for_rep, ptlrpc_check_reply(req), &lwi);
         CDEBUG(D_OTHER, "-- done\n");
 
-        if (req->rq_flags & PTL_RPC_FL_RESEND) {
+        /* Don't resend if we were interrupted. */
+        if ((req->rq_flags & (PTL_RPC_FL_RESEND | PTL_RPC_FL_INTR)) ==
+            PTL_RPC_FL_RESEND) {
                 req->rq_flags &= ~PTL_RPC_FL_RESEND;
                 goto resend;
         }
 
         up(&cli->cli_rpc_sem);
         if (req->rq_flags & PTL_RPC_FL_INTR) {
+                if (!(req->rq_flags & PTL_RPC_FL_TIMEOUT))
+                        LBUG(); /* should only be interrupted if we timed out. */
                 /* Clean up the dangling reply buffers */
                 ptlrpc_abort(req);
                 GOTO(out, rc = -EINTR);
@@ -568,6 +606,7 @@ int ptlrpc_replay_req(struct ptlrpc_request *req)
 {
         int rc = 0;
         struct ptlrpc_client *cli = req->rq_client;
+        struct l_wait_info lwi = LWI_INTR(SIGKILL|SIGTERM|SIGINT, NULL, NULL);
         ENTRY;
 
         init_waitqueue_head(&req->rq_wait_for_rep);
@@ -586,7 +625,7 @@ int ptlrpc_replay_req(struct ptlrpc_request *req)
         }
 
         CDEBUG(D_OTHER, "-- sleeping\n");
-        l_wait_event_killable(req->rq_wait_for_rep, ptlrpc_check_reply(req));
+        l_wait_event(req->rq_wait_for_rep, ptlrpc_check_reply(req), &lwi);
         CDEBUG(D_OTHER, "-- done\n");
 
         up(&cli->cli_rpc_sem);
