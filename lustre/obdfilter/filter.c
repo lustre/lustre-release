@@ -774,7 +774,7 @@ static int filter_pgcache_brw(int cmd, struct lustre_handle *conn,
                         retval = file->f_op->write(file, buffer, 
                                                    pga[pnum].count,
                                                    &off);
-                        kunmap(pages[pnum]);
+                        kunmap(pga[pnum].pg);
                         CDEBUG(D_INODE, "retval %ld\n", retval);
                 } else {
                         loff_t off = pga[pnum].off;
@@ -787,7 +787,7 @@ static int filter_pgcache_brw(int cmd, struct lustre_handle *conn,
                                 retval = file->f_op->read(file, buffer,
                                                           pga[pnum].count, &off);
                         }
-                        kunmap(pages[pnum]);
+                        kunmap(pga[pnum].pg);
 
                         if (retval != pga[pnum].count) {
                                 filp_close(file, 0);
