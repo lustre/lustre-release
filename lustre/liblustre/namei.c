@@ -124,7 +124,8 @@ int llu_pb_revalidate(struct pnode *pnode, int flags, struct lookup_intent *it)
         struct pnode_base *pb = pnode->p_base;
         int rc;
         ENTRY;
-        CDEBUG(D_VFSTRACE, "VFS Op:name=%s,intent=%x\n", pb->pb_name.name, it->it_op);
+        CDEBUG(D_VFSTRACE, "VFS Op:name=%s,intent=%x\n",
+               pb->pb_name.name, it ? it->it_op : 0);
 
         /* We don't want to cache negative dentries, so return 0 immediately.
          * We believe that this is safe, that negative dentries cannot be
@@ -348,15 +349,20 @@ static void translate_lookup_intent(struct intent *intent,
 {
         memset(it, 0, sizeof(*it));
 
-        if (!intent) {
-                it->it_op = IT_LOOKUP;
-                return;
-        }
+        /* FIXME libsysio will assign intent like following:
+         * open: INT_OPEN [| INT_CREAT]
+         * mkdir: INT_CREAT
+         *
+         * following logic is adjusted for libsysio
+         */
 
         it->it_flags = intent->int_arg2 ? *((int*)intent->int_arg2) : 0;
 
         if (intent->int_opmask & INT_OPEN)
                 it->it_op |= IT_OPEN;
+        else if (intent->int_opmask & INT_CREAT)
+                it->it_op |= IT_LOOKUP;
+
         /* FIXME libsysio has strange code on intent handling,
          * more check later */
         if (it->it_flags & O_CREAT) {
@@ -378,14 +384,10 @@ int llu_iop_lookup(struct pnode *pnode,
                    struct intent *intnt,
                    const char *path)
 {
-        struct lookup_intent it;
+        struct lookup_intent it_buf, *it;
         int rc;
 
         *inop = NULL;
-
-        /* libsysio trick */
-        if (intnt && path)
-                intnt = NULL;
 
         /* the mount root inode have no name, so don't call
          * remote in this case. but probably we need revalidate
@@ -399,16 +401,24 @@ int llu_iop_lookup(struct pnode *pnode,
         if (!pnode->p_base->pb_name.len)
                 return -EINVAL;
 
-        translate_lookup_intent(intnt, &it);
+        /* libsysio trick */
+        if (intnt && path)
+                intnt = NULL;
 
-        /* FIXME I don't know the flag, let it be 0 */
-        if (llu_pb_revalidate(pnode, 0, &it)) {
+        if (intnt) {
+                translate_lookup_intent(intnt, &it_buf);
+                it = &it_buf;
+        } else
+                it = NULL;
+
+        /* param flags is not used, let it be 0 */
+        if (llu_pb_revalidate(pnode, 0, it)) {
                 LASSERT(pnode->p_base->pb_ino);
                 *inop = pnode->p_base->pb_ino;
                 return 0;
         }
 
-        rc = llu_lookup2(pnode->p_parent->p_base->pb_ino, pnode, &it);
+        rc = llu_lookup2(pnode->p_parent->p_base->pb_ino, pnode, it);
         if (!rc) {
                 if (!pnode->p_base->pb_ino)
                         rc = -ENOENT;
