@@ -183,6 +183,34 @@ static void ll_update_atime(struct inode *inode)
         ll_inode_setattr(inode, &attr, 0);
 }
 
+static int ll_lock_callback(struct ldlm_lock *lock, struct ldlm_lock *new,
+                            void *data, __u32 data_len,
+                            struct ptlrpc_request **reqp)
+{
+        struct inode *inode = lock->l_data;
+        ENTRY;
+
+        if (new == NULL) {
+                /* Completion AST.  Do nothing. */
+                RETURN(0);
+        }
+
+        if (data_len != sizeof(struct inode))
+                LBUG();
+
+        /* FIXME: do something better than throwing away everything */
+        if (inode == NULL)
+                LBUG();
+        down(&inode->i_sem);
+        CDEBUG(D_INODE, "invalidating obdo/inode %ld\n", inode->i_ino);
+        invalidate_inode_pages(inode);
+        up(&inode->i_sem);
+
+        if (ldlm_cli_cancel(lock->l_client, lock) < 0)
+                LBUG();
+        RETURN(0);
+}
+
 static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
                             loff_t *ppos)
 {
@@ -190,7 +218,7 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
         struct inode *inode = filp->f_dentry->d_inode;
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct ldlm_extent extent;
-        struct ldlm_handle lockh;
+        struct lustre_handle lockh;
         __u64 res_id[RES_NAME_SIZE] = {inode->i_ino};
         int flags = 0;
         ldlm_error_t err;
@@ -203,9 +231,10 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
                 CDEBUG(D_INFO, "Locking inode %ld, start %Lu end %Lu\n",
                        inode->i_ino, extent.start, extent.end);
 
-                err = obd_enqueue(&sbi->ll_conn, sbi->ll_namespace, NULL,
-                                  res_id, LDLM_EXTENT, &extent, LCK_PR, &flags,
-                                  inode, sizeof(*inode), &lockh);
+                err = obd_enqueue(&sbi->ll_conn, NULL, res_id, LDLM_EXTENT,
+                                  &extent, sizeof(extent), LCK_PR, &flags,
+                                  ll_lock_callback, inode, sizeof(*inode),
+                                  &lockh);
                 if (err != ELDLM_OK)
                         CERROR("lock enqueue: err: %d\n", err);
                 ldlm_lock_dump((void *)(unsigned long)lockh.addr);
@@ -236,7 +265,7 @@ ll_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
         struct inode *inode = file->f_dentry->d_inode;
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct ldlm_extent extent;
-        struct ldlm_handle lockh;
+        struct lustre_handle lockh;
         __u64 res_id[RES_NAME_SIZE] = {inode->i_ino};
         int flags = 0;
         ldlm_error_t err;
@@ -244,14 +273,17 @@ ll_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
         ENTRY;
 
         if (!(fd->fd_flags & LL_FILE_IGNORE_LOCK)) {
+                /* FIXME: this should check whether O_APPEND is set and adjust
+                 * extent.start accordingly */
                 extent.start = *ppos;
                 extent.end = *ppos + count;
                 CDEBUG(D_INFO, "Locking inode %ld, start %Lu end %Lu\n",
                        inode->i_ino, extent.start, extent.end);
 
-                err = obd_enqueue(&sbi->ll_conn, sbi->ll_namespace, NULL,
-                                  res_id, LDLM_EXTENT, &extent, LCK_PW, &flags,
-                                  inode, sizeof(*inode), &lockh);
+                err = obd_enqueue(&sbi->ll_conn, NULL, res_id, LDLM_EXTENT,
+                                  &extent, sizeof(extent), LCK_PW, &flags,
+                                  ll_lock_callback, inode, sizeof(*inode),
+                                  &lockh);
                 if (err != ELDLM_OK)
                         CERROR("lock enqueue: err: %d\n", err);
                 ldlm_lock_dump((void *)(unsigned long)lockh.addr);
