@@ -457,8 +457,8 @@ void target_abort_recovery(void *data)
                 OBP(obd, postsetup)(obd);
 
         /* when recovery was abort, cleanup orphans for mds */
-        if (OBT(obd) && OBP(obd, postcleanup)) {
-                rc = OBP(obd, postcleanup)(obd);
+        if (OBT(obd) && OBP(obd, postrecov)) {
+                rc = OBP(obd, postrecov)(obd);
                 CERROR("Cleanup %d orphans after recovery was abort!\n", rc);
         }
 
@@ -742,16 +742,16 @@ int target_queue_final_reply(struct ptlrpc_request *req, int rc)
                        obd->obd_name);
                 obd->obd_recovering = 0;
 
-                /* when recovering finished, cleanup orphans for mds       */
-                /* there should be no orphan cleaned up for this condition */
-                if (OBT(obd) && OBP(obd, postcleanup)) {
-                        CERROR("cleanup orphans after all clients recovered\n");
-                        rc2 = OBP(obd, postcleanup)(obd);
-                        LASSERT(rc2 == 0);
-                }
-
                 if (OBT(obd) && OBP(obd, postsetup))
                         OBP(obd, postsetup)(obd);
+
+                /* when recovering finished, cleanup orphans for mds       */
+                if (OBT(obd) && OBP(obd, postrecov)) {
+                        CERROR("cleanup orphans after all clients recovered\n");
+                        rc2 = OBP(obd, postrecov)(obd);
+                        //LASSERT(rc2 == 0);
+                        CERROR("cleanup %d orphans\n", rc2);
+                }
 
                 list_for_each_safe(tmp, n, &obd->obd_delayed_reply_queue) {
                         req = list_entry(tmp, struct ptlrpc_request, rq_list);
