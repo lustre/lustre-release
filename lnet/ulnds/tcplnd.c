@@ -98,7 +98,7 @@ ptl_err_t tcpnal_send(nal_cb_t *n,
 
     pthread_mutex_lock(&send_lock);
 #if 1
-    for (i = total = 0; i <= ntiov; i++)
+    for (i = total = 0; i < ntiov; i++)
             total += tiov[i].iov_len;
     
     sysrc = syscall(SYS_writev, c->fd, tiov, ntiov);
