@@ -395,7 +395,6 @@ static int ptlrpc_check_status(struct ptlrpc_request *req)
         RETURN(err);
 }
 
-#warning this needs to change after robert fixes eviction handling
 static int after_reply(struct ptlrpc_request *req, int *restartp)
 {
         unsigned long flags;
@@ -443,7 +442,7 @@ static int after_reply(struct ptlrpc_request *req, int *restartp)
                         RETURN(-ENOTCONN);
                 }
 
-                ptlrpc_request_handle_eviction(req);
+                ptlrpc_request_handle_notconn(req);
 
                 if (req->rq_err)
                         RETURN(-EIO);
@@ -1286,7 +1285,6 @@ restart:
                 if (req->rq_err ||
                     req->rq_import_generation < imp->imp_generation)
                         rc = -EIO;
-
 
                 if (rc) {
                         spin_unlock_irqrestore(&imp->imp_lock, flags);

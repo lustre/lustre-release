@@ -654,11 +654,15 @@ static int mdc_iocontrol(unsigned int cmd, struct lustre_handle *conn, int len,
         struct obd_device *obddev = class_conn2obd(conn);
         struct obd_ioctl_data *data = karg;
         struct obd_import *imp = obddev->u.cli.cl_import;
+        int rc;
         ENTRY;
-
+        
         switch (cmd) {
         case OBD_IOC_CLIENT_RECOVER:
-                RETURN(ptlrpc_recover_import(imp, data->ioc_inlbuf1));
+                rc = ptlrpc_recover_import(imp, data->ioc_inlbuf1);
+                if (rc < 0)
+                        RETURN(rc);
+                RETURN(0);
         case IOC_OSC_SET_ACTIVE:
                 RETURN(ptlrpc_set_import_active(imp, data->ioc_offset));
         default:

@@ -323,23 +323,32 @@ void ptlrpc_handle_failed_import(struct obd_import *imp)
         EXIT;
 }
 
-void ptlrpc_request_handle_eviction(struct ptlrpc_request *failed_req)
+void ptlrpc_request_handle_notconn(struct ptlrpc_request *failed_req)
 {
         int rc;
         struct obd_import *imp= failed_req->rq_import;
         unsigned long flags;
         ENTRY;
 
-        CDEBUG(D_HA, "import %s of %s@%s evicted: reconnecting\n",
+        CDEBUG(D_HA, "import %s of %s@%s abruptly disconnected: reconnecting\n",
                imp->imp_obd->obd_name,
                imp->imp_target_uuid.uuid,
                imp->imp_connection->c_remote_uuid.uuid);
         rc = ptlrpc_recover_import(imp, NULL);
-        if (rc) {
+        if (rc < 0) {
                 ptlrpc_resend_req(failed_req);
                 if (rc != -EALREADY)
                         ptlrpc_handle_failed_import(imp);
+        } else if (rc == RECON_RESULT_RECOVERING) {
+                ptlrpc_resend_req(failed_req);
         } else {
+                if (rc != RECON_RESULT_EVICTED) {
+                        /* like LBUG, without the locking up */
+                        CERROR("unknown recover_import result %d\n", rc);
+                        portals_debug_dumplog();
+                        portals_run_lbug_upcall(__FILE__, __FUNCTION__,
+                                                __LINE__);
+                }
                 LASSERT(failed_req->rq_import_generation < imp->imp_generation);
                 spin_lock_irqsave (&failed_req->rq_lock, flags);
                 failed_req->rq_err = 1;
@@ -555,7 +564,6 @@ int ptlrpc_recover_import(struct obd_import *imp, char *new_uuid)
                        imp->imp_target_uuid.uuid,
                        imp->imp_connection->c_remote_uuid.uuid);
                 ptlrpc_set_import_active(imp, 0);
-//                ptlrpc_invalidate_import_state(imp);
         } else {
                 LBUG();
         }
@@ -570,6 +578,8 @@ int ptlrpc_recover_import(struct obd_import *imp, char *new_uuid)
 
         ptlrpc_wake_delayed(imp);
         EXIT;
+        if (!rc)
+                rc = recon_result;
  out:
         return rc;
 }
