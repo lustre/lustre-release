@@ -69,9 +69,11 @@ KMODEXT=""
 AC_SUBST(EXTRA_KLDFLAGS)
 AC_SUBST(EXTRA_KLIBS)
 
-plistdir='/System/Library/Extensions/$(firstword $(macos_PROGRAMS)).kext/Contents'
+kextdir='/System/Library/Extensions/$(firstword $(macos_PROGRAMS)).kext'
+plistdir='$(kextdir)/Contents'
 macosdir='$(plistdir)/MacOS'
 
+AC_SUBST(kextdir)
 AC_SUBST(plistdir)
 AC_SUBST(macosdir)
 
