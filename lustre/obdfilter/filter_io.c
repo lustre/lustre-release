@@ -121,7 +121,7 @@ static void filter_grant_incoming(struct obd_export *exp, struct obdo *oa)
 
         fed = &exp->exp_filter_data;
 
-        CDEBUG(oa->o_grant > fed->fed_grant ? D_ERROR : D_SUPER,
+        CDEBUG(oa->o_grant > fed->fed_grant ? D_ERROR : D_CACHE,
                "client %s reports granted: "LPU64" dropped: %u, local: %lu\n",
                exp->exp_client_uuid.uuid, oa->o_grant, oa->o_dropped,
                fed->fed_grant);
@@ -178,12 +178,12 @@ restat:
         }
 
         if (left < FILTER_GRANT_CHUNK && time_after(jiffies,obd->obd_osfs_age)){
-                CDEBUG(D_SUPER, "fs has no space left and statfs too old\n");
+                CDEBUG(D_CACHE, "fs has no space left and statfs too old\n");
                 max_age = jiffies;
                 goto restat;
         }
 
-        CDEBUG(D_SUPER,
+        CDEBUG(D_CACHE,
                "free: "LPU64" avail: "LPU64" granted "LPU64" left: "LPU64"\n",
                obd->obd_osfs.os_bfree << blockbits,
                obd->obd_osfs.os_bavail << blockbits, tot_granted, left);
@@ -225,9 +225,9 @@ long filter_grant(struct obd_export *exp, obd_size current_grant,
                 }
         }
 
-        CDEBUG(D_SUPER,"cli %s wants: "LPU64" granting: "LPU64"\n",
+        CDEBUG(D_CACHE,"cli %s wants: "LPU64" granting: "LPU64"\n",
                exp->exp_client_uuid.uuid, want, grant);
-        CDEBUG(D_SUPER, "tot cached:"LPU64" granted:"LPU64" num_exports: %d\n",
+        CDEBUG(D_CACHE, "tot cached:"LPU64" granted:"LPU64" num_exports: %d\n",
                obd->u.filter.fo_tot_dirty,
                obd->u.filter.fo_tot_granted, obd->obd_num_exports);
 
@@ -424,8 +424,7 @@ static int filter_grant_check(struct obd_export *exp, int objcount,
                                         used += bytes;
                                         rnb[n].flags |= OBD_BRW_GRANTED;
                                         lnb[n].lnb_grant_used = bytes;
-                                        CDEBUG(D_INODE, "idx %d used=%ld\n",
-                                               n, used);
+                                        CDEBUG(0, "idx %d used=%ld\n", n, used);
                                         rc = 0;
                                         continue;
                                 }
@@ -434,8 +433,7 @@ static int filter_grant_check(struct obd_export *exp, int objcount,
                                 /* if enough space, pretend it was granted */
                                 ungranted += bytes;
                                 rnb[n].flags |= OBD_BRW_GRANTED;
-                                CDEBUG(D_INODE, "idx %d ungranted=%ld\n",
-                                       n, ungranted);
+                                CDEBUG(0, "idx %d ungranted=%ld\n",n,ungranted);
                                 rc = 0;
                                 continue;
                         }
@@ -452,20 +450,17 @@ static int filter_grant_check(struct obd_export *exp, int objcount,
                 }
         }
 
-        if (ungranted && fed->fed_grant > 0)
-                CERROR("wrote %lu ungranted with %lu grant\n",
-                       ungranted, fed->fed_grant);
-
         /* Now substract what client have used already.  We don't subtract
          * this from the tot_granted yet, so that other client's can't grab
          * that space before we have actually allocated our blocks.  That
          * happens in filter_grant_commit() after the writes are done. */
         *left -= ungranted;
         fed->fed_grant -= used;
+        fed->fed_dirty -= used;
         fed->fed_pending += used;
 
-        CDEBUG(D_CACHE, "used: %ld ungranted: %ld grant: %ld left: "LPU64"\n",
-               used, ungranted, fed->fed_grant, *left);
+        CDEBUG(D_CACHE, "used: %ld ungranted: %ld grant: %ld dirty: %ld\n",
+               used, ungranted, fed->fed_grant, fed->fed_dirty);
 
         return rc;
 }
