@@ -1,7 +1,7 @@
 Index: linux-2.4.21-suse2/fs/ext3/balloc.c
 ===================================================================
 --- linux-2.4.21-suse2.orig/fs/ext3/balloc.c	2003-06-13 18:51:37.000000000 +0400
-+++ linux-2.4.21-suse2/fs/ext3/balloc.c	2004-02-05 20:50:48.000000000 +0300
++++ linux-2.4.21-suse2/fs/ext3/balloc.c	2004-02-06 11:07:16.000000000 +0300
 @@ -11,6 +11,7 @@
   *        David S. Miller (davem@caip.rutgers.edu), 1995
   */
@@ -10,7 +10,7 @@ Index: linux-2.4.21-suse2/fs/ext3/balloc.c
  #include <linux/config.h>
  #include <linux/sched.h>
  #include <linux/fs.h>
-@@ -1007,3 +1008,298 @@
+@@ -1007,3 +1008,303 @@
  			bitmap_count);
  }
  #endif
@@ -194,8 +194,6 @@ Index: linux-2.4.21-suse2/fs/ext3/balloc.c
 +	struct alloc_status as;
 +	int err, bit, i;
 +
-+	int scaned = 0;
-+
 +	J_ASSERT(num && *num > 0);
 +
 +	if (DQUOT_ALLOC_BLOCK(inode, *num)) {
@@ -214,6 +212,10 @@ Index: linux-2.4.21-suse2/fs/ext3/balloc.c
 +	as.len = 0;
 +	as.num = 0;
 +
++	if (goal < le32_to_cpu(es->s_first_data_block) ||
++	    goal >= le32_to_cpu(es->s_blocks_count))
++		goal = le32_to_cpu(es->s_first_data_block);
++
 +	lock_super(sb);
 +	first_group = (goal - le32_to_cpu(es->s_first_data_block)) /
 +		      	EXT3_BLOCKS_PER_GROUP(sb);
@@ -221,7 +223,6 @@ Index: linux-2.4.21-suse2/fs/ext3/balloc.c
 +		      	EXT3_BLOCKS_PER_GROUP(sb);
 +	group = first_group;
 +	do {
-+		scaned++;
 +		err = ext3_find_extent_in_group(&as, group, goal, *num);
 +		if (err < 0) 
 +			goto error_out;
@@ -261,10 +262,14 @@ Index: linux-2.4.21-suse2/fs/ext3/balloc.c
 +		goto error_out;
 +	}
 +	bmbh = EXT3_SB(sb)->s_block_bitmap[bitmap_nr];
-+	err = ext3_journal_get_write_access(handle, EXT3_SB(sb)->s_sbh);
++	/* Make sure we use undo access for the bitmap, because it is
++           critical that we do the frozen_data COW on bitmap buffers in
++           all cases even if the buffer is in BJ_Forget state in the
++           committing transaction.  */
++	err = ext3_journal_get_undo_access(handle, bmbh);
 +	if (err)
 +		goto error_out;
-+	err = ext3_journal_get_write_access(handle, bmbh);
++	err = ext3_journal_get_write_access(handle, EXT3_SB(sb)->s_sbh);
 +	if (err)
 +		goto error_out;
 +	err = ext3_journal_get_write_access(handle, bh);
@@ -312,7 +317,7 @@ Index: linux-2.4.21-suse2/fs/ext3/balloc.c
 Index: linux-2.4.21-suse2/fs/ext3/file.c
 ===================================================================
 --- linux-2.4.21-suse2.orig/fs/ext3/file.c	2004-02-05 20:42:39.000000000 +0300
-+++ linux-2.4.21-suse2/fs/ext3/file.c	2004-02-05 20:56:55.000000000 +0300
++++ linux-2.4.21-suse2/fs/ext3/file.c	2004-02-06 10:19:59.000000000 +0300
 @@ -70,6 +70,18 @@
  	int ret, err;
  	struct inode *inode = file->f_dentry->d_inode;
@@ -335,7 +340,7 @@ Index: linux-2.4.21-suse2/fs/ext3/file.c
 Index: linux-2.4.21-suse2/fs/ext3/Makefile
 ===================================================================
 --- linux-2.4.21-suse2.orig/fs/ext3/Makefile	2004-02-05 20:43:47.000000000 +0300
-+++ linux-2.4.21-suse2/fs/ext3/Makefile	2004-02-05 20:50:48.000000000 +0300
++++ linux-2.4.21-suse2/fs/ext3/Makefile	2004-02-06 10:19:59.000000000 +0300
 @@ -14,7 +14,7 @@
  obj-y    := balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o iopen.o \
  		ioctl.o namei.o super.o symlink.o hash.o ext3-exports.o \
@@ -348,7 +353,7 @@ Index: linux-2.4.21-suse2/fs/ext3/Makefile
 Index: linux-2.4.21-suse2/include/linux/ext3_fs.h
 ===================================================================
 --- linux-2.4.21-suse2.orig/include/linux/ext3_fs.h	2004-02-05 20:42:40.000000000 +0300
-+++ linux-2.4.21-suse2/include/linux/ext3_fs.h	2004-02-05 20:50:48.000000000 +0300
++++ linux-2.4.21-suse2/include/linux/ext3_fs.h	2004-02-06 10:19:59.000000000 +0300
 @@ -58,6 +58,8 @@
  #define ext3_debug(f, a...)	do {} while (0)
  #endif
