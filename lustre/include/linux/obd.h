@@ -476,10 +476,10 @@ struct obd_device {
         __u64                  obd_last_committed;
         struct fsfilt_operations *obd_fsops;
         spinlock_t              obd_osfs_lock;
-        struct llog_ctxt        *obd_llog_ctxt[LLOG_MAX_CTXTS];
         struct obd_statfs       obd_osfs;
         unsigned long           obd_osfs_age;
         struct obd_run_ctxt     obd_ctxt;
+        struct llog_ctxt        *obd_llog_ctxt[LLOG_MAX_CTXTS];
         struct obd_device       *obd_observer;
         struct obd_export       *obd_self_export;
 
@@ -519,14 +519,13 @@ struct obd_device {
         struct proc_dir_entry *obd_svc_procroot;
         struct lprocfs_stats  *obd_svc_stats;
         /* Fields used for fsfilt reservations. */
-        int  obd_reserved_space;
+        int  obd_reserve_space;        /* protected by obd_osfs_lock */
         /* This field contains cached statfs(2) amount of free blocks,
            each time reservation is made, we substract reserved amount from this
            field until zero is reached. Then we call statfs(2) again. This
            allows to minimize statfs(2) calls on filesystems with lots of free
            space. */
         long obd_reserve_freespace_estimated;
-        struct semaphore obd_reserve_guard;
 };
 
 #define OBD_OPT_FORCE           0x0001

@@ -125,9 +125,7 @@ int class_attach(struct lustre_cfg *lcfg)
         spin_lock_init(&obd->obd_osfs_lock);
         obd->obd_osfs_age = jiffies - 1000 * HZ;
         init_waitqueue_head(&obd->obd_refcount_waitq);
-        sema_init(&obd->obd_reserve_guard, 1);
-        obd->obd_reserved_space=0;
-        obd->obd_reserve_freespace_estimated=-1;
+        obd->obd_reserve_freespace_estimated = -1;
 
         /* XXX belongs in setup not attach  */
         /* recovery data */
@@ -236,9 +234,9 @@ int class_detach(struct obd_device *obd, struct lustre_cfg *lcfg)
                 CERROR("OBD device %d not attached\n", obd->obd_minor);
                 RETURN(-ENODEV);
         }
-        if (obd->obd_reserved_space != 0)
+        if (obd->obd_reserve_space != 0)
                 CERROR("Reserved space on class_detach is %d\n",
-                       obd->obd_reserved_space);
+                       obd->obd_reserve_space);
         if (OBP(obd, detach))
                 err = OBP(obd,detach)(obd);
 

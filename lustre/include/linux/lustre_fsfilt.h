@@ -98,7 +98,25 @@ struct obd_reservation_handle {
         int orh_reserve;
 };
 
-static inline int fsfilt_reserve(struct obd_device *obd,
+/* very similar to obd_statfs(), but caller already holds obd_osfs_lock */
+static inline int fsfilt_statfs(struct obd_device *obd, struct super_block *sb,
+                                unsigned long max_age)
+{
+        int rc = 0;
+
+        CDEBUG(D_SUPER, "osfs %lu, max_age %lu\n", obd->obd_osfs_age, max_age);
+        if (time_before(obd->obd_osfs_age, max_age)) {
+                rc = obd->obd_fsops->fs_statfs(sb, &obd->obd_osfs);
+                if (rc == 0) /* N.B. statfs can't really fail */
+                        obd->obd_osfs_age = jiffies;
+        } else {
+                CDEBUG(D_SUPER, "using cached obd_statfs data\n");
+        }
+
+        return rc;
+}
+
+static inline int fsfilt_reserve(struct obd_device *obd, struct super_block *sb,
                                  int reserve, struct obd_reservation_handle **h)
 {
         struct obd_reservation_handle *handle;
@@ -109,19 +127,13 @@ static inline int fsfilt_reserve(struct obd_device *obd,
 
         /* Perform space reservation if needed */
         if (reserve) {
-                down(&obd->obd_reserve_guard);
+                spin_lock(&obd->obd_osfs_lock);
                 obd->obd_reserve_freespace_estimated -= reserve;
                 if (obd->obd_reserve_freespace_estimated < 0) {
-                        struct obd_statfs osfs;
-                        /* Can we use jiffies here, or is there a race window
-                           where somebody calls obd_statfs(), caches data, then
-                           uses some space, and then we came and get this same
-                           (now stale) cached data all within same jiffie?
-                           maybe jiffies-1 should be used? */
-                        int rc = obd_statfs(obd, &osfs, jiffies);
+                        int rc = fsfilt_statfs(obd, sb, jiffies - 1);
                         if (rc) {
                                 CERROR("statfs failed during reservation\n");
-                                up(&obd->obd_reserve_guard);
+                                spin_unlock(&obd->obd_osfs_lock);
                                 OBD_FREE(handle, sizeof(*handle));
                                 return rc;
                         }
@@ -129,18 +141,18 @@ static inline int fsfilt_reserve(struct obd_device *obd,
                          * available compared to what is really available
                          * (reiserfs reserves 1996K for itself).
                          */
-                        obd->obd_reserve_freespace_estimated = osfs.os_bavail -
-                                                        obd->obd_reserved_space;
+                        obd->obd_reserve_freespace_estimated =
+                                obd->obd_osfs.os_bfree-obd->obd_reserve_space;
                         if (obd->obd_reserve_freespace_estimated < reserve) {
-                                up(&obd->obd_reserve_guard);
+                                spin_unlock(&obd->obd_osfs_lock);
                                 OBD_FREE(handle, sizeof(*handle));
                                 return -ENOSPC;
                         }
                         obd->obd_reserve_freespace_estimated -= reserve;
                 }
-                obd->obd_reserved_space += reserve;
+                obd->obd_reserve_space += reserve;
                 handle->orh_reserve = reserve;
-                up(&obd->obd_reserve_guard);
+                spin_unlock(&obd->obd_osfs_lock);
         }
         *h = handle;
         return 0;
@@ -159,7 +171,7 @@ static inline void *fsfilt_start_log(struct obd_device *obd,
         if (obd->obd_fsops->fs_get_op_len)
                 reserve = obd->obd_fsops->fs_get_op_len(op, NULL, logs);
 
-        rc = fsfilt_reserve(obd, reserve, &h);
+        rc = fsfilt_reserve(obd, inode->i_sb, reserve, &h);
         if (rc)
                 return ERR_PTR(rc);
 
@@ -190,7 +202,8 @@ static inline void *fsfilt_start(struct obd_device *obd,
         return fsfilt_start_log(obd, inode, op, oti, 0);
 }
 
-static inline void *fsfilt_brw_start_log(struct obd_device *obd, int objcount,
+static inline void *fsfilt_brw_start_log(struct obd_device *obd,
+                                         int objcount,
                                          struct fsfilt_objinfo *fso,
                                          int niocount, struct niobuf_local *nb,
                                          struct obd_trans_info *oti,int numlogs)
@@ -204,7 +217,7 @@ static inline void *fsfilt_brw_start_log(struct obd_device *obd, int objcount,
         if (obd->obd_fsops->fs_get_op_len)
                 reserve = obd->obd_fsops->fs_get_op_len(objcount, fso, numlogs);
 
-        rc = fsfilt_reserve(obd, reserve, &h);
+        rc = fsfilt_reserve(obd, fso->fso_dentry->d_inode->i_sb, reserve, &h);
         if (rc)
                 return ERR_PTR(rc);
 
@@ -252,10 +265,10 @@ static inline int fsfilt_commit(struct obd_device *obd, struct inode *inode,
         if (time_after(jiffies, now + 15 * HZ))
                 CERROR("long journal start time %lus\n", (jiffies - now) / HZ);
 
-        down(&obd->obd_reserve_guard);
-        obd->obd_reserved_space -= h->orh_reserve;
-        LASSERT(obd->obd_reserved_space >= 0);
-        up(&obd->obd_reserve_guard);
+        spin_lock(&obd->obd_osfs_lock);
+        obd->obd_reserve_space -= h->orh_reserve;
+        LASSERT(obd->obd_reserve_space >= 0);
+        spin_unlock(&obd->obd_osfs_lock);
         OBD_FREE(h, sizeof(*h));
 
         return rc;
@@ -277,10 +290,10 @@ static inline int fsfilt_commit_async(struct obd_device *obd,
         if (time_after(jiffies, now + 15 * HZ))
                 CERROR("long journal start time %lus\n", (jiffies - now) / HZ);
 
-        down(&obd->obd_reserve_guard);
-        obd->obd_reserved_space -= h->orh_reserve;
-        LASSERT(obd->obd_reserved_space >= 0);
-        up(&obd->obd_reserve_guard);
+        spin_lock(&obd->obd_osfs_lock);
+        obd->obd_reserve_space -= h->orh_reserve;
+        LASSERT(obd->obd_reserve_space >= 0);
+        spin_unlock(&obd->obd_osfs_lock);
         OBD_FREE(h, sizeof(*h));
 
         return rc;
@@ -344,24 +357,6 @@ static inline int fsfilt_add_journal_cb(struct obd_device *obd, __u64 last_rcvd,
         return obd->obd_fsops->fs_add_journal_cb(obd, last_rcvd,
                                                  h->orh_filt_handle, cb_func,
                                                  cb_data);
-}
-
-/* very similar to obd_statfs(), but caller already holds obd_osfs_lock */
-static inline int fsfilt_statfs(struct obd_device *obd, struct super_block *sb,
-                                unsigned long max_age)
-{
-        int rc = 0;
-
-        CDEBUG(D_SUPER, "osfs %lu, max_age %lu\n", obd->obd_osfs_age, max_age);
-        if (time_before(obd->obd_osfs_age, max_age)) {
-                rc = obd->obd_fsops->fs_statfs(sb, &obd->obd_osfs);
-                if (rc == 0) /* N.B. statfs can't really fail */
-                        obd->obd_osfs_age = jiffies;
-        } else {
-                CDEBUG(D_SUPER, "using cached obd_statfs data\n");
-        }
-
-        return rc;
 }
 
 static inline int fsfilt_sync(struct obd_device *obd, struct super_block *sb)

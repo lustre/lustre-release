@@ -13,6 +13,7 @@ tbd  Cluster File Systems, Inc. <info@clusterfs.com>
 	- fix race in target_handle_connect (2898)
 	- mds_reint_create() should take same inode create lock (2926)
 	- correct journal credits calculated for CANCEL_UNLINK_LOG (2931)
+	- don't close files for self_export to avoid uninitialized obd (2936)
 	- allow MDS with the same name as client node (2939)
 	- hold dentry reference for closed log files for unlink (2325)
 	- reserve space for all logs during transactions (2059)
