@@ -162,13 +162,13 @@ static int ll_commit_write(struct file *file, struct page *page,
         int err;
         loff_t size;
         struct io_cb_data *cbd = ll_init_cb();
+        ENTRY;
 
         pg.pg = page;
         pg.count = to;
         pg.off = (((obd_off)page->index) << PAGE_SHIFT);
         pg.flag = create ? OBD_BRW_CREATE : 0;
 
-        ENTRY;
         if (!cbd)
                 RETURN(-ENOMEM);
 
@@ -240,26 +240,31 @@ void ll_truncate(struct inode *inode)
 int ll_direct_IO(int rw, struct inode *inode, struct kiobuf *iobuf,
                  unsigned long blocknr, int blocksize)
 {
-        obd_count        bufs_per_obdo = iobuf->nr_pages;
+        obd_count bufs_per_obdo = iobuf->nr_pages;
         struct ll_inode_info *lli = ll_i2info(inode);
         struct lov_stripe_md *md = lli->lli_smd;
         struct brw_page *pga;
-        int              rc = 0;
-        int i;
-        struct io_cb_data *cbd = ll_init_cb();
+        int i, rc = 0;
+        struct io_cb_data *cbd;
 
         ENTRY;
-        if (!cbd)
+        if (!md || !md->lmd_object_id)
                 RETURN(-ENOMEM);
 
         if (blocksize != PAGE_SIZE) {
                 CERROR("direct_IO blocksize != PAGE_SIZE\n");
-                return -EINVAL;
+                RETURN(-EINVAL);
         }
 
+        cbd = ll_init_cb();
+        if (!cbd)
+                RETURN(-ENOMEM);
+
         OBD_ALLOC(pga, sizeof(*pga) * bufs_per_obdo);
-        if (!pga)
-                GOTO(out, rc = -ENOMEM);
+        if (!pga) {
+                OBD_FREE(cbd, sizeof(*cbd));
+                RETURN(-ENOMEM);
+        }
 
         /* NB: we can't use iobuf->maplist[i]->index for the offset
          * instead of "blocknr" because ->index contains garbage.
@@ -273,16 +278,12 @@ int ll_direct_IO(int rw, struct inode *inode, struct kiobuf *iobuf,
                 pga[i].flag = OBD_BRW_CREATE;
         }
 
-        if (!md || !md->lmd_object_id)
-                GOTO(out, rc = -ENOMEM);
-
         rc = obd_brw(rw == WRITE ? OBD_BRW_WRITE : OBD_BRW_READ,
                      ll_i2obdconn(inode), md, bufs_per_obdo, pga,
                      ll_sync_io_cb, cbd);
         if (rc == 0)
                 rc = bufs_per_obdo * PAGE_SIZE;
 
-out:
         OBD_FREE(pga, sizeof(*pga) * bufs_per_obdo);
         RETURN(rc);
 }

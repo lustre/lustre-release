@@ -81,7 +81,8 @@ struct io_cb_data {
         int complete;
         int err;
         struct ptlrpc_bulk_desc *desc;
-        brw_callback_t    cb;
+        brw_callback_t cb;
+        void *data;
 };
 
 int ll_sync_io_cb(struct io_cb_data *data, int err, int phase);
