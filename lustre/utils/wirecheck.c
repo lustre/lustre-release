@@ -245,6 +245,7 @@ check_mds_body(void)
         CHECK_MEMBER(mds_body, handle);
         CHECK_MEMBER(mds_body, size);
         CHECK_MEMBER(mds_body, blocks);
+        CHECK_MEMBER(mds_body, io_epoch);
         CHECK_MEMBER(mds_body, ino);
         CHECK_MEMBER(mds_body, valid);
         CHECK_MEMBER(mds_body, fsuid);
@@ -262,6 +263,17 @@ check_mds_body(void)
         CHECK_MEMBER(mds_body, generation);
         CHECK_MEMBER(mds_body, suppgid);
         CHECK_MEMBER(mds_body, eadatasize);
+
+        CHECK_VALUE(FMODE_READ);
+        CHECK_VALUE(FMODE_WRITE);
+        CHECK_VALUE(FMODE_EXEC);
+        CHECK_VALUE(MDS_OPEN_CREAT);
+        CHECK_VALUE(MDS_OPEN_EXCL);
+        CHECK_VALUE(MDS_OPEN_APPEND);
+        CHECK_VALUE(MDS_OPEN_SYNC);
+        CHECK_VALUE(MDS_OPEN_DIRECTORY);
+        CHECK_VALUE(MDS_OPEN_DELAY_CREATE);
+        CHECK_VALUE(MDS_OPEN_HAS_EA);
 }
 
 void
@@ -545,7 +557,8 @@ check_llogd_body(void)
         BLANK_LINE();
         CHECK_STRUCT(llogd_body);
         CHECK_MEMBER(llogd_body, lgd_logid);
-        CHECK_MEMBER(llogd_body, lgd_len);
+        CHECK_MEMBER(llogd_body, lgd_ctxt_idx);
+        CHECK_MEMBER(llogd_body, lgd_llh_flags);
         CHECK_MEMBER(llogd_body, lgd_index);
         CHECK_MEMBER(llogd_body, lgd_saved_index);
         CHECK_MEMBER(llogd_body, lgd_cur_offset);
