@@ -1,2 +1,2 @@
-EXTRA_DIST := lustre-build.mv lustre-build-darwin.mv lustre-build-linux.m4
+EXTRA_DIST := lustre-build.m4 lustre-build-darwin.m4 lustre-build-linux.m4
 

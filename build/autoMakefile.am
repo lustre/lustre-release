@@ -1,5 +1,8 @@
-EXTRA_DIST := Makefile lbuild linux-merge-config.awk	  \
-	linux-merge-modules.awk linux-rhconfig.h lmake	  \
-	lustre-kernel-2.4.spec.in lustre.spec lustre.spec \
-	suse-functions.sh suse-post.sh suse-postun.sh	  \
+EXTRA_DIST := Makefile Makefile.in.toplevel autoMakefile.am.toplevel	\
+	lbuild linux-merge-config.awk					\
+	linux-merge-modules.awk linux-rhconfig.h lmake			\
+	lustre-kernel-2.4.spec.in lustre.spec lustre.spec		\
+	suse-functions.sh suse-post.sh suse-postun.sh			\
 	suse-trigger-script.sh.in
+
+SUBDIRS := autoconf

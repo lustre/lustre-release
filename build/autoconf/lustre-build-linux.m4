@@ -1,27 +1,4 @@
 #
-# LB_LINUX_INKERNEL
-#
-# in kernel compilation? (2.5 only)
-#
-AC_DEFUN([LB_LINUX_INKERNEL],
-[AC_MSG_CHECKING([if inkernel build support is requested])
-AC_ARG_ENABLE([inkernel],
-	AC_HELP_STRING([--enable-inkernel],
-		       [set up 2.5 kernel makefiles]),
-	[],[enable_inkernel=no])
-AC_MSG_RESULT([$enable_inkernel])
-
-if test x$enable_inkernel = xyes ; then
-        echo ln -s `pwd` $LINUX/fs/lustre
-        rm $LINUX/fs/lustre
-       	ln -s `pwd` $LINUX/fs/lustre
-	find portals lustre -name Makefile.mk | sed 's/.mk$//' | xargs -n 1 \
-		sh -e -x -c '(cp -f $0.mk $0.in)'
-fi
-])
-
-
-#
 # LB_LINUX_VERSION
 #
 # Set things accordingly for a 2.5 kernel
@@ -40,8 +17,6 @@ AC_MSG_RESULT([$linux25])
 
 MODULE_TARGET="SUBDIRS"
 if test $linux25 = "yes" ; then
-	LB_CONFIG_INKERNEL
-
 	makerule="$PWD/build"
 	AC_MSG_CHECKING([for external module build support])
 	rm -f build/conftest.i
@@ -461,30 +436,20 @@ LB_LINUX_CONFIG([EXT3_FS_XATTR],[$1],[$3])
 # If we have (and can build) fshooks.h
 #
 AC_DEFUN([LB_LINUX_FSHOOKS],
-[AC_MSG_CHECKING([if this compiler can build a SuSE 2.6 kernel])
-# an excerpt from fshooks.h, which doesn't build with fedora's gcc 3.4
-LB_LINUX_TRY_COMPILE([
-	/* for the lack of a kernel-wide definition */
-	typedef enum {
-	        false,
-	        true
-	} boolean_t __attribute__((__mode__(__QI__)));
-],[],[
-	AC_MSG_RESULT([yes])
-],[
-	AC_MSG_RESULT([no])
-	AC_MSG_WARN([We suggest trying gcc 3.3.x.])
-	AC_MSG_WARN([You can set CC=gcc33 before running configure.])
-	AC_MSG_ERROR([Your compiler cannot build a SuSE 2.6 kernel.])
-])
-AC_MSG_CHECKING([if fshooks are present])
-LB_LINUX_TRY_COMPILE([
-	#include <linux/fshooks.h>
-],[],[
-	AC_MSG_RESULT([yes])
+[AC_CHECK_FILE([$LINUX/include/linux/fshooks.h],[
+	AC_MSG_CHECKING([if fshooks.h can be compiled])
+	LB_LINUX_TRY_COMPILE([
+		#include <linux/fshooks.h>
+	],[],[
+		AC_MSG_RESULT([yes])
+	],[
+		AC_MSG_RESULT([no])
+		AC_MSG_WARN([You might have better luck with gcc 3.3.x.])
+		AC_MSG_WARN([You can set CC=gcc33 before running configure.])
+		AC_MSG_ERROR([Your compiler cannot build fshooks.h.])
+	])
 $1
 ],[
-	AC_MSG_RESULT([no])
 $2
 ])
 ])

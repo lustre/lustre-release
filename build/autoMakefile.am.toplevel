@@ -1,6 +1,8 @@
 SUBDIRS := . build @LIBSYSIO_SUBDIR@ portals lustre
 DIST_SUBDIRS := build @LIBSYSIO_SUBDIR@ portals lustre
 
+EXTRA_DIST := config.h.in
+
 # these empty rules are needed so that automake doesn't add its own
 # recursive rules
 etags-recursive:
