@@ -26,10 +26,16 @@ struct obd_type {
         int  typ_refcnt;
 };
 
+#define OBD_RUN_CTXT_MAGIC      0xC0FFEEAA
+#define OBD_CTXT_DEBUG          /* development-only debugging */
+
 struct obd_run_ctxt {
         struct vfsmount *pwdmnt;
         struct dentry   *pwd;
         mm_segment_t     fs;
+#ifdef OBD_CTXT_DEBUG
+        __u32            magic;
+#endif
 };
 
 struct obd_conn {
