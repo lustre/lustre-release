@@ -60,7 +60,6 @@ struct ll_rpc_opcode {
         { MDS_DISCONNECT,   "mds_disconnect" },
         { MDS_GETSTATUS,    "mds_getstatus" },
         { MDS_STATFS,       "mds_statfs" },
-        { MDS_GETLOVINFO,   "mds_getlovinfo" },
         { MDS_PIN,          "mds_pin" },
         { MDS_UNPIN,        "mds_unpin" },
         { MDS_SYNC,         "mds_sync" },
@@ -149,10 +148,10 @@ void ptlrpc_lprocfs_register(struct proc_dir_entry *root, char *dir,
         }
 }
 
-void ptlrpc_lprocfs_register_service(struct obd_device *obddev,
+void ptlrpc_lprocfs_register_service(struct proc_dir_entry *entry,
                                      struct ptlrpc_service *svc)
 {
-        ptlrpc_lprocfs_register(obddev->obd_proc_entry, svc->srv_name,
+        ptlrpc_lprocfs_register(entry, svc->srv_name,
                                 "stats", &svc->srv_procroot, 
                                 &svc->srv_stats);
 }

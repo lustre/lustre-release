@@ -86,4 +86,4 @@ foreach $key (@sorted) {
     print STDERR "*** Leak: $memory->{$key}->{size} bytes allocated at $key ($memory->{$key}->{file}:$memory->{$key}->{func}:$memory->{$key}->{lno}, debug file line $memory->{$key}->{debug_line})\n";
 }
 
-print "maximum used: $max, amount leaked: $total\n";
+print STDERR "maximum used: $max, amount leaked: $total\n";
