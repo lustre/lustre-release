@@ -686,6 +686,7 @@ static  cache_hook_op cache_space_hook_ops[HOOK_MAX + 1] = {
         [HOOK_RENAME]     cache_space_hook_rename,
         [HOOK_SETATTR]    NULL,
         [HOOK_WRITE]      NULL,
+        [HOOK_READDIR]    NULL,
 };
 
 int cache_space_post(int op, void *handle, struct inode *old_dir,

@@ -798,6 +798,7 @@ static post_kml_rec smfs_kml_post[HOOK_MAX + 1] = {
         [HOOK_RENAME]  smfs_post_rec_rename,
         [HOOK_SETATTR] smfs_post_rec_setattr,
         [HOOK_WRITE]   smfs_post_rec_write,
+        [HOOK_READDIR] NULL,
 };
 static int smfs_post_kml_rec(struct inode *dir, void *de, void *data1, 
                              void *data2, int op)
