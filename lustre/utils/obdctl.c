@@ -35,6 +35,7 @@
 #include <linux/lustre_idl.h>
 #include <unistd.h>
 #include <sys/un.h>
+#include <time.h>
 #include <sys/time.h>
 #include <netinet/in.h>
 #include <errno.h>
@@ -291,7 +292,8 @@ static int jt_attach(int argc, char **argv)
                 printf("invalid ioctl\n"); 
                 return 1;
         }
-        printf("attach len %d addr %p raw %p type %s data %s and %s\n", data.ioc_len, buf, rawbuf,
+        printf("attach len %d addr %p raw %p type %s data %s and %s\n",
+               data.ioc_len, buf, rawbuf,
                MKSTR(data.ioc_inlbuf1), MKSTR(data.ioc_inlbuf2), &buf[516]);
 
         rc = ioctl(fd, OBD_IOC_ATTACH , buf);
@@ -415,7 +417,7 @@ static int jt_destroy(int argc, char **argv)
 
         IOCINIT(data);
         if (argc < 1) { 
-                printf("usage %s id\n", argv[0]); 
+                printf("usage: %s id\n", argv[0]); 
         }
 
         data.ioc_obdo1.o_id = strtoul(argv[1], NULL, 0);
@@ -427,56 +429,149 @@ static int jt_destroy(int argc, char **argv)
         return rc;
 }
 
-static int jt_multi_getattr(int argc, char **argv)
-{
-        struct obd_ioctl_data data;
-        int count, i;
-        int rc;
-
-        IOCINIT(data);
-        if (argc == 2) { 
-                count = strtoul(argv[1], NULL, 0);
-                data.ioc_obdo1.o_valid = 0xffffffff;
-                data.ioc_obdo1.o_id = 2;
-                printf("getting %d attrs (testing only)\n", count);
-        } else { 
-                printf("usage %s id\n", argv[0]); 
-                return 0;
-        }
-
-        for (i = 0 ; i < count; i++) {
-                rc = ioctl(fd, OBD_IOC_GETATTR , &data);
-                if (rc) { 
-                        printf("Error: %s on i=%d\n", strerror(rc), i); 
-                        break;
-                } else { 
-                        printf("attr number %d\n", i);
-                }
-        }
-        return 0;
-}
-
 static int jt_getattr(int argc, char **argv)
 {
         struct obd_ioctl_data data;
         int rc;
 
         IOCINIT(data);
-        if (argc == 2) { 
+        if (argc == 2) {
                 data.ioc_obdo1.o_id = strtoul(argv[1], NULL, 0);
                 data.ioc_obdo1.o_valid = 0xffffffff;
                 printf("getting attr for %Ld\n", data.ioc_obdo1.o_id);
-        } else { 
-                printf("usage %s id\n", argv[0]); 
+        } else {
+                printf("usage: %s id\n", argv[0]);
                 return 0;
         }
 
         rc = ioctl(fd, OBD_IOC_GETATTR , &data);
-        if (rc) { 
-                printf("Error: %s\n", strerror(rc)); 
-        } else { 
-                printf("attr obdo %Ld, mode %o\n", data.ioc_obdo1.o_id, 
+        if (rc) {
+                printf("Error: %s\n", strerror(rc));
+        } else {
+                printf("attr obdo %Ld, mode %o\n", data.ioc_obdo1.o_id,
                        data.ioc_obdo1.o_mode);
+        }
+        return 0;
+}
+
+static int jt_test_getattr(int argc, char **argv)
+{
+        struct obd_ioctl_data data;
+        struct timeval start;
+        int count, i;
+        int silent = 0;
+        int rc;
+
+        IOCINIT(data);
+        if (argc == 2 || argc == 3) {
+                count = strtoul(argv[1], NULL, 0);
+
+                if (argc == 3)
+                        silent = strtoul(argv[2], NULL, 0);
+                data.ioc_obdo1.o_valid = 0xffffffff;
+                data.ioc_obdo1.o_id = 2;
+                gettimeofday(&start, NULL);
+                printf("getting %d attrs (testing only): %s", count,
+                       ctime(&start.tv_sec));
+        } else {
+                printf("usage: %s count [silent]\n", argv[0]);
+                return 0;
+        }
+
+        for (i = 0 ; i < count; i++) {
+                rc = ioctl(fd, OBD_IOC_GETATTR , &data);
+                if (rc) {
+                        printf("Error: %s on getattr #%d\n", strerror(rc), i);
+                        break;
+                } else if (!silent) {
+                        printf("attr number %d\n", i);
+                }
+        }
+        if (!rc) {
+                struct timeval end;
+
+                gettimeofday(&end, NULL);
+
+                printf("got attrs successfully %d times (%g/sec): %s", i,
+                       (double)i / ((double)(end.tv_sec - start.tv_sec) +
+                                    (double)(end.tv_usec - start.tv_usec) /
+                                    1000000), ctime(&end.tv_sec));
+        }
+        return 0;
+}
+
+static int jt_test_brw(int argc, char **argv)
+{
+        struct obd_ioctl_data data;
+        struct timeval start;
+        char *bulk;
+        int pages = 4, count;
+        int silent = 0, write = 0, rw;
+        int i;
+        int rc;
+
+        if (argc >= 2 && argc <= 5) {
+                int len;
+
+                count = strtoul(argv[1], NULL, 0);
+
+                if (argc >= 3)
+                        write = strtoul(argv[2], NULL, 0);
+                if (argc >= 4)
+                        silent = strtoul(argv[3], NULL, 0);
+                if (argc >= 5)
+                        pages = strtoul(argv[4], NULL, 0);
+
+                len = pages * PAGE_SIZE;
+
+                bulk = malloc(2 * len);
+                if (!bulk) {
+                        printf("%s: out of memory allocating 2x%d pages\n",
+                               argv[0], pages);
+                        return 0;
+                }
+                IOCINIT(data);
+                data.ioc_conn2 = connid;
+                data.ioc_obdo1.o_id = data.ioc_obdo2.o_id = 2;
+                data.ioc_count = len;
+                data.ioc_offset = 0;
+                data.ioc_plen1 = data.ioc_plen2 = len;
+                data.ioc_pbuf1 = bulk;
+                data.ioc_pbuf2 = bulk + len;
+
+                gettimeofday(&start, NULL);
+                printf("%s %d (2x%d pages) (testing only): %s",
+                       write ? "writing" : "reading", count, pages,
+                       ctime(&start.tv_sec));
+        } else {
+                printf("usage: %s count [write [silent [pages]]]\n", argv[0]);
+                return 0;
+        }
+
+        rw = write ? OBD_IOC_BRW_WRITE : OBD_IOC_BRW_READ;
+        for (i = 0 ; i < count; i++) {
+                rc = ioctl(fd, rw, &data);
+                if (rc) {
+                        printf("Error: %s on %s #%d\n", strerror(rc),
+                               write ? "write" : "read", i);
+                        break;
+                } else if (!silent) {
+                        printf("%s number %d\n", write ? "write" : "read", i);
+                }
+        }
+
+        free(bulk);
+
+        if (!rc) {
+                struct timeval end;
+
+                gettimeofday(&end, NULL);
+
+                printf("%s 2x%d pages successfully %d times (%g/sec): %s",
+                       write ? "wrote" : "read", pages, i,
+                       2.0 * i * pages / ((double)(end.tv_sec - start.tv_sec) +
+                                    (double)(end.tv_usec - start.tv_usec) /
+                                    1000000), ctime(&end.tv_sec));
         }
         return 0;
 }
@@ -489,11 +584,13 @@ command_t list[] = {
         {"cleanup", jt_cleanup, 0, "cleanup the current device (arg: )"},
         {"create", jt_create, 0, "create [count [mode [silent]]]"},
         {"destroy", jt_destroy, 0, "destroy id"},
-        {"test_getattr", jt_multi_getattr, 0, "test_getattr count [silent]"},
         {"getattr", jt_getattr, 0, "getattr id"},
         {"setattr", jt_setattr, 0, "setattr id mode"},
         {"connect", jt_connect, 0, "connect - get a connection to device"},
-        {"disconnect", jt_disconnect, 0, "disconnect - break connection to device"},
+        {"disconnect", jt_disconnect, 0,
+                "disconnect - break connection to device"},
+        {"test_getattr", jt_test_getattr, 0, "test_getattr count [silent]"},
+        {"test_brw", jt_test_brw, 0, "test_brw count [write [silent]]"},
         {"help", Parser_help, 0, "help"},
         {"exit", Parser_quit, 0, "quit"},
         {"quit", Parser_quit, 0, "quit"},
@@ -513,19 +610,22 @@ static void signal_server(int sig)
 int main(int argc, char **argv)
 {
         struct sigaction sigact;
+        int rc = 0;
+
         sigact.sa_handler = signal_server;
         sigfillset(&sigact.sa_mask);
         sigact.sa_flags = SA_RESTART;
         sigaction(SIGINT, &sigact, NULL);
 
+
         if (argc > 1) { 
-                return Parser_execarg(argc - 1, &argv[1], list);
+                rc = Parser_execarg(argc - 1, &argv[1], list);
+        } else {
+                Parser_init("obdctl > ", list);
+                Parser_commands();
         }
 
-        Parser_init("obdctl > ", list);
-        Parser_commands();
         do_disconnect();
-
-        return 0;
+        return rc;
 }
 
