@@ -361,6 +361,12 @@ static void ll_clear_inode(struct inode *inode)
                 /* XXX FIXME do something dramatic */
         }
 
+        rc = obd_cancel_unused(&sbi->ll_osc_conn, inode, LDLM_FL_NO_CALLBACK);
+        if (rc < 0) {
+                CERROR("obd_cancel_unused: %d\n", rc);
+                /* XXX FIXME do something dramatic */
+        }
+
         if (atomic_read(&inode->i_count) == 0) {
                 struct ll_inode_info *lli = ll_i2info(inode);
                 struct lov_stripe_md *lsm = lli->lli_smd;

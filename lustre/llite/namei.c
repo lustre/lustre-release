@@ -384,8 +384,10 @@ struct dentry *ll_find_alias(struct inode *inode, struct dentry *de)
                 if (dentry == de)
                         continue;
 
-                if (!atomic_read(&dentry->d_count))
+                if (!atomic_read(&dentry->d_count)) {
+                        iput(inode);
                         continue;
+                }
 
                 if (!list_empty(&dentry->d_lru))
                         continue;
@@ -787,14 +789,14 @@ static int ll_mkdir(struct inode *dir, struct dentry *dentry, int mode)
         if (IS_ERR(inode))
                 goto out_dir;
 
-        ext2_inc_count(inode);
-
         err = ext2_make_empty(inode, dir);
         if (err)
                 goto out_fail;
 
         /* no directory data updates when intents rule */
         if (!it || !it->it_disposition) {
+                /* XXX FIXME This code needs re-checked for non-intents */
+                ext2_inc_count(inode);
                 err = ll_add_link(dentry, inode);
                 if (err)
                         goto out_fail;
