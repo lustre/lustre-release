@@ -107,7 +107,7 @@ lgmnal_small_receive1(lgmnal_data_t *nal_data, gm_recv_t *recv)
  	 *	Get a transmit descriptor for this message
 	 */
 	srxd = lgmnal_rxbuffer_to_srxd(nal_data, buffer);
-	LGMNAL_PRINT(LGMNAL_DEBUG, ("Back from lgmnal_rxbuffer_to_srxd\n"));
+	LGMNAL_PRINT(LGMNAL_DEBUG_VV, ("Back from lgmnal_rxbuffer_to_srxd\n"));
 	if (!srxd) {
 		LGMNAL_PRINT(LGMNAL_DEBUG, ("Failed to get receive descriptor for this buffer\n"));
 		lib_parse(nal_data->nal_cb, portals_hdr, srxd);
@@ -293,7 +293,7 @@ lgmnal_small_transmit(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie, ptl_hd
 		LGMNAL_PRINT(LGMNAL_DEBUG_ERR, ("no nal_data\n"));
 		return(LGMNAL_STATUS_FAIL);
 	} else {
-		LGMNAL_PRINT(LGMNAL_DEBUG_ERR, ("nal_data [%p]\n", nal_data));
+		LGMNAL_PRINT(LGMNAL_DEBUG_VV, ("nal_data [%p]\n", nal_data));
 	}
 
 	LGMNAL_GM_LOCK(nal_data);
