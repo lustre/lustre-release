@@ -106,8 +106,6 @@ static int ll_fill_super(struct super_block *sb, void *data, int silent)
         int err;
         struct ll_fid rootfid;
         struct obd_statfs osfs;
-        __u64 last_committed;
-        __u64 last_xid;
         struct ptlrpc_request *request = NULL;
         struct ptlrpc_connection *mdc_conn;
         struct ll_read_inode2_cookie lic;
@@ -171,21 +169,16 @@ static int ll_fill_super(struct super_block *sb, void *data, int silent)
                 GOTO(out_mdc, sb = NULL);
         }
 
-        /* XXX: need to store the last_* values somewhere */
-        err = mdc_getstatus(&sbi->ll_mdc_conn, &rootfid, &last_committed,
-                            &last_xid, &request);
-        ptlrpc_req_finished(request);
+        err = mdc_getstatus(&sbi->ll_mdc_conn, &rootfid);
         if (err) {
                 CERROR("cannot mds_connect: rc = %d\n", err);
                 GOTO(out_mdc, sb = NULL);
         }
-        CDEBUG(D_SUPER, "rootfid %Ld\n", (unsigned long long)rootfid.id);
+        CDEBUG(D_SUPER, "rootfid "LPU64"\n", rootfid.id);
         sbi->ll_rootino = rootfid.id;
 
         memset(&osfs, 0, sizeof(osfs));
-        request = NULL;
-        err = mdc_statfs(&sbi->ll_mdc_conn, &osfs, &request);
-        ptlrpc_req_finished(request);
+        err = mdc_statfs(&sbi->ll_mdc_conn, &osfs);
         sb->s_blocksize = osfs.os_bsize;
         sb->s_blocksize_bits = log2(osfs.os_bsize);
         sb->s_magic = LL_SUPER_MAGIC;
@@ -194,7 +187,6 @@ static int ll_fill_super(struct super_block *sb, void *data, int silent)
         sb->s_op = &ll_super_operations;
 
         /* make root inode */
-        request = NULL;
         err = mdc_getattr(&sbi->ll_mdc_conn, sbi->ll_rootino, S_IFDIR,
                           OBD_MD_FLNOTOBD|OBD_MD_FLBLOCKS, 0, &request);
         if (err) {
@@ -226,6 +218,7 @@ static int ll_fill_super(struct super_block *sb, void *data, int silent)
         }
 
         ptlrpc_req_finished(request);
+        request = NULL;
 
 out_dev:
         if (mdc)
@@ -252,17 +245,27 @@ out_free:
 struct super_block * ll_get_sb(struct file_system_type *fs_type, 
                                    int flags, char *devname, void * data)
 {
-	return get_sb_nodev(fs_type, flags, data, ll_fill_super);
+        return get_sb_nodev(fs_type, flags, data, ll_fill_super);
 }
 
 static void ll_put_super(struct super_block *sb)
 {
         struct ll_sb_info *sbi = ll_s2sbi(sb);
-
+        struct ll_fid rootfid;
         ENTRY;
+
         list_del(&sbi->ll_conn_chain);
         ll_commitcbd_cleanup(sbi);
         obd_disconnect(&sbi->ll_osc_conn);
+
+        /* NULL request to force sync on the MDS, and get the last_committed
+         * value to flush remaining RPCs from the pending queue on client.
+         *
+         * XXX This should be an mdc_sync() call to sync the whole MDS fs,
+         *     which we can call for other reasons as well.
+         */
+        mdc_getstatus(&sbi->ll_mdc_conn, &rootfid);
+
         obd_disconnect(&sbi->ll_mdc_conn);
         OBD_FREE(sbi, sizeof(*sbi));
 
@@ -391,16 +394,14 @@ int ll_setattr(struct dentry *de, struct iattr *attr)
 
 static int ll_statfs(struct super_block *sb, struct statfs *sfs)
 {
-        struct ptlrpc_request *request = NULL;
         struct ll_sb_info *sbi = ll_s2sbi(sb);
         struct obd_statfs osfs;
         int rc;
         ENTRY;
 
         memset(sfs, 0, sizeof(*sfs));
-        rc = mdc_statfs(&sbi->ll_mdc_conn, &osfs, &request);
+        rc = obd_statfs(&sbi->ll_mdc_conn, &osfs);
         statfs_unpack(sfs, &osfs);
-        ptlrpc_req_finished(request);
         if (rc)
                 CERROR("mdc_statfs fails: rc = %d\n", rc);
         else
@@ -581,46 +582,46 @@ static kmem_cache_t *ll_inode_cachep;
 
 static struct inode *ll_alloc_inode(struct super_block *sb)
 {
-	struct ll_inode_info *lli;
-	lli = kmem_cache_alloc(ll_inode_cachep, SLAB_KERNEL);
-	if (!lli)
-		return NULL;
+        struct ll_inode_info *lli;
+        lli = kmem_cache_alloc(ll_inode_cachep, SLAB_KERNEL);
+        if (!lli)
+                return NULL;
 
-	memset(lli, 0, (char *)&lli->lli_vfs_inode - (char *)lli);
+        memset(lli, 0, (char *)&lli->lli_vfs_inode - (char *)lli);
         sema_init(&lli->lli_open_sem, 1);
 
-	return &lli->lli_vfs_inode;
+        return &lli->lli_vfs_inode;
 }
 
 static void ll_destroy_inode(struct inode *inode)
 {
-	kmem_cache_free(ll_inode_cachep, ll_i2info(inode));
+        kmem_cache_free(ll_inode_cachep, ll_i2info(inode));
 }
 
 static void init_once(void * foo, kmem_cache_t * cachep, unsigned long flags)
 {
-	struct ll_inode_info *lli = foo;
+        struct ll_inode_info *lli = foo;
 
-	if ((flags & (SLAB_CTOR_VERIFY|SLAB_CTOR_CONSTRUCTOR)) ==
-	    SLAB_CTOR_CONSTRUCTOR)
-		inode_init_once(&lli->lli_vfs_inode);
+        if ((flags & (SLAB_CTOR_VERIFY|SLAB_CTOR_CONSTRUCTOR)) ==
+            SLAB_CTOR_CONSTRUCTOR)
+                inode_init_once(&lli->lli_vfs_inode);
 }
- 
+
 int ll_init_inodecache(void)
 {
-	ll_inode_cachep = kmem_cache_create("lustre_inode_cache",
-					     sizeof(struct ll_inode_info),
-					     0, SLAB_HWCACHE_ALIGN,
-					     init_once, NULL);
-	if (ll_inode_cachep == NULL)
-		return -ENOMEM;
-	return 0;
+        ll_inode_cachep = kmem_cache_create("lustre_inode_cache",
+                                            sizeof(struct ll_inode_info),
+                                            0, SLAB_HWCACHE_ALIGN,
+                                            init_once, NULL);
+        if (ll_inode_cachep == NULL)
+                return -ENOMEM;
+        return 0;
 }
 
 void ll_destroy_inodecache(void)
 {
-	if (kmem_cache_destroy(ll_inode_cachep))
-		CERROR("ll_inode_cache: not all structures were freed\n");
+        if (kmem_cache_destroy(ll_inode_cachep))
+                CERROR("ll_inode_cache: not all structures were freed\n");
 }
 
 

@@ -35,9 +35,8 @@
 
 extern int mds_queue_req(struct ptlrpc_request *);
 
-int mdc_getstatus(struct lustre_handle *conn, struct ll_fid *rootfid,
-                  __u64 *last_committed, __u64 *last_xid,
-                  struct ptlrpc_request **request)
+/* should become mdc_getinfo() */
+int mdc_getstatus(struct lustre_handle *conn, struct ll_fid *rootfid)
 {
         struct ptlrpc_request *req;
         struct mds_body *body;
@@ -61,13 +60,11 @@ int mdc_getstatus(struct lustre_handle *conn, struct ll_fid *rootfid,
                 body = lustre_msg_buf(req->rq_repmsg, 0);
                 mds_unpack_body(body);
                 memcpy(rootfid, &body->fid1, sizeof(*rootfid));
-                *last_committed = req->rq_repmsg->last_committed;
-                *last_xid = req->rq_repmsg->last_xid;
 
-                CDEBUG(D_NET,"root ino=%ld, last_committed=%Lu, last_xid=%Ld\n",
-                       (unsigned long)rootfid->id,
-                       (unsigned long long)*last_committed,
-                       (unsigned long long)*last_xid);
+                CDEBUG(D_NET, "root ino="LPU64", last_committed="LPU64
+                       ", last_xid="LPU64"\n",
+                       rootfid->id, req->rq_repmsg->last_committed,
+                       req->rq_repmsg->last_xid);
         }
 
         EXIT;
@@ -751,8 +748,7 @@ int mdc_readpage(struct lustre_handle *conn, obd_id ino, int type, __u64 offset,
         return rc;
 }
 
-int mdc_statfs(struct lustre_handle *conn, struct obd_statfs *osfs,
-               struct ptlrpc_request **request)
+static int mdc_statfs(struct lustre_handle *conn, struct obd_statfs *osfs)
 {
         struct ptlrpc_request *req;
         int rc, size = sizeof(*osfs);
@@ -761,7 +757,8 @@ int mdc_statfs(struct lustre_handle *conn, struct obd_statfs *osfs,
         req = ptlrpc_prep_req(class_conn2cliimp(conn), MDS_STATFS, 0, NULL,
                               NULL);
         if (!req)
-                GOTO(out, rc = -ENOMEM);
+                RETURN(-ENOMEM);
+
         req->rq_replen = lustre_msg_size(1, &size);
 
         rc = ptlrpc_queue_wait(req);
@@ -774,7 +771,7 @@ int mdc_statfs(struct lustre_handle *conn, struct obd_statfs *osfs,
 
         EXIT;
 out:
-        *request = req;
+        ptlrpc_req_finished(req);
 
         return rc;
 }
@@ -784,6 +781,7 @@ struct obd_ops mdc_obd_ops = {
         o_cleanup: client_obd_cleanup,
         o_connect: client_obd_connect,
         o_disconnect: client_obd_disconnect,
+        o_statfs: mdc_statfs,
 };
 
 static int __init ptlrpc_request_init(void)
@@ -805,7 +803,6 @@ EXPORT_SYMBOL(mdc_getlovinfo);
 EXPORT_SYMBOL(mdc_enqueue);
 EXPORT_SYMBOL(mdc_cancel_unused);
 EXPORT_SYMBOL(mdc_getattr);
-EXPORT_SYMBOL(mdc_statfs);
 EXPORT_SYMBOL(mdc_create);
 EXPORT_SYMBOL(mdc_unlink);
 EXPORT_SYMBOL(mdc_rename);

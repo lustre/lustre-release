@@ -34,6 +34,7 @@
 #include <linux/init.h>
 #include <linux/obd_class.h>
 #include <linux/random.h>
+#include <linux/locks.h>
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 #include <linux/buffer_head.h>
 #endif
@@ -385,7 +386,7 @@ static int mds_disconnect(struct lustre_handle *conn)
                 }
         }
         spin_unlock(&med->med_open_lock);
-                                                       
+
         ldlm_cancel_locks_for_export(export);
         mds_client_free(export);
 
@@ -394,6 +395,23 @@ static int mds_disconnect(struct lustre_handle *conn)
                 MOD_DEC_USE_COUNT;
 
         RETURN(rc);
+}
+
+/*
+ * XXX This is NOT guaranteed to flush all transactions to disk (even though
+ *     it is equivalent to calling sync()) because it only _starts_ the flush
+ *     and does not wait for completion.  It's better than nothing though.
+ *     What we really want is a mild form of fsync_dev_lockfs(), but it is
+ *     non-standard, or enabling do_sync_supers in ext3, just for this call.
+ */
+static void mds_fsync_super(struct super_block *sb)
+{
+        lock_kernel();
+        lock_super(sb);
+        if (sb->s_dirt && sb->s_op && sb->s_op->write_super)
+                sb->s_op->write_super(sb);
+        unlock_super(sb);
+        unlock_kernel();
 }
 
 static int mds_getstatus(struct ptlrpc_request *req)
@@ -410,7 +428,13 @@ static int mds_getstatus(struct ptlrpc_request *req)
                 RETURN(0);
         }
 
-        /* Anything we need to do here with the client's trans no or so? */
+        /* Flush any outstanding transactions to disk so the client will
+         * get the latest last_committed value and can drop their local
+         * requests if they have any.  This would be fsync_super() if it
+         * was exported.
+         */
+        mds_fsync_super(mds->mds_sb);
+
         body = lustre_msg_buf(req->rq_repmsg, 0);
         memcpy(&body->fid1, &mds->mds_rootfid, sizeof(body->fid1));
 

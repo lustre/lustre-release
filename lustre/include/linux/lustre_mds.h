@@ -157,14 +157,10 @@ int mdc_enqueue(struct lustre_handle *conn, int lock_type,
 int mdc_cancel_unused(struct lustre_handle *conn, struct inode *, int flags);
 int mdc_getlovinfo(struct obd_device *obd, struct lustre_handle *mdc_connh,
                    struct ptlrpc_request **request);
-int mdc_getstatus(struct lustre_handle *conn,
-                  struct ll_fid *rootfid, __u64 *last_committed,
-                  __u64 *last_xid, struct ptlrpc_request **);
+int mdc_getstatus(struct lustre_handle *conn, struct ll_fid *rootfid);
 int mdc_getattr(struct lustre_handle *conn,
                 obd_id ino, int type, unsigned long valid, size_t ea_size,
                 struct ptlrpc_request **request);
-int mdc_statfs(struct lustre_handle *conn, struct obd_statfs *osfs,
-               struct ptlrpc_request **request);
 int mdc_setattr(struct lustre_handle *conn,
                 struct inode *, struct iattr *iattr, struct ptlrpc_request **);
 int mdc_open(struct lustre_handle *conn, obd_id ino, int type, int flags,
