@@ -185,8 +185,10 @@ static struct dentry *ll_lookup2(struct inode *dir, struct dentry *dentry,
                 ino = lic.lic_body->fid1.id;
                 mode = lic.lic_body->mode;
                 if (it->it_op & (IT_CREAT | IT_MKDIR | IT_SYMLINK | IT_MKNOD)) {
-                        /* For create ops, we want the lookup to be negative */
-                        if (!it->it_status)
+                        /* For create ops, we want the lookup to be negative,
+                         * unless the create failed in a way that indicates
+                         * that the file is already there */
+                        if (it->it_status != -EEXIST)
                                 GOTO(negative, NULL);
                 } else if (it->it_op & (IT_GETATTR | IT_SETATTR | IT_LOOKUP)) {
                         /* For check ops, we want the lookup to succeed */
@@ -201,9 +203,10 @@ static struct dentry *ll_lookup2(struct inode *dir, struct dentry *dentry,
                         }
                         it->it_data = dentry;
                 } else if (it->it_op & (IT_UNLINK | IT_RMDIR)) {
-                        /* For remove ops, we want the lookup to succeed */
+                        /* For remove ops, we want the lookup to succeed unless
+                         * the file truly doesn't exist */
                         it->it_data = NULL;
-                        if (it->it_status)
+                        if (it->it_status == -ENOENT)
                                 GOTO(neg_req, NULL);
                         goto iget;
                 } else if (it->it_op == IT_OPEN) {

@@ -609,8 +609,7 @@ static int mds_getattr(int offset, struct ptlrpc_request *req)
         push_ctxt(&saved, &mds->mds_ctxt, &uc);
         de = mds_fid2dentry(mds, &body->fid1, NULL);
         if (IS_ERR(de)) {
-                req->rq_status = -ENOENT;
-                rc = 0;
+                rc = req->rq_status = -ENOENT;
                 GOTO(out_pop, PTR_ERR(de));
         }
 

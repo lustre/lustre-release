@@ -76,7 +76,7 @@ int ldlm_completion_ast(struct ldlm_lock *lock, int flags)
         ENTRY;
 
         if (flags & (LDLM_FL_BLOCK_WAIT | LDLM_FL_BLOCK_GRANTED |
-                      LDLM_FL_BLOCK_CONV)) {
+                     LDLM_FL_BLOCK_CONV)) {
                 /* Go to sleep until the lock is granted. */
                 /* FIXME: or cancelled. */
                 LDLM_DEBUG(lock, "client-side enqueue returned a blocked lock,"

@@ -59,7 +59,7 @@ struct ext2_obd {
         struct vfsmount *e2_vfsmnt;
 };
 
-struct obd_ucred { 
+struct obd_ucred {
         __u32 ouc_fsuid;
         __u32 ouc_fsgid;
 };
@@ -72,6 +72,7 @@ struct obd_run_ctxt {
         mm_segment_t     fs;
         __u32            fsuid;
         __u32            fsgid;
+        __u32            override;
 #ifdef OBD_CTXT_DEBUG
         __u32            magic;
 #endif

@@ -61,8 +61,8 @@ int mds_update_last_rcvd(struct mds_obd *mds, void *handle,
 
         mds_fs_set_last_rcvd(mds, handle);
         rc = lustre_fwrite(mds->mds_rcvd_filp, (char *)mcd, sizeof(*mcd), &off);
-        CDEBUG(D_INODE, "wrote trans #"LPD64" for client '%s' at #%d: rc = %d\n",
-               last_rcvd, mcd->mcd_uuid, med->med_off, rc);
+        CDEBUG(D_INODE, "wrote trans #"LPD64" for client '%s' at #%d: rc = "
+               "%d\n", last_rcvd, mcd->mcd_uuid, med->med_off, rc);
 
         if (rc == sizeof(*mcd))
                 rc = 0;
@@ -152,7 +152,7 @@ out_setattr_de:
         l_dput(de);
 out_setattr:
         req->rq_status = rc;
-        return (0);
+        return 0;
 }
 
 static int mds_reint_recreate(struct mds_update_record *rec, int offset,
@@ -327,9 +327,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
         }
 
         if (rc) {
-                CERROR("error during create: %d\n", rc);
-                if (rc != -ENOSPC)
-                        LBUG();
+                CDEBUG(D_INODE, "error during create: %d\n", rc);
                 GOTO(out_create_commit, rc);
         } else {
                 struct iattr iattr;

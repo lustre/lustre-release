@@ -50,6 +50,7 @@ void push_ctxt(struct obd_run_ctxt *save, struct obd_run_ctxt *new,
         save->fs = get_fs();
         save->pwd = dget(current->fs->pwd);
         save->pwdmnt = mntget(current->fs->pwdmnt);
+        save->override = cap_raised(current->cap_effective, CAP_DAC_OVERRIDE);
 
         LASSERT(save->pwd);
         LASSERT(save->pwdmnt);
@@ -64,6 +65,8 @@ void push_ctxt(struct obd_run_ctxt *save, struct obd_run_ctxt *new,
         }
         set_fs(new->fs);
         set_fs_pwd(current->fs, new->pwdmnt, new->pwd);
+        if (save->override)
+                cap_lower(current->cap_effective, CAP_DAC_OVERRIDE);
 }
 
 void pop_ctxt(struct obd_run_ctxt *saved)
@@ -84,6 +87,9 @@ void pop_ctxt(struct obd_run_ctxt *saved)
         //printk("pc6\n");
         current->fsuid = saved->fsuid;
         current->fsgid = saved->fsgid;
+
+        if (saved->override)
+                cap_raise(current->cap_effective, CAP_DAC_OVERRIDE);
 }
 
 /* utility to make a file */
