@@ -29,7 +29,7 @@
 #include <linux/smp_lock.h>
 
 #include <linux/obd_support.h>
-#include <linux/obd_sim.h>
+#include <linux/obd_ext2.h>
 #include <linux/obdfs.h>
 
 int console_loglevel;
@@ -108,7 +108,6 @@ int obdfs_write_one_page(struct file *file, struct page *page, unsigned long off
 	status = -EFAULT;
 
 	if (bytes) {
-
 		lock_kernel();
 		status = obdfs_writepage(file->f_dentry, page);
 		unlock_kernel();

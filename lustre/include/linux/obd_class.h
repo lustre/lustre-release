@@ -6,7 +6,7 @@
 #include <linux/time.h>
 #include <linux/obd.h>
 
-#include <linux/obd_sim.h>
+#include <linux/obd_ext2.h>
 #include <linux/obd_snap.h>
 /* #include <linux/obd_fc.h> */
 #include <linux/obd_raid1.h>

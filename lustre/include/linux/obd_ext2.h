@@ -1,5 +1,5 @@
-#ifndef _OBD_SIM
-#define _OBD_SIM
+#ifndef _OBD_EXT2
+#define _OBD_EXT2
 
 #define OBD_EXT2_RUNIT           _IOWR('f', 61, long)
 
@@ -13,7 +13,7 @@ struct ext2_obd {
 extern struct obdfs_sb_info *obd_sbi;
 extern struct file_operations *obd_fso;
 
-/* obd_sim.c */
+/* ext2_obd.c */
 extern struct obd_ops ext2_obd_ops;
 inline long ext2_block_map (struct inode * inode, long block);
 
