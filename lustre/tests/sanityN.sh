@@ -106,8 +106,35 @@ for C in a b c d e f g h i j k l; do
 done
 [ "`cat $MOUNT1/f11`" = "abcdefghijkl" ] && pass || error
 	
-rm -f $MOUNT1/f[0-9]* $MOUNT1/lnk
+echo "test 12: file length and contents across mounts"
+dd if=$SHELL of=$MOUNT1/f12 bs=4096 count=1
+$CHECKSTAT -s 4096 $MOUNT1/f12 $MOUNT2/f12 || error
+dd if=$SHELL bs=4096 count=1 |					\
+	md5sum - $MOUNT1/f12 $MOUNT2/f12 | (			\
+		read GOODSUM DASH;				\
+		while read SUM FILE ; do			\
+			[ $SUM == $GOODSUM ] || exit 2;		\
+		done; ) || error
 
+echo "test 13: open(,O_TRUNC,), close() across mounts"
+dd if=$SHELL of=$MOUNT1/f13 bs=4096 count=1
+> $MOUNT1/f13
+$CHECKSTAT -s 0 $MOUNT1/f13 $MOUNT2/f13 || error
+
+echo "test 14: file extension while holding the fd open"
+> $MOUNT1/f14
+# ugh.
+touch $MOUNT1/f14-start
+sh -c "
+  echo -n a;
+  mv $MOUNT1/f14-start $MOUNT1/f14-going;
+  while [ -f $MOUNT1/f14-going ] ; do sleep 1; done;
+    "  >> $MOUNT1/f14 &
+while [ -f $MOUNT1/f14-start ] ; do sleep 1; done;
+$CHECKSTAT -s 1 $MOUNT1/f14 $MOUNT2/f14 || error
+rm $MOUNT1/f14-going
+
+rm -f $MOUNT1/f[0-9]* $MOUNT1/lnk
 $CLEAN
 
 exit
