@@ -255,6 +255,7 @@ do_node() {
 
     if $VERBOSE; then
 	echo "CMD: $HOST $@"
+	$PDSH $HOST $LCTL mark "$@" || :
     fi
     $PDSH $HOST "(PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests; cd $RPWD; sh -c \"$@\")"
 }
@@ -416,12 +417,13 @@ drop_bl_callback() {
 }
 
 cancel_lru_locks() {
-	for d in /proc/fs/lustre/ldlm/namespaces/$1*; do
-	    if [ -f $d/lru_size ]; then
-		echo clear > $d/lru_size
-		grep [0-9] $d/lock_unused_count
-	    fi
-	done
+    $LCTL mark cancel_lru_locks
+    for d in /proc/fs/lustre/ldlm/namespaces/$1*; do
+	if [ -f $d/lru_size ]; then
+	    echo clear > $d/lru_size
+	    grep [0-9] $d/lock_unused_count
+	fi
+    done
 }
 
 ##################################
