@@ -159,28 +159,44 @@ static void *fsfilt_ext3_start(struct inode *inode, int op, void *desc_private)
  *
  * 1 EXT3_DATA_TRANS_BLOCKS for the last_rcvd update.
  */
-static int fsfilt_ext3_credits_needed(int objcount, struct fsfilt_objinfo *fso)
+static int fsfilt_ext3_credits_needed(int objcount, struct fsfilt_objinfo *fso,
+                                      int niocount, struct niobuf_local *nb)
 {
         struct super_block *sb = fso->fso_dentry->d_inode->i_sb;
-        int blockpp = 1 << (PAGE_CACHE_SHIFT - sb->s_blocksize_bits);
-        int addrpp = EXT3_ADDR_PER_BLOCK(sb) * blockpp;
-        int nbitmaps = 0;
-        int ngdblocks = 0;
-        int needed = objcount + 1;
-        int i;
+        __u64 next_indir;
+        const int blockpp = 1 << (PAGE_CACHE_SHIFT - sb->s_blocksize_bits);
+        int nbitmaps = 0, ngdblocks;
+        int needed = objcount + 1; /* inodes + superblock */
+        int i, j;
 
-        for (i = 0; i < objcount; i++, fso++) {
-                int nblocks = fso->fso_bufcnt * blockpp;
-                int ndindirect = min(nblocks, addrpp + 1);
-                int nindir = nblocks + ndindirect + 1;
+        for (i = 0, j = 0; i < objcount; i++, fso++) {
+                /* two or more dindirect blocks in case we cross boundary */
+                int ndind = (long)((nb[j + fso->fso_bufcnt - 1].offset -
+                                    nb[j].offset) >>
+                                   sb->s_blocksize_bits) /
+                        (EXT3_ADDR_PER_BLOCK(sb) * EXT3_ADDR_PER_BLOCK(sb));
+                nbitmaps += min(fso->fso_bufcnt, ndind > 0 ? ndind : 2);
 
-                nbitmaps += nindir + nblocks;
-                ngdblocks += nindir + nblocks;
+                /* leaf, indirect, tindirect blocks for first block */
+                nbitmaps += blockpp + 2;
 
-                needed += nindir;
+                j += fso->fso_bufcnt;
         }
 
-        /* Assumes ext3 and ext3 have same sb_info layout at the start. */
+        next_indir = nb[0].offset +
+                (EXT3_ADDR_PER_BLOCK(sb) << sb->s_blocksize_bits);
+        for (i = 1; i < niocount; i++) {
+                if (nb[i].offset >= next_indir) {
+                        nbitmaps++;     /* additional indirect */
+                        next_indir = nb[i].offset +
+                                (EXT3_ADDR_PER_BLOCK(sb)<<sb->s_blocksize_bits);
+                } else if (nb[i].offset != nb[i - 1].offset + sb->s_blocksize) {
+                        nbitmaps++;     /* additional indirect */
+                }
+                nbitmaps += blockpp;    /* each leaf in different group? */
+        }
+
+        ngdblocks = nbitmaps;
         if (nbitmaps > EXT3_SB(sb)->s_groups_count)
                 nbitmaps = EXT3_SB(sb)->s_groups_count;
         if (ngdblocks > EXT3_SB(sb)->s_gdb_count)
@@ -217,7 +233,8 @@ static int fsfilt_ext3_credits_needed(int objcount, struct fsfilt_objinfo *fso)
  * the pages have been written.
  */
 static void *fsfilt_ext3_brw_start(int objcount, struct fsfilt_objinfo *fso,
-                                   int niocount, void *desc_private)
+                                   int niocount, struct niobuf_local *nb,
+                                   void *desc_private)
 {
         journal_t *journal;
         handle_t *handle;
@@ -226,7 +243,7 @@ static void *fsfilt_ext3_brw_start(int objcount, struct fsfilt_objinfo *fso,
 
         LASSERT(current->journal_info == desc_private);
         journal = EXT3_SB(fso->fso_dentry->d_inode->i_sb)->s_journal;
-        needed = fsfilt_ext3_credits_needed(objcount, fso);
+        needed = fsfilt_ext3_credits_needed(objcount, fso, niocount, nb);
 
         /* The number of blocks we could _possibly_ dirty can very large.
          * We reduce our request if it is absurd (and we couldn't get that
