@@ -166,6 +166,10 @@ static int ost_punch(struct ptlrpc_request *req)
 
         body = lustre_msg_buf(req->rq_reqmsg, 0);
 
+        if (!(body->oa.o_valid & OBD_MD_FLSIZE) ||
+            !(body->oa.o_valid & OBD_MD_FLBLOCKS))
+                RETURN(-EINVAL);
+
         rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repmsg);
         if (rc)
                 RETURN(rc);
