@@ -23,10 +23,17 @@
 #include <linux/obdo.h>
 
 extern kmem_cache_t *ll_file_data_slab;
-struct ll_file_data { 
-        __u64 fd_mdshandle; 
-        struct ptlrpc_request *fd_req; 
+struct ll_file_data {
+        __u64 fd_mdshandle;
+        struct ptlrpc_request *fd_req;
+        __u32 fd_flags;
 };
+
+#define LL_IOC_GETFLAGS                 _IOR ('f', 151, long)
+#define LL_IOC_SETFLAGS                 _IOW ('f', 152, long)
+#define LL_IOC_CLRFLAGS                 _IOW ('f', 153, long)
+
+#define LL_FILE_IGNORE_LOCK             0x00000001
 
 #define LL_INLINESZ      60
 struct ll_inode_info {
@@ -35,7 +42,7 @@ struct ll_inode_info {
         char             lli_inline[LL_INLINESZ];
 };
 
-#define LL_SUPER_MAGIC 0x0BD00BD0;
+#define LL_SUPER_MAGIC 0x0BD00BD0
 
 #define LL_COMMITCBD_STOPPING  0x1
 #define LL_COMMITCBD_STOPPED   0x2

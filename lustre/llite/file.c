@@ -168,9 +168,25 @@ static inline void ll_remove_suid(struct inode *inode)
         }
 }
 
+static void ll_update_atime(struct inode *inode)
+{
+        struct iattr attr;
+
+        attr.ia_atime = CURRENT_TIME;
+        attr.ia_valid = ATTR_ATIME;
+
+        if (inode->i_atime == attr.ia_atime) return;
+        if (IS_RDONLY(inode)) return;
+        if (IS_NOATIME(inode)) return;
+
+        /* ll_inode_setattr() sets inode->i_atime from attr.ia_atime */
+        ll_inode_setattr(inode, &attr, 0);
+}
+
 static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
                             loff_t *ppos)
 {
+        struct ll_file_data *fd = (struct ll_file_data *)filp->private_data;
         struct inode *inode = filp->f_dentry->d_inode;
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct ldlm_extent extent;
@@ -181,31 +197,31 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
         ssize_t retval;
         ENTRY;
 
-        extent.start = *ppos;
-        extent.end = *ppos + count;
-        CDEBUG(D_INFO, "Locking inode %ld, start %Lu end %Lu\n",
-               inode->i_ino, extent.start, extent.end);
+        if (!(fd->fd_flags & LL_FILE_IGNORE_LOCK)) {
+                extent.start = *ppos;
+                extent.end = *ppos + count;
+                CDEBUG(D_INFO, "Locking inode %ld, start %Lu end %Lu\n",
+                       inode->i_ino, extent.start, extent.end);
 
-        err = obd_enqueue(&sbi->ll_conn, sbi->ll_namespace, NULL, res_id,
-                          LDLM_EXTENT, &extent, LCK_PR, &flags, inode,
-                          sizeof(*inode), &lockh);
-        if (err != ELDLM_OK)
-                CERROR("lock enqueue: err: %d\n", err);
-        ldlm_lock_dump((void *)(unsigned long)lockh.addr);
+                err = obd_enqueue(&sbi->ll_conn, sbi->ll_namespace, NULL,
+                                  res_id, LDLM_EXTENT, &extent, LCK_PR, &flags,
+                                  inode, sizeof(*inode), &lockh);
+                if (err != ELDLM_OK)
+                        CERROR("lock enqueue: err: %d\n", err);
+                ldlm_lock_dump((void *)(unsigned long)lockh.addr);
+        }
 
         CDEBUG(D_INFO, "Reading inode %ld, %d bytes, offset %Ld\n",
                inode->i_ino, count, *ppos);
         retval = generic_file_read(filp, buf, count, ppos);
-        if (retval > 0) {
-                struct iattr attr;
-                attr.ia_valid = ATTR_ATIME;
-                attr.ia_atime = CURRENT_TIME;
-                ll_setattr(filp->f_dentry, &attr);
-        }
+        if (retval > 0)
+                ll_update_atime(inode);
 
-        err = obd_cancel(&sbi->ll_conn, LCK_PR, &lockh);
-        if (err != ELDLM_OK)
-                CERROR("lock cancel: err: %d\n", err);
+        if (!(fd->fd_flags & LL_FILE_IGNORE_LOCK)) {
+                err = obd_cancel(&sbi->ll_conn, LCK_PR, &lockh);
+                if (err != ELDLM_OK)
+                        CERROR("lock cancel: err: %d\n", err);
+        }
 
         RETURN(retval);
 }
@@ -216,6 +232,7 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
 static ssize_t
 ll_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 {
+        struct ll_file_data *fd = (struct ll_file_data *)file->private_data;
         struct inode *inode = file->f_dentry->d_inode;
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct ldlm_extent extent;
@@ -226,28 +243,72 @@ ll_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
         ssize_t retval;
         ENTRY;
 
-        extent.start = *ppos;
-        extent.end = *ppos + count;
-        CDEBUG(D_INFO, "Locking inode %ld, start %Lu end %Lu\n",
-               inode->i_ino, extent.start, extent.end);
+        if (!(fd->fd_flags & LL_FILE_IGNORE_LOCK)) {
+                extent.start = *ppos;
+                extent.end = *ppos + count;
+                CDEBUG(D_INFO, "Locking inode %ld, start %Lu end %Lu\n",
+                       inode->i_ino, extent.start, extent.end);
 
-        err = obd_enqueue(&sbi->ll_conn, sbi->ll_namespace, NULL, res_id,
-                          LDLM_EXTENT, &extent, LCK_PW, &flags, inode,
-                          sizeof(*inode), &lockh);
-        if (err != ELDLM_OK)
-                CERROR("lock enqueue: err: %d\n", err);
-        ldlm_lock_dump((void *)(unsigned long)lockh.addr);
+                err = obd_enqueue(&sbi->ll_conn, sbi->ll_namespace, NULL,
+                                  res_id, LDLM_EXTENT, &extent, LCK_PW, &flags,
+                                  inode, sizeof(*inode), &lockh);
+                if (err != ELDLM_OK)
+                        CERROR("lock enqueue: err: %d\n", err);
+                ldlm_lock_dump((void *)(unsigned long)lockh.addr);
+        }
 
         CDEBUG(D_INFO, "Writing inode %ld, %ld bytes, offset %Ld\n",
                inode->i_ino, (long)count, *ppos);
 
         retval = generic_file_write(file, buf, count, ppos);
 
-        err = obd_cancel(&sbi->ll_conn, LCK_PW, &lockh);
-        if (err != ELDLM_OK)
-                CERROR("lock cancel: err: %d\n", err);
+        if (!(fd->fd_flags & LL_FILE_IGNORE_LOCK)) {
+                err = obd_cancel(&sbi->ll_conn, LCK_PW, &lockh);
+                if (err != ELDLM_OK)
+                        CERROR("lock cancel: err: %d\n", err);
+        }
 
         RETURN(retval);
+}
+
+int ll_file_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
+                  unsigned long arg)
+{
+        struct ll_file_data *fd = (struct ll_file_data *)file->private_data;
+        int flags;
+
+        switch(cmd) {
+        case LL_IOC_GETFLAGS:
+                /* Get the current value of the file flags */
+                return put_user(fd->fd_flags, (int *)arg);
+        case LL_IOC_SETFLAGS:
+        case LL_IOC_CLRFLAGS:
+                /* Set or clear specific file flags */
+                /* XXX This probably needs checks to ensure the flags are
+                 *     not abused, and to handle any flag side effects.
+                 */
+                if (get_user(flags, (int *) arg))
+                        return -EFAULT;
+
+                if (cmd == LL_IOC_SETFLAGS)
+                        fd->fd_flags |= flags;
+                else
+                        fd->fd_flags &= ~flags;
+                return 0;
+
+        /* We need to special case any other ioctls we want to handle,
+         * to send them to the MDS/OST as appropriate and to properly
+         * network encode the arg field.
+        case EXT2_IOC_GETFLAGS:
+        case EXT2_IOC_SETFLAGS:
+        case EXT2_IOC_GETVERSION_OLD:
+        case EXT2_IOC_GETVERSION_NEW:
+        case EXT2_IOC_SETVERSION_OLD:
+        case EXT2_IOC_SETVERSION_NEW:
+        */
+        default:
+                return -ENOTTY;
+        }
 }
 
 /* XXX this does not need to do anything for data, it _does_ need to
@@ -258,12 +319,13 @@ int ll_fsync(struct file *file, struct dentry *dentry, int data)
 }
 
 struct file_operations ll_file_operations = {
-        read: ll_file_read,
-        write: ll_file_write,
-        open: ll_file_open,
-        release: ll_file_release,
-        mmap: generic_file_mmap,
-        fsync: NULL
+        read:           ll_file_read,
+        write:          ll_file_write,
+        ioctl:          ll_file_ioctl,
+        open:           ll_file_open,
+        release:        ll_file_release,
+        mmap:           generic_file_mmap,
+        fsync:          NULL
 };
 
 struct inode_operations ll_file_inode_operations = {
