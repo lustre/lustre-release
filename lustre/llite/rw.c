@@ -519,13 +519,16 @@ void ll_removepage(struct page *page)
         EXIT;
 }
 
-static int ll_page_matches(struct page *page)
+static int ll_page_matches(struct page *page, int fd_flags)
 {
         struct lustre_handle match_lockh = {0};
         struct inode *inode = page->mapping->host;
         ldlm_policy_data_t page_extent;
         int flags, matches;
         ENTRY;
+
+        if (fd_flags & LL_FILE_CW_LOCKED)
+                RETURN(1);
 
         page_extent.l_extent.start = (__u64)page->index << PAGE_CACHE_SHIFT;
         page_extent.l_extent.end =
@@ -563,7 +566,7 @@ static int ll_issue_page_read(struct obd_export *exp,
 
 static void ll_readahead(struct ll_readahead_state *ras,
                          struct obd_export *exp, struct address_space *mapping,
-                         struct obd_io_group *oig)
+                         struct obd_io_group *oig, int flags)
 {
         unsigned long i, start, end;
         struct ll_async_page *llap;
@@ -612,7 +615,7 @@ static void ll_readahead(struct ll_readahead_state *ras,
                 if (Page_Uptodate(page))
                         goto next_page;
 
-                if ((rc = ll_page_matches(page)) <= 0) {
+                if ((rc = ll_page_matches(page, flags)) <= 0) {
                         LL_CDEBUG_PAGE(D_READA | D_PAGE, page,
                                        "lock match failed: rc %d\n", rc);
                         goto next_page;
@@ -764,7 +767,7 @@ int ll_readpage(struct file *filp, struct page *page)
 
         if (llap->llap_defer_uptodate) {
                 ll_readahead_update(inode, &fd->fd_ras, page->index, 1);
-                ll_readahead(&fd->fd_ras, exp, page->mapping, oig);
+                ll_readahead(&fd->fd_ras, exp, page->mapping, oig,fd->fd_flags);
                 obd_trigger_group_io(exp, ll_i2info(inode)->lli_smd, NULL,
                                      oig);
                 LL_CDEBUG_PAGE(D_PAGE, page, "marking uptodate from defer\n");
@@ -775,7 +778,7 @@ int ll_readpage(struct file *filp, struct page *page)
 
         ll_readahead_update(inode, &fd->fd_ras, page->index, 0);
 
-        rc = ll_page_matches(page);
+        rc = ll_page_matches(page, fd->fd_flags);
         if (rc < 0) {
                 LL_CDEBUG_PAGE(D_ERROR, page, "lock match failed: rc %d\n", rc);
                 GOTO(out, rc);
@@ -806,7 +809,7 @@ int ll_readpage(struct file *filp, struct page *page)
 
         LL_CDEBUG_PAGE(D_PAGE, page, "queued readpage\n");
         if ((ll_i2sbi(inode)->ll_flags & LL_SBI_READAHEAD))
-                ll_readahead(&fd->fd_ras, exp, page->mapping, oig);
+                ll_readahead(&fd->fd_ras, exp, page->mapping, oig,fd->fd_flags);
 
         rc = obd_trigger_group_io(exp, ll_i2info(inode)->lli_smd, NULL, oig);
 

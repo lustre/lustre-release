@@ -68,6 +68,9 @@ typedef enum {
 #define LDLM_FL_WARN           0x008000 /* see ldlm_cli_cancel_unused */
 #define LDLM_FL_DISCARD_DATA   0x010000 /* discard (no writeback) on cancel */
 
+#define LDLM_FL_NO_TIMEOUT     0x020000 /* Blocked by group lock - wait
+                                         * indefinitely */
+
 /* file & record locking */
 #define LDLM_FL_BLOCK_NOWAIT   0x040000 // server told not to wait if blocked
 #define LDLM_FL_TEST_LOCK      0x080000 // return blocking lock
@@ -331,7 +334,7 @@ do {                                                                          \
         if (lock->l_resource->lr_type == LDLM_FLOCK) {                        \
                 CDEBUG(level, "### " format                                   \
                        " ns: %s lock: %p/"LPX64" lrc: %d/%d,%d mode: %s/%s "  \
-                       "res: "LPU64"/"LPU64" rrc: %d type: %s pid: %d "       \
+                       "res: "LPU64"/"LPU64" rrc: %d type: %s pid: "LPU64" "  \
                        "["LPU64"->"LPU64"] flags: %x remote: "LPX64           \
                        " expref: %d\n" , ## a,                                \
                        lock->l_resource->lr_namespace->ns_name, lock,         \

@@ -166,6 +166,8 @@ int llu_iop_open(struct pnode *pnode, int flags, mode_t mode)
         }
         fd->fd_flags &= ~O_LOV_DELAY_CREATE;
 
+        lli->lli_open_flags = flags;
+
  out_release:
         request = it->d.lustre.it_data;
         ptlrpc_req_finished(request);
@@ -255,6 +257,13 @@ int llu_mdc_close(struct obd_export *mdc_exp, struct inode *inode)
         struct obdo obdo;
         int rc, valid;
         ENTRY;
+
+        /* clear group lock, if present */
+        if (fd->fd_flags & LL_FILE_CW_LOCKED) {
+                struct lov_stripe_md *lsm = llu_i2info(inode)->lli_smd;
+                fd->fd_flags &= ~(LL_FILE_CW_LOCKED|LL_FILE_IGNORE_LOCK);
+                rc = llu_extent_unlock(fd, inode, lsm, LCK_CW, &fd->fd_cwlockh);
+        }
 
         valid = OBD_MD_FLID;
         if (test_bit(LLI_F_HAVE_OST_SIZE_LOCK, &lli->lli_flags))

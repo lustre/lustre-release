@@ -1187,10 +1187,78 @@ static int llu_iop_fcntl(struct inode *ino, int cmd, va_list ap)
         return -ENOSYS;
 }
 
+static int llu_get_cwlock(struct inode *inode, unsigned long arg)
+{
+        struct llu_inode_info *lli = llu_i2info(inode);
+        struct ll_file_data *fd = lli->lli_file_data;
+        ldlm_policy_data_t policy = { .l_extent = { .start = 0,
+                                                    .end = OBD_OBJECT_EOF}};
+        struct lustre_handle lockh = { 0 };
+        struct lov_stripe_md *lsm = lli->lli_smd;
+        ldlm_error_t err;
+        int flags = 0;
+        ENTRY;
+
+        if (fd->fd_flags & LL_FILE_CW_LOCKED) {
+                RETURN(-EINVAL);
+        }
+
+        policy.l_extent.gid = arg;
+        if (lli->lli_open_flags & O_NONBLOCK)
+                flags = LDLM_FL_BLOCK_NOWAIT;
+
+        err = llu_extent_lock(fd, inode, lsm, LCK_CW, &policy, &lockh, flags);
+        if (err)
+                RETURN(err);
+
+        fd->fd_flags |= LL_FILE_CW_LOCKED|LL_FILE_IGNORE_LOCK;
+        fd->fd_gid = arg;
+        memcpy(&fd->fd_cwlockh, &lockh, sizeof(lockh));
+
+        RETURN(0);
+}
+
+static int llu_put_cwlock(struct inode *inode, unsigned long arg)
+{
+        struct llu_inode_info *lli = llu_i2info(inode);
+        struct ll_file_data *fd = lli->lli_file_data;
+        struct lov_stripe_md *lsm = lli->lli_smd;
+        ldlm_error_t err;
+        ENTRY;
+
+        if (!(fd->fd_flags & LL_FILE_CW_LOCKED))
+                RETURN(-EINVAL);
+
+        if (fd->fd_gid != arg)
+                RETURN(-EINVAL);
+
+        fd->fd_flags &= ~(LL_FILE_CW_LOCKED|LL_FILE_IGNORE_LOCK);
+
+        err = llu_extent_unlock(fd, inode, lsm, LCK_CW, &fd->fd_cwlockh);
+        if (err)
+                RETURN(err);
+
+        fd->fd_gid = 0;
+        memset(&fd->fd_cwlockh, 0, sizeof(fd->fd_cwlockh));
+
+        RETURN(0);
+}       
+
 static int llu_iop_ioctl(struct inode *ino, unsigned long int request,
                          va_list ap)
 {
-        CERROR("liblustre did not support ioctl\n");
+        unsigned long arg;
+
+        switch (request) {
+        case LL_IOC_CW_LOCK:
+                arg = va_arg(ap, unsigned long);
+                return llu_get_cwlock(ino, arg);
+        case LL_IOC_CW_UNLOCK:
+                arg = va_arg(ap, unsigned long);
+                return llu_put_cwlock(ino, arg);
+        }
+
+        CERROR("did not support ioctl cmd %lx\n", request);
         return -ENOSYS;
 }
 

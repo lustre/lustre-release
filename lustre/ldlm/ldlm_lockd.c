@@ -184,7 +184,8 @@ static void waiting_locks_callback(unsigned long unused)
                 lock = list_entry(waiting_locks_list.next, struct ldlm_lock,
                                   l_pending_chain);
 
-                if (lock->l_callback_timeout > jiffies)
+                if ((lock->l_callback_timeout > jiffies) ||
+                    (lock->l_req_mode == LCK_CW))
                         break;
 
                 LDLM_ERROR(lock, "lock callback timer expired: evicting client "
@@ -496,7 +497,8 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
 
         rc = ptlrpc_queue_wait(req);
-        if (rc == -ETIMEDOUT || rc == -EINTR || rc == -ENOTCONN) {
+        if ((rc == -ETIMEDOUT || rc == -EINTR || rc == -ENOTCONN) &&
+             !lock->l_export->exp_libclient) {
                 ldlm_del_waiting_lock(lock);
                 ldlm_failed_ast(lock, rc, "completion");
         } else if (rc == -EINVAL) {
@@ -542,7 +544,8 @@ int ldlm_server_glimpse_ast(struct ldlm_lock *lock, void *data)
         req->rq_timeout = 2; /* 2 second timeout for initial AST reply */
 
         rc = ptlrpc_queue_wait(req);
-        if (rc == -ETIMEDOUT || rc == -EINTR || rc == -ENOTCONN) {
+        if ((rc == -ETIMEDOUT || rc == -EINTR || rc == -ENOTCONN) &&
+            !lock->l_export->exp_libclient) {
                 ldlm_del_waiting_lock(lock);
                 ldlm_failed_ast(lock, rc, "glimpse");
         } else if (rc == -EINVAL) {

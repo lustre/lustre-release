@@ -106,8 +106,15 @@ noreproc:
 
         lwd.lwd_lock = lock;
 
-        lwi = LWI_TIMEOUT_INTR(obd_timeout * HZ, ldlm_expired_completion_wait,
-                               interrupted_completion_wait, &lwd);
+        if (flags & LDLM_FL_NO_TIMEOUT) {
+                LDLM_DEBUG(lock, "waiting indefinitely for group lock\n");
+                lwi = LWI_INTR(interrupted_completion_wait, &lwd);
+        } else {
+                lwi = LWI_TIMEOUT_INTR(obd_timeout * HZ,
+                                       ldlm_expired_completion_wait,
+                                       interrupted_completion_wait, &lwd);
+        }
+
         if (imp != NULL) {
                 spin_lock_irqsave(&imp->imp_lock, irqflags);
                 lwd.lwd_generation = imp->imp_generation;

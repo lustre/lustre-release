@@ -43,6 +43,13 @@ static int ll_mdc_close(struct obd_export *mdc_exp, struct inode *inode,
         int rc, valid;
         ENTRY;
 
+        /* clear group lock, if present */
+        if (fd->fd_flags & LL_FILE_CW_LOCKED) {
+                struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
+                fd->fd_flags &= ~(LL_FILE_CW_LOCKED|LL_FILE_IGNORE_LOCK);
+                rc = ll_extent_unlock(fd, inode, lsm, LCK_CW, &fd->fd_cwlockh);
+        }
+
         valid = OBD_MD_FLID;
 
         memset(&obdo, 0, sizeof(obdo));
@@ -721,7 +728,9 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
         policy.l_extent.start = *ppos;
         policy.l_extent.end = *ppos + count - 1;
 
-        err = ll_extent_lock(fd, inode, lsm, LCK_PR, &policy, &lockh, 0);
+        err = ll_extent_lock(fd, inode, lsm, LCK_PR, &policy, &lockh,
+                             (filp->f_flags & O_NONBLOCK)?LDLM_FL_BLOCK_NOWAIT:
+                                                          0);
         if (err != ELDLM_OK)
                 RETURN(err);
 
@@ -768,7 +777,10 @@ static ssize_t ll_file_write(struct file *file, const char *buf, size_t count,
         loff_t maxbytes = ll_file_maxbytes(inode);
         ldlm_error_t err;
         ssize_t retval;
+        int nonblock = 0;
         ENTRY;
+        if (file->f_flags & O_NONBLOCK)
+                nonblock = LDLM_FL_BLOCK_NOWAIT;
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p),size="LPSZ",offset=%Ld\n",
                inode->i_ino, inode->i_generation, inode, count, *ppos);
 
@@ -793,7 +805,7 @@ static ssize_t ll_file_write(struct file *file, const char *buf, size_t count,
                 policy.l_extent.end = *ppos + count - 1;
         }
 
-        err = ll_extent_lock(fd, inode, lsm, LCK_PW, &policy, &lockh, 0);
+        err = ll_extent_lock(fd, inode, lsm, LCK_PW, &policy, &lockh, nonblock);
         if (err != ELDLM_OK)
                 RETURN(err);
 
@@ -1006,6 +1018,67 @@ static int ll_lov_getstripe(struct inode *inode, unsigned long arg)
                             (void *)arg);
 }
 
+static int ll_get_cwlock(struct inode *inode, struct file *file,
+                         unsigned long arg)
+{
+        struct ll_file_data *fd = file->private_data;
+        ldlm_policy_data_t policy = { .l_extent = { .start = 0,
+                                                    .end = OBD_OBJECT_EOF}};
+        struct lustre_handle lockh = { 0 };
+        struct ll_inode_info *lli = ll_i2info(inode);
+        struct lov_stripe_md *lsm = lli->lli_smd;
+        ldlm_error_t err;
+        int flags = 0;
+        ENTRY;
+
+        if (fd->fd_flags & LL_FILE_CW_LOCKED) {
+                RETURN(-EINVAL);
+        }
+
+        policy.l_extent.gid = arg;
+        if (file->f_flags & O_NONBLOCK)
+                flags = LDLM_FL_BLOCK_NOWAIT;
+
+        err = ll_extent_lock(fd, inode, lsm, LCK_CW, &policy, &lockh, flags);
+        if (err)
+                RETURN(err);
+
+        fd->fd_flags |= LL_FILE_CW_LOCKED|LL_FILE_IGNORE_LOCK;
+        fd->fd_gid = arg;
+        memcpy(&fd->fd_cwlockh, &lockh, sizeof(lockh));
+
+        RETURN(0);
+}
+
+static int ll_put_cwlock(struct inode *inode, struct file *file,
+                         unsigned long arg)
+{
+        struct ll_file_data *fd = file->private_data;
+        struct ll_inode_info *lli = ll_i2info(inode);
+        struct lov_stripe_md *lsm = lli->lli_smd;
+        ldlm_error_t err;
+        ENTRY;
+
+        if (!(fd->fd_flags & LL_FILE_CW_LOCKED)) {
+                /* Ugh, it's already unlocked. */
+                RETURN(-EINVAL);
+        }
+
+        if (fd->fd_gid != arg) /* Ugh? Unlocking with different gid? */
+                RETURN(-EINVAL);
+        
+        fd->fd_flags &= ~(LL_FILE_CW_LOCKED|LL_FILE_IGNORE_LOCK);
+
+        err = ll_extent_unlock(fd, inode, lsm, LCK_CW, &fd->fd_cwlockh);
+        if (err)
+                RETURN(err);
+
+        fd->fd_gid = 0;
+        memset(&fd->fd_cwlockh, 0, sizeof(fd->fd_cwlockh));
+
+        RETURN(0);
+}       
+
 int ll_file_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
                   unsigned long arg)
 {
@@ -1049,6 +1122,10 @@ int ll_file_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
         case EXT3_IOC_GETFLAGS:
         case EXT3_IOC_SETFLAGS:
                 RETURN( ll_iocontrol(inode, file, cmd, arg) );
+        case LL_IOC_CW_LOCK:
+                RETURN(ll_get_cwlock(inode, file, arg));
+        case LL_IOC_CW_UNLOCK:
+                RETURN(ll_put_cwlock(inode, file, arg));
         /* We need to special case any other ioctls we want to handle,
          * to send them to the MDS/OST as appropriate and to properly
          * network encode the arg field.
@@ -1078,8 +1155,14 @@ loff_t ll_file_seek(struct file *file, loff_t offset, int origin)
         lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_LLSEEK);
         if (origin == 2) { /* SEEK_END */
                 ldlm_error_t err;
+                int nonblock = 0;
                 ldlm_policy_data_t policy = { .l_extent = {0, OBD_OBJECT_EOF }};
-                err = ll_extent_lock(fd, inode, lsm, LCK_PR, &policy, &lockh,0);
+
+                if (file->f_flags & O_NONBLOCK)
+                        nonblock = LDLM_FL_BLOCK_NOWAIT;
+
+                err = ll_extent_lock(fd, inode, lsm, LCK_PR, &policy, &lockh,
+                                     nonblock);
                 if (err != ELDLM_OK)
                         RETURN(err);
 
@@ -1212,7 +1295,7 @@ int ll_file_flock(struct file *file, int cmd, struct file_lock *file_lock)
                 LBUG();
         }
 
-        CDEBUG(D_DLMTRACE, "inode=%lu, pid=%u, flags=%#x, mode=%u, "
+        CDEBUG(D_DLMTRACE, "inode=%lu, pid="LPU64", flags=%#x, mode=%u, "
                "start="LPU64", end="LPU64"\n", inode->i_ino, flock.l_flock.pid,
                flags, mode, flock.l_flock.start, flock.l_flock.end);
 

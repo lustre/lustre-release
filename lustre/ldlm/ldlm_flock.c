@@ -129,8 +129,8 @@ ldlm_process_flock_lock(struct ldlm_lock *req, int *flags, int first_enq,
         int overlaps = 0;
         ENTRY;
 
-        CDEBUG(D_DLMTRACE, "flags %#x pid %u mode %u start "LPU64" end "LPU64
-               "\n", *flags, new->l_policy_data.l_flock.pid, mode,
+        CDEBUG(D_DLMTRACE, "flags %#x pid "LPU64" mode %u start "LPU64" end "
+               LPU64"\n", *flags, new->l_policy_data.l_flock.pid, mode,
                req->l_policy_data.l_flock.start,
                req->l_policy_data.l_flock.end);
 
@@ -512,7 +512,7 @@ granted:
                 getlk->fl_end = lock->l_policy_data.l_flock.end;
         } else {
                 /* We need to reprocess the lock to do merges or splits
-                 * with existing locks owne by this process. */
+                 * with existing locks owned by this process. */
                 flags = LDLM_FL_WAIT_NOREPROC;
                 ldlm_process_flock_lock(lock, &flags, 1, &err);
         }

@@ -2048,6 +2048,8 @@ static int lov_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
                                            &sub_ext.l_extent.end))
                         continue;
 
+                sub_ext.l_extent.gid = policy->l_extent.gid;
+
                 if (lov->tgts[loi->loi_ost_idx].active == 0) {
                         CDEBUG(D_HA, "lov idx %d inactive\n", loi->loi_ost_idx);
                         continue;

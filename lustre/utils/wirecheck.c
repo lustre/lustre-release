@@ -406,6 +406,7 @@ check_ldlm_extent(void)
         CHECK_STRUCT(ldlm_extent);
         CHECK_MEMBER(ldlm_extent, start);
         CHECK_MEMBER(ldlm_extent, end);
+        CHECK_MEMBER(ldlm_extent, gid);
 }
 
 void

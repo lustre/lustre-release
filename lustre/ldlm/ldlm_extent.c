@@ -130,10 +130,16 @@ static void ldlm_extent_policy(struct ldlm_resource *res,
 
 /* Determine if the lock is compatible with all locks on the queue.
  * We stop walking the queue if we hit ourselves so we don't take
- * conflicting locks enqueued after us into accound, or we'd wait forever. */
+ * conflicting locks enqueued after us into accound, or we'd wait forever.
+ *
+ * 0 if the lock is not compatible
+ * 1 if the lock is compatible
+ * 2 if this group lock is compatible and requires no further checking
+ * negative error, such as EWOULDBLOCK for group locks
+ */
 static int
 ldlm_extent_compat_queue(struct list_head *queue, struct ldlm_lock *req,
-                         int send_cbs)
+                         int send_cbs, int *flags, ldlm_error_t *err)
 {
         struct list_head *tmp;
         struct ldlm_lock *lock;
@@ -152,13 +158,54 @@ ldlm_extent_compat_queue(struct list_head *queue, struct ldlm_lock *req,
                         RETURN(compat);
 
                 /* locks are compatible, overlap doesn't matter */
-                if (lockmode_compat(lock->l_req_mode, req_mode))
-                        continue;
+                if (lockmode_compat(lock->l_req_mode, req_mode)) {
+                        /* nonCW locks are compatible, overlap doesn't matter */
+                        if (req_mode != LCK_CW)
+                                continue;
+                                
+                        /* If we are trying to get a CW lock and there is
+                           another one of this kind, we need to compare gid */
+                        if (req->l_policy_data.l_extent.gid ==
+                             lock->l_policy_data.l_extent.gid) {
+                                if (lock->l_req_mode == lock->l_granted_mode)
+                                        RETURN(2);
 
-                /* if lock doesn't overlap skip it */
-                if (lock->l_policy_data.l_extent.end < req_start ||
-                    lock->l_policy_data.l_extent.start > req_end)
+                                /* If we are in nonblocking mode - return
+                                   immediately */
+                                if (*flags & LDLM_FL_BLOCK_NOWAIT) {
+                                        compat = -EWOULDBLOCK;
+                                        goto destroylock;
+                                }
+                                /* If this group lock is compatible with another
+                                 * group lock on the waiting list, they must be
+                                 * together in the list, so they can be granted
+                                 * at the same time.  Otherwise the later lock
+                                 * can get stuck behind another, incompatible,
+                                 * lock. */
+                                ldlm_resource_insert_lock_after(lock, req);
+                                /* Because 'lock' is not granted, we can stop
+                                 * processing this queue and return immediately.
+                                 * There is no need to check the rest of the
+                                 * list. */
+                                RETURN(0);
+                        }
+                }
+
+                if (lock->l_req_mode == LCK_CW) {
+                        /* If compared lock is CW, then requested is PR/PW/ =>
+                         * this is not compatible; extent range does not
+                         * matter */
+                        if (*flags & LDLM_FL_BLOCK_NOWAIT) {
+                                compat = -EWOULDBLOCK;
+                                goto destroylock;
+                        } else {
+                                *flags |= LDLM_FL_NO_TIMEOUT;
+                        }
+                } else if (lock->l_policy_data.l_extent.end < req_start ||
+                           lock->l_policy_data.l_extent.start > req_end) {
+                        /* if a non-CW lock doesn't overlap skip it */
                         continue;
+                }
 
                 if (!send_cbs)
                         RETURN(0);
@@ -168,6 +215,11 @@ ldlm_extent_compat_queue(struct list_head *queue, struct ldlm_lock *req,
                         ldlm_add_ast_work_item(lock, req, NULL, 0);
         }
 
+        return(compat);
+destroylock:
+        list_del_init(&req->l_res_link);
+        ldlm_lock_destroy(req);
+        *err = compat;
         RETURN(compat);
 }
 
@@ -185,18 +237,27 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, int *flags, int first_enq,
 {
         struct ldlm_resource *res = lock->l_resource;
         struct list_head rpc_list = LIST_HEAD_INIT(rpc_list);
-        int rc;
+        int rc, rc2;
         ENTRY;
 
         LASSERT(list_empty(&res->lr_converting));
+        *err = ELDLM_OK;
 
         if (!first_enq) {
+                /* Careful observers will note that we don't handle -EWOULDBLOCK
+                 * here, but it's ok for a non-obvious reason -- compat_queue
+                 * can only return -EWOULDBLOCK if (flags & BLOCK_NOWAIT).
+                 * flags should always be zero here, and if that ever stops
+                 * being true, we want to find out. */
+                LASSERT(*flags == 0);
                 LASSERT(res->lr_tmp != NULL);
-                rc = ldlm_extent_compat_queue(&res->lr_granted, lock, 0);
-                if (!rc)
-                        RETURN(LDLM_ITER_STOP);
-                rc = ldlm_extent_compat_queue(&res->lr_waiting, lock, 0);
-                if (!rc)
+                rc = ldlm_extent_compat_queue(&res->lr_granted, lock, 0, flags,
+                                              err);
+                if (rc == 1) {
+                        rc = ldlm_extent_compat_queue(&res->lr_waiting, lock, 0,
+                                                      flags, err);
+                }
+                if (rc == 0)
                         RETURN(LDLM_ITER_STOP);
 
                 ldlm_resource_unlink_lock(lock);
@@ -209,12 +270,24 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, int *flags, int first_enq,
  restart:
         LASSERT(res->lr_tmp == NULL);
         res->lr_tmp = &rpc_list;
-        rc = ldlm_extent_compat_queue(&res->lr_granted, lock, 1);
-        rc += ldlm_extent_compat_queue(&res->lr_waiting, lock, 1);
+        rc = ldlm_extent_compat_queue(&res->lr_granted, lock, 1, flags, err);
+        if (rc < 0)
+                RETURN(rc); /* lock was destroyed */
+        if (rc == 2)
+                goto grant;
+
+        rc2 = ldlm_extent_compat_queue(&res->lr_waiting, lock, 1, flags, err);
+        if (rc2 < 0)
+                RETURN(rc2); /* lock was destroyed */
         res->lr_tmp = NULL;
 
-        if (rc != 2) {
-                /* If either of the compat_queue()s returned 0, then we
+        if (rc + rc2 == 2) {
+        grant:
+                ldlm_extent_policy(res, lock, flags);
+                ldlm_resource_unlink_lock(lock);
+                ldlm_grant_lock(lock, NULL, 0, 0);
+        } else {
+                /* If either of the compat_queue()s returned failure, then we
                  * have ASTs to send and must go onto the waiting list.
                  *
                  * bug 2322: we used to unlink and re-add here, which was a
@@ -228,10 +301,6 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, int *flags, int first_enq,
                 if (rc == -ERESTART)
                         GOTO(restart, -ERESTART);
                 *flags |= LDLM_FL_BLOCK_GRANTED;
-        } else {
-                ldlm_extent_policy(res, lock, flags);
-                ldlm_resource_unlink_lock(lock);
-                ldlm_grant_lock(lock, NULL, 0, 0);
         }
         RETURN(0);
 }

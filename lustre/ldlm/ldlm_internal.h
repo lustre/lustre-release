@@ -1,6 +1,10 @@
 /* ldlm_request.c */
 int ldlm_cancel_lru(struct ldlm_namespace *ns);
 
+/* ldlm_resource.c */
+void ldlm_resource_insert_lock_after(struct ldlm_lock *original,
+                                     struct ldlm_lock *new);
+
 /* ldlm_lock.c */
 void ldlm_grant_lock(struct ldlm_lock *lock, void *data, int datalen,
 		     int run_ast);

@@ -578,6 +578,10 @@ extern struct task_struct *current;
 #define del_wait_queue(p) do { list_del(&(p)->sleeping); } while (0)
 #define remove_wait_queue(q,p) do { list_del(&(p)->sleeping); } while (0)
 
+#define DECLARE_WAIT_QUEUE_HEAD(HEAD)                           \
+        wait_queue_head_t HEAD = {                              \
+                .sleepers = LIST_HEAD_INIT(HEAD.sleepers)       \
+        }
 #define init_waitqueue_head(l) INIT_LIST_HEAD(&(l)->sleepers)
 #define wake_up(l) do { int a; a++; } while (0)
 #define TASK_INTERRUPTIBLE 0

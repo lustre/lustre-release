@@ -29,6 +29,7 @@
 #include <time.h>
 #include <sys/types.h>
 #include <sys/queue.h>
+#include <fcntl.h>
 
 #include <sysio.h>
 #include <fs.h>
@@ -89,12 +90,17 @@ static int llu_extent_lock_callback(struct ldlm_lock *lock,
                         CERROR("ldlm_cli_cancel failed: %d\n", rc);
                 break;
         case LDLM_CB_CANCELING: {
-                struct inode *inode = llu_inode_from_lock(lock);
+                struct inode *inode;
                 struct llu_inode_info *lli;
                 struct lov_stripe_md *lsm;
                 __u32 stripe;
                 __u64 kms;
                 
+                /* This lock wasn't granted, don't try to evict pages */
+                if (lock->l_req_mode != lock->l_granted_mode)
+                        RETURN(0);
+
+                inode = llu_inode_from_lock(lock);
                 if (!inode)
                         RETURN(0);
                 lli= llu_i2info(inode);
@@ -126,59 +132,44 @@ static int llu_glimpse_callback(struct ldlm_lock *lock, void *reqp)
 {
         struct ptlrpc_request *req = reqp;
         struct inode *inode = llu_inode_from_lock(lock);
-        struct obd_export *exp;
         struct llu_inode_info *lli;
         struct ost_lvb *lvb;
-        struct {
-                int stripe_number;
-                __u64 size;
-                struct lov_stripe_md *lsm;
-        } data;
-        __u32 vallen = sizeof(data);
-        int rc, size = sizeof(*lvb);
+        int rc, size = sizeof(*lvb), stripe = 0;
         ENTRY;
 
         if (inode == NULL)
-                RETURN(0);
+                GOTO(out, rc = -ELDLM_NO_LOCK_DATA);
         lli = llu_i2info(inode);
         if (lli == NULL)
-                goto iput;
+                GOTO(iput, rc = -ELDLM_NO_LOCK_DATA);
         if (lli->lli_smd == NULL)
-                goto iput;
-        exp = llu_i2obdexp(inode);
+                GOTO(iput, rc = -ELDLM_NO_LOCK_DATA);
 
         /* First, find out which stripe index this lock corresponds to. */
         if (lli->lli_smd->lsm_stripe_count > 1)
-                data.stripe_number = llu_lock_to_stripe_offset(inode, lock);
-        else
-                data.stripe_number = 0;
-
-        data.size = lli->lli_st_size;
-        data.lsm = lli->lli_smd;
-
-        rc = obd_get_info(exp, strlen("size_to_stripe"), "size_to_stripe",
-                          &vallen, &data);
-        if (rc != 0) {
-                CERROR("obd_get_info: rc = %d\n", rc);
-                LBUG();
-        }
-
-        LDLM_DEBUG(lock, "i_size: %Lu -> stripe number %d -> size %Lu",
-                   lli->lli_st_size, data.stripe_number, data.size);
+                stripe = llu_lock_to_stripe_offset(inode, lock);
 
         rc = lustre_pack_reply(req, 1, &size, NULL);
         if (rc) {
                 CERROR("lustre_pack_reply: %d\n", rc);
-                goto iput;
+                GOTO(iput, rc);
         }
 
         lvb = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*lvb));
-        lvb->lvb_size = data.size;
-        ptlrpc_reply(req);
+        lvb->lvb_size = lli->lli_smd->lsm_oinfo[stripe].loi_kms;
 
+        LDLM_DEBUG(lock, "i_size: %llu -> stripe number %u -> kms "LPU64,
+                   lli->lli_st_size, stripe, lvb->lvb_size);
  iput:
         I_RELE(inode);
-        RETURN(0);
+ out:
+        /* These errors are normal races, so we don't want to fill the console
+         * with messages by calling ptlrpc_error() */
+        if (rc == -ELDLM_NO_LOCK_DATA)
+                lustre_pack_reply(req, 0, NULL, NULL);
+
+        req->rq_status = rc;
+        return rc;
 }
 
 __u64 lov_merge_size(struct lov_stripe_md *lsm, int kms);
@@ -287,16 +278,19 @@ int llu_extent_lock_no_validate(struct ll_file_data *fd,
  */
 int llu_extent_lock(struct ll_file_data *fd, struct inode *inode,
                     struct lov_stripe_md *lsm, int mode,
-                    struct ldlm_extent *extent, struct lustre_handle *lockh)
+                    struct ldlm_extent *extent, struct lustre_handle *lockh,
+                    int nonblock)
 {
         struct llu_inode_info *lli = llu_i2info(inode);
         struct obd_export *exp = llu_i2obdexp(inode);
         struct ldlm_extent size_lock;
         struct lustre_handle match_lockh = {0};
         int flags, rc, matched;
+        int astflags = nonblock ? LDLM_FL_BLOCK_NOWAIT : 0;
         ENTRY;
 
-        rc = llu_extent_lock_no_validate(fd, inode, lsm, mode, extent, lockh, 0);
+        rc = llu_extent_lock_no_validate(fd, inode, lsm, mode, extent,
+                                         lockh, astflags);
         if (rc != ELDLM_OK)
                 RETURN(rc);
 
@@ -708,6 +702,8 @@ llu_file_write(struct inode *inode, const struct iovec *iovec,
         ldlm_policy_data_t policy;
         struct llu_sysio_callback_args *lsca;
         struct llu_sysio_cookie *cookie;
+        int astflag = (lli->lli_open_flags & O_NONBLOCK) ?
+                       LDLM_FL_BLOCK_NOWAIT : 0;
         ldlm_error_t err;
         int iovidx;
         ENTRY;
@@ -742,7 +738,7 @@ llu_file_write(struct inode *inode, const struct iovec *iovec,
                 policy.l_extent.end = pos + count - 1;
 
                 err = llu_extent_lock(fd, inode, lsm, LCK_PW, &policy,
-                                      &lockh, 0);
+                                      &lockh, astflag);
                 if (err != ELDLM_OK)
                         GOTO(err_out, err = -ENOLCK);
 
@@ -816,6 +812,8 @@ llu_file_read(struct inode *inode, const struct iovec *iovec,
         ldlm_policy_data_t policy;
         struct llu_sysio_callback_args *lsca;
         struct llu_sysio_cookie *cookie;
+        int astflag = (lli->lli_open_flags & O_NONBLOCK) ?
+                       LDLM_FL_BLOCK_NOWAIT : 0;
         __u64 kms;
         int iovidx;
 
@@ -838,7 +836,8 @@ llu_file_read(struct inode *inode, const struct iovec *iovec,
                 policy.l_extent.start = pos;
                 policy.l_extent.end = pos + count - 1;
 
-                err = llu_extent_lock(fd, inode, lsm, LCK_PR, &policy, &lockh, 0);
+                err = llu_extent_lock(fd, inode, lsm, LCK_PR, &policy,
+                                      &lockh, astflag);
                 if (err != ELDLM_OK)
                         GOTO(err_out, err = -ENOLCK);
 

@@ -625,6 +625,29 @@ void ldlm_resource_add_lock(struct ldlm_resource *res, struct list_head *head,
         l_unlock(&res->lr_namespace->ns_lock);
 }
 
+void ldlm_resource_insert_lock_after(struct ldlm_lock *original,
+                                     struct ldlm_lock *new)
+{
+        struct ldlm_resource *res = original->l_resource;
+
+        l_lock(&res->lr_namespace->ns_lock);
+
+        ldlm_resource_dump(res);
+        CDEBUG(D_OTHER, "About to insert this lock after %p:\n", original);
+        ldlm_lock_dump(D_OTHER, new, 0);
+
+        if (new->l_destroyed) {
+                CDEBUG(D_OTHER, "Lock destroyed, not adding to resource\n");
+                goto out;
+        }
+
+        LASSERT(list_empty(&new->l_res_link));
+
+        list_add(&new->l_res_link, &original->l_res_link);
+ out:
+        l_unlock(&res->lr_namespace->ns_lock);
+}
+
 void ldlm_resource_unlink_lock(struct ldlm_lock *lock)
 {
         l_lock(&lock->l_resource->lr_namespace->ns_lock);

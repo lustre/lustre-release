@@ -729,14 +729,15 @@ typedef enum {
 struct ldlm_extent {
         __u64 start;
         __u64 end;
+        __u64 gid;
 };
 
 struct ldlm_flock {
         __u64 start;
         __u64 end;
+        __u64 pid;
+        __u64 blocking_pid;
         __u64 blocking_export;
-        pid_t blocking_pid;
-        pid_t pid;
 };
 
 /* it's important that the fields of the ldlm_extent structure match

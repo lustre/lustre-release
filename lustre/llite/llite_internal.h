@@ -49,13 +49,15 @@ struct ll_readahead_state {
 };
 
 extern kmem_cache_t *ll_file_data_slab;
+struct lustre_handle;
 struct ll_file_data {
         struct obd_client_handle fd_mds_och;
         struct ll_readahead_state fd_ras;
         __u32 fd_flags;
+        struct lustre_handle fd_cwlockh;
+        unsigned long fd_gid;
 };
 
-struct lustre_handle;
 struct lov_stripe_md;
 
 extern spinlock_t inode_lock;

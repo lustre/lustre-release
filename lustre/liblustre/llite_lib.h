@@ -38,6 +38,8 @@
 struct ll_file_data {
         struct obd_client_handle fd_mds_och;
         __u32 fd_flags;
+        struct lustre_handle fd_cwlockh;
+        unsigned long fd_gid;
 };
 
 struct llu_sb_info
@@ -86,6 +88,7 @@ struct llu_inode_info {
          * was opened several times without close, we track an
          * open_count here */
         struct ll_file_data    *lli_file_data;
+        int                     lli_open_flags;
         int                     lli_open_count;
 
         /* stat FIXME not 64 bit clean */

@@ -590,6 +590,11 @@ static struct ldlm_lock *search_queue(struct list_head *queue, ldlm_mode_t mode,
                      lock->l_policy_data.l_extent.end < policy->l_extent.end))
                         continue;
 
+                if (lock->l_resource->lr_type == LDLM_EXTENT &&
+                    mode == LCK_CW &&
+                    lock->l_policy_data.l_extent.gid != policy->l_extent.gid)
+                        continue;
+
                 if (lock->l_destroyed)
                         continue;
 
@@ -1180,7 +1185,7 @@ void ldlm_lock_dump(int level, struct ldlm_lock *lock, int pos)
                        lock->l_policy_data.l_extent.end,
                        lock->l_req_extent.start, lock->l_req_extent.end);
         else if (lock->l_resource->lr_type == LDLM_FLOCK)
-                CDEBUG(level, "  Pid: %d Extent: "LPU64" -> "LPU64"\n",
+                CDEBUG(level, "  Pid: "LPU64" Extent: "LPU64" -> "LPU64"\n",
                        lock->l_policy_data.l_flock.pid,
                        lock->l_policy_data.l_flock.start,
                        lock->l_policy_data.l_flock.end);

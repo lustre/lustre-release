@@ -178,6 +178,7 @@ do {                                                                         \
        }                                                                     \
 } while(0)
 
+#ifdef __KERNEL__
 /* The idea here is to synchronise two threads to force a race. The
  * first thread that calls this with a matching fail_loc is put to
  * sleep. The next thread that calls with the same fail_loc wakes up
@@ -193,6 +194,10 @@ do {                                                            \
                 wake_up(&obd_race_waitq);                       \
         }                                                       \
 } while(0)
+#else
+/* sigh.  an expedient fix until OBD_RACE is fixed up */
+#define OBD_RACE(foo) LBUG()
+#endif
 
 #define fixme() CDEBUG(D_OTHER, "FIXME\n");
 
