@@ -154,7 +154,7 @@ ptl_parse_time (time_t *t, char *str)
                 return (0);
         
         memset (&tm, 0, sizeof (tm));
-        n = sscanf (str, "%d-%d-%d %d:%d:%d",
+        n = sscanf (str, "%d-%d-%d-%d:%d:%d",
                     &tm.tm_year, &tm.tm_mon, &tm.tm_mday, 
                     &tm.tm_hour, &tm.tm_min, &tm.tm_sec);
         if (n != 6)
@@ -1338,7 +1338,7 @@ jt_ptl_notify_router (int argc, char **argv)
                 when = now.tv_sec;
         } else if (ptl_parse_time (&when, argv[3]) != 0) {
                 fprintf(stderr, "Can't parse time %s\n"
-                        "Please specify either 'YYYY-MM-DD HH:MM:SS'\n"
+                        "Please specify either 'YYYY-MM-DD-HH:MM:SS'\n"
                         "or an absolute unix time in seconds\n", argv[3]);
                 return (-1);
         } else if (when > now.tv_sec) {

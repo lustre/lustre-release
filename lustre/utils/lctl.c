@@ -101,7 +101,7 @@ command_t cmdlist[] = {
          "usage: del_route <gateway> [<target>] [<target>]"},
         {"set_route", jt_ptl_notify_router, 0,
          "enable/disable routes via the given gateway in the portals routing table\n"
-         "usage: set_gw <gateway> <up/down> [<time>]"},
+         "usage: set_route <gateway> <up/down> [<time>]"},
         {"route_list", jt_ptl_print_routes, 0, "print the portals routing table\n"
          "usage: route_list"},
         {"recv_mem", jt_ptl_rxmem, 0, "set socket receive buffer size, "
