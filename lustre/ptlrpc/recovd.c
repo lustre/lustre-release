@@ -68,7 +68,7 @@ void recovd_conn_manage(struct ptlrpc_connection *conn,
                        conn, conn->c_remote_uuid, rd->rd_recovd, rd->rd_recover,
                        recovd, recover);
                 spin_lock(&rd->rd_recovd->recovd_lock);
-                list_del(&rd->rd_managed_chain);
+                list_del_init(&rd->rd_managed_chain);
                 spin_unlock(&rd->rd_recovd->recovd_lock);
         }
 
@@ -93,9 +93,9 @@ void recovd_conn_unmanage(struct ptlrpc_connection *conn)
 
         if (recovd) {
                 spin_lock(&recovd->recovd_lock);
-                list_del(&rd->rd_managed_chain);
-                spin_unlock(&recovd->recovd_lock);
+                list_del_init(&rd->rd_managed_chain);
                 rd->rd_recovd = NULL;
+                spin_unlock(&recovd->recovd_lock);
         }
         /* should be safe enough, right? */
         rd->rd_recover = NULL;
