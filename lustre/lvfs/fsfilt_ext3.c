@@ -671,11 +671,12 @@ static int fsfilt_ext3_prep_san_write(struct inode *inode, long *blocks,
 static int fsfilt_ext3_read_record(struct file * file, void *buf,
                                    int size, loff_t *offs)
 {
-        struct buffer_head *bh;
-        unsigned long block, boffs;
         struct inode *inode = file->f_dentry->d_inode;
-        int err;
+        unsigned long block, boffs;
+        struct buffer_head *bh;
+        int err, blocksize;
 
+        /* prevent reading after eof */
         if (inode->i_size < *offs + size) {
                 size = inode->i_size - *offs;
                 if (size < 0) {
@@ -686,87 +687,86 @@ static int fsfilt_ext3_read_record(struct file * file, void *buf,
                         return 0;
         }
 
-        block = *offs >> inode->i_blkbits;
-        bh = ext3_bread(NULL, inode, block, 0, &err);
-        if (!bh) {
-                CERROR("can't read block: %d\n", err);
-                return err;
-        }
+        blocksize = 1 << inode->i_blkbits;
 
-        boffs = (unsigned)*offs % bh->b_size;
-        if (boffs + size > bh->b_size) {
-                CERROR("request crosses block's border. offset %llu, size %u\n",
-                       *offs, size);
+        while (size > 0) {
+                int csize = min(blocksize, size);
+                
+                block = *offs >> inode->i_blkbits;
+                boffs = *offs & (blocksize - 1);
+                bh = ext3_bread(NULL, inode, block, 0, &err);
+                if (!bh) {
+                        CERROR("can't read block: %d\n", err);
+                        return err;
+                }
+
+                memcpy(buf, bh->b_data + boffs, csize);
                 brelse(bh);
-                return -EIO;
-        }
 
-        memcpy(buf, bh->b_data + boffs, size);
-        brelse(bh);
-        *offs += size;
+                *offs += csize;
+                buf += csize;
+                size -= csize;
+        }
         return 0;
 }
 
-static int fsfilt_ext3_write_record(struct file *file, void *buf, int size,
+static int fsfilt_ext3_write_record(struct file *file, void *buf, int bufsize,
                                     loff_t *offs, int force_sync)
 {
-        struct buffer_head *bh;
+        struct buffer_head *bh = NULL;
         unsigned long block, boffs;
         struct inode *inode = file->f_dentry->d_inode;
-        loff_t old_size = inode->i_size;
+        loff_t old_size = inode->i_size, offset = *offs;
+        loff_t new_size = inode->i_size;
         journal_t *journal;
         handle_t *handle;
-        int err;
+        int err, block_count = 0, blocksize;
 
+        /* Determine how many transaction credits are needed */
+        blocksize = 1 << inode->i_blkbits;
+        block_count = (*offs & (blocksize - 1)) + bufsize;
+        block_count = (block_count + blocksize - 1) >> inode->i_blkbits;
+        
         journal = EXT3_SB(inode->i_sb)->s_journal;
-        handle = journal_start(journal, EXT3_DATA_TRANS_BLOCKS + 2);
+        handle = journal_start(journal,
+                               block_count * EXT3_DATA_TRANS_BLOCKS + 2);
         if (IS_ERR(handle)) {
                 CERROR("can't start transaction\n");
                 return PTR_ERR(handle);
         }
 
-        block = *offs >> inode->i_blkbits;
-        if (*offs + size > inode->i_size) {
-                down(&inode->i_sem);
-                if (*offs + size > inode->i_size)
-                        inode->i_size = *offs + size;
-                if (inode->i_size > EXT3_I(inode)->i_disksize)
-                        EXT3_I(inode)->i_disksize = inode->i_size;
-                up(&inode->i_sem);
-        }
+        while (bufsize > 0) {
+                int size = min(blocksize, bufsize);
 
-        bh = ext3_bread(handle, inode, block, 1, &err);
-        if (!bh) {
-                CERROR("can't read/create block: %d\n", err);
-                goto out;
-        }
+                if (bh != NULL)
+                        brelse(bh);
 
-        /* This is a hack only needed because ext3_get_block_handle() updates
-         * i_disksize after marking the inode dirty in ext3_splice_branch().
-         * We will fix that when we get a chance, as ext3_mark_inode_dirty()
-         * is not without cost, nor is it even exported.
-         */
-        if (inode->i_size > old_size)
-                mark_inode_dirty(inode);
+                block = offset >> inode->i_blkbits;
+                boffs = offset & (blocksize - 1);
+                bh = ext3_bread(handle, inode, block, 1, &err);
+                if (!bh) {
+                        CERROR("can't read/create block: %d\n", err);
+                        goto out;
+                }
 
-        boffs = (unsigned)*offs % bh->b_size;
-        if (boffs + size > bh->b_size) {
-                CERROR("request crosses block's border. offset %llu, size %u\n",
-                       *offs, size);
-                err = -EIO;
-                goto out;
-        }
-
-        err = ext3_journal_get_write_access(handle, bh);
-        if (err) {
-                CERROR("journal_get_write_access() returned error %d\n", err);
-                goto out;
-        }
-        memcpy(bh->b_data + boffs, buf, size);
-        err = ext3_journal_dirty_metadata(handle, bh);
-        if (err) {
-                CERROR("journal_dirty_metadata() returned error %d\n", err);
-                goto out;
+                err = ext3_journal_get_write_access(handle, bh);
+                if (err) {
+                        CERROR("journal_get_write_access() returned error %d\n",
+                               err);
+                        goto out;
+                }
+                memcpy(bh->b_data + boffs, buf, size);
+                err = ext3_journal_dirty_metadata(handle, bh);
+                if (err) {
+                        CERROR("journal_dirty_metadata() returned error %d\n",
+                               err);
+                        goto out;
+                }
+                if (offset + size > new_size)
+                        new_size = offset + size;
+                offset += size;
+                bufsize -= size;
+                buf += size;
         }
 
         if (force_sync)
@@ -774,9 +774,22 @@ static int fsfilt_ext3_write_record(struct file *file, void *buf, int size,
 out:
         if (bh)
                 brelse(bh);
+
+        /* correct in-core and on-disk sizes */
+        if (new_size > inode->i_size) {
+                down(&inode->i_sem);
+                if (new_size > inode->i_size)
+                        inode->i_size = new_size;
+                if (inode->i_size > EXT3_I(inode)->i_disksize)
+                        EXT3_I(inode)->i_disksize = inode->i_size;
+                up(&inode->i_sem);
+                if (inode->i_size > old_size)
+                        mark_inode_dirty(inode);
+        }
+
         journal_stop(handle);
         if (err == 0)
-                *offs += size;
+                *offs = offset;
         return err;
 }
 
