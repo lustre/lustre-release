@@ -59,7 +59,8 @@ static void *fsfilt_reiserfs_brw_start(int objcount, struct fsfilt_objinfo *fso,
         return (void *)0xf00f00be;
 }
 
-static int fsfilt_reiserfs_commit(struct inode *inode, void *handle)
+static int fsfilt_reiserfs_commit(struct inode *inode, void *handle, 
+                                  int force_sync)
 {
         if (handle != (void *)0xf00f00be) {
                 CERROR("bad handle %p", handle);
