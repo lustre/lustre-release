@@ -824,7 +824,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 __u64 id = data->ioc_obdo1.o_id;
                 int gfp_mask = (id & 1) ? GFP_HIGHUSER : GFP_KERNEL;
                 int verify = (id != 0);
-                unsigned long off;
+                __u64 off;
                 int j;
 
                 if (!cbd)
@@ -833,9 +833,10 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 obd_data2conn(&conn, data);
 
                 pages = data->ioc_count / PAGE_SIZE;
+                off = data->ioc_offset;
 
-                CDEBUG(D_INODE, "BRW %s with %d pages\n",
-                       rw == OBD_BRW_READ ? "read" : "write", pages);
+                CDEBUG(D_INODE, "BRW %s with %d pages @ 0x"LPX64"\n",
+                       rw == OBD_BRW_READ ? "read" : "write", pages, off);
                 OBD_ALLOC(pga, pages * sizeof(*pga));
                 if (!pga) {
                         CERROR("no memory for %d BRW per-page data\n", pages);
@@ -844,8 +845,6 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 
                 memset(&smd, 0, sizeof(smd));
                 smd.lmd_object_id = id;
-
-                off = data->ioc_offset;
 
                 for (j = 0, pgp = pga; j < pages; j++, off += PAGE_SIZE, pgp++){
                         pgp->pg = alloc_pages(gfp_mask, 0);
