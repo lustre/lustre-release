@@ -225,14 +225,14 @@ out_free:
 
 static void ll_put_super(struct super_block *sb)
 {
-        struct ll_sb_info *sbi = sb->u.generic_sbp;
+        struct ll_sb_info *sbi = ll_s2sbi(sb);
         ENTRY;
         ll_commitcbd_cleanup(sbi);
         ptlrpc_cleanup_client(&sbi->ll_mds_client);
         ptlrpc_put_connection(sbi->ll_mds_conn);
         ldlm_namespace_free(sbi->ll_namespace);
         obd_disconnect(&sbi->ll_conn);
-        OBD_FREE(sb->u.generic_sbp, sizeof(*sbi));
+        OBD_FREE(sbi, sizeof(*sbi));
         MOD_DEC_USE_COUNT;
         EXIT;
 } /* ll_put_super */
@@ -331,6 +331,19 @@ static int ll_statfs(struct super_block *sb, struct statfs *buf)
                 RETURN(err);
         }
         memcpy(buf, &tmp, sizeof(*buf));
+#if 0
+        err = mdc_statfs(&sbi->ll_mds_client, sbi->ll_mds_conn, &tmp,
+                          &request);
+        if (err) {
+                CERROR("obd_statfs fails (%d)\n", err);
+                RETURN(err);
+        }
+	if (tmp.f_files < buf->f_files)
+                buf->f_files = tmp.f_files;
+	if (tmp.f_ffree < buf->f_ffree)
+                buf->f_ffree = tmp.f_ffree;
+        buf->f_namelen = tmp.f_namelen;
+#endif
         CDEBUG(D_SUPER, "statfs returns avail %ld\n", tmp.f_bavail);
 
         RETURN(err);
@@ -338,8 +351,7 @@ static int ll_statfs(struct super_block *sb, struct statfs *buf)
 
 static void inline ll_to_inode(struct inode *dst, struct mds_body *body)
 {
-        struct ll_inode_info *ii = 
-                (struct ll_inode_info *) &dst->u.generic_ip;
+        struct ll_inode_info *ii = ll_i2info(dst);
 
         /* core attributes first */
         if ( body->valid & OBD_MD_FLID )
