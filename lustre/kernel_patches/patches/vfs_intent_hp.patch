@@ -436,7 +436,7 @@
 @@ -1145,7 +1231,7 @@ do_last:
  		if (!error) {
  			DQUOT_INIT(inode);
- 
+ 			
 -			error = do_truncate(dentry, 0);
 +			error = do_truncate(dentry, 0, 1);
  		}
