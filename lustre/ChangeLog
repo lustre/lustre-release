@@ -12,6 +12,7 @@ tbd  Cluster File Systems, Inc. <info@clusterfs.com>
 	- don't use cancelling-locks' kms values (2947)
 	- use highest lock extent for kms, not last one (2925)
 	- don't dereference ERR_PTR() dentry in error handling path (3107)
+	- fix thread race in portals_debug_dumplog() (3122)
        * miscellania
 	- allow default OST striping configuration per directory (1414)
 
