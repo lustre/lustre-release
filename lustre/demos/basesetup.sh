@@ -25,7 +25,7 @@ fi
 
 
 # temp file
-if [ "$TMPFILE" -a -f $TMPFILE ]; then 
+if [ "$LOOPDEV" -a "$TMPFILE" -a -f $TMPFILE ]; then 
     echo "$TMPFILE exists; I'm unwilling to overwrite it.  Remove [N/y]?" 1>&2
     rm -i $TMPFILE
     [ -f $TMPFILE ] && exit 1

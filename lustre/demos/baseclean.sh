@@ -33,7 +33,7 @@ if [ "$LOOPDEV" ]; then
     rmmod loop > /dev/null 2>&1
 fi
 
-if [ "$TMPFILE" -a -f "$TMPFILE" ]; then
+if [ "$LOOPDEV" -a "$TMPFILE" -a -f "$TMPFILE" ]; then
     rm -i $TMPFILE
 fi
 

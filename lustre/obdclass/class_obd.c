@@ -23,6 +23,7 @@
  *              Copyright (c) 1999 Stelias Computing, Inc.
  *                (authors {pschwan,braam}@stelias.com)
  *              Copyright (C) 1999 Seagate Technology, Inc.
+ *              Copyright (C) 2001 Cluster File Systems, Inc.
  *
  * 
  */
@@ -115,8 +116,11 @@ static int obd_class_release(struct inode * inode, struct file * file)
         return 0;
 }
 
-/* support function */
-static struct obd_type *obd_nm_to_type(char *nm) 
+/* 
+ * support functions: we could use inter-module communication, but this 
+ * is more portable to other OS's
+ */
+static struct obd_type *obd_search_type(char *nm)
 {
         struct list_head *tmp;
         struct obd_type *type;
@@ -131,7 +135,24 @@ static struct obd_type *obd_nm_to_type(char *nm)
                         return type;
                 }
         }
-        return NULL;
+	return NULL;
+}
+
+static struct obd_type *obd_nm_to_type(char *nm) 
+{
+        struct obd_type *type = obd_search_type(nm);
+
+#ifdef CONFIG_KMOD
+	if ( !type ) {
+		if ( !request_module(nm) ) {
+			CDEBUG(D_PSDEV, "Loaded module '%s'\n", nm);
+			type = obd_search_type(nm);
+		} else {
+			CDEBUG(D_PSDEV, "Can't load module '%s'\n", nm);
+		}
+	}
+#endif
+        return type;
 }
 
 
@@ -163,18 +184,23 @@ static int getdata(int len, void **data)
 
 static int obd_devicename_from_path(obd_devicename* whoami, 
 				    uint32_t klen,
-				    char* kname)
+				    char* kname, char *user_path)
 {
+	int err;
+	struct nameidata nd;
 	whoami->len = klen;
 	whoami->name = kname;
 
-/* 	err = user_path_walk(user_string, &nd); */
-/* 	if (!err) {  */
-/* 		whoami->dentry = nd.dentry; */
-/* 		path_release(&nd); */
-/* 	} */
-/* 	return err; */
+#if (LINUX_VERSION_CODE <=  0x20403)
 
+ 	err = user_path_walk(user_path, &nd);
+ 	if (!err) {
+		CDEBUG(D_INFO, "found dentry for %s\n", kname);
+ 		whoami->dentry = nd.dentry;
+ 		path_release(&nd);
+ 	}
+ 	return err;
+#endif 
 	return 0;
 }
 
@@ -238,16 +264,6 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 /* find the type */
                 nm = input->att_type;
                 type = obd_nm_to_type(nm);
-#ifdef CONFIG_KMOD
-                if ( !type ) {
-                        if ( !request_module(nm) ) {
-                                CDEBUG(D_PSDEV, "Loaded module '%s'\n", nm);
-                                type = obd_nm_to_type(nm);
-                        } else {
-                                CDEBUG(D_PSDEV, "Can't load module '%s'\n", nm);
-                        }
-                }
-#endif
 
                 OBD_FREE(input->att_type, input->att_typelen + 1);
                 if ( !type ) {
@@ -339,6 +355,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                         int setup_datalen;
                         void *setup_data;
                 } *setup;
+		char *user_path;
 
                 setup = tmp_buf;
 
@@ -367,7 +384,8 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 		  EXIT;
 		  return err;
 		}
-		
+		user_path = setup->setup_data;
+
                 /* get the attach data */
                 err = getdata(setup->setup_datalen, &setup->setup_data);
                 if ( err ) {
@@ -377,7 +395,8 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 
 		err = obd_devicename_from_path(&(obddev->obd_fsname),
 					       setup->setup_datalen,
-					       (char*) setup->setup_data);
+					       (char*) setup->setup_data, 
+					       user_path);
 		if (err) {
 		  memset(&(obddev->obd_fsname), 0, sizeof(obd_devicename));
 		  EXIT;
