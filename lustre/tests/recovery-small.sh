@@ -3,13 +3,12 @@
 set -e
 
 LUSTRE=${LUSTRE:-`dirname $0`/..}
+UPCALL=${UPCALL:-$PWD/recovery-small-upcall.sh}
 . $LUSTRE/tests/test-framework.sh
 
 init_test_env $@
 
 . ${CONFIG:=$LUSTRE/tests/cfg/local.sh}
-
-. $LUSTRE/tests/test-framework.sh
 
 build_test_filter
 
@@ -135,6 +134,47 @@ test_10() {
     do_facet client checkstat -v -p 0777 $MOUNT/f10  || return 3
     do_facet client "munlink $MOUNT/f10"
 }
-run_test 10 "finish request after client eviction (bug 1521)"
+run_test 10 "finish request on server after client eviction (bug 1521)"
+
+#bug 2460
+# wake up a thead waiting for completion after eviction
+test_11(){
+    do_facet client multiop $MOUNT/$tfile Ow  || return 1
+    do_facet client multiop $MOUNT/$tfile or  || return 2
+
+    cancel_lru_locks OSC
+
+    do_facet client multiop $MOUNT/$tfile or  || return 3
+    drop_bl_callback multiop $MOUNT/$tfile Ow  || 
+        echo "client evicted, as expected"
+
+    do_facet client munlink $MOUNT/$tfile  || return 4
+}
+run_test 11 "wake up a thead waiting for completion after eviction (b=2460)"
+
+clear_failloc() {
+    facet=$1
+    pause=$2
+    sleep $pause
+    echo "clearing fail_loc on $facet"
+    do_facet $facet "sysctl -w lustre.fail_loc=0"
+}
+
+#b=2494
+test_12(){
+    $LCTL mark multiop $MOUNT/$tfile OS_c 
+    multiop $MOUNT/$tfile OS_c  &
+    PID=$!
+#define OBD_FAIL_MDS_CLOSE_NET           0x115
+    DDPID=$!
+    do_facet mds "sysctl -w lustre.fail_loc=0x115"
+    clear_failloc mds $((TIMEOUT * 2)) &
+    kill -USR1 $PID
+    echo "waiting for multiop $PID"
+    wait $PID || return 2
+    do_facet client munlink $MOUNT/$tfile  || return 3
+}
+run_test 12 "recover from timed out resend in ptlrpcd (b=2494)"
 
 $CLEANUP
+    

@@ -74,4 +74,4 @@ trap 0
 kill $CR_PID || true
 kill $ST_PID || true
 
-#rm -r $PDIR
+rm -rf $LOCKDIR
