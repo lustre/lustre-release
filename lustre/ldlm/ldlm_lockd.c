@@ -46,8 +46,8 @@ static int ldlm_server_blocking_ast(struct ldlm_lock *lock,
         ENTRY;
 
         cl = &lock->l_resource->lr_namespace->ns_rpc_client;
-        req = ptlrpc_prep_req(cl, lock->l_connection, LDLM_BL_CALLBACK, 1,
-                              &size, NULL);
+        req = ptlrpc_prep_req(cl, lock->l_export->exp_connection,
+                              LDLM_BL_CALLBACK, 1, &size, NULL);
         if (!req)
                 RETURN(-ENOMEM);
 
@@ -80,8 +80,8 @@ static int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags)
         }
 
         cl = &lock->l_resource->lr_namespace->ns_rpc_client;
-        req = ptlrpc_prep_req(cl, lock->l_connection, LDLM_CP_CALLBACK, 1,
-                              &size, NULL);
+        req = ptlrpc_prep_req(cl, lock->l_export->exp_connection,
+                              LDLM_CP_CALLBACK, 1, &size, NULL);
         if (!req)
                 RETURN(-ENOMEM);
 
@@ -165,7 +165,8 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req)
                 dlm_rep->lock_mode = lock->l_req_mode;
         }
 
-        lock->l_connection = ptlrpc_connection_addref(req->rq_connection);
+        lock->l_export = req->rq_export;
+        ptlrpc_connection_addref(req->rq_connection);
         EXIT;
  out:
         if (lock)

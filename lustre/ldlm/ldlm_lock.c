@@ -151,8 +151,8 @@ void ldlm_lock_put(struct ldlm_lock *lock)
         if (lock->l_refc == 0 && (lock->l_flags & LDLM_FL_DESTROYED)) {
                 lock->l_resource = NULL;
                 LDLM_DEBUG(lock, "final lock_put on destroyed lock, freeing");
-                if (lock->l_connection)
-                        ptlrpc_put_connection(lock->l_connection);
+                if (lock->l_export && lock->l_export->exp_connection)
+                        ptlrpc_put_connection(lock->l_export->exp_connection);
                 CDEBUG(D_MALLOC, "kfreed 'lock': %d at %p (tot 1).\n",
                        sizeof(*lock), lock);
                 kmem_cache_free(ldlm_lock_slab, lock);
@@ -845,9 +845,9 @@ void ldlm_lock_dump(struct ldlm_lock *lock)
                  lock->l_version[2], lock->l_version[3]);
 
         CDEBUG(D_OTHER, "  -- Lock dump: %p (%s)\n", lock, ver);
-        if (lock->l_connection)
+        if (lock->l_export && lock->l_export->exp_connection)
                 CDEBUG(D_OTHER, "  Node: NID %x (rhandle: %Lx)\n",
-                       lock->l_connection->c_peer.peer_nid,
+                       lock->l_export->exp_connection->c_peer.peer_nid,
                        lock->l_remote_handle.addr);
         else
                 CDEBUG(D_OTHER, "  Node: local\n");

@@ -126,7 +126,7 @@ struct ldlm_lock {
         ldlm_completion_callback    l_completion_ast;
         ldlm_blocking_callback    l_blocking_ast;
 
-        struct ptlrpc_connection *l_connection;
+        struct obd_export    *l_export;
         struct ptlrpc_client *l_client;
         struct lustre_handle *l_connh;
         __u32                 l_flags;

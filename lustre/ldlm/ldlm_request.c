@@ -107,7 +107,6 @@ int ldlm_cli_enqueue(struct lustre_handle *connh,
                      __u32 data_len,
                      struct lustre_handle *lockh)
 {
-        struct ptlrpc_connection *connection;
         struct ldlm_lock *lock;
         struct ldlm_request *body;
         struct ldlm_reply *reply;
@@ -119,7 +118,6 @@ int ldlm_cli_enqueue(struct lustre_handle *connh,
                                               type, cookie, cookielen, mode,
                                               flags, completion, blocking, data,
                                               data_len, lockh);
-        connection = client_conn2cli(connh)->cl_conn;
 
         *flags = 0;
         lock = ldlm_lock_create(ns, parent_lock_handle, res_id, type, mode,
@@ -159,7 +157,7 @@ int ldlm_cli_enqueue(struct lustre_handle *connh,
                 req->rq_replen = lustre_msg_size(1, &size);
         }
         lock->l_connh = connh;
-        lock->l_connection = ptlrpc_connection_addref(connection);
+        lock->l_export = NULL;
         lock->l_client = client_conn2cli(connh)->cl_client;
 
         rc = ptlrpc_queue_wait(req);
