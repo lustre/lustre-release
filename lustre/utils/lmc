@@ -513,15 +513,17 @@ def add_ost(gen, lustre, options):
         ostname = new_name('OST_'+ node_name)
 
     osdname = new_name("OSD_" + ostname)
-    osd_uuid = get_option(options, 'osduuid', '', deprecated_tag = 'obduuid')
-    if osd_uuid and lookup(lustre, osd_uuid):
-            error("Duplicate OBD UUID:", osd_uuid)
-    else:
-        osd_uuid = new_uuid(osdname)
+    osd_uuid = new_uuid(osdname)
 
     ost_uuid = name2uuid(lustre, ostname, fatal=0)
     if not ost_uuid:
-        ost_uuid = new_uuid(ostname)
+        ost_uuid = get_option(options, 'ostuuid', '', deprecated_tag = 'obduuid')
+        if ost_uuid:
+            if lookup(lustre, ost_uuid):
+                error("Duplicate OST UUID:", ost_uuid)
+        else:
+            ost_uuid = new_uuid(ostname)
+
         ost = gen.ost(ostname, ost_uuid, osd_uuid)
         lustre.appendChild(ost)
         if lovname:
@@ -643,7 +645,7 @@ def add_mtpt(gen, lustre, options):
     mtpt = gen.mountpoint(name, uuid, mds_uuid, lov_uuid, path)
     node = findByName(lustre, node_name, "node")
     if not node:
-            error('node:',  node_name, "not found.")
+        error('node:',  node_name, "not found.")
     node_add_profile(gen, node, "mountpoint", uuid)
     lustre.appendChild(mtpt)
 
@@ -656,7 +658,7 @@ def add_oscref(gen, lustre, options):
     osc_uuid = name2uuid(lustre, osc_name, tag='osc')
     node = findByName(lustre, node_name, "node")
     if not node:
-	    error('node:', node_name, "not found")
+        error('node:', node_name, "not found")
     node_add_profile(gen, node, "osc",osc_uuid)
 
 ############################################################
@@ -701,7 +703,7 @@ def parse_cmdline(argv):
                  "echo_client=", "stripe_sz=", "stripe_cnt=", "stripe_pattern=",
                  "mds=", "route", "router", "merge=", "format", "reformat", "output=",
                  "dev=", "size=", "obd=", "ost=", "obdtype=", "osdtype=", "obduuid=", "in=",
-                 "osduuid=", "path=", "help", "batch=", "lov=", "gw=", "lo=", "hi=",
+                 "ostuuid=", "path=", "help", "batch=", "lov=", "gw=", "lo=", "hi=",
                  "osc=", "real_obd=", "cache_obd=", "fstype=",
                  "timeout=", "recovery_upcall="]
     opts = []
@@ -771,8 +773,8 @@ def parse_cmdline(argv):
             options['fstype'] = a
         if o == "--obduuid":
             options['obduuid'] = a
-        if o == "--osduuid":
-            options['osduuid'] = a
+        if o == "--ostuuid":
+            options['ostuuid'] = a
 
         # lov options
         if o == "--stripe_sz":
