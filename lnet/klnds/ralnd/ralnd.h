@@ -289,21 +289,6 @@ typedef struct kra_tx                           /* message descriptor */
 #define RANAL_BUF_VIRT_UNMAPPED  4              /* virtual: not mapped yet */
 #define RANAL_BUF_VIRT_MAPPED    5              /* virtual: mapped already */
 
-#define RANAL_TX_IDLE            0x00           /* on freelist */
-#define RANAL_TX_SIMPLE          0x10           /* about to send a simple message */
-#define RANAL_TX_PUTI_REQ        0x20           /* PUT initiator about to send PUT_REQ */
-#define RANAL_TX_PUTI_WAIT_ACK   0x21           /* PUT initiator waiting for PUT_ACK */
-#define RANAL_TX_PUTI_RDMA       0x22           /* PUT initiator waiting for RDMA to complete */
-#define RANAL_TX_PUTI_DONE       0x23           /* PUT initiator about to send PUT_DONE */
-#define RANAL_TX_PUTT_NAK        0x30           /* PUT target about to send PUT_NAK */
-#define RANAL_TX_PUTT_ACK        0x30           /* PUT target about to send PUT_ACK */
-#define RANAL_TX_PUTT_WAIT_DONE  0x31           /* PUT target waiting for PUT_DONE */
-#define RANAL_TX_GETI_REQ        0x40           /* GET initiator about to send GET_REQ */
-#define RANAL_TX_GETI_WAIT_DONE  0x41           /* GET initiator waiting for GET_DONE */
-#define RANAL_TX_GETT_NAK        0x50           /* GET target about to send PUT_NAK */
-#define RANAL_TX_GETT_RDMA       0x51           /* GET target waiting for RDMA to complete */
-#define RANAL_TX_GETT_DONE       0x52           /* GET target about to send GET_DONE */
-
 typedef struct kra_conn
 {
         struct kra_peer    *rac_peer;           /* owning peer */

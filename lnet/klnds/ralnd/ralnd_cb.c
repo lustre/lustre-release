@@ -630,7 +630,7 @@ kranal_do_send (lib_nal_t    *nal,
                         break;                  /* RDMA not expected */
                 }
 
-                /* Incoming message consistent with immediate reply? */
+                /* Incoming message consistent with RDMA? */
                 if (conn->rac_rxmsg->ram_type != RANAL_MSG_GET_REQ) {
                         CERROR("REPLY to "LPX64" bad msg type %x!!!\n",
                                nid, conn->rac_rxmsg->ram_type);
