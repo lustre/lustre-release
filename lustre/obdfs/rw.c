@@ -5,7 +5,7 @@
  * Copryright (C) 1999 Stelias Computing Inc, 
  *                (author Peter J. Braam <braam@stelias.com>)
  * Copryright (C) 1999 Seagate Technology Inc.
- */
+*/
 
 
 #include <linux/config.h>
@@ -142,6 +142,7 @@ void obdfs_cleanup_pgrqcache(void)
 /*
  * Find a specific page in the page cache.  If it is found, we return
  * the write request struct associated with it, if not found return NULL.
+ * Called with the list lock held.
  */
 static struct obdfs_pgrq *
 obdfs_find_in_page_list(struct inode *inode, struct page *page)
@@ -155,6 +156,7 @@ obdfs_find_in_page_list(struct inode *inode, struct page *page)
 	OIDEBUG(inode);
 
 	if (list_empty(page_list)) {
+		CDEBUG(D_INODE, "empty list\n");
 		EXIT;
 		return NULL;
 	}
@@ -175,8 +177,8 @@ obdfs_find_in_page_list(struct inode *inode, struct page *page)
 } /* obdfs_find_in_page_list */
 
 
-static struct page*
-obdfs_find_page_index(struct inode *inode, unsigned long index)
+/* called with the list lock held */
+static struct page* obdfs_find_page_index(struct inode *inode, unsigned long index)
 {
 	struct list_head *page_list = obdfs_iplist(inode);
 	struct list_head *tmp;
@@ -184,7 +186,8 @@ obdfs_find_page_index(struct inode *inode, unsigned long index)
 
 	ENTRY;
 
-	CDEBUG(D_INODE, "looking for inode %ld pageindex %ld\n", inode->i_ino, index);
+	CDEBUG(D_INODE, "looking for inode %ld pageindex %ld\n",
+	       inode->i_ino, index);
 	OIDEBUG(inode);
 
 	if (list_empty(page_list)) {
@@ -198,7 +201,7 @@ obdfs_find_page_index(struct inode *inode, unsigned long index)
 		pgrq = list_entry(tmp, struct obdfs_pgrq, rq_plist);
 		page = pgrq->rq_page;
 		if (index == page->index) {
-			CDEBUG(D_INODE, "INDEX SEARC found page %p in list, index %ld\n", page, index);
+			CDEBUG(D_INODE, "INDEX SEARCH found page %p in list, index %ld\n", page, index);
 			EXIT;
 			return page;
 		}
@@ -206,10 +209,10 @@ obdfs_find_page_index(struct inode *inode, unsigned long index)
 
 	EXIT;
 	return NULL;
-} /* obdfs_find_in_page_list */
+} /* obdfs_find_page_index */
 
 
-/* call and free pages from Linux page cache */
+/* call and free pages from Linux page cache: called with io lock on inodes */
 int obdfs_do_vec_wr(struct inode **inodes, obd_count num_io,
 		    obd_count num_obdos, struct obdo **obdos,
 		    obd_count *oa_bufs, struct page **pages, char **bufs,
@@ -229,9 +232,6 @@ int obdfs_do_vec_wr(struct inode **inodes, obd_count num_io,
 	while ( num_io > 0 ) {
 		num_io--;
 		CDEBUG(D_INODE, "calling put_page for %p, index %ld\n", pages[num_io], pages[num_io]->index);
-		/*
-		UnlockPage(pages[num_io]);
-		*/
 		put_page(pages[num_io]);
 	}
 
@@ -258,6 +258,7 @@ static int obdfs_add_page_to_cache(struct inode *inode, struct page *page)
 	ENTRY;
 
 	/* If this page isn't already in the inode page list, add it */
+	obd_down(&obdfs_i2sbi(inode)->osi_list_mutex);
 	if ( !obdfs_find_in_page_list(inode, page) ) {
 		struct obdfs_pgrq *pgrq;
 		pgrq = kmem_cache_alloc(obdfs_pgrq_cachep, SLAB_KERNEL);
@@ -265,6 +266,7 @@ static int obdfs_add_page_to_cache(struct inode *inode, struct page *page)
 		       inode->i_ino, page, pgrq, obdfs_cache_count);
 		if (!pgrq) {
 			EXIT;
+			obd_up(&obdfs_i2sbi(inode)->osi_list_mutex);
 			return -ENOMEM;
 		}
 		memset(pgrq, 0, sizeof(*pgrq)); 
@@ -274,19 +276,22 @@ static int obdfs_add_page_to_cache(struct inode *inode, struct page *page)
 		list_add(&pgrq->rq_plist, obdfs_iplist(inode));
 	}
 
-	/* If inode isn't already on the superblock inodes list, add it */
+	/* If inode isn't already on the superblock inodes list, add it,
+	 * and increase ref count on inode so it doesn't disappear on us.
+	 */
 	if ( list_empty(obdfs_islist(inode)) ) {
+		iget(inode->i_sb, inode->i_ino);
 		CDEBUG(D_INODE, "adding inode %ld to superblock list %p\n",
 		       inode->i_ino, obdfs_slist(inode));
 		list_add(obdfs_islist(inode), obdfs_slist(inode));
 	}
-
 
 	/* XXX For testing purposes, we write out the page here.
 	 *     In the future, a flush daemon will write out the page.
 	res = obdfs_flush_reqs(obdfs_slist(inode), 0);
 	obdfs_flush_dirty_pages(1);
 	 */
+	obd_up(&obdfs_i2sbi(inode)->osi_list_mutex);
 
 	EXIT;
 	return res;
@@ -359,16 +364,17 @@ int obdfs_write_one_page(struct file *file, struct page *page,
 } /* obdfs_write_one_page */
 
 /* 
-   return an up to date page:
-    - if locked is true then is returned locked
-    - if create is true the corresponding disk blocks are created 
-    - page is held, i.e. caller must release the page
-
-   modeled on NFS code.
-*/
+ * return an up to date page:
+ *  - if locked is true then is returned locked
+ *  - if create is true the corresponding disk blocks are created 
+ *  - page is held, i.e. caller must release the page
+ *
+ * modeled on NFS code.
+ */
 struct page *obdfs_getpage(struct inode *inode, unsigned long offset, int create, int locked)
 {
 	struct page *page_cache;
+	int index;
 	struct page ** hash;
 	struct page * page;
 	int err;
@@ -376,8 +382,11 @@ struct page *obdfs_getpage(struct inode *inode, unsigned long offset, int create
 	ENTRY;
 
 	offset = offset & PAGE_CACHE_MASK;
-	CDEBUG(D_INODE, "\n");
-	
+	CDEBUG(D_INODE, "ino: %ld, offset %ld, create %d, locked %d\n",
+	       inode->i_ino, offset, create, locked);
+	index = offset  >> PAGE_CACHE_SHIFT;
+
+
 	page = NULL;
 	page_cache = page_cache_alloc();
 	if ( ! page_cache ) {
@@ -386,8 +395,8 @@ struct page *obdfs_getpage(struct inode *inode, unsigned long offset, int create
 	}
 	CDEBUG(D_INODE, "page_cache %p\n", page_cache);
 
-	hash = page_hash(&inode->i_data, offset);
-	page = grab_cache_page(&inode->i_data, offset);
+	hash = page_hash(&inode->i_data, index);
+	page = grab_cache_page(&inode->i_data, index);
 
 	/* Yuck, no page */
 	if (! page) {
@@ -406,7 +415,7 @@ struct page *obdfs_getpage(struct inode *inode, unsigned long offset, int create
 	} 
 
 
-	if ( obdfs_find_page_index(inode, offset) ) {
+	if ( obdfs_find_page_index(inode, index) ) {
 		printk("OVERWRITE: found dirty page %p, index %ld\n", page, page->index);
 	}
 

@@ -76,6 +76,7 @@ struct obdfs_sb_info {
 	ino_t			 osi_rootino;	/* number of root inode */
 	int			 osi_minor;	/* minor of /dev/obdX */
 	struct list_head	 osi_inodes;	/* list of dirty inodes */
+	struct semaphore         osi_list_mutex;
 };
 
 struct obdfs_inode_info {
@@ -86,6 +87,14 @@ struct obdfs_inode_info {
 };
 
 #define OBDFS_INFO(inode) ((struct obdfs_inode_info *)(&(inode)->u.generic_ip))
+
+static inline struct obdfs_sb_info *obdfs_i2sbi(struct inode *inode)
+{
+	struct obdfs_sb_info *sbi;
+
+	sbi = (struct obdfs_sb_info *) &(inode->i_sb->u.generic_sbp);
+	return sbi;
+}
 
 static inline struct list_head *obdfs_iplist(struct inode *inode) 
 {
@@ -101,18 +110,32 @@ static inline struct list_head *obdfs_islist(struct inode *inode)
 	return &info->oi_inodes;
 }
 
-static inline struct list_head *obdfs_slist(struct inode *inode) {
-	struct obdfs_sb_info *sbi = (struct obdfs_sb_info *)(&inode->i_sb->u.generic_sbp);
+static inline struct list_head *obdfs_slist(struct inode *inode) 
+{
+	struct obdfs_sb_info *sbi = obdfs_i2sbi(inode);
 	return &sbi->osi_inodes;
 }
 
-static inline void obdfs_print_plist(struct inode *inode) {
+#define obd_down(mutex) {\
+	CDEBUG(D_INODE, "got lock at %s, %d\n", __FUNCTION__, __LINE__);\
+	down(mutex);\
+}
+
+#define obd_up(mutex) {\
+	up(mutex);\
+	CDEBUG(D_INODE, "free lock at %s, %d\n", __FUNCTION__, __LINE__);\
+}
+
+static inline void obdfs_print_plist(struct inode *inode) 
+{
 	struct list_head *page_list = obdfs_iplist(inode);
 	struct list_head *tmp;
 
 	CDEBUG(D_INODE, "inode %ld: page", inode->i_ino);
+	/* obd_down(&obdfs_i2sbi(inode)->osi_list_mutex); */
 	if (list_empty(page_list)) {
 		printk(" list empty\n");
+		obd_up(&obdfs_i2sbi(inode)->osi_list_mutex);
 		return;
 	}
 
@@ -123,6 +146,7 @@ static inline void obdfs_print_plist(struct inode *inode) {
 		printk(" %p", pgrq->rq_page);
 	}
 	printk("\n");
+	/* obd_up(&obdfs_i2sbi(inode)->osi_list_mutex); */
 }
 
 void obdfs_sysctl_init(void);

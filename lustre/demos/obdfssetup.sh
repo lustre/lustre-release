@@ -4,6 +4,7 @@ OBDDIR="`dirname $0`/.."
 .  $OBDDIR/demos/config.sh
 
 $OBDDIR/demos/basesetup.sh
+#losetup /dev/loop0 /tmp/obdfs.tmpfile
 
 if [ x$? != x0 ]; then 
     echo "Error running basesetup.sh"

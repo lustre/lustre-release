@@ -65,9 +65,9 @@ extern int obd_print_entry;
 	       "size %Ld, blocks %ld\n", __FUNCTION__ , __LINE__,\
 	       inode->i_ino, inode->i_atime, inode->i_mtime, inode->i_ctime,\
 	       inode->i_size, inode->i_blocks);\
-	printk("]]%s line %d[[ mode %o, uid %d, gid %d, nlnk %d\n",\
+	printk("]]%s line %d[[ mode %o, uid %d, gid %d, nlnk %d, count %d\n",\
 	       __FUNCTION__, __LINE__, inode->i_mode, inode->i_uid,\
-	       inode->i_gid, inode->i_nlink);\
+	       inode->i_gid, inode->i_nlink, inode->i_count);\
 }
 
 /* Ext2 inode information */
@@ -84,7 +84,7 @@ extern int obd_print_entry;
 #define OIDEBUG(inode) { \
 	ICDEBUG(inode);\
 	printk("oinfo: flags 0x%08x\n", OBDFS_INFO(inode)->oi_flags);\
-	obdfs_print_plist(inode);\
+	/* obdfs_print_plist(inode); */\
 }
 
 #define ODEBUG(obdo) { \

@@ -198,12 +198,14 @@ struct dentry *obdfs_lookup(struct inode *dir, struct dentry *dentry)
  * NOTE!! The inode part of 'de' is left at 0 - which means you
  * may not sleep between calling this and putting something into
  * the entry, as someone else might have used it while you slept.
-
+ *
  * returns a locked and held page upon success 
  */
 
 
-/* We do this with a locked page: that's not necessary, since the semaphore on the inode protects this page as well. */
+/* We do this with a locked page: that's not necessary, since the semaphore
+ * on the inode protects this page as well.
+ */
 static struct page *obdfs_add_entry (struct inode * dir,
 				     const char * name, int namelen,
 				     struct ext2_dir_entry_2 ** res_dir,

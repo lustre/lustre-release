@@ -196,6 +196,7 @@ static struct super_block * obdfs_read_super(struct super_block *sb,
 	}
 
 	INIT_LIST_HEAD(&sbi->osi_inodes);
+	sema_init(&sbi->osi_list_mutex, 1);
 
 	sbi->osi_super = sb;
 
@@ -306,6 +307,7 @@ void obdfs_read_inode(struct inode *inode)
 	obdfs_to_inode(inode, oa);
 	INIT_LIST_HEAD(obdfs_iplist(inode)); /* list of dirty pages on inode */
 	INIT_LIST_HEAD(obdfs_islist(inode)); /* list of inodes in superblock */
+
 
 	obdo_free(oa);
 	/* OIDEBUG(inode); */
