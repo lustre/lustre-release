@@ -216,9 +216,8 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
 	    oa->o_flags == OBD_FL_DELORPHAN) {
                 /* delete from next_id on up */
                 oa->o_valid |= OBD_MD_FLID;
-                oa->o_id = oscc->oscc_next_id;
-                if (oa->o_id == 0)
-                        RETURN(0);
+                oa->o_id = oscc->oscc_next_id - 1;
+
                 rc = osc_real_create(oscc->oscc_exp, oa, ea, NULL);
 
                 spin_lock(&oscc->oscc_lock);

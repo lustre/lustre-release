@@ -1555,29 +1555,32 @@ static int filter_should_precreate(struct obd_export *exp, struct obdo *oa,
         int diff, rc;
         ENTRY;
 
-        /* only precreate if group == 0 and o_id is specfied */
-        if (group != 0 || oa->o_id == 0)
-                RETURN(1);
-
         diff = oa->o_id - filter_last_id(filter, oa);
         CDEBUG(D_INFO, "filter_last_id() = "LPU64" -> diff = %d\n",
                filter_last_id(filter, oa), diff);
-        if (diff >= 0)
-                RETURN(diff);
-
-        if (!(oa->o_valid & OBD_MD_FLFLAGS) ||
-            !(oa->o_flags & OBD_FL_DELORPHAN)) {
-                CERROR("filter asked to delete %d objects, but DELORPHAN flag "
-                       "isn't set!\n", -diff);
+       
+        /* delete orphans request */
+        if ((oa->o_valid & OBD_MD_FLFLAGS) && 
+            (oa->o_flags & OBD_FL_DELORPHAN)) {
+                LASSERT(diff <= 0);
+                if (diff == 0)
+                        RETURN(0);
+                filter_destroy_precreated(exp, oa, filter);
+                rc = filter_update_last_objid(obd, group, 0);
+                if (rc)
+                        CERROR("unable to write lastobjid, but orphans" 
+                               "were deleted\n");
                 RETURN(0);
+        } else {
+                /* only precreate if group == 0 and o_id is specfied */
+                if (!(oa->o_valid & OBD_FL_DELORPHAN) && 
+                    (group != 0 || oa->o_id == 0))
+                        RETURN(1);
+
+                LASSERT(diff >= 0);
+                RETURN(diff);
         }
 
-        /* delete orphan request */
-        filter_destroy_precreated(exp, oa, filter);
-        rc = filter_update_last_objid(obd, group, 0);
-        if (rc)
-                CERROR("unable to write lastobjid, but orphans were deleted\n");
-        RETURN(rc);
 }
 
 /* We rely on the fact that only one thread will be creating files in a given

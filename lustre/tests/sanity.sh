@@ -1480,7 +1480,7 @@ run_test 52b "immutable flag test =============================="
 
 test_53() {
         for i in /proc/fs/lustre/osc/OSC*mds1 ; do
-                ostname=`echo $i | cut -d _ -f 3-4`
+                ostname=`echo $i | cut -d _ -f 3-4 | sed -e s/_mds1//`
                 ost_last=`cat /proc/fs/lustre/obdfilter/$ostname/last_id`
                 mds_last=`cat $i/prealloc_last_id`
                 echo "$ostname.last_id=$ost_last ; MDS.last_id=$mds_last"
