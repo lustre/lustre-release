@@ -40,6 +40,8 @@ int ldlm_extent_compat(struct ldlm_lock *a, struct ldlm_lock *b)
         RETURN(1);
 }
 
+#include "ldlm_internal.h"
+
 /* The purpose of this function is to return:
  * - the maximum extent
  * - containing the requested extent

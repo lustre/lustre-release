@@ -27,7 +27,6 @@
 # include <linux/slab.h>
 # include <linux/module.h>
 # include <linux/lustre_dlm.h>
-# include <linux/lustre_mds.h>
 #else
 # include <liblustre.h>
 # include <linux/kp30.h>
@@ -410,6 +409,8 @@ static void ldlm_add_ast_work_item(struct ldlm_lock *lock,
         if (new && (lock->l_flags & LDLM_FL_AST_SENT))
                 GOTO(out, 0);
 
+        CDEBUG(D_OTHER, "lock %p incompatible; sending blocking AST.\n", lock);
+
         OBD_ALLOC(w, sizeof(*w));
         if (!w) {
                 LBUG();
@@ -565,11 +566,8 @@ static int ldlm_lock_compat_list(struct ldlm_lock *lock, int send_cbs,
 
                 rc = 0;
 
-                if (send_cbs && child->l_blocking_ast != NULL) {
-                        CDEBUG(D_OTHER, "lock %p incompatible; sending "
-                               "blocking AST.\n", child);
+                if (send_cbs && child->l_blocking_ast != NULL)
                         ldlm_add_ast_work_item(child, lock, NULL, 0);
-                }
         }
 
         return rc;
@@ -597,7 +595,8 @@ static int ldlm_lock_compat(struct ldlm_lock *lock, int send_cbs)
  *  - ldlm_reprocess_queue
  *  - ldlm_lock_convert
  */
-void ldlm_grant_lock(struct ldlm_lock *lock, void *data, int datalen)
+void ldlm_grant_lock(struct ldlm_lock *lock, void *data, int datalen,
+                     int run_ast)
 {
         struct ldlm_resource *res = lock->l_resource;
         ENTRY;
@@ -609,7 +608,7 @@ void ldlm_grant_lock(struct ldlm_lock *lock, void *data, int datalen)
         if (lock->l_granted_mode < res->lr_most_restr)
                 res->lr_most_restr = lock->l_granted_mode;
 
-        if (lock->l_completion_ast != NULL)
+        if (run_ast && lock->l_completion_ast != NULL)
                 ldlm_add_ast_work_item(lock, NULL, data, datalen);
 
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
@@ -764,6 +763,7 @@ struct ldlm_lock *ldlm_lock_create(struct ldlm_namespace *ns,
                                    struct ldlm_res_id res_id, __u32 type,
                                    ldlm_mode_t mode,
                                    ldlm_blocking_callback blocking,
+                                   ldlm_completion_callback completion,
                                    void *data)
 {
         struct ldlm_resource *res, *parent_res = NULL;
@@ -791,15 +791,14 @@ struct ldlm_lock *ldlm_lock_create(struct ldlm_namespace *ns,
         lock->l_req_mode = mode;
         lock->l_data = data;
         lock->l_blocking_ast = blocking;
+        lock->l_completion_ast = completion;
 
         RETURN(lock);
 }
 
 ldlm_error_t ldlm_lock_enqueue(struct ldlm_namespace *ns,
                                struct ldlm_lock **lockp,
-                               void *cookie, int cookie_len,
-                               int *flags,
-                               ldlm_completion_callback completion)
+                               void *cookie, int cookie_len, int *flags)
 {
         struct ldlm_resource *res;
         struct ldlm_lock *lock = *lockp;
@@ -863,7 +862,7 @@ ldlm_error_t ldlm_lock_enqueue(struct ldlm_namespace *ns,
                 else if (*flags & (LDLM_FL_BLOCK_WAIT | LDLM_FL_BLOCK_GRANTED))
                         ldlm_resource_add_lock(res, &res->lr_waiting, lock);
                 else
-                        ldlm_grant_lock(lock, NULL, 0);
+                        ldlm_grant_lock(lock, NULL, 0, 0);
                 GOTO(out, ELDLM_OK);
         } else if (*flags & LDLM_FL_REPLAY) {
                 if (*flags & LDLM_FL_BLOCK_CONV) {
@@ -873,7 +872,7 @@ ldlm_error_t ldlm_lock_enqueue(struct ldlm_namespace *ns,
                         ldlm_resource_add_lock(res, &res->lr_waiting, lock);
                         GOTO(out, ELDLM_OK);
                 } else if (*flags & LDLM_FL_BLOCK_GRANTED) {
-                        ldlm_grant_lock(lock, NULL, 0);
+                        ldlm_grant_lock(lock, NULL, 0, 0);
                         GOTO(out, ELDLM_OK);
                 }
                 /* If no flags, fall through to normal enqueue path. */
@@ -895,12 +894,9 @@ ldlm_error_t ldlm_lock_enqueue(struct ldlm_namespace *ns,
                 *flags |= LDLM_FL_BLOCK_GRANTED;
                 GOTO(out, ELDLM_OK);
         }
-        ldlm_grant_lock(lock, NULL, 0);
+        ldlm_grant_lock(lock, NULL, 0, 0);
         EXIT;
       out:
-        /* Don't set 'completion_ast' until here so that if the lock is granted
-         * immediately we don't do an unnecessary completion call. */
-        lock->l_completion_ast = completion;
         l_unlock(&ns->ns_lock);
         return ELDLM_OK;
 }
@@ -922,7 +918,7 @@ static int ldlm_reprocess_queue(struct ldlm_resource *res,
                         RETURN(1);
 
                 list_del_init(&pending->l_res_link);
-                ldlm_grant_lock(pending, NULL, 0);
+                ldlm_grant_lock(pending, NULL, 0, 1);
         }
 
         RETURN(0);
@@ -1034,6 +1030,9 @@ void ldlm_lock_cancel(struct ldlm_lock *lock)
         struct ldlm_namespace *ns;
         ENTRY;
 
+        /* There's no race between calling this and taking the ns lock below;
+         * a lock can only be put on the waiting list once, because it can only
+         * issue a blocking AST once. */
         ldlm_del_waiting_lock(lock);
 
         res = lock->l_resource;
@@ -1118,7 +1117,7 @@ struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
                         LBUG();
 
                         res->lr_tmp = &rpc_list;
-                        ldlm_grant_lock(lock, NULL, 0);
+                        ldlm_grant_lock(lock, NULL, 0, 0);
                         res->lr_tmp = NULL;
                         granted = 1;
                         /* FIXME: completion handling not with ns_lock held ! */

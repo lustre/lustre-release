@@ -21,7 +21,9 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#define EXPORT_SYMTAB
+#ifndef EXPORT_SYMTAB
+# define EXPORT_SYMTAB
+#endif
 #define DEBUG_SUBSYSTEM S_LDLM
 
 #ifdef __KERNEL__
@@ -35,6 +37,8 @@
 
 #include <linux/lustre_dlm.h>
 #include <linux/obd_class.h>
+#include "ldlm_internal.h"
+
 extern kmem_cache_t *ldlm_resource_slab;
 extern kmem_cache_t *ldlm_lock_slab;
 extern struct lustre_lock ldlm_handle_lock;
@@ -454,7 +458,7 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req,
                                 dlm_req->lock_desc.l_resource.lr_name,
                                 dlm_req->lock_desc.l_resource.lr_type,
                                 dlm_req->lock_desc.l_req_mode,
-                                blocking_callback, NULL);
+                                blocking_callback, completion_callback, NULL);
         if (!lock)
                 GOTO(out, err = -ENOMEM);
 
@@ -471,7 +475,7 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req,
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
 
         err = ldlm_lock_enqueue(obddev->obd_namespace, &lock, cookie, cookielen,
-                                &flags, completion_callback);
+                                &flags);
         if (err)
                 GOTO(out, err);
 
@@ -665,7 +669,7 @@ static void ldlm_handle_cp_callback(struct ptlrpc_request *req,
                 LDLM_DEBUG(lock, "completion AST, new resource");
         }
         lock->l_resource->lr_tmp = &ast_list;
-        ldlm_grant_lock(lock, req, sizeof(*req));
+        ldlm_grant_lock(lock, req, sizeof(*req), 1);
         lock->l_resource->lr_tmp = NULL;
         LDLM_DEBUG(lock, "callback handler finished, about to run_ast_work");
         l_unlock(&ns->ns_lock);

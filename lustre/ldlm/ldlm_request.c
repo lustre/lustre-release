@@ -29,6 +29,8 @@
 #include <linux/obd_class.h>
 #include <linux/obd.h>
 
+#include "ldlm_internal.h"
+
 static void interrupted_completion_wait(void *data)
 {
 }
@@ -146,7 +148,7 @@ static int ldlm_cli_enqueue_local(struct ldlm_namespace *ns,
         }
 
         lock = ldlm_lock_create(ns, parent_lockh, res_id, type, mode,
-                                blocking, data);
+                                blocking, completion, data);
         if (!lock)
                 GOTO(out_nolock, err = -ENOMEM);
         LDLM_DEBUG(lock, "client-side local enqueue handler, new lock created");
@@ -155,8 +157,7 @@ static int ldlm_cli_enqueue_local(struct ldlm_namespace *ns,
         ldlm_lock2handle(lock, lockh);
         lock->l_flags |= LDLM_FL_LOCAL;
 
-        err = ldlm_lock_enqueue(ns, &lock, cookie, cookielen, flags,
-                                completion);
+        err = ldlm_lock_enqueue(ns, &lock, cookie, cookielen, flags);
         if (err != ELDLM_OK)
                 GOTO(out, err);
 
@@ -218,14 +219,9 @@ int ldlm_cli_enqueue(struct lustre_handle *connh,
                 LASSERT(connh == lock->l_connh);
         } else {
                 lock = ldlm_lock_create(ns, parent_lock_handle, res_id, type,
-                                        mode, blocking, data);
+                                        mode, blocking, completion, data);
                 if (lock == NULL)
                         GOTO(out_nolock, rc = -ENOMEM);
-                /* ugh.  I set this early (instead of waiting for _enqueue)
-                 * because the completion AST might arrive early, and we need
-                 * (in just this one case) to run the completion_cb even if it
-                 * arrives before the reply. */
-                lock->l_completion_ast = completion;
                 LDLM_DEBUG(lock, "client-side enqueue START");
                 /* for the local lock, add the reference */
                 ldlm_lock_addref_internal(lock, mode);
@@ -344,11 +340,7 @@ int ldlm_cli_enqueue(struct lustre_handle *connh,
         }
 
         if (!is_replay) {
-                l_lock(&ns->ns_lock);
-                lock->l_completion_ast = NULL;
-                rc = ldlm_lock_enqueue(ns, &lock, cookie, cookielen, flags,
-                                       completion);
-                l_unlock(&ns->ns_lock);
+                rc = ldlm_lock_enqueue(ns, &lock, cookie, cookielen, flags);
                 if (lock->l_completion_ast)
                         lock->l_completion_ast(lock, *flags, NULL);
         }
@@ -813,7 +805,6 @@ void ldlm_change_cbdata(struct ldlm_namespace *ns,
                        void *data)
 {
         struct ldlm_resource *res;
-        int rc = 0;
         ENTRY;
 
         if (ns == NULL) {
@@ -828,7 +819,7 @@ void ldlm_change_cbdata(struct ldlm_namespace *ns,
         }
 
         l_lock(&ns->ns_lock);
-        rc = ldlm_resource_foreach(res, iter, data);
+        ldlm_resource_foreach(res, iter, data);
         l_unlock(&ns->ns_lock);
         ldlm_resource_putref(res);
         EXIT;
