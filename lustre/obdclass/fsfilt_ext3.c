@@ -222,15 +222,13 @@ static void *fsfilt_ext3_brw_start(int objcount, struct fsfilt_objinfo *fso,
         RETURN(handle);
 }
 
-static int fsfilt_ext3_commit(struct inode *inode, void *h /*, force_sync */)
+static int fsfilt_ext3_commit(struct inode *inode, void *h, int force_sync)
 {
         int rc;
         handle_t *handle = h;
 
-#if 0
         if (force_sync)
                 handle->h_sync = 1; /* recovery likes this */
-#endif
 
         lock_kernel();
         rc = journal_stop(handle);
