@@ -571,8 +571,8 @@ int portals_debug_init(unsigned long bufsize)
         memset(debug_buf, 0, debug_size);
         debug_wrapped = 0;
 
-        printk(KERN_INFO "Portals: allocated %lu byte debug buffer at %p.\n",
-               bufsize, debug_buf);
+        //printk(KERN_INFO "Portals: allocated %lu byte debug buffer at %p.\n",
+               //bufsize, debug_buf);
         atomic_set(&debug_off_a, debug_off);
         notifier_chain_register(&panic_notifier_list, &lustre_panic_notifier);
         debug_size = bufsize;
