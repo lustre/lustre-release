@@ -55,21 +55,22 @@ void inode_update_time(struct inode *inode, int ctime_too)
 
 int ext3_map_inode_page(struct inode *inode, struct page *page,
                         unsigned long *blocks, int *created, int create);
-int filter_direct_io(int rw, struct inode *inode, struct kiobuf *iobuf)
+/* Must be called with i_sem taken; this will drop it */
+static int filter_direct_io(int rw, struct inode *inode, struct kiobuf *iobuf)
 {
         struct page *page;
         unsigned long *b = iobuf->blocks;
         int rc, i, create = (rw == OBD_BRW_WRITE), blocks_per_page, *created;
-        int *cr, cleanup_phase;
+        int *cr, cleanup_phase = 0;
         ENTRY;
 
         blocks_per_page = PAGE_SIZE >> inode->i_blkbits;
         if (iobuf->nr_pages * blocks_per_page > KIO_MAX_SECTORS)
-                RETURN(-EINVAL);
+                GOTO(cleanup, rc = -EINVAL);
 
         OBD_ALLOC(created, sizeof(*created) * iobuf->nr_pages*blocks_per_page);
         if (created == NULL)
-                RETURN(-ENOMEM);
+                GOTO(cleanup, rc = -ENOMEM);
         cleanup_phase = 1;
 
         rc = lock_kiovec(1, &iobuf, 1);
@@ -77,8 +78,6 @@ int filter_direct_io(int rw, struct inode *inode, struct kiobuf *iobuf)
                 GOTO(cleanup, rc);
         cleanup_phase = 2;
 
-        down(&inode->i_sem);
-        cleanup_phase = 3;
         for (i = 0, cr = created, b = iobuf->blocks; i < iobuf->nr_pages; i++){
                 page = iobuf->maplist[i];
 
@@ -90,7 +89,7 @@ int filter_direct_io(int rw, struct inode *inode, struct kiobuf *iobuf)
                 cr += blocks_per_page;
         }
         up(&inode->i_sem);
-        cleanup_phase = 2;
+        cleanup_phase = 3;
 
         rc = brw_kiovec(WRITE, 1, &iobuf, inode->i_dev, iobuf->blocks,
                         1 << inode->i_blkbits);
@@ -106,18 +105,21 @@ int filter_direct_io(int rw, struct inode *inode, struct kiobuf *iobuf)
         EXIT;
 cleanup:
         switch(cleanup_phase) {
-                case 3:
-                        up(&inode->i_sem);
-                case 2:
-                        unlock_kiovec(1, &iobuf);
-                case 1:
-                        OBD_FREE(created, sizeof(*created) * 
-                                          iobuf->nr_pages*blocks_per_page);
+        case 3:
+        case 2:
+                unlock_kiovec(1, &iobuf);
+        case 1:
+                OBD_FREE(created, sizeof(*created) * 
+                         iobuf->nr_pages*blocks_per_page);
+        case 0:
+                if (cleanup_phase == 3)
                         break;
-                default:
-                        CERROR("corrupt cleanup_phase (%d)?\n", cleanup_phase);
-                        LBUG();
-                        break;
+                up(&inode->i_sem);
+                break;
+        default:
+                CERROR("corrupt cleanup_phase (%d)?\n", cleanup_phase);
+                LBUG();
+                break;
         }
         return rc;
 }
@@ -175,6 +177,7 @@ int filter_commitrw_write(struct obd_export *exp, int objcount,
         push_ctxt(&saved, &obd->obd_ctxt, NULL);
         cleanup_phase = 2; 
 
+        down(&inode->i_sem);
         oti->oti_handle = fsfilt_brw_start(obd, objcount, &fso, niocount, oti);
         if (IS_ERR(oti->oti_handle)) {
                 rc = PTR_ERR(oti->oti_handle);
@@ -189,7 +192,7 @@ int filter_commitrw_write(struct obd_export *exp, int objcount,
 
         rc = filter_direct_io(OBD_BRW_WRITE, inode, iobuf);
         if (rc == 0) {
-                down(&inode->i_sem);
+                lock_kernel();
                 inode_update_time(inode, 1);
                 if (iattr.ia_size > inode->i_size) {
                         CDEBUG(D_INFO, "setting i_size to "LPU64"\n",
@@ -197,7 +200,7 @@ int filter_commitrw_write(struct obd_export *exp, int objcount,
                         fsfilt_setattr(obd, res->dentry, oti->oti_handle,
                                        &iattr, 0);
                 }
-                up(&inode->i_sem);
+                unlock_kernel();
         }
 
         if (time_after(jiffies, now + 15 * HZ))
