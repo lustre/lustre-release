@@ -60,13 +60,17 @@ static int connmgr_upcall(void)
         return call_usermodehelper(argv[0], argv, envp);
 }
 
-static void connmgr_unpack_body(struct ptlrpc_request *req)
+static int connmgr_unpack_body(struct ptlrpc_request *req)
 {
         struct connmgr_body *b = lustre_msg_buf(req->rq_repmsg, 0);
-        if (b == NULL)
+        if (b == NULL) {
                 LBUG();
+                RETURN(-EINVAL);
+        }
 
         b->generation = NTOH__u32(b->generation);
+
+        return 0;
 }
 
 int connmgr_connect(struct recovd_obd *recovd, struct ptlrpc_connection *conn)
@@ -80,6 +84,7 @@ int connmgr_connect(struct recovd_obd *recovd, struct ptlrpc_connection *conn)
         if (!recovd) {
                 CERROR("no manager\n");
                 LBUG();
+                GOTO(out, rc = -EINVAL);
         }
         cl = recovd->recovd_client;
 
@@ -97,7 +102,9 @@ int connmgr_connect(struct recovd_obd *recovd, struct ptlrpc_connection *conn)
         rc = ptlrpc_queue_wait(req);
         rc = ptlrpc_check_status(req, rc);
         if (!rc) {
-                connmgr_unpack_body(req);
+                rc = connmgr_unpack_body(req);
+                if (rc)
+                        GOTO(out_free, rc);
                 body = lustre_msg_buf(req->rq_repmsg, 0);
                 CDEBUG(D_NET, "remote generation: %o\n", body->generation);
                 conn->c_level = LUSTRE_CONN_CON;
@@ -105,10 +112,10 @@ int connmgr_connect(struct recovd_obd *recovd, struct ptlrpc_connection *conn)
                 conn->c_remote_token = body->conn_token;
         }
 
+out_free:
         ptlrpc_free_req(req);
-        EXIT;
- out:
-        return rc;
+out:
+        RETURN(rc);
 }
 
 static int connmgr_handle_connect(struct ptlrpc_request *req)
@@ -125,7 +132,11 @@ static int connmgr_handle_connect(struct ptlrpc_request *req)
         }
 
         body = lustre_msg_buf(req->rq_reqmsg, 0);
-        connmgr_unpack_body(req);
+        rc = connmgr_unpack_body(req);
+        if (rc) {
+                req->rq_status = rc;
+                RETURN(0);
+        }
 
         req->rq_connection->c_remote_conn = body->conn;
         req->rq_connection->c_remote_token = body->conn_token;
