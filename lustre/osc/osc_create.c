@@ -270,7 +270,6 @@ void oscc_init(struct lustre_handle *exph)
 {
         struct obd_export *exp = class_conn2export(exph);
         struct osc_export_data *oed = &exp->exp_osc_data;
-        int saved_grow_count;
 
         memset(oed, 0, sizeof(*oed));
         INIT_LIST_HEAD(&oed->oed_oscc.oscc_list);
@@ -285,10 +284,6 @@ void oscc_init(struct lustre_handle *exph)
         oed->oed_oscc.oscc_last_id = 1;
         /* XXX the export handle should give the oscc the last object */
         /* oed->oed_oscc.oscc_last_id = exph->....; */
-        saved_grow_count = oed->oed_oscc.oscc_grow_count;
-        oed->oed_oscc.oscc_grow_count = oed->oed_oscc.oscc_initial_create_count;
-        oscc_precreate(&oed->oed_oscc, oed->oed_oscc.oscc_osccd, 0);
-        oed->oed_oscc.oscc_grow_count = saved_grow_count;
 
         class_export_put(exp);
 }
