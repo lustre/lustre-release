@@ -6,4 +6,4 @@
 include $(src)/../portals/Kernelenv
 
 obj-y += obdfilter.o
-obdfilter-objs := filter.o lproc_obdfilter.o
+obdfilter-objs := filter.o lproc_obdfilter.o filter_log.o filter_io.o filter_san.o
