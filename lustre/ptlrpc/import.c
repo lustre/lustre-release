@@ -271,12 +271,12 @@ static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
                         CDEBUG(D_HA, "connected to replayable target: %s\n",
                                imp->imp_target_uuid.uuid);
                         imp->imp_replayable = 1;
-                        ptlrpc_pinger_add_import(imp);
                 } else {
                         imp->imp_replayable = 0;
                 }
                 imp->imp_remote_handle = request->rq_repmsg->handle;
                 IMPORT_SET_STATE(imp, LUSTRE_IMP_FULL);
+                ptlrpc_pinger_add_import(imp);
                 GOTO(finish, rc = 0);
         }
 
@@ -509,8 +509,9 @@ int ptlrpc_disconnect_import(struct obd_import *imp)
                 /* For non-replayable connections, don't attempt
                    reconnect if this fails */
                 if (!imp->imp_replayable) {
-                        IMPORT_SET_STATE(imp, LUSTRE_IMP_DISCON);
-                        request->rq_send_state =  LUSTRE_IMP_DISCON;
+                        request->rq_no_resend = 1;
+                        IMPORT_SET_STATE(imp, LUSTRE_IMP_CONNECTING);
+                        request->rq_send_state =  LUSTRE_IMP_CONNECTING;
                 }
                 request->rq_replen = lustre_msg_size(0, NULL);
                 rc = ptlrpc_queue_wait(request);
