@@ -155,12 +155,17 @@ def debug(*args):
 # ack, python's builtin int() does not support '0x123' syntax.
 # eval can do it, although what a hack!
 def my_int(s):
+    import types
+    if type(s) is types.IntType:
+	    return s
     try:
-        if s[0:2] == '0x':
+        if (s[0:2] == '0x') or (s[0:1] == '0'):
             return eval(s, {}, {})
         else:
             return int(s)
     except SyntaxError, e:
+        raise ValueError("not a number")
+    except TypeError, e:
         raise ValueError("not a number")
     except NameError, e:
         raise ValueError("not a number")
@@ -209,23 +214,37 @@ class DaemonHandler:
             if not self.path:
                 panic(self.command, "not found.")
         ret, out = runcmd(self.path +' '+ self.command_line())
+        if ret:
+            # wait for up to 15 seconds checking to see if a competing daemon
+            # starts successfully
+            loop_count = 15
+            while (not self.running()) and (loop_count > 0):
+                loop_count = loop_count - 1
+                time.sleep(1)
 
-        # FIXME: add this check can only narrow the race but can not avoid it
-        # completely, so I don't apply this method on inserting module.
-        if ret and not self.running():
-            raise CommandError(self.path, out, ret)
+            if not self.running():
+                raise CommandError(self.path, out, ret)
 
     def stop(self):
         if self.running():
             pid = self.read_pidfile()
+            if not pid:
+                return
             try:
                 log ("killing process", pid)
                 os.kill(pid, 15)
                 #time.sleep(1) # let daemon die
             except OSError, e:
                 log("unable to kill", self.command, e)
-            if self.running():
-                log("unable to kill", self.command)
+
+            # wait for the dameon to die for up to 15 seconds
+            # before complaining about it
+            loop_count = 15
+            while self.running() and (self.read_pidfile == pid) and (loop_count > 0):
+                loop_count = loop_count - 1
+                time.sleep(1)
+            if self.running() and (self.read_pidfile == pid):
+                log("unable to kill", self.command, "process", pid)
 
     def running(self):
         pid = self.read_pidfile()
@@ -674,7 +693,7 @@ class LCTLInterface:
   quit""" % (timeout,)
         self.run(cmds)
 
-    # delete mount options
+    # set lustre upcall
     def set_lustre_upcall(self, upcall):
         cmds = """
   set_lustre_upcall %s
@@ -1012,7 +1031,16 @@ def sys_get_local_address(net_type, wildcard, cluster_id):
     elif net_type == 'lo':
         fixme("automatic local address for loopback")
     elif net_type == 'gm':
-        fixme("automatic local address for GM")
+        gmnalnid = '/usr/sbin/gmnalnid'
+        if os.path.exists(gmnalnid) and os.access(gmnalnid, os.X_OK):
+            (rc, local) = run(gmnalnid, "-l")
+        else:
+            panic (gmnalnid, " not found or not executable on node with GM networking")
+        if rc:
+            panic (gmnalnid, " failed")
+        local=string.rstrip(local[0])
+    else:
+        fixme("automatic local address for net type %s" % net_type)
 
     return local
 
@@ -1255,11 +1283,11 @@ class Network(Module):
                 lctl.add_interface(self.net_type, ip, netmask)
         if self.net_type == 'elan':
             sys_optimize_elan()
-	if self.net_type == 'openib':
+        if self.net_type == 'openib':
             if self.port == 0:
                 panic("no port set for", self.net_type, self.hostaddr[0])
             sysctl('/proc/sys/openibnal/port', self.port)
-	if self.net_type == 'ra':
+        if self.net_type == 'ra':
             if self.port == 0:
                 panic("no port set for", self.net_type, self.hostaddr[0])
             sysctl('/proc/sys/ranal/port', self.port)
@@ -1692,7 +1720,7 @@ class MDSDEV(Module):
                             for s in out: log("record> ", string.strip(s))
                         config.noexec = old_noexec
         try:
-            lctl.cleanup(self.name, self.uuid, 0, 0)
+            lctl.cleanup(self.name, self.uuid, config.force, config.failover)
         except CommandError, e:
             log(self.module_name, "cleanup failed: ", self.name)
             e.dump()
@@ -2271,7 +2299,7 @@ def find_local_clusters(node_db):
         local_clusters.append((srv.net_type, srv.cluster_id, srv.nid))
         if srv.port > 0:
             if not acceptors.has_key(srv.port):
-            	acceptors[srv.port] = AcceptorHandler(srv.port, srv.net_type)
+                acceptors[srv.port] = AcceptorHandler(srv.port, srv.net_type)
 
 # This node is a gateway.
 is_router = 0
@@ -2611,6 +2639,16 @@ def sysctl(path, val):
 def sys_set_debug_path():
     sysctl('portals/debug_path', config.debug_path)
 
+def validate_upcall(upcall):
+    import os
+    if upcall in ('DEFAULT',):
+        pass
+    elif os.path.exists(upcall):
+        if not os.access(upcall, os.X_OK):
+            print "WARNING upcall script not executable: %s" % upcall
+    else:
+        print "WARNING invalid upcall script specified: %s" % upcall
+
 def sys_set_lustre_upcall(upcall):
     # the command overrides the value in the node config
     if config.lustre_upcall:
@@ -2618,6 +2656,7 @@ def sys_set_lustre_upcall(upcall):
     elif config.upcall:
         upcall = config.upcall
     if upcall:
+        validate_upcall(upcall)
         lctl.set_lustre_upcall(upcall)
 
 def sys_set_portals_upcall(upcall):
@@ -2627,6 +2666,7 @@ def sys_set_portals_upcall(upcall):
     elif config.upcall:
         upcall = config.upcall
     if upcall:
+        validate_upcall(upcall)
         sysctl('portals/upcall', upcall)
 
 def sys_set_timeout(timeout):
