@@ -300,11 +300,6 @@ static struct dentry *filter_fid2dentry(struct obd_device *obd,
                 RETURN(dchild);
         }
 
-        if (!dchild->d_op)
-                dchild->d_op = &filter_dops;
-        else
-                LASSERT(dchild->d_op == &filter_dops);
-
         CDEBUG(D_INODE, "got child obj O/%s/%s: %p, count = %d\n",
                obd_mode_to_type(type), name, dchild,
                atomic_read(&dchild->d_count));
@@ -327,6 +322,7 @@ static struct file *filter_obj_open(struct obd_export *export,
 {
         struct filter_obd *filter = &export->exp_obd->u.filter;
         struct super_block *sb = filter->fo_sb;
+        struct dentry *dentry;
         struct filter_export_data *fed = &export->exp_filter_data;
         struct filter_dentry_data *fdd;
         struct filter_file_data *ffd;
@@ -372,11 +368,12 @@ static struct file *filter_obj_open(struct obd_export *export,
         if (IS_ERR(file))
                 GOTO(out_fdd, file);
 
+        dentry = file->f_dentry;
         spin_lock(&filter->fo_fddlock);
-        if (file->f_dentry->d_fsdata) {
+        if (dentry->d_fsdata) {
                 spin_unlock(&filter->fo_fddlock);
                 kmem_cache_free(filter_dentry_cache, fdd);
-                fdd = file->f_dentry->d_fsdata;
+                fdd = dentry->d_fsdata;
                 LASSERT(kmem_cache_validate(filter_dentry_cache, fdd));
                 /* should only happen during client recovery */
                 if (fdd->fdd_flags & FILTER_FLAG_DESTROY)
@@ -386,13 +383,18 @@ static struct file *filter_obj_open(struct obd_export *export,
                 atomic_set(&fdd->fdd_open_count, 1);
                 fdd->fdd_flags = 0;
                 /* If this is racy, then we can use {cmp}xchg and atomic_add */
-                file->f_dentry->d_fsdata = fdd;
+                dentry->d_fsdata = fdd;
                 spin_unlock(&filter->fo_fddlock);
         }
 
         get_random_bytes(&ffd->ffd_servercookie, sizeof(ffd->ffd_servercookie));
         ffd->ffd_file = file;
         file->private_data = ffd;
+
+        if (!dentry->d_op)
+                dentry->d_op = &filter_dops;
+        else
+                LASSERT(dentry->d_op == &filter_dops);
 
         spin_lock(&fed->fed_lock);
         list_add(&ffd->ffd_export_list, &fed->fed_open_head);
@@ -1207,12 +1209,8 @@ static inline void lustre_put_page(struct page *page)
 }
 
 
-#ifndef PageUptodate
-#define PageUptodate(page) Page_Uptodate(page)
-#endif
 static struct page *
-lustre_get_page_read(struct inode *inode,
-                     struct niobuf_remote *rnb)
+lustre_get_page_read(struct inode *inode, struct niobuf_remote *rnb)
 {
         unsigned long index = rnb->offset >> PAGE_SHIFT;
         struct address_space *mapping = inode->i_mapping;
