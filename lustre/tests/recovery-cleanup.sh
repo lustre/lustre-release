@@ -93,9 +93,9 @@ setup() {
 
 cleanup() {
     do_mds "echo 0 > /proc/sys/lustre/fail_loc"
-    unmount_client $@ || true
-    shutdown_mds $@ || true
-    shutdown_ost $@ || true
+    unmount_client $@ || exit 97
+    shutdown_mds $@ || exit 98
+    shutdown_ost $@ || exit 99
 }
 
 wait_for_timeout() {
