@@ -195,6 +195,7 @@ static int mds_ext3_set_last_rcvd(struct mds_obd *mds, void *handle)
                (unsigned long long)mcb->cb_last_rcvd);
         journal_callback_set(handle, mds_ext3_callback_func, mcb);
 #else
+#warning "no journal callback kernel patch, faking it..."
         {
         static long next = 0;
 
