@@ -128,17 +128,21 @@ static int ll_intent_file_open(struct file *file, void *lmm,
         const char *name = file->f_dentry->d_name.name;
         const int len = file->f_dentry->d_name.len;
         struct lustre_handle lockh;
-        struct mdc_op_data data;
+        struct mdc_op_data *op_data;
         int rc;
 
         if (!parent)
                 RETURN(-ENOENT);
 
-        ll_prepare_mdc_data(&data, parent->d_inode, NULL, name, len, O_RDWR);
+        OBD_ALLOC(op_data, sizeof(*op_data));
+        if (op_data == NULL)
+                RETURN(-ENOMEM);
+        ll_prepare_mdc_data(op_data, parent->d_inode, NULL, name, len, O_RDWR);
 
-        rc = md_enqueue(sbi->ll_lmv_exp, LDLM_IBITS, itp, LCK_PR, &data,
+        rc = md_enqueue(sbi->ll_lmv_exp, LDLM_IBITS, itp, LCK_PR, op_data,
                         &lockh, lmm, lmmsize, ldlm_completion_ast,
                         ll_mdc_blocking_ast, NULL);
+        OBD_FREE(op_data, sizeof(*op_data));
         if (rc == 0) {
                 if (itp->d.lustre.it_lock_mode)
                         memcpy(&itp->d.lustre.it_lock_handle,

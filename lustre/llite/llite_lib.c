@@ -920,7 +920,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
         struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct ptlrpc_request *request = NULL;
-        struct mdc_op_data op_data;
+        struct mdc_op_data *op_data;
         int ia_valid = attr->ia_valid;
         int rc = 0;
         ENTRY;
@@ -970,10 +970,15 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
          * inode ourselves so we can call obdo_from_inode() always. */
         if (ia_valid & (lsm ? ~(ATTR_SIZE | ATTR_FROM_OPEN | ATTR_RAW) : ~0)) {
                 struct lustre_md md;
-                ll_prepare_mdc_data(&op_data, inode, NULL, NULL, 0, 0);
 
-                rc = md_setattr(sbi->ll_lmv_exp, &op_data,
+                OBD_ALLOC(op_data, sizeof(*op_data));
+                if (op_data == NULL)
+                        RETURN(-ENOMEM);
+                ll_prepare_mdc_data(op_data, inode, NULL, NULL, 0, 0);
+
+                rc = md_setattr(sbi->ll_lmv_exp, op_data,
                                 attr, NULL, 0, NULL, 0, &request);
+                OBD_FREE(op_data, sizeof(*op_data));
                 if (rc) {
                         ptlrpc_req_finished(request);
                         if (rc != -EPERM && rc != -EACCES)
@@ -1434,7 +1439,7 @@ int ll_iocontrol(struct inode *inode, struct file *file,
                 RETURN(put_user(flags, (int *)arg));
         }
         case EXT3_IOC_SETFLAGS: {
-                struct mdc_op_data op_data;
+                struct mdc_op_data *op_data;
                 struct iattr attr;
                 struct obdo *oa;
                 struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
@@ -1446,14 +1451,20 @@ int ll_iocontrol(struct inode *inode, struct file *file,
                 if (!oa)
                         RETURN(-ENOMEM);
 
-                ll_prepare_mdc_data(&op_data, inode, NULL, NULL, 0, 0);
+                OBD_ALLOC(op_data, sizeof(*op_data));
+                if (op_data == NULL) {
+                        obdo_free(oa);
+                        RETURN(-ENOMEM);
+                }
+                ll_prepare_mdc_data(op_data, inode, NULL, NULL, 0, 0);
 
                 memset(&attr, 0x0, sizeof(attr));
                 attr.ia_attr_flags = flags;
                 attr.ia_valid |= ATTR_ATTR_FLAG;
 
-                rc = md_setattr(sbi->ll_lmv_exp, &op_data,
+                rc = md_setattr(sbi->ll_lmv_exp, op_data,
                                 &attr, NULL, 0, NULL, 0, &req);
+                OBD_FREE(op_data, sizeof(*op_data));
                 if (rc) {
                         ptlrpc_req_finished(req);
                         if (rc != -EPERM && rc != -EACCES)

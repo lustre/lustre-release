@@ -526,7 +526,7 @@ static int ll_mknod_raw(struct nameidata *nd, int mode, dev_t rdev)
         const char *name = nd->last.name;
         int len = nd->last.len;
         struct ll_sb_info *sbi = ll_i2sbi(dir);
-        struct mdc_op_data op_data;
+        struct mdc_op_data *op_data;
         int err = -EMLINK;
         ENTRY;
 
@@ -546,9 +546,14 @@ static int ll_mknod_raw(struct nameidata *nd, int mode, dev_t rdev)
         case S_IFBLK:
         case S_IFIFO:
         case S_IFSOCK:
-                ll_prepare_mdc_data(&op_data, dir, NULL, name, len, 0);
-                err = md_create(sbi->ll_lmv_exp, &op_data, NULL, 0, mode,
-                                current->fsuid, current->fsgid, rdev, &request);
+                OBD_ALLOC(op_data, sizeof(*op_data));
+                if (op_data == NULL)
+                        RETURN(-ENOMEM);
+                ll_prepare_mdc_data(op_data, dir, NULL, name, len, 0);
+                err = md_create(sbi->ll_lmv_exp, op_data, NULL, 0, mode,
+                                current->fsuid, current->fsgid, rdev,
+                                &request);
+                OBD_FREE(op_data, sizeof(*op_data));
                 if (err == 0)
                         ll_update_times(request, 0, dir);
                 ptlrpc_req_finished(request);
@@ -570,7 +575,7 @@ static int ll_mknod(struct inode *dir, struct dentry *child,
         const char *name = child->d_name.name;
         int len = child->d_name.len;
         struct ll_sb_info *sbi = ll_i2sbi(dir);
-        struct mdc_op_data op_data;
+        struct mdc_op_data *op_data;
         int err = -EMLINK;
         ENTRY;
 
@@ -590,9 +595,14 @@ static int ll_mknod(struct inode *dir, struct dentry *child,
         case S_IFBLK:
         case S_IFIFO:
         case S_IFSOCK:
-                ll_prepare_mdc_data(&op_data, dir, NULL, name, len, 0);
-                err = md_create(sbi->ll_lmv_exp, &op_data, NULL, 0, mode,
-                                current->fsuid, current->fsgid, rdev, &request);
+                OBD_ALLOC(op_data, sizeof(*op_data));
+                if (op_data == NULL)
+                        RETURN(-ENOMEM);
+                ll_prepare_mdc_data(op_data, dir, NULL, name, len, 0);
+                err = md_create(sbi->ll_lmv_exp, op_data, NULL, 0, mode,
+                                current->fsuid, current->fsgid, rdev,
+                                &request);
+                OBD_FREE(op_data, sizeof(*op_data));
                 if (err)
                         GOTO(out_err, err);
 
@@ -624,7 +634,7 @@ static int ll_symlink_raw(struct nameidata *nd, const char *tgt)
         int len = nd->last.len;
         struct ptlrpc_request *request = NULL;
         struct ll_sb_info *sbi = ll_i2sbi(dir);
-        struct mdc_op_data op_data;
+        struct mdc_op_data *op_data;
         int err = -EMLINK;
         ENTRY;
 
@@ -634,10 +644,14 @@ static int ll_symlink_raw(struct nameidata *nd, const char *tgt)
         if (dir->i_nlink >= EXT3_LINK_MAX)
                 RETURN(err);
 
-        ll_prepare_mdc_data(&op_data, dir, NULL, name, len, 0);
-        err = md_create(sbi->ll_lmv_exp, &op_data,
+        OBD_ALLOC(op_data, sizeof(*op_data));
+        if (op_data == NULL)
+                RETURN(-ENOMEM);
+        ll_prepare_mdc_data(op_data, dir, NULL, name, len, 0);
+        err = md_create(sbi->ll_lmv_exp, op_data,
                         tgt, strlen(tgt) + 1, S_IFLNK | S_IRWXUGO,
                         current->fsuid, current->fsgid, 0, &request);
+        OBD_FREE(op_data, sizeof(*op_data));
         if (err == 0)
                 ll_update_times(request, 0, dir);
         
@@ -652,17 +666,21 @@ static int ll_link_raw(struct nameidata *srcnd, struct nameidata *tgtnd)
         const char *name = tgtnd->last.name;
         int len = tgtnd->last.len;
         struct ptlrpc_request *request = NULL;
-        struct mdc_op_data op_data;
+        struct mdc_op_data *op_data;
         int err;
         struct ll_sb_info *sbi = ll_i2sbi(dir);
-
         ENTRY;
-        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p),dir=%lu/%u(%p),target=%s\n",
-               src->i_ino, src->i_generation, src,
-               dir->i_ino, dir->i_generation, dir, name);
 
-        ll_prepare_mdc_data(&op_data, src, dir, name, len, 0);
-        err = md_link(sbi->ll_lmv_exp, &op_data, &request);
+        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p),dir=%lu/%u(%p),target=%s\n",
+               src->i_ino, src->i_generation, src, dir->i_ino, dir->i_generation,
+               dir, name);
+
+        OBD_ALLOC(op_data, sizeof(*op_data));
+        if (op_data == NULL)
+                RETURN(-ENOMEM);
+        ll_prepare_mdc_data(op_data, src, dir, name, len, 0);
+        err = md_link(sbi->ll_lmv_exp, op_data, &request);
+        OBD_FREE(op_data, sizeof(*op_data));
         if (err == 0)
                 ll_update_times(request, 0, dir);
         ptlrpc_req_finished(request);
@@ -677,16 +695,20 @@ static int ll_mkdir_raw(struct nameidata *nd, int mode)
         int len = nd->last.len;
         struct ptlrpc_request *request = NULL;
         struct ll_sb_info *sbi = ll_i2sbi(dir);
-        struct mdc_op_data op_data;
+        struct mdc_op_data *op_data;
         int err = -EMLINK;
         ENTRY;
         CDEBUG(D_VFSTRACE, "VFS Op:name=%s,dir=%lu/%u(%p)\n",
                name, dir->i_ino, dir->i_generation, dir);
 
         mode = (mode & (S_IRWXUGO|S_ISVTX) & ~current->fs->umask) | S_IFDIR;
-        ll_prepare_mdc_data(&op_data, dir, NULL, name, len, 0);
-        err = md_create(sbi->ll_lmv_exp, &op_data, NULL, 0, mode,
+        OBD_ALLOC(op_data, sizeof(*op_data));
+        if (op_data == NULL)
+                RETURN(-ENOMEM);
+        ll_prepare_mdc_data(op_data, dir, NULL, name, len, 0);
+        err = md_create(sbi->ll_lmv_exp, op_data, NULL, 0, mode,
                         current->fsuid, current->fsgid, 0, &request);
+        OBD_FREE(op_data, sizeof(*op_data));
         if (err == 0)
                 ll_update_times(request, 0, dir);
         ptlrpc_req_finished(request);
@@ -699,14 +721,18 @@ static int ll_rmdir_raw(struct nameidata *nd)
         const char *name = nd->last.name;
         int len = nd->last.len;
         struct ptlrpc_request *request = NULL;
-        struct mdc_op_data op_data;
+        struct mdc_op_data *op_data;
         int rc;
         ENTRY;
         CDEBUG(D_VFSTRACE, "VFS Op:name=%s,dir=%lu/%u(%p)\n",
                name, dir->i_ino, dir->i_generation, dir);
 
-        ll_prepare_mdc_data(&op_data, dir, NULL, name, len, S_IFDIR);
-        rc = md_unlink(ll_i2sbi(dir)->ll_lmv_exp, &op_data, &request);
+        OBD_ALLOC(op_data, sizeof(*op_data));
+        if (op_data == NULL)
+                RETURN(-ENOMEM);
+        ll_prepare_mdc_data(op_data, dir, NULL, name, len, S_IFDIR);
+        rc = md_unlink(ll_i2sbi(dir)->ll_lmv_exp, op_data, &request);
+        OBD_FREE(op_data, sizeof(*op_data));
         if (rc == 0)
                 ll_update_times(request, 0, dir);
         ptlrpc_req_finished(request);
@@ -800,14 +826,18 @@ static int ll_unlink_raw(struct nameidata *nd)
         const char *name = nd->last.name;
         int len = nd->last.len;
         struct ptlrpc_request *request = NULL;
-        struct mdc_op_data op_data;
+        struct mdc_op_data *op_data;
         int rc;
         ENTRY;
         CDEBUG(D_VFSTRACE, "VFS Op:name=%s,dir=%lu/%u(%p)\n",
                name, dir->i_ino, dir->i_generation, dir);
 
-        ll_prepare_mdc_data(&op_data, dir, NULL, name, len, 0);
-        rc = md_unlink(ll_i2sbi(dir)->ll_lmv_exp, &op_data, &request);
+        OBD_ALLOC(op_data, sizeof(*op_data));
+        if (op_data == NULL)
+                RETURN(-ENOMEM);
+        ll_prepare_mdc_data(op_data, dir, NULL, name, len, 0);
+        rc = md_unlink(ll_i2sbi(dir)->ll_lmv_exp, op_data, &request);
+        OBD_FREE(op_data, sizeof(*op_data));
         if (rc)
                 GOTO(out, rc);
         ll_update_times(request, 0, dir);
@@ -829,16 +859,20 @@ static int ll_rename_raw(struct nameidata *oldnd, struct nameidata *newnd)
         int newlen  = newnd->last.len;
         struct ptlrpc_request *request = NULL;
         struct ll_sb_info *sbi = ll_i2sbi(src);
-        struct mdc_op_data op_data;
+        struct mdc_op_data *op_data;
         int err;
         ENTRY;
         CDEBUG(D_VFSTRACE, "VFS Op:oldname=%s, src_dir=%lu/%u(%p), newname=%s, "
                "tgt_dir=%lu/%u(%p)\n", oldname, src->i_ino, src->i_generation,
                src, newname, tgt->i_ino, tgt->i_generation, tgt);
 
-        ll_prepare_mdc_data(&op_data, src, tgt, NULL, 0, 0);
-        err = md_rename(sbi->ll_lmv_exp, &op_data,
-                        oldname, oldlen, newname, newlen, &request);
+        OBD_ALLOC(op_data, sizeof(*op_data));
+        if (op_data == NULL)
+                RETURN(-ENOMEM);
+        ll_prepare_mdc_data(op_data, src, tgt, NULL, 0, 0);
+        err = md_rename(sbi->ll_lmv_exp, op_data, oldname, oldlen,
+                        newname, newlen, &request);
+        OBD_FREE(op_data, sizeof(*op_data));
         if (!err) {
                 ll_update_times(request, 0, src);
                 ll_update_times(request, 0, tgt);

@@ -224,13 +224,18 @@ static struct page *ll_get_dir_page(struct inode *dir, unsigned long n)
         if (!rc) {
                 struct lookup_intent it = { .it_op = IT_READDIR };
                 struct ptlrpc_request *request;
-                struct mdc_op_data data;
+                struct mdc_op_data *op_data;
 
-                ll_prepare_mdc_data(&data, dir, NULL, NULL, 0, 0);
+                OBD_ALLOC(op_data, sizeof(*op_data));
+                if (op_data == NULL)
+                        RETURN(ERR_PTR(-ENOMEM));
+
+                ll_prepare_mdc_data(op_data, dir, NULL, NULL, 0, 0);
 
                 rc = md_enqueue(ll_i2sbi(dir)->ll_lmv_exp, LDLM_IBITS, &it,
-                                LCK_PR, &data, &lockh, NULL, 0,
+                                LCK_PR, op_data, &lockh, NULL, 0,
                                 ldlm_completion_ast, ll_mdc_blocking_ast, dir);
+                OBD_FREE(op_data, sizeof(*op_data));
 
                 request = (struct ptlrpc_request *)it.d.lustre.it_data;
                 if (request)
@@ -374,13 +379,13 @@ done:
 
 static int ll_mkdir_stripe(struct inode *inode, unsigned long arg)
 {
-        char *name;
-        struct ll_user_mkdir_stripe lums;
         struct ptlrpc_request *request = NULL;
         struct ll_sb_info *sbi = ll_i2sbi(inode);
-        struct mdc_op_data op_data;
+        struct ll_user_mkdir_stripe lums;
+        struct mdc_op_data *op_data;
         u16 nstripes;
         mode_t mode;
+        char *name;
         int err = 0;
         ENTRY;
 
@@ -402,9 +407,14 @@ static int ll_mkdir_stripe(struct inode *inode, unsigned long arg)
 
         mode = lums.lums_mode;
         mode = (mode & (S_IRWXUGO|S_ISVTX) & ~current->fs->umask) | S_IFDIR;
-        ll_prepare_mdc_data(&op_data, inode, NULL, name,lums.lums_namelen,0);
-        err = md_create(sbi->ll_lmv_exp, &op_data, &nstripes, sizeof(nstripes),
+
+        OBD_ALLOC(op_data, sizeof(*op_data));
+        if (op_data == NULL)
+                GOTO(out, err = -ENOMEM);
+        ll_prepare_mdc_data(op_data, inode, NULL, name,lums.lums_namelen,0);
+        err = md_create(sbi->ll_lmv_exp, op_data, &nstripes, sizeof(nstripes),
                         mode, current->fsuid, current->fsgid, 0, &request);
+        OBD_FREE(op_data, sizeof(*op_data));
         ptlrpc_req_finished(request);
         EXIT;
 out:
@@ -473,34 +483,37 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 RETURN(ll_finish_gns(sbi));
         case LL_IOC_LOV_SETSTRIPE: {
                 struct ptlrpc_request *request = NULL;
-                struct mdc_op_data op_data;
+                struct mdc_op_data *op_data;
                 struct iattr attr = { 0 };
                 struct lov_user_md lum, *lump = (struct lov_user_md *)arg;
                 int rc = 0;
-
-                ll_prepare_mdc_data(&op_data, inode, NULL, NULL, 0, 0);
 
                 LASSERT(sizeof(lum) == sizeof(*lump));
                 LASSERT(sizeof(lum.lmm_objects[0]) ==
                         sizeof(lump->lmm_objects[0]));
                 rc = copy_from_user(&lum, lump, sizeof(lum));
                 if (rc)
-                        return(-EFAULT);
+                        RETURN(-EFAULT);
 
                 if (lum.lmm_magic != LOV_USER_MAGIC)
                         RETURN(-EINVAL);
 
-                rc = md_setattr(sbi->ll_lmv_exp, &op_data,
-                                &attr, &lum, sizeof(lum), NULL, 0, &request);
-                if (rc) {
-                        ptlrpc_req_finished(request);
-                        if (rc != -EPERM && rc != -EACCES)
-                                CERROR("md_setattr fails: rc = %d\n", rc);
-                        return rc;
-                }
+                OBD_ALLOC(op_data, sizeof(*op_data));
+                if (op_data == NULL)
+                        RETURN(-ENOMEM);
+                
+                ll_prepare_mdc_data(op_data, inode, NULL, NULL, 0, 0);
+
+                rc = md_setattr(sbi->ll_lmv_exp, op_data, &attr, &lum,
+                                sizeof(lum), NULL, 0, &request);
+                OBD_FREE(op_data, sizeof(*op_data));
                 ptlrpc_req_finished(request);
 
-                return rc;
+                if (rc) {
+                        if (rc != -EPERM && rc != -EACCES)
+                                CERROR("md_setattr fails: rc = %d\n", rc);
+                }
+                RETURN(rc);
         }
         case LL_IOC_LOV_GETSTRIPE: {
                 struct ptlrpc_request *request = NULL;
