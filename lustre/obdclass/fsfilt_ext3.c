@@ -269,7 +269,7 @@ static int fsfilt_ext3_statfs(struct super_block *sb, struct statfs *sfs)
         return rc;
 }
 
-static struct fsfilt_operations fsfilt_ext3_fs_ops = {
+static struct fsfilt_operations fsfilt_ext3_ops = {
         fs_type:                "ext3",
         fs_owner:               THIS_MODULE,
         fs_start:               fsfilt_ext3_start,
@@ -296,7 +296,7 @@ static int __init fsfilt_ext3_init(void)
                 GOTO(out, rc = -ENOMEM);
         }
 
-        rc = fsfilt_register_fs_type(&fsfilt_ext3_fs_ops);
+        rc = fsfilt_register_ops(&fsfilt_ext3_fs_ops);
 
         if (rc)
                 kmem_cache_destroy(fcb_cache);
@@ -308,7 +308,7 @@ static void __exit fsfilt_ext3_exit(void)
 {
         int rc;
 
-        fsfilt_unregister_fs_type("ext3");
+        fsfilt_unregister_ops(&fsfilt_ext3_fs_ops);
         rc = kmem_cache_destroy(fcb_cache);
 
         if (rc || fcb_cache_count) {

@@ -51,8 +51,10 @@ struct fsfilt_operations {
         int     (* fs_statfs)(struct super_block *sb, struct statfs *sfs);
 };
 
-extern int fsfilt_register_fs_type(struct fsfilt_operations *op);
-extern void fsfilt_unregister_fs_type(const char *name);
+extern int fsfilt_register_ops(struct fsfilt_operations *fs_ops);
+extern void fsfilt_unregister_ops(struct fsfilt_operations *fs_ops);
+extern struct fsfilt_operations *fsfilt_get_ops(char *type);
+extern void fsfilt_put_ops(struct fsfilt_operations *fs_ops);
 
 #define FSFILT_OP_UNLINK         1
 #define FSFILT_OP_RMDIR          2
@@ -130,9 +132,6 @@ static inline int fsfilt_statfs(struct obd_device *obd, struct super_block *fs,
 {
         return obd->obd_fsops->fs_statfs(fs, sfs);
 }
-
-extern struct fsfilt_operations *fsfilt_get_ops(char *type);
-extern void fsfilt_put_ops(struct fsfilt_operations *fs_ops);
 
 #endif /* __KERNEL__ */
 

@@ -28,28 +28,28 @@ static struct fsfilt_operations *fsfilt_search_type(const char *type)
         return NULL;
 }
 
-int fsfilt_register_type(struct fsfilt_operations *ops)
+int fsfilt_register_ops(struct fsfilt_operations *fs_ops)
 {
         struct fsfilt_operations *found;
 
         /* lock fsfilt_types list */
-        if ((found = fsfilt_search_type(ops->fs_type))) {
-                if (found != ops) {
+        if ((found = fsfilt_search_type(fs_ops->fs_type))) {
+                if (found != fs_ops) {
                         CERROR("different operations for type %s\n",
-			       ops->fs_type);
+			       fs_ops->fs_type);
                         /* unlock fsfilt_types list */
                         RETURN(-EEXIST);
                 }
         } else {
 		MOD_INC_USE_COUNT;
-		list_add(&ops->fs_list, &fsfilt_types);
+		list_add(&fs_ops->fs_list, &fsfilt_types);
 	}
 
 	/* unlock fsfilt_types list */
         return 0;
 }
 
-void fsfilt_unregister_type(const char *type)
+void fsfilt_unregister_ops(struct fsfilt_operations *fs_ops)
 {
         struct list_head *p;
 
@@ -57,8 +57,8 @@ void fsfilt_unregister_type(const char *type)
         list_for_each(p, &fsfilt_types) {
 		struct fsfilt_operations *found;
 
-                found = list_entry(p, struct fsfilt_operations, fs_list);
-                if (!strcmp(found->fs_type, type)) {
+                found = list_entry(p, typeof(*found), fs_list);
+                if (found == fs_ops) {
                         list_del(p);
                         MOD_DEC_USE_COUNT;
                         break;
@@ -104,7 +104,7 @@ void fsfilt_put_ops(struct fsfilt_operations *fs_ops)
 }
 
 
-EXPORT_SYMBOL(fsfilt_register_fs_type);
-EXPORT_SYMBOL(fsfilt_unregister_fs_type);
+EXPORT_SYMBOL(fsfilt_register_ops);
+EXPORT_SYMBOL(fsfilt_unregister_ops);
 EXPORT_SYMBOL(fsfilt_get_ops);
 EXPORT_SYMBOL(fsfilt_put_ops);
