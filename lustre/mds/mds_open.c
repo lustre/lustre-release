@@ -739,7 +739,7 @@ int mds_lock_new_child(struct obd_device *obd, struct inode *inode,
         else if (child_lockh == &lockh)
                 ldlm_lock_decref(child_lockh, LCK_EX);
 
-        return rc;
+        RETURN(rc);
 }
 
 int mds_open(struct mds_update_record *rec, int offset,
@@ -985,7 +985,7 @@ int mds_mfd_close(struct ptlrpc_request *req, struct obd_device *obd,
         struct mds_obd *mds = &obd->u.mds;
         struct inode *pending_dir = mds->mds_pending_dir->d_inode;
         void *handle = NULL;
-        struct mds_body *request_body = NULL, *reply_body;
+        struct mds_body *request_body = NULL, *reply_body = NULL;
         struct dentry_params dp;
         ENTRY;
 
