@@ -31,33 +31,31 @@ extern int request_in_callback(ptl_event_t *ev);
 static int ptlrpc_check_event(struct ptlrpc_service *svc,
                               struct ptlrpc_thread *thread, ptl_event_t *event)
 {
-        int rc = 0;
+        int rc;
         ENTRY;
 
         spin_lock(&svc->srv_lock);
+
         if (thread->t_flags & SVC_STOPPING)
                 GOTO(out, rc = 1);
 
         LASSERT ((thread->t_flags & SVC_EVENT) == 0);
+        LASSERT (ptl_is_valid_handle (&svc->srv_eq_h));
 
-        if (ptl_is_valid_handle(&svc->srv_eq_h)) {
-                int err;
-                err = PtlEQGet(svc->srv_eq_h, event);
-
-                if (err == PTL_OK) {
-                        thread->t_flags |= SVC_EVENT;
-                        GOTO(out, rc = 1);
-                }
-
-                if (err != PTL_EQ_EMPTY) {
-                        CERROR("BUG: PtlEQGet returned %d\n", err);
-                        LBUG();
-                }
-
+        rc = PtlEQGet(svc->srv_eq_h, event);
+        switch (rc)
+        {
+        case PTL_OK:
+                thread->t_flags |= SVC_EVENT;
+                GOTO(out, rc = 1);
+                
+        case PTL_EQ_EMPTY:
                 GOTO(out, rc = 0);
+                
+        default:
+                CERROR("BUG: PtlEQGet returned %d\n", rc);
+                LBUG();
         }
-
-        EXIT;
  out:
         spin_unlock(&svc->srv_lock);
         return rc;
