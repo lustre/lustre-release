@@ -124,8 +124,8 @@ typedef struct {
 
 #define PORTALS_PROTO_MAGIC                0xeebc0ded
 
-#define PORTALS_PROTO_VERSION_MAJOR        0
-#define PORTALS_PROTO_VERSION_MINOR        3
+#define PORTALS_PROTO_VERSION_MAJOR        1
+#define PORTALS_PROTO_VERSION_MINOR        0
 
 typedef struct {
         long recv_count, recv_length, send_count, send_length, drop_count,
