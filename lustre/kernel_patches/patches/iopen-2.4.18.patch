@@ -396,10 +396,10 @@
  #define EXT3_MOUNT_UPDATE_JOURNAL	0x1000	/* Update the journal format */
  #define EXT3_MOUNT_NO_UID32		0x2000  /* Disable 32-bit UIDs */
  #define EXT3_MOUNT_INDEX		0x4000  /* Enable directory index */
-+#define EXT3_MOUNT_IOPEN                0x8000  /* Allow access via iopen */
-+#define EXT3_MOUNT_IOPEN_NOPRIV        0x10000  /* Make iopen world-readable */
++#define EXT3_MOUNT_IOPEN		0x8000	/* Allow access via iopen */
++#define EXT3_MOUNT_IOPEN_NOPRIV		0x10000	/* Make iopen world-readable */
+ #define EXT3_MOUNT_ASYNCDEL		0x20000	/* Delayed deletion */
  
  /* Compatibility, for having both ext2_fs.h and ext3_fs.h included at once */
- #ifndef _LINUX_EXT2_FS_H
 
 _
