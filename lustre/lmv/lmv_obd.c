@@ -563,11 +563,6 @@ static int lmv_setup(struct obd_device *obd, obd_count len, void *buf)
                 RETURN(-EINVAL);
         }
 
-        rc = obd_llog_init(obd, &obd->obd_llogs, tgt_obd, 0, NULL);
-        if (rc) {
-                CERROR("failed to setup llogging subsystems\n");
-        }
-
         RETURN(rc);
 }
 
