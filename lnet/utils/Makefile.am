@@ -28,6 +28,7 @@ endif
 endif
 
 acceptor_SOURCES = acceptor.c
+acceptor_LDADD = $(LIBWRAP)
 
 wirecheck_SOURCES = wirecheck.c
 
