@@ -294,6 +294,10 @@ static int fsfilt_ext3_setattr(struct dentry *dentry, void *handle,
         /* Don't allow setattr to change file type */
         iattr->ia_mode = (inode->i_mode & S_IFMT)|(iattr->ia_mode & ~S_IFMT);
 
+        /* We set these flags on the client, but have already checked perms
+         * so don't confuse inode_change_ok. */
+        iattr->ia_valid &= ~(ATTR_MTIME_SET | ATTR_ATIME_SET);
+
         if (inode->i_op->setattr) {
                 rc = inode->i_op->setattr(dentry, iattr);
         } else {
@@ -648,8 +652,6 @@ static struct fsfilt_operations fsfilt_ext3_ops = {
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 
-#warning "fsfilt_ext3_init() and fsfilt_ext3_exit() aren't called on 2.6. MUST be fixed"
-
 static int __init fsfilt_ext3_init(void)
 {
         int rc;
@@ -692,6 +694,10 @@ MODULE_LICENSE("GPL");
 
 module_init(fsfilt_ext3_init);
 module_exit(fsfilt_ext3_exit);
+
+#else
+
+#warning "fsfilt_ext3_init() and fsfilt_ext3_exit() aren't called on 2.6. MUST be fixed"
 
 #endif
 
