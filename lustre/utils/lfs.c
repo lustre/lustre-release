@@ -56,19 +56,21 @@ static int lfs_catinfo(int argc, char **argv);
 /* all avaialable commands */
 command_t cmdlist[] = {
         {"setstripe", lfs_setstripe, 0,
-         "blah...\n"
+         "To create a new file with a specific striping pattern.\n"
          "usage: setstripe <filename> <stripe size> <stripe start> <stripe count>\n"
          "\tstripe size:  Number of bytes in each stripe (0 default)\n"
          "\tstripe start: OST index of first stripe (-1 default)\n"
          "\tstripe count: Number of OSTs to stripe over (0 default)"},
         {"find", lfs_find, 0,
-         "blah...\n"
+         "To list the extended attributes for a given filename or files in a directory "
+         "or recursively for all files in a directory tree.\n"
          "usage: find [--obd <uuid>] [--quiet | --verbose] [--recursive] <dir|file> ..."},
         {"getstripe", lfs_getstripe, 0,
-         "blah...\n"
+         "To list the striping pattern for given filename.\n"
          "usage:getstripe <filename>"},
         {"check", lfs_check, 0, 
-         "blah...\n"
+         "Display the status of MDS or OSTs (as specified in the command) "
+         "or all the servers (MDS and OSTs).\n"
          "usage: check <osts|mds|servers>"},
         {"catinfo", lfs_catinfo, 0,
          "Show information of specified type logs.\n"
