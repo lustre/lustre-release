@@ -16,7 +16,7 @@ EXTRA_PROGRAMS = ptlrpc
 
 ptlrpc_SOURCES = recover.c connection.c ptlrpc_module.c events.c service.c \
 client.c niobuf.c pack_generic.c lproc_ptlrpc.c pinger.c ptlrpc_lib.c \
-ptlrpc_internal.h
+ptlrpc_internal.h recov_thread.c
 endif
 
 include $(top_srcdir)/Rules
