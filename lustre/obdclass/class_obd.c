@@ -88,6 +88,8 @@ unsigned int obd_timeout = 100;
 char obd_lustre_upcall[128] = "DEFAULT"; /* or NONE or /full/path/to/upcall  */
 unsigned int obd_sync_filter; /* = 0, don't sync by default */
 
+DECLARE_WAIT_QUEUE_HEAD(obd_race_waitq);
+
 #ifdef __KERNEL__
 /*  opening /dev/obd */
 static int obd_class_open(struct inode * inode, struct file * file)
@@ -375,6 +377,7 @@ void *obd_psdev = NULL;
 EXPORT_SYMBOL(obd_dev);
 EXPORT_SYMBOL(obdo_cachep);
 EXPORT_SYMBOL(obd_fail_loc);
+EXPORT_SYMBOL(obd_race_waitq);
 EXPORT_SYMBOL(obd_timeout);
 EXPORT_SYMBOL(obd_lustre_upcall);
 EXPORT_SYMBOL(obd_sync_filter);

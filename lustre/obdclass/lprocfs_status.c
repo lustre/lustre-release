@@ -138,7 +138,7 @@ void lprocfs_remove(struct proc_dir_entry *root)
         LASSERT(root != NULL);
         parent = root->parent;
         LASSERT(parent != NULL);
-
+ 
         while (1) {
                 while (temp->subdir != NULL)
                         temp = temp->subdir;

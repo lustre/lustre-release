@@ -129,7 +129,7 @@ Release: %{release}%{?targetboard:%{targetboard}}%{?debuglevel_1:.dbg}
 %define KVERREL %{PACKAGE_VERSION}-%{kextraver}%{?targetboard:%{targetboard}}%{?debuglevel_1:.dbg}
 License: GPL
 Group: System Environment/Kernel
-ExclusiveArch: %{all_x86} x86_64
+ExclusiveArch: %{all_x86} x86_64 ia64
 ExclusiveOS: Linux
 Obsoletes: kernel-modules, kernel-sparc
 Provides: kernel = %{version}

@@ -54,11 +54,14 @@ enum {
         OBD_SYNCFILTER,         /* XXX temporary, as we play with sync osts.. */
 };
 
+int proc_fail_loc(ctl_table *table, int write, struct file *filp,
+                  void *buffer, size_t *lenp);
+
 static ctl_table obd_table[] = {
         {OBD_FAIL_LOC, "fail_loc", &obd_fail_loc, sizeof(int), 0644, NULL,
                 &proc_dointvec},
         {OBD_TIMEOUT, "timeout", &obd_timeout, sizeof(int), 0644, NULL,
-                &proc_dointvec},
+                &proc_fail_loc},
         /* XXX need to lock so we avoid update races with recovery upcall! */
         {OBD_UPCALL, "upcall", obd_lustre_upcall, 128, 0644, NULL,
                 &proc_dostring, &sysctl_string },
@@ -87,4 +90,16 @@ void obd_sysctl_clean (void)
                 unregister_sysctl_table(obd_table_header);
         obd_table_header = NULL;
 #endif
+}
+
+int proc_fail_loc(ctl_table *table, int write, struct file *filp,
+                  void *buffer, size_t *lenp)
+{
+        int rc;
+        int old_fail_loc = obd_fail_loc;
+
+        rc = proc_dointvec(table,write,filp,buffer,lenp);
+        if (old_fail_loc != obd_fail_loc)
+                wake_up(&obd_race_waitq);
+        return rc;
 }

@@ -1,5 +1,5 @@
 # lustre.spec
-%define version 1.2.0.4
+%define version 1.2.0.5
 %define kversion @LINUXRELEASE@
 %define linuxdir @LINUX@
 %define enable_doc @ENABLE_DOC@
