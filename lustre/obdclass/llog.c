@@ -94,6 +94,25 @@ int llog_cancel_rec(struct llog_handle *loghandle, int index)
         RETURN(rc);
 }
 
+#if 0
+int filter_log_cancel(struct obd_export *exp, struct lov_stripe_md *lsm,
+                      int num_cookies, struct llog_cookie *logcookies,
+                      int flags)
+{
+        struct obd_device *obd = exp->exp_obd;
+        struct obd_run_ctxt saved;
+        int rc;
+        ENTRY;
+
+        push_ctxt(&saved, &obd->u.filter.fo_ctxt, NULL);
+        rc = llog_cancel_records(obd->u.filter.fo_catalog, num_cookies,
+                                 logcookies);
+        pop_ctxt(&saved, &obd->u.filter.fo_ctxt, NULL);
+
+        RETURN(rc);
+}
+#endif
+
 
 int llog_process_log(struct llog_handle *loghandle, llog_cb_t cb, void *data)
 {

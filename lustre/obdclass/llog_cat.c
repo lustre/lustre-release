@@ -76,10 +76,8 @@ struct llog_handle *llog_cat_new_log(struct llog_handle *cathandle,
                 GOTO(out_destroy, rc = -ENOSPC);
         }
 
-        CDEBUG(D_HA, "new recovery log "LPX64":%x catalog index %u\n",
-               loghandle->lgh_cookie.lgc_lgl.lgl_oid,
-               loghandle->lgh_cookie.lgc_lgl.lgl_ogen, index);
-        loghandle->lgh_cookie.lgc_index = index;
+        CDEBUG(D_HA, "new recovery log "LPX64": catalog index %u\n",
+               loghandle->lgh_id.lgl_oid, index);
 
         rec.lid_hdr.lrh_len = sizeof(rec);
         rec.lid_hdr.lrh_index = index;
@@ -88,15 +86,12 @@ struct llog_handle *llog_cat_new_log(struct llog_handle *cathandle,
         rec.lid_tail.lrt_len = sizeof(rec);
         rec.lid_tail.lrt_index = index;
 
-        rc = llog_write_record(cathandle, &rec, loghandle->lgh_my_cat_cookie, 
-                               index);
+        /* update the catalog: header and record */
+        rc = llog_write_rec(cathandle, &rec, loghandle->lgh_my_cat_cookie, 1,
+                            NULL, index);
         if (rc < 0) {
                 GOTO(out_destroy, rc);
         }
-
-        rc =  llog_write_record(loghandle, )
-
-                
 
         cathandle->lgh_current = loghandle;
         list_add_tail(&loghandle->lgh_list, &cathandle->lgh_list);
