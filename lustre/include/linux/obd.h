@@ -424,14 +424,14 @@ struct recovd_obd {
 };
 
 struct ost_obd {
-        spinlock_t              ost_lock;
+        spinlock_t             ost_lock;
         struct ptlrpc_service *ost_service;
         struct ptlrpc_service *ost_create_service;
         struct obd_service_time ost_stimes[6];
 };
 
 struct echo_client_obd {
-        struct obd_export      *ec_exp;   /* the local connection to osc/lov */
+        struct obd_export      *ec_exp;     /* the local connection to osc/lov */
         spinlock_t              ec_lock;
         struct list_head        ec_objects;
         int                     ec_nstripes;
@@ -445,8 +445,18 @@ struct cache_obd {
         char                   *cache_name;
         int                     refcount;
         int                     cache_on;
+        struct semaphore        sem;
 };
 
+struct cm_obd {
+        struct obd_export      *cache_exp;  /* local connection to cache obd */
+        struct obd_export      *master_exp;
+        struct obd_device      *cache_obd;
+        struct obd_device      *master_obd;
+        int                     master_group;
+        struct cmobd_write_service *write_srv;
+};
+        
 struct lov_tgt_desc {
         struct obd_uuid         uuid;
         __u32                   ltd_gen;
@@ -497,16 +507,6 @@ struct niobuf_local {
         int lnb_grant_used;
         int rc;
 };
-
-struct cm_obd {
-        struct obd_device      *master_obd;    /* master lov */
-        struct obd_export      *master_exp;
-        struct obd_device      *cache_obd;     /* cache obdfilter */
-        struct obd_export      *cache_exp;
-        int                     master_group;  /* master group*/
-        struct cmobd_write_service *write_srv;
-};
-        
 
 /* Don't conflict with on-wire flags OBD_BRW_WRITE, etc */
 #define N_LOCAL_TEMP_PAGE 0x10000000

@@ -77,14 +77,21 @@ void cmobd_free_lsm(struct lov_stripe_md **lsmp)
 /* reintegration functions */
 static int cmobd_setattr_reint(struct obd_device *obd, void *rec)
 {
+        struct obdo *oa = (struct obdo*)rec;
         struct cm_obd *cmobd = &obd->u.cm;
-        struct lov_obd *lov = &cmobd->master_obd->u.lov;
         struct obd_export *exp = cmobd->master_exp;
         struct lov_stripe_md *lsm;
-        struct obdo *oa = (struct obdo*)rec;
+        struct lov_obd *lov;
         int rc;
         ENTRY;
         
+        /* 
+         * nevertheless ost is not used anymore and lov should be always present
+         * as a object storage export, using ost is still possible (just
+         * deprecated) and we should make sure here, that this is really
+         * lov. --umka.
+         */
+        lov = &cmobd->master_exp->exp_obd->u.lov;
         rc = cmobd_dummy_lsm(&lsm, lov->desc.ld_tgt_count, oa, 
                              (__u32)lov->desc.ld_default_stripe_size);
         if (rc)
@@ -99,15 +106,22 @@ out:
 
 static int cmobd_create_reint(struct obd_device *obd, void *rec)
 {
+        struct obdo *oa = (struct obdo *)rec;
         struct cm_obd *cmobd = &obd->u.cm;
-        struct lov_obd *lov = &cmobd->master_obd->u.lov;
         struct obd_export *exp = cmobd->master_exp;
         struct lov_stripe_md *lsm;
         struct obd_trans_info oti = { 0 };
-        struct obdo *oa = (struct obdo *)rec;
+        struct lov_obd *lov;
         int rc;
         ENTRY;
          
+        /* 
+         * nevertheless ost is not used anymore and lov should be always present
+         * as a object storage export, using ost is still possible (just
+         * deprecated) and we should make sure here, that this is really
+         * lov. --umka.
+         */
+        lov = &cmobd->master_exp->exp_obd->u.lov;
         rc = cmobd_dummy_lsm(&lsm, lov->desc.ld_tgt_count, oa,
                              (__u32)lov->desc.ld_default_stripe_size);
         if (rc)
@@ -203,14 +217,14 @@ static int cmobd_write_extents(struct obd_device *obd, struct obdo *oa,
                                struct ldlm_extent *extent)
 {
         struct cm_obd *cmobd = &obd->u.cm;
-        struct obd_device *cache = cmobd->cache_obd;
-        struct lov_obd *lov = &cmobd->master_obd->u.lov;
-        struct ldlm_res_id res_id;
-        ldlm_policy_data_t policy;
+        struct obd_device *cache = cmobd->cache_exp->exp_obd;
         struct lustre_handle lockh_src = { 0 };
         struct lustre_handle lockh_dst = { 0 };
+        struct ldlm_res_id res_id;
+        ldlm_policy_data_t policy;
         struct lov_stripe_md *lsm;
         int flags = 0, err, rc = 0;
+        struct lov_obd *lov;
         ENTRY;
 
         /* XXX for debug write replay without smfs and kml */
@@ -227,7 +241,21 @@ static int cmobd_write_extents(struct obd_device *obd, struct obdo *oa,
         if (rc != ELDLM_OK)
                 RETURN(rc);
         
+        /* 
+         * nevertheless ost is not used anymore and lov should be always present
+         * as a object storage export, using ost is still possible (just
+         * deprecated) and we should make sure here, that this is really
+         * lov. --umka.
+         */
+        lov = &cmobd->master_exp->exp_obd->u.lov;
+
         /* construct the pseudo lsm */
+
+        /*
+         * it is not good to access lov fields like @desc directly. This is
+         * layering violation. It should be accessed via some interface method,
+         * like llite does. --umka
+         */
         rc = cmobd_dummy_lsm(&lsm, lov->desc.ld_tgt_count, oa,
                              (__u32)lov->desc.ld_default_stripe_size);
         if (rc)
@@ -260,7 +288,7 @@ out_lock:
 static int cmobd_write_reint(struct obd_device *obd, void *rec)
 {
         struct cm_obd *cmobd = &obd->u.cm;
-        struct obd_device *cache = cmobd->cache_obd;
+        struct obd_device *cache = cmobd->cache_exp->exp_obd;
         struct obdo *oa = (struct obdo *)rec;
         struct ldlm_extent *extent = NULL; 
         unsigned long csb, ino;

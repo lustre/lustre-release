@@ -37,7 +37,7 @@ OSDTYPE=${OSDTYPE:-obdfilter}
 OSTFAILOVER=${OSTFAILOVER:-}
 
 FSTYPE=${FSTYPE:-smfs}
-BACKUP_FSTYPE=${BACKUP_FSTYPE:-ext3}
+BACK_FSTYPE=${BACK_FSTYPE:-ext3}
 
 NETTYPE=${NETTYPE:-tcp}
 NIDTYPE=${NIDTYPE:-$NETTYPE}
@@ -60,27 +60,27 @@ ${LMC} -m $config --add net --node $NODE --nid `h2$NIDTYPE $NODE` \
 --nettype $NETTYPE || exit 1
 
 ${LMC} -m $config --add mds --node $NODE --mds $CACHE_MDS1 --fstype $FSTYPE \
---backfstype $BACKUP_FSTYPE --backdev $MDS1_CACHE_DEV --dev $FSTYPE \
+--backfstype $BACK_FSTYPE --backdev $MDS1_CACHE_DEV --dev $FSTYPE \
 --mountfsoptions $MDS_MOUNT_OPTS --size $MDSSIZE --format || exit 10
 
 if test "x$CLIENTS" = "x2"; then
         ${LMC} -m $config --add mds --node $NODE --mds $CACHE_MDS2 \
-        --fstype $FSTYPE --backfstype $BACKUP_FSTYPE --backdev $MDS2_CACHE_DEV \
+        --fstype $FSTYPE --backfstype $BACK_FSTYPE --backdev $MDS2_CACHE_DEV \
         --dev $FSTYPE --mountfsoptions $MDS_MOUNT_OPTS --size $MDSSIZE --format || exit 10
 fi
 
 if test "x$MODE" = "xmds"; then
         ${LMC} -m $config --add mds --node $NODE --mds $MASTER_MDS1 \
-        --fstype $BACKUP_FSTYPE --dev $MDS1_MASTER_DEV --size $MDSSIZE --format || exit 10
+        --fstype $BACK_FSTYPE --dev $MDS1_MASTER_DEV --size $MDSSIZE --format || exit 10
 else
         ${LMC} -m $config --add lmv --lmv $MASTER_LMV || exit 12
 
         ${LMC} -m $config --add mds --node $NODE --mds $MASTER_MDS1 \
-        --fstype $BACKUP_FSTYPE --dev $MDS1_MASTER_DEV --size $MDSSIZE \
+        --fstype $BACK_FSTYPE --dev $MDS1_MASTER_DEV --size $MDSSIZE \
         --lmv $MASTER_LMV --format || exit 10
 
         ${LMC} -m $config --add mds --node $NODE --mds $MASTER_MDS2 \
-        --fstype $BACKUP_FSTYPE --dev $MDS2_MASTER_DEV --size $MDSSIZE \
+        --fstype $BACK_FSTYPE --dev $MDS2_MASTER_DEV --size $MDSSIZE \
         --lmv $MASTER_LMV --format || exit 10
 fi
 
@@ -93,7 +93,7 @@ else
 fi
 
 ${LMC} -m $config --add ost --ost $MASTER_OST --node $NODE --lov $MASTER_LOV \
---fstype $BACKUP_FSTYPE --dev $OST_MASTER_DEV --size $OSTSIZE  || exit 21
+--fstype $BACK_FSTYPE --dev $OST_MASTER_DEV --size $OSTSIZE  || exit 21
 
 if test "x$MODE" = "xmds"; then
         ${LMC} -m $config --add cmobd --node $NODE --cmobd $CMOBD_MDS1 \

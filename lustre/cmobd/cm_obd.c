@@ -50,31 +50,6 @@ static int cmobd_detach(struct obd_device *obd)
         return lprocfs_obd_detach(obd);
 }
 
-static struct obd_device *cmobd_find_master(struct obd_device *obd,
-                                            struct obd_uuid *uuid)
-{
-        struct obd_device *master_obd;
-
-        CWARN("%s: looking for client obd %s\n",
-              obd->obd_uuid.uuid, uuid->uuid);
-         
-        master_obd = class_find_client_obd(NULL,
-                                           OBD_LOV_DEVICENAME,
-                                           uuid);
-        if (master_obd)
-                return master_obd;
-        
-        master_obd = class_find_client_obd(NULL,
-                                           OBD_LMV_DEVICENAME,
-                                           uuid);
-        if (master_obd)
-                return master_obd;
-        
-        master_obd = class_find_client_obd(NULL, LUSTRE_MDC_NAME, 
-                                           uuid);
-        return master_obd;
-}
-
 static inline int cmobd_lmv_obd(struct obd_device *obd)
 {
         if (!strcmp(obd->obd_type->typ_name, LUSTRE_MDC_NAME) ||
@@ -98,17 +73,41 @@ static void cmobd_init_ea_size(struct obd_device *obd)
         struct cm_obd *cmobd = &obd->u.cm;
         ENTRY;
 
-        /* FIXME-UMKA: here we should also take into account that there is
-         * possible to have few OSTs. */
+        /*
+         * here we should also take into account that there is possible to have
+         * few OSTs. --umka
+         */
         easize = lov_mds_md_size(ost_count);
         cookiesize = ost_count * sizeof(struct llog_cookie);
 
         obd_init_ea_size(cmobd->master_exp, easize, cookiesize);
 
-        cmobd->master_obd->u.cli.cl_max_mds_easize = easize;
-        cmobd->master_obd->u.cli.cl_max_mds_cookiesize = cookiesize;
+        cmobd->master_exp->exp_obd->u.cli.cl_max_mds_easize = easize;
+        cmobd->master_exp->exp_obd->u.cli.cl_max_mds_cookiesize = cookiesize;
         
         EXIT;
+}
+
+static struct obd_device *
+find_master_obd(struct obd_device *obd, struct obd_uuid *uuid)
+{
+        struct obd_device *master;
+
+        CWARN("%s: looking for client obd %s\n",
+              obd->obd_uuid.uuid, uuid->uuid);
+
+        master = class_find_client_obd(NULL, OBD_LOV_DEVICENAME,
+                                       uuid);
+        if (master)
+                return master;
+
+        master = class_find_client_obd(NULL, OBD_LMV_DEVICENAME,
+                                       uuid);
+        if (master)
+                return master;
+
+        return class_find_client_obd(NULL, LUSTRE_MDC_NAME,
+                                     uuid);
 }
 
 static int cmobd_setup(struct obd_device *obd, obd_count len, void *buf)
@@ -121,51 +120,57 @@ static int cmobd_setup(struct obd_device *obd, obd_count len, void *buf)
         int valsize, rc;
         ENTRY;
 
-        if (lcfg->lcfg_inllen1 < 1 || !lcfg->lcfg_inlbuf1) {
-                CERROR("CMOBD setup requires master uuid\n");
+        if (lcfg->lcfg_inllen1 == 0 || lcfg->lcfg_inlbuf1 == NULL) {
+                CERROR("%s: setup requires master device uuid\n", 
+                       obd->obd_name);
                 RETURN(-EINVAL);
         }
-        if (lcfg->lcfg_inllen2 < 1 || !lcfg->lcfg_inlbuf2) {
-                CERROR("CMOBD setup requires cache uuid\n");
+
+        if (lcfg->lcfg_inllen2 == 0 || lcfg->lcfg_inlbuf2 == NULL) {
+                CERROR("%s: setup requires cache device uuid\n",
+                       obd->obd_name);
                 RETURN(-EINVAL);
         }
-        
+
         obd_str2uuid(&master_uuid, lcfg->lcfg_inlbuf1);
         obd_str2uuid(&cache_uuid, lcfg->lcfg_inlbuf2);
 
-        /* FIXME-WANGDI: saving client obds here is not correct as they may
-           become invalid due to refcounter exhausting on cleanup. The prefer
-           way seems to be getting them each time we need them. */
-        cmobd->master_obd = cmobd_find_master(obd, &master_uuid);
-        if (cmobd->master_obd == NULL) {
-                CERROR("Can't find master obd %s\n", &master_uuid.uuid[0]);
-                RETURN(-EINVAL);
-        }
-        
-        cmobd->cache_obd = class_uuid2obd(&cache_uuid);
-        if (cmobd->cache_obd == NULL) {
-                CERROR("Can't find cache obd %s\n", &cache_uuid.uuid[0]);
+        /* getting master obd */
+        cmobd->master_obd = find_master_obd(obd, &master_uuid);
+        if (!cmobd->master_obd) {
+                CERROR("can't find master obd by uuid %s\n",
+                       master_uuid.uuid);
                 RETURN(-EINVAL);
         }
 
+        /* getting cache obd */
+        cmobd->cache_obd = class_uuid2obd(&cache_uuid);
+        if (cmobd->cache_obd == NULL) {
+                CERROR("CMOBD: unable to find obd by uuid: %s\n",
+                       cache_uuid.uuid);
+                RETURN(-EINVAL);
+        }
+
+        /* connecting master */
+        memset(&conn, 0, sizeof(conn));
         rc = obd_connect(&conn, cmobd->master_obd, &obd->obd_uuid, 0);
         if (rc)
                 RETURN(rc);
         cmobd->master_exp = class_conn2export(&conn);
 
+        /* connecting cache */
         memset(&conn, 0, sizeof(conn));
         rc = class_connect(&conn, cmobd->cache_obd, &obd->obd_uuid);
         if (rc)
                 GOTO(put_master, rc);
-
         cmobd->cache_exp = class_conn2export(&conn);
         
-        if (cmobd_lov_obd(cmobd->master_obd)) {
+        if (cmobd_lov_obd(cmobd->master_exp->exp_obd)) {
                 /* for master osc remove the recovery flag. */
                 rc = obd_set_info(cmobd->master_exp, strlen("unrecovery"),
                                   "unrecovery", 0, NULL); 
                 if (rc)
-                        GOTO(put_master, rc);
+                        GOTO(put_cache, rc);
                 
                 rc = cmobd_init_write_srv(obd);
                 if (rc)
@@ -175,41 +180,47 @@ static int cmobd_setup(struct obd_device *obd, obd_count len, void *buf)
                 cmobd->write_srv = NULL;
         }
 
-        if (cmobd_lmv_obd(cmobd->master_obd)) {
-                /* making sure, that both obds are ready. This is especially
-                 * important in the case of using LMV as master. */
+        if (cmobd_lmv_obd(cmobd->master_exp->exp_obd)) {
+                /*
+                 * making sure, that both obds are ready. This is especially
+                 * important in the case of using LMV as master.
+                 */
                 rc = obd_getready(cmobd->master_exp);
                 if (rc) {
-                        CERROR("Can't make %s obd ready.\n",
+                        CERROR("can't get %s obd ready.\n",
                                master_uuid.uuid);
                         GOTO(put_cache, rc);
                 }
         
                 rc = obd_getready(cmobd->cache_exp);
                 if (rc) {
-                        CERROR("Can't make %s obd ready.\n",
+                        CERROR("can't get %s obd ready.\n",
                                cache_uuid.uuid);
                         GOTO(put_cache, rc);
                 }
         
-                /* requesting master obd to have its root inode store cookie to
-                 * be able to save it to local root inode EA. */
+                /*
+                 * requesting master obd to have its root inode store cookie to
+                 * be able to save it to local root inode EA.
+                 */
                 valsize = sizeof(struct lustre_id);
         
                 rc = obd_get_info(cmobd->master_exp, strlen("rootid"),
                                   "rootid", &valsize, &mid);
                 if (rc) {
-                        CERROR("Can't get rootid from master MDS %s, "
+                        CERROR("can't get rootid from master MDS %s, "
                                "err= %d.\n", master_uuid.uuid, rc);
                         GOTO(put_cache, rc);
                 }
 
-                /* getting rootid from cache MDS. It is needed to update local
-                 * (cache) root inode by rootid value from master obd. */
+                /*
+                 * getting rootid from cache MDS. It is needed to update local
+                 * (cache) root inode by rootid value from master obd.
+                 */
                 rc = obd_get_info(cmobd->cache_exp, strlen("rootid"),
                                   "rootid", &valsize, &lid);
                 if (rc) {
-                        CERROR("Can't get rootid from local MDS %s, "
+                        CERROR("can't get rootid from local MDS %s, "
                                "err= %d.\n", cache_uuid.uuid, rc);
                         GOTO(put_cache, rc);
                 }
@@ -218,10 +229,10 @@ static int cmobd_setup(struct obd_device *obd, obd_count len, void *buf)
                 CWARN("storing "DLID4" to local inode "DLID4".\n",
                       OLID4(&mid), OLID4(&lid));
 
-                rc = mds_update_mid(cmobd->cache_obd, &lid,
+                rc = mds_update_mid(cmobd->cache_exp->exp_obd, &lid,
                                     &mid, sizeof(mid));
                 if (rc) {
-                        CERROR("Can't update local root inode by ID "
+                        CERROR("can't update local root inode by ID "
                                "from master MDS %s, err = %d.\n",
                                master_uuid.uuid, rc);
                         GOTO(put_cache, rc);
@@ -233,19 +244,29 @@ put_cache:
         class_disconnect(cmobd->cache_exp, 0);
 put_master:
         obd_disconnect(cmobd->master_exp, 0);
-        RETURN(rc);
+        return rc;
 }
 
 static int cmobd_cleanup(struct obd_device *obd, int flags)
 {
         struct cm_obd *cmobd = &obd->u.cm;
+        int rc;
         ENTRY;
 
         if (cmobd->write_srv)
                 cmobd_cleanup_write_srv(obd);
 
-        class_disconnect(cmobd->cache_exp, 0);
-        obd_disconnect(cmobd->master_exp, 0);
+        rc = obd_disconnect(cmobd->master_exp, flags);
+        if (rc) {
+                CERROR("error disconnecting master, err %d\n",
+                       rc);
+        }
+        
+        rc = class_disconnect(cmobd->cache_exp, flags);
+        if (rc) {
+                CERROR("error disconnecting cache, err %d\n",
+                       rc);
+        }
         
         RETURN(0);
 }
@@ -304,7 +325,7 @@ static int __init cmobd_init(void)
         RETURN(0);
 }
 
-static void /*__exit*/ cmobd_exit(void)
+static void __exit cmobd_exit(void)
 {
         class_unregister_type(LUSTRE_CMOBD_NAME);
         if (kmem_cache_destroy(cmobd_extent_slab) != 0)

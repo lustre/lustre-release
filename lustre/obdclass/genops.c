@@ -271,9 +271,9 @@ struct obd_device *class_uuid2obd(struct obd_uuid *uuid)
    specified, then only the client with that uuid is returned,
    otherwise any client connected to the tgt is returned.
    If tgt_uuid is NULL, the lov with grp_uuid is returned. */
-struct obd_device * class_find_client_obd(struct obd_uuid *tgt_uuid,
-                                          char * typ_name,
-                                          struct obd_uuid *grp_uuid)
+struct obd_device *class_find_client_obd(struct obd_uuid *tgt_uuid,
+                                         char *typ_name,
+                                         struct obd_uuid *grp_uuid)
 {
         int i;
 
@@ -308,7 +308,7 @@ struct obd_device * class_find_client_obd(struct obd_uuid *tgt_uuid,
    searching at *next, and if a device is found, the next index to look
    it is saved in *next. If next is NULL, then the first matching device
    will always be returned. */
-struct obd_device * class_devices_in_group(struct obd_uuid *grp_uuid, int *next)
+struct obd_device *class_devices_in_group(struct obd_uuid *grp_uuid, int *next)
 {
         int i;
 

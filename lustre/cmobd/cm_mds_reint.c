@@ -103,7 +103,7 @@ static int cmobd_reint_setattr(struct obd_device *obd, void *record)
          * #249. Will be fixed later. */
 
         /* converting localstore cookie to remote lustre_id. */
-        rc = mds_read_mid(cmobd->cache_obd, &rec->sa_id,
+        rc = mds_read_mid(cmobd->cache_exp->exp_obd, &rec->sa_id,
                           &rec->sa_id, sizeof(rec->sa_id));
         if (rc) {
                 CERROR("Can't read master MDS store cookie "
@@ -161,7 +161,7 @@ static int cmobd_reint_create(struct obd_device *obd, void *record)
         memset(&rec->cr_replayid, 0, sizeof(rec->cr_replayid));
 
         /* converting local inode store cookie to remote lustre_id. */
-        rc = mds_read_mid(cmobd->cache_obd, &rec->cr_id,
+        rc = mds_read_mid(cmobd->cache_exp->exp_obd, &rec->cr_id,
                           &rec->cr_id, sizeof(rec->cr_id));
         if (rc) {
                 CERROR("Can't read master MDS store cookie "
@@ -196,7 +196,7 @@ static int cmobd_reint_create(struct obd_device *obd, void *record)
                  * inode EA. */
                 body = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*body));
 
-                rc = mds_update_mid(cmobd->cache_obd, &lid,
+                rc = mds_update_mid(cmobd->cache_exp->exp_obd, &lid,
                                     &body->id1, sizeof(body->id1));
         }
 
@@ -225,7 +225,7 @@ static int cmobd_reint_unlink(struct obd_device *obd, void *record)
                 RETURN(-EINVAL);
 
         /* converting local store cookie to remote lustre_id. */
-        rc = mds_read_mid(cmobd->cache_obd, &rec->ul_id1,
+        rc = mds_read_mid(cmobd->cache_exp->exp_obd, &rec->ul_id1,
                           &rec->ul_id1, sizeof(rec->ul_id1));
         if (rc) {
                 CERROR("Can't read master MDS store cookie "
@@ -273,7 +273,7 @@ static int cmobd_reint_link(struct obd_device *obd, void *record)
                 RETURN(-EINVAL);
 
         /* converting local store cookie for both ids to remote lustre_id. */
-        rc = mds_read_mid(cmobd->cache_obd, &rec->lk_id1,
+        rc = mds_read_mid(cmobd->cache_exp->exp_obd, &rec->lk_id1,
                           &rec->lk_id1, sizeof(rec->lk_id1));
         if (rc) {
                 CERROR("Can't read master MDS store cookie "
@@ -281,7 +281,7 @@ static int cmobd_reint_link(struct obd_device *obd, void *record)
                 RETURN(rc);
         }
         
-        rc = mds_read_mid(cmobd->cache_obd, &rec->lk_id2,
+        rc = mds_read_mid(cmobd->cache_exp->exp_obd, &rec->lk_id2,
                           &rec->lk_id2, sizeof(rec->lk_id2));
         if (rc) {
                 CERROR("Can't read master MDS store cookie "
@@ -329,7 +329,7 @@ static int cmobd_reint_rename(struct obd_device *obd, void *record)
                 RETURN(-EINVAL);
         
         /* converting local store cookie for both ids to remote lustre_id. */
-        rc = mds_read_mid(cmobd->cache_obd, &rec->rn_id1,
+        rc = mds_read_mid(cmobd->cache_exp->exp_obd, &rec->rn_id1,
                           &rec->rn_id1, sizeof(rec->rn_id1));
         if (rc) {
                 CERROR("Can't read master MDS store cookie "
@@ -337,7 +337,7 @@ static int cmobd_reint_rename(struct obd_device *obd, void *record)
                 RETURN(rc);
         }
         
-        rc = mds_read_mid(cmobd->cache_obd, &rec->rn_id2,
+        rc = mds_read_mid(cmobd->cache_exp->exp_obd, &rec->rn_id2,
                           &rec->rn_id2, sizeof(rec->rn_id2));
         if (rc) {
                 CERROR("Can't read master MDS store cookie "

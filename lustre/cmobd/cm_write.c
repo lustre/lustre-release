@@ -651,19 +651,26 @@ int cmobd_replay_write(struct obd_device *obd, struct obdo *oa,
                        struct ldlm_extent *ext)
 {
         struct cm_obd *cmobd = &obd->u.cm;
-        struct lov_obd *lov = &cmobd->master_obd->u.lov;
         struct lov_stripe_md *lsm = NULL;
         struct cmobd_extent_set set;
         struct cmobd_extent_info *ex;
         struct l_wait_info lwi = { 0 };
         struct list_head *pos, *n;
         struct cmobd_async_page *cmap;
+        struct lov_obd *lov;
         unsigned long flags;
         obd_count i, buf_count;
         obd_off start;
         int rc = 0;
         ENTRY;
 
+        /* 
+         * nevertheless ost is not used anymore and lov should be always present
+         * as a object storage export, using ost is still possible (just
+         * deprecated) and we should make sure here, that this is really
+         * lov. --umka.
+         */
+        lov = &cmobd->master_exp->exp_obd->u.lov;
         rc = cmobd_dummy_lsm(&lsm, lov->desc.ld_tgt_count, oa,
                              (__u32)lov->desc.ld_default_stripe_size);
         if (rc)

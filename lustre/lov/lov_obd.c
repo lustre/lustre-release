@@ -487,17 +487,17 @@ int lov_detach(struct obd_device *dev)
 
 static int lov_setup(struct obd_device *obd, obd_count len, void *buf)
 {
+        struct lov_obd *lov = &obd->u.lov;
         struct lustre_cfg *lcfg = buf;
         struct lov_desc *desc;
-        struct lov_obd *lov = &obd->u.lov;
         int count;
         ENTRY;
-                                                                                                                                                                                                     
+
         if (lcfg->lcfg_inllen1 < 1) {
                 CERROR("LOV setup requires a descriptor\n");
                 RETURN(-EINVAL);
         }
-                                                                                                                                                                                                     
+
         desc = (struct lov_desc *)lcfg->lcfg_inlbuf1;
         if (sizeof(*desc) > lcfg->lcfg_inllen1) {
                 CERROR("descriptor size wrong: %d > %d\n",
@@ -528,13 +528,13 @@ static int lov_setup(struct obd_device *obd, obd_count len, void *buf)
                        lov->bufsize);
                 RETURN(-EINVAL);
         }
-                                                                                                                                                                                                     
+
         desc->ld_tgt_count = 0;
         desc->ld_active_tgt_count = 0;
         lov->desc = *desc;
         spin_lock_init(&lov->lov_lock);
         sema_init(&lov->lov_llog_sem, 1);
-                                                                                                                                                                                                     
+
         RETURN(0);
 }
 
