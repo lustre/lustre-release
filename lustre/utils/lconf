@@ -1661,7 +1661,7 @@ class MDSDEV(Module):
                         noexec_opt = ('', '-n')
                         ret, out = run (sys.argv[0],
                                         noexec_opt[old_noexec == 1],
-                                        " -v --internal --record --nomod",
+                                        " -v --record --nomod",
                                         "--record_log", client_name,
                                         "--record_device", self.name,
                                         "--node", client_name,
@@ -1676,8 +1676,7 @@ class MDSDEV(Module):
                             for s in out: log("record> ", string.strip(s))
                         ret, out = run (sys.argv[0],
                                         noexec_opt[old_noexec == 1],
-                                        "--cleanup",
-                                        "-v --internal --record --nomod",
+                                        "--cleanup -v --record --nomod",
                                         "--record_log", client_name + "-clean",
                                         "--record_device", self.name,
                                         "--node", client_name,
@@ -2472,7 +2471,7 @@ def doHost(lustreDB, hosts):
         if node_db:
             break
     if not node_db:
-        panic('Node entry '+hosts[0]+' not found in config file.')
+        panic('No host entry found.')
 
     local_node_name = node_db.get_val('name', 0)
     is_router = node_db.get_val_int('router', 0)
@@ -2481,18 +2480,7 @@ def doHost(lustreDB, hosts):
     timeout = node_db.get_val_int('timeout', 0)
     ptldebug = node_db.get_val('ptldebug', '')
     subsystem = node_db.get_val('subsystem', '')
-
-    if not config.internal:
-        node_nid_name = node_db.get_val('nid', '')
-        node_nid_ip = socket.gethostbyname(node_nid_name)
     
-        if node_nid_ip == '127.0.0.1':
-            if node_nid_name != 'localhost':
-                print "Fatal error:\n"
-                print "This node is configured with a network ID (nid) of",node_nid_name,", but that hostname resolves to the loopback address (127.0.0.1).  Without the real IP address, Lustre can't tell its peers how to contact it.  If you are trying to run all services on a single node, for testing, then specify a nid of \"localhost\".\n"
-                print "This is probably caused by the wrong entry in /etc/hosts.  To fix this, edit /etc/hosts and either remove the entry for",node_nid_name,", or change it to the correct IP address.\n"
-                panic('Aborting due to invalid node IP.')
-
     find_local_clusters(node_db)
     if not is_router:
         find_local_routes(lustreDB)
@@ -2741,8 +2729,7 @@ def verify_devpath(devpath, name):
 
     else:
         for line in out:
-            res = re.compile("^Filesystem.features:.*journal_dev.").search(line)
-            if res:
+            res = re.compile("^Filesystem.features:.*journal_dev.").search(line)            if res:
                 panic("The back-end storage device \""+devpath+"\", specified for Lustre service \""+name+"\", contains an ext3 external journal, instead of a proper ext3 file system.\n\nIt's possible that you meant to specify a different device, or that you meant to reformat this device before using it.  If you are intending to use a file system with an external journal, then the Lustre configuration file should point to the device that contains the main ext3 file system, not the journal device.\n");
 
 
@@ -2776,7 +2763,6 @@ INTPARAM = Lustre.Options.INTPARAM
 PARAMLIST = Lustre.Options.PARAMLIST
 lconf_options = [
     ('verbose,v', "Print system commands as they are run"),
-    ('internal', "Internal use ONLY"),
     ('ldapurl',"LDAP server URL, eg. ldap://localhost", PARAM),
     ('config', "Cluster config name used for LDAP query", PARAM),
     ('select', "service=nodeA,service2=nodeB ", PARAMLIST),
