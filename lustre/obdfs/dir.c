@@ -537,6 +537,7 @@ int ext2_make_empty(struct inode *inode, struct inode *parent)
 	struct ext2_dir_entry_2 * de;
 	char *base;
 	int err;
+	ENTRY;
 
 	if (!page)
 		return -ENOMEM;
@@ -564,6 +565,7 @@ int ext2_make_empty(struct inode *inode, struct inode *parent)
 fail:
 	UnlockPage(page);
 	page_cache_release(page);
+	ENTRY;
 	return err;
 }
 

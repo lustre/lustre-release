@@ -93,7 +93,8 @@ modulefsdir = @modulefsdir@
 MODULE = obdfs
 modulefs_DATA = obdfs.o
 EXTRA_PROGRAMS = obdfs
-obdfs_SOURCES = flushd.c rw.c file.c dir.c sysctl.c super.c namei.c symlink.c
+# obdfs_SOURCES = flushd.c rw.c file.c dir.c sysctl.c super.c namei.c symlink.c
+obdfs_SOURCES = rw.c file.c dir.c sysctl.c super.c namei.c symlink.c
 mkinstalldirs = $(SHELL) $(top_srcdir)/mkinstalldirs
 CONFIG_CLEAN_FILES = 
 
@@ -101,8 +102,7 @@ DEFS = @DEFS@ -I. -I$(srcdir)
 CPPFLAGS = @CPPFLAGS@
 LDFLAGS = @LDFLAGS@
 LIBS = @LIBS@
-obdfs_OBJECTS =  flushd.o rw.o file.o dir.o sysctl.o super.o namei.o \
-symlink.o
+obdfs_OBJECTS =  rw.o file.o dir.o sysctl.o super.o namei.o symlink.o
 obdfs_LDADD = $(LDADD)
 obdfs_DEPENDENCIES = 
 obdfs_LDFLAGS = 
@@ -119,8 +119,8 @@ DISTFILES = $(DIST_COMMON) $(SOURCES) $(HEADERS) $(TEXINFOS) $(EXTRA_DIST)
 
 TAR = gtar
 GZIP_ENV = --best
-DEP_FILES =  .deps/dir.P .deps/file.P .deps/flushd.P .deps/namei.P \
-.deps/rw.P .deps/super.P .deps/symlink.P .deps/sysctl.P
+DEP_FILES =  .deps/dir.P .deps/file.P .deps/namei.P .deps/rw.P \
+.deps/super.P .deps/symlink.P .deps/sysctl.P
 SOURCES = $(obdfs_SOURCES)
 OBJECTS = $(obdfs_OBJECTS)
 

@@ -228,8 +228,8 @@ static struct super_block * obdfs_read_super(struct super_block *sb,
         }
         
         CDEBUG(D_INFO, "\n"); 
-        sb->s_blocksize = blocksize;
-        sb->s_blocksize_bits = (unsigned char)blocksize_bits;
+        sb->s_blocksize = PAGE_SIZE;
+        sb->s_blocksize_bits = (unsigned char)PAGE_SHIFT;
         sb->s_magic = OBDFS_SUPER_MAGIC;
         sb->s_op = &obdfs_super_operations;
 
@@ -295,7 +295,7 @@ static void obdfs_put_super(struct super_block *sb)
         sb->s_dev = 0;
         
         sbi = (struct obdfs_sb_info *) &sb->u.generic_sbp;
-        obdfs_flush_reqs(&sbi->osi_inodes, ~0UL);
+        //obdfs_flush_reqs(&sbi->osi_inodes, ~0UL);
 
         OPS(sb,disconnect)(ID(sb));
         list_del(&sbi->osi_list);
@@ -307,7 +307,7 @@ static void obdfs_put_super(struct super_block *sb)
 } /* obdfs_put_super */
 
 
-void obdfs_do_change_inode(struct inode *inode, int mask)
+void obdfs_do_change_inode(struct inode *inode, int valid)
 {
         struct obdo *oa;
         int err;
@@ -325,7 +325,7 @@ void obdfs_do_change_inode(struct inode *inode, int mask)
                 return;
         }
 
-        oa->o_valid = OBD_MD_FLNOTOBD & (~mask);
+        oa->o_valid = OBD_MD_FLNOTOBD & (valid | OBD_MD_FLID);
         obdfs_from_inode(oa, inode);
         err = IOPS(inode, setattr)(IID(inode), oa);
 
@@ -342,7 +342,7 @@ void obdfs_change_inode(struct inode *inode, int mask)
 }
 
 
-
+extern void write_inode_pages(struct inode *);
 /* This routine is called from iput() (for each unlink on the inode).
  * We can't put this call into delete_inode() since that is called only
  * when i_count == 0, and we need to keep a reference on the inode while
@@ -351,19 +351,20 @@ void obdfs_change_inode(struct inode *inode, int mask)
 static void obdfs_put_inode(struct inode *inode)
 {
         ENTRY;
-        if (inode->i_nlink) {
+        if (inode->i_nlink && (atomic_read(&inode->i_count) == 1)) {
+		write_inode_pages(inode);
                 EXIT;
                 return;
         }
 
-        obdfs_dequeue_pages(inode);
+        //obdfs_dequeue_pages(inode);
         EXIT;
 } /* obdfs_put_inode */
 
 
 static void obdfs_delete_inode(struct inode *inode)
 {
-	obdfs_do_change_inode(inode, 0);
+	obdfs_do_change_inode(inode, ~0);
 	clear_inode(inode); 
 }
 #if 0
@@ -404,7 +405,7 @@ static void obdfs_delete_inode(struct inode *inode)
 #endif
 
 
-int inode_copy_attr(struct inode * inode, struct iattr * attr)
+static int obdfs_attr2inode(struct inode * inode, struct iattr * attr)
 {
 	unsigned int ia_valid = attr->ia_valid;
 	int error = 0;
@@ -452,7 +453,7 @@ int obdfs_setattr(struct dentry *de, struct iattr *attr)
                 return -ENOMEM;
         }
 
-	inode_copy_attr(inode, attr);
+	obdfs_attr2inode(inode, attr);
         oa->o_id = inode->i_ino;
         obdo_from_iattr(oa, attr);
         err = IOPS(inode, setattr)(IID(inode), oa);
@@ -549,23 +550,15 @@ int init_obdfs(void)
         obdfs_sysctl_init();
 
         INIT_LIST_HEAD(&obdfs_super_list);
-        err = obdfs_init_pgrqcache();
-        if (err)
-                return err;
+        //err = obdfs_init_pgrqcache();
+        //if (err)
+	//return err;
 
-        obdfs_flushd_init();
+	//obdfs_flushd_init();
         return register_filesystem(&obdfs_fs_type);
 }
 
 
-struct address_space_operations obdfs_aops = {
-        readpage: obdfs_readpage,
-        writepage: obdfs_writepage,
-        sync_page: block_sync_page,
-        prepare_write: obdfs_prepare_write, 
-        commit_write: obdfs_commit_write,
-        bmap: NULL
-};
 
 
 #ifdef MODULE
@@ -578,9 +571,9 @@ void cleanup_module(void)
 {
         ENTRY;
 
-        obdfs_flushd_cleanup();
+        //obdfs_flushd_cleanup();
         obdfs_sysctl_clean();
-        obdfs_cleanup_pgrqcache();
+        //obdfs_cleanup_pgrqcache();
         unregister_filesystem(&obdfs_fs_type);
         CDEBUG(D_MALLOC, "OBDFS mem used %ld\n", obd_memory);
         EXIT;

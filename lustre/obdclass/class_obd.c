@@ -181,31 +181,6 @@ static int getdata(int len, void **data)
         return 0;
 }
 
-
-static int obd_devicename_from_path(obd_devicename* whoami, 
-				    uint32_t klen,
-				    char* kname, char *user_path)
-{
-	int err;
-	struct nameidata nd;
-	whoami->len = klen;
-	whoami->name = kname;
-
-#if (LINUX_VERSION_CODE <=  0x20403)
-
- 	err = user_path_walk(user_path, &nd);
- 	if (!err) {
-		CDEBUG(D_INFO, "found dentry for %s\n", kname);
- 		whoami->dentry = nd.dentry;
- 		path_release(&nd);
- 	}
- 	return err;
-#endif 
-	return 0;
-}
-
-
-
 /* to control /dev/obdNNN */
 static int obd_class_ioctl (struct inode * inode, struct file * filp, 
                             unsigned int cmd, unsigned long arg)
@@ -241,9 +216,14 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 /* have we attached a type to this device */
                 if ( obddev->obd_type || 
                      (obddev->obd_flags & OBD_ATTACHED) ){
+			char *name;
+			if (obddev->obd_type->typ_name) 
+				name = obddev->obd_type->typ_name; 
+			else 
+				name = "";
                         CDEBUG(D_IOCTL,
                                "OBD Device %d already attached to type %s.\n",
-                               dev, obddev->obd_type->typ_name);
+                               dev, name);
                         EXIT;
                         return -EBUSY;
                 }
@@ -353,6 +333,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
         case OBD_IOC_SETUP: {
                 struct ioc_setup {
                         int setup_datalen;
+			int setup_rdev;
                         void *setup_data;
                 } *setup;
 		char *user_path;
@@ -376,8 +357,6 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                         return -EBUSY;
                 }
 
-
-
 		/* get main structure */
 		err = copy_from_user(setup, (void *) arg, sizeof(*setup));
 		if (err) {
@@ -392,20 +371,12 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                         EXIT;
                         return err;
                 }
+		obddev->obd_rdev = setup->setup_rdev;
+		obddev->obd_user_name = user_path;
 
-		err = obd_devicename_from_path(&(obddev->obd_fsname),
-					       setup->setup_datalen,
-					       (char*) setup->setup_data, 
-					       user_path);
-		if (err) {
-		  memset(&(obddev->obd_fsname), 0, sizeof(obd_devicename));
-		  EXIT;
-		  return err;
-		}
-		
                 /* do the setup */
-                CDEBUG(D_PSDEV, "Setup %d, type %s\n", dev, 
-                       obddev->obd_type->typ_name);
+                CDEBUG(D_PSDEV, "Setup %d, type %s device %x\n", dev, 
+                       obddev->obd_type->typ_name, setup->setup_rdev);
                 if ( !OBT(obddev) || !OBP(obddev, setup) ) {
                         obddev->obd_type->typ_refcnt++;
                         CDEBUG(D_PSDEV, "Dev %d refcount now %d\n",
@@ -506,6 +477,10 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 
                 OBP(obddev, disconnect)(&conn);
                 return 0;
+		
+	case OBD_IOC_DEC_USE_COUNT:
+		MOD_DEC_USE_COUNT;
+		return 0;
 
         case OBD_IOC_SYNC: {
                 struct oic_range_s *range = tmp_buf;

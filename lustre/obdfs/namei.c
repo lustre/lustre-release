@@ -288,6 +288,7 @@ static int obdfs_mkdir(struct inode * dir, struct dentry * dentry, int mode)
 {
 	struct inode * inode;
 	int err = -EMLINK;
+	ENTRY;
 
 	if (dir->i_nlink >= EXT2_LINK_MAX)
 		goto out;
@@ -315,14 +316,17 @@ static int obdfs_mkdir(struct inode * dir, struct dentry * dentry, int mode)
 
 	d_instantiate(dentry, inode);
 out:
+	EXIT;
 	return err;
 
 out_fail:
 	ext2_dec_count(inode);
 	ext2_dec_count(inode);
 	iput(inode);
+	EXIT;
 out_dir:
 	ext2_dec_count(dir);
+	EXIT;
 	goto out;
 }
 

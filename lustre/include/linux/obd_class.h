@@ -120,6 +120,8 @@ struct obd_device {
         int obd_flags;
         int obd_refcnt; 
         obd_devicename obd_fsname; 
+	kdev_t obd_rdev;
+	char * obd_user_name;
 	struct proc_dir_entry *obd_proc_entry;
         int obd_multi_count;
         struct obd_conn obd_multi_conn[MAX_MULTI];
@@ -344,6 +346,9 @@ static __inline__ void obdo_cpy_md(struct obdo *dst, struct obdo *src)
 
         dst->o_valid |= src->o_valid;
 }
+
+/* WARNING: the file systems must take care not to tinker with
+   attributes they don't manage (such as blocks). */
 
 static __inline__ void obdo_from_inode(struct obdo *dst, struct inode *src)
 {

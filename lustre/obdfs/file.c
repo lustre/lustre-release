@@ -37,6 +37,7 @@
 #include <linux/obd_support.h>
 #include <linux/obdfs.h>
 
+extern int obdfs_setattr(struct dentry *de, struct iattr *attr);
 void obdfs_change_inode(struct inode *inode);
 
 static inline void obdfs_remove_suid(struct inode *inode)
@@ -50,7 +51,8 @@ static inline void obdfs_remove_suid(struct inode *inode)
         mode &= inode->i_mode;
         if (mode && !capable(CAP_FSETID)) {
                 inode->i_mode &= ~mode;
-                obdfs_change_inode(inode);
+		// XXX careful here - we cannot change the size
+                //obdfs_change_inode(inode);
         }
 }
 
@@ -66,23 +68,35 @@ obdfs_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 
         retval = generic_file_write(file, buf, count, ppos);
         CDEBUG(D_INFO, "Wrote %d\n", retval);
+
+	/* update mtime/ctime/atime here, NOT size */
         if (retval > 0) {
-                struct inode *inode = file->f_dentry->d_inode;
-                obdfs_remove_suid(inode);
-                inode->i_ctime = inode->i_mtime = CURRENT_TIME;
-                obdfs_change_inode(inode);
+		struct iattr attr;
+		attr.ia_valid = ATTR_MTIME | ATTR_CTIME | ATTR_ATIME;
+		attr.ia_mtime = attr.ia_ctime = attr.ia_atime =
+			CURRENT_TIME;
+                obdfs_setattr(file->f_dentry, &attr);
         }
         EXIT;
         return retval;
 }
 
+
+/* XXX this does not need to do anything for data, it _does_ need to
+   call setattr */ 
+int obdfs_fsync(struct file *file, struct dentry *dentry, int data)
+{
+	return 0;
+}
+
 struct file_operations obdfs_file_operations = {
-        read: generic_file_read,      /* read */
-        write: obdfs_file_write,       /* write  */
-        mmap: generic_file_mmap,      /* mmap */
+        read: generic_file_read,
+        write: obdfs_file_write,
+        mmap: generic_file_mmap,
+	fsync: NULL
 };
 
-extern int obdfs_setattr(struct dentry *de, struct iattr *attr);
+
 struct inode_operations obdfs_file_inode_operations = {
         truncate: obdfs_truncate,
 	setattr: obdfs_setattr
