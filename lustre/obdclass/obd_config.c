@@ -112,6 +112,8 @@ int class_attach(struct lustre_cfg *lcfg)
 		RETURN(-EBUSY);
 	}
 
+        LASSERT(obd == (obd_dev + obd->obd_minor));
+
         minor = obd->obd_minor;
         memset(obd, 0, sizeof(*obd));
         obd->obd_minor = minor;
@@ -173,6 +175,8 @@ int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         struct obd_export *exp;
         ENTRY;
 
+        LASSERT(obd == (obd_dev + obd->obd_minor));
+
         /* have we attached a type to this device? */
         if (!obd->obd_attached) {
                 CERROR("Device %d not attached\n", obd->obd_minor);
@@ -195,7 +199,6 @@ int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         
         obd->obd_type->typ_refcnt++;
         obd->obd_set_up = 1;
-        atomic_inc(&obd->obd_refcount);
 
         exp = class_new_export(obd);
         if (exp == NULL) {
@@ -228,6 +231,7 @@ err_cleanup:
 
 int class_detach(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
+        int minor;
         int err = 0;
 
         ENTRY;
@@ -252,7 +256,9 @@ int class_detach(struct obd_device *obd, struct lustre_cfg *lcfg)
         obd->obd_type->typ_refcnt--;
         class_put_type(obd->obd_type);
         obd->obd_type = NULL;
+        minor = obd->obd_minor;
         memset(obd, 0, sizeof(*obd));
+        obd->obd_minor = minor;
         RETURN(err);
 }
 
@@ -295,14 +301,9 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
                         }
         }
 
-        err = obd_precleanup(obd, flags);
-        if (err) 
-                RETURN(err);
-        
-        LASSERT(obd->obd_self_export);
-        class_unlink_export(obd->obd_self_export);
-
-        if (atomic_read(&obd->obd_refcount) == 1 ||
+        /* The one reference that should be remaining is the
+         * obd_self_export */
+        if (atomic_read(&obd->obd_refcount) <= 1 ||
             flags & OBD_OPT_FORCE) {
                 /* this will stop new connections, and need to
                    do it before class_disconnect_exports() */
@@ -340,24 +341,25 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
                        obd->obd_name);
         }
 
-out:
+        if (obd->obd_self_export) {
+                err = obd_precleanup(obd, flags);
+                if (err) 
+                        GOTO(out, err);
+                class_unlink_export(obd->obd_self_export);
+                obd->obd_self_export = NULL;
+        }
+
         err = obd_cleanup(obd, flags);
+out:
         if (!err) {
                 obd->obd_set_up = obd->obd_stopping = 0;
                 obd->obd_type->typ_refcnt--;
-                atomic_dec(&obd->obd_refcount);
                 /* XXX this should be an LASSERT */
                 if (atomic_read(&obd->obd_refcount) > 0) 
                         CERROR("%s still has refcount %d after "
                                "cleanup.\n", obd->obd_name,
                                atomic_read(&obd->obd_refcount));
-        } else {
-                /* attempt to leave OBD in a usable state. */
-                obd->obd_stopping = 0;
-                if (OBT(obd) && OBP(obd, postsetup)) {
-                        obd_postsetup(obd);
-                }
-        }
+        } 
 
         RETURN(err);
 
@@ -487,7 +489,11 @@ int class_process_config(struct lustre_cfg *lcfg)
 	/* Commands that require a device */
         obd = class_name2obd(lcfg->lcfg_dev_name);
         if (obd == NULL) {
-                CERROR("no device for: %s\n", lcfg->lcfg_dev_name);
+                if (lcfg->lcfg_dev_name == NULL) {
+                        CERROR("this lcfg command requires a device name\n");
+                } else {
+                        CERROR("no device for: %s\n", lcfg->lcfg_dev_name);
+                }
                 GOTO(out, err = -EINVAL);
 	}
 	    
@@ -583,16 +589,9 @@ out:
 int class_config_parse_llog(struct llog_obd_ctxt *ctxt, char *name, 
                           struct config_llog_instance *cfg)
 {
-        struct obd_export *exp = ctxt->loc_exp;
         struct llog_handle *llh;
         int rc, rc2;
         ENTRY;
-
-        if (exp == NULL) {
-                LBUG();
-                CERROR("No log export on obd\n");
-                RETURN(-ENOTCONN);
-        }
 
         rc = llog_create(ctxt, &llh, NULL, name);
         if (rc) 
@@ -659,16 +658,9 @@ out:
 int class_config_dump_llog(struct llog_obd_ctxt *ctxt, char *name, 
                           struct config_llog_instance *cfg)
 {
-        struct obd_export *exp = ctxt->loc_exp;
         struct llog_handle *llh;
         int rc, rc2;
         ENTRY;
-
-        if (exp == NULL) {
-                LBUG();
-                CERROR("No log export on obd\n");
-                RETURN(-ENOTCONN);
-        }
 
         rc = llog_create(ctxt, &llh, NULL, name);
         if (rc) 
