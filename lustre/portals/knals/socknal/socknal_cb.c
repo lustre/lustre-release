@@ -147,6 +147,7 @@ ksocknal_get_ltx (int may_block)
                         ltx = list_entry(ksocknal_data.ksnd_idle_ltx_list.next,
                                          ksock_ltx_t, ltx_tx.tx_list);
                         list_del (&ltx->ltx_tx.tx_list);
+                        ksocknal_data.ksnd_active_ltxs++;
                         break;
                 }
 
@@ -155,6 +156,7 @@ ksocknal_get_ltx (int may_block)
                                 ltx = list_entry(ksocknal_data.ksnd_idle_nblk_ltx_list.next,
                                                  ksock_ltx_t, ltx_tx.tx_list);
                                 list_del (&ltx->ltx_tx.tx_list);
+                                ksocknal_data.ksnd_active_ltxs++;
                         }
                         break;
                 }
@@ -178,6 +180,7 @@ ksocknal_put_ltx (ksock_ltx_t *ltx)
         
         spin_lock_irqsave (&ksocknal_data.ksnd_idle_ltx_lock, flags);
 
+        ksocknal_data.ksnd_active_ltxs--;
         list_add_tail (&ltx->ltx_tx.tx_list, ltx->ltx_idle);
 
         /* normal tx desc => wakeup anyone blocking for one */
@@ -744,6 +747,8 @@ ksocknal_find_conn_locked (ksock_tx_t *tx, ksock_peer_t *peer)
         /* Find the conn with the shortest tx queue */
         list_for_each (tmp, &peer->ksnp_conns) {
                 ksock_conn_t *c = list_entry (tmp, ksock_conn_t, ksnc_list);
+
+                LASSERT (!c->ksnc_closing);
                 
                 if (conn == NULL ||
                     atomic_read (&conn->ksnc_tx_nob) >
@@ -1011,9 +1016,9 @@ ksocknal_send_pages (nal_cb_t *nal, void *private, lib_msg_t *cookie,
         ltx->ltx_tx.tx_nob = sizeof (*hdr) + payload_len;
 
         rc = ksocknal_launch_packet (&ltx->ltx_tx, nid);
-        if (rc != PTL_OK)
+        if (rc != PTL_OK) 
                 ksocknal_put_ltx (ltx);
-
+                
         return (rc);
 }
 
