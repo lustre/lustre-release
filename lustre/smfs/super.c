@@ -22,12 +22,13 @@
 #include <linux/slab.h>
 #include <linux/loop.h>
 #include <linux/errno.h>
+#include <linux/lustre_idl.h>
 #include "smfs_internal.h" 
 
 /* Find the options for the clone. These consist of a cache device
    and an index in the snaptable associated with that device. 
 */
-static char *smfs_options(char *options, char **devstr, char **namestr)
+static char *smfs_options(char *options, char **devstr, char **namestr, int *kml)
 {
 	struct option *opt_value = NULL;
 	char *pos;
@@ -39,6 +40,8 @@ static char *smfs_options(char *options, char **devstr, char **namestr)
 		} else if (!strcmp(opt_value->opt, "type")) {
 			if (namestr != NULL)
 				*namestr = opt_value->value;
+		} else if (!strcmp(opt_value->opt, "kml")) {
+			*kml = 1;	
 		} else {
 			break;
 		}
@@ -253,7 +256,7 @@ smfs_read_super(
 	char *devstr = NULL, *typestr = NULL;
 	char *cache_data;
 	ino_t root_ino;
-	int err = 0;
+	int err = 0, kml = 0;
 
 	ENTRY;
 
@@ -261,7 +264,7 @@ smfs_read_super(
 	
 	init_option(data);
 	/* read and validate options */
-	cache_data = smfs_options(data, &devstr, &typestr);
+	cache_data = smfs_options(data, &devstr, &typestr, &kml);
 	if (*cache_data) {
 		CERROR("invalid mount option %s\n", (char*)data);
 		GOTO(out_err, err=-EINVAL);
@@ -276,6 +279,11 @@ smfs_read_super(
 		CERROR("Can not mount %s as %s\n", devstr, typestr);
 		GOTO(out_err, 0);
 	}
+	
+	if (kml) smfs_kml_init(sb);	
+	
+	setup_sm_journal_ops(typestr);
+	
 	dget(S2CSB(sb)->s_root);
 	root_ino = S2CSB(sb)->s_root->d_inode->i_ino;
 	root_inode = iget(sb, root_ino);
