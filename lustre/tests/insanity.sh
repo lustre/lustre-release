@@ -14,6 +14,7 @@ ALWAYS_EXCEPT="10"
 
 SETUP=${SETUP:-"setup"}
 CLEANUP=${CLEANUP:-"cleanup"}
+UPCALL=${UPCALL:-DEFAULT}
 
 build_test_filter
 
