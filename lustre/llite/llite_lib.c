@@ -744,6 +744,99 @@ void ll_read_inode2(struct inode *inode, void *opaque)
         }
 }
 
+int ll_iocontrol(struct inode *inode, struct file *file,
+                        unsigned int cmd, unsigned long arg)
+{
+        struct ll_sb_info *sbi = ll_i2sbi(inode);
+        struct ptlrpc_request *req = NULL;
+        int rc, flags = 0;
+        ENTRY;
+        
+        switch(cmd) {
+        case EXT3_IOC_GETFLAGS: {
+                struct ll_fid fid;
+                unsigned long valid = OBD_MD_FLFLAGS;
+                struct mds_body *body;
+
+                ll_inode2fid(&fid, inode);
+                rc = mdc_getattr(sbi->ll_mdc_exp, &fid, valid, 0, &req);
+                if (rc) {
+                        CERROR("failure %d inode %lu\n", rc, inode->i_ino);
+                        RETURN(-abs(rc));
+                }
+                
+                body = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*body));
+                
+                if (body->flags & S_APPEND)
+                        flags |= EXT3_APPEND_FL;
+                if (body->flags & S_IMMUTABLE)
+                        flags |= EXT3_IMMUTABLE_FL;
+                if (body->flags & S_NOATIME)
+                        flags |= EXT3_NOATIME_FL;
+                
+                ptlrpc_req_finished (req);
+                
+                RETURN( put_user(flags, (int *)arg) );
+        }
+        case EXT3_IOC_SETFLAGS: {
+                struct mdc_op_data op_data;
+                struct iattr attr;
+                struct obdo oa;
+                struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
+        
+                if ( get_user( flags, (int *)arg ) )
+                        RETURN( -EFAULT );
+                
+                ll_prepare_mdc_op_data(&op_data, inode, NULL, NULL, 0, 0);
+                
+                memset(&attr, 0x0, sizeof(attr));
+                attr.ia_attr_flags = flags;
+                attr.ia_valid |= ATTR_ATTR_FLAG;
+                
+                rc = mdc_setattr(sbi->ll_mdc_exp, &op_data,
+                                 &attr, NULL, 0, NULL, 0, &req);
+                if (rc) {
+                        ptlrpc_req_finished(req);
+                        if (rc != -EPERM && rc != -EACCES)
+                                CERROR("mdc_setattr fails: rc = %d\n", rc);
+                        RETURN(rc);
+                }
+                ptlrpc_req_finished(req);
+                
+                memset(&oa, 0x0, sizeof(oa));
+                oa.o_id = lsm->lsm_object_id;
+                oa.o_flags = flags;
+                oa.o_valid = OBD_MD_FLID | OBD_MD_FLFLAGS;
+                
+                rc = obd_setattr(sbi->ll_osc_exp, &oa, lsm, NULL);
+                if (rc) {
+                        if (rc != -EPERM && rc != -EACCES)
+                                CERROR("mdc_setattr fails: rc = %d\n", rc);
+                        RETURN(rc);
+                }
+                
+                if (flags & EXT3_APPEND_FL)
+                        inode->i_flags |= S_APPEND;
+                else
+                        inode->i_flags &= ~S_APPEND;
+                if (flags & EXT3_IMMUTABLE_FL)
+                        inode->i_flags |= S_IMMUTABLE;
+                else
+                        inode->i_flags &= ~S_IMMUTABLE;
+                if (flags & EXT3_NOATIME_FL)
+                        inode->i_flags |= S_NOATIME;
+                else
+                        inode->i_flags &= ~S_NOATIME;
+                
+                RETURN(0);
+        }
+        default:
+                RETURN(-ENOSYS);
+        }
+        
+        RETURN(0);
+}
+
 void ll_umount_begin(struct super_block *sb)
 {
         struct ll_sb_info *sbi = ll_s2sbi(sb);
