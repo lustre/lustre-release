@@ -362,7 +362,7 @@ static int null_if_equal(struct ldlm_lock *lock, void *data)
         if (lock->l_req_mode != lock->l_granted_mode)
                 return LDLM_ITER_STOP;
 
-        return 0;
+        return LDLM_ITER_CONTINUE;
 }
 
 void ll_clear_inode(struct inode *inode)
