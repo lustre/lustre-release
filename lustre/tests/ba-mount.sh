@@ -36,11 +36,11 @@ ${LMC} --add net --node $MDS --tcpbuf $TCPBUF --nid $MDS --nettype tcp
 ${LMC} --add mds --node $MDS --mds mds1 --dev /tmp/mds1 --size 50000
 
 OBD_UUID=`awk "/$OST / { print \\$3 }" $UUIDLIST`
-[ "$OBD_UUID" ] && OBD_UUID="--obduuid=$OBD_UUID" || echo "$OST: no UUID"
+[ "$OBD_UUID" ] && OBD_UUID="--obduuid $OBD_UUID" || echo "$OST: no UUID"
 
 # server node
 ${LMC} --add net --node $OST --tcpbuf $TCPBUF --nid $OST --nettype tcp
-${LMC} --add ost --node $OST -obd obd1 --obduuid $OBD_UUID --dev bluearc
+${LMC} --add ost --node $OST --obd obd1 $OBD_UUID --dev bluearc
 
 # mount point on the MDS/client
 ${LMC} --add mtpt --node $MDS --path /mnt/lustre --mds mds1 --lov obd1
