@@ -169,6 +169,11 @@ struct ptlrpc_request *ptlrpc_prep_req(struct obd_import *imp, int opcode,
         request->rq_level = LUSTRE_CONN_FULL;
         request->rq_type = PTL_RPC_MSG_REQUEST;
         request->rq_import = imp;
+
+        /* XXX FIXME bug 625069 */
+        request->rq_request_portal = imp->imp_client->cli_request_portal;
+        request->rq_reply_portal = imp->imp_client->cli_reply_portal;
+
         request->rq_connection = ptlrpc_connection_addref(conn);
 
         INIT_LIST_HEAD(&request->rq_list);

@@ -355,7 +355,7 @@ int ptl_send_rpc(struct ptlrpc_request *request)
                 }
 
                 rc = PtlMEAttach(request->rq_connection->c_peer.peer_ni,
-                               request->rq_import->imp_client->cli_reply_portal,
+                             request->rq_reply_portal,/* XXX FIXME bug 625069 */
                                  source_id, request->rq_xid, 0, PTL_UNLINK,
                                  PTL_INS_AFTER, &request->rq_reply_me_h);
                 if (rc != PTL_OK) {
@@ -382,14 +382,14 @@ int ptl_send_rpc(struct ptlrpc_request *request)
                 CDEBUG(D_NET, "Setup reply buffer: %u bytes, xid "LPU64
                        ", portal %u\n",
                        request->rq_replen, request->rq_xid,
-                       request->rq_import->imp_client->cli_reply_portal);
+                       request->rq_reply_portal);
         }
 
         /* Clear any flags that may be present from previous sends,
          * except for REPLAY. */
         request->rq_flags &= PTL_RPC_FL_REPLAY;
         rc = ptl_send_buf(request, request->rq_connection,
-                          request->rq_import->imp_client->cli_request_portal);
+                          request->rq_request_portal);
         RETURN(rc);
 
  cleanup2:

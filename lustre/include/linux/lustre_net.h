@@ -131,6 +131,9 @@ struct ptlrpc_request {
         int rq_flags; 
         atomic_t rq_refcount;
 
+        int rq_request_portal; /* XXX FIXME bug 625069 */
+        int rq_reply_portal; /* XXX FIXME bug 625069 */
+
         int rq_reqlen;
         struct lustre_msg *rq_reqmsg;
 

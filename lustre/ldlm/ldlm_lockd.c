@@ -501,6 +501,31 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
                 OBD_FAIL_RETURN(OBD_FAIL_LDLM_CP_CALLBACK, 0);
                 rc = ldlm_handle_cp_callback(req);
                 RETURN(rc);
+
+        /* XXX FIXME move these three back to mds/handler.c, bug 625069 */
+        case LDLM_ENQUEUE:
+                CDEBUG(D_INODE, "enqueue\n");
+                OBD_FAIL_RETURN(OBD_FAIL_LDLM_ENQUEUE, 0);
+                rc = ldlm_handle_enqueue(req);
+                if (rc)
+                        break;
+                RETURN(0);
+        case LDLM_CONVERT:
+                CDEBUG(D_INODE, "convert\n");
+                OBD_FAIL_RETURN(OBD_FAIL_LDLM_CONVERT, 0);
+                rc = ldlm_handle_convert(req);
+                if (rc)
+                        break;
+                RETURN(0);
+        case LDLM_CANCEL:
+                CDEBUG(D_INODE, "cancel\n");
+                OBD_FAIL_RETURN(OBD_FAIL_LDLM_CANCEL, 0);
+                rc = ldlm_handle_cancel(req);
+                if (rc)
+                        break;
+                RETURN(0);
+        /* XXX FIXME move these three back to mds/handler.c, bug 625069 */
+
         default:
                 CERROR("invalid opcode %d\n", req->rq_reqmsg->opc);
                 RETURN(-EINVAL);
@@ -530,11 +555,6 @@ static int ldlm_iocontrol(long cmd, struct lustre_handle *conn, int len,
         connection = ptlrpc_uuid_to_connection("ldlm");
         if (!connection)
                 CERROR("No LDLM UUID found: assuming ldlm is local.\n");
-
-        /* XXX
-           ptlrpc_init_client(LDLM_REQUEST_PORTAL, LDLM_REPLY_PORTAL,
-           obddev->u.ldlm.ldlm_client, connection);
-        */
 
         switch (cmd) {
         case IOC_LDLM_TEST:

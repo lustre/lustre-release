@@ -558,8 +558,8 @@ static int lov_getattr(struct lustre_handle *conn, struct obdo *oa,
                 if (loi->loi_id == 0)
                         continue;
 
-                CERROR("objid "LPX64"[%d] has subobj "LPX64" at idx %u\n",
-                       oa->o_id, i, loi->loi_id, loi->loi_ost_idx);
+                CDEBUG(D_INFO, "objid "LPX64"[%d] has subobj "LPX64" at idx "
+                       "%u\n", oa->o_id, i, loi->loi_id, loi->loi_ost_idx);
                 /* create data objects with "parent" OA */
                 memcpy(&tmp, oa, sizeof(tmp));
                 tmp.o_id = loi->loi_id;
