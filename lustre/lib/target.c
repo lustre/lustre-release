@@ -104,6 +104,11 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         if (!target)
                 GOTO(out, rc = -ENODEV);
 
+        spin_lock_bh(&target->obd_processing_task_lock);
+        if (target->obd_flags & OBD_ABORT_RECOVERY)
+                target_abort_recovery(target);
+        spin_unlock_bh(&target->obd_processing_task_lock);
+
         conn.addr = req->rq_reqmsg->addr;
         conn.cookie = req->rq_reqmsg->cookie;
 
