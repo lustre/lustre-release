@@ -1294,7 +1294,7 @@ int jt_obd_test_getattr(int argc, char **argv)
         char *end;
         int rc = 0;
 
-        if (argc < 2 && argc > 4)
+        if (argc < 2 || argc > 4)
                 return CMD_HELP;
 
         IOC_INIT(data);
