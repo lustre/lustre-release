@@ -2304,7 +2304,6 @@ static int mds_get_parents_children_locked(struct obd_device *obd,
                                            &(dlm_handles[6]),LCK_PW,&p_policy);
                 if (rc != ELDLM_OK)
                         GOTO(cleanup, rc);
-
                 p1_res_id.name[2] = full_name_hash(old_name, old_len - 1);
                 p2_res_id.name[2] = full_name_hash(new_name, new_len - 1);
                 CDEBUG(D_INFO, "take locks on %lu:%u:"LPX64", %lu:%u:"LPX64"\n",
@@ -2313,6 +2312,7 @@ static int mds_get_parents_children_locked(struct obd_device *obd,
                        (*de_tgtdirp)->d_inode->i_ino,
                        (*de_tgtdirp)->d_inode->i_generation, p2_res_id.name[2]);
         }
+        cleanup_phase = 3;
 #endif
 
         /* Step 3: Lookup the source child entry */
@@ -2324,7 +2324,7 @@ static int mds_get_parents_children_locked(struct obd_device *obd,
                 GOTO(cleanup, rc);
         }
 
-        cleanup_phase = 3; /* original name dentry */
+        cleanup_phase = 4; /* original name dentry */
 
         inode = (*de_oldp)->d_inode;
         if (inode != NULL) {
@@ -2349,7 +2349,7 @@ static int mds_get_parents_children_locked(struct obd_device *obd,
                 GOTO(cleanup, rc);
         }
 
-        cleanup_phase = 4; /* target dentry */
+        cleanup_phase = 5; /* target dentry */
 
         inode = (*de_newp)->d_inode;
         if (inode != NULL) {
@@ -2369,7 +2369,7 @@ retry_locks:
         /* Step 5: Take locks on the parents and child(ren) */
         maxres_src = &p1_res_id;
         maxres_tgt = &p2_res_id;
-        cleanup_phase = 4; /* target dentry */
+        cleanup_phase = 5; /* target dentry */
 
         if (c1_res_id.name[0] != 0 && res_gt(&c1_res_id, &p1_res_id, NULL,NULL))
                 maxres_src = &c1_res_id;
@@ -2398,7 +2398,7 @@ retry_locks:
                 if (c2_res_id.name[0] != 0)
                         ldlm_lock_decref(&dlm_handles[3], child_mode);
                 ldlm_lock_decref(&dlm_handles[1], parent_mode);
-                cleanup_phase = 4;
+                cleanup_phase = 5;
                 if (rc > 0)
                         goto retry_locks;
                 GOTO(cleanup, rc);
@@ -2415,7 +2415,7 @@ retry_locks:
         if (rc) {
                 ldlm_lock_decref(&dlm_handles[2], child_mode);
                 ldlm_lock_decref(&dlm_handles[0], parent_mode);
-                cleanup_phase = 4;
+                cleanup_phase = 5;
                 if (rc > 0)
                         goto retry_locks;
                 GOTO(cleanup, rc);
@@ -2430,13 +2430,19 @@ cleanup:
                                 ldlm_lock_decref(&dlm_handles[3], child_mode);
                         if (c1_res_id.name[0] != 0)
                                 ldlm_lock_decref(&dlm_handles[2], child_mode);
-                case 5: /* parent locks */
                         ldlm_lock_decref(&dlm_handles[1], parent_mode);
                         ldlm_lock_decref(&dlm_handles[0], parent_mode);
-                case 4: /* target dentry */
+                case 5: /* target dentry */
                         l_dput(*de_newp);
-                case 3: /* source dentry */
+                case 4: /* source dentry */
                         l_dput(*de_oldp);
+                case 3:
+#ifdef S_PDIROPS
+                        if (dlm_handles[5].cookie != 0)
+                                ldlm_lock_decref(&(dlm_handles[5]), LCK_PW);
+                        if (dlm_handles[6].cookie != 0)
+                                ldlm_lock_decref(&(dlm_handles[6]), LCK_PW);
+#endif
                 case 2: /* target directory dentry */
                         l_dput(*de_tgtdirp);
                 case 1: /* source directry dentry */
