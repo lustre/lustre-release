@@ -7,8 +7,8 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test: 2399 (temporarily until new kernels arrive)
-ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"48"}
+# bug number for skipped test: 2986
+ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"66b"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 [ "$ALWAYS_EXCEPT$EXCEPT" ] && echo "Skipping tests: $ALWAYS_EXCEPT $EXCEPT"
@@ -1122,6 +1122,7 @@ test_34c() {
 run_test 34c "O_RDWR opening file-with-size works =============="
 
 test_34d() {
+	[ ! -f $DIR/f34 ] && test_34a 
 	dd if=/dev/zero of=$DIR/f34 conv=notrunc bs=4k count=1 || error
 	$CHECKSTAT -s $TEST_34_SIZE $DIR/f34 || error
 	rm $DIR/f34
@@ -1240,14 +1241,19 @@ stop_kupdated() {
 }
 
 # ensure that all stripes have some grant before we test client-side cache
-for i in `seq -f $DIR/f42-%g 1 $STRIPECOUNT`; do
-	dd if=/dev/zero of=$i bs=4k count=1
-	rm $i
-done
+setup_test42() {
+	[ "$SETUP_TEST42" ] && return
+	for i in `seq -f $DIR/f42-%g 1 $STRIPECOUNT`; do
+		dd if=/dev/zero of=$i bs=4k count=1
+		rm $i
+	done
+	SETUP_TEST42=DONE
+}
 
 # Tests 42* verify that our behaviour is correct WRT caching, file closure,
 # file truncation, and file removal.
 test_42a() {
+	setup_test42
 	cancel_lru_locks OSC
 	stop_kupdated
 	sync; sleep 1; sync # just to be safe
@@ -1262,6 +1268,7 @@ test_42a() {
 run_test 42a "ensure that we don't flush on close =============="
 
 test_42b() {
+	setup_test42
 	cancel_lru_locks OSC
 	stop_kupdated
         sync
@@ -1474,7 +1481,7 @@ test_47() {
 }
 run_test 47 "Device nodes check ================================"
 
-test_48a() {
+test_48a() { # bug 2399
 	mkdir $DIR/d48a
 	cd $DIR/d48a
 	mv $DIR/d48a $DIR/d48.new || error "move directory failed"
@@ -1490,7 +1497,7 @@ test_48a() {
 }
 run_test 48a "Access renamed working dir (should return errors)="
 
-test_48b() {
+test_48b() { # bug 2399
 	mkdir $DIR/d48b
 	cd $DIR/d48b
 	rmdir $DIR/d48b || error "remove cwd $DIR/d48b failed"
@@ -1827,6 +1834,29 @@ test_65() {
         echo "pass"
 }
 run_test 65 "Verify that the files are created using parent dir's stripe info"
+
+test_66a() {	# bug 2983 - ldlm_handle_enqueue cleanup
+	mkdir -p $DIR/d66
+	multiop $DIR/d66/f66 O_wc &
+	MULTI_PID=$!
+	usleep 500
+	cancel_lru_locks OSC
+#define OBD_FAIL_LDLM_ENQUEUE_EXTENT_ERR 0x308
+	sysctl -w lustre.fail_loc=0x80000308
+	kill -USR1 $MULTI_PID
+	wait $MULTI_PID && error "multiop didn't fail enqueue" || true
+}
+run_test 66a "ldlm_handle_enqueue error (should return error) ==="
+
+test_66b() {	# bug 2986 - ldlm_handle_enqueue error during open
+	mkdir $DIR/d66
+	touch $DIR/d66/f66
+	cancel_lru_locks OSC
+#define OBD_FAIL_LDLM_ENQUEUE_EXTENT_ERR 0x308
+	sysctl -w lustre.fail_loc=0x80000308
+	dd if=/etc/hosts of=$DIR/d66/f66 && error "didn't fail enqueue" || true
+}
+run_test 66b "ldlm_handle_enqueue error (should return error) ==="
 
 
 # on the LLNL clusters, runas will still pick up root's $TMP settings,

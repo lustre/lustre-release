@@ -187,6 +187,7 @@ void ldlm_lock_destroy(struct ldlm_lock *lock)
         }
 
         if (!list_empty(&lock->l_res_link)) {
+                LDLM_ERROR(lock, "lock still on resource");
                 ldlm_lock_dump(D_ERROR, lock, 0);
                 LBUG();
         }

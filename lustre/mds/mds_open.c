@@ -1038,7 +1038,6 @@ int mds_mfd_close(struct ptlrpc_request *req, struct obd_device *obd,
         void *handle = NULL;
         struct mds_body *request_body = NULL, *reply_body = NULL;
         struct dentry_params dp;
-        struct lov_mds_md *lmm;
         ENTRY;
 
         if (req != NULL) {
@@ -1062,6 +1061,8 @@ int mds_mfd_close(struct ptlrpc_request *req, struct obd_device *obd,
         }
 
         if (last_orphan && unlink_orphan) {
+                int stripe_count = 0;
+                struct lov_mds_md *lmm = NULL;
                 LASSERT(rc == 0); /* mds_put_write_access must have succeeded */
 
                 CDEBUG(D_HA, "destroying orphan object %s\n", fidname);
@@ -1079,20 +1080,21 @@ int mds_mfd_close(struct ptlrpc_request *req, struct obd_device *obd,
                 LASSERT(pending_child->d_inode != NULL);
 
                 cleanup_phase = 2; /* dput(pending_child) when finished */
-                lmm = lustre_msg_buf(req->rq_repmsg, 1, 0);
-                handle = fsfilt_start_log(obd, pending_dir,
-                                          FSFILT_OP_UNLINK, NULL,
-                                          le32_to_cpu(lmm->lmm_stripe_count));
+                if (req != NULL) {
+                        lmm = lustre_msg_buf(req->rq_repmsg, 1, 0);
+                        stripe_count = le32_to_cpu(lmm->lmm_stripe_count);
+                }
+
+                handle = fsfilt_start_log(obd, pending_dir, FSFILT_OP_UNLINK,
+                                          NULL, stripe_count);
                 if (IS_ERR(handle)) {
                         rc = PTR_ERR(handle);
                         handle = NULL;
                         GOTO(cleanup, rc);
                 }
 
-                if (req != NULL &&
-                    (reply_body->valid & OBD_MD_FLEASIZE) &&
-                    mds_log_op_unlink(obd, pending_child->d_inode,
-                                      lustre_msg_buf(req->rq_repmsg, 1, 0),
+                if (req != NULL && (reply_body->valid & OBD_MD_FLEASIZE) &&
+                    mds_log_op_unlink(obd, pending_child->d_inode, lmm,
                                       req->rq_repmsg->buflens[1],
                                       lustre_msg_buf(req->rq_repmsg, 2, 0),
                                       req->rq_repmsg->buflens[2]) > 0) {
