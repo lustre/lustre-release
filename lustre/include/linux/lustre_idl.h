@@ -28,6 +28,7 @@
 # include <linux/ioctl.h>
 # include <asm/types.h>
 # include <linux/types.h>
+# include <linux/list.h>
 #else
 # define __KERNEL__
 # include <linux/list.h>
@@ -152,6 +153,19 @@ struct obdo {
 #define OBD_MD_LINKNAME (0x00040000)
 #define OBD_MD_FLNOTOBD (~(OBD_MD_FLOBDMD | OBD_MD_FLOBDFLG | OBD_MD_FLBLOCKS |\
                            OBD_MD_LINKNAME))
+
+struct obd_statfs {
+        __u64           os_type;
+        __u64           os_blocks;
+        __u64           os_bfree;
+        __u64           os_bavail;
+        __u64           os_files;
+        __u64           os_ffree;
+        __u64           os_fsid;
+        __u32           os_bsize;
+        __u32           os_namelen;
+        __u32           os_spare[12];
+};
 
 struct obd_ioobj {
         obd_id    ioo_id;
