@@ -36,6 +36,8 @@
 #include <linux/pagemap.h>
 #include <linux/mm.h>
 #include <linux/rbtree.h>
+#include <linux/seq_file.h>
+#include <linux/time.h>
 
 /* PG_inactive_clean is shorthand for rmap, we want free_high/low here.. */
 #ifdef PG_inactive_clean
@@ -71,8 +73,7 @@ static int llwp_consume_page(struct ll_writeback_pages *llwp,
 
         /* we raced with truncate? */
         if ( off >= inode->i_size ) {
-                ll_remove_dirty(&ll_i2info(inode)->lli_dirty, page->index,
-                                page->index);
+                ll_remove_dirty(inode, page->index, page->index);
                 unlock_page(page);
                 return 0;
         }
@@ -175,13 +176,17 @@ static void ll_writeback( struct inode *inode,
         }
         obd_brw_set_decref(set);
 
+        if(rc)
+                INODE_IO_STAT_ADD(inode, wb_fail, llwp->npgs);
+        else
+                INODE_IO_STAT_ADD(inode, wb_ok, llwp->npgs);
+
         for ( i = 0 ; i < llwp->npgs ; i++) {
                 struct page *page = llwp->pga[i].pg;
 
                 CDEBUG(D_CACHE, "cleaning page %p\n", page);
                 LASSERT(PageLocked(page));
-                ll_remove_dirty(&ll_i2info(inode)->lli_dirty, page->index,
-                                page->index);
+                ll_remove_dirty(inode, page->index, page->index);
                 unlock_page(page);
                 page_cache_release(page);
         }
@@ -315,6 +320,8 @@ int ll_check_dirty( struct super_block *sb)
                         llwp.npgs = 0;
                         ll_get_dirty_pages(inode, &llwp);
                         if (llwp.npgs) {
+                                INODE_IO_STAT_ADD(inode, wb_from_pressure, 
+                                                  llwp.npgs);
                                 ll_writeback(inode, &llwp);
                                 rc += llwp.npgs;
                                 making_progress = 1;
@@ -383,8 +390,10 @@ int ll_batch_writepage( struct inode *inode, struct page *page )
         llwp_consume_page(&llwp, inode, page);
 
         ll_get_dirty_pages(inode, &llwp);
-        if ( llwp.npgs )
+        if ( llwp.npgs ) {
+                INODE_IO_STAT_ADD(inode, wb_from_writepage, llwp.npgs);
                 ll_writeback(inode, &llwp);
+        }
 
 cleanup:
         if ( llwp.pga != NULL )
@@ -455,8 +464,17 @@ static void ll_insert_oe(rb_root_t *root, struct offset_extent *new_oe)
         EXIT;
 }
 
-void ll_record_dirty(struct ll_dirty_offsets *lldo, unsigned long offset)
+static inline void lldo_dirty_add(struct inode *inode, 
+                                  struct ll_dirty_offsets *lldo, 
+                                  long val)
 {
+        lldo->do_num_dirty += val;
+        INODE_IO_STAT_ADD(inode, dirty_pages, val);
+}
+
+void ll_record_dirty(struct inode *inode, unsigned long offset)
+{
+        struct ll_dirty_offsets *lldo = &ll_i2info(inode)->lli_dirty;
         struct offset_extent needle, *oe, *new_oe;
         int rc;
         ENTRY;
@@ -475,7 +493,7 @@ void ll_record_dirty(struct ll_dirty_offsets *lldo, unsigned long offset)
                 new_oe->oe_start = offset;
                 new_oe->oe_end = offset;
                 ll_insert_oe(&lldo->do_root, new_oe);
-                lldo->do_num_dirty++;
+                lldo_dirty_add(inode, lldo, 1);
                 new_oe = NULL;
                 GOTO(out, rc = 1);
         }
@@ -497,7 +515,7 @@ void ll_record_dirty(struct ll_dirty_offsets *lldo, unsigned long offset)
                 oe->oe_end++;
         else
                 LBUG();
-        lldo->do_num_dirty++;
+        lldo_dirty_add(inode, lldo, 1);
 
 out:
         CDEBUG(D_INODE, "%lu now dirty\n", lldo->do_num_dirty);
@@ -508,9 +526,10 @@ out:
         return;
 }
 
-void ll_remove_dirty(struct ll_dirty_offsets *lldo, unsigned long start, 
+void ll_remove_dirty(struct inode *inode, unsigned long start, 
                      unsigned long end)
 {
+        struct ll_dirty_offsets *lldo = &ll_i2info(inode)->lli_dirty;
         struct offset_extent needle, *oe, *new_oe;
         ENTRY;
 
@@ -531,19 +550,19 @@ void ll_remove_dirty(struct ll_dirty_offsets *lldo, unsigned long start,
                         oe->oe_end = start - 1;
                         ll_insert_oe(&lldo->do_root, new_oe);
                         new_oe = NULL;
-                        lldo->do_num_dirty -= end - start + 1;
+                        lldo_dirty_add(inode, lldo, -(end - start + 1));
                         break;
                 }
 
                 /* overlapping edges */
                 if (oe->oe_start < start && oe->oe_end <= end) {
-                        lldo->do_num_dirty -= oe->oe_end - start + 1;
+                        lldo_dirty_add(inode, lldo, -(oe->oe_end - start + 1));
                         oe->oe_end = start - 1;
                         oe = NULL;
                         continue;
                 }
                 if (oe->oe_end > end && oe->oe_start >= start) {
-                        lldo->do_num_dirty -= end - oe->oe_start + 1;
+                        lldo_dirty_add(inode, lldo, -(end - oe->oe_start + 1));
                         oe->oe_start = end + 1;
                         oe = NULL;
                         continue;
@@ -551,7 +570,7 @@ void ll_remove_dirty(struct ll_dirty_offsets *lldo, unsigned long start,
 
                 /* an extent entirely within the one we're clearing */
                 rb_erase(&oe->oe_node, &lldo->do_root);
-                lldo->do_num_dirty -= oe->oe_end - oe->oe_start + 1;
+                lldo_dirty_add(inode, lldo, -(oe->oe_end - oe->oe_start + 1));
                 spin_unlock(&lldo->do_lock);
                 OBD_FREE(oe, sizeof(*oe));
                 spin_lock(&lldo->do_lock);
@@ -613,3 +632,74 @@ void ll_lldo_init(struct ll_dirty_offsets *lldo)
         lldo->do_num_dirty = 0;
         lldo->do_root.rb_node = NULL;
 }
+
+/* seq file export of some page cache tracking stats */
+static int ll_pgcache_seq_show(struct seq_file *seq, void *v)
+{
+        struct timeval now;
+        struct ll_sb_info *sbi = seq->private;
+        do_gettimeofday(&now);
+
+        seq_printf(seq, "snapshot_time:            %lu:%lu (secs:usecs)\n", 
+                   now.tv_sec, now.tv_usec);
+        seq_printf(seq, "VM_under_pressure:        %s\n", 
+                   should_writeback() ? "yes" : "no");
+        seq_printf(seq, "dirty_pages:              "LPU64"\n", 
+                   sbi->ll_iostats.fis_dirty_pages);
+        seq_printf(seq, "dirty_page_hits:          "LPU64"\n", 
+                   sbi->ll_iostats.fis_dirty_hits);
+        seq_printf(seq, "dirty_page_misses:        "LPU64"\n", 
+                   sbi->ll_iostats.fis_dirty_misses);
+        seq_printf(seq, "writeback_from_writepage: "LPU64"\n", 
+                   sbi->ll_iostats.fis_wb_from_writepage);
+        seq_printf(seq, "writeback_from_pressure:  "LPU64"\n", 
+                   sbi->ll_iostats.fis_wb_from_pressure);
+        seq_printf(seq, "writeback_ok_pages:       "LPU64"\n", 
+                   sbi->ll_iostats.fis_wb_ok);
+        seq_printf(seq, "writeback_failed_pages:   "LPU64"\n", 
+                   sbi->ll_iostats.fis_wb_fail);
+        return 0;
+}
+
+static void *ll_pgcache_seq_start(struct seq_file *p, loff_t *pos)
+{
+        if (*pos == 0)
+                return (void *)1;
+        return NULL;
+}
+static void *ll_pgcache_seq_next(struct seq_file *p, void *v, loff_t *pos)
+{
+        ++*pos;
+        return NULL;
+}
+static void ll_pgcache_seq_stop(struct seq_file *p, void *v)
+{
+}
+
+struct seq_operations ll_pgcache_seq_sops = {
+        .start = ll_pgcache_seq_start,
+        .stop = ll_pgcache_seq_stop,
+        .next = ll_pgcache_seq_next,
+        .show = ll_pgcache_seq_show,
+};
+
+static int ll_pgcache_seq_open(struct inode *inode, struct file *file)
+{
+        struct proc_dir_entry *dp = inode->u.generic_ip;
+        struct seq_file *seq; 
+        int rc;
+
+        rc = seq_open(file, &ll_pgcache_seq_sops);
+        if (rc)
+                return rc;
+        seq = file->private_data;
+        seq->private = dp->data;
+        return 0;
+}
+
+struct file_operations ll_pgcache_seq_fops = {
+        .open    = ll_pgcache_seq_open,
+        .read    = seq_read,
+        .llseek  = seq_lseek,
+        .release = seq_release,
+};
