@@ -1,4 +1,5 @@
 .Xrefs
+.Xrefs-2.5
 aclocal.m4
 config.log
 config.status
@@ -13,3 +14,5 @@ lustre*.tar.gz
 cscope.files
 cscope.out
 autom4te-2.53.cache
+autom4te.cache
+
