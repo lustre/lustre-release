@@ -155,6 +155,7 @@ void ll_removepage(struct page *page);
 int ll_readpage(struct file *file, struct page *page);
 struct ll_async_page *llap_from_cookie(void *cookie);
 struct ll_async_page *llap_from_page(struct page *page);
+struct ll_async_page *llap_cast_private(struct page *page);
 void ll_readahead_init(struct inode *inode, struct ll_readahead_state *ras);
 
 void ll_truncate(struct inode *inode);
