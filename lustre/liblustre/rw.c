@@ -110,8 +110,10 @@ static int llu_extent_lock_callback(struct ldlm_lock *lock,
                 lsm = lli->lli_smd;
 
                 stripe = llu_lock_to_stripe_offset(inode, lock);
+                l_lock(&lock->l_resource->lr_namespace->ns_lock);
                 kms = ldlm_extent_shift_kms(lock,
                                             lsm->lsm_oinfo[stripe].loi_kms);
+                l_unlock(&lock->l_resource->lr_namespace->ns_lock);
                 if (lsm->lsm_oinfo[stripe].loi_kms != kms)
                         LDLM_DEBUG(lock, "updating kms from "LPU64" to "LPU64,
                                    lsm->lsm_oinfo[stripe].loi_kms, kms);
