@@ -7,6 +7,20 @@ tbd
 	- chdir() and mount() now pin the directory entry (1020)
 	- avoid CERROR in normal ll_setattr_raw() error case (1500)
 	- discard very old requests without processing them (1502)
+	- remove some common, well-understood CERRORs (1505)
+	- require O_DIRECT I/O to be page-sized to workaround IA64 crash (1609)
+	- clear "grant" flags in OST replies until OST grant code lands (1644)
+	- fix read performance by not clobbering i_blksize on client (1598)
+	- fix __ldlm_handle2lock oops by not dereferencing lock after PUT (1625)
+	- make LRU size a /proc tunable, clears locks when reduced (707)
+	- fix some lprocfs rot that prevented ptlbd from loading (1732)
+	- server locks take references on exports now (1558)
+	- build fixes for 2.4.20-rh trees (1663)
+	- return an error from lov_create if all OSCs are inactive (1751)
+	- fix import levels when a reconnect happens without a timeout (1597)
+	- exit early from mds_open if we get a lookup error (1749)
+	- partial page read at EOF wouldn't wait for disk before sending (1642)
+	- avoid NULL deref in obdfilter when reading page past EOF (1592)
 
 2003-06-15  Phil Schwan  <phil@clusterfs.com>
        * version v0_7
