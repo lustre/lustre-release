@@ -25,9 +25,13 @@
 #define _LPROCFS_SNMP_H
 
 #ifdef __KERNEL__
+#include <linux/config.h>
 #include <linux/autoconf.h>
 #include <linux/proc_fs.h>
+#include <linux/smp.h>
 #endif
+
+#include <linux/kp30.h>
 
 #ifndef LPROCFS
 #ifdef  CONFIG_PROC_FS  /* Ensure that /proc is configured */
@@ -47,7 +51,7 @@ struct lprocfs_static_vars {
         struct lprocfs_vars *obd_vars;
 };
 
-/* Lprocfs counters are can be configured using the enum bit masks below.
+/* An lprocfs counter can be configured using the enum bit masks below.
  *
  * LPROCFS_CNTR_EXTERNALLOCK indicates that an external lock already
  * protects this counter from concurrent updates. If not specified,
@@ -69,98 +73,105 @@ struct lprocfs_static_vars {
  */
 
 enum {
-        LPROCFS_CNTR_EXTERNALLOCK = 1,
-        LPROCFS_CNTR_AVGMINMAX    = 2,
-        LPROCFS_CNTR_STDDEV       = 4,
+        LPROCFS_CNTR_EXTERNALLOCK = 0x0001,
+        LPROCFS_CNTR_AVGMINMAX    = 0x0002,
+        LPROCFS_CNTR_STDDEV       = 0x0004,
+
+        /* counter data type */
+        LPROCFS_TYPE_REGS         = 0x0100,
+        LPROCFS_TYPE_BYTES        = 0x0200,
+        LPROCFS_TYPE_PAGES        = 0x0400,
+        LPROCFS_TYPE_CYCLE        = 0x0800,
+};
+
+struct lprocfs_atomic {
+        atomic_t               la_entry;
+        atomic_t               la_exit;
 };
 
 struct lprocfs_counter {
-        union {
-                spinlock_t    internal; /* when there is no external lock */
-                spinlock_t   *external; /* external lock, when available */
-        } l;
-        unsigned int  config;
-        __u64         count;
-        __u64         sum;
-        __u64         min;
-        __u64         max;
-        __u64         sumsquare;
-        const char    *name;   /* must be static */
-        const char    *units;  /* must be static */
+        struct lprocfs_atomic  lc_cntl;  /* may need to move to per set */
+        unsigned int           lc_config;
+        __u64                  lc_count;
+        __u64                  lc_sum;
+        __u64                  lc_min;
+        __u64                  lc_max;
+        __u64                  lc_sumsquare;
+        const char            *lc_name;   /* must be static */
+        const char            *lc_units;  /* must be static */
+};
+
+struct lprocfs_percpu {
+        struct lprocfs_counter lp_cntr[0];
 };
 
 
-struct lprocfs_counters {
-        unsigned int           num;
-        unsigned int           padto8byteboundary;
-        struct lprocfs_counter cntr[0];
+struct lprocfs_stats {
+        unsigned int           ls_num;     /* # of counters */
+        unsigned int           ls_percpu_size;
+        struct lprocfs_percpu *ls_percpu[0];
 };
 
 
 /* class_obd.c */
 extern struct proc_dir_entry *proc_lustre_root;
+
+/* lproc_lov.c */
+extern struct file_operations ll_proc_target_fops;
 struct obd_device;
 
 #ifdef LPROCFS
 
-/* Two optimized LPROCFS counter increment macros are provided:
- *     LPROCFS_COUNTER_INCR(cntr, value) - use for multi-valued counters
- *     LPROCFS_COUNTER_INCBY1(cntr) - optimized for by-one counters
+/* Two optimized LPROCFS counter increment functions are provided:
+ *     lprocfs_counter_incr(cntr, value) - optimized for by-one counters
+ *     lprocfs_counter_add(cntr) - use for multi-valued counters
  * Counter data layout allows config flag, counter lock and the
  * count itself to reside within a single cache line.
  */
 
-#define LPROCFS_COUNTER_INCR(cntr, value)                         \
-        do {                                                      \
-               struct lprocfs_counter *c = (cntr);                \
-               LASSERT(c != NULL);                                \
-               if (!(c->config & LPROCFS_CNTR_EXTERNALLOCK))      \
-                     spin_lock(&c->l.internal);                   \
-               c->count++;                                        \
-               if (c->config & LPROCFS_CNTR_AVGMINMAX) {          \
-                      __u64 val = (__u64) (value);                \
-                      c->sum += val;                              \
-                      if (c->config & LPROCFS_CNTR_STDDEV)        \
-                         c->sumsquare += (val*val);               \
-                      if (val < c->min) c->min = val;             \
-                      if (val > c->max) c->max = val;             \
-               }                                                  \
-               if (!(c->config & LPROCFS_CNTR_EXTERNALLOCK))      \
-                      spin_unlock(&c->l.internal);                \
-      } while (0)
+static inline void lprocfs_counter_add(struct lprocfs_stats *stats, int idx,
+                                       long amount)
+{
+        struct lprocfs_counter *percpu_cntr;
 
-#define LPROCFS_COUNTER_INCBY1(cntr)                              \
-        do {                                                      \
-               struct lprocfs_counter *c = (cntr);                \
-               LASSERT(c != NULL);                                \
-               if (!(c->config & LPROCFS_CNTR_EXTERNALLOCK))      \
-                     spin_lock(&c->l.internal);                   \
-               c->count++;                                        \
-               if (!(c->config & LPROCFS_CNTR_EXTERNALLOCK))      \
-                      spin_unlock(&c->l.internal);                \
-      } while (0)
+        LASSERT(stats != NULL);
+        percpu_cntr = &(stats->ls_percpu[smp_processor_id()]->lp_cntr[idx]);
+        atomic_inc(&percpu_cntr->lc_cntl.la_entry);
+        percpu_cntr->lc_count++;
 
-#define LPROCFS_COUNTER_INIT(cntr, conf, lck, nam, un)                 \
-        do {                                                           \
-               struct lprocfs_counter *c = (cntr);                     \
-               LASSERT(c != NULL);                                     \
-               memset(c, 0, sizeof(struct lprocfs_counter));           \
-               if (conf & LPROCFS_CNTR_EXTERNALLOCK) c->l.external = (lck); \
-               else spin_lock_init(&c->l.internal);                    \
-               c->config = conf;                                       \
-               c->min = (~(__u64)0);                                   \
-               c->name = (nam);                                        \
-               c->units = (un);                                        \
-        } while (0)
+        if (percpu_cntr->lc_config & LPROCFS_CNTR_AVGMINMAX) {
+                percpu_cntr->lc_sum += amount;
+                if (percpu_cntr->lc_config & LPROCFS_CNTR_STDDEV)
+                        percpu_cntr->lc_sumsquare += (__u64)amount * amount;
+                if (amount < percpu_cntr->lc_min)
+                        percpu_cntr->lc_min = amount;
+                if (amount > percpu_cntr->lc_max)
+                        percpu_cntr->lc_max = amount;
+        }
+        atomic_inc(&percpu_cntr->lc_cntl.la_exit);
+}
 
-extern struct lprocfs_counters* lprocfs_alloc_counters(unsigned int num);
-extern void lprocfs_free_counters(struct lprocfs_counters* cntrs);
-extern int lprocfs_alloc_obd_counters(struct obd_device *obddev,
-                                      unsigned int num_private_counters);
-extern void lprocfs_free_obd_counters(struct obd_device *obddev);
-extern int lprocfs_register_counters(struct proc_dir_entry *root,
-                                     const char* name,
-                                     struct lprocfs_counters *cntrs);
+static inline void lprocfs_counter_incr(struct lprocfs_stats *stats, int idx)
+{
+        struct lprocfs_counter *percpu_cntr;
+
+        LASSERT(stats != NULL);
+        percpu_cntr = &(stats->ls_percpu[smp_processor_id()]->lp_cntr[idx]);
+        atomic_inc(&percpu_cntr->lc_cntl.la_entry);
+        percpu_cntr->lc_count++;
+        atomic_inc(&percpu_cntr->lc_cntl.la_exit);
+}
+
+extern struct lprocfs_stats *lprocfs_alloc_stats(unsigned int num);
+extern void lprocfs_free_stats(struct lprocfs_stats *stats);
+extern int lprocfs_alloc_obd_stats(struct obd_device *obddev,
+                                   unsigned int num_private_stats);
+extern void lprocfs_counter_init(struct lprocfs_stats *stats, int index,
+                                 unsigned conf, const char *name,
+                                 const char *units);
+extern void lprocfs_free_obd_stats(struct obd_device *obddev);
+extern int lprocfs_register_stats(struct proc_dir_entry *root, const char *name,
+                                  struct lprocfs_stats *stats);
 
 #define LPROCFS_INIT_MULTI_VARS(array, size)                              \
 void lprocfs_init_multi_vars(unsigned int idx,                            \
@@ -194,6 +205,9 @@ extern struct proc_dir_entry *lprocfs_register(const char *name,
                                                void *data);
 
 extern void lprocfs_remove(struct proc_dir_entry *root);
+
+extern struct proc_dir_entry *lprocfs_srch(struct proc_dir_entry *root,
+                                           const char *name);
 
 extern int lprocfs_obd_attach(struct obd_device *dev, struct lprocfs_vars *list);
 extern int lprocfs_obd_detach(struct obd_device *dev);
@@ -248,23 +262,28 @@ int fct_name(char *page, char **start, off_t off,                         \
 
 #else
 /* LPROCFS is not defined */
-#define LPROCFS_COUNTER_INCR(cntr, value)
-#define LPROCFS_COUNTER_INCBY1(cntr)
-#define LPROCFS_COUNTER_INIT(cntr, conf, lock, nam, un)
-
-static inline struct lprocfs_counters* lprocfs_alloc_counters(unsigned int num)
-{ return NULL; }
-static inline void lprocfs_free_counters(struct lprocfs_counters* cntrs)
+static inline void lprocfs_counter_add(struct lprocfs_stats *stats,
+                                       int index, long amount) { return; }
+static inline void lprocfs_counter_incr(struct lprocfs_stats *stats,
+                                        int index) { return; }
+static inline void lprocfs_counter_init(struct lprocfs_stats *stats,
+                                        int index, unsigned conf,
+                                        const char *name, const char *units)
 { return; }
 
-static inline int lprocfs_register_counters(struct proc_dir_entry *root,
-                                            const char* name,
-                                            struct lprocfs_counters *cntrs)
+static inline struct lprocfs_stats* lprocfs_alloc_stats(unsigned int num)
+{ return NULL; }
+static inline void lprocfs_free_stats(struct lprocfs_stats *stats)
+{ return; }
+
+static inline int lprocfs_register_stats(struct proc_dir_entry *root,
+                                            const char *name,
+                                            struct lprocfs_stats *stats)
 { return 0; }
-static inline int lprocfs_alloc_obd_counters(struct obd_device *obddev,
-                                             unsigned int num_private_counters)
+static inline int lprocfs_alloc_obd_stats(struct obd_device *obddev,
+                                             unsigned int num_private_stats)
 { return 0; }
-static inline void lprocfs_free_obd_counters(struct obd_device *obddev)
+static inline void lprocfs_free_obd_stats(struct obd_device *obddev)
 { return; }
 
 static inline struct proc_dir_entry *
@@ -279,6 +298,8 @@ static inline int lprocfs_add_vars(struct proc_dir_entry *root,
                                    struct lprocfs_vars *var,
                                    void *data) { return 0; }
 static inline void lprocfs_remove(struct proc_dir_entry *root) {};
+static inline struct proc_dir_entry *lprocfs_srch(struct proc_dir_entry *head,
+                                    const char *name) {return 0;}
 struct obd_device;
 static inline int lprocfs_obd_attach(struct obd_device *dev,
                                      struct lprocfs_vars *list) { return 0; }
