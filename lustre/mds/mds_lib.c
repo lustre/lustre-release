@@ -60,10 +60,12 @@ void mds_pack_inode2fid(struct ll_fid *fid, struct inode *inode)
 /* Note that we can copy all of the fields, just some will not be "valid" */
 void mds_pack_inode2body(struct mds_body *b, struct inode *inode)
 {
-        b->valid = OBD_MD_FLID | OBD_MD_FLATIME | OBD_MD_FLMTIME |
-                OBD_MD_FLCTIME | OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
-                OBD_MD_FLUID | OBD_MD_FLGID | OBD_MD_FLTYPE | OBD_MD_FLMODE |
-                OBD_MD_FLNLINK | OBD_MD_FLGENER;
+        b->valid = OBD_MD_FLID | OBD_MD_FLCTIME | OBD_MD_FLUID | OBD_MD_FLGID |
+                OBD_MD_FLTYPE | OBD_MD_FLMODE | OBD_MD_FLNLINK | OBD_MD_FLGENER;
+
+        if (!S_ISREG(inode->i_mode))
+                b->valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS | OBD_MD_FLATIME |
+                            OBD_MD_FLMTIME;
 
         b->ino = inode->i_ino;
         b->atime = LTIME_S(inode->i_atime);
