@@ -90,7 +90,7 @@ AC_SUBST(QSWNAL)
 #
 # LP_CONFIG_GM
 #
-# check if infiniband support is available
+# check if GM support is available
 #
 AC_DEFUN([LP_CONFIG_GM],
 [AC_MSG_CHECKING([if gm support was requested])
@@ -128,26 +128,54 @@ AC_SUBST(GMNAL)
 # LP_CONFIG_OPENIB
 #
 # check for OpenIB in the kernel
-AC_DEFUN([LP_CONFIG_OPENIB],
-[AC_MSG_CHECKING([if OpenIB kernel headers are present])
-OPENIBCPPFLAGS="-I$LINUX/drivers/infiniband/include -DIN_TREE_BUILD"
-EXTRA_KCFLAGS_save="$EXTRA_KCFLAGS"
-EXTRA_KCFLAGS="$EXTRA_KCFLAGS $OPENIBCPPFLAGS"
-LB_LINUX_TRY_COMPILE(
+AC_DEFUN([LP_CONFIG_OPENIB],[
+AC_MSG_CHECKING([whether to enable OpenIB support])
+# set default
+DFLTOPENIBCPPFLAGS="-I$LINUX/drivers/infiniband/include -DIN_TREE_BUILD"
+AC_ARG_WITH([openib],
+	AC_HELP_STRING([--with-openib=path],
+	               [build openibnal against path]),
 	[
+		case $with_openib in
+		yes)    OPENIBCPPFLAGS="$DFLTOPENIBCPPFLAGS"
+			ENABLEOPENIB=2
+			;;
+		no)     ENABLEOPENIB=0
+			;;
+		*)      OPENIBCPPFLAGS="-I$with_openib/include"
+			ENABLEOPENIB=3
+			;;
+		esac
+	],[
+                OPENIBCPPFLAGS="$DFLTOPENIBCPPFLAGS"
+		ENABLEOPENIB=1
+	])
+if test $ENABLEOPENIB -eq 0; then
+	AC_MSG_RESULT([disabled])
+else
+	EXTRA_KCFLAGS_save="$EXTRA_KCFLAGS"
+	EXTRA_KCFLAGS="$EXTRA_KCFLAGS $OPENIBCPPFLAGS"
+	LB_LINUX_TRY_COMPILE([
 		#include <ts_ib_core.h>
 	],[
-                struct ib_device_properties props;
+       	        struct ib_device_properties props;
 		return 0;
 	],[
 		AC_MSG_RESULT([yes])
 		OPENIBNAL="openibnal"
 	],[
 		AC_MSG_RESULT([no])
+		case $ENABLEOPENIB in
+		1) ;;
+		2) AC_MSG_ERROR([default openib headers not present]);;
+		3) AC_MSG_ERROR([bad --with-openib path]);;
+		*) AC_MSG_ERROR([internal error]);;
+		esac
 		OPENIBNAL=""
 		OPENIBCPPFLAGS=""
 	])
-EXTRA_KCFLAGS="$EXTRA_KCFLAGS_save"
+	EXTRA_KCFLAGS="$EXTRA_KCFLAGS_save"
+fi
 AC_SUBST(OPENIBCPPFLAGS)
 AC_SUBST(OPENIBNAL)
 ])
