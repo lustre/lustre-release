@@ -622,13 +622,27 @@ void class_disconnect_exports(struct obd_device *obd, int flags)
         EXIT;
 }
 
-void osic_init(struct obd_sync_io_container *osic)
+void osic_init(struct obd_sync_io_container **osic_out)
 {
+        struct obd_sync_io_container *osic;
+        OBD_ALLOC(osic, sizeof(*osic));
         spin_lock_init(&osic->osic_lock);
         osic->osic_rc = 0;
         osic->osic_pending = 0;
+        atomic_set(&osic->osic_refcount, 1);
         init_waitqueue_head(&osic->osic_waitq);
+        *osic_out = osic;
 };
+
+static inline void osic_grab(struct obd_sync_io_container *osic)
+{
+        atomic_inc(&osic->osic_refcount);
+}
+void osic_release(struct obd_sync_io_container *osic)
+{
+        if (atomic_dec_and_test(&osic->osic_refcount))
+                OBD_FREE(osic, sizeof(*osic));
+}
 
 void osic_add_one(struct obd_sync_io_container *osic)
 {
@@ -637,6 +651,7 @@ void osic_add_one(struct obd_sync_io_container *osic)
         spin_lock_irqsave(&osic->osic_lock, flags);
         osic->osic_pending++;
         spin_unlock_irqrestore(&osic->osic_lock, flags);
+        osic_grab(osic);
 }
 
 void osic_complete_one(struct obd_sync_io_container *osic, int rc)
@@ -657,6 +672,7 @@ void osic_complete_one(struct obd_sync_io_container *osic, int rc)
                         osic->osic_pending);
         if (wake)
                 wake_up(wake);
+        osic_release(osic);
 }
 
 static int osic_done(struct obd_sync_io_container *osic)

@@ -1604,6 +1604,24 @@ test_62() {
 }
 run_test 62 "verify obd_match failure doesn't LBUG (should -EIO)"
 
+# bug 2319 - osic_wait() interrupted causes crash because of invalid waitq.
+test_63() {
+	for i in /proc/fs/lustre/osc/*/max_dirty_mb ; do
+	echo 0 > $i
+	done
+	for i in `seq 10` ; do
+		dd if=/dev/zero of=$DIR/syncwrite_testfile bs=8k &
+		sleep 5
+		kill $!
+		sleep 1
+	done
+
+	for i in /proc/fs/lustre/osc/*/max_dirty_mb ; do
+		echo $[ 60 * 1025 *1024 ] > $i
+	done
+}
+run_test 63 "Verify osic_wait interruption does not crash"
+
 # on the LLNL clusters, runas will still pick up root's $TMP settings,
 # which will not be writable for the runas user, and then you get a CVS
 # error message with a corrupt path string (CVS bug) and panic.

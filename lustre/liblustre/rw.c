@@ -466,6 +466,7 @@ void put_sysio_cookie(struct llu_sysio_cookie *cookie)
 
         I_RELE(cookie->lsc_inode);
 
+        osic_release(cookie->lsc_osic);
         OBD_FREE(cookie, LLU_SYSIO_COOKIE_SIZE(cookie->lsc_npages));
 }
 
@@ -525,7 +526,7 @@ int llu_prep_async_io(struct llu_sysio_cookie *cookie, int cmd,
                 llap[i].llap_page = &pages[i];
                 llap[i].llap_inode = cookie->lsc_inode;
 
-                rc = obd_queue_sync_io(exp, lsm, NULL, &cookie->lsc_osic,
+                rc = obd_queue_sync_io(exp, lsm, NULL, cookie->lsc_osic,
                                        llap[i].llap_cookie, cmd,
                                        pages[i]._offset, pages[i]._count, 0);
                 if (rc)
@@ -543,7 +544,7 @@ int llu_start_async_io(struct llu_sysio_cookie *cookie)
         struct lov_stripe_md *lsm = llu_i2info(cookie->lsc_inode)->lli_smd;
         struct obd_export *exp = llu_i2obdexp(cookie->lsc_inode);
 
-        return obd_trigger_sync_io(exp, lsm, NULL, &cookie->lsc_osic);
+        return obd_trigger_sync_io(exp, lsm, NULL, cookie->lsc_osic);
 }
 
 /*
@@ -783,7 +784,7 @@ int llu_iop_iodone(struct ioctx *ioctxp)
         for (i = 0; i < lsca->ncookies; i++) {
                 cookie = lsca->cookies[i];
                 if (cookie) {
-                        err = osic_wait(&cookie->lsc_osic);
+                        err = osic_wait(cookie->lsc_osic);
                         if (err && !rc)
                                 rc = err;
                         if (!rc)

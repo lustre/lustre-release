@@ -111,6 +111,7 @@ struct obd_async_page_ops {
 
 struct obd_sync_io_container {
         spinlock_t      osic_lock;
+        atomic_t        osic_refcount;
         int             osic_pending;
         int             osic_rc;
         wait_queue_head_t osic_waitq;

@@ -575,6 +575,7 @@ EXPORT_SYMBOL(class_disconnect);
 EXPORT_SYMBOL(class_disconnect_exports);
 
 EXPORT_SYMBOL(osic_init);
+EXPORT_SYMBOL(osic_release);
 EXPORT_SYMBOL(osic_add_one);
 EXPORT_SYMBOL(osic_wait);
 EXPORT_SYMBOL(osic_complete_one);

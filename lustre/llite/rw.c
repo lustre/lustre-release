@@ -396,20 +396,22 @@ int ll_commit_write(struct file *file, struct page *page, unsigned from,
                 rc = obd_queue_async_io(exp, lsm, NULL, llap->llap_cookie, 
                                         OBD_BRW_WRITE, 0, 0, 0, 0);
                 if (rc != 0) { /* async failed, try sync.. */
-                        struct obd_sync_io_container osic;
+                        struct obd_sync_io_container *osic;
                         osic_init(&osic);
 
-                        rc = obd_queue_sync_io(exp, lsm, NULL, &osic, 
+                        rc = obd_queue_sync_io(exp, lsm, NULL, osic, 
                                                llap->llap_cookie, 
                                                OBD_BRW_WRITE, 0, to, 0);
                         if (rc)
-                                GOTO(out, rc);
+                                GOTO(free_osic, rc);
 
-                        rc = obd_trigger_sync_io(exp, lsm, NULL, &osic);
+                        rc = obd_trigger_sync_io(exp, lsm, NULL, osic);
                         if (rc)
-                                GOTO(out, rc);
+                                GOTO(free_osic, rc);
 
-                        rc = osic_wait(&osic);
+                        rc = osic_wait(osic);
+free_osic:
+                        osic_release(osic);
                         GOTO(out, rc);
                 }
                 LL_CDEBUG_PAGE(page, "write queued\n");
