@@ -575,7 +575,7 @@ __s32 portals_debug_copy_to_user(char *buf, unsigned long len);
 # undef printf
 #endif
 void portals_debug_msg(int subsys, int mask, char *file, const char *fn, 
-                       const int line, unsigned long stack, const char *format,
+                       const int line, unsigned long stack, char *format,
                         ...)
         __attribute__ ((format (printf, 7, 8)));
 #else
