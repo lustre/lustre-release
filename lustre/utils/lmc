@@ -64,6 +64,12 @@ def new_name(base):
 def get_uuid(name):
     return "%s_UUID" % (name)
 
+# simple pretty print XML
+def newline(dom, node, ind = ""):
+    node.appendChild(dom.createTextNode("\n" + ind))
+def indent(dom, node, ind = "   "):
+    node.appendChild(dom.createTextNode(ind))
+
 #
 # Create a new empty lustre document 
 def new_Lustre():
@@ -72,6 +78,31 @@ def new_Lustre():
     dom = xml.dom.minidom.parseString(str)
     return dom
 
+def new_network(dom, net, hostname, port):
+    name = new_name('net')
+    uuid = get_uuid(name)
+    str = """
+   <network name = "%s" uuid = "%s" type="%s" >
+      <server>%s</server>
+      <port>%d</port>
+   </network> """ % (name, uuid, net, hostname, port)
+    node = xml.dom.minidom.parseString(str)
+    return node.getElementsByTagName("network")[0]
+
+#
+# Create new object the fast and easy way
+# (note: dom is not needed for this way)
+def new_node(dom, net, hostname, port):
+    uuid = get_uuid(hostname)
+    str ="""
+<node name="%s" uuid="%s">
+</node> """ % (hostname, uuid)
+    node = xml.dom.minidom.parseString(str)
+    node = node.getElementsByTagName("node")[0]
+    indent(dom, node)
+    node.appendChild(new_network(dom, net, hostname, port))
+    newline(dom, node)
+    return node
 #
 # Create a new object the "correct" way by using the DOM api.
 #
@@ -81,6 +112,8 @@ def new_OBD(dom, name, fs, devname, format, dev_size=0, dev_file=""):
     obd = dom.createElement("obd")
     obd.setAttribute("name", name)
     obd.setAttribute("uuid", uuid)
+    obd.setAttribute('type', 'obdfilter')
+    obd.appendChild(dom.createTextNode("\n  "))
 
     fstype = dom.createElement("fstype")
     txt= dom.createTextNode(fs)
@@ -92,12 +125,14 @@ def new_OBD(dom, name, fs, devname, format, dev_size=0, dev_file=""):
         dev.setAttribute("size", "%s" % (dev_size))
     txt = dom.createTextNode(devname)
     dev.appendChild(txt)
+    newline(dom, obd, "  ")
     obd.appendChild(dev)
-
+    newline(dom, obd, "   ")
     fmt = dom.createElement("autoformat")
     txt = dom.createTextNode(format)
     fmt.appendChild(txt)
     obd.appendChild(fmt)
+    newline(dom, obd)
 
     return obd
 
@@ -146,14 +181,20 @@ def add_OST(dom, options, args):
     oscname = new_name("osc")
     ostname = new_name("ost")
     
+    node = new_node(dom, "tcp", host, 2436)
     obd = new_OBD(dom, obdname, "extN", devname, "no", size)
     osc = new_OSC(dom, oscname, obdname)
     ost = new_OST(dom, ostname, host, 2020, obdname)
     
-    dom.getElementsByTagName("lustre")[0].appendChild(obd)
-    dom.getElementsByTagName("lustre")[0].appendChild(osc)
-    dom.getElementsByTagName("lustre")[0].appendChild(ost)
-
+    lustre = dom.getElementsByTagName("lustre")[0]
+    lustre.appendChild(node)
+    newline(dom, lustre)
+    lustre.appendChild(obd)
+    newline(dom, lustre)    
+    lustre.appendChild(osc)
+    newline(dom, lustre)    
+    lustre.appendChild(ost)
+    newline(dom, lustre)    
 
 #
 # Command line processing
