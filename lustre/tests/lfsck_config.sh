@@ -12,7 +12,7 @@ MDSSIZE=${MDSSIZE:-100000}
 FSTYPE=${FSTYPE:-ext3}
 MOUNT=${MOUNT:-/mnt/lustre}
 #MOUNT2=${MOUNT2:-${MOUNT}2}
-NETWORKTYPE=${NETWORKTYPE:-tcp}
+NETTYPE=${NETTYPE:-tcp}
 
 OSTSIZE=${OSTSIZE:-200000}
 
@@ -28,7 +28,7 @@ rm -f $config
 
 # create nodes
 ${LMC} --add node --node localhost || exit 10
-${LMC} --add net --node  localhost --nid `hostname` --nettype $NETWORKTYPE || exit 11
+${LMC} --add net --node  localhost --nid `hostname` --nettype $NETTYPE || exit 11
 
 # configure mds server
 ${LMC} --add mds --nspath /mnt/mds_ns  --node localhost --mds mds1 --fstype $FSTYPE --dev $MDSDEV --size $MDSSIZE $JARG --mkfsoptions "-I $MDSISIZE" || exit 20
