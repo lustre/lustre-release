@@ -252,7 +252,7 @@ static int mds_read_last_rcvd(struct obd_device *obd, struct file *file)
 
         if (rc != sizeof(*msd)) {
                 CERROR("error reading MDS %s: rc = %d\n", LAST_RCVD,rc);
-                if (rc > 0)
+                if (rc >= 0)
                         rc = -EIO;
                 GOTO(err_msd, rc);
         }
