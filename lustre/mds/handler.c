@@ -1086,7 +1086,7 @@ static int mds_getattr_lock(struct ptlrpc_request *req, int offset,
                 LASSERT(dparent);
 
                 dchild = ll_lookup_one_len(name, dparent, namesize - 1);
-                LASSERT(dchild);
+                LASSERT(!IS_ERR(dchild));
                 LDLM_LOCK_PUT(granted_lock);
         }
 
