@@ -1076,21 +1076,21 @@ void ll_read_inode2(struct inode *inode, void *opaque)
         } else {
                 inode->i_op = &ll_special_inode_operations;
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-                init_special_inode(inode, inode->i_mode, 
+                init_special_inode(inode, inode->i_mode,
                                    kdev_t_to_nr(inode->i_rdev));
 #else
                 init_special_inode(inode, inode->i_mode, inode->i_rdev);
-                
+
                 lli->ll_save_ifop = inode->i_fop;
                 if (S_ISCHR(inode->i_mode)) {
-                        inode->i_fop = &ll_special_chr_inode_fops;                                                         
-                }else if (S_ISBLK(inode->i_mode)) {
-                        inode->i_fop = &ll_special_blk_inode_fops; 
-                }else if (S_ISFIFO(inode->i_mode)){
+                        inode->i_fop = &ll_special_chr_inode_fops;
+                } else if (S_ISBLK(inode->i_mode)) {
+                        inode->i_fop = &ll_special_blk_inode_fops;
+                } else if (S_ISFIFO(inode->i_mode)) {
                         inode->i_fop = &ll_special_fifo_inode_fops;
-                }else if (S_ISSOCK(inode->i_mode)){ 
+                } else if (S_ISSOCK(inode->i_mode)) {
                         inode->i_fop = &ll_special_sock_inode_fops;
-                }                                               
+                }
                 inode->i_fop->owner = lli->ll_save_ifop->owner;
 #endif
                 EXIT;
@@ -1098,7 +1098,7 @@ void ll_read_inode2(struct inode *inode, void *opaque)
 }
 
 int ll_iocontrol(struct inode *inode, struct file *file,
-                        unsigned int cmd, unsigned long arg)
+                 unsigned int cmd, unsigned long arg)
 {
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct ptlrpc_request *req = NULL;

@@ -157,8 +157,8 @@ void ll_lookup_finish_locks(struct lookup_intent *it, struct dentry *dentry)
                 mdc_set_lock_data(&it->d.lustre.it_lock_handle, inode);
         }
 
-        /* drop IT_LOOKUP locks */
-        if (it->it_op == IT_LOOKUP)
+        /* drop lookup or getattr locks immediately */
+        if (it->it_op == IT_LOOKUP || it->it_op == IT_GETATTR)
                 ll_intent_release(it);
 }
 
