@@ -35,6 +35,7 @@
 #include <linux/obd_class.h>
 #include <linux/obd.h>
 #endif
+#include <linux/lustre_log.h>
 #include <linux/lprocfs_status.h>
 #include <portals/list.h>
 

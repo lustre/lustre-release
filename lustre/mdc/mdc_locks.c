@@ -31,11 +31,10 @@
 # include <linux/init.h>
 #else
 # include <liblustre.h>
-# include <linux/obd_class.h>
 #endif
 
+#include <linux/obd_class.h>
 #include <linux/lustre_mds.h>
-#include <linux/lustre_lite.h>
 #include <linux/lustre_dlm.h>
 #include <linux/lprocfs_status.h>
 #include "mdc_internal.h"
