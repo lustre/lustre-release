@@ -10,15 +10,20 @@
 
 --- linux-2.4.19-hp2_pnnl2/fs/dcache.c~vfs_intent_hp	Sun Jan 19 19:04:47 2003
 +++ linux-2.4.19-hp2_pnnl2-root/fs/dcache.c	Sun Jan 19 19:04:47 2003
-@@ -145,6 +145,8 @@ repeat:
- unhash_it:
- 	list_del_init(&dentry->d_hash);
- 
++@@ -186,6 +188,13 @@ int d_invalidate(struct dentry * dentry)
+ 		spin_unlock(&dcache_lock);
+ 		return 0;
+ 	}
+
++	/* network invalidation by Lustre */
++	if (dentry->d_flags & DCACHE_LUSTRE_INVALID) { 
++		spin_unlock(&dcache_lock);
++		return 0;
++	}
 +
-+
- kill_it: {
- 		struct dentry *parent;
- 		list_del(&dentry->d_child);
+ 	/*
+ 	 * Check whether to do a partial shrink_dcache
+ 	 * to get rid of unused child entries.
 @@ -616,6 +618,7 @@ struct dentry * d_alloc(struct dentry * 
  	dentry->d_op = NULL;
  	dentry->d_fsdata = NULL;
@@ -29,14 +34,7 @@
  	INIT_LIST_HEAD(&dentry->d_subdirs);
 --- linux-2.4.19-hp2_pnnl2/fs/namei.c~vfs_intent_hp	Sun Jan 19 19:04:47 2003
 +++ linux-2.4.19-hp2_pnnl2-root/fs/namei.c	Sun Jan 19 19:35:55 2003
-@@ -1,3 +1,6 @@
-+
-+
-+
- /*
-  *  linux/fs/namei.c
-  *
-@@ -94,6 +97,14 @@
+@@ -94,6 +97,13 @@
   * XEmacs seems to be relying on it...
   */
  
@@ -46,7 +44,6 @@
 +		de->d_op->d_intent_release(de, it);
 +
 +}
-+
 +
  /* In order to reduce some races, while at the same time doing additional
   * checking and hopefully speeding things up, we copy filenames to the
@@ -202,8 +199,8 @@
  		if (lookup_flags & LOOKUP_DIRECTORY) {
  			err = -ENOTDIR; 
 -			if (!inode->i_op || !inode->i_op->lookup)
-+			if (!inode->i_op || (!inode->i_op->lookup &&
-+					     !inode->i_op->lookup2))
++			if (!inode->i_op ||
++			    (!inode->i_op->lookup && !inode->i_op->lookup2))
  				break;
  		}
  		goto return_base;
@@ -462,7 +459,7 @@
  		dput(dentry);
  	}
  	up(&nd.dentry->d_inode->i_sem);
-+ out2:
++out2:
  	path_release(&nd);
  out:
  	putname(tmp);
@@ -548,15 +545,15 @@
  	error = -EISDIR;
  	if (nd.last_type != LAST_NORM)
  		goto exit1;
-+        if (nd.dentry->d_inode->i_op->unlink2) {
-+                struct inode_operations *op = nd.dentry->d_inode->i_op;
-+                error = op->unlink2(nd.dentry->d_inode, 
-+                                   nd.last.name, 
-+                                   nd.last.len);
-+                /* the file system want to use normal vfs path now */
-+                if (error != -EOPNOTSUPP)
-+                        goto exit1;
-+        }
++	if (nd.dentry->d_inode->i_op->unlink2) {
++		struct inode_operations *op = nd.dentry->d_inode->i_op;
++		error = op->unlink2(nd.dentry->d_inode, 
++				    nd.last.name, 
++				    nd.last.len);
++		/* the file system want to use normal vfs path now */
++		if (error != -EOPNOTSUPP)
++			goto exit1;
++	}
  	down(&nd.dentry->d_inode->i_sem);
 -	dentry = lookup_hash(&nd.last, nd.dentry);
 +	dentry = lookup_hash_it(&nd.last, nd.dentry, &it);
@@ -584,16 +581,16 @@
  		if (error)
  			goto out;
 -		dentry = lookup_create(&nd, 0);
-+                if (nd.dentry->d_inode->i_op->symlink2) {
-+                        struct inode_operations *op = nd.dentry->d_inode->i_op;
-+                        error = op->symlink2(nd.dentry->d_inode, 
-+                                             nd.last.name, 
-+                                             nd.last.len,
-+                                             from);
-+                        /* the file system want to use normal vfs path now */
-+                        if (error != -EOPNOTSUPP)
-+                                goto out2;
-+                }
++		if (nd.dentry->d_inode->i_op->symlink2) {
++			struct inode_operations *op = nd.dentry->d_inode->i_op;
++			error = op->symlink2(nd.dentry->d_inode, 
++					     nd.last.name, 
++					     nd.last.len,
++					     from);
++			/* the file system want to use normal vfs path now */
++			if (error != -EOPNOTSUPP)
++				goto out2;
++		}
 +		it.it_data = from;
 +		dentry = lookup_create(&nd, 0, &it);
  		error = PTR_ERR(dentry);
@@ -603,10 +600,10 @@
  			dput(dentry);
  		}
  		up(&nd.dentry->d_inode->i_sem);
-+        out2:
++	out2:
  		path_release(&nd);
 -out:
-+        out:
++	out:
  		putname(to);
  	}
  	putname(from);
@@ -632,16 +629,16 @@
  		if (old_nd.mnt != nd.mnt)
  			goto out_release;
 -		new_dentry = lookup_create(&nd, 0);
-+                if (nd.dentry->d_inode->i_op->link2) {
-+                        struct inode_operations *op = nd.dentry->d_inode->i_op;
-+                        error = op->link2(old_nd.dentry->d_inode, 
-+                                          nd.dentry->d_inode, 
-+                                          nd.last.name, 
-+                                          nd.last.len);
-+                        /* the file system want to use normal vfs path now */
-+                        if (error != -EOPNOTSUPP)
-+                                goto out_release;
-+                }
++		if (nd.dentry->d_inode->i_op->link2) {
++			struct inode_operations *op = nd.dentry->d_inode->i_op;
++			error = op->link2(old_nd.dentry->d_inode, 
++					  nd.dentry->d_inode, 
++					  nd.last.name, 
++					  nd.last.len);
++			/* the file system want to use normal vfs path now */
++			if (error != -EOPNOTSUPP)
++				goto out_release;
++		}
 +		it.it_op = IT_LINK2;
 +		new_dentry = lookup_create(&nd, 0, &it);
  		error = PTR_ERR(new_dentry);
@@ -717,19 +714,19 @@
  	if (newnd.last_type != LAST_NORM)
  		goto exit2;
  
-+        if (old_dir->d_inode->i_op->rename2) {
-+                lock_kernel();
-+                error = old_dir->d_inode->i_op->rename2(old_dir->d_inode, 
-+                                                new_dir->d_inode,
-+                                                oldnd.last.name, 
-+                                                oldnd.last.len,
-+                                                newnd.last.name,
-+                                                newnd.last.len);
-+                unlock_kernel();
-+                /* the file system want to use normal vfs path now */
-+                if (error != -EOPNOTSUPP)
-+                        goto exit2;
-+        }
++	if (old_dir->d_inode->i_op->rename2) {
++		lock_kernel();
++		error = old_dir->d_inode->i_op->rename2(old_dir->d_inode, 
++						new_dir->d_inode,
++						oldnd.last.name, 
++						oldnd.last.len,
++						newnd.last.name,
++						newnd.last.len);
++		unlock_kernel();
++		/* the file system want to use normal vfs path now */
++		if (error != -EOPNOTSUPP)
++			goto exit2;
++	}
 +
  	double_lock(new_dir, old_dir);
  
@@ -768,7 +765,7 @@
  static inline int
 -__vfs_follow_link(struct nameidata *nd, const char *link)
 +__vfs_follow_link(struct nameidata *nd, const char *link, 
-+                     struct lookup_intent *it)
++		  struct lookup_intent *it)
  {
  	int res = 0;
  	char *name;
@@ -790,7 +787,7 @@
 +}
 +
 +int vfs_follow_link_it(struct nameidata *nd, const char *link, 
-+                       struct lookup_intent *it)
++		       struct lookup_intent *it)
 +{
 +	return __vfs_follow_link(nd, link, it);
  }
@@ -1260,6 +1257,14 @@
  };
  
  /* the dentry parameter passed to d_hash and d_compare is the parent
+@@ -124,6 +155,7 @@ d_iput:            no              no              yes
+ 					 * s_nfsd_free_path semaphore will be down
+ 					 */
+ #define DCACHE_REFERENCED	0x0008	/* Recently used, don't discard. */
++#define DCACHE_LUSTRE_INVALID	0x0010	/* Lustre invalidated */
+ 
+ extern spinlock_t dcache_lock;
+ 
 --- linux-2.4.19-hp2_pnnl2/include/linux/fs.h~vfs_intent_hp	Sun Jan 19 19:04:47 2003
 +++ linux-2.4.19-hp2_pnnl2-root/include/linux/fs.h	Sun Jan 19 19:04:48 2003
 @@ -575,6 +575,7 @@ struct file {
