@@ -12,7 +12,7 @@ else
 MODULE = osc
 modulefs_DATA = osc.o
 EXTRA_PROGRAMS = osc
-osc_SOURCES = osc_request.c lproc_osc.c osc_lib.c
+osc_SOURCES = osc_request.c lproc_osc.c osc_lib.c  osc_create.c osc_rpcd.c osc_internal.h
 endif
 
 include $(top_srcdir)/Rules
