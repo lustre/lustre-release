@@ -71,7 +71,7 @@ inline void set_page_clean(struct page *page)
 }
 
 /* SYNCHRONOUS I/O to object storage for an inode */
-static int ll_brw(int rw, struct inode *inode, struct page *page, int create)
+static int ll_brw(int cmd, struct inode *inode, struct page *page, int create)
 {
         struct ll_inode_info *lli = ll_i2info(inode);
         struct lov_stripe_md *md = lli->lli_smd;
@@ -88,7 +88,7 @@ static int ll_brw(int rw, struct inode *inode, struct page *page, int create)
         pg.off = ((obd_off)page->index) << PAGE_SHIFT;
         pg.flag = create ? OBD_BRW_CREATE : 0;
 
-        err = obd_brw(rw, ll_i2obdconn(inode), md, 1, &pg, ll_sync_io_cb, cbd);
+        err = obd_brw(cmd, ll_i2obdconn(inode), md, 1, &pg, ll_sync_io_cb, cbd);
 
         RETURN(err);
 } /* ll_brw */
