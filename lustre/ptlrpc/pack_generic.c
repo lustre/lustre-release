@@ -1078,7 +1078,7 @@ void lustre_assert_wire_constants(void)
                  (long long)(int)sizeof(((struct lustre_msg *)0)->buflens[7]));
 
         /* Checks for struct obdo */
-        LASSERTF((int)sizeof(struct obdo) == 172, " found %lld\n",
+        LASSERTF((int)sizeof(struct obdo) == 176, " found %lld\n",
                  (long long)(int)sizeof(struct obdo));
         LASSERTF((int)offsetof(struct obdo, o_id) == 0, " found %lld\n",
                  (long long)(int)offsetof(struct obdo, o_id));
@@ -1152,7 +1152,7 @@ void lustre_assert_wire_constants(void)
                  (long long)(int)offsetof(struct obdo, o_easize));
         LASSERTF((int)sizeof(((struct obdo *)0)->o_easize) == 4, " found %lld\n",
                  (long long)(int)sizeof(((struct obdo *)0)->o_easize));
-        LASSERTF((int)offsetof(struct obdo, o_inline) == 108, " found %lld\n",
+        LASSERTF((int)offsetof(struct obdo, o_inline) == 112, " found %lld\n",
                  (long long)(int)offsetof(struct obdo, o_inline));
         LASSERTF((int)sizeof(((struct obdo *)0)->o_inline) == 64, " found %lld\n",
                  (long long)(int)sizeof(((struct obdo *)0)->o_inline));
@@ -1362,11 +1362,11 @@ void lustre_assert_wire_constants(void)
                  (long long)OBD_BRW_FROM_GRANT);
 
         /* Checks for struct ost_body */
-        LASSERTF((int)sizeof(struct ost_body) == 172, " found %lld\n",
+        LASSERTF((int)sizeof(struct ost_body) == 176, " found %lld\n",
                  (long long)(int)sizeof(struct ost_body));
         LASSERTF((int)offsetof(struct ost_body, oa) == 0, " found %lld\n",
                  (long long)(int)offsetof(struct ost_body, oa));
-        LASSERTF((int)sizeof(((struct ost_body *)0)->oa) == 172, " found %lld\n",
+        LASSERTF((int)sizeof(((struct ost_body *)0)->oa) == 176, " found %lld\n",
                  (long long)(int)sizeof(((struct ost_body *)0)->oa));
 
         /* Checks for struct ll_fid */
