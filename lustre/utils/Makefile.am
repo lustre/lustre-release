@@ -1,5 +1,6 @@
 # Administration utilities Makefile
 DEFS=
+SUBDIRS = Lustre
 
 CFLAGS:=-g -O2 -I$(top_srcdir)/utils -I$(PORTALS)/include  -I$(srcdir)/../include -Wall -L$(PORTALSLIB)
 KFLAGS:=
