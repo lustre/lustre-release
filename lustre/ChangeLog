@@ -27,6 +27,7 @@
 	- add --abort-recovery option to lconf to abort recovery on device
 	  startup (6017)
 	- add support for an arbitrary number of OSTs (3026)  
+	- Quota support protocol changes.
 	
 2005-03-22  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.1
