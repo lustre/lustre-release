@@ -14,3 +14,4 @@ vfs_mntcwd_2.5.72_rev1.patch
 ext3-san-jdike-2.5.73.patch
 iopen-2.5.73.patch
 export-truncate-2.5.63.patch
+qla2xxx-v8.00.00b1-2.5.73.patch

@@ -1,0 +1,24 @@
+
+--- linux-2.5.73/drivers/scsi/Makefile~qla2xxx-v8.00.00b1-2.5.73	2003-06-22 11:33:08.000000000 -0700
++++ linux-2.5.73-n9560/drivers/scsi/Makefile	2003-07-01 16:29:54.000000000 -0700
+@@ -73,6 +73,7 @@ obj-$(CONFIG_SCSI_QLOGIC_FAS)	+= qlogicf
+ obj-$(CONFIG_SCSI_QLOGIC_ISP)	+= qlogicisp.o 
+ obj-$(CONFIG_SCSI_QLOGIC_FC)	+= qlogicfc.o 
+ obj-$(CONFIG_SCSI_QLOGIC_1280)	+= qla1280.o 
++obj-$(CONFIG_SCSI_QLA2XXX)      += qla2xxx/
+ obj-$(CONFIG_SCSI_PAS16)	+= pas16.o
+ obj-$(CONFIG_SCSI_SEAGATE)	+= seagate.o
+ obj-$(CONFIG_SCSI_FD_8xx)	+= seagate.o
+--- linux-2.5.73/drivers/scsi/Kconfig~qla2xxx-v8.00.00b1-2.5.73	2003-06-22 11:33:16.000000000 -0700
++++ linux-2.5.73-n9560/drivers/scsi/Kconfig	2003-07-01 16:29:54.000000000 -0700
+@@ -1283,6 +1283,8 @@ config SCSI_QLOGIC_1280
+ 	  The module will be called qla1280. If you want to compile it as
+ 	  a module, say M here and read <file:Documentation/modules.txt>.
+ 
++source "drivers/scsi/qla2xxx/Kconfig"
++
+ config SCSI_QLOGICPTI
+ 	tristate "PTI Qlogic, ISP Driver"
+ 	depends on SBUS && SCSI
+
+_
