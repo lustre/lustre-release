@@ -40,62 +40,6 @@
 
 extern int ptlrpc_init_portals(void);
 extern void ptlrpc_exit_portals(void);
-static int ldlm_hooks_referenced = 0;
-
-int (*ptlrpc_ldlm_namespace_cleanup)(struct ldlm_namespace *, int);
-int (*ptlrpc_ldlm_replay_locks)(struct obd_import *);
-
-#define GET_HOOK(name)                                                         \
-if (!ptlrpc_##name) {                                                          \
-        if (!(ptlrpc_##name = inter_module_get(#name))) {                      \
-                CERROR("can't i_m_g(\"" #name "\")\n");                        \
-                return 0;                                                      \
-        }                                                                      \
-}
-
-static int ldlm_hooks_referenced;
-
-/* This is called from ptlrpc_get_connection, which runs after all the modules
- * are loaded, but before anything else interesting happens.
- */
-int ptlrpc_get_ldlm_hooks(void)
-{
-        if (ldlm_hooks_referenced)
-                return 1;
-
-        GET_HOOK(ldlm_namespace_cleanup);
-        GET_HOOK(ldlm_replay_locks);
-
-        ldlm_hooks_referenced = 1;
-        RETURN(1);
-}
-
-#undef GET_HOOK
-
-#define PUT_HOOK(hook)                                                         \
-if (ptlrpc_##hook) {                                                           \
-        inter_module_put(#hook);                                               \
-        ptlrpc_##hook = NULL;                                                  \
-}
-
-void ptlrpc_put_ldlm_hooks(void)
-{
-        ENTRY;
-        if (!ldlm_hooks_referenced)
-                return;
-
-        PUT_HOOK(ldlm_namespace_cleanup);
-        PUT_HOOK(ldlm_replay_locks);
-        ldlm_hooks_referenced = 0;
-        EXIT;
-}
-
-#undef PUT_HOOK
-
-int ptlrpc_ldlm_hooks_referenced(void)
-{
-        return ldlm_hooks_referenced;
-}
 
 __init int ptlrpc_init(void)
 {
@@ -115,11 +59,13 @@ __init int ptlrpc_init(void)
         ptlrpc_abort_inflight_superhack = ptlrpc_abort_inflight;
 
         ptlrpc_start_pinger();
+        ldlm_init();
         RETURN(0);
 }
 
 static void __exit ptlrpc_exit(void)
 {
+        ldlm_exit();
         ptlrpc_stop_pinger();
         ptlrpc_exit_portals();
         ptlrpc_cleanup_connection();
@@ -222,10 +168,6 @@ EXPORT_SYMBOL(lustre_swab_ptlbd_op);
 EXPORT_SYMBOL(lustre_swab_ptlbd_niob);
 EXPORT_SYMBOL(lustre_swab_ptlbd_rsp);
 
-/* ptlrpc_module.c */
-EXPORT_SYMBOL(ptlrpc_put_ldlm_hooks);
-EXPORT_SYMBOL(ptlrpc_ldlm_hooks_referenced);
-
 /* recover.c */
 EXPORT_SYMBOL(ptlrpc_run_recovery_over_upcall);
 EXPORT_SYMBOL(ptlrpc_run_failed_import_upcall);
@@ -257,7 +199,7 @@ EXPORT_SYMBOL(llog_client_ops);
 
 #ifdef __KERNEL__
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
-MODULE_DESCRIPTION("Lustre Request Processor");
+MODULE_DESCRIPTION("Lustre Request Processor and Lock Management");
 MODULE_LICENSE("GPL");
 
 module_init(ptlrpc_init);

@@ -25,18 +25,13 @@
 #ifndef PTLRPC_INTERNAL_H
 #define PTLRPC_INTERNAL_H
 
+#include "../ldlm/ldlm_internal.h"
+
 struct ldlm_namespace;
 struct obd_import;
 struct ldlm_res_id;
 struct ptlrpc_request_set;
 
-/* ldlm hooks that we need, managed via inter_module_{get,put} */
-extern int (*ptlrpc_ldlm_namespace_cleanup)(struct ldlm_namespace *, int);
-extern int (*ptlrpc_ldlm_cli_cancel_unused)(struct ldlm_namespace *,
-                                            struct ldlm_res_id *, int);
-extern int (*ptlrpc_ldlm_replay_locks)(struct obd_import *);
-
-int ptlrpc_get_ldlm_hooks(void);
 void ptlrpc_daemonize(void);
 
 void ptlrpc_request_handle_notconn(struct ptlrpc_request *);
