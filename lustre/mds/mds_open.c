@@ -106,7 +106,6 @@ int mds_open(struct mds_update_record *rec, int offset,
         if (IS_ERR(parent)) {
                 rc = PTR_ERR(parent);
                 CERROR("parent lookup error %d\n", rc);
-                LBUG();
                 RETURN(rc);
         }
         LASSERT(parent->d_inode);
@@ -201,7 +200,7 @@ int mds_open(struct mds_update_record *rec, int offset,
 
         /* dentry_open does a dput(de) and mntput(mds->mds_vfsmnt) on error */
         mntget(mds->mds_vfsmnt);
-        file = dentry_open(dchild,mds->mds_vfsmnt,
+        file = dentry_open(dchild, mds->mds_vfsmnt,
                            rec->ur_flags & ~(O_DIRECT | O_TRUNC));
         if (IS_ERR(file))
                 GOTO(out_step_5, rc = PTR_ERR(file));
