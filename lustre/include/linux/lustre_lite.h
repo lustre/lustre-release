@@ -46,6 +46,7 @@ struct ll_inode_info {
         struct obdo     *lli_obdo;
         char            *lli_symlink_name;
         char             lli_inline[LL_INLINESZ];
+        struct lustre_handle lli_intent_lock_handle;
 };
 
 #define LL_SUPER_MAGIC 0x0BD00BD0
@@ -55,16 +56,14 @@ struct ll_inode_info {
 #define LL_COMMITCBD_RUNNING   0x4
 
 struct ll_sb_info {
-        struct obd_conn           ll_conn;
+        struct obd_conn           ll_mdc_conn;
+        struct obd_conn           ll_osc_conn;
         ino_t                     ll_rootino; /* number of root inode */
-        struct ptlrpc_client      ll_mds_client;
-        struct ptlrpc_connection *ll_mds_conn;
-        struct ldlm_namespace    *ll_namespace;
 
         wait_queue_head_t         ll_commitcbd_waitq;
         wait_queue_head_t         ll_commitcbd_ctl_waitq;
         int                       ll_commitcbd_flags;
-        struct task_struct        *ll_commitcbd_thread;
+        struct task_struct       *ll_commitcbd_thread;
         time_t                    ll_commitcbd_waketime;
         time_t                    ll_commitcbd_timeout;
         spinlock_t                ll_commitcbd_lock;
@@ -78,7 +77,13 @@ static inline struct ll_sb_info *ll_s2sbi(struct super_block *sb)
 
 static inline struct obd_conn *ll_s2obdconn(struct super_block *sb)
 {
-        return &(ll_s2sbi(sb))->ll_conn;
+        return &(ll_s2sbi(sb))->ll_osc_conn;
+}
+
+static inline struct mdc_obd *sbi2mdc(struct ll_sb_info *sbi)
+{
+        struct obd_device *obd = sbi->ll_mdc_conn.oc_dev;
+        return &obd->u.mdc;
 }
 
 static inline struct ll_sb_info *ll_i2sbi(struct inode *inode)
@@ -115,6 +120,13 @@ static inline void ll_inode2fid(struct ll_fid *fid, struct inode *inode)
         ll_ino2fid(fid, inode->i_ino, inode->i_generation,
                    inode->i_mode & S_IFMT);
 }
+
+/* namei.c */
+int ll_lock(struct inode *dir, struct dentry *dentry,
+            struct lookup_intent *it, struct lustre_handle *lockh);
+int ll_unlock(__u32 mode, struct lustre_handle *lockh);
+
+
 
 /* dir.c */
 extern struct file_operations ll_dir_operations;

@@ -45,18 +45,22 @@
 #define PTL_RPC_MSG_REQUEST 4711
 #define PTL_RPC_MSG_ERR 4712
 
-struct lustre_msg {
-        __u64 conn;
-        __u64 token;
+struct lustre_handle {
+        __u64 addr;
+        __u64 cookie;
+};
 
-        __u32 opc;
-        __u32 xid;
+struct lustre_msg {
+        __u64 conn;  /* pointer to ptlrpc_connection */
+        __u64 token; /* security token */
+
         __u64 last_rcvd;
         __u64 last_committed;
         __u64 transno;
+        __u32 opc;
         __u32 status;
         __u32 type;
-        __u32   connid;
+        __u32 target_id;
         __u32   bufcount;
         __u32   buflens[0];
 };
@@ -98,6 +102,7 @@ typedef uint32_t        obd_count;
 
 #define OBD_FL_INLINEDATA       (0x00000001)
 #define OBD_FL_OBDMDEXISTS      (0x00000002)
+#define OBD_FL_CREATEONOPEN     (0x00000004)
 
 #define OBD_INLINESZ    60
 #define OBD_OBDMDSZ     60
@@ -194,7 +199,9 @@ struct ost_body {
 #define MDS_REINT      4
 #define MDS_READPAGE   6
 #define MDS_CONNECT    7
-#define MDS_STATFS     8
+#define MDS_DISCONNECT 8
+#define MDS_GETSTATUS  9
+#define MDS_STATFS     10
 
 #define REINT_SETATTR  1
 #define REINT_CREATE   2
@@ -302,14 +309,13 @@ typedef enum {
         LCK_NL
 } ldlm_mode_t;
 
-struct ldlm_handle {
-        __u64 addr;
-        __u64 cookie;
-};
-
 struct ldlm_extent {
         __u64 start;
         __u64 end;
+};
+
+struct ldlm_intent {
+        __u64 opc;
 };
 
 struct ldlm_resource_desc {
@@ -327,23 +333,24 @@ struct ldlm_lock_desc {
 };
 
 struct ldlm_request {
-        __u32 flags;
+        __u32 lock_flags;
         struct ldlm_lock_desc lock_desc;
-        struct ldlm_handle lock_handle1;
-        struct ldlm_handle lock_handle2;
+        struct lustre_handle lock_handle1;
+        struct lustre_handle lock_handle2;
 };
 
 struct ldlm_reply {
-        __u32 flags;
-        struct ldlm_handle lock_handle;
-        struct ldlm_extent lock_extent;
+        __u32 lock_flags;
+        __u64 lock_resource_name[3];
+        struct lustre_handle lock_handle;
+        struct ldlm_extent lock_extent;   /* XXX make this policy 1 &2 */
+        __u64  lock_policy_res1;
+        __u64  lock_policy_res2;
 };
 
 /*
  *   OBD IOCTLS
  */
-
-
 #define OBD_IOCTL_VERSION 0x00010001
 
 struct obd_ioctl_data {

@@ -91,7 +91,7 @@ static int ptl_send_buf(struct ptlrpc_request *request,
         CDEBUG(D_NET, "Sending %d bytes to portal %d, xid %Ld\n",
                request->rq_req_md.length, portal, request->rq_xid);
 
-        rc = PtlPut(md_h, ack, remote_id, portal, 0, request->rq_reqmsg->xid,
+        rc = PtlPut(md_h, ack, remote_id, portal, 0, request->rq_xid,
                     0, 0);
         if (rc != PTL_OK) {
                 CERROR("PtlPut(%Lu, %d, %Ld) failed: %d\n", remote_id.nid,
@@ -109,18 +109,14 @@ int ptlrpc_send_bulk(struct ptlrpc_bulk_desc *desc)
         ptl_process_id_t remote_id;
         ENTRY;
 
-        atomic_set(&desc->b_finished_count, desc->b_page_count);
-
         list_for_each_safe(tmp, next, &desc->b_page_list) {
-                /* only request an ACK for the last page */
-                int ack = (next == &desc->b_page_list);
                 struct ptlrpc_bulk_page *bulk;
                 bulk = list_entry(tmp, struct ptlrpc_bulk_page, b_link);
 
                 bulk->b_md.start = bulk->b_buf;
                 bulk->b_md.length = bulk->b_buflen;
                 bulk->b_md.eventq = bulk_source_eq;
-                bulk->b_md.threshold = 1 + ack; /* SENT and (if last) ACK */
+                bulk->b_md.threshold = 2; /* SENT and ACK */
                 bulk->b_md.options = PTL_MD_OP_PUT;
                 bulk->b_md.user_ptr = bulk;
 
@@ -138,8 +134,8 @@ int ptlrpc_send_bulk(struct ptlrpc_bulk_desc *desc)
                 CDEBUG(D_NET, "Sending %d bytes to portal %d, xid %d\n",
                        bulk->b_md.length, desc->b_portal, bulk->b_xid);
 
-                rc = PtlPut(bulk->b_md_h, (ack ? PTL_ACK_REQ : PTL_NOACK_REQ),
-                            remote_id, desc->b_portal, 0, bulk->b_xid, 0, 0);
+                rc = PtlPut(bulk->b_md_h, PTL_ACK_REQ, remote_id,
+                            desc->b_portal, 0, bulk->b_xid, 0, 0);
                 if (rc != PTL_OK) {
                         CERROR("PtlPut(%Lu, %d, %d) failed: %d\n",
                                remote_id.nid, desc->b_portal, bulk->b_xid, rc);
@@ -157,8 +153,6 @@ int ptlrpc_register_bulk(struct ptlrpc_bulk_desc *desc)
         struct list_head *tmp, *next;
         int rc;
         ENTRY;
-
-        atomic_set(&desc->b_finished_count, desc->b_page_count);
 
         list_for_each_safe(tmp, next, &desc->b_page_list) {
                 struct ptlrpc_bulk_page *bulk;
@@ -224,7 +218,6 @@ int ptlrpc_reply(struct ptlrpc_service *svc, struct ptlrpc_request *req)
         req->rq_type = PTL_RPC_TYPE_REPLY;
         req->rq_repmsg->conn = req->rq_connection->c_remote_conn;
         req->rq_repmsg->token = req->rq_connection->c_remote_token;
-        req->rq_repmsg->xid = HTON__u32(req->rq_reqmsg->xid);
         req->rq_repmsg->status = HTON__u32(req->rq_status);
         req->rq_reqmsg->type = HTON__u32(req->rq_type);
         return ptl_send_buf(req, req->rq_connection, svc->srv_rep_portal);
@@ -284,7 +277,7 @@ int ptl_send_rpc(struct ptlrpc_request *request)
 
         rc = PtlMEAttach(request->rq_connection->c_peer.peer_ni,
                          request->rq_client->cli_reply_portal,
-                         local_id, request->rq_reqmsg->xid, 0, PTL_UNLINK,
+                         local_id, request->rq_xid, 0, PTL_UNLINK,
                          PTL_INS_AFTER, &request->rq_reply_me_h);
         if (rc != PTL_OK) {
                 CERROR("PtlMEAttach failed: %d\n", rc);
@@ -369,7 +362,6 @@ int ptl_handled_rpc(struct ptlrpc_service *service, void *start)
         int index;
 
         spin_lock(&service->srv_lock);
-
         for (index = 0; index < service->srv_ring_length; index++)
                 if (service->srv_buf[index] == start) 
                         break;

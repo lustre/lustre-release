@@ -31,9 +31,11 @@
 #include <linux/obd_class.h>
 #include <linux/lustre_idl.h>
 #include <linux/lustre_net.h>
+#include <linux/lustre_dlm.h>
 #include <linux/obd_lov.h> /* for lov_md */
 
 #define LUSTRE_MDS_NAME "mds"
+#define LUSTRE_MDC_NAME "mdc"
 
 struct mds_update_record { 
         __u32 ur_opcode;
@@ -99,55 +101,79 @@ struct mds_file_data {
 };
 
 /* mds/mds_reint.c  */
-int mds_reint_rec(struct mds_update_record *r, struct ptlrpc_request *req);
+int mds_reint_rec(struct mds_update_record *r, int offset,
+                  struct ptlrpc_request *req);
 struct mds_client_info *mds_uuid_to_mci(struct mds_obd *mds, __u8 *uuid);
 
 /* lib/mds_updates.c */
+void mds_unpack_body(struct mds_body *b);
 void mds_pack_req_body(struct ptlrpc_request *);
 void mds_pack_rep_body(struct ptlrpc_request *);
-void mds_unpack_req_body(struct ptlrpc_request *);
-void mds_unpack_rep_body(struct ptlrpc_request *);
-int mds_update_unpack(struct ptlrpc_request *, struct mds_update_record *);
+int mds_update_unpack(struct ptlrpc_request *, int offset,
+                      struct mds_update_record *);
 
-void mds_setattr_pack(struct mds_rec_setattr *, struct inode *, struct iattr *);
-void mds_create_pack(struct mds_rec_create *, struct inode *,  __u32 mode,
-                     __u64 id, __u32 uid, __u32 gid, __u64 time);
-void mds_unlink_pack(struct mds_rec_unlink *, struct inode *inode,
-                     struct inode *child);
-void mds_link_pack(struct mds_rec_link *, struct inode *ino, struct inode *dir);
-void mds_rename_pack(struct mds_rec_rename *, struct inode *srcdir,
-                     struct inode *tgtdir);
+void mds_getattr_pack(struct ptlrpc_request *req, int offset,
+                      struct inode *inode, 
+                      const char *name, int namelen);
+void mds_setattr_pack(struct ptlrpc_request *, int offset, struct inode *,
+                      struct iattr *, const char *name, int namelen);
+void mds_create_pack(struct ptlrpc_request *, int offset, struct inode *,
+                     __u32 mode, __u64 id, __u32 uid, __u32 gid, __u64 time,
+                     const char *name, int namelen, const char *tgt,
+                     int tgtlen);
+void mds_unlink_pack(struct ptlrpc_request *, int offset, struct inode *inode,
+                     struct inode *child, const char *name, int namelen);
+void mds_link_pack(struct ptlrpc_request *, int offset, struct inode *ino,
+                   struct inode *dir, const char *name, int namelen);
+void mds_rename_pack(struct ptlrpc_request *, int offset, struct inode *srcdir,
+                     struct inode *tgtdir, const char *name, int namelen,
+                     const char *tgt, int tgtlen);
+void mds_pack_inode2fid(struct ll_fid *fid, struct inode *inode);
+void mds_pack_inode2body(struct mds_body *body, struct inode *inode);
 
 /* mds/handler.c */
 struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid, struct vfsmount **mnt);
+int mds_lock_callback(struct ldlm_lock *lock, struct ldlm_lock *new,
+                      void *data, int data_len);
+int mds_reint(int offset, struct ptlrpc_request *req);
 
 /* mdc/mdc_request.c */
-int mdc_connect(struct ptlrpc_client *, struct ptlrpc_connection *,
+static inline struct mdc_obd *mdc_conn2mdc(struct obd_conn *conn)
+{
+        return &conn->oc_dev->u.mdc;
+}
+
+int mdc_enqueue(struct obd_conn *conn, int lock_type, struct lookup_intent *it, 
+                int lock_mode, struct inode *dir, struct dentry *de,
+                struct lustre_handle *h, __u64 id, char *tgt, int tgtlen,
+                void *data, int datalen);
+int mdc_getstatus(struct obd_conn *conn,
                 struct ll_fid *rootfid, __u64 *last_committed, __u64 *last_rcvd,
                 __u32 *last_xid, struct ptlrpc_request **);
-int mdc_getattr(struct ptlrpc_client *, struct ptlrpc_connection *, ino_t ino,
-                int type, unsigned long valid, size_t ea_size,
-                struct ptlrpc_request **);
-int mdc_setattr(struct ptlrpc_client *, struct ptlrpc_connection *,
+int mdc_getattr(struct obd_conn *conn,
+                ino_t ino, int type, unsigned long valid, size_t ea_size,
+                struct ptlrpc_request **request);
+int mdc_setattr(struct obd_conn *conn,
                 struct inode *, struct iattr *iattr, struct ptlrpc_request **);
-int mdc_open(struct ptlrpc_client *, struct ptlrpc_connection *, ino_t ino,
-             int type, int flags, __u64 cookie, __u64 *fh, struct ptlrpc_request **req); 
-int mdc_close(struct ptlrpc_client *cl, struct ptlrpc_connection *peer,
+int mdc_open(struct obd_conn *conn,
+             ino_t ino, int type, int flags, __u64 objid, __u64 cookie, 
+             __u64 *fh, struct ptlrpc_request **request);
+int mdc_close(struct obd_conn *conn,
               ino_t ino, int type, __u64 fh,  struct ptlrpc_request **req);
-int mdc_readpage(struct ptlrpc_client *, struct ptlrpc_connection *, ino_t ino,
+int mdc_readpage(struct obd_conn *conn, ino_t ino,
                  int type, __u64 offset, char *addr, struct ptlrpc_request **);
-int mdc_create(struct ptlrpc_client *, struct ptlrpc_connection *,
+int mdc_create(struct obd_conn *conn,
                struct inode *dir, const char *name, int namelen, 
                const char *tgt, int tgtlen, int mode, __u32 uid, __u32 gid,
                __u64 time, __u64 rdev, struct obdo *obdo,
                struct ptlrpc_request **);
-int mdc_unlink(struct ptlrpc_client *, struct ptlrpc_connection *,
+int mdc_unlink(struct obd_conn *conn,
                struct inode *dir, struct inode *child, const char *name,
                int namelen, struct ptlrpc_request **);
-int mdc_link(struct ptlrpc_client *, struct ptlrpc_connection *,
+int mdc_link(struct obd_conn *conn,
              struct dentry *src, struct inode *dir, const char *name,
              int namelen, struct ptlrpc_request **);
-int mdc_rename(struct ptlrpc_client *, struct ptlrpc_connection *,
+int mdc_rename(struct obd_conn *conn,
                struct inode *src, struct inode *tgt, const char *old,
                int oldlen, const char *new, int newlen,
                struct ptlrpc_request **);

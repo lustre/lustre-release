@@ -3,8 +3,37 @@ Lustre versioning
 
 0.0.1  2/19/2002 <braam@clusterfs.com>
 0.0.2  3/14/2002 <braam@clusterfs.com> describe branches / stable tag
+0.0.3  6/10/2002 <braam@clusterfs.com> describe release mechanisms
 
 This document describes versioning of source and binaries for Lustre.
+
+Packages
+========
+
+RPM's that you build should get 3 figure versions, CVS versions will
+be 4 digits, and can correspond to test RPM's, and lead up to the
+package version.  So let's plan on releasing
+
+So you'd build 2 sets of test rpms this week: 
+
+0.0.9.1
+0.0.9.2
+
+we decide it's fine then and we release 
+
+0.1.0
+
+We go on developing with 
+
+0.1.0.{1,2,3,4,...} 
+
+as test releases and then we release: 
+
+0.1.1
+
+The 0.1 sequence is an unstable sequence, like 2.5 for the kernel is.
+So we expect lots of 0.1.X releases leading up to a stable 0.2 (or
+1.0) at the time of deployment.
 
 CVS
 ===
@@ -38,7 +67,8 @@ New numbers are used as follows:
 What will run, what won't ? 
 ---------------------------
 
-1. If the test level is non-zero no guarantees of any kind are made. 
+1. If the test level is non-zero, i.e. there are 4 digits in the
+   version, no guarantees of any kind are made.
 
 2. For three digit releases/tags the code should perform 
    according to the announcement.
@@ -46,7 +76,7 @@ What will run, what won't ?
 Moving tags
 -----------
 
-The last stable release will be tagged:            CVS tag "stable"
+The last stable release will be tagged:            CVS tag "t_last_stable"
 The last operational development snapshot will be  CVS tag "dstable"
 
 Branches

@@ -69,8 +69,18 @@ struct filter_obd {
 struct mds_client_info;
 struct mds_server_data;
 
+struct mdc_obd {
+        struct ptlrpc_client *mdc_client;
+        struct ptlrpc_client *mdc_ldlm_client;
+        struct ptlrpc_connection *mdc_conn;
+        __u8 mdc_target_uuid[37];
+};
+
 struct mds_obd {
+        struct ldlm_namespace *mds_local_namespace;
         struct ptlrpc_service *mds_service;
+        struct ptlrpc_client *mds_ldlm_client; /* to be an LDLM client */
+        struct ptlrpc_connection *mds_ldlm_conn; /* to be an LDLM client */
 
         char *mds_fstype;
         struct super_block *mds_sb;
@@ -147,9 +157,8 @@ struct raid1_obd {
 
 struct ost_obd {
         struct ptlrpc_service *ost_service;
-
-        struct obd_device *ost_tgt;
-        struct obd_conn ost_conn;
+        struct obd_device *ost_tgt; /* the exported OBD */ 
+        struct obd_conn ost_conn;   /* the local connection to the OBD */
 };
 
 struct osc_obd {
@@ -157,6 +166,7 @@ struct osc_obd {
         struct ptlrpc_client *osc_client;
         struct ptlrpc_client *osc_ldlm_client;
         struct ptlrpc_connection *osc_conn;
+        __u8 osc_target_uuid[37];
 };
 
 typedef __u8 uuid_t[37];
@@ -197,6 +207,7 @@ struct obd_device {
                 struct ext2_obd ext2;
                 struct filter_obd filter;
                 struct mds_obd mds;
+                struct mdc_obd mdc;
                 struct ost_obd ost;
                 struct osc_obd osc;
                 struct ldlm_obd ldlm;
@@ -261,13 +272,12 @@ struct obd_ops {
                           int objcount, struct obd_ioobj *obj,
                           int niocount, struct niobuf_local *local,
                           void *desc_private);
-
-        int (*o_enqueue)(struct obd_conn *conn, struct ldlm_namespace *ns,
-                         struct ldlm_handle *parent_lock, __u64 *res_id,
-                         __u32 type, struct ldlm_extent *, __u32 mode,
-                         int *flags, void *data, int datalen,
-                         struct ldlm_handle *lockh);
-        int (*o_cancel)(struct obd_conn *, __u32 mode, struct ldlm_handle *);
+        int (*o_enqueue)(struct obd_conn *conn,
+                         struct lustre_handle *parent_lock, __u64 *res_id,
+                         __u32 type, void *cookie, int cookielen, __u32 mode,
+                         int *flags, void *cb, void *data, int datalen,
+                         struct lustre_handle *lockh);
+        int (*o_cancel)(struct obd_conn *, __u32 mode, struct lustre_handle *);
 };
 
 #endif

@@ -3,7 +3,9 @@
 SRCDIR="`dirname $0`/"
 . $SRCDIR/common.sh
 
-$DBGCTL debug_kernel /tmp/debug.1
+TIME=`date +'%s'`
+
+$DBGCTL debug_kernel /tmp/debug.1.$TIME
 
 if mount | grep '/mnt/lustre'; then
 	umount /mnt/lustre || fail "cannot unmount"
@@ -11,16 +13,12 @@ fi
 
 killall acceptor
 rmmod llite
-rmmod mdc
 
 $OBDCTL <<EOF
+name2dev MDCDEV
+cleanup
+detach
 name2dev OSCDEV
-cleanup
-detach
-name2dev LDLMDEV
-cleanup
-detach
-name2dev RPCDEV
 cleanup
 detach
 name2dev OSTDEV
@@ -32,6 +30,12 @@ detach
 name2dev MDSDEV
 cleanup
 detach
+name2dev LDLMDEV
+cleanup
+detach
+name2dev RPCDEV
+cleanup
+detach
 quit
 EOF
 
@@ -40,6 +44,7 @@ rmmod mds_extN
 rmmod mds_ext3
 rmmod mds_ext2
 rmmod mds
+rmmod mdc
 rmmod osc
 rmmod ost
 rmmod obdfilter
@@ -49,15 +54,15 @@ rmmod ptlrpc
 rmmod obdclass
 rmmod extN
 
-$DBGCTL debug_kernel /tmp/debug.2
+$DBGCTL debug_kernel /tmp/debug.2.$TIME
 
 $PTLCTL <<EOF
 setup tcp
 disconnect
 del_uuid self
-del_uuid mds
-del_uuid ost
-del_uuid ldlm
+del_uuid localhost
+del_uuid localhost
+del_uuid localhost
 quit
 EOF
 

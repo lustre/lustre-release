@@ -43,18 +43,21 @@ static void osc_con2dlmcl(struct obd_conn *conn, struct ptlrpc_client **cl,
 
 static int osc_connect(struct obd_conn *conn)
 {
+        struct osc_obd *osc = &conn->oc_dev->u.osc;
         struct ptlrpc_request *request;
         struct ptlrpc_client *cl;
         struct ptlrpc_connection *connection;
         struct ost_body *body;
-        int rc, size = sizeof(*body);
+        char *tmp = osc->osc_target_uuid;
+        int rc, size = sizeof(osc->osc_target_uuid);
         ENTRY;
 
         osc_con2cl(conn, &cl, &connection);
-        request = ptlrpc_prep_req(cl, connection, OST_CONNECT, 0, NULL, NULL);
+        request = ptlrpc_prep_req(cl, connection, OST_CONNECT, 1, &size, &tmp);
         if (!request)
                 RETURN(-ENOMEM);
 
+        size = sizeof(*body);
         request->rq_replen = lustre_msg_size(1, &size);
 
         rc = ptlrpc_queue_wait(request);
@@ -67,6 +70,10 @@ static int osc_connect(struct obd_conn *conn)
         body = lustre_msg_buf(request->rq_repmsg, 0);
         CDEBUG(D_INODE, "received connid %d\n", body->connid);
 
+        /* This might be redundant. */
+        cl->cli_target_devno = request->rq_repmsg->target_id;
+        osc->osc_ldlm_client->cli_target_devno = cl->cli_target_devno;
+        /* XXX: Make this a handle */
         conn->oc_id = body->connid;
         EXIT;
  out:
@@ -92,7 +99,7 @@ static int osc_disconnect(struct obd_conn *conn)
         body = lustre_msg_buf(request->rq_reqmsg, 0);
         body->connid = conn->oc_id;
 
-        request->rq_replen = lustre_msg_size(1, &size);
+        request->rq_replen = lustre_msg_size(0, NULL);
 
         rc = ptlrpc_queue_wait(request);
         GOTO(out, rc);
@@ -264,7 +271,6 @@ static int osc_create(struct obd_conn *conn, struct obdo *oa)
 
         body = lustre_msg_buf(request->rq_reqmsg, 0);
         memcpy(&body->oa, oa, sizeof(*oa));
-        body->oa.o_valid = ~0;
         body->connid = conn->oc_id;
 
         request->rq_replen = lustre_msg_size(1, &size);
@@ -638,14 +644,16 @@ static int osc_brw(int rw, struct obd_conn *conn, obd_count num_oa,
                                      offset, flags, (bulk_callback_t)callback);
 }
 
-static int osc_enqueue(struct obd_conn *oconn, struct ldlm_namespace *ns,
-                       struct ldlm_handle *parent_lock, __u64 *res_id,
-                       __u32 type, struct ldlm_extent *extent, __u32 mode,
-                       int *flags, void *data, int datalen,
-                       struct ldlm_handle *lockh)
+static int osc_enqueue(struct obd_conn *oconn,
+                       struct lustre_handle *parent_lock, __u64 *res_id,
+                       __u32 type, void *extentp, int extent_len, __u32 mode,
+                       int *flags, void *callback, void *data, int datalen,
+                       struct lustre_handle *lockh)
 {
+        struct obd_device *obddev = oconn->oc_dev;
         struct ptlrpc_connection *conn;
         struct ptlrpc_client *cl;
+        struct ldlm_extent *extent = extentp;
         int rc;
         __u32 mode2;
 
@@ -656,7 +664,8 @@ static int osc_enqueue(struct obd_conn *oconn, struct ldlm_namespace *ns,
 
         /* Next, search for already existing extent locks that will cover us */
         osc_con2dlmcl(oconn, &cl, &conn);
-        rc = ldlm_local_lock_match(ns, res_id, type, extent, mode, lockh);
+        rc = ldlm_local_lock_match(obddev->obd_namespace, res_id, type, extent,
+                                   sizeof(extent), mode, lockh);
         if (rc == 1) {
                 /* We already have a lock, and it's referenced */
                 return 0;
@@ -671,10 +680,11 @@ static int osc_enqueue(struct obd_conn *oconn, struct ldlm_namespace *ns,
         else
                 mode2 = LCK_PW;
 
-        rc = ldlm_local_lock_match(ns, res_id, type, extent, mode2, lockh);
+        rc = ldlm_local_lock_match(obddev->obd_namespace, res_id, type, extent,
+                                   sizeof(extent), mode2, lockh);
         if (rc == 1) {
                 int flags;
-                struct ldlm_lock *lock = ldlm_handle2object(lockh);
+                struct ldlm_lock *lock = lustre_handle2object(lockh);
                 /* FIXME: This is not incredibly elegant, but it might
                  * be more elegant than adding another parameter to
                  * lock_match.  I want a second opinion. */
@@ -691,18 +701,19 @@ static int osc_enqueue(struct obd_conn *oconn, struct ldlm_namespace *ns,
                 return rc;
         }
 
-        rc = ldlm_cli_enqueue(cl, conn, ns, parent_lock, res_id, type,
-                              extent, mode, flags, data, datalen, lockh);
+        rc = ldlm_cli_enqueue(cl, conn, NULL, obddev->obd_namespace,
+                              parent_lock, res_id, type, extent, sizeof(extent),
+                              mode, flags, callback, data, datalen, lockh);
         return rc;
 }
 
 static int osc_cancel(struct obd_conn *oconn, __u32 mode,
-                      struct ldlm_handle *lockh)
+                      struct lustre_handle *lockh)
 {
         struct ldlm_lock *lock;
         ENTRY;
 
-        lock = ldlm_handle2object(lockh);
+        lock = lustre_handle2object(lockh);
         ldlm_lock_decref(lock, mode);
 
         RETURN(0);
@@ -710,17 +721,47 @@ static int osc_cancel(struct obd_conn *oconn, __u32 mode,
 
 static int osc_setup(struct obd_device *obddev, obd_count len, void *buf)
 {
+        struct obd_ioctl_data* data = buf;
         struct osc_obd *osc = &obddev->u.osc;
+        char server_uuid[37];
         int rc;
         ENTRY;
 
-        osc->osc_conn = ptlrpc_uuid_to_connection("ost");
-        if (!osc->osc_conn)
+        if (data->ioc_inllen1 < 1) {
+                CERROR("osc setup requires a TARGET UUID\n");
                 RETURN(-EINVAL);
+        }
+
+        if (data->ioc_inllen1 > 37) {
+                CERROR("osc TARGET UUID must be less than 38 characters\n");
+                RETURN(-EINVAL);
+        }
+
+        if (data->ioc_inllen2 < 1) {
+                CERROR("osc setup requires a SERVER UUID\n");
+                RETURN(-EINVAL);
+        }
+
+        if (data->ioc_inllen2 > 37) {
+                CERROR("osc SERVER UUID must be less than 38 characters\n");
+                RETURN(-EINVAL);
+        }
+
+        memcpy(osc->osc_target_uuid, data->ioc_inlbuf1, data->ioc_inllen1);
+        memcpy(server_uuid, data->ioc_inlbuf2, MIN(data->ioc_inllen2,
+                                                   sizeof(server_uuid)));
+
+        osc->osc_conn = ptlrpc_uuid_to_connection(server_uuid);
+        if (!osc->osc_conn)
+                RETURN(-ENOENT);
+
+        obddev->obd_namespace = ldlm_namespace_new(LDLM_NAMESPACE_CLIENT);
+        if (obddev->obd_namespace == NULL)
+                GOTO(out_conn, rc = -ENOMEM);
 
         OBD_ALLOC(osc->osc_client, sizeof(*osc->osc_client));
         if (osc->osc_client == NULL)
-                GOTO(out_conn, rc = -ENOMEM);
+                GOTO(out_ns, rc = -ENOMEM);
 
         OBD_ALLOC(osc->osc_ldlm_client, sizeof(*osc->osc_ldlm_client));
         if (osc->osc_ldlm_client == NULL)
@@ -738,6 +779,8 @@ static int osc_setup(struct obd_device *obddev, obd_count len, void *buf)
 
  out_client:
         OBD_FREE(osc->osc_client, sizeof(*osc->osc_client));
+ out_ns:
+        ldlm_namespace_free(obddev->obd_namespace);
  out_conn:
         ptlrpc_put_connection(osc->osc_conn);
         return rc;
@@ -746,6 +789,8 @@ static int osc_setup(struct obd_device *obddev, obd_count len, void *buf)
 static int osc_cleanup(struct obd_device * obddev)
 {
         struct osc_obd *osc = &obddev->u.osc;
+
+        ldlm_namespace_free(obddev->obd_namespace);
 
         ptlrpc_cleanup_client(osc->osc_client);
         OBD_FREE(osc->osc_client, sizeof(*osc->osc_client));
@@ -813,8 +858,7 @@ struct obd_ops osc_obd_ops = {
 
 static int __init osc_init(void)
 {
-        obd_register_type(&osc_obd_ops, LUSTRE_OSC_NAME);
-        return 0;
+        return obd_register_type(&osc_obd_ops, LUSTRE_OSC_NAME);
 }
 
 static void __exit osc_exit(void)

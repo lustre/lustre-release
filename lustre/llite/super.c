@@ -54,7 +54,7 @@ static char *ll_read_opt(const char *opt, char *data)
         RETURN(retval);
 }
 
-static void ll_options(char *options, char **dev, char **vers)
+static void ll_options(char *options, char **ost, char **mds)
 {
         char *this_char;
         ENTRY;
@@ -68,8 +68,8 @@ static void ll_options(char *options, char **dev, char **vers)
              this_char != NULL;
              this_char = strtok (NULL, ",")) {
                 CDEBUG(D_INFO, "this_char %s\n", this_char);
-                if ( (!*dev && (*dev = ll_read_opt("device", this_char)))||
-                     (!*vers && (*vers = ll_read_opt("version", this_char))) )
+                if ( (!*ost && (*ost = ll_read_opt("ost", this_char)))||
+                     (!*mds && (*mds = ll_read_opt("mds", this_char))) )
                         continue;
         }
         EXIT;
@@ -80,8 +80,8 @@ static struct super_block * ll_read_super(struct super_block *sb,
 {
         struct inode *root = 0;
         struct ll_sb_info *sbi;
-        char *device = NULL;
-        char *version = NULL;
+        char *ost = NULL;
+        char *mds = NULL;
         int devno;
         int err;
         struct ll_fid rootfid;
@@ -101,56 +101,59 @@ static struct super_block * ll_read_super(struct super_block *sb,
 
         sb->u.generic_sbp = sbi;
 
-        ll_options(data, &device, &version);
+        ll_options(data, &ost, &mds);
 
-        if (!device) {
-                CERROR("no device\n");
+        if (!ost) {
+                CERROR("no ost\n");
                 GOTO(out_free, sb = NULL);
         }
 
-        devno = simple_strtoul(device, NULL, 0);
+        if (!mds) {
+                CERROR("no mds\n");
+                GOTO(out_free, sb = NULL);
+        }
+
+        devno = simple_strtoul(ost, NULL, 0);
         if (devno >= MAX_OBD_DEVICES) {
-                CERROR("device of %s too high\n", device);
+                CERROR("devno of %s too high\n", ost);
                 GOTO(out_free, sb = NULL);
         }
 
-        sbi->ll_conn.oc_dev = &obd_dev[devno];
-        err = obd_connect(&sbi->ll_conn);
+        sbi->ll_osc_conn.oc_dev = &obd_dev[devno];
+        err = obd_connect(&sbi->ll_osc_conn);
         if (err) {
-                CERROR("cannot connect to %s: rc = %d\n", device, err);
+                CERROR("cannot connect to %s: rc = %d\n", ost, err);
                 GOTO(out_free, sb = NULL);
         }
 
-        sbi->ll_namespace = ldlm_namespace_new(NULL, 1);
-        if (sbi->ll_namespace == NULL) {
-                CERROR("failed to create local lock namespace\n");
-                GOTO(out_obd, sb = NULL);
+        devno = simple_strtoul(mds, NULL, 0);
+        if (devno >= MAX_OBD_DEVICES) {
+                CERROR("devno of %s too high\n", mds);
+                GOTO(out_free, sb = NULL);
         }
 
-        ptlrpc_init_client(ptlrpc_connmgr, ll_recover,
-                           MDS_REQUEST_PORTAL, MDC_REPLY_PORTAL,
-                           &sbi->ll_mds_client);
-
-        sbi->ll_mds_client.cli_data = sbi;
-        sbi->ll_mds_client.cli_name = "mdc";
-        sbi->ll_mds_conn = ptlrpc_uuid_to_connection("mds");
-        if (!sbi->ll_mds_conn) {
-                CERROR("cannot find MDS\n");
-                GOTO(out_ldlm, sb = NULL);
+        sbi->ll_mdc_conn.oc_dev = &obd_dev[devno];
+        err = obd_connect(&sbi->ll_mdc_conn);
+        if (err) {
+                CERROR("cannot connect to %s: rc = %d\n", mds, err);
+                GOTO(out_free, sb = NULL);
         }
 
+#if 0
         err = connmgr_connect(ptlrpc_connmgr, sbi->ll_mds_conn);
         if (err) {
                 CERROR("cannot connect to MDS: rc = %d\n", err);
                 GOTO(out_rpc, sb = NULL);
         }
+#endif 
 
-        sbi->ll_mds_conn->c_level = LUSTRE_CONN_FULL;
+        sbi2mdc(sbi)->mdc_conn->c_level = LUSTRE_CONN_FULL;
 
         /* XXX: need to store the last_* values somewhere */
-        err = mdc_connect(&sbi->ll_mds_client, sbi->ll_mds_conn,
-                          &rootfid, &last_committed, &last_rcvd, &last_xid,
-                          &request);
+        err = mdc_getstatus(&sbi->ll_mdc_conn,
+                            &rootfid, &last_committed, 
+                            &last_rcvd, &last_xid,
+                            &request);
         if (err) {
                 CERROR("cannot mds_connect: rc = %d\n", err);
                 GOTO(out_disc, sb = NULL);
@@ -167,7 +170,7 @@ static struct super_block * ll_read_super(struct super_block *sb,
         sb->s_op = &ll_super_operations;
 
         /* make root inode */
-        err = mdc_getattr(&sbi->ll_mds_client, sbi->ll_mds_conn,
+        err = mdc_getattr(&sbi->ll_mdc_conn,
                           sbi->ll_rootino, S_IFDIR,
                           OBD_MD_FLNOTOBD|OBD_MD_FLBLOCKS, 0, &request);
         if (err) {
@@ -200,25 +203,21 @@ static struct super_block * ll_read_super(struct super_block *sb,
         ptlrpc_free_req(request);
 
 out_dev:
-        if (device)
-                OBD_FREE(device, strlen(device) + 1);
-        if (version)
-                OBD_FREE(version, strlen(version) + 1);
+        if (mds)
+                OBD_FREE(mds, strlen(mds) + 1);
+        if (ost)
+                OBD_FREE(ost, strlen(ost) + 1);
 
         RETURN(sb);
 
 out_cdb:
         ll_commitcbd_cleanup(sbi);
 out_mdc:
-        ptlrpc_cleanup_client(&sbi->ll_mds_client);
+        obd_disconnect(&sbi->ll_mdc_conn);
+        obd_disconnect(&sbi->ll_osc_conn);
 out_disc:
         ptlrpc_free_req(request);
-out_rpc:
-        ptlrpc_put_connection(sbi->ll_mds_conn);
-out_ldlm:
-        ldlm_namespace_free(sbi->ll_namespace);
-out_obd:
-        obd_disconnect(&sbi->ll_conn);
+        obd_disconnect(&sbi->ll_osc_conn);
 out_free:
         OBD_FREE(sbi, sizeof(*sbi));
 
@@ -231,11 +230,9 @@ static void ll_put_super(struct super_block *sb)
         struct ll_sb_info *sbi = ll_s2sbi(sb);
         ENTRY;
         ll_commitcbd_cleanup(sbi);
-        ptlrpc_cleanup_client(&sbi->ll_mds_client);
-        ptlrpc_put_connection(sbi->ll_mds_conn);
-        ldlm_namespace_free(sbi->ll_namespace);
-        obd_disconnect(&sbi->ll_conn);
-        OBD_FREE(sbi, sizeof(*sbi));
+        obd_disconnect(&sbi->ll_osc_conn);
+        obd_disconnect(&sbi->ll_mdc_conn);
+
         MOD_DEC_USE_COUNT;
         EXIT;
 } /* ll_put_super */
@@ -321,7 +318,7 @@ int ll_inode_setattr(struct inode *inode, struct iattr *attr, int do_trunc)
         /* change incore inode */
         ll_attr2inode(inode, attr, do_trunc);
 
-        err = mdc_setattr(&sbi->ll_mds_client, sbi->ll_mds_conn, inode, attr,
+        err = mdc_setattr(&sbi->ll_mdc_conn, inode, attr,
                           &request);
         if (err)
                 CERROR("mdc_setattr fails (%d)\n", err);
@@ -342,7 +339,7 @@ static int ll_statfs(struct super_block *sb, struct statfs *buf)
         int err;
         ENTRY;
 
-        err = obd_statfs(&ll_s2sbi(sb)->ll_conn, &tmp);
+        err = obd_statfs(&ll_s2sbi(sb)->ll_osc_conn, &tmp);
         if (err) {
                 CERROR("obd_statfs fails (%d)\n", err);
                 RETURN(err);

@@ -87,14 +87,14 @@ static int obd_class_release(struct inode * inode, struct file * file)
         RETURN(0);
 }
 
-static int obd_class_name2dev(char *name)
+int obd_class_name2dev(char *name)
 {
         int res = -1;
         int i;
 
         for (i=0; i < MAX_OBD_DEVICES; i++) {
                 struct obd_device *obd = &obd_dev[i];
-                if (obd->obd_name && strcmp(name, obd->obd_name) == 0) {
+                if (obd->obd_name && strncmp(name, obd->obd_name, 37) == 0) {
                         res = i;
                         return res;
                 }
@@ -611,7 +611,7 @@ EXPORT_SYMBOL(obd_register_type);
 EXPORT_SYMBOL(obd_unregister_type);
 
 EXPORT_SYMBOL(obd_dev);
-
+EXPORT_SYMBOL(obd_class_name2dev);
 EXPORT_SYMBOL(gen_connect);
 EXPORT_SYMBOL(gen_client);
 EXPORT_SYMBOL(gen_cleanup);
@@ -630,7 +630,7 @@ static int __init init_obdclass(void)
         int err;
         int i;
 
-        printk(KERN_INFO "OBD class driver  v0.01, braam@stelias.com\n");
+        printk(KERN_INFO "OBD class driver  v0.9, info@clusterfs.com\n");
 
         INIT_LIST_HEAD(&obd_types);
 

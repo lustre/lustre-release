@@ -31,7 +31,7 @@
 #include <linux/obd_class.h>
 #include <linux/lustre_mds.h>
 
-static int mdc_reint(struct ptlrpc_client *cl, struct ptlrpc_request *request, int level)
+static int mdc_reint(struct ptlrpc_request *request, int level)
 {
         int rc;
         request->rq_level = level;
@@ -45,26 +45,27 @@ static int mdc_reint(struct ptlrpc_client *cl, struct ptlrpc_request *request, i
         return rc;
 }
 
-int mdc_setattr(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
+int mdc_setattr(struct obd_conn *conn,
                 struct inode *inode, struct iattr *iattr,
                 struct ptlrpc_request **request)
 {
+        struct mdc_obd *mdc = mdc_conn2mdc(conn);
         struct mds_rec_setattr *rec;
         struct ptlrpc_request *req;
         int rc, size = sizeof(*rec);
         ENTRY;
 
-        req = ptlrpc_prep_req(cl, conn, MDS_REINT, 1, &size, NULL);
+        req = ptlrpc_prep_req(mdc->mdc_client, mdc->mdc_conn, 
+                              MDS_REINT, 1, &size, NULL);
         if (!req)
                 RETURN(-ENOMEM);
 
-        rec = lustre_msg_buf(req->rq_reqmsg, 0);
-        mds_setattr_pack(rec, inode, iattr);
+        mds_setattr_pack(req, 0, inode, iattr, NULL, 0);
 
         size = sizeof(struct mds_body);
         req->rq_replen = lustre_msg_size(1, &size);
 
-        rc = mdc_reint(cl, req, LUSTRE_CONN_FULL);
+        rc = mdc_reint(req, LUSTRE_CONN_FULL);
         *request = req;
         if (rc == -ERESTARTSYS )
                 rc = 0;
@@ -72,15 +73,16 @@ int mdc_setattr(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
         RETURN(rc);
 }
 
-int mdc_create(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
+int mdc_create(struct obd_conn *conn,
                struct inode *dir, const char *name, int namelen,
                const char *tgt, int tgtlen, int mode, __u32 uid,
                __u32 gid, __u64 time, __u64 rdev, struct obdo *obdo,
                struct ptlrpc_request **request)
 {
         struct mds_rec_create *rec;
+        struct mdc_obd *mdc = mdc_conn2mdc(conn);
         struct ptlrpc_request *req;
-        int rc, size[3] = {sizeof(*rec), namelen + 1, 0};
+        int rc, size[3] = {sizeof(struct mds_rec_create), namelen + 1, 0};
         char *tmp, *bufs[3] = {NULL, NULL, NULL};
         int level, bufcount = 2;
         ENTRY;
@@ -94,15 +96,14 @@ int mdc_create(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
                 bufcount = 3;
         }
 
-        req = ptlrpc_prep_req(cl, conn, MDS_REINT, bufcount, size, bufs);
+        req = ptlrpc_prep_req(mdc->mdc_client, mdc->mdc_conn, MDS_REINT,
+                              bufcount, size, bufs);
         if (!req)
                 RETURN(-ENOMEM);
 
         rec = lustre_msg_buf(req->rq_reqmsg, 0);
-        mds_create_pack(rec, dir, mode, rdev, uid, gid, time);
-
-        tmp = lustre_msg_buf(req->rq_reqmsg, 1);
-        LOGL0(name, namelen, tmp);
+        mds_create_pack(req, 0, dir, mode, rdev, uid, gid, time,
+                        name, namelen, NULL, 0);
 
         if (S_ISREG(mode)) {
                 tmp = lustre_msg_buf(req->rq_reqmsg, 2);
@@ -117,7 +118,7 @@ int mdc_create(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
 
         level = LUSTRE_CONN_FULL;
  resend:
-        rc = mdc_reint(cl, req, level);
+        rc = mdc_reint(req, level);
         if (rc == -ERESTARTSYS) {
                 struct mds_update_record_hdr *hdr =
                         lustre_msg_buf(req->rq_reqmsg, 0);
@@ -132,30 +133,26 @@ int mdc_create(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
         RETURN(rc);
 }
 
-int mdc_unlink(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
+int mdc_unlink(struct obd_conn *conn,
                struct inode *dir, struct inode *child, const char *name,
                int namelen, struct ptlrpc_request **request)
 {
-        struct mds_rec_unlink *rec;
+        struct mdc_obd *mdc = mdc_conn2mdc(conn);
         struct ptlrpc_request *req;
-        int rc, size[2] = {sizeof(*rec), namelen + 1};
-        char *tmp;
+        int rc, size[2] = {sizeof(struct mds_rec_unlink), namelen + 1};
         ENTRY;
 
-        req = ptlrpc_prep_req(cl, conn, MDS_REINT, 2, size, NULL);
+        req = ptlrpc_prep_req(mdc->mdc_client, mdc->mdc_conn, MDS_REINT, 2,
+                              size, NULL);
         if (!req)
                 RETURN(-ENOMEM);
 
-        rec = lustre_msg_buf(req->rq_reqmsg, 0);
-        mds_unlink_pack(rec, dir, child);
-
-        tmp = lustre_msg_buf(req->rq_reqmsg, 1);
-        LOGL0(name, namelen, tmp);
+        mds_unlink_pack(req, 0, dir, child, name, namelen);
 
         size[0] = sizeof(struct mds_body);
         req->rq_replen = lustre_msg_size(1, size);
 
-        rc = mdc_reint(cl, req, LUSTRE_CONN_FULL);
+        rc = mdc_reint(req, LUSTRE_CONN_FULL);
         *request = req;
         if (rc == -ERESTARTSYS )
                 rc = 0;
@@ -163,30 +160,26 @@ int mdc_unlink(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
         RETURN(rc);
 }
 
-int mdc_link(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
+int mdc_link(struct obd_conn *conn,
              struct dentry *src, struct inode *dir, const char *name,
              int namelen, struct ptlrpc_request **request)
 {
-        struct mds_rec_link *rec;
+        struct mdc_obd *mdc = mdc_conn2mdc(conn);
         struct ptlrpc_request *req;
-        int rc, size[2] = {sizeof(*rec), namelen + 1};
-        char *tmp;
+        int rc, size[2] = {sizeof(struct mds_rec_link), namelen + 1};
         ENTRY;
 
-        req = ptlrpc_prep_req(cl, conn, MDS_REINT, 2, size, NULL);
+        req = ptlrpc_prep_req(mdc->mdc_client, mdc->mdc_conn, MDS_REINT, 2,
+                              size, NULL);
         if (!req)
                 RETURN(-ENOMEM);
 
-        rec = lustre_msg_buf(req->rq_reqmsg, 0);
-        mds_link_pack(rec, src->d_inode, dir);
-
-        tmp = lustre_msg_buf(req->rq_reqmsg, 1);
-        LOGL0(name, namelen, tmp);
+        mds_link_pack(req, 0, src->d_inode, dir, name, namelen);
 
         size[0] = sizeof(struct mds_body);
         req->rq_replen = lustre_msg_size(1, size);
 
-        rc = mdc_reint(cl, req, LUSTRE_CONN_FULL);
+        rc = mdc_reint(req, LUSTRE_CONN_FULL);
         *request = req;
         if (rc == -ERESTARTSYS )
                 rc = 0;
@@ -194,36 +187,28 @@ int mdc_link(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
         RETURN(rc);
 }
 
-int mdc_rename(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
+int mdc_rename(struct obd_conn *conn,
                struct inode *src, struct inode *tgt, const char *old,
                int oldlen, const char *new, int newlen,
                struct ptlrpc_request **request)
 {
-        struct mds_rec_rename *rec;
+        struct mdc_obd *mdc = mdc_conn2mdc(conn);
         struct ptlrpc_request *req;
-        int rc, size[3] = {sizeof(*rec), oldlen + 1, newlen + 1};
-        char *tmp;
+        int rc, size[3] = {sizeof(struct mds_rec_rename), oldlen + 1,
+                           newlen + 1};
         ENTRY;
 
-        req = ptlrpc_prep_req(cl, conn, MDS_REINT, 3, size, NULL);
+        req = ptlrpc_prep_req(mdc->mdc_client, mdc->mdc_conn, 
+                              MDS_REINT, 3, size, NULL);
         if (!req)
                 RETURN(-ENOMEM);
 
-        rec = lustre_msg_buf(req->rq_reqmsg, 0);
-        mds_rename_pack(rec, src, tgt);
-
-        tmp = lustre_msg_buf(req->rq_reqmsg, 1);
-        LOGL0(old, oldlen, tmp);
-
-        if (tgt) {
-                tmp = lustre_msg_buf(req->rq_reqmsg, 2);
-                LOGL0(new, newlen, tmp);
-        }
+        mds_rename_pack(req, 0, src, tgt, old, oldlen, new, newlen);
 
         size[0] = sizeof(struct mds_body);
         req->rq_replen = lustre_msg_size(1, size);
 
-        rc = mdc_reint(cl, req, LUSTRE_CONN_FULL);
+        rc = mdc_reint(req, LUSTRE_CONN_FULL);
         *request = req;
         if (rc == -ERESTARTSYS )
                 rc = 0;

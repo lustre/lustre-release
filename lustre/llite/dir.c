@@ -41,6 +41,7 @@
 #include <linux/lustre_idl.h>
 #include <linux/lustre_mds.h>
 #include <linux/lustre_lite.h>
+#include <linux/lustre_dlm.h>
 
 typedef struct ext2_dir_entry_2 ext2_dirent;
 
@@ -62,6 +63,8 @@ static int ll_dir_readpage(struct file *file, struct page *page)
         __u64 offset;
         int rc = 0;
         struct ptlrpc_request *request = NULL;
+        struct lustre_handle lockh; 
+        struct lookup_intent it = {IT_READDIR }; 
 
         ENTRY;
 
@@ -72,6 +75,11 @@ static int ll_dir_readpage(struct file *file, struct page *page)
                 goto readpage_out;
         }
 
+        rc = ll_lock(inode, NULL, &it, &lockh);
+        if (rc != ELDLM_OK)
+                CERROR("lock enqueue: err: %d\n", rc);
+        ldlm_lock_dump((void *)(unsigned long)lockh.addr);
+
         if (Page_Uptodate(page)) {
                 CERROR("Explain this please?\n");
                 EXIT;
@@ -80,7 +88,7 @@ static int ll_dir_readpage(struct file *file, struct page *page)
 
         offset = page->index << PAGE_SHIFT; 
         buf = kmap(page);
-        rc = mdc_readpage(&sbi->ll_mds_client, sbi->ll_mds_conn, inode->i_ino,
+        rc = mdc_readpage(&sbi->ll_mdc_conn, inode->i_ino,
                           S_IFDIR, offset, buf, &request);
         kunmap(page); 
         ptlrpc_free_req(request);
@@ -91,6 +99,9 @@ static int ll_dir_readpage(struct file *file, struct page *page)
                 SetPageUptodate(page);
 
         UnlockPage(page);
+        rc = ll_unlock(LCK_PR, &lockh);
+        if (rc != ELDLM_OK)
+                CERROR("ll_unlock: err: %d\n", rc);
         return rc;
 } /* ll_dir_readpage */
 

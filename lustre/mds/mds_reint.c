@@ -24,6 +24,7 @@
 #include <linux/lustre_lib.h>
 #include <linux/lustre_idl.h>
 #include <linux/lustre_mds.h>
+#include <linux/lustre_dlm.h>
 #include <linux/obd_class.h>
 
 struct mds_client_info *mds_uuid_to_mci(struct mds_obd *mds, __u8 *uuid)
@@ -71,7 +72,7 @@ int mds_update_last_rcvd(struct mds_obd *mds, void *handle,
         req->rq_repmsg->transno = HTON__u64(mds->mds_last_rcvd);
         mci->mci_mcd->mcd_last_rcvd = cpu_to_le64(mds->mds_last_rcvd);
         mci->mci_mcd->mcd_mount_count = cpu_to_le64(mds->mds_mount_count);
-        mci->mci_mcd->mcd_last_xid = cpu_to_le32(req->rq_reqmsg->xid);
+        mci->mci_mcd->mcd_last_xid = cpu_to_le64(req->rq_xid);
 
         mds_fs_set_last_rcvd(mds, handle);
         push_ctxt(&saved, &mds->mds_ctxt);
@@ -93,7 +94,7 @@ int mds_update_last_rcvd(struct mds_obd *mds, void *handle,
         return rc;
 }
 
-static int mds_reint_setattr(struct mds_update_record *rec,
+static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                              struct ptlrpc_request *req)
 {
         struct mds_obd *mds = &req->rq_obd->u.mds;
@@ -134,7 +135,7 @@ out_setattr:
         return(0);
 }
 
-static int mds_reint_recreate(struct mds_update_record *rec,
+static int mds_reint_recreate(struct mds_update_record *rec, int offset,
                             struct ptlrpc_request *req)
 {
         struct dentry *de = NULL;
@@ -167,7 +168,7 @@ static int mds_reint_recreate(struct mds_update_record *rec,
                 body = lustre_msg_buf(req->rq_repmsg, 0);
                 body->ino = dchild->d_inode->i_ino;
                 body->generation = dchild->d_inode->i_generation;
-        } else { 
+        } else {
                 CERROR("child doesn't exist (dir %ld, name %s)\n",
                        dir->i_ino, rec->ur_name);
                 rc = -ENOENT;
@@ -183,7 +184,7 @@ out_create_de:
         return 0;
 }
 
-static int mds_reint_create(struct mds_update_record *rec,
+static int mds_reint_create(struct mds_update_record *rec, int offset,
                             struct ptlrpc_request *req)
 {
         struct dentry *de = NULL;
@@ -191,9 +192,18 @@ static int mds_reint_create(struct mds_update_record *rec,
         struct dentry *dchild = NULL;
         struct inode *dir;
         void *handle;
-        int rc = 0, type = rec->ur_mode & S_IFMT;
-        int err;
+        struct ldlm_lock *lock;
+        struct lustre_handle lockh;
+        int rc = 0, err, flags, lock_mode, type = rec->ur_mode & S_IFMT;
+        __u64 res_id[3] = {0,0,0};
         ENTRY;
+
+        /* requests were at offset 2, replies go back at 1 */
+        if (offset)
+                offset = 1;
+
+        if (strcmp(req->rq_obd->obd_type->typ_name, "mds") != 0)
+                LBUG();
 
         de = mds_fid2dentry(mds, rec->ur_fid1, NULL);
         if (IS_ERR(de) || OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_CREATE)) {
@@ -201,8 +211,26 @@ static int mds_reint_create(struct mds_update_record *rec,
                 GOTO(out_create_de, rc = -ESTALE);
         }
         dir = de->d_inode;
-        CDEBUG(D_INODE, "parent ino %ld name %s mode %o\n", 
+        CDEBUG(D_INODE, "parent ino %ld name %s mode %o\n",
                dir->i_ino, rec->ur_name, rec->ur_mode);
+
+        lock_mode = (req->rq_reqmsg->opc == MDS_REINT) ? LCK_CW : LCK_PW;
+        res_id[0] = dir->i_ino;
+
+        rc = ldlm_local_lock_match(mds->mds_local_namespace, res_id, LDLM_PLAIN,
+                                   NULL, 0, lock_mode, &lockh);
+        if (rc == 0) {
+                rc = ldlm_cli_enqueue(mds->mds_ldlm_client, mds->mds_ldlm_conn,
+                                      NULL, mds->mds_local_namespace, NULL,
+                                      res_id, LDLM_PLAIN, NULL, 0, lock_mode,
+                                      &flags, (void *)mds_lock_callback, NULL,
+                                      0, &lockh);
+                if (rc != ELDLM_OK) {
+                        CERROR("lock enqueue: err: %d\n", rc);
+                        GOTO(out_create_de, rc = -EIO);
+                }
+        }
+        ldlm_lock_dump((void *)(unsigned long)lockh.addr);
 
         down(&dir->i_sem);
         dchild = lookup_one_len(rec->ur_name, de, rec->ur_namelen - 1);
@@ -214,9 +242,20 @@ static int mds_reint_create(struct mds_update_record *rec,
         }
 
         if (dchild->d_inode) {
+                struct mds_body *body;
+                struct obdo *obdo;
+                struct inode *inode = dchild->d_inode;
                 CERROR("child exists (dir %ld, name %s, ino %ld)\n",
                        dir->i_ino, rec->ur_name, dchild->d_inode->i_ino);
-                LBUG();
+
+                body = lustre_msg_buf(req->rq_repmsg, offset);
+                mds_pack_inode2fid(&body->fid1, inode);
+                mds_pack_inode2body(body, inode);
+                if (S_ISREG(inode->i_mode)) {
+                        obdo = lustre_msg_buf(req->rq_repmsg, offset + 1);
+                        mds_fs_get_obdo(mds, inode, obdo);
+                }
+                /* now a normal case for intent locking */
                 GOTO(out_create_dchild, rc = -EEXIST);
         }
 
@@ -303,11 +342,11 @@ static int mds_reint_create(struct mds_update_record *rec,
                         /* XXX should we abort here in case of error? */
                 }
 
-                body = lustre_msg_buf(req->rq_repmsg, 0);
+                body = lustre_msg_buf(req->rq_repmsg, offset);
                 body->ino = inode->i_ino;
                 body->generation = inode->i_generation;
         }
-
+        EXIT;
 out_create_commit:
         err = mds_fs_commit(mds, dir, handle);
         if (err) {
@@ -318,13 +357,15 @@ out_create_commit:
 out_create_dchild:
         l_dput(dchild);
         up(&dir->i_sem);
+        lock = lustre_handle2object(&lockh);
+        ldlm_lock_decref(lock, lock_mode);
 out_create_de:
         l_dput(de);
         req->rq_status = rc;
         return 0;
 }
 
-static int mds_reint_unlink(struct mds_update_record *rec,
+static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                             struct ptlrpc_request *req)
 {
         struct dentry *de = NULL;
@@ -410,7 +451,7 @@ out_unlink:
         return 0;
 }
 
-static int mds_reint_link(struct mds_update_record *rec,
+static int mds_reint_link(struct mds_update_record *rec, int offset,
                             struct ptlrpc_request *req)
 {
         struct dentry *de_src = NULL;
@@ -477,7 +518,7 @@ out_link:
         return 0;
 }
 
-static int mds_reint_rename(struct mds_update_record *rec,
+static int mds_reint_rename(struct mds_update_record *rec, int offset,
                             struct ptlrpc_request *req)
 {
         struct dentry *de_srcdir = NULL;
@@ -499,6 +540,8 @@ static int mds_reint_rename(struct mds_update_record *rec,
         if (IS_ERR(de_tgtdir)) {
                 GOTO(out_rename_srcdir, rc = -ESTALE);
         }
+
+#warning FIXME: This needs locking attention
 
         de_old = lookup_one_len(rec->ur_name, de_srcdir, rec->ur_namelen - 1);
         if (IS_ERR(de_old)) {
@@ -545,7 +588,8 @@ out_rename:
         return 0;
 }
 
-typedef int (*mds_reinter)(struct mds_update_record *, struct ptlrpc_request*);
+typedef int (*mds_reinter)(struct mds_update_record *, int offset,
+                           struct ptlrpc_request *);
 
 static mds_reinter reinters[REINT_MAX+1] = {
         [REINT_SETATTR]   mds_reint_setattr,
@@ -556,9 +600,10 @@ static mds_reinter reinters[REINT_MAX+1] = {
         [REINT_RECREATE]  mds_reint_recreate,
 };
 
-int mds_reint_rec(struct mds_update_record *rec, struct ptlrpc_request *req)
+int mds_reint_rec(struct mds_update_record *rec, int offset,
+                  struct ptlrpc_request *req)
 {
-        int rc, size = sizeof(struct mds_body);
+        int rc;
 
         if (rec->ur_opcode < 1 || rec->ur_opcode > REINT_MAX) {
                 CERROR("opcode %d not valid\n", rec->ur_opcode);
@@ -566,14 +611,7 @@ int mds_reint_rec(struct mds_update_record *rec, struct ptlrpc_request *req)
                 RETURN(rc);
         }
 
-        rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repmsg);
-        if (rc) {
-                CERROR("mds: out of memory\n");
-                rc = req->rq_status = -ENOMEM;
-                RETURN(rc);
-        }
-
-        rc = reinters[rec->ur_opcode](rec, req);
+        rc = reinters[rec->ur_opcode](rec, offset, req);
 
         return rc;
 }

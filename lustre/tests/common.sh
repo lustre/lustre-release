@@ -152,6 +152,7 @@ setup_portals() {
 	fi
 
 	[ -z "$OSTNODE" ] && OSTNODE=$SERVER
+	[ -z "$MDSNODE" ] && MDSNODE=$SERVER
 
 	if [ -z "$DLM" ]; then
 		if [ "$LOCALHOST" == "$SERVER" ]; then
@@ -179,13 +180,13 @@ setup_portals() {
 	$PTLCTL <<- EOF
 	setup $NETWORK
 	mynid $LOCALHOST
-	connect $SERVER $PORT
-	add_uuid self
-	add_uuid mds
+	connect $MDSNODE $PORT
+	add_uuid $MDSNODE
 	connect $OSTNODE $PORT
-	add_uuid ost
+	add_uuid $OSTNODE
 	connect $DLM $PORT
-	add_uuid ldlm
+	add_uuid $DLM
+	add_uuid self
 	quit
 	EOF
 }
@@ -211,6 +212,7 @@ setup_lustre() {
 	do_insmod $LUSTRE/mdc/mdc.o || exit -1
 	do_insmod $LUSTRE/llite/llite.o || exit -1
 
+        echo "$R/tmp/lustre-log" > /proc/sys/portals/debug_path
 	list_mods
 
 	if $OBDCTL name2dev RPCDEV > /dev/null 2>&1; then
@@ -345,38 +347,73 @@ setup_server() {
 }
 
 setup_osc() {
+	set -vx
 	[ "$SETUP_OSC" != "y" ] && return 0
+        [ "$OSC_NAMES" ] || OSC_NAMES=OSCDEV
 
-	if $OBDCTL name2dev OSCDEV > /dev/null 2>&1; then
+        for THEOSC in $OSC_NAMES ; do 
+            OSCDEVNO=`find_devno $THEOSC`
+	    if $OBDCTL name2dev $THEOSC > /dev/null 2>&1; then
 		echo "$0: OSCDEV is already configured"
+		return 0
+	    fi
+
+	$OBDCTL <<- EOF || return $rc
+	newdev
+	attach osc $THEOSC
+	setup OSTDEV $OSTNODE
+	quit
+	EOF
+        done
+}
+
+setup_mdc() {
+	set -vx
+	[ "$SETUP_MDC" != "y" ] && return 0
+        [ "$MDC_NAMES" ] || MDC_NAMES=MDCDEV
+
+        for THEMDC in $MDC_NAMES ; do 
+            MDCDEVNO=`find_devno $THEMDC`
+	if $OBDCTL name2dev $THEMDC > /dev/null 2>&1; then
+		echo "$0: MDCDEV is already configured"
 		return 0
 	fi
 
 	$OBDCTL <<- EOF || return $?
 	newdev
-	attach osc OSCDEV
-	setup -1
+	attach mdc $THEMDC
+	setup MDSDEV $MDSNODE
 	quit
 	EOF
+        done
 }
 
+
 setup_mount() {
+	set -vx
 	[ "$SETUP_MOUNT" != "y" ] && return 0
+        [ "$MDC_NAMES" ] || MDC_NAMES=MDCDEV
+        [ "$OSC_NAMES" ] || OSC_NAMES=OSCDEV
+	[ -z "$MOUNT_LIST" -a "$OSCMT" ] && MOUNT_LIST="MT" && MT="$OSCMT OSCDEV MDCDEV"
 
-	[ "$OSCMT" ] || fail "error: $0: OSCMT unset"
+	[ "$MOUNT_LIST" ] || fail "error: $0: MOUNT_LIST unset"
 
-	if mount | grep -q $OSCMT; then
-		echo "$0: $OSCMT is already mounted"
-		return 0
-	fi
+	for THEMOUNT in $MOUNT_LIST; do
+	    eval "echo \$$THEMOUNT" | while read MTPT THEOSC THEMDC; do
+		if mount | grep -q $MTPT; then
+		    echo "$0: $MTPT is already mounted"
+		    return 0
+		fi
 
-	[ ! -d $OSCMT ] && mkdir $OSCMT
-	echo "$0: mounting \$OSCDEV on $OSCMT"
-	mount -t lustre_lite -o device=`find_devno OSCDEV` none $OSCMT
+		[ ! -d $MTPT ] && mkdir $MTPT
+		echo mount -t lustre_lite -o ost=`find_devno $THEOSC`,mds=`find_devno $THEMDC` none $MTPT
+		mount -t lustre_lite -o ost=`find_devno $THEOSC`,mds=`find_devno $THEMDC` none $MTPT
+	    done
+	done
 }
 
 setup_client() {
-	setup_osc && setup_mount
+	setup_osc && setup_mdc && setup_mount
 }
 
 DEBUG_ON="echo 0xffffffff > /proc/sys/portals/debug"
@@ -406,9 +443,9 @@ cleanup_portals() {
 	setup $NETWORK
 	disconnect
 	del_uuid self
-	del_uuid mds
-	del_uuid ost
-	del_uuid ldlm
+	del_uuid $MDSNODE
+	del_uuid $OSTNODE
+	del_uuid $DLM
 	quit
 	EOF
 
@@ -503,23 +540,45 @@ cleanup_mount() {
 	[ "$SETUP" -a -z "$SETUP_MOUNT" ] && return 0
 
 	[ "$OSCMT" ] || OSCMT=/mnt/lustre
-	if [ "`mount | grep $OSCMT`" ]; then
-		umount $OSCMT || fail "unable to unmount $OSCMT"
-	fi
+	for THEMOUNT in $OSCMT; do
+	    if [ "`mount | grep $THEMOUNT`" ]; then
+		umount $THEMOUNT || fail "unable to unmount $THEMOUNT"
+	    fi
+	done
 }
 
 cleanup_osc() {
 	[ "$SETUP" -a -z "$SETUP_OSC" ] && return 0
+        [ "$OSC_NAMES" ] || OSC_NAMES=OSCDEV
 
-	OSCDEVNO=`find_devno OSCDEV`
-	if [ "$OSCDEVNO" ]; then
+        for THEOSC in $OSC_NAMES ; do 
+            OSCDEVNO=`find_devno $THEOSC`
+            if [ "$OSCDEVNO" ]; then
 		$OBDCTL <<- EOF
 		device $OSCDEVNO
 		cleanup
 		detach
 		quit
 		EOF
-	fi
+            fi
+        done
+}
+
+cleanup_mdc() {
+	[ "$SETUP" -a -z "$SETUP_MDC" ] && return 0
+        [ "$MDC_NAMES" ] || MDC_NAMES=MDCDEV
+
+        for THEMDC in $MDC_NAMES ; do 
+            MDCDEVNO=`find_devno $THEMDC`
+            if [ "$MDCDEVNO" ]; then
+		$OBDCTL <<- EOF
+		device $MDCDEVNO
+		cleanup
+		detach
+		quit
+		EOF
+            fi
+        done
 }
 
 cleanup_rpc() {
@@ -535,7 +594,7 @@ cleanup_rpc() {
 }
 
 cleanup_client() {
-	cleanup_mount && cleanup_osc && cleanup_rpc
+	cleanup_mount && cleanup_osc && cleanup_mdc && cleanup_rpc
 }
 
 fail() { 

@@ -36,6 +36,7 @@
 #include <linux/module.h>
 #include <linux/obd_ost.h>
 #include <linux/lustre_net.h>
+#include <linux/lustre_dlm.h>
 
 static int ost_destroy(struct ost_obd *ost, struct ptlrpc_request *req)
 {
@@ -183,19 +184,36 @@ static int ost_setattr(struct ost_obd *ost, struct ptlrpc_request *req)
         RETURN(0);
 }
 
-static int ost_connect(struct ost_obd *ost, struct ptlrpc_request *req)
+static int ost_connect(struct ptlrpc_request *req)
 {
         struct obd_conn conn;
         struct ost_body *body;
-        int rc, size = sizeof(*body);
+        struct ost_obd *ost;
+        char *uuid;
+        int rc, size = sizeof(*body), i;
         ENTRY;
 
+        uuid = lustre_msg_buf(req->rq_reqmsg, 0);
+        if (req->rq_reqmsg->buflens[0] > 37) {
+                /* Invalid UUID */
+                req->rq_status = -EINVAL;
+                RETURN(0);
+        }
+
+        i = obd_class_name2dev(uuid);
+        if (i == -1) {
+                req->rq_status = -ENODEV;
+                RETURN(0);
+        }
+
+        ost = &(obd_dev[i].u.ost);
         conn.oc_dev = ost->ost_tgt;
 
         rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repmsg);
         if (rc)
                 RETURN(rc);
 
+        req->rq_repmsg->target_id = i;
         req->rq_status = obd_connect(&conn);
 
         CDEBUG(D_IOCTL, "rep buffer %p, id %d\n", req->rq_repmsg, conn.oc_id);
@@ -208,14 +226,14 @@ static int ost_disconnect(struct ost_obd *ost, struct ptlrpc_request *req)
 {
         struct obd_conn conn;
         struct ost_body *body;
-        int rc, size = sizeof(*body);
+        int rc;
         ENTRY;
 
         body = lustre_msg_buf(req->rq_reqmsg, 0);
         conn.oc_id = body->connid;
         conn.oc_dev = ost->ost_tgt;
 
-        rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repmsg);
+        rc = lustre_pack_msg(0, NULL, NULL, &req->rq_replen, &req->rq_repmsg);
         if (rc)
                 RETURN(rc);
 
@@ -482,7 +500,7 @@ static int ost_handle(struct obd_device *obddev, struct ptlrpc_service *svc,
                       struct ptlrpc_request *req)
 {
         int rc;
-        struct ost_obd *ost = &obddev->u.ost;
+        struct ost_obd *ost;
         ENTRY;
 
         rc = lustre_unpack_msg(req->rq_reqmsg, req->rq_reqlen);
@@ -497,11 +515,23 @@ static int ost_handle(struct obd_device *obddev, struct ptlrpc_service *svc,
                 GOTO(out, rc = -EINVAL);
         }
 
+        if (req->rq_reqmsg->opc != OST_CONNECT) {
+                int id = req->rq_reqmsg->target_id;
+                struct obd_device *obddev;
+                if (id < 0 || id > MAX_OBD_DEVICES)
+                        GOTO(out, rc = -ENODEV);
+                obddev = &obd_dev[id];
+                if (strcmp(obddev->obd_type->typ_name, "ost") != 0)
+                        GOTO(out, rc = -EINVAL);
+                ost = &obddev->u.ost;
+                req->rq_obd = obddev;
+        }
+
         switch (req->rq_reqmsg->opc) {
         case OST_CONNECT:
                 CDEBUG(D_INODE, "connect\n");
                 OBD_FAIL_RETURN(OBD_FAIL_OST_CONNECT_NET, 0);
-                rc = ost_connect(ost, req);
+                rc = ost_connect(req);
                 break;
         case OST_DISCONNECT:
                 CDEBUG(D_INODE, "disconnect\n");
@@ -608,6 +638,10 @@ static int ost_setup(struct obd_device *obddev, obd_count len, void *buf)
                 CERROR("fail to connect to device %d\n", data->ioc_dev);
                 GOTO(error_dec, err = -EINVAL);
         }
+
+        obddev->obd_namespace = ldlm_namespace_new(LDLM_NAMESPACE_SERVER);
+        if (obddev->obd_namespace == NULL)
+                LBUG();
 
         ost->ost_service = ptlrpc_init_svc(128 * 1024,
                                            OST_REQUEST_PORTAL, OSC_REPLY_PORTAL,

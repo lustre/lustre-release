@@ -12,4 +12,6 @@ truncate
 directio
 openme
 writeme
+mcreate
+tchmod
 fsx

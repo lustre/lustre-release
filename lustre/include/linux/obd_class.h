@@ -44,7 +44,7 @@
 /*
  *  ======== OBD Device Declarations ===========
  */
-#define MAX_OBD_DEVICES 8
+#define MAX_OBD_DEVICES 32
 extern struct obd_device obd_dev[MAX_OBD_DEVICES];
 
 #define OBD_ATTACHED 0x1
@@ -345,24 +345,24 @@ static inline int obd_iocontrol(int cmd, struct obd_conn *conn,
         RETURN(rc);
 }
 
-static inline int obd_enqueue(struct obd_conn *conn, struct ldlm_namespace *ns,
-                              struct ldlm_handle *parent_lock, __u64 *res_id,
-                              __u32 type, struct ldlm_extent *extent,
-                              __u32 mode, int *flags, void *data, int datalen,
-                              struct ldlm_handle *lockh)
+static inline int obd_enqueue(struct obd_conn *conn,
+                              struct lustre_handle *parent_lock, __u64 *res_id,
+                              __u32 type, void *cookie, int cookielen,
+                              __u32 mode, int *flags, void *cb, void *data,
+                              int datalen, struct lustre_handle *lockh)
 {
         int rc;
         OBD_CHECK_SETUP(conn);
         OBD_CHECK_OP(conn, enqueue);
-        
-        rc = OBP(conn->oc_dev, enqueue)(conn, ns, parent_lock, res_id, type,
-                                        extent, mode, flags, data, datalen,
-                                        lockh);
+
+        rc = OBP(conn->oc_dev, enqueue)(conn, parent_lock, res_id, type,
+                                        cookie, cookielen, mode, flags, cb,
+                                        data, datalen, lockh);
         RETURN(rc);
 }
 
 static inline int obd_cancel(struct obd_conn *conn, __u32 mode,
-                             struct ldlm_handle *lockh)
+                             struct lustre_handle *lockh)
 {
         int rc;
         OBD_CHECK_SETUP(conn);
@@ -675,6 +675,7 @@ static __inline__ int obdo_cmp_md(struct obdo *dst, struct obdo *src,
 #ifdef __KERNEL__
 int obd_register_type(struct obd_ops *ops, char *nm);
 int obd_unregister_type(char *nm);
+int obd_class_name2dev(char *name);
 
 struct obd_client {
         struct list_head cli_chain;

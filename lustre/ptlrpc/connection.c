@@ -89,6 +89,8 @@ int ptlrpc_put_connection(struct ptlrpc_connection *c)
                 spin_unlock(&conn_lock);
                 rc = 1;
         }
+        if (atomic_read(&c->c_refcount) < 0)
+                CERROR("refcount < 0!\n");
 
         RETURN(rc);
 }

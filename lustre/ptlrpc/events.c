@@ -69,13 +69,18 @@ static int reply_out_callback(ptl_event_t *ev)
  */
 static int reply_in_callback(ptl_event_t *ev)
 {
-        struct ptlrpc_request *rpc = ev->mem_desc.user_ptr;
+        struct ptlrpc_request *req = ev->mem_desc.user_ptr;
         ENTRY;
 
+        if (req->rq_xid != ev->match_bits) {
+                CERROR("Reply packet for wrong request\n");
+                LBUG(); 
+        }
+
         if (ev->type == PTL_EVENT_PUT) {
-                rpc->rq_repmsg = ev->mem_desc.start + ev->offset;
+                req->rq_repmsg = ev->mem_desc.start + ev->offset;
                 barrier();
-                wake_up_interruptible(&rpc->rq_wait_for_rep);
+                wake_up_interruptible(&req->rq_wait_for_rep);
         } else {
                 // XXX make sure we understand all events, including ACK's
                 CERROR("Unknown event %d\n", ev->type);
@@ -88,40 +93,11 @@ static int reply_in_callback(ptl_event_t *ev)
 int request_in_callback(ptl_event_t *ev)
 {
         struct ptlrpc_service *service = ev->mem_desc.user_ptr;
-        int index;
 
         if (ev->rlength != ev->mlength)
                 CERROR("Warning: Possibly truncated rpc (%d/%d)\n",
                        ev->mlength, ev->rlength);
 
-        spin_lock(&service->srv_lock);
-        for (index = 0; index < service->srv_ring_length; index++)
-                if ( service->srv_buf[index] == ev->mem_desc.start)
-                        break;
-
-        if (index == service->srv_ring_length)
-                LBUG();
-
-        service->srv_ref_count[index]++;
-
-        if (ptl_is_valid_handle(&ev->unlinked_me)) {
-                int idx;
-
-                for (idx = 0; idx < service->srv_ring_length; idx++)
-                        if (service->srv_me_h[idx].handle_idx ==
-                            ev->unlinked_me.handle_idx)
-                                break;
-                if (idx == service->srv_ring_length)
-                        LBUG();
-
-                CDEBUG(D_NET, "unlinked %d\n", idx);
-                ptl_set_inv_handle(&(service->srv_me_h[idx]));
-
-                if (service->srv_ref_count[idx] == 0)
-                        ptlrpc_link_svc_me(service, idx);
-        }
-
-        spin_unlock(&service->srv_lock);
         if (ev->type == PTL_EVENT_PUT)
                 wake_up(&service->srv_waitq);
         else
@@ -142,7 +118,7 @@ static int bulk_source_callback(ptl_event_t *ev)
                 CDEBUG(D_NET, "got ACK event\n");
                 if (bulk->b_cb != NULL)
                         bulk->b_cb(bulk);
-                if (atomic_dec_and_test(&desc->b_finished_count)) {
+                if (atomic_dec_and_test(&desc->b_pages_remaining)) {
                         desc->b_flags |= PTL_BULK_FL_SENT;
                         wake_up_interruptible(&desc->b_waitq);
                         if (desc->b_cb != NULL)
@@ -167,7 +143,7 @@ static int bulk_sink_callback(ptl_event_t *ev)
                         CERROR("bulkbuf != mem_desc -- why?\n");
                 if (bulk->b_cb != NULL)
                         bulk->b_cb(bulk);
-                if (atomic_dec_and_test(&desc->b_finished_count)) {
+                if (atomic_dec_and_test(&desc->b_pages_remaining)) {
                         desc->b_flags |= PTL_BULK_FL_RCVD;
                         wake_up_interruptible(&desc->b_waitq);
                         if (desc->b_cb != NULL)

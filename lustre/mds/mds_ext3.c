@@ -183,6 +183,7 @@ static void mds_ext3_delete_inode(struct inode *inode)
                 mds_ext3_fs_ops.cl_delete_inode(inode);
 }
 
+
 static void mds_ext3_callback_status(void *jcb, int error)
 {
         struct mds_cb_data *mcb = (struct mds_cb_data *)jcb;

@@ -57,6 +57,9 @@ extern unsigned long obd_fail_loc;
 #define OBD_FAIL_MDS_CONNECT_NET         0x117
 #define OBD_FAIL_MDS_CONNECT_PACK        0x118
 #define OBD_FAIL_MDS_REINT_NET_REP       0x119
+#define OBD_FAIL_MDS_DISCONNECT_NET      0x11a
+#define OBD_FAIL_MDS_GETSTATUS_NET       0x11b
+#define OBD_FAIL_MDS_GETSTATUS_PACK      0x11c
 
 #define OBD_FAIL_OST                     0x200
 #define OBD_FAIL_OST_CONNECT_NET         0x201

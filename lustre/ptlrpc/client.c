@@ -62,8 +62,10 @@ struct ptlrpc_connection *ptlrpc_uuid_to_connection(char *uuid)
         }
 
         c = ptlrpc_get_connection(&peer);
-        if (c)
+        if (c) { 
+                memcpy(c->c_remote_uuid, uuid, sizeof(c->c_remote_uuid));
                 c->c_epoch++;
+        }
 
         return c;
 }
@@ -108,6 +110,7 @@ struct ptlrpc_bulk_page *ptlrpc_prep_bulk_page(struct ptlrpc_bulk_desc *desc)
                 ptl_set_inv_handle(&bulk->b_me_h);
                 list_add_tail(&bulk->b_link, &desc->b_page_list);
                 desc->b_page_count++;
+                atomic_inc(&desc->b_pages_remaining);
         }
         return bulk;
 }
@@ -135,7 +138,8 @@ void ptlrpc_free_bulk(struct ptlrpc_bulk_desc *desc)
 
 void ptlrpc_free_bulk_page(struct ptlrpc_bulk_page *bulk)
 {
-        if (!bulk) {
+        ENTRY;
+        if (bulk == NULL) {
                 EXIT;
                 return;
         }
@@ -143,6 +147,7 @@ void ptlrpc_free_bulk_page(struct ptlrpc_bulk_page *bulk)
         list_del(&bulk->b_link);
         bulk->b_desc->b_page_count--;
         OBD_FREE(bulk, sizeof(*bulk));
+        EXIT;
 }
 
 struct ptlrpc_request *ptlrpc_prep_req(struct ptlrpc_client *cl,
@@ -163,8 +168,8 @@ struct ptlrpc_request *ptlrpc_prep_req(struct ptlrpc_client *cl,
         rc = lustre_pack_msg(count, lengths, bufs,
                              &request->rq_reqlen, &request->rq_reqmsg);
         if (rc) {
-                OBD_FREE(request, sizeof(*request));
                 CERROR("cannot pack request %d\n", rc);
+                OBD_FREE(request, sizeof(*request));
                 RETURN(NULL);
         }
 
@@ -175,13 +180,15 @@ struct ptlrpc_request *ptlrpc_prep_req(struct ptlrpc_client *cl,
         request->rq_reqmsg->token = conn->c_remote_token;
         request->rq_reqmsg->opc = HTON__u32(opcode);
         request->rq_reqmsg->type = HTON__u32(PTL_RPC_MSG_REQUEST);
+        request->rq_reqmsg->target_id = HTON__u32(cl->cli_target_devno);
+
         INIT_LIST_HEAD(&request->rq_list);
 
         /* this will be dec()d once in req_finished, once in free_committed */
         atomic_set(&request->rq_refcount, 2);
 
         spin_lock(&conn->c_lock);
-        request->rq_reqmsg->xid = HTON__u32(++conn->c_xid_out);
+        request->rq_xid = HTON__u32(++conn->c_xid_out);
         request->rq_xid = conn->c_xid_out;
         spin_unlock(&conn->c_lock);
 
@@ -458,7 +465,7 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
         }
  resend:
         req->rq_time = CURRENT_TIME;
-        req->rq_timeout = 30;
+        req->rq_timeout = 3;
         rc = ptl_send_rpc(req);
         if (rc) {
                 CERROR("error %d, opcode %d\n", rc, req->rq_reqmsg->opc);
@@ -502,7 +509,7 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
                 CERROR("unpack_rep failed: %d\n", rc);
                 GOTO(out, rc);
         }
-        CDEBUG(D_NET, "got rep %d\n", req->rq_repmsg->xid);
+        CDEBUG(D_NET, "got rep %Ld\n", req->rq_xid);
         if (req->rq_repmsg->status == 0)
                 CDEBUG(D_NET, "--> buf %p len %d status %d\n", req->rq_repmsg,
                        req->rq_replen, req->rq_repmsg->status);
@@ -559,7 +566,7 @@ int ptlrpc_replay_req(struct ptlrpc_request *req)
                 GOTO(out, rc);
         }
 
-        CDEBUG(D_NET, "got rep %d\n", req->rq_repmsg->xid);
+        CDEBUG(D_NET, "got rep %Ld\n", req->rq_xid);
         if (req->rq_repmsg->status == 0)
                 CDEBUG(D_NET, "--> buf %p len %d status %d\n", req->rq_repmsg,
                        req->rq_replen, req->rq_repmsg->status);

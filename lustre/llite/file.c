@@ -38,19 +38,41 @@ static int ll_file_open(struct inode *inode, struct file *file)
         struct ll_file_data *fd;
         struct obdo *oa;
         struct ll_sb_info *sbi = ll_i2sbi(inode);
+        struct ll_inode_info *lli = ll_i2info(inode);
+        __u64 id = 0;
         ENTRY;
 
         if (file->private_data)
                 LBUG();
+
+        /*  delayed create of object (intent created inode) */
+        /*  XXX object needs to be cleaned up if mdc_open fails */
+        /*  XXX error handling appropriate here? */
+        if (lli->lli_obdo == NULL) {
+                struct inode * inode = file->f_dentry->d_inode;
+
+                oa = lli->lli_obdo = obdo_alloc();
+                oa->o_valid = OBD_MD_FLMODE;
+                oa->o_mode = S_IFREG | 0600;
+                rc = obd_create(ll_i2obdconn(inode), oa);
+                if (rc)
+                        RETURN(rc);
+                lli->lli_flags &= ~OBD_FL_CREATEONOPEN;
+        }
+
+        oa = lli->lli_obdo;
+        if (oa == NULL) {
+                LBUG();
+                GOTO(out_mdc, rc = -EINVAL);
+        }
 
         fd = kmem_cache_alloc(ll_file_data_slab, SLAB_KERNEL);
         if (!fd)
                 GOTO(out, rc = -ENOMEM);
         memset(fd, 0, sizeof(*fd));
 
-        rc = mdc_open(&sbi->ll_mds_client, sbi->ll_mds_conn, inode->i_ino,
-                      S_IFREG, file->f_flags, (__u64)(unsigned long)file, 
-                      &fd->fd_mdshandle, &req); 
+        rc = mdc_open(&sbi->ll_mdc_conn, inode->i_ino, S_IFREG, file->f_flags,
+                      id, (__u64)(unsigned long)file, &fd->fd_mdshandle, &req);
         fd->fd_req = req;
         ptlrpc_req_finished(req);
         if (rc)
@@ -62,15 +84,9 @@ static int ll_file_open(struct inode *inode, struct file *file)
         if (!fd->fd_mdshandle)
                 CERROR("mdc_open didn't assign fd_mdshandle\n");
 
-        oa = ll_i2info(inode)->lli_obdo;
-        if (oa == NULL) {
-                LBUG();
-                GOTO(out_mdc, rc = -ENOMEM);
-        }
         rc = obd_open(ll_i2obdconn(inode), oa);
-        if (rc) {
+        if (rc)
                 GOTO(out_mdc, rc = -abs(rc));
-        }
 
         file->private_data = fd;
 
@@ -78,7 +94,7 @@ static int ll_file_open(struct inode *inode, struct file *file)
 
         return 0;
 out_mdc:
-        mdc_close(&sbi->ll_mds_client, sbi->ll_mds_conn, inode->i_ino,
+        mdc_close(&sbi->ll_mdc_conn, inode->i_ino,
                   S_IFREG, fd->fd_mdshandle, &req);
 out_req:
         ptlrpc_free_req(req);
@@ -130,11 +146,11 @@ static int ll_file_release(struct inode *inode, struct file *file)
                 }
         }
 
-        rc = mdc_close(&sbi->ll_mds_client, sbi->ll_mds_conn, inode->i_ino,
+        rc = mdc_close(&sbi->ll_mdc_conn, inode->i_ino,
                        S_IFREG, fd->fd_mdshandle, &req);
         ptlrpc_req_finished(req);
-        if (rc) { 
-                if (rc > 0) 
+        if (rc) {
+                if (rc > 0)
                         rc = -rc;
                 GOTO(out, rc);
         }
@@ -180,6 +196,32 @@ static void ll_update_atime(struct inode *inode)
         ll_inode_setattr(inode, &attr, 0);
 }
 
+static int ll_lock_callback(struct ldlm_lock *lock, struct ldlm_lock *new,
+                            void *data, __u32 data_len)
+{
+        struct inode *inode = lock->l_data;
+        ENTRY;
+
+        if (new == NULL) {
+                /* Completion AST.  Do nothing. */
+                RETURN(0);
+        }
+
+        if (data_len != sizeof(struct inode))
+                LBUG();
+
+        /* FIXME: do something better than throwing away everything */
+        if (inode == NULL)
+                LBUG();
+        down(&inode->i_sem);
+        invalidate_inode_pages(inode);
+        up(&inode->i_sem);
+
+        if (ldlm_cli_cancel(lock->l_client, lock) < 0)
+                LBUG();
+        RETURN(0);
+}
+
 static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
                             loff_t *ppos)
 {
@@ -187,7 +229,7 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
         struct inode *inode = filp->f_dentry->d_inode;
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct ldlm_extent extent;
-        struct ldlm_handle lockh;
+        struct lustre_handle lockh;
         __u64 res_id[RES_NAME_SIZE] = {inode->i_ino};
         int flags = 0;
         ldlm_error_t err;
@@ -200,9 +242,10 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
                 CDEBUG(D_INFO, "Locking inode %ld, start %Lu end %Lu\n",
                        inode->i_ino, extent.start, extent.end);
 
-                err = obd_enqueue(&sbi->ll_conn, sbi->ll_namespace, NULL,
-                                  res_id, LDLM_EXTENT, &extent, LCK_PR, &flags,
-                                  inode, sizeof(*inode), &lockh);
+                err = obd_enqueue(&sbi->ll_osc_conn, NULL, res_id, LDLM_EXTENT,
+                                  &extent, sizeof(extent), LCK_PR, &flags,
+                                  ll_lock_callback, inode, sizeof(*inode),
+                                  &lockh);
                 if (err != ELDLM_OK)
                         CERROR("lock enqueue: err: %d\n", err);
                 ldlm_lock_dump((void *)(unsigned long)lockh.addr);
@@ -211,11 +254,12 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
         CDEBUG(D_INFO, "Reading inode %ld, %d bytes, offset %Ld\n",
                inode->i_ino, count, *ppos);
         retval = generic_file_read(filp, buf, count, ppos);
+
         if (retval > 0)
                 ll_update_atime(inode);
 
         if (!(fd->fd_flags & LL_FILE_IGNORE_LOCK)) {
-                err = obd_cancel(&sbi->ll_conn, LCK_PR, &lockh);
+                err = obd_cancel(&sbi->ll_osc_conn, LCK_PR, &lockh);
                 if (err != ELDLM_OK)
                         CERROR("lock cancel: err: %d\n", err);
         }
@@ -233,7 +277,7 @@ ll_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
         struct inode *inode = file->f_dentry->d_inode;
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct ldlm_extent extent;
-        struct ldlm_handle lockh;
+        struct lustre_handle lockh;
         __u64 res_id[RES_NAME_SIZE] = {inode->i_ino};
         int flags = 0;
         ldlm_error_t err;
@@ -246,9 +290,10 @@ ll_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
                 CDEBUG(D_INFO, "Locking inode %ld, start %Lu end %Lu\n",
                        inode->i_ino, extent.start, extent.end);
 
-                err = obd_enqueue(&sbi->ll_conn, sbi->ll_namespace, NULL,
-                                  res_id, LDLM_EXTENT, &extent, LCK_PW, &flags,
-                                  inode, sizeof(*inode), &lockh);
+                err = obd_enqueue(&sbi->ll_osc_conn, NULL, res_id, LDLM_EXTENT,
+                                  &extent, sizeof(extent), LCK_PW, &flags,
+                                  ll_lock_callback, inode, sizeof(*inode),
+                                  &lockh);
                 if (err != ELDLM_OK)
                         CERROR("lock enqueue: err: %d\n", err);
                 ldlm_lock_dump((void *)(unsigned long)lockh.addr);
@@ -260,7 +305,7 @@ ll_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
         retval = generic_file_write(file, buf, count, ppos);
 
         if (!(fd->fd_flags & LL_FILE_IGNORE_LOCK)) {
-                err = obd_cancel(&sbi->ll_conn, LCK_PW, &lockh);
+                err = obd_cancel(&sbi->ll_osc_conn, LCK_PW, &lockh);
                 if (err != ELDLM_OK)
                         CERROR("lock cancel: err: %d\n", err);
         }

@@ -173,7 +173,8 @@ static int ll_commit_write(struct file *file, struct page *page,
                       &bufs_per_obdo, &page, &count, &offset, &flags, NULL);
         kunmap(page);
 
-        if ((iattr.ia_size = offset + to) > inode->i_size) {
+        iattr.ia_size = offset + to;
+        if (iattr.ia_size > inode->i_size) {
                 /* do NOT truncate when writing in the middle of a file */
                 inode->i_size = iattr.ia_size;
                 iattr.ia_valid = ATTR_SIZE;
@@ -258,6 +259,65 @@ int ll_direct_IO(int rw, struct inode *inode, struct kiobuf *iobuf,
         if (offset) 
                 OBD_FREE(offset, sizeof(obd_off) * bufs_per_obdo); 
         RETURN(rc);
+}
+
+
+int ll_flush_inode_pages(struct inode * inode)
+{
+        //int i;
+        //        obd_count        num_obdo = 1;
+        obd_count        bufs_per_obdo = 0;
+        struct obdo     *oa = NULL;
+        obd_size         *count = NULL;
+        obd_off          *offset = NULL;
+        obd_flag         *flags = NULL;
+        int              err = 0;
+
+        ENTRY;
+
+        spin_lock(&pagecache_lock);
+
+        spin_unlock(&pagecache_lock);
+
+
+        OBD_ALLOC(count, sizeof(obd_size) * bufs_per_obdo); 
+        if (!count)
+                GOTO(out, err=-ENOMEM); 
+
+        OBD_ALLOC(offset, sizeof(obd_off) * bufs_per_obdo); 
+        if (!offset)
+                GOTO(out, err=-ENOMEM); 
+
+        OBD_ALLOC(flags, sizeof(obd_flag) * bufs_per_obdo); 
+        if (!flags)
+                GOTO(out, err=-ENOMEM); 
+
+#if 0
+        for (i = 0 ; i < bufs_per_obdo ; i++) { 
+                count[i] = PAGE_SIZE;
+                offset[i] = ((obd_off)(iobuf->maplist[i])->index) << PAGE_SHIFT;
+                flags[i] = OBD_BRW_CREATE;
+        }
+
+        oa = ll_oa_from_inode(inode, OBD_MD_FLNOTOBD);
+        if (!oa)
+                RETURN(-ENOMEM);
+
+        err = obd_brw(rw, ll_i2obdconn(inode), num_obdo, &oa, &bufs_per_obdo,
+                      iobuf->maplist, count, offset, flags);
+        if (err == 0) 
+                err = bufs_per_obdo * 4096;
+#endif
+ out:
+        if (oa) 
+                obdo_free(oa);
+        if (flags) 
+                OBD_FREE(flags, sizeof(obd_flag) * bufs_per_obdo); 
+        if (count) 
+                OBD_FREE(count, sizeof(obd_count) * bufs_per_obdo); 
+        if (offset) 
+                OBD_FREE(offset, sizeof(obd_off) * bufs_per_obdo); 
+        RETURN(err);
 }
 
 

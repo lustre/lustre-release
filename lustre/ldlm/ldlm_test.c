@@ -26,23 +26,23 @@ int ldlm_test_basics(struct obd_device *obddev)
         struct ldlm_resource *res;
         __u64 res_id[RES_NAME_SIZE] = {1, 2, 3};
         ldlm_error_t err;
-        struct ldlm_handle lockh_1, lockh_2;
+        struct lustre_handle lockh_1, lockh_2;
         int flags;
 
-        ns = ldlm_namespace_new(obddev, 0);
+        ns = ldlm_namespace_new(LDLM_NAMESPACE_SERVER);
         if (ns == NULL)
                 LBUG();
 
         err = ldlm_local_lock_create(ns, NULL, res_id, LDLM_PLAIN, LCK_CR,
                                      NULL, 0, &lockh_1);
-        err = ldlm_local_lock_enqueue(&lockh_1, NULL, &flags,
+        err = ldlm_local_lock_enqueue(&lockh_1, NULL, 0, &flags,
                                       ldlm_test_callback, ldlm_test_callback);
         if (err != ELDLM_OK)
                 LBUG();
 
         err = ldlm_local_lock_create(ns, NULL, res_id, LDLM_PLAIN, LCK_EX,
                                      NULL, 0, &lockh_2);
-        err = ldlm_local_lock_enqueue(&lockh_2, NULL, &flags,
+        err = ldlm_local_lock_enqueue(&lockh_2, NULL, 0, &flags,
                                       ldlm_test_callback, ldlm_test_callback);
         if (err != ELDLM_OK)
                 LBUG();
@@ -71,18 +71,19 @@ int ldlm_test_extents(struct obd_device *obddev)
         struct ldlm_lock *lock;
         __u64 res_id[RES_NAME_SIZE] = {0, 0, 0};
         struct ldlm_extent ext1 = {4, 6}, ext2 = {6, 9}, ext3 = {10, 11};
-        struct ldlm_handle ext1_h, ext2_h, ext3_h;
+        struct lustre_handle ext1_h, ext2_h, ext3_h;
         ldlm_error_t err;
         int flags;
 
-        ns = ldlm_namespace_new(obddev, 0);
+        ns = ldlm_namespace_new(LDLM_NAMESPACE_SERVER);
         if (ns == NULL)
                 LBUG();
 
         flags = 0;
         err = ldlm_local_lock_create(ns, NULL, res_id, LDLM_EXTENT, LCK_PR,
                                      NULL, 0, &ext1_h);
-        err = ldlm_local_lock_enqueue(&ext1_h, &ext1, &flags, NULL, NULL);
+        err = ldlm_local_lock_enqueue(&ext1_h, &ext1, sizeof(ext1), &flags,
+                                      NULL, NULL);
         if (err != ELDLM_OK)
                 LBUG();
         if (!(flags & LDLM_FL_LOCK_CHANGED))
@@ -91,7 +92,8 @@ int ldlm_test_extents(struct obd_device *obddev)
         flags = 0;
         err = ldlm_local_lock_create(ns, NULL, res_id, LDLM_EXTENT, LCK_PR,
                                      NULL, 0, &ext2_h);
-        err = ldlm_local_lock_enqueue(&ext2_h, &ext2, &flags, NULL, NULL);
+        err = ldlm_local_lock_enqueue(&ext2_h, &ext2, sizeof(ext2), &flags,
+                                      NULL, NULL);
         if (err != ELDLM_OK)
                 LBUG();
         if (!(flags & LDLM_FL_LOCK_CHANGED))
@@ -100,7 +102,8 @@ int ldlm_test_extents(struct obd_device *obddev)
         flags = 0;
         err = ldlm_local_lock_create(ns, NULL, res_id, LDLM_EXTENT, LCK_EX,
                                      NULL, 0, &ext3_h);
-        err = ldlm_local_lock_enqueue(&ext3_h, &ext3, &flags, NULL, NULL);
+        err = ldlm_local_lock_enqueue(&ext3_h, &ext3, sizeof(ext3), &flags,
+                                      NULL, NULL);
         if (err != ELDLM_OK)
                 LBUG();
         if (!(flags & LDLM_FL_BLOCK_GRANTED))
@@ -115,7 +118,7 @@ int ldlm_test_extents(struct obd_device *obddev)
                 ldlm_reprocess_all(res);
 
         flags = 0;
-        lock = ldlm_handle2object(&ext2_h);
+        lock = lustre_handle2object(&ext2_h);
         res = ldlm_local_lock_cancel(lock);
         if (res != NULL)
                 ldlm_reprocess_all(res);
@@ -137,13 +140,14 @@ static int ldlm_test_network(struct obd_device *obddev,
 
         __u64 res_id[RES_NAME_SIZE] = {1, 2, 3};
         struct ldlm_extent ext = {4, 6};
-        struct ldlm_handle lockh1;
+        struct lustre_handle lockh1;
         int flags = 0;
         ldlm_error_t err;
 
-        err = ldlm_cli_enqueue(ldlm->ldlm_client, conn, obddev->obd_namespace,
-                               NULL, res_id, LDLM_EXTENT, &ext, LCK_PR, &flags,
-                               NULL, 0, &lockh1);
+        err = ldlm_cli_enqueue(ldlm->ldlm_client, conn, NULL,
+                               obddev->obd_namespace, NULL, res_id, LDLM_EXTENT,
+                               &ext, sizeof(ext), LCK_PR, &flags, NULL, NULL, 0,
+                               &lockh1);
         CERROR("ldlm_cli_enqueue: %d\n", err);
 
         RETURN(err);

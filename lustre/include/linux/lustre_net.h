@@ -36,11 +36,11 @@
 
 #define CONNMGR_REQUEST_PORTAL    1
 #define CONNMGR_REPLY_PORTAL      2
-#define OSC_REQUEST_PORTAL      3
+//#define OSC_REQUEST_PORTAL      3
 #define OSC_REPLY_PORTAL        4
 #define OSC_BULK_PORTAL         5
 #define OST_REQUEST_PORTAL      6
-#define OST_REPLY_PORTAL        7
+//#define OST_REPLY_PORTAL        7
 #define OST_BULK_PORTAL         8
 #define MDC_REQUEST_PORTAL      9
 #define MDC_REPLY_PORTAL        10
@@ -103,6 +103,7 @@ struct ptlrpc_client {
         __u32 cli_reply_portal;
         __u64 cli_last_rcvd;
         __u64 cli_last_committed;
+        __u32 cli_target_devno;
 
         void *cli_data;
         struct semaphore cli_rpc_sem; /* limits outstanding requests */
@@ -204,7 +205,7 @@ struct ptlrpc_bulk_desc {
         wait_queue_head_t b_waitq;
         struct list_head b_page_list;
         __u32 b_page_count;
-        atomic_t b_finished_count;
+        atomic_t b_pages_remaining;
         void *b_desc_private;
 };
 

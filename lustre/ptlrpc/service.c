@@ -147,13 +147,11 @@ static int handle_incoming_request(struct obd_device *obddev,
         start = event->mem_desc.start;
         memset(&request, 0, sizeof(request));
         request.rq_obd = obddev;
+        request.rq_xid = event->match_bits;
         request.rq_reqmsg = event->mem_desc.start + event->offset;
         request.rq_reqlen = event->mem_desc.length;
 
-        if (request.rq_reqmsg->xid != event->match_bits)
-                LBUG();
-
-        CDEBUG(D_NET, "got req %d\n", request.rq_reqmsg->xid);
+        CDEBUG(D_NET, "got req %Ld\n", request.rq_xid);
 
         peer.peer_nid = event->initiator.nid;
         /* FIXME: this NI should be the incoming NI.
@@ -191,6 +189,38 @@ static int handle_incoming_request(struct obd_device *obddev,
         ptlrpc_put_connection(request.rq_connection);
         ptl_handled_rpc(svc, start);
         return rc;
+}
+
+void ptlrpc_rotate_reqbufs(struct ptlrpc_service *service, 
+                            ptl_event_t *ev)
+{
+        int index;
+
+        for (index = 0; index < service->srv_ring_length; index++)
+                if (service->srv_buf[index] == ev->mem_desc.start)
+                        break;
+        
+        if (index == service->srv_ring_length)
+                LBUG();
+
+        service->srv_ref_count[index]++;
+
+        if (ptl_is_valid_handle(&ev->unlinked_me)) {
+                int idx;
+
+                for (idx = 0; idx < service->srv_ring_length; idx++)
+                        if (service->srv_me_h[idx].handle_idx ==
+                            ev->unlinked_me.handle_idx)
+                                break;
+                if (idx == service->srv_ring_length)
+                        LBUG();
+
+                CDEBUG(D_NET, "unlinked %d\n", idx);
+                ptl_set_inv_handle(&(service->srv_me_h[idx]));
+
+                if (service->srv_ref_count[idx] == 0)
+                        ptlrpc_link_svc_me(service, idx);
+        }
 }
 
 static int ptlrpc_main(void *arg)
@@ -242,6 +272,8 @@ static int ptlrpc_main(void *arg)
                 
                 if (thread->t_flags & SVC_EVENT) { 
                         thread->t_flags &= ~SVC_EVENT;
+                        ptlrpc_rotate_reqbufs(svc, &event); 
+
                         rc = handle_incoming_request(obddev, svc, &event);
                         thread->t_flags &= ~SVC_EVENT;
                         continue;
