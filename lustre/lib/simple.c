@@ -95,19 +95,20 @@ struct dentry *simple_mknod(struct dentry *dir, char *name, int mode)
 
         ASSERT_KERNEL_CTXT("kernel doing mknod outside kernel context\n");
         CDEBUG(D_INODE, "creating file %*s\n", (int)strlen(name), name);
+
         down(&dir->d_inode->i_sem);
         dchild = lookup_one_len(name, dir, strlen(name));
         if (IS_ERR(dchild))
                 GOTO(out, PTR_ERR(dchild));
 
         if (dchild->d_inode) {
-                if (((dchild->d_inode->i_mode ^ mode) & S_IFMT) != 0)
+                if ((dchild->d_inode->i_mode & S_IFMT) != S_IFREG)
                         GOTO(out, err = -EEXIST);
 
                 GOTO(out, dchild);
         }
 
-        err = vfs_create(dir->d_inode, dchild, (mode & S_IFMT) | S_IFREG);
+        err = vfs_create(dir->d_inode, dchild, (mode & ~S_IFMT) | S_IFREG);
         EXIT;
 out:
         up(&dir->d_inode->i_sem);
