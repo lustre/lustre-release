@@ -168,7 +168,8 @@ static inline lib_eq_t *
 lib_eq_alloc (nal_cb_t *nal)
 {
         /* NEVER called with statelock held */
-        lib_eq_t *eq = kmem_cache_alloc(ptl_eq_slab, GFP_NOFS);
+        lib_eq_t *eq;
+        PORTAL_SLAB_ALLOC(eq, ptl_eq_slab, sizeof(*eq));
 
         if (eq == NULL)
                 return (NULL);
@@ -189,7 +190,8 @@ static inline lib_md_t *
 lib_md_alloc (nal_cb_t *nal)
 {
         /* NEVER called with statelock held */
-        lib_md_t *md = kmem_cache_alloc(ptl_md_slab, GFP_NOFS);
+        lib_md_t *md;
+        PORTAL_SLAB_ALLOC(md, ptl_md_slab, sizeof(*md));
 
         if (md == NULL)
                 return (NULL);
@@ -210,7 +212,8 @@ static inline lib_me_t *
 lib_me_alloc (nal_cb_t *nal)
 {
         /* NEVER called with statelock held */
-        lib_me_t *me = kmem_cache_alloc(ptl_me_slab, GFP_NOFS);
+        lib_me_t *me;
+        PORTAL_SLAB_ALLOC(me, ptl_me_slab, sizeof(*me));
 
         if (me == NULL)
                 return (NULL);
@@ -231,7 +234,8 @@ static inline lib_msg_t *
 lib_msg_alloc(nal_cb_t *nal)
 {
         /* ALWAYS called with statelock held */
-        lib_msg_t *msg = kmem_cache_alloc(ptl_msg_slab, GFP_ATOMIC);
+        lib_msg_t *msg;
+        PORTAL_SLAB_ALLOC(msg, ptl_msg_slab, sizeof(*msg));
 
         if (msg == NULL)
                 return (NULL);

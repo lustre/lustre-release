@@ -334,7 +334,7 @@ do {                                                                      \
                 portal_kmem_inc((ptr), (size));                           \
                 memset((ptr), 0, (size));                                 \
         }                                                                 \
-        CDEBUG(D_MALLOC, "kmalloced '" #ptr "': %ld at %p (tot %d).\n",   \
+        CDEBUG(D_MALLOC, "kmalloced '" #ptr "': %d at %p (tot %d).\n",    \
                (int)(size), (ptr), atomic_read(&portal_kmemory));         \
 } while (0)
 
