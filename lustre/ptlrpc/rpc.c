@@ -96,7 +96,6 @@ static int server_request_callback(ptl_event_t *ev, void *data)
                 if (service->srv_me_h[service->srv_me_active] == 0)
                         CERROR("All %d ring ME's are unlinked!\n",
                                service->srv_ring_length);
-
         }
 
         if (ev->type == PTL_EVENT_PUT) {
@@ -201,6 +200,7 @@ int ptl_send_rpc(struct ptlrpc_request *request, struct lustre_peer *peer)
         ptl_handle_me_t me_h, bulk_me_h;
         ptl_process_id_t local_id;
         int rc;
+        char *repbuf;
 
         ENTRY;
 
@@ -210,8 +210,10 @@ int ptl_send_rpc(struct ptlrpc_request *request, struct lustre_peer *peer)
                 return -EINVAL;
         }
 
-        OBD_ALLOC(request->rq_repbuf, request->rq_replen);
-        if (!request->rq_repbuf) { 
+        /* request->rq_repbuf is set only when the reply comes in, in
+         * client_packet_callback() */
+        OBD_ALLOC(repbuf, request->rq_replen);
+        if (!repbuf) { 
                 EXIT;
                 return -ENOMEM;
         }
@@ -228,7 +230,7 @@ int ptl_send_rpc(struct ptlrpc_request *request, struct lustre_peer *peer)
                 goto cleanup;
         }
 
-        request->rq_reply_md.start = request->rq_repbuf;
+        request->rq_reply_md.start = repbuf;
         request->rq_reply_md.length = request->rq_replen;
         request->rq_reply_md.threshold = 1;
         request->rq_reply_md.options = PTL_MD_OP_PUT;
@@ -278,7 +280,7 @@ int ptl_send_rpc(struct ptlrpc_request *request, struct lustre_peer *peer)
  cleanup2:
         PtlMEUnlink(me_h);
  cleanup:
-        OBD_FREE(request->rq_repbuf, request->rq_replen);
+        OBD_FREE(repbuf, request->rq_replen);
 
         return rc;
 }
@@ -374,7 +376,7 @@ int rpc_register_service(struct ptlrpc_service *service, char *uuid)
         }
 
         for (i = 0; i < service->srv_ring_length; i++) {
-                OBD_ALLOC(service->srv_buf[i], service->srv_buf_size);                
+                OBD_ALLOC(service->srv_buf[i], service->srv_buf_size);
 
                 if (service->srv_buf[i] == NULL) {
                         CERROR("no memory\n");
