@@ -39,7 +39,7 @@
   <obd uuid='OBD_localhost_UUID' name='OBD_localhost' type='obdfilter'>
     <fstype>extN</fstype>
     <device size='100000'>/tmp/ost1</device>
-    <autoformat>yes</autoformat>
+    <autoformat>no</autoformat>
   </obd>
   <osc name='OSC_localhost' uuid='OSC_localhost_UUID'>
     <ost_ref uuidref='OST_localhost_UUID'/>
@@ -52,7 +52,7 @@
   <obd name='OBD_localhost_2' uuid='OBD_localhost_2_UUID' type='obdfilter'>
     <fstype>extN</fstype>
     <device size='100000'>/tmp/ost2</device>
-    <autoformat>yes</autoformat>
+    <autoformat>no</autoformat>
   </obd>
   <osc name='OSC_localhost_2' uuid='OSC_localhost_2_UUID'>
     <ost_ref uuidref='OST_localhost_2_UUID'/>

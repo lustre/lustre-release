@@ -1,6 +1,7 @@
 #!/bin/bash
 
-config=local.xml
+config=${1:-local.xml}
+
 LMC=../utils/lmc
 
 # create nodes
