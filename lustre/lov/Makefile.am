@@ -10,7 +10,7 @@ modulefs_DATA = lov.o
 EXTRA_PROGRAMS = lov
 LINX= lov_pack.c
 
-lov_SOURCES = lov_obd.c $(LINX)
+lov_SOURCES = lov_obd.c lproc_lov.c $(LINX)
 
 lov_pack.c: 
 	test -e lov_pack.c || ln -sf $(top_srcdir)/lib/lov_pack.c

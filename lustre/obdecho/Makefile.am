@@ -9,7 +9,7 @@ modulefs_DATA = obdecho.o
 EXTRA_PROGRAMS = obdecho
 
 LINX=
-obdecho_SOURCES = echo.c $(LINX)
+obdecho_SOURCES = echo.c lproc_echo.c $(LINX)
 
 include $(top_srcdir)/Rules
 

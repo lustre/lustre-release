@@ -15,7 +15,7 @@ ll_pack.c:
 simple.c:
 	test -e simple.c || ln -sf $(top_srcdir)/lib/simple.c
 
-FILTERC = filter.c
+FILTERC = filter.c lproc_obdfilter.c
 obdfilter_SOURCES = $(FILTERC) $(LINX)
 
 dist-hook:

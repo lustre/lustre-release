@@ -38,6 +38,10 @@
 #include <linux/lustre_net.h>
 #include <linux/lustre_dlm.h>
 #include <linux/init.h>
+#include <linux/lprocfs_status.h>
+
+extern lprocfs_vars_t status_var_nm_1[];
+extern lprocfs_vars_t status_class_var[];
 
 static int ost_destroy(struct ptlrpc_request *req)
 {
@@ -665,21 +669,50 @@ static int ost_cleanup(struct obd_device * obddev)
         MOD_DEC_USE_COUNT;
         RETURN(0);
 }
+int ost_attach(struct obd_device *dev, 
+                   obd_count len, void *data)
+{
+        /*  lprocfs_reg_dev(dev, (lprocfs_group_t*)lprocfs_ptlrpc_nm,
+                        sizeof(struct lprofiler_ptlrpc));
+        */
+        lprocfs_reg_obd(dev, (lprocfs_vars_t*)status_var_nm_1, (void*)dev);
+        return 0; 
+}
+
+int ost_detach(struct obd_device *dev)
+{
+        /* lprocfs_dereg_dev(dev); */
+        lprocfs_dereg_obd(dev);
+        return 0;
+
+}
+
+
 
 /* use obd ops to offer management infrastructure */
 static struct obd_ops ost_obd_ops = {
+        o_attach:      ost_attach,
+        o_detach:      ost_detach,
         o_setup:       ost_setup,
         o_cleanup:     ost_cleanup,
 };
 
 static int __init ost_init(void)
 {
-        class_register_type(&ost_obd_ops, LUSTRE_OST_NAME);
+        int rc;
+
+        rc = class_register_type(&ost_obd_ops,
+                                 (lprocfs_vars_t*)status_class_var, 
+                                 LUSTRE_OST_NAME);
+        if (rc) RETURN(rc);
+
         return 0;
+
 }
 
 static void __exit ost_exit(void)
 {
+        
         class_unregister_type(LUSTRE_OST_NAME);
 }
 

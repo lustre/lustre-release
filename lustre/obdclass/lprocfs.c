@@ -1,7 +1,7 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Copyright (C) 2002 Intel Corporation
+ *  Copyright (C) 2002 Cluster File Systems, Inc.
  *
  *   This file is part of Lustre, http://www.lustre.org.
  *
@@ -17,22 +17,6 @@
  *   You should have received a copy of the GNU General Public License
  *   along with Lustre; if not, write to the Free Software
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
- */
-
-/*
- * Author: Hariharan Thantry
- * File Name: lprocfs.c
- *
- * During initialization (of lustre), the following directory materializes
- *          /proc/lustre
- * When the first OBD device of a class is created (due to insmod)
- * the directory
- *         /proc/lustre/devices/<device-class> is created.
- * When an instance of a device is created (during attach) the
- * directory entry for that instance along with the variables for
- * that entry gets created. These variables could be counters, string
- * variables etc.
- * Each API further describes the functionality offered.
  *
  */
 
@@ -76,18 +60,16 @@ char escape_char = '%';
  * Externs
  */
 extern struct proc_dir_entry proc_root; /* Defined in proc/root.c */
-
+extern struct obd_type *class_nm_to_type(char *nm);
 
 /*
  * Globals
  */
+struct proc_dir_entry *proc_lustre_root = 0;
+struct proc_dir_entry *proc_lustre_dev_root = 0;
 
-static struct proc_dir_entry *proc_lustre_root = 0;
-static struct proc_dir_entry *proc_lustre_dev_root = 0;
 
-/* struct lustre_lock proc_lustre_lock; */
-/* static struct proc_dir_entry *proc_lustre_conn_root = 0; */
-char *testStr = "General..";
+
 
 /*
  * Link the namespace with the internal array indices for
@@ -328,14 +310,6 @@ struct groupspace_index class_index[] = {
 };
 
 
-/*
- *  API implementations
- */
-
-/*
- * lprocfs_reg_dev: Registers an instance of the OBD device in the
- *                       proc hierarchy
- */
 
 int lprocfs_reg_dev(struct obd_device* device, lprocfs_group_t* namespace,
                     unsigned int cnt_struct_size)
@@ -362,6 +336,7 @@ int lprocfs_reg_dev(struct obd_device* device, lprocfs_group_t* namespace,
                        device->obd_type->typ_name);
                 return LPROCFS_FAILURE;
         }
+        CDEBUG(D_OTHER, "Obtained the class array index\n");
 
         /* Create the directory namespace */
         retval = lprocfs_create_dir_namespace(this_dev_root, namespace,
@@ -517,7 +492,7 @@ int lprocfs_create_dir_namespace(struct proc_dir_entry* root,
 
         while (1) {
                 temp = &namespace[i];
-                if (temp->count_func_namespace == 0)
+                if (temp->count_func_namespace)
                         break;
                 while ((temp->dir_namespace)[j] != 0){
                         dir_root = lprocfs_add_dir(root,
@@ -553,57 +528,6 @@ int lprocfs_getclass_idx(struct groupspace_index* group, const char* classname)
         return LPROCFS_FAILURE;
 }
 
-struct proc_dir_entry* lprocfs_mkinitdir(struct obd_device* device)
-{
-        struct proc_dir_entry* this_dev_root = 0;
-        struct proc_dir_entry* temp_proc = 0;
-
-        /*
-         * First check if /proc/lustre exits. If it does not,
-         * instantiate the same and the devices directory
-         */
-        if (!proc_lustre_root) {
-                proc_lustre_root = lprocfs_mkdir("lustre", &proc_root);
-                if (!proc_lustre_root) {
-                        CERROR(" !! Cannot create /proc/lustre !! \n");
-                        return 0;
-                }
-                proc_lustre_dev_root =
-                        lprocfs_mkdir("devices", proc_lustre_root);
-
-                if (!proc_lustre_dev_root) {
-                        CERROR(" !! Cannot create /proc/lustre/devices !! \n");
-                        return 0;
-                }
-        }
-
-        /*
-         * Check if this is the first instance for a device of
-         * this class in the lprocfs hierarchy.
-         */
-        temp_proc = lprocfs_srch(proc_lustre_dev_root,
-                                 device->obd_type->typ_name);
-
-        if (!temp_proc) {
-                temp_proc = lprocfs_mkdir(device->obd_type->typ_name,
-                                          proc_lustre_dev_root);
-                if (!temp_proc) {
-                        CERROR("! Proc dir for device class %s !!\n",
-                               device->obd_type->typ_name);
-                        return 0;
-                }
-        }
-
-        /* Next create the proc_dir_entry for this instance */
-        this_dev_root = lprocfs_mkdir(device->obd_name, temp_proc);
-        if (!this_dev_root) {
-                CERROR("!Can't create proc entry for instance %s !! \n",
-                       device->obd_name);
-                return 0;
-        }
-
-        return this_dev_root;
-}
 
 
 int lprocfs_get_idx(struct namespace_index* class, const char* dir_name)
@@ -750,43 +674,6 @@ struct proc_dir_entry* lprocfs_add_dir(struct proc_dir_entry *root,
         return new_root;
 }
 
-struct proc_dir_entry* lprocfs_srch(struct proc_dir_entry* head,
-                                    const char* name)
-{
-        struct proc_dir_entry* temp;
-
-        if (!head)
-                return 0;
-        temp = head->subdir;
-        while (temp != NULL) {
-                if (!strcmp(temp->name, name))
-                        return temp;
-                temp = temp->next;
-        }
-
-        return 0;
-}
-
-#warning FIXME: recursive code is VERY bad in the kernel because of stack limit
-struct proc_dir_entry* lprocfs_bfs_srch(struct proc_dir_entry* root,
-                                        const char* name)
-{
-        struct proc_dir_entry* temp = root;
-
-        if (!temp)
-                return 0;
-
-        if (!strcmp(temp->name, name))
-                return temp;
-
-        if ((temp = lprocfs_bfs_srch(root->next, name)) != 0)
-                return temp;
-
-        if ((temp = lprocfs_bfs_srch(root->subdir, name)) != 0)
-                return temp;
-
-        return temp;
-}
 
 int lprocfs_get_nm(char* name, lprocfs_obd_nm_t* collection)
 {

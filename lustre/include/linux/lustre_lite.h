@@ -18,6 +18,7 @@
 
 #include <linux/fs.h>
 #include <linux/ext2_fs.h>
+#include <linux/proc_fs.h>
 
 #include <linux/obd_class.h>
 #include <linux/lustre_net.h>
@@ -75,6 +76,7 @@ struct ll_sb_info {
         obd_uuid_t                ll_sb_uuid;
         struct lustre_handle      ll_mdc_conn;
         struct lustre_handle      ll_osc_conn;
+        struct proc_dir_entry*    ll_mnt_root;
         obd_id                    ll_rootino; /* number of root inode */
 
         int                       ll_flags;

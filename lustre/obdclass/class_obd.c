@@ -43,7 +43,7 @@
 #include <linux/obd_class.h>
 #include <linux/lustre_debug.h>
 #include <linux/smp_lock.h>
-#include <linux/lprocfs.h>
+#include <linux/lprocfs_status.h>
 
 struct semaphore obd_conf_sem;   /* serialize configuration commands */
 struct obd_device obd_dev[MAX_OBD_DEVICES];
@@ -56,388 +56,6 @@ unsigned long obd_timeout = 100;
 char obd_recovery_upcall[128] = "/usr/lib/lustre/ha_assist";
 
 extern struct obd_type *class_nm_to_type(char *nm);
-/*
- * LProcFS specific data structures. These define the namespace for
- * the various device classes. We will need to distribute these
- * later, to individual modules (e.g. MDS, MDC etc)
- */
-
-#ifdef LPROCFS_EXISTS
-
-/*
- * Common SNMP namespace
- */
-
-char *snmp_dir_nm[] = {
-        "snmp",
-        0
-
-};
-
-lprocfs_vars_t snmp_var_nm[]={
-        {"uuid", rd_uuid, wr_uuid},
-        {"f_blocksize",rd_blksize, wr_other},
-        {"f_blockstotal",rd_blktotal, wr_other},
-        {"f_blocksfree",rd_blkfree, wr_other},
-        {"f_kbytesfree", rd_kbfree, wr_other},
-        {"f_objects", rd_numobjects, wr_other},
-        {"f_objectsfree", rd_objfree, wr_other},
-        {"f_objectgroups", rd_objgroups, wr_other},
-        {"0", 0, 0}
-};
-
-
-
-
-/*
- * Common OBD namespace for lprocFS (these are used very often)
- */
-
-char* obd_dir_nm_1[]= {
-        "mgmt%",
-        "mgmt/setup",
-        "mgmt/cleanup",
-        "mgmt/connect",
-        "mgmt/disconnect",
-        0
-};
-
-lprocfs_vars_t obd_var_nm_1[]= {
-        {"num_ops", lprocfs_ll_rd, lprocfs_ll_wr},
-        {"min_time", lprocfs_ll_rd, lprocfs_ll_wr},
-        {"max_time", lprocfs_ll_rd, lprocfs_ll_wr},
-        {"sum_time", lprocfs_ll_rd, lprocfs_ll_wr},
-        {"0", 0, 0}
-};
-
-
-/*
- *  MDC Spcific namespace for lprocFS
- */
-
-char *mdc_dir_nm_1[]= {
-        "reint",
-        "getstatus",
-        "getattr",
-        "setattr",
-        "open",
-        "readpage",
-        "create",
-        "unlink",
-        "link",
-        "rename",
-        0
-};
-
-
-
-
-
-/*
- * Create the MDC groupings
- */
-lprocfs_group_t lprocfs_mdc_nm[]= {
-
-        {obd_dir_nm_1, obd_var_nm_1, e_generic},
-        {mdc_dir_nm_1, obd_var_nm_1, e_generic},
-        {snmp_dir_nm, snmp_var_nm, e_specific},
-        {0, 0, 0}
-};
-
-/*
- * MDS Device Groupings
- */
-char *mds_dir_nm_1[]={
-        "getstatus",
-        "connect",
-        "disconnect_callback",
-        "getattr",
-        "readpage",
-        "open",
-        "close",
-        "create",
-        "unlink",
-        "link",
-        "rename",
-        "reint%",
-        "reint/summary",
-        "reint/setattr",
-        "reint/create",
-        "reint/unlink",
-        "reint/link",
-        "reint/rename",
-        "reint/recreate",
-        0
-};
-/*
-char *mds_dir_nm_2[]={
-        "mstatfs",
-        0
-};
-
-
-lprocfs_vars_t mds_var_nm_2[]={
-        {"f_type", rd_fs_type, wr_other},
-        {"f_bsize",rd_other, wr_other},
-        {"f_blocks",rd_other, wr_other},
-        {"f_bfree",rd_other, wr_other},
-        {"f_bavail",rd_other, wr_other},
-        {"uuid",rd_string, wr_string},
-        {"0", 0, 0}
-};
-
-*/
-
-char *mds_snmp_dir_nm_1[] = {
-        "snmp",
-        0
-};
-
-
-lprocfs_vars_t mds_snmp_var_nm_1[] = {
-        {"f_fstype", rd_fs_type, wr_other},
-        {"f_files",rd_other, wr_other},
-        {"f_inodesfree",rd_other, wr_other},
-        {"f_filesets",rd_other, wr_other},
-        {"0", 0, 0}
-};
-
-lprocfs_group_t lprocfs_mds_nm[]={
-         {obd_dir_nm_1, obd_var_nm_1, e_generic},
-         {mds_dir_nm_1, obd_var_nm_1, e_generic},
-         /* {mds_dir_nm_2, mds_var_nm_2, e_specific}, */
-         {snmp_dir_nm, snmp_var_nm, e_specific},
-         {mds_snmp_dir_nm_1, mds_snmp_var_nm_1, e_specific},
-         {0, 0, 0}
-};
-
-lprocfs_group_t lprocfs_mdt_nm[]={
-         {obd_dir_nm_1, obd_var_nm_1, e_generic},
-         /* {mds_dir_nm_1, obd_var_nm_1, e_generic}, */
-         /* {mds_dir_nm_2, mds_var_nm_2, e_specific}, */
-         {snmp_dir_nm, snmp_var_nm, e_specific},
-         {mds_snmp_dir_nm_1, mds_snmp_var_nm_1, e_specific},
-         {0, 0, 0}
-};
-
-/*
- * OSC Namespace
- */
-
-char* osc_dir_nm_1[]={
-        "create",
-        "destroy",
-        "getattr",
-        "setattr",
-        "open",
-        "close",
-        "brw",
-        "punch",
-        "summary",
-        "cancel",
-        0
-};
-
-lprocfs_group_t lprocfs_osc_nm[]={
-         {obd_dir_nm_1, obd_var_nm_1, e_generic},
-         {osc_dir_nm_1, obd_var_nm_1, e_generic},
-         {snmp_dir_nm, snmp_var_nm, e_specific},
-         {0, 0, 0}
-};
-
-
-/*
- * OST, LOV, OBD_FILTER namespace
- * Note: These namespaces are exactly similar to the osc_dir_namespace
- * Hence, I use the osc namespace as the base class and add only
- * those attributes that are missing in osc_dir_namespace.
- */
-
-char *ost_lov_obdfilter_dir_nm_1[]={
-        "getinfo",
-        0
-
-};
-
-
-
-/*
-char *ost_lov_obdfilter_dir_nm_2[]={
-        "ostatfs",
-        0
-};
-
-lprocfs_vars_t ost_lov_obdfilter_var_nm_2[]={
-        {"f_type", rd_fs_type, wr_other},
-        {"f_bsize",rd_other, wr_other},
-        {"f_blocks",rd_other, wr_other},
-        {"f_bfree",rd_other, wr_other},
-        {"f_bavail",rd_other, wr_other},
-        {"f_objects", rd_other, wr_other},
-        {"f_ofree", rd_other, wr_other},
-        {"f_objectgroups", rd_other, wr_other},
-        {"f_uuid", rd_string, wr_string},
-        {"0", 0, 0}
-};
-*/
-
-
-char* obdfilter_snmp_dir_nm_1[] = {
-        "snmp",
-        0
-};
-lprocfs_vars_t obdfilter_snmp_var_nm_1[] = {
-        {"f_fstype", rd_other, wr_other},
-        {"f_inodestotal", rd_other, wr_other},
-        {"f_inodesfree", rd_other, wr_other},
-        {"0", 0, 0}
-};
-
-
-lprocfs_group_t lprocfs_ost_nm[] = {
-         {obd_dir_nm_1, obd_var_nm_1, e_generic},
-         {osc_dir_nm_1, obd_var_nm_1, e_generic},
-         {ost_lov_obdfilter_dir_nm_1, obd_var_nm_1, e_generic},
-         /* {ost_lov_obdfilter_dir_nm_2, ost_lov_obdfilter_var_nm_2, e_specific}, */
-         {snmp_dir_nm, snmp_var_nm, e_specific},
-         {0, 0, 0}
-};
-
-char* lov_snmp_dir_nm_1[] = {
-        "snmp",
-        0
-};
-lprocfs_vars_t lov_snmp_var_nm_1[] = {
-        {"lov_stripesize", rd_other, wr_other},
-        {"lov_stripedepth", rd_other, wr_other},
-        {"lov_stripefactor", rd_other, wr_other},
-        {"lov_stripetype", rd_other, wr_other},
-        {"0", 0, 0}
-};
-
-lprocfs_group_t lprocfs_lov_nm[] = {
-        {obd_dir_nm_1, obd_var_nm_1, e_generic},
-        {osc_dir_nm_1, obd_var_nm_1, e_generic},
-        {ost_lov_obdfilter_dir_nm_1, obd_var_nm_1, e_generic},
-        /* {ost_lov_obdfilter_dir_nm_2, ost_lov_obdfilter_var_nm_2, e_specific}, */
-        {snmp_dir_nm, snmp_var_nm, e_specific},
-        {lov_snmp_dir_nm_1, lov_snmp_var_nm_1, e_specific},
-        {0, 0, 0}
-};
-
-lprocfs_group_t lprocfs_obdf_nm[] = {
-         {obd_dir_nm_1, obd_var_nm_1, e_generic},
-         {osc_dir_nm_1, obd_var_nm_1, e_generic},
-         {ost_lov_obdfilter_dir_nm_1, obd_var_nm_1, e_generic},
-         /* {ost_lov_obdfilter_dir_nm_2, ost_lov_obdfilter_var_nm_2, e_specific}, */
-         {snmp_dir_nm, snmp_var_nm, e_specific},
-         {obdfilter_snmp_dir_nm_1, obdfilter_snmp_var_nm_1, e_specific},
-         {0, 0, 0}
-};
-
-
-/*
- * LDLM Device namespace
- */
-
-
-char* ldlm_dir_nm_1[]={
-        "locks%",
-        "locks/enqueus",
-        "locks/cancels",
-        "locks/converts",
-        "locks/matches",
-        0
-};
-
-lprocfs_vars_t ldlm_var_nm_1[]= {
-        {"num_total", lprocfs_ll_rd, lprocfs_ll_wr},
-        {"num_zerolatency", lprocfs_ll_rd, lprocfs_ll_wr},
-        {"num_zerolatency_inflight", lprocfs_ll_rd, lprocfs_ll_wr},
-        {"num_zerolatency_done", lprocfs_ll_rd, lprocfs_ll_wr},
-        {"nonzero_mintime", lprocfs_ll_rd, lprocfs_ll_wr},
-        {"nonzero_maxtime", lprocfs_ll_rd, lprocfs_ll_wr},
-        {"nonzero_sumtime", lprocfs_ll_rd, lprocfs_ll_wr},
-        {"0", 0, 0}
-
-};
-
-lprocfs_group_t lprocfs_ldlm_nm[]={
-         {obd_dir_nm_1, obd_var_nm_1, e_generic},
-         {ldlm_dir_nm_1, ldlm_var_nm_1, e_generic},
-         {0, 0, 0}
-};
-
-/*
- * Note: Need to add namespace for breaking out locks by device class
- */
-
-/*
- * PTLRPC Namespace
- */
-char* ptlrpc_dir_nm_1[]={
-        "counters",
-        0
-};
-
-lprocfs_vars_t ptlrpc_var_nm_1[]={
-        {"msgs_alloc", lprocfs_ll_rd, lprocfs_ll_wr},
-        {"msgs_max", lprocfs_ll_rd, lprocfs_ll_wr},
-        {"recv_count", lprocfs_ll_rd, lprocfs_ll_wr},
-        {"recv_length", lprocfs_ll_rd, lprocfs_ll_wr},
-        {"send_count", lprocfs_ll_rd, lprocfs_ll_wr},
-        {"send_length", lprocfs_ll_rd, lprocfs_ll_wr},
-        {"portal_kmemory", lprocfs_ll_rd, lprocfs_ll_wr},
-        {"0", 0, 0}
-};
-
-char* ptlrpc_dir_nm_2[] = {
-        "network",
-        0
-};
-
-lprocfs_vars_t ptlrpc_var_nm_2[] = {
-        {"type", rd_string, wr_string},
-        {"mtu", lprocfs_ll_rd, lprocfs_ll_wr},
-        {"rxpackets", lprocfs_ll_rd, lprocfs_ll_wr},
-        {"txpackets", lprocfs_ll_rd, lprocfs_ll_wr},
-        {"txbytes", lprocfs_ll_rd, lprocfs_ll_wr},
-        {"0", 0, 0}
-};
-
-lprocfs_group_t lprocfs_ptlrpc_nm[]={
-         {obd_dir_nm_1, obd_var_nm_1, e_generic},
-         {ptlrpc_dir_nm_1, ptlrpc_var_nm_1, e_generic},
-         {ptlrpc_dir_nm_2, ptlrpc_var_nm_2, e_specific},
-         {snmp_dir_nm, snmp_var_nm, e_specific},
-         {0, 0, 0}
-};
-
-
-/*
- * Building the entire device namespace. This will be used during attach and
- * detach to associate the namespace with the class of the device
- */
-
-lprocfs_obd_nm_t obd_nm[]={
-        {"mdc", lprocfs_mdc_nm, sizeof(struct lprofiler_gen)},
-        {"mds", lprocfs_mds_nm, sizeof(struct lprofiler_gen)},
-        {"mdt", lprocfs_mdt_nm, sizeof(struct lprofiler_gen)},
-        {"osc", lprocfs_osc_nm, sizeof(struct lprofiler_gen)},
-        {"ost", lprocfs_ost_nm, sizeof(struct lprofiler_gen)},
-        {"lov", lprocfs_lov_nm, sizeof(struct lprofiler_gen)},
-        {"obdfilter", lprocfs_obdf_nm, sizeof(struct lprofiler_gen)},
-        {"obdecho", lprocfs_ost_nm, sizeof(struct lprofiler_gen)},
-        {"ldlm", lprocfs_ldlm_nm, sizeof(struct lprofiler_ldlm)},
-        {"ptlrpc", lprocfs_ptlrpc_nm, sizeof(struct lprofiler_ptlrpc)},
-        {"0", 0, 0}
-};
-
-#else
-
-lprocfs_obd_nm_t* obd_nm=0;
-
-#endif
 
 /*  opening /dev/obd */
 static int obd_class_open(struct inode * inode, struct file * file)
@@ -516,7 +134,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
         int rw = OBD_BRW_READ;
         int err = 0;
         int serialised = 0;
-        int l_idx = 0;
+
         ENTRY;
 
         switch (cmd)
@@ -719,17 +337,6 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 INIT_LIST_HEAD(&obd->obd_imports);
                 spin_lock_init(&obd->obd_dev_lock);
 
-                /* do the attach */
-                if (OBP(obd, attach))
-                        err = OBP(obd,attach)(obd, sizeof(*data), data);
-                if (err) {
-                        obd->obd_type = NULL;
-                } else {
-                        obd->obd_flags |= OBD_ATTACHED;
-
-                        type->typ_refcnt++;
-                        CDEBUG(D_IOCTL, "OBD: dev %d attached type %s\n",
-                               obd->obd_minor, data->ioc_inlbuf1);
                         if (data->ioc_inlbuf2) {
                                 int len = strlen(data->ioc_inlbuf2) + 1;
                                 OBD_ALLOC(obd->obd_name, len);
@@ -738,14 +345,9 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                                         LBUG();
                                 }
                                 memcpy(obd->obd_name, data->ioc_inlbuf2, len);
-                                /* obd->obd_proc_entry =
-                                        proc_lustre_register_obd_device(obd);
-                                */
                         } else {
                                 CERROR("WARNING: unnamed obd device\n");
-                                obd->obd_proc_entry = NULL;
                         }
-
                         if (data->ioc_inlbuf3) {
                                 int len = strlen(data->ioc_inlbuf3);
                                 if (len >= sizeof(obd->obd_uuid)) {
@@ -758,16 +360,20 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                                 }
                                 memcpy(obd->obd_uuid, data->ioc_inlbuf3, len);
                         }
+                /* do the attach */
+                if (OBP(obd, attach))
+                        err = OBP(obd,attach)(obd, sizeof(*data), data);
+                if (err) {
+                        if(data->ioc_inlbuf2)                                                
+                                OBD_FREE(obd->obd_name, strlen(obd->obd_name)+1);
+                        obd->obd_type = NULL;
 
-                        /* Get the LprocFS namespace for this device class */
-                        l_idx = lprocfs_get_nm(data->ioc_inlbuf1, obd_nm);
-                        if (l_idx < 0) {
-                                CERROR("Non-existent device class"
-                                       "or proc/lustre not compiled \n");
                         } else {
-                                lprocfs_reg_dev(obd, obd_nm[l_idx].obd_names,
-                                                obd_nm[l_idx].cntr_blk_sz);
-                        }
+                        obd->obd_flags |= OBD_ATTACHED;
+
+                        type->typ_refcnt++;
+                        CDEBUG(D_IOCTL, "OBD: dev %d attached type %s\n",
+                               obd->obd_minor, data->ioc_inlbuf1);
 
                         CDEBUG(D_IOCTL, "MOD_INC_USE for attach: count = %d\n",
                                atomic_read(&(THIS_MODULE)->uc.usecount));
@@ -795,19 +401,13 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                         }
                         forcibly_detach_exports(obd);
                 }
-
-                if (lprocfs_dereg_dev(obd) != LPROCFS_SUCCESS) {
-                        CERROR("Could not remove /proc entry\n");
-                }
+                   if (OBP(obd, detach))
+                        err=OBP(obd,detach)(obd);
 
                 if (obd->obd_name) {
                         OBD_FREE(obd->obd_name, strlen(obd->obd_name)+1);
                         obd->obd_name = NULL;
                 }
-                /*
-                if (obd->obd_proc_entry)
-                        proc_lustre_release_obd_device(obd);
-                */
 
                 obd->obd_flags &= ~OBD_ATTACHED;
                 obd->obd_type->typ_refcnt--;
@@ -1092,6 +692,7 @@ EXPORT_SYMBOL(class_uuid_unparse);
 EXPORT_SYMBOL(class_signal_connection_failure);
 EXPORT_SYMBOL(ll_sync_io_cb);
 EXPORT_SYMBOL(ll_init_cb);
+EXPORT_SYMBOL(class_nm_to_type);
 
 static int __init init_obdclass(void)
 {
@@ -1114,15 +715,19 @@ static int __init init_obdclass(void)
                 obd->obd_minor = i;
 
         err = obd_init_caches();
+        
         if (err)
                 return err;
         obd_sysctl_init();
+        
+        err=lprocfs_reg_main();
+        
         return 0;
 }
 
 static void __exit cleanup_obdclass(void)
 {
-        int i;
+        int i, err;
         ENTRY;
 
         misc_deregister(&obd_psdev);
@@ -1137,6 +742,9 @@ static void __exit cleanup_obdclass(void)
 
         obd_cleanup_caches();
         obd_sysctl_clean();
+        
+        err = lprocfs_dereg_main();
+
         CERROR("obd memory leaked: %ld bytes\n", obd_memory);
         EXIT;
 }

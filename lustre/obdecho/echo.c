@@ -12,8 +12,8 @@
  * and Andreas Dilger <adilger@clusterfs.com>
  */
 
-static char rcsid[] __attribute ((unused)) = "$Id: echo.c,v 1.41 2002/10/18 22:32:45 pschwan Exp $";
-#define OBDECHO_VERSION "$Revision: 1.41 $"
+static char rcsid[] __attribute ((unused)) = "$Id: echo.c,v 1.42 2002/11/01 17:23:13 thantry Exp $";
+#define OBDECHO_VERSION "$Revision: 1.42 $"
 
 #define EXPORT_SYMTAB
 
@@ -38,12 +38,16 @@ static char rcsid[] __attribute ((unused)) = "$Id: echo.c,v 1.41 2002/10/18 22:3
 #include <linux/obd_echo.h>
 #include <linux/lustre_debug.h>
 #include <linux/lustre_dlm.h>
+#include <linux/lprocfs_status.h>
 
 static atomic_t echo_page_rws;
 static atomic_t echo_getattrs;
 
 #define ECHO_PROC_STAT "sys/obdecho"
 #define ECHO_INIT_OBJID 0x1000000000000000ULL
+
+extern lprocfs_vars_t status_var_nm_1[];
+extern lprocfs_vars_t status_class_var[];
 
 int echo_proc_read(char *page, char **start, off_t off, int count, int *eof,
                    void *data)
@@ -425,7 +429,26 @@ static int echo_cleanup(struct obd_device *obddev)
         RETURN(0);
 }
 
+int echo_attach(struct obd_device *dev, 
+                   obd_count len, void *data)
+{
+        int rc;
+        rc = lprocfs_reg_obd(dev, (lprocfs_vars_t*)status_var_nm_1, (void*)dev);
+        return rc; 
+}
+
+int echo_detach(struct obd_device *dev)
+{
+        int rc;
+        rc = lprocfs_dereg_obd(dev);
+        return rc;
+
+}
+
+
 struct obd_ops echo_obd_ops = {
+        o_attach:       echo_attach,
+        o_detach:       echo_detach,
         o_connect:      echo_connect,
         o_disconnect:   echo_disconnect,
         o_create:       echo_create,
@@ -442,16 +465,25 @@ struct obd_ops echo_obd_ops = {
 
 static int __init obdecho_init(void)
 {
+        int rc;
+        
+
         printk(KERN_INFO "Echo OBD driver " OBDECHO_VERSION
                " info@clusterfs.com\n");
 
         echo_proc_init();
+        rc = class_register_type(&echo_obd_ops, 
+                                 (lprocfs_vars_t*)status_class_var, 
+                                 OBD_ECHO_DEVICENAME);
+        if (rc) RETURN(rc);
+        
+        return 0;
 
-        return class_register_type(&echo_obd_ops, OBD_ECHO_DEVICENAME);
 }
 
 static void __exit obdecho_exit(void)
 {
+                
         echo_proc_fini();
 
         class_unregister_type(OBD_ECHO_DEVICENAME);

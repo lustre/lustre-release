@@ -28,6 +28,6 @@ lov_pack.c:
 target.c: 
 	test -e target.c || ln -sf $(top_srcdir)/lib/target.c
 
-mds_SOURCES = mds_lov.c handler.c mds_reint.c mds_fs.c $(LINX)
+mds_SOURCES = mds_lov.c handler.c mds_reint.c mds_fs.c lproc_mds.c $(LINX)
 
 include $(top_srcdir)/Rules

@@ -1,4 +1,4 @@
-/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
  *  lov/lov.c
@@ -27,6 +27,10 @@
 #include <linux/random.h>
 #include <linux/slab.h>
 #include <asm/div64.h>
+#include <linux/lprocfs_status.h>
+
+extern lprocfs_vars_t status_var_nm_1[];
+extern lprocfs_vars_t status_class_var[];
 
 static kmem_cache_t *lov_file_cache;
 
@@ -1413,7 +1417,25 @@ static int lov_iocontrol(long cmd, struct lustre_handle *conn, int len,
         RETURN(rc);
 }
 
+int lov_attach(struct obd_device *dev, 
+               obd_count len, void *data)
+{
+        int rc;
+        rc = lprocfs_reg_obd(dev, (lprocfs_vars_t*)status_var_nm_1, (void*)dev);
+        return rc; 
+}
+
+int lov_detach(struct obd_device *dev)
+{        
+        int rc;
+        rc = lprocfs_dereg_obd(dev);
+        return rc;
+ 
+ }
+
 struct obd_ops lov_obd_ops = {
+        o_attach:      lov_attach,
+        o_detach:      lov_detach,
         o_setup:       lov_setup,
         o_connect:     lov_connect,
         o_disconnect:  lov_disconnect,
@@ -1437,6 +1459,8 @@ struct obd_ops lov_obd_ops = {
 
 static int __init lov_init(void)
 {
+        int rc;
+        
         printk(KERN_INFO "Lustre Logical Object Volume driver " LOV_VERSION
                ", info@clusterfs.com\n");
         lov_file_cache = kmem_cache_create("ll_lov_file_data",
@@ -1445,14 +1469,23 @@ static int __init lov_init(void)
         if (!lov_file_cache)
                 RETURN(-ENOMEM);
 
-        return class_register_type(&lov_obd_ops, OBD_LOV_DEVICENAME);
+        rc = class_register_type(&lov_obd_ops,
+                                 (lprocfs_vars_t*)status_class_var,
+                                 OBD_LOV_DEVICENAME);
+        if (rc) RETURN(rc);
+        
+        return 0;
+
+        
 }
 
 static void __exit lov_exit(void)
 {
-        class_unregister_type(OBD_LOV_DEVICENAME);
+                
         if (kmem_cache_destroy(lov_file_cache))
                 CERROR("couldn't free LOV open cache\n");
+        class_unregister_type(OBD_LOV_DEVICENAME);
+     
 }
 
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");

@@ -41,6 +41,7 @@
 #include <linux/lustre_idl.h>
 #include <linux/lustre_mds.h>
 #include <linux/lustre_dlm.h>
+#include <linux/lprocfs_status.h>
 #endif
 
 
@@ -745,12 +746,13 @@ static inline int obdo_cmp_md(struct obdo *dst, struct obdo *src,
  * <shaver> // XXX if this were any uglier, I'd get my own show on MTV */ 
 extern int (*ptlrpc_put_connection_superhack)(struct ptlrpc_connection *c);
 
-int class_register_type(struct obd_ops *ops, char *nm);
+int class_register_type(struct obd_ops *ops, lprocfs_vars_t* vars, char *nm);
 int class_unregister_type(char *nm);
 int class_name2dev(char *name);
 int class_uuid2dev(char *uuid);
 struct obd_device *class_uuid2obd(char *uuid);
 struct obd_export *class_new_export(struct obd_device *obddev);
+struct obd_type *class_nm_to_type(char* name);
 void class_destroy_export(struct obd_export *exp);
 int class_connect(struct lustre_handle *conn, struct obd_device *obd,
                   obd_uuid_t cluuid);

@@ -30,10 +30,13 @@
 #include <linux/lustre_dlm.h>
 #include <linux/init.h>
 #include <linux/obd_lov.h>
+#include <linux/lprocfs_status.h>
 
 #define REQUEST_MINOR 244
 
 extern int mds_queue_req(struct ptlrpc_request *);
+extern lprocfs_vars_t status_var_nm_1[];
+extern lprocfs_vars_t status_class_var[];
 
 /* should become mdc_getinfo() */
 int mdc_getstatus(struct lustre_handle *conn, struct ll_fid *rootfid)
@@ -775,8 +778,24 @@ out:
 
         return rc;
 }
+int mdc_attach(struct obd_device *dev, 
+                   obd_count len, void *data)
+{
+        int rc;
+        rc = lprocfs_reg_obd(dev, (lprocfs_vars_t*)status_var_nm_1, (void*)dev);
+        return rc; 
+}
 
+int mdc_detach(struct obd_device *dev)
+{
+        int rc;
+        rc = lprocfs_dereg_obd(dev);
+        return rc;
+
+}
 struct obd_ops mdc_obd_ops = {
+        o_attach: mdc_attach,
+        o_detach: mdc_detach,
         o_setup:   client_obd_setup,
         o_cleanup: client_obd_cleanup,
         o_connect: client_obd_connect,
@@ -786,12 +805,21 @@ struct obd_ops mdc_obd_ops = {
 
 static int __init ptlrpc_request_init(void)
 {
-        return class_register_type(&mdc_obd_ops, LUSTRE_MDC_NAME);
+        int rc;
+        rc = class_register_type(&mdc_obd_ops, 
+                                 (lprocfs_vars_t*)status_class_var, 
+                                 LUSTRE_MDC_NAME);
+        if(rc)
+                RETURN(rc);
+        return 0;
+        
 }
 
 static void __exit ptlrpc_request_exit(void)
 {
+        
         class_unregister_type(LUSTRE_MDC_NAME);
+        
 }
 
 MODULE_AUTHOR("Cluster File Systems <info@clusterfs.com>");

@@ -37,6 +37,10 @@
 #include <linux/obd_support.h> /* for OBD_FAIL_CHECK */
 #include <linux/lustre_lite.h> /* for ll_i2info */
 #include <portals/lib-types.h> /* for PTL_MD_MAX_IOV */
+#include <linux/lprocfs_status.h>
+
+extern lprocfs_vars_t status_var_nm_1[];
+extern lprocfs_vars_t status_class_var[];
 
 static int osc_getattr(struct lustre_handle *conn, struct obdo *oa,
                        struct lov_stripe_md *md)
@@ -815,7 +819,24 @@ out:
         return err;
 }
 
+int osc_attach(struct obd_device *dev, 
+                   obd_count len, void *data)
+{
+        int rc;
+        rc = lprocfs_reg_obd(dev, (lprocfs_vars_t*)status_var_nm_1, (void*)dev);
+        return rc; 
+}
+
+int osc_detach(struct obd_device *dev)
+{
+        int rc;
+        rc = lprocfs_dereg_obd(dev);
+        return rc;
+
+}
 struct obd_ops osc_obd_ops = {
+        o_attach:       osc_attach,
+        o_detach:       osc_detach,
         o_setup:        client_obd_setup,
         o_cleanup:      client_obd_cleanup,
         o_statfs:       osc_statfs,
@@ -837,7 +858,15 @@ struct obd_ops osc_obd_ops = {
 
 static int __init osc_init(void)
 {
-        return class_register_type(&osc_obd_ops, LUSTRE_OSC_NAME);
+        int rc;
+        
+        rc = class_register_type(&osc_obd_ops,
+                                 (lprocfs_vars_t*)status_class_var, 
+                                 LUSTRE_OSC_NAME);
+        if (rc)
+                RETURN(rc);
+        return 0;
+       
 }
 
 static void __exit osc_exit(void)

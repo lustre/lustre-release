@@ -20,11 +20,10 @@
  *
  */
 #define DEBUG_SUBSYSTEM S_CLASS
-#include <linux/obd_support.h>
-#include <linux/obd_class.h>
-#include <linux/lprocfs.h>
-#include <linux/string.h>
-#include <linux/lustre_lib.h>
+
+#include <linux/lustre_lite.h>
+#include <linux/lprocfs_status.h>
+
 
 int rd_uuid(char* page, char **start, off_t off,
                int count, int *eof, void *data)
@@ -43,71 +42,46 @@ int rd_blksize(char* page, char **start, off_t off,
         struct obd_device* temp=(struct obd_device*)data;
         struct statfs mystats;
 
-        int rc, len=0;
+        int len=0;
 
-        rc = vfs_statfs(temp->u.filter.fo_sb, &mystats);
-        if (rc) {
-                CERROR("obdfilter: statfs failed: rc %d\n", rc);
-                return 0;
-        }
-        len+=snprintf(page, count, LPU64"\n", (__u64)(mystats.f_bsize)); 
+        vfs_statfs(temp->u.filter.fo_sb, &mystats);
+
+        len+=snprintf(page, count, "%ld\n", mystats.f_bsize); 
         return len;
         
 
 }
-int rd_blktotal(char* page, char **start, off_t off,
+int rd_kbtotal(char* page, char **start, off_t off,
                 int count, int *eof, void *data)
 {
         struct obd_device* temp=(struct obd_device*)data;
         struct statfs mystats;
+        int len=0;
+        __u64 result;
 
-        int rc, len=0;
+        vfs_statfs(temp->u.filter.fo_sb, &mystats);
+        
+        result=((__u64)(mystats.f_blocks*mystats.f_bsize))>>10;
 
-        rc = vfs_statfs(temp->u.filter.fo_sb, &mystats);
-        if (rc) {
-                CERROR("obdfilter: statfs failed: rc %d\n", rc);
-                return 0;
-        }
-        len+=snprintf(page, count, LPU64"\n", (__u64)(mystats.f_blocks)); 
+        len+=snprintf(page, count, LPU64"\n", result); 
+
         return len;   
 }
 
-int rd_blkfree(char* page, char **start, off_t off,
+int rd_kbfree(char* page, char **start, off_t off,
                int count, int *eof, void *data)
 {
         struct obd_device* temp=(struct obd_device*)data;
         struct statfs mystats;
 
-        int rc, len=0;
+        int len=0;
+        __u64 result;
 
-        rc = vfs_statfs(temp->u.filter.fo_sb, &mystats);
-        if (rc) {
-                CERROR("obdfilter: statfs failed: rc %d\n", rc);
-                return 0;
-        }
-        len+=snprintf(page, count, LPU64"\n", (__u64)(mystats.f_bfree)); 
+        vfs_statfs(temp->u.filter.fo_sb, &mystats);
+        result=((__u64)(mystats.f_bfree*mystats.f_bsize))>>10;
+
+        len+=snprintf(page, count, LPU64"\n", result); 
         return len;     
-}
-
-int rd_kbfree(char* page, char **start, off_t off,
-              int count, int *eof, void *data)
-{ 
-        struct obd_device* temp=(struct obd_device*)data;
-        struct statfs mystats;
-
-        int rc, len=0, blk_size=0;
-
-        rc = vfs_statfs(temp->u.filter.fo_sb, &mystats);
-        if (rc) {
-                CERROR("obdfilter: statfs failed: rc %d\n", rc);
-                return 0;
-        }
-        blk_size=mystats.f_bsize;
-
-        len+=snprintf(page, count, LPU64"\n", \
-                      (__u64)((mystats.f_bfree)/(blk_size*1024))); 
-        return len;
-                
 }
 
 int rd_fstype(char* page, char **start, off_t off,
@@ -121,13 +95,57 @@ int rd_fstype(char* page, char **start, off_t off,
         return len;
         
 }
+int rd_files(char* page, char **start, off_t off,
+              int count, int *eof, void *data)
+{ 
+        
+        struct obd_device* temp=(struct obd_device*)data;
+        struct statfs mystats;
 
-lprocfs_vars_t snmp_var_nm_1[]={
-        {"snmp/uuid", rd_uuid, 0},
-        {"snmp/f_blocksize",rd_blksize, 0},
-        {"snmp/f_blockstotal",rd_blktotal, 0},
-        {"snmp/f_blocksfree",rd_blkfree, 0},
-        {"snmp/f_kbytesfree", rd_kbfree, 0},
-        {"snmp/f_fstype", rd_fstype, 0},
+         int len=0;
+
+         vfs_statfs(temp->u.filter.fo_sb, &mystats);
+
+         len+=snprintf(page, count, "%ld\n", mystats.f_files); 
+        return len;
+}
+
+int rd_filesfree(char* page, char **start, off_t off,
+                  int count, int *eof, void *data)
+{
+        struct obd_device* temp=(struct obd_device*)data;
+        struct statfs mystats;
+        
+        int len=0;
+        
+        vfs_statfs(temp->u.filter.fo_sb, &mystats);
+        
+        len+=snprintf(page, count, "%ld\n", mystats.f_ffree); 
+        return len;
+        
+        
+}
+
+lprocfs_vars_t status_var_nm_1[]={
+        {"status/uuid", rd_uuid, 0},
+        {"status/blocksize",rd_blksize, 0},
+        {"status/kbytestotal",rd_kbtotal, 0},
+        {"status/kbytesfree", rd_kbfree, 0},
+        {"status/files", rd_files, 0},
+        {"status/filesfree", rd_filesfree, 0},
+        {"status/fstype", rd_fstype, 0},
+        {0}
+};
+int rd_numdevices(char* page, char **start, off_t off,
+                  int count, int *eof, void *data)
+{
+        struct obd_type* class=(struct obd_type*)data;
+        int len=0;
+        len+=snprintf(page, count, "%d\n", class->typ_refcnt);
+        return len;
+}
+
+lprocfs_vars_t status_class_var[]={
+        {"status/num_devices", rd_numdevices, 0},
         {0}
 };

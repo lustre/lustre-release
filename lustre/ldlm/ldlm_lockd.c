@@ -657,7 +657,7 @@ struct obd_ops ldlm_obd_ops = {
 
 static int __init ldlm_init(void)
 {
-        int rc = class_register_type(&ldlm_obd_ops, OBD_LDLM_DEVICENAME);
+        int rc = class_register_type(&ldlm_obd_ops, 0, OBD_LDLM_DEVICENAME);
         if (rc != 0)
                 return rc;
 

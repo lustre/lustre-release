@@ -18,6 +18,7 @@
 #include <linux/obd_class.h>
 #include <linux/random.h>
 #include <linux/slab.h>
+#include <linux/lprocfs_status.h>
 
 extern struct list_head obd_types;
 kmem_cache_t *obdo_cachep = NULL;
@@ -148,9 +149,10 @@ struct obd_type *class_nm_to_type(char *nm)
         return type;
 }
 
-int class_register_type(struct obd_ops *ops, char *nm)
+int class_register_type(struct obd_ops *ops, struct lprocfs_vars* vars, char *nm)
 {
         struct obd_type *type;
+        int rc;
 
         ENTRY;
 
@@ -171,6 +173,10 @@ int class_register_type(struct obd_ops *ops, char *nm)
         list_add(&type->typ_chain, &obd_types);
         memcpy(type->typ_ops, ops, sizeof(*type->typ_ops));
         strcpy(type->typ_name, nm);
+        rc = lprocfs_reg_class(type, (lprocfs_vars_t *)vars, (void*)type);
+        if(rc)
+                RETURN(rc);
+        
         RETURN(0);
 }
 
@@ -192,6 +198,8 @@ int class_unregister_type(char *nm)
                 OBD_FREE(type->typ_ops, sizeof(*type->typ_ops));
                 RETURN(-EBUSY);
         }
+        if(type->typ_procroot)
+                lprocfs_dereg_class(type);
 
         list_del(&type->typ_chain);
         OBD_FREE(type->typ_name, strlen(nm) + 1);

@@ -20,13 +20,10 @@
  *
  */
 #define DEBUG_SUBSYSTEM S_LLITE
-#include <linux/obd_support.h>
-#include <linux/obd_class.h>
+
 #include <linux/lustre_lite.h>
-#include <linux/lprocfs.h>
-#include <linux/string.h>
-#include <linux/fs.h>
-#include <linux/lustre_lib.h>
+#include <linux/lprocfs_status.h>
+
 
 
 int rd_path(char* page, char **start, off_t off,
@@ -92,13 +89,13 @@ int rd_kbfree(char* page, char **start, off_t off,
         (sb->s_op->statfs)(sb, &mystats);
         blk_size=mystats.f_bsize;
         
-        len+=snprintf(page, count, LPU64"\n", \
+        len+=snprintf(page, count, LPU64"\n", 
                       (__u64)((mystats.f_bfree)/(blk_size*1024))); 
         return len; 
         
 }
 
-int rd_numobjects(char* page, char **start, off_t off,
+int rd_filestotal(char* page, char **start, off_t off,
                   int count, int *eof, void *data)
 {
         
@@ -114,7 +111,7 @@ int rd_numobjects(char* page, char **start, off_t off,
         return len;
 }
 
-int rd_objfree(char* page, char **start, off_t off,
+int rd_filesfree(char* page, char **start, off_t off,
                int count, int *eof, void *data)
 {
         
@@ -130,7 +127,7 @@ int rd_objfree(char* page, char **start, off_t off,
         return len;
 }
 
-int rd_objgroups(char* page, char **start, off_t off,
+int rd_filegroups(char* page, char **start, off_t off,
                  int count, int *eof, void *data)
 {
         return 0;
@@ -164,16 +161,16 @@ int rd_dev_uuid(char* page, char **start, off_t off,
 }
 
 
-lprocfs_vars_t snmp_var_nm_1[]={
-        {"snmp/uuid", rd_uuid, 0},
-        {"snmp/mntpt_path", rd_path, 0},
-        {"snmp/fs_type", rd_fstype, 0},
-        {"snmp/f_blocksize",rd_blksize, 0},
-        {"snmp/f_blockstotal",rd_blktotal, 0},
-        {"snmp/f_blocksfree",rd_blkfree, 0},
-        {"snmp/f_kbytesfree", rd_kbfree, 0},
-        {"snmp/f_objects", rd_numobjects, 0},
-        {"snmp/f_objectsfree", rd_objfree, 0},
-        {"snmp/f_objectgroups", rd_objgroups, 0},
+lprocfs_vars_t status_var_nm_1[]={
+        {"status/uuid", rd_uuid, 0},
+        {"status/mntpt_path", rd_path, 0},
+        {"status/fs_type", rd_fstype, 0},
+        {"status/blocksize",rd_blksize, 0},
+        {"status/blockstotal",rd_blktotal, 0},
+        {"status/blocksfree",rd_blkfree, 0},
+        {"status/kbytesfree", rd_kbfree, 0},
+        {"status/filestotal", rd_filestotal, 0},
+        {"status/filesfree", rd_filesfree, 0},
+        {"status/filegroups", rd_filegroups, 0},
         {0}
 };

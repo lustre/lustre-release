@@ -17,7 +17,7 @@ obd_pack.c:
 target.c: 
 	test -e target.c || ln -sf $(top_srcdir)/lib/target.c
 
-ost_SOURCES = ost_handler.c $(LINX)
+ost_SOURCES = ost_handler.c lproc_ost.c $(LINX)
 dist-hook:
 	list='$(LINX)'; for f in $$list; do rm -f $(distdir)/$$f; done
 

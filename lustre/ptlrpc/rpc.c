@@ -30,9 +30,15 @@
 #include <linux/lustre_ha.h>
 #include <linux/lustre_net.h>
 #include <linux/init.h>
+#include <linux/lprocfs_status.h>
+
+
 
 extern int ptlrpc_init_portals(void);
 extern void ptlrpc_exit_portals(void);
+
+extern lprocfs_vars_t status_var_nm_1[];
+extern lprocfs_vars_t status_class_var[];
 
 int connmgr_setup(struct obd_device *obddev, obd_count len, void *buf)
 {
@@ -160,9 +166,25 @@ static int connmgr_connect(struct lustre_handle *conn, struct obd_device *src,
 {
         return class_connect(conn, src, cluuid);
 }
+int connmgr_attach(struct obd_device *dev, 
+                   obd_count len, void *data)
+{
+        int rc;
+        rc = lprocfs_reg_obd(dev, (lprocfs_vars_t*)status_var_nm_1, (void*)dev);
+        return rc; 
+}
 
+int conmgr_detach(struct obd_device *dev)
+{
+        int rc;
+        rc = lprocfs_dereg_obd(dev);
+        return rc;
+
+}
 /* use obd ops to offer management infrastructure */
 static struct obd_ops recovd_obd_ops = {
+        o_attach:      connmgr_attach,
+        o_detach:      conmgr_detach,
         o_setup:       connmgr_setup,
         o_cleanup:     connmgr_cleanup,
         o_iocontrol:   connmgr_iocontrol,
@@ -177,8 +199,16 @@ static int __init ptlrpc_init(void)
         if (rc) 
                 RETURN(rc);
         ptlrpc_init_connection();
-        class_register_type(&recovd_obd_ops, LUSTRE_HA_NAME);
+        rc = class_register_type(&recovd_obd_ops, 
+                                 (lprocfs_vars_t*)status_class_var,
+                                 LUSTRE_HA_NAME);
+        if (rc) 
+                RETURN(rc);
         ptlrpc_put_connection_superhack = ptlrpc_put_connection;
+
+        if (rc)
+                RETURN(rc);
+                
         return 0;
 }
 

@@ -30,6 +30,10 @@
 #include <linux/init.h>
 #include <linux/random.h>
 #include <linux/stringify.h>
+#include <linux/lprocfs_status.h>
+
+extern lprocfs_vars_t status_class_var[];
+extern lprocfs_vars_t status_var_nm_1[];
 
 static kmem_cache_t *filter_open_cache;
 static kmem_cache_t *filter_dentry_cache;
@@ -1751,9 +1755,25 @@ int filter_copy_data(struct lustre_handle *dst_conn, struct obdo *dst,
 
         RETURN(err);
 }
+int filter_attach(struct obd_device *dev, 
+                   obd_count len, void *data)
+{
 
+        int rc;
+        rc = lprocfs_reg_obd(dev, (lprocfs_vars_t*)status_var_nm_1, (void*)dev);
+        return rc; 
+}
 
+int filter_detach(struct obd_device *dev)
+{
+        int rc;
+        rc = lprocfs_dereg_obd(dev);
+        return rc;
+
+}
 static struct obd_ops filter_obd_ops = {
+        o_attach:      filter_attach,
+        o_detach:      filter_detach,
         o_get_info:    filter_get_info,
         o_setup:       filter_setup,
         o_cleanup:     filter_cleanup,
@@ -1796,7 +1816,9 @@ static int __init obdfilter_init(void)
                 RETURN(-ENOMEM);
         }
 
-        return class_register_type(&filter_obd_ops, OBD_FILTER_DEVICENAME);
+        return class_register_type(&filter_obd_ops, 
+                                   (lprocfs_vars_t*)status_class_var,
+                                   OBD_FILTER_DEVICENAME);
 }
 
 static void __exit obdfilter_exit(void)
