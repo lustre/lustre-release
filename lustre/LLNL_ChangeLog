@@ -1,6 +1,17 @@
 2003-08-12  Brian Behlendorf  <behlendorf1@llnl.gov>
        * tip of b_llnl_devel
        * bug fixes:
+         - #1592 fixes trying to read a single page that was entirely past
+           EOF, we would later oops in commitrw on the OST trying to dput
+           a NULL dentry.  This fixes the 'make' issue Richard discovered.
+         - #1765 fixes MDS cleanup bug where we have an outstanding reply
+           at disconnect time.  Remove all exp_outstanding_reply
+           manipulation in mds_disconnect.
+         - #1732 fixes the lprocfs unresolved symbol error.
+
+2003-08-12  Brian Behlendorf  <behlendorf1@llnl.gov>
+       * version llnl_5devel tagged
+       * bug fixes:
          - #1600 MDS server data isn't written at setup.  This causes a crash 
            in mds_update_server_data when the MDS is mounted the first time.
          - #1749 
