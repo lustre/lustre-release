@@ -59,7 +59,8 @@ static ssize_t smfs_write(struct file *filp, const char *buf, size_t count,
 
         sfi = F2SMFI(filp);
 
-        if (sfi->magic != SMFS_FILE_MAGIC) BUG();
+        if (sfi->magic != SMFS_FILE_MAGIC) 
+                LBUG();
 
         if (ppos != &(filp->f_pos)) {
                 cache_ppos = &tmp_ppos;
@@ -98,7 +99,8 @@ int smfs_ioctl(struct inode * inode, struct file * filp,
                 RETURN(-ENOENT);
 
         sfi = F2SMFI(filp);
-        if (sfi->magic != SMFS_FILE_MAGIC) BUG();
+        if (sfi->magic != SMFS_FILE_MAGIC) 
+                LBUG();
 
         pre_smfs_inode(inode, cache_inode);
 
@@ -129,7 +131,8 @@ static ssize_t smfs_read(struct file *filp, char *buf,
                 RETURN(-ENOENT);
 
         sfi = F2SMFI(filp);
-        if (sfi->magic != SMFS_FILE_MAGIC) BUG();
+        if (sfi->magic != SMFS_FILE_MAGIC) 
+                LBUG();
 
         if (ppos != &(filp->f_pos)) {
                 cache_ppos = &tmp_ppos;
@@ -167,7 +170,8 @@ static loff_t smfs_llseek(struct file *file,
                 RETURN(-ENOENT);
 
         sfi = F2SMFI(file);
-        if (sfi->magic != SMFS_FILE_MAGIC) BUG();
+        if (sfi->magic != SMFS_FILE_MAGIC) 
+                LBUG();
 
         pre_smfs_inode(file->f_dentry->d_inode, cache_inode);
 
@@ -196,7 +200,7 @@ static int smfs_mmap(struct file *file, struct vm_area_struct *vma)
 
         sfi = F2SMFI(file);
         if (sfi->magic != SMFS_FILE_MAGIC)
-                BUG();
+                LBUG();
 
         if (cache_inode->i_mapping == &cache_inode->i_data)
                 inode->i_mapping = cache_inode->i_mapping;
@@ -241,7 +245,7 @@ static int smfs_init_cache_file(struct inode *inode, struct file *filp)
         sfi->c_file = cache_filp;
 
         if (filp->private_data != NULL)
-                BUG();
+                LBUG();
 
         filp->private_data = sfi;
 
@@ -260,6 +264,8 @@ static int smfs_cleanup_cache_file(struct file *filp)
         int rc = 0;
         ENTRY;
 
+        if (!filp)
+                RETURN(rc);
         sfi = F2SMFI(filp);
 
         post_smfs_dentry(sfi->c_file->f_dentry);
@@ -298,6 +304,7 @@ int smfs_open(struct inode *inode, struct file *filp)
 int smfs_release(struct inode *inode, struct file *filp)
 {
         struct inode *cache_inode = NULL;
+        struct file *cache_file = NULL;
         struct smfs_file_info *sfi = NULL;
         int rc = 0;
         ENTRY;
@@ -305,17 +312,18 @@ int smfs_release(struct inode *inode, struct file *filp)
         cache_inode = I2CI(inode);
         if (!cache_inode)
                 RETURN(-ENOENT);
-
-        sfi = F2SMFI(filp);
-        if (sfi->magic != SMFS_FILE_MAGIC)
-                BUG();
-
+        if (filp) {
+                sfi = F2SMFI(filp);
+                if (sfi->magic != SMFS_FILE_MAGIC)
+                        LBUG();
+                cache_file = sfi->c_file;
+        }
         pre_smfs_inode(inode, cache_inode);
         if (cache_inode->i_fop->release)
-                rc = cache_inode->i_fop->release(cache_inode, sfi->c_file);
+                rc = cache_inode->i_fop->release(cache_inode, cache_file);
 
         post_smfs_inode(inode, cache_inode);
-        duplicate_file(filp, sfi->c_file);
+        duplicate_file(filp, cache_file);
 
         smfs_cleanup_cache_file(filp);
         RETURN(rc);
@@ -324,25 +332,36 @@ int smfs_release(struct inode *inode, struct file *filp)
 int smfs_fsync(struct file *file, struct dentry *dentry, int datasync)
 {
         struct smfs_file_info *sfi = NULL;
+        struct dentry *cache_dentry = NULL;
+        struct file *cache_file = NULL;
         struct inode *cache_inode;
         int rc = 0;
 
-        cache_inode = I2CI(file->f_dentry->d_inode);
+        cache_inode = I2CI(dentry->d_inode);
         if (!cache_inode)
                 RETURN(-ENOENT);
+        
+        cache_dentry = pre_smfs_dentry(NULL, cache_inode, dentry);
+        if (!cache_dentry)
+                RETURN(-ENOMEM);
 
-        sfi = F2SMFI(file);
-        if (sfi->magic != SMFS_FILE_MAGIC)
-                BUG();
+        if (file) {
+                sfi = F2SMFI(file);
+                if (sfi->magic != SMFS_FILE_MAGIC)
+                        LBUG();
+                cache_file = sfi->c_file;
+        } 
 
-        pre_smfs_inode(file->f_dentry->d_inode, cache_inode);
+        pre_smfs_inode(dentry->d_inode, cache_inode);
 
-        if (cache_inode->i_fop->fsync)
-                rc = cache_inode->i_fop->fsync(sfi->c_file,
-                                               sfi->c_file->f_dentry, datasync);
-
-        post_smfs_inode(file->f_dentry->d_inode, cache_inode);
-        duplicate_file(file, sfi->c_file);
+        if (cache_inode->i_fop->fsync) {
+                rc = cache_inode->i_fop->fsync(cache_file,
+                                               cache_dentry, datasync);
+        
+        }
+        post_smfs_inode(dentry->d_inode, cache_inode);
+        duplicate_file(file, cache_file);
+        post_smfs_dentry(cache_dentry);
 
         RETURN(rc);
 }
