@@ -652,6 +652,14 @@ static int fsfilt_ext3_sync(struct super_block *sb)
         return ext3_force_commit(sb);
 }
 
+extern int ext3_map_inode_page(struct inode *inode, struct page *page,
+                               unsigned long *blocks, int *created, int create);
+int fsfilt_ext3_map_inode_page(struct inode *inode, struct page *page,
+                               unsigned long *blocks, int *created, int create)
+{
+        return ext3_map_inode_page(inode, page, blocks, created, create);
+}
+
 extern int ext3_prep_san_write(struct inode *inode, long *blocks,
                                int nblocks, loff_t newsize);
 static int fsfilt_ext3_prep_san_write(struct inode *inode, long *blocks,
@@ -802,6 +810,7 @@ static struct fsfilt_operations fsfilt_ext3_ops = {
         fs_add_journal_cb:      fsfilt_ext3_add_journal_cb,
         fs_statfs:              fsfilt_ext3_statfs,
         fs_sync:                fsfilt_ext3_sync,
+        fs_map_inode_page:      fsfilt_ext3_map_inode_page,
         fs_prep_san_write:      fsfilt_ext3_prep_san_write,
         fs_write_record:        fsfilt_ext3_write_record,
         fs_read_record:         fsfilt_ext3_read_record,

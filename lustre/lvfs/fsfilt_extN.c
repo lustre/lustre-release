@@ -32,7 +32,13 @@
 #include <linux/quotaops.h>
 #include <linux/extN_fs.h>
 #include <linux/extN_jbd.h>
-#include <linux/extN_xattr.h>
+#include <linux/version.h>
+/* XXX ugh */
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+ #include <linux/extN_xattr.h>
+#else
+ #include <linux/../../fs/extN/xattr.h>
+#endif
 #include <linux/kp30.h>
 #include <linux/lustre_fsfilt.h>
 #include <linux/obd.h>
@@ -269,11 +275,12 @@ static int fsfilt_extN_commit(struct inode *inode, void *h, int force_sync)
         return rc;
 }
 
-static int fsfilt_extN_commit_async(struct inode *inode, void **h)
+static int fsfilt_extN_commit_async(struct inode *inode, void *h,
+                                        void **wait_handle)
 {
         transaction_t *transaction;
         unsigned long tid, rtid;
-        handle_t *handle = *h;
+        handle_t *handle = h;
         journal_t *journal;
         int rc;
 
@@ -298,14 +305,14 @@ static int fsfilt_extN_commit_async(struct inode *inode, void **h)
                        (unsigned long) tid, (unsigned long) rtid);
         unlock_kernel();
 
-        *h = (void *) tid;
+        *wait_handle = (void *) tid;
         CDEBUG(D_INODE, "commit async: %lu\n", (unsigned long) tid);
         return 0;
 }
 
 static int fsfilt_extN_commit_wait(struct inode *inode, void *h)
 {
-        tid_t tid = (tid_t) h;
+        tid_t tid = (tid_t)(long)h;
 
         CDEBUG(D_INODE, "commit wait: %lu\n", (unsigned long) tid);
 	if (is_journal_aborted(EXTN_JOURNAL(inode)))
@@ -645,6 +652,14 @@ static int fsfilt_extN_sync(struct super_block *sb)
         return extN_force_commit(sb);
 }
 
+extern int extN_map_inode_page(struct inode *inode, struct page *page,
+                               unsigned long *blocks, int *created, int create);
+int fsfilt_extN_map_inode_page(struct inode *inode, struct page *page,
+                               unsigned long *blocks, int *created, int create)
+{
+        return extN_map_inode_page(inode, page, blocks, created, create);
+}
+
 extern int extN_prep_san_write(struct inode *inode, long *blocks,
                                int nblocks, loff_t newsize);
 static int fsfilt_extN_prep_san_write(struct inode *inode, long *blocks,
@@ -662,9 +677,13 @@ static int fsfilt_extN_read_record(struct file * file, void *buf,
         int err;
 
         if (inode->i_size < *offs + size) {
-                CERROR("file size %llu is too short for read %u@%llu\n",
-                       inode->i_size, size, *offs);
-                return -EIO;
+                size = inode->i_size - *offs;
+                if (size < 0) {
+                        CERROR("size %llu is too short for read %u@%llu\n",
+                                        inode->i_size, size, *offs);
+                        return -EIO;
+                } else if (size == 0)
+                        return 0;
         }
 
         block = *offs >> inode->i_blkbits;
@@ -710,7 +729,9 @@ static int fsfilt_extN_write_record(struct file *file, void *buf, int size,
         if (*offs + size > inode->i_size) {
                 down(&inode->i_sem);
                 if (*offs + size > inode->i_size)
-                        inode->i_size = ((loff_t)block + 1) << inode->i_blkbits;
+                        inode->i_size = *offs + size;
+                if (inode->i_size > EXTN_I(inode)->i_disksize)
+                        EXTN_I(inode)->i_disksize = inode->i_size;
                 up(&inode->i_sem);
         }
 
@@ -766,7 +787,7 @@ static int fsfilt_extN_setup(struct super_block *sb)
         EXTN_SB(sb)->dx_unlock = fsfilt_extN_dx_unlock;
 #endif
 #ifdef S_PDIROPS
-        CERROR("Enabling PDIROPS\n");
+        CWARN("Enabling PDIROPS\n");
         set_opt(EXTN_SB(sb)->s_mount_opt, PDIROPS);
         sb->s_flags |= S_PDIROPS;
 #endif
@@ -789,6 +810,7 @@ static struct fsfilt_operations fsfilt_extN_ops = {
         fs_add_journal_cb:      fsfilt_extN_add_journal_cb,
         fs_statfs:              fsfilt_extN_statfs,
         fs_sync:                fsfilt_extN_sync,
+        fs_map_inode_page:      fsfilt_extN_map_inode_page,
         fs_prep_san_write:      fsfilt_extN_prep_san_write,
         fs_write_record:        fsfilt_extN_write_record,
         fs_read_record:         fsfilt_extN_read_record,
