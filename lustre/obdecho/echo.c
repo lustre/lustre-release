@@ -159,12 +159,12 @@ int echo_commitrw(int cmd, struct obd_conn *conn, int objcount,
                 int j;
 
                 for (j = 0 ; j < obj->ioo_bufcnt ; j++, r++) {
-                        unsigned long addr;
+                        struct page *page = r->page;
+                        unsigned long addr = (unsigned long)page_address(page);
 
-                        addr = r->addr;
                         if (!addr || !kern_addr_valid(addr)) {
-                                CERROR("bad addr %lx, id %Ld (%d), buf %d/%d\n",
-                                       addr, obj->ioo_id, i, j,obj->ioo_bufcnt);
+                                CERROR("bad page %p, id %Ld (%d), buf %d/%d\n",
+                                       page, obj->ioo_id, i, j,obj->ioo_bufcnt);
                                 rc = -EFAULT;
                                 EXIT;
                                 goto commitrw_cleanup;
@@ -182,7 +182,8 @@ commitrw_cleanup:
         CERROR("cleaning up %d pages (%d obdos)\n", niocount - (r - res) - 1,
                objcount);
         while (++r < res + niocount) {
-                unsigned long addr = r->addr;
+                struct page *page = r->page;
+                unsigned long addr = (unsigned long)page_address(page);
 
                 free_pages(addr, 0);
                 echo_pages--;
