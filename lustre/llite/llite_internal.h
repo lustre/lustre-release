@@ -110,7 +110,7 @@ struct ll_async_page {
         struct page     *llap_page;
         struct list_head llap_pending_write;
          /* only trust these if the page lock is providing exclusion */
-         int             llap_write_queued:1,
+        int              llap_write_queued:1,
                          llap_defer_uptodate:1;
         struct list_head llap_proc_item;
 };
@@ -248,6 +248,8 @@ int ll_close_thread_start(struct ll_close_queue **lcq_ret);
 
 #define LL_SBI_NOLCK            0x1
 #define LL_SBI_READAHEAD        0x2
+
+#define LL_MAX_BLKSIZE          (4UL * 1024 * 1024)
 
 #if  (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 #define    ll_s2sbi(sb)     ((struct ll_sb_info *)((sb)->s_fs_info))
