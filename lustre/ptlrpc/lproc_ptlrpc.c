@@ -108,7 +108,7 @@ void ptlrpc_lprocfs_register(struct proc_dir_entry *root, char *dir,
         struct proc_dir_entry *svc_procroot;
         struct lprocfs_stats *svc_stats;
         int i, rc;
-        unsigned int svc_counter_config = LPROCFS_CNTR_AVGMINMAX | 
+        unsigned int svc_counter_config = LPROCFS_CNTR_AVGMINMAX |
                                           LPROCFS_CNTR_STDDEV;
 
         LASSERT(*procroot_ret == NULL);
@@ -134,6 +134,10 @@ void ptlrpc_lprocfs_register(struct proc_dir_entry *root, char *dir,
                              svc_counter_config, "req_qdepth", "reqs");
         lprocfs_counter_init(svc_stats, PTLRPC_REQACTIVE_CNTR,
                              svc_counter_config, "req_active", "reqs");
+        lprocfs_counter_init(svc_stats, PTLRPC_REQBUF_AVAIL_CNTR,
+                             svc_counter_config, "reqbuf_avail", "bufs");
+        lprocfs_counter_init(svc_stats, PTLRPC_REQBUF_TOTAL_CNTR,
+                             svc_counter_config, "reqbuf_total", "bufs");
         for (i = 0; i < LUSTRE_MAX_OPCODES; i++) {
                 __u32 opcode = ll_rpc_opcode_table[i].opcode;
                 lprocfs_counter_init(svc_stats, PTLRPC_LAST_CNTR + i,

@@ -20,6 +20,7 @@ struct obd_ucred {
         __u32 ouc_cap;
         __u32 ouc_suppgid1;
         __u32 ouc_suppgid2;
+        __u32 ouc_umask;
 };
 
 struct lvfs_callback_ops {

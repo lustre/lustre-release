@@ -1137,6 +1137,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
 
         cleanup_phase = 1; /* dchild, dparent, locks */
 
+        dget(dchild);
         child_inode = dchild->d_inode;
         if (child_inode == NULL) {
                 CDEBUG(D_INODE, "child doesn't exist (dir %lu, name %s)\n",
@@ -1194,13 +1195,6 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
         } else {
                 if (S_ISDIR(child_inode->i_mode))
                         GOTO(cleanup, rc = -EISDIR);
-        }
-
-        if (child_inode->i_nlink == (S_ISDIR(child_inode->i_mode) ? 2 : 1) &&
-            mds_open_orphan_count(child_inode) > 0) {
-                rc = mds_open_unlink_rename(rec, obd, dparent, dchild, &handle);
-                cleanup_phase = 4; /* transaction */
-                GOTO(cleanup, rc);
         }
 
         /* Step 4: Do the unlink: we already verified ur_mode above (bug 72) */
@@ -1273,6 +1267,14 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
 
         switch(cleanup_phase) {
         case 4:
+                LASSERT(dchild != NULL && dchild->d_inode != NULL);
+                LASSERT(atomic_read(&dchild->d_inode->i_count) > 0);
+                if (rc == 0 && dchild->d_inode->i_nlink == 0 &&
+                                mds_open_orphan_count(dchild->d_inode) > 0) {
+                        /* filesystem is really going to destroy an inode
+                         * we have to delay this till inode is opened -bzzz */
+                        mds_open_unlink_rename(rec, obd, dparent, dchild, NULL);
+                }
                 rc = mds_finish_transno(mds, dparent->d_inode, handle, req,
                                         rc, 0);
                 if (!rc)
@@ -1294,6 +1296,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                         ldlm_lock_decref(&parent_lockh, LCK_PW);
                 else
                         ptlrpc_save_lock(req, &parent_lockh, LCK_PW);
+                l_dput(dchild);
                 l_dput(dchild);
                 l_dput(dparent);
         case 0:

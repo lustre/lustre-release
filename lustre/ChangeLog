@@ -7,6 +7,9 @@ tbd  Cluster File Systems, Inc. <info@clusterfs.com>
 	- change init script to fail more clearly if not run as root (1528)
 	- fix ns_lock/i_sem lock ordering deadlock for kms update (3477)
 	- don't do DNS lookups on NIDs too small for IP addresses (3442)
+	- dynamic ptlrpc request buffer allocation (2102)
+	- don't allow unlinking open directory if it isn't empty (2904)
+	- set MDS/OST threads to umask 0 to not clobber client modes (3359)
        * miscellania
 	- servers can dump a log evicting a client - lustre.dump_on_timeout=1
 

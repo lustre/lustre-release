@@ -60,6 +60,7 @@ int mds_open_unlink_rename(struct mds_update_record *rec,
         struct dentry *pending_child;
         char fidname[LL_FID_NAMELEN];
         int fidlen = 0, rc;
+        unsigned mode;
         ENTRY;
 
         LASSERT(!mds_inode_is_orphan(dchild->d_inode));
@@ -81,18 +82,26 @@ int mds_open_unlink_rename(struct mds_update_record *rec,
                 GOTO(out_dput, rc = 0);
         }
 
-        *handle = fsfilt_start(obd, pending_dir, FSFILT_OP_RENAME, NULL);
-        if (IS_ERR(*handle))
-                GOTO(out_dput, rc = PTR_ERR(*handle));
-
-        lock_kernel();
-        rc = vfs_rename(dparent->d_inode, dchild, pending_dir, pending_child);
-        unlock_kernel();
+        /* link() is semanticaly-wrong for S_IFDIR, so we set S_IFREG
+         * for linking and return real mode back then -bzzz */
+        mode = dchild->d_inode->i_mode;
+        dchild->d_inode->i_mode = S_IFREG;
+        rc = vfs_link(dchild, pending_dir, pending_child);
         if (rc)
-                CERROR("error renaming orphan %lu/%s to PENDING: rc = %d\n",
-                       dparent->d_inode->i_ino, rec->ur_name, rc);
+                CERROR("error linking orphan %s to PENDING: rc = %d\n",
+                       rec->ur_name, rc);
         else
                 mds_inode_set_orphan(dchild->d_inode);
+
+        /* return mode and correct i_nlink if inode is directory */
+        LASSERT(dchild->d_inode->i_nlink == 1);
+        dchild->d_inode->i_mode = mode;
+        if ((mode & S_IFMT) == S_IFDIR) {
+                dchild->d_inode->i_nlink++;
+                pending_dir->i_nlink++;
+        }
+        mark_inode_dirty(dchild->d_inode);
+
 out_dput:
         dput(pending_child);
 out_lock:

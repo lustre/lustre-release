@@ -195,6 +195,8 @@ EXT2_DEV=${EXT2_DEV:-/tmp/SANITY.LOOP}
 touch $EXT2_DEV
 mke2fs -j -F $EXT2_DEV 8000 > /dev/null
 
+umask 022
+
 test_0() {
 	touch $DIR/f
 	$CHECKSTAT -t file $DIR/f || error
@@ -202,6 +204,12 @@ test_0() {
 	$CHECKSTAT -a $DIR/f || error
 }
 run_test 0 "touch .../f ; rm .../f ============================="
+
+test_0b() {
+	chmod 0755 $DIR || error
+	$CHECKSTAT -p 0755 $DIR || error
+}
+run_test 0b "chmod 0755 $DIR ============================="
 
 test_1a() {
 	mkdir $DIR/d1
@@ -893,6 +901,12 @@ test_31d() {
 	$CHECKSTAT -a $DIR/d31d || error
 }
 run_test 31d "remove of open directory ========================="
+
+test_31e() { # bug 2904
+	check_kernel_version 34 || return 0
+	openfilleddirunlink $DIR/d31e || error
+}
+run_test 31e "remove of open non-empty directory ==============="
 
 test_32a() {
 	echo "== more mountpoints and symlinks ================="

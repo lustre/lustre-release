@@ -110,11 +110,13 @@ void push_ctxt(struct obd_run_ctxt *save, struct obd_run_ctxt *new_ctx,
                 save->ouc.ouc_cap = current->cap_effective;
                 save->ouc.ouc_suppgid1 = current_groups[0];
                 save->ouc.ouc_suppgid2 = current_groups[1];
+                save->ouc.ouc_umask = current->fs->umask;
 
                 current->fsuid = uc->ouc_fsuid;
                 current->fsgid = uc->ouc_fsgid;
                 current->cap_effective = uc->ouc_cap;
                 current_ngroups = 0;
+                current->fs->umask = 0; /* umask already applied on client */
 
                 if (uc->ouc_suppgid1 != -1)
                         current_groups[current_ngroups++] = uc->ouc_suppgid1;
@@ -171,6 +173,7 @@ void pop_ctxt(struct obd_run_ctxt *saved, struct obd_run_ctxt *new_ctx,
                 current_ngroups = saved->ngroups;
                 current_groups[0] = saved->ouc.ouc_suppgid1;
                 current_groups[1] = saved->ouc.ouc_suppgid2;
+                current->fs->umask = saved->ouc.ouc_umask;
         }
 
         /*

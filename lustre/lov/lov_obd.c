@@ -2650,7 +2650,7 @@ static int lov_set_info(struct obd_export *exp, obd_count keylen,
 
 }
 
-/* Merge rss if kms == 0
+/* Merge rss if @kms_only == 0
  *
  * Even when merging RSS, we will take the KMS value if it's larger.
  * This prevents getattr from stomping on dirty cached pages which
@@ -2665,8 +2665,6 @@ __u64 lov_merge_size(struct lov_stripe_md *lsm, int kms_only)
              i++, loi++) {
                 obd_size lov_size, tmpsize;
 
-                CDEBUG(D_DLMTRACE, "stripe %u ost %u kms "LPU64" rss "LPU64"\n",
-                       i, loi->loi_ost_idx, loi->loi_kms, loi->loi_rss);
                 tmpsize = loi->loi_kms;
                 if (kms_only == 0 && loi->loi_rss > tmpsize)
                         tmpsize = loi->loi_rss;

@@ -942,8 +942,7 @@ int mds_open(struct mds_update_record *rec, int offset,
                 if (rc)
                         CERROR("error on parent setattr: rc = %d\n", rc);
 
-                rc = mds_finish_transno(mds, dchild->d_inode, handle, req, 0,
-                                        rep ? rep->lock_policy_res1 : 0);
+                rc = fsfilt_commit(obd, dchild->d_inode, handle, 0);
                 handle = NULL;
                 acc_mode = 0;           /* Don't check for permissions */
         }

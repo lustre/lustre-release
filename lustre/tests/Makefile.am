@@ -20,7 +20,7 @@ noinst_PROGRAMS += opendirunlink opendevunlink unlinkmany fchdir_test checkstat
 noinst_PROGRAMS += wantedi statone runas openfile getdents mkdirdeep o_directory
 noinst_PROGRAMS += small_write multiop sleeptest ll_sparseness_verify
 noinst_PROGRAMS += ll_sparseness_write mrename ll_dirstripe_verify
-noinst_PROGRAMS += rename_many
+noinst_PROGRAMS += openfilleddirunlink rename_many
 # noinst_PROGRAMS += ldaptest
 bin_PROGRAMS = mcreate munlink mkdirmany iopentest1 iopentest2
 endif # TESTS
@@ -57,6 +57,7 @@ wantedi_SOURCES = wantedi.c
 createtest_SOURCES = createtest.c
 open_delay_SOURCES = open_delay.c
 opendirunlink_SOURCES = opendirunlink.c
+openfilleddirunlink_SOURCES = openfilleddirunlink.c
 opendevunlink_SOURCES = opendevunlink.c
 fchdir_test_SOURCES = fchdir_test.c
 getdents_SOURCES=getdents.c
