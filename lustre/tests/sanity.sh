@@ -161,16 +161,30 @@ $CLEAN
 dmesg | grep -i destruct
 $START
 
-echo '==== touch /mnt/lustre/f ; ls /mnt/lustre ==== test 17'
+echo '==== touch /mnt/lustre/f ; ls /mnt/lustre ==== test 18'
 touch /mnt/lustre/f
 ls /mnt/lustre
 $CLEAN
 dmesg | grep -i destruct
 $START
 
-echo '==== touch /mnt/lustre/f ; ls -l /mnt/lustre ==== test 18'
+echo '==== touch /mnt/lustre/f ; ls -l /mnt/lustre ==== test 19'
 touch /mnt/lustre/f
 ls -l /mnt/lustre
+$CLEAN
+dmesg | grep -i destruct
+$START
+
+echo '==== touch /mnt/lustre/f ; ls -l /mnt/lustre ==== test 19'
+touch /mnt/lustre/f
+rm /mnt/lustre/f
+echo "1 done"
+touch /mnt/lustre/f
+rm /mnt/lustre/f
+echo "2 done"
+touch /mnt/lustre/f
+rm /mnt/lustre/f
+echo "3 done"
 $CLEAN
 dmesg | grep -i destruct
 $START
