@@ -209,7 +209,7 @@ struct snap_obd_data {
 	unsigned int snap_index;/* which snapshot is ours */
 	unsigned int snap_table;/* which table do we use */
 };
-#define DISK_SNAPTABLE_ATTR     "Snaptable"
+#define DISK_SNAPTABLE_ATTR     "Snaptable12"
 #define DISK_SNAP_TABLE_MAGIC	0x1976
 struct snap_disk_table {
 	unsigned int    	magic;
@@ -287,6 +287,10 @@ void cleanup_filter_info_cache(void);
 int init_filter_info_cache(void);
 extern void init_filter_data(struct inode *inode, int flag);
 extern void set_filter_ops(struct snap_cache *cache, struct inode *inode);
+extern int currentfs_setxattr(struct dentry *dentry, const char *name, 
+		       const void *value, size_t size, int flags);
+extern int currentfs_removexattr(struct dentry *dentry, const char *name);
+extern int currentfs_setattr(struct dentry *dentry, struct iattr *attr);
 /* dir.c */
 extern struct inode_operations currentfs_dir_iops;
 extern struct file_operations currentfs_dir_fops;
@@ -306,6 +310,8 @@ extern struct dentry_operations currentfs_dentry_ops;
 extern int init_option(char *data);
 extern void cleanup_option(void);
 extern int get_opt(struct option **opt, char **pos);
+/* clonefs.c */
+int clonefs_mounted(struct snap_cache *cache, int index);
 
 #define FILTER_DID_SUPER_OPS 	0x1
 #define FILTER_DID_INODE_OPS 	0x2
