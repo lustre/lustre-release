@@ -11,5 +11,5 @@ if [ ! -f $config ]; then
    sh $mkconfig $config || exit 1
 fi
 
-${LCONF} --cleanup echo.xml
+${LCONF} --cleanup $NAME.xml
 
