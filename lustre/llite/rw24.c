@@ -109,18 +109,17 @@ static int ll_writepage_24(struct page *page)
         page_cache_get(page);
         if (llap->llap_write_queued) {
                 LL_CDEBUG_PAGE(page, "marking urgent\n");
-                rc = obd_set_async_flags(exp, ll_i2info(inode)->lli_smd, NULL, 
-                                         llap->llap_cookie, ASYNC_READY | 
-                                         ASYNC_URGENT);
+                rc = obd_set_async_flags(exp, ll_i2info(inode)->lli_smd, NULL,
+                                         llap->llap_cookie,
+                                         ASYNC_READY | ASYNC_URGENT);
         } else {
                 llap->llap_write_queued = 1;
-                rc = obd_queue_async_io(exp, ll_i2info(inode)->lli_smd, NULL, 
-                                        llap->llap_cookie, OBD_BRW_WRITE, 0, 0, 
-                                        OBD_BRW_CREATE, ASYNC_READY | 
-                                        ASYNC_URGENT);
+                rc = obd_queue_async_io(exp, ll_i2info(inode)->lli_smd, NULL,
+                                        llap->llap_cookie, OBD_BRW_WRITE, 0, 0,
+                                        0, ASYNC_READY | ASYNC_URGENT);
                 if (rc == 0)
                         LL_CDEBUG_PAGE(page, "mmap write queued\n");
-                else 
+                else
                         llap->llap_write_queued = 0;
         }
         if (rc)
@@ -170,7 +169,7 @@ static int ll_direct_IO_24(int rw,
                 RETURN(-ENOMEM);
         }
 
-        flags = (rw == WRITE ? OBD_BRW_CREATE : 0) /* | OBD_BRW_DIRECTIO */;
+        flags = 0 /* | OBD_BRW_DIRECTIO */;
         offset = ((obd_off)blocknr << inode->i_blkbits);
         length = iobuf->length;
 
@@ -222,6 +221,6 @@ struct address_space_operations ll_aops = {
         prepare_write: ll_prepare_write,
         commit_write: ll_commit_write,
         removepage: ll_removepage,
-        sync_page: ll_sync_page,
+        sync_page: NULL,
         bmap: NULL
 };
