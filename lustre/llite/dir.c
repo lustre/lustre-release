@@ -55,7 +55,8 @@ typedef struct ext2_dir_entry_2 ext2_dirent;
 #define SetPageChecked(page)     set_bit(PG_checked, &(page)->flags)
 
 
-static int ll_dir_prepare_write(struct file *file, struct page *page, unsigned from, unsigned to)
+static int ll_dir_prepare_write(struct file *file, struct page *page,
+                                unsigned from, unsigned to)
 {
         return 0;
 }
@@ -124,11 +125,10 @@ static int ll_dir_readpage(struct file *file, struct page *page)
 
         unlock_page(page);
         ll_unlock(LCK_PR, &lockh);
-        mdc_put_rpc_lock(&mdc_rpc_lock, &it);
         if (rc != ELDLM_OK)
                 CERROR("ll_unlock: err: %d\n", rc);
         return rc;
-} /* ll_dir_readpage */
+}
 
 struct address_space_operations ll_dir_aops = {
         readpage: ll_dir_readpage,
