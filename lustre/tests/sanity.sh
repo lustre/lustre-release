@@ -14,6 +14,8 @@ ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"42b"}
 SRCDIR=`dirname $0`
 PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$PATH
 
+TMP=${TMP:-/tmp}
+
 CHECKSTAT=${CHECKSTAT:-"checkstat -v"}
 CREATETEST=${CREATETEST:-createtest}
 LFIND=${LFIND:-lfind}
@@ -27,6 +29,8 @@ TRUNCATE=${TRUNCATE:-truncate}
 MUNLINK=${MUNLINK:-munlink}
 SOCKETSERVER=${SOCKETSERVER:-socketserver}
 SOCKETCLIENT=${SOCKETCLIENT:-socketclient}
+IOPENTEST1=${IOPENTEST1:-iopentest1}
+IOPENTEST2=${IOPENTEST2:-iopentest2}
 
 if [ $UID -ne 0 ]; then
 	RUNAS_ID="$UID"
@@ -1541,6 +1545,22 @@ test_54d() {
 	[ "$string" = `echo $string > $f | cat $f` ] || error
 }
 run_test 54d "fifo device works in lustre"
+
+test_55() {
+        for i in `ls $TMP|grep -E 'mds|ost'` ; do
+                rm -rf $DIR/d55
+                mkdir $DIR/d55
+                mount -o loop,iopen $TMP/$i $DIR/d55
+                touch $DIR/d55/foo
+                $IOPENTEST1 $DIR/d55/foo $DIR/d55
+                $IOPENTEST2 $DIR/d55
+                echo "check for $TMP/$i. Please wait..."
+                sleep 6
+                rm -rf $DIR/d55/*
+                umount $DIR/d55
+        done
+}
+run_test 55 "check iopen_connect_dentry()======================="
 
 test_59() {
 	echo "touch 130 files"

@@ -21,13 +21,15 @@ noinst_PROGRAMS += wantedi statone runas openfile getdents mkdirdeep o_directory
 noinst_PROGRAMS += small_write multiop sleeptest ll_sparseness_verify
 noinst_PROGRAMS += ll_sparseness_write mrename
 # noinst_PROGRAMS += ldaptest
-bin_PROGRAMS = mcreate munlink mkdirmany
+bin_PROGRAMS = mcreate munlink mkdirmany iopentest1 iopentest2
 
 # ldaptest_SOURCES = ldaptest.c
 tchmod_SOURCES = tchmod.c
 toexcl_SOURCES = toexcl.c
 testreq_SOURCES = testreq.c
 mcreate_SOURCES = mcreate.c
+iopentest1_SOURCES = iopentest1.c
+iopentest2_SOURCES = iopentest2.c
 munlink_SOURCES = munlink.c
 mlink_SOURCES = mlink.c
 truncate_SOURCES = truncate.c
