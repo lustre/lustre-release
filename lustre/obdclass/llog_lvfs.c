@@ -398,6 +398,9 @@ static int llog_lvfs_create(struct obd_device *obd, struct llog_handle **res,
         }
 
         handle->lgh_obd = obd;
+ finish:
+        if (oa)
+                obdo_free(oa);
         RETURN(rc);
 cleanup:
         switch (cleanup_phase) {
@@ -406,8 +409,7 @@ cleanup:
         case 1:
                 llog_free_handle(handle);
         }
-        obdo_free(oa);
-        return rc;
+        goto finish;
 }
 
 static int llog_lvfs_close(struct llog_handle *handle)
