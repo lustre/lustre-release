@@ -40,7 +40,6 @@ void ll_release(struct dentry *de)
         EXIT;
 }
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 void ll_intent_release(struct dentry *de, struct lookup_intent *it)
 {
         struct lustre_handle *handle;
@@ -67,7 +66,6 @@ void ll_intent_release(struct dentry *de, struct lookup_intent *it)
         //up(&ll_d2d(de)->lld_it_sem);
         EXIT;
 }
-#endif
 
 int ll_revalidate2(struct dentry *de, int flags, struct lookup_intent *it)
 {

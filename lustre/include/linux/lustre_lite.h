@@ -160,11 +160,7 @@ int ll_lock(struct inode *dir, struct dentry *dentry,
 int ll_unlock(__u32 mode, struct lustre_handle *lockh);
 
 /* dcache.c */
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
-void ll_intent_release(struct nameidata *);
-#else
 void ll_intent_release(struct dentry *, struct lookup_intent *);
-#endif
 int ll_set_dd(struct dentry *de);
 
 /****

@@ -32,7 +32,7 @@ extern void ll_destroy_inodecache(void);
 extern int ll_recover(struct recovd_data *, int);
 extern int ll_commitcbd_setup(struct ll_sb_info *);
 extern int ll_commitcbd_cleanup(struct ll_sb_info *);
-static int ll_read_inode2(struct inode *inode, void *opaque);
+int ll_read_inode2(struct inode *inode, void *opaque);
 
 static char *ll_read_opt(const char *opt, char *data)
 {
@@ -470,7 +470,7 @@ void ll_update_inode(struct inode *inode, struct mds_body *body)
                 inode->i_size = body->size;
 }
 
-static int ll_read_inode2(struct inode *inode, void *opaque)
+int ll_read_inode2(struct inode *inode, void *opaque)
 {
         struct ll_read_inode2_cookie *lic = opaque;
         struct mds_body *body = lic->lic_body;

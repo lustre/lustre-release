@@ -690,6 +690,8 @@ int ll_fsync(struct file *file, struct dentry *dentry, int data)
         return 0;
 }
 
+
+
 static int ll_inode_revalidate(struct dentry *dentry)
 {
         struct inode *inode = dentry->d_inode;
@@ -706,6 +708,12 @@ static int ll_inode_revalidate(struct dentry *dentry)
         RETURN(ll_file_size(inode, lsm));
 }
 
+static int ll_getattr(struct vfsmount *mnt, struct dentry *de, 
+                      struct kstat *stat)
+{
+        return ll_inode_revalidate(de);
+}
+
 struct file_operations ll_file_operations = {
         read:           ll_file_read,
         write:          ll_file_write,
@@ -720,5 +728,9 @@ struct file_operations ll_file_operations = {
 struct inode_operations ll_file_inode_operations = {
         truncate:   ll_truncate,
         setattr:    ll_setattr,
-        revalidate: ll_inode_revalidate
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
+                getattr: ll_getattr,
+#else
+        revalidate: ll_inode_revalidate,
+#endif
 };

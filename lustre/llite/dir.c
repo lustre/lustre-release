@@ -91,7 +91,7 @@ static int ll_dir_readpage(struct file *file, struct page *page)
         }
         ldlm_lock_dump((void *)(unsigned long)lockh.addr);
 
-        if (Page_Uptodate(page)) {
+        if (PageUptodate(page)) {
                 CERROR("Explain this please?\n");
                 GOTO(readpage_out, rc);
         }
@@ -127,6 +127,7 @@ struct address_space_operations ll_dir_aops = {
         prepare_write: ll_dir_prepare_write
 };
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 int waitfor_one_page(struct page *page)
 {
         int error = 0;
@@ -140,6 +141,13 @@ int waitfor_one_page(struct page *page)
         } while ((bh = bh->b_this_page) != head);
         return error;
 }
+#else 
+int waitfor_one_page(struct page *page)
+{
+        wait_on_page_locked(page);
+        return 0;
+}
+#endif
 
 /*
  * ext2 uses block-sized chunks. Arguably, sector-sized ones would be
@@ -279,7 +287,7 @@ static struct page * ext2_get_page(struct inode *dir, unsigned long n)
         if (!IS_ERR(page)) {
                 wait_on_page(page);
                 kmap(page);
-                if (!Page_Uptodate(page))
+                if (!PageUptodate(page))
                         goto fail;
                 if (!PageChecked(page))
                         ext2_check_page(page);

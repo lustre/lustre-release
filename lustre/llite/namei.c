@@ -88,7 +88,7 @@ static inline int ext2_add_nondir(struct dentry *dentry, struct inode *inode)
 }
 
 /* methods */
-static int ll_find_inode(struct inode *inode, unsigned long ino, void *opaque)
+static int ll_test_inode(struct inode *inode, void *opaque)
 {
         struct ll_read_inode2_cookie *lic = opaque;
         struct mds_body *body = lic->lic_body;
@@ -144,6 +144,36 @@ int ll_unlock(__u32 mode, struct lustre_handle *lockh)
 
         RETURN(0);
 }
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
+extern int ll_read_inode2(struct inode *inode, void *opaque);
+struct inode *ll_iget(struct super_block *sb, ino_t hash, 
+                      struct ll_read_inode2_cookie *lic)
+{
+        struct inode *inode;
+
+	inode = iget5_locked(sb, hash, ll_test_inode, ll_read_inode2, lic);
+
+	if (!inode)
+		return ERR_PTR(-ENOMEM);
+
+	if (inode->i_state & I_NEW) {
+                
+		unlock_new_inode(inode);
+	}
+
+        // XXX Coda always fills inodes, should Lustre?
+        return inode;
+}
+#else
+struct inode *ll_iget(struct super_block *sb, inot_t hash, 
+                      struct ll_read_inode2_cookie *lic)
+{
+        struct inode *inode;
+        inode = iget4(sb, hash, ll_find_inode, lic);
+        return inode;
+}
+#endif
 
 static struct dentry *ll_lookup2(struct inode *dir, struct dentry *dentry,
                                  struct lookup_intent *it)
@@ -276,8 +306,7 @@ static struct dentry *ll_lookup2(struct inode *dir, struct dentry *dentry,
 
         /* No rpc's happen during iget4, -ENOMEM's are possible */
         LASSERT(ino != 0);
-        inode = iget4(dir->i_sb, ino, ll_find_inode, &lic);
-
+        inode = ll_iget(dir->i_sb, ino, &lic);
         if (!inode) {
                 ptlrpc_free_req(request);
                 ll_intent_release(dentry, it);
@@ -377,7 +406,7 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
         lic.lic_body = body;
 
         LASSERT(body->ino != 0);
-        inode = iget4(dir->i_sb, body->ino, ll_find_inode, &lic);
+        inode = ll_iget(dir->i_sb, body->ino, &lic);
         if (IS_ERR(inode)) {
                 int rc = PTR_ERR(inode);
                 CERROR("new_inode -fatal: rc %d\n", rc);
