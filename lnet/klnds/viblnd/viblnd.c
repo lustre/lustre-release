@@ -56,7 +56,7 @@ void vibnal_assert_wire_constants (void)
 
         /* Constants... */
         CLASSERT (IBNAL_MSG_MAGIC == 0x0be91b91);
-        CLASSERT (IBNAL_MSG_VERSION == 5);
+        CLASSERT (IBNAL_MSG_VERSION == 6);
         CLASSERT (IBNAL_MSG_CONNREQ == 0xc0);
         CLASSERT (IBNAL_MSG_CONNACK == 0xc1);
         CLASSERT (IBNAL_MSG_NOOP == 0xd0);
