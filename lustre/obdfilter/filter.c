@@ -481,14 +481,16 @@ static int filter_cleanup(struct obd_device * obddev)
 }
 
 
-static inline void filter_from_inode(struct obdo *oa, struct inode *inode)
+static inline void filter_from_inode(struct obdo *oa, struct inode *inode,
+                                     int valid)
 {
         int type = oa->o_mode & S_IFMT;
         ENTRY;
 
-        CDEBUG(D_INFO, "src inode %ld, dst obdo %ld valid 0x%08x\n",
-               inode->i_ino, (long)oa->o_id, oa->o_valid);
-        obdo_from_inode(oa, inode);
+        CDEBUG(D_INFO, "src inode %ld (%p), dst obdo %ld valid 0x%08x\n",
+               inode->i_ino, inode, (long)oa->o_id, valid);
+        /* Don't copy the inode number in place of the object ID */
+        obdo_from_inode(oa, inode, valid);
         oa->o_mode &= ~S_IFMT;
         oa->o_mode |= type;
 
@@ -519,14 +521,13 @@ static int filter_getattr(struct lustre_handle *conn, struct obdo *oa,
         if (IS_ERR(dentry))
                 RETURN(PTR_ERR(dentry));
 
-        oa->o_valid &= ~OBD_MD_FLID;
-        filter_from_inode(oa, dentry->d_inode);
+        filter_from_inode(oa, dentry->d_inode, oa->o_valid & ~OBD_MD_FLID);
 
         dput(dentry);
         RETURN(0);
 }
 
-static int filter_setattr(struct lustre_handle *conn, struct obdo *oa, 
+static int filter_setattr(struct lustre_handle *conn, struct obdo *oa,
                           struct lov_stripe_md *md)
 {
         struct obd_run_ctxt saved;
@@ -537,7 +538,7 @@ static int filter_setattr(struct lustre_handle *conn, struct obdo *oa,
         int rc;
         ENTRY;
 
-        iattr_from_obdo(&iattr, oa);
+        iattr_from_obdo(&iattr, oa, oa->o_valid);
         iattr.ia_mode = (iattr.ia_mode & ~S_IFMT) | S_IFREG;
         dentry = filter_fid2dentry(obd, filter_parent(obd, iattr.ia_mode),
                                    oa->o_id, iattr.ia_mode);
@@ -557,7 +558,7 @@ static int filter_setattr(struct lustre_handle *conn, struct obdo *oa,
         if (iattr.ia_mode & ATTR_SIZE) {
                 up(&inode->i_sem);
                 oa->o_valid = OBD_MD_FLBLOCKS | OBD_MD_FLCTIME | OBD_MD_FLMTIME;
-                obdo_from_inode(oa, inode);
+                obdo_from_inode(oa, inode, oa->o_valid);
         }
         unlock_kernel();
 
@@ -582,15 +583,16 @@ static int filter_open(struct lustre_handle *conn, struct obdo *oa,
         obd = class_conn2obd(conn);
         dentry = filter_fid2dentry(obd, filter_parent(obd, oa->o_mode),
                                    oa->o_id, oa->o_mode);
-        oa->o_size = dentry->d_inode->i_size;
         if (IS_ERR(dentry))
                 RETURN(PTR_ERR(dentry));
+
+        oa->o_size = dentry->d_inode->i_size;
 
         return 0;
 } /* filter_open */
 
 static int filter_close(struct lustre_handle *conn, struct obdo *oa,
-                          struct lov_stripe_md *ea)
+                        struct lov_stripe_md *ea)
 {
         struct obd_device *obd;
         struct dentry *dentry;
@@ -632,11 +634,12 @@ static int filter_create(struct lustre_handle* conn, struct obdo *oa,
                 return -EINVAL;
         }
 
-        oa->o_id = filter_next_id(obd);
         if (!(oa->o_mode && S_IFMT)) {
                 CERROR("filter obd: no type!\n");
                 return -ENOENT;
         }
+
+        oa->o_id = filter_next_id(obd);
 
         filter_id(name, oa->o_id, oa->o_mode);
         mode = (oa->o_mode & ~S_IFMT) | S_IFREG;
@@ -1229,10 +1232,6 @@ static int filter_write_locked_page(struct niobuf_local *lnb)
                 GOTO(out, rc);
         }
 
-        /* debugging: just seeing that this works correctly */
-        CERROR("copying data from %p (%ld) to %p (ino %ld:%ld)\n", lnb->addr,
-               lnb->page->index, page_address(lpage),
-               lnb->dentry->d_inode->i_ino, lpage->index);
         /* lpage is kmapped in lustre_get_page_write() above and kunmapped in
          * lustre_commit_write() below, lnb->page was kmapped previously in
          * filter_get_page_write() and kunmapped in lustre_put_page() below.
@@ -1277,9 +1276,6 @@ static int filter_commitrw(int cmd, struct lustre_handle *conn,
                                 LBUG();
 
                         if (r->flags & N_LOCAL_TEMP_PAGE) {
-                                /* debugging: just seeing if this happens */
-                                CERROR("found a locked page (index %ld)\n",
-                                       page->index);
                                 found_locked++;
                                 continue;
                         }
@@ -1293,11 +1289,6 @@ static int filter_commitrw(int cmd, struct lustre_handle *conn,
                         } else
                                 lustre_put_page(page);
 
-                        CDEBUG(D_INODE,
-                               "put inode %p (%ld), count = %d, nlink = %d\n",
-                               r->dentry->d_inode, r->dentry->d_inode->i_ino,
-                               atomic_read(&r->dentry->d_inode->i_count) - 1,
-                               r->dentry->d_inode->i_nlink);
                         dput(r->dentry);
                 }
         }
@@ -1316,11 +1307,6 @@ static int filter_commitrw(int cmd, struct lustre_handle *conn,
                         err = filter_write_locked_page(r);
                         if (!rc)
                                 rc = err;
-                        CDEBUG(D_INODE,
-                               "put inode %p (%ld), count = %d, nlink = %d\n",
-                               r->dentry->d_inode, r->dentry->d_inode->i_ino,
-                               atomic_read(&r->dentry->d_inode->i_count) - 1,
-                               r->dentry->d_inode->i_nlink);
                         dput(r->dentry);
                 }
         }

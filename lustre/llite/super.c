@@ -405,8 +405,7 @@ inline int ll_stripe_mds_md_size(struct super_block *sb)
         return mdc->cl_max_mdsize;
 }
 
-static int ll_file_size(struct inode *inode, struct lov_stripe_md *md,
-                        __u64 *size)
+static int ll_file_size(struct inode *inode, struct lov_stripe_md *md)
 {
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct lustre_handle *lockhs;
@@ -423,10 +422,12 @@ static int ll_file_size(struct inode *inode, struct lov_stripe_md *md,
          * like lov_getattr? --phil */
         oa.o_id = md->lmd_object_id;
         oa.o_mode = S_IFREG;
-        oa.o_valid = OBD_MD_FLID | OBD_MD_FLMODE | OBD_MD_FLSIZE;
+        oa.o_valid = OBD_MD_FLID|OBD_MD_FLMODE|OBD_MD_FLSIZE|OBD_MD_FLBLOCKS;
         rc = obd_getattr(&sbi->ll_osc_conn, &oa, md);
-        if (!rc)
-                *size = oa.o_size;
+        if (!rc) {
+                inode->i_size = oa.o_size;
+                inode->i_blocks = oa.o_blocks;
+        }
 
         err = ll_size_unlock(inode, md, LCK_PR, lockhs);
         if (err != ELDLM_OK) {
@@ -497,7 +498,7 @@ static void ll_read_inode2(struct inode *inode, void *opaque)
         if (lli->lli_smd && (inode->i_mode & S_IFREG)) {
                 int rc;
 
-                rc = ll_file_size(inode, lli->lli_smd, &inode->i_size);
+                rc = ll_file_size(inode, lli->lli_smd);
                 if (rc) {
                         CERROR("ll_file_size: %d\n", rc);
                         /* FIXME: need to somehow prevent inode creation */
