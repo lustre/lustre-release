@@ -202,7 +202,7 @@ struct obd_device {
 };
 
 struct obd_ops {
-        int (*o_iocontrol)(int cmd, struct obd_conn *, int len, void *karg,
+        int (*o_iocontrol)(long cmd, struct obd_conn *, int len, void *karg,
                            void *uarg);
         int (*o_get_info)(struct obd_conn *, obd_count keylen, void *key,
                           obd_count *vallen, void **val);

@@ -285,7 +285,7 @@ out:
         return 0;
 }
 
-static int ldlm_iocontrol(int cmd, struct obd_conn *conn, int len, void *karg,
+static int ldlm_iocontrol(long cmd, struct obd_conn *conn, int len, void *karg,
                           void *uarg)
 {
         struct obd_device *obddev = conn->oc_dev;
@@ -295,7 +295,7 @@ static int ldlm_iocontrol(int cmd, struct obd_conn *conn, int len, void *karg,
 
         if (_IOC_TYPE(cmd) != IOC_LDLM_TYPE || _IOC_NR(cmd) < IOC_LDLM_MIN_NR ||
             _IOC_NR(cmd) > IOC_LDLM_MAX_NR) {
-                CDEBUG(D_IOCTL, "invalid ioctl ( type %d, nr %d, size %d )\n",
+                CDEBUG(D_IOCTL, "invalid ioctl (type %ld, nr %ld, size %ld)\n",
                        _IOC_TYPE(cmd), _IOC_NR(cmd), _IOC_SIZE(cmd));
                 RETURN(-EINVAL);
         }
