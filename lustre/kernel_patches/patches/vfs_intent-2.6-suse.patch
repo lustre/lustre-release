@@ -635,6 +635,14 @@ Index: linux-2.6.4-51.0/include/linux/fs.h
  	int (*setxattr) (struct dentry *, const char *,const void *,size_t,int);
  	ssize_t (*getxattr) (struct dentry *, const char *, void *, size_t);
  	ssize_t (*listxattr) (struct dentry *, char *, size_t);
+@@ -888,6 +888,7 @@
+ 	int (*remount_fs) (struct super_block *, int *, char *);
+ 	void (*clear_inode) (struct inode *);
+ 	void (*umount_begin) (struct super_block *);
++	void (*umount_lustre) (struct super_block *);
+ 
+ 	int (*show_options)(struct seq_file *, struct vfsmount *);
+ };
 @@ -1101,6 +1107,7 @@
  extern int unregister_filesystem(struct file_system_type *);
  extern struct vfsmount *kern_mount(struct file_system_type *);
