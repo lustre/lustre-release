@@ -293,7 +293,7 @@ static int ll_special_open(struct inode *inode, struct file *filp)
 
         err = ll_local_open(filp, it);
         if (rc != 0) {
-                CERROR("error opening special file: rc %d", rc);
+                CERROR("error opening special file: rc %d\n", rc);
                 ll_mdc_close(ll_i2sbi(inode)->ll_mdc_exp, inode, filp);
         } else if (err) {
                 if (pfop && *pfop && (*pfop)->release)
