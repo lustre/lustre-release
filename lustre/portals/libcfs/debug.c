@@ -790,41 +790,62 @@ void portals_debug_set_level(unsigned int debug_level)
         portal_debug = debug_level;
 }
 
+void portals_run_upcall(char **argv)
+{
+        int   rc;
+        int   argc;
+        char *envp[] = {
+                "HOME=/",
+                "PATH=/sbin:/bin:/usr/sbin:/usr/bin",
+                NULL};
+        ENTRY;
+
+        argv[0] = portals_upcall;
+        argc = 1;
+        while (argv[argc] != NULL)
+                argc++;
+
+        if (argc < 2)
+                panic ("Missing upcall arg");
+        
+        rc = call_usermodehelper(argv[0], argv, envp);
+        if (rc < 0) {
+                CERROR("Error %d invoking portals upcall %s %s%s%s%s%s%s%s%s; "
+                       "check /proc/sys/portals/upcall\n",
+                       rc, argv[0], argv[1],
+                       argc < 3 ? "" : ",", argc < 3 ? "" : argv[2],
+                       argc < 4 ? "" : ",", argc < 4 ? "" : argv[3],
+                       argc < 5 ? "" : ",", argc < 5 ? "" : argv[4],
+                       argc < 6 ? "" : ",...");
+        } else {
+                CERROR("Invoked portals upcall %s %s%s%s%s%s%s%s%s\n",
+                       argv[0], argv[1],
+                       argc < 3 ? "" : ",", argc < 3 ? "" : argv[2],
+                       argc < 4 ? "" : ",", argc < 4 ? "" : argv[3],
+                       argc < 5 ? "" : ",", argc < 5 ? "" : argv[4],
+                       argc < 6 ? "" : ",...");
+        }
+}
+
 void portals_run_lbug_upcall(char *file, const char *fn, const int line)
 {
         char *argv[6];
-        char *envp[3];
         char buf[32];
-        int rc;
 
         ENTRY;
         snprintf (buf, sizeof buf, "%d", line);
 
-        argv[0] = portals_upcall;
         argv[1] = "LBUG";
         argv[2] = file;
         argv[3] = (char *)fn;
         argv[4] = buf;
         argv[5] = NULL;
 
-        envp[0] = "HOME=/";
-        envp[1] = "PATH=/sbin:/bin:/usr/sbin:/usr/bin";
-        envp[2] = NULL;
-
-        rc = call_usermodehelper(argv[0], argv, envp);
-        if (rc < 0) {
-                CERROR("Error invoking lbug upcall %s %s %s %s %s: %d; check "
-                       "/proc/sys/portals/upcall\n",                
-                       argv[0], argv[1], argv[2], argv[3], argv[4], rc);
-                
-        } else {
-                CERROR("Invoked upcall %s %s %s %s %s\n",
-                       argv[0], argv[1], argv[2], argv[3], argv[4]);
-        }
+        portals_run_upcall (argv);
 }
-
 
 EXPORT_SYMBOL(portals_debug_dumplog);
 EXPORT_SYMBOL(portals_debug_msg);
 EXPORT_SYMBOL(portals_debug_set_level);
+EXPORT_SYMBOL(portals_run_upcall);
 EXPORT_SYMBOL(portals_run_lbug_upcall);
