@@ -129,7 +129,8 @@ static int ptlrpc_pinger_main(void *arg)
         while (1) {
                 unsigned long this_ping = jiffies;
                 long time_to_next_ping;
-                struct l_wait_info lwi = LWI_TIMEOUT(10 * HZ, NULL, NULL);
+                struct l_wait_info lwi = LWI_TIMEOUT(obd_timeout * HZ,
+                                                     NULL, NULL);
                 struct ptlrpc_request_set *set;
                 struct ptlrpc_request *req;
                 struct list_head *iter;
