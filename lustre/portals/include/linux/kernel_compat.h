@@ -13,7 +13,7 @@
         spin_unlock_irqrestore(&task->sighand->siglock, flags)
 #define USERMODEHELPER(path, argv, envp)       \
         call_usermodehelper(path, argv, envp, 1)
-#define RECALC_SIGPENDING       recalc_sigpending
+#define RECALC_SIGPENDING       recalc_sigpending()
 #define CURRENT_SECONDS         get_seconds()
 
 #else 

@@ -6,7 +6,7 @@
 include $(src)/../portals/Kernelenv
 
 obj-y += obdclass.o fsfilt_ext3.o
-obdclass-objs := class_obd.o debug.o genops.o sysctl.o uuid.o \
+obdclass-objs := class_obd.o debug.o genops.o sysctl.o uuid.o simple.o\
 		lprocfs_status.o lustre_handles.o lustre_peer.o fsfilt.o \
 		statfs_pack.o
 

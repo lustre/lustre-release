@@ -217,14 +217,6 @@ int ll_fill_super(struct super_block *sb, void *data, int silent)
                 GOTO(out_osc, err);
         }
 
-        /* initialize the pagecache writeback thread */
-        err = lliod_start(sbi);
-        if (err) {
-                CERROR("failed to start lliod: rc = %d\n",err);
-                ptlrpc_req_finished(request);
-                GOTO(out_osc, sb = NULL);
-        }
-
         /* initialize committed transaction callback daemon */
         spin_lock_init(&sbi->ll_commitcbd_lock);
         init_waitqueue_head(&sbi->ll_commitcbd_waitq);
@@ -255,6 +247,13 @@ int ll_fill_super(struct super_block *sb, void *data, int silent)
                 GOTO(out_cbd, err = -EBADF);
         }
 
+        /* initialize the pagecache writeback thread */
+        err = lliod_start(sbi, root);
+        if (err) {
+                CERROR("failed to start lliod: rc = %d\n",err);
+                GOTO(out_root, sb = NULL);
+        }
+
         sb->s_root = d_alloc_root(root);
 
         if (proc_lustre_fs_root) {
@@ -272,6 +271,8 @@ out_dev:
 
         RETURN(err);
 
+out_root:
+        iput(root);
 out_cbd:
         ll_commitcbd_cleanup(sbi);
 out_lliod:
