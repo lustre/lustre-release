@@ -1,0 +1,450 @@
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
+ *
+ * lib/lib-md.c
+ * Memory Descriptor management routines
+ *
+ *  Copyright (c) 2001-2003 Cluster File Systems, Inc.
+ *  Copyright (c) 2001-2002 Sandia National Laboratories
+ *
+ *   This file is part of Lustre, http://www.sf.net/projects/lustre/
+ *
+ *   Lustre is free software; you can redistribute it and/or
+ *   modify it under the terms of version 2 of the GNU General Public
+ *   License as published by the Free Software Foundation.
+ *
+ *   Lustre is distributed in the hope that it will be useful,
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   GNU General Public License for more details.
+ *
+ *   You should have received a copy of the GNU General Public License
+ *   along with Lustre; if not, write to the Free Software
+ *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ */
+
+#ifndef __KERNEL__
+# include <stdio.h>
+#else
+# define DEBUG_SUBSYSTEM S_PORTALS
+# include <linux/kp30.h>
+#endif
+
+#include <portals/lib-p30.h>
+#include <portals/arg-blocks.h>
+
+/* must be called with state lock held */
+void lib_md_unlink(nal_cb_t * nal, lib_md_t * md)
+{
+        if ((md->md_flags & PTL_MD_FLAG_ZOMBIE) == 0) {
+                /* first unlink attempt... */
+                lib_me_t *me = md->me;
+
+                md->md_flags |= PTL_MD_FLAG_ZOMBIE;
+
+                /* Disassociate from ME (if any), and unlink it if it was created
+                 * with PTL_UNLINK */
+                if (me != NULL) {
+                        me->md = NULL;
+                        if (me->unlink == PTL_UNLINK)
+                                lib_me_unlink(nal, me);
+                }
+
+                /* emsure all future handle lookups fail */
+                lib_invalidate_handle(nal, &md->md_lh);
+        }
+
+        if (md->pending != 0) {
+                CDEBUG(D_NET, "Queueing unlink of md %p\n", md);
+                return;
+        }
+
+        CDEBUG(D_NET, "Unlinking md %p\n", md);
+
+        if ((md->options & PTL_MD_KIOV) != 0) {
+                if (nal->cb_unmap_pages != NULL)
+                        nal->cb_unmap_pages (nal, md->md_niov, md->md_iov.kiov, 
+                                             &md->md_addrkey);
+        } else if (nal->cb_unmap != NULL) {
+                nal->cb_unmap (nal, md->md_niov, md->md_iov.iov, 
+                               &md->md_addrkey);
+        }
+
+        if (md->eq != NULL) {
+                md->eq->eq_refcount--;
+                LASSERT (md->eq->eq_refcount >= 0);
+        }
+
+        list_del (&md->md_list);
+        lib_md_free(nal, md);
+}
+
+/* must be called with state lock held */
+static int lib_md_build(nal_cb_t *nal, lib_md_t *new, void *private,
+                        ptl_md_t *md, ptl_handle_eq_t *eqh, int unlink)
+{
+        lib_eq_t     *eq = NULL;
+        int           rc;
+        int           i;
+        int           niov;
+
+        /* NB we are passed an allocated, but uninitialised/active md.
+         * if we return success, caller may lib_md_unlink() it.
+         * otherwise caller may only lib_md_free() it.
+         */
+
+        if (!PtlHandleIsEqual (*eqh, PTL_EQ_NONE)) {
+                eq = ptl_handle2eq(eqh, nal);
+                if (eq == NULL)
+                        return PTL_EQ_INVALID;
+        }
+
+        /* Must check this _before_ allocation.  Also, note that non-iov
+         * MDs must set md_niov to 0. */
+        LASSERT((md->options & (PTL_MD_IOVEC | PTL_MD_KIOV)) == 0 ||
+                md->length <= PTL_MD_MAX_IOV);
+
+        /* This implementation doesn't know how to create START events or
+         * disable END events.  Best to LASSERT our caller is compliant so
+         * we find out quickly...  */
+        LASSERT (PtlHandleIsEqual (*eqh, PTL_EQ_NONE) ||
+                 ((md->options & PTL_MD_EVENT_START_DISABLE) != 0 &&
+                  (md->options & PTL_MD_EVENT_END_DISABLE) == 0));
+
+        if ((md->options & PTL_MD_MAX_SIZE) != 0 && /* max size used */
+            (md->max_size < 0 || md->max_size > md->length)) // illegal max_size
+                return PTL_MD_INVALID;
+
+        new->me = NULL;
+        new->start = md->start;
+        new->offset = 0;
+        new->max_size = md->max_size;
+        new->options = md->options;
+        new->user_ptr = md->user_ptr;
+        new->eq = eq;
+        new->threshold = md->threshold;
+        new->pending = 0;
+        new->md_flags = (unlink == PTL_UNLINK) ? PTL_MD_FLAG_AUTO_UNLINK : 0;
+
+        if ((md->options & PTL_MD_IOVEC) != 0) {
+                int total_length = 0;
+
+                if ((md->options & PTL_MD_KIOV) != 0) /* Can't specify both */
+                        return PTL_MD_INVALID; 
+
+                new->md_niov = niov = md->length;
+                
+                if (nal->cb_read (nal, private, new->md_iov.iov, md->start,
+                                  niov * sizeof (new->md_iov.iov[0])))
+                        return PTL_SEGV;
+
+                for (i = 0; i < niov; i++) {
+                        /* We take the base address on trust */
+                        if (new->md_iov.iov[i].iov_len <= 0) /* invalid length */
+                                return PTL_VAL_FAILED;
+
+                        total_length += new->md_iov.iov[i].iov_len;
+                }
+
+                new->length = total_length;
+
+                if (nal->cb_map != NULL) {
+                        rc = nal->cb_map (nal, niov, new->md_iov.iov, 
+                                          &new->md_addrkey);
+                        if (rc != PTL_OK)
+                                return (rc);
+                }
+        } else if ((md->options & PTL_MD_KIOV) != 0) {
+#ifndef __KERNEL__
+                return PTL_MD_INVALID;
+#else
+                int total_length = 0;
+                
+                /* Trap attempt to use paged I/O if unsupported early. */
+                if (nal->cb_send_pages == NULL ||
+                    nal->cb_recv_pages == NULL)
+                        return PTL_MD_INVALID;
+
+                new->md_niov = niov = md->length;
+
+                if (nal->cb_read (nal, private, new->md_iov.kiov, md->start,
+                                  niov * sizeof (new->md_iov.kiov[0])))
+                        return PTL_SEGV;
+                
+                for (i = 0; i < niov; i++) {
+                        /* We take the page pointer on trust */
+                        if (new->md_iov.kiov[i].kiov_offset + 
+                            new->md_iov.kiov[i].kiov_len > PAGE_SIZE )
+                                return PTL_VAL_FAILED; /* invalid length */
+
+                        total_length += new->md_iov.kiov[i].kiov_len;
+                }
+
+                new->length = total_length;
+
+                if (nal->cb_map_pages != NULL) {
+                        rc = nal->cb_map_pages (nal, niov, new->md_iov.kiov, 
+                                                &new->md_addrkey);
+                        if (rc != PTL_OK)
+                                return (rc);
+                }
+#endif
+        } else {   /* contiguous */
+                new->length = md->length;
+                new->md_niov = niov = 1;
+                new->md_iov.iov[0].iov_base = md->start;
+                new->md_iov.iov[0].iov_len = md->length;
+
+                if (nal->cb_map != NULL) {
+                        rc = nal->cb_map (nal, niov, new->md_iov.iov, 
+                                          &new->md_addrkey);
+                        if (rc != PTL_OK)
+                                return (rc);
+                }
+        } 
+
+        if (eq != NULL)
+                eq->eq_refcount++;
+
+        /* It's good; let handle2md succeed and add to active mds */
+        lib_initialise_handle (nal, &new->md_lh, PTL_COOKIE_TYPE_MD);
+        list_add (&new->md_list, &nal->ni.ni_active_mds);
+
+        return PTL_OK;
+}
+
+/* must be called with state lock held */
+void lib_md_deconstruct(nal_cb_t * nal, lib_md_t * md, ptl_md_t * new)
+{
+        /* NB this doesn't copy out all the iov entries so when a
+         * discontiguous MD is copied out, the target gets to know the
+         * original iov pointer (in start) and the number of entries it had
+         * and that's all.
+         */
+        new->start = md->start;
+        new->length = ((md->options & (PTL_MD_IOVEC | PTL_MD_KIOV)) == 0) ?
+                      md->length : md->md_niov;
+        new->threshold = md->threshold;
+        new->max_size = md->max_size;
+        new->options = md->options;
+        new->user_ptr = md->user_ptr;
+        ptl_eq2handle(&new->eventq, md->eq);
+}
+
+int do_PtlMDAttach(nal_cb_t * nal, void *private, void *v_args, void *v_ret)
+{
+        /*
+         * Incoming:
+         *      ptl_handle_me_t current_in
+         *      ptl_md_t md_in
+         *      ptl_unlink_t unlink_in
+         *
+         * Outgoing:
+         *      ptl_handle_md_t         * handle_out
+         */
+
+        PtlMDAttach_in *args = v_args;
+        PtlMDAttach_out *ret = v_ret;
+        lib_me_t *me;
+        lib_md_t *md;
+        unsigned long flags;
+
+        if ((args->md_in.options & (PTL_MD_KIOV | PTL_MD_IOVEC)) != 0 &&
+            args->md_in.length > PTL_MD_MAX_IOV) /* too many fragments */
+                return (ret->rc = PTL_IOV_INVALID);
+
+        md = lib_md_alloc(nal, &args->md_in);
+        if (md == NULL)
+                return (ret->rc = PTL_NO_SPACE);
+
+        state_lock(nal, &flags);
+
+        me = ptl_handle2me(&args->me_in, nal);
+        if (me == NULL) {
+                ret->rc = PTL_ME_INVALID;
+        } else if (me->md != NULL) {
+                ret->rc = PTL_ME_IN_USE;
+        } else {
+                ret->rc = lib_md_build(nal, md, private, &args->md_in,
+                                       &args->eq_in, args->unlink_in);
+
+                if (ret->rc == PTL_OK) {
+                        me->md = md;
+                        md->me = me;
+
+                        ptl_md2handle(&ret->handle_out, md);
+
+                        state_unlock (nal, &flags);
+                        return (PTL_OK);
+                }
+        }
+
+        lib_md_free (nal, md);
+
+        state_unlock (nal, &flags);
+        return (ret->rc);
+}
+
+int do_PtlMDBind(nal_cb_t * nal, void *private, void *v_args, void *v_ret)
+{
+        /*
+         * Incoming:
+         *      ptl_handle_ni_t ni_in
+         *      ptl_md_t md_in
+         *
+         * Outgoing:
+         *      ptl_handle_md_t         * handle_out
+         */
+
+        PtlMDBind_in *args = v_args;
+        PtlMDBind_out *ret = v_ret;
+        lib_md_t *md;
+        unsigned long flags;
+
+        if ((args->md_in.options & (PTL_MD_KIOV | PTL_MD_IOVEC)) != 0 &&
+            args->md_in.length > PTL_MD_MAX_IOV) /* too many fragments */
+                return (ret->rc = PTL_IOV_INVALID);
+
+        md = lib_md_alloc(nal, &args->md_in);
+        if (md == NULL)
+                return (ret->rc = PTL_NO_SPACE);
+
+        state_lock(nal, &flags);
+
+        ret->rc = lib_md_build(nal, md, private, &args->md_in, 
+                               &args->eq_in, args->unlink_in);
+
+        if (ret->rc == PTL_OK) {
+                ptl_md2handle(&ret->handle_out, md);
+
+                state_unlock(nal, &flags);
+                return (PTL_OK);
+        }
+
+        lib_md_free (nal, md);
+
+        state_unlock(nal, &flags);
+        return (ret->rc);
+}
+
+int do_PtlMDUnlink(nal_cb_t * nal, void *private, void *v_args, void *v_ret)
+{
+        PtlMDUnlink_in  *args = v_args;
+        PtlMDUnlink_out *ret = v_ret;
+        ptl_event_t      ev;
+        lib_md_t        *md;
+        unsigned long    flags;
+
+        state_lock(nal, &flags);
+
+        md = ptl_handle2md(&args->md_in, nal);
+        if (md == NULL) {
+                state_unlock(nal, &flags);
+                return (ret->rc = PTL_MD_INVALID);
+        }
+
+        /* If the MD is busy, lib_md_unlink just marks it for deletion, and
+         * when the NAL is done, the completion event flags that the MD was
+         * unlinked.  Otherwise, we enqueue an event now... */
+
+        if (md->eq != NULL &&
+            md->pending == 0) {
+                memset(&ev, 0, sizeof(ev));
+
+                ev.type = PTL_EVENT_UNLINK;
+                ev.ni_fail_type = PTL_OK;
+                ev.unlinked = 1;
+                lib_md_deconstruct(nal, md, &ev.mem_desc);
+                
+                lib_enq_event_locked(nal, private, md->eq, &ev);
+        }
+
+        lib_md_deconstruct(nal, md, &ret->status_out);
+        lib_md_unlink(nal, md);
+        ret->rc = PTL_OK;
+
+        state_unlock(nal, &flags);
+
+        return (PTL_OK);
+}
+
+int do_PtlMDUpdate_internal(nal_cb_t * nal, void *private, void *v_args,
+                            void *v_ret)
+{
+        /*
+         * Incoming:
+         *      ptl_handle_md_t md_in
+         *      ptl_md_t                * old_inout
+         *      ptl_md_t                * new_inout
+         *      ptl_handle_eq_t testq_in
+         *      ptl_seq_t               sequence_in
+         *
+         * Outgoing:
+         *      ptl_md_t                * old_inout
+         *      ptl_md_t                * new_inout
+         */
+        PtlMDUpdate_internal_in *args = v_args;
+        PtlMDUpdate_internal_out *ret = v_ret;
+        lib_md_t *md;
+        lib_eq_t *test_eq = NULL;
+        ptl_md_t *new = &args->new_inout;
+        unsigned long flags;
+
+        state_lock(nal, &flags);
+
+        md = ptl_handle2md(&args->md_in, nal);
+        if (md == NULL) {
+                 ret->rc = PTL_MD_INVALID;
+                 goto out;
+        }
+
+        if (args->old_inout_valid)
+                lib_md_deconstruct(nal, md, &ret->old_inout);
+
+        if (!args->new_inout_valid) {
+                ret->rc = PTL_OK;
+                goto out;
+        }
+
+        /* XXX fttb, the new MD must be the same "shape" wrt fragmentation,
+         * since we simply overwrite the old lib-md */
+        if ((((new->options ^ md->options) & 
+              (PTL_MD_IOVEC | PTL_MD_KIOV)) != 0) ||
+            ((new->options & (PTL_MD_IOVEC | PTL_MD_KIOV)) != 0 && 
+             new->length != md->md_niov)) {
+                ret->rc = PTL_IOV_INVALID;
+                goto out;
+        } 
+
+        if (!PtlHandleIsEqual (args->testq_in, PTL_EQ_NONE)) {
+                test_eq = ptl_handle2eq(&args->testq_in, nal);
+                if (test_eq == NULL) {
+                        ret->rc = PTL_EQ_INVALID;
+                        goto out;
+                }
+        }
+
+        if (md->pending != 0) {
+                        ret->rc = PTL_MD_NO_UPDATE;
+                        goto out;
+        }
+
+        if (test_eq == NULL ||
+            test_eq->sequence == args->sequence_in) {
+                lib_me_t *me = md->me;
+                int       unlink = (md->md_flags & PTL_MD_FLAG_AUTO_UNLINK) ?
+                                   PTL_UNLINK : PTL_RETAIN;
+
+                // #warning this does not track eq refcounts properly 
+                ret->rc = lib_md_build(nal, md, private,
+                                       new, &new->eventq, unlink);
+
+                md->me = me;
+        } else {
+                ret->rc = PTL_MD_NO_UPDATE;
+        }
+
+ out:
+        state_unlock(nal, &flags);
+        return (ret->rc);
+}
