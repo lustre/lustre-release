@@ -178,17 +178,20 @@ int mds_open(struct mds_update_record *rec, int offset,
  out_unlock:
         l_dput(parent);
         ldlm_lock_decref(&lockh, lock_mode);
-        if (rc && rc != -EEXIST && mfd != NULL)
+        if (rc && rc != -EEXIST && mfd != NULL) {
                 kmem_cache_free(mds_file_cache, mfd);
+                mfd = NULL;
+        }
         if (rc)
                 RETURN(rc);
 
  out_pack:
-        body->handle.addr = (__u64)(unsigned long)mfd;
-        body->handle.cookie = mfd->mfd_servercookie;
-        if (mfd)
+        if (mfd) {
+                body->handle.addr = (__u64)(unsigned long)mfd;
+                body->handle.cookie = mfd->mfd_servercookie;
                 CDEBUG(D_INODE, "file %p: mfd %p, cookie "LPX64"\n",
                        mfd->mfd_file, mfd, mfd->mfd_servercookie);
+        }
         RETURN(0);
 
  out_ldput:
