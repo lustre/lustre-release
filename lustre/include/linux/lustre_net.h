@@ -169,8 +169,10 @@ CDEBUG(level,                                                                  \
        "@@@ " fmt " req x"LPD64"/t"LPD64" o%d->%s:%d lens %d/%d fl %x\n",      \
        ## args, req->rq_xid, req->rq_transno,                                  \
        req->rq_reqmsg ? req->rq_reqmsg->opc : -1,                              \
-       req->rq_connection->c_remote_uuid,                                      \
-       req->rq_import->imp_client->cli_request_portal);                        \
+       req->rq_connection ? (char *)req->rq_connection->c_remote_uuid : "<?>", \
+       (req->rq_import && req->rq_import->imp_client) ?                        \
+           req->rq_import->imp_client->cli_request_portal : -1,                \
+       req->rq_reqlen, req->rq_replen, req->rq_flags);                         \
 } while (0)
 
 struct ptlrpc_bulk_page {

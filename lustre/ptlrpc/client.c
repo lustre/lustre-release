@@ -412,7 +412,7 @@ restart1:
                 if (req->rq_import != imp)
                         continue;
                 /* XXX we should make sure that nobody's sleeping on these! */
-                CDEBUG(D_INFO, "Cleaning req %p from sending list.\n", req);
+                DEBUG_REQ(D_ERROR, req, "cleaning up from sending list");
                 list_del_init(&req->rq_list);
                 req->rq_import = NULL;
                 spin_unlock(&conn->c_lock);
@@ -424,7 +424,7 @@ restart2:
                 req = list_entry(tmp, struct ptlrpc_request, rq_list);
                 if (req->rq_import != imp)
                         continue;
-                CERROR("Request %p is on the dying list at cleanup!\n", req);
+                DEBUG_REQ(D_ERROR, req, "on dying list at cleanup");
                 list_del_init(&req->rq_list);
                 req->rq_import = NULL;
                 spin_unlock(&conn->c_lock);
@@ -481,11 +481,27 @@ static int expired_request(void *data)
         struct ptlrpc_request *req = data;
 
         ENTRY;
-        CERROR("req xid "LPD64" op %d: timeout on conn to %s:%d\n",
-               (unsigned long long)req->rq_xid, req->rq_reqmsg->opc,
-               req->rq_connection->c_remote_uuid,
-               req->rq_import->imp_client->cli_request_portal);
+        if (!req) {
+                CERROR("NULL req!");
+                LBUG();
+                RETURN(0);
+        }
+
+        DEBUG_REQ(D_ERROR, req, "timeout");
         req->rq_flags |= PTL_RPC_FL_TIMEOUT;
+
+        if (!req->rq_import) {
+                DEBUG_REQ(D_ERROR, req, "NULL import");
+                LBUG();
+                RETURN(0);
+        }
+
+        if (!req->rq_import->imp_connection) {
+                DEBUG_REQ(D_ERROR, req, "NULL connection");
+                LBUG();
+                RETURN(0);
+        }
+
         if (!req->rq_import->imp_connection->c_recovd_data.rd_recovd)
                 RETURN(1);
 
@@ -582,7 +598,7 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
 
         DEBUG_REQ(D_NET, req, "-- sleeping");
         lwi = LWI_TIMEOUT_INTR(req->rq_timeout * HZ, expired_request,
-                               interrupted_request,req);
+                               interrupted_request, req);
         l_wait_event(req->rq_wait_for_rep, ptlrpc_check_reply(req), &lwi);
         DEBUG_REQ(D_NET, req, "-- done sleeping");
 
