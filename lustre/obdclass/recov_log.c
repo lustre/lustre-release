@@ -22,11 +22,11 @@
  * OST<->MDS recovery logging infrastructure.
  *
  * Invariants in implementation:
- * - 1 log file for each OST<->MDS connection, so that if an OST fails it
- *   need only look at logs relevant to itself
+ * - we do not share logs among different OST<->MDS connections, so that
+ *   if an OST or MDS fails it need only look at log(s) relevant to itself
  */
 
-#define DEBUG_SUBSYSTEM S_UNDEFINED
+#define DEBUG_SUBSYSTEM S_LOG
 
 #ifndef EXPORT_SYMTAB
 #define EXPORT_SYMTAB
