@@ -57,16 +57,8 @@ void class_init_uuidlist(void)
 
 void class_exit_uuidlist(void)
 {
-        struct list_head *tmp, *n;
-
-        /* Module going => sole user => don't need to lock g_uuid_list */
-        list_for_each_safe(tmp, n, &g_uuid_list) {
-                struct uuid_nid_data *data =
-                        list_entry(tmp, struct uuid_nid_data, head);
-
-                OBD_FREE(data->uuid, strlen(data->uuid) + 1);
-                OBD_FREE(data, sizeof(*data));
-        }
+        /* delete all */
+        class_del_uuid(NULL);
 }
 
 int lustre_uuid_to_peer(char *uuid, struct lustre_peer *peer)
@@ -117,7 +109,7 @@ int class_add_uuid(char *uuid, __u64 nid, __u32 nal)
         if (data == NULL)
                 goto fail_1;
 
-        CDEBUG(D_INFO, "add uuid %s "LPU64" %u\n", uuid, nid, nal);
+        CDEBUG(D_INFO, "add uuid %s "LPX64" %u\n", uuid, nid, nal);
         memcpy(data->uuid, uuid, nob);
         data->nid = nid;
         data->nal = nal;
