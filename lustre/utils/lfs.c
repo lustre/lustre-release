@@ -28,21 +28,28 @@
 #include <stdio.h>
 #include <getopt.h>
 #include <string.h>
+#include <mntent.h>
+#include <portals/api-support.h>
+#include <portals/ptlctl.h>
 
 #include <liblustre.h>
 #include <linux/lustre_idl.h>
 
 #include "parser.h"
+#include "obdctl.h"
 
 extern int op_create_file(char *name, long stripe_size, int stripe_offset,
                 int stripe_count);
 extern int op_find(char *path, struct obd_uuid *obduuid, int recursive,
                 int verbose, int quiet);
+extern int op_check(int type_num, char **obd_type_p, char *dir);
 
 /* all functions */
 static int lfs_setstripe(int argc, char **argv);
 static int lfs_find(int argc, char **argv);
 static int lfs_getstripe(int argc, char **argv);
+static int lfs_osts(int argc, char **argv);
+static int lfs_check(int argc, char **argv);
 
 /* all avaialable commands */
 command_t cmdlist[] = {
@@ -58,6 +65,10 @@ command_t cmdlist[] = {
         {"getstripe", lfs_getstripe, 0,
          "blah...\n"
          "usage:getstripe <filename>"},
+        {"check", lfs_check, 0, 
+         "blah...\n"
+         "usage: check <osts|mds|servers>"},
+        {"osts", lfs_osts, 0, "osts"},
         {"help", Parser_help, 0, "help"},
         {"exit", Parser_quit, 0, "quit"},
         {"quit", Parser_quit, 0, "quit"},
@@ -187,12 +198,104 @@ static int lfs_getstripe(int argc, char **argv)
         return rc;
 }
 
+static int lfs_osts(int argc, char **argv)
+{
+        FILE *fp;
+        struct mntent *mnt = NULL;
+        struct obd_uuid *obduuid = NULL;
+        int rc=0;
+                                                                                                                             
+        if (argc != 1)
+                return CMD_HELP;
+
+        fp = setmntent(MOUNTED, "r");
+
+        if (fp == NULL) {
+                 fprintf(stderr, "setmntent(%s): %s:", MOUNTED,
+                        strerror (errno));
+        } else {
+                mnt = getmntent(fp);
+                while (feof(fp) == 0 && ferror(fp) ==0) {
+                        if (strcmp(mnt->mnt_type, "lustre_lite") == 0) {
+                                rc = op_find(mnt->mnt_dir, obduuid, 0, 0, 0);
+                                if (rc)
+                                        fprintf(stderr, "error: lfs osts failed for %s\n",
+                                                mnt->mnt_dir);
+                        }
+                        mnt = getmntent(fp);
+                }
+                endmntent(fp);
+        }
+                                                                                                                             
+        return rc;
+}
+
+static int lfs_check(int argc, char **argv)
+{
+        int rc;
+        FILE *fp;
+        struct mntent *mnt = NULL;
+        int type_num = 1;
+        char *obd_type_p[2];
+        char obd_type1[4];
+        char obd_type2[4];
+
+        if (argc != 2)
+                return CMD_HELP;
+
+        obd_type_p[1]=obd_type1;
+        obd_type_p[2]=obd_type2;
+
+        if (strcmp(argv[1],"osts")==0) {
+                strcpy(obd_type_p[0],"osc");
+        } else if (strcmp(argv[1],"mds")==0) {
+                strcpy(obd_type_p[0],"mdc");
+        } else if (strcmp(argv[1],"servers")==0) {
+                type_num=2;
+                strcpy(obd_type_p[0],"osc");
+                strcpy(obd_type_p[1],"mdc");
+        } else {
+                fprintf(stderr, "error: %s: option '%s' unrecognized\n",
+                                argv[0], argv[1]);
+                        return CMD_HELP;
+        }
+
+        fp = setmntent(MOUNTED, "r");
+        if (fp == NULL) {
+                 fprintf(stderr, "setmntent(%s): %s:", MOUNTED,
+                        strerror (errno));
+        } else {
+                mnt = getmntent(fp);
+                while (feof(fp) == 0 && ferror(fp) ==0) {
+                        if (strcmp(mnt->mnt_type, "lustre_lite") == 0) 
+                                break;
+                        mnt = getmntent(fp);
+                }
+                endmntent(fp);
+        }
+           
+        rc = op_check(type_num,obd_type_p,mnt->mnt_dir);
+
+        if (rc)
+                fprintf(stderr, "error: %s: %s status failed\n",
+                                argv[0],argv[1]);
+                                                                                                                             
+        return rc;
+
+}
+
 int main(int argc, char **argv)
 {
         int rc;
 
         setlinebuf(stdout);
-
+                                                                                                                             
+        ptl_initialize(argc, argv);
+        if (obd_initialize(argc, argv) < 0)
+                exit(2);
+        if (dbg_initialize(argc, argv) < 0)
+                exit(3);
+                                                                                                                             
         Parser_init("lfs > ", cmdlist);
 
         if (argc > 1) {
@@ -201,5 +304,6 @@ int main(int argc, char **argv)
                 rc = Parser_commands();
         }
 
+        obd_cleanup(argc, argv);
         return rc;
 }
