@@ -11,9 +11,11 @@
  kernel/ksyms.c         |    1 
  11 files changed, 564 insertions(+), 126 deletions(-)
 
---- linux-2.4.18-chaos/fs/exec.c~vfs_intent-2.4.18-18-chaos65	2003-07-28 17:52:03.000000000 +0400
-+++ linux-2.4.18-chaos-alexey/fs/exec.c	2003-09-14 17:25:41.000000000 +0400
-@@ -117,8 +117,10 @@ asmlinkage long sys_uselib(const char * 
+Index: linux-2.4.18-p4smp/fs/exec.c
+===================================================================
+--- linux-2.4.18-p4smp.orig/fs/exec.c	2004-02-03 01:00:10.000000000 -0500
++++ linux-2.4.18-p4smp/fs/exec.c	2004-03-19 16:05:42.000000000 -0500
+@@ -117,8 +117,10 @@
  	struct file * file;
  	struct nameidata nd;
  	int error;
@@ -74,9 +76,11 @@
  		goto close_fail;
  
  	retval = binfmt->core_dump(signr, regs, file);
---- linux-2.4.18-chaos/fs/dcache.c~vfs_intent-2.4.18-18-chaos65	2003-07-28 17:52:03.000000000 +0400
-+++ linux-2.4.18-chaos-alexey/fs/dcache.c	2003-09-14 17:25:41.000000000 +0400
-@@ -186,6 +186,13 @@ int d_invalidate(struct dentry * dentry)
+Index: linux-2.4.18-p4smp/fs/dcache.c
+===================================================================
+--- linux-2.4.18-p4smp.orig/fs/dcache.c	2004-02-03 01:00:10.000000000 -0500
++++ linux-2.4.18-p4smp/fs/dcache.c	2004-03-19 16:05:42.000000000 -0500
+@@ -186,6 +186,13 @@
  		spin_unlock(&dcache_lock);
  		return 0;
  	}
@@ -113,9 +117,11 @@
  }
  
  #define do_switch(x,y) do { \
---- linux-2.4.18-chaos/fs/namespace.c~vfs_intent-2.4.18-18-chaos65	2003-07-28 17:52:05.000000000 +0400
-+++ linux-2.4.18-chaos-alexey/fs/namespace.c	2003-09-14 17:25:41.000000000 +0400
-@@ -99,6 +99,7 @@ static void detach_mnt(struct vfsmount *
+Index: linux-2.4.18-p4smp/fs/namespace.c
+===================================================================
+--- linux-2.4.18-p4smp.orig/fs/namespace.c	2004-02-03 01:00:10.000000000 -0500
++++ linux-2.4.18-p4smp/fs/namespace.c	2004-03-19 16:05:42.000000000 -0500
+@@ -99,6 +99,7 @@
  {
  	old_nd->dentry = mnt->mnt_mountpoint;
  	old_nd->mnt = mnt->mnt_parent;
@@ -228,8 +234,10 @@
  	path_release(&new_nd);
  out0:
  	unlock_kernel();
---- linux-2.4.18-chaos/fs/namei.c~vfs_intent-2.4.18-18-chaos65	2003-07-28 17:52:05.000000000 +0400
-+++ linux-2.4.18-chaos-alexey/fs/namei.c	2003-09-14 17:25:41.000000000 +0400
+Index: linux-2.4.18-p4smp/fs/namei.c
+===================================================================
+--- linux-2.4.18-p4smp.orig/fs/namei.c	2004-02-03 01:00:10.000000000 -0500
++++ linux-2.4.18-p4smp/fs/namei.c	2004-03-19 16:06:19.000000000 -0500
 @@ -94,6 +94,13 @@
   * XEmacs seems to be relying on it...
   */
@@ -473,6 +481,8 @@
 +				}
 +				nd->dentry = new;
 +			}
++			if (!nd->dentry->d_inode)
++				goto no_inode;
 +		}
 +		else if (dentry && dentry->d_op && dentry->d_op->d_revalidate){
  			err = -ESTALE;
@@ -786,12 +796,16 @@
  	if (IS_ERR(dentry))
  		goto fail;
  	if (!is_dir && nd->last.name[nd->last.len] && !dentry->d_inode)
-@@ -1267,7 +1423,16 @@ asmlinkage long sys_mknod(const char * f
+@@ -1267,7 +1423,20 @@ asmlinkage long sys_mknod(const char * f
  	error = path_lookup(tmp, LOOKUP_PARENT, &nd);
  	if (error)
  		goto out;
 -	dentry = lookup_create(&nd, 0);
 +
++	if (nd.last_type != LAST_NORM) {
++		error = -EEXIST;
++		goto out2;
++	}
 +	if (nd.dentry->d_inode->i_op->mknod_raw) {
 +		struct inode_operations *op = nd.dentry->d_inode->i_op;
 +		error = op->mknod_raw(&nd, mode, dev);
@@ -812,11 +826,15 @@
  	path_release(&nd);
  out:
  	putname(tmp);
-@@ -1335,7 +1501,14 @@ asmlinkage long sys_mkdir(const char * p
+@@ -1335,7 +1501,18 @@ asmlinkage long sys_mkdir(const char * p
  		error = path_lookup(tmp, LOOKUP_PARENT, &nd);
  		if (error)
  			goto out;
 -		dentry = lookup_create(&nd, 1);
++		if (nd.last_type != LAST_NORM) {
++			error = -EEXIST;
++			goto out2;
++		}
 +		if (nd.dentry->d_inode->i_op->mkdir_raw) {
 +			struct inode_operations *op = nd.dentry->d_inode->i_op;
 +			error = op->mkdir_raw(&nd, mode);
@@ -871,11 +889,15 @@
  	error = PTR_ERR(dentry);
  	if (!IS_ERR(dentry)) {
  		/* Why not before? Because we want correct error value */
-@@ -1570,15 +1759,23 @@ asmlinkage long sys_symlink(const char *
+@@ -1570,15 +1759,27 @@ asmlinkage long sys_symlink(const char *
  		error = path_lookup(to, LOOKUP_PARENT, &nd);
  		if (error)
  			goto out;
 -		dentry = lookup_create(&nd, 0);
++		if (nd.last_type != LAST_NORM) {
++			error = -EEXIST;
++			goto out2;
++		}
 +		if (nd.dentry->d_inode->i_op->symlink_raw) {
 +			struct inode_operations *op = nd.dentry->d_inode->i_op;
 +			error = op->symlink_raw(&nd, from);
@@ -897,11 +919,15 @@
  		putname(to);
  	}
  	putname(from);
-@@ -1654,7 +1851,14 @@ asmlinkage long sys_link(const char * ol
+@@ -1654,7 +1851,18 @@ asmlinkage long sys_link(const char * ol
  		error = -EXDEV;
  		if (old_nd.mnt != nd.mnt)
  			goto out_release;
 -		new_dentry = lookup_create(&nd, 0);
++		if (nd.last_type != LAST_NORM) {
++			error = -EEXIST;
++			goto out_release;
++		}
 +		if (nd.dentry->d_inode->i_op->link_raw) {
 +			struct inode_operations *op = nd.dentry->d_inode->i_op;
 +			error = op->link_raw(&old_nd, &nd);
@@ -1022,8 +1048,10 @@
  	if (page) {
  		kunmap(page);
  		page_cache_release(page);
---- linux-2.4.18-chaos/fs/open.c~vfs_intent-2.4.18-18-chaos65	2003-07-28 17:52:06.000000000 +0400
-+++ linux-2.4.18-chaos-alexey/fs/open.c	2003-09-14 17:25:41.000000000 +0400
+Index: linux-2.4.18-p4smp/fs/open.c
+===================================================================
+--- linux-2.4.18-p4smp.orig/fs/open.c	2004-02-03 01:00:10.000000000 -0500
++++ linux-2.4.18-p4smp/fs/open.c	2004-03-19 16:05:42.000000000 -0500
 @@ -19,6 +19,8 @@
  #include <asm/uaccess.h>
  
@@ -1416,9 +1444,11 @@
  /*
   * Find an empty file descriptor entry, and mark it busy.
   */
---- linux-2.4.18-chaos/fs/stat.c~vfs_intent-2.4.18-18-chaos65	2003-07-28 17:52:06.000000000 +0400
-+++ linux-2.4.18-chaos-alexey/fs/stat.c	2003-09-14 17:30:21.000000000 +0400
-@@ -17,21 +17,26 @@
+Index: linux-2.4.18-p4smp/fs/stat.c
+===================================================================
+--- linux-2.4.18-p4smp.orig/fs/stat.c	2004-02-03 01:00:10.000000000 -0500
++++ linux-2.4.18-p4smp/fs/stat.c	2004-03-19 16:06:19.000000000 -0500
+@@ -17,21 +17,24 @@
   * Revalidate the inode. This is required for proper NFS attribute caching.
   */
  static __inline__ int
@@ -1427,8 +1457,6 @@
  {
  	struct inode * inode = dentry->d_inode;
 -	if (inode->i_op && inode->i_op->revalidate)
-+	if (!inode)
-+		return -ENOENT;
 +	if (inode->i_op && inode->i_op->revalidate_it)
 +		return inode->i_op->revalidate_it(dentry, it);
 +	else if (inode->i_op && inode->i_op->revalidate)
@@ -1497,8 +1525,10 @@
  			UPDATE_ATIME(inode);
  			error = inode->i_op->readlink(nd.dentry, buf, bufsiz);
  		}
---- linux-2.4.18-chaos/include/linux/dcache.h~vfs_intent-2.4.18-18-chaos65	2003-07-28 17:52:16.000000000 +0400
-+++ linux-2.4.18-chaos-alexey/include/linux/dcache.h	2003-09-14 17:25:41.000000000 +0400
+Index: linux-2.4.18-p4smp/include/linux/dcache.h
+===================================================================
+--- linux-2.4.18-p4smp.orig/include/linux/dcache.h	2004-02-03 01:00:10.000000000 -0500
++++ linux-2.4.18-p4smp/include/linux/dcache.h	2004-03-19 16:05:42.000000000 -0500
 @@ -5,6 +5,51 @@
  
  #include <asm/atomic.h>
@@ -1582,9 +1612,11 @@
  
  extern spinlock_t dcache_lock;
  
---- linux-2.4.18-chaos/include/linux/fs.h~vfs_intent-2.4.18-18-chaos65	2003-09-14 17:24:21.000000000 +0400
-+++ linux-2.4.18-chaos-alexey/include/linux/fs.h	2003-09-14 17:25:41.000000000 +0400
-@@ -73,6 +73,7 @@ extern int leases_enable, dir_notify_ena
+Index: linux-2.4.18-p4smp/include/linux/fs.h
+===================================================================
+--- linux-2.4.18-p4smp.orig/include/linux/fs.h	2004-03-19 16:05:40.000000000 -0500
++++ linux-2.4.18-p4smp/include/linux/fs.h	2004-03-19 16:05:42.000000000 -0500
+@@ -73,6 +73,7 @@
  
  #define FMODE_READ 1
  #define FMODE_WRITE 2
@@ -1716,9 +1748,11 @@
  extern int page_readlink(struct dentry *, char *, int);
  extern int page_follow_link(struct dentry *, struct nameidata *);
  extern struct inode_operations page_symlink_inode_operations;
---- linux-2.4.18-chaos/kernel/fork.c~vfs_intent-2.4.18-18-chaos65	2003-07-28 17:52:20.000000000 +0400
-+++ linux-2.4.18-chaos-alexey/kernel/fork.c	2003-09-14 17:25:41.000000000 +0400
-@@ -399,10 +399,13 @@ static inline struct fs_struct *__copy_f
+Index: linux-2.4.18-p4smp/kernel/fork.c
+===================================================================
+--- linux-2.4.18-p4smp.orig/kernel/fork.c	2004-02-03 01:00:10.000000000 -0500
++++ linux-2.4.18-p4smp/kernel/fork.c	2004-03-19 16:05:42.000000000 -0500
+@@ -399,10 +399,13 @@
  		fs->umask = old->umask;
  		read_lock(&old->lock);
  		fs->rootmnt = mntget(old->rootmnt);
@@ -1732,9 +1766,11 @@
  			fs->altrootmnt = mntget(old->altrootmnt);
  			fs->altroot = dget(old->altroot);
  		} else {
---- linux-2.4.18-chaos/kernel/exit.c~vfs_intent-2.4.18-18-chaos65	2003-07-28 17:52:20.000000000 +0400
-+++ linux-2.4.18-chaos-alexey/kernel/exit.c	2003-09-14 17:25:41.000000000 +0400
-@@ -303,11 +303,14 @@ static inline void __put_fs_struct(struc
+Index: linux-2.4.18-p4smp/kernel/exit.c
+===================================================================
+--- linux-2.4.18-p4smp.orig/kernel/exit.c	2004-02-03 01:00:10.000000000 -0500
++++ linux-2.4.18-p4smp/kernel/exit.c	2004-03-19 16:05:42.000000000 -0500
+@@ -303,11 +303,14 @@
  {
  	/* No need to hold fs->lock if we are killing it */
  	if (atomic_dec_and_test(&fs->count)) {
@@ -1749,9 +1785,11 @@
  			dput(fs->altroot);
  			mntput(fs->altrootmnt);
  		}
---- linux-2.4.18-chaos/kernel/ksyms.c~vfs_intent-2.4.18-18-chaos65	2003-09-14 17:24:22.000000000 +0400
-+++ linux-2.4.18-chaos-alexey/kernel/ksyms.c	2003-09-14 17:25:41.000000000 +0400
-@@ -294,6 +294,7 @@ EXPORT_SYMBOL(read_cache_page);
+Index: linux-2.4.18-p4smp/kernel/ksyms.c
+===================================================================
+--- linux-2.4.18-p4smp.orig/kernel/ksyms.c	2004-03-19 16:05:40.000000000 -0500
++++ linux-2.4.18-p4smp/kernel/ksyms.c	2004-03-19 16:05:42.000000000 -0500
+@@ -293,6 +293,7 @@
  EXPORT_SYMBOL(set_page_dirty);
  EXPORT_SYMBOL(vfs_readlink);
  EXPORT_SYMBOL(vfs_follow_link);
@@ -1759,5 +1797,3 @@
  EXPORT_SYMBOL(page_readlink);
  EXPORT_SYMBOL(page_follow_link);
  EXPORT_SYMBOL(page_symlink_inode_operations);
-
-_
