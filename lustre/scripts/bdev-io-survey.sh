@@ -1,0 +1,720 @@
+#!/bin/bash
+
+# for now all the units are in 'k', but we could introduce some helpers
+# would be nice to run tests in the background and trap signals and kill
+#
+#  todo:
+#	make sure devices aren't in use before going to town
+#	really use threads with iozone
+#	look into what sgp_dd is really doing, update arguments
+# 	rename config/prepare/setup/cleanup/finish/teardown
+# 	do something with sf and fpp iterating
+#	discard first vmstat line
+#
+
+# a temp dir that is setup and torn down for each script run
+tmpdir=""
+# so we can kill background processes as the test cleans up
+declare -a cleanup_pids
+# to unmount mounts in our tmpdir before removing it
+declare -a cleanup_mounts
+# global for completing the table.  XXX this is a wart that could go
+cur_y="0"
+
+# defaults for some options:
+min_threads=1
+max_threads=4
+
+# optional output directory
+output_dir=""
+ 
+die() {
+        echo $* 1>&2
+        exit 1
+}
+rm_or_die() {
+        for path in $*; do
+                [ -e $path ] || continue;
+                [ -f $path ] || die "needed to remove non-file $path"
+                rm -f $path || die "couldn't remove $path"
+        done
+}
+save_output() {
+	[ ! -z "$output_dir" ] && mv -f $1 $output_dir/$2
+}
+cleanup() {
+	for pid in ${cleanup_pids[*]}; do
+		kill $pid
+	done
+	cleanup_echo_filter
+	for a in ${cleanup_mounts[*]}; do
+		umount -f $a
+	done
+        [ ${#tmpdir} == 18 ] && [ -d $tmpdir ] && rm -rf $tmpdir
+}
+trap cleanup EXIT
+
+pid_now_running() {
+	local pid=$1
+	cleanup_pids[$pid]=$pid
+}
+pid_has_stopped() {
+	local pid=$1
+	unset cleanup_pids[$pid]
+}
+                                                                                
+commas() {
+	echo $* | sed -e 's/ /,/g'
+}
+do_bc() {
+        echo "scale=2; $*" | bc
+}
+mean_stddev() {
+	local points=$*
+
+	local avg=0
+	local num=0
+	for p in $points; do
+		avg=`do_bc $avg + $p`
+		num=`do_bc $num + 1`
+	done
+	case $num in
+		0) echo '??' ; return ;;
+		1) echo "$avg:0" ; return ;;
+	esac
+
+	avg=`do_bc $avg / $num`
+	local tmp=0
+	for p in $points; do
+	        local dev=`do_bc \($p - $avg\) \^ 2`
+	        tmp=`do_bc $tmp + $dev`
+	done
+	tmp=`do_bc sqrt \( $tmp / \($num - 1\) \)`
+	echo "$avg:$tmp"
+}
+
+usage() {
+        echo $*
+        echo "       -b <block device to profile>"
+        echo "       -d <summary output directory>"
+        echo "       -l <max io len>"
+        echo "       -t <minimum number of threads per device>"
+        echo "       -T <maximum number of threads per device>"
+        exit;
+}
+
+# some cute code for handling tables whose columns fit
+set_max() {
+        local target=$1
+        local val=$2
+                                                                                
+        if [ $val -gt ${!target:-0} ]; then
+                eval $target=$val
+        fi
+}
+table_set() {
+        local name="_table_$1"
+        local col=$2
+        local row=$3
+        local val=$4
+        local num
+                                                                                
+        eval ${name}_${row}_${col}="'$val'"
+                                                                                
+        set_max ${name}_${col}_longest ${#val}
+        set_max ${name}_num_col $(($col + 1))
+        set_max ${name}_num_row $(($row + 1))
+}
+                                                                                
+table_get() {
+        local name="_table_$1"
+        local col=$2
+        local row=$3
+        tmp="${name}_${row}_${col}"
+        echo ${!tmp}
+}
+                                                                                
+table_dump() {
+        local name="_table_$1"
+        local num_col;
+        local num_row;
+        local fmt="";
+        local tmp
+        local sep
+                                                                                
+        tmp="${name}_num_col"
+        num_col="${!tmp:-0}"
+        tmp="${name}_num_row"
+        num_row="${!tmp:-0}"
+                                                                                
+        # iterate through the columns to find the longest
+                                                                                
+        sep=" "
+        for x in `seq 0 $num_col`; do
+                tmp="${name}_${x}_longest"
+                tmp=${!tmp:-0}
+                [ $tmp -eq 0 ] && continue
+                                                                                
+                [ $x -eq $((num_col - 1)) ] && sep='\n'
+                                                                                
+                fmt="$fmt%-${tmp}s$sep"
+        done
+                                                                                
+        # nothing in the table to print
+        [ -z "$fmt" ] && return
+                                                                                
+        for y in `seq 0 $num_row`; do
+                local row=""
+                for x in `seq 0 $num_col`; do
+                                                                                
+                        # skip this element if the column is empty
+                        tmp="${name}_${x}_longest"
+                        [ ${!tmp:-0} -eq 0 ] && continue
+                                                                                
+                        # fill this cell with the value or '' for printf
+                        tmp="${name}_${y}_${x}"
+                        row="$row'${!tmp:-""}' "
+                done
+                eval printf "'$fmt'" $row
+        done
+}
+
+######################################################################
+# the sgp_dd tests
+sgp_dd_banner() {
+	echo sgp_dd using dio=1 and thr=
+}
+sgp_dd_config() {
+	# it could be making sure that the block dev
+	# isn't in use by something else
+	local nothing=0
+}
+sgp_dd_prepare() {
+	if ! which sgp_dd; then
+		echo "can't find sgp_dd binary"
+		return 1
+	fi
+	return 0
+}
+sgp_dd_setup() {
+	# it could be making sure that the block dev
+	# isn't in use by something else
+	local nothing=0
+}
+sgp_dd_start() {
+	local threads=$1
+	local iosize=$2
+	local wor=$3
+	local i=$4
+	local ifof;
+	local bdev=${blocks[$i]};
+
+	case "$wor" in
+		w) ifof="if=/dev/zero of=$bdev" ;;
+		r) ifof="if=$bdev of=/dev/null" ;;
+		*) die "asked to do io with $wor?"
+	esac
+	echo sgp_dd $ifof bs=$iosize"k" count=$(($io_len / $iosize)) time=1 \
+			dio=1 thr=$threads
+}
+sgp_dd_result() {
+	local output=$1
+
+	awk '($(NF) == "MB/sec") {print $(NF-1)}' < $output
+}
+sgp_dd_cleanup() {
+	# got me
+	local nothing=0
+}
+sgp_dd_finish() {
+	# got me
+	local nothing=0
+}
+sgp_dd_teardown() {
+	# got me
+	local nothing=0
+}
+
+######################################################################
+# the iozone tests
+ext2_iozone_banner() {
+	echo "iozone -I on a clean ext2 fs"
+}
+ext2_iozone_config() {
+	local nothing=0
+}
+ext2_iozone_prepare() {
+	local index=$1
+	local bdev=${blocks[$index]}
+	local mntpnt=$tmpdir/mount_$index
+
+	if ! which iozone; then
+		echo "iozone binary not found in PATH"
+		return 1
+	fi
+	if ! which mke2fs; then
+		echo "mke2fs binary not found in PATH"
+		return 1
+	fi
+
+	if ! mkdir -p $mntpnt ; then
+		echo "$mntpnt isn't a directory?"
+	fi
+
+	echo making ext2 filesystem on $bdev
+	if ! mke2fs -b 4096 $bdev; then
+		echo "mke2fs failed"
+		return 1;
+	fi
+
+	if ! mount -t ext2 $bdev $mntpnt; then 
+		echo "couldn't mount $bdev on $mntpnt"
+		return 1;
+	fi
+
+	cleanup_mounts[$index]="$mntpnt"
+	return 0
+}
+ext2_iozone_setup() {
+	local id=$1
+	local wor=$2
+	local f="$tmpdir/mount_$id/iozone"
+
+	case "$wor" in
+		w) rm -f $f ;;
+		r) ;;
+		*) die "asked to do io with $wor?"
+	esac
+}
+ext2_iozone_start() {
+	local threads=$1
+	local iosize=$2
+	local wor=$3
+	local id=$4
+	local args;
+	local f="$tmpdir/mount_$id/iozone"
+
+	case "$wor" in
+		w) args="-i 0 -w" ;;
+		r) args="-i 1 -w" ;;
+		*) die "asked to do io with $wor?"
+	esac
+
+	echo iozone "$args -r ${iosize}k -s ${io_len}k -I -f $f"
+}
+ext2_iozone_result() {
+	local output=$1
+
+	kps=`awk '($2 == "reclen"){results=NR+1}(results == NR){print $3}' \
+		< $output`
+	do_bc "$kps / 1024"
+}
+ext2_iozone_cleanup() {
+	local id=$1
+	local wor=$2
+	local f="$tmpdir/mount_$id/iozone"
+
+	case "$wor" in
+		w) ;;
+		r) rm -f $f ;;
+		*) die "asked to do io with $wor?"
+	esac
+}
+ext2_iozone_finish() {
+	local index=$1
+	local mntpnt=$tmpdir/mount_$index
+
+	umount -f $mntpnt
+	unset cleanup_mounts[$index]
+}
+ext2_iozone_teardown() {
+	local nothing=0
+}
+
+######################################################################
+# the lctl test_brw via the echo_client on top of the filter
+
+# the echo_client setup is nutty enough to warrant its own clenaup
+running_config=""
+running_modules=""
+declare -a running_names
+
+cleanup_echo_filter() {
+	local i
+
+	for i in `seq 0 $last_block`; do
+		[ -z "${running_oids[$i]}" ] && continue
+		lctl --device "\$"echo_$i destroy ${running_oids[$i]} \
+			$running_threads
+	done
+	running_oids=""
+
+	for n in ${running_names[*]}; do
+# I can't believe leading whitespace matters here.
+lctl << EOF
+cfg_device $n
+cleanup
+detach
+quit
+EOF
+	done
+	running_names=""
+
+	for m in $running_modules; do
+		rmmod $m
+	done
+	running_modules=""
+
+	[ ! -z "$running_config" ] && lconf --cleanup $running_config
+	running_config=""
+}
+
+echo_filter_banner() {
+	echo "test_brw on the echo_client on the filter" 
+}
+echo_filter_config() {
+	local index=$1
+	local bdev=${blocks[$index]}
+	local config="$tmpdir/config.xml"
+
+	if ! which lmc; then
+		echo "lmc binary not found in PATH"
+		return 1
+	fi
+	if ! which lconf; then
+		echo "lconf binary not found in PATH"
+		return 1
+	fi
+	if ! which lctl; then
+		echo "lctl binary not found in PATH"
+		return 1
+	fi
+
+	if [ $index = 0 ]; then
+		if ! lmc -m $config --add net  \
+			--node localhost --nid localhost --nettype tcp; then
+			echo "error adding localhost net node"
+			return 1
+		fi
+	fi
+
+	if ! lmc -m $config --add ost --ost ost_$index --node localhost \
+			--fstype ext3 --dev $bdev --journal_size 400; then
+		echo "error adding $bdev to config with lmc"
+		return 1
+	fi
+
+	# it would be nice to be able to ask lmc to setup an echo client
+	# to the filter here.  --add echo_client assumes osc
+}
+echo_filter_prepare() {
+	local index=$1
+	local bdev=${blocks[$index]}
+	local config="$tmpdir/config.xml"
+	local name="echo_$index"
+	local uuid="echo_$index_uuid"
+
+	if [ $index = 0 ]; then
+		if ! lconf --reformat $config; then
+			echo "error setting up with lconf"
+			return 1;
+		fi
+		running_config="$config"
+		if ! grep -q '^obdecho\>' /proc/modules; then
+			if ! modprobe obdecho; then
+				echo "error running modprobe obdecho"
+				return 1;
+			fi
+			running_modules="obdecho"
+		fi
+	fi
+
+lctl << EOF
+        newdev
+        attach echo_client $name $uuid
+        setup ost_$index
+        quit
+EOF
+	if [  $? != 0 ]; then
+		echo "error setting up echo_client $name against ost_$index"
+		return 1
+	fi
+	running_names[$index]=$name
+}
+echo_filter_setup() {
+	local id=$1
+	local wor=$2
+	local threads=$3
+	local name="echo_$id"
+	local oid
+
+	case "$wor" in
+		w) ;;
+		r) return ;;
+		*) die "asked to do io with $wor?"
+	esac
+
+	running_threads=$threads
+	oid=`lctl --device "\$"$name create $threads | \
+		awk '/1 is object id/ { print $6 }'`
+	# XXX need to deal with errors
+	running_oids[$id]=$oid
+}
+echo_filter_start() {
+	local threads=$1
+	local iosize=$2
+	local wor=$3
+	local id=$4
+	local name="echo_$id"
+	local pages=$(($io_len / 4))
+
+	case "$wor" in
+		w) args="-i 0 -w" ;;
+		r) args="-i 1 -w" ;;
+		*) die "asked to do io with $wor?"
+	esac
+
+	echo lctl --threads $threads v "\$"$name \
+		test_brw 1 w v $pages ${running_oids[$i]} p$iosize
+}
+echo_filter_result() {
+	local output=$1
+	local total=0
+	local mbs
+
+	for mbs in `awk '($8=="MB/s):"){print substr($7,2)}' < $output`; do
+		total=$(do_bc $total + $mbs)
+	done
+	echo $total
+}
+echo_filter_cleanup() {
+	local id=$1
+	local wor=$2
+	local threads=$3
+	local name="echo_$id"
+
+	case "$wor" in
+		w) return ;;
+		r) ;;
+		*) die "asked to do io with $wor?"
+	esac
+
+	lctl --device "\$"$name destroy ${running_oids[$i]} $threads
+	unset running_oids[$i]
+}
+echo_filter_finish() {
+	local index=$1
+	# leave real work for _teardown
+}
+echo_filter_teardown() {
+	cleanup_echo_filter
+}
+
+######################################################################
+# the iteration that drives the tests
+
+test_one() {
+	local test=$1
+	local my_x=$2
+	local my_y=$3
+	local threads=$4
+	local iosize=$5
+	local wor=$6
+	local vmstat_pid
+	local vmstat_log="$tmpdir/vmstat.log"
+	local opref="$test-$threads-$iosize-$wor"
+
+	for i in `seq 0 $last_block`; do
+		${test}_setup $i $wor $threads
+	done
+
+	echo $test with $threads threads
+
+	# start up vmstat and record its pid
+	echo starting `date`
+        nice -19 vmstat 1 > $vmstat_log 2>&1 &
+	[ $? = 0 ] || die "vmstat failed"
+	vmstat_pid=$!
+	pid_now_running $vmstat_pid
+
+	# start all the tests.  each returns a pid to wait on
+	pids=""
+	for i in `seq 0 $last_block`; do
+		cmd=`${test}_start $threads $iosize $wor $i`
+		$cmd > $tmpdir/$i 2>&1 &
+		local pid=$!
+		pids="$pids $pid"
+		pid_now_running $pid
+	done
+
+	echo -n waiting on pids $pids:
+	for p in $pids; do
+		wait $p
+		echo -n .
+		pid_has_stopped $p
+	done
+	echo
+
+	# stop vmstat and get cpu use from it
+	kill $vmstat_pid
+	echo stopping `date`
+	pid_has_stopped $vmstat_pid
+	cpu=$(mean_stddev $(awk \
+	      '(NR > 3 && NF == 16 && $16 != "id" )	\
+		{print 100 - $16}' < $vmstat_log) )
+	save_output $vmstat_log $opref.vmstat
+
+	# record each index's test results and sum them
+	thru=0
+	line=""
+	for i in `seq 0 $last_block`; do
+		local t=`${test}_result $tmpdir/$i`
+		save_output $tmpdir/$i $opref.$i
+		echo test returned "$t"
+		line="$line $t"
+		# some tests return mean:stddev per thread, filter out stddev
+		thru=$(do_bc $thru + $(echo $t | sed -e 's/:.*$//g'))
+	done
+	line="("`commas $line`")"
+
+	for i in `seq 0 $last_block`; do
+		${test}_cleanup $i $wor $threads
+	done
+
+	# tabulate the results
+	echo $test did $thru mb/s with $cpu
+	table_set $test $my_x $my_y $thru
+	table_set $test $(($my_x + 1)) $my_y $cpu
+	table_set $test $(($my_x + 2)) $my_y $line
+}
+
+test_iterator() {
+	local test=$1
+	local thr=$min_threads
+	local cleanup=""
+	local rc=0
+	local i
+	
+	for i in `seq 0 $last_block`; do
+		if ! ${test}_config $i; then
+			echo "couldn't config $test for bdev ${blocks[$i]}"
+			echo "skipping $test for all block devices"
+			cleanup=$(($i - 1))
+			rc=1;
+			break
+		fi
+	done
+
+	for i in `seq 0 $last_block`; do
+		# don't prepare if _config already failed
+		[ ! -z "$cleanup" ] && break
+		if ! ${test}_prepare $i; then
+			echo "couldn't prepare $test for bdev ${blocks[$i]}"
+			echo "skipping $test for all block devices"
+			cleanup=$(($i - 1))
+			rc=1;
+			break
+		fi
+	done
+
+	while [ -z "$cleanup" -a $thr -lt $(($max_threads + 1)) ]; do
+		for iosize in 64 128; do
+			table_set $test 0 $cur_y $thr
+			table_set $test 1 $cur_y $iosize
+			table_set $test 2 $cur_y "|"
+
+			for wor in w r; do
+				table_set $test 3 $cur_y $wor
+				test_one $test 4 $cur_y $thr $iosize $wor
+				cur_y=$(($cur_y + 1))
+			done
+		done
+		thr=$(($thr + $thr))
+	done
+
+	[ -z "$cleanup" ] && cleanup=$last_block
+
+	if [ "$cleanup" != -1 ]; then
+		for i in `seq $cleanup 0`; do
+			${test}_finish $i
+		done
+	fi
+
+	${test}_teardown
+
+	return $rc;
+}
+
+while getopts ":d:b:l:t:T:" opt; do
+        case $opt in
+                b) block=$OPTARG                 ;;
+                d) output_dir=$OPTARG                 ;;
+                l) io_len=$OPTARG			;;
+                t) min_threads=$OPTARG			;;
+                T) max_threads=$OPTARG			;;
+                \?) usage
+        esac
+done
+
+if [ -z "$io_len" ]; then
+	io_len=`awk '($1 == "MemTotal:"){print $2}' < /proc/meminfo`
+	[ -z "$io_len" ] && die "couldn't determine the amount of memory"
+fi
+
+if [ ! -z "$output_dir" ]; then
+	[ ! -e "$output_dir" ] && "output dir $output_dir doesn't exist"
+	[ ! -d "$output_dir" ] && "output dir $output_dir isn't a directory"
+fi
+
+block=`echo $block | sed -e 's/,/ /g'`
+[ -z "$block" ] && usage "need block devices"
+
+[ $min_threads -gt $max_threads ] && \
+	die "min threads $min_threads must be <= min_threads $min_threads"
+
+last_block=-1
+for b in $block; do
+	[ ! -e $b ] && die "block device file $b doesn't exist"
+	[ ! -b $b ] && die "$b isn't a block device"
+	last_block=$(($last_block + 1))
+	blocks[$last_block]=$b
+done	
+
+tmpdir=`mktemp -d /tmp/.surveyXXXXXX` || die "couldn't create tmp dir"
+
+echo each test will operate on $io_len"k"
+
+tests="sgp_dd ext2_iozone echo_filter"
+test_results=""
+
+for t in $tests; do
+
+	table_set $t 0 0 "T"
+	table_set $t 1 0 "L"
+	table_set $t 2 0 "|"
+	table_set $t 3 0 "W"
+	table_set $t 5 0 "C:S"
+	table_set $t 6 0 "B"
+	cur_y=1;
+
+	if ! test_iterator $t; then
+		continue;
+	fi
+	test_results="$test_results $t"
+done
+
+[ ! -z "$test_results" ] && (
+	echo
+	echo "T = number of concurrent threads per device"
+	echo "L = base io operation length, in KB"
+	echo "W/O/R = write/overwrite/read throughput, in MB/s"
+	echo "C = percentage CPU used, both user and system"
+	echo "S = standard deviation in cpu use"
+	echo "B = per-block results: ("`echo ${blocks[*]} | sed -e 's/ /,/g'`")"
+	echo
+)
+
+for t in $test_results; do
+	${t}_banner
+	table_dump $t
+done
