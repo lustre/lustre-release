@@ -44,21 +44,26 @@ def usage():
 
 config.xml          Lustre configuration in xml format.
 --get <url>         URL to fetch a config file
--v | --verbose      Print system commands as they are run
--d | --debug        Print system commands, but does not run them
 --node <nodename>   Load config for <nodename>
---cleanup	    Cleans up config. (Shutdown)
+-d | --cleanup	    Cleans up config. (Shutdown)
+-v | --verbose      Print system commands as they are run
 -h | --help         Print this help 
---gdb               Create a gdb script to load the modules. Prints message
-                    after creating script and sleeps for 5 seconds.
+--gdb               Prints message after creating gdb module script
+                    and sleeps for 5 seconds.
+-n | --noexec       Prints the commands and steps that will be run for a
+                    config without executing them. This can used to check if a
+                    config file is doing what it should be doing. (Implies -v)
+--nomod             Skip load/unload module step.
+--nosetup           Skip device setup/cleanup step.
 """
     TODO = """
 --ldap server	    LDAP server with lustre config database
+--makeldiff         Translate xml source to LDIFF 
 --reformat	    Reformat all devices (will confirm)
+This are perhaps not needed:
 --lustre="src dir"  Base directory of lustre sources. Used to search
                     for modules.
 --portals=src       Portals source 
---makeldiff         Translate xml source to LDIFF 
 """
     sys.exit()
 
@@ -164,8 +169,27 @@ def debug(*args):
 # ============================================================
 # locally defined exceptions
 class CommandError (exceptions.Exception):
-    def __init__(self, args=None):
-        self.args = args
+    def __init__(self, cmd_name, cmd_err, rc=None):
+        self.cmd_name = cmd_name
+        self.cmd_err = cmd_err
+        self.rc = rc
+
+    def dump(self):
+        import types
+        if type(self.cmd_err) == types.StringType:
+            if self.rc:
+                print "! %s (%d): %s" % (self.cmd_name, self.rc, self.cmd_err)
+            else:
+                print "! %s: %s" % (self.cmd_name, self.cmd_err)
+        elif type(self.cmd_err) == types.ListType:
+            if self.rc:
+                print "! %s (error %d):" % (self.cmd_name, self.rc)
+            else:
+                print "! %s:" % (self.cmd_name)
+            for s in self.cmd_err:
+                print "> %s" %(string.strip(s))
+        else:
+            print self.cmd_err
 
 # ============================================================
 # handle lctl interface
@@ -184,7 +208,7 @@ class LCTLInterface:
                 debug('! lctl not found')
                 self.lctl = 'lctl'
             else:
-                raise CommandError,  "unable to find lctl binary."
+                raise CommandError('lctl', "unable to find lctl binary.")
             
     def run(self, cmds):
         """
@@ -200,17 +224,14 @@ class LCTLInterface:
         p = popen2.Popen3(self.lctl, 1)
         p.tochild.write(cmds + "\n")
         p.tochild.close()
-        ret = p.wait()
         out = p.fromchild.readlines()
-        for l in out:
-            debug('lctl:',string.strip(l))
         err = p.childerr.readlines()
+        ret = p.wait()
         if ret or len(err):
-            log (self.lctl, "error:", ret)
-            logall(err)
-            raise CommandError, err
+            raise CommandError(self.lctl, err, ret)
         return ret, out
 
+            
     def network(self, net, nid):
         """ initialized network and add "self" """
         # Idea: "mynid" could be used for all network types to add "self," and then
@@ -502,24 +523,25 @@ class Module:
             #  (rc, out) = run ('/sbin/lsmod | grep -s', mod)
             if self.mod_loaded(mod) and not config.noexec():
                 continue
+            log ('loading module:', mod)
             if config.src_dir():
                 module = find_module(config.src_dir(), mod)
                 if not module:
                     panic('module not found:', mod)
                 (rc, out)  = run('/sbin/insmod', module)
                 if rc:
-                    raise CommandError, "insmod failed: %s" %(module)
+                    raise CommandError('insmod', out, rc)
             else:
                 (rc, out) = run('/sbin/modprobe', mod)
                 if rc:
-                    raise CommandError, "modprobe failed: %s" %(module)
+                    raise CommandError('modprobe', out, rc)
             
     def cleanup_module(self):
         """Unload the modules in the list in reverse order."""
         rev = self.kmodule_list
         rev.reverse()
         for mod in rev:
-            debug('rmmod', mod)
+            log('unloading module:', mod)
             if config.noexec():
                 continue
             run('/sbin/rmmod', mod)
@@ -549,8 +571,7 @@ class Network(Module):
         if self.net_type == 'tcp':
             ret = run_daemon(TCP_ACCEPTOR, self.port)
             if ret:
-                print "error:", ret
-                raise CommandError, "cannot run acceptor"
+                raise CommandError(TCP_ACCEPTOR, 'failed', ret)
         lctl.network(self.net_type, self.nid)
         lctl.newdev(attach = "ptlrpc RPCDEV")
 
@@ -968,10 +989,10 @@ def doHost(lustreNode, hosts, clean_flag):
 # Command line processing
 #
 def parse_cmdline(argv):
-    short_opts = "hdv"
+    short_opts = "hdnv"
     long_opts = ["ldap", "reformat", "lustre=", "verbose", "gdb",
-                 "portals=", "makeldiff", "cleanup",
-                 "help", "debug", "node=", "get=", "nomod", "nosetup"]
+                 "portals=", "makeldiff", "cleanup", "noexec",
+                 "help", "node=", "get=", "nomod", "nosetup"]
     opts = []
     args = []
     try:
@@ -983,11 +1004,11 @@ def parse_cmdline(argv):
     for o, a in opts:
         if o in ("-h", "--help"):
             usage()
-        if o == "--cleanup":
+        if o in ("-d","--cleanup"):
             config.cleanup(1)
         if o in ("-v", "--verbose"):
             config.verbose(1)
-        if o in ("-d", "--debug"):
+        if o in ("-n", "--noexec"):
             config.noexec(1)
             config.verbose(1)
         if o == "--portals":
@@ -1027,9 +1048,12 @@ def setDebugPath():
     debug("debug path: ", config.debug_path())
     if config.noexec():
         return
-    fp = open('/proc/sys/portals/debug_path', 'w')
-    fp.write(config.debug_path())
-    fp.close()
+    try:
+        fp = open('/proc/sys/portals/debug_path', 'w')
+        fp.write(config.debug_path())
+        fp.close()
+    except IOError, e:
+        print e
              
     
 def makeDevices():
@@ -1065,7 +1089,7 @@ def main():
         if len(host) > 0:
             node_list.append(host)
         node_list.append('localhost')
-    print "configuring for host: ", node_list
+    debug("configuring for host: ", node_list)
 
     TCP_ACCEPTOR = find_prog('acceptor')
     if not TCP_ACCEPTOR:
@@ -1086,6 +1110,7 @@ if __name__ == "__main__":
         main()
     except RuntimeError:
         pass
-    except CommandError:
-        print 'FIXME: insert exception data here'
+    except CommandError, e:
+        e.dump()
+        
 
