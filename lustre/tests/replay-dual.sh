@@ -35,8 +35,8 @@ cleanup() {
         fail mds
     fi
 
-    umount $MOUNT2
-    umount $MOUNT
+    umount $MOUNT2 || true
+    umount $MOUNT || true
     rmmod llite
     stop mds ${FORCE}
     stop ost2 ${FORCE}
@@ -174,6 +174,137 @@ test_6() {
     return 0
 }
 run_test 6 "open1, open2, unlink |X| close1 [fail mds] close2"
+
+test_7() {
+    replay_barrier mds
+    createmany -o $MOUNT1/$tfile- 25
+    createmany -o $MOUNT2/$tfile-2- 1
+    createmany -o $MOUNT1/$tfile-3- 25
+    umount $MOUNT2
+
+    facet_failover mds
+    # expect failover to fail
+    df $MOUNT && return 1
+
+#   3313 - current fix for 3313 prevents any reply here
+#    unlinkmany $MOUNT1/$tfile- 25 || return 2
+
+    zconf_mount `hostname` $MOUNT2
+    return 0
+}
+run_test 7 "timeouts waiting for lost client during replay"
+
+
+test_8() {
+    replay_barrier mds
+    drop_reint_reply "mcreate $MOUNT1/$tfile"    || return 1
+    fail mds
+    checkstat $MOUNT2/$tfile || return 2
+    rm $MOUNT1/$tfile || return 3
+
+    return 0
+}
+run_test 8 "replay of resent request"
+
+test_9() {
+    replay_barrier mds
+    mcreate $MOUNT1/$tfile-1
+    mcreate $MOUNT2/$tfile-2
+    # drop first reint reply
+    sysctl -w lustre.fail_loc=0x80000119
+    fail mds
+    sysctl -w lustre.fail_loc=0
+
+    rm $MOUNT1/$tfile-[1,2] || return 1
+
+    return 0
+}
+run_test 9 "resending a replayed create"
+
+test_10() {
+    mcreate $MOUNT1/$tfile-1
+    replay_barrier mds
+    munlink $MOUNT1/$tfile-1
+    mcreate $MOUNT2/$tfile-2
+    # drop first reint reply
+    sysctl -w lustre.fail_loc=0x80000119
+    fail mds
+    sysctl -w lustre.fail_loc=0
+
+    checkstat $MOUNT1/$tfile-1 && return 1
+    checkstat $MOUNT1/$tfile-2 || return 2
+    rm $MOUNT1/$tfile-2
+
+    return 0
+}
+run_test 10 "resending a replayed unlink"
+
+test_11() {
+    replay_barrier mds
+    mcreate $MOUNT1/$tfile-1
+    mcreate $MOUNT2/$tfile-2
+    mcreate $MOUNT1/$tfile-3
+    mcreate $MOUNT2/$tfile-4
+    mcreate $MOUNT1/$tfile-5
+    # drop all reint replies for a while
+    sysctl -w lustre.fail_loc=0x0119
+    facet_failover mds
+    #sleep for while, let both clients reconnect and timeout
+    sleep $((TIMEOUT * 2))
+    sysctl -w lustre.fail_loc=0
+
+    rm $MOUNT1/$tfile-[1-5] || return 1
+
+    return 0
+}
+run_test 11 "both clients timeout during replay"
+
+test_12() {
+    replay_barrier mds
+
+    multiop $DIR/$tfile mo_c &
+    MULTIPID=$!
+    sleep 5
+
+    # drop first enqueue
+    sysctl -w lustre.fail_loc=0x80000302
+    facet_failover mds
+    df $MOUNT || return 1
+    sysctl -w lustre.fail_loc=0
+
+    ls $DIR/$tfile
+    $CHECKSTAT -t file $DIR/$tfile || return 2
+    kill -USR1 $MULTIPID || return 3
+    wait $MULTIPID || return 4
+    rm $DIR/$tfile
+
+    return 0
+}
+run_test 12 "open resend timeout"
+
+test_13() {
+    multiop $DIR/$tfile mo_c &
+    MULTIPID=$!
+    sleep 5
+
+    replay_barrier mds
+
+    kill -USR1 $MULTIPID || return 3
+    wait $MULTIPID || return 4
+
+    # drop close 
+    sysctl -w lustre.fail_loc=0x80000115
+    facet_failover mds
+    df $MOUNT || return 1
+    sysctl -w lustre.fail_loc=0
+
+    ls $DIR/$tfile
+    $CHECKSTAT -t file $DIR/$tfile || return 2
+    rm $DIR/$tfile
+
+    return 0
+}
+run_test 13 "close resend timeout"
 
 test_7() {
     mcreate $MOUNT1/a

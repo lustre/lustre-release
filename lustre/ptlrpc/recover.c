@@ -151,7 +151,7 @@ int ptlrpc_replay_next(struct obd_import *imp, int *inflight)
 {
         int rc = 0;
         struct list_head *tmp, *pos;
-        struct ptlrpc_request *req;
+        struct ptlrpc_request *req = NULL;
         unsigned long flags;
         __u64 last_transno;
         ENTRY;
@@ -187,16 +187,34 @@ int ptlrpc_replay_next(struct obd_import *imp, int *inflight)
          */
         list_for_each_safe(tmp, pos, &imp->imp_replay_list) {
                 req = list_entry(tmp, struct ptlrpc_request, rq_replay_list);
-                if (req->rq_transno > last_transno) {
-                        rc = ptlrpc_replay_req(req);
-                        if (rc) {
-                                CERROR("recovery replay error %d for req "
-                                       LPD64"\n", rc, req->rq_xid);
-                                RETURN(rc);
-                        }
-                        *inflight = 1;
+
+                /* If need to resend, stop on the matching one first. It's 
+                   possible though it's already been committed, so in that case 
+                   we'll just continue with replay */
+                if (imp->imp_resend_replay && 
+                    req->rq_transno == last_transno) {
+                        lustre_msg_add_flags(req->rq_reqmsg, MSG_RESENT);
                         break;
                 }
+
+                if (req->rq_transno > last_transno) {
+                        imp->imp_last_replay_transno = req->rq_transno;
+                        break;
+                }
+
+                req = NULL;
+        }
+
+        imp->imp_resend_replay = 0;
+
+        if (req != NULL) {
+                rc = ptlrpc_replay_req(req);
+                if (rc) {
+                        CERROR("recovery replay error %d for req "
+                               LPD64"\n", rc, req->rq_xid);
+                        RETURN(rc);
+                }
+                *inflight = 1;
         }
         RETURN(rc);
 }

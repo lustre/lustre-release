@@ -256,7 +256,7 @@ int ptlrpc_connect_import(struct obd_import *imp, char * new_uuid)
         IMPORT_SET_STATE_NOLOCK(imp, LUSTRE_IMP_CONNECTING);
 
         imp->imp_conn_cnt++;
-        imp->imp_last_replay_transno = 0;
+        imp->imp_resend_replay = 0;
 
         if (imp->imp_remote_handle.cookie == 0) {
                 initial_connect = 1;
@@ -398,13 +398,18 @@ static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
                                imp->imp_connection->c_remote_uuid.uuid);
                 }
 
-                if (imp->imp_invalid)
+                if (imp->imp_invalid) {
                         IMPORT_SET_STATE(imp, LUSTRE_IMP_EVICTED);
-                else
+                } else if (MSG_CONNECT_RECOVERING & msg_flags) {
+                        imp->imp_resend_replay = 1;
+                        IMPORT_SET_STATE(imp, LUSTRE_IMP_REPLAY);
+                } else {
                         IMPORT_SET_STATE(imp, LUSTRE_IMP_RECOVER);
+                }
         } else if ((MSG_CONNECT_RECOVERING & msg_flags) && !imp->imp_invalid) {
                 LASSERT(imp->imp_replayable);
                 imp->imp_remote_handle = request->rq_repmsg->handle;
+                imp->imp_last_replay_transno = 0;
                 IMPORT_SET_STATE(imp, LUSTRE_IMP_REPLAY);
         } else {
                 imp->imp_remote_handle = request->rq_repmsg->handle;

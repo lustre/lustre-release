@@ -499,11 +499,6 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         if (rc && rc != EALREADY)
                 GOTO(out, rc);
 
-        /* XXX track this all the time? */
-        if (target->obd_recovering) {
-                target->obd_connected_clients++;
-        }
-
         req->rq_repmsg->handle = conn;
 
         /* If the client and the server are the same node, we will already
@@ -545,6 +540,10 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
                 /* We indicate the reconnection in a flag, not an error code. */
                 lustre_msg_add_op_flags(req->rq_repmsg, MSG_CONNECT_RECONNECT);
                 GOTO(out, rc = 0);
+        }
+
+        if (target->obd_recovering) {
+                target->obd_connected_clients++;
         }
 
         memcpy(&conn, lustre_msg_buf(req->rq_reqmsg, 2, sizeof conn),
@@ -742,6 +741,9 @@ static int check_for_next_transno(struct obd_device *obd)
         queue_len = obd->obd_requests_queued_for_recovery;
         next_transno = obd->obd_next_recovery_transno;
 
+        CDEBUG(D_HA,"max: %d, connected: %d, completed: %d, queue_len: %d, "
+               "req_transno: "LPU64", next_transno: "LPU64"\n",
+               max, connected, completed, queue_len, req_transno, next_transno);
         if (obd->obd_abort_recovery) {
                 CDEBUG(D_HA, "waking for aborted recovery\n");
                 wake_up = 1;
@@ -855,6 +857,9 @@ int target_queue_recovery_request(struct ptlrpc_request *req,
          * Also, if this request has a transno less than the one we're waiting
          * for, we should process it now.  It could (and currently always will)
          * be an open request for a descriptor that was opened some time ago.
+         *
+         * Also, a resent, replayed request that has already been
+         * handled will pass through here and be processed immediately.
          */
         if (obd->obd_processing_task == current->pid ||
             transno < obd->obd_next_recovery_transno) {
@@ -864,6 +869,17 @@ int target_queue_recovery_request(struct ptlrpc_request *req,
                 OBD_FREE(reqmsg, req->rq_reqlen);
                 OBD_FREE(saved_req, sizeof *saved_req);
                 return 1;
+        }
+
+        /* A resent, replayed request that is still on the queue; just drop it.
+           The queued request will handle this. */
+        if ((lustre_msg_get_flags(req->rq_reqmsg) & (MSG_RESENT | MSG_REPLAY)) ==
+            (MSG_RESENT | MSG_REPLAY)) {
+                DEBUG_REQ(D_ERROR, req, "dropping resent queued req");
+                spin_unlock_bh(&obd->obd_processing_task_lock);
+                OBD_FREE(reqmsg, req->rq_reqlen);
+                OBD_FREE(saved_req, sizeof *saved_req);
+                return 0;
         }
 
         memcpy(saved_req, req, sizeof *req);
