@@ -11,6 +11,8 @@
 #define PTL_NI_OK  PTL_OK
 typedef ptl_err_t ptl_ni_fail_t;
 
+typedef __u32 ptl_uid_t;
+typedef __u32 ptl_jid_t;
 typedef __u64 ptl_nid_t;
 typedef __u32 ptl_pid_t;
 typedef __u32 ptl_pt_index_t;
@@ -40,6 +42,8 @@ static inline int PtlHandleIsEqual (ptl_handle_any_t h1, ptl_handle_any_t h2)
 	return (h1.nal_idx == h2.nal_idx && h1.cookie == h2.cookie);
 }
 
+#define PTL_UID_ANY      ((ptl_uid_t) -1)
+#define PTL_JID_ANY      ((ptl_jid_t) -1)
 #define PTL_NID_ANY      ((ptl_nid_t) -1)
 #define PTL_PID_ANY      ((ptl_pid_t) -1)
 
@@ -65,7 +69,7 @@ typedef struct {
         int              max_size;
         unsigned int     options;
         void            *user_ptr;
-        ptl_handle_eq_t  eventq;
+        ptl_handle_eq_t  eq_handle;
 } ptl_md_t;
 
 /* Options for the MD structure */
@@ -128,15 +132,20 @@ typedef unsigned PTL_SEQ_BASETYPE ptl_seq_t;
 typedef struct {
         ptl_event_kind_t   type;
         ptl_process_id_t   initiator;
-        ptl_pt_index_t     portal;
+        ptl_uid_t          uid;
+        ptl_jid_t          jid;
+        ptl_pt_index_t     pt_index;
         ptl_match_bits_t   match_bits;
         ptl_size_t         rlength;
-	ptl_size_t         mlength;
-	ptl_size_t         offset;
-        ptl_md_t           mem_desc;
+        ptl_size_t         mlength;
+        ptl_size_t         offset;
+        ptl_handle_md_t    md_handle;
+        ptl_md_t           md;
         ptl_hdr_data_t     hdr_data;
-	int                unlinked;
-	ptl_ni_fail_t      ni_fail_type;
+        ptl_seq_t          link;
+        ptl_ni_fail_t      ni_fail_type;
+
+        int                unlinked;
 
         volatile ptl_seq_t sequence;
 } ptl_event_t;
