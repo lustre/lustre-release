@@ -1,0 +1,225 @@
+diff -ru lustre-head/fs/extN/ialloc.c lustre/fs/extN/ialloc.c
+--- lustre-head/fs/extN/ialloc.c	Mon Dec 23 10:02:58 2002
++++ lustre/fs/extN/ialloc.c	Mon Dec 23 09:46:20 2002
+@@ -289,6 +289,37 @@
+ }
+ 
+ /*
++ * @block_group: block group of inode
++ * @offset: relative offset of inode within @block_group
++ *
++ * Check whether any of the inodes in this disk block are in use.
++ *
++ * Caller must be holding superblock lock (group/bitmap read lock in future).
++ */
++int extN_itable_block_used(struct super_block *sb, unsigned int block_group,
++			   int offset)
++{
++	int bitmap_nr = load_inode_bitmap(sb, block_group);
++	int inodes_per_block;
++	unsigned long inum, iend;
++	struct buffer_head *ibitmap;
++
++	if (bitmap_nr < 0)
++		return 1;
++
++	inodes_per_block = sb->s_blocksize / EXTN_SB(sb)->s_inode_size;
++	inum = offset & ~(inodes_per_block - 1);
++	iend = inum + inodes_per_block;
++	ibitmap = EXTN_SB(sb)->s_inode_bitmap[bitmap_nr];
++	for (; inum < iend; inum++) {
++		if (inum != offset && extN_test_bit(inum, ibitmap->b_data))
++			return 1;
++	}
++
++	return 0;
++}
++
++/*
+  * There are two policies for allocating an inode.  If the new inode is
+  * a directory, then a forward search is made for a block group with both
+  * free space and a low directory-to-inode ratio; if that fails, then of
+@@ -312,6 +343,7 @@
+ 	struct extN_group_desc * gdp;
+ 	struct extN_group_desc * tmp;
+ 	struct extN_super_block * es;
++	struct extN_iloc iloc;
+ 	int err = 0;
+ 
+ 	/* Cannot create files in a deleted directory */
+@@ -505,7 +538,7 @@
+ 	ei->i_prealloc_count = 0;
+ #endif
+ 	ei->i_block_group = i;
+-	
++
+ 	if (ei->i_flags & EXTN_SYNC_FL)
+ 		inode->i_flags |= S_SYNC;
+ 	if (IS_SYNC(inode))
+@@ -514,9 +547,18 @@
+ 	inode->i_generation = sbi->s_next_generation++;
+ 
+ 	ei->i_state = EXTN_STATE_NEW;
+-	err = extN_mark_inode_dirty(handle, inode);
++	err = extN_get_inode_loc_new(inode, &iloc, 1);
+ 	if (err) goto fail;
+-	
++	BUFFER_TRACE(iloc->bh, "get_write_access");
++	err = extN_journal_get_write_access(handle, iloc.bh);
++	if (err) {
++		brelse(iloc.bh);
++		iloc.bh = NULL;
++		goto fail;
++	}
++	err = extN_mark_iloc_dirty(handle, inode, &iloc);
++	if (err) goto fail;
++
+ 	unlock_super (sb);
+ 	if(DQUOT_ALLOC_INODE(inode)) {
+ 		DQUOT_DROP(inode);
+diff -ru lustre-head/fs/extN/inode.c lustre/fs/extN/inode.c
+--- lustre-head/fs/extN/inode.c	Mon Dec 23 10:02:58 2002
++++ lustre/fs/extN/inode.c	Mon Dec 23 09:50:25 2002
+@@ -2011,23 +1994,32 @@
+ 	extN_journal_stop(handle, inode);
+ }
+ 
+-/* 
+- * extN_get_inode_loc returns with an extra refcount against the
+- * inode's underlying buffer_head on success. 
+- */
++extern int extN_itable_block_used(struct super_block *sb,
++				  unsigned int block_group,
++				  int offset);
++
++#define NUM_INODE_PREREAD 16
+ 
+-int extN_get_inode_loc (struct inode *inode, struct extN_iloc *iloc)
++/*
++ * extN_get_inode_loc returns with an extra refcount against the inode's
++ * underlying buffer_head on success.  If this is for a new inode allocation
++ * (new is non-zero) then we may be able to optimize away the read if there
++ * are no other in-use inodes in this inode table block.  If we need to do
++ * a read, then read in a whole chunk of blocks to avoid blocking again soon
++ * if we are doing lots of creates/updates.
++ */
++int extN_get_inode_loc_new(struct inode *inode, struct extN_iloc *iloc, int new)
+ {
+ 	struct super_block *sb = inode->i_sb;
+ 	struct extN_sb_info *sbi = EXTN_SB(sb);
+-	struct buffer_head *bh = 0;
++	struct buffer_head *bh[NUM_INODE_PREREAD];
+ 	unsigned long block;
+ 	unsigned long block_group;
+ 	unsigned long group_desc;
+ 	unsigned long desc;
+ 	unsigned long offset;
+ 	struct extN_group_desc * gdp;
+-		
++
+ 	if ((inode->i_ino != EXTN_ROOT_INO &&
+ 		inode->i_ino != EXTN_JOURNAL_INO &&
+ 		inode->i_ino < EXTN_FIRST_INO(sb)) ||
+@@ -2042,38 +2034,86 @@
+ 	}
+ 	group_desc = block_group >> sbi->s_desc_per_block_bits;
+ 	desc = block_group & (sbi->s_desc_per_block - 1);
+-	bh = sbi->s_group_desc[group_desc];
+-	if (!bh) {
++	if (!sbi->s_group_desc[group_desc]) {
+ 		extN_error(sb, __FUNCTION__, "Descriptor not loaded");
+ 		goto bad_inode;
+ 	}
+ 
+-	gdp = (struct extN_group_desc *) bh->b_data;
++	gdp = (struct extN_group_desc *)(sbi->s_group_desc[group_desc]->b_data);
++
+ 	/*
+ 	 * Figure out the offset within the block group inode table
+ 	 */
+-	offset = ((inode->i_ino - 1) % sbi->s_inodes_per_group) *
+-		sbi->s_inode_size;
++	offset = ((inode->i_ino - 1) % sbi->s_inodes_per_group);
++
+ 	block = le32_to_cpu(gdp[desc].bg_inode_table) +
+-		(offset >> EXTN_BLOCK_SIZE_BITS(sb));
+-	if (!(bh = sb_bread(sb, block))) {
+-		extN_error (sb, __FUNCTION__,
+-			    "unable to read inode block - "
+-			    "inode=%lu, block=%lu", inode->i_ino, block);
+-		goto bad_inode;
++		(offset * sbi->s_inode_size >> EXTN_BLOCK_SIZE_BITS(sb));
++
++	bh[0] = sb_getblk(sb, block);
++	if (buffer_uptodate(bh[0]))
++		goto done;
++
++	/* If we don't really need to read this block, and it isn't already
++	 * in memory, then we just zero it out.  Otherwise, we keep the
++	 * current block contents (deleted inode data) for posterity.
++	 */
++	if (new && !extN_itable_block_used(sb, block_group, offset)) {
++		lock_buffer(bh[0]);
++		memset(bh[0]->b_data, 0, bh[0]->b_size);
++		mark_buffer_uptodate(bh[0], 1);
++		unlock_buffer(bh[0]);
++	} else {
++		unsigned long block_end, itable_end;
++		int count = 1;
++
++		itable_end = le32_to_cpu(gdp[desc].bg_inode_table) +
++				sbi->s_itb_per_group;
++		block_end = block + NUM_INODE_PREREAD;
++		if (block_end > itable_end)
++			block_end = itable_end;
++
++		for (; block < block_end; block++) {
++			bh[count] = sb_getblk(sb, block);
++			if (count && (buffer_uptodate(bh[count]) ||
++				      buffer_locked(bh[count]))) {
++				__brelse(bh[count]);
++			} else
++				count++;
++		}
++
++		ll_rw_block(READ, count, bh);
++
++		/* Release all but the block we actually need (bh[0]) */
++		while (--count > 0)
++			__brelse(bh[count]);
++
++		wait_on_buffer(bh[0]);
++		if (!buffer_uptodate(bh[0])) {
++			extN_error(sb, __FUNCTION__,
++				   "unable to read inode block - "
++				   "inode=%lu, block=%lu", inode->i_ino,
++				   bh[0]->b_blocknr);
++			goto bad_inode;
++		}
+ 	}
+-	offset &= (EXTN_BLOCK_SIZE(sb) - 1);
++ done:
++	offset = (offset * sbi->s_inode_size) & (EXTN_BLOCK_SIZE(sb) - 1);
+ 
+-	iloc->bh = bh;
+-	iloc->raw_inode = (struct extN_inode *) (bh->b_data + offset);
++	iloc->bh = bh[0];
++	iloc->raw_inode = (struct extN_inode *)(bh[0]->b_data + offset);
+ 	iloc->block_group = block_group;
+-	
++
+ 	return 0;
+-	
++
+  bad_inode:
+ 	return -EIO;
+ }
+ 
++int extN_get_inode_loc(struct inode *inode, struct extN_iloc *iloc)
++{
++	return extN_get_inode_loc_new(inode, iloc, 0);
++}
++
+ void extN_read_inode(struct inode * inode)
+ {
+ 	struct extN_iloc iloc;

@@ -1,0 +1,4 @@
+dn: fs=lustre
+fs:lustre
+objectClass: lustre
+desc: Lustre Config
