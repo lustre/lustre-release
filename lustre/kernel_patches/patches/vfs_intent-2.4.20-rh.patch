@@ -500,7 +500,7 @@ Index: linux-2.4.20-rh/fs/namei.c
  	 * Create - we need to know the parent.
  	 */
 + 	if (it) {
-+ 		it->it_mode = mode;
++ 		it->it_create_mode = mode;
 + 		it->it_op |= IT_CREAT;
 + 	}
  	error = path_lookup(pathname, LOOKUP_PARENT, nd);
@@ -519,7 +519,7 @@ Index: linux-2.4.20-rh/fs/namei.c
  		goto exit;
  	}
  
-+	it->it_mode = mode;
++	it->it_create_mode = mode;
  	/* Negative dentry, just create the file */
  	if (!dentry->d_inode) {
 -		error = vfs_create(dir->d_inode, dentry,
