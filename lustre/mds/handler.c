@@ -2003,6 +2003,7 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
 
         /* we have to know mdsnum before touching underlying fs -bzzz */
         sema_init(&mds->mds_lmv_sem, 1);
+        mds->mds_lmv_connected = 0;
         if (lcfg->lcfg_inllen5 > 0 && lcfg->lcfg_inlbuf5 && 
             strcmp(lcfg->lcfg_inlbuf5, "dumb")) {
                 class_uuid_t uuid;

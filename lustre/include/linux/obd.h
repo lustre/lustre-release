@@ -362,6 +362,7 @@ struct mds_obd {
         atomic_t                         mds_real_clients;
         struct obd_uuid                  mds_lmv_uuid;
         struct dentry                   *mds_fids_dir;
+        int                              mds_lmv_connected;
         struct dentry                   *mds_unnamed_dir; /* for mdt_obd_create only */
 };
 

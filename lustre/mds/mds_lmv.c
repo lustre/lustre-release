@@ -54,11 +54,11 @@ int mds_lmv_connect(struct obd_device *obd, char * lmv_name)
         if (IS_ERR(mds->mds_lmv_obd))
                 RETURN(PTR_ERR(mds->mds_lmv_obd));
 
-        if (mds->mds_lmv_obd)
+        if (mds->mds_lmv_connected)
                 RETURN(0);
 
         down(&mds->mds_lmv_sem);
-        if (mds->mds_lmv_obd) {
+        if (mds->mds_lmv_connected) {
                 up(&mds->mds_lmv_sem);
                 RETURN(0);
         }
@@ -111,6 +111,7 @@ int mds_lmv_connect(struct obd_device *obd, char * lmv_name)
         if (rc)
                 GOTO(err_reg, rc);
 
+        mds->mds_lmv_connected = 1;
         up(&mds->mds_lmv_sem);
 	RETURN(0);
 
@@ -146,6 +147,8 @@ int mds_lmv_disconnect(struct obd_device *obd, int flags)
 
         down(&mds->mds_lmv_sem);
         if (!IS_ERR(mds->mds_lmv_obd) && mds->mds_lmv_exp != NULL) {
+                LASSERT(mds->mds_lmv_connected != 0);
+                mds->mds_lmv_connected = 0;
                 obd_register_observer(mds->mds_lmv_obd, NULL);
 
                 /* if obd_disconnect fails (probably because the export was

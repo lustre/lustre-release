@@ -254,7 +254,6 @@ int lmv_check_connect(struct obd_device *obd)
                 return 0;
         }
 
-        lmv->connected = 1;
         cluuid = &lmv->cluuid;
         exp = lmv->exp;
         
@@ -348,6 +347,7 @@ int lmv_check_connect(struct obd_device *obd)
 
         lmv_set_timeouts(obd);
         class_export_put(exp);
+        lmv->connected = 1;
         up(&lmv->init_sem);
         return 0;
 
@@ -401,7 +401,7 @@ static int lmv_disconnect(struct obd_export *exp, int flags)
                         if (mdc_symlink) {
                                 lprocfs_remove(mdc_symlink);
                         } else {
-                                CERROR("/proc/fs/lustre/%s/%s/target_obds/%s missing.",
+                                CERROR("/proc/fs/lustre/%s/%s/target_obds/%s missing\n",
                                        obd->obd_type->typ_name, obd->obd_name,
                                        mdc_obd->obd_name);
                         }
@@ -442,7 +442,7 @@ static int lmv_disconnect(struct obd_export *exp, int flags)
         if (lmv_proc_dir) {
                 lprocfs_remove(lmv_proc_dir);
         } else {
-                CERROR("/proc/fs/lustre/%s/%s/target_obds missing.",
+                CERROR("/proc/fs/lustre/%s/%s/target_obds missing\n",
                        obd->obd_type->typ_name, obd->obd_name);
         }
 
