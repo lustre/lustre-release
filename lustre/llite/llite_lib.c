@@ -1080,18 +1080,6 @@ void ll_read_inode2(struct inode *inode, void *opaque)
                                    kdev_t_to_nr(inode->i_rdev));
 #else
                 init_special_inode(inode, inode->i_mode, inode->i_rdev);
-
-                lli->ll_save_ifop = inode->i_fop;
-                if (S_ISCHR(inode->i_mode)) {
-                        inode->i_fop = &ll_special_chr_inode_fops;
-                } else if (S_ISBLK(inode->i_mode)) {
-                        inode->i_fop = &ll_special_blk_inode_fops;
-                } else if (S_ISFIFO(inode->i_mode)) {
-                        inode->i_fop = &ll_special_fifo_inode_fops;
-                } else if (S_ISSOCK(inode->i_mode)) {
-                        inode->i_fop = &ll_special_sock_inode_fops;
-                }
-                inode->i_fop->owner = lli->ll_save_ifop->owner;
 #endif
                 EXIT;
         }

@@ -1503,48 +1503,13 @@ test_53() {
 }
 run_test 53 "verify that MDS and OSTs agree on pre-creation====="
 
-test_54a() {
+test_54() {
      	$SOCKETSERVER $DIR/socket &
 	sleep 1
      	$SOCKETCLIENT $DIR/socket || error
       	$MUNLINK $DIR/socket
 }
-run_test 54a "unix damain socket test ==========================="
-
-test_54b() {
-	f="$DIR/f54b"
-	mknod $f c 1 3
-	chmod 0666 $f
-	dd if=/dev/zero of=$f bs=`page_size` count=1 
-}
-run_test 54b "char device works in lustre"
-
-test_54c() {
-	f="$DIR/f54c"
-	dir="$DIR/dir54c"
-	loopdev="$DIR/loop54c"
-	
-	mknod $loopdev b 7 1
-	dd if=/dev/zero of=$f bs=`page_size` count=1024 > /dev/null
-	chmod 0666 $f
-	losetup $loopdev $f
-	echo "make a loop file system..."	
-	mkfs.ext2  -F $f > /dev/null
-	mkdir -p $dir
-	mount $loopdev $dir 
-	dd if=/dev/zero of=$dir/tmp bs=`page_size` count=30 || error
-	dd if=$dir/tmp of=/dev/zero bs=`page_size` count=30 || error
-	umount $dir
-}
-run_test 54c "loop device works in lustre"
-
-test_54d() {
-	f="$DIR/f54d"
-	string="aaaaaa"
-	mknod $f p
-	[ "$string" = `echo $string > $f | cat $f` ] || error
-}
-run_test 54d "fifo device works in lustre"
+run_test 54 "unix damain socket test ==========================="
 
 test_59() {
 	echo "touch 130 files"
