@@ -29,10 +29,15 @@ EXTRA_DIST = chbar.sh postbar $(DOCS) $(IMAGES) $(LYXFILES) lustre.bib
 
 all: $(DOCS)
 
+# These variables are set by lbuild/check-build.
+RPMRELEASE ?= RELEASE
+KERNTYPE ?= chaos
+KERNRPM ?= kernel-2.4.18lustre13-RELEASE.i386.rpm
+
 # update date and version in document
 date := $(shell date +%x)
 tag := $(shell echo '$$Name:  $$' | sed -e 's/^\$$Na''me: *\$$$$/HEAD/; s/^\$$Na''me: \(.*\) \$$$$/\1/')
-addversion = sed -e 's|@T''AG@|$(tag)|g; s|@VER''SION@|$(VERSION)|g; s|@DA''TE@|$(date)|g'
+addversion = sed -e 's|@T''AG@|$(tag)|g; s|@VER''SION@|$(VERSION)|g; s|@DA''TE@|$(date)|g; s|@RPM''RELEASE@|$(RPMRELEASE)|g; s|@KERN''TYPE@|$(KERNTYPE)|g; s|@KERN''RPM@|$(KERNRPM)|g'
 
 # Regenerate when the $(VERSION) or $Name:  $ changes.
 .INTERMEDIATE: $(GENERATED)
