@@ -95,32 +95,6 @@ do {                                                                    \
         }                                                               \
 } while (0)
 
-/*
-    pack "LL LL LL LL LL LL LL L L L L L L L L L a60 a60 L L L",
-    $obdo->{id}, 0,
-    $obdo->{gr}, 0,
-    $obdo->{atime}, 0,
-    $obdo->{mtime}, 0 ,
-    $obdo->{ctime}, 0,
-    $obdo->{size}, 0,
-    $obdo->{blocks}, 0,
-    $obdo->{blksize},
-    $obdo->{mode},
-    $obdo->{uid},
-    $obdo->{gid},
-    $obdo->{flags},
-    $obdo->{obdflags},
-    $obdo->{nlink},
-    $obdo->{generation},
-    $obdo->{valid},
-    $obdo->{inline},
-    $obdo->{obdmd},
-    0, 0, # struct list_head
-    0;  #  struct obd_ops
-}
-
-*/
-
 char *obdo_print(struct obdo *obd)
 {
         char buf[1024];
@@ -144,6 +118,7 @@ char *obdo_print(struct obdo *obd)
 }
 
 
+#define BAD_VERBOSE (-999999999)
 
 #define N2D_OFF 0x100      /* So we can tell between error codes and devices */
 
@@ -181,7 +156,7 @@ static int do_name2dev(char *func, char *name)
  * supports a number or name.
  * FIXME: support UUID
  */
-static int parse_devname(char * func, char *name)
+static int parse_devname(char *func, char *name)
 {
         int rc;
         int ret = -1;
@@ -192,8 +167,7 @@ static int parse_devname(char * func, char *name)
                 rc = do_name2dev(func, name + 1);
                 if (rc >= N2D_OFF) {
                         ret = rc - N2D_OFF;
-                        printf("%s is device %d\n", name,
-                               ret);
+                        printf("%s is device %d\n", name, ret);
                 } else {
                         fprintf(stderr, "error: %s: %s: %s\n", cmdname(func),
                                 name, "device not found");
@@ -256,7 +230,7 @@ static int be_verbose(int verbose, struct timeval *next_time,
         }
 
         /* A negative verbosity means to print at most each X seconds */
-        if (verbose < 0 && next_time != NULL && difftime(&now, next_time) >= 0) {
+        if (verbose < 0 && next_time != NULL && difftime(&now, next_time) >= 0){
                 next_time->tv_sec = now.tv_sec - verbose;
                 next_time->tv_usec = now.tv_usec;
                 if (next_num)
@@ -267,16 +241,23 @@ static int be_verbose(int verbose, struct timeval *next_time,
         return 0;
 }
 
-static int get_verbose(const char *arg)
+static int get_verbose(char *func, const char *arg)
 {
         int verbose;
+        char *end;
 
         if (!arg || arg[0] == 'v')
                 verbose = 1;
         else if (arg[0] == 's' || arg[0] == 'q')
                 verbose = 0;
-        else
-                verbose = (int)strtoul(arg, NULL, 0);
+        else {
+                verbose = (int)strtoul(arg, &end, 0);
+                if (*end) {
+                        fprintf(stderr, "error: %s: bad verbose option '%s'\n",
+                                cmdname(func), arg);
+                        return BAD_VERBOSE;
+                }
+        }
 
         if (verbose < 0)
                 printf("Print status every %d seconds\n", -verbose);
@@ -447,7 +428,7 @@ int jt_obd_connect(int argc, char **argv)
 
         do_disconnect(argv[0], 1);
 
-#warning Robert: implement timeout per lctl usage for probe
+#warning TODO: implement timeout per lctl usage for probe
         if (argc != 1)
                 return CMD_HELP;
 
@@ -479,11 +460,8 @@ int jt_opt_device(int argc, char **argv)
         int ret;
         int rc;
 
-        if (argc < 3) {
-                fprintf(stderr, "usage: %s devno <command [args ...]>\n",
-                        cmdname(argv[0]));
-                return -1;
-        }
+        if (argc < 3)
+                return CMD_HELP;
 
         rc = do_device("device", parse_devname(argv[0], argv[1]));
 
@@ -508,18 +486,22 @@ int jt_opt_threads(int argc, char **argv)
         int threads, next_thread;
         int verbose;
         int rc = 0;
+        char *end;
         int i;
 
-        if (argc < 5) {
-                fprintf(stderr,
-                        "usage: %s numthreads verbose devno <cmd [args ...]>\n",
-                        argv[0]);
-                return -1;
+        if (argc < 5)
+                return CMD_HELP;
+
+        threads = strtoul(argv[1], &end, 0);
+        if (*end) {
+                fprintf(stderr, "error: %s: invalid page count '%s'\n",
+                        cmdname(argv[0]), argv[1]);
+                return CMD_HELP;
         }
 
-        threads = strtoul(argv[1], NULL, 0);
-
-        verbose = get_verbose(argv[2]);
+        verbose = get_verbose(argv[0], argv[2]);
+        if (verbose == BAD_VERBOSE)
+                return CMD_HELP;
 
         if (verbose != 0)
                 printf("%s: starting %d threads on device %s running %s\n",
@@ -573,7 +555,7 @@ int jt_opt_threads(int argc, char **argv)
                                  * always returns 1 (OK).  See wait(2).
                                  */
                                 int err = WEXITSTATUS(status);
-                                if (err)
+                                if (err || WIFSIGNALED(status))
                                         fprintf(stderr,
                                                 "%s: PID %d had rc=%d\n",
                                                 argv[0], ret, err);
@@ -790,21 +772,35 @@ int jt_obd_create(int argc, char **argv)
         int count = 1, next_count;
         int verbose = 1;
         int rc = 0, i;
+        char *end;
 
         IOCINIT(data);
         if (argc < 2 || argc > 4)
                 return CMD_HELP;
 
-        count = strtoul(argv[1], NULL, 0);
+        count = strtoul(argv[1], &end, 0);
+        if (*end) {
+                fprintf(stderr, "error: %s: invalid iteration count '%s'\n",
+                        cmdname(argv[0]), argv[1]);
+                return CMD_HELP;
+        }
 
-        if (argc > 2)
-                data.ioc_obdo1.o_mode = strtoul(argv[2], NULL, 0);
-        else
+        if (argc > 2) {
+                data.ioc_obdo1.o_mode = strtoul(argv[2], &end, 0);
+                if (*end) {
+                        fprintf(stderr, "error: %s: invalid mode '%s'\n",
+                                cmdname(argv[0]), argv[2]);
+                        return CMD_HELP;
+                }
+        } else
                 data.ioc_obdo1.o_mode = 0100644;
         data.ioc_obdo1.o_valid = OBD_MD_FLMODE;
 
-        if (argc > 3)
-                verbose = get_verbose(argv[3]);
+        if (argc > 3) {
+                verbose = get_verbose(argv[0], argv[3]);
+                if (verbose == BAD_VERBOSE)
+                        return CMD_HELP;
+        }
 
         printf("%s: %d objects\n", cmdname(argv[0]), count);
         gettimeofday(&next_time, NULL);
@@ -828,14 +824,25 @@ int jt_obd_create(int argc, char **argv)
 int jt_obd_setattr(int argc, char **argv)
 {
         struct obd_ioctl_data data;
+        char *end;
         int rc;
 
         IOCINIT(data);
         if (argc != 2)
                 return CMD_HELP;
 
-        data.ioc_obdo1.o_id = strtoul(argv[1], NULL, 0);
-        data.ioc_obdo1.o_mode = S_IFREG | strtoul(argv[2], NULL, 0);
+        data.ioc_obdo1.o_id = strtoul(argv[1], &end, 0);
+        if (*end) {
+                fprintf(stderr, "error: %s: invalid objid '%s'\n",
+                        cmdname(argv[0]), argv[1]);
+                return CMD_HELP;
+        }
+        data.ioc_obdo1.o_mode = S_IFREG | strtoul(argv[2], &end, 0);
+        if (*end) {
+                fprintf(stderr, "error: %s: invalid mode '%s'\n",
+                        cmdname(argv[0]), argv[2]);
+                return CMD_HELP;
+        }
         data.ioc_obdo1.o_valid = OBD_MD_FLMODE;
 
         rc = ioctl(fd, OBD_IOC_SETATTR, &data);
@@ -849,13 +856,19 @@ int jt_obd_setattr(int argc, char **argv)
 int jt_obd_destroy(int argc, char **argv)
 {
         struct obd_ioctl_data data;
+        char *end;
         int rc;
 
         IOCINIT(data);
         if (argc != 2)
                 return CMD_HELP;
 
-        data.ioc_obdo1.o_id = strtoul(argv[1], NULL, 0);
+        data.ioc_obdo1.o_id = strtoul(argv[1], &end, 0);
+        if (*end) {
+                fprintf(stderr, "error: %s: invalid objid '%s'\n",
+                        cmdname(argv[0]), argv[1]);
+                return CMD_HELP;
+        }
         data.ioc_obdo1.o_mode = S_IFREG | 0644;
 
         rc = ioctl(fd, OBD_IOC_DESTROY, &data);
@@ -869,13 +882,19 @@ int jt_obd_destroy(int argc, char **argv)
 int jt_obd_getattr(int argc, char **argv)
 {
         struct obd_ioctl_data data;
+        char *end;
         int rc;
 
         if (argc != 2)
                 return CMD_HELP;
 
         IOCINIT(data);
-        data.ioc_obdo1.o_id = strtoul(argv[1], NULL, 0);
+        data.ioc_obdo1.o_id = strtoul(argv[1], &end, 0);
+        if (*end) {
+                fprintf(stderr, "error: %s: invalid objid '%s'\n",
+                        cmdname(argv[0]), argv[1]);
+                return CMD_HELP;
+        }
         /* to help obd filter */
         data.ioc_obdo1.o_mode = 0100644;
         data.ioc_obdo1.o_valid = 0xffffffff;
@@ -898,17 +917,25 @@ int jt_obd_test_getattr(int argc, char **argv)
         struct timeval start, next_time;
         int i, count, next_count;
         int verbose;
+        char *end;
         int rc = 0;
 
         if (argc != 2 && argc != 3)
                 return CMD_HELP;
 
         IOCINIT(data);
-        count = strtoul(argv[1], NULL, 0);
+        count = strtoul(argv[1], &end, 0);
+        if (*end) {
+                fprintf(stderr, "error: %s: invalid iteration count '%s'\n",
+                        cmdname(argv[0]), argv[1]);
+                return CMD_HELP;
+        }
 
-        if (argc == 3)
-                verbose = get_verbose(argv[2]);
-        else
+        if (argc == 3) {
+                verbose = get_verbose(argv[0], argv[2]);
+                if (verbose == BAD_VERBOSE)
+                        return CMD_HELP;
+        } else
                 verbose = 1;
 
         data.ioc_obdo1.o_valid = 0xffffffff;
@@ -959,14 +986,23 @@ int jt_obd_test_brw(int argc, char **argv)
         int pages = 1, objid = 3, count, next_count;
         int verbose = 1, write = 0, rw;
         long long offset;
+        char *end;
         int i;
         int len;
         int rc = 0;
 
-        if (argc < 2 || argc > 6)
+        if (argc < 2 || argc > 6) {
+                fprintf(stderr, "error: %s: bad number of arguments: %d\n",
+                        cmdname(argv[0]), argc);
                 return CMD_HELP;
+        }
 
-        count = strtoul(argv[1], NULL, 0);
+        count = strtoul(argv[1], &end, 0);
+        if (*end) {
+                fprintf(stderr, "error: %s: bad iteration count '%s'\n",
+                        cmdname(argv[0]), argv[1]);
+                return CMD_HELP;
+        }
 
         if (argc >= 3) {
                 if (argv[2][0] == 'w' || argv[2][0] == '1')
@@ -974,13 +1010,27 @@ int jt_obd_test_brw(int argc, char **argv)
                 else if (argv[2][0] == 'r' || argv[2][0] == '0')
                         write = 0;
 
-                verbose = get_verbose(argv[3]);
+                verbose = get_verbose(argv[0], argv[3]);
+                if (verbose == BAD_VERBOSE)
+                        return CMD_HELP;
         }
 
-        if (argc >= 5)
-                pages = strtoul(argv[4], NULL, 0);
-        if (argc >= 6)
-                objid = strtoul(argv[5], NULL, 0);
+        if (argc >= 5) {
+                pages = strtoul(argv[4], &end, 0);
+                if (*end) {
+                        fprintf(stderr, "error: %s: bad page count '%s'\n",
+                                cmdname(argv[0]), argv[4]);
+                        return CMD_HELP;
+                }
+        }
+        if (argc >= 6) {
+                objid = strtoul(argv[5], &end, 0);
+                if (*end) {
+                        fprintf(stderr, "error: %s: bad objid '%s'\n",
+                                cmdname(argv[0]), argv[5]);
+                        return CMD_HELP;
+                }
+        }
 
         len = pages * PAGE_SIZE;
 
@@ -1039,38 +1089,65 @@ int jt_obd_lov_config(int argc, char **argv)
         struct lov_desc desc;
         uuid_t *uuidarray;
         int rc, size, i;
+        char *end;
+
         IOCINIT(data);
 
         if (argc <= 6)
                 return CMD_HELP;
 
-        if (strlen(argv[1]) > sizeof(uuid_t) - 1) {
-                fprintf(stderr, "lov_config: no %dB memory for uuid's\n",
-                        strlen(argv[1]));
+        if (strlen(argv[1]) > sizeof(*uuidarray) - 1) {
+                fprintf(stderr, "error: %s: no %dB memory for uuid's\n",
+                        cmdname(argv[0]), strlen(argv[1]));
                 return -ENOMEM;
         }
 
         memset(&desc, 0, sizeof(desc));
-        strcpy(desc.ld_uuid, argv[1]);
-        desc.ld_default_stripe_count = strtoul(argv[2], NULL, 0);
-        desc.ld_default_stripe_size = strtoul(argv[3], NULL, 0);
-        desc.ld_default_stripe_offset = (__u64) strtoul(argv[4], NULL, 0);
-        desc.ld_pattern = strtoul(argv[5], NULL, 0);
+        strncpy(desc.ld_uuid, argv[1], sizeof(*uuidarray) - 1);
+        desc.ld_default_stripe_count = strtoul(argv[2], &end, 0);
+        if (*end) {
+                fprintf(stderr, "error: %s: bad default stripe count '%s'\n",
+                        cmdname(argv[0]), argv[2]);
+                return CMD_HELP;
+        }
+        desc.ld_default_stripe_size = strtoul(argv[3], &end, 0);
+        if (*end) {
+                fprintf(stderr, "error: %s: bad default stripe size '%s'\n",
+                        cmdname(argv[0]), argv[3]);
+                return CMD_HELP;
+        }
+        if (desc.ld_default_stripe_size < 4096) {
+                fprintf(stderr, "error: %s: stripe size %ld too small\n",
+                        cmdname(argv[0]), (long)desc.ld_default_stripe_size);
+                return -EINVAL;
+        }
+        desc.ld_default_stripe_offset = (__u64) strtoul(argv[4], &end, 0);
+        if (*end) {
+                fprintf(stderr, "error: %s: bad default stripe offset '%s'\n",
+                        cmdname(argv[0]), argv[4]);
+                return CMD_HELP;
+        }
+        desc.ld_pattern = strtoul(argv[5], &end, 0);
+        if (*end) {
+                fprintf(stderr, "error: %s: bad stripe pattern '%s'\n",
+                        cmdname(argv[0]), argv[5]);
+                return CMD_HELP;
+        }
         desc.ld_tgt_count = argc - 6;
 
-
-        size = sizeof(uuid_t) * desc.ld_tgt_count;
+        size = desc.ld_tgt_count * sizeof(*uuidarray);
         uuidarray = malloc(size);
         if (!uuidarray) {
-                fprintf(stderr, "lov_config: no %dB memory for uuid's\n", size);
+                fprintf(stderr, "error: %s: no %dB memory for uuid's\n",
+                        cmdname(argv[0]), size);
                 return -ENOMEM;
         }
         memset(uuidarray, 0, size);
         for (i = 6; i < argc; i++) {
                 char *buf = (char *)(uuidarray + i - 6);
-                if (strlen(argv[i]) >= sizeof(uuid_t)) {
-                        fprintf(stderr, "lov_config: arg %d (%s) too long\n",
-                                i, argv[i]);
+                if (strlen(argv[i]) >= sizeof(*uuidarray)) {
+                        fprintf(stderr, "error: %s: arg %d (%s) too long\n",
+                                cmdname(argv[0]), i, argv[i]);
                         free(uuidarray);
                         return -EINVAL;
                 }
