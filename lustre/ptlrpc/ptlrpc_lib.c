@@ -80,6 +80,11 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         memcpy(server_uuid.uuid, data->ioc_inlbuf2, MIN(data->ioc_inllen2,
                                                         sizeof(server_uuid)));
 
+        init_MUTEX(&cli->cl_dirty_sem);
+        cli->cl_dirty = 0;
+        cli->cl_dirty_granted = 0;
+        cli->cl_ost_can_grant = 1;
+
         conn = ptlrpc_uuid_to_connection(&server_uuid);
         if (conn == NULL)
                 RETURN(-ENOENT);
