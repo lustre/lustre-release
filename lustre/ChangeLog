@@ -10,6 +10,9 @@ tbd
 	- add "uuid" to "lctl device" command to help upcalls (991)
 	- "open" RPCs with transnos would confuse recovery counters (1037)
 	- do proper endian conversion of all wire messages (288, 340, 891)
+	- orphans are moved into the PENDING directory for possible recovery
+	- replayed opens now open by fid for orphan/rename safety (1042)
+	- last close of an orphan inode generates a transno (683)
 	- remove OST bulk get LBUGs, fix ost_brw_write cleanup (1126)
 	- call waiting locks callback from LDLM recovery thread (1127, 1151)
 	- fix ptlrpc_connection leak in target_handle_connect (1174)
