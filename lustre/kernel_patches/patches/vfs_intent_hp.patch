@@ -8,7 +8,7 @@
  kernel/ksyms.c         |    1 
  fs/exec.c                   |   18 -
  9 files changed, 487 insertions(+), 96 deletions(-)
-
+ 
 --- linux-2.4.19-hp2_pnnl4/fs/dcache.c~vfs_intent_hp	Sun Jan 19 19:04:47 2003
 +++ linux-2.4.19-hp2_pnnl4-root/fs/dcache.c	Sun Jan 19 19:04:47 2003
 @@ -186,6 +188,13 @@ int d_invalidate(struct dentry * dentry)
@@ -33,6 +33,29 @@
  	INIT_LIST_HEAD(&dentry->d_hash);
  	INIT_LIST_HEAD(&dentry->d_lru);
  	INIT_LIST_HEAD(&dentry->d_subdirs);
+@@ -859,13 +867,19 @@ void d_delete(struct dentry * dentry)
+  * Adds a dentry to the hash according to its name.
+  */
+  
+-void d_rehash(struct dentry * entry)
++void __d_rehash(struct dentry * entry, int lock)
+ {
+ 	struct list_head *list = d_hash(entry->d_parent, entry->d_name.hash);
+ 	if (!list_empty(&entry->d_hash)) BUG();
+-	spin_lock(&dcache_lock);
++	if (lock) spin_lock(&dcache_lock);
+ 	list_add(&entry->d_hash, list);
+-	spin_unlock(&dcache_lock);
++	if (lock) spin_unlock(&dcache_lock);
++}
++EXPORT_SYMBOL(__d_rehash);
++
++void d_rehash(struct dentry * entry)
++{
++	__d_rehash(entry, 1);
+ }
+ 
+ #define do_switch(x,y) do { \
 --- linux-2.4.19-hp2_pnnl4/fs/namei.c~vfs_intent_hp	Sun Jan 19 19:04:47 2003
 +++ linux-2.4.19-hp2_pnnl4-root/fs/namei.c	Sun Jan 19 19:35:55 2003
 @@ -94,6 +97,13 @@
@@ -905,7 +928,7 @@
  out_putf:
  	fput(file);
  out:
-@@ -260,14 +273,16 @@ asmlinkage long sys_utime(char * filenam
+@@ -260,11 +273,13 @@ asmlinkage long sys_utime(char * filenam
  	struct inode * inode;
  	struct iattr newattrs;
  
@@ -915,17 +938,11 @@
  		goto out;
  	inode = nd.dentry->d_inode;
  
--	error = -EROFS;
--	if (IS_RDONLY(inode))
--		goto dput_and_out;
 +	/* this is safe without a Lustre lock because it only depends
 +	   on the super block */
-+	error = -EROFS;
-+	if (IS_RDONLY(inode))
-+		goto dput_and_out;
- 
- 	/* Don't worry, the checks are done in inode_change_ok() */
- 	newattrs.ia_valid = ATTR_CTIME | ATTR_MTIME | ATTR_ATIME;
+ 	error = -EROFS;
+ 	if (IS_RDONLY(inode))
+ 		goto dput_and_out;
 @@ -279,11 +294,29 @@ asmlinkage long sys_utime(char * filenam
  			goto dput_and_out;
  
@@ -957,7 +974,7 @@
  	error = notify_change(nd.dentry, &newattrs);
  dput_and_out:
  	path_release(&nd);
-@@ -304,16 +337,18 @@ asmlinkage long sys_utimes(char * filena
+@@ -304,12 +337,14 @@ asmlinkage long sys_utimes(char * filena
  	struct inode * inode;
  	struct iattr newattrs;
  
@@ -968,19 +985,11 @@
  		goto out;
  	inode = nd.dentry->d_inode;
  
--	error = -EROFS;
--	if (IS_RDONLY(inode))
--		goto dput_and_out;
--
 +	/* this is safe without a Lustre lock because it only depends
 +	   on the super block */
-+	error = -EROFS;
-+	if (IS_RDONLY(inode))
-+		goto dput_and_out;
-+
- 	/* Don't worry, the checks are done in inode_change_ok() */
- 	newattrs.ia_valid = ATTR_CTIME | ATTR_MTIME | ATTR_ATIME;
- 	if (utimes) {
+ 	error = -EROFS;
+ 	if (IS_RDONLY(inode))
+ 		goto dput_and_out;
 @@ -324,7 +359,20 @@ asmlinkage long sys_utimes(char * filena
  		newattrs.ia_atime = times[0].tv_sec;
  		newattrs.ia_mtime = times[1].tv_sec;
@@ -1382,7 +1391,7 @@
  	unsigned long d_vfs_flags;
  	void * d_fsdata;		/* fs-specific data */
  	unsigned char d_iname[DNAME_INLINE_LEN]; /* small names */
-@@ -90,8 +119,13 @@ struct dentry_operations {
+@@ -90,8 +119,15 @@ struct dentry_operations {
  	int (*d_delete)(struct dentry *);
  	void (*d_release)(struct dentry *);
  	void (*d_iput)(struct dentry *, struct inode *);
@@ -1392,6 +1401,8 @@
  
 +/* defined in fs/namei.c */
 +extern void intent_release(struct dentry *de, struct lookup_intent *it);
++/* defined in fs/dcache.c */
++extern void __d_rehash(struct dentry * entry, int lock);
 +
  /* the dentry parameter passed to d_hash and d_compare is the parent
   * directory of the entries to be compared. It is used in case these
@@ -1513,5 +1524,3 @@
  EXPORT_SYMBOL(page_readlink);
  EXPORT_SYMBOL(page_follow_link);
  EXPORT_SYMBOL(page_symlink_inode_operations);
-
-_
