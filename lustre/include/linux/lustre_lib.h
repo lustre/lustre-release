@@ -447,6 +447,7 @@ static inline void obd_ioctl_freedata(char *buf, int len)
 #define OBD_IOC_LLOG_PRINT             _IOWR('f', 192, long)
 #define OBD_IOC_LLOG_CANCEL            _IOWR('f', 193, long)
 #define OBD_IOC_LLOG_REMOVE            _IOWR('f', 194, long)
+#define OBD_IOC_LLOG_CHECK             _IOWR('f', 195, long)
 
 #define ECHO_IOC_GET_STRIPE            _IOWR('f', 200, long)
 #define ECHO_IOC_SET_STRIPE            _IOWR('f', 201, long)

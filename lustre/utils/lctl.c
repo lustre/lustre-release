@@ -245,7 +245,12 @@ command_t cmdlist[] = {
          "usage: llog_print <$logname|#oid#ogr#ogen> [from] [to]\n"
          "       oid, ogr and ogen are hexadecimal.\n"
          "       print all records from index 1 by default."},
-        {"llog_cancel", jt_llog_cancel, 0,
+        {"llog_check", jt_llog_check, 0,
+         "print log content information.\n"
+         "usage: llog_check <$logname|#oid#ogr#ogen> [from] [to]\n"
+         "       oid, ogr and ogen are hexadecimal.\n"
+         "       check all records from index 1 by default."},
+         {"llog_cancel", jt_llog_cancel, 0,
          "cancel one record in log.\n"
          "usage: llog_cancel <catlog id|catlog name> <log id> <index>"},
         {"llog_remove", jt_llog_remove, 0,

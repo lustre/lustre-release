@@ -1937,26 +1937,68 @@ int jt_llog_cancel(int argc, char **argv)
         return rc;
 
 }
+int jt_llog_check(int argc, char **argv)
+{
+        struct obd_ioctl_data data;
+        int rc;
+
+        if (argc != 2 && argc != 4)
+                return CMD_HELP;
+
+        IOC_INIT(data);
+        data.ioc_inllen1 = strlen(argv[1]) + 1;
+        data.ioc_inlbuf1 = argv[1];
+        if (argc == 4) {
+                data.ioc_inllen2 = strlen(argv[2]) + 1;
+                data.ioc_inlbuf2 = argv[2];
+                data.ioc_inllen3 = strlen(argv[3]) + 1;
+                data.ioc_inlbuf3 = argv[3];
+        } else {
+                char from[2] = "1", to[3] = "-1";
+                data.ioc_inllen2 = strlen(from) + 1;
+                data.ioc_inlbuf2 = from;
+                data.ioc_inllen3 = strlen(to) + 1;
+                data.ioc_inlbuf3 = to;
+        }
+        data.ioc_inllen4 = max - size_round(sizeof(data)) -
+                size_round(data.ioc_inllen1) -
+                size_round(data.ioc_inllen2) -
+                size_round(data.ioc_inllen3);
+        IOC_PACK(argv[0], data);
+
+        rc = l_ioctl(OBD_DEV_ID, OBD_IOC_LLOG_CHECK, buf);
+        if (rc == 0)
+                fprintf(stdout, "%s", ((struct obd_ioctl_data*)buf)->ioc_bulk);
+        else
+                fprintf(stderr, "OBD_IOC_LLOG_CHECK failed: %s\n",
+                        strerror(errno));
+        return rc;
+}
 
 int jt_llog_remove(int argc, char **argv)
 {
         struct obd_ioctl_data data;
         int rc;
 
-        if (argc != 3)
+        if (argc != 3 && argc != 2)
                 return CMD_HELP;
 
         IOC_INIT(data);
         data.ioc_inllen1 = strlen(argv[1]) + 1;
         data.ioc_inlbuf1 = argv[1];
-        data.ioc_inllen2 = strlen(argv[2]) + 1;
-        data.ioc_inlbuf2 = argv[2];
+        if (argc == 3){
+                data.ioc_inllen2 = strlen(argv[2]) + 1;
+                data.ioc_inlbuf2 = argv[2];
+        }
         IOC_PACK(argv[0], data);
 
         rc = l_ioctl(OBD_DEV_ID, OBD_IOC_LLOG_REMOVE, buf);
-        if (rc == 0)
-                fprintf(stdout, "log %s are removed.\n", argv[2]);
-        else
+        if (rc == 0) {
+                if (argc == 3)
+                        fprintf(stdout, "log %s are removed.\n", argv[2]);
+                else
+                        fprintf(stdout, "the log in catlog %s are removed. \n", argv[1]);
+        } else
                 fprintf(stderr, "OBD_IOC_LLOG_REMOVE failed: %s\n",
                         strerror(errno));
 

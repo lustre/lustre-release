@@ -240,6 +240,7 @@ int class_handle_ioctl(struct obd_class_user_state *ocus, unsigned int cmd,
         case OBD_IOC_LLOG_INFO:
         case OBD_IOC_LLOG_PRINT:
         case OBD_IOC_LLOG_CANCEL:
+        case OBD_IOC_LLOG_CHECK:
         case OBD_IOC_LLOG_REMOVE:
                 break;
         default:

@@ -462,8 +462,9 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 RETURN(rc);
 
         }
+        case OBD_IOC_LLOG_CHECK: 
         case OBD_IOC_LLOG_CANCEL:
-        case OBD_IOC_LLOG_REMOVE: {
+        case OBD_IOC_LLOG_REMOVE: { 
                 struct llog_ctxt *ctxt = 
                         llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
 
