@@ -371,7 +371,7 @@ void ll_clear_inode(struct inode *inode)
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p)\n", inode->i_ino,
                inode->i_generation, inode);
         rc = ll_mdc_cancel_unused(&sbi->ll_mdc_conn, inode,
-                                  LDLM_FL_NO_CALLBACK, inode);
+                                  LDLM_FL_WARN | LDLM_FL_NO_CALLBACK, inode);
         if (rc < 0) {
                 CERROR("ll_mdc_cancel_unused: %d\n", rc);
                 /* XXX FIXME do something dramatic */
@@ -400,6 +400,47 @@ void ll_clear_inode(struct inode *inode)
 
         EXIT;
 }
+
+#if 0
+static void ll_delete_inode(struct inode *inode)
+{
+        ENTRY;
+        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu(%p)\n", inode->i_ino, inode);
+        if (S_ISREG(inode->i_mode)) {
+                int err;
+                struct obdo *oa;
+                struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
+
+                /* mcreate with no open */
+                if (!lsm)
+                        GOTO(out, 0);
+
+                if (lsm->lsm_object_id == 0) {
+                        CERROR("This really happens\n");
+                        /* No obdo was ever created */
+                        GOTO(out, 0);
+                }
+
+                oa = obdo_alloc();
+                if (oa == NULL)
+                        GOTO(out, -ENOMEM);
+
+                oa->o_id = lsm->lsm_object_id;
+                oa->o_valid = OBD_MD_FLID;
+                obdo_from_inode(oa, inode, OBD_MD_FLTYPE);
+
+                err = obd_destroy(ll_i2obdconn(inode), oa, lsm, NULL);
+                obdo_free(oa);
+                if (err)
+                        CDEBUG(D_INODE,
+                               "inode %lu obd_destroy objid "LPX64" error %d\n",
+                               inode->i_ino, lsm->lsm_object_id, err);
+        }
+out:
+        clear_inode(inode);
+        EXIT;
+}
+#endif
 
 
 /* like inode_setattr, but doesn't mark the inode dirty */
@@ -552,7 +593,7 @@ skip_extent_lock:
         err = mdc_setattr(&sbi->ll_mdc_conn, &op_data,
                           attr, NULL, 0, NULL, 0, &request);
         if (err)
-                CERROR("mdc_setattr fails: err = %d\n", err);
+                CERROR("mdc_setattr failed: %d\n", err);
 
         ptlrpc_req_finished(request);
 
