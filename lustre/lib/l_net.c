@@ -52,7 +52,7 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         int rq_portal, rp_portal;
         char *name;
         struct client_obd *cli = &obddev->u.cli;
-        char server_uuid[37];
+        obd_uuid_t server_uuid;
         ENTRY;
 
         if (obddev->obd_type->typ_ops->o_brw) {
@@ -119,7 +119,7 @@ int client_obd_cleanup(struct obd_device * obddev)
 }
 
 int client_obd_connect(struct lustre_handle *conn, struct obd_device *obd,
-                       char *cluuid)
+                       obd_uuid_t cluuid)
 {
         struct client_obd *cli = &obd->u.cli;
         struct ptlrpc_request *request;

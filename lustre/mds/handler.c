@@ -35,7 +35,7 @@
 #include <linux/obd_class.h>
 
 extern int mds_get_lovtgts(struct obd_device *obd, int tgt_count,
-                           uuid_t *uuidarray);
+                           obd_uuid_t *uuidarray);
 extern int mds_get_lovdesc(struct obd_device *obd, struct lov_desc *desc);
 extern int mds_update_last_rcvd(struct mds_obd *mds, void *handle,
                                 struct ptlrpc_request *req);
@@ -261,7 +261,7 @@ struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
  * on the server, etc.
  */
 static int mds_connect(struct lustre_handle *conn, struct obd_device *obd,
-                       char *cluuid)
+                       obd_uuid_t cluuid)
 {
         struct obd_export *exp;
         struct mds_client_data *mcd;
@@ -394,8 +394,8 @@ static int mds_getlovinfo(struct ptlrpc_request *req)
                 RETURN(0);
         }
 
-        tgt_count = NTOH__u32(desc->ld_tgt_count);
-        if (tgt_count * sizeof(uuid_t) > streq->repbuf) {
+        tgt_count = le32_to_cpu(desc->ld_tgt_count);
+        if (tgt_count * sizeof(obd_uuid_t) > streq->repbuf) {
                 CERROR("too many targets, enlarge client buffers\n");
                 req->rq_status = -ENOSPC;
                 RETURN(0);
@@ -692,11 +692,11 @@ static int mds_open(struct ptlrpc_request *req)
         /* check if this inode has seen a delayed object creation */
         if (req->rq_reqmsg->bufcount > 1) {
                 void *handle;
-                struct lov_mds_md *md;
+                struct lov_mds_md *lmm;
                 struct inode *inode = de->d_inode;
                 int rc;
 
-                md = lustre_msg_buf(req->rq_reqmsg, 1);
+                lmm = lustre_msg_buf(req->rq_reqmsg, 1);
 
                 handle = mds_fs_start(mds, de->d_inode, MDS_FSOP_SETATTR);
                 if (!handle) {
@@ -705,7 +705,7 @@ static int mds_open(struct ptlrpc_request *req)
                 }
 
                 /* XXX error handling */
-                rc = mds_fs_set_md(mds, inode, handle, md);
+                rc = mds_fs_set_md(mds, inode, handle, lmm);
                 if (!rc) {
                         struct obd_run_ctxt saved;
                         push_ctxt(&saved, &mds->mds_ctxt);

@@ -30,7 +30,7 @@ struct obd_export {
         void                     *exp_data; /* device specific data */
         int                       exp_desclen;
         char                     *exp_desc;
-        uuid_t                    exp_uuid;
+        obd_uuid_t                exp_uuid;
 };
 
 extern struct obd_export *class_conn2export(struct lustre_handle *conn);

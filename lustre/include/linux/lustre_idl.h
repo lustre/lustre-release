@@ -419,7 +419,7 @@ struct lov_desc {
         __u64 ld_default_stripe_size;      /* in bytes */
         __u64 ld_default_stripe_offset;    /* in bytes */
         __u32 ld_pattern;                  /* RAID 0,1 etc */
-        uuid_t ld_uuid;
+        obd_uuid_t ld_uuid;
 };
 
 /*

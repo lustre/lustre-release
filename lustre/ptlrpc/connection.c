@@ -30,7 +30,7 @@ static struct list_head conn_list;
 static struct list_head conn_unused_list;
 
 struct ptlrpc_connection *ptlrpc_get_connection(struct lustre_peer *peer,
-                                                char *uuid)
+                                                obd_uuid_t uuid)
 {
         struct list_head *tmp, *pos;
         struct ptlrpc_connection *c;
@@ -43,7 +43,7 @@ struct ptlrpc_connection *ptlrpc_get_connection(struct lustre_peer *peer,
         list_for_each(tmp, &conn_list) {
                 c = list_entry(tmp, struct ptlrpc_connection, c_link);
                 if (memcmp(peer, &c->c_peer, sizeof(*peer)) == 0 &&
-                    (!uuid || strcmp(c->c_remote_uuid, uuid) == 0)) {
+                    (!uuid || !memcmp(c->c_remote_uuid, uuid, sizeof(uuid)))) {
                         ptlrpc_connection_addref(c);
                         GOTO(out, c);
                 }

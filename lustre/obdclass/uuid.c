@@ -86,7 +86,7 @@ static void uuid_pack(struct uuid *uu, class_uuid_t ptr)
 	memcpy(out+10, uu->node, 6);
 }
 
-int class_uuid_parse(char *in, class_uuid_t uu)
+int class_uuid_parse(obd_uuid_t in, class_uuid_t uu)
 {
 	struct uuid uuid;
 	int i;
@@ -122,7 +122,7 @@ int class_uuid_parse(char *in, class_uuid_t uu)
 }
 #endif
 
-void class_uuid_unparse(class_uuid_t uu, char *out)
+void class_uuid_unparse(class_uuid_t uu, obd_uuid_t out)
 {
 	struct uuid uuid;
 

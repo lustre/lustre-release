@@ -409,8 +409,8 @@ void class_destroy_export(struct obd_export *exp)
 
 /* a connection defines an export context in which preallocation can
    be managed. */
-int class_connect (struct lustre_handle *conn, struct obd_device *obd,
-                   char *cluuid)
+int class_connect(struct lustre_handle *conn, struct obd_device *obd,
+                  obd_uuid_t cluuid)
 {
         struct obd_export * export;
         if (conn == NULL) {

@@ -338,7 +338,7 @@ static struct dentry *filter_parent(struct obd_device *obddev, obd_mode mode)
 
 /* obd methods */
 static int filter_connect(struct lustre_handle *conn, struct obd_device *obd,
-                          char *cluuid)
+                          obd_uuid_t cluuid)
 {
         int rc;
         ENTRY;

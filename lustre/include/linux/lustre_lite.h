@@ -58,7 +58,7 @@ struct ll_inode_info {
 #define LL_SBI_NOLCK   0x1
 
 struct ll_sb_info {
-        unsigned char             ll_sb_uuid[37];
+        obd_uuid_t                ll_sb_uuid;
         struct lustre_handle      ll_mdc_conn;
         struct lustre_handle      ll_osc_conn;
         obd_id                    ll_rootino; /* number of root inode */

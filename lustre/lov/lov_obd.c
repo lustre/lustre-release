@@ -28,14 +28,14 @@
 
 /* obd methods */
 static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
-                       char *cluuid)
+                       obd_uuid_t cluuid)
 {
         struct ptlrpc_request *req;
         struct lov_obd *lov = &obd->u.lov;
         struct client_obd *mdc = &lov->mdcobd->u.cli;
         struct lov_desc *desc = &lov->desc;
         struct lustre_handle mdc_conn;
-        uuid_t *uuidarray;
+        obd_uuid_t *uuidarray;
         int rc, rc2;
         int i;
 

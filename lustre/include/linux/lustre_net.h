@@ -230,9 +230,9 @@ typedef void (*bulk_callback_t)(struct ptlrpc_bulk_desc *, void *);
 typedef int (*svc_handler_t)(struct ptlrpc_request *req);
 
 /* rpc/connection.c */
-void ptlrpc_readdress_connection(struct ptlrpc_connection *conn, char *uuid);
+void ptlrpc_readdress_connection(struct ptlrpc_connection *conn, obd_uuid_t uuid);
 struct ptlrpc_connection *ptlrpc_get_connection(struct lustre_peer *peer,
-                                                char *uuid);
+                                                obd_uuid_t uuid);
 int ptlrpc_put_connection(struct ptlrpc_connection *c);
 struct ptlrpc_connection *ptlrpc_connection_addref(struct ptlrpc_connection *);
 void ptlrpc_init_connection(void);
@@ -255,7 +255,7 @@ void ptlrpc_init_client(int req_portal, int rep_portal, char *name,
                         struct ptlrpc_client *);
 void ptlrpc_cleanup_client(struct obd_import *imp);
 __u8 *ptlrpc_req_to_uuid(struct ptlrpc_request *req);
-struct ptlrpc_connection *ptlrpc_uuid_to_connection(char *uuid);
+struct ptlrpc_connection *ptlrpc_uuid_to_connection(obd_uuid_t uuid);
 
 int ptlrpc_queue_wait(struct ptlrpc_request *req);
 void ptlrpc_continue_req(struct ptlrpc_request *req);
@@ -274,8 +274,8 @@ int ptlrpc_check_status(struct ptlrpc_request *req, int err);
 
 /* rpc/service.c */
 struct ptlrpc_service *
-ptlrpc_init_svc(__u32 bufsize, int nbuffs, int req_portal, int rep_portal, 
-                char *uuid, svc_handler_t, char *name);
+ptlrpc_init_svc(__u32 bufsize, int nbuffs, int req_portal, int rep_portal,
+                obd_uuid_t uuid, svc_handler_t, char *name);
 void ptlrpc_stop_all_threads(struct ptlrpc_service *svc);
 int ptlrpc_start_thread(struct obd_device *dev, struct ptlrpc_service *svc,
                         char *name);

@@ -65,7 +65,7 @@ static int ptlrpc_check_event(struct ptlrpc_service *svc,
 
 struct ptlrpc_service *
 ptlrpc_init_svc(__u32 bufsize, int nbuffs, int req_portal, int rep_portal,
-                char *uuid, svc_handler_t handler, char *name)
+                obd_uuid_t uuid, svc_handler_t handler, char *name)
 {
         int err;
         int rc, i;

@@ -41,7 +41,7 @@ __u8 *ptlrpc_req_to_uuid(struct ptlrpc_request *req)
         return req->rq_connection->c_remote_uuid;
 }
 
-struct ptlrpc_connection *ptlrpc_uuid_to_connection(char *uuid)
+struct ptlrpc_connection *ptlrpc_uuid_to_connection(obd_uuid_t uuid)
 {
         struct ptlrpc_connection *c;
         struct lustre_peer peer;
@@ -64,7 +64,7 @@ struct ptlrpc_connection *ptlrpc_uuid_to_connection(char *uuid)
         return c;
 }
 
-void ptlrpc_readdress_connection(struct ptlrpc_connection *conn, char *uuid)
+void ptlrpc_readdress_connection(struct ptlrpc_connection *conn,obd_uuid_t uuid)
 {
         struct lustre_peer peer;
         int err;

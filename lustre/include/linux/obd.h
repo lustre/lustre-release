@@ -41,13 +41,13 @@ struct lov_oinfo { /* per-child structure */
 
 struct lov_stripe_md {
         __u32 lsm_magic;
-        __u32 lsm_mds_easize;      /* packed size for MDS of ea */
+        __u32 lsm_mds_easize;      /* packed size for MDS of ea - KILL ME*/
         __u64 lsm_object_id;       /* lov object id */
         __u64 lsm_stripe_size;     /* size of the stripe */
         __u32 lsm_stripe_pattern;  /* per-lov object stripe pattern */
         int   lsm_stripe_offset;   /* offset of first stripe in lmd_objects */
         int   lsm_stripe_count;    /* how many objects are being striped on */
-        int   lsm_ost_count;       /* how many OSTs are in this LOV */
+        int   lsm_ost_count;       /* how many OSTs are in this LOV - KILL ME */
         struct lov_oinfo lsm_oinfo[0];
 };
 
@@ -95,7 +95,7 @@ struct client_obd {
         struct obd_import    cl_import;
         struct semaphore     cl_sem;
         int                  cl_conn_count;
-        __u8                 cl_target_uuid[37]; /* XXX -> lustre_name */
+        obd_uuid_t           cl_target_uuid; /* XXX -> lustre_name */
         int                  cl_max_mds_easize;
         int                  cl_max_ost_easize;
 };
@@ -175,7 +175,7 @@ struct ost_obd {
 
 
 struct lov_tgt_desc {
-        uuid_t uuid;
+        obd_uuid_t uuid;
         struct lustre_handle conn;
 };
 
@@ -205,7 +205,7 @@ struct obd_device {
 
         /* common and UUID name of this device */
         char *obd_name;
-        __u8 obd_uuid[37];
+        obd_uuid_t obd_uuid;
 
         int obd_minor;
         int obd_flags;
@@ -251,7 +251,7 @@ struct obd_ops {
         int (*o_setup) (struct obd_device *dev, obd_count len, void *data);
         int (*o_cleanup)(struct obd_device *dev);
         int (*o_connect)(struct lustre_handle *conn, struct obd_device *src,
-                         char *cluuid);
+                         obd_uuid_t cluuid);
         int (*o_disconnect)(struct lustre_handle *conn);
 
 

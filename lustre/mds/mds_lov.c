@@ -25,7 +25,7 @@
 #include <linux/lustre_lib.h>
 
 int mds_configure_lov(struct obd_device *obd, struct lov_desc *desc,
-                      uuid_t *uuidarray)
+                      obd_uuid_t *uuidarray)
 {
         struct mds_obd *mds = &obd->u.mds;
         struct obd_run_ctxt saved;
@@ -108,7 +108,7 @@ int mds_get_lovdesc(struct obd_device *obd, struct lov_desc *desc)
         RETURN(0);
 }
 
-int mds_get_lovtgts(struct obd_device *obd, int tgt_count, uuid_t *uuidarray)
+int mds_get_lovtgts(struct obd_device *obd, int tgt_count,obd_uuid_t *uuidarray)
 {
         struct mds_obd *mds = &obd->u.mds;
         struct obd_run_ctxt saved;
@@ -149,6 +149,7 @@ int mds_iocontrol(long cmd, struct lustre_handle *conn,
         struct obd_device *obd = class_conn2obd(conn);
         struct obd_ioctl_data *data = karg;
         struct lov_desc *desc;
+        obd_uuid_t *uuidarray;
         int count;
         int rc;
 
@@ -162,11 +163,12 @@ int mds_iocontrol(long cmd, struct lustre_handle *conn,
                 }
 
                 count = desc->ld_tgt_count;
-                if (sizeof(uuid_t) * count != data->ioc_inllen2) {
+                uuidarray = (obd_uuid_t *)data->ioc_inlbuf2;
+                if (sizeof(*uuidarray) * count != data->ioc_inllen2) {
                         CERROR("UUID array size wrong\n");
                         RETURN(-EINVAL);
                 }
-                rc = mds_configure_lov(obd, desc, (uuid_t *)data->ioc_inlbuf2);
+                rc = mds_configure_lov(obd, desc, uuidarray);
 
                 RETURN(rc);
         default:
