@@ -21,8 +21,9 @@ test_brw
 newfile
 openclose
 createdestroy
-createmany
-mkdirmany
 lovstripe
-*.xml
+lov.xml
+uml.xml
+echo.xml
+local.xml
 stat
