@@ -57,9 +57,13 @@ static int ost_queue_req(struct obd_device *obddev, struct ost_request *req)
 	       __LINE__, ost, req, srv_req);
 
 	memset(srv_req, 0, sizeof(*req)); 
+
+	/* move the request buffer */
 	srv_req->rq_reqbuf = req->rq_reqbuf;
 	srv_req->rq_reqlen    = req->rq_reqlen;
 	srv_req->rq_obd = ost;
+
+	/* remember where it came from */
 	srv_req->rq_reply_handle = req;
 
 	list_add(&srv_req->rq_list, &ost->ost_reqs); 
@@ -115,7 +119,9 @@ int ost_error(struct obd_device *obddev, struct ost_request *req)
 	hdr->seqno = req->rq_reqhdr->seqno;
 	hdr->status = req->rq_status; 
 	hdr->type = OST_TYPE_ERR;
+
 	req->rq_repbuf = (char *)hdr;
+	req->rq_replen = sizeof(*hdr); 
 
 	EXIT;
 	return ost_reply(obddev, req);

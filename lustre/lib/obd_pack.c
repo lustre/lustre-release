@@ -73,7 +73,6 @@ int ost_pack_req(char *buf1, int buflen1, char *buf2, int buflen2,
 
 	preq = (struct ost_req_packed *)(*buf + sizeof(**hdr));
 	ptr = *buf + sizeof(**hdr) + sizeof(*preq);
-
 	*req = (struct ost_req *)(*buf + sizeof(**hdr));
 
 	(*hdr)->type =  OST_TYPE_REQ;

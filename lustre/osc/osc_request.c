@@ -40,7 +40,7 @@ struct ost_request *osc_prep_req(int size, int opcode)
 
 	request = (struct ost_request *)kmalloc(sizeof(*request), GFP_KERNEL); 
 	if (!request) { 
-		printk("osc_getattr: request allocation out of memory\n");
+		printk("osc_prep_req: request allocation out of memory\n");
 		return NULL;
 	}
 

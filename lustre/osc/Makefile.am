@@ -3,6 +3,8 @@
 # This code is issued under the GNU General Public License.
 # See the file COPYING in this distribution
 
+DEFS:=
+
 MODULE = osc
 modulefs_DATA = osc.o
 EXTRA_PROGRAMS = osc

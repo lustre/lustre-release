@@ -69,6 +69,7 @@ int mds_pack_req(char *name, int namelen, char *tgt, int tgtlen,
 
 	memset(*buf, 0, *len); 
 	*hdr = (struct mds_req_hdr *)(*buf);
+	*req = (struct mds_req *)(*buf + sizeof(**hdr));
 
 	preq = (struct mds_req_packed *)(*buf + sizeof(**hdr));
 	ptr = *buf + sizeof(**hdr) + sizeof(*preq);
@@ -153,6 +154,7 @@ int mds_pack_rep(char *name, int namelen, char *tgt, int tgtlen,
 
 	memset(*buf, 0, *len); 
 	*hdr = (struct mds_rep_hdr *)(*buf);
+        *rep = (struct mds_rep *)(*buf + sizeof(**hdr));
 
 	prep = (struct mds_rep_packed *)(*buf + sizeof(**hdr));
 	ptr = *buf + sizeof(**hdr) + sizeof(*prep);

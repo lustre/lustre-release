@@ -38,42 +38,85 @@ static struct mds_obd *MDS;
 // XXX make this networked!  
 static int mds_queue_req(struct mds_request *req)
 {
-	struct mds_request *srv_request;
+	struct mds_request *srv_req;
 	
 	if (!MDS) { 
 		EXIT;
 		return -1;
 	}
 
-	srv_request = kmalloc(sizeof(*srv_request), GFP_KERNEL);
-	if (!srv_request) { 
+	srv_req = kmalloc(sizeof(*srv_req), GFP_KERNEL);
+	if (!srv_req) { 
 		EXIT;
 		return -ENOMEM;
 	}
 
-	/* move the request buffer */
-	srv_request->rq_reqlen = req->rq_reqlen;
-	srv_request->rq_reqbuf = req->rq_reqbuf;
-	srv_request->rq_obd = MDS;
+	printk("---> MDS at %d %p, incoming req %p, srv_req %p\n", 
+	       __LINE__, MDS, req, srv_req);
 
-	req->rq_reqbuf = NULL;
-	req->rq_reqlen = 0; 
+	memset(srv_req, 0, sizeof(*req)); 
+
+	/* move the request buffer */
+	srv_req->rq_reqbuf = req->rq_reqbuf;
+	srv_req->rq_reqlen    = req->rq_reqlen;
+	srv_req->rq_obd = MDS;
 
 	/* remember where it came from */
-	srv_request->rq_reply_handle = req;
+	srv_req->rq_reply_handle = req;
 
-	/* get the server working on this request */
-	spin_lock(&MDS->mds_lock); 
-	list_add(&srv_request->rq_list, &MDS->mds_reqs); 
-	spin_unlock(&MDS->mds_lock); 
+	list_add(&srv_req->rq_list, &MDS->mds_reqs); 
 	wake_up(&MDS->mds_waitq);
-
-	/* put client asleep */
-	printk("-- sleeping\n");
-	interruptible_sleep_on(&req->rq_wait_for_rep);
-	printk("-- done\n");
 	return 0;
 }
+
+/* XXX replace with networking code */
+int mds_reply(struct mds_request *req)
+{
+	struct mds_request *clnt_req = req->rq_reply_handle;
+
+	ENTRY;
+
+	/* free the request buffer */
+	kfree(req->rq_reqbuf);
+	req->rq_reqbuf = NULL; 
+	
+	/* move the reply to the client */ 
+	clnt_req->rq_replen = req->rq_replen;
+	clnt_req->rq_repbuf = req->rq_repbuf;
+	req->rq_repbuf = NULL;
+	req->rq_replen = 0;
+
+	/* wake up the client */ 
+	wake_up_interruptible(&clnt_req->rq_wait_for_rep); 
+	EXIT;
+	return 0;
+}
+
+int mds_error(struct mds_request *req)
+{
+	struct mds_rep_hdr *hdr;
+
+	ENTRY;
+	hdr = kmalloc(sizeof(*hdr), GFP_KERNEL);
+	if (!hdr) { 
+		EXIT;
+		return -ENOMEM;
+	}
+
+	memset(hdr, 0, sizeof(*hdr));
+	
+	hdr->seqno = req->rq_reqhdr->seqno;
+	hdr->status = req->rq_status; 
+	hdr->type = MDS_TYPE_ERR;
+
+	req->rq_repbuf = (char *)hdr;
+	req->rq_replen = sizeof(*hdr); 
+
+	EXIT;
+	return mds_reply(req);
+}
+
+
 
 static struct dentry *mds_fid2dentry(struct mds_obd *mds, struct lustre_fid *fid)
 {
@@ -134,52 +177,6 @@ int mds_getattr(struct mds_request *req)
 	return 0;
 }
 
-/* XXX replace with networking code */
-int mds_reply(struct mds_request *req)
-{
-	struct mds_request *clnt_req = req->rq_reply_handle;
-
-	ENTRY;
-
-	/* free the request buffer */
-	kfree(req->rq_reqbuf);
-	req->rq_reqbuf = NULL; 
-	
-	/* move the reply to the client */ 
-	clnt_req->rq_replen = req->rq_replen;
-	clnt_req->rq_repbuf = req->rq_repbuf;
-	req->rq_repbuf = NULL;
-	req->rq_replen = 0;
-
-	/* wake up the client */ 
-	wake_up_interruptible(&clnt_req->rq_wait_for_rep); 
-	EXIT;
-	return 0;
-}
-
-int mds_error(struct mds_request *req)
-{
-	struct mds_rep_hdr *hdr;
-
-	ENTRY;
-	hdr = kmalloc(sizeof(*hdr), GFP_KERNEL);
-	if (!hdr) { 
-		EXIT;
-		return -ENOMEM;
-	}
-
-	memset(hdr, 0, sizeof(*hdr));
-	
-	hdr->seqno = req->rq_reqhdr->seqno;
-	hdr->status = req->rq_status; 
-	hdr->type = MDS_TYPE_ERR;
-
-	req->rq_repbuf = (char *)hdr;
-	req->rq_replen = sizeof(*hdr); 
-
-	EXIT;
-	return mds_reply(req);
-}
 
 //int mds_handle(struct mds_conn *conn, int len, char *buf)
 int mds_handle(struct mds_request *req)

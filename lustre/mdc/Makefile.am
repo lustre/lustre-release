@@ -3,11 +3,16 @@
 # This code is issued under the GNU General Public License.
 # See the file COPYING in this distribution
 
-MODULE = llight
-modulefs_DATA = llight.o
-EXTRA_PROGRAMS = llight
+DEFS:=
+
+MODULE = mdc
+modulefs_DATA = mdc.o
+EXTRA_PROGRAMS = mdc
 
 
-llight_SOURCES =  super.c rw.c file.c dir.c sysctl.c namei.c symlink.c
+mdc_SOURCES =  mds_pack.c mdc_request.c 
+
+mds_pack.c: 
+	ln -s ../lib/mds_pack.c .
 
 include $(top_srcdir)/Rules
