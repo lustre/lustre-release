@@ -11,6 +11,8 @@ export PATH=/sbin:/usr/sbin:$SRCDIR:$PATH
 . $SRCDIR/common.sh
 
 ERROR=
+SRC=/etc
+COUNT=100
 
 setup_opts $@
 
@@ -25,9 +27,9 @@ echo "comparing /etc/hosts and $OSCMT/hosts"
 diff -u /etc/hosts $OSCMT/hosts || fail "$OSCMT/hosts different" 4
 
 # ok, that hopefully worked, so let's do a little more
-FILES=`find /etc -type f`
-echo "copying files from /etc to $OSCMT/etc"
-tar cf - $FILES | tar xvf - -C $OSCMT || fail "copying /etc" 10
+FILES=`find $SRC -type f | head -100`
+echo "copying files from $SRC to $OSCMT$SRC"
+tar cf - $FILES | tar xvf - -C $OSCMT || fail "copying $SRC" 10
 
 echo "comparing newly copied files"
 for f in $FILES; do
@@ -56,7 +58,7 @@ echo "truncating $OSCMT/hosts"
 echo "removing $OSCMT/hosts"
 rm $OSCMT/hosts || fail "can't remove $OSCMT/hosts" 26
 
-echo "removing $OSCMT/etc"
-rm -r $OSCMT/etc || fail "can't remove $OSCMT/etc" 27
+echo "removing $OSCMT$SRC"
+rm -r $OSCMT$SRC || fail "can't remove $OSCMT$SRC" 27
 
 sh llcleanup.sh $@
