@@ -281,7 +281,6 @@ static int mds_connect(struct lustre_handle *conn, struct obd_device *obd,
 
         memcpy(mcd->mcd_uuid, cluuid, sizeof(mcd->mcd_uuid));
         med->med_mcd = mcd;
-        mcd->mcd_mount_count = cpu_to_le64(obd->u.mds.mds_mount_count);
 
         rc = mds_client_add(obd, &obd->u.mds, med, -1);
         if (rc == 0)

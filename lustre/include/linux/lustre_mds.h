@@ -120,8 +120,6 @@ struct mds_update_record {
 
 #define MDS_CLIENT_SLOTS 17
 
-#define MDS_MOUNT_RECOV 2
-
 #define MDS_ROCOMPAT_LOVOBJID   0x00000001
 #define MDS_ROCOMPAT_SUPP       (MDS_ROCOMPAT_LOVOBJID)
 
@@ -150,12 +148,11 @@ struct mds_server_data {
 /* Data stored per client in the last_rcvd file.  In le32 order. */
 struct mds_client_data {
         __u8 mcd_uuid[40];      /* client UUID */
-        __u64 mcd_mount_count;  /* MDS incarnation number */
         __u64 mcd_last_transno; /* last completed transaction ID */
         __u64 mcd_last_xid;     /* xid for the last transaction */
         __u32 mcd_last_result;  /* result from last RPC */
         __u32 mcd_last_data;    /* per-op data (disposition for open &c.) */
-        __u8 mcd_padding[MDS_LR_CLIENT_SIZE - 72];
+        __u8 mcd_padding[MDS_LR_CLIENT_SIZE - 64];
 };
 
 /* file data for open files on MDS */

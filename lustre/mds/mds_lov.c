@@ -519,7 +519,7 @@ int mds_notify(struct obd_device *obd, struct obd_device *watched,
         }
 
         uuid = &watched->u.cli.cl_import->imp_target_uuid;
-        CERROR("MDS %s: %s now active, resetting orphans\n",
+        CWARN("MDS %s: %s now active, resetting orphans\n",
                obd->obd_name, uuid->uuid);
         RETURN(mds_lov_clearorphans(&obd->u.mds, uuid));
 }

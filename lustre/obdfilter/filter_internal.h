@@ -41,7 +41,6 @@
 #define FILTER_SUBDIR_COUNT      32            /* set to zero for no subdirs */
 #define FILTER_GROUPS 3 /* must be at least 3; not dynamic yet */
 
-#define FILTER_MOUNT_RECOV 2
 #define FILTER_RECOVERY_TIMEOUT (obd_timeout * 5 * HZ / 2) /* *waves hands* */
 
 #define FILTER_ROCOMPAT_SUPP   (0)
@@ -73,9 +72,8 @@ struct filter_server_data {
 struct filter_client_data {
         __u8  fcd_uuid[40];        /* client UUID */
         __u64 fcd_last_rcvd;       /* last completed transaction ID */
-        __u64 fcd_mount_count;     /* FILTER incarnation number */
         __u64 fcd_last_xid;        /* client RPC xid for the last transaction */
-        __u8  fcd_padding[FILTER_LR_CLIENT_SIZE - 64];
+        __u8  fcd_padding[FILTER_LR_CLIENT_SIZE - 56];
 };
 
 #define FILTER_DENTRY_MAGIC 0x9efba101

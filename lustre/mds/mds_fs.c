@@ -273,7 +273,8 @@ static int mds_read_last_rcvd(struct obd_device *obd, struct file *file)
         for (cl_idx = 0, off = le32_to_cpu(msd->msd_client_start);
              off < last_rcvd_size; cl_idx++) {
                 __u64 last_transno;
-                int mount_age;
+                struct obd_export *exp;
+                struct mds_export_data *med;
 
                 if (!mcd) {
                         OBD_ALLOC_WAIT(mcd, sizeof(*mcd));
@@ -304,36 +305,27 @@ static int mds_read_last_rcvd(struct obd_device *obd, struct file *file)
                 /* These exports are cleaned up by mds_disconnect(), so they
                  * need to be set up like real exports as mds_connect() does.
                  */
-                mount_age = mount_count - le64_to_cpu(mcd->mcd_mount_count);
-                if (mount_age < MDS_MOUNT_RECOV) {
-                        struct obd_export *exp = class_new_export(obd);
-                        struct mds_export_data *med;
-                        CDEBUG(D_HA, "RCVRNG CLIENT uuid: %s idx: %d lr: "LPU64
-                               " srv lr: "LPU64" mnt: "LPU64" last mount: "
-                               LPU64"\n", mcd->mcd_uuid, cl_idx,
-                               last_transno, le64_to_cpu(msd->msd_last_transno),
-                               le64_to_cpu(mcd->mcd_mount_count), mount_count);
-                        if (exp == NULL)
-                                GOTO(err_client, rc = -ENOMEM);
+                CDEBUG(D_HA, "RCVRNG CLIENT uuid: %s idx: %d lr: "LPU64
+                       " srv lr: "LPU64"\n", mcd->mcd_uuid, cl_idx,
+                       last_transno, le64_to_cpu(msd->msd_last_transno));
 
-                        memcpy(&exp->exp_client_uuid.uuid, mcd->mcd_uuid,
-                               sizeof exp->exp_client_uuid.uuid);
-                        med = &exp->exp_mds_data;
-                        med->med_mcd = mcd;
-                        mds_client_add(obd, mds, med, cl_idx);
-                        /* create helper if export init gets more complex */
-                        INIT_LIST_HEAD(&med->med_open_head);
-                        spin_lock_init(&med->med_open_lock);
+                exp = class_new_export(obd);
+                if (exp == NULL)
+                        GOTO(err_client, rc = -ENOMEM);
 
-                        mcd = NULL;
-                        obd->obd_recoverable_clients++;
-                        obd->obd_max_recoverable_clients++;
-                        class_export_put(exp);
-                } else {
-                        CDEBUG(D_INFO, "discarded client %d, UUID '%s', count "
-                               LPU64"\n", cl_idx, mcd->mcd_uuid,
-                               le64_to_cpu(mcd->mcd_mount_count));
-                }
+                memcpy(&exp->exp_client_uuid.uuid, mcd->mcd_uuid,
+                       sizeof exp->exp_client_uuid.uuid);
+                med = &exp->exp_mds_data;
+                med->med_mcd = mcd;
+                mds_client_add(obd, mds, med, cl_idx);
+                /* create helper if export init gets more complex */
+                INIT_LIST_HEAD(&med->med_open_head);
+                spin_lock_init(&med->med_open_lock);
+
+                mcd = NULL;
+                obd->obd_recoverable_clients++;
+                obd->obd_max_recoverable_clients++;
+                class_export_put(exp);
 
                 CDEBUG(D_OTHER, "client at idx %d has last_transno = "LPU64"\n",
                        cl_idx, last_transno);

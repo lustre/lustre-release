@@ -102,7 +102,6 @@ int filter_finish_transno(struct obd_export *exp, struct obd_trans_info *oti,
                 spin_unlock(&filter->fo_translock);
         }
         fcd->fcd_last_rcvd = cpu_to_le64(last_rcvd);
-        fcd->fcd_mount_count = cpu_to_le64(filter->fo_mount_count);
 
         /* could get xid from oti, if it's ever needed */
         fcd->fcd_last_xid = 0;
@@ -428,7 +427,8 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
         for (cl_idx = 0, off = le32_to_cpu(fsd->fsd_client_start);
              off < last_rcvd_size; cl_idx++) {
                 __u64 last_rcvd;
-                int mount_age;
+                struct obd_export *exp;
+                struct filter_export_data *fed;
 
                 if (!fcd) {
                         OBD_ALLOC(fcd, sizeof(*fcd));
@@ -459,34 +459,24 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
                 /* These exports are cleaned up by filter_disconnect(), so they
                  * need to be set up like real exports as filter_connect() does.
                  */
-                mount_age = mount_count - le64_to_cpu(fcd->fcd_mount_count);
-                if (mount_age < FILTER_MOUNT_RECOV) {
-                        struct obd_export *exp = class_new_export(obd);
-                        struct filter_export_data *fed;
-                        CERROR("RCVRNG CLIENT uuid: %s idx: %d lr: "LPU64
-                               " srv lr: "LPU64" mnt: "LPU64" last mount: "
-                               LPU64"\n", fcd->fcd_uuid, cl_idx,
-                               last_rcvd, le64_to_cpu(fsd->fsd_last_transno),
-                               le64_to_cpu(fcd->fcd_mount_count), mount_count);
-                        if (exp == NULL)
-                                GOTO(err_client, rc = -ENOMEM);
+                exp = class_new_export(obd);
+                CDEBUG(D_HA, "RCVRNG CLIENT uuid: %s idx: %d lr: "LPU64
+                       " srv lr: "LPU64"\n", fcd->fcd_uuid, cl_idx,
+                       last_rcvd, le64_to_cpu(fsd->fsd_last_transno));
+                if (exp == NULL)
+                        GOTO(err_client, rc = -ENOMEM);
 
-                        memcpy(&exp->exp_client_uuid.uuid, fcd->fcd_uuid,
-                               sizeof exp->exp_client_uuid.uuid);
-                        fed = &exp->exp_filter_data;
-                        fed->fed_fcd = fcd;
-                        filter_client_add(obd, filter, fed, cl_idx);
-                        /* create helper if export init gets more complex */
-                        spin_lock_init(&fed->fed_lock);
+                memcpy(&exp->exp_client_uuid.uuid, fcd->fcd_uuid,
+                       sizeof exp->exp_client_uuid.uuid);
+                fed = &exp->exp_filter_data;
+                fed->fed_fcd = fcd;
+                filter_client_add(obd, filter, fed, cl_idx);
+                /* create helper if export init gets more complex */
+                spin_lock_init(&fed->fed_lock);
 
-                        fcd = NULL;
-                        obd->obd_recoverable_clients++;
-                        class_export_put(exp);
-                } else {
-                        CDEBUG(D_INFO, "discarded client %d UUID '%s' count "
-                               LPU64"\n", cl_idx, fcd->fcd_uuid,
-                               le64_to_cpu(fcd->fcd_mount_count));
-                }
+                fcd = NULL;
+                obd->obd_recoverable_clients++;
+                class_export_put(exp);
 
                 CDEBUG(D_OTHER, "client at idx %d has last_rcvd = "LPU64"\n",
                        cl_idx, last_rcvd);
@@ -499,7 +489,7 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
         obd->obd_last_committed = le64_to_cpu(fsd->fsd_last_transno);
 
         if (obd->obd_recoverable_clients) {
-                CERROR("RECOVERY: %d recoverable clients, last_rcvd "
+                CWARN("RECOVERY: %d recoverable clients, last_rcvd "
                        LPU64"\n", obd->obd_recoverable_clients,
                        le64_to_cpu(fsd->fsd_last_transno));
                 obd->obd_next_recovery_transno = obd->obd_last_committed + 1;
@@ -1097,7 +1087,7 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
                 if (*lcfg->lcfg_inlbuf3 == 'f') {
                         obd->obd_replayable = 1;
                         obd_sync_filter = 1;
-                        CERROR("%s: recovery enabled\n", obd->obd_name);
+                        CWARN("%s: recovery enabled\n", obd->obd_name);
                 } else {
                         if (*lcfg->lcfg_inlbuf3 != 'n') {
                                 CERROR("unrecognised flag '%c'\n",
@@ -1307,7 +1297,6 @@ static int filter_connect(struct lustre_handle *conn, struct obd_device *obd,
 
         memcpy(fcd->fcd_uuid, cluuid, sizeof(fcd->fcd_uuid));
         fed->fed_fcd = fcd;
-        fcd->fcd_mount_count = cpu_to_le64(filter->fo_mount_count);
 
         rc = filter_client_add(obd, filter, fed, -1);
 

@@ -101,7 +101,7 @@ test_3() {
     fail ost
     wait $ddpid || return 1
     cmp $verify $DIR/$tfile || return 2
-    rm $verify
+    rm -f $verify $DIR/$tfile
 }
 run_test 3 "Fail OST during write, with verification"
 
@@ -116,7 +116,7 @@ test_4() {
     cmppid=$!
     fail ost
     wait $cmppid || return 1
-    rm $verify
+    rm -f $verify $DIR/$tfile
 }
 run_test 4 "Fail OST during read, with verification"
 

@@ -145,7 +145,6 @@ int mds_finish_transno(struct mds_obd *mds, struct inode *inode, void *handle,
         }
         req->rq_repmsg->transno = req->rq_transno = transno;
         mcd->mcd_last_transno = cpu_to_le64(transno);
-        mcd->mcd_mount_count = cpu_to_le64(mds->mds_mount_count);
         mcd->mcd_last_xid = cpu_to_le64(req->rq_xid);
         mcd->mcd_last_result = cpu_to_le32(rc);
         mcd->mcd_last_data = cpu_to_le32(op_data);
