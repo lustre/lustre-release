@@ -29,7 +29,7 @@
  *  LIB functions follow
  *
  */
-int
+ptl_err_t
 ksocknal_read(nal_cb_t *nal, void *private, void *dst_addr,
               user_ptr src_addr, size_t len)
 {
@@ -37,10 +37,10 @@ ksocknal_read(nal_cb_t *nal, void *private, void *dst_addr,
                nal->ni.nid, (long)len, src_addr, dst_addr);
 
         memcpy( dst_addr, src_addr, len );
-        return 0;
+        return PTL_OK;
 }
 
-int
+ptl_err_t
 ksocknal_write(nal_cb_t *nal, void *private, user_ptr dst_addr,
                void *src_addr, size_t len)
 {
@@ -48,20 +48,7 @@ ksocknal_write(nal_cb_t *nal, void *private, user_ptr dst_addr,
                nal->ni.nid, (long)len, src_addr, dst_addr);
 
         memcpy( dst_addr, src_addr, len );
-        return 0;
-}
-
-int
-ksocknal_callback (nal_cb_t * nal, void *private, lib_eq_t *eq,
-                         ptl_event_t *ev)
-{
-        CDEBUG(D_NET, LPX64": callback eq %p ev %p\n",
-               nal->ni.nid, eq, ev);
-
-        if (eq->event_callback != NULL)
-                eq->event_callback(ev);
-
-        return 0;
+        return PTL_OK;
 }
 
 void *
@@ -617,7 +604,8 @@ ksocknal_tx_done (ksock_tx_t *tx, int asynch)
 
         if (tx->tx_isfwd) {             /* was a forwarded packet? */
                 kpr_fwd_done (&ksocknal_data.ksnd_router,
-                              KSOCK_TX_2_KPR_FWD_DESC (tx), 0);
+                              KSOCK_TX_2_KPR_FWD_DESC (tx), 
+                              (tx->tx_resid == 0) ? 0 : -ECONNABORTED);
                 EXIT;
                 return;
         }
@@ -625,7 +613,8 @@ ksocknal_tx_done (ksock_tx_t *tx, int asynch)
         /* local send */
         ltx = KSOCK_TX_2_KSOCK_LTX (tx);
 
-        lib_finalize (&ksocknal_lib, ltx->ltx_private, ltx->ltx_cookie);
+        lib_finalize (&ksocknal_lib, ltx->ltx_private, ltx->ltx_cookie,
+                      (tx->tx_resid == 0) ? PTL_OK : PTL_FAIL);
 
         ksocknal_free_ltx (ltx);
         EXIT;
@@ -694,16 +683,17 @@ ksocknal_process_transmit (ksock_conn_t *conn, ksock_tx_t *tx)
         LASSERT (rc < 0);
 
         if (!conn->ksnc_closing)
-                CERROR ("[%p] Error %d on write to "LPX64
-                        " ip %08x:%d\n",conn, rc, 
-                        conn->ksnc_peer->ksnp_nid,
-                        conn->ksnc_ipaddr, conn->ksnc_port);
+                CERROR("[%p] Error %d on write to "LPX64
+                       " ip %d.%d.%d.%d:%d\n", conn, rc,
+                       conn->ksnc_peer->ksnp_nid,
+                       HIPQUAD(conn->ksnc_ipaddr),
+                       conn->ksnc_port);
 
         ksocknal_close_conn_and_siblings (conn, rc);
         ksocknal_tx_launched (tx);
-        
+
         return (rc);
-} 
+}
 
 void
 ksocknal_launch_autoconnect_locked (ksock_route_t *route)
@@ -737,23 +727,26 @@ ksocknal_launch_autoconnect_locked (ksock_route_t *route)
 ksock_peer_t *
 ksocknal_find_target_peer_locked (ksock_tx_t *tx, ptl_nid_t nid)
 {
+        char          ipbuf[PTL_NALFMT_SIZE];
         ptl_nid_t     target_nid;
         int           rc;
         ksock_peer_t *peer = ksocknal_find_peer_locked (nid);
-        
+
         if (peer != NULL)
                 return (peer);
-        
+
         if (tx->tx_isfwd) {
                 CERROR ("Can't send packet to "LPX64
-                        ": routed target is not a peer\n", nid);
+                       " %s: routed target is not a peer\n",
+                        nid, portals_nid2str(SOCKNAL, nid, ipbuf));
                 return (NULL);
         }
-        
+
         rc = kpr_lookup (&ksocknal_data.ksnd_router, nid, tx->tx_nob,
                          &target_nid);
         if (rc != 0) {
-                CERROR ("Can't route to "LPX64": router error %d\n", nid, rc);
+                CERROR ("Can't route to "LPX64" %s: router error %d\n",
+                        nid, portals_nid2str(SOCKNAL, nid, ipbuf), rc);
                 return (NULL);
         }
 
@@ -761,7 +754,8 @@ ksocknal_find_target_peer_locked (ksock_tx_t *tx, ptl_nid_t nid)
         if (peer != NULL)
                 return (peer);
 
-        CERROR ("Can't send packet to "LPX64": no peer entry\n", target_nid);
+        CERROR ("Can't send packet to "LPX64" %s: no peer entry\n",
+                target_nid, portals_nid2str(SOCKNAL, target_nid, ipbuf));
         return (NULL);
 }
 
@@ -829,8 +823,10 @@ ksocknal_queue_tx_locked (ksock_tx_t *tx, ksock_conn_t *conn)
         LASSERT(!conn->ksnc_closing);
         LASSERT(tx->tx_resid == tx->tx_nob);
         
-        CDEBUG (D_NET, "Sending to "LPX64" on port %d\n", 
-                conn->ksnc_peer->ksnp_nid, conn->ksnc_port);
+        CDEBUG (D_NET, "Sending to "LPX64" ip %d.%d.%d.%d:%d\n", 
+                conn->ksnc_peer->ksnp_nid,
+                HIPQUAD(conn->ksnc_ipaddr),
+                conn->ksnc_port);
 
         atomic_add (tx->tx_nob, &conn->ksnc_tx_nob);
         tx->tx_conn = conn;
@@ -1011,7 +1007,7 @@ ksocknal_launch_packet (ksock_tx_t *tx, ptl_nid_t nid)
         return (-EHOSTUNREACH);
 }
 
-int
+ptl_err_t
 ksocknal_sendmsg(nal_cb_t     *nal, 
                  void         *private, 
                  lib_msg_t    *cookie,
@@ -1022,6 +1018,7 @@ ksocknal_sendmsg(nal_cb_t     *nal,
                  unsigned int  payload_niov, 
                  struct iovec *payload_iov, 
                  ptl_kiov_t   *payload_kiov,
+                 size_t        payload_offset,
                  size_t        payload_nob)
 {
         ksock_ltx_t  *ltx;
@@ -1084,20 +1081,19 @@ ksocknal_sendmsg(nal_cb_t     *nal,
                 ltx->ltx_tx.tx_kiov  = NULL;
                 ltx->ltx_tx.tx_nkiov = 0;
 
-                ltx->ltx_tx.tx_niov = 1 + payload_niov;
-
-                memcpy(ltx->ltx_iov + 1, payload_iov,
-                       payload_niov * sizeof (*payload_iov));
-
+                ltx->ltx_tx.tx_niov = 
+                        1 + lib_extract_iov(payload_niov, &ltx->ltx_iov[1],
+                                            payload_niov, payload_iov,
+                                            payload_offset, payload_nob);
         } else {
                 /* payload is all pages */
-                ltx->ltx_tx.tx_kiov = ltx->ltx_kiov;
-                ltx->ltx_tx.tx_nkiov = payload_niov;
-
                 ltx->ltx_tx.tx_niov = 1;
 
-                memcpy(ltx->ltx_kiov, payload_kiov, 
-                       payload_niov * sizeof (*payload_kiov));
+                ltx->ltx_tx.tx_kiov = ltx->ltx_kiov;
+                ltx->ltx_tx.tx_nkiov =
+                        lib_extract_kiov(payload_niov, ltx->ltx_kiov,
+                                         payload_niov, payload_kiov,
+                                         payload_offset, payload_nob);
         }
 
         rc = ksocknal_launch_packet(&ltx->ltx_tx, nid);
@@ -1108,28 +1104,28 @@ ksocknal_sendmsg(nal_cb_t     *nal,
         return (PTL_FAIL);
 }
 
-int
+ptl_err_t
 ksocknal_send (nal_cb_t *nal, void *private, lib_msg_t *cookie,
                ptl_hdr_t *hdr, int type, ptl_nid_t nid, ptl_pid_t pid,
                unsigned int payload_niov, struct iovec *payload_iov,
-               size_t payload_len)
+               size_t payload_offset, size_t payload_len)
 {
         return (ksocknal_sendmsg(nal, private, cookie,
                                  hdr, type, nid, pid,
                                  payload_niov, payload_iov, NULL,
-                                 payload_len));
+                                 payload_offset, payload_len));
 }
 
-int
+ptl_err_t
 ksocknal_send_pages (nal_cb_t *nal, void *private, lib_msg_t *cookie, 
                      ptl_hdr_t *hdr, int type, ptl_nid_t nid, ptl_pid_t pid,
                      unsigned int payload_niov, ptl_kiov_t *payload_kiov, 
-                     size_t payload_len)
+                     size_t payload_offset, size_t payload_len)
 {
         return (ksocknal_sendmsg(nal, private, cookie,
                                  hdr, type, nid, pid,
                                  payload_niov, NULL, payload_kiov,
-                                 payload_len));
+                                 payload_offset, payload_len));
 }
 
 void
@@ -1185,10 +1181,16 @@ ksocknal_fmb_callback (void *arg, int error)
         ksock_conn_t      *conn = NULL;
         ksock_sched_t     *sched;
         unsigned long      flags;
+        char               ipbuf[PTL_NALFMT_SIZE];
+        char               ipbuf2[PTL_NALFMT_SIZE];
 
         if (error != 0)
-                CERROR("Failed to route packet from "LPX64" to "LPX64": %d\n",
-                       NTOH__u64(hdr->src_nid), NTOH__u64(hdr->dest_nid),
+                CERROR("Failed to route packet from "
+                       LPX64" %s to "LPX64" %s: %d\n",
+                       NTOH__u64(hdr->src_nid),
+                       portals_nid2str(SOCKNAL, NTOH__u64(hdr->src_nid), ipbuf),
+                       NTOH__u64(hdr->dest_nid),
+                       portals_nid2str(SOCKNAL, NTOH__u64(hdr->dest_nid), ipbuf2),
                        error);
         else
                 CDEBUG (D_NET, "routed packet from "LPX64" to "LPX64": OK\n",
@@ -1196,7 +1198,7 @@ ksocknal_fmb_callback (void *arg, int error)
 
         /* drop peer ref taken on init */
         ksocknal_put_peer (fmb->fmb_peer);
-        
+
         spin_lock_irqsave (&fmp->fmp_lock, flags);
 
         list_add (&fmb->fmb_list, &fmp->fmp_idle_fmbs);
@@ -1377,6 +1379,7 @@ ksocknal_fwd_parse (ksock_conn_t *conn)
         ptl_nid_t     src_nid = NTOH__u64 (conn->ksnc_hdr.src_nid);
         int           body_len = NTOH__u32 (conn->ksnc_hdr.payload_length);
         char str[PTL_NALFMT_SIZE];
+        char str2[PTL_NALFMT_SIZE];
 
         CDEBUG (D_NET, "%p "LPX64"->"LPX64" %d parsing header\n", conn,
                 src_nid, dest_nid, conn->ksnc_rx_nob_left);
@@ -1388,7 +1391,7 @@ ksocknal_fwd_parse (ksock_conn_t *conn)
                 CERROR("dropping packet from "LPX64" (%s) for "LPX64" (%s): "
                        "packet size %d illegal\n",
                        src_nid, portals_nid2str(TCPNAL, src_nid, str),
-                       dest_nid, portals_nid2str(TCPNAL, dest_nid, str),
+                       dest_nid, portals_nid2str(TCPNAL, dest_nid, str2),
                        body_len);
 
                 ksocknal_new_packet (conn, 0);  /* on to new packet */
@@ -1399,7 +1402,7 @@ ksocknal_fwd_parse (ksock_conn_t *conn)
                 CERROR("dropping packet from "LPX64" (%s) for "LPX64
                        " (%s): not forwarding\n",
                        src_nid, portals_nid2str(TCPNAL, src_nid, str),
-                       dest_nid, portals_nid2str(TCPNAL, dest_nid, str));
+                       dest_nid, portals_nid2str(TCPNAL, dest_nid, str2));
                 /* on to new packet (skip this one's body) */
                 ksocknal_new_packet (conn, body_len);
                 return;
@@ -1409,7 +1412,7 @@ ksocknal_fwd_parse (ksock_conn_t *conn)
                 CERROR ("dropping packet from "LPX64" (%s) for "LPX64
                         "(%s): packet size %d too big\n",
                         src_nid, portals_nid2str(TCPNAL, src_nid, str),
-                        dest_nid, portals_nid2str(TCPNAL, dest_nid, str),
+                        dest_nid, portals_nid2str(TCPNAL, dest_nid, str2),
                         body_len);
                 /* on to new packet (skip this one's body) */
                 ksocknal_new_packet (conn, body_len);
@@ -1422,7 +1425,7 @@ ksocknal_fwd_parse (ksock_conn_t *conn)
                 CERROR ("dropping packet from "LPX64" (%s) for "LPX64
                         "(%s): target is a peer\n",
                         src_nid, portals_nid2str(TCPNAL, src_nid, str),
-                        dest_nid, portals_nid2str(TCPNAL, dest_nid, str));
+                        dest_nid, portals_nid2str(TCPNAL, dest_nid, str2));
                 ksocknal_put_peer (peer);  /* drop ref from get above */
 
                 /* on to next packet (skip this one's body) */
@@ -1529,13 +1532,16 @@ ksocknal_process_receive (ksock_conn_t *conn)
                 LASSERT (rc != -EAGAIN);
 
                 if (rc == 0)
-                        CWARN ("[%p] EOF from "LPX64" ip %08x:%d\n",
+                        CWARN ("[%p] EOF from "LPX64" ip %d.%d.%d.%d:%d\n",
                                conn, conn->ksnc_peer->ksnp_nid,
-                               conn->ksnc_ipaddr, conn->ksnc_port);
+                               HIPQUAD(conn->ksnc_ipaddr),
+                               conn->ksnc_port);
                 else if (!conn->ksnc_closing)
-                        CERROR ("[%p] Error %d on read from "LPX64" ip %08x:%d\n",
+                        CERROR ("[%p] Error %d on read from "LPX64
+                                " ip %d.%d.%d.%d:%d\n",
                                 conn, rc, conn->ksnc_peer->ksnp_nid,
-                                conn->ksnc_ipaddr, conn->ksnc_port);
+                                HIPQUAD(conn->ksnc_ipaddr),
+                                conn->ksnc_port);
 
                 ksocknal_close_conn_and_siblings (conn, rc);
                 return (rc == 0 ? -ESHUTDOWN : rc);
@@ -1576,7 +1582,7 @@ ksocknal_process_receive (ksock_conn_t *conn)
 
         case SOCKNAL_RX_BODY:
                 /* payload all received */
-                lib_finalize(&ksocknal_lib, NULL, conn->ksnc_cookie);
+                lib_finalize(&ksocknal_lib, NULL, conn->ksnc_cookie, PTL_OK);
                 /* Fall through */
 
         case SOCKNAL_RX_SLOP:
@@ -1612,9 +1618,10 @@ ksocknal_process_receive (ksock_conn_t *conn)
         return (-EINVAL);                       /* keep gcc happy */
 }
 
-int
+ptl_err_t
 ksocknal_recv (nal_cb_t *nal, void *private, lib_msg_t *msg,
-               unsigned int niov, struct iovec *iov, size_t mlen, size_t rlen)
+               unsigned int niov, struct iovec *iov, 
+               size_t offset, size_t mlen, size_t rlen)
 {
         ksock_conn_t *conn = (ksock_conn_t *)private;
 
@@ -1627,20 +1634,22 @@ ksocknal_recv (nal_cb_t *nal, void *private, lib_msg_t *msg,
 
         conn->ksnc_rx_nkiov = 0;
         conn->ksnc_rx_kiov = NULL;
-        conn->ksnc_rx_niov = niov;
         conn->ksnc_rx_iov = conn->ksnc_rx_iov_space.iov;
-        memcpy (conn->ksnc_rx_iov, iov, niov * sizeof (*iov));
+        conn->ksnc_rx_niov =
+                lib_extract_iov(PTL_MD_MAX_IOV, conn->ksnc_rx_iov,
+                                niov, iov, offset, mlen);
 
         LASSERT (mlen == 
                  lib_iov_nob (conn->ksnc_rx_niov, conn->ksnc_rx_iov) +
                  lib_kiov_nob (conn->ksnc_rx_nkiov, conn->ksnc_rx_kiov));
 
-        return (rlen);
+        return (PTL_OK);
 }
 
-int
+ptl_err_t
 ksocknal_recv_pages (nal_cb_t *nal, void *private, lib_msg_t *msg,
-                     unsigned int niov, ptl_kiov_t *kiov, size_t mlen, size_t rlen)
+                     unsigned int niov, ptl_kiov_t *kiov, 
+                     size_t offset, size_t mlen, size_t rlen)
 {
         ksock_conn_t *conn = (ksock_conn_t *)private;
 
@@ -1653,15 +1662,16 @@ ksocknal_recv_pages (nal_cb_t *nal, void *private, lib_msg_t *msg,
 
         conn->ksnc_rx_niov = 0;
         conn->ksnc_rx_iov  = NULL;
-        conn->ksnc_rx_nkiov = niov;
         conn->ksnc_rx_kiov = conn->ksnc_rx_iov_space.kiov;
-        memcpy (conn->ksnc_rx_kiov, kiov, niov * sizeof (*kiov));
+        conn->ksnc_rx_nkiov = 
+                lib_extract_kiov(PTL_MD_MAX_IOV, conn->ksnc_rx_kiov,
+                                 niov, kiov, offset, mlen);
 
         LASSERT (mlen == 
                  lib_iov_nob (conn->ksnc_rx_niov, conn->ksnc_rx_iov) +
                  lib_kiov_nob (conn->ksnc_rx_nkiov, conn->ksnc_rx_kiov));
 
-        return (rlen);
+        return (PTL_OK);
 }
 
 int ksocknal_scheduler (void *arg)
@@ -2014,54 +2024,60 @@ ksocknal_sock_read (struct socket *sock, void *buffer, int nob)
 }
 
 int
-ksocknal_hello (struct socket *sock, ptl_nid_t *nid, int *type, __u64 *incarnation)
+ksocknal_hello (struct socket *sock, ptl_nid_t *nid, int *type,
+                __u64 *incarnation)
 {
         int                 rc;
         ptl_hdr_t           hdr;
         ptl_magicversion_t *hmv = (ptl_magicversion_t *)&hdr.dest_nid;
+        char                ipbuf[PTL_NALFMT_SIZE];
+        char                ipbuf2[PTL_NALFMT_SIZE];
 
         LASSERT (sizeof (*hmv) == sizeof (hdr.dest_nid));
 
         memset (&hdr, 0, sizeof (hdr));
         hmv->magic         = __cpu_to_le32 (PORTALS_PROTO_MAGIC);
-        hmv->version_major = __cpu_to_le32 (PORTALS_PROTO_VERSION_MAJOR);
-        hmv->version_minor = __cpu_to_le32 (PORTALS_PROTO_VERSION_MINOR);
-        
+        hmv->version_major = __cpu_to_le16 (PORTALS_PROTO_VERSION_MAJOR);
+        hmv->version_minor = __cpu_to_le16 (PORTALS_PROTO_VERSION_MINOR);
+
         hdr.src_nid = __cpu_to_le64 (ksocknal_lib.ni.nid);
         hdr.type    = __cpu_to_le32 (PTL_MSG_HELLO);
 
         hdr.msg.hello.type = __cpu_to_le32 (*type);
-        hdr.msg.hello.incarnation = 
+        hdr.msg.hello.incarnation =
                 __cpu_to_le64 (ksocknal_data.ksnd_incarnation);
 
         /* Assume sufficient socket buffering for this message */
         rc = ksocknal_sock_write (sock, &hdr, sizeof (hdr));
         if (rc != 0) {
-                CERROR ("Error %d sending HELLO to "LPX64"\n", rc, *nid);
+                CERROR ("Error %d sending HELLO to "LPX64" %s\n",
+                        rc, *nid, portals_nid2str(SOCKNAL, *nid, ipbuf));
                 return (rc);
         }
 
         rc = ksocknal_sock_read (sock, hmv, sizeof (*hmv));
         if (rc != 0) {
-                CERROR ("Error %d reading HELLO from "LPX64"\n", rc, *nid);
+                CERROR ("Error %d reading HELLO from "LPX64" %s\n",
+                        rc, *nid, portals_nid2str(SOCKNAL, *nid, ipbuf));
                 return (rc);
         }
-        
+
         if (hmv->magic != __le32_to_cpu (PORTALS_PROTO_MAGIC)) {
-                CERROR ("Bad magic %#08x (%#08x expected) from "LPX64"\n",
-                        __cpu_to_le32 (hmv->magic), PORTALS_PROTO_MAGIC, *nid);
+                CERROR ("Bad magic %#08x (%#08x expected) from "LPX64" %s\n",
+                        __cpu_to_le32 (hmv->magic), PORTALS_PROTO_MAGIC, *nid,
+                        portals_nid2str(SOCKNAL, *nid, ipbuf));
                 return (-EPROTO);
         }
 
         if (hmv->version_major != __cpu_to_le16 (PORTALS_PROTO_VERSION_MAJOR) ||
             hmv->version_minor != __cpu_to_le16 (PORTALS_PROTO_VERSION_MINOR)) {
                 CERROR ("Incompatible protocol version %d.%d (%d.%d expected)"
-                        " from "LPX64"\n",
+                        " from "LPX64" %s\n",
                         __le16_to_cpu (hmv->version_major),
                         __le16_to_cpu (hmv->version_minor),
                         PORTALS_PROTO_VERSION_MAJOR,
                         PORTALS_PROTO_VERSION_MINOR,
-                        *nid);
+                        *nid, portals_nid2str(SOCKNAL, *nid, ipbuf));
                 return (-EPROTO);
         }
 
@@ -2073,8 +2089,8 @@ ksocknal_hello (struct socket *sock, ptl_nid_t *nid, int *type, __u64 *incarnati
 
         rc = ksocknal_sock_read (sock, hmv + 1, sizeof (hdr) - sizeof (*hmv));
         if (rc != 0) {
-                CERROR ("Error %d reading rest of HELLO hdr from "LPX64"\n",
-                        rc, *nid);
+                CERROR ("Error %d reading rest of HELLO hdr from "LPX64" %s\n",
+                        rc, *nid, portals_nid2str(SOCKNAL, *nid, ipbuf));
                 return (rc);
         }
 
@@ -2082,9 +2098,10 @@ ksocknal_hello (struct socket *sock, ptl_nid_t *nid, int *type, __u64 *incarnati
         if (hdr.type != __cpu_to_le32 (PTL_MSG_HELLO) ||
             hdr.payload_length != __cpu_to_le32 (0)) {
                 CERROR ("Expecting a HELLO hdr with 0 payload,"
-                        " but got type %d with %d payload from "LPX64"\n",
+                        " but got type %d with %d payload from "LPX64" %s\n",
                         __le32_to_cpu (hdr.type),
-                        __le32_to_cpu (hdr.payload_length), *nid);
+                        __le32_to_cpu (hdr.payload_length), *nid,
+                        portals_nid2str(SOCKNAL, *nid, ipbuf));
                 return (-EPROTO);
         }
 
@@ -2096,8 +2113,12 @@ ksocknal_hello (struct socket *sock, ptl_nid_t *nid, int *type, __u64 *incarnati
         if (*nid == PTL_NID_ANY) {              /* don't know peer's nid yet */
                 *nid = __le64_to_cpu(hdr.src_nid);
         } else if (*nid != __le64_to_cpu (hdr.src_nid)) {
-                CERROR ("Connected to nid "LPX64", but expecting "LPX64"\n",
-                        __le64_to_cpu (hdr.src_nid), *nid);
+                CERROR ("Connected to nid "LPX64" %s, but expecting "LPX64" %s\n",
+                        __le64_to_cpu (hdr.src_nid),
+                        portals_nid2str(SOCKNAL,
+                                        __le64_to_cpu(hdr.src_nid),
+                                        ipbuf),
+                        *nid, portals_nid2str(SOCKNAL, *nid, ipbuf2));
                 return (-EPROTO);
         }
 
@@ -2115,12 +2136,15 @@ ksocknal_hello (struct socket *sock, ptl_nid_t *nid, int *type, __u64 *incarnati
                         *type = SOCKNAL_CONN_BULK_IN;
                         break;
                 default:
-                        CERROR ("Unexpected type %d from "LPX64"\n", *type, *nid);
+                        CERROR ("Unexpected type %d from "LPX64" %s\n",
+                                *type, *nid,
+                                portals_nid2str(SOCKNAL, *nid, ipbuf));
                         return (-EPROTO);
                 }
         } else if (__le32_to_cpu(hdr.msg.hello.type) != SOCKNAL_CONN_NONE) {
-                CERROR ("Mismatched types: me %d "LPX64" %d\n",
-                        *type, *nid, __le32_to_cpu(hdr.msg.hello.type));
+                CERROR ("Mismatched types: me %d "LPX64" %s %d\n",
+                        *type, *nid, portals_nid2str(SOCKNAL, *nid, ipbuf),
+                        __le32_to_cpu(hdr.msg.hello.type));
                 return (-EPROTO);
         }
 
@@ -2224,6 +2248,7 @@ ksocknal_connect_peer (ksock_route_t *route, int type)
         int                 fd;
         struct socket      *sock;
         int                 rc;
+        char                ipbuf[PTL_NALFMT_SIZE];
 
         rc = sock_create (PF_INET, SOCK_STREAM, 0, &sock);
         if (rc != 0) {
@@ -2316,8 +2341,11 @@ ksocknal_connect_peer (ksock_route_t *route, int type)
         rc = sock->ops->connect (sock, (struct sockaddr *)&peer_addr, 
                                  sizeof (peer_addr), sock->file->f_flags);
         if (rc != 0) {
-                CERROR ("Error %d connecting to "LPX64"\n", rc,
-                        route->ksnr_peer->ksnp_nid);
+                CERROR ("Error %d connecting to "LPX64" %s\n", rc,
+                        route->ksnr_peer->ksnp_nid,
+                        portals_nid2str(SOCKNAL,
+                                        route->ksnr_peer->ksnp_nid,
+                                        ipbuf));
                 goto out;
         }
         
@@ -2399,13 +2427,21 @@ ksocknal_autoconnect (ksock_route_t *route)
         write_unlock_irqrestore (&ksocknal_data.ksnd_global_lock, flags);
 
         while (!list_empty (&zombies)) {
+                char ipbuf[PTL_NALFMT_SIZE];
+                char ipbuf2[PTL_NALFMT_SIZE];
                 tx = list_entry (zombies.next, ksock_tx_t, tx_list);
-                
-                CERROR ("Deleting packet type %d len %d ("LPX64"->"LPX64")\n",
+
+                CERROR ("Deleting packet type %d len %d ("LPX64" %s->"LPX64" %s)\n",
                         NTOH__u32 (tx->tx_hdr->type),
                         NTOH__u32 (tx->tx_hdr->payload_length),
                         NTOH__u64 (tx->tx_hdr->src_nid),
-                        NTOH__u64 (tx->tx_hdr->dest_nid));
+                        portals_nid2str(SOCKNAL,
+                                        NTOH__u64(tx->tx_hdr->src_nid),
+                                        ipbuf),
+                        NTOH__u64 (tx->tx_hdr->dest_nid),
+                        portals_nid2str(SOCKNAL,
+                                        NTOH__u64(tx->tx_hdr->src_nid),
+                                        ipbuf2));
 
                 list_del (&tx->tx_list);
                 /* complete now */
@@ -2478,8 +2514,8 @@ ksocknal_find_timed_out_conn (ksock_peer_t *peer)
                     time_after_eq (jiffies, conn->ksnc_rx_deadline)) {
                         /* Timed out incomplete incoming message */
                         atomic_inc (&conn->ksnc_refcount);
-                        CERROR ("Timed out RX from "LPX64" %p\n", 
-                                peer->ksnp_nid, conn);
+                        CERROR ("Timed out RX from "LPX64" %p %d.%d.%d.%d\n",
+                                peer->ksnp_nid, conn, HIPQUAD(conn->ksnc_ipaddr));
                         return (conn);
                 }
                 
@@ -2489,10 +2525,11 @@ ksocknal_find_timed_out_conn (ksock_peer_t *peer)
                         /* Timed out messages queued for sending, or
                          * messages buffered in the socket's send buffer */
                         atomic_inc (&conn->ksnc_refcount);
-                        CERROR ("Timed out TX to "LPX64" %s%d %p\n", 
+                        CERROR ("Timed out TX to "LPX64" %s%d %p %d.%d.%d.%d\n", 
                                 peer->ksnp_nid, 
                                 list_empty (&conn->ksnc_tx_queue) ? "" : "Q ",
-                                conn->ksnc_sock->sk->sk_wmem_queued, conn);
+                                conn->ksnc_sock->sk->sk_wmem_queued, conn,
+                                HIPQUAD(conn->ksnc_ipaddr));
                         return (conn);
                 }
         }
@@ -2521,8 +2558,9 @@ ksocknal_check_peer_timeouts (int idx)
                 if (conn != NULL) {
                         read_unlock (&ksocknal_data.ksnd_global_lock);
 
-                        CERROR ("Timeout out conn->"LPX64" ip %x:%d\n",
-                                peer->ksnp_nid, conn->ksnc_ipaddr,
+                        CERROR ("Timeout out conn->"LPX64" ip %d.%d.%d.%d:%d\n",
+                                peer->ksnp_nid,
+                                HIPQUAD(conn->ksnc_ipaddr),
                                 conn->ksnc_port);
                         ksocknal_close_conn_and_siblings (conn, -ETIMEDOUT);
                         
@@ -2679,7 +2717,6 @@ nal_cb_t ksocknal_lib = {
         cb_recv_pages:   ksocknal_recv_pages,
         cb_read:         ksocknal_read,
         cb_write:        ksocknal_write,
-        cb_callback:     ksocknal_callback,
         cb_malloc:       ksocknal_malloc,
         cb_free:         ksocknal_free,
         cb_printf:       ksocknal_printf,
