@@ -626,7 +626,7 @@ static int osc_enqueue(struct lustre_handle *connh, struct lov_stripe_md *lsm,
         /* Filesystem locks are given a bit of special treatment: if
          * this is not a file size lock (which has end == -1), we
          * fixup the lock to start and end on page boundaries. */
-        if (extent->end != OBD_PUNCH_EOF) {
+        if (extent->end != OBD_OBJECT_EOF) {
                 extent->start &= PAGE_MASK;
                 extent->end = (extent->end + PAGE_SIZE - 1) & PAGE_MASK;
         }
