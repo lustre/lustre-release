@@ -641,7 +641,7 @@ void target_abort_recovery(void *data)
 
         class_disconnect_exports(obd, 0);
 
-        /* when recovery was abort, cleanup orphans for mds */
+        /* when recovery was aborted, cleanup orphans on mds and ost */
         if (OBT(obd) && OBP(obd, postrecov)) {
                 rc = OBP(obd, postrecov)(obd);
                 if (rc >= 0)
@@ -929,12 +929,12 @@ int target_queue_final_reply(struct ptlrpc_request *req, int rc)
                        obd->obd_name);
                 obd->obd_recovering = 0;
 
-                /* when recovering finished, cleanup orphans for mds */
+                /* when recovery finished, cleanup orphans on mds and ost */
                 if (OBT(obd) && OBP(obd, postrecov)) {
                         rc2 = OBP(obd, postrecov)(obd);
                         if (rc2 >= 0)
-                                CWARN("%s: all clients recovered, %d MDS orphans "
-                                       "deleted\n", obd->obd_name, rc2);
+                                CWARN("%s: all clients recovered, %d MDS "
+                                      "orphans deleted\n", obd->obd_name, rc2);
                         else
                                 CERROR("postrecov failed %d\n", rc2);
                 }
@@ -1132,4 +1132,3 @@ void *ldlm_put_lock_into_req(struct ptlrpc_request *req,
         LBUG();
         return NULL;
 }
-
