@@ -42,8 +42,7 @@
  *
  * Assumes caller has already pushed us into the kernel context and is locking.
  */
-struct llog_handle *llog_cat_new_log(struct llog_handle *cathandle,
-                                 struct obd_uuid *tgtuuid)
+static struct llog_handle *llog_cat_new_log(struct llog_handle *cathandle)
 {
         struct llog_handle *loghandle;
         struct llog_log_hdr *llh;
@@ -56,15 +55,15 @@ struct llog_handle *llog_cat_new_log(struct llog_handle *cathandle,
         if (rc)
                 RETURN(ERR_PTR(rc));
 
-        rc = llog_init_handle(loghandle, LLOG_F_IS_PLAIN | LLOG_F_ZAP_WHEN_EMPTY, 
-                         &cathandle->lgh_hdr->llh_tgtuuid);
+        rc = llog_init_handle(loghandle, 
+                              LLOG_F_IS_PLAIN | LLOG_F_ZAP_WHEN_EMPTY, 
+                              &cathandle->lgh_hdr->llh_tgtuuid);
         if (rc)
                 GOTO(out_destroy, rc);
 
-
+        /* Find first free entry */
         llh = cathandle->lgh_hdr;
         bitmap_size = sizeof(llh->llh_bitmap) * 8;
-        /* This should basically always find the first entry free */
         for (i = 0, index = llh->llh_count; i < bitmap_size; i++, index++) {
                 index %= bitmap_size;
                 if (ext2_set_bit(index, llh->llh_bitmap)) {
@@ -79,7 +78,6 @@ struct llog_handle *llog_cat_new_log(struct llog_handle *cathandle,
                 CERROR("no free catalog slots for log...\n");
                 GOTO(out_destroy, rc = -ENOSPC);
         }
-
 
         CDEBUG(D_HA, "new recovery log "LPX64": catalog index %u\n",
                loghandle->lgh_id.lgl_oid, index);
@@ -148,50 +146,17 @@ out:
         RETURN(rc);
 }
 
-
-#if 0
-/* Assumes caller has already pushed us into the kernel context. */
-int llog_cat_init(struct llog_handle *cathandle, struct obd_uuid *tgtuuid)
+void llog_cat_put(struct llog_handle *cathandle)
 {
-        struct llog_log_hdr *llh;
-        loff_t offset = 0;
-        int rc = 0;
+        struct llog_handle *loghandle, *n;
         ENTRY;
 
-        LASSERT(sizeof(*llh) == LLOG_CHUNK_SIZE);
-
-        down(&cathandle->lgh_lock);
-        llh = cathandle->lgh_hdr;
-
-        if (cathandle->lgh_file->f_dentry->d_inode->i_size == 0) {
-                llog_write_rec(cathandle, &llh->llh_hdr, NULL, 0, NULL, 0);
-
-write_hdr:    
-  rc = lustre_fwrite(cathandle->lgh_file, llh, LLOG_CHUNK_SIZE,
-                                   &offset);
-                if (rc != LLOG_CHUNK_SIZE) {
-                        CERROR("error writing catalog header: rc %d\n", rc);
-                        OBD_FREE(llh, sizeof(*llh));
-                        if (rc >= 0)
-                                rc = -ENOSPC;
-                } else
-                        rc = 0;
-        } else {
-                rc = lustre_fread(cathandle->lgh_file, llh, LLOG_CHUNK_SIZE,
-                                  &offset);
-                if (rc != LLOG_CHUNK_SIZE) {
-                        CERROR("error reading catalog header: rc %d\n", rc);
-                        /* Can we do much else if the header is bad? */
-                        goto write_hdr;
-                } else
-                        rc = 0;
-        }
-
-        cathandle->lgh_tgtuuid = &llh->llh_tgtuuid;
-        up(&cathandle->lgh_lock);
-        RETURN(rc);
+        list_for_each_entry_safe(loghandle, n, &cathandle->u.chd.chd_head, 
+                                 u.phd.phd_entry)
+                llog_close(loghandle);
+        llog_close(cathandle);
+        EXIT;
 }
-EXPORT_SYMBOL(llog_cat_init);
 
 /* Return the currently active log handle.  If the current log handle doesn't
  * have enough space left for the current record, start a new one.
@@ -201,21 +166,21 @@ EXPORT_SYMBOL(llog_cat_init);
  *
  * Assumes caller has already pushed us into the kernel context and is locking.
  */
-static struct llog_handle *llog_cat_current_log(struct llog_handle *cathandle,
-                                            int reclen)
+static struct llog_handle *llog_cat_current_log(struct llog_handle *cathandle, 
+                                                int create)
 {
         struct llog_handle *loghandle = NULL;
         ENTRY;
 
-        loghandle = cathandle->lgh_current;
+        loghandle = cathandle->u.chd.chd_current_log;
         if (loghandle) {
                 struct llog_log_hdr *llh = loghandle->lgh_hdr;
-                if (llh->llh_count < sizeof(llh->llh_bitmap) * 8)
+                if (loghandle->lgh_last_idx < sizeof(llh->llh_bitmap) * 8)
                         RETURN(loghandle);
         }
 
-        if (reclen)
-                loghandle = llog_new_log(cathandle, cathandle->lgh_tgtuuid);
+        if (create)
+                loghandle = llog_cat_new_log(cathandle);
         RETURN(loghandle);
 }
 
@@ -224,17 +189,16 @@ static struct llog_handle *llog_cat_current_log(struct llog_handle *cathandle,
  *
  * Assumes caller has already pushed us into the kernel context.
  */
-int llog_cat_add_record(struct llog_handle *cathandle, struct llog_rec_hdr *rec,
+int llog_cat_add_rec(struct llog_handle *cathandle, struct llog_rec_hdr *rec,
                     struct llog_cookie *reccookie, void *buf)
 {
         struct llog_handle *loghandle;
-        int reclen = rec->lrh_len;
         int rc;
         ENTRY;
 
         LASSERT(rec->lrh_len <= LLOG_CHUNK_SIZE);
         down(&cathandle->lgh_lock);
-        loghandle = llog_cat_current_log(cathandle, reclen);
+        loghandle = llog_cat_current_log(cathandle, 1);
         if (IS_ERR(loghandle)) {
                 up(&cathandle->lgh_lock);
                 RETURN(PTR_ERR(loghandle));
@@ -242,12 +206,12 @@ int llog_cat_add_record(struct llog_handle *cathandle, struct llog_rec_hdr *rec,
         down(&loghandle->lgh_lock);
         up(&cathandle->lgh_lock);
 
-        rc = llog_write_record(loghandle, rec, reccookie, buf);
+        rc = llog_write_rec(loghandle, rec, reccookie, 1, buf, -1);
 
         up(&loghandle->lgh_lock);
         RETURN(rc);
 }
-EXPORT_SYMBOL(llog_cat_add_record);
+EXPORT_SYMBOL(llog_cat_add_rec);
 
 /* For each cookie in the cookie array, we clear the log in-use bit and either:
  * - the log is empty, so mark it free in the catalog header and delete it
@@ -258,7 +222,7 @@ EXPORT_SYMBOL(llog_cat_add_record);
  *
  * Assumes caller has already pushed us into the kernel context.
  */
-int llog_cancel_records(struct llog_handle *cathandle, int count,
+int llog_cat_cancel_records(struct llog_handle *cathandle, int count,
                         struct llog_cookie *cookies)
 {
         int i, rc = 0;
@@ -285,15 +249,13 @@ int llog_cancel_records(struct llog_handle *cathandle, int count,
                 if (!ext2_clear_bit(cookies->lgc_index, llh->llh_bitmap)) {
                         CERROR("log index %u in "LPX64":%x already clear?\n",
                                cookies->lgc_index, lgl->lgl_oid, lgl->lgl_ogen);
-                } else if (--llh->llh_count == 0 &&
+                } else if (--llh->llh_count == 1 &&
                            loghandle != llog_cat_current_log(cathandle, 0)) {
-                        rc = llog_close_log(cathandle, loghandle);
+                        rc = llog_close(loghandle);
                 } else {
-                        loff_t offset = 0;
-                        int ret = lustre_fwrite(loghandle->lgh_file, llh,
-                                                sizeof(*llh), &offset);
-
-                        if (ret != sizeof(*llh)) {
+                        int ret = llog_write_rec(loghandle, &llh->llh_hdr, 
+                                            NULL, 0, NULL, 0);
+                        if (ret != 0) {
                                 CERROR("error cancelling index %u: rc %d\n",
                                        cookies->lgc_index, ret);
                                 /* XXX mark handle bad? */
@@ -307,20 +269,53 @@ int llog_cancel_records(struct llog_handle *cathandle, int count,
 
         RETURN(rc);
 }
-EXPORT_SYMBOL(llog_cancel_records);
+EXPORT_SYMBOL(llog_cat_cancel_records);
 
-void llog_cat_put(struct obd_device *obd, struct llog_handle *cathandle)
+#if 0
+/* Assumes caller has already pushed us into the kernel context. */
+int llog_cat_init(struct llog_handle *cathandle, struct obd_uuid *tgtuuid)
 {
-        struct llog_handle *loghandle, *n;
-        struct obd_run_ctxt saved;
-        int rc;
+        struct llog_log_hdr *llh;
+        loff_t offset = 0;
+        int rc = 0;
         ENTRY;
 
-        push_ctxt(&saved, &obd->u.mds.mds_ctxt, NULL);
-        list_for_each_entry_safe(loghandle, n, &cathandle->lgh_list, lgh_list)
-                llog_cat_close(cathandle, loghandle);
-        pop_ctxt(&saved, &obd->u.mds.mds_ctxt, NULL);
+        LASSERT(sizeof(*llh) == LLOG_CHUNK_SIZE);
 
-        EXIT;
+        down(&cathandle->lgh_lock);
+        llh = cathandle->lgh_hdr;
+
+        if (cathandle->lgh_file->f_dentry->d_inode->i_size == 0) {
+                llog_write_rec(cathandle, &llh->llh_hdr, NULL, 0, NULL, 0);
+
+write_hdr:    
+                rc = lustre_fwrite(cathandle->lgh_file, llh, LLOG_CHUNK_SIZE,
+                                   &offset);
+                if (rc != LLOG_CHUNK_SIZE) {
+                        CERROR("error writing catalog header: rc %d\n", rc);
+                        OBD_FREE(llh, sizeof(*llh));
+                        if (rc >= 0)
+                                rc = -ENOSPC;
+                } else
+                        rc = 0;
+        } else {
+                rc = lustre_fread(cathandle->lgh_file, llh, LLOG_CHUNK_SIZE,
+                                  &offset);
+                if (rc != LLOG_CHUNK_SIZE) {
+                        CERROR("error reading catalog header: rc %d\n", rc);
+                        /* Can we do much else if the header is bad? */
+                        goto write_hdr;
+                } else
+                        rc = 0;
+        }
+
+        cathandle->lgh_tgtuuid = &llh->llh_tgtuuid;
+        up(&cathandle->lgh_lock);
+        RETURN(rc);
 }
+EXPORT_SYMBOL(llog_cat_init);
+
+
+
+
 #endif
