@@ -1,0 +1,5 @@
+cvs -z9 -q
+diff -u -p
+co -d -P
+update -d -P
+commit
