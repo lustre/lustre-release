@@ -2,12 +2,13 @@ Index: linux/fs/ext3/namei.c
 ===================================================================
 --- linux.orig/fs/ext3/namei.c	Wed Aug 25 11:34:25 2004
 +++ linux/fs/ext3/namei.c	Wed Aug 25 13:16:03 2004
-@@ -1541,11 +1541,16 @@
+@@ -1541,11 +1541,17 @@
  static inline void ext3_inc_count(handle_t *handle, struct inode *inode)
  {
  	inode->i_nlink++;
 +	if (is_dx(inode) && inode->i_nlink > 1) {
-+		if (inode->i_nlink >= 65000) /* limit is 16-bit i_links_count */
++		/* limit is 16-bit i_links_count */
++		if (inode->i_nlink >= EXT3_LINK_MAX || inode->i_nlink == 2)
 +			inode->i_nlink = 1;
 +        }
  }
@@ -151,6 +152,15 @@ Index: linux/include/linux/ext3_fs.h
  
  /*
   * Debug code
+@@ -79,7 +81,7 @@
+ /*
+  * Maximal count of links to a file
+  */
+-#define EXT3_LINK_MAX		32000
++#define EXT3_LINK_MAX		65000
+ 
+ /*
+  * Macro-instructions used to manage several block sizes
 @@ -580,14 +580,15 @@
   */
  

@@ -2,12 +2,13 @@ Index: 69chaos/fs/ext3/namei.c
 ===================================================================
 --- 69chaos.orig/fs/ext3/namei.c	2004-08-24 23:56:04.000000000 -0700
 +++ 69chaos/fs/ext3/namei.c	2004-08-24 23:57:20.000000000 -0700
-@@ -1542,11 +1542,16 @@
+@@ -1542,11 +1542,17 @@
  static inline void ext3_inc_count(handle_t *handle, struct inode *inode)
  {
  	inode->i_nlink++;
 +	if (is_dx(inode) && inode->i_nlink > 1) {
-+		if (inode->i_nlink >= 65000) /* limit is 16-bit i_links_count */
++		/* limit is 16-bit i_links_count */
++		if (inode->i_nlink >= EXT3_LINK_MAX || inode->i_nlink == 2)
 +			inode->i_nlink = 1;
 +        }
  }
@@ -151,6 +152,15 @@ Index: 69chaos/include/linux/ext3_fs.h
  
  /*
   * Debug code
+@@ -79,7 +81,7 @@
+ /*
+  * Maximal count of links to a file
+  */
+-#define EXT3_LINK_MAX		32000
++#define EXT3_LINK_MAX		65000
+ 
+ /*
+  * Macro-instructions used to manage several block sizes
 @@ -582,14 +582,15 @@
   */
  
