@@ -312,7 +312,7 @@ static int fsfilt_ext3_commit_async(struct inode *inode, void *h,
 
 static int fsfilt_ext3_commit_wait(struct inode *inode, void *h)
 {
-        tid_t tid = (tid_t)(long)h;
+        tid_t tid = (tid_t) h;
 
         CDEBUG(D_INODE, "commit wait: %lu\n", (unsigned long) tid);
 	if (is_journal_aborted(EXT3_JOURNAL(inode)))
@@ -669,9 +669,13 @@ static int fsfilt_ext3_read_record(struct file * file, void *buf,
         int err;
 
         if (inode->i_size < *offs + size) {
-                CERROR("file size %llu is too short for read %u@%llu\n",
-                       inode->i_size, size, *offs);
-                return -EIO;
+                size = inode->i_size - *offs;
+                if (size < 0) {
+                        CERROR("size %llu is too short for read %u@%llu\n",
+                                        inode->i_size, size, *offs);
+                        return -EIO;
+                } else if (size == 0)
+                        return 0;
         }
 
         block = *offs >> inode->i_blkbits;
@@ -717,7 +721,9 @@ static int fsfilt_ext3_write_record(struct file *file, void *buf, int size,
         if (*offs + size > inode->i_size) {
                 down(&inode->i_sem);
                 if (*offs + size > inode->i_size)
-                        inode->i_size = ((loff_t)block + 1) << inode->i_blkbits;
+                        inode->i_size = *offs + size;
+                if (inode->i_size > EXT3_I(inode)->i_disksize)
+                        EXT3_I(inode)->i_disksize = inode->i_size;
                 up(&inode->i_sem);
         }
 

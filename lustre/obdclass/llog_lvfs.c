@@ -42,7 +42,8 @@
 #include <linux/lustre_fsfilt.h>
 #include "llog_internal.h"
 
-static int llog_lvfs_pad(struct l_file *file, int len, int index)
+static int llog_lvfs_pad(struct obd_device *obd, struct l_file *file,
+                                int len, int index)
 {
         struct llog_rec_hdr rec;
         struct llog_rec_tail tail;
@@ -55,25 +56,25 @@ static int llog_lvfs_pad(struct l_file *file, int len, int index)
         tail.lrt_index = rec.lrh_index = cpu_to_le32(index);
         rec.lrh_type = 0;
 
-        rc = lustre_fwrite(file, &rec, sizeof(rec), &file->f_pos);
-        if (rc != sizeof(rec)) {
+        rc = fsfilt_write_record(obd, file, &rec, sizeof(rec), &file->f_pos, 0);
+        if (rc) {
                 CERROR("error writing padding record: rc %d\n", rc);
-                GOTO(out, rc < 0 ? rc : rc = -EIO);
+                goto out;
         }
 
         file->f_pos += len - sizeof(rec) - sizeof(tail);
-        rc = lustre_fwrite(file, &tail, sizeof(tail), &file->f_pos);
-        if (rc != sizeof(tail)) {
+        rc = fsfilt_write_record(obd, file, &tail, sizeof(tail), &file->f_pos, 0);
+        if (rc) {
                 CERROR("error writing padding record: rc %d\n", rc);
-                GOTO(out, rc < 0 ? rc : rc = -EIO);
+                goto out;
         }
-        rc = 0;
+
  out:
         RETURN(rc);
 }
 
-static int llog_lvfs_write_blob(struct l_file *file, struct llog_rec_hdr *rec,
-                                void *buf, loff_t off)
+static int llog_lvfs_write_blob(struct obd_device *obd, struct l_file *file,
+                                struct llog_rec_hdr *rec, void *buf, loff_t off)
 {
         int rc;
         struct llog_rec_tail end;
@@ -84,34 +85,34 @@ static int llog_lvfs_write_blob(struct l_file *file, struct llog_rec_hdr *rec,
         file->f_pos = off;
 
         if (!buf) {
-                rc = lustre_fwrite(file, rec, buflen, &file->f_pos);
-                if (rc != buflen) {
+                rc = fsfilt_write_record(obd, file, rec, buflen, &file->f_pos, 0);
+                if (rc) {
                         CERROR("error writing log record: rc %d\n", rc);
-                        GOTO(out, rc < 0 ? rc : rc = -ENOSPC);
+                        goto out;
                 }
                 GOTO(out, rc = 0);
         }
 
         /* the buf case */
         rec->lrh_len = cpu_to_le32(sizeof(*rec) + buflen + sizeof(end));
-        rc = lustre_fwrite(file, rec, sizeof(*rec), &file->f_pos);
-        if (rc != sizeof(*rec)) {
+        rc = fsfilt_write_record(obd, file, rec, sizeof(*rec), &file->f_pos, 0);
+        if (rc) {
                 CERROR("error writing log hdr: rc %d\n", rc);
-                GOTO(out, rc < 0 ? rc : rc = -ENOSPC);
+                goto out;
         }
 
-        rc = lustre_fwrite(file, buf, buflen, &file->f_pos);
-        if (rc != buflen) {
+        rc = fsfilt_write_record(obd, file, buf, buflen, &file->f_pos, 0);
+        if (rc) {
                 CERROR("error writing log buffer: rc %d\n", rc);
-                GOTO(out, rc < 0 ? rc : rc  = -ENOSPC);
+                goto out;
         }
 
         end.lrt_len = rec->lrh_len;
         end.lrt_index = rec->lrh_index;
-        rc = lustre_fwrite(file, &end, sizeof(end), &file->f_pos);
-        if (rc != sizeof(end)) {
+        rc = fsfilt_write_record(obd, file, &end, sizeof(end), &file->f_pos, 0);
+        if (rc) {
                 CERROR("error writing log tail: rc %d\n", rc);
-                GOTO(out, rc < 0 ? rc : rc =  -ENOSPC);
+                goto out;
         }
 
         rc = 0;
@@ -122,17 +123,17 @@ static int llog_lvfs_write_blob(struct l_file *file, struct llog_rec_hdr *rec,
         RETURN(rc);
 }
 
-static int llog_lvfs_read_blob(struct l_file *file, void *buf, int size,
-                               loff_t off)
+static int llog_lvfs_read_blob(struct obd_device *obd, struct l_file *file,
+                                void *buf, int size, loff_t off)
 {
         loff_t offset = off;
         int rc;
         ENTRY;
 
-        rc = lustre_fread(file, buf, size, &offset);
-        if (rc != size) {
+        rc = fsfilt_read_record(obd, file, buf, size, &offset);
+        if (rc) {
                 CERROR("error reading log record: rc %d\n", rc);
-                RETURN(-EIO);
+                RETURN(rc);
         }
         RETURN(0);
 }
@@ -140,22 +141,25 @@ static int llog_lvfs_read_blob(struct l_file *file, void *buf, int size,
 static int llog_lvfs_read_header(struct llog_handle *handle)
 {
         struct llog_rec_tail tail;
+        struct obd_device *obd;
         int rc;
         ENTRY;
 
         LASSERT(sizeof(*handle->lgh_hdr) == LLOG_CHUNK_SIZE);
+        
+        obd = handle->lgh_ctxt->loc_exp->exp_obd;
 
         if (handle->lgh_file->f_dentry->d_inode->i_size == 0) {
                 CERROR("not reading header from 0-byte log\n");
                 RETURN(LLOG_EEMPTY);
         }
 
-        rc = llog_lvfs_read_blob(handle->lgh_file, handle->lgh_hdr,
+        rc = llog_lvfs_read_blob(obd, handle->lgh_file, handle->lgh_hdr,
                                  LLOG_CHUNK_SIZE, 0);
         if (rc)
                 CERROR("error reading log header\n");
 
-        rc = llog_lvfs_read_blob(handle->lgh_file, &tail, sizeof(tail),
+        rc = llog_lvfs_read_blob(obd, handle->lgh_file, &tail, sizeof(tail),
                                  handle->lgh_file->f_dentry->d_inode->i_size -
                                  sizeof(tail));
         if (rc)
@@ -177,6 +181,7 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
         struct llog_log_hdr *llh;
         int reclen = le32_to_cpu(rec->lrh_len), index, rc;
         struct llog_rec_tail *lrt;
+        struct obd_device *obd;
         struct file *file;
         loff_t offset;
         size_t left;
@@ -184,6 +189,7 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
 
         llh = loghandle->lgh_hdr;
         file = loghandle->lgh_file;
+        obd = loghandle->lgh_ctxt->loc_exp->exp_obd;
 
         /* record length should not bigger than LLOG_CHUNK_SIZE */
         if (buf)
@@ -206,13 +212,13 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
                 if (idx && llh->llh_size && llh->llh_size != reclen)
                         RETURN(-EINVAL);
 
-                rc = llog_lvfs_write_blob(file, &llh->llh_hdr, NULL, 0);
+                rc = llog_lvfs_write_blob(obd, file, &llh->llh_hdr, NULL, 0);
                 /* we are done if we only write the header or on error */
                 if (rc || idx == 0)
                         RETURN(rc);
 
                 saved_offset = sizeof(*llh) + (idx-1) * le32_to_cpu(rec->lrh_len);
-                rc = llog_lvfs_write_blob(file, rec, buf, saved_offset);
+                rc = llog_lvfs_write_blob(obd, file, rec, buf, saved_offset);
                 if (rc == 0 && reccookie) {
                         reccookie->lgc_lgl = loghandle->lgh_id;
                         reccookie->lgc_index = idx;
@@ -236,7 +242,7 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
         /* NOTE: padding is a record, but no bit is set */
         if (left != 0 && left < reclen) {
                 loghandle->lgh_last_idx++;
-                rc = llog_lvfs_pad(file, left, loghandle->lgh_last_idx);
+                rc = llog_lvfs_pad(obd, file, left, loghandle->lgh_last_idx);
                 if (rc)
                         RETURN(rc);
         }
@@ -256,11 +262,11 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
         llh->llh_count = cpu_to_le32(le32_to_cpu(llh->llh_count) + 1);
 
         offset = 0;
-        rc = llog_lvfs_write_blob(file, &llh->llh_hdr, NULL, 0);
+        rc = llog_lvfs_write_blob(obd, file, &llh->llh_hdr, NULL, 0);
         if (rc)
                 RETURN(rc);
 
-        rc = llog_lvfs_write_blob(file, rec, buf, file->f_pos);
+        rc = llog_lvfs_write_blob(obd, file, rec, buf, file->f_pos);
         if (rc)
                 RETURN(rc);
 
@@ -318,11 +324,26 @@ static int llog_lvfs_next_block(struct llog_handle *loghandle, int *cur_idx,
         while (*cur_offset < loghandle->lgh_file->f_dentry->d_inode->i_size) {
                 struct llog_rec_hdr *rec;
                 struct llog_rec_tail *tail;
+                loff_t ppos;
 
                 llog_skip_over(cur_offset, *cur_idx, next_idx);
 
-                rc = lustre_fread(loghandle->lgh_file, buf, len,
-                                  (loff_t *)cur_offset); /* ugh */
+                ppos = *cur_offset;
+                rc = fsfilt_read_record(loghandle->lgh_ctxt->loc_exp->exp_obd,
+                                        loghandle->lgh_file, buf, len,
+                                        cur_offset);
+
+                if (rc) {
+                        CERROR("Cant read llog block at log id "LPU64
+                               "/%u offset "LPU64"\n",
+                               loghandle->lgh_id.lgl_oid,
+                               loghandle->lgh_id.lgl_ogen, 
+                               *cur_offset);
+                         RETURN(rc);
+                }
+
+                /* put number of readed bytes in rc to make code simpler */
+                rc = *cur_offset - ppos;
 
                 if (rc == 0) /* end of file, nothing to do */
                         RETURN(0);
