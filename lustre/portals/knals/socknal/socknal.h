@@ -273,9 +273,9 @@ extern void ksocknal_close_conn (ksock_conn_t *conn);
 static inline void
 ksocknal_put_conn (ksock_conn_t *conn)
 {
-        CDEBUG (D_OTHER, "putting conn[%p] -> "LPX64" (%d)\n", 
+        CDEBUG (D_OTHER, "putting conn[%p] -> "LPX64" (%d)\n",
                 conn, conn->ksnc_peernid, atomic_read (&conn->ksnc_refcount));
-        
+
         if (atomic_dec_and_test (&conn->ksnc_refcount))
                 _ksocknal_put_conn (conn);
 }

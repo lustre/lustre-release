@@ -65,8 +65,7 @@ struct semaphore nal_cmd_sem;
 void
 kportal_assertion_failed (char *expr, char *file, char *func, int line)
 {
-        unsigned long stack = CDEBUG_STACK(stack);
-        portals_debug_msg(0, D_EMERG, file, func, line, stack,
+        portals_debug_msg(0, D_EMERG, file, func, line, CDEBUG_STACK(),
                           "ASSERTION(%s) failed\n", expr);
         LBUG();
 }
