@@ -699,7 +699,7 @@ static struct mod_paths {
         {"mgmt_cli", "lustre/mgmt"},
         {"cobd", "lustre/cobd"},
         {"cmobd", "lustre/cmobd"},
-        {"conf_obd", "lustre/obdclass"},
+        {"confobd", "lustre/obdclass"},
         {NULL, NULL}
 };
 
