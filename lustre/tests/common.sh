@@ -371,6 +371,7 @@ setup_mount() {
 	fi
 
 	[ ! -d $OSCMT ] && mkdir $OSCMT
+	echo "$0: mounting \$OSCDEV on $OSCMT"
 	mount -t lustre_lite -o device=`find_devno OSCDEV` none $OSCMT
 }
 

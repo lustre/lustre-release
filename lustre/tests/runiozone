@@ -1,6 +1,7 @@
 #!/bin/sh
 SIZE=5g
 COUNT=0
+[ $1 ] && SIZE=$1
 rm -f endiozone
 while date; do
 	echo "Test #$COUNT"
