@@ -618,9 +618,7 @@ int ldlm_cancel_lru(struct ldlm_namespace *ns, ldlm_sync_t sync)
 
                 LDLM_LOCK_GET(lock); /* dropped by bl thread */
                 ldlm_lock_remove_from_lru(lock);
-                if (sync == LDLM_ASYNC)
-                        ldlm_bl_to_thread(ns, NULL, lock);
-                else
+                if (sync != LDLM_ASYNC || ldlm_bl_to_thread(ns, NULL, lock))
                         list_add(&lock->l_lru, &cblist);
 
                 if (--count == 0)

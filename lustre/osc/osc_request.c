@@ -2342,7 +2342,10 @@ static void osc_set_data_with_check(struct lustre_handle *lockh, void *data)
 {
         struct ldlm_lock *lock = ldlm_handle2lock(lockh);
 
-        LASSERTF(lock != NULL, "lockh %p, data %p\n", lockh, data);
+        if (lock == NULL) {
+                CERROR("lockh %p, data %p - client evicted?\n", lockh, data);
+                return;
+        }
         l_lock(&lock->l_resource->lr_namespace->ns_lock);
 #ifdef __KERNEL__
         if (lock->l_ast_data && lock->l_ast_data != data) {
@@ -2466,7 +2469,7 @@ static int osc_match(struct obd_export *exp, struct lov_stripe_md *lsm,
         rc = ldlm_lock_match(obd->obd_namespace, *flags, &res_id, type,
                              policy, mode, lockh);
         if (rc) {
-                if (!(*flags & LDLM_FL_TEST_LOCK))
+                //if (!(*flags & LDLM_FL_TEST_LOCK))
                         osc_set_data_with_check(lockh, data);
                 RETURN(rc);
         }

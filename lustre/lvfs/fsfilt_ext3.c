@@ -936,15 +936,10 @@ out:
 
 static void __exit fsfilt_ext3_exit(void)
 {
-        int rc;
-
         fsfilt_unregister_ops(&fsfilt_ext3_ops);
-        rc = kmem_cache_destroy(fcb_cache);
-
-        if (rc || atomic_read(&fcb_cache_count)) {
-                CERROR("can't free fsfilt callback cache: count %d, rc = %d\n",
-                       atomic_read(&fcb_cache_count), rc);
-        }
+        LASSERTF(kmem_cache_destroy(fcb_cache) == 0,
+                 "can't free fsfilt callback cache: count %d\n",
+                 atomic_read(&fcb_cache_count));
 
         //rc = ext3_xattr_unregister();
 }

@@ -93,8 +93,8 @@ int ll_init_inodecache(void)
 
 void ll_destroy_inodecache(void)
 {
-        if (kmem_cache_destroy(ll_inode_cachep))
-                CERROR("ll_inode_cache: not all structures were freed\n");
+        LASSERTF(kmem_cache_destroy(ll_inode_cachep) == 0,
+                 "ll_inode_cache: not all structures were freed\n");
 }
 
 /* exported operations */
@@ -158,7 +158,8 @@ static void __exit exit_lustre_lite(void)
         unregister_filesystem(&lustre_fs_type);
         unregister_filesystem(&lustre_lite_fs_type);
         ll_destroy_inodecache();
-        kmem_cache_destroy(ll_file_data_slab);
+        LASSERTF(kmem_cache_destroy(ll_file_data_slab) == 0,
+                 "couldn't destroy ll_file_data slab\n");
         if (proc_lustre_fs_root) {
                 lprocfs_remove(proc_lustre_fs_root);
                 proc_lustre_fs_root = NULL;

@@ -418,8 +418,8 @@ ptlrpc_server_handle_request (struct ptlrpc_service *svc)
          * client's timeout is similar to mine, she'll be timing out this
          * REQ anyway (bug 1502) */
         if (timediff / 1000000 > (long)obd_timeout) {
-                CERROR("Dropping timed-out request from "LPX64
-                       ": %ld seconds old\n",
+                CERROR("Dropping timed-out opc %d request from "LPX64
+                       ": %ld seconds old\n", request->rq_reqmsg->opc,
                        request->rq_peer.peer_nid, timediff / 1000000);
                 goto out;
         }

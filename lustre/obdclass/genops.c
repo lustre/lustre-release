@@ -273,13 +273,13 @@ struct obd_device * class_find_client_obd(struct obd_uuid *tgt_uuid,
 struct obd_device * class_devices_in_group(struct obd_uuid *grp_uuid, int *next)
 {
         int i;
-        if (next == NULL) 
+        if (next == NULL)
                 i = 0;
         else if (*next >= 0 && *next < MAX_OBD_DEVICES)
                 i = *next;
-        else 
+        else
                 return NULL;
-                
+
         for (; i < MAX_OBD_DEVICES; i++) {
                 struct obd_device *obd = &obd_dev[i];
                 if (obd->obd_type == NULL)
@@ -297,18 +297,15 @@ struct obd_device * class_devices_in_group(struct obd_uuid *grp_uuid, int *next)
 
 void obd_cleanup_caches(void)
 {
-        int rc;
         ENTRY;
         if (obdo_cachep) {
-                rc = kmem_cache_destroy(obdo_cachep);
-                if (rc)
-                        CERROR("Cannot destory ll_obdo_cache\n");
+                LASSERTF(kmem_cache_destroy(obdo_cachep) == 0,
+                         "Cannot destory ll_obdo_cache\n");
                 obdo_cachep = NULL;
         }
         if (import_cachep) {
-                rc = kmem_cache_destroy(import_cachep);
-                if (rc)
-                        CERROR("Cannot destory ll_import_cache\n");
+                LASSERTF(kmem_cache_destroy(import_cachep) == 0,
+                         "Cannot destory ll_import_cache\n");
                 import_cachep = NULL;
         }
         EXIT;

@@ -806,11 +806,11 @@ static int mds_getattr(int offset, struct ptlrpc_request *req)
         int rc = 0;
         ENTRY;
 
-        body = lustre_swab_reqbuf (req, offset, sizeof (*body),
-                                   lustre_swab_mds_body);
+        body = lustre_swab_reqbuf(req, offset, sizeof(*body),
+                                  lustre_swab_mds_body);
         if (body == NULL) {
-                CERROR ("Can't unpack body\n");
-                RETURN (-EFAULT);
+                CERROR("Can't unpack body\n");
+                RETURN(-EFAULT);
         }
 
         uc.ouc_fsuid = body->fsuid;
@@ -819,14 +819,14 @@ static int mds_getattr(int offset, struct ptlrpc_request *req)
         push_ctxt(&saved, &obd->obd_ctxt, &uc);
         de = mds_fid2dentry(mds, &body->fid1, NULL);
         if (IS_ERR(de)) {
-                rc = req->rq_status = -ENOENT;
-                GOTO(out_pop, PTR_ERR(de));
+                rc = req->rq_status = PTR_ERR(de);
+                GOTO(out_pop, rc);
         }
 
         rc = mds_getattr_pack_msg(req, de->d_inode, offset);
         if (rc != 0) {
-                CERROR ("mds_getattr_pack_msg: %d\n", rc);
-                GOTO (out_pop, rc);
+                CERROR("mds_getattr_pack_msg: %d\n", rc);
+                GOTO(out_pop, rc);
         }
 
         req->rq_status = mds_getattr_internal(obd, de, req, body, 0);

@@ -46,7 +46,7 @@ extern struct lustre_lock ldlm_handle_lock;
 extern struct list_head ldlm_namespace_list;
 
 static DECLARE_MUTEX(ldlm_ref_sem);
-static int ldlm_refcount = 0;
+static int ldlm_refcount;
 
 /* LDLM state */
 
@@ -374,7 +374,8 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
                 /* this blocking AST will be communicated as part of the
                  * completion AST instead */
                 l_unlock(&lock->l_resource->lr_namespace->ns_lock);
-                LDLM_DEBUG(lock, "lock not granted, not sending blocking AST");                 RETURN(0);
+                LDLM_DEBUG(lock, "lock not granted, not sending blocking AST");
+                RETURN(0);
         }
 
         if (lock->l_destroyed) {
@@ -412,7 +413,7 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
 
         req->rq_send_state = LUSTRE_IMP_FULL;
-        req->rq_timeout = 2; /* 2 second timeout for initial AST reply */
+        req->rq_timeout = ldlm_timeout; /* timeout for initial AST reply */
         rc = ptlrpc_queue_wait(req);
         if (rc != 0)
                 rc = ldlm_handle_ast_error(lock, req, rc, "blocking");
@@ -474,7 +475,7 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
         req->rq_replen = lustre_msg_size(0, NULL);
 
         req->rq_send_state = LUSTRE_IMP_FULL;
-        req->rq_timeout = 2; /* 2 second timeout for initial AST reply */
+        req->rq_timeout = ldlm_timeout; /* timeout for initial AST reply */
 
         /* We only send real blocking ASTs after the lock is granted */
         l_lock(&lock->l_resource->lr_namespace->ns_lock);
@@ -517,7 +518,7 @@ int ldlm_server_glimpse_ast(struct ldlm_lock *lock, void *data)
         req->rq_replen = lustre_msg_size(1, &size);
 
         req->rq_send_state = LUSTRE_IMP_FULL;
-        req->rq_timeout = 2; /* 2 second timeout for initial AST reply */
+        req->rq_timeout = ldlm_timeout; /* timeout for initial AST reply */
 
         rc = ptlrpc_queue_wait(req);
         if (rc == -ELDLM_NO_LOCK_DATA)
@@ -889,16 +890,16 @@ static void ldlm_handle_gl_callback(struct ptlrpc_request *req,
                 ptlrpc_error(req);
         }
 
+        l_unlock(&ns->ns_lock);
         if (lock->l_granted_mode == LCK_PW &&
             !lock->l_readers && !lock->l_writers &&
             time_after(jiffies, lock->l_last_used + 10 * HZ)) {
-                l_unlock(&ns->ns_lock);
-                ldlm_handle_bl_callback(ns, NULL, lock);
+                if (ldlm_bl_to_thread(ns, NULL, lock))
+                        ldlm_handle_bl_callback(ns, NULL, lock);
                 EXIT;
                 return;
         }
 
-        l_unlock(&ns->ns_lock);
         LDLM_LOCK_PUT(lock);
         EXIT;
 }
@@ -935,11 +936,11 @@ int ldlm_bl_to_thread(struct ldlm_namespace *ns, struct ldlm_lock_desc *ld,
         list_add_tail(&blwi->blwi_entry, &blp->blp_list);
         wake_up(&blp->blp_waitq);
         spin_unlock(&blp->blp_lock);
-#else
-        LBUG();
-#endif
 
         RETURN(0);
+#else
+        RETURN(-ENOSYS);
+#endif
 }
 
 static int ldlm_callback_handler(struct ptlrpc_request *req)
@@ -1056,14 +1057,9 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
         switch (req->rq_reqmsg->opc) {
         case LDLM_BL_CALLBACK:
                 CDEBUG(D_INODE, "blocking ast\n");
-#ifdef __KERNEL__
-                rc = ldlm_bl_to_thread(ns, &dlm_req->lock_desc, lock);
-                ldlm_callback_reply(req, rc);
-#else
-                rc = 0;
-                ldlm_callback_reply(req, rc);
-                ldlm_handle_bl_callback(ns, &dlm_req->lock_desc, lock);
-#endif
+                ldlm_callback_reply(req, 0);
+                if (ldlm_bl_to_thread(ns, &dlm_req->lock_desc, lock))
+                        ldlm_handle_bl_callback(ns, &dlm_req->lock_desc, lock);
                 break;
         case LDLM_CP_CALLBACK:
                 CDEBUG(D_INODE, "completion ast\n");
@@ -1416,10 +1412,10 @@ void __exit ldlm_exit(void)
 {
         if ( ldlm_refcount )
                 CERROR("ldlm_refcount is %d in ldlm_exit!\n", ldlm_refcount);
-        if (kmem_cache_destroy(ldlm_resource_slab) != 0)
-                CERROR("couldn't free ldlm resource slab\n");
-        if (kmem_cache_destroy(ldlm_lock_slab) != 0)
-                CERROR("couldn't free ldlm lock slab\n");
+        LASSERTF(kmem_cache_destroy(ldlm_resource_slab) == 0,
+                 "couldn't free ldlm resource slab\n");
+        LASSERTF(kmem_cache_destroy(ldlm_lock_slab) == 0,
+                 "couldn't free ldlm lock slab\n");
 }
 
 /* ldlm_flock.c */

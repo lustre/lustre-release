@@ -821,7 +821,7 @@ int ptlrpc_expire_one_request(struct ptlrpc_request *req)
         struct obd_import *imp = req->rq_import;
         ENTRY;
 
-        DEBUG_REQ(D_ERROR, req, "timeout");
+        DEBUG_REQ(D_ERROR, req, "timeout (sent %lu)", (long)req->rq_sent);
 
         spin_lock_irqsave (&req->rq_lock, flags);
         req->rq_timedout = 1;
@@ -949,7 +949,6 @@ int ptlrpc_set_next_timeout(struct ptlrpc_request_set *set)
         }
         RETURN(timeout);
 }
-                
 
 int ptlrpc_set_wait(struct ptlrpc_request_set *set)
 {
@@ -1410,7 +1409,7 @@ restart:
                 timeout = 1;
         } else {
                 timeout = MAX(req->rq_timeout * HZ, 1);
-                DEBUG_REQ(D_NET, req, "-- sleeping");
+                DEBUG_REQ(D_NET, req, "-- sleeping for %d jiffies", timeout);
         }
         lwi = LWI_TIMEOUT_INTR(timeout, expired_request, interrupted_request,
                                req);

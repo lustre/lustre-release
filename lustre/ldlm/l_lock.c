@@ -85,8 +85,9 @@ void l_lock(struct lustre_lock *lock)
 
 void l_unlock(struct lustre_lock *lock)
 {
-        LASSERT(lock->l_owner == current);
-        LASSERT(lock->l_depth >= 0);
+        LASSERTF(lock->l_owner == current, "lock %p, current %p\n",
+                 lock->l_owner, current);
+        LASSERTF(lock->l_depth >= 0, "depth %d\n", lock->l_depth);
 
         spin_lock(&lock->l_spin);
         if (--lock->l_depth < 0) {

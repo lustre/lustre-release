@@ -37,6 +37,7 @@ extern atomic_t obd_memory;
 extern int obd_memmax;
 extern unsigned int obd_fail_loc;
 extern unsigned int obd_timeout;
+extern unsigned int ldlm_timeout;
 extern char obd_lustre_upcall[128];
 extern unsigned int obd_sync_filter;
 extern wait_queue_head_t obd_race_waitq;
