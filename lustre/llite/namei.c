@@ -287,7 +287,9 @@ int ll_intent_lock(struct inode *parent, struct dentry **de,
                         GOTO(out, flag = LL_LOOKUP_POSITIVE);
                 }
 
-                /* Do a getattr now that we have the lock */
+                /* Do a getattr now that we have the lock, and fetch the
+                 * up-to-date stripe MD at the same time.
+                 */
                 valid = OBD_MD_FLNOTOBD;
                 if (it->it_op == IT_READLINK) {
                         datalen = mds_body->size;
@@ -340,7 +342,6 @@ int ll_intent_lock(struct inode *parent, struct dentry **de,
                 }
         }
 
-        EXIT;
  out:
         if (intent_finish != NULL) {
                 rc = intent_finish(flag, request, de, it, offset, ino);
@@ -485,17 +486,18 @@ static struct dentry *ll_lookup2(struct inode *parent, struct dentry *dentry,
 {
         struct dentry *save = dentry;
         int rc;
+        ENTRY;
 
         rc = ll_intent_lock(parent, &dentry, it, lookup2_finish);
         if (rc < 0) {
                 CERROR("ll_intent_lock: %d\n", rc);
-                return ERR_PTR(rc);
+                RETURN(ERR_PTR(rc));
         }
 
         if (dentry == save)
-                return NULL;
+                RETURN(NULL);
         else
-                return dentry;
+                RETURN(dentry);
 }
 
 static struct inode *ll_create_node(struct inode *dir, const char *name,

@@ -145,7 +145,7 @@ typedef int (*ldlm_blocking_callback)(struct ldlm_lock *lock,
 typedef int (*ldlm_completion_callback)(struct ldlm_lock *lock, int flags);
 
 struct ldlm_lock {
-        __u64                 l_random;
+        struct portals_handle l_handle; // must be first in the structure
         atomic_t              l_refc;
         struct ldlm_resource *l_resource;
         struct ldlm_lock     *l_parent;
@@ -183,8 +183,9 @@ struct ldlm_lock {
 };
 
 typedef int (*ldlm_res_compat)(struct ldlm_lock *child, struct ldlm_lock *new);
-typedef int (*ldlm_res_policy)(struct ldlm_lock *lock, void *req_cookie,
-                               ldlm_mode_t mode, int flags, void *data);
+typedef int (*ldlm_res_policy)(struct ldlm_namespace *, struct ldlm_lock *,
+                               void *req_cookie, ldlm_mode_t mode, int flags,
+                               void *data);
 
 #define LDLM_PLAIN       10
 #define LDLM_EXTENT      11
@@ -246,22 +247,24 @@ extern char *ldlm_it2str(int it);
 do {                                                                          \
         if (lock->l_resource == NULL) {                                       \
                 CDEBUG(D_DLMTRACE, "### " format                              \
-                       " ns: \?\? lock: %p lrc: %d/%d,%d mode: %s/%s "        \
+                       " ns: \?\? lock: %p/"LPX64" lrc: %d/%d,%d mode: %s/%s "\
                        "res: \?\? rrc=\?\? type: \?\?\? remote: "LPX64")\n"   \
-                       , ## a, lock, lock->l_refc, lock->l_readers,           \
-                       lock->l_writers,                                       \
+                       , ## a, lock, lock->l_handle.h_cookie,                 \
+                       atomic_read(&lock->l_refc),                            \
+                       lock->l_readers, lock->l_writers,                      \
                        ldlm_lockname[lock->l_granted_mode],                   \
                        ldlm_lockname[lock->l_req_mode],                       \
-                       lock->l_remote_handle.addr);                           \
+                       lock->l_remote_handle.cookie);                         \
                 break;                                                        \
         }                                                                     \
         if (lock->l_resource->lr_type == LDLM_EXTENT) {                       \
                 CDEBUG(D_DLMTRACE, "### " format                              \
-                       " ns: %s lock: %p lrc: %d/%d,%d mode: %s/%s res: "LPU64   \
-                       "/"LPU64" rrc: %d type: %s ["LPU64"->"LPU64"] remote: "  \
-                       LPX64"\n" , ## a,                                     \
+                       " ns: %s lock: %p/"LPX64" lrc: %d/%d,%d mode: %s/%s "  \
+                       "res: "LPU64"/"LPU64" rrc: %d type: %s ["LPU64"->"LPU64\
+                       "] remote: "LPX64"\n" , ## a,                          \
                        lock->l_resource->lr_namespace->ns_name, lock,         \
-                       lock->l_refc, lock->l_readers, lock->l_writers,        \
+                       lock->l_handle.h_cookie, atomic_read(&lock->l_refc),   \
+                       lock->l_readers, lock->l_writers,                      \
                        ldlm_lockname[lock->l_granted_mode],                   \
                        ldlm_lockname[lock->l_req_mode],                       \
                        lock->l_resource->lr_name[0],                          \
@@ -269,22 +272,24 @@ do {                                                                          \
                        atomic_read(&lock->l_resource->lr_refcount),           \
                        ldlm_typename[lock->l_resource->lr_type],              \
                        lock->l_extent.start, lock->l_extent.end,              \
-                       lock->l_remote_handle.addr);                           \
+                       lock->l_remote_handle.cookie);                         \
                 break;                                                        \
         }                                                                     \
         {                                                                     \
                 CDEBUG(D_DLMTRACE, "### " format                              \
-                       " ns: %s lock: %p lrc: %d/%d,%d mode: %s/%s res: "LPU64   \
-                       "/"LPU64" rrc: %d type: %s remote: "LPX64"\n" , ## a,   \
-                       lock->l_resource->lr_namespace->ns_name, lock,         \
-                       lock->l_refc, lock->l_readers, lock->l_writers,        \
+                       " ns: %s lock: %p/"LPX64" lrc: %d/%d,%d mode: %s/%s "  \
+                       "res: "LPU64"/"LPU64" rrc: %d type: %s remote: "LPX64  \
+                       "\n" , ## a, lock->l_resource->lr_namespace->ns_name,  \
+                       lock, lock->l_handle.h_cookie,                         \
+                       atomic_read (&lock->l_refc),                           \
+                       lock->l_readers, lock->l_writers,                      \
                        ldlm_lockname[lock->l_granted_mode],                   \
                        ldlm_lockname[lock->l_req_mode],                       \
                        lock->l_resource->lr_name[0],                          \
                        lock->l_resource->lr_name[1],                          \
                        atomic_read(&lock->l_resource->lr_refcount),           \
                        ldlm_typename[lock->l_resource->lr_type],              \
-                       lock->l_remote_handle.addr);                           \
+                       lock->l_remote_handle.cookie);                         \
         }                                                                     \
 } while (0)
 
@@ -295,22 +300,25 @@ do {                                                                          \
  * Iterators.
  */
 
-#define LDLM_ITER_CONTINUE 0 /* keep iterating */
-#define LDLM_ITER_STOP     1 /* stop iterating */
+#define LDLM_ITER_CONTINUE 1 /* keep iterating */
+#define LDLM_ITER_STOP     0 /* stop iterating */
 
 typedef int (*ldlm_iterator_t)(struct ldlm_lock *, void *);
+typedef int (*ldlm_res_iterator_t)(struct ldlm_resource *, void *);
 
 int ldlm_resource_foreach(struct ldlm_resource *res, ldlm_iterator_t iter,
                           void *closure);
 int ldlm_namespace_foreach(struct ldlm_namespace *ns, ldlm_iterator_t iter,
                            void *closure);
+int ldlm_namespace_foreach_res(struct ldlm_namespace *ns,
+                               ldlm_res_iterator_t iter, void *closure);
 
 int ldlm_replay_locks(struct obd_import *imp);
 
 /* ldlm_extent.c */
 int ldlm_extent_compat(struct ldlm_lock *, struct ldlm_lock *);
-int ldlm_extent_policy(struct ldlm_lock *, void *, ldlm_mode_t, int flags,
-                       void *);
+int ldlm_extent_policy(struct ldlm_namespace *, struct ldlm_lock *, void *,
+                       ldlm_mode_t, int flags, void *);
 
 /* ldlm_lockd.c */
 int ldlm_handle_enqueue(struct ptlrpc_request *req);
@@ -319,19 +327,17 @@ int ldlm_handle_cancel(struct ptlrpc_request *req);
 int ldlm_del_waiting_lock(struct ldlm_lock *lock);
 
 /* ldlm_lock.c */
-void ldlm_register_intent(int (*arg)(struct ldlm_lock *lock, void *req_cookie,
-                                     ldlm_mode_t mode, int flags, void *data));
+void ldlm_register_intent(ldlm_res_policy arg);
 void ldlm_unregister_intent(void);
 void ldlm_lock2handle(struct ldlm_lock *lock, struct lustre_handle *lockh);
-struct ldlm_lock *__ldlm_handle2lock(struct lustre_handle *, int strict,
-                                     int flags);
+struct ldlm_lock *__ldlm_handle2lock(struct lustre_handle *, int flags);
 void ldlm_cancel_callback(struct ldlm_lock *);
 int ldlm_lock_set_data(struct lustre_handle *, void *data, int datalen);
 void ldlm_lock_remove_from_lru(struct ldlm_lock *);
 
 static inline struct ldlm_lock *ldlm_handle2lock(struct lustre_handle *h)
 {
-        return __ldlm_handle2lock(h, 1, 0);
+        return __ldlm_handle2lock(h, 0);
 }
 
 #define LDLM_LOCK_PUT(lock)                     \
@@ -363,18 +369,19 @@ ldlm_lock_create(struct ldlm_namespace *ns,
                  struct lustre_handle *parent_lock_handle,
                  __u64 *res_id, __u32 type, ldlm_mode_t mode, void *data,
                  __u32 data_len);
-ldlm_error_t ldlm_lock_enqueue(struct ldlm_lock *lock, void *cookie,
-                               int cookie_len, int *flags,
+ldlm_error_t ldlm_lock_enqueue(struct ldlm_namespace *, struct ldlm_lock *,
+                               void *cookie, int cookie_len, int *flags,
                                ldlm_completion_callback completion,
                                ldlm_blocking_callback blocking);
 struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
                                         int *flags);
 void ldlm_lock_cancel(struct ldlm_lock *lock);
 void ldlm_cancel_locks_for_export(struct obd_export *export);
-void ldlm_run_ast_work(struct list_head *rpc_list);
+int ldlm_run_ast_work(struct list_head *rpc_list);
 void ldlm_reprocess_all(struct ldlm_resource *res);
-void ldlm_lock_dump(struct ldlm_lock *lock);
-void ldlm_lock_dump_handle(struct lustre_handle *);
+void ldlm_reprocess_all_ns(struct ldlm_namespace *ns);
+void ldlm_lock_dump(int level, struct ldlm_lock *lock);
+void ldlm_lock_dump_handle(int level, struct lustre_handle *);
 
 /* ldlm_test.c */
 int ldlm_test(struct obd_device *device, struct lustre_handle *connh);
@@ -406,9 +413,11 @@ void ldlm_res2desc(struct ldlm_resource *res, struct ldlm_resource_desc *desc);
 void ldlm_dump_all_namespaces(void);
 void ldlm_namespace_dump(struct ldlm_namespace *);
 void ldlm_resource_dump(struct ldlm_resource *);
-int ldlm_lock_change_resource(struct ldlm_lock *, __u64 new_resid[3]);
+int ldlm_lock_change_resource(struct ldlm_namespace *, struct ldlm_lock *,
+                              __u64 new_resid[3]);
 
 /* ldlm_request.c */
+int ldlm_expired_completion_wait(void *data);
 int ldlm_completion_ast(struct ldlm_lock *lock, int flags);
 int ldlm_cli_enqueue(struct lustre_handle *conn,
                      struct ptlrpc_request *req,

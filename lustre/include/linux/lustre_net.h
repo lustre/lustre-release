@@ -48,21 +48,27 @@
 
 #define LDLM_NUM_THREADS        4
 #define LDLM_NEVENTS    1024
-#define LDLM_NBUFS      20
-#define LDLM_BUFSIZE    (32 * 1024)
+#define LDLM_NBUFS      100
+#define LDLM_BUFSIZE    (8 * 1024)
 #define LDLM_MAXREQSIZE 1024
 
 #define MDT_NUM_THREADS 8
 #define MDS_NEVENTS     1024
-#define MDS_NBUFS       20
-#define MDS_BUFSIZE     (32 * 1024)
+#define MDS_NBUFS       100
+#define MDS_BUFSIZE     (8 * 1024)
 #define MDS_MAXREQSIZE  1024
 
 #define OST_NUM_THREADS 6
 #define OST_NEVENTS     min(num_physpages / 16, 32768UL)
-#define OST_NBUFS       min(OST_NEVENTS / 128, 256UL)
-#define OST_BUFSIZE     ((OST_NEVENTS > 4096UL ? 128 : 32) * 1024)
+#define OST_NBUFS       min(OST_NEVENTS / 128, 1280UL)
+#define OST_BUFSIZE     ((OST_NEVENTS > 4096UL ? 32 : 8) * 1024)
 #define OST_MAXREQSIZE  (8 * 1024)
+
+#define PTLBD_NUM_THREADS        4
+#define PTLBD_NEVENTS    1024
+#define PTLBD_NBUFS      20
+#define PTLBD_BUFSIZE    (32 * 1024)
+#define PTLBD_MAXREQSIZE 1024
 
 #define CONN_INVALID 1
 
@@ -137,7 +143,6 @@ struct ptlrpc_request {
         __u64 rq_xid;
 
         int rq_level;
-        time_t rq_timeout;
         //        void * rq_reply_handle;
         wait_queue_head_t rq_wait_for_rep;
 
@@ -160,13 +165,14 @@ struct ptlrpc_request {
 #define DEBUG_REQ(level, req, fmt, args...)                                    \
 do {                                                                           \
 CDEBUG(level,                                                                  \
-       "@@@ " fmt " req x"LPD64"/t"LPD64" o%d->%s:%d lens %d/%d ref %d fl "    \
-       "%x\n" ,  ## args, req->rq_xid, req->rq_transno,                        \
+       "@@@ " fmt " req@%p x"LPD64"/t"LPD64" o%d->%s:%d lens %d/%d ref %d fl " \
+       "%x\n" ,  ## args, req, req->rq_xid, req->rq_reqmsg->transno,           \
        req->rq_reqmsg ? req->rq_reqmsg->opc : -1,                              \
        req->rq_connection ? (char *)req->rq_connection->c_remote_uuid : "<?>", \
        (req->rq_import && req->rq_import->imp_client) ?                        \
            req->rq_import->imp_client->cli_request_portal : -1,                \
-       req->rq_reqlen, req->rq_replen, req->rq_refcount, req->rq_flags);       \
+       req->rq_reqlen, req->rq_replen,                                         \
+       atomic_read (&req->rq_refcount), req->rq_flags);                        \
 } while (0)
 
 struct ptlrpc_bulk_page {

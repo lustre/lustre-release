@@ -1273,7 +1273,7 @@ int jt_obd_lov_setconfig(int argc, char **argv)
 
         if (strlen(argv[1]) > sizeof(desc.ld_uuid) - 1) {
                 fprintf(stderr,
-                        "error: %s: LOV uuid '%s' longer than %zd characters\n",
+                        "error: %s: LOV uuid '%s' longer than "LPSZ" characters\n",
                         cmdname(argv[0]), argv[1], sizeof(desc.ld_uuid) - 1);
                 return -EINVAL;
         }
@@ -1375,18 +1375,24 @@ int jt_obd_lov_getconfig(int argc, char **argv)
         struct obd_ioctl_data data;
         struct lov_desc desc;
         obd_uuid_t *uuidarray;
-        int rc;
+        char *path;
+        int rc, tmpfd;
 
+        /* FIXME: ug.  IOCINIT checks fd. */
+        tmpfd = fd;
+        fd = 1;
         IOCINIT(data);
+        fd = tmpfd;        
 
         if (argc != 2)
                 return CMD_HELP;
 
-        if (strlen(argv[1]) > sizeof(desc.ld_uuid) - 1) {
-                fprintf(stderr,
-                        "error: %s: LOV uuid '%s' longer than %zd characters\n",
-                        cmdname(argv[0]), argv[1], sizeof(desc.ld_uuid) - 1);
-                return -EINVAL;
+        path = argv[1];
+        tmpfd = open(path, O_RDONLY);
+        if (tmpfd < 0) {
+                fprintf(stderr, "open \"%s\" failed: %s\n", path,
+                        strerror(errno));
+                return -1;
         }
 
         memset(&desc, 0, sizeof(desc));
@@ -1397,7 +1403,8 @@ repeat:
         if (!uuidarray) {
                 fprintf(stderr, "error: %s: no memory for %d uuid's\n",
                         cmdname(argv[0]), desc.ld_tgt_count);
-                return -ENOMEM;
+                rc = -ENOMEM;
+                goto out;
         }
 
         data.ioc_inllen1 = sizeof(desc);
@@ -1410,7 +1417,7 @@ repeat:
                 rc = -EINVAL;
                 goto out;
         }
-        rc = ioctl(fd, OBD_IOC_LOV_GET_CONFIG, buf);
+        rc = ioctl(tmpfd, OBD_IOC_LOV_GET_CONFIG, buf);
         if (rc == -ENOSPC) {
                 free(uuidarray);
                 goto repeat;
@@ -1440,6 +1447,7 @@ repeat:
         }
 out:
         free(uuidarray);
+        close(tmpfd);
         return rc;
 }
 
@@ -1593,6 +1601,55 @@ int jt_obd_failconn(int argc, char **argv)
                 fprintf(stderr, "error: %s: %s\n", cmdname(argv[0]),
                         strerror(rc = errno));
         
+        return rc;
+}
+
+int jt_obd_mdc_lookup(int argc, char **argv)
+{
+        struct obd_ioctl_data data;
+        char *parent, *child;
+        int rc, tmpfd, verbose = 1;
+
+        if (argc < 3 || argc > 4)
+                return CMD_HELP;
+
+        parent = argv[1];
+        child = argv[2];
+        if (argc == 4)
+                verbose = get_verbose(argv[0], argv[3]);
+
+        /* FIXME: ug.  IOCINIT checks fd. */
+        tmpfd = fd;
+        fd = 1;
+        IOCINIT(data);
+        fd = tmpfd;        
+
+        data.ioc_inllen1 = strlen(child) + 1;
+        data.ioc_inlbuf1 = child;
+
+        IOC_PACK(argv[0], data);
+
+        tmpfd = open(parent, O_RDONLY);
+        if (tmpfd < 0) {
+                fprintf(stderr, "open \"%s\" failed: %s\n", parent,
+                        strerror(errno));
+                return -1;
+        }
+
+        rc = ioctl(tmpfd, IOC_MDC_LOOKUP, buf);
+        if (rc < 0) {
+                fprintf(stderr, "error: %s: ioctl error: %s\n",
+                        cmdname(argv[0]), strerror(rc = errno));
+        }
+        close(tmpfd);
+
+        if (verbose) {
+                IOC_UNPACK(argv[0], data);
+                printf("%s: mode %o uid %d gid %d\n", child,
+                       data.ioc_obdo1.o_mode, data.ioc_obdo1.o_uid,
+                       data.ioc_obdo1.o_gid);
+        }
+
         return rc;
 }
 

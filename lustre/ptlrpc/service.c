@@ -128,7 +128,7 @@ ptlrpc_init_svc(__u32 nevents, __u32 nbufs,
                 ptlrpc_link_svc_me(rqbd);
         }
 
-        CDEBUG(D_NET, "Starting service listening on portal %d (eq: %p)\n",
+        CDEBUG(D_NET, "Starting service listening on portal %d (eq: %lu)\n",
                service->srv_req_portal, service->srv_eq_h.handle_idx);
 
         RETURN(service);
@@ -171,8 +171,7 @@ static int handle_incoming_request(struct obd_device *obddev,
                 goto out;
         }
 
-        CDEBUG(D_RPCTRACE, "Handling RPC pid:xid:nid:opc %d:"
-               LPX64":%x:%d\n",
+        CDEBUG(D_RPCTRACE, "Handling RPC pid:xid:nid:opc %d:"LPX64":"LPX64":%d\n",
                NTOH__u32(request->rq_reqmsg->status),
                request->rq_xid,
                event->initiator.nid,
@@ -254,7 +253,7 @@ static int ptlrpc_main(void *arg)
         struct ptlrpc_request *request;
         ptl_event_t *event;
         int rc = 0;
-
+        unsigned long flags;
         ENTRY;
 
         lock_kernel();
@@ -264,10 +263,10 @@ static int ptlrpc_main(void *arg)
         sigfillset(&current->blocked);
         recalc_sigpending();
 #else
-        spin_lock_irq(&current->sigmask_lock);
+        spin_lock_irqsave(&current->sigmask_lock, flags);
         sigfillset(&current->blocked);
         recalc_sigpending(current);
-        spin_unlock_irq(&current->sigmask_lock);
+        spin_unlock_irqrestore(&current->sigmask_lock, flags);
 #endif
 
 #ifdef __arch_um__
@@ -383,6 +382,9 @@ int ptlrpc_start_thread(struct obd_device *dev, struct ptlrpc_service *svc,
         list_add(&thread->t_link, &svc->srv_threads);
         spin_unlock(&svc->srv_lock);
 
+        /* CLONE_VM and CLONE_FILES just avoid a needless copy, because we
+         * just drop the VM and FILES in ptlrpc_daemonize() right away.
+         */
         rc = kernel_thread(ptlrpc_main, (void *) &d, CLONE_VM | CLONE_FILES);
         if (rc < 0) {
                 CERROR("cannot start thread\n");

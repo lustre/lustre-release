@@ -86,7 +86,7 @@ int mds_finish_transno(struct mds_obd *mds, void *handle,
         written = lustre_fwrite(mds->mds_rcvd_filp, (char *)mcd, sizeof(*mcd),
                                 &off);
         CDEBUG(D_INODE, "wrote trans #"LPD64" for client %s at #%d: written = "
-               "%d\n", last_rcvd, mcd->mcd_uuid, med->med_off, written);
+               LPSZ"\n", last_rcvd, mcd->mcd_uuid, med->med_off, written);
 
         if (written == sizeof(*mcd))
                 GOTO(out, rc = 0);
@@ -220,7 +220,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
         CDEBUG(D_INODE, "parent ino %lu name %s mode %o\n",
                dir->i_ino, rec->ur_name, rec->ur_mode);
 
-        ldlm_lock_dump_handle(&lockh);
+        ldlm_lock_dump_handle(D_OTHER, &lockh);
 
         down(&dir->i_sem);
         dchild = lookup_one_len(rec->ur_name, de, rec->ur_namelen - 1);
@@ -263,6 +263,11 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 if (S_ISDIR(rec->ur_mode))
                         rec->ur_mode |= S_ISGID;
         }
+
+        if (rec->ur_fid2->id)
+                dchild->d_fsdata = (void *)(unsigned long)rec->ur_fid2->id;
+        else
+                LASSERT(!(rec->ur_opcode & REINT_REPLAYING));
 
         /* From here on, we must exit via a path that calls mds_finish_transno,
          * so that we release the mds_transno_sem (and, in the case of success,
@@ -314,6 +319,11 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 GOTO(out_transno_dchild, rc = -EINVAL);
         }
 
+        /* In case we stored the desired inum in here, we want to clean up.
+         * We also do this in the out_transno_dchild block, for the error cases.
+         */
+        dchild->d_fsdata = NULL;
+
         if (rc) {
                 CDEBUG(D_INODE, "error during create: %d\n", rc);
                 GOTO(out_create_commit, rc);
@@ -331,13 +341,14 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                         ATTR_MTIME | ATTR_CTIME;
 
                 if (rec->ur_fid2->id) {
-                        LASSERT(rec->ur_opcode & REINT_REPLAYING);
+                        LASSERT(rec->ur_fid2->id == inode->i_ino);
                         inode->i_generation = rec->ur_fid2->generation;
                         /* Dirtied and committed by the upcoming setattr. */
-                        CDEBUG(D_INODE, "recreated ino %lu with gen %lu\n",
+                        CDEBUG(D_INODE, "recreated ino %lu with gen %x\n",
                                inode->i_ino, inode->i_generation);
                 } else {
-                        CDEBUG(D_INODE, "created ino %lu\n", inode->i_ino);
+                        CDEBUG(D_INODE, "created ino %lu with gen %x\n",
+                               inode->i_ino, inode->i_generation);
                 }
 
                 rc = fsfilt_setattr(obd, dchild, handle, &iattr);
@@ -376,6 +387,7 @@ out_create:
         return 0;
 
 out_transno_dchild:
+        dchild->d_fsdata = NULL;
         /* Need to release the transno lock, and then put the dchild. */
         LASSERT(rc);
         mds_finish_transno(mds, handle, req, rc);
@@ -442,7 +454,8 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
 
         dir = de->d_inode;
         inode = dchild->d_inode;
-        CDEBUG(D_INODE, "parent ino %lu\n", dir->i_ino);
+        DEBUG_REQ(D_INODE, req, "parent ino %lu, child ino %lu\n", dir->i_ino,
+                  inode ? inode->i_ino : 0);
 
         if (!inode) {
                 if (rec->ur_opcode & REINT_REPLAYING) {
@@ -572,7 +585,7 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
                         GOTO(out_link_src_put, rc = -EIO);
                 }
         } else {
-                ldlm_lock_dump_handle(&srclockh);
+                ldlm_lock_dump_handle(D_OTHER, &srclockh);
         }
 
         de_tgt_dir = mds_fid2dentry(mds, rec->ur_fid2, NULL);
@@ -597,7 +610,7 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
                         GOTO(out_link_tgt_dir_put, rc = -EIO);
                 }
         } else {
-                ldlm_lock_dump_handle(&tgtlockh);
+                ldlm_lock_dump_handle(D_OTHER, &tgtlockh);
         }
 
         down(&de_tgt_dir->d_inode->i_sem);
@@ -709,7 +722,7 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
                         GOTO(out_rename_srcput, rc = -EIO);
                 }
         } else {
-                ldlm_lock_dump_handle(&srclockh);
+                ldlm_lock_dump_handle(D_OTHER, &srclockh);
         }
 
         de_tgtdir = mds_fid2dentry(mds, rec->ur_fid2, NULL);
@@ -734,7 +747,7 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
                         GOTO(out_rename_tgtput, rc = -EIO);
                 }
         } else {
-                ldlm_lock_dump_handle(&tgtlockh);
+                ldlm_lock_dump_handle(D_OTHER, &tgtlockh);
         }
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))

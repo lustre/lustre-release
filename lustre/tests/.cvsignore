@@ -22,6 +22,7 @@ newfile
 openclose
 createdestroy
 createmany
+statmany
 mkdirmany
 lovstripe
 *.xml
@@ -29,3 +30,4 @@ stat
 setuid
 multifstat
 checkstat
+wantedi

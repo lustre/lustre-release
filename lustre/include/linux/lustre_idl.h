@@ -72,6 +72,9 @@ typedef __u8 obd_uuid_t[37];
 #define LDLM_CB_REPLY_PORTAL       16
 #define LDLM_CANCEL_REQUEST_PORTAL     17
 #define LDLM_CANCEL_REPLY_PORTAL       18
+#define PTLBD_REQUEST_PORTAL           19
+#define PTLBD_REPLY_PORTAL             20
+#define PTLBD_BULK_PORTAL              21
 
 #define SVC_KILLED               1
 #define SVC_EVENT                2
@@ -126,9 +129,12 @@ struct lustre_msg {
 #define MSG_OP_FLAG_SHIFT  16
 
 /* Flags that apply to all requests are in the bottom 16 bits */
-#define MSG_GEN_FLAG_MASK  0x0000ffff
-#define MSG_LAST_REPLAY    1
-#define MSG_RESENT         2
+#define MSG_GEN_FLAG_MASK      0x0000ffff
+#define MSG_LAST_REPLAY        1
+#define MSG_RESENT             2
+
+/* XXX horrible interim hack -- see bug 578 */
+#define MSG_REPLAY_IN_PROGRESS 4
 
 static inline int lustre_msg_get_flags(struct lustre_msg *msg)
 {
@@ -231,13 +237,11 @@ struct lov_object_id { /* per-child structure */
 
 struct lov_mds_md {
         __u32 lmm_magic;
-        __u32 lmm_unused;          /* was packed size of extended attribute */
         __u64 lmm_object_id;       /* lov object id */
-        __u32 lmm_stripe_offset;   /* starting stripe offset in lmd_objects */
-        __u32 lmm_stripe_count;    /* number of stipes in use for this object */
-        __u64 lmm_stripe_size;     /* size of the stripe */
-        __u32 lmm_ost_count;       /* how many OST idx are in this LOV md */
-        __u32 lmm_stripe_pattern;  /* per-lov object stripe pattern */
+        __u32 lmm_stripe_size;     /* size of the stripe */
+        __u32 lmm_stripe_offset;   /* starting stripe offset in lmm_objects */
+        __u16 lmm_stripe_count;    /* number of stipes in use for this object */
+        __u16 lmm_ost_count;       /* how many OST idx are in this LOV md */
         struct lov_object_id lmm_objects[0];
 };
 
@@ -334,6 +338,7 @@ struct ost_body {
 #define MDS_GETSTATUS  9
 #define MDS_STATFS     10
 #define MDS_GETLOVINFO 11
+#define MDS_GETATTR_NAME 12
 
 #define REINT_SETATTR  1
 #define REINT_CREATE   2
@@ -548,5 +553,34 @@ struct ldlm_reply {
         struct ldlm_extent lock_extent;   /* XXX make this policy 1 &2 */
         __u64  lock_policy_res1;
         __u64  lock_policy_res2;
+};
+
+/*
+ * ptlbd, portal block device requests
+ */
+typedef enum {
+        PTLBD_QUERY = 200,
+        PTLBD_READ = 201,
+        PTLBD_WRITE = 202,
+} ptlbd_cmd_t;
+
+struct ptlbd_op {
+        __u16 op_cmd;
+        __u16 op_lun;
+        __u16 op_niob_cnt;
+        __u16 op__padding;
+        __u32 op_block_cnt;
+};
+
+struct ptlbd_niob {
+        __u64 n_xid;
+        __u64 n_block_nr;
+        __u32 n_offset;
+        __u32 n_length;
+};
+
+struct ptlbd_rsp {
+        __u16 r_status;
+        __u16 r_error_cnt;
 };
 #endif

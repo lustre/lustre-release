@@ -5,11 +5,11 @@ config=${1:-local.xml}
 LMC="${LMC:-../utils/lmc} -m $config"
 TMP=${TMP:-/tmp}
 
-MDSDEV=$TMP/mds1
-MDSSIZE=50000
+MDSDEV=${MDSDEV:-$TMP/mds1}
+MDSSIZE=${MDSSIZE:-50000}
 
-OSTDEV=$TMP/ost1
-OSTSIZE=200000
+OSTDEV=${OSTDEV:-$TMP/ost1}
+OSTSIZE=${OSTSIZE:-200000}
 
 kver=`uname -r | cut -d "." -f 1,2`
 

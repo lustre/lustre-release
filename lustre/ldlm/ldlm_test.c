@@ -172,7 +172,7 @@ int ldlm_test_basics(struct obd_device *obddev)
         lock1 = ldlm_lock_create(ns, NULL, res_id, LDLM_PLAIN, LCK_CR, NULL, 0);
         if (lock1 == NULL)
                 LBUG();
-        err = ldlm_lock_enqueue(lock1, NULL, 0, &flags,
+        err = ldlm_lock_enqueue(ns, lock1, NULL, 0, &flags,
                                 ldlm_completion_ast, ldlm_blocking_ast);
         if (err != ELDLM_OK)
                 LBUG();
@@ -180,7 +180,7 @@ int ldlm_test_basics(struct obd_device *obddev)
         lock = ldlm_lock_create(ns, NULL, res_id, LDLM_PLAIN, LCK_EX, NULL, 0);
         if (lock == NULL)
                 LBUG();
-        err = ldlm_lock_enqueue(lock, NULL, 0, &flags,
+        err = ldlm_lock_enqueue(ns, lock, NULL, 0, &flags,
                                 ldlm_completion_ast, ldlm_blocking_ast);
         if (err != ELDLM_OK)
                 LBUG();
@@ -222,7 +222,8 @@ int ldlm_test_extents(struct obd_device *obddev)
                                  0);
         if (lock1 == NULL)
                 LBUG();
-        err = ldlm_lock_enqueue(lock1, &ext1, sizeof(ext1), &flags, NULL, NULL);
+        err = ldlm_lock_enqueue(ns, lock1, &ext1, sizeof(ext1), &flags, NULL,
+                                NULL);
         if (err != ELDLM_OK)
                 LBUG();
         if (!(flags & LDLM_FL_LOCK_CHANGED))
@@ -231,7 +232,8 @@ int ldlm_test_extents(struct obd_device *obddev)
         flags = 0;
         lock2 = ldlm_lock_create(ns, NULL, res_id, LDLM_EXTENT, LCK_PR,
                                 NULL, 0);
-        err = ldlm_lock_enqueue(lock2, &ext2, sizeof(ext2), &flags, NULL, NULL);
+        err = ldlm_lock_enqueue(ns, lock2, &ext2, sizeof(ext2), &flags, NULL,
+                                NULL);
         if (err != ELDLM_OK)
                 LBUG();
         if (!(flags & LDLM_FL_LOCK_CHANGED))
@@ -241,7 +243,7 @@ int ldlm_test_extents(struct obd_device *obddev)
         lock = ldlm_lock_create(ns, NULL, res_id, LDLM_EXTENT, LCK_EX, NULL, 0);
         if (lock == NULL)
                 LBUG();
-        err = ldlm_lock_enqueue(lock, &ext3, sizeof(ext3), &flags,
+        err = ldlm_lock_enqueue(ns, lock, &ext3, sizeof(ext3), &flags,
                                 NULL, NULL);
         if (err != ELDLM_OK)
                 LBUG();
@@ -293,7 +295,7 @@ static int ldlm_test_network(struct obd_device *obddev,
         CERROR("ldlm_cli_convert: %d\n", err);
 
         lock = ldlm_handle2lock(&lockh1);
-        ldlm_lock_dump(lock);
+        ldlm_lock_dump(D_OTHER, lock);
         ldlm_lock_put(lock);
 
         /* Need to decrement old mode. Don't bother incrementing new
@@ -432,6 +434,7 @@ static int ldlm_do_convert(void)
 static int ldlm_test_main(void *data)
 {
         struct ldlm_test_thread *thread = data;
+        unsigned long flags;
         ENTRY;
 
         lock_kernel();
@@ -440,10 +443,10 @@ static int ldlm_test_main(void *data)
         sigfillset(&current->blocked);
         recalc_sigpending();
 #else
-        spin_lock_irq(&current->sigmask_lock);
+        spin_lock_irqsave(&current->sigmask_lock, flags);
         sigfillset(&current->blocked);
         recalc_sigpending(current);
-        spin_unlock_irq(&current->sigmask_lock);
+        spin_unlock_irqrestore(&current->sigmask_lock, flags);
 #endif
 
         sprintf(current->comm, "ldlm_test");

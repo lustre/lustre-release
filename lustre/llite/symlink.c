@@ -89,7 +89,7 @@ static int ll_follow_link(struct dentry *dentry, struct nameidata *nd,
         struct inode *inode = dentry->d_inode;
         struct ll_inode_info *lli = ll_i2info(inode);
         struct ptlrpc_request *request;
-        int op, mode, rc;
+        int op = 0, mode = 0, rc;
         char *symname;
         ENTRY;
 

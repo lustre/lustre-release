@@ -46,6 +46,32 @@ int mds_set_lovdesc(struct obd_device *obd, struct lov_desc *desc,
         ENTRY;
 
         tgt_count = desc->ld_tgt_count;
+        if (desc->ld_default_stripe_count > desc->ld_tgt_count) {
+                CERROR("default stripe count %u > OST count %u\n",
+                       desc->ld_default_stripe_count, desc->ld_tgt_count);
+                RETURN(-EINVAL);
+        }
+        if (desc->ld_default_stripe_size & (PAGE_SIZE - 1)) {
+                CERROR("default stripe size "LPU64" not a multiple of %lu\n",
+                       desc->ld_default_stripe_size, PAGE_SIZE);
+                RETURN(-EINVAL);
+        }
+        if (desc->ld_default_stripe_offset > desc->ld_tgt_count) {
+                CERROR("default stripe offset "LPU64" > max OST index %u\n",
+                       desc->ld_default_stripe_offset, desc->ld_tgt_count);
+                RETURN(-EINVAL);
+        }
+        if (desc->ld_pattern != 0) {
+                CERROR("stripe pattern %u unknown\n",
+                       desc->ld_pattern);
+                RETURN(-EINVAL);
+        }
+
+        memcpy(&mds->mds_lov_desc, desc, sizeof *desc);
+        mds->mds_has_lov_desc = 1;
+        /* XXX the MDS should not really know about this */
+        mds->mds_max_mdsize = lov_mds_md_size(desc->ld_tgt_count);
+
         lov_packdesc(desc);
 
         push_ctxt(&saved, &mds->mds_ctxt, NULL);
@@ -55,6 +81,7 @@ int mds_set_lovdesc(struct obd_device *obd, struct lov_desc *desc,
                 GOTO(out, rc = PTR_ERR(f));
         }
 
+#warning FIXME: if there is an existing LOVDESC, verify new tgt_count > old
         rc = lustre_fwrite(f, (char *)desc, sizeof(*desc), &f->f_pos);
         if (filp_close(f, 0))
                 CERROR("Error closing LOVDESC file\n");
@@ -69,6 +96,7 @@ int mds_set_lovdesc(struct obd_device *obd, struct lov_desc *desc,
                 GOTO(out, rc = PTR_ERR(f));
         }
 
+#warning FIXME: if there is an existing LOVTGTS, verify existing UUIDs same
         rc = 0;
         for (i = 0; i < tgt_count ; i++) {
                 rc = lustre_fwrite(f, uuidarray[i],

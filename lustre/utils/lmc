@@ -53,6 +53,7 @@ Object creation command summary:
   --node node_name
   --mds mds_name
   --dev path
+  --fstype extN|ext3
   --size size
 
 --add lov
@@ -68,6 +69,7 @@ Object creation command summary:
   --lov lov_name 
   --dev path
   --size size
+  --fstype extN|ext3
   --obduuid uuid
   
 --add mtpt  - Mountpoint
@@ -179,13 +181,13 @@ class GenConfig:
     def network(self, name, uuid, hostname, net, port=0, tcpbuf=0):
         """create <network> node"""
         network = self.newService("network", name, uuid)
-        network.setAttribute("type", net);
-        self.addElement(network, "server", hostname)
+        network.setAttribute("nettype", net);
+        self.addElement(network, "nid", hostname)
         if port:
             self.addElement(network, "port", "%d" %(port))
         if tcpbuf:
-            self.addElement(network, "send_mem", "%d" %(tcpbuf))
-            self.addElement(network, "recv_mem", "%d" %(tcpbuf))
+            self.addElement(network, "sendmem", "%d" %(tcpbuf))
+            self.addElement(network, "recvmem", "%d" %(tcpbuf))
             
         return network
 
@@ -199,10 +201,15 @@ class GenConfig:
             ref.setAttribute("hi", hi)
         return ref
     
-    def node(self, name, uuid):
+    def profile(self, name, uuid):
+        """ create a host """
+        profile = self.newService("profile", name, uuid)
+        return profile
+
+    def node(self, name, uuid, prof_uuid):
         """ create a host """
         node = self.newService("node", name, uuid)
-        self.addElement(node, 'profile')
+        node.appendChild(self.ref("profile", prof_uuid))
         return node
 
     def ldlm(self, name, uuid):
@@ -212,27 +219,21 @@ class GenConfig:
 
     def obd(self, name, uuid, fs, obdtype, devname, format, ost_uuid, dev_size=0):
         obd = self.newService("obd", name, uuid)
-        obd.setAttribute('type', obdtype)
-        self.addElement(obd, 'active_target', ost_uuid)
+        obd.setAttribute('obdtype', obdtype)
+        obd.appendChild(self.ref("active", ost_uuid))
         if fs:
             self.addElement(obd, "fstype", fs)
         if devname:
-            dev = self.addElement(obd, "device", devname)
-            if (dev_size):
-                dev.setAttribute("size", "%s" % (dev_size))
+            dev = self.addElement(obd, "devpath", devname)
             self.addElement(obd, "autoformat", format)
+            if dev_size:
+                self.addElement(obd, "devsize", "%s" % (dev_size))
         return obd
-
-#    def osc(self, name, uuid, obd_uuid, net_uuid):
-#        osc = self.newService("osc", name, uuid)
-#        osc.appendChild(self.ref("ost", net_uuid))
-#        osc.appendChild(self.ref("obd", obd_uuid))
-#        return osc
 
     def cobd(self, name, uuid, real_uuid, cache_uuid):
         cobd = self.newService("cobd", name, uuid)
-        cobd.appendChild(self.ref("real_obd",real_uuid))
-        cobd.appendChild(self.ref("cache_obd",cache_uuid))
+        cobd.appendChild(self.ref("realobd",real_uuid))
+        cobd.appendChild(self.ref("cacheobd",cache_uuid))
         return cobd
 
     def ost(self, name, uuid, obd_uuid, net_uuid):
@@ -244,10 +245,9 @@ class GenConfig:
     def lov(self, name, uuid, mds_uuid, stripe_sz, stripe_cnt, pattern):
         lov = self.newService("lov", name, uuid)
         lov.appendChild(self.ref("mds", mds_uuid))
-        devs = self.addElement(lov, "devices" )
-        devs.setAttribute("stripesize", stripe_sz)
-        devs.setAttribute("stripecount", stripe_cnt)
-        devs.setAttribute("pattern", pattern)
+        lov.setAttribute("stripesize", stripe_sz)
+        lov.setAttribute("stripecount", stripe_cnt)
+        lov.setAttribute("stripepattern", pattern)
         return lov
 
     def lovconfig(self, name, uuid, lov_uuid):
@@ -255,19 +255,22 @@ class GenConfig:
         lovconfig.appendChild(self.ref("lov", lov_uuid))
         return lovconfig
 
-    def mds(self, name, uuid, fs, devname, format, net_uuid, node_uuid,
-            failover_uuid = "", dev_size=0 ):
+    def mds(self, name, uuid, mdd_uuid):
         mds = self.newService("mds", name, uuid)
-        self.addElement(mds, "fstype", fs)
-        dev = self.addElement(mds, "device", devname)
-        if dev_size:
-            dev.setAttribute("size", "%s" % (dev_size))
-        self.addElement(mds, "autoformat", format)
-        mds.appendChild(self.ref("network", net_uuid))
-        mds.appendChild(self.ref("node", node_uuid))
-        if failover_uuid:
-            mds.appendChild(self.ref("failover", failover_uuid))
+        mds.appendChild(self.ref("active",mdd_uuid))
         return mds
+
+    def mdsdev(self, name, uuid, fs, devname, format, net_uuid, node_uuid,
+            mds_uuid, dev_size=0 ):
+        mdd = self.newService("mdsdev", name, uuid)
+        self.addElement(mdd, "fstype", fs)
+        dev = self.addElement(mdd, "devpath", devname)
+        self.addElement(mdd, "autoformat", format)
+        if dev_size:
+                self.addElement(mdd, "devsize", "%s" % (dev_size))
+        mdd.appendChild(self.ref("network", net_uuid))
+        mdd.appendChild(self.ref("mds", mds_uuid))
+        return mdd
 
     def mountpoint(self, name, uuid, mds_uuid, osc_uuid, path):
         mtpt = self.newService("mountpoint", name, uuid)
@@ -277,7 +280,7 @@ class GenConfig:
         return mtpt
 
     def echo_client(self, name, uuid, osc_uuid):
-        ec = self.newService("echo_client", name, uuid)
+        ec = self.newService("echoclient", name, uuid)
         ec.appendChild(self.ref("obd", osc_uuid))
         return ec
 
@@ -314,19 +317,6 @@ def lookup(node, uuid):
                 n = lookup(n, uuid)
                 if n: return n
     return None
-            
-
-def mds2node(lustre, mds_name):
-    """ Find the node a MDS is configured on """
-    mds = findByName(lustre, mds_name, 'mds')
-    ref = mds.getElementsByTagName('node_ref')
-    if not ref:
-        error("mds2node:", "no node_ref found for", '"'+mds_name+'"')
-    node_uuid = ref[0].getAttribute('uuidref')
-    node = lookup(lustre, node_uuid)
-    if not node:
-        error('mds2node:', "no node found for :", '"'+mds_name+'"')
-    return node
 
 
 def name2uuid(lustre, name, tag="",  fatal=1):
@@ -353,18 +343,16 @@ def get_net_uuid(lustre, node_name):
 
 
 def lov_add_obd(gen, lov, osc_uuid):
-    devs = lov.getElementsByTagName('devices')
-    if len(devs) == 1:
-        devs[0].appendChild(gen.ref("obd", osc_uuid))
-    else:
-        error("No devices element found for LOV:", lov)
-
+    lov.appendChild(gen.ref("obd", osc_uuid))
                             
 def node_add_profile(gen, node, ref, uuid):
-    ret = node.getElementsByTagName('profile')
+    refname = "%s_ref" % "profile"
+    ret = node.getElementsByTagName(refname)
     if not ret:
-        error('node has no profile:', node)
-    ret[0].appendChild(gen.ref(ref, uuid))
+        error('node has no profile ref:', node)
+    prof_uuid = ret[0].getAttribute('uuidref')
+    profile = lookup(node.parentNode, prof_uuid)
+    profile.appendChild(gen.ref(ref, uuid))
     
 def get_attr(dom_node, attr, default=""):
     v = dom_node.getAttribute(attr)
@@ -377,7 +365,13 @@ def get_attr(dom_node, attr, default=""):
 #
 def do_add_node(gen, lustre,  options, node_name):
     uuid = new_uuid(node_name)
-    node = gen.node(node_name, uuid)
+    prof_name = new_name("PROFILE_" + node_name)
+    prof_uuid = new_uuid(prof_name)
+    profile = gen.profile(prof_name, prof_uuid)
+    node = gen.node(node_name, uuid, prof_uuid)
+    lustre.appendChild(node)
+    lustre.appendChild(profile)
+
     node_add_profile(gen, node, 'ldlm', ldlm_uuid)
     if has_option(options, 'router'):
         node.setAttribute('router', '1')
@@ -385,7 +379,6 @@ def do_add_node(gen, lustre,  options, node_name):
         node.setAttribute('timeout', get_option(options, 'timeout'))
     if has_option(options, 'recovery_upcall'):
         node.setAttribute('recovery_upcall', get_option(options, 'recovery_upcall'))
-    lustre.appendChild(node)
     return node
 
     
@@ -393,7 +386,6 @@ def add_node(gen, lustre, options):
     """ create a node with a network config """
 
     node_name = get_option(options, 'node')
-
     ret = findByName(lustre, node_name, "node")
     if ret:
         print "Node:", node_name, "exists."
@@ -444,37 +436,41 @@ def add_route(gen, lustre, options):
     
     netlist = node.getElementsByTagName('network')
     net = netlist[0]
-    rlist = net.getElementsByTagName('route_tbl')
+    rlist = net.getElementsByTagName('routetbl')
     if len(rlist) > 0:
         rtbl = rlist[0]
     else:
-        rtbl = gen.addElement(net, 'route_tbl')
+        rtbl = gen.addElement(net, 'routetbl')
     rtbl.appendChild(gen.route(net_type, gw, lo, hi))
 
 
 def add_mds(gen, lustre, options):
     node_name = get_option(options, 'node')
-    mds_orig = get_option(options, 'mds')
-    mds_name = new_name(mds_orig)
-    if mds_name != mds_orig:
-        warning("name:", mds_orig, "already used. using:", mds_name)
+    mds_name = get_option(options, 'mds')
+    mdd_name = new_name("MDD_" + mds_name +"_" + node_name)
+    mdd_uuid = new_uuid(mdd_name)
+
+    mds_uuid = name2uuid(lustre, mds_name, fatal=0)
+    if not mds_uuid:
+        mds_uuid = new_uuid(mds_name)
+        mds = gen.mds(mds_name, mds_uuid, mdd_uuid)
+        lustre.appendChild(mds)
+        
     devname = get_option(options, 'dev')
     size = get_option(options, 'size', 0)
     fstype = get_option(options, 'fstype', 'extN')
 
-    mds_uuid = new_uuid(mds_name)
-
     node_uuid = name2uuid(lustre, node_name, 'node')
 
     node = findByName(lustre, node_name, "node")
-    node_add_profile(gen, node, "mds", mds_uuid)
+    node_add_profile(gen, node, "mdsdev", mdd_uuid)
     net_uuid = get_net_uuid(lustre, node_name)
     if not net_uuid:
         error("NODE: ", node_name, "not found")
 
-    mds = gen.mds(mds_name, mds_uuid, fstype, devname, get_format_flag(options),
-                  net_uuid, node_uuid, dev_size=size)
-    lustre.appendChild(mds)
+    mdd = gen.mdsdev(mdd_name, mdd_uuid, fstype, devname, get_format_flag(options),
+                  net_uuid, node_uuid, mds_uuid, dev_size=size)
+    lustre.appendChild(mdd)
                    
 
 def add_ost(gen, lustre, options):
@@ -552,7 +548,7 @@ def add_echo_client(gen, lustre, options):
 
     echoname = new_name('ECHO_'+ node_name)
     echo_uuid = new_uuid(echoname)
-    node_add_profile(gen, node, 'echo_client', echo_uuid)
+    node_add_profile(gen, node, 'echoclient', echo_uuid)
 
     lov_uuid = name2uuid(lustre, lov_name, tag='lov', fatal=0)
     if not lov_uuid:
@@ -584,11 +580,11 @@ def add_lov(gen, lustre, options):
     lov = gen.lov(name, uuid, mds_uuid, stripe_sz, stripe_cnt, pattern)
     lustre.appendChild(lov)
     
-    # add an lovconfig entry to the mds profile
+    # add an lovconfig entry to the active mdsdev profile
     lovconfig_name = new_name('LVCFG_' + name)
     lovconfig_uuid = new_uuid(lovconfig_name)
-    node = mds2node(lustre, mds_name)
-    node_add_profile(gen, node, "lovconfig", lovconfig_uuid)
+    mds = findByName(lustre, mds_name)
+    mds.appendChild(gen.ref("lovconfig", lovconfig_uuid))
     lovconfig = gen.lovconfig(lovconfig_name, lovconfig_uuid, uuid)
     lustre.appendChild(lovconfig)
 
@@ -882,5 +878,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-    

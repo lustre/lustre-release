@@ -441,7 +441,40 @@ pass
 $CLEAN
 $START
 
-echo '== cleanup ========================================='
+echo '== stripe sanity ================================= test27'
+echo "--test 26.1 create one stripe"
+mkdir $MOUNT/d27
+../utils/lstripe $MOUNT/d27/f0 4096 0 1
+$CHECKSTAT -t file $MOUNT/d27/f0
+echo "--test 26.2 write to one stripe file"
+cp /etc/hosts $MOUNT/d27/f0
+pass
+$CLEAN
+$START
+
+echo "--test 26.3 create two stripes"
+../utils/lstripe $MOUNT/d27/f01 4096 0 2
+echo "--test 26.4 write to two stripe file"
+cp /etc/hosts $MOUNT/d27/f01
+pass
+$CLEAN
+$START
+
+echo "--test 26.5 lstripe existing file (should return error)"
+../utils/lstripe $MOUNT/d27/f12 4096 1 2
+! ../utils/lstripe $MOUNT/d27/f12 4096 1 2
+pass
+$CLEAN
+$START
+
+echo "--test 26.6 lfind "
+../utils/lfind $MOUNT/d27
+pass
+$CLEAN
+$START
+
+
+echo '== cleanup ============================================='
 rm -r $MOUNT/[Rdfs][1-9]*
 
 echo '======================= finished ======================='

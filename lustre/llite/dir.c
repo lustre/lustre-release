@@ -91,7 +91,7 @@ static int ll_dir_readpage(struct file *file, struct page *page)
                 unlock_page(page);
                 RETURN(rc);
         }
-        ldlm_lock_dump_handle(&lockh);
+        ldlm_lock_dump_handle(D_OTHER, &lockh);
 
         if (PageUptodate(page)) {
                 CERROR("Explain this please?\n");
@@ -745,7 +745,69 @@ not_empty:
         return 0;
 }
 
+static int ll_dir_ioctl(struct inode *inode, struct file *file,
+                        unsigned int cmd, unsigned long arg)
+{
+        struct ll_sb_info *sbi = ll_i2sbi(inode);
+        struct obd_ioctl_data *data;
+        ENTRY;
+
+        switch(cmd) {
+        case IOC_MDC_LOOKUP: {
+                struct ptlrpc_request *request = NULL;
+                char *buf = NULL;
+                char *filename;
+                int namelen, rc, err, len = 0;
+                int ea_size = 0; // obd_size_wiremd(&sbi->ll_osc_conn, NULL);
+                unsigned long valid;
+
+                rc = obd_ioctl_getdata(&buf, &len, (void *)arg);
+                if (rc)
+                        RETURN(rc);
+                data = (void *)buf;
+
+                filename = data->ioc_inlbuf1;
+                namelen = data->ioc_inllen1;
+
+                if (namelen < 1) {
+                        CERROR("IOC_MDC_LOOKUP missing filename\n");
+                        GOTO(out, rc = -EINVAL);
+                }
+
+                valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLSIZE;
+                rc = mdc_getattr_name(&sbi->ll_mdc_conn, inode, filename,
+                                      namelen, valid, ea_size, &request);
+                if (rc < 0) {
+                        CERROR("mdc_getattr_name: %d\n", rc);
+                        GOTO(out, rc);
+                } else {
+                        struct mds_body *body;
+                        body = lustre_msg_buf(request->rq_repmsg, 0);
+                        /* surely there's a better way -phik */
+                        data->ioc_obdo1.o_mode = body->mode;
+                        data->ioc_obdo1.o_uid = body->uid;
+                        data->ioc_obdo1.o_gid = body->gid;
+                }
+
+                err = copy_to_user((void *)arg, buf, len);
+                if (err)
+                        GOTO(out_req, rc = -EFAULT);
+
+                EXIT;
+        out_req:
+                ptlrpc_req_finished(request);
+        out:
+                OBD_FREE(buf, len);
+                return rc;
+        }
+        default:
+                CERROR("unrecognized ioctl %#x\n", cmd);
+                RETURN(-ENOTTY);
+        }
+}
+
 struct file_operations ll_dir_operations = {
         read: generic_read_dir,
-        readdir: ll_readdir
+        readdir: ll_readdir,
+        ioctl: ll_dir_ioctl
 };

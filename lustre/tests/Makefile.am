@@ -12,7 +12,7 @@ EXTRA_DIST = $(pkgexample_SCRIPTS) $(noinst_SCRIPTS) $(noinst_DATA) \
 	rundbench \
 	elan-client.cfg    mds.cfg 	trivial.sh
 pkgexampledir = '${exec_prefix}/usr/lib/$(PACKAGE)/examples'
-pkgexample_SCRIPTS = llmount.sh llmountcleanup.sh llecho.sh local.sh uml.sh lov.sh
+pkgexample_SCRIPTS = llmount.sh llmountcleanup.sh llecho.sh llechocleanup.sh local.sh echo.sh uml.sh lov.sh
 noinst_SCRIPTS = llsetup.sh llrsetup.sh llcleanup.sh
 noinst_DATA = lustre.cfg
 noinst_SCRIPTS += fs.sh intent-test.sh intent-test2.sh leak_finder.pl \
@@ -24,9 +24,9 @@ noinst_SCRIPTS += fs.sh intent-test.sh intent-test2.sh leak_finder.pl \
 	runtests runvmstat snaprun.sh tbox.sh  common.sh
 noinst_PROGRAMS = openunlink testreq truncate directio openme writeme mcreate
 noinst_PROGRAMS += munlink tchmod toexcl fsx test_brw openclose createdestroy
-noinst_PROGRAMS += lovstripe stat createmany mkdirmany multifstat
+noinst_PROGRAMS += stat createmany statmany mkdirmany multifstat
 # noinst_PROGRAMS += ldaptest 
-noinst_PROGRAMS += checkstat
+noinst_PROGRAMS += checkstat wantedi
 
 # ldaptest_SOURCES = ldaptest.c
 tchmod_SOURCES = tchmod.c
@@ -43,11 +43,12 @@ fsx_SOURCES = fsx.c
 test_brw_SOURCES = test_brw.c
 openclose_SOURCES = openclose.c
 createdestroy_SOURCES = createdestroy.c
-lovstripe_SOURCES = lovstripe.c
 stat_SOURCES = stat.c
 createmany_SOURCES = createmany.c
+statmany_SOURCES = statmany.c
 mkdirmany_SOURCES = mkdirmany.c
 multifstat_SOURCES = multifstat.c
 checkstat_SOURCES = checkstat.c
+wantedi_SOURCES = wantedi.c
 
 include $(top_srcdir)/Rules

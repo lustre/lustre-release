@@ -134,7 +134,9 @@ out_ns:
 
 extern struct ldlm_lock *ldlm_lock_get(struct ldlm_lock *lock);
 
-/* If 'local_only' is true, don't try to tell the server, just cleanup. */
+/* If 'local_only' is true, don't try to tell the server, just cleanup.
+ * This is currently only used for recovery, and we make certain assumptions
+ * as a result--notably, that we shouldn't cancel locks with refs. -phil */
 static void cleanup_resource(struct ldlm_resource *res, struct list_head *q,
                              int local_only)
 {
@@ -146,6 +148,18 @@ static void cleanup_resource(struct ldlm_resource *res, struct list_head *q,
                 struct ldlm_lock *lock;
                 lock = list_entry(tmp, struct ldlm_lock, l_res_link);
                 LDLM_LOCK_GET(lock);
+
+                if (local_only && (lock->l_readers || lock->l_writers)) {
+                        /* This is a little bit gross, but much better than the
+                         * alternative: pretend that we got a blocking AST from
+                         * the server, so that when the lock is decref'd, it
+                         * will go away ... */
+                        lock->l_flags |= LDLM_FL_CBPENDING;
+                        /* ... without sending a CANCEL message. */
+                        lock->l_flags |= LDLM_FL_CANCELING;
+                        LDLM_LOCK_PUT(lock);
+                        continue;
+                }
 
                 /* At shutdown time, don't call the cancellation callback */
                 lock->l_flags |= LDLM_FL_CANCEL;
@@ -170,11 +184,17 @@ static void cleanup_resource(struct ldlm_resource *res, struct list_head *q,
                 }
                 LDLM_LOCK_PUT(lock);
         }
+        EXIT;
 }
 
 int ldlm_namespace_cleanup(struct ldlm_namespace *ns, int local_only)
 {
         int i;
+
+        if (ns == NULL) {
+                CDEBUG(D_INFO, "NULL ns, skipping cleanup\n");
+                return ELDLM_OK;
+        }
 
         l_lock(&ns->ns_lock);
         for (i = 0; i < RES_HASH_SIZE; i++) {
@@ -431,7 +451,8 @@ void ldlm_resource_add_lock(struct ldlm_resource *res, struct list_head *head,
         l_lock(&res->lr_namespace->ns_lock);
 
         ldlm_resource_dump(res);
-        ldlm_lock_dump(lock);
+        CDEBUG(D_OTHER, "About to grant this lock:\n");
+        ldlm_lock_dump(D_OTHER, lock);
 
         LASSERT(list_empty(&lock->l_res_link));
 
@@ -510,20 +531,20 @@ void ldlm_resource_dump(struct ldlm_resource *res)
         list_for_each(tmp, &res->lr_granted) {
                 struct ldlm_lock *lock;
                 lock = list_entry(tmp, struct ldlm_lock, l_res_link);
-                ldlm_lock_dump(lock);
+                ldlm_lock_dump(D_OTHER, lock);
         }
 
         CDEBUG(D_OTHER, "Converting locks:\n");
         list_for_each(tmp, &res->lr_converting) {
                 struct ldlm_lock *lock;
                 lock = list_entry(tmp, struct ldlm_lock, l_res_link);
-                ldlm_lock_dump(lock);
+                ldlm_lock_dump(D_OTHER, lock);
         }
 
         CDEBUG(D_OTHER, "Waiting locks:\n");
         list_for_each(tmp, &res->lr_waiting) {
                 struct ldlm_lock *lock;
                 lock = list_entry(tmp, struct ldlm_lock, l_res_link);
-                ldlm_lock_dump(lock);
+                ldlm_lock_dump(D_OTHER, lock);
         }
 }

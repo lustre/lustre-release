@@ -673,8 +673,6 @@ static inline void iattr_from_obdo(struct iattr *attr, struct obdo *oa,
 static inline void obdo_from_inode(struct obdo *dst, struct inode *src,
                                    obd_flag valid)
 {
-//        if (valid & OBD_MD_FLID)
-//                dst->o_id = src->i_ino;
         if (valid & OBD_MD_FLATIME)
                 dst->o_atime = src->i_atime;
         if (valid & OBD_MD_FLMTIME)
@@ -710,8 +708,8 @@ static inline void obdo_from_inode(struct obdo *dst, struct inode *src,
 static inline void obdo_to_inode(struct inode *dst, struct obdo *src,
                                  obd_flag valid)
 {
-//        if (valid & OBD_MD_FLID)
-//                dst->i_ino = src->o_id;
+        valid &= src->o_valid;
+
         if (valid & OBD_MD_FLATIME)
                 dst->i_atime = src->o_atime;
         if (valid & OBD_MD_FLMTIME)
@@ -847,7 +845,8 @@ int class_name2dev(char *name);
 int class_uuid2dev(char *uuid);
 struct obd_device *class_uuid2obd(char *uuid);
 struct obd_export *class_new_export(struct obd_device *obddev);
-struct obd_type *class_nm_to_type(char* name);
+struct obd_type *class_get_type(char *name);
+void class_put_type(struct obd_type *type);
 void class_destroy_export(struct obd_export *exp);
 int class_connect(struct lustre_handle *conn, struct obd_device *obd,
                   obd_uuid_t cluuid);
@@ -865,6 +864,13 @@ static inline struct ptlrpc_connection *class_rd2conn(struct recovd_data *rd)
         /* reuse list_entry's member-pointer offset stuff */
         return list_entry(rd, struct ptlrpc_connection, c_recovd_data);
 }
+
+struct obd_statfs;
+struct statfs;
+void statfs_pack(struct obd_statfs *osfs, struct statfs *sfs);
+void statfs_unpack(struct statfs *sfs, struct obd_statfs *osfs);
+void obd_statfs_pack(struct obd_statfs *tgt, struct obd_statfs *src);
+void obd_statfs_unpack(struct obd_statfs *tgt, struct obd_statfs *src);
 
 #endif
 

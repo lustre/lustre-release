@@ -46,16 +46,10 @@ int connmgr_setup(struct obd_device *obddev, obd_count len, void *buf)
         int err;
         ENTRY;
 
-        MOD_INC_USE_COUNT;
         memset(recovd, 0, sizeof(*recovd));
 
         err = recovd_setup(recovd);
-        if (err) {
-                MOD_DEC_USE_COUNT;
-                RETURN(err);
-        }
-
-        RETURN(0);
+        RETURN(err);
 }
 
 int connmgr_cleanup(struct obd_device *dev)
@@ -64,15 +58,11 @@ int connmgr_cleanup(struct obd_device *dev)
         int err;
 
         err = recovd_cleanup(recovd);
-        if (err)
-                LBUG();
-
-        MOD_DEC_USE_COUNT;
-        RETURN(0);
+        RETURN(err);
 }
 
-int connmgr_iocontrol(unsigned int cmd, struct lustre_handle *hdl, int len, void *karg,
-                      void *uarg)
+int connmgr_iocontrol(unsigned int cmd, struct lustre_handle *hdl, int len,
+                      void *karg, void *uarg)
 {
         struct ptlrpc_connection *conn = NULL;
         struct obd_device *obd = class_conn2obd(hdl);
@@ -85,7 +75,7 @@ int connmgr_iocontrol(unsigned int cmd, struct lustre_handle *hdl, int len, void
 
         if (cmd != OBD_IOC_RECOVD_NEWCONN && cmd != OBD_IOC_RECOVD_FAILCONN)
                 RETURN(-EINVAL); /* XXX ENOSYS? */
-        
+
         /* Find the connection that's been rebuilt or has failed. */
         spin_lock(&recovd->recovd_lock);
         list_for_each(tmp, &recovd->recovd_troubled_items) {
@@ -106,9 +96,9 @@ int connmgr_iocontrol(unsigned int cmd, struct lustre_handle *hdl, int len, void
                 list_for_each(tmp, &recovd->recovd_managed_items) {
                         conn = list_entry(tmp, struct ptlrpc_connection,
                                           c_recovd_data.rd_managed_chain);
-                        
+
                         LASSERT(conn->c_recovd_data.rd_recovd == recovd);
-                        
+
                         if (!strcmp(conn->c_remote_uuid, data->ioc_inlbuf1))
                                 break;
                         conn = NULL;
@@ -152,7 +142,7 @@ int connmgr_iocontrol(unsigned int cmd, struct lustre_handle *hdl, int len, void
         }
         ptlrpc_readdress_connection(conn, conn->c_remote_uuid);
         spin_unlock(&conn->c_lock);
-        
+
         conn->c_recovd_data.rd_phase = RD_PREPARED;
         wake_up(&recovd->recovd_waitq);
  out:
@@ -176,27 +166,29 @@ int conmgr_detach(struct obd_device *dev)
 {
         return lprocfs_dereg_obd(dev);
 }
+
 /* use obd ops to offer management infrastructure */
 static struct obd_ops recovd_obd_ops = {
-        o_attach:      connmgr_attach,
-        o_detach:      conmgr_detach,
-        o_setup:       connmgr_setup,
-        o_cleanup:     connmgr_cleanup,
-        o_iocontrol:   connmgr_iocontrol,
-        o_connect:     connmgr_connect,
-        o_disconnect:  class_disconnect
+        o_owner:        THIS_MODULE,
+        o_attach:       connmgr_attach,
+        o_detach:       conmgr_detach,
+        o_setup:        connmgr_setup,
+        o_cleanup:      connmgr_cleanup,
+        o_iocontrol:    connmgr_iocontrol,
+        o_connect:      connmgr_connect,
+        o_disconnect:   class_disconnect
 };
 
 static int __init ptlrpc_init(void)
 {
-        int rc; 
+        int rc;
         rc = ptlrpc_init_portals();
-        if (rc) 
+        if (rc)
                 RETURN(rc);
         ptlrpc_init_connection();
         rc = class_register_type(&recovd_obd_ops, status_class_var,
                                  LUSTRE_HA_NAME);
-        if (rc) 
+        if (rc)
                 RETURN(rc);
         ptlrpc_put_connection_superhack = ptlrpc_put_connection;
         return 0;

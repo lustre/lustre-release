@@ -52,13 +52,12 @@ struct semaphore obd_conf_sem;   /* serialize configuration commands */
 struct obd_device obd_dev[MAX_OBD_DEVICES];
 struct list_head obd_types;
 atomic_t obd_memory;
+int obd_memmax;
 
 /* The following are visible and mutable through /proc/sys/lustre/. */
 unsigned long obd_fail_loc;
 unsigned long obd_timeout = 100;
 char obd_recovery_upcall[128] = "/usr/lib/lustre/ha_assist";
-
-extern struct obd_type *class_nm_to_type(char *nm);
 
 /*  opening /dev/obd */
 static int obd_class_open(struct inode * inode, struct file * file)
@@ -66,8 +65,6 @@ static int obd_class_open(struct inode * inode, struct file * file)
         ENTRY;
 
         file->private_data = NULL;
-        CDEBUG(D_IOCTL, "MOD_INC_USE for open: count = %d\n",
-               atomic_read(&(THIS_MODULE)->uc.usecount));
         MOD_INC_USE_COUNT;
         RETURN(0);
 }
@@ -80,9 +77,6 @@ static int obd_class_release(struct inode * inode, struct file * file)
         // XXX drop lsm, connections here
         if (file->private_data)
                 file->private_data = NULL;
-
-        CDEBUG(D_IOCTL, "MOD_DEC_USE for close: count = %d\n",
-               atomic_read(&(THIS_MODULE)->uc.usecount) - 1);
         MOD_DEC_USE_COUNT;
         RETURN(0);
 }
@@ -329,16 +323,16 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 if (obd->obd_flags & OBD_ATTACHED || obd->obd_type) {
                         CERROR("OBD: Device %d already typed as %s.\n",
                                obd->obd_minor, MKSTR(obd->obd_type->typ_name));
-                        GOTO(out, err=-EBUSY);
+                        GOTO(out, err = -EBUSY);
                 }
 
                 if (!data->ioc_inllen1 || !data->ioc_inlbuf1) {
                         CERROR("No type passed!\n");
-                        GOTO(out, err=-EINVAL);
+                        GOTO(out, err = -EINVAL);
                 }
                 if (data->ioc_inlbuf1[data->ioc_inllen1-1] !=0) {
                         CERROR("Type not nul terminated!\n");
-                        GOTO(out, err=-EINVAL);
+                        GOTO(out, err = -EINVAL);
                 }
 
                 CDEBUG(D_IOCTL, "attach type %s name: %s uuid: %s\n",
@@ -346,10 +340,10 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                        MKSTR(data->ioc_inlbuf2), MKSTR(data->ioc_inlbuf3));
 
                 /* find the type */
-                type = class_nm_to_type(data->ioc_inlbuf1);
+                type = class_get_type(data->ioc_inlbuf1);
                 if (!type) {
                         CERROR("OBD: unknown type dev %d\n", obd->obd_minor);
-                        GOTO(out, err=-EINVAL);
+                        GOTO(out, err = -EINVAL);
                 }
 
                 minor = obd->obd_minor;
@@ -364,8 +358,8 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                         int len = strlen(data->ioc_inlbuf2) + 1;
                         OBD_ALLOC(obd->obd_name, len);
                         if (!obd->obd_name) {
-                                CERROR("no memory\n");
-                                LBUG();
+                                class_put_type(obd->obd_type);
+                                GOTO(out, err = -ENOMEM);
                         }
                         memcpy(obd->obd_name, data->ioc_inlbuf2, len);
                 } else {
@@ -374,11 +368,12 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 if (data->ioc_inlbuf3) {
                         int len = strlen(data->ioc_inlbuf3);
                         if (len >= sizeof(obd->obd_uuid)) {
-                                CERROR("uuid must be < %d bytes long\n",
+                                CERROR("uuid must be < "LPSZ" bytes long\n",
                                        sizeof(obd->obd_uuid));
                                 if (obd->obd_name)
                                         OBD_FREE(obd->obd_name,
                                                  strlen(obd->obd_name) + 1);
+                                class_put_type(obd->obd_type);
                                 GOTO(out, err=-EINVAL);
                         }
                         memcpy(obd->obd_uuid, data->ioc_inlbuf3, len);
@@ -389,6 +384,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 if (err) {
                         if(data->ioc_inlbuf2)
                                 OBD_FREE(obd->obd_name, strlen(obd->obd_name)+1);
+                        class_put_type(obd->obd_type);
                         obd->obd_type = NULL;
                 } else {
                         obd->obd_flags |= OBD_ATTACHED;
@@ -396,10 +392,6 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                         type->typ_refcnt++;
                         CDEBUG(D_IOCTL, "OBD: dev %d attached type %s\n",
                                obd->obd_minor, data->ioc_inlbuf1);
-
-                        CDEBUG(D_IOCTL, "MOD_INC_USE for attach: count = %d\n",
-                               atomic_read(&(THIS_MODULE)->uc.usecount));
-                        MOD_INC_USE_COUNT;
                 }
 
                 GOTO(out, err);
@@ -423,8 +415,8 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                         }
                         forcibly_detach_exports(obd);
                 }
-                   if (OBP(obd, detach))
-                        err=OBP(obd,detach)(obd);
+                if (OBP(obd, detach))
+                        err = OBP(obd,detach)(obd);
 
                 if (obd->obd_name) {
                         OBD_FREE(obd->obd_name, strlen(obd->obd_name)+1);
@@ -433,10 +425,8 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 
                 obd->obd_flags &= ~OBD_ATTACHED;
                 obd->obd_type->typ_refcnt--;
+                class_put_type(obd->obd_type);
                 obd->obd_type = NULL;
-                CDEBUG(D_IOCTL, "MOD_DEC_USE for detach: count = %d\n",
-                       atomic_read(&(THIS_MODULE)->uc.usecount) - 1);
-                MOD_DEC_USE_COUNT;
                 GOTO(out, err = 0);
         }
 
@@ -503,13 +493,6 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 obd_data2conn(&conn, data);
                 err = obd_disconnect(&conn);
                 GOTO(out, err);
-        }
-
-        case OBD_IOC_DEC_USE_COUNT: {
-                CDEBUG(D_IOCTL, "MOD_DEC_USE for force dec: count = %d\n",
-                       atomic_read(&(THIS_MODULE)->uc.usecount) - 1);
-                MOD_DEC_USE_COUNT;
-                GOTO(out, err=0);
         }
 
         default:
@@ -620,6 +603,7 @@ EXPORT_SYMBOL(obd_kmap_put);
 EXPORT_SYMBOL(obd_dev);
 EXPORT_SYMBOL(obdo_cachep);
 EXPORT_SYMBOL(obd_memory);
+EXPORT_SYMBOL(obd_memmax);
 EXPORT_SYMBOL(obd_fail_loc);
 EXPORT_SYMBOL(obd_timeout);
 EXPORT_SYMBOL(obd_recovery_upcall);
@@ -627,6 +611,8 @@ EXPORT_SYMBOL(ptlrpc_put_connection_superhack);
 
 EXPORT_SYMBOL(class_register_type);
 EXPORT_SYMBOL(class_unregister_type);
+EXPORT_SYMBOL(class_get_type);
+EXPORT_SYMBOL(class_put_type);
 EXPORT_SYMBOL(class_name2dev);
 EXPORT_SYMBOL(class_uuid2dev);
 EXPORT_SYMBOL(class_uuid2obd);
@@ -642,7 +628,6 @@ EXPORT_SYMBOL(class_disconnect_all);
 EXPORT_SYMBOL(class_uuid_unparse);
 
 EXPORT_SYMBOL(class_signal_connection_failure);
-EXPORT_SYMBOL(class_nm_to_type);
 
 static int __init init_obdclass(void)
 {
@@ -666,9 +651,9 @@ static int __init init_obdclass(void)
                 obd->obd_minor = i;
 
         err = obd_init_caches();
-
         if (err)
                 return err;
+
         obd_sysctl_init();
 
         err = lprocfs_reg_main();
@@ -696,7 +681,8 @@ static void __exit cleanup_obdclass(void)
 
         err = lprocfs_dereg_main();
 
-        CERROR("obd memory leaked: %ld bytes\n", obd_memory);
+        CERROR("obd mem max: %d leaked: %d\n", obd_memmax,
+               atomic_read(&obd_memory));
         EXIT;
 }
 

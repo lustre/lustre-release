@@ -22,8 +22,9 @@
  *
  */
 
-#define DEBUG_SUBSYSTEM S_LLITE
+#define DEBUG_SUBSYSTEM S_CLASS
 
+#define EXPORT_SYMTAB
 #include <linux/lustre_net.h>
 #include <linux/obd_support.h>
 
@@ -39,7 +40,10 @@ void obd_statfs_pack(struct obd_statfs *tgt, struct obd_statfs *src)
         tgt->os_namelen = HTON__u32(src->os_namelen);
 }
 
-#define obd_statfs_unpack(tgt, src) obd_statfs_pack(tgt, src)
+void obd_statfs_unpack(struct obd_statfs *tgt, struct obd_statfs *src)
+{
+        obd_statfs_pack(tgt, src);
+}
 
 void statfs_pack(struct obd_statfs *osfs, struct statfs *sfs)
 {
@@ -65,3 +69,7 @@ void statfs_unpack(struct statfs *sfs, struct obd_statfs *osfs)
         sfs->f_namelen = osfs->os_namelen;
 }
 
+EXPORT_SYMBOL(obd_statfs_pack);
+EXPORT_SYMBOL(obd_statfs_unpack);
+EXPORT_SYMBOL(statfs_pack);
+EXPORT_SYMBOL(statfs_unpack);

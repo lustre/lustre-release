@@ -1,4 +1,5 @@
-TBA
+2003-01-06  Andreas Dilger  <adilger@clusterfs.com>
+	* version v0_5_19
 	* bug fixes
 	 - Fully reactivate OST imports after reconnection (512, others)
 	 - Make sure client sees our -ENOTCONN from mds_handle (513 - partial)
@@ -20,6 +21,41 @@ TBA
 	 - fix paths in lconf, which would load incorrect modules (451, 507)
 	 - fix confusing lconf 'host not found' error message (386)
 	 - fix lock order deadlock on OST (O/R i_sem before journal ops, 478)
+	 - fix race condition in mdc_blocking_ast() for inode access (526)
+	 - fix lov_unpackmd() unpacking wrong number of stripes (537)
+	 - fix lov_set_osc_active() marking wrong OSC inactive (440)
+	 - fix bad lstripe lov_unpackmd() assertion (fix layering too) (527)
+	 - fix multiple writes of stripe MD to MDS (358, maybe 519)
+	 - fix lstripe in several ways (kernel side) (527)
+	 - fix request leak in ldlm_cli_enqueue (262)
+	 - incorrect OSC was marked inactive after OST failure
+	 - call mds_fs_cleanup before unmounting filesystem (524)
+	 - fix races between taking ns_lock and ldlm_lock_change_resource
+	 - fix races updating LOV export open file list
+	 - fix lov_enqueue error path, avoid decref-ing bad lock handle
+	 - fix recovery NULL deref in ldlm_cli_cancel_unused
+	 - fix some DLM races by using new hash table for lock handles (419)
+	 - permit the client to specify desired inodes, at replay
+	 - duplicate requests when we queue them for replay reintegration
+	 - fix last_rcvd offset calculation
+	 - sync after each recovered transaction, so we always make progress
+	 - never, not always, ERESTART requests without transnos
+	 - store the lov_desc in the MDS, so we don't depend on getlovinfo to
+	   set it
+	 - skip replay if the MDS says that the client is already connected
+	 - don't check for a recovery-enabled export to match lctl's UUID
+	 - don't INC_USE_COUNT for phantom exports
+	 - don't crash when cleaning up phantom exports (567)
+	 - don't double-finish or set replay data for errored mdc_open requests
+	 - abort requests when they time out, so we don't get old replies
+	 - send/receive replies for AST messages again
+	 - if the client says that it doesn't have the lock, cancel it on the
+	   server
+	 - if we timeout during I/O, don't try to cancel an in-use lock; instead
+	   mark it as destroyed, it will all work out when decref is called
+	 - fix module use counts (22, 581)
+	* protocol changes
+	 - ASTs now expect a reply (server cancels lock on error reply)
 
 2002-12-02  Andreas Dilger  <adilger@clusterfs.com>
 	* version v0_5_18

@@ -1,10 +1,15 @@
 #!/bin/sh
 
 LCONF=../utils/lconf
+NAME=${NAME:-echo}
+TMP=${TMP:-/tmp}
 
-if [ -f echo.xml ]; then
-   ${LCONF} --cleanup echo.xml
-else
-   echo "no echo.xml found"
+config=$NAME.xml
+mkconfig=./$NAME.sh
+
+if [ ! -f $config ]; then
+   sh $mkconfig $config || exit 1
 fi
+
+${LCONF} --cleanup echo.xml
 

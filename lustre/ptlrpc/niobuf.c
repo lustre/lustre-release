@@ -148,6 +148,14 @@ int ptlrpc_send_bulk(struct ptlrpc_bulk_desc *desc)
 
                 iov[desc->bd_md.niov].iov_base = bulk->bp_buf;
                 iov[desc->bd_md.niov].iov_len = bulk->bp_buflen;
+                if (iov[desc->bd_md.niov].iov_len <= 0) {
+                        CERROR("bad bp_buflen[%d] @ %p: %d\n", desc->bd_md.niov,
+                               bulk->bp_buf, bulk->bp_buflen);
+                        CERROR("desc: xid %u, pages %d, ptl %d, ref %d\n",
+                               xid, desc->bd_page_count, desc->bd_portal,
+                               atomic_read(&desc->bd_refcount));
+                        LBUG();
+                }
                 desc->bd_md.niov++;
                 desc->bd_md.length += bulk->bp_buflen;
         }
@@ -384,22 +392,20 @@ int ptl_send_rpc(struct ptlrpc_request *request)
         /* add a ref, which will be balanced in request_out_callback */
         atomic_inc(&request->rq_refcount);
         if (request->rq_replen != 0) {
-                /* request->rq_repmsg is set only when the reply comes in, in
-                 * client_packet_callback() */
-                if (request->rq_reply_md.start) {
+                if (request->rq_reply_md.start != NULL) {
                         rc = PtlMEUnlink(request->rq_reply_me_h);
-                        LASSERT (rc == PTL_OK);
-                        OBD_FREE(request->rq_reply_md.start,
-                                 request->rq_replen);
-                        /* If we're resending, rq_repmsg needs to be NULLed out
-                         * again so that ptlrpc_check_reply doesn't trip early.
-                         */
+                        if (rc != PTL_OK && rc != PTL_INV_ME) {
+                                CERROR("rc %d\n", rc);
+                                LBUG();
+                        }
+                        repbuf = (char *)request->rq_reply_md.start;
                         request->rq_repmsg = NULL;
-                }
-                OBD_ALLOC(repbuf, request->rq_replen);
-                if (!repbuf) {
-                        LBUG();
-                        RETURN(ENOMEM);
+                } else {
+                        OBD_ALLOC(repbuf, request->rq_replen);
+                        if (!repbuf) {
+                                LBUG();
+                                RETURN(ENOMEM);
+                        }
                 }
 
                 rc = PtlMEAttach(request->rq_connection->c_peer.peer_ni,

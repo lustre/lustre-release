@@ -41,53 +41,59 @@ int (*ptlrpc_put_connection_superhack)(struct ptlrpc_connection *c);
  * support functions: we could use inter-module communication, but this
  * is more portable to other OS's
  */
-static struct obd_type *class_search_type(char *nm)
+static struct obd_type *class_search_type(char *name)
 {
         struct list_head *tmp;
         struct obd_type *type;
-        CDEBUG(D_INFO, "SEARCH %s\n", nm);
+        CDEBUG(D_INFO, "SEARCH %s\n", name);
 
         tmp = &obd_types;
         list_for_each(tmp, &obd_types) {
                 type = list_entry(tmp, struct obd_type, typ_chain);
                 CDEBUG(D_INFO, "TYP %s\n", type->typ_name);
-                if (strlen(type->typ_name) == strlen(nm) &&
-                    strcmp(type->typ_name, nm) == 0 ) {
+                if (strlen(type->typ_name) == strlen(name) &&
+                    strcmp(type->typ_name, name) == 0) {
                         return type;
                 }
         }
         return NULL;
 }
 
-struct obd_type *class_nm_to_type(char *nm)
+struct obd_type *class_get_type(char *name)
 {
-        struct obd_type *type = class_search_type(nm);
+        struct obd_type *type = class_search_type(name);
 
 #ifdef CONFIG_KMOD
-        if ( !type ) {
-                if ( !request_module(nm) ) {
-                        CDEBUG(D_INFO, "Loaded module '%s'\n", nm);
-                        type = class_search_type(nm);
-                } else {
-                        CDEBUG(D_INFO, "Can't load module '%s'\n", nm);
-                }
+        if (!type) {
+                if (!request_module(name)) {
+                        CDEBUG(D_INFO, "Loaded module '%s'\n", name);
+                        type = class_search_type(name);
+                } else
+                        CDEBUG(D_INFO, "Can't load module '%s'\n", name);
         }
 #endif
+        if (type)
+                __MOD_INC_USE_COUNT(type->typ_ops->o_owner);
         return type;
 }
 
+void class_put_type(struct obd_type *type)
+{
+        LASSERT(type);
+        __MOD_DEC_USE_COUNT(type->typ_ops->o_owner);
+}
+
 int class_register_type(struct obd_ops *ops, struct lprocfs_vars *vars,
-                        char *nm)
+                        char *name)
 {
         struct obd_type *type;
         int rc;
-
         ENTRY;
 
-        LASSERT (strnlen (nm, 1024) < 1024);    /* sanity check */
-        
-        if (class_search_type(nm)) {
-                CDEBUG(D_IOCTL, "Type %s already registered\n", nm);
+        LASSERT(strnlen(name, 1024) < 1024);    /* sanity check */
+
+        if (class_search_type(name)) {
+                CDEBUG(D_IOCTL, "Type %s already registered\n", name);
                 RETURN(-EEXIST);
         }
 
@@ -97,38 +103,33 @@ int class_register_type(struct obd_ops *ops, struct lprocfs_vars *vars,
                 RETURN(rc);
 
         OBD_ALLOC(type->typ_ops, sizeof(*type->typ_ops));
-        OBD_ALLOC(type->typ_name, strlen(nm) + 1);
-        if (type->typ_ops == NULL ||
-            type->typ_name == NULL)
+        OBD_ALLOC(type->typ_name, strlen(name) + 1);
+        if (type->typ_ops == NULL || type->typ_name == NULL)
                 GOTO (failed, rc);
-        
+
         *(type->typ_ops) = *ops;
-        strcpy(type->typ_name, nm);
+        strcpy(type->typ_name, name);
         list_add(&type->typ_chain, &obd_types);
 
         rc = lprocfs_reg_class(type, vars, type);
         if (rc != 0) {
-                list_del (&type->typ_chain);
-                GOTO (failed, rc);
+                list_del(&type->typ_chain);
+                GOTO(failed, rc);
         }
-        
-        CDEBUG(D_INFO, "MOD_INC_USE for register_type: count = %d\n",
-               atomic_read(&(THIS_MODULE)->uc.usecount));
-        MOD_INC_USE_COUNT;
+
         RETURN (0);
 
  failed:
         if (type->typ_ops != NULL)
-                OBD_FREE (type->typ_name, strlen (nm) + 1);
+                OBD_FREE(type->typ_name, strlen(name) + 1);
         if (type->typ_ops != NULL)
                 OBD_FREE (type->typ_ops, sizeof (*type->typ_ops));
         RETURN(rc);
 }
 
-int class_unregister_type(char *nm)
+int class_unregister_type(char *name)
 {
-        struct obd_type *type = class_nm_to_type(nm);
-
+        struct obd_type *type = class_search_type(name);
         ENTRY;
 
         if (!type) {
@@ -137,7 +138,7 @@ int class_unregister_type(char *nm)
         }
 
         if (type->typ_refcnt) {
-                CERROR("type %s has refcount (%d)\n", nm, type->typ_refcnt);
+                CERROR("type %s has refcount (%d)\n", name, type->typ_refcnt);
                 /* This is a bad situation, let's make the best of it */
                 /* Remove ops, but leave the name for debugging */
                 OBD_FREE(type->typ_ops, sizeof(*type->typ_ops));
@@ -147,13 +148,10 @@ int class_unregister_type(char *nm)
                 lprocfs_dereg_class(type);
 
         list_del(&type->typ_chain);
-        OBD_FREE(type->typ_name, strlen(nm) + 1);
+        OBD_FREE(type->typ_name, strlen(name) + 1);
         if (type->typ_ops != NULL)
                 OBD_FREE(type->typ_ops, sizeof(*type->typ_ops));
         OBD_FREE(type, sizeof(*type));
-        CDEBUG(D_INFO, "MOD_DEC_USE for register_type: count = %d\n",
-               atomic_read(&(THIS_MODULE)->uc.usecount) - 1);
-        MOD_DEC_USE_COUNT;
         RETURN(0);
 } /* class_unregister_type */
 
@@ -165,7 +163,7 @@ int class_name2dev(char *name)
         if (!name)
                 return -1;
 
-        for (i=0; i < MAX_OBD_DEVICES; i++) {
+        for (i = 0; i < MAX_OBD_DEVICES; i++) {
                 struct obd_device *obd = &obd_dev[i];
                 if (obd->obd_name && strcmp(name, obd->obd_name) == 0) {
                         res = i;
@@ -181,7 +179,7 @@ int class_uuid2dev(char *uuid)
         int res = -1;
         int i;
 
-        for (i=0; i < MAX_OBD_DEVICES; i++) {
+        for (i = 0; i < MAX_OBD_DEVICES; i++) {
                 struct obd_device *obd = &obd_dev[i];
                 if (strncmp(uuid, obd->obd_uuid, sizeof(obd->obd_uuid)) == 0) {
                         res = i;
@@ -197,7 +195,7 @@ struct obd_device *class_uuid2obd(char *uuid)
 {
         int i;
 
-        for (i=0; i < MAX_OBD_DEVICES; i++) {
+        for (i = 0; i < MAX_OBD_DEVICES; i++) {
                 struct obd_device *obd = &obd_dev[i];
                 if (strncmp(uuid, obd->obd_uuid, sizeof(obd->obd_uuid)) == 0)
                         return obd;
@@ -428,7 +426,9 @@ void class_disconnect_all(struct obd_device *obddev)
                         spin_unlock(&obddev->obd_dev_lock);
                         CERROR("force disconnecting %s:%s export %p\n",
                                export->exp_obd->obd_type->typ_name,
-                               export->exp_connection->c_remote_uuid, export);
+                               export->exp_connection ?
+                               (char *)export->exp_connection->c_remote_uuid :
+                               "<unconnected>", export);
                         rc = obd_disconnect(&conn);
                         if (rc < 0) {
                                 /* AED: not so sure about this...  We can't

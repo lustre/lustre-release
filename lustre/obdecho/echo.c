@@ -109,26 +109,7 @@ static int echo_connect(struct lustre_handle *conn, struct obd_device *obd,
                         obd_uuid_t cluuid, struct recovd_obd *recovd,
                         ptlrpc_recovery_cb_t recover)
 {
-        int rc;
-
-        MOD_INC_USE_COUNT;
-        rc = class_connect(conn, obd, cluuid);
-
-        if (rc)
-                MOD_DEC_USE_COUNT;
-
-        return rc;
-}
-
-static int echo_disconnect(struct lustre_handle *conn)
-{
-        int rc;
-
-        rc = class_disconnect(conn);
-        if (!rc)
-                MOD_DEC_USE_COUNT;
-
-        return rc;
+        return class_connect(conn, obd, cluuid);
 }
 
 static __u64 echo_next_id(struct obd_device *obddev)
@@ -148,7 +129,7 @@ int echo_create(struct lustre_handle *conn, struct obdo *oa,
         struct obd_device *obd = class_conn2obd(conn);
 
         if (!obd) {
-                CERROR("invalid client %Lx\n", conn->addr);
+                CERROR("invalid client "LPX64"\n", conn->addr);
                 return -EINVAL;
         }
 
@@ -453,20 +434,21 @@ int echo_detach(struct obd_device *dev)
 }
 
 static struct obd_ops echo_obd_ops = {
-        o_attach:       echo_attach,
-        o_detach:       echo_detach,
-        o_connect:      echo_connect,
-        o_disconnect:   echo_disconnect,
-        o_create:       echo_create,
-        o_destroy:      echo_destroy,
-        o_open:         echo_open,
-        o_close:        echo_close,
-        o_getattr:      echo_getattr,
-        o_setattr:      echo_setattr,
-        o_preprw:       echo_preprw,
-        o_commitrw:     echo_commitrw,
-        o_setup:        echo_setup,
-        o_cleanup:      echo_cleanup
+        o_owner:       THIS_MODULE,
+        o_attach:      echo_attach,
+        o_detach:      echo_detach,
+        o_connect:     echo_connect,
+        o_disconnect:  class_disconnect,
+        o_create:      echo_create,
+        o_destroy:     echo_destroy,
+        o_open:        echo_open,
+        o_close:       echo_close,
+        o_getattr:     echo_getattr,
+        o_setattr:     echo_setattr,
+        o_preprw:      echo_preprw,
+        o_commitrw:    echo_commitrw,
+        o_setup:       echo_setup,
+        o_cleanup:     echo_cleanup
 };
 
 extern int echo_client_init(void);

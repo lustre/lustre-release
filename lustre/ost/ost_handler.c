@@ -37,6 +37,7 @@
 #include <linux/obd_ost.h>
 #include <linux/lustre_net.h>
 #include <linux/lustre_dlm.h>
+#include <linux/lustre_export.h>
 #include <linux/init.h>
 #include <linux/lprocfs_status.h>
 
@@ -212,10 +213,10 @@ static int ost_setattr(struct ptlrpc_request *req)
 
 static int ost_bulk_timeout(void *data)
 {
-        struct ptlrpc_bulk_desc *desc = data;
-
         ENTRY;
-        recovd_conn_fail(desc->bd_connection);
+        /* We don't fail the connection here, because having the export
+         * killed makes the (vital) call to commitrw very sad.
+         */
         RETURN(1);
 }
 
@@ -223,7 +224,8 @@ static int ost_brw_read(struct ptlrpc_request *req)
 {
         struct lustre_handle *conn = (struct lustre_handle *)req->rq_reqmsg;
         struct ptlrpc_bulk_desc *desc;
-        void *tmp1, *tmp2, *end2;
+        struct obd_ioobj *tmp1;
+        void *tmp2, *end2;
         struct niobuf_remote *remote_nb;
         struct niobuf_local *local_nb = NULL;
         struct obd_ioobj *ioo;
@@ -316,16 +318,19 @@ static int ost_brw_write(struct ptlrpc_request *req)
 {
         struct lustre_handle *conn = (struct lustre_handle *)req->rq_reqmsg;
         struct ptlrpc_bulk_desc *desc;
+        struct obd_ioobj *tmp1;
+        void *tmp2, *end2;
         struct niobuf_remote *remote_nb;
-        struct niobuf_local *local_nb, *lnb;
+        struct niobuf_local *local_nb = NULL;
+        struct niobuf_local *lnb;
         struct obd_ioobj *ioo;
         struct ost_body *body;
-        int cmd, rc, i, j, objcount, niocount, size[2] = {sizeof(*body)};
-        void *tmp1, *tmp2, *end2;
+        struct l_wait_info lwi;
+        int rc, cmd, i, j, objcount, niocount;
+        int size[2] = {sizeof(*body)};
         void *desc_priv = NULL;
         int reply_sent = 0;
         struct ptlrpc_service *srv;
-        struct l_wait_info lwi;
         __u32 xid;
         ENTRY;
 
@@ -415,11 +420,15 @@ static int ost_brw_write(struct ptlrpc_request *req)
         if (rc) {
                 if (rc != -ETIMEDOUT)
                         LBUG();
-                GOTO(fail_bulk, rc);
+                ptlrpc_abort_bulk(desc);
+                recovd_conn_fail(desc->bd_connection);
+                obd_commitrw(cmd, conn, objcount, tmp1, niocount, local_nb,
+                             desc->bd_desc_private);
+        } else {
+                rc = obd_commitrw(cmd, conn, objcount, tmp1, niocount, local_nb,
+                                  desc->bd_desc_private);
         }
 
-        rc = obd_commitrw(cmd, conn, objcount, tmp1, niocount, local_nb,
-                          desc->bd_desc_private);
         ptlrpc_bulk_decref(desc);
         EXIT;
 out_free:
@@ -438,7 +447,7 @@ out:
 fail_bulk:
         ptlrpc_free_bulk(desc);
 fail_preprw:
-        /* FIXME: how do we undo the preprw? */
+        /* FIXME: how do we undo the preprw? - answer = call commitrw */
         goto out_free;
 }
 
@@ -457,6 +466,7 @@ static int ost_handle(struct ptlrpc_request *req)
             req->rq_export == NULL) {
                 CERROR("lustre_ost: operation %d on unconnected OST\n",
                        req->rq_reqmsg->opc);
+                req->rq_status = -ENOTCONN;
                 GOTO(out, rc = -ENOTCONN);
         }
 
@@ -592,19 +602,18 @@ static int ost_setup(struct obd_device *obddev, obd_count len, void *buf)
                 RETURN(-EINVAL);
         }
 
-        MOD_INC_USE_COUNT;
         tgt = class_uuid2obd(data->ioc_inlbuf1);
         if (!tgt || !(tgt->obd_flags & OBD_ATTACHED) ||
             !(tgt->obd_flags & OBD_SET_UP)) {
                 CERROR("device not attached or not set up (%d)\n",
                        data->ioc_dev);
-                GOTO(error_dec, err = -EINVAL);
+                RETURN(err = -EINVAL);
         }
 
         err = obd_connect(&ost->ost_conn, tgt, NULL, NULL, NULL);
         if (err) {
                 CERROR("fail to connect to device %d\n", data->ioc_dev);
-                GOTO(error_dec, err = -EINVAL);
+                RETURN(err);
         }
 
         ost->ost_service = ptlrpc_init_svc(OST_NEVENTS, OST_NBUFS,
@@ -630,8 +639,6 @@ static int ost_setup(struct obd_device *obddev, obd_count len, void *buf)
 
 error_disc:
         obd_disconnect(&ost->ost_conn);
-error_dec:
-        MOD_DEC_USE_COUNT;
         RETURN(err);
 }
 
@@ -651,14 +658,12 @@ static int ost_cleanup(struct obd_device * obddev)
         ptlrpc_unregister_service(ost->ost_service);
 
         err = obd_disconnect(&ost->ost_conn);
-        if (err) {
+        if (err)
                 CERROR("lustre ost: fail to disconnect device\n");
-                RETURN(-EINVAL);
-        }
 
-        MOD_DEC_USE_COUNT;
-        RETURN(0);
+        RETURN(err);
 }
+
 int ost_attach(struct obd_device *dev, obd_count len, void *data)
 {
         return lprocfs_reg_obd(dev, status_var_nm_1, dev);
@@ -667,24 +672,71 @@ int ost_attach(struct obd_device *dev, obd_count len, void *data)
 int ost_detach(struct obd_device *dev)
 {
         return lprocfs_dereg_obd(dev);
-       
 }
 
+/* This is so similar to mds_connect that it makes my heart weep: we should
+ * shuffle the UUID into obd_export proper and make this all happen in
+ * target_handle_connect.
+ */
+static int ost_connect(struct lustre_handle *conn,
+                       struct obd_device *obd, obd_uuid_t cluuid,
+                       struct recovd_obd *recovd,
+                       ptlrpc_recovery_cb_t recover)
+{
+        struct obd_export *exp;
+        struct ost_export_data *oed;
+        struct list_head *p;
+        int rc;
+        ENTRY;
+
+        if (!conn || !obd || !cluuid)
+                RETURN(-EINVAL);
+
+        /* lctl gets a backstage, all-access pass. */
+        if (!strcmp(cluuid, "OBD_CLASS_UUID"))
+                goto dont_check_exports;
+
+        spin_lock(&obd->obd_dev_lock);
+        list_for_each(p, &obd->obd_exports) {
+                exp = list_entry(p, struct obd_export, exp_obd_chain);
+                oed = &exp->exp_ost_data;
+                if (!memcmp(cluuid, oed->oed_uuid, sizeof oed->oed_uuid)) {
+                        spin_unlock(&obd->obd_dev_lock);
+                        LASSERT(exp->exp_obd == obd);
+
+                        RETURN(target_handle_reconnect(conn, exp, cluuid));
+                }
+        }
+
+ dont_check_exports:
+        rc = class_connect(conn, obd, cluuid);
+        if (rc)
+                RETURN(rc);
+        exp = class_conn2export(conn);
+        LASSERT(exp);
+
+        oed = &exp->exp_ost_data;
+        memcpy(oed->oed_uuid, cluuid, sizeof oed->oed_uuid);
+
+        RETURN(0);
+}
 
 
 /* use obd ops to offer management infrastructure */
 static struct obd_ops ost_obd_ops = {
-        o_attach:      ost_attach,
-        o_detach:      ost_detach,
-        o_setup:       ost_setup,
-        o_cleanup:     ost_cleanup,
+        o_owner:        THIS_MODULE,
+        o_attach:       ost_attach,
+        o_detach:       ost_detach,
+        o_setup:        ost_setup,
+        o_cleanup:      ost_cleanup,
+        o_connect:      ost_connect,
 };
 
 static int __init ost_init(void)
 {
         int rc;
 
-        rc = class_register_type(&ost_obd_ops, status_class_var, 
+        rc = class_register_type(&ost_obd_ops, status_class_var,
                                  LUSTRE_OST_NAME);
         RETURN(rc);
 
@@ -692,7 +744,6 @@ static int __init ost_init(void)
 
 static void __exit ost_exit(void)
 {
-        
         class_unregister_type(LUSTRE_OST_NAME);
 }
 

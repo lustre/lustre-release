@@ -95,8 +95,8 @@ static void ll_options(char *options, char **ost, char **mds, int *flags)
 #define log2(n) ffz(~(n))
 #endif
 
-static struct super_block * ll_read_super(struct super_block *sb,
-                                          void *data, int silent)
+static struct super_block *ll_read_super(struct super_block *sb,
+                                         void *data, int silent)
 {
         struct inode *root = 0;
         struct obd_device *obd;
@@ -112,13 +112,10 @@ static struct super_block * ll_read_super(struct super_block *sb,
         class_uuid_t uuid;
 
         ENTRY;
-        MOD_INC_USE_COUNT;
 
         OBD_ALLOC(sbi, sizeof(*sbi));
-        if (!sbi) {
-                MOD_DEC_USE_COUNT;
+        if (!sbi)
                 RETURN(NULL);
-        }
 
         INIT_LIST_HEAD(&sbi->ll_conn_chain);
         INIT_LIST_HEAD(&sbi->ll_orphan_dentry_list);
@@ -238,7 +235,6 @@ out_mdc:
 out_free:
         OBD_FREE(sbi, sizeof(*sbi));
 
-        MOD_DEC_USE_COUNT;
         goto out_dev;
 } /* ll_read_super */
 
@@ -275,7 +271,6 @@ static void ll_put_super(struct super_block *sb)
 
         OBD_FREE(sbi, sizeof(*sbi));
 
-        MOD_DEC_USE_COUNT;
         EXIT;
 } /* ll_put_super */
 
@@ -300,16 +295,16 @@ static void ll_clear_inode(struct inode *inode)
                 }
         }
 
-        if (atomic_read(&inode->i_count) == 0) {
-                char *symlink_name = lli->lli_symlink_name;
+        if (atomic_read(&inode->i_count) != 0)
+                CERROR("clearing in-use inode %lu: count = %d\n",
+                       inode->i_ino, atomic_read(&inode->i_count));
 
-                if (lli->lli_smd)
-                        obd_free_memmd(&sbi->ll_osc_conn, &lli->lli_smd);
+        if (lli->lli_smd)
+                obd_free_memmd(&sbi->ll_osc_conn, &lli->lli_smd);
 
-                if (symlink_name) {
-                        OBD_FREE(symlink_name, strlen(symlink_name) + 1);
-                        lli->lli_symlink_name = NULL;
-                }
+        if (lli->lli_symlink_name) {
+                OBD_FREE(lli->lli_symlink_name,strlen(lli->lli_symlink_name)+1);
+                lli->lli_symlink_name = NULL;
         }
 
         EXIT;
@@ -323,8 +318,9 @@ static void ll_delete_inode(struct inode *inode)
                 struct obdo *oa;
                 struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
 
+                /* mcreate with no open */
                 if (!lsm)
-                        GOTO(out, -EINVAL);
+                        GOTO(out, 0);
 
                 if (lsm->lsm_object_id == 0) {
                         CERROR("This really happens\n");
@@ -337,13 +333,13 @@ static void ll_delete_inode(struct inode *inode)
                         GOTO(out, -ENOMEM);
 
                 oa->o_id = lsm->lsm_object_id;
-                oa->o_mode = inode->i_mode;
-                oa->o_valid = OBD_MD_FLID | OBD_MD_FLEASIZE | OBD_MD_FLTYPE;
+                obdo_from_inode(oa, inode, OBD_MD_FLID | OBD_MD_FLTYPE);
 
                 err = obd_destroy(ll_i2obdconn(inode), oa, lsm);
                 obdo_free(oa);
-                CDEBUG(D_SUPER, "obd destroy of objid "LPX64" error %d\n",
-                       lsm->lsm_object_id, err);
+                if (err)
+                        CDEBUG(D_SUPER, "obd destroy objid "LPX64" error %d\n",
+                               lsm->lsm_object_id, err);
         }
 out:
         clear_inode(inode);
@@ -386,18 +382,23 @@ int ll_inode_setattr(struct inode *inode, struct iattr *attr, int do_trunc)
 {
         struct ptlrpc_request *request = NULL;
         struct ll_sb_info *sbi = ll_i2sbi(inode);
-        int err;
-
+        int err = 0;
         ENTRY;
 
         /* change incore inode */
         ll_attr2inode(inode, attr, do_trunc);
 
-        err = mdc_setattr(&sbi->ll_mdc_conn, inode, attr, &request);
-        if (err)
-                CERROR("mdc_setattr fails (%d)\n", err);
+        /* Don't send size changes to MDS to avoid "fast EA" problems, and
+         * also avoid a pointless RPC (we get file size from OST anyways).
+         */
+        attr->ia_valid &= ~ATTR_SIZE;
+        if (attr->ia_valid) {
+                err = mdc_setattr(&sbi->ll_mdc_conn, inode, attr, &request);
+                if (err)
+                        CERROR("mdc_setattr fails (%d)\n", err);
 
-        ptlrpc_req_finished(request);
+                ptlrpc_req_finished(request);
+        }
 
         RETURN(err);
 }
@@ -503,7 +504,6 @@ static void ll_read_inode2(struct inode *inode, void *opaque)
         /* core attributes first */
         ll_update_inode(inode, body);
 
-        //if (body->valid & OBD_MD_FLEASIZE)
         LASSERT(!lli->lli_smd);
         if (lic && lic->lic_lmm)
                 obd_unpackmd(ll_i2obdconn(inode), &lli->lli_smd, lic->lic_lmm);
@@ -515,8 +515,7 @@ static void ll_read_inode2(struct inode *inode, void *opaque)
                 rc = ll_file_size(inode, lli->lli_smd);
                 if (rc) {
                         CERROR("ll_file_size: %d\n", rc);
-                        /* FIXME: need to somehow prevent inode creation */
-                        LBUG();
+                        ll_clear_inode(inode);
                         make_bad_inode(inode);
                 }
         }
@@ -548,8 +547,8 @@ static inline void invalidate_request_list(struct list_head *req_list)
         list_for_each_safe(tmp, n, req_list) {
                 struct ptlrpc_request *req =
                         list_entry(tmp, struct ptlrpc_request, rq_list);
-                CERROR("invalidating req xid "LPD64" op %d to %s:%d\n",
-                       (unsigned long long)req->rq_xid, req->rq_reqmsg->opc,
+                CERROR("invalidating req xid "LPU64" op %d to %s:%d\n",
+                       req->rq_xid, req->rq_reqmsg->opc,
                        req->rq_connection->c_remote_uuid,
                        req->rq_import->imp_client->cli_request_portal);
                 req->rq_flags |= PTL_RPC_FL_ERR;
@@ -591,8 +590,11 @@ struct super_operations ll_super_operations =
         umount_begin: ll_umount_begin
 };
 
-struct file_system_type lustre_lite_fs_type = {
-        "lustre_lite", 0, ll_read_super, NULL
+static struct file_system_type lustre_lite_fs_type = {
+        name:           "lustre_lite",
+        fs_flags:       0,
+        read_super:     ll_read_super,
+        owner:          THIS_MODULE,
 };
 
 static int __init init_lustre_lite(void)

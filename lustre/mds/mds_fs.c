@@ -88,6 +88,9 @@ int mds_client_add(struct mds_obd *mds, struct mds_export_data *med, int cl_off)
                                 RETURN(written);
                         RETURN(-EIO);
                 }
+                CDEBUG(D_INFO, "wrote client mcd at off %u (len %u)\n",
+                       MDS_LR_CLIENT + (cl_off * MDS_LR_SIZE),
+                       (unsigned int)sizeof(*med->med_mcd));
         }
         return 0;
 }
@@ -104,28 +107,27 @@ int mds_client_free(struct obd_export *exp)
         if (!med->med_mcd)
                 RETURN(0);
 
-        CDEBUG(D_INFO, "freeing client at offset %d with UUID '%s'\n",
-               med->med_off, med->med_mcd->mcd_uuid);
+        off = MDS_LR_CLIENT + (med->med_off * MDS_LR_SIZE);
+
+        CDEBUG(D_INFO, "freeing client at offset %u (%lld)with UUID '%s'\n",
+               med->med_off, off, med->med_mcd->mcd_uuid);
 
         if (!test_and_clear_bit(med->med_off, last_rcvd_slots)) {
-                CERROR("MDS client %d: bit already clear in bitmap!!\n",
+                CERROR("MDS client %u: bit already clear in bitmap!!\n",
                        med->med_off);
                 LBUG();
         }
 
-        off = med->med_off;
-
         memset(&zero_mcd, 0, sizeof zero_mcd);
         push_ctxt(&saved, &mds->mds_ctxt, NULL);
         written = lustre_fwrite(mds->mds_rcvd_filp, (const char *)&zero_mcd,
-                                sizeof zero_mcd, &off);
+                                sizeof(zero_mcd), &off);
         pop_ctxt(&saved, &mds->mds_ctxt, NULL);
 
-        if (written != sizeof zero_mcd) {
+        if (written != sizeof(zero_mcd)) {
                 CERROR("error zeroing out client %s off %d in %s: %d\n",
                        med->med_mcd->mcd_uuid, med->med_off, LAST_RCVD,
                        written);
-                LBUG();
         } else {
                 CDEBUG(D_INFO, "zeroed out disconnecting client %s at off %d\n",
                        med->med_mcd->mcd_uuid, med->med_off);
@@ -151,7 +153,7 @@ static int mds_read_last_rcvd(struct obd_device *obddev, struct file *f)
         struct mds_client_data *mcd = NULL;
         loff_t off = 0;
         int cl_off;
-        int max_off = f->f_dentry->d_inode->i_size / sizeof(*mcd);
+        unsigned long last_rcvd_size = f->f_dentry->d_inode->i_size;
         __u64 last_rcvd = 0;
         __u64 last_mount;
         int rc = 0;
@@ -169,11 +171,13 @@ static int mds_read_last_rcvd(struct obd_device *obddev, struct file *f)
 
         if (rc != sizeof(*msd)) {
                 CERROR("error reading MDS %s: rc = %d\n", LAST_RCVD, rc);
-                if (rc > 0) {
+                if (rc > 0)
                         rc = -EIO;
-                }
                 GOTO(err_msd, rc);
         }
+
+        CDEBUG(D_INODE, "last_rcvd has size %lu (msd + %lu clients)\n",
+               last_rcvd_size, (last_rcvd_size - sizeof *msd) / sizeof *mcd);
 
         /*
          * When we do a clean MDS shutdown, we save the last_rcvd into
@@ -182,17 +186,14 @@ static int mds_read_last_rcvd(struct obd_device *obddev, struct file *f)
          */
         last_rcvd = le64_to_cpu(msd->msd_last_rcvd);
         mds->mds_last_rcvd = last_rcvd;
-        CDEBUG(D_INODE, "got %Lu for server last_rcvd value\n",
-               (unsigned long long)last_rcvd);
+        CDEBUG(D_INODE, "got "LPU64" for server last_rcvd value\n", last_rcvd);
 
         last_mount = le64_to_cpu(msd->msd_mount_count);
         mds->mds_mount_count = last_mount;
-        CDEBUG(D_INODE, "got %Lu for server last_mount value\n",
-               (unsigned long long)last_mount);
+        CDEBUG(D_INODE, "got "LPU64" for server last_mount value\n",last_mount);
 
-        for (off = MDS_LR_CLIENT, cl_off = 0;
-             off < max_off;
-             off += MDS_LR_SIZE, cl_off++) {
+        /* off is adjusted by lustre_fread, so we don't adjust it in the loop */
+        for (off = MDS_LR_CLIENT, cl_off = 0; off < last_rcvd_size; cl_off++) {
                 int mount_age;
 
                 if (!mcd) {
@@ -205,7 +206,7 @@ static int mds_read_last_rcvd(struct obd_device *obddev, struct file *f)
                 if (rc != sizeof(*mcd)) {
                         CERROR("error reading MDS %s offset %d: rc = %d\n",
                                LAST_RCVD, cl_off, rc);
-                        if (rc > 0)
+                        if (rc > 0) /* XXX fatal error or just abort reading? */
                                 rc = -EIO;
                         break;
                 }
@@ -218,11 +219,11 @@ static int mds_read_last_rcvd(struct obd_device *obddev, struct file *f)
 
                 last_rcvd = le64_to_cpu(mcd->mcd_last_rcvd);
 
-                /* The exports are cleaned up by mds_disconnect, so they
-                 * need to be set up like real exports also.
+                /* These exports are cleaned up by mds_disconnect(), so they
+                 * need to be set up like real exports as mds_connect() does.
                  */
                 mount_age = last_mount - le64_to_cpu(mcd->mcd_mount_count);
-                if (last_rcvd && mount_age < MDS_MOUNT_RECOV) {
+                if (mount_age < MDS_MOUNT_RECOV) {
                         struct obd_export *exp = class_new_export(obddev);
                         struct mds_export_data *med;
 
@@ -234,13 +235,12 @@ static int mds_read_last_rcvd(struct obd_device *obddev, struct file *f)
                         med = &exp->exp_mds_data;
                         med->med_mcd = mcd;
                         mds_client_add(mds, med, cl_off);
-                        /* XXX put this in a helper if it gets more complex */
+                        /* create helper if export init gets more complex */
                         INIT_LIST_HEAD(&med->med_open_head);
                         spin_lock_init(&med->med_open_lock);
 
                         mcd = NULL;
                         mds->mds_recoverable_clients++;
-                        MOD_INC_USE_COUNT;
                 } else {
                         CDEBUG(D_INFO,
                                "discarded client %d, UUID '%s', count %Ld\n",
@@ -248,18 +248,18 @@ static int mds_read_last_rcvd(struct obd_device *obddev, struct file *f)
                                (long long)le64_to_cpu(mcd->mcd_mount_count));
                 }
 
-                if (last_rcvd > mds->mds_last_rcvd) {
-                        CDEBUG(D_OTHER,
-                               "client at offset %d has last_rcvd = %Lu\n",
-                               cl_off, (unsigned long long)last_rcvd);
+                CDEBUG(D_OTHER, "client at offset %d has last_rcvd = %Lu\n",
+                       cl_off, (unsigned long long)last_rcvd);
+
+                if (last_rcvd > mds->mds_last_rcvd)
                         mds->mds_last_rcvd = last_rcvd;
-                }
         }
 
         mds->mds_last_committed = mds->mds_last_rcvd;
         if (mds->mds_recoverable_clients) {
-                CERROR("need recovery: %d recoverable clients, last_rcvd %Lu\n",
+                CERROR("RECOVERY: %d recoverable clients, last_rcvd "LPU64"\n",
                        mds->mds_recoverable_clients, mds->mds_last_rcvd);
+                mds->mds_next_recovery_transno = mds->mds_last_committed + 1;
         }
 
         if (mcd)
@@ -312,7 +312,7 @@ static int mds_fs_prep(struct obd_device *obddev)
         if (!S_ISREG(f->f_dentry->d_inode->i_mode)) {
                 CERROR("%s is not a regular file!: mode = %o\n", LAST_RCVD,
                        f->f_dentry->d_inode->i_mode);
-                GOTO(err_pop, rc = -ENOENT);
+                GOTO(err_filp, rc = -ENOENT);
         }
 
         rc = fsfilt_journal_data(obddev, f);
@@ -355,10 +355,24 @@ int mds_fs_setup(struct obd_device *obddev, struct vfsmount *mnt)
         RETURN(mds_fs_prep(obddev));
 }
 
-void mds_fs_cleanup(struct obd_device *obddev)
+int mds_fs_cleanup(struct obd_device *obddev)
 {
         struct mds_obd *mds = &obddev->u.mds;
+        struct obd_run_ctxt saved;
+        int rc = 0;
 
         class_disconnect_all(obddev); /* this cleans up client info too */
         mds_server_free_data(mds);
+
+        push_ctxt(&saved, &mds->mds_ctxt, NULL);
+        if (mds->mds_rcvd_filp) {
+                rc = filp_close(mds->mds_rcvd_filp, 0);
+                mds->mds_rcvd_filp = NULL;
+
+                if (rc)
+                        CERROR("last_rcvd file won't close, rc=%d\n", rc);
+        }
+        pop_ctxt(&saved, &mds->mds_ctxt, NULL);
+
+        return rc;
 }

@@ -44,12 +44,12 @@ struct obd_device *client_tgtuuid2obd(char *tgtuuid)
 {
         int i;
 
-        for (i=0; i < MAX_OBD_DEVICES; i++) {
+        for (i = 0; i < MAX_OBD_DEVICES; i++) {
                 struct obd_device *obd = &obd_dev[i];
                 if ((strcmp(obd->obd_type->typ_name, LUSTRE_OSC_NAME) == 0) ||
                     (strcmp(obd->obd_type->typ_name, LUSTRE_MDC_NAME) == 0)) {
                         struct client_obd *cli = &obd->u.cli;
-                        if (strncmp(tgtuuid, cli->cl_target_uuid, 
+                        if (strncmp(tgtuuid, cli->cl_target_uuid,
                                     sizeof(cli->cl_target_uuid)) == 0)
                                 return obd;
                 }
@@ -107,7 +107,7 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         imp->imp_connection = ptlrpc_uuid_to_connection(server_uuid);
         if (!imp->imp_connection)
                 RETURN(-ENOENT);
-        
+
         INIT_LIST_HEAD(&imp->imp_replay_list);
         INIT_LIST_HEAD(&imp->imp_sending_list);
         INIT_LIST_HEAD(&imp->imp_delayed_list);
@@ -120,7 +120,6 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
 
         cli->cl_max_mds_easize = sizeof(struct lov_mds_md);
 
-        MOD_INC_USE_COUNT;
         RETURN(0);
 }
 
@@ -131,7 +130,6 @@ int client_obd_cleanup(struct obd_device * obddev)
         ptlrpc_cleanup_client(&obd->cl_import);
         ptlrpc_put_connection(obd->cl_import.imp_connection);
 
-        MOD_DEC_USE_COUNT;
         return 0;
 }
 
@@ -150,12 +148,10 @@ int client_obd_connect(struct lustre_handle *conn, struct obd_device *obd,
 
         ENTRY;
         down(&cli->cl_sem);
-        MOD_INC_USE_COUNT;
         rc = class_connect(conn, obd, cluuid);
-        if (rc) {
-                MOD_DEC_USE_COUNT;
+        if (rc)
                 GOTO(out_sem, rc);
-        }
+
         cli->cl_conn_count++;
         if (cli->cl_conn_count > 1)
                 GOTO(out_sem, rc);
@@ -217,7 +213,6 @@ out_ldlm:
 out_disco:
                         cli->cl_conn_count--;
                         class_disconnect(conn);
-                        MOD_DEC_USE_COUNT;
                 }
         }
 out_sem:
@@ -251,20 +246,20 @@ int client_obd_disconnect(struct lustre_handle *conn)
 
         cli->cl_conn_count--;
         if (cli->cl_conn_count)
-                GOTO(out_disco, rc = 0);
+                GOTO(out_no_disconnect, rc = 0);
 
         ldlm_namespace_free(obd->obd_namespace);
         obd->obd_namespace = NULL;
         request = ptlrpc_prep_req(&cli->cl_import, rq_opc, 0, NULL,
                                   NULL);
         if (!request)
-                GOTO(out_disco, rc = -ENOMEM);
-        
+                GOTO(out_req, rc = -ENOMEM);
+
         request->rq_replen = lustre_msg_size(0, NULL);
 
         /* Process disconnects even if we're waiting for recovery. */
         request->rq_level = LUSTRE_CONN_RECOVD;
-        
+
         rc = ptlrpc_queue_wait(request);
         if (rc)
                 GOTO(out_req, rc);
@@ -273,12 +268,11 @@ int client_obd_disconnect(struct lustre_handle *conn)
  out_req:
         if (request)
                 ptlrpc_req_finished(request);
- out_disco:
+        list_del_init(&cli->cl_import.imp_chain);
+ out_no_disconnect:
         err = class_disconnect(conn);
         if (!rc && err)
                 rc = err;
-        list_del_init(&cli->cl_import.imp_chain);
-        MOD_DEC_USE_COUNT;
  out_sem:
         up(&cli->cl_sem);
         RETURN(rc);

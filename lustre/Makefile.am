@@ -12,8 +12,8 @@ DIRS24 = extN mds
 endif
 
 # NOTE: keep extN before mds and obdfilter
-SUBDIRS = $(DIRS24) obdclass utils ptlrpc ldlm lib obdfilter mdc osc ost llite 
-SUBDIRS+= obdecho lov tests doc scripts 
+SUBDIRS = $(DIRS24) obdclass utils ptlrpc ldlm lib obdfilter mdc osc ost llite
+SUBDIRS+= obdecho lov cobd ptlbd tests doc scripts conf
 
 DIST_SUBDIRS = $(SUBDIRS)
 EXTRA_DIST = BUGS FDL Rules include archdep.m4
@@ -28,4 +28,4 @@ dist-hook:
 include $(top_srcdir)/Rules
 
 rpms: dist Makefile
-	rpm -ta $(distdir).tar.gz
+	rpmbuild -ta $(distdir).tar.gz

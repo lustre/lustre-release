@@ -9,13 +9,8 @@ MODULE = llite
 modulefs_DATA = llite.o
 EXTRA_PROGRAMS = llite
 
-LINX= ll_pack.c
-
 llite_SOURCES = dcache.c commit_callback.c super.c rw.c super25.c
-llite_SOURCES += file.c dir.c sysctl.c symlink.c $(LINX)
+llite_SOURCES += file.c dir.c sysctl.c symlink.c
 llite_SOURCES += recover.c namei.c lproc_llite.c
-
-ll_pack.c:
-	test -e ll_pack.c || ln -sf $(top_srcdir)/lib/ll_pack.c .
 
 include $(top_srcdir)/Rules

@@ -224,7 +224,7 @@ struct ldlm_lock;
 int ll_lock_callback(struct ldlm_lock *, struct ldlm_lock_desc *, void *data,
                      __u32 data_len, int flag);
 int ll_size_lock(struct inode *, struct lov_stripe_md *, obd_off start,
-                 int mode, struct lustre_handle **);
+                 int mode, struct lustre_handle *);
 int ll_size_unlock(struct inode *, struct lov_stripe_md *, int mode,
                    struct lustre_handle *);
 int ll_file_size(struct inode *inode, struct lov_stripe_md *md);

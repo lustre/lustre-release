@@ -12,19 +12,28 @@
 
 struct lov_oinfo { /* per-child structure */
         __u64 loi_id;              /* object ID on the target OST */
-        struct lustre_handle *loi_handle; /* handle for object on OST */
+        struct lustre_handle *loi_handle; /* open file handle for obj on OST */
         int loi_ost_idx;           /* OST stripe index in lmd_objects array */
 };
 
 struct lov_stripe_md {
-        __u32 lsm_magic;
         __u64 lsm_object_id;       /* lov object id */
-        __u64 lsm_stripe_size;     /* size of the stripe */
-        __u32 lsm_stripe_pattern;  /* per-lov object stripe pattern */
+        __u32 lsm_magic;
+        __u32 lsm_stripe_size;     /* size of the stripe */
         int   lsm_stripe_offset;   /* offset of first stripe in lmd_objects */
         int   lsm_stripe_count;    /* how many objects are being striped on */
         struct lov_oinfo lsm_oinfo[0];
 };
+
+#define IOC_OSC_TYPE         'h'
+#define IOC_OSC_MIN_NR       20
+#define IOC_OSC_REGISTER_LOV _IOWR(IOC_OSC_TYPE, 20, struct obd_device *)
+#define IOC_OSC_MAX_NR       50
+
+#define IOC_MDC_TYPE         'i'
+#define IOC_MDC_MIN_NR       20
+#define IOC_MDC_LOOKUP       _IOWR(IOC_MDC_TYPE, 20, struct obd_device *)
+#define IOC_MDC_MAX_NR       50
 
 #ifdef __KERNEL__
 # include <linux/fs.h>
@@ -46,9 +55,9 @@ struct obd_type {
 };
 
 struct brw_page {
-        struct page *pg;
-        obd_size count;
         obd_off  off;
+        struct page *pg;
+        int count;
         obd_flag flag;
 };
 
@@ -95,6 +104,7 @@ struct filter_obd {
         struct dentry *fo_dentry_O_mode[16];
         spinlock_t fo_objidlock;        /* protects fo_lastobjid increment */
         __u64 fo_lastobjid;
+        __u64 fo_last_committed;
         struct file_operations *fo_fop;
         struct inode_operations *fo_iop;
         struct address_space_operations *fo_aops;
@@ -114,11 +124,6 @@ struct client_obd {
         int                  cl_max_mds_easize;
         struct obd_device   *cl_containing_lov;
 };
-
-#define IOC_OSC_TYPE         'h'
-#define IOC_OSC_MIN_NR       20
-#define IOC_OSC_REGISTER_LOV _IOWR('h', 20, struct obd_device *)
-#define IOC_OSC_MAX_NR       50
 
 struct mds_obd {
         struct ptlrpc_service           *mds_service;
@@ -146,6 +151,9 @@ struct mds_obd {
         struct list_head                 mds_delayed_reply_queue;
         spinlock_t                       mds_processing_task_lock;
         pid_t                            mds_processing_task;
+
+        int                              mds_has_lov_desc;
+        struct lov_desc                  mds_lov_desc;
 };
 
 struct ldlm_obd {
@@ -167,6 +175,19 @@ struct echo_obd {
         atomic_t eo_prep;
         atomic_t eo_read;
         atomic_t eo_write;
+};
+
+/*
+ * this struct does double-duty acting as either a client or
+ * server instance .. maybe not wise.
+ */
+struct ptlbd_obd {
+        /* server's */
+        struct ptlrpc_service *ptlbd_service;
+        /* client's */
+        struct ptlrpc_client bd_client;
+        struct obd_import bd_import;
+        int refcount; /* XXX sigh */
 };
 
 struct recovd_obd {
@@ -200,6 +221,11 @@ struct ost_obd {
 
 struct echo_client_obd {
         struct lustre_handle conn;   /* the local connection to osc/lov */
+};
+
+struct cache_obd {
+        struct lustre_handle cobd_target;       /* local connection to target obd */
+        struct lustre_handle cobd_cache;        /* local connection to cache obd */
 };
 
 struct lov_tgt_desc {
@@ -260,6 +286,8 @@ struct obd_device {
                 struct recovd_obd recovd;
                 struct trace_obd trace;
                 struct lov_obd lov;
+                struct cache_obd cobd;
+                struct ptlbd_obd ptlbd;
 #if 0
                 struct snap_obd snap;
 #endif
@@ -270,6 +298,7 @@ struct obd_device {
 };
 
 struct obd_ops {
+        struct module *o_owner;
         int (*o_iocontrol)(unsigned int cmd, struct lustre_handle *, int len,
                            void *karg, void *uarg);
         int (*o_get_info)(struct lustre_handle *, obd_count keylen, void *key,

@@ -399,7 +399,7 @@ static void unmap_and_decref_bulk_desc(void *data)
 }
 
 /*  this is the callback function which is invoked by the Portals
- *  event handler associated with the bulk_sink queue and bulk_source queue. 
+ *  event handler associated with the bulk_sink queue and bulk_source queue.
  */
 static void osc_ptl_ev_hdlr(struct ptlrpc_bulk_desc *desc)
 {
@@ -428,7 +428,9 @@ static int osc_brw_read(struct lustre_handle *conn, struct lov_stripe_md *lsm,
         struct ptlrpc_bulk_desc *desc = NULL;
         struct ost_body *body;
         int rc, size[3] = {sizeof(*body)}, mapped = 0;
-        void *iooptr, *nioptr;
+        unsigned long flags;
+        struct obd_ioobj *iooptr;
+        void *nioptr;
         __u32 xid;
         ENTRY;
 
@@ -453,9 +455,9 @@ static int osc_brw_read(struct lustre_handle *conn, struct lov_stripe_md *lsm,
         ost_pack_ioo(&iooptr, lsm, page_count);
         /* end almost identical to brw_write case */
 
-        spin_lock(&imp->imp_lock);
+        spin_lock_irqsave(&imp->imp_lock, flags);
         xid = ++imp->imp_last_xid;       /* single xid for all pages */
-        spin_unlock(&imp->imp_lock);
+        spin_unlock_irqrestore(&imp->imp_lock, flags);
 
         obd_kmap_get(page_count, 0);
 
@@ -521,26 +523,27 @@ out_unmap:
         goto out_req;
 }
 
-static int osc_brw_write(struct lustre_handle *conn, struct lov_stripe_md *md,
+static int osc_brw_write(struct lustre_handle *conn, struct lov_stripe_md *lsm,
                          obd_count page_count, struct brw_page *pga,
                          struct obd_brw_set *set)
 {
-        struct ptlrpc_connection *connection =
-                client_conn2cli(conn)->cl_import.imp_connection;
+        struct obd_import *imp = class_conn2cliimp(conn);
+        struct ptlrpc_connection *connection = imp->imp_connection;
         struct ptlrpc_request *request = NULL;
         struct ptlrpc_bulk_desc *desc = NULL;
         struct ost_body *body;
         struct niobuf_local *local = NULL;
         struct niobuf_remote *remote;
-        int rc, j, size[3] = {sizeof(*body)}, mapped = 0;
-        void *iooptr, *nioptr;
+        int rc, size[3] = {sizeof(*body)}, mapped = 0;
+        int j;
+        struct obd_ioobj *iooptr;
+        void *nioptr;
         ENTRY;
 
         size[1] = sizeof(struct obd_ioobj);
-        size[2] = page_count * sizeof(*remote);
+        size[2] = page_count * sizeof(struct niobuf_remote);
 
-        request = ptlrpc_prep_req(class_conn2cliimp(conn), OST_WRITE, 3, size,
-                                  NULL);
+        request = ptlrpc_prep_req(imp, OST_WRITE, 3, size, NULL);
         if (!request)
                 RETURN(-ENOMEM);
 
@@ -548,14 +551,14 @@ static int osc_brw_write(struct lustre_handle *conn, struct lov_stripe_md *md,
 
         desc = ptlrpc_prep_bulk(connection);
         if (!desc)
-               GOTO(out_req, rc = -ENOMEM);
+                GOTO(out_req, rc = -ENOMEM);
         desc->bd_portal = OSC_BULK_PORTAL;
         desc->bd_ptl_ev_hdlr = osc_ptl_ev_hdlr;
         CDEBUG(D_PAGE, "desc = %p\n", desc);
 
         iooptr = lustre_msg_buf(request->rq_reqmsg, 1);
         nioptr = lustre_msg_buf(request->rq_reqmsg, 2);
-        ost_pack_ioo(&iooptr, md, page_count);
+        ost_pack_ioo(&iooptr, lsm, page_count);
         /* end almost identical to brw_read case */
 
         OBD_ALLOC(local, page_count * sizeof(*local));
@@ -567,7 +570,7 @@ static int osc_brw_write(struct lustre_handle *conn, struct lov_stripe_md *md,
         for (mapped = 0; mapped < page_count; mapped++) {
                 local[mapped].addr = kmap(pga[mapped].pg);
 
-                CDEBUG(D_INFO, "kmap(pg) = %p ; pg->flags = %lx ; pg->count = "
+                CDEBUG(D_INFO, "kmap(pg) = %p ; pg->flags = %lx ; pg->refcount = "
                        "%d ; page %d of %d\n",
                        local[mapped].addr, pga[mapped].pg->flags,
                        page_count(pga[mapped].pg),
@@ -604,7 +607,7 @@ static int osc_brw_write(struct lustre_handle *conn, struct lov_stripe_md *md,
                 if (!bulk)
                         GOTO(out_unmap, rc = -ENOMEM);
 
-                bulk->bp_buf = (void *)(unsigned long)local[j].addr;
+                bulk->bp_buf = local[j].addr;
                 bulk->bp_buflen = local[j].len;
                 bulk->bp_xid = remote->xid;
                 bulk->bp_page = pga[j].pg;
@@ -776,6 +779,50 @@ static int osc_statfs(struct lustre_handle *conn, struct obd_statfs *osfs)
         return rc;
 }
 
+/* Retrieve object striping information.
+ *
+ * @lmmu is a pointer to an in-core struct with lmm_ost_count indicating
+ * the maximum number of OST indices which will fit in the user buffer.
+ * lmm_magic must be LOV_MAGIC (we only use 1 slot here).
+ */
+static int osc_getstripe(struct lustre_handle *conn, struct lov_stripe_md *lsm,
+                         struct lov_mds_md *lmmu)
+{
+        struct lov_mds_md lmm, *lmmk;
+        int rc, lmm_size;
+        ENTRY;
+
+        if (!lsm)
+                RETURN(-ENODATA);
+
+        rc = copy_from_user(&lmm, lmmu, sizeof(lmm));
+        if (rc)
+                RETURN(-EFAULT);
+
+        if (lmm.lmm_magic != LOV_MAGIC)
+                RETURN(-EINVAL);
+
+        if (lmm.lmm_ost_count < 1)
+                RETURN(-EOVERFLOW);
+
+        lmm_size = sizeof(lmm) + sizeof(lmm.lmm_objects[0]);
+        OBD_ALLOC(lmmk, lmm_size);
+        if (rc < 0)
+                RETURN(rc);
+
+        lmmk->lmm_stripe_count = 1;
+        lmmk->lmm_ost_count = 1;
+        lmmk->lmm_object_id = lsm->lsm_object_id;
+        lmmk->lmm_objects[0].l_object_id = lsm->lsm_object_id;
+
+        if (copy_to_user(lmmu, lmmk, lmm_size))
+                rc = -EFAULT;
+
+        OBD_FREE(lmmk, lmm_size);
+
+        RETURN(rc);
+}
+
 static int osc_iocontrol(unsigned int cmd, struct lustre_handle *conn, int len,
                          void *karg, void *uarg)
 {
@@ -878,8 +925,16 @@ static int osc_iocontrol(unsigned int cmd, struct lustre_handle *conn, int len,
                 OBD_FREE(buf, len);
                 GOTO(out, err);
         }
+        case LL_IOC_LOV_SETSTRIPE:
+                err = obd_alloc_memmd(conn, karg);
+                if (err > 0)
+                        err = 0;
+                GOTO(out, err);
+        case LL_IOC_LOV_GETSTRIPE:
+                err = osc_getstripe(conn, karg, uarg);
+                GOTO(out, err);
         default:
-                CERROR ("osc_ioctl(): unrecognised ioctl %#lx\n", cmd);
+                CERROR ("osc_ioctl(): unrecognised ioctl %#x\n", cmd);
                 GOTO(out, err = -ENOTTY);
         }
 out:
@@ -904,7 +959,7 @@ static void set_osc_active(struct obd_import *imp, int active)
 
                 fakeconn.addr = (__u64)(unsigned long)exp;
                 fakeconn.cookie = exp->exp_cookie;
-                ioc_data.ioc_inlbuf1 = imp->imp_obd->obd_uuid;
+                ioc_data.ioc_inlbuf1 = imp->imp_obd->u.cli.cl_target_uuid;
                 ioc_data.ioc_offset = active;
                 rc = obd_iocontrol(IOC_LOV_SET_OSC_ACTIVE, &fakeconn,
                                    sizeof ioc_data, &ioc_data, NULL);
@@ -919,42 +974,11 @@ static void set_osc_active(struct obd_import *imp, int active)
         }
 }
 
-
-/* XXX looks a lot like super.c:invalidate_request_list, don't it? */
-static void abort_inflight_for_import(struct obd_import *imp)
-{
-        struct list_head *tmp, *n;
-
-        /* Make sure that no new requests get processed for this import.
-         * ptlrpc_queue_wait must (and does) hold imp_lock while testing this
-         * flag and then putting requests on sending_list or delayed_list.
-         */
-        spin_lock(&imp->imp_lock);
-        imp->imp_flags |= IMP_INVALID;
-        spin_unlock(&imp->imp_lock);
-
-        list_for_each_safe(tmp, n, &imp->imp_sending_list) {
-                struct ptlrpc_request *req =
-                        list_entry(tmp, struct ptlrpc_request, rq_list);
-
-                DEBUG_REQ(D_HA, req, "inflight");
-                req->rq_flags |= PTL_RPC_FL_ERR;
-                wake_up(&req->rq_wait_for_rep);
-        }
-
-        list_for_each_safe(tmp, n, &imp->imp_delayed_list) {
-                struct ptlrpc_request *req =
-                        list_entry(tmp, struct ptlrpc_request, rq_list);
-
-                DEBUG_REQ(D_HA, req, "aborting waiting req");
-                req->rq_flags |= PTL_RPC_FL_ERR;
-                wake_up(&req->rq_wait_for_rep);
-        }
-}
-
 static int osc_recover(struct obd_import *imp, int phase)
 {
         int rc;
+        unsigned long flags;
+        struct ptlrpc_request *req;
         ENTRY;
 
         switch(phase) {
@@ -969,15 +993,21 @@ static int osc_recover(struct obd_import *imp, int phase)
 
             case PTLRPC_RECOVD_PHASE_RECOVER:
                 imp->imp_flags &= ~IMP_INVALID;
-                rc = ptlrpc_reconnect_import(imp, OST_CONNECT);
+                rc = ptlrpc_reconnect_import(imp, OST_CONNECT, &req);
+                ptlrpc_req_finished(req);
                 if (rc) {
                         imp->imp_flags |= IMP_INVALID;
                         RETURN(rc);
                 }
 
-                spin_lock(&imp->imp_lock);
+                spin_lock_irqsave(&imp->imp_lock, flags);
                 imp->imp_level = LUSTRE_CONN_FULL;
-                spin_unlock(&imp->imp_lock);
+                spin_unlock_irqrestore(&imp->imp_lock, flags);
+
+                /* Is this the right place?  Should we do this in _PREPARE
+                 * as well?  What about raising the level right away?
+                 */
+                ptlrpc_wake_delayed(imp);
 
                 set_osc_active(imp, 1 /* active */);
                 RETURN(0);
@@ -1001,6 +1031,7 @@ static int osc_connect(struct lustre_handle *conn, struct obd_device *obd,
 }
 
 struct obd_ops osc_obd_ops = {
+        o_owner:        THIS_MODULE,
         o_attach:       osc_attach,
         o_detach:       osc_detach,
         o_setup:        client_obd_setup,

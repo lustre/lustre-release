@@ -7,8 +7,6 @@ NAME=${NAME:-local}
 config=$NAME.xml
 mkconfig=./$NAME.sh
 
-if [ ! -f $config -o $mkconfig -nt $config ]; then
-   sh $mkconfig $config || exit 1
-fi
+sh $mkconfig $config || exit 1
 
 ${LCONF} --reformat --gdb $config || exit 2

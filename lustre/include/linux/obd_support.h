@@ -31,6 +31,7 @@
 
 /* global variables */
 extern atomic_t obd_memory;
+extern int obd_memmax;
 extern unsigned long obd_fail_loc;
 extern unsigned long obd_timeout;
 extern char obd_recovery_upcall[128];
@@ -66,6 +67,7 @@ extern char obd_recovery_upcall[128];
 #define OBD_FAIL_MDS_GETSTATUS_PACK      0x11c
 #define OBD_FAIL_MDS_STATFS_PACK         0x11d
 #define OBD_FAIL_MDS_STATFS_NET          0x11e
+#define OBD_FAIL_MDS_GETATTR_NAME_NET    0x11f
 
 #define OBD_FAIL_OST                     0x200
 #define OBD_FAIL_OST_CONNECT_NET         0x201
@@ -156,13 +158,17 @@ do {                                                                    \
         int s = (size);                                                 \
         (ptr) = lptr = kmalloc(s, GFP_KERNEL);                          \
         if (lptr == NULL) {                                             \
-                CERROR("kmalloc of '" #ptr "' (%ld bytes) failed "      \
+                CERROR("kmalloc of '" #ptr "' (%d bytes) failed "       \
                        "at %s:%d\n", s, __FILE__, __LINE__);            \
         } else {                                                        \
+                int obd_curmem;                                         \
                 memset(lptr, 0, s);                                     \
                 atomic_add(s, &obd_memory);                             \
+                obd_curmem = atomic_read(&obd_memory);                  \
+                if (obd_curmem > obd_memmax)                            \
+                        obd_memmax = obd_curmem;                        \
                 CDEBUG(D_MALLOC, "kmalloced '" #ptr "': %d at %p "      \
-                       "(tot %d)\n", s, lptr, atomic_read(&obd_memory));\
+                       "(tot %d)\n", s, lptr, obd_curmem);              \
         }                                                               \
 } while (0)
 

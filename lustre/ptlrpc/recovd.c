@@ -23,7 +23,6 @@
 /* dump_connection_list, but shorter for nicer debugging logs */
 static void d_c_l(struct list_head *head)
 {
-        int sanity = 0;
         struct list_head *tmp;
 
         list_for_each(tmp, head) {
@@ -33,8 +32,6 @@ static void d_c_l(struct list_head *head)
                 CDEBUG(D_HA, "   %p = %s (%d/%d)\n", conn, conn->c_remote_uuid,
                        conn->c_recovd_data.rd_phase,
                        conn->c_recovd_data.rd_next_phase);
-                if (sanity++ > 1000)
-                        LBUG();
         }
 }
 
@@ -277,7 +274,7 @@ static int recovd_handle_event(struct recovd_obd *recovd)
 static int recovd_main(void *arg)
 {
         struct recovd_obd *recovd = (struct recovd_obd *)arg;
-
+        unsigned long flags;
         ENTRY;
 
         lock_kernel();
@@ -287,10 +284,10 @@ static int recovd_main(void *arg)
         sigfillset(&current->blocked);
         recalc_sigpending();
 #else
-        spin_lock_irq(&current->sigmask_lock);
+        spin_lock_irqsave(&current->sigmask_lock, flags);
         sigfillset(&current->blocked);
         recalc_sigpending(current);
-        spin_unlock_irq(&current->sigmask_lock);
+        spin_unlock_irqrestore(&current->sigmask_lock, flags);
 #endif
 
         sprintf(current->comm, "lustre_recovd");

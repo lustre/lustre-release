@@ -16,7 +16,8 @@ EXTRA_PROGRAMS = extN
 EXTN_FIXES = patch-2.4.18-chaos22
 #EXTN_FIXES = ext3-2.4.18-fixes.diff
 EXTNP = htree-ext3-2.4.18.diff linux-2.4.18ea-0.8.26.diff
-EXTNP+= ext3-2.4.18-ino_sb_macro.diff extN-misc-fixup.diff
+EXTNP+= ext3-2.4.18-ino_sb_macro.diff extN-misc-fixup.diff extN-noread.diff
+EXTNP+= extN-wantedi.diff
 EXTNC = balloc.c bitmap.c dir.c file.c fsync.c ialloc.c inode.c ioctl.c
 EXTNC+= namei.c super.c symlink.c
 EXTNI = extN_fs.h extN_fs_i.h extN_fs_sb.h extN_jbd.h quotaops.h
@@ -52,31 +53,27 @@ diff:
 	$(RM) extN.patchT
 	l='$(EXTNC)'; for f in $$l; do                                        \
           echo "$$f";                                                         \
-          (diff -u $(extN_orig)/$$f extN/$$f) >> extN.patchT;              \
-          test $$? -le 1 || exit 1;                                       
+          (diff -u $(extN_orig)/$$f extN/$$f) >> extN.patchT;                 \
+          test $$? -le 1 || exit 1;                                           \
 	done
 	l='$(EXTNI)'; for f in $$l; do                                        \
           echo "$$f";                                                         \
           (diff -u $(extN_include_orig)/$$f $(top_srcdir)/include/linux/$$f)>>extN.patchT;\
-          test $$? -le 1 || exit 1;                                          
+          test $$? -le 1 || exit 1;                                           \
 	done
 	l='$(EXTN_EXTRA)'; for f in $$l; do                                   \
           f=`echo "$$f" | sed 's%^fs/%%'`;                                    \
           echo "$$f";                                                         \
           (cd $(top_srcdir) &&                                                \
             diff -u /dev/null $$f) >> extN.patchT;                            \
-          test $$? -le 1 || exit 1;                                          
+          test $$? -le 1 || exit 1;                                           \
 	done
 	mv -f extN.patchT $(top_builddir)/$(subdir)/extN.patch-$(RELEASE)
 	echo "Don't forget to add $(srcdir)/extN.patch-$(RELEASE) to CVS!"
 
-
-
 .PHONY: diff
 
 # Just do the SUB transformation on all our source files.
-
-
 sed-stamp:
 	$(RM) $@
 	rm -rf $(extN_orig) $(extN_include_orig)

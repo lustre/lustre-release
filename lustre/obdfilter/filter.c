@@ -275,11 +275,11 @@ static struct dentry *filter_fid2dentry(struct obd_device *obd,
         len = sprintf(name, LPU64, id);
         CDEBUG(D_INODE, "opening object O/%*s/%s\n",
                dparent->d_name.len, dparent->d_name.name, name);
-        if (!locked)
-                down(&dparent->d_inode->i_sem);
+        //if (!locked)
+                //down(&dparent->d_inode->i_sem);
         dchild = lookup_one_len(name, dparent, len);
-        if (!locked)
-                up(&dparent->d_inode->i_sem);
+        //if (!locked)
+                //up(&dparent->d_inode->i_sem);
         if (IS_ERR(dchild)) {
                 CERROR("child lookup error %ld\n", PTR_ERR(dchild));
                 RETURN(dchild);
@@ -333,7 +333,7 @@ static struct file *filter_obj_open(struct obd_export *export,
                 RETURN(ERR_PTR(-EINVAL));
         }
 
-        ffd = kmem_cache_alloc(filter_open_cache, SLAB_KERNEL);
+        PORTAL_SLAB_ALLOC(ffd, filter_open_cache, sizeof(*ffd));
         if (!ffd) {
                 CERROR("obdfilter: out of memory\n");
                 RETURN(ERR_PTR(-ENOMEM));
@@ -352,7 +352,7 @@ static struct file *filter_obj_open(struct obd_export *export,
         pop_ctxt(&saved, &filter->fo_ctxt, NULL);
 
         if (IS_ERR(file)) {
-                CERROR("error opening %s: rc %d\n", name, PTR_ERR(file));
+                CERROR("error opening %s: rc %ld\n", name, PTR_ERR(file));
                 GOTO(out_fdd, file);
         }
 
@@ -397,7 +397,7 @@ out_fdd:
         kmem_cache_free(filter_dentry_cache, fdd);
 out_ffd:
         ffd->ffd_servercookie = DEAD_HANDLE_MAGIC;
-        kmem_cache_free(filter_open_cache, ffd);
+        PORTAL_SLAB_FREE(ffd, filter_open_cache, sizeof(*ffd));
         goto out;
 }
 
@@ -459,7 +459,7 @@ static int filter_close_internal(struct obd_device *obd,
         }
 
         f_dput(object_dentry);
-        kmem_cache_free(filter_open_cache, ffd);
+        PORTAL_SLAB_FREE(ffd, filter_open_cache, sizeof(*ffd));
 
         RETURN(rc);
 }
@@ -1423,8 +1423,8 @@ out_ctxt:
 }
 
 static int filter_brw(int cmd, struct lustre_handle *conn,
-                              struct lov_stripe_md *lsm, obd_count oa_bufs,
-                              struct brw_page *pga, struct obd_brw_set *set)
+                      struct lov_stripe_md *lsm, obd_count oa_bufs,
+                      struct brw_page *pga, struct obd_brw_set *set)
 {
         struct obd_ioobj        ioo;
         struct niobuf_local     *lnb;
@@ -1437,10 +1437,10 @@ static int filter_brw(int cmd, struct lustre_handle *conn,
         OBD_ALLOC(lnb, oa_bufs * sizeof(struct niobuf_local));
         OBD_ALLOC(rnb, oa_bufs * sizeof(struct niobuf_remote));
 
-        if ( lnb == NULL || rnb == NULL )
+        if (lnb == NULL || rnb == NULL)
                 GOTO(out, ret = -ENOMEM);
 
-        for ( i = 0 ; i < oa_bufs ; i++ ) {
+        for (i = 0; i < oa_bufs; i++) {
                 rnb[i].offset = pga[i].off;
                 rnb[i].len = pga[i].count;
         }
@@ -1450,16 +1450,16 @@ static int filter_brw(int cmd, struct lustre_handle *conn,
         ioo.ioo_type = S_IFREG;
         ioo.ioo_bufcnt = oa_bufs;
 
-        ret = filter_preprw(cmd, conn, 1, &ioo, oa_bufs, rnb, lnb, 
-                                &desc_private);
-        if ( ret != 0 )
+        ret = filter_preprw(cmd, conn, 1, &ioo, oa_bufs, rnb, lnb,
+                            &desc_private);
+        if (ret != 0)
                 GOTO(out, ret);
 
-        for ( i = 0; i < oa_bufs ; i++ ) {
+        for (i = 0; i < oa_bufs; i++) {
                 void *virt = kmap(pga[i].pg);
                 obd_off off = pga[i].off & ~PAGE_MASK;
 
-                if ( cmd & OBD_BRW_WRITE ) 
+                if (cmd & OBD_BRW_WRITE)
                         memcpy(lnb[i].addr + off, virt + off, pga[i].count);
                 else
                         memcpy(virt + off, lnb[i].addr + off, pga[i].count);
@@ -1470,9 +1470,9 @@ static int filter_brw(int cmd, struct lustre_handle *conn,
         ret = filter_commitrw(cmd, conn, 1, &ioo, oa_bufs, lnb, desc_private);
 
 out:
-        if ( lnb )
+        if (lnb)
                 OBD_FREE(lnb, oa_bufs * sizeof(struct niobuf_local));
-        if ( rnb )
+        if (rnb)
                 OBD_FREE(rnb, oa_bufs * sizeof(struct niobuf_remote));
         RETURN(ret);
 }
@@ -1608,29 +1608,30 @@ int filter_copy_data(struct lustre_handle *dst_conn, struct obdo *dst,
 }
 
 static struct obd_ops filter_obd_ops = {
-        o_attach:      filter_attach,
-        o_detach:      filter_detach,
-        o_get_info:    filter_get_info,
-        o_setup:       filter_setup,
-        o_cleanup:     filter_cleanup,
-        o_connect:     filter_connect,
-        o_disconnect:  filter_disconnect,
-        o_statfs:      filter_statfs,
-        o_getattr:     filter_getattr,
-        o_create:      filter_create,
-        o_setattr:     filter_setattr,
-        o_destroy:     filter_destroy,
-        o_open:        filter_open,
-        o_close:       filter_close,
-        o_brw:         filter_brw,
-        o_punch:       filter_truncate,
-        o_preprw:      filter_preprw,
-        o_commitrw:    filter_commitrw
+        o_owner:        THIS_MODULE,
+        o_attach:       filter_attach,
+        o_detach:       filter_detach,
+        o_get_info:     filter_get_info,
+        o_setup:        filter_setup,
+        o_cleanup:      filter_cleanup,
+        o_connect:      filter_connect,
+        o_disconnect:   filter_disconnect,
+        o_statfs:       filter_statfs,
+        o_getattr:      filter_getattr,
+        o_create:       filter_create,
+        o_setattr:      filter_setattr,
+        o_destroy:      filter_destroy,
+        o_open:         filter_open,
+        o_close:        filter_close,
+        o_brw:          filter_brw,
+        o_punch:        filter_truncate,
+        o_preprw:       filter_preprw,
+        o_commitrw:     filter_commitrw
 #if 0
-        o_preallocate: filter_preallocate_inodes,
-        o_migrate:     filter_migrate,
-        o_copy:        filter_copy_data,
-        o_iterate:     filter_iterate
+        o_preallocate:  filter_preallocate_inodes,
+        o_migrate:      filter_migrate,
+        o_copy:         filter_copy_data,
+        o_iterate:      filter_iterate
 #endif
 };
 

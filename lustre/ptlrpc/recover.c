@@ -24,7 +24,8 @@
 #include <linux/lustre_net.h>
 #include <linux/obd.h>
 
-int ptlrpc_reconnect_import(struct obd_import *imp, int rq_opc)
+int ptlrpc_reconnect_import(struct obd_import *imp, int rq_opc,
+                            struct ptlrpc_request **reqptr)
 {
         struct obd_device *obd = imp->imp_obd;
         struct client_obd *cli = &obd->u.cli;
@@ -37,6 +38,8 @@ int ptlrpc_reconnect_import(struct obd_import *imp, int rq_opc)
         int rc;
 
         request = ptlrpc_prep_req(imp, rq_opc, 2, size, tmp);
+        if (!request)
+                RETURN(-ENOMEM);
         request->rq_level = LUSTRE_CONN_NEW;
         request->rq_replen = lustre_msg_size(0, NULL);
         /*
@@ -60,7 +63,7 @@ int ptlrpc_reconnect_import(struct obd_import *imp, int rq_opc)
                             sizeof (old_hdl.addr)) &&
                     !memcmp(&old_hdl.cookie, &request->rq_repmsg->cookie,
                             sizeof (old_hdl.cookie))) {
-                        CERROR("%s@%s didn't like our handle %Lx/%Lx, failed\n",
+                        CERROR("%s@%s didn't like our handle "LPX64"/"LPX64", failed\n",
                                cli->cl_target_uuid, conn->c_remote_uuid,
                                (__u64)(unsigned long)ldlmexp,
                                ldlmexp->exp_cookie);
@@ -70,7 +73,7 @@ int ptlrpc_reconnect_import(struct obd_import *imp, int rq_opc)
                 old_hdl.addr = request->rq_repmsg->addr;
                 old_hdl.cookie = request->rq_repmsg->cookie;
                 if (memcmp(&imp->imp_handle, &old_hdl, sizeof(old_hdl))) {
-                        CERROR("%s@%s changed handle from %Lx/%Lx to %Lx/%Lx; "
+                        CERROR("%s@%s changed handle from "LPX64"/"LPX64" to "LPX64"/"LPX64"; "
                                "copying, but this may foreshadow disaster\n",
                                cli->cl_target_uuid, conn->c_remote_uuid,
                                old_hdl.addr, old_hdl.cookie,
@@ -87,7 +90,7 @@ int ptlrpc_reconnect_import(struct obd_import *imp, int rq_opc)
                 old_hdl = imp->imp_handle;
                 imp->imp_handle.addr = request->rq_repmsg->addr;
                 imp->imp_handle.cookie = request->rq_repmsg->cookie;
-                CERROR("now connected to %s@%s (%Lx/%Lx, was %Lx/%Lx)!\n",
+                CERROR("now connected to %s@%s ("LPX64"/"LPX64", was "LPX64"/"LPX64")!\n",
                        cli->cl_target_uuid, conn->c_remote_uuid,
                        imp->imp_handle.addr, imp->imp_handle.cookie,
                        old_hdl.addr, old_hdl.cookie);
@@ -99,7 +102,7 @@ int ptlrpc_reconnect_import(struct obd_import *imp, int rq_opc)
         }
 
  out_disc:
-        ptlrpc_req_finished(request);
+        *reqptr = request;
         return rc;
 }
 
@@ -136,18 +139,19 @@ int ptlrpc_run_recovery_upcall(struct ptlrpc_connection *conn)
         RETURN(0);
 }
 
-int ptlrpc_replay(struct obd_import *imp, int send_last_flag)
+int ptlrpc_replay(struct obd_import *imp)
 {
         int rc = 0;
         struct list_head *tmp, *pos;
         struct ptlrpc_request *req;
+        unsigned long flags;
         __u64 committed = imp->imp_peer_committed_transno;
         ENTRY;
 
         /* It might have committed some after we last spoke, so make sure we
          * get rid of them now.
          */
-        spin_lock(&imp->imp_lock);
+        spin_lock_irqsave(&imp->imp_lock, flags);
 
         ptlrpc_free_committed(imp);
 
@@ -162,26 +166,20 @@ int ptlrpc_replay(struct obd_import *imp, int send_last_flag)
         list_for_each_safe(tmp, pos, &imp->imp_replay_list) {
                 req = list_entry(tmp, struct ptlrpc_request, rq_list);
 
-                if (req->rq_transno == imp->imp_max_transno &&
-                    send_last_flag) {
-                        req->rq_reqmsg->flags |= MSG_LAST_REPLAY;
-                        DEBUG_REQ(D_HA, req, "LAST_REPLAY:");
-                } else {
-                        DEBUG_REQ(D_HA, req, "REPLAY:");
-                }
+                DEBUG_REQ(D_HA, req, "REPLAY:");
 
+                /* XXX locking WRT failure during replay? */
                 rc = ptlrpc_replay_req(req);
-                req->rq_reqmsg->flags &= ~MSG_LAST_REPLAY;
 
                 if (rc) {
-                        CERROR("recovery replay error %d for req %Ld\n",
+                        CERROR("recovery replay error %d for req "LPD64"\n",
                                rc, req->rq_xid);
                         GOTO(out, rc);
                 }
         }
 
  out:
-        spin_unlock(&imp->imp_lock);
+        spin_unlock_irqrestore(&imp->imp_lock, flags);
         return rc;
 }
 
@@ -192,7 +190,7 @@ int ptlrpc_replay(struct obd_import *imp, int send_last_flag)
 
 static int resend_type(struct ptlrpc_request *req, __u64 committed)
 {
-        if (req->rq_transno < committed) {
+        if (req->rq_transno && req->rq_transno < committed) {
                 if (req->rq_flags & PTL_RPC_FL_REPLIED) {
                         /* Saw the reply and it was committed, no biggie. */
                         DEBUG_REQ(D_HA, req, "NO_RESEND");
@@ -217,11 +215,12 @@ int ptlrpc_resend(struct obd_import *imp)
         int rc = 0;
         struct list_head *tmp, *pos;
         struct ptlrpc_request *req;
+        unsigned long flags;
         __u64 committed = imp->imp_peer_committed_transno;
 
         ENTRY;
 
-        spin_lock(&imp->imp_lock);
+        spin_lock_irqsave(&imp->imp_lock, flags);
         list_for_each(tmp, &imp->imp_sending_list) {
                 req = list_entry(tmp, struct ptlrpc_request, rq_list);
                 DEBUG_REQ(D_HA, req, "SENDING: ");
@@ -259,19 +258,21 @@ int ptlrpc_resend(struct obd_import *imp)
                 }
         }
 
+        spin_unlock_irqrestore(&imp->imp_lock, flags);
         RETURN(rc);
 }
 
 void ptlrpc_wake_delayed(struct obd_import *imp)
 {
+        unsigned long flags;
         struct list_head *tmp, *pos;
         struct ptlrpc_request *req;
 
-        spin_lock(&imp->imp_lock);
+        spin_lock_irqsave(&imp->imp_lock, flags);
         list_for_each_safe(tmp, pos, &imp->imp_delayed_list) {
                 req = list_entry(tmp, struct ptlrpc_request, rq_list);
                 DEBUG_REQ(D_HA, req, "waking:");
                 wake_up(&req->rq_wait_for_rep);
         }
-        spin_unlock(&imp->imp_lock);
+        spin_unlock_irqrestore(&imp->imp_lock, flags);
 }

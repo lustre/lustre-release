@@ -107,6 +107,16 @@ static int ll_brw(int cmd, struct inode *inode, struct page *page, int create)
         else
                 pg.count = PAGE_SIZE;
 
+        CDEBUG(D_PAGE, "%s %d bytes ino %lu at "LPU64"/"LPX64"\n",
+              cmd & OBD_BRW_WRITE ? "write" : "read", pg.count, inode->i_ino,
+              pg.off, pg.off);
+        if (pg.count == 0) {
+                CERROR("ZERO COUNT: ino %lu: size %p:%Lu(%p:%Lu) idx %lu off "
+                       LPU64"\n",
+                       inode->i_ino, inode, inode->i_size, page->mapping->host,
+                       page->mapping->host->i_size, page->index, pg.off);
+        }
+
         pg.flag = create ? OBD_BRW_CREATE : 0;
 
         set->brw_callback = ll_brw_sync_wait;
@@ -160,7 +170,7 @@ void ll_truncate(struct inode *inode)
 {
         struct obdo oa = {0};
         struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
-        struct lustre_handle *lockhs = NULL;
+        struct lustre_handle lockh = { 0, 0 };
         int err;
         ENTRY;
 
@@ -174,10 +184,10 @@ void ll_truncate(struct inode *inode)
         oa.o_mode = inode->i_mode;
         oa.o_valid = OBD_MD_FLID | OBD_MD_FLMODE | OBD_MD_FLTYPE;
 
-        CDEBUG(D_INFO, "calling punch for "LPX64" (all bytes after "LPD64")\n",
+        CDEBUG(D_INFO, "calling punch for "LPX64" (all bytes after %Lu)\n",
                oa.o_id, inode->i_size);
 
-        err = ll_size_lock(inode, lsm, inode->i_size, LCK_PW, &lockhs);
+        err = ll_size_lock(inode, lsm, inode->i_size, LCK_PW, &lockh);
         if (err) {
                 CERROR("ll_size_lock failed: %d\n", err);
                 return;
@@ -191,7 +201,7 @@ void ll_truncate(struct inode *inode)
         else
                 obdo_to_inode(inode, &oa, oa.o_valid);
 
-        err = ll_size_unlock(inode, lsm, LCK_PW, lockhs);
+        err = ll_size_unlock(inode, lsm, LCK_PW, &lockh);
         if (err)
                 CERROR("ll_size_unlock failed: %d\n", err);
 
@@ -280,6 +290,7 @@ static int ll_commit_write(struct file *file, struct page *page,
 
         pg.pg = page;
         pg.count = to;
+        /* XXX make the starting offset "from" */
         pg.off = (((obd_off)page->index) << PAGE_SHIFT);
         pg.flag = create ? OBD_BRW_CREATE : 0;
 
@@ -292,7 +303,7 @@ static int ll_commit_write(struct file *file, struct page *page,
         if (!PageLocked(page))
                 LBUG();
 
-        CDEBUG(D_INODE, "commit_page writing (off "LPD64"), count "LPD64"\n",
+        CDEBUG(D_INODE, "commit_page writing (off "LPD64"), count %d\n",
                pg.off, pg.count);
 
         set->brw_callback = ll_brw_sync_wait;

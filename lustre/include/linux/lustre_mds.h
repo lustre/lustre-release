@@ -155,7 +155,7 @@ int mds_pack_md(struct mds_obd *mds, struct ptlrpc_request *req,
 
 /* mds/mds_fs.c */
 int mds_fs_setup(struct obd_device *obddev, struct vfsmount *mnt);
-void mds_fs_cleanup(struct obd_device *obddev);
+int mds_fs_cleanup(struct obd_device *obddev);
 
 /* mdc/mdc_request.c */
 int mdc_enqueue(struct lustre_handle *conn, int lock_type,
@@ -167,8 +167,11 @@ int mdc_getlovinfo(struct obd_device *obd, struct lustre_handle *mdc_connh,
                    struct ptlrpc_request **request);
 int mdc_getstatus(struct lustre_handle *conn, struct ll_fid *rootfid);
 int mdc_getattr(struct lustre_handle *conn,
-                obd_id ino, int type, unsigned long valid, size_t ea_size,
+                obd_id ino, int type, unsigned long valid, unsigned int ea_size,
                 struct ptlrpc_request **request);
+int mdc_getattr_name(struct lustre_handle *conn, struct inode *parent,
+                     char *filename, int namelen, unsigned long valid,
+                     unsigned int ea_size, struct ptlrpc_request **request);
 int mdc_setattr(struct lustre_handle *conn,
                 struct inode *, struct iattr *iattr, struct ptlrpc_request **);
 int mdc_open(struct lustre_handle *conn, obd_id ino, int type, int flags,

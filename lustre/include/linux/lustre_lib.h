@@ -53,10 +53,13 @@ struct ptlrpc_request;
 struct obd_device;
 struct recovd_data;
 struct recovd_obd;
+struct obd_export;
 #include <linux/lustre_ha.h>
 
 int target_handle_connect(struct ptlrpc_request *req);
 int target_handle_disconnect(struct ptlrpc_request *req);
+int target_handle_reconnect(struct lustre_handle *conn, struct obd_export *exp,
+                            char *cluuid);
 int client_obd_connect(struct lustre_handle *conn, struct obd_device *obd,
                        obd_uuid_t cluuid, struct recovd_obd *recovd,
                        ptlrpc_recovery_cb_t recover);
@@ -136,17 +139,6 @@ static inline void *lustre_handle2object(struct lustre_handle *handle)
 static inline void ldlm_object2handle(void *object, struct lustre_handle *handle)
 {
         handle->addr = (__u64)(unsigned long)object;
-}
-
-struct obd_statfs;
-struct statfs;
-void statfs_pack(struct obd_statfs *osfs, struct statfs *sfs);
-void statfs_unpack(struct statfs *sfs, struct obd_statfs *osfs);
-void obd_statfs_pack(struct obd_statfs *tgt, struct obd_statfs *src);
-static inline void
-obd_statfs_unpack(struct obd_statfs *tgt, struct obd_statfs *src)
-{
-        obd_statfs_pack(tgt, src);
 }
 
 #include <linux/portals_lib.h>
@@ -408,11 +400,13 @@ static inline int obd_ioctl_getdata(char **buf, int *len, void *arg)
         }
 
         if (data->ioc_inllen2) {
-                data->ioc_inlbuf2 = &data->ioc_bulk[0] + size_round(data->ioc_inllen1);
+                data->ioc_inlbuf2 = &data->ioc_bulk[0] +
+                        size_round(data->ioc_inllen1);
         }
 
         if (data->ioc_inllen3) {
-                data->ioc_inlbuf3 = &data->ioc_bulk[0] + size_round(data->ioc_inllen1) + 
+                data->ioc_inlbuf3 = &data->ioc_bulk[0] +
+                        size_round(data->ioc_inllen1) +
                         size_round(data->ioc_inllen2);
         }
 
@@ -426,7 +420,7 @@ static inline int obd_ioctl_getdata(char **buf, int *len, void *arg)
 #define OBD_IOC_CLEANUP                _IO  ('f', 103      )
 #define OBD_IOC_DESTROY                _IOW ('f', 104, long)
 #define OBD_IOC_PREALLOCATE            _IOWR('f', 105, long)
-#define OBD_IOC_DEC_USE_COUNT          _IO  ('f', 106      )
+
 #define OBD_IOC_SETATTR                _IOW ('f', 107, long)
 #define OBD_IOC_GETATTR                _IOR ('f', 108, long)
 #define OBD_IOC_READ                   _IOWR('f', 109, long)
