@@ -13,7 +13,7 @@
 if LINUX25
 
 # We still need to link each module with vermagic.o to get rid of "kernel taited" warnings.
-basename=$(shell echo $< | sed -e 's/\.c//g' | sed -e 's/-//g' | sed -e 's/\.o//g')
+basename=$(shell echo $< | sed -e 's/\.c//g' | sed -e 's/-//g' | sed -e 's/\.o//g' | sed -e 's/^.*\///g')
 AM_CPPFLAGS=-I$(top_builddir)/include -Wstrict-prototypes -Wno-trigraphs -fno-strict-aliasing -fno-common -pipe -mpreferred-stack-boundary=2  -DKBUILD_MODNAME=$(MODULE) -DKBUILD_BASENAME=$(basename)
 
 else
