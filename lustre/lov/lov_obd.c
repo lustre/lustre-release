@@ -26,8 +26,9 @@ extern struct obd_device obd_dev[MAX_OBD_DEVICES];
 
 /* obd methods */
 
-static int lov_getinfo(struct obd_device *obd, struct lov_desc *desc,
-                       uuid_t **uuids, struct ptlrpc_request **request)
+static int lov_getinfo(struct obd_device *obd, struct lustre_handle *mdc_connh,
+                       struct lov_desc *desc, uuid_t **uuids,
+                       struct ptlrpc_request **request)
 {
         struct ptlrpc_request *req;
         struct mds_status_req *streq;
@@ -36,8 +37,7 @@ static int lov_getinfo(struct obd_device *obd, struct lov_desc *desc,
         int rc, size[2] = {sizeof(*streq)};
         ENTRY;
 
-#warning error: need to set lov->mdc_connh somewhere!!!!
-        req = ptlrpc_prep_req2(mdc->mdc_client, mdc->mdc_conn, &lov->mdc_connh,
+        req = ptlrpc_prep_req2(mdc->mdc_client, mdc->mdc_conn, mdc_connh,
                                MDS_LOVINFO, 1, size, NULL);
         if (!req)
                 GOTO(out, rc = -ENOMEM);
@@ -71,88 +71,89 @@ static int lov_getinfo(struct obd_device *obd, struct lov_desc *desc,
 
 static int lov_connect(struct lustre_handle *conn, struct obd_device *obd)
 {
+        struct ptlrpc_request *req;
+        struct lustre_handle mdc_conn;
+        struct lov_obd *lov = &obd->u.lov;
+        uuid_t *uuidarray;
         int rc;
         int i;
-        struct ptlrpc_request *req;
-        struct lov_obd *lov = &obd->u.lov;
-        uuid_t *uuidarray; 
 
         MOD_INC_USE_COUNT;
+        memcpy(&mdc_conn, conn, sizeof(mdc_conn));
+        conn->addr = -1;
+        conn->cookie = 0;
         rc = class_connect(conn, obd);
-        if (rc) { 
+        if (rc) {
                 MOD_DEC_USE_COUNT;
-                RETURN(rc); 
+                RETURN(rc);
         }
-        
-        rc = lov_getinfo(obd, &lov->desc, &uuidarray, &req);
-        if (rc) { 
+
+        rc = lov_getinfo(obd, &mdc_conn, &lov->desc, &uuidarray, &req);
+        if (rc) {
                 CERROR("cannot get lov info %d\n", rc);
-                GOTO(out, rc); 
+                GOTO(out, rc);
         }
-        
-        if (lov->desc.ld_tgt_count > 1000) { 
+
+        if (lov->desc.ld_tgt_count > 1000) {
                 CERROR("configuration error: target count > 1000 (%d)\n",
                        lov->desc.ld_tgt_count);
-                GOTO(out, rc = -EINVAL); 
+                GOTO(out, rc = -EINVAL);
         }
-        
-        if (strcmp(obd->obd_uuid, lov->desc.ld_uuid)) { 
-                CERROR("lov uuid %s not on mds device (%s)\n", 
+
+        if (strcmp(obd->obd_uuid, lov->desc.ld_uuid)) {
+                CERROR("lov uuid %s not on mds device (%s)\n",
                        obd->obd_uuid, lov->desc.ld_uuid);
-                GOTO(out, rc = -EINVAL); 
-        }                
-            
-        if (req->rq_repmsg->bufcount < 2 || req->rq_repmsg->buflens[1] < 
-            sizeof(uuid_t) * lov->desc.ld_tgt_count) { 
+                GOTO(out, rc = -EINVAL);
+        }
+
+        if (req->rq_repmsg->bufcount < 2 || req->rq_repmsg->buflens[1] <
+            sizeof(uuid_t) * lov->desc.ld_tgt_count) {
                 CERROR("invalid uuid array returned\n");
-                GOTO(out, rc = -EINVAL); 
+                GOTO(out, rc = -EINVAL);
         }
 
-        lov->bufsize = sizeof(struct lov_tgt_desc) *  lov->desc.ld_tgt_count; 
-        OBD_ALLOC(lov->tgts, lov->bufsize); 
-        if (!lov->tgts) { 
-                CERROR("Out of memory\n"); 
-                GOTO(out, rc = -ENOMEM); 
+        lov->bufsize = sizeof(struct lov_tgt_desc) *  lov->desc.ld_tgt_count;
+        OBD_ALLOC(lov->tgts, lov->bufsize);
+        if (!lov->tgts) {
+                CERROR("Out of memory\n");
+                GOTO(out, rc = -ENOMEM);
         }
 
-        uuidarray = lustre_msg_buf(req->rq_repmsg, 1); 
-        for (i = 0 ; i < lov->desc.ld_tgt_count; i++) { 
-                memcpy(lov->tgts[i].uuid, uuidarray[i], sizeof(uuid_t)); 
-        }
+        uuidarray = lustre_msg_buf(req->rq_repmsg, 1);
+        for (i = 0 ; i < lov->desc.ld_tgt_count; i++)
+                memcpy(lov->tgts[i].uuid, uuidarray[i], sizeof(uuid_t));
 
-        for (i = 0 ; i < lov->desc.ld_tgt_count; i++) { 
+        for (i = 0 ; i < lov->desc.ld_tgt_count; i++) {
                 struct obd_device *tgt = class_uuid2obd(uuidarray[i]);
-                if (!tgt) { 
-                        CERROR("Target %s not configured\n", uuidarray[i]); 
-                        GOTO(out_mem, rc = -EINVAL); 
+                if (!tgt) {
+                        CERROR("Target %s not configured\n", uuidarray[i]);
+                        GOTO(out_mem, rc = -EINVAL);
                 }
-                rc = obd_connect(&lov->tgts[i].conn, tgt); 
-                if (rc) { 
-                        CERROR("Target %s connect error %d\n", 
-                               uuidarray[i], rc); 
+                rc = obd_connect(&lov->tgts[i].conn, tgt);
+                if (rc) {
+                        CERROR("Target %s connect error %d\n",
+                               uuidarray[i], rc);
                         GOTO(out_mem, rc);
                 }
         }
 
  out_mem:
-        if (rc) { 
-                for (i = 0 ; i < lov->desc.ld_tgt_count; i++) { 
+        if (rc) {
+                for (i = 0 ; i < lov->desc.ld_tgt_count; i++) {
                         int rc2;
                         rc2 = obd_disconnect(&lov->tgts[i].conn);
                         if (rc2)
-                                CERROR("BAD: Target %s disconnect error %d\n", 
-                                       uuidarray[i], rc2); 
+                                CERROR("BAD: Target %s disconnect error %d\n",
+                                       uuidarray[i], rc2);
                 }
                 OBD_FREE(lov->tgts, lov->bufsize);
         }
  out:
-        if (rc) { 
+        if (rc)
                 class_disconnect(conn);
-        }
-        if (req)
-                ptlrpc_free_req(req); 
+
+        ptlrpc_free_req(req);
         return rc;
-        
 }
 
 static int lov_disconnect(struct lustre_handle *conn)
@@ -241,16 +242,16 @@ static int lov_create(struct lustre_handle *conn, struct obdo *oa, struct lov_st
 
         if (!export)
                 RETURN(-EINVAL);
-        lov = &export->export_obd->u.lov;
+        lov = &export->exp_obd->u.lov;
 
-        oa->o_easize =  lov_stripe_md_size(export->export_obd); 
-        if (! *ea) { 
-                OBD_ALLOC(*ea, oa->o_easize); 
-                if (! *ea) 
-                        RETURN(-ENOMEM); 
+        oa->o_easize =  lov_stripe_md_size(export->exp_obd);
+        if (!*ea) {
+                OBD_ALLOC(*ea, oa->o_easize);
+                if (! *ea)
+                        RETURN(-ENOMEM);
         }
 
-        md = *ea; 
+        md = *ea;
         md->lmd_size = oa->o_easize;
         md->lmd_object_id = oa->o_id;
         if (!md->lmd_stripe_count) { 
@@ -300,10 +301,10 @@ struct lov_stripe_md *ea)
                 RETURN(-EINVAL); 
         }
 
-        if (!export || !export->export_obd) 
+        if (!export || !export->exp_obd) 
                 RETURN(-ENODEV); 
 
-        lov = &export->export_obd->u.lov;
+        lov = &export->exp_obd->u.lov;
         md = ea;
 
         for (i = 0; i < md->lmd_stripe_count; i++) {

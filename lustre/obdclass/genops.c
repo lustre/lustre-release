@@ -1,4 +1,6 @@
-/*
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
+*
  *  linux/fs/ext2_obd/sim_obd.c
  * Copyright (C) 2001  Cluster File Systems, Inc.
  *
@@ -111,8 +113,8 @@ int class_name2dev(char *name)
         int res = -1;
         int i;
 
-	if (!name)
-	    return -1;
+        if (!name)
+                return -1;
 
         for (i=0; i < MAX_OBD_DEVICES; i++) {
                 struct obd_device *obd = &obd_dev[i];
@@ -220,24 +222,31 @@ int obd_init_caches(void)
 /* map connection to client */
 struct obd_export *class_conn2export(struct lustre_handle *conn)
 {
-        struct obd_export * export;
+        struct obd_export *export;
 
-        if (!conn)
-		RETURN(NULL);
-
-	if (conn->addr == -1)	/* this means assign a new connection */
+        if (!conn) {
+                CDEBUG(D_CACHE, "looking for null handle\n");
                 RETURN(NULL);
+        }
+
+        if (conn->addr == -1) {  /* this means assign a new connection */
+                CDEBUG(D_CACHE, "want a new connection\n");
+                RETURN(NULL);
+        }
 
         if (!conn->addr) {
+                CDEBUG(D_CACHE, "looking for null addr\n");
                 fixme();
                 RETURN(NULL);
         }
 
+        CDEBUG(D_IOCTL, "looking for export addr %Lx cookie %Lx\n",
+               conn->addr, conn->cookie);
         export = (struct obd_export *) (unsigned long)conn->addr;
         if (!kmem_cache_validate(export_cachep, (void *)export))
                 RETURN(NULL);
 
-        if (export->export_cookie != conn->cookie)
+        if (export->exp_cookie != conn->cookie)
                 return NULL;
         return export;
 } /* class_conn2export */
@@ -247,7 +256,7 @@ struct obd_device *class_conn2obd(struct lustre_handle *conn)
         struct obd_export *export;
         export = class_conn2export(conn); 
         if (export) 
-                return export->export_obd;
+                return export->exp_obd;
         fixme();
         return NULL;
 }
@@ -265,35 +274,35 @@ int class_connect (struct lustre_handle *conn, struct obd_device *obd)
         }
 
         memset(export, 0, sizeof(*export));
-        get_random_bytes(&export->export_cookie, sizeof(__u64));
-        export->export_obd = obd;
-        export->export_import.addr = conn->addr;
-        export->export_import.cookie = conn->cookie;
+        get_random_bytes(&export->exp_cookie, sizeof(__u64));
+        export->exp_obd = obd;
+        export->exp_rconnh.addr = conn->addr;
+        export->exp_rconnh.cookie = conn->cookie;
 
-        list_add(&(export->export_chain), export->export_obd->obd_exports.prev);
+        list_add(&(export->exp_chain), export->exp_obd->obd_exports.prev);
         conn->addr = (__u64) (unsigned long)export;
-        conn->cookie = export->export_cookie;
-	CDEBUG(D_IOCTL, "connect: addr %Lx cookie %Lx\n",
-	       (long long)conn->addr, (long long)conn->cookie);
+        conn->cookie = export->exp_cookie;
+        CDEBUG(D_IOCTL, "connect: addr %Lx cookie %Lx\n",
+               (long long)conn->addr, (long long)conn->cookie);
         return 0;
 }
 
-int class_import2export(struct lustre_handle *conn, struct lustre_handle *imp)
+int class_rconn2export(struct lustre_handle *conn, struct lustre_handle *rconn)
 {
-	struct obd_export *export = class_conn2export(conn);
+        struct obd_export *export = class_conn2export(conn);
 
-	if (!export)
-		return -EINVAL;
+        if (!export)
+                return -EINVAL;
 
-        export->export_import.addr = imp->addr;
-        export->export_import.cookie = imp->cookie;
+        export->exp_rconnh.addr = rconn->addr;
+        export->exp_rconnh.cookie = rconn->cookie;
 
-	return 0;
+        return 0;
 }
 
 int class_disconnect(struct lustre_handle *conn)
 {
-        struct obd_export * export;
+        struct obd_export *export;
         ENTRY;
 
         if (!(export = class_conn2export(conn))) {
@@ -302,13 +311,13 @@ int class_disconnect(struct lustre_handle *conn)
                        "nonexistent client %Lx\n", conn->addr);
                 RETURN(-EINVAL);
         } else
-		CDEBUG(D_IOCTL, "disconnect: addr %Lx cookie %Lx\n",
-		       (long long)conn->addr, (long long)conn->cookie);
-        list_del(&export->export_chain);
+                CDEBUG(D_IOCTL, "disconnect: addr %Lx cookie %Lx\n",
+                       (long long)conn->addr, (long long)conn->cookie);
+        list_del(&export->exp_chain);
         kmem_cache_free(export_cachep, export);
 
         RETURN(0);
-} 
+}
 
 #if 0
 

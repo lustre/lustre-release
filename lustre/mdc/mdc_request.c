@@ -34,21 +34,21 @@
 extern int mds_queue_req(struct ptlrpc_request *);
 
 int mdc_con2cl(struct lustre_handle *conn, struct ptlrpc_client **cl,
-                struct ptlrpc_connection **connection,
-                struct lustre_handle **rconn)
+               struct ptlrpc_connection **connection,
+               struct lustre_handle **rconn)
 {
         struct obd_export *export;
         struct mdc_obd *mdc;
 
         export = class_conn2export(conn);
         if (!export)
-                return -EINVAL;
+                return -ENOTCONN;
 
-        mdc = &export->export_obd->u.mdc;
+        mdc = &export->exp_obd->u.mdc;
 
         *cl = mdc->mdc_client;
         *connection = mdc->mdc_conn;
-        *rconn = &export->export_import;
+        *rconn = &export->exp_rconnh;
 
         return 0;
 }
@@ -62,13 +62,13 @@ static int mdc_con2dlmcl(struct lustre_handle *conn, struct ptlrpc_client **cl,
 
         export = class_conn2export(conn);
         if (!export)
-                return -EINVAL;
+                return -ENOTCONN;
 
-        mdc = &export->export_obd->u.mdc;
+        mdc = &export->exp_obd->u.mdc;
 
         *cl = mdc->mdc_ldlm_client;
         *connection = mdc->mdc_conn;
-        *rconn = &export->export_import;
+        *rconn = &export->exp_rconnh;
 
         return 0;
 }
@@ -88,7 +88,7 @@ int mdc_getstatus(struct lustre_handle *conn, struct ll_fid *rootfid,
 
         mdc_con2cl(conn, &cl, &connection, &rconn);
         req = ptlrpc_prep_req2(cl, connection, rconn,
-                              MDS_GETSTATUS, 1, &size, NULL);
+                               MDS_GETSTATUS, 1, &size, NULL);
         if (!req)
                 GOTO(out, rc = -ENOMEM);
 
@@ -765,7 +765,7 @@ static int mdc_connect(struct lustre_handle *conn, struct obd_device *obd)
         if (rc)
                 GOTO(out, rc);
 
-        class_import2export(conn, (struct lustre_handle *)request->rq_repmsg);
+        class_rconn2export(conn, (struct lustre_handle *)request->rq_repmsg);
 
         EXIT;
  out:

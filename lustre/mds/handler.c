@@ -31,7 +31,7 @@ static int mds_cleanup(struct obd_device * obddev);
 
 inline struct mds_obd *mds_req2mds(struct ptlrpc_request *req)
 {
-        return &req->rq_export->export_obd->u.mds;
+        return &req->rq_export->exp_obd->u.mds;
 }
 
 /* Assumes caller has already pushed into the kernel filesystem context */
@@ -377,7 +377,7 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req)
         __u64 res_id[3] = {0, 0, 0};
         ENTRY;
 
-        if (strcmp(req->rq_export->export_obd->obd_type->typ_name, "mds") != 0)
+        if (strcmp(req->rq_export->exp_obd->obd_type->typ_name, "mds") != 0)
                 LBUG();
 
         if (req->rq_reqmsg->bufcount <= offset + 1) {
@@ -1051,7 +1051,7 @@ static int mds_setup(struct obd_device *obddev, obd_count len, void *buf)
         export = class_conn2export(&mds->mds_connh);
         if (!export)
                 LBUG();
-        export->export_connection = mds->mds_ldlm_conn;
+        export->exp_connection = mds->mds_ldlm_conn;
 
         RETURN(0);
 

@@ -234,7 +234,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
         if (offset)
                 offset = 1;
 
-        if (strcmp(req->rq_export->export_obd->obd_type->typ_name, "mds") != 0)
+        if (strcmp(req->rq_export->exp_obd->obd_type->typ_name, "mds") != 0)
                 LBUG();
 
         de = mds_fid2dentry(mds, rec->ur_fid1, NULL);

@@ -64,27 +64,28 @@ extern void proc_lustre_remove_obd_entry(const char* name,
 #ifdef __KERNEL__
 extern struct obd_export *class_conn2export(struct lustre_handle *conn);
 extern struct obd_device *class_conn2obd(struct lustre_handle *conn);
-extern int class_import2export(struct lustre_handle *conn,
-                               struct lustre_handle *imp);
+extern int class_rconn2export(struct lustre_handle *conn,
+                              struct lustre_handle *rconn);
 
 struct obd_export {
-        __u64 export_cookie;
-        struct lustre_handle export_import; /* client handle */ 
-        struct list_head export_chain;
-        struct obd_device *export_obd;
-        struct ptlrpc_connection *export_connection;
-        void *export_data; /* device specific data */
-        int export_desclen;
-        char *export_desc;
+        __u64 exp_cookie;
+        struct lustre_handle exp_rconnh;        /* remote connection handle */
+        struct lustre_handle exp_impconnh;
+        struct list_head exp_chain;
+        struct obd_device *exp_obd;
+        struct ptlrpc_connection *exp_connection;
+        void *exp_data; /* device specific data */
+        int exp_desclen;
+        char *exp_desc;
 };
 
 struct obd_import {
-        __u64 import_cookie;
-        struct lustre_handle import_export; /* server handle */ 
-        struct list_head import_chain;
-        struct obd_device *import_obd;
-        unsigned int import_id;
-        void *import_data; /* device specific data */
+        __u64 imp_cookie;
+        struct lustre_handle imp_expconnh;
+        struct list_head imp_chain;
+        struct obd_device *imp_obd;
+        unsigned int imp_id;
+        void *imp_data; /* device specific data */
 };
 
 static inline int obd_check_conn(struct lustre_handle *conn) 
@@ -127,29 +128,29 @@ static inline int obd_check_conn(struct lustre_handle *conn)
 #define OBT(dev)        (dev)->obd_type
 #define OBP(dev,op)     (dev)->obd_type->typ_ops->o_ ## op
 
-#define OBD_CHECK_SETUP(conn, export)                          \
+#define OBD_CHECK_SETUP(conn, export)                           \
 do {                                                            \
         if (!(conn)) {                                          \
                 CERROR("NULL connection\n");                    \
                 RETURN(-EINVAL);                                \
         }                                                       \
                                                                 \
-        export = class_conn2export(conn);\
-        if (!(export)) {                                \
-                CERROR("No export\n");                        \
+        export = class_conn2export(conn);                       \
+        if (!(export)) {                                        \
+                CERROR("No export\n");                          \
                 RETURN(-EINVAL);                                \
         }                                                       \
                                                                 \
-        if ( !((export)->export_obd->obd_flags & OBD_SET_UP) ) {    \
+        if (!((export)->exp_obd->obd_flags & OBD_SET_UP)) {     \
                 CERROR("Device %d not setup\n",                 \
-                       (export)->export_obd->obd_minor);        \
+                       (export)->exp_obd->obd_minor);           \
                 RETURN(-EINVAL);                                \
         }                                                       \
 } while (0)
 
-#define OBD_CHECK_DEVSETUP(obd)                                \
+#define OBD_CHECK_DEVSETUP(obd)                                 \
 do {                                                            \
-        if (!(obd)) {                                          \
+        if (!(obd)) {                                           \
                 CERROR("NULL device\n");                        \
                 RETURN(-EINVAL);                                \
         }                                                       \
@@ -176,9 +177,9 @@ static inline int obd_get_info(struct lustre_handle *conn, obd_count keylen,
         int rc;
         struct obd_export *export;
         OBD_CHECK_SETUP(conn, export);
-        OBD_CHECK_OP(export->export_obd,get_info);
+        OBD_CHECK_OP(export->exp_obd,get_info);
 
-        rc = OBP(export->export_obd, get_info)(conn, keylen, key, vallen, val);
+        rc = OBP(export->exp_obd, get_info)(conn, keylen, key, vallen, val);
         RETURN(rc);
 }
 
@@ -188,9 +189,9 @@ static inline int obd_set_info(struct lustre_handle *conn, obd_count keylen,
         int rc;
         struct obd_export *export;
         OBD_CHECK_SETUP(conn, export);
-        OBD_CHECK_OP(export->export_obd,set_info);
+        OBD_CHECK_OP(export->exp_obd,set_info);
 
-        rc = OBP(export->export_obd, set_info)(conn, keylen, key, vallen, val);
+        rc = OBP(export->exp_obd, set_info)(conn, keylen, key, vallen, val);
         RETURN(rc);
 }
 
@@ -220,9 +221,9 @@ static inline int obd_create(struct lustre_handle *conn, struct obdo *obdo, stru
         int rc;
         struct obd_export *export;
         OBD_CHECK_SETUP(conn, export);
-        OBD_CHECK_OP(export->export_obd,create);
+        OBD_CHECK_OP(export->exp_obd,create);
 
-        rc = OBP(export->export_obd, create)(conn, obdo, ea);
+        rc = OBP(export->exp_obd, create)(conn, obdo, ea);
         RETURN(rc);
 }
 
@@ -231,9 +232,9 @@ static inline int obd_destroy(struct lustre_handle *conn, struct obdo *obdo, str
         int rc;
         struct obd_export *export;
         OBD_CHECK_SETUP(conn, export);
-        OBD_CHECK_OP(export->export_obd,destroy);
+        OBD_CHECK_OP(export->exp_obd,destroy);
 
-        rc = OBP(export->export_obd, destroy)(conn, obdo, ea);
+        rc = OBP(export->exp_obd, destroy)(conn, obdo, ea);
         RETURN(rc);
 }
 
@@ -242,9 +243,9 @@ static inline int obd_getattr(struct lustre_handle *conn, struct obdo *obdo)
         int rc;
         struct obd_export *export;
         OBD_CHECK_SETUP(conn, export);
-        OBD_CHECK_OP(export->export_obd,getattr);
+        OBD_CHECK_OP(export->exp_obd,getattr);
 
-        rc = OBP(export->export_obd, getattr)(conn, obdo);
+        rc = OBP(export->exp_obd, getattr)(conn, obdo);
         RETURN(rc);
 }
 
@@ -253,9 +254,9 @@ static inline int obd_close(struct lustre_handle *conn, struct obdo *obdo, struc
         int rc;
         struct obd_export *export;
         OBD_CHECK_SETUP(conn, export);
-        OBD_CHECK_OP(export->export_obd,close);
+        OBD_CHECK_OP(export->exp_obd,close);
 
-        rc = OBP(export->export_obd, close)(conn, obdo, md);
+        rc = OBP(export->exp_obd, close)(conn, obdo, md);
         RETURN(rc);
 }
 static inline int obd_open(struct lustre_handle *conn, struct obdo *obdo, 
@@ -264,9 +265,9 @@ static inline int obd_open(struct lustre_handle *conn, struct obdo *obdo,
         int rc;
         struct obd_export *export;
         OBD_CHECK_SETUP(conn, export);
-        OBD_CHECK_OP(export->export_obd,open);
+        OBD_CHECK_OP(export->exp_obd,open);
 
-        rc = OBP(export->export_obd, open) (conn, obdo, md);
+        rc = OBP(export->exp_obd, open) (conn, obdo, md);
         RETURN(rc);
 }
 
@@ -275,9 +276,9 @@ static inline int obd_setattr(struct lustre_handle *conn, struct obdo *obdo)
         int rc;
         struct obd_export *export;
         OBD_CHECK_SETUP(conn, export);
-        OBD_CHECK_OP(export->export_obd,setattr);
+        OBD_CHECK_OP(export->exp_obd,setattr);
 
-        rc = OBP(export->export_obd, setattr)(conn, obdo);
+        rc = OBP(export->exp_obd, setattr)(conn, obdo);
         RETURN(rc);
 }
 
@@ -296,9 +297,9 @@ static inline int obd_disconnect(struct lustre_handle *conn)
         int rc;
         struct obd_export *export;
         OBD_CHECK_SETUP(conn, export);
-        OBD_CHECK_OP(export->export_obd,disconnect);
+        OBD_CHECK_OP(export->exp_obd,disconnect);
 
-        rc = OBP(export->export_obd, disconnect)(conn);
+        rc = OBP(export->exp_obd, disconnect)(conn);
         RETURN(rc);
 }
 
@@ -307,9 +308,9 @@ static inline int obd_statfs(struct lustre_handle *conn, struct statfs *buf)
         int rc;
         struct obd_export *export;
         OBD_CHECK_SETUP(conn, export);
-        OBD_CHECK_OP(export->export_obd,statfs);
+        OBD_CHECK_OP(export->exp_obd,statfs);
 
-        rc = OBP(export->export_obd, statfs)(conn, buf);
+        rc = OBP(export->exp_obd, statfs)(conn, buf);
         RETURN(rc);
 }
 
@@ -320,9 +321,9 @@ static inline int obd_punch(struct lustre_handle *conn, struct obdo *tgt,
         int rc;
         struct obd_export *export;
         OBD_CHECK_SETUP(conn, export);
-        OBD_CHECK_OP(export->export_obd,punch);
+        OBD_CHECK_OP(export->exp_obd,punch);
 
-        rc = OBP(export->export_obd, punch)(conn, tgt, md, count, offset);
+        rc = OBP(export->exp_obd, punch)(conn, tgt, md, count, offset);
         RETURN(rc);
 }
 
@@ -338,14 +339,14 @@ static inline int obd_brw(int cmd, struct lustre_handle *conn,
         int rc;
         struct obd_export *export;
         OBD_CHECK_SETUP(conn, export);
-        OBD_CHECK_OP(export->export_obd,brw);
+        OBD_CHECK_OP(export->exp_obd,brw);
 
         if (!(cmd & OBD_BRW_RWMASK)) {
                 CERROR("obd_brw: cmd must be OBD_BRW_READ or OBD_BRW_WRITE\n");
                 LBUG();
         }
 
-        rc = OBP(export->export_obd, brw)(cmd, conn, md, oa_bufs, buf,
+        rc = OBP(export->exp_obd, brw)(cmd, conn, md, oa_bufs, buf,
                                     count, offset, flags, callback);
         RETURN(rc);
 }
@@ -358,9 +359,9 @@ static inline int obd_preprw(int cmd, struct lustre_handle *conn,
         int rc;
         struct obd_export *export;
         OBD_CHECK_SETUP(conn, export);
-        OBD_CHECK_OP(export->export_obd,preprw);
+        OBD_CHECK_OP(export->exp_obd,preprw);
 
-        rc = OBP(export->export_obd, preprw)(cmd, conn, objcount, obj, niocount,
+        rc = OBP(export->exp_obd, preprw)(cmd, conn, objcount, obj, niocount,
                                        remote, local, desc_private);
         RETURN(rc);
 }
@@ -373,9 +374,9 @@ static inline int obd_commitrw(int cmd, struct lustre_handle *conn,
         int rc;
         struct obd_export *export;
         OBD_CHECK_SETUP(conn, export);
-        OBD_CHECK_OP(export->export_obd,commitrw);
+        OBD_CHECK_OP(export->exp_obd,commitrw);
 
-        rc = OBP(export->export_obd, commitrw)(cmd, conn, objcount, obj, niocount,
+        rc = OBP(export->exp_obd, commitrw)(cmd, conn, objcount, obj, niocount,
                                          local, desc_private);
         RETURN(rc);
 }
@@ -386,9 +387,9 @@ static inline int obd_iocontrol(int cmd, struct lustre_handle *conn,
         int rc;
         struct obd_export *export;
         OBD_CHECK_SETUP(conn, export);
-        OBD_CHECK_OP(export->export_obd,iocontrol);
+        OBD_CHECK_OP(export->exp_obd,iocontrol);
 
-        rc = OBP(export->export_obd, iocontrol)(cmd, conn, len, karg, uarg);
+        rc = OBP(export->exp_obd, iocontrol)(cmd, conn, len, karg, uarg);
         RETURN(rc);
 }
 
@@ -401,9 +402,9 @@ static inline int obd_enqueue(struct lustre_handle *conn,
         int rc;
         struct obd_export *export;
         OBD_CHECK_SETUP(conn, export);
-        OBD_CHECK_OP(export->export_obd,enqueue);
+        OBD_CHECK_OP(export->exp_obd,enqueue);
 
-        rc = OBP(export->export_obd, enqueue)(conn, parent_lock, res_id, type,
+        rc = OBP(export->exp_obd, enqueue)(conn, parent_lock, res_id, type,
                                         cookie, cookielen, mode, flags, cb,
                                         data, datalen, lockh);
         RETURN(rc);
@@ -415,9 +416,9 @@ static inline int obd_cancel(struct lustre_handle *conn, __u32 mode,
         int rc;
         struct obd_export *export;
         OBD_CHECK_SETUP(conn, export);
-        OBD_CHECK_OP(export->export_obd,cancel);
+        OBD_CHECK_OP(export->exp_obd,cancel);
 
-        rc = OBP(export->export_obd, cancel)(conn, mode, lockh);
+        rc = OBP(export->exp_obd, cancel)(conn, mode, lockh);
         RETURN(rc);
 }
 

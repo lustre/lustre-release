@@ -30,19 +30,23 @@ static void osc_con2cl(struct lustre_handle *conn, struct ptlrpc_client **cl,
                        struct lustre_handle **rconn)
 {
         struct obd_export *export = class_conn2export(conn);
-        struct osc_obd *osc = &export->export_obd->u.osc;
+        struct osc_obd *osc = &export->exp_obd->u.osc;
+
         *cl = osc->osc_client;
         *connection = osc->osc_conn;
-        *rconn = &export->export_import;
+        *rconn = &export->exp_rconnh;
 }
 
 static void osc_con2dlmcl(struct lustre_handle *conn, struct ptlrpc_client **cl,
                           struct ptlrpc_connection **connection,
                           struct lustre_handle **rconn)
 {
-        struct osc_obd *osc = &class_conn2obd(conn)->u.osc;
+        struct obd_export *export = class_conn2export(conn);
+        struct osc_obd *osc = &export->exp_obd->u.osc;
+
         *cl = osc->osc_ldlm_client;
         *connection = osc->osc_conn;
+        *rconn = &export->exp_rconnh;
 }
 
 static int osc_connect(struct lustre_handle *conn, struct obd_device *obd)
@@ -86,7 +90,7 @@ static int osc_connect(struct lustre_handle *conn, struct obd_device *obd)
         /* XXX eventually maybe more refinement */
         osc->osc_conn->c_level = LUSTRE_CONN_FULL;
 
-        class_import2export(conn, (struct lustre_handle *)request->rq_repmsg);
+        class_rconn2export(conn, (struct lustre_handle *)request->rq_repmsg);
 
         EXIT;
  out:

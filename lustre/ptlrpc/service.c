@@ -181,7 +181,7 @@ static int handle_incoming_request(struct obd_device *obddev,
         request.rq_export = class_conn2export((struct lustre_handle *) request.rq_reqmsg);
 
         if (request.rq_export) {
-                request.rq_connection = request.rq_export->export_connection;
+                request.rq_connection = request.rq_export->exp_connection;
                 ptlrpc_connection_addref(request.rq_connection);
         } else {
                 request.rq_connection = ptlrpc_get_connection(&peer);

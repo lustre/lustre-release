@@ -158,7 +158,6 @@ struct lov_tgt_desc {
 };
 
 struct lov_obd {
-        struct lustre_handle mdc_connh;
         struct obd_device *mdcobd;
         struct lov_desc desc;
         int bufsize; 

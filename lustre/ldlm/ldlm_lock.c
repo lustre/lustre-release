@@ -264,7 +264,7 @@ static int ldlm_intent_policy(struct ldlm_lock *lock, void *req_cookie,
         if (req->rq_reqmsg->bufcount > 1) {
                 /* an intent needs to be considered */
                 struct ldlm_intent *it = lustre_msg_buf(req->rq_reqmsg, 1);
-                struct mds_obd *mds= &req->rq_export->export_obd->u.mds;
+                struct mds_obd *mds= &req->rq_export->exp_obd->u.mds;
                 struct mds_body *mds_rep;
                 struct ldlm_reply *rep;
                 __u64 new_resid[3] = {0, 0, 0}, old_res;

@@ -61,31 +61,31 @@ static int read_lustre_status(char *page, char **start, off_t offset,
 
 	p = sprintf(&page[0], "device=%d\n", obddev->obd_minor);
 	p += sprintf(&page[0], "name=%s\n", MKSTR(obddev->obd_name));
-	p += sprintf(&page[0], "uuid=%s\n", obddev->obd_uuid); 
+	p += sprintf(&page[0], "uuid=%s\n", obddev->obd_uuid);
         p += sprintf(&page[p], "attached=1\n");
         p += sprintf(&page[0], "type=%s\n", MKSTR(obddev->obd_type->typ_name));
-	
+
         if  (obddev->obd_flags & OBD_SET_UP) {
                 p += sprintf(&page[p], "setup=1\n");
         }
-        
+
         /* print exports */
         {
                 struct list_head * lh;
                 struct obd_export * export=0;
-                
+
                 lh = &obddev->obd_exports;
                 while ((lh = lh->next) != &obddev->obd_exports) {
                         p += sprintf(&page[p],
                                      ((export==0) ? ", connections(" : ",") );
-                        export = list_entry(lh, struct obd_export, export_chain);
+                        export = list_entry(lh, struct obd_export, exp_chain);
                         p += sprintf(&page[p], "%p", export);
-                } 
+                }
                 if (export!=0) { /* there was at least one export */
                         p += sprintf(&page[p], ")");
                 }
         }
-        
+
         p += sprintf(&page[p], "\n");
 
 	/* Compute eof and return value */

@@ -23,7 +23,7 @@ extern int (*mds_getattr_name_p)(int offset, struct ptlrpc_request *req);
 
 static int ldlm_handle_enqueue(struct ptlrpc_request *req)
 {
-        struct obd_device *obddev = req->rq_export->export_obd;
+        struct obd_device *obddev = req->rq_export->exp_obd;
         struct ldlm_reply *dlm_rep;
         struct ldlm_request *dlm_req;
         int rc, size = sizeof(*dlm_rep), cookielen = 0;

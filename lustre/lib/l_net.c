@@ -82,7 +82,7 @@ int target_handle_connect(struct ptlrpc_request *req)
                 LBUG();
 
         req->rq_export = export;
-        export->export_connection = req->rq_connection;
+        export->exp_connection = req->rq_connection;
         RETURN(0);
 }
 
