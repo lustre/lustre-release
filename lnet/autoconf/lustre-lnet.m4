@@ -177,6 +177,10 @@ else
        	        struct ib_device_properties dev_props;
 	        struct ib_cm_active_param   cm_active_params;
 	        tTS_IB_CLIENT_QUERY_TID     tid;
+	        int                         enum1 = IB_QP_ATTRIBUTE_STATE;
+		int                         enum2 = IB_ACCESS_LOCAL_WRITE;
+		int                         enum3 = IB_CQ_CALLBACK_INTERRUPT;
+		int                         enum4 = IB_CQ_PROVIDER_REARM;
 		return 0;
 	],[
 		AC_MSG_RESULT([yes])
