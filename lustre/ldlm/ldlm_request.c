@@ -13,7 +13,8 @@
 
 #include <linux/lustre_dlm.h>
 
-int ldlm_cli_enqueue(struct ptlrpc_client *cl, struct ptlrpc_connection *conn, struct lustre_handle *connh, 
+int ldlm_cli_enqueue(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
+                     struct lustre_handle *connh, 
                      struct ptlrpc_request *req,
                      struct ldlm_namespace *ns,
                      struct lustre_handle *parent_lock_handle,
@@ -38,11 +39,10 @@ int ldlm_cli_enqueue(struct ptlrpc_client *cl, struct ptlrpc_connection *conn, s
                                 data, data_len);
         if (lock == NULL)
                 GOTO(out, rc = -ENOMEM);
+        LDLM_DEBUG(lock, "client-side enqueue START");
         /* for the local lock, add the reference */
         ldlm_lock_addref_internal(lock, mode);
         ldlm_lock2handle(lock, lockh);
-
-        LDLM_DEBUG(lock, "client-side enqueue START");
 
         if (req == NULL) {
                 req = ptlrpc_prep_req2(cl, conn, connh, 
@@ -127,18 +127,18 @@ int ldlm_cli_enqueue(struct ptlrpc_client *cl, struct ptlrpc_connection *conn, s
         rc = ldlm_lock_enqueue(lock, cookie, cookielen, flags, callback,
                                      callback);
 
-        LDLM_DEBUG(lock, "client-side enqueue END");
         if (*flags & (LDLM_FL_BLOCK_WAIT | LDLM_FL_BLOCK_GRANTED |
                       LDLM_FL_BLOCK_CONV)) {
                 /* Go to sleep until the lock is granted. */
                 /* FIXME: or cancelled. */
-                CDEBUG(D_NET, "enqueue returned a blocked lock (%p), "
-                       "going to sleep.\n", lock);
+                LDLM_DEBUG(lock, "client-side enqueue returned a blocked lock,"
+                           " sleeping");
                 ldlm_lock_dump(lock);
                 wait_event_interruptible(lock->l_waitq, lock->l_req_mode ==
                                          lock->l_granted_mode);
-                CDEBUG(D_NET, "waking up, the lock must be granted.\n");
+                LDLM_DEBUG(lock, "client-side enqueue waking up: granted");
         }
+        LDLM_DEBUG(lock, "client-side enqueue END");
         ldlm_lock_put(lock);
         EXIT;
  out:

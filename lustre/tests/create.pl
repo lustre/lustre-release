@@ -1,19 +1,21 @@
 #!/usr/bin/perl
 
-$mtpt = shift || die;
-$mount_count = shift || die;
-$i = shift || die;
+my $mtpt = shift || die;
+my $mount_count = shift || die;
+my $i = shift || die;
+my $size = 2;
 
 while ($i--) {
     $which = int(rand() * $mount_count) + 1;
     $path = "$mtpt$which/";
 
-    $d = int(rand() * 5);
+    $d = int(rand() * $size);
     print `./mcreate $path$d`;
 
     $which = int(rand() * $mount_count) + 1;
     $path = "$mtpt$which/";
 
-    $d = int(rand() * 5);
+    $d = int(rand() * $size);
     unlink("$path$d") || print "unlink($path$d): $!\n"
 }
+print "Done.\n";

@@ -86,20 +86,19 @@ static int ldlm_handle_enqueue(struct ptlrpc_request *req)
         lock->l_connection = ptlrpc_connection_addref(req->rq_connection);
         EXIT;
  out:
-        if (lock)
+        if (lock) {
+                LDLM_DEBUG(lock, "server-side enqueue handler, sending reply");
                 ldlm_lock_put(lock);
+        }
         req->rq_status = err;
         CDEBUG(D_INFO, "err = %d\n", err);
 
         if (ptlrpc_reply(req->rq_svc, req))
                 LBUG();
 
-        if (err)
-                LDLM_DEBUG_NOLOCK("server-side enqueue handler END");
-        else {
+        if (!err)
                 ldlm_reprocess_all(lock->l_resource);
-                LDLM_DEBUG(lock, "server-side enqueue handler END");
-        }
+        LDLM_DEBUG_NOLOCK("server-side enqueue handler END");
 
         return 0;
 }
@@ -220,8 +219,8 @@ static int ldlm_handle_callback(struct ptlrpc_request *req)
                 l_unlock(&lock->l_resource->lr_namespace->ns_lock);
                 
                 if (do_ast) {
-                        CDEBUG(D_INFO, "Lock already unused, calling "
-                               "callback (%p).\n", lock->l_blocking_ast);
+                        LDLM_DEBUG(lock, "already unused, calling "
+                                   "callback (%p)", lock->l_blocking_ast);
                         if (lock->l_blocking_ast != NULL) {
                                 struct lustre_handle lockh;
                                 ldlm_lock2handle(lock, &lockh);

@@ -124,9 +124,9 @@ int mdc_getattr(struct lustre_handle *conn,
         return rc;
 }
 
-static int mdc_lock_callback(struct lustre_handle *lockh, struct ldlm_lock_desc *desc,
-                             void *data, int data_len,
-                             struct ptlrpc_request **req)
+static int mdc_lock_callback(struct lustre_handle *lockh,
+                             struct ldlm_lock_desc *desc, void *data,
+                             int data_len, struct ptlrpc_request **req)
 {
         int rc;
         struct inode *inode = data;
@@ -201,7 +201,7 @@ int mdc_enqueue(struct lustre_handle *conn, int lock_type, struct lookup_intent 
                 size[4] = tgtlen + 1;
                 req = ptlrpc_prep_req2(mdc->mdc_ldlm_client, mdc->mdc_conn,
                                        &mdc->mdc_connh, 
-                                      LDLM_ENQUEUE, 5, size, NULL);
+                                       LDLM_ENQUEUE, 5, size, NULL);
                 if (!req)
                         RETURN(-ENOMEM);
 
@@ -278,12 +278,13 @@ int mdc_enqueue(struct lustre_handle *conn, int lock_type, struct lookup_intent 
                 size[0] = sizeof(struct ldlm_reply);
                 req->rq_replen = lustre_msg_size(1, size);
         } else if ( it->it_op == IT_GETATTR || it->it_op == IT_RENAME ||
-                     it->it_op == IT_OPEN ) {
+                    it->it_op == IT_OPEN ) {
                 size[2] = sizeof(struct mds_body);
                 size[3] = de->d_name.len + 1;
 
                 req = ptlrpc_prep_req2(mdc->mdc_ldlm_client, mdc->mdc_conn,
-                                      &mdc->mdc_connh, LDLM_ENQUEUE, 4, size, NULL);
+                                       &mdc->mdc_connh, LDLM_ENQUEUE, 4, size,
+                                       NULL);
                 if (!req)
                         RETURN(-ENOMEM);
 

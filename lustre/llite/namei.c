@@ -177,7 +177,7 @@ static struct dentry *ll_lookup2(struct inode * dir, struct dentry *dentry,
                         RETURN(ERR_PTR(-abs(err)));
                 }
                 offset = 0;
-        } else if (it->it_op == IT_UNLINK) { 
+        } else if (it->it_op == IT_UNLINK) {
                 struct obdo *obdo;
                 obdo = lustre_msg_buf(request->rq_repmsg, 1);
                 inode = new_inode(dir->i_sb);
@@ -186,14 +186,14 @@ static struct dentry *ll_lookup2(struct inode * dir, struct dentry *dentry,
                 /* XXX fix mem allocation error */
                 memcpy(ll_i2info(inode)->lli_obdo, obdo, sizeof(*obdo));
 
-                if (!inode) 
+                if (!inode)
                         GOTO(out_req, -ENOMEM);
                 inode->i_mode= S_IFREG;
                 inode->i_nlink = 1;
                 GOTO(out_req, 0);
-        } else if (it->it_op == IT_RMDIR) { 
+        } else if (it->it_op == IT_RMDIR) {
                 inode = new_inode(dir->i_sb);
-                if (!inode) 
+                if (!inode)
                         GOTO(out_req, -ENOMEM);
                 ll_i2info(inode)->lli_obdo = NULL;
                 inode->i_mode= S_IFDIR;
@@ -543,9 +543,9 @@ static int ll_unlink(struct inode * dir, struct dentry *dentry)
         struct page * page;
         int err = -ENOENT;
 
-        if (dentry->d_it && dentry->d_it->it_disposition) { 
+        if (dentry->d_it && dentry->d_it->it_disposition) {
                 inode->i_nlink = 0;
-                GOTO(out, err=0);
+                GOTO(out, err = dentry->d_it->it_status);
         }
 
         de = ext2_find_entry (dir, dentry, &page);
@@ -573,22 +573,23 @@ static int ll_rmdir(struct inode * dir, struct dentry *dentry)
         int err = 0;
         int intent_did = dentry->d_it && dentry->d_it->it_disposition;
 
-        if (!intent_did) { 
+        if (!intent_did) {
                 if (!ext2_empty_dir(inode))
                 LBUG();
 
                 err = ll_unlink(dir, dentry);
-                if (err) 
+                if (err)
                         RETURN(err);
-        }
+        } else
+                err = dentry->d_it->it_status;
         inode->i_size = 0;
         ext2_dec_count(inode);
         ext2_dec_count(dir);
         RETURN(err);
 }
 
-static int ll_rename (struct inode * old_dir, struct dentry * old_dentry,
-                      struct inode * new_dir, struct dentry * new_dentry )
+static int ll_rename(struct inode * old_dir, struct dentry * old_dentry,
+                     struct inode * new_dir, struct dentry * new_dentry)
 {
         struct inode * old_inode = old_dentry->d_inode;
         struct inode * new_inode = new_dentry->d_inode;
@@ -598,11 +599,8 @@ static int ll_rename (struct inode * old_dir, struct dentry * old_dentry,
         struct ext2_dir_entry_2 * old_de;
         int err = -ENOENT;
 
-        if (new_dentry->d_it) {
-                struct ptlrpc_request *req = new_dentry->d_it->it_data;
-                err = req->rq_status;
-                goto out;
-        }
+        if (new_dentry->d_it)
+                GOTO(out, err = new_dentry->d_it->it_status);
 
         err = ll_mdc_rename(old_dir, new_dir, old_dentry, new_dentry);
         if (err)

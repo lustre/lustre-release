@@ -348,9 +348,13 @@ static int ldlm_intent_policy(struct ldlm_lock *lock, void *req_cookie,
                                 RETURN(-EINVAL);
                         }
                         rc = mds_getattr_name_p(2, req);
-                        if (rc) {
-                                req->rq_status = rc;
-                                RETURN(rc);
+                        /* FIXME: we need to sit down and decide on who should
+                         * set req->rq_status, who should return negative and
+                         * positive return values, and what they all mean. */
+                        if (rc || req->rq_status != 0) {
+                                mds_rep = lustre_msg_buf(req->rq_repmsg, 1);
+                                rep->lock_policy_res2 = req->rq_status;
+                                RETURN(ELDLM_LOCK_ABORTED);
                         }
                         break;
                 case IT_READDIR|IT_OPEN:
@@ -366,7 +370,9 @@ static int ldlm_intent_policy(struct ldlm_lock *lock, void *req_cookie,
 
                 mds_rep = lustre_msg_buf(req->rq_repmsg, 1);
                 rep->lock_policy_res2 = req->rq_status;
-                new_resid[0] = mds_rep->ino;
+                new_resid[0] = NTOH__u32(mds_rep->ino);
+                if (new_resid[0] == 0)
+                        LBUG();
                 old_res = lock->l_resource->lr_name[0];
 
                 CDEBUG(D_INFO, "remote intent: locking %d instead of"
@@ -455,6 +461,7 @@ void ldlm_lock_addref_internal(struct ldlm_lock *lock, __u32 mode)
                 lock->l_writers++;
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
         ldlm_lock_get(lock);
+        LDLM_DEBUG(lock, "ldlm_lock_addref(%s)", ldlm_lockname[mode]);
 }
 
 /* Args: unlocked lock */
@@ -466,7 +473,7 @@ void ldlm_lock_decref(struct lustre_handle *lockh, __u32 mode)
         if (lock == NULL)
                 LBUG();
 
-        LDLM_DEBUG(lock, "ldlm_lock_decref(%d)", mode);
+        LDLM_DEBUG(lock, "ldlm_lock_decref(%s)", ldlm_lockname[mode]);
         l_lock(&lock->l_resource->lr_namespace->ns_lock);
         if (mode == LCK_NL || mode == LCK_CR || mode == LCK_PR)
                 lock->l_readers--;
@@ -484,12 +491,12 @@ void ldlm_lock_decref(struct lustre_handle *lockh, __u32 mode)
                         LBUG();
                 }
 
-                CDEBUG(D_INFO, "final decref done on cbpending lock, "
-                       "calling callback.\n");
+                LDLM_DEBUG(lock, "final decref done on cbpending lock");
                 l_unlock(&lock->l_resource->lr_namespace->ns_lock);
 
                 ldlm_lock2handle(lock, &lockh);
-                lock->l_blocking_ast(&lockh, NULL, lock->l_data,
+                /* FIXME: -1 is a really, really bad 'desc' */
+                lock->l_blocking_ast(&lockh, (void *)-1, lock->l_data,
                                      lock->l_data_len);
         } else
                 l_unlock(&lock->l_resource->lr_namespace->ns_lock);

@@ -191,7 +191,7 @@ static int osc_open(struct lustre_handle *conn, struct obdo *oa)
         EXIT;
  out:
         ptlrpc_free_req(request);
-        return 0;
+        return rc;
 }
 
 static int osc_close(struct lustre_handle *conn, struct obdo *oa)

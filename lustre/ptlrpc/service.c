@@ -299,7 +299,9 @@ static int ptlrpc_main(void *arg)
 static void ptlrpc_stop_thread(struct ptlrpc_service *svc,
                                struct ptlrpc_thread *thread)
 {
+        spin_lock(&svc->srv_lock);
         thread->t_flags = SVC_STOPPING;
+        spin_unlock(&svc->srv_lock);
 
         wake_up(&svc->srv_waitq);
         wait_event_interruptible(thread->t_ctl_waitq,

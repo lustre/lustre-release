@@ -197,10 +197,11 @@ extern char *ldlm_typename[];
 #define LDLM_DEBUG(lock, format, a...)                                  \
 do {                                                                    \
         CDEBUG(D_DLMTRACE, "### " format                                \
-               " (%s: lock %p(rc=%d) mode %s/%s on res %Lu(rc=%d) "     \
-               " type %s remote %Lx)\n" , ## a,                         \
+               " (%s: lock %p(rc=%d/%d,%d) mode %s/%s on res %Lu"       \
+               "(rc=%d) type %s remote %Lx)\n" , ## a,                  \
                lock->l_resource->lr_namespace->ns_name, lock,           \
-               lock->l_refc, ldlm_lockname[lock->l_granted_mode],       \
+               lock->l_refc, lock->l_readers, lock->l_writers,          \
+               ldlm_lockname[lock->l_granted_mode],                     \
                ldlm_lockname[lock->l_req_mode],                         \
                lock->l_resource->lr_name[0],                            \
                atomic_read(&lock->l_resource->lr_refcount),             \
