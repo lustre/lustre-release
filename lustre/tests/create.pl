@@ -6,6 +6,7 @@ GetOptions("silent!"=> \$silent);
 my $mtpt = shift || usage();
 my $mount_count = shift || usage();
 my $i = shift || usage();
+my $count = $i;
 my $files = 5;
 my $mcreate = 0; # should we use mcreate or open?
 
@@ -56,6 +57,9 @@ while ($i--) {
         print  "Unlink done [$$] $path: Success\n"if !$silent;
     } else {
         print  "Unlink done [$$] $path: $!\n"if !$silent;
+    }
+    if ($i % 100 == 0) {
+        print stderr ($count - $i) . " operations [" . $$ . "]\n";
     }
 }
 print "Done.\n";
