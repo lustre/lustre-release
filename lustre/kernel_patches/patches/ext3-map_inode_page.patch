@@ -38,7 +38,7 @@
 +        if (failed == 0 || create == 0)
 +                return 0;
 +
-+        needed_blocks = ext3_writepage_trans_blocks(inode) * failed;
++        needed_blocks = ext3_writepage_trans_blocks(inode);
 +        lock_kernel();
 +        handle = ext3_journal_start(inode, needed_blocks);
 +        unlock_kernel();
