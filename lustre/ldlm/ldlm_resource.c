@@ -283,6 +283,9 @@ static void cleanup_resource(struct ldlm_resource *res, struct list_head *q,
                 lock = list_entry(tmp, struct ldlm_lock, l_res_link);
                 LDLM_LOCK_GET(lock);
 
+                lock->l_flags |= LDLM_FL_CANCEL;
+                lock->l_flags |= flags;
+
                 if (local_only && (lock->l_readers || lock->l_writers)) {
                         /* This is a little bit gross, but much better than the
                          * alternative: pretend that we got a blocking AST from
@@ -291,15 +294,12 @@ static void cleanup_resource(struct ldlm_resource *res, struct list_head *q,
                         lock->l_flags |= LDLM_FL_CBPENDING;
                         /* ... without sending a CANCEL message. */
                         lock->l_flags |= LDLM_FL_LOCAL_ONLY;
-                        /* caller may also specify additional flags */
-                        lock->l_flags |= flags;
                         LDLM_DEBUG(lock, "setting FL_LOCAL_ONLY");
+                        if (lock->l_completion_ast)
+                                lock->l_completion_ast(lock, 0, NULL);
                         LDLM_LOCK_PUT(lock);
                         continue;
                 }
-
- 
-                lock->l_flags |= flags;
 
                 if (client) {
                         struct lustre_handle lockh;
@@ -377,7 +377,7 @@ int ldlm_namespace_free(struct ldlm_namespace *ns, int force)
         spin_unlock(&ldlm_namespace_lock);
 
         /* At shutdown time, don't call the cancellation callback */
-        ldlm_namespace_cleanup(ns, LDLM_FL_CANCEL);
+        ldlm_namespace_cleanup(ns, 0);
 
 #ifdef __KERNEL__
         {

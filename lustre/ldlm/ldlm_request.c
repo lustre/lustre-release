@@ -120,7 +120,7 @@ noreproc:
         /* Go to sleep until the lock is granted or cancelled. */
         rc = l_wait_event(lock->l_waitq,
                           ((lock->l_req_mode == lock->l_granted_mode) ||
-                           lock->l_destroyed), &lwi);
+                           (lock->l_flags & LDLM_FL_CANCEL)), &lwi);
 
         if (lock->l_destroyed) {
                 LDLM_DEBUG(lock, "client-side enqueue waking up: destroyed");
