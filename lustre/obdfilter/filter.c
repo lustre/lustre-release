@@ -55,6 +55,7 @@
 #include <linux/lustre_commit_confd.h>
 #include <portals/list.h>
 
+#include <linux/lustre_smfs.h>
 #include "filter_internal.h"
 
 static struct lvfs_callback_ops filter_lvfs_ops;
@@ -1268,7 +1269,7 @@ static int filter_post_fs_cleanup(struct obd_device *obd)
         RETURN(rc);
 }
 
-static int filter_group_set_kml_flags(struct obd_device *obd, int group)
+static int filter_group_set_fs_flags(struct obd_device *obd, int group)
 {
         struct filter_obd *filter = &obd->u.filter;
         int rc = 0, i = 0;
@@ -1280,7 +1281,8 @@ static int filter_group_set_kml_flags(struct obd_device *obd, int group)
         for (i = 0; i < filter->fo_subdir_count; i++) {
                 struct dentry *dentry;
                 dentry = (filter->fo_subdirs + group)->dentry[i];
-                rc = fsfilt_set_kml_flags(obd, dentry->d_inode);
+                rc = fsfilt_set_fs_flags(obd, dentry->d_inode, 
+                                         SM_DO_REC | SM_DO_COW);
                 if (rc)
                         RETURN(rc);
         }
@@ -1297,7 +1299,7 @@ static int filter_post_fs_setup(struct obd_device *obd)
                 RETURN(rc);
         
         for (j = 0; j < filter->fo_group_count; j++) {
-                rc = filter_group_set_kml_flags(obd, j);
+                rc = filter_group_set_fs_flags(obd, j);
                 if (rc)
                         return rc;
         } 
@@ -2133,7 +2135,8 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
                 cleanup_phase = 1;
 
                 /*only do precreate rec record. so clean kml flags here*/
-                fsfilt_clear_kml_flags(obd, dparent->d_inode);
+                fsfilt_clear_fs_flags(obd, dparent->d_inode, 
+                                      SM_DO_REC | SM_DO_COW);
                 
                 dchild = filter_fid2dentry(obd, dparent, group, next_id);
                 if (IS_ERR(dchild))
@@ -2180,7 +2183,7 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
                                 CERROR("unable to write lastobjid "
                                        "but file created\n");
                 }
-                fsfilt_set_kml_flags(obd, dparent->d_inode);
+                fsfilt_set_fs_flags(obd, dparent->d_inode, SM_DO_REC | SM_DO_COW);
         
         cleanup:
                 switch(cleanup_phase) {
@@ -2685,7 +2688,7 @@ static int filter_set_info(struct obd_export *exp, __u32 keylen,
                 CERROR("can't read group %u\n", group);
                 RETURN(rc);
         }
-        rc = filter_group_set_kml_flags(obd, group);
+        rc = filter_group_set_fs_flags(obd, group);
          if (rc != 0) {
                 CERROR("can't set kml flags %u\n", group);
                 RETURN(rc);

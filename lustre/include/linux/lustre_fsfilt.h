@@ -95,8 +95,8 @@ struct fsfilt_operations {
         int     (* fs_post_cleanup)(struct obd_device *obd, struct vfsmount *mnt);
         int     (* fs_get_reint_log_ctxt)(struct super_block *sb, 
                                           struct llog_ctxt **ctxt);
-        int     (* fs_set_kml_flags)(struct inode *inode);
-        int     (* fs_clear_kml_flags)(struct inode *inode);
+        int     (* fs_set_fs_flags)(struct inode *inode, int flags);
+        int     (* fs_clear_fs_flags)(struct inode *inode, int flags);
         int     (* fs_set_ost_flags)(struct super_block *sb);
         int     (* fs_set_mds_flags)(struct super_block *sb);
         int     (* fs_precreate_rec)(struct dentry *dentry, int *num, 
@@ -544,18 +544,18 @@ llog_fsfilt_write_record(struct llog_ctxt *ctxt, struct file *file,
 }
 
 static inline int 
-fsfilt_set_kml_flags(struct obd_device *obd, struct inode *inode)
+fsfilt_set_fs_flags(struct obd_device *obd, struct inode *inode, int flags)
 {
-        if (obd->obd_fsops->fs_set_kml_flags)
-                return obd->obd_fsops->fs_set_kml_flags(inode);
+        if (obd->obd_fsops->fs_set_fs_flags)
+                return obd->obd_fsops->fs_set_fs_flags(inode, flags);
         return 0;
 }
 
 static inline int 
-fsfilt_clear_kml_flags(struct obd_device *obd, struct inode *inode)
+fsfilt_clear_fs_flags(struct obd_device *obd, struct inode *inode, int flags)
 {
-        if (obd->obd_fsops->fs_clear_kml_flags)
-                return obd->obd_fsops->fs_clear_kml_flags(inode);
+        if (obd->obd_fsops->fs_clear_fs_flags)
+                return obd->obd_fsops->fs_clear_fs_flags(inode, flags);
         return 0;
 }
 static inline int 

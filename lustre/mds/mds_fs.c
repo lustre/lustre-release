@@ -41,6 +41,7 @@
 #include <linux/lustre_fsfilt.h>
 #include <portals/list.h>
 
+#include <linux/lustre_smfs.h>
 #include "mds_internal.h"
 
 /* This limit is arbitrary, but for now we fit it in 1 page (32k clients) */
@@ -374,9 +375,10 @@ static int  mds_fs_post_setup(struct obd_device *obd)
         if (rc)
                 GOTO(out, rc);
  
-        fsfilt_set_kml_flags(obd, de->d_inode);
-        fsfilt_set_kml_flags(obd, mds->mds_pending_dir->d_inode);
-        
+        fsfilt_set_fs_flags(obd, de->d_inode, 
+                              SM_DO_REC | SM_DO_COW);
+        fsfilt_set_fs_flags(obd, mds->mds_pending_dir->d_inode, 
+                              SM_DO_REC | SM_DO_COW);
         fsfilt_set_mds_flags(obd, mds->mds_sb);
 out:
         l_dput(de);

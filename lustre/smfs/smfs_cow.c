@@ -104,7 +104,6 @@ int smfs_cow_init(struct super_block *sb)
         int rc = 0;
 
         SMFS_SET_COW(smfs_info);
-        SMFS_SET_INODE_COW(inode);
       
         OBD_ALLOC(smfs_info->smsi_snap_info, sizeof(struct snap_info));
      
@@ -179,13 +178,15 @@ int smfs_init_snap_inode_info(struct inode *inode, int flags)
         int vallen, rc = 0;
         ENTRY;
 
-        sni_info->sn_flags = flags;
-        vallen = sizeof(sni_info->sn_gen);
+        if (SMFS_DO_COW(S2SMI(inode->i_sb)) &&
+            (flags & SM_DO_COW)) {
+                sni_info->sn_flags = flags;
+                vallen = sizeof(sni_info->sn_gen);
 
-        rc = snapops->fs_get_snap_info(NULL, inode, SNAP_GENERATION,
-                                       strlen(SNAP_GENERATION),
-                                       &sni_info->sn_gen, &vallen);               
-        
+                rc = snapops->fs_get_snap_info(NULL, inode, SNAP_GENERATION,
+                                               strlen(SNAP_GENERATION),
+                                               &sni_info->sn_gen, &vallen);               
+        } 
         RETURN(rc);                                              
          
 }
@@ -253,7 +254,7 @@ int smfs_add_snap_item(struct super_block *sb, char *name)
         struct snap      *snap_item;
         int    table_size, count = 0, index = 0, rc = 0;
 
-        count = snap_table->sntbl_count + 1; 
+        count = snap_table->sntbl_count; 
 	/* XXX Is down this sema necessary*/
 	down_interruptible(&snap_info->sntbl_sema);
         snap_item = &snap_table->sntbl_items[count];
@@ -284,7 +285,6 @@ int smfs_add_snap_item(struct super_block *sb, char *name)
 exit:
 	up(&snap_info->sntbl_sema);
 	RETURN(rc);
-
 }
 EXPORT_SYMBOL(smfs_add_snap_item);
 /*
@@ -351,7 +351,7 @@ int smfs_cow_create(struct inode *dir, struct dentry *dentry)
 
         if (smfs_needs_cow(dir) != -1) {
 		CDEBUG(D_INODE, "snap_needs_cow for ino %lu \n",dir->i_ino);
-		if ((smfs_cow(dir, dentry->d_parent, 0))) {
+		if ((snap_do_cow(dir, dentry->d_parent, 0))) {
 			CERROR("Do cow error\n");
 			RETURN(-EINVAL);
 		}

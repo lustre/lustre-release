@@ -79,9 +79,8 @@ static void smfs_read_inode2(struct inode *inode, void *opaque)
         post_smfs_inode(inode, cache_inode);
         sm_set_inode_ops(cache_inode, inode);
 #if CONFIG_SNAPFS
-        if (SMFS_DO_COW(S2SMI(inode->i_sb))) {
+        if (opaque)
                 smfs_init_snap_inode_info(inode, *((int *)opaque));
-        }
 #endif
         CDEBUG(D_INODE, "read_inode ino %lu icount %d \n",
                inode->i_ino, atomic_read(&inode->i_count));

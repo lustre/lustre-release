@@ -618,19 +618,23 @@ static int fsfilt_smfs_post_cleanup(struct obd_device *obd,
         RETURN(rc);
 }
 
-static int fsfilt_smfs_set_kml_flags(struct inode *inode)
+static int fsfilt_smfs_set_fs_flags(struct inode *inode, int flags)
 {
         int rc = 0;
-        if (SMFS_DO_REC(S2SMI(inode->i_sb)))
+        if (SMFS_DO_REC(S2SMI(inode->i_sb)) && (flags & SM_DO_REC))
                 SMFS_SET_INODE_REC(inode);
+        if (SMFS_DO_COW(S2SMI(inode->i_sb)) && (flags & SM_DO_COW))
+                SMFS_SET_INODE_COW(inode);
         RETURN(rc);
 }
 
-static int fsfilt_smfs_clear_kml_flags(struct inode *inode)
+static int fsfilt_smfs_clear_fs_flags(struct inode *inode, int flags)
 {
         int rc = 0;
-        if (SMFS_DO_REC(S2SMI(inode->i_sb)))
+        if (SMFS_DO_REC(S2SMI(inode->i_sb)) && (flags & SM_DO_REC))
                 SMFS_CLEAN_INODE_REC(inode);
+        if (SMFS_DO_COW(S2SMI(inode->i_sb)) && (flags & SM_DO_COW))
+                SMFS_CLEAN_INODE_COW(inode);
         RETURN(rc);
 }
 
@@ -939,8 +943,8 @@ static struct fsfilt_operations fsfilt_smfs_ops = {
         .fs_setup               = fsfilt_smfs_setup,
         .fs_post_setup          = fsfilt_smfs_post_setup,
         .fs_post_cleanup        = fsfilt_smfs_post_cleanup,
-        .fs_set_kml_flags       = fsfilt_smfs_set_kml_flags,
-        .fs_clear_kml_flags     = fsfilt_smfs_clear_kml_flags,
+        .fs_set_fs_flags       = fsfilt_smfs_set_fs_flags,
+        .fs_clear_fs_flags     = fsfilt_smfs_clear_fs_flags,
         .fs_set_ost_flags       = fsfilt_smfs_set_ost_flags,
         .fs_set_mds_flags       = fsfilt_smfs_set_mds_flags,
         .fs_precreate_rec       = fsfilt_smfs_precreate_rec,
