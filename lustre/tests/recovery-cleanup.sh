@@ -29,15 +29,15 @@ OSTDEV=${OSTDEV:-/tmp/ost-`hostname`}
 OSTSIZE=${OSTSIZE:-100000}
 
 do_mds() {
-    $PDSH $MDSNODE "PATH=\$PATH:$LUSTRE/utils:$LUSTRE/tests; cd $PWD; $@"
+    $PDSH $MDSNODE "PATH=\$PATH:$LUSTRE/utils:$LUSTRE/tests; cd $PWD; $@" || exit $?
 }
 
 do_client() {
-    $PDSH $CLIENT "PATH=\$PATH:$LUSTRE/utils:$LUSTRE/tests; cd $PWD; $@"
+    $PDSH $CLIENT "PATH=\$PATH:$LUSTRE/utils:$LUSTRE/tests; cd $PWD; $@" || exit $?
 }
 
 do_ost() {
-    $PDSH $OSTNODE "PATH=\$PATH:$LUSTRE/utils:$LUSTRE/tests; cd $PWD; $@"
+    $PDSH $OSTNODE "PATH=\$PATH:$LUSTRE/utils:$LUSTRE/tests; cd $PWD; $@" || exit $?
 }
 
 drop_request() {
@@ -88,7 +88,7 @@ setup() {
     make_config
     start_mds ${REFORMAT:---reformat}
     start_ost ${REFORMAT:---reformat}
-    mount_client --timeout=${TIMEOUT:-5} --recovery_upcall=/bin/true
+    mount_client --timeout=${TIMEOUT:-5} --lustre_upcall=/bin/true
 }
 
 cleanup() {
@@ -107,7 +107,7 @@ wait_for_timeout() {
 try_to_cleanup() {
     kill -INT $!
     unmount_client --force --dump /tmp/client-cleanup-`date +%s`.log
-    mount_client --timeout=${TIMEOUT:-5} --recovery_upcall=/bin/true
+    mount_client --timeout=${TIMEOUT:-5} --lustre_upcall=/bin/true
 }
 
 if [ ! -z "$ONLY" ]; then

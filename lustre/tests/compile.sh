@@ -5,7 +5,7 @@ MNT=${MNT:-/mnt/lustre}
 DIR=${DIR:-$MNT}
 SRC=${SRC:-`dirname $0`/../..}
 while date; do
-	for i in portals lustre; do
+	for i in lustre; do
 		TGT=$DIR/$i
 		[ -d $TGT ] || cp -av $SRC/$i/ $TGT
 		make -C $TGT clean
