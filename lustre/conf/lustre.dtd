@@ -13,7 +13,7 @@
 <!ELEMENT lustre (node | profile | mountpoint | ldlm | ptlrpc |echoclient |
                   mds | mdsdev| ost | osd | lov | lovconfig)*>
 
-<!ELEMENT node (network | routetbl | profile_ref)*>
+<!ELEMENT node (network | routetbl | profile_ref | timeout | recoveryUpcall)*>
 <!ATTLIST node %object.attr;
                router CDATA #IMPLIED>
                
@@ -47,18 +47,20 @@
 <!ATTLIST ptlrpc %object.attr;>
 
 <!ELEMENT osd (fstype | devpath | devsize | autoformat | 
-               target_ref | node_ref)*>
+               target_ref | node_ref | journalsize )*>
 <!ATTLIST osd %object.attr; 
               osdtype (obdfilter | obdecho) 'obdfilter'>
 
 <!ELEMENT ost (active_ref)*>
-<!ATTLIST ost %object.attr;>
+<!ATTLIST ost %object.attr;
+              failover ( 1 | 0 ) #IMPLIED>
 
 <!ELEMENT mds (active_ref | lovconfig_ref)*>
-<!ATTLIST mds %object.attr;>
+<!ATTLIST mds %object.attr;
+              failover ( 1 | 0 ) #IMPLIED>
 
 <!ELEMENT mdsdev (fstype | devpath | devsize | autoformat | 
-                  target_ref | node_ref )*>
+                  target_ref | node_ref | journalsize )*>
 <!ATTLIST mdsdev %object.attr;>
 
 <!ELEMENT lov (mds_ref |(obd_ref)+)*>
@@ -72,11 +74,14 @@
 <!ATTLIST lovconfig %object.attr;>
 
 <!-- basic elements -->
+<!ELEMENT recoveryUpcall %object.content;>
+<!ELEMENT timeout       %object.content;>
+<!ELEMENT journalsize   %object.content;>
 <!ELEMENT fstype        %object.content;>
 <!ELEMENT nid           %object.content;>
 <!ELEMENT port          %object.content;>
-<!ELEMENT sendmem      %object.content;>
-<!ELEMENT recvmem      %object.content;>
+<!ELEMENT sendmem       %object.content;>
+<!ELEMENT recvmem       %object.content;>
 <!ELEMENT autoformat    %object.content;>
 <!ELEMENT activetarget  %object.content;>
 <!ELEMENT devpath       %object.content;>
