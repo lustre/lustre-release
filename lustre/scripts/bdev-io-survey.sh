@@ -45,13 +45,17 @@ save_output() {
 	[ ! -z "$output_dir" ] && mv -f $1 $output_dir/$2
 }
 cleanup() {
-	for pid in ${cleanup_pids[*]}; do
-		kill $pid
-	done
-	cleanup_echo_filter
-	for a in ${cleanup_mounts[*]}; do
-		umount -f $a
-	done
+	# only cleanup test runs if we have block devices
+	if [ $last_block != -1 ]; then
+		for pid in ${cleanup_pids[*]}; do
+			kill $pid
+		done
+		cleanup_echo_filter
+		for a in ${cleanup_mounts[*]}; do
+			umount -f $a
+		done
+	fi
+
         [ ${#tmpdir} == 18 ] && [ -d $tmpdir ] && rm -rf $tmpdir
 }
 trap cleanup EXIT
@@ -341,6 +345,7 @@ ext2_iozone_teardown() {
 running_config=""
 running_modules=""
 declare -a running_names
+declare -a running_oids
 
 cleanup_echo_filter() {
 	local i
@@ -350,7 +355,7 @@ cleanup_echo_filter() {
 		lctl --device "\$"echo_$i destroy ${running_oids[$i]} \
 			$running_threads
 	done
-	running_oids=""
+	unset running_oids
 
 	for n in ${running_names[*]}; do
 # I can't believe leading whitespace matters here.
@@ -687,6 +692,9 @@ done
 last_block=-1
 for b in $block; do
 	[ ! -e $b ] && die "block device file $b doesn't exist"
+	[ ! -b $b ] && die "$b isn't a block device"
+	dd if=$b of=/dev/null bs=8192 count=1 || \
+		die "couldn't read 8k from $b, is it alive?"
 	[ ! -b $b ] && die "$b isn't a block device"
 	last_block=$(($last_block + 1))
 	blocks[$last_block]=$b
