@@ -46,8 +46,12 @@ ext3-raw-lookup.patch
 ext3-ea-in-inode-2.4.20.patch
 listman-2.4.20.patch
 ext3-trusted_ea-2.4.20.patch
+ext3-extents-2.4.20.patch 
+ext3-extents-in-ea-2.4.20.patch
+ext3-extents-in-ea-ioctl-2.4.20.patch
+ext3-record-extents-ea.patch 
 kernel_text_address-2.4.20-vanilla.patch 
 ext3-xattr-ptr-arith-fix.patch
 gfp_memalloc-2.4.22.patch
-loop_device_get_info.patch
-snapfs_core-2.4.20.patch 
+loop_device_get_info.patch 
+ext3-snapfs-2.4.20.patch 
