@@ -205,8 +205,9 @@ static int ll_osc_open(struct lustre_handle *conn, struct inode *inode,
                 GOTO(out, rc);
 
         file->f_flags &= ~O_LOV_DELAY_CREATE;
-        obdo_refresh_inode(inode, oa, (OBD_MD_FLBLOCKS | OBD_MD_FLATIME |
-                                       OBD_MD_FLMTIME | OBD_MD_FLCTIME));
+        obdo_refresh_inode(inode, oa, (OBD_MD_FLBLOCKS | OBD_MD_FLBLKSZ |
+                                       OBD_MD_FLATIME | OBD_MD_FLMTIME |
+                                       OBD_MD_FLCTIME));
         EXIT;
 out:
         obdo_free(oa);
@@ -263,6 +264,7 @@ static int ll_create_obj(struct lustre_handle *conn, struct inode *inode,
                 }
                 GOTO(out_oa, rc);
         }
+        obdo_refresh_inode(inode, oa, OBD_MD_FLBLKSZ);
 
         LASSERT(lsm && lsm->lsm_object_id);
         rc = obd_packmd(conn, &lmm, lsm);
@@ -469,8 +471,8 @@ int ll_inode_getattr(struct inode *inode, struct lov_stripe_md *lsm,
                  (aft != 0 || after < before) &&
                  oa.o_size < ((u64)before + 1) << PAGE_CACHE_SHIFT);
 
-        obdo_refresh_inode(inode, &oa, (OBD_MD_FLBLOCKS | OBD_MD_FLMTIME |
-                                        OBD_MD_FLCTIME));
+        obdo_refresh_inode(inode, &oa, (OBD_MD_FLBLOCKS | OBD_MD_FLBLKSZ |
+                                        OBD_MD_FLMTIME | OBD_MD_FLCTIME));
         if (inode->i_blksize < PAGE_CACHE_SIZE)
                 inode->i_blksize = PAGE_CACHE_SIZE;
 

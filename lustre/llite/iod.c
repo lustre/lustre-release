@@ -170,9 +170,11 @@ static void ll_writeback(struct inode *inode, struct obdo *oa,
                                    llwp->pga, set, NULL);
                 if (rc == 0)
                         rc = ptlrpc_set_wait(set);
-                if (rc == 0)
-                        obdo_refresh_inode(inode, oa,
-                                           oa->o_valid & ~OBD_MD_FLSIZE);
+                if (rc == 0) {
+                        /* bug 1598: don't clobber blksize */
+                        oa->o_valid &= ~(OBD_MD_FLSIZE | OBD_MD_FLBLKSZ);
+                        obdo_refresh_inode(inode, oa, oa->o_valid);
+                }
                 ptlrpc_set_destroy (set);
         }
         /*

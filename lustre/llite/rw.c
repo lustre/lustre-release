@@ -305,8 +305,11 @@ static int ll_readpage(struct file *file, struct page *first_page)
                 if (rc == 0)
                         rc = ptlrpc_set_wait(set);
                 ptlrpc_set_destroy(set);
-                if (rc == 0)
+                if (rc == 0) {
+                        /* bug 1598: don't clobber blksize */
+                        oa->o_valid &= ~(OBD_MD_FLSIZE | OBD_MD_FLBLKSZ);
                         obdo_refresh_inode(inode, oa, oa->o_valid);
+                }
                 if (rc && rc != -EIO)
                         CERROR("error from obd_brw_async: rc = %d\n", rc);
                 obdo_free(oa);
@@ -426,8 +429,11 @@ static int ll_prepare_write(struct file *file, struct page *page, unsigned from,
         oa.o_valid = OBD_MD_FLID |OBD_MD_FLMODE |OBD_MD_FLTYPE |OBD_MD_FLHANDLE;
 
         rc = ll_brw(OBD_BRW_READ, inode, &oa, page, 0);
-        if (rc == 0)
+        if (rc == 0) {
+                /* bug 1598: don't clobber blksize */
+                oa.o_valid &= ~(OBD_MD_FLSIZE | OBD_MD_FLBLKSZ);
                 obdo_refresh_inode(inode, &oa, oa.o_valid);
+        }
 
         EXIT;
  prepare_done:
