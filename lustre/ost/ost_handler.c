@@ -82,20 +82,20 @@ static int ost_statfs(struct ptlrpc_request *req)
         int rc, size = sizeof(*osfs);
         ENTRY;
 
+        rc = obd_statfs(conn, &sfs);
+        if (rc) {
+                CERROR("ost: statfs failed: rc %d\n", rc);
+                req->rq_status = rc;
+                RETURN(rc);
+        }
+
         rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repmsg);
         if (rc)
                 RETURN(rc);
 
-        rc = obd_statfs(conn, &sfs);
-        if (rc) {
-                CERROR("ost: statfs failed: rc %d\n", rc);
-                GOTO(out, rc);
-        }
         osfs = lustre_msg_buf(req->rq_repmsg, 0);
         memset(osfs, 0, size);
         obd_statfs_pack(osfs, &sfs);
-out:
-        req->rq_status = rc;
         RETURN(0);
 }
 
@@ -416,12 +416,12 @@ static int ost_handle(struct ptlrpc_request *req)
 
         rc = lustre_unpack_msg(req->rq_reqmsg, req->rq_reqlen);
         if (rc || OBD_FAIL_CHECK(OBD_FAIL_MDS_HANDLE_UNPACK)) {
-                CERROR("lustre_mds: Invalid request\n");
+                CERROR("lustre_ost: Invalid request\n");
                 GOTO(out, rc);
         }
 
         if (req->rq_reqmsg->type != PTL_RPC_MSG_REQUEST) {
-                CERROR("lustre_mds: wrong packet type sent %d\n",
+                CERROR("lustre_ost: wrong packet type sent %d\n",
                        req->rq_reqmsg->type);
                 GOTO(out, rc = -EINVAL);
         }
@@ -500,10 +500,15 @@ static int ost_handle(struct ptlrpc_request *req)
 out:
         //req->rq_status = rc;
         if (rc) {
-                CERROR("ost: processing error %d\n", rc);
+                CERROR("ost: processing error (opcode=%d): %d\n",
+                       req->rq_reqmsg->opc, rc);
                 ptlrpc_error(req->rq_svc, req);
         } else {
                 CDEBUG(D_INODE, "sending reply\n");
+                if (req->rq_repmsg == NULL)
+                        CERROR("handler for opcode %d returned rc=0 without "
+                               "creating rq_repmsg; needs to return rc != "
+                               "0!\n");
                 ptlrpc_reply(req->rq_svc, req);
         }
 

@@ -38,7 +38,6 @@
 #include <linux/lustre_net.h>
 #include <linux/lustre_dlm.h>
 
-
 int target_handle_connect(struct ptlrpc_request *req)
 {
         struct obd_device *target;
@@ -58,13 +57,13 @@ int target_handle_connect(struct ptlrpc_request *req)
         i = class_uuid2dev(uuid);
         if (i == -1) {
                 req->rq_status = -ENODEV;
-                RETURN(-NODEV);
+                RETURN(-ENODEV);
         }
 
         target = &obd_dev[i];
         if (!target) {
                 req->rq_status = -ENODEV;
-                RETURN(0);
+                RETURN(-ENODEV);
         }
 
         conn.addr = req->rq_reqmsg->addr;
@@ -78,7 +77,7 @@ int target_handle_connect(struct ptlrpc_request *req)
         req->rq_repmsg->addr = conn.addr;
         req->rq_repmsg->cookie = conn.cookie;
 
-        export = class_conn2export(&conn); 
+        export = class_conn2export(&conn);
         if (!export)
                 LBUG();
 
@@ -86,7 +85,6 @@ int target_handle_connect(struct ptlrpc_request *req)
         export->export_connection = req->rq_connection;
         RETURN(0);
 }
-
 
 int target_handle_disconnect(struct ptlrpc_request *req)
 {
