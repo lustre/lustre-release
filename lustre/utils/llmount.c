@@ -47,7 +47,7 @@ update_mtab_entry(char *spec, char *node, char *type, char *opts,
         mnt.mnt_fsname = spec;
         mnt.mnt_dir = node;
         mnt.mnt_type = type;
-        mnt.mnt_opts = opts;
+        mnt.mnt_opts = opts ? opts : "";
         mnt.mnt_freq = freq;
         mnt.mnt_passno = pass;
 
@@ -66,6 +66,30 @@ update_mtab_entry(char *spec, char *node, char *type, char *opts,
         }
 }
 
+int
+init_options(struct lustre_mount_data *lmd)
+{
+        memset(lmd, 0, sizeof(lmd));
+        lmd->lmd_server_nid = PTL_NID_ANY;
+        lmd->lmd_local_nid = PTL_NID_ANY;
+        lmd->lmd_port = 988;    /* XXX define LUSTRE_DEFAULT_PORT */
+        lmd->lmd_nal = SOCKNAL;
+        return 0;
+}
+
+int
+print_options(struct lustre_mount_data *lmd)
+{
+        printf("mds:             %s\n", lmd->lmd_mds);
+        printf("profile:         %s\n", lmd->lmd_profile);
+        printf("server_nid:      "LPX64"\n", lmd->lmd_server_nid);
+        printf("local_nid:       "LPX64"\n", lmd->lmd_local_nid);
+        printf("nal:             %d\n", lmd->lmd_nal);
+        printf("server_ipaddr:   0x%x\n", lmd->lmd_server_ipaddr);
+        printf("port:            %d\n", lmd->lmd_port);
+
+        return 0;
+}
 
 int
 parse_options(char * options, struct lustre_mount_data *lmd)
@@ -74,7 +98,7 @@ parse_options(char * options, struct lustre_mount_data *lmd)
         int val;
         char *opt;
         char * opteq;
-
+        
         /* parsing ideas here taken from util-linux/mount/nfsmount.c */
         for (opt = strtok(options, ","); opt; opt = strtok(NULL, ",")) {
                 if ((opteq = strchr(opt, '='))) {
@@ -116,12 +140,80 @@ parse_options(char * options, struct lustre_mount_data *lmd)
 }
 
 int
+set_local(struct lustre_mount_data *lmd)
+{
+        char buf[256];
+        ptl_nid_t nid;
+        int rc;
+
+        if (lmd->lmd_local_nid != PTL_NID_ANY)
+                return 0;
+
+        memset(buf, 0, sizeof(buf));
+
+        if (lmd->lmd_nal == SOCKNAL || lmd->lmd_nal == TCPNAL) {
+                rc = gethostname(buf, sizeof(buf) - 1);
+                if (rc) {
+                        fprintf (stderr, "mount: can't get local buf:"
+                                 "%d\n", rc);
+                        return rc;
+                }
+        } else if (lmd->lmd_nal == QSWNAL) {
+                FILE *fp;
+                fp = fopen("/proc/elan/device0/position", "r");
+                if (fp == NULL) {
+                        perror("mount: /proc/elan/device0/position");
+                        return -1;
+                }
+                rc = fscanf(fp, "%*s %255s", buf);
+                fclose(fp);
+                if (rc != 1) {
+                        fprintf(stderr, "mount: problem read elan NID");
+                        return -1;
+                }
+                
+        }
+
+        if (ptl_parse_nid (&nid, buf) != 0) {
+                fprintf (stderr, "mount: can't parse NID %s\n", 
+                         buf);
+                return (-1);
+        }
+
+        lmd->lmd_local_nid = nid;
+        return 0;
+}
+
+int
 set_peer(char *hostname, struct lustre_mount_data *lmd)
 {
         ptl_nid_t nid = 0;
+        int rc;
 
-        if (lmd->lmd_server_nid == 0) {
-                if (ptl_parse_nid (&nid, hostname) != 0) {
+        if (lmd->lmd_nal == SOCKNAL || lmd->lmd_nal == TCPNAL) {
+                if (lmd->lmd_server_nid == PTL_NID_ANY) {
+                        if (ptl_parse_nid (&nid, hostname) != 0) {
+                                fprintf (stderr, "mount: can't parse NID %s\n",
+                                         hostname);
+                                return (-1);
+                        }
+                        lmd->lmd_server_nid = nid;
+                }
+
+                if (ptl_parse_ipaddr(&lmd->lmd_server_ipaddr, hostname) != 0) {
+                        fprintf (stderr, "mount: can't parse host %s\n",
+                                 hostname);
+                        return (-1);
+                }
+        } else if (lmd->lmd_nal == QSWNAL) {
+                char buf[64];
+                rc = sscanf(hostname, "%*[^0-9]%63[0-9]", buf);
+                if (rc != 1) {
+                        fprintf (stderr, "mount: can't get elan id from host %s\n",
+                                 hostname);
+                        return -1;
+                }
+                if (ptl_parse_nid (&nid, buf) != 0) {
                         fprintf (stderr, "mount: can't parse NID %s\n",
                                  hostname);
                         return (-1);
@@ -129,23 +221,6 @@ set_peer(char *hostname, struct lustre_mount_data *lmd)
                 lmd->lmd_server_nid = nid;
         }
 
-        if (!lmd->lmd_nal)
-                lmd->lmd_nal = ptl_name2nal("tcp");
-
-        if (lmd->lmd_nal == SOCKNAL) {
-                if (!lmd->lmd_port)
-                        lmd->lmd_port = 988;
-                if (ptl_parse_ipaddr(&lmd->lmd_server_ipaddr, hostname) != 0) {
-                        fprintf (stderr, "mount: can't parse host %s\n",
-                                 hostname);
-                        return (-1);
-                }
-        }
-
-        if (verbose) {
-                printf("nal %u\n", lmd->lmd_nal);
-                printf("server_nid: %llu\n", (long long)lmd->lmd_server_nid);
-        }
 
         return 0;
 }
@@ -195,6 +270,10 @@ build_data(char *source, char *options, struct lustre_mount_data *lmd)
         if (rc)
                 return rc;
 
+        rc = set_local(lmd);
+        if (rc)
+                return rc;
+
         rc = set_peer(hostname, lmd);
         if (rc)
                 return rc;
@@ -210,6 +289,9 @@ build_data(char *source, char *options, struct lustre_mount_data *lmd)
         }
         strcpy(lmd->lmd_profile, profile);
 
+        
+        if (verbose)
+                print_options(lmd);
         return 0;
 }
 
@@ -218,7 +300,7 @@ main(int argc, char * const argv[])
 {
         char * source = argv[1];
         char * target = argv[2];
-        char * options = NULL;
+        char * options = "";
         int opt;
         int i;
         struct lustre_mount_data lmd;
@@ -248,8 +330,7 @@ main(int argc, char * const argv[])
                         printf("arg[%d] = %s\n", i, argv[i]);
                 }
 
-        memset(&lmd, 0, sizeof(lmd));
-
+        init_options(&lmd);
         rc = build_data(source, options, &lmd);
         if (rc) {
                 exit(1);

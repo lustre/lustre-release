@@ -34,13 +34,15 @@ enum lcfg_command_type {
         LCFG_DEL_UUID       = 0x00cf006,
         LCFG_MOUNTOPT       = 0x00cf007,
         LCFG_DEL_MOUNTOPT   = 0x00cf008,
+        LCFG_SET_TIMEOUT    = 0x00cf009,
+        LCFG_SET_UPCALL     = 0x00cf010,
 };
 
 struct lustre_cfg {
         uint32_t lcfg_version;
         uint32_t lcfg_command;
 
-        uint32_t lcfg_dev;
+        uint32_t lcfg_num; 
         uint32_t lcfg_flags;
         uint64_t lcfg_nid;
         uint32_t lcfg_nal;

@@ -4,20 +4,38 @@
 TESTDIR=`dirname $0`
 LUSTRE=$TESTDIR/..
 
-exec >> $TESTDIR/recovery-`hostname`.log
+mkdir -p $TESTDIR/logs
+
+exec >> $TESTDIR/logs/recovery-`hostname`.log
 exec 2>&1
 
 set -xv
 
 failed_import() {
-#    $LUSTRE/utils/lctl --device %$3 recover ||
-#        logger -p kern.info recovery failed: $@
+    if [ -f $TESTDIR/XMLCONFIG ] ; then
+	source $TESTDIR/XMLCONFIG
+	if [ ! -f $TESTDIR/XMLCONFIG ]; then
+	    echo "config file not found: $XMLCONFIG"
+	    exit 1
+	 fi
+    else
+	echo "$TESTDIR/XMLCONFIG: not found"
+	exit 1
+    fi
+	
+    if [ -f $TESTDIR/mdsactive ] ; then
+        source $TESTDIR/mdsactive
+	MDSSELECT="--select mds_svc=${mdsactive}_facet"
+    fi
 
-    source $LUSTRE/tests/mdsactive
+    if [ -f $TESTDIR/ostactive ] ; then
+        source $TESTDIR/ostactive
+	OSTSELECT="--select ost_svc=${ostactive}_facet"
+    fi
 
     $LUSTRE/utils/lconf --verbose --recover --node client_facet  \
-      --select mds1=${mdsactive}_facet\
-     --tgt_uuid $2 --client_uuid $3 --conn_uuid $4 $TESTDIR/replay-single.xml
+      $MDSSELECT $OSTSELECT \
+     --tgt_uuid $2 --client_uuid $3 --conn_uuid $4 $XMLCONFIG
 
 }
 

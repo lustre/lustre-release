@@ -706,14 +706,6 @@
  	       const char *name, const void *value, size_t value_len, int flags)
  {
  	struct super_block *sb = inode->i_sb;
-@@ -603,6 +1181,7 @@ ext3_xattr_set(handle_t *handle, struct 
- 	name_len = strlen(name);
- 	if (name_len > 255 || value_len > sb->s_blocksize)
- 		return -ERANGE;
-+
- 	down(&ext3_xattr_sem);
- 
- 	if (block) {
 --- linux-2.4.20/include/linux/ext3_fs.h~ext3-ea-in-inode-2.4.20	2003-10-08 23:18:08.000000000 +0400
 +++ linux-2.4.20-alexey/include/linux/ext3_fs.h	2003-10-12 16:35:46.000000000 +0400
 @@ -264,6 +264,8 @@ struct ext3_inode {

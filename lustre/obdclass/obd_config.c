@@ -35,6 +35,7 @@
 #include <linux/obd_class.h>
 #include <linux/obd.h>
 #endif
+#include <linux/lustre_log.h>
 #include <linux/lprocfs_status.h>
 #include <portals/list.h>
 
@@ -86,7 +87,7 @@ int class_attach(struct lustre_cfg *lcfg)
 
 	CDEBUG(D_IOCTL, "attach type %s name: %s uuid: %s\n",
 	       MKSTR(lcfg->lcfg_inlbuf1),
-	       MKSTR(lcfg->lcfg_inlbuf2), MKSTR(lcfg->lcfg_inlbuf3));
+	       MKSTR(lcfg->lcfg_dev_name), MKSTR(lcfg->lcfg_inlbuf2));
 
         /* find the type */
         type = class_get_type(typename);
@@ -495,6 +496,22 @@ int class_process_config(struct lustre_cfg *lcfg)
                 class_del_profile(lcfg->lcfg_inlbuf1);
                 GOTO(out, err = 0);
         }
+        case LCFG_SET_TIMEOUT: {
+                CDEBUG(D_IOCTL, "changing lustre timeout from %d to %d\n", 
+                       obd_timeout,
+                       lcfg->lcfg_num);
+                obd_timeout = lcfg->lcfg_num;
+                GOTO(out, err = 0);
+        }
+        case LCFG_SET_UPCALL: {
+                CDEBUG(D_IOCTL, "setting lustre ucpall to: %s\n", 
+                       lcfg->lcfg_inlbuf1);
+                if (lcfg->lcfg_inllen1 > sizeof obd_lustre_upcall)
+                        GOTO(out, err = -EINVAL);
+                memcpy(obd_lustre_upcall, lcfg->lcfg_inlbuf1, 
+                       lcfg->lcfg_inllen1);
+                GOTO(out, err = 0);
+        }
 	}
 	
 
@@ -592,7 +609,13 @@ static int class_config_llog_handler(struct llog_handle * handle,
                 
                 lustre_cfg_freedata(buf, cfg_len);
         } else if (rec->lrh_type == PTL_CFG_REC) {
-                rc = kportal_nal_cmd((struct portals_cfg *)cfg_buf);
+                struct portals_cfg *pcfg = (struct portals_cfg *)cfg_buf;
+                if (pcfg->pcfg_command ==NAL_CMD_REGISTER_MYNID &&
+                    cfg->cfg_local_nid != PTL_NID_ANY) {
+                        pcfg->pcfg_nid = cfg->cfg_local_nid;
+                }
+
+                rc = kportal_nal_cmd(pcfg);
         }
 out:
         RETURN(rc);
@@ -650,6 +673,8 @@ static int class_config_dump_handler(struct llog_handle * handle,
                                lcfg->lcfg_nid);
                 if (lcfg->lcfg_nal)
                         CDEBUG(D_INFO, "         nal: %x\n", lcfg->lcfg_nal);
+                if (lcfg->lcfg_num)
+                        CDEBUG(D_INFO, "         nal: %x\n", lcfg->lcfg_num);
                 if (lcfg->lcfg_inlbuf1)
                         CDEBUG(D_INFO, "     inlbuf1: %s\n",lcfg->lcfg_inlbuf1);
                 if (lcfg->lcfg_inlbuf2)

@@ -42,7 +42,6 @@
 #include <linux/lustre_lib.h>
 #include <linux/lustre_net.h>
 #include <linux/lustre_idl.h>
-#include <linux/lustre_lite.h> /* for LL_IOC_LOV_[GS]ETSTRIPE */
 #include <linux/lustre_dlm.h>
 #include <linux/lustre_mds.h>
 #include <linux/obd_class.h>

@@ -489,3 +489,48 @@ int jt_lcfg_del_mount_option(int argc, char **argv)
         return rc;
 }
 
+int jt_lcfg_set_timeout(int argc, char **argv)
+{
+        int rc;
+        struct lustre_cfg lcfg;
+
+        LCFG_INIT(lcfg, LCFG_SET_TIMEOUT, lcfg_devname);
+
+        if (argc != 2)
+                return CMD_HELP;
+
+        lcfg.lcfg_num = atoi(argv[1]);
+        
+        rc = lcfg_ioctl(argv[0], OBD_DEV_ID, &lcfg);
+        if (rc < 0) {
+                fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
+                        strerror(rc = errno));
+        }
+
+        return rc;
+}
+
+
+int jt_lcfg_set_lustre_upcall(int argc, char **argv)
+{
+        int rc;
+        struct lustre_cfg lcfg;
+
+        LCFG_INIT(lcfg, LCFG_SET_UPCALL, lcfg_devname);
+
+        if (argc != 2)
+                return CMD_HELP;
+
+        /* profile name */
+        lcfg.lcfg_inllen1 = strlen(argv[1]) + 1;
+        lcfg.lcfg_inlbuf1 = argv[1];
+
+        rc = lcfg_ioctl(argv[0], OBD_DEV_ID, &lcfg);
+        if (rc < 0) {
+                fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
+                        strerror(rc = errno));
+        }
+
+        return rc;
+}
+
