@@ -37,7 +37,6 @@ main(int argc, char**argv)
         int uid_is_set = 0;
         uid_t user_id;
         gid_t grp_id;
-        pid_t child_pid;
 
         if(argc == 1) {
                 Usage_and_abort();
