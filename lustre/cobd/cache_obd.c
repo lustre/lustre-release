@@ -205,7 +205,7 @@ cobd_close(struct lustre_handle *conn, struct obdo *oa,
         return (obd_close (&cobd->cobd_target, oa, lsm, oti));
 }
 
-static int cobd_preprw(int cmd, struct obd_export *exp, struct obdo *obdo,
+static int cobd_preprw(int cmd, struct obd_export *exp, struct obdo *oa,
                        int objcount, struct obd_ioobj *obj,
                        int niocount, struct niobuf_remote *nb,
                        struct niobuf_local *res, struct obd_trans_info *oti)
@@ -220,7 +220,7 @@ static int cobd_preprw(int cmd, struct obd_export *exp, struct obdo *obdo,
                 return -EOPNOTSUPP;
 
         cobd_exp = class_conn2export(&exp->exp_obd->u.cobd.cobd_target);
-        rc = obd_preprw(cmd, cobd_exp, obdo, objcount, obj, niocount, nb, res,
+        rc = obd_preprw(cmd, cobd_exp, oa, objcount, obj, niocount, nb, res,
                         oti);
         class_export_put(cobd_exp);
 
