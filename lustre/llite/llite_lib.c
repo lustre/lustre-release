@@ -26,11 +26,10 @@
 #include <linux/module.h>
 #include <linux/random.h>
 #include <linux/version.h>
+
 #include <linux/lustre_lite.h>
 #include <linux/lustre_ha.h>
 #include <linux/lustre_dlm.h>
-#include <linux/init.h>
-#include <linux/fs.h>
 #include <linux/lprocfs_status.h>
 #include "llite_internal.h"
 
@@ -174,6 +173,12 @@ int lustre_common_fill_super(struct super_block *sb, char *mdc, char *osc)
                 GOTO(out_root, err = -EBADF);
         }
 
+        err = ll_close_thread_start(&sbi->ll_lcq);
+        if (err) {
+                CERROR("cannot start close thread: rc %d\n", err);
+                GOTO(out_root, err);
+        }
+
         sb->s_root = d_alloc_root(root);
         RETURN(err);
 
@@ -194,6 +199,8 @@ void lustre_common_put_super(struct super_block *sb)
         struct ll_sb_info *sbi = ll_s2sbi(sb);
         struct hlist_node *tmp, *next;
         ENTRY;
+
+        ll_close_thread_shutdown(sbi->ll_lcq);
 
         list_del(&sbi->ll_conn_chain);
         obd_disconnect(sbi->ll_osc_exp, 0);
@@ -291,6 +298,8 @@ void ll_lli_init(struct ll_inode_info *lli)
         sema_init(&lli->lli_open_sem, 1);
         lli->lli_flags = 0;
         lli->lli_maxbytes = PAGE_CACHE_MAXBYTES;
+        spin_lock_init(&lli->lli_lock);
+        INIT_LIST_HEAD(&lli->lli_pending_write_llaps);
 }
 
 int ll_fill_super(struct super_block *sb, void *data, int silent)
@@ -512,6 +521,7 @@ int lustre_fill_super(struct super_block *sb, void *data, int silent)
 
                 cfg.cfg_instance = sbi->ll_instance;
                 cfg.cfg_uuid = sbi->ll_sb_uuid;
+                cfg.cfg_local_nid = lmd->lmd_local_nid;
                 err = lustre_process_log(lmd, lmd->lmd_profile, &cfg);
                 if (err < 0) {
                         CERROR("Unable to process log: %s\n", lmd->lmd_profile);
@@ -812,7 +822,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                 /* XXX when we fix the AST intents to pass the discard-range
                  * XXX extent, make ast_flags always LDLM_AST_DISCARD_DATA
                  * XXX here. */
-                if (extent.start == 0)
+                if (attr->ia_size == 0)
                         ast_flags = LDLM_AST_DISCARD_DATA;
 
                 /* bug 1639: avoid write/truncate i_sem/DLM deadlock */
@@ -828,6 +838,8 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                 if (rc == 0)
                         set_bit(LLI_F_HAVE_OST_SIZE_LOCK,
                                 &ll_i2info(inode)->lli_flags);
+
+                //ll_try_done_writing(inode);
 
                 /* unlock now as we don't mind others file lockers racing with
                  * the mds updates below? */
@@ -1058,6 +1070,18 @@ void ll_read_inode2(struct inode *inode, void *opaque)
                                    kdev_t_to_nr(inode->i_rdev));
 #else
                 init_special_inode(inode, inode->i_mode, inode->i_rdev);
+                
+                lli->ll_save_ifop = inode->i_fop;
+                if (S_ISCHR(inode->i_mode)) {
+                        inode->i_fop = &ll_special_chr_inode_fops;                                                         
+                }else if (S_ISBLK(inode->i_mode)) {
+                        inode->i_fop = &ll_special_blk_inode_fops; 
+                }else if (S_ISFIFO(inode->i_mode)){
+                        inode->i_fop = &ll_special_fifo_inode_fops;
+                }else if (S_ISSOCK(inode->i_mode)){ 
+                        inode->i_fop = &ll_special_sock_inode_fops;
+                }                                               
+                inode->i_fop->owner = lli->ll_save_ifop->owner;
 #endif
                 EXIT;
         }

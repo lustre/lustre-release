@@ -7,6 +7,11 @@
  * See the file COPYING in this distribution
  */
 
+#ifndef LOV_INTERNAL_H
+#define LOV_INTERNAL_H
+
+#include <linux/lustre_user.h>
+
 #define LAP_MAGIC 8200
 
 struct lov_async_page {
@@ -41,3 +46,5 @@ int lov_getstripe(struct obd_export *exp,
 
 /* lproc_lov.c */
 extern struct file_operations lov_proc_target_fops;
+
+#endif

@@ -55,7 +55,7 @@ struct cat_handle_data {
 
 /* In-memory descriptor for a log object or log catalog */
 struct llog_handle {
-        struct semaphore        lgh_lock;
+        struct rw_semaphore     lgh_lock;
         struct llog_logid       lgh_id;              /* id of this log */
         struct llog_log_hdr    *lgh_hdr;
         struct file            *lgh_file;
@@ -115,6 +115,11 @@ int obd_llog_init(struct obd_device *obd, struct obd_device *disk_obd,
                   int count, struct llog_logid *logid);
 
 int obd_llog_finish(struct obd_device *obd, int count);
+
+/* llog_ioctl.c */
+int llog_ioctl(struct llog_ctxt *ctxt, int cmd, struct obd_ioctl_data *data);
+int llog_catlog_list(struct obd_device *obd, int count, 
+                     struct obd_ioctl_data *data);
 
 /* llog_net.c */
 int llog_initiator_connect(struct llog_ctxt *ctxt);

@@ -241,6 +241,7 @@ static int filter_start_page_write(struct inode *inode,
                 CERROR("no memory for a temp page\n");
                 RETURN(lnb->rc = -ENOMEM);
         }
+        POISON_PAGE(page, 0xf1);
         page->index = lnb->offset >> PAGE_SHIFT;
         lnb->page = page;
 

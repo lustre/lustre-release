@@ -52,8 +52,7 @@
 /* Data stored per server at the head of the last_rcvd file.  In le32 order.
  * Try to keep this the same as mds_server_data so we might one day merge. */
 struct filter_server_data {
-        __u8  fsd_uuid[37];        /* server UUID */
-        __u8  fsd_uuid_padding[3]; /* unused */
+        __u8  fsd_uuid[40];        /* server UUID */
         __u64 fsd_unused;          /* was fsd_last_objid - don't use for now */
         __u64 fsd_last_transno;    /* last completed transaction ID */
         __u64 fsd_mount_count;     /* FILTER incarnation number */
@@ -66,15 +65,13 @@ struct filter_server_data {
         __u16 fsd_subdir_count;    /* number of subdirectories for objects */
         __u64 fsd_catalog_oid;     /* recovery catalog object id */
         __u32 fsd_catalog_ogen;    /* recovery catalog inode generation */
-        __u8  fsd_peeruuid[37];    /* UUID of MDS associated with this OST */
-        __u8  peer_padding[3];     /* unused */
+        __u8  fsd_peeruuid[40];    /* UUID of MDS associated with this OST */
         __u8  fsd_padding[FILTER_LR_SERVER_SIZE - 140];
 };
 
 /* Data stored per client in the last_rcvd file.  In le32 order. */
 struct filter_client_data {
-        __u8  fcd_uuid[37];        /* client UUID */
-        __u8  fcd_uuid_padding[3]; /* unused */
+        __u8  fcd_uuid[40];        /* client UUID */
         __u64 fcd_last_rcvd;       /* last completed transaction ID */
         __u64 fcd_mount_count;     /* FILTER incarnation number */
         __u64 fcd_last_xid;        /* client RPC xid for the last transaction */
