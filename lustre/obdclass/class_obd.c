@@ -344,6 +344,7 @@ static int obd_class_release(struct inode * inode, struct file * file)
 {
         ENTRY;
 
+        // XXX drop lsm, connections here
         if (file->private_data)
                 file->private_data = NULL;
 
@@ -729,6 +730,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                         GOTO(out, err);
 
                 err = copy_to_user((int *)arg, data, sizeof(*data));
+                // XXX save connection data into file handle
                 GOTO(out, err);
         }
 
@@ -744,10 +746,11 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
         }
 
         case OBD_IOC_CREATE: {
-                struct lov_stripe_md *ea = NULL;
+                struct lov_stripe_md *lsm = NULL;
                 obd_data2conn(&conn, data);
 
-                err = obd_create(&conn, &data->ioc_obdo1, &ea);
+#warning FIXME: save lsm into file handle for other ops, release on close
+                err = obd_create(&conn, &data->ioc_obdo1, &lsm);
                 if (err)
                         GOTO(out, err);
 
