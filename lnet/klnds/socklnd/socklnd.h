@@ -105,8 +105,14 @@
 
 #define SOCKNAL_SINGLE_FRAG_TX      0           /* disable multi-fragment sends */
 #define SOCKNAL_SINGLE_FRAG_RX      0           /* disable multi-fragment receives */
-#define SOCKNAL_RISK_KMAP_DEADLOCK  1           /* risk kmap deadlock on multi-frag I/O 
-                                                 * (backs off to single-frag if disabled) */
+
+/* risk kmap deadlock on multi-frag I/O (backs off to single-frag if disabled).
+ * no risk if we're not running on a CONFIG_HIGHMEM platform. */
+#ifdef CONFIG_HIGHMEM
+# define SOCKNAL_RISK_KMAP_DEADLOCK  0
+#else
+# define SOCKNAL_RISK_KMAP_DEADLOCK  1
+#endif
                                                 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,72))
 # define sk_allocation  allocation
