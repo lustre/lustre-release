@@ -654,6 +654,13 @@ int mds_try_to_split_dir(struct obd_device *obd, struct dentry *dentry,
         oa->o_gr = FILTER_GROUP_FIRST_MDS + mds->mds_num;
         oa->o_valid |= OBD_MD_FLID | OBD_MD_FLFLAGS | OBD_MD_FLGROUP;
         oa->o_mode = dir->i_mode;
+
+        /* 
+         * until lmv_obd_create() properly rewritten, it is important to have
+         * here oa->o_id = dir->i_ino, as otherwise master object will have
+         * invalid store cookie (zero inode num), what will lead to -ESTALE in
+         * mds_open() or somewhere else.
+         */
 	oa->o_id = dir->i_ino;
 
         down(&dir->i_sem);
