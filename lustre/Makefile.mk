@@ -7,7 +7,6 @@ obj-y += portals/
 # obdclass has to come before anything that does class_register..
 obj-y += obdclass/
 obj-y += ptlrpc/
-obj-y += ldlm/
 obj-y += obdfilter/
 obj-y += mdc/
 obj-y += mds/
