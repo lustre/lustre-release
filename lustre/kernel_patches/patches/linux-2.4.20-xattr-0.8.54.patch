@@ -2637,7 +2637,7 @@
  };
 --- /dev/null	Fri Aug 30 17:31:37 2002
 +++ linux-2.4.20-braam/fs/ext3/xattr.c	Sat Apr  5 03:57:18 2003
-@@ -0,0 +1,1224 @@
+@@ -0,0 +1,1231 @@
 +/*
 + * linux/fs/ext3/xattr.c
 + *
@@ -2708,6 +2708,13 @@
 +#include <linux/compatmac.h>
 +
 +#define EXT3_EA_USER "user."
++
++/* These symbols may be needed by a module. */
++EXPORT_SYMBOL(ext3_xattr_register);
++EXPORT_SYMBOL(ext3_xattr_unregister);
++EXPORT_SYMBOL(ext3_xattr_get);
++EXPORT_SYMBOL(ext3_xattr_list);
++EXPORT_SYMBOL(ext3_xattr_set);
 +
 +#if LINUX_VERSION_CODE < KERNEL_VERSION(2,4,0)
 +# define mark_buffer_dirty(bh) mark_buffer_dirty(bh, 1)
