@@ -89,11 +89,10 @@ lwt_control (int enable, int clear)
         if (clear)
                 for (i = 0; i < num_online_cpus(); i++) {
                         p = lwt_cpus[i].lwtc_current_page;
-                        
+
                         for (j = 0; j < lwt_pages_per_cpu; j++) {
-                                
                                 memset (p->lwtp_events, 0, PAGE_SIZE);
-                                
+
                                 p = list_entry (p->lwtp_list.next,
                                                 lwt_page_t, lwtp_list);
                         }
@@ -110,8 +109,7 @@ lwt_control (int enable, int clear)
 }
 
 int
-lwt_snapshot (int *ncpu, int *total_size, 
-              void *user_ptr, int user_size) 
+lwt_snapshot (int *ncpu, int *total_size, void *user_ptr, int user_size)
 {
         const int    events_per_page = PAGE_SIZE / sizeof(lwt_event_t);
         const int    bytes_per_page = events_per_page * sizeof(lwt_event_t);
