@@ -66,6 +66,7 @@ static int ll_file_open(struct inode *inode, struct file *file)
                         oa->o_valid = OBD_MD_FLMODE | OBD_MD_FLEASIZE |
                                         OBD_MD_FLID;
                         rc = obd_create(ll_i2obdconn(inode), oa, &lli->lli_smd);
+
                         if (rc) {
                                 obdo_free(oa);
                                 up(&lli->lli_open_sem);

@@ -470,16 +470,6 @@ static void ll_read_inode2(struct inode *inode, void *opaque)
         //if (body->valid & OBD_MD_FLSIZE)
         //        inode->i_size = body->size;
 
-        /* Get the authoritative file size */
-        if (md && md->md && inode->i_mode & S_IFREG) {
-                int rc;
-                rc = ll_file_size(inode, md->md, &inode->i_size);
-                if (rc) {
-                        CERROR("ll_file_size: %d\n", rc);
-                        /* FIXME: need to somehow prevent inode creation */
-                        LBUG();
-                }
-        }
 
         //if (body->valid & OBD_MD_FLEASIZE)
         if (md && md->md && md->md->lmd_stripe_count) { 
@@ -498,6 +488,20 @@ static void ll_read_inode2(struct inode *inode, void *opaque)
                         LBUG();
                 }
                 lov_unpackmd(ii->lli_smd, smd);
+        } else { 
+                ii->lli_smd = NULL;
+        }
+
+        /* Get the authoritative file size */
+        if (ii->lli_smd && (inode->i_mode & S_IFREG)) {
+                int rc;
+
+                rc = ll_file_size(inode, ii->lli_smd, &inode->i_size);
+                if (rc) {
+                        CERROR("ll_file_size: %d\n", rc);
+                        /* FIXME: need to somehow prevent inode creation */
+                        LBUG();
+                }
         }
 
         /* OIDEBUG(inode); */
