@@ -1354,7 +1354,8 @@ void ll_delete_inode(struct inode *inode)
                 CERROR("md_delete_object() failed, error %d.\n",
                        rc);
         }
-        
+
+        clear_inode(inode);
         EXIT;
 }
 
