@@ -145,15 +145,14 @@ int mds_open(struct mds_update_record *rec, int offset,
                 if (IS_ERR(handle)) {
                         rc = PTR_ERR(handle);
                         mds_finish_transno(mds, handle, req, rc);
+                        up(&dir->i_sem);
                         GOTO(out_ldput, rc);
                 }
                 rc = vfs_create(dir, dchild, rec->ur_mode);
                 up(&dir->i_sem);
-                if (rc)
-                        GOTO(out_unlock, rc);
                 rc = mds_finish_transno(mds, handle, req, rc);
                 err = fsfilt_commit(obd, dir, handle);
-                if (err) {
+                if (rc || err) {
                         CERROR("error on commit: err = %d\n", err);
                         if (!rc)
                                 rc = err;
@@ -191,7 +190,7 @@ int mds_open(struct mds_update_record *rec, int offset,
         mntget(mnt);
         file = dentry_open(dchild, mnt, flags & ~O_DIRECT & ~O_TRUNC);
         if (IS_ERR(file))
-                GOTO(out_ldput, req->rq_status = PTR_ERR(file));
+                GOTO(out_unlock, req->rq_status = PTR_ERR(file));
 
         file->private_data = mfd;
         mfd->mfd_file = file;
