@@ -58,16 +58,24 @@ struct ext2_obd {
         struct vfsmount *e2_vfsmnt;
 };
 
+struct obd_ucred { 
+        __u32 ouc_fsuid;
+        __u32 ouc_fsgid;
+};
+
 #define OBD_RUN_CTXT_MAGIC      0xC0FFEEAA
 #define OBD_CTXT_DEBUG          /* development-only debugging */
 struct obd_run_ctxt {
         struct vfsmount *pwdmnt;
         struct dentry   *pwd;
         mm_segment_t     fs;
+        __u32            fsuid;
+        __u32            fsgid;
 #ifdef OBD_CTXT_DEBUG
         __u32            magic;
 #endif
 };
+
 
 #ifdef OBD_CTXT_DEBUG
 #define OBD_SET_CTXT_MAGIC(ctxt) (ctxt)->magic = OBD_RUN_CTXT_MAGIC

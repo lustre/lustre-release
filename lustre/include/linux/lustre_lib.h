@@ -100,7 +100,9 @@ struct  io_cb_data *ll_init_cb(void);
 
 /* simple.c */
 struct obd_run_ctxt;
-void push_ctxt(struct obd_run_ctxt *save, struct obd_run_ctxt *new);
+struct obd_ucred;
+void push_ctxt(struct obd_run_ctxt *save, struct obd_run_ctxt *new, 
+               struct obd_ucred *cred);
 void pop_ctxt(struct obd_run_ctxt *saved);
 struct dentry *simple_mkdir(struct dentry *dir, char *name, int mode);
 struct dentry *simple_mknod(struct dentry *dir, char *name, int mode);

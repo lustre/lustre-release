@@ -224,7 +224,7 @@ static int mds_fs_prep(struct obd_device *obddev)
         struct file *f;
         int rc;
 
-        push_ctxt(&saved, &mds->mds_ctxt);
+        push_ctxt(&saved, &mds->mds_ctxt, NULL);
         dentry = simple_mkdir(current->fs->pwd, "ROOT", 0755);
         if (IS_ERR(dentry)) {
                 rc = PTR_ERR(dentry);

@@ -41,7 +41,8 @@
 #endif
 
 /* push / pop to root of obd store */
-void push_ctxt(struct obd_run_ctxt *save, struct obd_run_ctxt *new)
+void push_ctxt(struct obd_run_ctxt *save, struct obd_run_ctxt *new, 
+               struct obd_ucred *uc)
 {
         //ASSERT_NOT_KERNEL_CTXT("already in kernel context!\n");
         ASSERT_CTXT_MAGIC(new->magic);
@@ -55,6 +56,12 @@ void push_ctxt(struct obd_run_ctxt *save, struct obd_run_ctxt *new)
         LASSERT(new->pwd);
         LASSERT(new->pwdmnt);
 
+        save->fsuid = current->fsuid;
+        save->fsgid = current->fsgid;
+        if (uc) { 
+                current->fsuid = uc->ouc_fsuid;
+                current->fsgid = uc->ouc_fsgid;
+        }
         set_fs(new->fs);
         set_fs_pwd(current->fs, new->pwdmnt, new->pwd);
 }
@@ -75,6 +82,8 @@ void pop_ctxt(struct obd_run_ctxt *saved)
         //printk("pc5");
         mntput(saved->pwdmnt);
         //printk("pc6\n");
+        current->fsuid = saved->fsuid;
+        current->fsgid = saved->fsgid;
 }
 
 /* utility to make a file */

@@ -37,7 +37,7 @@ int mds_configure_lov(struct obd_device *obd, struct lov_desc *desc,
         tgt_count = desc->ld_tgt_count;
         lov_packdesc(desc);
 
-        push_ctxt(&saved, &mds->mds_ctxt);
+        push_ctxt(&saved, &mds->mds_ctxt, NULL);
         f = filp_open("LOVDESC", O_CREAT|O_RDWR, 0644);
         if (IS_ERR(f)) {
                 CERROR("Cannot open/create LOVDESC file\n");
@@ -86,7 +86,7 @@ int mds_get_lovdesc(struct obd_device *obd, struct lov_desc *desc)
         struct file *f;
         int rc;
 
-        push_ctxt(&saved, &mds->mds_ctxt);
+        push_ctxt(&saved, &mds->mds_ctxt, NULL);
         f = filp_open("LOVDESC", O_RDONLY, 0644);
         if (!f || IS_ERR(f)) {
                 CERROR("Cannot open LOVDESC file\n");
@@ -116,7 +116,7 @@ int mds_get_lovtgts(struct obd_device *obd, int tgt_count,obd_uuid_t *uuidarray)
         int rc;
         int rc2;
 
-        push_ctxt(&saved, &mds->mds_ctxt);
+        push_ctxt(&saved, &mds->mds_ctxt, NULL);
         f = filp_open("LOVTGTS", O_RDONLY, 0644);
         if (IS_ERR(f)) {
                 CERROR("Cannot open LOVTGTS file\n");

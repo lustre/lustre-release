@@ -72,7 +72,7 @@ static int filter_prep(struct obd_device *obddev)
         __u64 lastino = 2;
         int mode = 0;
 
-        push_ctxt(&saved, &filter->fo_ctxt);
+        push_ctxt(&saved, &filter->fo_ctxt, NULL);
         dentry = simple_mkdir(current->fs->pwd, "O", 0700);
         CDEBUG(D_INODE, "got/created O: %p\n", dentry);
         if (IS_ERR(dentry)) {
@@ -197,7 +197,7 @@ static void filter_post(struct obd_device *obddev)
         struct file *file;
         int mode;
 
-        push_ctxt(&saved, &filter->fo_ctxt);
+        push_ctxt(&saved, &filter->fo_ctxt, NULL);
         file = filp_open("D/status", O_RDWR | O_CREAT, 0700);
         if (IS_ERR(file)) {
                 CERROR("OBD filter: cannot create status file\n");
@@ -313,7 +313,7 @@ static struct file *filter_obj_open(struct obd_device *obddev,
         }
 
         filter_id(name, id, type);
-        push_ctxt(&saved, &obddev->u.filter.fo_ctxt);
+        push_ctxt(&saved, &obddev->u.filter.fo_ctxt, NULL);
         file = filp_open(name, O_RDONLY | O_LARGEFILE, 0 /* type? */);
         pop_ctxt(&saved);
 
@@ -532,7 +532,7 @@ static int filter_setattr(struct lustre_handle *conn, struct obdo *oa,
         lock_kernel();
         if (iattr.ia_valid & ATTR_SIZE)
                 down(&inode->i_sem);
-        push_ctxt(&saved, &obd->u.filter.fo_ctxt);
+        push_ctxt(&saved, &obd->u.filter.fo_ctxt, NULL);
         if (inode->i_op->setattr)
                 rc = inode->i_op->setattr(dentry, &iattr);
         else
@@ -633,7 +633,7 @@ static int filter_create(struct lustre_handle* conn, struct obdo *oa,
         //filter_id(name, oa->o_id, oa->o_mode);
         sprintf(name, LPU64, oa->o_id);
         mode = (oa->o_mode & ~S_IFMT) | S_IFREG;
-        push_ctxt(&saved, &obd->u.filter.fo_ctxt);
+        push_ctxt(&saved, &obd->u.filter.fo_ctxt, NULL);
         new = simple_mknod(filter->fo_dentry_O_mode[S_IFREG >> S_SHIFT], name,
                            mode);
         pop_ctxt(&saved);
@@ -697,7 +697,7 @@ static int filter_destroy(struct lustre_handle *conn, struct obdo *oa,
         }
 
         filter = &obd->u.filter;
-        push_ctxt(&saved, &filter->fo_ctxt);
+        push_ctxt(&saved, &filter->fo_ctxt, NULL);
 
         rc = vfs_unlink(dir_dentry->d_inode, object_dentry);
         pop_ctxt(&saved);
@@ -748,7 +748,7 @@ static int filter_pgcache_brw(int cmd, struct lustre_handle *conn,
         }
 
         sb = obd->u.filter.fo_sb;
-        push_ctxt(&saved, &obd->u.filter.fo_ctxt);
+        push_ctxt(&saved, &obd->u.filter.fo_ctxt, NULL);
         pnum = 0; /* pnum indexes buf 0..num_pages */
 
         file = filter_obj_open(obd, lsm->lsm_object_id, S_IFREG);
@@ -1191,7 +1191,7 @@ static int filter_preprw(int cmd, struct lustre_handle *conn,
         }
         memset(res, 0, sizeof(*res) * niocount);
 
-        push_ctxt(&saved, &obd->u.filter.fo_ctxt);
+        push_ctxt(&saved, &obd->u.filter.fo_ctxt, NULL);
 
         if (cmd & OBD_BRW_WRITE) {
                 *desc_private = filter_journal_start(&journal_save,
@@ -1322,7 +1322,7 @@ static int filter_commitrw(int cmd, struct lustre_handle *conn,
         int i;
         ENTRY;
 
-        push_ctxt(&saved, &obd->u.filter.fo_ctxt);
+        push_ctxt(&saved, &obd->u.filter.fo_ctxt, NULL);
         journal_save = current->journal_info;
         LASSERT(!journal_save);
 

@@ -846,6 +846,7 @@ int mds_reint_rec(struct mds_update_record *rec, int offset,
 {
         struct mds_obd *mds = mds_req2mds(req);
         struct obd_run_ctxt saved;
+        struct obd_ucred uc;
 
         int rc;
 
@@ -855,7 +856,10 @@ int mds_reint_rec(struct mds_update_record *rec, int offset,
                 RETURN(rc);
         }
 
-        push_ctxt(&saved, &mds->mds_ctxt);
+        uc.ouc_fsuid = rec->ur_fsuid;
+        uc.ouc_fsgid = rec->ur_fsgid;
+
+        push_ctxt(&saved, &mds->mds_ctxt, &uc);
         rc = reinters[rec->ur_opcode] (rec, offset, req);
         pop_ctxt(&saved);
 

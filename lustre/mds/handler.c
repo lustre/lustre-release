@@ -506,6 +506,7 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req)
         struct lustre_handle lockh;
         char *name;
         int namelen, flags, lock_mode, rc = 0;
+        struct obd_ucred uc;
         __u64 res_id[3] = {0, 0, 0};
         ENTRY;
 
@@ -523,7 +524,9 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req)
         if (offset)
                 offset = 1;
 
-        push_ctxt(&saved, &mds->mds_ctxt);
+        uc.ouc_fsuid = body->fsuid;
+        uc.ouc_fsgid = body->fsgid;
+        push_ctxt(&saved, &mds->mds_ctxt, &uc);
         de = mds_fid2dentry(mds, &body->fid1, NULL);
         if (IS_ERR(de)) {
                 LBUG();
@@ -582,11 +585,14 @@ static int mds_getattr(int offset, struct ptlrpc_request *req)
         struct dentry *de;
         struct inode *inode;
         struct mds_body *body;
+        struct obd_ucred uc;
         int rc = 0, size[2] = {sizeof(*body)}, bufcount = 1;
         ENTRY;
 
         body = lustre_msg_buf(req->rq_reqmsg, offset);
-        push_ctxt(&saved, &mds->mds_ctxt);
+        uc.ouc_fsuid = body->fsuid;
+        uc.ouc_fsgid = body->fsgid;
+        push_ctxt(&saved, &mds->mds_ctxt, &uc);
         de = mds_fid2dentry(mds, &body->fid1, NULL);
         if (IS_ERR(de)) {
                 req->rq_status = -ENOENT;
@@ -724,7 +730,10 @@ static int mds_open(struct ptlrpc_request *req)
                 rc = mds_fs_set_md(mds, inode, handle, lmm);
                 if (!rc) {
                         struct obd_run_ctxt saved;
-                        push_ctxt(&saved, &mds->mds_ctxt);
+                        struct obd_ucred uc;
+                        uc.ouc_fsuid = body->fsuid;
+                        uc.ouc_fsgid = body->fsgid;
+                        push_ctxt(&saved, &mds->mds_ctxt, &uc);
                         rc = mds_update_last_rcvd(mds, handle, req);
                         pop_ctxt(&saved);
                 } else {
@@ -809,6 +818,7 @@ static int mds_readpage(struct ptlrpc_request *req)
         struct mds_body *body, *repbody;
         struct obd_run_ctxt saved;
         int rc, size = sizeof(*body);
+        struct obd_ucred uc;
         ENTRY;
 
         rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repmsg);
@@ -818,7 +828,9 @@ static int mds_readpage(struct ptlrpc_request *req)
         }
 
         body = lustre_msg_buf(req->rq_reqmsg, 0);
-        push_ctxt(&saved, &mds->mds_ctxt);
+        uc.ouc_fsuid = body->fsuid;
+        uc.ouc_fsgid = body->fsgid;
+        push_ctxt(&saved, &mds->mds_ctxt, &uc);
         de = mds_fid2dentry(mds, &body->fid1, &mnt);
         if (IS_ERR(de))
                 GOTO(out_pop, rc = PTR_ERR(de));
@@ -1061,7 +1073,7 @@ static int mds_recover(struct obd_device *obddev)
 
         /* This happens at the end when recovery is complete */
         ++mds->mds_mount_count;
-        push_ctxt(&saved, &mds->mds_ctxt);
+        push_ctxt(&saved, &mds->mds_ctxt, NULL);
         rc = mds_update_server_data(mds);
         pop_ctxt(&saved);
 
@@ -1174,7 +1186,7 @@ static int mds_cleanup(struct obd_device *obddev)
         if (!mds->mds_sb)
                 RETURN(0);
 
-        push_ctxt(&saved, &mds->mds_ctxt);
+        push_ctxt(&saved, &mds->mds_ctxt, NULL);
         mds_update_server_data(mds);
 
         if (mds->mds_rcvd_filp) {
