@@ -342,6 +342,8 @@ sub execute_line {
     my @cmdline = split(' ', $line);
     my $word = shift @cmdline;
 
+    return 0 unless ($word);
+
     my $cmd;
     if ( $file ) {
         $cmd = $word;
@@ -351,10 +353,6 @@ sub execute_line {
     unless ($cmd) {
         printf STDERR "$word: No such command, or not unique.\n";
         return (-1);
-    }
-
-    if ($cmd eq "help" || $cmd eq "exit" || $cmd eq "quit") {
-        return (&{$commands{$cmd}->{func}}(@cmdline));
     }
 
     # Call the function.
@@ -389,7 +387,7 @@ sub Device {
 		print "Cannot open $device. Did you insert the obdclass module ?\n";
 		return -1;
 	    }
-	    print "Openend device $device\n";
+	    print "Opened device $device\n";
 	    $opendevfds{$device} = *NEW_OBD;
 	    $::dev_obd = *NEW_OBD;
 	}
