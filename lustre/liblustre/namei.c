@@ -47,8 +47,6 @@ static void ll_intent_release(struct lookup_intent *it)
         struct lustre_handle *handle;
         ENTRY;
 
-        /* LASSERT(ll_d2d(de) != NULL); */
-
         if (it->d.lustre.it_lock_mode) {
                 handle = (struct lustre_handle *)&it->d.lustre.it_lock_handle;
                 CDEBUG(D_DLMTRACE, "releasing lock with cookie "LPX64
@@ -65,86 +63,6 @@ static void ll_intent_release(struct lookup_intent *it)
         it->it_op_release = 0;
         EXIT;
 }
-
-#if 0
-static void llu_mdc_lock_set_inode(struct lustre_handle *lockh,
-                                   struct inode *inode)
-{
-        struct ldlm_lock *lock = ldlm_handle2lock(lockh);
-        ENTRY;
-
-        LASSERT(lock != NULL);
-        lock->l_data = inode;
-        LDLM_LOCK_PUT(lock);
-        EXIT;
-}
-
-static int pnode_revalidate_finish(struct ptlrpc_request *request,
-                                   struct inode *parent, struct pnode *pnode,
-                                   struct lookup_intent *it, int offset,
-                                   obd_id ino)
-{
-        struct llu_sb_info    *sbi = llu_i2sbi(parent);
-        struct pnode_base     *pb = pnode->p_base;
-        struct mds_body       *body;
-        struct lov_stripe_md  *lsm = NULL;
-        struct lov_mds_md     *lmm;
-        int                    lmmsize;
-        int                    rc = 0;
-        ENTRY;
-
-        /* NB 1 request reference will be taken away by ll_intent_lock()
-         * when I return */
-
-        if (it_disposition(it, DISP_LOOKUP_NEG))
-                RETURN(-ENOENT);
-
-        /* We only get called if the mdc_enqueue() called from
-         * ll_intent_lock() was successful.  Therefore the mds_body is
-         * present and correct, and the eadata is present (but still
-         * opaque, so only obd_unpackmd() can check the size) */
-        body = lustre_msg_buf(request->rq_repmsg, offset, sizeof (*body));
-        LASSERT (body != NULL);
-        LASSERT_REPSWABBED (request, offset);
-
-        if (body->valid & OBD_MD_FLEASIZE) {
-                /* Only bother with this if inodes's LSM not set? */
-
-                if (body->eadatasize == 0) {
-                        CERROR ("OBD_MD_FLEASIZE set, but eadatasize 0\n");
-                        GOTO (out, rc = -EPROTO);
-                }
-                lmmsize = body->eadatasize;
-                lmm = lustre_msg_buf (request->rq_repmsg, offset + 1, lmmsize);
-                LASSERT (lmm != NULL);
-                LASSERT_REPSWABBED (request, offset + 1);
-
-                rc = obd_unpackmd (&sbi->ll_osc_conn,
-                                   &lsm, lmm, lmmsize);
-                if (rc < 0) {
-                        CERROR ("Error %d unpacking eadata\n", rc);
-                        LBUG();
-                        /* XXX don't know if I should do this... */
-                        GOTO (out, rc);
-                        /* or skip the ll_update_inode but still do
-                         * mdc_lock_set_inode() */
-                }
-                LASSERT (rc >= sizeof (*lsm));
-                rc = 0;
-        }
-
-        llu_update_inode(pb->pb_ino, body, lsm);
-
-        if (lsm != NULL &&
-            llu_i2info(pb->pb_ino)->lli_smd != lsm)
-                obd_free_memmd (&sbi->ll_osc_conn, &lsm);
-
-        llu_mdc_lock_set_inode((struct lustre_handle *)&it->d.lustre.it_lock_handle,
-                               pb->pb_ino);
- out:
-        RETURN(rc);
-}
-#endif
 
 /*
  * remove the stale inode from pnode
@@ -190,7 +108,7 @@ void llu_lookup_finish_locks(struct lookup_intent *it, struct pnode *pnode)
 
 }
 
-static inline void ll_invalidate_inode_pages(struct inode * inode)
+static inline void llu_invalidate_inode_pages(struct inode * inode)
 {
         /* do nothing */
 }
@@ -234,7 +152,7 @@ static int llu_mdc_blocking_ast(struct ldlm_lock *lock,
                         CDEBUG(D_INODE, "invalidating inode %lu\n",
                                lli->lli_st_ino);
 
-                        ll_invalidate_inode_pages(inode);
+                        llu_invalidate_inode_pages(inode);
                 }
 
 /*
@@ -287,7 +205,7 @@ int llu_pb_revalidate(struct pnode *pnode, int flags, struct lookup_intent *it)
         }
 
         /* This is due to bad interaction with libsysio. remove this when we
-         * switched to libbsdio
+         * switched to libbsdio XXX
          */
         {
                 struct llu_inode_info *lli = llu_i2info(pb->pb_ino);
@@ -324,14 +242,8 @@ int llu_pb_revalidate(struct pnode *pnode, int flags, struct lookup_intent *it)
         if (req == NULL && rc >= 0)
                 GOTO(out, rc);
 
-        /* unfortunately ll_intent_lock may cause a callback and revoke our
-           dentry */
-        /*
-        spin_lock(&dcache_lock);
-        list_del_init(&de->d_hash);
-        spin_unlock(&dcache_lock);
-        d_rehash(de);
-        */
+        /* Note: ll_intent_lock may cause a callback, check this! */
+
         if (it->it_op & (IT_OPEN | IT_GETATTR))
                 LL_SAVE_INTENT(pb->pb_ino, it);
         RETURN(1);
@@ -341,7 +253,7 @@ int llu_pb_revalidate(struct pnode *pnode, int flags, struct lookup_intent *it)
         if (rc == 0) {
                 LASSERT(pb->pb_ino);
                 if (S_ISDIR(llu_i2info(pb->pb_ino)->lli_st_mode))
-                        ll_invalidate_inode_pages(pb->pb_ino);
+                        llu_invalidate_inode_pages(pb->pb_ino);
                 llu_i2info(pb->pb_ino)->lli_stale_flag = 1;
                 unhook_stale_inode(pnode);
         } else {
@@ -364,8 +276,9 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
         int rc;
 
         /* NB 1 request reference will be taken away by ll_intent_lock()
-         * when I return */
-        /* XXX libsysio require the inode must be generated here XXX */
+         * when I return 
+         * Note: libsysio require the inode must be generated here
+         */
         if ((it->it_op & IT_CREAT) || !it_disposition(it, DISP_LOOKUP_NEG)) {
                 struct lustre_md md;
                 struct llu_inode_info *lli;
@@ -410,15 +323,10 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
                 ENTRY;
         }
 
+        /* intent will be further used in cases of open()/getattr() */
         if (inode && (it->it_op & (IT_OPEN | IT_GETATTR)))
                 LL_SAVE_INTENT(inode, it);
-/*
-        dentry->d_op = &ll_d_ops;
-        ll_set_dd(dentry);
 
-        if (dentry == saved)
-                d_add(dentry, inode);
-*/
         child->p_base->pb_ino = inode;
 
         RETURN(0);
@@ -439,9 +347,6 @@ struct inode *llu_inode_from_lock(struct ldlm_lock *lock)
         return inode;
 }
 
-/* XXX */
-#define EXT2_NAME_LEN (255)
-
 static int llu_lookup_it(struct inode *parent, struct pnode *pnode,
                          struct lookup_intent *it, int flags)
 {
@@ -453,20 +358,10 @@ static int llu_lookup_it(struct inode *parent, struct pnode *pnode,
         int rc;
         ENTRY;
 
+#define EXT2_NAME_LEN (255) /* XXX */
+
         if (pnode->p_base->pb_name.len > EXT2_NAME_LEN)
                 RETURN(-ENAMETOOLONG);
-
-
-/*
-        CDEBUG(D_VFSTRACE, "VFS Op:name=%s,dir=%lu/%u(%p),intent=%s\n",
-               dentry->d_name.name, parent->i_ino, parent->i_generation,
-               parent, LL_IT2STR(it));
-
-        if (d_mountpoint(dentry))
-                CERROR("Tell Peter, lookup on mtpt, it %s\n", LL_IT2STR(it));
-
-        ll_frob_intent(&it, &lookup_it);
-*/
 
         if (!it) {
                 it = &lookup_it;
@@ -495,12 +390,6 @@ static int llu_lookup_it(struct inode *parent, struct pnode *pnode,
 
         llu_lookup_finish_locks(it, pnode);
 
-/*
-        if (dentry == save)
-                GOTO(out, retval = NULL);
-        else
-                GOTO(out, retval = dentry);
-*/
  out:
         if (req)
                 ptlrpc_req_finished(req);
@@ -555,12 +444,7 @@ translate_lookup_intent(struct intent *intent, const char *path)
                 it->it_flags |= fmode;
         }
 
-        /*
-        else if (intent->int_opmask & INT_CREAT)
-                it->it_op |= IT_LOOKUP;
-         */
-
-        /* FIXME libsysio has strange code on intent handling,
+        /* XXX libsysio has strange code on intent handling,
          * more check later */
         if (it->it_flags & O_CREAT) {
                 it->it_op |= IT_CREAT;
@@ -569,9 +453,8 @@ translate_lookup_intent(struct intent *intent, const char *path)
 
         if (intent->int_opmask & INT_GETATTR)
                 it->it_op |= IT_GETATTR;
-        /* XXX */
-        if (intent->int_opmask & INT_SETATTR)
-                LBUG();
+
+        LASSERT(!(intent->int_opmask & INT_SETATTR));
 
         /* libsysio is different to linux vfs when doing unlink/rmdir,
          * INT_UPDPARENT was passed down during name resolution. Here
