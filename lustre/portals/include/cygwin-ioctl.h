@@ -1,5 +1,4 @@
-/* $Id: cygwin-ioctl.h,v 1.1.2.1 2003/08/19 12:08:49 ericm Exp $
- *
+/*
  * linux/ioctl.h for Linux by H.H. Bergman.
  */
 
