@@ -3,7 +3,7 @@
  *
  * Lustre Lite I/O Page Cache
  *
- * Copyright (C) 2002 Cluster File Systems, Inc. 
+ * Copyright (C) 2002 Cluster File Systems, Inc.
  */
 
 #include <linux/config.h>
@@ -37,14 +37,15 @@
 /* SYNCHRONOUS I/O to object storage for an inode */
 static int ll_brw(int rw, struct inode *inode, struct page *page, int create)
 {
-        struct ll_inode_info *lii = ll_i2info(inode);
-        struct lov_stripe_md *md = lii->lli_smd;
-        struct brw_page pg; 
-        int              err;
+        struct ll_inode_info *lli = ll_i2info(inode);
+        struct lov_stripe_md *md = lli->lli_smd;
+        struct brw_page pg;
+        int err;
         struct io_cb_data *cbd = ll_init_cb();
         ENTRY;
-        if (!cbd) 
-                RETURN(-ENOMEM); 
+
+        if (!cbd)
+                RETURN(-ENOMEM);
 
         pg.pg = page;
         pg.count = PAGE_SIZE;
@@ -52,6 +53,7 @@ static int ll_brw(int rw, struct inode *inode, struct page *page, int create)
         pg.flag = create ? OBD_BRW_CREATE : 0;
 
         err = obd_brw(rw, ll_i2obdconn(inode), md, 1, &pg, ll_sync_io_cb, cbd);
+
         RETURN(err);
 } /* ll_brw */
 
@@ -94,8 +96,8 @@ static int ll_prepare_write(struct file *file, struct page *page, unsigned from,
         //obd_off offset = ((obd_off)page->index) << PAGE_SHIFT;
         int rc = 0;
         char *addr;
-        ENTRY; 
-        
+        ENTRY;
+
         addr = kmap(page);
         if (!PageLocked(page))
                 LBUG();
@@ -109,7 +111,7 @@ static int ll_prepare_write(struct file *file, struct page *page, unsigned from,
          * to date until commit_write */
         if (from == 0 && to == PAGE_SIZE)
                 RETURN(0);
-        
+
         /* prepare write should not read what lies beyond the end of
            the file */
         rc = ll_brw(OBD_BRW_READ, inode, page, 0);
@@ -139,7 +141,7 @@ static int ll_writepage(struct page *page)
         } else {
                 CERROR("ll_brw failure %d\n", err);
         }
-        UnlockPage(page); 
+        UnlockPage(page);
         RETURN(err);
 }
 
@@ -151,8 +153,8 @@ static int ll_commit_write(struct file *file, struct page *page,
 {
         int create = 1;
         struct inode *inode = page->mapping->host;
-        struct ll_inode_info *lii = ll_i2info(inode);
-        struct lov_stripe_md *md = lii->lli_smd;
+        struct ll_inode_info *lli = ll_i2info(inode);
+        struct lov_stripe_md *md = lli->lli_smd;
         struct brw_page pg;
         int err;
         struct iattr iattr;
@@ -179,9 +181,6 @@ static int ll_commit_write(struct file *file, struct page *page,
                       1, &pg, ll_sync_io_cb, cbd);
         kunmap(page);
 
-        if (err)
-                GOTO(out, err);
-
         iattr.ia_size = pg.off + pg.count;
         if (iattr.ia_size > inode->i_size) {
                 /* do NOT truncate when writing in the middle of a file */
@@ -195,7 +194,6 @@ static int ll_commit_write(struct file *file, struct page *page,
                 }
 #endif
         }
-out:
         RETURN(err);
 } /* ll_commit_write */
 
@@ -206,7 +204,7 @@ void ll_truncate(struct inode *inode)
         int err;
         ENTRY;
 
-        if (!md) { 
+        if (!md) {
                 /* object not yet allocated */
                 inode->i_mtime = inode->i_ctime = CURRENT_TIME;
                 return;
@@ -238,8 +236,8 @@ int ll_direct_IO(int rw, struct inode *inode, struct kiobuf *iobuf,
                  unsigned long blocknr, int blocksize)
 {
         obd_count        bufs_per_obdo = iobuf->nr_pages;
-        struct ll_inode_info *lii = ll_i2info(inode);
-        struct lov_stripe_md *md = lii->lli_smd;
+        struct ll_inode_info *lli = ll_i2info(inode);
+        struct lov_stripe_md *md = lli->lli_smd;
         struct brw_page *pga;
         int              rc = 0;
         int i;

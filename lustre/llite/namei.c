@@ -418,7 +418,7 @@ static int ll_create(struct inode * dir, struct dentry * dentry, int mode)
         struct obdo oa;
         struct inode *inode;
         struct lov_stripe_md *smd = NULL;
-        struct ll_inode_info *ii = NULL;
+        struct ll_inode_info *lli = NULL;
         ENTRY;
 
         if (dentry->d_it->it_disposition == 0) {
@@ -443,8 +443,8 @@ static int ll_create(struct inode * dir, struct dentry * dentry, int mode)
         }
 
         if (dentry->d_it->it_disposition) {
-                ii = ll_i2info(inode);
-                memcpy(&ii->lli_intent_lock_handle,
+                lli = ll_i2info(inode);
+                memcpy(&lli->lli_intent_lock_handle,
                        dentry->d_it->it_lock_handle,
                        sizeof(struct lustre_handle));
                 d_instantiate(dentry, inode);
@@ -456,9 +456,9 @@ static int ll_create(struct inode * dir, struct dentry * dentry, int mode)
         RETURN(rc);
 
 out_destroy:
-#warning AED: verify that smd is set here
         if (smd) {
                 oa.o_easize = smd->lmd_easize;
+                oa.o_valid |= OBD_MD_FLEASIZE;
                 err = obd_destroy(ll_i2obdconn(dir), &oa, smd);
                 if (err)
                         CERROR("error destroying objid %Ld on error: err %d\n",
@@ -494,8 +494,9 @@ static int ll_symlink(struct inode *dir, struct dentry *dentry,
 {
         unsigned l = strlen(symname);
         struct inode *inode;
-        struct ll_inode_info *oinfo;
+        struct ll_inode_info *lli;
         int err = 0;
+        ENTRY;
 
         inode = ll_create_node(dir, dentry->d_name.name, dentry->d_name.len,
                                symname, l, S_IFLNK | S_IRWXUGO, 0,
@@ -503,13 +504,16 @@ static int ll_symlink(struct inode *dir, struct dentry *dentry,
         if (IS_ERR(inode))
                 RETURN(PTR_ERR(inode));
 
-        oinfo = ll_i2info(inode);
+        lli = ll_i2info(inode);
 
-        OBD_ALLOC(oinfo->lli_symlink_name, l + 1);
-        if (!oinfo->lli_symlink_name)
+        OBD_ALLOC(lli->lli_symlink_name, l + 1);
+        /* this _could_ be a non-fatal error, since the symlink is already
+         * stored on the MDS by this point, and we can re-get it in readlink.
+         */
+        if (!lli->lli_symlink_name)
                 RETURN(-ENOMEM);
 
-        memcpy(oinfo->lli_symlink_name, symname, l + 1);
+        memcpy(lli->lli_symlink_name, symname, l + 1);
         inode->i_size = l;
 
         /* no directory data updates when intents rule */
@@ -518,7 +522,7 @@ static int ll_symlink(struct inode *dir, struct dentry *dentry,
         else
                 err = ext2_add_nondir(dentry, inode);
 
-        return err;
+        RETURN(err);
 }
 
 static int ll_link(struct dentry *old_dentry, struct inode * dir,
@@ -602,8 +606,6 @@ static int ll_common_unlink(struct inode *dir, struct dentry *dentry,
 
         if (dentry->d_it && dentry->d_it->it_disposition) {
                 err = dentry->d_it->it_status;
-                if (!err)
-                        inode->i_nlink = 0;
                 GOTO(out, err);
         }
 
@@ -621,8 +623,8 @@ static int ll_common_unlink(struct inode *dir, struct dentry *dentry,
                 goto out;
 
         inode->i_ctime = dir->i_ctime;
-        ext2_dec_count(inode);
 out:
+        ext2_dec_count(inode);
         return err;
 }
 

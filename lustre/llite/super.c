@@ -440,10 +440,10 @@ static void ll_read_inode2(struct inode *inode, void *opaque)
 {
         struct ll_inode_md *md = opaque;
         struct mds_body *body = md->body;
-        struct ll_inode_info *ii = ll_i2info(inode);
+        struct ll_inode_info *lli = ll_i2info(inode);
         ENTRY;
 
-        sema_init(&ii->lli_open_sem, 1);
+        sema_init(&lli->lli_open_sem, 1);
 
         /* core attributes first */
         if (body->valid & OBD_MD_FLID)
@@ -481,23 +481,23 @@ static void ll_read_inode2(struct inode *inode, void *opaque)
                                inode->i_ino);
                         LBUG();
                 }
-                size = sizeof(*ii->lli_smd) +
+                size = sizeof(*lli->lli_smd) +
                         md->md->lmd_stripe_count * sizeof(struct lov_oinfo);
-                OBD_ALLOC(ii->lli_smd, size);
-                if (!ii->lli_smd) {
+                OBD_ALLOC(lli->lli_smd, size);
+                if (!lli->lli_smd) {
                         CERROR("No memory for %d\n", size);
                         LBUG();
                 }
-                lov_unpackmd(ii->lli_smd, smd);
+                lov_unpackmd(lli->lli_smd, smd);
         } else {
-                ii->lli_smd = NULL;
+                lli->lli_smd = NULL;
         }
 
         /* Get the authoritative file size */
-        if (ii->lli_smd && (inode->i_mode & S_IFREG)) {
+        if (lli->lli_smd && (inode->i_mode & S_IFREG)) {
                 int rc;
 
-                rc = ll_file_size(inode, ii->lli_smd, &inode->i_size);
+                rc = ll_file_size(inode, lli->lli_smd, &inode->i_size);
                 if (rc) {
                         CERROR("ll_file_size: %d\n", rc);
                         /* FIXME: need to somehow prevent inode creation */
