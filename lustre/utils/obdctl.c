@@ -38,7 +38,6 @@
 #include <netinet/in.h>
 #include <errno.h>
 #include <string.h>
-#include <linux/module.h>
 
 #define __KERNEL__
 #include <linux/list.h>
@@ -444,53 +443,6 @@ static int jt_getattr(int argc, char **argv)
 	return 0;
 }
 
-static int jt_modules(int argc, char **argv)
-{
-        char *modules[] = {"portals", "ksocknal", "obdclass", "ptlrpc",
-                           "obdext2", "ost", "osc", "mds", "mdc", "llight",
-                           "obdecho", NULL};
-        char *paths[] = {"portals/linux/oslib", "portals/linux/socknal",
-                         "obd/class", "obd/rpc", "obd/ext2obd", "obd/ost",
-                         "obd/osc", "obd/mds", "obd/mdc", "obd/llight",
-                        "obd/obdecho", NULL};
-        char *path = "..";
-        char *kernel = "linux";
-        int i;
-
-        if (argc >= 2)
-                path = argv[1];
-        if (argc == 3) 
-                kernel = argv[2];
-        if (argc > 3) {
-                printf("%s [path] [kernel]\n", argv[0]);
-                return 0;
-        }
-
-        printf("symbol-file\nsymbol-file %s\nb panic\nb stop\n", kernel); 
-
-        for (i = 0; modules[i] != NULL; i++) {
-                struct module_info info;
-                int rc;
-                size_t crap;
-                int query_module(const char *name, int which, void *buf,
-                                 size_t bufsize, size_t *ret);
-
-                rc = query_module(modules[i], QM_INFO, &info, sizeof(info),
-                                  &crap);
-                if (rc < 0) {
-                        if (errno != ENOENT)
-                                printf("query_module(%s) failed: %s\n",
-                                       modules[i], strerror(errno));
-                } else {
-                        printf("add-symbol-file %s/%s/%s.o 0x%0lx\n", path,
-                               paths[i], modules[i],
-                               info.addr + sizeof(struct module));
-                }
-        }
-
-        return 0;
-}
-
 command_t list[] = {
 	{"device", jt_device, 0, "set current device (args device no)"},
         {"attach", jt_attach, 0, "name the typed of device (args: type data"},
@@ -504,7 +456,6 @@ command_t list[] = {
         {"setattr", jt_setattr, 0, "setattr id mode"},
         {"connect", jt_connect, 0, "connect - get a connection to device"},
         {"disconnect", jt_disconnect, 0, "disconnect - break connection to device"},
-        {"modules", jt_modules, 0, "provide gdb-friendly module info (arg: <path>)"},
         {"help", Parser_help, 0, "help"},
         {"exit", Parser_quit, 0, "quit"},
         {"quit", Parser_quit, 0, "quit"},
