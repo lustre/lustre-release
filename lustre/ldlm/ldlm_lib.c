@@ -91,17 +91,14 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
                 RETURN(-EINVAL);
         }
 
-
         sema_init(&cli->cl_sem, 1);
         cli->cl_conn_count = 0;
-        memcpy(server_uuid.uuid, lcfg->lcfg_inlbuf2, MIN(lcfg->lcfg_inllen2,
+        memcpy(server_uuid.uuid, lcfg->lcfg_inlbuf2, min(lcfg->lcfg_inllen2,
                                                         sizeof(server_uuid)));
 
-        init_MUTEX(&cli->cl_dirty_sem);
         cli->cl_dirty = 0;
-        cli->cl_dirty_granted = 0;
+        cli->cl_avail_grant = 0;
         cli->cl_dirty_max = OSC_MAX_DIRTY_DEFAULT * 1024 * 1024;
-        cli->cl_ost_can_grant = 1;
         INIT_LIST_HEAD(&cli->cl_cache_waiters);
         INIT_LIST_HEAD(&cli->cl_loi_ready_list);
         INIT_LIST_HEAD(&cli->cl_loi_write_list);
@@ -472,6 +469,7 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
                 }
         }
 
+
         /* If all else goes well, this is our RPC return code. */
         req->rq_status = 0;
 
@@ -561,7 +559,8 @@ void target_destroy_export(struct obd_export *exp)
 
         /* We cancel locks at disconnect time, but this will catch any locks
          * granted in a race with recovery-induced disconnect. */
-        ldlm_cancel_locks_for_export(exp);
+        if (exp->exp_obd->obd_namespace != NULL)
+                ldlm_cancel_locks_for_export(exp);
 }
 
 /*
