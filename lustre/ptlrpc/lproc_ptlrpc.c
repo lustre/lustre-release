@@ -50,7 +50,7 @@ struct ll_rpc_opcode {
         { OST_SAN_READ,     "ost_san_read" },
         { OST_SAN_WRITE,    "ost_san_write" },
         { OST_SYNCFS,       "ost_syncfs" },
-        { OST_LOG_CANCEL,   "ost_log_cancel" },
+        { OST_SET_INFO,     "ost_set_info" },
         { MDS_GETATTR,      "mds_getattr" },
         { MDS_GETATTR_NAME, "mds_getattr_name" },
         { MDS_CLOSE,        "mds_close" },
@@ -70,7 +70,8 @@ struct ll_rpc_opcode {
         { PTLBD_READ,       "ptlbd_read" },
         { PTLBD_WRITE,      "ptlbd_write" },
         { PTLBD_FLUSH,      "ptlbd_flush" },
-        { OBD_PING,         "obd_ping" }
+        { OBD_PING,         "obd_ping" },
+        { OBD_LOG_CANCEL,   "obd_log_cancel" }
 };
 
 const char* ll_opcode2str(__u32 opcode)
@@ -126,11 +127,11 @@ void ptlrpc_lprocfs_register_service(struct obd_device *obddev,
                              "svc_eqdepth", "reqs");
         /* no stddev on idletime */
         LPROCFS_COUNTER_INIT(&svc_cntrs->cntr[PTLRPC_SVCIDLETIME_CNTR],
-                             (LPROCFS_CNTR_EXTERNALLOCK | LPROCFS_CNTR_AVGMINMAX),
+                           (LPROCFS_CNTR_EXTERNALLOCK | LPROCFS_CNTR_AVGMINMAX),
                              &svc->srv_lock, "svc_idletime", "cycles");
-        for (i=0; i < LUSTRE_MAX_OPCODES; i++) {
+        for (i = 0; i < LUSTRE_MAX_OPCODES; i++) {
                 __u32 opcode = ll_rpc_opcode_table[i].opcode;
-                LPROCFS_COUNTER_INIT(&svc_cntrs->cntr[PTLRPC_LAST_CNTR+i], 
+                LPROCFS_COUNTER_INIT(&svc_cntrs->cntr[PTLRPC_LAST_CNTR + i], 
                                      svc_counter_config, &svc->srv_lock,
                                      ll_opcode2str(opcode), "cycles");
         }
