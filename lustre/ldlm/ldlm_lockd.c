@@ -177,7 +177,6 @@ static int ldlm_handle_callback(struct ptlrpc_service *svc,
                           struct ptlrpc_request *req)
 {
         struct ldlm_request *dlm_req;
-        struct ldlm_lock_desc desc; 
         struct ldlm_lock_desc *descp; 
         struct ldlm_lock *lock;
         __u64 is_blocking_ast;
@@ -190,20 +189,18 @@ static int ldlm_handle_callback(struct ptlrpc_service *svc,
                 RETURN(-ENOMEM);
         }
         dlm_req = lustre_msg_buf(req->rq_reqmsg, 0);
+        descp = &dlm_req->lock_desc;
 
         /* We must send the reply first, so that the thread is free to handle
          * any requests made in common_callback() */
         rc = ptlrpc_reply(svc, req);
         if (rc != 0)
                 RETURN(rc);
-
+        
         lock = ldlm_handle2lock(&dlm_req->lock_handle1);
-        is_blocking_ast = dlm_req->lock_handle2.addr;
-        if (is_blocking_ast) { 
-                /* FIXME: copy lock information into desc here */
-                descp = &desc;
-        }  else 
-                descp = NULL; 
+        /* check if this is a blocking AST */ 
+        if (!descp->l_req_mode)
+                descp = NULL;
 
         if (!lock) { 
                 CERROR("callback on lock %Lx - lock disappeared\n", 
@@ -214,7 +211,7 @@ static int ldlm_handle_callback(struct ptlrpc_service *svc,
         LDLM_DEBUG(lock, "client %s callback handler START",
                    is_blocking_ast ? "blocked" : "completion");
 
-        if (is_blocking_ast) {
+        if (descp) {
                 int do_ast; 
                 l_lock(&lock->l_resource->lr_namespace->ns_lock);
                 lock->l_flags |= LDLM_FL_CBPENDING;

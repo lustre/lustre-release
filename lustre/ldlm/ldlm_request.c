@@ -139,7 +139,7 @@ int ldlm_cli_enqueue(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
         return rc;
 }
 
-int ldlm_cli_callback(struct ldlm_lock *lock, struct ldlm_lock_desc *new,
+int ldlm_cli_callback(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                       void *data, __u32 data_len, struct ptlrpc_request **reqp)
 {
         struct ldlm_request *body;
@@ -158,16 +158,16 @@ int ldlm_cli_callback(struct ldlm_lock *lock, struct ldlm_lock_desc *new,
         memcpy(&body->lock_handle1, &lock->l_remote_handle,
                sizeof(body->lock_handle1));
 
-        if (new == NULL) {
+        if (desc == NULL) {
                 CDEBUG(D_NET, "Sending granted AST\n");
                 ldlm_lock2desc(lock, &body->lock_desc);
         } else {
                 CDEBUG(D_NET, "Sending blocked AST\n");
-                memcpy(&body->lock_desc, new, sizeof(*new));
+                memcpy(&body->lock_desc, desc, sizeof(*desc));
         }
 
         LDLM_DEBUG(lock, "server preparing %s AST",
-                   new == NULL ? "completion" : "blocked");
+                   desc->l_req_mode = 0 ? "completion" : "blocked");
 
         req->rq_replen = lustre_msg_size(0, NULL);
 
