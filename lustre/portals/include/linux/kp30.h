@@ -282,7 +282,9 @@ do {                                                                          \
 
 #define PORTAL_ALLOC_GFP(ptr, size, mask)                                 \
 do {                                                                      \
-        LASSERT (!in_interrupt());                                        \
+        LASSERT (!in_interrupt() ||                                       \
+                 (size <= PORTAL_VMALLOC_SIZE &&                          \
+                  (mask & __GFP_WAIT) == 0));                             \
         if ((size) > PORTAL_VMALLOC_SIZE)                                 \
                 (ptr) = vmalloc(size);                                    \
         else                                                              \
