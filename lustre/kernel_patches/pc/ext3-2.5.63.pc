@@ -1,4 +1,0 @@
-fs/ext3/xattr.c
-fs/ext3/inode.c
-fs/ext3/super.c
-fs/ext3/xattr.h

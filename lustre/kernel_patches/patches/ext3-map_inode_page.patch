@@ -1,0 +1,84 @@
+
+
+
+ fs/ext3/ext3-exports.c |    3 ++
+ fs/ext3/inode.c        |   55 +++++++++++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 58 insertions(+)
+
+--- linux-2.4.20-l18/fs/ext3/inode.c~ext3-map_inode_page	Tue Jul  8 20:07:23 2003
++++ linux-2.4.20-l18-phil/fs/ext3/inode.c	Wed Jul  9 03:56:41 2003
+@@ -2867,3 +2867,58 @@ int ext3_prep_san_write(struct inode *in
+ 		ret = ret2;
+ 	return ret;
+ }
++
++int ext3_map_inode_page(struct inode *inode, struct page *page,
++                        unsigned long *blocks, int *created, int create)
++{
++        unsigned int blocksize, blocks_per_page;
++        unsigned long iblock;
++        struct buffer_head dummy;
++        void *handle;
++        int i, rc = 0, failed = 0, needed_blocks;
++
++        blocksize = inode->i_sb->s_blocksize;
++        blocks_per_page = PAGE_SIZE >> inode->i_sb->s_blocksize_bits;
++        iblock = page->index >> (PAGE_SHIFT - inode->i_sb->s_blocksize_bits);
++
++        for (i = 0; i < blocks_per_page; i++, iblock++) {
++                blocks[i] = ext3_bmap(inode->i_mapping, iblock);
++                if (blocks[i] == 0) {
++                        failed++;
++                        created[i] = -1;
++                } else {
++                        created[i] = 0;
++                }
++        }
++
++        if (failed == 0 || create == 0)
++                return 0;
++
++        needed_blocks = ext3_writepage_trans_blocks(inode) * failed;
++        lock_kernel();
++        handle = ext3_journal_start(inode, needed_blocks);
++        unlock_kernel();
++        if (IS_ERR(handle))
++                return PTR_ERR(handle);
++
++        iblock = page->index >> (PAGE_SHIFT - inode->i_sb->s_blocksize_bits);
++        for (i = 0; i < blocks_per_page; i++, iblock++) {
++                if (blocks[i] != 0)
++                        continue;
++
++                rc = ext3_get_block_handle(handle, inode, iblock, &dummy, 1);
++                if (rc) {
++                        printk(KERN_INFO "ext3_map_inode_page: error reading "
++                               "block %ld\n", iblock);
++                        goto out;
++                }
++                blocks[i] = dummy.b_blocknr;
++                created[i] = 1;
++        }
++
++ out:
++	lock_kernel();
++	ext3_journal_stop(handle, inode);
++	unlock_kernel();
++        return rc;
++}
+--- linux-2.4.20-l18/fs/ext3/ext3-exports.c~ext3-map_inode_page	Tue Jul  8 20:07:10 2003
++++ linux-2.4.20-l18-phil/fs/ext3/ext3-exports.c	Tue Jul  8 20:09:02 2003
+@@ -9,6 +9,8 @@
+ 
+ int ext3_prep_san_write(struct inode *inode, long *blocks,
+ 	                int nblocks, loff_t newsize);
++int ext3_map_inode_page(struct inode *inode, struct page *page,
++                        unsigned long *block, int *created, int create);
+ 
+ EXPORT_SYMBOL(ext3_force_commit);
+ EXPORT_SYMBOL(ext3_bread);
+@@ -18,3 +20,4 @@ EXPORT_SYMBOL(ext3_xattr_get);
+ EXPORT_SYMBOL(ext3_xattr_list);
+ EXPORT_SYMBOL(ext3_xattr_set);
+ EXPORT_SYMBOL(ext3_prep_san_write);
++EXPORT_SYMBOL(ext3_map_inode_page);

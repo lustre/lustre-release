@@ -1,0 +1,12 @@
+fs/exec.c
+fs/dcache.c
+fs/namespace.c
+fs/namei.c
+fs/open.c
+fs/stat.c
+fs/proc/base.c
+include/linux/dcache.h
+include/linux/fs.h
+kernel/fork.c
+kernel/exit.c
+kernel/ksyms.c
