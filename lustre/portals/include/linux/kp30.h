@@ -223,14 +223,6 @@ do {                                                                    \
         portals_run_lbug_upcall(file, func, line);                      \
         panic("LBUG");                                                  \
 } while (0)
-
-#define LBUG()                                                          \
-do {                                                                    \
-        CEMERG("LBUG - trying to dump log to /tmp/lustre-log\n");       \
-        portals_debug_dumplog();                                        \
-        portals_run_lbug_upcall(__FILE__, __FUNCTION__, __LINE__);      \
-        panic("LBUG");                                                  \
-} while (0)
 #else
 #define LBUG_WITH_LOC(file, func, line)                                 \
 do {                                                                    \
@@ -240,16 +232,9 @@ do {                                                                    \
         set_task_state(current, TASK_UNINTERRUPTIBLE);                  \
         schedule();                                                     \
 } while (0)
-
-#define LBUG()                                                          \
-do {                                                                    \
-        CEMERG("LBUG\n");                                               \
-        portals_debug_dumplog();                                        \
-        portals_run_lbug_upcall(__FILE__, __FUNCTION__, __LINE__);      \
-        set_task_state(current, TASK_UNINTERRUPTIBLE);                  \
-        schedule();                                                     \
-} while (0)
 #endif /* __arch_um__ */
+
+#define LBUG() LBUG_WITH_LOC(__FILE__, __FUNCTION__, __LINE__)
 
 /*
  * Memory
