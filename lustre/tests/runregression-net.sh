@@ -50,7 +50,7 @@ runthreads() {
 	fi
 }
 
-[ -z "$OID" ] && OID=`lctl --device \\$$ECHONAME create 1 | awk '/is object id/ { print $6 }'`
+[ -z "$OID" ] && OID=`lctl --device \\$$ECHONAME create 1 | awk '/is object id/ { print $6 }'` && echo "created object $OID"
 [ -z "$OID" ] && echo "error creating object" 1>&2 && exit 1
 
 # TODO: obdctl needs to check on the progress of each forked thread
@@ -63,11 +63,11 @@ for CMD in test_getattr test_brw_write test_brw_read; do
 		;;
 	test_brw_write)
 		PG=1
-		PGV=16
+		PGV=${PGV:-16}
 		;;
 	test_brw_read)
 		PG=1
-		PGV=16
+		PGV=${PGV:-16}
 		;;
 	esac
 
@@ -76,8 +76,7 @@ for CMD in test_getattr test_brw_write test_brw_read; do
 	runthreads 1 $CMD 1 1 $PG
 	runthreads 1 $CMD 100 1 $PG
 
-	debug_server_off
-	debug_client_off
+	echo 0 > /proc/sys/portals/debug
 	runthreads 1 $CMD $COUNT_100 -10 $PG
 	[ "$PGV" ] && runthreads 1 $CMD $COUNT_1000 -10 $PGV
 
