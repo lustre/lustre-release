@@ -685,6 +685,8 @@ class Module:
 
     def cleanup(self):
         """ default cleanup, used for most modules """
+        if not is_prepared(self.uuid):
+            return
         self.info()
         srv = self.get_server()
         if srv and local_net(srv):
@@ -855,6 +857,8 @@ class LDLM(Module):
         Module.__init__(self, 'LDLM', dom_node)
         self.add_module('lustre/ldlm', 'ldlm')
     def prepare(self):
+        if is_prepared(self.uuid):
+            return
         self.info()
         lctl.newdev(attach="ldlm %s %s" % (self.name, self.uuid),
                     setup ="")
@@ -877,6 +881,8 @@ class LOV(Module):
         self.add_module('lustre/lov', 'lov')
 
     def prepare(self):
+        if is_prepared(self.uuid):
+            return
         for osc_uuid in self.devlist:
             osc = lookup(self.dom_node.parentNode, osc_uuid)
             if osc:
@@ -891,6 +897,8 @@ class LOV(Module):
                     setup ="%s" % (mdc_uuid))
 
     def cleanup(self):
+        if not is_prepared(self.uuid):
+            return
         for osc_uuid in self.devlist:
             osc = lookup(self.dom_node.parentNode, osc_uuid)
             if osc:
@@ -958,6 +966,8 @@ class MDS(Module):
         self.add_module('lustre/mds', 'mds_%s' % (self.fstype))
             
     def prepare(self):
+        if is_prepared(self.uuid):
+            return
         self.info(self.devname, self.fstype, self.format)
         blkdev = block_dev(self.devname, self.size, self.fstype, self.format)
         if not is_prepared('MDT_UUID'):
@@ -973,6 +983,8 @@ class MDS(Module):
                 print "cleanup failed: ", self.name
                 e.dump()
                 cleanup_error(e.rc)
+        if not is_prepared(self.uuid):
+            return
         Module.cleanup(self)
         clean_loop(self.devname)
 
@@ -995,6 +1007,8 @@ class MDC(Module):
         self.add_module('lustre/mdc', 'mdc')
 
     def prepare(self):
+        if is_prepared(self.uuid):
+            return
         self.info(self.mds.uuid)
         srv = self.get_server()
         lctl.connect(srv.net_type, srv.nid, srv.port, srv.uuid, srv.send_mem, srv.recv_mem)
@@ -1017,6 +1031,8 @@ class OBD(Module):
     # formatting anything.
     # FIXME: check if device is already formatted.
     def prepare(self):
+        if is_prepared(self.uuid):
+            return
         self.info(self.obdtype, self.devname, self.size, self.fstype, self.format)
         if self.obdtype == 'obdecho':
             blkdev = ''
@@ -1025,6 +1041,8 @@ class OBD(Module):
         lctl.newdev(attach="%s %s %s" % (self.obdtype, self.name, self.uuid),
                     setup ="%s %s" %(blkdev, self.fstype))
     def cleanup(self):
+        if not is_prepared(self.uuid):
+            return
         Module.cleanup(self)
         if not self.obdtype == 'obdecho':
             clean_loop(self.devname)
@@ -1036,6 +1054,8 @@ class OST(Module):
         self.add_module('lustre/ost', 'ost')
 
     def prepare(self):
+        if is_prepared(self.uuid):
+            return
         self.info(self.obd_uuid)
         lctl.newdev(attach="ost %s %s" % (self.name, self.uuid),
                     setup ="%s" % (self.obd_uuid))
@@ -1068,6 +1088,8 @@ class OSC(Module):
         self.add_module('lustre/osc', 'osc')
 
     def prepare(self):
+        if is_prepared(self.uuid):
+            return
         self.info(self.obd_uuid, self.ost_uuid)
         srv = self.get_server()
         if local_net(srv):
@@ -1083,6 +1105,8 @@ class OSC(Module):
                     setup ="%s %s" %(self.obd_uuid, srv.uuid))
 
     def cleanup(self):
+        if not is_prepared(self.uuid):
+            return
         srv = self.get_server()
         if local_net(srv):
             Module.cleanup(self)
