@@ -5,7 +5,7 @@ use Getopt::Long;
 
 sub usage () {
     print "Usage: $0 <mount point prefix> <iterations>\n";
-    print "example: $0 --count=2 /mnt/lustre 2 50\n";
+    print "example: $0 --count=2 /mnt/lustre 50\n";
     print "         will test in /mnt/lustre1 and /mnt/lustre2\n";
     print "         $0 --count=0 /mnt/lustre 50\n";
     print "         will test in /mnt/lustre only\n";
