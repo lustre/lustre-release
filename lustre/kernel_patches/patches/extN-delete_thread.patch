@@ -1,6 +1,8 @@
---- linux/include/linux/ext3_fs.h.orig	Fri Mar 14 18:09:02 2003
-+++ linux/include/linux/ext3_fs.h	Fri Mar 14 18:10:20 2003
-@@ -190,7 +192,8 @@
+ 0 files changed
+
+--- linux-2.4.18-p4smp-61chaos/include/linux/ext3_fs.h~extN-delete_thread	2003-05-29 10:19:15.000000000 +0800
++++ linux-2.4.18-p4smp-61chaos-root/include/linux/ext3_fs.h	2003-05-29 10:50:04.000000000 +0800
+@@ -190,6 +190,7 @@ struct ext3_group_desc
   */
  #define EXT3_STATE_JDATA		0x00000001 /* journaled data exists */
  #define EXT3_STATE_NEW			0x00000002 /* inode is newly created */
@@ -8,8 +10,8 @@
  
  /*
   * ioctl commands
---- linux/include/linux/ext3_fs_sb.h.orig	Tue Feb 11 16:34:33 2003
-+++ linux/include/linux/ext3_fs_sb.h	Mon Mar 10 14:42:07 2003
+--- linux-2.4.18-p4smp-61chaos/include/linux/ext3_fs_sb.h~extN-delete_thread	2003-05-29 10:19:15.000000000 +0800
++++ linux-2.4.18-p4smp-61chaos-root/include/linux/ext3_fs_sb.h	2003-05-29 10:50:04.000000000 +0800
 @@ -29,6 +29,8 @@
  
  #define EXT3_MAX_GROUP_LOADED	32
@@ -19,7 +21,7 @@
  /*
   * third extended-fs super-block data in memory
   */
-@@ -73,7 +75,15 @@
+@@ -74,6 +76,14 @@ struct ext3_sb_info {
  	struct timer_list turn_ro_timer;	/* For turning read-only (crash simulation) */
  	wait_queue_head_t ro_wait_queue;	/* For people waiting for the fs to go read-only */
  #endif
@@ -34,9 +36,9 @@
  };
  
  #endif	/* _LINUX_EXT3_FS_SB */
---- linux/fs/ext3/super.c.orig	Wed Mar 12 14:05:30 2003
-+++ linux/fs/ext3/super.c	Thu Mar 13 19:05:26 2003
-@@ -396,6 +396,207 @@
+--- linux-2.4.18-p4smp-61chaos/fs/ext3/super.c~extN-delete_thread	2003-05-29 10:19:15.000000000 +0800
++++ linux-2.4.18-p4smp-61chaos-root/fs/ext3/super.c	2003-05-29 10:50:04.000000000 +0800
+@@ -398,6 +398,207 @@ static void dump_orphan_list(struct supe
  	}
  }
  
@@ -244,7 +246,7 @@
  void ext3_put_super (struct super_block * sb)
  {
  	struct ext3_sb_info *sbi = EXT3_SB(sb);
-@@ -403,6 +578,7 @@
+@@ -405,6 +606,7 @@ void ext3_put_super (struct super_block 
  	kdev_t j_dev = sbi->s_journal->j_dev;
  	int i;
  
@@ -252,7 +254,7 @@
  	ext3_xattr_put_super(sb);
  	journal_destroy(sbi->s_journal);
  	if (!(sb->s_flags & MS_RDONLY)) {
-@@ -451,7 +627,11 @@
+@@ -453,7 +655,11 @@ static struct super_operations ext3_sops
  	write_inode:	ext3_write_inode,	/* BKL not held.  Don't need */
  	dirty_inode:	ext3_dirty_inode,	/* BKL not held.  We take it */
  	put_inode:	ext3_put_inode,		/* BKL not held.  Don't need */
@@ -263,8 +265,8 @@
 +#endif
  	put_super:	ext3_put_super,		/* BKL held */
  	write_super:	ext3_write_super,	/* BKL held */
- 	write_super_lockfs: ext3_write_super_lockfs, /* BKL not held. Take it */
-@@ -1205,6 +1385,7 @@
+ 	sync_fs:	ext3_sync_fs,
+@@ -1209,6 +1415,7 @@ struct super_block * ext3_read_super (st
  	}
  
  	ext3_setup_super (sb, es, sb->s_flags & MS_RDONLY);
@@ -272,3 +274,5 @@
  	/*
  	 * akpm: core read_super() calls in here with the superblock locked.
  	 * That deadlocks, because orphan cleanup needs to lock the superblock
+
+_
