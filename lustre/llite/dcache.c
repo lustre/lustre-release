@@ -35,6 +35,7 @@ void ll_intent_release(struct dentry *de)
         CDEBUG(D_INFO, "calling ldlm_lock_decref(%p, %d)\n", lock,
                de->d_it->it_lock_mode);
         ldlm_lock_decref(lock, de->d_it->it_lock_mode);
+        de->d_it = NULL;
         EXIT;
 }
 
