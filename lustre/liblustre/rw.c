@@ -116,14 +116,9 @@ static int llu_brw(int cmd, struct inode *inode, struct page *page, int flags)
 {
         struct llu_inode_info *lli = llu_i2info(inode);
         struct lov_stripe_md *lsm = lli->lli_smd;
-        struct obd_brw_set *set;
         struct brw_page pg;
         int rc;
         ENTRY;
-
-        set = obd_brw_set_new();
-        if (set == NULL)
-                RETURN(-ENOMEM);
 
         pg.pg = page;
         pg.off = ((obd_off)page->index) << PAGE_SHIFT;
@@ -145,17 +140,10 @@ static int llu_brw(int cmd, struct inode *inode, struct page *page, int flags)
 
         pg.flag = flags;
 
-        set->brw_callback = ll_brw_sync_wait;
         rc = obd_brw(cmd, llu_i2obdconn(inode), lsm, 1, &pg, set, NULL);
         if (rc) {
-                if (rc != -EIO)
-                        CERROR("error from obd_brw: rc = %d\n", rc);
-        } else {
-                rc = ll_brw_sync_wait(set, CB_PHASE_START);
-                if (rc)
-                        CERROR("error from callback: rc = %d\n", rc);
+                CERROR("error from obd_brw: rc = %d\n", rc);
         }
-        obd_brw_set_decref(set);
 
         RETURN(rc);
 }

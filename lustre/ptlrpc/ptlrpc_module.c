@@ -38,6 +38,7 @@
 
 extern int ptlrpc_init_portals(void);
 extern void ptlrpc_exit_portals(void);
+static int ldlm_hooks_referenced = 0;
 
 int (*ptlrpc_ldlm_namespace_cleanup)(struct ldlm_namespace *, int);
 int (*ptlrpc_ldlm_replay_locks)(struct obd_import *);
@@ -78,6 +79,9 @@ if (ptlrpc_##hook) {                                                           \
 void ptlrpc_put_ldlm_hooks(void)
 {
         ENTRY;
+        if (!ldlm_hooks_referenced)
+                return;
+
         PUT_HOOK(ldlm_namespace_cleanup);
         PUT_HOOK(ldlm_replay_locks);
         ldlm_hooks_referenced = 0;
@@ -125,19 +129,14 @@ EXPORT_SYMBOL(ptlrpc_cleanup_connection);
 /* niobuf.c */
 EXPORT_SYMBOL(ptlrpc_bulk_put);
 EXPORT_SYMBOL(ptlrpc_bulk_get);
-EXPORT_SYMBOL(ptlrpc_register_bulk_put);
-EXPORT_SYMBOL(ptlrpc_register_bulk_get);
 EXPORT_SYMBOL(ptlrpc_abort_bulk);
+EXPORT_SYMBOL(ptlrpc_register_bulk);
+EXPORT_SYMBOL(ptlrpc_unregister_bulk);
 EXPORT_SYMBOL(ptlrpc_reply);
 EXPORT_SYMBOL(ptlrpc_error);
 EXPORT_SYMBOL(ptlrpc_resend_req);
 EXPORT_SYMBOL(ptl_send_rpc);
 EXPORT_SYMBOL(ptlrpc_link_svc_me);
-EXPORT_SYMBOL(obd_brw_set_new);
-EXPORT_SYMBOL(obd_brw_set_add);
-EXPORT_SYMBOL(obd_brw_set_del);
-EXPORT_SYMBOL(obd_brw_set_decref);
-EXPORT_SYMBOL(obd_brw_set_addref);
 
 /* client.c */
 EXPORT_SYMBOL(ptlrpc_init_client);
@@ -149,7 +148,7 @@ EXPORT_SYMBOL(ptlrpc_replay_req);
 EXPORT_SYMBOL(ptlrpc_restart_req);
 EXPORT_SYMBOL(ptlrpc_prep_req);
 EXPORT_SYMBOL(ptlrpc_free_req);
-EXPORT_SYMBOL(ptlrpc_abort);
+EXPORT_SYMBOL(ptlrpc_unregister_reply);
 EXPORT_SYMBOL(ptlrpc_req_finished);
 EXPORT_SYMBOL(ptlrpc_request_addref);
 EXPORT_SYMBOL(ptlrpc_prep_bulk_imp);
@@ -157,16 +156,14 @@ EXPORT_SYMBOL(ptlrpc_prep_bulk_exp);
 EXPORT_SYMBOL(ptlrpc_free_bulk);
 EXPORT_SYMBOL(ptlrpc_prep_bulk_page);
 EXPORT_SYMBOL(ptlrpc_free_bulk_page);
-EXPORT_SYMBOL(ll_brw_sync_wait);
 EXPORT_SYMBOL(ptlrpc_abort_inflight);
 EXPORT_SYMBOL(ptlrpc_retain_replayable_request);
 EXPORT_SYMBOL(ptlrpc_next_xid);
 
 EXPORT_SYMBOL(ptlrpc_prep_set);
-EXPORT_SYMBOL(ptlrpc_drop_set);
 EXPORT_SYMBOL(ptlrpc_set_add_req);
-EXPORT_SYMBOL(ptlrpc_req_completed);
-EXPORT_SYMBOL(ptlrpc_req_result);
+EXPORT_SYMBOL(ptlrpc_set_destroy);
+EXPORT_SYMBOL(ptlrpc_set_wait);
 
 /* service.c */
 EXPORT_SYMBOL(ptlrpc_init_svc);

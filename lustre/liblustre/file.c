@@ -407,7 +407,9 @@ static int llu_mdc_close(struct lustre_handle *mdc_conn, struct inode *inode)
         /* We held on to the request for replay until we saw a close for that
          * file.  Now that we've closed it, it gets replayed on the basis of
          * its transno only. */
+        spin_lock (&fd->fd_mds_och.och_req->rq_lock);
         fd->fd_mds_och.och_req->rq_replay = 0;
+        spin_unlock (&fd->fd_mds_och.och_req->rq_lock);
 
         if (fd->fd_mds_och.och_req->rq_transno) {
                 /* This open created a file, so it needs replay as a
