@@ -90,8 +90,8 @@ ldlm_flock_enqueue(struct ldlm_lock **reqp, void *req_cookie, int *flags,
         int overlaps = 0;
         ENTRY;
 
-        CDEBUG(D_FLOCK, "flags: 0x%x pid: %d mode: %d start: %llu end: %llu\n",
-               *flags, new->l_data.l_flock.pid, mode,
+        CDEBUG(D_DLMTRACE, "flags: 0x%x pid: %d mode: %d start: %llu "
+               "end: %llu\n", *flags, new->l_data.l_flock.pid, mode,
                req->l_data.l_flock.start, req->l_data.l_flock.end);
 
         *err = ELDLM_OK;
