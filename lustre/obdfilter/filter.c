@@ -1096,6 +1096,7 @@ struct page *filter_get_page_write(struct inode *inode, unsigned long index,
                  * a no-op for most filesystems, because we write the whole
                  * page.  For partial-page I/O this will read in the page.
                  */
+                kmap(page);
                 rc = mapping->a_ops->prepare_write(NULL, page, 0, PAGE_SIZE);
                 if (rc) {
                         CERROR("page index %lu, rc = %d\n", index, rc);
@@ -1109,8 +1110,6 @@ struct page *filter_get_page_write(struct inode *inode, unsigned long index,
                         LBUG();
                         GOTO(err_unlock, rc = -EIO);
                 }
-
-                kmap(page);
         }
         return page;
 
