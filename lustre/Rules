@@ -28,6 +28,8 @@ $(MODULE).o: $($(MODULE)_OBJECTS)
 tags:
 	rm -f $(top_srcdir)/TAGS
 	rm -f $(top_srcdir)/tags
-	find $(top_srcdir) -name '*.[hc]' | grep -v ".orig" | xargs etags -a
-	find $(top_srcdir) -name '*.[hc]' | grep -v ".orig" | xargs ctags -a
+	find $(top_srcdir) -name '*.[hc]' | xargs etags -a
+	CTAGSF=`ctags --version | grep -iq exuberant && \
+		echo "-I __initdata,__exitdata,EXPORT_SYMBOL"`; \
+	find $(top_srcdir) -name '*.[hc]' | xargs ctags $$CTAGSF -a
 
