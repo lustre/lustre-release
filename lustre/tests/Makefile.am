@@ -20,6 +20,7 @@ noinst_PROGRAMS += opendirunlink opendevunlink unlinkmany fchdir_test checkstat
 noinst_PROGRAMS += wantedi statone runas openfile getdents mkdirdeep o_directory
 noinst_PROGRAMS += small_write multiop sleeptest ll_sparseness_verify
 noinst_PROGRAMS += ll_sparseness_write mrename ll_dirstripe_verify
+noinst_PROGRAMS += rename_many
 # noinst_PROGRAMS += ldaptest
 bin_PROGRAMS = mcreate munlink mkdirmany iopentest1 iopentest2
 endif # TESTS
@@ -66,6 +67,7 @@ mkdirdeep_SOURCES = mkdirdeep.c
 mkdirdeep_LDADD=-L$(top_builddir)/portals/utils -lptlctl $(LIBREADLINE)
 small_write_SOURCES = small_write.c
 sleeptest_SOURCES = sleeptest.c
+rename_many_SOURCES = rename_many.c
 #write_append_truncate_SOURCES=write_append_truncate.c
 #write_append_truncate_CC=mpicc
 #createmany_mpi_SOURCES=createmany_mpi.c
