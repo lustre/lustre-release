@@ -1,9 +1,9 @@
 # lustre.spec
-%define version 0.4.4
+%define version 0.5.0
 %define kversion @RELEASE@
 %define linuxdir @LINUX@
 %define portalsdir @PORTALS@
-Release: 3
+Release: 1
 
 Summary: Lustre Lite File System
 Name: lustre-lite
