@@ -208,7 +208,7 @@ int jt_obd_cleanup(int argc, char **argv)
         struct lustre_cfg *lcfg;
         char force = 'F';
         char failover = 'A';
-        char flags[3];
+        char flags[3] = { 0 };
         int flag_cnt = 0, n;
         int rc;
 
@@ -224,7 +224,10 @@ int jt_obd_cleanup(int argc, char **argv)
         if (argc < 1 || argc > 3)
                 return CMD_HELP;
 
-        for (n = 1; n < argc; n++) 
+        /* we are protected from overflowing our buffer by the argc
+         * check above
+         */
+        for (n = 1; n < argc; n++) {
                 if (strcmp(argv[n], "force") == 0) {
                         flags[flag_cnt++] = force;
                 } else if (strcmp(argv[n], "failover") == 0) {
@@ -233,9 +236,10 @@ int jt_obd_cleanup(int argc, char **argv)
                         fprintf(stderr, "unknown option: %s", argv[n]);
                         return CMD_HELP;
                 }
+        }
 
         if (flag_cnt) {
-                lustre_cfg_bufs_set(&bufs, 1, flags, flag_cnt);
+                lustre_cfg_bufs_set_string(&bufs, 1, flags);
         }
 
         lcfg = lustre_cfg_new(LCFG_CLEANUP, &bufs);
