@@ -107,7 +107,7 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         cli->cl_brw_in_flight = 0;
         spin_lock_init(&cli->cl_rpc_concurrency_oh.oh_lock);
         spin_lock_init(&cli->cl_pages_per_rpc_oh.oh_lock);
-        cli->cl_max_pages_per_rpc = PTL_MD_MAX_IOV;
+        cli->cl_max_pages_per_rpc = PTL_MD_MAX_PAGES;
         cli->cl_max_rpcs_in_flight = 8;
 
         ldlm_get_ref();
@@ -134,7 +134,7 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         imp->imp_connect_op = connect_op;
         imp->imp_generation = 0;
         INIT_LIST_HEAD(&imp->imp_pinger_chain);
-        memcpy(imp->imp_target_uuid.uuid, lcfg->lcfg_inlbuf1, 
+        memcpy(imp->imp_target_uuid.uuid, lcfg->lcfg_inlbuf1,
               lcfg->lcfg_inllen1);
         class_import_put(imp);
 
@@ -143,45 +143,45 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         cli->cl_max_mds_cookiesize = sizeof(struct llog_cookie);
         cli->cl_sandev = to_kdev_t(0);
 
-        if (lcfg->lcfg_inllen3 != 0) { 
+        if (lcfg->lcfg_inllen3 != 0) {
                 if (!strcmp(lcfg->lcfg_inlbuf3, "inactive")) {
                         CDEBUG(D_HA, "marking %s %s->%s as inactive\n",
-                               name, obddev->obd_name, 
+                               name, obddev->obd_name,
                                imp->imp_target_uuid.uuid);
                         imp->imp_invalid = 1;
-                
+
                         if (lcfg->lcfg_inllen4 != 0)
                                 mgmt_name = lcfg->lcfg_inlbuf4;
                 } else {
                         mgmt_name = lcfg->lcfg_inlbuf3;
                 }
         }
-                
+
         if (mgmt_name != NULL) {
                 /* Register with management client if we need to. */
                 CDEBUG(D_HA, "%s registering with %s for events about %s\n",
                        obddev->obd_name, mgmt_name, server_uuid.uuid);
-        
+
                 mgmt_obd = class_name2obd(mgmt_name);
                 if (!mgmt_obd) {
                         CERROR("can't find mgmtcli %s to register\n",
                                mgmt_name);
                         GOTO(err_import, rc = -ENOSYS);
                 }
-        
+
                 register_f = inter_module_get("mgmtcli_register_for_events");
                 if (!register_f) {
                         CERROR("can't i_m_g mgmtcli_register_for_events\n");
                         GOTO(err_import, rc = -ENOSYS);
                 }
-        
+
                 rc = register_f(mgmt_obd, obddev, &imp->imp_target_uuid);
                 inter_module_put("mgmtcli_register_for_events");
-        
+
                 if (!rc)
                         cli->cl_mgmtcli_obd = mgmt_obd;
         }
-        
+
         RETURN(rc);
 
 err_import:
@@ -201,7 +201,7 @@ int client_obd_cleanup(struct obd_device *obddev, int flags)
                 RETURN(-EINVAL);
         if (cli->cl_mgmtcli_obd) {
                 mgmtcli_deregister_for_events_t dereg_f;
-                
+
                 dereg_f = inter_module_get("mgmtcli_deregister_for_events");
                 dereg_f(cli->cl_mgmtcli_obd, obddev);
                 inter_module_put("mgmtcli_deregister_for_events");
@@ -243,7 +243,7 @@ int client_connect_import(struct lustre_handle *dlm_handle,
 
         imp->imp_dlm_handle = *dlm_handle;
         imp->imp_state = LUSTRE_IMP_DISCON;
-        
+
         rc = ptlrpc_connect_import(imp);
         if (rc != 0) {
                 LASSERT (imp->imp_state == LUSTRE_IMP_DISCON);
@@ -289,9 +289,8 @@ int client_disconnect_export(struct obd_export *exp, int failover)
         ENTRY;
 
         if (!obd) {
-                CERROR("invalid export for disconnect: "
-                       "exp %p cookie "LPX64"\n", exp, 
-                       exp ? exp->exp_handle.h_cookie : -1);
+                CERROR("invalid export for disconnect: exp %p cookie "LPX64"\n",
+                       exp, exp ? exp->exp_handle.h_cookie : -1);
                 RETURN(-EINVAL);
         }
 
@@ -468,7 +467,9 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         if (export == NULL) {
                 if (target->obd_recovering) {
                         CERROR("denying connection for new client %s: "
-                               "in recovery\n", cluuid.uuid);
+                               "%d clients in recovery for %lds\n", cluuid.uuid,
+                               target->obd_recoverable_clients,
+                               (target->obd_recovery_timer.expires-jiffies)/HZ);
                         rc = -EBUSY;
                 } else {
  dont_check_exports:
