@@ -32,11 +32,11 @@ void ost_pack_ioo(void **tmp, struct obdo *oa, int bufcnt)
         struct obd_ioobj *ioo = *tmp;
         char *c = *tmp;
 
-        ioo->ioo_id = HTON__u64(oa->o_id); 
-        ioo->ioo_gr = HTON__u64(oa->o_gr); 
-        ioo->ioo_type = HTON__u32(oa->o_mode); 
-        ioo->ioo_bufcnt = HTON__u32(bufcnt); 
-        *tmp = c + sizeof(*ioo); 
+        ioo->ioo_id = HTON__u64(oa->o_id);
+        ioo->ioo_gr = HTON__u64(oa->o_gr);
+        ioo->ioo_type = HTON__u32(oa->o_mode);
+        ioo->ioo_bufcnt = HTON__u32(bufcnt);
+        *tmp = c + sizeof(*ioo);
 }
 
 void ost_unpack_ioo(void **tmp, struct obd_ioobj **ioop)
@@ -45,11 +45,11 @@ void ost_unpack_ioo(void **tmp, struct obd_ioobj **ioop)
         struct obd_ioobj *ioo = *tmp;
         *ioop = *tmp;
 
-        ioo->ioo_id = NTOH__u64(ioo->ioo_id); 
-        ioo->ioo_gr = NTOH__u64(ioo->ioo_gr); 
-        ioo->ioo_type = NTOH__u32(ioo->ioo_type); 
-        ioo->ioo_bufcnt = NTOH__u32(ioo->ioo_bufcnt); 
-        *tmp = c + sizeof(*ioo); 
+        ioo->ioo_id = NTOH__u64(ioo->ioo_id);
+        ioo->ioo_gr = NTOH__u64(ioo->ioo_gr);
+        ioo->ioo_type = NTOH__u32(ioo->ioo_type);
+        ioo->ioo_bufcnt = NTOH__u32(ioo->ioo_bufcnt);
+        *tmp = c + sizeof(*ioo);
 }
 
 void ost_pack_niobuf(void **tmp, __u64 offset, __u32 len, __u32 flags,
@@ -58,11 +58,11 @@ void ost_pack_niobuf(void **tmp, __u64 offset, __u32 len, __u32 flags,
         struct niobuf_remote *nb = *tmp;
         char *c = *tmp;
 
-        nb->offset = HTON__u64(offset); 
-        nb->len = HTON__u32(len); 
-        nb->flags = HTON__u32(flags); 
+        nb->offset = HTON__u64(offset);
+        nb->len = HTON__u32(len);
+        nb->flags = HTON__u32(flags);
         nb->xid = HTON__u32(xid);
-        *tmp = c + sizeof(*nb); 
+        *tmp = c + sizeof(*nb);
 }
 
 void ost_unpack_niobuf(void **tmp, struct niobuf_remote **nbp)
@@ -72,9 +72,9 @@ void ost_unpack_niobuf(void **tmp, struct niobuf_remote **nbp)
 
         *nbp = *tmp;
 
-        nb->offset = NTOH__u64(nb->offset); 
-        nb->len = NTOH__u32(nb->len); 
-        nb->flags = NTOH__u32(nb->flags); 
+        nb->offset = NTOH__u64(nb->offset);
+        nb->len = NTOH__u32(nb->len);
+        nb->flags = NTOH__u32(nb->flags);
 
-        *tmp = c + sizeof(*nb); 
+        *tmp = c + sizeof(*nb);
 }
