@@ -154,8 +154,8 @@ int ll_prepare_write(struct file *file, struct page *page, unsigned from,
         int rc = 0;
         ENTRY;
 
-        if (!PageLocked(page))
-                LBUG();
+        LASSERT(PageLocked(page));
+        (void)llap_cast_private(page); /* assertion */
 
         /* Check to see if we should return -EIO right away */
         pga.pg = page;
@@ -336,6 +336,17 @@ static struct obd_async_page_ops ll_async_page_ops = {
         .ap_completion =        ll_ap_completion,
 };
 
+struct ll_async_page *llap_cast_private(struct page *page)
+{
+        struct ll_async_page *llap = (struct ll_async_page *)page->private;
+
+        LASSERTF(llap == NULL || llap->llap_magic == LLAP_MAGIC,
+                 "page %p private %lu gave magic %d which != %d\n",
+                 page, page->private, llap->llap_magic, LLAP_MAGIC);
+
+        return llap;
+}
+
 /* XXX have the exp be an argument? */
 struct ll_async_page *llap_from_page(struct page *page)
 {
@@ -346,12 +357,9 @@ struct ll_async_page *llap_from_page(struct page *page)
         int rc;
         ENTRY;
 
-        llap = (struct ll_async_page *)page->private;
-        if (llap != NULL) {
-                if (llap->llap_magic != LLAP_MAGIC)
-                        RETURN(ERR_PTR(-EINVAL));
+        llap = llap_cast_private(page);
+        if (llap != NULL)
                 RETURN(llap);
-        }
 
         exp = ll_i2obdexp(page->mapping->host);
         if (exp == NULL)

@@ -25,6 +25,7 @@ tbd  Cluster File Systems, Inc. <info@clusterfs.com>
 	- fix ll_extent_lock() error return code for 64-bit systems (3043)
 	- don't crash in mdc_close for bad permissions on open (3285)
 	- zero i_rdev for non-device files (3147)
+	- clear page->private before handing to FS, better assertion (3119)
        * miscellania
 	- allow default OST striping configuration per directory (1414)
 	- increase maximum number of MDS request buffers for large systems
