@@ -914,34 +914,15 @@ ksocknal_terminate_conn (ksock_conn_t *conn)
          * destroy it. */
         unsigned long   flags;
         ksock_peer_t   *peer = conn->ksnc_peer;
-        ksock_sched_t  *sched = conn->ksnc_scheduler;
         struct timeval  now;
         time_t          then = 0;
         int             notify = 0;
 
-        LASSERT(conn->ksnc_closing);
-
-        /* wake up the scheduler to "send" all remaining packets to /dev/null */
-        spin_lock_irqsave(&sched->kss_lock, flags);
-
-        if (!conn->ksnc_tx_scheduled &&
-            !list_empty(&conn->ksnc_tx_queue)){
-                list_add_tail (&conn->ksnc_tx_list,
-                               &sched->kss_tx_conns);
-                /* a closing conn is always ready to tx */
-                conn->ksnc_tx_ready = 1;
-                conn->ksnc_tx_scheduled = 1;
-                /* extra ref for scheduler */
-                atomic_inc (&conn->ksnc_refcount);
-
-                wake_up (&sched->kss_waitq);
-        }
-
-        spin_unlock_irqrestore (&sched->kss_lock, flags);
-
         /* serialise with callbacks */
         write_lock_irqsave (&ksocknal_data.ksnd_global_lock, flags);
 
+        LASSERT (conn->ksnc_closing);
+        
         /* Remove conn's network callbacks.
          * NB I _have_ to restore the callback, rather than storing a noop,
          * since the socket could survive past this module being unloaded!! */
@@ -953,8 +934,6 @@ ksocknal_terminate_conn (ksock_conn_t *conn)
          * sk_user_data is NULL. */
         conn->ksnc_sock->sk->sk_user_data = NULL;
 
-        /* OK, so this conn may not be completely disengaged from its
-         * scheduler yet, but it _has_ committed to terminate... */
         conn->ksnc_scheduler->kss_nconns--;
 
         if (peer->ksnp_error != 0) {
@@ -991,20 +970,27 @@ ksocknal_destroy_conn (ksock_conn_t *conn)
         LASSERT (conn->ksnc_route == NULL);
         LASSERT (!conn->ksnc_tx_scheduled);
         LASSERT (!conn->ksnc_rx_scheduled);
-        LASSERT (list_empty(&conn->ksnc_tx_queue));
+
+        /* complete queued packets */
+        while (!list_empty (&conn->ksnc_tx_queue)) {
+                ksock_tx_t *tx = list_entry (conn->ksnc_tx_queue.next,
+                                             ksock_tx_t, tx_list);
+
+                CERROR ("Deleting packet %p type %d len %d ("LPX64"->"LPX64")\n",
+                        tx,
+                        NTOH__u32 (tx->tx_hdr->type),
+                        NTOH__u32 (tx->tx_hdr->payload_length),
+                        NTOH__u64 (tx->tx_hdr->src_nid),
+                        NTOH__u64 (tx->tx_hdr->dest_nid));
+
+                list_del (&tx->tx_list);
+                ksocknal_tx_done (tx, 0);
+        }
 
         /* complete current receive if any */
         switch (conn->ksnc_rx_state) {
         case SOCKNAL_RX_BODY:
-#if 0
                 lib_finalize (&ksocknal_lib, NULL, conn->ksnc_cookie);
-#else
-                CERROR ("Refusing to complete a partial receive from "
-                        LPX64", ip %08x\n", conn->ksnc_peer->ksnp_nid,
-                        conn->ksnc_ipaddr);
-                CERROR ("This may hang communications and "
-                        "prevent modules from unloading\n");
-#endif
                 break;
         case SOCKNAL_RX_BODY_FWD:
                 ksocknal_fmb_callback (conn->ksnc_cookie, -ECONNABORTED);
