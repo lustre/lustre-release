@@ -8,10 +8,7 @@ MODULE = obdfilter
 modulefs_DATA = obdfilter.o
 EXTRA_PROGRAMS = obdfilter
 
-LINX=simple.c ll_pack.c
-ll_pack.c:
-	test -e ll_pack.c || ln -sf $(top_srcdir)/lib/ll_pack.c
-
+LINX=simple.c
 simple.c:
 	test -e simple.c || ln -sf $(top_srcdir)/lib/simple.c
 

@@ -67,9 +67,11 @@ static void policy_internal(struct list_head *queue, struct ldlm_extent *req_ex,
 }
 
 /* apply the internal policy by walking all the lists */
-int ldlm_extent_policy(struct ldlm_lock *lock, void *req_cookie,
-                       ldlm_mode_t mode, int flags, void *data)
+int ldlm_extent_policy(struct ldlm_namespace *ns, struct ldlm_lock **lockp,
+                       void *req_cookie, ldlm_mode_t mode, int flags,
+                       void *data)
 {
+        struct ldlm_lock *lock = *lockp;
         struct ldlm_resource *res = lock->l_resource;
         struct ldlm_extent *req_ex = req_cookie;
         struct ldlm_extent new_ex;
@@ -79,11 +81,11 @@ int ldlm_extent_policy(struct ldlm_lock *lock, void *req_cookie,
         if (!res)
                 LBUG();
 
-        l_lock(&res->lr_namespace->ns_lock);
+        l_lock(&ns->ns_lock);
         policy_internal(&res->lr_granted, req_ex, &new_ex, mode);
         policy_internal(&res->lr_converting, req_ex, &new_ex, mode);
         policy_internal(&res->lr_waiting, req_ex, &new_ex, mode);
-        l_unlock(&res->lr_namespace->ns_lock);
+        l_unlock(&ns->ns_lock);
 
         memcpy(&lock->l_extent, &new_ex, sizeof(new_ex));
 

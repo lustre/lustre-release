@@ -1,10 +1,10 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  The daemon that causes completed but not committed transactions 
+ *  The daemon that causes completed but not committed transactions
  *   on the MDS to be flushed periodically when they are committed.
- *   A gratuitous getattr RPC is made to the MDS to discover the 
- *   last committed record. 
+ *   A gratuitous getattr RPC is made to the MDS to discover the
+ *   last committed record.
  *
  *  Lustre High Availability Daemon
  *
@@ -37,32 +37,32 @@
 
 static int ll_commitcbd_check_event(struct ll_sb_info *sbi)
 {
-        int rc = 0; 
+        int rc = 0;
         ENTRY;
 
-        spin_lock(&sbi->ll_commitcbd_lock); 
-        if (sbi->ll_commitcbd_flags & LL_COMMITCBD_STOPPING) { 
+        spin_lock(&sbi->ll_commitcbd_lock);
+        if (sbi->ll_commitcbd_flags & LL_COMMITCBD_STOPPING)
                 GOTO(out, rc = 1);
-        }
 
+        EXIT;
  out:
         spin_unlock(&sbi->ll_commitcbd_lock);
-        RETURN(rc);
+        return rc;
 }
 
 static int ll_commitcbd_main(void *arg)
 {
         struct ll_sb_info *sbi = (struct ll_sb_info *)arg;
-
+        unsigned long flags;
         ENTRY;
 
         lock_kernel();
         daemonize();
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-        spin_lock_irq(&current->sigmask_lock);
+        spin_lock_irqsave(&current->sigmask_lock, flags);
         sigfillset(&current->blocked);
         our_recalc_sigpending(current);
-        spin_unlock_irq(&current->sigmask_lock);
+        spin_unlock_irqrestore(&current->sigmask_lock, flags);
 #else
         sigfillset(&current->blocked);
         our_recalc_sigpending(current);
@@ -80,19 +80,19 @@ static int ll_commitcbd_main(void *arg)
 
         /* And now, loop forever on requests */
         while (1) {
-                wait_event(sbi->ll_commitcbd_waitq, 
+                wait_event(sbi->ll_commitcbd_waitq,
                            ll_commitcbd_check_event(sbi));
 
                 spin_lock(&sbi->ll_commitcbd_lock);
                 if (sbi->ll_commitcbd_flags & LL_COMMITCBD_STOPPING) {
                         spin_unlock(&sbi->ll_commitcbd_lock);
-                        CERROR("lustre_commitd quitting\n"); 
+                        CERROR("lustre_commitd quitting\n");
                         EXIT;
                         break;
                 }
 
                 schedule_timeout(sbi->ll_commitcbd_timeout);
-                CERROR("commit callback daemon woken up - FIXME\n"); 
+                CERROR("commit callback daemon woken up - FIXME\n");
                 spin_unlock(&sbi->ll_commitcbd_lock);
         }
 
@@ -116,7 +116,7 @@ int ll_commitcbd_setup(struct ll_sb_info *sbi)
                 CERROR("cannot start thread\n");
                 RETURN(rc);
         }
-        wait_event(sbi->ll_commitcbd_ctl_waitq, 
+        wait_event(sbi->ll_commitcbd_ctl_waitq,
                    sbi->ll_commitcbd_flags & LL_COMMITCBD_RUNNING);
         RETURN(0);
 }
