@@ -67,7 +67,7 @@ static int llog_test_2(struct obd_device *obd, struct llog_handle **llh)
 
         CERROR("2: re-open a log with a name\n");
         sprintf(name, "%x", llog_test_rand);
-        rc = 0;//llog_open(obd, llh, name);
+        rc = llog_open(obd, llh, NULL, name);
         if (rc)
                 CERROR("2: re-open log with name %s failed: %d\n", name, rc);
 
