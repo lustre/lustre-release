@@ -679,24 +679,6 @@
  /* SMP-safe */
  /* returns 1 if everything is done */
  static int __emul_lookup_dentry(const char *name, struct nameidata *nd)
-@@ -707,6 +738,17 @@
- }
- 
- /* SMP-safe */
-+int path_lookup_it(const char *path, unsigned flags, struct nameidata *nd,
-+		   struct lookup_intent *it)
-+{
-+	int error = 0;
-+	if (path_init(path, flags, nd))
-+		error = path_walk_it(path, nd, it);
-+	return error;
-+}
-+
-+
-+/* SMP-safe */
- int path_lookup(const char *path, unsigned flags, struct nameidata *nd)
- {
- 	int error = 0;
 @@ -742,7 +786,8 @@
   * needs parent already locked. Doesn't follow mounts.
   * SMP-safe.
