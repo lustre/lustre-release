@@ -26,6 +26,10 @@ case "$lustretag" in
 	portalstag="b1_4_bgl"
 	;;
 
+    b1_4_rhel4)
+	portalstag="b1_4_rhel4"
+	;;
+
     b_cmd*)
     	portalstag="$lustretag"
 	;;
