@@ -209,9 +209,9 @@ out_cdb:
 out_mdc:
         ptlrpc_cleanup_client(&sbi->ll_mds_client);
 out_disc:
-        ptlrpc_put_connection(sbi->ll_mds_conn);
-out_rpc:
         ptlrpc_free_req(request);
+out_rpc:
+        ptlrpc_put_connection(sbi->ll_mds_conn);
 out_ldlm:
         ldlm_namespace_free(sbi->ll_namespace);
 out_obd:
