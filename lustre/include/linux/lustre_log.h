@@ -41,56 +41,104 @@
 
 /* catalog of log objects */
 
-/* WARNING: adjust size records! */
-#define LLOG_LOG_SIZE            (64 << 10) /* == PTL_MD_MAX_IOV */
-#define LLOG_REC_SIZE            64
-#define LLOG_NUM_REC             (LLOG_LOG_SIZE / LLOG_REC_SIZE)
+#define LLOG_MAX_OBJ             (64 << 10)
 
+/* Identifier for a single log object */
 struct llog_logid {
-        __u64           lgl_oid;
-        __u64           lgl_bootcount;
+        __u64                   lgl_oid;
+        __u64                   lgl_bootcount;
 };
 
-struct llog_loglist_header {
-        char               llh_bitmap[8192];
-        struct llog_logid  llh_current;
-        struct llog_logid  llh_logs[0];
+/* On-disk header structure of catalog of available log object (internal) */
+#define LLOG_HEADER_SIZE        (4096)     /* <= PAGE_SIZE */
+#define LLOG_HDR_RSVD_U32       (16)
+#define LLOG_HDR_DATA_SIZE      (LLOG_HDR_RSVD_U32 * sizeof(__u32))
+#define LLOG_BITMAP_SIZE        (LLOG_HEADER_SIZE - LLOG_HDR_DATA_SIZE)
+
+#define LLOG_LOGLIST_MAGIC      0x6d50e67d
+struct llog_catalog_header {
+        __u32                   lch_size;
+        __u32                   lch_magic;
+        __u32                   lch_numrec;
+        __u32                   lch_reserved[LLOG_HDR_RSVD_U32 - 4];
+        __u32                   lch_bitmap[LLOG_BITMAP_SIZE / sizeof(__u32)];
+        __u32                   lch_size_end;
+        struct llog_logid       lch_logs[0];
 };
 
-/* OST records for
-   - orphans
-   - size adjustments
-   - open unlinked files
-*/
 
-struct llog_trans_rec {
-        __u64             ltr_op;
-        struct ll_fid     ltr_fid;
-        obd_id            ltr_oid;
+/* Log data records */
+typedef enum {
+        OST_CREATE_REC = 1,
+} llog_op_type;
+
+/* Log record header - stored in originating host endian order (use magic to
+ * check order).
+ * Each record must start with this and be a multiple of 64 bits in size.
+ */
+struct llog_trans_hdr {
+        __u32                   lth_len;
+        llog_op_type            lth_op;
+};
+
+struct llog_create_rec {
+        struct llog_trans_hdr   lcr_hdr;
+        struct ll_fid           lcr_fid;
+        obd_id                  lcr_oid;
+        obd_count               lcr_ogener;
+        __u32                   lcr_end_len;
 } __attribute__((packed));
 
-/* header structure of each log */
+struct llog_unlink_rec {
+        struct llog_trans_hdr   lur_hdr;
+        obd_id                  lur_oid;
+        obd_count               lur_ogener;
+        __u32                   lur_end_len;
+} __attribute__((packed));
 
-/* bitmap of allocated entries is based on minimum entry size of 16
-   bytes with a log file size of 64K that is 16K entries, ie. 16K bits
-   in the bitmap or a 2kb bitmap */
+/* On-disk header structure of each log object - stored in creating host
+ * endian order, with the exception of the bitmap - stored in little endian
+ * order so that we can use ext2_{clear,set,test}_bit() for optimized
+ * little-endian handling of bitmaps.
+ */
+#define LLOG_MAX_LOG_SIZE       (64 << 10) /* == PTL_MD_MAX_IOV */
+#define LLOG_MIN_REC_SIZE       (16)
 
-struct llog_index {
-        __u32                 lgi_bitmap[LLOG_NUM_REC / sizeof(__u32)];
-        __u32                 lgi_numrec;
-        struct llog_trans_rec lgi_records[0];
+#define LLOG_OBJECT_MAGIC       0xffb45539
+struct llog_object_hdr {
+        /* This first chunk should be exactly 4096 bytes in size */
+        __u32                   loh_size;
+        __u32                   loh_magic;
+        __u32                   loh_numrec;
+        __u32                   loh_reserved[LLOG_HDR_RSVD_U32 - 4];
+        __u32                   loh_bitmap[LLOG_BITMAP_SIZE / sizeof(__u32)];
+        __u32                   loh_size_end;
+
+        struct llog_trans_rec   loh_records[0];
 };
 
+static inline llog_log_swabbed(struct llog_object_hdr *hdr)
+{
+        if (hdr->loh_magic == __swab32(LLOG_OBJECT_MAGIC))
+                return 1;
+        if (hdr->loh_magic == LLOG_OBJECT_MAGIC)
+                return 0;
+        return -EINVAL;
+}
+
+/* In-memory descriptor for a log object */
 struct llog_handle {
-        struct file *lgh_file;
-        struct llog_index *lgh_hdr;
-        struct llog_logid lgh_lid;
+        struct list_head        lgh_list;
+        struct llog_logid       lgh_lid;
+        struct brw_page         lgh_pga[2];
+        struct lov_stripe_md   *lgh_lsm;
 };
 
-/* cookie to find a log entry back */
+/* cookie to find a log record back in a specific log object */
 struct llog_cookie {
-        struct llog_logid lgc_lid;
-        __u64             lgc_recno;
+        struct llog_logid       lgc_lid;
+        __u32                   lgc_index;
+        __u32                   lgc_offset;
 };
 
 /* exported api prototypes */
