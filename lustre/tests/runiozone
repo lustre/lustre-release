@@ -4,7 +4,7 @@ COUNT=0
 rm -f endiozone
 while date; do
 	echo "Test #$COUNT"
-	iozone -i 0 -i 1 -f /mnt/lusre/test.$$ -s $SIZE 2>&1 || exit $?
+	iozone -i 0 -i 1 -f /mnt/lustre/test.$$ -s $SIZE 2>&1 || exit $?
 	COUNT=`expr $COUNT + 1`
 	[ -f endiozone ] && rm endiozone && exit 0
 done | tee /tmp/iozone.log
