@@ -23,6 +23,9 @@
  */
 
 #define DEBUG_SUBSYSTEM S_OST
+#ifndef __KERNEL__
+#include <liblustre.h>
+#endif
 
 #include <linux/obd_ost.h>
 #include <linux/lustre_net.h>
