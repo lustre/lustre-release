@@ -124,40 +124,6 @@ obdio_disconnect (struct obdio_conn *conn, int flags)
 }
 
 int
-obdio_open (struct obdio_conn *conn, uint64_t oid, struct lustre_handle *fh)
-{
-        int    rc;
-
-        obdio_iocinit (conn);
-
-        conn->oc_data.ioc_obdo1.o_id = oid;
-        conn->oc_data.ioc_obdo1.o_mode = S_IFREG;
-        conn->oc_data.ioc_obdo1.o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLMODE;
-
-        rc = obdio_ioctl (conn, OBD_IOC_OPEN);
-
-        if (rc == 0)
-                memcpy (fh, obdo_handle(&conn->oc_data.ioc_obdo1), sizeof (*fh));
-
-        return (rc);
-}
-
-int
-obdio_close (struct obdio_conn *conn, uint64_t oid, struct lustre_handle *fh)
-{
-        obdio_iocinit (conn);
-
-
-        conn->oc_data.ioc_obdo1.o_id = oid;
-        conn->oc_data.ioc_obdo1.o_mode = S_IFREG;
-        memcpy (obdo_handle (&conn->oc_data.ioc_obdo1), fh, sizeof (*fh));
-        conn->oc_data.ioc_obdo1.o_valid = OBD_MD_FLID | OBD_MD_FLTYPE |
-                                          OBD_MD_FLMODE | OBD_MD_FLHANDLE;
-
-        return (obdio_ioctl (conn, OBD_IOC_CLOSE));
-}
-
-int
 obdio_pread (struct obdio_conn *conn, uint64_t oid,
              char *buffer, uint32_t count, uint64_t offset)
 {
@@ -264,7 +230,6 @@ obdio_new_barrier (uint64_t oid, uint64_t id, int npeers)
 int
 obdio_setup_barrier (struct obdio_conn *conn, struct obdio_barrier *b)
 {
-        struct lustre_handle    fh;
         struct lustre_handle    lh;
         int                     rc;
         int                     rc2;
@@ -277,19 +242,11 @@ obdio_setup_barrier (struct obdio_conn *conn, struct obdio_barrier *b)
                 abort ();
         }
 
-        rc = obdio_open (conn, b->ob_oid, &fh);
-        if (rc != 0) {
-                fprintf (stderr, "obdio_setup_barrier "LPX64": Failed to open object: %s\n",
-                         b->ob_oid, strerror (errno));
-                return (rc);
-        }
-
         fileb = (struct obdio_barrier *) obdio_alloc_aligned_buffer (&space, getpagesize ());
         if (fileb == NULL) {
                 fprintf (stderr, "obdio_setup_barrier "LPX64": Can't allocate page buffer\n",
                          b->ob_oid);
-                rc = -1;
-                goto out_0;
+                return (-1);
         }
 
         memset (fileb, 0, getpagesize ());
@@ -299,7 +256,7 @@ obdio_setup_barrier (struct obdio_conn *conn, struct obdio_barrier *b)
         if (rc != 0) {
                 fprintf (stderr, "obdio_setup_barrier "LPX64": Error on enqueue: %s\n",
                          b->ob_oid, strerror (errno));
-                goto out_1;
+                goto out;
         }
 
         rc = obdio_pwrite (conn, b->ob_oid, (void *)fileb, getpagesize (), 0);
@@ -313,23 +270,14 @@ obdio_setup_barrier (struct obdio_conn *conn, struct obdio_barrier *b)
                          b->ob_oid, strerror (errno));
                 rc = rc2;
         }
- out_1:
+ out:
         free (space);
- out_0:
-        rc2 = obdio_close (conn, b->ob_oid, &fh);
-        if (rc == 0 && rc2 != 0) {
-                fprintf (stderr, "obdio_setup_barrier "LPX64": Error on close: %s\n",
-                         b->ob_oid, strerror (errno));
-                rc = rc2;
-        }
-
         return (rc);
 }
 
 int
 obdio_barrier (struct obdio_conn *conn, struct obdio_barrier *b)
 {
-        struct lustre_handle   fh;
         struct lustre_handle   lh;
         int                    rc;
         int                    rc2;
@@ -337,19 +285,11 @@ obdio_barrier (struct obdio_conn *conn, struct obdio_barrier *b)
         struct obdio_barrier  *fileb;
         char                  *mode;
 
-        rc = obdio_open (conn, b->ob_oid, &fh);
-        if (rc != 0) {
-                fprintf (stderr, "obdio_barrier "LPX64": Error on open: %s\n",
-                         b->ob_oid, strerror (errno));
-                return (rc);
-        }
-
         fileb = (struct obdio_barrier *) obdio_alloc_aligned_buffer (&space, getpagesize ());
         if (fileb == NULL) {
                 fprintf (stderr, "obdio_barrier "LPX64": Can't allocate page buffer\n",
                          b->ob_oid);
-                rc = -1;
-                goto out_0;
+                return (-1);
         }
 
         rc = obdio_enqueue (conn, b->ob_oid, LCK_PW, 0, getpagesize (), &lh);
@@ -450,14 +390,6 @@ obdio_barrier (struct obdio_conn *conn, struct obdio_barrier *b)
         }
  out_1:
         free (space);
- out_0:
-        rc2 = obdio_close (conn, b->ob_oid, &fh);
-        if (rc == 0 && rc2 != 0) {
-                fprintf (stderr, "obdio_barrier "LPX64": Error on close: %s\n",
-                         b->ob_oid, strerror (errno));
-                rc = rc2;
-        }
-
         return (rc);
 }
 
