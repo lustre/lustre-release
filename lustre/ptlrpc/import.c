@@ -405,7 +405,7 @@ static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
                                request->rq_repmsg->handle.cookie);
                         imp->imp_remote_handle = request->rq_repmsg->handle;
                 } else {
-                        CERROR("reconnected to %s@%s after partition\n",
+                        CDEBUG(D_HA, "reconnected to %s@%s after partition\n",
                                imp->imp_target_uuid.uuid,
                                imp->imp_connection->c_remote_uuid.uuid);
                 }
@@ -427,7 +427,7 @@ static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
                 imp->imp_last_replay_transno = 0;
                 IMPORT_SET_STATE(imp, LUSTRE_IMP_REPLAY);
         } else {
-                CWARN("oops! we get evicted from %s\n", imp->imp_target_uuid.uuid);
+                CDEBUG(D_HA, "oops! we get evicted from %s\n", imp->imp_target_uuid.uuid);
                 imp->imp_remote_handle = request->rq_repmsg->handle;
                 IMPORT_SET_STATE(imp, LUSTRE_IMP_EVICTED);
         }

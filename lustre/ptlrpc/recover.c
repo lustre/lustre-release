@@ -130,16 +130,16 @@ void ptlrpc_initiate_recovery(struct obd_import *imp)
         LASSERT (obd_lustre_upcall != NULL);
         
         if (strcmp(obd_lustre_upcall, "DEFAULT") == 0) {
-                CDEBUG(D_ERROR, "%s: starting recovery without upcall\n",
+                CDEBUG(D_HA, "%s: starting recovery without upcall\n",
                         imp->imp_target_uuid.uuid);
                 ptlrpc_connect_import(imp, NULL);
         } 
         else if (strcmp(obd_lustre_upcall, "NONE") == 0) {
-                CDEBUG(D_ERROR, "%s: recovery diabled\n",
+                CDEBUG(D_HA, "%s: recovery disabled\n",
                         imp->imp_target_uuid.uuid);
         } 
         else {
-                CDEBUG(D_ERROR, "%s: calling upcall to start recovery\n",
+                CDEBUG(D_HA, "%s: calling upcall to start recovery\n",
                         imp->imp_target_uuid.uuid);
                 ptlrpc_run_failed_import_upcall(imp);
         }
@@ -374,13 +374,13 @@ static int ptlrpc_recover_import_no_retry(struct obd_import *imp,
         if (rc)
                 RETURN(rc);
 
-        CDEBUG(D_ERROR, "%s: recovery started, waiting\n",
+        CDEBUG(D_HA, "%s: recovery started, waiting\n",
                imp->imp_target_uuid.uuid);
 
         lwi = LWI_TIMEOUT(MAX(obd_timeout * HZ, 1), NULL, NULL);
         rc = l_wait_event(imp->imp_recovery_waitq,
                           !ptlrpc_import_in_recovery(imp), &lwi);
-        CDEBUG(D_ERROR, "%s: recovery finished\n",
+        CDEBUG(D_HA, "%s: recovery finished\n",
                imp->imp_target_uuid.uuid);
 
         RETURN(rc);
