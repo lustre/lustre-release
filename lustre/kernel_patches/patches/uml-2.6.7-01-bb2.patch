@@ -6716,7 +6716,6 @@ Index: uml-2.6.7/fs/hostfs/hostfs_kern.c
 +{
 +	if(HOSTFS_I(inode)->fd != -1) {
 +		close_file(&HOSTFS_I(inode)->fd);
-+		printk("Closing host fd in .delete_inode\n");
 +		HOSTFS_I(inode)->fd = -1;
 +	}
 +	clear_inode(inode);
@@ -6729,7 +6728,6 @@ Index: uml-2.6.7/fs/hostfs/hostfs_kern.c
 +
 +	if(HOSTFS_I(inode)->fd != -1) {
 +		close_file(&HOSTFS_I(inode)->fd);
-+		printk("Closing host fd in .destroy_inode\n");
 +	}
 +
 +	kfree(HOSTFS_I(inode));
