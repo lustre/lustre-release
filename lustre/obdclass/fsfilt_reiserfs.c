@@ -160,6 +160,12 @@ static int fsfilt_reiserfs_statfs(struct super_block *sb, struct obd_statfs *osf
         return rc;
 }
 
+static int fsfilt_reiserfs_sync(struct super_block *sb)
+{
+        CERROR("not implemented yet\n");
+        return -ENOSYS;
+}
+
 static struct fsfilt_operations fsfilt_reiserfs_ops = {
         fs_type:                "reiserfs",
         fs_owner:               THIS_MODULE,
@@ -173,6 +179,7 @@ static struct fsfilt_operations fsfilt_reiserfs_ops = {
         fs_journal_data:        fsfilt_reiserfs_journal_data,
         fs_set_last_rcvd:       fsfilt_reiserfs_set_last_rcvd,
         fs_statfs:              fsfilt_reiserfs_statfs,
+        fs_sync:                fsfilt_reiserfs_sync,
 };
 
 static int __init fsfilt_reiserfs_init(void)
