@@ -1380,9 +1380,6 @@ class LMV(Module):
         if name_override != None:
             self.name = "lmv_%s" % name_override
         self.add_lustre_module('lmv', 'lmv')
-        self.mds_uuid = self.db.get_first_ref('mds')
-        mds = self.db.lookup(self.mds_uuid)
-        self.lmv_name = mds.getName()
         self.devlist = self.db.get_refs('mds')
         self.mdclist = []
         self.desc_uuid = self.uuid
@@ -1409,7 +1406,6 @@ class LMV(Module):
             except CommandError, e:
                 print "Error preparing LMV %s\n" % mdc.uuid
                 raise e
-        self.info(self.mds_uuid)
         lctl.lmv_setup(self.name, self.uuid, self.desc_uuid,
                        string.join(self.devlist))
 
@@ -1517,6 +1513,7 @@ class MDSDEV(Module):
  	# setup LMV
  	if self.master_mds:
             client_uuid = generate_client_uuid(self.name)
+	    client_uuid = self.name + "_lmv_" + "UUID"
  	    self.master = LMV(self.db.lookup(self.lmv_uuid), client_uuid, self.name, self.name)
  	    self.master_mds = self.master.name
         # modules
@@ -1524,6 +1521,7 @@ class MDSDEV(Module):
         self.add_lustre_module('osc', 'osc')
         self.add_lustre_module('lov', 'lov')
         self.add_lustre_module('lmv', 'lmv')
+        self.add_lustre_module('ost', 'ost')
         self.add_lustre_module('mds', 'mds')
         if self.fstype:
             self.add_lustre_module('lvfs', 'fsfilt_%s' % (self.fstype))

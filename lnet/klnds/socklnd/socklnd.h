@@ -77,7 +77,7 @@
 #define SOCKNAL_MAX_RECONNECT_INTERVAL	(60*HZ) /* ...exponentially increasing to this */
 
 /* default vals for runtime tunables */
-#define SOCKNAL_IO_TIMEOUT       50             /* default comms timeout (seconds) */
+#define SOCKNAL_IO_TIMEOUT       20             /* default comms timeout (seconds) */
 #define SOCKNAL_EAGER_ACK        0              /* default eager ack (boolean) */
 #define SOCKNAL_TYPED_CONNS      1              /* unidirectional large, bidirectional small? */
 #define SOCKNAL_ZC_MIN_FRAG     (2<<10)         /* default smallest zerocopy fragment */

@@ -148,6 +148,7 @@ void ptlrpc_deactivate_import(struct obd_import *imp)
 void ptlrpc_invalidate_import(struct obd_import *imp, int in_rpc)
 {
         struct l_wait_info lwi;
+        unsigned long timeout;
         int inflight = 0;
         int rc;
 
@@ -160,8 +161,12 @@ void ptlrpc_invalidate_import(struct obd_import *imp, int in_rpc)
                 inflight = 1;
         /* wait for all requests to error out and call completion 
            callbacks */
-        lwi = LWI_TIMEOUT_INTR(MAX(obd_timeout * HZ, 1), NULL, 
-                               NULL, NULL);
+        if (imp->imp_server_timeout)
+                timeout = obd_timeout / 2;
+        else
+                timeout = obd_timeout;
+        timeout = MAX(timeout * HZ, 1);
+        lwi = LWI_TIMEOUT_INTR(timeout, NULL, NULL, NULL);
         rc = l_wait_event(imp->imp_recovery_waitq, 
                           (atomic_read(&imp->imp_inflight) == inflight), 
                           &lwi);
@@ -441,6 +446,13 @@ finish:
                 if (aa->pcaa_initial_connect && !imp->imp_initial_recov) {
                         ptlrpc_deactivate_import(imp);
                 }
+                /*if (rc == -ETIMEDOUT) {
+                        CDEBUG(D_ERROR, "recovery of %s on %s failed (timeout)\n",
+                               imp->imp_target_uuid.uuid,
+                               (char *)imp->imp_connection->c_remote_uuid.uuid);
+                        ptlrpc_connect_import(imp, NULL);
+                        RETURN(0);
+                }*/
                 CDEBUG(D_ERROR, "recovery of %s on %s failed (%d)\n",
                        imp->imp_target_uuid.uuid,
                        (char *)imp->imp_connection->c_remote_uuid.uuid, rc);
@@ -572,8 +584,13 @@ int ptlrpc_disconnect_import(struct obd_import *imp)
 
         if (ptlrpc_import_in_recovery(imp)) {
                 struct l_wait_info lwi;
-                lwi = LWI_TIMEOUT_INTR(MAX(obd_timeout * HZ, 1), back_to_sleep, 
-                                       NULL, NULL);
+                unsigned long timeout;
+                if (imp->imp_server_timeout)
+                        timeout = obd_timeout / 2;
+                else
+                        timeout = obd_timeout;
+                timeout = MAX(timeout * HZ, 1);
+                lwi = LWI_TIMEOUT_INTR(obd_timeout, back_to_sleep, NULL, NULL);
                 rc = l_wait_event(imp->imp_recovery_waitq, 
                                   !ptlrpc_import_in_recovery(imp), &lwi);
 

@@ -339,10 +339,13 @@ int target_handle_reconnect(struct lustre_handle *conn, struct obd_export *exp,
                 struct lustre_handle *hdl;
                 hdl = &exp->exp_imp_reverse->imp_remote_handle;
                 /* Might be a re-connect after a partition. */
-                if (!memcmp(&conn->cookie, &hdl->cookie, sizeof conn->cookie)) {
+#warning "FIXME ASAP"
+                memcpy(&hdl->cookie, &conn->cookie, sizeof(conn->cookie));
+                if (1 || !memcmp(&conn->cookie, &hdl->cookie, sizeof conn->cookie)) {
                         CERROR("%s reconnecting\n", cluuid->uuid);
                         conn->cookie = exp->exp_handle.h_cookie;
-                        RETURN(EALREADY);
+                        /*RETURN(EALREADY);*/
+                        RETURN(0);
                 } else {
                         CERROR("%s reconnecting from %s, "
                                "handle mismatch (ours "LPX64", theirs "
@@ -393,6 +396,7 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         
         if (!target || target->obd_stopping || !target->obd_set_up) {
                 CERROR("UUID '%s' is not available for connect\n", str);
+
                 GOTO(out, rc = -ENODEV);
         }
 
@@ -447,7 +451,8 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         } else if (req->rq_reqmsg->conn_cnt == 1) {
                 CERROR("%s reconnected with 1 conn_cnt; cookies not random?\n",
                        cluuid.uuid);
-                GOTO(out, rc = -EALREADY);
+#warning "FIXME ASAP"
+                /*GOTO(out, rc = -EALREADY);*/
         }
 
         /* Tell the client if we're in recovery. */
@@ -503,7 +508,8 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         LASSERT(export != NULL);
 
         spin_lock_irqsave(&export->exp_lock, flags);
-        if (export->exp_conn_cnt >= req->rq_reqmsg->conn_cnt) {
+#warning "FIXME ASAP"
+        if (0 && export->exp_conn_cnt >= req->rq_reqmsg->conn_cnt) {
                 CERROR("%s: already connected at a higher conn_cnt: %d > %d\n",
                        cluuid.uuid, export->exp_conn_cnt, 
                        req->rq_reqmsg->conn_cnt);

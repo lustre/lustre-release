@@ -707,6 +707,11 @@ int mdc_set_info(struct obd_export *exp, obd_count keylen,
                 rc = ptlrpc_queue_wait(req);
                 ptlrpc_req_finished(req);
                 RETURN(rc);
+        } else if (keylen >= strlen("inter_mds") && strcmp(key, "inter_mds") == 0) {
+                struct obd_import *imp = class_exp2cliimp(exp);
+                imp->imp_server_timeout = 1;
+                CDEBUG(D_OTHER, "%s: timeout / 2\n", exp->exp_obd->obd_name);
+                RETURN(0);
         }
         
         RETURN(rc);

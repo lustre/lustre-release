@@ -337,8 +337,11 @@ static int pinger_check_rpcs(void *arg)
                         if (level == LUSTRE_IMP_DISCON) {
                                 /* wait at least a timeout before 
                                    trying recovery again. */
+                                unsigned long timeout = obd_timeout;
+                                if (imp->imp_server_timeout)
+                                        timeout = obd_timeout / 2;
                                 imp->imp_next_ping = time(NULL) + 
-                                        (obd_timeout * HZ);
+                                        (timeout * HZ);
                                 ptlrpc_initiate_recovery(imp);
                         } 
                         else if (level != LUSTRE_IMP_FULL ||

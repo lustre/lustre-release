@@ -99,6 +99,10 @@ int mds_lmv_connect(struct obd_device *obd, char * lmv_name)
                 GOTO(err_reg, rc);
         mds->mds_num = mdsize;
 
+        rc = obd_set_info(mds->mds_lmv_exp, strlen("inter_mds"),
+                                "inter_mds", 0, NULL);
+        if (rc)
+                GOTO(err_reg, rc);
 	RETURN(0);
 
 err_reg:
@@ -518,7 +522,6 @@ static int filter_start_page_write(struct inode *inode,
 struct dentry *filter_fid2dentry(struct obd_device *obd,
                                  struct dentry *dir_dentry,
                                  obd_gr group, obd_id id);
-void f_dput(struct dentry *dentry);
 
 int mds_preprw(int cmd, struct obd_export *exp, struct obdo *oa,
                 int objcount, struct obd_ioobj *obj,
@@ -547,7 +550,7 @@ int mds_preprw(int cmd, struct obd_export *exp, struct obdo *oa,
         if (dentry->d_inode == NULL) {
                 CERROR("trying to BRW to non-existent file "LPU64"\n",
                        obj->ioo_id);
-                f_dput(dentry);
+                l_dput(dentry);
                 GOTO(cleanup, rc = -ENOENT);
         }
 
@@ -571,7 +574,7 @@ int mds_preprw(int cmd, struct obd_export *exp, struct obdo *oa,
                                i, obj->ioo_bufcnt, dentry, rc);
                         while (lnb-- > res)
                                 __free_pages(lnb->page, 0);
-                        f_dput(dentry);
+                        l_dput(dentry);
                         GOTO(cleanup, rc);
                 }
                 tot_bytes += lnb->len;

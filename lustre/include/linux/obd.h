@@ -425,6 +425,7 @@ struct lmv_obd {
         int                     connected;
         int                     max_easize;
         int                     max_cookiesize;
+        int                     server_timeout;
 };
 
 struct niobuf_local {

@@ -106,6 +106,27 @@ static int lmv_connect_fake(struct lustre_handle *conn,
         RETURN(0);
 }
 
+void lmv_set_timeouts(struct obd_device *obd)
+{
+        struct lmv_tgt_desc *tgts;
+        struct lmv_obd *lmv;
+        int i;
+
+        lmv = &obd->u.lmv;
+        if (lmv->server_timeout == 0)
+                return;
+
+        if (lmv->connected == 0)
+                return;
+
+        for (i = 0, tgts = lmv->tgts; i < lmv->count; i++, tgts++) {
+                if (tgts->exp == NULL)
+                        continue;
+                obd_set_info(tgts->exp, strlen("inter_mds"),
+                             "inter_mds", 0, NULL);
+        }
+}
+
 int lmv_connect(struct obd_device *obd)
 {
         struct lmv_obd *lmv = &obd->u.lmv;
@@ -179,6 +200,8 @@ int lmv_connect(struct obd_device *obd)
                         tgt_obd->obd_name, tgt_obd->obd_uuid.uuid,
                         atomic_read(&obd->obd_refcount));
         }
+
+        lmv_set_timeouts(obd);
 
         class_export_put(exp);
         RETURN (0);
@@ -1126,17 +1149,21 @@ int lmv_set_info(struct obd_export *exp, obd_count keylen,
                 RETURN(-EINVAL);
         }
         lmv = &obd->u.lmv;
-        lmv_connect(obd);
 
         if (keylen >= strlen("client") && strcmp(key, "client") == 0) {
                 struct lmv_tgt_desc *tgts;
                 int i, rc;
 
+                lmv_connect(obd);
                 for (i = 0, tgts = lmv->tgts; i < lmv->count; i++, tgts++) {
                         rc = obd_set_info(tgts->exp, keylen, key, vallen, val);
                         if (rc)
                                 RETURN(rc);
                 }
+                RETURN(0);
+        } else if (keylen >= strlen("inter_mds") && strcmp(key, "inter_mds") == 0) {
+                lmv->server_timeout = 1;
+                lmv_set_timeouts(obd);
                 RETURN(0);
         }
         
