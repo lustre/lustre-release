@@ -73,9 +73,9 @@ static char *ll_read_opt(const char *opt, char *data)
 static void ll_options(char *options, char **dev, char **vers)
 {
         char *this_char;
-        ENTRY; 
+        ENTRY;
 
-        if (!options) { 
+        if (!options) {
                 EXIT;
                 return;
         }
@@ -87,31 +87,30 @@ static void ll_options(char *options, char **dev, char **vers)
                 if ( (!*dev && (*dev = ll_read_opt("device", this_char)))||
                      (!*vers && (*vers = ll_read_opt("version", this_char))) )
                         continue;
-                
         }
         EXIT;
 }
 
-static struct super_block * ll_read_super(struct super_block *sb, 
-                                            void *data, int silent)
+static struct super_block * ll_read_super(struct super_block *sb,
+                                          void *data, int silent)
 {
-        struct inode *root = 0; 
+        struct inode *root = 0;
         struct ll_sb_info *sbi;
         char *device = NULL;
         char *version = NULL;
-        int connected = 0;
         int devno;
         int err;
         struct ptlrpc_request *request = NULL;
 
         ENTRY;
-        MOD_INC_USE_COUNT; 
+        MOD_INC_USE_COUNT;
 
         OBD_ALLOC(sbi, sizeof(*sbi));
-        if (!sbi) { 
-                EXIT;
-                return NULL;
+        if (!sbi) {
+                MOD_DEC_USE_COUNT;
+                RETURN(NULL);
         }
+
         memset(sbi, 0, sizeof(*sbi));
         sb->u.generic_sbp = sbi;
 
@@ -119,25 +118,21 @@ static struct super_block * ll_read_super(struct super_block *sb,
 
         if ( !device ) {
                 CERROR("no device\n");
-                sb = NULL; 
-                goto ERR;
+                GOTO(out_free, sb = NULL);
         }
 
         devno = simple_strtoul(device, NULL, 0);
         if ( devno >= MAX_OBD_DEVICES ) {
                 CERROR("device of %s too high\n", device);
-                sb = NULL; 
-                goto ERR;
-        } 
+                GOTO(out_free, sb = NULL);
+        }
 
         sbi->ll_conn.oc_dev = &obd_dev[devno];
         err = obd_connect(&sbi->ll_conn);
         if ( err ) {
                 CERROR("cannot connect to %s\n", device);
-                sb = NULL; 
-                goto ERR;
+                GOTO(out_free, sb = NULL);
         }
-        connected = 1;
 
         /* the first parameter should become an mds device no */
         err = ptlrpc_connect_client(-1, "mds",
@@ -146,11 +141,10 @@ static struct super_block * ll_read_super(struct super_block *sb,
                                     mds_pack_req,
                                     mds_unpack_rep,
                                     &sbi->ll_mds_client);
-        
+
         if (err) {
-                CERROR("cannot find MDS\n");  
-                sb = NULL;
-                goto ERR;
+                CERROR("cannot find MDS\n");
+                GOTO(out_disc, sb = NULL);
         }
         sbi->ll_super = sb;
         sbi->ll_rootino = 2;
@@ -162,12 +156,11 @@ static struct super_block * ll_read_super(struct super_block *sb,
         sb->s_op = &ll_super_operations;
 
         /* make root inode */
-        err = mdc_getattr(&sbi->ll_mds_client, sbi->ll_rootino, S_IFDIR, 
+        err = mdc_getattr(&sbi->ll_mds_client, sbi->ll_rootino, S_IFDIR,
                           OBD_MD_FLNOTOBD|OBD_MD_FLBLOCKS, &request);
         if (err) {
                 CERROR("mdc_getattr failed for root %d\n", err);
-                sb = NULL; 
-                goto ERR;
+                GOTO(out_req, sb = NULL);
         }
 
         root = iget4(sb, sbi->ll_rootino, NULL, request->rq_rep.mds);
@@ -175,27 +168,22 @@ static struct super_block * ll_read_super(struct super_block *sb,
                 sb->s_root = d_alloc_root(root);
         } else {
                 CERROR("lustre_light: bad iget4 for root\n");
-                sb = NULL; 
-                goto ERR;
-        } 
-
-ERR:
-        ptlrpc_free_req(request);
-        if (device)
-                OBD_FREE(device, strlen(device) + 1);
-        if (version)
-                OBD_FREE(version, strlen(version) + 1);
-        if (!sb && connected) 
-                obd_disconnect(&sbi->ll_conn);
-
-        if (!sb && root) {
-                iput(root);
+                GOTO(out_req, sb = NULL);
         }
-        if (!sb) 
-                MOD_DEC_USE_COUNT;
 
-        EXIT;
-        return sb;
+out_req:
+        ptlrpc_free_req(request);
+        if (!sb) {
+out_disc:
+                obd_disconnect(&sbi->ll_conn);
+out_free:
+                MOD_DEC_USE_COUNT;
+                OBD_FREE(sbi, sizeof(*sbi));
+        }
+        OBD_FREE(device, strlen(device) + 1);
+        OBD_FREE(version, strlen(version) + 1);
+
+        RETURN(sb);
 } /* ll_read_super */
 
 static void ll_put_super(struct super_block *sb)
