@@ -40,14 +40,14 @@ OBD_UUID=`awk "/$OST / { print \\$3 }" $UUIDLIST`
 
 # server node
 ${LMC} -m $config --add net --node $OST --tcpbuf $TCPBUF --nid $OST --nettype tcp
-${LMC} -m $config --add ost --node $OST --obduuid $OBD_UUID --dev bluearc
+${LMC} -m $config --add ost --node $OST -obd obd1 --obduuid $OBD_UUID --dev bluearc
 
 # mount point on the MDS/client
-${LMC} -m $config --add mtpt --node $MDS --path /mnt/lustre --mds mds1 --lov OSC_$OST
+${LMC} -m $config --add mtpt --node $MDS --path /mnt/lustre --mds mds1 --lov obd1
 
 # other clients
 ${LMC} -m $config --add net --node client --tcpbuf $TCPBUF --nid '*' --nettype tcp
-${LMC} -m $config --add mtpt --node client --path /mnt/lustre --mds mds1 --lov OSC_$OST
+${LMC} -m $config --add mtpt --node client --path /mnt/lustre --mds mds1 --lov obd1
 
 $LMC_REAL --batch $BATCH
 rm -f $BATCH
