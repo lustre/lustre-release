@@ -35,10 +35,11 @@
 #include <linux/init.h>
 #include <linux/obd_class.h>
 #include <linux/random.h>
-#include <linux/locks.h>
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 #include <linux/buffer_head.h>
 #include <linux/workqueue.h>
+#else
+#include <linux/locks.h>
 #endif
 #include <linux/obd_lov.h>
 #include <linux/lustre_mds.h>
