@@ -44,6 +44,7 @@ inline unsigned long round_timeout(unsigned long timeout)
 static struct list_head waiting_locks_list;
 static spinlock_t waiting_locks_spinlock;
 static struct timer_list waiting_locks_timer;
+static int ldlm_already_setup = 0;
 
 static void waiting_locks_callback(unsigned long unused)
 {
@@ -564,6 +565,9 @@ static int ldlm_setup(struct obd_device *obddev, obd_count len, void *buf)
         int rc, i;
         ENTRY;
 
+        if (ldlm_already_setup)
+                RETURN(-EALREADY);
+
         MOD_INC_USE_COUNT;
         /*
         rc = ldlm_proc_setup(obddev);
@@ -595,6 +599,8 @@ static int ldlm_setup(struct obd_device *obddev, obd_count len, void *buf)
         waiting_locks_timer.data = 0;
         init_timer(&waiting_locks_timer);
 
+        ldlm_already_setup = 1;
+
         RETURN(0);
 
  out_thread:
@@ -624,6 +630,7 @@ static int ldlm_cleanup(struct obd_device *obddev)
         ptlrpc_unregister_service(ldlm->ldlm_service);
         /* ldlm_proc_cleanup(obddev); */
 
+        ldlm_already_setup = 0;
         MOD_DEC_USE_COUNT;
         RETURN(0);
 }

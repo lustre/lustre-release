@@ -332,7 +332,7 @@ struct ldlm_lock *ldlm_handle2lock(struct lustre_handle *handle)
         if (lock->l_random != handle->cookie) {
                 CERROR("bogus cookie: lock "LPX64", handle "LPX64"\n",
                        lock->l_random, handle->cookie);
-                GOTO(out, NULL);
+                GOTO(out2, NULL);
         }
         if (!lock->l_resource) {
                 CERROR("trying to lock bogus resource: lock %p\n", lock);

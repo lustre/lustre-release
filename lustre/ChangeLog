@@ -1,3 +1,16 @@
+2002-10-10  Phil Schwan  <phil@clusterfs.com>
+	* version v0_5_14
+	* bug fixes:
+	  - recovery deadlock fix
+	  - rm -rf causes LBUG fix (617817)
+          - file open by multiple tasks fix (618962)
+	  - directory permissions bugs (602707 and 620007)
+	  - journal_stop fixed with locking (611313)
+	  - O_APPEND failures resolved (618273, perhaps 614459)
+	  - lconf PATH fix (619770)
+	  - IA64 build fix (621450)
+	  - RPC buffer sizes scale with amount of memory
+
 2002-10-01  Phil Schwan  <phil@clusterfs.com>
 	* version v0_5_13
 	* bug fixes:
