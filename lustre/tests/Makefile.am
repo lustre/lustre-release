@@ -16,7 +16,7 @@ EXTRA_DIST = $(pkgexample_scripts) $(noinst_SCRIPTS) $(noinst_DATA) \
 	sanity.sh rundbench
 if TESTS
 pkgexample_SCRIPTS = $(pkgexample_scripts)
-noinst_PROGRAMS = openunlink testreq truncate directio openme writeme open_delay
+noinst_PROGRAMS = openunlink testreq truncate directio openme writeme
 noinst_PROGRAMS += tchmod toexcl fsx test_brw openclose createdestroy
 noinst_PROGRAMS += stat createmany statmany multifstat createtest mlink utime
 noinst_PROGRAMS += opendirunlink opendevunlink unlinkmany fchdir_test checkstat

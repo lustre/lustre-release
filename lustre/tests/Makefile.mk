@@ -6,7 +6,7 @@ OURPTLCTL := $(addprefix $(src)/../portals/utils/, $(PTLCTLOBJS))
 OURPTLCTLNOPARSER := $(addprefix $(src)/../portals/utils/, \
 			$(filter-out parser.o,$(PTLCTLOBJS)))
 
-host-progs := openunlink testreq truncate directio openme writeme open_delay \
+host-progs := openunlink testreq truncate directio openme writeme \
 	 	munlink tchmod toexcl fsx test_brw openclose createdestroy \
 		stat createmany statmany multifstat createtest mlink \
 		opendirunlink opendevunlink unlinkmany fchdir_test \
@@ -43,7 +43,6 @@ runas-objs  := runas.o
 openfile-objs  := openfile.o
 wantedi-objs  := wantedi.o
 createtest-objs  := createtest.o
-open_delay-objs  := open_delay.o
 opendirunlink-objs :=opendirunlink.o
 opendevunlink-objs :=opendirunlink.o
 fchdir_test-objs :=fchdir_test.o
