@@ -321,7 +321,7 @@ gmnal_small_rx(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie,
 
 	if (!private) {
 		CDEBUG(D_ERROR, "gmnal_small_rx no context\n");
-		lib_finalize(nal_cb, private, cookie);
+		lib_finalize(nal_cb, private, cookie, PTL_FAIL);
 		return(PTL_FAIL);
 	}
 
@@ -343,10 +343,7 @@ gmnal_small_rx(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie,
  	 *	let portals library know receive is complete
 	 */
 	CDEBUG(D_PORTALS, "calling lib_finalize\n");
-	if (lib_finalize(nal_cb, private, cookie) != PTL_OK) {
-		/* TO DO what to do with failed lib_finalise? */
-		CDEBUG(D_INFO, "lib_finalize failed\n");
-	}
+	lib_finalize(nal_cb, private, cookie, PTL_OK);
 	/*
 	 *	return buffer so it can be used again
 	 */
@@ -595,10 +592,7 @@ gmnal_small_tx_callback(gm_port_t *gm_port, void *context, gm_status_t status)
 		return;
 	}
 	gmnal_return_stxd(nal_data, stxd);
-	if (lib_finalize(nal_cb, stxd, cookie) != PTL_OK) {
-		CDEBUG(D_INFO, "Call to lib_finalize failed for stxd [%p]\n", 
-		       stxd);
-	}
+	lib_finalize(nal_cb, stxd, cookie, PTL_OK);
 	return;
 }
 
@@ -835,7 +829,7 @@ gmnal_large_rx(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie,
 
 	if (!srxd) {
 		CDEBUG(D_ERROR, "gmnal_large_rx no context\n");
-		lib_finalize(nal_cb, private, cookie);
+		lib_finalize(nal_cb, private, cookie, PTL_FAIL);
 		return(PTL_FAIL);
 	}
 
@@ -1132,10 +1126,7 @@ gmnal_remote_get_callback(gm_port_t *gm_port, void *context,
 	 *	Let our client application proceed
 	 */	
 	CDEBUG(D_ERROR, "final callback context[%p]\n", srxd);
-	if (lib_finalize(nal_cb, srxd, srxd->cookie) != PTL_OK) {
-		CDEBUG(D_INFO, "Call to lib_finalize failed for srxd [%p]\n", 
-		       srxd);
-	}
+	lib_finalize(nal_cb, srxd, srxd->cookie, PTL_OK);
 
 	/*
 	 *	send an ack to the sender to let him know we got the data
@@ -1300,10 +1291,7 @@ gmnal_large_tx_ack_received(gmnal_data_t *nal_data, gmnal_srxd_t *srxd)
 
 	CDEBUG(D_INFO, "gmnal_large_tx_ack_received stxd [%p]\n", stxd);
 
-	if (lib_finalize(nal_cb, stxd, stxd->cookie) != PTL_OK) {
-		CDEBUG(D_INFO, "Call to lib_finalize failed for stxd [%p]\n", 
-		       stxd);
-	}
+	lib_finalize(nal_cb, stxd, stxd->cookie, PTL_OK);
 
 	/*
 	 *	extract the iovec from the stxd, deregister the memory.

@@ -131,7 +131,7 @@ int gmnal_cb_send(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie,
 			       	niov, iov, len);
 	} else {
 		CDEBUG(D_ERROR, "Large message send it is not supported\n");
-		lib_finalize(nal_cb, private, cookie);
+		lib_finalize(nal_cb, private, cookie, PTL_FAIL);
 		return(PTL_FAIL);
 		gmnal_large_tx(nal_cb, private, cookie, hdr, type, nid, pid, 
 				niov, iov, len);
