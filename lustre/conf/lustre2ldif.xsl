@@ -125,6 +125,9 @@ journalsize: <value-of select="journalsize"/>
 <if test="mkfsoptions">
 mkfsoptions: <value-of select="mkfsoptions"/>
 </if>
+<if test="mountfsoptions">
+mountfsoptions: <value-of select="mountfsoptions"/>
+</if>
 nodeRef: <value-of select="node_ref/@uuidref"/>
 targetRef: <value-of select="target_ref/@uuidref"/>
 <text>
@@ -179,6 +182,9 @@ journalsize: <value-of select="journalsize"/>
 <if test="mkfsoptions">
 mkfsoptions: <value-of select="mkfsoptions"/>
 </if>
+<if test="mountfsoptions">
+mountfsoptions: <value-of select="mountfsoptions"/>
+</if>
 <text>
 </text>
 </template>
@@ -213,6 +219,9 @@ dn: uuid=<value-of select="@uuid"/>,<value-of select="$basedn"/>
 objectClass: MOUNTPOINT
 lustreName: <value-of select="@name"/>
 uuid: <value-of select="@uuid"/><apply-templates/>
+<if test="clientoptions">
+clientoptions: <value-of select="clientoptions"/>
+</if>
 <text>
 </text>
 </template>

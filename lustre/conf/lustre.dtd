@@ -37,6 +37,7 @@
 <!ATTLIST profile %object.attr;>
 
 <!ELEMENT mountpoint path #REQUIRED
+                     clientoptions #REQUIRED >
                      filesystem_ref #REQUIRED >
 <!ATTLIST mountpoint %object.attr;>
 
@@ -53,7 +54,7 @@
 <!ATTLIST ptlrpc %object.attr;>
 
 <!ELEMENT osd (fstype | devpath | devsize | autoformat | 
-               target_ref | node_ref | journalsize | mkfsoptions)*>
+               target_ref | node_ref | journalsize | mkfsoptions | mountfsoptions)*>
 <!ATTLIST osd %object.attr; 
               osdtype (obdfilter | obdecho) 'obdfilter'>
 
@@ -71,7 +72,7 @@
               failover ( 1 | 0 ) #IMPLIED>
 
 <!ELEMENT mdsdev (fstype | devpath | devsize | autoformat | 
-                  target_ref | node_ref | journalsize | mkfsoptions)*>
+                  target_ref | node_ref | journalsize | mkfsoptions | mountfsoptions)*>
 <!ATTLIST mdsdev %object.attr;>
 
 <!ELEMENT lov (mds_ref |(obd_ref)+)*>
@@ -91,6 +92,8 @@
 <!ELEMENT subsystem     %object.content;>
 <!ELEMENT journalsize   %object.content;>
 <!ELEMENT mkfsoptions   %object.content;>
+<!ELEMENT mountfsoptions %object.content;>
+<!ELEMENT clientoptions %object.content;>
 <!ELEMENT fstype        %object.content;>
 <!ELEMENT nid           %object.content;>
 <!ELEMENT port          %object.content;>
