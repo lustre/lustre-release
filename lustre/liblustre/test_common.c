@@ -207,6 +207,20 @@ int t_check_stat(const char *name, struct stat *buf)
 	return 0;
 }
 
+int t_check_stat_fail(const char *name)
+{
+	struct stat stat;
+        int rc;
+
+	rc = lstat(name, &stat);
+        if (!rc) {
+		printf("%s still exists\n", name);
+		EXIT(-1);
+	}
+
+	return 0;
+}
+
 void t_echo_create(const char *path, const char *str)
 {
         int fd, rc;
@@ -229,21 +243,38 @@ void t_echo_create(const char *path, const char *str)
         }
 }
 
-int t_pread_once(const char *path, char *buf, size_t size, off_t offset)
+void _t_grep(const char *path, char *str, int should_contain)
 {
+	char buf[1024];
 	int fd;
 	int rc;
 	
-	memset(buf, 0, size);
-
 	fd = t_open_readonly(path);
-	if (lseek(fd, offset, SEEK_SET) == -1) {
-		printf("pread_once: seek to %lu error: %s\n",
-			offset, strerror(errno));
+	if (lseek(fd, 0, SEEK_SET) == -1) {
+		printf("pread_once: seek to 0 error: %s\n", strerror(errno));
 		EXIT(fd);
 	}
 
-	rc = read(fd, buf, size);
+	rc = read(fd, buf, 1023);
+	if (rc < 0) {
+		printf("grep: read error: %s\n", strerror(errno));
+		EXIT(-1);
+	}
 	close(fd);
-	return rc;
+	buf[rc] = 0;
+
+	if ((strstr(buf, str) != 0) ^ should_contain) {
+		printf("grep: can't find string %s\n", str);
+		EXIT(-1);
+	}
+}
+
+void t_grep(const char *path, char *str)
+{
+	_t_grep(path, str, 1);
+}
+
+void t_grep_v(const char *path, char *str)
+{
+	_t_grep(path, str, 0);
 }

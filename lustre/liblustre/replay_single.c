@@ -112,7 +112,7 @@ void t1()
 
 void t2a()
 {
-        char *path="/mnt/lustre/f1a";
+        char *path="/mnt/lustre/f2a";
         ENTRY("touch");
 
         replay_barrier();
@@ -125,7 +125,7 @@ void t2a()
 
 void t2b()
 {
-        char *path="/mnt/lustre/f1a";
+        char *path="/mnt/lustre/f2b";
         ENTRY("mcreate+touch");
 
         t_create(path);
@@ -138,51 +138,56 @@ void t2b()
 }
 
 
-void t3()
+void n_create_delete(int nfiles)
 {
         char *base="/mnt/lustre/f3_";
         char path[100];
         char str[100];
-        char buf[100];
         int i;
-        ENTRY("10 create/delete");
 
         replay_barrier();
-        for (i = 0; i < 10; i++) {
+        for (i = 0; i < nfiles; i++) {
                 sprintf(path, "%s%d\n", base, i);
                 sprintf(str, "TEST#%d CONTENT\n", i);
                 t_echo_create(path, str);
         }
         mds_failover();
-        for (i = 0; i < 10; i++) {
+        for (i = 0; i < nfiles; i++) {
                 sprintf(path, "%s%d\n", base, i);
                 sprintf(str, "TEST#%d CONTENT\n", i);
-                t_pread_once(path, buf, 100, 0);
-                if (!strstr(buf, str)) {
-                        printf("f%d: content error !\n", i);
-                        exit(-1);
-                }
+                t_grep(path, str);
         }
         replay_barrier();
-        for (i = 0; i < 10; i++) {
+        for (i = 0; i < nfiles; i++) {
                 sprintf(path, "%s%d\n", base, i);
                 t_unlink(path);
         }
         mds_failover();
-        for (i = 0; i < 10; i++) {
+        for (i = 0; i < nfiles; i++) {
                 sprintf(path, "%s%d\n", base, i);
-                if (!stat(path, NULL)) {
-                        printf("f%d still exist!\n", i);
-                        exit(-1);
-                }
+                t_check_stat_fail(path);
         }
+        LEAVE();
+}
+
+void t3a()
+{
+        ENTRY("10 create/delete");
+        n_create_delete(10);
+        LEAVE();
+}
+
+void t3b()
+{
+        ENTRY("60 create/delete(>1'st block precreated)");
+        n_create_delete(60);
         LEAVE();
 }
 
 void t4()
 {
-        char *dir="/mnt/lustre/d2";
-        char *path="/mnt/lustre/d2/f2";
+        char *dir="/mnt/lustre/d4";
+        char *path="/mnt/lustre/d4/f1";
         ENTRY("mkdir + contained create");
 
         replay_barrier();
@@ -191,15 +196,21 @@ void t4()
         mds_failover();
         t_check_stat(dir, NULL);
         t_check_stat(path, NULL);
+        sleep(2); /* wait for log process thread */
+
+        replay_barrier();
         t_unlink(path);
         t_rmdir(dir);
+        mds_failover();
+        t_check_stat_fail(dir);
+        t_check_stat_fail(path);
         LEAVE();
 }
 
 void t5()
 {
-        char *dir="/mnt/lustre/d3";
-        char *path="/mnt/lustre/d3/f3";
+        char *dir="/mnt/lustre/d5";
+        char *path="/mnt/lustre/d5/f1";
         ENTRY("mkdir |X| contained create");
 
         t_mkdir(dir);
@@ -215,7 +226,7 @@ void t5()
 
 void t6()
 {
-        char *path="/mnt/lustre/f4";
+        char *path="/mnt/lustre/f6";
         int fd;
         ENTRY("open |X| close");
 
@@ -227,6 +238,72 @@ void t6()
         t_check_stat(path, NULL);
         t_close(fd);
         t_unlink(path);
+        LEAVE();
+}
+
+void t7()
+{
+        char *path="/mnt/lustre/f7";
+        char *path2="/mnt/lustre/f7-2";
+        ENTRY("create |X| rename unlink");
+
+        t_create(path);
+        replay_barrier();
+        t_rename(path, path2);
+        mds_failover();
+        t_check_stat_fail(path);
+        t_check_stat(path2, NULL);
+        t_unlink(path2);
+}
+
+void t8()
+{
+        char *path="/mnt/lustre/f8";
+        char *path2="/mnt/lustre/f8-2";
+        ENTRY("create open write rename |X| create-old-name read");
+
+        t_create(path);
+        t_echo_create(path, "old");
+        t_rename(path, path2);
+        replay_barrier();
+        t_echo_create(path, "new");
+        mds_failover();
+        t_grep(path, "new");
+        t_grep(path2, "old");
+        t_unlink(path);
+        t_unlink(path2);
+}
+
+void t9()
+{
+        char *path="/mnt/lustre/f9";
+        char *path2="/mnt/lustre/f9-2";
+        ENTRY("|X| open(O_CREAT), unlink, touch new, unlink new");
+
+        replay_barrier();
+        t_create(path);
+        t_unlink(path);
+        t_create(path2);
+        mds_failover();
+        t_check_stat_fail(path);
+        t_check_stat(path2, NULL);
+        t_unlink(path2);
+}
+
+void t10()
+{
+        char *path="/mnt/lustre/f10";
+        char *path2="/mnt/lustre/f10-2";
+        ENTRY("|X| mcreate, open write, rename");
+
+        replay_barrier();
+        t_create(path);
+        t_echo_create(path, "old");
+        t_rename(path, path2);
+        t_grep(path2, "old");
+        mds_failover();
+        t_grep(path2, "old");
+        t_unlink(path2);
 }
 
 extern int portal_debug;
@@ -313,10 +390,15 @@ int main(int argc, char * const argv[])
         t1();
         t2a();
         t2b();
-        t3();
+        t3a();
+        t3b();
         t4();
         t5();
         t6();
+        t7();
+        t8();
+        t9();
+        t10();
 
 	printf("liblustre is about shutdown\n");
         __liblustre_cleanup_();

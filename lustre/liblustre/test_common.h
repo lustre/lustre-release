@@ -22,7 +22,10 @@ int t_open_readonly(const char *path);
 int t_open(const char *path);
 void t_close(int fd);
 int t_check_stat(const char *name, struct stat *buf);
+int t_check_stat_fail(const char *name);
 void t_echo_create(const char *path, const char *str);
-int t_pread_once(const char *path, char *buf, size_t size, off_t offset);
+//int t_pread_once(const char *path, char *buf, size_t size, off_t offset);
+void t_grep(const char *path, char *str);
+void t_grep_v(const char *path, char *str);
 
 #endif
