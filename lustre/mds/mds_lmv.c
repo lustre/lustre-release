@@ -1052,12 +1052,12 @@ cleanup:
 }
 
 int mds_convert_mea_ea(struct obd_device *obd, struct inode *inode,
-                       struct lov_mds_md *lmm, int lmm_size)
+                       struct lov_mds_md *lmm, int lmmsize)
 {
+        int i, rc, err, size;
         struct mea_old *old;
         struct mea *mea;
         struct mea *new;
-        int rc, err, i;
         void *handle;
         ENTRY;
 
@@ -1068,7 +1068,7 @@ int mds_convert_mea_ea(struct obd_device *obd, struct inode *inode,
 
         old = (struct mea_old *) lmm;
         rc = sizeof(struct ll_fid) * old->mea_count + sizeof(struct mea_old);
-        if (old->mea_count > 256 || old->mea_master > 256 || lmm_size < rc
+        if (old->mea_count > 256 || old->mea_master > 256 || lmmsize < rc
                         || old->mea_master > old->mea_count) {
                 CWARN("unknown MEA format, dont convert it\n");
                 CWARN("  count %u, master %u, size %u\n",
@@ -1079,8 +1079,8 @@ int mds_convert_mea_ea(struct obd_device *obd, struct inode *inode,
         CWARN("converting MEA EA on %lu/%u from V0 to V1 (%u/%u)\n",
               inode->i_ino, inode->i_generation, old->mea_count, old->mea_master);
 
-        lmm_size = sizeof(struct ll_fid) * old->mea_count + sizeof(struct mea);
-        OBD_ALLOC(new, lmm_size);
+        size = sizeof(struct ll_fid) * old->mea_count + sizeof(struct mea);
+        OBD_ALLOC(new, size);
         if (new == NULL)
                 RETURN(-ENOMEM);
 
@@ -1096,15 +1096,17 @@ int mds_convert_mea_ea(struct obd_device *obd, struct inode *inode,
                 GOTO(conv_free, rc);
         }
 
-        lmm = (struct lov_mds_md *) new;
-        rc = fsfilt_set_md(obd, inode, handle, lmm, lmm_size);
+        rc = fsfilt_set_md(obd, inode, handle, (struct lov_mds_md *) new, size);
+        if (rc > lmmsize)
+                size = lmmsize;
+        memcpy(lmm, new, size);
 
         err = fsfilt_commit(obd, obd->u.mds.mds_sb, inode, handle, 0);
         if (!rc)
-                rc = err ? err : lmm_size;
+                rc = err ? err : size;
         GOTO(conv_free, rc);
 conv_free:
-        OBD_FREE(new, lmm_size);
+        OBD_FREE(new, size);
         return rc;
 }
 
