@@ -13,7 +13,6 @@
 
 /* global variables */
 extern int obd_debug_level;
-extern int obd_print_entry;
 extern unsigned long obd_memory;
 
 #define OBD_ALLOC(ptr, size)                                    \

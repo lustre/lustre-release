@@ -17,12 +17,12 @@ EOF
 
 new_fs ext2 /tmp/ost 10000
 OST=$LOOPDEV
-
 MDSFS=ext2
 new_fs ${MDSFS} /tmp/mds 10000
 MDS=$LOOPDEV
 
-echo 8291 > /proc/sys/obd/debug
+mknod /dev/obd c 10 241
+echo 0xffffffff > /proc/sys/portals/debug
 
 $R/usr/src/obd/utils/obdctl <<EOF
 device 0

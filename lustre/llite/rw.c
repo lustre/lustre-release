@@ -281,9 +281,10 @@ static int ll_writepage(struct page *page)
 	return err;
 }
 
-/* SYNCHRONOUS I/O to object storage for an inode -- object attr will be updated too */
-static int ll_commit_write(struct file *file, struct page *page, 
-		    unsigned from, unsigned to)
+/* SYNCHRONOUS I/O to object storage for an inode -- object attr will be updated
+ * too */
+static int ll_commit_write(struct file *file, struct page *page,
+                           unsigned from, unsigned to)
 {
 	int create = 1;
 	struct inode *inode = page->mapping->host;
@@ -321,16 +322,14 @@ static int ll_commit_write(struct file *file, struct page *page,
 		err = ll_inode_setattr(inode, &iattr, 0);
 		if (err) {
 			CERROR("failed - %d.\n", err);
-			obdo_free(oa);
-			EXIT;
-			return -EIO;
+                        err = -EIO;
 		}
 	}
 
         obdo_free(oa);
         EXIT;
         return err;
-} /* ll_brw */
+} /* ll_commit_write */
 
 void ll_truncate(struct inode *inode)
 {

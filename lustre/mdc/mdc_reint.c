@@ -25,32 +25,22 @@
 #include <linux/config.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
-#include <linux/mm.h>
-#include <linux/string.h>
-#include <linux/stat.h>
-#include <linux/errno.h>
-#include <linux/locks.h>
-#include <linux/unistd.h>
-
-#include <asm/system.h>
-#include <asm/uaccess.h>
-#include <linux/module.h>
-
-#include <linux/fs.h>
-#include <linux/stat.h>
-#include <asm/uaccess.h>
-#include <asm/segment.h>
-#include <linux/miscdevice.h>
 
 #define DEBUG_SUBSYSTEM S_MDC
 
-#include <linux/obd_support.h>
 #include <linux/obd_class.h>
-#include <linux/lustre_lib.h>
-#include <linux/lustre_idl.h>
 #include <linux/lustre_mds.h>
 
-extern int mdc_reint(struct ptlrpc_client *peer, struct ptlrpc_request *request);
+static int mdc_reint(struct ptlrpc_client *cl, struct ptlrpc_request *request)
+{
+	int rc; 
+
+	rc = ptlrpc_queue_wait(cl, request);
+        if (rc)
+		CERROR("error in handling %d\n", rc); 
+
+	return rc;
+}
 
 int mdc_setattr(struct ptlrpc_client *peer, 
 		struct inode *inode, struct iattr *iattr,
@@ -60,9 +50,11 @@ int mdc_setattr(struct ptlrpc_client *peer,
 	struct mds_rec_setattr *rec;
         ENTRY;
 
-	*request = ptlrpc_prep_req(peer, MDS_REINT, 0, NULL, sizeof(*rec), NULL);
+        *request = ptlrpc_prep_req(peer, MDS_REINT, 0, NULL,
+                                   sizeof(*rec), NULL);
 	if (!(*request)) { 
-		CERROR("mdc request: cannot pack\n");
+		CERROR("cannot pack\n");
+                EXIT;
 		return -ENOMEM;
 	}
 
@@ -92,7 +84,7 @@ int mdc_create(struct ptlrpc_client *peer,
 			       sizeof(*rec) + size_round0(namelen) + 
 			       size_round0(tgtlen), NULL);
 	if (!(*request)) { 
-		CERROR("mdc_create: cannot pack\n");
+		CERROR("cannot pack\n");
 		return -ENOMEM;
 	}
 
@@ -119,7 +111,7 @@ int mdc_unlink(struct ptlrpc_client *peer,
 	(*request) = ptlrpc_prep_req(peer, MDS_REINT, 0, NULL, 
 			       sizeof(*rec) + size_round0(namelen), NULL);
 	if (!(*request)) { 
-		CERROR("mdc_unlink: cannot pack\n");
+		CERROR("cannot pack\n");
 		return -ENOMEM;
 	}
 
@@ -146,7 +138,7 @@ int mdc_link(struct ptlrpc_client *peer, struct dentry *src,
 	(*request) = ptlrpc_prep_req(peer, MDS_REINT, 0, NULL, 
 			       sizeof(*rec) + size_round0(namelen), NULL);
 	if (!(*request)) { 
-		CERROR("mdc_link: cannot pack\n");
+		CERROR("cannot pack\n");
 		return -ENOMEM;
 	}
 
@@ -174,7 +166,7 @@ int mdc_rename(struct ptlrpc_client *peer, struct inode *src,
 			       sizeof(*rec) + size_round0(oldlen)
 			       + size_round0(newlen), NULL);
 	if (!(*request)) { 
-		CERROR("mdc_link: cannot pack\n");
+		CERROR("cannot pack\n");
 		return -ENOMEM;
 	}
 

@@ -1,4 +1,6 @@
-/*
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
+ *
  * Copyright (C) 2001  Cluster File Systems, Inc.
  *
  * This code is issued under the GNU General Public License.
@@ -49,7 +51,6 @@ static int obd_sctl_reset( ctl_table * table, int write, struct file
 
 static ctl_table obd_table[] = {
         {OBD_DEBUG, "debug", &obd_debug_level, sizeof(int), 0644, NULL, &proc_dointvec},
-        {OBD_ENTRY, "trace", &obd_print_entry, sizeof(int), 0644, NULL, &proc_dointvec},
         {OBD_VARS, "vars", &vars[0], sizeof(int), 0644, NULL, &proc_dointvec},
         {OBD_INDEX, "index", &index, sizeof(int), 0644, NULL, &obd_sctl_vars},
         {OBD_RESET, "reset", NULL, 0, 0644, NULL, &obd_sctl_reset},
@@ -112,7 +113,3 @@ int obd_sctl_vars (ctl_table * table, int write,
 
         return rc; 
 }
-
-
-
-

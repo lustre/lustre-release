@@ -210,18 +210,6 @@ int mdc_readpage(struct ptlrpc_client *cl, ino_t ino, int type, __u64 offset,
 	return rc;
 }
 
-int mdc_reint(struct ptlrpc_client *cl, struct ptlrpc_request *request)
-{
-	int rc; 
-
-	rc = ptlrpc_queue_wait(cl, request);
-	if (rc) { 
-		CERROR("mdc request: error in handling %d\n", rc); 
-	}
-
-	return rc;
-}
-
 static int request_ioctl(struct inode *inode, struct file *file, 
                          unsigned int cmd, unsigned long arg)
 {
