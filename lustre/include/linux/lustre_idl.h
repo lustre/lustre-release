@@ -205,25 +205,25 @@ struct lov_mds_md {
 };
 
 #define OBD_MD_FLALL    (0xffffffff)
-#define OBD_MD_FLID     (0x00000001)
-#define OBD_MD_FLATIME  (0x00000002)
-#define OBD_MD_FLMTIME  (0x00000004)
-#define OBD_MD_FLCTIME  (0x00000008)
-#define OBD_MD_FLSIZE   (0x00000010)
-#define OBD_MD_FLBLOCKS (0x00000020)
-#define OBD_MD_FLBLKSZ  (0x00000040)
-#define OBD_MD_FLMODE   (0x00000080)
-#define OBD_MD_FLTYPE   (0x00000100)
-#define OBD_MD_FLUID    (0x00000200)
-#define OBD_MD_FLGID    (0x00000400)
-#define OBD_MD_FLFLAGS  (0x00000800)
+#define OBD_MD_FLID     (0x00000001)    /* object ID */
+#define OBD_MD_FLATIME  (0x00000002)    /* access time */
+#define OBD_MD_FLMTIME  (0x00000004)    /* data modification time */
+#define OBD_MD_FLCTIME  (0x00000008)    /* change time */
+#define OBD_MD_FLSIZE   (0x00000010)    /* size */
+#define OBD_MD_FLBLOCKS (0x00000020)    /* allocated blocks count */
+#define OBD_MD_FLBLKSZ  (0x00000040)    /* block size */
+#define OBD_MD_FLMODE   (0x00000080)    /* access bits (mode & ~S_IFMT) */
+#define OBD_MD_FLTYPE   (0x00000100)    /* object type (mode & S_IFMT) */
+#define OBD_MD_FLUID    (0x00000200)    /* user ID */
+#define OBD_MD_FLGID    (0x00000400)    /* group ID */
+#define OBD_MD_FLFLAGS  (0x00000800)    /* flags word */
 #define OBD_MD_FLOBDFLG (0x00001000)
-#define OBD_MD_FLNLINK  (0x00002000)
-#define OBD_MD_FLGENER  (0x00004000)
-#define OBD_MD_FLINLINE (0x00008000)
-#define OBD_MD_FLRDEV   (0x00010000)
-#define OBD_MD_FLEASIZE (0x00020000)
-#define OBD_MD_LINKNAME (0x00040000)
+#define OBD_MD_FLNLINK  (0x00002000)    /* link count */
+#define OBD_MD_FLGENER  (0x00004000)    /* generation number */
+#define OBD_MD_FLINLINE (0x00008000)    /* inline data */
+#define OBD_MD_FLRDEV   (0x00010000)    /* device number */
+#define OBD_MD_FLEASIZE (0x00020000)    /* extended attribute data */
+#define OBD_MD_LINKNAME (0x00040000)    /* symbolic link target */
 #define OBD_MD_FLNOTOBD (~(OBD_MD_FLOBDFLG | OBD_MD_FLBLOCKS | OBD_MD_LINKNAME))
 
 struct obd_statfs {
