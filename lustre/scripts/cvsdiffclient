@@ -21,10 +21,13 @@ if [ -f $TMP ]; then
 		[ "$OPERATION" ] || OPERATION=Update
 		[ "$OPERWHERE" ] || OPERWHERE=from
 		echo "CVS: $OPERATION $child $OPERWHERE $parent ($date)" >> $TMP
+	elif [ -r CVS/Tag ]; then
+		echo "CVS: Branch: `sed 's/^T//' CVS/Tag`" >> $TMP
 	fi
 	echo "CVS: did you update the ChangeLog for a bug fix?" >> $TMP
-	echo "CVS: b=" >> $TMP
-	echo "CVS: r=" >> $TMP
+	echo "CVS: did you update the hours spent in Bugzilla?" >> $TMP
+	echo "CVS: b=<bug>" >> $TMP
+	echo "CVS: r=<reviewed_by>" >> $TMP
 
 	cat $1 >> $TMP
 	cp $TMP $1
