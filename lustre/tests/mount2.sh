@@ -2,14 +2,14 @@
 
 config=${1:-mount2.xml}
 
-LMC=${LMC:-../utils/lmc}
+LMC="${LMC:-../utils/lmc} -m $config"
 TMP=${TMP:-/tmp}
 
-MDSDEV=$TMP/mds1
-MDSSIZE=50000
+MDSDEV=${MDSDEV:-$TMP/mds1}
+MDSSIZE=${MDSSIZE:-50000}
 
-OSTDEV=$TMP/ost1
-OSTSIZE=100000
+OSTDEV=${OSTDEV:-$TMP/ost1}
+OSTSIZE=${OSTSIZE:-200000}
 
 kver=`uname -r | cut -d "." -f 1,2`
 
@@ -21,15 +21,19 @@ case $kver in
      ;;
 esac
 
+
+rm -f $config
+
 # create nodes
-${LMC} -o $config --add net --node localhost --nid localhost --nettype tcp || exit 1
+${LMC} --add node --node localhost || exit 10
+${LMC} --add net --node  localhost --nid localhost --nettype tcp || exit 11
 
 # configure mds server
-${LMC} -m $config --add mds --format --node localhost $FSTYPE --mds mds1 --dev $MDSDEV --size $MDSSIZE || exit 2
+${LMC} --add mds  --node localhost --mds mds1 --dev $MDSDEV --size $MDSSIZE || exit 20
 
 # configure ost
-${LMC} -m $config --add ost --format --obd obd1 --node localhost $FSTYPE --dev $OSTDEV --size $OSTSIZE || exit 3
+${LMC} --add ost --node localhost --obd obd1 --dev $OSTDEV --size  $OSTSIZE || exit 30
 
 # create client config
-${LMC} -m $config --add mtpt --node localhost --path /mnt/lustre1 --mds mds1 --obd obd1 || exit 4
-${LMC} -m $config --add mtpt --node localhost --path /mnt/lustre2 --mds mds1 --obd obd1 || exit 4
+${LMC} --add mtpt --node localhost --path /mnt/lustre1 --mds mds1 --obd obd1 || exit 40
+${LMC} --add mtpt --node localhost --path /mnt/lustre2 --mds mds1 --obd obd1 || exit 40
