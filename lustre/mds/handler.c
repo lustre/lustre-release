@@ -718,44 +718,42 @@ static int mds_open(struct ptlrpc_request *req)
                 void *handle;
                 struct lov_mds_md *lmm;
                 struct inode *inode = de->d_inode;
-                int rc;
+                struct obd_run_ctxt saved;
+                struct obd_ucred uc;
+                int rc, rc2;
 
                 lmm = lustre_msg_buf(req->rq_reqmsg, 1);
 
+                uc.ouc_fsuid = body->fsuid;
+                uc.ouc_fsgid = body->fsgid;
+                push_ctxt(&saved, &mds->mds_ctxt, &uc);
                 handle = mds_fs_start(mds, de->d_inode, MDS_FSOP_SETATTR);
                 if (!handle) {
-                        req->rq_status = -ENOMEM;
-                        RETURN(0);
-                }
-
-                /* XXX error handling */
-                rc = mds_fs_set_md(mds, inode, handle, lmm);
-                if (!rc) {
-                        struct obd_run_ctxt saved;
-                        struct obd_ucred uc;
-                        uc.ouc_fsuid = body->fsuid;
-                        uc.ouc_fsgid = body->fsgid;
-                        push_ctxt(&saved, &mds->mds_ctxt, &uc);
-                        rc = mds_update_last_rcvd(mds, handle, req);
                         pop_ctxt(&saved);
-                } else {
-                        req->rq_status = rc;
-                        RETURN(0);
+                        GOTO(out_md, rc = -ENOMEM);
                 }
-                /* FIXME: need to return last_rcvd, last_committed */
 
-                /* FIXME: keep rc intact */
-                rc = mds_fs_commit(mds, de->d_inode, handle);
+                rc = mds_fs_set_md(mds, inode, handle, lmm);
+                if (!rc)
+                        rc = mds_update_last_rcvd(mds, handle, req);
+
+                rc2 = mds_fs_commit(mds, de->d_inode, handle);
+                if (rc2 && !rc)
+                        rc = rc2;
+                pop_ctxt(&saved);
                 if (rc) {
+out_md:
                         req->rq_status = rc;
+                        l_dput(de);
+                        mntput(mnt);
                         RETURN(0);
                 }
         }
 
         flags = body->flags;
         file = dentry_open(de, mnt, flags & ~O_DIRECT);
-        if (!file || IS_ERR(file)) {
-                req->rq_status = -EINVAL;
+        if (IS_ERR(file)) {
+                req->rq_status = PTR_ERR(file);
                 OBD_FREE(mfd, sizeof(*mfd));
                 RETURN(0);
         }
@@ -773,28 +771,13 @@ static int mds_open(struct ptlrpc_request *req)
 
 static int mds_close(struct ptlrpc_request *req)
 {
-        struct dentry *de;
         struct mds_body *body;
         struct file *file;
-        struct mds_obd *mds = mds_req2mds(req);
-        struct vfsmount *mnt;
         struct mds_file_data *mfd;
         int rc;
         ENTRY;
 
-        rc = lustre_pack_msg(0, NULL, NULL, &req->rq_replen, &req->rq_repmsg);
-        if (rc || OBD_FAIL_CHECK(OBD_FAIL_MDS_CLOSE_PACK)) {
-                CERROR("mds: out of memory\n");
-                req->rq_status = -ENOMEM;
-                RETURN(0);
-        }
-
         body = lustre_msg_buf(req->rq_reqmsg, 0);
-        de = mds_fid2dentry(mds, &body->fid1, &mnt);
-        if (IS_ERR(de)) {
-                req->rq_status = -ENOENT;
-                RETURN(0);
-        }
 
         /* FIXME: need to have cookies involved here */
         file = (struct file *)(unsigned long)body->extra;
@@ -805,8 +788,18 @@ static int mds_close(struct ptlrpc_request *req)
         OBD_FREE(mfd, sizeof(*mfd));
 
         req->rq_status = filp_close(file, 0);
-        l_dput(de);
-        mntput(mnt);
+
+        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_CLOSE_PACK)) {
+                CERROR("test case OBD_FAIL_MDS_CLOSE_PACK\n");
+                req->rq_status = -ENOMEM;
+                RETURN(-ENOMEM);
+        }
+
+        rc = lustre_pack_msg(0, NULL, NULL, &req->rq_replen, &req->rq_repmsg);
+        if (rc) {
+                CERROR("mds: lustre_pack_msg: rc = %d\n", rc);
+                req->rq_status = rc;
+        }
 
         RETURN(0);
 }
