@@ -66,4 +66,13 @@ while ($i--) {
         print STDERR ($count - $i) . " operations [" . $$ . "]\n";
     }
 }
+
+my $which = "";
+if ($mount_count > 0) {
+    $which = int(rand() * $mount_count) + 1;
+}
+for ($d = 0; $d < $files; $d++) {
+    unlink("$mtpt$which/$d");
+}
+
 print "Done.\n";
