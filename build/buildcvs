@@ -73,7 +73,7 @@ case "$lustretag" in
 	portalstag=$lustretag
 	;;
 
-    v1_[0-3]*|v1_4_0*|[A-Z]*)
+    v1_[0-3]*|v1_4_*|[A-Z]*)
 	portalstag="$lustretag"
 	;;
 
