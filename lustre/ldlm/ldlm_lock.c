@@ -561,13 +561,17 @@ void ldlm_grant_lock(struct ldlm_lock *lock)
 
 /* returns a referenced lock or NULL */
 static struct ldlm_lock *search_queue(struct list_head *queue, ldlm_mode_t mode,
-                                      struct ldlm_extent *extent)
+                                      struct ldlm_extent *extent,
+                                      struct ldlm_lock *old_lock)
 {
         struct ldlm_lock *lock;
         struct list_head *tmp;
 
         list_for_each(tmp, queue) {
                 lock = list_entry(tmp, struct ldlm_lock, l_res_link);
+
+                if (lock == old_lock)
+                        continue;
 
                 if (lock->l_flags & (LDLM_FL_CBPENDING | LDLM_FL_DESTROYED))
                         continue;
@@ -589,36 +593,53 @@ static struct ldlm_lock *search_queue(struct list_head *queue, ldlm_mode_t mode,
         return NULL;
 }
 
-/* Must be called with no resource or lock locks held.
+/* Can be called in two ways:
+ *
+ * If 'ns' is NULL, then lockh describes an existing lock that we want to look
+ * for a duplicate of.
+ *
+ * Otherwise, all of the fields must be filled in, to match against.
  *
  * Returns 1 if it finds an already-existing lock that is compatible; in this
  * case, lockh is filled in with a addref()ed lock
-*/
-int ldlm_lock_match(struct ldlm_namespace *ns, __u64 * res_id, __u32 type,
+ */
+int ldlm_lock_match(struct ldlm_namespace *ns, __u64 *res_id, __u32 type,
                     void *cookie, int cookielen, ldlm_mode_t mode,
                     struct lustre_handle *lockh)
 {
         struct ldlm_resource *res;
-        struct ldlm_lock *lock;
+        struct ldlm_lock *lock, *old_lock = NULL;
         int rc = 0;
         ENTRY;
 
+        if (ns == NULL) {
+                old_lock = ldlm_handle2lock(lockh);
+                LASSERT(old_lock);
+
+                ns = old_lock->l_resource->lr_namespace;
+                res_id = old_lock->l_resource->lr_name;
+                type = old_lock->l_resource->lr_type;
+                mode = old_lock->l_req_mode;
+        }
+
         res = ldlm_resource_get(ns, NULL, res_id, type, 0);
-        if (res == NULL)
+        if (res == NULL) {
+                LASSERT(old_lock == NULL);
                 RETURN(0);
+        }
 
         ns = res->lr_namespace;
         l_lock(&ns->ns_lock);
 
-        if ((lock = search_queue(&res->lr_granted, mode, cookie)))
+        if ((lock = search_queue(&res->lr_granted, mode, cookie, old_lock)))
                 GOTO(out, rc = 1);
-        if ((lock = search_queue(&res->lr_converting, mode, cookie)))
+        if ((lock = search_queue(&res->lr_converting, mode, cookie, old_lock)))
                 GOTO(out, rc = 1);
-        if ((lock = search_queue(&res->lr_waiting, mode, cookie)))
+        if ((lock = search_queue(&res->lr_waiting, mode, cookie, old_lock)))
                 GOTO(out, rc = 1);
 
         EXIT;
-      out:
+       out:
         ldlm_resource_put(res);
         l_unlock(&ns->ns_lock);
 
@@ -631,6 +652,10 @@ int ldlm_lock_match(struct ldlm_namespace *ns, __u64 * res_id, __u32 type,
                 LDLM_DEBUG(lock, "matched");
         else
                 LDLM_DEBUG_NOLOCK("not matched");
+
+        if (old_lock)
+                LDLM_LOCK_PUT(old_lock);
+
         return rc;
 }
 

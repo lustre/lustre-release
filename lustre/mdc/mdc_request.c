@@ -373,7 +373,7 @@ int mdc_enqueue(struct lustre_handle *conn, int lock_type,
                 LBUG();
                 RETURN(-EINVAL);
         }
-#warning FIXME: the data here needs to be different if a lock was granted for a different inode
+
         rc = ldlm_cli_enqueue(conn, req, obddev->obd_namespace, NULL, res_id,
                               lock_type, NULL, 0, lock_mode, &flags,
                               ldlm_completion_ast, mdc_blocking_ast, data,
@@ -396,6 +396,25 @@ int mdc_enqueue(struct lustre_handle *conn, int lock_type,
         } else if (rc != 0) {
                 CERROR("ldlm_cli_enqueue: %d\n", rc);
                 RETURN(rc);
+        } else {
+                /* The server almost certainly gave us a lock other than the one
+                 * that we asked for.  If we already have a matching lock, then
+                 * cancel this one--we don't need two. */
+                struct ldlm_lock *lock = ldlm_handle2lock(lockh);
+                struct lustre_handle lockh2;
+                LASSERT(lock);
+
+                LDLM_DEBUG(lock, "matching against this");
+
+                memcpy(&lockh2, lockh, sizeof(lockh2));
+                if (ldlm_lock_match(NULL, NULL, LDLM_PLAIN, NULL, 0, LCK_NL,
+                                    &lockh2)) {
+                        /* We already have a lock; cancel the old one */
+                        ldlm_lock_decref(lockh, lock_mode);
+                        ldlm_cli_cancel(lockh);
+                        memcpy(lockh, &lockh2, sizeof(lockh2));
+                }
+                LDLM_LOCK_PUT(lock);
         }
 
         /* On replay, we don't want the lock granted. */

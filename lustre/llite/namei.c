@@ -308,6 +308,8 @@ int ll_intent_lock(struct inode *parent, struct dentry **de,
                 struct ll_inode_info *lli = ll_i2info(parent);
                 int mode;
 
+                LBUG(); /* For the moment, no non-intent locks */
+
                 /* it_disposition == 0 indicates that it just did a simple lock
                  * request, for which we are very thankful.  move along with
                  * the local lookup then. */

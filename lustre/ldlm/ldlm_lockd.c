@@ -749,7 +749,7 @@ EXPORT_SYMBOL(ldlm_register_intent);
 EXPORT_SYMBOL(ldlm_unregister_intent);
 EXPORT_SYMBOL(ldlm_lockname);
 EXPORT_SYMBOL(ldlm_typename);
-EXPORT_SYMBOL(ldlm_handle2lock);
+EXPORT_SYMBOL(__ldlm_handle2lock);
 EXPORT_SYMBOL(ldlm_lock2handle);
 EXPORT_SYMBOL(ldlm_lock_put);
 EXPORT_SYMBOL(ldlm_lock_match);
