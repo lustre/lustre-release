@@ -184,6 +184,57 @@ void t1()
         LEAVE();
 }
 
+void t2()
+{
+        char *path = "/mnt/lustre/rp_ost_t2_file";
+        char *str = "xxxxjoiwlsdf98lsjdfsjfoajflsjfajfoaidfojaj08eorje;";
+        ENTRY("empty replay");
+
+        replay_barrier();
+        mds_failover();
+
+        t_echo_create(path, str);
+        t_grep(path, str);
+        t_unlink(path);
+}
+
+void t3()
+{
+        char *path = "/mnt/lustre/rp_ost_t3_file";
+        char *str = "xxxxjoiwlsdf98lsjdfsjfoajflsjfajfoaidfojaj08eorje;";
+        ENTRY("touch");
+
+        replay_barrier();
+        t_echo_create(path, str);
+        mds_failover();
+
+        t_grep(path, str);
+        t_unlink(path);
+}
+
+void t4()
+{
+        char *path = "/mnt/lustre/rp_ost_t4_file";
+        char namebuf[1024];
+        char str[1024];
+        int count = 10, i;
+        ENTRY("|X| 10 open(CREAT)s (ping involved)");
+
+        replay_barrier();
+        for (i = 0; i < count; i++) {
+                sprintf(namebuf, "%s%02d", path, i);
+                sprintf(str, "%s-%08d-%08x-AAAAA", "content", i, i);
+                t_echo_create(namebuf, str);
+        }
+        mds_failover();
+
+        for (i = 0; i < count; i++) {
+                sprintf(namebuf, "%s%02d", path, i);
+                sprintf(str, "%s-%08d-%08x-AAAAA", "content", i, i);
+                t_grep(namebuf, str);
+                t_unlink(namebuf);
+        }
+}
 
 extern int portal_debug;
 extern int portal_subsystem_debug;
@@ -263,10 +314,17 @@ int main(int argc, char * const argv[])
         sprintf(barrier_cmd, "ssh %s \"%s\"", mds_server, barrier_script);
         sprintf(failover_cmd, "ssh %s \"%s\"", mds_server, failover_script);
 
+        setenv(ENV_LUSTRE_TIMEOUT, "5", 1);
+
         __liblustre_setup_();
 
         t0();
         t1();
+        t2();
+/* XXX still have problems
+        t3();
+        t4();
+ */
 
 	printf("liblustre is about shutdown\n");
         __liblustre_cleanup_();
