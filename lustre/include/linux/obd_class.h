@@ -17,49 +17,53 @@
 #define MAX_OBD_DEVICES 8
 #define MAX_MULTI 16
 
-typedef uint64   obd_id;
-typedef uint32   obd_mode;
-typedef uint64   obd_off;
-typedef uint64   obd_size;
-typedef uint32   obd_uid;
-typedef uint32   obd_gid;
-typedef uint32   obd_mode;
-typedef uint32   obd_mode;
-typedef uint32   obd_mode;
+typedef uint64_t	obd_id;
+typedef uint64_t	obd_time;
+typedef uint64_t	obd_size;
+typedef uint64_t	obd_off;
+typedef uint64_t	obd_blocks;
+typedef uint32_t	obd_blksize;
+typedef uint32_t	obd_mode;
+typedef uint32_t	obd_uid;
+typedef uint32_t	obd_gid;
+typedef uint32_t	obd_flag;
+typedef uint32_t	obd_count;
 
-#define OBD_INLINE_DATASZ 60
-#define OBD_MDSZ 60
+#define OBD_INLINESZ	60
+#define OBD_OBDMDSZ	60
 
-#define OBD_FL_INLINED         (1UL)  
-#define OBD_FL_OBDMDEXISTS     (1UL << 1)
+#define OBD_FL_INLINEDATA	(1UL)  
+#define OBD_FL_OBDMDEXISTS	(1UL << 1)
 
+/* Note: 64-bit types are 64-bit aligned in structure */
 struct obdo {
-	uint32                  o_valid;  /* hot fields in this obdo */
-	objid                   o_id;
-	umode_t			o_mode;
-	nlink_t			o_nlink;
-	uid_t			o_uid;
-	gid_t			o_gid;
-	off_t			o_size;
-	time_t			o_atime;
-	time_t			o_mtime;
-	time_t			o_ctime;
-	__u32                   o_flags;
-	int                     o_obdflags;
-	unsigned long		o_blksize;
-	unsigned long		o_blocks;
-	char                    o_inline_data[OBD_INLINE_DATASZ];
-	char                    o_md[OBD_MDSZ];
-	struct obd_ops         *o_op;
+	obd_id			o_id;
+	obd_time		o_atime;
+	obd_time		o_mtime;
+	obd_time		o_ctime;
+	obd_size		o_size;
+	obd_blocks		o_blocks;
+	obd_blksize		o_blksize;
+	obd_mode		o_mode;
+	obd_uid			o_uid;
+	obd_gid			o_gid;
+	obd_flag		o_flags;
+	obd_flag		o_obdflags;
+	obd_count		o_nlink;
+	obd_flag		o_valid;	/* hot fields in this obdo */
+	char			*o_inline;
+	char			*o_obdmd;
+	struct list_head	o_list;
+	struct obd_ops		*o_op;
 };
 
 
-static inline int obdo_has_inlinedata(struct obdo *obdo)
+static inline int obdo_has_inline(struct obdo *obdo)
 {
 	return obdo->o_obdflags & OBD_FL_INLINEDATA;
 };
 
-static inline int obdo_has_omd(struct obdo *obdo)
+static inline int obdo_has_obdmd(struct obdo *obdo)
 {
 	return obdo->o_obdflags & OBD_FL_OBDMDEXISTS;
 };
@@ -101,27 +105,27 @@ struct obd_device {
 
 struct obd_ops {
 	int (*o_iocontrol)(int cmd, struct obd_conn *, int len, void *karg, void *uarg);
-	int (*o_get_info)(struct obd_conn *, int keylen, void *key, int *vallen, void **val);
-	int (*o_set_info)(struct obd_conn *, int keylen, void *key, int vallen, void *val);
-	int (*o_attach)(struct obd_device *, int len, void *);
+	int (*o_get_info)(struct obd_conn *, obd_count keylen, void *key, obd_count *vallen, void **val);
+	int (*o_set_info)(struct obd_conn *, obd_count keylen, void *key, obd_count vallen, void *val);
+	int (*o_attach)(struct obd_device *, obd_count len, void *);
 	int (*o_detach)(struct obd_device *);
-	int (*o_setup) (struct obd_device *dev, int len, void *data);
+	int (*o_setup) (struct obd_device *dev, obd_count len, void *data);
 	int (*o_cleanup)(struct obd_device *dev);
 	int (*o_connect)(struct obd_conn *conn);
 	int (*o_disconnect)(struct obd_conn *);
 	int (*o_statfs)(struct obd_conn *, struct statfs *statfs);
-	int (*o_preallocate)(struct obd_conn *, uint32 *req, objid ids[32]);
-	int (*o_create)(struct obd_conn *,  obdattr *new);
-	int (*o_destroy)(struct obd_conn *, obdattr *oa);
-	int (*o_setattr)(struct obd_conn *, obdattr *oa);
-	int (*o_getattr)(struct obd_conn *, obdattr *oa);
-	int (*o_read)(struct obd_conn *, obdattr *oa, char *buf, obd_size *count, obd_off offset);
-	int (*o_write)(struct obd_conn *, obdattr *oa, char *buf, obd_size *count, obd_off offset);
-	int (*o_brw)(int rw, struct obd_conn * conn, obdattr *oa, char *buf, obd_size *count, obd_off offset, uint32 flags);
-	int (*o_punch)(struct obd_conn *, obdattr *tgt, obd_size count, obd_off start);
-	int (*o_migrate)(struct obd_conn *, obdattr *dst, obdattr *src, obd_size count, obd_off start);
-	int (*o_copy)(struct obd_conn *dstconn, obdattr *dst, struct obd_conn *srconn, obdattr *src, obd_size count, obd_off start);
-	int (*o_iterate)(struct obd_conn *, int (*)(objid, void *), objid start, void *);
+	int (*o_preallocate)(struct obd_conn *, obd_count *req, obd_id *ids);
+	int (*o_create)(struct obd_conn *,  struct obdo *oa);
+	int (*o_destroy)(struct obd_conn *, struct obdo *oa);
+	int (*o_setattr)(struct obd_conn *, struct obdo *oa);
+	int (*o_getattr)(struct obd_conn *, struct obdo *oa);
+	int (*o_read)(struct obd_conn *, struct obdo *oa, char *buf, obd_size *count, obd_off offset);
+	int (*o_write)(struct obd_conn *, struct obdo *oa, char *buf, obd_size *count, obd_off offset);
+	int (*o_brw)(int rw, struct obd_conn * conn, struct obdo *oa, char *buf, obd_size *count, obd_off offset, obd_flag flags);
+	int (*o_punch)(struct obd_conn *, struct obdo *tgt, obd_size count, obd_off offset);
+	int (*o_migrate)(struct obd_conn *, struct obdo *dst, struct obdo *src, obd_size count, obd_off offset);
+	int (*o_copy)(struct obd_conn *dstconn, struct obdo *dst, struct obd_conn *srconn, struct obdo *src, obd_size count, obd_off offset);
+	int (*o_iterate)(struct obd_conn *, int (*)(objid, void *), obd_id start, void *);
 
 };
 
@@ -146,15 +150,16 @@ struct obd_prealloc_inode {
 };
 
 /* generic operations shared by various OBD types */
+int gen_multi_setup(struct obd_device *obddev, uint32_t len, void *data);
+int gen_multi_cleanup(struct obd_device *obddev);
+int gen_multi_attach(struct obd_device *obddev, uint32_t len, void *data);
+int gen_multi_detach(struct obd_device *obddev);
 int gen_connect (struct obd_conn *conn);
 int gen_disconnect(struct obd_conn *conn);
-int gen_multi_setup(struct obd_device *obddev, int len, void *data);
-int gen_multi_cleanup(struct obd_device *obddev);
-int gen_multi_attach(struct obd_device *obddev, int len, void *data);
 struct obd_client *gen_client(struct obd_conn *);
-int gen_multi_detach(struct obd_device *obddev);
 int gen_cleanup(struct obd_device *obddev);
-int gen_copy_data(struct obd_conn *, obdattr *source, obdattr *target);
+int gen_copy_data(struct obd_conn *dst_conn, struct obdo *dst,
+		  struct obd_conn *src_conn, struct obdo *src);
 
 
 
@@ -244,35 +249,38 @@ extern void obd_sysctl_clean (void);
 
 
 /* support routines */
-static __inline__ obdattr *obd_empty_oa(void)
+static __inline__ struct obdo *obd_empty_oa(void)
 {
-	obdattr *res = NULL;
-	OBD_ALLOC(res, obdattr *, sizeof(*res));
+	struct obdo *res = NULL;
+
+	/* XXX we should probably use a slab cache here */
+	OBD_ALLOC(res, struct obdo *, sizeof(*res));
 	memset(res, 0, sizeof (*res));
+
 	return res;
 }
 
-static __inline__ void obd_free_oa(obdattr *oa)
+static __inline__ void obd_free_oa(struct obdo *oa)
 {
 	if ( !oa ) 
 		return;
-	OBD_FREE(oa,sizeof(*oa));
+	OBD_FREE(oa, sizeof(*oa));
 }
 
 
 
-static __inline__ obdattr *obd_oa_fromid(struct obd_conn *conn,  objid id)
+static __inline__ struct obdo *obd_oa_fromid(struct obd_conn *conn, obd_id id)
 {
-	obdattr *res = NULL;
+	struct obdo *res = NULL;
 
-	OBD_ALLOC(res, obdattr *, sizeof(*res));
+	OBD_ALLOC(res, struct obdo *, sizeof(*res));
 	if ( !res ) {
 		EXIT;
 		return NULL;
 	}
 	memset(res, 0, sizeof(*res));
-	res->i_ino = id;
-	if (conn->oc_dev->obd_type->typ_ops->o_getattr(conn, res)) {
+	res->o_id = id;
+	if (OBD(conn->oc_dev, getattr)(conn, res)) {
 		OBD_FREE(res, sizeof(*res));
 		EXIT;
 		return NULL;
@@ -281,23 +289,25 @@ static __inline__ obdattr *obd_oa_fromid(struct obd_conn *conn,  objid id)
 	return res;
 }
 
-#define OBD_MD_NO	(1UL)       /* negates meaning of all flags */
-#define OBD_MD_ALL	(OBD_MD_NO) /* passing NO with no other flags == ALL */
-#define OBD_MD_FLMODE	(1UL<<1)
-#define OBD_MD_FLUID	(1UL<<2)
-#define OBD_MD_FLGID	(1UL<<3)
+#define OBD_MD_FLALL	(~0UL)
+#define OBD_MD_FLID	(1UL)
+#define OBD_MD_FLATIME	(1UL<<1)
+#define OBD_MD_FLMTIME	(1UL<<2)
+#define OBD_MD_FLCTIME	(1UL<<3)
 #define OBD_MD_FLSIZE	(1UL<<4)
-#define OBD_MD_FLATIME	(1UL<<5)
-#define OBD_MD_FLMTIME	(1UL<<6)
-#define OBD_MD_FLCTIME	(1UL<<7)
-#define OBD_MD_FLFLAGS	(1UL<<8)
-#define OBD_MD_FLBLOCKS	(1UL<<9)
-#define OBD_MD_FLOBDMD	(1UL<<10)
-#define OBD_MD_INLINED	(1UL<<11)
+#define OBD_MD_FLBLOCKS	(1UL<<5)
+#define OBD_MD_FLBLKSZ	(1UL<<6)
+#define OBD_MD_FLMODE	(1UL<<7)
+#define OBD_MD_FLUID	(1UL<<8)
+#define OBD_MD_FLGID	(1UL<<9)
+#define OBD_MD_FLFLAGS	(1UL<<10)
+#define OBD_MD_FLOBDFLG	(1UL<<11)
+#define OBD_MD_FLINLINE	(1UL<<12)
+#define OBD_MD_FLOBDMD	(1UL<<13)
 
 
 
-static __inline__ void obdo_cpy_md(obdattr *dst, obdattr *src)
+static __inline__ void obdo_cpy_md(struct obdo *dst, struct obdo *src)
 {
 	/* If the OBD_MD_NO flag is set, then we copy all EXCEPT those
 	 * fields given by the flags.  The default is to copy the field
@@ -336,17 +346,17 @@ static __inline__ void obdo_cpy_md(obdattr *dst, obdattr *src)
 	}
 }
 
+static __inline__ void obdo_cpy_from_inode(struct obdo *dst, struct inode *src)
+{
+}
 
-static __inline__ int obdo_cmp_md(obdattr *dst, obdattr *src)
+static __inline__ void obdo_cpy_from_oa(struct inode *dst, struct obdo *src)
+{
+}
+
+static __inline__ int obdo_cmp_md(struct obdo *dst, struct obdo *src)
 {
 	int res = 1;
-
-	/* If the OBD_MD_NO flag is set, then we copy all EXCEPT those
-	 * fields given by the flags.  The default is to copy the field
-	 * given by the flags.
-	 */
-	if (src->o_valid & OBD_MD_NO)
-		src->o_valid = ~src->o_valid;
 
 	if ( src->o_valid & OBD_MD_FLMODE )
 		res = (res && (dst->i_mode == src->i_mode));
