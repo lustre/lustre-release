@@ -47,7 +47,6 @@ int client_import_connect(struct lustre_handle *dlm_handle,
         char *tmp[] = {imp->imp_target_uuid.uuid,
                        obd->obd_uuid.uuid,
                        (char *)dlm_handle};
-        int rq_opc = (obd->obd_type->typ_ops->o_brw) ? OST_CONNECT :MDS_CONNECT;
         int msg_flags;
 
         ENTRY;
@@ -67,7 +66,7 @@ int client_import_connect(struct lustre_handle *dlm_handle,
         if (obd->obd_namespace == NULL)
                 GOTO(out_disco, rc = -ENOMEM);
 
-        request = ptlrpc_prep_req(imp, rq_opc, 3, size, tmp);
+        request = ptlrpc_prep_req(imp, imp->imp_connect_op, 3, size, tmp);
         if (!request)
                 GOTO(out_ldlm, rc = -ENOMEM);
 
@@ -90,7 +89,7 @@ int client_import_connect(struct lustre_handle *dlm_handle,
         class_export_put(exp);
 
         msg_flags = lustre_msg_get_op_flags(request->rq_repmsg);
-        if (rq_opc == MDS_CONNECT || msg_flags & MSG_CONNECT_REPLAYABLE) {
+        if (msg_flags & MSG_CONNECT_REPLAYABLE) {
                 imp->imp_replayable = 1;
                 CDEBUG(D_HA, "connected to replayable target: %s\n",
                        imp->imp_target_uuid.uuid);
@@ -132,7 +131,16 @@ int client_import_disconnect(struct lustre_handle *dlm_handle, int failover)
                 RETURN(-EINVAL);
         }
 
-        rq_opc = obd->obd_type->typ_ops->o_brw ? OST_DISCONNECT:MDS_DISCONNECT;
+        switch (imp->imp_connect_op) {
+        case OST_CONNECT: rq_opc = OST_DISCONNECT; break;
+        case MDS_CONNECT: rq_opc = MDS_DISCONNECT; break;
+        case MGMT_CONNECT:rq_opc = MGMT_DISCONNECT;break;
+        default:
+                CERROR("don't know how to disconnect from %s (connect_op %d)\n",
+                       imp->imp_target_uuid.uuid, imp->imp_connect_op);
+                RETURN(-EINVAL);
+        }
+
         down(&cli->cl_sem);
         if (!cli->cl_conn_count) {
                 CERROR("disconnecting disconnected device (%s)\n",
