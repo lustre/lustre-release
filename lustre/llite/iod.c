@@ -151,9 +151,9 @@ static void ll_writeback(struct inode *inode, struct ll_writeback_pages *llwp)
         struct ptlrpc_request_set *set;
         ENTRY;
 
-        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu,bytes=%u\n",
-               inode->i_ino, ((llwp->npgs-1) << PAGE_SHIFT) +
-                             llwp->pga[llwp->npgs-1].count);
+        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p),bytes=%u\n",
+               inode->i_ino, inode->i_generation, inode,
+               ((llwp->npgs-1) << PAGE_SHIFT) + llwp->pga[llwp->npgs-1].count);
 
         set = ptlrpc_prep_set();
         if (set == NULL) {
