@@ -335,6 +335,8 @@ static int obd_class_open(struct inode * inode, struct file * file)
         ENTRY;
 
         file->private_data = NULL;
+        CDEBUG(D_IOCTL, "MOD_INC_USE for open: count = %d\n",
+               atomic_read(&(THIS_MODULE)->uc.usecount));
         MOD_INC_USE_COUNT;
         RETURN(0);
 }
@@ -348,6 +350,8 @@ static int obd_class_release(struct inode * inode, struct file * file)
         if (file->private_data)
                 file->private_data = NULL;
 
+        CDEBUG(D_IOCTL, "MOD_DEC_USE for close: count = %d\n",
+               atomic_read(&(THIS_MODULE)->uc.usecount) - 1);
         MOD_DEC_USE_COUNT;
         RETURN(0);
 }
@@ -633,6 +637,8 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                                                 obd_nm[l_idx].cntr_blk_sz);
                         }
                         */
+                        CDEBUG(D_IOCTL, "MOD_INC_USE for attach: count = %d\n",
+                               atomic_read(&(THIS_MODULE)->uc.usecount));
                         MOD_INC_USE_COUNT;
                 }
 
@@ -673,8 +679,10 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 obd->obd_flags &= ~OBD_ATTACHED;
                 obd->obd_type->typ_refcnt--;
                 obd->obd_type = NULL;
+                CDEBUG(D_IOCTL, "MOD_DEC_USE for detach: count = %d\n",
+                       atomic_read(&(THIS_MODULE)->uc.usecount) - 1);
                 MOD_DEC_USE_COUNT;
-                GOTO(out, err=0);
+                GOTO(out, err = 0);
         }
 
         case OBD_IOC_SETUP: {
@@ -741,6 +749,8 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
         }
 
         case OBD_IOC_DEC_USE_COUNT: {
+                CDEBUG(D_IOCTL, "MOD_DEC_USE for force dec: count = %d\n",
+                       atomic_read(&(THIS_MODULE)->uc.usecount) - 1);
                 MOD_DEC_USE_COUNT;
                 GOTO(out, err=0);
         }
