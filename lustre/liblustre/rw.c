@@ -326,7 +326,7 @@ ssize_t llu_file_write(struct inode *inode, const struct iovec *iovec,
 {
         struct llu_inode_info *lli = llu_i2info(inode);
         struct ll_file_data *fd = lli->lli_file_data; /* XXX not ready don't use it now */
-        struct lustre_handle lockh = { 0, 0 };
+        struct lustre_handle lockh = { 0 };
         struct lov_stripe_md *lsm = lli->lli_smd;
         struct ldlm_extent extent;
         ldlm_error_t err;
@@ -476,7 +476,7 @@ ssize_t llu_file_read(struct inode *inode, const struct iovec *iovec,
         struct llu_inode_info *lli = llu_i2info(inode);
         struct ll_file_data *fd = lli->lli_file_data;
         struct lov_stripe_md *lsm = lli->lli_smd;
-        struct lustre_handle lockh = { 0, 0 };
+        struct lustre_handle lockh = { 0 };
 #if 0
         struct ll_read_extent rextent;
 #else
