@@ -31,18 +31,9 @@
  */
 
 #define EXPORT_SYMTAB
-
-#include <linux/version.h>
-#include <linux/module.h>
-#include <linux/fs.h>
-#include <linux/stat.h>
-#include <linux/locks.h>
-#include <linux/ext2_fs.h>
-#include <linux/quotaops.h>
-#include <asm/unistd.h>
-
 #define DEBUG_SUBSYSTEM S_OST
 
+#include <linux/module.h>
 #include <linux/obd_ost.h>
 #include <linux/lustre_net.h>
 

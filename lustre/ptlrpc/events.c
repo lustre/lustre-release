@@ -21,18 +21,13 @@
  */
 
 #define EXPORT_SYMTAB
-
-#include <linux/module.h>
-
 #define DEBUG_SUBSYSTEM S_RPC
 
+#include <linux/module.h>
 #include <linux/lustre_net.h>
 
-ptl_handle_eq_t request_out_eq, 
-                reply_in_eq, 
-                reply_out_eq,
-                bulk_source_eq, 
-                bulk_sink_eq;
+ptl_handle_eq_t request_out_eq, reply_in_eq, reply_out_eq, bulk_source_eq,
+        bulk_sink_eq;
 static const ptl_handle_ni_t *socknal_nip = NULL, *qswnal_nip = NULL;
 
 /*
@@ -41,8 +36,8 @@ static const ptl_handle_ni_t *socknal_nip = NULL, *qswnal_nip = NULL;
 static int request_out_callback(ptl_event_t *ev, void *data)
 {
         struct ptlrpc_request *req = ev->mem_desc.user_ptr;
-        struct ptlrpc_client *cl = req->rq_client; 
-        
+        struct ptlrpc_client *cl = req->rq_client;
+
         ENTRY;
 
         if (ev->type == PTL_EVENT_SENT) {
@@ -50,9 +45,9 @@ static int request_out_callback(ptl_event_t *ev, void *data)
                 list_del(&req->rq_list);
                 list_add(&req->rq_list, &cl->cli_sent_head);
                 spin_unlock(&req->rq_client->cli_lock);
-        } else { 
+        } else {
                 // XXX make sure we understand all events, including ACK's
-                CERROR("Unknown event %d\n", ev->type); 
+                CERROR("Unknown event %d\n", ev->type);
                 LBUG();
         }
 
@@ -69,9 +64,9 @@ static int reply_out_callback(ptl_event_t *ev, void *data)
 
         if (ev->type == PTL_EVENT_SENT) {
                 OBD_FREE(ev->mem_desc.start, ev->mem_desc.length);
-        } else { 
+        } else {
                 // XXX make sure we understand all events, including ACK's
-                CERROR("Unknown event %d\n", ev->type); 
+                CERROR("Unknown event %d\n", ev->type);
                 LBUG();
         }
 
@@ -90,9 +85,9 @@ static int reply_in_callback(ptl_event_t *ev, void *data)
                 rpc->rq_repmsg = ev->mem_desc.start + ev->offset;
                 barrier();
                 wake_up_interruptible(&rpc->rq_wait_for_rep);
-        } else { 
+        } else {
                 // XXX make sure we understand all events, including ACK's
-                CERROR("Unknown event %d\n", ev->type); 
+                CERROR("Unknown event %d\n", ev->type);
                 LBUG();
         }
 
@@ -108,9 +103,9 @@ int request_in_callback(ptl_event_t *ev, void *data)
                 CERROR("Warning: Possibly truncated rpc (%d/%d)\n",
                        ev->mlength, ev->rlength);
 
-        spin_lock(&service->srv_lock); 
+        spin_lock(&service->srv_lock);
         for (index = 0; index < service->srv_ring_length; index++)
-                if ( service->srv_buf[index] == ev->mem_desc.start) 
+                if ( service->srv_buf[index] == ev->mem_desc.start)
                         break;
 
         if (index == service->srv_ring_length)
@@ -132,10 +127,10 @@ int request_in_callback(ptl_event_t *ev, void *data)
                 ptl_set_inv_handle(&(service->srv_me_h[idx]));
 
                 if (service->srv_ref_count[idx] == 0)
-                        ptlrpc_link_svc_me(service, idx); 
+                        ptlrpc_link_svc_me(service, idx);
         }
 
-        spin_unlock(&service->srv_lock); 
+        spin_unlock(&service->srv_lock);
         if (ev->type == PTL_EVENT_PUT)
                 wake_up(&service->srv_waitq);
         else
@@ -147,7 +142,6 @@ int request_in_callback(ptl_event_t *ev, void *data)
 static int bulk_source_callback(ptl_event_t *ev, void *data)
 {
         struct ptlrpc_bulk_desc *bulk = ev->mem_desc.user_ptr;
-
         ENTRY;
 
         if (ev->type == PTL_EVENT_SENT) {
@@ -161,14 +155,12 @@ static int bulk_source_callback(ptl_event_t *ev, void *data)
                 LBUG();
         }
 
-        EXIT;
-        return 1;
+        RETURN(1);
 }
 
 static int bulk_sink_callback(ptl_event_t *ev, void *data)
 {
         struct ptlrpc_bulk_desc *bulk = ev->mem_desc.user_ptr;
-
         ENTRY;
 
         if (ev->type == PTL_EVENT_PUT) {
@@ -187,8 +179,7 @@ static int bulk_sink_callback(ptl_event_t *ev, void *data)
         if (bulk->b_cb != NULL)
                 ptlrpc_free_bulk(bulk);
 
-        EXIT;
-        return 1;
+        RETURN(1);
 }
 
 int ptlrpc_init_portals(void)

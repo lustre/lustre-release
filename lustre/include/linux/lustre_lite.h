@@ -46,8 +46,7 @@ struct ll_sb_info {
         ino_t                     ll_rootino; /* number of root inode */
         struct ptlrpc_client      ll_mds_client;
         struct ptlrpc_connection *ll_mds_conn;
-        struct ptlrpc_client      ll_ost_client;
-        struct ptlrpc_connection *ll_ost_conn;
+        struct ldlm_namespace    *ll_namespace;
 
         wait_queue_head_t         ll_commitcbd_waitq;
         wait_queue_head_t         ll_commitcbd_ctl_waitq;

@@ -175,6 +175,7 @@ struct obd_device {
         struct list_head obd_gen_clients;
         struct list_head obd_req_list;
         wait_queue_head_t obd_req_waitq;
+        struct ldlm_namespace *obd_namespace;
         union {
                 struct ext2_obd ext2;
                 struct filter_obd filter;
@@ -240,6 +241,12 @@ struct obd_ops {
         int (*o_commitrw)(int cmd, struct obd_conn *conn,
                           int objcount, struct obd_ioobj *obj,
                           int niocount, struct niobuf *res);
+        int (*o_enqueue)(struct obd_conn *conn, struct ldlm_namespace *ns,
+                         struct ldlm_handle *parent_lock, __u64 *res_id,
+                         __u32 type, struct ldlm_extent *, __u32 mode,
+                         int *flags, void *data, int datalen,
+                         struct ldlm_handle *lockh);
+        int (*o_cancel)(struct obd_conn *, __u32 mode, struct ldlm_handle *);
 };
 
 #endif
