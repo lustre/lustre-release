@@ -112,9 +112,9 @@ int ll_lock(struct inode *dir, struct dentry *dentry,
                 tgt = it->it_data;
                 tgtlen = strlen(tgt);
                 it->it_data = NULL;
-        } else if (it->it_op & IT_LOOKUP) {
+        } else if (it->it_op & IT_LOOKUP)
                 lock_mode = LCK_CR;
-        } else {
+        else {
                 LBUG();
                 RETURN(-EINVAL);
         }
@@ -404,7 +404,7 @@ static int ll_create(struct inode * dir, struct dentry * dentry, int mode)
         int err, rc = 0;
         struct obdo oa;
         struct inode *inode;
-        struct lov_stripe_md *smd;
+        struct lov_stripe_md *smd = NULL;
         struct ll_inode_info *ii = NULL;
         ENTRY;
 
@@ -426,7 +426,6 @@ static int ll_create(struct inode * dir, struct dentry * dentry, int mode)
                 rc = PTR_ERR(inode);
                 CERROR("error creating MDS object for id %Ld: rc = %d\n",
                        (unsigned long long)oa.o_id, rc);
-#warning FIXME: 'ii' needs to be set before this goto
                 GOTO(out_destroy, rc);
         }
 
@@ -444,11 +443,15 @@ static int ll_create(struct inode * dir, struct dentry * dentry, int mode)
         RETURN(rc);
 
 out_destroy:
-        oa.o_easize = ii->lli_smd->lmd_easize;
-        err = obd_destroy(ll_i2obdconn(dir), &oa, ii->lli_smd);
-        if (err)
-                CERROR("error destroying object %Ld in error path: err = %d\n",
+#warning AED: verify that smd is set here
+        if (smd) {
+                oa.o_easize = smd->lmd_easize;
+                err = obd_destroy(ll_i2obdconn(dir), &oa, smd);
+                if (err)
+                        CERROR("error destroying objid %Ld on error: err %d\n",
                        (unsigned long long)oa.o_id, err);
+        }
+
         return rc;
 }
 
@@ -465,10 +468,10 @@ static int ll_mknod(struct inode *dir, struct dentry *dentry, int mode,
                 RETURN(PTR_ERR(inode));
 
         /* no directory data updates when intents rule */
-        if (dentry->d_it->it_disposition == 0)
-                err = ext2_add_nondir(dentry, inode);
-        else
+        if (dentry->d_it && dentry->d_it->it_disposition)
                 d_instantiate(dentry, inode);
+        else
+                err = ext2_add_nondir(dentry, inode);
 
         return err;
 }
@@ -479,24 +482,13 @@ static int ll_symlink(struct inode *dir, struct dentry *dentry,
         unsigned l = strlen(symname);
         struct inode *inode;
         struct ll_inode_info *oinfo;
-        int err;
+        int err = 0;
 
-        if (dentry->d_it && dentry->d_it->it_disposition) {
-                err = dentry->d_it->it_status;
-                inode = dentry->d_inode;
-        } else {
-                inode = ll_create_node(dir, dentry->d_name.name,
-                                       dentry->d_name.len, symname, l,
-                                       S_IFLNK | S_IRWXUGO, 0, dentry->d_it,
-                                       NULL);
-                if (IS_ERR(inode))
-                        RETURN(PTR_ERR(inode));
-
-                err = ext2_add_nondir(dentry, inode);
-        }
-
-        if (err)
-                GOTO(out, err);
+        inode = ll_create_node(dir, dentry->d_name.name, dentry->d_name.len,
+                               symname, l, S_IFLNK | S_IRWXUGO, 0,
+                               dentry->d_it, NULL);
+        if (IS_ERR(inode))
+                RETURN(PTR_ERR(inode));
 
         oinfo = ll_i2info(inode);
 
@@ -507,7 +499,12 @@ static int ll_symlink(struct inode *dir, struct dentry *dentry,
         memcpy(oinfo->lli_symlink_name, symname, l + 1);
         inode->i_size = l;
 
-out:
+        /* no directory data updates when intents rule */
+        if (dentry->d_it && dentry->d_it->it_disposition)
+                d_instantiate(dentry, inode);
+        else
+                err = ext2_add_nondir(dentry, inode);
+
         return err;
 }
 
