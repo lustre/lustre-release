@@ -442,6 +442,7 @@ int obdfs_notify_change(struct dentry *de, struct iattr *attr)
                 return -ENOMEM;
         }
 
+	inode_setattr(inode, attr);
         oa->o_id = inode->i_ino;
         obdo_from_iattr(oa, attr);
         err = IOPS(inode, setattr)(IID(inode), oa);

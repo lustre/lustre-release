@@ -201,48 +201,6 @@ static int obdfs_mknod (struct inode * dir, struct dentry *dentry, int mode, int
 	return err;
 }
 
-
-/* XXX sort this out -- why is our readpage re-reading the page? */
-static int obdfs_page_symlink(struct inode *inode, const char *symname, int len)
-{
-	struct address_space *mapping = inode->i_mapping;
-	struct page *page = grab_cache_page(mapping, 0);
-	int err = -ENOMEM;
-	char *kaddr;
-
-	if (!page)
-		goto fail;
-	err = mapping->a_ops->prepare_write(NULL, page, 0, len-1);
-	if (err)
-		goto fail_map;
-	kaddr = page_address(page);
-	memcpy(kaddr, symname, len-1);
-	mapping->a_ops->commit_write(NULL, page, 0, len-1);
-#if 0
-	/*
-	 * Notice that we are _not_ going to block here - end of page is
-	 * unmapped, so this will only try to map the rest of page, see
-	 * that it is unmapped (typically even will not look into inode -
-	 * ->i_size will be enough for everything) and zero it out.
-	 * OTOH it's obviously correct and should make the page up-to-date.
-	 */
-	err = mapping->a_ops->readpage(NULL, page);
-	wait_on_page(page);
-#endif
-	obd_unlock_page(page);
-	page_cache_release(page);
-	if (err < 0)
-		goto fail;
-	mark_inode_dirty(inode);
-	return 0;
-fail_map:
-	UnlockPage(page);
-	page_cache_release(page);
-fail:
-	return err;
-}
-
-
 static int obdfs_symlink (struct inode * dir, struct dentry * dentry,
 	const char * symname)
 {
@@ -265,9 +223,7 @@ static int obdfs_symlink (struct inode * dir, struct dentry * dentry,
 		/* slow symlink */
 		inode->i_op = &page_symlink_inode_operations;
 		inode->i_mapping->a_ops = &obdfs_aops;
-		printk("-----> calling block symlink len %d\n", l); 
-		err = obdfs_page_symlink(inode, symname, l);
-		printk("-----> calling block err %d\n", err); 
+		err = block_symlink(inode, symname, l);
 		if (err)
 			goto out_fail;
 	} else {

@@ -81,15 +81,24 @@ int obdfs_readpage(struct file *file, struct page *page)
         int rc;
 
         ENTRY;
-        /* PDEBUG(page, "READ"); */
+	
+	if (Page_Uptodate(page)) {
+		EXIT;
+		goto readpage_out;
+	}
+
         rc = obdfs_brw(READ, inode, page, 0);
-        if ( !rc ) {
-                SetPageUptodate(page);
-                obd_unlock_page(page);
+        if ( rc ) {
+		EXIT; 
+		return rc;
         } 
         /* PDEBUG(page, "READ"); */
+
+ readpage_out:
+	SetPageUptodate(page);
+	obd_unlock_page(page);
         EXIT;
-        return rc;
+        return 0;
 } /* obdfs_readpage */
 
 int obdfs_prepare_write(struct file *file, struct page *page, unsigned from, unsigned to)
