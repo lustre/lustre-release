@@ -1016,9 +1016,8 @@ sub get_parsed_line()
 	chop $in_line;
 	print "MALFORMED LINE :$in_line IN FILE :$file @ $linecnt\n";
 	return 0;
-	return @parsed_line;
     }
-
+	return @parsed_line;
 }
 # Function to skip over all stuff that the user
 # doesn't want
