@@ -423,7 +423,8 @@ void portals_debug_dumplog(void)
         rc = kernel_thread(portals_do_debug_dumplog,
                            NULL, CLONE_VM | CLONE_FS | CLONE_FILES);
         if (rc < 0) {
-                printk(KERN_ERR "LustreError: cannot start dump thread\n");
+                printk(KERN_ERR "LustreError: cannot start log dump thread: "
+                       "%d\n", rc);
                 return;
         }
         sleep_on(&debug_ctlwq);

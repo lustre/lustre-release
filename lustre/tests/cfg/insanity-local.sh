@@ -9,7 +9,7 @@ FAIL_CLIENTS=${FAIL_CLIENTS:-""}
 
 NETTYPE=${NETTYPE:-tcp}
 TIMEOUT=${TIMEOUT:-30}
-PTLDEBUG=${PTLDEBUG:-'"ha|info|ioctl|malloc"'}
+PTLDEBUG=${PTLDEBUG:-0}
 MOUNT=${MOUNT:-"/mnt/lustre"}
 #CLIENT_UPCALL=${CLIENT_UPCALL:-`pwd`/client-upcall-mdev.sh}
 UPCALL=${CLIENT_UPCALL:-`pwd`/replay-single-upcall.sh}
