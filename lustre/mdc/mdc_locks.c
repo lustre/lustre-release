@@ -184,8 +184,8 @@ int mdc_enqueue(struct obd_export *exp,
                 int lock_mode,
                 struct mdc_op_data *data,
                 struct lustre_handle *lockh,
-                char *tgt,
-                int tgtlen,
+                void *lmm,
+                int lmmsize,
                 ldlm_completion_callback cb_completion,
                 ldlm_blocking_callback cb_blocking,
                 void *cb_data)
@@ -234,7 +234,7 @@ int mdc_enqueue(struct obd_export *exp,
                 /* pack the intended request */
                 mdc_open_pack(req, 2, data, it->it_create_mode, 0, 
                               LTIME_S(CURRENT_TIME),
-                              it->it_flags, tgt, tgtlen);
+                              it->it_flags, lmm, lmmsize);
                 /* get ready for the reply */
                 reply_buffers = 3;
                 req->rq_replen = lustre_msg_size(3, repsize);
@@ -401,6 +401,7 @@ EXPORT_SYMBOL(mdc_enqueue);
  */
 int mdc_intent_lock(struct obd_export *exp, struct ll_uctxt *uctxt,
                     struct ll_fid *pfid, const char *name, int len,
+                    void *lmm, int lmmsize,
                     struct ll_fid *cfid, struct lookup_intent *it, int flags,
                     struct ptlrpc_request **reqp,
                     ldlm_blocking_callback cb_blocking)
@@ -452,7 +453,8 @@ int mdc_intent_lock(struct obd_export *exp, struct ll_uctxt *uctxt,
                 mdc_fid2mdc_op_data(&op_data, uctxt, pfid, cfid, name, len, 0);
 
                 rc = mdc_enqueue(exp, LDLM_PLAIN, it, it_to_lock_mode(it),
-                                 &op_data, &lockh, NULL, 0, ldlm_completion_ast,
+                                 &op_data, &lockh, lmm, lmmsize, 
+                                 ldlm_completion_ast,
                                  cb_blocking, NULL);
                 if (rc < 0)
                         RETURN(rc);
