@@ -1,3 +1,4 @@
+configurable-x86-stack-2.4.20.patch
 uml-patch-2.4.20-6.patch
 uml-2.4.20-do_mmap_pgoff-fix.patch
 uml-2.4.20-fixes-1.patch
