@@ -1277,7 +1277,7 @@ run_test 42b "test destroy of file with cached dirty data ======"
 # any number of fixes (don't get {0,EOF} on open, match
 # composite locks, do smarter file size management) fix
 # this, but for now we want these tests to verify that
-# the cancelation with truncate intent works, so we
+# the cancellation with truncate intent works, so we
 # start the file with a full-file pw lock to match against
 # until the truncate.
 trunc_test() {
@@ -1318,7 +1318,7 @@ run_test 42d "test complete truncate of file with cached dirty data"
 test_43() {
 	mkdir $DIR/d43
 	cp -p /bin/ls $DIR/d43/f
-	exec 100>> $DIR/d43/f	
+	exec 100>> $DIR/d43/f
 	$DIR/d43/f && error || true
 	exec 100<&-
 }
@@ -1327,8 +1327,7 @@ run_test 43 "execution of file opened for write should return -ETXTBSY"
 test_43a() {
         mkdir -p $DIR/d43
 	cp -p `which multiop` $DIR/d43/multiop
-        touch $DIR/d43/g
-        $DIR/d43/multiop $DIR/d43/g o_c &
+        $DIR/d43/multiop $TMP/test43.junk O_c &
         MULTIPID=$!
         sleep 1
         multiop $DIR/d43/multiop Oc && error "expected error, got success"
@@ -1340,8 +1339,7 @@ run_test 43a "open(RDWR) of file being executed should return -ETXTBSY"
 test_43b() {
         mkdir -p $DIR/d43
 	cp -p `which multiop` $DIR/d43/multiop
-        touch $DIR/d43/g
-        $DIR/d43/multiop $DIR/d43/g o_c &
+        $DIR/d43/multiop $TMP/test43.junk O_c &
         MULTIPID=$!
         sleep 1
         truncate $DIR/d43/multiop 0 && error "expected error, got success"
@@ -1429,7 +1427,7 @@ test_45() {
 	do_dirty_record "echo blah > $f"
 	[ $before -eq $after ] && error "write wasn't cached"
 	do_dirty_record "cancel_lru_locks OSC"
-	[ $before -gt $after ] || error "lock cancelation didn't lower dirty count"
+	[ $before -gt $after ] || error "lock cancellation didn't lower dirty count"
 	start_kupdated
 }
 run_test 45 "osc io page accounting ============================"
@@ -1711,7 +1709,6 @@ test_62() {
         cancel_lru_locks OSC
         echo 0x405 > /proc/sys/lustre/fail_loc
         cat $f && error "cat succeeded, expect -EIO"
-        multiop $f Owc && error "multiop succeeded, expect -EIO"
         echo 0 > /proc/sys/lustre/fail_loc
 }
 run_test 62 "verify obd_match failure doesn't LBUG (should -EIO)"

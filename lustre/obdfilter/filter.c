@@ -902,29 +902,16 @@ static int filter_blocking_ast(struct ldlm_lock *lock,
         RETURN(0);
 }
 
-static int filter_lock_dentry(struct obd_device *obd, struct dentry *de,
-                              ldlm_mode_t lock_mode,struct lustre_handle *lockh)
+static int filter_lock_dentry(struct obd_device *obd, struct dentry *dparent)
 {
-        struct ldlm_res_id res_id = { .name = {0} };
-        int flags = 0, rc;
-        ENTRY;
-
-        res_id.name[0] = de->d_inode->i_ino;
-        res_id.name[1] = de->d_inode->i_generation;
-        rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace, NULL,
-                              res_id, LDLM_PLAIN, NULL, 0, lock_mode,
-                              &flags, ldlm_completion_ast,
-                              filter_blocking_ast, NULL, lockh);
-
-        RETURN(rc == ELDLM_OK ? 0 : -EIO);  /* XXX translate ldlm code */
+        down(&dparent->d_inode->i_sem);
+        return 0;
 }
 
 /* We never dget the object parent, so DON'T dput it either */
-static void filter_parent_unlock(struct dentry *dparent,
-                                 struct lustre_handle *lockh,
-                                 ldlm_mode_t lock_mode)
+static void filter_parent_unlock(struct dentry *dparent)
 {
-        ldlm_lock_decref(lockh, lock_mode);
+        up(&dparent->d_inode->i_sem);
 }
 
 /* We never dget the object parent, so DON'T dput it either */
@@ -941,20 +928,19 @@ struct dentry *filter_parent(struct obd_device *obd, obd_gr group, obd_id objid)
 
 /* We never dget the object parent, so DON'T dput it either */
 struct dentry *filter_parent_lock(struct obd_device *obd, obd_gr group,
-                                  obd_id objid, ldlm_mode_t lock_mode,
-                                  struct lustre_handle *lockh)
+                                  obd_id objid)
 {
         unsigned long now = jiffies;
-        struct dentry *de = filter_parent(obd, group, objid);
+        struct dentry *dparent = filter_parent(obd, group, objid);
         int rc;
 
-        if (IS_ERR(de))
-                return de;
+        if (IS_ERR(dparent))
+                return dparent;
 
-        rc = filter_lock_dentry(obd, de, lock_mode, lockh);
+        rc = filter_lock_dentry(obd, dparent);
         if (time_after(jiffies, now + 15 * HZ))
                 CERROR("slow parent lock %lus\n", (jiffies - now) / HZ);
-        return rc ? ERR_PTR(rc) : de;
+        return rc ? ERR_PTR(rc) : dparent;
 }
 
 /* How to get files, dentries, inodes from object id's.
@@ -968,7 +954,6 @@ struct dentry *filter_fid2dentry(struct obd_device *obd,
                                  struct dentry *dir_dentry,
                                  obd_gr group, obd_id id)
 {
-        struct lustre_handle lockh;
         struct dentry *dparent = dir_dentry;
         struct dentry *dchild;
         char name[32];
@@ -982,15 +967,15 @@ struct dentry *filter_fid2dentry(struct obd_device *obd,
 
         len = sprintf(name, LPU64, id);
         if (dir_dentry == NULL) {
-                dparent = filter_parent_lock(obd, group, id, LCK_PR, &lockh);
+                dparent = filter_parent_lock(obd, group, id);
                 if (IS_ERR(dparent))
                         RETURN(dparent);
         }
         CDEBUG(D_INODE, "looking up object O/%*s/%s\n",
                dparent->d_name.len, dparent->d_name.name, name);
-        dchild = ll_lookup_one_len(name, dparent, len);
+        dchild = /*ll_*/lookup_one_len(name, dparent, len);
         if (dir_dentry == NULL)
-                filter_parent_unlock(dparent, &lockh, LCK_PR);
+                filter_parent_unlock(dparent);
         if (IS_ERR(dchild)) {
                 CERROR("child lookup error %ld\n", PTR_ERR(dchild));
                 RETURN(dchild);
@@ -1009,21 +994,15 @@ static int filter_prepare_destroy(struct obd_device *obd, obd_id objid)
         struct lustre_handle lockh;
         int flags = LDLM_AST_DISCARD_DATA, rc;
         struct ldlm_res_id res_id = { .name = { objid } };
-        struct ldlm_extent extent = { 0, OBD_OBJECT_EOF };
-        ENTRY;
+        ldlm_policy_data_t policy = { .l_extent = { 0, OBD_OBJECT_EOF } };
 
+        ENTRY;
         /* Tell the clients that the object is gone now and that they should
-         * throw away any cached pages.  If we're the OST at stripe 0 in the
-         * file then this enqueue will communicate the DISCARD to all the
-         * clients.  This assumes that we always destroy all the objects for
-         * a file at a time, as is currently the case.  If we're not the
-         * OST at stripe 0 then we'll harmlessly get a very lonely lock in
-         * the local DLM and immediately drop it. */
-        rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace, NULL,
-                              res_id, LDLM_EXTENT, &extent,
-                              sizeof(extent), LCK_PW, &flags,
-                              ldlm_completion_ast, filter_blocking_ast,
-                              NULL, &lockh);
+         * throw away any cached pages. */
+        rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace, res_id,
+                              LDLM_EXTENT, &policy, LCK_PW,
+                              &flags, filter_blocking_ast, ldlm_completion_ast,
+                              NULL, NULL, NULL, 0, NULL, &lockh);
 
         /* We only care about the side-effects, just drop the lock. */
         if (rc == ELDLM_OK)
@@ -1056,6 +1035,119 @@ static int filter_destroy_internal(struct obd_device *obd, obd_id objid,
                        dchild->d_name.len, dchild->d_name.name, rc);
 
         RETURN(rc);
+}
+
+static int filter_intent_policy(struct ldlm_namespace *ns,
+                                struct ldlm_lock **lockp, void *req_cookie,
+                                ldlm_mode_t mode, int flags, void *data)
+{
+        struct list_head rpc_list = LIST_HEAD_INIT(rpc_list);
+        struct ptlrpc_request *req = req_cookie;
+        struct ldlm_lock *lock = *lockp, *l = NULL;
+        struct ldlm_resource *res = lock->l_resource;
+        ldlm_processing_policy policy;
+        struct ost_lvb *res_lvb, *reply_lvb;
+        struct list_head *tmp;
+        ldlm_error_t err;
+        int tmpflags = 0, rc, repsize[2] = {sizeof(struct ldlm_reply),
+                                            sizeof(struct ost_lvb) };
+        ENTRY;
+
+        policy = ldlm_get_processing_policy(res);
+        LASSERT(policy != NULL);
+        LASSERT(req != NULL);
+
+        rc = lustre_pack_reply(req, 2, repsize, NULL);
+        if (rc)
+                RETURN(req->rq_status = rc);
+
+        reply_lvb = lustre_msg_buf(req->rq_repmsg, 1, sizeof(*reply_lvb));
+        LASSERT(reply_lvb != NULL);
+
+        //fixup_handle_for_resent_req(req, lock, &lockh);
+
+        /* If we grant any lock at all, it will be a whole-file read lock.
+         * Call the extent policy function to see if our request can be
+         * granted, or is blocked. */
+        lock->l_policy_data.l_extent.start = 0;
+        lock->l_policy_data.l_extent.end = OBD_OBJECT_EOF;
+        lock->l_req_mode = LCK_PR;
+
+        l_lock(&res->lr_namespace->ns_lock);
+
+        res->lr_tmp = &rpc_list;
+        rc = policy(lock, &tmpflags, 0, &err);
+        res->lr_tmp = NULL;
+
+        /* FIXME: we should change the policy function slightly, to not make
+         * this list at all, since we just turn around and free it */
+        while (!list_empty(&rpc_list)) {
+                struct ldlm_ast_work *w =
+                        list_entry(rpc_list.next, struct ldlm_ast_work, w_list);
+                list_del(&w->w_list);
+                LDLM_LOCK_PUT(w->w_lock);
+                OBD_FREE(w, sizeof(*w));
+        }
+
+        if (rc == LDLM_ITER_CONTINUE) {
+                /* The lock met with no resistance; we're finished. */
+                l_unlock(&res->lr_namespace->ns_lock);
+                RETURN(ELDLM_LOCK_REPLACED);
+        }
+
+        /* Do not grant any lock, but instead send GL callbacks.  The extent
+         * policy nicely created a list of all PW locks for us.  We will choose
+         * the highest of those which are larger than the size in the LVB, if
+         * any, and perform a glimpse callback. */
+        down(&res->lr_lvb_sem);
+        res_lvb = res->lr_lvb_data;
+        LASSERT(res_lvb != NULL);
+        reply_lvb->lvb_size = res_lvb->lvb_size;
+        up(&res->lr_lvb_sem);
+
+        list_for_each(tmp, &res->lr_granted) {
+                struct ldlm_lock *tmplock =
+                        list_entry(tmp, struct ldlm_lock, l_res_link);
+
+                if (tmplock->l_granted_mode == LCK_PR)
+                        continue;
+
+                if (tmplock->l_policy_data.l_extent.end <=
+                    reply_lvb->lvb_size)
+                        continue;
+
+                if (l == NULL) {
+                        l = LDLM_LOCK_GET(tmplock);
+                        continue;
+                }
+
+                if (l->l_policy_data.l_extent.start >
+                    tmplock->l_policy_data.l_extent.start)
+                        continue;
+
+                LDLM_LOCK_PUT(l);
+                l = LDLM_LOCK_GET(tmplock);
+        }
+        l_unlock(&res->lr_namespace->ns_lock);
+
+        /* There were no PW locks beyond the size in the LVB; finished. */
+        if (l == NULL)
+                RETURN(ELDLM_LOCK_ABORTED);
+
+        LASSERT(l->l_glimpse_ast != NULL);
+        rc = l->l_glimpse_ast(l, NULL); /* this will update the LVB */
+
+        down(&res->lr_lvb_sem);
+#if 0
+        if (res_lvb->lvb_size == reply_lvb->lvb_size)
+                LDLM_ERROR(l, "we lost the glimpse race!");
+#endif
+        reply_lvb->lvb_size = res_lvb->lvb_size;
+        up(&res->lr_lvb_sem);
+
+        LDLM_LOCK_PUT(l);
+
+        RETURN(ELDLM_LOCK_ABORTED);
 }
 
 /* mount the file system (secretly) */
@@ -1129,6 +1221,9 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
                                                 LDLM_NAMESPACE_SERVER);
         if (obd->obd_namespace == NULL)
                 GOTO(err_post, rc = -ENOMEM);
+        obd->obd_namespace->ns_lvbp = obd;
+        obd->obd_namespace->ns_lvbo = &filter_lvbo;
+        ldlm_register_intent(obd->obd_namespace, filter_intent_policy);
 
         ptlrpc_init_client(LDLM_CB_REQUEST_PORTAL, LDLM_CB_REPLY_PORTAL,
                            "filter_ldlm_cb_client", &obd->obd_ldlm_client);
@@ -1448,6 +1543,8 @@ static int filter_setattr(struct obd_export *exp, struct obdo *oa,
         struct filter_obd *filter;
         struct dentry *dentry;
         struct iattr iattr;
+        struct ldlm_res_id res_id = { .name = { oa->o_id } };
+        struct ldlm_resource *res;
         void *handle;
         int rc, rc2;
         ENTRY;
@@ -1485,6 +1582,22 @@ static int filter_setattr(struct obd_export *exp, struct obdo *oa,
                 CERROR("error on commit, err = %d\n", rc2);
                 if (!rc)
                         rc = rc2;
+        }
+
+        if (iattr.ia_valid & ATTR_SIZE) {
+                res = ldlm_resource_get(exp->exp_obd->obd_namespace, NULL,
+                                        res_id, LDLM_EXTENT, 0);
+                if (res == NULL) {
+                        CERROR("!!! resource_get failed for object "LPU64" -- "
+                               "filter_setattr with no lock?\n", oa->o_id);
+                } else {
+                        if (res->lr_namespace->ns_lvbo &&
+                            res->lr_namespace->ns_lvbo->lvbo_update) {
+                                rc = res->lr_namespace->ns_lvbo->lvbo_update
+                                        (res, NULL, 0);
+                        }
+                        ldlm_resource_putref(res);
+                }
         }
 
         oa->o_valid = OBD_MD_FLID;
@@ -1625,7 +1738,6 @@ static int filter_should_precreate(struct obd_export *exp, struct obdo *oa,
 static int filter_precreate(struct obd_device *obd, struct obdo *oa,
                             obd_gr group, int *num)
 {
-        struct lustre_handle parent_lockh;
         struct dentry *dchild = NULL;
         struct filter_obd *filter;
         struct dentry *dparent;
@@ -1660,8 +1772,7 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
 
                 CDEBUG(D_INFO, "precreate objid "LPU64"\n", next_id);
 
-                dparent = filter_parent_lock(obd, group, next_id, LCK_PW,
-                                             &parent_lockh);
+                dparent = filter_parent_lock(obd, group, next_id);
                 if (IS_ERR(dparent))
                         GOTO(cleanup, rc = PTR_ERR(dparent));
                 cleanup_phase = 1;
@@ -1720,7 +1831,7 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
                 case 2:
                         f_dput(dchild);
                 case 1:
-                        filter_parent_unlock(dparent, &parent_lockh, LCK_PW);
+                        filter_parent_unlock(dparent);
                 case 0:
                         break;
                 }
@@ -1798,7 +1909,6 @@ static int filter_destroy(struct obd_export *exp, struct obdo *oa,
         struct dentry *dchild = NULL, *dparent = NULL;
         struct obd_run_ctxt saved;
         void *handle = NULL;
-        struct lustre_handle parent_lockh;
         struct llog_cookie *fcc = NULL;
         int rc, rc2, cleanup_phase = 0, have_prepared = 0;
         obd_gr group = 0;
@@ -1813,8 +1923,7 @@ static int filter_destroy(struct obd_export *exp, struct obdo *oa,
         push_ctxt(&saved, &obd->obd_ctxt, NULL);
 
  acquire_locks:
-        dparent = filter_parent_lock(obd, group, oa->o_id, LCK_PW,
-                                     &parent_lockh);
+        dparent = filter_parent_lock(obd, group, oa->o_id);
         if (IS_ERR(dparent))
                 GOTO(cleanup, rc = PTR_ERR(dparent));
         cleanup_phase = 1;
@@ -1844,7 +1953,7 @@ static int filter_destroy(struct obd_export *exp, struct obdo *oa,
                  * complication of condition the above code to skip it on the
                  * second time through. */
                 f_dput(dchild);
-                filter_parent_unlock(dparent, &parent_lockh, LCK_PW);
+                filter_parent_unlock(dparent);
 
                 filter_prepare_destroy(obd, oa->o_id);
                 have_prepared = 1;
@@ -1869,13 +1978,14 @@ cleanup:
         switch(cleanup_phase) {
         case 3:
                 if (fcc != NULL) {
-                        if (oti != NULL) {
+                        if (oti != NULL)
                                 fsfilt_add_journal_cb(obd, 0, oti->oti_handle,
-                                                      filter_cancel_cookies_cb, fcc);
-                        } else {
+                                                      filter_cancel_cookies_cb,
+                                                      fcc);
+                        else
                                 fsfilt_add_journal_cb(obd, 0, handle,
-                                                      filter_cancel_cookies_cb, fcc);
-                        }
+                                                      filter_cancel_cookies_cb,
+                                                      fcc);
                 }
                 rc = filter_finish_transno(exp, oti, rc);
                 rc2 = fsfilt_commit(obd, dparent->d_inode, handle, 0);
@@ -1887,13 +1997,7 @@ cleanup:
         case 2:
                 f_dput(dchild);
         case 1:
-                if (rc || oti == NULL) {
-                        filter_parent_unlock(dparent, &parent_lockh, LCK_PW);
-                } else {
-                        memcpy(&oti->oti_ack_locks[0].lock, &parent_lockh,
-                               sizeof(parent_lockh));
-                        oti->oti_ack_locks[0].mode = LCK_PW;
-                }
+                filter_parent_unlock(dparent);
         case 0:
                 pop_ctxt(&saved, &obd->obd_ctxt, NULL);
                 break;

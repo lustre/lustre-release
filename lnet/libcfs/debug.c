@@ -945,9 +945,6 @@ char *portals_nid2str(int nal, ptl_nid_t nid, char *str)
 }
 
 #ifdef __KERNEL__
-#include <linux/lustre_version.h>
-#if (LUSTRE_KERNEL_VERSION >= 30)
-#warning "FIXME: remove workaround when l30 is widely used"
 char stack_backtrace[LUSTRE_TRACE_SIZE];
 spinlock_t stack_backtrace_lock = SPIN_LOCK_UNLOCKED;
 
@@ -958,7 +955,7 @@ extern int is_kernel_text_address(unsigned long addr);
 char *portals_debug_dumpstack(void)
 {
         asm("int $3");
-        return "dump stack";
+        return "dump stack\n";
 }
 
 #elif defined(__i386__)
@@ -1020,7 +1017,6 @@ char *portals_debug_dumpstack(void)
 #endif /* __arch_um__ */
 EXPORT_SYMBOL(stack_backtrace_lock);
 EXPORT_SYMBOL(portals_debug_dumpstack);
-#endif /* LUSTRE_KERNEL_VERSION < 30 */
 #endif /* __KERNEL__ */
 
 EXPORT_SYMBOL(portals_debug_dumplog);

@@ -432,7 +432,7 @@ static struct ldlm_resource *ldlm_resource_new(void)
         INIT_LIST_HEAD(&res->lr_granted);
         INIT_LIST_HEAD(&res->lr_converting);
         INIT_LIST_HEAD(&res->lr_waiting);
-
+        sema_init(&res->lr_lvb_sem, 1);
         atomic_set(&res->lr_refcount, 1);
 
         return res;
@@ -482,6 +482,7 @@ ldlm_resource_add(struct ldlm_namespace *ns, struct ldlm_resource *parent,
         }
         l_unlock(&ns->ns_lock);
 
+
         RETURN(res);
 }
 
@@ -494,6 +495,7 @@ ldlm_resource_get(struct ldlm_namespace *ns, struct ldlm_resource *parent,
 {
         struct list_head *bucket, *tmp;
         struct ldlm_resource *res = NULL;
+        int rc;
         ENTRY;
 
         LASSERT(ns != NULL);
@@ -519,6 +521,15 @@ ldlm_resource_get(struct ldlm_namespace *ns, struct ldlm_resource *parent,
                 res = NULL;
 
         l_unlock(&ns->ns_lock);
+
+        if (create && ns->ns_lvbo && ns->ns_lvbo->lvbo_init) {
+                rc = ns->ns_lvbo->lvbo_init(res);
+                if (rc) {
+                        CERROR("lvbo_init failure %d\n", rc);
+                        LASSERT(ldlm_resource_putref(res) == 1);
+                        res = NULL;
+                }
+        }
 
         RETURN(res);
 }
@@ -579,6 +590,8 @@ int ldlm_resource_putref(struct ldlm_resource *res)
                 ns->ns_refcount--;
                 list_del_init(&res->lr_hash);
                 list_del_init(&res->lr_childof);
+                if (res->lr_lvb_data)
+                        OBD_FREE(res->lr_lvb_data, res->lr_lvb_len);
                 l_unlock(&ns->ns_lock);
 
                 OBD_SLAB_FREE(res, ldlm_resource_slab, sizeof *res);
@@ -626,7 +639,6 @@ void ldlm_res2desc(struct ldlm_resource *res, struct ldlm_resource_desc *desc)
 {
         desc->lr_type = res->lr_type;
         memcpy(&desc->lr_name, &res->lr_name, sizeof(desc->lr_name));
-        memcpy(desc->lr_version, res->lr_version, sizeof(desc->lr_version));
 }
 
 void ldlm_dump_all_namespaces(void)

@@ -626,6 +626,7 @@ int lustre_msg_size(int count, int *lengths);
 int lustre_unpack_msg(struct lustre_msg *m, int len);
 void *lustre_msg_buf(struct lustre_msg *m, int n, int minlen);
 char *lustre_msg_string (struct lustre_msg *m, int n, int max_len);
+void *lustre_swab_buf(struct lustre_msg *, int n, int minlen, void *swabber);
 void *lustre_swab_reqbuf (struct ptlrpc_request *req, int n, int minlen,
                           void *swabber);
 void *lustre_swab_repbuf (struct ptlrpc_request *req, int n, int minlen,

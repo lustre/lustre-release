@@ -39,14 +39,11 @@ static int ll_mdc_close(struct obd_export *mdc_exp, struct inode *inode,
         struct ll_file_data *fd = file->private_data;
         struct ptlrpc_request *req = NULL;
         struct obd_client_handle *och = &fd->fd_mds_och;
-        struct ll_inode_info *lli = ll_i2info(inode);
         struct obdo obdo;
         int rc, valid;
         ENTRY;
 
         valid = OBD_MD_FLID;
-        if (test_bit(LLI_F_HAVE_OST_SIZE_LOCK, &lli->lli_flags))
-                valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
 
         memset(&obdo, 0, sizeof(obdo));
         obdo.o_id = inode->i_ino;
@@ -288,17 +285,45 @@ static inline void ll_remove_suid(struct inode *inode)
         }
 }
 
-/* Flush the page cache for an extent as its canceled.  No one can dirty the
- * extent until we've finished our work and they can enqueue another lock.
- * The DLM protects us from ll_file_read/write here, but other kernel actors
- * could have pages locked */
+static int ll_lock_to_stripe_offset(struct inode *inode, struct ldlm_lock *lock)
+{
+        struct ll_inode_info *lli = ll_i2info(inode);
+        struct lov_stripe_md *lsm = lli->lli_smd;
+        struct obd_export *exp = ll_i2obdexp(inode);
+        struct {
+                char name[16];
+                struct ldlm_lock *lock;
+                struct lov_stripe_md *lsm;
+        } key = { .name = "lock_to_stripe", .lock = lock, .lsm = lsm };
+        __u32 stripe, vallen = sizeof(stripe);
+        int rc;
+        ENTRY;
+
+        if (lsm->lsm_stripe_count == 1)
+                RETURN(0);
+
+        /* get our offset in the lov */
+        rc = obd_get_info(exp, sizeof(key), &key, &vallen, &stripe);
+        if (rc != 0) {
+                CERROR("obd_get_info: rc = %d\n", rc);
+                LBUG();
+        }
+        LASSERT(stripe < lsm->lsm_stripe_count);
+        RETURN(stripe);
+}
+
+/* Flush the page cache for an extent as its canceled.  When we're on an LOV,
+ * we get a lock cancellation for each stripe, so we have to map the obd's
+ * region back onto the stripes in the file that it held.
+ *
+ * No one can dirty the extent until we've finished our work and they can
+ * enqueue another lock.  The DLM protects us from ll_file_read/write here,
+ * but other kernel actors could have pages locked. */
 void ll_pgcache_remove_extent(struct inode *inode, struct lov_stripe_md *lsm,
-                              struct ldlm_lock *lock)
+                              struct ldlm_lock *lock, __u32 stripe)
 {
         struct ldlm_extent *extent = &lock->l_policy_data.l_extent;
-        struct obd_export *exp = ll_i2obdexp(inode);
-        struct ll_inode_info *lli = ll_i2info(inode);
-        unsigned long start, end, i;
+        unsigned long start, end, count, skip, i, j;
         struct page *page;
         int rc, discard = lock->l_flags & LDLM_FL_DISCARD_DATA;
         ENTRY;
@@ -306,26 +331,50 @@ void ll_pgcache_remove_extent(struct inode *inode, struct lov_stripe_md *lsm,
         CDEBUG(D_INODE, "obdo %lu inode %p ["LPU64"->"LPU64"] size: %llu\n",
                inode->i_ino, inode, extent->start, extent->end, inode->i_size);
 
+        /* our locks are page granular thanks to osc_enqueue, we invalidate the
+         * whole page. */
+        LASSERT((extent->start & ~PAGE_CACHE_MASK) == 0);
+        LASSERT(((extent->end+1) & ~PAGE_CACHE_MASK) == 0);
+
         start = extent->start >> PAGE_CACHE_SHIFT;
+        count = ~0;
+        skip = 0;
         end = (extent->end >> PAGE_CACHE_SHIFT) + 1;
         if ((end << PAGE_CACHE_SHIFT) < extent->end)
                 end = ~0;
+        if (lsm->lsm_stripe_count > 1) {
+                count = lsm->lsm_stripe_size >> PAGE_CACHE_SHIFT;
+                skip = (lsm->lsm_stripe_count - 1) * count;
+                start += (start/count * skip) + (stripe * count);
+                if (end != ~0)
+                        end += (end/count * skip) + (stripe * count);
+        } 
 
         i = (inode->i_size + PAGE_CACHE_SIZE-1) >> PAGE_CACHE_SHIFT;
-        if (end >= i)
-                clear_bit(LLI_F_HAVE_OST_SIZE_LOCK,
-                          &(ll_i2info(inode)->lli_flags));
         if (i < end)
                 end = i;
 
-        CDEBUG(D_INODE, "walking page indices start: %lu end: %lu\n", start,
-               end);
+        CDEBUG(D_INODE, "walking page indices start: %lu j: %lu count: %lu "
+               "skip: %lu end: %lu%s\n", start, start % count, count, skip, end,
+               discard ? " (DISCARDING)" : "");
 
-        for (i = start; i < end; i++) {
+        /* this is the simplistic implementation of page eviction at
+         * cancelation.  It is careful to get races with other page
+         * lockers handled correctly.  fixes from bug 20 will make it
+         * more efficient by associating locks with pages and with
+         * batching writeback under the lock explicitly. */
+        for (i = start, j = start % count ; ; j++, i++) {
+                if (j == count) {
+                        i += skip;
+                        j = 0;
+                }
+                if (i >= end)
+                        break;
+
                 ll_pgcache_lock(inode->i_mapping);
                 if (list_empty(&inode->i_mapping->dirty_pages) &&
-                     list_empty(&inode->i_mapping->clean_pages) &&
-                     list_empty(&inode->i_mapping->locked_pages)) {
+                    list_empty(&inode->i_mapping->clean_pages) &&
+                    list_empty(&inode->i_mapping->locked_pages)) {
                         CDEBUG(D_INODE, "nothing left\n");
                         ll_pgcache_unlock(inode->i_mapping);
                         break;
@@ -337,8 +386,7 @@ void ll_pgcache_remove_extent(struct inode *inode, struct lov_stripe_md *lsm,
                 page = find_get_page(inode->i_mapping, i);
                 if (page == NULL)
                         continue;
-
-                LL_CDEBUG_PAGE(page, "locking\n");
+                LL_CDEBUG_PAGE(page, "locking page\n");
                 lock_page(page);
 
                 /* page->mapping to check with racing against teardown */
@@ -350,11 +398,7 @@ void ll_pgcache_remove_extent(struct inode *inode, struct lov_stripe_md *lsm,
                         list_add(&page->list, &inode->i_mapping->locked_pages);
                         ll_pgcache_unlock(inode->i_mapping);
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-                        rc = inode->i_mapping->a_ops->writepage(page);
-#else
-                        rc = inode->i_mapping->a_ops->writepage(page, NULL);
-#endif
+                        rc = ll_call_writepage(inode, page);
                         if (rc != 0)
                                 CERROR("writepage of page %p failed: %d\n",
                                        page, rc);
@@ -371,16 +415,6 @@ void ll_pgcache_remove_extent(struct inode *inode, struct lov_stripe_md *lsm,
                 unlock_page(page);
                 page_cache_release(page);
         }
-
-        if (test_bit(LLI_F_PREFER_EXTENDED_SIZE, &lli->lli_flags)) {
-                rc = obd_lock_contains(exp, lsm, lock, inode->i_size - 1);
-                if (rc != 0) {
-                        if (rc < 0)
-                                CERROR("obd_lock_contains: rc = %d\n", rc);
-                        clear_bit(LLI_F_PREFER_EXTENDED_SIZE, &lli->lli_flags);
-                }
-        }
-
         EXIT;
 }
 
@@ -391,7 +425,6 @@ static int ll_extent_lock_callback(struct ldlm_lock *lock,
         struct lustre_handle lockh = { 0 };
         int rc;
         ENTRY;
-
 
         if ((unsigned long)data > 0 && (unsigned long)data < 0x1000) {
                 LDLM_ERROR(lock, "cancelling lock with bad data %p", data);
@@ -408,17 +441,32 @@ static int ll_extent_lock_callback(struct ldlm_lock *lock,
         case LDLM_CB_CANCELING: {
                 struct inode *inode = ll_inode_from_lock(lock);
                 struct ll_inode_info *lli;
+                struct lov_stripe_md *lsm;
+                __u32 stripe;
+                __u64 kms;
 
-                if (!inode)
+                if (inode == NULL)
                         RETURN(0);
-                lli= ll_i2info(inode);
-                if (!lli)
-                        RETURN(0);
-                if (!lli->lli_smd)
-                        RETURN(0);
+                lli = ll_i2info(inode);
+                if (lli == NULL)
+                        goto iput;
+                if (lli->lli_smd == NULL)
+                        goto iput;
+                lsm = lli->lli_smd;
 
-                ll_pgcache_remove_extent(inode, lli->lli_smd, lock);
+                stripe = ll_lock_to_stripe_offset(inode, lock);
+                ll_pgcache_remove_extent(inode, lsm, lock, stripe);
+
+                down(&inode->i_sem);
+                kms = ldlm_extent_shift_kms(lock,
+                                            lsm->lsm_oinfo[stripe].loi_kms);
+                if (lsm->lsm_oinfo[stripe].loi_kms != kms)
+                        LDLM_DEBUG(lock, "updating kms from "LPU64" to "LPU64,
+                                   lsm->lsm_oinfo[stripe].loi_kms, kms);
+                lsm->lsm_oinfo[stripe].loi_kms = kms;
+                up(&inode->i_sem);
                 //ll_try_done_writing(inode);
+        iput:
                 iput(inode);
                 break;
         }
@@ -429,15 +477,153 @@ static int ll_extent_lock_callback(struct ldlm_lock *lock,
         RETURN(0);
 }
 
-/*
- * some callers, notably truncate, really don't want i_size set based
- * on the the size returned by the getattr, or lock acquisition in
- * the future.
- */
-int ll_extent_lock_no_validate(struct ll_file_data *fd, struct inode *inode,
-                   struct lov_stripe_md *lsm,
-                   int mode, struct ldlm_extent *extent,
-                   struct lustre_handle *lockh, int ast_flags)
+#if 0
+int ll_async_completion_ast(struct ldlm_lock *lock, int flags, void *data)
+{
+        /* XXX ALLOCATE - 160 bytes */
+        struct inode *inode = ll_inode_from_lock(lock);
+        struct ll_inode_info *lli = ll_i2info(inode);
+        struct lustre_handle lockh = { 0 };
+        struct ost_lvb *lvb;
+        __u32 stripe;
+        ENTRY;
+
+        if (flags & (LDLM_FL_BLOCK_WAIT | LDLM_FL_BLOCK_GRANTED |
+                     LDLM_FL_BLOCK_CONV)) {
+                LBUG(); /* not expecting any blocked async locks yet */
+                LDLM_DEBUG(lock, "client-side async enqueue returned a blocked "
+                           "lock, returning");
+                ldlm_lock_dump(D_OTHER, lock, 0);
+                ldlm_reprocess_all(lock->l_resource);
+                RETURN(0);
+        }
+
+        LDLM_DEBUG(lock, "client-side async enqueue: granted/glimpsed");
+
+        stripe = ll_lock_to_stripe_offset(inode, lock);
+
+        if (lock->l_lvb_len) {
+                struct lov_stripe_md *lsm = lli->lli_smd;
+                __u64 kms;
+                lvb = lock->l_lvb_data;
+                lsm->lsm_oinfo[stripe].loi_rss = lvb->lvb_size;
+
+                down(&inode->i_sem);
+                kms = MAX(lsm->lsm_oinfo[stripe].loi_kms, lvb->lvb_size);
+                kms = ldlm_extent_shift_kms(NULL, kms);
+                if (lsm->lsm_oinfo[stripe].loi_kms != kms)
+                        LDLM_DEBUG(lock, "updating kms from "LPU64" to "LPU64,
+                                   lsm->lsm_oinfo[stripe].loi_kms, kms);
+                lsm->lsm_oinfo[stripe].loi_kms = kms;
+                up(&inode->i_sem);
+        }
+
+        iput(inode);
+        wake_up(&lock->l_waitq);
+
+        ldlm_lock2handle(lock, &lockh);
+        ldlm_lock_decref(&lockh, LCK_PR);
+        RETURN(0);
+}
+#endif
+
+/* This function is a disaster.  I hate the LOV. */
+static int ll_glimpse_callback(struct ldlm_lock *lock, void *reqp)
+{
+        struct ptlrpc_request *req = reqp;
+        struct inode *inode = ll_inode_from_lock(lock);
+        struct obd_export *exp;
+        struct ll_inode_info *lli;
+        struct ost_lvb *lvb;
+        struct {
+                int stripe_number;
+                __u64 size;
+                struct lov_stripe_md *lsm;
+        } data;
+        __u32 vallen = sizeof(data);
+        int rc, size = sizeof(*lvb);
+        ENTRY;
+
+        if (inode == NULL)
+                RETURN(0);
+        lli = ll_i2info(inode);
+        if (lli == NULL)
+                goto iput;
+        if (lli->lli_smd == NULL)
+                goto iput;
+        exp = ll_i2obdexp(inode);
+
+        /* First, find out which stripe index this lock corresponds to. */
+        if (lli->lli_smd->lsm_stripe_count > 1)
+                data.stripe_number = ll_lock_to_stripe_offset(inode, lock);
+        else
+                data.stripe_number = 0;
+
+        data.size = inode->i_size;
+        data.lsm = lli->lli_smd;
+
+        rc = obd_get_info(exp, strlen("size_to_stripe"), "size_to_stripe",
+                          &vallen, &data);
+        if (rc != 0) {
+                CERROR("obd_get_info: rc = %d\n", rc);
+                LBUG();
+        }
+
+        LDLM_DEBUG(lock, "i_size: %Lu -> stripe number %d -> size %Lu",
+                   inode->i_size, data.stripe_number, data.size);
+
+        rc = lustre_pack_reply(req, 1, &size, NULL);
+        if (rc) {
+                CERROR("lustre_pack_reply: %d\n", rc);
+                goto iput;
+        }
+
+        lvb = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*lvb));
+        lvb->lvb_size = data.size;
+        ptlrpc_reply(req);
+
+ iput:
+        iput(inode);
+        RETURN(0);
+}
+
+__u64 lov_merge_size(struct lov_stripe_md *lsm, int kms);
+__u64 lov_merge_mtime(struct lov_stripe_md *lsm, __u64 current_time);
+
+/* NB: lov_merge_size will prefer locally cached writes if they extend the
+ * file (because it prefers KMS over RSS when larger) */
+int ll_glimpse_size(struct inode *inode, struct ost_lvb *lvb)
+{
+        struct ll_inode_info *lli = ll_i2info(inode);
+        struct ll_sb_info *sbi = ll_i2sbi(inode);
+        ldlm_policy_data_t policy = { .l_extent = { 0, OBD_OBJECT_EOF } };
+        struct lustre_handle lockh;
+        int rc, flags = LDLM_FL_HAS_INTENT;
+        ENTRY;
+
+        CDEBUG(D_DLMTRACE, "Glimpsing inode %lu\n", inode->i_ino);
+
+        rc = obd_enqueue(sbi->ll_osc_exp, lli->lli_smd, LDLM_EXTENT, &policy,
+                         LCK_PR, &flags, ll_extent_lock_callback,
+                         ldlm_completion_ast, ll_glimpse_callback, inode,
+                         sizeof(*lvb), lustre_swab_ost_lvb, &lockh);
+        if (rc > 0)
+                RETURN(-EIO);
+
+        lvb->lvb_size = lov_merge_size(lli->lli_smd, 0);
+        //inode->i_mtime = lov_merge_mtime(lli->lli_smd, inode->i_mtime);
+
+        CDEBUG(D_DLMTRACE, "glimpse: size: "LPU64"\n", lvb->lvb_size);
+
+        obd_cancel(sbi->ll_osc_exp, lli->lli_smd, LCK_PR, &lockh);
+
+        RETURN(rc);
+}
+
+int ll_extent_lock(struct ll_file_data *fd, struct inode *inode,
+                   struct lov_stripe_md *lsm, int mode,
+                   ldlm_policy_data_t *policy, struct lustre_handle *lockh,
+                   int ast_flags)
 {
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         int rc;
@@ -451,90 +637,21 @@ int ll_extent_lock_no_validate(struct ll_file_data *fd, struct inode *inode,
                 RETURN(0);
 
         CDEBUG(D_DLMTRACE, "Locking inode %lu, start "LPU64" end "LPU64"\n",
-               inode->i_ino, extent->start, extent->end);
+               inode->i_ino, policy->l_extent.start, policy->l_extent.end);
 
-        rc = obd_enqueue(sbi->ll_osc_exp, lsm, NULL, LDLM_EXTENT, extent,
-                         sizeof(extent), mode, &ast_flags,
-                         ll_extent_lock_callback, inode, lockh);
+        rc = obd_enqueue(sbi->ll_osc_exp, lsm, LDLM_EXTENT, policy, mode,
+                         &ast_flags, ll_extent_lock_callback,
+                         ldlm_completion_ast, ll_glimpse_callback, inode,
+                         sizeof(struct ost_lvb), lustre_swab_ost_lvb, lockh);
         if (rc > 0)
                 rc = -EIO;
-        RETURN(rc);
-}
 
-/*
- * this grabs a lock and manually implements behaviour that makes it look like
- * the OST is returning the file size with each lock acquisition.
- */
-int ll_extent_lock(struct ll_file_data *fd, struct inode *inode,
-                   struct lov_stripe_md *lsm, int mode,
-                   struct ldlm_extent *extent, struct lustre_handle *lockh)
-{
-        struct ll_inode_info *lli = ll_i2info(inode);
-        struct obd_export *exp = ll_i2obdexp(inode);
-        struct ldlm_extent size_lock;
-        struct lustre_handle match_lockh = {0};
-        struct obdo oa;
-        obd_flag refresh_valid;
-        int flags, rc, matched;
-        ENTRY;
+        if (policy->l_extent.start == 0 &&
+            policy->l_extent.end == OBD_OBJECT_EOF)
+                inode->i_size = lov_merge_size(lsm, 1);
 
-        rc = ll_extent_lock_no_validate(fd, inode, lsm, mode, extent, lockh, 0);
-        if (rc != ELDLM_OK)
-                RETURN(rc);
+        //inode->i_mtime = lov_merge_mtime(lsm, inode->i_mtime);
 
-        if (test_bit(LLI_F_HAVE_OST_SIZE_LOCK, &lli->lli_flags))
-                RETURN(0);
-
-        rc = ll_lsm_getattr(exp, lsm, &oa);
-        if (rc) 
-                GOTO(out, rc);
-
-        /* We set this flag in commit write as we extend the file size.  When
-         * the bit is set and the lock is canceled that covers the file size,
-         * we clear the bit.  This is enough to protect the window where our
-         * local size extension is needed for writeback.  However, it relies on
-         * behaviour that won't be true in the near future.  This assumes that
-         * all getattr callers get extent locks, which they currnetly do.  It
-         * also assumes that we only send discarding asts for {0,eof} truncates
-         * as is currently the case.  This will have to be replaced by the
-         * proper eoc communication between clients and the ost, which is on
-         * its way. */
-        refresh_valid = (OBD_MD_FLBLOCKS | OBD_MD_FLBLKSZ | OBD_MD_FLMTIME | 
-                         OBD_MD_FLCTIME | OBD_MD_FLSIZE);
-        if (test_bit(LLI_F_PREFER_EXTENDED_SIZE, &lli->lli_flags)) {
-                if (oa.o_size < inode->i_size)
-                        refresh_valid &= ~OBD_MD_FLSIZE;
-                else 
-                        clear_bit(LLI_F_PREFER_EXTENDED_SIZE, &lli->lli_flags);
-        }
-        obdo_refresh_inode(inode, &oa, refresh_valid);
-
-        CDEBUG(D_INODE, "objid "LPX64" size %Lu, blocks %lu, blksize %lu\n",
-               lsm->lsm_object_id, inode->i_size, inode->i_blocks,
-               inode->i_blksize);
-
-        size_lock.start = inode->i_size;
-        size_lock.end = OBD_OBJECT_EOF;
-
-        /* XXX I bet we should be checking the lock ignore flags.. */
-        flags = LDLM_FL_CBPENDING | LDLM_FL_BLOCK_GRANTED;
-        matched = obd_match(exp, lsm, LDLM_EXTENT, &size_lock,
-                            sizeof(size_lock), LCK_PR, &flags, inode,
-                            &match_lockh);
-        if (matched < 0)
-                GOTO(out, rc = matched);
-
-        /* hey, alright, we hold a size lock that covers the size we
-         * just found, its not going to change for a while.. */
-        if (matched == 1) {
-                set_bit(LLI_F_HAVE_OST_SIZE_LOCK, &lli->lli_flags);
-                obd_cancel(exp, lsm, LCK_PR, &match_lockh);
-        }
-
-        rc = 0;
-out:
-        if (rc)
-                ll_extent_unlock(fd, inode, lsm, mode, lockh);
         RETURN(rc);
 }
 
@@ -564,9 +681,10 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
         struct ll_inode_info *lli = ll_i2info(inode);
         struct lov_stripe_md *lsm = lli->lli_smd;
         struct lustre_handle lockh = { 0 };
-        struct ldlm_extent extent;
+        ldlm_policy_data_t policy;
         ldlm_error_t err;
         ssize_t retval;
+        __u64 kms;
         ENTRY;
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p),size="LPSZ",offset=%Ld\n",
                inode->i_ino, inode->i_generation, inode, count, *ppos);
@@ -582,20 +700,28 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
         if (!lsm)
                 RETURN(0);
 
-        /* grab a -> eof extent to push extending writes out of node's caches
-         * so we can see them at the getattr after lock acquisition.  this will
-         * turn into a seperate [*ppos + count, EOF] 'size intent' lock attempt
-         * in the future. */
-        extent.start = *ppos;
-        extent.end = OBD_OBJECT_EOF;
+        policy.l_extent.start = *ppos;
+        policy.l_extent.end = *ppos + count - 1;
 
-        err = ll_extent_lock(fd, inode, lsm, LCK_PR, &extent, &lockh);
+        err = ll_extent_lock(fd, inode, lsm, LCK_PR, &policy, &lockh, 0);
         if (err != ELDLM_OK)
                 RETURN(err);
 
+        kms = lov_merge_size(lsm, 1);
+        if (policy.l_extent.end > kms) {
+                /* A glimpse is necessary to determine whether we return a short
+                 * read or some zeroes at the end of the buffer */
+                struct ost_lvb lvb;
+                retval = ll_glimpse_size(inode, &lvb);
+                if (retval)
+                        goto out;
+                inode->i_size = lvb.lvb_size;
+        } else {
+                inode->i_size = kms;
+        }
 
-        CDEBUG(D_INFO, "Reading inode %lu, "LPSZ" bytes, offset %Ld\n",
-               inode->i_ino, count, *ppos);
+        CDEBUG(D_INFO, "Reading inode %lu, "LPSZ" bytes, offset %Ld, i_size "
+               LPU64"\n", inode->i_ino, count, *ppos, inode->i_size);
 
         /* turn off the kernel's read-ahead */
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
@@ -605,7 +731,7 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
 #endif
         retval = generic_file_read(filp, buf, count, ppos);
 
-        /* XXX errors? */
+ out:
         ll_extent_unlock(fd, inode, lsm, LCK_PR, &lockh);
         RETURN(retval);
 }
@@ -620,11 +746,10 @@ static ssize_t ll_file_write(struct file *file, const char *buf, size_t count,
         struct inode *inode = file->f_dentry->d_inode;
         struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
         struct lustre_handle lockh = { 0 };
-        struct ldlm_extent extent;
+        ldlm_policy_data_t policy;
         loff_t maxbytes = ll_file_maxbytes(inode);
         ldlm_error_t err;
         ssize_t retval;
-        char should_validate = 1;
         ENTRY;
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p),size="LPSZ",offset=%Ld\n",
                inode->i_ino, inode->i_generation, inode, count, *ppos);
@@ -638,23 +763,14 @@ static ssize_t ll_file_write(struct file *file, const char *buf, size_t count,
         LASSERT(lsm);
 
         if (file->f_flags & O_APPEND) {
-                extent.start = 0;
-                extent.end = OBD_OBJECT_EOF;
+                policy.l_extent.start = 0;
+                policy.l_extent.end = OBD_OBJECT_EOF;
         } else  {
-                extent.start = *ppos;
-                extent.end = *ppos + count - 1;
-                /* we really don't care what i_size is if we're doing
-                 * fully page aligned writes */
-                if ((*ppos & ~PAGE_CACHE_MASK) == 0 &&
-                    (count & ~PAGE_CACHE_MASK) == 0)
-                        should_validate = 0;
+                policy.l_extent.start = *ppos;
+                policy.l_extent.end = *ppos + count - 1;
         }
 
-        if (should_validate)
-                err = ll_extent_lock(fd, inode, lsm, LCK_PW, &extent, &lockh);
-        else
-                err = ll_extent_lock_no_validate(fd, inode, lsm, LCK_PW,
-                                                 &extent, &lockh, 0);
+        err = ll_extent_lock(fd, inode, lsm, LCK_PW, &policy, &lockh, 0);
         if (err != ELDLM_OK)
                 RETURN(err);
 
@@ -939,8 +1055,8 @@ loff_t ll_file_seek(struct file *file, loff_t offset, int origin)
         lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_LLSEEK);
         if (origin == 2) { /* SEEK_END */
                 ldlm_error_t err;
-                struct ldlm_extent extent = {0, OBD_OBJECT_EOF};
-                err = ll_extent_lock(fd, inode, lsm, LCK_PR, &extent, &lockh);
+                ldlm_policy_data_t policy = { .l_extent = {0, OBD_OBJECT_EOF }};
+                err = ll_extent_lock(fd, inode, lsm, LCK_PR, &policy, &lockh,0);
                 if (err != ELDLM_OK)
                         RETURN(err);
 
@@ -1019,7 +1135,7 @@ int ll_file_flock(struct file *file, int cmd, struct file_lock *file_lock)
         struct ldlm_res_id res_id =
                     { .name = {inode->i_ino, inode->i_generation, LDLM_FLOCK} };
         struct lustre_handle lockh = {0};
-        struct ldlm_flock flock;
+        ldlm_policy_data_t flock;
         ldlm_mode_t mode = 0;
         int flags = 0;
         int rc;
@@ -1028,9 +1144,9 @@ int ll_file_flock(struct file *file, int cmd, struct file_lock *file_lock)
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu file_lock=%p\n",
                inode->i_ino, file_lock);
 
-        flock.pid = file_lock->fl_pid;
-        flock.start = file_lock->fl_start;
-        flock.end = file_lock->fl_end;
+        flock.l_flock.pid = file_lock->fl_pid;
+        flock.l_flock.start = file_lock->fl_start;
+        flock.l_flock.end = file_lock->fl_end;
 
         switch (file_lock->fl_type) {
         case F_RDLCK:
@@ -1074,14 +1190,14 @@ int ll_file_flock(struct file *file, int cmd, struct file_lock *file_lock)
         }
 
         CDEBUG(D_DLMTRACE, "inode=%lu, pid=%u, flags=%#x, mode=%u, "
-               "start="LPU64", end="LPU64"\n", inode->i_ino, flock.pid,
-               flags, mode, flock.start, flock.end);
+               "start="LPU64", end="LPU64"\n", inode->i_ino, flock.l_flock.pid,
+               flags, mode, flock.l_flock.start, flock.l_flock.end);
 
         obddev = sbi->ll_mdc_exp->exp_obd;
         rc = ldlm_cli_enqueue(sbi->ll_mdc_exp, NULL, obddev->obd_namespace,
-                              NULL, res_id, LDLM_FLOCK, &flock, sizeof(flock),
-                              mode, &flags, ldlm_flock_completion_ast, NULL,
-                              file_lock, &lockh);
+                              res_id, LDLM_FLOCK, &flock, mode, &flags,
+                              NULL, ldlm_flock_completion_ast, NULL, file_lock,
+                              NULL, 0, NULL, &lockh);
         RETURN(rc);
 }
 
@@ -1105,13 +1221,13 @@ static int ll_have_md_lock(struct dentry *de)
 
         flags = LDLM_FL_BLOCK_GRANTED | LDLM_FL_CBPENDING;
         if (ldlm_lock_match(obddev->obd_namespace, flags, &res_id, LDLM_PLAIN,
-                            NULL, 0, LCK_PR, &lockh)) {
+                            NULL, LCK_PR, &lockh)) {
                 ldlm_lock_decref(&lockh, LCK_PR);
                 RETURN(1);
         }
 
         if (ldlm_lock_match(obddev->obd_namespace, flags, &res_id, LDLM_PLAIN,
-                            NULL, 0, LCK_PW, &lockh)) {
+                            NULL, LCK_PW, &lockh)) {
                 ldlm_lock_decref(&lockh, LCK_PW);
                 RETURN(1);
         }
@@ -1121,6 +1237,7 @@ static int ll_have_md_lock(struct dentry *de)
 int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
 {
         struct inode *inode = dentry->d_inode;
+        struct ll_inode_info *lli;
         struct lov_stripe_md *lsm;
         ENTRY;
 
@@ -1128,6 +1245,7 @@ int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
                 CERROR("REPORT THIS LINE TO PETER\n");
                 RETURN(0);
         }
+        lli = ll_i2info(inode);
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p),name=%s\n",
                inode->i_ino, inode->i_generation, inode, dentry->d_name.name);
 #if (LINUX_VERSION_CODE <= KERNEL_VERSION(2,5,0))
@@ -1159,30 +1277,18 @@ int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
                 ptlrpc_req_finished(req);
         }
 
-#if 0
-        if (ll_have_md_lock(dentry) &&
-            test_bit(LLI_F_HAVE_MDS_SIZE_LOCK, &ll_i2info(inode)->lli_flags))
-                RETURN(0);
-#endif
-
-        lsm = ll_i2info(inode)->lli_smd;
-        if (!lsm)       /* object not yet allocated, don't validate size */
+        lsm = lli->lli_smd;
+        if (lsm == NULL) /* object not yet allocated, don't validate size */
                 RETURN(0);
 
-        /* unfortunately stat comes in through revalidate and we don't
-         * differentiate this use from initial instantiation.  we're
-         * also being wildly conservative and flushing write caches
-         * so that stat really returns the proper size. */
+        /* ll_glimpse_size will prefer locally cached writes if they extend
+         * the file */
         {
-                struct ldlm_extent extent = {0, OBD_OBJECT_EOF};
-                struct lustre_handle lockh = {0};
+                struct ost_lvb lvb;
                 ldlm_error_t err;
 
-                err = ll_extent_lock(NULL, inode, lsm, LCK_PR, &extent, &lockh);
-                if (err != ELDLM_OK)
-                        RETURN(err);
-
-                ll_extent_unlock(NULL, inode, lsm, LCK_PR, &lockh);
+                err = ll_glimpse_size(inode, &lvb);
+                inode->i_size = lvb.lvb_size;
         }
         RETURN(0);
 }

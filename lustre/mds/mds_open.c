@@ -740,10 +740,10 @@ int mds_lock_new_child(struct obd_device *obd, struct inode *inode,
         if (child_lockh == NULL)
                 child_lockh = &lockh;
 
-        rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace, NULL,
-                              child_res_id, LDLM_PLAIN, NULL, 0,
-                              LCK_EX, &lock_flags, ldlm_completion_ast,
-                              mds_blocking_ast, NULL, child_lockh);
+        rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace, child_res_id,
+                              LDLM_PLAIN, NULL, LCK_EX, &lock_flags,
+                              mds_blocking_ast, ldlm_completion_ast, NULL, NULL,
+                              NULL, 0, NULL, child_lockh);
         if (rc != ELDLM_OK)
                 CERROR("ldlm_cli_enqueue: %d\n", rc);
         else if (child_lockh == &lockh)

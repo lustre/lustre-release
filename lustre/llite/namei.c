@@ -41,6 +41,7 @@
 #include <linux/obd_support.h>
 #include <linux/lustre_lite.h>
 #include <linux/lustre_dlm.h>
+#include <linux/lustre_version.h>
 #include "llite_internal.h"
 
 /* methods */
@@ -286,9 +287,8 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
                 /* If this is a stat, get the authoritative file size */
                 if (it->it_op == IT_GETATTR && S_ISREG(inode->i_mode) &&
                     ll_i2info(inode)->lli_smd != NULL) {
-                        struct ldlm_extent extent = {0, OBD_OBJECT_EOF};
-                        struct lustre_handle lockh = {0};
                         struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
+                        struct ost_lvb lvb;
                         ldlm_error_t rc;
 
                         LASSERT(lsm->lsm_object_id != 0);
@@ -296,13 +296,12 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
                         /* bug 2334: drop MDS lock before acquiring OST lock */
                         ll_intent_drop_lock(it);
 
-                        rc = ll_extent_lock(NULL, inode, lsm, LCK_PR, &extent,
-                                            &lockh);
-                        if (rc != ELDLM_OK) {
+                        rc = ll_glimpse_size(inode, &lvb);
+                        if (rc) {
                                 iput(inode);
                                 RETURN(-EIO);
                         }
-                        ll_extent_unlock(NULL, inode, lsm, LCK_PR, &lockh);
+                        inode->i_size = lvb.lvb_size;
                 }
 
                 dentry = *de = ll_find_alias(inode, dentry);
@@ -320,8 +319,14 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
 }
 
 
+#if (LUSTRE_KERNEL_VERSION < 33)
 static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
                                    struct lookup_intent *it, int flags)
+#else
+static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
+                                   struct nameidata *nd,
+                                   struct lookup_intent *it, int flags)
+#endif
 {
         struct dentry *save = dentry, *retval;
         struct ll_fid pfid;

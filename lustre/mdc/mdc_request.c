@@ -486,16 +486,16 @@ int mdc_close(struct obd_export *exp, struct obdo *obdo,
                                NULL, NULL);
         rc = l_wait_event(req->rq_reply_waitq, mdc_close_check_reply(req),
                           &lwi);
-        
-         if (rc == 0) {
+        if (rc == 0) {
                 rc = req->rq_repmsg->status;
                 if (req->rq_repmsg->type == PTL_RPC_MSG_ERR) {
-                        DEBUG_REQ(D_ERROR, req, "type == PTL_RPC_MSG_ERR, err = %d", rc);
+                        DEBUG_REQ(D_ERROR, req, "type == PTL_RPC_MSG_ERR, err "
+                                  "= %d", rc);
                         if (rc > 0)
                                 rc = -rc;
                 } else if (mod == NULL) {
-                        CERROR("Unexpected: can't find mdc_open_data, but the close "
-                               "succeeded.  Please tell CFS.\n");
+                        CERROR("Unexpected: can't find mdc_open_data, but the "
+                               "close succeeded.  Please tell CFS.\n");
                 }
         }
 

@@ -171,17 +171,14 @@ extern struct inode_operations ll_file_inode_operations;
 extern struct inode_operations ll_special_inode_operations;
 extern int ll_inode_revalidate_it(struct dentry *, struct lookup_intent *);
 int ll_extent_lock(struct ll_file_data *, struct inode *,
-                   struct lov_stripe_md *, int mode, struct ldlm_extent *,
-                   struct lustre_handle *);
+                   struct lov_stripe_md *, int mode, ldlm_policy_data_t *,
+                   struct lustre_handle *, int ast_flags);
 int ll_extent_unlock(struct ll_file_data *, struct inode *,
                      struct lov_stripe_md *, int mode, struct lustre_handle *);
 int ll_file_open(struct inode *inode, struct file *file);
 int ll_file_release(struct inode *inode, struct file *file);
 int ll_lsm_getattr(struct obd_export *, struct lov_stripe_md *, struct obdo *);
-int ll_extent_lock_no_validate(struct ll_file_data *, struct inode *,
-                               struct lov_stripe_md *, int mode,
-                               struct ldlm_extent *, struct lustre_handle *,
-                               int ast_flags);
+int ll_glimpse_size(struct inode *inode, struct ost_lvb *lvb);
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
 int ll_getattr(struct vfsmount *mnt, struct dentry *de,
                struct lookup_intent *it, struct kstat *stat);

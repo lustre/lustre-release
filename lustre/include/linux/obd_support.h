@@ -110,6 +110,7 @@ extern unsigned int obd_sync_filter;
 #define OBD_FAIL_LDLM_CANCEL             0x304
 #define OBD_FAIL_LDLM_BL_CALLBACK        0x305
 #define OBD_FAIL_LDLM_CP_CALLBACK        0x306
+#define OBD_FAIL_LDLM_GL_CALLBACK        0x307
 
 #define OBD_FAIL_OSC                     0x400
 #define OBD_FAIL_OSC_BRW_READ_BULK       0x401

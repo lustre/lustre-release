@@ -1058,7 +1058,8 @@ static int ost_handle(struct ptlrpc_request *req)
                 CDEBUG(D_INODE, "enqueue\n");
                 OBD_FAIL_RETURN(OBD_FAIL_LDLM_ENQUEUE, 0);
                 rc = ldlm_handle_enqueue(req, ldlm_server_completion_ast,
-                                         ldlm_server_blocking_ast);
+                                         ldlm_server_blocking_ast,
+                                         ldlm_server_glimpse_ast);
                 fail = OBD_FAIL_OST_LDLM_REPLY_NET;
                 break;
         case LDLM_CONVERT:

@@ -6,6 +6,8 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- reduce journal credits needed for BRW writes (2370)
 	- orphan handling to avoid losing space on client/server crashes
 	- ptlrpcd can be blocked, stopping ALL progress (2477)
+	- use lock value blocks to assist in proper KMS, faster stat (1021)
+	- takes i_sem instead of DLM locks internally on obdfilter (2720)
 	- recovery for initial connections (2355)
 	- fixes for mds_cleanup_orphans (1934)
 	- abort_recovery crashes MDS in b_eq (mds_unlink_orphan) (2584)

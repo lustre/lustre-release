@@ -453,6 +453,15 @@ struct ost_body {
 extern void lustre_swab_ost_body (struct ost_body *b);
 extern void lustre_swab_ost_last_id(obd_id *id);
 
+/* lock value block communicated between the filter and llite */
+
+struct ost_lvb {
+        __u64 lvb_size;
+        __u64 lvb_time;
+};
+
+extern void lustre_swab_ost_lvb(struct ost_lvb *);
+
 /*
  *   MDS REQ RECORDS
  */
@@ -691,13 +700,12 @@ typedef enum {
         LDLM_CANCEL      = 103,
         LDLM_BL_CALLBACK = 104,
         LDLM_CP_CALLBACK = 105,
+        LDLM_GL_CALLBACK = 106,
         LDLM_LAST_OPC
 } ldlm_cmd_t;
 #define LDLM_FIRST_OPC LDLM_ENQUEUE
 
 #define RES_NAME_SIZE 4
-#define RES_VERSION_SIZE 4
-
 struct ldlm_res_id {
         __u64 name[RES_NAME_SIZE];
 };
@@ -746,12 +754,10 @@ struct ldlm_intent {
 
 extern void lustre_swab_ldlm_intent (struct ldlm_intent *i);
 
-/* Note this unaligned structure; as long as it's only used in ldlm_request
- * below, we're probably fine. */
 struct ldlm_resource_desc {
         __u32 lr_type;
+        __u32 lr_padding;
         struct ldlm_res_id lr_name;
-        __u32 lr_version[RES_VERSION_SIZE];
 } __attribute__((packed));
 
 extern void lustre_swab_ldlm_resource_desc (struct ldlm_resource_desc *r);
@@ -761,13 +767,13 @@ struct ldlm_lock_desc {
         ldlm_mode_t l_req_mode;
         ldlm_mode_t l_granted_mode;
         ldlm_policy_data_t l_policy_data;
-        __u32 l_version[RES_VERSION_SIZE];
 } __attribute__((packed));
 
 extern void lustre_swab_ldlm_lock_desc (struct ldlm_lock_desc *l);
 
 struct ldlm_request {
         __u32 lock_flags;
+        __u32 lock_padding;
         struct ldlm_lock_desc lock_desc;
         struct lustre_handle lock_handle1;
         struct lustre_handle lock_handle2;
@@ -777,10 +783,8 @@ extern void lustre_swab_ldlm_request (struct ldlm_request *rq);
 
 struct ldlm_reply {
         __u32 lock_flags;
-        __u32 lock_mode;
-        struct ldlm_res_id lock_resource_name;
+        struct ldlm_lock_desc lock_desc;
         struct lustre_handle lock_handle;
-        ldlm_policy_data_t lock_policy_data;
         __u64  lock_policy_res1;
         __u64  lock_policy_res2;
 };

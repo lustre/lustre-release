@@ -95,9 +95,6 @@ enum {
 #define FILTER_MAX_CACHE_SIZE OBD_OBJECT_EOF
 
 /* filter.c */
-struct dentry *filter_parent(struct obd_device *, obd_gr group, obd_id objid);
-struct dentry *filter_parent_lock(struct obd_device *, obd_gr, obd_id,
-                                  ldlm_mode_t, struct lustre_handle *);
 void f_dput(struct dentry *);
 struct dentry *filter_fid2dentry(struct obd_device *, struct dentry *dir,
                                  obd_gr group, obd_id id);
@@ -113,6 +110,10 @@ int filter_update_server_data(struct obd_device *, struct file *,
 int filter_update_last_objid(struct obd_device *, obd_gr, int force_sync);
 int filter_common_setup(struct obd_device *, obd_count len, void *buf,
                         char *option);
+
+/* filter_lvb.c */
+extern struct ldlm_valblock_ops filter_lvbo;
+
 
 /* filter_io.c */
 int filter_preprw(int cmd, struct obd_export *, struct obdo *, int objcount,

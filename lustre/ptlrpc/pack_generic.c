@@ -318,40 +318,34 @@ char *lustre_msg_string (struct lustre_msg *m, int index, int max_len)
         return (str);
 }
 
-/* Wrap up the normal fixed length case */
-void *lustre_swab_reqbuf (struct ptlrpc_request *req, int index, int min_size,
-                          void *swabber)
+/* Wrap up the normal fixed length cases */
+void *lustre_swab_buf(struct lustre_msg *msg, int index, int min_size,
+                      void *swabber)
 {
         void *ptr;
 
-        LASSERT_REQSWAB(req, index);
-
-        ptr = lustre_msg_buf(req->rq_reqmsg, index, min_size);
+        ptr = lustre_msg_buf(msg, index, min_size);
         if (ptr == NULL)
                 return NULL;
 
-        if (swabber != NULL && lustre_msg_swabbed(req->rq_reqmsg))
+        if (swabber != NULL && lustre_msg_swabbed(msg))
                 ((void (*)(void *))swabber)(ptr);
 
         return ptr;
 }
 
-/* Wrap up the normal fixed length case */
-void *lustre_swab_repbuf (struct ptlrpc_request *req, int index, int min_size,
-                          void *swabber)
+void *lustre_swab_reqbuf(struct ptlrpc_request *req, int index, int min_size,
+                         void *swabber)
 {
-        void *ptr;
+        LASSERT_REQSWAB(req, index);
+        return lustre_swab_buf(req->rq_reqmsg, index, min_size, swabber);
+}
 
+void *lustre_swab_repbuf(struct ptlrpc_request *req, int index, int min_size,
+                         void *swabber)
+{
         LASSERT_REPSWAB(req, index);
-
-        ptr = lustre_msg_buf(req->rq_repmsg, index, min_size);
-        if (ptr == NULL)
-                return NULL;
-
-        if (swabber != NULL && lustre_msg_swabbed(req->rq_repmsg))
-                ((void (*)(void *))swabber)(ptr);
-
-        return ptr;
+        return lustre_swab_buf(req->rq_repmsg, index, min_size, swabber);
 }
 
 /* byte flipping routines for all wire types declared in
@@ -417,6 +411,12 @@ void lustre_swab_ost_body (struct ost_body *b)
 void lustre_swab_ost_last_id(obd_id *id)
 {
         __swab64s(id);
+}
+
+void lustre_swab_ost_lvb(struct ost_lvb *lvb)
+{
+        __swab64s(&lvb->lvb_size);
+        __swab64s(&lvb->lvb_time);
 }
 
 void lustre_swab_ll_fid (struct ll_fid *fid)
@@ -564,24 +564,16 @@ void lustre_swab_ldlm_intent (struct ldlm_intent *i)
 
 void lustre_swab_ldlm_resource_desc (struct ldlm_resource_desc *r)
 {
-        int   i;
-
         __swab32s (&r->lr_type);
         lustre_swab_ldlm_res_id (&r->lr_name);
-        for (i = 0; i < RES_VERSION_SIZE; i++)
-                __swab32s (&r->lr_version[i]);
 }
 
 void lustre_swab_ldlm_lock_desc (struct ldlm_lock_desc *l)
 {
-        int   i;
-
         lustre_swab_ldlm_resource_desc (&l->l_resource);
         __swab32s (&l->l_req_mode);
         __swab32s (&l->l_granted_mode);
         lustre_swab_ldlm_policy_data (&l->l_policy_data);
-        for (i = 0; i < RES_VERSION_SIZE; i++)
-                __swab32s (&l->l_version[i]);
 }
 
 void lustre_swab_ldlm_request (struct ldlm_request *rq)
@@ -595,10 +587,8 @@ void lustre_swab_ldlm_request (struct ldlm_request *rq)
 void lustre_swab_ldlm_reply (struct ldlm_reply *r)
 {
         __swab32s (&r->lock_flags);
-        __swab32s (&r->lock_mode);
-        lustre_swab_ldlm_res_id (&r->lock_resource_name);
+        lustre_swab_ldlm_lock_desc (&r->lock_desc);
         /* lock_handle opaque */
-        lustre_swab_ldlm_policy_data (&r->lock_policy_data);
         __swab64s (&r->lock_policy_res1);
         __swab64s (&r->lock_policy_res2);
 }
@@ -1199,13 +1189,11 @@ void lustre_assert_wire_constants(void)
         LASSERT((int)sizeof(((struct ldlm_intent *)0)->opc) == 8);
 
         /* Checks for struct ldlm_resource_desc */
-        LASSERT((int)sizeof(struct ldlm_resource_desc) == 52);
+        LASSERT((int)sizeof(struct ldlm_resource_desc) == 40);
         LASSERT(offsetof(struct ldlm_resource_desc, lr_type) == 0);
         LASSERT((int)sizeof(((struct ldlm_resource_desc *)0)->lr_type) == 4);
-        LASSERT(offsetof(struct ldlm_resource_desc, lr_name) == 4);
+        LASSERT(offsetof(struct ldlm_resource_desc, lr_name) == 8);
         LASSERT((int)sizeof(((struct ldlm_resource_desc *)0)->lr_name) == 32);
-        LASSERT(offsetof(struct ldlm_resource_desc, lr_version[4]) == 52);
-        LASSERT((int)sizeof(((struct ldlm_resource_desc *)0)->lr_version[4]) == 4);
 
         /* Checks for struct ldlm_lock_desc */
         LASSERT((int)sizeof(struct ldlm_lock_desc) == 108);

@@ -69,6 +69,7 @@ struct ll_rpc_opcode {
         { LDLM_CANCEL,      "ldlm_cancel" },
         { LDLM_BL_CALLBACK, "ldlm_bl_callback" },
         { LDLM_CP_CALLBACK, "ldlm_cp_callback" },
+        { LDLM_GL_CALLBACK, "ldlm_gl_callback" },
         { PTLBD_QUERY,      "ptlbd_query" },
         { PTLBD_READ,       "ptlbd_read" },
         { PTLBD_WRITE,      "ptlbd_write" },

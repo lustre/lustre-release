@@ -126,6 +126,7 @@ void ll_truncate(struct inode *inode)
                oa.o_id, inode->i_size);
 
         /* truncate == punch from new size to absolute end of file */
+        /* NB: obd_punch must be called with i_sem held!  It updates the kms! */
         rc = obd_punch(ll_i2obdexp(inode), &oa, lsm, inode->i_size,
                        OBD_OBJECT_EOF, NULL);
         if (rc)
@@ -139,6 +140,7 @@ void ll_truncate(struct inode *inode)
         return;
 } /* ll_truncate */
 
+__u64 lov_merge_size(struct lov_stripe_md *lsm, int kms);
 int ll_prepare_write(struct file *file, struct page *page, unsigned from,
                      unsigned to)
 {
@@ -148,6 +150,7 @@ int ll_prepare_write(struct file *file, struct page *page, unsigned from,
         obd_off offset = ((obd_off)page->index) << PAGE_SHIFT;
         struct brw_page pga;
         struct obdo oa;
+        __u64 kms;
         int rc = 0;
         ENTRY;
 
@@ -179,10 +182,11 @@ int ll_prepare_write(struct file *file, struct page *page, unsigned from,
                 RETURN(0);
         }
 
-        /* If are writing to a new page, no need to read old data.
-         * the extent locking and getattr procedures in ll_file_write have
-         * guaranteed that i_size is stable enough for our zeroing needs */
-        if (inode->i_size <= offset) {
+        /* If are writing to a new page, no need to read old data.  The extent
+         * locking will have updated the KMS, and for our purposes here we can
+         * treat it like i_size. */
+        kms = lov_merge_size(lsm, 1);
+        if (kms <= offset) {
                 memset(kmap(page), 0, PAGE_SIZE);
                 kunmap(page);
                 GOTO(prepare_done, rc = 0);
@@ -374,6 +378,8 @@ struct ll_async_page *llap_from_page(struct page *page)
         RETURN(llap);
 }
 
+void lov_increase_kms(struct obd_export *exp, struct lov_stripe_md *lsm,
+                      obd_off size);
 /* update our write count to account for i_size increases that may have
  * happened since we've queued the page for io. */
 
@@ -449,13 +455,10 @@ free_osic:
 
 out:
         if (rc == 0) {
-                /* XXX needs to be pushed down to the OSC as EOC */
                 size = (((obd_off)page->index) << PAGE_SHIFT) + to;
-                if (size > inode->i_size) {
+                lov_increase_kms(exp, lsm, size);
+                if (size > inode->i_size)
                         inode->i_size = size;
-                        /* see commentary in file.c:ll_inode_getattr() */
-                        set_bit(LLI_F_PREFER_EXTENDED_SIZE, &lli->lli_flags);
-                }
                 SetPageUptodate(page);
         }
         RETURN(rc);
@@ -524,17 +527,17 @@ static int ll_page_matches(struct page *page)
 {
         struct lustre_handle match_lockh = {0};
         struct inode *inode = page->mapping->host;
-        struct ldlm_extent page_extent;
+        ldlm_policy_data_t page_extent;
         int flags, matches;
         ENTRY;
 
-        page_extent.start = (__u64)page->index << PAGE_CACHE_SHIFT;
-        page_extent.end = page_extent.start + PAGE_CACHE_SIZE - 1;
+        page_extent.l_extent.start = (__u64)page->index << PAGE_CACHE_SHIFT;
+        page_extent.l_extent.end =
+                page_extent.l_extent.start + PAGE_CACHE_SIZE - 1;
         flags = LDLM_FL_CBPENDING | LDLM_FL_BLOCK_GRANTED;
         matches = obd_match(ll_i2sbi(inode)->ll_osc_exp, 
                             ll_i2info(inode)->lli_smd, LDLM_EXTENT, 
-                            &page_extent, sizeof(page_extent), 
-                            LCK_PR, &flags, inode, &match_lockh);
+                            &page_extent, LCK_PR, &flags, inode, &match_lockh);
         if (matches < 0) {
                 LL_CDEBUG_PAGE(page, "lock match failed\n");
                 RETURN(matches);

@@ -56,6 +56,9 @@
 
 #include "mds_internal.h"
 
+static int mds_intent_policy(struct ldlm_namespace *ns,
+                             struct ldlm_lock **lockp, void *req_cookie,
+                             ldlm_mode_t mode, int flags, void *data);
 static int mds_postsetup(struct obd_device *obd);
 static int mds_cleanup(struct obd_device *obd, int flags);
 
@@ -167,10 +170,10 @@ struct dentry *mds_fid2locked_dentry(struct obd_device *obd, struct ll_fid *fid,
 
         res_id.name[0] = de->d_inode->i_ino;
         res_id.name[1] = de->d_inode->i_generation;
-        rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace, NULL,
-                              res_id, LDLM_PLAIN, NULL, 0, lock_mode,
-                              &flags, ldlm_completion_ast,
-                              mds_blocking_ast, NULL, lockh);
+        rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace, res_id,
+                              LDLM_PLAIN, NULL, lock_mode, &flags,
+                              mds_blocking_ast, ldlm_completion_ast, NULL, NULL,
+                              NULL, 0, NULL, lockh);
         if (rc != ELDLM_OK) {
                 l_dput(de);
                 retval = ERR_PTR(-EIO); /* XXX translate ldlm code */
@@ -418,7 +421,7 @@ int mds_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 
         /* XXX layering violation!  -phil */
         l_lock(&lock->l_resource->lr_namespace->ns_lock);
-        /* Get this: if mds_blocking_ast is racing with ldlm_intent_policy,
+        /* Get this: if mds_blocking_ast is racing with mds_intent_policy,
          * such that mds_blocking_ast is called just before l_i_p takes the
          * ns_lock, then by the time we get the lock, we might not be the
          * correct blocking function anymore.  So check, and return early, if
@@ -1205,7 +1208,7 @@ int mds_handle(struct ptlrpc_request *req)
                 DEBUG_REQ(D_INODE, req, "enqueue");
                 OBD_FAIL_RETURN(OBD_FAIL_LDLM_ENQUEUE, 0);
                 rc = ldlm_handle_enqueue(req, ldlm_server_completion_ast,
-                                         ldlm_server_blocking_ast);
+                                         ldlm_server_blocking_ast, NULL);
                 break;
         case LDLM_CONVERT:
                 DEBUG_REQ(D_INODE, req, "convert");
@@ -1369,6 +1372,7 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
                 mds_cleanup(obd, 0);
                 GOTO(err_put, rc = -ENOMEM);
         }
+        ldlm_register_intent(obd->obd_namespace, mds_intent_policy);
 
         rc = mds_fs_setup(obd, mnt);
         if (rc) {
@@ -1624,159 +1628,146 @@ void intent_set_disposition(struct ldlm_reply *rep, int flag)
         rep->lock_policy_res1 |= flag;
 }
 
-static int ldlm_intent_policy(struct ldlm_namespace *ns,
-                              struct ldlm_lock **lockp, void *req_cookie,
-                              ldlm_mode_t mode, int flags, void *data)
+static int mds_intent_policy(struct ldlm_namespace *ns,
+                             struct ldlm_lock **lockp, void *req_cookie,
+                             ldlm_mode_t mode, int flags, void *data)
 {
         struct ptlrpc_request *req = req_cookie;
         struct ldlm_lock *lock = *lockp;
-        int rc;
+        struct ldlm_intent *it;
+        struct mds_obd *mds = &req->rq_export->exp_obd->u.mds;
+        struct ldlm_reply *rep;
+        struct lustre_handle lockh = { 0 };
+        struct ldlm_lock *new_lock;
+        int rc, offset = 2, repsize[4] = {sizeof(struct ldlm_reply),
+                                          sizeof(struct mds_body),
+                                          mds->mds_max_mdsize,
+                                          mds->mds_max_cookiesize};
         ENTRY;
 
-        if (!req_cookie)
-                RETURN(0);
+        LASSERT(req != NULL);
 
-        if (req->rq_reqmsg->bufcount > 1) {
-                /* an intent needs to be considered */
-                struct ldlm_intent *it;
-                struct mds_obd *mds = &req->rq_export->exp_obd->u.mds;
-                struct ldlm_reply *rep;
-                struct lustre_handle lockh = { 0 };
-                struct ldlm_lock *new_lock;
-                int offset = 2, repsize[4] = {sizeof(struct ldlm_reply),
-                                              sizeof(struct mds_body),
-                                              mds->mds_max_mdsize,
-                                              mds->mds_max_cookiesize};
-
-                it = lustre_swab_reqbuf(req, 1, sizeof (*it),
-                                        lustre_swab_ldlm_intent);
-                if (it == NULL) {
-                        CERROR ("Intent missing\n");
-                        req->rq_status = -EFAULT;
-                        RETURN(req->rq_status);
-                }
-
-                LDLM_DEBUG(lock, "intent policy, opc: %s",
-                           ldlm_it2str(it->opc));
-
-                rc = lustre_pack_reply(req, it->opc == IT_UNLINK ? 4 : 3,
-                                       repsize, NULL);
-                if (rc)
-                        RETURN(req->rq_status = rc);
-
-                rep = lustre_msg_buf(req->rq_repmsg, 0, sizeof (*rep));
-                intent_set_disposition(rep, DISP_IT_EXECD);
-
-                fixup_handle_for_resent_req(req, lock, &lockh);
-
-                /* execute policy */
-                switch ((long)it->opc) {
-                case IT_OPEN:
-                case IT_CREAT|IT_OPEN:
-                        /* XXX swab here to assert that an mds_open reint
-                         * packet is following */
-                        rep->lock_policy_res2 = mds_reint(req, offset, &lockh);
-#if 0
-                        /* We abort the lock if the lookup was negative and
-                         * we did not make it to the OPEN portion */
-                        if (!intent_disposition(rep, DISP_LOOKUP_EXECD))
-                                RETURN(ELDLM_LOCK_ABORTED);
-                        if (intent_disposition(rep, DISP_LOOKUP_NEG) &&
-                            !intent_disposition(rep, DISP_OPEN_OPEN))
-#endif 
-                                RETURN(ELDLM_LOCK_ABORTED);
-                        break;
-                case IT_GETATTR:
-                case IT_LOOKUP:
-                case IT_READDIR:
-                        rep->lock_policy_res2 = mds_getattr_name(offset, req,
-                                                                 &lockh);
-                        /* FIXME: LDLM can set req->rq_status. MDS sets
-                           policy_res{1,2} with disposition and status.
-                           - replay: returns 0 & req->status is old status 
-                           - otherwise: returns req->status */
-                        if (intent_disposition(rep, DISP_LOOKUP_NEG))
-                                rep->lock_policy_res2 = 0;
-                        if (!intent_disposition(rep, DISP_LOOKUP_POS) || 
-                            rep->lock_policy_res2)
-                                RETURN(ELDLM_LOCK_ABORTED);
-                        if (req->rq_status != 0) {
-                                LBUG();
-                                rep->lock_policy_res2 = req->rq_status;
-                                RETURN(ELDLM_LOCK_ABORTED);
-                        }
-                        break;
-                default:
-                        CERROR("Unhandled intent "LPD64"\n", it->opc);
-                        LBUG();
-                }
-
-                /* By this point, whatever function we called above must have
-                 * either filled in 'lockh', been an intent replay, or returned
-                 * an error.  We want to allow replayed RPCs to not get a lock,
-                 * since we would just drop it below anyways because lock replay
-                 * is done separately by the client afterwards.  For regular
-                 * RPCs we want to give the new lock to the client instead of
-                 * whatever lock it was about to get.
-                 */
-                new_lock = ldlm_handle2lock(&lockh);
-                if (new_lock == NULL && (flags & LDLM_FL_INTENT_ONLY))
-                        RETURN(0);
-                
-                LASSERT(new_lock != NULL);
-
-                /* If we've already given this lock to a client once, then we
-                 * should have no readers or writers.  Otherwise, we should
-                 * have one reader _or_ writer ref (which will be zeroed below)
-                 * before returning the lock to a client.
-                 */
-                if (new_lock->l_export == req->rq_export) {
-                        LASSERT(new_lock->l_readers + new_lock->l_writers == 0);
-                } else {
-                        LASSERT(new_lock->l_export == NULL);
-                        LASSERT(new_lock->l_readers + new_lock->l_writers == 1);
-                }
-
-                *lockp = new_lock;
-
-                if (new_lock->l_export == req->rq_export) {
-                        /* Already gave this to the client, which means that we
-                         * reconstructed a reply. */
-                        LASSERT(lustre_msg_get_flags(req->rq_reqmsg) &
-                                MSG_RESENT);
-                        RETURN(ELDLM_LOCK_REPLACED);
-                }
-
-                /* Fixup the lock to be given to the client */
-                l_lock(&new_lock->l_resource->lr_namespace->ns_lock);
-                new_lock->l_readers = 0;
-                new_lock->l_writers = 0;
-
-                new_lock->l_export = class_export_get(req->rq_export);
-                list_add(&new_lock->l_export_chain,
-                         &new_lock->l_export->exp_ldlm_data.led_held_locks);
-
-                new_lock->l_blocking_ast = lock->l_blocking_ast;
-                new_lock->l_completion_ast = lock->l_completion_ast;
-
-                memcpy(&new_lock->l_remote_handle, &lock->l_remote_handle,
-                       sizeof(lock->l_remote_handle));
-
-                new_lock->l_flags &= ~LDLM_FL_LOCAL;
-
-                LDLM_LOCK_PUT(new_lock);
-                l_unlock(&new_lock->l_resource->lr_namespace->ns_lock);
-
-                RETURN(ELDLM_LOCK_REPLACED);
-        } else {
+        if (req->rq_reqmsg->bufcount <= 1) {
+                /* No intent was provided */
                 int size = sizeof(struct ldlm_reply);
                 rc = lustre_pack_reply(req, 1, &size, NULL);
-                if (rc) {
-                        LBUG();
-                        RETURN(-ENOMEM);
-                }
+                LASSERT(rc == 0);
+                RETURN(0);
         }
-        RETURN(0);
+
+        it = lustre_swab_reqbuf(req, 1, sizeof(*it), lustre_swab_ldlm_intent);
+        if (it == NULL) {
+                CERROR("Intent missing\n");
+                RETURN(req->rq_status = -EFAULT);
+        }
+
+        LDLM_DEBUG(lock, "intent policy, opc: %s", ldlm_it2str(it->opc));
+
+        rc = lustre_pack_reply(req, it->opc == IT_UNLINK ? 4 : 3, repsize,
+                               NULL);
+        if (rc)
+                RETURN(req->rq_status = rc);
+
+        rep = lustre_msg_buf(req->rq_repmsg, 0, sizeof (*rep));
+        intent_set_disposition(rep, DISP_IT_EXECD);
+
+        fixup_handle_for_resent_req(req, lock, &lockh);
+
+        /* execute policy */
+        switch ((long)it->opc) {
+        case IT_OPEN:
+        case IT_CREAT|IT_OPEN:
+                /* XXX swab here to assert that an mds_open reint
+                 * packet is following */
+                rep->lock_policy_res2 = mds_reint(req, offset, &lockh);
+#if 0
+                /* We abort the lock if the lookup was negative and
+                 * we did not make it to the OPEN portion */
+                if (!intent_disposition(rep, DISP_LOOKUP_EXECD))
+                        RETURN(ELDLM_LOCK_ABORTED);
+                if (intent_disposition(rep, DISP_LOOKUP_NEG) &&
+                    !intent_disposition(rep, DISP_OPEN_OPEN))
+#endif 
+                        RETURN(ELDLM_LOCK_ABORTED);
+                break;
+        case IT_GETATTR:
+        case IT_LOOKUP:
+        case IT_READDIR:
+                rep->lock_policy_res2 = mds_getattr_name(offset, req, &lockh);
+                /* FIXME: LDLM can set req->rq_status. MDS sets
+                   policy_res{1,2} with disposition and status.
+                   - replay: returns 0 & req->status is old status 
+                   - otherwise: returns req->status */
+                if (intent_disposition(rep, DISP_LOOKUP_NEG))
+                        rep->lock_policy_res2 = 0;
+                if (!intent_disposition(rep, DISP_LOOKUP_POS) || 
+                    rep->lock_policy_res2)
+                        RETURN(ELDLM_LOCK_ABORTED);
+                if (req->rq_status != 0) {
+                        LBUG();
+                        rep->lock_policy_res2 = req->rq_status;
+                        RETURN(ELDLM_LOCK_ABORTED);
+                }
+                break;
+        default:
+                CERROR("Unhandled intent "LPD64"\n", it->opc);
+                LBUG();
+        }
+
+        /* By this point, whatever function we called above must have either
+         * filled in 'lockh', been an intent replay, or returned an error.  We
+         * want to allow replayed RPCs to not get a lock, since we would just
+         * drop it below anyways because lock replay is done separately by the
+         * client afterwards.  For regular RPCs we want to give the new lock to
+         * the client instead of whatever lock it was about to get. */
+        new_lock = ldlm_handle2lock(&lockh);
+        if (new_lock == NULL && (flags & LDLM_FL_INTENT_ONLY))
+                RETURN(0);
+
+        LASSERT(new_lock != NULL);
+
+        /* If we've already given this lock to a client once, then we should
+         * have no readers or writers.  Otherwise, we should have one reader
+         * _or_ writer ref (which will be zeroed below) before returning the
+         * lock to a client. */
+        if (new_lock->l_export == req->rq_export) {
+                LASSERT(new_lock->l_readers + new_lock->l_writers == 0);
+        } else {
+                LASSERT(new_lock->l_export == NULL);
+                LASSERT(new_lock->l_readers + new_lock->l_writers == 1);
+        }
+
+        *lockp = new_lock;
+
+        if (new_lock->l_export == req->rq_export) {
+                /* Already gave this to the client, which means that we
+                 * reconstructed a reply. */
+                LASSERT(lustre_msg_get_flags(req->rq_reqmsg) &
+                        MSG_RESENT);
+                RETURN(ELDLM_LOCK_REPLACED);
+        }
+
+        /* Fixup the lock to be given to the client */
+        l_lock(&new_lock->l_resource->lr_namespace->ns_lock);
+        new_lock->l_readers = 0;
+        new_lock->l_writers = 0;
+
+        new_lock->l_export = class_export_get(req->rq_export);
+        list_add(&new_lock->l_export_chain,
+                 &new_lock->l_export->exp_ldlm_data.led_held_locks);
+
+        new_lock->l_blocking_ast = lock->l_blocking_ast;
+        new_lock->l_completion_ast = lock->l_completion_ast;
+
+        memcpy(&new_lock->l_remote_handle, &lock->l_remote_handle,
+               sizeof(lock->l_remote_handle));
+
+        new_lock->l_flags &= ~LDLM_FL_LOCAL;
+
+        LDLM_LOCK_PUT(new_lock);
+        l_unlock(&new_lock->l_resource->lr_namespace->ns_lock);
+
+        RETURN(ELDLM_LOCK_REPLACED);
 }
 
 int mds_attach(struct obd_device *dev, obd_count len, void *data)
@@ -1938,14 +1929,12 @@ static int __init mds_init(void)
         class_register_type(&mds_obd_ops, lvars.module_vars, LUSTRE_MDS_NAME);
         lprocfs_init_multi_vars(1, &lvars);
         class_register_type(&mdt_obd_ops, lvars.module_vars, LUSTRE_MDT_NAME);
-        ldlm_register_intent(ldlm_intent_policy);
 
         return 0;
 }
 
 static void /*__exit*/ mds_exit(void)
 {
-        ldlm_unregister_intent();
         class_unregister_type(LUSTRE_MDS_NAME);
         class_unregister_type(LUSTRE_MDT_NAME);
 }

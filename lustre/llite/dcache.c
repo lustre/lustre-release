@@ -30,6 +30,7 @@
 #include <linux/lustre_lite.h>
 #include <linux/lustre_idl.h>
 #include <linux/lustre_dlm.h>
+#include <linux/lustre_version.h>
 
 #include "llite_internal.h"
 
@@ -193,7 +194,12 @@ void ll_frob_intent(struct lookup_intent **itp, struct lookup_intent *deft)
         it->it_op_release = ll_intent_release;
 }
 
+#if (LUSTRE_KERNEL_VERSION < 33)
 int ll_revalidate_it(struct dentry *de, int flags, struct lookup_intent *it)
+#else
+int ll_revalidate_it(struct dentry *de, int flags, struct nameidata *nd,
+                     struct lookup_intent *it)
+#endif
 {
         int rc;
         struct ll_fid pfid, cfid;

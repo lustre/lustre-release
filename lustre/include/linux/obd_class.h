@@ -852,12 +852,11 @@ static inline int obd_iocontrol(unsigned int cmd, struct obd_export *exp,
         RETURN(rc);
 }
 
-static inline int obd_enqueue(struct obd_export *exp,
-                              struct lov_stripe_md *ea,
-                              struct lustre_handle *parent_lock,
-                              __u32 type, void *cookie, int cookielen,
-                              __u32 mode, int *flags, void *cb, void *data,
-                              struct lustre_handle *lockh)
+static inline int obd_enqueue(struct obd_export *exp, struct lov_stripe_md *ea,
+                              __u32 type, ldlm_policy_data_t *policy,
+                              __u32 mode, int *flags, void *bl_cb, void *cp_cb,
+                              void *gl_cb, void *data, __u32 lvb_len,
+                              void *lvb_swabber, struct lustre_handle *lockh)
 {
         int rc;
         ENTRY;
@@ -865,16 +864,15 @@ static inline int obd_enqueue(struct obd_export *exp,
         EXP_CHECK_OP(exp, enqueue);
         OBD_COUNTER_INCREMENT(exp->exp_obd, enqueue);
 
-        rc = OBP(exp->exp_obd, enqueue)(exp, ea, parent_lock, type,
-                                        cookie, cookielen, mode, flags, cb,
-                                        data, lockh);
+        rc = OBP(exp->exp_obd, enqueue)(exp, ea, type, policy, mode, flags,
+                                        bl_cb, cp_cb, gl_cb, data, lvb_len,
+                                        lvb_swabber, lockh);
         RETURN(rc);
 }
 
-static inline int obd_match(struct obd_export *exp,
-                            struct lov_stripe_md *ea, __u32 type, void *cookie,
-                            int cookielen, __u32 mode, int *flags, void *data,
-                            struct lustre_handle *lockh)
+static inline int obd_match(struct obd_export *exp, struct lov_stripe_md *ea,
+                            __u32 type, ldlm_policy_data_t *policy, __u32 mode,
+                            int *flags, void *data, struct lustre_handle *lockh)
 {
         int rc;
         ENTRY;
@@ -882,11 +880,10 @@ static inline int obd_match(struct obd_export *exp,
         EXP_CHECK_OP(exp, match);
         OBD_COUNTER_INCREMENT(exp->exp_obd, match);
 
-        rc = OBP(exp->exp_obd, match)(exp, ea, type, cookie, cookielen, mode,
-                                      flags, data, lockh);
+        rc = OBP(exp->exp_obd, match)(exp, ea, type, policy, mode, flags, data,
+                                      lockh);
         RETURN(rc);
 }
-
 
 static inline int obd_change_cbdata(struct obd_export *exp,
                                     struct lov_stripe_md *lsm, 
@@ -969,20 +966,6 @@ static inline int obd_unpin(struct obd_export *exp,
 
         rc = OBP(exp->exp_obd, unpin)(exp, handle, flag);
         return(rc);
-}
-
-static inline int obd_lock_contains(struct obd_export *exp,
-                                    struct lov_stripe_md *lsm, 
-                                    struct ldlm_lock *lock, obd_off offset)
-{
-        int rc;
-        ENTRY;
-
-        EXP_CHECK_OP(exp, lock_contains);
-        OBD_COUNTER_INCREMENT(exp->exp_obd, lock_contains);
-
-        rc = OBP(exp->exp_obd, lock_contains)(exp, lsm, lock, offset);
-        RETURN(rc);
 }
 
 static inline void obd_invalidate_import(struct obd_device *obd,

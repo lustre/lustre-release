@@ -431,7 +431,6 @@ check_ldlm_resource_desc(void)
         CHECK_STRUCT(ldlm_resource_desc);
         CHECK_MEMBER(ldlm_resource_desc, lr_type);
         CHECK_MEMBER(ldlm_resource_desc, lr_name);
-        CHECK_MEMBER(ldlm_resource_desc, lr_version[RES_VERSION_SIZE]);
 }
 
 void
@@ -443,7 +442,6 @@ check_ldlm_lock_desc(void)
         CHECK_MEMBER(ldlm_lock_desc, l_req_mode);
         CHECK_MEMBER(ldlm_lock_desc, l_granted_mode);
         CHECK_MEMBER(ldlm_lock_desc, l_policy_data);
-        CHECK_MEMBER(ldlm_lock_desc, l_version[RES_VERSION_SIZE]);
 }
 
 void
@@ -463,10 +461,8 @@ check_ldlm_reply(void)
         BLANK_LINE();
         CHECK_STRUCT(ldlm_reply);
         CHECK_MEMBER(ldlm_reply, lock_flags);
-        CHECK_MEMBER(ldlm_reply, lock_mode);
-        CHECK_MEMBER(ldlm_reply, lock_resource_name);
+        CHECK_MEMBER(ldlm_request, lock_desc);
         CHECK_MEMBER(ldlm_reply, lock_handle);
-        CHECK_MEMBER(ldlm_reply, lock_policy_data);
         CHECK_MEMBER(ldlm_reply, lock_policy_res1);
         CHECK_MEMBER(ldlm_reply, lock_policy_res2);
 }

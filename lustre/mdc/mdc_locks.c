@@ -284,9 +284,10 @@ int mdc_enqueue(struct obd_export *exp,
         }
 
         mdc_get_rpc_lock(obddev->u.cli.cl_rpc_lock, it);
-        rc = ldlm_cli_enqueue(exp, req, obddev->obd_namespace, NULL, res_id,
-                              lock_type, NULL, 0, lock_mode, &flags,
-                              cb_completion, cb_blocking, cb_data, lockh);
+        rc = ldlm_cli_enqueue(exp, req, obddev->obd_namespace, res_id,
+                              lock_type, NULL, lock_mode, &flags, cb_blocking,
+                              cb_completion, NULL, cb_data, NULL, 0, NULL,
+                              lockh);
         mdc_put_rpc_lock(obddev->u.cli.cl_rpc_lock, it);
 
         /* Similarly, if we're going to replay this request, we don't want to
@@ -319,6 +320,7 @@ int mdc_enqueue(struct obd_export *exp,
                         lock_mode = lock->l_req_mode;
                 }
 
+                ldlm_lock_allow_match(lock);
                 LDLM_LOCK_PUT(lock);
         }
 
@@ -424,13 +426,12 @@ int mdc_intent_lock(struct obd_export *exp, struct ll_uctxt *uctxt,
 
                 mode = LCK_PR;
                 rc = ldlm_lock_match(exp->exp_obd->obd_namespace, flags,
-                                     &res_id, LDLM_PLAIN, NULL, 0, LCK_PR,
-                                     &lockh);
+                                     &res_id, LDLM_PLAIN, NULL, LCK_PR, &lockh);
                 if (!rc) {
                         mode = LCK_PW;
                         rc = ldlm_lock_match(exp->exp_obd->obd_namespace, flags,
-                                             &res_id, LDLM_PLAIN, NULL, 0,
-                                             LCK_PW, &lockh);
+                                             &res_id, LDLM_PLAIN, NULL, LCK_PW,
+                                             &lockh);
                 }
                 if (rc) {
                         memcpy(&it->d.lustre.it_lock_handle, &lockh, 
@@ -532,7 +533,7 @@ int mdc_intent_lock(struct obd_export *exp, struct ll_uctxt *uctxt,
                 LDLM_LOCK_PUT(lock);
                 memcpy(&old_lock, &lockh, sizeof(lockh));
                 if (ldlm_lock_match(NULL, LDLM_FL_BLOCK_GRANTED, NULL,
-                                    LDLM_PLAIN, NULL, 0, LCK_NL, &old_lock)) {
+                                    LDLM_PLAIN, NULL, LCK_NL, &old_lock)) {
                         ldlm_lock_decref_and_cancel(&lockh,
                                                     it->d.lustre.it_lock_mode);
                         memcpy(&lockh, &old_lock, sizeof(old_lock));

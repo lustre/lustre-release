@@ -54,7 +54,11 @@ struct lov_oinfo {                 /* per-stripe data structure */
         struct loi_oap_pages loi_write_lop;
         /* _cli_ is poorly named, it should be _ready_ */
         struct list_head loi_cli_item;
-        struct list_head        loi_write_item;
+        struct list_head loi_write_item;
+
+        __u64 loi_kms; /* known minimum size */
+        __u64 loi_rss; /* recently seen size */
+        __u64 loi_mtime; /* recently seen mtime */
 };
 
 static inline void loi_init(struct lov_oinfo *loi)
@@ -605,17 +609,16 @@ struct obd_ops {
                           int objcount, struct obd_ioobj *obj,
                           int niocount, struct niobuf_local *local,
                           struct obd_trans_info *oti);
-        int (*o_enqueue)(struct obd_export *exp, struct lov_stripe_md *md,
-                         struct lustre_handle *parent_lock,
-                         __u32 type, void *cookie, int cookielen, __u32 mode,
-                         int *flags, void *cb, void *data,
+        int (*o_enqueue)(struct obd_export *, struct lov_stripe_md *,
+                         __u32 type, ldlm_policy_data_t *, __u32 mode,
+                         int *flags, void *bl_cb, void *cp_cb, void *gl_cb,
+                         void *data, __u32 lvb_len, void *lvb_swabber,
                          struct lustre_handle *lockh);
-        int (*o_match)(struct obd_export *exp, struct lov_stripe_md *md,
-                         __u32 type, void *cookie, int cookielen, __u32 mode,
-                         int *flags, void *data, struct lustre_handle *lockh);
-        int (*o_change_cbdata)(struct obd_export *exp,
-                               struct lov_stripe_md *lsm, ldlm_iterator_t it,
-                               void *data);
+        int (*o_match)(struct obd_export *, struct lov_stripe_md *, __u32 type,
+                       ldlm_policy_data_t *, __u32 mode, int *flags, void *data,
+                       struct lustre_handle *lockh);
+        int (*o_change_cbdata)(struct obd_export *, struct lov_stripe_md *,
+                               ldlm_iterator_t it, void *data);
         int (*o_cancel)(struct obd_export *, struct lov_stripe_md *md,
                         __u32 mode, struct lustre_handle *);
         int (*o_cancel_unused)(struct obd_export *, struct lov_stripe_md *,
@@ -632,11 +635,6 @@ struct obd_ops {
                            int count, struct llog_logid *logid);
         int (*o_llog_finish)(struct obd_device *obd, int count);
 
-        /* only until proper file size mechanics arrive */
-        int (*o_lock_contains)(struct obd_export *exp, 
-                               struct lov_stripe_md *lsm, 
-                               struct ldlm_lock *lock, obd_off offset);
-
         /* metadata-only methods */
         int (*o_pin)(struct obd_export *, obd_id ino, __u32 gen, int type,
                      struct obd_client_handle *, int flag);
@@ -651,7 +649,6 @@ struct obd_ops {
          * to lprocfs_alloc_obd_stats() in obdclass/lprocfs_status.c.
          * Also, add a wrapper function in include/linux/obd_class.h.
          */
-
 };
 
 

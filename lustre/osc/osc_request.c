@@ -593,6 +593,7 @@ void osc_wake_cache_waiters(struct client_obd *cli)
                 } else {
                         osc_consume_write_grant(cli, ocw->ocw_oap);
                 }
+
                 wake_up(&ocw->ocw_waitq);
         }
 
@@ -1700,7 +1701,6 @@ static int osc_enter_cache(struct client_obd *cli, struct lov_oinfo *loi,
         if (cli->cl_dirty_max < PAGE_SIZE)
                 return(-EDQUOT);
 
-
         /* Hopefully normal case - cache space and write credits available */
         if (cli->cl_dirty + PAGE_SIZE <= cli->cl_dirty_max &&
             cli->cl_avail_grant >= PAGE_SIZE) {
@@ -2370,27 +2370,32 @@ static int osc_change_cbdata(struct obd_export *exp, struct lov_stripe_md *lsm,
 }
 
 static int osc_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
-                       struct lustre_handle *parent_lock,
-                       __u32 type, void *extentp, int extent_len, __u32 mode,
-                       int *flags, void *callback, void *data,
+                       __u32 type, ldlm_policy_data_t *policy, __u32 mode,
+                       int *flags, void *bl_cb, void *cp_cb, void *gl_cb,
+                       void *data, __u32 lvb_len, void *lvb_swabber,
                        struct lustre_handle *lockh)
 {
         struct ldlm_res_id res_id = { .name = {lsm->lsm_object_id} };
         struct obd_device *obd = exp->exp_obd;
-        struct ldlm_extent *extent = extentp;
+        struct ost_lvb lvb;
         int rc;
         ENTRY;
 
         /* Filesystem lock extents are extended to page boundaries so that
          * dealing with the page cache is a little smoother.  */
-        extent->start -= extent->start & ~PAGE_MASK;
-        extent->end |= ~PAGE_MASK;
+        policy->l_extent.start -= policy->l_extent.start & ~PAGE_MASK;
+        policy->l_extent.end |= ~PAGE_MASK;
 
         /* Next, search for already existing extent locks that will cover us */
-        rc = ldlm_lock_match(obd->obd_namespace, 0, &res_id,
-                             type, extent, sizeof(*extent), mode, lockh);
+        rc = ldlm_lock_match(obd->obd_namespace, 0, &res_id, type, policy, mode,
+                             lockh);
         if (rc == 1) {
                 osc_set_data_with_check(lockh, data);
+                if (*flags & LDLM_FL_HAS_INTENT) {
+                        /* I would like to be able to ASSERT here that rss <=
+                         * kms, but I can't, for reasons which are explained in
+                         * lov_enqueue() */
+                }
                 /* We already have a lock, and it's referenced */
                 RETURN(ELDLM_OK);
         }
@@ -2409,7 +2414,7 @@ static int osc_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
 
         if (mode == LCK_PR) {
                 rc = ldlm_lock_match(obd->obd_namespace, 0, &res_id, type,
-                                     extent, sizeof(*extent), LCK_PW, lockh);
+                                     policy, LCK_PW, lockh);
                 if (rc == 1) {
                         /* FIXME: This is not incredibly elegant, but it might
                          * be more elegant than adding another parameter to
@@ -2421,19 +2426,22 @@ static int osc_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
                 }
         }
 
-        rc = ldlm_cli_enqueue(exp, NULL, obd->obd_namespace, parent_lock,
-                              res_id, type, extent, sizeof(*extent), mode,
-                              flags,ldlm_completion_ast, callback, data, lockh);
+        rc = ldlm_cli_enqueue(exp, NULL, obd->obd_namespace, res_id, type,
+                              policy, mode, flags, bl_cb, cp_cb, gl_cb, data,
+                              &lvb, sizeof(lvb), lustre_swab_ost_lvb, lockh);
+
+        if ((*flags & LDLM_FL_HAS_INTENT && rc == ELDLM_LOCK_ABORTED) || !rc)
+                lsm->lsm_oinfo->loi_rss = lvb.lvb_size;
+
         RETURN(rc);
 }
 
 static int osc_match(struct obd_export *exp, struct lov_stripe_md *lsm,
-                     __u32 type, void *extentp, int extent_len, __u32 mode,
+                     __u32 type, ldlm_policy_data_t *policy, __u32 mode,
                      int *flags, void *data, struct lustre_handle *lockh)
 {
         struct ldlm_res_id res_id = { .name = {lsm->lsm_object_id} };
         struct obd_device *obd = exp->exp_obd;
-        struct ldlm_extent *extent = extentp;
         int rc;
         ENTRY;
 
@@ -2441,12 +2449,12 @@ static int osc_match(struct obd_export *exp, struct lov_stripe_md *lsm,
 
         /* Filesystem lock extents are extended to page boundaries so that
          * dealing with the page cache is a little smoother */
-        extent->start -= extent->start & ~PAGE_MASK;
-        extent->end |= ~PAGE_MASK;
+        policy->l_extent.start -= policy->l_extent.start & ~PAGE_MASK;
+        policy->l_extent.end |= ~PAGE_MASK;
 
         /* Next, search for already existing extent locks that will cover us */
         rc = ldlm_lock_match(obd->obd_namespace, *flags, &res_id, type,
-                             extent, sizeof(*extent), mode, lockh);
+                             policy, mode, lockh);
         if (rc) {
                 osc_set_data_with_check(lockh, data);
                 RETURN(rc);
@@ -2456,7 +2464,7 @@ static int osc_match(struct obd_export *exp, struct lov_stripe_md *lsm,
          * writers can share a single PW lock. */
         if (mode == LCK_PR) {
                 rc = ldlm_lock_match(obd->obd_namespace, *flags, &res_id, type,
-                                     extent, sizeof(*extent), LCK_PW, lockh);
+                                     policy, LCK_PW, lockh);
                 if (rc == 1) {
                         /* FIXME: This is not incredibly elegant, but it might
                          * be more elegant than adding another parameter to
@@ -2846,19 +2854,6 @@ static int osc_disconnect(struct obd_export *exp, int flags)
         return rc;
 }
 
-static int osc_lock_contains(struct obd_export *exp, struct lov_stripe_md *lsm,
-                             struct ldlm_lock *lock, obd_off offset)
-{
-        ENTRY;
-        if (exp == NULL)
-                RETURN(-ENODEV);
-
-        if (lock->l_policy_data.l_extent.start <= offset &&
-            lock->l_policy_data.l_extent.end >= offset)
-                RETURN(1);
-        RETURN(0);
-}
-
 static int osc_invalidate_import(struct obd_device *obd,
                                  struct obd_import *imp)
 {
@@ -2937,7 +2932,6 @@ struct obd_ops osc_obd_ops = {
         o_iocontrol:    osc_iocontrol,
         o_get_info:     osc_get_info,
         o_set_info:     osc_set_info,
-        o_lock_contains:osc_lock_contains,
         o_invalidate_import: osc_invalidate_import,
         o_llog_init:    osc_llog_init,
         o_llog_finish:  osc_llog_finish,
@@ -2969,7 +2963,6 @@ struct obd_ops sanosc_obd_ops = {
         o_cancel:       osc_cancel,
         o_cancel_unused:osc_cancel_unused,
         o_iocontrol:    osc_iocontrol,
-        o_lock_contains:osc_lock_contains,
         o_invalidate_import: osc_invalidate_import,
         o_llog_init:    osc_llog_init,
         o_llog_finish:  osc_llog_finish,

@@ -175,7 +175,7 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, int *flags, int first_enq,
         ldlm_extent_internal_policy(&res->lr_waiting, lock, &new_ex);
 
         if (new_ex.start != lock->l_policy_data.l_extent.start ||
-            new_ex.end != lock->l_policy_data.l_extent.end)  {
+            new_ex.end != lock->l_policy_data.l_extent.end) {
                 *flags |= LDLM_FL_LOCK_CHANGED;
                 lock->l_policy_data.l_extent.start = new_ex.start;
                 lock->l_policy_data.l_extent.end = new_ex.end;
@@ -208,4 +208,33 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, int *flags, int first_enq,
                 ldlm_grant_lock(lock, NULL, 0, 0);
         }
         RETURN(0);
+}
+
+/* When a lock is cancelled by a client, the KMS may undergo change if this
+ * is the "highest lock".  This function returns the new KMS value.
+ *
+ * NB: A lock on [x,y] protects a KMS of up to y + 1 bytes! */
+__u64 ldlm_extent_shift_kms(struct ldlm_lock *lock, __u64 old_kms)
+{
+        struct ldlm_resource *res = lock->l_resource;
+        struct list_head *tmp;
+        struct ldlm_lock *lck;
+        __u64 kms = 0;
+        ENTRY;
+
+        l_lock(&res->lr_namespace->ns_lock);
+        list_for_each(tmp, &res->lr_granted) {
+                lck = list_entry(tmp, struct ldlm_lock, l_res_link);
+
+                if (lock == lck)
+                        continue;
+                if (lck->l_policy_data.l_extent.end >= old_kms)
+                        GOTO(out, kms = old_kms);
+                kms = lck->l_policy_data.l_extent.end + 1;
+        }
+
+        GOTO(out, kms);
+ out:
+        l_unlock(&res->lr_namespace->ns_lock);
+        return kms;
 }

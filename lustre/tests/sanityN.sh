@@ -284,11 +284,44 @@ test_13() {	# bug 2451 - directory coherency
 }
 run_test 13 "test directory page revocation ===================="
 
-test_14() {	# bug 974 - ENOSPC
+test_14() {
+	mkdir $DIR1/d14
+	cp -p /bin/ls $DIR1/d14/ls
+	exec 100>> $DIR1/d14/ls
+	$DIR2/d14/ls && error || true
+	exec 100<&-
+}
+run_test 14 "execution of file opened for write should return -ETXTBSY=="
+
+test_14a() {
+        mkdir -p $DIR1/d14
+	cp -p `which multiop` $DIR1/d14/multiop
+        $DIR1/d14/multiop $TMP/test14.junk O_c &
+        MULTIPID=$!
+        sleep 1
+        multiop $DIR2/d14/multiop Oc && error "expected error, got success"
+        kill -USR1 $MULTIPID || return 2
+        wait $MULTIPID || return 3
+}
+run_test 14a "open(RDWR) of file being executed should return -ETXTBSY"
+
+test_14b() {
+        mkdir -p $DIR1/d14
+	cp -p `which multiop` $DIR1/d14/multiop
+        $DIR1/d14/multiop $TMP/test14.junk O_c &
+        MULTIPID=$!
+        sleep 1
+        truncate $DIR2/d14/multiop 0 && error "expected error, got success"
+        kill -USR1 $MULTIPID || return 2
+        wait $MULTIPID || return 3
+}
+run_test 14b "truncate of file being executed should return -ETXTBSY"
+
+test_15() {	# bug 974 - ENOSPC
 	env
 	sh oos2.sh $MOUNT1 $MOUNT2
 }
-run_test 14 "test out-of-space with multiple writers ==========="
+run_test 15 "test out-of-space with multiple writers ==========="
 
 log "cleanup: ======================================================"
 rm -rf $DIR1/[df][0-9]* $DIR1/lnk || true

@@ -73,9 +73,18 @@ typedef enum {
 
 /* These are flags that are mapped into the flags and ASTs of blocking locks */
 #define LDLM_AST_DISCARD_DATA  0x80000000 /* Add FL_DISCARD to blocking ASTs */
-
 /* Flags sent in AST lock_flags to be mapped into the receiving lock. */
 #define LDLM_AST_FLAGS         (LDLM_FL_DISCARD_DATA)
+
+/* XXX FIXME: This is being added to b_size as a low-risk fix to the fact that
+ * the LVB filling happens _after_ the lock has been granted, so another thread
+ * can match before the LVB has been updated.  As a dirty hack, we set
+ * LDLM_FL_CAN_MATCH only after we've done the LVB poop.
+ *
+ * The proper fix is to do the granting inside of the completion AST, which can
+ * be replaced with a LVB-aware wrapping function for OSC locks.  That change is
+ * pretty high-risk, though, and would need a lot more testing. */
+#define LDLM_FL_CAN_MATCH      0x100000
 
 /* The blocking callback is overloaded to perform two functions.  These flags
  * indicate which operation should be performed. */
@@ -124,6 +133,20 @@ static inline int lockmode_compat(ldlm_mode_t exist, ldlm_mode_t new)
    -
 */
 
+struct ldlm_lock; 
+struct ldlm_resource; 
+struct ldlm_namespace;
+
+typedef int (*ldlm_res_policy)(struct ldlm_namespace *, struct ldlm_lock **,
+                               void *req_cookie, ldlm_mode_t mode, int flags,
+                               void *data);
+
+struct ldlm_valblock_ops {
+        int (*lvbo_init)(struct ldlm_resource *res);
+        int (*lvbo_update)(struct ldlm_resource *res, struct lustre_msg *m,
+                           int buf_idx);
+};
+
 struct ldlm_namespace {
         char                  *ns_name;
         __u32                  ns_client; /* is this a client-side lock tree? */
@@ -143,6 +166,9 @@ struct ldlm_namespace {
         spinlock_t             ns_counter_lock;
         __u64                  ns_locks;
         __u64                  ns_resources;
+        ldlm_res_policy        ns_policy;
+        struct ldlm_valblock_ops *ns_lvbo;
+        void                    *ns_lvbp;
 };
 
 /*
@@ -162,6 +188,7 @@ typedef int (*ldlm_blocking_callback)(struct ldlm_lock *lock,
                                       int flag);
 typedef int (*ldlm_completion_callback)(struct ldlm_lock *lock, int flags,
                                         void *data);
+typedef int (*ldlm_glimpse_callback)(struct ldlm_lock *lock, void *data);
 
 struct ldlm_lock {
         struct portals_handle l_handle; // must be first in the structure
@@ -181,6 +208,7 @@ struct ldlm_lock {
 
         ldlm_completion_callback l_completion_ast;
         ldlm_blocking_callback   l_blocking_ast;
+        ldlm_glimpse_callback    l_glimpse_ast;
         void                    *l_ast_data;
 
         struct obd_export    *l_export;
@@ -190,7 +218,12 @@ struct ldlm_lock {
         __u32                 l_flags;
         struct lustre_handle  l_remote_handle;
         ldlm_policy_data_t    l_policy_data;
-        __u32                 l_version[RES_VERSION_SIZE];
+
+        /* This LVB is used only on the client side, as temporary storage for
+         * a lock value block received during an enqueue */
+        __u32                 l_lvb_len;
+        void                 *l_lvb_data;
+        void                 *l_lvb_swabber;
 
         __u32                 l_readers;
         __u32                 l_writers;
@@ -201,11 +234,9 @@ struct ldlm_lock {
          * on this waitq to learn when it becomes granted. */
         wait_queue_head_t     l_waitq;
         struct timeval        l_enqueued_time;
+        unsigned long         l_last_used; /* jiffies */
 };
 
-typedef int (*ldlm_res_policy)(struct ldlm_namespace *, struct ldlm_lock **,
-                               void *req_cookie, ldlm_mode_t mode, int flags,
-                               void *data);
 
 #define LDLM_PLAIN       10
 #define LDLM_EXTENT      11
@@ -229,8 +260,12 @@ struct ldlm_resource {
         __u32                  lr_type; /* LDLM_PLAIN or LDLM_EXTENT */
         struct ldlm_resource  *lr_root;
         struct ldlm_res_id     lr_name;
-        __u32                  lr_version[RES_VERSION_SIZE];
         atomic_t               lr_refcount;
+
+        /* Server-side-only lock value block elements */
+        struct semaphore       lr_lvb_sem;
+        __u32                  lr_lvb_len;
+        void                  *lr_lvb_data;
 
         /* lr_tmp holds a list head temporarily, during the building of a work
          * queue.  see ldlm_add_ast_work_item and ldlm_run_ast_work */
@@ -341,6 +376,9 @@ do {                                                                          \
 #define LDLM_DEBUG_NOLOCK(format, a...)                 \
         CDEBUG(D_DLMTRACE, "### " format "\n" , ## a)
 
+typedef int (*ldlm_processing_policy)(struct ldlm_lock *lock, int *flags,
+                                      int first_enq, ldlm_error_t *err);
+
 /*
  * Iterators.
  */
@@ -365,12 +403,17 @@ void ldlm_change_cbdata(struct ldlm_namespace *, struct ldlm_res_id *,
 /* ldlm_flock.c */
 int ldlm_flock_completion_ast(struct ldlm_lock *lock, int flags, void *data);
 
+/* ldlm_extent.c */
+__u64 ldlm_extent_shift_kms(struct ldlm_lock *lock, __u64 old_kms);
+
+
 /* ldlm_lockd.c */
 int ldlm_server_blocking_ast(struct ldlm_lock *, struct ldlm_lock_desc *,
                              void *data, int flag);
 int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data);
+int ldlm_server_glimpse_ast(struct ldlm_lock *lock, void *data);
 int ldlm_handle_enqueue(struct ptlrpc_request *req, ldlm_completion_callback,
-                        ldlm_blocking_callback);
+                        ldlm_blocking_callback, ldlm_glimpse_callback);
 int ldlm_handle_convert(struct ptlrpc_request *req);
 int ldlm_handle_cancel(struct ptlrpc_request *req);
 int ldlm_del_waiting_lock(struct ldlm_lock *lock);
@@ -378,8 +421,8 @@ int ldlm_get_ref(void);
 void ldlm_put_ref(int force);
 
 /* ldlm_lock.c */
-void ldlm_register_intent(ldlm_res_policy arg);
-void ldlm_unregister_intent(void);
+ldlm_processing_policy ldlm_get_processing_policy(struct ldlm_resource *res);
+void ldlm_register_intent(struct ldlm_namespace *ns, ldlm_res_policy arg);
 void ldlm_lock2handle(struct ldlm_lock *lock, struct lustre_handle *lockh);
 struct ldlm_lock *__ldlm_handle2lock(struct lustre_handle *, int flags);
 void ldlm_cancel_callback(struct ldlm_lock *);
@@ -413,8 +456,9 @@ void ldlm_lock2desc(struct ldlm_lock *lock, struct ldlm_lock_desc *desc);
 void ldlm_lock_addref(struct lustre_handle *lockh, __u32 mode);
 void ldlm_lock_decref(struct lustre_handle *lockh, __u32 mode);
 void ldlm_lock_decref_and_cancel(struct lustre_handle *lockh, __u32 mode);
+void ldlm_lock_allow_match(struct ldlm_lock *lock);
 int ldlm_lock_match(struct ldlm_namespace *ns, int flags, struct ldlm_res_id *,
-                    __u32 type, void *cookie, int cookielen, ldlm_mode_t mode,
+                    __u32 type, ldlm_policy_data_t *, ldlm_mode_t mode,
                     struct lustre_handle *);
 struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
                                         int *flags);
@@ -465,15 +509,18 @@ int ldlm_completion_ast(struct ldlm_lock *lock, int flags, void *data);
 int ldlm_cli_enqueue(struct obd_export *exp,
                      struct ptlrpc_request *req,
                      struct ldlm_namespace *ns,
-                     struct lustre_handle *parent_lock_handle,
                      struct ldlm_res_id,
                      __u32 type,
-                     void *cookie, int cookielen,
+                     ldlm_policy_data_t *,
                      ldlm_mode_t mode,
                      int *flags,
+                     ldlm_blocking_callback blocking,
                      ldlm_completion_callback completion,
-                     ldlm_blocking_callback callback,
+                     ldlm_glimpse_callback glimpse,
                      void *data,
+                     void *lvb,
+                     __u32 lvb_len,
+                     void *lvb_swabber,
                      struct lustre_handle *lockh);
 int ldlm_server_ast(struct lustre_handle *lockh, struct ldlm_lock_desc *new,
                     void *data, __u32 data_len);
@@ -483,7 +530,7 @@ int ldlm_cli_cancel_unused(struct ldlm_namespace *, struct ldlm_res_id *,
                            int flags, void *opaque);
 
 /* mds/handler.c */
-/* This has to be here because recurisve inclusion sucks. */
+/* This has to be here because recursive inclusion sucks. */
 int intent_disposition(struct ldlm_reply *rep, int flag);
 void intent_set_disposition(struct ldlm_reply *rep, int flag);
 int mds_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
