@@ -73,6 +73,8 @@ void ll_ap_completion_24(void *data, int cmd, int rc)
                 SetPageError(page);
         }
 
+        LL_CDEBUG_PAGE(page, "io complete, unlocking\n");
+
         unlock_page(page);
         page_cache_release(page);
 }
@@ -98,6 +100,7 @@ static int ll_writepage_24(struct page *page)
 
         page_cache_get(page);
         if (llap->llap_queued) {
+                LL_CDEBUG_PAGE(page, "marking urgent\n");
                 rc = obd_set_async_flags(exp, ll_i2info(inode)->lli_smd, NULL, 
                                          llap->llap_cookie, ASYNC_READY | 
                                          ASYNC_URGENT);
@@ -106,8 +109,10 @@ static int ll_writepage_24(struct page *page)
                                         llap->llap_cookie, OBD_BRW_WRITE, 0, 0, 
                                         OBD_BRW_CREATE, ASYNC_READY | 
                                         ASYNC_URGENT);
-                if (rc == 0)
+                if (rc == 0) {
+                        LL_CDEBUG_PAGE(page, "mmap write queued\n");
                         llap->llap_queued = 1;
+                }
         }
         if (rc)
                 page_cache_release(page);
