@@ -281,15 +281,15 @@ int mds_cleanup_orphans(struct obd_device *obd)
                 child_inode = dchild->d_inode;
                 if (mds_inode_is_orphan(child_inode) &&
                     mds_open_orphan_count(child_inode)) {
-                        CDEBUG(D_ERROR, "orphan %s was re-opened during "
-                               "recovery\n", ptr->d_name);
+                        CWARN("orphan %s was re-opened during recovery\n", 
+                              ptr->d_name);
                         GOTO(next, rc2 = 0);
                 }
 
                 rc2 = mds_unlink(obd, dchild, child_inode, pending_dir);
                 if (rc2 == 0) {
                         item ++;
-                        CDEBUG(D_ERROR, "removed orphan %s from MDS and OST\n",
+                        CWARN("removed orphan %s from MDS and OST\n",
                                ptr->d_name);
                 } else {
                         l_dput(dchild); 

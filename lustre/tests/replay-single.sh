@@ -14,7 +14,7 @@ init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/local.sh}
 
 # Skip these tests
-ALWAYS_EXCEPT=""
+ALWAYS_EXCEPT="35"
 
 
 gen_config() {
@@ -142,7 +142,7 @@ test_5() {
       grep -q "tag-$i" $DIR/$tfile-$i || error "f1c-$i"
     done 
     rm -rf $DIR/$tfile-*
-    sleep 5
+    sleep 3
     # waiting for commitment of removal
 }
 run_test 5 "|x| 220 open(O_CREAT)"
@@ -646,11 +646,24 @@ test_34() {
     fail_abort mds
     kill -USR1 $pid
     [ -e $DIR/$tfile ] && return 1
-    sleep 5
+    sleep 3
     # wait for commitment of removal
     return 0
 }
 run_test 34 "abort recovery before client does replay (test mds_cleanup_orphans)"
+
+# bug 2278 - generate one orphan on OST, then destroy it during recovery from llog 
+test_35() {
+    touch $DIR/$tfile
+
+    echo 0x80000119 > /proc/sys/lustre/fail_loc
+    rm -f $DIR/$tfile &
+    sleep 1
+    # give a chance to remove from MDS
+    fail_abort mds
+    $CHECKSTAT -t file $DIR/$tfile && return 1 || true
+}
+run_test 35 "test recovery from llog for unlink op"
 
 equals_msg test complete, cleaning up
 cleanup

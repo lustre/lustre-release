@@ -237,3 +237,47 @@ int llog_origin_handle_close(struct ptlrpc_request *req)
 
 	RETURN(rc);
 }
+
+#ifdef ENABLE_ORPHANS
+int llog_origin_handle_cancel(struct ptlrpc_request *req)
+{
+        struct obd_device *obd = req->rq_export->exp_obd;
+        struct obd_device *disk_obd;
+        struct llog_cookie *logcookies;
+        struct llog_ctxt *ctxt;
+        int num_cookies, rc = 0;
+        struct obd_run_ctxt saved;
+        struct llog_handle *cathandle;
+        ENTRY;
+
+        logcookies = lustre_msg_buf(req->rq_reqmsg, 0, sizeof(*logcookies));
+        num_cookies = req->rq_reqmsg->buflens[0]/sizeof(*logcookies);
+        if (logcookies == NULL || num_cookies == 0) {
+                DEBUG_REQ(D_HA, req, "no cookies sent");
+                RETURN(-EFAULT);
+        }
+
+        ctxt = llog_get_context(obd, logcookies->lgc_subsys);
+        if (ctxt == NULL) {
+                CWARN("llog subsys not setup or already cleanup\n");
+                RETURN(-ENOENT);
+        }
+        down(&ctxt->loc_sem);
+        disk_obd = ctxt->loc_exp->exp_obd;
+        cathandle = ctxt->loc_handle;
+        LASSERT(cathandle);
+
+        push_ctxt(&saved, &disk_obd->obd_ctxt, NULL); 
+        rc = llog_cat_cancel_records(cathandle, num_cookies, logcookies);
+        if (rc)
+                CERROR("cancel %d llog-records failed: %d\n", num_cookies, rc);
+        else
+                CWARN("cancel %d llog-records\n", num_cookies);
+
+        pop_ctxt(&saved, &disk_obd->obd_ctxt, NULL);
+        up(&ctxt->loc_sem);
+
+        RETURN(rc);
+}
+EXPORT_SYMBOL(llog_origin_handle_cancel);
+#endif
