@@ -109,15 +109,34 @@ int request_in_callback(ptl_event_t *ev)
         struct ptlrpc_service *service = rqbd->rqbd_service;
 
         LASSERT ((ev->mem_desc.options & PTL_MD_IOV) == 0); /* requests always contiguous */
-
+        LASSERT (ev->type == PTL_EVENT_PUT);    /* we only enable puts */
+        LASSERT (atomic_read (&service->srv_nrqbds_receiving) > 0);
+        LASSERT (atomic_read (&rqbd->rqbd_refcount) > 0);
+        
         if (ev->rlength != ev->mlength)
                 CERROR("Warning: Possibly truncated rpc (%d/%d)\n",
                        ev->mlength, ev->rlength);
 
-        if (ev->type == PTL_EVENT_PUT)
-                wake_up(&service->srv_waitq);
+        if (ptl_is_valid_handle (&ev->unlinked_me))
+        {
+                /* This is the last request to be received into this
+                 * request buffer.  We don't bump the refcount, since the
+                 * thread servicing this event is effectively taking over
+                 * portals' reference.
+                 */
+                LASSERT (!memcmp (&ev->unlinked_me, &rqbd->rqbd_me_h, 
+                                  sizeof (ev->unlinked_me)));
+
+                if (atomic_dec_and_test (&service->srv_nrqbds_receiving)) /* we're off-air */
+                {
+                        CERROR ("All request buffers busy\n");
+                        LBUG();
+                }
+        }
         else
-                CERROR("Unexpected event type: %d\n", ev->type);
+                atomic_inc (&rqbd->rqbd_refcount); /* +1 ref for service thread */
+
+        wake_up(&service->srv_waitq);
 
         return 0;
 }

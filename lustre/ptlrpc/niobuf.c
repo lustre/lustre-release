@@ -398,6 +398,8 @@ void ptlrpc_link_svc_me(struct ptlrpc_request_buffer_desc *rqbd)
         ptl_md_t dummy;
         ptl_handle_md_t md_h;
 
+        LASSERT (atomic_read (&rqbd->rqbd_refcount) == 0);
+        
         /* Attach the leading ME on which we build the ring */
         rc = PtlMEAttach(service->srv_self.peer_ni, service->srv_req_portal,
                          match_id, 0, ~0,
@@ -409,16 +411,22 @@ void ptlrpc_link_svc_me(struct ptlrpc_request_buffer_desc *rqbd)
 
         dummy.start         = rqbd->rqbd_buffer;
         dummy.length        = service->srv_buf_size;
-        dummy.max_offset    = service->srv_buf_size;
-        dummy.threshold     = 1;
-        dummy.options       = PTL_MD_OP_PUT;
+        dummy.max_size      = service->srv_max_req_size;
+        dummy.threshold     = PTL_MD_THRESH_INF;
+        dummy.options       = PTL_MD_OP_PUT | PTL_MD_MAX_SIZE | PTL_MD_AUTO_UNLINK;
         dummy.user_ptr      = rqbd;
         dummy.eventq        = service->srv_eq_h;
 
+        atomic_inc (&service->srv_nrqbds_receiving);
+        atomic_set (&rqbd->rqbd_refcount, 1);   /* 1 ref for portals */
+        
         rc = PtlMDAttach(rqbd->rqbd_me_h, dummy, PTL_UNLINK, &md_h);
         if (rc != PTL_OK) {
-                /* cleanup */
                 CERROR("PtlMDAttach failed: %d\n", rc);
                 LBUG();
+#warning proper cleanup required
+                PtlMEUnlink (rqbd->rqbd_me_h);
+                atomic_set (&rqbd->rqbd_refcount, 0);
+                atomic_dec (&service->srv_nrqbds_receiving);
         }
 }

@@ -31,9 +31,42 @@
 #include <linux/lustre_ha.h>
 #include <linux/lustre_import.h>
 
-/* default rpc ring length */
-//#define RPC_RING_LENGTH    10
-#define RPC_REQUEST_QUEUE_DEPTH	1024
+/* The following constants determine how much memory is devoted to
+ * buffering in the lustre services.
+ *
+ * ?_NEVENTS            # event queue entries
+ *
+ * ?_NBUFS		# request buffers
+ * ?_BUFSIZE		# bytes in a single request buffer
+ * total memory = ?_NBUFS * ?_BUFSIZE
+ *
+ * ?_MAXREQSIZE         # maximum request service will receive
+ * larger messages will get dropped.
+ * request buffers are auto-unlinked when less than ?_MAXREQSIZE
+ * is left in them.
+ */
+
+#define LDLM_NEVENTS	1024
+#define LDLM_NBUFS	10
+#define LDLM_BUFSIZE	(64 * 1024)
+#define LDLM_MAXREQSIZE	1024
+
+#define MDS_NEVENTS	1024
+#define MDS_NBUFS	10
+#define MDS_BUFSIZE	(64 * 1024)
+#define MDS_MAXREQSIZE	1024
+
+#ifdef __arch_um__
+#define OST_NEVENTS	1024
+#define OST_NBUFS	10
+#define OST_BUFSIZE	(64 * 1024)
+#define OST_MAXREQSIZE	(8 * 1024)
+#else
+#define OST_NEVENTS	4096
+#define OST_NBUFS	40
+#define OST_BUFSIZE	(128 * 1024)
+#define OST_MAXREQSIZE	(8 * 1024)
+#endif
 
 struct ptlrpc_connection {
         struct list_head        c_link;
@@ -184,8 +217,10 @@ struct ptlrpc_thread {
 };
 
 struct ptlrpc_request_buffer_desc {
+        struct list_head       rqbd_list;
         struct ptlrpc_service *rqbd_service;
         ptl_handle_me_t        rqbd_me_h;
+        atomic_t               rqbd_refcount;
         char                  *rqbd_buffer;
 };
 
@@ -196,10 +231,12 @@ struct ptlrpc_service {
         /* incoming request buffers */
         /* FIXME: perhaps a list of EQs, if multiple NIs are used? */
 
-        struct ptlrpc_request_buffer_desc *srv_rqbds; /* all the request buffer descriptors */
+        __u32            srv_max_req_size;      /* biggest request to receive */
+        __u32            srv_buf_size;          /* # bytes in a request buffer */
+        struct list_head srv_rqbds;             /* all the request buffer descriptors */
+        __u32            srv_nrqbds;            /* # request buffers */
+        atomic_t         srv_nrqbds_receiving;  /* # request buffers posted for input */
 
-        __u32 srv_buf_size;                     /* # bytes in a request buffer */
-        __u32 srv_nbuffs;                       /* # request buffers */
         __u32 srv_req_portal;
         __u32 srv_rep_portal;
 
@@ -213,7 +250,6 @@ struct ptlrpc_service {
         wait_queue_head_t srv_waitq; /* all threads sleep on this */
 
         spinlock_t srv_lock;
-        struct list_head srv_reqs;
         struct list_head srv_threads;
         int (*srv_handler)(struct ptlrpc_request *req);
         char *srv_name;  /* only statically allocated strings here; we don't clean them */
@@ -274,7 +310,8 @@ int ptlrpc_check_status(struct ptlrpc_request *req, int err);
 
 /* rpc/service.c */
 struct ptlrpc_service *
-ptlrpc_init_svc(__u32 bufsize, int nbuffs, int req_portal, int rep_portal,
+ptlrpc_init_svc(__u32 nevents, __u32 nbufs, __u32 bufsize, __u32 max_req_size, 
+                int req_portal, int rep_portal,
                 obd_uuid_t uuid, svc_handler_t, char *name);
 void ptlrpc_stop_all_threads(struct ptlrpc_service *svc);
 int ptlrpc_start_thread(struct obd_device *dev, struct ptlrpc_service *svc,

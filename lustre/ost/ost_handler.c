@@ -597,9 +597,10 @@ static int ost_setup(struct obd_device *obddev, obd_count len, void *buf)
                 GOTO(error_dec, err = -EINVAL);
         }
 
-        ost->ost_service = ptlrpc_init_svc(1024, 4096, OST_REQUEST_PORTAL,
-                                           OSC_REPLY_PORTAL, "self", ost_handle,
-                                           "ost");
+        ost->ost_service = ptlrpc_init_svc(OST_NEVENTS, OST_NBUFS,
+                                           OST_BUFSIZE, OST_MAXREQSIZE,
+                                           OST_REQUEST_PORTAL, OSC_REPLY_PORTAL, 
+                                           "self", ost_handle, "ost");
         if (!ost->ost_service) {
                 CERROR("failed to start service\n");
                 GOTO(error_disc, err = -EINVAL);

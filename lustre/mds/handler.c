@@ -1098,9 +1098,10 @@ static int mds_setup(struct obd_device *obddev, obd_count len, void *buf)
                 GOTO(err_put, rc);
         }
 
-        mds->mds_service = ptlrpc_init_svc(1024, 640, MDS_REQUEST_PORTAL,
-                                           MDC_REPLY_PORTAL, "self",mds_handle,
-                                           "mds");
+        mds->mds_service = ptlrpc_init_svc(MDS_NEVENTS, MDS_NBUFS,
+                                           MDS_BUFSIZE, MDS_MAXREQSIZE,
+                                           MDS_REQUEST_PORTAL, MDC_REPLY_PORTAL, 
+                                           "self", mds_handle, "mds");
         if (!mds->mds_service) {
                 CERROR("failed to start service\n");
                 GOTO(err_fs, rc = -EINVAL);

@@ -559,9 +559,10 @@ static int ldlm_setup(struct obd_device *obddev, obd_count len, void *buf)
         if (rc != 0)
                 GOTO(out_dec, rc);
         */
-        ldlm->ldlm_service = ptlrpc_init_svc(1024, 640, LDLM_REQUEST_PORTAL,
-                                             LDLM_REPLY_PORTAL, "self",
-                                             ldlm_callback_handler, "ldlm");
+        ldlm->ldlm_service = ptlrpc_init_svc(LDLM_NEVENTS, LDLM_NBUFS,
+                                             LDLM_BUFSIZE, LDLM_MAXREQSIZE,
+                                             LDLM_REQUEST_PORTAL, LDLM_REPLY_PORTAL, 
+                                             "self", ldlm_callback_handler, "ldlm");
         if (!ldlm->ldlm_service)
                 GOTO(out_dec, rc = -ENOMEM);
 
