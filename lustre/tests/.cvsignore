@@ -57,3 +57,5 @@ mrename
 cmknod
 iopentest1
 iopentest2
+*.log
+logs
