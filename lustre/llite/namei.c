@@ -141,6 +141,11 @@ static struct dentry *ll_lookup2(struct inode * dir, struct dentry *dentry,
 
         ENTRY;
 
+        if (it == NULL) {
+                LBUG();
+                RETURN(NULL);
+        }
+
         CDEBUG(D_INFO, "name: %*s, intent op: %d\n", dentry->d_name.len,
                dentry->d_name.name, it->it_op);
 
