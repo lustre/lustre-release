@@ -36,10 +36,6 @@ extern void stifle_history(int);
 extern void add_history(char *);
 
 #include "parser.h"
-#define CMD_COMPLETE 0
-#define CMD_INCOMPLETE 1
-#define CMD_NONE 2
-#define CMD_AMBIG 3
 
 static command_t * top_level;           /* Top level of commands, initialized by
                                     * InitParser                              */
@@ -264,6 +260,10 @@ int execute_line(char * line)
         case CMD_COMPLETE:
                 i = line2args(line, argv, MAXARGS);
                 rc = (cmd->pc_func)(i, argv);
+
+                if (rc == CMD_HELP)
+                        fprintf(stderr, "%s\n", cmd->pc_help);
+
                 break;
         }
 
@@ -587,6 +587,66 @@ int Parser_arg2int(const char *inp, long *result, int base)
                 return 0;
         else 
                 return 1;
+}
+
+/* Convert human readable size string to and int; "1k" -> 1000 */
+int Parser_size (int *sizep, char *str) {
+        int size;
+        char mod[32];
+
+        switch (sscanf (str, "%d%1[gGmMkK]", &size, mod)) {
+        default:
+                return (-1);
+
+        case 1:
+                *sizep = size;
+                return (0);
+
+        case 2:
+                switch (*mod) {
+                case 'g':
+                case 'G':
+                        *sizep = size << 30;
+                        return (0);
+
+                case 'm':
+                case 'M':
+                        *sizep = size << 20;
+                        return (0);
+
+                case 'k':
+                case 'K':
+                        *sizep = size << 10;
+                        return (0);
+
+                default:
+                        *sizep = size;
+                        return (0);
+                }
+        }
+}
+
+/* Convert a string boolean to an int; "enable" -> 1 */
+int Parser_bool (int *b, char *str) {
+        if (strcasecmp (str, "no") ||
+            strcasecmp (str, "n") ||
+            strcasecmp (str, "off") ||
+            strcasecmp (str, "disable"))
+        {
+                *b = 0;
+                return (0);
+        }
+        
+        if (strcasecmp (str, "yes") ||
+            strcasecmp (str, "y") ||
+            strcasecmp (str, "on") ||
+            strcasecmp (str, "enable"))
+        {
+                *b = 1;
+                return (0);
+        }
+        
+        return (-1);
 }
 
 int Parser_quit(int argc, char **argv)
