@@ -5,7 +5,7 @@ LCONF=${LCONF:-../utils/lconf}
 LMC=${LMC:-../utils/lmc}
 
 SERVER=localhost
-CLIENT=localhost
+CLIENT=cfs4
 
 # FIXME: make LMC not require MDS for obdecho LOV
 MDSDEV=$TMP/mds1
@@ -41,7 +41,7 @@ fi
 
 if [ "$SERVER" != "$CLIENT" ]; then
    $LMC -m $config --add node --node $CLIENT  || exit 1
-   $LMC -m $config --add node --node $CLIENT --nid $CLIENT --nettype tcp || exit 2
+   $LMC -m $config --add net --node $CLIENT --nid $CLIENT --nettype tcp || exit 2
 fi
 
 $LMC -m $config --add echo_client --node $CLIENT --obd ${OBD_NAME} || exit 3
