@@ -312,6 +312,20 @@ static int fsfilt_ext3_setattr(struct dentry *dentry, void *handle,
         return rc;
 }
 
+static int fsfilt_ext3_iocontrol(struct inode * inode, struct file *file,
+                                 unsigned int cmd, unsigned long arg)
+{
+        int rc = 0;
+        ENTRY;
+        
+        if (inode->i_fop->ioctl)
+                rc = inode->i_fop->ioctl(inode, file, cmd, arg);
+        else
+                RETURN(-ENOTTY);
+        
+        RETURN(rc);
+}
+
 static int fsfilt_ext3_set_md(struct inode *inode, void *handle,
                               void *lmm, int lmm_size)
 {
@@ -653,6 +667,7 @@ static struct fsfilt_operations fsfilt_ext3_ops = {
         fs_brw_start:           fsfilt_ext3_brw_start,
         fs_commit:              fsfilt_ext3_commit,
         fs_setattr:             fsfilt_ext3_setattr,
+        fs_iocontrol:           fsfilt_ext3_iocontrol,
         fs_set_md:              fsfilt_ext3_set_md,
         fs_get_md:              fsfilt_ext3_get_md,
         fs_readpage:            fsfilt_ext3_readpage,
