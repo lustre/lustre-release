@@ -548,20 +548,19 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 }
 
                 err = obd_brw(rw, &conn, &smd, j, pga, ll_sync_io_cb, cbd);
+                if (err)
+                        CERROR("test_brw: error from obd_brw: err = %d\n", err);
                 EXIT;
         brw_cleanup:
                 for (j = 0, pgp = pga; j < pages; j++, pgp++) {
                         if (pgp->pg != NULL) {
-                                if (verify) {
+                                if (verify && !err) {
                                         void *addr = kmap(pgp->pg);
-                                        int err2;
 
-                                        err2 = page_debug_check("test_brw",
-                                                                addr,
-                                                                PAGE_SIZE,
-                                                                pgp->off,id);
-                                        if (!err)
-                                                err = err2;
+                                        err = page_debug_check("test_brw",
+                                                               addr,
+                                                               PAGE_SIZE,
+                                                               pgp->off,id);
                                         kunmap(pgp->pg);
                                 }
                                 __free_pages(pgp->pg, 0);
