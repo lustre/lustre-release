@@ -1,11 +1,12 @@
 
 
 
- 0 files changed
+ arch/um/kernel/mem.c |    8 ++++++--
+ 1 files changed, 6 insertions(+), 2 deletions(-)
 
---- linux-2.4.18-17.8.0/arch/um/kernel/mem.c~uml_no_panic	2002-12-06 14:52:30.000000000 -0800
-+++ linux-2.4.18-17.8.0-zab/arch/um/kernel/mem.c	2002-12-06 14:52:30.000000000 -0800
-@@ -559,7 +559,9 @@ struct mem_region *page_region(struct pa
+--- linux-2.4.20/arch/um/kernel/mem.c~uml_no_panic	2003-04-08 23:34:57.000000000 -0600
++++ linux-2.4.20-braam/arch/um/kernel/mem.c	2003-04-08 23:34:57.000000000 -0600
+@@ -742,7 +742,9 @@ struct mem_region *page_region(struct pa
  			return(region);
  		}
  	}
@@ -16,7 +17,7 @@
  	return(NULL);
  }
  
-@@ -581,7 +583,9 @@ unsigned long region_pa(void *virt)
+@@ -814,7 +816,9 @@ extern unsigned long region_pa(void *vir
  		   (addr <= region->start + region->len))
  			return(mk_phys(addr - region->start, i));
  	}

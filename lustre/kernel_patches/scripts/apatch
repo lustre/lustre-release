@@ -5,8 +5,6 @@
 	echo "Check your install, or go to the right directory"
 	exit 1
 }
-
-
 do_apply()
 {
 	FILES=$(cat $P/pc/$PATCH_NAME.pc)
@@ -70,7 +68,7 @@ apatch()
 		echo "$PATCH_NAME" is already applied
 		exit 1
 	fi
-
+	
 	if [ $opt_force != 0 ]
 	then
 		echo FORCING PATCH
@@ -78,6 +76,7 @@ apatch()
 
 	if [ $opt_force != 0 ] || can_apply $P/patches/"$PATCH_NAME".patch
 	then
+		check_pc_match $P/patches/"$PATCH_NAME".patch $P/pc/"$PATCH_NAME".pc 
 		do_apply $P/patches/"$PATCH_NAME".patch
 		add_to_db "$PATCH_NAME"
 		echo applied $PATCH_NAME
