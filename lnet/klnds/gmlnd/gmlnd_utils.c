@@ -192,7 +192,7 @@ gmnal_get_stxd(gmnal_data_t *nal_data, int block)
 {
 
 	gmnal_stxd_t	*txd = NULL;
-        pid_t           pid = current->pid;
+	pid_t		pid = current->pid;
 
 
 	CDEBUG(D_TRACE, "gmnal_get_stxd nal_data [%p] block[%d] pid [%d]\n", 
@@ -825,8 +825,15 @@ gmnal_is_small_msg(gmnal_data_t *nal_data, int niov, struct iovec *iov,
 
 }
 
+/* 
+ *	extract info from the receive event.
+ *	Have to do this before the next call to gm_receive
+ *	Deal with all endian stuff here.
+ *	Then stick work entry on list where rxthreads
+ *	can get it to complete the receive
+ */
 int
-gmnal_add_rxtwe(gmnal_data_t *nal_data, gm_recv_event_t *rxevent)
+gmnal_add_rxtwe(gmnal_data_t *nal_data, gm_recv_t *recv)
 {
 	gmnal_rxtwe_t	*we = NULL;
 
@@ -837,7 +844,11 @@ gmnal_add_rxtwe(gmnal_data_t *nal_data, gm_recv_event_t *rxevent)
 		CDEBUG(D_ERROR, "failed to malloc\n");
 		return(GMNAL_STATUS_FAIL);
 	}
-        we->rx = rxevent;
+	we->buffer = gm_ntohp(recv->buffer);
+	we->snode = (int)gm_ntoh_u16(recv->sender_node_id);
+	we->sport = (int)gm_ntoh_u8(recv->sender_port_id);
+	we->type = (int)gm_ntoh_u8(recv->type);
+	we->length = (int)gm_ntohl(recv->length);
 
 	spin_lock(&nal_data->rxtwe_lock);
 	if (nal_data->rxtwe_tail) {
