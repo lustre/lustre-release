@@ -11,7 +11,7 @@ SUBDIRS = portals unals utils
 else
 
 if CRAY_PORTALS
-SUBDIRS = libcfs unals utils tests doc 
+SUBDIRS = libcfs tests doc 
 else 
 SUBDIRS = libcfs portals knals unals utils tests doc router
 endif
