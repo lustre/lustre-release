@@ -85,10 +85,10 @@
  {
  	struct dentry * result;
  	struct inode *dir = parent->d_inode;
-+        int counter = 0;
++	int counter = 0;
  
 +again:
-+        counter++;
++	counter++;
  	down(&dir->i_sem);
  	/*
  	 * First re-do the cached lookup just in case it was created
@@ -97,10 +97,10 @@
  		if (!result->d_op->d_revalidate(result, nd) && !d_invalidate(result)) {
  			dput(result);
 -			result = ERR_PTR(-ENOENT);
-+                        if (counter > 10)
-+                                result = ERR_PTR(-ESTALE);
-+                        if (!IS_ERR(result))
-+                                goto again;
++			if (counter > 10)
++				result = ERR_PTR(-ESTALE);
++			if (!IS_ERR(result))
++				goto again;
  		}
  	}
  	return result;

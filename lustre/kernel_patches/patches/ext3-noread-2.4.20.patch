@@ -57,18 +57,18 @@
  	inode->u.ext3_i.i_state = EXT3_STATE_NEW;
 -	err = ext3_mark_inode_dirty(handle, inode);
 -	if (err) goto fail;
-+ 	err = ext3_get_inode_loc_new(inode, &iloc, 1);
-+  	if (err) goto fail;
-+ 	BUFFER_TRACE(iloc->bh, "get_write_access");
-+ 	err = ext3_journal_get_write_access(handle, iloc.bh);
-+ 	if (err) {
-+ 		brelse(iloc.bh);
-+ 		iloc.bh = NULL;
-+ 		goto fail;
-+ 	}
-+ 	err = ext3_mark_iloc_dirty(handle, inode, &iloc);
-+ 	if (err) goto fail;
-+ 
++	err = ext3_get_inode_loc_new(inode, &iloc, 1);
++	if (err) goto fail;
++	BUFFER_TRACE(iloc->bh, "get_write_access");
++	err = ext3_journal_get_write_access(handle, iloc.bh);
++	if (err) {
++		brelse(iloc.bh);
++		iloc.bh = NULL;
++		goto fail;
++	}
++	err = ext3_mark_iloc_dirty(handle, inode, &iloc);
++	if (err) goto fail;
++
 +
  	
  	unlock_super (sb);
@@ -86,19 +86,19 @@
 -
 -int ext3_get_inode_loc (struct inode *inode, struct ext3_iloc *iloc)
 +#define NUM_INODE_PREREAD	16
-+  
++
 +/*
-+  * ext3_get_inode_loc returns with an extra refcount against the inode's
-+  * underlying buffer_head on success.  If this is for a new inode allocation
-+  * (new is non-zero) then we may be able to optimize away the read if there
-+  * are no other in-use inodes in this inode table block.  If we need to do
-+  * a read, then read in a whole chunk of blocks to avoid blocking again soon
-+  * if we are doing lots of creates/updates.
-+  */
++ * ext3_get_inode_loc returns with an extra refcount against the inode's
++ * underlying buffer_head on success.  If this is for a new inode allocation
++ * (new is non-zero) then we may be able to optimize away the read if there
++ * are no other in-use inodes in this inode table block.  If we need to do
++ * a read, then read in a whole chunk of blocks to avoid blocking again soon
++ * if we are doing lots of creates/updates.
++ */
 +int ext3_get_inode_loc_new(struct inode *inode, struct ext3_iloc *iloc, int new)
  {
 -	struct buffer_head *bh = 0;
-+ 	struct buffer_head *bh[NUM_INODE_PREREAD];
++	struct buffer_head *bh[NUM_INODE_PREREAD];
  	unsigned long block;
  	unsigned long block_group;
  	unsigned long group_desc;
@@ -115,7 +115,7 @@
  	}
  
 -	gdp = (struct ext3_group_desc *) bh->b_data;
-+ 	gdp = (struct ext3_group_desc *)(inode->i_sb->u.ext3_sb.s_group_desc[group_desc]->b_data);
++	gdp = (struct ext3_group_desc *)(inode->i_sb->u.ext3_sb.s_group_desc[group_desc]->b_data);
  	/*
  	 * Figure out the offset within the block group inode table
  	 */
@@ -132,62 +132,62 @@
 -		goto bad_inode;
 -	}
 -	offset &= (EXT3_BLOCK_SIZE(inode->i_sb) - 1);
-+ 		(offset * EXT3_INODE_SIZE(inode->i_sb) >> EXT3_BLOCK_SIZE_BITS(inode->i_sb));
++		(offset * EXT3_INODE_SIZE(inode->i_sb) >> EXT3_BLOCK_SIZE_BITS(inode->i_sb));
  
 -	iloc->bh = bh;
 -	iloc->raw_inode = (struct ext3_inode *) (bh->b_data + offset);
-+ 	bh[0] = sb_getblk(inode->i_sb, block);
-+ 	if (buffer_uptodate(bh[0]))
-+ 		goto done;
-+ 
-+ 	/* If we don't really need to read this block, and it isn't already
-+ 	 * in memory, then we just zero it out.  Otherwise, we keep the
-+ 	 * current block contents (deleted inode data) for posterity.
-+ 	 */
-+ 	if (new && !ext3_itable_block_used(inode->i_sb, block_group, offset)) {
-+ 		lock_buffer(bh[0]);
-+ 		memset(bh[0]->b_data, 0, bh[0]->b_size);
-+ 		mark_buffer_uptodate(bh[0], 1);
-+ 		unlock_buffer(bh[0]);
-+ 	} else {
-+ 		unsigned long block_end, itable_end;
-+ 		int count = 1;
-+ 
-+ 		itable_end = le32_to_cpu(gdp[desc].bg_inode_table) +
-+ 				inode->i_sb->u.ext3_sb.s_itb_per_group;
-+ 		block_end = block + NUM_INODE_PREREAD;
-+ 		if (block_end > itable_end)
-+ 			block_end = itable_end;
++	bh[0] = sb_getblk(inode->i_sb, block);
++	if (buffer_uptodate(bh[0]))
++		goto done;
 +
-+ 		for (++block; block < block_end; block++) {
-+ 			bh[count] = sb_getblk(inode->i_sb, block);
-+ 			if (count && (buffer_uptodate(bh[count]) ||
-+ 				      buffer_locked(bh[count]))) {
-+ 				__brelse(bh[count]);
-+ 			} else
-+ 				count++;
-+ 		}
-+ 
-+ 		ll_rw_block(READ, count, bh);
-+ 
-+ 		/* Release all but the block we actually need (bh[0]) */
-+ 		while (--count > 0)
-+ 			__brelse(bh[count]);
-+ 
-+ 		wait_on_buffer(bh[0]);
-+ 		if (!buffer_uptodate(bh[0])) {
-+ 			ext3_error(inode->i_sb, __FUNCTION__,
-+ 				   "unable to read inode block - "
-+ 				   "inode=%lu, block=%lu", inode->i_ino,
-+ 				   bh[0]->b_blocknr);
-+ 			goto bad_inode;
-+ 		}
-+  	}
-+  done:
-+ 	offset = (offset * EXT3_INODE_SIZE(inode->i_sb)) & (EXT3_BLOCK_SIZE(inode->i_sb) - 1);
-+  
-+ 	iloc->bh = bh[0];
-+ 	iloc->raw_inode = (struct ext3_inode *)(bh[0]->b_data + offset);
++	/* If we don't really need to read this block, and it isn't already
++	 * in memory, then we just zero it out.  Otherwise, we keep the
++	 * current block contents (deleted inode data) for posterity.
++	 */
++	if (new && !ext3_itable_block_used(inode->i_sb, block_group, offset)) {
++		lock_buffer(bh[0]);
++		memset(bh[0]->b_data, 0, bh[0]->b_size);
++		mark_buffer_uptodate(bh[0], 1);
++		unlock_buffer(bh[0]);
++	} else {
++		unsigned long block_end, itable_end;
++		int count = 1;
++
++		itable_end = le32_to_cpu(gdp[desc].bg_inode_table) +
++				inode->i_sb->u.ext3_sb.s_itb_per_group;
++		block_end = block + NUM_INODE_PREREAD;
++		if (block_end > itable_end)
++			block_end = itable_end;
++
++		for (++block; block < block_end; block++) {
++			bh[count] = sb_getblk(inode->i_sb, block);
++			if (count && (buffer_uptodate(bh[count]) ||
++				      buffer_locked(bh[count]))) {
++				__brelse(bh[count]);
++			} else
++				count++;
++		}
++
++		ll_rw_block(READ, count, bh);
++
++		/* Release all but the block we actually need (bh[0]) */
++		while (--count > 0)
++			__brelse(bh[count]);
++
++		wait_on_buffer(bh[0]);
++		if (!buffer_uptodate(bh[0])) {
++			ext3_error(inode->i_sb, __FUNCTION__,
++				   "unable to read inode block - "
++				   "inode=%lu, block=%lu", inode->i_ino,
++				   bh[0]->b_blocknr);
++			goto bad_inode;
++		}
++	}
++done:
++	offset = (offset * EXT3_INODE_SIZE(inode->i_sb)) & (EXT3_BLOCK_SIZE(inode->i_sb) - 1);
++
++	iloc->bh = bh[0];
++	iloc->raw_inode = (struct ext3_inode *)(bh[0]->b_data + offset);
  	iloc->block_group = block_group;
  	
  	return 0;
@@ -197,9 +197,9 @@
  
 +int ext3_get_inode_loc(struct inode *inode, struct ext3_iloc *iloc)
 +{
-+ 	return ext3_get_inode_loc_new(inode, iloc, 0);
++	return ext3_get_inode_loc_new(inode, iloc, 0);
 +}
-+ 
++
  void ext3_read_inode(struct inode * inode)
  {
  	struct ext3_iloc iloc;

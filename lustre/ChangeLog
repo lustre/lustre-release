@@ -1,16 +1,22 @@
 tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.0
        * bug fixes
-       - reduce journal credits needed for BRW writes (2370)
-       - orphan handling to avoid losing space on client/server crashes
-       - ptlrpcd can be blocked, stopping ALL progress (2477)
-       - recovery for initial connections (2355)
-       - orphan recovery problems in b_eq (1934)
-       - block all file creations until orphan recovery completes (1901)
-       - client remove rq_connection from request struct (2423)
-       - conf-sanity test_5, proper cleanup in umount log not availale (2640)
-       - recovery timer race (2670)
-       - mdc_close recovey bug (2532)
+	- reduce journal credits needed for BRW writes (2370)
+	- orphan handling to avoid losing space on client/server crashes
+	- ptlrpcd can be blocked, stopping ALL progress (2477)
+	- recovery for initial connections (2355)
+	- orphan recovery problems in b_eq (1934)
+	- block all file creations until orphan recovery completes (1901)
+	- client remove rq_connection from request struct (2423)
+	- conf-sanity test_5, proper cleanup in umount log not availale (2640)
+	- recovery timer race (2670)
+	- mdc_close recovey bug (2532)
+
+2004-02-06  Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 1.0.4
+       * kernel patches
+	- fix for failed assertion in iopen_connect_dentry (1792,2517)
+
 
 2004-01-27  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.0.3
