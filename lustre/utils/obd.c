@@ -208,7 +208,7 @@ static int getfd(char *func)
          ((double)((a)->tv_usec - (b)->tv_usec) / 1000000))
 
 static int be_verbose(int verbose, struct timeval *next_time,
-                      int num, int *next_num, int num_total)
+                      __u64 num, __u64 *next_num, int num_total)
 {
         struct timeval now;
 
@@ -483,7 +483,7 @@ int jt_opt_device(int argc, char **argv)
 
 int jt_opt_threads(int argc, char **argv)
 {
-        int threads, next_thread;
+        __u64 threads, next_thread;
         int verbose;
         int rc = 0;
         char *end;
@@ -492,7 +492,7 @@ int jt_opt_threads(int argc, char **argv)
         if (argc < 5)
                 return CMD_HELP;
 
-        threads = strtoul(argv[1], &end, 0);
+        threads = strtoull(argv[1], &end, 0);
         if (*end) {
                 fprintf(stderr, "error: %s: invalid page count '%s'\n",
                         cmdname(argv[0]), argv[1]);
@@ -504,7 +504,7 @@ int jt_opt_threads(int argc, char **argv)
                 return CMD_HELP;
 
         if (verbose != 0)
-                printf("%s: starting %d threads on device %s running %s\n",
+                printf("%s: starting "LPD64" threads on device %s running %s\n",
                        argv[0], threads, argv[3], argv[4]);
 
         SHMEM_RESET();
@@ -769,7 +769,7 @@ int jt_obd_create(int argc, char **argv)
 {
         struct obd_ioctl_data data;
         struct timeval next_time;
-        int count = 1, next_count;
+        __u64 count = 1, next_count;
         int verbose = 1;
         int mode = 0100644;
         int rc = 0, i;
@@ -779,7 +779,7 @@ int jt_obd_create(int argc, char **argv)
         if (argc < 2 || argc > 4)
                 return CMD_HELP;
 
-        count = strtoul(argv[1], &end, 0);
+        count = strtoull(argv[1], &end, 0);
         if (*end) {
                 fprintf(stderr, "error: %s: invalid iteration count '%s'\n",
                         cmdname(argv[0]), argv[1]);
@@ -801,7 +801,7 @@ int jt_obd_create(int argc, char **argv)
                         return CMD_HELP;
         }
 
-        printf("%s: %d objects\n", cmdname(argv[0]), count);
+        printf("%s: "LPD64" objects\n", cmdname(argv[0]), count);
         gettimeofday(&next_time, NULL);
         next_time.tv_sec -= verbose;
 
@@ -924,7 +924,7 @@ int jt_obd_test_getattr(int argc, char **argv)
 {
         struct obd_ioctl_data data;
         struct timeval start, next_time;
-        int i, count, next_count;
+        __u64 i, count, next_count;
         int verbose = 1;
         obd_id objid = 3;
         char *end;
@@ -934,7 +934,7 @@ int jt_obd_test_getattr(int argc, char **argv)
                 return CMD_HELP;
 
         IOCINIT(data);
-        count = strtoul(argv[1], &end, 0);
+        count = strtoull(argv[1], &end, 0);
         if (*end) {
                 fprintf(stderr, "error: %s: invalid iteration count '%s'\n",
                         cmdname(argv[0]), argv[1]);
@@ -949,7 +949,7 @@ int jt_obd_test_getattr(int argc, char **argv)
 
         if (argc >= 4) {
                 if (argv[3][0] == 't')
-                        objid = strtoull(argv[3] + 1, &end, 0) + thread;
+                        objid = strtoull(argv[3] + 1, &end, 0) + thread - 1;
                 else
                         objid = strtoull(argv[3], &end, 0);
                 if (*end) {
@@ -963,8 +963,8 @@ int jt_obd_test_getattr(int argc, char **argv)
         next_time.tv_sec = start.tv_sec - verbose;
         next_time.tv_usec = start.tv_usec;
         if (verbose != 0)
-                printf("%s: getting %d attrs (testing only): %s",
-                       cmdname(argv[0]), count, ctime(&start.tv_sec));
+                printf("%s: getting "LPD64" attrs (objid "LPX64"): %s",
+                       cmdname(argv[0]), count, objid, ctime(&start.tv_sec));
 
         for (i = 1, next_count = verbose; i <= count; i++) {
                 data.ioc_obdo1.o_id = objid;
@@ -972,14 +972,14 @@ int jt_obd_test_getattr(int argc, char **argv)
                 rc = ioctl(fd, OBD_IOC_GETATTR, &data);
                 SHMEM_BUMP();
                 if (rc < 0) {
-                        fprintf(stderr, "error: %s: #%d - %s\n",
+                        fprintf(stderr, "error: %s: #"LPD64" - %s\n",
                                 cmdname(argv[0]), i, strerror(rc = errno));
                         break;
                 } else {
                         if (be_verbose
                             (verbose, &next_time, i, &next_count, count))
-                                printf("%s: got attr #%d\n", cmdname(argv[0]),
-                                       i);
+                                printf("%s: got attr #"LPD64"\n",
+                                       cmdname(argv[0]), i);
                 }
         }
 
@@ -993,7 +993,7 @@ int jt_obd_test_getattr(int argc, char **argv)
 
                 --i;
                 if (verbose != 0)
-                        printf("%s: %d attrs in %.4gs (%.4g attr/s): %s",
+                        printf("%s: "LPD64" attrs in %.4gs (%.4g attr/s): %s",
                                cmdname(argv[0]), i, diff, (double)i / diff,
                                ctime(&end.tv_sec));
         }
@@ -1004,10 +1004,12 @@ int jt_obd_test_brw(int argc, char **argv)
 {
         struct obd_ioctl_data data;
         struct timeval start, next_time;
-        int pages = 1, count, next_count;
+        int pages = 1;
+        __u64 count, next_count;
         __u64 objid = 3;
         int verbose = 1, write = 0, rw;
         char *end;
+        int thr_offset = 0;
         int i;
         int len;
         int rc = 0;
@@ -1018,7 +1020,13 @@ int jt_obd_test_brw(int argc, char **argv)
                 return CMD_HELP;
         }
 
-        count = strtoul(argv[1], &end, 0);
+        /* make each thread write to a different offset */
+        if (argv[1][0] == 't') {
+                thr_offset = thread - 1;
+                count = strtoull(argv[1] + 1, &end, 0);
+        } else
+                count = strtoull(argv[1], &end, 0);
+
         if (*end) {
                 fprintf(stderr, "error: %s: bad iteration count '%s'\n",
                         cmdname(argv[0]), argv[1]);
@@ -1048,7 +1056,7 @@ int jt_obd_test_brw(int argc, char **argv)
         }
         if (argc >= 6) {
                 if (argv[5][0] == 't')
-                        objid = strtoull(argv[5] + 1, &end, 0) + thread;
+                        objid = strtoull(argv[5] + 1, &end, 0) + thread - 1;
                 else
                         objid = strtoull(argv[5], &end, 0);
                 if (*end) {
@@ -1065,16 +1073,16 @@ int jt_obd_test_brw(int argc, char **argv)
         data.ioc_obdo1.o_mode = S_IFREG;
         data.ioc_obdo1.o_valid = OBD_MD_FLID | OBD_MD_FLMODE;
         data.ioc_count = len;
-        data.ioc_offset = 0;
+        data.ioc_offset = thr_offset * len * count;
 
         gettimeofday(&start, NULL);
         next_time.tv_sec = start.tv_sec - verbose;
         next_time.tv_usec = start.tv_usec;
 
         if (verbose != 0)
-                printf("%s: %s %dx%d pages (objid 0x%Lx): %s",
-                       cmdname(argv[0]), write ? "writing" : "reading",
-                       count, pages, (long long)objid, ctime(&start.tv_sec));
+                printf("%s: %s "LPU64"x%d pages (obj "LPX64", off "LPU64"): %s",
+                       cmdname(argv[0]), write ? "writing" : "reading", count,
+                       pages, objid, data.ioc_offset, ctime(&start.tv_sec));
 
         rc = ioctl(fd, OBD_IOC_OPEN, &data);
         if (rc) {
@@ -1145,11 +1153,19 @@ int jt_obd_lov_config(int argc, char **argv)
 
         memset(&desc, 0, sizeof(desc));
         strncpy(desc.ld_uuid, argv[1], sizeof(*uuidarray) - 1);
+        desc.ld_tgt_count = argc - 6;
         desc.ld_default_stripe_count = strtoul(argv[2], &end, 0);
         if (*end) {
                 fprintf(stderr, "error: %s: bad default stripe count '%s'\n",
                         cmdname(argv[0]), argv[2]);
                 return CMD_HELP;
+        }
+        if (desc.ld_default_stripe_count > desc.ld_tgt_count) {
+                fprintf(stderr,
+                        "error: %s: stripe count %d more than OST count %d\n",
+                        cmdname(argv[0]), desc.ld_default_stripe_count,
+                        desc.ld_tgt_count);
+                return -EINVAL;
         }
         desc.ld_default_stripe_size = strtoul(argv[3], &end, 0);
         if (*end) {
@@ -1174,7 +1190,6 @@ int jt_obd_lov_config(int argc, char **argv)
                         cmdname(argv[0]), argv[5]);
                 return CMD_HELP;
         }
-        desc.ld_tgt_count = argc - 6;
 
         size = desc.ld_tgt_count * sizeof(*uuidarray);
         uuidarray = malloc(size);
