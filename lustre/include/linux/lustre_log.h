@@ -73,8 +73,9 @@ struct llog_handle {
 /* llog.c  -  general API */
 typedef int (*llog_cb_t)(struct llog_handle *, struct llog_rec_hdr *, void *);
 int llog_init_handle(struct llog_handle *handle, int flags, struct obd_uuid *uuid);
-extern void llog_free_handle(struct llog_handle *handle);
 int llog_process(struct llog_handle *loghandle, llog_cb_t cb, void *data);
+extern struct llog_handle *llog_alloc_handle(void);
+extern void llog_free_handle(struct llog_handle *handle);
 extern int llog_close(struct llog_handle *cathandle);
 
 /* llog_cat.c   -  catalog api */
@@ -89,13 +90,37 @@ int llog_cat_cancel_records(struct llog_handle *cathandle, int count,
                             struct llog_cookie *cookies);
 int llog_cat_process(struct llog_handle *cat_llh, llog_cb_t cb, void *data);
 
-extern struct llog_handle *llog_alloc_handle(void);
-extern int llog_init_catalog(struct llog_handle *cathandle,
-                             struct obd_uuid *tgtuuid);
-extern int llog_delete_log(struct llog_handle *cathandle,
-                           struct llog_handle *loghandle);
-extern struct llog_handle *llog_new_log(struct llog_handle *cathandle,
-                                        struct obd_uuid *tgtuuid);
+/* llog_obd.c */
+int obd_llog_setup(struct obd_device *obd, struct obd_device *disk_obd,
+                   int index, int count, struct llog_logid *logid);
+int obd_llog_cleanup(struct obd_device *obd);
+int obd_llog_origin_add(struct obd_export *exp,
+                        int index,
+                        struct llog_rec_hdr *rec, struct lov_stripe_md *lsm,
+                        struct llog_cookie *logcookies, int numcookies);
+int obd_llog_repl_cancel(struct obd_device *, struct lov_stripe_md *lsm,
+                         int count, struct llog_cookie *cookies, int flags);
+
+int llog_obd_setup_logid(struct obd_device *obd, struct obd_device *disk_obd,
+                         int index, int count, struct llog_logid *logid);
+int llog_obd_cleanup(struct obd_device *obd);
+int llog_obd_origin_add(struct obd_export *exp,
+                        int index,
+                        struct llog_rec_hdr *rec, struct lov_stripe_md *lsm,
+                        struct llog_cookie *logcookies, int numcookies);
+int llog_cat_initialize(struct obd_device *obd, int count);
+
+
+/* llog_net.c */
+int llog_initiator_connect(struct obd_device *obd);
+int llog_receptor_accept(struct obd_device *obd, struct obd_import *imp);
+int llog_origin_handle_cancel(struct obd_device *obd, struct ptlrpc_request *req);
+
+/* recov_thread.c */
+int llog_obd_repl_cancel(struct obd_device *obd,
+                         struct lov_stripe_md *lsm, int count,
+                         struct llog_cookie *cookies, int flags);
+
 struct llog_operations {
         int (*lop_write_rec)(struct llog_handle *loghandle,
                              struct llog_rec_hdr *rec, 
@@ -107,13 +132,20 @@ struct llog_operations {
         int (*lop_next_block)(struct llog_handle *h, 
                               int *curr_idx,  
                               int next_idx, 
-                              __u64 *cur_offset, 
+                              __u64 *offset, 
                               void *buf, 
                               int len);
         int (*lop_create)(struct obd_device *obd, struct llog_handle **,
                           struct llog_logid *logid, char *name);
         int (*lop_close)(struct llog_handle *handle);
         int (*lop_read_header)(struct llog_handle *handle);
+        /* for devices in stacks, using other obd's for log storage */
+        int (*lop_origin_setup)(struct obd_device *, int);
+        int (*lop_origin_cleanup)(struct obd_device *);
+        int (*lop_origin_open)(struct obd_device *originator, 
+                               struct obd_device *disk_obd,
+                               int index, int named, int flags, 
+                               struct obd_uuid *log_uuid);
 };
 
 extern struct llog_operations llog_lvfs_ops;
@@ -252,5 +284,38 @@ static inline int llog_create(struct obd_device *obd, struct llog_handle **res,
         rc = lop->lop_create(obd, res, logid, name);
         RETURN(rc);
 }
+
+
+/* llog obd interfaces */
+#define LLOG_OBD_MAX_HANDLES 3
+
+/* MDS stored handles in OSC */
+#define LLOG_OBD_DEL_LOG_HANDLE 0
+
+/* OBDFILTER stored handles in OBDFILTER */
+#define LLOG_OBD_SZ_LOG_HANDLE  0
+#define LLOG_OBD_RD1_LOG_HANDLE 1
+
+struct llog_obd_ctxt {
+        struct obd_device *loc_obd;
+        struct llog_handle *loc_handles[LLOG_OBD_MAX_HANDLES];
+        struct llog_commit_data *loc_llcd;
+        struct semaphore loc_sem; /* protects loc_llcd */
+        struct obd_import *loc_imp;
+};
+
+void llog_obd_cleanup_ctxt(struct obd_device *obd);
+int obd_log_cancel(struct obd_export *exp, struct llog_handle *cathandle,
+                   void *buf, int count, struct llog_cookie *cookies, int flags);
+
+
+int llog_originator_setup(struct obd_device *, int);
+int llog_originator_cleanup(struct obd_device *);
+int llog_originator_open(struct obd_device *originator, 
+                         struct obd_device *disk_obd,
+                         int index, int named, int flags, 
+                         struct obd_uuid *log_uuid);
+
+
 
 #endif

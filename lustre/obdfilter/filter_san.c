@@ -37,16 +37,16 @@
 /* sanobd setup methods - use a specific mount option */
 int filter_san_setup(struct obd_device *obd, obd_count len, void *buf)
 {
-        struct obd_ioctl_data* data = buf;
+        struct lustre_cfg* lcfg = buf;
         char *option = NULL;
 
-        if (!data->ioc_inlbuf2)
+        if (!lcfg->lcfg_inlbuf2)
                 RETURN(-EINVAL);
 
         /* for extN/ext3 filesystem, we must mount it with 'writeback' mode */
-        if (!strcmp(data->ioc_inlbuf2, "extN"))
+        if (!strcmp(lcfg->lcfg_inlbuf2, "extN"))
                 option = "data=writeback";
-        else if (!strcmp(data->ioc_inlbuf2, "ext3"))
+        else if (!strcmp(lcfg->lcfg_inlbuf2, "ext3"))
                 option = "data=writeback,asyncdel";
         else
                 LBUG(); /* just a reminder */

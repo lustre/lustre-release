@@ -45,6 +45,7 @@
 #include <linux/lustre_net.h>
 #include <portals/types.h>
 #include <portals/list.h>
+#include <linux/lustre_log.h>
 #include "ptlrpc_internal.h"
 
 static struct llog_commit_master lustre_lcm;
@@ -118,6 +119,61 @@ void llcd_send(struct llog_commit_data *llcd)
         wake_up_nr(&llcd->llcd_lcm->lcm_waitq, 1);
 }
 EXPORT_SYMBOL(llcd_send);
+
+/* deleted objects have a commit callback that cancels the MDS
+ * log record for the deletion.  The commit callback calls this 
+ * function 
+ */
+int llog_obd_repl_cancel(struct obd_device *obd,
+                         struct lov_stripe_md *lsm, int count,
+                         struct llog_cookie *cookies, int flags)
+{
+        struct llog_obd_ctxt *ctxt = obd->obd_llog_ctxt;
+        struct llog_commit_data *llcd;
+        int rc = 0;
+        ENTRY;
+
+        LASSERT(ctxt);
+
+        if (count == 0 || cookies == NULL) {
+                down(&ctxt->loc_sem);
+                if (ctxt->loc_llcd == NULL || !(flags & OBD_LLOG_FL_SENDNOW))
+                        GOTO(out, rc);
+
+                llcd = ctxt->loc_llcd;
+                GOTO(send_now, rc);
+        }
+
+        down(&ctxt->loc_sem);
+        llcd = ctxt->loc_llcd;
+        if (llcd == NULL) {
+                llcd = llcd_grab();
+                if (llcd == NULL) {
+                        CERROR("couldn't get an llcd - dropped "LPX64":%x+%u\n",
+                               cookies->lgc_lgl.lgl_oid,
+                               cookies->lgc_lgl.lgl_ogen, cookies->lgc_index);
+                        GOTO(out, rc = -ENOMEM);
+                }
+                llcd->llcd_import = ctxt->loc_imp;
+                ctxt->loc_llcd = llcd;
+        }
+
+        memcpy(llcd->llcd_cookies + llcd->llcd_cookiebytes, cookies,
+               sizeof(*cookies));
+        llcd->llcd_cookiebytes += sizeof(*cookies);
+
+        GOTO(send_now, rc);
+send_now:
+        if ((PAGE_SIZE - llcd->llcd_cookiebytes < sizeof(*cookies) ||
+             flags & OBD_LLOG_FL_SENDNOW)) {
+                ctxt->loc_llcd = NULL;
+                llcd_send(llcd);
+        }
+out:
+        up(&ctxt->loc_sem);
+        return rc;
+}
+EXPORT_SYMBOL(llog_obd_repl_cancel);
 
 static int log_commit_thread(void *arg)
 {
@@ -262,7 +318,7 @@ static int log_commit_thread(void *arg)
                         spin_lock(&lcm->lcm_llcd_lock);
                         list_splice(&lcd->lcd_llcd_list, &lcm->lcm_llcd_resend);
                         if (++llcd->llcd_tries < 5) {
-                                CERROR("commit %p failed %dx: rc %d\n",
+                                CERROR("commit %p failed on attempt %d: rc %d\n",
                                        llcd, llcd->llcd_tries, rc);
 
                                 list_add_tail(&llcd->llcd_list,

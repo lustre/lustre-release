@@ -277,7 +277,8 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
         memset(res, 0, niocount * sizeof(*res));
 
         push_ctxt(&saved, &exp->exp_obd->obd_ctxt, NULL);
-        dentry = filter_fid2dentry(exp->exp_obd, NULL, 0, obj->ioo_id);
+        dentry = filter_fid2dentry(exp->exp_obd, NULL, obj->ioo_gr, 
+                                   obj->ioo_id);
         if (IS_ERR(dentry))
                 GOTO(cleanup, rc = PTR_ERR(dentry));
 
@@ -450,9 +451,7 @@ int filter_brw(int cmd, struct obd_export *exp, struct obdo *oa,
                 rnb[i].len = pga[i].count;
         }
 
-        ioo.ioo_id = oa->o_id;
-        ioo.ioo_gr = 0;
-        ioo.ioo_type = oa->o_mode & S_IFMT;
+        obdo_to_ioobj(oa, &ioo);
         ioo.ioo_bufcnt = oa_bufs;
 
         ret = filter_preprw(cmd, exp, oa, 1, &ioo, oa_bufs, rnb, lnb, oti);
