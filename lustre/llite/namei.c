@@ -82,6 +82,7 @@ static struct dentry *ll_lookup(struct inode * dir, struct dentry *dentry)
 	struct mds_rep *rep; 
 	struct ptlrep_hdr *hdr = NULL; 
 	struct inode * inode = NULL;
+        struct ll_sb_info *sbi;
 	int err;
 	int type;
 	ino_t ino;
@@ -94,8 +95,10 @@ static struct dentry *ll_lookup(struct inode * dir, struct dentry *dentry)
 	if (!ino)
 		goto negative;
 
-	err = mdc_getattr(ino, type, OBD_MD_FLNOTOBD|OBD_MD_FLBLOCKS, 
-			 &rep, &hdr);
+        sbi = (struct ll_sb_info *)(&dentry->d_inode->i_sb->u.generic_sbp);
+
+	err = mdc_getattr(sbi->ll_peer_ptr, ino, type,
+			  OBD_MD_FLNOTOBD|OBD_MD_FLBLOCKS, &rep, &hdr);
         if ( err ) {
                 printk(__FUNCTION__ ": obdo_fromid failed\n");
                 EXIT;
@@ -137,10 +140,12 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
 	struct mds_rep *rep;
 	struct ptlrep_hdr *hdr;
         int err;
+        struct ll_sb_info *sbi =
+		(struct ll_sb_info *)(&dir->i_sb->u.generic_sbp);
 
         ENTRY;
 
-     	err = mdc_create(dir, name, namelen, mode, id,
+     	err = mdc_create(sbi->ll_peer_ptr, dir, name, namelen, mode, id,
 			 current->uid, current->gid, CURRENT_TIME, 
 			 &rep, &hdr); 
 	if (err) { 

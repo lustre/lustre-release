@@ -14,6 +14,7 @@
 #include <linux/obd_class.h>
 #include <linux/obdo.h>
 #include <linux/list.h>
+#include <linux/lustre_net.h>
 
 #define LL_SUPER_MAGIC 0x0BD00BD0;
 
@@ -34,6 +35,8 @@ struct ll_sb_info {
         struct list_head         ll_inodes;    /* list of dirty inodes */
         unsigned long            ll_cache_count;
         struct semaphore         ll_list_mutex;
+	struct lustre_peer       ll_peer;
+	struct lustre_peer      *ll_peer_ptr;
 };
 
 

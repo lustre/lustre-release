@@ -35,6 +35,9 @@
 
 extern int mds_queue_req(struct ptlrpc_request *);
 
+/* FIXME: this belongs in some sort of service struct */
+static int mdc_xid = 0;
+
 struct ptlrpc_request *mds_prep_req(int opcode, int namelen, char *name, int tgtlen, char *tgt)
 {
 	struct ptlrpc_request *request;
@@ -46,6 +49,8 @@ struct ptlrpc_request *mds_prep_req(int opcode, int namelen, char *name, int tgt
 		printk("mds_prep_req: request allocation out of memory\n");
 		return NULL;
 	}
+
+	request->rq_xid = mdc_xid++;
 
 	rc = mds_pack_req(name, namelen, tgt, tgtlen,
 			  &request->rq_reqhdr, &(request->rq_req.mds),
@@ -71,10 +76,17 @@ static int mds_queue_wait(struct ptlrpc_request *req, struct lustre_peer *peer)
 	int rc;
 
 	/* XXX fix the race here (wait_for_event?)*/
-	/* hand the packet over to the server */
-	rc = ptl_send_rpc(req, peer);
+	if (peer == NULL) {
+		/* Local delivery */
+		rc = mds_queue_req(req); 
+	} else {
+		/* Remote delivery via portals. */
+		req->rq_req_portal = MDS_REQUEST_PORTAL;
+		req->rq_reply_portal = MDS_REPLY_PORTAL;
+		rc = ptl_send_rpc(req, peer);
+	}
 	if (rc) { 
-		printk("mdc_queue_wait: error %d, opcode %d\n", rc, 
+		printk(__FUNCTION__ ": error %d, opcode %d\n", rc, 
 		       req->rq_reqhdr->opc); 
 		return -rc;
 	}
@@ -84,15 +96,20 @@ static int mds_queue_wait(struct ptlrpc_request *req, struct lustre_peer *peer)
 	interruptible_sleep_on(&req->rq_wait_for_rep);
 	printk("-- done\n");
 
-	mds_unpack_rep(req->rq_repbuf, req->rq_replen, &req->rq_rephdr, 
-		       &req->rq_rep.mds); 
+	rc = mds_unpack_rep(req->rq_repbuf, req->rq_replen, &req->rq_rephdr, 
+			    &req->rq_rep.mds);
+	if (rc) {
+		printk(__FUNCTION__ ": mds_unpack_rep failed: %d\n", rc);
+		return rc;
+	}
+
 	if ( req->rq_rephdr->status == 0 )
 		printk("-->mdc_queue_wait: buf %p len %d status %d\n", 
 		       req->rq_repbuf, req->rq_replen, 
 		       req->rq_rephdr->status); 
 
 	EXIT;
-	return req->rq_rephdr->status;
+	return 0;
 }
 
 void mds_free_req(struct ptlrpc_request *request)
@@ -161,6 +178,9 @@ int mdc_readpage(struct lustre_peer *peer, ino_t ino, int type, __u64 offset,
 	request->rq_req.mds->size = offset;
 	request->rq_req.mds->tgtlen = sizeof(niobuf); 
 
+	request->rq_replen = 
+		sizeof(struct ptlrep_hdr) + sizeof(struct mds_rep);
+
 	rc = mds_queue_wait(request, peer);
 	if (rc) { 
 		printk("mdc request: error in handling %d\n", rc); 
@@ -198,7 +218,7 @@ static int request_ioctl(struct inode *inode, struct file *file,
 		       unsigned int cmd, unsigned long arg)
 {
 	int err;
-	struct lustre_peer peer; 
+	struct lustre_peer peer, *peer_ptr = NULL;
 
 	ENTRY;
 
@@ -216,13 +236,15 @@ static int request_ioctl(struct inode *inode, struct file *file,
                 return -EINVAL;
         }
 
-	//rc = ptl_peer("mds", peer); 
+	err = kportal_uuid_to_peer("mds", &peer);
+	if (err == 0)
+		peer_ptr = &peer;
 	
 	switch (cmd) {
 	case IOC_REQUEST_GETATTR: { 
 		struct ptlrep_hdr *hdr = NULL;
 		printk("-- getting attr for ino 2\n"); 
-		err = mdc_getattr(&peer, 2, S_IFDIR, ~0, NULL, &hdr);
+		err = mdc_getattr(peer_ptr, 2, S_IFDIR, ~0, NULL, &hdr);
 		if (hdr)
 			kfree(hdr);
 		printk("-- done err %d\n", err);
@@ -238,7 +260,7 @@ static int request_ioctl(struct inode *inode, struct file *file,
 			break;
 		}
 		printk("-- readpage 0 for ino 2\n"); 
-		err = mdc_readpage(&peer, 2, S_IFDIR, 0, buf, NULL, &hdr);
+		err = mdc_readpage(peer_ptr, 2, S_IFDIR, 0, buf, NULL, &hdr);
 		printk("-- done err %d\n", err);
 		if (!err) { 
 			printk("-- status: %d\n", hdr->status); 
@@ -260,13 +282,14 @@ static int request_ioctl(struct inode *inode, struct file *file,
 		iattr.ia_atime = 0;
 		iattr.ia_valid = ATTR_MODE | ATTR_ATIME;
 
-		err = mdc_setattr(&peer, &inode, &iattr, NULL, &hdr);
+		err = mdc_setattr(peer_ptr, &inode, &iattr, NULL, &hdr);
 		printk("-- done err %d\n", err);
 		if (!err) { 
 			printk("-- status: %d\n", hdr->status); 
 			err = hdr->status;
+		} else {
+			kfree(hdr); 
 		}
-		kfree(hdr); 
 		break;
 	}
 
@@ -280,8 +303,8 @@ static int request_ioctl(struct inode *inode, struct file *file,
 		iattr.ia_atime = 0;
 		iattr.ia_valid = ATTR_MODE | ATTR_ATIME;
 
-		err = mdc_create(&peer, &inode, "foofile", strlen("foofile"), 
-				 0100707, 47114711, 
+		err = mdc_create(peer_ptr, &inode, "foofile",
+				 strlen("foofile"), 0100707, 47114711, 
 				 11, 47, 0, NULL, &hdr);
 		printk("-- done err %d\n", err);
 		if (!err) { 

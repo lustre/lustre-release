@@ -310,6 +310,7 @@ static int ost_get_info(struct ost_obd *ost, struct ptlrpc_request *req)
 }
 
 
+#if 0
 static struct page * ext2_get_page(struct inode *dir, unsigned long n)
 {
 	struct address_space *mapping = dir->i_mapping;
@@ -331,8 +332,6 @@ fail:
 	ext2_put_page(page);
 	return ERR_PTR(-EIO);
 }
-
-#if 0
 
 static inline void ext2_put_page(struct page *page)
 {

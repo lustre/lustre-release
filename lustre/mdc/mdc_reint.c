@@ -51,8 +51,12 @@ int mdc_setattr(struct lustre_peer *peer,
 	rec = mds_req_tgt(request->rq_req.mds);
 	mds_setattr_pack(rec, inode, iattr); 
 	request->rq_req.mds->opcode = HTON__u32(REINT_SETATTR);
+	request->rq_replen = 
+		sizeof(struct ptlrep_hdr) + sizeof(struct mds_rep);
 
 	rc = mdc_reint(peer, request);
+	if (rc)
+		return rc;
 
 	if (rep) { 
 		*rep = request->rq_rep.mds;
@@ -61,8 +65,7 @@ int mdc_setattr(struct lustre_peer *peer,
 		*hdr = request->rq_rephdr;
 	}
 
-	kfree(request); 
-	return rc;
+	return 0;
 }
 
 int mdc_create(struct lustre_peer *peer, 
@@ -81,6 +84,9 @@ int mdc_create(struct lustre_peer *peer,
 		printk("mdc_create: cannot pack\n");
 		return -ENOMEM;
 	}
+
+	request->rq_replen = 
+		sizeof(struct ptlrep_hdr) + sizeof(struct mds_rep);
 
 	rec = mds_req_tgt(request->rq_req.mds);
 	mds_create_pack(rec, dir, name, namelen, mode, id, uid, gid, time); 

@@ -29,18 +29,8 @@
 #include <linux/obd_support.h>
 #include <linux/lustre_net.h>
 
-ptl_handle_ni_t LUSTRE_NI;
 static ptl_handle_eq_t req_eq;
-static int req_initialized = 0;
 
-/* This seems silly now, but some day we'll have more than one NI */
-int req_get_peer(__u32 nid, struct lustre_peer *peer)
-{
-        peer->peer_ni = req_ni;
-        peer->peer_nid = nid;
-
-        return 0;
-}
 static int request_callback(ptl_event_t *ev, void *data)
 {
         struct ptlrpc_request *rpc = ev->mem_desc.user_ptr;
@@ -48,32 +38,50 @@ static int request_callback(ptl_event_t *ev, void *data)
         ENTRY;
 
         if (ev->type == PTL_EVENT_SENT) {
-                kfree(rpc->rq_reqbuf);
+                kfree(ev->mem_desc.start);
         } else if (ev->type == PTL_EVENT_PUT) {
-                struct ptlrpc_request *clnt_rpc = rpc->rq_reply_handle;
-
                 rpc->rq_repbuf = ev->mem_desc.start + ev->offset;
-
-                wake_up_interruptible(&clnt_rpc->rq_wait_for_rep);
+                wake_up_interruptible(&rpc->rq_wait_for_rep);
         }
 
         EXIT;
         return 1;
 }
 
+static int incoming_callback(ptl_event_t *ev, void *data)
+{
+        struct ptlrpc_service *service = data;
+
+        ENTRY;
+
+        if (ev->type == PTL_EVENT_PUT) {
+                wake_up(service->srv_wait_queue);
+        } else {
+                printk("Unexpected event type: %d\n", ev->type);
+        }
+
+        EXIT;
+        return 0;
+}
+
 int ptl_send_buf(struct ptlrpc_request *request, struct lustre_peer *peer,
-                 int portal)
+                 int portal, int is_request)
 {
         int rc;
         ptl_process_id_t remote_id;
         ptl_handle_md_t md_h;
 
-        request->rq_req_md.start = request->rq_reqbuf;
-        request->rq_req_md.length = request->rq_reqlen;
+        if (is_request) {
+                request->rq_req_md.start = request->rq_reqbuf;
+                request->rq_req_md.length = request->rq_reqlen;
+        } else {
+                request->rq_req_md.start = request->rq_repbuf;
+                request->rq_req_md.length = request->rq_replen;
+        }
         request->rq_req_md.threshold = PTL_MD_THRESH_INF;
         request->rq_req_md.options = PTL_MD_OP_PUT;
         request->rq_req_md.user_ptr = request;
-        request->rq_req_md.eventq = PTL_EQ_NONE;
+        request->rq_req_md.eventq = req_eq;
 
         rc = PtlMDBind(peer->peer_ni, request->rq_req_md, &md_h);
         if (rc != 0) {
@@ -85,7 +93,8 @@ int ptl_send_buf(struct ptlrpc_request *request, struct lustre_peer *peer,
         remote_id.nid = peer->peer_nid;
         remote_id.pid = 0;
 
-        rc = PtlPut(md_h, PTL_NOACK_REQ, remote_id, portal, 0, 0, 0, 0);
+        rc = PtlPut(md_h, PTL_NOACK_REQ, remote_id, portal, 0, request->rq_xid,
+                    0, 0);
         if (rc != PTL_OK) {
                 printk(__FUNCTION__ ": PtlPut failed: %d\n", rc);
                 /* FIXME: tear down md */
@@ -114,7 +123,7 @@ int ptl_send_rpc(struct ptlrpc_request *request, struct lustre_peer *peer)
         local_id.rid = PTL_ID_ANY;
 
         rc = PtlMEAttach(peer->peer_ni, request->rq_reply_portal, local_id,
-                         0, ~0, PTL_RETAIN, &me_h);
+                         request->rq_xid, 0, PTL_RETAIN, &me_h);
         if (rc != PTL_OK) {
                 EXIT;
                 /* FIXME: tear down EQ, free reqbuf */
@@ -134,20 +143,81 @@ int ptl_send_rpc(struct ptlrpc_request *request, struct lustre_peer *peer)
                 return rc;
         }
 
-        return ptl_send_buf(request, peer, request->rq_req_portal);
+        return ptl_send_buf(request, peer, request->rq_req_portal, 1);
 }
 
+int rpc_register_service(struct ptlrpc_service *service, char *uuid)
+{
+        struct lustre_peer peer;
+        int rc;
 
-//int req_init_event_queue(struct lustre_peer *peer);
+        rc = kportal_uuid_to_peer(uuid, &peer);
+        if (rc != 0) {
+                printk("Invalid uuid \"%s\"\n", uuid);
+                return -EINVAL;
+        }
+
+        service->srv_buf = kmalloc(service->srv_buf_size, GFP_KERNEL);
+        if (service->srv_buf == NULL) {
+                printk(__FUNCTION__ ": no memory\n");
+                return -ENOMEM;
+        }
+
+        service->srv_id.addr_kind = PTL_ADDR_GID;
+        service->srv_id.gid = PTL_ID_ANY;
+        service->srv_id.rid = PTL_ID_ANY;
+
+	rc = PtlMEAttach(peer.peer_ni, service->srv_portal, service->srv_id,
+                         0, ~0, PTL_RETAIN, &service->srv_me);
+        if (rc != PTL_OK) {
+                printk("PtlMEAttach failed: %d\n", rc);
+                return rc;
+        }
+
+        rc = PtlEQAlloc(peer.peer_ni, 128, incoming_callback, service,
+                        &service->srv_eq);
+        if (rc != PTL_OK) {
+                printk("PtlEQAlloc failed: %d\n", rc);
+                return rc;
+        }
+
+        /* FIXME: Build an auto-unlinking MD and build a ring. */
+        /* FIXME: Make sure that these are reachable by DMA on well-known
+         * addresses. */
+	service->srv_md.start		= service->srv_buf;
+	service->srv_md.length		= service->srv_buf_size;
+	service->srv_md.threshold	= PTL_MD_THRESH_INF;
+	service->srv_md.options		= PTL_MD_OP_PUT;
+	service->srv_md.user_ptr	= service;
+	service->srv_md.eventq		= service->srv_eq;
+
+	rc = PtlMDAttach(service->srv_me, service->srv_md,
+                         PTL_RETAIN, &service->srv_md_h);
+        if (rc != PTL_OK) {
+                printk("PtlMDAttach failed: %d\n", rc);
+                /* FIXME: wow, we need to clean up. */
+                return rc;
+        }
+
+        return 0;
+}
 
 static int req_init_portals(void)
 {
         int rc;
-        rc = PtlEQAlloc(req_ni, 128, request_callback, NULL, &req_eq);
-        if (rc != PTL_OK) {
-                EXIT;
-                return rc; /* FIXME: does this portals rc make sense? */
+        const ptl_handle_ni_t *nip;
+        ptl_handle_ni_t ni;
+
+        nip = inter_module_get_request(LUSTRE_NAL "_ni", LUSTRE_NAL);
+        if (nip == NULL) {
+                printk("get_ni failed: is the NAL module loaded?\n");
+                return -EIO;
         }
+        ni = *nip;
+
+        rc = PtlEQAlloc(ni, 128, request_callback, NULL, &req_eq);
+        if (rc != PTL_OK)
+                printk("PtlEQAlloc failed: %d\n", rc);
 
         return rc;
 }
@@ -159,10 +229,11 @@ static int __init req_init(void)
 
 static void __exit req_exit(void)
 {
-        if (req_initialized) {
-                PtlNIFini(req_ni);
-                inter_module_put(LUSTRE_NAL "_init");
-        }
+        PtlEQFree(req_eq);
+
+        inter_module_put(LUSTRE_NAL "_ni");
+
+        return;
 }
 
 MODULE_AUTHOR("Peter J. Braam <braam@clusterfs.com>");

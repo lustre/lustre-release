@@ -244,6 +244,8 @@ int ll_readpage(struct file *file, struct page *page)
 int ll_dir_readpage(struct file *file, struct page *page)
 {
 	struct inode *inode = page->mapping->host;
+        struct ll_sb_info *sbi =
+		(struct ll_sb_info *)(&inode->i_sb->u.generic_sbp);
 	char *buf;
 	__u64 offset;
         int rc = 0;
@@ -265,7 +267,8 @@ int ll_dir_readpage(struct file *file, struct page *page)
 
 	offset = page->index << PAGE_SHIFT; 
 	buf = kmap(page);
-        rc = mdc_readpage(inode->i_ino, S_IFDIR, offset, buf, NULL, &hdr);
+        rc = mdc_readpage(sbi->ll_peer_ptr, inode->i_ino, S_IFDIR, offset, buf,
+			  NULL, &hdr);
 	kunmap(buff); 
         if ( rc ) {
 		EXIT; 

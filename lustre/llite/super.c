@@ -126,6 +126,10 @@ static struct super_block * ll_read_super(struct super_block *sb,
         }
 	connected = 1;
 
+	err = kportal_uuid_to_peer("mds", &sbi->ll_peer);
+	if (err == 0)
+		sbi->ll_peer_ptr = &sbi->ll_peer;
+
         sbi->ll_super = sb;
 	sbi->ll_rootino = 2;
 
@@ -136,7 +140,7 @@ static struct super_block * ll_read_super(struct super_block *sb,
         sb->s_op = &ll_super_operations;
 
         /* make root inode */
-	err = mdc_getattr(sbi->ll_rootino, S_IFDIR, 
+	err = mdc_getattr(sbi->ll_peer_ptr, sbi->ll_rootino, S_IFDIR, 
 			  OBD_MD_FLNOTOBD|OBD_MD_FLBLOCKS, 
 			  &rep, &hdr);
         if (err) {
@@ -238,6 +242,8 @@ int ll_setattr(struct dentry *de, struct iattr *attr)
 {
         struct inode *inode = de->d_inode;
 	struct ptlrep_hdr *hdr = NULL;
+        struct ll_sb_info *sbi =
+		(struct ll_sb_info *)(&inode->i_sb->u.generic_sbp);
 	int err;
 
         ENTRY;
@@ -245,7 +251,7 @@ int ll_setattr(struct dentry *de, struct iattr *attr)
 	/* change incore inode */
 	ll_attr2inode(inode, attr);
 
-	err = mdc_setattr(inode, attr, NULL, &hdr); 
+	err = mdc_setattr(sbi->ll_peer_ptr, inode, attr, NULL, &hdr); 
         if ( err )
                 printk(__FUNCTION__ ": ll_setattr fails (%d)\n", err);
 

@@ -27,19 +27,29 @@
 #include <portals/p30.h>
 #include <linux/lustre_idl.h>
 
-#define OSC_PORTAL 1
-#define MDS_PORTAL 2
-#define OST_PORTAL 3
-
-struct lustre_peer {
-        ptl_handle_ni_t peer_ni;
-        __u32 peer_nid;
-};
+#define OSC_REQUEST_PORTAL 1
+#define OSC_REPLY_PORTAL   2
+#define MDS_REQUEST_PORTAL 3
+#define MDS_REPLY_PORTAL   4
+#define OST_REQUEST_PORTAL 5
+#define OST_REPLY_PORTAL   6
 
 struct ptlrpc_service {
+        char *srv_buf;
         __u32 srv_buf_size;
-        void (* srv_callback)(ptl_event_t *, void *data);
         __u32 srv_ring_length;
+        __u32 srv_portal;
+
+        struct lustre_peer srv_self;
+
+        /* FIXME: perhaps a list of EQs, if multiple NIs are used? */
+        ptl_handle_eq_t srv_eq;
+
+        ptl_handle_me_t srv_me;
+        ptl_process_id_t srv_id;
+        ptl_md_t srv_md;
+        ptl_handle_md_t srv_md_h;
+        wait_queue_head_t *srv_wait_queue;
 };
 
 
@@ -53,8 +63,9 @@ struct ptlrpc_request {
 	int rq_reqlen;
 	struct ptlreq_hdr *rq_reqhdr;
 	union ptl_req rq_req;
+        __u32 rq_xid;
 
-	char *rq_repbuf;
+ 	char *rq_repbuf;
 	int rq_replen;
 	struct ptlrep_hdr *rq_rephdr;
 	union ptl_rep rq_rep;
@@ -66,10 +77,15 @@ struct ptlrpc_request {
         ptl_md_t rq_req_md;
         __u32 rq_reply_portal;
         __u32 rq_req_portal;
+
+        struct lustre_peer rq_peer;
 };
 
 /* rpc/rpc.c */
+int ptl_send_buf(struct ptlrpc_request *request, struct lustre_peer *peer,
+                 int portal, int is_request);
 int ptl_send_rpc(struct ptlrpc_request *request, struct lustre_peer *peer);
+int rpc_register_service(struct ptlrpc_service *service, char *uuid);
 
 /* FIXME */
 #if 1

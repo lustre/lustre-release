@@ -58,6 +58,8 @@ struct mds_obd {
 	struct file_operations *mds_fop; 
 	struct inode_operations *mds_iop;
 	struct address_space_operations *mds_aops;
+
+        struct ptlrpc_service *mds_service;
 };
 
 

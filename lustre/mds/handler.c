@@ -95,18 +95,28 @@ int mds_reply(struct ptlrpc_request *req)
 
 	ENTRY;
 	
-	/* move the reply to the client */ 
-	clnt_req->rq_replen = req->rq_replen;
-	clnt_req->rq_repbuf = req->rq_repbuf;
-	req->rq_repbuf = NULL;
-	req->rq_replen = 0;
+	if (req->rq_obd->mds_service != NULL) {
+		/* This is a request that came from the network via portals. */
 
-	/* free the request buffer */
-	kfree(req->rq_reqbuf);
-	req->rq_reqbuf = NULL; 
+		/* FIXME: we need to increment the count of handled events */
+		ptl_send_buf(req, &req->rq_peer, MDS_REPLY_PORTAL, 0);
+	} else {
+		/* This is a local request that came from another thread. */
 
-	/* wake up the client */ 
-	wake_up_interruptible(&clnt_req->rq_wait_for_rep); 
+		/* move the reply to the client */ 
+		clnt_req->rq_replen = req->rq_replen;
+		clnt_req->rq_repbuf = req->rq_repbuf;
+		req->rq_repbuf = NULL;
+		req->rq_replen = 0;
+
+		/* free the request buffer */
+		kfree(req->rq_reqbuf);
+		req->rq_reqbuf = NULL;
+
+		/* wake up the client */ 
+		wake_up_interruptible(&clnt_req->rq_wait_for_rep); 
+	}
+
 	EXIT;
 	return 0;
 }
@@ -415,12 +425,10 @@ int mds_main(void *arg)
 
 	/* And now, wait forever for commit wakeup events. */
 	while (1) {
-		struct ptlrpc_request *request;
-		int rc; 
+		int rc;
 
 		if (mds->mds_flags & MDS_UNMOUNT)
 			break;
-
 
 		wake_up(&mds->mds_done_waitq);
 		interruptible_sleep_on(&mds->mds_waitq);
@@ -428,13 +436,44 @@ int mds_main(void *arg)
 		CDEBUG(D_INODE, "lustre_mds wakes\n");
 		CDEBUG(D_INODE, "pick up req here and continue\n"); 
 
-		if (list_empty(&mds->mds_reqs)) { 
-			CDEBUG(D_INODE, "woke because of timer\n"); 
-		} else { 
-			request = list_entry(mds->mds_reqs.next, 
-					     struct ptlrpc_request, rq_list);
-			list_del(&request->rq_list);
-			rc = mds_handle(request); 
+		if (mds->mds_service != NULL) {
+			ptl_event_t ev;
+
+			while (1) {
+				struct ptlrpc_request request;
+
+				rc = PtlEQGet(mds->mds_service->srv_eq, &ev);
+				if (rc != PTL_OK && rc != PTL_EQ_DROPPED)
+					break;
+				/* FIXME: If we move to an event-driven model,
+				 * we should put the request on the stack of
+				 * mds_handle instead. */
+				memset(&request, 0, sizeof(request));
+				request.rq_reqbuf = ev.mem_desc.start +
+					ev.offset;
+				request.rq_reqlen = ev.mem_desc.length;
+				request.rq_obd = MDS;
+				request.rq_xid = ev.match_bits;
+
+				request.rq_peer.peer_nid = ev.initiator.nid;
+				/* FIXME: this NI should be the incoming NI.
+				 * We don't know how to find that from here. */
+				request.rq_peer.peer_ni =
+					mds->mds_service->srv_self.peer_ni;
+				rc = mds_handle(&request);
+			}
+		} else {
+			struct ptlrpc_request *request;
+
+			if (list_empty(&mds->mds_reqs)) {
+				CDEBUG(D_INODE, "woke because of timer\n");
+			} else {
+				request = list_entry(mds->mds_reqs.next,
+						     struct ptlrpc_request,
+						     rq_list);
+				list_del(&request->rq_list);
+				rc = mds_handle(request);
+			}
 		}
 	}
 
@@ -475,50 +514,32 @@ static int mds_setup(struct obd_device *obddev, obd_count len,
 {
 	struct obd_ioctl_data* data = buf;
 	struct mds_obd *mds = &obddev->u.mds;
+	struct vfsmount *mnt;
+	struct lustre_peer peer;
+	int err; 
         ENTRY;
 
-        /* If the ioctl data contains two inline buffers, this is a request to
-         * mount a local filesystem for metadata storage.  If the ioctl data
-         * contains one buffer, however, it is the UUID of the remote node that
-         * we will contact for metadata. */
-        if (data->ioc_inllen2 == 0) {
-                __u32 nid;
 
-                nid = kportal_uuid_to_nid(data->ioc_inlbuf1);
-                if (nid == 0) {
-                        printk("Lustre: uuid_to_nid failed; use ptlctl to "
-                               "associate this uuid with a NID\n");
-                        EXIT;
-                        return -EINVAL;
-                }
-                printk("Lustre MDS: remote nid is %u\n", nid);
-                mds->mds_remote_nid = nid;
-        } else {
-                struct vfsmount *mnt;
-                int err; 
+	mnt = do_kern_mount(data->ioc_inlbuf2, 0, data->ioc_inlbuf1, NULL); 
+	err = PTR_ERR(mnt);
+	if (IS_ERR(mnt)) { 
+		EXIT;
+		return err;
+	}
 
-                mnt = do_kern_mount(data->ioc_inlbuf2, 0, 
-                                    data->ioc_inlbuf1, NULL); 
-                err = PTR_ERR(mnt);
-                if (IS_ERR(mnt)) { 
-                        EXIT;
-                        return err;
-                }
+	mds->mds_sb = mnt->mnt_root->d_inode->i_sb;
+	if (!obddev->u.mds.mds_sb) {
+		EXIT;
+		return -ENODEV;
+	}
 
-                mds->mds_sb = mnt->mnt_root->d_inode->i_sb;
-                if (!obddev->u.mds.mds_sb) {
-                        EXIT;
-                        return -ENODEV;
-                }
+	mds->mds_vfsmnt = mnt;
+	obddev->u.mds.mds_fstype = strdup(data->ioc_inlbuf2);
 
-                mds->mds_vfsmnt = mnt;
-                obddev->u.mds.mds_fstype = strdup(data->ioc_inlbuf2);
-
-                mds->mds_ctxt.pwdmnt = mnt;
-                mds->mds_ctxt.pwd = mnt->mnt_root;
-                mds->mds_ctxt.fs = KERNEL_DS;
-                mds->mds_remote_nid = 0;
-        }
+	mds->mds_ctxt.pwdmnt = mnt;
+	mds->mds_ctxt.pwd = mnt->mnt_root;
+	mds->mds_ctxt.fs = KERNEL_DS;
+	mds->mds_remote_nid = 0;
 
 	INIT_LIST_HEAD(&mds->mds_reqs);
 	mds->mds_thread = NULL;
@@ -527,6 +548,20 @@ static int mds_setup(struct obd_device *obddev, obd_count len,
 	MDS = mds;
 
 	spin_lock_init(&obddev->u.mds.mds_lock);
+
+	err = kportal_uuid_to_peer("self", &peer);
+	if (err == 0) {
+		mds->mds_service = kmalloc(sizeof(*mds->mds_service),
+						  GFP_KERNEL);
+		if (mds->mds_service == NULL)
+			return -ENOMEM;
+		mds->mds_service->srv_buf_size = 64 * 1024;
+		mds->mds_service->srv_portal = MDS_REQUEST_PORTAL;
+		memcpy(&mds->mds_service->srv_self, &peer, sizeof(peer));
+		mds->mds_service->srv_wait_queue = &mds->mds_waitq;
+
+		rpc_register_service(mds->mds_service, "self");
+	}
 
 	mds_start_srv_thread(mds);
 
