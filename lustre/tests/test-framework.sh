@@ -91,7 +91,7 @@ facet_nid() {
 	echo "The env variable ${facet}_HOST must be set."
 	exit 1
    fi
-   echo `h2$NETWORKTYPE $HOST`
+   echo `h2$NETTYPE $HOST`
 }
 
 no_dsh() {
@@ -140,7 +140,7 @@ add_facet() {
     echo "add facet $facet: `facet_host $facet`"
     do_lmc --add node --node ${facet}_facet $@ --timeout $TIMEOUT
     do_lmc --add net --node ${facet}_facet --nid `facet_nid $facet` \
-	--nettype $NETWORKTYPE
+	--nettype $NETTYPE
 }
 
 error() {
