@@ -48,6 +48,7 @@
 # define DEBUG_SUBSYSTEM S_PORTALS
 
 #include <linux/kp30.h>
+#include <linux/portals_compat25.h>
 
 #define DEBUG_OVERFLOW 1024
 static char *debug_buf = NULL;
@@ -233,7 +234,7 @@ int portals_do_debug_dumplog(void *arg)
         reparent_to_init();
         journal_info = current->journal_info;
         current->journal_info = NULL;
-        sprintf(debug_file_name, "%s.%ld", debug_file_path, CURRENT_TIME);
+        sprintf(debug_file_name, "%s.%ld", debug_file_path, CURRENT_SECONDS);
         file = filp_open(debug_file_name, O_CREAT|O_TRUNC|O_RDWR, 0644);
 
         if (!file || IS_ERR(file)) {
@@ -811,7 +812,7 @@ void portals_run_lbug_upcall(char *file, const char *fn, const int line)
         envp[1] = "PATH=/sbin:/bin:/usr/sbin:/usr/bin";
         envp[2] = NULL;
 
-        rc = call_usermodehelper(argv[0], argv, envp);
+        rc = USERMODEHELPER(argv[0], argv, envp);
         if (rc < 0) {
                 CERROR("Error invoking lbug upcall %s %s %s %s %s: %d; check "
                        "/proc/sys/portals/upcall\n",                

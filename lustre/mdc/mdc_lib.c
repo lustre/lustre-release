@@ -74,17 +74,14 @@ void mdc_create_pack(struct ptlrpc_request *req, int offset,
         rec->cr_fsuid = current->fsuid;
         rec->cr_fsgid = current->fsgid;
         rec->cr_cap = current->cap_effective;
-        ll_ino2fid(&rec->cr_fid, op_data->ino1, op_data->gen1, op_data->typ1);
+        rec->cr_fid = op_data->fid1;
         memset(&rec->cr_replayfid, 0, sizeof(rec->cr_replayfid));
         rec->cr_mode = mode;
         rec->cr_rdev = rdev;
         rec->cr_uid = uid;
         rec->cr_gid = gid;
         rec->cr_time = time;
-        if (in_group_p(op_data->gid1))
-                rec->cr_suppgid = op_data->gid1;
-        else
-                rec->cr_suppgid = -1;
+        rec->cr_suppgid = op_data->ctxt.gid1;
 
         tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1, op_data->namelen + 1);
         LOGL0(op_data->name, op_data->namelen, tmp);
@@ -111,8 +108,7 @@ void mdc_open_pack(struct ptlrpc_request *req, int offset,
         rec->cr_fsgid = current->fsgid;
         rec->cr_cap = current->cap_effective;
         if (op_data != NULL)
-                ll_ino2fid(&rec->cr_fid, op_data->ino1,
-                           op_data->gen1, op_data->typ1);
+                rec->cr_fid = op_data->fid1;
         memset(&rec->cr_replayfid, 0, sizeof(rec->cr_replayfid));
         rec->cr_mode = mode;
         rec->cr_flags = flags;
@@ -120,10 +116,7 @@ void mdc_open_pack(struct ptlrpc_request *req, int offset,
         rec->cr_uid = uid;
         rec->cr_gid = gid;
         rec->cr_time = time;
-        if (in_group_p(op_data->gid1))
-                rec->cr_suppgid = op_data->gid1;
-        else
-                rec->cr_suppgid = -1;
+        rec->cr_suppgid = op_data->ctxt.gid1;
 
         if (op_data->name) {
                 tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1,
@@ -148,7 +141,7 @@ void mdc_setattr_pack(struct ptlrpc_request *req,
         rec->sa_fsuid = current->fsuid;
         rec->sa_fsgid = current->fsgid;
         rec->sa_cap = current->cap_effective;
-        ll_ino2fid(&rec->sa_fid, data->ino1, data->gen1, data->typ1);
+        rec->sa_fid = data->fid1;
 
         if (iattr) {
                 rec->sa_valid = iattr->ia_valid;
@@ -160,14 +153,11 @@ void mdc_setattr_pack(struct ptlrpc_request *req,
                 rec->sa_mtime = LTIME_S(iattr->ia_mtime);
                 rec->sa_ctime = LTIME_S(iattr->ia_ctime);
                 rec->sa_attr_flags = iattr->ia_attr_flags;
-
                 if ((iattr->ia_valid & ATTR_GID) && in_group_p(iattr->ia_gid))
                         rec->sa_suppgid = iattr->ia_gid;
                 else if ((iattr->ia_valid & ATTR_MODE) &&
-                         in_group_p(data->gid1))
-                        rec->sa_suppgid = data->gid1;
-                else
-                        rec->sa_suppgid = -1;
+                         in_group_p(iattr->ia_gid))
+                        rec->sa_suppgid = data->ctxt.gid1;
         }
 
         if (ealen == 0)
@@ -194,14 +184,10 @@ void mdc_unlink_pack(struct ptlrpc_request *req, int offset,
         rec->ul_fsuid = current->fsuid;
         rec->ul_fsgid = current->fsgid;
         rec->ul_cap = current->cap_effective;
-        rec->ul_mode = data->mode;
-        if (in_group_p(data->gid1))
-                rec->ul_suppgid = data->gid1;
-        else
-                rec->ul_suppgid = -1;
-        ll_ino2fid(&rec->ul_fid1, data->ino1, data->gen1, data->typ1);
-        if (data->ino2)
-                ll_ino2fid(&rec->ul_fid2, data->ino2, data->gen2, data->typ2);
+        rec->ul_mode = data->create_mode;
+        rec->ul_suppgid = data->ctxt.gid1;
+        rec->ul_fid1 = data->fid1;
+        rec->ul_fid2 = data->fid2;
 
         tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1, data->namelen + 1);
         LASSERT (tmp != NULL);
@@ -220,16 +206,10 @@ void mdc_link_pack(struct ptlrpc_request *req, int offset,
         rec->lk_fsuid = current->fsuid;
         rec->lk_fsgid = current->fsgid;
         rec->lk_cap = current->cap_effective;
-        if (in_group_p(data->gid1))
-                rec->lk_suppgid1 = data->gid1;
-        else
-                rec->lk_suppgid1 = -1;
-        if (in_group_p(data->gid2))
-                rec->lk_suppgid2 = data->gid2;
-        else
-                rec->lk_suppgid2 = -1;
-        ll_ino2fid(&rec->lk_fid1, data->ino1, data->gen1, data->typ1);
-        ll_ino2fid(&rec->lk_fid2, data->ino2, data->gen2, data->typ2);
+        rec->lk_suppgid1 = data->ctxt.gid1;
+        rec->lk_suppgid2 = data->ctxt.gid2;
+        rec->lk_fid1 = data->fid1;
+        rec->lk_fid2 = data->fid2;
 
         tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1, data->namelen + 1);
         LOGL0(data->name, data->namelen, tmp);
@@ -249,16 +229,16 @@ void mdc_rename_pack(struct ptlrpc_request *req, int offset,
         rec->rn_fsuid = current->fsuid;
         rec->rn_fsgid = current->fsgid;
         rec->rn_cap = current->cap_effective;
-        if (in_group_p(data->gid1))
-                rec->rn_suppgid1 = data->gid1;
+        if (in_group_p(data->ctxt.gid1))
+                rec->rn_suppgid1 = data->ctxt.gid1;
         else
                 rec->rn_suppgid1 = -1;
-        if (in_group_p(data->gid2))
-                rec->rn_suppgid2 = data->gid2;
+        if (in_group_p(data->ctxt.gid2))
+                rec->rn_suppgid2 = data->ctxt.gid2;
         else
                 rec->rn_suppgid2 = -1;
-        ll_ino2fid(&rec->rn_fid1, data->ino1, data->gen1, data->typ1);
-        ll_ino2fid(&rec->rn_fid2, data->ino2, data->gen2, data->typ2);
+        rec->rn_fid1 = data->fid1;
+        rec->rn_fid2 = data->fid2;
 
         tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1, oldlen + 1);
         LOGL0(old, oldlen, tmp);
@@ -280,12 +260,9 @@ void mdc_getattr_pack(struct ptlrpc_request *req, int valid, int offset,
         b->capability = current->cap_effective;
         b->valid = valid;
         b->flags = flags;
-        if (in_group_p(data->gid1))
-                b->suppgid = data->gid1;
-        else
-                b->suppgid = -1;
+        b->suppgid = data->ctxt.gid1;
 
-        ll_ino2fid(&b->fid1, data->ino1, data->gen1, data->typ1);
+        b->fid1 = data->fid1;
         if (data->name) {
                 char *tmp;
                 tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1,
