@@ -1,7 +1,29 @@
+Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/MAINTAINERS
+===================================================================
+--- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/MAINTAINERS	2004-11-18 20:59:11.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/MAINTAINERS	2004-11-18 23:25:15.000000000 -0500
+@@ -1199,6 +1199,17 @@
+ W:	http://www.cse.unsw.edu.au/~neilb/patches/linux-devel/
+ S:	Maintained
+ 
++KEXEC
++P:	Eric Biederman
++P:	Randy Dunlap
++M:	ebiederm@xmission.com
++M:	rddunlap@osdl.org
++W:	http://www.xmission.com/~ebiederm/files/kexec/
++W:	http://developer.osdl.org/rddunlap/kexec/
++L:	linux-kernel@vger.kernel.org
++L:	fastboot@osdl.org
++S:	Maintained
++
+ LANMEDIA WAN CARD DRIVER
+ P:	Andrew Stanley-Jones
+ M:	asj@lanmedia.com
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/x86_64/Kconfig
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/arch/x86_64/Kconfig	2004-11-18 20:59:11.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/x86_64/Kconfig	2004-11-18 20:59:21.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/x86_64/Kconfig	2004-11-18 23:25:15.000000000 -0500
 @@ -411,6 +411,23 @@
  	depends on IA32_EMULATION
  	default y
@@ -26,10 +48,22 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/x86_64/Kconfig
  endmenu
  
  source drivers/Kconfig
+Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/x86_64/kernel/Makefile
+===================================================================
+--- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/arch/x86_64/kernel/Makefile	2004-11-11 10:28:46.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/x86_64/kernel/Makefile	2004-11-18 23:26:29.000000000 -0500
+@@ -19,6 +19,7 @@
+ obj-$(CONFIG_X86_LOCAL_APIC)	+= apic.o  nmi.o
+ obj-$(CONFIG_X86_IO_APIC)	+= io_apic.o mpparse.o \
+ 		genapic.o genapic_cluster.o genapic_flat.o
++obj-$(CONFIG_KEXEC)		+= machine_kexec.o relocate_kernel.o
+ obj-$(CONFIG_PM)		+= suspend.o
+ obj-$(CONFIG_SOFTWARE_SUSPEND)	+= suspend_asm.o
+ obj-$(CONFIG_CPU_FREQ)		+= cpufreq/
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/x86_64/kernel/apic.c
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/arch/x86_64/kernel/apic.c	2004-11-11 10:28:46.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/x86_64/kernel/apic.c	2004-11-18 20:59:21.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/x86_64/kernel/apic.c	2004-11-18 23:25:15.000000000 -0500
 @@ -143,6 +143,36 @@
  		outb(0x70, 0x22);
  		outb(0x00, 0x23);
@@ -70,7 +104,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/x86_64/kernel/apic.c
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/x86_64/kernel/e820.c
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/arch/x86_64/kernel/e820.c	2004-04-03 22:36:53.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/x86_64/kernel/e820.c	2004-11-18 20:59:21.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/x86_64/kernel/e820.c	2004-11-18 23:25:15.000000000 -0500
 @@ -185,8 +185,6 @@
  	int i;
  	for (i = 0; i < e820.nr_map; i++) {
@@ -83,7 +117,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/x86_64/kernel/e820.c
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/x86_64/kernel/i8259.c
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/arch/x86_64/kernel/i8259.c	2004-11-18 20:59:11.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/x86_64/kernel/i8259.c	2004-11-18 20:59:21.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/x86_64/kernel/i8259.c	2004-11-18 23:25:15.000000000 -0500
 @@ -318,6 +318,44 @@
  	}
  }
@@ -132,7 +166,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/x86_64/kernel/i8259.c
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/x86_64/kernel/io_apic.c
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/arch/x86_64/kernel/io_apic.c	2004-11-11 10:28:46.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/x86_64/kernel/io_apic.c	2004-11-18 20:59:21.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/x86_64/kernel/io_apic.c	2004-11-18 23:25:15.000000000 -0500
 @@ -328,7 +328,7 @@
  /*
   * Find the pin to which IRQ[irq] (ISA) is connected
@@ -189,7 +223,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/x86_64/kernel/io_apic.
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/x86_64/kernel/machine_kexec.c
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/arch/x86_64/kernel/machine_kexec.c	1969-12-31 19:00:00.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/x86_64/kernel/machine_kexec.c	2004-11-18 20:59:21.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/x86_64/kernel/machine_kexec.c	2004-11-18 23:25:15.000000000 -0500
 @@ -0,0 +1,246 @@
 +/*
 + * machine_kexec.c - handle transition of Linux booting another kernel
@@ -437,22 +471,10 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/x86_64/kernel/machine_
 +	rnk = (relocate_new_kernel_t) control_code_buffer;
 +	(*rnk)(indirection_page, control_code_buffer, image->start, start_pgtable);
 +}
-Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/x86_64/kernel/Makefile
-===================================================================
---- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/arch/x86_64/kernel/Makefile	2004-11-11 10:28:46.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/x86_64/kernel/Makefile	2004-11-18 21:00:17.000000000 -0500
-@@ -19,6 +19,7 @@
- obj-$(CONFIG_X86_LOCAL_APIC)	+= apic.o  nmi.o
- obj-$(CONFIG_X86_IO_APIC)	+= io_apic.o mpparse.o \
- 		genapic.o genapic_cluster.o genapic_flat.o
-+obj-$(CONFIG_KEXEC)		+= machine_kexec.o relocate_kernel.o
- obj-$(CONFIG_PM)		+= suspend.o
- obj-$(CONFIG_SOFTWARE_SUSPEND)	+= suspend_asm.o
- obj-$(CONFIG_CPU_FREQ)		+= cpufreq/
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/x86_64/kernel/reboot.c
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/arch/x86_64/kernel/reboot.c	2004-04-03 22:37:59.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/x86_64/kernel/reboot.c	2004-11-18 20:59:21.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/x86_64/kernel/reboot.c	2004-11-18 23:25:15.000000000 -0500
 @@ -91,31 +91,6 @@
  		      [target] "b" (WARMBOOT_TRAMP));
  }
@@ -541,7 +563,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/x86_64/kernel/reboot.c
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/x86_64/kernel/relocate_kernel.S
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/arch/x86_64/kernel/relocate_kernel.S	1969-12-31 19:00:00.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/x86_64/kernel/relocate_kernel.S	2004-11-18 20:59:21.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/x86_64/kernel/relocate_kernel.S	2004-11-18 23:25:15.000000000 -0500
 @@ -0,0 +1,141 @@
 +/*
 + * relocate_kernel.S - put the kernel image in place to boot
@@ -687,7 +709,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/x86_64/kernel/relocate
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/asm-x86_64/apicdef.h
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/include/asm-x86_64/apicdef.h	2004-11-11 10:28:46.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/asm-x86_64/apicdef.h	2004-11-18 21:01:31.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/asm-x86_64/apicdef.h	2004-11-18 23:26:05.000000000 -0500
 @@ -32,8 +32,8 @@
  #define			SET_APIC_LOGICAL_ID(x)	(((x)<<24))
  #define			APIC_ALL_CPUS		0xFFu
@@ -710,7 +732,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/asm-x86_64/apicdef.
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/asm-x86_64/kexec.h
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/include/asm-x86_64/kexec.h	1969-12-31 19:00:00.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/asm-x86_64/kexec.h	2004-11-18 20:59:21.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/asm-x86_64/kexec.h	2004-11-18 23:25:15.000000000 -0500
 @@ -0,0 +1,25 @@
 +#ifndef _X86_64_KEXEC_H
 +#define _X86_64_KEXEC_H
@@ -740,19 +762,19 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/asm-x86_64/kexec.h
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/asm-x86_64/unistd.h
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/include/asm-x86_64/unistd.h	2004-11-11 10:28:49.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/asm-x86_64/unistd.h	2004-11-18 21:02:24.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/asm-x86_64/unistd.h	2004-11-18 23:27:18.000000000 -0500
 @@ -551,7 +551,22 @@
  #define __NR_mq_getsetattr 	245
  __SYSCALL(__NR_mq_getsetattr, sys_mq_getsetattr)
  
 -#define __NR_syscall_max __NR_mq_getsetattr
-+#define __#define __NR_mq_open 240
++#define __NR_mq_open 240
 +__SYSCALL(__NR_mq_open, sys_ni_syscall)
 +#define __NR_mq_unlink 241
 +__SYSCALL(__NR_mq_unlink, sys_ni_syscall)
 +#define __NR_mq_timedsend 242
 +__SYSCALL(__NR_mq_timedsend, sys_ni_syscall)
-+#define __NR_mq_timedreceive243
++#define __NR_mq_timedreceive 243
 +__SYSCALL(__NR_mq_timedreceive, sys_ni_syscall)
 +#define __NR_mq_notify 244
 +__SYSCALL(__NR_mq_notify, sys_ni_syscall)
@@ -760,7 +782,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/asm-x86_64/unistd.h
 +__SYSCALL(__NR_mq_getsetattr, sys_ni_syscall)
 +#define __NR_kexec_load 246
 +__SYSCALL(__NR_kexec_load, sys_kexec_load)
-+  
++
 +#define __NR_syscall_max __NR_kexec_load
  #ifndef __NO_STUBS
  
@@ -768,7 +790,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/asm-x86_64/unistd.h
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/linux/kexec.h
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/include/linux/kexec.h	1969-12-31 19:00:00.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/linux/kexec.h	2004-11-18 20:59:21.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/linux/kexec.h	2004-11-18 23:25:15.000000000 -0500
 @@ -0,0 +1,56 @@
 +#ifndef LINUX_KEXEC_H
 +#define LINUX_KEXEC_H
@@ -829,8 +851,24 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/linux/kexec.h
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/linux/reboot.h
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/include/linux/reboot.h	2004-04-03 22:38:27.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/linux/reboot.h	2004-11-18 20:59:21.000000000 -0500
-@@ -49,6 +49,8 @@
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/linux/reboot.h	2004-11-18 23:25:15.000000000 -0500
+@@ -22,6 +22,7 @@
+  * POWER_OFF   Stop OS and remove all power from system, if possible.
+  * RESTART2    Restart system using given command string.
+  * SW_SUSPEND  Suspend system using software suspend if compiled in.
++ * KEXEC       Restart system using a previously loaded Linux kernel
+  */
+ 
+ #define	LINUX_REBOOT_CMD_RESTART	0x01234567
+@@ -31,6 +32,7 @@
+ #define	LINUX_REBOOT_CMD_POWER_OFF	0x4321FEDC
+ #define	LINUX_REBOOT_CMD_RESTART2	0xA1B2C3D4
+ #define	LINUX_REBOOT_CMD_SW_SUSPEND	0xD000FCE2
++#define LINUX_REBOOT_CMD_KEXEC          0x45584543
+ 
+ 
+ #ifdef __KERNEL__
+@@ -49,6 +51,8 @@
  extern void machine_halt(void);
  extern void machine_power_off(void);
  
@@ -839,10 +877,43 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/linux/reboot.h
  #endif
  
  #endif /* _LINUX_REBOOT_H */
+Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/linux/syscalls.h
+===================================================================
+--- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/include/linux/syscalls.h	2004-11-11 10:28:49.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/linux/syscalls.h	2004-11-18 23:25:15.000000000 -0500
+@@ -19,6 +19,7 @@
+ struct iovec;
+ struct itimerspec;
+ struct itimerval;
++struct kexec_segment;
+ struct linux_dirent;
+ struct linux_dirent64;
+ struct list_head;
+@@ -154,6 +155,8 @@
+ asmlinkage long sys_reboot(int magic1, int magic2, unsigned int cmd,
+ 				void __user *arg);
+ asmlinkage long sys_restart_syscall(void);
++asmlinkage long sys_kexec_load(void *entry, unsigned long nr_segments,
++			      struct kexec_segment *segments, unsigned long flags);
+ 
+ asmlinkage long sys_exit(int error_code);
+ asmlinkage void sys_exit_group(int error_code);
+Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/kernel/Makefile
+===================================================================
+--- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/kernel/Makefile	2004-11-11 10:28:43.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/kernel/Makefile	2004-11-18 23:25:15.000000000 -0500
+@@ -17,6 +17,7 @@
+ obj-$(CONFIG_KALLSYMS) += kallsyms.o
+ obj-$(CONFIG_PM) += power/
+ obj-$(CONFIG_BSD_PROCESS_ACCT) += acct.o
++obj-$(CONFIG_KEXEC) += kexec.o
+ obj-$(CONFIG_COMPAT) += compat.o
+ obj-$(CONFIG_PAGG) += pagg.o
+ obj-$(CONFIG_IKCONFIG) += configs.o
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/kernel/kexec.c
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/kernel/kexec.c	1969-12-31 19:00:00.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/kernel/kexec.c	2004-11-18 20:59:21.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/kernel/kexec.c	2004-11-18 23:25:15.000000000 -0500
 @@ -0,0 +1,640 @@
 +/*
 + * kexec.c - kexec system call
@@ -1484,22 +1555,10 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/kernel/kexec.c
 +	kimage_free(image);
 +	return result;
 +}
-Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/kernel/Makefile
-===================================================================
---- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/kernel/Makefile	2004-11-11 10:28:43.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/kernel/Makefile	2004-11-18 20:59:21.000000000 -0500
-@@ -17,6 +17,7 @@
- obj-$(CONFIG_KALLSYMS) += kallsyms.o
- obj-$(CONFIG_PM) += power/
- obj-$(CONFIG_BSD_PROCESS_ACCT) += acct.o
-+obj-$(CONFIG_KEXEC) += kexec.o
- obj-$(CONFIG_COMPAT) += compat.o
- obj-$(CONFIG_PAGG) += pagg.o
- obj-$(CONFIG_IKCONFIG) += configs.o
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/kernel/sys.c
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/kernel/sys.c	2004-11-11 10:28:49.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/kernel/sys.c	2004-11-18 20:59:21.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/kernel/sys.c	2004-11-18 23:25:15.000000000 -0500
 @@ -17,6 +17,8 @@
  #include <linux/init.h>
  #include <linux/highuid.h>
@@ -1542,25 +1601,3 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/kernel/sys.c
  #ifdef CONFIG_SOFTWARE_SUSPEND
  	case LINUX_REBOOT_CMD_SW_SUSPEND:
  		{
-Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/MAINTAINERS
-===================================================================
---- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/MAINTAINERS	2004-11-18 20:59:11.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/MAINTAINERS	2004-11-18 20:59:21.000000000 -0500
-@@ -1199,6 +1199,17 @@
- W:	http://www.cse.unsw.edu.au/~neilb/patches/linux-devel/
- S:	Maintained
- 
-+KEXEC
-+P:	Eric Biederman
-+P:	Randy Dunlap
-+M:	ebiederm@xmission.com
-+M:	rddunlap@osdl.org
-+W:	http://www.xmission.com/~ebiederm/files/kexec/
-+W:	http://developer.osdl.org/rddunlap/kexec/
-+L:	linux-kernel@vger.kernel.org
-+L:	fastboot@osdl.org
-+S:	Maintained
-+
- LANMEDIA WAN CARD DRIVER
- P:	Andrew Stanley-Jones
- M:	asj@lanmedia.com
