@@ -84,7 +84,7 @@ diff -ru lum-2.4.18-um30/fs/ext3/balloc.c uml-2.4.18-12.5/fs/ext3/balloc.c
  	/*
  	 * First, test whether the goal block is free.
  	 */
-@@ -684,16 +686,21 @@
+@@ -684,10 +686,21 @@
  	if (tmp == le32_to_cpu(gdp->bg_block_bitmap) ||
  	    tmp == le32_to_cpu(gdp->bg_inode_bitmap) ||
  	    in_range (tmp, le32_to_cpu(gdp->bg_inode_table),
