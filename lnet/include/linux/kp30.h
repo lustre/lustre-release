@@ -83,8 +83,10 @@ extern unsigned int portal_printk;
 #ifndef __KERNEL__
 #define THREAD_SIZE 8192
 #endif
-#ifdef  __arch_ia64__
-#define CDEBUG_STACK() ((unsigned long)__builtin_dwarf_cfa()&(THREAD_SIZE - 1))
+#ifdef  __ia64__
+#define CDEBUG_STACK() (THREAD_SIZE -                                      \
+                        ((unsigned long)__builtin_dwarf_cfa() &            \
+                         (THREAD_SIZE - 1)))
 #else
 #define CDEBUG_STACK() (THREAD_SIZE -                                      \
                         ((unsigned long)__builtin_frame_address(0) &       \
@@ -265,7 +267,7 @@ do {                                                                      \
         if (s > PORTAL_VMALLOC_SIZE)                                      \
                 (ptr) = vmalloc(s);                                       \
         else                                                              \
-                (ptr) = kmalloc(s, GFP_KERNEL);                           \
+                (ptr) = kmalloc(s, GFP_NOFS);                             \
         if ((ptr) == NULL)                                                \
                 CERROR("PORTALS: out of memory at %s:%d (tried to alloc"  \
                        " '" #ptr "' = %ld)\n", __FILE__, __LINE__, s);    \
@@ -465,8 +467,8 @@ kpr_lookup (kpr_router_t *router, ptl_nid_t nid, ptl_nid_t *gateway_nid)
 }
 
 static inline void
-kpr_fwd_init (kpr_fwd_desc_t *fwd, ptl_nid_t nid, 
-              int nob, int niov, struct iovec *iov, 
+kpr_fwd_init (kpr_fwd_desc_t *fwd, ptl_nid_t nid,
+              int nob, int niov, struct iovec *iov,
               kpr_fwd_callback_t callback, void *callback_arg)
 {
         fwd->kprfd_target_nid   = nid;
@@ -610,7 +612,7 @@ extern void kportal_blockallsigs (void);
 # ifdef PORTAL_DEBUG
 #  undef NDEBUG
 #  include <assert.h>
-#  define LASSERT(e)	assert(e)
+#  define LASSERT(e)     assert(e)
 # else
 #  define LASSERT(e)
 # endif
@@ -914,7 +916,7 @@ void kportal_put_ni (int nal);
 #ifndef BITS_PER_LONG
 #if (~0UL) == 0xffffffffUL
 #define BITS_PER_LONG 32
-#else 
+#else
 #define BITS_PER_LONG 64
 #endif
 #endif

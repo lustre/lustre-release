@@ -522,7 +522,7 @@ ktoenal_module_init (void)
                 LASSERT (fmb->fmb_npages > 0);
                 for (j = 0; j < fmb->fmb_npages; j++)
                 {
-                        fmb->fmb_pages[j] = alloc_page (GFP_KERNEL);
+                        fmb->fmb_pages[j] = alloc_page(GFP_KERNEL);
 
                         if (fmb->fmb_pages[j] == NULL)
                         {

@@ -95,10 +95,8 @@ nal_t *
 ksocknal_init(int interface, ptl_pt_index_t ptl_size,
               ptl_ac_index_t ac_size, ptl_pid_t requested_pid)
 {
-        CDEBUG(D_NET, "calling lib_init with nid "LPX64"\n",
-               ksocknal_data.ksnd_mynid);
-        lib_init(&ksocknal_lib, ksocknal_data.ksnd_mynid, 0, 10, ptl_size,
-                 ac_size);
+        CDEBUG(D_NET, "calling lib_init with nid "LPX64"\n", (ptl_nid_t)0);
+        lib_init(&ksocknal_lib, (ptl_nid_t)0, 0, 10, ptl_size, ac_size);
         return (&ksocknal_api);
 }
 
@@ -129,7 +127,6 @@ ksocknal_set_mynid(ptl_nid_t nid)
         CDEBUG(D_IOCTL, "setting mynid to "LPX64" (old nid="LPX64")\n",
                nid, ni->nid);
 
-        ksocknal_data.ksnd_mynid = nid;
         ni->nid = nid;
         return (0);
 }
@@ -190,7 +187,7 @@ ksocknal_add_sock (ptl_nid_t nid, int fd, int bind_irq)
         if (!conn)
                 GOTO(error, ret);
 
-        memset (conn, 0, sizeof (conn));        /* zero for consistency */
+        sock->sk->allocation = GFP_NOFS;    /* don't call info fs for alloc */
 
         conn->ksnc_file = file;
         conn->ksnc_sock = sock;
@@ -818,7 +815,7 @@ ksocknal_module_init (void)
 
                         LASSERT (fmb->fmb_npages > 0);
                         for (j = 0; j < fmb->fmb_npages; j++) {
-                                fmb->fmb_pages[j] = alloc_page (GFP_KERNEL);
+                                fmb->fmb_pages[j] = alloc_page(GFP_KERNEL);
 
                                 if (fmb->fmb_pages[j] == NULL) {
                                         ksocknal_module_fini ();

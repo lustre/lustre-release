@@ -106,7 +106,6 @@ typedef struct {
         struct list_head  ksnd_socklist;        /* all my connections */
         rwlock_t          ksnd_socklist_lock;   /* stabilise add/find/remove */
 
-        ptl_nid_t         ksnd_mynid;
         nal_cb_t         *ksnd_nal_cb;
         spinlock_t        ksnd_nal_cb_lock;     /* lib cli/sti lock */
 
