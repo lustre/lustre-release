@@ -152,7 +152,7 @@ static inline int lustre_cfg_unpack(struct lustre_cfg *data, char *pbuf,
 
 #include <linux/obd_support.h>
 
-static inline int lustre_cfg_getdata(char **buf, int len, void *arg)
+static inline int lustre_cfg_getdata(char **buf, int len, void *arg, int kernel)
 {
         struct lustre_cfg *lcfg;
         int err;
@@ -171,19 +171,21 @@ static inline int lustre_cfg_getdata(char **buf, int len, void *arg)
 
         /* XXX allocate this more intelligently, using kmalloc when
          * appropriate */
-        OBD_VMALLOC(*buf, len);
+        OBD_ALLOC(*buf, len);
         if (*buf == NULL) {
                 CERROR("Cannot allocate control buffer of len %d\n", len);
                 RETURN(-EINVAL);
         }
-        lcfg = (struct lustre_cfg *)*buf;
 
-        err = copy_from_user(*buf, (void *)arg, len);
-        if ( err ) {
-                EXIT;
-                return err;
+        if (kernel) {
+                memcpy(*buf, (void *)arg, len);
+        } else {
+                err = copy_from_user(*buf, (void *)arg, len);
+                if (err) 
+                        RETURN(err);
         }
 
+        lcfg = (struct lustre_cfg *)*buf;
 
         if (lcfg->lcfg_version != LUSTRE_CFG_VERSION) {
                 CERROR("Version mismatch kernel vs application\n");
@@ -227,7 +229,7 @@ static inline void lustre_cfg_freedata(char *buf, int len)
 {
         ENTRY;
 
-        OBD_VFREE(buf, len);
+        OBD_FREE(buf, len);
         EXIT;
         return;
 }

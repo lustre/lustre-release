@@ -96,8 +96,10 @@ int class_attach(struct lustre_cfg *lcfg)
         }
         
         obd = class_name2obd(name);
-        if (obd != NULL)
+        if (obd != NULL) {
+                CERROR("obd %s already attached\n", name);
                 RETURN(-EEXIST);
+        }
 
 	obd = class_newdev(&dev);
 	if (dev == -1)
@@ -388,15 +390,12 @@ void class_del_profile(char *prof)
         }
 }
 
-int class_process_config(int len, char *data)
+int class_process_config(struct lustre_cfg *lcfg)
 {
-        char *buf;
 	struct obd_device *obd;
-        struct lustre_cfg *lcfg;
         int err;
 
-        lustre_cfg_getdata(&buf, len, data);
-        lcfg = (struct lustre_cfg* ) buf;
+        LASSERT(lcfg && !IS_ERR(lcfg));
 
         CDEBUG(D_IOCTL, "processing cmd: %x\n", lcfg->lcfg_command);
 
@@ -470,7 +469,6 @@ int class_process_config(int len, char *data)
         }
 	}
 out:
-        lustre_cfg_freedata(buf, len);
         RETURN(err);
 }
 	    

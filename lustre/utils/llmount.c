@@ -48,28 +48,17 @@ update_mtab_entry(char *spec, char *node, char *type, char *opts,
         mnt.mnt_freq = freq;
         mnt.mnt_passno = pass;
       
-        /* We get chatty now rather than after the update to mtab since the
-           mount succeeded, even if the write to /etc/mtab should fail.  */
-//        if (verbose)
-//                print_one (&mnt);
-
         if (!nomtab) {
-                if (flags & MS_REMOUNT) {
-//                        update_mtab (mnt.mnt_dir, &mnt);
-                        ;
+                fp = setmntent(MOUNTED, "a+");
+                if (fp == NULL) {
+                        fprintf(stderr, "setmntent(%s): %s:", MOUNTED, 
+                                strerror (errno));
                 } else {
-                        fp = setmntent(MOUNTED, "a+");
-                        if (fp == NULL) {
-                                fprintf(stderr, "setmntent(%s): %s:", 
-                                        MOUNTED,
+                        if ((addmntent (fp, &mnt)) == 1) {
+                                fprintf(stderr, "addmntent: %s:", 
                                         strerror (errno));
-                        } else {
-                                if ((addmntent (fp, &mnt)) == 1) {
-                                        fprintf(stderr, "addmntent: %s:", 
-                                                strerror (errno));
-                                }
-                                endmntent(fp);
                         }
+                        endmntent(fp);
                 }
         }
 }
