@@ -877,11 +877,6 @@ out:
         RETURN(rc);
 }
 
-static int getattr_done(struct lov_request_set *set)
-{
-        return common_attr_done(set);
-}
-
 int lov_fini_getattr_set(struct lov_request_set *set)
 {
         int rc = 0;
@@ -891,7 +886,7 @@ int lov_fini_getattr_set(struct lov_request_set *set)
         if (set == NULL)
                 RETURN(0);
         if (set->set_completes)
-                rc = getattr_done(set);
+                rc = common_attr_done(set);
 
         if (atomic_dec_and_test(&set->set_refcount))
                 lov_finish_set(set);
@@ -1029,11 +1024,6 @@ out_set:
         RETURN(rc);
 }
 
-static int setattr_done(struct lov_request_set *set)
-{
-        return common_attr_done(set);
-}
-
 int lov_fini_setattr_set(struct lov_request_set *set)
 {
         int rc = 0;
@@ -1043,7 +1033,7 @@ int lov_fini_setattr_set(struct lov_request_set *set)
         if (set == NULL)
                 RETURN(0);
         if (set->set_completes) {
-                rc = setattr_done(set);
+                rc = common_attr_done(set);
                 /* FIXME update qos data here */
         }
 
@@ -1108,6 +1098,28 @@ int lov_prep_setattr_set(struct obd_export *exp, struct obdo *src_oa,
         RETURN(rc);
 out_set:
         lov_fini_setattr_set(set);
+        RETURN(rc);
+}
+
+int lov_update_setattr_set(struct lov_request_set *set,
+                           struct lov_request *req, int rc)
+{
+        struct lov_obd *lov = &set->set_exp->exp_obd->u.lov;
+        ENTRY;
+
+        lov_update_set(set, req, rc);
+
+        /* grace error on inactive ost */
+        if (rc && !lov->tgts[req->rq_idx].active)
+                rc = 0;
+
+        /* FIXME: LOV STACKING update loi data should be done by OSC *
+         * when this is gone we can go back to using lov_update_common_set() */
+        if (rc == 0 && req->rq_oa->o_valid & OBD_MD_FLMTIME)
+                set->set_md->lsm_oinfo[req->rq_stripe].loi_mtime =
+                        req->rq_oa->o_mtime;
+        /* ditto loi_atime, loi_ctime when available */
+
         RETURN(rc);
 }
 

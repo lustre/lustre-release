@@ -25,6 +25,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- fix "lfs check" to not block when the MDS is down (5628)
 	- don't LASSERT in ll_release on NULL lld with NFS export (4655, 5760)
 	- hold NS lock when calling handle_ast_error->del_waiting_lock (5746)
+	- fix setattr mtime regression from lovcleanup merge (4829, 5669)
        * miscellania
 	- service request history (4965)
 	- put {ll,lov,osc}_async_page structs in a single slab (4699)

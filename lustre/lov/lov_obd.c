@@ -737,10 +737,10 @@ static int lov_setattr(struct obd_export *exp, struct obdo *src_oa,
 
         list_for_each (pos, &set->set_list) {
                 req = list_entry(pos, struct lov_request, rq_link);
-                
+
                 rc = obd_setattr(lov->tgts[req->rq_idx].ltd_exp, req->rq_oa,
                                  NULL, NULL);
-                err = lov_update_common_set(set, req, rc);
+                err = lov_update_setattr_set(set, req, rc);
                 if (err) {
                         CERROR("error: setattr objid "LPX64" subobj "
                                LPX64" on OST idx %d: rc = %d\n",
