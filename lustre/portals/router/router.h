@@ -50,12 +50,19 @@ typedef struct
 
 typedef struct
 {
+        struct list_head        kpge_list;
+        atomic_t                kpge_weight;
+        struct timeval          kpge_timestamp;
+        int                     kpge_alive;
+        int                     kpge_nalid;
+        int                     kpge_refcount;
+        ptl_nid_t               kpge_nid;
+} kpr_gateway_entry_t;
+
+typedef struct
+{
 	struct list_head   	kpre_list;
-        atomic_t                kpre_weight;
-        int                     kpre_gateway_alive;
-	int                     kpre_gateway_nalid;
-        int                     kpre_refcount;
-	ptl_nid_t           	kpre_gateway_nid;
+        kpr_gateway_entry_t    *kpre_gateway;
 	ptl_nid_t           	kpre_lo_nid;
         ptl_nid_t               kpre_hi_nid;
 } kpr_route_entry_t;
@@ -74,7 +81,7 @@ extern void kpr_proc_fini (void);
 extern int kpr_add_route (int gateway_nal, ptl_nid_t gateway_nid, 
                           ptl_nid_t lo_nid, ptl_nid_t hi_nid);
 extern int kpr_del_route (ptl_nid_t gw, ptl_nid_t lo, ptl_nid_t hi);
-extern int kpr_set_route (ptl_nid_t gw, int alive);
+extern int kpr_set_route (ptl_nid_t gw, int alive, struct timeval when);
 extern int kpr_get_route (int idx, int *gateway_nal, ptl_nid_t *gateway_nid, 
                           ptl_nid_t *lo_nid, ptl_nid_t *hi_nid, int *alive);
 
