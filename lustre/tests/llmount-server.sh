@@ -29,5 +29,11 @@ setup ${OST}
 device 2
 attach ost
 setup 1
+device 3
+attach ptlrpc
+setup
+device 4
+attach ldlm
+setup
 quit
 EOF

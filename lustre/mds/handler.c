@@ -510,6 +510,9 @@ static int mds_setup(struct obd_device *obddev, obd_count len, void *buf)
 #ifdef CONFIG_DEV_RDONLY
         dev_clear_rdonly(2);
 #endif
+        if (!data->ioc_inlbuf1 || !data->ioc_inlbuf2)
+                RETURN(-EINVAL);
+
         mds->mds_fstype = strdup(data->ioc_inlbuf2);
 
         if (!strcmp(mds->mds_fstype, "ext3"))

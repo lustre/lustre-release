@@ -28,7 +28,6 @@
 #include <linux/obd_class.h>
 #include <portals/p30.h>
 #include <linux/lustre_idl.h>
-#include <linux/lustre_ha.h>
 
 /* FOO_REQUEST_PORTAL is for incoming requests on the FOO
  * FOO_REPLY_PORTAL   is for incoming replies on the FOO

@@ -21,18 +21,17 @@
  */
 
 #define EXPORT_SYMTAB
-
 #define DEBUG_SUBSYSTEM S_RPC
 
 #include <linux/lustre_net.h>
 
 extern int request_in_callback(ptl_event_t *ev, void *data);
 extern int ptl_handled_rpc(struct ptlrpc_service *service, void *start);
-extern int connmgr_handle_event(struct obd_device *dev, struct ptlrpc_service *);
 
 static int ptlrpc_check_event(struct ptlrpc_service *svc)
 {
         int rc = 0;
+        ENTRY;
 
         spin_lock(&svc->srv_lock);
         if (sigismember(&(current->pending.signal), SIGKILL) ||
@@ -75,6 +74,7 @@ ptlrpc_init_svc(__u32 bufsize, int req_portal, int rep_portal, char *uuid,
         int err;
         int rc, i;
         struct ptlrpc_service *service;
+        ENTRY;
 
         OBD_ALLOC(service, sizeof(*service));
         if (!service) {
@@ -105,8 +105,7 @@ ptlrpc_init_svc(__u32 bufsize, int req_portal, int rep_portal, char *uuid,
         service->srv_id.nid = PTL_ID_ANY;
         service->srv_id.pid = PTL_ID_ANY;
 
-        rc = PtlEQAlloc(service->srv_self.peer_ni, 128,
-                        request_in_callback,
+        rc = PtlEQAlloc(service->srv_self.peer_ni, 128, request_in_callback,
                         service, &(service->srv_eq_h));
 
         if (rc != PTL_OK) {
@@ -129,7 +128,7 @@ ptlrpc_init_svc(__u32 bufsize, int req_portal, int rep_portal, char *uuid,
         CDEBUG(D_NET, "Starting service listening on portal %d\n",
                service->srv_req_portal);
 
-        return service;
+        RETURN(service);
 err_ring:
         service->srv_ring_length = i;
         rpc_unregister_service(service); // XXX verify this is right
@@ -166,10 +165,6 @@ static int handle_incoming_request(struct obd_device *obddev,
          * We don't know how to find that from here. */
         peer.peer_ni = svc->srv_self.peer_ni;
 
-        /* FIXME: rq_reqmsg->conn should be, if nonzero, the local connection
-         * structure.  Until we have the HA connect messages that we talked
-         * about, however, we don't have a way to exchange that address/token
-         * pair and this will always be zero. */
         if (request.rq_reqmsg->conn) {
                 request.rq_connection =
                         (void *)(unsigned long)request.rq_reqmsg->conn;

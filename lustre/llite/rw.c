@@ -191,8 +191,7 @@ static int ll_readpage(struct file *file, struct page *page)
         if (!PageLocked(page))
                 LBUG();
 
-        if ( ((inode->i_size + PAGE_CACHE_SIZE -1)>>PAGE_SHIFT)
-             <= page->index) {
+        if (((inode->i_size + PAGE_CACHE_SIZE -1)>>PAGE_SHIFT) <= page->index) {
                 memset(kmap(page), 0, PAGE_CACHE_SIZE);
                 kunmap(page);
                 GOTO(readpage_out, rc);

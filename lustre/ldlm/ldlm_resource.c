@@ -10,21 +10,12 @@
  */
 
 #define EXPORT_SYMTAB
-
-#include <linux/version.h>
-#include <linux/module.h>
-#include <linux/slab.h>
-#include <asm/unistd.h>
-
 #define DEBUG_SUBSYSTEM S_LDLM
 
-#include <linux/obd_support.h>
-#include <linux/obd_class.h>
-
+#include <linux/slab.h>
 #include <linux/lustre_dlm.h>
 
-kmem_cache_t *ldlm_resource_slab;
-kmem_cache_t *ldlm_lock_slab;
+kmem_cache_t *ldlm_resource_slab, *ldlm_lock_slab;
 
 struct list_head ldlm_namespaces;
 spinlock_t ldlm_spinlock;

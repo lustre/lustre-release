@@ -31,12 +31,15 @@ device 2
 attach ost
 setup 1
 device 3
-attach osc
-setup -1
-device 4
 attach ptlrpc
 setup
+device 4
+attach ldlm
+setup
+device 5
+attach osc
+setup -1
 quit
 EOF
 
-mount -t lustre_lite -o device=3 none /mnt/lustre
+mount -t lustre_lite -o device=5 none /mnt/lustre

@@ -1,9 +1,11 @@
-/* object based disk file system
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
+ *
+ * object based disk file system
  * 
  * This code is issued under the GNU General Public License.
  * See the file COPYING in this distribution
  * 
- *
  *
  *
 
@@ -12,6 +14,7 @@
 #ifndef _LL_H
 #define _LL_H
 
+#include <linux/fs.h>
 #include <linux/ext2_fs.h>
 
 #include <linux/lustre_net.h>
@@ -99,4 +102,3 @@ void ll_sysctl_init(void);
 void ll_sysctl_clean(void);
 
 #endif
-

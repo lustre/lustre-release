@@ -270,6 +270,9 @@ static int filter_setup(struct obd_device *obddev, obd_count len, void *buf)
         int err = 0;
         ENTRY;
 
+        if (!data->ioc_inlbuf1 || !data->ioc_inlbuf2)
+                RETURN(-EINVAL);
+
         MOD_INC_USE_COUNT;
         mnt = do_kern_mount(data->ioc_inlbuf2, 0, data->ioc_inlbuf1, NULL);
         err = PTR_ERR(mnt);

@@ -24,8 +24,7 @@
 
 #define DEBUG_SUBSYSTEM S_RPC
 
-#include <linux/lustre_net.h>
-
+#include <linux/lustre_ha.h>
 
 void ptlrpc_init_client(struct connmgr_obd *mgr, int req_portal,
                         int rep_portal, struct ptlrpc_client *cl)

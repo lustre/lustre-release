@@ -10,6 +10,9 @@ rmmod llite
 rmmod mdc
 
 $OBDCTL <<EOF
+device 5
+cleanup
+detach
 device 4
 cleanup
 detach

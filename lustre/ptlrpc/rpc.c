@@ -26,18 +26,10 @@
 
 #define DEBUG_SUBSYSTEM S_RPC
 
-#include <linux/lustre_net.h>
-
-extern int connmgr_handle(struct obd_device *dev,
-                          struct ptlrpc_service *svc,
-                          struct ptlrpc_request *req);
+#include <linux/lustre_ha.h>
 
 extern int ptlrpc_init_portals(void);
 extern void ptlrpc_exit_portals(void);
-
-extern int recovd_setup(struct connmgr_obd *mgr);
-extern int recovd_cleanup(struct connmgr_obd *mgr);
-
 
 int connmgr_setup(struct obd_device *obddev, obd_count len, void *buf)
 {
@@ -55,9 +47,9 @@ int connmgr_setup(struct obd_device *obddev, obd_count len, void *buf)
         if (err)
                 GOTO(err_free, err);
 
-        mgr->mgr_service = ptlrpc_init_svc
-                (128 * 1024,CONNMGR_REQUEST_PORTAL, CONNMGR_REPLY_PORTAL,
-                 "self", connmgr_handle);
+        mgr->mgr_service =
+                ptlrpc_init_svc(128 * 1024,CONNMGR_REQUEST_PORTAL,
+                                CONNMGR_REPLY_PORTAL, "self", connmgr_handle);
         if (!mgr->mgr_service) {
                 CERROR("failed to start service\n");
                 GOTO(err_recovd, err = -EINVAL);
@@ -86,7 +78,6 @@ int connmgr_setup(struct obd_device *obddev, obd_count len, void *buf)
         RETURN(err);
 }
 
-
 int connmgr_cleanup(struct obd_device *dev)
 {
         struct connmgr_obd *mgr = &dev->u.mgr;
@@ -106,7 +97,7 @@ int connmgr_cleanup(struct obd_device *dev)
         OBD_FREE(mgr->mgr_service, sizeof(*mgr->mgr_service));
         mgr->mgr_flags = MGR_STOPPING;
 
-        PORTAL_FREE(mgr->mgr_client, sizeof(*mgr->mgr_client));
+        OBD_FREE(mgr->mgr_client, sizeof(*mgr->mgr_client));
         MOD_DEC_USE_COUNT;
         RETURN(0);
 }

@@ -15,50 +15,37 @@
  */
 
 #define EXPORT_SYMTAB
-
-#include <linux/version.h>
-#include <linux/module.h>
-#include <linux/fs.h>
-#include <linux/stat.h>
-#include <linux/locks.h>
-#include <linux/kmod.h>
-#include <linux/quotaops.h>
-#include <asm/unistd.h>
-#include <asm/uaccess.h>
-
 #define DEBUG_SUBSYSTEM S_RPC
 
+#include <linux/kmod.h>
 #include <linux/lustre_lite.h>
 #include <linux/lustre_ha.h>
-#include <linux/lustre_lib.h>
-#include <linux/lustre_net.h>
 
-struct connmgr_obd *ptlrpc_connmgr; 
+struct connmgr_obd *ptlrpc_connmgr;
 
 void connmgr_cli_manage(struct connmgr_obd *mgr, struct ptlrpc_client *cli)
 {
         ENTRY;
         cli->cli_ha_mgr = mgr;
         spin_lock(&mgr->mgr_lock);
-        list_add(&cli->cli_ha_item, &mgr->mgr_connections_lh); 
-        spin_unlock(&mgr->mgr_lock); 
+        list_add(&cli->cli_ha_item, &mgr->mgr_connections_lh);
+        spin_unlock(&mgr->mgr_lock);
         EXIT;
 }
-
 
 void connmgr_cli_fail(struct ptlrpc_client *cli)
 {
         ENTRY;
-        spin_lock(&cli->cli_ha_mgr->mgr_lock); 
+        spin_lock(&cli->cli_ha_mgr->mgr_lock);
         cli->cli_ha_mgr->mgr_flags |= SVC_HA_EVENT;
         list_del(&cli->cli_ha_item);
-        list_add(&cli->cli_ha_item, &cli->cli_ha_mgr->mgr_troubled_lh); 
-        spin_unlock(&cli->cli_ha_mgr->mgr_lock); 
+        list_add(&cli->cli_ha_item, &cli->cli_ha_mgr->mgr_troubled_lh);
+        spin_unlock(&cli->cli_ha_mgr->mgr_lock);
         wake_up(&cli->cli_ha_mgr->mgr_waitq);
         EXIT;
 }
 
-int connmgr_upcall(void)
+static int connmgr_upcall(void)
 {
         char *argv[2];
         char *envp[3];
@@ -82,8 +69,7 @@ static void connmgr_unpack_body(struct ptlrpc_request *req)
         b->generation = NTOH__u32(b->generation);
 }
 
-int connmgr_connect(struct connmgr_obd *mgr, 
-                    struct ptlrpc_connection *conn)
+int connmgr_connect(struct connmgr_obd *mgr, struct ptlrpc_connection *conn)
 {
         struct ptlrpc_request *req;
         struct ptlrpc_client *cl;
@@ -91,8 +77,8 @@ int connmgr_connect(struct connmgr_obd *mgr,
         int rc, size = sizeof(*body);
         ENTRY;
 
-        if (!mgr) { 
-                CERROR("no manager\n"); 
+        if (!mgr) {
+                CERROR("no manager\n");
                 LBUG();
         }
         cl = mgr->mgr_client;
@@ -103,25 +89,28 @@ int connmgr_connect(struct connmgr_obd *mgr,
 
         body = lustre_msg_buf(req->rq_reqmsg, 0);
         body->generation = HTON__u32(conn->c_generation);
+        body->conn = (__u64)(unsigned long)conn;
+        body->conn_token = conn->c_token;
 
         req->rq_replen = lustre_msg_size(1, &size);
 
         rc = ptlrpc_queue_wait(req);
         rc = ptlrpc_check_status(req, rc);
-
         if (!rc) {
                 connmgr_unpack_body(req);
                 body = lustre_msg_buf(req->rq_repmsg, 0);
                 CDEBUG(D_NET, "mode: %o\n", body->generation);
+                conn->c_remote_conn = body->conn;
+                conn->c_remote_token = body->conn_token;
         }
 
+        ptlrpc_free_req(req);
         EXIT;
  out:
         return rc;
 }
 
-
-int connmgr_handle_connect(struct ptlrpc_request *req)
+static int connmgr_handle_connect(struct ptlrpc_request *req)
 {
         struct connmgr_body *body;
         int rc, size = sizeof(*body);
@@ -135,36 +124,41 @@ int connmgr_handle_connect(struct ptlrpc_request *req)
         }
 
         body = lustre_msg_buf(req->rq_reqmsg, 0);
-        connmgr_unpack_body(req); 
+        connmgr_unpack_body(req);
 
-        printk("incoming generation %d\n", body->generation);
+        req->rq_connection->c_remote_conn = body->conn;
+        req->rq_connection->c_remote_token = body->conn_token;
+
+        CERROR("incoming generation %d\n", body->generation);
         body = lustre_msg_buf(req->rq_repmsg, 0);
         body->generation = 4711;
+        body->conn = (__u64)(unsigned long)req->rq_connection;
+        body->conn_token = req->rq_connection->c_token;
+
         RETURN(0);
 }
 
-int connmgr_handle(struct obd_device *dev,
-                   struct ptlrpc_service *svc,
+int connmgr_handle(struct obd_device *dev, struct ptlrpc_service *svc,
                    struct ptlrpc_request *req)
 {
         int rc;
         ENTRY;
 
         rc = lustre_unpack_msg(req->rq_reqmsg, req->rq_reqlen);
-        if (rc) { 
-                CERROR("lustre_mds: Invalid request\n");
+        if (rc) {
+                CERROR("Invalid request\n");
                 GOTO(out, rc);
         }
 
         if (req->rq_reqmsg->type != PTL_RPC_REQUEST) {
-                CERROR("lustre_mds: wrong packet type sent %d\n",
+                CERROR("wrong packet type sent %d\n",
                        req->rq_reqmsg->type);
                 GOTO(out, rc = -EINVAL);
         }
 
         switch (req->rq_reqmsg->opc) {
         case CONNMGR_CONNECT:
-                CDEBUG(D_INODE, "getattr\n");
+                CDEBUG(D_INODE, "connect\n");
                 OBD_FAIL_RETURN(OBD_FAIL_MDS_GETATTR_NET, 0);
                 rc = connmgr_handle_connect(req);
                 break;
@@ -186,68 +180,65 @@ out:
         return 0;
 }
 
-
 static int recovd_check_event(struct connmgr_obd *mgr)
 {
-        int rc = 0; 
+        int rc = 0;
         ENTRY;
 
         spin_lock(&mgr->mgr_lock);
 
-        if (!(mgr->mgr_flags & MGR_WORKING) && 
-            !list_empty(&mgr->mgr_troubled_lh) ) {
+        if (!(mgr->mgr_flags & MGR_WORKING) &&
+            !list_empty(&mgr->mgr_troubled_lh)) {
 
-                CERROR("connection in trouble - state: WORKING, upcall\n"); 
+                CERROR("connection in trouble - state: WORKING, upcall\n");
                 mgr->mgr_flags = MGR_WORKING;
 
-                mgr->mgr_waketime = CURRENT_TIME; 
+                mgr->mgr_waketime = CURRENT_TIME;
                 mgr->mgr_timeout = 5 * HZ;
-                schedule_timeout(mgr->mgr_timeout); 
+                schedule_timeout(mgr->mgr_timeout);
 
         }
 
         if (mgr->mgr_flags & MGR_WORKING &&
-            CURRENT_TIME <= mgr->mgr_waketime + mgr->mgr_timeout ) { 
+            CURRENT_TIME <= mgr->mgr_waketime + mgr->mgr_timeout) {
                 CERROR("WORKING: new event\n");
 
-                mgr->mgr_waketime = CURRENT_TIME; 
-                schedule_timeout(mgr->mgr_timeout); 
+                mgr->mgr_waketime = CURRENT_TIME;
+                schedule_timeout(mgr->mgr_timeout);
         }
 
-        if (mgr->mgr_flags & MGR_STOPPING) { 
+        if (mgr->mgr_flags & MGR_STOPPING) {
                 CERROR("ha mgr stopping\n");
                 rc = 1;
         }
 
-        spin_unlock(&mgr->mgr_lock); 
+        spin_unlock(&mgr->mgr_lock);
         RETURN(rc);
 }
 
-int recovd_handle_event(struct connmgr_obd *mgr)
+static int recovd_handle_event(struct connmgr_obd *mgr)
 {
-
         spin_lock(&mgr->mgr_lock);
 
-        if (!(mgr->mgr_flags & MGR_WORKING) && 
-            !list_empty(&mgr->mgr_troubled_lh) ) {
+        if (!(mgr->mgr_flags & MGR_WORKING) &&
+            !list_empty(&mgr->mgr_troubled_lh)) {
 
-                CERROR("connection in trouble - state: WORKING, upcall\n"); 
+                CERROR("connection in trouble - state: WORKING, upcall\n");
                 mgr->mgr_flags = MGR_WORKING;
 
 
                 connmgr_upcall();
-                mgr->mgr_waketime = CURRENT_TIME; 
+                mgr->mgr_waketime = CURRENT_TIME;
                 mgr->mgr_timeout = 5 * HZ;
-                schedule_timeout(mgr->mgr_timeout); 
-
+                schedule_timeout(mgr->mgr_timeout);
         }
 
         if (mgr->mgr_flags & MGR_WORKING &&
-            CURRENT_TIME <= mgr->mgr_waketime + mgr->mgr_timeout ) { 
+            CURRENT_TIME <= mgr->mgr_waketime + mgr->mgr_timeout) {
                 CERROR("WORKING: new event\n");
 
-                mgr->mgr_waketime = CURRENT_TIME; 
-                schedule_timeout(mgr->mgr_timeout); 
+                mgr->mgr_waketime = CURRENT_TIME;
+                schedule_timeout(mgr->mgr_timeout);
         }
 
         spin_unlock(&mgr->mgr_lock);
@@ -277,18 +268,18 @@ static int recovd_main(void *arg)
 
         /* And now, loop forever on requests */
         while (1) {
-                wait_event_interruptible(mgr->mgr_waitq, 
+                wait_event_interruptible(mgr->mgr_waitq,
                                          recovd_check_event(mgr));
 
                 spin_lock(&mgr->mgr_lock);
                 if (mgr->mgr_flags & MGR_STOPPING) {
                         spin_unlock(&mgr->mgr_lock);
-                        CERROR("lustre_hamgr quitting\n"); 
+                        CERROR("lustre_hamgr quitting\n");
                         EXIT;
                         break;
                 }
 
-                recovd_handle_event(mgr); 
+                recovd_handle_event(mgr);
                 spin_unlock(&mgr->mgr_lock);
         }
 
@@ -307,7 +298,7 @@ int recovd_setup(struct connmgr_obd *mgr)
 
         INIT_LIST_HEAD(&mgr->mgr_connections_lh);
         INIT_LIST_HEAD(&mgr->mgr_troubled_lh);
-        spin_lock_init(&mgr->mgr_lock); 
+        spin_lock_init(&mgr->mgr_lock);
 
         d.mgr = mgr;
         d.name = "lustre_recovd";
@@ -323,9 +314,8 @@ int recovd_setup(struct connmgr_obd *mgr)
         }
         wait_event(mgr->mgr_ctl_waitq, mgr->mgr_flags & MGR_RUNNING);
 
-        RETURN(0); 
+        RETURN(0);
 }
-
 
 int recovd_cleanup(struct connmgr_obd *mgr)
 {

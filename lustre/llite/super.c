@@ -16,25 +16,11 @@
 
 #include <linux/config.h>
 #include <linux/module.h>
-#include <linux/kernel.h>
-#include <linux/mm.h>
-#include <linux/string.h>
-#include <linux/stat.h>
-#include <linux/errno.h>
-#include <linux/locks.h>
-#include <linux/unistd.h>
-
-#include <asm/system.h>
-#include <asm/uaccess.h>
-
-#include <linux/fs.h>
-#include <linux/stat.h>
-#include <asm/uaccess.h>
-#include <asm/segment.h>
 
 #define DEBUG_SUBSYSTEM S_LLITE
 
 #include <linux/lustre_lite.h>
+#include <linux/lustre_ha.h>
 
 kmem_cache_t *ll_file_data_slab;
 extern struct address_space_operations ll_aops;
@@ -50,26 +36,21 @@ static char *ll_read_opt(const char *opt, char *data)
         ENTRY;
 
         CDEBUG(D_INFO, "option: %s, data %s\n", opt, data);
-        if ( strncmp(opt, data, strlen(opt)) ) {
-                EXIT;
-                return NULL;
-        }
-        if ( (value = strchr(data, '=')) == NULL ) {
-                EXIT;
-                return NULL;
-        }
+        if ( strncmp(opt, data, strlen(opt)) )
+                RETURN(NULL);
+        if ( (value = strchr(data, '=')) == NULL )
+                RETURN(NULL);
 
         value++;
         OBD_ALLOC(retval, strlen(value) + 1);
         if ( !retval ) {
                 CERROR("out of memory!\n");
-                return NULL;
+                RETURN(NULL);
         }
         
         memcpy(retval, value, strlen(value)+1);
         CDEBUG(D_SUPER, "Assigned option: %s, value %s\n", opt, retval);
-        EXIT;
-        return retval;
+        RETURN(retval);
 }
 
 static void ll_options(char *options, char **dev, char **vers)
@@ -135,8 +116,7 @@ static struct super_block * ll_read_super(struct super_block *sb,
                 GOTO(out_free, sb = NULL);
         }
 
-        ptlrpc_init_client(ptlrpc_connmgr, 
-                           MDS_REQUEST_PORTAL, MDC_REPLY_PORTAL,
+        ptlrpc_init_client(ptlrpc_connmgr, MDS_REQUEST_PORTAL, MDC_REPLY_PORTAL,
                            &sbi->ll_mds_client);
 
         sbi->ll_mds_conn = ptlrpc_uuid_to_connection("mds");
@@ -290,8 +270,7 @@ int ll_inode_setattr(struct inode *inode, struct iattr *attr, int do_trunc)
 
         ptlrpc_free_req(request);
 
-        EXIT;
-        return err;
+        RETURN(err);
 }
 
 int ll_setattr(struct dentry *de, struct iattr *attr)
@@ -303,19 +282,17 @@ static int ll_statfs(struct super_block *sb, struct statfs *buf)
 {
         struct statfs tmp;
         int err;
-
         ENTRY;
 
         err = obd_statfs(ID(sb), &tmp);
         if ( err ) { 
                 CERROR("obd_statfs fails (%d)\n", err);
-                return err;
+                RETURN(err);
         }
         memcpy(buf, &tmp, sizeof(*buf));
         CDEBUG(D_SUPER, "statfs returns avail %ld\n", tmp.f_bavail);
-        EXIT;
 
-        return err; 
+        RETURN(err);
 }
 
 static void inline ll_to_inode(struct inode *dst, struct mds_body *body)
@@ -393,9 +370,9 @@ static inline void ll_read_inode2(struct inode *inode, void *opaque)
         } else {
                 init_special_inode(inode, inode->i_mode,
                                    ((int *)ll_i2info(inode)->lli_inline)[0]);
+                EXIT;
         }
 
-        EXIT;
         return;
 }
 

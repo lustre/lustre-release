@@ -568,11 +568,8 @@ out:
         return 0;
 }
 
-
 /* mount the file system (secretly) */
-static int ost_setup(struct obd_device *obddev, obd_count len,
-                        void *buf)
-
+static int ost_setup(struct obd_device *obddev, obd_count len, void *buf)
 {
         struct obd_ioctl_data* data = buf;
         struct ost_obd *ost = &obddev->u.ost;
@@ -580,14 +577,14 @@ static int ost_setup(struct obd_device *obddev, obd_count len,
         int err;
         ENTRY;
 
-        if (data->ioc_dev  < 0 || data->ioc_dev > MAX_OBD_DEVICES)
+        if (data->ioc_dev < 0 || data->ioc_dev > MAX_OBD_DEVICES)
                 RETURN(-ENODEV);
 
         MOD_INC_USE_COUNT;
         tgt = &obd_dev[data->ioc_dev];
         ost->ost_tgt = tgt;
-        if ( ! (tgt->obd_flags & OBD_ATTACHED) ||
-             ! (tgt->obd_flags & OBD_SET_UP) ){
+        if (!(tgt->obd_flags & OBD_ATTACHED) ||
+            !(tgt->obd_flags & OBD_SET_UP)) {
                 CERROR("device not attached or not set up (%d)\n",
                        data->ioc_dev);
                 GOTO(error_dec, err = -EINVAL);
@@ -609,9 +606,8 @@ static int ost_setup(struct obd_device *obddev, obd_count len,
         }
 
         err = ptlrpc_start_thread(obddev, ost->ost_service, "lustre_ost");
-        if (err) {
+        if (err)
                 GOTO(error_disc, err = -EINVAL);
-        }
 
         RETURN(0);
 

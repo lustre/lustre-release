@@ -141,6 +141,7 @@ struct ost_obd {
 struct osc_obd {
         struct obd_device *osc_tgt;
         struct ptlrpc_client *osc_client;
+        struct ptlrpc_client *osc_ldlm_client;
         struct ptlrpc_connection *osc_conn;
 };
 

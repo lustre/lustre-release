@@ -12,16 +12,8 @@
  */
 
 #define EXPORT_SYMTAB
-
-#include <linux/version.h>
-#include <linux/module.h>
-#include <linux/slab.h>
-#include <asm/unistd.h>
-
 #define DEBUG_SUBSYSTEM S_LDLM
 
-#include <linux/obd_support.h>
-#include <linux/obd_class.h>
 #include <linux/lustre_dlm.h>
 
 /* This function will be called to judge if the granted queue of another child

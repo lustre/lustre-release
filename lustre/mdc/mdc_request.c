@@ -223,7 +223,7 @@ int mdc_readpage(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
 static int request_ioctl(struct inode *inode, struct file *file,
                          unsigned int cmd, unsigned long arg)
 {
-        int err;
+        int err = 0;
         struct ptlrpc_client cl;
         struct ptlrpc_connection *conn;
         struct ptlrpc_request *request;
@@ -262,7 +262,7 @@ static int request_ioctl(struct inode *inode, struct file *file,
                 OBD_ALLOC(buf, PAGE_SIZE);
                 if (!buf) {
                         err = -ENOMEM;
-                        break;
+                        GOTO(out, err);
                 }
                 CERROR("-- readpage 0 for ino %lu\n", arg);
                 err = mdc_readpage(&cl, conn, arg, S_IFDIR, 0, buf, &request);
