@@ -324,7 +324,7 @@ gmnal_api_startup(nal_t *nal, ptl_pid_t requested_pid,
 /*
 	pid = gm_getpid();
 */
-        process_id.pid = 0;
+        process_id.pid = requested_pid;
         process_id.nid = global_nid;
         
 	CDEBUG(D_INFO, "portals_pid is [%u]\n", process_id.pid);
@@ -399,7 +399,7 @@ int gmnal_init(void)
         rc = ptl_register_nal(GMNAL, &the_gm_nal);
         if (rc != PTL_OK)
                 CERROR("Can't register GMNAL: %d\n", rc);
-        rc = PtlNIInit(GMNAL, 0, NULL, NULL, &kgmnal_ni);
+        rc = PtlNIInit(GMNAL, LUSTRE_SRV_PTL_PID, NULL, NULL, &kgmnal_ni);
         if (rc != PTL_OK && rc != PTL_IFACE_DUP) {
                 ptl_unregister_nal(GMNAL);
                 return (-ENODEV);
