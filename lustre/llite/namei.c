@@ -254,6 +254,8 @@ static struct dentry *ll_lookup2(struct inode *dir, struct dentry *dentry,
                 if (request->rq_repmsg->bufcount < offset + 1)
                         LBUG();
                 md.md = lustre_msg_buf(request->rq_repmsg, offset + 1);
+                if (md.md->lmd_magic != LOV_MAGIC)
+                        md.md = NULL;
         } else
                 md.md = NULL;
 

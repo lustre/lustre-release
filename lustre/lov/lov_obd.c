@@ -300,7 +300,7 @@ static int lov_destroy(struct lustre_handle *conn, struct obdo *oa,
                 tmp.o_id = md->lmd_oinfo[i].loi_id;
                 rc = obd_destroy(&lov->tgts[i].conn, &tmp, NULL);
                 if (rc)
-                        CERROR("Error destroying object "LPD64"on %d\n",
+                        CERROR("Error destroying object "LPD64" on %d\n",
                                md->lmd_oinfo[i].loi_id, i);
         }
         RETURN(rc);

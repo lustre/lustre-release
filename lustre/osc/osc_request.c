@@ -205,7 +205,7 @@ static int osc_create(struct lustre_handle *conn, struct obdo *oa,
         memcpy(oa, &body->oa, sizeof(*oa));
 
         (*ea)->lmd_object_id = oa->o_id;
-        (*ea)->lmd_stripe_count = 1;
+        (*ea)->lmd_stripe_count = 0;
         EXIT;
  out:
         ptlrpc_free_req(request);

@@ -167,7 +167,6 @@ int client_obd_connect(struct lustre_handle *conn, struct obd_device *obd,
 
         recovd_conn_manage(c, ptlrpc_recovd, ll_recover);
 
-
         EXIT;
 out_req:
         ptlrpc_free_req(request);

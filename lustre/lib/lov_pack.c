@@ -30,18 +30,18 @@
 
 void lov_packdesc(struct lov_desc *ld)
 {
-        ld->ld_tgt_count = HTON__u32(ld->ld_tgt_count); 
-        ld->ld_default_stripe_count = HTON__u32(ld->ld_default_stripe_count); 
-        ld->ld_default_stripe_size = HTON__u32(ld->ld_default_stripe_size); 
-        ld->ld_pattern = HTON__u32(ld->ld_pattern); 
+        ld->ld_tgt_count = HTON__u32(ld->ld_tgt_count);
+        ld->ld_default_stripe_count = HTON__u32(ld->ld_default_stripe_count);
+        ld->ld_default_stripe_size = HTON__u32(ld->ld_default_stripe_size);
+        ld->ld_pattern = HTON__u32(ld->ld_pattern);
 }
 
 void lov_unpackdesc(struct lov_desc *ld)
 {
-        ld->ld_tgt_count = NTOH__u32(ld->ld_tgt_count); 
-        ld->ld_default_stripe_count = HTON__u32(ld->ld_default_stripe_count); 
-        ld->ld_default_stripe_size = HTON__u32(ld->ld_default_stripe_size); 
-        ld->ld_pattern = HTON__u32(ld->ld_pattern); 
+        ld->ld_tgt_count = NTOH__u32(ld->ld_tgt_count);
+        ld->ld_default_stripe_count = HTON__u32(ld->ld_default_stripe_count);
+        ld->ld_default_stripe_size = HTON__u32(ld->ld_default_stripe_size);
+        ld->ld_pattern = HTON__u32(ld->ld_pattern);
 }
 
 void lov_packmd(struct lov_mds_md *mdsmd, struct lov_stripe_md *md)
@@ -54,8 +54,8 @@ void lov_packmd(struct lov_mds_md *mdsmd, struct lov_stripe_md *md)
         mdsmd->lmd_stripe_count = md->lmd_stripe_count;
         mdsmd->lmd_stripe_size = md->lmd_stripe_size;
         mdsmd->lmd_stripe_pattern = md->lmd_stripe_pattern;
-        
-        for (i=0; i<md->lmd_stripe_count; i++) 
+
+        for (i = 0; i < md->lmd_stripe_count; i++)
                 mdsmd->lmd_objects[i].l_object_id = md->lmd_oinfo[i].loi_id;
 }
 
@@ -69,9 +69,9 @@ void lov_unpackmd(struct lov_stripe_md *md, struct lov_mds_md *mdsmd)
         md->lmd_stripe_count = mdsmd->lmd_stripe_count;
         md->lmd_stripe_size = mdsmd->lmd_stripe_size;
         md->lmd_stripe_pattern = mdsmd->lmd_stripe_pattern;
-        
-        for (i=0; i<md->lmd_stripe_count; i++) {
-                md->lmd_oinfo[i].loi_id = mdsmd->lmd_objects[i].l_object_id; 
+
+        for (i = 0; i < md->lmd_stripe_count; i++) {
+                md->lmd_oinfo[i].loi_id = mdsmd->lmd_objects[i].l_object_id;
                 md->lmd_oinfo[i].loi_size = 0;
         }
 }

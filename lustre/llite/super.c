@@ -421,7 +421,6 @@ out:
         RETURN(rc);
 }
 
-
 static void ll_read_inode2(struct inode *inode, void *opaque)
 {
         struct ll_inode_md *md = opaque;
@@ -457,9 +456,8 @@ static void ll_read_inode2(struct inode *inode, void *opaque)
         if (body->valid & OBD_MD_FLSIZE)
                 inode->i_size = body->size;
 
-
         //if (body->valid & OBD_MD_FLEASIZE)
-        if (md && md->md && md->md->lmd_stripe_count) {
+        if (md && md->md) {
                 struct lov_mds_md *smd = md->md;
                 int size;
                 if (md->md->lmd_easize != ll_mds_easize(inode->i_sb)) {
