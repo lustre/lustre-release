@@ -40,6 +40,30 @@
 int ext3_map_inode_page(struct inode *inode, struct page *page,
                         unsigned long *blocks, int *created, int create);
 
+struct dio_request {
+        atomic_t numreqs;       /* number of reqs being processed */
+        struct bio *bio_list;   /* list of completed bios */
+        wait_queue_head_t wait;
+	int created[16]; /* 8KB pages man , 512bytes block min */
+	unsigned long blocks[16]; /* -- */
+        spinlock_t lock;
+};
+
+static int dio_complete_routine(struct bio *bio, unsigned int done, int error)
+{
+        struct dio_request *dreq = bio->bi_private;
+        unsigned long flags;
+
+        spin_lock_irqsave(&dreq->lock, flags);
+        bio->bi_private = dreq->bio_list;
+        dreq->bio_list = bio;
+        spin_unlock_irqrestore(&dreq->lock, flags);
+        if (atomic_dec_and_test(&dreq->numreqs))
+                wake_up(&dreq->wait);
+
+        return 0;
+}
+
 static int can_be_merged(struct bio *bio, sector_t sector)
 {
 	int size;
@@ -61,14 +85,12 @@ int filter_commitrw_write(struct obd_export *exp, int objcount,
         struct niobuf_local *lnb;
         struct fsfilt_objinfo fso;
         struct iattr iattr = { .ia_valid = ATTR_SIZE, .ia_size = 0, };
-        struct kiobuf *iobuf;
         struct inode *inode = NULL;
         int rc = 0, i, k, cleanup_phase = 0, err;
         unsigned long now = jiffies; /* DEBUGGING OST TIMEOUTS */
-	struct bio *bio = NULL, *bio_list = NULL;
-	int created[16]; /* 8KB pages man , 512bytes block min */
-	unsigned long blocks[16];
 	int blocks_per_page;
+        struct dio_request *dreq;
+        struct bio *bio = NULL;
         ENTRY;
         LASSERT(oti != NULL);
         LASSERT(objcount == 1);
@@ -76,6 +98,14 @@ int filter_commitrw_write(struct obd_export *exp, int objcount,
 
         blocks_per_page = PAGE_SIZE >> inode->i_blkbits;
 	LASSERT(blocks_per_page <= 16);
+
+        OBD_ALLOC(dreq, sizeof(*dreq));
+        if (dreq == NULL)
+                RETURN(-ENOMEM);
+        dreq->bio_list = NULL;
+        init_waitqueue_head(&dreq->wait);
+        atomic_set(&dreq->numreqs, 0);
+        spin_lock_init(&dreq->lock);
 
         cleanup_phase = 1;
         fso.fso_dentry = res->dentry;
@@ -103,17 +133,19 @@ int filter_commitrw_write(struct obd_export *exp, int objcount,
 		int offs;
 
 		/* get block number for next page */
-                rc = ext3_map_inode_page(inode, lnb->page, blocks, created, 1);
+                rc = ext3_map_inode_page(inode, lnb->page, dreq->blocks,
+                                                dreq->created, 1);
                 if (rc)
                         GOTO(cleanup, rc);
 
 		for (k = 0; k < blocks_per_page; k++) {
-			sector = blocks[k] * (inode->i_sb->s_blocksize >> 9);
+			sector = dreq->blocks[k] * (inode->i_sb->s_blocksize >> 9);
 			offs = k * inode->i_sb->s_blocksize;
 
 			if (!bio || !can_be_merged(bio, sector) ||
 				!bio_add_page(bio, lnb->page, lnb->len, offs)) {
 				if (bio) {
+                                        atomic_inc(&dreq->numreqs);
 					submit_bio(WRITE, bio);
 					bio = NULL;
 				}
@@ -121,11 +153,8 @@ int filter_commitrw_write(struct obd_export *exp, int objcount,
 				bio = bio_alloc(GFP_NOIO, obj->ioo_bufcnt);
 				bio->bi_bdev = inode->i_sb->s_bdev;
 				bio->bi_sector = sector;
-				bio->bi_end_io = NULL; /* FIXME */
-
-				/* put on the list */
-				bio->bi_private = bio_list;
-				bio_list = bio;
+				bio->bi_end_io = dio_complete_routine; 
+                                bio->bi_private = dreq;
 
 				if (!bio_add_page(bio, lnb->page, lnb->len, 0))
 					LBUG();
@@ -138,10 +167,20 @@ int filter_commitrw_write(struct obd_export *exp, int objcount,
                 if (this_size > iattr.ia_size)
                         iattr.ia_size = this_size;
         }
-	if (bio)
-		submit_bio(WRITE, bio);
+	if (bio) {
+                atomic_inc(&dreq->numreqs);
+                submit_bio(WRITE, bio);
+        }
 
 	/* time to wait for I/O completion */
+        wait_event(dreq->wait, atomic_read(&dreq->numreqs) == 1);
+
+        /* free all bios */
+        while (dreq->bio_list) {
+                bio = dreq->bio_list;
+                dreq->bio_list = bio->bi_private;
+                bio_put(bio);
+        }
 
         if (rc == 0) {
                 down(&inode->i_sem);
@@ -173,6 +212,7 @@ cleanup:
                 pop_ctxt(&saved, &obd->u.filter.fo_ctxt, NULL);
                 LASSERT(current->journal_info == NULL);
         case 1:
+                OBD_FREE(dreq, sizeof(*dreq));
         case 0:
                 for (i = 0, lnb = res; i < obj->ioo_bufcnt; i++, lnb++) {
                         /* flip_.. gets a ref, while free_page only frees
