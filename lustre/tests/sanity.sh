@@ -409,7 +409,7 @@ $CLEAN
 $START
 
 echo "--test 25.2 lookup file in symlinked directory"
-$CHECKSTAT -a $MOUNT/s25/foo
+$CHECKSTAT -t file $MOUNT/s25/foo
 pass
 $CLEAN
 $START
