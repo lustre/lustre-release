@@ -315,9 +315,10 @@ static int mds_read_last_rcvd(struct obd_device *obd, struct file *file)
                 /* These exports are cleaned up by mds_disconnect(), so they
                  * need to be set up like real exports as mds_connect() does.
                  */
-                CDEBUG(D_HA, "RCVRNG CLIENT uuid: %s idx: %d lr: "LPU64
-                       " srv lr: "LPU64"\n", mcd->mcd_uuid, cl_idx,
-                       last_transno, le64_to_cpu(msd->msd_last_transno));
+                CDEBUG(D_HA|D_WARNING,"RCVRNG CLIENT uuid: %s idx: %d lr: "LPU64
+                       " srv lr: "LPU64" lx: "LPU64"\n", mcd->mcd_uuid, cl_idx,
+                       last_transno, le64_to_cpu(msd->msd_last_transno),
+                       mcd->mcd_last_xid);
 
                 exp = class_new_export(obd);
                 if (exp == NULL)
@@ -620,7 +621,6 @@ int mds_obd_create(struct obd_export *exp, struct obdo *oa,
 {
         struct mds_obd *mds = &exp->exp_obd->u.mds;
         struct inode *parent_inode = mds->mds_objects_dir->d_inode;
-        unsigned int tmpname = ll_insecure_random_int();
         struct file *filp;
         struct dentry *dchild;
         struct lvfs_run_ctxt saved;
@@ -629,21 +629,19 @@ int mds_obd_create(struct obd_export *exp, struct obdo *oa,
         int rc = 0, err, namelen;
         ENTRY;
 
+        push_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
+        down(&parent_inode->i_sem);
         if (oa->o_id) {
-                push_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
-                                                                                                                             
                 namelen = ll_fid2str(fidname, oa->o_id, oa->o_generation);
  
-                down(&parent_inode->i_sem);
                 dchild = lookup_one_len(fidname, mds->mds_objects_dir, namelen);
-                if (IS_ERR(dchild)) {
-                        up(&parent_inode->i_sem);
+                if (IS_ERR(dchild))
                         GOTO(out_pop, rc = PTR_ERR(dchild));
-                }
+
                 if (dchild->d_inode == NULL) {
                         struct dentry_params dp;
                         struct inode *inode;
-                                                                                                                             
+
                         dchild->d_fsdata = (void *) &dp;
                         dp.p_ptr = NULL;
                         dp.p_inum = oa->o_id;
@@ -653,7 +651,6 @@ int mds_obd_create(struct obd_export *exp, struct obdo *oa,
                         if (rc) {
                                 CDEBUG(D_INODE, "err during create: %d\n", rc);
                                 dput(dchild);
-                                up(&parent_inode->i_sem);
                                 GOTO(out_pop, rc);
                         }
                         inode = dchild->d_inode;
@@ -668,18 +665,16 @@ int mds_obd_create(struct obd_export *exp, struct obdo *oa,
                 GOTO(out_pop, rc);
         }
 
-        push_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
-        
-        sprintf(fidname, "OBJECTS/%u", tmpname);
+        sprintf(fidname, "OBJECTS/%u.%u",ll_insecure_random_int(),current->pid);
         filp = filp_open(fidname, O_CREAT | O_EXCL, 0644);
         if (IS_ERR(filp)) {
                 rc = PTR_ERR(filp);
                 if (rc == -EEXIST) {
-                        CERROR("impossible object name collision %u\n",
-                               tmpname);
+                        CERROR("impossible object name collision %s\n",
+                               fidname);
                         LBUG();
                 }
-                CERROR("error creating tmp object %u: rc %d\n", tmpname, rc);
+                CERROR("error creating tmp object %s: rc %d\n", fidname, rc);
                 GOTO(out_pop, rc);
         }
 
@@ -689,7 +684,6 @@ int mds_obd_create(struct obd_export *exp, struct obdo *oa,
         oa->o_generation = filp->f_dentry->d_inode->i_generation;
         namelen = ll_fid2str(fidname, oa->o_id, oa->o_generation);
 
-        down(&parent_inode->i_sem);
         dchild = lookup_one_len(fidname, mds->mds_objects_dir, namelen);
 
         if (IS_ERR(dchild)) {
@@ -720,20 +714,19 @@ int mds_obd_create(struct obd_export *exp, struct obdo *oa,
         if (!err) {
                 oa->o_gr = FILTER_GROUP_FIRST_MDS + mds->mds_num;
                 oa->o_valid |= OBD_MD_FLID | OBD_MD_FLGENER | OBD_MD_FLGROUP;
-        }
-        else if (!rc)
+        } else if (!rc)
                 rc = err;
 out_dput:
         dput(dchild);
 out_close:
-        up(&parent_inode->i_sem);
         err = filp_close(filp, 0);
         if (err) {
-                CERROR("closing tmpfile %u: rc %d\n", tmpname, rc);
+                CERROR("closing tmpfile %s: rc %d\n", fidname, rc);
                 if (!rc)
                         rc = err;
         }
 out_pop:
+        up(&parent_inode->i_sem);
         pop_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
         RETURN(rc);
 }
