@@ -142,6 +142,7 @@ static int pnode_revalidate_finish(struct ptlrpc_request *request,
  out:
         RETURN(rc);
 }
+#endif
 
 /*
  * remove the stale inode from pnode
@@ -168,6 +169,7 @@ void unhook_stale_inode(struct pnode *pno)
         return;
 }
 
+#if 0
 int llu_pb_revalidate(struct pnode *pnode, int flags, struct lookup_intent *it)
 {
         struct pnode_base *pb = pnode->p_base;
@@ -277,109 +279,6 @@ int llu_pb_revalidate(struct pnode *pnode, int flags, struct lookup_intent *it)
         RETURN(1);
 }
 
-struct inode *llu_iget(struct filesys *fs, obd_id ino, struct lustre_md *md)
-{
-        struct inode *inode;
-
-        /* FIXME need to find the if the inode existed or not FIXME */
-
-        inode = llu_new_inode(fs, md->body->ino, md->body->mode);
-        if (!inode) {
-                CERROR("can't allocate new inode\n");
-                return NULL;
-        }
-
-        llu_update_inode(inode, md->body, md->lsm);
-
-        return inode;
-}
-
-static int
-llu_lookup2_finish(struct ptlrpc_request *request,
-                   struct inode *parent, struct pnode *pnode,
-                   struct lookup_intent *it, int offset, obd_id ino)
-{
-        struct llu_sb_info *sbi = llu_i2sbi(parent);
-        struct inode *inode = NULL;
-        int rc;
-
-        /* NB 1 request reference will be taken away by ll_intent_lock()
-         * when I return */
-
-        /* if (!it_disposition(it, DISP_LOOKUP_NEG)) { */
-        /* XXX libsysio require the inode must be generated here XXX */
-        if ((it->it_op & IT_CREAT) || !it_disposition(it, DISP_LOOKUP_NEG)) {
-                struct lustre_md md;
-                ENTRY;
-
-                rc = mdc_req2lustre_md(request, offset, &sbi->ll_osc_conn, &md);
-                if (rc) 
-                        RETURN(rc);
-
-                inode = llu_iget(pnode->p_mount->mnt_fs, ino, &md);
-                if (!inode) {
-                        /* free the lsm if we allocated one above */
-                        if (md.lsm != NULL)
-                                obd_free_memmd(&sbi->ll_osc_conn, &md.lsm);
-                        RETURN(-ENOMEM);
-                } else if (md.lsm != NULL &&
-                           llu_i2info(inode)->lli_smd != md.lsm) {
-                        obd_free_memmd(&sbi->ll_osc_conn, &md.lsm);
-                }
-
-                /* If this is a stat, get the authoritative file size */
-                if (it->it_op == IT_GETATTR && S_ISREG(inode->i_mode) &&
-                    llu_i2info(inode)->lli_smd != NULL) {
-                        struct ldlm_extent extent = {0, OBD_OBJECT_EOF};
-                        struct lustre_handle lockh = {0};
-                        struct lov_stripe_md *lsm = llu_i2info(inode)->lli_smd;
-                        ldlm_error_t rc;
-
-                        LASSERT(lsm->lsm_object_id != 0);
-
-                        rc = llu_extent_lock(NULL, inode, lsm, LCK_PR, &extent,
-                                            &lockh);
-                        if (rc != ELDLM_OK)
-                                RETURN(-EIO);
-                        llu_extent_unlock(NULL, inode, lsm, LCK_PR, &lockh);
-                }
-
-                /* dentry = *de = ll_find_alias(inode, dentry); */
-
-        } else {
-                ENTRY;
-        }
-#if 0
-        dentry->d_op = &ll_d_ops;
-        ll_set_dd(dentry);
-
-        if (dentry == saved)
-                d_add(dentry, inode);
-#endif
-        pnode->p_base->pb_ino = inode;
-
-        RETURN(0);
-}
-
-static int llu_lookup2(struct inode *parent, struct pnode *pnode,
-                       struct lookup_intent *it)
-{
-        int rc;
-        ENTRY;
-
-        /*
-        CDEBUG(D_VFSTRACE, "VFS Op:name=%s,dir=%lu,intent=%s\n",
-               dentry->d_name.name, parent->i_ino, LL_IT2STR(it));
-         */
-
-        rc = llu_intent_lock(parent, pnode, it, 0/*XXX check this*/,
-                             llu_lookup2_finish);
-        if (rc < 0) {
-                CDEBUG(D_INFO, "ll_intent_lock: %d\n", rc);
-        }
-
-        RETURN(rc);
-}
 #endif
 
 static int lookup_it_finish(struct ptlrpc_request *request, int offset,
@@ -389,7 +288,6 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
         struct pnode *child = icbd->icbd_child;
         struct inode *parent = icbd->icbd_parent;
         struct llu_sb_info *sbi = llu_i2sbi(parent);
-//        struct dentry *dentry = *de, *saved = *de;
         struct inode *inode = NULL;
         int rc;
 
