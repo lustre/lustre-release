@@ -15,7 +15,7 @@ int main(int argc, char ** argv)
         int do_open;
         long int start, last;
 
-        if (argc < 4) {
+        if (argc != 4) {
                 printf("Usage %s <-o|-m> filenamebase count\n", argv[0]);
                 return 1;
         }
