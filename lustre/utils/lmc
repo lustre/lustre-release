@@ -29,16 +29,15 @@ lmc - lustre configurtion data  manager
 
 
 # configure server
-./lmc --merge config.xml  --node server --mds /tmp/mds1 50000
-./lmc --merge config.xml  --node server --mdc MDC_server
+./lmc --merge config.xml  --node server --mds mds1 /tmp/mds1 50000
 
 # create lov
-./lmc --merge config.xml  --lov lov1 MDC_server 65536 0 0
+./lmc --merge config.xml  --lov lov1 mds1 65536 0 0
 ./lmc --merge config.xml  --node server --lov lov1 --ost /tmp/ost1 100000
 ./lmc --merge config.xml  --node server --lov lov1 --ost /tmp/ost2 100000
 
 # create client config
-./lmc --merge config.xml  --node client --mtpt /mnt/lustre MDC_server lov1
+./lmc --merge config.xml  --node client --mtpt /mnt/lustre mds1 lov1
 
 """
 
@@ -207,9 +206,9 @@ class GenConfig:
         ost.appendChild(self.ref("obd", obd_uuid))
         return ost
 
-    def lov(self, name, uuid, mdc_uuid, stripe_sz, stripe_off, pattern):
+    def lov(self, name, uuid, mds_uuid, stripe_sz, stripe_off, pattern):
         lov = self.newService("lov", name, uuid)
-        lov.appendChild(self.ref("mdc", mdc_uuid))
+        lov.appendChild(self.ref("mds", mds_uuid))
         devs = self.addElement(lov, "devices" )
         devs.setAttribute("stripesize", stripe_sz)
         devs.setAttribute("stripeoffset", stripe_off)
@@ -240,12 +239,34 @@ class GenConfig:
         self.addElement(mtpt, "path", path)
         return mtpt
 
-def findByName(lustre, name, tag = "*"):
-    path = '//%s[@name="%s"]' % (tag, name)
-    ret = Evaluate(path, lustre)
-    if ret:
-        return ret[0]
+def getName(n):
+    return n.getAttribute('name')
+
+def findByName(lustre, name, tag = ""):
+    for n in lustre.childNodes:
+        if n.nodeType == n.ELEMENT_NODE:
+            if tag and n.nodeName != tag:
+                continue
+            if getName(n) == name:
+                return n
+            else:
+                n = findByName(n, name)
+                if n: return n
     return None
+
+
+def mds2node(lustre, mds_name):
+    """ Find the node a MDS is configured on """
+    msd = findByName(lustre, mds_name, 'mds')
+    ref = Evaluate('./network_ref', msd)
+    if not ref:
+        error("no network found for:", mds_name)
+    net_uuid = ref[0].getAttribute('uuidref')
+    path = '//node/network[@uuid="%s"]/..' % (net_uuid)
+    node = Evaluate(path, lustre)
+    if not node:
+        error("no node found for :", mds_name)
+    return node[0]
     
 # XXX: assumes only one network element per node. will fix this
 # as soon as support for routers is added
@@ -260,14 +281,14 @@ def get_net_uuid(lustre, node_name):
     return None
 
 def lov_add_osc(gen, lov, osc_uuid):
-    devs = Evaluate("devices", lov)
+    devs = lov.getElementsByTagName('devices')
     if len(devs) == 1:
         devs[0].appendChild(gen.ref("osc", osc_uuid))
     else:
         error("No devices element found for LOV:", lov)
                             
 def node_add_profile(gen, node, ref, uuid):
-    ret = Evaluate("./profile", node)
+    ret = node.getElementsByTagName('profile')
     if not ret:
         error('node has no profile:', node)
     ret[0].appendChild(gen.ref(ref, uuid))
@@ -382,22 +403,24 @@ def add_lov(gen, lustre, options, args):
         usage()
 
     name = options['lov']
-    mdc_name = args[0]
+    mds_name = args[0]
     stripe_sz = args[1]
     stripe_off = args[2]
     pattern = args[3]
+    uuid = get_uuid(name)
 
     ret = findByName(lustre, name, "lov")
     if ret:
         error("LOV: ", name, " already exists.")
 
-    ret = findByName(lustre, mdc_name, "mdc")
+    ret = findByName(lustre, mds_name, "mds")
     if not ret:
-        error(mdc_name, "not found.")
-    mdc_uuid = ret.getAttribute("uuid")
+        error(mds_name, "not found.")
+    mds_uuid = ret.getAttribute("uuid")
 
-    uuid = get_uuid(name)
-    lov = gen.lov(name, uuid, mdc_uuid, stripe_sz, stripe_off, pattern)
+    node = mds2node(lustre, mds_name)
+    node_add_profile(gen, node, "lov", uuid)
+    lov = gen.lov(name, uuid, mds_uuid, stripe_sz, stripe_off, pattern)
     lustre.appendChild(lov)
 
 def add_mtpt(gen, lustre, options, args):
@@ -411,8 +434,9 @@ def add_mtpt(gen, lustre, options, args):
         error("--mtpt requires a --node argument")
 
     path = args[0]
-    mdc_name = args[1]
+    mds_name = args[1]
     lov_name = args[2]
+    mdc_name = 'MDC_' + mds_name
 
     name = new_name('MNT_'+ node_name)
 
@@ -439,7 +463,6 @@ def add_mtpt(gen, lustre, options, args):
             error('node:',  node_name, "not found.")
     node_add_profile(gen, node, "mountpoint", uuid)
     node_add_profile(gen, node, "mdc", mdc_uuid)
-    node_add_profile(gen, node, "lov", lov_uuid)
     lustre.appendChild(mtpt)
 
 def add_mdc(gen, lustre, options, args):
@@ -473,14 +496,14 @@ def add_mds(gen, lustre, options, args):
     else:
         error("--mds requires a --node argument")
 
+    mds_name = new_name(options['mds'])
     devname = args[0]
     if len(args) > 1:
         size = args[1]
     else:
         size = 0
 
-    mds_name = new_name('MDS_'+ node_name)
-    mdc_name = new_name('MDC_'+ node_name)
+    mdc_name = 'MDC_' + mds_name
     mds_uuid = get_uuid(mds_name)
     mdc_uuid = get_uuid(mdc_name)
 
@@ -506,7 +529,7 @@ def add_mds(gen, lustre, options, args):
 
 def parse_cmdline(argv):
     short_opts = "ho:i:m:"
-    long_opts = ["ost", "mtpt", "lov=", "node=", "mds", "net",
+    long_opts = ["ost", "mtpt", "lov=", "node=", "mds=", "net",
                  "mdc", "merge=", "format", "reformat", "output=",
                  "in=", "help"]
     opts = []
@@ -526,7 +549,7 @@ def parse_cmdline(argv):
         if o == "--ost":
             options['ost'] = 1
         if o == "--mds":
-            options['mds'] = 1
+            options['mds'] = a
         if o == "--mdc":
             options['mdc'] = 1
         if o == "--net":

@@ -29,7 +29,6 @@ import sys, getopt
 import string, os, stat, popen2, socket
 import re, exceptions
 import xml.dom.minidom
-from xml.xpath import Evaluate
 
 # Global parameters
 TCP_ACCEPTOR = '../..//portals/linux/utils/acceptor'
@@ -204,12 +203,12 @@ class LCTLInterface:
         self.run(cmds)
 
     # create an lov
-    def lovconfig(self, uuid, mdcuuid, stripe_cnt, stripe_sz, stripe_off, pattern, devlist):
+    def lovconfig(self, uuid, mdsuuid, stripe_cnt, stripe_sz, stripe_off, pattern, devlist):
         cmds = """
   device $%s
   probe
   lovconfig %s %d %d %d %s %s
-  quit""" % (mdcuuid, uuid, stripe_cnt, stripe_sz, stripe_off, pattern, devlist)
+  quit""" % (mdsuuid, uuid, stripe_cnt, stripe_sz, stripe_off, pattern, devlist)
         self.run(cmds)
 
 # ============================================================
@@ -372,8 +371,8 @@ class Network(Module):
 
     def prepare(self):
         self.info(self.net_type, self.nid, self.port)
-        if type == 'tcp':
-            ret = run_daemon(TCP_ACCEPTOR, port)
+        if self.net_type == 'tcp':
+            ret = run_daemon(TCP_ACCEPTOR, self.port)
             if ret:
                 print "error:", ret
                 raise CommandError, "cannot run acceptor"
@@ -386,7 +385,7 @@ class Network(Module):
             lctl.cleanup("RPCDEV", "")
         except CommandError:
             print "cleanup failed: ", self.name
-        if type == 'tcp':
+        if self.net_type == 'tcp':
             # yikes, this ugly! need to save pid in /var/something
             run("killall acceptor")
 
@@ -405,10 +404,7 @@ class LOV(Module):
         self.stripe_sz = int(devs.getAttribute('stripesize'))
         self.stripe_off = int(devs.getAttribute('stripeoffset'))
         self.pattern = int(devs.getAttribute('pattern'))
-        mdcref =  node.getElementsByTagName('mdc_ref')[0]
-        self.mdcuuid = mdcref.getAttribute('uuidref')
-        mdc= lookup(node.parentNode, self.mdcuuid)
-        mdsref =  mdc.getElementsByTagName('mds_ref')[0]
+        mdsref =  node.getElementsByTagName('mds_ref')[0]
         self.mdsuuid = mdsref.getAttribute('uuidref')
         mds= lookup(node.parentNode, self.mdsuuid)
         self.mdsname = getName(mds)
@@ -422,20 +418,11 @@ class LOV(Module):
         self.stripe_cnt = strip_cnt
 
     def prepare(self):
-        for osc_uuid in string.split(self.devlist):
-            osc = lookup(self.dom_node.parentNode, osc_uuid)
-            if osc:
-                n = OSC(osc)
-                n.prepare()
-            else:
-                panic('osc not found:', osc_uuid)
-        self.info(self.mdcuuid, self.stripe_cnt, self.stripe_sz, self.stripe_off, self.pattern,
+        self.info(self.mdsuuid, self.stripe_cnt, self.stripe_sz, self.stripe_off, self.pattern,
         self.devlist, self.mdsname)
         lctl.lovconfig(self.uuid, self.mdsname, self.stripe_cnt,
                        self.stripe_sz, self.stripe_off, self.pattern,
                        self.devlist)
-        lctl.newdev(attach="lov %s %s" % (self.name, self.uuid),
-                    setup ="%s" % (self.mdcuuid))
 
 class MDS(Module):
     def __init__(self,node):
@@ -525,7 +512,7 @@ class OSC(Module):
         srv = Network(net)
         lctl.connect(srv.net_type, srv.nid, srv.port, srv.uuid, srv.send_buf, srv.read_buf)
         lctl.newdev(attach="osc %s %s" % (self.name, self.uuid),
-                    setup ="%s %s" %(self.obd_uuid, self.ost_uuid))
+                    setup ="%s %s" %(self.obd_uuid, srv.uuid))
 
     def cleanup(self):
         self.info(self.obd_uuid, self.ost_uuid)
@@ -547,7 +534,18 @@ class Mountpoint(Module):
         self.lov_uuid = ref.getAttribute('uuidref')
 
     def prepare(self):
+        l = lookup(self.dom_node.parentNode, self.lov_uuid)
+        lov = LOV(l)
+        for osc_uuid in string.split(lov.devlist):
+            osc = lookup(self.dom_node.parentNode, osc_uuid)
+            if osc:
+                n = OSC(osc)
+                n.prepare()
+            else:
+                panic('osc not found:', osc_uuid)
         self.info(self.path, self.mdc_uuid,self.lov_uuid)
+        lctl.newdev(attach="lov %s %s" % (lov.name, lov.uuid),
+                    setup ="%s" % (self.mdc_uuid))
         cmd = "mount -t lustre_lite -o osc=%s,mdc=%s none %s" % \
               (self.lov_uuid, self.mdc_uuid, self.path)
         run("mkdir", self.path)
@@ -582,36 +580,24 @@ def getText(node, tag, default=""):
         return default
 
 def get_ost_net(node, uuid):
-    path = '//*[@uuid="%s"]/network_ref' % (uuid)
-    ret = Evaluate(path, node)
-    if ret:
-        uuid = ret[0].getAttribute('uuidref')
+    ost = lookup(node, uuid)
+    list = ost.getElementsByTagName('network_ref')
+    if list:
+        uuid = list[0].getAttribute('uuidref')
     else:
         return None
-    net = lookup(node, uuid)
-    return net
+    return lookup(node, uuid)
     
-
-# Recusively search from node for a uuid
 def lookup(node, uuid):
-    path = '//*[@uuid="%s"]' % (uuid)
-    ret = Evaluate(path, node)
-    if ret:
-        return ret[0]
-    else:
-        return None
-    
-# would like to do performance test on these two lookups
-#def lookup(node, uuid):
-#    for n in node.childNodes:
-#        if n.nodeType == n.ELEMENT_NODE:
-#            if getUUID(n) == uuid:
-#                return n
-#            else:
-#                n = lookup(n, uuid)
-#                if n: return n
-#    return None
-
+    for n in node.childNodes:
+        if n.nodeType == n.ELEMENT_NODE:
+            if getUUID(n) == uuid:
+                return n
+            else:
+                n = lookup(n, uuid)
+                if n: return n
+    return None
+            
 # Get name attribute of node
 def getName(node):
     return node.getAttribute('name')
