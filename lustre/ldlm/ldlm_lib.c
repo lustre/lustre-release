@@ -451,10 +451,12 @@ void target_abort_recovery(void *data)
         target_cancel_recovery_timer(obd);
         spin_unlock_bh(&obd->obd_processing_task_lock);
 
+        obd_precleanup(obd, OBD_OPT_FORCE);
+        class_disconnect_exports(obd, 0);
+
         /* XXX can't call this with spin_lock_bh, but it probably
            should be protected, somehow. */
-        if (OBT(obd) && OBP(obd, postsetup))
-                OBP(obd, postsetup)(obd);
+        obd_postsetup(obd);
 
         /* when recovery was abort, cleanup orphans for mds */
         if (OBT(obd) && OBP(obd, postrecov)) {
@@ -462,7 +464,6 @@ void target_abort_recovery(void *data)
                 CERROR("Cleanup %d orphans after recovery was abort!\n", rc);
         }
 
-        class_disconnect_exports(obd, 0);
         abort_delayed_replies(obd);
         abort_recovery_queue(obd);
         ptlrpc_run_recovery_over_upcall(obd);
@@ -742,9 +743,7 @@ int target_queue_final_reply(struct ptlrpc_request *req, int rc)
                        obd->obd_name);
                 obd->obd_recovering = 0;
 
-                if (OBT(obd) && OBP(obd, postsetup))
-                        OBP(obd, postsetup)(obd);
-
+                obd_postsetup(obd);
                 /* when recovering finished, cleanup orphans for mds       */
                 if (OBT(obd) && OBP(obd, postrecov)) {
                         CERROR("cleanup orphans after all clients recovered\n");

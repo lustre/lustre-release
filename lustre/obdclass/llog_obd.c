@@ -85,6 +85,7 @@ int llog_obd_setup(struct obd_device *obd, struct obd_device *disk_obd,
 {
         struct llog_obd_ctxt *ctxt;
         struct llog_handle *handle;
+        struct obd_run_ctxt saved;
         int rc;
 
         LASSERT(count == 1);
@@ -119,7 +120,9 @@ int llog_obd_setup(struct obd_device *obd, struct obd_device *disk_obd,
                 GOTO(out, rc);
 
         disk_obd->obd_llog_ctxt->loc_handles[index] = handle;
+        push_ctxt(&saved, &disk_obd->obd_ctxt, NULL);
         rc = llog_init_handle(handle,  LLOG_F_IS_CAT, NULL);
+        pop_ctxt(&saved, &disk_obd->obd_ctxt, NULL);
  out:
         if (ctxt && rc) 
                 OBD_FREE(ctxt, sizeof(*ctxt));
@@ -156,6 +159,7 @@ int llog_obd_origin_add(struct obd_export *exp,
                     struct llog_cookie *logcookies, int numcookies)
 {
         struct llog_handle *cathandle;
+        struct obd_export *export = exp->exp_obd->obd_log_exp;
         int rc;
         ENTRY;
 
@@ -164,7 +168,8 @@ int llog_obd_origin_add(struct obd_export *exp,
                 RETURN(-EINVAL);
         }
 
-        cathandle = exp->exp_obd->obd_llog_ctxt->loc_handles[index];
+        //cathandle = exp->exp_obd->obd_llog_ctxt->loc_handles[index];
+        cathandle = export->exp_obd->obd_llog_ctxt->loc_handles[index];
         LASSERT(cathandle != NULL);
         rc = llog_cat_add_rec(cathandle, rec, logcookies, NULL);
         if (rc != 1)
@@ -176,9 +181,13 @@ EXPORT_SYMBOL(llog_obd_origin_add);
 /* initialize the local storage obd for the logs */
 int llog_initialize(struct obd_device *obd)
 {
-        struct obd_export *exp = class_new_export(obd);
+        struct obd_export *exp;
         ENTRY;
 
+        if (obd->obd_log_exp)
+                RETURN(0);
+
+        exp = class_new_export(obd);
         if (exp == NULL)
                 RETURN(-ENOMEM);
         memcpy(&exp->exp_client_uuid, &obd->obd_uuid, 
@@ -190,6 +199,32 @@ int llog_initialize(struct obd_device *obd)
         RETURN(0);
 }
 EXPORT_SYMBOL(llog_initialize);
+
+/* disconnect the local storage obd for the logs */
+int llog_disconnect(struct obd_device *obd)
+{
+        struct obd_export *exp;
+        ENTRY;
+
+        LASSERT(obd->obd_log_exp);
+        exp = obd->obd_log_exp;
+
+        class_handle_unhash(&exp->exp_handle);
+        spin_lock(&exp->exp_obd->obd_dev_lock);
+        list_del_init(&exp->exp_obd_chain);
+        exp->exp_obd->obd_num_exports--;
+        spin_unlock(&exp->exp_obd->obd_dev_lock);
+        OBD_FREE(exp, sizeof(*exp));
+        if (obd->obd_set_up) {
+                atomic_dec(&obd->obd_refcount);
+                wake_up(&obd->obd_refcount_waitq);
+        }
+
+        obd->obd_log_exp = NULL;
+        obd->obd_logops = NULL;
+        RETURN(0);
+}
+EXPORT_SYMBOL(llog_disconnect);
 
 int llog_cat_initialize(struct obd_device *obd, int count)
 {
