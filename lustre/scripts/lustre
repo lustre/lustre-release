@@ -8,6 +8,18 @@
 # processname: lconf
 # config: /etc/lustre/config.xml
 # pidfile: /var/run/lustre.pid
+### BEGIN INIT INFO
+# Provides: lustre
+# Required-Start:
+# Required-Stop: 
+# Should-Start: scance
+# Should-Stop: scance
+# Default-Start: 3 4 5
+# Default-Stop: 0 1 2 6
+# Short-Description: Lustre Lite network File System.
+# Description: This starts both Lustre client and server functions.
+### END INIT INFO
+
 
 SERVICE=lustre
 LOCK=/var/lock/subsys/$SERVICE

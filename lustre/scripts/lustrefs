@@ -13,15 +13,53 @@
 # description: Mounts and unmounts all Lustre mount points.
 #
 ### BEGIN INIT INFO
-# Provides: $local_fs $remote_fs
+# Provides: lustrefs
+# Required-Start: $network
+# Required-Stop: $network
+# Should-Start: 
+# Should-Stop: 
+# Default-Start: 3 4 5
+# Default-Stop: 0 1 2 6
+# Short-Description: Mounts and unmounts all Lustre mount points.
 ### END INIT INFO
+## Provides: $local_fs $remote_fs
 
-[ -f /etc/sysconfig/network ] || exit 0
-. /etc/init.d/functions
-. /etc/sysconfig/network
+# Source function library.
+if [ -f /etc/init.d/functions ]; then
+   . /etc/init.d/functions
+fi
+
+# Source networking configuration.
+if [ -f /etc/sysconfig/network ]; then
+   . /etc/sysconfig/network
+fi
+
+# Source lsb-functions.
+if [ -f /lib/lsb/init-functions ]; then
+   . /lib/lsb/init-functions
+fi
 
 # Check that networking is up.
 [ "${NETWORKING}" = "no" ] && exit 0
+
+# Red Hat has it's own "action"-function for RHGB-messages.
+lustre_action () {
+	STRING=$1
+	shift
+	if [ $(typeset -F action) ]; then
+		action "$STRING" $*
+		rc=$?
+	else
+		$*
+		rc=$?
+		if [ $rc = 0 ]; then
+			log_success_msg "$STRING"
+		else
+			log_failure_msg "$STRING"
+		fi
+	fi
+	return $rc
+}
 
 LUSTREFSTAB=`LC_ALL=C awk '!/^#/ && $3 == "lustre" && $4 !~ /noauto/ { print $2 }' /etc/fstab`
 LUSTREMTAB=`LC_ALL=C awk '!/^#/ && $3 == "lustre" { print $2 }' /proc/mounts`
@@ -29,7 +67,7 @@ LUSTREMTAB=`LC_ALL=C awk '!/^#/ && $3 == "lustre" { print $2 }' /proc/mounts`
 # See how we were called.
 case "$1" in
   start)
-	[ -n "$LUSTREFSTAB" ] && action $"Mounting Lustre filesystems: " mount -a -t lustre
+	[ -n "$LUSTREFSTAB" ] && lustre_action $"Mounting Lustre filesystems: " mount -a -t lustre
 	touch /var/lock/subsys/lustrefs
 	;;
   stop)
@@ -40,9 +78,9 @@ case "$1" in
 		while [ -n "$remaining" -a "$retry" -gt 0 ]
 		do
 			if [ "$retry" -lt 3 ]; then
-				action $"Unmounting Lustre filesystems (retry): " umount -f -a -t lustre
+				lustre_action $"Unmounting Lustre filesystems (retry): " umount -f -a -t lustre
 			else
-				action $"Unmounting Lustre filesystems: " umount -a -t lustre
+				lustre_action $"Unmounting Lustre filesystems: " umount -a -t lustre
 			fi
 			sleep 2
 			remaining=`LC_ALL=C awk '!/^#/ && $3 ~ /^lustre/ && $2 != "/" {print $2}' /proc/mounts`

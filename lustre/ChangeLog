@@ -38,6 +38,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- align r/w RPCs to PTLRPC_MAX_BRW_SIZE boundaries for performance
 	- allow readahead allocations to fail when low on memory (5383)
 	- mmap locking landed again, after considerable improvement (2828)
+	- fix lustre/lustrefs init scripts for SuSE (patch from Scali, 5702)
 
 2004-11-23  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.0
