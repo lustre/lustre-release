@@ -87,7 +87,7 @@ cobd_setup (struct obd_device *dev, obd_count len, void *buf)
 }
 
 static int
-cobd_cleanup (struct obd_device *dev)
+cobd_cleanup (struct obd_device *dev, int force)
 {
         struct cache_obd  *cobd = &dev->u.cobd;
         int                rc;
