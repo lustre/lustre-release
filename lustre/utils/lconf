@@ -726,7 +726,10 @@ class OBD(Module):
     # FIXME: check if device is already formatted.
     def prepare(self):
         self.info(self.obdtype, self.devname, self.size, self.fstype, self.format)
-        blkdev = block_dev(self.devname, self.size, self.fstype, self.format)
+        if not self.obdtype == 'obdecho':
+            blkdev = block_dev(self.devname, self.size, self.fstype, self.format)
+        else:
+            blkdev = ''
         lctl.newdev(attach="%s %s %s" % (self.obdtype, self.name, self.uuid),
                     setup ="%s %s" %(blkdev, self.fstype))
     def cleanup(self):
@@ -830,13 +833,16 @@ class Mountpoint(Module):
 # TODO: Change query funcs to use XPath, which is muc cleaner
 
 def getDevice(obd):
-    dev = obd.getElementsByTagName('device')[0]
-    dev.normalize();
-    try:
-        size = int(dev.getAttribute('size'))
-    except ValueError:
-        size = 0
-    return dev.firstChild.data, size
+    list = obd.getElementsByTagName('device')
+    if len(list) > 0:
+        dev = list[0]
+        dev.normalize();
+        try:
+            size = int(dev.getAttribute('size'))
+        except ValueError:
+            size = 0
+        return dev.firstChild.data, size
+    return '', 0
 
 # Get the text content from the first matching child
 # If there is no content (or it is all whitespace), return

@@ -87,6 +87,9 @@ Options:
 --format            Format the partitions if unformated
 --reformat          Reformat partitions (this should be an lconf arg,
                     I think)
+--obdtype="obdtype" Specifiy obdtype: valid ones are obdecho and obdfilter.
+                    This is only useful for the --ost command.
+                    The device parameters are ignored for the obdecho type.
 """
     sys.exit(1)
 
@@ -194,14 +197,16 @@ class GenConfig:
         ldlm = self.newService("ldlm", name, uuid)
         return ldlm
 
-    def obd(self, name, uuid, fs, devname, format, dev_size=0):
+    def obd(self, name, uuid, fs, obdtype, devname, format, dev_size=0):
         obd = self.newService("obd", name, uuid)
-        obd.setAttribute('type', 'obdfilter')
-        self.addElement(obd, "fstype", fs)
-        dev = self.addElement(obd, "device", devname)
-        if (dev_size):
-            dev.setAttribute("size", "%s" % (dev_size))
-        self.addElement(obd, "autoformat", format)
+        obd.setAttribute('type', obdtype)
+        if fs:
+            self.addElement(obd, "fstype", fs)
+        if devname:
+            dev = self.addElement(obd, "device", devname)
+            if (dev_size):
+                dev.setAttribute("size", "%s" % (dev_size))
+            self.addElement(obd, "autoformat", format)
         return obd
 
     def osc(self, name, uuid, obd_uuid, net_uuid):
@@ -331,6 +336,12 @@ def node_add_profile(gen, node, ref, uuid):
 # Create a new obd, osc, and ost. Add them to the DOM.
 #
 def add_ost(gen, lustre, options, args):
+    lovname = ''
+    obdtype = 'obdfilter'
+    devname = ''
+    size = 0
+    fstype = 'extN'
+    
     if len(args) < 1:
         usage()
 
@@ -341,15 +352,17 @@ def add_ost(gen, lustre, options, args):
 
     if options.has_key('lov'):
         lovname = options['lov']
-    else:
-        lovname = ''
 
-    devname = args[0]
-    if len(args) > 1:
-        size = args[1]
-    else:
-        size = 0
+    if options.has_key('obdtype'):
+        obdtype = options['obdtype']
 
+    if obdtype == 'obdecho':
+        fstype = ''
+    else:
+        devname = args[0]
+        if len(args) > 1:
+            size = args[1]
+        
     obdname = new_name('OBD_'+ node_name)
     oscname = new_name('OSC_'+ node_name)
     ostname = new_name('OST_'+ node_name)
@@ -361,7 +374,7 @@ def add_ost(gen, lustre, options, args):
     if not net_uuid:
         error("NODE: ", node_name, "not found")
     
-    obd = gen.obd(obdname, obd_uuid,  "extN", devname, get_format_flag(options), size)
+    obd = gen.obd(obdname, obd_uuid, fstype, obdtype, devname, get_format_flag(options), size)
     ost = gen.ost(ostname, ost_uuid, obd_uuid, net_uuid)
     osc = gen.osc(oscname, osc_uuid, obd_uuid, ost_uuid)
     
@@ -551,7 +564,7 @@ def parse_cmdline(argv):
     short_opts = "ho:i:m:"
     long_opts = ["ost", "mtpt", "lov=", "node=", "mds=", "net",
                  "mdc", "merge=", "format", "reformat", "output=",
-                 "in=", "help"]
+                 "obdtype=", "in=", "help"]
     opts = []
     args = []
     options = {}
@@ -582,6 +595,8 @@ def parse_cmdline(argv):
             options['lov'] = a
         if o in ("-m", "--merge"):
             options['merge'] = a
+        if o == "--obdtype":
+            options['obdtype'] = a
         if o == "--format":
             options['format'] = 1
         if o  == "--reformat":
