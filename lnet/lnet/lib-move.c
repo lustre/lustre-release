@@ -1299,60 +1299,23 @@ void lib_assert_wire_constants (void)
         LASSERT (PTL_MSG_GET == 2);
         LASSERT (PTL_MSG_REPLY == 3);
         LASSERT (PTL_MSG_HELLO == 4);
+
         /* Checks for struct ptl_handle_wire_t */
         LASSERT (sizeof (ptl_handle_wire_t) == 16);
         LASSERT (offsetof (ptl_handle_wire_t, wh_interface_cookie) == 0);
         LASSERT (sizeof (((ptl_handle_wire_t *)0)->wh_interface_cookie) == 8);
         LASSERT (offsetof (ptl_handle_wire_t, wh_object_cookie) == 8);
         LASSERT (sizeof (((ptl_handle_wire_t *)0)->wh_object_cookie) == 8);
-        /* Checks for struct ptl_ack_t */
-        LASSERT (sizeof (ptl_ack_t) == 32);
-        LASSERT (offsetof (ptl_ack_t, mlength) == 0);
-        LASSERT (sizeof (((ptl_ack_t *)0)->mlength) == 4);
-        LASSERT (offsetof (ptl_ack_t, dst_wmd) == 4);
-        LASSERT (sizeof (((ptl_ack_t *)0)->dst_wmd) == 16);
-        LASSERT (offsetof (ptl_ack_t, match_bits) == 20);
-        LASSERT (sizeof (((ptl_ack_t *)0)->match_bits) == 8);
-        LASSERT (offsetof (ptl_ack_t, length) == 28);
-        LASSERT (sizeof (((ptl_ack_t *)0)->length) == 4);
-        /* Checks for struct ptl_put_t */
-        LASSERT (sizeof (ptl_put_t) == 44);
-        LASSERT (offsetof (ptl_put_t, ptl_index) == 0);
-        LASSERT (sizeof (((ptl_put_t *)0)->ptl_index) == 4);
-        LASSERT (offsetof (ptl_put_t, ack_wmd) == 4);
-        LASSERT (sizeof (((ptl_put_t *)0)->ack_wmd) == 16);
-        LASSERT (offsetof (ptl_put_t, match_bits) == 20);
-        LASSERT (sizeof (((ptl_put_t *)0)->match_bits) == 8);
-        LASSERT (offsetof (ptl_put_t, length) == 28);
-        LASSERT (sizeof (((ptl_put_t *)0)->length) == 4);
-        LASSERT (offsetof (ptl_put_t, offset) == 32);
-        LASSERT (sizeof (((ptl_put_t *)0)->offset) == 4);
-        LASSERT (offsetof (ptl_put_t, hdr_data) == 36);
-        LASSERT (sizeof (((ptl_put_t *)0)->hdr_data) == 8);
-        /* Checks for struct ptl_get_t */
-        LASSERT (sizeof (ptl_get_t) == 44);
-        LASSERT (offsetof (ptl_get_t, ptl_index) == 0);
-        LASSERT (sizeof (((ptl_get_t *)0)->ptl_index) == 4);
-        LASSERT (offsetof (ptl_get_t, return_wmd) == 4);
-        LASSERT (sizeof (((ptl_get_t *)0)->return_wmd) == 16);
-        LASSERT (offsetof (ptl_get_t, match_bits) == 20);
-        LASSERT (sizeof (((ptl_get_t *)0)->match_bits) == 8);
-        LASSERT (offsetof (ptl_get_t, length) == 28);
-        LASSERT (sizeof (((ptl_get_t *)0)->length) == 4);
-        LASSERT (offsetof (ptl_get_t, src_offset) == 32);
-        LASSERT (sizeof (((ptl_get_t *)0)->src_offset) == 4);
-        LASSERT (offsetof (ptl_get_t, return_offset) == 36);
-        LASSERT (sizeof (((ptl_get_t *)0)->return_offset) == 4);
-        LASSERT (offsetof (ptl_get_t, sink_length) == 40);
-        LASSERT (sizeof (((ptl_get_t *)0)->sink_length) == 4);
-        /* Checks for struct ptl_reply_t */
-        LASSERT (sizeof (ptl_reply_t) == 32);
-        LASSERT (offsetof (ptl_reply_t, dst_wmd) == 4);
-        LASSERT (sizeof (((ptl_reply_t *)0)->dst_wmd) == 16);
-        LASSERT (offsetof (ptl_reply_t, dst_offset) == 20);
-        LASSERT (sizeof (((ptl_reply_t *)0)->dst_offset) == 4);
-        LASSERT (offsetof (ptl_reply_t, length) == 28);
-        LASSERT (sizeof (((ptl_reply_t *)0)->length) == 4);
+
+        /* Checks for struct ptl_magicversion_t */
+        LASSERT (sizeof (ptl_magicversion_t) == 8);
+        LASSERT (offsetof (ptl_magicversion_t, magic) == 0);
+        LASSERT (sizeof (((ptl_magicversion_t *)0)->magic) == 4);
+        LASSERT (offsetof (ptl_magicversion_t, version_major) == 4);
+        LASSERT (sizeof (((ptl_magicversion_t *)0)->version_major) == 2);
+        LASSERT (offsetof (ptl_magicversion_t, version_minor) == 6);
+        LASSERT (sizeof (((ptl_magicversion_t *)0)->version_minor) == 2);
+
         /* Checks for struct ptl_hdr_t */
         LASSERT (sizeof (ptl_hdr_t) == 72);
         LASSERT (offsetof (ptl_hdr_t, dest_nid) == 0);
@@ -1365,14 +1328,52 @@ void lib_assert_wire_constants (void)
         LASSERT (sizeof (((ptl_hdr_t *)0)->src_pid) == 4);
         LASSERT (offsetof (ptl_hdr_t, type) == 24);
         LASSERT (sizeof (((ptl_hdr_t *)0)->type) == 4);
-        LASSERT (offsetof (ptl_hdr_t, msg) == 28);
-        LASSERT (sizeof (((ptl_hdr_t *)0)->msg) == 44);
-        /* Checks for struct ptl_magicversion_t */
-        LASSERT (sizeof (ptl_magicversion_t) == 8);
-        LASSERT (offsetof (ptl_magicversion_t, magic) == 0);
-        LASSERT (sizeof (((ptl_magicversion_t *)0)->magic) == 4);
-        LASSERT (offsetof (ptl_magicversion_t, version_major) == 4);
-        LASSERT (sizeof (((ptl_magicversion_t *)0)->version_major) == 2);
-        LASSERT (offsetof (ptl_magicversion_t, version_minor) == 6);
-        LASSERT (sizeof (((ptl_magicversion_t *)0)->version_minor) == 2);
+
+        /* Ack */
+        LASSERT (offsetof (ptl_hdr_t, msg.ack.mlength) == 28);
+        LASSERT (sizeof (((ptl_hdr_t *)0)->msg.ack.mlength) == 4);
+        LASSERT (offsetof (ptl_hdr_t, msg.ack.dst_wmd) == 32);
+        LASSERT (sizeof (((ptl_hdr_t *)0)->msg.ack.dst_wmd) == 16);
+        LASSERT (offsetof (ptl_hdr_t, msg.ack.match_bits) == 48);
+        LASSERT (sizeof (((ptl_hdr_t *)0)->msg.ack.match_bits) == 8);
+        LASSERT (offsetof (ptl_hdr_t, msg.ack.length) == 56);
+        LASSERT (sizeof (((ptl_hdr_t *)0)->msg.ack.length) == 4);
+
+        /* Put */
+        LASSERT (offsetof (ptl_hdr_t, msg.put.ptl_index) == 28);
+        LASSERT (sizeof (((ptl_hdr_t *)0)->msg.put.ptl_index) == 4);
+        LASSERT (offsetof (ptl_hdr_t, msg.put.ack_wmd) == 32);
+        LASSERT (sizeof (((ptl_hdr_t *)0)->msg.put.ack_wmd) == 16);
+        LASSERT (offsetof (ptl_hdr_t, msg.put.match_bits) == 48);
+        LASSERT (sizeof (((ptl_hdr_t *)0)->msg.put.match_bits) == 8);
+        LASSERT (offsetof (ptl_hdr_t, msg.put.length) == 56);
+        LASSERT (sizeof (((ptl_hdr_t *)0)->msg.put.length) == 4);
+        LASSERT (offsetof (ptl_hdr_t, msg.put.offset) == 60);
+        LASSERT (sizeof (((ptl_hdr_t *)0)->msg.put.offset) == 4);
+        LASSERT (offsetof (ptl_hdr_t, msg.put.hdr_data) == 64);
+        LASSERT (sizeof (((ptl_hdr_t *)0)->msg.put.hdr_data) == 8);
+
+        /* Get */
+        LASSERT (offsetof (ptl_hdr_t, msg.get.ptl_index) == 28);
+        LASSERT (sizeof (((ptl_hdr_t *)0)->msg.get.ptl_index) == 4);
+        LASSERT (offsetof (ptl_hdr_t, msg.get.return_wmd) == 32);
+        LASSERT (sizeof (((ptl_hdr_t *)0)->msg.get.return_wmd) == 16);
+        LASSERT (offsetof (ptl_hdr_t, msg.get.match_bits) == 48);
+        LASSERT (sizeof (((ptl_hdr_t *)0)->msg.get.match_bits) == 8);
+        LASSERT (offsetof (ptl_hdr_t, msg.get.length) == 56);
+        LASSERT (sizeof (((ptl_hdr_t *)0)->msg.get.length) == 4);
+        LASSERT (offsetof (ptl_hdr_t, msg.get.src_offset) == 60);
+        LASSERT (sizeof (((ptl_hdr_t *)0)->msg.get.src_offset) == 4);
+        LASSERT (offsetof (ptl_hdr_t, msg.get.return_offset) == 64);
+        LASSERT (sizeof (((ptl_hdr_t *)0)->msg.get.return_offset) == 4);
+        LASSERT (offsetof (ptl_hdr_t, msg.get.sink_length) == 68);
+        LASSERT (sizeof (((ptl_hdr_t *)0)->msg.get.sink_length) == 4);
+
+        /* Reply */
+        LASSERT (offsetof (ptl_hdr_t, msg.reply.dst_wmd) == 32);
+        LASSERT (sizeof (((ptl_hdr_t *)0)->msg.reply.dst_wmd) == 16);
+        LASSERT (offsetof (ptl_hdr_t, msg.reply.dst_offset) == 48);
+        LASSERT (sizeof (((ptl_hdr_t *)0)->msg.reply.dst_offset) == 4);
+        LASSERT (offsetof (ptl_hdr_t, msg.reply.length) == 56);
+        LASSERT (sizeof (((ptl_hdr_t *)0)->msg.reply.length) == 4);
 }
