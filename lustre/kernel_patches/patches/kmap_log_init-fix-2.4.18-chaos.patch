@@ -1,0 +1,19 @@
+ init/main.c |    4 +++-
+ 1 files changed, 3 insertions(+), 1 deletion(-)
+
+--- linux-2.4.18-chaos-uml/init/main.c~kmap_log_init-fix-2.4.18-chaos	2003-07-28 17:52:20.000000000 +0400
++++ linux-2.4.18-chaos-uml-alexey/init/main.c	2003-09-09 16:57:34.000000000 +0400
+@@ -448,8 +448,10 @@ asmlinkage void __init start_kernel(void
+ 	 */
+ 	if (num_mappedpages == 0)
+ 		num_mappedpages = num_physpages;
+-  
++ 
++#if defined(CONFIG_HIGHMEM) || defined(WANT_PAGE_VIRTUAL)
+ 	kmap_log_init();
++#endif
+ 	fork_init(num_mappedpages);
+ 	proc_caches_init();
+ 	vfs_caches_init(num_physpages);
+
+_
