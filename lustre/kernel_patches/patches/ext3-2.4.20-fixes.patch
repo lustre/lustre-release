@@ -41,7 +41,7 @@ diff -ru lum-2.4.18-um30/fs/ext3/balloc.c uml-2.4.18-12.5/fs/ext3/balloc.c
 +		if (block == le32_to_cpu(gdp->bg_block_bitmap) ||
 +		    block == le32_to_cpu(gdp->bg_inode_bitmap) ||
 +		    in_range(block, le32_to_cpu(gdp->bg_inode_table),
-+			     sb->u.ext2_sb.s_itb_per_group)) {
++			     EXT3_SB(sb)->s_itb_per_group)) {
 +			ext3_error(sb, __FUNCTION__,
 +				   "Freeing block in system zone - block = %lu",
 +				   block);
