@@ -68,3 +68,4 @@ rename_many
 memhog
 mmap_sanity
 rmdirmany
+writemany
