@@ -34,6 +34,7 @@ int ldlm_test(struct obd_device *obddev)
         struct ldlm_resource *res;
         __u32 res_id[RES_NAME_SIZE] = {1, 2, 3, 4, 5, 6};
         ldlm_error_t err;
+        struct ldlm_handle h;
 
         ns = ldlm_namespace_new(obddev, 1);
         if (ns == NULL)
@@ -46,11 +47,13 @@ int ldlm_test(struct obd_device *obddev)
         res->lr_blocking = ldlm_test_callback;
 
         /* Get a couple of read locks */
-        err = ldlm_local_lock_enqueue(obddev, 1, NULL, NULL, res_id, LCK_CR);
+        err = ldlm_local_lock_enqueue(obddev, 1, NULL, NULL, res_id, 
+                                      LCK_CR, &h);
         if (err != ELDLM_OK)
                 BUG();
 
-        err = ldlm_local_lock_enqueue(obddev, 1, NULL, NULL, res_id, LCK_CR);
+        err = ldlm_local_lock_enqueue(obddev, 1, NULL, NULL, res_id, 
+                                      LCK_CR, &h);
         if (err != ELDLM_OK)
                 BUG();
 

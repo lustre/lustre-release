@@ -157,7 +157,8 @@ extern struct obd_ops ldlm_obd_ops;
 ldlm_error_t ldlm_local_lock_enqueue(struct obd_device *obbdev, __u32 ns_id,
                                      struct ldlm_resource *parent_res,
                                      struct ldlm_lock *parent_lock,
-                                     __u32 *res_id, ldlm_mode_t mode);
+                                     __u32 *res_id, ldlm_mode_t mode, 
+                                     struct ldlm_handle *);
 void ldlm_lock_dump(struct ldlm_lock *lock);
 
 /* ldlm_test.c */
@@ -170,7 +171,7 @@ void ldlm_resource_dump(struct ldlm_resource *res);
 struct ldlm_resource *ldlm_resource_get(struct ldlm_namespace *ns,
                                         struct ldlm_resource *parent,
                                         __u32 *name, int create);
-void ldlm_resource_put(struct ldlm_resource *res);
+int ldlm_resource_put(struct ldlm_resource *res);
 
 #endif /* __KERNEL__ */
 

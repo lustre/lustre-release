@@ -7,6 +7,8 @@
  * See the file COPYING in this distribution
  *
  * by Cluster File Systems, Inc.
+ * authors, Peter Braam <braam@clusterfs.com> & 
+ * Phil Schwan <phil@clusterfs.com>
  */
 
 #define EXPORT_SYMTAB
@@ -55,8 +57,8 @@ static int ldlm_notify_incompatible(struct list_head *list,
         int rc = 0;
 
         list_for_each(tmp, list) {
-                struct ldlm_lock *lock = list_entry(tmp, struct ldlm_lock,
-                                                    l_res_link);
+                struct ldlm_lock *lock;
+                lock = list_entry(tmp, struct ldlm_lock, l_res_link);
                 if (lockmode_compat(lock->l_req_mode, new->l_req_mode))
                         continue;
 
@@ -69,10 +71,59 @@ static int ldlm_notify_incompatible(struct list_head *list,
         return rc;
 }
 
+
+static int ldlm_reprocess_queue(struct list_head *queue, 
+                                struct list_head *granted_list)
+{
+        struct list_head *tmp1, *tmp2;
+        struct ldlm_resource *res;
+        int rc = 0;
+
+        list_for_each(tmp1, queue) { 
+                struct ldlm_lock *pending;
+                rc = 0; 
+                pending = list_entry(tmp1, struct ldlm_lock, l_res_link);
+
+                /* check if pending can go in ... */ 
+                list_for_each(tmp2, granted_list) {
+                        struct ldlm_lock *lock;
+                        lock = list_entry(tmp2, struct ldlm_lock, l_res_link);
+                        if (lockmode_compat(lock->l_granted_mode, 
+                                            pending->l_req_mode))
+                                continue;
+                        else { 
+                                /* no, we are done */
+                                rc = 1;
+                                break;
+                        }
+                }
+
+                if (rc) { 
+                        /* no - we are done */
+                        break;
+                }
+
+                res = pending->l_resource;
+                list_del(&pending->l_res_link); 
+                list_add(&pending->l_res_link, &res->lr_granted);
+                pending->l_granted_mode = pending->l_req_mode;
+
+                if (pending->l_granted_mode < res->lr_most_restr)
+                        res->lr_most_restr = pending->l_granted_mode;
+
+                /* XXX call completion here */ 
+                
+
+        }
+
+        return rc;
+}
+
 ldlm_error_t ldlm_local_lock_enqueue(struct obd_device *obddev, __u32 ns_id,
                                      struct ldlm_resource *parent_res,
                                      struct ldlm_lock *parent_lock,
-                                     __u32 *res_id, ldlm_mode_t mode)
+                                     __u32 *res_id, ldlm_mode_t mode, 
+                                     struct ldlm_handle *lockh)
 {
         struct ldlm_namespace *ns;
         struct ldlm_resource *res;
@@ -93,6 +144,7 @@ ldlm_error_t ldlm_local_lock_enqueue(struct obd_device *obddev, __u32 ns_id,
         if (lock == NULL)
                 BUG();
 
+        lockh->addr = (__u64)(unsigned long)lock;
         spin_lock(&res->lr_lock);
 
         /* FIXME: We may want to optimize by checking lr_most_restr */
@@ -119,12 +171,37 @@ ldlm_error_t ldlm_local_lock_enqueue(struct obd_device *obddev, __u32 ns_id,
         if (mode < res->lr_most_restr)
                 res->lr_most_restr = mode;
 
+        /* XXX call the completion call back function */ 
+
         rc = ELDLM_OK;
         GOTO(out, rc);
 
  out:
         spin_unlock(&res->lr_lock);
         return rc;
+}
+
+ldlm_error_t ldlm_local_lock_cancel(struct obd_device *obddev, 
+                                     struct ldlm_handle *lockh)
+{
+        struct ldlm_lock *lock;
+        struct ldlm_resource *res = lock->l_resource;
+        ENTRY;
+
+        lock = (struct ldlm_lock *)(unsigned long)lockh->addr;
+        list_del(&lock->l_res_link); 
+
+        kmem_cache_free(ldlm_lock_slab, lock); 
+        if (ldlm_resource_put(lock->l_resource)) {
+                EXIT;
+                return 0;
+        }
+        
+        ldlm_reprocess_queue(&res->lr_converting, &res->lr_granted); 
+        if (list_empty(&res->lr_converting))
+                ldlm_reprocess_queue(&res->lr_waiting, &res->lr_granted); 
+        
+        return 0;
 }
 
 void ldlm_lock_dump(struct ldlm_lock *lock)

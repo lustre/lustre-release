@@ -335,7 +335,7 @@ int ptl_send_rpc(struct ptlrpc_request *request, struct lustre_peer *peer)
         return rc;
 }
 
-/* ptl_received_rpc() should be called by the sleeping process once
+/* ptl_handled_rpc() should be called by the sleeping process once
  * it finishes processing an event.  This ensures the ref count is
  * decremented and that the rpc ring buffer cycles properly.
  */ 
@@ -344,7 +344,7 @@ int ptl_handled_rpc(struct ptlrpc_service *service, void *start)
         int rc, index = 0;
 
         spin_lock(&service->srv_lock);
-        /* XXX this is wrong must find index on which request arrived!!!*/ 
+
         while (index < service->srv_ring_length) {
                 if ( service->srv_md[index].start == start) 
                         break;
@@ -360,23 +360,22 @@ int ptl_handled_rpc(struct ptlrpc_service *service, void *start)
         if (service->srv_ref_count[index] < 0)
                 BUG();
         
-        if ((service->srv_ref_count[index] == 0) &&
-            (service->srv_me_h[index] == 0)) {
+        if (service->srv_ref_count[index] == 0 &&
+            service->srv_me_h[index] == 0) {
 
                 /* Replace the unlinked ME and MD */
                 rc = PtlMEInsert(service->srv_me_h[service->srv_me_tail],
                                  service->srv_id, 0, ~0, PTL_RETAIN,
                                  PTL_INS_AFTER, &(service->srv_me_h[index]));
-                CDEBUG(D_NET, "Inserting new ME and MD in ring, rc %d\n", rc);
-                service->srv_me_tail = index;
-                service->srv_ref_count[index] = 0;
-                
                 if (rc != PTL_OK) {
                         CERROR("PtlMEInsert failed: %d\n", rc);
                         BUG();
                         spin_unlock(&service->srv_lock);
                         return rc;
                 }
+                CDEBUG(D_NET, "Inserting new ME and MD in ring, rc %d\n", rc);
+
+                service->srv_me_tail = index;
 
                 service->srv_md[index].start        = service->srv_buf[index];
                 service->srv_md[index].length       = service->srv_buf_size;
@@ -397,9 +396,6 @@ int ptl_handled_rpc(struct ptlrpc_service *service, void *start)
                         spin_unlock(&service->srv_lock);
                         return rc;
                 }
-
-                service->srv_md_active =
-                        NEXT_INDEX(index, service->srv_ring_length);
         } 
         
         spin_unlock(&service->srv_lock);

@@ -99,15 +99,19 @@ int server_request_callback(ptl_event_t *ev, void *data)
          */
 
         spin_lock(&service->srv_lock); 
-        service->srv_ref_count[service->srv_md_active]++;
+        if ( ev->mem_desc.start != 
+             service->srv_md[service->srv_md_active].start ) {
+                BUG();
+        }
 
+        service->srv_ref_count[service->srv_md_active]++;
         CDEBUG(D_INODE, "event offset %d buf size %d\n", 
                ev->offset, service->srv_buf_size);
         if (ev->offset >= (service->srv_buf_size - 1024)) {
-                CDEBUG(D_INODE, "Unlinking ME %d\n", service->srv_me_active);
+                CDEBUG(D_INODE, "Unlinking ME %d\n", service->srv_md_active);
 
-                rc = PtlMEUnlink(service->srv_me_h[service->srv_me_active]);
-                service->srv_me_h[service->srv_me_active] = 0;
+                rc = PtlMEUnlink(service->srv_me_h[service->srv_md_active]);
+                service->srv_me_h[service->srv_md_active] = 0;
 
                 if (rc != PTL_OK) {
                         CERROR("PtlMEUnlink failed - DROPPING soon: %d\n", rc);
@@ -116,12 +120,14 @@ int server_request_callback(ptl_event_t *ev, void *data)
                         return rc;
                 }
 
-                service->srv_me_active = NEXT_INDEX(service->srv_me_active,
-                                                    service->srv_ring_length);
+                service->srv_md_active = (service->srv_md_active + 1) % 
+                        service->srv_ring_length;
 
-                if (service->srv_me_h[service->srv_me_active] == 0)
+                if (service->srv_me_h[service->srv_md_active] == 0) { 
                         CERROR("All %d ring ME's are unlinked!\n",
                                service->srv_ring_length);
+                        BUG();
+                }
         }
 
         spin_unlock(&service->srv_lock); 

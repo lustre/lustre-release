@@ -53,9 +53,6 @@
 /* default rpc ring length */
 #define RPC_RING_LENGTH    2
 
-/* generic wrappable next */
-#define NEXT_INDEX(index, max)	(((index+1) >= max) ? 0 : (index+1))
-
 #define SVC_STOPPING 1
 #define SVC_RUNNING 2
 #define SVC_STOPPED 4
@@ -159,7 +156,6 @@ struct ptlrpc_service {
         /* FIXME: perhaps a list of EQs, if multiple NIs are used? */
         char *srv_buf[RPC_RING_LENGTH];
         __u32 srv_buf_size;
-        __u32 srv_me_active;
 	__u32 srv_me_tail;
 	__u32 srv_md_active;
         __u32 srv_ring_length;

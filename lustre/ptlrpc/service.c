@@ -274,7 +274,6 @@ int rpc_register_service(struct ptlrpc_service *service, char *uuid)
         }
 
         service->srv_ring_length = RPC_RING_LENGTH;
-        service->srv_me_active = 0;
         service->srv_md_active = 0;
 
         service->srv_id.addr_kind = PTL_ADDR_GID;

@@ -193,8 +193,9 @@ struct ldlm_resource *ldlm_resource_get(struct ldlm_namespace *ns,
 	return res;
 }
 
-void ldlm_resource_put(struct ldlm_resource *res)
+int ldlm_resource_put(struct ldlm_resource *res)
 {
+        int rc = 0; 
         ldlm_lock(res->lr_namespace->ns_obddev);
 
         if (atomic_dec_and_test(&res->lr_refcount)) {
@@ -212,9 +213,10 @@ void ldlm_resource_put(struct ldlm_resource *res)
                 list_del(&res->lr_childof);
 
                 kmem_cache_free(ldlm_resource_slab, res);
+                rc = 1;
         }
-
         ldlm_unlock(res->lr_namespace->ns_obddev);
+        return rc; 
 }
 
 int ldlm_get_resource_handle(struct ldlm_resource *res, struct ldlm_handle *h)
