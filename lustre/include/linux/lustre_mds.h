@@ -46,6 +46,7 @@ struct mds_run_ctxt {
 
 #define MDS_STOPPING 1
 #define MDS_RUNNING 2
+#define MDS_STOPPED 4
 #define LUSTRE_MDS_NAME "mds"
 
 struct mds_obd {

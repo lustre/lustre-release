@@ -60,6 +60,7 @@ struct ptlrpc_request *ptlrpc_prep_req(struct ptlrpc_client *cl,
 		return NULL;
 	}
 	request->rq_reqhdr->opc = opcode;
+	request->rq_reqhdr->seqno = request->rq_xid;
 
 	EXIT;
 	return request;
@@ -121,7 +122,7 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req,
 		CERROR("unpack_rep failed: %d\n", rc);
 		return rc;
 	}
-
+        CERROR("got rep %lld\n", req->rq_rephdr->seqno);
 	if ( req->rq_rephdr->status == 0 )
                 CDEBUG(0, "--> buf %p len %d status %d\n",
 		       req->rq_repbuf, req->rq_replen, 
