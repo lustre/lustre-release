@@ -1,9 +1,14 @@
 #!/bin/bash
 
+set -e
+set -vx
+
 export NAME=${NAME:-local}
 export OSTSIZE=10000
 
 MOUNT=${MOUNT:-/mnt/lustre}
+OOS=$MOUNT/oosfile
+LOG=$TMP/oosfile
 TMP=${TMP:-/tmp}
 
 echo "mnt.."
@@ -12,35 +17,46 @@ echo "done"
 
 SUCCESS=1
 
-FREESPACE=`df |grep $MOUNT|tr -s ' '|cut -d ' ' -f4`
+ORIGFREE=`df | grep $MOUNT | awk '{ print $4}'`
 
-rm -f $TMP/oosfile
-dd if=/dev/zero of=$MOUNT/oosfile count=$[$FREESPACE + 1] bs=1k 2>$TMP/oosfile
+export LANG=C LC_LANG=C # for "No space left on device" message
 
-RECORDSOUT=`grep "records out" $TMP/oosfile|cut -d + -f1`
-
-[ -z "`grep "No space left on device" $TMP/oosfile`" ] && \
-        echo "failed:dd not return ENOSPC" && SUCCESS=0
-
-REMAINEDFREE=`df |grep $MOUNT|tr -s ' '|cut -d ' ' -f4`
-[ $[$FREESPACE - $REMAINEDFREE ] -lt $RECORDSOUT ] && \
-        echo "failed:the space written by dd not equal to available space" && \
-        SUCCESS=0 && echo "$FREESPACE - $REMAINEDFREE $RECORDSOUT"
-
-[ $REMAINEDFREE -gt 100 ] && \
-	echo "failed:too many space left $REMAINEDFREE and -ENOSPC returned" &&\
+if dd if=/dev/zero of=$OOS count=$(($ORIGFREE + 16)) bs=1k 2> $LOG; then
+	echo "ERROR: dd did not fail"
 	SUCCESS=0
+fi
 
-FILESIZE=`ls -l $MOUNT/oosfile|tr -s ' '|cut -d ' ' -f5`
-[ $RECORDSOUT -ne $[$FILESIZE/1024] ] && \
-        echo "failed:the space written by dd not equal to the size of file" && \
+RECORDSOUT=`grep "records out" $LOG | cut -d + -f1`
+
+if [ -z "`grep "No space left on device" $LOG`" ]; then
+        echo "ERROR: dd not return ENOSPC"
+	SUCCESS=0
+fi
+
+LEFTFREE=`df | grep $MOUNT | awk '{ print $4 }'`
+if [ $(($ORIGFREE - $LEFTFREE)) -lt $RECORDSOUT ]; then
+        echo "ERROR: space used by dd not equal to available space"
         SUCCESS=0
+	echo "$ORIGFREE - $LEFTFREE $RECORDSOUT"
+fi
 
-[ $SUCCESS -eq 1 ] && echo "Success!"
+if [ $LEFTFREE -gt 100 ]; then
+	echo "ERROR: too much space left $LEFTFREE and -ENOSPC returned"
+	SUCCESS=0
+fi
 
-rm -f $MOUNT/oosfile*
-rm -f $TMP/oosfile
+FILESIZE=`ls -l $OOS | awk '{ print $5 }'`
+if [ $RECORDSOUT -ne $(($FILESIZE / 1024)) ]; then
+        echo "ERROR: blocks written by dd not equal to the size of file"
+        SUCCESS=0
+fi
 
-echo ""
-echo "cln.."
-sh llmountcleanup.sh
+if [ $SUCCESS -eq 1 ]; then
+	echo "Success!"
+
+	rm -f $OOS
+	rm -f $LOG
+
+	echo -e "\ncln.."
+	sh llmountcleanup.sh
+fi
