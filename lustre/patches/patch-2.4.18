@@ -260,7 +260,7 @@
  	current->journal_info = handle;
  
  	err = try_start_this_handle(journal, handle);
-@@ -1328,6 +1337,29 @@
+@@ -1328,6 +1337,28 @@
  #endif
  
  /*
@@ -277,11 +277,10 @@
 + * allocated struct must start with a struct journal_callback at offset 0,
 + * and has the caller-specific data afterwards.
 + */
-+void journal_callback_set(handle_t *handle, void (*func)(void *, int),
-+			  void *cb_data)
++void journal_callback_set(handle_t *handle,
++			  void (*func)(struct journal_callback *jcb, int error),
++			  struct journal_callback *jcb)
 +{
-+	struct journal_callback *jcb = cb_data;
-+
 +	list_add(&jcb->jcb_list, &handle->h_jcb);
 +	jcb->jcb_func = func;
 +}
@@ -332,7 +331,7 @@
 +#define HAVE_JOURNAL_CALLBACK_STATUS
 +struct journal_callback {
 +	struct list_head jcb_list;
-+	void (*jcb_func)(void *cb_data, int error);
++	void (*jcb_func)(struct journal_callback *jcb, int error);
 +	/* user data goes here */
 +};
 +
@@ -367,8 +366,9 @@
  extern int	 journal_try_to_free_buffers(journal_t *, struct page *, int);
  extern int	 journal_stop(handle_t *);
  extern int	 journal_flush (journal_t *);
-+extern void	 journal_callback_set(handle_t *handle, void (*fn)(void *, int),
-+				      void *cb_data);
++extern void	 journal_callback_set(handle_t *handle,
++				      void (*fn)(struct journal_callback *,int),
++				      struct journal_callback *jcb);
  
  extern void	 journal_lock_updates (journal_t *);
  extern void	 journal_unlock_updates (journal_t *);

@@ -221,7 +221,7 @@ static void mds_extN_delete_inode(struct inode *inode)
                 mds_extN_fs_ops.cl_delete_inode(inode);
 }
 
-static void mds_extN_callback_status(void *jcb, int error)
+static void mds_extN_callback_status(struct journal_callback *jcb, int error)
 {
         struct mds_cb_data *mcb = (struct mds_cb_data *)jcb;
 
@@ -250,7 +250,7 @@ static int mds_extN_set_last_rcvd(struct mds_obd *mds, void *handle)
         CDEBUG(D_EXT2, "set callback for last_rcvd: %Ld\n",
                (unsigned long long)mcb->cb_last_rcvd);
         journal_callback_set(handle, mds_extN_callback_status,
-                             (void *)mcb);
+                             (struct journal_callback *)mcb);
 #else
 #warning "no journal callback kernel patch, faking it..."
         {
