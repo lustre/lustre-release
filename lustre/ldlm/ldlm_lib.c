@@ -887,6 +887,7 @@ int target_queue_recovery_request(struct ptlrpc_request *req,
         if (obd->obd_processing_task == current->pid ||
             transno < obd->obd_next_recovery_transno) {
                 /* Processing the queue right now, don't re-add. */
+                lustre_msg_clear_flags(req->rq_reqmsg, MSG_RESENT);
                 LASSERT(list_empty(&req->rq_list));
                 spin_unlock_bh(&obd->obd_processing_task_lock);
                 OBD_FREE(reqmsg, req->rq_reqlen);
@@ -990,7 +991,12 @@ int target_queue_final_reply(struct ptlrpc_request *req, int rc)
         list_add(&req->rq_list, &obd->obd_delayed_reply_queue);
 
         spin_lock_bh(&obd->obd_processing_task_lock);
-        --obd->obd_recoverable_clients;
+        /* only count the first "replay over" request from each
+           export */
+        if (req->rq_export->exp_replay_needed) {
+                --obd->obd_recoverable_clients;
+                req->rq_export->exp_replay_needed = 0;
+        }
         recovery_done = (obd->obd_recoverable_clients == 0);
         spin_unlock_bh(&obd->obd_processing_task_lock);
 

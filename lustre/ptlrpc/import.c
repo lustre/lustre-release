@@ -100,6 +100,10 @@ int ptlrpc_set_import_discon(struct obd_import *imp)
         spin_lock_irqsave(&imp->imp_lock, flags);
 
         if (imp->imp_state == LUSTRE_IMP_FULL) {
+                CERROR("%s: connection lost to %s@%s\n",
+                       imp->imp_obd->obd_name, 
+                       imp->imp_target_uuid.uuid,
+                       imp->imp_connection->c_remote_uuid.uuid);
                 IMPORT_SET_STATE_NOLOCK(imp, LUSTRE_IMP_DISCON);
                 spin_unlock_irqrestore(&imp->imp_lock, flags);
                 obd_import_event(imp->imp_obd, imp, IMP_EVENT_DISCON);
@@ -407,6 +411,9 @@ static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
                 if (imp->imp_invalid) {
                         IMPORT_SET_STATE(imp, LUSTRE_IMP_EVICTED);
                 } else if (MSG_CONNECT_RECOVERING & msg_flags) {
+                        CDEBUG(D_HA, "%s: reconnected to %s during replay\n",
+                               imp->imp_obd->obd_name, 
+                               imp->imp_target_uuid.uuid);
                         imp->imp_resend_replay = 1;
                         IMPORT_SET_STATE(imp, LUSTRE_IMP_REPLAY);
                 } else {
@@ -476,7 +483,15 @@ static int completed_replay_interpret(struct ptlrpc_request *req,
                                     void * data, int rc)
 {
         atomic_dec(&req->rq_import->imp_replay_inflight);
-        ptlrpc_import_recovery_state_machine(req->rq_import);
+        if (req->rq_status == 0) {
+                ptlrpc_import_recovery_state_machine(req->rq_import);
+        } else {
+                CDEBUG(D_HA, "%s: LAST_REPLAY message error: %d, "
+                       "reconnecting\n", 
+                       req->rq_import->imp_obd->obd_name, req->rq_status);
+                ptlrpc_connect_import(req->rq_import, NULL);
+        }
+
         RETURN(0);
 }
 
@@ -557,6 +572,10 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
                         GOTO(out, rc);
                 IMPORT_SET_STATE(imp, LUSTRE_IMP_FULL);
                 ptlrpc_activate_import(imp);
+                CERROR("%s: connection restored to %s@%s\n",
+                       imp->imp_obd->obd_name, 
+                       imp->imp_target_uuid.uuid,
+                       imp->imp_connection->c_remote_uuid.uuid);
         }
 
         if (imp->imp_state == LUSTRE_IMP_FULL) {

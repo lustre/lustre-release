@@ -485,7 +485,9 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
                 spin_lock_init(&fed->fed_lock);
 
                 fcd = NULL;
+                exp->exp_replay_needed = 1;
                 obd->obd_recoverable_clients++;
+                obd->obd_max_recoverable_clients++;
                 class_export_put(exp);
 
                 CDEBUG(D_OTHER, "client at idx %d has last_rcvd = "LPU64"\n",

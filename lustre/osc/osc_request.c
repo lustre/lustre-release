@@ -785,9 +785,6 @@ static int osc_brw_prep_request(int cmd, struct obd_import *imp,struct obdo *oa,
         LASSERT((void *)(niobuf - niocount) ==
                 lustre_msg_buf(req->rq_reqmsg, 2, niocount * sizeof(*niobuf)));
         osc_announce_cached(cli, &body->oa, opc == OST_WRITE ? requested_nob:0);
-        spin_lock_irqsave(&req->rq_lock, flags);
-        req->rq_no_resend = 1;
-        spin_unlock_irqrestore(&req->rq_lock, flags);
 
         /* size[0] still sizeof (*body) */
         if (opc == OST_WRITE) {
@@ -908,8 +905,6 @@ restart_bulk:
         rc = osc_brw_prep_request(cmd, class_exp2cliimp(exp), oa, lsm,
                                   page_count, pga, &requested_nob, &niocount,
                                   &request);
-        /* NB ^ sets rq_no_resend */
-
         if (rc != 0)
                 return (rc);
 
@@ -938,13 +933,6 @@ static int brw_interpret(struct ptlrpc_request *request,
         struct brw_page *pga = aa->aa_pga;
         ENTRY;
 
-        /* XXX bug 937 here */
-        if (rc == -ETIMEDOUT && request->rq_resend) {
-                DEBUG_REQ(D_HA, request,  "BULK TIMEOUT");
-                LBUG(); /* re-send.  later. */
-                //goto restart_bulk;
-        }
-
         rc = osc_brw_fini_request(request, oa, requested_nob, niocount,
                                   page_count, pga, rc);
         RETURN (rc);
@@ -964,8 +952,6 @@ static int async_internal(int cmd, struct obd_export *exp, struct obdo *oa,
         rc = osc_brw_prep_request(cmd, class_exp2cliimp(exp), oa, lsm,
                                   page_count, pga, &requested_nob, &nio_count,
                                   &request);
-        /* NB ^ sets rq_no_resend */
-
         if (rc == 0) {
                 LASSERT(sizeof(*aa) <= sizeof(request->rq_async_args));
                 aa = (struct osc_brw_async_args *)&request->rq_async_args;
