@@ -1,8 +1,0 @@
-DESC
-lkcd's "2.5" cvs module at 
-
-	:pserver:anonymous@cvs.sourceforge.net:/cvsroot/lkcd
-
-contains a directory tree of goo that is supposed to be copied into the
-target tree before being built.  this is that tree in patch form.
-EDESC

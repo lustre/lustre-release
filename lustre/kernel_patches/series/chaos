@@ -1,7 +1,0 @@
-dev_read_only.patch
-exports.patch
-kmem_cache_validate.patch
-lustre_version.patch
-vfs_intent-2.4.18-18.patch
-invalidate_show.patch
-iod-rmap-exports.patch

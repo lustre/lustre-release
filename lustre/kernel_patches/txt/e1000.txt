@@ -1,4 +1,0 @@
-This patch creates the necessary drivers
-for the e1000 card that are not included with
-the standard RH distribution. This is used for the
-GigE e1000 cards.
