@@ -47,6 +47,14 @@ echo -n "test 5: fstat validation on multiple mount points..."
 ./multifstat /mnt/lustre1/fstatfile /mnt/lustre2/fstatfile || error "test 5 fails"
 echo "pass"
 
+echo -n "test 9: remove of open file on other node..."
+touch /mnt/lustre1/f9
+tail -f /mnt/lustre/f9 &
+rm /mnt/lustre2/f9
+kill %1
+cat /mnt/lustre1/f9 && error "test 9 fails"
+echo "pass"
+
 $CLEAN
 $START
 
