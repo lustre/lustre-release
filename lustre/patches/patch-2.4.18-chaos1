@@ -1336,3 +1336,14 @@
  		error = -EINVAL;
  		if (inode->i_op && inode->i_op->readlink &&
  		    !(error = do_revalidate(nd.dentry))) {
+--- kernel-rh-2.4.18/fs/nfsd/vfs.c.orig-lustre	Thu Jun 13 15:28:25 2002
++++ kernel-rh-2.4.18/fs/nfsd/vfs.c	Thu Jun 13 15:28:40 2002
+@@ -1285,7 +1285,7 @@
+ 			err = nfserr_perm;
+ 	} else
+ #endif
+-	err = vfs_rename(fdir, odentry, tdir, ndentry);
++	err = vfs_rename(fdir, odentry, tdir, ndentry, NULL);
+ 	if (!err && EX_ISSYNC(tfhp->fh_export)) {
+ 		nfsd_sync_dir(tdentry);
+ 		nfsd_sync_dir(fdentry);
