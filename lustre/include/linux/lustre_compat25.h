@@ -54,6 +54,7 @@
 #define to_kdev_t(dev)                  (dev)
 #define kdev_t_to_nr(dev)               (dev)
 #define val_to_kdev(dev)                (dev)
+#define ILOOKUP(sb, ino, test, data)    ilookup5(sb, ino, test, data);
 
 #include <linux/writeback.h>
 
@@ -61,8 +62,9 @@
 
 #define ll_vfs_create(a,b,c,d)              vfs_create(a,b,c)
 #define ll_permission(a,b,c)                permission(a,b)
-
-#define ll_dev_t                        int
+#define ILOOKUP(sb, ino, test, data)        ilookup4(sb, ino, test, data);
+#define DCACHE_DISCONNECTED                 DCACHE_NFSD_DISCONNECTED
+#define ll_dev_t                            int
 
 static inline void clear_page_dirty(struct page *page)
 {
