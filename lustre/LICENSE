@@ -1,3 +1,23 @@
+Each file in this distribution should contain a header stating the
+copyright owner(s), and the licensing terms for that module.  Some
+files are not eligible for copyright protection, and contain neither.
+
+There are many files which may be covered by a separate Evaluation
+License Agreement that you may have signed before downloading this
+software.  If you did not sign such an agreement, or if the file does
+not mention that license, then you can redistribute and/or modify it
+under the terms of version 2 of the GNU General Public License.
+Each file is very clear about which license is applicable.
+
+In any case, Lustre is distributed in the hope that it will be
+useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+license text for more details.
+
+Reproduced below is the GNU General Public License version 2, and
+Linus's clarifying statement from the Linux kernel source code:
+
+----------------------------------------
 
    NOTE! This copyright does *not* cover user programs that use kernel
  services by normal system calls - this is merely considered normal use
