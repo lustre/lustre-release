@@ -7,11 +7,7 @@ invalidate_show.patch
 iod-rmap-exports.patch
 export-truncate.patch
 ext3-compat-2.4.18-chaos.patch
-ext-2.4-patch-1.patch
-ext-2.4-patch-2.patch
-ext-2.4-patch-3.patch
-ext-2.4-patch-4.patch
-ext-2.4-patch-5.patch
+ext3-htree.patch
 linux-2.4.18ea-0.8.26-2.patch
 ext3-2.4-ino_t.patch
 ext3-2.4.18-ino_sb_macro-2.patch
