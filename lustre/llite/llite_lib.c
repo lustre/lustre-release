@@ -241,6 +241,12 @@ int lustre_common_fill_super(struct super_block *sb, char *mdc, char *osc)
 #endif
 
         sb->s_root = d_alloc_root(root);
+
+#ifdef S_PDIROPS
+        CWARN("Enabling PDIROPS\n");
+        sb->s_flags |= S_PDIROPS;
+#endif
+
         RETURN(err);
 
 out_root:
