@@ -42,19 +42,17 @@ static int smfs_readlink(struct dentry *dentry, char *buffer, int buflen)
 {
         struct inode *cache_inode = I2CI(dentry->d_inode);
         struct dentry *cache_dentry;
-        int rc = 0;
+        int rc = -ENOMEM;
         ENTRY;
 
-        if (!cache_inode)
+        if (!cache_inode || !cache_inode->i_op->readlink)
                 RETURN(-ENOENT);
 
         cache_dentry = pre_smfs_dentry(NULL, cache_inode, dentry);
-        if (!cache_dentry)
-                GOTO(exit, rc = -ENOMEM);
-        if (cache_inode->i_op && cache_inode->i_op->readlink)
-                rc = cache_inode->i_op->readlink(cache_dentry, buffer, buflen);
-        GOTO(exit, rc);
-exit:
+        if (cache_dentry)
+                rc = cache_inode->i_op->readlink(cache_dentry, buffer, 
+                                                 buflen);
+        
         post_smfs_dentry(cache_dentry);
         return rc;
 }
@@ -63,21 +61,18 @@ static int smfs_follow_link(struct dentry *dentry, struct nameidata *nd)
 {
         struct inode *cache_inode = I2CI(dentry->d_inode);
         struct dentry *cache_dentry;
-        int rc = 0;
+        int rc = -ENOMEM;
         ENTRY;
 
-        if (!cache_inode)
+        if (!cache_inode || !cache_inode->i_op->follow_link)
                 RETURN(-ENOENT);
 
         cache_dentry = pre_smfs_dentry(NULL, cache_inode, dentry);
-        if (!cache_dentry)
-                GOTO(exit, rc = -ENOMEM);
-
-        if (cache_inode->i_op && cache_inode->i_op->follow_link)
+        if (cache_dentry)
                 rc = cache_inode->i_op->follow_link(cache_dentry, nd);
-exit:
+
         post_smfs_dentry(cache_dentry);
-        return rc;
+        RETURN(rc);
 }
 
 struct inode_operations smfs_sym_iops = {

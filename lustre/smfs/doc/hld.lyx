@@ -753,6 +753,20 @@ int smfs_register_plugin (struct smfs_plugin *);
 
 SMFS will return 0 in case of successfull registration or error code otherwise.
  
+\layout Subsubsection*
+
+Plugin deregistration
+\layout Standard
+
+SMFS provide following method for deregistration:
+\layout LyX-Code
+
+void * smfs_deregister_plugin (int type);
+\layout Standard
+
+SMFS will return private plugin data from struct smfs_plugin in case of
+ successfull registration or NULL pointer otherwise.
+ 
 \layout Paragraph*
 
 Plugins operation
@@ -761,7 +775,7 @@ Plugins operation
 Plugin's hook function must have the same type:
 \layout LyX-Code
 
-typedef int smfs_hook_func (int opcode, void * parameter);
+typedef int (*smfs_plg_hook) (int opcode, void * parameter, void * plg_private);
 \layout Standard
 
 Parameter can contains:
@@ -783,6 +797,13 @@ opcode - hook code
 \layout Itemize
 
 handle - fsfilt transaction if exists
+\layout Standard
+
+
+\emph on 
+Plg_private 
+\emph default 
+is private plugin data.
 \layout Standard
 
 There are opcodes for now:
@@ -895,7 +916,7 @@ calculate size for transaction - if plugin will participate into transaction
 etc.
 \layout LyX-Code
 
-smfs_helper(int code, void * parameter);
+smfs_helper(int code, void * parameter, void * plg_private);
 \layout Standard
 
 Where 

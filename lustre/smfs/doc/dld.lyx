@@ -662,12 +662,9 @@ Fsfilt operations
 \layout Standard
 
 LVFS has fsfilt operations for SMFS.
- SMFS store copy of fsfilt operations from backstore filesystem, gets fsfilt
- operations for itself and pass each call to backstore filesysem.
+ SMFS store copy of fsfilt operations from backstore filesystem.
+ If it gets fsfilt operations then it is passed to backstore filesysem.
  
-\layout Comment
-
-should I give more info?
 \layout Subsubsection
 
 Transactions handling
@@ -680,10 +677,7 @@ All hooks should be in the same transaction with backstore fs operation.
  stuff to it.
  To solve this SMFS pass transaction handler to plugin, so it can do transaction
  in right way.
- 
-\layout Comment
-
-details?
+ Also plugin should provide method to calculate extra size for transaction.
 \layout Subsection
 
 Backstore filesystem
@@ -693,8 +687,7 @@ Initialization
 \layout Enumerate
 
 Backstore FS is mounted by SMFS while initialization, if mount is failed
- SMFS initialization is also failed (maybe in that case we need to mount
- backstore FS directly instead of SMFS?)
+ SMFS initialization is also failed.
 \layout Enumerate
 
 SMFS creates own superblock using backstore one and fsfilter operations
@@ -717,7 +710,13 @@ Inode operations
 SMFS creates own inode operations for each inode.
  When some operations in invoked SMFS calls real filesystem method to complete
  it.
- There are additional actions for making SMFS inode and real inode consistent.
+ 
+\layout Standard
+
+There are additional actions for making SMFS inode and real inode consistent.
+ These actions are needed before real operation to create artificial objects
+ and after - to copy changes from backfs inode.
+ 
 \layout Subsubsection
 
 File operations
@@ -725,7 +724,8 @@ File operations
 
 SMFS creates own filp, duplicate backstore FS filp and dentry.
  They are used in file operations following by backstore operation call.
- 
+ To do file operations we create artificial file object before calling of
+ real operation.
 \layout Section
 
 
@@ -739,7 +739,7 @@ Backstore filesystem
 Next options is passed to smfs and descript backstore FS completely:
 \layout Standard
 
-smfs dev=/mnt type=ext3
+smfs dev=/mnt type=ldiskfs
 \layout Subsection
 
 SMFS plugins/upcalls
@@ -1387,6 +1387,127 @@ duplicate-sb(sb, backfs_sb);
 Inode operations
 \layout Standard
 
+Each inode operaion uses backfs inode structure, this structure is created
+ while several fs operations are invoked.
+ Logic of all operations is next:
+\layout Itemize
+
+There is smfs dentry for each operation passed as parameter
+\layout Itemize
+
+SMFS creates artificial dentries for using they in backstore fs operation
+\layout Itemize
+
+after operation there is backstore fs inode in backfs_dentry->d_inode
+\layout Itemize
+
+if SMFS inode not exits it is created here and connected to backfs inode
+\layout Itemize
+
+several fields are copied from backstore fs inode to smfs one
+\layout Itemize
+
+all artificial dentries are cleared.
+\layout Standard
+
+
+\emph on 
+Artificial dentry handling
+\layout LyX-Code
+
+struct dentry *pre_smfs_dentry(struct dentry *parent_dentry, struct inode
+ *cache_inode,
+\layout LyX-Code
+
+                               struct dentry *dentry) {
+\layout LyX-Code
+
+        struct dentry *cache_dentry = NULL;
+\layout LyX-Code
+
+        cache_dentry = d_alloc(parent_dentry, &dentry->d_name);
+\layout LyX-Code
+
+        if (!cache_dentry)
+\layout LyX-Code
+
+                RETURN(NULL);
+\layout LyX-Code
+
+        if (!parent_dentry)
+\layout LyX-Code
+
+                cache_dentry->d_parent = cache_dentry;
+\layout LyX-Code
+
+        if (cache_inode)
+\layout LyX-Code
+
+                d_add(cache_dentry, cache_inode);
+\layout LyX-Code
+
+        RETURN(cache_dentry);
+\layout LyX-Code
+
+}
+\layout LyX-Code
+
+\layout LyX-Code
+
+void post_smfs_dentry(struct dentry *cache_dentry) {
+\layout LyX-Code
+
+        if (!cache_dentry)
+\layout LyX-Code
+
+                return;
+\layout LyX-Code
+
+        d_unalloc(cache_dentry);
+\layout LyX-Code
+
+} 
+\layout Standard
+
+For inode operation we have parent inode and dentry for operation.
+ So SMFS has to create artificial parent dentry with backfs_inode connected
+ to it and artificial dentry for ext3 operation.
+ This is done with pre_smfs_dentry() method.
+\layout Standard
+
+After successfull creation SMFS will do backfs operation and gets filled
+ artificial dentry.
+ Next step is getting SMFS inode from cache using ext3 inode number.
+ If inode is found it is connected to smfs dentry and operation can be counted
+ as completed.
+ SMFS clean all artificial dentries and exits.
+\layout Standard
+
+
+\emph on 
+duplicate_inode details
+\layout Standard
+
+
+\begin_inset ERT
+status Open
+
+\layout Standard
+
+\backslash 
+lst{../../include/linux/lustre_smfs.h}{Duplicate
+\backslash 
+_inode()}{firstline=297,lastline=316}
+\end_inset 
+
+
+\layout Standard
+
+
+\emph on 
+Inode operations
+\layout Standard
+
 
 \begin_inset ERT
 status Open
@@ -1570,6 +1691,36 @@ lst{../../smfs/file.c}{Truncate()}{firstline=385,lastline=404}
 \layout Subsubsection
 
 File operations
+\layout Standard
+
+SMFS creates artificial struct file object for each SMFS file struct and
+ use it for backstore fs operations.
+ Backstore struct file is created in open() method and connected to private
+ field in smfs struct file.
+ This struct will be released in smfs_release().
+\layout Standard
+
+When created and modified this struct file is duplicated to smfs one:
+\layout Standard
+
+
+\emph on 
+duplicate_file
+\layout Standard
+
+
+\begin_inset ERT
+status Open
+
+\layout Standard
+
+\backslash 
+lst{../../include/linux/lustre_smfs.h}{duplicate
+\backslash 
+_file()}{firstline=343,lastline=362}
+\end_inset 
+
+
 \layout Paragraph
 
 Common case (write/read/llseek/mmap/ioctl/readdir)
@@ -1827,18 +1978,6 @@ Plugin commit transaction.
 
 Transaction MUST be commited where it was started.
  It is not allowed to start it in pre_hook and commit in post_hook.
-\layout Subsubsection
-
-Special case: write operation
-\layout Standard
-
-Write operation cannot be encapsulated in SMFS transaction because really
- this operation starts transactions for each prepare_write/commit_write
- so current transaction can be easily overflowed.
- At the moment SMFS do nothing with write, but plugin like KML do log for
- write operation.
- Therefore in case of crush we will not be able to restore KML log synced
- with FS operations.
 \layout Subsection
 
 Locking

@@ -48,15 +48,16 @@ static void smfs_init_inode_info(struct inode *inode, void *opaque)
                 
                 /* getting backing fs inode. */
                 ino = sargs ? sargs->s_ino : inode->i_ino;
+                //ino = sargs->s_ino;
                 cache_inode = iget(S2CSB(inode->i_sb), ino); 
-
+                
                 OBD_ALLOC(inode->u.generic_ip,
                           sizeof(struct smfs_inode_info));
         
                 LASSERT(inode->u.generic_ip);
                 I2CI(inode) = cache_inode;
         
-                CDEBUG(D_INODE, "cache_inode i_count ino %lu i_count %d\n",
+                CDEBUG(D_INODE, "cache_inode %lu i_count %d\n",
                        cache_inode->i_ino, atomic_read(&cache_inode->i_count));
         
                 post_smfs_inode(inode, cache_inode);
@@ -75,14 +76,16 @@ static void smfs_clear_inode_info(struct inode *inode)
         if (I2SMI(inode)) {
                 struct inode *cache_inode = I2CI(inode);
 
+                CDEBUG(D_INODE, "Clear_info: cache_inode %lu\n", cache_inode->i_ino);
+
                 LASSERTF(((atomic_read(&cache_inode->i_count) == 1) || 
                           cache_inode == cache_inode->i_sb->s_root->d_inode),
-                         "inode %p cache inode %p %lu i_count %d != 0 \n", 
+                         "inode %p cache inode %p #%lu i_count %d != 1 \n", 
                          inode, cache_inode, cache_inode->i_ino, 
                          atomic_read(&cache_inode->i_count));
-
-                if (cache_inode != cache_inode->i_sb->s_root->d_inode)
-                        iput(cache_inode);
+                
+                //if (cache_inode != cache_inode->i_sb->s_root->d_inode)
+                iput(cache_inode);
                 
                 OBD_FREE(inode->u.generic_ip,
                          sizeof(struct smfs_inode_info));
@@ -90,6 +93,7 @@ static void smfs_clear_inode_info(struct inode *inode)
         }
 }
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 static void smfs_read_inode2(struct inode *inode, void *opaque)
 {
         ENTRY;
@@ -106,7 +110,6 @@ static void smfs_read_inode2(struct inode *inode, void *opaque)
         EXIT;
 }
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 static int smfs_test_inode(struct inode *inode, unsigned long ino, 
                            void *opaque)
 #else
@@ -115,12 +118,7 @@ static int smfs_test_inode(struct inode *inode, void *opaque)
 {
         struct smfs_iget_args *sargs = (struct smfs_iget_args*)opaque;
 
-        LASSERT(sargs);
-
-        if (!sargs)
-                return 1;
-
-        if (inode->i_ino != sargs->s_ino)
+        if (!sargs || (inode->i_ino != sargs->s_ino))
                 return 0;
         
 #ifdef CONFIG_SNAPFS
@@ -128,19 +126,6 @@ static int smfs_test_inode(struct inode *inode, void *opaque)
             !smfs_snap_test_inode(inode, opaque))
                 return 0;  
 #endif
-        if (I2SMI(inode)) {
-                struct inode *cache_inode = I2CI(inode);
-
-                /* this is needed to make symatry between smfs_put_inode(). */
-                LASSERT(cache_inode != NULL);
-                igrab(cache_inode);
-                
-                LASSERTF(cache_inode->i_ino == inode->i_ino, 
-                         "inode ino %lu != cache ino %lu",
-                         cache_inode->i_ino, inode->i_ino); 
-        } else {
-                smfs_init_inode_info(inode, opaque);
-        }
         
         return 1;
 }
@@ -148,7 +133,7 @@ static int smfs_test_inode(struct inode *inode, void *opaque)
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 int smfs_set_inode(struct inode *inode, void *opaque)
 {
-        smfs_read_inode2(inode, opaque);
+        //smfs_read_inode2(inode, opaque);
         return 0;
 }
 
@@ -161,13 +146,16 @@ struct inode *smfs_iget(struct super_block *sb, ino_t hash,
         inode = iget5_locked(sb, hash, smfs_test_inode,
                              smfs_set_inode, sargs);
         if (inode) {
-                if (inode->i_state & I_NEW)
+                if (inode->i_state & I_NEW) {
+                        smfs_init_inode_info(inode, (void*)sargs);
                         unlock_new_inode(inode);
+                }
+                inode->i_ino = hash;
                 CDEBUG(D_VFSTRACE, "inode: %lu/%u(%p) index %d "
                        "ino %d\n", inode->i_ino, inode->i_generation,
                        inode, sargs->s_index, sargs->s_ino);
-                inode->i_ino = hash;
         }
+        
         return inode;
 }
 #else
@@ -180,10 +168,8 @@ struct inode *smfs_iget(struct super_block *sb, ino_t hash,
         inode = iget4(sb, hash, smfs_test_inode, sargs);
         if (inode) {
                 struct inode *cache_inode = I2CI(inode);
-                LASSERTF((inode->i_ino == cache_inode->i_ino), 
-                         "inode %p ino %lu != cache inode %p ino %lu",
-                          inode, inode->i_ino, cache_inode, cache_inode->i_ino); 
-                CDEBUG(D_VFSTRACE, "inode: %lu/%u(%p)\n", inode->i_ino,
+                
+                CDEBUG(D_VFSTRACE, "new inode: %lu/%u(%p)\n", inode->i_ino,
                        inode->i_generation, inode);
         }
         return inode;
@@ -200,6 +186,8 @@ struct inode *smfs_get_inode(struct super_block *sb, ino_t hash,
         sargs.s_ino = hash; 
         sargs.s_inode = dir; 
         sargs.s_index = index;
+        CDEBUG(D_VFSTRACE, "get_inode: %lu\n", hash);
+
         inode = smfs_iget(sb, hash, &sargs);
 
         RETURN(inode);
@@ -219,10 +207,13 @@ static void smfs_write_inode(struct inode *inode, int wait)
 
         cache_inode = I2CI(inode);
         LASSERT(cache_inode != NULL);
+        
+        CDEBUG(D_INODE,"Write inode %lu\n",inode->i_ino);
 
         pre_smfs_inode(inode, cache_inode);
-        if (S2CSB(inode->i_sb)->s_op->write_inode)
-                S2CSB(inode->i_sb)->s_op->write_inode(cache_inode, wait);
+        
+        if (cache_inode->i_sb->s_op->write_inode)
+                cache_inode->i_sb->s_op->write_inode(cache_inode, wait);
         
         post_smfs_inode(inode, cache_inode);
         EXIT;
@@ -246,9 +237,9 @@ static void smfs_dirty_inode(struct inode *inode)
         post_smfs_inode(inode, cache_inode);
         EXIT;
 }
-
 static void smfs_put_inode(struct inode *inode)
 {
+#if 0
         struct inode *cache_inode;
         ENTRY;
 
@@ -272,6 +263,7 @@ static void smfs_put_inode(struct inode *inode)
                 smfs_clear_inode_info(inode);
         
         EXIT;
+#endif
 }
 
 static void smfs_clear_inode(struct inode *inode)

@@ -81,6 +81,7 @@ int get_opt(struct option **option, char **pos)
 
         if (!*opt_left)
                 return -ENODATA;
+        
         left = strchr(opt_left, ',');
         if (left == opt_left)
                 return -EINVAL;
@@ -122,5 +123,49 @@ int get_opt(struct option **option, char **pos)
         list_add(&tmp_opt->list, &option_list);
         if (*opt_left == ',') opt_left ++; /*after ','*/
         *option = tmp_opt;
+        printk("Option: %s=%s\n", tmp_opt->opt, tmp_opt->value);
         return 0;
 }
+
+char *smfs_options(char *data, char **devstr, char **namestr,
+                   char *opts, int *flags)  
+{
+        struct option *opt_value = NULL;
+        char   *pos;
+        
+        LASSERT(opts && flags);
+        init_option(data);
+        
+        while (!(get_opt(&opt_value, &pos))) {
+                if (!strcmp(opt_value->opt, "dev")) {
+                        if (devstr != NULL)
+                                *devstr = opt_value->value;
+                } else if (!strcmp(opt_value->opt, "type")) {
+                        if (namestr != NULL)
+                                *namestr = opt_value->value;
+                } else if (!strcmp(opt_value->opt, "kml")) {
+                        *flags |= SM_DO_REC;
+                } else if (!strcmp(opt_value->opt, "cache")) {
+                        *flags |= SM_CACHE_HOOK;
+                } else if (!strcmp(opt_value->opt, "snap")) {
+                        *flags |= SM_DO_COW;
+                } else if (!strcmp(opt_value->opt, "options")) {
+                        if (strlen(opts) == 0)
+                                sprintf((char *)opts + strlen(opts), "%s",
+                                        opt_value->value);
+                        else  
+                                sprintf((char *)opts + strlen(opts), ",%s",
+                                        opt_value->value);
+                } else {
+                        /* FIXME-WANGDI: how about the opt_value->value */
+                        if (strlen(opts) == 0)
+                                sprintf((char *)opts + strlen(opts), "%s",
+                                        opt_value->opt);
+                        else  
+                                sprintf((char *)opts + strlen(opts), ",%s",
+                                        opt_value->opt);
+                }
+        }
+        return pos;
+}
+

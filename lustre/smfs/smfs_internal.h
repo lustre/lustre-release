@@ -24,7 +24,7 @@
 #ifndef __LINUX_SMFS_H
 #define __LINUX_SMFS_H
 
-//#include <linux/lustre_fsfilt.h>
+#include "smfs_api.h"
 #define SMFSDEV_NAME "/dev/smfsconf"
 #define SMFS_PSDEV_MINOR 250
 #define SMFS_PSDEV_MAJOR 10
@@ -278,19 +278,6 @@ static inline int get_active_entry(struct inode *dir, __u64 *active_entry)
                 rc = 0;
         RETURN(rc);
 }
-#define HOOK_CREATE       1
-#define HOOK_LOOKUP       2
-#define HOOK_LINK         3
-#define HOOK_UNLINK       4
-#define HOOK_SYMLINK      5
-#define HOOK_MKDIR        6
-#define HOOK_RMDIR        7
-#define HOOK_MKNOD        8
-#define HOOK_RENAME       9
-#define HOOK_SETATTR      10
-#define HOOK_WRITE        11 
-#define HOOK_READDIR      12
-#define HOOK_MAX          12 
 
 #define PRE_HOOK          0
 #define POST_HOOK         1
@@ -321,15 +308,12 @@ do {                                                                           \
                 GOTO(label, rc);                                               \
 } while(0)                                                                     \
 
-#define SMFS_GET_INODE(sb, cache_inode, dir, inode, rc, label)          \
+#define SMFS_IGET(dir, hash, inode, rc, label)          \
 do {                                                                    \
-        LASSERT(cache_inode);                                           \
-        inode = smfs_get_inode(sb, cache_inode->i_ino, dir, 0);         \
-        iput(cache_inode);                                              \
+        inode = smfs_get_inode(dir->i_sb, hash, dir, 0);         \
         if (!inode)                                                     \
                 GOTO(label, rc = -ENOENT);                              \
-} while(0)        
-
+} while(0)      
 
 #if CONFIG_SNAPFS
 int smfs_cow_init(struct super_block *sb);

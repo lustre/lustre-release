@@ -45,75 +45,8 @@
 #include <linux/lustre_smfs.h>
 #include "smfs_internal.h"
 
-static char *smfs_options(char *data, char **devstr, 
-                          char **namestr, char *opts, 
-                          int *flags)  
-{
-        struct option *opt_value = NULL;
-        char   *pos;
-        
-        LASSERT(opts && flags);
 
-        while (!(get_opt(&opt_value, &pos))) {
-                if (!strcmp(opt_value->opt, "dev")) {
-                        if (devstr != NULL)
-                                *devstr = opt_value->value;
-                } else if (!strcmp(opt_value->opt, "type")) {
-                        if (namestr != NULL)
-                                *namestr = opt_value->value;
-                } else if (!strcmp(opt_value->opt, "kml")) {
-                        *flags |= SM_DO_REC;
-                } else if (!strcmp(opt_value->opt, "cache")) {
-                        *flags |= SM_CACHE_HOOK;
-                } else if (!strcmp(opt_value->opt, "snap")) {
-                        *flags |= SM_DO_COW;
-                } else if (!strcmp(opt_value->opt, "options")) {
-                        if (strlen(opts) == 0)
-                                sprintf((char *)opts + strlen(opts), "%s",
-                                        opt_value->value);
-                        else  
-                                sprintf((char *)opts + strlen(opts), ",%s",
-                                        opt_value->value);
-                } else {
-                        /* FIXME-WANGDI: how about the opt_value->value */
-                        if (strlen(opts) == 0)
-                                sprintf((char *)opts + strlen(opts), "%s",
-                                        opt_value->opt);
-                        else  
-                                sprintf((char *)opts + strlen(opts), ",%s",
-                                        opt_value->opt);
-                }
-        }
-        return pos;
-}
-
-struct super_block *smfs_get_sb_by_path(char *path, int len)
-{
-        struct super_block *sb;
-        struct nameidata nd;
-        int error = 0;
-
-        ENTRY;
-
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-        if (path_init(path, LOOKUP_FOLLOW, &nd)) {
-#else
-        if (path_lookup(path, LOOKUP_FOLLOW, &nd)) {
-#endif
-                error = path_walk(path, &nd);
-                if (error) {
-                        path_release(&nd);
-                        RETURN(NULL);
-                }
-        } else {
-                RETURN(NULL);
-        }
-
-        /* FIXME-WANGDI: add some check code here. */
-        sb = nd.dentry->d_sb;
-        path_release(&nd);
-        RETURN(sb);
-}
+struct list_head smfs_plg_list;
 
 static struct smfs_super_info *smfs_init_smb(struct super_block *sb)
 {
@@ -195,11 +128,11 @@ err_out:
 
 static int smfs_umount_cache(struct smfs_super_info *smb)
 {
-        struct dentry *root = smb->smsi_sb->s_root;
+        //struct dentry *root = smb->smsi_sb->s_root;
         
-        dput(root);
-        if (atomic_read(&root->d_inode->i_count) == 0)
-                igrab(root->d_inode); 
+        //dput(root);
+        //if (atomic_read(&root->d_inode->i_count) == 0)
+        //        igrab(root->d_inode); 
         
         mntput(smb->smsi_mnt);
         smfs_cleanup_sm_ops(smb);
@@ -218,6 +151,7 @@ static int smfs_init_hook_ops(struct smfs_super_info *smb)
 {
         ENTRY;
         INIT_LIST_HEAD(&smb->smsi_hook_list);
+        INIT_LIST_HEAD(&smfs_plg_list);
         RETURN(0); 
 }
 
@@ -238,7 +172,6 @@ static void smfs_cleanup_hook_ops(struct smfs_super_info *smb)
         } 
         EXIT;
 }
-
 static void smfs_cleanup_smb(struct super_block *sb)
 {
         struct smfs_super_info *smb;
@@ -290,6 +223,8 @@ static int smfs_init_hooks(struct super_block *sb)
         RETURN(0);
 }
 
+extern char* smfs_options(char*, char**, char**, char*, int *);
+
 int smfs_fill_super(struct super_block *sb, void *data, int silent)
 {
         struct inode *root_inode = NULL;
@@ -316,7 +251,6 @@ int smfs_fill_super(struct super_block *sb, void *data, int silent)
         memset((void *)page, 0, PAGE_SIZE);
         opts = (char *)page;
 
-        init_option(data);
         cache_data = smfs_options(data, &devstr, &typestr, opts, 
                                   &smb->smsi_flags); 
         if (*cache_data) {
@@ -339,6 +273,7 @@ int smfs_fill_super(struct super_block *sb, void *data, int silent)
         }
 
         duplicate_sb(sb, smb->smsi_sb);
+        sb->s_bdev = smb->smsi_sb->s_bdev;
         sm_set_sb_ops(smb->smsi_sb, sb);
 
         err = smfs_init_hook_ops(smb);
@@ -349,7 +284,7 @@ int smfs_fill_super(struct super_block *sb, void *data, int silent)
         }
         
         /* init the root_inode of smfs. */ 
-        dget(S2CSB(sb)->s_root);
+        //dget(S2CSB(sb)->s_root);
         root_ino = S2CSB(sb)->s_root->d_inode->i_ino;
         root_inode = smfs_get_inode(sb, root_ino, NULL, 0);
 
@@ -372,9 +307,10 @@ int smfs_fill_super(struct super_block *sb, void *data, int silent)
         CDEBUG(D_SUPER, "sb %lx, &sb->u.generic_sbp: %lx\n",
                (ulong)sb, (ulong)&sb->u.generic_sbp);
 #else
-        CDEBUG(D_SUPER, "sb %lx, &sb->s_fs_info: %lx\n",
-               (ulong)sb, (ulong)&sb->s_fs_info);
+        CDEBUG(D_SUPER, "sb %lx(%p), &sb->s_fs_info: %lx\n",
+               (ulong)sb, smb->smsi_sb, (ulong)&sb->s_fs_info);
 #endif
+        
 out_err:
         cleanup_option();
         if (err)
@@ -452,7 +388,8 @@ struct smfs_hook_ops *smfs_unregister_hook_ops(struct smfs_super_info *smb,
                         list_del(p);
                         RETURN(found);
                 }
-        } 
+        }
+
         RETURN(NULL);
 }
 
@@ -483,4 +420,51 @@ void smfs_trans_commit(struct inode *inode, void *handle, int force_sync)
         if (fsfilt->fs_commit)
                 fsfilt->fs_commit(inode->i_sb, inode, handle, force_sync);
 }
+
+
+int smfs_register_plugin(struct smfs_plugin * new_plugin) 
+{
+        struct smfs_plugin * plg = NULL;
+        struct list_head * plist = &smfs_plg_list;
+        
+        ENTRY;
+        
+        list_for_each_entry(plg, plist, plg_list) {
+                if (plg->plg_type == new_plugin->plg_type) {
+                        CWARN("Plugin is already registered\n");
+                        RETURN(-EEXIST);
+                }
+        }
+        
+        OBD_ALLOC(plg, sizeof(*plg));
+        if (!plg) {
+                CWARN("Cannot allocate memory for plugin\n");
+                RETURN(-ENOMEM);
+        }
+        
+        memcpy(plg, new_plugin, sizeof(*plg));
+        list_add_tail(&plg->plg_list, plist);
+                
+        RETURN(0);
+}
+
+void * smfs_deregister_plugin(int type)
+{
+        struct smfs_plugin * plg = NULL;
+        struct list_head * plist = &smfs_plg_list;
+        void * priv = NULL;
+        
+        ENTRY;
+        list_for_each_entry(plg, plist, plg_list) {
+                if (plg->plg_type == type) {
+                        list_del(&plg->plg_list);
+                        priv = plg->plg_private;
+                        OBD_FREE(plg, sizeof(*plg));
+                        break;
+                }
+        }
+                
+        RETURN(priv);
+}
+
 
