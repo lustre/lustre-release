@@ -1,8 +1,8 @@
 %patch
 Index: linux-2.4.24/mm/slab.c
 ===================================================================
---- linux-2.4.24.orig/mm/slab.c	2004-02-06 11:15:22.000000000 +0300
-+++ linux-2.4.24/mm/slab.c	2004-02-07 00:42:38.000000000 +0300
+--- linux-2.4.24.orig/mm/slab.c	2004-07-14 18:14:27.000000000 +0400
++++ linux-2.4.24/mm/slab.c	2004-07-16 15:54:07.000000000 +0400
 @@ -97,6 +97,8 @@
  #define	FORCED_DEBUG	0
  #endif
@@ -25,7 +25,7 @@ Index: linux-2.4.24/mm/slab.c
  
  #if DEBUG
  /*
-@@ -1342,6 +1350,20 @@
+@@ -1340,6 +1348,20 @@
  	unsigned long save_flags;
  	void* objp;
  
@@ -46,7 +46,7 @@ Index: linux-2.4.24/mm/slab.c
  	kmem_cache_alloc_head(cachep, flags);
  try_again:
  	local_irq_save(save_flags);
-@@ -1436,13 +1458,17 @@
+@@ -1434,13 +1456,17 @@
  
  	if (cachep->flags & SLAB_RED_ZONE) {
  		objp -= BYTES_PER_WORD;
@@ -66,7 +66,7 @@ Index: linux-2.4.24/mm/slab.c
  	}
  	if (cachep->flags & SLAB_POISON)
  		kmem_poison_obj(cachep, objp);
-@@ -1578,6 +1604,10 @@
+@@ -1576,6 +1602,10 @@
  void kmem_cache_free (kmem_cache_t *cachep, void *objp)
  {
  	unsigned long flags;
@@ -77,7 +77,7 @@ Index: linux-2.4.24/mm/slab.c
  #if DEBUG
  	CHECK_PAGE(virt_to_page(objp));
  	if (cachep != GET_PAGE_CACHE(virt_to_page(objp)))
-@@ -1603,6 +1633,10 @@
+@@ -1601,6 +1631,10 @@
  
  	if (!objp)
  		return;
@@ -88,7 +88,7 @@ Index: linux-2.4.24/mm/slab.c
  	local_irq_save(flags);
  	CHECK_PAGE(virt_to_page(objp));
  	c = GET_PAGE_CACHE(virt_to_page(objp));
-@@ -2078,3 +2112,471 @@
+@@ -2076,3 +2110,471 @@
  #endif
  }
  #endif
@@ -562,8 +562,8 @@ Index: linux-2.4.24/mm/slab.c
 +
 Index: linux-2.4.24/mm/vmalloc.c
 ===================================================================
---- linux-2.4.24.orig/mm/vmalloc.c	2004-01-10 17:05:20.000000000 +0300
-+++ linux-2.4.24/mm/vmalloc.c	2004-02-06 11:17:09.000000000 +0300
+--- linux-2.4.24.orig/mm/vmalloc.c	2004-06-24 09:03:26.000000000 +0400
++++ linux-2.4.24/mm/vmalloc.c	2004-07-16 15:54:07.000000000 +0400
 @@ -53,7 +53,7 @@
  	} while (address < end);
  }
@@ -582,10 +582,27 @@ Index: linux-2.4.24/mm/vmalloc.c
  					unsigned long size,
  					int gfp_mask,
  					pgprot_t prot,
+Index: linux-2.4.24/mm/page_alloc.c
+===================================================================
+--- linux-2.4.24.orig/mm/page_alloc.c	2004-07-14 18:14:27.000000000 +0400
++++ linux-2.4.24/mm/page_alloc.c	2004-07-16 16:11:49.000000000 +0400
+@@ -91,6 +91,12 @@
+ 	zone_t *zone;
+ 
+ 	arch_free_page(page, order);
++
++	for (index = 0; index < (1 << order); index++) {
++		BUG_ON(atomic_read(&page[index].count) > 0);
++		BUG_ON(PageSlab(page + index));
++	}
++
+ 	/*
+ 	 * Yes, think what happens when other parts of the kernel take 
+ 	 * a reference to a page in order to pin it for io. -ben
 Index: linux-2.4.24/init/main.c
 ===================================================================
---- linux-2.4.24.orig/init/main.c	2004-01-10 17:05:59.000000000 +0300
-+++ linux-2.4.24/init/main.c	2004-02-06 11:17:43.000000000 +0300
+--- linux-2.4.24.orig/init/main.c	2004-06-24 09:06:32.000000000 +0400
++++ linux-2.4.24/init/main.c	2004-07-16 15:54:07.000000000 +0400
 @@ -437,6 +437,9 @@
  #if defined(CONFIG_SYSVIPC)
  	ipc_init();
@@ -598,8 +615,8 @@ Index: linux-2.4.24/init/main.c
  
 Index: linux-2.4.24/fs/proc/proc_misc.c
 ===================================================================
---- linux-2.4.24.orig/fs/proc/proc_misc.c	2004-01-10 17:05:55.000000000 +0300
-+++ linux-2.4.24/fs/proc/proc_misc.c	2004-02-06 11:35:27.000000000 +0300
+--- linux-2.4.24.orig/fs/proc/proc_misc.c	2004-06-24 09:06:31.000000000 +0400
++++ linux-2.4.24/fs/proc/proc_misc.c	2004-07-16 15:54:07.000000000 +0400
 @@ -303,6 +303,22 @@
  	release:	seq_release,
  };
@@ -635,8 +652,8 @@ Index: linux-2.4.24/fs/proc/proc_misc.c
  #endif
 Index: linux-2.4.24/include/linux/slab.h
 ===================================================================
---- linux-2.4.24.orig/include/linux/slab.h	2004-01-29 15:01:10.000000000 +0300
-+++ linux-2.4.24/include/linux/slab.h	2004-02-06 11:18:26.000000000 +0300
+--- linux-2.4.24.orig/include/linux/slab.h	2004-07-16 10:25:19.000000000 +0400
++++ linux-2.4.24/include/linux/slab.h	2004-07-16 15:54:13.000000000 +0400
 @@ -40,6 +40,7 @@
  #define	SLAB_HWCACHE_ALIGN	0x00002000UL	/* align objs on a h/w cache lines */
  #define SLAB_CACHE_DMA		0x00004000UL	/* use GFP_DMA memory */
@@ -647,8 +664,8 @@ Index: linux-2.4.24/include/linux/slab.h
  #define	SLAB_CTOR_CONSTRUCTOR	0x001UL		/* if not set, then deconstructor */
 Index: linux-2.4.24/include/asm-i386/io.h
 ===================================================================
---- linux-2.4.24.orig/include/asm-i386/io.h	2004-01-29 15:01:10.000000000 +0300
-+++ linux-2.4.24/include/asm-i386/io.h	2004-02-06 11:18:26.000000000 +0300
+--- linux-2.4.24.orig/include/asm-i386/io.h	2004-07-16 10:25:19.000000000 +0400
++++ linux-2.4.24/include/asm-i386/io.h	2004-07-16 15:54:13.000000000 +0400
 @@ -75,6 +75,16 @@
   
  static inline unsigned long virt_to_phys(volatile void * address)
@@ -668,8 +685,8 @@ Index: linux-2.4.24/include/asm-i386/io.h
  
 Index: linux-2.4.24/include/asm-i386/page.h
 ===================================================================
---- linux-2.4.24.orig/include/asm-i386/page.h	2004-01-14 02:58:46.000000000 +0300
-+++ linux-2.4.24/include/asm-i386/page.h	2004-02-06 11:17:09.000000000 +0300
+--- linux-2.4.24.orig/include/asm-i386/page.h	2004-07-14 18:14:27.000000000 +0400
++++ linux-2.4.24/include/asm-i386/page.h	2004-07-16 15:54:07.000000000 +0400
 @@ -131,9 +131,49 @@
  #define VMALLOC_RESERVE		((unsigned long)__VMALLOC_RESERVE)
  #define __MAXMEM		(-__PAGE_OFFSET-__VMALLOC_RESERVE)
@@ -722,9 +739,9 @@ Index: linux-2.4.24/include/asm-i386/page.h
  #define VM_DATA_DEFAULT_FLAGS	(VM_READ | VM_WRITE | VM_EXEC | \
 Index: linux-2.4.24/arch/i386/config.in
 ===================================================================
---- linux-2.4.24.orig/arch/i386/config.in	2004-01-14 02:58:46.000000000 +0300
-+++ linux-2.4.24/arch/i386/config.in	2004-02-06 11:17:09.000000000 +0300
-@@ -508,6 +508,9 @@
+--- linux-2.4.24.orig/arch/i386/config.in	2004-07-16 15:54:07.000000000 +0400
++++ linux-2.4.24/arch/i386/config.in	2004-07-16 15:54:07.000000000 +0400
+@@ -509,6 +509,9 @@
     bool '  Check for stack overflows' CONFIG_DEBUG_STACKOVERFLOW
     bool '  Debug high memory support' CONFIG_DEBUG_HIGHMEM
     bool '  Debug memory allocations' CONFIG_DEBUG_SLAB
@@ -742,7 +759,8 @@ Index: linux-2.4.24/arch/i386/config.in
  include/asm-i386/page.h |   40 +++
  include/linux/slab.h    |    1 
  init/main.c             |    3 
+ mm/page_alloc.c         |    6 
  mm/slab.c               |  506 +++++++++++++++++++++++++++++++++++++++++++++++-
  mm/vmalloc.c            |    4 
- 8 files changed, 582 insertions(+), 4 deletions(-)
+ 9 files changed, 588 insertions(+), 4 deletions(-)
 

@@ -6,8 +6,8 @@
 Index: linux-2.4.24/include/linux/dynlocks.h
 ===================================================================
 --- linux-2.4.24.orig/include/linux/dynlocks.h	2003-01-30 13:24:37.000000000 +0300
-+++ linux-2.4.24/include/linux/dynlocks.h	2004-07-16 10:25:15.000000000 +0400
-@@ -0,0 +1,45 @@
++++ linux-2.4.24/include/linux/dynlocks.h	2004-07-16 14:17:00.000000000 +0400
+@@ -0,0 +1,46 @@
 +#ifndef _LINUX_DYNLOCKS_H
 +#define _LINUX_DYNLOCKS_H
 +
@@ -44,6 +44,7 @@ Index: linux-2.4.24/include/linux/dynlocks.h
 +	struct list_head dl_list;
 +	spinlock_t dl_list_lock;
 +	struct dynlock * dl_back;
++	int dl_locks;
 +};
 +
 +void dynlock_init(struct dynlock *dl);
@@ -56,8 +57,8 @@ Index: linux-2.4.24/include/linux/dynlocks.h
 Index: linux-2.4.24/lib/dynlocks.c
 ===================================================================
 --- linux-2.4.24.orig/lib/dynlocks.c	2003-01-30 13:24:37.000000000 +0300
-+++ linux-2.4.24/lib/dynlocks.c	2004-07-16 11:53:38.000000000 +0400
-@@ -0,0 +1,199 @@
++++ linux-2.4.24/lib/dynlocks.c	2004-07-16 15:31:06.000000000 +0400
+@@ -0,0 +1,247 @@
 +/*
 + * Dynamic Locks
 + *
@@ -72,6 +73,49 @@ Index: linux-2.4.24/lib/dynlocks.c
 +#include <linux/slab.h>
 +#include <linux/sched.h>
 +
++static kmem_cache_t * dynlock_cachep = NULL;
++
++void __init dynlock_cache_init(void)
++{
++	printk(KERN_INFO "init dynlocks cache\n");
++	dynlock_cachep = kmem_cache_create("dynlock_cache",
++					 sizeof(struct dynlock_member),
++					 0,
++					 SLAB_HWCACHE_ALIGN,
++					 NULL, NULL);
++	if (dynlock_cachep == NULL)
++		panic("Can't create dynlock cache");
++}
++
++static void dynlock_check_consistency(struct dynlock *dl)
++{
++	struct dynlock_member *hl; 
++	struct list_head *cur;
++	int num = 0;
++	
++	spin_lock(&dl->dl_list_lock);
++	BUG_ON(dl == NULL);
++	BUG_ON(dl->dl_magic != DYNLOCK_LIST_MAGIC);
++	BUG_ON(dl->dl_back != dl);
++	list_for_each(cur, &dl->dl_list) {
++		BUG_ON(cur->next == NULL);
++		BUG_ON(cur->prev == NULL);
++		hl = list_entry(cur, struct dynlock_member, dl_list);
++		if (hl->dl_magic != DYNLOCK_MAGIC || hl->dl_head != dl) {
++			printk("corrupted lock 0x%p/%d: magic 0x%x (!=0x%x)\n",
++				hl, num, hl->dl_magic, DYNLOCK_MAGIC);
++			printk("  value 0x%lx, %d readers, %d writers, pid %d, %d refs\n",
++				hl->dl_value, hl->dl_readers, hl->dl_writers,
++				hl->dl_pid, hl->dl_refcount);
++			printk("   head 0x%p\n", hl->dl_head);
++			BUG();
++		}
++		num++;
++	}
++	BUG_ON(num != dl->dl_locks);
++	spin_unlock(&dl->dl_list_lock);
++}
++
 +/*
 + * dynlock_init
 + *
@@ -84,6 +128,7 @@ Index: linux-2.4.24/lib/dynlocks.c
 +	INIT_LIST_HEAD(&dl->dl_list);
 +	dl->dl_magic = DYNLOCK_LIST_MAGIC;
 +	dl->dl_back = dl;
++	dl->dl_locks = 0;
 +}
 +
 +/*
@@ -135,7 +180,7 @@ Index: linux-2.4.24/lib/dynlocks.c
 +				 * lock we didn't find and just created
 +				 * so, we drop our lock
 +				 */
-+				kfree(nhl);
++				kmem_cache_free(dynlock_cachep, nhl);
 +				nhl = NULL;
 +			}
 +			hl->dl_refcount++;
@@ -148,13 +193,14 @@ Index: linux-2.4.24/lib/dynlocks.c
 +		/* we already have allocated lock. use it */
 +		hl = nhl;
 +		nhl = NULL;
++		dl->dl_locks++;
 +		list_add(&hl->dl_list, &dl->dl_list);
 +		goto found;
 +	}
 +	spin_unlock(&dl->dl_list_lock);
 +	
 +	/* lock not found and we haven't allocated lock yet. allocate it */
-+	nhl = kmalloc(sizeof(struct dynlock_member), gfp);
++	nhl = kmem_cache_alloc(dynlock_cachep, gfp);
 +	if (nhl == NULL)
 +		return NULL;
 +	nhl->dl_refcount = 1;
@@ -196,6 +242,7 @@ Index: linux-2.4.24/lib/dynlocks.c
 +	spin_unlock(&dl->dl_list_lock);
 +
 +	BUG_ON(hl->dl_magic != DYNLOCK_MAGIC);
++	dynlock_check_consistency(dl);
 +	return hl;
 +}
 +
@@ -247,10 +294,12 @@ Index: linux-2.4.24/lib/dynlocks.c
 +	if (--(hl->dl_refcount) == 0) {
 +		hl->dl_magic = DYNLOCK_MAGIC2;
 +		list_del(&hl->dl_list);
++		dl->dl_locks--;
 +	}
 +	spin_unlock(&dl->dl_list_lock);
 +	if (hl->dl_refcount == 0)
-+		kfree(hl);
++		kmem_cache_free(dynlock_cachep, hl);
++	dynlock_check_consistency(dl);
 +}
 +
 +EXPORT_SYMBOL(dynlock_init);
@@ -274,3 +323,21 @@ Index: linux-2.4.24/lib/Makefile
  
  obj-$(CONFIG_FW_LOADER) += firmware_class.o
  obj-$(CONFIG_RWSEM_GENERIC_SPINLOCK) += rwsem-spinlock.o
+Index: linux-2.4.24/fs/dcache.c
+===================================================================
+--- linux-2.4.24.orig/fs/dcache.c	2004-07-16 12:35:54.000000000 +0400
++++ linux-2.4.24/fs/dcache.c	2004-07-16 12:36:14.000000000 +0400
+@@ -1274,6 +1274,7 @@
+ extern void bdev_cache_init(void);
+ extern void cdev_cache_init(void);
+ extern void iobuf_cache_init(void);
++extern void dynlock_cache_init(void);
+ 
+ void __init vfs_caches_init(unsigned long mempages)
+ {
+@@ -1310,4 +1311,5 @@
+ 	bdev_cache_init();
+ 	cdev_cache_init();
+ 	iobuf_cache_init();
++	dynlock_cache_init();
+ }
