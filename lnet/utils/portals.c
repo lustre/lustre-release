@@ -848,6 +848,46 @@ int jt_ptl_push_connection (int argc, char **argv)
         return 0;
 }
 
+int 
+jt_ptl_print_active_txs (int argc, char **argv)
+{
+        struct portal_ioctl_data data;
+        int                      index;
+        int                      rc;
+
+        if (!g_nal_is_compatible (argv[0], QSWNAL, 0))
+                return -1;
+
+        for (index = 0;;index++) {
+                PORTAL_IOC_INIT (data);
+                data.ioc_nal     = g_nal;
+                data.ioc_nal_cmd = NAL_CMD_GET_TXDESC;
+                data.ioc_count   = index;
+                
+                rc = l_ioctl (PORTALS_DEV_ID, IOC_PORTAL_NAL_CMD, &data);
+                if (rc != 0)
+                        break;
+
+                printf ("%p: %5s payload %6d bytes to "LPX64" via "LPX64" by pid %6d: %s, %s, state %d\n",
+                        data.ioc_pbuf1,
+                        data.ioc_count == PTL_MSG_ACK ? "ACK" :
+                        data.ioc_count == PTL_MSG_PUT ? "PUT" :
+                        data.ioc_count == PTL_MSG_GET ? "GET" :
+                        data.ioc_count == PTL_MSG_REPLY ? "REPLY" : "<wierd message>",
+                        data.ioc_size,
+                        data.ioc_nid,
+                        data.ioc_nid2,
+                        data.ioc_misc,
+                        (data.ioc_flags & 1) ? "delayed" : "immediate",
+                        (data.ioc_flags & 2) ? "nblk"    : "normal",
+                        data.ioc_flags >> 2);
+        }
+
+        if (index == 0)
+                printf ("<no active descs>\n");
+        return 0;
+}
+
 int jt_ptl_ping(int argc, char **argv)
 {
         int       rc;
