@@ -163,6 +163,7 @@ int mds_open(struct mds_update_record *rec, int offset,
 
         flags = rec->ur_flags;
         /* dentry_open does a dput(de) and mntput(mnt) on error */
+        mntget(mnt);
         file = dentry_open(dchild, mnt, flags & ~O_DIRECT & ~O_TRUNC);
         if (IS_ERR(file))
                 GOTO(out_ldput, req->rq_status = PTR_ERR(file));
