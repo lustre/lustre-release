@@ -426,7 +426,11 @@ static void mdc_commit_close(struct ptlrpc_request *req)
         LASSERT(open_req->rq_type != LI_POISON);
 
         DEBUG_REQ(D_HA, open_req, "open req balanced");
-        LASSERT(open_req->rq_transno != 0);
+        if (open_req->rq_transno == 0) {
+                DEBUG_REQ(D_ERROR, open_req, "BUG 3892  open");
+                DEBUG_REQ(D_ERROR, req, "BUG 3892 close");
+                LASSERTF(open_req->rq_transno != 0, "BUG 3892");
+        }
         LASSERT(open_req->rq_import == imp);
 
         /* We no longer want to preserve this for transno-unconditional
