@@ -185,7 +185,6 @@ int llog_origin_handle_read_header(struct ptlrpc_request *req)
         struct obd_run_ctxt saved;
         struct llog_ctxt *ctxt;
         __u32 flags;
-        __u8 *buf;
         int size[] = {sizeof (*hdr)};
         int rc, rc2;
         ENTRY;
@@ -196,10 +195,6 @@ int llog_origin_handle_read_header(struct ptlrpc_request *req)
                 CERROR ("Can't unpack llogd_body\n");
                 GOTO(out, rc =-EFAULT);
         }
-
-        OBD_ALLOC(buf, LLOG_CHUNK_SIZE);
-        if (!buf)
-                GOTO(out, rc = -ENOMEM);
 
         ctxt = llog_get_context(obd, body->lgd_ctxt_idx);
         LASSERT(ctxt != NULL);
@@ -216,7 +211,6 @@ int llog_origin_handle_read_header(struct ptlrpc_request *req)
         if (rc)
                 GOTO(out_close, rc);
 
-
         rc = lustre_pack_reply(req, 1, size, NULL);
         if (rc)
                 GOTO(out_close, rc = -ENOMEM);
@@ -231,7 +225,6 @@ out_close:
 
 out_pop:
         pop_ctxt(&saved, &disk_obd->obd_ctxt, NULL);
-        OBD_FREE(buf, LLOG_CHUNK_SIZE);
 
 out:
         RETURN(rc);
@@ -387,7 +380,7 @@ static int llog_catinfo_cb(struct llog_handle *cat,
         }
         ctxt = cbd->ctxt;
 
-        if (!(cat->lgh_hdr->llh_flags & cpu_to_le32(LLOG_F_IS_CAT)))
+        if (!(cat->lgh_hdr->llh_flags & LLOG_F_IS_CAT))
                 RETURN(-EINVAL);
 
         lir = (struct llog_logid_rec *)rec;
@@ -431,8 +424,9 @@ static int llog_catinfo_deletions(struct obd_device *obd, char *buf,
         struct llog_handle *handle;
         struct obd_run_ctxt saved;
         int size, i, count;
-        struct llog_logid *idarray, *id;
-        char name[32] = "CATLIST";
+        struct llog_catid *idarray;
+        struct llog_logid *id;
+        char name[32] = CATLIST;
         int rc;
         struct cb_data data;
         struct llog_ctxt *ctxt = llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
@@ -446,7 +440,6 @@ static int llog_catinfo_deletions(struct obd_device *obd, char *buf,
         OBD_ALLOC(idarray, size);
         if (!idarray)
                 RETURN(-ENOMEM);
-        memset(idarray, 0, size);
 
         rc = llog_get_cat_list(obd, obd, name, count, idarray);
         if (rc)
@@ -454,12 +447,13 @@ static int llog_catinfo_deletions(struct obd_device *obd, char *buf,
 
         push_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_ctxt, NULL);
 
-        id = idarray;
         data.ctxt = ctxt;
         data.out = buf;
         data.remains = buf_len;
         for (i = 0; i < count; i++) {
                 int l, index, uncanceled = 0;
+
+                id = &idarray[i].lci_logid;
                 rc = llog_create(ctxt, &handle, id, NULL);
                 if (rc)
                         GOTO(out_pop, rc);
