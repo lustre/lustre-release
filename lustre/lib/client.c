@@ -138,9 +138,9 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
 
 int client_obd_cleanup(struct obd_device *obddev, int force, int failover)
 {
-        struct client_obd *obd = &obddev->u.cli;
+        struct client_obd *client = &obddev->u.cli;
 
-        class_destroy_import(obd->cl_import);
+        class_destroy_import(client->cl_import);
         return 0;
 }
 
@@ -314,6 +314,10 @@ int ptlrpc_import_disconnect(struct lustre_handle *conn, int failover)
                 rc = ptlrpc_queue_wait(request);
                 if (rc)
                         GOTO(out_req, rc);
+        }
+        if (imp->imp_export) {
+                class_export_put(imp->imp_export);
+                imp->imp_export = NULL;
         }
         EXIT;
  out_req:
