@@ -247,6 +247,7 @@ static void ll_clear_inode(struct inode *inode)
         if (atomic_read(&inode->i_count) == 0) {
                 struct ll_inode_info *lli = ll_i2info(inode);
                 struct lov_stripe_md *md = lli->lli_smd;
+                char *symlink_name = lli->lli_symlink_name;
 
                 if (md) {
                         int size = sizeof(*md) + 
@@ -254,9 +255,8 @@ static void ll_clear_inode(struct inode *inode)
                         OBD_FREE(md, size); 
                         lli->lli_smd = NULL;
                 }
-                if (lli->lli_symlink_name) {
-                        OBD_FREE(lli->lli_symlink_name,
-                                 strlen(lli->lli_symlink_name) + 1);
+                if (symlink_name) {
+                        OBD_FREE(symlink_name, strlen(symlink_name) + 1);
                         lli->lli_symlink_name = NULL;
                 }
         }
@@ -476,20 +476,20 @@ static void ll_read_inode2(struct inode *inode, void *opaque)
         if (md && md->md && md->md->lmd_stripe_count) { 
                 struct lov_mds_md *smd = md->md;
                 int size;
-                if (md->md->lmd_easize != ll_stripe_mds_md_size(inode->i_sb)) { 
+                if (md->md->lmd_easize != ll_stripe_mds_md_size(inode->i_sb)) {
                         CERROR("Striping metadata size error %ld\n",
-                               inode->i_ino); 
+                               inode->i_ino);
                         LBUG();
                 }
-                size = sizeof(*ii->lli_smd) + 
+                size = sizeof(*ii->lli_smd) +
                         md->md->lmd_stripe_count * sizeof(struct lov_oinfo);
                 OBD_ALLOC(ii->lli_smd, size);
-                if (!ii->lli_smd){ 
+                if (!ii->lli_smd) {
                         CERROR("No memory for %d\n", size);
                         LBUG();
                 }
                 lov_unpackmd(ii->lli_smd, smd);
-        } else { 
+        } else {
                 ii->lli_smd = NULL;
         }
 
