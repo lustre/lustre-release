@@ -625,8 +625,12 @@ int class_disconnect(struct obd_export *export, int flags)
         CDEBUG(D_IOCTL, "disconnect: cookie "LPX64"\n",
                export->exp_handle.h_cookie);
 
-        class_unlink_export(export);
-        class_export_put(export);
+        if (export->exp_handle.h_cookie == 0x5a5a5a5a5a5a5a5a) {
+                CERROR("disconnecting freed export %p, ignoring\n", export);
+        } else {
+                class_unlink_export(export);
+                class_export_put(export);
+        }
         RETURN(0);
 }
 
