@@ -19,6 +19,7 @@ struct lov_getattr_async_args {
         struct lov_stripe_md  *aa_lsm;
         struct obdo           *aa_oa;
         struct obdo           *aa_obdos;
+        struct lov_obd        *aa_lov;
 };
 
 static inline int lov_stripe_md_size(int stripes)
