@@ -27,6 +27,7 @@ import error
 class Options:
     FLAG = 1
     PARAM = 2
+    INTPARAM = 3
     def __init__(self, cmd, remain_help, options):
         self.options = options
         shorts = ""
@@ -35,7 +36,7 @@ class Options:
         for opt in options:
             long = self.long(opt)
             short = self.short(opt)
-            if self.type(opt) == Options.PARAM:
+            if self.type(opt) in (Options.PARAM, Options.INTPARAM):
                 if short:  short = short + ':'
                 if long: long = long + '='
             shorts = shorts + short
@@ -94,6 +95,11 @@ class Options:
                 option = self.lookup_long(o[2:])
             if self.type(option) == Options.PARAM:
                 val = a
+            elif self.type(option) == Options.INTPARAM:
+                try: 
+                    val = int(a)
+                except ValueError, e:
+                    raise error.OptionError("option: '%s' expects integer value, got '%s' "  % (o,a))
             else:
                 val = 1
             values[self.long(option)] = val
@@ -127,7 +133,7 @@ class Options:
             s = self.short(opt)
             if s: str = "-%s|--%s" % (s,self.long(opt))
             else: str = "--%s" % (self.long(opt),)
-            if self.type(opt) == Options.PARAM:
+            if self.type(opt) in (Options.PARAM, Options.INTPARAM):
                 str = "%s <arg>" % (str,)
             help = self.help(opt)
             n = string.find(help, '\n')
@@ -157,7 +163,7 @@ if __name__ == "__main__":
                   ('maxlevel', """Specify the maximum level
                     Levels are aproximatly like:
                             70 - mountpoint, echo_client, osc, mdc, lov""",
-                   Options.PARAM, 100),
+                   Options.INTPARAM, 100),
 
                   ])
 
