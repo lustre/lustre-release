@@ -127,13 +127,10 @@ void obdfs_dequeue_pages(struct inode *inode)
         struct list_head *tmp;
 
         ENTRY;
-	CDEBUG(D_INFO, "down0\n");
         obd_down(&obdfs_i2sbi(inode)->osi_list_mutex);
-	CDEBUG(D_INFO, "got down0\n");
         tmp = obdfs_islist(inode);
         if ( list_empty(tmp) ) {
                 CDEBUG(D_INFO, "no dirty pages for inode %ld\n", inode->i_ino);
-		CDEBUG(D_INFO, "up 0a\n");
                 obd_up(&obdfs_i2sbi(inode)->osi_list_mutex);
                 EXIT;
                 return;
@@ -156,7 +153,6 @@ void obdfs_dequeue_pages(struct inode *inode)
                 put_page(page);
         }
 
-	CDEBUG(D_INFO, "up 0b\n");
         obd_up(&obdfs_i2sbi(inode)->osi_list_mutex);
 
         /* decrement inode reference for page cache */
@@ -191,12 +187,9 @@ int obdfs_flush_reqs(struct list_head *inode_list, unsigned long check_time)
 
         sbi = list_entry(inode_list, struct obdfs_sb_info, osi_inodes);
 
-	CDEBUG(D_INFO, "down1\n");
         obd_down(&sbi->osi_list_mutex);
-	CDEBUG(D_INFO, "got down1\n");
         if ( list_empty(inode_list) ) {
                 CDEBUG(D_INFO, "list empty\n");
-		CDEBUG(D_INFO, "up 1a\n");
                 obd_up(&sbi->osi_list_mutex);
                 EXIT;
                 return 0;
@@ -261,7 +254,6 @@ int obdfs_flush_reqs(struct list_head *inode_list, unsigned long check_time)
                         num_obdos++;
 
                         if ( num_io == MAX_IOVEC ) {
-				CDEBUG(D_INFO, "up 1b\n");
                                 obd_up(&sbi->osi_list_mutex);
                                 err = obdfs_do_vec_wr(inodes, num_io, num_obdos,
                                                       obdos, bufs_per_obdo,
@@ -274,16 +266,13 @@ int obdfs_flush_reqs(struct list_head *inode_list, unsigned long check_time)
                                         EXIT;
                                         goto ERR;
                                 }
-				CDEBUG(D_INFO, "down2\n");
                                 obd_down(&sbi->osi_list_mutex);
-				CDEBUG(D_INFO, "got down2\n");
                                 goto again;
                         }
                 }
         }
 
 BREAK:
-	CDEBUG(D_INFO, "up 2\n");
         obd_up(&sbi->osi_list_mutex);
 
         /* flush any remaining I/Os */
@@ -301,9 +290,7 @@ BREAK:
          * Make sure we don't point at the current inode with tmp
          * when we re-init the list on the inode, or we will loop.
          */
-	CDEBUG(D_INFO, "down3\n");
         obd_down(&sbi->osi_list_mutex);
-	CDEBUG(D_INFO, "got down3\n");
         tmp = inode_list;
         while ( (tmp = tmp->prev) != inode_list ) {
                 struct obdfs_inode_info *ii;
@@ -322,7 +309,6 @@ BREAK:
                         INIT_LIST_HEAD(obdfs_islist(inode));
                 }
         }
-	CDEBUG(D_INFO, "up 3\n");
         obd_up(&sbi->osi_list_mutex);
 
         CDEBUG(D_INFO, "flushed %ld pages in total\n", total_io);
