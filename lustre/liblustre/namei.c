@@ -180,6 +180,7 @@ int llu_pb_revalidate(struct pnode *pnode, int flags, struct lookup_intent *it)
                         CERROR("inode %lu still have intent %p(opc 0x%x), release it\n",
                                         lli->lli_st_ino, lli->lli_it, lli->lli_it->it_op);
                         ll_intent_release(lli->lli_it);
+                        lli->lli_it = NULL;
                 }
         }
 
