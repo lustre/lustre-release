@@ -48,8 +48,8 @@ case ${host_cpu} in
 
 ;;
 
-        default )
-	AC_ERROR("Unknown Linux Platform")
+        *)
+	AC_ERROR("Unknown Linux Platform: $host_cpu")
 esac
 
 AC_MSG_CHECKING(for MODVERSIONS)
