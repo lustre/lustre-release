@@ -296,7 +296,7 @@ static int fsfilt_smfs_get_md(struct inode *inode, void *lmm, int lmm_size)
 static int fsfilt_smfs_send_bio(struct inode *inode, 
 				struct bio *bio)
 #else
-static int fsfilt_smfs_send_bio(struct inode *inode, 
+static int fsfilt_smfs_send_bio(int rw, struct inode *inode, 
 				struct kiobuf *bio)
 #endif
 {
@@ -314,7 +314,7 @@ static int fsfilt_smfs_send_bio(struct inode *inode,
 	if (!cache_fsfilt->fs_send_bio)
 		RETURN(-ENOSYS);
 		
-	return cache_fsfilt->fs_send_bio(cache_inode, bio);
+	return cache_fsfilt->fs_send_bio(rw, cache_inode, bio);
 }
 
 static struct page *
