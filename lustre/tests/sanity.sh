@@ -1058,6 +1058,15 @@ test_33() {
         log 33_2
 }
 run_test 33 "write file with mode 444 (should return error) ===="
+                                                                                                                                               
+test_33a() {
+        rm -fr $DIR/d33
+        mkdir -p $DIR/d33
+        chown $RUNAS_ID $DIR/d33
+        $RUNAS $OPENFILE -f O_RDWR:O_CREAT -m 0444 $DIR/d33/f33 || error
+        $RUNAS $OPENFILE -f O_RDWR:O_CREAT -m 0444 $DIR/d33/f33 && error || true
+}
+run_test 33a "test open file(mode=0444) with O_RDWR (should return error) ===="
 
 TEST_34_SIZE=${TEST_34_SIZE:-2000000000000}
 test_34a() {
