@@ -113,7 +113,7 @@ int lprocfs_add_vars(struct proc_dir_entry *root, struct lprocfs_vars *list,
                 }
 
                 if (pathcopy != pathbuf)
-                OBD_FREE(pathcopy, pathsize);
+                        OBD_FREE(pathcopy, pathsize);
 
                 if (cur_root == NULL || proc == NULL) {
                         CERROR("LprocFS: No memory to create /proc entry %s",
