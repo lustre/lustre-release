@@ -77,7 +77,6 @@ static void *fsfilt_smfs_brw_start(int objcount, struct fsfilt_objinfo *fso,
 
         cache_inode = I2CI(fso->fso_dentry->d_inode);
         cache_dentry = pre_smfs_dentry(NULL, cache_inode, fso->fso_dentry);
-
         if (!cache_dentry)
                 GOTO(exit, rc = ERR_PTR(-ENOMEM));
 
@@ -85,13 +84,13 @@ static void *fsfilt_smfs_brw_start(int objcount, struct fsfilt_objinfo *fso,
         cache_fso.fso_bufcnt = fso->fso_bufcnt;
 
         if (!cache_fsfilt->fs_brw_start)
-                return ERR_PTR(-ENOSYS);
-
+                GOTO(exit, rc =  ERR_PTR(-ENOSYS));
+        
         rc = cache_fsfilt->fs_brw_start(objcount, &cache_fso, niocount, nb,
                                         desc_private, logs);
 exit:
         post_smfs_dentry(cache_dentry);
-        return rc;
+        RETURN(rc);
 }
 
 /* FIXME-WANGDI: here we can easily have inode == NULL due to
@@ -105,7 +104,9 @@ static int fsfilt_smfs_commit(struct super_block *sb, struct inode *inode,
         struct super_block *csb = S2CSB(sb); 
         struct inode *cache_inode = NULL;
         int    rc = -EIO;
-
+        
+        ENTRY;
+        
         if (inode)
                 cache_inode = I2CI(inode);
 
@@ -168,6 +169,9 @@ static int fsfilt_smfs_setattr(struct dentry *dentry, void *handle,
         if (!cache_fsfilt)
                 RETURN(rc);
 
+        if (!cache_fsfilt->fs_setattr)
+                RETURN(-ENOSYS);
+
         cache_inode = I2CI(dentry->d_inode);
 
         cache_dentry = pre_smfs_dentry(NULL, cache_inode, dentry);
@@ -175,9 +179,6 @@ static int fsfilt_smfs_setattr(struct dentry *dentry, void *handle,
                 GOTO(exit, rc = -ENOMEM);
 
         pre_smfs_inode(dentry->d_inode, cache_inode);
-
-        if (!cache_fsfilt->fs_setattr)
-                RETURN(-ENOSYS);
 
         rc = cache_fsfilt->fs_setattr(cache_dentry, handle, iattr, do_trunc);
 
@@ -212,6 +213,10 @@ static int fsfilt_smfs_iocontrol(struct inode *inode, struct file *file,
 
         if (!cache_inode)
                 RETURN(rc);
+        
+        if (!cache_fsfilt->fs_iocontrol)
+                RETURN(-ENOSYS);
+
 
         if (file != NULL) {
                 sfi = F2SMFI(file);
@@ -221,9 +226,6 @@ static int fsfilt_smfs_iocontrol(struct inode *inode, struct file *file,
         } else {
                 sfi = NULL;
         }
-
-        if (!cache_fsfilt->fs_iocontrol)
-                RETURN(-ENOSYS);
 
         if (sfi) {
                 rc = cache_fsfilt->fs_iocontrol(cache_inode, sfi->c_file, cmd,
@@ -362,7 +364,9 @@ static int fsfilt_smfs_send_bio(int rw, struct inode *inode, void *bio)
 {
         struct inode *cache_inode;
         struct fsfilt_operations *cache_fsfilt;
-
+        
+        ENTRY;
+        
         cache_fsfilt = I2FOPS(inode);
         if (!cache_fsfilt)
                 RETURN(-EINVAL);
@@ -382,7 +386,7 @@ fsfilt_smfs_getpage(struct inode *inode, long int index)
 {
         struct  fsfilt_operations *cache_fsfilt;
         struct  inode *cache_inode;
-
+        ENTRY;
         cache_fsfilt = I2FOPS(inode);
         if (!cache_fsfilt)
                 RETURN(ERR_PTR(-EINVAL));
@@ -485,7 +489,9 @@ static int fsfilt_smfs_add_journal_cb(struct obd_device *obd,
         struct fsfilt_operations *cache_fsfilt = S2SMI(sb)->sm_cache_fsfilt;
         struct super_block *csb = S2CSB(sb);
         int rc = -EIO;
-
+        
+        ENTRY;
+        
         if (!cache_fsfilt)
                  RETURN(rc);
         if (cache_fsfilt->fs_add_journal_cb)
@@ -500,6 +506,8 @@ static int fsfilt_smfs_statfs(struct super_block *sb, struct obd_statfs *osfs)
         struct super_block *csb = S2CSB(sb);
         int rc = -EIO;
 
+        ENTRY;
+        
         if (!cache_fsfilt)
                 RETURN(rc);
 
@@ -536,7 +544,9 @@ int fsfilt_smfs_map_inode_pages(struct inode *inode, struct page **page,
         struct  fsfilt_operations *cache_fsfilt = I2FOPS(inode);
         struct  inode *cache_inode = NULL;
         int     rc = -EIO;
-
+        
+        ENTRY;
+        
         if (!cache_fsfilt)
                 RETURN(-EINVAL);
 
@@ -549,6 +559,7 @@ int fsfilt_smfs_map_inode_pages(struct inode *inode, struct page **page,
                 RETURN(-ENOSYS);
 
         down(&cache_inode->i_sem);
+
         rc = cache_fsfilt->fs_map_inode_pages(cache_inode, page, pages, blocks,
                                               created, create, sem);
         up(&cache_inode->i_sem);
@@ -896,6 +907,7 @@ static int fsfilt_smfs_init_extents_ea(struct inode *inode)
         struct fsfilt_operations *cache_fsfilt = I2FOPS(inode);
         struct inode *cache_inode = NULL;
         int    rc = -EIO;
+        ENTRY;
 
         if (!cache_fsfilt)
                 RETURN(rc);
@@ -924,7 +936,7 @@ static int fsfilt_smfs_write_extents(struct dentry *dentry,
                                      unsigned long from, unsigned long num)
 {
         int rc = 0;
-
+        ENTRY;
         if (SMFS_DO_REC(S2SMI(dentry->d_inode->i_sb)))
                 rc = smfs_write_extents(dentry->d_inode, dentry, from, num);
 
@@ -953,6 +965,7 @@ static int fsfilt_smfs_get_ino_write_extents(struct super_block *sb, ino_t ino,
         struct lvfs_run_ctxt saved;
         int    rc = 0, fs_ex_size, ex_num, flags;
         char   *buf = NULL, *ex_buf = NULL;
+        ENTRY;
 
         push_ctxt(&saved, S2SMI(sb)->smsi_ctxt, NULL);
 
