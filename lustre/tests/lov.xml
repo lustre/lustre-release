@@ -1,4 +1,5 @@
 <?xml version='1.0' encoding='UTF-8'?>
+<!DOCTYPE lustre>
 <lustre>
   <ldlm name='ldlm' uuid='ldlm_UUID'/>
   <node name='localhost' uuid='localhost_UUID'>
@@ -15,8 +16,8 @@
       <mdc_ref uuidref='MDC_mds1_UUID'/>
     </profile>
     <network name='NET_localhost_tcp' uuid='NET_localhost_tcp_UUID' type='tcp'>
-      <server>uml1</server>
-      <port>888</port>
+      <server>localhost</server>
+      <port>988</port>
     </network>
   </node>
   <mds name='mds1' uuid='mds1_UUID'>
@@ -31,7 +32,7 @@
   </mdc>
   <lov name='lov1' uuid='lov1_UUID'>
     <mds_ref uuidref='mds1_UUID'/>
-    <devices stripeoffset='0' stripesize='4096' pattern='0'>
+    <devices stripesize='4096' stripeoffset='0' pattern='0'>
       <osc_ref uuidref='OSC_localhost_UUID'/>
       <osc_ref uuidref='OSC_localhost_2_UUID'/>
     </devices>

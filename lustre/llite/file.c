@@ -185,7 +185,8 @@ static int ll_file_release(struct inode *inode, struct file *file)
         }
         ptlrpc_free_req(fd->fd_req);
 
-        l_lock(&obddev->obd_namespace->ns_lock);
+        // XXX Phil lov devices have no namespace
+        //l_lock(&obddev->obd_namespace->ns_lock);
         list_for_each_safe(tmp, next, &lli->lli_osc_locks) {
                 struct ldlm_lock *lock;
                 struct lustre_handle lockh;
@@ -200,7 +201,7 @@ static int ll_file_release(struct inode *inode, struct file *file)
                 if (rc < 0)
                         CERROR("ldlm_cli_cancel: %d\n", rc);
         }
-        l_unlock(&obddev->obd_namespace->ns_lock);
+        //l_unlock(&obddev->obd_namespace->ns_lock);
 
         EXIT;
 
