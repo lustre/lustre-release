@@ -342,14 +342,26 @@ set_local(struct lustre_mount_data *lmd)
 
         memset(buf, 0, sizeof(buf));
 
-        if (lmd->lmd_nal == SOCKNAL || lmd->lmd_nal == TCPNAL) {
+        switch (lmd->lmd_nal) {
+        default:
+                fprintf(stderr, "%s: Unknown network type: %d\n",
+                        progname, lmd->lmd_nal);
+                return 1;
+                
+        case SOCKNAL:
+        case TCPNAL:
+        case OPENIBNAL:
+        case IIBNAL:
+        case VIBNAL:
+        case RANAL:
                 rc = gethostname(buf, sizeof(buf) - 1);
                 if (rc) {
                         fprintf (stderr, "%s: can't get local buf: %d\n",
                                  progname, rc);
                         return rc;
                 }
-        } else if (lmd->lmd_nal == QSWNAL) {
+                break;
+        case QSWNAL: {
                 char *pfiles[] = {"/proc/qsnet/elan3/device0/position",
                                   "/proc/qsnet/elan4/device0/position",
                                   "/proc/elan/device0/position",
@@ -375,6 +387,8 @@ set_local(struct lustre_mount_data *lmd)
                                 return 1;
                         }
                 }
+                break;
+        }
         }
 
         if (ptl_parse_nid (&nid, ptr) != 0) {
@@ -392,7 +406,28 @@ set_peer(char *hostname, struct lustre_mount_data *lmd)
         ptl_nid_t nid = 0;
         int rc;
 
-        if (lmd->lmd_nal == SOCKNAL || lmd->lmd_nal == TCPNAL) {
+        switch (lmd->lmd_nal) {
+        default:
+                fprintf(stderr, "%s: Unknown network type: %d\n",
+                        progname, lmd->lmd_nal);
+                return 1;
+                
+        case IIBNAL:
+        case VIBNAL:
+                if (lmd->lmd_server_nid != PTL_NID_ANY)
+                        break;
+                if (ptl_parse_nid (&nid, hostname) != 0) {
+                        fprintf (stderr, "%s: can't parse NID %s\n",
+                                 progname, hostname);
+                        return (1);
+                }
+                lmd->lmd_server_nid = nid;
+                break;
+
+        case SOCKNAL:
+        case TCPNAL:
+        case OPENIBNAL:
+        case RANAL:
                 if (lmd->lmd_server_nid == PTL_NID_ANY) {
                         if (ptl_parse_nid (&nid, hostname) != 0) {
                                 fprintf (stderr, "%s: can't parse NID %s\n",
@@ -407,8 +442,13 @@ set_peer(char *hostname, struct lustre_mount_data *lmd)
                                  progname, hostname);
                         return (1);
                 }
-        } else if (lmd->lmd_nal == QSWNAL &&lmd->lmd_server_nid == PTL_NID_ANY){
+                break;
+        case QSWNAL: {
                 char buf[64];
+
+                if (lmd->lmd_server_nid != PTL_NID_ANY)
+                        break;
+
                 rc = sscanf(hostname, "%*[^0-9]%63[0-9]", buf);
                 if (rc != 1) {
                         fprintf (stderr, "%s: can't get elan id from host %s\n",
@@ -421,8 +461,10 @@ set_peer(char *hostname, struct lustre_mount_data *lmd)
                         return (1);
                 }
                 lmd->lmd_server_nid = nid;
-        }
 
+                break;
+        }
+        }
 
         return 0;
 }
