@@ -214,8 +214,8 @@ struct filter_obd {
         unsigned long       *fo_last_rcvd_slots;
         __u64                fo_mount_count;
 
-        unsigned int         fo_destroy_in_progress:1;
-        struct semaphore     fo_create_lock;
+        unsigned long        fo_destroys_in_progress;
+        struct semaphore     fo_create_locks[32];
 
         struct file_operations *fo_fop;
         struct inode_operations *fo_iop;

@@ -330,6 +330,7 @@ do {                                                            \
 do {                                                            \
         if ((exp) == NULL) {                                    \
                 CERROR("obd_" #op ": NULL export\n");           \
+                portals_debug_dumplog();                        \
                 RETURN(-ENODEV);                                \
         }                                                       \
         if ((exp)->exp_obd == NULL || !OBT((exp)->exp_obd)) {   \
@@ -357,6 +358,7 @@ do {                                                            \
 do {                                                            \
         if ((exp) == NULL) {                                    \
                 CERROR("obd_" #op ": NULL export\n");           \
+                portals_debug_dumplog();                        \
                 RETURN(-ENODEV);                                \
         }                                                       \
         if ((exp)->exp_obd == NULL || !OBT((exp)->exp_obd)) {   \
