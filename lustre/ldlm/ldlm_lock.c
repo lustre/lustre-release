@@ -357,6 +357,7 @@ void ldlm_lock2desc(struct ldlm_lock *lock, struct ldlm_lock_desc *desc)
 
 static int ldlm_send_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock *new)
 {
+        struct ldlm_lock_desc desc;
         struct ptlrpc_request *req = NULL;
         ENTRY;
 
@@ -368,7 +369,8 @@ static int ldlm_send_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock *new)
 
         lock->l_flags |= LDLM_FL_AST_SENT;
         /* FIXME: this should merely add the lock to the lr_tmp list */
-        lock->l_blocking_ast(lock, new, lock->l_data, lock->l_data_len, &req);
+        ldlm_lock2desc(new, &desc);
+        lock->l_blocking_ast(lock, &desc, lock->l_data, lock->l_data_len, &req);
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
 
         if (req != NULL) {
