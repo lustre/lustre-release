@@ -12,10 +12,10 @@
  kernel/ksyms.c            |    1 
  12 files changed, 558 insertions(+), 128 deletions(-)
 
-Index: 64chaos_mballoc/fs/dcache.c
+Index: 68chaos_eebperf/fs/dcache.c
 ===================================================================
---- 64chaos_mballoc.orig/fs/dcache.c	2004-07-27 13:44:25.000000000 -0700
-+++ 64chaos_mballoc/fs/dcache.c	2004-07-27 13:46:47.000000000 -0700
+--- 68chaos_eebperf.orig/fs/dcache.c	2004-08-11 12:06:26.000000000 -0700
++++ 68chaos_eebperf/fs/dcache.c	2004-08-11 13:14:54.000000000 -0700
 @@ -186,6 +186,13 @@
  		spin_unlock(&dcache_lock);
  		return 0;
@@ -53,10 +53,10 @@ Index: 64chaos_mballoc/fs/dcache.c
  }
  
  #define do_switch(x,y) do { \
-Index: 64chaos_mballoc/fs/exec.c
+Index: 68chaos_eebperf/fs/exec.c
 ===================================================================
---- 64chaos_mballoc.orig/fs/exec.c	2004-07-27 13:44:25.000000000 -0700
-+++ 64chaos_mballoc/fs/exec.c	2004-07-27 13:46:47.000000000 -0700
+--- 68chaos_eebperf.orig/fs/exec.c	2004-08-11 12:06:26.000000000 -0700
++++ 68chaos_eebperf/fs/exec.c	2004-08-11 13:14:54.000000000 -0700
 @@ -119,8 +119,10 @@
  	struct file * file;
  	struct nameidata nd;
@@ -118,10 +118,10 @@ Index: 64chaos_mballoc/fs/exec.c
  		goto close_fail;
  
  	retval = binfmt->core_dump(signr, regs, file);
-Index: 64chaos_mballoc/fs/namei.c
+Index: 68chaos_eebperf/fs/namei.c
 ===================================================================
---- 64chaos_mballoc.orig/fs/namei.c	2004-07-27 13:44:25.000000000 -0700
-+++ 64chaos_mballoc/fs/namei.c	2004-07-27 14:08:57.000000000 -0700
+--- 68chaos_eebperf.orig/fs/namei.c	2004-08-11 12:06:26.000000000 -0700
++++ 68chaos_eebperf/fs/namei.c	2004-08-11 13:14:54.000000000 -0700
 @@ -94,6 +94,13 @@
   * XEmacs seems to be relying on it...
   */
@@ -877,10 +877,10 @@ Index: 64chaos_mballoc/fs/namei.c
  	if (page) {
  		kunmap(page);
  		page_cache_release(page);
-Index: 64chaos_mballoc/fs/namespace.c
+Index: 68chaos_eebperf/fs/namespace.c
 ===================================================================
---- 64chaos_mballoc.orig/fs/namespace.c	2004-07-27 13:44:25.000000000 -0700
-+++ 64chaos_mballoc/fs/namespace.c	2004-07-27 13:46:47.000000000 -0700
+--- 68chaos_eebperf.orig/fs/namespace.c	2004-08-11 12:06:26.000000000 -0700
++++ 68chaos_eebperf/fs/namespace.c	2004-08-11 13:14:54.000000000 -0700
 @@ -98,6 +98,7 @@
  {
  	old_nd->dentry = mnt->mnt_mountpoint;
@@ -993,10 +993,10 @@ Index: 64chaos_mballoc/fs/namespace.c
  	path_release(&new_nd);
  out0:
  	unlock_kernel();
-Index: 64chaos_mballoc/fs/open.c
+Index: 68chaos_eebperf/fs/open.c
 ===================================================================
---- 64chaos_mballoc.orig/fs/open.c	2004-07-27 13:44:25.000000000 -0700
-+++ 64chaos_mballoc/fs/open.c	2004-07-27 13:46:47.000000000 -0700
+--- 68chaos_eebperf.orig/fs/open.c	2004-08-11 12:06:26.000000000 -0700
++++ 68chaos_eebperf/fs/open.c	2004-08-11 13:14:54.000000000 -0700
 @@ -19,6 +19,8 @@
  #include <asm/uaccess.h>
  
@@ -1397,10 +1397,10 @@ Index: 64chaos_mballoc/fs/open.c
  /*
   * Find an empty file descriptor entry, and mark it busy.
   */
-Index: 64chaos_mballoc/fs/stat.c
+Index: 68chaos_eebperf/fs/stat.c
 ===================================================================
---- 64chaos_mballoc.orig/fs/stat.c	2004-07-27 13:44:25.000000000 -0700
-+++ 64chaos_mballoc/fs/stat.c	2004-07-27 13:58:32.000000000 -0700
+--- 68chaos_eebperf.orig/fs/stat.c	2004-08-11 12:06:26.000000000 -0700
++++ 68chaos_eebperf/fs/stat.c	2004-08-11 15:17:19.000000000 -0700
 @@ -17,10 +17,12 @@
   * Revalidate the inode. This is required for proper NFS attribute caching.
   */
@@ -1423,9 +1423,9 @@ Index: 64chaos_mballoc/fs/stat.c
 +	struct lookup_intent it = { .it_op = IT_GETATTR };
  	int error, errcnt = 0;
  
+ again:
 -	error = user_path_walk(filename, &nd);
 +	error = user_path_walk_it(filename, &nd, &it);
- again:
  	if (!error) {
 -		error = do_revalidate(nd.dentry);
 +		error = do_revalidate(nd.dentry, &it);
@@ -1566,10 +1566,10 @@ Index: 64chaos_mballoc/fs/stat.c
  		if (!err)
  			err = cp_new_stat64(dentry->d_inode, statbuf);
  		fput(f);
-Index: 64chaos_mballoc/include/linux/dcache.h
+Index: 68chaos_eebperf/include/linux/dcache.h
 ===================================================================
---- 64chaos_mballoc.orig/include/linux/dcache.h	2004-07-27 13:44:25.000000000 -0700
-+++ 64chaos_mballoc/include/linux/dcache.h	2004-07-27 13:46:47.000000000 -0700
+--- 68chaos_eebperf.orig/include/linux/dcache.h	2004-08-11 12:06:26.000000000 -0700
++++ 68chaos_eebperf/include/linux/dcache.h	2004-08-11 13:14:54.000000000 -0700
 @@ -6,6 +6,51 @@
  #include <asm/atomic.h>
  #include <linux/mount.h>
@@ -1653,10 +1653,10 @@ Index: 64chaos_mballoc/include/linux/dcache.h
  
  extern spinlock_t dcache_lock;
  
-Index: 64chaos_mballoc/include/linux/fs.h
+Index: 68chaos_eebperf/include/linux/fs.h
 ===================================================================
---- 64chaos_mballoc.orig/include/linux/fs.h	2004-07-27 13:46:42.000000000 -0700
-+++ 64chaos_mballoc/include/linux/fs.h	2004-07-27 13:46:47.000000000 -0700
+--- 68chaos_eebperf.orig/include/linux/fs.h	2004-08-11 13:14:54.000000000 -0700
++++ 68chaos_eebperf/include/linux/fs.h	2004-08-11 13:14:54.000000000 -0700
 @@ -73,6 +73,7 @@
  
  #define FMODE_READ 1
@@ -1784,10 +1784,10 @@ Index: 64chaos_mballoc/include/linux/fs.h
  extern int page_readlink(struct dentry *, char *, int);
  extern int page_follow_link(struct dentry *, struct nameidata *);
  extern struct inode_operations page_symlink_inode_operations;
-Index: 64chaos_mballoc/include/linux/fs_struct.h
+Index: 68chaos_eebperf/include/linux/fs_struct.h
 ===================================================================
---- 64chaos_mballoc.orig/include/linux/fs_struct.h	2004-07-27 13:44:25.000000000 -0700
-+++ 64chaos_mballoc/include/linux/fs_struct.h	2004-07-27 13:46:47.000000000 -0700
+--- 68chaos_eebperf.orig/include/linux/fs_struct.h	2004-08-11 12:06:26.000000000 -0700
++++ 68chaos_eebperf/include/linux/fs_struct.h	2004-08-11 13:14:54.000000000 -0700
 @@ -37,10 +37,12 @@
  	write_lock(&fs->lock);
  	old_root = fs->root;
@@ -1814,10 +1814,10 @@ Index: 64chaos_mballoc/include/linux/fs_struct.h
  		dput(old_pwd);
  		mntput(old_pwdmnt);
  	}
-Index: 64chaos_mballoc/kernel/exit.c
+Index: 68chaos_eebperf/kernel/exit.c
 ===================================================================
---- 64chaos_mballoc.orig/kernel/exit.c	2004-07-27 13:44:25.000000000 -0700
-+++ 64chaos_mballoc/kernel/exit.c	2004-07-27 13:46:47.000000000 -0700
+--- 68chaos_eebperf.orig/kernel/exit.c	2004-08-11 12:06:26.000000000 -0700
++++ 68chaos_eebperf/kernel/exit.c	2004-08-11 13:14:54.000000000 -0700
 @@ -369,11 +369,14 @@
  {
  	/* No need to hold fs->lock if we are killing it */
@@ -1833,10 +1833,10 @@ Index: 64chaos_mballoc/kernel/exit.c
  			dput(fs->altroot);
  			mntput(fs->altrootmnt);
  		}
-Index: 64chaos_mballoc/kernel/fork.c
+Index: 68chaos_eebperf/kernel/fork.c
 ===================================================================
---- 64chaos_mballoc.orig/kernel/fork.c	2004-07-27 13:44:25.000000000 -0700
-+++ 64chaos_mballoc/kernel/fork.c	2004-07-27 13:46:47.000000000 -0700
+--- 68chaos_eebperf.orig/kernel/fork.c	2004-08-11 12:06:26.000000000 -0700
++++ 68chaos_eebperf/kernel/fork.c	2004-08-11 13:14:54.000000000 -0700
 @@ -466,10 +466,13 @@
  		fs->umask = old->umask;
  		read_lock(&old->lock);
@@ -1851,11 +1851,11 @@ Index: 64chaos_mballoc/kernel/fork.c
  			fs->altrootmnt = mntget(old->altrootmnt);
  			fs->altroot = dget(old->altroot);
  		} else {
-Index: 64chaos_mballoc/kernel/ksyms.c
+Index: 68chaos_eebperf/kernel/ksyms.c
 ===================================================================
---- 64chaos_mballoc.orig/kernel/ksyms.c	2004-07-27 13:46:42.000000000 -0700
-+++ 64chaos_mballoc/kernel/ksyms.c	2004-07-27 13:46:47.000000000 -0700
-@@ -320,6 +320,7 @@
+--- 68chaos_eebperf.orig/kernel/ksyms.c	2004-08-11 13:14:54.000000000 -0700
++++ 68chaos_eebperf/kernel/ksyms.c	2004-08-11 13:14:54.000000000 -0700
+@@ -329,6 +329,7 @@
  EXPORT_SYMBOL(set_page_dirty);
  EXPORT_SYMBOL(vfs_readlink);
  EXPORT_SYMBOL(vfs_follow_link);
