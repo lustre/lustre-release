@@ -15,8 +15,13 @@ LLIB_EXEC= ../liblustre.a -lpthread
 noinst_LIBRARIES = libtestcommon.a
 libtestcommon_a_SOURCES = test_common.c
 
-bin_PROGRAMS = echo_test sanity recovery_small replay_single test_lock_cancel \
-    replay_ost_single
+def_tests = echo_test sanity recovery_small replay_single replay_ost_single
+
+if MPITESTS
+bin_PROGRAMS = $(def_tests) test_lock_cancel
+else
+bin_PROGRAMS = $(def_tests)
+endif
 
 echo_test_SOURCES = echo_test.c  ../../utils/parser.c ../../utils/obd.c ../../utils/lustre_cfg.c
 echo_test_LDADD = ../liblsupport.a $(LIBREADLINE) -lpthread 
@@ -34,12 +39,14 @@ replay_single_SOURCES = replay_single.c
 replay_single_LDADD := ./libtestcommon.a $(LLIB_EXEC)
 replay_single_DEPENDENCIES = $(top_srcdir)/liblustre/liblustre.a
 
-test_lock_cancel_SOURCES = test_lock_cancel.c
-test_lock_cancel_LDADD :=  $(LLIB_EXEC) -lmpi -llam
-
 replay_ost_single_SOURCES = replay_ost_single.c
 replay_ost_single_LDADD := ./libtestcommon.a $(LLIB_EXEC)
 replay_ost_single_DEPENDENCIES = $(top_srcdir)/liblustre/liblustre.a
+
+if MPITESTS
+test_lock_cancel_SOURCES = test_lock_cancel.c
+test_lock_cancel_LDADD :=  $(LLIB_EXEC) -lmpi -llam
+endif
 
 include $(top_srcdir)/Rules
 
