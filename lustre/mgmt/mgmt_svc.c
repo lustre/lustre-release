@@ -23,7 +23,7 @@
  */
 
 #define EXPORT_SYMTAB
-#define DEBUG_SUBSYSTEM S_MGMT
+#define DEBUG_SUBSYSTEM S_FILTER
 #include <linux/module.h>
 #include <linux/init.h>
 
