@@ -12,11 +12,11 @@
 
 #include <portals/types.h>
 #ifdef __KERNEL__
-# define PTL_USE_SLAB_CACHE
 # include <linux/uio.h>
 # include <linux/smp_lock.h>
 # include <linux/types.h>
 #else
+# define PTL_USE_DESC_LISTS
 # include <sys/types.h>
 #endif
 
@@ -214,7 +214,7 @@ struct lib_md_t {
 #define PTL_MD_FLAG_UNLINK            (1 << 0)
 #define PTL_MD_FLAG_AUTO_UNLINKED     (1 << 1)
 
-#ifndef PTL_USE_SLAB_CACHE
+#ifdef PTL_USE_DESC_LISTS
 typedef struct
 {
         void	          *fl_objs;             /* single contiguous array of objects */
@@ -262,7 +262,7 @@ typedef struct {
         
         struct list_head ni_test_peers;
         
-#ifndef PTL_USE_SLAB_CACHE
+#ifdef PTL_USE_DESC_LISTS
         lib_freelist_t   ni_free_mes;
         lib_freelist_t   ni_free_msgs;
         lib_freelist_t   ni_free_mds;

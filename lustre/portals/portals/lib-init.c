@@ -38,97 +38,24 @@
 # include <sys/time.h>
 #endif
 
-#ifdef PTL_USE_SLAB_CACHE
+#ifndef PTL_USE_DESC_LISTS
 static int ptl_slab_users;
 
-kmem_cache_t *ptl_md_slab;
-kmem_cache_t *ptl_msg_slab;
-kmem_cache_t *ptl_me_slab;
-kmem_cache_t *ptl_eq_slab;
-
-atomic_t md_in_use_count;
-atomic_t msg_in_use_count;
-atomic_t me_in_use_count;
-atomic_t eq_in_use_count;
-
-/* NB zeroing in ctor and on freeing ensures items that
- * kmem_cache_validate() OK, but haven't been initialised
- * as an MD/ME/EQ can't have valid handles
- */
-static void
-ptl_md_slab_ctor (void *obj, kmem_cache_t *slab, unsigned long flags)
-{
-        memset (obj, 0, sizeof (lib_md_t));
-}
-
-static void
-ptl_me_slab_ctor (void *obj, kmem_cache_t *slab, unsigned long flags)
-{
-        memset (obj, 0, sizeof (lib_me_t));
-}
-
-static void
-ptl_eq_slab_ctor (void *obj, kmem_cache_t *slab, unsigned long flags)
-{
-        memset (obj, 0, sizeof (lib_eq_t));
-}
+atomic_t md_in_use_count = ATOMIC_INIT(0);
+atomic_t msg_in_use_count = ATOMIC_INIT(0);
+atomic_t me_in_use_count = ATOMIC_INIT(0);
+atomic_t eq_in_use_count = ATOMIC_INIT(0);
 
 int
 kportal_descriptor_setup (nal_cb_t *nal)
 {
-        /* NB on failure caller must still call kportal_descriptor_cleanup */
-        /*               ******                                            */
-
-        /* We'll have 1 set of slabs for ALL the nals :) */
-
-        if (ptl_slab_users++)
-                return 0;
-
-        ptl_md_slab = kmem_cache_create("portals_MD",
-                                        sizeof(lib_md_t), 0,
-                                        SLAB_HWCACHE_ALIGN,
-                                        ptl_md_slab_ctor, NULL);
-        if (!ptl_md_slab) {
-                CERROR("couldn't allocate ptl_md_t slab");
-                RETURN (PTL_NOSPACE);
-        }
-
-        /* NB no ctor for msgs; they don't need handle verification */
-        ptl_msg_slab = kmem_cache_create("portals_MSG",
-                                         sizeof(lib_msg_t), 0,
-                                         SLAB_HWCACHE_ALIGN,
-                                         NULL, NULL);
-        if (!ptl_msg_slab) {
-                CERROR("couldn't allocate ptl_msg_t slab");
-                RETURN (PTL_NOSPACE);
-        }
-
-        ptl_me_slab = kmem_cache_create("portals_ME",
-                                        sizeof(lib_me_t), 0,
-                                        SLAB_HWCACHE_ALIGN,
-                                        ptl_me_slab_ctor, NULL);
-        if (!ptl_me_slab) {
-                CERROR("couldn't allocate ptl_me_t slab");
-                RETURN (PTL_NOSPACE);
-        }
-
-        ptl_eq_slab = kmem_cache_create("portals_EQ",
-                                        sizeof(lib_eq_t), 0,
-                                        SLAB_HWCACHE_ALIGN,
-                                        ptl_eq_slab_ctor, NULL);
-        if (!ptl_eq_slab) {
-                CERROR("couldn't allocate ptl_eq_t slab");
-                RETURN (PTL_NOSPACE);
-        }
-
+        ptl_slab_users++;
         RETURN(PTL_OK);
 }
 
 void
 kportal_descriptor_cleanup (nal_cb_t *nal)
 {
-        int rc;
-
         if (--ptl_slab_users != 0)
                 return;
 
@@ -136,27 +63,6 @@ kportal_descriptor_cleanup (nal_cb_t *nal)
         LASSERT (atomic_read (&me_in_use_count) == 0);
         LASSERT (atomic_read (&eq_in_use_count) == 0);
         LASSERT (atomic_read (&msg_in_use_count) == 0);
-
-        if (ptl_md_slab != NULL) {
-                rc = kmem_cache_destroy(ptl_md_slab);
-                if (rc != 0)
-                        CERROR("unable to free MD slab\n");
-        }
-        if (ptl_msg_slab != NULL) {
-                rc = kmem_cache_destroy(ptl_msg_slab);
-                if (rc != 0)
-                        CERROR("unable to free MSG slab\n");
-        }
-        if (ptl_me_slab != NULL) {
-                rc = kmem_cache_destroy(ptl_me_slab);
-                if (rc != 0)
-                        CERROR("unable to free ME slab\n");
-        }
-        if (ptl_eq_slab != NULL) {
-                rc = kmem_cache_destroy(ptl_eq_slab);
-                if (rc != 0)
-                        CERROR("unable to free EQ slab\n");
-        }
 }
 #else
 

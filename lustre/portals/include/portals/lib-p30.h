@@ -42,7 +42,7 @@ do {                                                    \
         nal->cb_sti(nal, flagsp);                       \
 }
 
-#ifndef PTL_USE_SLAB_CACHE
+#ifdef PTL_USE_DESC_LISTS
 
 #define MAX_MES         2048
 #define MAX_MDS         2048
@@ -155,10 +155,6 @@ lib_msg_free (nal_cb_t *nal, lib_msg_t *msg)
 
 #else
 
-extern kmem_cache_t *ptl_md_slab;
-extern kmem_cache_t *ptl_msg_slab;
-extern kmem_cache_t *ptl_me_slab;
-extern kmem_cache_t *ptl_eq_slab;
 extern atomic_t      md_in_use_count;
 extern atomic_t      msg_in_use_count;
 extern atomic_t      me_in_use_count;
@@ -169,7 +165,7 @@ lib_eq_alloc (nal_cb_t *nal)
 {
         /* NEVER called with statelock held */
         lib_eq_t *eq;
-        PORTAL_SLAB_ALLOC(eq, ptl_eq_slab, sizeof(*eq));
+        PORTAL_ALLOC(eq, sizeof(*eq));
 
         if (eq == NULL)
                 return (NULL);
@@ -183,7 +179,7 @@ lib_eq_free (nal_cb_t *nal, lib_eq_t *eq)
 {
         /* ALWAYS called with statelock held */
         atomic_dec (&eq_in_use_count);
-        PORTAL_SLAB_FREE(eq, ptl_eq_slab, sizeof(*eq));
+        PORTAL_FREE(eq, sizeof(*eq));
 }
 
 static inline lib_md_t *
@@ -191,7 +187,7 @@ lib_md_alloc (nal_cb_t *nal)
 {
         /* NEVER called with statelock held */
         lib_md_t *md;
-        PORTAL_SLAB_ALLOC(md, ptl_md_slab, sizeof(*md));
+        PORTAL_ALLOC(md, sizeof(*md));
 
         if (md == NULL)
                 return (NULL);
@@ -205,7 +201,7 @@ lib_md_free (nal_cb_t *nal, lib_md_t *md)
 {
         /* ALWAYS called with statelock held */
         atomic_dec (&md_in_use_count);
-        PORTAL_SLAB_FREE(md, ptl_md_slab, sizeof(*md));
+        PORTAL_FREE(md, sizeof(*md));
 }
 
 static inline lib_me_t *
@@ -213,7 +209,7 @@ lib_me_alloc (nal_cb_t *nal)
 {
         /* NEVER called with statelock held */
         lib_me_t *me;
-        PORTAL_SLAB_ALLOC(me, ptl_me_slab, sizeof(*me));
+        PORTAL_ALLOC(me, sizeof(*me));
 
         if (me == NULL)
                 return (NULL);
@@ -227,7 +223,7 @@ lib_me_free(nal_cb_t *nal, lib_me_t *me)
 {
         /* ALWAYS called with statelock held */
         atomic_dec (&me_in_use_count);
-        PORTAL_SLAB_FREE(me, ptl_me_slab, sizeof(*me));
+        PORTAL_FREE(me, sizeof(*me));
 }
 
 static inline lib_msg_t *
@@ -235,7 +231,7 @@ lib_msg_alloc(nal_cb_t *nal)
 {
         /* ALWAYS called with statelock held */
         lib_msg_t *msg;
-        PORTAL_SLAB_ALLOC(msg, ptl_msg_slab, sizeof(*msg));
+        PORTAL_ALLOC_ATOMIC(msg, sizeof(*msg));
 
         if (msg == NULL)
                 return (NULL);
@@ -249,7 +245,7 @@ lib_msg_free(nal_cb_t *nal, lib_msg_t *msg)
 {
         /* ALWAYS called with statelock held */
         atomic_dec (&msg_in_use_count);
-        PORTAL_SLAB_FREE(msg, ptl_msg_slab, sizeof(*msg));
+        PORTAL_FREE(msg, sizeof(*msg));
 }
 #endif
 
