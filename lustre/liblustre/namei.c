@@ -113,9 +113,9 @@ static inline void llu_invalidate_inode_pages(struct inode * inode)
         /* do nothing */
 }
 
-static int llu_mdc_blocking_ast(struct ldlm_lock *lock,
-                                struct ldlm_lock_desc *desc,
-                                void *data, int flag)
+int llu_mdc_blocking_ast(struct ldlm_lock *lock,
+                         struct ldlm_lock_desc *desc,
+                         void *data, int flag)
 {
         int rc;
         struct lustre_handle lockh;
@@ -357,8 +357,6 @@ static int llu_lookup_it(struct inode *parent, struct pnode *pnode,
         struct lookup_intent lookup_it = { .it_op = IT_LOOKUP };
         int rc;
         ENTRY;
-
-#define EXT2_NAME_LEN (255) /* XXX */
 
         if (pnode->p_base->pb_name.len > EXT2_NAME_LEN)
                 RETURN(-ENAMETOOLONG);
