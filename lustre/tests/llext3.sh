@@ -32,6 +32,9 @@ setup 1
 device 3
 attach osc
 setup -1
+device 4
+attach ptlrpc
+setup
 quit
 EOF
 

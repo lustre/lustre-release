@@ -146,10 +146,10 @@ static struct super_block * ll_read_super(struct super_block *sb,
         }
 
         err = connmgr_connect(ptlrpc_connmgr, sbi->ll_mds_conn);
-        if (err) { 
-                CERROR("cannot connect to MDS\n"); 
+        if (err) {
+                CERROR("cannot connect to MDS\n");
                 GOTO(out_disc, sb = NULL);
-        }                
+        }
 
         sbi->ll_rootino = 2;
 

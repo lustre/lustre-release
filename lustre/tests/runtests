@@ -10,7 +10,7 @@ PATH=$PATH:$RUNDIR
 
 ERROR=
 
-[ "`mount | grep /mnt/obd`" ] || echo | llmount.sh || exit 1
+[ "`mount | grep /mnt/lustre`" ] || echo | sh llmount.sh || exit 1
 
 # let's start slowly here...
 touch /mnt/lustre || exit 2
@@ -29,9 +29,9 @@ done
 
 [ "$ERROR" ] && exit $ERROR
 
-llmountcleanup.sh
+sh llmountcleanup.sh
 
-echo | llrmount.sh || exit 20
+echo | sh llrmount.sh || exit 20
 echo "comparing previously copied files"
 diff -u /etc/hosts /mnt/lustre/hosts || exit 21
 
@@ -45,4 +45,4 @@ rm /mnt/lustre/hosts || exit 23
 
 rm -r /mnt/lustre/etc || exit 24
 
-llmountcleanup.sh
+sh llmountcleanup.sh
