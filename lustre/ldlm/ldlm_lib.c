@@ -836,7 +836,7 @@ void target_send_reply(struct ptlrpc_request *req, int rc, int fail_id)
         } else {
                 obd_fail_loc |= OBD_FAIL_ONCE | OBD_FAILED;
                 DEBUG_REQ(D_ERROR, req, "dropping reply");
-                if (!exp && req->rq_repmsg) {
+                if (req->rq_repmsg) {
                         OBD_FREE(req->rq_repmsg, req->rq_replen);
                         req->rq_repmsg = NULL;
                 }
