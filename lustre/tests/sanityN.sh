@@ -317,7 +317,7 @@ test_14b() {
 run_test 14b "truncate of file being executed should return -ETXTBSY"
 
 test_15() {	# bug 974 - ENOSPC
-	env
+	echo $PATH
 	sh oos2.sh $MOUNT1 $MOUNT2
 }
 run_test 15 "test out-of-space with multiple writers ==========="
