@@ -33,6 +33,8 @@ char usage[] =
 "        T  ftruncate to zero\n"
 "        w  write\n"
 "        W  write entire mmap-ed region\n"
+"        y  fsync\n"
+"        Y  fdatasync\n"
 "        z  seek to zero\n";
 
 void null_handler(int unused) { }
@@ -158,6 +160,17 @@ int main(int argc, char **argv)
 			for (i = 0; i < mmap_len && mmap_ptr; i += 4096)
 				mmap_ptr[i] += junk++;
 			break;
+		case 'y':
+			if (fsync(fd) == -1) {
+				perror("fsync");
+				exit(1);
+			}
+			break;
+		case 'Y':
+			if (fdatasync(fd) == -1) {
+				perror("fdatasync");
+				exit(1);
+			}
 		case 'z':
 			if (lseek(fd, 0, SEEK_SET) == -1) {
 				perror("lseek");
