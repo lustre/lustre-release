@@ -246,7 +246,10 @@ ksocknal_send_iov (ksock_conn_t *conn, ksock_tx_t *tx)
                 CDEBUG(D_NET, "vaddr %p, page %p->%p + offset %x for %d\n",
                        (void *)vaddr, page, page_address(page), offset, zcsize);
 
-                more |= (zcsize < fragsize);
+                if (zcsize < fragsize) {
+                        fragsize = zcsize;
+                        more = 1;
+                }
 
                 rc = tcp_sendpage_zccd(sock, page, offset, zcsize, 
                                        more ? (MSG_DONTWAIT | MSG_MORE) : MSG_DONTWAIT,
@@ -1040,7 +1043,8 @@ ksocknal_fwd_packet (void *arg, kpr_fwd_desc_t *fwd)
         tx->tx_iov   = fwd->kprfd_iov;
         tx->tx_nkiov = 0;
         tx->tx_kiov  = NULL;
-        
+        tx->tx_hdr   = (ptl_hdr_t *)fwd->kprfd_iov[0].iov_base;
+
         rc = ksocknal_launch_packet (tx, nid);
         if (rc != 0) {
                 /* FIXME, could pass a better completion error */
@@ -1820,8 +1824,6 @@ ksocknal_exchange_nids (int fd, ptl_nid_t nid)
         ptl_hdr_t           hdr;
         ptl_magicversion_t *hmv = (ptl_magicversion_t *)&hdr.dest_nid;
 
-        CERROR ("nid "LPX64"\n", nid);
-
         LASSERT (sizeof (*hmv) == sizeof (hdr.dest_nid));
 
         memset (&hdr, 0, sizeof (hdr));
@@ -1839,16 +1841,12 @@ ksocknal_exchange_nids (int fd, ptl_nid_t nid)
                 return (rc);
         }
 
-        CERROR ("send hello\n");
-
         rc = ksocknal_sock_read (fd, hmv, sizeof (*hmv));
         if (rc != 0) {
                 CERROR ("Error %d reading HELLO from "LPX64"\n", rc, nid);
                 return (rc);
         }
         
-        CERROR ("read magicversion\n");
-
         if (hmv->magic != __le32_to_cpu (PORTALS_PROTO_MAGIC)) {
                 CERROR ("Bad magic %#08x (%#08x expected) from "LPX64"\n",
                         __cpu_to_le32 (hmv->magic), PORTALS_PROTO_MAGIC, nid);
@@ -1878,8 +1876,6 @@ ksocknal_exchange_nids (int fd, ptl_nid_t nid)
                 return (rc);
         }
 
-        CERROR ("read rest of hello\n");
-
         /* ...and check we got what we expected */
         if (hdr.type != __cpu_to_le32 (PTL_MSG_HELLO) ||
             PTL_HDR_LENGTH (&hdr) != __cpu_to_le32 (0)) {
@@ -1895,8 +1891,6 @@ ksocknal_exchange_nids (int fd, ptl_nid_t nid)
                         __le64_to_cpu (hdr.src_nid), nid);
                 return (-EINVAL);
         }
-
-        CERROR ("SUCCESS\n");
 
         return (0);
 }
@@ -2019,6 +2013,12 @@ ksocknal_autoconnect (ksock_route_t *route)
         while (!list_empty (&zombies)) {
                 tx = list_entry (zombies.next, ksock_tx_t, tx_list);
                 
+                CERROR ("Deleting packet type %d len %d ("LPX64"->"LPX64")\n",
+                        NTOH__u32 (tx->tx_hdr->type),
+                        NTOH__u32 (PTL_HDR_LENGTH(tx->tx_hdr)),
+                        NTOH__u64 (tx->tx_hdr->src_nid),
+                        NTOH__u64 (tx->tx_hdr->dest_nid));
+
                 list_del (&tx->tx_list);
                 /* complete now */
                 ksocknal_tx_done (tx, 0);
