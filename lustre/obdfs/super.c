@@ -320,6 +320,11 @@ static void obdfs_write_inode(struct inode *inode)
 	int err;
 	
 	ENTRY;
+	if (IOPS(inode, setattr) == NULL) {
+		printk(KERN_ERR __FUNCTION__ ": no setattr method!\n");
+		EXIT;
+		return;
+	}
 	oa = obdo_alloc();
 	if ( !oa ) {
 		printk(__FUNCTION__ ": obdo_alloc failed\n");
@@ -346,54 +351,21 @@ static void obdfs_write_inode(struct inode *inode)
 } /* obdfs_write_inode */
 
 
-/* Dequeue cached pages for a dying inode without writing them to disk.
- *
- * This routine is called from iput() (for each unlink on the inode).
- * We can't put this code into delete_inode() since that is called only
+/* This routine is called from iput() (for each unlink on the inode).
+ * We can't put this call into delete_inode() since that is called only
  * when i_count == 0, and we need to keep a reference on the inode while
  * it is in the page cache, which means i_count > 0.  Catch 22.
  */
 static void obdfs_put_inode(struct inode *inode)
 {
-	struct list_head *tmp;
-
 	ENTRY;
 	if (inode->i_nlink) {
 		EXIT;
 		return;
 	}
 
-	obd_down(&obdfs_i2sbi(inode)->osi_list_mutex);
-	tmp = obdfs_islist(inode);
-	if ( list_empty(tmp) ) {
-		CDEBUG(D_INFO, "no dirty pages for inode %ld\n", inode->i_ino);
-		obd_up(&obdfs_i2sbi(inode)->osi_list_mutex);
-		EXIT;
-		return;
-	}
-
-	/* take it out of the super list */
-	list_del(tmp);
-	INIT_LIST_HEAD(obdfs_islist(inode));
-
-	tmp = obdfs_iplist(inode);
-	while ( (tmp = tmp->prev) != obdfs_iplist(inode) ) {
-		struct obdfs_pgrq *req;
-		struct page *page;
-		
-		req = list_entry(tmp, struct obdfs_pgrq, rq_plist);
-		page = req->rq_page;
-		/* take it out of the list and free */
-		obdfs_pgrq_del(req);
-		/* now put the page away */
-		put_page(page);
-	}
-
-	/* decrement inode reference for page cache */
-	inode->i_count--;
-
+	obdfs_dequeue_pages(inode);
 	EXIT;
-	obd_up(&obdfs_i2sbi(inode)->osi_list_mutex);
 } /* obdfs_put_inode */
 
 
@@ -401,11 +373,18 @@ static void obdfs_delete_inode(struct inode *inode)
 {
 	struct obdo *oa;
 	int err;
+
         ENTRY;
+	if (IOPS(inode, destroy) == NULL) {
+		printk(KERN_ERR __FUNCTION__ ": no destroy method!\n");
+		EXIT;
+		return;
+	}
 
 	oa = obdo_alloc();
 	if ( !oa ) {
 		printk(__FUNCTION__ ": obdo_alloc failed\n");
+		EXIT;
 		return;
 	}
 	oa->o_valid = OBD_MD_FLNOTOBD;
@@ -431,6 +410,11 @@ static int obdfs_notify_change(struct dentry *de, struct iattr *attr)
 	int err;
 
 	ENTRY;
+	if (IOPS(inode, setattr) == NULL) {
+		printk(KERN_ERR __FUNCTION__ ": no setattr method!\n");
+		EXIT;
+		return -EIO;
+	}
 	oa = obdo_alloc();
 	if ( !oa ) {
 		printk(__FUNCTION__ ": obdo_alloc failed\n");
@@ -528,8 +512,7 @@ void cleanup_module(void)
 	obdfs_sysctl_clean();
 	obdfs_cleanup_pgrqcache();
 	unregister_filesystem(&obdfs_fs_type);
-	CDEBUG(D_MALLOC, "OBDFS mem used %ld, inodes %d, pages %d\n",
-	       obd_memory, obd_inodes, obd_pages);
+	CDEBUG(D_MALLOC, "OBDFS mem used %ld\n", obd_memory);
 	EXIT;
 }
 

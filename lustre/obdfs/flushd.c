@@ -8,27 +8,9 @@
  *
  */
 #define __NO_VERSION__
-#include <linux/module.h>
-#include <linux/sched.h>
 #include <linux/fs.h>
-#include <linux/malloc.h>
 #include <linux/locks.h>
-#include <linux/errno.h>
 #include <linux/swap.h>
-#include <linux/smp_lock.h>
-#include <linux/vmalloc.h>
-#include <linux/blkdev.h>
-#include <linux/sysrq.h>
-#include <linux/file.h>
-#include <linux/init.h>
-#include <linux/quotaops.h>
-#include <linux/iobuf.h>
-#include <linux/highmem.h>
-
-#include <asm/uaccess.h>
-#include <asm/io.h>
-#include <asm/bitops.h>
-#include <asm/mmu_context.h>
 
 #include <linux/obd_support.h>
 #include <linux/obd_class.h>
@@ -118,6 +100,43 @@ static int obdfs_enqueue_pages(struct inode *inode, struct obdo **obdo,
 	return num;  
 } /* obdfs_enqueue_pages */
 
+/* Dequeue cached pages for a dying inode without writing them to disk. */
+void obdfs_dequeue_pages(struct inode *inode)
+{
+	struct list_head *tmp;
+
+	obd_down(&obdfs_i2sbi(inode)->osi_list_mutex);
+	tmp = obdfs_islist(inode);
+	if ( list_empty(tmp) ) {
+		CDEBUG(D_INFO, "no dirty pages for inode %ld\n", inode->i_ino);
+		obd_up(&obdfs_i2sbi(inode)->osi_list_mutex);
+		EXIT;
+		return;
+	}
+
+	/* take it out of the super list */
+	list_del(tmp);
+	INIT_LIST_HEAD(obdfs_islist(inode));
+
+	tmp = obdfs_iplist(inode);
+	while ( (tmp = tmp->prev) != obdfs_iplist(inode) ) {
+		struct obdfs_pgrq *req;
+		struct page *page;
+		
+		req = list_entry(tmp, struct obdfs_pgrq, rq_plist);
+		page = req->rq_page;
+		/* take it out of the list and free */
+		obdfs_pgrq_del(req);
+		/* now put the page away */
+		put_page(page);
+	}
+
+	obd_up(&obdfs_i2sbi(inode)->osi_list_mutex);
+
+	/* decrement inode reference for page cache */
+	inode->i_count--;
+}
+
 /* Remove writeback requests for the superblock */
 int obdfs_flush_reqs(struct list_head *inode_list, unsigned long check_time)
 {
@@ -147,8 +166,7 @@ int obdfs_flush_reqs(struct list_head *inode_list, unsigned long check_time)
 
 	obd_down(&sbi->osi_list_mutex);
 	if ( list_empty(inode_list) ) {
-		CDEBUG(D_CACHE, "list empty: memory %ld, inodes %d, pages %d\n",
-		       obd_memory, obd_inodes, obd_pages);
+		CDEBUG(D_CACHE, "list empty: memory %ld\n", obd_memory);
 		obd_up(&sbi->osi_list_mutex);
 		EXIT;
 		return 0;
@@ -348,34 +366,35 @@ static int pupdate(void *unused)
 		/* asynchronous setattr etc for the future ...
 		obdfs_flush_dirty_inodes(jiffies - pupd_prm.age_super);
 		 */
+		/* XXX for debugging
 		dirty_limit = nr_free_buffer_pages() * pupd_prm.nfract / 100;
-		CDEBUG(D_CACHE, "dirty_limit %ld, cache_count %ld\n",
-		       dirty_limit, obdfs_cache_count);
+		 * XXX */
+		dirty_limit = 16384 * pupd_prm.nfract / 100;
+		CDEBUG(D_CACHE, "dirty_limit %ld, cache_count %ld, wrote %d\n",
+		       dirty_limit, obdfs_cache_count, wrote);
 
 		if (obdfs_cache_count > dirty_limit) {
 			interval = 0;
 			if ( wrote < pupd_prm.ndirty )
 				age >>= 1;
+			CDEBUG(D_CACHE, "age %ld, interval %d\n",
+				age, interval);
 		} else {
-			int isave = interval;
-			int asave = age;
-
-			if ( wrote < pupd_prm.ndirty >> 1 )
+			if ( wrote < pupd_prm.ndirty >> 1 &&
+			     obdfs_cache_count < dirty_limit / 2) {
 				interval = pupd_prm.interval;
-			else
-				interval = isave >> 1;
-
-			if (obdfs_cache_count > dirty_limit / 3) {
-				age = asave >> 1;
-				interval = isave >> 1;
-			} else
 				age = pupd_prm.age_buffer;
+			} else if (obdfs_cache_count > dirty_limit / 2) {
+				interval >>= 1;
+				if ( wrote < pupd_prm.ndirty )
+					age >>= 1;
+				CDEBUG(D_CACHE, "age %ld, interval %d\n",
+				       age, interval);
+			}
 		}
 
-		CDEBUG(D_CACHE, "age %ld, interval %d\n", age, interval);
 		wrote = obdfs_flush_dirty_pages(jiffies - age);
 	}
-
 }
 
 
