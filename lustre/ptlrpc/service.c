@@ -701,6 +701,9 @@ static int ptlrpc_main(void *arg)
         struct ptlrpc_thread   *thread = data->thread;
         struct lc_watchdog     *watchdog;
         unsigned long           flags;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,4)
+        struct group_info *ginfo = NULL;
+#endif
         ENTRY;
 
         lock_kernel();
@@ -716,6 +719,17 @@ static int ptlrpc_main(void *arg)
                  (int)strlen(data->name), (int)sizeof(current->comm));
         THREAD_NAME(current->comm, sizeof(current->comm) - 1, "%s", data->name);
         unlock_kernel();
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,4)
+        ginfo = groups_alloc(0);
+        if (!ginfo) {
+                thread->t_flags = SVC_RUNNING;
+                wake_up(&thread->t_ctl_waitq);
+                return (-ENOMEM);
+        }
+        set_current_groups(ginfo);
+        put_group_info(ginfo);
+#endif
 
         /* Record that the thread is running */
         thread->t_flags = SVC_RUNNING;

@@ -1,14 +1,18 @@
 tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.3.4
        * bug fixes
-	- flock/lockf fixes
+	- flock/lockf fixes (bug it's still disabled, pending 
 	- don't use EXT3 constants in llite code (5094)
 	- return async write errors to application if possible (2248)
+	- return last_committed value from OST to avoid OOM (4966)
        * miscellania
 	- reorganization of lov code
 	- single portals codebase
 	- Infiniband NAL
 	- add pid to ldlm debugging output (4922)
+	- return last_committed value from OST to avoid OOM (4966)
+	- add extents/mballoc support (5025)
+	- direct I/O reads in the obdfilter (4048)
 
 tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.8

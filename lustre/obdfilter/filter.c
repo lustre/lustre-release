@@ -282,8 +282,7 @@ static int filter_free_server_data(struct filter_obd *filter)
 {
         OBD_FREE(filter->fo_fsd, sizeof(*filter->fo_fsd));
         filter->fo_fsd = NULL;
-        OBD_FREE(filter->fo_last_rcvd_slots,
-                 FILTER_LR_MAX_CLIENT_WORDS * sizeof(unsigned long));
+        OBD_FREE(filter->fo_last_rcvd_slots, FILTER_LR_MAX_CLIENTS/8);
         filter->fo_last_rcvd_slots = NULL;
         return 0;
 }
@@ -354,8 +353,7 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
                 RETURN(-ENOMEM);
         filter->fo_fsd = fsd;
 
-        OBD_ALLOC(filter->fo_last_rcvd_slots,
-                  FILTER_LR_MAX_CLIENT_WORDS * sizeof(unsigned long));
+        OBD_ALLOC(filter->fo_last_rcvd_slots, FILTER_LR_MAX_CLIENTS/8);
         if (filter->fo_last_rcvd_slots == NULL) {
                 OBD_FREE(fsd, sizeof(*fsd));
                 RETURN(-ENOMEM);
@@ -1278,32 +1276,12 @@ static int filter_setup(struct obd_device *obd, obd_count len, void *buf)
 {
         struct lprocfs_static_vars lvars;
         struct lustre_cfg* lcfg = buf;
-        const char *str = NULL;
-        char *option = NULL;
-        int n = 0;
         int rc;
 
         if (!lcfg->lcfg_inlbuf1 || !lcfg->lcfg_inlbuf2)
                 RETURN(-EINVAL);
 
-        if (!strcmp(lcfg->lcfg_inlbuf2, "ext3") ||
-            !strcmp(lcfg->lcfg_inlbuf2, "ldiskfs")) {
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-        /* bug 1577: implement async-delete for 2.5 */
-                str = "errors=remount-ro,asyncdel";
-#else
-                str = "errors=remount-ro";
-#endif
-                n = strlen(str) + 1;
-                OBD_ALLOC(option, n);
-                if (option == NULL)
-                        RETURN(-ENOMEM);
-                strcpy(option, str);
-        }
-
-        rc = filter_common_setup(obd, len, buf, option);
-        if (option)
-                OBD_FREE(option, n);
+        rc = filter_common_setup(obd, len, buf, lcfg->lcfg_inlbuf4);
 
         lprocfs_init_vars(filter, &lvars);
         if (rc == 0 && lprocfs_obd_setup(obd, lvars.obd_vars) == 0 &&
@@ -2535,15 +2513,28 @@ static int __init obdfilter_init(void)
 
         lprocfs_init_vars(filter, &lvars);
 
+        OBD_ALLOC(obdfilter_created_scratchpad,
+                  OBDFILTER_CREATED_SCRATCHPAD_ENTRIES * 
+                  sizeof(*obdfilter_created_scratchpad));
+        if (obdfilter_created_scratchpad == NULL)
+                return -ENOMEM;
+
         rc = class_register_type(&filter_obd_ops, lvars.module_vars,
                                  OBD_FILTER_DEVICENAME);
-        if (rc)
+        if (rc) {
+                GOTO(out, rc);
                 return rc;
+        }
 
         rc = class_register_type(&filter_sanobd_ops, lvars.module_vars,
                                  OBD_FILTER_SAN_DEVICENAME);
-        if (rc)
+        if (rc) {
                 class_unregister_type(OBD_FILTER_DEVICENAME);
+out:
+                OBD_FREE(obdfilter_created_scratchpad,
+                         OBDFILTER_CREATED_SCRATCHPAD_ENTRIES * 
+                         sizeof(*obdfilter_created_scratchpad));
+        }
         return rc;
 }
 
@@ -2551,6 +2542,9 @@ static void __exit obdfilter_exit(void)
 {
         class_unregister_type(OBD_FILTER_SAN_DEVICENAME);
         class_unregister_type(OBD_FILTER_DEVICENAME);
+        OBD_FREE(obdfilter_created_scratchpad,
+                 OBDFILTER_CREATED_SCRATCHPAD_ENTRIES * 
+                 sizeof(*obdfilter_created_scratchpad));
 }
 
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");

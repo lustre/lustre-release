@@ -13,7 +13,7 @@ Index: 57chaos/fs/ext3/inode.c
  
  	nei->i_disksize = oei->i_disksize;
  	nei->i_state |= EXT3_STATE_DELETE;
-@@ -2522,6 +2526,12 @@ void ext3_read_inode(struct inode * inod
+@@ -2522,6 +2526,13 @@ void ext3_read_inode(struct inode * inod
  	else
  		EXT3_I(inode)->i_extra_isize = 0;
  
@@ -21,6 +21,7 @@ Index: 57chaos/fs/ext3/inode.c
 +		inode->u.ext3_i.i_cached_extent[0] = 0;
 +		inode->u.ext3_i.i_cached_extent[1] = 0;
 +		inode->u.ext3_i.i_cached_extent[2] = 0;
++		inode->u.ext3_i.i_cached_extent[3] = 0;
 +	}
 +
  	if (S_ISREG(inode->i_mode)) {

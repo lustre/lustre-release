@@ -61,13 +61,6 @@ case "$CC_VERSION" in
 	"gcc version 2.96 20000731 (Mandrake Linux 8.1 2.96-0.62mdk)")
 		bad_cc
 		;;
-	# unpatched 'gcc' on rh9.  miscompiles a
-	# 	 struct = (type) { .member = value, };
-	# asignment in the iibnal where the struct is a mix
-	# of u64 and u32 bit-fields.
-	"gcc version 3.2.2 20030222 (Red Hat Linux 3.2.2-5)")
-		bad_cc
-		;;
 	*)
 		AC_MSG_RESULT([no known problems])
 		;;

@@ -58,6 +58,12 @@ struct fsfilt_operations {
         int     (* fs_set_md)(struct inode *inode, void *handle, void *md,
                               int size);
         int     (* fs_get_md)(struct inode *inode, void *md, int size);
+        /* this method is needed to make IO operation fsfilt nature depend. */
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
+        int     (* fs_send_bio)(int rw, struct inode *inode, struct bio *bio);
+#else
+        int     (* fs_send_bio)(int rw, struct inode *inode,struct kiobuf *bio);
+#endif
         ssize_t (* fs_readpage)(struct file *file, char *buf, size_t count,
                                 loff_t *offset);
         int     (* fs_add_journal_cb)(struct obd_device *obd, __u64 last_rcvd,
@@ -65,9 +71,10 @@ struct fsfilt_operations {
                                       void *cb_data);
         int     (* fs_statfs)(struct super_block *sb, struct obd_statfs *osfs);
         int     (* fs_sync)(struct super_block *sb);
-        int     (* fs_map_inode_page)(struct inode *inode, struct page *page,
-                                      unsigned long *blocks, int *created,
-                                      int create);
+        int     (* fs_map_inode_pages)(struct inode *inode, struct page **page,
+                                       int pages, unsigned long *blocks,
+                                       int *created, int create,
+                                       struct semaphore *sem);
         int     (* fs_prep_san_write)(struct inode *inode, long *blocks,
                                       int nblocks, loff_t newsize);
         int     (* fs_write_record)(struct file *, void *, int size, loff_t *,
@@ -229,6 +236,17 @@ static inline int fsfilt_get_md(struct obd_device *obd, struct inode *inode,
         return obd->obd_fsops->fs_get_md(inode, md, size);
 }
 
+static inline int fsfilt_send_bio(int rw, struct obd_device *obd,
+                                  struct inode *inode, void *bio)
+{
+        LASSERTF(rw == OBD_BRW_WRITE || rw == OBD_BRW_READ, "%x\n", rw);
+
+        if (rw == OBD_BRW_READ)
+                return obd->obd_fsops->fs_send_bio(READ, inode, bio);
+        else
+                return obd->obd_fsops->fs_send_bio(WRITE, inode, bio);
+}
+
 static inline ssize_t fsfilt_readpage(struct obd_device *obd,
                                       struct file *file, char *buf,
                                       size_t count, loff_t *offset)
@@ -267,13 +285,14 @@ static inline int fsfilt_sync(struct obd_device *obd, struct super_block *sb)
         return obd->obd_fsops->fs_sync(sb);
 }
 
-static inline int fsfilt_map_inode_page(struct obd_device *obd,
-                                        struct inode *inode, struct page *page,
-                                        unsigned long *blocks, int *created,
-                                        int create)
+static inline int fsfilt_map_inode_pages(struct obd_device *obd,
+                                         struct inode *inode,
+                                         struct page **page, int pages,
+                                         unsigned long *blocks, int *created,
+                                         int create, struct semaphore *sem)
 {
-        return obd->obd_fsops->fs_map_inode_page(inode, page, blocks, created,
-                                                 create);
+        return obd->obd_fsops->fs_map_inode_pages(inode, page, pages, blocks,
+                                                  created, create, sem);
 }
 
 static inline int fs_prep_san_write(struct obd_device *obd,

@@ -145,7 +145,7 @@ mkdir -p $RPM_BUILD_ROOT/var/lib/ldap/lustre
 %attr(-, root, root) /usr/bin/mcreate
 %attr(-, root, root) /usr/bin/munlink
 %attr(-, root, root) /usr/lib/lustre/python
-%attr(-, root, root) /usr/lib/lustre/examples
+%attr(-, root, root) /usr/share/lustre/examples
 
 %attr(-, root, root) /etc/init.d/lustre
 %attr(-, root, root) /etc/init.d/lustrefs

@@ -1,8 +1,8 @@
-Index: linux-2.4.21-15.EL/fs/ext3/extents.c
+Index: linux-2.4.21-20.EL/fs/ext3/extents.c
 ===================================================================
---- linux-2.4.21-15.EL.orig/fs/ext3/extents.c	2003-01-30 13:24:37.000000000 +0300
-+++ linux-2.4.21-15.EL/fs/ext3/extents.c	2004-09-12 20:22:35.000000000 +0400
-@@ -0,0 +1,2271 @@
+--- linux-2.4.21-20.EL.orig/fs/ext3/extents.c	2003-01-30 13:24:37.000000000 +0300
++++ linux-2.4.21-20.EL/fs/ext3/extents.c	2004-11-03 00:35:30.644364336 +0300
+@@ -0,0 +1,2278 @@
 +/*
 + * Copyright (c) 2003, Cluster File Systems, Inc, info@clusterfs.com
 + * Written by Alex Tomas <alex@clusterfs.com>
@@ -1283,14 +1283,15 @@ Index: linux-2.4.21-15.EL/fs/ext3/extents.c
 +}
 +
 +static inline void
-+ext3_ext_put_in_cache(struct ext3_extents_tree *tree, struct ext3_extent *ex)
++ext3_ext_put_in_cache(struct ext3_extents_tree *tree, __u32 block,
++			__u32 len, __u32 start, int type)
 +{
++	EXT_ASSERT(len > 0);
 +	if (tree->cex) {
-+		EXT_ASSERT(ex);
-+		EXT_ASSERT(ex->ee_len);
-+		tree->cex->ee_block = ex->ee_block;
-+		tree->cex->ee_start = ex->ee_start;
-+		tree->cex->ee_len = ex->ee_len;
++		tree->cex->ec_type = type;
++		tree->cex->ec_block = block;
++		tree->cex->ec_len = len;
++		tree->cex->ec_start = start;
 +	}
 +}
 +
@@ -1304,7 +1305,8 @@ Index: linux-2.4.21-15.EL/fs/ext3/extents.c
 +				unsigned long block)
 +{
 +	int depth = EXT_DEPTH(tree);
-+	struct ext3_extent *ex, gex;
++	unsigned long lblock, len;
++	struct ext3_extent *ex;
 +
 +	if (!tree->cex)
 +		return;
@@ -1312,63 +1314,64 @@ Index: linux-2.4.21-15.EL/fs/ext3/extents.c
 +	ex = path[depth].p_ext;
 +	if (ex == NULL) {
 +		/* there is no extent yet, so gap is [0;-] */
-+		gex.ee_block = 0;
-+		gex.ee_len = EXT_CACHE_MARK;
++		lblock = 0;
++		len = EXT_MAX_BLOCK;
 +		ext_debug(tree, "cache gap(whole file):");
 +	} else if (block < ex->ee_block) {
-+		gex.ee_block = block;
-+		gex.ee_len = ex->ee_block - block;
++		lblock = block;
++		len = ex->ee_block - block;
 +		ext_debug(tree, "cache gap(before): %lu [%lu:%lu]",
 +				(unsigned long) block,
 +				(unsigned long) ex->ee_block,
 +				(unsigned long) ex->ee_len);
 +	} else if (block >= ex->ee_block + ex->ee_len) {
-+		gex.ee_block = ex->ee_block + ex->ee_len;
-+		gex.ee_len = ext3_ext_next_allocated_block(path);
++		lblock = ex->ee_block + ex->ee_len;
++		len = ext3_ext_next_allocated_block(path);
 +		ext_debug(tree, "cache gap(after): [%lu:%lu] %lu",
 +				(unsigned long) ex->ee_block,
 +				(unsigned long) ex->ee_len,
 +				(unsigned long) block);
-+		EXT_ASSERT(gex.ee_len > gex.ee_block);
-+		gex.ee_len = gex.ee_len - gex.ee_block;
++		EXT_ASSERT(len > lblock);
++		len = len - lblock;
 +	} else {
++		lblock = len = 0;
 +		BUG();
 +	}
 +
-+	ext_debug(tree, " -> %lu:%lu\n", (unsigned long) gex.ee_block,
-+			(unsigned long) gex.ee_len);
-+	gex.ee_start = EXT_CACHE_MARK;
-+	ext3_ext_put_in_cache(tree, &gex);
++	ext_debug(tree, " -> %lu:%lu\n", (unsigned long) lblock, len);
++	ext3_ext_put_in_cache(tree, lblock, len, 0, EXT3_EXT_CACHE_GAP);
 +}
 +
 +static inline int
 +ext3_ext_in_cache(struct ext3_extents_tree *tree, unsigned long block,
 +			struct ext3_extent *ex)
 +{
-+	struct ext3_extent *cex = tree->cex;
++	struct ext3_ext_cache *cex = tree->cex;
 +
 +	/* is there cache storage at all? */
 +	if (!cex)
-+		return 0;
++		return EXT3_EXT_CACHE_NO;
 +
 +	/* has cache valid data? */
-+	if (cex->ee_len == 0)
-+		return 0;
++	if (cex->ec_type == EXT3_EXT_CACHE_NO)
++		return EXT3_EXT_CACHE_NO;
 +
-+	if (block >= cex->ee_block && block < cex->ee_block + cex->ee_len) {
-+		ex->ee_block = cex->ee_block;
-+		ex->ee_start = cex->ee_start;
-+		ex->ee_len = cex->ee_len;
++	EXT_ASSERT(cex->ec_type == EXT3_EXT_CACHE_GAP ||
++			cex->ec_type == EXT3_EXT_CACHE_EXTENT);
++	if (block >= cex->ec_block && block < cex->ec_block + cex->ec_len) {
++		ex->ee_block = cex->ec_block;
++		ex->ee_start = cex->ec_start;
++		ex->ee_len = cex->ec_len;
 +		ext_debug(tree, "%lu cached by %lu:%lu:%lu\n",
 +				(unsigned long) block,
 +				(unsigned long) ex->ee_block,
 +				(unsigned long) ex->ee_len,
 +				(unsigned long) ex->ee_start);
-+		return 1;
++		return cex->ec_type;
 +	}
 +
 +	/* not in cache */
-+	return 0;
++	return EXT3_EXT_CACHE_NO;
 +}
 +
 +/*
@@ -1954,7 +1957,7 @@ Index: linux-2.4.21-15.EL/fs/ext3/extents.c
 +	tree->root = (void *) EXT3_I(inode)->i_data;
 +	tree->buffer = (void *) inode;
 +	tree->buffer_len = sizeof(EXT3_I(inode)->i_data);
-+	tree->cex = (struct ext3_extent *) &EXT3_I(inode)->i_cached_extent;
++	tree->cex = (struct ext3_ext_cache *) &EXT3_I(inode)->i_cached_extent;
 +	tree->ops = &ext3_blockmap_helpers;
 +}
 +
@@ -1974,19 +1977,20 @@ Index: linux-2.4.21-15.EL/fs/ext3/extents.c
 +	down_write(&EXT3_I(inode)->truncate_sem);
 +
 +	/* check in cache */
-+	if (ext3_ext_in_cache(&tree, iblock, &newex)) {
-+		if (newex.ee_start == EXT_CACHE_MARK) {
-+			/* this is cached gap */
++	if ((goal = ext3_ext_in_cache(&tree, iblock, &newex))) {
++		if (goal == EXT3_EXT_CACHE_GAP) {
 +			if (!create) {
 +				/* block isn't allocated yet and
 +				 * user don't want to allocate it */
 +				goto out2;
 +			}
 +			/* we should allocate requested block */
-+		} else if (newex.ee_start) {
++		} else if (goal == EXT3_EXT_CACHE_EXTENT) {
 +			/* block is already allocated */
 +			newblock = iblock - newex.ee_block + newex.ee_start;
 +			goto out;
++		} else {
++			EXT_ASSERT(0);
 +		}
 +	}
 +
@@ -2014,7 +2018,9 @@ Index: linux-2.4.21-15.EL/fs/ext3/extents.c
 +			ext_debug(&tree, "%d fit into %d:%d -> %d\n",
 +					(int) iblock, ex->ee_block, ex->ee_len,
 +					newblock);
-+			ext3_ext_put_in_cache(&tree, ex);
++			ext3_ext_put_in_cache(&tree, ex->ee_block,
++						ex->ee_len, ex->ee_start,
++						EXT3_EXT_CACHE_EXTENT);
 +			goto out;
 +		}
 +	}
@@ -2052,7 +2058,8 @@ Index: linux-2.4.21-15.EL/fs/ext3/extents.c
 +	newblock = newex.ee_start;
 +	set_bit(BH_New, &bh_result->b_state);
 +
-+	ext3_ext_put_in_cache(&tree, &newex);
++	ext3_ext_put_in_cache(&tree, newex.ee_block, newex.ee_len,
++				newex.ee_start, EXT3_EXT_CACHE_EXTENT);
 +out:
 +	ext3_ext_show_leaf(&tree, path);
 +	set_bit(BH_Mapped, &bh_result->b_state);
@@ -2274,11 +2281,11 @@ Index: linux-2.4.21-15.EL/fs/ext3/extents.c
 +EXPORT_SYMBOL(ext3_ext_find_goal);
 +EXPORT_SYMBOL(ext3_ext_calc_credits_for_insert);
 +
-Index: linux-2.4.21-15.EL/fs/ext3/ialloc.c
+Index: linux-2.4.21-20.EL/fs/ext3/ialloc.c
 ===================================================================
---- linux-2.4.21-15.EL.orig/fs/ext3/ialloc.c	2004-09-12 20:22:15.000000000 +0400
-+++ linux-2.4.21-15.EL/fs/ext3/ialloc.c	2004-09-12 20:24:20.000000000 +0400
-@@ -596,9 +596,21 @@
+--- linux-2.4.21-20.EL.orig/fs/ext3/ialloc.c	2004-11-02 20:43:27.000000000 +0300
++++ linux-2.4.21-20.EL/fs/ext3/ialloc.c	2004-11-02 20:53:34.000000000 +0300
+@@ -596,9 +596,22 @@
  		iloc.bh = NULL;
  		goto fail;
  	}
@@ -2286,8 +2293,9 @@ Index: linux-2.4.21-15.EL/fs/ext3/ialloc.c
 -	if (err) goto fail;
   
 +  	if (test_opt(sb, EXTENTS)) {
-+  		EXT3_I(inode)->i_flags |= EXT3_EXTENTS_FL;
-+  		ext3_extents_initialize_blockmap(handle, inode);
++ 		EXT3_I(inode)->i_flags |= EXT3_EXTENTS_FL;
++		memset(&inode->u.ext3_i.i_cached_extent, 0, sizeof(__u32) * 4);
++ 		ext3_extents_initialize_blockmap(handle, inode);
 +		if (!EXT3_HAS_INCOMPAT_FEATURE(sb, EXT3_FEATURE_INCOMPAT_EXTENTS)) {
 +			err = ext3_journal_get_write_access(handle, EXT3_SB(sb)->s_sbh);
 +			if (err) goto fail;
@@ -2302,10 +2310,10 @@ Index: linux-2.4.21-15.EL/fs/ext3/ialloc.c
  
  
  #ifdef CONFIG_EXT3_FS_XATTR
-Index: linux-2.4.21-15.EL/fs/ext3/inode.c
+Index: linux-2.4.21-20.EL/fs/ext3/inode.c
 ===================================================================
---- linux-2.4.21-15.EL.orig/fs/ext3/inode.c	2004-09-12 20:22:29.000000000 +0400
-+++ linux-2.4.21-15.EL/fs/ext3/inode.c	2004-09-12 20:22:35.000000000 +0400
+--- linux-2.4.21-20.EL.orig/fs/ext3/inode.c	2004-11-02 20:43:31.000000000 +0300
++++ linux-2.4.21-20.EL/fs/ext3/inode.c	2004-11-02 20:53:34.000000000 +0300
 @@ -859,6 +859,16 @@
  	goto reread;
  }
@@ -2360,7 +2368,15 @@ Index: linux-2.4.21-15.EL/fs/ext3/inode.c
  	
  	handle = start_transaction(inode);
  	if (IS_ERR(handle))
-@@ -2842,6 +2855,9 @@
+@@ -2502,6 +2515,7 @@
+ 	for (block = 0; block < EXT3_N_BLOCKS; block++)
+ 		ei->i_data[block] = iloc.raw_inode->i_block[block];
+ 	INIT_LIST_HEAD(&ei->i_orphan);
++	memset(&inode->u.ext3_i.i_cached_extent, 0, sizeof(__u32) * 4);
+ 
+ 	if (EXT3_INODE_SIZE(inode->i_sb) > EXT3_GOOD_OLD_INODE_SIZE)
+ 		EXT3_I(inode)->i_extra_isize =
+@@ -2842,6 +2856,9 @@
  	int indirects = (EXT3_NDIR_BLOCKS % bpp) ? 5 : 3;
  	int ret;
  	
@@ -2370,7 +2386,7 @@ Index: linux-2.4.21-15.EL/fs/ext3/inode.c
  	if (ext3_should_journal_data(inode))
  		ret = 3 * (bpp + indirects) + 2;
  	else
-@@ -3166,7 +3182,7 @@
+@@ -3166,7 +3183,7 @@
  
  	/* alloc blocks one by one */
  	for (i = 0; i < nblocks; i++) {
@@ -2379,7 +2395,7 @@ Index: linux-2.4.21-15.EL/fs/ext3/inode.c
  						&bh_tmp, 1, 1);
  		if (ret)
  			break;
-@@ -3242,7 +3258,7 @@
+@@ -3242,7 +3259,7 @@
                  if (blocks[i] != 0)
                          continue;
  
@@ -2388,10 +2404,10 @@ Index: linux-2.4.21-15.EL/fs/ext3/inode.c
                  if (rc) {
                          printk(KERN_INFO "ext3_map_inode_page: error %d "
                                 "allocating block %ld\n", rc, iblock);
-Index: linux-2.4.21-15.EL/fs/ext3/Makefile
+Index: linux-2.4.21-20.EL/fs/ext3/Makefile
 ===================================================================
---- linux-2.4.21-15.EL.orig/fs/ext3/Makefile	2004-09-12 20:22:01.000000000 +0400
-+++ linux-2.4.21-15.EL/fs/ext3/Makefile	2004-09-12 20:22:35.000000000 +0400
+--- linux-2.4.21-20.EL.orig/fs/ext3/Makefile	2004-11-02 20:43:19.000000000 +0300
++++ linux-2.4.21-20.EL/fs/ext3/Makefile	2004-11-02 20:53:34.000000000 +0300
 @@ -9,10 +9,11 @@
  
  O_TARGET := ext3.o
@@ -2406,10 +2422,10 @@ Index: linux-2.4.21-15.EL/fs/ext3/Makefile
  obj-m    := $(O_TARGET)
  
  export-objs += xattr.o
-Index: linux-2.4.21-15.EL/fs/ext3/super.c
+Index: linux-2.4.21-20.EL/fs/ext3/super.c
 ===================================================================
---- linux-2.4.21-15.EL.orig/fs/ext3/super.c	2004-09-12 20:22:15.000000000 +0400
-+++ linux-2.4.21-15.EL/fs/ext3/super.c	2004-09-12 20:22:35.000000000 +0400
+--- linux-2.4.21-20.EL.orig/fs/ext3/super.c	2004-11-02 20:43:27.000000000 +0300
++++ linux-2.4.21-20.EL/fs/ext3/super.c	2004-11-02 20:53:34.000000000 +0300
 @@ -648,6 +648,7 @@
  	int i;
  
@@ -2438,10 +2454,10 @@ Index: linux-2.4.21-15.EL/fs/ext3/super.c
  	return sb;
  
  failed_mount3:
-Index: linux-2.4.21-15.EL/fs/ext3/ioctl.c
+Index: linux-2.4.21-20.EL/fs/ext3/ioctl.c
 ===================================================================
---- linux-2.4.21-15.EL.orig/fs/ext3/ioctl.c	2004-09-12 20:21:53.000000000 +0400
-+++ linux-2.4.21-15.EL/fs/ext3/ioctl.c	2004-09-12 20:22:35.000000000 +0400
+--- linux-2.4.21-20.EL.orig/fs/ext3/ioctl.c	2004-11-02 20:43:14.000000000 +0300
++++ linux-2.4.21-20.EL/fs/ext3/ioctl.c	2004-11-02 20:53:34.000000000 +0300
 @@ -173,6 +173,10 @@
  			return ret;
  		}
@@ -2453,10 +2469,10 @@ Index: linux-2.4.21-15.EL/fs/ext3/ioctl.c
  	default:
  		return -ENOTTY;
  	}
-Index: linux-2.4.21-15.EL/include/linux/ext3_fs.h
+Index: linux-2.4.21-20.EL/include/linux/ext3_fs.h
 ===================================================================
---- linux-2.4.21-15.EL.orig/include/linux/ext3_fs.h	2004-09-12 20:22:15.000000000 +0400
-+++ linux-2.4.21-15.EL/include/linux/ext3_fs.h	2004-09-12 20:23:38.000000000 +0400
+--- linux-2.4.21-20.EL.orig/include/linux/ext3_fs.h	2004-11-02 20:43:27.000000000 +0300
++++ linux-2.4.21-20.EL/include/linux/ext3_fs.h	2004-11-02 20:53:34.000000000 +0300
 @@ -188,6 +188,7 @@
  #define EXT3_IMAGIC_FL			0x00002000 /* AFS directory */
  #define EXT3_JOURNAL_DATA_FL		0x00004000 /* file data should be journaled */
@@ -2522,11 +2538,11 @@ Index: linux-2.4.21-15.EL/include/linux/ext3_fs.h
  
  #endif	/* __KERNEL__ */
  
-Index: linux-2.4.21-15.EL/include/linux/ext3_extents.h
+Index: linux-2.4.21-20.EL/include/linux/ext3_extents.h
 ===================================================================
---- linux-2.4.21-15.EL.orig/include/linux/ext3_extents.h	2003-01-30 13:24:37.000000000 +0300
-+++ linux-2.4.21-15.EL/include/linux/ext3_extents.h	2004-09-12 20:22:35.000000000 +0400
-@@ -0,0 +1,237 @@
+--- linux-2.4.21-20.EL.orig/include/linux/ext3_extents.h	2003-01-30 13:24:37.000000000 +0300
++++ linux-2.4.21-20.EL/include/linux/ext3_extents.h	2004-11-02 20:53:34.000000000 +0300
+@@ -0,0 +1,251 @@
 +/*
 + * Copyright (c) 2003, Cluster File Systems, Inc, info@clusterfs.com
 + * Written by Alex Tomas <alex@clusterfs.com>
@@ -2566,7 +2582,7 @@ Index: linux-2.4.21-15.EL/include/linux/ext3_extents.h
 + * if EXT_DEBUG is defined you can use 'extdebug' mount option
 + * to get lots of info what's going on
 + */
-+#define EXT_DEBUG
++#define EXT_DEBUG_
 +#ifdef EXT_DEBUG
 +#define ext_debug(tree,fmt,a...) 			\
 +do {							\
@@ -2648,6 +2664,20 @@ Index: linux-2.4.21-15.EL/include/linux/ext3_extents.h
 + */
 +
 +/*
++ * storage for cached extent
++ */
++struct ext3_ext_cache {
++	__u32	ec_start;
++	__u32	ec_block;
++	__u32	ec_len;
++	__u32	ec_type;
++};
++
++#define EXT3_EXT_CACHE_NO	0
++#define EXT3_EXT_CACHE_GAP	1
++#define EXT3_EXT_CACHE_EXTENT	2
++
++/*
 + * ext3_extents_tree is used to pass initial information
 + * to top-level extents API
 + */
@@ -2658,7 +2688,7 @@ Index: linux-2.4.21-15.EL/include/linux/ext3_extents.h
 +	void *buffer;		/* will be passed as arg to ^^ routines	*/
 +	int buffer_len;
 +	void *private;
-+	struct ext3_extent *cex;/* last found extent */
++	struct ext3_ext_cache *cex;/* last found extent */
 +	struct ext3_extents_helpers *ops;
 +};
 +
@@ -2758,22 +2788,22 @@ Index: linux-2.4.21-15.EL/include/linux/ext3_extents.h
 +ext3_ext_invalidate_cache(struct ext3_extents_tree *tree)
 +{
 +	if (tree->cex)
-+		tree->cex->ee_len = 0;
++		tree->cex->ec_type = EXT3_EXT_CACHE_NO;
 +}
 +
 +
 +#endif /* _LINUX_EXT3_EXTENTS */
 +
-Index: linux-2.4.21-15.EL/include/linux/ext3_fs_i.h
+Index: linux-2.4.21-20.EL/include/linux/ext3_fs_i.h
 ===================================================================
---- linux-2.4.21-15.EL.orig/include/linux/ext3_fs_i.h	2004-09-12 20:22:15.000000000 +0400
-+++ linux-2.4.21-15.EL/include/linux/ext3_fs_i.h	2004-09-12 20:22:35.000000000 +0400
+--- linux-2.4.21-20.EL.orig/include/linux/ext3_fs_i.h	2004-11-02 20:43:27.000000000 +0300
++++ linux-2.4.21-20.EL/include/linux/ext3_fs_i.h	2004-11-02 20:58:19.000000000 +0300
 @@ -90,6 +90,8 @@
  	 * by other means, so we have truncate_sem.
  	 */
  	struct rw_semaphore truncate_sem;
 +
-+	__u32 i_cached_extent[3];
++ 	__u32 i_cached_extent[4];
  };
  
  #endif	/* _LINUX_EXT3_FS_I */

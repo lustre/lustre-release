@@ -1384,6 +1384,7 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
 {
         struct lprocfs_static_vars lvars;
         struct lustre_cfg* lcfg = buf;
+        char *options = NULL;
         struct mds_obd *mds = &obd->u.mds;
         struct vfsmount *mnt;
         char ns_name[48];
@@ -1404,11 +1405,20 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         if (!page)
                 RETURN(-ENOMEM);
 
-        memset((void *)page, 0, PAGE_SIZE);
-        sprintf((char *)page, "iopen_nopriv,errors=remount-ro");
+        options = (char *)page;
+        memset(options, 0, PAGE_SIZE);
+                                                                                                                             
+        /* here we use "iopen_nopriv" hardcoded, because it affects MDS utility
+         * and the rest of options are passed by mount options. Probably this
+         * should be moved to somewhere else like startup scripts or lconf. */
+        sprintf(options, "iopen_nopriv");
+                                                                                                                             
+        if (lcfg->lcfg_inllen4 > 0 && lcfg->lcfg_inlbuf4)
+                sprintf(options + strlen(options), ",%s",
+                        lcfg->lcfg_inlbuf4);
 
         mnt = do_kern_mount(lcfg->lcfg_inlbuf2, 0,
-                            lcfg->lcfg_inlbuf1, (void *)page);
+                            lcfg->lcfg_inlbuf1, (void *)options);
         free_page(page);
         if (IS_ERR(mnt)) {
                 rc = PTR_ERR(mnt);

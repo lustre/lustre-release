@@ -1,8 +1,8 @@
 Index: linux-2.6.7/fs/ext3/mballoc.c
 ===================================================================
 --- linux-2.6.7.orig/fs/ext3/mballoc.c	2003-01-30 13:24:37.000000000 +0300
-+++ linux-2.6.7/fs/ext3/mballoc.c	2004-09-03 09:48:40.000000000 +0400
-@@ -0,0 +1,1397 @@
++++ linux-2.6.7/fs/ext3/mballoc.c	2004-09-06 12:51:42.000000000 +0400
+@@ -0,0 +1,1428 @@
 +/*
 + * Copyright (c) 2003, Cluster File Systems, Inc, info@clusterfs.com
 + * Written by Alex Tomas <alex@clusterfs.com>
@@ -124,6 +124,37 @@ Index: linux-2.6.7/fs/ext3/mballoc.c
 +void ext3_mb_poll_new_transaction(struct super_block *, handle_t *);
 +void ext3_mb_free_committed_blocks(struct super_block *);
 +
++#define mb_correct_addr_and_bit(bit,addr)	\
++{						\
++	if ((unsigned) addr & 1) {		\
++		bit += 8;			\
++		addr--;				\
++	}					\
++	if ((unsigned) addr & 2) {		\
++		bit += 16;			\
++		addr--;				\
++		addr--;				\
++	}					\
++}
++
++static inline int mb_test_bit(int bit, void *addr)
++{
++	mb_correct_addr_and_bit(bit,addr);
++	return test_bit(bit, addr);
++}
++
++static inline void mb_set_bit(int bit, void *addr)
++{
++	mb_correct_addr_and_bit(bit,addr);
++	set_bit(bit, addr);
++}
++
++static inline void mb_clear_bit(int bit, void *addr)
++{
++	mb_correct_addr_and_bit(bit,addr);
++	clear_bit(bit, addr);
++}
++
 +static inline void *mb_find_buddy(struct ext3_buddy *e3b, int order, int *max)
 +{
 +	int i = 1;
@@ -232,22 +263,22 @@ Index: linux-2.6.7/fs/ext3/mballoc.c
 +		count = 0;
 +		for (i = 0; i < max; i++) {
 +
-+			if (!test_bit(i, buddy)) {
++			if (!mb_test_bit(i, buddy)) {
 +				/* only single bit in buddy2 may be 1 */
-+				if (test_bit(i << 1, buddy2))
-+					J_ASSERT(!test_bit((i<<1)+1, buddy2));
-+				else if (test_bit((i << 1) + 1, buddy2))
-+					J_ASSERT(!test_bit(i << 1, buddy2));
++				if (mb_test_bit(i << 1, buddy2))
++					J_ASSERT(!mb_test_bit((i<<1)+1, buddy2));
++				else if (mb_test_bit((i << 1) + 1, buddy2))
++					J_ASSERT(!mb_test_bit(i << 1, buddy2));
 +				continue;
 +			}
 +
 +			/* both bits in buddy2 must be 0 */
-+			J_ASSERT(!test_bit(i << 1, buddy2));
-+			J_ASSERT(!test_bit((i << 1) + 1, buddy2));
++			J_ASSERT(!mb_test_bit(i << 1, buddy2));
++			J_ASSERT(!mb_test_bit((i << 1) + 1, buddy2));
 +
 +			for (j = 0; j < (1 << order); j++) {
 +				k = (i * (1 << order)) + j;
-+				J_ASSERT(test_bit(k, e3b->bd_bitmap));
++				J_ASSERT(mb_test_bit(k, e3b->bd_bitmap));
 +			}
 +			count++;
 +		}
@@ -257,14 +288,14 @@ Index: linux-2.6.7/fs/ext3/mballoc.c
 +
 +	buddy = mb_find_buddy(e3b, 0, &max);
 +	for (i = 0; i < max; i++) {
-+		if (test_bit(i, buddy))
++		if (mb_test_bit(i, buddy))
 +			continue;
 +		/* check used bits only */
 +		for (j = 0; j < e3b->bd_blkbits + 1; j++) {
 +			buddy2 = mb_find_buddy(e3b, j, &max2);
 +			k = i >> j;
 +			J_ASSERT(k < max2);
-+			J_ASSERT(!test_bit(k, buddy2));
++			J_ASSERT(!mb_test_bit(k, buddy2));
 +		}
 +	}
 +}
@@ -295,7 +326,7 @@ Index: linux-2.6.7/fs/ext3/mballoc.c
 +	bb = e3b->bd_buddy;
 +	while (order <= e3b->bd_blkbits + 1) {
 +		block = block >> 1;
-+		if (test_bit(block, bb)) {
++		if (mb_test_bit(block, bb)) {
 +			/* this block is part of buddy of order 'order' */
 +			return order;
 +		}
@@ -318,7 +349,7 @@ Index: linux-2.6.7/fs/ext3/mballoc.c
 +			cur += 32;
 +			continue;
 +		}
-+		clear_bit(cur, bm);
++		mb_clear_bit(cur, bm);
 +		cur++;
 +	}
 +}
@@ -336,7 +367,7 @@ Index: linux-2.6.7/fs/ext3/mballoc.c
 +			cur += 32;
 +			continue;
 +		}
-+		set_bit(cur, bm);
++		mb_set_bit(cur, bm);
 +		cur++;
 +	}
 +}
@@ -351,8 +382,8 @@ Index: linux-2.6.7/fs/ext3/mballoc.c
 +		block = first++;
 +		order = 0;
 +
-+		J_ASSERT(!test_bit(block, e3b->bd_bitmap));
-+		set_bit(block, e3b->bd_bitmap);
++		J_ASSERT(!mb_test_bit(block, e3b->bd_bitmap));
++		mb_set_bit(block, e3b->bd_bitmap);
 +		e3b->bd_bd->bb_counters[order]++;
 +
 +		/* start of the buddy */
@@ -360,8 +391,8 @@ Index: linux-2.6.7/fs/ext3/mballoc.c
 +
 +		do {
 +			block &= ~1UL;
-+			if (!test_bit(block, buddy) ||
-+					!test_bit(block + 1, buddy))
++			if (!mb_test_bit(block, buddy) ||
++					!mb_test_bit(block + 1, buddy))
 +				break;
 +
 +			/* both the buddies are free, try to coalesce them */
@@ -373,8 +404,8 @@ Index: linux-2.6.7/fs/ext3/mballoc.c
 +			if (order > 0) {
 +				/* for special purposes, we don't clear
 +				 * free bits in bitmap */
-+				clear_bit(block, buddy);
-+				clear_bit(block + 1, buddy);
++				mb_clear_bit(block, buddy);
++				mb_clear_bit(block + 1, buddy);
 +			}
 +			e3b->bd_bd->bb_counters[order]--;
 +			e3b->bd_bd->bb_counters[order]--;
@@ -383,7 +414,7 @@ Index: linux-2.6.7/fs/ext3/mballoc.c
 +			order++;
 +			e3b->bd_bd->bb_counters[order]++;
 +
-+			set_bit(block, buddy2);
++			mb_set_bit(block, buddy2);
 +			buddy = buddy2;
 +		} while (1);
 +	}
@@ -448,7 +479,7 @@ Index: linux-2.6.7/fs/ext3/mballoc.c
 +	buddy = mb_find_buddy(e3b, order, &max);
 +	J_ASSERT(buddy);
 +	J_ASSERT(block < max);
-+	if (!test_bit(block, buddy))
++	if (!mb_test_bit(block, buddy))
 +		goto nofree;
 +
 +	if (order == 0) {
@@ -471,7 +502,7 @@ Index: linux-2.6.7/fs/ext3/mballoc.c
 +			break;
 +
 +		next = (block + 1) * (1 << order);
-+		if (!test_bit(next, e3b->bd_bitmap))
++		if (!mb_test_bit(next, e3b->bd_bitmap))
 +			break;
 +
 +		ord = mb_find_order_for_block(e3b, next);
@@ -509,7 +540,7 @@ Index: linux-2.6.7/fs/ext3/mballoc.c
 +			mlen = 1 << ord;
 +			buddy = mb_find_buddy(e3b, ord, &max);
 +			J_ASSERT((start >> ord) < max);
-+			clear_bit(start >> ord, buddy);
++			mb_clear_bit(start >> ord, buddy);
 +			e3b->bd_bd->bb_counters[ord]--;
 +			start -= mlen;
 +			len -= mlen;
@@ -521,14 +552,14 @@ Index: linux-2.6.7/fs/ext3/mballoc.c
 +		/* we have to split large buddy */
 +		J_ASSERT(ord > 0);
 +		buddy = mb_find_buddy(e3b, ord, &max);
-+		clear_bit(start >> ord, buddy);
++		mb_clear_bit(start >> ord, buddy);
 +		e3b->bd_bd->bb_counters[ord]--;
 +
 +		ord--;
 +		cur = (start >> ord) & ~1U;
 +		buddy = mb_find_buddy(e3b, ord, &max);
-+		set_bit(cur, buddy);
-+		set_bit(cur + 1, buddy);
++		mb_set_bit(cur, buddy);
++		mb_set_bit(cur + 1, buddy);
 +		e3b->bd_bd->bb_counters[ord]++;
 +		e3b->bd_bd->bb_counters[ord]++;
 +	}
@@ -556,7 +587,7 @@ Index: linux-2.6.7/fs/ext3/mballoc.c
 +			mlen = 1 << ord;
 +			buddy = mb_find_buddy(e3b, ord, &max);
 +			J_ASSERT((start >> ord) < max);
-+			clear_bit(start >> ord, buddy);
++			mb_clear_bit(start >> ord, buddy);
 +			e3b->bd_bd->bb_counters[ord]--;
 +			start += mlen;
 +			len -= mlen;
@@ -567,14 +598,14 @@ Index: linux-2.6.7/fs/ext3/mballoc.c
 +		/* we have to split large buddy */
 +		J_ASSERT(ord > 0);
 +		buddy = mb_find_buddy(e3b, ord, &max);
-+		clear_bit(start >> ord, buddy);
++		mb_clear_bit(start >> ord, buddy);
 +		e3b->bd_bd->bb_counters[ord]--;
 +
 +		ord--;
 +		cur = (start >> ord) & ~1U;
 +		buddy = mb_find_buddy(e3b, ord, &max);
-+		set_bit(cur, buddy);
-+		set_bit(cur + 1, buddy);
++		mb_set_bit(cur, buddy);
++		mb_set_bit(cur + 1, buddy);
 +		e3b->bd_bd->bb_counters[ord]++;
 +		e3b->bd_bd->bb_counters[ord]++;
 +	}
@@ -615,7 +646,7 @@ Index: linux-2.6.7/fs/ext3/mballoc.c
 +	if ((ac->ac_g_flags & 1) && ac->ac_g_group == group) {
 +		/* someone asks for space at this specified block
 +		 * probably he wants to merge it into existing extent */
-+		if (test_bit(ac->ac_g_start, e3b->bd_bitmap)) {
++		if (mb_test_bit(ac->ac_g_start, e3b->bd_bitmap)) {
 +			/* good. at least one block is free */
 +			max = mb_find_extent(e3b, 0, ac->ac_g_start,
 +						ac->ac_g_len, &curex);
@@ -857,7 +888,7 @@ Index: linux-2.6.7/fs/ext3/mballoc.c
 +			    "block = %u", block);
 +#if 0
 +	for (i = 0; i < ac.ac_b_len; i++)
-+		J_ASSERT(!test_bit(ac.ac_b_start + i, bitmap_bh->b_data));
++		J_ASSERT(!mb_test_bit(ac.ac_b_start + i, bitmap_bh->b_data));
 +#endif
 +	mb_set_bits(bitmap_bh->b_data, ac.ac_b_start, ac.ac_b_len);
 +
@@ -930,7 +961,7 @@ Index: linux-2.6.7/fs/ext3/mballoc.c
 +
 +	/* loop over the blocks, nad create buddies for free ones */
 +	for (i = 0; i < sb->s_blocksize * 8; i++) {
-+		if (!test_bit(i, (void *) bh->b_data)) {
++		if (!mb_test_bit(i, (void *) bh->b_data)) {
 +			mb_free_blocks(&e3b, i, 1);
 +			count++;
 +		}
@@ -1650,9 +1681,9 @@ Index: linux-2.6.7/include/linux/ext3_fs.h
   */
 @@ -335,6 +337,7 @@
  #define EXT3_MOUNT_IOPEN_NOPRIV		0x80000	/* Make iopen world-readable */
- #define EXT3_MOUNT_EXTENTS		0x100000/* Extents support */
- #define EXT3_MOUNT_EXTDEBUG		0x200000/* Extents debug */
-+#define EXT3_MOUNT_MBALLOC		0x400000/* Buddy allocation support */
+ #define EXT3_MOUNT_EXTENTS		0x10000	/* Extents support */
+ #define EXT3_MOUNT_EXTDEBUG		0x20000	/* Extents debug */
++#define EXT3_MOUNT_MBALLOC		0x100000/* Buddy allocation support */
  
  /* Compatibility, for having both ext2_fs.h and ext3_fs.h included at once */
  #ifndef clear_opt

@@ -37,7 +37,6 @@
 
 /* This limit is arbitrary, but for now we fit it in 1 page (32k clients) */
 #define FILTER_LR_MAX_CLIENTS (PAGE_SIZE * 8)
-#define FILTER_LR_MAX_CLIENT_WORDS (FILTER_LR_MAX_CLIENTS/sizeof(unsigned long))
 
 #define FILTER_SUBDIR_COUNT      32            /* set to zero for no subdirs */
 #define FILTER_GROUPS 3 /* must be at least 3; not dynamic yet */
@@ -96,6 +95,11 @@ enum {
 //#define FILTER_MAX_CACHE_SIZE (32 * 1024 * 1024) /* was OBD_OBJECT_EOF */
 #define FILTER_MAX_CACHE_SIZE OBD_OBJECT_EOF
 
+/* We have to pass a 'created' array to fsfilt_map_inode_pages() which we
+ * then ignore.  So we pre-allocate one that everyone can use... */
+#define OBDFILTER_CREATED_SCRATCHPAD_ENTRIES 1024
+extern int *obdfilter_created_scratchpad;
+
 /* filter.c */
 void f_dput(struct dentry *);
 struct dentry *filter_fid2dentry(struct obd_device *, struct dentry *dir,
@@ -128,6 +132,8 @@ int filter_brw(int cmd, struct obd_export *, struct obdo *,
 	       struct lov_stripe_md *, obd_count oa_bufs, struct brw_page *,
 	       struct obd_trans_info *);
 void flip_into_page_cache(struct inode *inode, struct page *new_page);
+void filter_free_dio_pages(int objcount, struct obd_ioobj *obj,
+                           int niocount, struct niobuf_local *res);
 
 /* filter_io_*.c */
 int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
@@ -139,6 +145,13 @@ long filter_grant(struct obd_export *exp, obd_size current_grant,
                   obd_size want, obd_size fs_space_left);
 void filter_grant_commit(struct obd_export *exp, int niocount,
                          struct niobuf_local *res);
+int filter_alloc_iobuf(int rw, int num_pages, void **ret);
+void filter_free_iobuf(void *iobuf);
+int filter_iobuf_add_page(struct obd_device *obd, void *iobuf,
+                          struct inode *inode, struct page *page);
+int filter_direct_io(int rw, struct dentry *dchild, void *iobuf,
+                     struct obd_export *exp, struct iattr *attr,
+                     struct obd_trans_info *oti, void **wait_handle);
 
 /* filter_log.c */
 struct ost_filterdata {

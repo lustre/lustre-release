@@ -2,7 +2,7 @@ Index: linux-2.4.24/fs/ext3/inode.c
 ===================================================================
 --- linux-2.4.24.orig/fs/ext3/inode.c	2004-05-18 12:34:48.000000000 -0700
 +++ linux-2.4.24/fs/ext3/inode.c	2004-05-18 12:47:50.000000000 -0700
-@@ -2244,6 +2244,12 @@
+@@ -2244,6 +2244,13 @@
  	else
  		inode->u.ext3_i.i_extra_isize = 0;
  
@@ -10,6 +10,7 @@ Index: linux-2.4.24/fs/ext3/inode.c
 +		inode->u.ext3_i.i_cached_extent[0] = 0;
 +		inode->u.ext3_i.i_cached_extent[1] = 0;
 +		inode->u.ext3_i.i_cached_extent[2] = 0;
++		inode->u.ext3_i.i_cached_extent[3] = 0;
 +	}
 +
  	if (S_ISREG(inode->i_mode)) {

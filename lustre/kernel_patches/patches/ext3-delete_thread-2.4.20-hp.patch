@@ -5,10 +5,10 @@
  include/linux/ext3_fs_sb.h |   10 +
  5 files changed, 365 insertions(+)
 
-Index: linux/fs/ext3/super.c
+Index: linux-2.4.20-hp_pnnl39/fs/ext3/super.c
 ===================================================================
---- linux.orig/fs/ext3/super.c	Mon Feb  2 20:57:35 2004
-+++ linux/fs/ext3/super.c	Mon Feb  2 20:58:05 2004
+--- linux-2.4.20-hp_pnnl39.orig/fs/ext3/super.c	2004-11-02 22:16:42.000000000 +0300
++++ linux-2.4.20-hp_pnnl39/fs/ext3/super.c	2004-11-02 23:47:18.513035128 +0300
 @@ -400,6 +400,221 @@
  	}
  }
@@ -231,15 +231,17 @@ Index: linux/fs/ext3/super.c
  void ext3_put_super (struct super_block * sb)
  {
  	struct ext3_sb_info *sbi = EXT3_SB(sb);
-@@ -407,6 +622,7 @@
+@@ -407,6 +622,9 @@
  	kdev_t j_dev = sbi->s_journal->j_dev;
  	int i;
  
++#ifdef EXT3_DELETE_THREAD
 +	J_ASSERT(sbi->s_delete_inodes == 0);
++#endif
  	ext3_xattr_put_super(sb);
  	journal_destroy(sbi->s_journal);
  	if (!(sb->s_flags & MS_RDONLY)) {
-@@ -455,7 +671,11 @@
+@@ -455,7 +673,11 @@
  	write_inode:	ext3_write_inode,	/* BKL not held.  Don't need */
  	dirty_inode:	ext3_dirty_inode,	/* BKL not held.  We take it */
  	put_inode:	ext3_put_inode,		/* BKL not held.  Don't need */
@@ -252,7 +254,7 @@ Index: linux/fs/ext3/super.c
  	put_super:	ext3_put_super,		/* BKL held */
  	write_super:	ext3_write_super,	/* BKL held */
  	sync_fs:	ext3_sync_fs,
-@@ -524,6 +744,13 @@
+@@ -524,6 +746,13 @@
  			clear_opt (*mount_options, XATTR_USER);
  		else
  #endif
@@ -266,7 +268,7 @@ Index: linux/fs/ext3/super.c
  		if (!strcmp (this_char, "bsddf"))
  			clear_opt (*mount_options, MINIX_DF);
  		else if (!strcmp (this_char, "nouid32")) {
-@@ -1223,6 +1450,7 @@
+@@ -1223,6 +1452,7 @@
  	}
  
  	ext3_setup_super (sb, es, sb->s_flags & MS_RDONLY);
@@ -274,7 +276,7 @@ Index: linux/fs/ext3/super.c
  	/*
  	 * akpm: core read_super() calls in here with the superblock locked.
  	 * That deadlocks, because orphan cleanup needs to lock the superblock
-@@ -1614,7 +1842,12 @@
+@@ -1614,7 +1844,12 @@
  static int ext3_sync_fs(struct super_block *sb)
  {
  	tid_t target;
@@ -288,7 +290,7 @@ Index: linux/fs/ext3/super.c
  	sb->s_dirt = 0;
  	target = log_start_commit(EXT3_SB(sb)->s_journal, NULL);
  	log_wait_commit(EXT3_SB(sb)->s_journal, target);
-@@ -1678,6 +1911,9 @@
+@@ -1678,6 +1913,9 @@
  	if (!parse_options(data, &tmp, sbi, &tmp, 1))
  		return -EINVAL;
  
@@ -298,10 +300,10 @@ Index: linux/fs/ext3/super.c
  	if (sbi->s_mount_opt & EXT3_MOUNT_ABORT)
  		ext3_abort(sb, __FUNCTION__, "Abort forced by user");
  
-Index: linux/fs/ext3/inode.c
+Index: linux-2.4.20-hp_pnnl39/fs/ext3/inode.c
 ===================================================================
---- linux.orig/fs/ext3/inode.c	Mon Feb  2 20:57:35 2004
-+++ linux/fs/ext3/inode.c	Mon Feb  2 20:58:05 2004
+--- linux-2.4.20-hp_pnnl39.orig/fs/ext3/inode.c	2004-11-02 22:16:41.000000000 +0300
++++ linux-2.4.20-hp_pnnl39/fs/ext3/inode.c	2004-11-02 22:16:42.000000000 +0300
 @@ -2500,6 +2500,118 @@
  	return err;
  }
@@ -421,10 +423,10 @@ Index: linux/fs/ext3/inode.c
  /* 
   * On success, We end up with an outstanding reference count against
   * iloc->bh.  This _must_ be cleaned up later. 
-Index: linux/fs/ext3/file.c
+Index: linux-2.4.20-hp_pnnl39/fs/ext3/file.c
 ===================================================================
---- linux.orig/fs/ext3/file.c	Mon Feb  2 20:57:34 2004
-+++ linux/fs/ext3/file.c	Mon Feb  2 20:58:05 2004
+--- linux-2.4.20-hp_pnnl39.orig/fs/ext3/file.c	2004-11-02 22:16:41.000000000 +0300
++++ linux-2.4.20-hp_pnnl39/fs/ext3/file.c	2004-11-02 22:16:42.132490592 +0300
 @@ -125,7 +125,11 @@
  };
  
@@ -437,10 +439,10 @@ Index: linux/fs/ext3/file.c
  	setattr:	ext3_setattr,		/* BKL held */
  	setxattr:	ext3_setxattr,		/* BKL held */
  	getxattr:	ext3_getxattr,		/* BKL held */
-Index: linux/include/linux/ext3_fs.h
+Index: linux-2.4.20-hp_pnnl39/include/linux/ext3_fs.h
 ===================================================================
---- linux.orig/include/linux/ext3_fs.h	Mon Feb  2 20:57:35 2004
-+++ linux/include/linux/ext3_fs.h	Mon Feb  2 20:58:05 2004
+--- linux-2.4.20-hp_pnnl39.orig/include/linux/ext3_fs.h	2004-11-02 22:16:41.000000000 +0300
++++ linux-2.4.20-hp_pnnl39/include/linux/ext3_fs.h	2004-11-02 22:16:42.000000000 +0300
 @@ -193,6 +193,7 @@
   */
  #define EXT3_STATE_JDATA		0x00000001 /* journaled data exists */
@@ -467,10 +469,10 @@ Index: linux/include/linux/ext3_fs.h
  
  /* ioctl.c */
  extern int ext3_ioctl (struct inode *, struct file *, unsigned int,
-Index: linux/include/linux/ext3_fs_sb.h
+Index: linux-2.4.20-hp_pnnl39/include/linux/ext3_fs_sb.h
 ===================================================================
---- linux.orig/include/linux/ext3_fs_sb.h	Mon Feb  2 20:57:35 2004
-+++ linux/include/linux/ext3_fs_sb.h	Mon Feb  2 20:58:05 2004
+--- linux-2.4.20-hp_pnnl39.orig/include/linux/ext3_fs_sb.h	2004-11-02 22:16:42.000000000 +0300
++++ linux-2.4.20-hp_pnnl39/include/linux/ext3_fs_sb.h	2004-11-02 23:43:11.521583536 +0300
 @@ -29,6 +29,8 @@
  
  #define EXT3_MAX_GROUP_LOADED	8

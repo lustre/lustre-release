@@ -1,9 +1,9 @@
 %patch
-Index: linux-2.6.7/fs/ext3/extents.c
+Index: linux-2.6.5-sles9/fs/ext3/extents.c
 ===================================================================
---- linux-2.6.7.orig/fs/ext3/extents.c	2003-01-30 13:24:37.000000000 +0300
-+++ linux-2.6.7/fs/ext3/extents.c	2004-08-19 08:53:49.000000000 +0400
-@@ -0,0 +1,2306 @@
+--- linux-2.6.5-sles9.orig/fs/ext3/extents.c	2003-01-30 13:24:37.000000000 +0300
++++ linux-2.6.5-sles9/fs/ext3/extents.c	2004-11-09 02:25:56.143726112 +0300
+@@ -0,0 +1,2313 @@
 +/*
 + * Copyright (c) 2003, Cluster File Systems, Inc, info@clusterfs.com
 + * Written by Alex Tomas <alex@clusterfs.com>
@@ -150,7 +150,7 @@ Index: linux-2.6.7/fs/ext3/extents.c
 +		goal = bg_start + colour;
 +	}
 +
-+	newblock = ext3_new_block(handle, inode, goal, 0, 0, err);
++	newblock = ext3_new_block(handle, inode, goal, err);
 +	return newblock;
 +}
 +
@@ -1283,14 +1283,15 @@ Index: linux-2.6.7/fs/ext3/extents.c
 +}
 +
 +static inline void
-+ext3_ext_put_in_cache(struct ext3_extents_tree *tree, struct ext3_extent *ex)
++ext3_ext_put_in_cache(struct ext3_extents_tree *tree, __u32 block,
++			__u32 len, __u32 start, int type)
 +{
++	EXT_ASSERT(len > 0);
 +	if (tree->cex) {
-+		EXT_ASSERT(ex);
-+		EXT_ASSERT(ex->ee_len);
-+		tree->cex->ee_block = ex->ee_block;
-+		tree->cex->ee_start = ex->ee_start;
-+		tree->cex->ee_len = ex->ee_len;
++		tree->cex->ec_type = type;
++		tree->cex->ec_block = block;
++		tree->cex->ec_len = len;
++		tree->cex->ec_start = start;
 +	}
 +}
 +
@@ -1304,7 +1305,8 @@ Index: linux-2.6.7/fs/ext3/extents.c
 +				unsigned long block)
 +{
 +	int depth = EXT_DEPTH(tree);
-+	struct ext3_extent *ex, gex;
++	unsigned long lblock, len;
++	struct ext3_extent *ex;
 +
 +	if (!tree->cex)
 +		return;
@@ -1312,63 +1314,64 @@ Index: linux-2.6.7/fs/ext3/extents.c
 +	ex = path[depth].p_ext;
 +	if (ex == NULL) {
 +		/* there is no extent yet, so gap is [0;-] */
-+		gex.ee_block = 0;
-+		gex.ee_len = EXT_CACHE_MARK;
++		lblock = 0;
++		len = EXT_MAX_BLOCK;
 +		ext_debug(tree, "cache gap(whole file):");
 +	} else if (block < ex->ee_block) {
-+		gex.ee_block = block;
-+		gex.ee_len = ex->ee_block - block;
++		lblock = block;
++		len = ex->ee_block - block;
 +		ext_debug(tree, "cache gap(before): %lu [%lu:%lu]",
 +				(unsigned long) block,
 +				(unsigned long) ex->ee_block,
 +				(unsigned long) ex->ee_len);
 +	} else if (block >= ex->ee_block + ex->ee_len) {
-+		gex.ee_block = ex->ee_block + ex->ee_len;
-+		gex.ee_len = ext3_ext_next_allocated_block(path);
++		lblock = ex->ee_block + ex->ee_len;
++		len = ext3_ext_next_allocated_block(path);
 +		ext_debug(tree, "cache gap(after): [%lu:%lu] %lu",
 +				(unsigned long) ex->ee_block,
 +				(unsigned long) ex->ee_len,
 +				(unsigned long) block);
-+		EXT_ASSERT(gex.ee_len > gex.ee_block);
-+		gex.ee_len = gex.ee_len - gex.ee_block;
++		EXT_ASSERT(len > lblock);
++		len = len - lblock;
 +	} else {
++		lblock = len = 0;
 +		BUG();
 +	}
 +
-+	ext_debug(tree, " -> %lu:%lu\n", (unsigned long) gex.ee_block,
-+			(unsigned long) gex.ee_len);
-+	gex.ee_start = EXT_CACHE_MARK;
-+	ext3_ext_put_in_cache(tree, &gex);
++	ext_debug(tree, " -> %lu:%lu\n", (unsigned long) lblock, len);
++	ext3_ext_put_in_cache(tree, lblock, len, 0, EXT3_EXT_CACHE_GAP);
 +}
 +
 +static inline int
 +ext3_ext_in_cache(struct ext3_extents_tree *tree, unsigned long block,
 +			struct ext3_extent *ex)
 +{
-+	struct ext3_extent *cex = tree->cex;
++	struct ext3_ext_cache *cex = tree->cex;
 +
 +	/* is there cache storage at all? */
 +	if (!cex)
-+		return 0;
++		return EXT3_EXT_CACHE_NO;
 +
 +	/* has cache valid data? */
-+	if (cex->ee_len == 0)
-+		return 0;
++	if (cex->ec_type == EXT3_EXT_CACHE_NO)
++		return EXT3_EXT_CACHE_NO;
 +
-+	if (block >= cex->ee_block && block < cex->ee_block + cex->ee_len) {
-+		ex->ee_block = cex->ee_block;
-+		ex->ee_start = cex->ee_start;
-+		ex->ee_len = cex->ee_len;
++	EXT_ASSERT(cex->ec_type == EXT3_EXT_CACHE_GAP ||
++			cex->ec_type == EXT3_EXT_CACHE_EXTENT);
++	if (block >= cex->ec_block && block < cex->ec_block + cex->ec_len) {
++		ex->ee_block = cex->ec_block;
++		ex->ee_start = cex->ec_start;
++		ex->ee_len = cex->ec_len;
 +		ext_debug(tree, "%lu cached by %lu:%lu:%lu\n",
 +				(unsigned long) block,
 +				(unsigned long) ex->ee_block,
 +				(unsigned long) ex->ee_len,
 +				(unsigned long) ex->ee_start);
-+		return 1;
++		return cex->ec_type;
 +	}
 +
 +	/* not in cache */
-+	return 0;
++	return EXT3_EXT_CACHE_NO;
 +}
 +
 +/*
@@ -1958,7 +1961,7 @@ Index: linux-2.6.7/fs/ext3/extents.c
 +		ex->ee_len = 1;
 +		/* allocate new block for the extent */
 +		goal = ext3_ext_find_goal(inode, path, ex->ee_block);
-+		ex->ee_start = ext3_new_block(handle, inode, goal, 0, 0, err);
++		ex->ee_start = ext3_new_block(handle, inode, goal, err);
 +		if (ex->ee_start == 0) {
 +			/* error occured: restore old extent */
 +			ex->ee_start = newblock;
@@ -1984,7 +1987,7 @@ Index: linux-2.6.7/fs/ext3/extents.c
 +	tree->root = (void *) EXT3_I(inode)->i_data;
 +	tree->buffer = (void *) inode;
 +	tree->buffer_len = sizeof(EXT3_I(inode)->i_data);
-+	tree->cex = (struct ext3_extent *) &EXT3_I(inode)->i_cached_extent;
++	tree->cex = (struct ext3_ext_cache *) &EXT3_I(inode)->i_cached_extent;
 +	tree->ops = &ext3_blockmap_helpers;
 +}
 +
@@ -2005,19 +2008,20 @@ Index: linux-2.6.7/fs/ext3/extents.c
 +	down(&EXT3_I(inode)->truncate_sem);
 +
 +	/* check in cache */
-+	if (ext3_ext_in_cache(&tree, iblock, &newex)) {
-+		if (newex.ee_start == EXT_CACHE_MARK) {
-+			/* this is cached gap */
++	if ((goal = ext3_ext_in_cache(&tree, iblock, &newex))) {
++		if (goal == EXT3_EXT_CACHE_GAP) {
 +			if (!create) {
 +				/* block isn't allocated yet and
 +				 * user don't want to allocate it */
 +				goto out2;
 +			}
 +			/* we should allocate requested block */
-+		} else if (newex.ee_start) {
++		} else if (goal == EXT3_EXT_CACHE_EXTENT) {
 +			/* block is already allocated */
 +			newblock = iblock - newex.ee_block + newex.ee_start;
 +			goto out;
++		} else {
++			EXT_ASSERT(0);
 +		}
 +	}
 +
@@ -2045,7 +2049,9 @@ Index: linux-2.6.7/fs/ext3/extents.c
 +			ext_debug(&tree, "%d fit into %d:%d -> %d\n",
 +					(int) iblock, ex->ee_block, ex->ee_len,
 +					newblock);
-+			ext3_ext_put_in_cache(&tree, ex);
++			ext3_ext_put_in_cache(&tree, ex->ee_block,
++						ex->ee_len, ex->ee_start,
++						EXT3_EXT_CACHE_EXTENT);
 +			goto out;
 +		}
 +	}
@@ -2062,7 +2068,7 @@ Index: linux-2.6.7/fs/ext3/extents.c
 +
 +	/* allocate new block */
 +	goal = ext3_ext_find_goal(inode, path, iblock);
-+	newblock = ext3_new_block(handle, inode, goal, 0, 0, &err);
++	newblock = ext3_new_block(handle, inode, goal, &err);
 +	if (!newblock)
 +		goto out2;
 +	ext_debug(&tree, "allocate new block: goal %d, found %d\n",
@@ -2083,7 +2089,8 @@ Index: linux-2.6.7/fs/ext3/extents.c
 +	newblock = newex.ee_start;
 +	set_buffer_new(bh_result);
 +
-+	ext3_ext_put_in_cache(&tree, &newex);
++	ext3_ext_put_in_cache(&tree, newex.ee_block, newex.ee_len,
++				newex.ee_start, EXT3_EXT_CACHE_EXTENT);
 +out:
 +	ext3_ext_show_leaf(&tree, path);
 +	map_bh(bh_result, inode->i_sb, newblock);
@@ -2310,11 +2317,11 @@ Index: linux-2.6.7/fs/ext3/extents.c
 +EXPORT_SYMBOL(ext3_ext_find_goal);
 +EXPORT_SYMBOL(ext3_ext_calc_credits_for_insert);
 +
-Index: linux-2.6.7/fs/ext3/ialloc.c
+Index: linux-2.6.5-sles9/fs/ext3/ialloc.c
 ===================================================================
---- linux-2.6.7.orig/fs/ext3/ialloc.c	2004-08-19 08:51:04.000000000 +0400
-+++ linux-2.6.7/fs/ext3/ialloc.c	2004-08-19 08:53:49.000000000 +0400
-@@ -646,6 +646,10 @@
+--- linux-2.6.5-sles9.orig/fs/ext3/ialloc.c	2004-11-09 02:22:55.763148128 +0300
++++ linux-2.6.5-sles9/fs/ext3/ialloc.c	2004-11-09 02:23:21.587222272 +0300
+@@ -647,6 +647,10 @@
  		DQUOT_FREE_INODE(inode);
  		goto fail2;
    	}
@@ -2325,11 +2332,11 @@ Index: linux-2.6.7/fs/ext3/ialloc.c
  	err = ext3_mark_inode_dirty(handle, inode);
  	if (err) {
  		ext3_std_error(sb, err);
-Index: linux-2.6.7/fs/ext3/inode.c
+Index: linux-2.6.5-sles9/fs/ext3/inode.c
 ===================================================================
---- linux-2.6.7.orig/fs/ext3/inode.c	2004-08-19 08:51:04.000000000 +0400
-+++ linux-2.6.7/fs/ext3/inode.c	2004-08-19 08:53:49.000000000 +0400
-@@ -857,6 +857,17 @@
+--- linux-2.6.5-sles9.orig/fs/ext3/inode.c	2004-11-09 02:22:55.767147520 +0300
++++ linux-2.6.5-sles9/fs/ext3/inode.c	2004-11-09 02:23:21.592221512 +0300
+@@ -796,6 +796,17 @@
  	goto reread;
  }
  
@@ -2347,7 +2354,7 @@ Index: linux-2.6.7/fs/ext3/inode.c
  static int ext3_get_block(struct inode *inode, sector_t iblock,
  			struct buffer_head *bh_result, int create)
  {
-@@ -867,8 +878,8 @@
+@@ -806,8 +817,8 @@
  		handle = ext3_journal_current_handle();
  		J_ASSERT(handle != 0);
  	}
@@ -2358,7 +2365,7 @@ Index: linux-2.6.7/fs/ext3/inode.c
  	return ret;
  }
  
-@@ -894,8 +905,8 @@
+@@ -833,8 +844,8 @@
  		}
  	}
  	if (ret == 0)
@@ -2369,7 +2376,7 @@ Index: linux-2.6.7/fs/ext3/inode.c
  	if (ret == 0)
  		bh_result->b_size = (1 << inode->i_blkbits);
  	return ret;
-@@ -916,7 +927,7 @@
+@@ -855,7 +866,7 @@
  	dummy.b_state = 0;
  	dummy.b_blocknr = -1000;
  	buffer_trace_init(&dummy.b_history);
@@ -2378,7 +2385,7 @@ Index: linux-2.6.7/fs/ext3/inode.c
  	if (!*errp && buffer_mapped(&dummy)) {
  		struct buffer_head *bh;
  		bh = sb_getblk(inode->i_sb, dummy.b_blocknr);
-@@ -1669,7 +1680,7 @@
+@@ -1587,7 +1598,7 @@
   * This required during truncate. We need to physically zero the tail end
   * of that block so it doesn't yield old data if the file is later grown.
   */
@@ -2387,7 +2394,7 @@ Index: linux-2.6.7/fs/ext3/inode.c
  		struct address_space *mapping, loff_t from)
  {
  	unsigned long index = from >> PAGE_CACHE_SHIFT;
-@@ -2165,6 +2176,9 @@
+@@ -2083,6 +2094,9 @@
  			return;
  	}
  
@@ -2397,7 +2404,7 @@ Index: linux-2.6.7/fs/ext3/inode.c
  	handle = start_transaction(inode);
  	if (IS_ERR(handle)) {
  		if (page) {
-@@ -2888,6 +2902,9 @@
+@@ -2789,6 +2803,9 @@
  	int indirects = (EXT3_NDIR_BLOCKS % bpp) ? 5 : 3;
  	int ret;
  
@@ -2407,10 +2414,10 @@ Index: linux-2.6.7/fs/ext3/inode.c
  	if (ext3_should_journal_data(inode))
  		ret = 3 * (bpp + indirects) + 2;
  	else
-Index: linux-2.6.7/fs/ext3/Makefile
+Index: linux-2.6.5-sles9/fs/ext3/Makefile
 ===================================================================
---- linux-2.6.7.orig/fs/ext3/Makefile	2004-08-19 08:52:14.000000000 +0400
-+++ linux-2.6.7/fs/ext3/Makefile	2004-08-19 08:53:49.000000000 +0400
+--- linux-2.6.5-sles9.orig/fs/ext3/Makefile	2004-11-09 02:18:27.604914376 +0300
++++ linux-2.6.5-sles9/fs/ext3/Makefile	2004-11-09 02:23:21.593221360 +0300
 @@ -5,7 +5,7 @@
  obj-$(CONFIG_EXT3_FS) += ext3.o
  
@@ -2420,11 +2427,11 @@ Index: linux-2.6.7/fs/ext3/Makefile
  
  ext3-$(CONFIG_EXT3_FS_XATTR)	 += xattr.o xattr_user.o xattr_trusted.o
  ext3-$(CONFIG_EXT3_FS_POSIX_ACL) += acl.o
-Index: linux-2.6.7/fs/ext3/super.c
+Index: linux-2.6.5-sles9/fs/ext3/super.c
 ===================================================================
---- linux-2.6.7.orig/fs/ext3/super.c	2004-08-19 08:51:04.000000000 +0400
-+++ linux-2.6.7/fs/ext3/super.c	2004-08-19 08:53:49.000000000 +0400
-@@ -392,6 +392,7 @@
+--- linux-2.6.5-sles9.orig/fs/ext3/super.c	2004-11-09 02:22:56.450043704 +0300
++++ linux-2.6.5-sles9/fs/ext3/super.c	2004-11-09 02:23:21.597220752 +0300
+@@ -389,6 +389,7 @@
  	struct ext3_super_block *es = sbi->s_es;
  	int i;
  
@@ -2432,17 +2439,18 @@ Index: linux-2.6.7/fs/ext3/super.c
  	ext3_xattr_put_super(sb);
  	journal_destroy(sbi->s_journal);
  	if (!(sb->s_flags & MS_RDONLY)) {
-@@ -455,6 +456,9 @@
- 	ei->i_default_acl = EXT3_ACL_NOT_CACHED;
+@@ -447,6 +448,10 @@
  #endif
+ 	ei->i_rsv_window.rsv_end = EXT3_RESERVE_WINDOW_NOT_ALLOCATED;
  	ei->vfs_inode.i_version = 1;
 +	ei->i_cached_extent[0] = 0;
 +	ei->i_cached_extent[1] = 0;
 +	ei->i_cached_extent[2] = 0;
++	ei->i_cached_extent[3] = 0;
  	return &ei->vfs_inode;
  }
  
-@@ -590,7 +594,7 @@
+@@ -537,7 +542,7 @@
  	Opt_commit, Opt_journal_update, Opt_journal_inum,
  	Opt_abort, Opt_data_journal, Opt_data_ordered, Opt_data_writeback,
  	Opt_ignore, Opt_barrier, Opt_iopen, Opt_noiopen, Opt_iopen_nopriv,
@@ -2451,8 +2459,8 @@ Index: linux-2.6.7/fs/ext3/super.c
  };
  
  static match_table_t tokens = {
-@@ -638,6 +642,8 @@
- 	{Opt_iopen,  "iopen"},
+@@ -582,6 +587,8 @@
+ 	{Opt_iopen, "iopen"},
  	{Opt_noiopen, "noiopen"},
  	{Opt_iopen_nopriv, "iopen_nopriv"},
 +	{Opt_extents, "extents"},
@@ -2460,7 +2468,7 @@ Index: linux-2.6.7/fs/ext3/super.c
  	{Opt_err, NULL}
  };
  
-@@ -917,6 +923,12 @@
+@@ -797,6 +804,12 @@
  			break;
  		case Opt_ignore:
  			break;
@@ -2473,7 +2481,7 @@ Index: linux-2.6.7/fs/ext3/super.c
  		default:
  			printk (KERN_ERR
  				"EXT3-fs: Unrecognized mount option \"%s\" "
-@@ -1589,6 +1601,8 @@
+@@ -1449,6 +1462,8 @@
  	percpu_counter_mod(&sbi->s_dirs_counter,
  		ext3_count_dirs(sb));
  
@@ -2482,25 +2490,25 @@ Index: linux-2.6.7/fs/ext3/super.c
  	return 0;
  
  failed_mount3:
-Index: linux-2.6.7/fs/ext3/ioctl.c
+Index: linux-2.6.5-sles9/fs/ext3/ioctl.c
 ===================================================================
---- linux-2.6.7.orig/fs/ext3/ioctl.c	2004-08-19 08:51:03.000000000 +0400
-+++ linux-2.6.7/fs/ext3/ioctl.c	2004-08-19 08:53:49.000000000 +0400
-@@ -176,6 +176,10 @@
- 			return ret;
- 		}
- #endif
+--- linux-2.6.5-sles9.orig/fs/ext3/ioctl.c	2004-11-09 02:15:44.610693264 +0300
++++ linux-2.6.5-sles9/fs/ext3/ioctl.c	2004-11-09 02:23:52.991448104 +0300
+@@ -124,6 +124,10 @@
+ 			err = ext3_change_inode_journal_flag(inode, jflag);
+ 		return err;
+ 	}
 +	case EXT3_IOC_GET_EXTENTS:
 +	case EXT3_IOC_GET_TREE_STATS:
 +	case EXT3_IOC_GET_TREE_DEPTH:
 +		return ext3_ext_ioctl(inode, filp, cmd, arg);
- 	default:
- 		return -ENOTTY;
- 	}
-Index: linux-2.6.7/include/linux/ext3_fs.h
+ 	case EXT3_IOC_GETVERSION:
+ 	case EXT3_IOC_GETVERSION_OLD:
+ 		return put_user(inode->i_generation, (int *) arg);
+Index: linux-2.6.5-sles9/include/linux/ext3_fs.h
 ===================================================================
---- linux-2.6.7.orig/include/linux/ext3_fs.h	2004-08-19 08:51:04.000000000 +0400
-+++ linux-2.6.7/include/linux/ext3_fs.h	2004-08-19 08:53:49.000000000 +0400
+--- linux-2.6.5-sles9.orig/include/linux/ext3_fs.h	2004-11-09 02:22:58.767691368 +0300
++++ linux-2.6.5-sles9/include/linux/ext3_fs.h	2004-11-09 02:25:17.238640584 +0300
 @@ -186,6 +186,7 @@
  #define EXT3_DIRSYNC_FL			0x00010000 /* dirsync behaviour (directories only) */
  #define EXT3_TOPDIR_FL			0x00020000 /* Top of directory hierarchies*/
@@ -2509,18 +2517,18 @@ Index: linux-2.6.7/include/linux/ext3_fs.h
  
  #define EXT3_FL_USER_VISIBLE		0x0003DFFF /* User visible flags */
  #define EXT3_FL_USER_MODIFIABLE		0x000380FF /* User modifiable flags */
-@@ -209,6 +210,9 @@
- #ifdef CONFIG_JBD_DEBUG
- #define EXT3_IOC_WAIT_FOR_READONLY	_IOR('f', 99, long)
+@@ -211,6 +212,9 @@
  #endif
-+#define	EXT3_IOC_GET_EXTENTS		_IOR('f', 5, long)
-+#define	EXT3_IOC_GET_TREE_DEPTH		_IOR('f', 6, long)
-+#define	EXT3_IOC_GET_TREE_STATS		_IOR('f', 7, long)
+ #define EXT3_IOC_GETRSVSZ		_IOR('f', 5, long)
+ #define EXT3_IOC_SETRSVSZ		_IOW('f', 6, long)
++#define EXT3_IOC_GET_EXTENTS		_IOR('f', 7, long)
++#define EXT3_IOC_GET_TREE_DEPTH		_IOR('f', 8, long)
++#define EXT3_IOC_GET_TREE_STATS		_IOR('f', 9, long)
  
  /*
   * Structure of an inode on the disk
-@@ -329,6 +333,8 @@
- #define EXT3_MOUNT_POSIX_ACL		0x8000	/* POSIX Access Control Lists */
+@@ -333,6 +337,8 @@
+ #define EXT3_MOUNT_BARRIER		0x20000 /* Use block barriers */
  #define EXT3_MOUNT_IOPEN		0x40000	/* Allow access via iopen */
  #define EXT3_MOUNT_IOPEN_NOPRIV		0x80000	/* Make iopen world-readable */
 +#define EXT3_MOUNT_EXTENTS		0x100000/* Extents support */
@@ -2528,7 +2536,7 @@ Index: linux-2.6.7/include/linux/ext3_fs.h
  
  /* Compatibility, for having both ext2_fs.h and ext3_fs.h included at once */
  #ifndef clear_opt
-@@ -724,6 +730,7 @@
+@@ -729,6 +735,7 @@
  
  
  /* inode.c */
@@ -2536,7 +2544,7 @@ Index: linux-2.6.7/include/linux/ext3_fs.h
  extern int ext3_forget(handle_t *, int, struct inode *, struct buffer_head *, int);
  extern struct buffer_head * ext3_getblk (handle_t *, struct inode *, long, int, int *);
  extern struct buffer_head * ext3_bread (handle_t *, struct inode *, int, int, int *);
-@@ -796,6 +803,14 @@
+@@ -802,6 +809,14 @@
  extern struct inode_operations ext3_symlink_inode_operations;
  extern struct inode_operations ext3_fast_symlink_inode_operations;
  
@@ -2551,11 +2559,11 @@ Index: linux-2.6.7/include/linux/ext3_fs.h
  
  #endif	/* __KERNEL__ */
  
-Index: linux-2.6.7/include/linux/ext3_extents.h
+Index: linux-2.6.5-sles9/include/linux/ext3_extents.h
 ===================================================================
---- linux-2.6.7.orig/include/linux/ext3_extents.h	2003-01-30 13:24:37.000000000 +0300
-+++ linux-2.6.7/include/linux/ext3_extents.h	2004-08-19 08:53:49.000000000 +0400
-@@ -0,0 +1,238 @@
+--- linux-2.6.5-sles9.orig/include/linux/ext3_extents.h	2003-01-30 13:24:37.000000000 +0300
++++ linux-2.6.5-sles9/include/linux/ext3_extents.h	2004-11-09 02:23:21.606219384 +0300
+@@ -0,0 +1,252 @@
 +/*
 + * Copyright (c) 2003, Cluster File Systems, Inc, info@clusterfs.com
 + * Written by Alex Tomas <alex@clusterfs.com>
@@ -2595,7 +2603,7 @@ Index: linux-2.6.7/include/linux/ext3_extents.h
 + * if EXT_DEBUG is defined you can use 'extdebug' mount option
 + * to get lots of info what's going on
 + */
-+#define EXT_DEBUG
++#define EXT_DEBUG_
 +#ifdef EXT_DEBUG
 +#define ext_debug(tree,fmt,a...) 			\
 +do {							\
@@ -2677,6 +2685,20 @@ Index: linux-2.6.7/include/linux/ext3_extents.h
 + */
 +
 +/*
++ * storage for cached extent
++ */
++struct ext3_ext_cache {
++	__u32	ec_start;
++	__u32	ec_block;
++	__u32	ec_len;
++	__u32	ec_type;
++};
++
++#define EXT3_EXT_CACHE_NO	0
++#define EXT3_EXT_CACHE_GAP	1
++#define EXT3_EXT_CACHE_EXTENT	2
++
++/*
 + * ext3_extents_tree is used to pass initial information
 + * to top-level extents API
 + */
@@ -2687,7 +2709,7 @@ Index: linux-2.6.7/include/linux/ext3_extents.h
 +	void *buffer;		/* will be passed as arg to ^^ routines	*/
 +	int buffer_len;
 +	void *private;
-+	struct ext3_extent *cex;/* last found extent */
++	struct ext3_ext_cache *cex;/* last found extent */
 +	struct ext3_extents_helpers *ops;
 +};
 +
@@ -2788,35 +2810,35 @@ Index: linux-2.6.7/include/linux/ext3_extents.h
 +ext3_ext_invalidate_cache(struct ext3_extents_tree *tree)
 +{
 +	if (tree->cex)
-+		tree->cex->ee_len = 0;
++		tree->cex->ec_type = EXT3_EXT_CACHE_NO;
 +}
 +
 +
 +#endif /* _LINUX_EXT3_EXTENTS */
 +
-Index: linux-2.6.7/include/linux/ext3_fs_i.h
+Index: linux-2.6.5-sles9/include/linux/ext3_fs_i.h
 ===================================================================
---- linux-2.6.7.orig/include/linux/ext3_fs_i.h	2004-08-19 08:51:04.000000000 +0400
-+++ linux-2.6.7/include/linux/ext3_fs_i.h	2004-08-19 08:53:49.000000000 +0400
-@@ -111,6 +111,8 @@
+--- linux-2.6.5-sles9.orig/include/linux/ext3_fs_i.h	2004-11-09 02:22:55.780145544 +0300
++++ linux-2.6.5-sles9/include/linux/ext3_fs_i.h	2004-11-09 02:23:21.606219384 +0300
+@@ -128,6 +128,8 @@
  	 */
  	struct semaphore truncate_sem;
  	struct inode vfs_inode;
 +
-+ 	__u32 i_cached_extent[3];
++ 	__u32 i_cached_extent[4];
  };
  
  #endif	/* _LINUX_EXT3_FS_I */
 
 %diffstat
  fs/ext3/Makefile             |    2 
- fs/ext3/extents.c            | 2306 +++++++++++++++++++++++++++++++++++++++++++
+ fs/ext3/extents.c            | 2313 +++++++++++++++++++++++++++++++++++++++++++
  fs/ext3/ialloc.c             |    4 
  fs/ext3/inode.c              |   29 
  fs/ext3/ioctl.c              |    4 
- fs/ext3/super.c              |   16 
- include/linux/ext3_extents.h |  238 ++++
+ fs/ext3/super.c              |   17 
+ include/linux/ext3_extents.h |  252 ++++
  include/linux/ext3_fs.h      |   15 
  include/linux/ext3_fs_i.h    |    2 
- 9 files changed, 2608 insertions(+), 8 deletions(-)
+ 9 files changed, 2630 insertions(+), 8 deletions(-)
 

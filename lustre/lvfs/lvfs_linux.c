@@ -65,7 +65,7 @@ int obd_memmax;
 # define ASSERT_KERNEL_CTXT(msg) do {} while(0)
 #endif
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,0))
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,4))
 #define current_ngroups current->group_info->ngroups
 #define current_groups current->group_info->small_block
 #else
@@ -121,6 +121,13 @@ void push_ctxt(struct obd_run_ctxt *save, struct obd_run_ctxt *new_ctx,
                         current_groups[current_ngroups++] = uc->ouc_suppgid1;
                 if (uc->ouc_suppgid2 != -1)
                         current_groups[current_ngroups++] = uc->ouc_suppgid2;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,4)
+                if (uc->ouc_suppgid1 != -1 && uc->ouc_suppgid2 != -1
+                    && (uc->ouc_suppgid1 > uc->ouc_suppgid2)) {
+                                current_groups[0] = uc->ouc_suppgid2;
+                                current_groups[1] = uc->ouc_suppgid1;
+                }
+#endif
         }
         current->fs->umask = 0; /* umask already applied on client */
         set_fs(new_ctx->fs);

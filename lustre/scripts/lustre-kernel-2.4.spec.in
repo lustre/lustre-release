@@ -808,7 +808,7 @@ fi
 #/usr/share/doc/lustre/lustre.pdf
 #/usr/share/doc/lustre/COPYING
 
-/usr/lib/lustre/examples
+/usr/share/lustre/examples
 
 %files -n lustre-ldap
 %defattr(-, root, root)

@@ -930,6 +930,15 @@ def if2addr(iface):
     ip = string.split(addr, ':')[1]
     return ip
 
+def def_mount_options(fstype, target):
+    """returns deafult mount options for passed fstype and target (mds, ost)"""
+    if fstype == 'ext3' or fstype == 'ldiskfs':
+        mountfsoptions = "errors=remount-ro"
+        if target == 'ost' and sys_get_branch() == '2.4':
+            mountfsoptions = "%s,asyncdel" % (mountfsoptions)
+        return mountfsoptions
+    return ""
+
 def sys_get_elan_position_file():
     procfiles = ["/proc/elan/device0/position",
                  "/proc/qsnet/elan4/device0/position",
@@ -985,6 +994,21 @@ def sys_get_local_address(net_type, wildcard, cluster_id):
         fixme("automatic local address for GM")
 
     return local
+
+def sys_get_branch():
+    """Returns kernel release"""
+    try:
+        fp = open('/proc/sys/kernel/osrelease')
+        lines = fp.readlines()
+        fp.close()
+                                                                                                                             
+        for l in lines:
+            version = string.split(l)
+            a = string.split(version[0], '.')
+            return a[0] + '.' + a[1]
+    except IOError, e:
+        log(e)
+    return ""
 
 def mod_loaded(modname):
     """Check if a module is already loaded. Look in /proc/modules for it."""
@@ -1431,6 +1455,7 @@ class MDSDEV(Module):
         self.fstype = self.db.get_val('fstype', '')
         self.nspath = self.db.get_val('nspath', '')
         self.mkfsoptions = self.db.get_val('mkfsoptions', '')
+	self.mountfsoptions = self.db.get_val('mountfsoptions', '')
         # overwrite the orignal MDSDEV name and uuid with the MDS name and uuid
         target_uuid = self.db.get_first_ref('target')
         mds = self.db.lookup(target_uuid)
@@ -1515,8 +1540,26 @@ class MDSDEV(Module):
         if not is_prepared('MDT'):
             lctl.newdev("mdt", 'MDT', 'MDT_UUID', setup ="")
         try: 
+	    mountfsoptions = def_mount_options(self.fstype, 'mds')
+                                                                                                                             
+            if config.mountfsoptions:
+                if mountfsoptions:
+                    mountfsoptions = mountfsoptions + ',' + config.mountfsoptions
+                else:
+                    mountfsoptions = config.mountfsoptions
+                if self.mountfsoptions:
+                    mountfsoptions = mountfsoptions + ',' + self.mountfsoptions
+            else:
+                if self.mountfsoptions:
+                    if mountfsoptions:
+                        mountfsoptions = mountfsoptions + ',' + self.mountfsoptions
+                    else:
+                        mountfsoptions = self.mountfsoptions
+
+	    print 'MDS mount options: ' + mountfsoptions
+
             lctl.newdev("mds", self.name, self.uuid,
-                        setup ="%s %s %s" %(blkdev, self.fstype, self.name))
+                        setup ="%s %s %s %s" %(blkdev, self.fstype, self.name, mountfsoptions))
         except CommandError, e:
             if e.rc == 2:
                 panic("MDS is missing the config log. Need to run " +
@@ -1649,6 +1692,7 @@ class OSD(Module):
         self.journal_size = self.db.get_val_int('journalsize', 0)
         self.inode_size = self.db.get_val_int('inodesize', 0)
         self.mkfsoptions = self.db.get_val('mkfsoptions', '')
+	self.mountfsoptions = self.db.get_val('mountfsoptions', '')
         self.fstype = self.db.get_val('fstype', '')
         self.nspath = self.db.get_val('nspath', '')
         target_uuid = self.db.get_first_ref('target')
@@ -1703,9 +1747,28 @@ class OSD(Module):
             blkdev = block_dev(self.devpath, self.size, self.fstype,
                                config.reformat, self.format, self.journal_size,
                                self.inode_size, self.mkfsoptions)
+
+	mountfsoptions = def_mount_options(self.fstype, 'ost')
+                                                                                                                             
+        if config.mountfsoptions:
+            if mountfsoptions:
+                mountfsoptions = mountfsoptions + ',' + config.mountfsoptions
+            else:
+                mountfsoptions = config.mountfsoptions
+            if self.mountfsoptions:
+                mountfsoptions = mountfsoptions + ',' + self.mountfsoptions
+        else:
+            if self.mountfsoptions:
+                if mountfsoptions:
+                    mountfsoptions = mountfsoptions + ',' + self.mountfsoptions
+                else:
+                    mountfsoptions = self.mountfsoptions
+	
+	print 'OST mount options: ' + mountfsoptions
+
         lctl.newdev(self.osdtype, self.name, self.uuid,
-                    setup ="%s %s %s" %(blkdev, self.fstype,
-                                           self.failover_ost))
+                    setup ="%s %s %s %s" %(blkdev, self.fstype,
+                                           self.failover_ost, mountfsoptions))
         if not is_prepared('OSS'):
             lctl.newdev("ost", 'OSS', 'OSS_UUID', setup ="")
 
@@ -1970,6 +2033,7 @@ class Mountpoint(Module):
     def __init__(self,db):
         Module.__init__(self, 'MTPT', db)
         self.path = my_rstrip(self.db.get_val('path'), '/')
+	self.clientoptions = self.db.get_val('clientoptions', '')
         self.fs_uuid = self.db.get_first_ref('filesystem')
         fs = self.db.lookup(self.fs_uuid)
         self.mds_uuid = fs.get_first_ref('mds')
@@ -2003,8 +2067,20 @@ class Mountpoint(Module):
         if config.record or config.lctl_dump:
             lctl.mount_option(local_node_name, self.vosc.get_name(), mdc_name)
             return
-        cmd = "mount -t lustre_lite -o osc=%s,mdc=%s %s %s" % \
-              (self.vosc.get_name(), mdc_name, config.config, self.path)
+
+	if config.clientoptions:
+            if self.clientoptions:
+                self.clientoptions = self.clientoptions + ',' + config.clientoptions
+            else:
+                self.clientoptions = config.clientoptions
+        if self.clientoptions:
+            self.clientoptions = ',' + self.clientoptions
+            # Linux kernel will deal with async and not pass it to ll_fill_super,
+            # so replace it with Lustre async
+            self.clientoptions = string.replace(self.clientoptions, "async", "lasync")
+
+	cmd = "mount -t lustre_lite -o osc=%s,mdc=%s%s %s %s" % \
+              (self.vosc.get_name(), mdc_name, self.clientoptions, config.config, self.path)
         run("mkdir", self.path)
         ret, val = run(cmd)
         if ret:
@@ -2633,6 +2709,8 @@ lconf_options = [
     ('nosetup', "Skip device setup/cleanup step."),
     ('reformat', "Reformat all devices (without question)"),
     ('mkfsoptions', "Additional options for the mk*fs command line", PARAM),
+    ('mountfsoptions', "Additional options for mount fs command line", PARAM),
+    ('clientoptions', "Additional options for Lustre", PARAM),
     ('dump',  "Dump the kernel debug log to file before portals is unloaded",
                PARAM),
     ('write_conf', "Save all the client config information on mds."),
