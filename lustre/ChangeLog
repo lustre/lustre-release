@@ -1,3 +1,8 @@
+2002-07-03  Peter Braam  <braam@clusterfs.com>
+        * release version v0_4_2   Fixes a lookup error (type not passed)
+	* move forward to head of Portals
+	* move forward to latest Lustre kernel
+
 2002-06-25  Peter Braam  <braam@clusterfs.com>
 
 	* release version v0_4_1.  Hopefully stable on single node use. 
