@@ -206,7 +206,7 @@ ksocknal_bind_irq (unsigned int irq)
 
 ksock_route_t *
 ksocknal_create_route (__u32 ipaddr, int port, int buffer_size,
-                       int nonagel, int irq_affinity, int eager)
+                       int irq_affinity, int eager)
 {
         ksock_route_t *route;
 
@@ -223,7 +223,6 @@ ksocknal_create_route (__u32 ipaddr, int port, int buffer_size,
         route->ksnr_port = port;
         route->ksnr_buffer_size = buffer_size;
         route->ksnr_irq_affinity = irq_affinity;
-        route->ksnr_nonagel = nonagel;
         route->ksnr_eager = eager;
         route->ksnr_connecting = 0;
         route->ksnr_connected = 0;
@@ -403,7 +402,7 @@ ksocknal_get_route_by_idx (int index)
 
 int
 ksocknal_add_route (ptl_nid_t nid, __u32 ipaddr, int port, int bufnob,
-                    int nonagle, int bind_irq, int share, int eager)
+                    int bind_irq, int share, int eager)
 {
         unsigned long      flags;
         ksock_peer_t      *peer;
@@ -421,7 +420,7 @@ ksocknal_add_route (ptl_nid_t nid, __u32 ipaddr, int port, int bufnob,
                 return (-ENOMEM);
 
         route = ksocknal_create_route (ipaddr, port, bufnob, 
-                                       nonagle, bind_irq, eager);
+                                       bind_irq, eager);
         if (route == NULL) {
                 ksocknal_put_peer (peer);
                 return (-ENOMEM);
@@ -1318,8 +1317,7 @@ ksocknal_cmd(struct portals_cfg *pcfg, void * private)
                         pcfg->pcfg_count = route->ksnr_conn_count;
                         pcfg->pcfg_size  = route->ksnr_buffer_size;
                         pcfg->pcfg_wait  = route->ksnr_sharecount;
-                        pcfg->pcfg_flags = (route->ksnr_nonagel      ? 1 : 0) |
-                                           (route->ksnr_irq_affinity ? 2 : 0) |
+                        pcfg->pcfg_flags = (route->ksnr_irq_affinity ? 2 : 0) |
                                            (route->ksnr_eager        ? 4 : 0);
                         ksocknal_put_route (route);
                 }
@@ -1328,7 +1326,6 @@ ksocknal_cmd(struct portals_cfg *pcfg, void * private)
         case NAL_CMD_ADD_AUTOCONN: {
                 rc = ksocknal_add_route (pcfg->pcfg_nid, pcfg->pcfg_id,
                                          pcfg->pcfg_misc, pcfg->pcfg_size,
-                                         (pcfg->pcfg_flags & 0x01) != 0,
                                          (pcfg->pcfg_flags & 0x02) != 0,
                                          (pcfg->pcfg_flags & 0x04) != 0,
                                          (pcfg->pcfg_flags & 0x08) != 0);
