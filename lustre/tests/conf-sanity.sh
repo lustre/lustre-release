@@ -212,5 +212,85 @@ test_8() {
 }
 run_test 8 "double mount setup"
 
+test_9() {
+        # backup the old values of PTLDEBUG and SUBSYSTEM
+        OLDPTLDEBUG=$PTLDEBUG
+        OLDSUBSYSTEM=$SUBSYSTEM
+        
+        # generate new configuration file with lmc --ptldebug and --subsystem
+        PTLDEBUG="trace"
+        SUBSYSTEM="mdc"
+        gen_config
+
+        # check the result of lmc --ptldebug/subsystem
+        start_ost
+        start_mds
+        mount_client $MOUNT
+        [ "`cat /proc/sys/portals/debug`" = "1" ] && \
+           echo "lmc --debug success" || return 1
+        [ "`cat /proc/sys/portals/subsystem_debug`" = "16777216" ] && \
+           echo "lmc --subsystem success" || return 1
+        check_mount || return 41
+        cleanup
+
+        # the new PTLDEBUG/SUBSYSTEM used for lconf --ptldebug/subsystem
+        PTLDEBUG="inode"
+        SUBSYSTEM="mds"
+
+        # check lconf --ptldebug/subsystem overriding lmc --ptldebug/subsystem
+        start_ost
+        start_mds
+        mount_client $MOUNT
+        [ "`cat /proc/sys/portals/debug`" = "2" ] && \
+           echo "lconf --debug overriding success" || return 1
+        [ "`cat /proc/sys/portals/subsystem_debug`" = "33554432" ] && \
+           echo "lconf --subsystem overriding success" || return 1
+        check_mount || return 41
+        cleanup
+
+        # resume the old configuration
+        PTLDEBUG=$OLDPTLDEBUG
+        SUBSYSTEM=$OLDSUBSYSTEM
+        gen_config
+}
+run_test 9 "test --ptldebug and --subsystem for lmc"
+
+test_10() {
+        OLDXMLCONFIG=$XMLCONFIG
+        XMLCONFIG="broken.xml"
+        [ -f "$XMLCONFIG" ] && rm -f $XMLCONFIG
+        SAMENAME="mds1"
+        do_lmc --add node --node $SAMENAME
+        do_lmc --add net --node $SAMENAME --nid $SAMENAME --nettype tcp
+        do_lmc --add mds --node $SAMENAME --mds $SAMENAME --nid $SAMENAME \
+               --fstype ext3 --dev /dev/mds1 || return $?
+        do_lmc --add lov --lov lov1 --mds $SAMENAME --stripe_sz 65536 \
+               --stripe_cnt 1 --stripe_pattern 0 || return $?
+        echo "Success!"
+        XMLCONFIG=$OLDXMLCONFIG
+}
+run_test 10 "use lmc with the same name for node and mds"
+
+test_11() {
+        OLDXMLCONFIG=$XMLCONFIG
+        XMLCONFIG="conf11.xml"
+
+        [ -f "$XMLCONFIG" ] && rm -f $XMLCONFIG
+        add_mds mds --dev $MDSDEV --size $MDSSIZE
+        add_ost ost --dev $OSTDEV --size $OSTSIZE
+        add_client client mds --path $MOUNT --ost ost_svc || return $?
+        echo "Default lov config success!"
+        
+        [ -f "$XMLCONFIG" ] && rm -f $XMLCONFIG
+        add_mds mds --dev $MDSDEV --size $MDSSIZE
+        add_ost ost --dev $OSTDEV --size $OSTSIZE
+        add_client client mds --path $MOUNT && return $?
+        echo "--add mtpt with neither --lov nor --ost will return error"
+
+        echo ""
+        echo "Success!"
+        XMLCONFIG=$OLDXMLCONFIG
+}
+run_test 11 "use default lov configuration (should return error)"
 
 equals_msg "Done"

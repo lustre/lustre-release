@@ -8,4 +8,4 @@ include $(src)/../portals/Kernelenv
 obj-y += llite.o
 llite-objs := llite_lib.o dcache.o super.o rw.o \
 	super25.o file.o dir.o sysctl.o symlink.o namei.o lproc_llite.o \
-	rw26.o llite_nfs.o
+	rw26.o llite_nfs.o llite_close.o

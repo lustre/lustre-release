@@ -51,57 +51,86 @@
 #include "llite_internal.h"
 #include <linux/lustre_compat25.h>
 
-/* called as the osc engine completes an rpc that included our ocp.  
- * the ocp itself holds a reference to the page and will drop it when
- * the page is removed from the page cache.  our job is simply to
- * transfer rc into the page and unlock it */
-void ll_complete_writepage_26(struct obd_client_page *ocp, int rc)
+/* called for each page in a completed rpc.*/
+void ll_ap_completion_26(void *data, int cmd, int rc)
 {
-        struct page *page = ocp->ocp_page;
+        struct ll_async_page *llap;
+        struct page *page;
 
-        LASSERT(page->private == (unsigned long)ocp);
+        llap = llap_from_cookie(data);
+        if (IS_ERR(llap)) {
+                EXIT;
+                return;
+        }
+
+        page = llap->llap_page;
         LASSERT(PageLocked(page));
 
-        if (rc != 0) {
-                CERROR("writeback error on page %p index %ld: %d\n", page,
-                       page->index, rc);
+        if (rc == 0)  {
+                if (cmd == OBD_BRW_READ) {
+                        if (!llap->llap_defer_uptodate)
+                                SetPageUptodate(page);
+                } else {
+                        llap->llap_write_queued = 0;
+                }
+        } else { 
                 SetPageError(page);
         }
-        ocp->ocp_flags &= ~OCP_IO_READY;
 
-        /* let everyone get at this page again.. I wonder if this ordering
-         * is corect */
+        LL_CDEBUG_PAGE(page, "io complete, unlocking\n");
+
         unlock_page(page);
-        end_page_writeback(page);
+
+        if (0 && cmd == OBD_BRW_WRITE) {
+                llap_write_complete(page->mapping->host, llap);
+                ll_try_done_writing(page->mapping->host);
+        }
 
         page_cache_release(page);
 }
 
 static int ll_writepage_26(struct page *page, struct writeback_control *wbc)
 {
-        struct obd_client_page *ocp;
+        struct inode *inode = page->mapping->host;
+        struct obd_export *exp;
+        struct ll_async_page *llap;
+        int rc;
         ENTRY;
 
         LASSERT(!PageDirty(page));
         LASSERT(PageLocked(page));
-        LASSERT(page->private != 0);
 
-        ocp = (struct obd_client_page *)page->private;
-        ocp->ocp_flags |= OCP_IO_READY;
+        exp = ll_i2obdexp(inode);
+        if (exp == NULL)
+                GOTO(out, rc = -EINVAL);
 
+        llap = llap_from_page(page);
+        if (IS_ERR(llap))
+                GOTO(out, rc = PTR_ERR(llap));
         page_cache_get(page);
 
-        /* filemap_fdatawait() makes me think we need to set PageWriteback
-         * on pages that are in flight.  But our ocp mechanics doesn't
-         * really expect a page to be on both the osc lru and in flight.
-         * so for now, we don't unlock the page.. dirtiers whill wait
-         * for io to complete */
-        SetPageWriteback(page);
-
-        /* sadly, not all callers who writepage eventually call sync_page
-         * (ahem, kswapd) so we need to raise this page's priority 
-         * immediately */
-        RETURN(ll_sync_page(page));
+        if (llap->llap_write_queued) {
+                LL_CDEBUG_PAGE(page, "marking urgent\n");
+                rc = obd_set_async_flags(exp, ll_i2info(inode)->lli_smd, NULL, 
+                                         llap->llap_cookie, ASYNC_READY | 
+                                         ASYNC_URGENT);
+        } else {
+                llap->llap_write_queued = 1;
+                rc = obd_queue_async_io(exp, ll_i2info(inode)->lli_smd, NULL, 
+                                        llap->llap_cookie, OBD_BRW_WRITE, 0, 0, 
+                                        OBD_BRW_CREATE, ASYNC_READY | 
+                                        ASYNC_URGENT);
+                if (rc == 0)
+                        LL_CDEBUG_PAGE(page, "mmap write queued\n");
+                else 
+                        llap->llap_write_queued = 0;
+        }
+        if (rc)
+                page_cache_release(page);
+out:
+        if (rc)
+                unlock_page(page);
+        RETURN(rc);
 }
 
 struct address_space_operations ll_aops = {
@@ -111,8 +140,9 @@ struct address_space_operations ll_aops = {
         writepage: ll_writepage_26,
         writepages: generic_writepages,
         set_page_dirty: __set_page_dirty_nobuffers,
-        sync_page: block_sync_page,
+        sync_page: ll_sync_page,
         prepare_write: ll_prepare_write,
         commit_write: ll_commit_write,
+        removepage: ll_removepage,
         bmap: NULL
 };

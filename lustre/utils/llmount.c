@@ -140,8 +140,27 @@ parse_options(char * options, struct lustre_mount_data *lmd)
 }
 
 int
+get_local_elan_id(char *fname, char *buf)
+{
+        FILE *fp = fopen(fname, "r");
+        int   rc;
+
+        if (fp == NULL)
+                return -1;
+
+        rc = fscanf(fp, "NodeId %255s", buf);
+
+        fclose(fp);
+
+        return (rc == 1) ? 0 : -1;
+}
+
+int
 set_local(struct lustre_mount_data *lmd)
 {
+        /* XXX ClusterID?
+         * XXX PtlGetId() will be safer if portals is loaded and
+         * initialised correctly at this time... */
         char buf[256];
         ptl_nid_t nid;
         int rc;
@@ -159,19 +178,26 @@ set_local(struct lustre_mount_data *lmd)
                         return rc;
                 }
         } else if (lmd->lmd_nal == QSWNAL) {
-                FILE *fp;
-                fp = fopen("/proc/elan/device0/position", "r");
-                if (fp == NULL) {
-                        perror("mount: /proc/elan/device0/position");
-                        return -1;
-                }
-                rc = fscanf(fp, "%*s %255s", buf);
-                fclose(fp);
-                if (rc != 1) {
-                        fprintf(stderr, "mount: problem read elan NID");
-                        return -1;
-                }
+#if MULTIRAIL_EKC
+                char *pfiles[] = {"/proc/qsnet/elan3/device0/position",
+                                  "/proc/qsnet/elan4/device0/position",
+                                  NULL};
+#else
+                char *pfiles[] = {"/proc/elan/device0/position",
+                                  NULL};
+#endif
+                int   i = 0;
+
+                do {
+                        rc = get_local_elan_id(pfiles[i], buf);
+                } while (rc != 0 &&
+                         pfiles[++i] != NULL);
                 
+                if (rc != 0) {
+                        fprintf(stderr, "mount: can't read elan ID"
+                                " from /proc\n");
+                        return -1;
+                }
         }
 
         if (ptl_parse_nid (&nid, buf) != 0) {

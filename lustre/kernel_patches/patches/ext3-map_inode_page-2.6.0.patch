@@ -2,9 +2,11 @@
  fs/ext3/super.c |    3 +++
  2 files changed, 55 insertions(+)
 
---- linux-2.6.0-test6/fs/ext3/inode.c~ext3-map_inode_page-2.6.0	2003-10-14 17:03:48.000000000 +0400
-+++ linux-2.6.0-test6-alexey/fs/ext3/inode.c	2003-10-14 17:03:49.000000000 +0400
-@@ -3143,3 +3143,55 @@ int ext3_prep_san_write(struct inode *in
+Index: linux-2.6.0/fs/ext3/inode.c
+===================================================================
+--- linux-2.6.0.orig/fs/ext3/inode.c	2003-12-31 00:33:49.000000000 +0300
++++ linux-2.6.0/fs/ext3/inode.c	2003-12-31 01:14:17.000000000 +0300
+@@ -3136,3 +3136,58 @@
  		ret = ret2;
  	return ret;
  }
@@ -51,6 +53,9 @@
 +                               "block %ld\n", iblock);
 +                        goto out;
 +                }
++                if (buffer_new(&dummy))
++                        unmap_underlying_metadata(dummy.b_bdev,
++							dummy.b_blocknr);
 +                blocks[i] = dummy.b_blocknr;
 +                created[i] = 1;
 +        }
@@ -60,9 +65,11 @@
 +        return rc;
 +}
 +
---- linux-2.6.0-test6/fs/ext3/super.c~ext3-map_inode_page-2.6.0	2003-10-14 17:03:48.000000000 +0400
-+++ linux-2.6.0-test6-alexey/fs/ext3/super.c	2003-10-14 17:09:05.000000000 +0400
-@@ -2043,6 +2043,9 @@ static void __exit exit_ext3_fs(void)
+Index: linux-2.6.0/fs/ext3/super.c
+===================================================================
+--- linux-2.6.0.orig/fs/ext3/super.c	2003-12-31 00:33:49.000000000 +0300
++++ linux-2.6.0/fs/ext3/super.c	2003-12-31 01:10:40.000000000 +0300
+@@ -2051,6 +2051,9 @@
  int ext3_prep_san_write(struct inode *inode, long *blocks,
                          int nblocks, loff_t newsize);
  EXPORT_SYMBOL(ext3_prep_san_write);
@@ -72,5 +79,3 @@
  
  MODULE_AUTHOR("Remy Card, Stephen Tweedie, Andrew Morton, Andreas Dilger, Theodore Ts'o and others");
  MODULE_DESCRIPTION("Second Extended Filesystem with journaling extensions");
-
-_

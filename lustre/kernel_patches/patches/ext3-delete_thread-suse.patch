@@ -7,9 +7,9 @@
 
 Index: linux-2.4.21-suse/fs/ext3/super.c
 ===================================================================
---- linux-2.4.21-suse.orig/fs/ext3/super.c	2003-10-30 02:03:04.000000000 +0300
-+++ linux-2.4.21-suse/fs/ext3/super.c	2003-10-30 02:05:38.000000000 +0300
-@@ -400,6 +400,220 @@
+--- linux-2.4.21-suse.orig/fs/ext3/super.c	2004-01-12 19:49:25.000000000 +0300
++++ linux-2.4.21-suse/fs/ext3/super.c	2004-01-13 17:39:59.000000000 +0300
+@@ -400,6 +400,221 @@
  	}
  }
  
@@ -123,7 +123,8 @@ Index: linux-2.4.21-suse/fs/ext3/super.c
 +
 +	clear_opt(sbi->s_mount_opt, ASYNCDEL);
 +	wake_up(&sbi->s_delete_thread_queue);
-+	wait_event(sbi->s_delete_waiter_queue, list_empty(&sbi->s_delete_list));
++	wait_event(sbi->s_delete_waiter_queue,
++			sbi->s_delete_list.next == 0 && sbi->s_delete_inodes == 0);
 +}
 +
 +/* Instead of playing games with the inode flags, destruction, etc we just
@@ -230,15 +231,15 @@ Index: linux-2.4.21-suse/fs/ext3/super.c
  void ext3_put_super (struct super_block * sb)
  {
  	struct ext3_sb_info *sbi = EXT3_SB(sb);
-@@ -407,6 +621,7 @@
+@@ -407,6 +622,7 @@
  	kdev_t j_dev = sbi->s_journal->j_dev;
  	int i;
  
-+	ext3_stop_delete_thread(sbi);
++	J_ASSERT(sbi->s_delete_inodes == 0);
  	ext3_xattr_put_super(sb);
  	journal_destroy(sbi->s_journal);
  	if (!(sb->s_flags & MS_RDONLY)) {
-@@ -455,7 +670,11 @@
+@@ -455,7 +671,11 @@
  	write_inode:	ext3_write_inode,	/* BKL not held.  Don't need */
  	dirty_inode:	ext3_dirty_inode,	/* BKL not held.  We take it */
  	put_inode:	ext3_put_inode,		/* BKL not held.  Don't need */
@@ -250,7 +251,7 @@ Index: linux-2.4.21-suse/fs/ext3/super.c
  	put_super:	ext3_put_super,		/* BKL held */
  	write_super:	ext3_write_super,	/* BKL held */
  	sync_fs:	ext3_sync_fs,
-@@ -524,6 +743,13 @@
+@@ -524,6 +744,13 @@
  			clear_opt (*mount_options, XATTR_USER);
  		else
  #endif
@@ -264,7 +265,7 @@ Index: linux-2.4.21-suse/fs/ext3/super.c
  		if (!strcmp (this_char, "bsddf"))
  			clear_opt (*mount_options, MINIX_DF);
  		else if (!strcmp (this_char, "nouid32")) {
-@@ -1223,6 +1449,7 @@
+@@ -1223,6 +1450,7 @@
  	}
  
  	ext3_setup_super (sb, es, sb->s_flags & MS_RDONLY);
@@ -272,7 +273,21 @@ Index: linux-2.4.21-suse/fs/ext3/super.c
  	/*
  	 * akpm: core read_super() calls in here with the superblock locked.
  	 * That deadlocks, because orphan cleanup needs to lock the superblock
-@@ -1678,6 +1905,9 @@
+@@ -1614,7 +1842,12 @@
+ static int ext3_sync_fs(struct super_block *sb)
+ {
+ 	tid_t target;
+-	
++
++	if (atomic_read(&sb->s_active) == 0) {
++		/* fs is being umounted: time to stop delete thread */
++		ext3_stop_delete_thread(EXT3_SB(sb));
++	}
++
+ 	sb->s_dirt = 0;
+ 	target = log_start_commit(EXT3_SB(sb)->s_journal, NULL);
+ 	log_wait_commit(EXT3_SB(sb)->s_journal, target);
+@@ -1678,6 +1911,9 @@
  	if (!parse_options(data, &tmp, sbi, &tmp, 1))
  		return -EINVAL;
  
@@ -284,8 +299,8 @@ Index: linux-2.4.21-suse/fs/ext3/super.c
  
 Index: linux-2.4.21-suse/fs/ext3/inode.c
 ===================================================================
---- linux-2.4.21-suse.orig/fs/ext3/inode.c	2003-10-30 02:03:57.000000000 +0300
-+++ linux-2.4.21-suse/fs/ext3/inode.c	2003-10-30 02:05:38.000000000 +0300
+--- linux-2.4.21-suse.orig/fs/ext3/inode.c	2004-01-13 17:38:09.000000000 +0300
++++ linux-2.4.21-suse/fs/ext3/inode.c	2004-01-13 17:38:10.000000000 +0300
 @@ -2552,6 +2552,118 @@
  	return err;
  }
@@ -407,8 +422,8 @@ Index: linux-2.4.21-suse/fs/ext3/inode.c
   * iloc->bh.  This _must_ be cleaned up later. 
 Index: linux-2.4.21-suse/fs/ext3/file.c
 ===================================================================
---- linux-2.4.21-suse.orig/fs/ext3/file.c	2003-10-30 01:40:33.000000000 +0300
-+++ linux-2.4.21-suse/fs/ext3/file.c	2003-10-30 02:05:38.000000000 +0300
+--- linux-2.4.21-suse.orig/fs/ext3/file.c	2004-01-12 19:49:25.000000000 +0300
++++ linux-2.4.21-suse/fs/ext3/file.c	2004-01-13 17:38:10.000000000 +0300
 @@ -125,7 +125,11 @@
  };
  
@@ -423,8 +438,8 @@ Index: linux-2.4.21-suse/fs/ext3/file.c
  	getxattr:	ext3_getxattr,		/* BKL held */
 Index: linux-2.4.21-suse/include/linux/ext3_fs.h
 ===================================================================
---- linux-2.4.21-suse.orig/include/linux/ext3_fs.h	2003-10-30 02:03:57.000000000 +0300
-+++ linux-2.4.21-suse/include/linux/ext3_fs.h	2003-10-30 02:06:05.000000000 +0300
+--- linux-2.4.21-suse.orig/include/linux/ext3_fs.h	2004-01-13 17:38:09.000000000 +0300
++++ linux-2.4.21-suse/include/linux/ext3_fs.h	2004-01-13 17:38:10.000000000 +0300
 @@ -193,6 +193,7 @@
   */
  #define EXT3_STATE_JDATA		0x00000001 /* journaled data exists */
@@ -453,8 +468,8 @@ Index: linux-2.4.21-suse/include/linux/ext3_fs.h
  /* ioctl.c */
 Index: linux-2.4.21-suse/include/linux/ext3_fs_sb.h
 ===================================================================
---- linux-2.4.21-suse.orig/include/linux/ext3_fs_sb.h	2003-10-30 02:03:04.000000000 +0300
-+++ linux-2.4.21-suse/include/linux/ext3_fs_sb.h	2003-10-30 02:05:38.000000000 +0300
+--- linux-2.4.21-suse.orig/include/linux/ext3_fs_sb.h	2004-01-12 19:49:25.000000000 +0300
++++ linux-2.4.21-suse/include/linux/ext3_fs_sb.h	2004-01-13 17:38:10.000000000 +0300
 @@ -29,6 +29,8 @@
  
  #define EXT3_MAX_GROUP_LOADED	8
