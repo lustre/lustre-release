@@ -291,10 +291,10 @@ static int ll_writepage_24(struct page *page)
         obd_brw_plug(OBD_BRW_WRITE, exp, ll_i2info(inode)->lli_smd, NULL);
 
         page_cache_get(page);
-        rc = ll_start_ocp_io(page);
+        rc = ll_start_ocp_io(exp, page);
         if (rc == 0) {
                 ll_page_acct(0, 1);
-                ll_start_io_from_dirty(inode, ll_complete_writepage_24);
+                ll_start_io_from_dirty(exp, inode, ll_complete_writepage_24);
                 cleanup_phase = 1;
         } else {
                 page_cache_release(page);
