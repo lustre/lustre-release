@@ -1,0 +1,614 @@
+diff -urN linux/fs/file_table.c linux-2.4.20/fs/file_table.c
+--- linux/fs/file_table.c	2002-11-29 05:23:15.000000000 +0530
++++ linux-2.4.20/fs/file_table.c	2003-08-14 21:48:52.000000000 +0530
+@@ -82,7 +82,7 @@
+  * and call the open function (if any).  The caller must verify that
+  * inode->i_fop is not NULL.
+  */
+-int init_private_file(struct file *filp, struct dentry *dentry, int mode)
++int init_private_file_it(struct file *filp, struct dentry *dentry, int mode, struct lookup_intent *it)
+ {
+ 	memset(filp, 0, sizeof(*filp));
+ 	filp->f_mode   = mode;
+@@ -90,6 +90,8 @@
+ 	filp->f_dentry = dentry;
+ 	filp->f_uid    = current->fsuid;
+ 	filp->f_gid    = current->fsgid;
++	if (it)
++		filp->f_it = it;
+ 	filp->f_op     = dentry->d_inode->i_fop;
+ 	if (filp->f_op->open)
+ 		return filp->f_op->open(dentry->d_inode, filp);
+@@ -97,6 +99,11 @@
+ 		return 0;
+ }
+ 
++int init_private_file(struct file *filp, struct dentry *dentry, int mode)
++{
++	return init_private_file_it(filp, dentry, mode, NULL);
++}
++
+ void fput(struct file * file)
+ {
+ 	struct dentry * dentry = file->f_dentry;
+diff -urN linux/fs/inode.c linux-2.4.20/fs/inode.c
+--- linux/fs/inode.c	2003-08-14 21:46:54.000000000 +0530
++++ linux-2.4.20/fs/inode.c	2003-08-14 22:09:00.000000000 +0530
+@@ -969,6 +969,24 @@
+ 	return inode;
+ }
+ 
++struct inode *search_icache_for_lustre(struct super_block *sb, unsigned long ino, find_inode_t find_actor, void *opaque)
++{
++
++	struct list_head * head = inode_hashtable + hash(sb,ino);
++	struct inode * inode;
++
++	spin_lock(&inode_lock);
++	inode = find_inode(sb, ino, head, find_actor, opaque);
++	if (inode) {
++		__iget(inode);
++		spin_unlock(&inode_lock);
++		wait_on_inode(inode);
++		return inode;
++	}
++	spin_unlock(&inode_lock);
++	
++	return NULL;
++}
+ 
+ struct inode *iget4(struct super_block *sb, unsigned long ino, find_inode_t find_actor, void *opaque)
+ {
+diff -urN linux/fs/namei.c linux-2.4.20/fs/namei.c
+--- linux/fs/namei.c	2003-08-14 21:46:53.000000000 +0530
++++ linux-2.4.20/fs/namei.c	2003-08-14 21:48:52.000000000 +0530
+@@ -894,7 +894,7 @@
+ 
+ 
+ /* SMP-safe */
+-struct dentry * lookup_one_len(const char * name, struct dentry * base, int len)
++struct dentry * lookup_one_len_it(const char * name, struct dentry * base, int len, struct lookup_intent *it)
+ {
+ 	unsigned long hash;
+ 	struct qstr this;
+@@ -914,11 +914,16 @@
+ 	}
+ 	this.hash = end_name_hash(hash);
+ 
+-	return lookup_hash_it(&this, base, NULL);
++	return lookup_hash_it(&this, base, it);
+ access:
+ 	return ERR_PTR(-EACCES);
+ }
+ 
++struct dentry * lookup_one_len(const char * name, struct dentry * base, int len)
++{
++	return lookup_one_len_it(name, base, len, NULL);
++}
++
+ /*
+  *	namei()
+  *
+diff -urN linux/fs/nfsd/nfsfh.c linux-2.4.20/fs/nfsd/nfsfh.c
+--- linux/fs/nfsd/nfsfh.c	2002-11-29 05:23:15.000000000 +0530
++++ linux-2.4.20/fs/nfsd/nfsfh.c	2003-08-14 22:08:52.000000000 +0530
+@@ -36,6 +36,11 @@
+ 	int sequence;		/* sequence counter */
+ };
+ 
++static struct dentry *lookup_it(struct inode *inode, struct dentry * dentry)
++{
++	return inode->i_op->lookup_it(inode, dentry, NULL, 0);
++}
++
+ /*
+  * A rather strange filldir function to capture
+  * the name matching the specified inode number.
+@@ -85,9 +90,24 @@
+ 	/*
+ 	 * Open the directory ...
+ 	 */
+-	error = init_private_file(&file, dentry, FMODE_READ);
+-	if (error)
++
++	struct lookup_intent it;
++	intent_init(&it, IT_OPEN, 0);
++	extern int open2(struct dentry *dentry, struct lookup_intent *it);
++	error = open2(dentry, &it);
++	if (error) {
++	    if (it.it_op_release)
++		    intent_release(&it);
+ 		goto out;
++	}
++
++	error = init_private_file_it(&file, dentry, FMODE_READ, &it);
++	if (error) {
++	    if (it.it_op_release)
++		    intent_release(&it);
++		goto out;
++	}
++
+ 	error = -EINVAL;
+ 	if (!file.f_op->readdir)
+ 		goto out_close;
+@@ -113,6 +133,8 @@
+ 	}
+ 
+ out_close:
++	if (it.it_op_release)
++		intent_release(&it);
+ 	if (file.f_op->release)
+ 		file.f_op->release(dir, &file);
+ out:
+@@ -274,7 +296,10 @@
+ 	 * it is well connected.  But nobody returns different dentrys do they?
+ 	 */
+ 	down(&child->d_inode->i_sem);
+-	pdentry = child->d_inode->i_op->lookup(child->d_inode, tdentry);
++	if (child->d_inode->i_op->lookup_it)
++	    pdentry = lookup_it(child->d_inode, tdentry);
++	else
++	    pdentry = child->d_inode->i_op->lookup(child->d_inode, tdentry);
+ 	up(&child->d_inode->i_sem);
+ 	d_drop(tdentry); /* we never want ".." hashed */
+ 	if (!pdentry && tdentry->d_inode == NULL) {
+@@ -662,6 +687,11 @@
+ 
+ 	inode = dentry->d_inode;
+ 
++	/* cache coherency for non-device filesystems */
++	if (inode->i_op && inode->i_op->revalidate_it) {
++	    inode->i_op->revalidate_it(dentry, NULL);
++	}
++
+ 	/* Type check. The correct error return for type mismatches
+ 	 * does not seem to be generally agreed upon. SunOS seems to
+ 	 * use EISDIR if file isn't S_IFREG; a comment in the NFSv3
+@@ -900,8 +930,9 @@
+ 		dentry->d_parent->d_name.name, dentry->d_name.name);
+ 	goto out;
+ out_uptodate:
+-	printk(KERN_ERR "fh_update: %s/%s already up-to-date!\n",
+-		dentry->d_parent->d_name.name, dentry->d_name.name);
++	if(!dentry->d_parent->d_inode->i_op->mkdir_raw)
++		printk(KERN_ERR "fh_update: %s/%s already up-to-date!\n",
++			dentry->d_parent->d_name.name, dentry->d_name.name);
+ 	goto out;
+ }
+ 
+diff -urN linux/fs/nfsd/vfs.c linux-2.4.20/fs/nfsd/vfs.c
+--- linux/fs/nfsd/vfs.c	2002-11-29 05:23:15.000000000 +0530
++++ linux-2.4.20/fs/nfsd/vfs.c	2003-08-14 22:01:49.000000000 +0530
+@@ -77,6 +77,122 @@
+ static struct raparms *		raparml;
+ static struct raparms *		raparm_cache;
+ 
++static int link_raw(struct dentry *dold, struct dentry *ddir, struct dentry *dnew)
++{
++	int err;
++
++	struct nameidata old_nd = { .dentry = dold };
++	struct nameidata nd 	= { .dentry = ddir, .last = dnew->d_name };
++	struct inode_operations *op = nd.dentry->d_inode->i_op;
++	err = op->link_raw(&old_nd, &nd);
++	d_instantiate(dnew, dold->d_inode);
++	if(dold->d_inode->i_op && dold->d_inode->i_op->revalidate_it)
++		dold->d_inode->i_op->revalidate_it(dnew, NULL);
++
++	return err;
++}
++
++static int unlink_raw(struct dentry *dentry, char *fname, int flen, struct dentry *rdentry)
++{
++	int err;
++
++	struct nameidata nd = { .dentry = dentry, .last.name = fname, .last.len = flen };
++	struct inode_operations *op = nd.dentry->d_inode->i_op;
++	err = op->unlink_raw(&nd);
++	if (!err)
++		d_delete(rdentry);
++
++	return err;
++}
++
++static int rmdir_raw(struct dentry *dentry, char *fname, int flen, struct dentry *rdentry)
++{
++	int err;
++
++	struct nameidata nd = { .dentry = dentry, .last.name = fname, .last.len = flen };
++	struct inode_operations *op = nd.dentry->d_inode->i_op;
++	err = op->rmdir_raw(&nd);
++	if(!err) {
++		rdentry->d_inode->i_flags |= S_DEAD;
++		d_delete(rdentry);
++	}
++
++	return err;
++}
++
++static int symlink_raw(struct dentry *dentry,  char *fname, int flen, char *path)
++{
++	int err;
++
++	struct nameidata nd = { .dentry = dentry, .last.name = fname, .last.len = flen };
++	struct inode_operations *op = nd.dentry->d_inode->i_op;
++	err = op->symlink_raw(&nd, path);
++
++	return err;
++}
++
++static int mkdir_raw(struct dentry *dentry, char *fname, int flen, int mode)
++{
++	int err;
++
++	struct nameidata nd = { .dentry = dentry, .last.name = fname, .last.len = flen };
++	struct inode_operations *op = nd.dentry->d_inode->i_op;
++	err = op->mkdir_raw(&nd, mode);
++
++	return err;
++}
++
++static int mknod_raw(struct dentry *dentry, char *fname, int flen, int mode, dev_t dev)
++{
++	int err;
++
++	struct nameidata nd = { .dentry = dentry, .last.name = fname, .last.len = flen };
++	struct inode_operations *op = nd.dentry->d_inode->i_op;
++	err = op->mknod_raw(&nd, mode, dev);
++
++	return err;
++}	
++
++static int rename_raw(struct dentry *fdentry, struct dentry *tdentry, 
++						struct dentry *odentry, struct dentry *ndentry)
++{
++	int err;
++
++	struct nameidata old_nd = { .dentry = fdentry, .last = odentry->d_name};
++	struct nameidata new_nd = { .dentry = tdentry, .last = ndentry->d_name};
++	struct inode_operations *op = old_nd.dentry->d_inode->i_op;
++	err = op->rename_raw(&old_nd, &new_nd);
++	d_move(odentry, ndentry);
++
++	return err;
++}
++
++static int setattr_raw(struct inode *inode, struct iattr *iap)
++{
++	int err;
++
++	iap->ia_valid |= ATTR_RAW;
++	err = inode->i_op->setattr_raw(inode, iap);
++
++	return err;
++}
++
++int open2(struct dentry *dentry, struct lookup_intent *it)
++{
++	int err = 0;
++
++	if (dentry && dentry->d_op && dentry->d_op->d_revalidate_it) {
++		if (!dentry->d_op->d_revalidate_it(dentry, 0, it) && !d_invalidate(dentry)) {
++			dput(dentry);
++			err = -EINVAL;
++			dentry = NULL;
++			return err;
++		}
++	}
++
++	return err;
++}
++
+ /*
+  * Look up one component of a pathname.
+  * N.B. After this call _both_ fhp and resfh need an fh_put
+@@ -300,7 +416,10 @@
+ 	}
+ 	err = nfserr_notsync;
+ 	if (!check_guard || guardtime == inode->i_ctime) {
+-		err = notify_change(dentry, iap);
++		if ( dentry->d_inode->i_op && dentry->d_inode->i_op->setattr_raw)
++			err = setattr_raw(dentry->d_inode, iap);
++		else
++			err = notify_change(dentry, iap);
+ 		err = nfserrno(err);
+ 	}
+ 	if (size_change) {
+@@ -473,6 +592,15 @@
+ 		filp->f_mode  = FMODE_READ;
+ 	}
+ 
++	struct lookup_intent it;
++	intent_init(&it, IT_OPEN, filp->f_flags);
++
++	err = open2(dentry, &it);
++	if (err)
++		goto out_nfserr;
++	
++	filp->f_it = &it;
++	
+ 	err = 0;
+ 	if (filp->f_op && filp->f_op->open) {
+ 		err = filp->f_op->open(inode, filp);
+@@ -487,7 +615,11 @@
+ 			atomic_dec(&filp->f_count);
+ 		}
+ 	}
++
+ out_nfserr:
++	if (it.it_op_release)
++		intent_release(&it);
++
+ 	if (err)
+ 		err = nfserrno(err);
+ out:
+@@ -818,7 +950,7 @@
+ {
+ 	struct dentry	*dentry, *dchild;
+ 	struct inode	*dirp;
+-	int		err;
++	int		err, error = -EOPNOTSUPP;
+ 
+ 	err = nfserr_perm;
+ 	if (!flen)
+@@ -834,8 +966,24 @@
+ 	dentry = fhp->fh_dentry;
+ 	dirp = dentry->d_inode;
+ 
++	switch (type) {
++			case S_IFDIR:
++				if (dirp->i_op->mkdir_raw)
++		            error = mkdir_raw(dentry, fname, flen, iap->ia_mode);
++				break;
++			case S_IFCHR:
++			case S_IFBLK:
++			case S_IFIFO:
++			case S_IFSOCK:
++			    if (dirp->i_op->mknod_raw)
++					error = mknod_raw(dentry, fname, flen, iap->ia_mode, rdev);
++				break;
++				default:
++	                printk("nfsd: bad file type %o in nfsd_create\n", type);
++	}
++
+ 	err = nfserr_notdir;
+-	if(!dirp->i_op || !dirp->i_op->lookup)
++	if(!dirp->i_op || !(dirp->i_op->lookup || dirp->i_op->lookup_it))
+ 		goto out;
+ 	/*
+ 	 * Check whether the response file handle has been verified yet.
+@@ -868,10 +1016,12 @@
+ 	 * Make sure the child dentry is still negative ...
+ 	 */
+ 	err = nfserr_exist;
+-	if (dchild->d_inode) {
+-		dprintk("nfsd_create: dentry %s/%s not negative!\n",
+-			dentry->d_name.name, dchild->d_name.name);
+-		goto out; 
++	if ( error == -EOPNOTSUPP) {
++		if (dchild->d_inode) {
++			dprintk("nfsd_create: dentry %s/%s not negative!\n",
++				dentry->d_name.name, dchild->d_name.name);
++			goto out; 
++		}
+ 	}
+ 
+ 	if (!(iap->ia_valid & ATTR_MODE))
+@@ -887,13 +1037,15 @@
+ 		err = vfs_create(dirp, dchild, iap->ia_mode);
+ 		break;
+ 	case S_IFDIR:
+-		err = vfs_mkdir(dirp, dchild, iap->ia_mode);
++		if (error == -EOPNOTSUPP)
++			err = vfs_mkdir(dirp, dchild, iap->ia_mode);
+ 		break;
+ 	case S_IFCHR:
+ 	case S_IFBLK:
+ 	case S_IFIFO:
+ 	case S_IFSOCK:
+-		err = vfs_mknod(dirp, dchild, iap->ia_mode, rdev);
++		if (error == -EOPNOTSUPP)	
++			err = vfs_mknod(dirp, dchild, iap->ia_mode, rdev);
+ 		break;
+ 	default:
+ 	        printk("nfsd: bad file type %o in nfsd_create\n", type);
+@@ -943,6 +1095,8 @@
+ 	int		err;
+ 	__u32		v_mtime=0, v_atime=0;
+ 	int		v_mode=0;
++	struct lookup_intent it;
++	intent_init(&it, IT_CREAT, 0);
+ 
+ 	err = nfserr_perm;
+ 	if (!flen)
+@@ -962,14 +1116,18 @@
+ 	/* Get all the sanity checks out of the way before
+ 	 * we lock the parent. */
+ 	err = nfserr_notdir;
+-	if(!dirp->i_op || !dirp->i_op->lookup)
++	if(!dirp->i_op ||  !(dirp->i_op->lookup || dirp->i_op->lookup_it))
+ 		goto out;
+ 	fh_lock(fhp);
+ 
+ 	/*
+ 	 * Compose the response file handle.
+ 	 */
+-	dchild = lookup_one_len(fname, dentry, flen);
++	if (dirp->i_op->lookup_it) {
++		it.it_create_mode = iap->ia_mode;
++		dchild = lookup_one_len_it(fname, dentry, flen, &it);
++	} else
++		dchild = lookup_one_len(fname, dentry, flen);
+ 	err = PTR_ERR(dchild);
+ 	if (IS_ERR(dchild))
+ 		goto out_nfserr;
+@@ -1013,6 +1171,8 @@
+ 		case NFS3_CREATE_GUARDED:
+ 			err = nfserr_exist;
+ 		}
++		if(dirp->i_op->lookup_it)
++			err = 0;
+ 		goto out;
+ 	}
+ 
+@@ -1053,6 +1213,9 @@
+  		err = nfsd_setattr(rqstp, resfhp, iap, 0, (time_t)0);
+ 
+  out:
++	if (dirp->i_op->lookup_it && it.it_op_release) {
++	    intent_release(&it);
++	}
+ 	fh_unlock(fhp);
+  	return err;
+  
+@@ -1119,7 +1282,7 @@
+ 				struct iattr *iap)
+ {
+ 	struct dentry	*dentry, *dnew;
+-	int		err, cerr;
++	int		err, cerr, error = -EOPNOTSUPP;
+ 
+ 	err = nfserr_noent;
+ 	if (!flen || !plen)
+@@ -1133,12 +1296,18 @@
+ 		goto out;
+ 	fh_lock(fhp);
+ 	dentry = fhp->fh_dentry;
++	
++	if (dentry->d_inode->i_op->symlink_raw)
++		error = symlink_raw(dentry, fname, flen, path);
++
+ 	dnew = lookup_one_len(fname, dentry, flen);
+ 	err = PTR_ERR(dnew);
+ 	if (IS_ERR(dnew))
+ 		goto out_nfserr;
+ 
+-	err = vfs_symlink(dentry->d_inode, dnew, path);
++	err = error;
++	if (err == -EOPNOTSUPP || !dentry->d_inode->i_op->symlink_raw)
++		err = vfs_symlink(dentry->d_inode, dnew, path);
+ 	if (!err) {
+ 		if (EX_ISSYNC(fhp->fh_export))
+ 			nfsd_sync_dir(dentry);
+@@ -1206,7 +1375,10 @@
+ 	dold = tfhp->fh_dentry;
+ 	dest = dold->d_inode;
+ 
+-	err = vfs_link(dold, dirp, dnew);
++	if (dirp->i_op->link_raw)
++		err = link_raw(dold, ddir, dnew);
++	else
++		err = vfs_link(dold, dirp, dnew);
+ 	if (!err) {
+ 		if (EX_ISSYNC(ffhp->fh_export)) {
+ 			nfsd_sync_dir(ddir);
+@@ -1291,7 +1463,10 @@
+ 			err = nfserr_perm;
+ 	} else
+ #endif
+-	err = vfs_rename(fdir, odentry, tdir, ndentry);
++	if(fdir->i_op->rename_raw)
++		err = rename_raw(fdentry, tdentry, odentry, ndentry);
++	else
++		err = vfs_rename(fdir, odentry, tdir, ndentry);
+ 	if (!err && EX_ISSYNC(tfhp->fh_export)) {
+ 		nfsd_sync_dir(tdentry);
+ 		nfsd_sync_dir(fdentry);
+@@ -1312,7 +1487,7 @@
+ 	fill_post_wcc(tfhp);
+ 	double_up(&tdir->i_sem, &fdir->i_sem);
+ 	ffhp->fh_locked = tfhp->fh_locked = 0;
+-	
++
+ out:
+ 	return err;
+ }
+@@ -1358,9 +1533,15 @@
+ 			err = nfserr_perm;
+ 		} else
+ #endif
+-		err = vfs_unlink(dirp, rdentry);
++		if (dirp->i_op->unlink_raw)
++			err = unlink_raw(dentry, fname, flen, rdentry);
++		else
++			err = vfs_unlink(dirp, rdentry);
+ 	} else { /* It's RMDIR */
+-		err = vfs_rmdir(dirp, rdentry);
++		if (dirp->i_op->rmdir_raw)
++			err = rmdir_raw(dentry, fname, flen, rdentry);
++		else
++			err = vfs_rmdir(dirp, rdentry);
+ 	}
+ 
+ 	dput(rdentry);
+diff -urN linux/fs/super.c linux-2.4.20/fs/super.c
+--- linux/fs/super.c	2003-08-14 21:46:54.000000000 +0530
++++ linux-2.4.20/fs/super.c	2003-08-14 21:48:52.000000000 +0530
+@@ -27,6 +27,7 @@
+ #include <linux/devfs_fs_kernel.h>
+ #include <linux/major.h>
+ #include <linux/acct.h>
++#include <linux/fs.h>
+ 
+ #include <asm/uaccess.h>
+ 
+@@ -51,7 +52,7 @@
+  */
+ 
+ static struct file_system_type *file_systems;
+-static rwlock_t file_systems_lock = RW_LOCK_UNLOCKED;
++rwlock_t file_systems_lock = RW_LOCK_UNLOCKED;
+ 
+ /* WARNING: This can be used only if we _already_ own a reference */
+ static void get_filesystem(struct file_system_type *fs)
+diff -urN linux/include/linux/fs.h linux-2.4.20/include/linux/fs.h
+--- linux/include/linux/fs.h	2003-08-14 21:46:55.000000000 +0530
++++ linux-2.4.20/include/linux/fs.h	2003-08-14 21:48:52.000000000 +0530
+@@ -1366,6 +1366,7 @@
+ extern int follow_down(struct vfsmount **, struct dentry **);
+ extern int follow_up(struct vfsmount **, struct dentry **);
+ extern struct dentry * lookup_one_len(const char *, struct dentry *, int);
++extern struct dentry * lookup_one_len_it(const char *, struct dentry *, int, struct lookup_intent *);
+ extern struct dentry * lookup_hash(struct qstr *, struct dentry *);
+ #define user_path_walk(name,nd)	 __user_walk(name, LOOKUP_FOLLOW|LOOKUP_POSITIVE, nd)
+ #define user_path_walk_link(name,nd) __user_walk(name, LOOKUP_POSITIVE, nd)
+@@ -1379,6 +1380,7 @@
+ 
+ typedef int (*find_inode_t)(struct inode *, unsigned long, void *);
+ extern struct inode * iget4(struct super_block *, unsigned long, find_inode_t, void *);
++extern struct inode * search_icache_for_lustre(struct super_block *, unsigned long, find_inode_t, void *);
+ static inline struct inode *iget(struct super_block *sb, unsigned long ino)
+ {
+ 	return iget4(sb, ino, NULL, NULL);
+@@ -1494,6 +1496,7 @@
+ extern int dcache_readdir(struct file *, void *, filldir_t);
+ extern struct file_operations dcache_dir_ops;
+ 
++extern rwlock_t file_systems_lock;
+ extern struct file_system_type *get_fs_type(const char *name);
+ extern struct super_block *get_super(kdev_t);
+ extern void drop_super(struct super_block *sb);
+diff -urN linux/kernel/ksyms.c linux-2.4.20/kernel/ksyms.c
+--- linux/kernel/ksyms.c	2003-08-14 21:46:55.000000000 +0530
++++ linux-2.4.20/kernel/ksyms.c	2003-08-14 21:48:52.000000000 +0530
+@@ -146,6 +146,7 @@
+ EXPORT_SYMBOL(igrab);
+ EXPORT_SYMBOL(iunique);
+ EXPORT_SYMBOL(iget4);
++EXPORT_SYMBOL(search_icache_for_lustre);
+ EXPORT_SYMBOL(iput);
+ EXPORT_SYMBOL(force_delete);
+ EXPORT_SYMBOL(follow_up);
+@@ -156,6 +157,7 @@
+ EXPORT_SYMBOL(path_release);
+ EXPORT_SYMBOL(__user_walk);
+ EXPORT_SYMBOL(lookup_one_len);
++EXPORT_SYMBOL(lookup_one_len_it);
+ EXPORT_SYMBOL(lookup_hash);
+ EXPORT_SYMBOL(sys_close);
+ EXPORT_SYMBOL(dcache_lock);
+@@ -590,3 +592,4 @@
+ 
+ /* debug */
+ EXPORT_SYMBOL(dump_stack);
++EXPORT_SYMBOL(file_systems_lock);
