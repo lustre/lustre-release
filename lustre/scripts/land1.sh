@@ -25,19 +25,23 @@ CHILD=`echo $child | sed -e "s/^b_//" | tr "[a-z]" "[A-Z]"`
 date=`date +%Y%m%d_%H%M`
 module=lustre
 
+case $parent in
+  HEAD) : ;;
+  b_*|b1*) : ;;
+  *) parent="b_$parent" ;;
+esac
+case $child in
+  HEAD) : ;;
+  b_*|b1*) : ;;
+  *) child="b_$child"
+esac
+
 if [ "$parent" != "HEAD" -a "`cat CVS/Tag`" != "T$parent" ]; then
         echo "This script must be run within the $parent branch"
 	exit 1
 fi
 
 dir=$3
-
-if [ $parent != "HEAD" ]; then
-  parent="b_$parent"
-fi
-if [ $child != "HEAD" ]; then
-  child="b_$child"
-fi
 
 cat << EOF > .mergeinfo
 parent=$parent
@@ -90,4 +94,3 @@ fi
 echo "done"
 
 echo "Test, commit and then run land2.sh (no arguments)"
-

@@ -6,8 +6,6 @@
 
 #define PORTAL_DEBUG
 
-/* I think this beast is just trying to get cycles_t and get_cycles().
- * this should be in its own header. */
 #ifdef __linux__
 # include <asm/types.h>
 # if defined(__powerpc__) && !defined(__KERNEL__)
@@ -15,18 +13,7 @@
 #  include <asm/timex.h>
 #  undef __KERNEL__
 # else
-#  if defined(__KERNEL__)
-#   include <asm/timex.h>
-#  else
-#   include <sys/time.h>
-#   define cycles_t unsigned long
-static inline cycles_t get_cycles(void) 
-{
-        struct timeval tv;
-        gettimeofday(&tv, NULL);
-        return (tv.tv_sec * 100000) + tv.tv_usec;
-}
-#  endif
+#  include <asm/timex.h>
 # endif
 #else
 # include <sys/types.h>
@@ -42,7 +29,7 @@ typedef u_int64_t __u64;
 #endif
 
 #ifndef offsetof
-# define offsetof(typ,memb)     ((unsigned long)((char *)&(((typ *)0)->memb)))
+# define offsetof(typ,memb)     ((int)((char *)&(((typ *)0)->memb)))
 #endif
 
 #define LOWEST_BIT_SET(x)       ((x) & ~((x) - 1))
