@@ -245,10 +245,10 @@ static int ost_brw_read(struct ptlrpc_request *req)
                 GOTO(out, rc = -ENOMEM);
 
         /* The unpackers move tmp1 and tmp2, so reset them before using */
-        tmp1 = lustre_msg_buf(req->rq_reqmsg, 1);
-        tmp2 = lustre_msg_buf(req->rq_reqmsg, 2);
-        req->rq_status = obd_preprw(cmd, conn, objcount, tmp1, niocount, tmp2,
-                                    local_nb, &desc_priv);
+        ioo = lustre_msg_buf(req->rq_reqmsg, 1);
+        remote_nb = lustre_msg_buf(req->rq_reqmsg, 2);
+        req->rq_status = obd_preprw(cmd, conn, objcount, ioo, niocount,
+                                    remote_nb, local_nb, &desc_priv);
 
         if (req->rq_status)
                 GOTO(out, rc = 0);
@@ -259,14 +259,13 @@ static int ost_brw_read(struct ptlrpc_request *req)
         desc->b_portal = OST_BULK_PORTAL;
 
         for (i = 0; i < niocount; i++) {
-                struct ptlrpc_bulk_page *bulk;
-                bulk = ptlrpc_prep_bulk_page(desc);
+                struct ptlrpc_bulk_page *bulk = ptlrpc_prep_bulk_page(desc);
+
                 if (bulk == NULL)
                         GOTO(out_bulk, rc = -ENOMEM);
-                remote_nb = &(((struct niobuf_remote *)tmp2)[i]);
-                bulk->b_xid = remote_nb->xid;
-                bulk->b_buf = (void *)(unsigned long)local_nb[i].addr;
-                bulk->b_buflen = PAGE_SIZE;
+                bulk->b_xid = remote_nb[i].xid;
+                bulk->b_buf = local_nb[i].addr;
+                bulk->b_buflen = remote_nb[i].len;
         }
 
         rc = ptlrpc_send_bulk(desc);
@@ -274,16 +273,13 @@ static int ost_brw_read(struct ptlrpc_request *req)
                 GOTO(out_bulk, rc);
 
         lwi = LWI_TIMEOUT(obd_timeout * HZ, ost_bulk_timeout, desc);
-        rc = l_wait_event(desc->b_waitq, desc->b_flags & PTL_BULK_FL_SENT, &lwi);
+        rc = l_wait_event(desc->b_waitq, desc->b_flags &PTL_BULK_FL_SENT, &lwi);
         if (rc) {
                 LASSERT(rc == -ETIMEDOUT);
                 GOTO(out_bulk, rc);
         }
 
-        /* The unpackers move tmp1 and tmp2, so reset them before using */
-        tmp1 = lustre_msg_buf(req->rq_reqmsg, 1);
-        tmp2 = lustre_msg_buf(req->rq_reqmsg, 2);
-        req->rq_status = obd_commitrw(cmd, conn, objcount, tmp1, niocount,
+        req->rq_status = obd_commitrw(cmd, conn, objcount, ioo, niocount,
                                       local_nb, desc_priv);
 
         rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repmsg);

@@ -144,7 +144,7 @@ struct ptlrpc_request {
 struct ptlrpc_bulk_page {
         struct ptlrpc_bulk_desc *b_desc;
         struct list_head b_link;
-        char *b_buf;
+        void *b_buf;
         int b_buflen;
         struct page *b_page;
         __u32 b_xid;
