@@ -1,0 +1,121 @@
+ arch/i386/mm/init.c  |    6 +++++
+ arch/ia64/mm/init.c  |    6 +++++
+ include/linux/slab.h |    1 
+ kernel/ksyms.c       |    1 
+ mm/slab.c            |   53 +++++++++++++++++++++++++++++++++++++++++++++++++++
+ 5 files changed, 67 insertions(+)
+
+--- linux-2.4.19-hp2_pnnl2/arch/i386/mm/init.c~kmem_cache_validate_hp	Sun Jan 19 18:59:23 2003
++++ linux-2.4.19-hp2_pnnl2-root/arch/i386/mm/init.c	Sun Jan 19 18:59:24 2003
+@@ -43,6 +43,12 @@ unsigned long highstart_pfn, highend_pfn
+ static unsigned long totalram_pages;
+ static unsigned long totalhigh_pages;
+ 
++struct page *check_get_page(unsigned long kaddr)
++{
++#warning FIXME: Lustre team, is this solid?
++	return virt_to_page(kaddr);
++}
++
+ int do_check_pgt_cache(int low, int high)
+ {
+ 	int freed = 0;
+--- linux-2.4.19-hp2_pnnl2/arch/ia64/mm/init.c~kmem_cache_validate_hp	Sun Jan 19 18:59:23 2003
++++ linux-2.4.19-hp2_pnnl2-root/arch/ia64/mm/init.c	Sun Jan 19 18:59:24 2003
+@@ -44,6 +44,12 @@ unsigned long vmalloc_end = VMALLOC_END_
+ static struct page *vmem_map;
+ static unsigned long num_dma_physpages;
+ 
++struct page *check_get_page(unsigned long kaddr)
++{
++#warning FIXME: Lustre team, is this solid?
++	return virt_to_page(kaddr);
++}
++
+ int
+ do_check_pgt_cache (int low, int high)
+ {
+--- linux-2.4.19-hp2_pnnl2/include/linux/slab.h~kmem_cache_validate_hp	Sun Jan 19 18:59:23 2003
++++ linux-2.4.19-hp2_pnnl2-root/include/linux/slab.h	Sun Jan 19 19:01:07 2003
+@@ -56,6 +56,7 @@ extern kmem_cache_t *kmem_cache_create(c
+ extern int kmem_cache_destroy(kmem_cache_t *);
+ extern int kmem_cache_shrink(kmem_cache_t *);
+ extern void *kmem_cache_alloc(kmem_cache_t *, int);
++extern int kmem_cache_validate(kmem_cache_t *cachep, void *objp);
+ extern void kmem_cache_free(kmem_cache_t *, void *);
+ extern unsigned int kmem_cache_size(kmem_cache_t *);
+ 
+--- linux-2.4.19-hp2_pnnl2/kernel/ksyms.c~kmem_cache_validate_hp	Sun Jan 19 18:59:23 2003
++++ linux-2.4.19-hp2_pnnl2-root/kernel/ksyms.c	Sun Jan 19 19:00:32 2003
+@@ -118,6 +118,7 @@ EXPORT_SYMBOL(kmem_find_general_cachep);
+ EXPORT_SYMBOL(kmem_cache_create);
+ EXPORT_SYMBOL(kmem_cache_destroy);
+ EXPORT_SYMBOL(kmem_cache_shrink);
++EXPORT_SYMBOL(kmem_cache_validate);
+ EXPORT_SYMBOL(kmem_cache_alloc);
+ EXPORT_SYMBOL(kmem_cache_free);
+ EXPORT_SYMBOL(kmem_cache_size);
+--- linux-2.4.19-hp2_pnnl2/mm/slab.c~kmem_cache_validate_hp	Sun Jan 19 18:59:23 2003
++++ linux-2.4.19-hp2_pnnl2-root/mm/slab.c	Sun Jan 19 18:59:24 2003
+@@ -1207,6 +1207,59 @@ failed:
+  * Called with the cache-lock held.
+  */
+ 
++extern struct page *check_get_page(unsigned long kaddr);
++struct page *page_mem_map(struct page *page);
++static int kmem_check_cache_obj (kmem_cache_t * cachep,
++				 slab_t *slabp, void * objp)
++{
++	int i;
++	unsigned int objnr;
++
++#if DEBUG
++	if (cachep->flags & SLAB_RED_ZONE) {
++		objp -= BYTES_PER_WORD;
++		if ( *(unsigned long *)objp != RED_MAGIC2)
++			/* Either write before start, or a double free. */
++			return 0;
++		if (*(unsigned long *)(objp+cachep->objsize -
++				BYTES_PER_WORD) != RED_MAGIC2)
++			/* Either write past end, or a double free. */
++			return 0;
++	}
++#endif
++
++	objnr = (objp-slabp->s_mem)/cachep->objsize;
++	if (objnr >= cachep->num)
++		return 0;
++	if (objp != slabp->s_mem + objnr*cachep->objsize)
++		return 0;
++
++	/* Check slab's freelist to see if this obj is there. */
++	for (i = slabp->free; i != BUFCTL_END; i = slab_bufctl(slabp)[i]) {
++		if (i == objnr)
++			return 0;
++	}
++	return 1;
++}
++
++
++int kmem_cache_validate(kmem_cache_t *cachep, void *objp)
++{
++	struct page *page = check_get_page((unsigned long)objp);
++
++	if (!VALID_PAGE(page))
++		return 0;
++
++	if (!PageSlab(page))
++		return 0;
++
++	/* XXX check for freed slab objects ? */
++	if (!kmem_check_cache_obj(cachep, GET_PAGE_SLAB(page), objp))
++		return 0;
++
++	return (cachep == GET_PAGE_CACHE(page));
++}
++
+ #if DEBUG
+ static int kmem_extra_free_checks (kmem_cache_t * cachep,
+ 			slab_t *slabp, void * objp)
+
+_
