@@ -1219,27 +1219,27 @@ ksocknal_push (ptl_nid_t nid)
 }
 
 int
-ksocknal_cmd(struct portal_ioctl_data * data, void * private)
+ksocknal_cmd(struct portals_cfg *pcfg, void * private)
 {
         int rc = -EINVAL;
 
-        LASSERT (data != NULL);
+        LASSERT (pcfg != NULL);
 
-        switch(data->ioc_nal_cmd) {
+        switch(pcfg->pcfg_command) {
         case NAL_CMD_GET_AUTOCONN: {
-                ksock_route_t *route = ksocknal_get_route_by_idx (data->ioc_count);
+                ksock_route_t *route = ksocknal_get_route_by_idx (pcfg->pcfg_count);
 
                 if (route == NULL)
                         rc = -ENOENT;
                 else {
                         rc = 0;
-                        data->ioc_nid   = route->ksnr_peer->ksnp_nid;
-                        data->ioc_id    = route->ksnr_ipaddr;
-                        data->ioc_misc  = route->ksnr_port;
-                        data->ioc_count = route->ksnr_generation;
-                        data->ioc_size  = route->ksnr_buffer_size;
-                        data->ioc_wait  = route->ksnr_sharecount;
-                        data->ioc_flags = (route->ksnr_nonagel      ? 1 : 0) |
+                        pcfg->pcfg_nid   = route->ksnr_peer->ksnp_nid;
+                        pcfg->pcfg_id    = route->ksnr_ipaddr;
+                        pcfg->pcfg_misc  = route->ksnr_port;
+                        pcfg->pcfg_count = route->ksnr_generation;
+                        pcfg->pcfg_size  = route->ksnr_buffer_size;
+                        pcfg->pcfg_wait  = route->ksnr_sharecount;
+                        pcfg->pcfg_flags = (route->ksnr_nonagel      ? 1 : 0) |
                                           (route->ksnr_xchange_nids ? 2 : 0) |
                                           (route->ksnr_irq_affinity ? 4 : 0) |
                                           (route->ksnr_eager        ? 8 : 0);
@@ -1248,56 +1248,56 @@ ksocknal_cmd(struct portal_ioctl_data * data, void * private)
                 break;
         }
         case NAL_CMD_ADD_AUTOCONN: {
-                rc = ksocknal_add_route (data->ioc_nid, data->ioc_id,
-                                         data->ioc_misc, data->ioc_size,
-                                         (data->ioc_flags & 0x01) != 0,
-                                         (data->ioc_flags & 0x02) != 0,
-                                         (data->ioc_flags & 0x04) != 0,
-                                         (data->ioc_flags & 0x08) != 0,
-                                         (data->ioc_flags & 0x10) != 0);
+                rc = ksocknal_add_route (pcfg->pcfg_nid, pcfg->pcfg_id,
+                                         pcfg->pcfg_misc, pcfg->pcfg_size,
+                                         (pcfg->pcfg_flags & 0x01) != 0,
+                                         (pcfg->pcfg_flags & 0x02) != 0,
+                                         (pcfg->pcfg_flags & 0x04) != 0,
+                                         (pcfg->pcfg_flags & 0x08) != 0,
+                                         (pcfg->pcfg_flags & 0x10) != 0);
                 break;
         }
         case NAL_CMD_DEL_AUTOCONN: {
-                rc = ksocknal_del_route (data->ioc_nid, data->ioc_id, 
-                                         (data->ioc_flags & 1) != 0,
-                                         (data->ioc_flags & 2) != 0);
+                rc = ksocknal_del_route (pcfg->pcfg_nid, pcfg->pcfg_id, 
+                                         (pcfg->pcfg_flags & 1) != 0,
+                                         (pcfg->pcfg_flags & 2) != 0);
                 break;
         }
         case NAL_CMD_GET_CONN: {
-                ksock_conn_t *conn = ksocknal_get_conn_by_idx (data->ioc_count);
+                ksock_conn_t *conn = ksocknal_get_conn_by_idx (pcfg->pcfg_count);
 
                 if (conn == NULL)
                         rc = -ENOENT;
                 else {
                         rc = 0;
-                        data->ioc_nid  = conn->ksnc_peer->ksnp_nid;
-                        data->ioc_id   = conn->ksnc_ipaddr;
-                        data->ioc_misc = conn->ksnc_port;
+                        pcfg->pcfg_nid  = conn->ksnc_peer->ksnp_nid;
+                        pcfg->pcfg_id   = conn->ksnc_ipaddr;
+                        pcfg->pcfg_misc = conn->ksnc_port;
                         ksocknal_put_conn (conn);
                 }
                 break;
         }
         case NAL_CMD_REGISTER_PEER_FD: {
-                struct socket *sock = sockfd_lookup (data->ioc_fd, &rc);
+                struct socket *sock = sockfd_lookup (pcfg->pcfg_fd, &rc);
 
                 if (sock != NULL) {
-                        rc = ksocknal_create_conn (data->ioc_nid, NULL,
-                                                   sock, data->ioc_flags);
+                        rc = ksocknal_create_conn (pcfg->pcfg_nid, NULL,
+                                                   sock, pcfg->pcfg_flags);
                         if (rc != 0)
                                 fput (sock->file);
                 }
                 break;
         }
         case NAL_CMD_CLOSE_CONNECTION: {
-                rc = ksocknal_close_conn (data->ioc_nid, data->ioc_id);
+                rc = ksocknal_close_conn (pcfg->pcfg_nid, pcfg->pcfg_id);
                 break;
         }
         case NAL_CMD_REGISTER_MYNID: {
-                rc = ksocknal_set_mynid (data->ioc_nid);
+                rc = ksocknal_set_mynid (pcfg->pcfg_nid);
                 break;
         }
         case NAL_CMD_PUSH_CONNECTION: {
-                rc = ksocknal_push (data->ioc_nid);
+                rc = ksocknal_push (pcfg->pcfg_nid);
                 break;
         }
         }

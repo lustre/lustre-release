@@ -21,3 +21,4 @@ jbd-dont-account-blocks-twice.patch
 jbd-commit-tricks.patch
 add_page_private.patch
 socket-exports-2.4.22-rh.patch
+nfs_export_kernel-2.4.22-rh

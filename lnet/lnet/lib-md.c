@@ -396,8 +396,7 @@ int do_PtlMDUpdate_internal(nal_cb_t * nal, void *private, void *v_args,
             test_eq->sequence == args->sequence_in) {
                 lib_me_t *me = md->me;
 
-                /* XXX this does not track eq refcounts properly */
-
+                // #warning this does not track eq refcounts properly 
                 ret->rc = lib_md_build(nal, md, private,
                                        new, &new->eventq, md->unlink);
 

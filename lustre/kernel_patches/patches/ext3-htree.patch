@@ -1657,7 +1657,7 @@
 +	data1 = bh2->b_data;
 +
 +	/* The 0th block becomes the root, move the dirents out */
-+	de = &root->dotdot;
++	de = (struct ext3_dir_entry_2 *) &root->dotdot;
 +	de = (struct ext3_dir_entry_2 *) ((char *)de + de->rec_len);
 +	len = ((char *) root) + blocksize - (char *) de;
 +	memcpy (data1, de, len);

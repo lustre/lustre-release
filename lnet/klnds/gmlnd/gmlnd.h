@@ -159,7 +159,11 @@ typedef struct	_gmnal_msghdr {
  *	transmit descriptors on the free list)
  */
 typedef struct _gmnal_rxtwe {
-	gm_recv_event_t *rx;
+	void			*buffer;
+	unsigned		snode;
+	unsigned		sport;
+	unsigned		type;
+	unsigned		length;
 	struct _gmnal_rxtwe	*next;
 } gmnal_rxtwe_t;
 
@@ -408,10 +412,10 @@ int		gmnal_start_kernel_threads(gmnal_data_t *);
  */
 int 		gmnal_ct_thread(void *); /* caretaker thread */
 int 		gmnal_rx_thread(void *); /* receive thread */
-int 		gmnal_pre_receive(gmnal_data_t*, gm_recv_t*, int);
-int		gmnal_rx_bad(gmnal_data_t *, gm_recv_t *, gmnal_srxd_t *);
+int 		gmnal_pre_receive(gmnal_data_t*, gmnal_rxtwe_t*, int);
+int		gmnal_rx_bad(gmnal_data_t *, gmnal_rxtwe_t *, gmnal_srxd_t*);
 int		gmnal_rx_requeue_buffer(gmnal_data_t *, gmnal_srxd_t *);
-int		gmnal_add_rxtwe(gmnal_data_t *, gm_recv_event_t *);
+int		gmnal_add_rxtwe(gmnal_data_t *, gm_recv_t *);
 gmnal_rxtwe_t * gmnal_get_rxtwe(gmnal_data_t *);
 void		gmnal_remove_rxtwe(gmnal_data_t *);
 

@@ -207,17 +207,19 @@ kportal_get_route(int index, __u32 *gateway_nalidp, ptl_nid_t *gateway_nidp,
         return (rc);
 }
 
-static int
-kportal_nal_cmd(int nal, struct portal_ioctl_data *data)
+int
+kportal_nal_cmd(struct portals_cfg *pcfg)
 {
+        __u32 nal = pcfg->pcfg_nal;
         int rc = -EINVAL;
 
         ENTRY;
 
         down(&nal_cmd_sem);
         if (nal > 0 && nal <= NAL_MAX_NR && nal_cmd[nal].nch_handler) {
-                CDEBUG(D_IOCTL, "calling handler nal: %d, cmd: %d\n", nal, data->ioc_nal_cmd);
-                rc = nal_cmd[nal].nch_handler(data, nal_cmd[nal].nch_private);
+                CDEBUG(D_IOCTL, "calling handler nal: %d, cmd: %d\n", nal, 
+                       pcfg->pcfg_command);
+                rc = nal_cmd[nal].nch_handler(pcfg, nal_cmd[nal].nch_private);
         }
         up(&nal_cmd_sem);
         RETURN(rc);
@@ -445,15 +447,25 @@ static int kportal_ioctl(struct inode *inode, struct file *file,
                 break;
         }
 
-        case IOC_PORTAL_NAL_CMD:
-                CDEBUG (D_IOCTL, "nal command nal %d cmd %d\n", data->ioc_nal,
-                        data->ioc_nal_cmd);
-                err = kportal_nal_cmd(data->ioc_nal, data);
+        case IOC_PORTAL_NAL_CMD: {
+                struct portals_cfg pcfg;
+
+                LASSERT (data->ioc_plen1 == sizeof(pcfg));
+                err = copy_from_user(&pcfg, (void *)data->ioc_pbuf1, 
+                                     sizeof(pcfg));
+                if ( err ) {
+                        EXIT;
+                        return err;
+                }
+
+                CDEBUG (D_IOCTL, "nal command nal %d cmd %d\n", pcfg.pcfg_nal,
+                        pcfg.pcfg_command);
+                err = kportal_nal_cmd(&pcfg);
                 if (err == 0)
                         if (copy_to_user((char *)arg, data, sizeof (*data)))
                                 err = -EFAULT;
                 break;
-
+        }
         case IOC_PORTAL_FAIL_NID: {
                 const ptl_handle_ni_t *nip;
 
@@ -643,6 +655,7 @@ EXPORT_SYMBOL(kportal_assertion_failed);
 EXPORT_SYMBOL(dispatch_name);
 EXPORT_SYMBOL(kportal_get_ni);
 EXPORT_SYMBOL(kportal_put_ni);
+EXPORT_SYMBOL(kportal_nal_cmd);
 
 module_init(init_kportals_module);
 module_exit (exit_kportals_module);
