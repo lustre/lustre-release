@@ -759,7 +759,7 @@ struct ldlm_resource_desc {
         __u32 lr_type;
         __u32 lr_padding;
         struct ldlm_res_id lr_name;
-} __attribute__((packed));
+};
 
 extern void lustre_swab_ldlm_resource_desc (struct ldlm_resource_desc *r);
 
@@ -768,7 +768,7 @@ struct ldlm_lock_desc {
         ldlm_mode_t l_req_mode;
         ldlm_mode_t l_granted_mode;
         ldlm_policy_data_t l_policy_data;
-} __attribute__((packed));
+};
 
 extern void lustre_swab_ldlm_lock_desc (struct ldlm_lock_desc *l);
 
@@ -778,7 +778,7 @@ struct ldlm_request {
         struct ldlm_lock_desc lock_desc;
         struct lustre_handle lock_handle1;
         struct lustre_handle lock_handle2;
-} __attribute__((packed));
+};
 
 extern void lustre_swab_ldlm_request (struct ldlm_request *rq);
 
@@ -789,7 +789,7 @@ struct ldlm_reply {
         struct lustre_handle lock_handle;
         __u64  lock_policy_res1;
         __u64  lock_policy_res2;
-} __attribute__((packed));
+};
 
 extern void lustre_swab_ldlm_reply (struct ldlm_reply *r);
 
