@@ -116,7 +116,7 @@ void ll_lli_init(struct ll_inode_info *lli)
         spin_lock_init(&lli->lli_read_extent_lock);
         INIT_LIST_HEAD(&lli->lli_read_extents);
         lli->lli_flags = 0;
-        lli->lli_maxbytes = LUSTRE_STRIPE_MAXBYTES;
+        lli->lli_maxbytes = PAGE_CACHE_MAXBYTES;
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
         ll_lldo_init(&lli->lli_dirty);
         spin_lock_init(&lli->lli_pg_lock);
@@ -140,7 +140,7 @@ int ll_fill_super(struct super_block *sb, void *data, int silent)
         struct obd_statfs osfs;
         struct ptlrpc_request *request = NULL;
         struct ptlrpc_connection *mdc_conn;
-        struct ll_read_inode2_cookie lic;
+        struct lustre_md md;
         class_uuid_t uuid;
 
         ENTRY;
@@ -251,18 +251,18 @@ int ll_fill_super(struct super_block *sb, void *data, int silent)
                 GOTO(out_lliod, err);
         }
 
-        lic.lic_body = lustre_msg_buf(request->rq_repmsg, 0,
-                                      sizeof(*lic.lic_body));
-        LASSERT (lic.lic_body != NULL);         /* checked by mdc_getattr() */
-        LASSERT_REPSWABBED (request, 0);        /* swabbed by mdc_getattr() */
-
-        lic.lic_lsm = NULL;
+        err = mdc_req2lustre_md(request, 0, &sbi->ll_osc_conn, &md);
+        if (err) {
+                CERROR("failed to understand root inode md: rc = %d\n",err);
+                ptlrpc_req_finished (request);
+                GOTO(out_lliod, err);
+        }
 
         LASSERT(sbi->ll_rootino != 0);
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-        root = iget4(sb, sbi->ll_rootino, NULL, &lic);
+        root = iget4(sb, sbi->ll_rootino, NULL, &md);
 #else
-        root = ll_iget(sb, sbi->ll_rootino, &lic);
+        root = ll_iget(sb, sbi->ll_rootino, &md);
 #endif
 
         ptlrpc_req_finished(request);
@@ -543,42 +543,131 @@ int ll_inode_setattr(struct inode *inode, struct iattr *attr, int do_trunc)
         RETURN(err);
 }
 
+/* If this inode has objects allocated to it (lsm != NULL), then the OST
+ * object(s) determine the file size and mtime.  Otherwise, the MDS will
+ * keep these values until such a time that objects are allocated for it.
+ * We do the MDS operations first, as it is checking permissions for us.
+ * We don't to the MDS RPC if there is nothing that we want to store there,
+ * otherwise there is no harm in updating mtime/atime on the MDS if we are
+ * going to do an RPC anyways.
+ *
+ * If we are doing a truncate, we will send the mtime and ctime updates
+ * to the OST with the punch RPC, otherwise we do an explicit setattr RPC.
+ * I don't believe it is possible to get e.g. ATTR_MTIME_SET and ATTR_SIZE
+ * at the same time.
+ */
+#define OST_ATTR (ATTR_MTIME | ATTR_MTIME_SET | ATTR_CTIME | \
+                  ATTR_ATIME | ATTR_ATIME_SET | ATTR_SIZE)
 int ll_setattr_raw(struct inode *inode, struct iattr *attr)
 {
         struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct ptlrpc_request *request = NULL;
         struct mdc_op_data op_data;
-        int rc = 0, err;
+        time_t now = LTIME_S(CURRENT_TIME);
+        int ia_valid = attr->ia_valid;
+        int rc = 0;
         ENTRY;
+
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu\n", inode->i_ino);
 
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
         lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_SETATTR);
 #endif
 
-        if ((attr->ia_valid & ATTR_SIZE)) {
-                struct ldlm_extent extent = {attr->ia_size, OBD_OBJECT_EOF};
-                struct lustre_handle lockh = { 0 };
+        if ((ia_valid & ATTR_SIZE) && attr->ia_size > ll_file_maxbytes(inode)){
+                CDEBUG(D_INODE, "file too large %llu > "LPU64"\n",
+                       attr->ia_size, ll_file_maxbytes(inode));
+                RETURN(-EFBIG);
+        }
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-                if (attr->ia_size > ll_file_maxbytes(inode))
-                        RETURN(-EFBIG);
-#endif
+        /* We mark all of the fields "set" so the MDS does not re-set them */
+        if (ia_valid & ATTR_CTIME) {
+                attr->ia_ctime = now;
+                attr->ia_valid |= ATTR_CTIME_SET;
+        }
+        if (!(ia_valid & ATTR_ATIME_SET) && (ia_valid & ATTR_ATIME)) {
+                attr->ia_atime = now;
+                attr->ia_valid |= ATTR_ATIME_SET;
+        }
+        if (!(ia_valid & ATTR_MTIME_SET) && (ia_valid & ATTR_MTIME)) {
+                attr->ia_mtime = now;
+                attr->ia_valid |= ATTR_MTIME_SET;
+        }
 
-                /* If this file doesn't have stripes yet, it is already,
-                   by definition, truncated. */
-                if (attr->ia_valid & ATTR_FROM_OPEN && lsm == NULL) {
-                        LASSERT(attr->ia_size == 0);
-                        GOTO(skip_extent_lock, rc = 0);
+        if (attr->ia_valid & (ATTR_MTIME | ATTR_CTIME))
+                CDEBUG(D_INODE, "setting mtime %lu, ctime %lu, now = %lu\n",
+                       attr->ia_mtime, attr->ia_ctime, now);
+        if (lsm)
+                attr->ia_valid &= ~ATTR_SIZE;
+
+        /* If only OST attributes being set on objects, don't do MDS RPC.
+         * In that case, we need to check permissions and update the local
+         * inode ourselves so we can call obdo_from_inode() always. */
+        if (ia_valid & (lsm ? ~(OST_ATTR | ATTR_FROM_OPEN | ATTR_RAW) : ~0)) {
+                struct lustre_md md;
+                ll_prepare_mdc_op_data(&op_data, inode, NULL, NULL, 0, 0);
+
+                rc = mdc_setattr(&sbi->ll_mdc_conn, &op_data,
+                                  attr, NULL, 0, NULL, 0, &request);
+
+                if (rc) { 
+                        ptlrpc_req_finished(request);
+                        if (rc  != -EPERM) 
+                                CERROR("mdc_setattr fails: err = %d\n", rc);
+                        RETURN(rc);
                 }
 
-                /* we really need to get our PW lock before we change
-                 * inode->i_size.  if we don't we can race with other
-                 * i_size updaters on our node, like ll_file_read.  we
+                rc = mdc_req2lustre_md(request, 0, &sbi->ll_osc_conn, &md);
+                if (rc && rc != -EPERM) {
+                        ptlrpc_req_finished(request);
+                        CERROR("mdc_setattr fails: err = %d\n", rc);
+                        RETURN(rc);
+                }
+                ll_update_inode(inode, md.body, md.lsm);
+                ptlrpc_req_finished(request);
+
+                if (!md.lsm || !S_ISREG(inode->i_mode)) {
+                        CDEBUG(D_INODE, "no lsm: not setting attrs on OST\n");
+                        RETURN(0);
+                }
+        } else {
+                /* The OST doesn't check permissions, but the alternative is
+                 * a gratuitous RPC to the MDS.  We already rely on the client
+                 * to do read/write/truncate permission checks, so is mtime OK?
+                 */
+                if (ia_valid & (ATTR_MTIME | ATTR_ATIME)) {
+                        /* from sys_utime() */
+                        if (!(ia_valid & (ATTR_MTIME_SET | ATTR_ATIME_SET))) {
+                                if (current->fsuid != inode->i_uid &&
+                                    (rc = permission(inode, MAY_WRITE)) != 0)
+                                        RETURN(rc);
+                        }
+
+                        if ((rc = inode_change_ok(inode, attr)))
+                                RETURN(rc);
+                }
+
+                /* Won't invoke vmtruncate, as we already cleared ATTR_SIZE */
+                inode_setattr(inode, attr);
+        }
+
+        if (ia_valid & ATTR_SIZE) {
+                struct ldlm_extent extent = { .start = attr->ia_size,
+                                              .end = OBD_OBJECT_EOF };
+                struct lustre_handle lockh = { 0 };
+                int err;
+
+                /* Writeback uses inode->i_size to determine how far out
+                 * its cached pages go.  ll_truncate gets a PW lock, canceling
+                 * our lock, _after_ it has updated i_size.  this can confuse
+                 *
+                 * We really need to get our PW lock before we change
+                 * inode->i_size.  If we don't we can race with other
+                 * i_size updaters on our node, like ll_file_read.  We
                  * can also race with i_size propogation to other
                  * nodes through dirtying and writeback of final cached
-                 * pages.  this last one is especially bad for racing
+                 * pages.  This last one is especially bad for racing
                  * o_append users on other nodes. */
                 rc = ll_extent_lock_no_validate(NULL, inode, lsm, LCK_PW, 
                                                  &extent, &lockh);
@@ -596,54 +685,25 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                 /* unlock now as we don't mind others file lockers racing with 
                  * the mds updates below? */
                 err = ll_extent_unlock(NULL, inode, lsm, LCK_PW, &lockh);
-                if (err)
+                if (err) {
                         CERROR("ll_extent_unlock failed: %d\n", err);
-                if (rc)
-                        RETURN(rc);
-        }
-
-skip_extent_lock:
-        /* Don't send size changes to MDS to avoid "fast EA" problems, and
-         * also avoid a pointless RPC (we get file size from OST anyways).
-         */
-        attr->ia_valid &= ~ATTR_SIZE;
-        if (!attr->ia_valid)
-                RETURN(0);
-
-        ll_prepare_mdc_op_data(&op_data, inode, NULL, NULL, 0, 0);
-
-        err = mdc_setattr(&sbi->ll_mdc_conn, &op_data,
-                          attr, NULL, 0, NULL, 0, &request);
-        if (err)
-                CERROR("mdc_setattr failed: %d\n", err);
-
-        ptlrpc_req_finished(request);
-
-        if (S_ISREG(inode->i_mode) && attr->ia_valid & ATTR_MTIME_SET) {
-                struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
+                        if (!rc)
+                                rc = err;
+                }
+        } else if (ia_valid & ATTR_MTIME_SET) {
                 struct obdo oa;
-                int err2;
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
                 CDEBUG(D_INODE, "set mtime on OST inode %lu to %lu\n",
                        inode->i_ino, attr->ia_mtime);
-                oa.o_mtime = attr->ia_mtime;
-#else
-                CDEBUG(D_INODE, "set mtime on OST inode %lu to "LPU64"\n",
-                       inode->i_ino, ll_ts2u64(&attr->ia_mtime));
-                oa.o_mtime = ll_ts2u64(&attr->ia_mtime);
-#endif
                 oa.o_id = lsm->lsm_object_id;
-                oa.o_mode = S_IFREG;
-                oa.o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLMTIME;
-                err2 = obd_setattr(&sbi->ll_osc_conn, &oa, lsm, NULL);
-                if (err2) {
-                        CERROR("obd_setattr fails: rc=%d\n", err);
-                        if (!err)
-                                err = err2;
-                }
+                oa.o_valid = OBD_MD_FLID;
+                obdo_from_inode(&oa, inode, OBD_MD_FLTYPE | OBD_MD_FLATIME |
+                                            OBD_MD_FLMTIME | OBD_MD_FLCTIME);
+                rc = obd_setattr(&sbi->ll_osc_conn, &oa, lsm, NULL);
+                if (rc)
+                        CERROR("obd_setattr fails: rc=%d\n", rc);
         }
-        RETURN(err);
+        RETURN(rc);
 }
 
 int ll_setattr(struct dentry *de, struct iattr *attr)
@@ -726,6 +786,15 @@ out:
         RETURN(rc);
 }
 
+void dump_lsm(int level, struct lov_stripe_md *lsm)
+{
+        CDEBUG(level, "objid "LPX64", maxbytes "LPX64", magic %#08x, "
+               "stripe_size %#08x, offset %u, stripe_count %u\n",
+               lsm->lsm_object_id, lsm->lsm_maxbytes, lsm->lsm_magic,
+               lsm->lsm_stripe_size, lsm->lsm_stripe_offset,
+               lsm->lsm_stripe_count);
+}
+
 void ll_update_inode(struct inode *inode, struct mds_body *body,
                      struct lov_stripe_md *lsm)
 {
@@ -739,9 +808,18 @@ void ll_update_inode(struct inode *inode, struct mds_body *body,
                         if (lli->lli_maxbytes > PAGE_CACHE_MAXBYTES)
                                 lli->lli_maxbytes = PAGE_CACHE_MAXBYTES;
                 } else {
-                        LASSERT (!memcmp (lli->lli_smd, lsm, sizeof (*lsm)));
+                        if (memcmp(lli->lli_smd, lsm, sizeof(*lsm))) {
+                                CERROR("lsm mismatch for inode %ld\n",
+                                       inode->i_ino);
+                                CERROR("lli_smd:\n");
+                                dump_lsm(D_ERROR, lli->lli_smd);
+                                CERROR("lsm:\n");
+                                dump_lsm(D_ERROR, lsm);
+                                LBUG();
+                        }
                 }
         }
+
         if (body->valid & OBD_MD_FLID)
                 inode->i_ino = body->ino;
         if (body->valid & OBD_MD_FLATIME)
@@ -778,18 +856,19 @@ void ll_update_inode(struct inode *inode, struct mds_body *body,
 
 void ll_read_inode2(struct inode *inode, void *opaque)
 {
-        struct ll_read_inode2_cookie *lic = opaque;
-        struct mds_body *body = lic->lic_body;
+        struct lustre_md *md = opaque;
         struct ll_inode_info *lli = ll_i2info(inode);
         ENTRY;
-        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu\n", inode->i_ino);
+
+        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p)\n", inode->i_ino,
+               inode->i_generation, inode);
 
         ll_lli_init(lli);
 
         LASSERT(!lli->lli_smd);
 
         /* core attributes from the MDS first */
-        ll_update_inode(inode, body, lic->lic_lsm);
+        ll_update_inode(inode, md->body, md->lsm);
 
         /* OIDEBUG(inode); */
 
@@ -816,6 +895,16 @@ void ll_read_inode2(struct inode *inode, void *opaque)
 #endif
                 EXIT;
         }
+}
+
+int it_disposition(struct lookup_intent *it, int flag)
+{
+        return it->it_disposition & flag;
+}
+
+void it_set_disposition(struct lookup_intent *it, int flag)
+{
+        it->it_disposition |= flag;
 }
 
 void ll_umount_begin(struct super_block *sb)
