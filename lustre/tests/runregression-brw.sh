@@ -1,6 +1,6 @@
 #!/bin/sh
 SRCDIR="`dirname $0`/"
-export PATH=/sbin:/usr/sbin:$SRCDIR:$PATH
+export PATH=/sbin:/usr/sbin:$SRCDIR/../utils:$PATH
 
 LOOPS=${LOOPS:-1}
 COUNT=${COUNT:-1000000}

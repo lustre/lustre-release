@@ -31,22 +31,19 @@
 #include <linux/lustre_idl.h>
 #include <linux/lustre_dlm.h>
 
-/* should NOT be called with the dcache lock, see fs/dcache.c */
-void ll_release(struct dentry *de)
-{
-        ENTRY;
-        OBD_FREE(de->d_fsdata, sizeof(struct ll_dentry_data));
-        EXIT;
-}
+#include "llite_internal.h"
 
-int ll_delete(struct dentry *de)
+/* should NOT be called with the dcache lock, see fs/dcache.c */
+static void ll_release(struct dentry *de)
 {
-        if (de->d_it != 0) {
-                CERROR("%s put dentry %p+%p with d_it %p\n", current->comm,
-                       de, de->d_fsdata, de->d_it);
-                LBUG();
-        }
-        return 0;
+        struct ll_dentry_data *lld = ll_d2d(de);
+        ENTRY;
+
+        LASSERT(lld->lld_cwd_count == 0);
+        LASSERT(lld->lld_mnt_count == 0);
+        OBD_FREE(de->d_fsdata, sizeof(struct ll_dentry_data));
+
+        EXIT;
 }
 
 void ll_set_dd(struct dentry *de)
@@ -55,23 +52,20 @@ void ll_set_dd(struct dentry *de)
         LASSERT(de != NULL);
 
         lock_kernel();
-
         if (de->d_fsdata == NULL) {
                 OBD_ALLOC(de->d_fsdata, sizeof(struct ll_dentry_data));
-                sema_init(&ll_d2d(de)->lld_it_sem, 1);
         }
-
         unlock_kernel();
 
         EXIT;
 }
 
-void ll_intent_release(struct dentry *de, struct lookup_intent *it)
+void ll_intent_release(struct lookup_intent *it)
 {
         struct lustre_handle *handle;
         ENTRY;
 
-        if (it->it_lock_mode) {
+        if (it->it_op && it->it_lock_mode) {
                 handle = (struct lustre_handle *)it->it_lock_handle;
                 CDEBUG(D_DLMTRACE, "releasing lock with cookie "LPX64
                        " from it %p\n",
@@ -83,84 +77,73 @@ void ll_intent_release(struct dentry *de, struct lookup_intent *it)
                    lock (see bug 494) */
                 it->it_lock_mode = 0;
         }
+        it->it_magic = 0;
+        it->it_op_release = 0;
+        EXIT;
+}
 
-        if (!de->d_it || it->it_op == IT_RELEASED_MAGIC) {
-                EXIT;
+void ll_unhash_aliases(struct inode *inode)
+{
+        struct dentry *dentry = NULL;
+        struct list_head *tmp;
+        struct ll_sb_info *sbi;
+        ENTRY;
+
+        if (inode == NULL) {
+                CERROR("unexpected NULL inode, tell phil\n");
                 return;
         }
 
-        if (de->d_it == it)
-                LL_GET_INTENT(de, it);
-        else
-                CDEBUG(D_INODE, "STRANGE intent release: %p %p\n",
-                       de->d_it, it);
+        sbi = ll_i2sbi(inode);
 
+        CDEBUG(D_INODE, "marking dentries for ino %lx/%x invalid\n",
+               inode->i_ino, inode->i_generation);
+
+        spin_lock(&dcache_lock);
+        list_for_each(tmp, &inode->i_dentry) {
+                dentry = list_entry(tmp, struct dentry, d_alias);
+
+                list_del_init(&dentry->d_hash);
+                dentry->d_flags |= DCACHE_LUSTRE_INVALID;
+                list_add(&dentry->d_hash, &sbi->ll_orphan_dentry_list);
+        }
+
+        spin_unlock(&dcache_lock);
         EXIT;
 }
 
 extern struct dentry *ll_find_alias(struct inode *, struct dentry *);
 
-static int revalidate2_finish(int flag, struct ptlrpc_request *request,
+static int revalidate_it_finish(struct ptlrpc_request *request,
                               struct inode *parent, struct dentry **de,
                               struct lookup_intent *it, int offset, obd_id ino)
 {
         struct ll_sb_info     *sbi = ll_i2sbi(parent);
-        struct mds_body       *body;
-        struct lov_stripe_md  *lsm = NULL;
-        struct lov_mds_md     *lmm;
-        int                    lmmsize;
+        struct lustre_md      md;
         int                    rc = 0;
         ENTRY;
 
         /* NB 1 request reference will be taken away by ll_intent_lock()
          * when I return */
 
-        if ((flag & LL_LOOKUP_NEGATIVE) != 0)
-                GOTO (out, rc = -ENOENT);
+        if (it_disposition(it, DISP_LOOKUP_NEG))
+                RETURN(-ENOENT);
 
-        /* We only get called if the mdc_enqueue() called from
-         * ll_intent_lock() was successful.  Therefore the mds_body is
-         * present and correct, and the eadata is present (but still
-         * opaque, so only obd_unpackmd() can check the size) */
-        body = lustre_msg_buf(request->rq_repmsg, offset, sizeof (*body));
-        LASSERT (body != NULL);
-        LASSERT_REPSWABBED (request, offset);
+        /* ll_intent_lock was successful, now prepare the lustre_md) */
+        rc = mdc_req2lustre_md(request, offset, &sbi->ll_osc_conn, &md);
+        if (rc)
+                RETURN(rc);
 
-        if (body->valid & OBD_MD_FLEASIZE) {
-                /* Only bother with this if inodes's LSM not set? */
+        ll_update_inode((*de)->d_inode, md.body, md.lsm);
 
-                if (body->eadatasize == 0) {
-                        CERROR ("OBD_MD_FLEASIZE set, but eadatasize 0\n");
-                        GOTO (out, rc = -EPROTO);
-                }
-                lmmsize = body->eadatasize;
-                lmm = lustre_msg_buf (request->rq_repmsg, offset + 1, lmmsize);
-                LASSERT (lmm != NULL);
-                LASSERT_REPSWABBED (request, offset + 1);
+        if (md.lsm != NULL && ll_i2info((*de)->d_inode)->lli_smd != md.lsm)
+                obd_free_memmd (&sbi->ll_osc_conn, &md.lsm);
 
-                rc = obd_unpackmd (&sbi->ll_osc_conn,
-                                   &lsm, lmm, lmmsize);
-                if (rc < 0) {
-                        CERROR ("Error %d unpacking eadata\n", rc);
-                        LBUG();
-                        /* XXX don't know if I should do this... */
-                        GOTO (out, rc);
-                        /* or skip the ll_update_inode but still do
-                         * mdc_lock_set_inode() */
-                }
-                LASSERT (rc >= sizeof (*lsm));
-                rc = 0;
-        }
-
-        ll_update_inode((*de)->d_inode, body, lsm);
-
-        if (lsm != NULL &&
-            ll_i2info((*de)->d_inode)->lli_smd != lsm)
-                obd_free_memmd (&sbi->ll_osc_conn, &lsm);
-
-        ll_mdc_lock_set_inode((struct lustre_handle *)it->it_lock_handle,
-                              (*de)->d_inode);
- out:
+        CDEBUG(D_DLMTRACE, "setting l_data to inode %p (%lu/%u)\n",
+               (*de)->d_inode, (*de)->d_inode->i_ino,
+               (*de)->d_inode->i_generation);
+        ldlm_lock_set_data((struct lustre_handle *)it->it_lock_handle,
+                           (*de)->d_inode);
         RETURN(rc);
 }
 
@@ -197,20 +180,26 @@ int ll_have_md_lock(struct dentry *de)
         RETURN(0);
 }
 
-int ll_revalidate2(struct dentry *de, int flags, struct lookup_intent *it)
+int ll_revalidate_it(struct dentry *de, int flags, struct lookup_intent *it)
 {
         int rc;
         ENTRY;
         CDEBUG(D_VFSTRACE, "VFS Op:name=%s,intent=%s\n", de->d_name.name,
                LL_IT2STR(it));
 
-        /* We don't want to cache negative dentries, so return 0 immediately.
-         * We believe that this is safe, that negative dentries cannot be
-         * pinned by someone else */
-        if (de->d_inode == NULL) {
-                CDEBUG(D_INODE, "negative dentry: ret 0 to force lookup2\n");
+        /* Cached negative dentries are unsafe for now - look them up again */
+        if (de->d_inode == NULL)
                 RETURN(0);
-        }
+
+        /* 
+         * never execute intents for mount points
+         * - attrs will be fixed up in ll_revalidate_inode
+         */
+        if (d_mountpoint(de))
+                RETURN(1);
+
+        if (it)
+                it->it_op_release = ll_intent_release;
 
         if (it == NULL || it->it_op == IT_GETATTR) {
                 /* We could just return 1 immediately, but since we should only
@@ -233,7 +222,6 @@ int ll_revalidate2(struct dentry *de, int flags, struct lookup_intent *it)
                                 memcpy(it->it_lock_handle, &lockh,
                                        sizeof(lockh));
                                 it->it_lock_mode = LCK_PR;
-                                LL_SAVE_INTENT(de, it);
                         } else {
                                 ldlm_lock_decref(&lockh, LCK_PR);
                         }
@@ -248,7 +236,6 @@ int ll_revalidate2(struct dentry *de, int flags, struct lookup_intent *it)
                                 memcpy(it->it_lock_handle, &lockh,
                                        sizeof(lockh));
                                 it->it_lock_mode = LCK_PW;
-                                LL_SAVE_INTENT(de, it);
                         } else {
                                 ldlm_lock_decref(&lockh, LCK_PW);
                         }
@@ -256,31 +243,123 @@ int ll_revalidate2(struct dentry *de, int flags, struct lookup_intent *it)
                 }
                 if (S_ISDIR(de->d_inode->i_mode))
                         ll_invalidate_inode_pages(de->d_inode);
-                d_unhash_aliases(de->d_inode);
+                ll_unhash_aliases(de->d_inode);
                 RETURN(0);
         }
 
-        rc = ll_intent_lock(de->d_parent->d_inode, &de, it, revalidate2_finish);
+        rc = ll_intent_lock(de->d_parent->d_inode, &de, it, flags,
+                            revalidate_it_finish);
         if (rc < 0) {
                 if (rc != -ESTALE) {
                         CERROR("ll_intent_lock: rc %d : it->it_status %d\n", rc,
                                it->it_status);
                 }
+                ll_unhash_aliases(de->d_inode);
                 RETURN(0);
         }
         /* unfortunately ll_intent_lock may cause a callback and revoke our
            dentry */
         spin_lock(&dcache_lock);
-        list_del_init(&de->d_hash);
+        hlist_del_init(&de->d_hash);
         __d_rehash(de, 0);
         spin_unlock(&dcache_lock);
 
         RETURN(1);
 }
 
+static void ll_pin(struct dentry *de, struct vfsmount *mnt, int flag)
+{
+        struct inode *inode= de->d_inode;
+        struct ll_sb_info *sbi = ll_i2sbi(inode);
+        struct ll_dentry_data *ldd = ll_d2d(de);
+        struct obd_client_handle *handle;
+        int rc = 0;
+        ENTRY;
+        LASSERT(ldd);
+
+        lock_kernel();
+        /* Strictly speaking this introduces an additional race: the
+         * increments should wait until the rpc has returned.
+         * However, given that at present the function is void, this
+         * issue is moot. */
+        if (flag == 1 && (++ldd->lld_mnt_count) > 1) {
+                unlock_kernel();
+                EXIT;
+                return;
+        }
+
+        if (flag == 0 && (++ldd->lld_cwd_count) > 1) {
+                unlock_kernel();
+                EXIT;
+                return;
+        }
+        unlock_kernel();
+
+        handle = (flag) ? &ldd->lld_mnt_och : &ldd->lld_cwd_och;
+        rc = obd_pin(&sbi->ll_mdc_conn, inode->i_ino, inode->i_generation,
+                     inode->i_mode & S_IFMT, handle, flag);
+
+        if (rc) {
+                lock_kernel();
+                memset(handle, 0, sizeof(*handle));
+                if (flag == 0)
+                        ldd->lld_cwd_count--;
+                else
+                        ldd->lld_mnt_count--;
+                unlock_kernel();
+        }
+
+        EXIT;
+        return;
+}
+
+static void ll_unpin(struct dentry *de, struct vfsmount *mnt, int flag)
+{
+        struct ll_sb_info *sbi = ll_i2sbi(de->d_inode);
+        struct ll_dentry_data *ldd = ll_d2d(de);
+        struct obd_client_handle handle;
+        int count, rc = 0;
+        ENTRY;
+        LASSERT(ldd);
+
+        lock_kernel();
+        /* Strictly speaking this introduces an additional race: the
+         * increments should wait until the rpc has returned.
+         * However, given that at present the function is void, this
+         * issue is moot. */
+        handle = (flag) ? ldd->lld_mnt_och : ldd->lld_cwd_och;
+        if (handle.och_magic != OBD_CLIENT_HANDLE_MAGIC) {
+                /* the "pin" failed */
+                unlock_kernel();
+                EXIT;
+                return;
+        }
+
+        if (flag)
+                count = --ldd->lld_mnt_count;
+        else
+                count = --ldd->lld_cwd_count;
+        unlock_kernel();
+
+        if (count != 0) {
+                EXIT;
+                return;
+        }
+
+        rc = obd_unpin(&sbi->ll_mdc_conn, &handle, flag);
+        EXIT;
+        return;
+}
+
 struct dentry_operations ll_d_ops = {
-        .d_revalidate2 = ll_revalidate2,
-        .d_intent_release = ll_intent_release,
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
+        .d_revalidate_nd = ll_revalidate_nd,
+#else
+        .d_revalidate_it = ll_revalidate_it,
+#endif
         .d_release = ll_release,
-        .d_delete = ll_delete,
+#if 0
+        .d_pin = ll_pin,
+        .d_unpin = ll_unpin,
+#endif
 };

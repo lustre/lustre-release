@@ -34,8 +34,7 @@ static kdev_t path2dev(char *path)
 {
         struct dentry *dentry;
         struct nameidata nd;
-        kdev_t dev;
-        KDEVT_VAL(dev, 0);
+        kdev_t dev = KDEVT_INIT(0);
 
         if (!path_init(path, LOOKUP_FOLLOW, &nd))
                 return 0;

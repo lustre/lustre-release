@@ -35,6 +35,8 @@
 #include <linux/lustre_idl.h>
 #include <linux/lustre_lib.h>
 #include <linux/lustre_dlm.h>
+#include <linux/lustre_log.h>
+#include <linux/lustre_export.h>
 
 struct ldlm_lock_desc;
 struct mds_obd;
@@ -48,6 +50,11 @@ struct ll_file_data;
 #define LUSTRE_MDS_NAME "mds"
 #define LUSTRE_MDT_NAME "mdt"
 #define LUSTRE_MDC_NAME "mdc"
+
+struct lustre_md {
+        struct mds_body *body;
+        struct lov_stripe_md *lsm;
+};
 
 struct mdc_rpc_lock {
         struct semaphore rpcl_sem;
@@ -144,6 +151,8 @@ struct mds_update_record {
         char *ur_tgt;
         int ur_eadatalen;
         void *ur_eadata;
+        int ur_cookielen;
+        struct llog_cookie *ur_logcookies;
         struct iattr ur_iattr;
         struct obd_ucred ur_uc;
         __u64 ur_rdev;
@@ -160,8 +169,31 @@ struct mds_update_record {
 #define ur_suppgid1 ur_uc.ouc_suppgid1
 #define ur_suppgid2 ur_uc.ouc_suppgid2
 
-#define MDS_LR_CLIENT  8192
-#define MDS_LR_SIZE     128
+/* i_attr_flags holds the open count in the inode in 2.4 */
+//Alex implement on 2.4 with i_attr_flags and find soln for 2.5 please
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
+# define mds_open_orphan_count(inode)   (0)
+# define mds_open_orphan_inc(inode)  do { } while (0);
+# define mds_open_orphan_dec_test(inode)  (0)
+#else
+# define mds_inode_oatomic(inode)    ((atomic_t *)&(inode)->i_attr_flags)
+# define mds_open_orphan_count(inode)                          \
+  atomic_read(mds_inode_oatomic(inode))
+# define mds_open_orphan_inc(inode)                            \
+  atomic_inc(mds_inode_oatomic(inode))
+# define mds_open_orphan_dec_test(inode)                       \
+  atomic_dec_and_test(mds_inode_oatomic(inode))
+#endif
+#define mds_inode_is_orphan(inode)  ((inode)->i_flags & 0x4000000)
+#define mds_inode_set_orphan(inode) (inode)->i_flags |= 0x4000000
+
+#define MDS_LR_SERVER_SIZE    512
+
+#define MDS_LR_CLIENT_START  8192
+#define MDS_LR_CLIENT_SIZE    128
+#if MDS_LR_CLIENT_START < MDS_LR_SERVER_SIZE
+#error "Can't have MDS_LR_CLIENT_START < MDS_LR_SERVER_SIZE"
+#endif
 
 #define MDS_CLIENT_SLOTS 17
 
@@ -169,11 +201,24 @@ struct mds_update_record {
 
 /* Data stored per server at the head of the last_rcvd file.  In le32 order. */
 struct mds_server_data {
-        __u8 msd_uuid[37];      /* server UUID */
-        __u8 uuid_padding[3];   /* unused */
-        __u64 msd_last_transno; /* last completed transaction ID */
-        __u64 msd_mount_count;  /* MDS incarnation number */
-        __u8 padding[512 - 56];
+        __u8  msd_uuid[37];        /* server UUID */
+        __u8  uuid_padding[3];     /* unused */
+//      __u64 msd_last_objid;      /* last created object ID */
+        __u64 msd_last_transno;    /* last completed transaction ID */
+        __u64 msd_mount_count;     /* MDS incarnation number */
+        __u64 msd_padding_until_last_objid_is_enabled;
+        __u32 msd_feature_compat;  /* compatible feature flags */
+        __u32 msd_feature_rocompat;/* read-only compatible feature flags */
+        __u32 msd_feature_incompat;/* incompatible feature flags */
+        __u32 msd_server_size;     /* size of server data area */
+        __u32 msd_client_start;    /* start of per-client data area */
+        __u16 msd_client_size;     /* size of per-client data area */
+        __u16 msd_subdir_count;    /* number of subdirectories for objects */
+        __u64 msd_catalog_oid;     /* recovery catalog object id */
+        __u32 msd_catalog_ogen;    /* recovery catalog inode generation */
+        __u8  msd_peeruuid[37];    /* UUID of LOV/OSC associated with MDS */
+        __u8  peer_padding[3];     /* unused */
+        __u8  msd_padding[MDS_LR_SERVER_SIZE - 140];
 };
 
 /* Data stored per client in the last_rcvd file.  In le32 order. */
@@ -185,7 +230,7 @@ struct mds_client_data {
         __u64 mcd_last_xid;     /* xid for the last transaction */
         __u32 mcd_last_result;  /* result from last RPC */
         __u32 mcd_last_data;    /* per-op data (disposition for open &c.) */
-        __u8 padding[MDS_LR_SIZE - 74];
+        __u8 mcd_padding[MDS_LR_CLIENT_SIZE - 72];
 };
 
 /* file data for open files on MDS */
@@ -201,10 +246,6 @@ struct mds_file_data {
 /* mds/mds_reint.c  */
 int mds_reint_rec(struct mds_update_record *r, int offset,
                   struct ptlrpc_request *req, struct lustre_handle *);
-
-/* mds/mds_open.c */
-int mds_open(struct mds_update_record *rec, int offset,
-             struct ptlrpc_request *req, struct lustre_handle *);
 
 /* mds/handler.c */
 #ifdef __KERNEL__
@@ -223,13 +264,22 @@ int mds_pack_md(struct obd_device *mds, struct lustre_msg *msg,
                 int offset, struct mds_body *body, struct inode *inode);
 void mds_steal_ack_locks(struct obd_export *exp,
                          struct ptlrpc_request *req);
+int mds_update_server_data(struct obd_device *);
 
 /* mds/mds_fs.c */
 int mds_fs_setup(struct obd_device *obddev, struct vfsmount *mnt);
 int mds_fs_cleanup(struct obd_device *obddev, int failover);
 #endif
 
+/* mds/mds_lov.c */
+extern int mds_get_lovtgts(struct mds_obd *obd, int tgt_count,
+                           struct obd_uuid *uuidarray);
+extern int mds_get_lovdesc(struct mds_obd  *obd, struct lov_desc *desc);
+
 /* mdc/mdc_request.c */
+int mdc_req2lustre_md(struct ptlrpc_request *req, int offset,
+                      struct lustre_handle *obd_import,
+                      struct lustre_md *md);
 int mdc_enqueue(struct lustre_handle *conn, int lock_type,
                 struct lookup_intent *it, int lock_mode,
                 struct mdc_op_data *enq_data,
@@ -248,7 +298,7 @@ int mdc_getattr_name(struct lustre_handle *conn, struct ll_fid *fid,
                      unsigned int ea_size, struct ptlrpc_request **request);
 int mdc_setattr(struct lustre_handle *conn,
                 struct mdc_op_data *data,
-                struct iattr *iattr, void *ea, int ealen,
+                struct iattr *iattr, void *ea, int ealen, void *ea2, int ea2len,
                 struct ptlrpc_request **request);
 int mdc_open(struct lustre_handle *conn, obd_id ino, int type, int flags,
              struct lov_mds_md *lmm, int lmm_size, struct lustre_handle *fh,

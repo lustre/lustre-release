@@ -18,8 +18,8 @@
 #include <unistd.h>
 
 typedef struct flag_mapping {
-       char string[20];
-       int  flag;
+       const char *string;
+       const int  flag;
 } FLAG_MAPPING;
 
 FLAG_MAPPING flag_table[] = {
@@ -67,13 +67,13 @@ int main(int argc, char** argv)
                 case 'f': {
                         char *tmp;
 
-                        cloned_flags = (char *)malloc(strlen(optarg));
+                        cloned_flags = (char *)malloc(strlen(optarg)+1);
                         if (cloned_flags == NULL) {
                                 fprintf(stderr, "Insufficient memory.\n");
                                 exit(-1);
                         }
 
-                        strncpy(cloned_flags, optarg, strlen(optarg));
+                        strncpy(cloned_flags, optarg, strlen(optarg)+1);
                         for (tmp = strtok(optarg, ":|"); tmp;
                              tmp = strtok(NULL, ":|")) {
                                 int i = 0;

@@ -243,8 +243,7 @@ int ldlm_del_waiting_lock(struct ldlm_lock *lock)
 
 #endif /* __KERNEL__ */
 
-static inline void ldlm_failed_ast(struct ldlm_lock *lock, int rc,
-                                   char *ast_type)
+static void ldlm_failed_ast(struct ldlm_lock *lock, int rc, char *ast_type)
 {
         CERROR("%s AST failed (%d) for res "LPU64"/"LPU64
                ", mode %s: evicting client %s@%s NID "LPU64"\n",
@@ -347,10 +346,19 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
         RETURN(rc);
 }
 
+/* XXX copied from ptlrpc/service.c */
+static long timeval_sub(struct timeval *large, struct timeval *small)
+{
+        return (large->tv_sec - small->tv_sec) * 1000000 +
+                (large->tv_usec - small->tv_usec);
+}
+
 int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
 {
         struct ldlm_request *body;
         struct ptlrpc_request *req;
+        struct timeval granted_time;
+        long total_enqueue_wait;
         int rc = 0, size = sizeof(*body);
         ENTRY;
 
@@ -358,6 +366,12 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
                 LBUG();
                 RETURN(-EINVAL);
         }
+
+        do_gettimeofday(&granted_time);
+        total_enqueue_wait = timeval_sub(&granted_time, &lock->l_enqueued_time);
+
+        if (total_enqueue_wait / 1000000 > obd_timeout)
+                LDLM_ERROR(lock, "enqueue wait took %ldus", total_enqueue_wait);
 
         req = ptlrpc_prep_req(lock->l_export->exp_ldlm_data.led_import,
                               LDLM_CP_CALLBACK, 1, &size, NULL);
@@ -370,7 +384,8 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
         body->lock_flags = flags;
         ldlm_lock2desc(lock, &body->lock_desc);
 
-        LDLM_DEBUG(lock, "server preparing completion AST");
+        LDLM_DEBUG(lock, "server preparing completion AST (after %ldus wait)",
+                   total_enqueue_wait);
         req->rq_replen = lustre_msg_size(0, NULL);
 
         req->rq_level = LUSTRE_CONN_RECOVER;
@@ -447,6 +462,7 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req,
         if (!lock)
                 GOTO(out, err = -ENOMEM);
 
+        do_gettimeofday(&lock->l_enqueued_time);
         memcpy(&lock->l_remote_handle, &dlm_req->lock_handle1,
                sizeof(lock->l_remote_handle));
         LDLM_DEBUG(lock, "server-side enqueue handler, new lock created");
@@ -640,21 +656,9 @@ static void ldlm_handle_cp_callback(struct ptlrpc_request *req,
                 lock->l_req_mode = dlm_req->lock_desc.l_granted_mode;
                 LDLM_DEBUG(lock, "completion AST, new lock mode");
         }
-        if (lock->l_resource->lr_type == LDLM_EXTENT) {
+        if (lock->l_resource->lr_type == LDLM_EXTENT)
                 memcpy(&lock->l_extent, &dlm_req->lock_desc.l_extent,
                        sizeof(lock->l_extent));
-
-                if ((lock->l_extent.end & ~PAGE_MASK) != ~PAGE_MASK) {
-                        /* XXX Old versions of BA OST code have a fencepost bug
-                         * which will cause them to grant a lock that's one
-                         * byte too large.  This can be safely removed after BA
-                         * ships their next release -phik (02 Apr 2003) */
-                        lock->l_extent.end--;
-                } else if ((lock->l_extent.start & ~PAGE_MASK) ==
-                           ~PAGE_MASK) {
-                        lock->l_extent.start++;
-                }
-        }
 
         ldlm_resource_unlink_lock(lock);
         if (memcmp(&dlm_req->lock_desc.l_resource.lr_name,
@@ -961,7 +965,7 @@ static int ldlm_setup(struct obd_device *obddev, obd_count len, void *buf)
         return rc;
 }
 
-static int ldlm_cleanup(struct obd_device *obddev, int force, int failover)
+static int ldlm_cleanup(struct obd_device *obddev, int flags)
 {
         struct ldlm_obd *ldlm = &obddev->u.ldlm;
         ENTRY;
@@ -973,7 +977,7 @@ static int ldlm_cleanup(struct obd_device *obddev, int force, int failover)
         }
 
 #ifdef __KERNEL__
-        if (force) {
+        if (flags & OBD_OPT_FORCE) {
                 ptlrpc_put_ldlm_hooks();
         } else if (ptlrpc_ldlm_hooks_referenced()) {
                 CERROR("Some connections weren't cleaned up; run lconf with "
@@ -1084,6 +1088,7 @@ EXPORT_SYMBOL(ldlm_replay_locks);
 EXPORT_SYMBOL(ldlm_resource_foreach);
 EXPORT_SYMBOL(ldlm_namespace_foreach);
 EXPORT_SYMBOL(ldlm_namespace_foreach_res);
+EXPORT_SYMBOL(ldlm_change_cbdata);
 
 /* ldlm_lockd.c */
 EXPORT_SYMBOL(ldlm_server_blocking_ast);

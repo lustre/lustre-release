@@ -84,8 +84,8 @@ int portals_debug_copy_to_user(char *buf, unsigned long len)
 
 /* FIXME: I'm not very smart; someone smarter should make this better. */
 void
-portals_debug_msg (int subsys, int mask, char *file, char *fn, int line,
-                   const char *format, ...)
+portals_debug_msg (int subsys, int mask, char *file, const char *fn, 
+                   const int line, const char *format, ...)
 {
         va_list       ap;
         unsigned long flags;

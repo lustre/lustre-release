@@ -35,6 +35,7 @@
 #define LUSTRE_SANOST_NAME "sanost"
 
 struct osc_brw_async_args {
+        struct obdo     *aa_oa;
         int              aa_requested_nob;
         int              aa_nio_count;
         obd_count        aa_page_count;

@@ -1,17 +1,17 @@
 # lustre.spec
 %define version b_devel
-%define kversion @RELEASE@
+%define kversion @LINUXRELEASE@
 %define linuxdir @LINUX@
-Release: 0306170928kernel
 
 Summary: Lustre Lite File System
 Name: lustre-lite
 Version: %{version}
+Release: @RELEASE@
 Copyright: GPL
 Group: Utilities/System
 Requires: lustre-modules, PyXML
-BuildRoot: /var/tmp/lustre-%{version}-root
 Source: ftp://ftp.lustre.com/pub/lustre/lustre-%{version}.tar.gz
+BuildRoot: /var/tmp/lustre-%{version}-root
 
 %description
 The Lustre Lite Cluster File System: kernel drivers for file system,
@@ -69,20 +69,9 @@ cd $RPM_BUILD_DIR/lustre-%{version}
 ./configure --with-linux='%{linuxdir}' 
 make
 
-#%ifarch i386
-#cd $RPM_BUILD_DIR/lustre-%{version}-lib/lustre-%{version}
-#./configure --with-lib 
-#make
-#%endif
-
 %install
 cd $RPM_BUILD_DIR/lustre-%{version}
 make install prefix=$RPM_BUILD_ROOT
-
-#%ifarch i386
-#cd $RPM_BUILD_DIR/lustre-%{version}-lib/lustre-%{version}
-#make install prefix=$RPM_BUILD_ROOT
-#%endif
 
 %ifarch alpha
 # this hurts me
@@ -226,20 +215,20 @@ if [ ! -e /dev/portals ]; then
 fi
 depmod -ae || exit 0
 
-grep -q obdclass /etc/modules.conf || \
-	echo 'alias char-major-10-241 obdclass' >> /etc/modules.conf
+#grep -q obdclass /etc/modules.conf || \
+#	echo 'alias char-major-10-241 obdclass' >> /etc/modules.conf
 
-grep -q '/dev/obd' /etc/modules.conf || \
-	echo 'alias /dev/obd obdclass' >> /etc/modules.conf
+#grep -q '/dev/obd' /etc/modules.conf || \
+#	echo 'alias /dev/obd obdclass' >> /etc/modules.conf
 
-grep -q '/dev/lustre' /etc/modules.conf || \
-	echo 'alias /dev/lustre obdclass' >> /etc/modules.conf
+#grep -q '/dev/lustre' /etc/modules.conf || \
+#	echo 'alias /dev/lustre obdclass' >> /etc/modules.conf
 
-grep -q portals /etc/modules.conf || \
-        echo 'alias char-major-10-240 portals' >> /etc/modules.conf
+#grep -q portals /etc/modules.conf || \
+#        echo 'alias char-major-10-240 portals' >> /etc/modules.conf
 
-grep -q '/dev/portals' /etc/modules.conf || \
-        echo 'alias /dev/portals portals' >> /etc/modules.conf
+#grep -q '/dev/portals' /etc/modules.conf || \
+#        echo 'alias /dev/portals portals' >> /etc/modules.conf
 
 %postun
 depmod -ae || exit 0
@@ -257,6 +246,7 @@ if grep -q slapd-lustre $slapd; then
    cp $tmp $slapd
    rm $tmp
 fi
+
 %clean
 #rm -rf $RPM_BUILD_ROOT
 

@@ -715,7 +715,7 @@ llu_fsswop_mount(const char *source,
 
 /* XXX do we need this??
         memset(&osfs, 0, sizeof(osfs));
-        rc = obd_statfs(&sbi->ll_mdc_conn, &osfs);
+        rc = obd_statfs(class_conn2obd(&sbi->ll_mdc_conn),&osfs,jiffies-100*HZ);
 */
         /* fetch attr of root inode */
         err = mdc_getattr(&sbi->ll_mdc_conn, &rootfid,
@@ -765,9 +765,9 @@ out_inode:
 out_request:
         ptlrpc_req_finished(request);
 out_osc:
-        obd_disconnect(&sbi->ll_osc_conn);
+        obd_disconnect(&sbi->ll_osc_conn, 0);
 out_mdc:
-        obd_disconnect(&sbi->ll_mdc_conn);
+        obd_disconnect(&sbi->ll_mdc_conn, 0);
 out_free:
         OBD_FREE(sbi, sizeof(*sbi));
         return err;

@@ -76,7 +76,7 @@ static int ptlbd_cl_setup(struct obd_device *obd, obd_count len, void *buf)
         RETURN(0);
 }
 
-static int ptlbd_cl_cleanup(struct obd_device *obd, int force, int failover)
+static int ptlbd_cl_cleanup(struct obd_device *obd, int flags)
 {
         struct ptlbd_obd *ptlbd = &obd->u.ptlbd;
         struct obd_import *imp;
@@ -99,9 +99,8 @@ static int ptlbd_cl_cleanup(struct obd_device *obd, int force, int failover)
 
 
 /* modelled after ptlrpc_import_connect() */
-int ptlbd_cl_connect(struct lustre_handle *conn,
-                      struct obd_device *obd, 
-                      struct obd_uuid *target_uuid)
+int ptlbd_cl_connect(struct lustre_handle *conn, struct obd_device *obd,
+                     struct obd_uuid *target_uuid)
 {
         struct ptlbd_obd *ptlbd = &obd->u.ptlbd;
         struct obd_import *imp = ptlbd->bd_import;
@@ -196,7 +195,7 @@ int ptlbd_cl_init(void)
 {
         struct lprocfs_static_vars lvars;
 
-        lprocfs_init_vars(&lvars);
+        lprocfs_init_vars(ptlbd,&lvars);
         return class_register_type(&ptlbd_cl_obd_ops, lvars.module_vars,
                                    OBD_PTLBD_CL_DEVICENAME);
 }

@@ -64,8 +64,8 @@ void class_exit_uuidlist(void)
                 struct uuid_nid_data *data =
                         list_entry(tmp, struct uuid_nid_data, head);
 
-                PORTAL_FREE(data->uuid, strlen(data->uuid) + 1);
-                PORTAL_FREE(data, sizeof(*data));
+                OBD_FREE(data->uuid, strlen(data->uuid) + 1);
+                OBD_FREE(data, sizeof(*data));
         }
 }
 
@@ -109,11 +109,11 @@ int class_add_uuid(char *uuid, __u64 nid, __u32 nal)
         }
 
         rc = -ENOMEM;
-        PORTAL_ALLOC(data, sizeof(*data));
+        OBD_ALLOC(data, sizeof(*data));
         if (data == NULL)
                 goto fail_0;
 
-        PORTAL_ALLOC(data->uuid, nob);
+        OBD_ALLOC(data->uuid, nob);
         if (data == NULL)
                 goto fail_1;
 
@@ -131,7 +131,7 @@ int class_add_uuid(char *uuid, __u64 nid, __u32 nal)
         return 0;
 
  fail_1:
-        PORTAL_FREE (data, sizeof (*data));
+        OBD_FREE (data, sizeof (*data));
  fail_0:
         kportal_put_ni (nal);
         return (rc);
@@ -171,8 +171,8 @@ int class_del_uuid (char *uuid)
                 list_del (&data->head);
 
                 kportal_put_ni (data->nal);
-                PORTAL_FREE(data->uuid, strlen(data->uuid) + 1);
-                PORTAL_FREE(data, sizeof(*data));
+                OBD_FREE(data->uuid, strlen(data->uuid) + 1);
+                OBD_FREE(data, sizeof(*data));
         } while (!list_empty (&deathrow));
 
         return 0;

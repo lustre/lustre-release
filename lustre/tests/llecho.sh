@@ -1,6 +1,8 @@
 #!/bin/sh
 
-LCONF=${LCONF:-../utils/lconf}
+PATH=`dirname $0`/../utils:$PATH
+
+LCONF=${LCONF:-lconf}
 NAME=${NAME:-echo}
 
 config=$NAME.xml
@@ -17,5 +19,5 @@ $LCONF $lustre_opt --reformat --gdb $OPTS $config || exit 4
 cat <<EOF
 
 run getattr tests as:
-../utils/lctl --device '\$ECHO_$SERVER' test_getattr 1000000
+`dirname $0`../utils/lctl --device '\$ECHO_$SERVER' test_getattr 1000000
 EOF

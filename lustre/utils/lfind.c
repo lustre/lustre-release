@@ -21,38 +21,38 @@
 #define MAX_LOV_UUID_COUNT	1000
 #define OBD_NOT_FOUND		(-1)
 
-char *		cmd;
-struct option	longOpts[] = {
+char		*cmd;
+struct option	 longOpts[] = {
 			{"help", 0, 0, 'h'},
 			{"obd", 1, 0, 'o'},
 			{"query", 0, 0, 'q'},
 			{"verbose", 0, 0, 'v'},
 			{0, 0, 0, 0}
-		};
-int		query;
-int		verbose;
-char *		shortOpts = "ho:qv";
-char *		usageMsg = "[ --obd <obd uuid> | --query ] <dir|file> ...";
+		 };
+int		 query;
+int		 verbose;
+char		 shortOpts[] = "ho:qv";
+char		 usageMsg[] = "[ --obd <obd uuid> | --query ] <dir|file> ...";
 
-int		max_ost_count = MAX_LOV_UUID_COUNT;
-struct obd_uuid *	obduuid;
-char *		buf;
-int		buflen;
-struct obd_uuid *	uuids;
+int		 max_ost_count = MAX_LOV_UUID_COUNT;
+struct obd_uuid *obduuid;
+char		*buf;
+int		 buflen;
+struct obd_uuid *uuids;
 struct obd_ioctl_data data;
-struct lov_desc desc;
-int		uuidslen;
-int		cfglen;
+struct lov_desc  desc;
+int		 uuidslen;
+int		 cfglen;
 struct lov_mds_md *lmm;
-int		lmmlen;
+int		 lmmlen;
+int		 printed_UUIDs;
 
 void	init();
 void	usage(FILE *stream);
 void	errMsg(char *fmt, ...);
-void	processPath(const char *path);
+void	processPath(char *path);
 
-int
-main (int argc, char **argv) {
+int main (int argc, char **argv) {
 	int c;
 
 	cmd = basename(argv[0]);
@@ -61,8 +61,8 @@ main (int argc, char **argv) {
 		switch (c) {
 		case 'o':
 			if (obduuid) {
-				errMsg("obd '%s' already specified: '%s'.",
-					obduuid, optarg);
+				printf("obd '%s' already specified: '%s'\n",
+					obduuid->uuid, optarg);
 				exit(1);
 			}
 
@@ -81,7 +81,7 @@ main (int argc, char **argv) {
 			usage(stderr);
 			exit(1);
 		default:
-			errMsg("Internal error. Valid '%s' unrecognized.",
+			printf("Internal error. Valid '%s' unrecognized\n",
 				argv[optind - 1]);
 			usage(stderr);
 			exit(1);
@@ -105,8 +105,7 @@ main (int argc, char **argv) {
 	exit (0);
 }
 
-void
-init()
+void init()
 {
 	int datalen, desclen;
 
@@ -141,8 +140,7 @@ init()
 	}
 
 	if ((buf = malloc(buflen)) == NULL) {
-		errMsg("Unable to allocate %d bytes of memory for ioctl's.",
-			buflen);
+		errMsg("Unable to allocate %d bytes of memory for ioctl's");
 		exit(1);
 	}
 
@@ -150,112 +148,120 @@ init()
 	uuids = (struct obd_uuid *)buf;
 }
 
-void
-usage(FILE *stream)
+void usage(FILE *stream)
 {
 	fprintf(stream, "usage: %s %s\n", cmd, usageMsg);
 }
 
-void
-errMsg(char *fmt, ...)
+void errMsg(char *fmt, ...)
 {
 	va_list args;
+	int tmp_errno = errno;
 
 	fprintf(stderr, "%s: ", cmd);
 	va_start(args, fmt);
 	vfprintf(stderr, fmt, args);
 	va_end(args);
-	fprintf(stderr, "\n");
+	fprintf(stderr, ": %s (%d)\n", strerror(tmp_errno), tmp_errno);
 }
 
-void
-processPath(const char *path)
+void processPath(char *path)
 {
 	int fd;
 	int rc;
 	int i;
-	int obdindex;
+	int obdindex = OBD_NOT_FOUND;
 	int obdcount;
 	struct obd_uuid *uuidp;
+	char *fname, *dirname;
 
-	if (query || verbose && !obduuid) {
+	if ((query || verbose) && !obduuid) {
 		printf("%s\n", path);
 	}
 
-	if ((fd = open(path, O_RDONLY | O_LOV_DELAY_CREATE)) < 0) {
-		errMsg("open \"%.20s\" failed.", path);
-		perror("open");
+	fname = strrchr(path, '/');
+	if (fname != NULL && fname[1] != '\0') {
+		*fname = '\0';
+		fname++;
+		dirname = path;
+	} else if (fname != NULL && fname[1] == '\0') {
+		printf("need getdents support\n");
+		return;
+	} else {
+		dirname = ".";
+		fname = path;
+	}
+
+	if ((fd = open(dirname, O_RDONLY)) < 0) {
+		errMsg("open \"%.20s\" failed", dirname);
 		return;
 	}
 
-	memset(&data, 0, sizeof(data));
-        data.ioc_inllen1 = sizeof(desc);
-        data.ioc_inlbuf1 = (char *)&desc;
-        data.ioc_inllen2 = uuidslen;
-        data.ioc_inlbuf2 = (char *)uuids;
+	if (!printed_UUIDs) {
+		memset(&data, 0, sizeof(data));
+		data.ioc_inllen1 = sizeof(desc);
+		data.ioc_inlbuf1 = (char *)&desc;
+		data.ioc_inllen2 = uuidslen;
+		data.ioc_inlbuf2 = (char *)uuids;
 
-        memset(&desc, 0, sizeof(desc));
-        desc.ld_tgt_count = max_ost_count;
+		memset(&desc, 0, sizeof(desc));
+		desc.ld_tgt_count = max_ost_count;
 
-        if (obd_ioctl_pack(&data, &buf, buflen)) {
-                errMsg("internal buffering error.");
-		exit(1);
-        }
-
-        rc = ioctl(fd, OBD_IOC_LOV_GET_CONFIG, buf);
-        if (rc) {
-		if (errno == ENOTTY) {
-			if (!obduuid) {
-				printf("Not a regular file or not Lustre file.\n\n");
-			}
-			return;
-		}
-		errMsg("OBD_IOC_LOV_GET_CONFIG ioctl failed: %d.", errno);
-		perror("ioctl");
-		exit(1);
-        }
-
-	if (obd_ioctl_unpack(&data, buf, buflen)) {
-		errMsg("Invalid reply from ioctl.");
-                exit(1);
-	}
-
-        obdcount = desc.ld_tgt_count;
-	if (obdcount == 0)
-		return;
-
-	obdindex = OBD_NOT_FOUND;
-
-	if (obduuid) {
-		for (i = 0, uuidp = uuids; i < obdcount; i++, uuidp++) {
-			if (strncmp((const char *)obduuid, (const char *)uuidp,
-				    sizeof(*uuidp)) == 0) {
-				obdindex = i;
-			}
+		if (obd_ioctl_pack(&data, &buf, buflen)) {
+			errMsg("internal buffering error");
+			exit(1);
 		}
 
-		if (obdindex == OBD_NOT_FOUND)
+		rc = ioctl(fd, OBD_IOC_LOV_GET_CONFIG, buf);
+		if (rc) {
+			if (errno == ENOTTY) {
+				if (!obduuid) {
+					errMsg("error getting LOV config");
+				}
+				return;
+			}
+			errMsg("OBD_IOC_LOV_GET_CONFIG ioctl failed: %s");
+			exit(1);
+		}
+
+		if (obd_ioctl_unpack(&data, buf, buflen)) {
+			errMsg("Invalid reply from ioctl");
+			exit(1);
+		}
+
+		obdcount = desc.ld_tgt_count;
+		if (obdcount == 0)
 			return;
-	} else 	if (query || verbose) {
-		printf("OBDS:\n");
-		for (i = 0, uuidp = uuids; i < obdcount; i++, uuidp++)
-			printf("%4d: %s\n", i, (char *)uuidp);
+
+		obdindex = OBD_NOT_FOUND;
+
+		if (obduuid) {
+			for (i = 0, uuidp = uuids; i < obdcount; i++, uuidp++) {
+				if (strncmp((char *)obduuid, (char *)uuidp,
+					sizeof(*uuidp)) == 0) {
+					obdindex = i;
+				}
+			}
+
+			if (obdindex == OBD_NOT_FOUND)
+				return;
+		} else if (query || verbose) {
+			printf("OBDS:\n");
+			for (i = 0, uuidp = uuids; i < obdcount; i++, uuidp++)
+				printf("%4d: %s\n", i, (char *)uuidp);
+		}
+		printed_UUIDs = 1;
 	}
 
-	memset((void *)buf, 0, buflen);
-	lmm->lmm_magic = LOV_MAGIC;
-        lmm->lmm_ost_count = max_ost_count;
-
-	rc = ioctl(fd, LL_IOC_LOV_GETSTRIPE, (void *)lmm);
+	strcpy((char *)lmm, fname);
+	rc = ioctl(fd, IOC_MDC_GETSTRIPE, (void *)lmm);
 	if (rc) {
 		if (errno == ENODATA) {
-			if(!obduuid) {
-				printf("Has no stripe information.\n\n");
-			}
+			if (!obduuid)
+				printf("Has no stripe information.\n");
 		}
 		else {
-			errMsg("LL_IOC_LOV_GETSTRIPE ioctl failed. %d", errno);
-			perror("ioctl");
+			errMsg("IOC_MDC_GETSTRIPE ioctl failed");
 		}
 		return;
 	}

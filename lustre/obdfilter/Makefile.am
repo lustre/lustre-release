@@ -6,6 +6,7 @@
 MODULE = obdfilter
 modulefs_DATA = obdfilter.o
 EXTRA_PROGRAMS = obdfilter
-obdfilter_SOURCES = filter.c lproc_obdfilter.c
+obdfilter_SOURCES = filter.c filter_io.c filter_log.c filter_san.c \
+lproc_obdfilter.c filter_internal.h
 
 include $(top_srcdir)/Rules

@@ -32,6 +32,9 @@
 #include <linux/obd_class.h>
 #include <linux/obd_lov.h>
 #include <linux/lustre_lib.h>
+#include <linux/lustre_fsfilt.h>
+
+#include "mds_internal.h"
 
 void le_lov_desc_to_cpu (struct lov_desc *ld)
 {
@@ -141,6 +144,7 @@ int mds_set_lovdesc(struct obd_device *obd, struct lov_desc *desc,
         mds->mds_has_lov_desc = 1;
         /* XXX the MDS should not really know about this */
         mds->mds_max_mdsize = lov_mds_md_size(desc->ld_tgt_count);
+        mds->mds_max_cookiesize = desc->ld_tgt_count*sizeof(struct llog_cookie);
 
 out:
         pop_ctxt(&saved, &mds->mds_ctxt, NULL);
@@ -182,7 +186,8 @@ out:
         return rc;
 }
 
-int mds_get_lovtgts(struct mds_obd *mds, int tgt_count,struct obd_uuid *uuidarray)
+int mds_get_lovtgts(struct mds_obd *mds, int tgt_count,
+                    struct obd_uuid *uuidarray)
 {
         struct obd_run_ctxt saved;
         struct file *f;
@@ -266,13 +271,13 @@ int mds_iocontrol(unsigned int cmd, struct lustre_handle *conn,
 
                 RETURN(rc);
 
-        case OBD_IOC_SET_READONLY:
+        case OBD_IOC_SET_READONLY: {
+                BDEVNAME_DECLARE_STORAGE(tmp);
                 CERROR("setting device %s read-only\n",
-                       ll_bdevname(obd->u.mds.mds_sb->s_dev));
-#ifdef CONFIG_DEV_RDONLY
+                       ll_bdevname(obd->u.mds.mds_sb->s_dev, tmp));
                 dev_set_rdonly(obd->u.mds.mds_sb->s_dev, 2);
-#endif
                 RETURN(0);
+        }
 
         case OBD_IOC_ABORT_RECOVERY:
                 CERROR("aborting recovery for device %s\n", obd->obd_name);

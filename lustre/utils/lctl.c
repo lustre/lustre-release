@@ -205,6 +205,9 @@ command_t cmdlist[] = {
         {"debug_kernel", jt_dbg_debug_kernel, 0,
          "get debug buffer and dump to a file"
          "usage: debug_kernel [file] [raw]"},
+        {"dk", jt_dbg_debug_kernel, 0,
+         "get debug buffer and dump to a file"
+         "usage: dk [file] [raw]"},
         {"debug_file", jt_dbg_debug_file, 0,
          "read debug buffer from input and dump to output"
          "usage: debug_file <input> [output] [raw]"},

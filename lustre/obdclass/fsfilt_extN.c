@@ -43,10 +43,11 @@ static kmem_cache_t *fcb_cache;
 static atomic_t fcb_cache_count = ATOMIC_INIT(0);
 
 struct fsfilt_cb_data {
-        struct journal_callback cb_jcb; /* data private to jbd */
+        struct journal_callback cb_jcb; /* jbd private data - MUST BE FIRST */
         fsfilt_cb_t cb_func;            /* MDS/OBD completion function */
         struct obd_device *cb_obd;      /* MDS/OBD completion device */
         __u64 cb_last_rcvd;             /* MDS/OST last committed operation */
+        void *cb_data;                  /* MDS/OST completion function data */
 };
 
 #define EXTN_XATTR_INDEX_LUSTRE         5
@@ -58,11 +59,22 @@ struct fsfilt_cb_data {
  * the inode (which we will be changing anyways as part of this
  * transaction).
  */
-static void *fsfilt_extN_start(struct inode *inode, int op)
+static void *fsfilt_extN_start(struct inode *inode, int op, void *desc_private)
 {
         /* For updates to the last recieved file */
         int nblocks = EXTN_DATA_TRANS_BLOCKS;
         void *handle;
+
+        switch(op) {
+        case FSFILT_OP_CREATE_LOG:
+                nblocks += EXTN_INDEX_EXTRA_TRANS_BLOCKS+EXTN_DATA_TRANS_BLOCKS;
+                op = FSFILT_OP_CREATE;
+                break;
+        case FSFILT_OP_UNLINK_LOG:
+                nblocks += EXTN_INDEX_EXTRA_TRANS_BLOCKS+EXTN_DATA_TRANS_BLOCKS;
+                op = FSFILT_OP_UNLINK;
+                break;
+        }
 
         switch(op) {
         case FSFILT_OP_RMDIR:
@@ -95,7 +107,7 @@ static void *fsfilt_extN_start(struct inode *inode, int op)
                  LBUG();
         }
 
-        LASSERT(!current->journal_info);
+        LASSERT(current->journal_info == desc_private);
         lock_kernel();
         handle = journal_start(EXTN_JOURNAL(inode), nblocks);
         unlock_kernel();
@@ -124,7 +136,7 @@ static void *fsfilt_extN_start(struct inode *inode, int op)
  * objcount inode blocks
  * 1 superblock
  * 2 * EXTN_SINGLEDATA_TRANS_BLOCKS for the quota files
- * 
+ *
  * 1 EXTN_DATA_TRANS_BLOCKS for the last_rcvd update.
  */
 static int fsfilt_extN_credits_needed(int objcount, struct fsfilt_objinfo *fso)
@@ -155,7 +167,7 @@ static int fsfilt_extN_credits_needed(int objcount, struct fsfilt_objinfo *fso)
                 ngdblocks = EXTN_SB(sb)->s_gdb_count;
 
         needed += nbitmaps + ngdblocks;
-        
+
         /* last_rcvd update */
         needed += EXTN_DATA_TRANS_BLOCKS;
 
@@ -185,14 +197,14 @@ static int fsfilt_extN_credits_needed(int objcount, struct fsfilt_objinfo *fso)
  * the pages have been written.
  */
 static void *fsfilt_extN_brw_start(int objcount, struct fsfilt_objinfo *fso,
-                                   int niocount, struct niobuf_remote *nb)
+                                   int niocount, void *desc_private)
 {
         journal_t *journal;
         handle_t *handle;
         int needed;
         ENTRY;
 
-        LASSERT(!current->journal_info);
+        LASSERT(current->journal_info == desc_private);
         journal = EXTN_SB(fso->fso_dentry->d_inode->i_sb)->s_journal;
         needed = fsfilt_extN_credits_needed(objcount, fso);
 
@@ -218,6 +230,8 @@ static void *fsfilt_extN_brw_start(int objcount, struct fsfilt_objinfo *fso,
         if (IS_ERR(handle))
                 CERROR("can't get handle for %d credits: rc = %ld\n", needed,
                        PTR_ERR(handle));
+        else
+                LASSERT(handle->h_buffer_credits >= needed);
 
         RETURN(handle);
 }
@@ -249,24 +263,26 @@ static int fsfilt_extN_setattr(struct dentry *dentry, void *handle,
          * in the block pointers; this is really the "small" stripe MD data.
          * We can avoid further hackery by virtue of the MDS file size being
          * zero all the time (which doesn't invoke block truncate at unlink
-         * time), so we assert we never change the MDS file size from zero.
-         */
+         * time), so we assert we never change the MDS file size from zero. */
         if (iattr->ia_valid & ATTR_SIZE && !do_trunc) {
                 /* ATTR_SIZE would invoke truncate: clear it */
                 iattr->ia_valid &= ~ATTR_SIZE;
-                inode->i_size = iattr->ia_size;
+                EXTN_I(inode)->i_disksize = inode->i_size = iattr->ia_size;
 
                 /* make sure _something_ gets set - so new inode
-                 * goes to disk (probably won't work over XFS
-                 */
-                if (!iattr->ia_valid & ATTR_MODE) {
+                 * goes to disk (probably won't work over XFS */
+                if (!(iattr->ia_valid & (ATTR_MODE | ATTR_MTIME | ATTR_CTIME))){
                         iattr->ia_valid |= ATTR_MODE;
                         iattr->ia_mode = inode->i_mode;
                 }
         }
-        if (inode->i_op->setattr)
+
+        /* Don't allow setattr to change file type */
+        iattr->ia_mode = (inode->i_mode & S_IFMT)|(iattr->ia_mode & ~S_IFMT);
+
+        if (inode->i_op->setattr) {
                 rc = inode->i_op->setattr(dentry, iattr);
-        else{
+        } else {
                 rc = inode_change_ok(inode, iattr);
                 if (!rc)
                         rc = inode_setattr(inode, iattr);
@@ -286,8 +302,8 @@ static int fsfilt_extN_set_md(struct inode *inode, void *handle,
          * it will fit, because putting it in an EA currently kills the MDS
          * performance.  We'll fix this with "fast EAs" in the future.
          */
-        if (lmm_size <= sizeof(EXTN_I(inode)->i_data) -
-                        sizeof(EXTN_I(inode)->i_data[0])) {
+        if (inode->i_blocks == 0 && lmm_size <= sizeof(EXTN_I(inode)->i_data) -
+                                            sizeof(EXTN_I(inode)->i_data[0])) {
                 /* XXX old_size is debugging only */
                 int old_size = EXTN_I(inode)->i_data[0];
                 if (old_size != 0) {
@@ -319,7 +335,7 @@ static int fsfilt_extN_get_md(struct inode *inode, void *lmm, int lmm_size)
 {
         int rc;
 
-        if (EXTN_I(inode)->i_data[0]) {
+        if (inode->i_blocks == 0 && EXTN_I(inode)->i_data[0]) {
                 int size = le32_to_cpu(EXTN_I(inode)->i_data[0]);
                 LASSERT(size < sizeof(EXTN_I(inode)->i_data));
                 if (lmm) {
@@ -411,14 +427,15 @@ static void fsfilt_extN_cb_func(struct journal_callback *jcb, int error)
 {
         struct fsfilt_cb_data *fcb = (struct fsfilt_cb_data *)jcb;
 
-        fcb->cb_func(fcb->cb_obd, fcb->cb_last_rcvd, error);
+        fcb->cb_func(fcb->cb_obd, fcb->cb_last_rcvd, fcb->cb_data, error);
 
         OBD_SLAB_FREE(fcb, fcb_cache, sizeof *fcb);
         atomic_dec(&fcb_cache_count);
 }
 
 static int fsfilt_extN_set_last_rcvd(struct obd_device *obd, __u64 last_rcvd,
-                                     void *handle, fsfilt_cb_t cb_func)
+                                     void *handle, fsfilt_cb_t cb_func,
+                                     void *cb_data)
 {
         struct fsfilt_cb_data *fcb;
 
@@ -430,10 +447,10 @@ static int fsfilt_extN_set_last_rcvd(struct obd_device *obd, __u64 last_rcvd,
         fcb->cb_func = cb_func;
         fcb->cb_obd = obd;
         fcb->cb_last_rcvd = last_rcvd;
+        fcb->cb_data = cb_data;
 
         CDEBUG(D_EXT2, "set callback for last_rcvd: "LPD64"\n", last_rcvd);
         lock_kernel();
-        /* Note that an "incompatible pointer" warning here is OK for now */
         journal_callback_set(handle, fsfilt_extN_cb_func,
                              (struct journal_callback *)fcb);
         unlock_kernel();
@@ -459,7 +476,7 @@ static int fsfilt_extN_journal_data(struct file *filp)
  */
 static int fsfilt_extN_statfs(struct super_block *sb, struct obd_statfs *osfs)
 {
-        struct statfs sfs;
+        struct kstatfs sfs;
         int rc = vfs_statfs(sb, &sfs);
 
         if (!rc && sfs.f_bfree < sfs.f_ffree) {
@@ -484,6 +501,110 @@ static int fsfilt_extN_prep_san_write(struct inode *inode, long *blocks,
         return extN_prep_san_write(inode, blocks, nblocks, newsize);
 }
 
+static int fsfilt_extN_read_record(struct file * file, char *buf,
+                                   int size, loff_t *offs)
+{
+        struct buffer_head *bh;
+        unsigned long block, boffs;
+        struct inode *inode = file->f_dentry->d_inode;
+        int err;
+
+        if (inode->i_size < *offs + size) {
+                CERROR("file size %llu is too short for read %u@%llu\n",
+                       inode->i_size, size, *offs);
+                return -EIO;
+        }
+
+        block = *offs >> inode->i_blkbits;
+        bh = extN_bread(NULL, inode, block, 0, &err);
+        if (!bh) {
+                CERROR("can't read block: %d\n", err);
+                return err;
+        }
+
+        boffs = (unsigned)*offs % bh->b_size;
+        if (boffs + size > bh->b_size) {
+                CERROR("request crosses block's border. offset %llu, size %u\n",
+                       *offs, size);
+                brelse(bh);
+                return -EIO;
+        }
+
+        memcpy(buf, bh->b_data + boffs, size);
+        brelse(bh);
+        *offs += size;
+        return size;
+}
+
+static int fsfilt_extN_write_record(struct file * file, char *buf,
+                                    int size, loff_t *offs)
+{
+        struct buffer_head *bh;
+        unsigned long block, boffs;
+        struct inode *inode = file->f_dentry->d_inode;
+        loff_t old_size = inode->i_size;
+        journal_t *journal;
+        handle_t *handle;
+        int err;
+
+        journal = EXTN_SB(inode->i_sb)->s_journal;
+        handle = journal_start(journal, EXTN_DATA_TRANS_BLOCKS + 2);
+        if (handle == NULL) {
+                CERROR("can't start transaction\n");
+                return -EIO;
+        }
+
+        block = *offs >> inode->i_blkbits;
+        if (*offs + size > inode->i_size) {
+                down(&inode->i_sem);
+                if (*offs + size > inode->i_size)
+                        inode->i_size = ((loff_t)block + 1) << inode->i_blkbits;
+                up(&inode->i_sem);
+        }
+
+        bh = extN_bread(handle, inode, block, 1, &err);
+        if (!bh) {
+                CERROR("can't read/create block: %d\n", err);
+                goto out;
+        }
+
+        /* This is a hack only needed because extN_get_block_handle() updates
+         * i_disksize after marking the inode dirty in extN_splice_branch().
+         * We will fix that when we get a chance, as extN_mark_inode_dirty()
+         * is not without cost, nor is it even exported.
+         */
+        if (inode->i_size > old_size)
+                mark_inode_dirty(inode);
+
+        boffs = (unsigned)*offs % bh->b_size;
+        if (boffs + size > bh->b_size) {
+                CERROR("request crosses block's border. offset %llu, size %u\n",
+                       *offs, size);
+                err = -EIO;
+                goto out;
+        }
+
+        err = extN_journal_get_write_access(handle, bh);
+        if (err) {
+                CERROR("journal_get_write_access() returned error %d\n", err);
+                goto out;
+        }
+        memcpy(bh->b_data + boffs, buf, size);
+        err = extN_journal_dirty_metadata(handle, bh);
+        if (err) {
+                CERROR("journal_dirty_metadata() returned error %d\n", err);
+                goto out;
+        }
+        err = size;
+out:
+        if (bh)
+                brelse(bh);
+        journal_stop(handle);
+        if (err > 0)
+                *offs += size;
+        return err;
+}
+
 static struct fsfilt_operations fsfilt_extN_ops = {
         fs_type:                "extN",
         fs_owner:               THIS_MODULE,
@@ -499,6 +620,8 @@ static struct fsfilt_operations fsfilt_extN_ops = {
         fs_statfs:              fsfilt_extN_statfs,
         fs_sync:                fsfilt_extN_sync,
         fs_prep_san_write:      fsfilt_extN_prep_san_write,
+        fs_write_record:        fsfilt_extN_write_record,
+        fs_read_record:         fsfilt_extN_read_record,
 };
 
 static int __init fsfilt_extN_init(void)

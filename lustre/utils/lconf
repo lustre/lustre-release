@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 #
-#  Copyright (C) 2002 Cluster File Systems, Inc.
-#   Author: Robert Read <rread@clusterfs.com>
+#  Copyright (C) 2002-2003 Cluster File Systems, Inc.
+#   Authors: Robert Read <rread@clusterfs.com>
+#            Mike Shaver <shaver@clusterfs.com>
 #   This file is part of Lustre, http://www.lustre.org.
 #
 #   Lustre is free software; you can redistribute it and/or
@@ -26,7 +27,7 @@
 
 import sys, getopt, types
 import string, os, stat, popen2, socket, time, random, fcntl, select
-import re, exceptions, signal
+import re, exceptions, signal, traceback
 import xml.dom.minidom
 
 if sys.version[0] == '1':
@@ -57,7 +58,7 @@ MAX_LOOP_DEVICES = 256
 PORTALS_DIR = 'portals'
 
 
-# Please keep these uptodate with the values in portals/kp30.h
+# Please keep these in sync with the values in portals/kp30.h
 ptldebug_names = { 
     "trace" :     (1 << 0),
     "inode" :     (1 << 1),
@@ -107,6 +108,8 @@ subsystem_names = {
     "ptlrouter" :   (20 << 24),
     "cobd" :        (21 << 24),
     "ptlbd" :       (22 << 24),
+    "log" :         (23 << 24),
+    "mgmt" :        (24 << 24),
     }
 
 
@@ -423,8 +426,11 @@ class LCTLInterface:
   add_route %s %s %s
   quit  """ % (net,
                gw, lo, hi)
-        self.run(cmds)
-
+        try:
+            self.run(cmds)
+        except CommandError, e:
+            log ("ignore: ")
+            e.dump()
                 
     def del_route(self, net, gw, lo, hi):
         cmds =  """
@@ -443,7 +449,11 @@ class LCTLInterface:
   quit """ % (net,
               uuid, tgt, net,
               gw, tgt)
-        self.run(cmds)
+        try:
+            self.run(cmds)
+        except CommandError, e:
+            log ("ignore: ")
+            e.dump()
 
     # add a route to a range
     def del_route_host(self, net, uuid, gw, tgt):
@@ -795,7 +805,6 @@ def get_local_address(net_type, wildcard):
         local=string.rstrip(local[0])
 
     return local
-        
 
 # XXX: instead of device_list, ask for $name and see what we get
 def is_prepared(name):
@@ -1020,8 +1029,8 @@ class Network(Module):
                             self_nid = self.nid
                         if gw_nid < self_nid:
                             try:
-                                lctl.disconnect(router.net_type, router.nid, router.port,
-                                                router.uuid)
+                                lctl.disconnect(gw.net_type, gw.nid, gw.port,
+                                                gw.uuid)
                             except CommandError, e:
                                 print "disconnectAll failed: ", self.name
                                 e.dump()
@@ -1087,6 +1096,27 @@ class RouteTable(Module):
                 e.dump()
                 cleanup_error(e.rc)
 
+class Management(Module):
+    def __init__(self, db):
+        Module.__init__(self, 'MGMT', db)
+        self.add_lustre_module('obdclass', 'obdclass')
+        self.add_lustre_module('ptlrpc', 'ptlrpc')
+        self.add_lustre_module('ldlm', 'ldlm')
+        self.add_lustre_module('mgmt', 'mgmt_svc')
+
+    def prepare(self):
+        if is_prepared(self.name):
+            return
+        self.info()
+        lctl.newdev(attach="mgmt %s %s" % (self.name, self.uuid))
+
+    def safe_to_clean(self):
+        return 1
+
+    def cleanup(self):
+        if is_prepared(self.name):
+            Module.cleanup(self)
+
 class LDLM(Module):
     def __init__(self,db):
         Module.__init__(self, 'LDLM', db)
@@ -1109,7 +1139,7 @@ class LDLM(Module):
             Module.cleanup(self)
 
 class LOV(Module):
-    def __init__(self, db, uuid):
+    def __init__(self, db, uuid, fs_name):
         Module.__init__(self, 'LOV', db)
         self.add_lustre_module('mdc', 'mdc')
         self.add_lustre_module('lov', 'lov')
@@ -1123,11 +1153,12 @@ class LOV(Module):
         self.stripe_cnt = self.db.get_val_int('stripecount', len(self.devlist))
         self.osclist = []
         self.client_uuid = generate_client_uuid(self.name)
+        self.fs_name = fs_name
         self.mdc_name = ''
-        self.mdc = get_mdc(db, self.client_uuid, self.name, self.mds_uuid)
+        self.mdc = get_mdc(db, self.client_uuid, fs_name, self.mds_uuid)
         for obd_uuid in self.devlist:
             obd = self.db.lookup(obd_uuid)
-            osc = get_osc(obd, self.client_uuid, self.name)
+            osc = get_osc(obd, self.client_uuid, fs_name)
             if osc:
                 self.osclist.append(osc)
             else:
@@ -1142,7 +1173,7 @@ class LOV(Module):
                 # isn't implemented here yet.
                 osc.prepare(ignore_connect_failure=0)
             except CommandError, e:
-                print "Error preparing OSC %s (inactive)\n" % osc.uuid
+                print "Error preparing OSC %s\n" % osc.uuid
                 raise e
         self.mdc.prepare()
         self.mdc_name = self.mdc.name
@@ -1156,7 +1187,7 @@ class LOV(Module):
             Module.cleanup(self)
         for osc in self.osclist:
             osc.cleanup()
-        mdc = get_mdc(self.db, self.client_uuid, self.name, self.mds_uuid)
+        mdc = get_mdc(self.db, self.client_uuid, self.fs_name, self.mds_uuid)
         mdc.cleanup()
 
     def load_module(self):
@@ -1172,12 +1203,12 @@ class LOV(Module):
             break
 
 class LOVConfig(Module):
-    def __init__(self,db):
+    def __init__(self, db):
         Module.__init__(self, 'LOVConfig', db)
 
         self.lov_uuid = self.db.get_first_ref('lov')
         l = self.db.lookup(self.lov_uuid)
-        self.lov = LOV(l, "YOU_SHOULD_NEVER_SEE_THIS_UUID")
+        self.lov = LOV(l, "YOU_SHOULD_NEVER_SEE_THIS_UUID", '')
         
     def prepare(self):
         lov = self.lov
@@ -1410,9 +1441,20 @@ class OSD(Module):
         if not self.osdtype == 'obdecho':
             clean_loop(self.devpath)
 
+def mgmt_uuid_for_fs(mtpt_name):
+    if not mtpt_name:
+        return ''
+    mtpt_db = toplevel.lookup_name(mtpt_name)
+    fs_uuid = mtpt_db.get_first_ref('filesystem')
+    fs = toplevel.lookup(fs_uuid)
+    if not fs:
+        return ''
+    return fs.get_first_ref('mgmt')
+
 # Generic client module, used by OSC and MDC
 class Client(Module):
-    def __init__(self, tgtdb, uuid, module, owner):
+    def __init__(self, tgtdb, uuid, module, fs_name, self_name=None,
+                 module_dir=None):
         self.target_name = tgtdb.getName()
         self.target_uuid = tgtdb.getUUID()
         self.db = tgtdb
@@ -1427,11 +1469,22 @@ class Client(Module):
 
         self.module = module
         self.module_name = string.upper(module)
-        self.name = '%s_%s_%s_%s' % (self.module_name, socket.gethostname(),
-                                     self.target_name, owner)
+        if not self_name:
+            self.name = '%s_%s_%s_%s' % (self.module_name, socket.gethostname(),
+                                         self.target_name, fs_name)
+        else:
+            self.name = self_name
         self.uuid = uuid
         self.lookup_server(self.tgt_dev_uuid)
-        self.add_lustre_module(module, module)
+        mgmt_uuid = mgmt_uuid_for_fs(fs_name)
+        if mgmt_uuid:
+            self.mgmt_name = mgmtcli_name_for_uuid(mgmt_uuid)
+        else:
+            self.mgmt_name = ''
+        self.fs_name = fs_name
+        if not module_dir:
+            module_dir = module
+        self.add_lustre_module(module_dir, module)
 
     def lookup_server(self, srv_uuid):
         """ Lookup a server's network information """
@@ -1461,7 +1514,8 @@ class Client(Module):
                 raise e
         if srv:
             lctl.newdev(attach="%s %s %s" % (self.module, self.name, self.uuid),
-                        setup ="%s %s" %(self.target_uuid, srv.uuid))
+                        setup ="%s %s %s" % (self.target_uuid, srv.uuid,
+                                             self.mgmt_name))
 
     def cleanup(self):
         if is_prepared(self.name):
@@ -1473,7 +1527,7 @@ class Client(Module):
                 else:
                     srv, r =  find_route(self.get_servers())
                     if srv:
-                        lctl.del_route_host(r[0], srv.uuid, r[1], r[2])
+                        lctl.del_route_host(r[0], srv.uuid, r[1], r[3])
             except CommandError, e:
                 log(self.module_name, "cleanup failed: ", self.name)
                 e.dump()
@@ -1481,13 +1535,22 @@ class Client(Module):
 
 
 class MDC(Client):
-    def __init__(self, db, uuid, owner):
-         Client.__init__(self, db, uuid, 'mdc', owner)
+    def __init__(self, db, uuid, fs_name):
+         Client.__init__(self, db, uuid, 'mdc', fs_name)
+
 
 class OSC(Client):
-    def __init__(self, db, uuid, owner):
-         Client.__init__(self, db, uuid, 'osc', owner)
+    def __init__(self, db, uuid, fs_name):
+         Client.__init__(self, db, uuid, 'osc', fs_name)
 
+def mgmtcli_name_for_uuid(uuid):
+    return 'MGMTCLI_%s' % uuid
+
+class ManagementClient(Client):
+    def __init__(self, db, uuid):
+        Client.__init__(self, db, uuid, 'mgmt_cli', '',
+                        self_name = mgmtcli_name_for_uuid(db.getUUID()),
+                        module_dir = 'mgmt')
             
 class COBD(Module):
     def __init__(self, db):
@@ -1509,12 +1572,12 @@ class COBD(Module):
 
 # virtual interface for  OSC and LOV
 class VOSC(Module):
-    def __init__(self, db, uuid, owner):
+    def __init__(self, db, uuid, fs_name):
         Module.__init__(self, 'VOSC', db)
         if db.get_class() == 'lov':
-            self.osc = LOV(db, uuid)
+            self.osc = LOV(db, uuid, fs_name)
         else:
-            self.osc = get_osc(db, uuid, owner)
+            self.osc = get_osc(db, uuid, fs_name)
     def get_uuid(self):
         return self.osc.uuid
     def get_name(self):
@@ -1560,9 +1623,11 @@ class ECHO_CLIENT(Module):
     def load_module(self):
         self.osc.load_module()
         Module.load_module(self)
+
     def cleanup_module(self):
         Module.cleanup_module(self)
         self.osc.cleanup_module()
+
 
 def generate_client_uuid(name):
         client_uuid = '%05x_%.19s_%05x%05x' % (int(random.random() * 1048576),
@@ -1570,6 +1635,7 @@ def generate_client_uuid(name):
                                                int(random.random() * 1048576),
                                                int(random.random() * 1048576))
         return client_uuid[:36]
+
 
 class Mountpoint(Module):
     def __init__(self,db):
@@ -1579,6 +1645,7 @@ class Mountpoint(Module):
         fs = self.db.lookup(self.fs_uuid)
         self.mds_uuid = fs.get_first_ref('mds')
         self.obd_uuid = fs.get_first_ref('obd')
+        self.mgmt_uuid = fs.get_first_ref('mgmt')
         obd = self.db.lookup(self.obd_uuid)
         client_uuid = generate_client_uuid(self.name)
         self.vosc = VOSC(obd, client_uuid, self.name)
@@ -1586,12 +1653,18 @@ class Mountpoint(Module):
             self.add_lustre_module('mdc', 'mdc')
             self.mdc = get_mdc(db, client_uuid, self.name, self.mds_uuid)
         self.add_lustre_module('llite', 'llite')
-
+        if self.mgmt_uuid:
+            self.mgmtcli = ManagementClient(db.lookup(self.mgmt_uuid),
+                                            client_uuid)
+        else:
+            self.mgmtcli = None
 
     def prepare(self):
         if fs_is_mounted(self.path):
             log(self.path, "already mounted.")
             return
+        if self.mgmtcli:
+            self.mgmtcli.prepare()
         self.vosc.prepare()
         if self.vosc.need_mdc():
             self.mdc.prepare()
@@ -1632,13 +1705,20 @@ class Mountpoint(Module):
         self.vosc.cleanup()
         if self.vosc.need_mdc():
             self.mdc.cleanup()
+        if self.mgmtcli:
+            self.mgmtcli.cleanup()
 
     def load_module(self):
+        if self.mgmtcli:
+            self.mgmtcli.load_module()
         self.vosc.load_module()
         Module.load_module(self)
+
     def cleanup_module(self):
         Module.cleanup_module(self)
         self.vosc.cleanup_module()
+        if self.mgmtcli:
+            self.mgmtcli.cleanup_module()
 
 
 # ============================================================
@@ -1670,6 +1750,8 @@ def getServiceLevel(self):
         ret = 6
     elif type in ('ldlm',):
         ret = 20
+    elif type in ('mgmt',):
+        ret = 25
     elif type in ('osd', 'cobd'):
         ret = 30
     elif type in ('mdsdev',):
@@ -1707,15 +1789,15 @@ def getServices(self):
 #
 # OSC is no longer in the xml, so we have to fake it.
 # this is getting ugly and begging for another refactoring
-def get_osc(ost_db, uuid, owner):
-    osc = OSC(ost_db, uuid, owner)
+def get_osc(ost_db, uuid, fs_name):
+    osc = OSC(ost_db, uuid, fs_name)
     return osc
 
-def get_mdc(db, uuid, owner, mds_uuid):
+def get_mdc(db, uuid, fs_name, mds_uuid):
     mds_db = db.lookup(mds_uuid);
     if not mds_db:
         panic("no mds:", mds_uuid)
-    mdc = MDC(mds_db, uuid, owner)
+    mdc = MDC(mds_db, uuid, fs_name)
     return mdc
 
 ############################################################
@@ -1842,6 +1924,8 @@ def newService(db):
         n = Mountpoint(db)
     elif type == 'echoclient':
         n = ECHO_CLIENT(db)
+    elif type == 'mgmt':
+        n = Management(db)
     else:
         panic ("unknown service type:", type)
     return n
@@ -2060,7 +2144,7 @@ def sys_set_ptldebug():
 def sys_set_subsystem():
     if config.subsystem != None:
         try:
-            val = eval(config.ptldebug, ptldebug_names)
+            val = eval(config.subsystem, subsystem_names)
             val = "0x%x" % (val,)
             sysctl('portals/subsystem_debug', val)
         except NameError, e:
@@ -2191,7 +2275,7 @@ lconf_options = [
     ]      
 
 def main():
-    global lctl, config
+    global lctl, config, toplevel
 
     # in the upcall this is set to SIG_IGN
     signal.signal(signal.SIGCHLD, signal.SIG_DFL)
@@ -2241,8 +2325,11 @@ def main():
         dn = "config=%s,fs=lustre" % (config.config)
         db = Lustre.LustreDB_LDAP('', {}, base=dn, url = config.ldapurl)
     else:
-        cl.usage()
+        print 'Missing config file or ldap URL.'
+        print 'see lconf --help for command summary'
         sys.exit(1)
+
+    toplevel = db
 
     ver = db.get_version()
     if not ver:
@@ -2277,6 +2364,8 @@ if __name__ == "__main__":
         main()
     except Lustre.LconfError, e:
         print e
+#        traceback.print_exc(file=sys.stdout)
+        sys.exit(1)
     except CommandError, e:
         e.dump()
         sys.exit(e.rc)

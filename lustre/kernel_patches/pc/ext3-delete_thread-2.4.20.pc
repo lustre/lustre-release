@@ -1,3 +1,5 @@
 fs/ext3/super.c
+fs/ext3/inode.c
+fs/ext3/file.c
 include/linux/ext3_fs.h
 include/linux/ext3_fs_sb.h

@@ -30,5 +30,5 @@ if [ "$1" = "-v" ]; then
   verbose="-v"
 fi
 
-${LCONF} $portals_opt $lustre_opt $node_opt ${REFORMAT:---reformat} --gdb \
-    $verbose $conf_opt  || exit 2
+${LCONF} $portals_opt $lustre_opt $node_opt ${REFORMAT:---reformat} \
+    ${GDB:---gdb} $verbose $conf_opt  || exit 2

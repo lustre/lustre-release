@@ -31,7 +31,7 @@
 #else
 #include <linux/version.h>
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
-#include <asm/statfs.h>
+#include <linux/statfs.h>
 #endif
 #endif
 
@@ -40,8 +40,9 @@
 #include <linux/obd_support.h>
 #include <linux/obd_class.h>
 
-void statfs_pack(struct obd_statfs *osfs, struct statfs *sfs)
+void statfs_pack(struct obd_statfs *osfs, struct kstatfs *sfs)
 {
+        memset(osfs, 0, sizeof(*osfs));
         osfs->os_type = sfs->f_type;
         osfs->os_blocks = sfs->f_blocks;
         osfs->os_bfree = sfs->f_bfree;
@@ -52,8 +53,9 @@ void statfs_pack(struct obd_statfs *osfs, struct statfs *sfs)
         osfs->os_namelen = sfs->f_namelen;
 }
 
-void statfs_unpack(struct statfs *sfs, struct obd_statfs *osfs)
+void statfs_unpack(struct kstatfs *sfs, struct obd_statfs *osfs)
 {
+        memset(sfs, 0, sizeof(*sfs));
         sfs->f_type = osfs->os_type;
         sfs->f_blocks = osfs->os_blocks;
         sfs->f_bfree = osfs->os_bfree;
@@ -64,39 +66,5 @@ void statfs_unpack(struct statfs *sfs, struct obd_statfs *osfs)
         sfs->f_namelen = osfs->os_namelen;
 }
 
-int obd_self_statfs(struct obd_device *obd, struct statfs *sfs)
-{
-        struct obd_export *export, *my_export = NULL;
-        struct obd_statfs osfs = { 0 };
-        int rc;
-        ENTRY;
-
-        LASSERT( obd != NULL );
-
-        spin_lock(&obd->obd_dev_lock);
-        if (list_empty(&obd->obd_exports)) {
-                spin_unlock(&obd->obd_dev_lock);
-                export = my_export = class_new_export(obd);
-                if (export == NULL)
-                        RETURN(-ENOMEM);
-        } else {
-                export = list_entry(obd->obd_exports.next, typeof(*export),
-                                    exp_obd_chain);
-                export = class_export_get(export);
-                spin_unlock(&obd->obd_dev_lock);
-        }
-
-        rc = obd_statfs(export, &osfs);
-        if (!rc)
-                statfs_unpack(sfs, &osfs);
-
-        if (my_export)
-                class_unlink_export(my_export);
-
-        class_export_put(export);
-        RETURN(rc);
-}
-
 EXPORT_SYMBOL(statfs_pack);
 EXPORT_SYMBOL(statfs_unpack);
-EXPORT_SYMBOL(obd_self_statfs);

@@ -289,18 +289,24 @@ void ptlrpc_daemonize(void)
         reparent_to_init();
 }
 
+static long timeval_sub(struct timeval *large, struct timeval *small)
+{
+        return (large->tv_sec - small->tv_sec) * 1000000 +
+                (large->tv_usec - small->tv_usec);
+}
+
 static int ptlrpc_main(void *arg)
 {
-        struct ptlrpc_svc_data *data = (struct ptlrpc_svc_data *)arg;
+        struct ptlrpc_svc_data *data = arg;
         struct obd_device *obddev = data->dev;
         struct ptlrpc_service *svc = data->svc;
         struct ptlrpc_thread *thread = data->thread;
         struct ptlrpc_request *request;
         ptl_event_t *event;
-        int rc = 0;
         unsigned long flags;
-        cycles_t workdone_time = -1;
-        cycles_t svc_workcycles = -1;
+        struct timeval start_time, finish_time;
+        long total;
+        int rc = 0;
         ENTRY;
 
         lock_kernel();
@@ -311,21 +317,14 @@ static int ptlrpc_main(void *arg)
         RECALC_SIGPENDING;
         SIGNAL_MASK_UNLOCK(current, flags);
 
-#if defined(__arch_um__) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,4,20))
-        sprintf(current->comm, "%s|%d", data->name,current->thread.extern_pid);
-#elif defined(__arch_um__) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-        sprintf(current->comm, "%s|%d", data->name,
-                current->thread.mode.tt.extern_pid);
-#else
-        strcpy(current->comm, data->name);
-#endif
+        THREAD_NAME(current->comm, "%s", data->name);
         unlock_kernel();
 
         OBD_ALLOC(event, sizeof(*event));
-        if (!event)
+        if (event == NULL)
                 GOTO(out, rc = -ENOMEM);
         OBD_ALLOC(request, sizeof(*request));
-        if (!request)
+        if (request == NULL)
                 GOTO(out_event, rc = -ENOMEM);
 
         /* Record that the thread is running */
@@ -334,14 +333,15 @@ static int ptlrpc_main(void *arg)
 
         /* XXX maintain a list of all managed devices: insert here */
 
+        do_gettimeofday(&finish_time);
         /* And now, loop forever on requests */
         while (1) {
                 struct l_wait_info lwi = { 0 };
                 l_wait_event(svc->srv_waitq,
                              ptlrpc_check_event(svc, thread, event), &lwi);
 
+                spin_lock(&svc->srv_lock);
                 if (thread->t_flags & SVC_STOPPING) {
-                        spin_lock(&svc->srv_lock);
                         thread->t_flags &= ~SVC_STOPPING;
                         spin_unlock(&svc->srv_lock);
 
@@ -349,65 +349,64 @@ static int ptlrpc_main(void *arg)
                         break;
                 }
 
-                if (thread->t_flags & SVC_EVENT) {
-                        cycles_t  workstart_time;
-
-                        spin_lock(&svc->srv_lock);
-                        thread->t_flags &= ~SVC_EVENT;
-                        /* Update Service Statistics */
-                        workstart_time = get_cycles();
-                        if (workdone_time != -1 && svc->svc_stats != NULL) {
-                                /* Stats for req(n) are updated just before
-                                 * req(n+1) is executed. This avoids need to
-                                 * reacquire svc->srv_lock after
-                                 * call to handling_request().
-                                 */
-                                int opc;
-
-                                /* req_waittime */
-                                lprocfs_counter_add(svc->svc_stats,
-                                                    PTLRPC_REQWAIT_CNTR,
-                                                    (workstart_time -
-                                                     event->arrival_time));
-                                /* svc_eqdepth */
-                                /* Wait for b_eq branch
-                                lprocfs_counter_add(svc->svc_stats,
-                                                    PTLRPC_SVCEQDEPTH_CNTR,
-                                                    0);
-                                */
-                                /* svc_idletime */
-                                lprocfs_counter_add(svc->svc_stats,
-                                                    PTLRPC_SVCIDLETIME_CNTR,
-                                                    (workstart_time -
-                                                     workdone_time));
-                                /* previous request */
-                                opc = opcode_offset(request->rq_reqmsg->opc);
-                                if (opc > 0) {
-                                        LASSERT(opc < LUSTRE_MAX_OPCODES);
-                                        lprocfs_counter_add(svc->svc_stats, opc,
-                                                            PTLRPC_LAST_CNTR +
-                                                            svc_workcycles);
-                                }
-                        }
+                if (!(thread->t_flags & SVC_EVENT)) {
+                        CERROR("unknown flag in service");
                         spin_unlock(&svc->srv_lock);
-
-                        rc = handle_incoming_request(obddev, svc, event,
-                                                     request);
-                        workdone_time = get_cycles();
-                        svc_workcycles = workdone_time - workstart_time;
-                        continue;
+                        LBUG();
+                        EXIT;
+                        break;
                 }
 
-                CERROR("unknown break in service");
-                LBUG();
-                EXIT;
-                break;
+                thread->t_flags &= ~SVC_EVENT;
+                spin_unlock(&svc->srv_lock);
+
+                do_gettimeofday(&start_time);
+                total = timeval_sub(&start_time, &event->arrival_time);
+                if (svc->svc_stats != NULL) {
+                        lprocfs_counter_add(svc->svc_stats, PTLRPC_REQWAIT_CNTR,
+                                            total);
+                        lprocfs_counter_add(svc->svc_stats,
+                                            PTLRPC_SVCIDLETIME_CNTR,
+                                            timeval_sub(&start_time,
+                                                        &finish_time));
+#if 0 /* Wait for b_eq branch */
+                        lprocfs_counter_add(svc->svc_stats,
+                                            PTLRPC_SVCEQDEPTH_CNTR, 0);
+#endif
+                }
+
+                if (total / 1000000 > (long)obd_timeout) {
+                        CERROR("Dropping request from NID "LPX64" because it's "
+                               "%ld seconds old.\n", event->initiator.nid,
+                               total / 1000000); /* bug 1502 */
+                } else {
+                        CDEBUG(D_HA, "request from NID "LPX64" noticed after "
+                               "%ldus\n", event->initiator.nid, total);
+                        rc = handle_incoming_request(obddev, svc, event,
+                                                     request);
+                }
+                do_gettimeofday(&finish_time);
+                total = timeval_sub(&finish_time, &start_time);
+
+                CDEBUG((total / 1000000 > (long)obd_timeout) ? D_ERROR : D_HA,
+                       "request "LPU64" from NID "LPX64" processed in %ldus "
+                       "(%ldus total)\n", request->rq_xid, event->initiator.nid,
+                       total, timeval_sub(&finish_time, &event->arrival_time));
+
+                if (svc->svc_stats != NULL) {
+                        int opc = opcode_offset(request->rq_reqmsg->opc);
+                        if (opc > 0) {
+                                LASSERT(opc < LUSTRE_MAX_OPCODES);
+                                lprocfs_counter_add(svc->svc_stats,
+                                                    opc + PTLRPC_LAST_CNTR,
+                                                    total);
+                        }
+                }
         }
 
         /* NB should wait for all SENT callbacks to complete before exiting
          * here.  Unfortunately at this time there is no way to track this
-         * state.
-         */
+         * state. */
         OBD_FREE(request, sizeof(*request));
 out_event:
         OBD_FREE(event, sizeof(*event));

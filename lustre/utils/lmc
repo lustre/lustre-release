@@ -19,9 +19,9 @@
 #
 
 """
-lmc - lustre configurtion data  manager
+lmc - lustre configuration data manager
 
-  See lustre book for documentation for lmc.
+  See Lustre book (http://www.lustre.org/docs/lustre.pdf) for documentation on lmc.
 
 """
 
@@ -98,6 +98,10 @@ Object creation command summary:
   --path /mnt/point
   --mds mds_name
   --ost ost_name OR --lov lov_name
+
+--add mgmt  - Management/monitoring service
+  --node node_name
+  --mgmt mgmt_service_name
 """
 
 PARAM = Lustre.Options.PARAM
@@ -123,10 +127,10 @@ lmc_options = [
     # network 
     ('nettype', "Specify the network type. This can be tcp/elan/gm/scimac.", PARAM),
     ('nid', "Give the network ID, e.g ElanID/IP Address as used by portals.", PARAM),
-    ('tcpbuf', "Optional arguement to specify the TCP buffer size.", PARAM, "0"),
-    ('port', "Optional arguement to specify the TCP port number.", PARAM, DEFAULT_PORT),
-    ('nid_exchange', "Optional arguement to indicate if nid exchange should be done.", PARAM, 0),
-    ('irq_affinity', "Optional arguement.", PARAM, 0),
+    ('tcpbuf', "Optional argument to specify the TCP buffer size.", PARAM, "0"),
+    ('port', "Optional argument to specify the TCP port number.", PARAM, DEFAULT_PORT),
+    ('nid_exchange', "Optional argument to indicate if nid exchange should be done.", PARAM, 0),
+    ('irq_affinity', "Optional argument.", PARAM, 0),
     ('hostaddr', "", PARAM,""),
     ('cluster_id', "Specify the cluster ID", PARAM, "0"),
 
@@ -143,12 +147,12 @@ lmc_options = [
     ('mds', "Specify MDS name.", PARAM),
     ('ost', "Specify the OST name.", PARAM,""),
     ('osdtype', "This could obdfilter or obdecho.", PARAM, "obdfilter"),
-    ('failover', ""),
+    ('failover', "Enable failover support on OSTs or MDS?"),
     ('group', "", PARAM),
     ('dev', "Path of the device on local system.", PARAM,""),
     ('size', "Specify the size of the device if needed.", PARAM,"0"),
     ('journal_size', "Specify new journal size for underlying ext3 file system.", PARAM,"0"),
-    ('fstype', "Optional arguement to specify the filesystem type.", PARAM, "ext3"),
+    ('fstype', "Optional argument to specify the filesystem type.", PARAM, "ext3"),
     ('ostuuid', "", PARAM,""),
     ('nspath', "Local mount point of server namespace.", PARAM,""),
     ('format', ""),
@@ -167,6 +171,8 @@ lmc_options = [
     # cobd
     ('real_obd', "", PARAM),
     ('cache_obd', "", PARAM),
+
+    ('mgmt', "Specify management/monitoring service name.", PARAM, ""),
     ]
 
 def error(*args):
@@ -393,16 +399,25 @@ class GenConfig:
         mdd.appendChild(self.ref("target", mds_uuid))
         return mdd
 
+    def mgmt(self, mgmt_name, mgmt_uuid, node_uuid):
+        mgmt = self.newService("mgmt", mgmt_name, mgmt_uuid)
+        mgmt.appendChild(self.ref("node", node_uuid))
+        # Placeholder until mgmt-service failover.
+        mgmt.appendChild(self.ref("active", mgmt_uuid))
+        return mgmt
+
     def mountpoint(self, name, uuid, fs_uuid, path):
         mtpt = self.newService("mountpoint", name, uuid)
         mtpt.appendChild(self.ref("filesystem", fs_uuid))
         self.addElement(mtpt, "path", path)
         return mtpt
 
-    def filesystem(self, name, uuid, mds_uuid, obd_uuid):
+    def filesystem(self, name, uuid, mds_uuid, obd_uuid, mgmt_uuid):
         fs = self.newService("filesystem", name, uuid)
         fs.appendChild(self.ref("mds", mds_uuid))
         fs.appendChild(self.ref("obd", obd_uuid))
+        if mgmt_uuid:
+            fs.appendChild(self.ref("mgmt", mgmt_uuid))
         return fs
         
     def echo_client(self, name, uuid, osc_uuid):
@@ -660,6 +675,23 @@ def add_mds(gen, lustre, options):
     lustre.appendChild(mdd)
                    
 
+def add_mgmt(gen, lustre, options):
+    node_name = get_option(options, 'node')
+    node_uuid = name2uuid(lustre, node_name)
+    mgmt_name = get_option(options, 'mgmt')
+    if not mgmt_name:
+        mgmt_name = new_name('MGMT_' + node_name)
+    mgmt_uuid = name2uuid(lustre, mgmt_name, fatal=0)
+    if not mgmt_uuid:
+        mgmt_uuid = new_uuid(mgmt_name)
+        mgmt = gen.mgmt(mgmt_name, mgmt_uuid, node_uuid)
+        lustre.appendChild(mgmt)
+    else:
+        mgmt = lookup(lustre, mgmt_uuid)
+
+    node = findByName(lustre, node_name, "node")
+    node_add_profile(gen, node, 'mgmt', mgmt_uuid)
+
 def add_ost(gen, lustre, options):
     node_name = get_option(options, 'node')
     lovname = get_option(options, 'lov')
@@ -793,23 +825,27 @@ def add_lov(gen, lustre, options):
     lovconfig = gen.lovconfig(lovconfig_name, lovconfig_uuid, uuid)
     lustre.appendChild(lovconfig)
 
-def new_filesystem(gen, lustre, mds_uuid, obd_uuid):
+def new_filesystem(gen, lustre, mds_uuid, obd_uuid, mgmt_uuid):
     fs_name = new_name("FS_fsname")
     fs_uuid = new_uuid(fs_name)
     mds = lookup(lustre, mds_uuid)
     mds.appendChild(gen.ref("filesystem", fs_uuid))
-    fs = gen.filesystem(fs_name, fs_uuid, mds_uuid, obd_uuid)
+    fs = gen.filesystem(fs_name, fs_uuid, mds_uuid, obd_uuid, mgmt_uuid)
     lustre.appendChild(fs)
     return fs_uuid
 
-def get_fs_uuid(gen, lustre, mds_name, obd_name):
+def get_fs_uuid(gen, lustre, mds_name, obd_name, mgmt_name):
     mds_uuid = name2uuid(lustre, mds_name, tag='mds')
     obd_uuid = name2uuid(lustre, obd_name, tag='lov', fatal=0)
     if not obd_uuid:
         obd_uuid = name2uuid(lustre, obd_name, tag='ost', fatal=1)
+    if mgmt_name:
+        mgmt_uuid = name2uuid(lustre, mgmt_name, tag='mgmt', fatal=1)
+    else:
+        mgmt_uuid = ''
     fs_uuid = lookup_filesystem(lustre, mds_uuid, obd_uuid)
     if not fs_uuid:
-        fs_uuid = new_filesystem(gen, lustre, mds_uuid, obd_uuid)
+        fs_uuid = new_filesystem(gen, lustre, mds_uuid, obd_uuid, mgmt_uuid)
     return fs_uuid
     
 def add_mtpt(gen, lustre, options):
@@ -825,7 +861,8 @@ def add_mtpt(gen, lustre, options):
             lov_name = get_option(options, 'ost')
             if lov_name == '':
                 error("--add mtpt requires either --filesystem or --mds with an  --lov lov_name or --ost ost_name")
-        fs_uuid = get_fs_uuid(gen, lustre, mds_name, lov_name)
+        mgmt_name = get_option(options, 'mgmt')
+        fs_uuid = get_fs_uuid(gen, lustre, mds_name, lov_name, mgmt_name)
     else:
         fs_uuid = name2uuid(lustre, fs_name, tag='filesystem')
 
@@ -910,6 +947,8 @@ def add(devtype, gen, lustre, options):
         add_echo_client(gen, lustre, options)
     elif devtype == 'cobd':
         add_cobd(gen, lustre, options)
+    elif devtype == 'mgmt':
+        add_mgmt(gen, lustre, options)
     else:
         error("unknown device type:", devtype)
     

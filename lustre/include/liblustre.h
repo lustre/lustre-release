@@ -363,16 +363,16 @@ struct page {
 #define kmap(page) (page)->addr
 #define kunmap(a) do { int foo = 1; foo++; } while (0)
 
-static inline struct page *alloc_pages(int mask, unsigned long foo)
+static inline struct page *alloc_pages(int mask, unsigned long order)
 {
         struct page *pg = malloc(sizeof(*pg));
 
         if (!pg)
                 return NULL;
 #ifdef MAP_ANONYMOUS
-        pg->addr = mmap(0, PAGE_SIZE, PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, 0, 0);
+        pg->addr = mmap(0, PAGE_SIZE << order, PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, 0, 0);
 #else
-        pg->addr = malloc(PAGE_SIZE);
+        pg->addr = malloc(PAGE_SIZE << order);
 #endif
 
         if (!pg->addr) {
@@ -407,26 +407,27 @@ static inline struct page* __grab_cache_page(int index)
 /* arithmetic */
 #define do_div(a,b)                     \
         ({                              \
-                unsigned long ret;      \
-                ret = (a)%(b);          \
-                (a) = (a)/(b);          \
-                (ret);                  \
+                unsigned long remainder;\
+                remainder = (a) % (b);  \
+                (a) = (a) / (b);        \
+                (remainder);            \
         })
 
 /* VFS stuff */
-#define ATTR_MODE       1
-#define ATTR_UID        2
-#define ATTR_GID        4
-#define ATTR_SIZE       8
-#define ATTR_ATIME      16
-#define ATTR_MTIME      32
-#define ATTR_CTIME      64
-#define ATTR_ATIME_SET  128
-#define ATTR_MTIME_SET  256
-#define ATTR_FORCE      512     /* Not a change, but a change it */
-#define ATTR_ATTR_FLAG  1024
-#define ATTR_RAW        2048    /* file system, not vfs will massage attrs */
-#define ATTR_FROM_OPEN  4096    /* called from open path, ie O_TRUNC */
+#define ATTR_MODE       0x0001
+#define ATTR_UID        0x0002
+#define ATTR_GID        0x0004
+#define ATTR_SIZE       0x0008
+#define ATTR_ATIME      0x0010
+#define ATTR_MTIME      0x0020
+#define ATTR_CTIME      0x0040
+#define ATTR_ATIME_SET  0x0080
+#define ATTR_MTIME_SET  0x0100
+#define ATTR_FORCE      0x0200  /* Not a change, but a change it */
+#define ATTR_ATTR_FLAG  0x0400
+#define ATTR_RAW        0x0800  /* file system, not vfs will massage attrs */
+#define ATTR_FROM_OPEN  0x1000  /* called from open path, ie O_TRUNC */
+#define ATTR_CTIME_SET  0x2000
 
 struct iattr {
         unsigned int    ia_valid;

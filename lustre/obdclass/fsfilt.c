@@ -64,7 +64,7 @@ void fsfilt_unregister_ops(struct fsfilt_operations *fs_ops)
         /* unlock fsfilt_types list */
 }
 
-struct fsfilt_operations *fsfilt_get_ops(char *type)
+struct fsfilt_operations *fsfilt_get_ops(const char *type)
 {
         struct fsfilt_operations *fs_ops;
 
@@ -89,7 +89,7 @@ struct fsfilt_operations *fsfilt_get_ops(char *type)
 			/* unlock fsfilt_types list */
                 }
         }
-        __MOD_INC_USE_COUNT(fs_ops->fs_owner);
+        try_module_get(fs_ops->fs_owner);
         /* unlock fsfilt_types list */
 
         return fs_ops;
@@ -97,7 +97,7 @@ struct fsfilt_operations *fsfilt_get_ops(char *type)
 
 void fsfilt_put_ops(struct fsfilt_operations *fs_ops)
 {
-        __MOD_DEC_USE_COUNT(fs_ops->fs_owner);
+        module_put(fs_ops->fs_owner);
 }
 
 

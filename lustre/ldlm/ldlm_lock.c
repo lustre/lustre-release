@@ -71,6 +71,8 @@ char *ldlm_it2str(int it)
                 return "lookup";
         case IT_UNLINK:
                 return "unlink";
+        case IT_GETXATTR:
+                return "getxattr";
         default:
                 CERROR("Unknown intent %d\n", it);
                 return "UNKNOWN";
@@ -954,8 +956,8 @@ int ldlm_run_ast_work(struct list_head *rpc_list)
                 if (rc == -ERESTART)
                         retval = rc;
                 else if (rc)
-                        CERROR("Failed AST - should clean & disconnect "
-                               "client\n");
+                        CDEBUG(D_DLMTRACE, "Failed AST - should clean & "
+                               "disconnect client\n");
                 LDLM_LOCK_PUT(w->w_lock);
                 list_del(&w->w_list);
                 OBD_FREE(w, sizeof(*w));

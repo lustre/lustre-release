@@ -24,14 +24,25 @@
 #ifndef _LPROCFS_SNMP_H
 #define _LPROCFS_SNMP_H
 
+
 #ifdef __KERNEL__
 #include <linux/config.h>
 #include <linux/autoconf.h>
 #include <linux/proc_fs.h>
+#include <linux/version.h>
 #include <linux/smp.h>
+#include <linux/kp30.h>
+
+# if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
+#  include <linux/statfs.h>
+# else 
+#  define kstatfs statfs
+# endif
+
+#else 
+#  define kstatfs statfs
 #endif
 
-#include <linux/kp30.h>
 
 #ifndef LPROCFS
 #ifdef  CONFIG_PROC_FS  /* Ensure that /proc is configured */
@@ -116,9 +127,8 @@ struct lprocfs_stats {
 /* class_obd.c */
 extern struct proc_dir_entry *proc_lustre_root;
 
-/* lproc_lov.c */
-extern struct file_operations ll_proc_target_fops;
 struct obd_device;
+struct file;
 
 #ifdef LPROCFS
 
@@ -184,14 +194,18 @@ void lprocfs_init_multi_vars(unsigned int idx,                            \
    x->obd_vars = glob[idx].obd_vars;                                      \
 }                                                                         \
 
-#define LPROCFS_INIT_VARS(vclass, vinstance)           \
-void lprocfs_init_vars(struct lprocfs_static_vars *x)  \
+#define LPROCFS_INIT_VARS(name, vclass, vinstance)           \
+void lprocfs_##name##_init_vars(struct lprocfs_static_vars *x)  \
 {                                                      \
         x->module_vars = vclass;                       \
         x->obd_vars = vinstance;                       \
 }                                                      \
 
-extern void lprocfs_init_vars(struct lprocfs_static_vars *var);
+#define lprocfs_init_vars(NAME, VAR)     \
+do {      \
+        extern void lprocfs_##NAME##_init_vars(struct lprocfs_static_vars *);  \
+        lprocfs_##NAME##_init_vars(VAR);                                       \
+} while (0)
 extern void lprocfs_init_multi_vars(unsigned int idx,
                                     struct lprocfs_static_vars *var);
 /* lprocfs_status.c */
@@ -220,6 +234,8 @@ extern int lprocfs_rd_uuid(char *page, char **start, off_t off,
                            int count, int *eof, void *data);
 extern int lprocfs_rd_name(char *page, char **start, off_t off,
                            int count, int *eof, void *data);
+extern int lprocfs_rd_fstype(char *page, char **start, off_t off,
+                             int count, int *eof, void *data);
 extern int lprocfs_rd_server_uuid(char *page, char **start, off_t off,
                                   int count, int *eof, void *data);
 extern int lprocfs_rd_conn_uuid(char *page, char **start, off_t off,
@@ -228,38 +244,24 @@ extern int lprocfs_rd_numrefs(char *page, char **start, off_t off,
                               int count, int *eof, void *data);
 
 /* Statfs helpers */
-struct statfs;
 extern int lprocfs_rd_blksize(char *page, char **start, off_t off,
-                              int count, int *eof, struct statfs *sfs);
+                              int count, int *eof, void *data);
 extern int lprocfs_rd_kbytestotal(char *page, char **start, off_t off,
-                                  int count, int *eof, struct statfs *sfs);
+                                  int count, int *eof, void *data);
 extern int lprocfs_rd_kbytesfree(char *page, char **start, off_t off,
-                                 int count, int *eof, struct statfs *sfs);
+                                 int count, int *eof, void *data);
 extern int lprocfs_rd_filestotal(char *page, char **start, off_t off,
-                                 int count, int *eof, struct statfs *sfs);
+                                 int count, int *eof, void *data);
 extern int lprocfs_rd_filesfree(char *page, char **start, off_t off,
-                                int count, int *eof, struct statfs *sfs);
+                                int count, int *eof, void *data);
 extern int lprocfs_rd_filegroups(char *page, char **start, off_t off,
-                                 int count, int *eof, struct statfs *sfs);
+                                 int count, int *eof, void *data);
 
 /* lprocfs_status.c: counter read/write functions */
-struct file;
 extern int lprocfs_counter_read(char *page, char **start, off_t off,
                                 int count, int *eof, void *data);
 extern int lprocfs_counter_write(struct file *file, const char *buffer,
                                  unsigned long count, void *data);
-
-#define DEFINE_LPROCFS_STATFS_FCT(fct_name, get_statfs_fct)               \
-int fct_name(char *page, char **start, off_t off,                         \
-             int count, int *eof, void *data)                             \
-{                                                                         \
-        struct statfs sfs;                                                \
-        int rc = get_statfs_fct((struct obd_device*)data, &sfs);          \
-        return (rc == 0 ?                                                 \
-                lprocfs_##fct_name (page, start, off, count, eof, &sfs) : \
-                rc);                                                      \
-}
-
 #else
 /* LPROCFS is not defined */
 static inline void lprocfs_counter_add(struct lprocfs_stats *stats,
@@ -289,18 +291,17 @@ static inline void lprocfs_free_obd_stats(struct obd_device *obddev)
 static inline struct proc_dir_entry *
 lprocfs_register(const char *name, struct proc_dir_entry *parent,
                  struct lprocfs_vars *list, void *data) { return NULL; }
-#define LPROCFS_INIT_MULTI_VARS(array, size)
+#define LPROCFS_INIT_MULTI_VARS(array, size) do {} while (0)
 static inline void lprocfs_init_multi_vars(unsigned int idx,
                                            struct lprocfs_static_vars *x) { return; }
-#define LPROCFS_INIT_VARS(vclass, vinstance)
-static inline void lprocfs_init_vars(struct lprocfs_static_vars *x) { return; }
+#define LPROCFS_INIT_VARS(name, vclass, vinstance) do {} while (0)
+#define lprocfs_init_vars(...) do {} while (0)
 static inline int lprocfs_add_vars(struct proc_dir_entry *root,
                                    struct lprocfs_vars *var,
                                    void *data) { return 0; }
 static inline void lprocfs_remove(struct proc_dir_entry *root) {};
 static inline struct proc_dir_entry *lprocfs_srch(struct proc_dir_entry *head,
                                     const char *name) {return 0;}
-struct obd_device;
 static inline int lprocfs_obd_attach(struct obd_device *dev,
                                      struct lprocfs_vars *list) { return 0; }
 static inline int lprocfs_obd_detach(struct obd_device *dev)  { return 0; }
@@ -318,37 +319,30 @@ static inline int lprocfs_rd_numrefs(char *page, char **start, off_t off,
                                      int count, int *eof, void *data) { return 0; }
 
 /* Statfs helpers */
-struct statfs;
 static inline
 int lprocfs_rd_blksize(char *page, char **start, off_t off,
-                       int count, int *eof, struct statfs *sfs) { return 0; }
+                       int count, int *eof, void *data) { return 0; }
 static inline
 int lprocfs_rd_kbytestotal(char *page, char **start, off_t off,
-                           int count, int *eof, struct statfs *sfs) { return 0; }
+                           int count, int *eof, void *data) { return 0; }
 static inline
 int lprocfs_rd_kbytesfree(char *page, char **start, off_t off,
-                          int count, int *eof, struct statfs *sfs) { return 0; }
+                          int count, int *eof, void *data) { return 0; }
 static inline
 int lprocfs_rd_filestotal(char *page, char **start, off_t off,
-                          int count, int *eof, struct statfs *sfs) { return 0; }
+                          int count, int *eof, void *data) { return 0; }
 static inline
 int lprocfs_rd_filesfree(char *page, char **start, off_t off,
-                         int count, int *eof, struct statfs *sfs)  { return 0; }
+                         int count, int *eof, void *data)  { return 0; }
 static inline
 int lprocfs_rd_filegroups(char *page, char **start, off_t off,
-                          int count, int *eof, struct statfs *sfs) { return 0; }
+                          int count, int *eof, void *data) { return 0; }
 static inline
 int lprocfs_counter_read(char *page, char **start, off_t off,
                          int count, int *eof, void *data) { return 0; }
-struct file;
 static inline
 int lprocfs_counter_write(struct file *file, const char *buffer,
                           unsigned long count, void *data) { return 0; }
-
-#define DEFINE_LPROCFS_STATFS_FCT(fct_name, get_statfs_fct)  \
-int fct_name(char *page, char **start, off_t off,            \
-             int count, int *eof, void *data) { *eof = 1; return 0; }
-
 #endif /* LPROCFS */
 
 #endif /* LPROCFS_SNMP_H */

@@ -1,5 +1,11 @@
 /* portals/include/config.h.in.  Generated from configure.in by autoheader.  */
 
+/* Compile with orphan support */
+#undef ENABLE_ORPHANS
+
+/* Use the Pinger */
+#undef ENABLE_PINGER
+
 /* Define to 1 if you have the <inttypes.h> header file. */
 #undef HAVE_INTTYPES_H
 

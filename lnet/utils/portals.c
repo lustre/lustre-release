@@ -22,6 +22,7 @@
 
 #include <stdio.h>
 #include <sys/types.h>
+#include <netdb.h>
 #include <sys/socket.h>
 #include <netinet/tcp.h>
 #include <netdb.h>
@@ -106,6 +107,27 @@ nal2name (int nal)
         return ((e == NULL) ? "???" : e->name);
 }
 
+static struct hostent *
+ptl_gethostbyname(char * hname) {
+        struct hostent *he;
+        he = gethostbyname(hname);
+        if (!he) {
+                switch(h_errno) {
+                case HOST_NOT_FOUND:
+                case NO_ADDRESS:
+                        fprintf(stderr, "Unable to resolve hostname: %s\n",
+                                hname);
+                        break;
+                default:
+                        fprintf(stderr, "gethostbyname error: %s\n",
+                                strerror(errno));
+                        break;
+                }
+                return NULL;
+        }
+        return he;
+}
+
 int
 ptl_parse_nid (ptl_nid_t *nidp, char *str)
 {
@@ -127,7 +149,7 @@ ptl_parse_nid (ptl_nid_t *nidp, char *str)
         
         if ((('a' <= str[0] && str[0] <= 'z') ||
              ('A' <= str[0] && str[0] <= 'Z')) &&
-             (he = gethostbyname (str)) != NULL)
+             (he = ptl_gethostbyname (str)) != NULL)
         {
                 __u32 addr = *(__u32 *)he->h_addr;
 
@@ -351,12 +373,9 @@ int jt_ptl_connect(int argc, char **argv)
                         goto usage;
                 }
 
-                he = gethostbyname(argv[1]);
-                if (!he) {
-                        fprintf(stderr, "gethostbyname error: %s\n",
-                                strerror(errno));
+                he = ptl_gethostbyname(argv[1]);
+                if (!he)
                         return -1;
-                }
 
                 g_port = atol(argv[2]);
 
@@ -525,12 +544,9 @@ int jt_ptl_disconnect(int argc, char **argv)
 
                 PORTAL_IOC_INIT(data);
                 if (argc == 2) {
-                        he = gethostbyname(argv[1]);
-                        if (!he) {
-                                fprintf(stderr, "gethostbyname error: %s\n",
-                                        strerror(errno));
+                        he = ptl_gethostbyname(argv[1]);
+                        if (!he) 
                                 return -1;
-                        }
                         
                         data.ioc_nid = ntohl (*(__u32 *)he->h_addr); /* HOST byte order */
 
@@ -582,12 +598,9 @@ int jt_ptl_push_connection (int argc, char **argv)
 
                 PORTAL_IOC_INIT(data);
                 if (argc == 2) {
-                        he = gethostbyname(argv[1]);
-                        if (!he) {
-                                fprintf(stderr, "gethostbyname error: %s\n",
-                                        strerror(errno));
+                        he = ptl_gethostbyname(argv[1]);
+                        if (!he)
                                 return -1;
-                        }
                         
                         data.ioc_nid = ntohl (*(__u32 *)he->h_addr); /* HOST byte order */
 

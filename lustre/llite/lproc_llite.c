@@ -22,15 +22,13 @@
 #define DEBUG_SUBSYSTEM S_LLITE
 
 #include <linux/version.h>
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
-#include <asm/statfs.h>
-#endif
 #include <linux/lustre_lite.h>
 #include <linux/lprocfs_status.h>
 
 #include "llite_internal.h"
 
 /* /proc/lustre/llite mount point registration */
+struct proc_dir_entry *proc_lustre_fs_root;
 
 #ifndef LPROCFS
 int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
@@ -41,36 +39,113 @@ int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
 void lprocfs_unregister_mountpoint(struct ll_sb_info *sbi){}
 #else
 
-#define LPROC_LLITE_STAT_FCT(fct_name, get_statfs_fct)                    \
-int fct_name(char *page, char **start, off_t off,                         \
-             int count, int *eof, void *data)                             \
-{                                                                         \
-        struct statfs sfs;                                                \
-        int rc;                                                           \
-        LASSERT(data != NULL);                                            \
-        rc = get_statfs_fct((struct super_block*)data, &sfs);             \
-        return (rc==0                                                     \
-                ? lprocfs_##fct_name (page, start, off, count, eof, &sfs) \
-                : rc);                                                    \
-}
-
 long long mnt_instance;
 
-LPROC_LLITE_STAT_FCT(rd_blksize,     vfs_statfs);
-LPROC_LLITE_STAT_FCT(rd_kbytestotal, vfs_statfs);
-LPROC_LLITE_STAT_FCT(rd_kbytesfree,  vfs_statfs);
-LPROC_LLITE_STAT_FCT(rd_filestotal,  vfs_statfs);
-LPROC_LLITE_STAT_FCT(rd_filesfree,   vfs_statfs);
-LPROC_LLITE_STAT_FCT(rd_filegroups,  vfs_statfs);
+static int ll_rd_blksize(char *page, char **start, off_t off, int count,
+                         int *eof, void *data)
+{
+        struct super_block *sb = (struct super_block *)data;
+        struct obd_statfs osfs;
+        int rc;
 
-int rd_path(char *page, char **start, off_t off, int count, int *eof,
-            void *data)
+        LASSERT(sb != NULL);
+        rc = ll_statfs_internal(sb, &osfs, jiffies - HZ);
+        if (!rc) {
+              *eof = 1;
+              rc = snprintf(page, count, "%u\n", osfs.os_bsize);
+        }
+
+        return rc;
+}
+
+static int ll_rd_kbytestotal(char *page, char **start, off_t off, int count,
+                             int *eof, void *data)
+{
+        struct super_block *sb = (struct super_block *)data;
+        struct obd_statfs osfs;
+        int rc;
+
+        LASSERT(sb != NULL);
+        rc = ll_statfs_internal(sb, &osfs, jiffies - HZ);
+        if (!rc) {
+                __u32 blk_size = osfs.os_bsize >> 10;
+                __u64 result = osfs.os_blocks;
+
+                while (blk_size >>= 1)
+                        result <<= 1;
+
+                *eof = 1;
+                rc = snprintf(page, count, LPU64"\n", result);
+        }
+        return rc;
+
+}
+
+static int ll_rd_kbytesfree(char *page, char **start, off_t off, int count,
+                            int *eof, void *data)
+{
+        struct super_block *sb = (struct super_block *)data;
+        struct obd_statfs osfs;
+        int rc;
+
+        LASSERT(sb != NULL);
+        rc = ll_statfs_internal(sb, &osfs, jiffies - HZ);
+        if (!rc) {
+                __u32 blk_size = osfs.os_bsize >> 10;
+                __u64 result = osfs.os_bfree;
+
+                while (blk_size >>= 1)
+                        result <<= 1;
+
+                *eof = 1;
+                rc = snprintf(page, count, LPU64"\n", result);
+        }
+        return rc;
+}
+
+static int ll_rd_filestotal(char *page, char **start, off_t off, int count,
+                            int *eof, void *data)
+{
+        struct super_block *sb = (struct super_block *)data;
+        struct obd_statfs osfs;
+        int rc;
+
+        LASSERT(sb != NULL);
+        rc = ll_statfs_internal(sb, &osfs, jiffies - HZ);
+        if (!rc) {
+                 *eof = 1;
+                 rc = snprintf(page, count, LPU64"\n", osfs.os_files);
+        }
+        return rc;
+}
+
+static int ll_rd_filesfree(char *page, char **start, off_t off, int count,
+                           int *eof, void *data)
+{
+        struct super_block *sb = (struct super_block *)data;
+        struct obd_statfs osfs;
+        int rc;
+
+        LASSERT(sb != NULL);
+        rc = ll_statfs_internal(sb, &osfs, jiffies - HZ);
+        if (!rc) {
+                 *eof = 1;
+                 rc = snprintf(page, count, LPU64"\n", osfs.os_ffree);
+        }
+        return rc;
+
+}
+
+#if 0
+static int ll_rd_path(char *page, char **start, off_t off, int count, int *eof,
+                      void *data)
 {
         return 0;
 }
+#endif
 
-int rd_fstype(char *page, char **start, off_t off, int count, int *eof,
-              void *data)
+static int ll_rd_fstype(char *page, char **start, off_t off, int count,
+                        int *eof, void *data)
 {
         struct super_block *sb = (struct super_block*)data;
 
@@ -79,8 +154,8 @@ int rd_fstype(char *page, char **start, off_t off, int count, int *eof,
         return snprintf(page, count, "%s\n", sb->s_type->name);
 }
 
-int rd_sb_uuid(char *page, char **start, off_t off, int count, int *eof,
-               void *data)
+static int ll_rd_sb_uuid(char *page, char **start, off_t off, int count,
+                         int *eof, void *data)
 {
         struct super_block *sb = (struct super_block *)data;
 
@@ -89,18 +164,20 @@ int rd_sb_uuid(char *page, char **start, off_t off, int count, int *eof,
         return snprintf(page, count, "%s\n", ll_s2sbi(sb)->ll_sb_uuid.uuid);
 }
 
-struct lprocfs_vars lprocfs_obd_vars[] = {
-        { "uuid",        rd_sb_uuid,     0, 0 },
-        { "mntpt_path",  rd_path,        0, 0 },
-        { "fstype",      rd_fstype,      0, 0 },
-        { "blocksize",   rd_blksize,     0, 0 },
-        { "kbytestotal", rd_kbytestotal, 0, 0 },
-        { "kbytesfree",  rd_kbytesfree,  0, 0 },
-        { "filestotal",  rd_filestotal,  0, 0 },
-        { "filesfree",   rd_filesfree,   0, 0 },
-        { "filegroups",  rd_filegroups,  0, 0 },
-        { "dirty_pages", ll_rd_dirty_pages, 0, 0},
+static struct lprocfs_vars lprocfs_obd_vars[] = {
+        { "uuid",         ll_rd_sb_uuid,          0, 0 },
+        //{ "mntpt_path",   ll_rd_path,             0, 0 },
+        { "fstype",       ll_rd_fstype,           0, 0 },
+        { "blocksize",    ll_rd_blksize,          0, 0 },
+        { "kbytestotal",  ll_rd_kbytestotal,      0, 0 },
+        { "kbytesfree",   ll_rd_kbytesfree,       0, 0 },
+        { "filestotal",   ll_rd_filestotal,       0, 0 },
+        { "filesfree",    ll_rd_filesfree,        0, 0 },
+        //{ "filegroups",   lprocfs_rd_filegroups,  0, 0 },
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+        { "dirty_pages",  ll_rd_dirty_pages,      0, 0},
         { "max_dirty_pages", ll_rd_max_dirty_pages, ll_wr_max_dirty_pages, 0},
+#endif
         { 0 }
 };
 

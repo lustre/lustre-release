@@ -7,17 +7,19 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"34 35"}	# bugs 1365 and 1360 respectively
+ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"35 32q 37 39"} # bugs 1360, 1504
 
 SRCDIR=`dirname $0`
 PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$PATH
 
-CHECKSTAT=${CHECKSTAT:-"./checkstat -v"}
+CHECKSTAT=${CHECKSTAT:-"checkstat -v"}
 CREATETEST=${CREATETEST:-createtest}
 LFIND=${LFIND:-lfind}
 LSTRIPE=${LSTRIPE:-lstripe}
 LCTL=${LCTL:-lctl}
 MCREATE=${MCREATE:-mcreate}
+OPENFILE=${OPENFILE:-openfile}
+OPENUNLINK=${OPENUNLINK:-openunlink}
 TOEXCL=${TOEXCL:-toexcl}
 TRUNCATE=${TRUNCATE:-truncate}
 
@@ -29,22 +31,20 @@ else
 	RUNAS=${RUNAS:-"runas -u $RUNAS_ID"}
 fi
 
-MOUNT=${MOUNT:-/mnt/lustre}
-DIR=${DIR:-$MOUNT}
-export NAME=$NAME
+export NAME=${NAME:-local}
 
 SAVE_PWD=$PWD
 
 clean() {
-        echo -n "cln.."
-        sh llmountcleanup.sh > /dev/null || exit 20
+	echo -n "cln.."
+	sh llmountcleanup.sh > /dev/null || exit 20
 }
-
 CLEAN=${CLEAN:-clean}
+
 start() {
-        echo -n "mnt.."
-        sh llrmount.sh > /dev/null || exit 10
-        echo "done"
+	echo -n "mnt.."
+	sh llrmount.sh > /dev/null || exit 10
+	echo "done"
 }
 START=${START:-start}
 
@@ -54,7 +54,7 @@ log() {
 }
 
 run_one() {
-	if ! mount | grep -q $MOUNT; then
+	if ! mount | grep -q $DIR; then
 		$START
 	fi
 	log "== test $1: $2"
@@ -87,23 +87,33 @@ run_test() {
 }
 
 error() { 
-    echo FAIL
-    exit 1
+	echo "FAIL: $@"
+	exit 1
 }
 
 pass() { 
-    echo PASS
+	echo PASS
 }
 
-if ! mount | grep $MOUNT; then
+MOUNT="`mount | awk '/^'$NAME' .* lustre_lite / { print $3 }'`"
+if [ -z "$MOUNT" ]; then
 	sh llmount.sh
+	MOUNT="`mount | awk '/^'$NAME' .* lustre_lite / { print $3 }'`"
+	[ -z "$MOUNT" ] && error "NAME=$NAME not mounted"
 	I_MOUNTED=yes
 fi
 
+[ `echo $MOUNT | wc -w` -gt 1 ] && error "NAME=$NAME mounted more than once"
+
+DIR=${DIR:-$MOUNT}
+[ -z "`echo $DIR | grep $MOUNT`" ] && echo "$DIR not in $MOUNT" && exit 99
+
+rm -rf $DIR/[Rdfs][1-9]*
+
 echo preparing for tests involving mounts
-EXT2_DEV=/tmp/SANITY.LOOP
-dd if=/dev/zero of=$EXT2_DEV bs=1k seek=1000 count=1 > /dev/null
-mke2fs -F $EXT2_DEV > /dev/null
+EXT2_DEV=${EXT2_DEV:-/tmp/SANITY.LOOP}
+touch $EXT2_DEV
+mke2fs -F $EXT2_DEV 1000 > /dev/null
 
 test_0() {
 	touch $DIR/f
@@ -178,12 +188,49 @@ test_5() {
 }
 run_test 5 "mkdir .../d5 .../d5/d2; chmod .../d5/d2 ============"
 
-test_6() {
-	touch $DIR/f6
-	chmod 0666 $DIR/f6
-	$CHECKSTAT -t file -p 0666 $DIR/f6 || error
+test_6a() {
+	touch $DIR/f6a
+	chmod 0666 $DIR/f6a || error
+	$CHECKSTAT -t file -p 0666 -u \#$UID $DIR/f6a || error
 }
-run_test 6 "touch .../f6; chmod .../f6 ========================="
+run_test 6a "touch .../f6a; chmod .../f6a ======================"
+
+test_6b() {
+	[ $RUNAS_ID -eq $UID ] && echo "skipping test 6b" && return
+	$RUNAS chmod 0444 $DIR/f6a && error
+	$CHECKSTAT -t file -p 0666 -u \#$UID $DIR/f6a || error
+}
+run_test 6b "$RUNAS chmod .../f6a (should return error) =="
+
+test_6c() {
+	[ $RUNAS_ID -eq $UID ] && echo "skipping test 6c" && return
+	touch $DIR/f6c
+	chown $RUNAS_ID $DIR/f6c || error
+	$CHECKSTAT -t file -u \#$RUNAS_ID $DIR/f6c || error
+}
+run_test 6c "touch .../f6c; chown .../f6c ======================"
+
+test_6d() {
+	[ $RUNAS_ID -eq $UID ] && echo "skipping test 6d" && return
+	$RUNAS chown $UID $DIR/f6c && error
+	$CHECKSTAT -t file -u \#$RUNAS_ID $DIR/f6c || error
+}
+run_test 6d "$RUNAS chown .../f6c (should return error) =="
+
+test_6e() {
+	[ $RUNAS_ID -eq $UID ] && echo "skipping test 6e" && return
+	touch $DIR/f6e
+	chgrp $RUNAS_ID $DIR/f6e || error
+	$CHECKSTAT -t file -u \#$UID -g \#$RUNAS_ID $DIR/f6e || error
+}
+run_test 6e "touch .../f6e; chgrp .../f6e ======================"
+
+test_6f() {
+	[ $RUNAS_ID -eq $UID ] && echo "skipping test 6f" && return
+	$RUNAS chgrp $UID $DIR/f6e && error
+	$CHECKSTAT -t file -u \#$UID -g \#$RUNAS_ID $DIR/f6e || error
+}
+run_test 6f "$RUNAS chgrp .../f6e (should return error) =="
 
 test_7a() {
 	mkdir $DIR/d7
@@ -357,7 +404,7 @@ test_23() {
 run_test 23 "O_CREAT|O_EXCL in subdir =========================="
 
 test_24a() {
-	echo '============ rename sanity ================================='
+	echo '== rename sanity =============================================='
 	echo '-- same directory rename'
 	mkdir $DIR/R1
 	touch $DIR/R1/f
@@ -440,7 +487,7 @@ test_24i() {
 	$CHECKSTAT -t dir  $DIR/R9/a || error
 	$CHECKSTAT -a file $DIR/R9/a/f || error
 }
-run_test 24i "rename file to dir error: touch f ; mkdir a ; rename f a ====="
+run_test 24i "rename file to dir error: touch f ; mkdir a ; rename f a"
 
 test_24j() {
 	mkdir $DIR/R10
@@ -452,7 +499,7 @@ test_24j() {
 run_test 24j "source does not exist ============================" 
 
 test_25a() {
-	echo '== symlink sanity ======================================='
+	echo '== symlink sanity ============================================='
 	mkdir $DIR/d25
 	ln -s d25 $DIR/s25
 	touch $DIR/s25/foo || error
@@ -473,7 +520,8 @@ test_26a() {
 run_test 26a "multiple component symlink ======================="
 
 test_26b() {
-	ln -s d26/d26-2/foo $DIR/s26-2
+	mkdir -p $DIR/d26b/d26-2
+	ln -s d26b/d26-2/foo $DIR/s26-2
 	touch $DIR/s26-2 || error
 }
 run_test 26b "multiple component symlink at end of lookup ======"
@@ -500,12 +548,12 @@ test_26e() {
 run_test 26e "unlink multiple component recursive symlink ======"
 
 test_27a() {
-	echo '== stripe sanity ========================================'
+	echo '== stripe sanity =============================================='
 	mkdir $DIR/d27
 	$LSTRIPE $DIR/d27/f0 8192 0 1
 	$CHECKSTAT -t file $DIR/d27/f0
 	pass
-	log "test_27b: write to one stripe file ========================="
+	log "== test_27b: write to one stripe file ========================="
 	cp /etc/hosts $DIR/d27/f0
 }
 run_test 27a "one stripe file =================================="
@@ -513,7 +561,7 @@ run_test 27a "one stripe file =================================="
 test_27c() {
 	$LSTRIPE $DIR/d27/f01 8192 0 2
 	pass
-	log "test_27d: write to two stripe file file f01 ================"
+	log "== test_27d: write to two stripe file file f01 ================"
 	dd if=/dev/zero of=$DIR/d27/f01 bs=4k count=4
 }
 run_test 27c "create two stripe file f01 ======================="
@@ -537,14 +585,15 @@ run_test 27e "lstripe existing file (should return error) ======"
 test_27f() {
 	$LSTRIPE $DIR/d27/fbad 100 1 2 || true
 	dd if=/dev/zero of=$DIR/d27/f12 bs=4k count=4
+	$LFIND $DIR/d27/fbad
 }
 run_test 27f "lstripe with bad stripe size (should return error on LOV)"
 
 test_27g() {
 	$MCREATE $DIR/d27/fnone || error
 	pass
-	log "test 27.9: lfind ============================================"
-	$LFIND $DIR/d27
+	log "== test 27h: lfind ============================================"
+	$LFIND $DIR/d27/fnone | grep -q "Has no stripe info" || error
 }
 run_test 27g "mcreate file without objects to test lfind ======="
 
@@ -586,7 +635,7 @@ test_30() {
 run_test 30 "run binary from Lustre (execve) ==================="
 
 test_31() {
-	./openunlink $DIR/f31 $DIR/f31 || error
+	$OPENUNLINK $DIR/f31 $DIR/f31 || error
 }
 run_test 31 "open-unlink file =================================="
 
@@ -627,7 +676,7 @@ test_32d() {
 	ls -al $DIR/d32d/ext2-mountpoint/../d2/test_dir || error
 	umount $DIR/d32d/ext2-mountpoint || error
 }
-run_test 32d "open d32d/ext2-mountpoint/../d2/test_dir =========="
+run_test 32d "open d32d/ext2-mountpoint/../d2/test_dir ========="
 
 test_32e() {
 	[ -e $DIR/d32e ] && rm -fr $DIR/d32e
@@ -638,7 +687,7 @@ test_32e() {
 	$CHECKSTAT -t link $DIR/d32e/tmp/symlink11 || error
 	$CHECKSTAT -t link $DIR/d32e/symlink01 || error
 }
-run_test 32e "stat d32e/symlink->tmp/symlink->lustre-subdir ====="
+run_test 32e "stat d32e/symlink->tmp/symlink->lustre-subdir ===="
 
 test_32f() {
 	[ -e $DIR/d32f ] && rm -fr $DIR/d32f
@@ -649,7 +698,7 @@ test_32f() {
 	ls $DIR/d32f/tmp/symlink11  || error
 	ls $DIR/d32f/symlink01 || error
 }
-run_test 32f "open d32f/symlink->tmp/symlink->lustre-subdir ====="
+run_test 32f "open d32f/symlink->tmp/symlink->lustre-subdir ===="
 
 test_32g() {
 	[ -e $DIR/d32g ] && rm -fr $DIR/d32g
@@ -687,7 +736,7 @@ test_32i() {
 	$CHECKSTAT -t file $DIR/d32i/ext2-mountpoint/../test_file || error  
 	umount $DIR/d32i/ext2-mountpoint || error
 }
-run_test 32i "stat d32i/ext2-mountpoint/../test_file ============"
+run_test 32i "stat d32i/ext2-mountpoint/../test_file ==========="
 
 test_32j() {
 	[ -e $DIR/d32j ] && rm -fr $DIR/d32j
@@ -697,10 +746,10 @@ test_32j() {
 	cat $DIR/d32j/ext2-mountpoint/../test_file || error
 	umount $DIR/d32j/ext2-mountpoint || error
 }
-run_test 32j "open d32j/ext2-mountpoint/../test_file ============"
+run_test 32j "open d32j/ext2-mountpoint/../test_file ==========="
 
 test_32k() {
-	[ -e $DIR/d32k ] && rm -fr $DIR/d32k
+	rm -fr $DIR/d32k
 	mkdir -p $DIR/d32k/ext2-mountpoint 
 	mount -t ext2 -o loop $EXT2_DEV $DIR/d32k/ext2-mountpoint  
 	mkdir -p $DIR/d32k/d2
@@ -708,10 +757,10 @@ test_32k() {
 	$CHECKSTAT -t file $DIR/d32k/ext2-mountpoint/../d2/test_file || error
 	umount $DIR/d32k/ext2-mountpoint || error
 }
-run_test 32k "stat d32k/ext2-mountpoint/../d2/test_file ========="
+run_test 32k "stat d32k/ext2-mountpoint/../d2/test_file ========"
 
 test_32l() {
-	[ -e $DIR/d32l ] && rm -fr $DIR/d32l
+	rm -fr $DIR/d32l
 	mkdir -p $DIR/d32l/ext2-mountpoint 
 	mount -t ext2 -o loop $EXT2_DEV $DIR/d32l/ext2-mountpoint || error
 	mkdir -p $DIR/d32l/d2
@@ -719,10 +768,10 @@ test_32l() {
 	cat  $DIR/d32l/ext2-mountpoint/../d2/test_file || error
 	umount $DIR/d32l/ext2-mountpoint || error
 }
-run_test 32l "open d32l/ext2-mountpoint/../d2/test_file ========="
+run_test 32l "open d32l/ext2-mountpoint/../d2/test_file ========"
 
 test_32m() {
-	[ -e $DIR/d32m ] && rm -fr $DIR/d32m
+	rm -fr $DIR/d32m
 	mkdir -p $DIR/d32m/tmp    
 	TMP_DIR=$DIR/d32m/tmp       
 	ln -s $DIR $TMP_DIR/symlink11 
@@ -730,10 +779,10 @@ test_32m() {
 	$CHECKSTAT -t link $DIR/d32m/tmp/symlink11 || error
 	$CHECKSTAT -t link $DIR/d32m/symlink01 || error
 }
-run_test 32m "stat d32m/symlink->tmp/symlink->lustre-root ======="
+run_test 32m "stat d32m/symlink->tmp/symlink->lustre-root ======"
 
 test_32n() {
-	[ -e $DIR/d32n ] && rm -fr $DIR/d32n
+	rm -fr $DIR/d32n
 	mkdir -p $DIR/d32n/tmp    
 	TMP_DIR=$DIR/d32n/tmp       
 	ln -s $DIR $TMP_DIR/symlink11 
@@ -741,11 +790,11 @@ test_32n() {
 	ls -l $DIR/d32n/tmp/symlink11  || error
 	ls -l $DIR/d32n/symlink01 || error
 }
-run_test 32n "open d32n/symlink->tmp/symlink->lustre-root ======="
+run_test 32n "open d32n/symlink->tmp/symlink->lustre-root ======"
 
 test_32o() {
-	[ -e $DIR/d32o ] && rm -fr $DIR/d32o
-	[ -e $DIR/test_file ] && rm -fr $DIR/test_file
+	rm -fr $DIR/d32o
+	rm -f $DIR/test_file
 	touch $DIR/test_file 
 	mkdir -p $DIR/d32o/tmp    
 	TMP_DIR=$DIR/d32o/tmp       
@@ -759,8 +808,8 @@ test_32o() {
 run_test 32o "stat d32o/symlink->tmp/symlink->lustre-root/test_file"
 
 test_32p() {
-	[ -e $DIR/d32p ] && rm -fr $DIR/d32p
-	[ -e $DIR/test_file ] && rm -fr $DIR/test_file
+	rm -fr $DIR/d32p
+	rm -f $DIR/test_file
 	touch $DIR/test_file 
 	mkdir -p $DIR/d32p/tmp    
 	TMP_DIR=$DIR/d32p/tmp       
@@ -771,109 +820,220 @@ test_32p() {
 }
 run_test 32p "open d32p/symlink->tmp/symlink->lustre-root/test_file"
 
+test_32q() {
+	[ -e $DIR/d32q ] && rm -fr $DIR/d32q
+	mkdir -p $DIR/d32q
+	mount -t ext2 -o loop $EXT2_DEV $DIR/d32q
+	ls $DIR/d32q || error
+	umount $DIR/d32q || error
+}
+run_test 32q "ls a mounted file system ========================="
+
 #   chmod 444 /mnt/lustre/somefile
 #   open(/mnt/lustre/somefile, O_RDWR)
 #   Should return -1
 test_33() {
-	[ -e $DIR/test_33_file ] && rm -fr $DIR/test_33_file
+	rm -f $DIR/test_33_file
 	touch $DIR/test_33_file
 	chmod 444 $DIR/test_33_file
 	chown $RUNAS_ID $DIR/test_33_file
-	$RUNAS openfile -f O_RDWR $DIR/test_33_file && error || true
+	$RUNAS $OPENFILE -f O_RDWR $DIR/test_33_file && error || true
 }
 run_test 33 "write file with mode 444 (should return error) ===="
 
-test_34() {
-	$MCREATE $DIR/f
-	$TRUNCATE $DIR/f 100
-	rm $DIR/f
+TEST_34_SIZE=${TEST_34_SIZE:-2000000000000}
+test_34a() {
+	rm -f $DIR/test_34_file
+	$MCREATE $DIR/test_34_file || error
+	$LFIND $DIR/test_34_file | grep -q "Has no stripe information" || error
+	$TRUNCATE $DIR/test_34_file $TEST_34_SIZE || error
+	$LFIND $DIR/test_34_file | grep -q "Has no stripe information" || error
+	$CHECKSTAT -s $TEST_34_SIZE $DIR/test_34_file || error
 }
-run_test 34 "truncate file that has not been opened ============"
+run_test 34a "truncate file that has not been opened ==========="
+
+test_34b() {
+	$CHECKSTAT -s $TEST_34_SIZE $DIR/test_34_file || error
+	$OPENFILE -f O_RDONLY $DIR/test_34_file
+	$LFIND $DIR/test_34_file | grep -q "Has no stripe information" || error
+	$CHECKSTAT -s $TEST_34_SIZE $DIR/test_34_file || error
+}
+run_test 34b "O_RDONLY opening file doesn't create objects ====="
+
+test_34c() {
+	$CHECKSTAT -s $TEST_34_SIZE $DIR/test_34_file || error
+	$OPENFILE -f O_RDWR $DIR/test_34_file
+	$LFIND $DIR/test_34_file | grep -q "Has no stripe information" && error
+	$CHECKSTAT -s $TEST_34_SIZE $DIR/test_34_file || error
+}
+run_test 34c "O_RDWR opening file-with-size works =============="
+
+test_34d() {
+	dd if=/dev/zero of=$DIR/test_34_file conv=notrunc bs=4k count=1 || error
+	$CHECKSTAT -s $TEST_34_SIZE $DIR/test_34_file || error
+	rm $DIR/test_34_file
+}
+run_test 34d "write to sparse file ============================="
+
+test_34e() {
+	rm -f $DIR/test_34_file
+	$MCREATE $DIR/test_34_file || error
+	$TRUNCATE $DIR/test_34_file 1000 || error
+	$CHECKSTAT -s 1000 $DIR/test_34_file || error
+	$OPENFILE -f O_RDWR $DIR/test_34_file
+	$CHECKSTAT -s 1000 $DIR/test_34_file || error
+}
+run_test 34e "create objects, some with size and some without =="
 
 test_35() {
-	[ -e $DIR/test_35_file ] && rm -fr $DIR/test_35_file
 	cp /bin/sh $DIR/test_35_file
 	chmod 444 $DIR/test_35_file
 	chown $RUNAS_ID $DIR/test_35_file
-	$DIR/test_35_file && error
-	return 0
+	$DIR/test_35_file && error || true
+	rm $DIR/test_35_file
 }
 run_test 35 "exec file with mode 444 (should return error) ====="
 
 test_36a() {
-	log 36  "cvs operations ===================================="
-	mkdir -p $DIR/cvsroot
-	chown $RUNAS_ID $DIR/cvsroot
-	$RUNAS cvs -d $DIR/cvsroot init 
+	sleep 1		# we need a rest, or UMLs clock becomes skewed
+	rm -f $DIR/test_36_file
+	utime $DIR/test_36_file || error
 }
-run_test 36a "cvs init ========================================="
+run_test 36a "MDS utime check (mknod, utime) ==================="
 
 test_36b() {
-	# on the LLNL clusters, runas will still pick up root's $TMP settings,
-        # which will not be writable for the runas user, and then you get a CVS
-	# error message with a corrupt path string (CVS bug) and panic.
-	# We're not using much space, so just stick it in /tmp, which is
-	# safe.
-	OLDTMPDIR=$TMPDIR
-	OLDTMP=$TMP
-	TMPDIR=/tmp
-	TMP=/tmp
-
-	cd /etc/init.d
-	$RUNAS cvs -d $DIR/cvsroot import -m "nomesg"  reposname vtag rtag
-
-	TMPDIR=$OLDTMPDIR
-	TMP=$OLDTMP
+	sleep 1
+	echo "" > $DIR/test_36_file
+	utime $DIR/test_36_file || error
 }
-run_test 36b "cvs import ======================================="
+run_test 36b "OST utime check (open, utime) ===================="
 
 test_36c() {
-	cd $DIR
-	mkdir -p $DIR/reposname
-	chown $RUNAS_ID $DIR/reposname
-	$RUNAS cvs -d $DIR/cvsroot co reposname
+	sleep 1
+	rm -f $DIR/d36/test_36_file
+	mkdir $DIR/d36
+	chown $RUNAS_ID $DIR/d36
+	$RUNAS utime $DIR/d36/test_36_file || error
 }
-run_test 36c "cvs checkout ====================================="
+run_test 36c "non-root MDS utime check (mknod, utime) =========="
 
 test_36d() {
-	cd $DIR/reposname
-	$RUNAS touch foo36
-	$RUNAS cvs add -m 'addmsg' foo36
+	sleep 1
+	echo "" > $DIR/d36/test_36_file
+	$RUNAS utime $DIR/d36/test_36_file || error
 }
-run_test 36d "cvs add =========================================="
+run_test 36d "non-root OST utime check (open, utime) ==========="
 
 test_36e() {
-	cd $DIR/reposname
-	$RUNAS cvs update
+	sleep 1
+	[ $RUNAS_ID -eq $UID ] && return
+	touch $DIR/d36/test_36_file2
+	$RUNAS utime $DIR/d36/test_36_file2 && error || true
 }
-run_test 36e "cvs update ======================================="
-
-# XXX change this: use a non root user
-test_36f() {
-	cd $DIR/reposname
-	$RUNAS cvs commit -m 'nomsg' foo36
-}
-run_test 36f "cvs commit ======================================="
+run_test 36e "utime on non-owned file (should return error) ===="
 
 test_37() {
 	mkdir -p $DIR/dextra
 	echo f > $DIR/dextra/fbugfile
-	mount -t ext2 -o loop /$EXT2_DEV $DIR/dextra
-	ls $DIR/dextra |grep "\<fbugfile\>" && error
-	umount /$EXT2_DEV
-	rm -f DIR/dextra/fbugfile
+	mount -t ext2 -o loop $EXT2_DEV $DIR/dextra
+	ls $DIR/dextra | grep "\<fbugfile\>" && error
+	umount $DIR/dextra || error
+	rm -f $DIR/dextra/fbugfile || error
 }
-run_test 37 "ls a mounted file system to check the old contents ====="
+run_test 37 "ls a mounted file system to check old content ====="
 
 # open(file, O_DIRECTORY) will leak a request and not cleanup (bug 1501)
 test_38() {
-        o_directory $DIR/test38
+	o_directory $DIR/test38
 }
 run_test 38 "open a regular file with O_DIRECTORY =============="
-        
+
+test_39() {
+	touch $DIR/test_39_file
+	touch $DIR/test_39_file2
+#	ls -l  $DIR/test_39_file $DIR/test_39_file2
+#	ls -lu  $DIR/test_39_file $DIR/test_39_file2
+#	ls -lc  $DIR/test_39_file $DIR/test_39_file2
+	sleep 2
+	$OPENFILE -f O_CREAT:O_TRUNC:O_WRONLY $DIR/test_39_file2
+#	ls -l  $DIR/test_39_file $DIR/test_39_file2
+#	ls -lu  $DIR/test_39_file $DIR/test_39_file2
+#	ls -lc  $DIR/test_39_file $DIR/test_39_file2
+	[ $DIR/test_39_file2 -nt $DIR/test_39_file ] || error
+}
+run_test 39 "mtime changed on create ==========================="
+
+test_40() {
+	dd if=/dev/zero of=$DIR/f40 bs=4096 count=1
+	$RUNAS $OPENFILE -f O_WRONLY:O_TRUNC $DIR/f40 && error
+	$CHECKSTAT -t file -s 4096 $DIR/f40 || error
+}
+run_test 40 "failed open(O_TRUNC) doesn't truncate ============="
+
+test_41() {
+	# bug 1553
+	small_write $DIR/f41 18
+}
+run_test 41 "test small file write + fstat ====================="
+
+# on the LLNL clusters, runas will still pick up root's $TMP settings,
+# which will not be writable for the runas user, and then you get a CVS
+# error message with a corrupt path string (CVS bug) and panic.
+# We're not using much space, so just stick it in /tmp, which is safe.
+OLDTMPDIR=$TMPDIR
+OLDTMP=$TMP
+TMPDIR=/tmp
+TMP=/tmp
+OLDHOME=$HOME
+[ $RUNAS_ID -ne $UID ] && HOME=/tmp
+
+test_99a() {
+	echo 99 "cvs operations ===================================="
+	mkdir -p $DIR/d99cvsroot
+	chown $RUNAS_ID $DIR/d99cvsroot
+	$RUNAS cvs -d $DIR/d99cvsroot init || error
+}
+run_test 99a "cvs init ========================================="
+
+test_99b() {
+	cd /etc/init.d
+	$RUNAS cvs -d $DIR/d99cvsroot import -m "nomesg" d99reposname vtag rtag
+}
+run_test 99b "cvs import ======================================="
+
+test_99c() {
+	cd $DIR
+	mkdir -p $DIR/d99reposname
+	chown $RUNAS_ID $DIR/d99reposname
+	$RUNAS cvs -d $DIR/d99cvsroot co d99reposname
+}
+run_test 99c "cvs checkout ====================================="
+
+test_99d() {
+	cd $DIR/d99reposname
+	$RUNAS touch foo99
+	$RUNAS cvs add -m 'addmsg' foo99
+}
+run_test 99d "cvs add =========================================="
+
+test_99e() {
+	cd $DIR/d99reposname
+	$RUNAS cvs update
+}
+run_test 99e "cvs update ======================================="
+
+test_99f() {
+	cd $DIR/d99reposname
+	$RUNAS cvs commit -m 'nomsg' foo99
+}
+run_test 99f "cvs commit ======================================="
+
+TMPDIR=$OLDTMPDIR
+TMP=$OLDTMP
+HOME=$OLDHOME
 
 log "cleanup: ======================================================"
-rm -r $DIR/[Rdfs][1-9]*
+rm -rf $DIR/[Rdfs][1-9]*
 if [ "$I_MOUNTED" = "yes" ]; then
 	sh llmountcleanup.sh || error
 fi

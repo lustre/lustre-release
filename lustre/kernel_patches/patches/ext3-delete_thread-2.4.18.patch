@@ -1,11 +1,17 @@
- fs/ext3/super.c            |  229 +++++++++++++++++++++++++++++++++++++++++++++
- include/linux/ext3_fs.h    |    2 
+
+Create a service thread to handle delete and truncate of inodes, to avoid
+long latency while truncating very large files.
+
+
+ fs/ext3/inode.c            |  116 ++++++++++++++++++++++
+ fs/ext3/super.c            |  231 +++++++++++++++++++++++++++++++++++++++++++++
+ include/linux/ext3_fs.h    |    5 
  include/linux/ext3_fs_sb.h |   10 +
- 3 files changed, 241 insertions(+)
+ 4 files changed, 362 insertions(+)
 
 --- linux-2.4.18-18.8.0-l15/fs/ext3/super.c~ext3-delete_thread-2.4.18	Tue Jun  3 17:26:21 2003
-+++ linux-2.4.18-18.8.0-l15-adilger/fs/ext3/super.c	Wed Jun 18 11:59:14 2003
-@@ -396,6 +396,219 @@ static void dump_orphan_list(struct supe
++++ linux-2.4.18-18.8.0-l15-adilger/fs/ext3/super.c	Wed Jul  2 23:49:40 2003
+@@ -396,6 +396,220 @@ static void dump_orphan_list(struct supe
  	}
  }
  
@@ -130,14 +136,12 @@
 + * If we have any problem deferring the delete, just delete it right away.
 + * If we defer it, we also mark how many blocks it would free, so that we
 + * can keep the statfs data correct, and we know if we should sleep on the
-+ * truncate thread when we run out of space.
-+ *
-+ * In 2.5 this can be done much more cleanly by just registering a "drop"
-+ * method in the super_operations struct.
++ * delete thread when we run out of space.
 + */
 +static void ext3_delete_inode_thread(struct inode *old_inode)
 +{
 +	struct ext3_sb_info *sbi = EXT3_SB(old_inode->i_sb);
++	struct ext3_inode_info *nei, *oei = EXT3_I(old_inode);
 +	struct inode *new_inode;
 +	unsigned long blocks = old_inode->i_blocks >> (old_inode->i_blkbits-9);
 +
@@ -146,24 +150,22 @@
 +		return;
 +	}
 +
-+	if (!test_opt(old_inode->i_sb, ASYNCDEL)) {
-+		ext3_delete_inode(old_inode);
-+		return;
-+	}
++	if (!test_opt(old_inode->i_sb, ASYNCDEL) || !sbi->s_delete_list.next)
++		goto out_delete;
 +
 +	/* We may want to delete the inode immediately and not defer it */
-+	if (IS_SYNC(old_inode) || blocks <= EXT3_NDIR_BLOCKS ||
-+	    !sbi->s_delete_list.next) {
-+		ext3_delete_inode(old_inode);
-+		return;
-+	}
++	if (IS_SYNC(old_inode) || blocks <= EXT3_NDIR_BLOCKS)
++		goto out_delete;
 +
-+	if ((EXT3_I(old_inode)->i_state & EXT3_STATE_DELETE) ||
-+	    (EXT3_SB(old_inode->i_sb)->s_mount_state & EXT3_ORPHAN_FS)) {
++	/* We can't use the delete thread as-is during real orphan recovery,
++	 * as we add to the orphan list here, causing ext3_orphan_cleanup()
++	 * to loop endlessly.  It would be nice to do so, but needs work.
++	 */
++	if (oei->i_state & EXT3_STATE_DELETE ||
++	    sbi->s_mount_state & EXT3_ORPHAN_FS) {
 +		ext3_debug("doing deferred inode %lu delete (%lu blocks)\n",
 +			   old_inode->i_ino, blocks);
-+		ext3_delete_inode(old_inode);
-+		return;
++		goto out_delete;
 +	}
 +
 +	/* We can iget this inode again here, because our caller has unhashed
@@ -175,9 +177,9 @@
 +	 */
 +	down(&sbi->s_orphan_lock);
 +
-+	EXT3_SB(old_inode->i_sb)->s_mount_state |= EXT3_ORPHAN_FS;
++	sbi->s_mount_state |= EXT3_ORPHAN_FS;
 +	new_inode = iget(old_inode->i_sb, old_inode->i_ino);
-+	EXT3_SB(old_inode->i_sb)->s_mount_state &= ~EXT3_ORPHAN_FS;
++	sbi->s_mount_state &= ~EXT3_ORPHAN_FS;
 +	if (is_bad_inode(new_inode)) {
 +		printk(KERN_WARNING "read bad inode %lu\n", old_inode->i_ino);
 +		iput(new_inode);
@@ -187,20 +189,21 @@
 +		up(&sbi->s_orphan_lock);
 +		ext3_debug("delete inode %lu directly (bad read)\n",
 +			   old_inode->i_ino);
-+		ext3_delete_inode(old_inode);
-+		return;
++		goto out_delete;
 +	}
 +	J_ASSERT(new_inode != old_inode);
 +
-+	J_ASSERT(!list_empty(&EXT3_I(old_inode)->i_orphan));
++	J_ASSERT(!list_empty(&oei->i_orphan));
++
++	nei = EXT3_I(new_inode);
 +	/* Ugh.  We need to insert new_inode into the same spot on the list
 +	 * as old_inode was, to ensure the in-memory orphan list is still
 +	 * in the same order as the on-disk orphan list (badness otherwise).
 +	 */
-+	EXT3_I(new_inode)->i_orphan = EXT3_I(old_inode)->i_orphan;
-+	EXT3_I(new_inode)->i_orphan.next->prev = &EXT3_I(new_inode)->i_orphan;
-+	EXT3_I(new_inode)->i_orphan.prev->next = &EXT3_I(new_inode)->i_orphan;
-+	EXT3_I(new_inode)->i_state |= EXT3_STATE_DELETE;
++	nei->i_orphan = oei->i_orphan;
++	nei->i_orphan.next->prev = &nei->i_orphan;
++	nei->i_orphan.prev->next = &nei->i_orphan;
++	nei->i_state |= EXT3_STATE_DELETE;
 +	up(&sbi->s_orphan_lock);
 +
 +	clear_inode(old_inode);
@@ -216,6 +219,10 @@
 +		   new_inode->i_ino, blocks);
 +
 +	wake_up(&sbi->s_delete_thread_queue);
++	return;
++
++out_delete:
++	ext3_delete_inode(old_inode);
 +}
 +#else
 +#define ext3_start_delete_thread(sbi) do {} while(0)
@@ -225,7 +232,7 @@
  void ext3_put_super (struct super_block * sb)
  {
  	struct ext3_sb_info *sbi = EXT3_SB(sb);
-@@ -403,6 +615,7 @@ void ext3_put_super (struct super_block 
+@@ -403,6 +617,7 @@ void ext3_put_super (struct super_block 
  	kdev_t j_dev = sbi->s_journal->j_dev;
  	int i;
  
@@ -233,7 +240,7 @@
  	ext3_xattr_put_super(sb);
  	journal_destroy(sbi->s_journal);
  	if (!(sb->s_flags & MS_RDONLY)) {
-@@ -451,7 +664,11 @@ static struct super_operations ext3_sops
+@@ -451,7 +666,11 @@ static struct super_operations ext3_sops
  	write_inode:	ext3_write_inode,	/* BKL not held.  Don't need */
  	dirty_inode:	ext3_dirty_inode,	/* BKL not held.  We take it */
  	put_inode:	ext3_put_inode,		/* BKL not held.  Don't need */
@@ -245,7 +252,7 @@
  	put_super:	ext3_put_super,		/* BKL held */
  	write_super:	ext3_write_super,	/* BKL held */
  	write_super_lockfs: ext3_write_super_lockfs, /* BKL not held. Take it */
-@@ -511,6 +728,14 @@ static int parse_options (char * options
+@@ -511,6 +730,14 @@ static int parse_options (char * options
  	     this_char = strtok (NULL, ",")) {
  		if ((value = strchr (this_char, '=')) != NULL)
  			*value++ = 0;
@@ -260,7 +267,7 @@
  		if (!strcmp (this_char, "bsddf"))
  			clear_opt (*mount_options, MINIX_DF);
  		else if (!strcmp (this_char, "nouid32")) {
-@@ -1206,6 +1431,7 @@ struct super_block * ext3_read_super (st
+@@ -1206,6 +1433,7 @@ struct super_block * ext3_read_super (st
  	}
  
  	ext3_setup_super (sb, es, sb->s_flags & MS_RDONLY);
@@ -268,7 +275,7 @@
  	/*
  	 * akpm: core read_super() calls in here with the superblock locked.
  	 * That deadlocks, because orphan cleanup needs to lock the superblock
-@@ -1648,6 +1874,9 @@ int ext3_remount (struct super_block * s
+@@ -1648,6 +1876,9 @@ int ext3_remount (struct super_block * s
  	if (!parse_options(data, &tmp, sbi, &tmp, 1))
  		return -EINVAL;
  
@@ -278,8 +285,143 @@
  	if (sbi->s_mount_opt & EXT3_MOUNT_ABORT)
  		ext3_abort(sb, __FUNCTION__, "Abort forced by user");
  
+--- linux/fs/ext3/file.c.orig	Fri Jan 17 10:57:31 2003
++++ linux/fs/ext3/file.c	Mon Jun 30 13:28:52 2003
+@@ -121,7 +121,11 @@ struct file_operations ext3_file_operati
+ };
+ 
+ struct inode_operations ext3_file_inode_operations = {
++#ifdef EXT3_DELETE_THREAD
++	truncate:	ext3_truncate_thread,	/* BKL held */
++#else
+ 	truncate:	ext3_truncate,		/* BKL held */
++#endif
+ 	setattr:	ext3_setattr,		/* BKL held */
+ };
+ 
+--- linux-2.4.18-18.8.0-l15/fs/ext3/inode.c~ext3-delete_thread-2.4.18	Wed Jul  2 23:13:58 2003
++++ linux-2.4.18-18.8.0-l15-adilger/fs/ext3/inode.c	Wed Jul  2 23:50:29 2003
+@@ -2004,6 +2004,118 @@ out_stop:
+ 	ext3_journal_stop(handle, inode);
+ }
+ 
++#ifdef EXT3_DELETE_THREAD
++/* Move blocks from to-be-truncated inode over to a new inode, and delete
++ * that one from the delete thread instead.  This avoids a lot of latency
++ * when truncating large files.
++ *
++ * If we have any problem deferring the truncate, just truncate it right away.
++ * If we defer it, we also mark how many blocks it would free, so that we
++ * can keep the statfs data correct, and we know if we should sleep on the
++ * delete thread when we run out of space.
++ */
++void ext3_truncate_thread(struct inode *old_inode)
++{
++	struct ext3_sb_info *sbi = EXT3_SB(old_inode->i_sb);
++	struct ext3_inode_info *nei, *oei = EXT3_I(old_inode);
++	struct inode *new_inode;
++	handle_t *handle;
++	unsigned long blocks = old_inode->i_blocks >> (old_inode->i_blkbits-9);
++
++	if (!test_opt(old_inode->i_sb, ASYNCDEL) || !sbi->s_delete_list.next)
++		goto out_truncate;
++
++	/* XXX This is a temporary limitation for code simplicity.
++	 *     We could truncate to arbitrary sizes at some later time.
++	 */
++	if (old_inode->i_size != 0)
++		goto out_truncate;
++
++	/* We may want to truncate the inode immediately and not defer it */
++	if (IS_SYNC(old_inode) || blocks <= EXT3_NDIR_BLOCKS ||
++	    old_inode->i_size > oei->i_disksize)
++		goto out_truncate;
++
++	/* We can't use the delete thread as-is during real orphan recovery,
++	 * as we add to the orphan list here, causing ext3_orphan_cleanup()
++	 * to loop endlessly.  It would be nice to do so, but needs work.
++	 */
++	if (oei->i_state & EXT3_STATE_DELETE ||
++	    sbi->s_mount_state & EXT3_ORPHAN_FS) {
++		ext3_debug("doing deferred inode %lu delete (%lu blocks)\n",
++			   old_inode->i_ino, blocks);
++		goto out_truncate;
++	}
++
++	ext3_discard_prealloc(old_inode);
++
++	/* old_inode   = 1
++	 * new_inode   = sb + GDT + ibitmap
++	 * orphan list = 1 inode/superblock for add, 2 inodes for del
++	 * quota files = 2 * EXT3_SINGLEDATA_TRANS_BLOCKS
++	 */
++	handle = ext3_journal_start(old_inode, 7);
++	if (IS_ERR(handle))
++		goto out_truncate;
++
++	new_inode = ext3_new_inode(handle, old_inode, old_inode->i_mode);
++	if (IS_ERR(new_inode)) {
++		ext3_debug("truncate inode %lu directly (no new inodes)\n",
++			   old_inode->i_ino);
++		goto out_journal;
++	}
++
++	nei = EXT3_I(new_inode);
++
++	down_write(&oei->truncate_sem);
++	new_inode->i_size = old_inode->i_size;
++	new_inode->i_blocks = old_inode->i_blocks;
++	new_inode->i_uid = old_inode->i_uid;
++	new_inode->i_gid = old_inode->i_gid;
++	new_inode->i_nlink = 0;
++
++	/* FIXME when we do arbitrary truncates */
++	old_inode->i_blocks = oei->i_file_acl ? old_inode->i_blksize / 512 : 0;
++	old_inode->i_mtime = old_inode->i_ctime = CURRENT_TIME;
++
++	memcpy(nei->i_data, oei->i_data, sizeof(nei->i_data));
++	memset(oei->i_data, 0, sizeof(oei->i_data));
++
++	nei->i_disksize = oei->i_disksize;
++	nei->i_state |= EXT3_STATE_DELETE;
++	up_write(&oei->truncate_sem);
++
++	if (ext3_orphan_add(handle, new_inode) < 0)
++		goto out_journal;
++
++	if (ext3_orphan_del(handle, old_inode) < 0) {
++		ext3_orphan_del(handle, new_inode);
++		iput(new_inode);
++		goto out_journal;
++	}
++
++	ext3_journal_stop(handle, old_inode);
++
++	spin_lock(&sbi->s_delete_lock);
++	J_ASSERT(list_empty(&new_inode->i_dentry));
++	list_add_tail(&new_inode->i_dentry, &sbi->s_delete_list);
++	sbi->s_delete_blocks += blocks;
++	sbi->s_delete_inodes++;
++	spin_unlock(&sbi->s_delete_lock);
++
++	ext3_debug("delete inode %lu (%lu blocks) by thread\n",
++		   new_inode->i_ino, blocks);
++
++	wake_up(&sbi->s_delete_thread_queue);
++	return;
++
++out_journal:
++	ext3_journal_stop(handle, old_inode);
++out_truncate:
++	ext3_truncate(old_inode);
++}
++#endif /* EXT3_DELETE_THREAD */
++
+ /* 
+  * ext3_get_inode_loc returns with an extra refcount against the
+  * inode's underlying buffer_head on success. 
 --- linux-2.4.18-18.8.0-l15/include/linux/ext3_fs.h~ext3-delete_thread-2.4.18	Tue Jun  3 17:26:20 2003
-+++ linux-2.4.18-18.8.0-l15-adilger/include/linux/ext3_fs.h	Tue Jun 17 12:36:56 2003
++++ linux-2.4.18-18.8.0-l15-adilger/include/linux/ext3_fs.h	Wed Jul  2 23:19:09 2003
 @@ -190,6 +190,7 @@ struct ext3_group_desc
   */
  #define EXT3_STATE_JDATA		0x00000001 /* journaled data exists */
@@ -296,8 +438,18 @@
  
  /* Compatibility, for having both ext2_fs.h and ext3_fs.h included at once */
  #ifndef _LINUX_EXT2_FS_H
+@@ -651,6 +653,9 @@ extern void ext3_discard_prealloc (struc
+ extern void ext3_dirty_inode(struct inode *);
+ extern int ext3_change_inode_journal_flag(struct inode *, int);
+ extern void ext3_truncate (struct inode *);
++#ifdef EXT3_DELETE_THREAD
++extern void ext3_truncate_thread(struct inode *inode);
++#endif
+ 
+ /* ioctl.c */
+ extern int ext3_ioctl (struct inode *, struct file *, unsigned int,
 --- linux-2.4.18-18.8.0-l15/include/linux/ext3_fs_sb.h~ext3-delete_thread-2.4.18	Tue Jun  3 17:26:21 2003
-+++ linux-2.4.18-18.8.0-l15-adilger/include/linux/ext3_fs_sb.h	Tue Jun 17 12:36:56 2003
++++ linux-2.4.18-18.8.0-l15-adilger/include/linux/ext3_fs_sb.h	Wed Jul  2 23:19:09 2003
 @@ -29,6 +29,8 @@
  
  #define EXT3_MAX_GROUP_LOADED	32

@@ -1,6 +1,6 @@
 #!/bin/sh
-
-DIR=${DIR:-/mnt/lustre/`hostname`}
+MNT=${MNT:-/mnt/lustre}
+DIR=${DIR:-$MNT/`hostname`}
 #[ -e /proc/sys/portals/debug ] && echo 0 > /proc/sys/portals/debug 
 mkdir -p $DIR
 TGT=$DIR/client.txt

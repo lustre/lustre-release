@@ -38,7 +38,6 @@
 #include <linux/rbtree.h>
 #include <linux/seq_file.h>
 #include <linux/time.h>
-#include "llite_internal.h"
 
 /* PG_inactive_clean is shorthand for rmap, we want free_high/low here.. */
 #ifdef PG_inactive_clean
@@ -47,6 +46,7 @@
 
 #define DEBUG_SUBSYSTEM S_LLITE
 #include <linux/lustre_lite.h>
+#include "llite_internal.h"
 
 #ifndef list_for_each_prev_safe
 #define list_for_each_prev_safe(pos, n, head) \
@@ -55,11 +55,6 @@
 #endif
 
 extern spinlock_t inode_lock;
-
-struct ll_writeback_pages {
-        obd_count npgs, max;
-        struct brw_page *pga;
-};
 
 /*
  * check to see if we're racing with truncate and put the page in
@@ -139,13 +134,13 @@ static void ll_get_dirty_pages(struct inode *inode,
                 list_del(&page->list);
                 list_add(&page->list, &mapping->locked_pages);
 
-                if ( ! PageDirty(page) ) {
+                if (!PageDirty(page)) {
                         unlock_page(page);
                         continue;
                 }
                 ClearPageDirty(page);
 
-                if ( llwp_consume_page(llwp, inode, page) != 0)
+                if (llwp_consume_page(llwp, inode, page) != 0)
                         break;
         }
 
@@ -153,26 +148,31 @@ static void ll_get_dirty_pages(struct inode *inode,
         EXIT;
 }
 
-static void ll_writeback(struct inode *inode, struct ll_writeback_pages *llwp)
+static void ll_writeback(struct inode *inode, struct obdo *oa,
+                         struct ll_writeback_pages *llwp)
 {
-        int rc, i;
         struct ptlrpc_request_set *set;
+        int rc, i;
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p),bytes=%u\n",
                inode->i_ino, inode->i_generation, inode,
                ((llwp->npgs-1) << PAGE_SHIFT) + llwp->pga[llwp->npgs-1].count);
 
+        SIGNAL_MASK_ASSERT(); /* XXX BUG 1511 */
         set = ptlrpc_prep_set();
         if (set == NULL) {
                 CERROR ("Can't create request set\n");
                 rc = -ENOMEM;
         } else {
-                rc = obd_brw_async(OBD_BRW_WRITE, ll_i2obdconn(inode),
+                rc = obd_brw_async(OBD_BRW_WRITE, ll_i2obdconn(inode), oa,
                                    ll_i2info(inode)->lli_smd, llwp->npgs,
                                    llwp->pga, set, NULL);
                 if (rc == 0)
-                        rc = ptlrpc_set_wait (set);
+                        rc = ptlrpc_set_wait(set);
+                if (rc == 0)
+                        obdo_refresh_inode(inode, oa,
+                                           oa->o_valid & ~OBD_MD_FLSIZE);
                 ptlrpc_set_destroy (set);
         }
         /*
@@ -278,6 +278,7 @@ int ll_check_dirty(struct super_block *sb)
         unsigned long old_flags; /* hack? */
         int making_progress;
         struct inode *inode;
+        struct obdo oa;
         int rc = 0;
         ENTRY;
 
@@ -328,12 +329,18 @@ int ll_check_dirty(struct super_block *sb)
                         llwp.npgs = 0;
                         ll_get_dirty_pages(inode, &llwp);
                         if (llwp.npgs) {
-                               lprocfs_counter_add(ll_i2sbi(inode)->ll_stats,
-                                                   LPROC_LL_WB_PRESSURE,
-                                                   llwp.npgs);
-                               ll_writeback(inode, &llwp);
-                               rc += llwp.npgs;
-                               making_progress = 1;
+                                oa.o_id =
+                                      ll_i2info(inode)->lli_smd->lsm_object_id;
+                                oa.o_valid = OBD_MD_FLID;
+                                obdo_from_inode(&oa, inode,
+                                                OBD_MD_FLTYPE | OBD_MD_FLATIME|
+                                                OBD_MD_FLMTIME| OBD_MD_FLCTIME);
+                                lprocfs_counter_add(ll_i2sbi(inode)->ll_stats,
+                                                    LPROC_LL_WB_PRESSURE,
+                                                    llwp.npgs);
+                                ll_writeback(inode, &oa, &llwp);
+                                rc += llwp.npgs;
+                                making_progress = 1;
                         }
                 } while (llwp.npgs && should_writeback());
 
@@ -382,13 +389,14 @@ cleanup:
 }
 #endif /* linux 2.5 */
 
-int ll_batch_writepage(struct inode *inode, struct page *page)
+int ll_batch_writepage(struct inode *inode, struct obdo *oa, struct page *page)
 {
         unsigned long old_flags; /* hack? */
         struct ll_writeback_pages llwp;
         int rc = 0;
         ENTRY;
 
+        SIGNAL_MASK_ASSERT(); /* XXX BUG 1511 */
         old_flags = current->flags;
         current->flags |= PF_MEMALLOC;
         rc = ll_alloc_brw(inode, &llwp);
@@ -401,7 +409,7 @@ int ll_batch_writepage(struct inode *inode, struct page *page)
         if (llwp.npgs) {
                 lprocfs_counter_add(ll_i2sbi(inode)->ll_stats,
                                     LPROC_LL_WB_WRITEPAGE, llwp.npgs);
-                ll_writeback(inode, &llwp);
+                ll_writeback(inode, oa, &llwp);
         }
         kfree(llwp.pga);
 

@@ -36,13 +36,13 @@ static int cobd_attach(struct obd_device *dev, obd_count len, void *data)
 {
         struct lprocfs_static_vars lvars;
 
-        lprocfs_init_vars(&lvars);
-	return lprocfs_obd_attach(dev, lvars.obd_vars);
+        lprocfs_init_vars(cobd, &lvars);
+        return lprocfs_obd_attach(dev, lvars.obd_vars);
 }
 
 static int cobd_detach(struct obd_device *dev)
 {
-	return lprocfs_obd_detach(dev);
+        return lprocfs_obd_detach(dev);
 }
 
 static int
@@ -82,24 +82,23 @@ cobd_setup (struct obd_device *dev, obd_count len, void *buf)
         return (0);
 
  fail_0:
-        obd_disconnect (&cobd->cobd_target, 0 );
+        obd_disconnect(&cobd->cobd_target, 0);
         return (rc);
 }
 
-static int
-cobd_cleanup (struct obd_device *dev, int force, int failover)
+static int cobd_cleanup(struct obd_device *dev, int flags)
 {
         struct cache_obd  *cobd = &dev->u.cobd;
         int                rc;
 
-        if (!list_empty (&dev->obd_exports))
+        if (!list_empty(&dev->obd_exports))
                 return (-EBUSY);
 
-        rc = obd_disconnect (&cobd->cobd_cache, failover);
+        rc = obd_disconnect(&cobd->cobd_cache, flags);
         if (rc != 0)
                 CERROR ("error %d disconnecting cache\n", rc);
 
-        rc = obd_disconnect (&cobd->cobd_target, failover);
+        rc = obd_disconnect(&cobd->cobd_target, flags);
         if (rc != 0)
                 CERROR ("error %d disconnecting target\n", rc);
 
@@ -116,13 +115,12 @@ cobd_connect (struct lustre_handle *conn, struct obd_device *obd,
         return (rc);
 }
 
-static int
-cobd_disconnect (struct lustre_handle *conn, int failover)
+static int cobd_disconnect(struct lustre_handle *conn, int flags)
 {
-	int rc = class_disconnect (conn, failover);
+        int rc = class_disconnect(conn, flags);
 
         CERROR ("rc %d\n", rc);
-	return (rc);
+        return (rc);
 }
 
 static int
@@ -144,23 +142,15 @@ cobd_get_info(struct lustre_handle *conn, obd_count keylen,
         return obd_get_info(&cobd->cobd_target, keylen, key, vallen, val);
 }
 
-static int cobd_statfs(struct obd_export *exp, struct obd_statfs *osfs)
+static int cobd_statfs(struct obd_device *obd, struct obd_statfs *osfs,
+                       unsigned long max_age)
 {
-        struct obd_export *cobd_exp;
-        int rc;
-
-        if (exp->exp_obd == NULL)
-                return -EINVAL;
-
-        cobd_exp = class_conn2export(&exp->exp_obd->u.cobd.cobd_target);
-        rc = obd_statfs(cobd_exp, osfs);
-        class_export_put(cobd_exp);
-        return rc;
+        return obd_statfs(class_conn2obd(&obd->u.cobd.cobd_target), osfs,
+                          max_age);
 }
 
-static int
-cobd_getattr(struct lustre_handle *conn, struct obdo *oa,
-             struct lov_stripe_md *lsm)
+static int cobd_getattr(struct lustre_handle *conn, struct obdo *oa,
+                        struct lov_stripe_md *lsm)
 {
         struct obd_device *obd = class_conn2obd(conn);
         struct cache_obd  *cobd;
@@ -207,11 +197,10 @@ cobd_close(struct lustre_handle *conn, struct obdo *oa,
         return (obd_close (&cobd->cobd_target, oa, lsm, oti));
 }
 
-static int cobd_preprw(int cmd, struct obd_export *exp, struct obdo *obdo,
+static int cobd_preprw(int cmd, struct obd_export *exp, struct obdo *oa,
                        int objcount, struct obd_ioobj *obj,
                        int niocount, struct niobuf_remote *nb,
-                       struct niobuf_local *res, void **desc_private,
-                       struct obd_trans_info *oti)
+                       struct niobuf_local *res, struct obd_trans_info *oti)
 {
         struct obd_export *cobd_exp;
         int rc;
@@ -223,16 +212,17 @@ static int cobd_preprw(int cmd, struct obd_export *exp, struct obdo *obdo,
                 return -EOPNOTSUPP;
 
         cobd_exp = class_conn2export(&exp->exp_obd->u.cobd.cobd_target);
-        rc = obd_preprw(cmd, cobd_exp, obdo, objcount, obj, niocount, nb, res,
-                        desc_private, oti);
+        rc = obd_preprw(cmd, cobd_exp, oa, objcount, obj, niocount, nb, res,
+                        oti);
         class_export_put(cobd_exp);
+
         return rc;
 }
 
-static int cobd_commitrw(int cmd, struct obd_export *exp,
+static int cobd_commitrw(int cmd, struct obd_export *exp, struct obdo *oa,
                          int objcount, struct obd_ioobj *obj,
                          int niocount, struct niobuf_local *local,
-                         void *desc_private, struct obd_trans_info *oti)
+                         struct obd_trans_info *oti)
 {
         struct obd_export *cobd_exp;
         int rc;
@@ -244,16 +234,14 @@ static int cobd_commitrw(int cmd, struct obd_export *exp,
                 return -EOPNOTSUPP;
 
         cobd_exp = class_conn2export(&exp->exp_obd->u.cobd.cobd_target);
-        rc = obd_commitrw(cmd, cobd_exp, objcount, obj, niocount, local,
-                          desc_private, oti);
+        rc = obd_commitrw(cmd, cobd_exp, oa, objcount, obj,niocount,local,oti);
         class_export_put(cobd_exp);
         return rc;
 }
 
-static inline int
-cobd_brw(int cmd, struct lustre_handle *conn,
-         struct lov_stripe_md *lsm, obd_count oa_bufs,
-         struct brw_page *pga, struct obd_trans_info *oti)
+static int cobd_brw(int cmd, struct lustre_handle *conn, struct obdo *oa,
+                    struct lov_stripe_md *lsm, obd_count oa_bufs,
+                    struct brw_page *pga, struct obd_trans_info *oti)
 {
         struct obd_device *obd = class_conn2obd(conn);
         struct cache_obd  *cobd;
@@ -267,13 +255,11 @@ cobd_brw(int cmd, struct lustre_handle *conn,
                 return -EOPNOTSUPP;
 
         cobd = &obd->u.cobd;
-        return (obd_brw (cmd, &cobd->cobd_target,
-                         lsm, oa_bufs, pga, oti));
+        return (obd_brw(cmd, &cobd->cobd_target, oa, lsm, oa_bufs, pga, oti));
 }
 
-static int
-cobd_iocontrol(unsigned int cmd, struct lustre_handle *conn, int len,
-               void *karg, void *uarg)
+static int cobd_iocontrol(unsigned int cmd, struct lustre_handle *conn, int len,
+                          void *karg, void *uarg)
 {
         struct obd_device *obd = class_conn2obd(conn);
         struct cache_obd  *cobd;
@@ -286,7 +272,7 @@ cobd_iocontrol(unsigned int cmd, struct lustre_handle *conn, int len,
         /* intercept? */
 
         cobd = &obd->u.cobd;
-        return (obd_iocontrol (cmd, &cobd->cobd_target, len, karg, uarg));
+        return (obd_iocontrol(cmd, &cobd->cobd_target, len, karg, uarg));
 }
 
 static struct obd_ops cobd_ops = {
@@ -317,16 +303,16 @@ static int __init cobd_init(void)
         struct lprocfs_static_vars lvars;
         ENTRY;
 
-	printk(KERN_INFO "Lustre Caching OBD driver; info@clusterfs.com\n");
+        printk(KERN_INFO "Lustre Caching OBD driver; info@clusterfs.com\n");
 
-        lprocfs_init_vars(&lvars);
+        lprocfs_init_vars(cobd, &lvars);
         RETURN(class_register_type(&cobd_ops, lvars.module_vars,
                                    OBD_CACHE_DEVICENAME));
 }
 
-static void __exit cobd_exit(void)
+static void /*__exit*/ cobd_exit(void)
 {
-	class_unregister_type(OBD_CACHE_DEVICENAME);
+        class_unregister_type(OBD_CACHE_DEVICENAME);
 }
 
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");

@@ -25,67 +25,59 @@
 #include <linux/lprocfs_status.h>
 
 #ifndef LPROCFS
-struct lprocfs_vars lprocfs_obd_vars[] = { {0} };
-struct lprocfs_vars lprocfs_module_vars[] = { {0} };
+static struct lprocfs_vars lprocfs_obd_vars[] = { {0} };
+static struct lprocfs_vars lprocfs_module_vars[] = { {0} };
 #else
 /* Common STATUS namespace */
-static int rd_target(char *page, char **start, off_t off, int count,
-                     int *eof, void *data)
+static int cobd_rd_target(char *page, char **start, off_t off, int count,
+                          int *eof, void *data)
 {
-        struct obd_device    *dev = (struct obd_device*)data;
-	struct lustre_handle *conn;
-	struct obd_export    *exp;
-	int    rc;
+        struct obd_device *cobd = (struct obd_device *)data;
+        int    rc;
 
-        LASSERT(dev != NULL);
-        conn = &dev->u.cobd.cobd_target;
+        LASSERT(cobd != NULL);
 
-	if (!dev->obd_set_up) {
-		rc = snprintf (page, count, "not set up\n");
-	} else {
-		exp = class_conn2export(conn);
-		LASSERT(exp != NULL);
-		rc = snprintf(page, count, "%s\n", 
-                              exp->exp_obd->obd_uuid.uuid);
-                class_export_put(exp);
-	}
-	return (rc);
-}
-
-static int rd_cache(char *page, char **start, off_t off, int count,
-                    int *eof, void *data)
-{
-        struct obd_device    *dev = (struct obd_device*)data;
-	struct lustre_handle *conn;
-	struct obd_export    *exp;
-	int    rc;
-
-        LASSERT(dev != NULL);
-        conn = &dev->u.cobd.cobd_cache;
-
-	if (!dev->obd_set_up) {
-		rc = snprintf (page, count, "not set up\n");
+        if (!cobd->obd_set_up) {
+                rc = snprintf(page, count, "not set up\n");
         } else {
-		exp = class_conn2export(conn);
-		LASSERT (exp != NULL);
-		rc = snprintf(page, count, "%s\n", 
-                              exp->exp_obd->obd_uuid.uuid);
-                class_export_put(exp);
-	}
-	return (rc);
+                struct obd_device *tgt =
+                        class_conn2obd(&cobd->u.cobd.cobd_target);
+                LASSERT(tgt != NULL);
+                rc = snprintf(page, count, "%s\n", tgt->obd_uuid.uuid);
+        }
+        return rc;
 }
 
-struct lprocfs_vars lprocfs_obd_vars[] = {
-        { "uuid",        lprocfs_rd_uuid,    0, 0 },
-        { "target_uuid", rd_target,          0, 0 },
-        { "cache_uuid",  rd_cache,           0, 0 },
+static int cobd_rd_cache(char *page, char **start, off_t off, int count,
+                         int *eof, void *data)
+{
+        struct obd_device *cobd = (struct obd_device*)data;
+        int    rc;
+
+        LASSERT(cobd != NULL);
+
+        if (!cobd->obd_set_up) {
+                rc = snprintf(page, count, "not set up\n");
+        } else {
+                struct obd_device *cache =
+                        class_conn2obd(&cobd->u.cobd.cobd_cache);
+                LASSERT(cache != NULL);
+                rc = snprintf(page, count, "%s\n", cache->obd_uuid.uuid);
+        }
+        return rc;
+}
+
+static struct lprocfs_vars lprocfs_obd_vars[] = {
+        { "uuid",         lprocfs_rd_uuid,        0, 0 },
+        { "target_uuid",  cobd_rd_target,         0, 0 },
+        { "cache_uuid",   cobd_rd_cache,          0, 0 },
         { 0 }
 };
 
 struct lprocfs_vars lprocfs_module_vars[] = {
-        { "num_refs",    lprocfs_rd_numrefs, 0, 0 },
+        { "num_refs",     lprocfs_rd_numrefs,     0, 0 },
         { 0 }
 };
 #endif /* LPROCFS */
 
-LPROCFS_INIT_VARS(lprocfs_module_vars, lprocfs_obd_vars)
+LPROCFS_INIT_VARS(cobd, lprocfs_module_vars, lprocfs_obd_vars)

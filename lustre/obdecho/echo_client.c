@@ -484,7 +484,7 @@ echo_client_kbrw (struct obd_device *obd, int rw,
                 }
         }
 
-        rc = obd_brw(rw, &ec->ec_conn, lsm, npages, pga, NULL);
+        rc = obd_brw(rw, &ec->ec_conn, oa, lsm, npages, pga, NULL);
 
  out:
         if (rc != 0)
@@ -568,7 +568,7 @@ static int echo_client_ubrw(struct obd_device *obd, int rw,
                 pgp->flag = 0;
         }
 
-        rc = obd_brw(rw, &ec->ec_conn, lsm, npages, pga, NULL);
+        rc = obd_brw(rw, &ec->ec_conn, oa, lsm, npages, pga, NULL);
 
         //        if (rw == OBD_BRW_READ)
         //                mark_dirty_kiobuf (kiobuf, count);
@@ -1009,7 +1009,7 @@ static int echo_setup(struct obd_device *obddev, obd_count len, void *buf)
         RETURN(rc);
 }
 
-static int echo_cleanup(struct obd_device * obddev, int force, int failover)
+static int echo_cleanup(struct obd_device *obddev, int flags)
 {
         struct list_head       *el;
         struct ec_object       *eco;
@@ -1023,21 +1023,21 @@ static int echo_cleanup(struct obd_device * obddev, int force, int failover)
         }
 
         /* XXX assuming sole access */
-        while (!list_empty (&ec->ec_objects)) {
+        while (!list_empty(&ec->ec_objects)) {
                 el = ec->ec_objects.next;
-                eco = list_entry (el, struct ec_object, eco_obj_chain);
+                eco = list_entry(el, struct ec_object, eco_obj_chain);
 
-                LASSERT (eco->eco_refcount == 0);
+                LASSERT(eco->eco_refcount == 0);
                 eco->eco_refcount = 1;
                 eco->eco_deleted = 1;
-                echo_put_object (eco);
+                echo_put_object(eco);
         }
 
-        rc = obd_disconnect (&ec->ec_conn, 0);
+        rc = obd_disconnect(&ec->ec_conn, 0);
         if (rc != 0)
                 CERROR("fail to disconnect device: %d\n", rc);
 
-        RETURN (rc);
+        RETURN(rc);
 }
 
 static int echo_connect(struct lustre_handle *conn, struct obd_device *src,
@@ -1057,7 +1057,7 @@ static int echo_connect(struct lustre_handle *conn, struct obd_device *src,
         RETURN (rc);
 }
 
-static int echo_disconnect(struct lustre_handle *conn, int failover)
+static int echo_disconnect(struct lustre_handle *conn, int flags)
 {
         struct obd_export      *exp = class_conn2export (conn);
         struct obd_device      *obd;
@@ -1128,7 +1128,7 @@ int echo_client_init(void)
 {
         struct lprocfs_static_vars lvars;
 
-        lprocfs_init_vars(&lvars);
+        lprocfs_init_vars(echo, &lvars);
         return class_register_type(&echo_obd_ops, lvars.module_vars,
                                    OBD_ECHO_CLIENT_DEVICENAME);
 }

@@ -15,9 +15,12 @@ ext-2.4-patch-4.patch
 linux-2.4.20-xattr-0.8.54-chaos.patch
 ext3-2.4.20-fixes.patch
 ext3_orphan_lock-2.4.20-rh.patch
-ext3-delete_thread-2.4.20.patch
+ext3_delete_thread_2.4.20_chaos.patch
 ext3-noread-2.4.20.patch
 extN-wantedi.patch
 ext3-san-2.4.20.patch
+ext3-map_inode_page.patch
+ext3-error-export.patch
 iopen-2.4.20.patch
-tcp-zero-copy.patch
+tcp_zero_copy_2.4.20_chaos.patch
+gpl_header-chaos-2.4.20.patch

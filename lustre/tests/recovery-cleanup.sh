@@ -22,9 +22,10 @@ CLIENT=${CLIENT:-mdev8}
 NETWORKTYPE=${NETWORKTYPE:-tcp}
 MOUNTPT=${MOUNTPT:-/mnt/lustre}
 CONFIG=${CONFIG:-recovery-cleanup.xml}
-MDSDEV=${MDSDEV:-/tmp/mds}
-OSTDEV=${OSTDEV:-/tmp/ost}
+MDSDEV=${MDSDEV:-/tmp/mds-`hostname`}
 MDSSIZE=${MDSSIZE:-100000}
+FSTYPE=${FSTYPE:-ext3}
+OSTDEV=${OSTDEV:-/tmp/ost-`hostname`}
 OSTSIZE=${OSTSIZE:-100000}
 
 do_mds() {
@@ -51,10 +52,10 @@ make_config() {
        lmc -m $CONFIG --add net --node $NODE --nid `h2$NETWORKTYPE $NODE` \
            --nettype $NETWORKTYPE || exit 4
     done
-    lmc -m $CONFIG --add mds --node $MDSNODE --mds mds1 --dev $MDSDEV \
-        --size $MDSSIZE || exit 5
-    lmc -m $CONFIG --add ost --node $OSTNODE --ost ost1 --dev $OSTDEV \
-        --size $OSTSIZE || exit 6
+    lmc -m $CONFIG --add mds --node $MDSNODE --mds mds1 --fstype $FSTYPE \
+    	--dev $MDSDEV --size $MDSSIZE || exit 5
+    lmc -m $CONFIG --add ost --node $OSTNODE --ost ost1 --fstype $FSTYPE \
+    	--dev $OSTDEV --size $OSTSIZE || exit 6
     lmc -m $CONFIG --add mtpt --node $CLIENT --path $MOUNTPT --mds mds1 \
         --ost ost1 || exit 7
 }

@@ -188,6 +188,7 @@ struct ldlm_lock {
          * it's no longer in use.  If the lock is not granted, a process sleeps
          * on this waitq to learn when it becomes granted. */
         wait_queue_head_t     l_waitq;
+        struct timeval        l_enqueued_time;
 };
 
 typedef int (*ldlm_res_compat)(struct ldlm_lock *child, struct ldlm_lock *new);
@@ -316,6 +317,8 @@ int ldlm_namespace_foreach_res(struct ldlm_namespace *ns,
                                ldlm_res_iterator_t iter, void *closure);
 
 int ldlm_replay_locks(struct obd_import *imp);
+void ldlm_change_cbdata(struct ldlm_namespace *, struct ldlm_res_id *,
+                        ldlm_iterator_t iter, void *data);
 
 /* ldlm_extent.c */
 int ldlm_extent_compat(struct ldlm_lock *, struct ldlm_lock *);
@@ -450,6 +453,8 @@ int ldlm_cli_cancel_unused(struct ldlm_namespace *, struct ldlm_res_id *,
 
 /* mds/handler.c */
 /* This has to be here because recurisve inclusion sucks. */
+int intent_disposition(struct ldlm_reply *rep, int flag);
+void intent_set_disposition(struct ldlm_reply *rep, int flag);
 int mds_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                      void *data, int flag);
 

@@ -74,7 +74,7 @@ out_filp:
         RETURN(rc);
 }
 
-static int ptlbd_sv_cleanup(struct obd_device *obddev, int force, int failover)
+static int ptlbd_sv_cleanup(struct obd_device *obddev, int flags)
 {
         struct ptlbd_obd *ptlbd = &obddev->u.ptlbd;
         ENTRY;
@@ -102,7 +102,7 @@ int ptlbd_sv_init(void)
 {
         struct lprocfs_static_vars lvars;
 
-        lprocfs_init_vars(&lvars);
+        lprocfs_init_vars(ptlbd,&lvars);
         return class_register_type(&ptlbd_sv_obd_ops, lvars.module_vars,
                                    OBD_PTLBD_SV_DEVICENAME);
 }

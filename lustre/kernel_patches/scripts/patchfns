@@ -78,7 +78,7 @@ check_pc_match()
 		if [ $? != 0 ]; then
 			echo " $1 do not match with $2 "
 			echo " $2 will be changed to match $2"
-			cat $tmpfile > $P/pc/$PATCH_NAME.pc
+			# cat $tmpfile > $P/pc/$PATCH_NAME.pc
 		fi
 		rm -rf $tmpfile
 	fi

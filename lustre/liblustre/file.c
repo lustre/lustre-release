@@ -145,7 +145,7 @@ int llu_create(struct inode *dir, struct pnode_base *pnode, int mode)
 
         it = dentry->d_it;
 
-        rc = ll_it_open_error(IT_OPEN_CREATE, it);
+        rc = ll_it_open_error(DISP_OPEN_CREATE, it);
         if (rc) {
                 LL_GET_INTENT(dentry, it);
                 ptlrpc_req_finished(it->it_data);
@@ -317,7 +317,7 @@ static int llu_file_open(struct inode *inode)
 #if 0
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu\n", inode->i_ino);
         LL_GET_INTENT(file->f_dentry, it);
-        rc = ll_it_open_error(IT_OPEN_OPEN, it);
+        rc = ll_it_open_error(DISP_OPEN_OPEN, it);
         if (rc)
                 RETURN(rc);
 #endif
@@ -477,7 +477,7 @@ static int llu_file_release(struct inode *inode)
                 oa.o_id = lsm->lsm_object_id;
                 oa.o_mode = S_IFREG;
                 oa.o_valid = OBD_MD_FLTYPE | OBD_MD_FLID;
-                
+
                 memcpy(&oa.o_inline, &fd->fd_ost_och, FD_OSTDATA_SIZE);
                 oa.o_valid |= OBD_MD_FLHANDLE;
 

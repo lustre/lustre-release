@@ -96,9 +96,10 @@
 /* OST_MAXREQSIZE ~= 1640 bytes =
  * lustre_msg + obdo + 16 * obd_ioobj + 64 * niobuf_remote
  *
- * single object with 16 pages is 512 bytes
+ * - single object with 16 pages is 512 bytes
+ * - OST_MAXREQSIZE must be at least 1 page of cookies plus some spillover
  */
-#define OST_MAXREQSIZE  (2 * 1024)
+#define OST_MAXREQSIZE  (5 * 1024)
 
 #define PTLBD_NUM_THREADS        4
 #define PTLBD_NEVENTS    1024
@@ -188,15 +189,19 @@ union ptlrpc_async_args {
          * big enough.  For _tons_ of context, OBD_ALLOC a struct and store
          * a pointer to it here.  The pointer_arg ensures this struct is at
          * least big enough for that. */
-        void      *pointer_arg[4];
+        void      *pointer_arg[5];
         __u64      space[4];
 };
+
+struct ptlrpc_request_set;
+typedef int (*set_interpreter_func)(struct ptlrpc_request_set *, void *, int);
 
 struct ptlrpc_request_set {
         int               set_remaining; /* # uncompleted requests */
         wait_queue_head_t set_waitq;
+        wait_queue_head_t *set_wakeup_ptr;
         struct list_head  set_requests;
-        void             *set_interpret; /* completion callback */
+        set_interpreter_func    set_interpret; /* completion callback */
         union ptlrpc_async_args set_args; /* completion context */
 };
 

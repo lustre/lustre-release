@@ -1,4 +1,14 @@
 tbd
+       * version v0_8
+       * bug fixes
+        - orphans are moved into the PENDING directory for possible recovery
+        - replayed opens now open by fid for orphan/rename safety (1042)
+        - last close of an orphan inode generates a transno (683)
+	- chdir() and mount() now pin the directory entry (1020)
+	- avoid CERROR in normal ll_setattr_raw() error case (1500)
+	- discard very old requests without processing them (1502)
+
+2003-06-15  Phil Schwan  <phil@clusterfs.com>
        * version v0_7
        * bug fixes
 	- imports and exports cleanup too early, need refcounts (349, 879, 1045)

@@ -5,7 +5,7 @@ set -vxe
 
 [ "$CONFIGS" -a -z "$SANITYN" ] && SANITYN=no
 [ "$CONFIGS" ] || CONFIGS="local lov"
-[ "$MAX_THREADS" ] || MAX_THREADS=50
+[ "$MAX_THREADS" ] || MAX_THREADS=10
 if [ -z "$THREADS" ]; then
 	KB=`awk '/MemTotal:/ { print $2 }' /proc/meminfo`
 	THREADS=`expr $KB / 16384`
@@ -76,7 +76,7 @@ for NAME in $CONFIGS; do
 	if [ "$IOZONE_DIR" != "no" ]; then
 		mount | grep $MNT || sh llmount.sh
 		SPACE=`df $MNT | tail -1 | awk '{ print $4 }'`
-		IOZ_THREADS=`expr $SPACE / $SIZE`
+		IOZ_THREADS=`expr $SPACE / \( $SIZE + $SIZE / 1000 \)`
 		[ $THREADS -lt $IOZ_THREADS ] && IOZ_THREADS=$THREADS
 
 		$DEBUG_OFF

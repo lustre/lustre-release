@@ -1,7 +1,18 @@
- 0 files changed
+ fs/ext3/Makefile           |    4 
+ fs/ext3/ext3-exports.c     |   13 
+ fs/ext3/ialloc.c           |    2 
+ fs/ext3/inode.c            |   29 -
+ fs/ext3/namei.c            |   12 
+ fs/ext3/super.c            |   22 
+ fs/ext3/xattr.c            | 1242 +++++++++++++++++++++++++++++++++++++++++++++
+ include/linux/ext3_fs.h    |   46 -
+ include/linux/ext3_jbd.h   |    8 
+ include/linux/ext3_xattr.h |  155 +++++
+ include/linux/xattr.h      |   15 
+ 11 files changed, 1496 insertions(+), 52 deletions(-)
 
---- linux-2.4.18-18/fs/ext3/ialloc.c~linux-2.4.18ea-0.8.26	2003-04-20 16:14:31.000000000 +0800
-+++ linux-2.4.18-18-root/fs/ext3/ialloc.c	2003-04-20 16:14:31.000000000 +0800
+--- linux-2.4.18-p4smp/fs/ext3/ialloc.c~linux-2.4.18ea-0.8.26	2003-07-20 17:12:43.000000000 -0600
++++ linux-2.4.18-p4smp-braam/fs/ext3/ialloc.c	2003-07-21 22:49:05.000000000 -0600
 @@ -17,6 +17,7 @@
  #include <linux/jbd.h>
  #include <linux/ext3_fs.h>
@@ -18,8 +29,8 @@
  	DQUOT_FREE_INODE(inode);
  	DQUOT_DROP(inode);
  
---- linux-2.4.18-18/fs/ext3/inode.c~linux-2.4.18ea-0.8.26	2003-04-20 16:14:31.000000000 +0800
-+++ linux-2.4.18-18-root/fs/ext3/inode.c	2003-04-20 16:14:31.000000000 +0800
+--- linux-2.4.18-p4smp/fs/ext3/inode.c~linux-2.4.18ea-0.8.26	2003-07-20 17:12:43.000000000 -0600
++++ linux-2.4.18-p4smp-braam/fs/ext3/inode.c	2003-07-21 22:49:05.000000000 -0600
 @@ -39,6 +39,18 @@
   */
  #undef SEARCH_FROM_ZERO
@@ -59,7 +70,7 @@
  		goto no_delete;
  
  	lock_kernel();
-@@ -1861,6 +1871,8 @@ void ext3_truncate(struct inode * inode)
+@@ -1877,6 +1887,8 @@ void ext3_truncate(struct inode * inode)
  	if (!(S_ISREG(inode->i_mode) || S_ISDIR(inode->i_mode) ||
  	    S_ISLNK(inode->i_mode)))
  		return;
@@ -68,7 +79,7 @@
  	if (IS_APPEND(inode) || IS_IMMUTABLE(inode))
  		return;
  
-@@ -2008,8 +2020,6 @@ int ext3_get_inode_loc (struct inode *in
+@@ -2038,8 +2050,6 @@ int ext3_get_inode_loc (struct inode *in
  	struct ext3_group_desc * gdp;
  		
  	if ((inode->i_ino != EXT3_ROOT_INO &&
@@ -77,7 +88,7 @@
  		inode->i_ino != EXT3_JOURNAL_INO &&
  		inode->i_ino < EXT3_FIRST_INO(inode->i_sb)) ||
  		inode->i_ino > le32_to_cpu(
-@@ -2136,10 +2146,7 @@ void ext3_read_inode(struct inode * inod
+@@ -2166,10 +2176,7 @@ void ext3_read_inode(struct inode * inod
  
  	brelse (iloc.bh);
  
@@ -89,7 +100,7 @@
  		inode->i_op = &ext3_file_inode_operations;
  		inode->i_fop = &ext3_file_operations;
  		inode->i_mapping->a_ops = &ext3_aops;
-@@ -2147,7 +2154,7 @@ void ext3_read_inode(struct inode * inod
+@@ -2177,7 +2184,7 @@ void ext3_read_inode(struct inode * inod
  		inode->i_op = &ext3_dir_inode_operations;
  		inode->i_fop = &ext3_dir_operations;
  	} else if (S_ISLNK(inode->i_mode)) {
@@ -98,8 +109,8 @@
  			inode->i_op = &ext3_fast_symlink_inode_operations;
  		else {
  			inode->i_op = &page_symlink_inode_operations;
---- linux-2.4.18-18/fs/ext3/namei.c~linux-2.4.18ea-0.8.26	2003-04-20 16:14:31.000000000 +0800
-+++ linux-2.4.18-18-root/fs/ext3/namei.c	2003-04-20 16:14:31.000000000 +0800
+--- linux-2.4.18-p4smp/fs/ext3/namei.c~linux-2.4.18ea-0.8.26	2003-07-21 22:29:27.000000000 -0600
++++ linux-2.4.18-p4smp-braam/fs/ext3/namei.c	2003-07-21 22:49:05.000000000 -0600
 @@ -27,6 +27,7 @@
  #include <linux/sched.h>
  #include <linux/ext3_fs.h>
@@ -153,8 +164,8 @@
  		inode->i_op = &page_symlink_inode_operations;
  		inode->i_mapping->a_ops = &ext3_aops;
  		/*
---- linux-2.4.18-18/fs/ext3/super.c~linux-2.4.18ea-0.8.26	2003-04-20 16:14:31.000000000 +0800
-+++ linux-2.4.18-18-root/fs/ext3/super.c	2003-04-20 16:14:31.000000000 +0800
+--- linux-2.4.18-p4smp/fs/ext3/super.c~linux-2.4.18ea-0.8.26	2003-07-21 22:29:27.000000000 -0600
++++ linux-2.4.18-p4smp-braam/fs/ext3/super.c	2003-07-21 22:50:28.000000000 -0600
 @@ -24,6 +24,7 @@
  #include <linux/jbd.h>
  #include <linux/ext3_fs.h>
@@ -163,7 +174,7 @@
  #include <linux/slab.h>
  #include <linux/init.h>
  #include <linux/locks.h>
-@@ -404,6 +405,7 @@ void ext3_put_super (struct super_block 
+@@ -406,6 +407,7 @@ void ext3_put_super (struct super_block 
  	kdev_t j_dev = sbi->s_journal->j_dev;
  	int i;
  
@@ -171,7 +182,7 @@
  	journal_destroy(sbi->s_journal);
  	if (!(sb->s_flags & MS_RDONLY)) {
  		EXT3_CLEAR_INCOMPAT_FEATURE(sb, EXT3_FEATURE_INCOMPAT_RECOVER);
-@@ -1748,14 +1750,25 @@ int ext3_statfs (struct super_block * sb
+@@ -1749,17 +1751,27 @@ int ext3_statfs (struct super_block * sb
  
  static DECLARE_FSTYPE_DEV(ext3_fs_type, "ext3", ext3_read_super);
  
@@ -200,10 +211,29 @@
 +	return error;
  }
  
- EXPORT_SYMBOL(ext3_bread);
---- /dev/null	2002-08-31 07:31:37.000000000 +0800
-+++ linux-2.4.18-18-root/fs/ext3/xattr.c	2003-04-20 16:14:31.000000000 +0800
-@@ -0,0 +1,1247 @@
+-EXPORT_SYMBOL(ext3_bread);
+ 
+ MODULE_AUTHOR("Remy Card, Stephen Tweedie, Andrew Morton, Andreas Dilger, Theodore Ts'o and others");
+ MODULE_DESCRIPTION("Second Extended Filesystem with journaling extensions");
+--- /dev/null	2003-01-30 03:24:37.000000000 -0700
++++ linux-2.4.18-p4smp-braam/fs/ext3/ext3-exports.c	2003-07-21 22:49:05.000000000 -0600
+@@ -0,0 +1,13 @@
++#include <linux/config.h>
++#include <linux/module.h>
++#include <linux/ext3_fs.h>
++#include <linux/ext3_jbd.h>
++#include <linux/ext3_xattr.h>
++
++EXPORT_SYMBOL(ext3_force_commit);
++EXPORT_SYMBOL(ext3_bread);
++EXPORT_SYMBOL(ext3_xattr_register);
++EXPORT_SYMBOL(ext3_xattr_unregister);
++EXPORT_SYMBOL(ext3_xattr_get);
++EXPORT_SYMBOL(ext3_xattr_list);
++EXPORT_SYMBOL(ext3_xattr_set);
+--- /dev/null	2003-01-30 03:24:37.000000000 -0700
++++ linux-2.4.18-p4smp-braam/fs/ext3/xattr.c	2003-07-21 22:50:40.000000000 -0600
+@@ -0,0 +1,1242 @@
 +/*
 + * linux/fs/ext3/xattr.c
 + *
@@ -277,11 +307,6 @@
 +#include <linux/module.h>
 +
 +/* These symbols may be needed by a module. */
-+EXPORT_SYMBOL(ext3_xattr_register);
-+EXPORT_SYMBOL(ext3_xattr_unregister);
-+EXPORT_SYMBOL(ext3_xattr_get);
-+EXPORT_SYMBOL(ext3_xattr_list);
-+EXPORT_SYMBOL(ext3_xattr_set);
 +
 +#if LINUX_VERSION_CODE < KERNEL_VERSION(2,4,0)
 +# define mark_buffer_dirty(bh) mark_buffer_dirty(bh, 1)
@@ -1451,8 +1476,8 @@
 +}
 +
 +#endif  /* CONFIG_EXT3_FS_XATTR_SHARING */
---- linux-2.4.18-18/include/linux/ext3_fs.h~linux-2.4.18ea-0.8.26	2003-04-20 16:14:31.000000000 +0800
-+++ linux-2.4.18-18-root/include/linux/ext3_fs.h	2003-04-20 16:14:31.000000000 +0800
+--- linux-2.4.18-p4smp/include/linux/ext3_fs.h~linux-2.4.18ea-0.8.26	2003-07-21 22:29:27.000000000 -0600
++++ linux-2.4.18-p4smp-braam/include/linux/ext3_fs.h	2003-07-21 22:49:05.000000000 -0600
 @@ -58,8 +58,6 @@
   */
  #define	EXT3_BAD_INO		 1	/* Bad blocks inode */
@@ -1541,8 +1566,8 @@
  extern struct buffer_head * ext3_getblk (handle_t *, struct inode *, long, int, int *);
  extern struct buffer_head * ext3_bread (handle_t *, struct inode *, int, int, int *);
  
---- linux-2.4.18-18/include/linux/ext3_jbd.h~linux-2.4.18ea-0.8.26	2003-04-20 16:14:31.000000000 +0800
-+++ linux-2.4.18-18-root/include/linux/ext3_jbd.h	2003-04-20 16:14:31.000000000 +0800
+--- linux-2.4.18-p4smp/include/linux/ext3_jbd.h~linux-2.4.18ea-0.8.26	2003-07-21 22:29:27.000000000 -0600
++++ linux-2.4.18-p4smp-braam/include/linux/ext3_jbd.h	2003-07-21 22:49:05.000000000 -0600
 @@ -30,13 +30,19 @@
  
  #define EXT3_SINGLEDATA_TRANS_BLOCKS	8
@@ -1564,8 +1589,8 @@
  
  extern int ext3_writepage_trans_blocks(struct inode *inode);
  
---- /dev/null	2002-08-31 07:31:37.000000000 +0800
-+++ linux-2.4.18-18-root/include/linux/ext3_xattr.h	2003-04-20 16:14:31.000000000 +0800
+--- /dev/null	2003-01-30 03:24:37.000000000 -0700
++++ linux-2.4.18-p4smp-braam/include/linux/ext3_xattr.h	2003-07-21 22:49:05.000000000 -0600
 @@ -0,0 +1,155 @@
 +/*
 +  File: linux/ext3_xattr.h
@@ -1722,8 +1747,8 @@
 +
 +#endif  /* __KERNEL__ */
 +
---- /dev/null	2002-08-31 07:31:37.000000000 +0800
-+++ linux-2.4.18-18-root/include/linux/xattr.h	2003-04-20 16:14:31.000000000 +0800
+--- /dev/null	2003-01-30 03:24:37.000000000 -0700
++++ linux-2.4.18-p4smp-braam/include/linux/xattr.h	2003-07-21 22:49:05.000000000 -0600
 @@ -0,0 +1,15 @@
 +/*
 +  File: linux/xattr.h
@@ -1740,18 +1765,18 @@
 +#define XATTR_REPLACE	2	/* set value, fail if attr does not exist */
 +
 +#endif	/* _LINUX_XATTR_H */
---- linux-2.4.18-18/fs/ext3/Makefile~linux-2.4.18ea-0.8.26	2003-04-20 16:14:54.000000000 +0800
-+++ linux-2.4.18-18-root/fs/ext3/Makefile	2003-04-20 16:15:15.000000000 +0800
+--- linux-2.4.18-p4smp/fs/ext3/Makefile~linux-2.4.18ea-0.8.26	2003-07-21 22:27:37.000000000 -0600
++++ linux-2.4.18-p4smp-braam/fs/ext3/Makefile	2003-07-21 22:51:23.000000000 -0600
 @@ -9,10 +9,10 @@
  
  O_TARGET := ext3.o
  
 -export-objs :=	super.o inode.o
-+export-objs :=	super.o inode.o xattr.o
++export-objs :=	ext3-exports.o
  
  obj-y    := balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o \
 -		ioctl.o namei.o super.o symlink.o
-+		ioctl.o namei.o super.o symlink.o xattr.o
++		ioctl.o namei.o super.o symlink.o xattr.o ext3-exports.o
  obj-m    := $(O_TARGET)
  
  include $(TOPDIR)/Rules.make

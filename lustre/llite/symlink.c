@@ -24,12 +24,10 @@
 #include <linux/stat.h>
 #include <linux/smp_lock.h>
 #include <linux/version.h>
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
-#include <asm/statfs.h>
-#endif
 #define DEBUG_SUBSYSTEM S_LLITE
 
 #include <linux/lustre_lite.h>
+#include "llite_internal.h"
 
 static int ll_readlink_internal(struct inode *inode,
                                 struct ptlrpc_request **request, char **symname)
@@ -117,82 +115,46 @@ static int ll_readlink(struct dentry *dentry, char *buffer, int buflen)
         RETURN(rc);
 }
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-static int ll_follow_link(struct dentry *dentry, struct nameidata *nd,
-                          struct lookup_intent *it)
-{
-        struct inode *inode = dentry->d_inode;
-        struct ll_inode_info *lli = ll_i2info(inode);
-        struct ptlrpc_request *request;
-        int op = 0, mode = 0, rc;
-        char *symname;
-        ENTRY;
-
-        CDEBUG(D_VFSTRACE, "VFS Op\n");
-        if (it != NULL) {
-                op = it->it_op;
-                mode = it->it_mode;
-
-                ll_intent_release(dentry, it);
-        }
-
-        down(&lli->lli_open_sem);
-        rc = ll_readlink_internal(inode, &request, &symname);
-        up(&lli->lli_open_sem);
-        if (rc)
-                GOTO(out, rc);
-
-        if (it != NULL) {
-                it->it_op = op;
-                it->it_mode = mode;
-        }
-
-        rc = vfs_follow_link_it(nd, symname, it);
-        ptlrpc_req_finished(request);
- out:
-        RETURN(rc);
-}
-#else
 static int ll_follow_link(struct dentry *dentry, struct nameidata *nd)
 {
         struct inode *inode = dentry->d_inode;
         struct ll_inode_info *lli = ll_i2info(inode);
+        struct lookup_intent *it = ll_nd2it(nd);
         struct ptlrpc_request *request;
-        int op = 0, mode = 0, rc;
+        int rc;
         char *symname;
         ENTRY;
 
-        op = nd->it.it_op;
-        mode = nd->it.it_mode;
+        if (it != NULL) {
+                int op = it->it_op;
+                int mode = it->it_mode;
 
-        ll_intent_release(dentry, &nd->it);
+                ll_intent_release(it);
+                it->it_op = op;
+                it->it_mode = mode;
+        }
 
+        CDEBUG(D_VFSTRACE, "VFS Op\n");
         down(&lli->lli_open_sem);
-
         rc = ll_readlink_internal(inode, &request, &symname);
+        up(&lli->lli_open_sem);
         if (rc)
                 GOTO(out, rc);
-
-        nd->it.it_op = op;
-        nd->it.it_mode = mode;
 
         rc = vfs_follow_link(nd, symname);
         ptlrpc_req_finished(request);
  out:
-        up(&lli->lli_open_sem);
-
         RETURN(rc);
 }
-#endif
 
-extern int ll_inode_revalidate(struct dentry *dentry);
-extern int ll_setattr(struct dentry *de, struct iattr *attr);
 struct inode_operations ll_fast_symlink_inode_operations = {
         readlink:       ll_readlink,
         setattr:        ll_setattr,
         setattr_raw:    ll_setattr_raw,
-        follow_link2:   ll_follow_link,
+        follow_link:    ll_follow_link,
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-        revalidate:     ll_inode_revalidate
+        revalidate_it:  ll_inode_revalidate_it
+#else 
+        getattr_it:     ll_getattr
 #endif
 };

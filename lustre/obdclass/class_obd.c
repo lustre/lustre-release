@@ -53,9 +53,7 @@
 #include <linux/miscdevice.h>
 #include <linux/smp_lock.h>
 #else
-
 # include <liblustre.h>
-
 #endif
 
 #include <linux/obd_support.h>
@@ -64,6 +62,7 @@
 #include <linux/lprocfs_status.h>
 #include <portals/lib-types.h> /* for PTL_MD_MAX_IOV */
 #include <linux/lustre_build_version.h>
+#include <portals/list.h>
 
 struct semaphore obd_conf_sem;   /* serialize configuration commands */
 struct obd_device obd_dev[MAX_OBD_DEVICES];
@@ -181,12 +180,10 @@ static inline void obd_conn2data(struct obd_ioctl_data *data,
 
 static void dump_exports(struct obd_device *obd)
 {
-        struct list_head *tmp, *n;
+        struct obd_export *exp, *n;
 
-        list_for_each_safe(tmp, n, &obd->obd_exports) {
-                struct obd_export *exp = list_entry(tmp, struct obd_export,
-                                                    exp_obd_chain);
-                CDEBUG(D_ERROR, "%s: %p %s %d %d %p\n",
+        list_for_each_entry_safe(exp, n, &obd->obd_exports, exp_obd_chain) {
+                CERROR("%s: %p %s %d %d %p\n",
                        obd->obd_name, exp, exp->exp_client_uuid.uuid,
                        atomic_read(&exp->exp_refcount),
                        exp->exp_failed, exp->exp_outstanding_reply );
@@ -543,6 +540,7 @@ int class_handle_ioctl(struct obd_class_user_state *ocus, unsigned int cmd,
                 obd->obd_type->typ_refcnt--;
                 class_put_type(obd->obd_type);
                 obd->obd_type = NULL;
+                memset(obd, 0, sizeof(*obd));
                 GOTO(out, err = 0);
         }
 
@@ -562,7 +560,7 @@ int class_handle_ioctl(struct obd_class_user_state *ocus, unsigned int cmd,
 
                 atomic_set(&obd->obd_refcount, 0);
 
-                if ( OBT(obd) && OBP(obd, setup) )
+                if (OBT(obd) && OBP(obd, setup))
                         err = obd_setup(obd, sizeof(*data), data);
 
                 if (!err) {
@@ -574,8 +572,8 @@ int class_handle_ioctl(struct obd_class_user_state *ocus, unsigned int cmd,
                 GOTO(out, err);
         }
         case OBD_IOC_CLEANUP: {
-                int force = 0, failover = 0;
-                char * flag;
+                int flags = 0;
+                char *flag;
 
                 if (!obd->obd_set_up) {
                         CERROR("Device %d not setup\n", obd->obd_minor);
@@ -586,18 +584,19 @@ int class_handle_ioctl(struct obd_class_user_state *ocus, unsigned int cmd,
                         for (flag = data->ioc_inlbuf1; *flag != 0; flag++)
                                 switch (*flag) {
                                 case 'F':
-                                        force = 1;
+                                        flags |= OBD_OPT_FORCE;
                                         break;
                                 case 'A':
-                                        failover = 1;
+                                        flags |= OBD_OPT_FAILOVER;
                                         break;
                                 default:
-                                        CERROR("unrecognised flag '%c'\n", 
+                                        CERROR("unrecognised flag '%c'\n",
                                                *flag);
                                 }
                 }
-                
-                if (atomic_read(&obd->obd_refcount) == 1 || force) {
+
+                if (atomic_read(&obd->obd_refcount) == 1 ||
+                    flags & OBD_OPT_FORCE) {
                         /* this will stop new connections, and need to
                            do it before class_disconnect_exports() */
                         obd->obd_stopping = 1;
@@ -607,19 +606,19 @@ int class_handle_ioctl(struct obd_class_user_state *ocus, unsigned int cmd,
                         struct l_wait_info lwi = LWI_TIMEOUT_INTR(60 * HZ, NULL,
                                                                   NULL, NULL);
                         int rc;
-                        
-                        if (!force) {
+
+                        if (!(flags & OBD_OPT_FORCE)) {
                                 CERROR("OBD device %d (%p) has refcount %d\n",
-                                       obd->obd_minor, obd, 
+                                       obd->obd_minor, obd,
                                        atomic_read(&obd->obd_refcount));
                                 dump_exports(obd);
                                 GOTO(out, err = -EBUSY);
                         }
-                        class_disconnect_exports(obd, failover);
-                        CDEBUG(D_IOCTL, 
-                               "%s: waiting for obd refs to go away: %d\n", 
+                        class_disconnect_exports(obd, flags);
+                        CDEBUG(D_IOCTL,
+                               "%s: waiting for obd refs to go away: %d\n",
                                obd->obd_name, atomic_read(&obd->obd_refcount));
-                
+
                         rc = l_wait_event(obd->obd_refcount_waitq,
                                      atomic_read(&obd->obd_refcount) < 2, &lwi);
                         if (rc == 0) {
@@ -630,12 +629,12 @@ int class_handle_ioctl(struct obd_class_user_state *ocus, unsigned int cmd,
                                        atomic_read(&obd->obd_refcount));
                                 dump_exports(obd);
                         }
-                        CDEBUG(D_IOCTL, "%s: awake, now finishing cleanup\n", 
+                        CDEBUG(D_IOCTL, "%s: awake, now finishing cleanup\n",
                                obd->obd_name);
                 }
 
                 if (OBT(obd) && OBP(obd, cleanup))
-                        err = obd_cleanup(obd, force, failover);
+                        err = obd_cleanup(obd, flags);
 
                 if (!err) {
                         obd->obd_set_up = obd->obd_stopping = 0;
@@ -807,10 +806,10 @@ EXPORT_SYMBOL(class_conn2cliimp);
 EXPORT_SYMBOL(class_conn2ldlmimp);
 EXPORT_SYMBOL(class_disconnect);
 EXPORT_SYMBOL(class_disconnect_exports);
-EXPORT_SYMBOL(lustre_uuid_to_peer);
 
 /* uuid.c */
 EXPORT_SYMBOL(class_uuid_unparse);
+EXPORT_SYMBOL(lustre_uuid_to_peer);
 EXPORT_SYMBOL(client_tgtuuid2obd);
 
 EXPORT_SYMBOL(class_handle_hash);
@@ -831,12 +830,15 @@ int init_obdclass(void)
                       ", info@clusterfs.com\n");
 
         class_init_uuidlist();
-        class_handle_init();
+        err = class_handle_init();
+        if (err)
+                return err;
 
         sema_init(&obd_conf_sem, 1);
         INIT_LIST_HEAD(&obd_types);
 
-        if ((err = misc_register(&obd_psdev))) {
+        err = misc_register(&obd_psdev);
+        if (err) {
                 CERROR("cannot register %d err %d\n", OBD_MINOR, err);
                 return err;
         }
@@ -875,7 +877,7 @@ int obd_proc_read_version(char *page, char **start, off_t off, int count, int *e
 #endif
 
 #ifdef __KERNEL__
-static void __exit cleanup_obdclass(void)
+static void /*__exit*/ cleanup_obdclass(void)
 #else
 static void cleanup_obdclass(void)
 #endif
@@ -914,8 +916,8 @@ static void cleanup_obdclass(void)
  * kernel patch */
 #ifdef __KERNEL__
 #include <linux/lustre_version.h>
-#define LUSTRE_MIN_VERSION 18
-#define LUSTRE_MAX_VERSION 19
+#define LUSTRE_MIN_VERSION 21
+#define LUSTRE_MAX_VERSION 21
 #if (LUSTRE_KERNEL_VERSION < LUSTRE_MIN_VERSION)
 # error Cannot continue: Your Lustre kernel patch is older than the sources
 #elif (LUSTRE_KERNEL_VERSION > LUSTRE_MAX_VERSION)

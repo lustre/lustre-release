@@ -28,7 +28,7 @@
 #include <linux/lustre_mds.h>
 #include <linux/lustre_lite.h>
 
-void mds_readdir_pack(struct ptlrpc_request *req, __u64 offset, __u32 size,
+void mdc_readdir_pack(struct ptlrpc_request *req, __u64 offset, __u32 size,
                       obd_id ino, int type, __u64 xid)
 {
         struct mds_body *b;
@@ -45,7 +45,7 @@ void mds_readdir_pack(struct ptlrpc_request *req, __u64 offset, __u32 size,
         b->nlink = size;                        /* !! */
 }
 
-static void mds_pack_body(struct mds_body *b)
+static void mdc_pack_body(struct mds_body *b)
 {
         LASSERT (b != NULL);
 
@@ -54,14 +54,14 @@ static void mds_pack_body(struct mds_body *b)
         b->capability = current->cap_effective;
 }
 
-void mds_pack_req_body(struct ptlrpc_request *req)
+void mdc_pack_req_body(struct ptlrpc_request *req)
 {
         struct mds_body *b = lustre_msg_buf(req->rq_reqmsg, 0, sizeof (*b));
-        mds_pack_body(b);
+        mdc_pack_body(b);
 }
 
 /* packing of MDS records */
-void mds_create_pack(struct ptlrpc_request *req, int offset,
+void mdc_create_pack(struct ptlrpc_request *req, int offset,
                      struct mdc_op_data *op_data,
                      __u32 mode, __u64 rdev, __u32 uid, __u32 gid, __u64 time,
                      const void *data, int datalen)
@@ -94,8 +94,9 @@ void mds_create_pack(struct ptlrpc_request *req, int offset,
                 memcpy (tmp, data, datalen);
         }
 }
+
 /* packing of MDS records */
-void mds_open_pack(struct ptlrpc_request *req, int offset,
+void mdc_open_pack(struct ptlrpc_request *req, int offset,
                    struct mdc_op_data *op_data,
                    __u32 mode, __u64 rdev, __u32 uid, __u32 gid, __u64 time,
                    __u32 flags, const void *data, int datalen)
@@ -109,8 +110,9 @@ void mds_open_pack(struct ptlrpc_request *req, int offset,
         rec->cr_fsuid = current->fsuid;
         rec->cr_fsgid = current->fsgid;
         rec->cr_cap = current->cap_effective;
-        ll_ino2fid(&rec->cr_fid, op_data->ino1,
-                   op_data->gen1, op_data->typ1);
+        if (op_data != NULL)
+                ll_ino2fid(&rec->cr_fid, op_data->ino1,
+                           op_data->gen1, op_data->typ1);
         memset(&rec->cr_replayfid, 0, sizeof(rec->cr_replayfid));
         rec->cr_mode = mode;
         rec->cr_flags = flags;
@@ -123,17 +125,22 @@ void mds_open_pack(struct ptlrpc_request *req, int offset,
         else
                 rec->cr_suppgid = -1;
 
-        tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1, op_data->namelen + 1);
-        LOGL0(op_data->name, op_data->namelen, tmp);
+        if (op_data->name) {
+                tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1,
+                                     op_data->namelen + 1);
+                LOGL0(op_data->name, op_data->namelen, tmp);
+        }
 
         if (data) {
                 tmp = lustre_msg_buf(req->rq_reqmsg, offset + 2, datalen);
                 memcpy (tmp, data, datalen);
         }
 }
-void mds_setattr_pack(struct ptlrpc_request *req,
+
+void mdc_setattr_pack(struct ptlrpc_request *req,
                       struct mdc_op_data *data,
-                      struct iattr *iattr, void *ea, int ealen)
+                      struct iattr *iattr, void *ea, int ealen,
+                      void *ea2, int ea2len)
 {
         struct mds_rec_setattr *rec = lustre_msg_buf(req->rq_reqmsg, 0,
                                                      sizeof (*rec));
@@ -163,11 +170,18 @@ void mds_setattr_pack(struct ptlrpc_request *req,
                         rec->sa_suppgid = -1;
         }
 
-        if (ealen != 0)
-                memcpy(lustre_msg_buf(req->rq_reqmsg, 1, ealen), ea, ealen);
+        if (ealen == 0)
+                return;
+
+        memcpy(lustre_msg_buf(req->rq_reqmsg, 1, ealen), ea, ealen);
+
+        if (ea2len == 0)
+                return;
+
+        memcpy(lustre_msg_buf(req->rq_reqmsg, 2, ea2len), ea2, ea2len);
 }
 
-void mds_unlink_pack(struct ptlrpc_request *req, int offset,
+void mdc_unlink_pack(struct ptlrpc_request *req, int offset,
                      struct mdc_op_data *data)
 {
         struct mds_rec_unlink *rec;
@@ -194,7 +208,7 @@ void mds_unlink_pack(struct ptlrpc_request *req, int offset,
         LOGL0(data->name, data->namelen, tmp);
 }
 
-void mds_link_pack(struct ptlrpc_request *req, int offset,
+void mdc_link_pack(struct ptlrpc_request *req, int offset,
                    struct mdc_op_data *data)
 {
         struct mds_rec_link *rec;
@@ -221,7 +235,7 @@ void mds_link_pack(struct ptlrpc_request *req, int offset,
         LOGL0(data->name, data->namelen, tmp);
 }
 
-void mds_rename_pack(struct ptlrpc_request *req, int offset,
+void mdc_rename_pack(struct ptlrpc_request *req, int offset,
                      struct mdc_op_data *data,
                      const char *old, int oldlen, const char *new, int newlen)
 {
@@ -255,7 +269,7 @@ void mds_rename_pack(struct ptlrpc_request *req, int offset,
         }
 }
 
-void mds_getattr_pack(struct ptlrpc_request *req, int valid, int offset,
+void mdc_getattr_pack(struct ptlrpc_request *req, int valid, int offset,
                       int flags, struct mdc_op_data *data)
 {
         struct mds_body *b;

@@ -294,9 +294,10 @@ save_buffer(char *buffer, off_t bufferlength, int fd)
 		if (size_by_seek == (off_t)-1)
 			prterr("save_buffer: lseek eof");
 		else if (bufferlength > size_by_seek) {
-			warn("save_buffer: .fsxgood file too short... will
-save 0x%llx bytes instead of 0x%llx\n", (unsigned long long)size_by_seek,
-			     (unsigned long long)bufferlength);
+			warn("save_buffer: .fsxgood file too short... will"
+				"save 0x%llx bytes instead of 0x%llx\n", 
+				(unsigned long long)size_by_seek,
+				(unsigned long long)bufferlength);
 			bufferlength = size_by_seek;
 		}
 	}
@@ -310,8 +311,8 @@ save 0x%llx bytes instead of 0x%llx\n", (unsigned long long)size_by_seek,
 		if (byteswritten == -1)
 			prterr("save_buffer write");
 		else
-			warn("save_buffer: short write, 0x%x bytes instead
-of 0x%llx\n",
+			warn("save_buffer: short write, 0x%x bytes instead"
+				"of 0x%llx\n",
 			     (unsigned)byteswritten,
 			     (unsigned long long)bufferlength);
 	}
@@ -372,11 +373,11 @@ check_buffers(unsigned offset, unsigned size)
 		if (n) {
 		        prt("\t0x%5x\n", n);
 			if (bad)
-				prt("operation# (mod 256) for the bad data
-may be %u\n", ((unsigned)op & 0xff));
+				prt("operation# (mod 256) for the bad data"
+					"may be %u\n", ((unsigned)op & 0xff));
 			else
-				prt("operation# (mod 256) for the bad data
-unknown, check HOLE and EXTEND ops\n");
+				prt("operation# (mod 256) for the bad data"
+					"unknown, check HOLE and EXTEND ops\n");
 		} else
 		        prt("????????????????\n");
 		report_failure(110);
@@ -927,33 +928,33 @@ void
 usage(void)
 {
 	fprintf(stdout, "usage: %s",
-		"fsx [-dnqLOW] [-b opnum] [-c Prob] [-l flen] [-m
-start:end] [-o oplen] [-p progressinterval] [-r readbdy] [-s style] [-t
-truncbdy] [-w writebdy] [-D startingop] [-N numops] [-P dirpath] [-S seed]
-fname\n\
-	-b opnum: beginning operation number (default 1)\n\
-	-c P: 1 in P chance of file close+open at each op (default infinity)\n\
-	-d: debug output for all operations [-d -d = more debugging]\n\
-	-l flen: the upper bound on file size (default 262144)\n\
-	-m startop:endop: monitor (print debug output) specified byte range
-(default 0:infinity)\n\
-	-n: no verifications of file size\n\
-	-o oplen: the upper bound on operation size (default 65536)\n\
-	-p progressinterval: debug output at specified operation interval\n\
-	-q: quieter operation\n\
-	-r readbdy: 4096 would make reads page aligned (default 1)\n\
-	-s style: 1 gives smaller truncates (default 0)\n\
-	-t truncbdy: 4096 would make truncates page aligned (default 1)\n\
-	-w writebdy: 4096 would make writes page aligned (default 1)\n\
-	-D startingop: debug output starting at specified operation\n\
-	-L: fsxLite - no file creations & no file size changes\n\
-	-N numops: total # operations to do (default infinity)\n\
-	-O: use oplen (see -o flag) for every op (default random)\n\
-	-P: save .fsxlog and .fsxgood files in dirpath (default ./)\n\
-	-S seed: for random # generator (default 1) 0 gets timestamp\n\
-	-W: mapped write operations DISabled\n\
-        -R: read() system calls only (mapped reads disabled)\n\
-	fname: this filename is REQUIRED (no default)\n");
+		"fsx [-dnqLOW] [-b opnum] [-c Prob] [-l flen] [-m "
+"start:end] [-o oplen] [-p progressinterval] [-r readbdy] [-s style] [-t "
+"truncbdy] [-w writebdy] [-D startingop] [-N numops] [-P dirpath] [-S seed] "
+"fname\n"
+"	-b opnum: beginning operation number (default 1)\n"
+"	-c P: 1 in P chance of file close+open at each op (default infinity)\n"
+"	-d: debug output for all operations [-d -d = more debugging]\n"
+"	-l flen: the upper bound on file size (default 262144)\n"
+"	-m startop:endop: monitor (print debug output) specified byte rang"
+"(default 0:infinity)\n"
+"	-n: no verifications of file size\n"
+"	-o oplen: the upper bound on operation size (default 65536)\n"
+"	-p progressinterval: debug output at specified operation interval\n"
+"	-q: quieter operation\n"
+"	-r readbdy: 4096 would make reads page aligned (default 1)\n"
+"	-s style: 1 gives smaller truncates (default 0)\n"
+"	-t truncbdy: 4096 would make truncates page aligned (default 1)\n"
+"	-w writebdy: 4096 would make writes page aligned (default 1)\n"
+"	-D startingop: debug output starting at specified operation\n"
+"	-L: fsxLite - no file creations & no file size changes\n"
+"	-N numops: total # operations to do (default infinity)\n"
+"	-O: use oplen (see -o flag) for every op (default random)\n"
+"	-P: save .fsxlog and .fsxgood files in dirpath (default ./)\n"
+"	-S seed: for random # generator (default 1) 0 gets timestamp\n"
+"	-W: mapped write operations DISabled\n"
+"        -R: read() system calls only (mapped reads disabled)\n"
+"	fname: this filename is REQUIRED (no default)\n");
 	exit(90);
 }
 
@@ -1020,8 +1021,8 @@ main(int argc, char **argv)
 		case 'b':
 			simulatedopcount = getnum(optarg, &endp);
 			if (!quiet)
-				fprintf(stdout, "Will begin at operation
-%ld\n",
+				fprintf(stdout, "Will begin at operation"
+					"%ld\n",
 					simulatedopcount);
 			if (simulatedopcount == 0)
 				usage();
@@ -1206,8 +1207,8 @@ main(int argc, char **argv)
 				prterr(fname);
 				warn("main: error on write");
 			} else
-				warn("main: short write, 0x%x bytes instead
-of 0x%x\n",
+				warn("main: short write, 0x%x bytes instead"
+					"of 0x%x\n",
 				     (unsigned)written, maxfilelen);
 			exit(98);
 		}

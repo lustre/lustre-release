@@ -11,8 +11,13 @@ AC_ARG_WITH(lib, [  --with-lib compile lustre library], host_cpu="lib")
 
 AC_ARG_WITH(linux, [  --with-linux=[path] set path to Linux source (default=/usr/src/linux)],LINUX=$with_linux,LINUX=/usr/src/linux)
 AC_SUBST(LINUX)
+if test x$enable_inkernel = xyes ; then
+        echo ln -s `pwd` $LINUX/fs/lustre
+        rm $LINUX/fs/lustre
+        ln -s `pwd` $LINUX/fs/lustre
+fi
 
-# --------- UML?  --------------------
+#  --------------------
 AC_MSG_CHECKING(if you are running user mode linux for $host_cpu ...)
 if test $host_cpu = "lib" ; then 
         host_cpu="lib"
@@ -111,6 +116,13 @@ case ${host_cpu} in
         MOD_LINK=elf64_ia64
 ;;
 
+	x86_64 )
+	AC_MSG_RESULT($host_cpu)
+        KCFLAGS='-g -O2 -Wall -Wstrict-prototypes -Wno-trigraphs -fno-strict-aliasing -fno-common -fomit-frame-pointer -mno-red-zone -mcmodel=kernel -pipe -fno-reorder-blocks -finline-limit=2000 -fno-strength-reduce -fno-asynchronous-unwind-tables'
+	KCPPFLAGS='-D__KERNEL__ -DMODULE'
+        MOD_LINK=elf_x86_64
+;;
+
 	sparc64 )
 	AC_MSG_RESULT($host_cpu)
         KCFLAGS='-O2 -Wall -Wstrict-prototypes -Wno-trigraphs -fomit-frame-pointer -fno-strict-aliasing -fno-common -Wno-unused -m64 -pipe -mno-fpu -mcpu=ultrasparc -mcmodel=medlow -ffixed-g4 -fcall-used-g5 -fcall-used-g7 -Wno-sign-compare -Wa,--undeclared-regs'
@@ -160,21 +172,33 @@ if test $host_cpu != "lib" ; then
       AC_MSG_ERROR(** cannot find $LINUX/include/linux/autoconf.h. Run make config in $LINUX.)
   fi
 
-# ------------ RELEASE and moduledir ------------------
+# ------------ LINUXRELEASE and moduledir ------------------
   AC_MSG_CHECKING(for Linux release)
   
   dnl We need to rid ourselves of the nasty [ ] quotes.
   changequote(, )
   dnl Get release from version.h
-  RELEASE="`sed -ne 's/.*UTS_RELEASE[ \"]*\([0-9.a-zA-Z_-]*\).*/\1/p' $LINUX/include/linux/version.h`"
+  LINUXRELEASE="`sed -ne 's/.*UTS_RELEASE[ \"]*\([0-9.a-zA-Z_-]*\).*/\1/p' $LINUX/include/linux/version.h`"
   changequote([, ])
   
-  moduledir='$(libdir)/modules/'$RELEASE/kernel
+  moduledir='$(libdir)/modules/'$LINUXRELEASE/kernel
   AC_SUBST(moduledir)
   
   modulefsdir='$(moduledir)/fs/$(PACKAGE)'
   AC_SUBST(modulefsdir)
   
+  AC_MSG_RESULT($LINUXRELEASE)
+  AC_SUBST(LINUXRELEASE)
+
+# ------------ RELEASE --------------------------------
+  AC_MSG_CHECKING(lustre release)
+  
+  dnl We need to rid ourselves of the nasty [ ] quotes.
+  changequote(, )
+  dnl Get release from version.h
+  RELEASE="`sed -ne 's/-/_/g' -e 's/.*UTS_RELEASE[ \"]*\([0-9.a-zA-Z_]*\).*/\1/p' $LINUX/include/linux/version.h`_`date +%Y%m%d%H%M`"
+  changequote([, ])
+
   AC_MSG_RESULT($RELEASE)
   AC_SUBST(RELEASE)
 
@@ -302,7 +326,7 @@ AM_CONDITIONAL(LIBLUSTRE, test x$host_cpu = xlib)
 # This needs to run after we've defined the KCPPFLAGS
 
 AC_MSG_CHECKING(for kernel version)
-AC_TRY_LINK([#define __KERNEL__
+AC_TRY_COMPILE([#define __KERNEL__
              #include <linux/sched.h>],
             [struct task_struct p;
              p.sighand = NULL;],
@@ -313,5 +337,5 @@ if test $RH_2_4_20 = 1; then
 	AC_MSG_RESULT(redhat-2.4.20)
 	CPPFLAGS="$CPPFLAGS -DCONFIG_RH_2_4_20"
 else
-	AC_MSG_RESULT($RELEASE)
+	AC_MSG_RESULT($LINUXRELEASE)
 fi 

@@ -18,7 +18,7 @@
  *   along with Lustre; if not, write to the Free Software
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * (Un)packing of OST requests
+ * Lustre wire protocol definitions.
  *
  * We assume all nodes are either little-endian or big-endian, and we
  * always send messages in the sender's native format.  The receiver
@@ -29,9 +29,9 @@
  * implemented either here, inline (trivial implementations) or in
  * ptlrpc/pack_generic.c.  These 'swabbers' convert the type from "other"
  * endian, in-place in the message buffer.
- * 
+ *
  * A swabber takes a single pointer argument.  The caller must already have
- * verified that the length of the message buffer >= sizeof (type).  
+ * verified that the length of the message buffer >= sizeof (type).
  *
  * For variable length types, a second 'lustre_swab_v_xxxtypexxx()' routine
  * may be defined that swabs just the variable part, after the caller has
@@ -90,29 +90,33 @@ extern struct obd_uuid lctl_fake_uuid;
  * FOO_BULK_PORTAL    is for incoming bulk on the FOO
  */
 
-#define CONNMGR_REQUEST_PORTAL  1
-#define CONNMGR_REPLY_PORTAL    2
-//#define OSC_REQUEST_PORTAL      3
-#define OSC_REPLY_PORTAL        4
-//#define OSC_BULK_PORTAL         5
-#define OST_REQUEST_PORTAL      6
-//#define OST_REPLY_PORTAL        7
-#define OST_BULK_PORTAL         8
-//#define MDC_REQUEST_PORTAL      9
-#define MDC_REPLY_PORTAL        10
-//#define MDC_BULK_PORTAL         11
-#define MDS_REQUEST_PORTAL      12
-//#define MDS_REPLY_PORTAL        13
-#define MDS_BULK_PORTAL         14
-#define LDLM_CB_REQUEST_PORTAL     15
-#define LDLM_CB_REPLY_PORTAL       16
+#define CONNMGR_REQUEST_PORTAL          1
+#define CONNMGR_REPLY_PORTAL            2
+//#define OSC_REQUEST_PORTAL            3
+#define OSC_REPLY_PORTAL                4
+//#define OSC_BULK_PORTAL               5
+#define OST_REQUEST_PORTAL              6
+//#define OST_REPLY_PORTAL              7
+#define OST_BULK_PORTAL                 8
+//#define MDC_REQUEST_PORTAL            9
+#define MDC_REPLY_PORTAL               10
+//#define MDC_BULK_PORTAL              11
+#define MDS_REQUEST_PORTAL             12
+//#define MDS_REPLY_PORTAL             13
+#define MDS_BULK_PORTAL                14
+#define LDLM_CB_REQUEST_PORTAL         15
+#define LDLM_CB_REPLY_PORTAL           16
 #define LDLM_CANCEL_REQUEST_PORTAL     17
 #define LDLM_CANCEL_REPLY_PORTAL       18
 #define PTLBD_REQUEST_PORTAL           19
 #define PTLBD_REPLY_PORTAL             20
 #define PTLBD_BULK_PORTAL              21
-#define MDS_SETATTR_PORTAL      22
-#define MDS_READPAGE_PORTAL     23
+#define MDS_SETATTR_PORTAL             22
+#define MDS_READPAGE_PORTAL            23
+#define MGMT_REQUEST_PORTAL            24
+#define MGMT_REPLY_PORTAL              25
+#define MGMT_CLI_REQUEST_PORTAL        26
+#define MGMT_CLI_REPLY_PORTAL          27
 
 #define SVC_KILLED               1
 #define SVC_EVENT                2
@@ -159,7 +163,7 @@ struct lustre_msg {
 
 static inline int lustre_msg_swabbed (struct lustre_msg *msg)
 {
-        return (msg->magic == __swab32 (PTLRPC_MSG_MAGIC));
+        return (msg->magic == __swab32(PTLRPC_MSG_MAGIC));
 }
 
 /* Flags that are operation-specific go in the top 16 bits. */
@@ -207,9 +211,10 @@ static inline void lustre_msg_set_op_flags(struct lustre_msg *msg, int flags)
  * Flags for all connect opcodes (MDS_CONNECT, OST_CONNECT)
  */
 
-#define MSG_CONNECT_RECOVERING 0x1
-#define MSG_CONNECT_RECONNECT  0x2
+#define MSG_CONNECT_RECOVERING  0x1
+#define MSG_CONNECT_RECONNECT   0x2
 #define MSG_CONNECT_REPLAYABLE  0x4
+#define MSG_CONNECT_PEER        0x8
 
 /*
  *   OST requests: OBDO & OBD request records
@@ -234,12 +239,12 @@ typedef enum {
         OST_SAN_READ   = 14,
         OST_SAN_WRITE  = 15,
         OST_SYNCFS     = 16,
+        OST_SET_INFO   = 17,
         OST_LAST_OPC
 } ost_cmd_t;
 #define OST_FIRST_OPC  OST_REPLY
 /* When adding OST RPC opcodes, please update 
  * LAST/FIRST macros used in ptlrpc/ptlrpc_internals.h */
-
 
 typedef uint64_t        obd_id;
 typedef uint64_t        obd_gr;
@@ -324,8 +329,23 @@ struct lov_mds_md {
 #define OBD_MD_LINKNAME (0x00040000)    /* symbolic link target */
 #define OBD_MD_FLHANDLE (0x00080000)    /* file handle */
 #define OBD_MD_FLCKSUM  (0x00100000)    /* bulk data checksum */
+#define OBD_MD_FLQOS    (0x00200000)    /* quality of service stats */
+#define OBD_MD_FLOSCOPQ (0x00400000)    /* osc opaque data */
+#define OBD_MD_FLCOOKIE (0x00800000)    /* log cancellation cookie */
 #define OBD_MD_FLNOTOBD (~(OBD_MD_FLOBDFLG | OBD_MD_FLBLOCKS | OBD_MD_LINKNAME|\
-                           OBD_MD_FLEASIZE | OBD_MD_FLHANDLE | OBD_MD_FLCKSUM))
+                           OBD_MD_FLEASIZE | OBD_MD_FLHANDLE | OBD_MD_FLCKSUM|\
+                           OBD_MD_FLQOS | OBD_MD_FLOSCOPQ | OBD_MD_FLCOOKIE))
+
+static inline struct lustre_handle *obdo_handle(struct obdo *oa)
+{
+        return (struct lustre_handle *)oa->o_inline;
+}
+
+static inline struct llog_cookie *obdo_logcookie(struct obdo *oa)
+{
+        return (struct llog_cookie *)(oa->o_inline +
+                                      sizeof(struct lustre_handle));
+}
 
 struct obd_statfs {
         __u64           os_type;
@@ -399,6 +419,8 @@ typedef enum {
         MDS_GETSTATUS    = 40,
         MDS_STATFS       = 41,
         MDS_GETLOVINFO   = 42,
+        MDS_PIN          = 43,
+        MDS_UNPIN        = 44,
         MDS_LAST_OPC
 } mds_cmd_t;
 #define MDS_FIRST_OPC    MDS_GETATTR
@@ -417,12 +439,20 @@ typedef enum {
 #define REINT_OPEN     6
 #define REINT_MAX      6
 
-#define IT_INTENT_EXEC   1
-#define IT_OPEN_LOOKUP  (1 << 1)
-#define IT_OPEN_NEG     (1 << 2)
-#define IT_OPEN_POS     (1 << 3)
-#define IT_OPEN_CREATE  (1 << 4)
-#define IT_OPEN_OPEN    (1 << 5)
+/* the disposition of the intent outlines what was executed */
+#define DISP_IT_EXECD   1
+#define DISP_LOOKUP_EXECD  (1 << 1)
+#define DISP_LOOKUP_NEG     (1 << 2)
+#define DISP_LOOKUP_POS     (1 << 3)
+#define DISP_OPEN_CREATE  (1 << 4)
+#define DISP_OPEN_OPEN    (1 << 5)
+#define DISP_ENQ_COMPLETE (1<<6)
+
+
+struct ll_uctxt {
+        __u32 gid1;
+        __u32 gid2;
+};
 
 struct ll_fid {
         __u64 id;
@@ -503,6 +533,11 @@ struct mds_rec_setattr {
         __u64           sa_ctime;
         __u32           sa_suppgid;
 };
+
+/* Remove this once we declare it in include/linux/fs.h (v21 kernel patch?) */
+#ifndef ATTR_CTIME_SET
+#define ATTR_CTIME_SET 0x2000
+#endif
 
 extern void lustre_swab_mds_rec_setattr (struct mds_rec_setattr *sa);
 
@@ -720,9 +755,109 @@ struct ptlbd_rsp {
 extern void lustre_swab_ptlbd_rsp (struct ptlbd_rsp *r);
 
 /*
+ * Opcodes for management/monitoring node.
+ */
+#define MGMT_CONNECT    250
+#define MGMT_DISCONNECT 251
+#define MGMT_EXCEPTION  252 /* node died, etc. */
+
+/*
  * Opcodes for multiple servers.
  */
 
-#define OBD_PING 400
+#define OBD_PING       400
+#define OBD_LOG_CANCEL 401
+#define OBD_LAST_OPC  (OBD_LOG_CANCEL + 1)
+#define OBD_FIRST_OPC OBD_PING
+
+/* catalog of log objects */
+
+/* Identifier for a single log object */
+struct llog_logid {
+        __u64                   lgl_oid;
+        __u32                   lgl_ogen;
+};
+
+/* Log data record types - there is no specific reason that these need to
+ * be related to the RPC opcodes, but no reason not to (may be handy later?)
+ */
+typedef enum {
+        OST_CREATE_REC = 0x10600000 | (OST_CREATE << 8),
+        OST_ORPHAN_REC = 0x10600000 | (OST_DESTROY << 8),
+        MDS_UNLINK_REC = 0x10610000 | (MDS_REINT << 8) | REINT_UNLINK,
+        LLOG_CATALOG_MAGIC = 0x1062e67d,
+        LLOG_OBJECT_MAGIC = 0x10645539,
+} llog_op_type;
+
+/* Log record header - stored in originating host endian order (use magic to
+ * check order).
+ * Each record must start with this struct, end with a __u32 for the struct
+ * length, and be a multiple of 64 bits in size.
+ */
+struct llog_trans_hdr {
+        __u32                   lth_len;
+        __u32                   lth_type;
+};
+
+struct llog_create_rec {
+        struct llog_trans_hdr   lcr_hdr;
+        struct ll_fid           lcr_fid;
+        obd_id                  lcr_oid;
+        obd_count               lcr_ogen;
+        __u32                   lcr_end_len;
+} __attribute__((packed));
+
+struct llog_orphan_rec {
+        struct llog_trans_hdr   lor_hdr;
+        obd_id                  lor_oid;
+        obd_count               lor_ogen;
+        __u32                   lor_end_len;
+} __attribute__((packed));
+
+struct llog_unlink_rec {
+        struct llog_trans_hdr   lur_hdr;
+        obd_id                  lur_oid;
+        obd_count               lur_ogen;
+        __u32                   lur_end_len;
+} __attribute__((packed));
+
+/* On-disk header structure of each log object - stored in creating host
+ * endian order, with the exception of the bitmap - stored in little endian
+ * order so that we can use ext2_{clear,set,test}_bit() for proper/optimized
+ * little-endian handling of bitmaps (which are otherwise a pain to handle).
+ */
+#define LLOG_CHUNK_SIZE         4096
+#define LLOG_HEADER_SIZE        (96)
+#define LLOG_BITMAP_BYTES       (LLOG_CHUNK_SIZE - LLOG_HEADER_SIZE)
+
+#define LLOG_MIN_REC_SIZE       (16) /* round(struct llog_trans_hdr+end_len) */
+
+struct llog_object_hdr {
+        struct llog_trans_hdr   llh_hdr;
+        __u64                   llh_timestamp;
+        __u32                   llh_count;
+        __u16                   llh_bitmap_offset;
+        __u16                   llh_unused;
+        struct obd_uuid         llh_tgtuuid;
+        __u8                    llh_padding[3];
+        __u32                   llh_reserved[LLOG_HEADER_SIZE/sizeof(__u32)-17];
+        __u32                   llh_bitmap[LLOG_BITMAP_BYTES/sizeof(__u32)];
+        __u32                   llh_hdr_end_len;
+};
+
+static inline int llog_log_swabbed(struct llog_object_hdr *hdr)
+{
+        if (hdr->llh_hdr.lth_type == __swab32(LLOG_OBJECT_MAGIC))
+                return 1;
+        if (hdr->llh_hdr.lth_type == LLOG_OBJECT_MAGIC)
+                return 0;
+        return -1;
+}
+
+/* log cookies are used to reference a specific log file and a record therein */
+struct llog_cookie {
+        struct llog_logid       lgc_lgl;
+        __u32                   lgc_index;
+};
 
 #endif

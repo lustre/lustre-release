@@ -32,11 +32,12 @@
 #include <linux/version.h>
 #include <asm/system.h>
 #include <asm/uaccess.h>
-#include "llite_internal.h"
 
 #include <linux/fs.h>
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
 #include <linux/buffer_head.h>
+#include <linux/mpage.h>
+#include <linux/writeback.h>
 #else
 #include <linux/iobuf.h>
 #endif
@@ -51,7 +52,7 @@
 
 #include <linux/lustre_mds.h>
 #include <linux/lustre_lite.h>
-#include <linux/lustre_lib.h>
+#include "llite_internal.h"
 #include <linux/lustre_compat25.h>
 
 /*
@@ -90,7 +91,8 @@ void set_page_clean(struct page *page)
 }
 
 /* SYNCHRONOUS I/O to object storage for an inode */
-static int ll_brw(int cmd, struct inode *inode, struct page *page, int flags)
+static int ll_brw(int cmd, struct inode *inode, struct obdo *oa,
+                  struct page *page, int flags)
 {
         struct ll_inode_info *lli = ll_i2info(inode);
         struct lov_stripe_md *lsm = lli->lli_smd;
@@ -124,8 +126,8 @@ static int ll_brw(int cmd, struct inode *inode, struct page *page, int flags)
         else
                 lprocfs_counter_add(ll_i2sbi(inode)->ll_stats,
                                     LPROC_LL_BRW_READ, pg.count);
-        rc = obd_brw(cmd, ll_i2obdconn(inode), lsm, 1, &pg, NULL);
-        if (rc)
+        rc = obd_brw(cmd, ll_i2obdconn(inode), oa, lsm, 1, &pg, NULL);
+        if (rc != 0 && rc != -EIO)
                 CERROR("error from obd_brw: rc = %d\n", rc);
 
         RETURN(rc);
@@ -142,6 +144,7 @@ static int ll_readpage(struct file *file, struct page *first_page)
         struct page *page = first_page;
         struct list_head *pos;
         struct brw_page *pgs;
+        struct obdo *oa;
         unsigned long end_index, extent_end = 0;
         struct ptlrpc_request_set *set;
         int npgs = 0, rc = 0, max_pages;
@@ -276,19 +279,33 @@ static int ll_readpage(struct file *file, struct page *first_page)
 
         } while (page);
 
-        set = ptlrpc_prep_set();
-        if (set == NULL) {
+        if ((oa = obdo_alloc()) == NULL) {
+                CERROR("ENOMEM allocing obdo\n");
+                rc = -ENOMEM;
+        } else if ((set = ptlrpc_prep_set()) == NULL) {
                 CERROR("ENOMEM allocing request set\n");
+                obdo_free(oa);
                 rc = -ENOMEM;
         } else {
-                rc = obd_brw_async(OBD_BRW_READ, ll_i2obdconn(inode),
+                struct ll_file_data *fd = file->private_data;
+
+                oa->o_id = lli->lli_smd->lsm_object_id;
+                memcpy(obdo_handle(oa), &fd->fd_ost_och.och_fh,
+                       sizeof(fd->fd_ost_och.och_fh));
+                oa->o_valid = OBD_MD_FLID | OBD_MD_FLHANDLE;
+                obdo_from_inode(oa, inode, OBD_MD_FLTYPE | OBD_MD_FLATIME);
+
+                rc = obd_brw_async(OBD_BRW_READ, ll_i2obdconn(inode), oa,
                                    ll_i2info(inode)->lli_smd, npgs, pgs,
                                    set, NULL);
                 if (rc == 0)
                         rc = ptlrpc_set_wait(set);
                 ptlrpc_set_destroy(set);
+                if (rc == 0)
+                        obdo_refresh_inode(inode, oa, oa->o_valid);
                 if (rc && rc != -EIO)
                         CERROR("error from obd_brw_async: rc = %d\n", rc);
+                obdo_free(oa);
         }
 
         while (npgs-- > 0) {
@@ -310,15 +327,15 @@ static int ll_readpage(struct file *file, struct page *first_page)
 void ll_truncate(struct inode *inode)
 {
         struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
-        struct obdo oa = {0};
+        struct obdo oa;
         int err;
         ENTRY;
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p)\n", inode->i_ino,
                inode->i_generation, inode);
 
+        /* object not yet allocated */
         if (!lsm) {
-                /* object not yet allocated */
-                inode->i_mtime = inode->i_ctime = CURRENT_TIME;
+                CERROR("truncate on inode %lu with no objects\n", inode->i_ino);
                 EXIT;
                 return;
         }
@@ -331,8 +348,9 @@ void ll_truncate(struct inode *inode)
                         ~0);
 
         oa.o_id = lsm->lsm_object_id;
-        oa.o_mode = inode->i_mode;
-        oa.o_valid = OBD_MD_FLID | OBD_MD_FLMODE | OBD_MD_FLTYPE;
+        oa.o_valid = OBD_MD_FLID;
+        obdo_from_inode(&oa, inode, OBD_MD_FLTYPE|OBD_MD_FLMODE|OBD_MD_FLATIME|
+                                    OBD_MD_FLMTIME | OBD_MD_FLCTIME);
 
         CDEBUG(D_INFO, "calling punch for "LPX64" (all bytes after %Lu)\n",
                oa.o_id, inode->i_size);
@@ -343,7 +361,9 @@ void ll_truncate(struct inode *inode)
         if (err)
                 CERROR("obd_truncate fails (%d) ino %lu\n", err, inode->i_ino);
         else
-                obdo_to_inode(inode, &oa, oa.o_valid);
+                obdo_to_inode(inode, &oa, OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
+                                          OBD_MD_FLATIME | OBD_MD_FLMTIME |
+                                          OBD_MD_FLCTIME);
 
         EXIT;
         return;
@@ -356,9 +376,11 @@ static int ll_prepare_write(struct file *file, struct page *page, unsigned from,
 {
         struct inode *inode = page->mapping->host;
         struct ll_inode_info *lli = ll_i2info(inode);
+        struct ll_file_data *fd = file->private_data;
         struct lov_stripe_md *lsm = lli->lli_smd;
         obd_off offset = ((obd_off)page->index) << PAGE_SHIFT;
         struct brw_page pg;
+        struct obdo oa;
         int rc = 0;
         ENTRY;
 
@@ -375,7 +397,7 @@ static int ll_prepare_write(struct file *file, struct page *page, unsigned from,
         pg.off = offset;
         pg.count = PAGE_SIZE;
         pg.flag = 0;
-        rc = obd_brw(OBD_BRW_CHECK, ll_i2obdconn(inode), lsm, 1, &pg, NULL);
+        rc = obd_brw(OBD_BRW_CHECK, ll_i2obdconn(inode), NULL, lsm, 1,&pg,NULL);
         if (rc)
                 RETURN(rc);
 
@@ -393,7 +415,15 @@ static int ll_prepare_write(struct file *file, struct page *page, unsigned from,
                 GOTO(prepare_done, rc = 0);
         }
 
-        rc = ll_brw(OBD_BRW_READ, inode, page, 0);
+        oa.o_id = lsm->lsm_object_id;
+        oa.o_mode = inode->i_mode;
+        memcpy(obdo_handle(&oa), &fd->fd_ost_och.och_fh,
+               sizeof(fd->fd_ost_och.och_fh));
+        oa.o_valid = OBD_MD_FLID |OBD_MD_FLMODE |OBD_MD_FLTYPE |OBD_MD_FLHANDLE;
+
+        rc = ll_brw(OBD_BRW_READ, inode, &oa, page, 0);
+        if (rc == 0)
+                obdo_refresh_inode(inode, &oa, oa.o_valid);
 
         EXIT;
  prepare_done:
@@ -544,15 +574,19 @@ int ll_mark_dirty_page(struct lustre_handle *conn, struct lov_stripe_md *lsm,
 static int ll_writepage(struct page *page)
 {
         struct inode *inode = page->mapping->host;
+        struct obdo oa;
         ENTRY;
 
         CDEBUG(D_CACHE, "page %p [lau %d] inode %p\n", page,
-                        PageLaunder(page), inode);
+               PageLaunder(page), inode);
         LASSERT(PageLocked(page));
 
-        /* XXX should obd_brw errors trickle up? */
-        ll_batch_writepage(inode, page);
-        RETURN(0);
+        oa.o_id = ll_i2info(inode)->lli_smd->lsm_object_id;
+        oa.o_valid = OBD_MD_FLID;
+        obdo_from_inode(&oa, inode, OBD_MD_FLTYPE | OBD_MD_FLATIME |
+                                    OBD_MD_FLMTIME | OBD_MD_FLCTIME);
+
+        RETURN(ll_batch_writepage(inode, &oa, page));
 }
 
 /*
@@ -567,6 +601,7 @@ static int ll_commit_write(struct file *file, struct page *page,
         int rc = 0;
         ENTRY;
 
+        SIGNAL_MASK_ASSERT(); /* XXX BUG 1511 */
         LASSERT(inode == file->f_dentry->d_inode);
         LASSERT(PageLocked(page));
 
@@ -595,7 +630,18 @@ static int ll_commit_write(struct file *file, struct page *page,
         /* This means that we've hit either the local cache limit or the limit
          * of the OST's grant. */
         if (rc == -EDQUOT) {
-                int rc = ll_batch_writepage(inode, page);
+                struct ll_file_data *fd = file->private_data;
+                struct obdo oa;
+                int rc;
+
+                oa.o_id = ll_i2info(inode)->lli_smd->lsm_object_id;
+                memcpy(obdo_handle(&oa), &fd->fd_ost_och.och_fh,
+                       sizeof(fd->fd_ost_och.och_fh));
+                oa.o_valid = OBD_MD_FLID | OBD_MD_FLHANDLE;
+                obdo_from_inode(&oa, inode, OBD_MD_FLTYPE | OBD_MD_FLATIME |
+                                            OBD_MD_FLMTIME | OBD_MD_FLCTIME);
+
+                rc = ll_batch_writepage(inode, &oa, page);
                 lock_page(page); /* caller expects to unlock */
                 RETURN(rc);
         }
@@ -624,12 +670,13 @@ static int ll_direct_IO(int rw, struct inode *inode, struct kiobuf *iobuf,
         struct lov_stripe_md *lsm = lli->lli_smd;
         struct brw_page *pga;
         struct ptlrpc_request_set *set;
+        struct obdo oa;
         int length, i, flags, rc = 0;
         loff_t offset;
         ENTRY;
 
         if (!lsm || !lsm->lsm_object_id)
-                RETURN(-ENOMEM);
+                RETURN(-EBADF);
 
         if ((iobuf->offset & (blocksize - 1)) ||
             (iobuf->length & (blocksize - 1)))
@@ -663,6 +710,11 @@ static int ll_direct_IO(int rw, struct inode *inode, struct kiobuf *iobuf,
                 }
         }
 
+        oa.o_id = lsm->lsm_object_id;
+        oa.o_valid = OBD_MD_FLID;
+        obdo_from_inode(&oa, inode, OBD_MD_FLTYPE | OBD_MD_FLATIME |
+                                    OBD_MD_FLMTIME | OBD_MD_FLCTIME);
+
         if (rw == WRITE)
                 lprocfs_counter_add(ll_i2sbi(inode)->ll_stats,
                                     LPROC_LL_DIRECT_WRITE, iobuf->length);
@@ -670,8 +722,8 @@ static int ll_direct_IO(int rw, struct inode *inode, struct kiobuf *iobuf,
                 lprocfs_counter_add(ll_i2sbi(inode)->ll_stats,
                                     LPROC_LL_DIRECT_READ, iobuf->length);
         rc = obd_brw_async(rw == WRITE ? OBD_BRW_WRITE : OBD_BRW_READ,
-                           ll_i2obdconn(inode), lsm, iobuf->nr_pages, pga, set,
-                           NULL);
+                           ll_i2obdconn(inode), &oa, lsm, iobuf->nr_pages, pga,
+                           set, NULL);
         if (rc) {
                 CDEBUG(rc == -ENOSPC ? D_INODE : D_ERROR,
                        "error from obd_brw_async: rc = %d\n", rc);

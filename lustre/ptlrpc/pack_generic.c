@@ -187,14 +187,9 @@ void *lustre_msg_buf(struct lustre_msg *m, int n, int min_size)
         }
 
         buflen = m->buflens[n];
-        if (buflen == 0) {
-                CERROR("msg %p buffer[%d] is zero length\n", m, n);
-                return NULL;
-        }
-
         if (buflen < min_size) {
                 CERROR("msg %p buffer[%d] size %d too small (required %d)\n",
-                        m, n, buflen, min_size);
+                       m, n, buflen, min_size);
                 return NULL;
         }
 
@@ -249,17 +244,16 @@ void *lustre_swab_reqbuf (struct ptlrpc_request *req, int index, int min_size,
 {
         void *ptr;
 
-        LASSERT_REQSWAB (req, index);
+        LASSERT_REQSWAB(req, index);
 
         ptr = lustre_msg_buf(req->rq_reqmsg, index, min_size);
         if (ptr == NULL)
-                return (NULL);
+                return NULL;
 
-        if (swabber != NULL &&
-            lustre_msg_swabbed (req->rq_reqmsg))
+        if (swabber != NULL && lustre_msg_swabbed(req->rq_reqmsg))
                 ((void (*)(void *))swabber)(ptr);
 
-        return (ptr);
+        return ptr;
 }
 
 /* Wrap up the normal fixed length case */
@@ -268,17 +262,16 @@ void *lustre_swab_repbuf (struct ptlrpc_request *req, int index, int min_size,
 {
         void *ptr;
 
-        LASSERT_REPSWAB (req, index);
+        LASSERT_REPSWAB(req, index);
 
-        ptr = lustre_msg_buf (req->rq_repmsg, index, min_size);
+        ptr = lustre_msg_buf(req->rq_repmsg, index, min_size);
         if (ptr == NULL)
-                return (NULL);
+                return NULL;
 
-        if (swabber != NULL &&
-            lustre_msg_swabbed (req->rq_repmsg))
+        if (swabber != NULL && lustre_msg_swabbed(req->rq_repmsg))
                 ((void (*)(void *))swabber)(ptr);
 
-        return (ptr);
+        return ptr;
 }
 
 /* byte flipping routines for all wire types declared in
@@ -638,12 +631,12 @@ void lustre_assert_wire_constants (void)
         LASSERT (REINT_RENAME == 5);
         LASSERT (REINT_OPEN == 6);
         LASSERT (REINT_MAX == 6);
-        LASSERT (IT_INTENT_EXEC == 1);
-        LASSERT (IT_OPEN_LOOKUP == 2);
-        LASSERT (IT_OPEN_NEG == 4);
-        LASSERT (IT_OPEN_POS == 8);
-        LASSERT (IT_OPEN_CREATE == 16);
-        LASSERT (IT_OPEN_OPEN == 32);
+        LASSERT (DISP_IT_EXECD == 1);
+        LASSERT (DISP_LOOKUP_EXECD == 2);
+        LASSERT (DISP_LOOKUP_NEG == 4);
+        LASSERT (DISP_LOOKUP_POS == 8);
+        LASSERT (DISP_OPEN_CREATE == 16);
+        LASSERT (DISP_OPEN_OPEN == 32);
         LASSERT (MDS_STATUS_CONN == 1);
         LASSERT (MDS_STATUS_LOV == 2);
         LASSERT (MDS_OPEN_HAS_EA == 1);

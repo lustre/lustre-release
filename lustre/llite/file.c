@@ -32,8 +32,7 @@
 #include <linux/lustre_compat25.h>
 #endif
 
-int ll_inode_setattr(struct inode *inode, struct iattr *attr, int do_trunc);
-extern int ll_setattr(struct dentry *de, struct iattr *attr);
+#include "llite_internal.h"
 
 static int ll_mdc_close(struct lustre_handle *mdc_conn, struct inode *inode,
                         struct file *file)
@@ -135,28 +134,21 @@ int ll_file_release(struct inode *inode, struct file *file)
         lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_RELEASE);
         fd = (struct ll_file_data *)file->private_data;
         if (!fd) /* no process opened the file after an mcreate */
-                RETURN(rc = 0);
+                RETURN(0);
 
         /* we might not be able to get a valid handle on this file
          * again so we really want to flush our write cache.. */
-        if (S_ISREG(inode->i_mode)) {
-                filemap_fdatasync(inode->i_mapping);
-                filemap_fdatawait(inode->i_mapping);
+        if (S_ISREG(inode->i_mode) && lsm) {
+                write_inode_now(inode, 0);
+                obdo_from_inode(&oa, inode, OBD_MD_FLTYPE | OBD_MD_FLATIME |
+                                            OBD_MD_FLMTIME | OBD_MD_FLCTIME);
+                memcpy(obdo_handle(&oa), &fd->fd_ost_och, FD_OSTDATA_SIZE);
+                oa.o_valid |= OBD_MD_FLHANDLE;
 
-                if (lsm != NULL) {
-                        memset(&oa, 0, sizeof(oa));
-                        oa.o_id = lsm->lsm_object_id;
-                        oa.o_mode = S_IFREG;
-                        oa.o_valid = OBD_MD_FLTYPE | OBD_MD_FLID;
-
-                        memcpy(&oa.o_inline, &fd->fd_ost_och, FD_OSTDATA_SIZE);
-                        oa.o_valid |= OBD_MD_FLHANDLE;
-
-                        rc = obd_close(&sbi->ll_osc_conn, &oa, lsm, NULL);
-                        if (rc)
-                                CERROR("inode %lu object close failed: rc = "
-                                       "%d\n", inode->i_ino, rc);
-                }
+                rc = obd_close(&sbi->ll_osc_conn, &oa, lsm, NULL);
+                if (rc)
+                        CERROR("inode %lu object close failed: rc %d\n",
+                               inode->i_ino, rc);
         }
 
         rc2 = ll_mdc_close(&sbi->ll_mdc_conn, inode, file);
@@ -206,16 +198,16 @@ static int ll_osc_open(struct lustre_handle *conn, struct inode *inode,
                 RETURN(-ENOMEM);
         oa->o_id = lsm->lsm_object_id;
         oa->o_mode = S_IFREG;
-        oa->o_valid = (OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLBLOCKS |
-                       OBD_MD_FLMTIME | OBD_MD_FLCTIME);
+        oa->o_valid = OBD_MD_FLID;
+        obdo_from_inode(oa, inode, OBD_MD_FLTYPE);
         rc = obd_open(conn, oa, lsm, NULL, &fd->fd_ost_och);
         if (rc)
                 GOTO(out, rc);
 
         file->f_flags &= ~O_LOV_DELAY_CREATE;
-        obdo_to_inode(inode, oa, OBD_MD_FLBLOCKS | OBD_MD_FLBLKSZ |
-                                 OBD_MD_FLMTIME | OBD_MD_FLCTIME);
-
+        obdo_refresh_inode(inode, oa, OBD_MD_FLBLOCKS | OBD_MD_FLBLKSZ |
+                                      OBD_MD_FLATIME | OBD_MD_FLMTIME |
+                                      OBD_MD_FLCTIME);
         EXIT;
 out:
         obdo_free(oa);
@@ -236,24 +228,33 @@ static int ll_create_obj(struct lustre_handle *conn, struct inode *inode,
         struct obdo *oa;
         struct iattr iattr;
         struct mdc_op_data op_data;
-        int rc, err, lmm_size = 0;;
+        struct obd_trans_info oti = { 0 };
+        int rc, err, lmm_size = 0;
         ENTRY;
 
         oa = obdo_alloc();
         if (!oa)
                 RETURN(-ENOMEM);
 
+        LASSERT(S_ISREG(inode->i_mode));
         oa->o_mode = S_IFREG | 0600;
         oa->o_id = inode->i_ino;
+        oa->o_generation = inode->i_generation;
         /* Keep these 0 for now, because chown/chgrp does not change the
          * ownership on the OST, and we don't want to allow BA OST NFS
          * users to access these objects by mistake. */
         oa->o_uid = 0;
         oa->o_gid = 0;
-        oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLMODE |
-                OBD_MD_FLUID | OBD_MD_FLGID;
+        oa->o_valid = OBD_MD_FLID | OBD_MD_FLGENER | OBD_MD_FLTYPE |
+                OBD_MD_FLMODE | OBD_MD_FLUID | OBD_MD_FLGID;
+#ifdef ENABLE_ORPHANS
+        oa->o_valid |= OBD_MD_FLCOOKIE;
+#endif
 
-        rc = obd_create(conn, oa, &lsm, NULL);
+        obdo_from_inode(oa, inode, OBD_MD_FLTYPE|OBD_MD_FLATIME|OBD_MD_FLMTIME|
+                        OBD_MD_FLCTIME | (inode->i_size ? OBD_MD_FLSIZE : 0));
+
+        rc = obd_create(conn, oa, &lsm, &oti);
         if (rc) {
                 CERROR("error creating objects for inode %lu: rc = %d\n",
                        inode->i_ino, rc);
@@ -263,7 +264,7 @@ static int ll_create_obj(struct lustre_handle *conn, struct inode *inode,
                 }
                 GOTO(out_oa, rc);
         }
-        obdo_to_inode(inode, oa, OBD_MD_FLBLKSZ);
+        obdo_refresh_inode(inode, oa, OBD_MD_FLBLKSZ);
 
         LASSERT(lsm && lsm->lsm_object_id);
         rc = obd_packmd(conn, &lmm, lsm);
@@ -278,11 +279,18 @@ static int ll_create_obj(struct lustre_handle *conn, struct inode *inode,
 
         ll_prepare_mdc_op_data(&op_data, inode, NULL, NULL, 0, 0);
 
-        rc = mdc_setattr(&ll_i2sbi(inode)->ll_mdc_conn, &op_data,
-                         &iattr, lmm, lmm_size, &req);
+#if 0
+#warning FIXME: next line is for debugging purposes only
+        obd_log_cancel(&ll_i2sbi(inode)->ll_osc_conn, lsm, oti.oti_numcookies,
+                       oti.oti_logcookies, OBD_LLOG_FL_SENDNOW);
+#endif
+
+        rc = mdc_setattr(&ll_i2sbi(inode)->ll_mdc_conn, &op_data, &iattr,
+                         lmm, lmm_size, oti.oti_logcookies,
+                         oti.oti_numcookies * sizeof(oti.oti_onecookie), &req);
         ptlrpc_req_finished(req);
 
-        obd_free_diskmd (conn, &lmm);
+        obd_free_diskmd(conn, &lmm);
 
         /* If we couldn't complete mdc_open() and store the stripe MD on the
          * MDS, we need to destroy the objects now or they will be leaked.
@@ -297,13 +305,21 @@ static int ll_create_obj(struct lustre_handle *conn, struct inode *inode,
 
         EXIT;
 out_oa:
+        oti_free_cookies(&oti);
         obdo_free(oa);
         return rc;
 
 out_destroy:
-        obdo_from_inode(oa, inode, OBD_MD_FLTYPE);
         oa->o_id = lsm->lsm_object_id;
-        oa->o_valid |= OBD_MD_FLID;
+        oa->o_valid = OBD_MD_FLID;
+        obdo_from_inode(oa, inode, OBD_MD_FLTYPE);
+#if 0
+        err = obd_log_cancel(conn, lsm, oti.oti_numcookies, oti.oti_logcookies,
+                             OBD_LLOG_FL_SENDNOW);
+        if (err)
+                CERROR("error cancelling inode %lu log cookies: rc %d\n",
+                       inode->i_ino, err);
+#endif
         err = obd_destroy(conn, oa, lsm, NULL);
         obd_free_memmd(conn, &lsm);
         if (err)
@@ -327,8 +343,6 @@ out_destroy:
  * before returning in the O_LOV_DELAY_CREATE case and dropping it here
  * or in ll_file_release(), but I'm not sure that is desirable/necessary.
  */
-extern int ll_it_open_error(int phase, struct lookup_intent *it);
-
 int ll_file_open(struct inode *inode, struct file *file)
 {
         struct ll_sb_info *sbi = ll_i2sbi(inode);
@@ -346,9 +360,10 @@ int ll_file_open(struct inode *inode, struct file *file)
         if (inode->i_sb->s_root == file->f_dentry)
                 RETURN(0);
 
+        it = file->f_it;
         lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_OPEN);
-        LL_GET_INTENT(file->f_dentry, it);
-        rc = ll_it_open_error(IT_OPEN_OPEN, it);
+
+        rc = ll_it_open_error(DISP_OPEN_OPEN, it);
         if (rc)
                 RETURN(rc);
 
@@ -363,7 +378,8 @@ int ll_file_open(struct inode *inode, struct file *file)
 
         lsm = lli->lli_smd;
         if (lsm == NULL) {
-                if (file->f_flags & O_LOV_DELAY_CREATE) {
+                if (file->f_flags & O_LOV_DELAY_CREATE ||
+                    !(file->f_mode & FMODE_WRITE)) {
                         CDEBUG(D_INODE, "delaying object creation\n");
                         RETURN(0);
                 }
@@ -418,7 +434,7 @@ int ll_inode_getattr(struct inode *inode, struct lov_stripe_md *lsm,
                 OBD_MD_FLCTIME;
 
         if (ostdata != NULL) {
-                memcpy(&oa.o_inline, ostdata, FD_OSTDATA_SIZE);
+                memcpy(obdo_handle(&oa), ostdata, FD_OSTDATA_SIZE);
                 oa.o_valid |= OBD_MD_FLHANDLE;
         }
 
@@ -455,8 +471,8 @@ int ll_inode_getattr(struct inode *inode, struct lov_stripe_md *lsm,
                  (aft != 0 || after < before) &&
                  oa.o_size < ((u64)before + 1) << PAGE_CACHE_SHIFT);
 
-        obdo_to_inode(inode, &oa, (OBD_MD_FLBLOCKS | OBD_MD_FLBLKSZ |
-                                   OBD_MD_FLMTIME | OBD_MD_FLCTIME));
+        obdo_refresh_inode(inode, &oa, OBD_MD_FLBLOCKS | OBD_MD_FLBLKSZ |
+                                       OBD_MD_FLMTIME | OBD_MD_FLCTIME);
         if (inode->i_blksize < PAGE_CACHE_SIZE)
                 inode->i_blksize = PAGE_CACHE_SIZE;
 
@@ -474,6 +490,228 @@ int ll_inode_getattr(struct inode *inode, struct lov_stripe_md *lsm,
         CDEBUG(D_INODE, "objid "LPX64" size %Lu/%Lu blksize %lu\n",
                lsm->lsm_object_id, inode->i_size, inode->i_size,
                inode->i_blksize);
+        RETURN(0);
+}
+
+static inline void ll_remove_suid(struct inode *inode)
+{
+        unsigned int mode;
+
+        /* set S_IGID if S_IXGRP is set, and always set S_ISUID */
+        mode = (inode->i_mode & S_IXGRP)*(S_ISGID/S_IXGRP) | S_ISUID;
+
+        /* was any of the uid bits set? */
+        mode &= inode->i_mode;
+        if (mode && !capable(CAP_FSETID)) {
+                inode->i_mode &= ~mode;
+                // XXX careful here - we cannot change the size
+        }
+}
+
+#if 0
+static void ll_update_atime(struct inode *inode)
+{
+        if (IS_RDONLY(inode)) return;
+
+        /* update atime, but don't explicitly write it out just this change */
+        inode->i_atime = CURRENT_TIME;
+}
+#endif
+
+/*
+ * flush the page cache for an extent as its canceled.  when we're on an
+ * lov we get a lock cancelation for each of the obd locks under the lov
+ * so we have to map the obd's region back onto the stripes in the file
+ * that it held.
+ *
+ * no one can dirty the extent until we've finished our work and they
+ * can enqueue another lock.
+ *
+ * XXX this could be asking the inode's dirty tree for info
+ */
+void ll_pgcache_remove_extent(struct inode *inode, struct lov_stripe_md *lsm,
+                              struct ldlm_lock *lock)
+{
+        struct ldlm_extent *extent = &lock->l_extent;
+        unsigned long start, end, count, skip, i, j;
+        struct page *page;
+        int ret;
+        ENTRY;
+
+        CDEBUG(D_INODE, "obdo %lu inode %p ["LPU64"->"LPU64"] size: %llu\n",
+               inode->i_ino, inode, extent->start, extent->end, inode->i_size);
+
+        start = extent->start >> PAGE_CACHE_SHIFT;
+        count = ~0;
+        skip = 0;
+        end = (extent->end >> PAGE_CACHE_SHIFT) + 1;
+        if ((end << PAGE_CACHE_SHIFT) < extent->end)
+                end = ~0;
+        if (lsm->lsm_stripe_count > 1) {
+                struct {
+                        char name[16];
+                        struct ldlm_lock *lock;
+                        struct lov_stripe_md *lsm;
+                } key = { .name = "lock_to_stripe", .lock = lock, .lsm = lsm };
+                __u32 stripe;
+                __u32 vallen = sizeof(stripe);
+                int rc;
+
+                /* get our offset in the lov */
+                rc = obd_get_info(ll_i2obdconn(inode), sizeof(key),
+                                  &key, &vallen, &stripe);
+                if (rc != 0) {
+                        CERROR("obd_get_info: rc = %d\n", rc);
+                        LBUG();
+                }
+                LASSERT(stripe < lsm->lsm_stripe_count);
+
+                count = lsm->lsm_stripe_size >> PAGE_CACHE_SHIFT;
+                skip = (lsm->lsm_stripe_count - 1) * count;
+                start += (start/count * skip) + (stripe * count);
+                if (end != ~0)
+                        end += (end/count * skip) + (stripe * count);
+        }
+
+        i = (inode->i_size + PAGE_CACHE_SIZE-1) >> PAGE_CACHE_SHIFT;
+        if (end >= i)
+                clear_bit(LLI_F_HAVE_SIZE_LOCK, &(ll_i2info(inode)->lli_flags));
+        if (i < end)
+                end = i;
+
+        CDEBUG(D_INODE, "start: %lu j: %lu count: %lu skip: %lu end: %lu\n",
+               start, start % count, count, skip, end);
+
+        /* start writeback on dirty pages in the extent when its PW */
+        for (i = start, j = start % count;
+             lock->l_granted_mode == LCK_PW && i < end; j++, i++) {
+                if (j == count) {
+                        i += skip;
+                        j = 0;
+                }
+                /* its unlikely, but give us a chance to bail when we're out */
+                ll_pgcache_lock(inode->i_mapping);
+                if (list_empty(&inode->i_mapping->dirty_pages)) {
+                        CDEBUG(D_INODE, "dirty list empty\n");
+                        ll_pgcache_unlock(inode->i_mapping);
+                        break;
+                }
+                ll_pgcache_unlock(inode->i_mapping);
+
+                if (need_resched())
+                        schedule();
+
+                page = find_get_page(inode->i_mapping, i);
+                if (page == NULL)
+                        continue;
+                if (!PageDirty(page) || TryLockPage(page)) {
+                        page_cache_release(page);
+                        continue;
+                }
+                if (PageDirty(page)) {
+                        CDEBUG(D_INODE, "writing page %p\n", page);
+                        ll_pgcache_lock(inode->i_mapping);
+                        list_del(&page->list);
+                        list_add(&page->list, &inode->i_mapping->locked_pages);
+                        ll_pgcache_unlock(inode->i_mapping);
+
+                        /* this writepage might write out pages outside
+                         * this extent, but that's ok, the pages are only
+                         * still dirty because a lock still covers them */
+                        ClearPageDirty(page);
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+                        ret = inode->i_mapping->a_ops->writepage(page);
+#else
+                        ret = inode->i_mapping->a_ops->writepage(page, NULL);
+#endif
+                        if (ret != 0)
+                                unlock_page(page);
+                } else {
+                        unlock_page(page);
+                }
+                page_cache_release(page);
+
+        }
+
+        /* our locks are page granular thanks to osc_enqueue, we invalidate the
+         * whole page. */
+        LASSERT((extent->start & ~PAGE_CACHE_MASK) == 0);
+        LASSERT(((extent->end+1) & ~PAGE_CACHE_MASK) == 0);
+        for (i = start, j = start % count ; i < end ; j++, i++) {
+                if (j == count) {
+                        i += skip;
+                        j = 0;
+                }
+                ll_pgcache_lock(inode->i_mapping);
+                if (list_empty(&inode->i_mapping->dirty_pages) &&
+                     list_empty(&inode->i_mapping->clean_pages) &&
+                     list_empty(&inode->i_mapping->locked_pages)) {
+                        CDEBUG(D_INODE, "nothing left\n");
+                        ll_pgcache_unlock(inode->i_mapping);
+                        break;
+                }
+                ll_pgcache_unlock(inode->i_mapping);
+                if (need_resched())
+                        schedule();
+                page = find_get_page(inode->i_mapping, i);
+                if (page == NULL)
+                        continue;
+                CDEBUG(D_INODE, "dropping page %p at %lu\n", page, page->index);
+                lock_page(page);
+                if (page->mapping) /* might have raced */
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+                        truncate_complete_page(page);
+#else
+                        truncate_complete_page(page->mapping, page);
+#endif
+                unlock_page(page);
+                page_cache_release(page);
+        }
+        EXIT;
+}
+
+static int ll_extent_lock_callback(struct ldlm_lock *lock,
+                                   struct ldlm_lock_desc *new, void *data,
+                                   int flag)
+{
+        struct inode *inode = data;
+        struct ll_inode_info *lli = ll_i2info(inode);
+        struct lustre_handle lockh = { 0 };
+        int rc;
+        ENTRY;
+
+        if ((unsigned long)inode < 0x1000) {
+                LDLM_ERROR(lock, "cancelling lock with bad data %p", data);
+                LBUG();
+        }
+
+        switch (flag) {
+        case LDLM_CB_BLOCKING:
+                ldlm_lock2handle(lock, &lockh);
+                rc = ldlm_cli_cancel(&lockh);
+                if (rc != ELDLM_OK)
+                        CERROR("ldlm_cli_cancel failed: %d\n", rc);
+                break;
+        case LDLM_CB_CANCELING:
+                /* FIXME: we could be given 'canceling intents' so that we
+                 * could know to write-back or simply throw away the pages
+                 * based on if the cancel comes from a desire to, say,
+                 * read or truncate.. */
+                if ((unsigned long)lli->lli_smd < 0x1000) {
+                        /* note that lli is part of the inode itself, so it
+                         * is valid if as checked the inode pointer above. */
+                        CERROR("inode %lu, sb %p, lli %p, lli_smd %p\n",
+                               inode->i_ino, inode->i_sb, lli, lli->lli_smd);
+                        LDLM_ERROR(lock, "cancel lock on bad inode %p", inode);
+                        LBUG();
+                }
+
+                ll_pgcache_remove_extent(inode, lli->lli_smd, lock);
+                break;
+        default:
+                LBUG();
+        }
+
         RETURN(0);
 }
 
@@ -573,230 +811,6 @@ int ll_extent_unlock(struct ll_file_data *fd, struct inode *inode,
         RETURN(rc);
 }
 
-static inline void ll_remove_suid(struct inode *inode)
-{
-        unsigned int mode;
-
-        /* set S_IGID if S_IXGRP is set, and always set S_ISUID */
-        mode = (inode->i_mode & S_IXGRP)*(S_ISGID/S_IXGRP) | S_ISUID;
-
-        /* was any of the uid bits set? */
-        mode &= inode->i_mode;
-        if (mode && !capable(CAP_FSETID)) {
-                inode->i_mode &= ~mode;
-                // XXX careful here - we cannot change the size
-        }
-}
-
-#if 0
-static void ll_update_atime(struct inode *inode)
-{
-#ifdef USE_ATIME
-        struct iattr attr;
-
-        attr.ia_atime = LTIME_S(CURRENT_TIME);
-        attr.ia_valid = ATTR_ATIME;
-
-        if (inode->i_atime == attr.ia_atime) return;
-        if (IS_RDONLY(inode)) return;
-        if (IS_NOATIME(inode)) return;
-
-        /* ll_inode_setattr() sets inode->i_atime from attr.ia_atime */
-        ll_inode_setattr(inode, &attr, 0);
-#else
-        /* update atime, but don't explicitly write it out just this change */
-        inode->i_atime = CURRENT_TIME;
-#endif
-}
-#endif
-
-/*
- * flush the page cache for an extent as its canceled.  when we're on an
- * lov we get a lock cancelation for each of the obd locks under the lov
- * so we have to map the obd's region back onto the stripes in the file
- * that it held.
- *
- * no one can dirty the extent until we've finished our work and they
- * can enqueue another lock.
- *
- * XXX this could be asking the inode's dirty tree for info
- */
-void ll_pgcache_remove_extent(struct inode *inode, struct lov_stripe_md *lsm,
-                              struct ldlm_lock *lock)
-{
-        struct ldlm_extent *extent = &lock->l_extent;
-        unsigned long start, end, count, skip, i, j;
-        struct page *page;
-        int ret;
-        ENTRY;
-
-        CDEBUG(D_INODE, "obdo %lu inode %p ["LPU64"->"LPU64"] size: %llu\n",
-               inode->i_ino, inode, extent->start, extent->end, inode->i_size);
-
-        start = extent->start >> PAGE_CACHE_SHIFT;
-        count = ~0;
-        skip = 0;
-        end = (extent->end >> PAGE_CACHE_SHIFT) + 1;
-        if ((end << PAGE_CACHE_SHIFT) < extent->end)
-                end = ~0;
-        if (lsm->lsm_stripe_count > 1) {
-                struct {
-                        char name[16];
-                        struct ldlm_lock *lock;
-                        struct lov_stripe_md *lsm;
-                } key = { .name = "lock_to_stripe", .lock = lock, .lsm = lsm };
-                __u32 stripe;
-                __u32 vallen = sizeof(stripe);
-                int rc;
-
-                /* get our offset in the lov */
-                rc = obd_get_info(ll_i2obdconn(inode), sizeof(key),
-                                  &key, &vallen, &stripe);
-                if (rc != 0) {
-                        CERROR("obd_get_info: rc = %d\n", rc);
-                        LBUG();
-                }
-                LASSERT(stripe < lsm->lsm_stripe_count);
-
-                count = lsm->lsm_stripe_size >> PAGE_CACHE_SHIFT;
-                skip = (lsm->lsm_stripe_count - 1) * count;
-                start += (start/count * skip) + (stripe * count);
-                if (end != ~0)
-                        end += (end/count * skip) + (stripe * count);
-        }
-
-        i = (inode->i_size + PAGE_CACHE_SIZE-1) >> PAGE_CACHE_SHIFT;
-        if (end >= i)
-                clear_bit(LLI_F_HAVE_SIZE_LOCK, &(ll_i2info(inode)->lli_flags));
-        if (i < end)
-                end = i;
-
-        CDEBUG(D_INODE, "start: %lu j: %lu count: %lu skip: %lu end: %lu\n",
-               start, start % count, count, skip, end);
-
-        /* start writeback on dirty pages in the extent when its PW */
-        for (i = start, j = start % count;
-                        lock->l_granted_mode == LCK_PW && i < end; j++, i++) {
-                if (j == count) {
-                        i += skip;
-                        j = 0;
-                }
-                /* its unlikely, but give us a chance to bail when we're out */
-                PGCACHE_WRLOCK(inode->i_mapping);
-                if (list_empty(&inode->i_mapping->dirty_pages)) {
-                        CDEBUG(D_INODE, "dirty list empty\n");
-                        PGCACHE_WRUNLOCK(inode->i_mapping);
-                        break;
-                }
-                PGCACHE_WRUNLOCK(inode->i_mapping);
-
-                if (need_resched())
-                        schedule();
-
-                page = find_get_page(inode->i_mapping, i);
-                if (page == NULL)
-                        continue;
-                if (!PageDirty(page) || TryLockPage(page)) {
-                        page_cache_release(page);
-                        continue;
-                }
-                if (PageDirty(page)) {
-                        CDEBUG(D_INODE, "writing page %p\n", page);
-                        PGCACHE_WRLOCK(inode->i_mapping);
-                        list_del(&page->list);
-                        list_add(&page->list, &inode->i_mapping->locked_pages);
-                        PGCACHE_WRUNLOCK(inode->i_mapping);
-
-                        /* this writepage might write out pages outside
-                         * this extent, but that's ok, the pages are only
-                         * still dirty because a lock still covers them */
-                        ClearPageDirty(page);
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-                        ret = inode->i_mapping->a_ops->writepage(page);
-#else
-                        ret = inode->i_mapping->a_ops->writepage(page, NULL);
-#endif
-                        if (ret != 0)
-                                unlock_page(page);
-                } else {
-                        unlock_page(page);
-                }
-                page_cache_release(page);
-
-        }
-
-        /* our locks are page granular thanks to osc_enqueue, we invalidate the
-         * whole page. */
-        LASSERT((extent->start & ~PAGE_CACHE_MASK) == 0);
-        LASSERT(((extent->end+1) & ~PAGE_CACHE_MASK) == 0);
-        for (i = start, j = start % count ; i < end ; j++, i++) {
-                if ( j == count ) {
-                        i += skip;
-                        j = 0;
-                }
-                PGCACHE_WRLOCK(inode->i_mapping);
-                if (list_empty(&inode->i_mapping->dirty_pages) &&
-                     list_empty(&inode->i_mapping->clean_pages) &&
-                     list_empty(&inode->i_mapping->locked_pages)) {
-                        CDEBUG(D_INODE, "nothing left\n");
-                        PGCACHE_WRUNLOCK(inode->i_mapping);
-                        break;
-                }
-                PGCACHE_WRUNLOCK(inode->i_mapping);
-                if (need_resched())
-                        schedule();
-                page = find_get_page(inode->i_mapping, i);
-                if (page == NULL)
-                        continue;
-                CDEBUG(D_INODE, "dropping page %p at %lu\n", page, page->index);
-                lock_page(page);
-                if (page->mapping) /* might have raced */
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-                        truncate_complete_page(page);
-#else
-                        truncate_complete_page(page->mapping, page);
-#endif                
-                unlock_page(page);
-                page_cache_release(page);
-        }
-        EXIT;
-}
-
-int ll_extent_lock_callback(struct ldlm_lock *lock, struct ldlm_lock_desc *new,
-                            void *data, int flag)
-{
-        struct inode *inode = data;
-        struct ll_inode_info *lli = ll_i2info(inode);
-        struct lustre_handle lockh = { 0 };
-        int rc;
-        ENTRY;
-
-        LASSERT(inode != NULL);
-
-        switch (flag) {
-        case LDLM_CB_BLOCKING:
-                ldlm_lock2handle(lock, &lockh);
-                rc = ldlm_cli_cancel(&lockh);
-                if (rc != ELDLM_OK)
-                        CERROR("ldlm_cli_cancel failed: %d\n", rc);
-                break;
-        case LDLM_CB_CANCELING:
-                /* FIXME: we could be given 'canceling intents' so that we
-                 * could know to write-back or simply throw away the pages
-                 * based on if the cancel comes from a desire to, say,
-                 * read or truncate.. */
-                LASSERT((unsigned long)inode > 0x1000);
-                LASSERT((unsigned long)lli > 0x1000);
-                LASSERT((unsigned long)lli->lli_smd > 0x1000);
-                ll_pgcache_remove_extent(inode, lli->lli_smd, lock);
-                break;
-        default:
-                LBUG();
-        }
-
-        RETURN(0);
-}
-
 static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
                             loff_t *ppos)
 {
@@ -819,6 +833,10 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
 
         lprocfs_counter_add(ll_i2sbi(inode)->ll_stats, LPROC_LL_READ_BYTES,
                             count);
+
+        if (!lsm)
+                RETURN(0);
+
         /* grab a -> eof extent to push extending writes out of node's caches
          * so we can see them at the getattr after lock acquisition.  this will
          * turn into a seperate [*ppos + count, EOF] 'size intent' lock attempt
@@ -852,8 +870,8 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
 /*
  * Write to a file (through the page cache).
  */
-static ssize_t
-ll_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
+static ssize_t ll_file_write(struct file *file, const char *buf, size_t count,
+                             loff_t *ppos)
 {
         struct ll_file_data *fd = file->private_data;
         struct inode *inode = file->f_dentry->d_inode;
@@ -868,6 +886,7 @@ ll_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p),size="LPSZ",offset=%Ld\n",
                inode->i_ino, inode->i_generation, inode, count, *ppos);
 
+        SIGNAL_MASK_ASSERT(); /* XXX BUG 1511 */
         /*
          * sleep doing some writeback work of this mount's dirty data
          * if the VM thinks we're low on memory.. other dirtying code
@@ -875,11 +894,13 @@ ll_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
          * careful not to hold locked pages while they do so.  like
          * ll_prepare_write.  *cough*
          */
-        LL_CHECK_DIRTY(inode->i_sb);
+        ll_check_dirty(inode->i_sb);
 
         /* POSIX, but surprised the VFS doesn't check this already */
         if (count == 0)
                 RETURN(0);
+
+        LASSERT(lsm);
 
         if (file->f_flags & O_APPEND) {
                 extent.start = 0;
@@ -943,7 +964,8 @@ static int ll_lov_setstripe(struct inode *inode, struct file *file,
         lsm = lli->lli_smd;
         if (lsm) {
                 up(&lli->lli_open_sem);
-                CERROR("stripe already exists for ino %lu\n", inode->i_ino);
+                CDEBUG(D_IOCTL, "stripe already exists for ino %lu\n",
+                       inode->i_ino);
                 /* If we haven't already done the open, do so now */
                 if (file->f_flags & O_LOV_DELAY_CREATE) {
                         int rc2 = ll_osc_open(conn, inode, file, lsm);
@@ -987,6 +1009,7 @@ int ll_file_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
         struct ll_file_data *fd = file->private_data;
         struct lustre_handle *conn;
         int flags;
+
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p),cmd=%u\n", inode->i_ino,
                inode->i_generation, inode, cmd);
 
@@ -1077,8 +1100,8 @@ loff_t ll_file_seek(struct file *file, loff_t offset, int origin)
 
 int ll_fsync(struct file *file, struct dentry *dentry, int data)
 {
-        int ret;
         struct inode *inode = dentry->d_inode;
+        int rc;
         ENTRY;
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p)\n", inode->i_ino,
                inode->i_generation, inode);
@@ -1090,17 +1113,17 @@ int ll_fsync(struct file *file, struct dentry *dentry, int data)
          * still holding the PW lock that covered the dirty pages.  XXX we
          * should probably get a reference on it, though, just to be clear.
          */
-        ret = filemap_fdatasync(dentry->d_inode->i_mapping);
-        if ( ret == 0 )
-                ret = filemap_fdatawait(dentry->d_inode->i_mapping);
+        rc = filemap_fdatasync(inode->i_mapping);
+        if (rc == 0)
+                rc = filemap_fdatawait(inode->i_mapping);
 
-        RETURN(ret);
+        RETURN(rc);
 }
 
-int ll_inode_revalidate(struct dentry *dentry)
+int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
 {
         struct inode *inode = dentry->d_inode;
-        struct lov_stripe_md *lsm = NULL;
+        struct lov_stripe_md *lsm;
         ENTRY;
 
         if (!inode) {
@@ -1118,70 +1141,41 @@ int ll_inode_revalidate(struct dentry *dentry)
            below when the lock is marked CB_PENDING.  That RPC may not
            go out because someone else may be in another RPC waiting for
            that lock*/
-        if (!(dentry->d_it && dentry->d_it->it_lock_mode) &&
-            !ll_have_md_lock(dentry)) {
+        if (!(it && it->it_lock_mode) && !ll_have_md_lock(dentry)) {
+                struct lustre_md md;
                 struct ptlrpc_request *req = NULL;
                 struct ll_sb_info *sbi = ll_i2sbi(dentry->d_inode);
                 struct ll_fid fid;
-                struct mds_body *body;
-                struct lov_mds_md *lmm;
                 unsigned long valid = 0;
-                int eadatalen = 0, rc;
+                int rc;
+                int ealen = 0;
 
-                /* Why don't we update all valid MDS fields here, if we're
-                 * doing an RPC anyways?  -phil */
                 if (S_ISREG(inode->i_mode)) {
-                        eadatalen = obd_size_diskmd(&sbi->ll_osc_conn, NULL);
+                        ealen = obd_size_diskmd(&sbi->ll_osc_conn, NULL);
                         valid |= OBD_MD_FLEASIZE;
                 }
                 ll_inode2fid(&fid, inode);
-                rc = mdc_getattr(&sbi->ll_mdc_conn, &fid,
-                                 valid, eadatalen, &req);
+                rc = mdc_getattr(&sbi->ll_mdc_conn, &fid, valid, ealen, &req);
                 if (rc) {
                         CERROR("failure %d inode %lu\n", rc, inode->i_ino);
                         RETURN(-abs(rc));
                 }
-
-                body = lustre_msg_buf(req->rq_repmsg, 0, sizeof (*body));
-                LASSERT (body != NULL);         /* checked by mdc_getattr() */
-                LASSERT_REPSWABBED (req, 0);    /* swabbed by mdc_getattr() */
-
-                if (S_ISREG(inode->i_mode) &&
-                    (body->valid & (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS))) {
-                        CERROR("MDS sent back size for regular file\n");
-                        body->valid &= ~(OBD_MD_FLSIZE | OBD_MD_FLBLOCKS);
-                }
+                rc = mdc_req2lustre_md(req, 0, &sbi->ll_osc_conn, &md);
 
                 /* XXX Too paranoid? */
-                if ((body->valid ^ valid) & OBD_MD_FLEASIZE)
+                if ((md.body->valid ^ valid) & OBD_MD_FLEASIZE)
                         CERROR("Asked for %s eadata but got %s\n",
                                (valid & OBD_MD_FLEASIZE) ? "some" : "no",
-                               (body->valid & OBD_MD_FLEASIZE) ? "some":"none");
-
-                if (S_ISREG(inode->i_mode) &&
-                    (body->valid & OBD_MD_FLEASIZE)) {
-                        if (body->eadatasize == 0) { /* no EA data */
-                                CERROR("OBD_MD_FLEASIZE set but no data\n");
-                                RETURN(-EPROTO);
-                        }
-                        /* Only bother with this if inode's lsm not set? */
-                        lmm = lustre_msg_buf(req->rq_repmsg,1,body->eadatasize);
-                        LASSERT(lmm != NULL);       /* mdc_getattr() checked */
-                        LASSERT_REPSWABBED(req, 1); /* mdc_getattr() swabbed */
-
-                        rc = obd_unpackmd (&sbi->ll_osc_conn,
-                                           &lsm, lmm, body->eadatasize);
-                        if (rc < 0) {
-                                CERROR("Error %d unpacking eadata\n", rc);
-                                ptlrpc_req_finished(req);
-                                RETURN(rc);
-                        }
-                        LASSERT(rc >= sizeof(*lsm));
+                               (md.body->valid & OBD_MD_FLEASIZE) ? "some":
+                               "none");
+                if (rc) {
+                        ptlrpc_req_finished(req);
+                        RETURN(rc);
                 }
 
-                ll_update_inode(inode, body, lsm);
-                if (lsm != NULL && ll_i2info(inode)->lli_smd != lsm)
-                        obd_free_memmd(&sbi->ll_osc_conn, &lsm);
+                ll_update_inode(inode, md.body, md.lsm);
+                if (md.lsm != NULL && ll_i2info(inode)->lli_smd != md.lsm)
+                        obd_free_memmd(&sbi->ll_osc_conn, &md.lsm);
 
                 ptlrpc_req_finished(req);
         }
@@ -1211,19 +1205,20 @@ int ll_inode_revalidate(struct dentry *dentry)
 }
 
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-static int ll_getattr(struct vfsmount *mnt, struct dentry *de,
+int ll_getattr(struct vfsmount *mnt, struct dentry *de,
+                      struct lookup_intent *it, 
                       struct kstat *stat)
 {
         int res = 0;
         struct inode *inode = de->d_inode;
 
+        res = ll_inode_revalidate_it(de, it);
         lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_GETATTR);
-        res = ll_inode_revalidate(de);
+
         if (res)
                 return res;
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-        stat->dev = inode->i_dev;
-#endif
+
+        stat->dev = inode->i_sb->s_dev;
         stat->ino = inode->i_ino;
         stat->mode = inode->i_mode;
         stat->nlink = inode->i_nlink;
@@ -1234,6 +1229,8 @@ static int ll_getattr(struct vfsmount *mnt, struct dentry *de,
         stat->mtime = inode->i_mtime;
         stat->ctime = inode->i_ctime;
         stat->size = inode->i_size;
+        stat->blksize = inode->i_blksize;
+        stat->blocks = inode->i_blocks;
         return 0;
 }
 #endif
@@ -1254,9 +1251,9 @@ struct inode_operations ll_file_inode_operations = {
         setattr:    ll_setattr,
         truncate:   ll_truncate,
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-        getattr: ll_getattr,
+        getattr_it: ll_getattr,
 #else
-        revalidate: ll_inode_revalidate,
+        revalidate_it: ll_inode_revalidate_it,
 #endif
 };
 
@@ -1264,8 +1261,8 @@ struct inode_operations ll_special_inode_operations = {
         setattr_raw:    ll_setattr_raw,
         setattr:    ll_setattr,
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-        getattr:    ll_getattr,
+        getattr_it:    ll_getattr,
 #else
-        revalidate: ll_inode_revalidate,
+        revalidate_it: ll_inode_revalidate_it,
 #endif
 };

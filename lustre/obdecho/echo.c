@@ -64,7 +64,7 @@ static int echo_connect(struct lustre_handle *conn, struct obd_device *obd,
         return class_connect(conn, obd, cluuid);
 }
 
-static int echo_disconnect(struct lustre_handle *conn, int failover)
+static int echo_disconnect(struct lustre_handle *conn, int flags)
 {
         struct obd_export *exp = class_conn2export(conn);
 
@@ -72,7 +72,7 @@ static int echo_disconnect(struct lustre_handle *conn, int failover)
 
         ldlm_cancel_locks_for_export(exp);
         class_export_put(exp);
-        return (class_disconnect(conn, failover));
+        return class_disconnect(conn, flags);
 }
 
 static __u64 echo_next_id(struct obd_device *obddev)
@@ -235,7 +235,7 @@ static int echo_setattr(struct lustre_handle *conn, struct obdo *oa,
 int echo_preprw(int cmd, struct obd_export *export, struct obdo *oa,
                 int objcount, struct obd_ioobj *obj, int niocount,
                 struct niobuf_remote *nb, struct niobuf_local *res,
-                void **desc_private, struct obd_trans_info *oti)
+                struct obd_trans_info *oti)
 {
         struct obd_device *obd;
         struct niobuf_local *r = res;
@@ -253,7 +253,8 @@ int echo_preprw(int cmd, struct obd_export *export, struct obdo *oa,
         CDEBUG(D_PAGE, "%s %d obdos with %d IOs\n",
                cmd == OBD_BRW_READ ? "reading" : "writing", objcount, niocount);
 
-        *desc_private = (void *)DESC_PRIV;
+        if (oti)
+                oti->oti_handle = (void *)DESC_PRIV;
 
         for (i = 0; i < objcount; i++, obj++) {
                 int gfp_mask = (obj->ioo_id & 1) ? GFP_HIGHUSER : GFP_KERNEL;
@@ -285,7 +286,7 @@ int echo_preprw(int cmd, struct obd_export *export, struct obdo *oa,
 
                         r->offset = nb->offset;
                         r->len = nb->len;
-                        LASSERT ((r->offset & (PAGE_SIZE - 1)) + r->len <= PAGE_SIZE);
+                        LASSERT((r->offset & ~PAGE_MASK) + r->len <= PAGE_SIZE);
 
                         CDEBUG(D_PAGE, "$$$$ get page %p @ "LPU64" for %d\n",
                                r->page, r->offset, r->len);
@@ -339,9 +340,9 @@ preprw_cleanup:
         return rc;
 }
 
-int echo_commitrw(int cmd, struct obd_export *export, int objcount,
-                  struct obd_ioobj *obj, int niocount, struct niobuf_local *res,
-                  void *desc_private, struct obd_trans_info *oti)
+int echo_commitrw(int cmd, struct obd_export *export, struct obdo *oa,
+                  int objcount, struct obd_ioobj *obj, int niocount,
+                  struct niobuf_local *res, struct obd_trans_info *oti)
 {
         struct obd_device *obd;
         struct niobuf_local *r = res;
@@ -365,7 +366,7 @@ int echo_commitrw(int cmd, struct obd_export *export, int objcount,
                 RETURN(-EINVAL);
         }
 
-        LASSERT(desc_private == (void *)DESC_PRIV);
+        LASSERT(oti == NULL || oti->oti_handle == (void *)DESC_PRIV);
 
         for (i = 0; i < objcount; i++, obj++) {
                 int verify = obj->ioo_id != 0;
@@ -437,7 +438,7 @@ static int echo_setup(struct obd_device *obddev, obd_count len, void *buf)
         RETURN(0);
 }
 
-static int echo_cleanup(struct obd_device *obddev, int force, int failover)
+static int echo_cleanup(struct obd_device *obddev, int flags)
 {
         ENTRY;
 
@@ -453,7 +454,7 @@ int echo_attach(struct obd_device *obd, obd_count len, void *data)
         struct lprocfs_static_vars lvars;
         int rc;
 
-        lprocfs_init_vars(&lvars);
+        lprocfs_init_vars(echo, &lvars);
         rc = lprocfs_obd_attach(obd, lvars.obd_vars);
         if (rc != 0)
                 return rc;
@@ -539,7 +540,7 @@ static int __init obdecho_init(void)
 
         printk(KERN_INFO "Lustre Echo OBD driver; info@clusterfs.com\n");
 
-        lprocfs_init_vars(&lvars);
+        lprocfs_init_vars(echo, &lvars);
 
         rc = echo_object0_pages_init ();
         if (rc != 0)
@@ -561,7 +562,7 @@ static int __init obdecho_init(void)
         RETURN(rc);
 }
 
-static void __exit obdecho_exit(void)
+static void /*__exit*/ obdecho_exit(void)
 {
         echo_client_cleanup();
         class_unregister_type(OBD_ECHO_DEVICENAME);

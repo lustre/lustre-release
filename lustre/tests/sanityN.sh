@@ -2,130 +2,207 @@
 
 set -e
 
-PATH=$PATH:.
+ONLY=${ONLY:-"$*"}
+ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"8"} # bug 1557
+
+SRCDIR=`dirname $0`
+PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$PATH
 
 CHECKSTAT=${CHECKSTAT:-"checkstat -v"}
-MOUNT1=${MOUNT1:-/mnt/lustre1}
-MOUNT2=${MOUNT2:-/mnt/lustre2}
+CREATETEST=${CREATETEST:-createtest}
+LFIND=${LFIND:-lfind}
+LSTRIPE=${LSTRIPE:-lstripe}
+LCTL=${LCTL:-lctl}
+MCREATE=${MCREATE:-mcreate}
+OPENFILE=${OPENFILE:-openfile}
+OPENUNLINK=${OPENUNLINK:-openunlink}
+TOEXCL=${TOEXCL:-toexcl}
+TRUNCATE=${TRUNCATE:-truncate}
+
+if [ $UID -ne 0 ]; then
+	RUNAS_ID="$UID"
+	RUNAS=""
+else
+	RUNAS_ID=${RUNAS_ID:-500}
+	RUNAS=${RUNAS:-"runas -u $RUNAS_ID"}
+fi
+
 export NAME=${NAME:-mount2}
 
-clean() {
-        echo -n "cln.."
-        sh llmountcleanup.sh > /dev/null
-}
+SAVE_PWD=$PWD
 
+clean() {
+	echo -n "cln.."
+	sh llmountcleanup.sh > /dev/null || exit 20
+}
 CLEAN=${CLEAN:-clean}
+
 start() {
-        echo -n "mnt.."
-        sh llrmount.sh > /dev/null
-        echo -n "done"
+	echo -n "mnt.."
+	sh llrmount.sh > /dev/null || exit 10
+	echo "done"
 }
 START=${START:-start}
 
-error () { 
-    echo FAIL
-    exit 1
+log() {
+	echo "$*"
+	lctl mark "$*" || true
 }
 
-pass() { 
-    echo PASS
+run_one() {
+	if ! mount | grep -q $DIR1; then
+		$START
+	fi
+	log "== test $1: $2"
+	test_$1 || error
+	pass
+	cd $SAVE_PWD
+	$CLEAN
 }
 
-mkdir -p $MOUNT2
-mount | grep $MOUNT1 || sh llmount.sh
+run_test() {
+	for O in $ONLY; do
+		if [ "`echo $1 | grep '\<'$O'[a-z]*\>'`" ]; then
+			echo ""
+			run_one $1 "$2"
+			return $?
+		else
+			echo -n "."
+		fi
+	done
+	for X in $EXCEPT $ALWAYS_EXCEPT; do
+		if [ "`echo $1 | grep '\<'$X'[a-z]*\>'`" ]; then
+			echo "skipping excluded test $1"
+			return 0
+		fi
+	done
+	if [ -z "$ONLY" ]; then
+		run_one $1 "$2"
+		return $?
+	fi
+}
 
-echo -n "test 1: check create on 2 mtpt's..."
-touch $MOUNT1/f1
-[ -f $MOUNT2/f1 ] || error
-pass
+error () {
+	echo "FAIL: $@"
+	exit 1
+}
 
-echo "test 2: check attribute updates on 2 mtpt's..."
-chmod 777 $MOUNT2/f1
-$CHECKSTAT -t file -p 0777 $MOUNT1/f1 || error
-pass
+pass() {
+	echo PASS
+}
 
-echo "test 2b: check cached attribute updates on 2 mtpt's..."
-touch $MOUNT1/f2b
-ls -l $MOUNT2/f2b
-chmod 777 $MOUNT2/f2b
-$CHECKSTAT -t file -p 0777 $MOUNT1/f2b || error
-pass
+MOUNT1=`mount| awk '/^'$NAME' .* lustre_lite / { print $3 }'| head -1`
+MOUNT2=`mount| awk '/^'$NAME' .* lustre_lite / { print $3 }'| tail -1`
+[ -z "$MOUNT1" ] && error "NAME=$NAME not mounted once"
+[ "$MOUNT1" = "$MOUNT2" ] && error "NAME=$NAME not mounted twice"
+[ `mount| awk '/^'$NAME' .* lustre_lite / { print $3 }'| wc -l` -ne 2 ] && \
+	error "NAME=$NAME mounted more than twice"
 
-echo "test 2c: check cached attribute updates on 2 mtpt's..."
-touch $MOUNT1/f2c
-ls -l $MOUNT2/f2c
-chmod 777 $MOUNT1/f2c
-$CHECKSTAT -t file -p 0777 $MOUNT2/f2c || error
-pass
+DIR1=${DIR1:-$MOUNT1}
+DIR2=${DIR2:-$MOUNT2}
+[ -z "`echo $DIR1 | grep $MOUNT1`" ] && echo "$DIR1 not in $MOUNT1" && exit 96
+[ -z "`echo $DIR2 | grep $MOUNT2`" ] && echo "$DIR2 not in $MOUNT2" && exit 95
 
-echo "test 3: check after remount attribute updates on 2 mtpt's..."
-chmod a-x $MOUNT2/f1
-$CLEAN
-$START
-$CHECKSTAT -t file -p 0666 $MOUNT1/f1 || error
-pass
+rm -f $DIR1/[df][0-9]* $DIR1/lnk
 
-echo "test 4: unlink on one mountpoint removes file on other..."
-rm $MOUNT2/f1
-$CHECKSTAT -a $MOUNT1/f1 || error
-pass
+test_1a() {
+	touch $DIR1/f1
+	[ -f $DIR2/f1 ] || error
+}
+run_test 1a "check create on 2 mtpt's =========================="
 
-echo -n "test 5: symlink on one mtpt, readlink on another..."
-( cd $MOUNT1 ; ln -s this/is/good lnk )
+test_1b() {
+	chmod 777 $DIR2/f1
+	$CHECKSTAT -t file -p 0777 $DIR1/f1 || error
+	chmod a-x $DIR2/f1
+}
+run_test 1b "check attribute updates on 2 mtpt's ==============="
 
-[ "this/is/good" = "`perl -e 'print readlink("/mnt/lustre2/lnk");'`" ] || error
-pass
+test_1c() {
+	$CHECKSTAT -t file -p 0666 $DIR1/f1 || error
+}
+run_test 1c "check after remount attribute updates on 2 mtpt's ="
 
-echo -n "test 6: fstat validation on multiple mount points..."
-./multifstat $MOUNT1/f6 $MOUNT2/f6
-pass
+test_1d() {
+	rm $DIR2/f1
+	$CHECKSTAT -a $DIR1/f1 || error
+}
+run_test 1d "unlink on one mountpoint removes file on other ===="
 
-if [ -n "$BUG_1365" ]; then
-echo -n "test 7: create a file on one mount, truncate it on the other..."
-mcreate $MOUNT1/f1
-truncate $MOUNT2/f1 100
-rm $MOUNT1/f1
-pass
-else
-echo "Skipping test for 1365: set \$BUG_1365 to run it (and crash, likely)."
-fi
+test_2a() {
+	touch $DIR1/f2a
+	ls -l $DIR2/f2a
+	chmod 777 $DIR2/f2a
+	$CHECKSTAT -t file -p 0777 $DIR1/f2a || error
+}
+run_test 2a "check cached attribute updates on 2 mtpt's ========"
 
-echo "test 9: remove of open file on other node..."
-./openunlink $MOUNT1/f9 $MOUNT2/f9 || error
-pass
+test_2b() {
+	touch $DIR1/f2b
+	ls -l $DIR2/f2b
+	chmod 777 $DIR1/f2b
+	$CHECKSTAT -t file -p 0777 $DIR2/f2b || error
+}
+run_test 2b "check cached attribute updates on 2 mtpt's ========"
 
-echo "test 9b: remove of open directory on other node..."
-./opendirunlink $MOUNT1/dir1 $MOUNT2/dir1 || error
-pass
+test_3() {
+	( cd $DIR1 ; ln -s this/is/good lnk )
+	[ "this/is/good" = "`perl -e 'print readlink("'$DIR2/lnk'");'`" ] || \
+		error
+}
+run_test 3 "symlink on one mtpt, readlink on another ==========="
 
-#echo "test 9c: remove of open special file on other node..."
-#./opendevunlink $MOUNT1/dev1 $MOUNT2/dev1 || error
-#pass
+test_4() {
+	./multifstat $DIR1/f6 $DIR2/f6
+}
+run_test 4 "fstat validation on multiple mount points =========="
 
-echo -n "test 10: append of file with sub-page size on multiple mounts..."
-MTPT=1
-> $MOUNT2/f10
-for C in a b c d e f g h i j k l; do
-	MOUNT=`eval echo \\$MOUNT$MTPT`
-	echo -n $C >> $MOUNT/f10
-	[ "$MTPT" -eq 1 ] && MTPT=2 || MTPT=1
-done
-[ "`cat $MOUNT1/f10`" = "abcdefghijkl" ] && pass || error
-	
-echo -n "test 11: write of file with sub-page size on multiple mounts..."
-MTPT=1
-OFFSET=0
-> $MOUNT2/f11
-for C in a b c d e f g h i j k l; do
-	MOUNT=`eval echo \\$MOUNT$MTPT`
-	echo -n $C | dd of=$MOUNT/f11 bs=1 seek=$OFFSET count=1
-	[ "$MTPT" -eq 1 ] && MTPT=2 || MTPT=1
-	OFFSET=`expr $OFFSET + 1`
-done
-[ "`cat $MOUNT1/f11`" = "abcdefghijkl" ] && pass || error
-	
-rm -f $MOUNT1/f[0-9]* $MOUNT1/lnk
+test_5() {
+	mcreate $DIR1/f5
+	truncate $DIR2/f5 100
+	rm $DIR1/f5
+}
+run_test 5 "create a file on one mount, truncate it on the other"
 
-$CLEAN
+test_6() {
+	./openunlink $DIR1/f6 $DIR2/f6 || error
+}
+run_test 6 "remove of open file on other node =================="
 
-exit
+test_7() {
+	./opendirunlink $DIR1/d7 $DIR2/d7 || error
+}
+run_test 7 "remove of open directory on other node ============="
+
+test_8() {
+	./opendevunlink $DIR1/dev8 $DIR2/dev8 || error
+}
+run_test 8 "remove of open special file on other node =========="
+
+test_9() {
+	MTPT=1
+	> $DIR2/f9
+	for C in a b c d e f g h i j k l; do
+		DIR=`eval echo \\$DIR$MTPT`
+		echo -n $C >> $DIR/f9
+		[ "$MTPT" -eq 1 ] && MTPT=2 || MTPT=1
+	done
+	[ "`cat $DIR1/f9`" = "abcdefghijkl" ] || error
+}
+run_test 9 "append of file with sub-page size on multiple mounts"
+
+test_10() {
+	MTPT=1
+	OFFSET=0
+	> $DIR2/f10
+	for C in a b c d e f g h i j k l; do
+		DIR=`eval echo \\$DIR$MTPT`
+		echo -n $C | dd of=$DIR/f10 bs=1 seek=$OFFSET count=1
+		[ "$MTPT" -eq 1 ] && MTPT=2 || MTPT=1
+		OFFSET=`expr $OFFSET + 1`
+	done
+	[ "`cat $DIR1/f10`" = "abcdefghijkl" ] || error
+}
+run_test 10 "write of file with sub-page size on multiple mounts "
+
+rm -f $DIR1/f[0-9]* $DIR1/lnk

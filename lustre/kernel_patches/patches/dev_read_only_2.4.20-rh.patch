@@ -1,13 +1,10 @@
-
-
-
  drivers/block/blkpg.c  |   35 +++++++++++++++++++++++++++++++++++
  drivers/block/loop.c   |    3 +++
- drivers/ide/ide-disk.c |    5 ++++-
- 3 files changed, 42 insertions(+), 1 deletion(-)
+ drivers/ide/ide-disk.c |    5 +++++
+ 3 files changed, 43 insertions(+)
 
---- rh-2.4.20/drivers/block/blkpg.c~dev_read_only_2.4.20	2003-04-11 14:05:03.000000000 +0800
-+++ rh-2.4.20-root/drivers/block/blkpg.c	2003-04-12 13:11:31.000000000 +0800
+--- kernel-2.4.20-6chaos_18_7/drivers/block/blkpg.c~dev_read_only_2.4.20-rh	2003-05-15 21:12:48.000000000 -0600
++++ kernel-2.4.20-6chaos_18_7-braam/drivers/block/blkpg.c	2003-07-12 15:10:31.000000000 -0600
 @@ -297,3 +297,38 @@ int blk_ioctl(kdev_t dev, unsigned int c
  }
  
@@ -47,8 +44,8 @@
 +EXPORT_SYMBOL(dev_set_rdonly);
 +EXPORT_SYMBOL(dev_check_rdonly);
 +EXPORT_SYMBOL(dev_clear_rdonly);
---- rh-2.4.20/drivers/block/loop.c~dev_read_only_2.4.20	2003-04-11 14:05:08.000000000 +0800
-+++ rh-2.4.20-root/drivers/block/loop.c	2003-04-12 13:11:31.000000000 +0800
+--- kernel-2.4.20-6chaos_18_7/drivers/block/loop.c~dev_read_only_2.4.20-rh	2003-05-15 21:12:50.000000000 -0600
++++ kernel-2.4.20-6chaos_18_7-braam/drivers/block/loop.c	2003-07-12 15:10:31.000000000 -0600
 @@ -491,6 +491,9 @@ static int loop_make_request(request_que
  	spin_unlock_irq(&lo->lo_lock);
  
@@ -59,17 +56,17 @@
  		if (lo->lo_flags & LO_FLAGS_READ_ONLY)
  			goto err;
  	} else if (rw == READA) {
---- rh-2.4.20/drivers/ide/ide-disk.c~dev_read_only_2.4.20	2003-04-11 14:04:53.000000000 +0800
-+++ rh-2.4.20-root/drivers/ide/ide-disk.c	2003-04-12 13:14:48.000000000 +0800
-@@ -381,7 +381,10 @@ static ide_startstop_t do_rw_disk (ide_d
- 	if (IS_PDC4030_DRIVE)
- 		return promise_rw_disk(drive, rq, block);
- #endif /* CONFIG_BLK_DEV_PDC4030 */
--
-+ 	if (rq->cmd == WRITE && dev_check_rdonly(rq->rq_dev)) {
-+ 		ide_end_request(1, HWGROUP(drive));
-+ 		return ide_stopped;
-+ 	}
+--- kernel-2.4.20-6chaos_18_7/drivers/ide/ide-disk.c~dev_read_only_2.4.20-rh	2003-05-15 21:13:09.000000000 -0600
++++ kernel-2.4.20-6chaos_18_7-braam/drivers/ide/ide-disk.c	2003-07-12 15:12:03.000000000 -0600
+@@ -371,6 +371,11 @@ ide_startstop_t __ide_do_rw_disk (ide_dr
+ 	if (driver_blocked)
+ 		panic("Request while ide driver is blocked?");
+ 
++  	if (rq->cmd == WRITE && dev_check_rdonly(rq->rq_dev)) {
++  		ide_end_request(1, HWGROUP(drive));
++  		return ide_stopped;
++  	}
++
  	if (IDE_CONTROL_REG)
  		hwif->OUTB(drive->ctl, IDE_CONTROL_REG);
  

@@ -8,14 +8,17 @@
 #define OBD_LOV_DEVICENAME "lov"
 
 struct lov_brw_async_args {
-        obd_count        aa_oa_bufs;
-        struct brw_page *aa_ioarr;
+        struct lov_stripe_md  *aa_lsm;
+        struct obdo           *aa_obdos;
+        struct obdo           *aa_oa;
+        struct brw_page       *aa_ioarr;
+        obd_count              aa_oa_bufs;
 };
 
 struct lov_getattr_async_args {
         struct lov_stripe_md  *aa_lsm;
         struct obdo           *aa_oa;
-        struct obdo           *aa_stripe_oas;
+        struct obdo           *aa_obdos;
 };
 
 static inline int lov_stripe_md_size(int stripes)
@@ -27,15 +30,6 @@ static inline int lov_mds_md_size(int stripes)
 {
         return sizeof(struct lov_mds_md) + stripes*sizeof(struct lov_object_id);
 }
-
-extern int lov_packmd(struct lustre_handle *conn, struct lov_mds_md **lmm,
-                       struct lov_stripe_md *lsm);
-extern int lov_unpackmd(struct lustre_handle *conn, struct lov_stripe_md **lsm,
-                         struct lov_mds_md *lmm, int lmmsize);
-extern int lov_setstripe(struct lustre_handle *conn,
-                         struct lov_stripe_md **lsmp, struct lov_mds_md *lmmu);
-extern int lov_getstripe(struct lustre_handle *conn, 
-                         struct lov_stripe_md *lsm, struct lov_mds_md *lmmu);
 
 #define IOC_LOV_TYPE                   'g'
 #define IOC_LOV_MIN_NR                 50

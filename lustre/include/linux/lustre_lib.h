@@ -80,7 +80,7 @@ void target_send_reply(struct ptlrpc_request *req, int rc, int fail_id);
 
 int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf);
 int client_sanobd_setup(struct obd_device *obddev, obd_count len, void *buf);
-int client_obd_cleanup(struct obd_device * obddev, int force, int failover);
+int client_obd_cleanup(struct obd_device * obddev, int flags);
 struct client_obd *client_conn2cli(struct lustre_handle *conn);
 struct obd_device *client_tgtuuid2obd(struct obd_uuid *tgtuuid);
 
@@ -89,13 +89,16 @@ struct obd_device *client_tgtuuid2obd(struct obd_uuid *tgtuuid);
  * the server, we can just send the whole struct unaltered. */
 struct obd_client_handle {
         struct lustre_handle och_fh;
+        struct llog_cookie och_cookie;
         struct ptlrpc_request *och_req;
         __u32 och_magic;
 };
 #define OBD_CLIENT_HANDLE_MAGIC 0xd15ea5ed
 
 /* statfs_pack.c */
-int obd_self_statfs(struct obd_device *dev, struct statfs *sfs);
+struct statfs;
+void statfs_pack(struct obd_statfs *osfs, struct kstatfs *sfs);
+void statfs_unpack(struct kstatfs *sfs, struct obd_statfs *osfs);
 
 /* l_lock.c */
 struct lustre_lock {

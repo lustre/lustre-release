@@ -11,7 +11,7 @@
 #define __EXPORT_H
 
 #include <linux/lustre_idl.h>
-#include <linux/obd_filter.h>
+#include <linux/lustre_dlm.h>
 
 struct mds_client_data;
 
@@ -19,7 +19,8 @@ struct mds_export_data {
         struct list_head        med_open_head;
         spinlock_t              med_open_lock;
         struct mds_client_data *med_mcd;
-        int                     med_off;
+        loff_t                  med_off;
+        int                     med_idx;
 };
 
 struct ldlm_export_data {
@@ -37,6 +38,16 @@ struct ec_export_data { /* echo client */
         struct list_head eced_locks;
 };
 
+/* In-memory access to client data from OST struct */
+struct filter_client_data;
+struct filter_export_data {
+        struct list_head           fed_open_head; //files to close on disconnect
+        spinlock_t                 fed_lock;      /* protects fed_open_head */
+        struct filter_client_data *fed_fcd;
+        loff_t                     fed_lr_off;
+        int                        fed_lr_idx;
+};
+
 struct obd_export {
         struct portals_handle     exp_handle;
         atomic_t                  exp_refcount;
@@ -48,7 +59,8 @@ struct obd_export {
         struct ptlrpc_request    *exp_outstanding_reply;
         time_t                    exp_last_request_time;
         spinlock_t                exp_lock; /* protects flags int below */
-        int                       exp_failed:1, exp_failover:1;
+        int                       exp_failed:1;
+        int                       exp_flags;
         union {
                 struct mds_export_data    eu_mds_data;
                 struct filter_export_data eu_filter_data;

@@ -6,7 +6,7 @@ config=${1:-uml.xml}
 LMC=${LMC:-lmc}
 TMP=${TMP:-/tmp}
 
-MDSDEV=${MDSDEV:-$TMP/mds1}
+MDSDEV=${MDSDEV:-$TMP/mds1-`hostname`}
 MDSSIZE=${MDSSIZE:-50000}
 
 OSTDEVBASE=$TMP/ost
@@ -19,6 +19,7 @@ STRIPECNT=${STRIPECNT:-1}
 FSTYPE=${FSTYPE:-ext3}
 
 NETTYPE=${NETTYPE:-tcp}
+NIDTYPE=${NIDTYPE:-$NODETYPE}
 
 # NOTE - You can't have different MDS/OST nodes and also have clients on the
 #        MDS/OST nodes without using --endlevel and --startlevel during lconf.
@@ -50,6 +51,10 @@ CLIENTS=${CLIENTS:-"uml3"}
 
 rm -f $config
 
+h2localhost () {
+	echo localhost
+}
+	
 h2tcp () {
 	case $1 in
 	client) echo '\*' ;;
@@ -68,7 +73,7 @@ h2elan () {
 echo -n "adding NET for:"
 for NODE in `echo $MDSNODE $OSTNODES $CLIENTS | tr -s " " "\n" | sort -u`; do
 	echo -n " $NODE"
-	${LMC} -m $config --add net --node $NODE --nid `h2$NETTYPE $NODE` --nettype $NETTYPE || exit 1
+	${LMC} -m $config --add net --node $NODE --nid `h2$NIDTYPE $NODE` --nettype $NETTYPE || exit 1
 done
 
 # configure mds server
@@ -82,7 +87,7 @@ echo -n "adding OST on:"
 for NODE in $OSTNODES; do
 	eval OSTDEV=\$OSTDEV$COUNT
 	echo -n " $NODE"
-	OSTDEV=${OSTDEV:-$OSTDEVBASE$COUNT}
+	OSTDEV=${OSTDEV:-$OSTDEVBASE$COUNT-`hostname`}
         ${LMC} -m $config --add ost --node $NODE --lov lov1 --fstype $FSTYPE --dev $OSTDEV --size $OSTSIZE || exit 21
 	COUNT=`expr $COUNT + 1`
 done

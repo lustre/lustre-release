@@ -32,7 +32,7 @@
 #include <linux/lustre_mds.h>
 #include <linux/lustre_net.h>
 
-int client_import_connect(struct lustre_handle *dlm_handle, 
+int client_import_connect(struct lustre_handle *dlm_handle,
                           struct obd_device *obd,
                           struct obd_uuid *cluuid)
 {
@@ -47,7 +47,6 @@ int client_import_connect(struct lustre_handle *dlm_handle,
         char *tmp[] = {imp->imp_target_uuid.uuid,
                        obd->obd_uuid.uuid,
                        (char *)dlm_handle};
-        int rq_opc = (obd->obd_type->typ_ops->o_brw) ? OST_CONNECT :MDS_CONNECT;
         int msg_flags;
 
         ENTRY;
@@ -67,12 +66,14 @@ int client_import_connect(struct lustre_handle *dlm_handle,
         if (obd->obd_namespace == NULL)
                 GOTO(out_disco, rc = -ENOMEM);
 
-        request = ptlrpc_prep_req(imp, rq_opc, 3, size, tmp);
+        request = ptlrpc_prep_req(imp, imp->imp_connect_op, 3, size, tmp);
         if (!request)
                 GOTO(out_ldlm, rc = -ENOMEM);
 
         request->rq_level = LUSTRE_CONN_NEW;
         request->rq_replen = lustre_msg_size(0, NULL);
+
+        lustre_msg_add_op_flags(request->rq_reqmsg, MSG_CONNECT_PEER);
 
         imp->imp_dlm_handle = *dlm_handle;
 
@@ -88,7 +89,7 @@ int client_import_connect(struct lustre_handle *dlm_handle,
         class_export_put(exp);
 
         msg_flags = lustre_msg_get_op_flags(request->rq_repmsg);
-        if (rq_opc == MDS_CONNECT || msg_flags & MSG_CONNECT_REPLAYABLE) {
+        if (msg_flags & MSG_CONNECT_REPLAYABLE) {
                 imp->imp_replayable = 1;
                 CDEBUG(D_HA, "connected to replayable target: %s\n",
                        imp->imp_target_uuid.uuid);
@@ -130,7 +131,16 @@ int client_import_disconnect(struct lustre_handle *dlm_handle, int failover)
                 RETURN(-EINVAL);
         }
 
-        rq_opc = obd->obd_type->typ_ops->o_brw ? OST_DISCONNECT:MDS_DISCONNECT;
+        switch (imp->imp_connect_op) {
+        case OST_CONNECT: rq_opc = OST_DISCONNECT; break;
+        case MDS_CONNECT: rq_opc = MDS_DISCONNECT; break;
+        case MGMT_CONNECT:rq_opc = MGMT_DISCONNECT;break;
+        default:
+                CERROR("don't know how to disconnect from %s (connect_op %d)\n",
+                       imp->imp_target_uuid.uuid, imp->imp_connect_op);
+                RETURN(-EINVAL);
+        }
+
         down(&cli->cl_sem);
         if (!cli->cl_conn_count) {
                 CERROR("disconnecting disconnected device (%s)\n",
@@ -229,36 +239,31 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         struct obd_uuid remote_uuid;
         struct list_head *p;
         char *str, *tmp;
-        int rc, i, abort_recovery;
+        int rc = 0, abort_recovery;
         ENTRY;
 
         LASSERT_REQSWAB (req, 0);
-        str = lustre_msg_string (req->rq_reqmsg, 0, sizeof (tgtuuid.uuid) - 1);
+        str = lustre_msg_string(req->rq_reqmsg, 0, sizeof(tgtuuid) - 1);
         if (str == NULL) {
                 CERROR("bad target UUID for connect\n");
                 GOTO(out, rc = -EINVAL);
         }
+
         obd_str2uuid (&tgtuuid, str);
-
-        LASSERT_REQSWAB (req, 1);
-        str = lustre_msg_string (req->rq_reqmsg, 1, sizeof (cluuid.uuid) - 1);
-        if (str == NULL) {
-                CERROR("bad client UUID for connect\n");
-                GOTO(out, rc = -EINVAL);
-        }
-        obd_str2uuid (&cluuid, str);
-
-        i = class_uuid2dev(&tgtuuid);
-        if (i == -1) {
-                CERROR("UUID '%s' not found for connect\n", tgtuuid.uuid);
-                GOTO(out, rc = -ENODEV);
-        }
-
-        target = &obd_dev[i];
+        target = class_uuid2obd(&tgtuuid);
         if (!target || target->obd_stopping || !target->obd_set_up) {
                 CERROR("UUID '%s' is not available for connect\n", str);
                 GOTO(out, rc = -ENODEV);
         }
+
+        LASSERT_REQSWAB (req, 1);
+        str = lustre_msg_string(req->rq_reqmsg, 1, sizeof(cluuid) - 1);
+        if (str == NULL) {
+                CERROR("bad client UUID for connect\n");
+                GOTO(out, rc = -EINVAL);
+        }
+
+        obd_str2uuid (&cluuid, str);
 
         /* XXX extract a nettype and format accordingly */
         snprintf(remote_uuid.uuid, sizeof remote_uuid,
@@ -491,8 +496,7 @@ static void reset_recovery_timer(struct obd_device *obd)
 
         if (!recovering)
                 return;
-        CDEBUG(D_ERROR, "timer will expire in %ld seconds\n",
-               OBD_RECOVERY_TIMEOUT / HZ);
+        CERROR("timer will expire in %ld seconds\n", OBD_RECOVERY_TIMEOUT / HZ);
         mod_timer(&obd->obd_recovery_timer, jiffies + OBD_RECOVERY_TIMEOUT);
 }
 
@@ -568,7 +572,8 @@ static void process_recovery_queue(struct obd_device *obd)
                 DEBUG_REQ(D_ERROR, req, "processing: ");
                 (void)obd->obd_recovery_handler(req);
                 reset_recovery_timer(obd);
-#warning FIXME: mds_fsync_super(mds->mds_sb);
+                /* bug 1580: decide how to properly sync() in recovery */
+                //mds_fsync_super(mds->mds_sb);
                 class_export_put(req->rq_export);
                 OBD_FREE(req->rq_reqmsg, req->rq_reqlen);
                 OBD_FREE(req, sizeof *req);
@@ -715,8 +720,7 @@ int target_queue_final_reply(struct ptlrpc_request *req, int rc)
         if (recovery_done) {
                 struct list_head *tmp, *n;
                 ldlm_reprocess_all_ns(req->rq_export->exp_obd->obd_namespace);
-                CDEBUG(D_ERROR,
-                       "%s: all clients recovered, sending delayed replies\n",
+                CERROR("%s: all clients recovered, sending delayed replies\n",
                        obd->obd_name);
                 obd->obd_recovering = 0;
                 list_for_each_safe(tmp, n, &obd->obd_delayed_reply_queue) {

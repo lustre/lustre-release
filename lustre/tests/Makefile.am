@@ -6,18 +6,21 @@ CFLAGS := -g -Wall
 # LDADD := -lreadline -ltermcap # -lefence
 EXTRA_DIST = $(pkgexample_SCRIPTS) $(noinst_SCRIPTS) $(noinst_DATA) \
 	sanity.sh          rundbench    mcreate
-pkgexample_SCRIPTS = llmount.sh llmountcleanup.sh llecho.sh llechocleanup.sh local.sh echo.sh uml.sh lov.sh
+pkgexample_SCRIPTS = llmount.sh llmountcleanup.sh llecho.sh llechocleanup.sh
+pkgexample_SCRIPTS += local.sh echo.sh uml.sh lov.sh
 noinst_DATA =
-noinst_SCRIPTS = leak_finder.pl llecho.sh llmount.sh llmountcleanup.sh tbox.sh \
-	llrmount.sh runfailure-mds runvmstat runfailure-net runfailure-ost \
-	runiozone runregression-net.sh runtests sanity.sh rundbench
+noinst_SCRIPTS = leak_finder.pl llecho.sh llmount.sh llmountcleanup.sh tbox.sh
+noinst_SCRIPTS += llrmount.sh runfailure-mds runvmstat runfailure-net
+noinst_SCRIPTS += runfailure-ost runiozone runregression-net.sh runtests
+noinst_SCRIPTS += sanity.sh rundbench
 noinst_PROGRAMS = openunlink testreq truncate directio openme writeme open_delay
-noinst_PROGRAMS += munlink tchmod toexcl fsx test_brw openclose createdestroy
-noinst_PROGRAMS += stat createmany statmany multifstat createtest mlink
+noinst_PROGRAMS += tchmod toexcl fsx test_brw openclose createdestroy
+noinst_PROGRAMS += stat createmany statmany multifstat createtest mlink utime
 noinst_PROGRAMS += opendirunlink opendevunlink unlinkmany fchdir_test checkstat
-noinst_PROGRAMS += wantedi statone runas openfile getdents o_directory
+noinst_PROGRAMS += wantedi statone runas openfile getdents mkdirdeep o_directory
+noinst_PROGRAMS += small_write
 # noinst_PROGRAMS += ldaptest
-sbin_PROGRAMS = mcreate mkdirmany
+sbin_PROGRAMS = mcreate munlink mkdirmany
 
 # ldaptest_SOURCES = ldaptest.c
 tchmod_SOURCES = tchmod.c
@@ -48,13 +51,15 @@ openfile_SOURCES = openfile.c
 wantedi_SOURCES = wantedi.c
 createtest_SOURCES = createtest.c
 open_delay_SOURCES = open_delay.c
-opendirunlink_SOURCES=opendirunlink.c
-opendevunlink_SOURCES=opendirunlink.c
-fchdir_test_SOURCES=fchdir_test.c
+opendirunlink_SOURCES = opendirunlink.c
+opendevunlink_SOURCES = opendevunlink.c
+fchdir_test_SOURCES = fchdir_test.c
 getdents_SOURCES=getdents.c
 o_directory_SOURCES = o_directory.c
-#mkdirdeep_SOURCES= mkdirdeep.c
-#mkdirdeep_LDADD=-L../portals/util -lptlctl
-#mkdirdeep_CPPFLAGS=-I$(top_srcdir)/portals/include
+utime_SOURCES = utime.c
+mkdirdeep_SOURCES = mkdirdeep.c
+mkdirdeep_LDADD=-L$(top_builddir)/portals/utils -lptlctl
+mkdirdeep_CPPFLAGS=-I$(top_srcdir)/portals/include
+small_write_SOURCES = small_write.c
 
 include $(top_srcdir)/Rules

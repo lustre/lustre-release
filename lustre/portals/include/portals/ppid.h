@@ -1,6 +1,3 @@
-/*
- */
-
 #ifndef _INCppidh_
 #define _INCppidh_
 

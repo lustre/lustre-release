@@ -50,6 +50,7 @@ struct ll_rpc_opcode {
         { OST_SAN_READ,     "ost_san_read" },
         { OST_SAN_WRITE,    "ost_san_write" },
         { OST_SYNCFS,       "ost_syncfs" },
+        { OST_SET_INFO,     "ost_set_info" },
         { MDS_GETATTR,      "mds_getattr" },
         { MDS_GETATTR_NAME, "mds_getattr_name" },
         { MDS_CLOSE,        "mds_close" },
@@ -60,6 +61,8 @@ struct ll_rpc_opcode {
         { MDS_GETSTATUS,    "mds_getstatus" },
         { MDS_STATFS,       "mds_statfs" },
         { MDS_GETLOVINFO,   "mds_getlovinfo" },
+        { MDS_PIN,          "mds_pin" },
+        { MDS_UNPIN,        "mds_unpin" },
         { LDLM_ENQUEUE,     "ldlm_enqueue" },
         { LDLM_CONVERT,     "ldlm_convert" },
         { LDLM_CANCEL,      "ldlm_cancel" },
@@ -71,7 +74,8 @@ struct ll_rpc_opcode {
         { PTLBD_FLUSH,      "ptlbd_flush" },
         { PTLBD_CONNECT,    "ptlbd_connect" },
         { PTLBD_DISCONNECT, "ptlbd_disconnect" },
-        { OBD_PING,         "obd_ping" }
+        { OBD_PING,         "obd_ping" },
+        { OBD_LOG_CANCEL,   "obd_log_cancel" },
 };
 
 const char* ll_opcode2str(__u32 opcode)
@@ -119,7 +123,7 @@ void ptlrpc_lprocfs_register_service(struct obd_device *obddev,
         }
 
         lprocfs_counter_init(svc_stats, PTLRPC_REQWAIT_CNTR,
-                             svc_counter_config, "req_waittime", "cycles");
+                             svc_counter_config, "req_waittime", "usec");
         /* Wait for b_eq branch
         lprocfs_counter_init(svc_stats, PTLRPC_SVCEQDEPTH_CNTR,
                              svc_counter_config, "svc_eqdepth", "reqs");
@@ -127,12 +131,12 @@ void ptlrpc_lprocfs_register_service(struct obd_device *obddev,
         /* no stddev on idletime */
         lprocfs_counter_init(svc_stats, PTLRPC_SVCIDLETIME_CNTR,
                              (LPROCFS_CNTR_EXTERNALLOCK|LPROCFS_CNTR_AVGMINMAX),
-                             "svc_idletime", "cycles");
+                             "svc_idletime", "usec");
         for (i = 0; i < LUSTRE_MAX_OPCODES; i++) {
                 __u32 opcode = ll_rpc_opcode_table[i].opcode;
                 lprocfs_counter_init(svc_stats, PTLRPC_LAST_CNTR + i,
                                      svc_counter_config, ll_opcode2str(opcode),
-                                     "cycles");
+                                     "usec");
         }
 
         rc = lprocfs_register_stats(svc_procroot, "stats", svc_stats);
