@@ -199,6 +199,8 @@ struct dentry *simple_mknod(struct dentry *dir, char *name, int mode)
 
                 /* Fixup file permissions if necessary */
                 if ((old_mode & S_IALLUGO) != (mode & S_IALLUGO)) {
+                        CWARN("fixing permissions on %s from %o to %o\n",
+                              name, old_mode, mode);
                         dchild->d_inode->i_mode = (mode & S_IALLUGO) |
                                                   (old_mode & ~S_IALLUGO);
                         mark_inode_dirty(dchild->d_inode);
@@ -241,6 +243,8 @@ struct dentry *simple_mkdir(struct dentry *dir, char *name, int mode)
 
                 /* Fixup directory permissions if necessary */
                 if ((old_mode & S_IALLUGO) != (mode & S_IALLUGO)) {
+                        CWARN("fixing permissions on %s from %o to %o\n",
+                              name, old_mode, mode);
                         dchild->d_inode->i_mode = (mode & S_IALLUGO) |
                                                   (old_mode & ~S_IALLUGO);
                         mark_inode_dirty(dchild->d_inode);
