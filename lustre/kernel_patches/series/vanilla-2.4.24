@@ -28,6 +28,10 @@ nfs_export_kernel-2.4.22.patch
 ext3-ea-in-inode-2.4.22-rh.patch
 listman-2.4.20.patch
 ext3-trusted_ea-2.4.20.patch
+ext3-extents-2.4.20.patch
+ext3-extents-in-ea-2.4.20.patch
+ext3-extents-in-ea-ioctl-2.4.20.patch
+ext3-extents-in-ea-exports-symbol.patch
 kernel_text_address-2.4.22-vanilla.patch
 gfp_memalloc-2.4.24.patch
 ext3-xattr-ptr-arith-fix.patch
@@ -37,6 +41,6 @@ ext3-truncate-buffer-head.patch
 inode-max-readahead-2.4.24.patch
 dynamic-locks-2.4.24.patch 
 vfs-pdirops-2.4.20-rh.patch
-ext3-pdirops-2.4.24.patch 
+ext3-pdirops-2.4.24-chaos.patch 
 ext3-mds-num-2.4.24.patch 
 export_lookup_create.patch
