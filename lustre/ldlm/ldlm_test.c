@@ -1,38 +1,161 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Copyright (C) 2002 Cluster File Systems, Inc.
+ * Copyright (c) 2002 Cluster File Systems, Inc. <info@clusterfs.com>
+ * Copyright (c) 2002 Lawrence Livermore National Laboratory
+ *  Author: James Newsome <newsome2@llnl.gov>
  *
- * This code is issued under the GNU General Public License.
- * See the file COPYING in this distribution
+ *   This file is part of Lustre, http://www.lustre.org.
  *
- * by Cluster File Systems, Inc.
+ *   Lustre is free software; you can redistribute it and/or
+ *   modify it under the terms of version 2 of the GNU General Public
+ *   License as published by the Free Software Foundation.
+ *
+ *   Lustre is distributed in the hope that it will be useful,
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   GNU General Public License for more details.
+ *
+ *   You should have received a copy of the GNU General Public License
+ *   along with Lustre; if not, write to the Free Software
+ *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
 #define DEBUG_SUBSYSTEM S_LDLM
 
+#include <asm/atomic.h>
 #include <linux/types.h>
 #include <linux/random.h>
 
 #include <linux/lustre_dlm.h>
 
 struct ldlm_test_thread {
+        struct lustre_handle *connh;
+        struct obd_device *obddev;
         struct ldlm_namespace *t_ns;
         struct list_head t_link;
-        __u32 t_flags; 
+        __u32 t_flags;
         wait_queue_head_t t_ctl_waitq;
 };
 
-static spinlock_t ctl_lock = SPIN_LOCK_UNLOCKED;
-static struct list_head ctl_threads;
-static int regression_running = 0;
+struct ldlm_test_lock {
+        struct list_head l_link;
+        struct lustre_handle l_lockh;
+        ldlm_mode_t l_mode;
+};
 
+static const int max_locks = 10;
+
+static spinlock_t ctl_lock = SPIN_LOCK_UNLOCKED;
+/* protect these with the ctl_lock */
+static LIST_HEAD(ctl_threads);
+static int regression_running = 0;
+static LIST_HEAD(lock_list);
+static int num_locks = 0;
+
+/* cumulative stats for regression test */
+static atomic_t locks_requested = ATOMIC_INIT(0);
+static atomic_t locks_granted = ATOMIC_INIT(0);
+static atomic_t locks_matched = ATOMIC_INIT(0);
+
+/*
+ * blocking ast for regression test.
+ * Just cancels lock
+ */
+static int ldlm_test_blocking_ast(struct ldlm_lock *lock,
+                                  struct ldlm_lock_desc *new,
+                                  void *data, __u32 data_len)
+{
+        int rc;
+        struct lustre_handle lockh;
+        ENTRY;
+
+        LDLM_DEBUG_NOLOCK("We're blocking. Cancelling lock");
+        ldlm_lock2handle(lock, &lockh);
+        rc = ldlm_cli_cancel(&lockh);
+        if (rc < 0) {
+                CERROR("ldlm_cli_cancel: %d\n", rc);
+                LBUG();
+        }
+
+        RETURN(0);
+}
+
+/* blocking ast for basic tests. noop */
 static int ldlm_blocking_ast(struct ldlm_lock *lock,
                              struct ldlm_lock_desc *new,
                              void *data, __u32 data_len)
 {
         ENTRY;
         CERROR("ldlm_blocking_ast: lock=%p, new=%p\n", lock, new);
+        RETURN(0);
+}
+
+/* Completion ast for regression test.
+ * Does not sleep when blocked.
+ */
+static int ldlm_test_completion_ast(struct ldlm_lock *lock, int flags)
+{
+
+        ENTRY;
+
+        if (flags & (LDLM_FL_BLOCK_WAIT | LDLM_FL_BLOCK_GRANTED |
+                      LDLM_FL_BLOCK_CONV)) {
+                /* Do nothing */
+                LDLM_DEBUG(lock, "client-side enqueue returned a blocked lock");
+                ldlm_lock_dump(lock);
+        } else {
+                /* add to list of granted locks */
+                struct ldlm_test_lock *lock_info;
+
+                if (flags == LDLM_FL_WAIT_NOREPROC) {
+                        atomic_inc(&locks_matched);
+                        LDLM_DEBUG(lock, "lock matched");
+                } else if (flags == LDLM_FL_LOCK_CHANGED) {
+                        atomic_inc(&locks_granted);
+                        LDLM_DEBUG(lock, "lock changed and granted");
+                } else {
+                        atomic_inc(&locks_granted);
+                        LDLM_DEBUG(lock, "lock granted");
+                }
+
+                OBD_ALLOC(lock_info, sizeof(*lock_info));
+                if (lock_info == NULL) {
+                        LBUG();
+                        RETURN(-ENOMEM);
+                }
+
+                ldlm_lock2handle(lock, &lock_info->l_lockh);
+                lock_info->l_mode = lock->l_granted_mode;
+
+                spin_lock(&ctl_lock);
+                list_add_tail(&lock_info->l_link, &lock_list);
+                num_locks++;
+
+                /* if we're over the max of granted locks, decref some */
+                if (num_locks > max_locks) {
+                        /* delete from list */
+                        lock_info = list_entry(lock_list.next,
+                                               struct ldlm_test_lock, l_link);
+                        list_del(lock_list.next);
+                        num_locks--;
+                        spin_unlock(&ctl_lock);
+
+                        /* decrement and free the info
+                         * Don't hold ctl_lock here. The decref
+                         * may result in another lock being granted
+                         * and hence this function being called again.
+                         */
+                        LDLM_DEBUG_NOLOCK("Decrementing lock");
+                        ldlm_lock_decref(&lock_info->l_lockh,
+                                         lock_info->l_mode);
+                        OBD_FREE(lock_info, sizeof(*lock_info));
+
+                        spin_lock(&ctl_lock);
+                }
+                spin_unlock(&ctl_lock);
+        }
+
         RETURN(0);
 }
 
@@ -150,7 +273,7 @@ int ldlm_test_extents(struct obd_device *obddev)
 }
 
 static int ldlm_test_network(struct obd_device *obddev,
-                             struct ptlrpc_connection *conn)
+                             struct lustre_handle *connh)
 {
 
         __u64 res_id[RES_NAME_SIZE] = {1, 2, 3};
@@ -159,14 +282,18 @@ static int ldlm_test_network(struct obd_device *obddev,
         int flags = 0;
         ldlm_error_t err;
 
-        /* FIXME: this needs a connh as 3rd paramter, before it will work */
-
-        err = ldlm_cli_enqueue(NULL, NULL, obddev->obd_namespace, NULL, res_id,
+        err = ldlm_cli_enqueue(connh, NULL, obddev->obd_namespace, NULL, res_id,
                                LDLM_EXTENT, &ext, sizeof(ext), LCK_PR, &flags,
-                               NULL, NULL, NULL, 0, &lockh1);
+                               ldlm_completion_ast, NULL, NULL, 0, &lockh1);
+
         CERROR("ldlm_cli_enqueue: %d\n", err);
+
+        flags = 0;
+        err = ldlm_cli_convert(&lockh1, LCK_EX, &flags);
+        CERROR("ldlm_cli_convert: %d\n", err);
+
         if (err == ELDLM_OK)
-                ldlm_lock_decref(&lockh1, LCK_PR);
+                ldlm_lock_decref(&lockh1, LCK_EX);
 
         RETURN(err);
 }
@@ -174,7 +301,8 @@ static int ldlm_test_network(struct obd_device *obddev,
 static int ldlm_test_main(void *data)
 {
         struct ldlm_test_thread *thread = data;
-        struct ldlm_namespace *ns;
+        const unsigned int num_resources = 10;
+        const unsigned int num_extent = 10;
         ENTRY;
 
         lock_kernel();
@@ -186,49 +314,71 @@ static int ldlm_test_main(void *data)
 
         sprintf(current->comm, "ldlm_test");
 
-        ns = ldlm_namespace_new("ldlm_test", LDLM_NAMESPACE_CLIENT);
-        if (ns == NULL) {
-                LBUG();
-                GOTO(out, -ENOMEM);
-        }
-
         /* Record that the thread is running */
         thread->t_flags |= SVC_RUNNING;
         wake_up(&thread->t_ctl_waitq);
 
-        while (1) {
+        while (!(thread->t_flags & SVC_STOPPING)) {
                 struct lustre_handle lockh;
                 __u64 res_id[3] = {0};
                 __u32 lock_mode;
+                struct ldlm_extent ext;
                 char random;
-                int flags = 0, rc;
+                int flags = 0, rc = 0;
 
-                /* Pick a random resource from 1 to 10 */
+                /* Pick a random resource from 1 to num_resources */
                 get_random_bytes(&random, sizeof(random));
-                res_id[0] = random % 10 + 1;
+                res_id[0] = (unsigned char)random % num_resources;
 
                 /* Pick a random lock mode */
                 get_random_bytes(&random, sizeof(random));
-                lock_mode = random % LCK_NL + 1;
+                lock_mode = (unsigned char)random % LCK_NL + 1;
 
-                rc = ldlm_cli_enqueue(NULL, NULL, ns, NULL,
-                                      res_id, LDLM_PLAIN, NULL, 0, lock_mode,
-                                      &flags, ldlm_completion_ast,
-                                      ldlm_blocking_ast, NULL, 0, &lockh);
+                /* Pick a random extent */
+                get_random_bytes(&random, sizeof(random));
+                ext.start = (unsigned int)random % num_extent;
+                get_random_bytes(&random, sizeof(random));
+                ext.end = (unsigned int)random %
+                        (num_extent - (int)ext.start) + ext.start;
+
+                LDLM_DEBUG_NOLOCK("about to enqueue with resource %d, mode %d,"
+                                  " extent %d -> %d", (int)res_id[0], lock_mode,
+                                  (int)ext.start, (int)ext.end);
+
+                rc = ldlm_match_or_enqueue(thread->connh, NULL,
+                                           thread->obddev->obd_namespace, NULL,
+                                           res_id, LDLM_EXTENT, &ext,
+                                           sizeof(ext), lock_mode, &flags,
+                                           ldlm_test_completion_ast,
+                                           ldlm_test_blocking_ast, NULL, 0,
+                                           &lockh);
+
+                atomic_inc(&locks_requested);
                 if (rc < 0) {
                         CERROR("ldlm_cli_enqueue: %d\n", rc);
                         LBUG();
                 }
+
+                LDLM_DEBUG_NOLOCK("locks requested: %d, granted: %d, "
+                                  "matched: %d",
+                                  atomic_read(&locks_requested),
+                                  atomic_read(&locks_granted),
+                                  atomic_read(&locks_matched));
+
+                /* I think this may be necessary since we don't sleep
+                 * after a lock being blocked
+                 */
+                schedule();
         }
 
- out:
         thread->t_flags |= SVC_STOPPED;
         wake_up(&thread->t_ctl_waitq);
 
         RETURN(0);
 }
 
-static int ldlm_start_thread(void)
+static int ldlm_start_thread(struct obd_device *obddev,
+                             struct lustre_handle *connh)
 {
         struct ldlm_test_thread *test;
         int rc;
@@ -240,6 +390,9 @@ static int ldlm_start_thread(void)
                 RETURN(-ENOMEM);
         }
         init_waitqueue_head(&test->t_ctl_waitq);
+
+        test->connh = connh;
+        test->obddev = obddev;
 
         spin_lock(&ctl_lock);
         list_add(&test->t_link, &ctl_threads);
@@ -257,7 +410,7 @@ static int ldlm_start_thread(void)
 }
 
 int ldlm_regression_start(struct obd_device *obddev,
-                          struct ptlrpc_connection *conn, int count)
+                          struct lustre_handle *connh, int count)
 {
         int i, rc = 0;
         ENTRY;
@@ -272,7 +425,7 @@ int ldlm_regression_start(struct obd_device *obddev,
         spin_unlock(&ctl_lock);
 
         for (i = 0; i < count; i++) {
-                rc = ldlm_start_thread();
+                rc = ldlm_start_thread(obddev, connh);
                 if (rc < 0)
                         GOTO(cleanup, rc);
         }
@@ -314,17 +467,18 @@ int ldlm_regression_stop(void)
         RETURN(0);
 }
 
-int ldlm_test(struct obd_device *obddev, struct ptlrpc_connection *conn)
+int ldlm_test(struct obd_device *obddev, struct lustre_handle *connh)
 {
         int rc;
-        rc = ldlm_test_basics(obddev);
+/*        rc = ldlm_test_basics(obddev);
         if (rc)
                 RETURN(rc);
 
         rc = ldlm_test_extents(obddev);
         if (rc)
                 RETURN(rc);
+*/
 
-        rc = ldlm_test_network(obddev, conn);
+        rc = ldlm_test_network(obddev, connh);
         RETURN(rc);
 }

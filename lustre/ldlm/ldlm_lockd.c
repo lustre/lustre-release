@@ -414,7 +414,7 @@ static int ldlm_iocontrol(long cmd, struct lustre_handle *conn, int len,
 
         switch (cmd) {
         case IOC_LDLM_TEST:
-                err = ldlm_test(obddev, connection);
+                err = ldlm_test(obddev, conn);
                 CERROR("-- done err %d\n", err);
                 GOTO(out, err);
         case IOC_LDLM_DUMP:
@@ -552,6 +552,8 @@ EXPORT_SYMBOL(ldlm_cli_cancel);
 EXPORT_SYMBOL(ldlm_match_or_enqueue);
 EXPORT_SYMBOL(ldlm_it2str);
 EXPORT_SYMBOL(ldlm_test);
+EXPORT_SYMBOL(ldlm_regression_start);
+EXPORT_SYMBOL(ldlm_regression_stop);
 EXPORT_SYMBOL(ldlm_lock_dump);
 EXPORT_SYMBOL(ldlm_namespace_new);
 EXPORT_SYMBOL(ldlm_namespace_free);

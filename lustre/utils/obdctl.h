@@ -51,6 +51,8 @@ int jt_obd_test_getattr(int argc, char **argv);
 int jt_obd_test_brw(int argc, char **argv);
 int jt_obd_lov_config(int argc, char **argv);
 int jt_obd_test_ldlm(int argc, char **argv);
+int jt_obd_ldlm_regress_start(int argc, char **argv);
+int jt_obd_ldlm_regress_stop(int argc, char **argv);
 int jt_obd_dump_ldlm(int argc, char **argv);
 int jt_obd_newconn(int argc, char **argv);
 

@@ -693,6 +693,51 @@ static int osc_statfs(struct lustre_handle *conn, struct statfs *sfs)
         return rc;
 }
 
+static int osc_iocontrol(long cmd, struct lustre_handle *conn, int len,
+                         void *karg, void *uarg)
+{
+        struct obd_device *obddev = class_conn2obd(conn);
+        struct obd_ioctl_data *data = karg;
+        int err = 0;
+        ENTRY;
+
+        if (_IOC_TYPE(cmd) != IOC_LDLM_TYPE || _IOC_NR(cmd) < 
+                        IOC_LDLM_MIN_NR || _IOC_NR(cmd) > IOC_LDLM_MAX_NR) {
+                CDEBUG(D_IOCTL, "invalid ioctl (type %ld, nr %ld, size %ld)\n",
+                        _IOC_TYPE(cmd), _IOC_NR(cmd), _IOC_SIZE(cmd));
+                RETURN(-EINVAL);
+        }
+
+        switch (cmd) {
+        case IOC_LDLM_TEST: {
+                err = ldlm_test(obddev, conn);
+                CERROR("-- done err %d\n", err);
+                GOTO(out, err);
+        }
+        case IOC_LDLM_REGRESS_START: {
+                unsigned int numthreads; 
+                
+                if (data->ioc_inllen1) 
+                        numthreads = simple_strtoul(data->ioc_inlbuf1, NULL, 0);
+                else 
+                        numthreads = 1;
+
+                err = ldlm_regression_start(obddev, conn, numthreads);
+                CERROR("-- done err %d\n", err);
+                GOTO(out, err);
+        }
+        case IOC_LDLM_REGRESS_STOP: {
+                err = ldlm_regression_stop();
+                CERROR("-- done err %d\n", err);
+                GOTO(out, err);
+        }
+        default:
+                GOTO(out, err = -EINVAL);
+        }
+out:
+        return err;
+}
+
 struct obd_ops osc_obd_ops = {
         o_setup:        client_obd_setup,
         o_cleanup:      client_obd_cleanup,
@@ -708,7 +753,8 @@ struct obd_ops osc_obd_ops = {
         o_brw:          osc_brw,
         o_punch:        osc_punch,
         o_enqueue:      osc_enqueue,
-        o_cancel:       osc_cancel
+        o_cancel:       osc_cancel,
+        o_iocontrol:    osc_iocontrol
 };
 
 static int __init osc_init(void)

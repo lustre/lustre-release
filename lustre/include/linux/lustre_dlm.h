@@ -287,7 +287,11 @@ void ldlm_reprocess_all(struct ldlm_resource *res);
 void ldlm_lock_dump(struct ldlm_lock *lock);
 
 /* ldlm_test.c */
-int ldlm_test(struct obd_device *device, struct ptlrpc_connection *conn);
+int ldlm_test(struct obd_device *device, struct lustre_handle *connh);
+int ldlm_regression_start(struct obd_device *obddev, 
+                struct lustre_handle *connh, int count);
+int ldlm_regression_stop(void);
+
 
 /* resource.c */
 struct ldlm_namespace *ldlm_namespace_new(char *name, __u32 local);
@@ -358,6 +362,8 @@ int mds_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 
 #define IOC_LDLM_TEST                   _IOWR('f', 40, long)
 #define IOC_LDLM_DUMP                   _IOWR('f', 41, long)
-#define IOC_LDLM_MAX_NR                 41
+#define IOC_LDLM_REGRESS_START          _IOWR('f', 42, long)
+#define IOC_LDLM_REGRESS_STOP           _IOWR('f', 43, long)
+#define IOC_LDLM_MAX_NR                 43
 
 #endif

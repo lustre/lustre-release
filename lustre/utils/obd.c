@@ -1170,6 +1170,56 @@ int jt_obd_dump_ldlm(int argc, char **argv)
         return rc;
 }
 
+int jt_obd_ldlm_regress_start(int argc, char **argv)
+{
+        int rc;
+        struct obd_ioctl_data data;
+
+        IOCINIT(data);
+
+        if (argc > 2) {
+                fprintf(stderr, "usage: %s [numthreads]\n", cmdname(argv[0]));
+                return 1;
+        } else if (argc == 2) {
+                data.ioc_inllen1 =  strlen(argv[1]) + 1;
+                data.ioc_inlbuf1 = argv[1];
+        } else {
+                data.ioc_inllen1 = 0;
+        }
+
+        if (obd_ioctl_pack(&data, &buf, max)) {
+                fprintf(stderr, "error: %s: invalid ioctl\n", cmdname(argv[0]));
+                return -2;
+        }
+
+        rc = ioctl(fd, IOC_LDLM_REGRESS_START, buf);
+
+        if (rc)
+                fprintf(stderr, "error: %s: test failed: %s\n",
+                        cmdname(argv[0]), strerror(rc = errno));
+
+        return rc;
+}
+
+int jt_obd_ldlm_regress_stop(int argc, char **argv)
+{
+        int rc;
+        struct obd_ioctl_data data;
+        IOCINIT(data);
+
+        if (argc != 1) {
+                fprintf(stderr, "usage: %s\n", cmdname(argv[0]));
+                return 1;
+        }
+
+        rc = ioctl(fd, IOC_LDLM_REGRESS_STOP, &data);
+
+        if (rc)
+                fprintf(stderr, "error: %s: test failed: %s\n",
+                        cmdname(argv[0]), strerror(rc = errno));
+        return rc;
+}
+
 int jt_obd_newconn(int argc, char **argv)
 {
         int rc;

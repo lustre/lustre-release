@@ -724,9 +724,9 @@ static int filter_truncate(struct lustre_handle *conn, struct obdo *oa,
 }
 
 static int filter_pgcache_brw(int cmd, struct lustre_handle *conn, 
-                               struct lov_stripe_md *md, obd_count oa_bufs,
-                               struct brw_page *pga,
-                               brw_callback_t callback, void *data)
+                              struct lov_stripe_md *md, obd_count oa_bufs,
+                              struct brw_page *pga, brw_callback_t callback,
+                              struct io_cb_data *data)
 {
         struct obd_run_ctxt      saved;
         struct super_block      *sb;

@@ -133,6 +133,11 @@ command_t cmdlist[] = {
          "usage: test_brw <count> [write [verbose [pages [obdos]]]]"},
         {"test_ldlm", jt_obd_test_ldlm, 0, "perform lock manager test\n"
          "usage: test_ldlm"},
+        {"ldlm_regress_start", jt_obd_ldlm_regress_start, 0,
+         "start lock manager stress test (usage: ldlm_regress_start "
+         "[numthreads])\n"},
+        {"ldlm_regress_stop", jt_obd_ldlm_regress_stop, 0,
+         "stop lock manager stress test (no args)\n"},
         {"dump_ldlm", jt_obd_dump_ldlm, 0,
          "dump all lock manager state (no args)"},
 

@@ -11,8 +11,8 @@
  * by Peter Braam <braam@clusterfs.com>
  */
 
-static char rcsid[] __attribute ((unused)) = "$Id: echo.c,v 1.20 2002/08/07 21:46:32 shaver Exp $";
-#define OBDECHO_VERSION "$Revision: 1.20 $"
+static char rcsid[] __attribute ((unused)) = "$Id: echo.c,v 1.21 2002/08/12 21:57:42 pschwan Exp $";
+#define OBDECHO_VERSION "$Revision: 1.21 $"
 
 #define EXPORT_SYMTAB
 
@@ -32,6 +32,7 @@ static char rcsid[] __attribute ((unused)) = "$Id: echo.c,v 1.20 2002/08/07 21:4
 #include <linux/obd_support.h>
 #include <linux/obd_class.h>
 #include <linux/obd_echo.h>
+#include <linux/lustre_dlm.h>
 
 extern struct obd_device obd_dev[MAX_OBD_DEVICES];
 static struct obdo OA;
@@ -242,12 +243,26 @@ commitrw_cleanup:
         return rc;
 }
 
+static int echo_setup(struct obd_device *obddev, obd_count len, void *buf)
+{
+        ENTRY;
+
+        obddev->obd_namespace =
+                ldlm_namespace_new("echo-tgt", LDLM_NAMESPACE_SERVER);
+        if (obddev->obd_namespace == NULL)
+                LBUG();
+
+        RETURN(0);
+}
+
+
 struct obd_ops echo_obd_ops = {
         o_connect:     echo_connect,
         o_disconnect:  echo_disconnect,
         o_getattr:     echo_getattr,
         o_preprw:      echo_preprw,
         o_commitrw:    echo_commitrw,
+        o_setup:       echo_setup
 };
 
 static int __init obdecho_init(void)
