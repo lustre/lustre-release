@@ -21,8 +21,13 @@ char usage[] =
 "        m  mknod\n"
 "        c  close\n"
 "        _  wait for signal\n"
+"        r  read\n"
 "        s  stat\n"
-"        S  fstat\n";
+"        S  fstat\n"
+"        t  fchmod\n"
+"        T  ftruncate to zero\n"
+"        w  write\n"
+"        z  seek to zero\n";
 
 void null_handler(int unused) { }
 
@@ -30,7 +35,7 @@ int main(int argc, char **argv)
 {
         char *fname, *commands;
         struct stat st;
-        int fd;
+        int fd = -1;
 
         if (argc != 3) {
                 fprintf(stderr, usage, argv[0]);
@@ -43,10 +48,19 @@ int main(int argc, char **argv)
 
         for (commands = argv[2]; *commands; commands++) {
                 switch (*commands) {
-                case 'o':
-                        fd = open(fname, O_RDONLY);
-                        if (fd == -1) {
-                                perror("open(O_RDONLY)");
+                case '_':
+                        pause();
+                        break;
+                case 'c':
+                        if (close(fd) == -1) {
+                                perror("close");
+                                exit(1);
+                        }
+			fd = -1;
+                        break;
+                case 'm':
+                        if (mknod(fname, S_IFREG | 0644, 0) == -1) {
+                                perror("mknod(S_IFREG|0644, 0)");
                                 exit(1);
                         }
                         break;
@@ -57,9 +71,41 @@ int main(int argc, char **argv)
                                 exit(1);
                         }
                         break;
-                case 'm':
-                        if (mknod(fname, S_IFREG | 0644, 0) == -1) {
-                                perror("mknod(S_IFREG|0644, 0)");
+                case 'o':
+                        fd = open(fname, O_RDONLY);
+                        if (fd == -1) {
+                                perror("open(O_RDONLY)");
+                                exit(1);
+                        }
+                        break;
+		case 'r': {
+			char buf;
+			if (read(fd, &buf, 1) == -1) {
+				perror("read");
+				exit(1);
+			}
+		}
+                case 'S':
+                        if (fstat(fd, &st) == -1) {
+                                perror("fstat");
+                                exit(1);
+                        }
+                        break;
+                case 's':
+                        if (stat(fname, &st) == -1) {
+                                perror("stat");
+                                exit(1);
+                        }
+                        break;
+                case 't':
+                        if (fchmod(fd, 0) == -1) {
+                                perror("fchmod");
+                                exit(1);
+                        }
+                        break;
+                case 'T':
+                        if (ftruncate(fd, 0) == -1) {
+                                perror("ftruncate");
                                 exit(1);
                         }
                         break;
@@ -69,33 +115,24 @@ int main(int argc, char **argv)
                                 exit(1);
                         }
                         break;
-                case 'c':
-                        if (close(fd) == -1) {
-                                perror("close");
-                                exit(1);
-                        }
-                        break;
-                case '_':
-                        pause();
-                        break;
-                case 's':
-                        if (stat(fname, &st) == -1) {
-                                perror("stat");
-                                exit(1);
-                        }
-                        break;
-                case 'S':
-                        if (fstat(fd, &st) == -1) {
-                                perror("fstat");
-                                exit(1);
-                        }
-                        break;
+		case 'w':
+			if (write(fd, "w", 1) == -1) {
+				perror("write");
+				exit(1);
+			}
+			break;
+		case 'z':
+			if (lseek(fd, 0, SEEK_SET) == -1) {
+				perror("lseek");
+				exit(1);
+			}
+			break;
                 default:
                         fprintf(stderr, "unknown command \"%c\"\n", *commands);
                         fprintf(stderr, usage, argv[0]);
                         exit(1);
                 }
         }
-        
+
         return 0;
 }
