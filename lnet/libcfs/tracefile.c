@@ -52,22 +52,25 @@ static struct trace_page *tage_alloc(int gfp)
         struct trace_page *tage;
 
         page = cfs_alloc_page(gfp);
-        if (page != NULL) {
-                tage = cfs_alloc(sizeof *tage, gfp);
-                if (tage == NULL)
-                        cfs_free_page(page);
-                tage->page = page;
-        } else
-                tage = NULL;
+        if (page == NULL)
+                return NULL;
+        
+        tage = cfs_alloc(sizeof(*tage), gfp);
+        if (tage == NULL) {
+                cfs_free_page(page);
+                return NULL;
+        }
+        
+        tage->page = page;
         return tage;
 }
 
 static void tage_free(struct trace_page *tage)
 {
         LASSERT(tage != NULL);
+        LASSERT(tage->page != NULL);
 
-        if (tage->page != NULL)
-                cfs_free_page(tage->page);
+        cfs_free_page(tage->page);
         cfs_free(tage);
 }
 
@@ -81,10 +84,10 @@ static void tage_to_tail(struct trace_page *tage, struct list_head *queue)
 
 static int tage_invariant(struct trace_page *tage)
 {
-        return
-                tage != NULL &&
+        return (tage != NULL &&
+                tage->page != NULL &&
                 tage->used <= CFS_PAGE_SIZE &&
-                cfs_page_count(tage->page) > 0;
+                cfs_page_count(tage->page) > 0);
 }
 
 /* return a page that has 'len' bytes left at the end */
@@ -112,6 +115,7 @@ static struct trace_page *trace_get_tage(struct trace_cpu_data *tcd,
                          * to using the last page in the ring buffer. */
                         goto ring_buffer;
                 }
+
                 tage->used = 0;
                 tage->cpu = smp_processor_id();
                 list_add_tail(&tage->linkage, &tcd->tcd_pages);
@@ -145,8 +149,12 @@ static struct trace_page *trace_get_tage(struct trace_cpu_data *tcd,
                         tcd->tcd_cur_pages--;
                 }
                 put_pages_on_daemon_list_on_cpu(&pc);
+
+                LASSERT(!list_empty(&tcd->tcd_pages));
         }
-        LASSERT(!list_empty(&tcd->tcd_pages));
+
+        if (list_empty(&tcd->tcd_pages))
+                return NULL;
 
         tage = tage_from_list(tcd->tcd_pages.next);
         tage->used = 0;
