@@ -102,9 +102,11 @@ static int filter_lvbo_init(struct ldlm_resource *res)
  *
  *   m != NULL : called by the DLM itself after a glimpse callback
  *   m == NULL : called by the filter after a disk write
+ *
+ *   If 'increase' is true, don't allow values to move backwards.
  */
 static int filter_lvbo_update(struct ldlm_resource *res, struct lustre_msg *m,
-                              int buf_idx)
+                              int buf_idx, int increase)
 {
         int rc = 0;
         struct ost_lvb *lvb = res->lr_lvb_data;
@@ -137,13 +139,13 @@ static int filter_lvbo_update(struct ldlm_resource *res, struct lustre_msg *m,
                         //GOTO(out, rc = -EPROTO);
                         GOTO(out, rc = 0);
                 }
-                if (new->lvb_size > lvb->lvb_size) {
+                if (new->lvb_size > lvb->lvb_size || !increase) {
                         CDEBUG(D_DLMTRACE, "res: "LPU64" updating lvb size: "
                                LPU64" -> "LPU64"\n", res->lr_name.name[0],
                                lvb->lvb_size, new->lvb_size);
                         lvb->lvb_size = new->lvb_size;
                 }
-                if (new->lvb_mtime > lvb->lvb_mtime) {
+                if (new->lvb_mtime > lvb->lvb_mtime || !increase) {
                         CDEBUG(D_DLMTRACE, "res: "LPU64" updating lvb mtime: "
                                LPU64" -> "LPU64"\n", res->lr_name.name[0],
                                lvb->lvb_mtime, new->lvb_mtime);
@@ -170,10 +172,18 @@ static int filter_lvbo_update(struct ldlm_resource *res, struct lustre_msg *m,
         oa->o_valid = OBD_MD_FLID;
         obdo_from_inode(oa, dentry->d_inode, FILTER_VALID_FLAGS);
 
-        lvb->lvb_size = dentry->d_inode->i_size;
-        lvb->lvb_mtime = LTIME_S(dentry->d_inode->i_mtime);
-        CDEBUG(D_DLMTRACE, "res: "LPU64" disk lvb size: "LPU64", mtime: "
-               LPU64"\n", res->lr_name.name[0], lvb->lvb_size, lvb->lvb_mtime);
+        if (dentry->d_inode->i_size > lvb->lvb_size || !increase) {
+                CDEBUG(D_DLMTRACE, "res: "LPU64" updating lvb size from disk: "
+                       LPU64" -> "LPU64"\n", res->lr_name.name[0],
+                       lvb->lvb_size, dentry->d_inode->i_size);
+                lvb->lvb_size = dentry->d_inode->i_size;
+        }
+        if (dentry->d_inode->i_mtime > lvb->lvb_mtime || !increase) {
+                CDEBUG(D_DLMTRACE, "res: "LPU64" updating lvb mtime from disk: "
+                       LPU64" -> "LPU64"\n", res->lr_name.name[0],
+                       lvb->lvb_mtime,(__u64)LTIME_S(dentry->d_inode->i_mtime));
+                lvb->lvb_mtime = LTIME_S(dentry->d_inode->i_mtime);
+        }
         f_dput(dentry);
 
  out:
