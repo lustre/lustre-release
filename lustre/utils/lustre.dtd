@@ -27,15 +27,18 @@
 <!ATTLIST obd %tag.attr; type (obdfilter | obdext2 | obdecho) 'obdfilter'>
 <!ELEMENT ost (network_ref | obd_ref | failover_ref)*>
 <!ATTLIST ost %tag.attr;>
-<!ELEMENT mds (network_ref | fstype | device | server_ref | failover_ref)*>
+<!ELEMENT mds (network_ref | fstype | device | autoformat | server_ref | failover_ref)*>
 <!ATTLIST mds %tag.attr;>
 
 <!ELEMENT osc (network_ref | obd_ref)*>
 <!ATTLIST osc %tag.attr;>
-<!ELEMENT mdc (service_ref)>
+<!ELEMENT mdc (network_ref | mds_ref)*>
 <!ATTLIST mdc %tag.attr;>
-<!ELEMENT lov (osc_ref | obd_ref | mdc_ref)*>
+<!ELEMENT lov (devices | mdc_ref)*>
 <!ATTLIST lov %tag.attr;>
+<!ELEMENT devices (obd_ref)+>
+<!ATTLIST devices stripesize CDATA #REQUIRED
+                  pattern    CDATA #REQUIRED>
 <!ELEMENT router (misc)*>
 <!ATTLIST router %tag.attr;>
 
