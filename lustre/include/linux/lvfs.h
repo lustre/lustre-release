@@ -18,6 +18,10 @@ struct obd_ucred {
         __u32 ouc_suppgid2;
 };
 
+struct lvfs_callback_ops {
+        struct dentry *(*l_fid2dentry)(__u64 id_ino, __u32 gr_gen, void *data);
+};
+
 #define OBD_RUN_CTXT_MAGIC      0xC0FFEEAA
 #define OBD_CTXT_DEBUG          /* development-only debugging */
 struct obd_run_ctxt {
@@ -26,6 +30,7 @@ struct obd_run_ctxt {
         mm_segment_t     fs;
         struct obd_ucred ouc;
         int              ngroups;
+        struct lvfs_callback_ops cb_ops;
 #ifdef OBD_CTXT_DEBUG
         __u32            magic;
 #endif
@@ -49,6 +54,9 @@ struct dentry *simple_mknod(struct dentry *dir, char *name, int mode);
 int lustre_fread(struct file *file, void *buf, int len, loff_t *off);
 int lustre_fwrite(struct file *file, const void *buf, int len, loff_t *off);
 int lustre_fsync(struct file *file);
+
+/* lvfs_common.c */
+struct dentry *lvfs_fid2dentry(struct obd_run_ctxt *, __u64, __u32, void *data);
 
 static inline void l_dput(struct dentry *de)
 {
