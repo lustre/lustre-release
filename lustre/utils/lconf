@@ -110,7 +110,11 @@ class LCTLInterface:
         """
         self.lctl = find_prog(cmd)
         if not self.lctl:
-            raise RuntimeError,  "unable to find lctl binary."
+            if isnotouch():
+                debug('! lctl not found')
+                self.lctl = 'lctl'
+            else:
+                raise CommandError,  "unable to find lctl binary."
             
     def run(self, cmds):
         """
@@ -805,12 +809,8 @@ def fetch(url):
 #   * configure devices with lctl
 # Shutdown does steps in reverse
 #
-lctl = LCTLInterface('lctl')
 def main():
-    global options, TCP_ACCEPTOR
-    TCP_ACCEPTOR = find_prog('acceptor')
-    if not TCP_ACCEPTOR:
-        panic('acceptor not found')
+    global options, TCP_ACCEPTOR, lctl
     args = parse_cmdline(sys.argv[1:])
     if len(args) > 0:
         if not os.access(args[0], os.R_OK | os.W_OK):
@@ -830,6 +830,17 @@ def main():
             options['hostname'].append(host)
         options['hostname'].append('localhost')
     print "configuring for host: ", options['hostname']
+
+    TCP_ACCEPTOR = find_prog('acceptor')
+    if not TCP_ACCEPTOR:
+        if isnotouch():
+            TCP_ACCEPTOR = 'acceptor'
+            debug('! acceptor not found')
+        else:
+            panic('acceptor not found')
+
+    lctl = LCTLInterface('lctl')
+
     doHost(dom.documentElement, options['hostname'], options.has_key('cleanup') )
 
 if __name__ == "__main__":
@@ -840,4 +851,5 @@ if __name__ == "__main__":
     except CommandError:
         print '<insert exception data here>'
         pass
+
 
