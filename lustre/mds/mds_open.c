@@ -405,7 +405,6 @@ int mds_open(struct mds_update_record *rec, int offset,
                 acc_mode |= MAY_WRITE;
 
         /* Step 1: Find and lock the parent */
-        intent_set_disposition(rep, DISP_LOOKUP_EXECD);
         parent_mode = (rec->ur_flags & O_CREAT) ? LCK_PW : LCK_PR;
         parent = mds_fid2locked_dentry(obd, rec->ur_fid1, NULL, parent_mode,
                                        &parent_lockh);
@@ -425,6 +424,7 @@ int mds_open(struct mds_update_record *rec, int offset,
 
         cleanup_phase = 2; /* child dentry */
 
+        intent_set_disposition(rep, DISP_LOOKUP_EXECD);
         if (dchild->d_inode)
                 intent_set_disposition(rep, DISP_LOOKUP_POS);
         else

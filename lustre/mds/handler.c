@@ -1806,6 +1806,8 @@ static int ldlm_intent_policy(struct ldlm_namespace *ns,
                         rep->lock_policy_res2 = mds_reint(req, offset, &lockh);
                         /* We abort the lock if the lookup was negative and
                          * we did not make it to the OPEN portion */
+                        if (!intent_disposition(rep, DISP_LOOKUP_EXECD))
+                                RETURN(ELDLM_LOCK_ABORTED);
                         if (intent_disposition(rep, DISP_LOOKUP_NEG) &&
                             !intent_disposition(rep, DISP_OPEN_OPEN))
                                 RETURN(ELDLM_LOCK_ABORTED);
