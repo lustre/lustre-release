@@ -1,3 +1,12 @@
+#!/bin/sh
+LOOP0=/dev/loop0
+LOOP1=/dev/loop1
+
+if [ ! -e $LOOP0 ]; then
+    echo $LOOP0 'doesnt exist: (not) using devfs?' 
+    exit
+fi
+
 umount /mnt/obd
 
 rmmod llight
@@ -31,3 +40,6 @@ EOF
 rmmod ksocknal
 killall acceptor
 rmmod portals
+
+losetup -d $LOOP0
+losetup -d $LOOP1

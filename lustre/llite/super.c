@@ -47,13 +47,17 @@ static char *ll_read_opt(const char *opt, char *data)
 {
         char *value;
         char *retval;
+	ENTRY;
 
         CDEBUG(D_INFO, "option: %s, data %s\n", opt, data);
-        if ( strncmp(opt, data, strlen(opt)) )
+        if ( strncmp(opt, data, strlen(opt)) ) {
+		EXIT;
                 return NULL;
-
-        if ( (value = strchr(data, '=')) == NULL )
+	}
+        if ( (value = strchr(data, '=')) == NULL ) {
+		EXIT;
                 return NULL;
+	}
 
         value++;
         OBD_ALLOC(retval, char *, strlen(value) + 1);
@@ -64,15 +68,19 @@ static char *ll_read_opt(const char *opt, char *data)
         
         memcpy(retval, value, strlen(value)+1);
         CDEBUG(D_PSDEV, "Assigned option: %s, value %s\n", opt, retval);
+	EXIT;
         return retval;
 }
 
 static void ll_options(char *options, char **dev, char **vers)
 {
         char *this_char;
+	ENTRY; 
 
-        if (!options)
+        if (!options) { 
+		EXIT;
                 return;
+	}
 
         for (this_char = strtok (options, ",");
              this_char != NULL;
@@ -83,6 +91,7 @@ static void ll_options(char *options, char **dev, char **vers)
                         continue;
                 
         }
+	EXIT;
 }
 
 static struct super_block * ll_read_super(struct super_block *sb, 
@@ -103,12 +112,16 @@ static struct super_block * ll_read_super(struct super_block *sb,
 
         memset(sbi, 0, sizeof(*sbi));
 
+	printk(__FUNCTION__ "line %d\n", __LINE__); 
+
         ll_options(data, &device, &version);
+	printk(__FUNCTION__ "line %d\n", __LINE__); 
         if ( !device ) {
                 printk(__FUNCTION__ ": no device\n");
 		sb = NULL; 
                 goto ERR;
         }
+	printk(__FUNCTION__ "line %d\n", __LINE__); 
 
 	devno = simple_strtoul(device, NULL, 0);
         if ( devno >= MAX_OBD_DEVICES ) {
@@ -116,6 +129,7 @@ static struct super_block * ll_read_super(struct super_block *sb,
 		sb = NULL; 
                 goto ERR;
         } 
+	printk(__FUNCTION__ "line %d\n", __LINE__); 
 
         sbi->ll_conn.oc_dev = &obd_dev[devno];
         err = obd_connect(&sbi->ll_conn);
@@ -124,11 +138,14 @@ static struct super_block * ll_read_super(struct super_block *sb,
 		sb = NULL; 
                 goto ERR;
         }
+	printk(__FUNCTION__ "line %d\n", __LINE__); 
 	connected = 1;
 
+	printk(__FUNCTION__ "line %d\n", __LINE__); 
 	err = kportal_uuid_to_peer("mds", &sbi->ll_peer);
 	if (err == 0)
 		sbi->ll_peer_ptr = &sbi->ll_peer;
+	printk(__FUNCTION__ "line %d\n", __LINE__); 
 
         sbi->ll_super = sb;
 	sbi->ll_rootino = 2;
@@ -138,16 +155,19 @@ static struct super_block * ll_read_super(struct super_block *sb,
         sb->s_blocksize_bits = (unsigned char)PAGE_SHIFT;
         sb->s_magic = LL_SUPER_MAGIC;
         sb->s_op = &ll_super_operations;
+	printk(__FUNCTION__ "line %d\n", __LINE__); 
 
         /* make root inode */
 	err = mdc_getattr(sbi->ll_peer_ptr, sbi->ll_rootino, S_IFDIR, 
 			  OBD_MD_FLNOTOBD|OBD_MD_FLBLOCKS, 
 			  &rep, &hdr);
+	printk(__FUNCTION__ "line %d\n", __LINE__); 
         if (err) {
                 printk(__FUNCTION__ ": mds_getattr failed for root %d\n", err);
 		sb = NULL; 
                 goto ERR;
         }
+	printk(__FUNCTION__ "line %d\n", __LINE__); 
                          
         root = iget4(sb, sbi->ll_rootino, NULL, rep);
         if (root) {
@@ -157,6 +177,7 @@ static struct super_block * ll_read_super(struct super_block *sb,
 	    sb = NULL; 
             goto ERR;
         } 
+	printk(__FUNCTION__ "line %d\n", __LINE__); 
         
 ERR:
 	if (hdr)

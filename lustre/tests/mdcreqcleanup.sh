@@ -17,6 +17,6 @@ setup tcp localhost 1234
 disconnect self
 disconnect mds
 EOF
-rmmod ksocknal
 killall acceptor
+rmmod ksocknal
 rmmod portals

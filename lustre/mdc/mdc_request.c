@@ -79,6 +79,7 @@ static int mds_queue_wait(struct ptlrpc_request *req, struct lustre_peer *peer)
 	/* XXX fix the race here (wait_for_event?)*/
 	if (peer == NULL) {
 		/* Local delivery */
+		printk("--->> %s %d\n", __FUNCTION__, __LINE__);
 		rc = mds_queue_req(req); 
 	} else {
 		/* Remote delivery via portals. */

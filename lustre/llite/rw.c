@@ -269,7 +269,7 @@ int ll_dir_readpage(struct file *file, struct page *page)
 	buf = kmap(page);
         rc = mdc_readpage(sbi->ll_peer_ptr, inode->i_ino, S_IFDIR, offset, buf,
 			  NULL, &hdr);
-	kunmap(buff); 
+	kunmap(page); 
         if ( rc ) {
 		EXIT; 
 		goto readpage_out;
