@@ -199,6 +199,10 @@ static int mdc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                 /* Invalidate all dentries associated with this inode */
                 struct inode *inode = data;
 
+#warning "FIXME: what tells us that 'inode' is valid at all?"
+                if (!(inode->i_state & I_FREEING))
+                        break;
+
                 LASSERT(inode != NULL);
                 LASSERT(data_len == sizeof(*inode));
 
@@ -209,7 +213,8 @@ static int mdc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                         ll_invalidate_inode_pages(inode);
                 }
 
-                if ( inode != inode->i_sb->s_root->d_inode ) { 
+                if ( inode != inode->i_sb->s_root->d_inode ) {
+                        /* XXX should this igrab move up 12 lines? */
                         LASSERT(igrab(inode) == inode);
                         d_delete_aliases(inode);
                         iput(inode);
