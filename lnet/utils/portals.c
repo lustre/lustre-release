@@ -227,8 +227,9 @@ ptl_ipaddr_2_str (__u32 ipaddr, char *str)
 int
 ptl_parse_nid (ptl_nid_t *nidp, char *str)
 {
-        __u32 ipaddr;
-        long  lval;
+        __u32               ipaddr;
+        char               *end;
+        unsigned long long  ullval;
         
         if (!strcmp (str, "_all_")) {
                 *nidp = PTL_NID_ANY;
@@ -240,15 +241,10 @@ ptl_parse_nid (ptl_nid_t *nidp, char *str)
                 return (0);
         }
 
-        if (sscanf (str, "%li", &lval) == 1)
-        {
-                *nidp = (ptl_nid_t)lval;
-                return (0);
-        }
-
-        if (sscanf (str, "%lx", &lval) == 1)
-        {
-                *nidp = (ptl_nid_t)lval;
+        ullval = strtoull(str, &end, 0);
+        if (*end == 0) {
+                /* parsed whole string */
+                *nidp = (ptl_nid_t)ullval;
                 return (0);
         }
 
@@ -297,9 +293,13 @@ int g_nal_is_compatible (char *cmd, ...)
         
         if (g_nal == nal)
                 return (1);
-        
-        fprintf (stderr, "Command %s not compatible with nal %s\n",
-                 cmd, nal2name (g_nal));
+
+        if (cmd != NULL) {
+                /* Don't complain verbosely if we've not been passed a command
+                 * name to complain about! */
+                fprintf (stderr, "Command %s not compatible with nal %s\n",
+                         cmd, nal2name (g_nal));
+        }
         return (0);
 }
 
@@ -841,8 +841,8 @@ int jt_ptl_disconnect(int argc, char **argv)
                 return 0;
         }
 
-        if (!g_nal_is_compatible (argv[0], SOCKNAL, TOENAL, 0))
-                return -1;
+        if (!g_nal_is_compatible (NULL, SOCKNAL, TOENAL, 0))
+                return 0;
 
         if (argc >= 2 &&
             ptl_parse_nid (&nid, argv[1]) != 0) {
