@@ -7,16 +7,20 @@
 #include <sys/mman.h>
 
 // not correctly in the headers yet!!
+#ifndef O_DIRECT
 #define O_DIRECT	 040000	/* direct disk access hint */
+#endif
+
+#define BLOCKSIZE 4096
 
 int main(int argc, char **argv)
 {
         int fd;
         char *buf;
         int pages;
-        int rc; 
+        int rc;
 
-        if (argc != 3) { 
+        if (argc != 3) {
                 printf("Usage: %s file nr_pages\n", argv[0]);
                 return 1;
         }
@@ -24,32 +28,32 @@ int main(int argc, char **argv)
         pages = strtoul(argv[2], 0, 0);
         printf("directio on %s for %d pages \n", argv[1], pages);
 
-        buf = mmap(0, pages * 4096, PROT_READ|PROT_WRITE, 
+        buf = mmap(0, pages * BLOCKSIZE, PROT_READ|PROT_WRITE,
                    MAP_PRIVATE|MAP_ANON, 0, 0);
-        if (!buf) { 
+        if (!buf) {
                 printf("No memory %s\n", strerror(errno));
                 return 1;
         }
 
         fd = open(argv[1], O_DIRECT | O_RDWR | O_CREAT);
-        if (fd == -1) { 
+        if (fd == -1) {
                 printf("Cannot open %s:  %s\n", argv[1], strerror(errno));
                 return 1;
         }
 
-        rc = read(fd, buf, pages * 4096); 
-        if (rc != pages * 4096) { 
+        rc = read(fd, buf, pages * BLOCKSIZE);
+        if (rc != pages * BLOCKSIZE) {
                 printf("Read error: %s, rc %d\n", strerror(errno), rc);
                 return 1;
         }
 
-        if ( lseek(fd, 0, SEEK_SET) != 0 ) { 
+        if ( lseek(fd, 0, SEEK_SET) != 0 ) {
                 printf("Cannot seek %s\n", strerror(errno));
                 return 1;
         }
 
-        rc = write(fd, buf, pages * 4096); 
-        if (rc != pages * 4096) { 
+        rc = write(fd, buf, pages * BLOCKSIZE);
+        if (rc != pages * BLOCKSIZE) {
                 printf("Write error %s\n", strerror(errno));
                 return 1;
         }
