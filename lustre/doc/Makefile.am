@@ -9,9 +9,14 @@ SUFFIXES = .lyx .pdf .sgml .html .txt .fig .eps
 
 DOCS = master.pdf lustre-HOWTO.txt
 IMAGES = bigpicture.eps intermezzo.eps mds.eps portals-lib.eps client.eps layering.eps metadata.eps sb.eps cow.eps lockacq.eps obdfs.eps snapsetup.eps dirbodyapi.eps loraid.eps ost.eps updates.eps hotmigrate.eps lustreclusters.eps osthw.eps portals-lib.eps
-CLEANFILES = $(IMAGES) $(DOCS)
+LYXFILES = fs.lyx        llocks.lyx            master.lyx     network.lyx\
+	glossary.lyx  lustre-HOWTO.lyx      mgmt.lyx       obdspec.lyx\
+	intro.lyx     lustre-debugging.lyx  namespace.lyx
 
-EXTRA_DIST = $(DOCS)
+
+MAINTAINERCLEANFILES = $(IMAGES) $(DOCS)
+
+EXTRA_DIST = $(DOCS) $(IMAGES) $(LYXFILES)
 
 all: $(DOCS)
 
