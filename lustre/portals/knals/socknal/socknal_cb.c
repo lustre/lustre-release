@@ -1677,6 +1677,8 @@ int ksocknal_scheduler (void *arg)
         kportal_daemonize (name);
         kportal_blockallsigs ();
 
+        current->flags |= PF_MEMALLOC;
+
 #if (CONFIG_SMP && CPU_AFFINITY)
         if ((cpu_online_map & (1 << id)) != 0) {
 #if 1
