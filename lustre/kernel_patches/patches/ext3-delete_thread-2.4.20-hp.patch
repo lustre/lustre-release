@@ -437,22 +437,6 @@ Index: linux/fs/ext3/file.c
  	setattr:	ext3_setattr,		/* BKL held */
  	setxattr:	ext3_setxattr,		/* BKL held */
  	getxattr:	ext3_getxattr,		/* BKL held */
-Index: linux/fs/buffer.c
-===================================================================
---- linux.orig/fs/buffer.c	Mon Feb  2 20:57:35 2004
-+++ linux/fs/buffer.c	Mon Feb  2 20:58:05 2004
-@@ -373,9 +373,9 @@
- 	lock_super(sb);
- 	if (sb->s_dirt && sb->s_op && sb->s_op->write_super)
- 		sb->s_op->write_super(sb);
--	if (sb->s_op && sb->s_op->sync_fs)
--		sb->s_op->sync_fs(sb);
- 	unlock_super(sb);
-+	if (sb->s_op && sb->s_op->sync_fs)
-+		sb->s_op->sync_fs(sb);
- 	unlock_kernel();
- 
- 	return sync_buffers(dev, 1);
 Index: linux/include/linux/ext3_fs.h
 ===================================================================
 --- linux.orig/include/linux/ext3_fs.h	Mon Feb  2 20:57:35 2004
