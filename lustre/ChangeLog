@@ -21,6 +21,7 @@ tbd
 	- exit early from mds_open if we get a lookup error (1749)
 	- partial page read at EOF wouldn't wait for disk before sending (1642)
 	- avoid NULL deref in obdfilter when reading page past EOF (1592)
+	- bug 56: POSIX utime.4 -EPERM on FIFO not owned by user
 
 2003-06-15  Phil Schwan  <phil@clusterfs.com>
        * version v0_7
