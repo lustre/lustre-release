@@ -129,13 +129,13 @@ int pingsrv_thread(void *arg)
                 server->mdout.length    = server->evnt.rlength;
                 server->mdout.start     = server->in_buf;
                 server->mdout.threshold = 1; 
-                server->mdout.options   = PTL_MD_OP_PUT;
+                server->mdout.options   = PTL_MD_EVENT_START_DISABLE | PTL_MD_OP_PUT;
                 server->mdout.user_ptr  = NULL;
                 server->mdout.eventq    = PTL_EQ_NONE;
        
                 /* Bind the outgoing buffer */
                 if ((rc = PtlMDBind (server->ni, server->mdout, 
-                                                &server->mdout_h))) {
+                                     PTL_UNLINK, &server->mdout_h))) {
                          PDEBUG ("PtlMDBind", rc);
                          pingsrv_shutdown (1);
                          return 1;
@@ -145,7 +145,7 @@ int pingsrv_thread(void *arg)
                 server->mdin.start     = server->in_buf;
                 server->mdin.length    = MAXSIZE;
                 server->mdin.threshold = 1; 
-                server->mdin.options   = PTL_MD_OP_PUT;
+                server->mdin.options   = PTL_MD_EVENT_START_DISABLE | PTL_MD_OP_PUT;
                 server->mdin.user_ptr  = NULL;
                 server->mdin.eventq    = server->eq;
         
@@ -245,7 +245,7 @@ static struct pingsrv_data *pingsrv_setup(void)
         server->mdin.start     = server->in_buf;
         server->mdin.length    = MAXSIZE;
         server->mdin.threshold = 1; 
-        server->mdin.options   = PTL_MD_OP_PUT;
+        server->mdin.options   = PTL_MD_EVENT_START_DISABLE | PTL_MD_OP_PUT;
         server->mdin.user_ptr  = NULL;
         server->mdin.eventq    = server->eq;
         memset (server->in_buf, 0, STDSIZE);
