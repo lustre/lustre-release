@@ -295,6 +295,9 @@ do {                                                                          \
         }                                                                     \
 } while (0)
 
+/* I hate hate hate hate hate this.  This cannot stay.  bug 850. -phil */
+#define LDLM_DEBUG0(lock, format) __LDLM_DEBUG(D_DLMTRACE, lock, format"%s","")
+
 #define LDLM_DEBUG(lock, format, a...) __LDLM_DEBUG(D_DLMTRACE, lock, format, a)
 #define LDLM_ERROR(lock, format, a...) __LDLM_DEBUG(D_ERROR, lock, format, a)
 

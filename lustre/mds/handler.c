@@ -481,14 +481,14 @@ int mds_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                 struct lustre_handle lockh;
                 int rc;
 
-                LDLM_DEBUG(lock, "already unused, calling ldlm_cli_cancel");
+                LDLM_DEBUG0(lock, "already unused, calling ldlm_cli_cancel");
                 ldlm_lock2handle(lock, &lockh);
                 rc = ldlm_cli_cancel(&lockh);
                 if (rc < 0)
                         CERROR("ldlm_cli_cancel: %d\n", rc);
         } else {
-                LDLM_DEBUG(lock, "Lock still has references, will be "
-                           "cancelled later");
+                LDLM_DEBUG0(lock, "Lock still has references, will be "
+                            "cancelled later");
         }
         RETURN(0);
 }
@@ -1691,7 +1691,7 @@ static int ldlm_intent_policy(struct ldlm_namespace *ns,
                 }
 
                 if (flags & LDLM_FL_INTENT_ONLY) {
-                        LDLM_DEBUG(lock, "INTENT_ONLY, aborting lock");
+                        LDLM_DEBUG0(lock, "INTENT_ONLY, aborting lock");
                         RETURN(ELDLM_LOCK_ABORTED);
                 }
 

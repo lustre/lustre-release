@@ -170,7 +170,7 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
                sizeof(body->lock_handle1));
         memcpy(&body->lock_desc, desc, sizeof(*desc));
 
-        LDLM_DEBUG(lock, "server preparing blocking AST");
+        LDLM_DEBUG0(lock, "server preparing blocking AST");
         req->rq_replen = lustre_msg_size(0, NULL);
 
         ldlm_add_waiting_lock(lock);
@@ -220,7 +220,7 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
         body->lock_flags = flags;
         ldlm_lock2desc(lock, &body->lock_desc);
 
-        LDLM_DEBUG(lock, "server preparing completion AST");
+        LDLM_DEBUG0(lock, "server preparing completion AST");
         req->rq_replen = lustre_msg_size(0, NULL);
 
         req->rq_level = LUSTRE_CONN_RECOVD;
@@ -291,7 +291,7 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req,
 
         memcpy(&lock->l_remote_handle, &dlm_req->lock_handle1,
                sizeof(lock->l_remote_handle));
-        LDLM_DEBUG(lock, "server-side enqueue handler, new lock created");
+        LDLM_DEBUG0(lock, "server-side enqueue handler, new lock created");
 
         LASSERT(req->rq_export);
         lock->l_export = req->rq_export;
@@ -358,7 +358,7 @@ int ldlm_handle_convert(struct ptlrpc_request *req)
         if (!lock) {
                 req->rq_status = EINVAL;
         } else {
-                LDLM_DEBUG(lock, "server-side convert handler START");
+                LDLM_DEBUG0(lock, "server-side convert handler START");
                 ldlm_lock_convert(lock, dlm_req->lock_desc.l_req_mode,
                                   &dlm_rep->lock_flags);
                 if (ldlm_del_waiting_lock(lock))
@@ -368,7 +368,7 @@ int ldlm_handle_convert(struct ptlrpc_request *req)
 
         if (lock) {
                 ldlm_reprocess_all(lock->l_resource);
-                LDLM_DEBUG(lock, "server-side convert handler END");
+                LDLM_DEBUG0(lock, "server-side convert handler END");
                 LDLM_LOCK_PUT(lock);
         } else
                 LDLM_DEBUG_NOLOCK("server-side convert handler END");
@@ -403,7 +403,7 @@ int ldlm_handle_cancel(struct ptlrpc_request *req)
                                   dlm_req->lock_handle1.cookie);
                 req->rq_status = ESTALE;
         } else {
-                LDLM_DEBUG(lock, "server-side cancel handler START");
+                LDLM_DEBUG0(lock, "server-side cancel handler START");
                 ldlm_lock_cancel(lock);
                 if (ldlm_del_waiting_lock(lock))
                         CDEBUG(D_DLMTRACE, "cancelled waiting lock %p\n", lock);
@@ -415,7 +415,7 @@ int ldlm_handle_cancel(struct ptlrpc_request *req)
 
         if (lock) {
                 ldlm_reprocess_all(lock->l_resource);
-                LDLM_DEBUG(lock, "server-side cancel handler END");
+                LDLM_DEBUG0(lock, "server-side cancel handler END");
                 LDLM_LOCK_PUT(lock);
         }
 
@@ -444,7 +444,7 @@ static int ldlm_handle_bl_callback(struct ptlrpc_request *req,
                 RETURN(-EINVAL);
         }
 
-        LDLM_DEBUG(lock, "client blocking AST callback handler START");
+        LDLM_DEBUG0(lock, "client blocking AST callback handler START");
 
         l_lock(&lock->l_resource->lr_namespace->ns_lock);
         lock->l_flags |= LDLM_FL_CBPENDING;
@@ -459,10 +459,10 @@ static int ldlm_handle_bl_callback(struct ptlrpc_request *req,
                                              lock->l_data, LDLM_CB_BLOCKING);
                 }
         } else
-                LDLM_DEBUG(lock, "Lock still has references, will be"
-                           " cancelled later");
+                LDLM_DEBUG0(lock, "Lock still has references, will be"
+                            " cancelled later");
 
-        LDLM_DEBUG(lock, "client blocking callback handler END");
+        LDLM_DEBUG0(lock, "client blocking callback handler END");
         LDLM_LOCK_PUT(lock);
         RETURN(0);
 }
@@ -486,7 +486,7 @@ static int ldlm_handle_cp_callback(struct ptlrpc_request *req,
                 RETURN(-EINVAL);
         }
 
-        LDLM_DEBUG(lock, "client completion callback handler START");
+        LDLM_DEBUG0(lock, "client completion callback handler START");
 
         l_lock(&ns->ns_lock);
 
@@ -494,7 +494,7 @@ static int ldlm_handle_cp_callback(struct ptlrpc_request *req,
          * then we might need to switch lock modes, resources, or extents. */
         if (dlm_req->lock_desc.l_granted_mode != lock->l_req_mode) {
                 lock->l_req_mode = dlm_req->lock_desc.l_granted_mode;
-                LDLM_DEBUG(lock, "completion AST, new lock mode");
+                LDLM_DEBUG0(lock, "completion AST, new lock mode");
         }
         if (lock->l_resource->lr_type == LDLM_EXTENT)
                 memcpy(&lock->l_extent, &dlm_req->lock_desc.l_extent,
@@ -505,13 +505,13 @@ static int ldlm_handle_cp_callback(struct ptlrpc_request *req,
                    sizeof(lock->l_resource->lr_name)) != 0) {
                 ldlm_lock_change_resource(ns, lock,
                                          dlm_req->lock_desc.l_resource.lr_name);
-                LDLM_DEBUG(lock, "completion AST, new resource");
+                LDLM_DEBUG0(lock, "completion AST, new resource");
         }
         lock->l_resource->lr_tmp = &ast_list;
         ldlm_grant_lock(lock, req, sizeof(*req));
         lock->l_resource->lr_tmp = NULL;
         l_unlock(&ns->ns_lock);
-        LDLM_DEBUG(lock, "callback handler finished, about to run_ast_work");
+        LDLM_DEBUG0(lock, "callback handler finished, about to run_ast_work");
         LDLM_LOCK_PUT(lock);
 
         ldlm_run_ast_work(&ast_list);

@@ -193,8 +193,8 @@ static void cleanup_resource(struct ldlm_resource *res, struct list_head *q,
                         if (local_only || rc != ELDLM_OK)
                                 ldlm_lock_cancel(lock);
                 } else {
-                        LDLM_DEBUG(lock, "Freeing a lock still held by a "
-                                   "client node");
+                        LDLM_DEBUG0(lock, "Freeing a lock still held by a "
+                                    "client node");
 
                         ldlm_resource_unlink_lock(lock);
                         ldlm_lock_destroy(lock);

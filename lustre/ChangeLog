@@ -1,4 +1,4 @@
-TBD
+2003-02-11  Phil Schwan  <phil@clusterfs.com>
 	* version v0_5_20
 	* bug fixes
 	 - Fix ldlm_lock_match on the MDS to avoid matching remote locks (592)

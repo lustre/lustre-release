@@ -136,7 +136,7 @@ void ldlm_lock_put(struct ldlm_lock *lock)
 
         if (atomic_dec_and_test(&lock->l_refc)) {
                 l_lock(&ns->ns_lock);
-                LDLM_DEBUG(lock, "final lock_put on destroyed lock, freeing");
+                LDLM_DEBUG0(lock, "final lock_put on destroyed lock, freeing");
                 LASSERT(lock->l_destroyed);
                 LASSERT(list_empty(&lock->l_res_link));
 
@@ -479,7 +479,7 @@ void ldlm_lock_decref_internal(struct ldlm_lock *lock, __u32 mode)
                         CERROR("FL_CBPENDING set on non-local lock--just a "
                                "warning\n");
 
-                LDLM_DEBUG(lock, "final decref done on cbpending lock");
+                LDLM_DEBUG0(lock, "final decref done on cbpending lock");
                 l_unlock(&ns->ns_lock);
 
                 /* FIXME: need a real 'desc' here */
@@ -710,7 +710,7 @@ int ldlm_lock_match(struct ldlm_namespace *ns, int flags,
                         lock->l_completion_ast(lock, LDLM_FL_WAIT_NOREPROC, NULL);
         }
         if (rc)
-                LDLM_DEBUG(lock, "matched");
+                LDLM_DEBUG0(lock, "matched");
         else
                 LDLM_DEBUG_NOLOCK("not matched");
 
@@ -974,7 +974,7 @@ void ldlm_cancel_callback(struct ldlm_lock *lock)
                         lock->l_blocking_ast(lock, NULL, lock->l_data,
                                              LDLM_CB_CANCELING);
                 else
-                        LDLM_DEBUG(lock, "no blocking ast");
+                        LDLM_DEBUG0(lock, "no blocking ast");
         }
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
 }
@@ -994,7 +994,7 @@ void ldlm_lock_cancel(struct ldlm_lock *lock)
         /* Please do not, no matter how tempting, remove this LBUG without
          * talking to me first. -phik */
         if (lock->l_readers || lock->l_writers) {
-                LDLM_DEBUG(lock, "lock still has references");
+                LDLM_DEBUG0(lock, "lock still has references");
                 ldlm_lock_dump(D_OTHER, lock);
                 LBUG();
         }

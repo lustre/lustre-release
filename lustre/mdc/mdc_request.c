@@ -417,7 +417,7 @@ int mdc_enqueue(struct lustre_handle *conn, int lock_type,
                 /* The server almost certainly gave us a lock other than the
                  * one that we asked for.  If we already have a matching lock,
                  * then cancel this one--we don't need two. */
-                LDLM_DEBUG(lock, "matching against this");
+                LDLM_DEBUG0(lock, "matching against this");
 
                 memcpy(&lockh2, lockh, sizeof(lockh2));
                 if (ldlm_lock_match(NULL, LDLM_FL_BLOCK_GRANTED, NULL,
