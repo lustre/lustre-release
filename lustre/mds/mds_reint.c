@@ -85,6 +85,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, struct ptlrpc_reques
 */
 static inline void mds_store_objid(struct inode *inode, __u64 *id)
 {
+        /* FIXME: it is only by luck that this works on ext3 */
 	memcpy(&inode->u.ext2_i.i_data, id, sizeof(*id));
 }
 
