@@ -97,7 +97,7 @@ static int lprocfs_mds_wr_config_update(struct file *file, const char *buffer,
 }
 
 static int lprocfs_rd_last_fid(char *page, char **start, off_t off,
-                               unsigned long count, int *eof, void *data)
+                               int count, int *eof, void *data)
 {
         struct obd_device *obd = (struct obd_device *)data;
         struct mds_obd *mds = &obd->u.mds;
@@ -112,13 +112,13 @@ static int lprocfs_rd_last_fid(char *page, char **start, off_t off,
 }
 
 static int lprocfs_rd_group(char *page, char **start, off_t off,
-                            unsigned long count, int *eof, void *data)
+                            int count, int *eof, void *data)
 {
         struct obd_device *obd = (struct obd_device *)data;
         struct mds_obd *mds = &obd->u.mds;
 
         *eof = 1;
-        return snprintf(page, count, LPD64"\n", mds->mds_num);
+        return snprintf(page, count, "%lu\n", (unsigned long)mds->mds_num);
 }
 
 struct lprocfs_vars lprocfs_mds_obd_vars[] = {
