@@ -146,7 +146,7 @@ int client_import_disconnect(struct lustre_handle *dlm_handle, int failover)
         if (obd->obd_namespace != NULL) {
                 /* obd_no_recov == local only */
                 ldlm_cli_cancel_unused(obd->obd_namespace, NULL,
-                                       obd->obd_no_recov);
+                                       obd->obd_no_recov, NULL);
                 ldlm_namespace_free(obd->obd_namespace);
                 obd->obd_namespace = NULL;
         }

@@ -30,25 +30,25 @@ do {							\
 
 #define CHECK_MEMBER_OFFSET(s,m)		\
 do {						\
-	CHECK_VALUE (offsetof (s, m));	\
+	CHECK_VALUE(offsetof(s, m));	        \
 } while (0)
 
-#define CHECK_MEMBER_SIZEOF(s,m)			\
-do {							\
-	CHECK_VALUE (sizeof (((s *)0)->m));	\
+#define CHECK_MEMBER_SIZEOF(s,m)		\
+do {						\
+	CHECK_VALUE((int)sizeof(((s *)0)->m));	\
 } while (0)
 
 #define CHECK_MEMBER(s,m)			\
 do {						\
-	CHECK_MEMBER_OFFSET (s, m);		\
-	CHECK_MEMBER_SIZEOF (s, m);		\
+	CHECK_MEMBER_OFFSET(s, m);		\
+	CHECK_MEMBER_SIZEOF(s, m);		\
 } while (0)
 
 #define CHECK_STRUCT(s)                         \
 do {                                            \
-        BLANK_LINE ();                           \
+        BLANK_LINE ();                          \
         COMMENT ("Checks for struct "#s);       \
-	CHECK_VALUE (sizeof (s));               \
+	CHECK_VALUE((int)sizeof(s));            \
 } while (0)
 
 void
