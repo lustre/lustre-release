@@ -1,6 +1,0 @@
-MODULES := snapfs
-snapfs-objs := cache.o clonefs.o dcache.o dir.o dotsnap.o file.o
-snapfs-objs += filter.o inode.o journal_ext3.o psdev.o
-snapfs-objs += snap.o snaptable.o super.o symlink.o sysctl.o options.o
-
-@INCLUDE_RULES@
