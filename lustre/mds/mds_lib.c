@@ -49,12 +49,19 @@
 #include <linux/lustre_lib.h>
 #include <linux/lustre_mds.h>
 
-void mds_pack_dentry2fid(struct ll_fid *fid,
-                                struct dentry *dentry)
+void mds_pack_dentry2fid(struct ll_fid *fid, struct dentry *dentry)
 {
         fid->id = dentry->d_inum;
         fid->generation = dentry->d_generation;
         fid->mds = dentry->d_mdsnum;
+}
+
+void mds_pack_dentry2body(struct mds_body *b, struct dentry *dentry)
+{
+        b->valid |= OBD_MD_FLID | OBD_MD_FLGENER;
+        b->ino = dentry->d_inum;
+        b->generation = dentry->d_generation;
+        b->mds = dentry->d_mdsnum;
 }
 
 void mds_pack_inode2fid(struct obd_device *obd, struct ll_fid *fid,

@@ -124,6 +124,7 @@ int mds_get_md(struct obd_device *, struct inode *, void *md, int *size,
 int mds_pack_md(struct obd_device *, struct lustre_msg *, int offset,
                 struct mds_body *, struct inode *, int lock);
 void mds_pack_dentry2fid(struct ll_fid *, struct dentry *);
+void mds_pack_dentry2body(struct mds_body *b, struct dentry *dentry);
 void mds_pack_inode2fid(struct obd_device *, struct ll_fid *, struct inode *);
 void mds_pack_inode2body(struct obd_device *, struct mds_body *, struct inode *);
 #endif
