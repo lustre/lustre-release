@@ -396,98 +396,6 @@ void ll_clear_inode(struct inode *inode)
         EXIT;
 }
 
-/* like inode_setattr, but doesn't mark the inode dirty */
-int ll_attr2inode(struct inode *inode, struct iattr *attr, int trunc)
-{
-        unsigned int ia_valid = attr->ia_valid;
-        int error = 0;
-
-        if ((ia_valid & ATTR_SIZE) && trunc) {
-                if (attr->ia_size > ll_file_maxbytes(inode)) {
-                        error = -EFBIG;
-                        goto out;
-                }
-                error = vmtruncate(inode, attr->ia_size);
-                if (error)
-                        goto out;
-        } else if (ia_valid & ATTR_SIZE)
-                inode->i_size = attr->ia_size;
-
-        if (ia_valid & ATTR_UID)
-                inode->i_uid = attr->ia_uid;
-        if (ia_valid & ATTR_GID)
-                inode->i_gid = attr->ia_gid;
-        if (ia_valid & ATTR_ATIME)
-                inode->i_atime = attr->ia_atime;
-        if (ia_valid & ATTR_MTIME)
-                inode->i_mtime = attr->ia_mtime;
-        if (ia_valid & ATTR_CTIME)
-                inode->i_ctime = attr->ia_ctime;
-        if (ia_valid & ATTR_MODE) {
-                inode->i_mode = attr->ia_mode;
-                if (!in_group_p(inode->i_gid) && !capable(CAP_FSETID))
-                        inode->i_mode &= ~S_ISGID;
-        }
-out:
-        return error;
-}
-
-int ll_inode_setattr(struct inode *inode, struct iattr *attr, int do_trunc)
-{
-        struct ptlrpc_request *request = NULL;
-        struct ll_sb_info *sbi = ll_i2sbi(inode);
-        int err = 0;
-        ENTRY;
-
-        /* change incore inode */
-        err = ll_attr2inode(inode, attr, do_trunc);
-        if (err)
-                RETURN(err);
-
-        /* Don't send size changes to MDS to avoid "fast EA" problems, and
-         * also avoid a pointless RPC (we get file size from OST anyways).
-         */
-        attr->ia_valid &= ~ATTR_SIZE;
-        if (attr->ia_valid) {
-                struct mdc_op_data op_data;
-
-                ll_prepare_mdc_op_data(&op_data, inode, NULL, NULL, 0, 0);
-                err = mdc_setattr(&sbi->ll_mdc_conn, &op_data,
-                                  attr, NULL, 0, NULL, 0, &request);
-                if (err)
-                        CERROR("mdc_setattr fails: err = %d\n", err);
-
-                ptlrpc_req_finished(request);
-                if (S_ISREG(inode->i_mode) && attr->ia_valid & ATTR_MTIME_SET) {
-                        struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
-                        struct obdo oa;
-                        int err2;
-
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-                        CDEBUG(D_INODE, "set mtime on OST inode %lu to %lu\n",
-                               inode->i_ino, attr->ia_mtime);
-                        oa.o_mtime = attr->ia_mtime;
-#else
-                        CDEBUG(D_INODE, "set mtime on OST inode %lu to "
-                               LPU64"\n", inode->i_ino, 
-                               ll_ts2u64(&attr->ia_mtime));
-                        oa.o_mtime = ll_ts2u64(&attr->ia_mtime);
-#endif
-                        oa.o_id = lsm->lsm_object_id;
-                        oa.o_mode = S_IFREG;
-                        oa.o_valid = OBD_MD_FLID |OBD_MD_FLTYPE |OBD_MD_FLMTIME;
-                        err2 = obd_setattr(&sbi->ll_osc_conn, &oa, lsm, NULL);
-                        if (err2) {
-                                CERROR("obd_setattr fails: rc=%d\n", err);
-                                if (!err)
-                                        err = err2;
-                        }
-                }
-        }
-
-        RETURN(err);
-}
-
 /* If this inode has objects allocated to it (lsm != NULL), then the OST
  * object(s) determine the file size and mtime.  Otherwise, the MDS will
  * keep these values until such a time that objects are allocated for it.
@@ -664,13 +572,8 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
 
 int ll_setattr(struct dentry *de, struct iattr *attr)
 {
-        int rc = inode_change_ok(de->d_inode, attr);
-        CDEBUG(D_VFSTRACE, "VFS Op:name=%s\n", de->d_name.name);
-        if (rc)
-                return rc;
-
-        lprocfs_counter_incr(ll_i2sbi(de->d_inode)->ll_stats, LPROC_LL_SETATTR);
-        return ll_inode_setattr(de->d_inode, attr, 1);
+        LBUG(); /* code is unused, but leave this in case of VFS changes */
+        RETURN(-ENOSYS);
 }
 
 int ll_statfs_internal(struct super_block *sb, struct obd_statfs *osfs,
