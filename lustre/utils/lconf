@@ -392,7 +392,7 @@ class LCTLInterface:
   device $%s
   cleanup
   detach %s
-  quit""" % (name, ('force', '')[config.force()])
+  quit""" % (name, ('', 'force')[config.force()])
         self.run(cmds)
 
     # create an lov
