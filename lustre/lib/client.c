@@ -137,7 +137,7 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         RETURN(0);
 }
 
-int client_obd_cleanup(struct obd_device *obddev, int force)
+int client_obd_cleanup(struct obd_device *obddev, int force, int failover)
 {
         struct client_obd *obd = &obddev->u.cli;
 
@@ -255,14 +255,14 @@ out_ldlm:
                 obd->obd_namespace = NULL;
 out_disco:
                 cli->cl_conn_count--;
-                class_disconnect(conn);
+                class_disconnect(conn, 0);
         }
 out_sem:
         up(&cli->cl_sem);
         return rc;
 }
 
-int ptlrpc_import_disconnect(struct lustre_handle *conn)
+int ptlrpc_import_disconnect(struct lustre_handle *conn, int failover)
 {
         struct obd_device *obd = class_conn2obd(conn);
         struct client_obd *cli = &obd->u.cli;
@@ -319,7 +319,7 @@ int ptlrpc_import_disconnect(struct lustre_handle *conn)
         if (request)
                 ptlrpc_req_finished(request);
  out_no_disconnect:
-        err = class_disconnect(conn);
+        err = class_disconnect(conn, 0);
         if (!rc && err)
                 rc = err;
  out_sem:
