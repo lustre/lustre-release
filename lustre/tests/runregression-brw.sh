@@ -4,6 +4,13 @@ export PATH=/sbin:/usr/sbin:$PATH
 SRCDIR="`dirname $0`/"
 . $SRCDIR/common.sh
 
+OSCDEV="`device_list 2> /dev/null | awk '/ UP osc / { print $4 }'`"
+
+if [ -z "$OSCDEV" ]; then
+	echo "$0: needs an OSC set up first" 1>&2
+	exit 1
+fi
+
 runthreads() {
 	THR=$1
 	DO=$2
@@ -26,7 +33,7 @@ runthreads() {
 		;;
 	esac
 
-	$OBDCTL --threads $THR v '$OSCDEV' $DO $CNT $RW $V $PGS $OID || exit 1
+	$OBDCTL --threads $THR v \$$OSCDEV $DO $CNT $RW $V $PGS $OID || exit 1
 
 	if [ -e endrun ]; then
 		rm endrun
@@ -35,17 +42,7 @@ runthreads() {
 	fi
 }
 
-if [  -z "`$OBDCTL device_list 2> /dev/null | grep osc`" ]; then
-	setup_opts $@
-
-	setup_portals
-	setup_lustre
-
-	setup_server || exit -1
-	setup_client || exit -1
-fi
-
-[ -z "$OID" ] && OID=`$OBDCTL --device '$OSCDEV' create 1 | awk '/is object id/ { print $6 }'`
+[ -z "$OID" ] && OID=`$OBDCTL --device \$$OSCDEV create 1 | awk '/is object id/ { print $6 }'`
 [ -z "$OID" ] && echo "error creating object" 1>&2 && exit 1
 
 # TODO: obdctl needs to check on the progress of each forked thread
@@ -53,10 +50,7 @@ fi
 while date; do
 	PG=1
 	PGVW=16
-	case $OSTNODE in
-	ba*) PGVR= ;; # disabled until the BA OST code is updated
-	*) PGVR=16 ;;
-	esac
+	PGVR=16
 
 	# We use '--threads 1 X' instead of '--device X' so that
 	# obdctl can monitor the forked thread for progress (TODO).
@@ -116,9 +110,4 @@ while date; do
 	[ "$PGVR" ] && runthreads 100 test_brw_read 100000 -60 $PGVR
 done
 
-$OBDCTL --device '$OSCDEV' destroy $OID
-
-cleanup_client || exit -1
-cleanup_server || exit -1
-cleanup_lustre
-cleanup_portals
+$OBDCTL --device \$$OSCDEV destroy $OID

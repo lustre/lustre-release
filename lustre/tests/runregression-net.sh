@@ -4,10 +4,12 @@ export PATH=/sbin:/usr/sbin:$PATH
 SRCDIR="`dirname $0`/"
 . $SRCDIR/common.sh
 
-setup_opts $@
+OSCDEV="`device_list 2> /dev/null | awk '/ osc | lov / { print $4 }' | tail -1`"
 
-setup_portals
-setup_lustre
+if [ -z "$OSCDEV" ]; then
+	echo "$0: needs an OSC set up first" 1>&2
+	exit 1
+fi
 
 runthreads() {
 	THR=$1
@@ -31,7 +33,7 @@ runthreads() {
 		;;
 	esac
 
-	$OBDCTL --threads $THR v '$OSCDEV' $DO $CNT $RW $V $PGS $OID || exit 1
+	$OBDCTL --threads $THR v \$$OSCDEV $DO $CNT $RW $V $PGS $OID || exit 1
 
 	if [ -e endrun ]; then
 		rm endrun
@@ -40,10 +42,7 @@ runthreads() {
 	fi
 }
 
-setup_server || exit -1
-setup_client || exit -1
-
-OID=`$OBDCTL --device '$OSCDEV' create 1 | awk '/is object id/ { print $6 }'`
+OID=`$OBDCTL --device \$$OSCDEV create 1 | awk '/is object id/ { print $6 }'`
 
 # TODO: obdctl needs to check on the progress of each forked thread
 #       (IPC SHM, sockets?) to see if it hangs.
@@ -80,12 +79,8 @@ for CMD in test_getattr test_brw_write test_brw_read; do
 	runthreads 1 $CMD 1000000 -30 $PG
 	[ "$PGV" ] && runthreads 1 $CMD 100000 -30 $PGV
 
-	debug_server_on
-	debug_client_on
 	runthreads 1 $CMD 100 1 $PG
 
-	debug_server_off
-	debug_client_off
 	runthreads 2 $CMD 10000 100 $PG
 	[ "$PGV" ] && runthreads 2 $CMD 1000 100 $PGV
 
@@ -98,9 +93,4 @@ for CMD in test_getattr test_brw_write test_brw_read; do
 	runthreads 100 $CMD 10000 -30 $PG
 done
 
-$OBDCTL --device '$OSCDEV' destroy $OID
-
-cleanup_client || exit -1
-cleanup_server || exit -1
-cleanup_lustre
-cleanup_portals
+$OBDCTL --device \$$OSCDEV destroy $OID
