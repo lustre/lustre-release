@@ -1,0 +1,755 @@
+--- ./crypto/cipher.c	2004-07-26 12:52:03.000000000 +0100
++++ ./crypto/cipher.c	2004-07-26 12:55:11.000000000 +0100
+@@ -88,12 +88,21 @@ static void scatterwalk_start(struct sca
+ 
+ 	walk->sg = sg;
+ 
++#if SMALL_SCATTERLIST
++	walk->page = sg->u.page.page;
++	walk->len_this_segment = sg->length;
++
++	rest_of_page = PAGE_CACHE_SIZE - (sg->u.page.offset & (PAGE_CACHE_SIZE - 1));
++	walk->len_this_page = min(sg->length, rest_of_page);
++	walk->offset = sg->u.page.offset;
++#else
+ 	walk->page = sg->page;
+ 	walk->len_this_segment = sg->length;
+ 
+ 	rest_of_page = PAGE_CACHE_SIZE - (sg->offset & (PAGE_CACHE_SIZE - 1));
+ 	walk->len_this_page = min(sg->length, rest_of_page);
+ 	walk->offset = sg->offset;
++#endif
+ }
+ 
+ static void scatterwalk_map(struct scatter_walk *walk, int out)
+--- ./crypto/digest.c	2004-07-26 12:52:03.000000000 +0100
++++ ./crypto/digest.c	2004-07-26 12:55:11.000000000 +0100
+@@ -29,7 +29,11 @@ static void update(struct crypto_tfm *tf
+ 	unsigned int i;
+ 	
+ 	for (i = 0; i < nsg; i++) {
++#if SMALL_SCATTERLIST
++		char *p = crypto_kmap(sg[i].u.page.page, 0) + sg[i].u.page.offset;
++#else
+ 		char *p = crypto_kmap(sg[i].page, 0) + sg[i].offset;
++#endif
+ 		tfm->__crt_alg->cra_digest.dia_update(crypto_tfm_ctx(tfm),
+ 		                                      p, sg[i].length);
+ 		crypto_kunmap(p, 0);
+@@ -50,7 +54,11 @@ static void digest(struct crypto_tfm *tf
+ 	tfm->crt_digest.dit_init(tfm);
+ 		
+ 	for (i = 0; i < nsg; i++) {
++#if SMALL_SCATTERLIST
++		char *p = crypto_kmap(sg[i].u.page.page, 0) + sg[i].u.page.offset;
++#else
+ 		char *p = crypto_kmap(sg[i].page, 0) + sg[i].offset;
++#endif
+ 		tfm->__crt_alg->cra_digest.dia_update(crypto_tfm_ctx(tfm),
+ 		                                      p, sg[i].length);
+ 		crypto_kunmap(p, 0);
+--- ./crypto/hmac.c	2004-07-26 12:52:03.000000000 +0100
++++ ./crypto/hmac.c	2004-07-26 12:55:11.000000000 +0100
+@@ -25,8 +25,14 @@ static void hash_key(struct crypto_tfm *
+ {
+ 	struct scatterlist tmp;
+ 	
++#if SMALL_SCATTERLIST
++	tmp.ispaged = 1;
++	tmp.u.page.page = virt_to_page(key);
++	tmp.u.page.offset = ((long)key & ~PAGE_MASK);
++#else
+ 	tmp.page = virt_to_page(key);
+ 	tmp.offset = ((long)key & ~PAGE_MASK);
++#endif
+ 	tmp.length = keylen;
+ 	crypto_digest_digest(tfm, &tmp, 1, key);
+ 		
+@@ -70,8 +76,14 @@ void crypto_hmac_init(struct crypto_tfm 
+ 	for (i = 0; i < crypto_tfm_alg_blocksize(tfm); i++)
+ 		ipad[i] ^= 0x36;
+ 
++#if SMALL_SCATTERLIST
++	tmp.ispaged = 1;
++	tmp.u.page.page = virt_to_page(ipad);
++	tmp.u.page.offset = ((long)ipad & ~PAGE_MASK);
++#else
+ 	tmp.page = virt_to_page(ipad);
+ 	tmp.offset = ((long)ipad & ~PAGE_MASK);
++#endif
+ 	tmp.length = crypto_tfm_alg_blocksize(tfm);
+ 	
+ 	crypto_digest_init(tfm);
+@@ -104,15 +116,27 @@ void crypto_hmac_final(struct crypto_tfm
+ 	for (i = 0; i < crypto_tfm_alg_blocksize(tfm); i++)
+ 		opad[i] ^= 0x5c;
+ 
++#if SMALL_SCATTERLIST
++	tmp.ispaged = 1;
++	tmp.u.page.page = virt_to_page(opad);
++	tmp.u.page.offset = ((long)opad & ~PAGE_MASK);
++#else
+ 	tmp.page = virt_to_page(opad);
+ 	tmp.offset = ((long)opad & ~PAGE_MASK);
++#endif
+ 	tmp.length = crypto_tfm_alg_blocksize(tfm);
+ 
+ 	crypto_digest_init(tfm);
+ 	crypto_digest_update(tfm, &tmp, 1);
+ 	
++#if SMALL_SCATTERLIST
++	tmp.ispaged = 1;
++	tmp.u.page.page = virt_to_page(out);
++	tmp.u.page.offset = ((long)out & ~PAGE_MASK);
++#else
+ 	tmp.page = virt_to_page(out);
+ 	tmp.offset = ((long)out & ~PAGE_MASK);
++#endif
+ 	tmp.length = crypto_tfm_alg_digestsize(tfm);
+ 	
+ 	crypto_digest_update(tfm, &tmp, 1);
+--- ./drivers/ide/ide-dma.c	2004-07-26 12:52:17.000000000 +0100
++++ ./drivers/ide/ide-dma.c	2004-07-26 12:55:11.000000000 +0100
+@@ -281,14 +281,25 @@ static int ide_build_sglist (ide_hwif_t 
+ 		memset(&sg[nents], 0, sizeof(*sg));
+ 
+ 		if (bh->b_page) {
++#if SMALL_SCATTERLIST
++			sg[nents].ispaged = 1;
++			sg[nents].u.page.page = bh->b_page;
++			sg[nents].u.page.offset = bh_offset(bh);
++#else
+ 			sg[nents].page = bh->b_page;
+ 			sg[nents].offset = bh_offset(bh);
++#endif
+ 			lastdataend = bh_phys(bh) + bh->b_size;
+ 		} else {
+ 			if ((unsigned long) bh->b_data < PAGE_SIZE)
+ 				BUG();
+ 
++#if SMALL_SCATTERLIST
++			sg[nents].ispaged = 0;
++			sg[nents].u.address = bh->b_data;
++#else
+ 			sg[nents].address = bh->b_data;
++#endif
+ 			lastdataend = (unsigned long) bh->b_data + bh->b_size;
+ 		}
+ 
+@@ -329,14 +340,24 @@ static int ide_raw_build_sglist (ide_hwi
+ #if 1
+ 	if (sector_count > 128) {
+ 		memset(&sg[nents], 0, sizeof(*sg));
++#if SMALL_SCATTERLIST
++		sg[nents].ispaged = 0;
++		sg[nents].u.address = virt_addr;
++#else
+ 		sg[nents].address = virt_addr;
++#endif
+ 		sg[nents].length = 128  * SECTOR_SIZE;
+ 		nents++;
+ 		virt_addr = virt_addr + (128 * SECTOR_SIZE);
+ 		sector_count -= 128;
+ 	}
+ 	memset(&sg[nents], 0, sizeof(*sg));
++#if SMALL_SCATTERLIST
++	sg[nents].ispaged = 0;
++	sg[nents].u.address = virt_addr;
++#else
+ 	sg[nents].address = virt_addr;
++#endif
+ 	sg[nents].length =  sector_count  * SECTOR_SIZE;
+ 	nents++;
+ #else
+--- ./drivers/scsi/dpt_i2o.c	2004-07-26 12:52:39.000000000 +0100
++++ ./drivers/scsi/dpt_i2o.c	2004-07-26 12:55:11.000000000 +0100
+@@ -2151,7 +2151,13 @@ static s32 adpt_scsi_to_i2o(adpt_hba* pH
+ 		for(i = 0 ; i < cmd->use_sg; i++) {
+ 			*mptr++ = direction|0x10000000|sg->length;
+ 			len+=sg->length;
++#if SMALL_SCATTERLIST
++			if (sg->ispaged)
++			   BUG();
++			*mptr++ = virt_to_bus(sg->u.address);
++#else
+ 			*mptr++ = virt_to_bus(sg->address);
++#endif
+ 			sg++;
+ 		}
+ 		/* Make this an end of list */
+--- ./drivers/scsi/scsi_debug.c	2004-07-26 12:52:40.000000000 +0100
++++ ./drivers/scsi/scsi_debug.c	2004-07-26 12:55:11.000000000 +0100
+@@ -186,7 +186,13 @@ int scsi_debug_queuecommand(Scsi_Cmnd * 
+ 		struct scatterlist *sgpnt = (struct scatterlist *)
+ 						SCpnt->request_buffer;
+ 
++#if SMALL_SCATTERLIST		
++		if (sgpnt[0].ispaged)
++		   BUG();
++		buff = sgpnt[0].u.address;
++#else
+ 		buff = sgpnt[0].address;
++#endif
+ 		bufflen = sgpnt[0].length;
+ 		/* READ and WRITE process scatterlist themselves */
+ 	}
+@@ -672,7 +678,13 @@ static int resp_read(Scsi_Cmnd * SCpnt, 
+ 	if (SCpnt->use_sg) {
+ 		sgcount = 0;
+ 		sgpnt = (struct scatterlist *) buff;
++#if SMALL_SCATTERLIST
++		if (sgpnt[sgcount].ispaged)
++		   BUG();
++		buff = sgpnt[sgcount].u.address;
++#else
+ 		buff = sgpnt[sgcount].address;
++#endif
+ 		bufflen = sgpnt[sgcount].length;
+ 	}
+ 	do {
+@@ -682,7 +694,13 @@ static int resp_read(Scsi_Cmnd * SCpnt, 
+ 			block += bufflen >> POW2_SECT_SIZE;
+ 			sgcount++;
+ 			if (nbytes) {
++#if SMALL_SCATTERLIST
++				if (sgpnt[sgcount].ispaged)
++					BUG();
++				buff = sgpnt[sgcount].u.address;
++#else
+ 				buff = sgpnt[sgcount].address;
++#endif
+ 				bufflen = sgpnt[sgcount].length;
+ 			}
+ 		} else if (nbytes > 0)
+@@ -713,7 +731,13 @@ static int resp_write(Scsi_Cmnd * SCpnt,
+ 	if (SCpnt->use_sg) {
+ 		sgcount = 0;
+ 		sgpnt = (struct scatterlist *) buff;
++#if SMALL_SCATTERLIST
++		if (sgpnt[sgcount].ispaged)
++			BUG();
++		buff = sgpnt[sgcount].u.address;
++#else
+ 		buff = sgpnt[sgcount].address;
++#endif
+ 		bufflen = sgpnt[sgcount].length;
+ 	}
+ 	do {
+@@ -724,7 +748,13 @@ static int resp_write(Scsi_Cmnd * SCpnt,
+ 			block += bufflen >> POW2_SECT_SIZE;
+ 			sgcount++;
+ 			if (nbytes) {
++#if SMALL_SCATTERLIST
++				if (sgpnt[sgcount].ispaged)
++					BUG();
++				buff = sgpnt[sgcount].u.address;
++#else
+ 				buff = sgpnt[sgcount].address;
++#endif
+ 				bufflen = sgpnt[sgcount].length;
+ 			}
+ 		} else if (nbytes > 0)
+--- ./drivers/scsi/scsi_lib.c	2004-07-26 12:52:40.000000000 +0100
++++ ./drivers/scsi/scsi_lib.c	2004-07-26 12:55:11.000000000 +0100
+@@ -549,7 +549,13 @@ static void scsi_release_buffers(Scsi_Cm
+ 		if (bbpnt) {
+ 			for (i = 0; i < SCpnt->use_sg; i++) {
+ 				if (bbpnt[i])
++#if SMALL_SCATTERLIST
++					if (sgpnt[i].ispaged)
++						BUG();
++					scsi_free(sgpnt[i].u.address, sgpnt[i].length);
++#else
+ 					scsi_free(sgpnt[i].address, sgpnt[i].length);
++#endif
+ 			}
+ 		}
+ 		scsi_free(SCpnt->request_buffer, SCpnt->sglist_len);
+@@ -625,12 +631,23 @@ void scsi_io_completion(Scsi_Cmnd * SCpn
+ 		if (bbpnt) {
+ 			for (i = 0; i < SCpnt->use_sg; i++) {
+ 				if (bbpnt[i]) {
++#if SMALL_SCATTERLIST
++					if (sgpnt[i].ispaged)
++						BUG();
++					if (req->cmd == READ) {
++						memcpy(bbpnt[i],
++						       sgpnt[i].u.address,
++						       sgpnt[i].length);
++					}
++					scsi_free(sgpnt[i].u.address, sgpnt[i].length);
++#else
+ 					if (req->cmd == READ) {
+ 						memcpy(bbpnt[i],
+ 						       sgpnt[i].address,
+ 						       sgpnt[i].length);
+ 					}
+ 					scsi_free(sgpnt[i].address, sgpnt[i].length);
++#endif
+ 				}
+ 			}
+ 		}
+--- ./drivers/scsi/scsi_merge.c	2004-07-26 12:52:40.000000000 +0100
++++ ./drivers/scsi/scsi_merge.c	2004-07-26 13:06:01.000000000 +0100
+@@ -144,11 +144,21 @@ static void dma_exhausted(Scsi_Cmnd * SC
+ 	 */
+ 	for(jj=0; jj < SCpnt->use_sg; jj++)
+ 	{
++#if SMALL_SCATTERLIST
++		if (sgpnt[jj].ispaged)
++			BUG();
++		printk("[%d]\tlen:%d\taddr:%p\tbounce:%p\n",
++		       jj,
++		       sgpnt[jj].length,
++		       sgpnt[jj].u.address,
++		       (bbpnt ? bbpnt[jj] : NULL));
++#else
+ 		printk("[%d]\tlen:%d\taddr:%p\tbounce:%p\n",
+ 		       jj,
+ 		       sgpnt[jj].length,
+ 		       sgpnt[jj].address,
+ 		       (bbpnt ? bbpnt[jj] : NULL));
++#endif
+ 		if (bbpnt && bbpnt[jj])
+ 			consumed += sgpnt[jj].length;
+ 	}
+@@ -612,6 +622,9 @@ __inline static int __scsi_merge_request
+ 		max_segments = scsi_max_sg;
+ 
+ #ifdef DMA_CHUNK_SIZE
++# if SMALL_SCATTERLIST
++#  error "This defeats the purpose of SMALL_SCATTERLIST"
++# endif
+ 	if (max_segments > 64)
+ 		max_segments = 64;
+ 
+@@ -929,15 +942,26 @@ __inline static int __init_io(Scsi_Cmnd 
+ 		}
+ 
+ 		if (SCpnt->host->highmem_io) {
++#if SMALL_SCATTERLIST
++			sgpnt[count].ispaged = 1;
++			sgpnt[count].u.page.page = bh->b_page;
++			sgpnt[count].u.page.offset = bh_offset(bh);
++#else
+ 			sgpnt[count].page = bh->b_page;
+ 			sgpnt[count].offset = bh_offset(bh);
+ 			sgpnt[count].address = NULL;
++#endif
+ 		} else {
+ 			if (PageHighMem(bh->b_page))
+ 				BUG();
+ 
++#if SMALL_SCATTERLIST
++			sgpnt[count].ispaged = 0;
++			sgpnt[count].u.address = bh->b_data;
++#else
+ 			sgpnt[count].page = NULL;
+ 			sgpnt[count].address = bh->b_data;
++#endif
+ 		}
+ 		
+ 		sgpnt[count].length = bh->b_size;
+@@ -972,6 +996,50 @@ __inline static int __init_io(Scsi_Cmnd 
+ 		 * only done for dma_host, in which case .page is not
+ 		 * set since it's guarenteed to be a low memory page
+ 		 */
++#if SMALL_SCATTERLIST
++		if (sgpnt[i].ispaged)
++			BUG();
++		if (virt_to_phys(sgpnt[i].u.address) + sgpnt[i].length - 1 >
++		    ISA_DMA_THRESHOLD) {
++			if( scsi_dma_free_sectors - sectors <= 10  ) {
++				/*
++				 * If this would nearly drain the DMA
++				 * pool empty, then let's stop here.
++				 * Don't make this request any larger.
++				 * This is kind of a safety valve that
++				 * we use - we could get screwed later
++				 * on if we run out completely.  
++				 */
++				SCpnt->request_bufflen -= sgpnt[i].length;
++				SCpnt->use_sg = i;
++				if (i == 0) {
++					goto big_trouble;
++				}
++				break;
++			}
++
++			bbpnt[i] = sgpnt[i].u.address;
++			sgpnt[i].u.address =
++			    (char *) scsi_malloc(sgpnt[i].length);
++			/*
++			 * If we cannot allocate memory for this DMA bounce
++			 * buffer, then queue just what we have done so far.
++			 */
++			if (sgpnt[i].u.address == NULL) {
++				printk("Warning - running low on DMA memory\n");
++				SCpnt->request_bufflen -= sgpnt[i].length;
++				SCpnt->use_sg = i;
++				if (i == 0) {
++					goto big_trouble;
++				}
++				break;
++			}
++			if (req->cmd == WRITE) {
++				memcpy(sgpnt[i].u.address, bbpnt[i],
++				       sgpnt[i].length);
++			}
++		}
++#else
+ 		if (virt_to_phys(sgpnt[i].address) + sgpnt[i].length - 1 >
+ 		    ISA_DMA_THRESHOLD) {
+ 			if( scsi_dma_free_sectors - sectors <= 10  ) {
+@@ -1012,6 +1080,7 @@ __inline static int __init_io(Scsi_Cmnd 
+ 				       sgpnt[i].length);
+ 			}
+ 		}
++#endif
+ 	}
+ 	return 1;
+ 
+--- ./drivers/scsi/sg.c	2004-07-26 12:52:40.000000000 +0100
++++ ./drivers/scsi/sg.c	2004-07-26 12:55:12.000000000 +0100
+@@ -1068,7 +1068,11 @@ static void sg_rb_correct4mmap(Sg_scatte
+ 
+         for (k = 0; k < rsv_schp->k_use_sg; ++k, ++sclp) {
+ 	    for (m = PAGE_SIZE; m < sclp->length; m += PAGE_SIZE) {
++#if SMALL_SCATTERLIST
++		page_ptr = (unsigned char *)sclp->u.address + m;
++#else
+ 		page_ptr = (unsigned char *)sclp->address + m;
++#endif
+ 		page = virt_to_page(page_ptr);
+ 		if (startFinish)
+ 		    get_page(page);	/* increment page count */
+@@ -1121,7 +1125,11 @@ static struct page * sg_vma_nopage(struc
+             len = vma->vm_end - sa;
+             len = (len < sclp->length) ? len : sclp->length;
+ 	    if (offset < len) {
++#if SMALL_SCATTERLIST
++		page_ptr = (unsigned char *)sclp->u.address + offset;
++#else
+ 		page_ptr = (unsigned char *)sclp->address + offset;
++#endif
+ 		page = virt_to_page(page_ptr);
+ 		get_page(page);	/* increment page count */
+ 		break;
+@@ -1166,8 +1174,13 @@ static int sg_mmap(struct file * filp, s
+ 
+ 	for (k = 0; (k < rsv_schp->k_use_sg) && (sa < vma->vm_end); 
+ 	     ++k, ++sclp) {
++#if SMALL_SCATTERLIST
++	    if ((unsigned long)sclp->u.address & (PAGE_SIZE - 1))
++	    	return -EFAULT;     /* non page aligned memory ?? */
++#else
+ 	    if ((unsigned long)sclp->address & (PAGE_SIZE - 1))
+ 	    	return -EFAULT;     /* non page aligned memory ?? */
++#endif
+ 	    len = vma->vm_end - sa;
+ 	    len = (len < sclp->length) ? len : sclp->length;
+ 	    sa += len;
+@@ -1716,16 +1729,27 @@ static int sg_build_dir(Sg_request * srp
+ 	offset = (0 == k) ? kp->offset : 0;
+ 	num = (rem_sz > (PAGE_SIZE - offset)) ? (PAGE_SIZE - offset) :
+ 						rem_sz;
++#if SMALL_SCATTERLIST
++	sclp->u.address = page_address(kp->maplist[k]) + offset;
++	sclp->ispaged = 0;
++#else
+ 	sclp->address = page_address(kp->maplist[k]) + offset;
+ #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,4,13)
+ 	sclp->page = NULL;
+ #endif
++#endif
+ 	sclp->length = num;
+ 	mem_src_arr[k] = SG_USER_MEM;
+ 	rem_sz -= num;
++#if SMALL_SCATTERLIST
++	SCSI_LOG_TIMEOUT(5,
++	    printk("sg_build_dir: k=%d, a=0x%p, len=%d, ms=%d\n",
++	    k, sclp->u.address, num, mem_src_arr[k]));
++#else
+ 	SCSI_LOG_TIMEOUT(5,
+ 	    printk("sg_build_dir: k=%d, a=0x%p, len=%d, ms=%d\n",
+ 	    k, sclp->address, num, mem_src_arr[k]));
++#endif
+     }
+     schp->k_use_sg = k;
+     SCSI_LOG_TIMEOUT(5,
+@@ -1805,16 +1829,27 @@ static int sg_build_indi(Sg_scatter_hold
+                 if (! p)
+                     break;
+             }
++#if SMALL_SCATTERLIST
++            sclp->u.address = p;
++	    sclp->ispaged = 0;
++#else
+             sclp->address = p;
+ #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,4,13)
+ 	    sclp->page = NULL;
+ #endif
++#endif
+             sclp->length = ret_sz;
+ 	    mem_src_arr[k] = mem_src;
+ 
++#if SMALL_SCATTERLIST
++	    SCSI_LOG_TIMEOUT(5,
++		printk("sg_build_build: k=%d, a=0x%p, len=%d, ms=%d\n",
++                k, sclp->u.address, ret_sz, mem_src));
++#else
+ 	    SCSI_LOG_TIMEOUT(5,
+ 		printk("sg_build_build: k=%d, a=0x%p, len=%d, ms=%d\n",
+                 k, sclp->address, ret_sz, mem_src));
++#endif
+         } /* end of for loop */
+ 	schp->k_use_sg = k;
+ 	SCSI_LOG_TIMEOUT(5,
+@@ -1879,13 +1914,21 @@ static int sg_write_xfer(Sg_request * sr
+ 	struct scatterlist * sclp = (struct scatterlist *)schp->buffer;
+ 	char * mem_src_arr = sg_get_sgat_msa(schp);
+ 	ksglen = (int)sclp->length;
++#if SMALL_SCATTERLIST
++	p = sclp->u.address;
++#else
+ 	p = sclp->address;
++#endif
+ 
+ 	for (j = 0, k = 0; j < onum; ++j) {
+ 	    res = sg_u_iovec(hp, iovec_count, j, 1, &usglen, &up);
+ 	    if (res) return res;
+ 
++#if SMALL_SCATTERLIST
++	    for ( ; p; ++sclp, ksglen = (int)sclp->length, p = sclp->u.address) {
++#else
+ 	    for ( ; p; ++sclp, ksglen = (int)sclp->length, p = sclp->address) {
++#endif
+ 		ok = (SG_USER_MEM != mem_src_arr[k]);
+ 		if (usglen <= 0)
+ 		    break;
+@@ -1962,6 +2005,18 @@ static void sg_remove_scat(Sg_scatter_ho
+         struct scatterlist * sclp = (struct scatterlist *)schp->buffer;
+ 	char * mem_src_arr = sg_get_sgat_msa(schp);
+ 
++#if SMALL_SCATTERLIST
++	for (k = 0; (k < schp->k_use_sg) && sclp->u.address; ++k, ++sclp) {
++	    mem_src = mem_src_arr[k];
++	    SCSI_LOG_TIMEOUT(5,
++		printk("sg_remove_scat: k=%d, a=0x%p, len=%d, ms=%d\n",
++                       k, sclp->u.address, sclp->length, mem_src));
++            sg_free(sclp->u.address, sclp->length, mem_src);
++            sclp->u.address = NULL;
++	    sclp->ispaged = 0;
++            sclp->length = 0;
++        }
++#else
+ 	for (k = 0; (k < schp->k_use_sg) && sclp->address; ++k, ++sclp) {
+ 	    mem_src = mem_src_arr[k];
+ 	    SCSI_LOG_TIMEOUT(5,
+@@ -1974,6 +2029,7 @@ static void sg_remove_scat(Sg_scatter_ho
+ #endif
+             sclp->length = 0;
+         }
++#endif
+ 	sg_free(schp->buffer, schp->sglist_len, schp->buffer_mem_src);
+     }
+     else if (schp->buffer)
+@@ -2034,13 +2090,21 @@ static int sg_read_xfer(Sg_request * srp
+ 	struct scatterlist * sclp = (struct scatterlist *)schp->buffer;
+ 	char * mem_src_arr = sg_get_sgat_msa(schp);
+ 	ksglen = (int)sclp->length;
++#if SMALL_SCATTERLIST
++	p = sclp->u.address;
++#else
+ 	p = sclp->address;
++#endif
+ 
+ 	for (j = 0, k = 0; j < onum; ++j) {
+ 	    res = sg_u_iovec(hp, iovec_count, j, 0, &usglen, &up);
+ 	    if (res) return res;
+ 
++#if SMALL_SCATTERLIST
++	    for ( ; p; ++sclp, ksglen = (int)sclp->length, p = sclp->u.address) {
++#else
+ 	    for ( ; p; ++sclp, ksglen = (int)sclp->length, p = sclp->address) {
++#endif
+ 		ok = (SG_USER_MEM != mem_src_arr[k]);
+ 		if (usglen <= 0)
+ 		    break;
+@@ -2084,14 +2148,26 @@ static void sg_read_oxfer(Sg_request * s
+         int k, num;
+         struct scatterlist * sclp = (struct scatterlist *)schp->buffer;
+ 
++#if SMALL_SCATTERLIST
++	for (k = 0; (k < schp->k_use_sg) && sclp->u.address; ++k, ++sclp) {
++#else
+ 	for (k = 0; (k < schp->k_use_sg) && sclp->address; ++k, ++sclp) {
++#endif
+             num = (int)sclp->length;
+             if (num > num_read_xfer) {
++#if SMALL_SCATTERLIST
++                __copy_to_user(outp, sclp->u.address, num_read_xfer);
++#else
+                 __copy_to_user(outp, sclp->address, num_read_xfer);
++#endif
+                 break;
+             }
+             else {
++#if SMALL_SCATTERLIST
++                __copy_to_user(outp, sclp->u.address, num);
++#else
+                 __copy_to_user(outp, sclp->address, num);
++#endif
+                 num_read_xfer -= num;
+                 if (num_read_xfer <= 0)
+                     break;
+@@ -2137,7 +2213,11 @@ static void sg_link_reserve(Sg_fd * sfp,
+             if (rem <= num) {
+ 		if (0 == k) {
+ 		    req_schp->k_use_sg = 0;
++#if SMALL_SCATTERLIST
++		    req_schp->buffer = sclp->u.address;
++#else
+ 		    req_schp->buffer = sclp->address;
++#endif
+ 		}
+ 		else {
+     		    sfp->save_scat_len = num;
+--- ./drivers/scsi/sr.c	2004-07-26 12:52:40.000000000 +0100
++++ ./drivers/scsi/sr.c	2004-07-26 12:55:12.000000000 +0100
+@@ -343,7 +343,12 @@ static int sr_scatter_pad(Scsi_Cmnd *SCp
+ 
+ 	i = 0;
+ 	if (fsize) {
++#if SMALL_SCATTERLIST
++		sg[0].ispaged = 0;
++		sg[0].u.address = bbpnt[0] = front;
++#else
+ 		sg[0].address = bbpnt[0] = front;
++#endif
+ 		sg[0].length = fsize;
+ 		i++;
+ 	}
+@@ -354,7 +359,12 @@ static int sr_scatter_pad(Scsi_Cmnd *SCp
+ 		scsi_free(old_sg, (((SCpnt->use_sg * sizeof(struct scatterlist)) +
+ 				    (SCpnt->use_sg * sizeof(void *))) + 511) & ~511);
+ 	} else {
++#if SMALL_SCATTERLIST
++		sg[i].ispaged = 0;
++		sg[i].u.address = SCpnt->request_buffer;
++#else
+ 		sg[i].address = SCpnt->request_buffer;
++#endif
+ 		sg[i].length = SCpnt->request_bufflen;
+ 	}
+ 
+@@ -364,7 +374,12 @@ static int sr_scatter_pad(Scsi_Cmnd *SCp
+ 	SCpnt->use_sg += i;
+ 
+ 	if (bsize) {
++#if SMALL_SCATTERLIST
++		sg[SCpnt->use_sg].ispaged = 0;
++		sg[SCpnt->use_sg].u.address = back;
++#else
+ 		sg[SCpnt->use_sg].address = back;
++#endif
+ 		bbpnt[SCpnt->use_sg] = back;
+ 		sg[SCpnt->use_sg].length = bsize;
+ 		SCpnt->use_sg++;
+--- ./include/asm-i386/pci.h	2004-07-26 12:52:59.000000000 +0100
++++ ./include/asm-i386/pci.h	2004-07-26 12:55:12.000000000 +0100
+@@ -157,6 +157,17 @@ static inline int pci_map_sg(struct pci_
+  	 * temporary 2.4 hack
+  	 */
+  	for (i = 0; i < nents; i++ ) {
++#if SMALL_SCATTERLIST
++		if (sg[i].ispaged) {
++			if (!sg[i].u.page.page)
++				out_of_line_bug();
++			sg[i].dma_address = page_to_bus(sg[i].u.page.page) + sg[i].u.page.offset;
++		} else {
++			if (!sg[i].u.address)
++				out_of_line_bug();
++			sg[i].dma_address = virt_to_bus(sg[i].u.address);
++		}
++#else
+  		if (sg[i].address && sg[i].page)
+  			out_of_line_bug();
+  		else if (!sg[i].address && !sg[i].page)
+@@ -166,6 +177,7 @@ static inline int pci_map_sg(struct pci_
+  			sg[i].dma_address = virt_to_bus(sg[i].address);
+  		else
+  			sg[i].dma_address = page_to_bus(sg[i].page) + sg[i].offset;
++#endif
+  	}
+  
+ 	flush_write_buffers();
+--- ./include/asm-i386/scatterlist.h	2004-07-26 12:52:59.000000000 +0100
++++ ./include/asm-i386/scatterlist.h	2004-07-26 13:45:04.000000000 +0100
+@@ -19,7 +19,25 @@
+  *
+  * and that's it. There's no excuse for not highmem enabling YOUR driver. /jens
+  */
++
++/* Define SMALL_SCATTERLIST non-zero if you want to compress scatter/gather
++   descriptors to fit in 1 page.  NB this file is arch-specific, so we only
++   define this where we actually need/want it */
++#define SMALL_SCATTERLIST 1
++
+ struct scatterlist {
++#if SMALL_SCATTERLIST
++    union {
++       char         *address;			/* mapped address... */
++       struct {
++	  struct page  *page;			/* ...or page + offset... */
++	  unsigned int  offset;
++       } page;
++    } u;
++    dma_addr_t dma_address;
++    unsigned int length:31;			/* ...steal 1 bit from the length */
++    unsigned int ispaged:1;			/* to discriminate */
++#else
+     char *  address;    /* Location data is to be transferred to, NULL for
+ 			 * highmem page */
+     struct page * page; /* Location for highmem page, if any */
+@@ -27,6 +45,7 @@ struct scatterlist {
+ 
+     dma_addr_t dma_address;
+     unsigned int length;
++#endif
+ };
+ 
+ #define ISA_DMA_THRESHOLD (0x00ffffff)
+--- ./net/xfrm/xfrm_algo.c	2004-07-26 12:53:25.000000000 +0100
++++ ./net/xfrm/xfrm_algo.c	2004-07-26 12:55:12.000000000 +0100
+@@ -487,9 +487,14 @@ void skb_icv_walk(const struct sk_buff *
+ 	if (copy > 0) {
+ 		if (copy > len)
+ 			copy = len;
+-		
++#if SMALL_SCATTERLIST		
++		sg.ispaged = 1;
++		sg.u.page.page = virt_to_page(skb->data + offset);
++		sg.u.page.offset = (unsigned long)(skb->data + offset) % PAGE_SIZE;
++#else
+ 		sg.page = virt_to_page(skb->data + offset);
+ 		sg.offset = (unsigned long)(skb->data + offset) % PAGE_SIZE;
++#endif
+ 		sg.length = copy;
+ 		
+ 		icv_update(tfm, &sg, 1);
+@@ -511,8 +516,14 @@ void skb_icv_walk(const struct sk_buff *
+ 			if (copy > len)
+ 				copy = len;
+ 			
++#if SMALL_SCATTERLIST
++			sg.ispaged = 1;
++			sg.u.page.page = frag->page;
++			sg.u.page.offset = frag->page_offset + offset-start;
++#else
+ 			sg.page = frag->page;
+ 			sg.offset = frag->page_offset + offset-start;
++#endif
+ 			sg.length = copy;
+ 			
+ 			icv_update(tfm, &sg, 1);

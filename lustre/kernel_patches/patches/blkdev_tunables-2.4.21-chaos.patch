@@ -1,0 +1,34 @@
+--- ./drivers/addon/qla2200/qla2x00.h	2004-07-26 12:52:08.000000000 +0100
++++ ./drivers/addon/qla2200/qla2x00.h	2004-07-26 12:58:42.000000000 +0100
+@@ -3208,7 +3208,7 @@ void qla2x00_setup(char *s);
+ /* Kernel version specific template additions */
+ 
+ /* Number of segments 1 - 65535 */
+-#define SG_SEGMENTS     32             /* Cmd entry + 6 continuations */
++#define SG_SEGMENTS     512            /* Cmd entry + 6 continuations */
+ 
+ /*
+  * Scsi_Host_template (see hosts.h) 
+@@ -3222,7 +3222,7 @@ void qla2x00_setup(char *s);
+  *
+  */
+ #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,4,8)
+-#define TEMPLATE_MAX_SECTORS	max_sectors: 512,
++#define TEMPLATE_MAX_SECTORS	max_sectors: 2048,
+ #else
+ #define TEMPLATE_MAX_SECTORS 
+ #endif
+--- ./include/linux/blkdev.h	2004-07-26 12:53:11.000000000 +0100
++++ ./include/linux/blkdev.h	2004-07-26 13:12:42.000000000 +0100
+@@ -255,9 +255,9 @@ extern int * max_segments[MAX_BLKDEV];
+ 
+ extern char * blkdev_varyio[MAX_BLKDEV];
+ 
+-#define MAX_SEGMENTS 128
++#define MAX_SEGMENTS 256
+ #define MAX_SECTORS 255
+-#define MAX_SUPERBH 32768	/* must fit info ->b_size right now */
++#define MAX_SUPERBH (1<<20)
+ 
+ /*
+  * bh abuse :/
