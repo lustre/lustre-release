@@ -30,9 +30,9 @@
 #include "obdiolib.h"
 
 int
-obdio_test_fixed_extent (struct obdio_conn *conn, 
-                         uint32_t myhid, uint32_t mypid, 
-                         int reps, int locked, uint64_t oid, 
+obdio_test_fixed_extent (struct obdio_conn *conn,
+                         uint32_t myhid, uint32_t mypid,
+                         int reps, int locked, uint64_t oid,
                          uint64_t offset, uint32_t size)
 {
         struct lustre_handle fh;
@@ -44,7 +44,7 @@ obdio_test_fixed_extent (struct obdio_conn *conn,
         int                  j;
         int                  rc;
         int                  rc2;
-        
+
         rc = obdio_open (conn, oid, &fh);
         if (rc != 0) {
                 fprintf (stderr, "Failed to open object "LPX64": %s\n",
@@ -58,7 +58,7 @@ obdio_test_fixed_extent (struct obdio_conn *conn,
                 rc = -1;
                 goto out_0;
         }
-        
+
         for (i = 0; i < reps; i++) {
                 ibuf = (uint32_t *) buffer;
                 for (j = 0; j < size / (4 * sizeof (*ibuf)); j++) {
@@ -77,7 +77,7 @@ obdio_test_fixed_extent (struct obdio_conn *conn,
                                 goto out_1;
                         }
                 }
-                
+
                 rc = obdio_pwrite (conn, oid, buffer, size, offset);
                 if (rc != 0) {
                         fprintf (stderr, "Error writing "LPX64" @ "LPU64" for %u: %s\n",
@@ -87,9 +87,9 @@ obdio_test_fixed_extent (struct obdio_conn *conn,
                         rc = -1;
                         goto out_1;
                 }
-                
+
                 memset (buffer, 0xbb, size);
-                
+
                 rc = obdio_pread (conn, oid, buffer, size, offset);
                 if (rc != 0) {
                         fprintf (stderr, "Error reading "LPX64" @ "LPU64" for %u: %s\n",
@@ -109,7 +109,7 @@ obdio_test_fixed_extent (struct obdio_conn *conn,
                                 goto out_1;
                         }
                 }
-                
+
                 ibuf = (uint32_t *) buffer;
                 for (j = 0; j < size / (4 * sizeof (*ibuf)); j++) {
                         if (ibuf[0] != myhid ||
@@ -177,20 +177,20 @@ parse_kmg (uint64_t *valp, char *str)
 }
 
 void
-usage (char *cmdname, int help) 
+usage (char *cmdname, int help)
 {
         char *name = strrchr (cmdname, '/');
-        
+
         if (name == NULL)
                 name = cmdname;
-        
+
         fprintf (help ? stdout : stderr,
                  "usage: %s -d device -s size -o offset [-i id][-n reps][-l] oid\n",
                  name);
 }
 
 int
-main (int argc, char **argv) 
+main (int argc, char **argv)
 {
         uint32_t           mypid = getpid ();
         uint32_t           myhid = gethostid ();
@@ -214,7 +214,7 @@ main (int argc, char **argv)
                 case 'h':
                         usage (argv[0], 1);
                         return (0);
-                        
+
                 case 'i':
                         switch (sscanf (optarg, "%i.%i", &v1, &v2)) {
                         case 1:
@@ -230,7 +230,7 @@ main (int argc, char **argv)
                                 return (1);
                         }
                         break;
-                        
+
                 case 's':
                         if (parse_kmg (&val, optarg) != 0) {
                                 fprintf (stderr, "Can't parse size %s\n",
@@ -240,7 +240,7 @@ main (int argc, char **argv)
                         size = (uint32_t)val;
                         set_size++;
                         break;
-                        
+
                 case 'o':
                         if (parse_kmg (&val, optarg) != 0) {
                                 fprintf (stderr, "Can't parse offset %s\n",
@@ -282,21 +282,21 @@ main (int argc, char **argv)
                          device < 0 ? "device" : "object id");
                 return (1);
         }
-        
+
         oid = strtoull (argv[optind], &end, 0);
         if (end == argv[optind] || *end != 0) {
                 fprintf (stderr, "Can't parse object id %s\n",
                          argv[optind]);
                 return (1);
         }
-        
+
         conn = obdio_connect (device);
         if (conn == NULL)
                 return (1);
-        
-        rc = obdio_test_fixed_extent (conn, myhid, mypid, reps, locked, 
+
+        rc = obdio_test_fixed_extent (conn, myhid, mypid, reps, locked,
                                       oid, base_offset, size);
-        
+
         obdio_disconnect (conn);
 
         return (rc == 0 ? 0 : 1);
