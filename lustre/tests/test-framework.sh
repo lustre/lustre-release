@@ -91,7 +91,6 @@ zconf_mount() {
     else
        # this is so cheating
        do_node $client $LCONF --nosetup --node client_facet $XMLCONFIG  > /dev/null || return 2
-       $LCONF --nosetup --node client_facet $XMLCONFIG
        do_node $client $LLMOUNT `facet_active_host mds`:/mds_svc/client_facet $mnt -o nettype=$NETTYPE|| return 4
     fi
 
