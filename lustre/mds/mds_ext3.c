@@ -187,8 +187,8 @@ static void mds_ext3_callback_status(void *jcb, int error)
 {
         struct mds_cb_data *mcb = (struct mds_cb_data *)jcb;
 
-        CDEBUG(D_EXT2, "got callback for last_rcvd %Ld: rc = %d\n",
-               mcb->cb_last_rcvd, error);
+        CDEBUG(D_EXT2, "got callback for last_rcvd %Ld (%p): rc = %d\n",
+               mcb->cb_last_rcvd, mcb, error);
         if (!error && mcb->cb_last_rcvd > mcb->cb_mds->mds_last_committed)
                 mcb->cb_mds->mds_last_committed = mcb->cb_last_rcvd;
 
@@ -216,14 +216,14 @@ static int mds_ext3_set_last_rcvd(struct mds_obd *mds, void *handle)
         mcb->cb_last_rcvd = mds->mds_last_rcvd;
 
 #ifdef HAVE_JOURNAL_CALLBACK_STATUS
-        CDEBUG(D_EXT2, "set callback for last_rcvd: %Ld\n",
-               (unsigned long long)mcb->cb_last_rcvd);
+        CDEBUG(D_EXT2, "set callback for last_rcvd: %Ld (%p)\n",
+               (unsigned long long)mcb->cb_last_rcvd, mcb);
         journal_callback_set(handle, mds_ext3_callback_status,
                              (void *)mcb);
 #elif defined(HAVE_JOURNAL_CALLBACK)
         /* XXX original patch version - remove soon */
 #warning "using old journal callback kernel patch, please update"
-        CDEBUG(D_EXT2, "set callback for last_rcvd: %Ld\n",
+        CDEBUG(D_EXT2, "set callback for last_rcvd: %Ld (%p)\n",
                (unsigned long long)mcb->cb_last_rcvd);
         journal_callback_set(handle, mds_ext3_callback_func, mcb);
 #else
