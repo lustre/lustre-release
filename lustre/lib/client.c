@@ -227,8 +227,7 @@ int ptlrpc_import_connect(struct lustre_handle *conn, struct obd_device *obd,
 
         request->rq_level = LUSTRE_CONN_NEW;
         request->rq_replen = lustre_msg_size(0, NULL);
-        request->rq_reqmsg->addr = conn->addr;
-        request->rq_reqmsg->cookie = conn->cookie;
+        request->rq_reqmsg->handle = *conn;
 
         imp->imp_export = exp = class_conn2export(conn);
         exp->exp_connection = ptlrpc_connection_addref(request->rq_connection);
@@ -245,8 +244,7 @@ int ptlrpc_import_connect(struct lustre_handle *conn, struct obd_device *obd,
                        imp->imp_target_uuid.uuid);
         }
         imp->imp_level = LUSTRE_CONN_FULL;
-        imp->imp_remote_handle.addr = request->rq_repmsg->addr;
-        imp->imp_remote_handle.cookie = request->rq_repmsg->cookie;
+        imp->imp_remote_handle = request->rq_repmsg->handle;
 
         EXIT;
 out_req:
