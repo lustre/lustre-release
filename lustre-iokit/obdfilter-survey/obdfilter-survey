@@ -387,7 +387,7 @@ for ((rsz=$rszlo;rsz<=$rszhi;rsz*=2)); do
 		first_objs[$idx]=$first_obj
 	    done
 	    # run tests
-	    for test in write $tests; do
+	    for test in ${tests[@]}; do
 		print_summary -n "$test "
 		# create per-host script files
 		for host in ${unique_hosts[@]}; do
