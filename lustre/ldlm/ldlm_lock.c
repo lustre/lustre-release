@@ -127,8 +127,10 @@ static int ldlm_intent_policy(struct ldlm_lock *lock, void *req_cookie,
                                 RETURN(-EINVAL);
                         }
                         rc = mds_getattr_name_p(2, req);
-                        if (rc)
-                                LBUG();
+                        if (rc) {
+                                req->rq_status = rc;
+                                RETURN(rc);
+                        }
                         break;
                 case IT_READDIR|IT_OPEN:
                         LBUG();
@@ -489,6 +491,12 @@ ldlm_error_t ldlm_local_lock_enqueue(struct lustre_handle *lockh,
                 if (rc == ELDLM_LOCK_CHANGED) {
                         res = lock->l_resource;
                         *flags |= LDLM_FL_LOCK_CHANGED;
+                }
+                if (rc < 0) {
+                        /* Abort. */
+                        ldlm_resource_put(lock->l_resource);
+                        ldlm_lock_free(lock);
+                        RETURN(rc);
                 }
         }
 

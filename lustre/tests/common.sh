@@ -205,7 +205,7 @@ setup_lustre() {
 	do_insmod $LUSTRE/mds/mds_extN.o || \
 		echo "info: can't load mds_extN.o module, needs extN.o"
 	do_insmod $LUSTRE/obdecho/obdecho.o || exit -1
-	do_insmod $LUSTRE/obdext2/obdext2.o || exit -1
+	#do_insmod $LUSTRE/obdext2/obdext2.o || exit -1
 	do_insmod $LUSTRE/obdfilter/obdfilter.o || exit -1
 	do_insmod $LUSTRE/ost/ost.o || exit -1
 	do_insmod $LUSTRE/osc/osc.o || exit -1

@@ -135,9 +135,7 @@ static int _ldlm_enqueue(struct obd_device *obddev, struct ptlrpc_service *svc,
                 GOTO(out, err);
 
         flags = dlm_req->lock_flags;
-        err = ldlm_local_lock_enqueue(&lockh,
-                                      cookie, cookielen,
-                                      &flags,
+        err = ldlm_local_lock_enqueue(&lockh, cookie, cookielen, &flags,
                                       callback, callback);
         if (err != ELDLM_OK)
                 GOTO(out, err);
@@ -165,9 +163,8 @@ static int _ldlm_enqueue(struct obd_device *obddev, struct ptlrpc_service *svc,
         if (ptlrpc_reply(svc, req))
                 LBUG();
 
-        if (!err) {
+        if (!err)
                 ldlm_reprocess_all(lock->l_resource);
-        }
 
         return 0;
 }

@@ -355,7 +355,7 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req)
                 /* now a normal case for intent locking */
                 rc = 0;
         } else {
-                rc = -EEXIST;
+                rc = -ENOENT;
         }
 
         EXIT;

@@ -1,5 +1,5 @@
---- lum-pristine/drivers/block/blkpg.c	Mon Feb 25 12:37:57 2002
-+++ lum/drivers/block/blkpg.c	Fri Jun  7 12:49:14 2002
+--- lum-pristine/drivers/block/blkpg.c	Mon Feb 25 14:37:57 2002
++++ lum/drivers/block/blkpg.c	Fri Jun  7 14:49:14 2002
 @@ -294,3 +294,38 @@
  }
  
@@ -39,8 +39,8 @@
 +EXPORT_SYMBOL(dev_set_rdonly);
 +EXPORT_SYMBOL(dev_check_rdonly);
 +EXPORT_SYMBOL(dev_clear_rdonly);
---- lum-pristine/drivers/block/loop.c	Fri Dec 21 10:41:53 2001
-+++ lum/drivers/block/loop.c	Fri Jun  7 12:49:14 2002
+--- lum-pristine/drivers/block/loop.c	Fri Dec 21 12:41:53 2001
++++ lum/drivers/block/loop.c	Fri Jun  7 14:49:14 2002
 @@ -471,6 +471,11 @@
  	spin_unlock_irq(&lo->lo_lock);
  
@@ -53,8 +53,8 @@
  		if (lo->lo_flags & LO_FLAGS_READ_ONLY)
  			goto err;
  	} else if (rw == READA) {
---- lum-pristine/drivers/ide/ide-disk.c	Fri Dec 21 10:41:54 2001
-+++ lum/drivers/ide/ide-disk.c	Fri Jun  7 12:49:14 2002
+--- lum-pristine/drivers/ide/ide-disk.c	Fri Dec 21 12:41:54 2001
++++ lum/drivers/ide/ide-disk.c	Fri Jun  7 14:49:14 2002
 @@ -367,6 +367,12 @@
   */
  static ide_startstop_t do_rw_disk (ide_drive_t *drive, struct request *rq, unsigned long block)
@@ -68,8 +68,8 @@
  	if (IDE_CONTROL_REG)
  		OUT_BYTE(drive->ctl,IDE_CONTROL_REG);
  	OUT_BYTE(0x00, IDE_FEATURE_REG);
---- lum-pristine/fs/ext3/Makefile	Fri Dec 21 10:41:55 2001
-+++ lum/fs/ext3/Makefile	Fri Jun  7 12:49:13 2002
+--- lum-pristine/fs/ext3/Makefile	Fri Dec 21 12:41:55 2001
++++ lum/fs/ext3/Makefile	Fri Jun  7 14:49:13 2002
 @@ -9,6 +9,8 @@
  
  O_TARGET := ext3.o
@@ -79,8 +79,8 @@
  obj-y    := balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o \
  		ioctl.o namei.o super.o symlink.o
  obj-m    := $(O_TARGET)
---- lum-pristine/fs/ext3/super.c	Mon Feb 25 12:38:08 2002
-+++ lum/fs/ext3/super.c	Fri Jun  7 12:49:14 2002
+--- lum-pristine/fs/ext3/super.c	Mon Feb 25 14:38:08 2002
++++ lum/fs/ext3/super.c	Fri Jun  7 14:49:14 2002
 @@ -1744,7 +1744,7 @@
  	unregister_filesystem(&ext3_fs_type);
  }
@@ -90,8 +90,8 @@
  
  MODULE_AUTHOR("Remy Card, Stephen Tweedie, Andrew Morton, Andreas Dilger, Theodore Ts'o and others");
  MODULE_DESCRIPTION("Second Extended Filesystem with journaling extensions");
---- lum-pristine/fs/jbd/commit.c	Mon Feb 25 12:38:08 2002
-+++ lum/fs/jbd/commit.c	Fri Jun  7 12:49:14 2002
+--- lum-pristine/fs/jbd/commit.c	Mon Feb 25 14:38:08 2002
++++ lum/fs/jbd/commit.c	Fri Jun  7 14:49:14 2002
 @@ -475,7 +475,7 @@
             transaction's t_log_list queue, and metadata buffers are on
             the t_iobuf_list queue.
@@ -155,8 +155,8 @@
  	jbd_debug(3, "JBD: commit phase 7\n");
  
  	J_ASSERT(commit_transaction->t_sync_datalist == NULL);
---- lum-pristine/fs/jbd/journal.c	Mon Feb 25 12:38:08 2002
-+++ lum/fs/jbd/journal.c	Fri Jun  7 12:49:14 2002
+--- lum-pristine/fs/jbd/journal.c	Mon Feb 25 14:38:08 2002
++++ lum/fs/jbd/journal.c	Fri Jun  7 14:49:14 2002
 @@ -58,6 +58,7 @@
  #endif
  EXPORT_SYMBOL(journal_flush);
@@ -165,8 +165,8 @@
  
  EXPORT_SYMBOL(journal_init_dev);
  EXPORT_SYMBOL(journal_init_inode);
---- lum-pristine/fs/jbd/transaction.c	Mon Feb 25 12:38:08 2002
-+++ lum/fs/jbd/transaction.c	Fri Jun  7 12:49:14 2002
+--- lum-pristine/fs/jbd/transaction.c	Mon Feb 25 14:38:08 2002
++++ lum/fs/jbd/transaction.c	Fri Jun  7 14:49:14 2002
 @@ -57,6 +57,7 @@
  	transaction->t_state = T_RUNNING;
  	transaction->t_tid = journal->j_transaction_sequence++;
@@ -266,8 +266,8 @@
  	/* 
  	 * If the handle is marked SYNC, we need to set another commit
  	 * going!  We also want to force a commit if the current
---- lum-pristine/include/linux/blkdev.h	Mon Nov 26 06:29:17 2001
-+++ lum/include/linux/blkdev.h	Wed Jun 12 19:25:22 2002
+--- lum-pristine/include/linux/blkdev.h	Mon Nov 26 08:29:17 2001
++++ lum/include/linux/blkdev.h	Fri Jun 14 03:07:40 2002
 @@ -228,4 +228,8 @@
  	return retval;
  }
@@ -277,8 +277,8 @@
 +int dev_check_rdonly(kdev_t);
 +void dev_clear_rdonly(int);
  #endif
---- lum-pristine/include/linux/jbd.h	Mon Feb 25 12:38:13 2002
-+++ lum/include/linux/jbd.h	Wed Jun 12 19:23:11 2002
+--- lum-pristine/include/linux/jbd.h	Mon Feb 25 14:38:13 2002
++++ lum/include/linux/jbd.h	Fri Jun 14 13:22:24 2002
 @@ -249,6 +249,13 @@
  	return bh->b_private;
  }
@@ -326,8 +326,8 @@
  
  extern void	 journal_lock_updates (journal_t *);
  extern void	 journal_unlock_updates (journal_t *);
---- lum-pristine/kernel/ksyms.c	Mon Feb 25 12:38:13 2002
-+++ lum/kernel/ksyms.c	Fri Jun  7 12:49:13 2002
+--- lum-pristine/kernel/ksyms.c	Mon Feb 25 14:38:13 2002
++++ lum/kernel/ksyms.c	Fri Jun  7 14:49:13 2002
 @@ -271,6 +271,11 @@
  EXPORT_SYMBOL(lock_may_write);
  EXPORT_SYMBOL(dcache_readdir);
@@ -340,9 +340,9 @@
  /* for stackable file systems (lofs, wrapfs, cryptfs, etc.) */
  EXPORT_SYMBOL(default_llseek);
  EXPORT_SYMBOL(dentry_open);
---- lum-pristine/include/linux/dcache.h	Thu Nov 22 12:46:18 2001
-+++ lum/include/linux/dcache.h	Wed Jun 12 19:21:33 2002
-@@ -6,6 +6,31 @@
+--- lum-pristine/include/linux/dcache.h	Thu Nov 22 14:46:18 2001
++++ lum/include/linux/dcache.h	Fri Jun 14 03:03:17 2002
+@@ -6,6 +6,32 @@
  #include <asm/atomic.h>
  #include <linux/mount.h>
  
@@ -359,6 +359,7 @@
 +#define IT_GETATTR  (1<<10)
 +#define IT_SETATTR  (1<<11)
 +#define IT_READLINK  (1<<12)
++#define IT_MKNOD  (1<<13)
 +
 +struct lookup_intent { 
 +	int it_op;
@@ -374,7 +375,7 @@
  /*
   * linux/include/linux/dcache.h
   *
-@@ -79,17 +104,20 @@
+@@ -79,17 +105,20 @@
  	struct dentry_operations  *d_op;
  	struct super_block * d_sb;	/* The root of the dentry tree */
  	unsigned long d_vfs_flags;
@@ -395,8 +396,8 @@
  };
  
  /* the dentry parameter passed to d_hash and d_compare is the parent
---- lum-pristine/include/linux/fs.h	Thu Jun 13 14:07:26 2002
-+++ lum/include/linux/fs.h	Wed Jun 12 19:21:56 2002
+--- lum-pristine/include/linux/fs.h	Fri Jun 14 13:54:00 2002
++++ lum/include/linux/fs.h	Fri Jun 14 03:04:28 2002
 @@ -536,6 +536,7 @@
  
  	/* needed for tty driver, and maybe others */
@@ -450,8 +451,8 @@
  
  extern void iput(struct inode *);
  extern void force_delete(struct inode *);
---- lum-pristine/fs/namei.c	Mon Feb 25 12:38:09 2002
-+++ lum/fs/namei.c	Wed Jun 12 19:18:36 2002
+--- lum-pristine/fs/namei.c	Mon Feb 25 14:38:09 2002
++++ lum/fs/namei.c	Fri Jun 14 13:49:06 2002
 @@ -94,6 +94,14 @@
   * XEmacs seems to be relying on it...
   */
@@ -571,7 +572,20 @@
  				break;
  		}
  		goto return_base;
-@@ -636,12 +662,24 @@
+@@ -626,6 +652,7 @@
+ 		else if (this.len == 2 && this.name[1] == '.')
+ 			nd->last_type = LAST_DOTDOT;
+ return_base:
++                nd->dentry->d_it = it;
+ 		return 0;
+ out_dput:
+ 		dput(dentry);
+@@ -633,15 +660,29 @@
+ 	}
+ 	path_release(nd);
+ return_err:
++        if (!err)
++                nd->dentry->d_it = it;
  	return err;
  }
  
@@ -597,7 +611,7 @@
  /* SMP-safe */
  /* returns 1 if everything is done */
  static int __emul_lookup_dentry(const char *name, struct nameidata *nd)
-@@ -742,7 +780,8 @@
+@@ -742,7 +783,8 @@
   * needs parent already locked. Doesn't follow mounts.
   * SMP-safe.
   */
@@ -607,7 +621,7 @@
  {
  	struct dentry * dentry;
  	struct inode *inode;
-@@ -765,13 +804,16 @@
+@@ -765,13 +807,16 @@
  			goto out;
  	}
  
@@ -625,7 +639,7 @@
  		dentry = inode->i_op->lookup(inode, new);
  		unlock_kernel();
  		if (!dentry)
-@@ -783,6 +825,12 @@
+@@ -783,6 +828,12 @@
  	return dentry;
  }
  
@@ -638,7 +652,7 @@
  /* SMP-safe */
  struct dentry * lookup_one_len(const char * name, struct dentry * base, int len)
  {
-@@ -804,7 +852,7 @@
+@@ -804,7 +855,7 @@
  	}
  	this.hash = end_name_hash(hash);
  
@@ -647,7 +661,7 @@
  access:
  	return ERR_PTR(-EACCES);
  }
-@@ -836,6 +884,22 @@
+@@ -836,6 +887,22 @@
  	return err;
  }
  
@@ -670,7 +684,7 @@
  /*
   * It's inline, so penalty for filesystems that don't use sticky bit is
   * minimal.
-@@ -970,7 +1034,8 @@
+@@ -970,7 +1037,8 @@
   * for symlinks (where the permissions are checked later).
   * SMP-safe
   */
@@ -680,7 +694,7 @@
  {
  	int acc_mode, error = 0;
  	struct inode *inode;
-@@ -984,8 +1049,9 @@
+@@ -984,17 +1052,21 @@
  	 * The simplest case - just a plain lookup.
  	 */
  	if (!(flag & O_CREAT)) {
@@ -691,7 +705,10 @@
  		if (error)
  			return error;
  		dentry = nd->dentry;
-@@ -995,6 +1061,8 @@
++		dentry->d_it = it;
+ 		goto ok;
+ 	}
+ 
  	/*
  	 * Create - we need to know the parent.
  	 */
@@ -700,7 +717,7 @@
  	if (path_init(pathname, LOOKUP_PARENT, nd))
  		error = path_walk(pathname, nd);
  	if (error)
-@@ -1011,7 +1079,7 @@
+@@ -1011,7 +1083,7 @@
  
  	dir = nd->dentry;
  	down(&dir->d_inode->i_sem);
@@ -709,7 +726,7 @@
  
  do_last:
  	error = PTR_ERR(dentry);
-@@ -1022,6 +1090,7 @@
+@@ -1022,6 +1094,7 @@
  
  	/* Negative dentry, just create the file */
  	if (!dentry->d_inode) {
@@ -717,7 +734,19 @@
  		error = vfs_create(dir->d_inode, dentry,
  				   mode & ~current->fs->umask);
  		up(&dir->d_inode->i_sem);
-@@ -1181,13 +1250,20 @@
+@@ -1136,9 +1209,11 @@
+ 		if (flag & FMODE_WRITE)
+ 			DQUOT_INIT(inode);
+ 
++        intent_release(dentry);
+ 	return 0;
+ 
+ exit_dput:
++        intent_release(dentry);
+ 	dput(dentry);
+ exit:
+ 	path_release(nd);
+@@ -1181,13 +1256,20 @@
  	}
  	dir = nd->dentry;
  	down(&dir->d_inode->i_sem);
@@ -740,7 +769,7 @@
  {
  	struct dentry *dentry;
  
-@@ -1195,7 +1271,7 @@
+@@ -1195,7 +1277,7 @@
  	dentry = ERR_PTR(-EEXIST);
  	if (nd->last_type != LAST_NORM)
  		goto fail;
@@ -749,15 +778,15 @@
  	if (IS_ERR(dentry))
  		goto fail;
  	if (!is_dir && nd->last.name[nd->last.len] && !dentry->d_inode)
-@@ -1241,6 +1317,7 @@
+@@ -1241,6 +1323,7 @@
  	char * tmp;
  	struct dentry * dentry;
  	struct nameidata nd;
-+	struct lookup_intent it = { IT_CREAT , mode };
++	struct lookup_intent it = { IT_MKNOD , mode };
  
  	if (S_ISDIR(mode))
  		return -EPERM;
-@@ -1252,11 +1329,12 @@
+@@ -1252,11 +1335,12 @@
  		error = path_walk(tmp, &nd);
  	if (error)
  		goto out;
@@ -771,7 +800,7 @@
  		switch (mode & S_IFMT) {
  		case 0: case S_IFREG:
  			error = vfs_create(nd.dentry->d_inode,dentry,mode);
-@@ -1272,6 +1350,7 @@
+@@ -1272,6 +1356,7 @@
  		}
  		dput(dentry);
  	}
@@ -779,7 +808,7 @@
  	up(&nd.dentry->d_inode->i_sem);
  	path_release(&nd);
  out:
-@@ -1310,6 +1389,7 @@
+@@ -1310,6 +1395,7 @@
  {
  	int error = 0;
  	char * tmp;
@@ -787,7 +816,7 @@
  
  	tmp = getname(pathname);
  	error = PTR_ERR(tmp);
-@@ -1321,13 +1401,15 @@
+@@ -1321,13 +1407,15 @@
  			error = path_walk(tmp, &nd);
  		if (error)
  			goto out;
@@ -804,7 +833,7 @@
  		up(&nd.dentry->d_inode->i_sem);
  		path_release(&nd);
  out:
-@@ -1407,6 +1489,7 @@
+@@ -1407,6 +1495,7 @@
  	char * name;
  	struct dentry *dentry;
  	struct nameidata nd;
@@ -812,7 +841,7 @@
  
  	name = getname(pathname);
  	if(IS_ERR(name))
-@@ -1429,10 +1512,12 @@
+@@ -1429,10 +1518,12 @@
  			goto exit1;
  	}
  	down(&nd.dentry->d_inode->i_sem);
@@ -826,7 +855,7 @@
  		dput(dentry);
  	}
  	up(&nd.dentry->d_inode->i_sem);
-@@ -1476,6 +1561,7 @@
+@@ -1476,6 +1567,7 @@
  	char * name;
  	struct dentry *dentry;
  	struct nameidata nd;
@@ -834,7 +863,7 @@
  
  	name = getname(pathname);
  	if(IS_ERR(name))
-@@ -1489,14 +1575,16 @@
+@@ -1489,14 +1581,16 @@
  	if (nd.last_type != LAST_NORM)
  		goto exit1;
  	down(&nd.dentry->d_inode->i_sem);
@@ -852,7 +881,7 @@
  		dput(dentry);
  	}
  	up(&nd.dentry->d_inode->i_sem);
-@@ -1543,6 +1631,7 @@
+@@ -1543,6 +1637,7 @@
  	int error = 0;
  	char * from;
  	char * to;
@@ -860,7 +889,7 @@
  
  	from = getname(oldname);
  	if(IS_ERR(from))
-@@ -1557,12 +1646,14 @@
+@@ -1557,12 +1652,14 @@
  			error = path_walk(to, &nd);
  		if (error)
  			goto out;
@@ -876,7 +905,7 @@
  		up(&nd.dentry->d_inode->i_sem);
  		path_release(&nd);
  out:
-@@ -1626,6 +1717,7 @@
+@@ -1626,6 +1723,7 @@
  	int error;
  	char * from;
  	char * to;
@@ -884,7 +913,7 @@
  
  	from = getname(oldname);
  	if(IS_ERR(from))
-@@ -1648,12 +1740,14 @@
+@@ -1648,12 +1746,14 @@
  		error = -EXDEV;
  		if (old_nd.mnt != nd.mnt)
  			goto out_release;
@@ -900,7 +929,7 @@
  		up(&nd.dentry->d_inode->i_sem);
  out_release:
  		path_release(&nd);
-@@ -1694,7 +1788,8 @@
+@@ -1694,7 +1794,8 @@
   *	   locking].
   */
  int vfs_rename_dir(struct inode *old_dir, struct dentry *old_dentry,
@@ -910,7 +939,7 @@
  {
  	int error;
  	struct inode *target;
-@@ -1748,12 +1843,14 @@
+@@ -1748,12 +1849,14 @@
  	} else
  		double_down(&old_dir->i_zombie,
  			    &new_dir->i_zombie);
@@ -925,7 +954,7 @@
  	if (target) {
  		if (!error)
  			target->i_flags |= S_DEAD;
-@@ -1775,7 +1872,8 @@
+@@ -1775,7 +1878,8 @@
  }
  
  int vfs_rename_other(struct inode *old_dir, struct dentry *old_dentry,
@@ -935,7 +964,7 @@
  {
  	int error;
  
-@@ -1802,10 +1900,12 @@
+@@ -1802,10 +1906,12 @@
  	DQUOT_INIT(old_dir);
  	DQUOT_INIT(new_dir);
  	double_down(&old_dir->i_zombie, &new_dir->i_zombie);
@@ -948,7 +977,7 @@
  	double_up(&old_dir->i_zombie, &new_dir->i_zombie);
  	if (error)
  		return error;
-@@ -1817,13 +1917,14 @@
+@@ -1817,13 +1923,14 @@
  }
  
  int vfs_rename(struct inode *old_dir, struct dentry *old_dentry,
@@ -966,7 +995,7 @@
  	if (!error) {
  		if (old_dir == new_dir)
  			inode_dir_notify(old_dir, DN_RENAME);
-@@ -1841,6 +1942,7 @@
+@@ -1841,6 +1948,7 @@
  	struct dentry * old_dir, * new_dir;
  	struct dentry * old_dentry, *new_dentry;
  	struct nameidata oldnd, newnd;
@@ -974,7 +1003,7 @@
  
  	if (path_init(oldname, LOOKUP_PARENT, &oldnd))
  		error = path_walk(oldname, &oldnd);
-@@ -1868,7 +1970,9 @@
+@@ -1868,7 +1976,9 @@
  
  	double_lock(new_dir, old_dir);
  
@@ -985,7 +1014,7 @@
  	error = PTR_ERR(old_dentry);
  	if (IS_ERR(old_dentry))
  		goto exit3;
-@@ -1884,14 +1988,15 @@
+@@ -1884,14 +1994,15 @@
  		if (newnd.last.name[newnd.last.len])
  			goto exit4;
  	}
@@ -1003,8 +1032,8 @@
  	unlock_kernel();
  
  	dput(new_dentry);
---- lum-pristine/fs/open.c	Fri Oct 12 14:48:42 2001
-+++ lum/fs/open.c	Fri Jun  7 12:49:14 2002
+--- lum-pristine/fs/open.c	Fri Oct 12 16:48:42 2001
++++ lum/fs/open.c	Thu Jun 13 20:22:44 2002
 @@ -19,6 +19,8 @@
  #include <asm/uaccess.h>
  
@@ -1268,15 +1297,13 @@
  {
  	struct file * f;
  	struct inode *inode;
-@@ -690,6 +740,7 @@
- 			goto cleanup_all;
- 	}
- 	f->f_flags &= ~(O_CREAT | O_EXCL | O_NOCTTY | O_TRUNC);
-+	f->f_intent = it;
- 
- 	return f;
- 
-@@ -710,6 +761,13 @@
+@@ -705,11 +755,19 @@
+ cleanup_file:
+ 	put_filp(f);
+ cleanup_dentry:
++	intent_release(dentry);
+ 	dput(dentry);
+ 	mntput(mnt);
  	return ERR_PTR(error);
  }
  
@@ -1290,9 +1317,86 @@
  /*
   * Find an empty file descriptor entry, and mark it busy.
   */
---- lum-pristine/fs/stat.c	Thu Sep 13 17:04:43 2001
-+++ lum/fs/stat.c	Fri Jun  7 12:49:14 2002
-@@ -247,14 +247,16 @@
+--- lum-pristine/fs/stat.c	Thu Sep 13 19:04:43 2001
++++ lum/fs/stat.c	Fri Jun 14 01:51:11 2002
+@@ -13,6 +13,8 @@
+ 
+ #include <asm/uaccess.h>
+ 
++extern void intent_release(struct dentry *de);
++
+ /*
+  * Revalidate the inode. This is required for proper NFS attribute caching.
+  */
+@@ -135,13 +137,15 @@
+ asmlinkage long sys_stat(char * filename, struct __old_kernel_stat * statbuf)
+ {
+ 	struct nameidata nd;
++        struct lookup_intent it = {IT_GETATTR, 0};
+ 	int error;
+ 
+-	error = user_path_walk(filename, &nd);
++	error = user_path_walk_it(filename, &nd, &it);
+ 	if (!error) {
+ 		error = do_revalidate(nd.dentry);
+ 		if (!error)
+ 			error = cp_old_stat(nd.dentry->d_inode, statbuf);
++                intent_release(nd.dentry);
+ 		path_release(&nd);
+ 	}
+ 	return error;
+@@ -151,13 +155,15 @@
+ asmlinkage long sys_newstat(char * filename, struct stat * statbuf)
+ {
+ 	struct nameidata nd;
++        struct lookup_intent it = {IT_GETATTR, 0};
+ 	int error;
+ 
+-	error = user_path_walk(filename, &nd);
++	error = user_path_walk_it(filename, &nd, &it);
+ 	if (!error) {
+ 		error = do_revalidate(nd.dentry);
+ 		if (!error)
+ 			error = cp_new_stat(nd.dentry->d_inode, statbuf);
++                intent_release(nd.dentry);
+ 		path_release(&nd);
+ 	}
+ 	return error;
+@@ -172,13 +178,15 @@
+ asmlinkage long sys_lstat(char * filename, struct __old_kernel_stat * statbuf)
+ {
+ 	struct nameidata nd;
++        struct lookup_intent it = {IT_GETATTR, 0};
+ 	int error;
+ 
+-	error = user_path_walk_link(filename, &nd);
++	error = user_path_walk_link_it(filename, &nd, &it);
+ 	if (!error) {
+ 		error = do_revalidate(nd.dentry);
+ 		if (!error)
+ 			error = cp_old_stat(nd.dentry->d_inode, statbuf);
++                intent_release(nd.dentry);
+ 		path_release(&nd);
+ 	}
+ 	return error;
+@@ -189,13 +197,15 @@
+ asmlinkage long sys_newlstat(char * filename, struct stat * statbuf)
+ {
+ 	struct nameidata nd;
++        struct lookup_intent it = {IT_GETATTR, 0};
+ 	int error;
+ 
+-	error = user_path_walk_link(filename, &nd);
++	error = user_path_walk_link_it(filename, &nd, &it);
+ 	if (!error) {
+ 		error = do_revalidate(nd.dentry);
+ 		if (!error)
+ 			error = cp_new_stat(nd.dentry->d_inode, statbuf);
++                intent_release(nd.dentry);
+ 		path_release(&nd);
+ 	}
+ 	return error;
+@@ -247,20 +257,22 @@
  {
  	struct nameidata nd;
  	int error;
@@ -1307,11 +1411,17 @@
  	if (!error) {
  		struct inode * inode = nd.dentry->d_inode;
 -
-+		nd.dentry->d_it = &it;
  		error = -EINVAL;
  		if (inode->i_op && inode->i_op->readlink &&
  		    !(error = do_revalidate(nd.dentry))) {
-@@ -333,9 +335,12 @@
+ 			UPDATE_ATIME(inode);
+ 			error = inode->i_op->readlink(nd.dentry, buf, bufsiz);
+ 		}
++                intent_release(nd.dentry);
+ 		path_release(&nd);
+ 	}
+ 	return error;
+@@ -333,12 +345,15 @@
  {
  	struct nameidata nd;
  	int error;
@@ -1321,11 +1431,14 @@
 -	error = user_path_walk(filename, &nd);
 +	error = user_path_walk_it(filename, &nd, &it);
  	if (!error) {
-+		nd.dentry->d_it = &it;
  		error = do_revalidate(nd.dentry);
  		if (!error)
  			error = cp_new_stat64(nd.dentry->d_inode, statbuf);
-@@ -348,9 +353,12 @@
++                intent_release(nd.dentry);
+ 		path_release(&nd);
+ 	}
+ 	return error;
+@@ -348,12 +363,15 @@
  {
  	struct nameidata nd;
  	int error;
@@ -1335,11 +1448,14 @@
 -	error = user_path_walk_link(filename, &nd);
 +	error = user_path_walk_link_it(filename, &nd, &it);
  	if (!error) {
-+		nd.dentry->d_it = &it;
  		error = do_revalidate(nd.dentry);
  		if (!error)
  			error = cp_new_stat64(nd.dentry->d_inode, statbuf);
-@@ -363,11 +371,16 @@
++                intent_release(nd.dentry);
+ 		path_release(&nd);
+ 	}
+ 	return error;
+@@ -363,6 +381,10 @@
  {
  	struct file * f;
  	int err = -EBADF;
@@ -1350,9 +1466,3 @@
  
  	f = fget(fd);
  	if (f) {
- 		struct dentry * dentry = f->f_dentry;
- 
-+		dentry->d_it = &it;
- 		err = do_revalidate(dentry);
- 		if (!err)
- 			err = cp_new_stat64(dentry->d_inode, statbuf);
