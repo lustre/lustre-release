@@ -650,11 +650,17 @@ static void lustre_manual_cleanup(struct ll_sb_info *sbi)
 
 void lustre_put_super(struct super_block *sb)
 {
+        struct obd_device *obd;
         struct ll_sb_info *sbi = ll_s2sbi(sb);
+        int force_umount;
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op: sb %p\n", sb);
-
+        obd = class_exp2obd(sbi->ll_mdc_exp);
+        if (obd)
+                force_umount = obd->obd_no_recov;
+        obd = NULL;
+        
         lustre_common_put_super(sb);
 
         if (sbi->ll_lmd != NULL) {
@@ -662,6 +668,12 @@ void lustre_put_super(struct super_block *sb)
                 int len = strlen(sbi->ll_lmd->lmd_profile) + sizeof("-clean")+1;
                 int err;
                 struct config_llog_instance cfg;
+
+                if (force_umount) {
+                        CERROR("force umount, doing manual cleanup\n");
+                        lustre_manual_cleanup(sbi);
+                        GOTO(free_lmd, 0);
+                }
 
                 cfg.cfg_instance = sbi->ll_instance;
                 cfg.cfg_uuid = sbi->ll_sb_uuid;
@@ -677,6 +689,7 @@ void lustre_put_super(struct super_block *sb)
                 }
 
                 OBD_FREE(cln_prof, len);
+        free_lmd:
                 OBD_FREE(sbi->ll_lmd, sizeof(*sbi->ll_lmd));
                 OBD_FREE(sbi->ll_instance, strlen(sbi->ll_instance) + 1);
         }
