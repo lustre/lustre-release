@@ -891,6 +891,11 @@ ksocknal_queue_tx_locked (ksock_tx_t *tx, ksock_conn_t *conn)
 
         spin_lock_irqsave (&sched->kss_lock, flags);
 
+        conn->ksnc_tx_deadline = jiffies + 
+                                 ksocknal_data.ksnd_io_timeout * HZ;
+        mb();
+        /* Extend deadline BEFORE tx is enqueued */
+
         list_add_tail (&tx->tx_list, &conn->ksnc_tx_queue);
                 
         if (conn->ksnc_tx_ready &&      /* able to send */
@@ -2118,28 +2123,30 @@ ksocknal_hello (struct socket *sock, ptl_nid_t *nid, int *type, __u64 *incarnati
 }
 
 int
-ksocknal_setup_sock (struct socket *sock) 
+ksocknal_setup_sock (struct socket *sock)
 {
         mm_segment_t    oldmm = get_fs ();
         int             rc;
         int             option;
         struct linger   linger;
 
+        sock->sk->allocation = GFP_NOFS;
+
         /* Ensure this socket aborts active sends immediately when we close
          * it. */
-        
+
         linger.l_onoff = 0;
         linger.l_linger = 0;
 
         set_fs (KERNEL_DS);
-        rc = sock_setsockopt (sock, SOL_SOCKET, SO_LINGER, 
+        rc = sock_setsockopt (sock, SOL_SOCKET, SO_LINGER,
                               (char *)&linger, sizeof (linger));
         set_fs (oldmm);
         if (rc != 0) {
                 CERROR ("Can't set SO_LINGER: %d\n", rc);
                 return (rc);
         }
-        
+
         option = -1;
         set_fs (KERNEL_DS);
         rc = sock->ops->setsockopt (sock, SOL_TCP, TCP_LINGER2,

@@ -775,7 +775,6 @@ portals_debug_msg(int subsys, int mask, char *file, const char *fn,
                         /* If this is the first time, leave a marker in the
                          * output */
                         debug_daemon_state.overlapped = 1;
-                        ap = NULL;
                         format = "DEBUG MARKER: Debug buffer overlapped\n";
                         printk(KERN_ERR "LustreError: debug daemon buffer "
                                "overlapped\n");
@@ -982,7 +981,11 @@ extern int lookup_symbol(unsigned long address, char *buf, int buflen);
 
 char *portals_debug_dumpstack(void)
 {
+#if defined(__x86_64__)
+        unsigned long esp = current->thread.rsp;
+#else
         unsigned long esp = current->thread.esp;
+#endif
         unsigned long *stack = (unsigned long *)&esp;
         int size;
         unsigned long addr;
@@ -1012,7 +1015,7 @@ char *portals_debug_dumpstack(void)
                                             /* fix length + sizeof('\0') */
                                     <= pbuf + strlen(buffer) + 28 + 1)
                                         break;
-                                size = sprintf(pbuf, "([<%08lx>] %s (0x%x)) ",
+                                size = sprintf(pbuf, "([<%08lx>] %s (0x%p)) ",
                                                addr, buffer, stack-1);
                         }
                         pbuf += size;

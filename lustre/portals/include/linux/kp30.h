@@ -74,8 +74,10 @@ extern unsigned int portal_cerror;
 
 #ifdef __KERNEL__
 # include <linux/sched.h> /* THREAD_SIZE */
-#else
-# define THREAD_SIZE 8192
+#else 
+# ifndef THREAD_SIZE /* x86_64 has THREAD_SIZE in userspace */
+#  define THREAD_SIZE 8192
+# endif
 #endif
 
 #define LUSTRE_TRACE_SIZE (THREAD_SIZE >> 5)
@@ -277,13 +279,17 @@ do {                                                                          \
 
 #define PORTAL_VMALLOC_SIZE        16384
 
+#ifndef GFP_MEMALLOC
+#define GFP_MEMALLOC 0
+#endif
+
 #define PORTAL_ALLOC(ptr, size)                                           \
 do {                                                                      \
         LASSERT (!in_interrupt());                                        \
         if ((size) > PORTAL_VMALLOC_SIZE)                                 \
                 (ptr) = vmalloc(size);                                    \
         else                                                              \
-                (ptr) = kmalloc((size), GFP_NOFS);                        \
+                (ptr) = kmalloc((size), (GFP_KERNEL | GFP_MEMALLOC));     \
         if ((ptr) == NULL)                                                \
                 CERROR("PORTALS: out of memory at %s:%d (tried to alloc '"\
                        #ptr "' = %d)\n", __FILE__, __LINE__, (int)(size));\
@@ -312,10 +318,14 @@ do {                                                                    \
                s, (ptr), atomic_read(&portal_kmemory));                 \
 } while (0)
 
+#ifndef SLAB_MEMALLOC
+#define SLAB_MEMALLOC 0
+#endif
+
 #define PORTAL_SLAB_ALLOC(ptr, slab, size)                                \
 do {                                                                      \
         LASSERT(!in_interrupt());                                         \
-        (ptr) = kmem_cache_alloc((slab), SLAB_KERNEL);                    \
+        (ptr) = kmem_cache_alloc((slab), (SLAB_KERNEL | SLAB_MEMALLOC));  \
         if ((ptr) == NULL) {                                              \
                 CERROR("PORTALS: out of memory at %s:%d (tried to alloc"  \
                        " '" #ptr "' from slab '" #slab "')\n", __FILE__,  \
@@ -690,6 +700,9 @@ typedef struct {
         long        lwte_p2;
         long        lwte_p3;
         long        lwte_p4;
+#if BITS_PER_LONG > 32
+        long        lwte_pad;
+#endif
 } lwt_event_t;
 
 #if LWT_SUPPORT
@@ -1112,14 +1125,19 @@ void kportal_put_ni (int nal);
 # endif
 #endif
 
-#if (BITS_PER_LONG == 32 || __WORDSIZE == 32)
+#if defined(__x86_64__)
+# define LPU64 "%Lu"
+# define LPD64 "%Ld"
+# define LPX64 "%#Lx"
+# define LPSZ  "%lu"
+# define LPSSZ "%ld"
+#elif (BITS_PER_LONG == 32 || __WORDSIZE == 32)
 # define LPU64 "%Lu"
 # define LPD64 "%Ld"
 # define LPX64 "%#Lx"
 # define LPSZ  "%u"
 # define LPSSZ "%d"
-#endif
-#if (BITS_PER_LONG == 64 || __WORDSIZE == 64)
+#elif (BITS_PER_LONG == 64 || __WORDSIZE == 64)
 # define LPU64 "%lu"
 # define LPD64 "%ld"
 # define LPX64 "%#lx"

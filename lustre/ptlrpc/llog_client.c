@@ -45,7 +45,7 @@
 static int llog_client_create(struct llog_ctxt *ctxt, struct llog_handle **res,
                             struct llog_logid *logid, char *name)
 {
-        struct obd_import *imp; 
+        struct obd_import *imp;
         struct llogd_body req_body;
         struct llogd_body *body;
         struct llog_handle *handle;
@@ -66,17 +66,17 @@ static int llog_client_create(struct llog_ctxt *ctxt, struct llog_handle **res,
         *res = handle;
 
         memset(&req_body, 0, sizeof(req_body));
-        if (logid) 
+        if (logid)
                 req_body.lgd_logid = *logid;
         req_body.lgd_ctxt_idx = ctxt->loc_idx - 1;
-        
+
         if (name) {
                 size[bufcount] = strlen(name) + 1;
                 tmp[bufcount] = name;
                 bufcount++;
         }
 
-        req = ptlrpc_prep_req(imp, LLOG_ORIGIN_HANDLE_CREATE, bufcount, size, tmp);
+        req = ptlrpc_prep_req(imp, LLOG_ORIGIN_HANDLE_CREATE,bufcount,size,tmp);
         if (!req)
                 GOTO(err_free, rc = -ENOMEM);
 
@@ -84,7 +84,7 @@ static int llog_client_create(struct llog_ctxt *ctxt, struct llog_handle **res,
         rc = ptlrpc_queue_wait(req);
         if (rc)
                 GOTO(err_free, rc);
-        
+
 	body = lustre_swab_repbuf(req, 0, sizeof(*body),
                                  lustre_swab_llogd_body);
 	if (body == NULL) {
@@ -106,9 +106,9 @@ err_free:
 }
 
 
-static int llog_client_next_block(struct llog_handle *loghandle, 
-                                         int *cur_idx, int next_idx,
-                                         __u64 *cur_offset, void *buf, int len)
+static int llog_client_next_block(struct llog_handle *loghandle,
+                                  int *cur_idx, int next_idx,
+                                  __u64 *cur_offset, void *buf, int len)
 {
         struct obd_import *imp = loghandle->lgh_ctxt->loc_imp;
         struct ptlrpc_request *req = NULL;
@@ -119,32 +119,32 @@ static int llog_client_next_block(struct llog_handle *loghandle,
         int rc;
         ENTRY;
 
-        req = ptlrpc_prep_req(imp, LLOG_ORIGIN_HANDLE_NEXT_BLOCK, 1, &size, NULL);
+        req = ptlrpc_prep_req(imp, LLOG_ORIGIN_HANDLE_NEXT_BLOCK, 1,&size,NULL);
         if (!req)
                 GOTO(out, rc = -ENOMEM);
-        
+
         body = lustre_msg_buf(req->rq_reqmsg, 0, sizeof (*body));
         body->lgd_logid = loghandle->lgh_id;
         body->lgd_ctxt_idx = loghandle->lgh_ctxt->loc_idx - 1;
         body->lgd_llh_flags = loghandle->lgh_hdr->llh_flags;
-        body->lgd_cur_offset = *cur_offset;
         body->lgd_index = next_idx;
         body->lgd_saved_index = *cur_idx;
         body->lgd_len = len;
+        body->lgd_cur_offset = *cur_offset;
         repsize[1] = len;
 
         req->rq_replen = lustre_msg_size(2, repsize);
         rc = ptlrpc_queue_wait(req);
         if (rc)
                 GOTO(out, rc);
-        
+
 	body = lustre_swab_repbuf(req, 0, sizeof(*body),
                                  lustre_swab_llogd_body);
 	if (body == NULL) {
                 CERROR ("Can't unpack llogd_body\n");
                 GOTO(out, rc =-EFAULT);
 	}
-        
+
         ptr = lustre_msg_buf(req->rq_repmsg, 1, len);
 	if (ptr == NULL) {
                 CERROR ("Can't unpack bitmap\n");
@@ -153,7 +153,7 @@ static int llog_client_next_block(struct llog_handle *loghandle,
 
         *cur_idx = body->lgd_saved_index;
         *cur_offset = body->lgd_cur_offset;
-        
+
         memcpy(buf, ptr, len);
 
 out:
@@ -174,10 +174,10 @@ static int llog_client_read_header(struct llog_handle *handle)
         int rc;
         ENTRY;
 
-        req = ptlrpc_prep_req(imp, LLOG_ORIGIN_HANDLE_READ_HEADER, 1, &size, NULL);
+        req = ptlrpc_prep_req(imp, LLOG_ORIGIN_HANDLE_READ_HEADER,1,&size,NULL);
         if (!req)
                 GOTO(out, rc = -ENOMEM);
-        
+
         body = lustre_msg_buf(req->rq_reqmsg, 0, sizeof (*body));
         body->lgd_logid = handle->lgh_id;
         body->lgd_ctxt_idx = handle->lgh_ctxt->loc_idx - 1;
@@ -187,9 +187,8 @@ static int llog_client_read_header(struct llog_handle *handle)
         rc = ptlrpc_queue_wait(req);
         if (rc)
                 GOTO(out, rc);
-        
-	hdr = lustre_swab_repbuf(req, 0, sizeof(*hdr),
-                                 lustre_swab_llog_hdr);
+
+	hdr = lustre_swab_repbuf(req, 0, sizeof(*hdr), lustre_swab_llog_hdr);
 	if (hdr == NULL) {
                 CERROR ("Can't unpack llog_hdr\n");
                 GOTO(out, rc =-EFAULT);

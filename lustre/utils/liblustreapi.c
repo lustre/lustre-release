@@ -29,6 +29,8 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
+#include <stddef.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -45,6 +47,8 @@
 #include <linux/lustre_lib.h>
 #include <linux/lustre_user.h>
 #include <linux/obd_lov.h>
+
+#include <portals/ptlctl.h>
 
 static void err_msg(char *fmt, ...)
 {
@@ -447,4 +451,83 @@ out:
         cleanup_find(&param);
         return ret;
 }
+
+#define MAX_STRING_SIZE 128
+
+int op_check(int type_num, char **obd_type, char *dir)
+{
+        int rc=0;
+        int i=0,j=0,k;
+        char buf[OBD_MAX_IOCTL_BUFFER];
+        char *buf2;
+        struct obd_ioctl_data *data = (struct obd_ioctl_data *)buf;
+                                                                                                                     
+        memset(buf, 0, sizeof(buf));
+        data->ioc_version = OBD_IOCTL_VERSION;
+        data->ioc_inllen1 = sizeof(buf) - size_round(sizeof(*data));
+        data->ioc_len = obd_ioctl_packlen(data);
+                                                                                                                             
+        rc = l_ioctl(OBD_DEV_ID, OBD_IOC_LIST, data);
+                   
+        buf2 = data->ioc_bulk;
+
+        if (!data->ioc_inlbuf1) {
+                err_msg("No buffer passed!\n");
+                rc = errno;
+        }
+
+        do {
+                char status[3];
+                char obd_type_name[sizeof(struct obd_type)];
+                char obd_name[MAX_STRING_SIZE];
+                char obd_uuid[sizeof(struct obd_uuid)];
+                int obd_type_refcnt;
+
+                char rawbuf[OBD_MAX_IOCTL_BUFFER];
+                char *bufl = rawbuf;
+                int max = sizeof(rawbuf);
+                struct obd_ioctl_data datal;
+                struct obd_statfs osfs_buffer;
+                                                                                
+                memset (&osfs_buffer, 0, sizeof (osfs_buffer));
+
+                memset(bufl, 0, sizeof(rawbuf));
+                datal.ioc_pbuf1 = (char *)&osfs_buffer;
+                datal.ioc_plen1 = sizeof (osfs_buffer);
+
+                j = sscanf(buf2,"%d %s %s %s %s %d",&j,
+                             status,obd_type_name,
+                             obd_name, obd_uuid,
+                             &obd_type_refcnt);
+
+                if (j != 6) break;
+
+                for (k=0;k<type_num;k++) 
+                        if (strcmp(obd_type_name, obd_type[k]) == 0) {
+                                datal.ioc_inlbuf1 = obd_name;
+                                datal.ioc_inllen1 = strlen(obd_name) + 1; 
+
+                                obd_ioctl_pack(&datal,&bufl,max);
+
+                                rc = ioctl(dirfd(opendir(dir)), OBD_IOC_PING,bufl);
+
+                                if (rc) {
+                                        fprintf(stderr, "error: check %s: %s\n", 
+                                                obd_name, strerror(rc = errno));
+                                } else {
+                                        printf("%s active.\n",obd_name);
+                                }
+                        }
+
+                if (j==6)
+                        for (i=0;buf2[i]!= '\n';i++);
+
+                buf2 +=(i+1);
+
+        } while (j==6);                                                                                                     
+
+        return rc;
+}
+
+#undef MAX_STRING_SIZE
 

@@ -47,7 +47,7 @@ static int nal_write(nal_cb_t *nal,
                      void *private,
                      user_ptr dst_addr,
                      void *src_addr,
-                     ptl_size_t len)
+                     size_t len)
 {
     memcpy(dst_addr, src_addr, len);
     return 0;
@@ -64,7 +64,7 @@ static int nal_read(nal_cb_t * nal,
 }
 
 static void *nal_malloc(nal_cb_t *nal,
-                        ptl_size_t len)
+                        size_t len)
 {
     void *buf =  malloc(len);
     return buf;
@@ -72,7 +72,7 @@ static void *nal_malloc(nal_cb_t *nal,
 
 static void nal_free(nal_cb_t *nal,
                      void *buf,
-                     ptl_size_t len)
+                     size_t len)
 {
     free(buf);
 }

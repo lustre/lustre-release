@@ -1,0 +1,59 @@
+Index: linux-2.4.22-vanilla/include/linux/mm.h
+===================================================================
+--- linux-2.4.22-vanilla.orig/include/linux/mm.h	2003-11-17 15:26:32.000000000 +0300
++++ linux-2.4.22-vanilla/include/linux/mm.h	2003-11-17 15:40:32.000000000 +0300
+@@ -612,6 +612,7 @@
+ #define __GFP_IO	0x40	/* Can start low memory physical IO? */
+ #define __GFP_HIGHIO	0x80	/* Can start high mem physical IO? */
+ #define __GFP_FS	0x100	/* Can call down to low-level FS? */
++#define __GFP_MEMALLOC	0x200	/* like PF_MEMALLOC: see __alloc_pages */
+ 
+ #define GFP_NOHIGHIO	(__GFP_HIGH | __GFP_WAIT | __GFP_IO)
+ #define GFP_NOIO	(__GFP_HIGH | __GFP_WAIT)
+@@ -622,6 +623,7 @@
+ #define GFP_KERNEL	(__GFP_HIGH | __GFP_WAIT | __GFP_IO | __GFP_HIGHIO | __GFP_FS)
+ #define GFP_NFS		(__GFP_HIGH | __GFP_WAIT | __GFP_IO | __GFP_HIGHIO | __GFP_FS)
+ #define GFP_KSWAPD	(             __GFP_WAIT | __GFP_IO | __GFP_HIGHIO | __GFP_FS)
++#define GFP_MEMALLOC	__GFP_MEMALLOC
+ 
+ /* Flag - indicates that the buffer will be suitable for DMA.  Ignored on some
+    platforms, used as appropriate on others */
+Index: linux-2.4.22-vanilla/mm/page_alloc.c
+===================================================================
+--- linux-2.4.22-vanilla.orig/mm/page_alloc.c	2003-11-13 18:19:51.000000000 +0300
++++ linux-2.4.22-vanilla/mm/page_alloc.c	2003-11-17 15:40:32.000000000 +0300
+@@ -377,7 +377,8 @@
+ 	/* here we're in the low on memory slow path */
+ 
+ rebalance:
+-	if (current->flags & (PF_MEMALLOC | PF_MEMDIE)) {
++	if (current->flags & (PF_MEMALLOC | PF_MEMDIE) || 
++			gfp_mask & __GFP_MEMALLOC) {
+ 		zone = zonelist->zones;
+ 		for (;;) {
+ 			zone_t *z = *(zone++);
+Index: linux-2.4.22-vanilla/include/linux/slab.h
+===================================================================
+--- linux-2.4.22-vanilla.orig/include/linux/slab.h	2003-11-17 14:58:37.000000000 +0300
++++ linux-2.4.22-vanilla/include/linux/slab.h	2003-11-17 15:42:13.000000000 +0300
+@@ -23,6 +23,7 @@
+ #define	SLAB_KERNEL		GFP_KERNEL
+ #define	SLAB_NFS		GFP_NFS
+ #define	SLAB_DMA		GFP_DMA
++#define	SLAB_MEMALLOC		GFP_MEMALLOC
+ 
+ #define SLAB_LEVEL_MASK		(__GFP_WAIT|__GFP_HIGH|__GFP_IO|__GFP_HIGHIO|__GFP_FS)
+ #define	SLAB_NO_GROW		0x00001000UL	/* don't grow a cache */
+Index: linux-2.4.22-vanilla/mm/slab.c
+===================================================================
+--- linux-2.4.22-vanilla.orig/mm/slab.c	2003-11-13 17:39:29.000000000 +0300
++++ linux-2.4.22-vanilla/mm/slab.c	2003-11-17 15:42:13.000000000 +0300
+@@ -1115,7 +1115,7 @@
+ 	/* Be lazy and only check for valid flags here,
+  	 * keeping it out of the critical path in kmem_cache_alloc().
+ 	 */
+-	if (flags & ~(SLAB_DMA|SLAB_LEVEL_MASK|SLAB_NO_GROW))
++	if (flags & ~(SLAB_DMA|SLAB_LEVEL_MASK|SLAB_NO_GROW|SLAB_MEMALLOC))
+ 		BUG();
+ 	if (flags & SLAB_NO_GROW)
+ 		return 0;

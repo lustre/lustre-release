@@ -1,0 +1,15 @@
+ include/linux/mm.h |    1 +
+ 1 files changed, 1 insertion(+)
+
+Index: linux-2.4.19-pre1/include/linux/mm.h
+===================================================================
+--- linux-2.4.19-pre1.orig/include/linux/mm.h	2003-11-20 19:24:06.000000000 +0300
++++ linux-2.4.19-pre1/include/linux/mm.h	2003-11-21 02:00:13.000000000 +0300
+@@ -162,6 +162,7 @@
+ 	wait_queue_head_t wait;		/* Page locked?  Stand in line... */
+ 	struct page **pprev_hash;	/* Complement to *next_hash. */
+ 	struct buffer_head * buffers;	/* Buffer maps us to a disk block. */
++	unsigned long private;
+ 	void *virtual;			/* Kernel virtual address (NULL if
+ 					   not kmapped, ie. highmem) */
+ 	struct zone_struct *zone;	/* Memory zone we are in. */

@@ -137,15 +137,15 @@ int llog_origin_handle_next_block(struct ptlrpc_request *req)
 		GOTO(out_close, rc);
 
 	memset(buf, 0, LLOG_CHUNK_SIZE);
-	rc = llog_next_block(loghandle, &body->lgd_saved_index, 
-                             body->lgd_index, 
+	rc = llog_next_block(loghandle, &body->lgd_saved_index,
+                             body->lgd_index,
 			     &body->lgd_cur_offset, buf, LLOG_CHUNK_SIZE);
 	if (rc)
 		GOTO(out_close, rc);
 
 
         rc = lustre_pack_reply(req, 2, size, NULL);
-	if (rc) 
+	if (rc)
                 GOTO(out_close, rc = -ENOMEM);
 
         ptr = lustre_msg_buf(req->rq_repmsg, 0, sizeof (body));
@@ -210,7 +210,7 @@ int llog_origin_handle_read_header(struct ptlrpc_request *req)
 
 
         rc = lustre_pack_reply(req, 1, size, NULL);
-	if (rc) 
+	if (rc)
                 GOTO(out_close, rc = -ENOMEM);
 
         hdr = lustre_msg_buf(req->rq_repmsg, 0, sizeof (*hdr));

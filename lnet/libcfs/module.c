@@ -233,7 +233,7 @@ kportal_router_cmd(struct portals_cfg *pcfg, void * private)
                 CDEBUG (D_IOCTL, "Removing routes via [%d] "LPU64" : "LPU64" - "LPU64"\n",
                         pcfg->pcfg_gw_nal, pcfg->pcfg_nid, 
                         pcfg->pcfg_nid2, pcfg->pcfg_nid3);
-                err = kportal_del_route (pcfg->pcfg_nal, pcfg->pcfg_nid,
+                err = kportal_del_route (pcfg->pcfg_gw_nal, pcfg->pcfg_nid,
                                          pcfg->pcfg_nid2, pcfg->pcfg_nid3);
                 break;
 
