@@ -141,10 +141,10 @@ failed:
 
 static int handle_incoming_request(struct obd_device *obddev,
                                    struct ptlrpc_service *svc,
-                                   ptl_event_t *event)
+                                   ptl_event_t *event,
+                                   struct ptlrpc_request *request)
 {
         struct ptlrpc_request_buffer_desc *rqbd = event->mem_desc.user_ptr;
-        struct ptlrpc_request request;
         int rc;
 
         /* FIXME: If we move to an event-driven model, we should put the request
@@ -154,64 +154,63 @@ static int handle_incoming_request(struct obd_device *obddev,
         LASSERT (rqbd->rqbd_buffer == event->mem_desc.start);
         LASSERT (event->offset == 0);
 
-        memset(&request, 0, sizeof(request));
-        request.rq_svc = svc;
-        request.rq_obd = obddev;
-        request.rq_xid = event->match_bits;
-        request.rq_reqmsg = event->mem_desc.start + event->offset;
-        request.rq_reqlen = event->mem_desc.length;
+        request->rq_svc = svc;
+        request->rq_obd = obddev;
+        request->rq_xid = event->match_bits;
+        request->rq_reqmsg = event->mem_desc.start + event->offset;
+        request->rq_reqlen = event->mem_desc.length;
 
-        if (request.rq_reqlen < sizeof(struct lustre_msg)) {
+        if (request->rq_reqlen < sizeof(struct lustre_msg)) {
                 CERROR("incomplete request (%d): ptl %d from "LPX64" xid "LPD64"\n",
-                       request.rq_reqlen, svc->srv_req_portal,
-                       event->initiator.nid, request.rq_xid);
+                       request->rq_reqlen, svc->srv_req_portal,
+                       event->initiator.nid, request->rq_xid);
                 spin_unlock(&svc->srv_lock);
                 RETURN(-EINVAL);
         }
 
-        if (NTOH__u32(request.rq_reqmsg->type) != PTL_RPC_MSG_REQUEST) {
+        if (NTOH__u32(request->rq_reqmsg->type) != PTL_RPC_MSG_REQUEST) {
                 CERROR("wrong packet type received (type=%u)\n",
-                       request.rq_reqmsg->type);
+                       request->rq_reqmsg->type);
                 LBUG();
                 spin_unlock(&svc->srv_lock);
                 RETURN(-EINVAL);
         }
 
-        if (request.rq_reqmsg->magic != PTLRPC_MSG_MAGIC) {
+        if (request->rq_reqmsg->magic != PTLRPC_MSG_MAGIC) {
                 CERROR("wrong lustre_msg magic %d: ptl %d from "LPX64" xid "LPD64"\n",
-                       request.rq_reqmsg->magic, svc->srv_req_portal,
-                       event->initiator.nid, request.rq_xid);
+                       request->rq_reqmsg->magic, svc->srv_req_portal,
+                       event->initiator.nid, request->rq_xid);
                 spin_unlock(&svc->srv_lock);
                 RETURN(-EINVAL);
         }
 
-        if (request.rq_reqmsg->version != PTLRPC_MSG_VERSION) {
+        if (request->rq_reqmsg->version != PTLRPC_MSG_VERSION) {
                 CERROR("wrong lustre_msg version %d: ptl %d from "LPX64" xid "LPD64"\n",
-                       request.rq_reqmsg->version, svc->srv_req_portal,
-                       event->initiator.nid, request.rq_xid);
+                       request->rq_reqmsg->version, svc->srv_req_portal,
+                       event->initiator.nid, request->rq_xid);
                 spin_unlock(&svc->srv_lock);
                 RETURN(-EINVAL);
         }
 
-        CDEBUG(D_NET, "got req "LPD64"\n", request.rq_xid);
+        CDEBUG(D_NET, "got req "LPD64"\n", request->rq_xid);
 
-        request.rq_peer.peer_nid = event->initiator.nid;
+        request->rq_peer.peer_nid = event->initiator.nid;
         /* FIXME: this NI should be the incoming NI.
          * We don't know how to find that from here. */
-        request.rq_peer.peer_ni = svc->srv_self.peer_ni;
+        request->rq_peer.peer_ni = svc->srv_self.peer_ni;
 
-        request.rq_export = class_conn2export((struct lustre_handle *)
-                                              request.rq_reqmsg);
+        request->rq_export = class_conn2export((struct lustre_handle *)
+                                               request->rq_reqmsg);
 
-        if (request.rq_export) {
-                request.rq_connection = request.rq_export->exp_connection;
-                ptlrpc_connection_addref(request.rq_connection);
+        if (request->rq_export) {
+                request->rq_connection = request->rq_export->exp_connection;
+                ptlrpc_connection_addref(request->rq_connection);
         }
 
         spin_unlock(&svc->srv_lock);
 
-        rc = svc->srv_handler(&request);
-        ptlrpc_put_connection(request.rq_connection);
+        rc = svc->srv_handler(request);
+        ptlrpc_put_connection(request->rq_connection);
 
         ptlrpc_link_svc_me (rqbd);
         return rc;
@@ -224,6 +223,8 @@ static int ptlrpc_main(void *arg)
         struct obd_device *obddev = data->dev;
         struct ptlrpc_service *svc = data->svc;
         struct ptlrpc_thread *thread = data->thread;
+        struct ptlrpc_request *request;
+        ptl_event_t *event;
 
         ENTRY;
 
@@ -243,12 +244,15 @@ static int ptlrpc_main(void *arg)
 
         /* XXX maintain a list of all managed devices: insert here */
 
+        OBD_ALLOC(event, sizeof(*event));
+        LASSERT(event);
+        OBD_ALLOC(request, sizeof(*request));
+        LASSERT(request);
+
         /* And now, loop forever on requests */
         while (1) {
-                ptl_event_t event;
-
                 wait_event(svc->srv_waitq,
-                           ptlrpc_check_event(svc, thread, &event));
+                           ptlrpc_check_event(svc, thread, event));
 
                 spin_lock(&svc->srv_lock);
 
@@ -260,8 +264,9 @@ static int ptlrpc_main(void *arg)
                 }
 
                 if (thread->t_flags & SVC_EVENT) {
-                        LASSERT (event.sequence != 0);
-                        rc = handle_incoming_request(obddev, svc, &event);
+                        LASSERT (event->sequence != 0);
+                        rc = handle_incoming_request(obddev, svc, event,
+                                                     request);
                         thread->t_flags &= ~SVC_EVENT;
                         continue;
                 }
@@ -271,6 +276,9 @@ static int ptlrpc_main(void *arg)
                 EXIT;
                 break;
         }
+
+        OBD_FREE(event, sizeof(*event));
+        OBD_FREE(request, sizeof(*request));
 
         thread->t_flags = SVC_STOPPED;
         wake_up(&thread->t_ctl_waitq);
