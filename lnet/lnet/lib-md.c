@@ -97,8 +97,8 @@ lib_md_build(lib_nal_t *nal, lib_md_t *lmd, ptl_md_t *umd, int unlink)
          * otherwise caller may only lib_md_free() it.
          */
 
-        if (!PtlHandleIsEqual (umd->eventq, PTL_EQ_NONE)) {
-                eq = ptl_handle2eq(&umd->eventq, nal);
+        if (!PtlHandleIsEqual (umd->eq_handle, PTL_EQ_NONE)) {
+                eq = ptl_handle2eq(&umd->eq_handle, nal);
                 if (eq == NULL)
                         return PTL_EQ_INVALID;
         }
@@ -232,7 +232,7 @@ lib_md_deconstruct(lib_nal_t *nal, lib_md_t *lmd, ptl_md_t *umd)
         umd->max_size = lmd->max_size;
         umd->options = lmd->options;
         umd->user_ptr = lmd->user_ptr;
-        ptl_eq2handle(&umd->eventq, nal, lmd->eq);
+        ptl_eq2handle(&umd->eq_handle, nal, lmd->eq);
 }
 
 int 
@@ -342,7 +342,8 @@ lib_api_md_unlink (nal_t *apinal, ptl_handle_md_t *mdh)
                 ev.type = PTL_EVENT_UNLINK;
                 ev.ni_fail_type = PTL_OK;
                 ev.unlinked = 1;
-                lib_md_deconstruct(nal, md, &ev.mem_desc);
+                lib_md_deconstruct(nal, md, &ev.md);
+                ptl_md2handle(&ev.md_handle, nal, md);
                 
                 lib_enq_event_locked(nal, NULL, md->eq, &ev);
         }
