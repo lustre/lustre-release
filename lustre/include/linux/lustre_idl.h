@@ -289,6 +289,7 @@ struct obdo {
         obd_count               o_misc;
         __u32                   o_easize;       /* epoch in ost writes */
         __u32                   o_mds;
+        __u32                   o_padding;
         char                    o_inline[OBD_INLINESZ]; /* fid in ost writes */
 };
 
