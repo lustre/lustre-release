@@ -52,7 +52,7 @@ static int ptlbd_sv_setup(struct obd_device *obddev, obd_count len, void *buf)
                 ptlrpc_init_svc(PTLBD_NEVENTS, PTLBD_NBUFS, PTLBD_BUFSIZE,
                                 PTLBD_MAXREQSIZE, PTLBD_REQUEST_PORTAL,
                                 PTLBD_REPLY_PORTAL,
-                                ptlbd_parse_req, "ptlbd_sv");
+                                ptlbd_handle, "ptlbd_sv", obddev);
 
         if (ptlbd->ptlbd_service == NULL) 
                 GOTO(out_filp, rc = -ENOMEM);
@@ -94,6 +94,8 @@ static struct obd_ops ptlbd_sv_obd_ops = {
         o_owner:        THIS_MODULE,
         o_setup:        ptlbd_sv_setup,
         o_cleanup:      ptlbd_sv_cleanup,
+        o_connect:      class_connect,
+        o_disconnect:   class_disconnect,
 };
 
 int ptlbd_sv_init(void)
