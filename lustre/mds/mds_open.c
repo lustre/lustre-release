@@ -1075,6 +1075,9 @@ int mds_mfd_close(struct ptlrpc_request *req, struct obd_device *obd,
                         CERROR("error in setattr(%s): rc %d\n", fidname, rc);
 #endif
         }
+        /* If other clients have this file open for write, rc will be > 0 */
+        if (rc > 0)
+                rc = 0;
         l_dput(mfd->mfd_dentry);
         mds_mfd_destroy(mfd);
 
