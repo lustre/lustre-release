@@ -9,9 +9,9 @@
  net/core/dev.c                 |   18 ++++++++++++++++--
  9 files changed, 145 insertions(+), 3 deletions(-)
 
---- linux-2.5.73/drivers/net/3c59x.c~dump_netdev	Sun Jun 22 11:32:27 2003
-+++ linux-2.5.73-n9560/drivers/net/3c59x.c	Mon Jun 30 14:56:29 2003
-@@ -907,6 +907,7 @@ static void set_rx_mode(struct net_devic
+--- linux-2.6.0-test1/drivers/net/3c59x.c~dump_netdev	2003-07-22 01:14:04.000000000 -0600
++++ linux-2.6.0-test1-braam/drivers/net/3c59x.c	2003-07-22 01:15:10.000000000 -0600
+@@ -900,6 +900,7 @@ static void set_rx_mode(struct net_devic
  static int vortex_ioctl(struct net_device *dev, struct ifreq *rq, int cmd);
  static void vortex_tx_timeout(struct net_device *dev);
  static void acpi_set_WOL(struct net_device *dev);
@@ -19,17 +19,17 @@
  
  /* This driver uses 'options' to pass the media type, full-duplex flag, etc. */
  /* Option count limit only -- unlimited interfaces are supported. */
-@@ -1463,6 +1464,9 @@ static int __devinit vortex_probe1(struc
+@@ -1448,6 +1449,9 @@ static int __devinit vortex_probe1(struc
  	dev->set_multicast_list = set_rx_mode;
  	dev->tx_timeout = vortex_tx_timeout;
  	dev->watchdog_timeo = (watchdog * HZ) / 1000;
 +#ifdef HAVE_POLL_CONTROLLER
 +	dev->poll_controller = &vorboom_poll;
 +#endif
- 	if (pdev && vp->enable_wol) {
+ 	if (pdev) {
  		vp->pm_state_valid = 1;
   		pci_save_state(VORTEX_PCI(vp), vp->power_state);
-@@ -2453,6 +2457,29 @@ handler_exit:
+@@ -2438,6 +2442,29 @@ handler_exit:
  	return IRQ_HANDLED;
  }
  
@@ -59,9 +59,9 @@
  static int vortex_rx(struct net_device *dev)
  {
  	struct vortex_private *vp = (struct vortex_private *)dev->priv;
---- linux-2.5.73/drivers/net/e100/e100_main.c~dump_netdev	Sun Jun 22 11:32:44 2003
-+++ linux-2.5.73-n9560/drivers/net/e100/e100_main.c	Mon Jun 30 14:56:29 2003
-@@ -558,6 +558,22 @@ e100_trigger_SWI(struct e100_private *bd
+--- linux-2.6.0-test1/drivers/net/e100/e100_main.c~dump_netdev	2003-07-13 21:34:02.000000000 -0600
++++ linux-2.6.0-test1-braam/drivers/net/e100/e100_main.c	2003-07-22 01:14:38.000000000 -0600
+@@ -551,6 +551,22 @@ e100_trigger_SWI(struct e100_private *bd
  	readw(&(bdp->scb->scb_status));	/* flushes last write, read-safe */
  }
  
@@ -84,7 +84,7 @@
  static int __devinit
  e100_found1(struct pci_dev *pcid, const struct pci_device_id *ent)
  {
-@@ -576,6 +592,9 @@ e100_found1(struct pci_dev *pcid, const 
+@@ -569,6 +585,9 @@ e100_found1(struct pci_dev *pcid, const 
  
  	SET_MODULE_OWNER(dev);
  
@@ -94,9 +94,9 @@
  	if (first_time) {
  		first_time = false;
          	printk(KERN_NOTICE "%s - version %s\n",
---- linux-2.5.73/drivers/net/e1000/e1000_main.c~dump_netdev	Sun Jun 22 11:32:41 2003
-+++ linux-2.5.73-n9560/drivers/net/e1000/e1000_main.c	Mon Jun 30 15:28:13 2003
-@@ -145,6 +145,7 @@ static void e1000_leave_82542_rst(struct
+--- linux-2.6.0-test1/drivers/net/e1000/e1000_main.c~dump_netdev	2003-07-13 21:32:43.000000000 -0600
++++ linux-2.6.0-test1-braam/drivers/net/e1000/e1000_main.c	2003-07-22 01:14:38.000000000 -0600
+@@ -138,6 +138,7 @@ static void e1000_leave_82542_rst(struct
  static inline void e1000_rx_checksum(struct e1000_adapter *adapter,
                                       struct e1000_rx_desc *rx_desc,
                                       struct sk_buff *skb);
@@ -104,7 +104,7 @@
  static void e1000_tx_timeout(struct net_device *dev);
  static void e1000_tx_timeout_task(struct net_device *dev);
  static void e1000_smartspeed(struct e1000_adapter *adapter);
-@@ -413,6 +414,9 @@ e1000_probe(struct pci_dev *pdev,
+@@ -402,6 +403,9 @@ e1000_probe(struct pci_dev *pdev,
  
  	adapter->bd_number = cards_found;
  
@@ -114,7 +114,7 @@
  	/* setup the private structure */
  
  	if(e1000_sw_init(adapter))
-@@ -1699,6 +1703,15 @@ e1000_xmit_frame(struct sk_buff *skb, st
+@@ -1700,6 +1704,15 @@ e1000_xmit_frame(struct sk_buff *skb, st
  	return 0;
  }
  
@@ -130,9 +130,9 @@
  /**
   * e1000_tx_timeout - Respond to a Tx Hang
   * @netdev: network interface device structure
---- linux-2.5.73/drivers/net/eepro100.c~dump_netdev	Sun Jun 22 11:32:57 2003
-+++ linux-2.5.73-n9560/drivers/net/eepro100.c	Mon Jun 30 14:56:29 2003
-@@ -542,6 +542,7 @@ static void speedo_refill_rx_buffers(str
+--- linux-2.6.0-test1/drivers/net/eepro100.c~dump_netdev	2003-07-13 21:35:52.000000000 -0600
++++ linux-2.6.0-test1-braam/drivers/net/eepro100.c	2003-07-22 01:14:38.000000000 -0600
+@@ -543,6 +543,7 @@ static void speedo_refill_rx_buffers(str
  static int speedo_rx(struct net_device *dev);
  static void speedo_tx_buffer_gc(struct net_device *dev);
  static irqreturn_t speedo_interrupt(int irq, void *dev_instance, struct pt_regs *regs);
@@ -140,7 +140,7 @@
  static int speedo_close(struct net_device *dev);
  static struct net_device_stats *speedo_get_stats(struct net_device *dev);
  static int speedo_ioctl(struct net_device *dev, struct ifreq *rq, int cmd);
-@@ -880,6 +881,9 @@ static int __devinit speedo_found1(struc
+@@ -885,6 +886,9 @@ static int __devinit speedo_found1(struc
  	dev->get_stats = &speedo_get_stats;
  	dev->set_multicast_list = &set_rx_mode;
  	dev->do_ioctl = &speedo_ioctl;
@@ -148,9 +148,9 @@
 +	dev->poll_controller = &poll_speedo;
 +#endif
  
- 	return 0;
- }
-@@ -1661,6 +1665,23 @@ static irqreturn_t speedo_interrupt(int 
+ 	if (register_netdevice(dev))
+ 		goto err_free_unlock;
+@@ -1675,6 +1679,23 @@ static irqreturn_t speedo_interrupt(int 
  	return IRQ_RETVAL(handled);
  }
  
@@ -174,8 +174,8 @@
  static inline struct RxFD *speedo_rx_alloc(struct net_device *dev, int entry)
  {
  	struct speedo_private *sp = (struct speedo_private *)dev->priv;
---- linux-2.5.73/drivers/net/smc-ultra.c~dump_netdev	Sun Jun 22 11:32:33 2003
-+++ linux-2.5.73-n9560/drivers/net/smc-ultra.c	Mon Jun 30 14:56:29 2003
+--- linux-2.6.0-test1/drivers/net/smc-ultra.c~dump_netdev	2003-07-13 21:30:47.000000000 -0600
++++ linux-2.6.0-test1-braam/drivers/net/smc-ultra.c	2003-07-22 01:14:38.000000000 -0600
 @@ -122,6 +122,14 @@ MODULE_DEVICE_TABLE(isapnp, ultra_device
  #define ULTRA_IO_EXTENT 32
  #define EN0_ERWCNT		0x08	/* Early receive warning count. */
@@ -201,8 +201,8 @@
  	if (base_addr > 0x1ff)		/* Check a single specified location. */
  		return ultra_probe1(dev, base_addr);
  	else if (base_addr != 0)	/* Don't probe at all. */
---- linux-2.5.73/drivers/net/tlan.c~dump_netdev	Sun Jun 22 11:32:33 2003
-+++ linux-2.5.73-n9560/drivers/net/tlan.c	Mon Jun 30 14:56:29 2003
+--- linux-2.6.0-test1/drivers/net/tlan.c~dump_netdev	2003-07-13 21:30:42.000000000 -0600
++++ linux-2.6.0-test1-braam/drivers/net/tlan.c	2003-07-22 01:14:38.000000000 -0600
 @@ -345,6 +345,8 @@ static int	TLan_EeSendByte( u16, u8, int
  static void	TLan_EeReceiveByte( u16, u8 *, int );
  static int	TLan_EeReadByte( struct net_device *, u8, u8 * );
@@ -238,9 +238,9 @@
  
  
  	/***************************************************************
---- linux-2.5.73/drivers/net/tulip/tulip_core.c~dump_netdev	Sun Jun 22 11:32:56 2003
-+++ linux-2.5.73-n9560/drivers/net/tulip/tulip_core.c	Mon Jun 30 14:56:29 2003
-@@ -243,6 +243,7 @@ static void tulip_down(struct net_device
+--- linux-2.6.0-test1/drivers/net/tulip/tulip_core.c~dump_netdev	2003-07-13 21:34:48.000000000 -0600
++++ linux-2.6.0-test1-braam/drivers/net/tulip/tulip_core.c	2003-07-22 01:14:38.000000000 -0600
+@@ -245,6 +245,7 @@ static void tulip_down(struct net_device
  static struct net_device_stats *tulip_get_stats(struct net_device *dev);
  static int private_ioctl(struct net_device *dev, struct ifreq *rq, int cmd);
  static void set_rx_mode(struct net_device *dev);
@@ -248,7 +248,7 @@
  
  
  
-@@ -1618,6 +1619,9 @@ static int __devinit tulip_init_one (str
+@@ -1630,6 +1631,9 @@ static int __devinit tulip_init_one (str
  	dev->get_stats = tulip_get_stats;
  	dev->do_ioctl = private_ioctl;
  	dev->set_multicast_list = set_rx_mode;
@@ -258,7 +258,7 @@
  
  	if (register_netdev(dev))
  		goto err_out_free_ring;
-@@ -1775,6 +1779,24 @@ static void __devexit tulip_remove_one (
+@@ -1787,6 +1791,24 @@ static void __devexit tulip_remove_one (
  }
  
  
@@ -283,9 +283,9 @@
  static struct pci_driver tulip_driver = {
  	.name		= DRV_NAME,
  	.id_table	= tulip_pci_tbl,
---- linux-2.5.73/include/linux/netdevice.h~dump_netdev	Sun Jun 22 11:33:18 2003
-+++ linux-2.5.73-n9560/include/linux/netdevice.h	Mon Jun 30 14:56:29 2003
-@@ -439,6 +439,9 @@ struct net_device
+--- linux-2.6.0-test1/include/linux/netdevice.h~dump_netdev	2003-07-22 01:14:05.000000000 -0600
++++ linux-2.6.0-test1-braam/include/linux/netdevice.h	2003-07-22 01:14:38.000000000 -0600
+@@ -446,6 +446,9 @@ struct net_device
  						     unsigned char *haddr);
  	int			(*neigh_setup)(struct net_device *dev, struct neigh_parms *);
  	int			(*accept_fastpath)(struct net_device *, struct dst_entry*);
@@ -295,9 +295,9 @@
  
  	/* bridge stuff */
  	struct net_bridge_port	*br_port;
---- linux-2.5.73/net/core/dev.c~dump_netdev	Sun Jun 22 11:32:46 2003
-+++ linux-2.5.73-n9560/net/core/dev.c	Mon Jun 30 14:56:29 2003
-@@ -1348,8 +1348,6 @@ int netif_rx(struct sk_buff *skb)
+--- linux-2.6.0-test1/net/core/dev.c~dump_netdev	2003-07-22 01:14:05.000000000 -0600
++++ linux-2.6.0-test1-braam/net/core/dev.c	2003-07-22 01:14:38.000000000 -0600
+@@ -1349,8 +1349,6 @@ int netif_rx(struct sk_buff *skb)
  	struct softnet_data *queue;
  	unsigned long flags;
  
@@ -306,9 +306,9 @@
  
  	/*
  	 * The code is rearranged so that the path is the most
-@@ -1359,6 +1357,13 @@ int netif_rx(struct sk_buff *skb)
+@@ -1360,6 +1358,13 @@ int netif_rx(struct sk_buff *skb)
  	this_cpu = smp_processor_id();
- 	queue = &softnet_data[this_cpu];
+ 	queue = &__get_cpu_var(softnet_data);
  
 +	if (skb->dev->rx_hook)
 +		goto rx_hook;
@@ -320,7 +320,7 @@
  	netdev_rx_stat[this_cpu].total++;
  	if (queue->input_pkt_queue.qlen <= netdev_max_backlog) {
  		if (queue->input_pkt_queue.qlen) {
-@@ -1401,6 +1406,15 @@ drop:
+@@ -1402,6 +1407,15 @@ drop:
  
  	kfree_skb(skb);
  	return NET_RX_DROP;
