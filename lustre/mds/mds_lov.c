@@ -528,7 +528,29 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         case OBD_IOC_ABORT_RECOVERY:
                 target_stop_recovery_thread(obd);
                 RETURN(0);
+        case OBD_IOC_ROOT_SQUASH: {
+                __u32 *p = (__u32 *) data->ioc_inlbuf1;
 
+                if (data->ioc_inllen1 !=
+                    (sizeof(__u32) * 4 + sizeof(ptl_nid_t)))
+                        RETURN(-EINVAL);
+
+                if (*p == 0) { /* get */
+                        p += 2;
+                        *p++ = mds->mds_squash_uid;
+                        *p++ = mds->mds_squash_gid;
+                        *((ptl_nid_t*) p) = mds->mds_nosquash_nid;
+                } else { /* set */
+                        p += 2;
+                        mds->mds_squash_uid = *p++;
+                        mds->mds_squash_gid = *p++;
+                        mds->mds_nosquash_nid = *((ptl_nid_t*) p);
+                        CWARN("MDS: squash root to %d:%d, except nid 0x%llx\n",
+                               mds->mds_squash_uid, mds->mds_squash_gid,
+                               mds->mds_nosquash_nid);
+                }
+                RETURN(0);
+        }
         default:
                 RETURN(-EINVAL);
         }

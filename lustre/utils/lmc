@@ -96,6 +96,8 @@ Object creation command summary:
   --lmv lmv_name
   --mkfsoptions options
   --mountfsoptions options
+  --root_squash uid:gid
+  --no_root_squash ptl_nid 
 
 --add lov
   --lov lov_name
@@ -230,6 +232,8 @@ lmc_options = [
     ('backfstype', "Optional argument to specify the backing filesystem type.", PARAM, "ext3"),
     ('mkfsoptions', "Optional argument to mkfs.", PARAM, ""),
     ('mountfsoptions', "Optional argument to mount fs.", PARAM, ""),
+    ('root_squash', "MDS squash root to appointed uid.", PARAM, ""),
+    ('no_root_squash', "Don't squash root for appointed nid.", PARAM, ""),
     ('ostuuid', "", PARAM,""),
     ('nspath', "Local mount point of server namespace.", PARAM,""),
     ('format', ""),
@@ -523,7 +527,7 @@ class GenConfig:
     def mdsdev(self, name, uuid, fstype, devname, format, node_uuid,
                mds_uuid, dev_size=0, journal_size=0, inode_size=256,
                nspath="", mkfsoptions="", mountfsoptions="", backfstype="", 
-               backdevname="", lmv_uuid=""):
+               backdevname="",lmv_uuid="", root_squash="", no_root_squash=""):
         mdd = self.newService("mdsdev", name, uuid)
         self.addElement(mdd, "fstype", fstype)
         if backfstype:
@@ -544,7 +548,10 @@ class GenConfig:
             self.addElement(mdd, "mkfsoptions", mkfsoptions)
         if mountfsoptions:
             self.addElement(mdd, "mountfsoptions", mountfsoptions)
-
+        if root_squash:
+            self.addElement(mdd, "root_squash", root_squash)
+        if no_root_squash:
+            self.addElement(mdd, "no_root_squash", no_root_squash)
         mdd.appendChild(self.ref("node", node_uuid))
         mdd.appendChild(self.ref("target", mds_uuid))
 	mdd.appendChild(self.dev(devname)) 
@@ -1011,6 +1018,8 @@ def add_mds(gen, lustre, options):
     nspath = get_option(options, 'nspath')
     mkfsoptions = get_option(options, 'mkfsoptions')
     mountfsoptions = get_option(options, 'mountfsoptions')
+    root_squash = get_option(options, 'root_squash')
+    no_root_squash = get_option(options, 'no_root_squash')
 
     node_uuid = name2uuid(lustre, node_name, 'node')
 
@@ -1026,7 +1035,8 @@ def add_mds(gen, lustre, options):
     mdd = gen.mdsdev(mdd_name, mdd_uuid, fstype, devname,
                      get_format_flag(options), node_uuid, mds_uuid,
                      size, journal_size, inode_size, nspath, mkfsoptions, 
-                     mountfsoptions, backfstype, backdevname, lmv_uuid)
+                     mountfsoptions, backfstype, backdevname,lmv_uuid, 
+		     root_squash, no_root_squash)
     lustre.appendChild(mdd)
 
 

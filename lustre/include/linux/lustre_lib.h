@@ -436,6 +436,7 @@ static inline void obd_ioctl_freedata(char *buf, int len)
 #define OBD_IOC_NO_TRANSNO             _IOW ('f', 140, long)
 #define OBD_IOC_SET_READONLY           _IOW ('f', 141, long)
 #define OBD_IOC_ABORT_RECOVERY         _IOR ('f', 142, long)
+#define OBD_IOC_ROOT_SQUASH            _IOWR('f', 143, long)  
 
 #define OBD_GET_VERSION                _IOWR ('f', 144, long)
 

@@ -35,7 +35,9 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <signal.h>
-
+#include <ctype.h>
+#include <pwd.h>
+#include <grp.h>
 #include "obdctl.h"
 
 #include <linux/obd.h>          /* for struct lov_stripe_md */
@@ -744,6 +746,136 @@ int jt_obd_abort_recovery(int argc, char **argv)
         if (rc < 0)
                 fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
                         strerror(rc = errno));
+
+        return rc;
+}
+static int is_number(char *str)
+{
+        int i, len;
+
+        if (*str == '-' || *str == '+')
+                str++;
+
+        if (!strncmp(str, "0x", 2))
+                str += 2;
+
+        len = strlen(str);
+        if (!len)
+                return 0;
+
+        for (i = 0; i < len; i++)
+                if (!isdigit(str[i]))
+                        return 0;
+        return 1;
+}
+
+static int str2ugid(char *str, uint32_t *uid, uint32_t *gid)
+{
+        struct passwd *pwd;
+        struct group  *grp;
+        char *p;
+
+        p = strchr(str, ':');
+        if (!p)
+                return -1;
+        *p++ = 0;
+
+        pwd = getpwnam(str);
+        if (pwd)
+                *uid = pwd->pw_uid;
+        else {
+                if (!is_number(str))
+                        return -1;
+                *uid = atoi(str);
+        }
+
+        grp = getgrnam(p);
+        if (grp)
+                *gid = grp->gr_gid;
+        else {
+                if (!is_number(p))
+                        return -1;
+                *gid = atoi(p);
+        }
+        return 0;
+}
+
+static void ugid2str(char *uidname, char *gidname, uint32_t uid, uint32_t gid)
+{
+        struct passwd *pwd;
+        struct group  *grp;
+
+        pwd = getpwuid(uid);
+        if (pwd)
+                snprintf(uidname, 128, "%s", pwd->pw_name);
+        else
+                snprintf(uidname, 128, "%d", uid);
+
+        grp = getgrgid(gid);
+        if (grp)
+                snprintf(gidname, 128, "%s", grp->gr_name);
+        else
+                snprintf(uidname, 128, "%d", gid);
+}
+
+#define SQUASH_IOC_SIZE (4 * 4 + sizeof(ptl_nid_t))
+int jt_obd_root_squash(int argc, char **argv)
+{
+        struct obd_ioctl_data   data;
+        char                    mybuf[SQUASH_IOC_SIZE];
+        uint32_t                *dir, *uid, *gid;
+        ptl_nid_t               *nid;
+        int                     rc;
+
+        IOC_INIT(data);
+
+        if (argc > 3)
+                return CMD_HELP;
+
+        memset(mybuf, 0, sizeof(mybuf));
+        dir = (uint32_t *) mybuf;
+        uid = dir + 2;
+        gid = dir + 3;
+        nid = (ptl_nid_t *) (dir + 4);
+
+        if (argc == 1) {
+                *dir = 0;
+        } else {
+                *dir = 1;
+                if (str2ugid(argv[1], uid, gid)) {
+                        fprintf(stderr, "error: %s: can't parse ugid %s\n",
+                                jt_cmdname(argv[0]), argv[1]);
+                        return -1;
+                }
+                if (argc == 3) {
+                        if (ptl_parse_nid(nid, argv[2])) {
+                                fprintf(stderr,
+                                        "error: %s: can't parse nid %s\n",
+                                        jt_cmdname(argv[0]), argv[2]);
+                                return -1;
+                        }
+                } else
+                        *nid = 0;
+        }
+
+        data.ioc_inllen1= SQUASH_IOC_SIZE;
+        data.ioc_inlbuf1 = mybuf;
+
+        IOC_PACK(argv[0], data);
+        rc = l2_ioctl(OBD_DEV_ID, OBD_IOC_ROOT_SQUASH, buf);
+        IOC_UNPACK(argv[0], data);
+        if (rc < 0)
+                fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
+                        strerror(rc = errno));
+        else if (argc == 1) {
+                char uidname[128], gidname[128];
+                char nidstr[256] = {0, };
+
+                ugid2str(uidname, gidname, *uid, *gid);
+                ptl_nid2str(nidstr, *nid);
+                printf("squash (root:root) => (%s:%s), except nid %s\n",
+                        uidname, gidname, nidstr);
+        }
 
         return rc;
 }

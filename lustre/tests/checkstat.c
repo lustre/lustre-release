@@ -90,15 +90,34 @@ main (int argc, char **argv)
 					fprintf (stderr, "Can't parse numeric uid %s\n", optarg);
 					return (1);
 				}
-			} else {
-				struct passwd *pw = getpwnam (optarg);
-
-				if (pw == NULL)
+			}else {
+				int i,flag=0;
+				char * temp ;
+				temp = optarg;
+				for(i=0;i<strlen(optarg);i++)
 				{
-					fprintf (stderr, "Can't find user %s\n", optarg);
-					return (1);
+					if(!isdigit(*temp))	
+					{
+						flag=1;
+						break;
+					}
+					else
+						temp++;	
 				}
-				uid = pw->pw_uid;
+				if(flag)
+				{
+	                               struct passwd *pw = getpwnam (optarg);
+
+        	                        if (pw == NULL)
+                	                {
+                        	                fprintf (stderr, "Can't find user %s\n", optarg);
+                                	        return (1);
+                                	}
+	                                uid = pw->pw_uid;
+	
+				}
+				else
+					uid=(uid_t)atol(optarg);
 			}
 			break;
 

@@ -359,6 +359,9 @@ struct mds_obd {
         struct obd_export               *mds_lmv_exp; /* XXX lov_exp */
         struct ptlrpc_service           *mds_create_service;
         struct semaphore                 mds_lmv_sem;
+        uid_t                            mds_squash_uid;
+        gid_t                            mds_squash_gid;
+        ptl_nid_t                        mds_nosquash_nid;
         atomic_t                         mds_real_clients;
         struct obd_uuid                  mds_lmv_uuid;
         struct dentry                   *mds_fids_dir;

@@ -230,6 +230,9 @@ command_t cmdlist[] = {
          "disable writes to the underlying device\n"},
         {"abort_recovery", jt_obd_abort_recovery, 0,
          "abort recovery on MDS device\n"},
+        {"root_squash", jt_obd_root_squash, 0,
+         "squash root to 'uid:gid' except client 'nid'\n"
+         "usage: root_squash [uid:gid [nid]]\n"},
         {"mount_option", jt_lcfg_mount_option, 0, 
          "usage: mount_option profile osc_name [mdc_name] \n"},
         {"del_mount_option", jt_lcfg_del_mount_option, 0,

@@ -67,6 +67,7 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
 static int mds_postsetup(struct obd_device *obd);
 static int mds_cleanup(struct obd_device *obd, int flags);
 
+
 /* Assumes caller has already pushed into the kernel filesystem context */
 static int mds_sendpage(struct ptlrpc_request *req, struct file *file,
                         loff_t offset, int count)
@@ -682,6 +683,49 @@ int mds_pack_md(struct obd_device *obd, struct lustre_msg *msg, int offset,
         RETURN(rc);
 }
 
+static void mds_root_squash_rec(struct mds_obd *mds, ptl_nid_t *peernid,
+                                struct mds_update_record *rec)
+{
+        if (!mds->mds_squash_uid || rec->_ur_fsuid)
+               return;
+
+        if (*peernid == mds->mds_nosquash_nid)
+                return;
+
+        CDEBUG(D_OTHER, "squash req from 0x%llx, (%d:%d/%x)=>(%d:%d/%x)\n",
+                *peernid, 
+                rec->_ur_fsuid, rec->_ur_fsgid, rec->_ur_cap,
+                mds->mds_squash_uid, mds->mds_squash_gid,
+                (rec->_ur_cap & ~CAP_FS_MASK));
+
+        rec->_ur_fsuid = mds->mds_squash_uid;
+        rec->_ur_fsgid = mds->mds_squash_gid;
+        /* XXX should we remove all capabilities? */
+        rec->_ur_cap &= ~CAP_FS_MASK;
+        rec->_ur_suppgid1 = -1;
+        rec->_ur_suppgid2 = -1;
+}
+static void mds_root_squash_body(struct mds_obd *mds, ptl_nid_t *peernid,
+                                 struct mds_body *body)
+{
+        if (!mds->mds_squash_uid || body->fsuid)
+                return;
+
+        if (*peernid == mds->mds_nosquash_nid)
+                return;
+
+        CDEBUG(D_OTHER, "squash req from 0x%llx, (%d:%d/%x)=>(%d:%d/%x)\n",
+                *peernid, 
+                body->fsuid, body->fsgid, body->capability,
+                mds->mds_squash_uid, mds->mds_squash_gid,
+                (body->capability & ~CAP_FS_MASK));
+
+        body->fsuid = mds->mds_squash_uid;
+        body->fsgid = mds->mds_squash_gid;
+        /* XXX should we remove all capabilities? */
+        body->capability &= ~CAP_FS_MASK;
+        body->suppgid = -1;
+}
 static int mds_getattr_internal(struct obd_device *obd, struct dentry *dentry,
                                 struct ptlrpc_request *req,
                                 struct mds_body *reqbody, int reply_off)
@@ -902,7 +946,7 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req,
                 rep = lustre_msg_buf(req->rq_repmsg, 0, sizeof (*rep));
                 offset = 1;
         }
-
+        mds_root_squash_body(&obd->u.mds, &req->rq_peer.peer_nid, body); 
         uc.luc_fsuid = body->fsuid;
         uc.luc_fsgid = body->fsgid;
         uc.luc_cap = body->capability;
@@ -1216,6 +1260,7 @@ static int mds_readpage(struct ptlrpc_request *req)
         if (body == NULL)
                 GOTO (out, rc = -EFAULT);
 
+        mds_root_squash_body(&obd->u.mds, &req->rq_peer.peer_nid, body); 
         uc.luc_fsuid = body->fsuid;
         uc.luc_fsgid = body->fsgid;
         uc.luc_cap = body->capability;
@@ -1280,6 +1325,8 @@ int mds_reint(struct ptlrpc_request *req, int offset,
                 CERROR("invalid record\n");
                 GOTO(out, req->rq_status = -EINVAL);
         }
+        mds_root_squash_rec(&req->rq_export->exp_obd->u.mds,
+                            &req->rq_peer.peer_nid, rec);
         /* rc will be used to interrupt a for loop over multiple records */
         rc = mds_reint_rec(rec, offset, req, lockh);
  out:
