@@ -276,6 +276,53 @@ static int fsfilt_ext3_commit(struct inode *inode, void *h, int force_sync)
         return rc;
 }
 
+static int fsfilt_ext3_commit_async(struct inode *inode, void **h)
+{
+        transaction_t *transaction;
+        unsigned long tid, rtid;
+        handle_t *handle = *h;
+        journal_t *journal;
+        int rc;
+
+        LASSERT(current->journal_info == handle);
+
+        lock_kernel();
+        transaction = handle->h_transaction;
+        journal = transaction->t_journal;
+        tid = transaction->t_tid;
+        /* we don't want to be blocked */
+        handle->h_sync = 0;
+        rc = journal_stop(handle);
+        if (rc) {
+                CERROR("error while stopping transaction: %d\n", rc);
+                unlock_kernel();
+                return rc;
+        }
+
+        rtid = log_start_commit(journal, transaction);
+        if (rtid != tid)
+                CERROR("strange race: %lu != %lu\n",
+                       (unsigned long) tid, (unsigned long) rtid);
+        unlock_kernel();
+
+        *h = (void *) tid;
+        CDEBUG(D_INODE, "commit async: %lu\n", (unsigned long) tid);
+        return 0;
+}
+
+static int fsfilt_ext3_commit_wait(struct inode *inode, void *h)
+{
+        tid_t tid = (tid_t) h;
+
+        CDEBUG(D_INODE, "commit wait: %lu\n", (unsigned long) tid);
+	if (is_journal_aborted(EXT3_JOURNAL(inode)))
+                return -EIO;
+
+        log_wait_commit(EXT3_JOURNAL(inode), tid);
+
+        return 0;
+}
+
 static int fsfilt_ext3_setattr(struct dentry *dentry, void *handle,
                                struct iattr *iattr, int do_trunc)
 {
@@ -739,6 +786,8 @@ static struct fsfilt_operations fsfilt_ext3_ops = {
         fs_start:               fsfilt_ext3_start,
         fs_brw_start:           fsfilt_ext3_brw_start,
         fs_commit:              fsfilt_ext3_commit,
+        fs_commit_async:        fsfilt_ext3_commit_async,
+        fs_commit_wait:         fsfilt_ext3_commit_wait,
         fs_setattr:             fsfilt_ext3_setattr,
         fs_iocontrol:           fsfilt_ext3_iocontrol,
         fs_set_md:              fsfilt_ext3_set_md,
