@@ -57,17 +57,17 @@ static int filter_lvbo_init(struct ldlm_resource *res)
                 GOTO(out, rc = 0);
 
         OBD_ALLOC(lvb, sizeof(*lvb));
-        if (!lvb)
+        if (lvb == NULL)
                 GOTO(out, rc = -ENOMEM);
 
         res->lr_lvb_data = lvb;
         res->lr_lvb_len = sizeof(*lvb);
 
         obd = res->lr_namespace->ns_lvbp;
-        LASSERT(obd);
+        LASSERT(obd != NULL);
 
         oa = obdo_alloc();
-        if (!oa)
+        if (oa == NULL)
                 GOTO(out, rc = -ENOMEM);
 
         oa->o_id = res->lr_name.name[0];
@@ -87,11 +87,6 @@ static int filter_lvbo_init(struct ldlm_resource *res)
  out:
         if (oa)
                 obdo_free(oa);
-        if (rc && lvb) {
-                OBD_FREE(lvb, sizeof(*lvb));
-                res->lr_lvb_data = NULL;
-                res->lr_lvb_len = 0;
-        }
         up(&res->lr_lvb_sem);
         return rc;
 }
