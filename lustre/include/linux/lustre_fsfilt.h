@@ -48,6 +48,8 @@ struct fsfilt_operations {
         int     (* fs_commit)(struct inode *inode, void *handle,int force_sync);
         int     (* fs_setattr)(struct dentry *dentry, void *handle,
                                struct iattr *iattr, int do_trunc);
+        int     (* fs_iocontrol)(struct inode *inode, struct file *file,
+                                 unsigned int cmd, unsigned long arg);
         int     (* fs_set_md)(struct inode *inode, void *handle, void *md,
                               int size);
         int     (* fs_get_md)(struct inode *inode, void *md, int size);
@@ -152,6 +154,13 @@ static inline int fsfilt_setattr(struct obd_device *obd, struct dentry *dentry,
         if (time_after(jiffies, now + 15 * HZ))
                 CERROR("long setattr time %lus\n", (jiffies - now) / HZ);
         return rc;
+}
+
+static inline int fsfilt_iocontrol(struct obd_device *obd, struct inode *inode,
+                                   struct file *file, unsigned int cmd,
+                                   unsigned long arg)
+{
+        return obd->obd_fsops->fs_iocontrol(inode, file, cmd, arg);
 }
 
 static inline int fsfilt_set_md(struct obd_device *obd, struct inode *inode,
