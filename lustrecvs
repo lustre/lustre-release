@@ -25,7 +25,8 @@ EOF
 }
 
 if [ -z "$LUSTRECVS_UPDATED" ] ; then
-    cvs up "$0" || fatal 1 "Error updating lustrecvs"
+    echo "$progname: updating lustrecvs"
+    cvs up -l || fatal 1 "Error updating lustrecvs"
     export LUSTRECVS_UPDATED=yes
     exec "$0" "$@"
 fi
