@@ -10,10 +10,11 @@ exec 2>&1
 set -xv
 
 failed_import() {
-#    $LUSTRE/utils/lctl --device %$3 recover ||
-#        logger -p kern.info recovery failed: $@
-
-    source $LUSTRE/tests/mdsactive
+    if [ -f $LUSTRE/tests/ostactive ] ; then
+        source $LUSTRE/tests/mdsactive
+    else
+        mdsactive=mds
+    fi
 
     $LUSTRE/utils/lconf --verbose --recover --node client_facet  \
       --select mds1=${mdsactive}_facet\
