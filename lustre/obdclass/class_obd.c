@@ -1,4 +1,6 @@
-/*
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
+ *
  *              An implementation of a loadable kernel mode driver providing
  *              multiple kernel/user space bidirectional communications links.
  *
@@ -136,6 +138,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 	struct obd_ioctl_data *data;
 	struct obd_device *obd = filp->private_data;
 	struct obd_conn conn;
+	int rw = OBD_BRW_READ;
         int err = 0;
 	ENTRY;
 
@@ -384,6 +387,78 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 return err;
 	}
 
+	case OBD_IOC_BRW_WRITE:
+		rw = OBD_BRW_WRITE;
+	case OBD_IOC_BRW_READ: {
+		/* FIXME: use a better ioctl data struct than obd_ioctl_data */
+                struct obd_conn conns[2];
+                struct obdo     *obdos[2];
+                obd_count       oa_bufs[2];
+                struct page     **bufs;
+                obd_size        counts[2];
+                obd_off         offsets[2];
+                obd_flag        flags[2];
+                int             pages;
+                int             i, j;
+
+                oa_bufs[0] = data->ioc_plen1 / PAGE_SIZE;
+                oa_bufs[1] = data->ioc_plen2 / PAGE_SIZE;
+                pages = oa_bufs[0] + oa_bufs[1];
+
+                CDEBUG(D_INODE, "BRW %s with %d+%d pages\n",
+                       rw == OBD_BRW_READ ? "read" : "write",
+                       oa_bufs[0], oa_bufs[1]);
+                bufs = kmalloc(pages * sizeof(struct page *), GFP_KERNEL);
+                if (!bufs) {
+                        CERROR("no memory for %d BRW bufs\n", pages);
+                        EXIT;
+                        return -ENOMEM;
+                }
+
+                obdos[0] = &data->ioc_obdo1;
+                obdos[1] = &data->ioc_obdo2;
+
+                pages = 0;
+                for (i = 0; i < 2; i++) {
+                        void *from;
+
+                        conns[i].oc_id = (&data->ioc_conn1)[i];
+                        conns[i].oc_dev = obd;
+
+                        from = (&data->ioc_pbuf1)[i];
+
+                        for (j = 0; j < oa_bufs[i]; j++) {
+                                unsigned long to;
+
+                                to = __get_free_pages(GFP_KERNEL, 0);
+                                if (!to) {
+                                /*      ||
+                                    copy_from_user((void *)to,from,PAGE_SIZE))
+                                        free_pages(to, 0);
+                                 */
+                                        CERROR("no memory for brw pages\n");
+                                        EXIT;
+                                        goto brw_cleanup;
+                                }
+                                bufs[pages++] = virt_to_page(to);
+                                from += PAGE_SIZE;
+                        }
+
+                        counts[i] = data->ioc_count;
+                        offsets[i] = data->ioc_offset;
+                        flags[i] = 0;
+                }
+
+                err = obd_brw(rw, conns, 2, obdos, oa_bufs, bufs,
+                              counts, offsets, flags);
+
+                EXIT;
+        brw_cleanup:
+                while (pages-- > 0)
+                        free_pages((unsigned long)page_address(bufs[pages]), 0);
+                kfree(bufs);
+                return err;
+        }
 #if 0
         case OBD_IOC_SYNC: {
                 struct oic_range_s *range = tmp_buf;
