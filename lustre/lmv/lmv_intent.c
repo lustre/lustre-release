@@ -181,13 +181,11 @@ repeat:
 
         cfid = &body->fid1;
         obj = lmv_grab_obj(obd, cfid);
-        if (!obj && (mea = is_body_of_splitted_dir(*reqp, 1))) {
+        if (!obj && (mea = body_of_splitted_dir(*reqp, 1))) {
                 /* wow! this is splitted dir, we'd like to handle it */
-                rc = lmv_create_obj(exp, &body->fid1, mea);
-                if (rc)
-                        RETURN(rc);
-                
-                obj = lmv_grab_obj(obd, cfid);
+                obj = lmv_create_obj(exp, &body->fid1, mea);
+                if (IS_ERR(obj))
+                        RETURN(PTR_ERR(obj));
         }
 
         if (obj) {
@@ -301,16 +299,14 @@ int lmv_intent_getattr(struct obd_export *exp, struct ll_uctxt *uctxt,
         cfid = &body->fid1;
         obj2 = lmv_grab_obj(obd, cfid);
 
-        if (!obj2 && (mea = is_body_of_splitted_dir(*reqp, 1))) {
+        if (!obj2 && (mea = body_of_splitted_dir(*reqp, 1))) {
                 /* wow! this is splitted dir, we'd like to handle it. */
                 body = lustre_msg_buf((*reqp)->rq_repmsg, 1, sizeof(*body));
                 LASSERT(body != NULL);
 
-                rc = lmv_create_obj(exp, &body->fid1, mea);
-                if (rc)
-                        RETURN(rc);
-                
-                obj2 = lmv_grab_obj(obd, cfid);
+                obj2 = lmv_create_obj(exp, &body->fid1, mea);
+                if (IS_ERR(obj2))
+                        RETURN(PTR_ERR(obj2));
         }
 
         if (obj2) {
@@ -366,7 +362,7 @@ int lmv_lookup_slaves(struct obd_export *exp, struct ptlrpc_request **reqp)
         LASSERT(body != NULL);
 
         obj = lmv_grab_obj(obd, &body->fid1);
-        LASSERT(obj);
+        LASSERT(obj != NULL);
 
         CDEBUG(D_OTHER, "lookup slaves for %lu/%lu/%lu\n",
                (unsigned long)body->fid1.mds,
@@ -375,6 +371,8 @@ int lmv_lookup_slaves(struct obd_export *exp, struct ptlrpc_request **reqp)
 
         uctxt.gid1 = 0;
         uctxt.gid2 = 0;
+
+        lmv_lock_obj(obj);
         
         for (i = 0; i < obj->objcount; i++) {
                 struct ll_fid fid = obj->objs[i].fid;
@@ -395,6 +393,7 @@ int lmv_lookup_slaves(struct obd_export *exp, struct ptlrpc_request **reqp)
                 rc = md_intent_lock(lmv->tgts[fid.mds].ltd_exp, &uctxt, &fid,
                                     NULL, 0, NULL, 0, &fid, &it, 0, &req,
                                     lmv_dirobj_blocking_ast);
+                
                 lockh = (struct lustre_handle *) &it.d.lustre.it_lock_handle;
                 if (rc > 0) {
                         /* nice, this slave is valid */
@@ -411,6 +410,7 @@ int lmv_lookup_slaves(struct obd_export *exp, struct ptlrpc_request **reqp)
                  * obj is still valid. lookup it again */
                 LASSERT(req == NULL);
                 req = NULL;
+
                 memset(&it, 0, sizeof(it));
                 it.it_op = IT_GETATTR;
                 rc = md_intent_lock(lmv->tgts[fid.mds].ltd_exp, &uctxt, &fid,
@@ -434,7 +434,7 @@ int lmv_lookup_slaves(struct obd_export *exp, struct ptlrpc_request **reqp)
 
                 obj->objs[i].size = body2->size;
                 CDEBUG(D_OTHER, "fresh: %lu\n",
-                       (unsigned long) obj->objs[i].size);
+                       (unsigned long)obj->objs[i].size);
 
                 LDLM_LOCK_PUT(lock);
 
@@ -442,12 +442,13 @@ int lmv_lookup_slaves(struct obd_export *exp, struct ptlrpc_request **reqp)
                         ptlrpc_req_finished(req);
 release_lock:
                 lmv_update_body_from_obj(body, obj->objs + i);
+
                 if (it.d.lustre.it_lock_mode)
                         ldlm_lock_decref(lockh, it.d.lustre.it_lock_mode);
         }
 cleanup:
-        if (obj)
-                lmv_put_obj(obj);
+        lmv_unlock_obj(obj);
+        lmv_put_obj(obj);
         RETURN(rc);
 }
 
@@ -530,34 +531,40 @@ repeat:
         }
        
         if (rc == -ERESTART) {
-                /* directory got splitted since last update. this shouldn't
-                 * be becasue splitting causes lock revocation, so revalidate
-                 * had to fail and lookup on dir had to return mea */
+                /* directory got splitted since last update. this shouldn't be
+                 * becasue splitting causes lock revocation, so revalidate had
+                 * to fail and lookup on dir had to return mea */
                 CWARN("we haven't knew about directory splitting!\n");
                 LASSERT(obj == NULL);
-                rc = lmv_create_obj(exp, &rpfid, NULL);
-                if (rc)
-                        RETURN(rc);
+
+                obj = lmv_create_obj(exp, &rpfid, NULL);
+                if (IS_ERR(obj))
+                        RETURN(PTR_ERR(obj));
+                
                 goto repeat;
         }
 
         if (rc < 0)
                 RETURN(rc);
 
-        /* okay, MDS has returned success. probably name has been
-         * resolved in remote inode */
+        /* okay, MDS has returned success. probably name has been resolved in
+         * remote inode */
         rc = lmv_handle_remote_inode(exp, uctxt, lmm, lmmsize, it, flags,
                                      reqp, cb_blocking);
 
-        if (rc == 0 && (mea = is_body_of_splitted_dir(*reqp, 1))) {
+        if (rc == 0 && (mea = body_of_splitted_dir(*reqp, 1))) {
                 /* wow! this is splitted dir, we'd like to handle it */
                 body = lustre_msg_buf((*reqp)->rq_repmsg, 1, sizeof(*body));
                 LASSERT(body != NULL);
                 
-                if ((obj = lmv_grab_obj(obd, &body->fid1)))
+                obj = lmv_grab_obj(obd, &body->fid1);
+                if (!obj) {
+                        obj = lmv_create_obj(exp, &body->fid1, mea);
+                        if (IS_ERR(obj))
+                                RETURN(PTR_ERR(obj));
+                } else {
                         lmv_put_obj(obj);
-                else
-                        rc = lmv_create_obj(exp, &body->fid1, mea);
+                }
         }
 
         RETURN(rc);
@@ -625,11 +632,13 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct ptlrpc_request **reqp,
          * need not to be update, another fields (i_size, for example) are
          * cached all the time */
         obj = lmv_grab_obj(obd, mfid);
-        LASSERT(obj);
+        LASSERT(obj != NULL);
 
         uctxt.gid1 = 0;
         uctxt.gid2 = 0;
         master_lock_mode = 0;
+
+        lmv_lock_obj(obj);
         
         for (i = 0; i < obj->objcount; i++) {
                 struct ll_fid fid = obj->objs[i].fid;
@@ -687,12 +696,14 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct ptlrpc_request **reqp,
                  * obj is still valid. lookup it again */
                 LASSERT(req == NULL);
                 req = NULL;
+                
                 memset(&it, 0, sizeof(it));
                 it.it_op = IT_GETATTR;
                 rc = md_intent_lock(lmv->tgts[fid.mds].ltd_exp, &uctxt, &fid,
                                     NULL, 0, NULL, 0, NULL, &it, 0, &req, cb);
                 lockh = (struct lustre_handle *) &it.d.lustre.it_lock_handle;
                 LASSERT(rc <= 0);
+
                 if (rc < 0)
                         /* error during lookup */
                         GOTO(cleanup, rc);
@@ -727,7 +738,7 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct ptlrpc_request **reqp,
 update:
                 obj->objs[i].size = body->size;
                 CDEBUG(D_OTHER, "fresh: %lu\n",
-                       (unsigned long) obj->objs[i].size);
+                       (unsigned long)obj->objs[i].size);
 
                 if (req)
                         ptlrpc_req_finished(req);
@@ -738,8 +749,8 @@ release_lock:
         }
 
         if (*reqp) {
-                /* some attrs got refreshed, we have reply and it's time
-                 * to put fresh attrs to it */
+                /* some attrs got refreshed, we have reply and it's time to put
+                 * fresh attrs to it */
                 CDEBUG(D_OTHER, "return refreshed attrs: size = %lu\n",
                        (unsigned long) size);
                 body = lustre_msg_buf((*reqp)->rq_repmsg, 1, sizeof(*body));
@@ -768,7 +779,7 @@ release_lock:
                 rc = 1;
         }
 cleanup:
-        if (obj)
-                lmv_put_obj(obj);
+        lmv_unlock_obj(obj);
+        lmv_put_obj(obj);
         RETURN(rc);
 }

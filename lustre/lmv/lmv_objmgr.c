@@ -193,22 +193,22 @@ __lmv_grab_obj(struct obd_device *obd, struct ll_fid *fid)
 
                 /* check if object is in progress of destroying. If so - skip
                  * it. */
-                down(&obj->guard);
+                lmv_lock_obj(obj);
 
                 if (obj->freeing) {
-                        up(&obj->guard);
+                        lmv_unlock_obj(obj);
                         continue;
                 }
 
                 /* check if this is waht we're looking for. */
                 if (fid_equal(&obj->fid, fid)) {
                         __lmv_get_obj(obj);
-                        up(&obj->guard);
+                        lmv_unlock_obj(obj);
                         return obj;
                 }
-                
-                up(&obj->guard);
+                lmv_unlock_obj(obj);
         }
+
         return NULL;
 }
 
@@ -269,7 +269,7 @@ __lmv_create_obj(struct obd_device *obd, struct ll_fid *fid,
 
 /* creates object from passed @fid and @mea. If @mea is NULL, it will be
  * obtained from correct MDT and used for constructing the object. */
-int
+struct lmv_obj *
 lmv_create_obj(struct obd_export *exp,
                struct ll_fid *fid, struct mea *mea)
 {
@@ -278,7 +278,7 @@ lmv_create_obj(struct obd_export *exp,
         struct ptlrpc_request *req = NULL;
         struct lmv_obj *obj;
         struct lustre_md md;
-        int mealen, i, rc = 0;
+        int mealen, i, rc;
         ENTRY;
 
         CDEBUG(D_OTHER, "get mea for %lu/%lu/%lu and create lmv obj\n",
@@ -300,17 +300,17 @@ lmv_create_obj(struct obd_export *exp,
                                 valid, mealen, &req);
                 if (rc) {
                         CERROR("md_getattr() failed, error %d\n", rc);
-                        GOTO(cleanup, rc);
+                        GOTO(cleanup, obj = ERR_PTR(rc));
                 }
 
                 rc = mdc_req2lustre_md(exp, req, 0, NULL, &md);
                 if (rc) {
                         CERROR("mdc_req2lustre_md() failed, error %d\n", rc);
-                        GOTO(cleanup, rc);
+                        GOTO(cleanup, obj = ERR_PTR(rc));
                 }
 
                 if (!md.mea)
-                        GOTO(cleanup, rc = -ENODATA);
+                        GOTO(cleanup, obj = ERR_PTR(-ENODATA));
                         
                 mea = md.mea;
         }
@@ -321,14 +321,14 @@ lmv_create_obj(struct obd_export *exp,
                 CERROR("Can't create new object %lu/%lu/%lu\n",
                        (unsigned long)fid->mds, (unsigned long)fid->id,
                        (unsigned long)fid->generation);
-                GOTO(cleanup, rc = -ENOMEM);
+                GOTO(cleanup, obj = ERR_PTR(-ENOMEM));
         }
         
         lmv_put_obj(obj);
 cleanup:
         if (req)       
                 ptlrpc_req_finished(req);
-        RETURN(rc); 
+        RETURN(obj);
 }
 
 /* looks for object with @fid and orders to destroy it. It possible the object
@@ -340,25 +340,27 @@ lmv_destroy_obj(struct obd_export *exp, struct ll_fid *fid)
 {
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obj *obj;
-        int rc = 0;
         ENTRY;
 
         spin_lock(&lmv_obj_list_lock);
         
         obj = __lmv_grab_obj(obd, fid);
         if (obj) {
-                down(&obj->guard);
+
+                /* marking object as "freeing in progress" */
+                lmv_lock_obj(obj);
                 obj->freeing = 1;
-                up(&obj->guard);
-                
+                lmv_unlock_obj(obj);
+
                 __lmv_put_obj(obj);
                 __lmv_put_obj(obj);
                 
-                rc = 1;
+                spin_unlock(&lmv_obj_list_lock);
+                RETURN(1);
         }
         
         spin_unlock(&lmv_obj_list_lock);
-        RETURN(rc);
+        RETURN(0);
 }
 
 int
