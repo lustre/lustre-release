@@ -625,7 +625,7 @@ int class_config_parse_llog(struct llog_ctxt *ctxt, char *name,
         if (rc) 
                 GOTO(parse_out, rc);
 
-        rc = llog_process(llh, class_config_llog_handler, cfg);
+        rc = llog_process(llh, class_config_llog_handler, cfg, NULL);
 parse_out:
         rc2 = llog_close(llh);
         if (rc == 0)
@@ -722,7 +722,7 @@ int class_config_dump_llog(struct llog_ctxt *ctxt, char *name,
         if (rc) 
                 GOTO(parse_out, rc);
 
-        rc = llog_process(llh, class_config_dump_handler, cfg);
+        rc = llog_process(llh, class_config_dump_handler, cfg, NULL);
 parse_out:
         rc2 = llog_close(llh);
         if (rc == 0)
