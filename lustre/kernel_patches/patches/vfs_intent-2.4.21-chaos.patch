@@ -894,6 +894,15 @@ Index: linux-ia64/fs/namespace.c
  	list_add(&mnt->mnt_hash, mount_hashtable+hash(nd->mnt, nd->dentry));
  	list_add(&mnt->mnt_child, &nd->mnt->mnt_mounts);
  	nd->dentry->d_mounted++;
+@@ -286,7 +293,7 @@
+ 	}
+ }
+ 
+-static int do_umount(struct vfsmount *mnt, int flags)
++int do_umount(struct vfsmount *mnt, int flags)
+ {
+ 	struct super_block * sb = mnt->mnt_sb;
+ 	int retval = 0;
 @@ -488,14 +490,17 @@ static int do_loopback(struct nameidata 
  {
  	struct nameidata old_nd;
@@ -1854,11 +1863,23 @@ Index: linux-ia64/kernel/ksyms.c
 ===================================================================
 --- linux-ia64.orig/kernel/ksyms.c	2004-03-17 16:05:28.000000000 -0800
 +++ linux-ia64/kernel/ksyms.c	2004-03-17 16:05:51.000000000 -0800
-@@ -318,6 +318,7 @@ EXPORT_SYMBOL(read_cache_page);
+@@ -318,6 +318,8 @@ EXPORT_SYMBOL(read_cache_page);
  EXPORT_SYMBOL(set_page_dirty);
  EXPORT_SYMBOL(vfs_readlink);
  EXPORT_SYMBOL(vfs_follow_link);
 +EXPORT_SYMBOL(vfs_follow_link_it);
++EXPORT_SYMBOL(do_umount);
  EXPORT_SYMBOL(page_readlink);
  EXPORT_SYMBOL(page_follow_link);
  EXPORT_SYMBOL(page_symlink_inode_operations);
+===== include/linux/mount.h 1.7 vs edited =====
+--- linux-ia64.orig/include/linux/mount.h	Tue Feb  5 09:49:35 2002
++++ linux-ia64/include/linux/mount.h	Tue May  4 19:23:48 2004
+@@ -39,6 +39,7 @@
+ }
+ 
+ extern void __mntput(struct vfsmount *mnt);
++extern int do_umount(struct vfsmount *mnt, int flags);
+ 
+ static inline void mntput(struct vfsmount *mnt)
+ {
