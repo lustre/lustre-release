@@ -443,7 +443,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
         switch (cleanup_phase) {
         case 1:
                 if (S_ISREG(inode->i_mode) && rec->ur_eadata != NULL)
-                        down(&inode->i_sem);
+                        up(&inode->i_sem);
                 l_dput(de);
                 if (locked) {
                         if (rc) {
