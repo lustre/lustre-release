@@ -1149,8 +1149,6 @@ got_child:
                 else
                         ptlrpc_save_lock (req, parent_lockh, parent_mode);
         }
-        if (rc == 0)
-                atomic_inc(&mds->mds_open_count);
         if (mea)
                 OBD_FREE(mea, mea_size);
         RETURN(rc);
@@ -1324,7 +1322,6 @@ out:
         mds_mfd_destroy(mfd);
 
  cleanup:
-        atomic_dec(&mds->mds_open_count);
         if (req != NULL && reply_body != NULL) {
                 rc = mds_finish_transno(mds, pending_dir, handle, req, rc, 0);
         } else if (handle) {

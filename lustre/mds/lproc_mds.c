@@ -50,17 +50,6 @@ static int lprocfs_mds_rd_mntdev(char *page, char **start, off_t off, int count,
         return snprintf(page, count, "%s\n",obd->u.mds.mds_vfsmnt->mnt_devname);
 }
 
-static int lprocfs_mds_rd_filesopen(char *page, char **start, off_t off,
-                                    int count, int *eof, void *data)
-{
-        struct obd_device *obd = data;
-        LASSERT(obd != NULL);
-        *eof = 1;
-
-        return snprintf(page, count, "%d\n",
-                        atomic_read(&obd->u.mds.mds_open_count));
-}
-
 static int lprocfs_mds_rd_recovery_status(char *page, char **start, off_t off,
                                           int count, int *eof, void *data)
 {
@@ -172,7 +161,6 @@ struct lprocfs_vars lprocfs_mds_obd_vars[] = {
         { "fstype",       lprocfs_rd_fstype,      0, 0 },
         { "filestotal",   lprocfs_rd_filestotal,  0, 0 },
         { "filesfree",    lprocfs_rd_filesfree,   0, 0 },
-        { "filesopen",    lprocfs_mds_rd_filesopen,   0, 0 },
         { "mntdev",       lprocfs_mds_rd_mntdev,  0, 0 },
         { "recovery_status", lprocfs_mds_rd_recovery_status, 0, 0 },
         { "evict_client", 0, lprocfs_mds_wr_evict_client, 0 },

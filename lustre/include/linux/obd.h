@@ -337,7 +337,6 @@ struct mds_obd {
         /*add mds num here for real mds and cache mds create
           FIXME later will be totally fixed by b_cmd*/
         int                              mds_num;
-        atomic_t                         mds_open_count;
         int                              mds_config_version;
 
         char                            *mds_lmv_name;

@@ -2052,7 +2052,6 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         sema_init(&mds->mds_epoch_sem, 1);
         spin_lock_init(&mds->mds_transno_lock);
         mds->mds_max_cookiesize = sizeof(struct llog_cookie);
-        atomic_set(&mds->mds_open_count, 0);
         atomic_set(&mds->mds_real_clients, 0);
 
         obd->obd_namespace = ldlm_namespace_new(obd->obd_name,
