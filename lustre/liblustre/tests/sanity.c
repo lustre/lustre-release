@@ -35,6 +35,7 @@
 #include <signal.h>
 #include <errno.h>
 #include <dirent.h>
+#include <sys/uio.h>
 
 #include "test_common.h"
 
@@ -403,7 +404,203 @@ void t18()
                 }
         }
         t_unlink(file);
+        LEAVE();
 }
+
+void t19()
+{
+        char *file = "/mnt/lustre/test_t19_file";
+        int fd;
+        struct stat statbuf;
+        ENTRY("open(O_TRUNC) should trancate file to 0-length");
+
+        t_echo_create(file, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+
+        fd = open(file, O_RDWR|O_CREAT|O_TRUNC, (mode_t)0666);
+        if (fd < 0) {
+                printf("error open file: %s\n", strerror(errno));
+                exit(-1);
+        }
+        close(fd);
+        if(stat(file, &statbuf) != 0) {
+                printf("Error stat\n");
+                exit(1);
+        }
+        if (statbuf.st_size != 0) {
+                printf("size %ld is not zero\n", statbuf.st_size);
+                exit(-1);
+        }
+        t_unlink(file);
+        LEAVE();
+}
+
+void t20()
+{
+        char *file = "/mnt/lustre/test_t20_file";
+        int fd;
+        struct iovec iov[2];
+        char buf[100];
+        ssize_t ret;
+        ENTRY("trap app's general bad pointer for file i/o");
+
+        fd = open(file, O_RDWR|O_CREAT, (mode_t)0666);
+        if (fd < 0) {
+                printf("error open file: %s\n", strerror(errno));
+                exit(-1);
+        }
+
+        ret = write(fd, NULL, 20);
+        if (ret != -1 || errno != EFAULT) {
+                printf("write 1: ret %ld, errno %d\n", ret, errno);
+                exit(1);
+        }
+        ret = write(fd, (void *)-1, 20);
+        if (ret != -1 || errno != EFAULT) {
+                printf("write 2: ret %ld, errno %d\n", ret, errno);
+                exit(1);
+        }
+        iov[0].iov_base = NULL;
+        iov[0].iov_len = 10;
+        iov[1].iov_base = (void *)-1;
+        iov[1].iov_len = 10;
+        ret = writev(fd, iov, 2);
+        if (ret != -1 || errno != EFAULT) {
+                printf("writev 1: ret %ld, errno %d\n", ret, errno);
+                exit(1);
+        }
+        iov[0].iov_base = NULL;
+        iov[0].iov_len = 0;
+        iov[1].iov_base = buf;
+        iov[1].iov_len = sizeof(buf);
+        ret = writev(fd, iov, 2);
+        if (ret != sizeof(buf)) {
+                printf("write 3 ret %ld, error %d\n", ret, errno);
+                exit(1);
+        }
+        lseek(fd, 0, SEEK_SET);
+
+        ret = read(fd, NULL, 20);
+        if (ret != -1 || errno != EFAULT) {
+                printf("read 1: ret %ld, errno %d\n", ret, errno);
+                exit(1);
+        }
+        ret = read(fd, (void *)-1, 20);
+        if (ret != -1 || errno != EFAULT) {
+                printf("read 2: ret %ld, errno %d\n", ret, errno);
+                exit(1);
+        }
+        iov[0].iov_base = NULL;
+        iov[0].iov_len = 10;
+        iov[1].iov_base = (void *)-1;
+        iov[1].iov_len = 10;
+        ret = readv(fd, iov, 2);
+        if (ret != -1 || errno != EFAULT) {
+                printf("readv 1: ret %ld, errno %d\n", ret, errno);
+                exit(1);
+        }
+        iov[0].iov_base = NULL;
+        iov[0].iov_len = 0;
+        iov[1].iov_base = buf;
+        iov[1].iov_len = sizeof(buf);
+        ret = readv(fd, iov, 2);
+        if (ret != sizeof(buf)) {
+                printf("read 3 ret %ld, error %d\n", ret, errno);
+                exit(1);
+        }
+
+        close(fd);
+        t_unlink(file);
+        LEAVE();
+}
+
+void t21()
+{
+        char *file = "/mnt/lustre/test_t21_file";
+        int fd, ret;
+        ENTRY("basic fcntl support");
+
+        fd = open(file, O_RDWR|O_CREAT, (mode_t)0666);
+        if (fd < 0) {
+                printf("error open file: %s\n", strerror(errno));
+                exit(-1);
+        }
+        if (fcntl(fd, F_SETFL, O_APPEND)) {
+                printf("error set flag: %s\n", strerror(errno));
+                exit(-1);
+        }
+        if ((ret = fcntl(fd, F_GETFL)) != O_APPEND) {
+                printf("error get flag: ret %x\n", ret);
+                exit(-1);
+        }
+
+        close(fd);
+        t_unlink(file);
+        LEAVE();
+}
+
+void t22()
+{
+        char *file = "/mnt/lustre/test_t22_file";
+        int fd;
+        char *str = "1234567890";
+        char buf[100];
+        ssize_t ret;
+        ENTRY("make sure O_APPEND take effect");
+
+        fd = open(file, O_RDWR|O_CREAT|O_APPEND, (mode_t)0666);
+        if (fd < 0) {
+                printf("error open file: %s\n", strerror(errno));
+                exit(-1);
+        }
+
+        lseek(fd, 100, SEEK_SET);
+        ret = write(fd, str, strlen(str));
+        if (ret != strlen(str)) {
+                printf("write 1: ret %ld, errno %d\n", ret, errno);
+                exit(1);
+        }
+
+        lseek(fd, 0, SEEK_SET);
+        ret = read(fd, buf, sizeof(buf));
+        if (ret != strlen(str)) {
+                printf("read 1 got %ld\n", ret);
+                exit(1);
+        }
+
+        if (memcmp(buf, str, strlen(str))) {
+                printf("read 1 data err\n");
+                exit(1);
+        }
+
+        if (fcntl(fd, F_SETFL, 0)) {
+                printf("fcntl err: %s\n", strerror(errno));
+                exit(1);
+        }
+
+        lseek(fd, 100, SEEK_SET);
+        ret = write(fd, str, strlen(str));
+        if (ret != strlen(str)) {
+                printf("write 2: ret %ld, errno %d\n", ret, errno);
+                exit(1);
+        }
+
+        lseek(fd, 100, SEEK_SET);
+        ret = read(fd, buf, sizeof(buf));
+        if (ret != strlen(str)) {
+                printf("read 2 got %ld\n", ret);
+                exit(1);
+        }
+
+        if (memcmp(buf, str, strlen(str))) {
+                printf("read 2 data err\n");
+                exit(1);
+        }
+
+        close(fd);
+        t_unlink(file);
+        LEAVE();
+}
+
 
 #define PAGE_SIZE (4096)
 #define _npages (2048)
@@ -417,7 +614,7 @@ static void pages_io(int xfer, loff_t pos)
 {
         char *path="/mnt/lustre/test_t50";
         int check_sum[_npages] = {0,};
-        int fd, rc, i, j;
+        int fd, rc, i, j, data_error = 0;
         struct timeval tw1, tw2, tr1, tr2;
         double tw, tr;
 
@@ -474,6 +671,7 @@ static void pages_io(int xfer, loff_t pos)
                         sum += _buffer[i][j];
                 }
                 if (sum != check_sum[i]) {
+                        data_error = 1;
                         printf("chunk %d checksum error: expected 0x%x, get 0x%x\n",
                                 i, check_sum[i], sum);
                 }
@@ -486,6 +684,9 @@ static void pages_io(int xfer, loff_t pos)
         printf(" (R:%.3fM/s, W:%.3fM/s)\n",
                 (_npages * PAGE_SIZE) / (tw / 1000000.0) / (1024 * 1024),
                 (_npages * PAGE_SIZE) / (tr / 1000000.0) / (1024 * 1024));
+
+        if (data_error)
+                exit(1);
 }
 
 void t50()
@@ -576,6 +777,10 @@ int main(int argc, char * const argv[])
         t16();
         t17();
         t18();
+        t19();
+        t20();
+        t21();
+        t22();
         t50();
 
 	printf("liblustre is about shutdown\n");
