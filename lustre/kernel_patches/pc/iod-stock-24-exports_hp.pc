@@ -1,3 +1,0 @@
-fs/inode.c
-fs/Makefile
-mm/page_alloc.c
