@@ -33,6 +33,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- remove ancient LOV_MAGIC_V0 EA support (5047)
 	- add "disk I/Os in flight" and "I/O req time" stats in obdfilter
 	- allow readahead allocations to fail when low on memory (5383)
+	- mmap locking landed again, after considerable improvement (2828)
 
 2004-11-23  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.0
