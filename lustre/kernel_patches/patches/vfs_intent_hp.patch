@@ -559,7 +559,7 @@
  		error = 0;
  		if (path_init(from, LOOKUP_POSITIVE, &old_nd))
 -			error = path_walk(from, &old_nd);
-+			error = path_walk_it(from, &old_nd, &it);
++			error = path_walk_it(from, &old_nd, NULL);
  		if (error)
  			goto exit;
  		if (path_init(to, LOOKUP_PARENT, &nd))
