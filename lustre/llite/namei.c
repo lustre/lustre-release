@@ -178,6 +178,7 @@ static struct dentry *ll_lookup2(struct inode * dir, struct dentry *dentry,
                 memcpy(&lli->lli_intent_lock_handle, &lockh, sizeof(lockh));
 
                 ino = ll_inode_by_name(dir, dentry, &type);
+#warning FIXME: handle negative inode case (see old ll_lookup)
 
                 err = mdc_getattr(&sbi->ll_mdc_conn, ino, type,
                                   OBD_MD_FLNOTOBD|OBD_MD_FLBLOCKS, 0, &request);

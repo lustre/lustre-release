@@ -143,6 +143,7 @@ static struct super_block * ll_read_super(struct super_block *sb,
                 CERROR("OST %s: not setup or attached\n", ost);
                 GOTO(out_free, sb = NULL);
         }
+#warning error: need to set obd->u.lov.mdc_connh from sbi->ll_mdc_conn
         err = obd_connect(&sbi->ll_osc_conn, obd);
         if (err) {
                 CERROR("cannot connect to %s: rc = %d\n", ost, err);
@@ -187,7 +188,7 @@ static struct super_block * ll_read_super(struct super_block *sb,
         err = ll_commitcbd_setup(sbi);
         if (err) {
                 CERROR("failed to start commit callback daemon: rc = %d\n",err);
-                GOTO(out_mdc, sb = NULL);
+                GOTO(out_request, sb = NULL);
         }
 
         md.body = lustre_msg_buf(request->rq_repmsg, 0);
@@ -213,12 +214,11 @@ out_dev:
 
 out_cdb:
         ll_commitcbd_cleanup(sbi);
-out_mdc:
-        obd_disconnect(&sbi->ll_mdc_conn);
-        obd_disconnect(&sbi->ll_osc_conn);
-out_disc:
+out_request:
         ptlrpc_free_req(request);
         obd_disconnect(&sbi->ll_osc_conn);
+out_mdc:
+        obd_disconnect(&sbi->ll_mdc_conn);
 out_free:
         OBD_FREE(sbi, sizeof(*sbi));
 

@@ -59,7 +59,6 @@ struct mds_client_info;
 struct mds_server_data;
 
 struct mdc_obd {
-        struct lustre_handle mdc_connh;
         struct ptlrpc_client *mdc_client;
         struct ptlrpc_client *mdc_ldlm_client;
         struct ptlrpc_connection *mdc_conn;
@@ -68,7 +67,6 @@ struct mdc_obd {
 };
 
 struct osc_obd {
-        struct lustre_handle osc_connh;
         struct ptlrpc_client *osc_client;
         struct ptlrpc_client *osc_ldlm_client;
         struct ptlrpc_connection *osc_conn;
@@ -160,6 +158,7 @@ struct lov_tgt_desc {
 };
 
 struct lov_obd {
+        struct lustre_handle mdc_connh;
         struct obd_device *mdcobd;
         struct lov_desc desc;
         int bufsize; 

@@ -64,6 +64,8 @@ extern void proc_lustre_remove_obd_entry(const char* name,
 #ifdef __KERNEL__
 extern struct obd_export *class_conn2export(struct lustre_handle *conn);
 extern struct obd_device *class_conn2obd(struct lustre_handle *conn);
+extern int class_import2export(struct lustre_handle *conn,
+                               struct lustre_handle *imp);
 
 struct obd_export {
         __u64 export_cookie;
@@ -78,7 +80,7 @@ struct obd_export {
 
 struct obd_import {
         __u64 import_cookie;
-        struct lustre_handle import_export; /* client handle */ 
+        struct lustre_handle import_export; /* server handle */ 
         struct list_head import_chain;
         struct obd_device *import_obd;
         unsigned int import_id;

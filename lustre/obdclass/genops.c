@@ -223,13 +223,16 @@ struct obd_export *class_conn2export(struct lustre_handle *conn)
         struct obd_export * export;
 
         if (!conn)
+		RETURN(NULL);
+
+	if (conn->addr == -1)	/* this means assign a new connection */
                 RETURN(NULL);
 
-        if (!conn->addr || conn->addr == -1 ) { 
+        if (!conn->addr) {
                 fixme();
                 RETURN(NULL);
         }
-              
+
         export = (struct obd_export *) (unsigned long)conn->addr;
         if (!kmem_cache_validate(export_cachep, (void *)export))
                 RETURN(NULL);
@@ -263,15 +266,30 @@ int class_connect (struct lustre_handle *conn, struct obd_device *obd)
 
         memset(export, 0, sizeof(*export));
         get_random_bytes(&export->export_cookie, sizeof(__u64));
-        export->export_obd = obd; 
+        export->export_obd = obd;
         export->export_import.addr = conn->addr;
         export->export_import.cookie = conn->cookie;
-        
+
         list_add(&(export->export_chain), export->export_obd->obd_exports.prev);
         conn->addr = (__u64) (unsigned long)export;
         conn->cookie = export->export_cookie;
+	CDEBUG(D_IOCTL, "connect: addr %Lx cookie %Lx\n",
+	       (long long)conn->addr, (long long)conn->cookie);
         return 0;
-} 
+}
+
+int class_import2export(struct lustre_handle *conn, struct lustre_handle *imp)
+{
+	struct obd_export *export = class_conn2export(conn);
+
+	if (!export)
+		return -EINVAL;
+
+        export->export_import.addr = imp->addr;
+        export->export_import.cookie = imp->cookie;
+
+	return 0;
+}
 
 int class_disconnect(struct lustre_handle *conn)
 {
@@ -283,7 +301,9 @@ int class_disconnect(struct lustre_handle *conn)
                 CDEBUG(D_IOCTL, "disconnect: attempting to free "
                        "nonexistent client %Lx\n", conn->addr);
                 RETURN(-EINVAL);
-        }
+        } else
+		CDEBUG(D_IOCTL, "disconnect: addr %Lx cookie %Lx\n",
+		       (long long)conn->addr, (long long)conn->cookie);
         list_del(&export->export_chain);
         kmem_cache_free(export_cachep, export);
 

@@ -473,11 +473,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
         case OBD_IOC_BRW_WRITE:
                 rw = OBD_BRW_WRITE;
         case OBD_IOC_BRW_READ: {
-                /* FIXME: use a better ioctl data struct than obd_ioctl_data.
-                 *        We don't really support multiple-obdo I/Os here,
-                 *        for example offset and count are not per-obdo.
-                 */
-                struct lov_stripe_md *md;
+                struct lov_stripe_md smd;
                 obd_count       pages = 0;
                 struct page     **bufs = NULL;
                 obd_size        *counts = NULL;
@@ -502,7 +498,8 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                         GOTO(brw_free, err = -ENOMEM);
                 }
 
-                md = &data->ioc_obdo1;
+                memset(&smd, 0, sizeof(smd));
+                smd.lmd_object_id = data->ioc_obdo1.o_id;
 
                 from = (&data->ioc_pbuf1)[0];
                 off = data->ioc_offset;
@@ -527,7 +524,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                         flags[j] = 0;
                 }
 
-                err = obd_brw(rw, &conn, md, j, bufs, counts, offsets, flags,
+                err = obd_brw(rw, &conn, &smd, j, bufs, counts, offsets, flags,
                               NULL);
 
                 EXIT;
@@ -590,6 +587,7 @@ EXPORT_SYMBOL(class_uuid2dev);
 EXPORT_SYMBOL(class_uuid2obd);
 EXPORT_SYMBOL(class_connect);
 EXPORT_SYMBOL(class_conn2export);
+EXPORT_SYMBOL(class_import2export);
 EXPORT_SYMBOL(class_conn2obd);
 EXPORT_SYMBOL(class_disconnect);
 //EXPORT_SYMBOL(class_multi_setup);

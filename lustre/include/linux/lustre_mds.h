@@ -141,10 +141,9 @@ int mds_lock_callback(struct lustre_handle *lockh, struct ldlm_lock_desc *desc,
 int mds_reint(int offset, struct ptlrpc_request *req);
 
 /* mdc/mdc_request.c */
-static inline struct mdc_obd *mdc_conn2mdc(struct lustre_handle *conn)
-{
-        return &class_conn2obd(conn)->u.mdc;
-}
+extern int mdc_con2cl(struct lustre_handle *conn, struct ptlrpc_client **cl,
+                      struct ptlrpc_connection **connection,
+                      struct lustre_handle **rconn);
 
 int mdc_enqueue(struct lustre_handle *conn, int lock_type,
 		struct lookup_intent *it, int lock_mode, struct inode *dir,

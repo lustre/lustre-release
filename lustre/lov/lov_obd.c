@@ -26,43 +26,42 @@ extern struct obd_device obd_dev[MAX_OBD_DEVICES];
 
 /* obd methods */
 
-static int lov_getinfo(struct obd_device *obd, 
-                       struct lov_desc *desc, 
-                       uuid_t **uuids, 
-                       struct ptlrpc_request **request)
+static int lov_getinfo(struct obd_device *obd, struct lov_desc *desc,
+                       uuid_t **uuids, struct ptlrpc_request **request)
 {
         struct ptlrpc_request *req;
         struct mds_status_req *streq;
-        struct lov_obd *lov = &obd->u.lov; 
+        struct lov_obd *lov = &obd->u.lov;
         struct mdc_obd *mdc = &lov->mdcobd->u.mdc;
         int rc, size[2] = {sizeof(*streq)};
         ENTRY;
 
-        req = ptlrpc_prep_req2(mdc->mdc_client, mdc->mdc_conn, &mdc->mdc_connh,
+#warning error: need to set lov->mdc_connh somewhere!!!!
+        req = ptlrpc_prep_req2(mdc->mdc_client, mdc->mdc_conn, &lov->mdc_connh,
                                MDS_LOVINFO, 1, size, NULL);
         if (!req)
                 GOTO(out, rc = -ENOMEM);
-        
+
         *request = req;
         streq = lustre_msg_buf(req->rq_reqmsg, 0);
         streq->flags = HTON__u32(MDS_STATUS_LOV);
         streq->repbuf = HTON__u32(8000);
-        
-        /* prepare for reply */ 
+
+        /* prepare for reply */
         req->rq_level = LUSTRE_CONN_CON;
-        size[0] = sizeof(*desc); 
-        size[1] = 8000; 
+        size[0] = sizeof(*desc);
+        size[1] = 8000;
         req->rq_replen = lustre_msg_size(2, size);
-        
+
         rc = ptlrpc_queue_wait(req);
         rc = ptlrpc_check_status(req, rc);
 
         if (!rc) {
                 memcpy(desc, lustre_msg_buf(req->rq_repmsg, 0), sizeof(*desc));
                 *uuids = lustre_msg_buf(req->rq_repmsg, 1);
-                lov_unpackdesc(desc); 
+                lov_unpackdesc(desc);
         }
-        mdc->mdc_max_mdsize = sizeof(*desc) + 
+        mdc->mdc_max_mdsize = sizeof(*desc) +
                 desc->ld_tgt_count * sizeof(uuid_t);
 
         EXIT;
