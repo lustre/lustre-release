@@ -1,5 +1,5 @@
 lnxmaj="2.6.5"
-lnxrel="SLES9_SP1_BRANCH_2004111114454891"
+lnxrel="SLES9_SP1_20041111"
 
 KERNEL=linux-$lnxmaj-$lnxrel.tar.gz
 # they include our patches
