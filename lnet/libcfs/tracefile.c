@@ -207,6 +207,9 @@ void portals_debug_msg(int subsys, int mask, char *file, const char *fn,
         unsigned long flags;
         struct timeval tv;
 
+        if (strchr(file, '/'))
+                file = strrchr(file, '/') + 1;
+
         if (*(format + strlen(format) - 1) != '\n')
                 printk(KERN_INFO "format at %s:%d:%s doesn't end in newline\n",
                        file, line, fn);
