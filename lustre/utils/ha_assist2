@@ -16,10 +16,75 @@
 #   along with Lustre; if not, write to the Free Software
 #   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 #
-#Author : Ravindranadh Chowdary Sahukara <s-ravindranadh_chowdary@hp.com>
 
-from lutils import *
+import lustreLdap, sys, os, socket, string, popen2
 
+
+
+# Determine full path to use for an external command
+# searches dirname(argv[0]) first, then PATH
+def find_prog(cmd):
+    syspath = string.split(os.environ['PATH'], ':')
+    cmdpath = os.path.dirname(sys.argv[0])
+    syspath.insert(0, cmdpath);
+    syspath.insert(0, os.path.join(cmdpath, '../../portals/linux/utils/'))
+    for d in syspath:
+        prog = os.path.join(d,cmd)
+        if os.access(prog, os.X_OK):
+            return prog
+    return ''
+
+# handle lctl interface
+class LCTLInterface:
+    """
+    Manage communication with lctl
+    """
+
+    def __init__(self, cmd):
+        """
+        Initialize close by finding the lctl binary.
+        """
+        self.lctl = find_prog(cmd)
+        if not self.lctl:
+             lustreLdap.debug('! lctl not found')
+             self.lctl = 'lctl'
+
+    def run(self, cmds):
+        """
+        run lctl
+        the cmds are written to stdin of lctl
+        lctl doesn't return errors when run in script mode, so
+        stderr is checked
+        should modify command line to accept multiple commands, or
+        create complex command line options
+        """
+        lustreLdap.debug("+", self.lctl, cmds)
+        p = popen2.Popen3(self.lctl, 1)
+        p.tochild.write(cmds + "\n")
+        p.tochild.close()
+        out = p.fromchild.readlines()
+        err = p.childerr.readlines()
+        ret = p.wait()
+        if os.WIFEXITED(ret):
+            rc = os.WEXITSTATUS(ret)
+        else:
+            rc = 0
+        if rc or len(err):
+            lustreLdap.debug(self.lctl, err, rc)
+            sys.exit(1)
+        return rc, out
+
+    def runcmd(self, *args):
+        """
+        run lctl using the command line
+        """
+        cmd = string.join(map(str,args))
+        debug("+", self.lctl, cmd)
+        rc, out = run(self.lctl, cmd)
+        if rc:
+            lustreLdap.debug(self.lctl, out, rc)
+            sys.exit(1)
+        return rc, out
 
 def network(failedUUID, failoverUUID, failoverNode, failovernetType, failoverPort):
 	lctl=LCTLInterface('lctl')
@@ -33,46 +98,46 @@ def network(failedUUID, failoverUUID, failoverNode, failovernetType, failoverPor
 		name2dev RPCDEV
 		probe
 		newconn %s
-		quit""" % (failovernetType,failedUUID, failedUUID, failoverNode,int(failoverPort),failoverUUID,failoverNode,failoverUUID)
+		quit""" % (failovernetType, failedUUID, failedUUID, failoverNode, int(failoverPort), failoverUUID, failoverNode, failoverUUID)
 		print cmd
 		lctl.run(cmd)
 		
 
 def main():
-	FailedNetUUID=sys.argv[1:][0]
+	FailedNetUUID = sys.argv[1:][0]
 	print FailedNetUUID
 	print "ha assist checking for problems"
-	if not os.access("/tmp/halog",os.R_OK):
+	if not os.access("/tmp/halog", os.R_OK):
 		print "no problems ..exiting"
 		sys.exit(1)
 		
 	try:
-		fp=open("/etc/lustre/ldapserver","r")
-		line=fp.readline()
+		fp = open("/etc/lustre/ldapserver", "r")
+		line = fp.readline()
 		fp.close()
         except IOError, e:
             log(e)
 
-	ldapinfo=string.split(line,':')
-	server=ldapinfo[0]
-	port=ldapinfo[1]
-	base="fs=lustre"
-	myCon=MyConn(server,port)
+	ldapinfo = string.split(line,':')
+	server = ldapinfo[0]
+	port = ldapinfo[1]
+	base = "fs=lustre"
+	myCon = lustreLdap.MyConn(server, port)
 	myCon.open()
 
-	connId=myCon.id
+	connId = myCon.id
 	# initilize the new network object class
-	lustreNet=LustreNet()
+	lustreNet = lustreLdap.LustreNet()
 	# brings the failed network object class from LDAP the query is
-	lustreNet.getEntry_from_ldap(connId,base,FailedNetUUID)
+	lustreNet.getEntry_from_ldap(connId, base, FailedNetUUID)
 	
-	nodename=socket.gethostname()
+	nodename = socket.gethostname()
 
-	nodename=lustreNet.id
-	failoverNetUUID=lustreNet.fnetUUID
+	nodename = lustreNet.id
+	failoverNetUUID = lustreNet.fnetUUID
 	#Query the failover network information
-	lustreNet=LustreNet()
-	lustreNet.getEntry_from_ldap(connId,base,failoverNetUUID)
+	lustreNet = lustreLdap.LustreNet()
+	lustreNet.getEntry_from_ldap(connId, base, failoverNetUUID)
 	
 	network(FailedNetUUID, failoverNetUUID, lustreNet.id, lustreNet.netType, lustreNet.port)
 	
