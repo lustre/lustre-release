@@ -344,27 +344,32 @@ int ptlrpc_start_thread(struct obd_device *dev, struct ptlrpc_service *svc,
 int ptlrpc_unregister_service(struct ptlrpc_service *service)
 {
         int rc, i;
-
-        for (i = 0; i < service->srv_nbuffs; i++) {
-                struct ptlrpc_request_buffer_desc *rqbd =&service->srv_rqbds[i];
-
-                if (rqbd->rqbd_buffer == NULL) /* no buffer allocated */
-                        continue;             /* => never initialised */
-
-                /* Buffer allocated => got linked */
-                LASSERT (ptl_is_valid_handle (&rqbd->rqbd_me_h));
-
-                rc = PtlMEUnlink(rqbd->rqbd_me_h);
-                if (rc)
-                        CERROR("PtlMEUnlink failed: %d\n", rc);
-
-                OBD_FREE(rqbd->rqbd_buffer, service->srv_buf_size);
-        }
-
+        
+        /* NB service->srv_nbuffs gets set before we attempt (and possibly
+         * fail) to allocate srv_rqbds.
+         */
         if (service->srv_rqbds != NULL)
+        {
+                for (i = 0; i < service->srv_nbuffs; i++) {
+                        struct ptlrpc_request_buffer_desc *rqbd = &service->srv_rqbds[i];
+                        
+                        if (rqbd->rqbd_buffer == NULL) /* no buffer allocated */
+                                continue;             /* => never initialised */
+                        
+                        /* Buffer allocated => got linked */
+                        LASSERT (ptl_is_valid_handle (&rqbd->rqbd_me_h));
+                        
+                        rc = PtlMEUnlink(rqbd->rqbd_me_h);
+                        if (rc)
+                                CERROR("PtlMEUnlink failed: %d\n", rc);
+                        
+                        OBD_FREE(rqbd->rqbd_buffer, service->srv_buf_size);
+                }
+                
                 OBD_FREE(service->srv_rqbds, service->srv_nbuffs *
                          sizeof (struct ptlrpc_request_buffer_desc));
-
+        }
+        
         rc = PtlEQFree(service->srv_eq_h);
         if (rc)
                 CERROR("PtlEQFree failed: %d\n", rc);
