@@ -189,10 +189,12 @@ static int llog_test_4(struct obd_device *obd)
 {
         struct llog_handle *cath;
         char name[10];
-        int rc, i;
+        int rc, i, buflen;
         struct llog_mini_rec lmr;
         struct llog_cookie cookie;
         int num_recs = 0;
+        char *buf;
+        struct llog_rec_hdr rec;
 
         ENTRY;
 
@@ -244,10 +246,28 @@ static int llog_test_4(struct obd_device *obd)
                 }
                 num_recs++;
         }
-        
+
+        CERROR("4e: add 5 large records, one record per block\n");
+        buflen = LLOG_CHUNK_SIZE - LLOG_MIN_REC_SIZE;
+        OBD_ALLOC(buf, buflen);
+        if (buf == NULL)
+                GOTO(out, rc = -ENOMEM);
+        for (i = 0; i < 5; i++) {
+                rec.lrh_len = cpu_to_le16(buflen);
+                rec.lrh_type = cpu_to_le32(OBD_CFG_REC);
+                rc = llog_cat_add_rec(cath, &rec, NULL, buf);
+                if (rc) {
+                        CERROR("4e: write 5 records failed at #%d: %d\n",
+                               i + 1, rc);
+                        OBD_FREE(buf, buflen);
+                        GOTO(out, rc);
+                }
+                num_recs++;
+        }
+        OBD_FREE(buf, buflen);
 
  out:
-        CERROR("4e: put newly-created catalog\n");
+        CERROR("4f: put newly-created catalog\n");
         rc = llog_cat_put(cath);
         if (rc)
                 CERROR("1b: close log %s failed: %d\n", name, rc);
@@ -268,6 +288,18 @@ static int cat_print_cb(struct llog_handle *llh, struct llog_rec_hdr *rec, void 
         RETURN(0);
 }
 
+static int plain_print_cb(struct llog_handle *llh, struct llog_rec_hdr *rec, void *data)
+{
+        if (!le32_to_cpu(llh->lgh_hdr->llh_flags) & LLOG_F_IS_PLAIN) {
+                CERROR("log is not plain\n");
+                RETURN(-EINVAL);
+        }
+
+        CERROR("seeing record at index %d in log "LPX64"\n", 
+               le16_to_cpu(rec->lrh_index), llh->lgh_id.lgl_oid);
+        RETURN(0);
+}
+
 static int llog_cancel_rec_cb(struct llog_handle *llh, struct llog_rec_hdr *rec, void *data)
 {
         struct llog_cookie cookie;
@@ -283,7 +315,7 @@ static int llog_cancel_rec_cb(struct llog_handle *llh, struct llog_rec_hdr *rec,
         
         llog_cat_cancel_records(llh->u.phd.phd_cat_handle, 1, &cookie);
         i++;
-        if (i > 39000)
+        if (i == 40000)
                 RETURN(-4711);
         RETURN(0);
 }
@@ -318,12 +350,35 @@ static int llog_test_5(struct obd_device *obd)
                 GOTO(out, rc);
         }
 
-        CERROR("5c: Cancel 39000 records, see one log zapped\n");
+        CERROR("5c: Cancel 40000 records, see one log zapped\n");
         rc = llog_cat_process(llh, llog_cancel_rec_cb, "foobar");
         if (rc != -4711) {
                 CERROR("5c: process with cat_cancel_cb failed: %d\n", rc);
                 GOTO(out, rc);
         }
+
+        CERROR("5d: add 1 record to the log with many canceled empty pages\n");
+        rc = llog_cat_add_rec(llh, &rec, NULL, NULL);
+        if (rc) {
+                CERROR("5d: add record to the log with many canceled empty\
+                       pages failed\n");
+                GOTO(out, rc);
+        }
+
+        CERROR("5b: print the catalog entries.. we expect 2\n");
+        rc = llog_process(llh, (llog_cb_t)cat_print_cb, "test 5");
+        if (rc) {
+                CERROR("5b: process with cat_print_cb failed: %d\n", rc);
+                GOTO(out, rc);
+        }
+
+        CERROR("5e: print plain log entries.. expect 6\n");
+        rc = llog_cat_process(llh, plain_print_cb, "foobar");
+        if (rc) {
+                CERROR("5e: process with plain_print_cb failed: %d\n", rc);
+                GOTO(out, rc);
+        }
+
  out:
         CERROR("5: close re-opened catalog\n");
         if (llh)
