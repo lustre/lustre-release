@@ -21,7 +21,7 @@ IMAGES := $(patsubst %.fig,%.eps,$(wildcard *.fig))
 LYXFILES= $(wildcard *.lin) $(wildcard *.lyx)
 
 MAINTAINERCLEANFILES =  $(IMAGES) $(DOCS) $(VERSIONED)
-CLEANFILES = *.aux *.tex doc.old/*.aux doc.old/*.tex *.eps
+CLEANFILES = *.aux *.tex doc.old/*.aux doc.old/*.tex *.eps *.log *.pdf
 VERSIONED = lustre-HOWTO.lyx lustre.lyx doc.old/lustre-HOWTO.lyx doc.old/lustre.lyx
 GENERATED = $(VERSIONED) lustre-full.tex lustre-chbar.tex
 
