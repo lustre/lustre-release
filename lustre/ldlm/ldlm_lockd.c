@@ -36,10 +36,8 @@ static int ldlm_enqueue(struct ptlrpc_request *req)
 {
         struct ldlm_reply *dlm_rep;
         struct ldlm_request *dlm_req;
-        struct lustre_msg *msg, *req_msg;
         ldlm_error_t err;
-        int rc;
-        int bufsize = sizeof(*dlm_rep);
+        int rc, bufsize = sizeof(*dlm_rep);
         
         rc = lustre_pack_msg(1, &bufsize, NULL, &req->rq_replen,
                              &req->rq_repbuf);
@@ -48,12 +46,9 @@ static int ldlm_enqueue(struct ptlrpc_request *req)
                 req->rq_status = -ENOMEM;
                 RETURN(0);
         }
-        msg = (struct lustre_msg *)req->rq_repbuf;
-        req_msg = req->rq_req.lustre;
-        dlm_rep = lustre_msg_buf(0, msg);
-        dlm_req = lustre_msg_buf(0, req_msg);
-
-        msg->xid = req_msg->xid;
+        req->rq_repmsg = (struct lustre_msg *)req->rq_repbuf;
+        dlm_rep = lustre_msg_buf(req->rq_repmsg, 0);
+        dlm_req = lustre_msg_buf(req->rq_reqmsg, 0);
 
         err = ldlm_local_lock_enqueue(req->rq_obd,
                                       dlm_req->ns_id,
@@ -65,40 +60,36 @@ static int ldlm_enqueue(struct ptlrpc_request *req)
                                       &dlm_req->flags,
                                       ldlm_client_callback,
                                       ldlm_client_callback,
-                                      lustre_msg_buf(1, req_msg),
-                                      req_msg->buflens[1],
+                                      lustre_msg_buf(req->rq_reqmsg, 1),
+                                      req->rq_reqmsg->buflens[1],
                                       &dlm_rep->lock_handle);
-        msg->status = HTON__u32(err);
+        req->rq_status = err;
 
-        /* XXX unfinished */
-        return 0;
+        CERROR("local_lock_enqueue: %d\n", err);
+
+        RETURN(0);
 }
 
 static int ldlm_handle(struct obd_device *dev, struct ptlrpc_service *svc,
                        struct ptlrpc_request *req)
 {
         int rc;
-        struct ptlreq_hdr *hdr;
-
         ENTRY;
 
-        hdr = (struct ptlreq_hdr *)req->rq_reqbuf;
-
-        if (NTOH__u32(hdr->type) != PTL_RPC_REQUEST) {
-                CERROR("lustre_ldlm: wrong packet type sent %d\n",
-                       NTOH__u32(hdr->type));
-                rc = -EINVAL;
-                GOTO(out, rc);
-        }
-
         rc = lustre_unpack_msg(req->rq_reqbuf, req->rq_reqlen);
-        req->rq_reqhdr = (void *)req->rq_reqbuf;
+        req->rq_reqmsg = (struct lustre_msg *)req->rq_reqbuf;
         if (rc) {
                 CERROR("lustre_ldlm: Invalid request\n");
                 GOTO(out, rc);
         }
 
-        switch (req->rq_reqhdr->opc) {
+        if (req->rq_reqmsg->type != PTL_RPC_REQUEST) {
+                CERROR("lustre_ldlm: wrong packet type sent %d\n",
+                       req->rq_reqmsg->type);
+                GOTO(out, rc = -EINVAL);
+        }
+
+        switch (req->rq_reqmsg->opc) {
         case LDLM_ENQUEUE:
                 CDEBUG(D_INODE, "enqueue\n");
                 OBD_FAIL_RETURN(OBD_FAIL_LDLM_ENQUEUE, 0);
@@ -146,12 +137,11 @@ out:
         return 0;
 }
 
-
-
 static int ldlm_iocontrol(int cmd, struct obd_conn *conn, int len, void *karg,
                           void *uarg)
 {
         struct obd_device *obddev = conn->oc_dev;
+        struct ptlrpc_client cl;
         int err;
 
         ENTRY;
@@ -163,6 +153,14 @@ static int ldlm_iocontrol(int cmd, struct obd_conn *conn, int len, void *karg,
                                 _IOC_TYPE(cmd), _IOC_NR(cmd), _IOC_SIZE(cmd));
                 EXIT;
                 return -EINVAL;
+        }
+
+        err = ptlrpc_connect_client(-1, "ldlm",
+                                    LDLM_REQUEST_PORTAL, LDLM_REPLY_PORTAL,
+                                    &cl);
+        if (err) {
+                CERROR("cannot create client\n");
+                RETURN(-EINVAL);
         }
 
         switch (cmd) {

@@ -36,16 +36,15 @@
 #include <linux/lustre_mds.h>
 #include <linux/obd_class.h>
 
-extern struct ptlrpc_request *mds_prep_req(int size, int opcode, int namelen, char *name, int tgtlen, char *tgt);
-
-static int mds_reint_setattr(struct mds_update_record *rec, struct ptlrpc_request *req)
+static int mds_reint_setattr(struct mds_update_record *rec,
+                             struct ptlrpc_request *req)
 {
         struct mds_obd *mds = &req->rq_obd->u.mds;
         struct dentry *de;
 
         de = mds_fid2dentry(mds, rec->ur_fid1, NULL);
         if (IS_ERR(de) || OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_SETATTR)) {
-                req->rq_rephdr->status = -ESTALE;
+                req->rq_status = -ESTALE;
                 RETURN(0);
         }
 
@@ -54,7 +53,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, struct ptlrpc_reques
         OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_SETATTR_WRITE,
                        de->d_inode->i_sb->s_dev);
 
-        req->rq_rephdr->status = mds_fs_setattr(mds, de, NULL, &rec->ur_iattr);
+        req->rq_status = mds_fs_setattr(mds, de, NULL, &rec->ur_iattr);
 
         l_dput(de);
         RETURN(0);
@@ -63,14 +62,12 @@ static int mds_reint_setattr(struct mds_update_record *rec, struct ptlrpc_reques
 static int mds_reint_create(struct mds_update_record *rec,
                             struct ptlrpc_request *req)
 {
-        int type = rec->ur_mode & S_IFMT;
         struct dentry *de = NULL;
-        struct mds_rep *rep = req->rq_rep.mds;
         struct mds_obd *mds = &req->rq_obd->u.mds;
         struct dentry *dchild = NULL;
         struct inode *dir;
         void *handle;
-        int rc = 0;
+        int rc = 0, type = rec->ur_mode & S_IFMT;
         ENTRY;
 
         de = mds_fid2dentry(mds, rec->ur_fid1, NULL);
@@ -146,6 +143,7 @@ static int mds_reint_create(struct mds_update_record *rec,
         } else {
                 struct iattr iattr;
                 struct inode *inode = dchild->d_inode;
+                struct mds_body *body;
 
                 if (type == S_IFREG) {
                         rc = mds_fs_set_objid(mds, inode, handle, rec->ur_id);
@@ -160,19 +158,20 @@ static int mds_reint_create(struct mds_update_record *rec,
                 iattr.ia_uid = rec->ur_uid;
                 iattr.ia_gid = rec->ur_gid;
                 iattr.ia_valid = ATTR_UID | ATTR_GID | ATTR_ATIME |
-                                 ATTR_MTIME | ATTR_CTIME;
+                        ATTR_MTIME | ATTR_CTIME;
 
                 rc = mds_fs_setattr(mds, dchild, handle, &iattr);
 
-                rep->ino = inode->i_ino;
-                rep->generation = inode->i_generation;
+                body = lustre_msg_buf(req->rq_repmsg, 0);
+                body->ino = inode->i_ino;
+                body->generation = inode->i_generation;
         }
 
 out_reint_commit:
         rc = mds_fs_commit(mds, dir, handle);
 
 out_reint_create:
-        req->rq_rephdr->status = rc;
+        req->rq_status = rc;
         l_dput(dchild);
         l_dput(de);
         RETURN(0);
@@ -229,7 +228,7 @@ static int mds_reint_unlink(struct mds_update_record *rec,
         }
 
 out_unlink:
-        req->rq_rephdr->status = rc;
+        req->rq_status = rc;
         l_dput(dchild);
         l_dput(de);
         RETURN(0);
@@ -273,13 +272,12 @@ static int mds_reint_link(struct mds_update_record *rec,
         EXIT;
 
  out_link:
-        req->rq_rephdr->status = rc;
+        req->rq_status = rc;
         l_dput(dchild);
         l_dput(de_tgt_dir);
         l_dput(de_src);
         return 0;
 }
-
 
 static int mds_reint_rename(struct mds_update_record *rec,
                             struct ptlrpc_request *req)
@@ -320,7 +318,7 @@ static int mds_reint_rename(struct mds_update_record *rec,
         EXIT;
 
  out_rename:
-        req->rq_rephdr->status = rc;
+        req->rq_status = rc;
         l_dput(de_new);
         l_dput(de_old);
         l_dput(de_tgtdir);
@@ -330,7 +328,7 @@ static int mds_reint_rename(struct mds_update_record *rec,
 
 typedef int (*mds_reinter)(struct mds_update_record *, struct ptlrpc_request*);
 
-static mds_reinter  reinters[REINT_MAX+1] = {
+static mds_reinter reinters[REINT_MAX+1] = {
         [REINT_SETATTR]   mds_reint_setattr,
         [REINT_CREATE]    mds_reint_create,
         [REINT_UNLINK]    mds_reint_unlink,
@@ -340,22 +338,21 @@ static mds_reinter  reinters[REINT_MAX+1] = {
 
 int mds_reint_rec(struct mds_update_record *rec, struct ptlrpc_request *req)
 {
-        int rc;
+        int rc, size = sizeof(struct mds_body);
 
-        if (rec->ur_opcode < 0 || rec->ur_opcode > REINT_MAX) {
+        if (rec->ur_opcode < 1 || rec->ur_opcode > REINT_MAX) {
                 CERROR("opcode %d not valid\n", rec->ur_opcode);
                 rc = req->rq_status = -EINVAL;
                 RETURN(rc);
         }
 
-        rc = mds_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep,
-                          &req->rq_replen, &req->rq_repbuf);
+        rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repbuf);
+        req->rq_repmsg = (struct lustre_msg *)req->rq_repbuf;
         if (rc) {
                 CERROR("mds: out of memory\n");
                 rc = req->rq_status = -ENOMEM;
                 RETURN(rc);
         }
-        req->rq_rephdr->xid = req->rq_reqhdr->xid;
 
         rc = reinters[rec->ur_opcode](rec, req);
         return rc;

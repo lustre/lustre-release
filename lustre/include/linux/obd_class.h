@@ -109,8 +109,8 @@ static inline int obd_check_conn(struct obd_conn *conn)
         return 0;
 }
 
-#define OBT(dev)        dev->obd_type
-#define OBP(dev,op)     dev->obd_type->typ_ops->o_ ## op
+#define OBT(dev)        (dev)->obd_type
+#define OBP(dev,op)     (dev)->obd_type->typ_ops->o_ ## op
 
 #define OBD_CHECK_SETUP(conn)                                   \
 do {                                                            \
@@ -698,10 +698,5 @@ int gen_copy_data(struct obd_conn *dst_conn, struct obdo *dst,
 /* sysctl.c */
 extern void obd_sysctl_init (void);
 extern void obd_sysctl_clean (void);
-
-/* pack_generic.c */
-int lustre_pack_msg(int count, int *lens, char **bufs, int *len, char **buf);
-int lustre_unpack_msg(char *buf, int len);
-void *lustre_msg_buf(int n, struct lustre_msg *m);
 
 #endif /* __LINUX_CLASS_OBD_H */

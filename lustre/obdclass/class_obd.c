@@ -481,7 +481,6 @@ int obd_register_type(struct obd_ops *ops, char *nm)
         OBD_ALLOC(type, sizeof(*type));
         if (!type)
                 RETURN(-ENOMEM);
-        memset(type, 0, sizeof(*type));
         INIT_LIST_HEAD(&type->typ_chain);
         MOD_INC_USE_COUNT;
         list_add(&type->typ_chain, obd_types.next);

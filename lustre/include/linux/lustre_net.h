@@ -64,23 +64,11 @@
 #define SVC_LIST   32
 #define SVC_SIGNAL 64
 
-typedef int (*rep_unpack_t)(char *, int, struct ptlrep_hdr **, union ptl_rep *);
-typedef int (*req_pack_t)(char *, int, char *, int, struct ptlreq_hdr **,
-                          union ptl_req*, int *, char **); 
-
-typedef int (*req_unpack_t)(char *buf, int len, struct ptlreq_hdr **, 
-                            union ptl_req *);
-typedef int (*rep_pack_t)(char *buf1, int len1, char *buf2, int len2,
-                          struct ptlrep_hdr **, union ptl_rep*, 
-                          int *replen, char **repbuf); 
-
 struct ptlrpc_client {
         struct lustre_peer cli_server;
         struct obd_device *cli_obd;
         __u32 cli_request_portal;
         __u32 cli_reply_portal;
-        rep_unpack_t cli_rep_unpack;
-        req_pack_t cli_req_pack;
 
         spinlock_t cli_lock;
         __u32 cli_xid;
@@ -107,15 +95,13 @@ struct ptlrpc_request {
         __u32 rq_connid;
         __u32 rq_xid;
 
-        char *rq_reqbuf;
         int rq_reqlen;
-        struct ptlreq_hdr *rq_reqhdr;
-        union ptl_req rq_req;
+        char *rq_reqbuf;
+        struct lustre_msg *rq_reqmsg;
 
-        char *rq_repbuf;
         int rq_replen;
-        struct ptlrep_hdr *rq_rephdr;
-        union ptl_rep rq_rep;
+        char *rq_repbuf;
+        struct lustre_msg *rq_repmsg;
 
         char *rq_bulkbuf;
         int rq_bulklen;
@@ -183,8 +169,6 @@ struct ptlrpc_service {
         spinlock_t srv_lock;
         struct list_head srv_reqs;
         ptl_event_t  srv_ev;
-        req_unpack_t      srv_req_unpack;
-        rep_pack_t        srv_rep_pack;
         int (*srv_handler)(struct obd_device *obddev, 
                            struct ptlrpc_service *svc,
                            struct ptlrpc_request *req);
@@ -210,14 +194,12 @@ int ptl_send_rpc(struct ptlrpc_request *request, struct ptlrpc_client *cl);
 void ptlrpc_link_svc_me(struct ptlrpc_service *service, int i);
 
 /* rpc/client.c */
-int ptlrpc_connect_client(int dev, char *uuid, int req_portal, int rep_portal, 
-                          req_pack_t req_pack, rep_unpack_t rep_unpack,
+int ptlrpc_connect_client(int dev, char *uuid, int req_portal, int rep_portal,
                           struct ptlrpc_client *cl);
 int ptlrpc_queue_wait(struct ptlrpc_client *cl, struct ptlrpc_request *req);
 int ptlrpc_queue_req(struct ptlrpc_client *peer, struct ptlrpc_request *req);
-struct ptlrpc_request *ptlrpc_prep_req(struct ptlrpc_client *cl, 
-                                       int opcode, int namelen, char *name,
-                                       int tgtlen, char *tgt);
+struct ptlrpc_request *ptlrpc_prep_req(struct ptlrpc_client *cl, int opcode,
+                                       int count, int *lengths, char **bufs);
 void ptlrpc_free_req(struct ptlrpc_request *request);
 struct ptlrpc_bulk_desc *ptlrpc_prep_bulk(struct lustre_peer *);
 int ptlrpc_check_status(struct ptlrpc_request *req, int err);
@@ -236,5 +218,11 @@ struct ptlrpc_svc_data {
         struct ptlrpc_service *svc; 
         struct obd_device *dev;
 }; 
+
+/* rpc/pack_generic.c */
+int lustre_pack_msg(int count, int *lens, char **bufs, int *len, char **buf);
+int lustre_msg_size(int count, int *lengths);
+int lustre_unpack_msg(char *buf, int len);
+void *lustre_msg_buf(struct lustre_msg *m, int n);
 
 #endif

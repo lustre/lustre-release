@@ -111,7 +111,6 @@ static struct super_block * ll_read_super(struct super_block *sb,
                 RETURN(NULL);
         }
 
-        memset(sbi, 0, sizeof(*sbi));
         sb->u.generic_sbp = sbi;
 
         ll_options(data, &device, &version);
@@ -136,10 +135,7 @@ static struct super_block * ll_read_super(struct super_block *sb,
 
         /* the first parameter should become an mds device no */
         err = ptlrpc_connect_client(-1, "mds",
-                                    MDS_REQUEST_PORTAL,
-                                    MDC_REPLY_PORTAL,
-                                    mds_pack_req,
-                                    mds_unpack_rep,
+                                    MDS_REQUEST_PORTAL, MDC_REPLY_PORTAL,
                                     &sbi->ll_mds_client);
 
         if (err) {
@@ -163,7 +159,8 @@ static struct super_block * ll_read_super(struct super_block *sb,
                 GOTO(out_req, sb = NULL);
         }
 
-        root = iget4(sb, sbi->ll_rootino, NULL, request->rq_rep.mds);
+        root = iget4(sb, sbi->ll_rootino, NULL,
+                     lustre_msg_buf(request->rq_repmsg, 0));
         if (root) {
                 sb->s_root = d_alloc_root(root);
         } else {
@@ -295,38 +292,38 @@ static int ll_statfs(struct super_block *sb, struct statfs *buf)
         return err; 
 }
 
-static void inline ll_to_inode(struct inode *dst, struct mds_rep *rep)
+static void inline ll_to_inode(struct inode *dst, struct mds_body *body)
 {
         struct ll_inode_info *ii = 
                 (struct ll_inode_info *) &dst->u.generic_ip;
 
         /* core attributes first */
-        if ( rep->valid & OBD_MD_FLID )
-                dst->i_ino = rep->ino;
-        if ( rep->valid & OBD_MD_FLATIME ) 
-                dst->i_atime = rep->atime;
-        if ( rep->valid & OBD_MD_FLMTIME ) 
-                dst->i_mtime = rep->mtime;
-        if ( rep->valid & OBD_MD_FLCTIME ) 
-                dst->i_ctime = rep->ctime;
-        if ( rep->valid & OBD_MD_FLSIZE ) 
-                dst->i_size = rep->size;
-        if ( rep->valid & OBD_MD_FLMODE ) 
-                dst->i_mode = rep->mode;
-        if ( rep->valid & OBD_MD_FLUID ) 
-                dst->i_uid = rep->uid;
-        if ( rep->valid & OBD_MD_FLGID ) 
-                dst->i_gid = rep->gid;
-        if ( rep->valid & OBD_MD_FLFLAGS ) 
-                dst->i_flags = rep->flags;
-        if ( rep->valid & OBD_MD_FLNLINK )
-                dst->i_nlink = rep->nlink;
-        if ( rep->valid & OBD_MD_FLGENER )
-                dst->i_generation = rep->generation;
+        if ( body->valid & OBD_MD_FLID )
+                dst->i_ino = body->ino;
+        if ( body->valid & OBD_MD_FLATIME ) 
+                dst->i_atime = body->atime;
+        if ( body->valid & OBD_MD_FLMTIME ) 
+                dst->i_mtime = body->mtime;
+        if ( body->valid & OBD_MD_FLCTIME ) 
+                dst->i_ctime = body->ctime;
+        if ( body->valid & OBD_MD_FLSIZE ) 
+                dst->i_size = body->size;
+        if ( body->valid & OBD_MD_FLMODE ) 
+                dst->i_mode = body->mode;
+        if ( body->valid & OBD_MD_FLUID ) 
+                dst->i_uid = body->uid;
+        if ( body->valid & OBD_MD_FLGID ) 
+                dst->i_gid = body->gid;
+        if ( body->valid & OBD_MD_FLFLAGS ) 
+                dst->i_flags = body->flags;
+        if ( body->valid & OBD_MD_FLNLINK )
+                dst->i_nlink = body->nlink;
+        if ( body->valid & OBD_MD_FLGENER )
+                dst->i_generation = body->generation;
 
         /* this will become more elaborate for striping etc */ 
-        if (rep->valid & OBD_MD_FLOBJID) 
-                ii->lli_objid = rep->objid;
+        if (body->valid & OBD_MD_FLOBJID) 
+                ii->lli_objid = body->objid;
 #if 0
 
         if (obdo_has_inline(oa)) {
@@ -347,10 +344,10 @@ static void inline ll_to_inode(struct inode *dst, struct mds_rep *rep)
 
 static inline void ll_read_inode2(struct inode *inode, void *opaque)
 {
-        struct mds_rep *rep = opaque; 
+        struct mds_body *body = opaque; 
         
         ENTRY;
-        ll_to_inode(inode, rep); 
+        ll_to_inode(inode, body); 
 
         /* OIDEBUG(inode); */
 

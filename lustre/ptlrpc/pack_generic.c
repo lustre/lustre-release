@@ -22,27 +22,7 @@
  *
  */
 
-#include <linux/module.h>
-#include <linux/errno.h>
-#include <linux/kernel.h>
-#include <linux/major.h>
-#include <linux/sched.h>
-#include <linux/lp.h>
-#include <linux/slab.h>
-#include <linux/ioport.h>
-#include <linux/fcntl.h>
-#include <linux/delay.h>
-#include <linux/skbuff.h>
-#include <linux/proc_fs.h>
-#include <linux/fs.h>
-#include <linux/poll.h>
-#include <linux/init.h>
-#include <linux/list.h>
-#include <asm/io.h>
-#include <asm/segment.h>
-#include <asm/system.h>
-#include <asm/poll.h>
-#include <asm/uaccess.h>
+#define EXPORT_SYMTAB
 
 #define DEBUG_SUBSYSTEM S_CLASS
 
@@ -53,35 +33,45 @@ int lustre_pack_msg(int count, int *lens, char **bufs, int *len, char **buf)
 {
         char *ptr;
         struct lustre_msg *m;
-        int size = 0;
-        int i;
+        int size = 0, i;
 
-        for (i=0 ; i<count; i++) { 
+        for (i = 0; i < count; i++)
                 size += size_round(lens[i]);
-        }
-        *len = sizeof(*m) + size; 
+
+        *len = sizeof(*m) + count * sizeof(__u32) + size;
 
         OBD_ALLOC(*buf, *len);
-        if (!*buf) {
-                EXIT;
-                return -ENOMEM;
-        }
+        if (!*buf)
+                RETURN(-ENOMEM);
 
-        memset(*buf, 0, *len); 
         m = (struct lustre_msg *)(*buf);
-        m->type = PTL_RPC_REQUEST;
-
         m->bufcount = HTON__u32(count);
-        for (i=0 ; i<count; i++) { 
+        for (i = 0; i < count; i++)
                 m->buflens[i] = HTON__u32(lens[i]);
-        }
-        
+
         ptr = *buf + sizeof(*m) + sizeof(__u32) * count;
-        for (i=0 ; i<count ; i++) { 
-                LOGL(buf[i], lens[i], ptr); 
+        for (i = 0; i < count; i++) {
+                char *tmp = NULL;
+                if (bufs)
+                        tmp = bufs[i];
+                LOGL(tmp, lens[i], ptr);
         }
 
         return 0;
+}
+
+/* This returns the size of the buffer that is required to hold a lustre_msg
+ * with the given sub-buffer lengths. */
+int lustre_msg_size(int count, int *lengths)
+{
+        int size = sizeof(struct lustre_msg), i;
+
+        for (i = 0; i < count; i++)
+                size += size_round(lengths[i]);
+
+        size += count * sizeof(__u32);
+
+        return size;
 }
 
 int lustre_unpack_msg(char *buf, int len)
@@ -90,37 +80,40 @@ int lustre_unpack_msg(char *buf, int len)
         int required_len, i;
 
         required_len = sizeof(*m);
-        if (len < required_len) { 
+        if (len < required_len)
                 RETURN(-EINVAL);
-        }
 
-        m->bufcount = NTOH__u32(m->bufcount); 
+        m->opc = NTOH__u32(m->opc);
+        m->xid = NTOH__u32(m->xid);
+        m->status = NTOH__u32(m->status);
+        m->type = NTOH__u32(m->type);
+        m->connid = NTOH__u32(m->connid);
+        m->bufcount = NTOH__u32(m->bufcount);
 
-        required_len += m->bufcount * sizeof(__u32); 
-        if (len < required_len) { 
+        required_len += m->bufcount * sizeof(__u32);
+        if (len < required_len)
                 RETURN(-EINVAL);
-        }
 
-        for (i=0; i<m->bufcount; i++) { 
+        for (i = 0; i < m->bufcount; i++) {
                 m->buflens[i] = NTOH__u32(m->buflens[i]);
                 required_len += size_round(m->buflens[i]);
         }
 
-        if (len < required_len) { 
+        if (len < required_len) {
+                CERROR("len: %d, required_len %d\n", len, required_len);
                 RETURN(-EINVAL);
         }
 
-        EXIT;
-        return 0;
+        RETURN(0);
 }
 
-void *lustre_msg_buf(int n, struct lustre_msg *m)
+void *lustre_msg_buf(struct lustre_msg *m, int n)
 {
-        int i;
-        int offset;
+        int i, offset;
 
-        if (n >= m->bufcount || n < 0) { 
-                CERROR("referencing bad sub buffer!\n"); 
+        if (n < 0 || n >= m->bufcount) {
+                CERROR("referencing bad sub buffer!\n");
+                LBUG();
                 return NULL;
         }
 
@@ -129,8 +122,8 @@ void *lustre_msg_buf(int n, struct lustre_msg *m)
 
         offset = sizeof(*m) + m->bufcount * sizeof(__u32);
 
-        for (i=0; i < n;  i++ ) 
-                offset += size_round(m->buflens[i]); 
+        for (i = 0; i < n; i++)
+                offset += size_round(m->buflens[i]);
 
         return (char *)m + offset;
 }

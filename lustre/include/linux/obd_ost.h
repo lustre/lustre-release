@@ -33,21 +33,10 @@
 #define LUSTRE_OSC_NAME "osc"
 
 /* ost/ost_pack.c */
-int ost_pack_req(char *buf1, int buflen1, char *buf2, int buflen2, struct ptlreq_hdr **hdr, union ptl_req *req, int *len, char **buf);
-int ost_unpack_req(char *buf, int len, struct ptlreq_hdr **hdr, union ptl_req *req);
-int ost_pack_rep(char *buf1, int buflen1, char *buf2, int buflen2,
-		 struct ptlrep_hdr **hdr, union ptl_rep *r,
-		 int *len, char **buf);
-int ost_unpack_rep(char *buf, int len, struct ptlrep_hdr **hdr, union ptl_rep *rep);
-
 void ost_pack_niobuf(void **tmp, void *addr, __u64 offset, __u32 len, 
                      __u32 flags, __u32 xid);
 void ost_unpack_niobuf(void **tmp, struct niobuf **nbp);
 void ost_pack_ioo(void **tmp, struct obdo *oa, int bufcnt);
 void ost_unpack_ioo(void **tmp, struct obd_ioobj **ioop);
-void *ost_req_buf2(struct ost_req *req);
-void *ost_req_buf1(struct ost_req *req);
-void *ost_rep_buf2(struct ost_rep *rep);
-void *ost_rep_buf1(struct ost_rep *rep);
 
 #endif

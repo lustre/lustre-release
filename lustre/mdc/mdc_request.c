@@ -54,110 +54,106 @@
 
 extern int mds_queue_req(struct ptlrpc_request *);
 
-
 int mdc_getattr(struct ptlrpc_client *cl, ino_t ino, int type, int valid,
-                struct ptlrpc_request **req)
+                struct ptlrpc_request **request)
 {
-        int rc;
-        struct ptlrpc_request *request;
-
+        struct ptlrpc_request *req;
+        struct mds_body *body;
+        int rc, size = sizeof(*body);
         ENTRY;
 
-        request = ptlrpc_prep_req(cl, MDS_GETATTR, 0, NULL, 0, NULL);
-        if (!request) {
-                CERROR("llight request: cannot pack\n");
+        req = ptlrpc_prep_req(cl, MDS_GETATTR, 1, &size, NULL);
+        if (!req)
                 GOTO(out, rc = -ENOMEM);
+
+        body = lustre_msg_buf(req->rq_reqmsg, 0);
+        ll_ino2fid(&body->fid1, ino, 0, type);
+        body->valid = valid;
+
+        req->rq_replen = lustre_msg_size(1, &size);
+
+        rc = ptlrpc_queue_wait(cl, req);
+        rc = ptlrpc_check_status(req, rc);
+
+        if (!rc) {
+                mds_unpack_body(req);
+                body = lustre_msg_buf(req->rq_repmsg, 0);
+                CDEBUG(D_NET, "mode: %o\n", body->mode);
         }
 
-        ll_ino2fid(&request->rq_req.mds->fid1, ino, 0, type);
-
-        request->rq_req.mds->valid = valid;
-        request->rq_replen =
-                sizeof(struct ptlrep_hdr) + sizeof(struct mds_rep);
-
-        rc = ptlrpc_queue_wait(cl, request);
-        rc = ptlrpc_check_status(request, rc);
-
-        if (!rc)
-                CDEBUG(D_NET, "mode: %o\n", request->rq_rep.mds->mode);
-
-        GOTO(out, rc);
+        EXIT;
  out:
-        *req = request;
+        *request = req;
         return rc;
 }
 
 int mdc_open(struct ptlrpc_client *cl, ino_t ino, int type, int flags,
-             __u64 *fh, struct ptlrpc_request **req)
+             __u64 *fh, struct ptlrpc_request **request)
 {
-        struct ptlrpc_request *request;
-        int rc;
+        struct mds_body *body;
+        int rc, size = sizeof(*body);
+        struct ptlrpc_request *req;
 
-        request = ptlrpc_prep_req(cl, MDS_OPEN, 0, NULL, 0, NULL);
-        if (!request) {
-                CERROR("llight request: cannot pack\n");
-                rc = -ENOMEM;
-                goto out;
+        req = ptlrpc_prep_req(cl, MDS_OPEN, 1, &size, NULL);
+        if (!req)
+                GOTO(out, rc = -ENOMEM);
+
+        body = lustre_msg_buf(req->rq_reqmsg, 0);
+        ll_ino2fid(&body->fid1, ino, 0, type);
+        body->flags = HTON__u32(flags);
+
+        req->rq_replen = lustre_msg_size(1, &size);
+
+        rc = ptlrpc_queue_wait(cl, req);
+        rc = ptlrpc_check_status(req, rc);
+
+        if (!rc) {
+                mds_unpack_body(req);
+                body = lustre_msg_buf(req->rq_repmsg, 0);
+                *fh = body->objid;
         }
 
-        ll_ino2fid(&request->rq_req.mds->fid1, ino, 0, type);
-        request->rq_req.mds->flags = HTON__u32(flags);
-        request->rq_replen =
-                sizeof(struct ptlrep_hdr) + sizeof(struct mds_rep);
-
-        rc = ptlrpc_queue_wait(cl, request);
-        rc = ptlrpc_check_status(request, rc);
-
-        if (rc) {
-                CERROR("llight request: error in handling %d\n", rc);
-                goto out;
-        }
-
-        *fh = request->rq_rep.mds->objid;
+        EXIT;
  out:
-        *req = request;
+        *request = req;
         return rc;
 }
 
-
 int mdc_close(struct ptlrpc_client *cl, ino_t ino, int type, __u64 fh,
-              struct ptlrpc_request **req)
+              struct ptlrpc_request **request)
 {
-        struct ptlrpc_request *request;
-        int rc;
+        struct mds_body *body;
+        int rc, size = sizeof(*body);
+        struct ptlrpc_request *req;
 
-        request = ptlrpc_prep_req(cl, MDS_CLOSE, 0, NULL, 0, NULL);
-        if (!request) {
-                CERROR("llight request: cannot pack\n");
-                rc = -ENOMEM;
-                goto out;
-        }
+        req = ptlrpc_prep_req(cl, MDS_CLOSE, 1, &size, NULL);
+        if (!req)
+                GOTO(out, rc = -ENOMEM);
 
-        ll_ino2fid(&request->rq_req.mds->fid1, ino, 0, type);
-        request->rq_req.mds->objid = fh;
-        request->rq_replen =
-                sizeof(struct ptlrep_hdr) + sizeof(struct mds_rep);
+        body = lustre_msg_buf(req->rq_reqmsg, 0);
+        ll_ino2fid(&body->fid1, ino, 0, type);
+        body->objid = fh;
 
-        rc = ptlrpc_queue_wait(cl, request);
-        rc = ptlrpc_check_status(request, rc);
+        req->rq_replen = lustre_msg_size(1, &size);
 
-        if (rc) {
-                CERROR("llight request: error in handling %d\n", rc);
-                goto out;
-        }
+        rc = ptlrpc_queue_wait(cl, req);
+        rc = ptlrpc_check_status(req, rc);
 
+        EXIT;
  out:
-        *req = request;
+        *request = req;
         return rc;
 }
 
 int mdc_readpage(struct ptlrpc_client *cl, ino_t ino, int type, __u64 offset,
-                 char *addr, struct ptlrpc_request **req)
+                 char *addr, struct ptlrpc_request **request)
 {
-        struct ptlrpc_request *request = NULL;
+        struct ptlrpc_request *req = NULL;
         struct ptlrpc_bulk_desc *bulk = NULL;
         struct niobuf niobuf;
-        int rc;
+        struct mds_body *body;
+        int rc, size[2] = {sizeof(*body), sizeof(struct niobuf)};
+        char *bufs[2] = {NULL, (char *)&niobuf};
 
         niobuf.addr = (__u64) (long) addr;
 
@@ -170,43 +166,40 @@ int mdc_readpage(struct ptlrpc_client *cl, ino_t ino, int type, __u64 offset,
                 goto out;
         }
 
-        request = ptlrpc_prep_req(cl, MDS_READPAGE, 0, NULL,
-                                  sizeof(struct niobuf), (char *)&niobuf);
-        if (!request) {
-                CERROR("%s: cannot pack\n", __FUNCTION__);
-                rc = -ENOMEM;
-                goto out;
-        }
+        req = ptlrpc_prep_req(cl, MDS_READPAGE, 2, size, bufs);
+        if (!req)
+                GOTO(out, rc = -ENOMEM);
 
         bulk->b_buflen = PAGE_SIZE;
         bulk->b_buf = (void *)(long)niobuf.addr;
         bulk->b_portal = MDS_BULK_PORTAL;
-        bulk->b_xid = request->rq_xid;
+        bulk->b_xid = req->rq_xid;
 
         rc = ptlrpc_register_bulk(bulk);
         if (rc) {
-                CERROR("%s: couldn't setup bulk sink: error %d.\n",
-                       __FUNCTION__, rc);
-                goto out;
+                CERROR("couldn't setup bulk sink: error %d.\n", rc);
+                GOTO(out, rc);
         }
 
-        request->rq_req.mds->fid1.id = ino;
-        request->rq_req.mds->fid1.f_type = type;
-        request->rq_req.mds->size = offset;
-        request->rq_req.mds->tgtlen = sizeof(niobuf);
-        request->rq_replen = sizeof(struct ptlrep_hdr) + sizeof(struct mds_rep);
+        body = lustre_msg_buf(req->rq_reqmsg, 0);
+        body->fid1.id = ino;
+        body->fid1.f_type = type;
+        body->size = offset;
 
-        rc = ptlrpc_queue_wait(cl, request);
+        req->rq_replen = lustre_msg_size(1, size);
+
+        rc = ptlrpc_queue_wait(cl, req);
         if (rc) {
-                CERROR("mdc request: error in handling %d\n", rc);
+                CERROR("error in handling %d\n", rc);
                 ptlrpc_abort_bulk(bulk);
-                goto out;
+                GOTO(out, rc);
         }
 
-        CDEBUG(D_INODE, "mode: %o\n", request->rq_rep.mds->mode);
+        mds_unpack_body(req);
+        EXIT;
 
  out:
-        *req = request;
+        *request = req;
         if (bulk != NULL)
                 OBD_FREE(bulk, sizeof(*bulk));
         return rc;
@@ -233,8 +226,7 @@ static int request_ioctl(struct inode *inode, struct file *file,
         }
 
         err = ptlrpc_connect_client(-1, "mds",
-                                    MDS_REQUEST_PORTAL, MDC_REPLY_PORTAL,
-                                    mds_pack_req, mds_unpack_rep, &cl);
+                                    MDS_REQUEST_PORTAL, MDC_REPLY_PORTAL, &cl);
         if (err) {
                 CERROR("cannot create client\n");
                 RETURN(-EINVAL);

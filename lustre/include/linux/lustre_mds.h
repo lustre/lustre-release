@@ -43,7 +43,6 @@ static inline void l_dput(struct dentry *de)
 #define LUSTRE_MDS_NAME "mds"
 
 struct mds_update_record { 
-        __u32 ur_reclen;
         __u32 ur_opcode;
         struct ll_fid *ur_fid1;
         struct ll_fid *ur_fid2;
@@ -59,24 +58,22 @@ struct mds_update_record {
         __u64 ur_time;
 }; 
 
-/* mds/mds_pack.c */
-void *mds_req_tgt(struct mds_req *req);
-int mds_pack_req(char *name, int namelen, char *tgt, int tgtlen, struct ptlreq_hdr **hdr, union ptl_req *req, int *len, char **buf);
-int mds_unpack_req(char *buf, int len, struct ptlreq_hdr **hdr, union ptl_req *);
-int mds_pack_rep(char *name, int namelen, char *tgt, int tgtlen, struct ptlrep_hdr **hdr, union ptl_rep *rep, int *len, char **buf);
-int mds_unpack_rep(char *buf, int len, struct ptlrep_hdr **hdr, union ptl_rep *rep);
-
 /* mds/mds_reint.c  */
 int mds_reint_rec(struct mds_update_record *r, struct ptlrpc_request *req); 
 
 /* lib/mds_updates.c */
-int mds_update_unpack(char *buf, int len, struct mds_update_record *r); 
+void mds_pack_body(struct ptlrpc_request *);
+void mds_unpack_body(struct ptlrpc_request *);
+int mds_update_unpack(struct ptlrpc_request *, struct mds_update_record *);
 
-void mds_setattr_pack(struct mds_rec_setattr *rec, struct inode *inode, struct iattr *iattr);
-void mds_create_pack(struct mds_rec_create *rec, struct inode *inode, const char *name, int namelen, __u32 mode, __u64 id, __u32 uid, __u32 gid, __u64 time, const char *tgt, int tgtlen);
-void mds_unlink_pack(struct mds_rec_unlink *rec, struct inode *inode, struct inode *child, const char *name, int namelen);
-void mds_link_pack(struct mds_rec_link *rec, struct inode *inode, struct inode *dir, const char *name, int namelen);
-void mds_rename_pack(struct mds_rec_rename *rec, struct inode *srcdir, struct inode *tgtdir, const char *name, int namelen, const char *tgt, int tgtlen);
+void mds_setattr_pack(struct mds_rec_setattr *, struct inode *, struct iattr *);
+void mds_create_pack(struct mds_rec_create *, struct inode *,  __u32 mode,
+                     __u64 id, __u32 uid, __u32 gid, __u64 time);
+void mds_unlink_pack(struct mds_rec_unlink *, struct inode *inode,
+                     struct inode *child);
+void mds_link_pack(struct mds_rec_link *, struct inode *ino, struct inode *dir);
+void mds_rename_pack(struct mds_rec_rename *, struct inode *srcdir,
+                     struct inode *tgtdir);
 
 /* mds/handler.c */
 struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid, struct vfsmount **mnt);

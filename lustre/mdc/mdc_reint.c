@@ -33,151 +33,162 @@
 
 static int mdc_reint(struct ptlrpc_client *cl, struct ptlrpc_request *request)
 {
-        int rc; 
+        int rc;
 
         rc = ptlrpc_queue_wait(cl, request);
+        rc = ptlrpc_check_status(request, rc);
         if (rc)
-                CERROR("error in handling %d\n", rc); 
+                CERROR("error in handling %d\n", rc);
 
         return rc;
 }
 
-int mdc_setattr(struct ptlrpc_client *peer, 
-                struct inode *inode, struct iattr *iattr,
-                struct ptlrpc_request **request)
+int mdc_setattr(struct ptlrpc_client *cl, struct inode *inode,
+                struct iattr *iattr, struct ptlrpc_request **request)
 {
-        int rc; 
         struct mds_rec_setattr *rec;
+        struct ptlrpc_request *req;
+        int rc, size = sizeof(*rec);
         ENTRY;
 
-        *request = ptlrpc_prep_req(peer, MDS_REINT, 0, NULL,
-                                   sizeof(*rec), NULL);
-        if (!(*request)) { 
-                CERROR("cannot pack\n");
-                EXIT;
-                return -ENOMEM;
-        }
+        req = ptlrpc_prep_req(cl, MDS_REINT, 1, &size, NULL);
+        if (!req)
+                RETURN(-ENOMEM);
 
-        rec = mds_req_tgt((*request)->rq_req.mds);
-        mds_setattr_pack(rec, inode, iattr); 
-        (*request)->rq_req.mds->opcode = HTON__u32(REINT_SETATTR);
-        (*request)->rq_replen = 
-                sizeof(struct ptlrep_hdr) + sizeof(struct mds_rep);
+        rec = lustre_msg_buf(req->rq_reqmsg, 0);
+        mds_setattr_pack(rec, inode, iattr);
 
-        rc = mdc_reint(peer, *request);
+        size = sizeof(struct mds_body);
+        req->rq_replen = lustre_msg_size(1, &size);
 
-        EXIT;
-        return rc;
+        rc = mdc_reint(cl, req);
+        *request = req;
+
+        RETURN(rc);
 }
 
-int mdc_create(struct ptlrpc_client *peer, 
-               struct inode *dir, const char *name, int namelen, 
-               const char *tgt, int tgtlen, 
-               int mode, __u64 id, __u32 uid, __u32 gid, __u64 time, 
+int mdc_create(struct ptlrpc_client *cl, struct inode *dir, const char *name,
+               int namelen, const char *tgt, int tgtlen, int mode, __u64 id,
+               __u32 uid, __u32 gid, __u64 time,
                struct ptlrpc_request **request)
 {
-        int rc; 
         struct mds_rec_create *rec;
+        struct ptlrpc_request *req;
+        int rc, size[3] = {sizeof(*rec), namelen + 1, tgtlen + 1};
+        char *tmp;
         ENTRY;
 
-        (*request) = ptlrpc_prep_req(peer, MDS_REINT, 0, NULL, 
-                               sizeof(*rec) + size_round0(namelen) + 
-                               size_round0(tgtlen), NULL);
-        if (!(*request)) { 
-                CERROR("cannot pack\n");
-                return -ENOMEM;
+        req = ptlrpc_prep_req(cl, MDS_REINT, 3, size, NULL);
+        if (!req)
+                RETURN(-ENOMEM);
+
+        rec = lustre_msg_buf(req->rq_reqmsg, 0);
+        mds_create_pack(rec, dir, mode, id, uid, gid, time);
+
+        tmp = lustre_msg_buf(req->rq_reqmsg, 1);
+        LOGL0(name, namelen, tmp);
+
+        if (tgt) {
+                tmp = lustre_msg_buf(req->rq_reqmsg, 2);
+                LOGL0(tgt, tgtlen, tmp);
         }
 
-        (*request)->rq_replen = 
-                sizeof(struct ptlrep_hdr) + sizeof(struct mds_rep);
+        size[0] = sizeof(struct mds_body);
+        req->rq_replen = lustre_msg_size(1, size);
 
-        rec = mds_req_tgt((*request)->rq_req.mds);
-        mds_create_pack(rec, dir, name, namelen, mode, id, uid, gid, time, 
-                        tgt, tgtlen); 
+        rc = mdc_reint(cl, req);
+        *request = req;
 
-        rc = mdc_reint(peer, (*request));
-
-        EXIT;
-        return rc;
+        RETURN(rc);
 }
 
-int mdc_unlink(struct ptlrpc_client *peer,  struct inode *dir,
-               struct inode *child, const char *name, int namelen, 
+int mdc_unlink(struct ptlrpc_client *cl,  struct inode *dir,
+               struct inode *child, const char *name, int namelen,
                struct ptlrpc_request **request)
 {
-        int rc; 
         struct mds_rec_unlink *rec;
-
-        (*request) = ptlrpc_prep_req(peer, MDS_REINT, 0, NULL, 
-                                     sizeof(*rec) + size_round0(namelen), NULL);
-        if (!(*request)) { 
-                CERROR("cannot pack\n");
-                return -ENOMEM;
-        }
-
-        (*request)->rq_replen = 
-                sizeof(struct ptlrep_hdr) + sizeof(struct mds_rep);
-
-        rec = mds_req_tgt((*request)->rq_req.mds);
-        mds_unlink_pack(rec, dir, child, name, namelen);
-
-        rc = mdc_reint(peer, (*request));
-
-        EXIT;
-        return rc;
-}
-
-int mdc_link(struct ptlrpc_client *peer, struct dentry *src, 
-             struct inode *dir, const char *name, int namelen, 
-             struct ptlrpc_request **request)
-{
-        int rc; 
-        struct mds_rec_link *rec;
+        struct ptlrpc_request *req;
+        int rc, size[2] = {sizeof(*rec), namelen + 1};
+        char *tmp;
         ENTRY;
 
-        (*request) = ptlrpc_prep_req(peer, MDS_REINT, 0, NULL, 
-                               sizeof(*rec) + size_round0(namelen), NULL);
-        if (!(*request)) { 
-                CERROR("cannot pack\n");
-                return -ENOMEM;
-        }
+        req = ptlrpc_prep_req(cl, MDS_REINT, 2, size, NULL);
+        if (!req)
+                RETURN(-ENOMEM);
 
-        (*request)->rq_replen = 
-                sizeof(struct ptlrep_hdr) + sizeof(struct mds_rep);
+        rec = lustre_msg_buf(req->rq_reqmsg, 0);
+        mds_unlink_pack(rec, dir, child);
 
-        rec = mds_req_tgt((*request)->rq_req.mds);
-        mds_link_pack(rec, src->d_inode, dir, name, namelen);
+        tmp = lustre_msg_buf(req->rq_reqmsg, 1);
+        LOGL0(name, namelen, tmp);
 
-        rc = mdc_reint(peer, (*request));
-        EXIT;
-        return rc;
+        size[0] = sizeof(struct mds_body);
+        req->rq_replen = lustre_msg_size(1, size);
+
+        rc = mdc_reint(cl, req);
+        *request = req;
+
+        RETURN(rc);
 }
 
-int mdc_rename(struct ptlrpc_client *peer, struct inode *src, 
-               struct inode *tgt, const char *old, int oldlen, 
-               const char *new, int newlen, 
+int mdc_link(struct ptlrpc_client *cl, struct dentry *src, struct inode *dir,
+             const char *name, int namelen, struct ptlrpc_request **request)
+{
+        struct mds_rec_link *rec;
+        struct ptlrpc_request *req;
+        int rc, size[2] = {sizeof(*rec), namelen + 1};
+        char *tmp;
+        ENTRY;
+
+        req = ptlrpc_prep_req(cl, MDS_REINT, 2, size, NULL);
+        if (!req)
+                RETURN(-ENOMEM);
+
+        rec = lustre_msg_buf(req->rq_reqmsg, 0);
+        mds_link_pack(rec, src->d_inode, dir);
+
+        tmp = lustre_msg_buf(req->rq_reqmsg, 1);
+        LOGL0(name, namelen, tmp);
+
+        size[0] = sizeof(struct mds_body);
+        req->rq_replen = lustre_msg_size(1, size);
+
+        rc = mdc_reint(cl, req);
+        *request = req;
+
+        RETURN(rc);
+}
+
+int mdc_rename(struct ptlrpc_client *cl, struct inode *src, struct inode *tgt,
+               const char *old, int oldlen, const char *new, int newlen,
                struct ptlrpc_request **request)
 {
-        int rc; 
         struct mds_rec_rename *rec;
+        struct ptlrpc_request *req;
+        int rc, size[3] = {sizeof(*rec), oldlen + 1, newlen + 1};
+        char *tmp;
         ENTRY;
 
-        (*request) = ptlrpc_prep_req(peer, MDS_REINT, 0, NULL, 
-                               sizeof(*rec) + size_round0(oldlen)
-                               + size_round0(newlen), NULL);
-        if (!(*request)) { 
-                CERROR("cannot pack\n");
-                return -ENOMEM;
+        req = ptlrpc_prep_req(cl, MDS_REINT, 3, size, NULL);
+        if (!req)
+                RETURN(-ENOMEM);
+
+        rec = lustre_msg_buf(req->rq_reqmsg, 0);
+        mds_rename_pack(rec, src, tgt);
+
+        tmp = lustre_msg_buf(req->rq_reqmsg, 1);
+        LOGL0(old, oldlen, tmp);
+
+        if (tgt) {
+                tmp = lustre_msg_buf(req->rq_reqmsg, 2);
+                LOGL0(new, newlen, tmp);
         }
 
-        (*request)->rq_replen = 
-                sizeof(struct ptlrep_hdr) + sizeof(struct mds_rep);
+        size[0] = sizeof(struct mds_body);
+        req->rq_replen = lustre_msg_size(1, size);
 
-        rec = mds_req_tgt((*request)->rq_req.mds);
-        mds_rename_pack(rec, src, tgt, old, oldlen, new, newlen);
+        rc = mdc_reint(cl, req);
+        *request = req;
 
-        rc = mdc_reint(peer, (*request));
-
-        EXIT;
-        return rc;
+        RETURN(rc);
 }

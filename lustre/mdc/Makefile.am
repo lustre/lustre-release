@@ -9,12 +9,9 @@ MODULE = mdc
 modulefs_DATA = mdc.o
 EXTRA_PROGRAMS = mdc
 
-
-LINX=mds_pack.c mds_updates.c
+LINX=mds_updates.c
 mdc_SOURCES =  mdc_request.c mdc_reint.c $(LINX)
 
-mds_pack.c: 
-	ln -s ../lib/mds_pack.c .
 mds_updates.c: 
 	ln -s ../lib/mds_updates.c .
 

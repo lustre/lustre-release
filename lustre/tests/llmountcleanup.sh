@@ -5,6 +5,7 @@ SRCDIR="`dirname $0`"
 
 umount /mnt/obd
 
+killall acceptor
 rmmod llight
 rmmod mdc
 
@@ -45,7 +46,6 @@ EOF
 
 rmmod kqswnal
 rmmod ksocknal
-killall acceptor
 rmmod portals
 
 losetup -d ${LOOP}0

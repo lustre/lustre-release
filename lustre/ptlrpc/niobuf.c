@@ -214,7 +214,9 @@ int ptlrpc_reply(struct obd_device *obddev, struct ptlrpc_service *svc,
 
                 /* FIXME: we need to increment the count of handled events */
                 req->rq_type = PTL_RPC_REPLY;
-                req->rq_reqhdr->xid = req->rq_reqhdr->xid;
+                req->rq_repmsg->xid = HTON__u32(req->rq_reqmsg->xid);
+                req->rq_repmsg->status = HTON__u32(req->rq_status);
+                req->rq_reqmsg->type = HTON__u32(req->rq_type);
                 ptl_send_buf(req, &req->rq_peer, svc->srv_rep_portal);
         } else {
                 /* This is a local request that came from another thread. */
@@ -233,53 +235,42 @@ int ptlrpc_reply(struct obd_device *obddev, struct ptlrpc_service *svc,
                 wake_up_interruptible(&clnt_req->rq_wait_for_rep); 
         }
 
-        EXIT;
-        return 0;
+        RETURN(0);
 }
 
 int ptlrpc_error(struct obd_device *obddev, struct ptlrpc_service *svc,
                  struct ptlrpc_request *req)
 {
-        struct ptlrep_hdr *hdr;
-
+        int rc;
         ENTRY;
 
-        OBD_ALLOC(hdr, sizeof(*hdr));
-        if (!hdr) { 
-                EXIT;
-                return -ENOMEM;
-        }
-
-        memset(hdr, 0, sizeof(*hdr));
-
-        hdr->xid = req->rq_reqhdr->xid;
-        hdr->status = req->rq_status; 
-        hdr->type = PTL_RPC_ERR;
-
-        if (req->rq_repbuf) { 
+        if (req->rq_repbuf) {
                 CERROR("req has repbuf\n");
                 LBUG();
         }
 
-        req->rq_repbuf = (char *)hdr;
-        req->rq_replen = sizeof(*hdr); 
+        rc = lustre_pack_msg(0, NULL, NULL, &req->rq_replen, &req->rq_repbuf);
+        req->rq_repmsg = (struct lustre_msg *)req->rq_repbuf;
+        if (rc)
+                RETURN(rc);
 
-        EXIT;
-        return ptlrpc_reply(obddev, svc, req);
+        req->rq_repmsg->type = HTON__u32(PTL_RPC_ERR);
+
+        rc = ptlrpc_reply(obddev, svc, req);
+        RETURN(rc);
 }
 
 int ptl_send_rpc(struct ptlrpc_request *request, struct ptlrpc_client *cl)
 {
         ptl_process_id_t local_id;
-        struct ptlreq_hdr *hdr;
         int rc;
         char *repbuf;
 
         ENTRY;
 
-        hdr = (struct ptlreq_hdr *)request->rq_reqbuf;
-        if (NTOH__u32(hdr->type) != PTL_RPC_REQUEST) {
-                CERROR("wrong packet type sent %d\n", NTOH__u32(hdr->type));
+        if (NTOH__u32(request->rq_reqmsg->type) != PTL_RPC_REQUEST) {
+                CERROR("wrong packet type sent %d\n",
+                       NTOH__u32(request->rq_reqmsg->type));
                 LBUG();
                 RETURN(-EINVAL);
         }

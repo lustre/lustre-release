@@ -49,240 +49,220 @@
 static int ost_destroy(struct ost_obd *ost, struct ptlrpc_request *req)
 {
         struct obd_conn conn;
-        int rc;
-
+        struct ost_body *body;
+        int rc, size = sizeof(*body);
         ENTRY;
 
-        conn.oc_id = req->rq_req.ost->connid;
+        body = lustre_msg_buf(req->rq_reqmsg, 0);
+        conn.oc_id = body->connid;
         conn.oc_dev = ost->ost_tgt;
 
-        rc = ost_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep,
-                          &req->rq_replen, &req->rq_repbuf);
-        if (rc) {
-                CERROR("cannot pack reply\n");
+        rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repbuf);
+        req->rq_repmsg = (struct lustre_msg *)req->rq_repbuf;
+        if (rc)
                 RETURN(rc);
-        }
 
-        req->rq_rep.ost->result = obd_destroy(&conn, &req->rq_req.ost->oa);
-
+        req->rq_status = obd_destroy(&conn, &body->oa);
         RETURN(0);
 }
 
 static int ost_getattr(struct ost_obd *ost, struct ptlrpc_request *req)
 {
         struct obd_conn conn;
-        int rc;
-
+        struct ost_body *body, *repbody;
+        int rc, size = sizeof(*body);
         ENTRY;
 
-        conn.oc_id = req->rq_req.ost->connid;
+        body = lustre_msg_buf(req->rq_reqmsg, 0);
+        conn.oc_id = body->connid;
         conn.oc_dev = ost->ost_tgt;
 
-        rc = ost_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep,
-                          &req->rq_replen, &req->rq_repbuf);
-        if (rc) {
-                CERROR("cannot pack reply\n");
+        rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repbuf);
+        req->rq_repmsg = (struct lustre_msg *)req->rq_repbuf;
+        if (rc)
                 RETURN(rc);
-        }
-        req->rq_rep.ost->oa.o_id = req->rq_req.ost->oa.o_id;
-        req->rq_rep.ost->oa.o_valid = req->rq_req.ost->oa.o_valid;
 
-        req->rq_rep.ost->result =  obd_getattr(&conn, &req->rq_rep.ost->oa);
-
+        repbody = lustre_msg_buf(req->rq_repmsg, 0);
+        memcpy(&repbody->oa, &body->oa, sizeof(body->oa));
+        req->rq_status = obd_getattr(&conn, &repbody->oa);
         RETURN(0);
 }
 
 static int ost_open(struct ost_obd *ost, struct ptlrpc_request *req)
 {
         struct obd_conn conn;
-        int rc;
-
+        struct ost_body *body, *repbody;
+        int rc, size = sizeof(*body);
         ENTRY;
 
-        conn.oc_id = req->rq_req.ost->connid;
+        body = lustre_msg_buf(req->rq_reqmsg, 0);
+        conn.oc_id = body->connid;
         conn.oc_dev = ost->ost_tgt;
 
-        rc = ost_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep,
-                          &req->rq_replen, &req->rq_repbuf);
-        if (rc) {
-                CERROR("cannot pack reply\n");
+        rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repbuf);
+        req->rq_repmsg = (struct lustre_msg *)req->rq_repbuf;
+        if (rc)
                 RETURN(rc);
-        }
-        req->rq_rep.ost->oa.o_id = req->rq_req.ost->oa.o_id;
-        req->rq_rep.ost->oa.o_valid = req->rq_req.ost->oa.o_valid;
 
-        req->rq_rep.ost->result =  obd_open(&conn, &req->rq_rep.ost->oa);
-
+        repbody = lustre_msg_buf(req->rq_repmsg, 0);
+        memcpy(&repbody->oa, &body->oa, sizeof(body->oa));
+        req->rq_status = obd_open(&conn, &repbody->oa);
         RETURN(0);
 }
 
 static int ost_close(struct ost_obd *ost, struct ptlrpc_request *req)
 {
         struct obd_conn conn;
-        int rc;
-
+        struct ost_body *body, *repbody;
+        int rc, size = sizeof(*body);
         ENTRY;
 
-        conn.oc_id = req->rq_req.ost->connid;
+        body = lustre_msg_buf(req->rq_reqmsg, 0);
+        conn.oc_id = body->connid;
         conn.oc_dev = ost->ost_tgt;
 
-        rc = ost_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep,
-                          &req->rq_replen, &req->rq_repbuf);
-        if (rc) {
-                CERROR("cannot pack reply\n");
+        rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repbuf);
+        req->rq_repmsg = (struct lustre_msg *)req->rq_repbuf;
+        if (rc)
                 RETURN(rc);
-        }
-        req->rq_rep.ost->oa.o_id = req->rq_req.ost->oa.o_id;
-        req->rq_rep.ost->oa.o_valid = req->rq_req.ost->oa.o_valid;
 
-        req->rq_rep.ost->result =  obd_close(&conn, &req->rq_rep.ost->oa);
-
+        repbody = lustre_msg_buf(req->rq_repmsg, 0);
+        memcpy(&repbody->oa, &body->oa, sizeof(body->oa));
+        req->rq_status = obd_close(&conn, &repbody->oa);
         RETURN(0);
 }
-
 
 static int ost_create(struct ost_obd *ost, struct ptlrpc_request *req)
 {
         struct obd_conn conn;
-        int rc;
-
+        struct ost_body *body, *repbody;
+        int rc, size = sizeof(*body);
         ENTRY;
 
-        conn.oc_id = req->rq_req.ost->connid;
+        body = lustre_msg_buf(req->rq_reqmsg, 0);
+        conn.oc_id = body->connid;
         conn.oc_dev = ost->ost_tgt;
 
-        rc = ost_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep,
-                          &req->rq_replen, &req->rq_repbuf);
-        if (rc) {
-                CERROR("cannot pack reply\n");
+        rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repbuf);
+        req->rq_repmsg = (struct lustre_msg *)req->rq_repbuf;
+        if (rc)
                 RETURN(rc);
-        }
 
-        memcpy(&req->rq_rep.ost->oa, &req->rq_req.ost->oa,
-               sizeof(req->rq_req.ost->oa));
-
-        req->rq_rep.ost->result =obd_create(&conn, &req->rq_rep.ost->oa);
-
+        repbody = lustre_msg_buf(req->rq_repmsg, 0);
+        memcpy(&repbody->oa, &body->oa, sizeof(body->oa));
+        req->rq_status = obd_create(&conn, &repbody->oa);
         RETURN(0);
 }
 
 static int ost_punch(struct ost_obd *ost, struct ptlrpc_request *req)
 {
         struct obd_conn conn;
-        int rc;
-
+        struct ost_body *body, *repbody;
+        int rc, size = sizeof(*body);
         ENTRY;
 
-        conn.oc_id = req->rq_req.ost->connid;
+        body = lustre_msg_buf(req->rq_reqmsg, 0);
+        conn.oc_id = body->connid;
         conn.oc_dev = ost->ost_tgt;
 
-        rc = ost_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep,
-                          &req->rq_replen, &req->rq_repbuf);
-        if (rc) {
-                CERROR("cannot pack reply\n");
+        rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repbuf);
+        req->rq_repmsg = (struct lustre_msg *)req->rq_repbuf;
+        if (rc)
                 RETURN(rc);
-        }
 
-        memcpy(&req->rq_rep.ost->oa, &req->rq_req.ost->oa,
-               sizeof(req->rq_req.ost->oa));
-
-        req->rq_rep.ost->result = obd_punch(&conn, &req->rq_rep.ost->oa,
-                                            req->rq_rep.ost->oa.o_size,
-                                            req->rq_rep.ost->oa.o_blocks);
-
+        repbody = lustre_msg_buf(req->rq_repmsg, 0);
+        memcpy(&repbody->oa, &body->oa, sizeof(body->oa));
+        req->rq_status = obd_punch(&conn, &repbody->oa,
+                                   repbody->oa.o_size, repbody->oa.o_blocks);
         RETURN(0);
 }
-
 
 static int ost_setattr(struct ost_obd *ost, struct ptlrpc_request *req)
 {
         struct obd_conn conn;
-        int rc;
-
+        struct ost_body *body, *repbody;
+        int rc, size = sizeof(*body);
         ENTRY;
 
-        conn.oc_id = req->rq_req.ost->connid;
+        body = lustre_msg_buf(req->rq_reqmsg, 0);
+        conn.oc_id = body->connid;
         conn.oc_dev = ost->ost_tgt;
 
-        rc = ost_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep,
-                          &req->rq_replen, &req->rq_repbuf);
-        if (rc) {
-                CERROR("cannot pack reply\n");
+        rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repbuf);
+        req->rq_repmsg = (struct lustre_msg *)req->rq_repbuf;
+        if (rc)
                 RETURN(rc);
-        }
 
-        memcpy(&req->rq_rep.ost->oa, &req->rq_req.ost->oa,
-               sizeof(req->rq_req.ost->oa));
-
-        req->rq_rep.ost->result = obd_setattr(&conn, &req->rq_rep.ost->oa);
-
+        repbody = lustre_msg_buf(req->rq_repmsg, 0);
+        memcpy(&repbody->oa, &body->oa, sizeof(body->oa));
+        req->rq_status = obd_setattr(&conn, &repbody->oa);
         RETURN(0);
 }
 
 static int ost_connect(struct ost_obd *ost, struct ptlrpc_request *req)
 {
         struct obd_conn conn;
-        int rc;
-
+        struct ost_body *body;
+        int rc, size = sizeof(*body);
         ENTRY;
 
         conn.oc_dev = ost->ost_tgt;
 
-        rc = ost_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep,
-                          &req->rq_replen, &req->rq_repbuf);
-        if (rc) {
-                CERROR("cannot pack reply\n");
+        rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repbuf);
+        req->rq_repmsg = (struct lustre_msg *)req->rq_repbuf;
+        if (rc)
                 RETURN(rc);
-        }
 
-        req->rq_rep.ost->result = obd_connect(&conn);
+        req->rq_status = obd_connect(&conn);
 
         CDEBUG(D_IOCTL, "rep buffer %p, id %d\n", req->rq_repbuf, conn.oc_id);
-        req->rq_rep.ost->connid = conn.oc_id;
+        body = lustre_msg_buf(req->rq_repmsg, 0);
+        body->connid = conn.oc_id;
         RETURN(0);
 }
 
 static int ost_disconnect(struct ost_obd *ost, struct ptlrpc_request *req)
 {
         struct obd_conn conn;
-        int rc;
-
+        struct ost_body *body;
+        int rc, size = sizeof(*body);
         ENTRY;
 
+        body = lustre_msg_buf(req->rq_reqmsg, 0);
+        conn.oc_id = body->connid;
         conn.oc_dev = ost->ost_tgt;
-        conn.oc_id = req->rq_req.ost->connid;
 
-        rc = ost_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep,
-                          &req->rq_replen, &req->rq_repbuf);
-        if (rc) {
-                CERROR("cannot pack reply\n");
+        rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repbuf);
+        req->rq_repmsg = (struct lustre_msg *)req->rq_repbuf;
+        if (rc)
                 RETURN(rc);
-        }
-        CDEBUG(D_IOCTL, "Disconnecting %d\n", conn.oc_id);
-        req->rq_rep.ost->result = obd_disconnect(&conn);
 
+        CDEBUG(D_IOCTL, "Disconnecting %d\n", conn.oc_id);
+        req->rq_status = obd_disconnect(&conn);
         RETURN(0);
 }
 
 static int ost_get_info(struct ost_obd *ost, struct ptlrpc_request *req)
 {
         struct obd_conn conn;
-        int rc;
-        int vallen;
-        void *val;
-        char *ptr;
-
+        struct ost_body *body;
+        int rc, size[2] = {sizeof(*body)};
+        char *bufs[2] = {NULL, NULL}, *ptr;
         ENTRY;
 
-        conn.oc_id = req->rq_req.ost->connid;
+        body = lustre_msg_buf(req->rq_reqmsg, 0);
+        conn.oc_id = body->connid;
         conn.oc_dev = ost->ost_tgt;
 
-        ptr = ost_req_buf1(req->rq_req.ost);
-        req->rq_rep.ost->result = obd_get_info(&conn, req->rq_req.ost->buflen1,
-                                               ptr, &vallen, &val);
+        ptr = lustre_msg_buf(req->rq_reqmsg, 1);
+        if (!ptr)
+                RETURN(-EINVAL);
 
-        rc = ost_pack_rep(val, vallen, NULL, 0, &req->rq_rephdr,
-                          &req->rq_rep, &req->rq_replen, &req->rq_repbuf);
+        req->rq_status = obd_get_info(&conn, req->rq_reqmsg->buflens[1], ptr,
+                                      &(size[1]), (void **)&(bufs[1]));
+
+        rc = lustre_pack_msg(2, size, bufs, &req->rq_replen, &req->rq_repbuf);
+        req->rq_repmsg = (struct lustre_msg *)req->rq_repbuf;
         if (rc)
                 CERROR("cannot pack reply\n");
 
@@ -291,71 +271,62 @@ static int ost_get_info(struct ost_obd *ost, struct ptlrpc_request *req)
 
 static int ost_brw_read(struct ost_obd *obddev, struct ptlrpc_request *req)
 {
-        struct ptlrpc_bulk_desc **bulk_vec = NULL;
-        struct ptlrpc_bulk_desc *bulk = NULL;
+        struct ptlrpc_bulk_desc **bulk_vec = NULL, *bulk = NULL;
         struct obd_conn conn;
-        int rc;
-        int i, j;
-        int objcount, niocount;
-        char *tmp1, *tmp2, *end2;
-        int cmd;
+        void *tmp1, *tmp2, *end2;
         struct niobuf *nb, *dst, *res = NULL;
         struct obd_ioobj *ioo;
-        struct ost_req *r = req->rq_req.ost;
-
+        struct ost_body *body;
+        int rc, cmd, i, j, objcount, niocount, size = sizeof(*body);
         ENTRY;
 
-        tmp1 = ost_req_buf1(r);
-        tmp2 = ost_req_buf2(r);
-        end2 = tmp2 + req->rq_req.ost->buflen2;
-        objcount = r->buflen1 / sizeof(*ioo);
-        niocount = r->buflen2 / sizeof(*nb);
-        cmd = r->cmd;
+        body = lustre_msg_buf(req->rq_reqmsg, 0);
+        tmp1 = lustre_msg_buf(req->rq_reqmsg, 1);
+        tmp2 = lustre_msg_buf(req->rq_reqmsg, 2);
+        end2 = (char *)tmp2 + req->rq_reqmsg->buflens[2];
+        objcount = req->rq_reqmsg->buflens[1] / sizeof(*ioo);
+        niocount = req->rq_reqmsg->buflens[2] / sizeof(*nb);
+        cmd = body->data;
 
-        conn.oc_id = req->rq_req.ost->connid;
+        conn.oc_id = body->connid;
         conn.oc_dev = req->rq_obd->u.ost.ost_tgt;
 
         for (i = 0; i < objcount; i++) {
-                ost_unpack_ioo((void *)&tmp1, &ioo);
+                ost_unpack_ioo(&tmp1, &ioo);
                 if (tmp2 + ioo->ioo_bufcnt > end2) {
                         LBUG();
                         rc = -EFAULT;
                         break;
                 }
                 for (j = 0; j < ioo->ioo_bufcnt; j++)
-                        ost_unpack_niobuf((void *)&tmp2, &nb);
+                        ost_unpack_niobuf(&tmp2, &nb);
         }
 
-        rc = ost_pack_rep(NULL, 0, NULL, 0,
-                          &req->rq_rephdr, &req->rq_rep,
-                          &req->rq_replen, &req->rq_repbuf);
-        if (rc) {
-                CERROR("cannot pack reply\n");
+        rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repbuf);
+        req->rq_repmsg = (struct lustre_msg *)req->rq_repbuf;
+        if (rc)
                 RETURN(rc);
-        }
         OBD_ALLOC(res, sizeof(*res) * niocount);
         if (res == NULL)
                 RETURN(-ENOMEM);
 
         /* The unpackers move tmp1 and tmp2, so reset them before using */
-        tmp1 = ost_req_buf1(r);
-        tmp2 = ost_req_buf2(r);
-        req->rq_rep.ost->result = obd_preprw
-                (cmd, &conn, objcount, (struct obd_ioobj *)tmp1,
-                 niocount, (struct niobuf *)tmp2, res);
+        tmp1 = lustre_msg_buf(req->rq_reqmsg, 1);
+        tmp2 = lustre_msg_buf(req->rq_reqmsg, 2);
+        req->rq_status = obd_preprw(cmd, &conn, objcount,
+                                    tmp1, niocount, tmp2, res);
 
-        if (req->rq_rep.ost->result)
+        if (req->rq_status)
                 GOTO(out, 0);
 
         for (i = 0; i < niocount; i++) {
                 bulk = ptlrpc_prep_bulk(&req->rq_peer);
                 if (bulk == NULL) {
                         CERROR("cannot alloc bulk desc\n");
-                        rc = -ENOMEM;
-                        GOTO(out, rc);
+                        GOTO(out, rc = -ENOMEM);
                 }
 
-                dst = &((struct niobuf *)tmp2)[i];
+                dst = &(((struct niobuf *)tmp2)[i]);
                 bulk->b_xid = dst->xid;
                 bulk->b_buf = (void *)(unsigned long)res[i].addr;
                 bulk->b_buflen = PAGE_SIZE;
@@ -372,20 +343,11 @@ static int ost_brw_read(struct ost_obd *obddev, struct ptlrpc_request *req)
                 bulk = NULL;
         }
 
-#if 0
-        /* Local delivery */
-        dst = &((struct niobuf *)tmp2)[i];
-        memcpy((void *)(unsigned long)dst->addr,
-               (void *)(unsigned long)src->addr, PAGE_SIZE);
-#endif
-        barrier();
-
         /* The unpackers move tmp1 and tmp2, so reset them before using */
-        tmp1 = ost_req_buf1(r);
-        tmp2 = ost_req_buf2(r);
-        req->rq_rep.ost->result = obd_commitrw
-                (cmd, &conn, objcount, (struct obd_ioobj *)tmp1,
-                 niocount, res);
+        tmp1 = lustre_msg_buf(req->rq_reqmsg, 1);
+        tmp2 = lustre_msg_buf(req->rq_reqmsg, 2);
+        req->rq_status = obd_commitrw(cmd, &conn, objcount,
+                                      tmp1, niocount, res);
 
         EXIT;
  out:
@@ -394,10 +356,9 @@ static int ost_brw_read(struct ost_obd *obddev, struct ptlrpc_request *req)
         if (bulk != NULL)
                 OBD_FREE(bulk, sizeof(*bulk));
         if (bulk_vec != NULL) {
-                for (i = 0; i < niocount; i++) {
+                for (i = 0; i < niocount; i++)
                         if (bulk_vec[i] != NULL)
                                 OBD_FREE(bulk_vec[i], sizeof(*bulk));
-                }
                 OBD_FREE(bulk_vec, niocount * sizeof(*bulk_vec));
         }
 
@@ -437,26 +398,22 @@ static int ost_brw_write_cb(struct ptlrpc_bulk_desc *bulk, void *data)
 static int ost_brw_write(struct ost_obd *obddev, struct ptlrpc_request *req)
 {
         struct obd_conn conn;
-        int rc;
-        int i, j;
-        int objcount, niocount;
-        char *tmp1, *tmp2, *end2;
-        char *res;
-        int cmd;
         struct niobuf *nb, *dst;
         struct obd_ioobj *ioo;
-        struct ost_req *r = req->rq_req.ost;
-
+        struct ost_body *body;
+        int cmd, rc, i, j, objcount, niocount, size[2] = {sizeof(*body)};
+        void *tmp1, *tmp2, *end2, *res;
         ENTRY;
 
-        tmp1 = ost_req_buf1(r);
-        tmp2 = ost_req_buf2(r);
-        end2 = tmp2 + req->rq_req.ost->buflen2;
-        objcount = r->buflen1 / sizeof(*ioo);
-        niocount = r->buflen2 / sizeof(*nb);
-        cmd = r->cmd;
+        body = lustre_msg_buf(req->rq_reqmsg, 0);
+        tmp1 = lustre_msg_buf(req->rq_reqmsg, 1);
+        tmp2 = lustre_msg_buf(req->rq_reqmsg, 2);
+        end2 = (char *)tmp2 + req->rq_reqmsg->buflens[2];
+        objcount = req->rq_reqmsg->buflens[1] / sizeof(*ioo);
+        niocount = req->rq_reqmsg->buflens[2] / sizeof(*nb);
+        cmd = body->data;
 
-        conn.oc_id = req->rq_req.ost->connid;
+        conn.oc_id = body->connid;
         conn.oc_dev = req->rq_obd->u.ost.ost_tgt;
 
         for (i = 0; i < objcount; i++) {
@@ -469,23 +426,21 @@ static int ost_brw_write(struct ost_obd *obddev, struct ptlrpc_request *req)
                         ost_unpack_niobuf((void *)&tmp2, &nb);
         }
 
-        rc = ost_pack_rep(NULL, 0, NULL, niocount * sizeof(*nb),
-                          &req->rq_rephdr, &req->rq_rep,
-                          &req->rq_replen, &req->rq_repbuf);
-        if (rc) {
-                CERROR("cannot pack reply\n");
+        size[1] = niocount * sizeof(*nb);
+        rc = lustre_pack_msg(2, size, NULL, &req->rq_replen, &req->rq_repbuf);
+        req->rq_repmsg = (struct lustre_msg *)req->rq_repbuf;
+        if (rc)
                 RETURN(rc);
-        }
-        res = ost_rep_buf2(req->rq_rep.ost);
+
+        res = lustre_msg_buf(req->rq_repmsg, 1);
 
         /* The unpackers move tmp1 and tmp2, so reset them before using */
-        tmp1 = ost_req_buf1(r);
-        tmp2 = ost_req_buf2(r);
-        req->rq_rep.ost->result = obd_preprw
-                (cmd, &conn, objcount, (struct obd_ioobj *)tmp1,
-                 niocount, (struct niobuf *)tmp2, (struct niobuf *)res);
+        tmp1 = lustre_msg_buf(req->rq_reqmsg, 1);
+        tmp2 = lustre_msg_buf(req->rq_reqmsg, 2);
+        req->rq_status = obd_preprw(cmd, &conn, objcount,
+                                    tmp1, niocount, tmp2, res);
 
-        if (req->rq_rep.ost->result)
+        if (req->rq_status)
                 GOTO(out, 0);
 
         for (i = 0; i < niocount; i++) {
@@ -493,17 +448,14 @@ static int ost_brw_write(struct ost_obd *obddev, struct ptlrpc_request *req)
                 struct ptlrpc_service *srv = req->rq_obd->u.ost.ost_service;
 
                 bulk = ptlrpc_prep_bulk(&req->rq_peer);
-                if (bulk == NULL) {
-                        CERROR("cannot alloc bulk desc\n");
-                        rc = -ENOMEM;
-                        GOTO(out, rc);
-                }
+                if (bulk == NULL)
+                        GOTO(out, rc = -ENOMEM);
 
                 spin_lock(&srv->srv_lock);
                 bulk->b_xid = srv->srv_xid++;
                 spin_unlock(&srv->srv_lock);
 
-                dst = &((struct niobuf *)res)[i];
+                dst = &(((struct niobuf *)res)[i]);
                 dst->xid = HTON__u32(bulk->b_xid);
 
                 bulk->b_buf = (void *)(unsigned long)dst->addr;
@@ -515,15 +467,7 @@ static int ost_brw_write(struct ost_obd *obddev, struct ptlrpc_request *req)
                 rc = ptlrpc_register_bulk(bulk);
                 if (rc)
                         GOTO(out, rc);
-
-#if 0
-                /* Local delivery */
-                src = &((struct niobuf *)tmp2)[i];
-                memcpy((void *)(unsigned long)dst->addr,
-                       (void *)(unsigned long)src->addr, src->len);
-#endif
         }
-        barrier();
 
         EXIT;
  out:
@@ -533,10 +477,9 @@ static int ost_brw_write(struct ost_obd *obddev, struct ptlrpc_request *req)
 
 static int ost_brw(struct ost_obd *obddev, struct ptlrpc_request *req)
 {
-        struct ost_req *r = req->rq_req.ost;
-        int cmd = r->cmd;
+        struct ost_body *body = lustre_msg_buf(req->rq_reqmsg, 0);
 
-        if (cmd == OBD_BRW_READ)
+        if (body->data == OBD_BRW_READ)
                 return ost_brw_read(obddev, req);
         else
                 return ost_brw_write(obddev, req);
@@ -547,28 +490,22 @@ static int ost_handle(struct obd_device *obddev, struct ptlrpc_service *svc,
 {
         int rc;
         struct ost_obd *ost = &obddev->u.ost;
-        struct ptlreq_hdr *hdr;
-
         ENTRY;
 
-        hdr = (struct ptlreq_hdr *)req->rq_reqbuf;
-        if (NTOH__u32(hdr->type) != PTL_RPC_REQUEST) {
-                CERROR("lustre_ost: wrong packet type sent %d\n",
-                       NTOH__u32(hdr->type));
-                LBUG();
-                rc = -EINVAL;
+        rc = lustre_unpack_msg(req->rq_reqbuf, req->rq_reqlen);
+        req->rq_reqmsg = (struct lustre_msg *)req->rq_reqbuf;
+        if (rc || OBD_FAIL_CHECK(OBD_FAIL_MDS_HANDLE_UNPACK)) {
+                CERROR("lustre_mds: Invalid request\n");
                 GOTO(out, rc);
         }
 
-        rc = ost_unpack_req(req->rq_reqbuf, req->rq_reqlen,
-                            &req->rq_reqhdr, &req->rq_req);
-        if (rc) {
-                CERROR("lustre_ost: Invalid request\n");
-                GOTO(out, rc);
+        if (req->rq_reqmsg->type != PTL_RPC_REQUEST) {
+                CERROR("lustre_mds: wrong packet type sent %d\n",
+                       req->rq_reqmsg->type);
+                GOTO(out, rc = -EINVAL);
         }
 
-        switch (req->rq_reqhdr->opc) {
-
+        switch (req->rq_reqmsg->opc) {
         case OST_CONNECT:
                 CDEBUG(D_INODE, "connect\n");
                 OBD_FAIL_RETURN(OBD_FAIL_OST_CONNECT_NET, 0);
@@ -632,7 +569,7 @@ static int ost_handle(struct obd_device *obddev, struct ptlrpc_service *svc,
 
         EXIT;
 out:
-        req->rq_status = rc;
+        //req->rq_status = rc;
         if (rc) {
                 CERROR("ost: processing error %d\n", rc);
                 ptlrpc_error(obddev, svc, req);

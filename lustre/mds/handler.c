@@ -176,111 +176,110 @@ int mds_getattr(struct ptlrpc_request *req)
 {
         struct dentry *de;
         struct inode *inode;
-        struct mds_rep *rep;
+        struct mds_body *body;
         struct mds_obd *mds = &req->rq_obd->u.mds;
-        int rc;
+        int rc, size = sizeof(*body);
+        ENTRY;
 
-        rc = mds_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep,
-                          &req->rq_replen, &req->rq_repbuf);
+        rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repbuf);
+        req->rq_repmsg = (struct lustre_msg *)req->rq_repbuf;
         if (rc || OBD_FAIL_CHECK(OBD_FAIL_MDS_GETATTR_PACK)) {
                 CERROR("mds: out of memory\n");
                 req->rq_status = -ENOMEM;
                 RETURN(0);
         }
 
-        req->rq_rephdr->xid = req->rq_reqhdr->xid;
-        rep = req->rq_rep.mds;
-
-        de = mds_fid2dentry(mds, &req->rq_req.mds->fid1, NULL);
+        body = lustre_msg_buf(req->rq_reqmsg, 0);
+        de = mds_fid2dentry(mds, &body->fid1, NULL);
         if (IS_ERR(de)) {
-                req->rq_rephdr->status = -ENOENT;
+                req->rq_status = -ENOENT;
                 RETURN(0);
         }
 
+        body = lustre_msg_buf(req->rq_repmsg, 0);
         inode = de->d_inode;
-        rep->ino = inode->i_ino;
-        rep->generation = inode->i_generation;
-        rep->atime = inode->i_atime;
-        rep->ctime = inode->i_ctime;
-        rep->mtime = inode->i_mtime;
-        rep->uid = inode->i_uid;
-        rep->gid = inode->i_gid;
-        rep->size = inode->i_size;
-        rep->mode = inode->i_mode;
-        rep->nlink = inode->i_nlink;
-        rep->valid = ~0;
-        mds_fs_get_objid(mds, inode, &rep->objid);
+        body->ino = inode->i_ino;
+        body->generation = inode->i_generation;
+        body->atime = inode->i_atime;
+        body->ctime = inode->i_ctime;
+        body->mtime = inode->i_mtime;
+        body->uid = inode->i_uid;
+        body->gid = inode->i_gid;
+        body->size = inode->i_size;
+        body->mode = inode->i_mode;
+        body->nlink = inode->i_nlink;
+        body->valid = ~0;
+        mds_fs_get_objid(mds, inode, &body->objid);
         l_dput(de);
-        return 0;
+        RETURN(0);
 }
 
 int mds_open(struct ptlrpc_request *req)
 {
         struct dentry *de;
-        struct mds_rep *rep;
+        struct mds_body *body;
         struct file *file;
         struct vfsmount *mnt;
         __u32 flags;
-        int rc;
+        int rc, size = sizeof(*body);
+        ENTRY;
 
-        rc = mds_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep,
-                          &req->rq_replen, &req->rq_repbuf);
+        rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repbuf);
+        req->rq_repmsg = (struct lustre_msg *)req->rq_repbuf;
         if (rc || OBD_FAIL_CHECK(OBD_FAIL_MDS_OPEN_PACK)) {
                 CERROR("mds: out of memory\n");
                 req->rq_status = -ENOMEM;
                 RETURN(0);
         }
 
-        req->rq_rephdr->xid = req->rq_reqhdr->xid;
-        rep = req->rq_rep.mds;
-
-        de = mds_fid2dentry(&req->rq_obd->u.mds, &req->rq_req.mds->fid1, &mnt);
+        body = lustre_msg_buf(req->rq_reqmsg, 0);
+        de = mds_fid2dentry(&req->rq_obd->u.mds, &body->fid1, &mnt);
         if (IS_ERR(de)) {
-                req->rq_rephdr->status = -ENOENT;
+                req->rq_status = -ENOENT;
                 RETURN(0);
         }
-        flags = req->rq_req.mds->flags;
+        flags = body->flags;
         file = dentry_open(de, mnt, flags);
         if (!file || IS_ERR(file)) {
-                req->rq_rephdr->status = -EINVAL;
+                req->rq_status = -EINVAL;
                 RETURN(0);
         }
 
-        rep->objid = (__u64) (unsigned long)file;
-        return 0;
+        body = lustre_msg_buf(req->rq_repmsg, 0);
+        body->objid = (__u64) (unsigned long)file;
+        RETURN(0);
 }
 
 int mds_close(struct ptlrpc_request *req)
 {
         struct dentry *de;
-        struct mds_rep *rep;
+        struct mds_body *body;
         struct file *file;
         struct vfsmount *mnt;
         int rc;
+        ENTRY;
 
-        rc = mds_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep,
-                          &req->rq_replen, &req->rq_repbuf);
+        rc = lustre_pack_msg(0, NULL, NULL, &req->rq_replen, &req->rq_repbuf);
+        req->rq_repmsg = (struct lustre_msg *)req->rq_repbuf;
         if (rc || OBD_FAIL_CHECK(OBD_FAIL_MDS_CLOSE_PACK)) {
                 CERROR("mds: out of memory\n");
                 req->rq_status = -ENOMEM;
                 RETURN(0);
         }
 
-        req->rq_rephdr->xid = req->rq_reqhdr->xid;
-        rep = req->rq_rep.mds;
-
-        de = mds_fid2dentry(&req->rq_obd->u.mds, &req->rq_req.mds->fid1, &mnt);
+        body = lustre_msg_buf(req->rq_reqmsg, 0);
+        de = mds_fid2dentry(&req->rq_obd->u.mds, &body->fid1, &mnt);
         if (IS_ERR(de)) {
-                req->rq_rephdr->status = -ENOENT;
+                req->rq_status = -ENOENT;
                 RETURN(0);
         }
 
-        file = (struct file *)(unsigned long) req->rq_req.mds->objid;
-
-        req->rq_rephdr->status = filp_close(file, 0);
+        file = (struct file *)(unsigned long)body->objid;
+        req->rq_status = filp_close(file, 0);
         l_dput(de);
         mntput(mnt);
-        return 0;
+
+        RETURN(0);
 }
 
 int mds_readpage(struct ptlrpc_request *req)
@@ -289,25 +288,22 @@ int mds_readpage(struct ptlrpc_request *req)
         struct dentry *de;
         struct file *file;
         struct niobuf *niobuf;
-        struct mds_rep *rep;
-        int rc;
-
+        struct mds_body *body;
+        int rc, size = sizeof(*body);
         ENTRY;
 
-        rc = mds_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep,
-                          &req->rq_replen, &req->rq_repbuf);
+        rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repbuf);
+        req->rq_repmsg = (struct lustre_msg *)req->rq_repbuf;
         if (rc || OBD_FAIL_CHECK(OBD_FAIL_MDS_READPAGE_PACK)) {
                 CERROR("mds: out of memory\n");
                 req->rq_status = -ENOMEM;
                 RETURN(0);
         }
 
-        req->rq_rephdr->xid = req->rq_reqhdr->xid;
-        rep = req->rq_rep.mds;
-
-        de = mds_fid2dentry(&req->rq_obd->u.mds, &req->rq_req.mds->fid1, &mnt);
+        body = lustre_msg_buf(req->rq_reqmsg, 0);
+        de = mds_fid2dentry(&req->rq_obd->u.mds, &body->fid1, &mnt);
         if (IS_ERR(de)) {
-                req->rq_rephdr->status = PTR_ERR(de);
+                req->rq_status = PTR_ERR(de);
                 RETURN(0);
         }
 
@@ -316,32 +312,33 @@ int mds_readpage(struct ptlrpc_request *req)
         file = dentry_open(de, mnt, O_RDONLY | O_LARGEFILE);
         /* note: in case of an error, dentry_open puts dentry */
         if (IS_ERR(file)) {
-                req->rq_rephdr->status = PTR_ERR(file);
+                req->rq_status = PTR_ERR(file);
                 RETURN(0);
         }
 
-        niobuf = mds_req_tgt(req->rq_req.mds);
+        niobuf = lustre_msg_buf(req->rq_reqmsg, 1);
+        if (!niobuf) {
+                req->rq_status = -EINVAL;
+                LBUG();
+                RETURN(0);
+        }
 
         /* to make this asynchronous make sure that the handling function
            doesn't send a reply when this function completes. Instead a
            callback function would send the reply */
-        rc = mds_sendpage(req, file, req->rq_req.mds->size, niobuf);
+        rc = mds_sendpage(req, file, body->size, niobuf);
 
         filp_close(file, 0);
-        req->rq_rephdr->status = rc;
+        req->rq_status = rc;
         RETURN(0);
 }
 
 int mds_reint(struct ptlrpc_request *req)
 {
-        char *buf;
-        int rc, len;
+        int rc;
         struct mds_update_record rec;
 
-        buf = mds_req_tgt(req->rq_req.mds);
-        len = req->rq_req.mds->tgtlen;
-
-        rc = mds_update_unpack(buf, len, &rec);
+        rc = mds_update_unpack(req, &rec);
         if (rc || OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_UNPACK)) {
                 CERROR("invalid record\n");
                 req->rq_status = -EINVAL;
@@ -356,28 +353,22 @@ int mds_handle(struct obd_device *dev, struct ptlrpc_service *svc,
                struct ptlrpc_request *req)
 {
         int rc;
-        struct ptlreq_hdr *hdr;
-
         ENTRY;
 
-        hdr = (struct ptlreq_hdr *)req->rq_reqbuf;
-
-        if (NTOH__u32(hdr->type) != PTL_RPC_REQUEST) {
-                CERROR("lustre_mds: wrong packet type sent %d\n",
-                       NTOH__u32(hdr->type));
-                rc = -EINVAL;
-                GOTO(out, rc);
-        }
-
-        rc = mds_unpack_req(req->rq_reqbuf, req->rq_reqlen,
-                            &req->rq_reqhdr, &req->rq_req);
+        rc = lustre_unpack_msg(req->rq_reqbuf, req->rq_reqlen);
+        req->rq_reqmsg = (struct lustre_msg *)req->rq_reqbuf;
         if (rc || OBD_FAIL_CHECK(OBD_FAIL_MDS_HANDLE_UNPACK)) {
                 CERROR("lustre_mds: Invalid request\n");
                 GOTO(out, rc);
         }
 
-        switch (req->rq_reqhdr->opc) {
+        if (req->rq_reqmsg->type != PTL_RPC_REQUEST) {
+                CERROR("lustre_mds: wrong packet type sent %d\n",
+                       req->rq_reqmsg->type);
+                GOTO(out, rc = -EINVAL);
+        }
 
+        switch (req->rq_reqmsg->opc) {
         case MDS_GETATTR:
                 CDEBUG(D_INODE, "getattr\n");
                 OBD_FAIL_RETURN(OBD_FAIL_MDS_GETATTR_NET, 0);
@@ -419,12 +410,6 @@ int mds_handle(struct obd_device *dev, struct ptlrpc_service *svc,
         EXIT;
 out:
         if (rc) {
-                CERROR("no header\n");
-                LBUG();
-                return 0;
-        }
-
-        if( req->rq_status) {
                 ptlrpc_error(dev, svc, req);
         } else {
                 CDEBUG(D_NET, "sending reply\n");

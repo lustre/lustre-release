@@ -1,7 +1,6 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *
  * Copyright (C) 2001  Cluster File Systems, Inc.
  *
  * This code is issued under the GNU General Public License.
@@ -27,10 +26,10 @@ struct obd_type {
         int  typ_refcnt;
 };
 
-struct obd_run_ctxt { 
-	struct vfsmount *pwdmnt;
-	struct dentry   *pwd;
-	mm_segment_t     fs;
+struct obd_run_ctxt {
+        struct vfsmount *pwdmnt;
+        struct dentry   *pwd;
+        mm_segment_t     fs;
 };
 
 struct obd_conn {
@@ -39,42 +38,42 @@ struct obd_conn {
 };
 
 struct obd_devicename {
-	uint32_t len;
-	char *   name;
+        uint32_t len;
+        char *name;
         struct dentry *dentry;   /* file system obd device names */
-        __u8           _uuid[16]; /* uuid obd device names */
+        __u8 _uuid[16];          /* uuid obd device names */
 };
 
 
 /* Individual type definitions */
 
 struct ext2_obd {
-        struct super_block * e2_sb;
-	struct vfsmount *e2_vfsmnt;
+        struct super_block *e2_sb;
+        struct vfsmount *e2_vfsmnt;
 };
 
 struct filter_obd {
-	char *fo_fstype;
-        struct super_block * fo_sb;
-	struct vfsmount *fo_vfsmnt;
-	struct obd_run_ctxt fo_ctxt;
-	spinlock_t fo_lock;
-	__u64 fo_lastino;
-	struct file_operations *fo_fop; 
-	struct inode_operations *fo_iop;
-	struct address_space_operations *fo_aops;
+        char *fo_fstype;
+        struct super_block *fo_sb;
+        struct vfsmount *fo_vfsmnt;
+        struct obd_run_ctxt fo_ctxt;
+        spinlock_t fo_lock;
+        __u64 fo_lastino;
+        struct file_operations *fo_fop;
+        struct inode_operations *fo_iop;
+        struct address_space_operations *fo_aops;
 };
 
 struct mds_obd {
         struct ptlrpc_service *mds_service;
 
-	char *mds_fstype;
-        struct super_block * mds_sb;
-	struct vfsmount *mds_vfsmnt;
-	struct obd_run_ctxt mds_ctxt;
-	struct file_operations *mds_fop; 
-	struct inode_operations *mds_iop;
-	struct address_space_operations *mds_aops;
+        char *mds_fstype;
+        struct super_block *mds_sb;
+        struct vfsmount *mds_vfsmnt;
+        struct obd_run_ctxt mds_ctxt;
+        struct file_operations *mds_fop;
+        struct inode_operations *mds_iop;
+        struct address_space_operations *mds_aops;
         struct mds_fs_operations *mds_fsops;
 };
 
@@ -86,15 +85,15 @@ struct ldlm_obd {
 };
 
 struct echo_obd {
-	char *eo_fstype;
+        char *eo_fstype;
         struct super_block *eo_sb;
-	struct vfsmount *eo_vfsmnt;
-	struct obd_run_ctxt eo_ctxt;
-	spinlock_t eo_lock;
-	__u64 eo_lastino;
-	struct file_operations *eo_fop; 
-	struct inode_operations *eo_iop;
-	struct address_space_operations *eo_aops;
+        struct vfsmount *eo_vfsmnt;
+        struct obd_run_ctxt eo_ctxt;
+        spinlock_t eo_lock;
+        __u64 eo_lastino;
+        struct file_operations *eo_fop;
+        struct inode_operations *eo_iop;
+        struct address_space_operations *eo_aops;
 };
 
 struct trace_obd {
@@ -103,8 +102,8 @@ struct trace_obd {
 
 #if 0
 struct snap_obd {
-	unsigned int snap_index;  /* which snapshot index are we accessing */
-	int snap_tableno;
+        unsigned int snap_index;  /* which snapshot index are we accessing */
+        int snap_tableno;
 };
 
 struct raid1_obd {
@@ -120,13 +119,13 @@ struct raid1_obd {
 struct ost_obd {
         struct ptlrpc_service *ost_service;
 
-	struct obd_device *ost_tgt;
-	struct obd_conn ost_conn;
+        struct obd_device *ost_tgt;
+        struct obd_conn ost_conn;
 };
 
 struct osc_obd {
-	struct obd_device *osc_tgt;
-        struct ptlrpc_client *osc_peer;
+        struct obd_device *osc_tgt;
+        struct ptlrpc_client *osc_client;
 };
 
 /* corresponds to one of the obd's */
@@ -135,9 +134,9 @@ struct obd_device {
         struct obd_type *obd_type;
         int obd_minor;
         int obd_flags;
-        int obd_refcnt; 
-        struct obd_devicename obd_fsname; 
-	struct proc_dir_entry *obd_proc_entry;
+        int obd_refcnt;
+        struct obd_devicename obd_fsname;
+        struct proc_dir_entry *obd_proc_entry;
         int obd_multi_count;
         struct obd_conn obd_multi_conn[MAX_MULTI];
         unsigned int obd_gen_last_id;
@@ -153,7 +152,7 @@ struct obd_device {
                 struct osc_obd osc;
                 struct ldlm_obd ldlm;
                 struct echo_obd echo;
-	        struct trace_obd trace;
+                struct trace_obd trace;
 #if 0
                 struct raid1_obd raid1;
                 struct snap_obd snap;
@@ -200,13 +199,13 @@ struct obd_ops {
                       obd_size count, obd_off offset);
         int (*o_iterate)(struct obd_conn *conn, int (*)(obd_id, obd_gr, void *),
                          obd_id *startid, obd_gr group, void *data);
-	int (*o_preprw)(int cmd, struct obd_conn *conn, 
-			int objcount, struct obd_ioobj *obj, 
-			int niocount, struct niobuf *nb, 
-			struct niobuf *res);
-	int (*o_commitrw)(int cmd, struct obd_conn *conn, 
-			  int objcount, struct obd_ioobj *obj, 
-			  int niocount, struct niobuf *res);
+        int (*o_preprw)(int cmd, struct obd_conn *conn,
+                        int objcount, struct obd_ioobj *obj,
+                        int niocount, struct niobuf *nb,
+                        struct niobuf *res);
+        int (*o_commitrw)(int cmd, struct obd_conn *conn,
+                          int objcount, struct obd_ioobj *obj,
+                          int niocount, struct niobuf *res);
 };
 
 #endif

@@ -9,9 +9,7 @@ MODULE = mds
 modulefs_DATA = mds.o
 EXTRA_PROGRAMS = mds
 
-LINX=mds_pack.c mds_updates.c simple.c
-mds_pack.c: 
-	ln -s ../lib/mds_pack.c .
+LINX=mds_updates.c simple.c
 mds_updates.c: 
 	ln -s ../lib/mds_updates.c .
 simple.c: 

@@ -82,9 +82,9 @@ static inline int ext2_add_nondir(struct dentry *dentry, struct inode *inode)
 /* methods */
 static int ll_find_inode(struct inode *inode, unsigned long ino, void *opaque)
 {
-        struct mds_rep *rep = (struct mds_rep *)opaque;
+        struct mds_body *body = (struct mds_body *)opaque;
 
-        if (inode->i_generation != rep->generation)
+        if (inode->i_generation != body->generation)
                 return 0;
 
         return 1;
@@ -109,14 +109,15 @@ static struct dentry *ll_lookup(struct inode * dir, struct dentry *dentry)
 
         err = mdc_getattr(&sbi->ll_mds_client, ino, type,
                           OBD_MD_FLNOTOBD|OBD_MD_FLBLOCKS, &request);
-        if ( err ) {
+        if (err) {
                 CERROR("failure %d inode %ld\n", err, ino);
                 ptlrpc_free_req(request);
                 EXIT;
                 return ERR_PTR(-abs(err)); 
         }
 
-        inode = iget4(dir->i_sb, ino, ll_find_inode, request->rq_rep.mds);
+        inode = iget4(dir->i_sb, ino, ll_find_inode,
+                      lustre_msg_buf(request->rq_repmsg, 0));
 
         ptlrpc_free_req(request);
         if (!inode) 
@@ -133,7 +134,7 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
 {
         struct inode *inode;
         struct ptlrpc_request *request;
-        struct mds_rep *rep;
+        struct mds_body *body;
         int err;
         time_t time = CURRENT_TIME;
         struct ll_sb_info *sbi = ll_i2sbi(dir);
@@ -144,37 +145,34 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
                          mode, id,  current->uid, current->gid, time, &request);
         if (err) { 
                 inode = ERR_PTR(err);
-                EXIT;
-                goto out;
+                GOTO(out, err);
         }
-        rep = request->rq_rep.mds;
-        rep->valid = OBD_MD_FLNOTOBD;
+        body = lustre_msg_buf(request->rq_repmsg, 0);
+        body->valid = OBD_MD_FLNOTOBD;
 
-        rep->objid = id; 
-        rep->nlink = 1;
-        rep->atime = rep->ctime = rep->mtime = time;
-        rep->mode = mode;
+        body->objid = id; 
+        body->nlink = 1;
+        body->atime = body->ctime = body->mtime = time;
+        body->mode = mode;
         CDEBUG(D_INODE, "-- new_inode: objid %lld, ino %d, mode %o\n",
-               rep->objid, rep->ino, rep->mode); 
+               body->objid, body->ino, body->mode); 
 
-        inode = iget4(dir->i_sb, rep->ino, ll_find_inode, rep);
+        inode = iget4(dir->i_sb, body->ino, ll_find_inode, body);
         if (IS_ERR(inode)) {
                 CERROR("new_inode -fatal:  %ld\n", PTR_ERR(inode));
                 inode = ERR_PTR(-EIO);
                 LBUG();
-                EXIT;
-                goto out;
+                GOTO(out, -EIO);
         }
 
         if (!list_empty(&inode->i_dentry)) {
                 CERROR("new_inode -fatal: inode %d, ct %d lnk %d\n", 
-                       rep->ino, atomic_read(&inode->i_count), 
+                       body->ino, atomic_read(&inode->i_count), 
                        inode->i_nlink);
                 iput(inode);
                 LBUG();
                 inode = ERR_PTR(-EIO);
-                EXIT;
-                goto out;
+                GOTO(out, -EIO);
         }
 
         EXIT;
