@@ -394,12 +394,13 @@ kib_peer_t *
 kibnal_get_peer (ptl_nid_t nid)
 {
         kib_peer_t     *peer;
+        unsigned long   flags;
 
-        read_lock (&kibnal_data.kib_global_lock);
+        read_lock_irqsave(&kibnal_data.kib_global_lock, flags);
         peer = kibnal_find_peer_locked (nid);
         if (peer != NULL)                       /* +1 ref for caller? */
                 kib_peer_addref(peer);
-        read_unlock (&kibnal_data.kib_global_lock);
+        read_unlock_irqrestore(&kibnal_data.kib_global_lock, flags);
 
         return (peer);
 }
@@ -421,9 +422,10 @@ kibnal_get_peer_info (int index, ptl_nid_t *nidp, int *persistencep)
 {
         kib_peer_t        *peer;
         struct list_head  *ptmp;
+        unsigned long      flags;
         int                i;
 
-        read_lock (&kibnal_data.kib_global_lock);
+        read_lock_irqsave(&kibnal_data.kib_global_lock, flags);
 
         for (i = 0; i < kibnal_data.kib_peer_hash_size; i++) {
 
@@ -440,12 +442,13 @@ kibnal_get_peer_info (int index, ptl_nid_t *nidp, int *persistencep)
                         *nidp = peer->ibp_nid;
                         *persistencep = peer->ibp_persistence;
 
-                        read_unlock (&kibnal_data.kib_global_lock);
+                        read_unlock_irqrestore(&kibnal_data.kib_global_lock,
+                                               flags);
                         return (0);
                 }
         }
 
-        read_unlock (&kibnal_data.kib_global_lock);
+        read_unlock_irqrestore(&kibnal_data.kib_global_lock, flags);
         return (-ENOENT);
 }
 
@@ -562,9 +565,10 @@ kibnal_get_conn_by_idx (int index)
         struct list_head  *ptmp;
         kib_conn_t        *conn;
         struct list_head  *ctmp;
+        unsigned long      flags;
         int                i;
 
-        read_lock (&kibnal_data.kib_global_lock);
+        read_lock_irqsave(&kibnal_data.kib_global_lock, flags);
 
         for (i = 0; i < kibnal_data.kib_peer_hash_size; i++) {
                 list_for_each (ptmp, &kibnal_data.kib_peers[i]) {
@@ -583,13 +587,14 @@ kibnal_get_conn_by_idx (int index)
                                        conn, conn->ibc_state, conn->ibc_peer->ibp_nid,
                                        atomic_read (&conn->ibc_refcount));
                                 atomic_inc (&conn->ibc_refcount);
-                                read_unlock (&kibnal_data.kib_global_lock);
+                                read_unlock_irqrestore(&kibnal_data.kib_global_lock,
+                                                       flags);
                                 return (conn);
                         }
                 }
         }
 
-        read_unlock (&kibnal_data.kib_global_lock);
+        read_unlock_irqrestore(&kibnal_data.kib_global_lock, flags);
         return (NULL);
 }
 

@@ -929,11 +929,11 @@ kibnal_launch_tx (kib_tx_t *tx, ptl_nid_t nid)
         LASSERT (tx->tx_conn == NULL);          /* only set when assigned a conn */
         LASSERT (tx->tx_nsp > 0);               /* work items have been set up */
 
-        read_lock (g_lock);
+        read_lock_irqsave(g_lock, flags);
         
         peer = kibnal_find_peer_locked (nid);
         if (peer == NULL) {
-                read_unlock (g_lock);
+                read_unlock_irqrestore(g_lock, flags);
                 tx->tx_status = -EHOSTUNREACH;
                 kibnal_tx_done (tx);
                 return;
@@ -945,15 +945,15 @@ kibnal_launch_tx (kib_tx_t *tx, ptl_nid_t nid)
                        conn, conn->ibc_state, conn->ibc_peer->ibp_nid,
                        atomic_read (&conn->ibc_refcount));
                 atomic_inc (&conn->ibc_refcount); /* 1 ref for the tx */
-                read_unlock (g_lock);
+                read_unlock_irqrestore(g_lock, flags);
                 
                 kibnal_queue_tx (tx, conn);
                 return;
         }
         
         /* Making one or more connections; I'll need a write lock... */
-        read_unlock (g_lock);
-        write_lock_irqsave (g_lock, flags);
+        read_unlock(g_lock);
+        write_lock(g_lock);
 
         peer = kibnal_find_peer_locked (nid);
         if (peer == NULL) {
@@ -2217,12 +2217,13 @@ kibnal_check_conns (int idx)
         kib_peer_t        *peer;
         kib_conn_t        *conn;
         struct list_head  *ctmp;
+        unsigned long      flags;
 
  again:
         /* NB. We expect to have a look at all the peers and not find any
          * rdmas to time out, so we just use a shared lock while we
          * take a look... */
-        read_lock (&kibnal_data.kib_global_lock);
+        read_lock_irqsave(&kibnal_data.kib_global_lock, flags);
 
         list_for_each (ptmp, peers) {
                 peer = list_entry (ptmp, kib_peer_t, ibp_list);
@@ -2246,7 +2247,8 @@ kibnal_check_conns (int idx)
                                atomic_read (&conn->ibc_refcount));
 
                         atomic_inc (&conn->ibc_refcount);
-                        read_unlock (&kibnal_data.kib_global_lock);
+                        read_unlock_irqrestore(&kibnal_data.kib_global_lock,
+                                               flags);
 
                         CERROR("Timed out RDMA with "LPX64"\n",
                                peer->ibp_nid);
@@ -2259,7 +2261,7 @@ kibnal_check_conns (int idx)
                 }
         }
 
-        read_unlock (&kibnal_data.kib_global_lock);
+        read_unlock_irqrestore(&kibnal_data.kib_global_lock, flags);
 }
 
 void
