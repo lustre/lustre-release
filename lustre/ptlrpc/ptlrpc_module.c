@@ -20,7 +20,9 @@
  *
  */
 
-#define EXPORT_SYMTAB
+#ifndef EXPORT_SYMTAB
+# define EXPORT_SYMTAB
+#endif
 #define DEBUG_SUBSYSTEM S_RPC
 
 #ifdef __KERNEL__
