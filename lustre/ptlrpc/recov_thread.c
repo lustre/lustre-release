@@ -44,6 +44,7 @@
 #include <linux/obd_class.h>
 #include <linux/lustre_net.h>
 #include <portals/types.h>
+#include <portals/list.h>
 #include "ptlrpc_internal.h"
 
 
