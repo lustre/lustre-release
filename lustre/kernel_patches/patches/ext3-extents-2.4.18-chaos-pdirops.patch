@@ -9,7 +9,7 @@
  8 files changed, 1693 insertions(+), 8 deletions(-)
 
 --- /dev/null	2003-01-30 13:24:37.000000000 +0300
-+++ linux-2.4.18-chaos-pdirops-alexey/fs/ext3/extents.c	2003-09-23 14:30:02.000000000 +0400
++++ linux-2.4.18-chaos-pdirops-alexey/fs/ext3/extents.c	2003-09-23 18:09:30.000000000 +0400
 @@ -0,0 +1,1624 @@
 +/*
 + *
@@ -317,7 +317,7 @@
 +				ppos, eh->e_num, eh->e_max);
 +		ix = EXT_FIRST_INDEX(eh);
 +		if (eh->e_num) {
-+			EXT_ASSERT(ppos == 0 || ix->e_block == prev);
++			EXT_ASSERT(prev == 0 || ix->e_block == prev);
 +			path[ppos].p_idx = ix;
 +		}
 +		EXT_ASSERT(eh->e_num <= eh->e_max);
