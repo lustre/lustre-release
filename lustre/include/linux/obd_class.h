@@ -65,6 +65,8 @@ struct obd_device *class_uuid2obd(struct obd_uuid *uuid);
 struct obd_device * class_find_client_obd(struct obd_uuid *tgt_uuid, 
                                           char * typ_name,
                                           struct obd_uuid *grp_uuid);
+struct obd_device * class_devices_in_group(struct obd_uuid *grp_uuid, 
+                                           int *next);
 
 void osic_init(struct obd_sync_io_container **osic);
 void osic_add_one(struct obd_sync_io_container *osic,
@@ -100,6 +102,7 @@ struct lustre_profile {
 };
 
 struct lustre_profile *class_get_profile(char * prof);
+void class_del_profile(char *prof);
 
 #define class_export_get(exp)                                                  \
 ({                                                                             \
@@ -366,19 +369,6 @@ static inline int obd_setup(struct obd_device *obd, int datalen, void *data)
         OBD_COUNTER_INCREMENT(obd, setup);
 
         rc = OBP(obd, setup)(obd, datalen, data);
-        RETURN(rc);
-}
-
-static inline int obd_postsetup(struct obd_device *obd)
-{
-        int rc;
-        ENTRY;
-
-        OBD_CHECK_DEV_ACTIVE(obd);
-        OBD_CHECK_OP(obd, postsetup, 0);
-        OBD_COUNTER_INCREMENT(obd, postsetup);
-
-        rc = OBP(obd, postsetup)(obd);
         RETURN(rc);
 }
 

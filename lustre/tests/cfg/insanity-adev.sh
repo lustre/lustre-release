@@ -1,13 +1,14 @@
-mds_HOST=${mds_HOST:-mdev4}
-mdsfailover_HOST=${mdsfailover_HOST:-mdev5}
-ost1_HOST=${ost1_HOST:-mdev2}
-ost2_HOST=${ost2_HOST:-mdev3}
-EXTRA_OSTS=${EXTRA_OSTS:-mdev7}
+mds_HOST=${mds_HOST:-adev2}
+mdsfailover_HOST=${mdsfailover_HOST:-adev2}
+ost1_HOST=${ost1_HOST:-adev3}
+ost2_HOST=${ost2_HOST:-adev4}
+EXTRA_OSTS=${EXTRA_OSTS:-adev7}
 client_HOST=client
-LIVE_CLIENT=${LIVE_CLIENT:-mdev6}
+LIVE_CLIENT=${LIVE_CLIENT:-adev8}
 # This should always be a list, not a regexp
 #FAIL_CLIENTS=${FAIL_CLIENTS:-mdev7}
-FAIL_CLIENTS=${FAIL_CLIENTS:-""}
+FAIL_CLIENTS=${FAIL_CLIENTS:-"adev9 adev10 adev11 adev12"}
+EXTRA_CLIENTS=${EXTRA_CLIENTS:-"adev[13-15]"}
 
 NETTYPE=${NETTYPE:-tcp}
 
@@ -17,11 +18,14 @@ SUBSYSTEM=${SUBSYSTEM:-0}
 MOUNT=${MOUNT:-"/mnt/lustre"}
 UPCALL=${CLIENT_UPCALL:-`pwd`/replay-single-upcall.sh}
 
-MDSDEV=${MDSDEV:-/dev/sda1}
+MDSDEV=${MDSDEV:-/dev/sdc}
 MDSSIZE=${MDSSIZE:-50000}
+MDSJOURNALSIZE=${MDSJOURNALSIZE:-0}
 
 OSTDEV=${OSTDEV:-/tmp/ost-`hostname`}
 OSTSIZE=${OSTSIZE:=50000}
+OSTJOURNALSIZE=${OSTJOURNALSIZE:-0}
+
 FSTYPE=${FSTYPE:-ext3}
 STRIPE_BYTES=${STRIPE_BYTES:-1048576} 
 STRIPES_PER_OBJ=${STRIPES_PER_OBJ:-0}

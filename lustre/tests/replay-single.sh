@@ -662,8 +662,11 @@ run_test 34 "abort recovery before client does replay (test mds_cleanup_orphans)
 test_35() {
     touch $DIR/$tfile
 
-    echo 0x80000119 > /proc/sys/lustre/fail_loc
+#define OBD_FAIL_MDS_REINT_NET_REP       0x119
+    do_facet mds "sysctl -w lustre.fail_loc=0x80000119"
     rm -f $DIR/$tfile &
+    sleep 1
+    sync
     sleep 1
     # give a chance to remove from MDS
     fail_abort mds
@@ -708,40 +711,67 @@ test_37() {
 run_test 37 "abort recovery before client does replay (test mds_cleanup_orphans for directories)"
 
 test_38() {
-    for i in `seq 1 800`; do
-	touch $DIR/$tfile-$i
-    done
-    for i in `seq 1 400`; do
-	rm $DIR/$tfile-$i
-    done
-
+    createmany -o $DIR/$tfile-%d 800
+    unlinkmany $DIR/$tfile-%d 0 400
     replay_barrier mds
     fail mds
-    for i in `seq 401 800`; do
-	rm $DIR/$tfile-$i
-    done
+    unlinkmany $DIR/$tfile-%d 400 400
     sleep 2
     $CHECKSTAT -t file $DIR/$tfile-* && return 1 || true
 }
 run_test 38 "test recovery from unlink llog (test llog_gen_rec) "
 
 test_39() {
-    for i in `seq 1 800`; do
-	touch $DIR/$tfile-$i
-    done
-
+    createmany -o $DIR/$tfile-%d 800
     replay_barrier mds
-    for i in `seq 1 400`; do
-	rm $DIR/$tfile-$i
-    done
+    unlinkmany $DIR/$tfile-%d 0 400
     fail mds
-    for i in `seq 401 800`; do
-	rm $DIR/$tfile-$i
-    done
+    unlinkmany $DIR/$tfile-%d 400 400
     sleep 2
     $CHECKSTAT -t file $DIR/$tfile-* && return 1 || true
 }
 run_test 39 "test recovery from unlink llog (test llog_gen_rec) "
 
+count_ost_writes() {
+        cat /proc/fs/lustre/osc/*/stats |
+            awk -vwrites=0 '/ost_write/ { writes += $2 } END { print writes; }'
+}
+
+#b=2477,2532
+test_40(){
+    $LCTL mark multiop $MOUNT/$tfile OS_c 
+    multiop $MOUNT/$tfile OS_c  &
+    PID=$!
+    writeme -s $MOUNT/${tfile}-2 &
+    WRITE_PID=$!
+    sleep 1
+    facet_failover mds
+#define OBD_FAIL_MDS_CONNECT_NET         0x117
+    do_facet mds "sysctl -w lustre.fail_loc=0x80000117"
+    kill -USR1 $PID
+    stat1=`count_ost_writes`
+    sleep $TIMEOUT
+    stat2=`count_ost_writes`
+    echo "$stat1, $stat2"
+    if [ $stat1 -lt $stat2 ]; then 
+       echo "writes continuing during recovery"
+       RC=0
+    else
+       echo "writes not continuing during recovery, bug 2477"
+       RC=4
+    fi
+    echo "waiting for writeme $WRITE_PID"
+    kill $WRITE_PID
+    wait $WRITE_PID 
+
+    echo "waiting for multiop $PID"
+    wait $PID || return 2
+    do_facet client munlink $MOUNT/$tfile  || return 3
+    do_facet client munlink $MOUNT/${tfile}-2  || return 3
+    return $RC
+}
+run_test 40 "cause recovery in ptlrpc, ensure IO continues"
+
 equals_msg test complete, cleaning up
 $CLEANUP
+

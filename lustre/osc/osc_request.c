@@ -2514,6 +2514,8 @@ static int osc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         struct obd_ioctl_data *data = karg;
         int err = 0;
         ENTRY;
+        
+        MOD_INC_USE_COUNT;
 
         switch (cmd) {
         case OBD_IOC_LOV_GET_CONFIG: {
@@ -2578,6 +2580,7 @@ static int osc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 GOTO(out, err = -ENOTTY);
         }
 out:
+        MOD_DEC_USE_COUNT;
         return err;
 }
 
@@ -2659,6 +2662,19 @@ static int osc_set_info(struct obd_export *exp, obd_count keylen,
                 spin_lock(&oscc->oscc_lock);
                 oscc->oscc_flags &= ~OSCC_FLAG_NOSPC;
                 spin_unlock(&oscc->oscc_lock);
+                RETURN(0);
+        }
+
+
+        if (keylen == strlen("initial_recov") &&
+            memcmp(key, "initial_recov", strlen("initial_recov")) == 0) {
+                struct obd_import *imp = exp->exp_obd->u.cli.cl_import;
+                if (vallen != sizeof(int))
+                        RETURN(-EINVAL);
+                imp->imp_initial_recov = *(int *)val;
+                CDEBUG(D_HA, "%s: set imp_no_init_recov = %d\n",
+                       exp->exp_obd->obd_name,
+                       imp->imp_initial_recov);
                 RETURN(0);
         }
 

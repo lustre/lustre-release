@@ -97,7 +97,6 @@ EXPORT_SYMBOL(ptlrpc_link_svc_me);
 /* client.c */
 EXPORT_SYMBOL(ptlrpc_init_client);
 EXPORT_SYMBOL(ptlrpc_cleanup_client);
-EXPORT_SYMBOL(ptlrpc_req_to_uuid);
 EXPORT_SYMBOL(ptlrpc_uuid_to_connection);
 EXPORT_SYMBOL(ptlrpc_queue_wait);
 EXPORT_SYMBOL(ptlrpc_replay_req);
@@ -174,9 +173,7 @@ EXPORT_SYMBOL(lustre_swab_ptlbd_rsp);
 /* recover.c */
 EXPORT_SYMBOL(ptlrpc_run_recovery_over_upcall);
 EXPORT_SYMBOL(ptlrpc_run_failed_import_upcall);
-EXPORT_SYMBOL(ptlrpc_connect_import);
 EXPORT_SYMBOL(ptlrpc_disconnect_import);
-EXPORT_SYMBOL(ptlrpc_replay);
 EXPORT_SYMBOL(ptlrpc_resend);
 EXPORT_SYMBOL(ptlrpc_wake_delayed);
 EXPORT_SYMBOL(ptlrpc_set_import_active);

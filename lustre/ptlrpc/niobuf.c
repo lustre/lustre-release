@@ -548,6 +548,7 @@ void ptlrpc_unregister_bulk (struct ptlrpc_request *req)
 
 int ptlrpc_reply(struct ptlrpc_request *req)
 {
+        struct ptlrpc_connection *conn;
         unsigned long flags;
         int rc;
 
@@ -565,8 +566,14 @@ int ptlrpc_reply(struct ptlrpc_request *req)
         req->rq_repmsg->status = req->rq_status;
         req->rq_repmsg->opc = req->rq_reqmsg->opc;
 
+        if (req->rq_export == NULL) 
+                conn = ptlrpc_get_connection(&req->rq_peer, NULL);
+        else
+                conn = ptlrpc_connection_addref(req->rq_export->exp_connection);
+
         init_waitqueue_head(&req->rq_reply_waitq);
-        rc = ptl_send_buf(req, req->rq_connection, req->rq_svc->srv_rep_portal);
+        rc = ptl_send_buf(req, conn, 
+                          req->rq_svc->srv_rep_portal);
         if (rc != 0) {
                 /* Do what the callback handler would have done */
                 OBD_FREE (req->rq_repmsg, req->rq_replen);
@@ -575,6 +582,7 @@ int ptlrpc_reply(struct ptlrpc_request *req)
                 req->rq_want_ack = 0;
                 spin_unlock_irqrestore (&req->rq_lock, flags);
         }
+        ptlrpc_put_connection(conn);
         return rc;
 }
 
@@ -600,6 +608,7 @@ int ptl_send_rpc(struct ptlrpc_request *request)
 {
         int rc;
         int rc2;
+        struct ptlrpc_connection *connection;
         unsigned long flags;
         ptl_process_id_t source_id;
         ptl_handle_me_t  reply_me_h;
@@ -611,6 +620,8 @@ int ptl_send_rpc(struct ptlrpc_request *request)
          * cleanly from the previous attempt */
         LASSERT (!request->rq_receiving_reply);
 
+        connection = request->rq_import->imp_connection;
+
         if (request->rq_bulk != NULL) {
                 rc = ptlrpc_register_bulk (request);
                 if (rc != 0)
@@ -620,7 +631,7 @@ int ptl_send_rpc(struct ptlrpc_request *request)
         request->rq_reqmsg->handle = request->rq_import->imp_remote_handle;
         request->rq_reqmsg->conn_cnt = request->rq_import->imp_conn_cnt;
 
-        source_id.nid = request->rq_connection->c_peer.peer_nid;
+        source_id.nid = connection->c_peer.peer_nid;
         source_id.pid = PTL_PID_ANY;
 
         LASSERT (request->rq_replen != 0);
@@ -631,7 +642,7 @@ int ptl_send_rpc(struct ptlrpc_request *request)
                 RETURN(-ENOMEM);
         }
 
-        rc = PtlMEAttach(request->rq_connection->c_peer.peer_ni->pni_ni_h,
+        rc = PtlMEAttach(connection->c_peer.peer_ni->pni_ni_h,
                          request->rq_reply_portal, /* XXX FIXME bug 249 */
                          source_id, request->rq_xid, 0, PTL_UNLINK,
                          PTL_INS_AFTER, &reply_me_h);
@@ -647,8 +658,8 @@ int ptl_send_rpc(struct ptlrpc_request *request)
         request->rq_reply_md.threshold = 1;
         request->rq_reply_md.options = PTL_MD_OP_PUT;
         request->rq_reply_md.user_ptr = request;
-        request->rq_reply_md.eventq =
-                request->rq_connection->c_peer.peer_ni->pni_reply_in_eq_h;
+        request->rq_reply_md.eventq = 
+                connection->c_peer.peer_ni->pni_reply_in_eq_h;
 
         rc = PtlMDAttach(reply_me_h, request->rq_reply_md,
                          PTL_UNLINK, &request->rq_reply_md_h);
@@ -663,7 +674,7 @@ int ptl_send_rpc(struct ptlrpc_request *request)
                ", portal %u on %s\n",
                request->rq_replen, request->rq_xid,
                request->rq_reply_portal,
-               request->rq_connection->c_peer.peer_ni->pni_name);
+               connection->c_peer.peer_ni->pni_name);
 
         ptlrpc_request_addref(request);        /* 1 ref for the SENT callback */
 
@@ -679,8 +690,7 @@ int ptl_send_rpc(struct ptlrpc_request *request)
 
         request->rq_sent = LTIME_S(CURRENT_TIME);
         ptlrpc_pinger_sending_on_import(request->rq_import);
-        rc = ptl_send_buf(request, request->rq_connection,
-                          request->rq_request_portal);
+        rc = ptl_send_buf(request, connection, request->rq_request_portal);
         if (rc == 0) {
                 ptlrpc_lprocfs_rpc_sent(request);
                 RETURN(rc);

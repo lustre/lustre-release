@@ -70,8 +70,10 @@
 struct semaphore obd_conf_sem;   /* serialize configuration commands */
 struct obd_device obd_dev[MAX_OBD_DEVICES];
 struct list_head obd_types;
+#ifndef __KERNEL__
 atomic_t obd_memory;
 int obd_memmax;
+#endif
 
 int proc_version;
 
@@ -417,8 +419,6 @@ void *obd_psdev = NULL;
 
 EXPORT_SYMBOL(obd_dev);
 EXPORT_SYMBOL(obdo_cachep);
-EXPORT_SYMBOL(obd_memory);
-EXPORT_SYMBOL(obd_memmax);
 EXPORT_SYMBOL(obd_fail_loc);
 EXPORT_SYMBOL(obd_timeout);
 EXPORT_SYMBOL(obd_lustre_upcall);
@@ -436,6 +436,7 @@ EXPORT_SYMBOL(class_name2obd);
 EXPORT_SYMBOL(class_uuid2dev);
 EXPORT_SYMBOL(class_uuid2obd);
 EXPORT_SYMBOL(class_find_client_obd);
+EXPORT_SYMBOL(class_devices_in_group);
 EXPORT_SYMBOL(__class_export_put);
 EXPORT_SYMBOL(class_new_export);
 EXPORT_SYMBOL(class_unlink_export);
@@ -468,6 +469,7 @@ EXPORT_SYMBOL(class_handle2object);
 
 /* config.c */
 EXPORT_SYMBOL(class_get_profile);
+EXPORT_SYMBOL(class_del_profile);
 EXPORT_SYMBOL(class_process_config);
 EXPORT_SYMBOL(class_config_parse_llog);
 EXPORT_SYMBOL(class_config_dump_llog);
@@ -645,7 +647,11 @@ static void /*__exit*/ cleanup_obdclass(void)
 static void cleanup_obdclass(void)
 #endif
 {
+#ifdef __KERNEL__
+        int i;
+#else
         int i, leaked;
+#endif
         ENTRY;
 
         misc_deregister(&obd_psdev);
@@ -672,9 +678,11 @@ static void cleanup_obdclass(void)
         class_handle_cleanup();
         class_exit_uuidlist();
 
+#ifndef __KERNEL__
         leaked = atomic_read(&obd_memory);
         CDEBUG(leaked ? D_ERROR : D_INFO,
                "obd mem max: %d leaked: %d\n", obd_memmax, leaked);
+#endif
 
         EXIT;
 }

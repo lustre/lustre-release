@@ -266,6 +266,35 @@ struct obd_device * class_find_client_obd(struct obd_uuid *tgt_uuid,
         return NULL;
 }
 
+/* Iterate the obd_device list looking devices have grp_uuid. Start
+   searching at *next, and if a device is found, the next index to look
+   it is saved in *next. If next is NULL, then the first matching device
+   will always be returned. */
+struct obd_device * class_devices_in_group(struct obd_uuid *grp_uuid, int *next)
+{
+        int i;
+        if (next == NULL) 
+                i = 0;
+        else if (*next >= 0 && *next < MAX_OBD_DEVICES)
+                i = *next;
+        else 
+                return NULL;
+                
+        for (; i < MAX_OBD_DEVICES; i++) {
+                struct obd_device *obd = &obd_dev[i];
+                if (obd->obd_type == NULL)
+                        continue;
+                if (obd_uuid_equals(grp_uuid, &obd->obd_uuid)) {
+                        if (next != NULL)
+                                *next = i+1;
+                        return obd;
+                }
+        }
+
+        return NULL;
+}
+
+
 void obd_cleanup_caches(void)
 {
         int rc;
@@ -493,9 +522,10 @@ struct obd_import *class_new_import(void)
         imp->imp_max_transno = 0;
         imp->imp_peer_committed_transno = 0;
         imp->imp_state = LUSTRE_IMP_NEW;
-        sema_init(&imp->imp_recovery_sem, 1);
+        init_waitqueue_head(&imp->imp_recovery_waitq);
 
         atomic_set(&imp->imp_refcount, 2);
+        atomic_set(&imp->imp_replay_inflight, 0);
         INIT_LIST_HEAD(&imp->imp_handle.h_link);
         class_handle_hash(&imp->imp_handle, import_handle_addref);
 
@@ -589,7 +619,7 @@ void class_disconnect_exports(struct obd_device *obd, int flags)
         list_del_init(&obd->obd_exports);
         spin_unlock(&obd->obd_dev_lock);
 
-        CDEBUG(D_IOCTL, "OBD device %d (%p) has exports, "
+        CDEBUG(D_HA, "OBD device %d (%p) has exports, "
                "disconnecting them\n", obd->obd_minor, obd);
         list_for_each_safe(tmp, n, &work_list) {
                 exp = list_entry(tmp, struct obd_export, exp_obd_chain);
@@ -597,7 +627,7 @@ void class_disconnect_exports(struct obd_device *obd, int flags)
                 
                 if (obd_uuid_equals(&exp->exp_client_uuid, 
                                     &exp->exp_obd->obd_uuid)) {
-                        CDEBUG(D_IOCTL, 
+                        CDEBUG(D_HA, 
                                "exp %p export uuid == obd uuid, don't discon\n",
                                exp);
                         class_export_put(exp);
@@ -613,10 +643,10 @@ void class_disconnect_exports(struct obd_device *obd, int flags)
                 rc = obd_disconnect(fake_exp, flags);
                 class_export_put(exp);
                 if (rc) {
-                        CDEBUG(D_IOCTL, "disconnecting export %p failed: %d\n",
+                        CDEBUG(D_HA, "disconnecting export %p failed: %d\n",
                                exp, rc);
                 } else {
-                        CDEBUG(D_IOCTL, "export %p disconnected\n", exp);
+                        CDEBUG(D_HA, "export %p disconnected\n", exp);
                 }
         }
         EXIT;

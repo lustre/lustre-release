@@ -512,20 +512,20 @@ static int ost_brw_read(struct ptlrpc_request *req)
                         CERROR("bulk IO comms error: "
                                "evicting %s@%s nid "LPX64" (%s)\n",
                                req->rq_export->exp_client_uuid.uuid,
-                               req->rq_connection->c_remote_uuid.uuid,
-                               req->rq_connection->c_peer.peer_nid,
-                               portals_nid2str(req->rq_connection->c_peer.peer_ni->pni_number,
-                                               req->rq_connection->c_peer.peer_nid,
+                               req->rq_export->exp_connection->c_remote_uuid.uuid,
+                               req->rq_peer.peer_nid,
+                               portals_nid2str(req->rq_peer.peer_ni->pni_number,
+                                               req->rq_peer.peer_nid,
                                                str));
                         ptlrpc_fail_export(req->rq_export);
                 } else {
                         CERROR("ignoring bulk IO comms error: "
                                "client reconnected %s@%s nid "LPX64" (%s)\n",  
                                req->rq_export->exp_client_uuid.uuid,
-                               req->rq_connection->c_remote_uuid.uuid,
-                               req->rq_connection->c_peer.peer_nid,
-                               portals_nid2str(req->rq_connection->c_peer.peer_ni->pni_number,
-                                               req->rq_connection->c_peer.peer_nid,
+                               req->rq_export->exp_connection->c_remote_uuid.uuid,
+                               req->rq_peer.peer_nid,
+                               portals_nid2str(req->rq_peer.peer_ni->pni_number,
+                                               req->rq_peer.peer_nid,
                                                str));
                 }
         }
@@ -723,20 +723,20 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                         CERROR("bulk IO comms error: "
                                "evicting %s@%s nid "LPX64" (%s)\n",
                                req->rq_export->exp_client_uuid.uuid,
-                               req->rq_connection->c_remote_uuid.uuid,
-                               req->rq_connection->c_peer.peer_nid,
-                               portals_nid2str(req->rq_connection->c_peer.peer_ni->pni_number,
-                                               req->rq_connection->c_peer.peer_nid,
+                               req->rq_export->exp_connection->c_remote_uuid.uuid,
+                               req->rq_peer.peer_nid,
+                               portals_nid2str(req->rq_peer.peer_ni->pni_number,
+                                               req->rq_peer.peer_nid,
                                                str));
                         ptlrpc_fail_export(req->rq_export);
                 } else {
                         CERROR("ignoring bulk IO comms error: "
                                "client reconnected %s@%s nid "LPX64" (%s)\n",
                                req->rq_export->exp_client_uuid.uuid,
-                               req->rq_connection->c_remote_uuid.uuid,
-                               req->rq_connection->c_peer.peer_nid,
-                               portals_nid2str(req->rq_connection->c_peer.peer_ni->pni_number,
-                                               req->rq_connection->c_peer.peer_nid,
+                               req->rq_export->exp_connection->c_remote_uuid.uuid,
+                               req->rq_peer.peer_nid,
+                               portals_nid2str(req->rq_peer.peer_ni->pni_number,
+                                               req->rq_peer.peer_nid,
                                                str));
                 }        
         }
@@ -1171,8 +1171,12 @@ static int ost_cleanup(struct obd_device *obddev, int flags)
         int err = 0;
         ENTRY;
 
-        if (obddev->obd_recovering)
+        spin_lock_bh(&obddev->obd_processing_task_lock);
+        if (obddev->obd_recovering) {
                 target_cancel_recovery_timer(obddev);
+                obddev->obd_recovering = 0;
+        }
+        spin_unlock_bh(&obddev->obd_processing_task_lock);
 
         ptlrpc_stop_all_threads(ost->ost_service);
         ptlrpc_unregister_service(ost->ost_service);

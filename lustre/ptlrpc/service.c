@@ -237,8 +237,6 @@ static int handle_incoming_request(struct obd_device *obddev,
         request->rq_export = class_conn2export(&request->rq_reqmsg->handle);
 
         if (request->rq_export) {
-                request->rq_connection = request->rq_export->exp_connection;
-                ptlrpc_connection_addref(request->rq_connection);
                 if (request->rq_reqmsg->conn_cnt < 
                     request->rq_export->exp_conn_cnt) {
                         DEBUG_REQ(D_ERROR, request,
@@ -250,13 +248,7 @@ static int handle_incoming_request(struct obd_device *obddev,
 
                 request->rq_export->exp_last_request_time =
                         LTIME_S(CURRENT_TIME);
-        } else {
-                /* create a (hopefully temporary) connection that will be used
-                 * to send the reply if this call doesn't create an export.
-                 * XXX revisit this when we revamp ptlrpc */
-                request->rq_connection =
-                        ptlrpc_get_connection(&request->rq_peer, NULL);
-        }
+        } 
 
         CDEBUG(D_RPCTRACE, "Handling RPC pname:cluuid+ref:pid:xid:ni:nid:opc "
                "%s:%s+%d:%d:"LPU64":%s:"LPX64":%d\n", current->comm,
@@ -280,7 +272,6 @@ static int handle_incoming_request(struct obd_device *obddev,
                request->rq_reqmsg->opc);
 
 put_conn:
-        ptlrpc_put_connection(request->rq_connection);
         if (request->rq_export != NULL)
                 class_export_put(request->rq_export);
 

@@ -136,7 +136,7 @@ int ptlbd_cl_connect(struct lustre_handle *conn, struct obd_device *obd,
         if (rc)
                 GOTO(out_req, rc);
 
-        exp->exp_connection = ptlrpc_connection_addref(request->rq_connection);
+        exp->exp_connection = ptlrpc_connection_addref(imp->imp_connection);
 
         imp->imp_state = LUSTRE_IMP_FULL;
         imp->imp_remote_handle = request->rq_repmsg->handle;

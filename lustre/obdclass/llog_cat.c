@@ -239,7 +239,7 @@ static struct llog_handle *llog_cat_current_log(struct llog_handle *cathandle,
 
         CDEBUG(D_INODE, "creating new log\n");
         loghandle = llog_cat_new_log(cathandle);
-        if (loghandle)
+        if (!IS_ERR(loghandle))
                 down_write(&loghandle->lgh_lock);
         up_write(&cathandle->lgh_lock);
         RETURN(loghandle);

@@ -302,16 +302,11 @@ int lprocfs_rd_server_uuid(char *page, char **start, off_t off, int count,
 {
         struct obd_device *obd = (struct obd_device *)data;
         struct obd_import *imp;
-        static char* import_state_names[] = {
-                "<UNKNOWN 0>", "INVALID", "NEW", "DISCONN", "CONNECTING",
-                "REPLAY", "RECOVER", "FULL", "EVICTED",
-        };
         char *imp_state_name = NULL;
         
         LASSERT(obd != NULL);
         imp = obd->u.cli.cl_import;
-        LASSERT(imp->imp_state <= LUSTRE_IMP_EVICTED);
-        imp_state_name = import_state_names[imp->imp_state];
+        imp_state_name = ptlrpc_import_state_name(imp->imp_state);
         *eof = 1;
         return snprintf(page, count, "%s\t%s\n",
                         imp->imp_target_uuid.uuid, imp_state_name);
@@ -585,7 +580,6 @@ int lprocfs_alloc_obd_stats(struct obd_device *obd, unsigned num_private_stats)
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, attach);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, detach);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, setup);
-        LPROCFS_OBD_OP_INIT(num_private_stats, stats, postsetup);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, precleanup);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, cleanup);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, postrecov);

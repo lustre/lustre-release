@@ -56,6 +56,7 @@
 
 #include "mds_internal.h"
 
+static int mds_postsetup(struct obd_device *obd);
 static int mds_cleanup(struct obd_device *obd, int flags);
 
 static int mds_bulk_timeout(void *data)
@@ -1090,8 +1091,8 @@ int mds_handle(struct ptlrpc_request *req)
                 OBD_FAIL_RETURN(OBD_FAIL_MDS_READPAGE_NET, 0);
                 rc = mds_readpage(req);
 
-                if (OBD_FAIL_CHECK(OBD_FAIL_MDS_SENDPAGE))
-                        return 0;
+                OBD_FAIL_RETURN(OBD_FAIL_MDS_SENDPAGE, 0);
+
                 break;
 
         case MDS_REINT: {
@@ -1368,6 +1369,9 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
                            "mds_ldlm_client", &obd->obd_ldlm_client);
         obd->obd_replayable = 1;
 
+        rc = mds_postsetup(obd);
+        if (rc)
+                GOTO(err_fs, rc);
         RETURN(0);
 
 err_fs:
@@ -1437,6 +1441,7 @@ static int mds_postrecov(struct obd_device *obd)
         int rc, rc2;
 
         LASSERT(!obd->obd_recovering);
+        LASSERT(llog_get_context(obd, LLOG_UNLINK_ORIG_CTXT) != NULL);
 
         rc = llog_connect(llog_get_context(obd, LLOG_UNLINK_ORIG_CTXT),
                           obd->u.mds.mds_lov_desc.ld_tgt_count, NULL, NULL);
@@ -1520,8 +1525,13 @@ static int mds_cleanup(struct obd_device *obd, int flags)
 
         ldlm_namespace_free(obd->obd_namespace, flags & OBD_OPT_FORCE);
 
-        if (obd->obd_recovering)
+        spin_lock_bh(&obd->obd_processing_task_lock);
+        if (obd->obd_recovering) {
                 target_cancel_recovery_timer(obd);
+                obd->obd_recovering = 0;
+        }
+        spin_unlock_bh(&obd->obd_processing_task_lock);
+
         lock_kernel();
         dev_clear_rdonly(2);
         fsfilt_put_ops(obd->obd_fsops);
@@ -1871,7 +1881,6 @@ static struct obd_ops mds_obd_ops = {
         o_destroy_export:  mds_destroy_export,
         o_disconnect:  mds_disconnect,
         o_setup:       mds_setup,
-        o_postsetup:   mds_postsetup,
         o_precleanup:  mds_precleanup,
         o_cleanup:     mds_cleanup,
         o_postrecov:   mds_postrecov,

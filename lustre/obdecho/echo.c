@@ -90,7 +90,7 @@ static int echo_destroy_export(struct obd_export *exp)
         RETURN(0);
 }
 
-static __u64 echo_next_id(struct obd_device *obddev)
+ static __u64 echo_next_id(struct obd_device *obddev)
 {
         obd_id id;
 

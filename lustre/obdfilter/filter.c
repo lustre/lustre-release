@@ -1133,6 +1133,12 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
         ptlrpc_init_client(LDLM_CB_REQUEST_PORTAL, LDLM_CB_REPLY_PORTAL,
                            "filter_ldlm_cb_client", &obd->obd_ldlm_client);
 
+        rc = llog_cat_initialize(obd, 1);
+        if (rc) {
+                CERROR("failed to setup llogging subsystems\n");
+                GOTO(err_post, rc);
+        }
+
         RETURN(0);
 
 err_post:
@@ -1173,18 +1179,6 @@ static int filter_setup(struct obd_device *obd, obd_count len, void *buf)
         if (option)
                 OBD_FREE(option, n);
         return rc;
-}
-
-static int filter_postsetup(struct obd_device *obd)
-{
-        int rc = 0;
-        ENTRY;
-
-        // XXX add a storage location for the logid for size changes
-        rc = llog_cat_initialize(obd, 1);
-        if (rc)
-                CERROR("failed to setup llogging subsystems\n");
-        RETURN(rc);
 }
 
 static int filter_cleanup(struct obd_device *obd, int flags)
@@ -1760,7 +1754,8 @@ static int filter_destroy(struct obd_export *exp, struct obdo *oa,
         cleanup_phase = 2;
 
         if (dchild->d_inode == NULL) {
-                CERROR("destroying non-existent object "LPU64"\n", oa->o_id);
+                CDEBUG(D_INODE, "destroying non-existent object "LPU64"\n", 
+                       oa->o_id);
                 GOTO(cleanup, rc = -ENOENT);
         }
 
@@ -2105,7 +2100,6 @@ static struct obd_ops filter_obd_ops = {
         o_get_info:       filter_get_info,
         o_set_info:       filter_set_info,
         o_setup:          filter_setup,
-        o_postsetup:      filter_postsetup,
         o_precleanup:     filter_precleanup,
         o_cleanup:        filter_cleanup,
         o_connect:        filter_connect,

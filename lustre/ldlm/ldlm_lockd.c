@@ -366,7 +366,7 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
                  */
                 CERROR("BLOCKING AST to client (nid "LPU64") timeout, "
                        "simply cancel lock 0x%p\n",
-                       req->rq_connection->c_peer.peer_nid, lock);
+                       req->rq_peer.peer_nid, lock);
                 ldlm_lock_cancel(lock);
                 rc = -ERESTART;
 #endif
@@ -374,18 +374,18 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
                 if (rc == -EINVAL)
                         CDEBUG(D_DLMTRACE, "client (nid "LPU64") returned %d "
                                "from blocking AST for lock %p--normal race\n",
-                               req->rq_connection->c_peer.peer_nid,
+                               req->rq_peer.peer_nid,
                                req->rq_repmsg->status, lock);
                 else if (rc == -ENOTCONN)
                         CDEBUG(D_DLMTRACE, "client (nid "LPU64") returned %d "
                                "from blocking AST for lock %p--this client was "
                                "probably rebooted while it held a lock, nothing"
-                               " serious\n",req->rq_connection->c_peer.peer_nid,
+                               " serious\n",req->rq_peer.peer_nid,
                                req->rq_repmsg->status, lock);
                 else
                         CDEBUG(D_ERROR, "client (nid "LPU64") returned %d "
                                "from blocking AST for lock %p\n",
-                               req->rq_connection->c_peer.peer_nid,
+                               req->rq_peer.peer_nid,
                                (req->rq_repmsg != NULL)?
                                req->rq_repmsg->status : 0,
                                lock);
@@ -653,9 +653,9 @@ int ldlm_handle_cancel(struct ptlrpc_request *req)
         if (!lock) {
                 CERROR("received cancel for unknown lock cookie "LPX64
                        " from nid "LPX64" (%s)\n", dlm_req->lock_handle1.cookie,
-                       req->rq_connection->c_peer.peer_nid,
-                       portals_nid2str(req->rq_connection->c_peer.peer_ni->pni_number,
-                                       req->rq_connection->c_peer.peer_nid, str));
+                       req->rq_peer.peer_nid,
+                       portals_nid2str(req->rq_peer.peer_ni->pni_number,
+                                       req->rq_peer.peer_nid, str));
                 LDLM_DEBUG_NOLOCK("server-side cancel handler stale lock "
                                   "(cookie "LPU64")",
                                   dlm_req->lock_handle1.cookie);
@@ -817,9 +817,9 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
                 CDEBUG(D_RPCTRACE, "operation %d from nid "LPX64" (%s) with bad "
                        "export cookie "LPX64" (ptl req %d/rep %d); this is "
                        "normal if this node rebooted with a lock held\n",
-                       req->rq_reqmsg->opc, req->rq_connection->c_peer.peer_nid,
-                       portals_nid2str(req->rq_connection->c_peer.peer_ni->pni_number,
-                                       req->rq_connection->c_peer.peer_nid, str),
+                       req->rq_reqmsg->opc, req->rq_peer.peer_nid,
+                       portals_nid2str(req->rq_peer.peer_ni->pni_number,
+                                       req->rq_peer.peer_nid, str),
                        req->rq_reqmsg->handle.cookie,
                        req->rq_request_portal, req->rq_reply_portal);
 

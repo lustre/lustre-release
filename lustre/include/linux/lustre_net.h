@@ -221,6 +221,7 @@ struct ptlrpc_request {
         struct lustre_msg *rq_repmsg;
         __u64 rq_transno;
         __u64 rq_xid;
+        struct list_head rq_replay_list;
 
 #if SWAB_PARANOIA
         __u32 rq_req_swab_mask;
@@ -240,7 +241,6 @@ struct ptlrpc_request {
 
         struct ptlrpc_peer rq_peer; /* XXX see service.c can this be factored away? */
         struct obd_export *rq_export;
-        struct ptlrpc_connection *rq_connection;
         struct obd_import *rq_import;
         struct ptlrpc_service *rq_svc;
 
@@ -274,6 +274,8 @@ struct ptlrpc_request {
 /* Spare the preprocessor, spoil the bugs. */
 #define FLAG(field, str) (field ? str : "")
 
+#define PTLRPC_REQUEST_COMPLETE(req) ((req)->rq_phase > RQ_PHASE_RPC)
+
 #define DEBUG_REQ_FLAGS(req)                                                   \
         ((req->rq_phase == RQ_PHASE_NEW) ? "New" :                             \
          (req->rq_phase == RQ_PHASE_RPC) ? "RPC" :                             \
@@ -297,8 +299,8 @@ CDEBUG(level, "@@@ " fmt                                                       \
        req->rq_transno,                                                        \
        req->rq_reqmsg ? req->rq_reqmsg->opc : -1,                              \
        req->rq_import ? (char *)req->rq_import->imp_target_uuid.uuid : "<?>",  \
-       req->rq_connection ?                                                    \
-          (char *)req->rq_connection->c_remote_uuid.uuid : "<?>",              \
+       req->rq_import ?                                                        \
+          (char *)req->rq_import->imp_connection->c_remote_uuid.uuid : "<?>",  \
        (req->rq_import && req->rq_import->imp_client) ?                        \
            req->rq_import->imp_client->cli_request_portal : -1,                \
        req->rq_reqlen, req->rq_replen,                                         \
@@ -464,7 +466,6 @@ void ptlrpc_link_svc_me(struct ptlrpc_request_buffer_desc *rqbd);
 void ptlrpc_init_client(int req_portal, int rep_portal, char *name,
                         struct ptlrpc_client *);
 void ptlrpc_cleanup_client(struct obd_import *imp);
-struct obd_uuid *ptlrpc_req_to_uuid(struct ptlrpc_request *req);
 struct ptlrpc_connection *ptlrpc_uuid_to_connection(struct obd_uuid *uuid);
 
 int ptlrpc_queue_wait(struct ptlrpc_request *req);
@@ -523,7 +524,8 @@ struct ptlrpc_svc_data {
 };
 
 /* ptlrpc/import.c */
-int ptlrpc_connect_import(struct obd_import *imp);
+int ptlrpc_connect_import(struct obd_import *imp, char * new_uuid);
+int ptlrpc_init_import(struct obd_import *imp);
 int ptlrpc_disconnect_import(struct obd_import *imp);
 
 /* ptlrpc/pack_generic.c */

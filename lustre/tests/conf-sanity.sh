@@ -2,6 +2,11 @@
 # requirement:
 #	add uml1 uml2 uml3 in your /etc/hosts
 
+# FIXME - there is no reason to use all of these different
+#   return codes, espcially when most of them are mapped to something
+#   else anyway.  The combination of test number and return code
+#   figure out what failed.
+
 set -e
 
 SRCDIR=`dirname $0`
@@ -66,7 +71,7 @@ stop_ost() {
 mount_client() {
 	local MOUNTPATH=$1
 	echo "mount lustre on ${MOUNTPATH}....."
-	zconf_mount $MOUNTPATH $CMDVERBOSE || return 96
+	zconf_mount `hostname`  $MOUNTPATH $CMDVERBOSE || return 96
 }
 
 umount_client() {
@@ -178,14 +183,27 @@ run_test 4 "force cleanup ost, then cleanup"
 
 test_5() {
 	setup
-	touch $DIR/$tfile || return 86
-	stop_mds ${FORCE} || return 98
-	cleanup 
-	eno=$?
-	# ok for mds to fail shutdown
-	if [ 201 -ne $eno ]; then
-		return $eno;
-	fi
+	touch $DIR/$tfile || return 1
+	stop_mds ${FORCE} || return 2
+
+	# cleanup may return an error from the failed 
+	# disconnects; for now I'll consider this successful 
+	# if all the modules have unloaded.
+ 	umount $MOUNT &
+	UMOUNT_PID=$!
+	sleep $TIMEOUT
+	echo "killing umount"
+	kill -TERM $UMOUNT_PID
+	wait $UMOUNT_PID 
+
+	# cleanup client modules
+	$LCONF --cleanup --nosetup --node client_facet $XMLCONFIG > /dev/null 
+	
+	# stop_mds is a no-op here, and should not fail
+	stop_mds  || return 4
+	stop_ost || return 5
+
+	lsmod | grep -q portals && return 6
 	return 0
 }
 run_test 5 "force cleanup mds, then cleanup"

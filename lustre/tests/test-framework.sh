@@ -33,9 +33,10 @@ init_test_env() {
     [ -d /r ] && export ROOT=/r
 
     export PATH=:$PATH:$LUSTRE/utils:$LUSTRE/tests
+    export LLMOUNT=${LLMOUNT:-"llmount"}
     export LCONF=${LCONF:-"lconf"}
     export LMC=${LMC:-"lmc"}
-    export LCTL=${LCTL:-"lctl"}
+    export LCTL=${LCTL:-"$LUSTRE/utils/lctl"}
     export CHECKSTAT="${CHECKSTAT:-checkstat} "
 
     # Paths on remote nodes, if different 
@@ -55,6 +56,7 @@ init_test_env() {
     
     # save the name of the config file for the upcall
     echo "XMLCONFIG=$LUSTRE/tests/$XMLCONFIG"  > $LUSTRE/tests/XMLCONFIG
+#    echo "CONFIG=`canonical_path $CONFIG`"  > $LUSTRE/tests/CONFIG
 }
 
 # Facet functions
@@ -77,18 +79,18 @@ stop() {
 }
 
 zconf_mount() {
-    mnt=$1
+    client=$1
+    mnt=$2
 
-    [ -d $mnt ] || mkdir $mnt
-    
+    do_node $client mkdir $mnt 2> /dev/null || :
+
     if [ -x /sbin/mount.lustre ] ; then
-	mount -t lustre -o nettype=$NETTYPE \
-	    `facet_host mds`:/mds_svc/client_facet $mnt
+	do_node $client mount -t lustre -o nettype=$NETTYPE `facet_active_host mds`:/mds_svc/client_facet $mnt || return 1
     else
        # this is so cheating
+       do_node $client $LCONF --nosetup --node client_facet $XMLCONFIG  > /dev/null || return 2
        $LCONF --nosetup --node client_facet $XMLCONFIG
-       $LUSTRE/utils/llmount `facet_host mds`:/mds_svc/client_facet $mnt \
-            -o nettype=$NETTYPE || return $?
+       do_node $client $LLMOUNT `facet_active_host mds`:/mds_svc/client_facet $mnt -o nettype=$NETTYPE|| return 4
     fi
 
     [ -d /r ] && $LCTL modules > /r/tmp/ogdb-`hostname`
@@ -96,9 +98,11 @@ zconf_mount() {
 }
 
 zconf_umount() {
-    mnt=$1
-    umount  $mnt || :
-    $LCONF --cleanup --nosetup --node client_facet $XMLCONFIG || :
+    client=$1
+    mnt=$2
+    [ "$3" ] && force=-f
+    do_node $client umount $force  $mnt || :
+    do_node $client $LCONF --cleanup --nosetup --node client_facet $XMLCONFIG > /dev/null || :
 }
 
 shutdown_facet() {
@@ -122,6 +126,7 @@ wait_for_host() {
    HOST=$1
    check_network  $HOST 900
    while ! do_node $HOST "$CHECKSTAT -t dir $LUSTRE"; do sleep 5; done
+   while ! do_node $HOST "ls -d $LUSTRE " > /dev/null; do sleep 5; done
 }
 
 wait_for() {
@@ -144,9 +149,10 @@ facet_failover() {
     reboot_facet $facet
     client_df &
     DFPID=$!
+    echo "df pid is $DFPID"
     change_active $facet
     TO=`facet_active_host $facet`
-    echo "Failover MDS to $TO"
+    echo "Failover $facet to $TO"
     wait_for $facet
     start $facet
 }
@@ -184,6 +190,12 @@ fail_abort() {
 
 do_lmc() {
     $LMC -m ${XMLCONFIG} $@
+}
+
+h2gm () {
+   if [ "$1" = "client" ]; then echo \'*\'; else
+       $PDSH $1 $GMNALNID -l | cut -d\  -f2
+   fi
 }
 
 h2tcp() {
@@ -230,7 +242,11 @@ facet_active() {
 facet_active_host() {
     local facet=$1
     local active=`facet_active $facet`
-    echo `facet_host $active`
+    if [ "$facet" == client ]; then
+	hostname
+    else
+	echo `facet_host $active`
+    fi
 }
 
 change_active() {
@@ -255,7 +271,7 @@ do_node() {
 
     if $VERBOSE; then
 	echo "CMD: $HOST $@"
-	$PDSH $HOST $LCTL mark "$@" || :
+	$PDSH $HOST $LCTL mark "$@" > /dev/null 2>&1 || :
     fi
     $PDSH $HOST "(PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests; cd $RPWD; sh -c \"$@\")"
 }
@@ -416,6 +432,14 @@ drop_bl_callback() {
     return $RC
 }
 
+clear_failloc() {
+    facet=$1
+    pause=$2
+    sleep $pause
+    echo "clearing fail_loc on $facet"
+    do_facet $facet "sysctl -w lustre.fail_loc=0"
+}
+
 cancel_lru_locks() {
     $LCTL mark cancel_lru_locks
     for d in /proc/fs/lustre/ldlm/namespaces/$1*; do
@@ -501,3 +525,8 @@ run_one() {
 
     test_${testnum} || error "test_$testnum failed with $?"
 }
+
+canonical_path() {
+   (cd `dirname $1`; echo $PWD/`basename $1`)
+}
+

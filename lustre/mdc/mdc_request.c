@@ -41,6 +41,8 @@
 
 #define REQUEST_MINOR 244
 
+static int mdc_cleanup(struct obd_device *obd, int flags);
+
 extern int mds_queue_req(struct ptlrpc_request *);
 /* Helper that implements most of mdc_getstatus and signal_completed_replay. */
 /* XXX this should become mdc_get_info("key"), sending MDS_GET_INFO RPC */
@@ -403,6 +405,7 @@ static int mdc_close_interpret(struct ptlrpc_request *req, void *data, int rc)
 {
         union ptlrpc_async_args *aa = data;
         struct mdc_rpc_lock *rpc_lock = aa->pointer_arg[0];
+        
         mdc_put_rpc_lock(rpc_lock, NULL);
         wake_up(&req->rq_reply_waitq);
         RETURN(rc);
@@ -416,8 +419,9 @@ static int mdc_close_check_reply(struct ptlrpc_request *req)
         unsigned long flags;
 
         spin_lock_irqsave(&req->rq_lock, flags);
-        if (req->rq_replied || req->rq_err)
+        if (PTLRPC_REQUEST_COMPLETE(req)) {
                 rc = 1;
+        }
         spin_unlock_irqrestore (&req->rq_lock, flags);
         return rc;
 }
@@ -483,16 +487,15 @@ int mdc_close(struct obd_export *exp, struct obdo *obdo,
         rc = l_wait_event(req->rq_reply_waitq, mdc_close_check_reply(req),
                           &lwi);
         
-        if (mod == NULL && rc == 0)
-                CERROR("Unexpected: can't find mdc_open_data, but the close "
-                       "succeeded.  Please tell CFS.\n");
-
-        if (rc == 0) {
+         if (rc == 0) {
                 rc = req->rq_repmsg->status;
                 if (req->rq_repmsg->type == PTL_RPC_MSG_ERR) {
-                        DEBUG_REQ(D_ERROR, req, "type == PTL_RPC_MSG_ERR");
+                        DEBUG_REQ(D_ERROR, req, "type == PTL_RPC_MSG_ERR, err = %d", rc);
                         if (rc > 0)
                                 rc = -rc;
+                } else if (mod == NULL) {
+                        CERROR("Unexpected: can't find mdc_open_data, but the close "
+                               "succeeded.  Please tell CFS.\n");
                 }
         }
 
@@ -587,18 +590,21 @@ static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         int rc;
         ENTRY;
         
+        MOD_INC_USE_COUNT;
+
         switch (cmd) {
         case OBD_IOC_CLIENT_RECOVER:
                 rc = ptlrpc_recover_import(imp, data->ioc_inlbuf1);
                 if (rc < 0)
-                        RETURN(rc);
-                RETURN(0);
+                        GOTO(out, rc);
+                GOTO(out, rc = 0);
         case IOC_OSC_SET_ACTIVE:
-                RETURN(ptlrpc_set_import_active(imp, data->ioc_offset));
+                rc = ptlrpc_set_import_active(imp, data->ioc_offset);
+                GOTO(out, rc);
         case OBD_IOC_PARSE: {
                 ctxt = llog_get_context(exp->exp_obd, LLOG_CONFIG_REPL_CTXT);
                 rc = class_config_parse_llog(ctxt, data->ioc_inlbuf1, NULL);
-                RETURN(rc);
+                GOTO(out, rc);
         }
 #ifdef __KERNEL__
         case OBD_IOC_LLOG_INFO:
@@ -606,13 +612,36 @@ static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 ctxt = llog_get_context(obd, LLOG_CONFIG_REPL_CTXT);
                 rc = llog_ioctl(ctxt, cmd, data);
                 
-                RETURN(rc);
+                GOTO(out, rc);
         }
 #endif
         default:
                 CERROR("osc_ioctl(): unrecognised ioctl %#x\n", cmd);
-                RETURN(-ENOTTY);
+                GOTO(out, rc = -ENOTTY);
         }
+out:
+        MOD_DEC_USE_COUNT;
+        return rc;
+}
+
+int mdc_set_info(struct obd_export *exp, obd_count keylen,
+                 void *key, obd_count vallen, void *val)
+{
+        int rc = -EINVAL;
+
+        if (keylen == strlen("initial_recov") &&
+            memcmp(key, "initial_recov", strlen("initial_recov")) == 0) {
+                struct obd_import *imp = exp->exp_obd->u.cli.cl_import;
+                if (vallen != sizeof(int))
+                        RETURN(-EINVAL);
+                imp->imp_initial_recov = *(int *)val;
+                CDEBUG(D_HA, "%s: set imp_no_init_recov = %d\n",
+                       exp->exp_obd->obd_name,
+                       imp->imp_initial_recov);
+                RETURN(0);
+        }
+        
+        RETURN(rc);
 }
 
 static int mdc_statfs(struct obd_device *obd, struct obd_statfs *osfs,
@@ -803,17 +832,12 @@ static int mdc_setup(struct obd_device *obd, obd_count len, void *buf)
                 OBD_FREE(cli->cl_rpc_lock, sizeof (*cli->cl_rpc_lock));
         }
 
-        RETURN(rc);
-}
-
-
-int mdc_postsetup(struct obd_device *obd) 
-{
-        int rc;
         rc = obd_llog_init(obd, obd, 0, NULL);
         if (rc) {
+                mdc_cleanup(obd, 0);
                 CERROR("failed to setup llogging subsystems\n");
         }
+
         RETURN(rc);
 }
 
@@ -907,12 +931,12 @@ struct obd_ops mdc_obd_ops = {
         o_attach:      mdc_attach,
         o_detach:      mdc_detach,
         o_setup:       mdc_setup,
-        o_postsetup:   mdc_postsetup,
         o_precleanup:  mdc_precleanup,
         o_cleanup:     mdc_cleanup,
         o_connect:     client_connect_import,
         o_disconnect:  client_disconnect_export,
         o_iocontrol:   mdc_iocontrol,
+        o_set_info:    mdc_set_info,
         o_statfs:      mdc_statfs,
         o_pin:         mdc_pin,
         o_unpin:       mdc_unpin,

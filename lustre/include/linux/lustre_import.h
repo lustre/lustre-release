@@ -14,15 +14,30 @@
 #include <linux/lustre_idl.h>
 
 enum lustre_imp_state {
-//        LUSTRE_IMP_INVALID    = 1,
+        LUSTRE_IMP_CLOSED     = 1,
         LUSTRE_IMP_NEW        = 2,
         LUSTRE_IMP_DISCON     = 3,
         LUSTRE_IMP_CONNECTING = 4,
         LUSTRE_IMP_REPLAY     = 5,
-        LUSTRE_IMP_RECOVER    = 6,
-        LUSTRE_IMP_FULL       = 7,
-        LUSTRE_IMP_EVICTED    = 8,
+        LUSTRE_IMP_REPLAY_LOCKS = 6,
+        LUSTRE_IMP_REPLAY_WAIT  = 7,
+        LUSTRE_IMP_RECOVER    = 8,
+        LUSTRE_IMP_FULL       = 9,
+        LUSTRE_IMP_EVICTED    = 10,
 };
+
+static inline char * ptlrpc_import_state_name(enum lustre_imp_state state)
+{
+        
+        static char* import_state_names[] = {
+                "<UNKNOWN>", "CLOSED",  "NEW", "DISCONN", 
+                "CONNECTING", "REPLAY", "REPLAY_LOCKS", "REPLAY_WAIT", 
+                "RECOVER", "FULL", "EVICTED",
+        };
+
+        LASSERT (state <= LUSTRE_IMP_EVICTED);
+        return import_state_names[state];
+}
 
 
 struct obd_import {
@@ -42,7 +57,9 @@ struct obd_import {
         struct list_head          imp_delayed_list;
 
         struct obd_device        *imp_obd;
-        struct semaphore          imp_recovery_sem;
+        wait_queue_head_t         imp_recovery_waitq;
+        __u64                     imp_last_replay_transno;
+        atomic_t                  imp_replay_inflight;
         enum lustre_imp_state     imp_state;
         int                       imp_generation;
         __u32                     imp_conn_cnt;
@@ -57,7 +74,8 @@ struct obd_import {
 
         /* flags */
         int                       imp_invalid:1, imp_replayable:1,
-                                  imp_dlm_fake:1, imp_server_timeout:1;
+                                  imp_dlm_fake:1, imp_server_timeout:1,
+                                  imp_initial_recov:1;
         __u32                     imp_connect_op;
 };
 
