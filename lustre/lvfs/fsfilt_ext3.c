@@ -70,11 +70,11 @@ struct fsfilt_cb_data {
  * the inode (which we will be changing anyways as part of this
  * transaction).
  */
-static void *fsfilt_ext3_start(struct inode *inode, int op, void *desc_private)
+static void *fsfilt_ext3_start(struct inode *inode, int op, void *desc_private,
+                               int logs)
 {
         /* For updates to the last recieved file */
         int nblocks = EXT3_DATA_TRANS_BLOCKS;
-        int blocksize, block_count = 0;
         void *handle;
 
         if (current->journal_info) {
@@ -83,20 +83,11 @@ static void *fsfilt_ext3_start(struct inode *inode, int op, void *desc_private)
         }
 
         switch(op) {
-        case FSFILT_OP_CREATE_LOG:
-                nblocks += EXT3_INDEX_EXTRA_TRANS_BLOCKS+EXT3_DATA_TRANS_BLOCKS;
-                op = FSFILT_OP_CREATE;
-                break;
-        case FSFILT_OP_UNLINK_LOG:
-                nblocks += EXT3_INDEX_EXTRA_TRANS_BLOCKS+EXT3_DATA_TRANS_BLOCKS;
-                op = FSFILT_OP_UNLINK;
-                break;
-        }
-
-        switch(op) {
         case FSFILT_OP_RMDIR:
         case FSFILT_OP_UNLINK:
                 nblocks += EXT3_DELETE_TRANS_BLOCKS;
+                nblocks += (EXT3_INDEX_EXTRA_TRANS_BLOCKS +
+                            EXT3_DATA_TRANS_BLOCKS) * logs;
                 break;
         case FSFILT_OP_RENAME:
                 /* modify additional directory */
@@ -107,6 +98,8 @@ static void *fsfilt_ext3_start(struct inode *inode, int op, void *desc_private)
                 nblocks += 3;
                 /* no break */
         case FSFILT_OP_CREATE:
+                nblocks += (EXT3_INDEX_EXTRA_TRANS_BLOCKS +
+                            EXT3_DATA_TRANS_BLOCKS) * logs;
         case FSFILT_OP_MKDIR:
         case FSFILT_OP_MKNOD:
                 /* modify one inode + block bitmap + GDT */
@@ -120,12 +113,9 @@ static void *fsfilt_ext3_start(struct inode *inode, int op, void *desc_private)
                 /* Setattr on inode */
                 nblocks += 1;
                 break;
-        case FSFILT_OP_CANCEL_UNLINK_LOG:
-                blocksize = 1 << inode->i_blkbits;
-                block_count = (blocksize - 1) + LLOG_CHUNK_SIZE;
-                block_count = (block_count + blocksize - 1) >> inode->i_blkbits;
-                block_count = block_count * EXT3_DATA_TRANS_BLOCKS + 2;
-                nblocks = 2 * 2 * block_count;
+        case FSFILT_OP_CANCEL_UNLINK:
+                nblocks = (LLOG_CHUNK_SIZE >> inode->i_blkbits) +
+                        EXT3_DELETE_TRANS_BLOCKS * logs;
                 break;
         default: CERROR("unknown transaction start op %d\n", op);
                  LBUG();
@@ -242,7 +232,7 @@ static int fsfilt_ext3_credits_needed(int objcount, struct fsfilt_objinfo *fso,
  */
 static void *fsfilt_ext3_brw_start(int objcount, struct fsfilt_objinfo *fso,
                                    int niocount, struct niobuf_local *nb,
-                                   void *desc_private)
+                                   void *desc_private, int logs)
 {
         journal_t *journal;
         handle_t *handle;
@@ -848,6 +838,38 @@ static int fsfilt_ext3_setup(struct super_block *sb)
         return 0;
 }
 
+/* If fso is NULL, op is FSFILT operation, otherwise op is number of fso
+   objects. Logs is number of logfiles to update */
+static int fsfilt_ext3_get_op_len(int op, struct fsfilt_objinfo *fso, int logs)
+{
+        if ( !fso ) {
+                switch(op) {
+                case FSFILT_OP_CREATE:
+                                 /* directory leaf, index & indirect & EA*/
+                        return 4 + 3 * logs;
+                case FSFILT_OP_UNLINK:
+                        return 3 * logs;
+                }
+
+        } else {
+                int i;
+                int needed = 0;
+                struct super_block *sb = fso->fso_dentry->d_inode->i_sb;
+                int blockpp = 1 << (PAGE_CACHE_SHIFT - sb->s_blocksize_bits);
+                int addrpp = EXT3_ADDR_PER_BLOCK(sb) * blockpp;
+                for (i = 0; i < op; i++, fso++) {
+                        int nblocks = fso->fso_bufcnt * blockpp;
+                        int ndindirect = min(nblocks, addrpp + 1);
+                        int nindir = nblocks + ndindirect + 1;
+
+                        needed += nindir;
+                }
+                return needed + 3 * logs;
+        }
+
+        return 0;
+}
+
 static struct fsfilt_operations fsfilt_ext3_ops = {
         fs_type:                "ext3",
         fs_owner:               THIS_MODULE,
@@ -869,6 +891,7 @@ static struct fsfilt_operations fsfilt_ext3_ops = {
         fs_write_record:        fsfilt_ext3_write_record,
         fs_read_record:         fsfilt_ext3_read_record,
         fs_setup:               fsfilt_ext3_setup,
+        fs_get_op_len:          fsfilt_ext3_get_op_len,
 };
 
 static int __init fsfilt_ext3_init(void)

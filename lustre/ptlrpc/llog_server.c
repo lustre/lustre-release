@@ -272,8 +272,8 @@ int llog_origin_handle_cancel(struct ptlrpc_request *req)
                 LASSERT(cathandle != NULL);
                 inode = cathandle->lgh_file->f_dentry->d_inode;
 
-                handle = fsfilt_start(disk_obd, inode,
-                                      FSFILT_OP_CANCEL_UNLINK_LOG, NULL);
+                handle = fsfilt_start_log(disk_obd, inode,
+                                          FSFILT_OP_CANCEL_UNLINK, NULL, 1);
                 if (IS_ERR(handle)) {
                         CERROR("fsfilt_start failed: %ld\n", PTR_ERR(handle));
                         GOTO(pop_ctxt, rc = PTR_ERR(handle));

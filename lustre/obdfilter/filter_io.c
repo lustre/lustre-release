@@ -151,7 +151,7 @@ static void filter_grant_incoming(struct obd_export *exp, struct obdo *oa)
         EXIT;
 }
 
-#define GRANT_FOR_LLOG 16
+#define GRANT_FOR_LLOG(obd) (obd->obd_reserved_space)
 
 /* Figure out how much space is available between what we've granted
  * and what remains in the filesystem.  Compensate for ext3 indirect
@@ -177,8 +177,8 @@ restat:
 
         avail = obd->obd_osfs.os_bavail;
         left = avail - (avail >> (blockbits - 3)); /* (d)indirect */
-        if (left > GRANT_FOR_LLOG) {
-                left = (left - GRANT_FOR_LLOG) << blockbits;
+        if (left > GRANT_FOR_LLOG(obd)) {
+                left = (left - GRANT_FOR_LLOG(obd)) << blockbits;
         } else {
                 left = 0 /* << blockbits */;
         }
