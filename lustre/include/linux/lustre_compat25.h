@@ -78,4 +78,11 @@
 #endif
 
 
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
+#define  rb_node_s rb_node
+#define  rb_root_s rb_root
+typedef struct rb_root_s rb_root_t;
+typedef struct rb_node_s rb_node_t;
+#endif
+
 #endif /* _COMPAT25_H */
