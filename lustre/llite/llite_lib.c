@@ -356,14 +356,19 @@ int lustre_process_log(struct lustre_mount_data *lmd, char * profile,
         struct lustre_handle mdc_conn = {0, };
         struct obd_export *exp;
         char * name = "mdc_dev";
-        struct obd_uuid uuid = { "MDC_mount_UUID" };
+        class_uuid_t uuid;
+        struct obd_uuid mdc_uuid;
         struct llog_obd_ctxt *ctxt;
         int rc = 0;
         int err;
         ENTRY;
 
+        generate_random_uuid(uuid);
+        class_uuid_unparse(uuid, &mdc_uuid);
+
         if (lmd->lmd_local_nid) {
                 PCFG_INIT(pcfg, NAL_CMD_REGISTER_MYNID);
+                pcfg.pcfg_nal = lmd->lmd_nal;
                 pcfg.pcfg_nid = lmd->lmd_local_nid;
                 err = kportal_nal_cmd(&pcfg);
                 if (err <0)
@@ -395,7 +400,7 @@ int lustre_process_log(struct lustre_mount_data *lmd, char * profile,
         LCFG_INIT(lcfg, LCFG_ATTACH, name);
         lcfg.lcfg_inlbuf1 = "mdc";
         lcfg.lcfg_inllen1 = strlen(lcfg.lcfg_inlbuf1) + 1;
-        lcfg.lcfg_inlbuf2 = "mdc_dev_UUID";
+        lcfg.lcfg_inlbuf2 = mdc_uuid.uuid;
         lcfg.lcfg_inllen2 = strlen(lcfg.lcfg_inlbuf2) + 1;
         err = class_process_config(&lcfg);
         if (err < 0)
@@ -414,7 +419,7 @@ int lustre_process_log(struct lustre_mount_data *lmd, char * profile,
         if (obd == NULL)
                 GOTO(out_cleanup, err = -EINVAL);
 
-        err = obd_connect(&mdc_conn, obd, &uuid);
+        err = obd_connect(&mdc_conn, obd, &mdc_uuid);
         if (err) {
                 CERROR("cannot connect to %s: rc = %d\n", lmd->lmd_mds, err);
                 GOTO(out_cleanup, err);
