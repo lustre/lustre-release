@@ -180,9 +180,9 @@ setup_opts() {
 		exit -1
 	fi
 	
-	[ -z "$MDS_RSH" ] && MDS_RSH="eval"
-	[ -z "$OST_RSH" ] && OST_RSH="eval"
-	[ -z "$OSC_RSH" ] && OSC_RSH="eval"
+	[ "$MDC_NAMES" ] || export MDC_NAMES=MDCDEV
+	[ "$OSC_NAMES" ] || export OSC_NAMES=OSCDEV
+	[ -z "$MOUNT_LIST" -a "$OSCMT" ] && export MOUNT_LIST="MT" && export MT="$OSCMT OSCDEV MDCDEV"
 }
 
 setup_variables() {
@@ -229,15 +229,30 @@ setup_portals() {
 	$PTLCTL <<- EOF
 	network $NETWORK
 	$MYNID
-	connect $MDSNODE $PORT
-	add_uuid $MDSNODE $MDSNODE
-	connect $OSTNODE $PORT
-	add_uuid $OSTNODE $OSTNODE
 	connect $DLM $PORT
 	add_uuid $DLM $DLM
 	add_uuid self $LOCALHOST
 	quit
-EOF
+	EOF
+
+	if [ "$SETUP_MDS" -o "$SETUP_MDC" ]; then
+		$PTLCTL <<- EOF
+		network $NETWORK
+		connect $MDSNODE $PORT
+		add_uuid $MDSNODE $MDSNODE
+		quit
+		EOF
+	fi
+
+
+	if [ "$SETUP_OST" -o "$SETUP_OSC" ]; then
+		$PTLCTL <<- EOF
+		network $NETWORK
+		connect $OSTNODE $PORT
+		add_uuid $OSTNODE $OSTNODE
+		quit
+		EOF
+	fi
 }
 
 setup_lustre() {
@@ -287,7 +302,7 @@ setup_ldlm() {
 
 	$OBDCTL <<- EOF || return $?
 	newdev
-	attach ldlm LDLMDEV
+	attach ldlm LDLMDEV LDLMUUID
 	setup
 	quit
 	EOF
@@ -472,9 +487,6 @@ setup_lov () {
 
 setup_mount() {
 	[ "$SETUP_MOUNT" != "y" ] && return 0
-	[ "$MDC_NAMES" ] || MDC_NAMES=MDCDEV
-	[ "$OSC_NAMES" ] || OSC_NAMES=OSCDEV
-	[ -z "$MOUNT_LIST" -a "$OSCMT" ] && MOUNT_LIST="MT" && MT="$OSCMT OSCDEV MDCDEV"
 
 	[ "$MOUNT_LIST" ] || fail "error: $0: MOUNT_LIST unset"
 
@@ -501,21 +513,19 @@ DEBUG_ON="echo 0xffffffff > /proc/sys/portals/debug"
 DEBUG_OFF="echo 0 > /proc/sys/portals/debug"
 
 debug_server_off() {
-	[ "$MDS_RSH" ] && echo "Turn OFF debug on MDS" && $MDS_RSH "$DEBUG_OFF"
-	[ "$OST_RSH" ] && echo "Turn OFF debug on OST" && $OST_RSH "$DEBUG_OFF"
+	echo "Turn OFF debug" && eval "$DEBUG_OFF"
 }
 
 debug_server_on() {
-	[ "$MDS_RSH" ] && echo "Turn ON debug on MDS" && $MDS_RSH "$DEBUG_ON"
-	[ "$OST_RSH" ] && echo "Turn ON debug on OST" && $OST_RSH "$DEBUG_ON"
+	echo "Turn ON debug" && eval "$DEBUG_ON"
 }
 
 debug_client_off() {
-	echo "Turning OFF debug on client" && $OSC_RSH "$DEBUG_OFF"
+	echo "Turning OFF debug on client" && eval "$DEBUG_OFF"
 }
 
 debug_client_on() {
-	echo "Turning ON debug on client" && $OSC_RSH "$DEBUG_ON"
+	echo "Turning ON debug on client" && eval "$DEBUG_ON"
 }
 
 cleanup_portals() {
@@ -541,7 +551,7 @@ cleanup_portals() {
 	do_rmmod ksocknal
 	do_rmmod kptlrouter
 
-        [ "$TIME" ] && $DBGCTL debug_kernel $R/tmp/debug.3.$TIME
+        [ "$TIME" ] && $DBGCTL debug_kernel $R/tmp/debug.5.$TIME
 
 	do_rmmod portals
 }
@@ -627,9 +637,6 @@ cleanup_server() {
 
 cleanup_mount() {
 	[ "$SETUP_MOUNT" != "y" ] && return 0
-	[ "$MDC_NAMES" ] || MDC_NAMES=MDCDEV
-	[ "$OSC_NAMES" ] || OSC_NAMES=OSCDEV
-	[ -z "$MOUNT_LIST" -a "$OSCMT" ] && MOUNT_LIST="MT" && MT="$OSCMT OSCDEV MDCDEV"
 
 	[ "$MOUNT_LIST" ] || fail "error: $0: MOUNT_LIST unset"
 
