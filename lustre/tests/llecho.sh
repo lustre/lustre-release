@@ -19,6 +19,6 @@ $LCONF --gdb $config || exit 4
 cat <<EOF
 
 run getattr tests as:
-../utils/lctl --device \'\$OSC_$SERVER\' test_getattr 1000000
+../utils/lctl --device '\$OSC_$SERVER' test_getattr 1000000
 EOF
 
