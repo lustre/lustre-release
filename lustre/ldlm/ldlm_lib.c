@@ -645,7 +645,7 @@ void target_abort_recovery(void *data)
         if (OBT(obd) && OBP(obd, postrecov)) {
                 rc = OBP(obd, postrecov)(obd);
                 if (rc >= 0)
-                        CERROR("Cleanup %d orphans after recovery was aborted\n", rc);
+                        CWARN("Cleanup %d orphans after recovery was aborted\n", rc);
                 else
                         CERROR("postrecov failed %d\n", rc);
         }
@@ -688,7 +688,7 @@ void target_start_recovery_timer(struct obd_device *obd, svc_handler_t handler)
                 spin_unlock_bh(&obd->obd_processing_task_lock);
                 return;
         }
-        CERROR("%s: starting recovery timer (%us)\n", obd->obd_name,
+        CWARN("%s: starting recovery timer (%us)\n", obd->obd_name,
                OBD_RECOVERY_TIMEOUT / HZ);
         obd->obd_recovery_handler = handler;
         obd->obd_recovery_timer.function = target_recovery_expired;
@@ -930,7 +930,7 @@ int target_queue_final_reply(struct ptlrpc_request *req, int rc)
         if (recovery_done) {
                 struct list_head *tmp, *n;
                 ldlm_reprocess_all_ns(req->rq_export->exp_obd->obd_namespace);
-                CERROR("%s: all clients recovered, sending delayed replies\n",
+                CWARN("%s: all clients recovered, sending delayed replies\n",
                        obd->obd_name);
                 obd->obd_recovering = 0;
 
@@ -938,7 +938,7 @@ int target_queue_final_reply(struct ptlrpc_request *req, int rc)
                 if (OBT(obd) && OBP(obd, postrecov)) {
                         rc2 = OBP(obd, postrecov)(obd);
                         if (rc2 >= 0)
-                                CERROR("%s: all clients recovered, %d MDS orphans "
+                                CWARN("%s: all clients recovered, %d MDS orphans "
                                        "deleted\n", obd->obd_name, rc2);
                         else
                                 CERROR("postrecov failed %d\n", rc2);
