@@ -34,14 +34,10 @@ static kdev_t path2dev(char *path)
 {
         struct dentry *dentry;
         struct nameidata nd;
-        kdev_t dev;
-        KDEVT_VAL(dev, 0);
+        kdev_t dev = KDEVT_INIT(0);
 
-        if (!path_init(path, LOOKUP_FOLLOW, &nd))
-                return 0;
-
-        if (path_walk(path, &nd))
-                return 0;
+        if (ll_path_lookup(path, LOOKUP_FOLLOW, &nd))
+                return val_to_kdev(0);
 
         dentry = nd.dentry;
         if (dentry->d_inode && !is_bad_inode(dentry->d_inode) &&
