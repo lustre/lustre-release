@@ -241,12 +241,19 @@ static int ll_prepare_write(struct file *file, struct page *page, unsigned from,
 		goto prepare_done;
         }
 
-        if ( offset + from >= inode->i_size ) {
-		memset(addr, 0, PAGE_SIZE); 
+        if (offset + from >= inode->i_size) {
+		memset(addr, 0, PAGE_SIZE);
                 EXIT;
                 goto prepare_done;
         }
-        
+
+	/* We're completely overwriting an existing page, so _don't_ set it up
+	 * to date until commit_write */
+	if (from == 0 && to == PAGE_SIZE) {
+		memset(addr, 0, PAGE_SIZE);
+		RETURN(0);
+	}
+
         rc = ll_brw(OBD_BRW_READ, inode, page, 0);
 
  prepare_done:
@@ -299,14 +306,13 @@ static int ll_commit_write(struct file *file, struct page *page,
 
         ENTRY;
         oa = ll_oa_from_inode(inode, OBD_MD_FLNOTOBD);
-	if (! oa ) { 
-		return -ENOMEM;
-	}
+	if (! oa )
+		RETURN(-ENOMEM);
+
+	SetPageUptodate(page);
 
         if (!PageLocked(page))
                 BUG();
-        if (!Page_Uptodate(page))
-                BUG(); 
 
 	CDEBUG(D_INODE, "commit_page writing (at %d) to %d, count %Ld\n", 
 	       from, to, count);
