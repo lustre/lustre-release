@@ -43,7 +43,6 @@ static int obdfs_brw(int rw, struct inode *inode, struct page *page, int create)
         obd_count        num_obdo = 1;
         obd_count        bufs_per_obdo = 1;
         struct obdo     *oa;
-        char            *buf = (char *)page_address(page);
         obd_size         count = PAGE_SIZE;
         obd_off          offset = ((obd_off)page->index) << PAGE_SHIFT;
         obd_flag         flags = create ? OBD_BRW_CREATE : 0;
@@ -64,7 +63,7 @@ static int obdfs_brw(int rw, struct inode *inode, struct page *page, int create)
         obdfs_from_inode(oa, inode);
 
         err = IOPS(inode, brw)(rw, IID(inode), num_obdo, &oa, &bufs_per_obdo,
-                               &buf, &count, &offset, &flags);
+                               &page, &count, &offset, &flags);
 
         if ( !err )
                 obdfs_to_inode(inode, oa); /* copy o_blocks to i_blocks */
@@ -246,7 +245,7 @@ int obdfs_do_vec_wr(struct inode **inodes, obd_count num_io,
         }
 
         err = IOPS(inodes[0], brw)(WRITE, IID(inodes[0]), num_obdos, obdos,
-                                  oa_bufs, bufs, counts, offsets, flags);
+                                  oa_bufs, pages, counts, offsets, flags);
 
         CDEBUG(D_INFO, "BRW done\n");
         /* release the pages from the page cache */
