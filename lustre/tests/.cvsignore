@@ -27,3 +27,5 @@ lovstripe
 *.xml
 stat
 setuid
+multifstat
+checkstat
