@@ -70,7 +70,14 @@ struct mds_kml_pack_info {
         int mpi_size[4];
         int mpi_total_size;
 };
-
+typedef int (*smfs_hook_func)(struct inode *inode, struct dentry *dentry,
+                             void *data1, void *data2, int op, void *handle);
+struct smfs_hook_ops {
+        struct list_head smh_list;
+        char *           smh_name;
+        smfs_hook_func   smh_post_op;
+        smfs_hook_func   smh_pre_op;
+};
 struct smfs_super_info {
         struct super_block       *smsi_sb;
         struct vfsmount          *smsi_mnt;         /* mount the cache kern */
@@ -85,13 +92,15 @@ struct smfs_super_info {
         char                     *smsi_cache_ftype; /* cache file system type */
         char                     *smsi_ftype;       /* file system type */
 	struct obd_export	 *smsi_exp;	    /* file system obd exp */
-	struct snap_info	 *smsi_snap_info;    /* snap table cow */
+	struct snap_info	 *smsi_snap_info;   /* snap table cow */
         smfs_pack_rec_func   	 smsi_pack_rec[PACK_MAX]; /* sm_pack_rec type ops */
-        __u32                    smsi_flags;       /* flags */
+        __u32                    smsi_flags;        /* flags */
         __u32                    smsi_ops_check;
+        struct list_head         smsi_hook_list;
 };
 
-#define SMFS_FILE_TYPE "smfs"
+
+#define SMFS_FILE_TYPE         "smfs"
 #define SMFS_FILE_MAGIC        0x19760218
 
 struct smfs_file_info {

@@ -123,6 +123,59 @@ static int smfs_init_cowed_dir(struct super_block *sb, struct dentry* cowed_dir)
         snap_info->sn_cowed_dentry = dentry;
         RETURN(rc);
 }
+#define DOT_SNAP_NAME          ".snap"
+static int smfs_init_dotinfo(struct super_block *sb)
+{
+        struct snap_info *snap_info = S2SNAPI(sb);
+        struct snap_dot_info *dot_info = NULL;
+        int rc = 0;
+        ENTRY;
+
+        if (snap_info->sn_dot_info)
+                RETURN(-EEXIST);
+       
+        OBD_ALLOC(snap_info->sn_dot_info, sizeof(struct snap_dot_info));
+        
+        if (!snap_info->sn_dot_info)
+                RETURN(-ENOMEM); 
+      
+        dot_info = snap_info->sn_dot_info;
+ 
+        OBD_ALLOC(dot_info->dot_name,  strlen(DOT_SNAP_NAME) + 1);
+
+        if (!dot_info->dot_name) {
+                OBD_FREE(snap_info->sn_dot_info, sizeof(struct snap_dot_info));
+                RETURN(-ENOMEM); 
+        } 
+        memcpy(dot_info->dot_name, DOT_SNAP_NAME, strlen(DOT_SNAP_NAME));
+        
+        dot_info->dot_name_len = strlen(DOT_SNAP_NAME); 
+        dot_info->dot_snap_enable = 1;
+        
+        RETURN(rc);
+}
+
+static int smfs_cleanup_dotinfo(struct super_block *sb)
+{       
+        struct snap_info *snap_info = S2SNAPI(sb);
+        struct snap_dot_info *dot_info = NULL;
+        int rc = 0;
+        ENTRY;
+
+        if (!snap_info->sn_dot_info)
+                RETURN(rc);
+       
+        dot_info = snap_info->sn_dot_info;
+
+        if (dot_info->dot_name) { 
+                OBD_FREE(dot_info->dot_name, dot_info->dot_name_len + 1);
+        }
+        
+        OBD_FREE(dot_info, sizeof(struct snap_dot_info));
+
+        RETURN(rc);
+}
+
 int smfs_start_cow(struct super_block *sb)
 {
         int rc = 0;
@@ -163,6 +216,12 @@ int smfs_start_cow(struct super_block *sb)
                 CERROR("can not init snaptable rc=%d\n", rc);
                 RETURN(rc);
         }
+        /*init dot snap info*/
+        rc = smfs_init_dotinfo(sb);
+        if (rc) {
+                CERROR("can not init dot snap info rc=%d\n", rc);
+                RETURN(rc);
+        }
         /*init cowed dir to put the primary cowed inode
          *FIXME-WANGDI, later the s_root may not be the 
          *snap dir, we can indicate any dir to be cowed*/
@@ -188,32 +247,68 @@ int smfs_stop_cow(struct super_block *sb)
                 table_size =  SNAPTABLE_SIZE(snap_table->sntbl_max_count);
                 OBD_FREE(snap_info->sntbl, table_size);
         }
-        
+        smfs_cleanup_dotinfo(sb);
+         
         RETURN(rc);
 }
 EXPORT_SYMBOL(smfs_stop_cow);
 
+#define COW_HOOK "cow_hook"
+static int smfs_cow_pre_hook(struct inode *inode, struct dentry *dentry, 
+                             void *data1, void *data2, int op, void *handle)
+{
+        int rc = 0;
+        ENTRY;
+ 
+        if (smfs_do_cow(inode)) {                                              
+                rc = smfs_cow(inode, dentry, data1, data2, op);           
+        }
+        RETURN(rc);                                                                     
+}
 int smfs_cow_init(struct super_block *sb)
 {
         struct smfs_super_info *smfs_info = S2SMI(sb);
+        struct smfs_hook_ops *cow_hops = NULL;
         int rc = 0;
+
+        ENTRY;
 
         SMFS_SET_COW(smfs_info);
       
+        cow_hops = smfs_alloc_hook_ops(COW_HOOK, smfs_cow_pre_hook, NULL);
+        if (!cow_hops) {
+                RETURN(-ENOMEM);
+        }
+ 
+        rc = smfs_register_hook_ops(sb, cow_hops);      
+
+        if (rc) {
+                smfs_free_hook_ops(cow_hops);
+                RETURN(rc);
+        }
+ 
         OBD_ALLOC(smfs_info->smsi_snap_info, sizeof(struct snap_info));
         
         if (!smfs_info->smsi_snap_info) 
-                RETURN(-ENOMEM);
-        
+                GOTO(exit, rc = -ENOMEM);
+exit:
+        if (rc && cow_hops) {
+                smfs_unregister_hook_ops(sb, cow_hops->smh_name);
+                smfs_free_hook_ops(cow_hops);
+        } 
         RETURN(rc);
 }
 
 int smfs_cow_cleanup(struct super_block *sb)
 {
         
-        struct snap_info       *snap_info = S2SNAPI(sb);	
-        
+        struct snap_info   *snap_info = S2SNAPI(sb);	
+        struct smfs_hook_ops *cow_hops; 
         ENTRY;
+
+        cow_hops = smfs_unregister_hook_ops(sb, COW_HOOK);
+        smfs_free_hook_ops(cow_hops);
+
         SMFS_CLEAN_COW(S2SMI(sb));
         if (snap_info) 
                OBD_FREE(snap_info, sizeof(*snap_info)); 
@@ -438,7 +533,7 @@ int snap_do_cow(struct inode *inode, struct dentry *dparent, int del)
 	ind = snapops->fs_create_indirect(inode, snap.sn_index, snap.sn_gen, 
                                           dparent->d_inode, del);
 	if(ind && IS_ERR(ind)) {
-                CERROR("Create ind inode %lu index %d gen %d del %d\n rc%d\n",
+                CERROR("Create ind inode %lu index %d gen %d del %d\n rc%u\n",
                         inode->i_ino, snap.sn_index, snap.sn_gen, del,
                         PTR_ERR(ind));
 		RETURN(PTR_ERR(ind));
@@ -742,20 +837,26 @@ EXPORT_SYMBOL(smfs_cow_get_ind);
 typedef int (*cow_funcs)(struct inode *dir, struct dentry *dentry, 
                          void *new_dir, void *new_dentry);
 
-
-static cow_funcs smfs_cow_funcs[REINT_MAX + 2] = {
-        [REINT_SETATTR] smfs_cow_setattr,
-        [REINT_CREATE]  smfs_cow_create,
-        [REINT_LINK]    smfs_cow_link,
-        [REINT_UNLINK]  smfs_cow_unlink,
-        [REINT_RENAME]  smfs_cow_rename,
-        [REINT_WRITE]   smfs_cow_write,
-        [SNAP_LOOKUP]   smfs_cow_lookup,
+static cow_funcs smfs_cow_funcs[HOOK_MAX + 1] = {
+        [HOOK_CREATE]   smfs_cow_create,
+        [HOOK_LOOKUP]   smfs_cow_lookup,
+        [HOOK_LINK]     smfs_cow_link,
+        [HOOK_UNLINK]   smfs_cow_unlink,
+        [HOOK_SYMLINK]  smfs_cow_create,
+        [HOOK_MKDIR]    smfs_cow_create,
+        [HOOK_RMDIR]    smfs_cow_unlink, 
+        [HOOK_MKNOD]    smfs_cow_create,
+        [HOOK_RENAME]   smfs_cow_rename,
+        [HOOK_SETATTR]  smfs_cow_setattr,
+        [HOOK_WRITE]    smfs_cow_write,
 };
 
 int smfs_cow(struct inode *dir, struct dentry *dentry, void *new_dir, 
              void *new_dentry, int op)
 {
-        return smfs_cow_funcs[op](dir, dentry, new_dir, new_dentry);
+        if (smfs_cow_funcs[op]) {
+                return smfs_cow_funcs[op](dir, dentry, new_dir, new_dentry);
+        }
+        return 0;
 }
 

@@ -106,74 +106,6 @@ int lustre_init_ea_size(struct ll_sb_info *sbi)
 
         RETURN(rc);
 }
-#if CONFIG_SNAPFS
-int lustre_set_clone_info(struct super_block *sb, int clone_index)
-{
-        struct ll_sb_info *sbi = ll_s2sbi(sb);
-        
-        ENTRY;
-
-        CDEBUG(D_INFO, "set clone index %d\n", clone_index);
-        if (!clone_index)
-                RETURN(0); 
-        
-        if (sbi->ll_mdc_exp) {
-                struct obd_device *obd = class_exp2obd(sbi->ll_mdc_exp);
-                struct client_obd *cl_obd = &obd->u.cli;
-
-                OBD_ALLOC(cl_obd->cl_clone_info, sizeof(struct clonefs_info));
-                if (!cl_obd->cl_clone_info) 
-                        RETURN(-ENOMEM);
-                SET_CLONE_INDEX(cl_obd->cl_clone_info, clone_index);
-                SET_CLONE_FLAGS(cl_obd->cl_clone_info, SM_CLONE_FS);
-                cl_obd->cl_clone_info->cl_clone_info->clone_magic = 
-                                                  cpu_to_le32(CLONE_INFO_MAGI);
-        }
-        
-        if (sbi->ll_osc_exp) {
-                struct obd_device *obd = class_exp2obd(sbi->ll_osc_exp);
-                struct client_obd *cl_obd = &obd->u.cli;
-
-                OBD_ALLOC(cl_obd->cl_clone_info, sizeof(struct clonefs_info));
-                if (!cl_obd->cl_clone_info) 
-                        RETURN(-ENOMEM);
-                SET_CLONE_INDEX(cl_obd->cl_clone_info, clone_index);
-                SET_CLONE_FLAGS(cl_obd->cl_clone_info, SM_CLONE_FS);
-                cl_obd->cl_clone_info->cl_clone_info->clone_magic = 
-                                                  cpu_to_le32(CLONE_INFO_MAGI);
-        }
-        RETURN(0); 
-}
-
-int lustre_cleanup_clone_info(struct super_block *sb)
-{
-        struct ll_sb_info *sbi = ll_s2sbi(sb);
-       
-        ENTRY; 
-
-        if (sbi->ll_mdc_exp) {
-                struct obd_device *obd = class_exp2obd(sbi->ll_mdc_exp);
-                struct client_obd *cl_obd = &obd->u.cli;
-
-                if (!cl_obd->cl_clone_info) 
-                        RETURN(0); 
-                CDEBUG(D_INFO, "clean clone info %p\n", cl_obd->cl_clone_info);
-                OBD_FREE(cl_obd->cl_clone_info, sizeof(struct clonefs_info));
-        }
-        
-        if (sbi->ll_osc_exp) {
-                struct obd_device *obd = class_exp2obd(sbi->ll_osc_exp);
-                struct client_obd *cl_obd = &obd->u.cli;
-
-                if (!cl_obd->cl_clone_info) 
-                        RETURN(0); 
-                CDEBUG(D_INFO, "clean clone info %p\n", cl_obd->cl_clone_info);
-                OBD_FREE(cl_obd->cl_clone_info, sizeof(struct clonefs_info));
-        }
-        RETURN(0); 
-}
-#endif
-
 
 int lustre_common_fill_super(struct super_block *sb, char *mdc, char *osc)
 {
@@ -471,16 +403,6 @@ int ll_fill_super(struct super_block *sb, void *data, int silent)
         }
 
         err = lustre_common_fill_super(sb, mdc, osc);
-#if CONFIG_SNAPFS        
-        if (clone_opts) {
-                int clone_index = 0;
-                char *endp;
-
-                /*set clone info to the super block*/
-                clone_index = simple_strtoul(clone_opts, &endp, 0);
-                err = lustre_set_clone_info(sb, clone_index);                
-        }
-#endif         
 out:
         if (err)
                 lustre_free_sbi(sb);
@@ -712,15 +634,6 @@ int lustre_fill_super(struct super_block *sb, void *data, int silent)
 
         if (err)
                 GOTO(out_free, err);
-
-#if CONFIG_SNAPFS
-        if (lmd->lmd_clone_index) {
-                err = lustre_set_clone_info(sb, lmd->lmd_clone_index);                
-        }
-        
-        if (err)
-                GOTO(out_free, err);
-#endif
         
 out_dev:
         if (mdc)
@@ -754,9 +667,6 @@ out_free:
                 }
                 OBD_FREE(sbi->ll_lmd, sizeof(*sbi->ll_lmd));
         }
-#if CONFIG_SNAPFS
-        lustre_cleanup_clone_info(sb);
-#endif
         lustre_free_sbi(sb);
 
         goto out_dev;
@@ -803,10 +713,6 @@ void lustre_put_super(struct super_block *sb)
         if (obd)
                 force_umount = obd->obd_no_recov;
         obd = NULL;
-
-#if CONFIG_SNAPFS
-        lustre_cleanup_clone_info(sb);
-#endif
 
         lustre_common_put_super(sb);
         if (sbi->ll_lmd != NULL) {

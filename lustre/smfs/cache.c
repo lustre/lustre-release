@@ -322,3 +322,78 @@ void sm_set_sb_ops(struct super_block *cache_sb, struct super_block *sb)
         sb->s_op = cache_sops(smb);
         return;
 }
+struct smfs_hook_ops *smfs_alloc_hook_ops(char *name, smfs_hook_func pre_hook, 
+                                       smfs_hook_func post_hook)
+{
+        struct smfs_hook_ops *smfs_hops = NULL;
+        
+        ENTRY;
+        OBD_ALLOC(smfs_hops, sizeof(struct smfs_hook_ops));
+
+        if (!smfs_hops)
+                RETURN(NULL);
+ 
+        OBD_ALLOC(smfs_hops->smh_name, strlen(name) + 1);
+        
+        if (!smfs_hops->smh_name) { 
+                OBD_FREE(smfs_hops, sizeof(struct smfs_hook_ops));
+                RETURN(NULL);
+        }
+        
+        memcpy(smfs_hops->smh_name, name, strlen(name));  
+       
+        smfs_hops->smh_post_op = post_hook;  
+        smfs_hops->smh_pre_op = pre_hook;  
+        
+        RETURN(smfs_hops); 
+}
+
+void smfs_free_hook_ops(struct smfs_hook_ops *hops)
+{
+        if (hops) {
+                if (hops->smh_name){
+                        OBD_FREE(hops->smh_name, strlen(hops->smh_name) + 1);
+                }
+                OBD_FREE(hops, sizeof(struct smfs_hook_ops));
+        }
+}
+
+int smfs_register_hook_ops(struct super_block *sb, 
+                           struct smfs_hook_ops *smh_ops)
+{
+        struct smfs_super_info *smb = S2SMI(sb);
+        struct list_head *hlist = &smb->smsi_hook_list;
+        struct list_head *p;
+        ENTRY;
+ 
+        list_for_each(p, hlist) {
+                struct smfs_hook_ops *found;               
+                found = list_entry(p, struct smfs_hook_ops, smh_list);
+                if (!strcmp(found->smh_name, smh_ops->smh_name)) {
+                        CWARN("hook ops %s list  reregister\n", smh_ops->smh_name);
+                        RETURN(0);
+                }
+        }
+	list_add(&smh_ops->smh_list, hlist);
+        RETURN(0);
+} 
+struct smfs_hook_ops  *smfs_unregister_hook_ops(struct super_block *sb, 
+                                                char *name)
+{
+        struct smfs_super_info *smb = S2SMI(sb);
+        struct list_head *hlist = &smb->smsi_hook_list;
+        struct list_head *p;
+        ENTRY;      
+ 
+        list_for_each(p, hlist) {
+ 		struct smfs_hook_ops *found;
+
+                found = list_entry(p, typeof(*found), smh_list);
+                if (!memcmp(found->smh_name, name, strlen(name))) {
+                        list_del(p);
+                        RETURN(found);
+                }
+        } 
+        RETURN(NULL);
+}
+                        

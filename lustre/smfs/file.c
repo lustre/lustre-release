@@ -68,9 +68,8 @@ static ssize_t smfs_write(struct file *filp, const char *buf, size_t count,
         else {
                 tmp_ppos = *ppos;
         }
-
-        SMFS_PRE_COW(filp->f_dentry->d_inode, filp->f_dentry, &count, &tmp_ppos, 
-                     REINT_WRITE, "write", rc, exit);  
+        SMFS_HOOK(filp->f_dentry->d_inode, filp->f_dentry, &count, &tmp_ppos,
+                  HOOK_WRITE, NULL, PRE_HOOK, rc, exit);
 
         if (ppos != &(filp->f_pos)) {
                 cache_ppos = &tmp_ppos;
@@ -86,8 +85,8 @@ static ssize_t smfs_write(struct file *filp, const char *buf, size_t count,
                                                count, cache_ppos);
         }
 
-        SMFS_KML_POST(filp->f_dentry->d_inode, filp->f_dentry,
-                      ppos, &count, REINT_WRITE, "write", rc, exit);
+        SMFS_HOOK(filp->f_dentry->d_inode, filp->f_dentry, ppos, &count,
+                  HOOK_WRITE, NULL, POST_HOOK, rc, exit);
 exit:
         post_smfs_inode(filp->f_dentry->d_inode, cache_inode);
         *ppos = *cache_ppos;
@@ -434,8 +433,9 @@ int smfs_setattr(struct dentry *dentry, struct iattr *attr)
         if (cache_inode->i_op->setattr)
                 rc = cache_inode->i_op->setattr(cache_dentry, attr);
 
-        SMFS_KML_POST(dentry->d_inode, dentry, attr, NULL,
-                      REINT_SETATTR, "setattr", rc, exit);
+        SMFS_HOOK(dentry->d_inode, dentry, attr, NULL, HOOK_SETATTR, NULL, 
+                  POST_HOOK, rc, exit); 
+                  
 exit:
         post_smfs_inode(dentry->d_inode, cache_inode);
         post_smfs_dentry(cache_dentry);

@@ -59,16 +59,6 @@ struct smfs_control_device {
 
 #define MYPATHLEN(buffer, path) ((buffer) + PAGE_SIZE - (path))
 
-#define SMFS_KML_POST(dir, dentry, data1, data2, op, name, rc, label)   \
-do {                                                                    \
-        if (smfs_do_rec(dir) && !rc) {                                  \
-                CDEBUG(D_INODE, "Do %s kml post for dir %lu \n",        \
-                              name, dir->i_ino);                        \
-                rc = smfs_post_kml_rec(dir, dentry, data1, data2, op);  \
-                if (rc)                                                 \
-                        GOTO(label, rc);                                \
-        }                                                               \
-} while(0)
 
 #define PACK_KML_REC_INIT(buffer, op_code)          \
 do{                                                 \
@@ -76,6 +66,7 @@ do{                                                 \
         memcpy(buffer, &opcode, sizeof(opcode));    \
         buffer += sizeof(opcode);                   \
 } while (0)
+
 
 extern int init_smfs_proc_sys(void);
 /*options.c*/
@@ -126,6 +117,17 @@ static inline struct journal_operations *journal_ops(struct smfs_super_info *smb
 {
         return &smb->sm_ops->sm_journal_ops;
 }
+
+struct smfs_hook_ops *smfs_alloc_hook_ops(char *name, 
+                                          smfs_hook_func pre_hook, 
+                                          smfs_hook_func post_hook);
+
+void smfs_free_hook_ops(struct smfs_hook_ops *hops);
+int smfs_register_hook_ops(struct super_block *sb, 
+                           struct smfs_hook_ops *smh_ops);
+
+struct smfs_hook_ops *smfs_unregister_hook_ops(struct super_block *sb, 
+                                               char *name);
 /*super.c*/
 extern int init_smfs(void);
 extern int cleanup_smfs(void);
@@ -270,70 +272,53 @@ static inline int get_active_entry(struct inode *dir, __u64 *active_entry)
                 rc = 0;
         RETURN(rc);
 }
+#define HOOK_CREATE       1
+#define HOOK_LOOKUP       2
+#define HOOK_LINK         3
+#define HOOK_UNLINK       4
+#define HOOK_SYMLINK      5
+#define HOOK_MKDIR        6
+#define HOOK_RMDIR        7
+#define HOOK_MKNOD        8
+#define HOOK_RENAME       9
+#define HOOK_SETATTR      10
+#define HOOK_WRITE        11 
+#define HOOK_MAX          11 
 
-#define CACHE_HOOK_CREATE       1
-#define CACHE_HOOK_LOOKUP       2
-#define CACHE_HOOK_LINK         3
-#define CACHE_HOOK_UNLINK       4
-#define CACHE_HOOK_SYMLINK      5
-#define CACHE_HOOK_MKDIR        6
-#define CACHE_HOOK_RMDIR        7
-#define CACHE_HOOK_MKNOD        8
-#define CACHE_HOOK_RENAME       9
-
-#define CACHE_HOOK_MAX          9
-
-#define SMFS_CACHE_HOOK_PRE(op, handle, dir, rc)                                \
-{                                                                               \
-        while (smfs_cache_hook(dir)) {                                          \
-                if (!handle) {                                                  \
-                        handle = smfs_trans_start(dir, KML_CACHE_NOOP, NULL);   \
-                        if (IS_ERR(handle)) {                                   \
-                               rc = -ENOSPC;                                    \
-                               break;                                           \
-                        }                                                       \
-                }                                                               \
-                CDEBUG(D_INODE, "cache hook pre: op %d, dir %lu\n",             \
-                       op, dir->i_ino);                                         \
-                cache_space_pre(dir, op);                                       \
-                break;                                                          \
-        }                                                                       \
-}
-
-#define SMFS_CACHE_HOOK_POST(op, handle, old_dir, old_dentry,           \
-                             new_dir, new_dentry, rc, label)            \
-{                                                                       \
-        if (!rc && smfs_cache_hook(old_dir)) {                          \
-                LASSERT(handle != NULL);                                \
-                CDEBUG(D_INODE, "cache hook post: op %d, dir %lu\n",    \
-                       op, old_dir->i_ino);                             \
-                rc = cache_space_post(op, handle, old_dir, old_dentry,  \
-                                         new_dir, new_dentry);          \
-                if (rc)                                                 \
-                        GOTO(label, rc);                                \
-        }                                                               \
-}
-#if CONFIG_SNAPFS
-/*snap macros*/
-#define SMFS_PRE_COW(dir, dentry, new_dir, new_dentry, op, name, rc, label)    \
+#define PRE_HOOK 0
+#define POST_HOOK 1
+#define SMFS_HOOK(inode, dentry, data1, data2, op, handle, flag, rc, label)    \
 do {                                                                           \
-        if (smfs_do_cow(dir) && !rc) {                                         \
-                CDEBUG(D_INODE, "Do %s snap post for dir %lu \n",              \
-                              name, dir->i_ino);                               \
-                rc = smfs_cow(dir, dentry, new_dir, new_dentry, op);           \
-                if (op == SNAP_LOOKUP && rc == 1)                              \
-                        GOTO(label, rc = 0);                                   \
-                else if (rc)                                                   \
-                        GOTO(label, rc);                                       \
+        LASSERT(inode->i_sb);                                                  \
+        if (!rc) {                                                             \
+                struct smfs_super_info *smb = S2SMI(inode->i_sb);              \
+                struct list_head *hlist = &smb->smsi_hook_list;                \
+                struct list_head *p;                                           \
+                                                                               \
+                list_for_each(p, hlist) {                                      \
+ 		        struct smfs_hook_ops *hops;                            \
+                                                                               \
+                        hops = list_entry(p, typeof(*hops), smh_list);         \
+                        if (flag == PRE_HOOK && hops->smh_pre_op)              \
+                                rc = hops->smh_pre_op(inode, dentry, data1,    \
+                                                      data2, op, handle);      \
+                        else if (flag == POST_HOOK && hops->smh_post_op)       \
+                                rc = hops->smh_post_op(inode, dentry, data1,   \
+                                                       data2, op, handle);     \
+                        if (rc)                                                \
+                                break;                                         \
+                }                                                              \
         }                                                                      \
-} while(0)
+        if (rc)                                                                \
+                GOTO(label, rc);                                               \
+} while(0)                                                                     \
 
+#if CONFIG_SNAPFS
 extern int smfs_cow_init(struct super_block *sb);
 extern int smfs_cow_cleanup(struct super_block *sb);
 extern int smfs_init_snap_inode_info(struct inode *inode, int flags);
 #else
 #define SMFS_PRE_COW(dir, dentry, new_dir, new_dentry, op, name, rc, label)                 
 #endif 
-
 #endif /*__KERNEL*/
 #endif /* __LINUX_SMFS_H */

@@ -518,19 +518,27 @@ exit:
 }
 
 typedef int (*post_kml_rec)(struct inode *dir, struct dentry *dentry,
-                            void *data1, void *data2);
+                           void *data1, void *data2);
 
-static post_kml_rec smfs_kml_post[REINT_MAX + 1] = {
-        [REINT_SETATTR] smfs_post_rec_setattr,
-        [REINT_CREATE]  smfs_post_rec_create,
-        [REINT_LINK]    smfs_post_rec_link,
-        [REINT_UNLINK]  smfs_post_rec_unlink,
-        [REINT_RENAME]  smfs_post_rec_rename,
-        [REINT_WRITE]   smfs_post_rec_write,
+static post_kml_rec smfs_kml_post[HOOK_MAX + 1] = {
+        [HOOK_CREATE]  smfs_post_rec_create,
+        [HOOK_LOOKUP]  NULL,
+        [HOOK_LINK]    smfs_post_rec_link,
+        [HOOK_UNLINK]  smfs_post_rec_unlink,
+        [HOOK_SYMLINK] smfs_post_rec_create,
+        [HOOK_MKDIR]   smfs_post_rec_create,
+        [HOOK_RMDIR]   smfs_post_rec_unlink,
+        [HOOK_MKNOD]   smfs_post_rec_create,
+        [HOOK_RENAME]  smfs_post_rec_rename,
+        [HOOK_SETATTR] smfs_post_rec_setattr,
+        [HOOK_WRITE]   smfs_post_rec_write,
 };
 
 int smfs_post_kml_rec(struct inode *dir, struct dentry *dst_dentry,
                       void *data1, void *data2, int op)
 {
-        return smfs_kml_post[op](dir, dst_dentry, data1, data2);
+        if (smfs_kml_post[op]) {
+                return smfs_kml_post[op](dir, dst_dentry, data1, data2);
+        }
+        return 0;
 }

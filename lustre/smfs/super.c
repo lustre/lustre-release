@@ -213,6 +213,35 @@ static int sm_umount_cache(struct super_block *sb)
         return 0;
 }
 
+static int smfs_init_hook_ops(struct super_block *sb)
+{
+        struct smfs_super_info *smb = S2SMI(sb);
+        ENTRY;
+
+        INIT_LIST_HEAD(&smb->smsi_hook_list);
+
+        RETURN(0); 
+}
+static void smfs_cleanup_hook_ops(struct super_block *sb)
+{
+        struct smfs_super_info *smb = S2SMI(sb);
+        struct list_head *hlist = &smb->smsi_hook_list;
+        ENTRY;
+
+        while (!list_empty(hlist)) {
+                struct smfs_hook_ops *smfs_hops;
+                
+                smfs_hops = list_entry(hlist->next, struct smfs_hook_ops, 
+                                       smh_list);
+                CERROR("Unregister %s hook ops\n", smfs_hops->smh_name);         
+                
+                smfs_unregister_hook_ops(sb, smfs_hops->smh_name);
+                smfs_free_hook_ops(smfs_hops); 
+        } 
+        EXIT;
+        return;        
+}
+
 void smfs_put_super(struct super_block *sb)
 {
         if (SMFS_CACHE_HOOK(S2SMI(sb)))
@@ -222,12 +251,13 @@ void smfs_put_super(struct super_block *sb)
 #if CONFIG_SNAPFS
         if (SMFS_DO_COW(S2SMI(sb)))
                 smfs_cow_cleanup(sb);
-#endif
+#endif  
+        smfs_cleanup_hook_ops(sb);
+ 
         if (sb)
                 sm_umount_cache(sb);
         return;
 }
-
 static int smfs_fill_super(struct super_block *sb,
                            void *data, int silent)
 {
@@ -264,7 +294,13 @@ static int smfs_fill_super(struct super_block *sb,
                 CERROR("Can not mount %s as %s\n", devstr, typestr);
                 GOTO(out_err, 0);
         }
-
+        
+        err = smfs_init_hook_ops(sb);
+        if (err) {
+                CERROR("Can not init super hook ops err %d\n", err);
+                GOTO(out_err, 0);
+        }
+        
         if (do_rec) smfs_rec_init(sb);
         if (cache_hook) cache_space_hook_init(sb);
         

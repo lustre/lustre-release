@@ -165,6 +165,12 @@ struct snap_table {
 	struct  snap  	sntbl_items[0];
 };
 
+struct snap_dot_info {
+         char *dot_name;
+         int   dot_name_len;
+         int   dot_snap_enable;
+};
+
 struct snap_info {
         struct fsfilt_operations *snap_fsfilt;  
         struct fsfilt_operations *snap_cache_fsfilt; 
@@ -173,13 +179,9 @@ struct snap_info {
 	spinlock_t               sntbl_lock;
         struct snap_table        *sntbl;
         struct dentry            *sn_cowed_dentry;
-};
-#define SM_CLONE_FS        0x01
-#define SET_CLONE_INDEX(clone_info, index)            \
-                       (((struct clonefs_info *)clone_info)->clone_index = index)
-#define SET_CLONE_FLAGS(clone_info, flags)            \
-                       (((struct clonefs_info *)clone_info)->clone_flags = flags)
+        struct snap_dot_info     *sn_dot_info;
 
+};
 
 extern int smfs_add_snap_item(struct super_block *sb, char *name);
 extern int smfs_start_cow(struct super_block *sb);

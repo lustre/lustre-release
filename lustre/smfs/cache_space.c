@@ -43,16 +43,69 @@ struct cache_purge_param {
 static struct cache_purge_queue smfs_cpq;
 static struct cache_purge_queue *cpq = &smfs_cpq;
 
+#define CACHE_HOOK "cache_hook"
+int cache_space_pre_hook(struct inode *inode, struct dentry *dentry,
+                         void *data1, void *data2, int op, void *handle)
+{
+        int rc = 0;
+        ENTRY;
+
+        if (smfs_cache_hook(inode)) {                                          
+               if (!handle) {                                                  
+                        handle = smfs_trans_start(inode, KML_CACHE_NOOP, NULL);   
+                        if (IS_ERR(handle)) {                                   
+                                RETURN(PTR_ERR(handle));
+                        }                                                       
+                }                                                               
+                cache_space_pre(inode, op);                                       
+        }                                                                       
+        RETURN(rc); 
+}
+
+int cache_space_post_hook(struct inode *inode, struct dentry *dentry,
+                         void *data1, void *data2, int op, void *handle)
+{
+        int rc = 0;
+        ENTRY;
+        if (smfs_cache_hook(inode)) {      
+                struct inode *new_inode = (struct inode*)data1;
+                struct dentry *new_dentry = (struct dentry*)data2;                    
+                LASSERT(handle != NULL);                                
+                rc = cache_space_post(op, handle, inode, dentry, new_inode, 
+                                      new_dentry);
+        }
+        RETURN(rc);                                                               
+}
+
 int cache_space_hook_init(struct super_block *sb)
 {
         struct smfs_super_info  *smfs_info = S2SMI(sb);
+        struct smfs_hook_ops    *cache_hops;
+        int    rc = 0;
+        ENTRY;
 
+        cache_hops = smfs_alloc_hook_ops(CACHE_HOOK, cache_space_pre_hook, 
+                                         cache_space_post_hook);
+        if (!cache_hops) {
+                RETURN(-ENOMEM);
+        }
+        rc = smfs_register_hook_ops(sb, cache_hops);      
+        if (rc) {
+                smfs_free_hook_ops(cache_hops);
+                RETURN(rc);
+        }
         SMFS_SET_CACHE_HOOK(smfs_info);
-        return 0;
+
+        RETURN(0);
 }
+
 int cache_space_hook_exit(struct super_block *sb)
 {
         struct smfs_super_info  *smfs_info = S2SMI(sb);
+        struct smfs_hook_ops *cache_hops; 
+
+        cache_hops = smfs_unregister_hook_ops(sb, CACHE_HOOK);
+        smfs_free_hook_ops(cache_hops);
 
         SMFS_CLEAN_CACHE_HOOK(smfs_info);
         return 0;
@@ -619,28 +672,32 @@ static int cache_space_hook_rename(void *handle, struct inode *old_dir,
 typedef int (*cache_hook_op)(void *handle, struct inode *old_dir,
                              struct dentry *old_dentry, struct inode *new_dir,
                              struct dentry *new_dentry);
-static  cache_hook_op cache_space_hook_ops[CACHE_HOOK_MAX + 1] = {
-        [CACHE_HOOK_CREATE]     cache_space_hook_create,
-        [CACHE_HOOK_LOOKUP]     cache_space_hook_lookup,
-        [CACHE_HOOK_LINK]       cache_space_hook_link,
-        [CACHE_HOOK_UNLINK]     cache_space_hook_unlink,
-        [CACHE_HOOK_SYMLINK]    cache_space_hook_create,
-        [CACHE_HOOK_MKDIR]      cache_space_hook_mkdir,
-        [CACHE_HOOK_RMDIR]      cache_space_hook_rmdir,
-        [CACHE_HOOK_MKNOD]      cache_space_hook_create,
-        [CACHE_HOOK_RENAME]     cache_space_hook_rename,
+
+static  cache_hook_op cache_space_hook_ops[HOOK_MAX + 1] = {
+        [HOOK_CREATE]     cache_space_hook_create,
+        [HOOK_LOOKUP]     cache_space_hook_lookup,
+        [HOOK_LINK]       cache_space_hook_link,
+        [HOOK_UNLINK]     cache_space_hook_unlink,
+        [HOOK_SYMLINK]    cache_space_hook_create,
+        [HOOK_MKDIR]      cache_space_hook_mkdir,
+        [HOOK_RMDIR]      cache_space_hook_rmdir,
+        [HOOK_MKNOD]      cache_space_hook_create,
+        [HOOK_RENAME]     cache_space_hook_rename,
+        [HOOK_SETATTR]    NULL,
+        [HOOK_WRITE]      NULL,
 };
 
 int cache_space_post(int op, void *handle, struct inode *old_dir,
                struct dentry *old_dentry, struct inode *new_dir,
                struct dentry *new_dentry)
 {
-        int rc;
+        int rc = 0;
         ENTRY;
 
-        LASSERT(op <= CACHE_HOOK_MAX && cache_space_hook_ops[op] != NULL);
+        LASSERT(op <= HOOK_MAX + 1);
 
-        rc = cache_space_hook_ops[op](handle, old_dir, old_dentry,
-                                      new_dir, new_dentry);
+        if (cache_space_hook_ops[op]) 
+                rc = cache_space_hook_ops[op](handle, old_dir, old_dentry,
+                                              new_dir, new_dentry);
         RETURN(rc);
 }

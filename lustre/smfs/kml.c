@@ -47,10 +47,23 @@ smfs_pack_rec_func smfs_get_rec_pack_type(struct super_block *sb)
 
         return smsi->smsi_pack_rec[index];
 }
+static int smfs_rec_post_hook(struct inode *inode, struct dentry *dentry,
+                              void *data1, void *data2, int op, void *handle)
+{
+        int rc = 0;
+        ENTRY;
 
+        if (smfs_do_rec(inode))                                  
+                rc = smfs_post_kml_rec(inode, dentry, data1, data2, op);  
+        
+        RETURN(rc);
+}
+
+#define KML_HOOK "kml_hook"
 int smfs_rec_init(struct super_block *sb)
 {
         struct smfs_super_info *smfs_info = S2SMI(sb);
+        struct smfs_hook_ops   *rec_hops = NULL;
         int rc = 0;
 
         SMFS_SET_REC(smfs_info);
@@ -58,14 +71,29 @@ int smfs_rec_init(struct super_block *sb)
         ost_rec_pack_init(sb);
         mds_rec_pack_init(sb);
 
+        rec_hops = smfs_alloc_hook_ops(KML_HOOK, NULL, smfs_rec_post_hook);
+        if (!rec_hops) {
+                RETURN(-ENOMEM);
+        }
+ 
+        rc = smfs_register_hook_ops(sb, rec_hops);      
+
+        if (rc && rec_hops) {
+                smfs_unregister_hook_ops(sb, rec_hops->smh_name);
+                smfs_free_hook_ops(rec_hops);
+        } 
         RETURN(rc);
 }
 
 int smfs_rec_cleanup(struct super_block *sb)
 {
+        struct smfs_hook_ops *rec_hops; 
         int rc = 0;
 
+        rec_hops = smfs_unregister_hook_ops(sb, KML_HOOK);
+        smfs_free_hook_ops(rec_hops);
         SMFS_CLEAN_REC(S2SMI(sb));
+        
         RETURN(rc);
 }
 
