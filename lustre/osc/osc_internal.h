@@ -12,7 +12,7 @@
 
 /* bug 1578: negotiate BRW_MAX_SIZE with the OST, instead of hard-coding it */
 #define OSC_BRW_MAX_SIZE PTL_MTU
-#define OSC_BRW_MAX_IOV min_t(int, PTL_MD_MAX_IOV, OSC_BRW_MAX_SIZE/PAGE_SIZE)
+#define OSC_BRW_MAX_IOV PTL_MD_MAX_PAGES
 
 #define OAP_MAGIC 8675309
 
