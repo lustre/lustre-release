@@ -46,8 +46,13 @@
 #define ll_pgcache_lock(mapping)          spin_lock(&mapping->page_lock)
 #define ll_pgcache_unlock(mapping)        spin_unlock(&mapping->page_lock)
 
+#define ll_vfs_create(a,b,c,d)              vfs_create(a,b,c,d)
+#define ll_permission(a,b,c)                permission(a,b,c)
+
 #else /* 2.4.. */
 
+#define ll_vfs_create(a,b,c,d)              vfs_create(a,b,c)
+#define ll_permission(a,b,c)                permission(a,b)
 # define PGCACHE_WRLOCK(mapping)          spin_lock(&pagecache_lock)
 # define PGCACHE_WRUNLOCK(mapping)        spin_unlock(&pagecache_lock)
 
