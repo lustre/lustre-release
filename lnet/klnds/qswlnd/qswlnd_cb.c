@@ -828,11 +828,17 @@ kqswnal_rdma_fetch_complete (EP_RXD *rxd)
 
         LASSERT (ktx->ktx_state == KTX_RDMAING);
         LASSERT (krx->krx_rxd == rxd);
+        /* RPC completes with failure by default */
         LASSERT (krx->krx_rpc_reply_needed);
+        LASSERT (krx->krx_rpc_reply_status != 0);
 
-        /* Set the RPC completion status */
-        status = (status == EP_SUCCESS) ? 0 : -ECONNABORTED;
-        krx->krx_rpc_reply_status = status;
+        if (status == EP_SUCCESS) {
+                status = krx->krx_rpc_reply_status = 0;
+        } else {
+                /* Abandon RPC since get failed */
+                krx->krx_rpc_reply_needed = 0;
+                status = -ECONNABORTED;
+        }
 
         /* free ktx & finalize() its lib_msg_t */
         kqswnal_tx_done(ktx, status);
@@ -995,6 +1001,9 @@ kqswnal_rdma (kqswnal_rx_t *krx, lib_msg_t *libmsg, int type,
 #endif
                 if (eprc != EP_SUCCESS) {
                         CERROR("ep_rpc_get failed: %d\n", eprc);
+                        /* Don't attempt RPC completion: 
+                         * EKC nuked it when the get failed */
+                        krx->krx_rpc_reply_needed = 0;
                         rc = -ECONNABORTED;
                 }
                 break;
@@ -1582,11 +1591,12 @@ kqswnal_rxhandler(EP_RXD *rxd)
         krx->krx_state = KRX_PARSE;
         krx->krx_rxd = rxd;
         krx->krx_nob = nob;
-#if MULTIRAIL_EKC
-        krx->krx_rpc_reply_needed = (status != EP_SHUTDOWN) && ep_rxd_isrpc(rxd);
-#else
-        krx->krx_rpc_reply_needed = ep_rxd_isrpc(rxd);
-#endif
+
+        /* RPC reply iff rpc request received without error */
+        krx->krx_rpc_reply_needed = ep_rxd_isrpc(rxd) &&
+                                    (status == EP_SUCCESS ||
+                                     status == EP_MSG_TOO_BIG);
+
         /* Default to failure if an RPC reply is requested but not handled */
         krx->krx_rpc_reply_status = -EPROTO;
         atomic_set (&krx->krx_refcount, 1);
@@ -1914,8 +1924,6 @@ kqswnal_scheduler (void *arg)
                                 kqswnal_parse (krx);
                                 break;
                         case KRX_COMPLETING:
-                                /* Drop last ref to reply to RPC and requeue */
-                                LASSERT (krx->krx_rpc_reply_needed);
                                 kqswnal_rx_decref (krx);
                                 break;
                         default:
