@@ -171,6 +171,7 @@ static int ptlrpc_main(void *arg)
                          * we should put the request on the stack of
                          * mds_handle instead. */
                         memset(&request, 0, sizeof(request));
+                        request.rq_obd = obddev;
                         request.rq_reqbuf = svc->srv_ev.mem_desc.start + svc->srv_ev.offset;
                         request.rq_reqlen = svc->srv_ev.mem_desc.length;
                         request.rq_xid = svc->srv_ev.match_bits;
