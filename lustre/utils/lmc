@@ -74,7 +74,7 @@ Object creation command summary:
   --node node_name
   --nid nid
   --cluster_id 
-  --nettype tcp|elan|gm|openib|iib|vib
+  --nettype tcp|elan|gm|openib|iib|vib|ra
   --hostaddr ip[/netmask]
   --port port
   --tcpbuf size
@@ -163,7 +163,7 @@ lmc_options = [
     ('subsystem', "Specify which Lustre subsystems have debug output recorded in the log",  PARAM),
 
     # network 
-    ('nettype', "Specify the network type. This can be tcp/elan/gm/openib/iib/vib.", PARAM),
+    ('nettype', "Specify the network type. This can be tcp/elan/gm/openib/iib/vib/ra.", PARAM),
     ('nid', "Give the network ID, e.g ElanID/IP Address as used by portals.", PARAM),
     ('port', "Optional argument to specify the TCP port number.", PARAM, DEFAULT_PORT),
     ('hostaddr', "Optional argument to specify the host address.", PARAMLIST),
