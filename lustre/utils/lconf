@@ -26,16 +26,14 @@
 # Based in part on the XML obdctl modifications done by Brian Behlendorf 
 
 import sys, getopt
-import string, os, stat
-import re
+import string, os, stat, popen2
+import re, exceptions
 import xml.dom.minidom
 
-def fixme():
-    raise RuntimeError, 'This feature not implmemented yet.'
-
-def panic(msg):
-    raise RuntimeError, msg
-
+# Global parameters
+TCP_ACCEPTOR = 'acceptor'
+LCTL = './lctl' # fix this...
+options = {}
 #
 # Maximum number of devices to search for.
 # (the /dev/loop* nodes need to be created beforehand)
@@ -49,8 +47,10 @@ config.xml          Lustre configuration in xml format.
 --ldap server	    LDAP server with lustre config database
 
 Options:
+-v|--verbose           
+--debug             Don't send lctl commenads           
 --reformat	    Reformat all devices (will confirm)
---dev="lustre src"  Base directory of lustre sources. Used to search
+--lustre="src dir"  Base directory of lustre sources. Used to search
                     for modules.
 --portals=src       Portals source 
 --makeldiff         Translate xml source to LDIFF 
@@ -59,6 +59,41 @@ Options:
 
 (SCRIPT STILL UNDER DEVELOPMENT, MOST FUNCTIONALITY UNIMPLEMENTED)
 """
+
+# ============================================================ 
+# debugging and error funcs
+
+def fixme(msg = "this feature"):
+    raise RuntimeError, msg + ' not implmemented yet.'
+
+def panic(*args):
+    msg = string.join(map(str,args))
+    print msg
+    raise RuntimeError, msg
+
+def log(*args):
+    msg = string.join(map(str,args))
+    print msg
+
+def logall(msgs):
+    for s in msgs:
+        print string.strip(s)
+
+def debug(*args):
+    msg = string.join(map(str,args))
+    if isverbose(): print msg
+
+def isverbose():
+    return options.has_key('verbose') and  options['verbose'] == 1
+
+def isnotouch():
+    return options.has_key('debug') and options['debug'] == 1
+
+# ============================================================
+# locally defined exceptions
+class CommandError (exceptions.Exception):
+    def __init__(self, args=None):
+        self.args = args
 
 # ============================================================
 # Various system-level functions
@@ -69,15 +104,34 @@ Options:
 # save it if necessary
 def run(*args):
     cmd = string.join(map(str,args))
-    print "+", cmd
-    f = os.popen(cmd + ' 2> /dev/null')
+    debug ("+", cmd)
+    if isnotouch(): return ([], 0)
+    f = os.popen(cmd + ' 2>&1')
     out = f.readlines()
     ret = f.close()
     if ret:
         ret = ret >> 8
     else:
         ret = 0
-    return (out, ret)
+    return (ret, out)
+
+# run lctl
+# the cmds are written to stdin of lctl
+def run_lctl(cmds):
+    debug("+", LCTL, cmds)
+    if isnotouch(): return ([], 0)
+    p = popen2.Popen3(LCTL, 1)
+    p.tochild.write(cmds + "\n")
+    p.tochild.close()
+    out = p.fromchild.readlines()
+    ret = p.poll()
+    if ret:
+        err = p.childerr.readlines()
+        log (LCTL, "error:", ret)
+        logall(err)
+        raise CommandError, err
+    return ret, out
+
 
 # is the path a block device?
 def is_block(path):
@@ -119,8 +173,8 @@ def find_loop(file):
     for n in xrange(0, MAX_LOOP_DEVICES):
         dev = loop + str(n)
         if os.access(dev, os.R_OK):
-            (out, stat) = run('losetup', dev)
-            if (stat == 0 ):
+            (stat, out) = run('losetup', dev)
+            if (out and stat == 0):
                 m = re.search(r'\((.*)\)', out[0])
                 if m and file == m.group(1):
                     return dev
@@ -141,7 +195,7 @@ def init_loop(file, size, fstype):
     for n in xrange(0, MAX_LOOP_DEVICES):
         dev = loop + str(n)
         if os.access(dev, os.R_OK):
-            (out, stat) = run('losetup', dev)
+            (stat, out) = run('losetup', dev)
             if (stat):
                 run('losetup', dev, file)
                 return dev
@@ -155,98 +209,251 @@ def init_loop(file, size, fstype):
 def clean_loop(file):
     dev = find_loop(file)
     if dev:
-        run('losetup -d', dev)
+        ret, out = run('losetup -d', dev)
+        if ret:
+            log('unable to clean loop device:', dev, 'for file:', file)
+            logall(out)
+
+# initialize a block device if needed
+def block_dev(dev, size, fstype, format):
+    if isnotouch(): return dev
+    if not is_block(dev):
+        dev = init_loop(dev, size, fstype)
+    if (format == 'yes'):
+        mkfs(fstype, dev)
+    return dev
+
+# create a new device with lctl
+def lctl_network(net, nid):
+    cmds =  """
+  network %s
+  mynid %s
+  quit""" % (net, nid)
+    run_lctl(cmds)
+
+# create a new device with lctl
+def lctl_connect(net, server, port, servuuid):
+    cmds =  """
+  network %s
+  connect %s %d
+  add_uuid %s
+  quit""" % (net, server, port, servuuid)
+    run_lctl(cmds)
+
+# create a new device with lctl
+def lctl_newdev(attach, setup):
+    cmds = """
+  newdev
+  attach %s
+  setup %s
+  quit""" % (attach, setup)
+    run_lctl(cmds)
 
 # ============================================================
 # Functions to prepare the various objects
 
 def prepare_ldlm(node):
-    print 'prepare ldlm'
+    (name, uuid) = getNodeAttr(node)
+    print 'LDLM:', name, uuid
+    lctl_newdev(attach="ldlm %s %s" % (name, uuid),
+                setup ="")
+    
 
 def prepare_network(node):
-    print 'prepare network'
+    (type, nid, port) = getNetworkInfo(node)
+    print 'NETWORK:', type, nid, port
+    if type == 'tcp':
+        run(TCP_ACCEPTOR, port)
+    lctl_network(type, nid)
+
 
 # need to check /proc/mounts and /etc/mtab before
 # formatting anything.
 # FIXME: check if device is already formatted.
 def prepare_obd(obd):
-    (name, dev, size, fstype, format) = getOBDInfo(obd)
-    print "OBD: ", name, dev, size, fstype, format
-##     if not is_block(dev):
-##         dev = init_loop(dev, size, fstype)
-##     if (format == 'yes'):
-##         mkfs(fstype, dev)
+    (name, uuid, obdtype, dev, size, fstype, format) = getOBDInfo(obd)
+    print "OBD: ", name, obdtype, dev, size, fstype, format
+    dev = block_dev(dev, size, fstype, format)
+    lctl_newdev(attach="%s %s %s" % (obdtype, name, uuid),
+                setup ="%s %s" %(dev, fstype))
+    
 
 def prepare_ost(ost):
-    name = getOSTInfo(ost)
-    print 'prepare ost'
+    name, uuid, obd = getOSTInfo(ost)
+    print "OST: ", name, uuid, obd
+    lctl_newdev(attach="ost %s %s" % (name, uuid),
+                setup ="$%s" % (obd))
 
 def prepare_mds(node):
-    print 'prepare mds'
+    (name, uuid, dev, size, fstype, format) = getMDSInfo(node)
+    print "MDS: ", name, dev, size, fstype
+    dev = block_dev(dev, size, fstype, format)
+    lctl_newdev(attach="mds %s %s" % (name, uuid),
+                setup ="%s %s" %(dev, fstype))
 
 def prepare_osc(node):
-    print 'prepare osc'
+    (name, uuid, obduuid, srvuuid) = getOSCInfo(node)
+    print 'OSC:', name, uuid, obduuid, srvuuid
+    net = lookup(node.parentNode, srvuuid)
+    net, server, port = getNetworkInfo(net)
+    lctl_connect(net, server, port, srvuuid)
+    lctl_newdev(attach="osc %s %s" % (name, uuid),
+                setup ="%s %s" %(obduuid, srvuuid))
 
 def prepare_mdc(node):
-    print 'prepare mdc'
+    print 'MDC:'
 
 def prepare_mountpoint(node):
-    print 'prepare mtpt'
+    print 'MTPT:'
 
 # ============================================================
-# XML processing 
+# Functions to cleanup the various objects
 
-# extract device attributes for an obd
-def getOBDInfo(obd):
-    obdname = obd.getAttribute('name')
+def cleanup_ldlm(node):
+    (name, uuid) = getNodeAttr(node)
+    print 'LDLM:', name, uuid
+    #lctl_newdev(attach="ldlm %s %s" % (name, uuid),
+    #           setup ="")
+    
+
+def cleanup_network(node):
+    (type, nid, port) = getNetworkInfo(node)
+    print 'NETWORK:', type, nid, port
+    if type == 'tcp':
+        run(TCP_ACCEPTOR, port)
+    #lctl_network(type, nid)
+
+
+# need to check /proc/mounts and /etc/mtab before
+# formatting anything.
+# FIXME: check if device is already formatted.
+def cleanup_obd(obd):
+    (name, uuid, obdtype, dev, size, fstype, format) = getOBDInfo(obd)
+    print "OBD: ", name, obdtype, dev, size, fstype, format
+    #lctl_newdev(attach="%s %s %s" % (obdtype, name, uuid),
+    #            setup ="%s %s" %(dev, fstype))
+    clean_loop(dev)
+
+def cleanup_ost(ost):
+    name, uuid, obd = getOSTInfo(ost)
+    print "OST: ", name, uuid, obd
+    #lctl_newdev(attach="ost %s %s" % (name, uuid),
+    #            setup ="$%s" % (obd))
+
+def cleanup_mds(node):
+    (name, uuid, dev, size, fstype, format) = getMDSInfo(node)
+    print "MDS: ", name, dev, size, fstype
+    dev = block_dev(dev, size, fstype, format)
+    #lctl_newdev(attach="mds %s %s" % (name, uuid),
+    #            setup ="%s %s" %(dev, fstype))
+
+def cleanup_osc(node):
+    (name, uuid, obduuid, srvuuid) = getOSCInfo(node)
+    print 'OSC:', name, uuid, obduuid, srvuuid
+    net = lookup(node.parentNode, srvuuid)
+    net, server, port = getNetworkInfo(net)
+    #lctl_connect(net, server, port, srvuuid)
+    #lctl_newdev(attach="osc %s %s" % (name, uuid),
+    #            setup ="%s %s" %(obduuid, srvuuid))
+
+def cleanup_mdc(node):
+    print 'MDC:'
+
+def cleanup_mountpoint(node):
+    print 'MTPT:'
+
+# ============================================================
+# XML processing and query
+
+def getDevice(obd):
     dev = obd.getElementsByTagName('device')[0]
     dev.normalize();
     try:
         size = int(dev.getAttribute('size'))
     except ValueError:
         size = 0
+    return dev.firstChild.data, size
+    
 
+def getNetworkInfo(node):
+    type = node.getAttribute('type')
+    nid = getText(node, 'server', "")
+    port = int(getText(node, 'port', 0))
+    return type, nid, port
+    
+# extract device attributes for an obd
+def getNodeAttr(node):
+    name = node.getAttribute('name')
+    uuid = node.getAttribute('uuid')
+    return name, uuid
+
+def getOBDInfo(obd):
+    name, uuid = getNodeAttr(obd);
+    obdtype = obd.getAttribute('type')
+    devname, size = getDevice(obd)
     fstype = getText(obd, 'fstype')
     format = getText(obd, 'autoformat')
-    return (obdname, dev.firstChild.data, size, fstype, format)
+    return (name, uuid, obdtype, devname, size, fstype, format)
+    
+# extract device attributes for an obd
+def getMDSInfo(node):
+    name, uuid = getNodeAttr(node)
+    devname, size = getDevice(node)
+    fstype = getText(node, 'fstype')
+    format = getText(node, 'autoformat', "no")
+    return (name, uuid, devname, size, fstype, format)
     
 # extract device attributes for an obd
 def getOSTInfo(node):
-    name = node.getAttribute('name')
-    return (name)
+    name, uuid = getNodeAttr(node)
+    ref = node.getElementsByTagName('obd_ref')[0]
+    uuid = ref.getAttribute('uuidref')
+    obd = lookup(node.parentNode, uuid)
+    if obd:
+         obdname = getOBDInfo(obd)[0]
+    else:
+        obdname = "OBD NOT FOUND"
+    return (name, uuid, obdname)
+
+# extract device attributes for an obd
+def getOSCInfo(node):
+    name, uuid = getNodeAttr(node)
+    ref = node.getElementsByTagName('obd_ref')[0]
+    obduuid = ref.getAttribute('uuidref')
+    ref = node.getElementsByTagName('network_ref')[0]
+    ostuuid = ref.getAttribute('uuidref')
+    return (name, uuid, obduuid, ostuuid)
+
     
 # Get the text content from the first matching child
-def getText(node, tag):
-    node = node.getElementsByTagName(tag)[0]
-    node.normalize()
-    return node.firstChild.data
+def getText(node, tag, default=""):
+    list = node.getElementsByTagName(tag)
+    if len(list) > 0:
+        node = list[0]
+        node.normalize()
+        return node.firstChild.data
+    else:
+        return default
 
-# Recusively search for a particular node by uuid
-def getByUUID(node, uuid):
-    fixme()
-    for n in node.childNodes:
-        if n.nodeType == n.ELEMENT_NODE:
-            if getUUID(n) == uuid:
-                return n
-    return None
-
-# Recusively search for a particular node by name
-def getByName(node, name):
+# Recusively search from node for a uuid
+def lookup(node, uuid):
     for n in node.childNodes:
         # this service_id check is ugly. need some other way to
         # differentiate between definitions and references
-        if n.nodeType == n.ELEMENT_NODE and n.nodeName != 'service_id':
-            if getName(n) == name:
+        if n.nodeType == n.ELEMENT_NODE:
+            if getUUID(n) == uuid:
                 return n
             else:
-                n = getByName(n, name)
+                n = lookup(n, uuid)
                 if n: return n
-                    
     return None
 
 # Get name attribute of node
 def getName(node):
     return node.getAttribute('name')
+
+def getRef(node):
+    return node.getAttribute('uuidref')
 
 # Get name attribute of node
 def getUUID(node):
@@ -283,9 +490,9 @@ def getServices(lustreNode, profileNode):
     list = []
     for n in profileNode.childNodes:
         if n.nodeType == n.ELEMENT_NODE:
-            servNode = getByName(lustreNode, getName(n))
+            servNode = lookup(lustreNode, getRef(n))
             if not servNode:
-                panic('service not found: ' + servNode)
+                panic('service not found: ' + getName(n))
             level = getServiceLevel(servNode)
             list.append((level, servNode))
     list.sort()
@@ -298,11 +505,15 @@ def getProfile(lustreNode, profile):
             return prof
     return None
 
+# ============================================================
+# lconf type level logic
+#
+
 #
 # Start a service.
 def startService(node):
     type = getServiceType(node)
-    print 'Starting service:', type, getName(node), getUUID(node)
+    debug('Starting service:', type, getName(node), getUUID(node))
     # there must be a more dynamic way of doing this...
     if type == 'ldlm':
         prepare_ldlm(node)
@@ -332,15 +543,79 @@ def startService(node):
 def startProfile(lustreNode, profile):
     profileNode = getProfile(lustreNode, profile)
     if not profileNode:
-        print "profile:", profile, "not found."
-        sys.exit(1)
+        panic("profile:", profile, "not found.")
     services = getServices(lustreNode, profileNode)
     for s in services:
         startService(s[1])
 
-    #obdlist = lustreNode.getElementsByTagName("obd")
-    #for obd in obdlist:
-    #    prepareDevice(obd)
+
+# Stop a service.
+def stopService(node):
+    type = getServiceType(node)
+    debug('Stopping service:', type, getName(node), getUUID(node))
+    # there must be a more dynamic way of doing this...
+    if type == 'ldlm':
+        cleanup_ldlm(node)
+    elif type == 'network':
+        cleanup_network(node)
+    elif type == 'obd':
+        cleanup_obd(node)
+    elif type == 'ost':
+        cleanup_ost(node)
+    elif type == 'mds':
+        cleanup_mds(node)
+    elif type == 'osc':
+        cleanup_osc(node)
+    elif type == 'mdc':
+        cleanup_mdc(node)
+    elif type == 'mountpoint':
+        cleanup_mountpoint(node)
+
+# Shutdown services in reverse order than they were started
+def cleanupProfile(lustreNode, profile):
+    profileNode = getProfile(lustreNode, profile)
+    if not profileNode:
+        panic("profile:", profile, "not found.")
+    services = getServices(lustreNode, profileNode)
+    services.reverse()
+    for s in services:
+        stopService(s[1])
+
+#
+# Command line processing
+#
+def parse_cmdline(argv):
+    short_opts = "hv"
+    long_opts = ["ldap", "reformat", "lustre=",
+                 "portals=", "makeldiff", "cleanup", "iam=",
+                 "help", "debug"]
+    opts = []
+    args = []
+    global options
+    try:
+        opts, args = getopt.getopt(argv, short_opts, long_opts)
+    except getopt.GetoptError:
+        print "invalid opt"
+        usage()
+        sys.exit(2)
+
+    for o, a in opts:
+        if o in ("-h", "--help"):
+            usage()
+            sys.exit()
+        if o == "--cleanup":
+            options['cleanup'] = 1
+        if o in ("-v",  "--verbose"):
+            options['verbose'] = 1
+        if o == "--debug":
+            options['debug'] = 1
+        if o == "--portals":
+            options['portals'] = a
+        if o == "--lustre":
+            options['lustre'] = a
+        if o  == "--reformat":
+            options['reformat'] = 1
+    return args
 
 #
 # Initialize or shutdown lustre according to a configuration file
@@ -349,8 +624,18 @@ def startProfile(lustreNode, profile):
 # Shutdown does steps in reverse
 #
 def main():
-    dom = xml.dom.minidom.parse(sys.argv[1])
-    startProfile(dom.childNodes[0], 'local-profile')
+    global options
+    args = parse_cmdline(sys.argv[1:])
+    if len(args) > 0:
+        dom = xml.dom.minidom.parse(args[0])
+    else:
+        usage()
+        fixme("ldap not implemented yet")
+
+    if options.has_key('cleanup'):
+        cleanupProfile(dom.childNodes[0], 'local-profile')
+    else:
+        startProfile(dom.childNodes[0], 'local-profile')
     
 # 
 # try a different traceback style. (dare ya to try this in java)
@@ -374,3 +659,4 @@ if __name__ == "__main__":
         main()
     except:
         my_traceback()
+        

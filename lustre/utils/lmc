@@ -36,7 +36,7 @@ Commands:
 --mtpt "mds" "ost/lov-name" /mnt/point
    Creates a client mount point.
 
---lov "mds" "lov name < "all-ost.xml"
+--lov "mds" "lov name" < "all-ost.xml"
    Produces a logical volum striped over the OSTs found in all-ost.xml.
    (Not sure how all-ost.xml is created, exactly.)
 
@@ -46,7 +46,7 @@ Options:
 --reformat          Reformat partitions (this should be an lconf arg,
                     I think)
 (SCRIPT STILL UNDER DEVELOPMENT, MOST COMMANDS/OPTIONS UNIMPLEMENTED)
-"""
+"""  
 
 #
 # manage names and uuids
@@ -159,7 +159,7 @@ def add_OST(dom, options, args):
 # Command line processing
 #
 
-def cmdline(argv):
+def parse_cmdline(argv):
     short_opts = "ho:"
     long_opts = ["ost", "mtpt", "lov",
                  "merge=", "format", "reformat", "output=",
@@ -192,7 +192,7 @@ def cmdline(argv):
     return options, args
 
 def main():
-    options, args = cmdline(sys.argv[1:])
+    options, args = parse_cmdline(sys.argv[1:])
     outFile = '-'
 
     if options.has_key('merge'):
