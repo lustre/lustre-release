@@ -91,11 +91,11 @@ pass() {
 	echo PASS
 }
 
-MOUNT1=`mount| awk '/^'$NAME' .* lustre_lite / { print $3 }'| head -1`
-MOUNT2=`mount| awk '/^'$NAME' .* lustre_lite / { print $3 }'| tail -1`
+MOUNT1=`mount| awk '/ lustre/ { print $3 }'| head -1`
+MOUNT2=`mount| awk '/ lustre/ { print $3 }'| tail -1`
 [ -z "$MOUNT1" ] && error "NAME=$NAME not mounted once"
 [ "$MOUNT1" = "$MOUNT2" ] && error "NAME=$NAME not mounted twice"
-[ `mount| awk '/^'$NAME' .* lustre_lite / { print $3 }'| wc -l` -ne 2 ] && \
+[ `mount| awk '/ lustre/ { print $3 }'| wc -l` -ne 2 ] && \
 	error "NAME=$NAME mounted more than twice"
 
 DIR1=${DIR1:-$MOUNT1}
@@ -173,6 +173,7 @@ run_test 4 "fstat validation on multiple mount points =========="
 test_5() {
 	mcreate $DIR1/f5
 	truncate $DIR2/f5 100
+	$CHECKSTAT -t file -s 100 $DIR1/f5 || error
 	rm $DIR1/f5
 }
 run_test 5 "create a file on one mount, truncate it on the other"
@@ -200,7 +201,8 @@ test_9() {
 		echo -n $C >> $DIR/f9
 		[ "$MTPT" -eq 1 ] && MTPT=2 || MTPT=1
 	done
-	[ "`cat $DIR1/f9`" = "abcdefghijkl" ] || error
+	[ "`cat $DIR1/f9`" = "abcdefghijkl" ] || \
+		error "`od -a $DIR1/f10` != abcdefghijkl"
 }
 run_test 9 "append of file with sub-page size on multiple mounts"
 
@@ -214,7 +216,8 @@ test_10() {
 		[ "$MTPT" -eq 1 ] && MTPT=2 || MTPT=1
 		OFFSET=`expr $OFFSET + 1`
 	done
-	[ "`cat $DIR1/f10`" = "abcdefghijkl" ] || error
+	[ "`cat $DIR1/f10`" = "abcdefghijkl" ] || \
+		error "`od -a $DIR1/f10` != abcdefghijkl"
 }
 run_test 10 "write of file with sub-page size on multiple mounts "
 
