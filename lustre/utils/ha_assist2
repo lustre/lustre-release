@@ -1,0 +1,82 @@
+#!/usr/bin/python2
+# Author: Ravindranadh Chowdary Sahukara <s-ravindranadh_chowdary@hp.com>
+
+#   This file is part of Lustre, http://www.lustre.org.
+#
+#   Lustre is free software; you can redistribute it and/or
+#   modify it under the terms of version 2 of the GNU General Public
+#   License as published by the Free Software Foundation.
+#
+#   Lustre is distributed in the hope that it will be useful,
+#   but WITHOUT ANY WARRANTY; without even the implied warranty of
+#   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#   GNU General Public License for more details.
+#
+#   You should have received a copy of the GNU General Public License
+#   along with Lustre; if not, write to the Free Software
+#   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+#
+#Author : Ravindranadh Chowdary Sahukara <s-ravindranadh_chowdary@hp.com>
+
+from lutils import *
+
+
+def network(failedUUID, failoverUUID, failoverNode, failovernetType, failoverPort):
+	lctl=LCTLInterface('lctl')
+	if failovernetType == 'tcp':
+		cmd = """
+		network %s
+		close_uuid %s
+		del_uuid %s
+		connect %s %d
+		add_uuid %s %s
+		name2dev RPCDEV
+		probe
+		newconn %s
+		quit""" % (failovernetType,failedUUID, failedUUID, failoverNode,int(failoverPort),failoverUUID,failoverNode,failoverUUID)
+		print cmd
+		lctl.run(cmd)
+		
+
+def main():
+	FailedNetUUID=sys.argv[1:][0]
+	print FailedNetUUID
+	print "ha assist checking for problems"
+	if not os.access("/tmp/halog",os.R_OK):
+		print "no problems ..exiting"
+		sys.exit(1)
+		
+	try:
+		fp=open("/etc/lustre/ldapserver","r")
+		line=fp.readline()
+		fp.close()
+        except IOError, e:
+            log(e)
+
+	ldapinfo=string.split(line,':')
+	server=ldapinfo[0]
+	port=ldapinfo[1]
+	base="fs=lustre"
+	myCon=MyConn(server,port)
+	myCon.open()
+
+	connId=myCon.id
+	lustreNet=LustreNet()
+	lustreNet.getEntry_from_ldap(connId,base,FailedNetUUID)
+	
+	nodename=socket.gethostname()
+
+	nodename=lustreNet.id
+	failoverNetUUID=lustreNet.fnetUUID
+	lustreNet=LustreNet()
+	lustreNet.getEntry_from_ldap(connId,base,failoverNetUUID)
+	
+	network(FailedNetUUID, failoverNetUUID, lustreNet.id, lustreNet.netType, lustreNet.port)
+	
+
+
+if __name__ == "__main__":
+	main()
+
+
+
