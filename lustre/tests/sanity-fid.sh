@@ -219,7 +219,7 @@ test_1a() {
 	}
         rm -fr $DIR/1a0 || error
 }
-run_test 1a " fid managing correctness ============="
+run_test 1a " fid correctness (create) ============="
 
 test_1b() {
         rm -fr $DIR/1b0 > /dev/null
@@ -247,7 +247,7 @@ test_1b() {
 	}
         rm -fr $DIR/1b0 || error
 }
-run_test 1b " fid managing correctness ============="
+run_test 1b " fid correctness (remove) ============="
 
 TMPDIR=$OLDTMPDIR
 TMP=$OLDTMP
