@@ -643,7 +643,7 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req,
 
         EXIT;
  out:
-        if (lock->l_resource->lr_lvb_len > 0) {
+        if (lock != NULL && lock->l_resource->lr_lvb_len > 0) {
                 void *lvb = lustre_msg_buf(req->rq_repmsg, 1,
                                            lock->l_resource->lr_lvb_len);
                 memcpy(lvb, lock->l_resource->lr_lvb_data,
