@@ -4,29 +4,41 @@
 #ifndef _PORTALS_COMPAT_H
 #define _PORTALS_COMPAT_H
 
+// XXX BUG 1511 -- remove this stanza and all callers when bug 1511 is resolved
+#if SPINLOCK_DEBUG
+# if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)) || defined(CONFIG_RH_2_4_20)
+#  define SIGNAL_MASK_ASSERT() \
+   LASSERT(current->sighand->siglock.magic == SPINLOCK_MAGIC)
+# else
+#  define SIGNAL_MASK_ASSERT() \
+   LASSERT(current->sigmask_lock.magic == SPINLOCK_MAGIC)
+# endif
+#else
+# define SIGNAL_MASK_ASSERT()
+#endif
+// XXX BUG 1511 -- remove this stanza and all callers when bug 1511 is resolved
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0) || defined(CONFIG_RH_2_4_20)
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)) || defined(CONFIG_RH_2_4_20)
 
-#define SIGNAL_MASK_LOCK(task, flags)         \
-        spin_lock_irqsave( &task->sighand->siglock, flags)
-#define SIGNAL_MASK_UNLOCK(task, flags)       \
-        spin_unlock_irqrestore(&task->sighand->siglock, flags)
-#define USERMODEHELPER(path, argv, envp)       \
+# define SIGNAL_MASK_LOCK(task, flags)					\
+  spin_lock_irqsave(&task->sighand->siglock, flags)
+# define SIGNAL_MASK_UNLOCK(task, flags)				\
+  spin_unlock_irqrestore(&task->sighand->siglock, flags)
+#define USERMODEHELPER(path, argv, envp)                                \
         call_usermodehelper(path, argv, envp, 1)
-#define RECALC_SIGPENDING       recalc_sigpending()
-#define CURRENT_SECONDS         get_seconds()
+# define RECALC_SIGPENDING         recalc_sigpending()
+# define CURRENT_SECONDS           get_seconds()
 
-#else 
-        /* 2.4.. */
+#else /* 2.4.x */
 
-#define SIGNAL_MASK_LOCK(task, flags)         \
-        spin_lock_irqsave(&task->sigmask_lock, flags)
-#define SIGNAL_MASK_UNLOCK(task, flags)       \
-        spin_unlock_irqrestore(&task->sigmask_lock, flags)
-#define USERMODEHELPER(path, argv, envp)       \
+# define SIGNAL_MASK_LOCK(task, flags)					\
+  spin_lock_irqsave(&task->sigmask_lock, flags)
+# define SIGNAL_MASK_UNLOCK(task, flags)				\
+  spin_unlock_irqrestore(&task->sigmask_lock, flags)
+#define USERMODEHELPER(path, argv, envp)                                \
         call_usermodehelper(path, argv, envp)
-#define RECALC_SIGPENDING         recalc_sigpending(current)
-#define CURRENT_SECONDS         CURRENT_TIME
+# define RECALC_SIGPENDING         recalc_sigpending(current)
+# define CURRENT_SECONDS           CURRENT_TIME
 
 #endif
 
