@@ -205,7 +205,7 @@ int llog_lvfs_write_rec(struct llog_handle *loghandle,
         }
         RETURN(rc);
 }
-EXPORT_SYMBOL(llog_lvfs_write_record);
+EXPORT_SYMBOL(llog_lvfs_write_rec);
 
 int llog_lvfs_next_block(struct llog_handle *loghandle, int cur_idx,
                          int next_idx, __u64 *cur_offset, void *buf, int len)
@@ -313,10 +313,11 @@ int llog_lvfs_create(struct obd_device *obd,
                 rc = obd_create(obd->obd_log_exp, oa, NULL, NULL);
                 if (rc) 
                         GOTO(out_handle, rc);
-                de = obd_lvfs_fid2dentry(handle->lgh_obd, oa->o_id, oa->o_gr);
+                de = obd_lvfs_fid2dentry(obd->obd_log_exp, oa->o_id, oa->o_gr);
                 if (IS_ERR(de))
                         GOTO(out_handle, rc = PTR_ERR(de));
-                handle->lgh_file = l_dentry_open(de, open_flags);
+                handle->lgh_file = l_dentry_open(&obd->obd_ctxt, de,
+                                                 open_flags);
                 if (IS_ERR(handle->lgh_file))
                         GOTO(out_handle, rc = PTR_ERR(handle->lgh_file));
                 handle->lgh_id.lgl_oid = oa->o_id;
@@ -332,7 +333,6 @@ out_handle:
         return rc;
 }
 
-
 int llog_lvfs_close(struct llog_handle *handle)
 {
         int rc;
@@ -346,13 +346,32 @@ int llog_lvfs_close(struct llog_handle *handle)
         RETURN(rc);
 }
 
-#if 0
 int llog_lvfs_destroy(struct llog_handle *handle)
 {
+        struct obdo *oa;
+        int rc;
+        ENTRY;
 
+        oa = obdo_alloc();
+        if (oa == NULL) 
+                RETURN(-ENOMEM);
 
+        oa->o_id = handle->lgh_id.lgl_oid;
+        oa->o_gr = handle->lgh_id.lgl_ogr;
+        oa->o_generation = handle->lgh_id.lgl_ogen;
+        oa->o_valid = OBD_MD_FLGROUP | OBD_MD_FLGENER;
+
+        rc = llog_lvfs_close(handle);
+        if (rc)
+                GOTO(out, rc);
+
+        rc = obd_destroy(handle->lgh_obd->obd_log_exp, oa, NULL, NULL);
+ out:
+        obdo_free(oa);
+        RETURN(rc);
 }
 
+#if 0
 /* This is a callback from the llog_* functions.
  * Assumes caller has already pushed us into the kernel context. */
 int mds_log_close(struct llog_handle *cathandle, struct llog_handle *loghandle)

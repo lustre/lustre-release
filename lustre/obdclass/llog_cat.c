@@ -144,7 +144,7 @@ out:
 }
 
 
-
+#if 0
 /* Assumes caller has already pushed us into the kernel context. */
 int llog_cat_init(struct llog_handle *cathandle, struct obd_uuid *tgtuuid)
 {
@@ -322,3 +322,4 @@ void llog_cat_put(struct obd_device *obd, struct llog_handle *cathandle)
 
         EXIT;
 }
+#endif

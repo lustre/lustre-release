@@ -202,7 +202,8 @@ struct dentry *simple_mknod(struct dentry *dir, char *name, int mode)
                 GOTO(out_up, dchild);
         }
 
-        err = ll_vfs_create(dir->d_inode, dchild, (mode & ~S_IFMT) | S_IFREG, NULL);
+        err = ll_vfs_create(dir->d_inode, dchild, (mode & ~S_IFMT) | S_IFREG,
+                            NULL);
         if (err)
                 GOTO(out_err, err);
 
@@ -301,11 +302,13 @@ int lustre_fsync(struct file *file)
 }
 EXPORT_SYMBOL(lustre_fsync);
 
-
-
-
-
-
+struct l_file *l_dentry_open(struct obd_run_ctxt *ctxt, struct l_dentry *de,
+                             int flags)
+{
+        mntget(ctxt->pwdmnt);
+        return dentry_open(de, ctxt->pwdmnt, flags);
+}
+EXPORT_SYMBOL(l_dentry_open);
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 

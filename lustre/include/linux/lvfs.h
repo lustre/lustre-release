@@ -1,6 +1,8 @@
 #ifndef __LVFS_H__
 #define __LVFS_H__
 
+#include <linux/kp30.h>
+
 #if defined __KERNEL__
 #include <linux/lvfs_linux.h>
 #endif 
@@ -36,12 +38,14 @@ struct obd_run_ctxt {
 #endif
 };
 
-
 #ifdef OBD_CTXT_DEBUG
 #define OBD_SET_CTXT_MAGIC(ctxt) (ctxt)->magic = OBD_RUN_CTXT_MAGIC
 #else
 #define OBD_SET_CTXT_MAGIC(ctxt) do {} while(0)
 #endif
+
+/* lvfs_common.c */
+struct dentry *lvfs_fid2dentry(struct obd_run_ctxt *, __u64, __u32, void *data);
 
 #ifdef __KERNEL__
 
@@ -54,9 +58,6 @@ struct dentry *simple_mknod(struct dentry *dir, char *name, int mode);
 int lustre_fread(struct file *file, void *buf, int len, loff_t *off);
 int lustre_fwrite(struct file *file, const void *buf, int len, loff_t *off);
 int lustre_fsync(struct file *file);
-
-/* lvfs_common.c */
-struct dentry *lvfs_fid2dentry(struct obd_run_ctxt *, __u64, __u32, void *data);
 
 static inline void l_dput(struct dentry *de)
 {
