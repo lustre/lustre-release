@@ -5,8 +5,6 @@
 
 DEFS=
 
-CFLAGS = -DOBD_MAX_IOCTL_BUFFER=@OBD_BUFFER_SIZE@
-
 MODULE = cobd
 modulefs_DATA = cobd.o
 EXTRA_PROGRAMS = cobd
@@ -15,3 +13,5 @@ LINX=
 cobd_SOURCES = cache_obd.c lproc_cache.c $(LINX)
 
 include $(top_srcdir)/Rules
+
+CFLAGS += -DOBD_MAX_IOCTL_BUFFER=@OBD_BUFFER_SIZE@
