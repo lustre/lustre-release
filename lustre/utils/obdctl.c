@@ -303,7 +303,7 @@ static network_t *xml_network(xmlDocPtr doc, xmlNodePtr root) {
 }
 
 static int xml_mds(xmlDocPtr doc, xmlNodePtr root, 
-                   char *serv_id, char *serv_uuid) {
+                   char *serv_name, char *serv_uuid) {
         xmlNodePtr cur = root->xmlChildrenNode;
         char *fstype = NULL, *device = NULL;
         int rc;
@@ -316,6 +316,14 @@ static int xml_mds(xmlDocPtr doc, xmlNodePtr root,
                 if (!xmlStrcmp(cur->name, "device"))
                         device = xmlNodeGetContent(cur);
  
+                /* FIXME: Parse the network bits
+                 * if (!xmlStrcmp(cur->name, "network")) {
+                 *       net = xml_network(doc, cur);
+                 *       if (net == NULL)
+                 *               return -1;
+                 * }
+                 * free(net);
+                 */
                 cur = cur->next;
         } 
 
@@ -327,7 +335,7 @@ static int xml_mds(xmlDocPtr doc, xmlNodePtr root,
         if ((rc = xml_command("newdev", NULL)) != 0)
                 return rc;
 
-        if ((rc = xml_command("attach", "mds", "MDSDEV", NULL)) != 0)
+        if ((rc = xml_command("attach","mds",serv_name,serv_uuid,NULL)) != 0)
                 return rc;
 
         if ((rc = xml_command("setup", device, fstype, NULL)) != 0)
@@ -337,9 +345,9 @@ static int xml_mds(xmlDocPtr doc, xmlNodePtr root,
 }
         
 static int xml_obd(xmlDocPtr doc, xmlNodePtr root, 
-                   char *serv_id, char *serv_uuid) {
-        xmlNodePtr cur = root->xmlChildrenNode;
+                   char *serv_name, char *serv_uuid) {
         char *obdtype, *format = NULL, *fstype = NULL, *device = NULL;
+        xmlNodePtr cur = root->xmlChildrenNode;
         int rc;
 
         obdtype = xmlGetProp(root, "type");
@@ -359,7 +367,8 @@ static int xml_obd(xmlDocPtr doc, xmlNodePtr root,
         } 
 
         if ((obdtype == NULL) || (fstype == NULL) || (device == NULL)) {
-                printf("error: 'type' attrib and <fstype> and <device> tags required\n");
+                printf("error: 'type' attrib and <fstype> "
+                       "and <device> tags required\n");
                 return -1;
         }
 
@@ -371,7 +380,8 @@ static int xml_obd(xmlDocPtr doc, xmlNodePtr root,
         if ((rc = xml_command("newdev", NULL)) != 0)
                 return rc;
 
-        if ((rc = xml_command("attach", obdtype, "OBDDEV", NULL)) != 0)
+        if ((rc = xml_command("attach", obdtype,
+            serv_name,serv_uuid, NULL)) != 0)
                 return rc;
 
         if ((rc = xml_command("setup", device, fstype, NULL)) != 0)
@@ -381,125 +391,136 @@ static int xml_obd(xmlDocPtr doc, xmlNodePtr root,
 }
 
 static int xml_ost(xmlDocPtr doc, xmlNodePtr root, 
-                   char *serv_id, char *serv_uuid) {
-        int rc;
+                   char *serv_name, char *serv_uuid) {
+        char *server_name = NULL, *server_uuid = NULL;
+        char *failover_name = NULL, *failover_uuid = NULL;
+        xmlNodePtr cur = root->xmlChildrenNode;
+        int server_num, failover_num, rc;
 
         printf("--- Setting up OST ---\n");
+        while (cur != NULL) {
+                if (!xmlStrcmp(cur->name, "server_id")) {
+                        server_num = atoi(xmlGetProp(cur, "num"));
+                        server_name = xmlGetProp(cur, "name");
+                        server_uuid = xmlGetProp(cur, "uuid");
+                }
+
+                /* FIXME: Properly handle multiple failover servers */
+                if (!xmlStrcmp(cur->name, "failover_id")) {
+                        failover_num = atoi(xmlGetProp(cur, "num"));
+                        failover_name = xmlGetProp(cur, "name");
+                        failover_uuid = xmlGetProp(cur, "uuid");
+                }
+
+                cur = cur->next;
+        } 
+
+        if ((server_name == NULL) || (server_uuid == NULL)) {
+                printf("error: atleast the <server_id> tag is required\n");
+                return -1;
+        }
+        
         if ((rc = xml_command("newdev", NULL)) != 0)
                 return rc;
 
-        if ((rc = xml_command("attach", "ost", "OSTDEV", NULL)) != 0)
+        if ((rc = xml_command("attach","ost",serv_name,serv_uuid,NULL)) != 0)
                 return rc;
 
-        if ((rc = xml_command("setup", "$OBDDEV", NULL)) != 0)
+        if ((rc = xml_command("setup", server_name, NULL)) != 0)
                 return rc;
 
         return 0;
 }
 
 static int xml_osc(xmlDocPtr doc, xmlNodePtr root, 
-                   char *serv_id, char *serv_uuid) {
+                   char *serv_name, char *serv_uuid) {
+        char *ost_name = NULL, *ost_uuid = NULL;
         xmlNodePtr cur = root->xmlChildrenNode;
-        network_t *net = NULL;
-        int rc = 0;
+        int ost_num, rc = 0;
 
         printf("--- Setting up OSC ---\n");
         while (cur != NULL) {
-                if (!xmlStrcmp(cur->name, "network")) {
-                        net = xml_network(doc, cur);
-                        if (net == NULL)
-                                return -1;
+                if (!xmlStrcmp(cur->name, "service_id")) {
+                        ost_num = atoi(xmlGetProp(cur, "num"));
+                        ost_name = xmlGetProp(cur, "name");
+                        ost_uuid = xmlGetProp(cur, "uuid");
                 }
+
                 cur = cur->next;
         } 
 
-        if (net == NULL) {
-                printf("error: <network> tag required\n");
+        if ((ost_name == NULL) || (ost_uuid == NULL)) {
+                printf("error: atleast the <service_id> tag is required\n");
                 return -1;
         }
 
-        if ((rc = xml_command("newdev", NULL)) != 0) {
-                rc = -1;
-                goto xml_osc_error;
-        }
+        if ((rc = xml_command("newdev", NULL)) != 0)
+                return rc;
 
-        if ((rc = xml_command("attach", "osc", "OSCDEV", NULL)) != 0) {
-                rc = -1;
-                goto xml_osc_error;
-        }
+        if ((rc = xml_command("attach","osc",serv_name,serv_uuid,NULL)) != 0)
+                return rc;
 
-        if ((rc = xml_command("setup", "OSTDEV", net->server, NULL)) != 0) {
-                rc = -1;
-                goto xml_osc_error;
-        }
+        if ((rc = xml_command("setup", ost_uuid, "localhost", NULL)) != 0)
+                return rc;
 
-xml_osc_error:
-        free(net);
-        return rc;
+        return 0;
 }
 
 static int xml_mdc(xmlDocPtr doc, xmlNodePtr root, 
-                   char *serv_id, char *serv_uuid) {
+                   char *serv_name, char *serv_uuid) {
+        char *mds_name = NULL, *mds_uuid = NULL;
         xmlNodePtr cur = root->xmlChildrenNode;
-        network_t *net = NULL;
-        int rc = 0;
+        int mds_num, rc = 0;
 
         printf("--- Setting up MDC ---\n");
         while (cur != NULL) {
-                if (!xmlStrcmp(cur->name, "network")) {
-                        net = xml_network(doc, cur);
-                        if (net == NULL)
-                                return -1;
+                if (!xmlStrcmp(cur->name, "service_id")) {
+                        mds_num = atoi(xmlGetProp(cur, "num"));
+                        mds_name = xmlGetProp(cur, "name");
+                        mds_uuid = xmlGetProp(cur, "uuid");
                 }
+
                 cur = cur->next;
         } 
 
-        if (net == NULL) {
-                printf("error: <network> tag required\n");
+        if ((mds_name == NULL) || (mds_uuid == NULL)) {
+                printf("error: atleast the <service_id> tag is required\n");
                 return -1;
         }
 
-        if ((rc = xml_command("newdev", NULL)) != 0) {
-                rc = -1;
-                goto xml_mdc_error;
-        }
+        if ((rc = xml_command("newdev", NULL)) != 0) 
+                return rc;
 
-        if ((rc = xml_command("attach", "mdc", "MDCDEV", NULL)) != 0) {
-                rc = -1;
-                goto xml_mdc_error;
-        }
+        if ((rc = xml_command("attach","mdc",serv_name,serv_uuid,NULL)) != 0)
+                return rc;
 
-        if ((rc = xml_command("setup", "MDSDEV", net->server, NULL)) != 0) {
-                rc = -1;
-                goto xml_mdc_error;
-        }
-
-xml_mdc_error:
-        free(net);
-        return rc;
+        if ((rc = xml_command("setup", mds_uuid, "localhost", NULL)) != 0)
+                return rc;
+                
+        return 0;
 }
 
 static int xml_lov(xmlDocPtr doc, xmlNodePtr root, 
-                   char *serv_id, char *serv_uuid) {
+                   char *serv_name, char *serv_uuid) {
         printf("--- Setting up LOV ---\n");
         return 0;
 }
 
 static int xml_router(xmlDocPtr doc, xmlNodePtr root, 
-                   char *serv_id, char *serv_uuid) {
+                   char *serv_name, char *serv_uuid) {
         printf("--- Setting up ROUTER ---\n");
         return 0;
 }
 
 static int xml_ldlm(xmlDocPtr doc, xmlNodePtr root, 
-                   char *serv_id, char *serv_uuid) {
+                   char *serv_name, char *serv_uuid) {
         int rc;
 
         printf("--- Setting up LDLM ---\n");
         if ((rc = xml_command("newdev", NULL)) != 0)
                 return rc;
 
-        if ((rc = xml_command("attach", "ldlm", "LDLMDEV", NULL)) != 0)
+        if ((rc = xml_command("attach","ldlm",serv_name,serv_uuid,NULL)) != 0)
                 return rc;
 
         if ((rc = xml_command("setup", NULL)) != 0)
@@ -509,59 +530,59 @@ static int xml_ldlm(xmlDocPtr doc, xmlNodePtr root,
 }
 
 static int xml_service(xmlDocPtr doc, xmlNodePtr root, 
-                       int serv_num, char *serv_id, char *serv_uuid) {
+                       int serv_num, char *serv_name, char *serv_uuid) {
         xmlNodePtr cur = root;
-        char *id, *uuid;
+        char *name, *uuid;
 
         while (cur != NULL) {
-                id = xmlGetProp(cur, "id");
+                name = xmlGetProp(cur, "name");
                 uuid = xmlGetProp(cur, "uuid");
 
-                if (xmlStrcmp(id, serv_id) ||
+                if (xmlStrcmp(name, serv_name) ||
                     xmlStrcmp(uuid, serv_uuid)) {
                         cur = cur->next;
                         continue;
                 }
 
                 if (!xmlStrcmp(cur->name, "mds"))
-                        return xml_mds(doc, cur, serv_id, serv_uuid);
+                        return xml_mds(doc, cur, name, uuid);
                 else if (!xmlStrcmp(cur->name, "obd"))
-                        return xml_obd(doc, cur, serv_id, serv_uuid);
+                        return xml_obd(doc, cur, name, uuid);
                 else if (!xmlStrcmp(cur->name, "ost"))
-                        return xml_ost(doc, cur, serv_id, serv_uuid);
+                        return xml_ost(doc, cur, name, uuid);
                 else if (!xmlStrcmp(cur->name, "osc"))
-                        return xml_osc(doc, cur, serv_id, serv_uuid);
+                        return xml_osc(doc, cur, name, uuid);
                 else if (!xmlStrcmp(cur->name, "mdc"))
-                        return xml_mdc(doc, cur, serv_id, serv_uuid);
+                        return xml_mdc(doc, cur, name, uuid);
                 else if (!xmlStrcmp(cur->name, "lov"))
-                        return xml_lov(doc, cur, serv_id, serv_uuid);
+                        return xml_lov(doc, cur, name, uuid);
                 else if (!xmlStrcmp(cur->name, "router"))
-                        return xml_router(doc, cur, serv_id, serv_uuid);
+                        return xml_router(doc, cur, name, uuid);
                 else if (!xmlStrcmp(cur->name, "ldlm"))
-                        return xml_ldlm(doc, cur, serv_id, serv_uuid);
+                        return xml_ldlm(doc, cur, name, uuid);
                 else
                         return -1;        
 
                 cur = cur->next;
         }
 
-        printf("error: No XML config branch for id=%s uuid=%s\n",
-                serv_id, serv_uuid); 
+        printf("error: No XML config branch for name=%s uuid=%s\n",
+                serv_name, serv_uuid); 
         return -1; 
 }
 
 static int xml_profile(xmlDocPtr doc, xmlNodePtr root, 
-                       int prof_num, char *prof_id, char *prof_uuid) {
+                       int prof_num, char *prof_name, char *prof_uuid) {
         xmlNodePtr parent, cur = root;
-        char *id, *uuid, *srv_id, *srv_uuid;
+        char *name, *uuid, *srv_name, *srv_uuid;
         int rc = 0, num;
 
         while (cur != NULL) {
-                id = xmlGetProp(cur, "id");
+                name = xmlGetProp(cur, "name");
                 uuid = xmlGetProp(cur, "uuid");
 
                 if (xmlStrcmp(cur->name, "profile") || 
-                    xmlStrcmp(id, prof_id)          ||
+                    xmlStrcmp(name, prof_name)          ||
                     xmlStrcmp(uuid, prof_uuid)) {
                         cur = cur->next;
                         continue;
@@ -581,7 +602,7 @@ static int xml_profile(xmlDocPtr doc, xmlNodePtr root,
                         if (!xmlStrcmp(cur->name, "service_id")) {
                                 num = atoi(xmlGetProp(cur, "num"));
                                 rc = xml_service(doc, root, num,
-                                        srv_id = xmlGetProp(cur, "id"),
+                                        srv_name = xmlGetProp(cur, "name"),
                                         srv_uuid = xmlGetProp(cur, "uuid"));
                                 if (rc != 0) {
                                         printf("error: service config\n");
@@ -600,7 +621,7 @@ static int xml_profile(xmlDocPtr doc, xmlNodePtr root,
 
 static int xml_node(xmlDocPtr doc, xmlNodePtr root) {
         xmlNodePtr parent, cur = root;
-        char *id, *uuid;
+        char *name, *uuid;
         int rc = 0, num;
         
         /* Walk the node tags looking for ours */
@@ -610,15 +631,15 @@ static int xml_node(xmlDocPtr doc, xmlNodePtr root) {
                         continue;
                 }
 
-                id = xmlGetProp(cur, "id");
-                if (id == NULL)
+                name = xmlGetProp(cur, "name");
+                if (name == NULL)
                         return -1;
 
                 uuid = xmlGetProp(cur, "uuid");
                 if (uuid == NULL)
                         return -1;
 
-                /* FIXME: Verify our ID and UUID against /etc/lustre/id
+                /* FIXME: Verify our NAME and UUID against /etc/lustre/id
                  *        so we're sure we are who we think we are.
                  */
 
@@ -632,7 +653,7 @@ static int xml_node(xmlDocPtr doc, xmlNodePtr root) {
                         if (!xmlStrcmp(cur->name, "profile_id")) {
                                 num = atoi(xmlGetProp(cur, "num"));
                                 rc = xml_profile(doc, root, num,
-                                                 xmlGetProp(cur, "id"),
+                                                 xmlGetProp(cur, "name"),
                                                  xmlGetProp(cur, "uuid"));
                                 if (rc != 0)
                                         return rc;
