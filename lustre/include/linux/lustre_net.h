@@ -73,6 +73,8 @@
 struct ptlrpc_connection {
         struct list_head c_link;
         struct lustre_peer c_peer;
+        __u8 c_local_uuid[37];
+        __u8 c_remote_uuid[37];
 
         int c_level;
         __u32 c_generation;  /* changes upon new connection */
