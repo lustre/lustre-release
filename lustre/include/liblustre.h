@@ -21,6 +21,24 @@
 #define LINUX_VERSION_CODE 1
 #define KERNEL_VERSION(a,b,c) 0 
 
+static inline void inter_module_put(void *a)
+{
+        return;
+}
+
+extern ptl_handle_ni_t         tcpnal_ni;
+
+static inline void *inter_module_get(char *arg)
+{
+
+        if (strcmp(arg, "tcpnal_ni") == 0 )
+                return &tcpnal_ni;
+        else 
+                return NULL;
+
+}
+
+
 /* cheats for now */
 
 struct work_struct { 
@@ -43,7 +61,10 @@ static inline void schedule_work(struct work_struct *q)
 
 
 #define strnlen(a,b) strlen(a)
-#define kmalloc(a,b) malloc(a)
+static inline void *kmalloc(int size, int prot)
+{
+        return malloc(size);
+}
 #define vmalloc malloc
 #define vfree free
 #define kfree(a) free(a)
@@ -94,7 +115,16 @@ static inline int misc_register(void *foo)
 #define MOD_INC_USE_COUNT  do {int a = 1; a++; } while (0)
 #define MOD_DEC_USE_COUNT  do {int a = 1; a++; } while (0)
 
+/* module initialization */
+extern int init_obdclass(void);
+extern int ptlrpc_init(void);
+extern int ldlm_init(void);
+extern int osc_init(void);
+extern int echo_client_init(void);
+
+
 /* general stuff */
+#define jiffies 0
 
 #define EXPORT_SYMBOL(S)  
 
@@ -105,6 +135,14 @@ typedef __u64 kdev_t;
 #define spin_lock(l) do {int a = 1; a++; } while (0)
 #define spin_unlock(l) do {int a= 1; a++; } while (0)
 #define spin_lock_init(l) do {int a= 1; a++; } while (0)
+static inline void spin_lock_bh(spinlock_t *l)
+{
+        return;
+}
+static inline void spin_unlock_bh(spinlock_t *l)
+{
+        return;
+}
 static inline void spin_lock_irqrestore(a,b)
 {
         return;
@@ -121,8 +159,6 @@ static inline void spin_lock_irqsave(a,b)
 #define barrier() do {int a= 1; a++; } while (0)
 
 /* registering symbols */
-extern void *inter_module_get(char *name);
-extern void inter_module_put(char *name);
 
 #define ERESTARTSYS ERESTART
 #define HZ 1
@@ -160,7 +196,7 @@ static inline int copy_to_user(void *a,void *b, int c)
 typedef struct { 
          int size;
 } kmem_cache_t;
-
+#define SLAB_HWCACHE_ALIGN 0
 static inline kmem_cache_t *kmem_cache_create(name,objsize,c,d,e,f)
 {
         return malloc(objsize);
@@ -312,7 +348,34 @@ static inline int call_usermodehelper(char *prog, char **argv, char **evnp)
 
 struct timer_list { 
         struct list_head tl_list;
+        void (*function)(unsigned long unused);
+        void *data;
+        int expires;
 };
+
+static inline int timer_pending(struct timer_list *l)
+{
+        if (l->expires > jiffies)
+                return 1;
+        else 
+                return 0;
+}
+
+static inline int init_timer(struct timer_list *l)
+{
+        INIT_LIST_HEAD(&l->tl_list);
+}
+
+static inline void mod_timer(struct timer_list *l, int thetime)
+{
+        l->expires = thetime;
+
+}
+
+static inline void del_timer(struct timer_list *l)
+{
+        free(l);
+}
 
 typedef struct { volatile int counter; } atomic_t;
 

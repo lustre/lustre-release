@@ -20,10 +20,14 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
+#define DEBUG_SUBSYSTEM S_PORTALS
+#ifdef __KERNEL__
 #include <linux/types.h>
 #include <linux/random.h>
+#else 
+#include <liblustre.h>
+#endif 
 
-#define DEBUG_SUBSYSTEM S_PORTALS
 
 #include <linux/kp30.h>
 #include <linux/lustre_handles.h>
