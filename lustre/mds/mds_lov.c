@@ -363,9 +363,9 @@ int mds_lov_set_growth(struct mds_obd *mds, int count)
         int rc;
         ENTRY;
 
-        rc = obd_set_info(mds->mds_osc_exp, strlen("growth_count"), 
+        rc = obd_set_info(mds->mds_osc_exp, strlen("growth_count"),
                           "growth_count", sizeof(count), &count);
-                
+
         RETURN(rc);
 }
 
@@ -451,7 +451,7 @@ int mds_post_mds_lovconf(struct obd_device *obd)
         return rc;
 }
 
-int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len, 
+int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                   void *karg, void *uarg)
 {
         static struct obd_uuid cfg_uuid = { .uuid = "config_uuid" };
@@ -478,7 +478,6 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 else
                         mds->mds_cfg_llh = NULL;
                 pop_ctxt(&saved, &obd->obd_ctxt, NULL);
-                        
 
                 RETURN(rc);
         }
@@ -573,7 +572,7 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 BDEVNAME_DECLARE_STORAGE(tmp);
                 CERROR("setting device %s read-only\n",
                        ll_bdevname(obd->u.mds.mds_sb, tmp));
-                
+
                 handle = fsfilt_start(obd, inode, FSFILT_OP_MKNOD, NULL);
                 LASSERT(handle);
                 rc = fsfilt_commit(obd, inode, handle, 1);
@@ -592,3 +591,56 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         }
         RETURN(0);
 }
+
+/* Convert the on-disk LOV EA structre.
+ * We always try to convert from an old LOV EA format to the common in-memory
+ * (lsm) format (obd_unpackmd() understands the old on-disk (lmm) format) and
+ * then convert back to the new on-disk format and save it back to disk
+ * (obd_packmd() only ever saves to the new on-disk format) so we don't have
+ * to convert it each time this inode is accessed.
+ *
+ * This function is a bit interesting in the error handling.  We can safely
+ * ship the old lmm to the client in case of failure, since it uses the same
+ * obd_unpackmd() code and can do the conversion if the MDS fails for some
+ * reason.  We will not delete the old lmm data until we have written the
+ * new format lmm data in fsfilt_set_md(). */
+int mds_convert_lov_ea(struct obd_device *obd, struct inode *inode,
+                       struct lov_mds_md *lmm, int lmm_size)
+{
+        struct lov_stripe_md *lsm = NULL;
+        void *handle;
+        int rc, err;
+        ENTRY;
+
+        if (le32_to_cpu(lmm->lmm_magic) == LOV_MAGIC)
+                RETURN(0);
+
+        CWARN("converting LOV EA on %lu/%u from V0 to V1\n",
+              inode->i_ino, inode->i_generation);
+        rc = obd_unpackmd(obd->u.mds.mds_osc_exp, &lsm, lmm, lmm_size);
+        if (rc < 0)
+                GOTO(conv_end, rc);
+
+        rc = obd_packmd(obd->u.mds.mds_osc_exp, &lmm, lsm);
+        if (rc < 0)
+                GOTO(conv_free, rc);
+        lmm_size = rc;
+
+        handle = fsfilt_start(obd, inode, FSFILT_OP_SETATTR, NULL);
+        if (IS_ERR(handle)) {
+                rc = PTR_ERR(handle);
+                GOTO(conv_free, rc);
+        }
+
+        rc = fsfilt_set_md(obd, inode, handle, lmm, lmm_size);
+
+        err = fsfilt_commit(obd, inode, handle, 0);
+        if (!rc)
+                rc = err ? err : lmm_size;
+        GOTO(conv_free, rc);
+conv_free:
+        obd_free_memmd(obd->u.mds.mds_osc_exp, &lsm);
+conv_end:
+        return rc;
+}
+
