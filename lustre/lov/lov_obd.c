@@ -289,7 +289,7 @@ static int lov_destroy(struct lustre_handle *conn, struct obdo *oa,
                 rc = obd_destroy(&lov->tgts[i].conn, &tmp, NULL);
                 if (!rc) { 
                         CERROR("Error destroying object %Ld on %d\n",
-                               oa->o_id, i); 
+                               tmp.o_id, i); 
                 }
         }
         RETURN(rc);
@@ -366,7 +366,7 @@ static int lov_setattr(struct lustre_handle *conn, struct obdo *oa,
                 rc = obd_setattr(&lov->tgts[i].conn, &tmp, NULL);
                 if (!rc) { 
                         CERROR("Error setattr object %Ld on %d\n",
-                               oa->o_id, i); 
+                               tmp.o_id, i); 
                 }
         }
         RETURN(rc);
@@ -399,7 +399,7 @@ static int lov_open(struct lustre_handle *conn, struct obdo *oa,
                 if (rc) { 
                         rc2 = rc;
                         CERROR("Error open object %Ld on %d\n",
-                               oa->o_id, i); 
+                               tmp.o_id, i); 
                 }
         }
         RETURN(rc2);
@@ -432,7 +432,7 @@ static int lov_close(struct lustre_handle *conn, struct obdo *oa,
                 rc = obd_close(&lov->tgts[i].conn, &tmp, NULL);
                 if (rc) { 
                         CERROR("Error close object %Ld on %d\n",
-                               oa->o_id, i); 
+                               tmp.o_id, i); 
                 }
         }
         RETURN(rc);
@@ -523,7 +523,7 @@ static int lov_punch(struct lustre_handle *conn, struct obdo *oa,
                                starti, endi);
                 if (!rc) { 
                         CERROR("Error punch object %Ld on %d\n",
-                               oa->o_id, i); 
+                               tmp.o_id, i); 
                 }
         }
         RETURN(rc);
