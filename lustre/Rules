@@ -16,8 +16,8 @@ $(MODULE).o: $($(MODULE)_OBJECTS)
 tags:
 	rm -f $(top_srcdir)/TAGS
 	rm -f $(top_srcdir)/tags
-	find $(top_srcdir)/../portals -name '*.[hc]' | xargs etags -a
+	find $(top_srcdir)/../portals/ -name '*.[hc]' | xargs etags -a
 	find $(top_srcdir) -name '*.[hc]' | xargs etags -a
-	find $(top_srcdir)/../portals -name '*.[hc]' | xargs ctags -a
+	find $(top_srcdir)/../portals/ -name '*.[hc]' | xargs ctags -a
 	find $(top_srcdir) -name '*.[hc]' | xargs ctags -a
 
