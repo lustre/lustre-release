@@ -603,7 +603,7 @@ int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         /* Do snap options here*/
         rc = obd_do_cow(req->rq_export, ioo, objcount, remote_nb);
         if (rc)
-                GOTO(out, rc = npages); 
+                GOTO(out, rc); 
 
         /* FIXME all niobuf splitting should be done in obdfilter if needed */
         /* CAVEAT EMPTOR this sets ioo->ioo_bufcnt to # pages */
