@@ -1,0 +1,6 @@
+kernel/bootimg.c
+kernel/bootimg_pic.c
+include/asm-i386/apic.h
+include/linux/crash.h
+arch/i386/kernel/crash.c
+arch/i386/kernel/nmi.c

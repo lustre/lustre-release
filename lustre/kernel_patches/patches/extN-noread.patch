@@ -1,7 +1,11 @@
-diff -ru lustre-head/fs/ext3/ialloc.c lustre/fs/ext3/ialloc.c
---- lustre-head/fs/ext3/ialloc.c	Mon Dec 23 10:02:58 2002
-+++ lustre/fs/ext3/ialloc.c	Mon Dec 23 09:46:20 2002
-@@ -289,6 +289,37 @@
+ fs/ext3/ialloc.c        |   47 +++++++++++++++++++++-
+ fs/ext3/inode.c         |   99 ++++++++++++++++++++++++++++++++++++------------
+ include/linux/ext3_fs.h |    2 
+ 3 files changed, 122 insertions(+), 26 deletions(-)
+
+--- linux-2.4.18-chaos52/fs/ext3/ialloc.c~extN-noread	2003-05-16 12:26:29.000000000 +0800
++++ linux-2.4.18-chaos52-root/fs/ext3/ialloc.c	2003-05-16 12:26:31.000000000 +0800
+@@ -289,6 +289,37 @@ error_return:
  }
  
  /*
@@ -39,7 +43,7 @@ diff -ru lustre-head/fs/ext3/ialloc.c lustre/fs/ext3/ialloc.c
   * There are two policies for allocating an inode.  If the new inode is
   * a directory, then a forward search is made for a block group with both
   * free space and a low directory-to-inode ratio; if that fails, then of
-@@ -312,6 +343,7 @@
+@@ -312,6 +343,7 @@ struct inode * ext3_new_inode (handle_t 
  	struct ext3_group_desc * gdp;
  	struct ext3_group_desc * tmp;
  	struct ext3_super_block * es;
@@ -47,7 +51,7 @@ diff -ru lustre-head/fs/ext3/ialloc.c lustre/fs/ext3/ialloc.c
  	int err = 0;
  
  	/* Cannot create files in a deleted directory */
-@@ -505,7 +538,7 @@
+@@ -505,7 +537,7 @@ repeat:
  	ei->i_prealloc_count = 0;
  #endif
  	ei->i_block_group = i;
@@ -56,7 +60,7 @@ diff -ru lustre-head/fs/ext3/ialloc.c lustre/fs/ext3/ialloc.c
  	if (ei->i_flags & EXT3_SYNC_FL)
  		inode->i_flags |= S_SYNC;
  	if (IS_SYNC(inode))
-@@ -514,9 +547,18 @@
+@@ -514,9 +546,18 @@ repeat:
  	inode->i_generation = sbi->s_next_generation++;
  
  	ei->i_state = EXT3_STATE_NEW;
@@ -77,10 +81,9 @@ diff -ru lustre-head/fs/ext3/ialloc.c lustre/fs/ext3/ialloc.c
  	unlock_super (sb);
  	if(DQUOT_ALLOC_INODE(inode)) {
  		DQUOT_DROP(inode);
-diff -ru lustre-head/fs/ext3/inode.c lustre/fs/ext3/inode.c
---- lustre-head/fs/ext3/inode.c	Mon Dec 23 10:02:58 2002
-+++ lustre/fs/ext3/inode.c	Mon Dec 23 09:50:25 2002
-@@ -2011,23 +1994,28 @@
+--- linux-2.4.18-chaos52/fs/ext3/inode.c~extN-noread	2003-05-16 12:26:29.000000000 +0800
++++ linux-2.4.18-chaos52-root/fs/ext3/inode.c	2003-05-16 12:27:06.000000000 +0800
+@@ -2011,23 +2011,28 @@ out_stop:
  	ext3_journal_stop(handle, inode);
  }
  
@@ -116,7 +119,7 @@ diff -ru lustre-head/fs/ext3/inode.c lustre/fs/ext3/inode.c
  	if ((inode->i_ino != EXT3_ROOT_INO &&
  		inode->i_ino != EXT3_JOURNAL_INO &&
  		inode->i_ino < EXT3_FIRST_INO(sb)) ||
-@@ -2042,38 +2034,86 @@
+@@ -2042,38 +2047,86 @@ int ext3_get_inode_loc (struct inode *in
  	}
  	group_desc = block_group >> sbi->s_desc_per_block_bits;
  	desc = block_group & (sbi->s_desc_per_block - 1);
@@ -168,7 +171,7 @@ diff -ru lustre-head/fs/ext3/inode.c lustre/fs/ext3/inode.c
 +		block_end = block + NUM_INODE_PREREAD;
 +		if (block_end > itable_end)
 +			block_end = itable_end;
-+
++		block++;
 +		for (; block < block_end; block++) {
 +			bh[count] = sb_getblk(sb, block);
 +			if (count && (buffer_uptodate(bh[count]) ||
@@ -219,10 +222,9 @@ diff -ru lustre-head/fs/ext3/inode.c lustre/fs/ext3/inode.c
  void ext3_read_inode(struct inode * inode)
  {
  	struct ext3_iloc iloc;
-diff -ru include/linux/ext3_fs.h.orig include/linux/ext3_fs.h
---- lustre/include/linux/ext3_fs.h.orig	Sat Mar  8 01:23:09 2003
-+++ lustre/include/linux/ext3_fs.h	Sat Mar  8 01:24:31 2003
-@@ -642,6 +646,8 @@
+--- linux-2.4.18-chaos52/include/linux/ext3_fs.h~extN-noread	2003-05-16 12:26:29.000000000 +0800
++++ linux-2.4.18-chaos52-root/include/linux/ext3_fs.h	2003-05-16 12:26:31.000000000 +0800
+@@ -640,6 +640,8 @@ extern int ext3_forget(handle_t *, int, 
  extern struct buffer_head * ext3_getblk (handle_t *, struct inode *, long, int, int *);
  extern struct buffer_head * ext3_bread (handle_t *, struct inode *, int, int, int *);
  
@@ -231,3 +233,5 @@ diff -ru include/linux/ext3_fs.h.orig include/linux/ext3_fs.h
  extern int  ext3_get_inode_loc (struct inode *, struct ext3_iloc *);
  extern void ext3_read_inode (struct inode *);
  extern void ext3_write_inode (struct inode *, int);
+
+_

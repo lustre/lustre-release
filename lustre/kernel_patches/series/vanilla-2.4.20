@@ -1,7 +1,7 @@
 uml-patch-2.4.20-4.patch
 dev_read_only_hp.patch
 exports_hp.patch
-kmem_cache_validate_hp.patch
+kmem_cache_validate_2.4.20.patch
 lustre_version.patch
 vfs_intent-2.4.20-vanilla.patch
 invalidate_show.patch
@@ -20,6 +20,9 @@ ext3-largefile.patch
 ext3-truncate_blocks.patch
 ext3-unmount_sync.patch
 ext3-use-after-free.patch
+ext3-orphan_lock.patch
 ext3-noread-2.4.20.patch
+ext3-delete_thread-2.4.20.patch
 extN-wantedi.patch
-extN-san.patch
+ext3-san-2.4.20-hp.patch
+iopen-2.4.20.patch
