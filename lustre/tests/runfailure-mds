@@ -35,7 +35,8 @@ setup -1
 quit
 EOF
 
-mount -t lustre_light -o device=3 none /mnt/obd
+MOUNT='mount -t lustre_light -o device=3 none /mnt/obd'
+$MOUNT
 
 test_fail() {
 	echo $1 > /proc/sys/lustre/fail_loc
@@ -49,6 +50,7 @@ test_fail() {
 	device 0
 	cleanup
 	detach
+	quit
 	EOF
 
 	echo 0 > /proc/sys/lustre/fail_loc
@@ -57,11 +59,12 @@ test_fail() {
 	device 0
 	attach mds
 	setup ${MDS} ${MDSFS}
+	quit
 	EOF
-	mount -t lustre_light -o device=3 none /mnt/obd
+	$MOUNT
 }
 
-set -vx
+#set -vx
 
 touch /mnt/obd/foo
 chmod a+x /mnt/obd/foo
@@ -70,7 +73,7 @@ sync
 # OBD_FAIL_MDS_REINT_SETATTR_WRITE - MDS will discard data from setattr
 test_fail 0x10a chmod 000 /mnt/obd/foo
 ls -l /mnt/obd/foo
-[ ! -x /mnt/obd/foo ] && echo "/mnt/obd/foo is executable!" 1>&2 && exit -1
+[ ! -x /mnt/obd/foo ] && echo "/mnt/obd/foo is not executable!" 1>&2 && exit -1
 
 # OBD_FAIL_MDS_REINT_CREATE_WRITE - MDS will not create the file
 test_fail 0x10c touch /mnt/obd/bar
@@ -84,7 +87,8 @@ ls /mnt/obd/foo
 
 # OBD_FAIL_MDS_REINT_RENAME_WRITE - MDS will discard data from rename
 test_fail 0x112 mv /mnt/obd/foo /mnt/obd/bar
-ls /mnt/obd/bar
-[ $? -eq 0 ] && echo "/mnt/obd/foo has been renamed to bar!" 1>&2 && exit -1
+ls /mnt/obd/foo /mnt/obd/bar
+[ ! -f /mnt/obd/foo -o -f /mnt/obd/bar ] && \
+	echo "/mnt/obd/foo has been renamed to bar!" 1>&2 && exit -1
 
 echo "Done."
