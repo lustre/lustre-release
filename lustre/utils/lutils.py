@@ -1403,22 +1403,13 @@ def find_route(net):
 
 
 
+##############################################################################
+# Here it starts LDAP related stuff.
 
-
-"""
-
-#!/usr/bin/python2
-
-import socket
-import sys
-import os
-import socket
-import string
-from string import split,join
-#from ldap_utils import *
-"""
 import ldap
 import _ldap
+
+#returns the lustre ldap specific filters
 
 class lustre_ldap:
 	def __init__(self):
@@ -1428,7 +1419,7 @@ class lustre_ldap:
 		filter="(&"+lustreRdn+")"
 		return filter
 
-
+# make a connection to LDAP server and abd bind
 class MyConn:
 	def __init__(self,host,port):
 		self.id=0
@@ -1442,19 +1433,19 @@ class MyConn:
 			print "unable to open a connection"
 	
 		try:
+			# lustre tree starts from here...the DN is (cn=Manager ,fs=lustre)
 			status=self.id.simple_bind("cn=Manager, fs=lustre","secret")
 		except _ldap.LDAPError:
 			print "unable to bind"
 		
 	
 
-			
+# Lustre Node object class definition as per defined in the lustre.schema			
 
 class LustreNode:
 	def __init__(self,nodename):
 		self.objectClass="lustreNode"
 		self.nodeUUID = 0
-		#self.id= socket.gethostname()
 		self.id= nodename
 		self.netUUIDs = []
 		self.profileUUID = 0
@@ -1480,6 +1471,7 @@ class LustreNode:
 		retval="(objectClass="+self.objectClass+") (id="+self.id+")"
 		return retval
 
+	# Initilize lustre Node Object class after read drom LDAP server
 	def init_node(self,node_entry):
 		self.id=node_entry[0][1][self.id_str][0]
 		self.nodeUUID=node_entry[0][1][self.nodeUUID_str][0]
@@ -1493,25 +1485,36 @@ class LustreNode:
 		if node_entry[0][1].has_key(self.routerUUID_str):
 			self.routerUUID=node_entry[0][1][self.routerUUID_str][0]
 
+	# Brings the lustre Node object entries from LDAP server
 	def getEntry_from_ldap(self,conn_id,base):
 		try:
 			lustre_util=lustre_ldap()
+			# the filter has id=<nodename>,type=node,fs=lustre
+			# base is "fs=lustre"
 			filter=lustre_util.get_filter(self.get_rdn())
 			result=conn_id.search_s(base,ldap.SCOPE_SUBTREE,filter)
 			if result == []:
 				print "Error No Results found"
 				sys.exit(1)
 			self.init_node(result)
+			#network object class
 			if self.netUUIDs:
 				for i in range(len(self.netUUIDs)):
+					# loading the network object class from LDAP, since this related to lustre node class
 					self.lustreNet[i]=LustreNet()
 					self.lustreNet[i].getEntry_from_ldap(conn_id,base,self.netUUIDs[i])
 
+			# The ldlm object class
 			if self.ldlmUUID:
+				# loading the ldlm object class from LDAP, since this related to lustre node class
 				self.lustreLdlm=LustreLdlm()
 				self.lustreLdlm.getEntry_from_ldap(conn_id,base,self.ldlmUUID)
 
+			# The lustre node profile object class
 			if self.profileUUID:
+				# loading the node profile object class from LDAP, since this related to lustre node class
+				# The node profile contains the clientUUID, mdsUUIDs (multiple) and ostUUIDs(multiple)
+				# the rest of the object class queried from LDAP server useing above UUIDs 
 				self.lustreNodeProfile=LustreNodeProfile()
 				self.lustreNodeProfile.getEntry_from_ldap(conn_id,base,self.profileUUID)
 
@@ -1522,6 +1525,7 @@ class LustreNode:
 	def get_dn(self,id):
 		return self.id_str+"="+id+",type="+self.node_str+",fs=lustre"
 
+	# add entries into LDAP server, All of them are must fields
 	def addEntry_into_ldap(self,conn_id):
 		modlist=[]
 		dn=self.get_dn(self.id)
@@ -1542,7 +1546,7 @@ class LustreNode:
 
         def initobj(self,*args):
 		print "init obj :", args
-
+	# print values of object class
 	def print_node(self):
 		print "lustre Node Attributes......"
 		print "objectClass: %s" % self.objectClass
@@ -1553,9 +1557,7 @@ class LustreNode:
 		print "Node Profile UUID: %s" % self.profileUUID
 		print "Router UUID: %s" % self.routerUUID
 		print "Ldlm UUID: %s" % self.ldlmUUID
-		print
-		print
-		print
+		print 
 		for i in range(len(self.netUUIDs)):
 			self.lustreNet[i].print_net()
 		
@@ -1564,7 +1566,7 @@ class LustreNode:
 		
 
 
-
+# lustre Client object class It have mount uuid and net uuid, but the net uuid may not required at present.
 class LustreClient:
 	def __init__(self,lustreNode):
 		self.objectClass="lustreClient"
@@ -1590,6 +1592,7 @@ class LustreClient:
 		return retval
 
 
+	# load the object class with client config params
 	def init_node(self,node_entry):
 		self.clientUUID=node_entry[0][1][self.clientUUID_attr][0]
 		for i in range(len(node_entry[0][1][self.mountUUID_attr])):
@@ -1597,8 +1600,11 @@ class LustreClient:
 		self.netUUID=node_entry[0][1][self.netUUID_attr][0]
 
 
+	# brings the client config params from LDAP, here the search criteria is clientUUID=lustre1_client_UUID,type=client,fs=lustre, this is called as dn
 	def getEntry_from_ldap(self,conn_id,base,attr_val):
 		lustre_util=lustre_ldap()
+		# filter has "clientUUID=lustre1_client_UUID,type=client,fs=lustre"
+		# the base is "fs=lustre"
 		filter=lustre_util.get_filter(self.get_rdn(attr_val))
 		result=conn_id.search_s(base,ldap.SCOPE_SUBTREE,filter)
 		if result == []:
@@ -1742,10 +1748,6 @@ class LustreMount:
 				print "mds UUID: %s" % self.mdsUUID
 				print "lov UUID: %s" % self.lovUUID
 				print "mount point: %s" % self.mountPath
-				print
-				print
-				print
-				print
 				if self.default:
 					print "This file system is default file system for this cleint"
 				else:
@@ -1753,16 +1755,8 @@ class LustreMount:
 
 				if self.lustreMds:
 					self.lustreMds.print_mds()
-					print
-					print
-					print
-					print
 				if self.lustreLov:
 					self.lustreLov.print_lov()
-				print
-				print
-				print
-				print
 
 
 class LustreOsc:
@@ -1845,13 +1839,13 @@ class LustreOsc:
                 print "devName: %s" % self.devName
                 print "obdUUID: %s" % self.obdUUID
                 print "ostUUID: %s" % self.ostUUID
-		print "\n" * 5
+		print 
 		if self.lustreObd:
 			self.lustreObd.print_obd()
-		print "\n" * 5
+		print 
 		if self.lustreOst:
 			self.lustreOst.print_ost()
-		print "\n" * 5
+		print 
 
 
 class LustreMdc:
@@ -1923,10 +1917,6 @@ class LustreMdc:
 		print "Mdc UUID: %s" % self.mdcUUID
 		print "dev name: %s" % self.devName
 		print "Mds UUId: %s" % self.mdsUUID
-		print
-		print
-		print
-		print
 		print
 		if self.lustreMds:
 			self.lustreMds.print_mds()
@@ -2003,15 +1993,8 @@ class LustreOst:
                 print "devName: %s" % self.devName
                 print "obdUUID: %s" % self.obdUUID
 		print
-		print
-		print
-		print
 		if self.lustreObd:
 			self.lustreObd.print_obd()
-		print
-		print
-		print
-		print
 
 
 
@@ -2101,10 +2084,10 @@ class LustreMds:
                 print "devUUID: %s" % self.devUUID
                 #print "fUUID: %s" % self.fUUID
                 print "lovUUID: %s" % self.lovUUID
-		print "\n" * 5 
+		print 
 		if self.lustreLov:
 		    self.lustreLov.print_lov()
-		    print "\n" * 3 
+		    print 
 
 
 class LustreLov:
@@ -2206,12 +2189,12 @@ class LustreLov:
                 print "stripe Count: %s" % self.stripeCount
                 print "pattern: %s" % self.pattern
 		
-		print "\n" * 5
+		print 
 		if self.oscUUIDs:
 			for uuid in self.oscUUIDs:
 				if self.lustreOsc:
 				    self.lustreOsc[uuid].print_osc()
-		print "\n" * 5
+		print 
 
 
 class LustreDevice:
@@ -2383,10 +2366,10 @@ class LustreObd:
                 print "devName: %s" % self.devName
                 print "devUUID: %s" % self.devUUID
                 print "fUUID: %s" % self.fUUID
-		print "\n" * 5
+		print 
 		if self.lustreDev:
 			self.lustreDev.print_device()
-		print "\n" * 5
+		print 
 
 
 class LustreLdlm:
@@ -2539,7 +2522,7 @@ class LustreNet:
 		print "port: %s" % self.port
 		print "receive memory: %s" % self.recvMem
 		print "send memory: %s" % self.sendMem
-		print "\n" * 5
+		print 
 		
 
 class LustreNodeProfile:
@@ -2620,10 +2603,6 @@ class LustreNodeProfile:
 		for i in range(len(self.ostUUIDs)):
 			print "Ost UUID%d: %s" % (i,self.ostUUIDs[i])
 		print "Client UUID: %s" % self.clientUUID
-		print
-		print
-		print
-		print
 		print
 
 
