@@ -24,9 +24,16 @@ if [ -z "$OSCMT" ]; then
 	[ -z "$*" ] && fail "usage: $0 [--reformat] <conf>.xml" 1
 	$LCONF $@ || exit 1
         trap "$LCONF --cleanup $@" 0
-	OSCMT="`mount | awk '/ lustre_lite / { print $3 }'`"
+	OSCMT="`mount | awk '/ lustre_lite / { print $3 }' | tail -1`"
 	[ -z "$OSCMT" ] && fail "no lustre filesystem mounted" 1
 fi
+
+case $1 in
+-v|--verbose) V=-v;;
+esac
+
+OSCTMP=`echo $OSCMT | tr "/" "."`
+USED=`df | awk "/$OSCTMP/ { print \\$3 }" | tail -1`
 
 # let's start slowly here...
 echo "touching $OSCMT"
@@ -36,14 +43,14 @@ echo "copying /etc/hosts to $HOSTS"
 cp /etc/hosts $HOSTS || fail "can't cp /etc/hosts to $HOSTS" 3
 echo "comparing /etc/hosts and $HOSTS"
 diff -u /etc/hosts $HOSTS || fail "$HOSTS different" 4
-#echo "renaming $HOSTS to $HOSTS.ren"
-#mv $HOSTS $HOSTS.ren || fail "can't rename $HOSTS to $HOSTS.ren" 5
-#echo "copying /etc/hosts to $HOSTS again"
-#cp /etc/hosts $HOSTS || fail "can't cp /etc/hosts to $HOSTS again" 6
-#echo "truncating $HOSTS"
-#> $HOSTS || fail "can't truncate $HOSTS" 8
-#echo "removing $HOSTS"
-#rm $HOSTS || fail "can't remove $HOSTS" 9
+echo "renaming $HOSTS to $HOSTS.ren"
+mv $HOSTS $HOSTS.ren || fail "can't rename $HOSTS to $HOSTS.ren" 5
+echo "copying /etc/hosts to $HOSTS again"
+cp /etc/hosts $HOSTS || fail "can't cp /etc/hosts to $HOSTS again" 6
+echo "truncating $HOSTS"
+> $HOSTS || fail "can't truncate $HOSTS" 8
+echo "removing $HOSTS"
+rm $HOSTS || fail "can't remove $HOSTS" 9
 
 DST=$OSCMT/runtest.$$
 # let's start slowly here...
@@ -57,6 +64,7 @@ tar cf - $FILES | tar xvf - -C $DST || fail "copying $SRC" 11
 
 echo "comparing newly copied files"
 for f in $FILES; do
+	[ $V ] && echo "verifying $DST/$f"
 	diff -q $f $DST/$f || ERROR=11
 done
 
@@ -67,6 +75,7 @@ $LCONF $@ || exit 20
 
 echo "comparing previously copied files"
 for f in $FILES; do
+	[ $V ] && echo "verifying $DST/$f"
 	diff -q $f $DST/$f || ERROR=22
 done
 
@@ -75,13 +84,21 @@ done
 $LCONF --cleanup $@ || exit 29
 $LCONF $@ || exit 30
 
-#echo "renaming $HOSTS.ren to $HOSTS"
-#mv $HOSTS.ren $HOSTS || fail "can't rename $HOSTS.ren to $HOSTS" 32
+echo "renaming $HOSTS.ren to $HOSTS"
+mv $HOSTS.ren $HOSTS || fail "can't rename $HOSTS.ren to $HOSTS" 32
 echo "truncating $HOSTS"
 > $HOSTS || fail "can't truncate $HOSTS" 34
 echo "removing $HOSTS"
 rm $HOSTS || fail "can't remove $HOSTS again" 36
 echo "removing $DST"
-rm -r $DST || fail "can't remove $DST" 37
+rm -r $V $DST || fail "can't remove $DST" 37
+
+NOWUSED=`df | awk "/$OSCTMP/ { print \\$3 }" | tail -1`
+if [ $USED -ne $NOWUSED ]; then
+	echo "space not all freed: now ${NOWUSED}kB, was ${USED}kB" 1>&2
+	echo "this is normal on BA OSTs, because of subdirectories" 1>&2
+fi
+
+trap 0
 
 $LCONF --cleanup $@ || exit 29
