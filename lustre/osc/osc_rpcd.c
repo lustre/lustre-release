@@ -156,10 +156,8 @@ static int osc_rpcd(void *arg)
                 struct l_wait_info lwi;
                 int timeout;
 
-                timeout = ptlrpc_set_next_timeout(orc->orc_set);
-                /* XXX the interrupted thing isn't really functional. */
-                lwi = LWI_TIMEOUT_INTR(timeout * HZ, ptlrpc_expired_set,
-                                       ptlrpc_interrupted_set, orc->orc_set);
+                timeout = ptlrpc_set_next_timeout(orc->orc_set) * HZ;
+                lwi = LWI_TIMEOUT(timeout, ptlrpc_expired_set, orc->orc_set);
 
                 /* ala the pinger, wait on orc's waitqueue and the set's */
                 init_waitqueue_entry(&set_wait, current);
