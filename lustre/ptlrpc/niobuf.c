@@ -130,6 +130,8 @@ int ptlrpc_send_bulk(struct ptlrpc_bulk_desc *desc)
         desc->bd_md.options = PTL_MD_OP_PUT | PTL_MD_IOV;
         desc->bd_md.user_ptr = desc;
 
+        atomic_set (&desc->bd_source_callback_count, 2);
+        
         list_for_each_safe(tmp, next, &desc->bd_page_list) {
                 struct ptlrpc_bulk_page *bulk;
                 bulk = list_entry(tmp, struct ptlrpc_bulk_page, bp_link);

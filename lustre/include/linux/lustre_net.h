@@ -168,6 +168,8 @@ struct ptlrpc_bulk_desc {
         ptl_handle_md_t bd_md_h;
         ptl_handle_me_t bd_me_h;
 
+        atomic_t	bd_source_callback_count;
+
         struct iovec bd_iov[16];    /* self-sized pre-allocated iov */
 };
 
