@@ -472,7 +472,7 @@ sub Read {
     die "suck" if (length($buf) != $count);
 
     # the perl we're using doesn't support pack type Q, and offset is 64 bits
-    my $packed = pack("ILpLLL", $::client_id, $inode, $buf, $count, 0, $offset);
+    my $packed = pack("ILpLLL", $::client_id, $inode, $buf, $count, $offset, 0);
 
     my $rc = ioctl(DEV_OBD, &OBD_IOC_READ, $packed);
 
@@ -519,7 +519,7 @@ sub Write {
 	  "$inode...\n");
 
     # the perl we're using doesn't support pack type Q
-    my $packed = pack("ILpLLL", $::client_id, $inode, $text, $count, 0, $offset);
+    my $packed = pack("ILpLLL", $::client_id, $inode, $text, $count, $offset, 0);
     my $rc = ioctl(DEV_OBD, &OBD_IOC_WRITE, $packed);
 
     $retval = unpack("l", $packed);
