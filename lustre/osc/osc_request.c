@@ -333,8 +333,6 @@ int osc_brw_read(struct obd_conn *conn, obd_count num_oa, struct obdo **oa,
                 pages += oa_bufs[i];
 	}
 
-        /* We actually pack a _third_ buffer, with XIDs for bulk pages */
-        size2 += pages * sizeof(__u32);
 	request = ptlrpc_prep_req(cl, OST_BRW, size1, NULL, size2, NULL);
 	if (!request) { 
 		CERROR("cannot pack req!\n"); 
@@ -370,18 +368,12 @@ int osc_brw_read(struct obd_conn *conn, obd_count num_oa, struct obdo **oa,
                         bulk[n]->b_portal = OST_BULK_PORTAL;
                         ost_pack_niobuf(&ptr2, bulk[n]->b_buf, offset[n],
                                         count[n], flags[n], bulk[n]->b_xid);
+
+                        rc = ptlrpc_register_bulk(bulk[n]);
+                        if (rc)
+                                goto out;
                         n++;
                 }
-        }
-
-        /* This is kinda silly--put the XIDs in the "third" buffer. */
-        for (n = 0; n < pages; n++) {
-                *(__u32 *)ptr2 = bulk[n]->b_xid;
-                ptr2 = (char *)ptr2 + sizeof(__u32);
-
-                rc = ptlrpc_register_bulk(bulk[n]);
-                if (rc)
-                        goto out;
         }
 
         request->rq_replen = sizeof(struct ptlrep_hdr) + sizeof(struct ost_rep);
@@ -422,10 +414,9 @@ int osc_brw_write(struct obd_conn *conn, obd_count num_oa, struct obdo **oa,
 
 	size1 = num_oa * sizeof(ioo); 
         pages = 0;
-	for (i = 0; i < num_oa; i++) { 
-		size2 += oa_bufs[i] * sizeof(*src);
+        for (i = 0; i < num_oa; i++)
                 pages += oa_bufs[i];
-	}
+        size2 = pages * sizeof(*src);
 
         OBD_ALLOC(src, size2);
         if (!src) { 
@@ -479,7 +470,7 @@ int osc_brw_write(struct obd_conn *conn, obd_count num_oa, struct obdo **oa,
 			n++;
 		}
 	}
-        OBD_FREE(src); 
+        OBD_FREE(src, size2);
  out:
 	if (request->rq_rephdr)
 		OBD_FREE(request->rq_rephdr, request->rq_replen);
