@@ -274,7 +274,8 @@ echo_get_object (struct ec_object **ecop, struct obd_device *obd,
         struct ec_object       *eco2;
         int                     rc;
 
-        if ((oa->o_valid & OBD_MD_FLID) == 0)
+        if ((oa->o_valid & OBD_MD_FLID) == 0 ||
+            oa->o_id == 0)                      /* disallow use of object id 0 */
         {
                 CERROR ("No valid oid\n");
                 return (-EINVAL);
@@ -423,47 +424,66 @@ echo_get_stripe_off_id (struct lov_stripe_md *lsm, obd_off *offp, obd_id *idp)
         *offp = offset * stripe_size + woffset % stripe_size;
 }
 
-static void echo_page_debug_setup(struct lov_stripe_md *lsm, 
-                                  struct page *page, int rw, obd_id id, 
-                                  obd_off offset, obd_off count)
+static void 
+echo_client_page_debug_setup(struct lov_stripe_md *lsm, 
+                             struct page *page, int rw, obd_id id, 
+                             obd_off offset, obd_off count)
 {
-        void *addr;
-        obd_off stripe_off;
-        obd_id stripe_id;
+        char    *addr;
+        obd_off  stripe_off;
+        obd_id   stripe_id;
+        int      delta;
 
-        if (id == 0)
-                return;
+        /* no partial pages on the client */
+        LASSERT(count == PAGE_SIZE);
 
         addr = kmap(page);
 
-        if (rw == OBD_BRW_WRITE) {
-                stripe_off = offset;
-                stripe_id = id;
-                echo_get_stripe_off_id(lsm, &stripe_off, &stripe_id);
-        } else {
-                stripe_off = 0xdeadbeef00c0ffeeULL;
-                stripe_id = 0xdeadbeef00c0ffeeULL;
+        for (delta = 0; delta < PAGE_SIZE; delta += OBD_ECHO_BLOCK_SIZE) {
+                if (rw == OBD_BRW_WRITE) {
+                        stripe_off = offset + delta;
+                        stripe_id = id;
+                        echo_get_stripe_off_id(lsm, &stripe_off, &stripe_id);
+                } else {
+                        stripe_off = 0xdeadbeef00c0ffeeULL;
+                        stripe_id = 0xdeadbeef00c0ffeeULL;
+                }
+                block_debug_setup(addr + delta, OBD_ECHO_BLOCK_SIZE, 
+                                  stripe_off, stripe_id);
         }
-        page_debug_setup(addr, count, stripe_off, stripe_id);
 
         kunmap(page);
 }
 
-static int echo_page_debug_check(struct lov_stripe_md *lsm, 
-                                  struct page *page, obd_id id, 
-                                  obd_off offset, obd_off count)
+static int
+echo_client_page_debug_check(struct lov_stripe_md *lsm, 
+                             struct page *page, obd_id id, 
+                             obd_off offset, obd_off count)
 {
-        obd_off stripe_off = offset;
-        obd_id stripe_id = id;
-        void *addr;
-        int rc;
+        obd_off stripe_off;
+        obd_id  stripe_id;
+        char   *addr;
+        int     delta;
+        int     rc;
+        int     rc2;
 
-        if (id == 0)
-                return 0;
+        /* no partial pages on the client */
+        LASSERT(count == PAGE_SIZE);
 
         addr = kmap(page);
-        echo_get_stripe_off_id (lsm, &stripe_off, &stripe_id);
-        rc = page_debug_check("test_brw", addr, count, stripe_off, stripe_id);
+
+        for (rc = delta = 0; delta < PAGE_SIZE; delta += OBD_ECHO_BLOCK_SIZE) {
+                stripe_off = offset + delta;
+                stripe_id = id;
+                echo_get_stripe_off_id (lsm, &stripe_off, &stripe_id);
+
+                rc2 = block_debug_check("test_brw", 
+                                        addr + delta, OBD_ECHO_BLOCK_SIZE, 
+                                        stripe_off, stripe_id);
+                if (rc2 != 0)
+                        rc = rc2;
+        }
+
         kunmap(page);
         return rc;
 }
@@ -482,10 +502,11 @@ static int echo_client_kbrw(struct obd_device *obd, int rw, struct obdo *oa,
         int                     verify = 0;
         int                     gfp_mask;
 
-        /* oa_id  == 0    => speed test (no verification) else...
-         * oa & 1         => use HIGHMEM
-         */
-        gfp_mask = ((oa->o_id & 1) == 0) ? GFP_KERNEL : GFP_HIGHUSER;
+        /* oa_id == ECHO_PERSISTENT_OBJID => speed test (no verification).
+         * oa & 1                         => use HIGHMEM */
+
+        verify = (oa->o_id) != ECHO_PERSISTENT_OBJID;
+        gfp_mask = ((oa->o_id & 2) == 0) ? GFP_KERNEL : GFP_HIGHUSER;
 
         LASSERT(rw == OBD_BRW_WRITE || rw == OBD_BRW_READ);
 
@@ -517,15 +538,16 @@ static int echo_client_kbrw(struct obd_device *obd, int rw, struct obdo *oa,
                 pgp->off = off;
                 pgp->flag = 0;
 
-                echo_page_debug_setup(lsm, pgp->pg, rw, oa->o_id, off, 
-                                      pgp->count);
+                if (verify)
+                        echo_client_page_debug_setup(lsm, pgp->pg, rw, 
+                                                     oa->o_id, off, pgp->count);
         }
 
         rc = obd_brw(rw, ec->ec_exp, oa, lsm, npages, pga, oti);
 
  out:
-        if (rc == 0 && rw == OBD_BRW_READ)
-                verify = 1;
+        if (rc != 0 || rw != OBD_BRW_READ)
+                verify = 0;
 
         for (i = 0, pgp = pga; i < npages; i++, pgp++) {
                 if (pgp->pg == NULL)
@@ -533,8 +555,8 @@ static int echo_client_kbrw(struct obd_device *obd, int rw, struct obdo *oa,
 
                 if (verify) {
                         int vrc;
-                        vrc = echo_page_debug_check(lsm, pgp->pg, oa->o_id,
-                                                    pgp->off, pgp->count);
+                        vrc = echo_client_page_debug_check(lsm, pgp->pg, oa->o_id,
+                                                           pgp->off, pgp->count);
                         if (vrc != 0 && rc == 0)
                                 rc = vrc;
                 }
@@ -698,10 +720,11 @@ static void ec_ap_completion(void *data, int cmd, int rc)
                 return;
         eas = eap->eap_eas;
 
-        if (cmd == OBD_BRW_READ)
-                echo_page_debug_check(eas->eas_lsm, eap->eap_page, 
-                                      eas->eas_oa.o_id, eap->eap_off, 
-                                      PAGE_SIZE);
+        if (cmd == OBD_BRW_READ &&
+            eas->eas_oa.o_id != ECHO_PERSISTENT_OBJID)
+                echo_client_page_debug_check(eas->eas_lsm, eap->eap_page, 
+                                             eas->eas_oa.o_id, eap->eap_off,
+                                             PAGE_SIZE);
 
         spin_lock_irqsave(&eas->eas_lock, flags);
         if (rc && !eas->eas_rc)
@@ -823,9 +846,10 @@ static int echo_client_async_page(struct obd_export *exp, int rw,
                         break;
                 }
 
-                if (rw == OBD_BRW_WRITE)
-                        echo_page_debug_setup(lsm, eap->eap_page, rw, oa->o_id,
-                                              eap->eap_off, PAGE_SIZE);
+                if (oa->o_id != ECHO_PERSISTENT_OBJID)
+                        echo_client_page_debug_setup(lsm, eap->eap_page, rw, 
+                                                     oa->o_id, 
+                                                     eap->eap_off, PAGE_SIZE);
 
                 /* always asserts urgent, which isn't quite right */
                 rc = obd_queue_async_io(exp, lsm, NULL, eap->eap_cookie,
@@ -925,14 +949,19 @@ static int echo_client_prep_commit(struct obd_export *exp, int rw,
                         if (page == NULL && lnb[i].rc == 0) 
                                 continue;
 
+                        if (oa->o_id == ECHO_PERSISTENT_OBJID)
+                                continue;
+
                         if (rw == OBD_BRW_WRITE) 
-                                echo_page_debug_setup(lsm, page, rw, oa->o_id, 
-                                                      rnb[i].offset, 
-                                                      rnb[i].len);
+                                echo_client_page_debug_setup(lsm, page, rw, 
+                                                             oa->o_id, 
+                                                             rnb[i].offset, 
+                                                             rnb[i].len);
                         else
-                                echo_page_debug_check(lsm, page, oa->o_id, 
-                                                      rnb[i].offset, 
-                                                      rnb[i].len);
+                                echo_client_page_debug_check(lsm, page, 
+                                                             oa->o_id, 
+                                                             rnb[i].offset, 
+                                                             rnb[i].len);
                 }
 
                 ret = obd_commitrw(rw, exp, oa, 1, &ioo, npages, lnb, oti);

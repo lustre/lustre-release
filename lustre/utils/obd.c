@@ -1242,6 +1242,7 @@ int jt_obd_test_brw(int argc, char **argv)
         struct timeval start, next_time;
         __u64 count, next_count, len, thr_offset = 0, objid = 3;
         int write = 0, verbose = 1, cmd, i, rc = 0, pages = 1;
+        int repeat_offset = 0;
         char *end;
 
         if (argc < 2 || argc > 7) {
@@ -1267,8 +1268,11 @@ int jt_obd_test_brw(int argc, char **argv)
         if (argc >= 3) {
                 if (argv[2][0] == 'w' || argv[2][0] == '1')
                         write = 1;
-                else if (argv[2][0] == 'r' || argv[2][0] == '0')
-                        write = 0;
+                /* else it's a read */
+
+                if (argv[2][0] != 0 &&
+                    argv[2][1] == 'r')
+                        repeat_offset = 1;
         }
 
         if (argc >= 4) {
@@ -1366,7 +1370,8 @@ int jt_obd_test_brw(int argc, char **argv)
                         printf("%s: %s number %dx%d\n", jt_cmdname(argv[0]),
                                write ? "write" : "read", i, pages);
 
-                data.ioc_offset += len;
+                if (!repeat_offset)
+                        data.ioc_offset += len;
         }
 
         if (!rc) {

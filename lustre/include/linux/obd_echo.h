@@ -13,6 +13,13 @@
 #define OBD_ECHO_DEVICENAME "obdecho"
 #define OBD_ECHO_CLIENT_DEVICENAME "echo_client"
 
+/* The persistent object (i.e. actually stores stuff!) */
+#define ECHO_PERSISTENT_OBJID    1ULL
+#define ECHO_PERSISTENT_SIZE     ((__u64)(1<<20))
+
+/* block size to use for data verification */
+#define OBD_ECHO_BLOCK_SIZE	(4<<10)
+
 struct ec_object {
         struct list_head       eco_obj_chain;
         struct obd_device     *eco_device;
