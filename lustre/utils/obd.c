@@ -100,21 +100,14 @@ char *obdo_print(struct obdo *obd)
 {
         char buf[1024];
 
-        sprintf(buf, "id: %Ld\ngrp: %Ld\natime: %Ld\nmtime: %Ld\nctime: %Ld\n"
-                "size: %Ld\nblocks: %Ld\nblksize: %d\nmode: %o\nuid: %d\n"
-                "gid: %d\nflags: %x\nobdflags: %x\nnlink: %d,\nvalid %x\n",
-                obd->o_id,
-                obd->o_gr,
-                obd->o_atime,
-                obd->o_mtime,
-                obd->o_ctime,
-                obd->o_size,
-                obd->o_blocks,
-                obd->o_blksize,
-                obd->o_mode,
-                obd->o_uid,
-                obd->o_gid,
-                obd->o_flags, obd->o_obdflags, obd->o_nlink, obd->o_valid);
+        sprintf(buf, "id: "LPX64"\ngrp: "LPX64"\natime: "LPU64"\nmtime: "LPU64
+                "\nctime: "LPU64"\nsize: "LPU64"\nblocks: "LPU64
+                "\nblksize: %u\nmode: %o\nuid: %d\ngid: %d\nflags: %x\n"
+                "obdflags: %x\nnlink: %d,\nvalid %x\n",
+                obd->o_id, obd->o_gr, obd->o_atime, obd->o_mtime, obd->o_ctime,
+                obd->o_size, obd->o_blocks, obd->o_blksize, obd->o_mode,
+                obd->o_uid, obd->o_gid, obd->o_flags, obd->o_obdflags,
+                obd->o_nlink, obd->o_valid);
         return strdup(buf);
 }
 
@@ -286,7 +279,7 @@ int do_disconnect(char *func, int verbose)
                         OBD_IOC_DISCONNECT, strerror(errno));
         } else {
                 if (verbose)
-                        printf("%s: disconnected conn %Lx\n", cmdname(func),
+                        printf("%s: disconnected conn "LPX64"\n", cmdname(func),
                                conn_addr);
                 conn_addr = -1;
         }
@@ -297,6 +290,7 @@ int do_disconnect(char *func, int verbose)
 #if SHMEM_STATS
 static void shmem_setup(void)
 {
+        /* Create new segment */
         int shmid = shmget(IPC_PRIVATE, sizeof(counter_snapshot[0]), 0600);
 
         if (shmid == -1) {
@@ -305,6 +299,7 @@ static void shmem_setup(void)
                 return;
         }
 
+        /* Attatch to new segment */
         shared_counters = (long long *)shmat(shmid, NULL, 0);
 
         if (shared_counters == (long long *)(-1)) {
@@ -312,6 +307,14 @@ static void shmem_setup(void)
                         strerror(errno));
                 shared_counters = NULL;
                 return;
+        }
+
+        /* Mark segment as destroyed, so it will disappear when we exit.
+         * Forks will inherit attached segments, so we should be OK.
+         */
+        if (shmctl(shmid, IPC_RMID, NULL) == -1) {
+                fprintf(stderr, "Can't destroy shared memory counters: %s\n",
+                        strerror(errno));
         }
 }
 
@@ -837,8 +840,8 @@ int jt_obd_create(int argc, char **argv)
                 }
 
                 if (be_verbose(verbose, &next_time, i, &next_count, count))
-                        printf("%s: #%d is object id 0x%Lx\n", cmdname(argv[0]),
-                               i, (long long)data.ioc_obdo1.o_id);
+                        printf("%s: #%d is object id "LPX64"\n",
+                               cmdname(argv[0]), i, data.ioc_obdo1.o_id);
         }
         return rc;
 }
@@ -954,14 +957,14 @@ int jt_obd_getattr(int argc, char **argv)
         /* to help obd filter */
         data.ioc_obdo1.o_mode = 0100644;
         data.ioc_obdo1.o_valid = 0xffffffff;
-        printf("%s: object id %Ld\n", cmdname(argv[0]), data.ioc_obdo1.o_id);
+        printf("%s: object id "LPX64"\n", cmdname(argv[0]),data.ioc_obdo1.o_id);
 
         rc = ioctl(fd, OBD_IOC_GETATTR, &data);
         if (rc) {
                 fprintf(stderr, "error: %s: %s\n", cmdname(argv[0]),
                         strerror(rc = errno));
         } else {
-                printf("%s: object id %Ld, mode %o\n", cmdname(argv[0]),
+                printf("%s: object id "LPX64", mode %o\n", cmdname(argv[0]),
                        data.ioc_obdo1.o_id, data.ioc_obdo1.o_mode);
         }
         return rc;

@@ -4,6 +4,13 @@ export PATH=/sbin:/usr/sbin:$PATH
 SRCDIR="`dirname $0`/"
 . $SRCDIR/common.sh
 
+COUNT=${COUNT:-10000000}
+COUNT_10=`expr $COUNT / 10`
+COUNT_100=`expr $COUNT / 100`
+COUNT_1000=`expr $COUNT / 1000`
+
+ENDRUN=endrun-`hostname`
+
 OSCNAME="`$OBDCTL device_list 2> /dev/null | awk '/ osc | lov / { print $4 }' | tail -1`"
 
 if [ -z "$OSCNAME" ]; then
@@ -42,7 +49,8 @@ runthreads() {
 	fi
 }
 
-OID=`$OBDCTL --device \\$$OSCNAME create 1 | awk '/is object id/ { print $6 }'`
+[ -z "$OID" ] && OID=`$OBDCTL --device \\$$OSCNAME create 1 | awk '/is object id/ { print $6 }'`
+[ -z "$OID" ] && echo "error creating object" 1>&2 && exit 1
 
 # TODO: obdctl needs to check on the progress of each forked thread
 #       (IPC SHM, sockets?) to see if it hangs.
@@ -73,24 +81,25 @@ for CMD in test_getattr test_brw_write test_brw_read; do
 
 	debug_server_off
 	debug_client_off
-	runthreads 1 $CMD 10000 100 $PG
-	[ "$PGV" ] && runthreads 1 $CMD 1000 100 $PGV
+	runthreads 1 $CMD $COUNT_100 -10 $PG
+	[ "$PGV" ] && runthreads 1 $CMD $COUNT_1000 -10 $PGV
 
-	runthreads 1 $CMD 1000000 -30 $PG
-	[ "$PGV" ] && runthreads 1 $CMD 100000 -30 $PGV
+	runthreads 1 $CMD $COUNT -30 $PG
+	[ "$PGV" ] && runthreads 1 $CMD $COUNT_10 -30 $PGV
 
-	runthreads 1 $CMD 100 1 $PG
+	runthreads 1 $CMD 100 -10 $PG
 
-	runthreads 2 $CMD 10000 100 $PG
-	[ "$PGV" ] && runthreads 2 $CMD 1000 100 $PGV
+	runthreads 2 $CMD $COUNT_100 -30 $PG
+	[ "$PGV" ] && runthreads 2 $CMD $COUNT_1000 -30 $PGV
 
-	runthreads 2 $CMD 1000000 -30 $PG
-	[ "$PGV" ] && runthreads 2 $CMD 100000 -30 $PGV
+	runthreads 2 $CMD $COUNT -30 $PG
+	[ "$PGV" ] && runthreads 2 $CMD $COUNT_10 -30 $PGV
 
-	runthreads 10 $CMD 10000 1000 $PG
-	[ "$PGV" ] && runthreads 10 $CMD 1000 1000 $PGV
+	runthreads 10 $CMD $COUNT_10 -30 $PG
+	[ "$PGV" ] && runthreads 10 $CMD $COUNT_100 -30 $PGV
 
-	runthreads 100 $CMD 10000 -30 $PG
+	runthreads 100 $CMD $COUNT_100 -30 $PG
+	[ "$PGV" ] && runthreads 100 $CMD $COUNT_1000 -30 $PGV
 done
 
 $OBDCTL --device \$$OSCNAME destroy $OID

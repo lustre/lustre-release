@@ -884,10 +884,8 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 
 #warning FIXME: save lsm into file handle for other ops, release on close
                 err = obd_create(&conn, &data->ioc_obdo1, &lsm);
-                if (err)
-                        GOTO(out, err);
-
-                err = copy_to_user((void *)arg, data, sizeof(*data));
+                if (!err)
+                        err = copy_to_user((void *)arg, data, sizeof(*data));
                 GOTO(out, err);
         }
 
@@ -895,20 +893,16 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 
                 obd_data2conn(&conn, data);
                 err = obd_getattr(&conn, &data->ioc_obdo1, NULL);
-                if (err)
-                        GOTO(out, err);
-
-                err = copy_to_user((void *)arg, data, sizeof(*data));
+                if (!err)
+                        err = copy_to_user((void *)arg, data, sizeof(*data));
                 GOTO(out, err);
         }
 
         case OBD_IOC_SETATTR: {
                 obd_data2conn(&conn, data);
                 err = obd_setattr(&conn, &data->ioc_obdo1, NULL);
-                if (err)
-                        GOTO(out, err);
-
-                err = copy_to_user((void *)arg, data, sizeof(*data));
+                if (!err)
+                        err = copy_to_user((void *)arg, data, sizeof(*data));
                 GOTO(out, err);
         }
 
@@ -917,10 +911,8 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 obd_data2conn(&conn, data);
 
                 err = obd_destroy(&conn, &data->ioc_obdo1, NULL);
-                if (err)
-                        GOTO(out, err);
-
-                err = copy_to_user((void *)arg, data, sizeof(*data));
+                if (!err)
+                        err = copy_to_user((void *)arg, data, sizeof(*data));
                 GOTO(out, err);
         }
 
@@ -929,13 +921,14 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 
                 obd_data2conn(&conn, data);
                 err = obd_open(&conn, &data->ioc_obdo1, lsm);
+                if (!err)
+                        err = copy_to_user((void *)arg, data, sizeof(*data));
                 GOTO(out, err);
         }
 
         case OBD_IOC_CLOSE: {
                 struct lov_stripe_md *lsm = NULL; // XXX fill in from create
 
-                obd_data2conn(&conn, data);
                 obd_data2conn(&conn, data);
                 err = obd_close(&conn, &data->ioc_obdo1, lsm);
                 GOTO(out, err);

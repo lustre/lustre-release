@@ -31,9 +31,10 @@ if [ -z "$OSCMT" ]; then
 	[ -z "$OSCMT" ] && fail "no lustre filesystem mounted" 1
 fi
 
+V="-10"
 while [ "$1" ]; do
 	case $1 in
-	-v|--verbose) V=-v;;
+	-v|--verbose) V="1";;
 	--reformat) : ;;
 	*) OPTS="$OPTS $1" ;;
 	esac
@@ -47,8 +48,8 @@ USED=`expr $USED + 16`	# Some space for the status file
 THREADS=1
 while [ $THREADS -lt 196 ]; do
 	echo "starting $THREADS threads at `date`"
-	echo 0 > /proc/sys/portals/debug
-	$SRCDIR/createdestroy /mnt/lustre/file-$$ $COUNT -10 $THREADS
+	[ $V -gt 0 ] || echo 0 > /proc/sys/portals/debug
+	$SRCDIR/createdestroy /mnt/lustre/file-$$ $COUNT $V $THREADS
 	$SRCDIR/openclose /mnt/lustre/file-$$ $COUNT $THREADS
 	THREADS=`expr $THREADS + 5`
 	$LCONF --cleanup $OPTS || fail 10

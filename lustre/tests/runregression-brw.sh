@@ -4,15 +4,23 @@ export PATH=/sbin:/usr/sbin:$PATH
 SRCDIR="`dirname $0`/"
 . $SRCDIR/common.sh
 
+COUNT=${COUNT:-10000000}
+COUNT_10=`expr $COUNT / 10`
+COUNT_100=`expr $COUNT / 100`
+
 ENDRUN=endrun-`hostname`
 
-OSCNAME="`$OBDCTL device_list 2> /dev/null | awk '/ UP osc / { print $4 }'`"
+OSCNAME="`$OBDCTL device_list 2> /dev/null | awk '/ osc | lov / { print $4 }' | tail -1`"
 
 if [ -z "$OSCNAME" ]; then
 	echo "$0: needs an OSC set up first" 1>&2
 	exit 1
 fi
 
+cleanup () {
+	$OBDCTL --device \$$OSCNAME destroy $OID
+}
+	
 runthreads() {
 	THR=$1
 	DO=$2
@@ -40,7 +48,7 @@ runthreads() {
 	if [ -e $ENDRUN ]; then
 		rm $ENDRUN
 		echo "exiting because $ENDRUN file was found"
-		exit 0
+		cleanup
 	fi
 }
 
@@ -65,41 +73,41 @@ while date; do
 	[ "$PGVW" ] && runthreads 1 test_brw_read 1600 -30 $PG
 	[ "$PGVR" ] && runthreads 1 test_brw_read 100 -30 $PGVR
 
-	runthreads 1 test_brw_write 10000000 -30 $PG
-	runthreads 1 test_brw_read 10000000 -30 $PG
+	runthreads 1 test_brw_write $COUNT -30 $PG
+	runthreads 1 test_brw_read $COUNT -30 $PG
 
-	[ "$PGVW" ] && runthreads 1 test_brw_write 1000000 -30 $PGVW
-	[ "$PGVR" ] && runthreads 1 test_brw_read 1000000 -30 $PGVR
+	[ "$PGVW" ] && runthreads 1 test_brw_write $COUNT_10 -30 $PGVW
+	[ "$PGVR" ] && runthreads 1 test_brw_read $COUNT_10 -30 $PGVR
 
-	runthreads 2 test_brw_write 10000000 -30 $PG
-	runthreads 2 test_brw_read 10000000 -30 $PG
+	runthreads 2 test_brw_write $COUNT -30 $PG
+	runthreads 2 test_brw_read $COUNT -30 $PG
 
-	[ "$PGVW" ] && runthreads 2 test_brw_write 1000000 -30 $PGVW
-	[ "$PGVR" ] && runthreads 2 test_brw_read 1000000 -30 $PGVR
+	[ "$PGVW" ] && runthreads 2 test_brw_write $COUNT_10 -30 $PGVW
+	[ "$PGVR" ] && runthreads 2 test_brw_read $COUNT_10 -30 $PGVR
 
-	runthreads 10 test_brw_write 1000000 -30 $PG
-	runthreads 10 test_brw_read 1000000 -30 $PG
+	runthreads 10 test_brw_write $COUNT_10 -30 $PG
+	runthreads 10 test_brw_read $COUNT_10 -30 $PG
 
-	[ "$PGVW" ] && runthreads 10 test_brw_write 100000 -60 $PGVW
-	[ "$PGVR" ] && runthreads 10 test_brw_read 100000 -60 $PGVR
+	[ "$PGVW" ] && runthreads 10 test_brw_write $COUNT_100 -60 $PGVW
+	[ "$PGVR" ] && runthreads 10 test_brw_read $COUNT_100 -60 $PGVR
 
-	runthreads 32 test_brw_write 1000000 -30 $PG
-	runthreads 32 test_brw_read 1000000 -30 $PG
+	runthreads 32 test_brw_write $COUNT_10 -30 $PG
+	runthreads 32 test_brw_read $COUNT_10 -30 $PG
 
-	[ "$PGVW" ] && runthreads 32 test_brw_write 100000 -60 $PGVW
-	[ "$PGVR" ] && runthreads 32 test_brw_read 100000 -60 $PGVR
+	[ "$PGVW" ] && runthreads 32 test_brw_write $COUNT_100 -60 $PGVW
+	[ "$PGVR" ] && runthreads 32 test_brw_read $COUNT_100 -60 $PGVR
 
-	runthreads 64 test_brw_write 1000000 -30 $PG
-	runthreads 64 test_brw_read 1000000 -30 $PG
+	runthreads 64 test_brw_write $COUNT_10 -30 $PG
+	runthreads 64 test_brw_read $COUNT_10 -30 $PG
 
-	[ "$PGVW" ] && runthreads 64 test_brw_write 100000 -60 $PGVW
-	[ "$PGVR" ] && runthreads 64 test_brw_read 100000 -60 $PGVR
+	[ "$PGVW" ] && runthreads 64 test_brw_write $COUNT_100 -60 $PGVW
+	[ "$PGVR" ] && runthreads 64 test_brw_read $COUNT_100 -60 $PGVR
 
-	runthreads 100 test_brw_write 100000 -60 $PG
-	runthreads 100 test_brw_read 100000 -60 $PG
+	runthreads 100 test_brw_write $COUNT_100 -60 $PG
+	runthreads 100 test_brw_read $COUNT_100 -60 $PG
 
-	[ "$PGVW" ] && runthreads 100 test_brw_write 100000 -60 $PGVW
-	[ "$PGVR" ] && runthreads 100 test_brw_read 100000 -60 $PGVR
+	[ "$PGVW" ] && runthreads 100 test_brw_write $COUNT_100 -60 $PGVW
+	[ "$PGVR" ] && runthreads 100 test_brw_read $COUNT_100 -60 $PGVR
 done
 
-$OBDCTL --device \$$OSCNAME destroy $OID
+cleanup
