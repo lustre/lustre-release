@@ -342,31 +342,25 @@ lmv_destroy_obj(struct obd_export *exp, struct ll_fid *fid)
         struct lmv_obj *obj;
         ENTRY;
 
-        spin_lock(&lmv_obj_list_lock);
-        
-        obj = __lmv_grab_obj(obd, fid);
+        obj = lmv_grab_obj(obd, fid);
         if (obj) {
-
-                /* marking object as "freeing in progress" */
                 lmv_lock_obj(obj);
                 obj->freeing = 1;
                 lmv_unlock_obj(obj);
 
-                __lmv_put_obj(obj);
-                __lmv_put_obj(obj);
-                
-                spin_unlock(&lmv_obj_list_lock);
+                lmv_put_obj(obj);
+                lmv_put_obj(obj);
                 RETURN(1);
         }
-        
-        spin_unlock(&lmv_obj_list_lock);
+
         RETURN(0);
 }
 
 int
 lmv_setup_mgr(struct obd_device *obd)
 {
-        CWARN("LMV object manager setup\n");
+        CWARN("LMV object manager setup (%s)\n",
+              obd->obd_uuid.uuid);
         return 0;
 }
 
@@ -376,7 +370,8 @@ lmv_cleanup_mgr(struct obd_device *obd)
         struct lmv_obj *obj;
         struct list_head *cur, *tmp;
 
-        CWARN("LMV object manager cleanup\n");
+        CWARN("LMV object manager cleanup (%s)\n",
+              obd->obd_uuid.uuid);
         
         spin_lock(&lmv_obj_list_lock);
         list_for_each_safe(cur, tmp, &lmv_obj_list) {
