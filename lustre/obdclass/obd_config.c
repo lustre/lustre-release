@@ -271,8 +271,8 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
                         }
         }
 
-        if (OBT(obd) && OBP(obd, pre_cleanup)) {
-                err = obd_pre_cleanup(obd, flags);
+        if (OBT(obd) && OBP(obd, precleanup)) {
+                err = obd_precleanup(obd, flags);
                 if (err) 
                         RETURN(err);
         }
