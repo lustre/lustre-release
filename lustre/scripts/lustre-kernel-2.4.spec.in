@@ -803,7 +803,6 @@ exit 0
 %if %{linux26}
 %dir /usr/src/linux-%{KVERREL}/crypto
 %dir /usr/src/linux-%{KVERREL}/kdb
-/usr/src/linux-%{KVERREL}/Makefile.suse
 %dir /usr/src/linux-%{KVERREL}/rpmify
 %dir /usr/src/linux-%{KVERREL}/security
 %else

@@ -1410,7 +1410,7 @@
 +		struct ext3_dir_entry_2 *de = (struct ext3_dir_entry_2 *) (from + map->offs);
 +		rec_len = EXT3_DIR_REC_LEN(de->name_len);
 +		memcpy (to, de, rec_len);
-+		((struct ext3_dir_entry_2 *) to)->rec_len = rec_len;
++		((struct ext3_dir_entry_2 *)to)->rec_len = cpu_to_le16(rec_len);
 +		de->inode = 0;
 +		map++;
 +		to += rec_len;
@@ -1431,9 +1431,9 @@
 +			rec_len = EXT3_DIR_REC_LEN(de->name_len);
 +			if (de > to)
 +				memmove(to, de, rec_len);
-+			to->rec_len = rec_len;
++			to->rec_len = cpu_to_le16(rec_len);
 +			prev = to;
-+			to = (struct ext3_dir_entry_2 *) (((char *) to) + rec_len);
++			to = (struct ext3_dir_entry_2 *)((char *)to + rec_len);
 +		}
 +		de = next;
 +	}
@@ -2254,19 +2254,23 @@
  
  	if (IS_SYNC(old_dir) || IS_SYNC(new_dir))
  		handle->h_sync = 1;
-@@ -1071,14 +2174,33 @@ static int ext3_rename (struct inode * o
+@@ -1071,14 +2174,37 @@ static int ext3_rename (struct inode * o
  	/*
  	 * ok, that's it
  	 */
 -	ext3_delete_entry(handle, old_dir, old_de, old_bh);
-+	retval = ext3_delete_entry(handle, old_dir, old_de, old_bh);
-+	if (retval == -ENOENT) {
-+		/*
-+		 * old_de could have moved out from under us.
-+		 */
++	if (le32_to_cpu(old_de->inode) != old_inode->i_ino ||
++	    old_de->name_len != old_dentry->d_name.len ||
++	    strncmp(old_de->name, old_dentry->d_name.name, old_de->name_len) ||
++	    (retval = ext3_delete_entry(handle, old_dir,
++					old_de, old_bh)) == -ENOENT) {
++		/* old_de could have moved from under us during htree split, so
++		 * make sure that we are deleting the right entry.  We might
++		 * also be pointing to a stale entry in the unused part of
++		 * old_bh so just checking inum and the name isn't enough. */
 +		struct buffer_head *old_bh2;
 +		struct ext3_dir_entry_2 *old_de2;
-+		
++
 +		old_bh2 = ext3_find_entry(old_dentry, &old_de2);
 +		if (old_bh2) {
 +			retval = ext3_delete_entry(handle, old_dir,

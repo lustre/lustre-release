@@ -358,34 +358,39 @@ install_kernel()
     install -m 644 "$CONFIG_FILE" "$DESTDIR/boot/config-${FULL_VERSION}"
 
     mkdir -p "$DESTDIR/dev/shm"
+    mkdir -p "$DESTDIR/lib/modules/${FULL_VERSION}"
+
+    make CC="$CC" INSTALL_MOD_PATH="$DESTDIR" KERNELRELEASE="$FULL_VERSION" \
+	-s modules_install || \
+	fatal 1 "Error installing modules."
 
     case "$TARGET_ARCH" in
 	i386 | i586 | i686 | athlon)
 	    cp arch/i386/boot/bzImage "$DESTDIR/boot/vmlinuz-${FULL_VERSION}"
-	    cp vmlinux "$DESTDIR/boot/vmlinux-${FULL_VERSION}"
+	    cp vmlinux "$DESTDIR/lib/modules/${FULL_VERSION}/"
+	    ln -sf "../lib/modules/${FULL_VERSION}/vmlinux" "$DESTDIR/boot/vmlinux-${FULL_VERSION}"
 	    ;;
 	x86_64)
 	    cp arch/x86_64/boot/bzImage "$DESTDIR/boot/vmlinuz-${FULL_VERSION}"
-	    cp vmlinux "$DESTDIR/boot/vmlinux-${FULL_VERSION}"
+	    cp vmlinux "$DESTDIR/lib/modules/${FULL_VERSION}/"
+	    ln -sf "../lib/modules/${FULL_VERSION}/vmlinux" "$DESTDIR/boot/vmlinux-${FULL_VERSION}"
 	    ;;
 	ia64)
 	    gzip -cfv vmlinux > vmlinuz
 	    mkdir -p "$DESTDIR/boot/efi/redhat"
-	    install -m 755 vmlinux "$DESTDIR/boot/efi/redhat/vmlinux-${FULL_VERSION}"
+	    install -m 755 vmlinux "$DESTDIR/lib/modules/${FULL_VERSION}/"
 	    install -m 755 vmlinuz "$DESTDIR/boot/efi/redhat/vmlinuz-${FULL_VERSION}"
+	    ln -sf "../lib/modules/${FULL_VERSION}/vmlinux" "$DESTDIR/boot/efi/redhat/vmlinux-${FULL_VERSION}"
 	    ln -sf "efi/redhat/vmlinux-${FULL_VERSION}" "$DESTDIR/boot/vmlinux-${FULL_VERSION}"
 	    ln -sf "efi/redhat/vmlinuz-${FULL_VERSION}" "$DESTDIR/boot/vmlinuz-${FULL_VERSION}"
 	    ;;
 	*)
 	    cp vmlinuz "$DESTDIR/boot/vmlinuz-${FULL_VERSION}"
-	    cp vmlinux "$DESTDIR/boot/vmlinux-${FULL_VERSION}"
+	    cp vmlinux "$DESTDIR/lib/modules/${FULL_VERSION}/vmlinux-${FULL_VERSION}"
+	    ln -sf "../lib/modules/${FULL_VERSION}/vmlinux-${FULL_VERSION}" "$DESTDIR/boot/vmlinux-${FULL_VERSION}"
+
 	    ;;
     esac
-
-    mkdir -p "$DESTDIR/lib/modules/${FULL_VERSION}"
-    make CC="$CC" INSTALL_MOD_PATH="$DESTDIR" KERNELRELEASE="$FULL_VERSION" \
-	-s modules_install || \
-	fatal 1 "Error installing modules."
 
     popd >/dev/null
 }

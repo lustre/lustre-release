@@ -665,6 +665,12 @@ test_24n() {
 }
 run_test 24n "Statting the old file after renameing (Posix rename 2)"
 
+test_24o() {
+	check_kernel_version 37 || return 0
+	rename_many -s 3287 -v -n 10 $DIR
+}
+run_test 24o "rename of files during htree split ==============="
+
 test_25a() {
 	echo '== symlink sanity ============================================='
 	mkdir $DIR/d25
