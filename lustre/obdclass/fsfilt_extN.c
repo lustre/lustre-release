@@ -263,16 +263,14 @@ static int fsfilt_extN_setattr(struct dentry *dentry, void *handle,
          * in the block pointers; this is really the "small" stripe MD data.
          * We can avoid further hackery by virtue of the MDS file size being
          * zero all the time (which doesn't invoke block truncate at unlink
-         * time), so we assert we never change the MDS file size from zero.
-         */
+         * time), so we assert we never change the MDS file size from zero. */
         if (iattr->ia_valid & ATTR_SIZE && !do_trunc) {
                 /* ATTR_SIZE would invoke truncate: clear it */
                 iattr->ia_valid &= ~ATTR_SIZE;
                 EXTN_I(inode)->i_disksize = inode->i_size = iattr->ia_size;
 
                 /* make sure _something_ gets set - so new inode
-                 * goes to disk (probably won't work over XFS
-                 */
+                 * goes to disk (probably won't work over XFS */
                 if (!(iattr->ia_valid & (ATTR_MODE | ATTR_MTIME | ATTR_CTIME))){
                         iattr->ia_valid |= ATTR_MODE;
                         iattr->ia_mode = inode->i_mode;
@@ -478,7 +476,7 @@ static int fsfilt_extN_journal_data(struct file *filp)
  */
 static int fsfilt_extN_statfs(struct super_block *sb, struct obd_statfs *osfs)
 {
-        struct statfs sfs;
+        struct kstatfs sfs;
         int rc = vfs_statfs(sb, &sfs);
 
         if (!rc && sfs.f_bfree < sfs.f_ffree) {
@@ -503,8 +501,8 @@ static int fsfilt_extN_prep_san_write(struct inode *inode, long *blocks,
         return extN_prep_san_write(inode, blocks, nblocks, newsize);
 }
 
-static int fsfilt_extN_read_record(struct file * file, char * buf,
-                                   loff_t size, loff_t *offs)
+static int fsfilt_extN_read_record(struct file * file, char *buf,
+                                   int size, loff_t *offs)
 {
         struct buffer_head *bh;
         unsigned long block, boffs;
@@ -512,9 +510,10 @@ static int fsfilt_extN_read_record(struct file * file, char * buf,
         int err;
 
         if (inode->i_size < *offs + size) {
-                CERROR("file is too short for this request\n");
+                CERROR("file size %llu is too short for read %u@%llu\n",
+                       inode->i_size, size, *offs);
                 return -EIO;
-        } 
+        }
 
         block = *offs >> inode->i_blkbits;
         bh = extN_bread(NULL, inode, block, 0, &err);
@@ -537,12 +536,13 @@ static int fsfilt_extN_read_record(struct file * file, char * buf,
         return size;
 }
 
-static int fsfilt_extN_write_record(struct file * file, char * buf,
-                                    loff_t size, loff_t *offs)
+static int fsfilt_extN_write_record(struct file * file, char *buf,
+                                    int size, loff_t *offs)
 {
         struct buffer_head *bh;
         unsigned long block, boffs;
         struct inode *inode = file->f_dentry->d_inode;
+        loff_t old_size = inode->i_size;
         journal_t *journal;
         handle_t *handle;
         int err;
@@ -555,17 +555,26 @@ static int fsfilt_extN_write_record(struct file * file, char * buf,
         }
 
         block = *offs >> inode->i_blkbits;
-        if (block > inode->i_size >> inode->i_blkbits) {
+        if (*offs + size > inode->i_size) {
                 down(&inode->i_sem);
-                if (block > inode->i_size >> inode->i_blkbits) 
-                        inode->i_size = block << inode->i_blkbits;
+                if (*offs + size > inode->i_size)
+                        inode->i_size = ((loff_t)block + 1) << inode->i_blkbits;
                 up(&inode->i_sem);
         }
+
         bh = extN_bread(handle, inode, block, 1, &err);
         if (!bh) {
                 CERROR("can't read/create block: %d\n", err);
                 goto out;
         }
+
+        /* This is a hack only needed because extN_get_block_handle() updates
+         * i_disksize after marking the inode dirty in extN_splice_branch().
+         * We will fix that when we get a chance, as extN_mark_inode_dirty()
+         * is not without cost, nor is it even exported.
+         */
+        if (inode->i_size > old_size)
+                mark_inode_dirty(inode);
 
         boffs = (unsigned)*offs % bh->b_size;
         if (boffs + size > bh->b_size) {
@@ -584,7 +593,7 @@ static int fsfilt_extN_write_record(struct file * file, char * buf,
         err = extN_journal_dirty_metadata(handle, bh);
         if (err) {
                 CERROR("journal_dirty_metadata() returned error %d\n", err);
-                goto out; 
+                goto out;
         }
         err = size;
 out:
