@@ -1040,7 +1040,9 @@ static int mds_getattr_lock(struct ptlrpc_request *req, int offset,
                         if (rc)
                                 GOTO(cleanup, rc);
                 
-                        /*
+    			cleanup_phase = 2; /* dchild, dparent, locks */
+                        
+			/*
                          * let's make sure this name should leave on this mds
                          * node.
                          */
