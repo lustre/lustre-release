@@ -364,7 +364,7 @@ static int ll_statfs(struct super_block *sb, struct statfs *sfs)
                 CERROR("obd_statfs fails: rc = %d\n", rc);
         else
                 CDEBUG(D_SUPER, "statfs shows blocks %ld/%ld objects %ld/%ld\n",
-                       sfs->f_bavail, sfs->f_blocks, sfs->f_files,sfs->f_ffree);
+                       sfs->f_bavail, sfs->f_blocks, sfs->f_ffree,sfs->f_files);
 
         /* temporary until mds_statfs returns statfs info for all OSTs */
         if (!rc) {
