@@ -12,8 +12,8 @@ FSMOD = mds_extN
 endif
 
 MODULE = mds
-modulefs_DATA = mds.o $(MODS).o
-EXTRA_PROGRAMS = mds $(MODS)
+modulefs_DATA = mds.o $(FSMOD).o
+EXTRA_PROGRAMS = mds $(FSMOD)
 
 LINX= mds_updates.c simple.c ll_pack.c lov_pack.c target.c
 
