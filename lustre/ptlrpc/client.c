@@ -469,7 +469,7 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
         }
  resend:
         req->rq_time = CURRENT_TIME;
-        req->rq_timeout = 3;
+        req->rq_timeout = 15;
         rc = ptl_send_rpc(req);
         if (rc) {
                 CERROR("error %d, opcode %d\n", rc, req->rq_reqmsg->opc);
@@ -541,7 +541,7 @@ int ptlrpc_replay_req(struct ptlrpc_request *req)
                req->rq_connection->c_level);
 
         req->rq_time = CURRENT_TIME;
-        req->rq_timeout = 3;
+        req->rq_timeout = 15;
         rc = ptl_send_rpc(req);
         if (rc) {
                 CERROR("error %d, opcode %d\n", rc, req->rq_reqmsg->opc);

@@ -76,6 +76,7 @@ echo "ready debugger"
 read
 
 echo foo >> /mnt/lustre/bar
+cat /mnt/lustre/bar
 
 umount /mnt/lustre
 mount -t lustre_lite -o ost=5,mds=6 none /mnt/lustre
