@@ -39,120 +39,38 @@
 #include <linux/lustre_idl.h>
 #include <linux/obd.h>
 
-/* catalog of log objects */
-
-#define LLOG_MAX_OBJ             (64 << 10)
-
-/* Identifier for a single log object */
-struct llog_logid {
-        __u64                   lgl_oid;
-//      __u64                   lgl_bootcount;
-};
-
-/* On-disk header structure of catalog of available log object (internal) */
-#define LLOG_HEADER_SIZE        (4096)     /* <= PAGE_SIZE */
-#define LLOG_HDR_RSVD_U32       (16)
-#define LLOG_HDR_DATA_SIZE      (LLOG_HDR_RSVD_U32 * sizeof(__u32))
-#define LLOG_BITMAP_BYTES       (LLOG_HEADER_SIZE - LLOG_HDR_DATA_SIZE)
-
-#define LLOG_CATALOG_MAGIC      0x6d50e67d
-struct llog_catalog_hdr {
-        __u32                   lch_size;
-        __u32                   lch_magic;
-        __u32                   lch_numrec;
-        __u32                   lch_reserved[LLOG_HDR_RSVD_U32 - 4];
-        __u32                   lch_bitmap[LLOG_BITMAP_BYTES / sizeof(__u32)];
-        __u32                   lch_size_end;
-};
-
-
-/* Log data records */
-typedef enum {
-        OST_CREATE_REC = 1,
-} llog_op_type;
-
-/* Log record header - stored in originating host endian order (use magic to
- * check order).
- * Each record must start with this and be a multiple of 64 bits in size.
- */
-struct llog_trans_hdr {
-        __u32                   lth_len;
-        llog_op_type            lth_op;
-};
-
-struct llog_create_rec {
-        struct llog_trans_hdr   lcr_hdr;
-        struct ll_fid           lcr_fid;
-        obd_id                  lcr_oid;
-        obd_count               lcr_ogener;
-        __u32                   lcr_end_len;
-} __attribute__((packed));
-
-struct llog_unlink_rec {
-        struct llog_trans_hdr   lur_hdr;
-        obd_id                  lur_oid;
-        obd_count               lur_ogener;
-        __u32                   lur_end_len;
-} __attribute__((packed));
-
-/* On-disk header structure of each log object - stored in creating host
- * endian order, with the exception of the bitmap - stored in little endian
- * order so that we can use ext2_{clear,set,test}_bit() for optimized
- * little-endian handling of bitmaps.
- */
-#define LLOG_MAX_LOG_SIZE       (64 << 10) /* == PTL_MD_MAX_IOV */
-#define LLOG_MIN_REC_SIZE       (16)
-
-#define LLOG_OBJECT_MAGIC       0xffb45539
-struct llog_object_hdr {
-        /* This first chunk should be exactly 4096 bytes in size */
-        __u32                   loh_size;
-        __u32                   loh_magic;
-        __u32                   loh_maxrec;
-        __u32                   loh_reserved[LLOG_HDR_RSVD_U32 - 4];
-        __u32                   loh_bitmap[LLOG_BITMAP_BYTES / sizeof(__u32)];
-        __u32                   loh_size_end;
-};
-
-static inline int llog_log_swabbed(struct llog_object_hdr *hdr)
-{
-        if (hdr->loh_magic == __swab32(LLOG_OBJECT_MAGIC))
-                return 1;
-        if (hdr->loh_magic == LLOG_OBJECT_MAGIC)
-                return 0;
-        return -EINVAL;
-}
-
 /* In-memory descriptor for a log object or log catalog */
 struct llog_handle {
         struct list_head        lgh_list;
-        struct llog_logid       lgh_lid;
-        struct brw_page         lgh_pga[2];
-        struct obdo            *lgh_oa;
-        struct lov_stripe_md   *lgh_lsm;
-};
-
-/* cookie to find a log record back in a specific log object */
-struct llog_cookie {
-        struct llog_logid       lgc_lid;
-        __u32                   lgc_index;
-        __u32                   lgc_offset;
+        struct llog_cookie      lgh_cookie;
+        struct obd_device      *lgh_obd;
+        void                   *lgh_hdr;
+        struct file            *lgh_file;
+        struct llog_handle     *(*lgh_log_create)(struct llog_handle *loghandle,
+                                                  struct obd_trans_info *oti);
+        struct llog_handle     *(*lgh_log_open)(struct llog_handle *cathandle,
+                                                struct llog_cookie *logcookie);
+        int                     (*lgh_log_close)(struct llog_handle *cathandle,
+                                                 struct llog_handle *loghandle);
+        int                     lgh_index;
 };
 
 /* exported api prototypes */
-extern int llog_add_record(struct lustre_handle *conn,
+extern int llog_add_record(struct llog_handle *cathandle,
                            struct llog_trans_hdr *rec,
-                           struct llog_cookie *logcookie,
-                           struct obd_trans_info *oti);
-extern int llog_clear_records(struct lustre_handle *conn, int count,
-                              struct llog_cookie *cookies);
-extern int llog_clear_record(struct lustre_handle *conn, __u32 recno);
-extern int llog_delete(struct lustre_handle *conn, struct llog_logid *id);
+                           struct lov_mds_md *lmm,
+                           struct obd_trans_info *oti,
+                           struct llog_cookie *logcookies);
+
+extern int llog_cancel_records(struct llog_handle *cathandle, int count,
+                               struct llog_cookie *cookies);
 
 /* internal api */
-extern int llog_init_catalog(struct lustre_handle *conn);
-extern struct llog_handle *llog_id2handle(struct lustre_handle *conn,
-                                          struct llog_logid *logid);
+extern struct llog_handle *llog_alloc_handle(void);
+extern void llog_free_handle(struct llog_handle *handle);
+extern int llog_init_catalog(struct llog_handle *cathandle);
+extern struct llog_handle *llog_id2handle(struct llog_handle *cathandle,
+                                          struct llog_cookie *cookie);
 
 #endif
 
