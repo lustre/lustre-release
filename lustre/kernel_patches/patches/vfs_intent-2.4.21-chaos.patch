@@ -607,7 +607,7 @@ Index: linux-ia64/fs/namei.c
 +
  /* SMP-safe */
 -static struct dentry *lookup_create(struct nameidata *nd, int is_dir)
-+static struct dentry *lookup_create(struct nameidata *nd, int is_dir,
++struct dentry *lookup_create(struct nameidata *nd, int is_dir,
 +				    struct lookup_intent *it)
  {
  	struct dentry *dentry;
@@ -1758,12 +1758,14 @@ Index: linux-ia64/include/linux/fs.h
  
  	/* Following are for knfsd to interact with "interesting" filesystems
  	 * Currently just reiserfs, but possibly FAT and others later
-@@ -1131,10 +1150,14 @@ static inline int get_lease(struct inode
+@@ -1131,10 +1150,16 @@ static inline int get_lease(struct inode
  
  asmlinkage long sys_open(const char *, int, int);
  asmlinkage long sys_close(unsigned int);	/* yes, it's really unsigned */
 -extern int do_truncate(struct dentry *, loff_t start);
 +extern int do_truncate(struct dentry *, loff_t start, int called_from_open);
++struct dentry *lookup_create(struct nameidata *nd, int is_dir,
++				    struct lookup_intent *it);
  
  extern struct file *filp_open(const char *, int, int);
  extern struct file * dentry_open(struct dentry *, struct vfsmount *, int);
@@ -1871,12 +1873,13 @@ Index: linux-ia64/kernel/ksyms.c
 ===================================================================
 --- linux-ia64.orig/kernel/ksyms.c	2004-03-17 16:05:28.000000000 -0800
 +++ linux-ia64/kernel/ksyms.c	2004-03-17 16:05:51.000000000 -0800
-@@ -318,6 +318,8 @@ EXPORT_SYMBOL(read_cache_page);
+@@ -318,6 +318,9 @@ EXPORT_SYMBOL(read_cache_page);
  EXPORT_SYMBOL(set_page_dirty);
  EXPORT_SYMBOL(vfs_readlink);
  EXPORT_SYMBOL(vfs_follow_link);
 +EXPORT_SYMBOL(vfs_follow_link_it);
 +EXPORT_SYMBOL(do_umount);
++EXPORT_SYMBOL(lookup_create);
  EXPORT_SYMBOL(page_readlink);
  EXPORT_SYMBOL(page_follow_link);
  EXPORT_SYMBOL(page_symlink_inode_operations);
