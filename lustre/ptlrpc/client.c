@@ -81,8 +81,7 @@ int ptlrpc_connect_client(int dev, char *uuid, int req_portal, int rep_portal,
         cl->cli_reply_portal = rep_portal;
         cl->cli_rep_unpack = rep_unpack;
         cl->cli_req_pack = req_pack;
-        atomic_set(&cl->cli_queue_length, 32);
-        init_waitqueue_head(&cl->cli_waitq);
+        sema_init(&cl->cli_rpc_sem, 32);
 
         /* non networked client */
         if (dev >= 0 && dev < MAX_OBD_DEVICES) {
@@ -238,50 +237,6 @@ int ptlrpc_abort(struct ptlrpc_request *request)
         return 0;
 }
 
-static int ptlrpc_check_queue_depth(void *data)
-{
-        struct ptlrpc_client *cl = data;
-
-        if (atomic_read(&cl->cli_queue_length) > 0)
-                return 1;
-
-        if (sigismember(&(current->pending.signal), SIGKILL) ||
-            sigismember(&(current->pending.signal), SIGTERM) ||
-            sigismember(&(current->pending.signal), SIGINT))
-                return 1;
-
-        return 0;
-}
-
-#define __ptlrpc_wait_event_interruptible(wq, condition, ret)           \
-do {                                                                    \
-        wait_queue_t __wait;                                            \
-        init_waitqueue_entry(&__wait, current);                         \
-                                                                        \
-        add_wait_queue_exclusive(&wq, &__wait);                         \
-        for (;;) {                                                      \
-                set_current_state(TASK_INTERRUPTIBLE);                  \
-                if (condition)                                          \
-                        break;                                          \
-                if (!signal_pending(current)) {                         \
-                        schedule();                                     \
-                        continue;                                       \
-                }                                                       \
-                ret = -ERESTARTSYS;                                     \
-                break;                                                  \
-        }                                                               \
-        current->state = TASK_RUNNING;                                  \
-        remove_wait_queue(&wq, &__wait);                                \
-} while (0)
-
-#define ptlrpc_wait_event_interruptible(wq, condition)                  \
-({                                                                      \
-        int __ret = 0;                                                  \
-        if (!(condition))                                               \
-                __ptlrpc_wait_event_interruptible(wq, condition, __ret);  \
-        __ret;                                                          \
-})
-
 int ptlrpc_queue_wait(struct ptlrpc_client *cl, struct ptlrpc_request *req)
 {
         int rc = 0;
@@ -289,31 +244,26 @@ int ptlrpc_queue_wait(struct ptlrpc_client *cl, struct ptlrpc_request *req)
 
         init_waitqueue_head(&req->rq_wait_for_rep);
 
-        if (atomic_dec_and_test(&cl->cli_queue_length))
-                ptlrpc_wait_event_interruptible(cl->cli_waitq,
-                                                ptlrpc_check_queue_depth(cl));
-
         if (cl->cli_obd) {
                 /* Local delivery */
+                down(&cl->cli_rpc_sem);
                 rc = ptlrpc_enqueue(cl, req); 
         } else {
                 /* Remote delivery via portals. */
                 req->rq_req_portal = cl->cli_request_portal;
                 req->rq_reply_portal = cl->cli_reply_portal;
-                rc = ptl_send_rpc(req, &cl->cli_server);
+                rc = ptl_send_rpc(req, cl);
         }
         if (rc) { 
                 CERROR("error %d, opcode %d\n", rc, req->rq_reqhdr->opc);
-                atomic_inc(&cl->cli_queue_length);
-                wake_up(&cl->cli_waitq);
+                up(&cl->cli_rpc_sem);
                 RETURN(-rc);
         }
 
         CDEBUG(D_OTHER, "-- sleeping\n");
         wait_event_interruptible(req->rq_wait_for_rep, ptlrpc_check_reply(req));
         CDEBUG(D_OTHER, "-- done\n");
-        atomic_inc(&cl->cli_queue_length);
-        wake_up(&cl->cli_waitq);
+        up(&cl->cli_rpc_sem);
         if (req->rq_flags == PTL_RPC_INTR) { 
                 /* Clean up the dangling reply buffers */
                 ptlrpc_abort(req);

@@ -84,8 +84,7 @@ struct ptlrpc_client {
 
         spinlock_t cli_lock;
         __u32 cli_xid;
-        atomic_t cli_queue_length;
-        wait_queue_head_t cli_waitq;
+        struct semaphore cli_rpc_sem;
 };
 
 /* These do double-duty in rq_type and rq_flags */
@@ -206,7 +205,7 @@ int ptlrpc_reply(struct obd_device *obddev, struct ptlrpc_service *svc,
                  struct ptlrpc_request *req);
 int ptlrpc_error(struct obd_device *obddev, struct ptlrpc_service *svc,
                  struct ptlrpc_request *req);
-int ptl_send_rpc(struct ptlrpc_request *request, struct lustre_peer *peer);
+int ptl_send_rpc(struct ptlrpc_request *request, struct ptlrpc_client *cl);
 void ptlrpc_link_svc_me(struct ptlrpc_service *service, int i);
 
 /* rpc/client.c */

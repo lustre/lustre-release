@@ -262,7 +262,7 @@ int ptlrpc_error(struct obd_device *obddev, struct ptlrpc_service *svc,
         return ptlrpc_reply(obddev, svc, req);
 }
 
-int ptl_send_rpc(struct ptlrpc_request *request, struct lustre_peer *peer)
+int ptl_send_rpc(struct ptlrpc_request *request, struct ptlrpc_client *cl)
 {
         ptl_process_id_t local_id;
         struct ptlreq_hdr *hdr;
@@ -293,9 +293,11 @@ int ptl_send_rpc(struct ptlrpc_request *request, struct lustre_peer *peer)
         local_id.nid = PTL_ID_ANY;
         local_id.pid = PTL_ID_ANY;
 
-        rc = PtlMEAttach(peer->peer_ni, request->rq_reply_portal, local_id,
-                          request->rq_xid, 0, PTL_UNLINK, PTL_INS_AFTER,
-                          &request->rq_reply_me_h);
+        down(&cl->cli_rpc_sem);
+
+        rc = PtlMEAttach(cl->cli_server.peer_ni, request->rq_reply_portal,
+                         local_id, request->rq_xid, 0, PTL_UNLINK,
+                         PTL_INS_AFTER, &request->rq_reply_me_h);
         if (rc != PTL_OK) {
                 CERROR("PtlMEAttach failed: %d\n", rc);
                 LBUG();
@@ -323,12 +325,13 @@ int ptl_send_rpc(struct ptlrpc_request *request, struct lustre_peer *peer)
         CDEBUG(D_NET, "Setup reply buffer: %u bytes, xid %u, portal %u\n",
                request->rq_replen, request->rq_xid, request->rq_reply_portal);
 
-        return ptl_send_buf(request, peer, request->rq_req_portal);
+        return ptl_send_buf(request, &cl->cli_server, request->rq_req_portal);
 
  cleanup2:
         PtlMEUnlink(request->rq_reply_me_h);
  cleanup:
         OBD_FREE(repbuf, request->rq_replen);
+        up(&cl->cli_rpc_sem);
 
         return rc;
 }
