@@ -2,16 +2,18 @@ mds_HOST=${mds_HOST:-mdev4}
 mdsfailover_HOST=${mdsfailover_HOST:-mdev5}
 ost1_HOST=${ost1_HOST:-mdev2}
 ost2_HOST=${ost2_HOST:-mdev3}
+EXTRA_OSTS=${EXTRA_OSTS:-mdev7}
 client_HOST=client
 LIVE_CLIENT=${LIVE_CLIENT:-mdev6}
 # This should always be a list, not a regexp
-FAIL_CLIENTS=${FAIL_CLIENTS:-mdev7}
+#FAIL_CLIENTS=${FAIL_CLIENTS:-mdev7}
+FAIL_CLIENTS=${FAIL_CLIENTS:-""}
 
 NETTYPE=${NETTYPE:-tcp}
 
 TIMEOUT=${TIMEOUT:-30}
-#PTLDEBUG=${PTLDEBUG:-'"ha|info|ioctl|malloc"'}
 PTLDEBUG=${PTLDEBUG:-0}
+SUBSYSTEM=${SUBSYSTEM:-0}
 MOUNT=${MOUNT:-"/mnt/lustre"}
 UPCALL=${CLIENT_UPCALL:-`pwd`/replay-single-upcall.sh}
 

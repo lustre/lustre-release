@@ -2,6 +2,7 @@ mds_HOST=${mds_HOST:-`hostname`}
 mdsfailover_HOST=${mdsfailover_HOST:-""}
 ost1_HOST=${ost1_HOST:-"`hostname`"}
 ost2_HOST=${ost2_HOST:-"`hostname`"}
+EXTRA_OSTS=${EXTRA_OSTS:-"`hostname`"}
 client_HOST="'*'"
 LIVE_CLIENT=${LIVE_CLIENT:-"`hostname`"}
 # This should always be a list, not a regexp
@@ -17,9 +18,12 @@ UPCALL=${CLIENT_UPCALL:-`pwd`/replay-single-upcall.sh}
 
 MDSDEV=${MDSDEV:-$ROOT/tmp/mds-`hostname`}
 MDSSIZE=${MDSSIZE:-10000} #50000000
+MDSJOURNALSIZE=${MDSJOURNALSIZE:-0}
 
-OSTDEV=${OSTDEV:-$ROOT/tmp/ost-`hostname`}
+OSTDEV=${OSTDEV:-"$ROOT/tmp/ost-`hostname`-%d"}
 OSTSIZE=${OSTSIZE:=10000} #50000000
+OSTJOURNALSIZE=${OSTJOURNALSIZE:-0}
+
 FSTYPE=${FSTYPE:-ext3}
 STRIPE_BYTES=${STRIPE_BYTES:-65536} #1048576
 STRIPES_PER_OBJ=${STRIPES_PER_OBJ:-0}
