@@ -38,6 +38,10 @@ case "$lustretag" in
 	portalstag="b_hd_sec"
 	;;
 
+    b_hd_remote_acl)
+        portalstag="b_hd_sec"
+        ;;
+
     b_hd_remote_uid)
 	portalstag="b_hd_sec"
 	;;
