@@ -13,8 +13,8 @@ EXTRA_PROGRAMS = extN
 #       It will be applied automatically by the extN build process, or you
 #       can apply it to the source kernel tree and fix ext3 also.  For chaos22
 #       (or other RH < 12.5 kernels) use the "chaos22" patch instead.
-#EXTN_FIXES = ../patches/patch-2.4.18-chaos22
-EXTN_FIXES = ext3-2.4.18-fixes.diff
+EXTN_FIXES = ../patches/patch-2.4.18-chaos22
+#EXTN_FIXES = ext3-2.4.18-fixes.diff
 EXTNP = htree-ext3-2.4.18.diff linux-2.4.18ea-0.8.26.diff
 EXTNP+= ext3-2.4.18-ino_sb_macro.diff extN-misc-fixup.diff
 EXTNC = balloc.c bitmap.c dir.c file.c fsync.c ialloc.c inode.c ioctl.c

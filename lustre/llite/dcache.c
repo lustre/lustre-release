@@ -31,6 +31,14 @@
 
 extern struct address_space_operations ll_aops;
 
+void ll_release(struct dentry *de) 
+{
+        ENTRY;
+
+        OBD_FREE(de->d_fsdata, sizeof(struct ll_dentry_data));
+        EXIT;
+}
+
 void ll_intent_release(struct dentry *de)
 {
         struct lustre_handle *handle;
@@ -40,6 +48,9 @@ void ll_intent_release(struct dentry *de)
                 EXIT;
                 return;
         }
+
+        LASSERT(ll_d2d(de) != NULL);
+
         if (de->d_it->it_lock_mode) {
                 handle = (struct lustre_handle *)de->d_it->it_lock_handle;
                 if (de->d_it->it_op == IT_SETATTR) {
@@ -51,7 +62,8 @@ void ll_intent_release(struct dentry *de)
                 } else
                         ldlm_lock_decref(handle, de->d_it->it_lock_mode);
         }
-        de->d_it = NULL;
+        // de->d_it = NULL;
+        up(&ll_d2d(de)->lld_it_sem);
         EXIT;
 }
 
@@ -100,10 +112,37 @@ int ll_revalidate2(struct dentry *de, int flags, struct lookup_intent *it)
         if (atomic_read(&de->d_count) > 0)
                 RETURN(1);
 
+        if (ll_d2d(de) == NULL) {
+                CERROR("allocating fsdata\n");
+                ll_set_dd(de);
+        }
+        down(&ll_d2d(de)->lld_it_sem);
+        //  de->d_it = it;        
+
+        RETURN(0);
+}
+
+int ll_set_dd(struct dentry *de)
+{
+        ENTRY;
+        LASSERT(de != NULL);
+
+        lock_kernel();
+
+        if (de->d_fsdata != NULL) {
+                CERROR("dentry %p already has d_fsdata set\n", de);
+        } else {
+                OBD_ALLOC(de->d_fsdata, sizeof(struct ll_dentry_data));
+                sema_init(&ll_d2d(de)->lld_it_sem, 1);
+        }
+
+        unlock_kernel();
+
         RETURN(0);
 }
 
 struct dentry_operations ll_d_ops = {
-        d_revalidate2: ll_revalidate2,
-        d_intent_release: ll_intent_release
+        .d_revalidate2 = ll_revalidate2,
+        .d_intent_release = ll_intent_release,
+        .d_release = ll_release,
 };

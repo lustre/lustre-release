@@ -32,6 +32,11 @@ struct ll_file_data {
         __u32 fd_flags;
 };
 
+struct ll_dentry_data {
+        struct semaphore      lld_it_sem;
+};
+
+#define ll_d2d(dentry) ((struct ll_dentry_data*) dentry->d_fsdata)
 
 struct ll_read_inode2_cookie {
         struct mds_body *lic_body;
@@ -143,6 +148,7 @@ int ll_unlock(__u32 mode, struct lustre_handle *lockh);
 
 /* dcache.c */
 void ll_intent_release(struct dentry *de);
+int ll_set_dd(struct dentry *de);
 
 /* dir.c */
 extern struct file_operations ll_dir_operations;
