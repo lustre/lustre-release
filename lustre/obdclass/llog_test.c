@@ -334,7 +334,8 @@ static int llog_test_5(struct obd_device *obd)
 }
 
 
-static int llog_test6_process_rec(struct llog_rec_hdr * rec, void * private) 
+static int llog_test6_process_rec(struct llog_handle *handle,
+                                  struct llog_rec_hdr * rec, void * private) 
 {
         return 0;
 }
@@ -364,7 +365,7 @@ static int llog_test_6(struct obd_device *obd, char * name)
         }
 
         exp = class_conn2export(&exph);
-        rc = mdc_llog_process(exp, name, NULL, llog_test6_process_rec);
+        rc = mdc_llog_process(exp, name, llog_test6_process_rec, NULL);
         if (rc) {
                 CERROR("mdc_llog_process failed: rc = %d\n", rc);
         }

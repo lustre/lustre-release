@@ -252,12 +252,15 @@ EXPORT_SYMBOL(ptlrpc_lprocfs_register_obd);
 EXPORT_SYMBOL(ptlrpc_lprocfs_unregister_obd);
 
 /* llogd.c */
-EXPORT_SYMBOL(llogd_init);
+EXPORT_SYMBOL(llogd_create);
 EXPORT_SYMBOL(llogd_next_block);
+EXPORT_SYMBOL(llogd_read_header);
 EXPORT_SYMBOL(llogd_close);
-EXPORT_SYMBOL(llogd_client_init);
+EXPORT_SYMBOL(llogd_client_create);
 EXPORT_SYMBOL(llogd_client_next_block);
+EXPORT_SYMBOL(llogd_client_read_header);
 EXPORT_SYMBOL(llogd_client_close);
+EXPORT_SYMBOL(llogd_client_ops);
 
 #ifdef __KERNEL__
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
