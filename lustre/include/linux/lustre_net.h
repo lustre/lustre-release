@@ -56,18 +56,10 @@
 #define MDS_BUFSIZE	(64 * 1024)
 #define MDS_MAXREQSIZE	1024
 
-//#ifdef __arch_um__
-#if 0
-#define OST_NEVENTS	1024
-#define OST_NBUFS	10
-#define OST_BUFSIZE	(64 * 1024)
-#define OST_MAXREQSIZE	(8 * 1024)
-#else
 #define OST_NEVENTS	min(num_physpages / 16, 32768UL)
-#define OST_NBUFS	min(OST_NEVENTS / 100, 256UL)
+#define OST_NBUFS	min(OST_NEVENTS / 128, 256UL)
 #define OST_BUFSIZE	((OST_NEVENTS > 4096UL ? 128 : 64) * 1024)
 #define OST_MAXREQSIZE	(8 * 1024)
-#endif
 
 #define CONN_INVALID 1
 
