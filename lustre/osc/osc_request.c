@@ -82,11 +82,13 @@ extern int osc_queue_wait(struct obd_conn *conn, struct ptlrpc_request *req)
 	struct obd_device *client = conn->oc_dev;
 	struct lustre_peer *peer = &conn->oc_dev->u.osc.osc_peer;
 	int rc;
+        DECLARE_WAITQUEUE(wait, current);
 
 	ENTRY;
 
 	/* set the connection id */
 	req->rq_req.ost->connid = conn->oc_id;
+	init_waitqueue_head(&req->rq_wait_for_rep);
 
 	/* XXX fix the race here (wait_for_event?)*/
 	if (peer == NULL) {
@@ -109,10 +111,27 @@ extern int osc_queue_wait(struct obd_conn *conn, struct ptlrpc_request *req)
 	       conn->oc_id, req->rq_reqhdr->opc, req);
 
 	/* wait for the reply */
-	init_waitqueue_head(&req->rq_wait_for_rep);
 	CDEBUG(D_INODE, "-- sleeping\n");
-	interruptible_sleep_on(&req->rq_wait_for_rep);
+        add_wait_queue(&req->rq_wait_for_rep, &wait);
+        while (req->rq_repbuf == NULL) {
+                set_current_state(TASK_INTERRUPTIBLE);
+
+                /* if this process really wants to die, let it go */
+                if (sigismember(&(current->pending.signal), SIGKILL) ||
+                    sigismember(&(current->pending.signal), SIGINT))
+                        break;
+
+                schedule();
+        }
+        remove_wait_queue(&req->rq_wait_for_rep, &wait);
+        set_current_state(TASK_RUNNING);
 	CDEBUG(D_INODE, "-- done\n");
+
+        if (req->rq_repbuf == NULL) {
+                /* We broke out because of a signal */
+                EXIT;
+                return -EINTR;
+        }
 
 	rc = ost_unpack_rep(req->rq_repbuf, req->rq_replen, &req->rq_rephdr, 
 			    &req->rq_rep.ost); 
@@ -386,12 +405,33 @@ static int osc_setup(struct obd_device *obddev, obd_count len,
         return 0;
 } 
 
-void osc_sendpage(struct niobuf *dst, struct niobuf *src)
+int osc_sendpage(struct ptlrpc_request *req, struct niobuf *dst,
+                 struct niobuf *src)
 {
-	memcpy((char *)(unsigned long)dst->addr,  
-	       (char *)(unsigned long)src->addr, 
-	       src->len);
-	return;
+        if (req->rq_peer.peer_nid == 0) {
+                /* local sendpage */
+                memcpy((char *)(unsigned long)dst->addr,
+                       (char *)(unsigned long)src->addr, src->len);
+        } else {
+		char *buf;
+                int rc;
+
+		OBD_ALLOC(buf, src->len);
+		if (!buf)
+			return -ENOMEM;
+
+                memcpy(buf, (char *)(unsigned long)src->addr, src->len);
+
+                req->rq_bulkbuf = buf;
+                req->rq_bulklen = src->len;
+                rc = ptl_send_buf(req, &req->rq_peer, OST_BULK_PORTAL, 0);
+                init_waitqueue_head(&req->rq_wait_for_bulk);
+                sleep_on(&req->rq_wait_for_bulk);
+                OBD_FREE(buf, src->len);
+                req->rq_bulklen = 0; /* FIXME: eek. */
+        }
+
+        return 0;
 }
 
 
@@ -422,15 +462,16 @@ int osc_brw(int rw, struct obd_conn *conn, obd_count num_oa,
 	request->rq_req.ost->cmd = rw;
 	ptr1 = ost_req_buf1(request->rq_req.ost);
 	ptr2 = ost_req_buf2(request->rq_req.ost);
-	for (i=0; i < num_oa; i++) { 
+        for (i = 0; i < num_oa; i++) {
 		ost_pack_ioo(&ptr1, oa[i], oa_bufs[i]); 
-		for (j = 0 ; j < oa_bufs[i] ; j++) { 
+                for (j = 0; j < oa_bufs[i]; j++) {
 			ost_pack_niobuf(&ptr2, kmap(buf[n]), offset[n],
 					count[n], flags[n]); 
 			n++;
 		}
 	}
 
+        request->rq_bulk_portal = OST_BULK_PORTAL;
 	request->rq_replen = 
 		sizeof(struct ptlrep_hdr) + sizeof(struct ost_rep) + size2;
 
@@ -450,13 +491,13 @@ int osc_brw(int rw, struct obd_conn *conn, obd_count num_oa,
 	if (rw == OBD_BRW_READ)
 		goto out;
 
-	for (i=0; i < num_oa; i++) { 
-		for (j = 0 ; j < oa_bufs[i] ; j++) { 
+        for (i = 0; i < num_oa; i++) {
+                for (j = 0; j < oa_bufs[i]; j++) {
 			struct niobuf *dst;
 			src.addr = (__u64)(unsigned long)buf[n];
 			src.len = count[n];
 			ost_unpack_niobuf(&ptr2, &dst);
-			osc_sendpage(dst, &src);
+			osc_sendpage(request, dst, &src);
 			n++;
 		}
 	}
@@ -466,8 +507,8 @@ int osc_brw(int rw, struct obd_conn *conn, obd_count num_oa,
 	if (request->rq_rephdr)
 		OBD_FREE(request->rq_rephdr, request->rq_replen);
 	n = 0;
-	for (i=0; i < num_oa; i++) { 
-		for (j = 0 ; j < oa_bufs[i] ; j++) { 
+        for (i = 0; i < num_oa; i++) {
+                for (j = 0; j < oa_bufs[i]; j++) {
 			kunmap(buf[n]);
 			n++;
 		}
