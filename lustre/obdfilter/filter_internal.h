@@ -116,7 +116,8 @@ struct dentry *__filter_oa2dentry(struct obd_device *obd,struct obdo *oa,
 
 int filter_finish_transno(struct obd_export *, struct obd_trans_info *, int rc);
 __u64 filter_next_id(struct filter_obd *);
-int filter_update_server_data(struct file *, struct filter_server_data *);
+int filter_update_server_data(struct obd_device *, struct file *,
+				struct filter_server_data *);
 int filter_common_setup(struct obd_device *, obd_count len, void *buf,
                         char *option);
 

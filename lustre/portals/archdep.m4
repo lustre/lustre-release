@@ -160,20 +160,32 @@ if test $host_cpu != "lib" ; then
       AC_MSG_ERROR(** cannot find $LINUX/include/linux/autoconf.h. Run make config in $LINUX.)
   fi
 
-# ------------ RELEASE and moduledir ------------------
+# ------------ LINUXRELEASE and moduledir ------------------
   AC_MSG_CHECKING(for Linux release)
   
   dnl We need to rid ourselves of the nasty [ ] quotes.
   changequote(, )
   dnl Get release from version.h
-  RELEASE="`sed -ne 's/.*UTS_RELEASE[ \"]*\([0-9.a-zA-Z_-]*\).*/\1/p' $LINUX/include/linux/version.h`"
+  LINUXRELEASE="`sed -ne 's/.*UTS_RELEASE[ \"]*\([0-9.a-zA-Z_-]*\).*/\1/p' $LINUX/include/linux/version.h`"
   changequote([, ])
   
-  moduledir='$(libdir)/modules/'$RELEASE/kernel
+  moduledir='$(libdir)/modules/'$LINUXRELEASE/kernel
   AC_SUBST(moduledir)
   
   modulefsdir='$(moduledir)/fs/$(PACKAGE)'
   AC_SUBST(modulefsdir)
+  
+  AC_MSG_RESULT($LINUXRELEASE)
+  AC_SUBST(LINUXRELEASE)
+
+# ------------ RELEASE --------------------------------
+  AC_MSG_CHECKING(lustre release)
+  
+  dnl We need to rid ourselves of the nasty [ ] quotes.
+  changequote(, )
+  dnl Get release from version.h
+  RELEASE="`sed -ne 's/-/_/g' -e 's/.*UTS_RELEASE[ \"]*\([0-9.a-zA-Z_]*\).*/\1/p' $LINUX/include/linux/version.h`_`date +%Y%m%d%H%M`"
+  changequote([, ])
   
   AC_MSG_RESULT($RELEASE)
   AC_SUBST(RELEASE)
