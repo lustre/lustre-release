@@ -183,8 +183,6 @@ int ll_process_log(char *mds, char *config, struct config_llog_instance *cfg)
         err = class_process_config(&lcfg);
         if (err < 0)
                 GOTO(out, err);
-        
-
 out:
         if (rc == 0)
                 rc = err;
