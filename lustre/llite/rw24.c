@@ -134,7 +134,7 @@ void ll_start_readahead(struct ll_file_data *fd, struct obd_export *exp,
                 page_extent.start = (__u64)page->index << PAGE_CACHE_SHIFT;
                 page_extent.end = page_extent.start + PAGE_CACHE_SIZE - 1;
                 flags = LDLM_FL_CBPENDING | LDLM_FL_BLOCK_GRANTED;
-                matched = obd_match(&ll_i2sbi(inode)->ll_osc_conn, 
+                matched = obd_match(ll_i2sbi(inode)->ll_osc_exp, 
                                     ll_i2info(inode)->lli_smd, LDLM_EXTENT,
                                     &page_extent, sizeof(page_extent), LCK_PR, 
                                     &flags, inode, &match_lockh);
@@ -148,7 +148,7 @@ void ll_start_readahead(struct ll_file_data *fd, struct obd_export *exp,
                  * the page cache we know that the lock's cancelation will
                  * invalidate the page. XXX this should transition to
                  * proper association of pages and locks in the future */
-                obd_cancel(&ll_i2sbi(inode)->ll_osc_conn,
+                obd_cancel(ll_i2sbi(inode)->ll_osc_exp,
                            ll_i2info(inode)->lli_smd, LCK_PR, &match_lockh);
 
                 rc = ll_start_readpage_24(fd, exp, inode, page);
@@ -196,7 +196,7 @@ static int ll_readpage_24(struct file *file, struct page *page)
         page_extent.start = (__u64)page->index << PAGE_CACHE_SHIFT;
         page_extent.end = page_extent.start + PAGE_CACHE_SIZE - 1;
         flags = LDLM_FL_CBPENDING | LDLM_FL_BLOCK_GRANTED;
-        matched = obd_match(&ll_i2sbi(inode)->ll_osc_conn, 
+        matched = obd_match(ll_i2sbi(inode)->ll_osc_exp, 
                             ll_i2info(inode)->lli_smd, LDLM_EXTENT,
                             &page_extent, sizeof(page_extent), LCK_PR, &flags,
                             inode, &match_lockh);
@@ -226,11 +226,8 @@ static int ll_readpage_24(struct file *file, struct page *page)
         obd_brw_unplug(OBD_BRW_READ, exp, ll_i2info(inode)->lli_smd, NULL);
 
         if (matched)
-                obd_cancel(&ll_i2sbi(inode)->ll_osc_conn, 
+                obd_cancel(ll_i2sbi(inode)->ll_osc_exp, 
                            ll_i2info(inode)->lli_smd, LCK_PR, &match_lockh);
-
-        class_export_put(exp);
-
 out:
         if (rc)
                 unlock_page(page);
@@ -246,7 +243,7 @@ void ll_complete_writepage_24(struct obd_client_page *ocp, int rc)
         LASSERT(PageLocked(page));
 
         ll_page_acct(0, -1); /* io before dirty, this is so lame. */
-        rc = ll_clear_dirty_pages(ll_i2obdconn(inode),
+        rc = ll_clear_dirty_pages(ll_i2obdexp(inode),
                                   ll_i2info(inode)->lli_smd,
                                   page->index, page->index);
         LASSERT(rc == 0);
@@ -269,19 +266,16 @@ static int ll_writepage_24(struct page *page)
         struct inode *inode = page->mapping->host;
         struct obd_export *exp;
         struct obd_client_page *ocp;
-        int cleanup_phase = 0;
         int rc;
         ENTRY;
 
         exp = ll_i2obdexp(inode);
         if (exp == NULL)
-                GOTO(cleanup, rc = -EINVAL);
-        cleanup_phase = 1;
+                RETURN(-EINVAL);
 
         ocp = ocp_alloc(page);
         if (IS_ERR(ocp)) 
-                GOTO(cleanup, rc = PTR_ERR(ocp));
-        cleanup_phase = 2;
+                RETURN(PTR_ERR(ocp));
 
         ocp->ocp_callback = ll_complete_writepage_24;
         ocp->ocp_off = (obd_off)page->index << PAGE_CACHE_SHIFT;
@@ -295,22 +289,13 @@ static int ll_writepage_24(struct page *page)
         if (rc == 0) {
                 ll_page_acct(0, 1);
                 ll_start_io_from_dirty(exp, inode, ll_complete_writepage_24);
-                cleanup_phase = 1;
         } else {
+                ocp_free(page);
                 page_cache_release(page);
         }
 
         obd_brw_unplug(OBD_BRW_WRITE, exp, ll_i2info(inode)->lli_smd, NULL);
 
-cleanup:
-        switch(cleanup_phase) {
-                case 2:
-                        ocp_free(page);
-                case 1:
-                        class_export_put(exp);
-                case 0:
-                        break;
-        }
         if (rc != 0)
                 unlock_page(page);
         RETURN(rc);
@@ -376,7 +361,7 @@ static int ll_direct_IO_24(int rw, struct inode *inode, struct kiobuf *iobuf,
                 lprocfs_counter_add(ll_i2sbi(inode)->ll_stats,
                                     LPROC_LL_DIRECT_READ, iobuf->length);
         rc = obd_brw_async(rw == WRITE ? OBD_BRW_WRITE : OBD_BRW_READ,
-                           ll_i2obdconn(inode), &oa, lsm, iobuf->nr_pages, pga,
+                           ll_i2obdexp(inode), &oa, lsm, iobuf->nr_pages, pga,
                            set, NULL);
         if (rc) {
                 CDEBUG(rc == -ENOSPC ? D_INODE : D_ERROR,
