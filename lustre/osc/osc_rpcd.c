@@ -48,7 +48,6 @@
 #include <linux/kp30.h>
 #include <linux/lustre_mds.h> /* for mds_objid */
 #include <linux/lustre_net.h>
-#include <linux/lustre_otree.h>
 #include <linux/obd_ost.h>
 #include <linux/lustre_commit_confd.h>
 #include <linux/obd_lov.h>
