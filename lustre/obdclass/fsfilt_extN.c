@@ -557,9 +557,9 @@ static int fsfilt_extN_write_record(struct file *file, void *buf, int size,
 
         journal = EXTN_SB(inode->i_sb)->s_journal;
         handle = journal_start(journal, EXTN_DATA_TRANS_BLOCKS + 2);
-        if (handle == NULL) {
+        if (IS_ERR(handle)) {
                 CERROR("can't start transaction\n");
-                return -EIO;
+                return PTR_ERR(handle);
         }
 
         block = *offs >> inode->i_blkbits;
