@@ -90,27 +90,33 @@ static int ll_writepage_26(struct page *page, struct writeback_control *wbc)
 {
         struct inode *inode = page->mapping->host;
         struct ll_inode_info *lli = ll_i2info(inode);
+        struct obdo oa;
+        struct obd_export *exp;
+        struct obd_client_page *ocp;
+        int rc;
         ENTRY;
 
         LASSERT(PageLocked(page));
         LASSERT(!PageWriteback(page));
-        LASSERT(page->private == 0);
 
-        CDEBUG(D_CACHE, "page %p [wb %d] inode %p\n", page,
-               PageWriteback(page), inode);
+        ocp = ocp_alloc(page);
+        if (IS_ERR(ocp)) 
+                GOTO(out, rc = PTR_ERR(ocp));
+
+        ocp->ocp_callback = ll_complete_writepage_26;
+        ocp->ocp_flag = OBD_BRW_CREATE|OBD_BRW_FROM_GRANT;
 
         /* tell the vm that we're busy with the page */
         SetPageWriteback(page);
         unlock_page(page);
 
-        /* put it in the list that lliod will use */
-        page_cache_get(page);
+        /* XXX clean up the ocp? */ 
+        rc = ll_writepage_common(page);
+        if (rc)
+                RETURN(rc);
+        ll_local_cache_started_io(1);
 
-        lliod_give_page(inode, page, OBD_BRW_WRITE);
-        
-        if ((atomic_read(&lli->lli_in_writepages) == 0) || 
-            ((lli->lli_pl_write.pl_num << PAGE_SHIFT) > inode->i_blksize) )
-                lliod_wakeup(inode);
+        ll_writeback_from_dirty(inode);
 
         RETURN(0);
 }
