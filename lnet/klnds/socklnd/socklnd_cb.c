@@ -1099,6 +1099,9 @@ ksocknal_fmb_callback (void *arg, int error)
 
         spin_unlock_irqrestore (&fmp->fmp_lock, flags);
 
+        /* drop peer ref taken on init */
+        ksocknal_put_peer (fmb->fmb_peer);
+        
         if (conn == NULL)
                 return;
 
@@ -1159,7 +1162,6 @@ ksocknal_get_idle_fmb (ksock_conn_t *conn)
         return (NULL);
 }
 
-
 int
 ksocknal_init_fmb (ksock_conn_t *conn, ksock_fmb_t *fmb)
 {
@@ -1177,18 +1179,24 @@ ksocknal_init_fmb (ksock_conn_t *conn, ksock_fmb_t *fmb)
         LASSERT (sizeof (ptl_hdr_t) < PAGE_SIZE);
 
         /* Got a forwarding buffer; copy the header we just read into the
-         * forwarding buffer.  If there's payload start reading reading it
+         * forwarding buffer.  If there's payload, start reading reading it
          * into the buffer, otherwise the forwarding buffer can be kicked
          * off immediately.
          *
          * NB fmb->fmb_iov spans the WHOLE packet.
          *    conn->ksnc_rx_iov spans just the payload.
          */
-
         fmb->fmb_iov[0].iov_base = page_address (fmb->fmb_pages[0]);
 
         /* copy header */
         memcpy (fmb->fmb_iov[0].iov_base, &conn->ksnc_hdr, sizeof (ptl_hdr_t));
+
+        /* Take a ref on the conn's peer to prevent module unload before
+         * forwarding completes.  NB we ref peer and not conn since because
+         * all refs on conn after it has been closed must remove themselves
+         * in finite time */
+        fmb->fmb_peer = conn->ksnc_peer;
+        atomic_inc (&conn->ksnc_peer->ksnp_refcount);
 
         if (payload_nob == 0) {         /* got complete packet already */
                 CDEBUG (D_NET, "%p "LPX64"->"LPX64" %d fwd_start (immediate)\n",
@@ -1229,9 +1237,7 @@ ksocknal_init_fmb (ksock_conn_t *conn, ksock_fmb_t *fmb)
                       packet_nob, niov, fmb->fmb_iov,
                       ksocknal_fmb_callback, fmb);
 
-        /* stash router's descriptor ready for call to kpr_fwd_start */
-        conn->ksnc_cookie = &fmb->fmb_fwd;
-
+        conn->ksnc_cookie = fmb;                /* stash fmb for later */
         conn->ksnc_rx_state = SOCKNAL_RX_BODY_FWD; /* read in the payload */
 
         /* payload is desc's iov-ed buffer, but skipping the hdr */
@@ -1490,9 +1496,10 @@ ksocknal_process_receive (ksock_sched_t *sched, unsigned long *irq_flags)
                         NTOH__u64 (conn->ksnc_hdr.dest_nid),
                         conn->ksnc_rx_nob_left);
 
-                /* ksocknal_init_fmb() put router desc. in conn->ksnc_cookie */
-                kpr_fwd_start (&ksocknal_data.ksnd_router,
-                               (kpr_fwd_desc_t *)conn->ksnc_cookie);
+                /* forward the packet. NB ksocknal_init_fmb() put fmb into
+                 * conn->ksnc_cookie */
+                fmb = (ksock_fmb_t *)conn->ksnc_cookie;
+                kpr_fwd_start (&ksocknal_data.ksnd_router, &fmb->fmb_fwd);
 
                 /* no slop in forwarded packets */
                 LASSERT (conn->ksnc_rx_nob_left == 0);
