@@ -48,6 +48,7 @@ extern unsigned int portal_printk;
 #define S_COBD        (21 << 24)
 #define S_PTLBD       (22 << 24)
 #define S_LOG         (23 << 24)
+#define S_MGMT        (24 << 24)
 
 /* If you change these values, please keep portals/linux/utils/debug.c
  * up to date! */

@@ -116,6 +116,13 @@ case ${host_cpu} in
         MOD_LINK=elf64_ia64
 ;;
 
+	x86_64 )
+	AC_MSG_RESULT($host_cpu)
+        KCFLAGS='-g -O2 -Wall -Wstrict-prototypes -Wno-trigraphs -fno-strict-aliasing -fno-common -fomit-frame-pointer -mno-red-zone -mcmodel=kernel -pipe -fno-reorder-blocks -finline-limit=2000 -fno-strength-reduce -fno-asynchronous-unwind-tables'
+	KCPPFLAGS='-D__KERNEL__ -DMODULE'
+        MOD_LINK=elf_x86_64
+;;
+
 	sparc64 )
 	AC_MSG_RESULT($host_cpu)
         KCFLAGS='-O2 -Wall -Wstrict-prototypes -Wno-trigraphs -fomit-frame-pointer -fno-strict-aliasing -fno-common -Wno-unused -m64 -pipe -mno-fpu -mcpu=ultrasparc -mcmodel=medlow -ffixed-g4 -fcall-used-g5 -fcall-used-g7 -Wno-sign-compare -Wa,--undeclared-regs'
