@@ -335,6 +335,8 @@ static int lmv_disconnect(struct obd_export *exp, int flags)
         if (lmv->refcount != 0)
                 goto out_local;
 
+        lmv->connected = 0;
+
         for (i = 0; i < lmv->desc.ld_tgt_count; i++) {
                 if (lmv->tgts[i].ltd_exp == NULL)
                         continue;
