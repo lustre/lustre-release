@@ -32,6 +32,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- fix ppc64/x86_64 spec to use %{_libdir} instead of /usr/lib (5389)
 	- remove ancient LOV_MAGIC_V0 EA support (5047)
 	- add "disk I/Os in flight" and "I/O req time" stats in obdfilter
+	- align r/w RPCs to PTLRPC_MAX_BRW_SIZE boundaries for performance
 	- allow readahead allocations to fail when low on memory (5383)
 	- mmap locking landed again, after considerable improvement (2828)
 
