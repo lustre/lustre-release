@@ -28,6 +28,10 @@
 #ifndef __INCLUDE_GMNAL_H__
 #define __INCLUDE_GMNAL_H__
 
+#ifndef EXPORT_SYMTAB
+# define EXPORT_SYMTAB
+#endif
+
 #include "linux/config.h"
 #include "linux/module.h"
 #include "linux/tty.h"
@@ -41,9 +45,6 @@
 #include "linux/init.h"
 #include "linux/sem.h"
 #include "linux/vmalloc.h"
-#ifdef MODVERSIONS
-#include <linux/modversions.h>
-#endif
 
 #define DEBUG_SUBSYSTEM S_GMNAL
 
@@ -59,6 +60,7 @@
 #define GM_STRONG_TYPES 1
 #include "gm.h"
 #include "gm_internal.h"
+
 
 
 /*

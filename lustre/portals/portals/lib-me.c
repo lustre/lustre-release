@@ -44,7 +44,7 @@ int do_PtlMEAttach(nal_cb_t * nal, void *private, void *v_args, void *v_ret)
         unsigned long flags;
         lib_me_t *me;
 
-        if (args->index_in < 0 || args->index_in >= tbl->size)
+        if (args->index_in >= tbl->size)
                 return ret->rc = PTL_INV_PTINDEX;
 
         /* Should check for valid matchid, but not yet */

@@ -149,14 +149,14 @@ kpr_do_notify (int byNal, int gateway_nalid, ptl_nid_t gateway_nid,
                int alive, time_t when)
 {
 	unsigned long	     flags;
-        int                  rc = -ENOENT;
+        int                  found;
         kpr_nal_entry_t     *ne = NULL;
         kpr_gateway_entry_t *ge = NULL;
         struct timeval       now;
 	struct list_head    *e;
 	struct list_head    *n;
 
-        CDEBUG (D_ERROR, "%s notifying [%d] "LPX64": %s\n", 
+        CDEBUG (D_NET, "%s notifying [%d] "LPX64": %s\n", 
                 byNal ? "NAL" : "userspace", 
                 gateway_nalid, gateway_nid, alive ? "up" : "down");
 
@@ -177,6 +177,7 @@ kpr_do_notify (int byNal, int gateway_nalid, ptl_nid_t gateway_nid,
         /* Serialise with lookups (i.e. write lock) */
 	write_lock_irqsave(&kpr_rwlock, flags);
 
+        found = 0;
         list_for_each_safe (e, n, &kpr_gateways) {
 
                 ge = list_entry(e, kpr_gateway_entry_t, kpge_list);
@@ -185,15 +186,15 @@ kpr_do_notify (int byNal, int gateway_nalid, ptl_nid_t gateway_nid,
                     ge->kpge_nid != gateway_nid)
                         continue;
 
-                rc = 0;
+                found = 1;
                 break;
         }
 
-        if (rc != 0) {
+        if (!found) {
                 /* gateway not found */
                 write_unlock_irqrestore(&kpr_rwlock, flags);
                 CDEBUG (D_NET, "Gateway not found\n");
-                return (rc);
+                return (0);
         }
         
         if (when < ge->kpge_timestamp) {
@@ -226,25 +227,24 @@ kpr_do_notify (int byNal, int gateway_nalid, ptl_nid_t gateway_nid,
                 }
         }
 
+        found = 0;
         if (!byNal) {
                 /* userland notified me: notify NAL? */
                 ne = kpr_find_nal_entry_locked (ge->kpge_nalid);
                 if (ne != NULL) {
-                        if (ne->kpne_shutdown ||
-                            ne->kpne_interface.kprni_notify == NULL) {
-                                /* no need to notify */
-                                ne = NULL;
-                        } else {
+                        if (!ne->kpne_shutdown &&
+                            ne->kpne_interface.kprni_notify != NULL) {
                                 /* take a ref on this NAL until notifying
                                  * it has completed... */
                                 atomic_inc (&ne->kpne_refcount);
+                                found = 1;
                         }
                 }
         }
 
         write_unlock_irqrestore(&kpr_rwlock, flags);
 
-        if (ne != NULL) {
+        if (found) {
                 ne->kpne_interface.kprni_notify (ne->kpne_interface.kprni_arg,
                                                  gateway_nid, alive);
                 /* 'ne' can disappear now... */
@@ -580,8 +580,10 @@ kpr_add_route (int gateway_nalid, ptl_nid_t gateway_nid,
         atomic_set (&ge->kpge_weight, 0);
 
         PORTAL_ALLOC (re, sizeof (*re));
-        if (re == NULL)
+        if (re == NULL) {
+                PORTAL_FREE (ge, sizeof (*ge));
                 return (-ENOMEM);
+        }
 
         re->kpre_lo_nid = lo_nid;
         re->kpre_hi_nid = hi_nid;

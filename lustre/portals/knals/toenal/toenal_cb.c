@@ -371,7 +371,6 @@ ktoenal_launch_packet (ksock_conn_t *conn, ksock_tx_t *tx)
         for (;;)
         {
                 LASSERT (niov <= tx->tx_niov);
-                LASSERT (iov->iov_len >= 0);
                 
                 if (iov->iov_len >= nob)
                 {

@@ -34,14 +34,15 @@
 
 #include "parser.h"
 
-extern int op_create_file(char *name, long stripe_size, int stripe_offset, 
+extern int op_create_file(char *name, long stripe_size, int stripe_offset,
                 int stripe_count);
-extern int op_find(char *path, struct obd_uuid *obduuid, int recursive, 
+extern int op_find(char *path, struct obd_uuid *obduuid, int recursive,
                 int verbose, int quiet);
 
 /* all functions */
 static int lfs_setstripe(int argc, char **argv);
 static int lfs_find(int argc, char **argv);
+static int lfs_getstripe(int argc, char **argv);
 
 /* all avaialable commands */
 command_t cmdlist[] = {
@@ -54,6 +55,9 @@ command_t cmdlist[] = {
         {"find", lfs_find, 0,
          "blah...\n"
          "usage: find [--obd <uuid>] [--quiet | --verbose] [--recursive] <dir|file> ..."},
+        {"getstripe", lfs_getstripe, 0,
+         "blah...\n"
+         "usage:getstripe <filename>"},
         {"help", Parser_help, 0, "help"},
         {"exit", Parser_quit, 0, "quit"},
         {"quit", Parser_quit, 0, "quit"},
@@ -62,43 +66,43 @@ command_t cmdlist[] = {
 
 /* functions */
 static int lfs_setstripe(int argc, char **argv)
-{	
+{
         int result;
         long st_size;
         int  st_offset, st_count;
-	char *end;
-        
-        if (argc != 5) 
-		return CMD_HELP;
+        char *end;
 
-	// get the stripe size
-	st_size = strtoul(argv[2], &end, 0);
-	if (*end != '\0') {
-		fprintf(stderr, "error: %s: bad stripe size '%s'\n", 
+        if (argc != 5)
+                return CMD_HELP;
+
+        // get the stripe size
+        st_size = strtoul(argv[2], &end, 0);
+        if (*end != '\0') {
+                fprintf(stderr, "error: %s: bad stripe size '%s'\n",
                                 argv[0], argv[2]);
-		return CMD_HELP;
-	}
-	// get the stripe offset
-	st_offset = strtoul(argv[3], &end, 0);
-	if (*end != '\0') {
-		fprintf(stderr, "error: %s: bad stripe offset '%s'\n", 
+                return CMD_HELP;
+        }
+        // get the stripe offset
+        st_offset = strtoul(argv[3], &end, 0);
+        if (*end != '\0') {
+                fprintf(stderr, "error: %s: bad stripe offset '%s'\n",
                                 argv[0], argv[3]);
-		return CMD_HELP;
-	}
-	// get the stripe count 
-	st_count = strtoul(argv[4], &end, 0);
-	if (*end != '\0') {
-		fprintf(stderr, "error: %s: bad stripe count '%s'\n", 
+                return CMD_HELP;
+        }
+        // get the stripe count
+        st_count = strtoul(argv[4], &end, 0);
+        if (*end != '\0') {
+                fprintf(stderr, "error: %s: bad stripe count '%s'\n",
                                 argv[0], argv[4]);
-		return CMD_HELP;
-	}
+                return CMD_HELP;
+        }
 
-	result = op_create_file(argv[1], st_size, st_offset, st_count);
+        result = op_create_file(argv[1], st_size, st_offset, st_count);
         if (result)
                 fprintf(stderr, "error: %s: create stripe file failed\n",
                                 argv[0]);
 
-	return result;
+        return result;
 }
 
 static int lfs_find(int argc, char **argv)
@@ -113,54 +117,75 @@ static int lfs_find(int argc, char **argv)
         char short_opts[] = "ho:qrv";
         int quiet, verbose, recursive, c, rc;
         struct obd_uuid *obduuid = NULL;
-	
+
         optind = 0;
         quiet = verbose = recursive = 0;
-        while ((c = getopt_long(argc, argv, short_opts, 
+        while ((c = getopt_long(argc, argv, short_opts,
                                         long_opts, NULL)) != -1) {
-		switch (c) {
-		case 'o':
-			if (obduuid) {
-				fprintf(stderr, "error: %s: only one obduuid allowed",
-                                                argv[0]);
-				return CMD_HELP;
-			}
-			obduuid = (struct obd_uuid *)optarg;
-			break;
-		case 'q':
-			quiet++;
-			verbose = 0;
-			break;
+                switch (c) {
+                case 'o':
+                        if (obduuid) {
+                                fprintf(stderr,
+                                        "error: %s: only one obduuid allowed",
+                                        argv[0]);
+                                return CMD_HELP;
+                        }
+                        obduuid = (struct obd_uuid *)optarg;
+                        break;
+                case 'q':
+                        quiet++;
+                        verbose = 0;
+                        break;
                 case 'r':
                         recursive = 1;
                         break;
-		case 'v':
-			verbose++;
-			quiet = 0;
-			break;
-		case '?':
+                case 'v':
+                        verbose++;
+                        quiet = 0;
+                        break;
+                case '?':
                         return CMD_HELP;
                         break;
-		default:
-			fprintf(stderr, "error: %s: option '%s' unrecognized\n", 
-                                        argv[0], argv[optind - 1]);
+                default:
+                        fprintf(stderr, "error: %s: option '%s' unrecognized\n",
+                                argv[0], argv[optind - 1]);
                         return CMD_HELP;
                         break;
-		}
-	}
+                }
+        }
 
-	if (optind >= argc) 
+        if (optind >= argc)
                 return CMD_HELP;
 
         do {
                 rc = op_find(argv[optind], obduuid, recursive, verbose, quiet);
-        } while (++optind < argc && !rc); 
+        } while (++optind < argc && !rc);
 
         if (rc)
                 fprintf(stderr, "error: %s: find failed\n", argv[0]);
         return rc;
 }
 
+static int lfs_getstripe(int argc, char **argv)
+{
+        struct obd_uuid *obduuid = NULL;
+        int rc;
+
+        if (argc != 2)
+                return CMD_HELP;
+
+        optind = 1;
+
+        do {
+                rc = op_find(argv[optind], obduuid, 0, 0, 0);
+        } while (++optind < argc && !rc);
+
+        if (rc)
+                fprintf(stderr, "error: %s: getstripe failed for %s\n",
+                        argv[0], argv[1]);
+
+        return rc;
+}
 
 int main(int argc, char **argv)
 {

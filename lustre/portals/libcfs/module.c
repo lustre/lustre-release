@@ -162,9 +162,12 @@ kportal_notify_router (int gw_nalid, ptl_nid_t gw_nid,
         int rc;
         kpr_control_interface_t *ci;
 
+        /* No error if router not preset.  Sysadmin is allowed to notify
+         * _everywhere_ when a NID boots or crashes, even if they know
+         * nothing of the peer. */
         ci = (kpr_control_interface_t *)PORTAL_SYMBOL_GET(kpr_control_interface);
         if (ci == NULL)
-                return (-ENODEV);
+                return (0);
 
         rc = ci->kprci_notify (gw_nalid, gw_nid, alive, when);
 

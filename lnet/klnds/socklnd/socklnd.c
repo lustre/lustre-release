@@ -241,9 +241,8 @@ ksocknal_destroy_route (ksock_route_t *route)
 void
 ksocknal_put_route (ksock_route_t *route)
 {
-        CDEBUG (D_OTHER, "putting route[%p] -> "LPX64" (%d)\n",
-                route, route->ksnr_peer->ksnp_nid,
-                atomic_read (&route->ksnr_refcount));
+        CDEBUG (D_OTHER, "putting route[%p] (%d)\n",
+                route, atomic_read (&route->ksnr_refcount));
 
         LASSERT (atomic_read (&route->ksnr_refcount) > 0);
         if (!atomic_dec_and_test (&route->ksnr_refcount))
@@ -865,8 +864,7 @@ ksocknal_close_conn_locked (ksock_conn_t *conn, int error)
         spin_lock (&ksocknal_data.ksnd_reaper_lock);
 
         list_add_tail (&conn->ksnc_list, &ksocknal_data.ksnd_deathrow_conns);
-        if (waitqueue_active (&ksocknal_data.ksnd_reaper_waitq))
-                wake_up (&ksocknal_data.ksnd_reaper_waitq);
+        wake_up (&ksocknal_data.ksnd_reaper_waitq);
                 
         spin_unlock (&ksocknal_data.ksnd_reaper_lock);
 }
@@ -1008,8 +1006,7 @@ ksocknal_put_conn (ksock_conn_t *conn)
         spin_lock_irqsave (&ksocknal_data.ksnd_reaper_lock, flags);
 
         list_add (&conn->ksnc_list, &ksocknal_data.ksnd_zombie_conns);
-        if (waitqueue_active (&ksocknal_data.ksnd_reaper_waitq))
-                wake_up (&ksocknal_data.ksnd_reaper_waitq);
+        wake_up (&ksocknal_data.ksnd_reaper_waitq);
 
         spin_unlock_irqrestore (&ksocknal_data.ksnd_reaper_lock, flags);
 }

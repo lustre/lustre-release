@@ -179,8 +179,7 @@ ksocknal_put_ltx (ksock_ltx_t *ltx)
         list_add_tail (&ltx->ltx_tx.tx_list, ltx->ltx_idle);
 
         /* normal tx desc => wakeup anyone blocking for one */
-        if (ltx->ltx_idle == &ksocknal_data.ksnd_idle_ltx_list &&
-            waitqueue_active (&ksocknal_data.ksnd_idle_ltx_waitq))
+        if (ltx->ltx_idle == &ksocknal_data.ksnd_idle_ltx_list)
                 wake_up (&ksocknal_data.ksnd_idle_ltx_waitq);
 
         spin_unlock_irqrestore (&ksocknal_data.ksnd_idle_ltx_lock, flags);
@@ -627,8 +626,7 @@ ksocknal_zc_callback (zccd_t *zcd)
         spin_lock_irqsave (&sched->kss_lock, flags);
 
         list_add_tail (&tx->tx_list, &sched->kss_zctxdone_list);
-        if (waitqueue_active (&sched->kss_waitq))
-                wake_up (&sched->kss_waitq);
+        wake_up (&sched->kss_waitq);
 
         spin_unlock_irqrestore (&sched->kss_lock, flags);
         EXIT;
@@ -776,9 +774,7 @@ ksocknal_launch_autoconnect_locked (ksock_route_t *route)
         
         list_add_tail (&route->ksnr_connect_list,
                        &ksocknal_data.ksnd_autoconnectd_routes);
-
-        if (waitqueue_active (&ksocknal_data.ksnd_autoconnectd_waitq))
-                wake_up (&ksocknal_data.ksnd_autoconnectd_waitq);
+        wake_up (&ksocknal_data.ksnd_autoconnectd_waitq);
         
         spin_unlock_irqrestore (&ksocknal_data.ksnd_autoconnectd_lock, flags);
 }
@@ -867,8 +863,7 @@ ksocknal_queue_tx_locked (ksock_tx_t *tx, ksock_conn_t *conn)
                 list_add_tail (&conn->ksnc_tx_list, 
                                &sched->kss_tx_conns);
                 conn->ksnc_tx_scheduled = 1;
-                if (waitqueue_active (&sched->kss_waitq))
-                        wake_up (&sched->kss_waitq);
+                wake_up (&sched->kss_waitq);
         }
 
         spin_unlock_irqrestore (&sched->kss_lock, flags);
@@ -1209,9 +1204,7 @@ ksocknal_fmb_callback (void *arg, int error)
         spin_lock_irqsave (&sched->kss_lock, flags);
 
         list_add_tail (&conn->ksnc_rx_list, &sched->kss_rx_conns);
-
-        if (waitqueue_active (&sched->kss_waitq))
-                wake_up (&sched->kss_waitq);
+        wake_up (&sched->kss_waitq);
 
         spin_unlock_irqrestore (&sched->kss_lock, flags);
 }
@@ -1684,6 +1677,8 @@ int ksocknal_scheduler (void *arg)
         kportal_daemonize (name);
         kportal_blockallsigs ();
 
+        current->flags |= PF_MEMALLOC;
+
 #if (CONFIG_SMP && CPU_AFFINITY)
         if ((cpu_online_map & (1 << id)) != 0) {
 #if 1
@@ -1797,8 +1792,7 @@ ksocknal_data_ready (struct sock *sk, int n)
                         /* extra ref for scheduler */
                         atomic_inc (&conn->ksnc_refcount);
 
-                        if (waitqueue_active (&sched->kss_waitq))
-                                wake_up (&sched->kss_waitq);
+                        wake_up (&sched->kss_waitq);
                 }
 
                 spin_unlock_irqrestore (&sched->kss_lock, flags);
@@ -1862,8 +1856,7 @@ ksocknal_write_space (struct sock *sk)
                                 /* extra ref for scheduler */
                                 atomic_inc (&conn->ksnc_refcount);
 
-                                if (waitqueue_active (&sched->kss_waitq))
-                                        wake_up (&sched->kss_waitq);
+                                wake_up (&sched->kss_waitq);
                         }
 
                         spin_unlock_irqrestore (&sched->kss_lock, flags);
@@ -2363,7 +2356,7 @@ ksocknal_find_timed_out_conn (ksock_peer_t *peer)
                 }
                 
                 if ((!list_empty (&conn->ksnc_tx_queue) ||
-                     conn->ksnc_sock->sk->wmem_queued != 0) &&
+                     conn->ksnc_sock->sk->sk_wmem_queued != 0) &&
                     time_after_eq (jiffies, conn->ksnc_tx_deadline)) {
                         /* Timed out messages queued for sending, or
                          * messages buffered in the socket's send buffer */
@@ -2371,7 +2364,7 @@ ksocknal_find_timed_out_conn (ksock_peer_t *peer)
                         CERROR ("Timed out TX to "LPX64" %s%d %p\n", 
                                 peer->ksnp_nid, 
                                 list_empty (&conn->ksnc_tx_queue) ? "" : "Q ",
-                                conn->ksnc_sock->sk->wmem_queued, conn);
+                                conn->ksnc_sock->sk->sk_wmem_queued, conn);
                         return (conn);
                 }
         }

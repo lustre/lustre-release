@@ -1,0 +1,45 @@
+ drivers/net/pcnet32.c |   16 ++++++++++++++++
+ 1 files changed, 16 insertions(+)
+
+diff -puN drivers/net/pcnet32.c~kgdbeth-pcnet32-support drivers/net/pcnet32.c
+--- linux-2.6.0-test6-mm/drivers/net/pcnet32.c~kgdbeth-pcnet32-support	2003-10-06 00:45:54.000000000 +0400
++++ linux-2.6.0-test6-mm-alexey/drivers/net/pcnet32.c	2003-10-06 00:54:55.000000000 +0400
+@@ -331,6 +331,9 @@ static int  pcnet32_init_ring(struct net
+ static int  pcnet32_start_xmit(struct sk_buff *, struct net_device *);
+ static int  pcnet32_rx(struct net_device *);
+ static void pcnet32_tx_timeout (struct net_device *dev);
++#ifdef CONFIG_NET_POLL_CONTROLLER
++static void pcnet32_rx_poll(struct net_device *);
++#endif
+ static irqreturn_t pcnet32_interrupt(int, void *, struct pt_regs *);
+ static int  pcnet32_close(struct net_device *);
+ static struct net_device_stats *pcnet32_get_stats(struct net_device *);
+@@ -806,6 +809,10 @@ pcnet32_probe1(unsigned long ioaddr, uns
+     dev->tx_timeout = pcnet32_tx_timeout;
+     dev->watchdog_timeo = (5*HZ);
+ 
++#ifdef CONFIG_NET_POLL_CONTROLLER
++    dev->poll_controller = pcnet32_rx_poll;
++#endif
++
+     lp->next = pcnet32_dev;
+     pcnet32_dev = dev;
+ 
+@@ -1152,6 +1159,15 @@ pcnet32_start_xmit(struct sk_buff *skb, 
+     return 0;
+ }
+ 
++#ifdef CONFIG_NET_POLL_CONTROLLER
++static void pcnet32_rx_poll(struct net_device *dev)
++{
++	disable_irq(dev->irq);
++	pcnet32_interrupt(dev->irq, (void *)dev, 0);
++	enable_irq(dev->irq);
++}       
++#endif
++
+ /* The PCNET32 interrupt handler. */
+ static irqreturn_t
+ pcnet32_interrupt(int irq, void *dev_id, struct pt_regs * regs)
+
+_

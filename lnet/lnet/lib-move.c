@@ -305,8 +305,6 @@ lib_extract_iov (struct iovec *dst, lib_md_t *md,
         ptl_size_t      frag_len;
         int             dst_niov;
 
-        LASSERT (len >= 0);
-        LASSERT (offset >= 0);
         LASSERT (offset + len <= md->length);
         
         if (len == 0)                           /* no data => */
@@ -442,8 +440,6 @@ lib_extract_kiov (ptl_kiov_t *dst, lib_md_t *md,
         ptl_size_t      frag_len;
         int             dst_niov;
 
-        LASSERT (len >= 0);
-        LASSERT (offset >= 0);
         LASSERT (offset + len <= md->length);
         
         if (len == 0)                           /* no data => */

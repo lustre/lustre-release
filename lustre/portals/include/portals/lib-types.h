@@ -139,6 +139,7 @@ typedef struct {
 /* temporary expedient: limit number of entries in discontiguous MDs */
 # define PTL_MTU        (512<<10)
 # define PTL_MD_MAX_IOV 128
+# define PTL_MD_MAX_PAGES min_t(int, PTL_MD_MAX_IOV, PTL_MTU / PAGE_SIZE)
 
 struct lib_msg_t {
         struct list_head  msg_list;

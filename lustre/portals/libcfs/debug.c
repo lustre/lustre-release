@@ -292,10 +292,8 @@ int portals_debug_daemon(void *arg)
         if (!file || IS_ERR(file)) {
                 CERROR("cannot open %s for logging", debug_daemon_file_path);
                 GOTO(out1, PTR_ERR(file));
-        } else {
-                printk(KERN_ALERT "LustreError: daemon dumping log to %s ... writing ...\n",
-                       debug_daemon_file_path);
         }
+        printk(KERN_INFO "daemon dumping log to %s\n", debug_daemon_file_path);
 
         debug_daemon_state.overlapped = 0;
         debug_daemon_state.stopped = 0;
@@ -339,8 +337,8 @@ int portals_debug_daemon(void *arg)
                         rc = file->f_op->write(file, debug_buf+start,
                                                size, &file->f_pos);
                         if (rc < 0) {
-                                printk(KERN_ALERT
-                                           "LustreError: Debug_daemon write error %d\n", rc);
+                                printk(KERN_ALERT "LustreError: Debug_daemon "
+                                       "write error %d\n", rc);
                                 goto out;
                         }
                         start += rc;
@@ -361,16 +359,16 @@ int portals_debug_daemon(void *arg)
                 if (force_flush) {
                         rc = file->f_op->fsync(file, file->f_dentry, 1);
                         if (rc < 0) {
-                                printk(KERN_ALERT
-                                       "LustreError: Debug_daemon sync error %d\n", rc);
+                                printk(KERN_ALERT "LustreError: Debug_daemon "
+                                       "sync error %d\n", rc);
                                 goto out;
                         }
                         if (debug_daemon_state.stopped)
-                               break;           
+                               break;
                         debug_daemon_state.lctl_event = 1;
                         wake_up(&debug_daemon_state.lctl);
                 }
-                wait_event(debug_daemon_state.daemon, 
+                wait_event(debug_daemon_state.daemon,
                            debug_daemon_state.daemon_event);
                 }
 out:
@@ -636,7 +634,7 @@ int portals_debug_mark_buffer(char *text)
                 return -EINVAL;
 
         CDEBUG(0, "********************************************************\n");
-        CERROR("DEBUG MARKER: %s\n", text);
+        CWARN("DEBUG MARKER: %s\n", text);
         CDEBUG(0, "********************************************************\n");
 
         return 0;
@@ -650,7 +648,7 @@ int portals_debug_mark_buffer(char *text)
 __s32 portals_debug_copy_to_user(char *buf, unsigned long len)
 {
         int rc;
-        unsigned long debug_off, i, off, copied;
+        unsigned long total, debug_off, i, off, copied;
         unsigned long flags;
         struct page *page;
         LIST_HEAD(my_pages);
@@ -667,10 +665,10 @@ __s32 portals_debug_copy_to_user(char *buf, unsigned long len)
                 }
                 list_add(&page->list, &my_pages);
         }
-        
+
         spin_lock_irqsave(&portals_debug_lock, flags);
         debug_off = atomic_read(&debug_off_a);
-        
+
         /* Sigh. If the buffer is empty, then skip to the end. */
         if (debug_off == 0 && !debug_wrapped) {
                 spin_unlock_irqrestore(&portals_debug_lock, flags);
@@ -678,16 +676,19 @@ __s32 portals_debug_copy_to_user(char *buf, unsigned long len)
                 goto cleanup;
         }
 
-        if (debug_wrapped)
+        if (debug_wrapped) {
                 off = debug_off + 1;
-        else 
+                total = debug_size;
+        } else {
                 off = 0;
+                total = debug_off;
+        }
         copied = 0;
         list_for_each(pos, &my_pages) {
                 unsigned long to_copy;
                 page = list_entry(pos, struct page, list);
 
-                to_copy = min(debug_size - off, PAGE_SIZE);
+                to_copy = min(total - off, PAGE_SIZE);
                 if (to_copy == 0) {
                         off = 0;
                         to_copy = min(debug_size - off, PAGE_SIZE);
@@ -696,9 +697,9 @@ finish_partial:
                 memcpy(kmap(page), debug_buf + off, to_copy);
                 kunmap(page);
                 copied += to_copy;
-                if (copied >= (debug_wrapped ? debug_size : debug_off))
+                if (copied >= total)
                         break;
-                        
+
                 off += to_copy;
                 if (off >= debug_size) {
                         off = 0;
@@ -728,7 +729,7 @@ finish_partial:
                         break;
         }
         rc = copied;
-        
+
 cleanup:
         list_for_each_safe(pos, n, &my_pages) {
                 page = list_entry(pos, struct page, list);
@@ -786,8 +787,8 @@ portals_debug_msg(int subsys, int mask, char *file, const char *fn,
         max_nob = debug_size - debug_off + DEBUG_OVERFLOW;
         if (max_nob <= 0) {
                 spin_unlock_irqrestore(&portals_debug_lock, flags);
-                printk("LustreError: logic error in portals_debug_msg: <0 bytes"
-                       " to write\n");
+                printk("LustreError: logic error in portals_debug_msg: "
+                       "< 0 bytes to write\n");
                 return;
         }
 
@@ -799,45 +800,47 @@ portals_debug_msg(int subsys, int mask, char *file, const char *fn,
         do_gettimeofday(&tv);
 
         prefix_nob = snprintf(debug_buf + debug_off, max_nob,
-                              "%06x:%06x:%d:%lu.%06lu :",
+                              "%06x:%06x:%d:%lu.%06lu:%lu:%d:",
                               subsys, mask, smp_processor_id(),
-                              tv.tv_sec, tv.tv_usec);
+                              tv.tv_sec, tv.tv_usec, stack, current->pid);
         max_nob -= prefix_nob;
-        if(*(format + strlen(format) - 1) == '\n')
-                *(format + strlen(format) - 1) = ':';
-           
-        va_start(ap, format);
-        msg_nob = vsnprintf(debug_buf + debug_off + prefix_nob ,
-                            max_nob, format, ap);
-        max_nob -= msg_nob;
-        va_end(ap);
+        if(*(format + strlen(format) - 1) != '\n')
+                *(format + strlen(format)) = '\n';
 
 #if defined(__arch_um__) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,4,20))
-        msg_nob += snprintf(debug_buf + debug_off + prefix_nob + msg_nob, max_nob,
-                           "(%s:%d:%s() %d | %d+%lu)\n",
-                           file, line, fn, current->pid,
-                           current->thread.extern_pid, stack);
+        msg_nob = snprintf(debug_buf + debug_off + prefix_nob, max_nob,
+                           "%d:(%s:%d:%s()) ",
+                           current->thread.extern_pid, file, line, fn);
 #elif defined(__arch_um__) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-        msg_nob += snprintf(debug_buf + debug_off + prefix_nob + msg_nob, max_nob,
-                           "(%s:%d:%s() %d | %d+%lu)\n",
-                           file, line, fn, current->pid,
-                           current->thread.mode.tt.extern_pid, stack);
+        msg_nob = snprintf(debug_buf + debug_off + prefix_nob, max_nob,
+                           "%d:(%s:%d:%s()) ",
+                           current->thread.mode.tt.extern_pid, file, line, fn);
 #else
-        msg_nob += snprintf(debug_buf + debug_off + prefix_nob + msg_nob, max_nob,
-                           "(%s:%d:%s() %d+%lu)\n",
-                           file, line, fn, current->pid, stack);
+        msg_nob = snprintf(debug_buf + debug_off + prefix_nob, max_nob,
+                           ":(%s:%d:%s()) ",
+                           file, line, fn);
 #endif
+
+        va_start(ap, format);
+        msg_nob += vsnprintf(debug_buf + debug_off + prefix_nob + msg_nob,
+                             max_nob, format, ap);
+        max_nob -= msg_nob;
+        va_end(ap);
 
         /* Print to console, while msg is contiguous in debug_buf */
         /* NB safely terminated see above */
         if ((mask & D_EMERG) != 0)
                 printk(KERN_EMERG "LustreError: %s",
                        debug_buf + debug_off + prefix_nob);
-        if ((mask & D_ERROR) != 0)
-                printk(KERN_ERR   "LustreError: %s",
+        else if ((mask & D_ERROR) != 0)
+                printk(KERN_ERR "LustreError: %s",
+                       debug_buf + debug_off + prefix_nob);
+        else if ((mask & D_WARNING) != 0)
+                printk(KERN_WARNING "Lustre: %s",
                        debug_buf + debug_off + prefix_nob);
         else if (portal_printk)
-                printk("<%d>LustreError: %s", portal_printk, debug_buf+debug_off+prefix_nob);
+                printk("<%d>Lustre: %s", portal_printk,
+                       debug_buf+debug_off+prefix_nob);
         base_offset = debug_off & 0xFFFF;
 
         debug_off += prefix_nob + msg_nob;
@@ -880,8 +883,8 @@ void portals_run_upcall(char **argv)
                 argc++;
 
         LASSERT(argc >= 2);
-        
-        rc = call_usermodehelper(argv[0], argv, envp);
+
+        rc = USERMODEHELPER(argv[0], argv, envp);
         if (rc < 0) {
                 CERROR("Error %d invoking portals upcall %s %s%s%s%s%s%s%s%s; "
                        "check /proc/sys/portals/upcall\n",

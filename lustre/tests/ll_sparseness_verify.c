@@ -1,5 +1,10 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
+ *
+ * The companion to ll_sparseness_write; walk all the bytes in the file.
+ * the bytes at the offsets specified on the command line must be '+', as
+ * previously written by ll_sparseness_write.  All other bytes must be
+ * 0.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -10,229 +15,88 @@
 #include <sys/wait.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <stdarg.h>
 
 #define BUFSIZE (1024*1024)    
-int compfunc(const void *x, const void *y)
+
+void error(char *fmt, ...)
 {
-        if (*(unsigned int *)x < *(unsigned int *)y) {
-                return -1;
-        } else if (*(unsigned int *)x == *(unsigned int *)y) {
-                return 0;
-        } else {
-                return 1;
-        }
+        va_list ap;
+        va_start(ap, fmt);
+        vfprintf(stderr, fmt, ap);
+        va_end(ap);
+        exit(1);
 }
 
-/* sort offsets and delete redundant data in offsets 
- * no return 
- */
-void collapse_redundant(unsigned *offsets, int offsetcount)
+int compare_offsets(const void *a, const void *b)
 {
-        int i, j;
-
-        qsort(offsets, offsetcount, sizeof(unsigned int), compfunc);
-
-        /* collapse the redundant offsets */
-        for (i = 0; i < offsetcount - 1; i++) {
-                if (offsets[i] == offsets[i + 1]) {
-                        for (j = i; j < offsetcount; j++) {
-                                offsets[j] = offsets[j + 1];
-                        }
-                        offsetcount--;
-                }
-        }
+        off_t *A = (off_t *)a;
+        off_t *B = (off_t *)b;
+        return *A - *B;
 }
 
-/* verify the sparse pwrite from page(0) to page(filesize / BUFSIZE)
- * if sucess return last verified page number else return (-1)
- */
-int verify_content(int fd, int filesize, unsigned int *offsets, 
-                   int O_number)
+int main(int argc, char **argv)
 {
-        int i , j;
-        char *filebuf;
-        int focus = 0;
-        int p_number;
+        unsigned int num_offsets, cur_off = 0, i;
+        off_t *offsets, pos = 0, end_of_buf = 0;
+        char *end, *buf;
+        struct stat st;
+        ssize_t ret;
+        int fd;
 
-        filebuf = (char*) malloc(BUFSIZE);
+        if (argc < 3)
+                error("Usage: %s <filename> <offset> [ offset ... ]\n", 
+                       argv[0]);
 
-        p_number = filesize / BUFSIZE;
-        for (j = 0; j < p_number ; j++) {
+        fd = open(argv[1], O_RDONLY);
+        if (fd < 0)
+                error("couldn't open %s: %s\n", argv[1], strerror(errno));
 
-                i = read(fd, filebuf, BUFSIZE);
+        buf = malloc(BUFSIZE);
+        if (buf == NULL)
+                error("can't allocate buffer\n");
 
-                if (i != BUFSIZE) {
-                        fprintf(stderr, 
-                                "Reading file fails (%s), returning (%d)\n",
-                                strerror(errno), i);
-                        free(filebuf);
-                        return -1;
-                }
-
-                /* check the position that should hold '+'
-                 * If correct, change it to 0 in the buffer */
-                for (; focus < O_number; focus++) {
-                        if (offsets[focus] < (j + 1) * BUFSIZE - 1) {
-                                if (filebuf[offsets[focus] % BUFSIZE] != '+') {
-                                        fprintf(stderr, 
-                                                "Bad content, should         \
-                                                be '+' at %d.\n",
-                                                offsets[focus]);
-                                        free(filebuf);
-                                        return -1;
-                                } else {
-                                        /* '+', change it to 0 for comparison */
-                                        filebuf[offsets[focus] % BUFSIZE] = 0;
-                                }
-                        }
-                }
-                
-                /* Hopefully '+' should have been changed to 0
-                 * Thus, we should not encounter any strange character */
-                for (i = 0; i < BUFSIZE; i++) {
-                        if (filebuf[i] != 0) {
-                                fprintf(stderr,
-                                        "Bad content, should be 0 at %d.\n",
-                                        i + j * BUFSIZE);
-                                free(filebuf);
-                                return -1;
-                        }
-                }
+        num_offsets = argc - 2;
+        offsets = calloc(sizeof(offsets[0]), num_offsets);
+        for (i = 0; i < num_offsets; i++) {
+                offsets[i] = strtoul(argv[i + 2], &end, 10);
+                if (*end) 
+                        error("couldn't parse offset '%s'\n", argv[i + 2]);
         }
-       
-        free(filebuf); 
-        return focus;
-}
+        qsort(offsets, num_offsets, sizeof(offsets[0]), compare_offsets);
 
-/* verify the sparse pwrite with last page 
- * if sucess return 0 else return 1 
- */
-int verify_tail(int fd, int filesize, unsigned int *offsets, 
-                int O_number, int focus)
-{
-        int i;
-        char *filebuf;
-        int p_number;
+        if (fstat(fd, &st) < 0)
+                error("stat: %s\n", strerror(errno));
 
-        filebuf = (char*) malloc(BUFSIZE);
-
-        /* The last page */
-        p_number = filesize % BUFSIZE;
-        i = read(fd, filebuf, p_number);
-        if (i != p_number) {
-                fprintf(stderr, "Reading file fails (%s), returning (%d)\n",
-                        strerror(errno), i);
-                free(filebuf);
-                return 1;
-        }
-        for (; focus < O_number; focus++) {
-                if (offsets[focus] < filesize) {
-                        if (filebuf[offsets[focus] % BUFSIZE] != '+') {
-                                fprintf(stderr, 
-                                        "Bad content, should be '+' at %d.\n",
-                                        offsets[focus]);
-                                free(filebuf);
-                                return 1;
-                        } else {
-                                /* '+', change it to 0 for later comparison */
-                                filebuf[offsets[focus]%BUFSIZE] = 0;
-                        }
-                } else {
-                        fprintf(stderr,
-                                "Error: File size <= offset %d\n",
-                                offsets[focus]);
-                        free(filebuf);
-                        return 1;
+        for (i = 0; pos < st.st_size; i++, pos++) {
+                if (pos == end_of_buf) {
+                        ret = read(fd, buf, BUFSIZE);
+                        if (ret < 0)
+                                error("read(): %s\n", strerror(errno));
+                        end_of_buf = pos + ret;
+                        if (end_of_buf > st.st_size)
+                                error("read %d bytes past file size?\n",
+                                      end_of_buf - st.st_size);
+                        i = 0;
                 }
-        }
 
-        for (i = 0; i < p_number; i++) {
-                if (filebuf[i] != 0) {
-                        fprintf(stderr, "Bad content, should be 0 at %d.\n",
-                                filesize - (p_number - i) - 1);
-                        free(filebuf);
-                        return 1;
+                /* check for 0 when we aren't at a given offset */
+                if (cur_off >= num_offsets || pos != offsets[cur_off]) {
+                        if (buf[i] != 0) 
+                                error("found char 0x%x at pos %lu instead of "
+                                       "0x0\n", buf[i], (long)pos);
+                        continue;
                 }
+
+                /* the command line asks us to check for + at this offset */
+                if (buf[i] != '+') 
+                        error("found char 0x%x at pos %lu instead of "
+                               "'.'\n", buf[i], (long)pos);
+
+                /* skip over duplicate offset arguments */
+                while (cur_off < num_offsets && offsets[cur_off] == pos)
+                        cur_off++;
         }
-        
-        free(filebuf);
+        /* don't bother freeing or closing.. */
         return 0;
 }
-
-/* Function: verify the sparse pwrite (bug 1222): the charaters at
- *          <offset> should be '+', and all other characters should be 0
- * Return: 0 success
- *         1 failure*/
-int verify(char *filename, unsigned int *offsets, int O_number)
-{
-        int status; 
-        unsigned int size;
-        int fd;
-        struct stat Fstat;
-
-        status = stat(filename, &Fstat);
-        if (status == -1) {
-                fprintf(stderr, "No such file named as %s.\n", filename);
-                return 1;
-        }
-        size = Fstat.st_size;
-
-        /* Because we always have '+' just before EOF,
-         * qsorted offsets[] should have the (filesize-1) at the end */
-        if (size != offsets[O_number - 1] + 1) {
-                fprintf(stderr,
-                        "Error: the final character not in the offset?\n");
-                return 1;
-        }
-
-        /* now we check the integrity of the file */
-        fd = open(filename, O_RDONLY);
-        if (fd == -1) {
-                fprintf(stderr, "Openning %s fails (%s)\n",
-                        filename, strerror(errno));
-                return 1;
-        }
-
-        if((status = verify_content(fd, size, offsets, O_number)) < 0) {
-                close(fd);
-                return status ;
-        }
-
-        return  verify_tail(fd, size, offsets, O_number, status);
-}
-
-/* verify the sparse pwrite file with the charaters at <offset> 
- * should be '+', and all other characters should be 0
- */
-int main(int argc, char**argv)
-{
-        int i;
-        char *filename;
-        char *end;
-        int O_number;
-        unsigned int *offsets;
-
-        if (argc < 3) {
-                fprintf(stderr, 
-                        "Usage: %s <filename> <offset> [ offset ... ]\n", 
-                        argv[0]);
-                exit(1);
-        }
-
-        filename = argv[1];
-        O_number = argc - 2;
-        offsets = (unsigned int *) malloc(sizeof(unsigned int) * O_number);
-        for (i = 0; i < O_number; i++) {
-                offsets[i] = strtoul(argv[i + 2], &end, 10);
-                if (*end) {
-                        fprintf(stderr, 
-                                "<offset> parameter should be integer\n");
-                        exit(1);
-                }
-        }
-
-        collapse_redundant(offsets, O_number);
-
-        return verify(filename,offsets,O_number);
-}
-
