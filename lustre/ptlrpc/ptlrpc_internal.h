@@ -28,6 +28,7 @@
 struct ldlm_namespace;
 struct obd_import;
 struct ldlm_res_id;
+struct ptlrpc_request_set;
 
 /* ldlm hooks that we need, managed via inter_module_{get,put} */
 extern int (*ptlrpc_ldlm_namespace_cleanup)(struct ldlm_namespace *, int);
@@ -90,4 +91,8 @@ enum {
         PTLRPC_LAST_CNTR
 };
 
+int ptlrpc_expire_one_request(struct ptlrpc_request *req);
+int ptlrpc_check_set(struct ptlrpc_request_set *set);
+
+void ptlrpc_pinger_sending_on_import(struct obd_import *imp);
 #endif /* PTLRPC_INTERNAL_H */
