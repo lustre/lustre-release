@@ -135,7 +135,7 @@ void mdc_set_lock_data(__u64 *l, void *data)
 
         LASSERT(lock != NULL);
         l_lock(&lock->l_resource->lr_namespace->ns_lock);
-#if !defined(LIBLUSTRE)
+#ifdef __KERNEL__
         if (lock->l_ast_data && lock->l_ast_data != data) {
                 struct inode *new_inode = data;
                 struct inode *old_inode = lock->l_ast_data;

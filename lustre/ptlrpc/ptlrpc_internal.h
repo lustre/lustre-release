@@ -37,10 +37,19 @@ void ptlrpc_daemonize(void);
 void ptlrpc_request_handle_notconn(struct ptlrpc_request *);
 void lustre_assert_wire_constants(void);
 
+#ifdef __KERNEL__
 void ptlrpc_lprocfs_register_service(struct proc_dir_entry *proc_entry,
                                      struct ptlrpc_service *svc);
 void ptlrpc_lprocfs_unregister_service(struct ptlrpc_service *svc);
 void ptlrpc_lprocfs_rpc_sent(struct ptlrpc_request *req);
+void ptlrpc_lprocfs_do_request_stat (struct ptlrpc_request *req,
+                                     long q_usec, long work_usec);
+#else
+#define ptlrpc_lprocfs_register_service(params...) do{}while(0)
+#define ptlrpc_lprocfs_unregister_service(params...) do{}while(0)
+#define ptlrpc_lprocfs_rpc_sent(params...) do{}while(0)
+#define ptlrpc_lprocfs_do_request_stat(params...) do{}while(0)
+#endif /* __KERNEL__ */
 
 /* recovd_thread.c */
 int llog_init_commit_master(void);

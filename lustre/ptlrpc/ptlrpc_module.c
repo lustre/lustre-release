@@ -63,6 +63,7 @@ __init int ptlrpc_init(void)
         RETURN(0);
 }
 
+#ifdef __KERNEL__
 static void __exit ptlrpc_exit(void)
 {
         ldlm_exit();
@@ -197,7 +198,6 @@ EXPORT_SYMBOL(llog_origin_handle_read_header);
 EXPORT_SYMBOL(llog_origin_handle_close);
 EXPORT_SYMBOL(llog_client_ops);
 
-#ifdef __KERNEL__
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre Request Processor and Lock Management");
 MODULE_LICENSE("GPL");
