@@ -258,9 +258,19 @@ void ptlrpc_request_handle_notconn(struct ptlrpc_request *failed_req)
                imp->imp_target_uuid.uuid,
                imp->imp_connection->c_remote_uuid.uuid);
         
-        ptlrpc_set_import_discon(imp);
+        if (ptlrpc_set_import_discon(imp)) {
+                if (!imp->imp_replayable) {
+                        CDEBUG(D_HA, "import %s@%s for %s not replayable, "
+                               "auto-deactivating\n",
+                               imp->imp_target_uuid.uuid,
+                               imp->imp_connection->c_remote_uuid.uuid,
+                               imp->imp_obd->obd_name);
+                        ptlrpc_deactivate_import(imp);
+                }
 
-        rc = ptlrpc_connect_import(imp, NULL);
+                rc = ptlrpc_connect_import(imp, NULL);
+        }
+
         
         /* Wait for recovery to complete and resend. If evicted, then
            this request will be errored out later.*/
@@ -276,10 +286,9 @@ void ptlrpc_request_handle_notconn(struct ptlrpc_request *failed_req)
  * This should only be called by the ioctl interface, currently
  * with the lctl deactivate and activate commands.
  */
-int ptlrpc_set_import_active(struct obd_import *imp, int active)
+int  ptlrpc_set_import_active(struct obd_import *imp, int active)
 {
         struct obd_device *obd = imp->imp_obd;
-        unsigned long flags;
         int rc = 0;
 
         LASSERT(obd);
@@ -287,23 +296,14 @@ int ptlrpc_set_import_active(struct obd_import *imp, int active)
         /* When deactivating, mark import invalid, and abort in-flight
          * requests. */
         if (!active) {
-                ptlrpc_invalidate_import(imp);
+                ptlrpc_invalidate_import(imp, 0);
         } 
 
         /* When activating, mark import valid, and attempt recovery */
         if (active) {
                 CDEBUG(D_HA, "setting import %s VALID\n",
                        imp->imp_target_uuid.uuid);
-                spin_lock_irqsave(&imp->imp_lock, flags);
-                imp->imp_invalid = 0;
-                spin_unlock_irqrestore(&imp->imp_lock, flags);
-
                 rc = ptlrpc_recover_import(imp, NULL);
-                if (rc) {
-                        spin_lock_irqsave(&imp->imp_lock, flags);
-                        imp->imp_invalid = 1;
-                        spin_unlock_irqrestore(&imp->imp_lock, flags);
-                }
         }
 
         RETURN(rc);

@@ -231,26 +231,35 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
 	/* this is the special case where create removes orphans */
 	if ((oa->o_valid & OBD_MD_FLFLAGS) &&
 	    oa->o_flags == OBD_FL_DELORPHAN) {
-                CDEBUG(D_HA, "%p: oscc recovery started\n", oscc);
+                CDEBUG(D_HA, "%s: oscc recovery started\n", 
+                        exp->exp_obd->obd_name);
+                LASSERT(oscc->oscc_flags & OSCC_FLAG_RECOVERING);
+
                 /* delete from next_id on up */
                 oa->o_valid |= OBD_MD_FLID;
                 oa->o_id = oscc->oscc_next_id - 1;
 
                 CDEBUG(D_HA, "%s: deleting to next_id: "LPU64"\n", 
-                       oscc->oscc_obd->u.cli.cl_import->imp_target_uuid.uuid, 
-                       oa->o_id);
+                       exp->exp_obd->obd_name, oa->o_id);
 
                 rc = osc_real_create(exp, oa, ea, NULL);
 
                 spin_lock(&oscc->oscc_lock);
-                if (rc == -ENOSPC)
-                        oscc->oscc_flags |= OSCC_FLAG_NOSPC;
-                oscc->oscc_flags &= ~OSCC_FLAG_RECOVERING;
-                oscc->oscc_last_id = oa->o_id;
-                wake_up(&oscc->oscc_waitq);
+                if (rc == 0 || rc == -ENOSPC) {
+                        if (rc == -ENOSPC)
+                                oscc->oscc_flags |= OSCC_FLAG_NOSPC;
+                        oscc->oscc_flags &= ~OSCC_FLAG_RECOVERING;
+                        oscc->oscc_last_id = oa->o_id;
+                        CDEBUG(D_HA, "%s: oscc recovery finished: %d\n", 
+                               exp->exp_obd->obd_name, rc);
+                        wake_up(&oscc->oscc_waitq);
+                        
+                } else {
+                        CDEBUG(D_ERROR, "%s: oscc recovery failed: %d\n", 
+                               exp->exp_obd->obd_name, rc);
+                }
                 spin_unlock(&oscc->oscc_lock);
 
-                CDEBUG(D_HA, "%p: oscc recovery finished\n", oscc);
 
 		RETURN(rc);
 	}

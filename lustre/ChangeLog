@@ -33,6 +33,8 @@ tbd  Cluster File Systems, Inc. <info@clusterfs.com>
 	- update iopen-2.6 patch with fixes from 2399,2517,2904 (3301)
 	- don't leak open file on MDS after open resend (3325)
 	- serialize filter_precreate and filter_destroy_precreated (3329)
+	- clear page cache after eviction (2766)
+	- resynchronize MDS->OST in background (2824)
        * miscellania
 	- allow default OST striping configuration per directory (1414)
 	- fix compilation for qswnal for 2.6 kernels (3125)

@@ -10,7 +10,7 @@ init_test_env $@
 
 . ${CONFIG:=$LUSTRE/tests/cfg/insanity-local.sh}
 
-ALWAYS_EXCEPT="0 10"
+ALWAYS_EXCEPT="10"
 
 build_test_filter
 

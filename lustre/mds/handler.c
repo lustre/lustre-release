@@ -1527,27 +1527,53 @@ err_llog:
         RETURN(rc);
 }
 
-static int mds_postrecov(struct obd_device *obd) 
-
+int mds_postrecov(struct obd_device *obd) 
 {
-        int rc, rc2;
+        struct mds_obd *mds = &obd->u.mds;
+        int rc;
 
         LASSERT(!obd->obd_recovering);
         LASSERT(llog_get_context(obd, LLOG_UNLINK_ORIG_CTXT) != NULL);
 
+        /* set nextid first, so we are sure it happens */
+        rc = mds_lov_set_nextid(obd);
+        if (rc) {
+                CERROR ("%s: mds_lov_set_nextid failed\n",
+                        obd->obd_name);
+                GOTO(out, rc);
+        }
+
+        /* clean PENDING dir */
+        rc = mds_cleanup_orphans(obd);
+        if (rc) {
+                GOTO(out, rc);
+        }
+
         rc = llog_connect(llog_get_context(obd, LLOG_UNLINK_ORIG_CTXT),
                           obd->u.mds.mds_lov_desc.ld_tgt_count,
                           NULL, NULL, NULL);
-        if (rc != 0) {
-                CERROR("faild at llog_origin_connect: %d\n", rc);
+        if (rc) {
+                CERROR("%s: failed at llog_origin_connect: %d\n", 
+                       obd->obd_name, rc);
+                GOTO(out, rc);
         }
 
-        rc = mds_cleanup_orphans(obd);
+        /* remove the orphaned precreated objects */
+        rc = mds_lov_clearorphans(mds, NULL /* all OSTs */);
+        if (rc) {
+                GOTO(err_llog, rc);
+        }
 
-        rc2 = mds_lov_set_nextid(obd);
-        if (rc2 == 0)
-                rc2 = rc;
-        RETURN(rc2);
+out:
+        RETURN(rc);
+
+err_llog:
+        /* cleanup all llogging subsystems */
+        rc = obd_llog_finish(obd, mds->mds_lov_desc.ld_tgt_count);
+        if (rc)
+                CERROR("%s: failed to cleanup llogging subsystems\n",
+                        obd->obd_name);
+        goto out;
 }
 
 int mds_lov_clean(struct obd_device *obd)

@@ -117,7 +117,7 @@ int mds_lov_write_objids(struct obd_device *obd)
         RETURN(rc);
 }
 
-static int mds_lov_clearorphans(struct mds_obd *mds, struct obd_uuid *ost_uuid)
+int mds_lov_clearorphans(struct mds_obd *mds, struct obd_uuid *ost_uuid)
 {
         int rc;
         struct obdo oa;
@@ -155,12 +155,6 @@ int mds_lov_set_nextid(struct obd_device *obd)
 
         rc = obd_set_info(mds->mds_osc_exp, strlen("next_id"), "next_id",
                           mds->mds_lov_desc.ld_tgt_count, mds->mds_lov_objids);
-        if (rc < 0)
-                GOTO(out, rc);
-
-        rc = mds_lov_clearorphans(mds, NULL /* all OSTs */);
-
-out:
         RETURN(rc);
 }
 
@@ -263,28 +257,10 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
          * set_nextid().  The class driver can help us here, because
          * it can use the obd_recovering flag to determine when the
          * the OBD is full available. */
-        if (!obd->obd_recovering) {
-                rc = llog_connect(llog_get_context(obd, LLOG_UNLINK_ORIG_CTXT),
-                                  obd->u.mds.mds_lov_desc.ld_tgt_count, NULL,
-                                  NULL, NULL);
-                if (rc != 0)
-                        CERROR("faild at llog_origin_connect: %d\n", rc);
-
-                rc = mds_cleanup_orphans(obd);
-                if (rc > 0)
-                        CERROR("Cleanup %d orphans while MDS isn't recovering\n", rc);
-
-                rc = mds_lov_set_nextid(obd);
-                if (rc)
-                        GOTO(err_llog, rc);
-        }
+        if (!obd->obd_recovering)
+                rc = mds_postrecov(obd);
         RETURN(rc);
 
-err_llog:
-        /* cleanup all llogging subsystems */
-        rc = obd_llog_finish(obd, mds->mds_lov_desc.ld_tgt_count);
-        if (rc)
-                CERROR("failed to cleanup llogging subsystems\n");
 err_reg:
         obd_register_observer(mds->mds_osc_obd, NULL);
 err_discon:
@@ -502,6 +478,89 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 RETURN(-EINVAL);
         }
         RETURN(0);
+
+}
+
+struct mds_lov_sync_info {
+        struct obd_device *mlsi_obd; /* the lov device to sync */
+        struct obd_uuid   *mlsi_uuid;  /* target to sync */
+};
+
+int mds_lov_synchronize(void *data)
+{
+        struct mds_lov_sync_info *mlsi = data;
+        struct obd_device *obd;
+        struct obd_uuid *uuid;
+        unsigned long flags;
+        int rc;
+
+        lock_kernel();
+        ptlrpc_daemonize();
+
+        SIGNAL_MASK_LOCK(current, flags);
+        sigfillset(&current->blocked);
+        RECALC_SIGPENDING;
+        SIGNAL_MASK_UNLOCK(current, flags);
+
+        obd = mlsi->mlsi_obd;
+        uuid = mlsi->mlsi_uuid;
+
+        OBD_FREE(mlsi, sizeof(*mlsi));
+
+        LASSERT(obd != NULL);
+        LASSERT(uuid != NULL);
+
+        rc = obd_set_info(obd->u.mds.mds_osc_exp, strlen("mds_conn"), 
+                          "mds_conn", 0, uuid);
+        if (rc != 0)
+                RETURN(rc);
+        
+        rc = llog_connect(llog_get_context(obd, LLOG_UNLINK_ORIG_CTXT),
+                          obd->u.mds.mds_lov_desc.ld_tgt_count,
+                          NULL, NULL, uuid);
+        if (rc != 0) {
+                CERROR("%s: failed at llog_origin_connect: %d\n", 
+                       obd->obd_name, rc);
+                RETURN(rc);
+        }
+        
+        CWARN("MDS %s: %s now active, resetting orphans\n",
+              obd->obd_name, uuid->uuid);
+        rc = mds_lov_clearorphans(&obd->u.mds, uuid);
+        if (rc != 0) {
+                CERROR("%s: failed at mds_lov_clearorphans: %d\n", 
+                       obd->obd_name, rc);
+                RETURN(rc);
+        }
+
+        RETURN(0);
+}
+
+int mds_lov_start_synchronize(struct obd_device *obd, struct obd_uuid *uuid)
+{
+        struct mds_lov_sync_info *mlsi;
+        int rc;
+        
+        ENTRY;
+
+        OBD_ALLOC(mlsi, sizeof(*mlsi));
+        if (mlsi == NULL)
+                RETURN(-ENOMEM);
+
+        mlsi->mlsi_obd = obd;
+        mlsi->mlsi_uuid = uuid;
+
+        rc = kernel_thread(mds_lov_synchronize, mlsi, CLONE_VM | CLONE_FILES);
+        if (rc < 0)
+                CERROR("%s: error starting mds_lov_synchronize: %d\n", 
+                       obd->obd_name, rc);
+        else {
+                CDEBUG(D_HA, "%s: mds_lov_synchronize thread: %d\n", 
+                       obd->obd_name, rc);
+                rc = 0;
+        }
+
+        RETURN(rc);
 }
 
 int mds_notify(struct obd_device *obd, struct obd_device *watched, int active)
@@ -526,22 +585,7 @@ int mds_notify(struct obd_device *obd, struct obd_device *watched, int active)
         } else {
                 LASSERT(llog_get_context(obd, LLOG_UNLINK_ORIG_CTXT) != NULL);
 
-                rc = obd_set_info(obd->u.mds.mds_osc_exp, strlen("mds_conn"), "mds_conn",
-                                  0, uuid);
-                if (rc != 0)
-                        RETURN(rc);
-
-                rc = llog_connect(llog_get_context(obd, LLOG_UNLINK_ORIG_CTXT),
-                                  obd->u.mds.mds_lov_desc.ld_tgt_count,
-                                  NULL, NULL, uuid);
-                if (rc != 0) {
-                        CERROR("faild at llog_origin_connect: %d\n", rc);
-                        RETURN(rc);
-                }
-
-                CWARN("MDS %s: %s now active, resetting orphans\n",
-                      obd->obd_name, uuid->uuid);
-                rc = mds_lov_clearorphans(&obd->u.mds, uuid);
+                rc = mds_lov_start_synchronize(obd, uuid);
         }
         RETURN(rc);
 }

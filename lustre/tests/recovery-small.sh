@@ -2,8 +2,8 @@
 
 set -e
 
-#         bug 2732 2986 2762 2766
-ALWAYS_EXCEPT="17   20b  16   18"
+#         bug  2986 
+ALWAYS_EXCEPT="20b"
 
 
 LUSTRE=${LUSTRE:-`dirname $0`/..}
@@ -62,6 +62,12 @@ replay() {
 if [ ! -z "$EVAL" ]; then
     eval "$EVAL"
     exit $?
+fi
+
+if [ "$ONLY" == "cleanup" ]; then
+    sysctl -w portals.debug=0 || true
+    cleanup
+    exit
 fi
 
 if [ "$ONLY" == "cleanup" ]; then
@@ -207,9 +213,22 @@ test_15() {
 }
 run_test 15 "failed open (-ENOMEM)"
 
+stop_read_ahead() {
+   for f in /proc/fs/lustre/llite/*/read_ahead; do 
+      echo 0 > $f
+   done
+}
+
+start_read_ahead() {
+   for f in /proc/fs/lustre/llite/*/read_ahead; do 
+      echo 1 > $f
+   done
+}
+
 test_16() {
     do_facet client cp /etc/termcap $MOUNT
     sync
+    stop_read_ahead
 
 #define OBD_FAIL_PTLRPC_BULK_PUT_NET 0x504 | OBD_FAIL_ONCE
     sysctl -w lustre.fail_loc=0x80000504
@@ -218,20 +237,24 @@ test_16() {
     do_facet client "cmp /etc/termcap $MOUNT/termcap"  && return 1
     sysctl -w lustre.fail_loc=0
     # give recovery a chance to finish (shouldn't take long)
-    sleep 1
+    sleep $TIMEOUT
     do_facet client "cmp /etc/termcap $MOUNT/termcap"  || return 2
+    start_read_ahead
 }
 run_test 16 "timeout bulk put, evict client (2732)"
 
 test_17() {
-#define OBD_FAIL_PTLRPC_BULK_GET_NET 0x0503 | OBD_FAIL_ONCE
-    # will get evicted here
+    # OBD_FAIL_PTLRPC_BULK_GET_NET 0x0503 | OBD_FAIL_ONCE
+    # client will get evicted here
     sysctl -w lustre.fail_loc=0x80000503
-    do_facet client cp /etc/termcap $MOUNT && return 1
-
-    do_facet client "cmp /etc/termcap $MOUNT/termcap"  && return 1
+    do_facet client cp /etc/termcap $DIR/$tfile
     sysctl -w lustre.fail_loc=0
-    do_facet client "cmp /etc/termcap $MOUNT/termcap"  || return 2
+
+    sleep $TIMEOUT
+    # expect cmp to fail
+    do_facet client "cmp /etc/termcap $DIR/$tfile"  && return 1
+    do_facet client "rm $DIR/$tfile" || return 2
+    return 0
 }
 run_test 17 "timeout bulk get, evict client (2732)"
 

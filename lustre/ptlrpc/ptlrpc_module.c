@@ -134,6 +134,7 @@ EXPORT_SYMBOL(ptlrpc_stop_all_threads);
 EXPORT_SYMBOL(ptlrpc_start_n_threads);
 EXPORT_SYMBOL(ptlrpc_start_thread);
 EXPORT_SYMBOL(ptlrpc_unregister_service);
+EXPORT_SYMBOL(ptlrpc_daemonize);
 
 /* pack_generic.c */
 EXPORT_SYMBOL(lustre_msg_swabbed);
@@ -181,6 +182,7 @@ EXPORT_SYMBOL(ptlrpc_disconnect_import);
 EXPORT_SYMBOL(ptlrpc_resend);
 EXPORT_SYMBOL(ptlrpc_wake_delayed);
 EXPORT_SYMBOL(ptlrpc_set_import_active);
+EXPORT_SYMBOL(ptlrpc_deactivate_import);
 EXPORT_SYMBOL(ptlrpc_invalidate_import);
 EXPORT_SYMBOL(ptlrpc_fail_import);
 EXPORT_SYMBOL(ptlrpc_fail_export);

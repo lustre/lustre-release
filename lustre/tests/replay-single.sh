@@ -834,25 +834,19 @@ run_test 41 "read from a valid osc while other oscs are invalid"
 
 # test MDS recovery after ost failure
 test_42() {
-    blocks=`df $MOUNT | tail -1 | awk '{ print $1 }'`
+    blocks=`df $MOUNT | tail -n 1 | awk '{ print $1 }'`
     createmany -o $DIR/$tfile-%d 800
     replay_barrier ost
     unlinkmany $DIR/$tfile-%d 0 400
     facet_failover ost
     
     # osc is evicted, fs is smaller
-    set -vx
-    blocks_after=`df $MOUNT | tail -1 | awk '{ print $1 }'`
-    if [ "$blocks_after" = "Filesystem" ]; then
-	echo "df failed, assuming caused by OST failout"
-    else
-        [ $blocks_after -lt $blocks ] || return 1
-    fi
+    blocks_after=`df $MOUNT | tail -n 1 | awk '{ print $1 }'`
+    [ $blocks_after -lt $blocks ] || return 1
     echo wait for MDS to timeout and recover
     sleep $((TIMEOUT * 2))
     unlinkmany $DIR/$tfile-%d 400 400
     $CHECKSTAT -t file $DIR/$tfile-* && return 2 || true
-    set +vx
 }
 run_test 42 "recovery after ost failure"
 
@@ -919,6 +913,31 @@ test_46() {
     return 0
 }
 run_test 46 "Don't leak file handle after open resend (3325)"
+
+# b=2824
+test_47() {
+
+    # create some files to make sure precreate has been done on all 
+    # OSTs. (just in case this test is run independently)
+    createmany -o $DIR/$tfile 20  || return 1
+
+    # OBD_FAIL_OST_CREATE_NET 0x204
+    fail ost
+    do_facet ost "sysctl -w lustre.fail_loc=0x80000204"
+    df $MOUNT || return 2
+
+    # let the MDS discover the OST failure, attempt to recover, fail
+    # and recover again.  
+    sleep $((3 * TIMEOUT))
+
+    # Without 2824, this createmany would hang 
+    createmany -o $DIR/$tfile 20 || return 3
+    unlinkmany $DIR/$tfile 20 || return 4
+
+    do_facet ost "sysctl -w lustre.fail_loc=0"
+    return 0
+}
+run_test 47 "MDS->OSC failure during precreate cleanup (2824)"
 
 equals_msg test complete, cleaning up
 $CLEANUP

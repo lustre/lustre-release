@@ -338,24 +338,20 @@ static int lov_notify(struct obd_device *obd, struct obd_device *watched,
         }
         uuid = &watched->u.cli.cl_import->imp_target_uuid;
 
-        /*
-         * Must notify (MDS) before we mark the OSC as active, so that
-         * the orphan deletion happens without interference from racing
-         * creates.
+        /* Set OSC as active before notifying the observer, so the
+         * observer can use the OSC normally.  
          */
-        if (obd->obd_observer) {
-                /* Pass the notification up the chain. */
-                rc = obd_notify(obd->obd_observer, watched, active);
-                if (rc)
-                        RETURN(rc);
-        }
-
         rc = lov_set_osc_active(&obd->u.lov, uuid, active);
-
         if (rc) {
                 CERROR("%sactivation of %s failed: %d\n",
                        active ? "" : "de", uuid->uuid, rc);
+                RETURN(rc);
         }
+
+        if (obd->obd_observer)
+                /* Pass the notification up the chain. */
+                rc = obd_notify(obd->obd_observer, watched, active);
+
         RETURN(rc);
 }
 

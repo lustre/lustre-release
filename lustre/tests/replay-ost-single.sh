@@ -12,8 +12,8 @@ init_test_env $@
 ostfailover_HOST=${ostfailover_HOST:-$ost_HOST}
 
 # Skip these tests
+# BUG NUMBER: 2766?
 ALWAYS_EXCEPT="5"
-# test 5 needs a larger fs than what local normally has
 
 gen_config() {
     rm -f $XMLCONFIG
@@ -120,11 +120,15 @@ test_4() {
 run_test 4 "Fail OST during read, with verification"
 
 test_5() {
-    IOZONE_OPTS="-i 0 -i 1 -i 2 -+d -r 64 -s 1g"
+    FREE=`df -h $DIR | tail -n 1 | awk '{ print $3 }'`
+    case $FREE in
+    *T|*G) FREE=1G;;
+    esac
+    IOZONE_OPTS="-i 0 -i 1 -i 2 -+d -r 4 -s $FREE"
     iozone $IOZONE_OPTS -f $DIR/$tfile &
     PID=$!
     
-    sleep 10
+    sleep 8
     fail ost
     wait $PID || return 1
     rm -f $DIR/$tfile

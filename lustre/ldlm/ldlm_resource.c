@@ -289,7 +289,10 @@ static void cleanup_resource(struct ldlm_resource *res, struct list_head *q,
                 lock = list_entry(tmp, struct ldlm_lock, l_res_link);
                 LDLM_LOCK_GET(lock);
 
-                lock->l_flags |= LDLM_FL_CANCEL;
+                /* Set CBPENDING so nothing in the cancellation path
+                 * can match this lock */
+                lock->l_flags |= LDLM_FL_CBPENDING;
+                lock->l_flags |= LDLM_FL_FAILED;
                 lock->l_flags |= flags;
 
                 if (local_only && (lock->l_readers || lock->l_writers)) {
@@ -297,7 +300,6 @@ static void cleanup_resource(struct ldlm_resource *res, struct list_head *q,
                          * alternative: pretend that we got a blocking AST from
                          * the server, so that when the lock is decref'd, it
                          * will go away ... */
-                        lock->l_flags |= LDLM_FL_CBPENDING;
                         /* ... without sending a CANCEL message. */
                         lock->l_flags |= LDLM_FL_LOCAL_ONLY;
                         LDLM_DEBUG(lock, "setting FL_LOCAL_ONLY");

@@ -68,6 +68,7 @@ int mds_lov_write_objids(struct obd_device *obd);
 void mds_lov_update_objids(struct obd_device *obd, obd_id *ids);
 int mds_lov_set_growth(struct mds_obd *mds, int count);
 int mds_lov_set_nextid(struct obd_device *obd);
+int mds_lov_clearorphans(struct mds_obd *mds, struct obd_uuid *ost_uuid);
 int mds_post_mds_lovconf(struct obd_device *obd);
 int mds_notify(struct obd_device *obd, struct obd_device *watched, int active);
 int mds_convert_lov_ea(struct obd_device *obd, struct inode *inode,
@@ -98,6 +99,7 @@ extern struct lvfs_callback_ops mds_lvfs_ops;
 int mds_lov_clean(struct obd_device *obd);
 extern int mds_iocontrol(unsigned int cmd, struct obd_export *exp,
                          int len, void *karg, void *uarg);
+int mds_postrecov(struct obd_device *obd);
 #ifdef __KERNEL__
 int mds_get_md(struct obd_device *, struct inode *, void *md, int *size, 
                int lock);

@@ -311,6 +311,8 @@ int osc_real_create(struct obd_export *exp, struct obdo *oa,
                         oa->o_flags == OBD_FL_DELORPHAN);
                 DEBUG_REQ(D_HA, request,
                           "delorphan from OST integration");
+                /* Don't resend the delorphan request */
+                request->rq_no_resend = request->rq_no_delay = 1;
         }
 
         rc = ptlrpc_queue_wait(request);
@@ -1139,7 +1141,7 @@ static void osc_occ_interrupted(struct oig_callback_context *occ)
         /* ok, it's been put in an rpc. */
         if (oap->oap_request != NULL) {
                 ptlrpc_mark_interrupted(oap->oap_request);
-                ptlrpcd_wake();
+                ptlrpcd_wake(oap->oap_request);
                 GOTO(unlock, 0);
         }
 
@@ -1200,17 +1202,23 @@ static int brw_interpret_oap(struct ptlrpc_request *request,
         struct list_head *pos, *n;
         ENTRY;
 
-        CDEBUG(D_INODE, "request %p aa %p\n", request, aa);
 
         rc = osc_brw_fini_request(request, aa->aa_oa, aa->aa_requested_nob,
                                   aa->aa_nio_count, aa->aa_page_count,
                                   aa->aa_pga, rc);
 
+        CDEBUG(D_INODE, "request %p aa %p rc %d\n", request, aa, rc);
+
         cli = aa->aa_cli;
         /* in failout recovery we ignore writeback failure and want
          * to just tell llite to unlock the page and continue */
-        if (cli->cl_import == NULL || cli->cl_import->imp_invalid)
+        if (request->rq_reqmsg->opc == OST_WRITE && 
+            (cli->cl_import == NULL || cli->cl_import->imp_invalid)) {
+                CDEBUG(D_INODE, "flipping to rc 0 imp %p inv %d\n", 
+                       cli->cl_import, 
+                       cli->cl_import ? cli->cl_import->imp_invalid : -1);
                 rc = 0;
+        }
 
         spin_lock(&cli->cl_loi_list_lock);
 
@@ -1502,6 +1510,13 @@ static int lop_makes_rpc(struct client_obd *cli, struct loi_oap_pages *lop,
         if (lop->lop_num_pending == 0)
                 RETURN(0);
 
+        /* if we have an invalid import we want to drain the queued pages
+         * by forcing them through rpcs that immediately fail and complete
+         * the pages.  recovery relies on this to empty the queued pages
+         * before canceling the locks and evicting down the llite pages */
+        if (cli->cl_import == NULL || cli->cl_import->imp_invalid)
+                RETURN(1);
+
         /* stream rpcs in queue order as long as as there is an urgent page
          * queued.  this is our cheap solution for good batching in the case
          * where writepage marks some random page in the middle of the file as
@@ -1549,6 +1564,9 @@ static void loi_list_maint(struct client_obd *cli, struct lov_oinfo *loi)
 
         on_list(&loi->loi_write_item, &cli->cl_loi_write_list,
                 loi->loi_write_lop.lop_num_pending);
+
+        on_list(&loi->loi_read_item, &cli->cl_loi_read_list,
+                loi->loi_read_lop.lop_num_pending);
 }
 
 #define LOI_DEBUG(LOI, STR, args...)                                     \
@@ -1577,6 +1595,17 @@ struct lov_oinfo *osc_next_loi(struct client_obd *cli)
             !list_empty(&cli->cl_loi_write_list))
                 RETURN(list_entry(cli->cl_loi_write_list.next,
                                   struct lov_oinfo, loi_write_item));
+
+        /* then return all queued objects when we have an invalid import
+         * so that they get flushed */
+        if (cli->cl_import == NULL || cli->cl_import->imp_invalid) {
+                if (!list_empty(&cli->cl_loi_write_list))
+                        RETURN(list_entry(cli->cl_loi_write_list.next,
+                                          struct lov_oinfo, loi_write_item));
+                if (!list_empty(&cli->cl_loi_read_list))
+                        RETURN(list_entry(cli->cl_loi_read_list.next,
+                                          struct lov_oinfo, loi_read_item));
+        }
         RETURN(NULL);
 }
 
@@ -1626,6 +1655,8 @@ static void osc_check_rpcs(struct client_obd *cli)
                         list_del_init(&loi->loi_cli_item);
                 if (!list_empty(&loi->loi_write_item))
                         list_del_init(&loi->loi_write_item);
+                if (!list_empty(&loi->loi_read_item))
+                        list_del_init(&loi->loi_read_item);
 
                 loi_list_maint(cli, loi);
 
@@ -2858,25 +2889,25 @@ static int osc_import_event(struct obd_device *obd,
                 }
                 break;
         }
+        case IMP_EVENT_INACTIVE: {
+                if (obd->obd_observer)
+                        rc = obd_notify(obd->obd_observer, obd, 0);
+                break;
+        }
         case IMP_EVENT_INVALIDATE: {
                 struct ldlm_namespace *ns = obd->obd_namespace;
 
-                /* this used to try and tear down queued pages, but it was
-                 * not correctly implemented.  We'll have to do it again once
-                 * we call obd_invalidate_import() agian */
-                /* XXX And we still need to do this */
-
-                /* Reset grants, too */
+                /* Reset grants */
                 cli = &obd->u.cli;
                 spin_lock(&cli->cl_loi_list_lock);
                 cli->cl_avail_grant = 0;
                 cli->cl_lost_grant = 0;
+                /* all pages go to failing rpcs due to the invalid import */
+                osc_check_rpcs(cli);
                 spin_unlock(&cli->cl_loi_list_lock);
                 
                 ldlm_namespace_cleanup(ns, LDLM_FL_LOCAL_ONLY);
 
-                if (obd->obd_observer)
-                        rc = obd_notify(obd->obd_observer, obd, 0);
                 break;
         }
         case IMP_EVENT_ACTIVE: {

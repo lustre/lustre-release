@@ -326,6 +326,7 @@ struct ptlrpc_request {
         struct ptlrpc_request_set *rq_set;
         void *rq_interpret_reply;               /* Async completion handler */
         union ptlrpc_async_args rq_async_args;  /* Async completion context */
+        void * rq_ptlrpcd_data;
 };
 
 
@@ -626,6 +627,8 @@ int ptlrpc_start_thread(struct obd_device *dev, struct ptlrpc_service *svc,
                         char *name);
 int ptlrpc_unregister_service(struct ptlrpc_service *service);
 int liblustre_check_services (void *arg);
+void ptlrpc_daemonize(void);
+
 
 struct ptlrpc_svc_data {
         char *name;
@@ -669,7 +672,7 @@ int ptlrpc_pinger_add_import(struct obd_import *imp);
 int ptlrpc_pinger_del_import(struct obd_import *imp);
 
 /* ptlrpc/ptlrpcd.c */
-void ptlrpcd_wake(void);
+void ptlrpcd_wake(struct ptlrpc_request *req);
 void ptlrpcd_add_req(struct ptlrpc_request *req);
 int ptlrpcd_addref(void);
 void ptlrpcd_decref(void);
