@@ -13,7 +13,7 @@ LDAP_PW=${LDAP_PW:-secret}
 LDAP_AUTH="-x -D $LDAP_ROOTDN -w $LDAP_PW"
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 
-if [ -f $LUSTRE/Makefile.am ]; then
+if [ -f $LUSTRE/autoMakefile.am ]; then
   CONFDIR=$LUSTRE/conf
 else
   CONFDIR=/usr/lib/lustre
