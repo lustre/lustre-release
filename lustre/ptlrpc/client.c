@@ -334,20 +334,19 @@ int ptlrpc_check_status(struct ptlrpc_request *req, int err)
                 RETURN(-ENOMEM);
         }
 
+        err = req->rq_repmsg->status;
         if (req->rq_repmsg->type == NTOH__u32(PTL_RPC_MSG_ERR)) {
                 CERROR("req->rq_repmsg->type == PTL_RPC_MSG_ERR\n");
-                RETURN(-EINVAL);
+                RETURN(err ? err : -EINVAL);
         }
 
-        if (req->rq_repmsg->status != 0) {
-                if (req->rq_repmsg->status < 0)
-                        CERROR("req->rq_repmsg->status is %d\n",
-                               req->rq_repmsg->status);
+        if (err != 0) {
+                if (err < 0)
+                        CERROR("req->rq_repmsg->status is %d\n", err);
                 else
-                        CDEBUG(D_INFO, "req->rq_repmsg->status is %d\n",
-                               req->rq_repmsg->status);
+                        CDEBUG(D_INFO, "req->rq_repmsg->status is %d\n", err);
                 /* XXX: translate this error from net to host */
-                RETURN(req->rq_repmsg->status);
+                RETURN(err);
         }
 
         RETURN(0);
@@ -391,10 +390,10 @@ void ptlrpc_free_committed(struct ptlrpc_client *cli)
                 if (req->rq_transno > cli->cli_last_committed)
                         break;
 
-                CDEBUG(D_INFO, "Marking request %Ld as committed ("
-                       "transno=%Lu, last_committed=%Lu\n", 
-                       req->rq_xid, req->rq_transno, 
-                       cli->cli_last_committed);
+                CDEBUG(D_INFO, "Marking request xid %Ld as committed ("
+                       "transno=%Lu, last_committed=%Lu\n",
+                       (long long)req->rq_xid, (long long)req->rq_transno,
+                       (long long)cli->cli_last_committed);
                 if (atomic_dec_and_test(&req->rq_refcount)) {
                         /* we do this to prevent free_req deadlock */
                         list_del_init(&req->rq_list); 
@@ -488,7 +487,7 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
                        current->pid, req->rq_level, req->rq_connection->c_level);
                 spin_lock(&cli->cli_lock);
                 list_del_init(&req->rq_list);
-                list_add(&req->rq_list, cli->cli_delayed_head.prev); 
+                list_add_tail(&req->rq_list, &cli->cli_delayed_head);
                 spin_unlock(&cli->cli_lock);
                 l_wait_event_killable
                         (req->rq_wait_for_rep, 
