@@ -93,7 +93,7 @@ int main(int argc, char **argv)
                 exit(1);
         }
         if (st.st_nlink != 0)
-                fprintf(stderr, "st_nlink = %d\n", st.st_nlink);
+                fprintf(stderr, "st_nlink = %d\n", (int)st.st_nlink);
 
         fprintf(stderr, "reading\n");
         rc = read(fd, buf, strlen(T1) + 1);
