@@ -8,14 +8,14 @@ MODULE = extN
 modulefs_DATA = extN.o
 EXTRA_PROGRAMS = extN
 
-EXTNP = 
-EXTN_FIXES = ext3-2.4.18-fixes.diff
 # NOTE: If you are not using a RedHat 12.5 or later kernel, then you need to
 #       apply the following patch first, as it fixes a number of bugs in ext3.
-#       You can either apply it as part of the extN build by uncommenting the
-#       line below, or apply it to the source kernel tree and fix ext3 also.
-# EXTNP = $(EXTN_FIXES)
-EXTNP+= htree-ext3-2.4.18.diff linux-2.4.18ea-0.8.26.diff
+#       It will be applied automatically by the extN build process, or you
+#       can apply it to the source kernel tree and fix ext3 also.  For chaos22
+#       (or other RH < 12.5 kernels) use the "chaos22" patch instead.
+#EXTN_FIXES = ../patches/patch-2.4.18-chaos22
+EXTN_FIXES = ext3-2.4.18-fixes.diff
+EXTNP = htree-ext3-2.4.18.diff linux-2.4.18ea-0.8.26.diff
 EXTNP+= ext3-2.4.18-ino_sb_macro.diff extN-misc-fixup.diff
 EXTNC = balloc.c bitmap.c dir.c file.c fsync.c ialloc.c inode.c ioctl.c
 EXTNC+= namei.c super.c symlink.c
@@ -99,7 +99,7 @@ patch-stamp: sed-stamp $(EXTNP)
 	else                                                                  \
 	  echo "If first patch fails, read NOTE in extN/Makefile.am";         \
 	  list='$(EXTNP)'; \
-	  sed '/extN_mark_inode_dirty/q' $(srcdir)/extN.orig/namei.c | tail -2 | grep i_version >/dev/null || list="$(EXTN_FIXES) $$list"; \
+	  sed '/i_version/q' $(srcdir)/extN.orig/namei.c | tail -2 | grep extN_mark_inode_dirty >/dev/null && list="$(EXTN_FIXES) $$list"; \
 	  for p in $$list; do                                \
 	    echo "applying patch $$p";                                        \
 	    sed $(SUB) $(srcdir)/$$p |                                        \
