@@ -5,7 +5,7 @@ SRCDIR="`dirname $0`"
 
 setup
 
-$R/usr/src/portals/linux/utils/ptlctl <<EOF
+$PTLCTL <<EOF
 mynid localhost
 setup tcp
 connect localhost 1234
@@ -14,11 +14,9 @@ add_uuid ost
 quit
 EOF
 
-mknod /dev/obd c 10 241
 echo 8191 > /proc/sys/portals/debug
-echo 8191 > /proc/sys/portals/trace
 
-$R/usr/src/obd/utils/obdctl <<EOF
+$OBDCTL <<EOF
 device 0
 attach obdecho
 setup
