@@ -114,6 +114,7 @@ int l_has_lock(struct lustre_lock *lock)
         return owner;
 }
 
+#ifdef __KERNEL__
 #include <linux/lustre_version.h>
 void l_check_no_ns_lock(struct ldlm_namespace *ns)
 {
@@ -128,3 +129,10 @@ void l_check_no_ns_lock(struct ldlm_namespace *ns)
                 next_msg = jiffies + 60 * HZ;
         }
 }
+
+#else
+void l_check_no_ns_lock(struct ldlm_namespace *ns)
+{
+#warning "FIXME: check lock in user space??"
+}
+#endif /* __KERNEL__ */
