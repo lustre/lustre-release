@@ -17,14 +17,14 @@
   </node>
   <mds name='mds1' uuid='mds1_UUID'>
     <fstype>extN</fstype>
-    <device size='100000'>/tmp/mds1</device>
+    <device size='50000'>/tmp/mds1</device>
     <autoformat>yes</autoformat>
     <network_ref uuidref='NET_localhost_tcp_UUID'/>
     <node_ref uuidref='localhost_UUID'/>
   </mds>
   <obd type='obdfilter' name='OBD_localhost' uuid='OBD_localhost_UUID'>
     <fstype>extN</fstype>
-    <device size='400000'>/tmp/ost1</device>
+    <device size='200000'>/tmp/ost1</device>
     <autoformat>yes</autoformat>
   </obd>
   <osc name='OSC_localhost' uuid='OSC_localhost_UUID'>
