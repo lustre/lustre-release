@@ -328,7 +328,6 @@ class LCTLInterface:
         self.run(cmds)
 
                 
-    # add a route to a range
     def del_route(self, net, gw, lo, hi):
         cmds =  """
   ignore_errors
@@ -755,8 +754,11 @@ class Network(Module):
 
     def prepare(self):
         self.info(self.net_type, self.nid, self.port)
-        if self.net_type == 'tcp':
-            ret, out = run(TCP_ACCEPTOR, '-s', self.send_mem, '-r', self.recv_mem, self.port)
+        if self.net_type in ('tcp', 'toe'):
+            nal_id = '' # default is socknal
+            if self.net_type == 'toe':
+                nal_id = '-N 4'
+            ret, out = run(TCP_ACCEPTOR, '-s', self.send_mem, '-r', self.recv_mem, nal_id, self.port)
             if ret:
                 raise CommandError(TCP_ACCEPTOR, out, ret)
         ret = self.dom_node.getElementsByTagName('route_tbl')
@@ -946,8 +948,8 @@ class MDC(Module):
         self._connected = 0
 
         host = socket.gethostname()
-        self.name = 'MDC_'+host
-        self.uuid = self.name+'_UUID'
+        self.name = 'MDC_%s_%s' % ( host, self.mds.name )
+        self.uuid = self.name + '_UUID' 
 
         self.lookup_server(self.mds.uuid)
         self.add_module('lustre/mdc', 'mdc')
@@ -1070,8 +1072,7 @@ class Mountpoint(Module):
     def prepare(self):
         self.osc.prepare()
         mdc_uuid = prepare_mdc(self.dom_node.parentNode, self.mds_uuid)
-
-        self.info(self.path, self.mds_uuid,self.lov_uuid)
+        self.info(self.path, self.mds_uuid, self.lov_uuid)
         cmd = "mount -t lustre_lite -o osc=%s,mdc=%s none %s" % \
               (self.lov_uuid, mdc_uuid, self.path)
         run("mkdir", self.path)
@@ -1271,18 +1272,18 @@ def getByName(lustreNode, name, tag):
 # MDC UUID hack - 
 # FIXME: clean this mess up!
 #
-mdc_uuid = None
+saved_mdc = {}
 def prepare_mdc(dom_node, mds_uuid):
-    global mdc_uuid
+    global saved_mdc
     mds_node = lookup(dom_node, mds_uuid);
     if not mds_node:
         panic("no mds:", mds_uuid)
-    if mdc_uuid:
-        return mdc_uuid
+    if saved_mdc.has_key(mds_uuid):
+        return saved_mdc[mds_uuid]
     mdc = MDC(mds_node)
     mdc.prepare()
-    mdc_uuid = mdc.uuid
-    return mdc_uuid
+    saved_mdc[mds_uuid] = mdc.uuid
+    return mdc.uuid
 
 mdc_cleaned = None
 def cleanup_mdc(dom_node, mds_uuid):

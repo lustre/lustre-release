@@ -64,7 +64,7 @@ Commands:
    specifies the node to modify.
 
 --net hostname nettype [port, recv_buf, send_buf]
-   Nettype is either tcp, elan, or gm.
+   Nettype is either tcp, toe, elan, or gm.
    Requires --node
 
 --route net gw lo [hi]
@@ -423,7 +423,7 @@ def add_net(gen, lustre, options, args):
     port = 0
     tcpbuf = 0
 
-    if net_type == 'tcp':
+    if net_type in ('tcp', 'toe'):
         if len(args) > 2:
             port = int(args[2])
         else:
