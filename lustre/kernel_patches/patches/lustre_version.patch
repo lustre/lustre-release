@@ -1,7 +1,7 @@
 Version 37: fix htree rename-within-same-dir (b=3417), endianness (b=2447)
-Version 36: don't dput dentry in link_path_walk_it after lookup error (b=2350)
+Version 36: don't dput dentry after error (b=2350), zero page->private (3119)
 Version 35: pass intent to real_lookup after revalidate failure (b=3285)
-Version 34: fix ext3 iopen assertion failure (b=2517, b=2399)
+Version 34: ext3 iopen assertion (b=2517), operations on deleted "." (b=2399)
 
  include/linux/lustre_version.h |    1 +
  1 files changed, 1 insertion(+)
