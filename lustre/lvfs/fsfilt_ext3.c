@@ -677,14 +677,19 @@ static int fsfilt_ext3_read_record(struct file * file, void *buf,
         int err, blocksize, csize, boffs;
 
         /* prevent reading after eof */
+        lock_kernel();
         if (inode->i_size < *offs + size) {
                 size = inode->i_size - *offs;
+                unlock_kernel();
                 if (size < 0) {
                         CERROR("size %llu is too short for read %u@%llu\n",
-                                        inode->i_size, size, *offs);
+                               inode->i_size, size, *offs);
                         return -EIO;
-                } else if (size == 0)
+                } else if (size == 0) {
                         return 0;
+                }
+        } else {
+                unlock_kernel();
         }
 
         blocksize = 1 << inode->i_blkbits;
@@ -725,14 +730,14 @@ static int fsfilt_ext3_write_record(struct file *file, void *buf, int bufsize,
         blocksize = 1 << inode->i_blkbits;
         block_count = (*offs & (blocksize - 1)) + bufsize;
         block_count = (block_count + blocksize - 1) >> inode->i_blkbits;
-        
-        down(&inode->i_sem);
+
         journal = EXT3_SB(inode->i_sb)->s_journal;
+        lock_kernel();
         handle = journal_start(journal,
                                block_count * EXT3_DATA_TRANS_BLOCKS + 2);
+        unlock_kernel();
         if (IS_ERR(handle)) {
                 CERROR("can't start transaction\n");
-                up(&inode->i_sem);
                 return PTR_ERR(handle);
         }
 
@@ -778,16 +783,19 @@ out:
 
         /* correct in-core and on-disk sizes */
         if (new_size > inode->i_size) {
+                lock_kernel();
                 if (new_size > inode->i_size)
                         inode->i_size = new_size;
                 if (inode->i_size > EXT3_I(inode)->i_disksize)
                         EXT3_I(inode)->i_disksize = inode->i_size;
                 if (inode->i_size > old_size)
                         mark_inode_dirty(inode);
+                unlock_kernel();
         }
 
+        lock_kernel();
         journal_stop(handle);
-        up(&inode->i_sem);
+        unlock_kernel();
 
         if (err == 0)
                 *offs = offset;
