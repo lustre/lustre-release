@@ -192,7 +192,7 @@ static struct super_block * obdfs_read_super(struct super_block *sb,
         CDEBUG(D_INFO, "\n"); 
         /* list of dirty inodes, and a mutex to hold while modifying it */
         INIT_LIST_HEAD(&sbi->osi_inodes);
-        sema_init(&sbi->osi_list_mutex, 1);
+        init_MUTEX (&sbi->osi_list_mutex);
 
         CDEBUG(D_INFO, "\n"); 
         sbi->osi_super = sb;
@@ -286,7 +286,6 @@ static void obdfs_put_super(struct super_block *sb)
 
         OPS(sb,disconnect)(ID(sb));
         list_del(&sbi->osi_list);
-        memset(sbi, 0, sizeof(*sbi));
         
         printk(KERN_INFO "OBDFS: Bye bye.\n");
 
