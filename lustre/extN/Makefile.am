@@ -8,7 +8,10 @@ MODULE = extN
 modulefs_DATA = extN.o
 EXTRA_PROGRAMS = extN
 
-EXTNP = htree-ext3-2.4.18.diff linux-2.4.18ea-0.8.26.diff
+# NOTE: if you are not using a RedHat 12.5 or later kernel, then you need to
+#       apply the following patch first, as it fixes a number of bugs in ext3.
+# EXTNP = ext3-2.4.18-fixes.diff
+EXTNP+= htree-ext3-2.4.18.diff linux-2.4.18ea-0.8.26.diff
 EXTNP+= ext3-2.4.18-ino_sb_macro.diff extN-misc-fixup.diff
 EXTNC = balloc.c bitmap.c dir.c file.c fsync.c ialloc.c inode.c ioctl.c
 EXTNC+= namei.c super.c symlink.c

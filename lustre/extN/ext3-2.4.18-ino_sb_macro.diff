@@ -168,19 +168,16 @@
  		return -EIO;
  	
  	/*
-@@ -275,8 +273,9 @@ void ext3_free_blocks (handle_t *handle,
+@@ -275,7 +273,7 @@ void ext3_free_blocks (handle_t *handle,
  		return;
  	}
  	lock_super (sb);
 -	es = sb->u.ext3_sb.s_es;
--	if (block < le32_to_cpu(es->s_first_data_block) || 
 +	es = EXT3_SB(sb)->s_es;
-+	if (block < le32_to_cpu(es->s_first_data_block) ||
-+	    block + count < block ||
+ 	if (block < le32_to_cpu(es->s_first_data_block) ||
+ 	    block + count < block ||
  	    (block + count) > le32_to_cpu(es->s_blocks_count)) {
- 		ext3_error (sb, "ext3_free_blocks",
- 			    "Freeing blocks not in datazone - "
-@@ -304,22 +303,11 @@ do_more:
+@@ -304,7 +302,7 @@ do_more:
  	if (bitmap_nr < 0)
  		goto error_return;
  	
@@ -189,22 +186,7 @@
  	gdp = ext3_get_group_desc (sb, block_group, &gd_bh);
  	if (!gdp)
  		goto error_return;
- 
--	if (in_range (le32_to_cpu(gdp->bg_block_bitmap), block, count) ||
--	    in_range (le32_to_cpu(gdp->bg_inode_bitmap), block, count) ||
--	    in_range (block, le32_to_cpu(gdp->bg_inode_table),
--		      sb->u.ext3_sb.s_itb_per_group) ||
--	    in_range (block + count - 1, le32_to_cpu(gdp->bg_inode_table),
--		      sb->u.ext3_sb.s_itb_per_group))
--		ext3_error (sb, "ext3_free_blocks",
--			    "Freeing blocks in system zones - "
--			    "Block = %lu, count = %lu",
--			    block, count);
--
- 	/*
- 	 * We are about to start releasing blocks in the bitmap,
- 	 * so we need undo access.
-@@ -340,19 +328,29 @@ do_more:
+@@ -330,8 +328,8 @@ do_more:
  	if (err)
  		goto error_return;
  
@@ -215,42 +197,16 @@
  	if (err)
  		goto error_return;
  
--	for (i = 0; i < count; i++) {
-+	for (i = 0; i < count; i++, block++) {
-+		if (block == le32_to_cpu(gdp->bg_block_bitmap) ||
-+		    block == le32_to_cpu(gdp->bg_inode_bitmap) ||
-+		    in_range(block, le32_to_cpu(gdp->bg_inode_table),
+@@ -341,7 +339,7 @@
+ 		if (block == le32_to_cpu(gdp->bg_block_bitmap) ||
+ 		    block == le32_to_cpu(gdp->bg_inode_bitmap) ||
+ 		    in_range(block, le32_to_cpu(gdp->bg_inode_table),
+-			     sb->u.ext2_sb.s_itb_per_group)) {
 +			     EXT3_SB(sb)->s_itb_per_group)) {
-+			ext3_error(sb, __FUNCTION__,
-+				   "Freeing block in system zone - block = %lu",
-+				   block);
-+			continue;
-+		}
-+
- 		/*
- 		 * An HJ special.  This is expensive...
- 		 */
- #ifdef CONFIG_JBD_DEBUG
- 		{
- 			struct buffer_head *debug_bh;
--			debug_bh = sb_get_hash_table(sb, block + i);
-+			debug_bh = sb_get_hash_table(sb, block);
- 			if (debug_bh) {
- 				BUFFER_TRACE(debug_bh, "Deleted!");
- 				if (!bh2jh(bitmap_bh)->b_committed_data)
-@@ -365,9 +363,8 @@ do_more:
- #endif
- 		BUFFER_TRACE(bitmap_bh, "clear bit");
- 		if (!ext3_clear_bit (bit + i, bitmap_bh->b_data)) {
--			ext3_error (sb, __FUNCTION__,
--				      "bit already cleared for block %lu", 
--				      block + i);
-+			ext3_error(sb, __FUNCTION__,
-+				   "bit already cleared for block %lu", block);
- 			BUFFER_TRACE(bitmap_bh, "bit already cleared");
- 		} else {
- 			dquot_freed_blocks++;
-@@ -410,12 +407,11 @@ do_more:
+ 			ext3_error(sb, __FUNCTION__,
+ 				   "Freeing block in system zone - block = %lu",
+ 				   block);
+@@ -410,8 +407,8 @@ do_more:
  	if (!err) err = ret;
  
  	/* And the superblock */
@@ -261,11 +217,7 @@
  	if (!err) err = ret;
  
  	if (overflow && !err) {
--		block += count;
- 		count = overflow;
- 		goto do_more;
- 	}
-@@ -564,17 +560,18 @@ int ext3_new_block (handle_t *handle, st
+@@ -564,12 +560,12 @@ int ext3_new_block (handle_t *handle, st
  	}
  
  	lock_super (sb);
@@ -282,12 +234,6 @@
  	     !capable(CAP_SYS_RESOURCE)))
  		goto out;
  
- 	ext3_debug ("goal=%lu.\n", goal);
- 
-+repeat:
- 	/*
- 	 * First, test whether the goal block is free.
- 	 */
 @@ -598,7 +595,7 @@ int ext3_new_block (handle_t *handle, st
  		if (bitmap_nr < 0)
  			goto io_error;
@@ -329,32 +275,6 @@
  	if (fatal) goto out;
  
  	tmp = j + i * EXT3_BLOCKS_PER_GROUP(sb)
-@@ -684,10 +681,21 @@ got_block:
- 	if (tmp == le32_to_cpu(gdp->bg_block_bitmap) ||
- 	    tmp == le32_to_cpu(gdp->bg_inode_bitmap) ||
- 	    in_range (tmp, le32_to_cpu(gdp->bg_inode_table),
--		      sb->u.ext3_sb.s_itb_per_group))
--		ext3_error (sb, "ext3_new_block",
--			    "Allocating block in system zone - "
--			    "block = %u", tmp);
-+		      EXT3_SB(sb)->s_itb_per_group)) {
-+		ext3_error(sb, __FUNCTION__,
-+			   "Allocating block in system zone - block = %u", tmp);
-+
-+		/* Note: This will potentially use up one of the handle's
-+		 * buffer credits.  Normally we have way too many credits,
-+		 * so that is OK.  In _very_ rare cases it might not be OK.
-+		 * We will trigger an assertion if we run out of credits,
-+		 * and we will have to do a full fsck of the filesystem -
-+		 * better than randomly corrupting filesystem metadata.
-+		 */
-+		ext3_set_bit(j, bh->b_data);
-+		goto repeat;
-+	}
-+
- 
- 	/* The superblock lock should guard against anybody else beating
- 	 * us to this point! */
 @@ -796,7 +804,7 @@ got_block:
  	if (!fatal) fatal = err;
  	
@@ -923,16 +843,6 @@
  		     i < EXT3_SB(inode->i_sb)->s_es->s_prealloc_dir_blocks;
  		     i++) {
  			/*
-@@ -1015,8 +1018,8 @@ static int ext3_prepare_write(struct fil
- 			      unsigned from, unsigned to)
- {
- 	struct inode *inode = page->mapping->host;
--	handle_t *handle = ext3_journal_current_handle();
- 	int ret, needed_blocks = ext3_writepage_trans_blocks(inode);
-+	handle_t *handle;
- 
- 	lock_kernel();
- 	handle = ext3_journal_start(inode, needed_blocks);
 @@ -1131,8 +1134,8 @@ static int ext3_commit_write(struct file
  			kunmap(page);
  		}
@@ -1428,8 +1338,8 @@
  	}
 -	inode->u.ext3_i.i_disksize = inode->i_size;
 +	EXT3_I(inode)->i_disksize = inode->i_size;
- 	ext3_mark_inode_dirty(handle, inode);
  	err = ext3_add_nondir(handle, dentry, inode);
+ 	ext3_mark_inode_dirty(handle, inode);
  out_stop:
 --- ./fs/ext3/super.c.orig	Fri Apr 12 10:27:49 2002
 +++ ./fs/ext3/super.c	Tue May  7 16:05:44 2002
