@@ -41,7 +41,8 @@ int obdfs_flush_reqs(struct list_head *page_list,
 /* SYNCHRONOUS I/O for an inode */
 static int obdfs_brw(int rw, struct inode *inode, struct page *page, int create)
 {
-	obd_count	 num_io = 1;
+	obd_count	 num_oa = 1;
+	obd_count	 oa_bufs = 1;
 	struct obdo	*oa;
 	char		*buf = (char *)page_address(page);
 	obd_size	 count = PAGE_SIZE;
@@ -57,8 +58,8 @@ static int obdfs_brw(int rw, struct inode *inode, struct page *page, int create)
 	}
 	obdfs_from_inode(oa, inode);
 
-	err = IOPS(inode, brw)(rw, IID(inode), &num_io, &oa, &buf, &count,
-			       &offset, &flags);
+	err = IOPS(inode, brw)(rw, IID(inode), num_oa, &oa, &oa_bufs, &buf,
+			       &count, &offset, &flags);
 
 	if ( !err )
 		obdfs_to_inode(inode, oa); /* copy o_blocks to i_blocks */
@@ -115,8 +116,7 @@ int obdfs_init_pgrqcache(void)
 
 inline void obdfs_pgrq_del(struct obdfs_pgrq *pgrq)
 {
-		list_del(&pgrq->rq_ilist);
-		list_del(&pgrq->rq_slist);
+		list_del(&pgrq->rq_plist);
 		kmem_cache_free(obdfs_pgrq_cachep, pgrq);
 }
 
@@ -139,11 +139,10 @@ void obdfs_cleanup_pgrqcache(void)
  * Find a specific page in the page cache.  If it is found, we return
  * the write request struct associated with it, if not found return NULL.
  */
-#if 0
 static struct obdfs_pgrq *
-obdfs_find_in_page_cache(struct inode *inode, struct page *page)
+obdfs_find_in_page_list(struct inode *inode, struct page *page)
 {
-	struct list_head *page_list = &OBDFS_LIST(inode);
+	struct list_head *page_list = obdfs_iplist(inode);
 	struct list_head *tmp;
 	struct obdfs_pgrq *pgrq;
 
@@ -156,7 +155,7 @@ obdfs_find_in_page_cache(struct inode *inode, struct page *page)
 	}
 	tmp = page_list;
 	while ( (tmp = tmp->next) != page_list ) {
-		pgrq = list_entry(tmp, struct obdfs_pgrq, rq_list);
+		pgrq = list_entry(tmp, struct obdfs_pgrq, rq_plist);
 		CDEBUG(D_INODE, "checking page %p\n", pgrq->rq_page);
 		if (pgrq->rq_page == page) {
 			CDEBUG(D_INODE, "found page %p in list\n", page);
@@ -167,26 +166,27 @@ obdfs_find_in_page_cache(struct inode *inode, struct page *page)
 
 	EXIT;
 	return NULL;
-} /* obdfs_find_in_page_cache */
-#endif
+} /* obdfs_find_in_page_list */
 
 
-int obdfs_do_vec_wr(struct super_block *sb, obd_count *num_io, 
-			   struct obdo **obdos,
-			   struct page **pages, char **bufs, obd_size *counts,
-			   obd_off *offsets, obd_flag *flags)
+/* call and free pages from Linux page cache */
+int obdfs_do_vec_wr(struct super_block *sb, obd_count num_io,
+		    obd_count num_obdos, struct obdo **obdos,
+		    obd_count *oa_bufs, struct page **pages, char **bufs,
+		    obd_size *counts, obd_off *offsets, obd_flag *flags)
 {
-	int last_io = *num_io;
-	int err;
 	struct obdfs_sb_info *sbi = (struct obdfs_sb_info *)&sb->u.generic_sbp;
+	int err;
+
 	ENTRY;
-	CDEBUG(D_INODE, "writing %d pages in vector\n", last_io);
-	err = OPS(sb, brw)(WRITE, &sbi->osi_conn, num_io, obdos,
+	CDEBUG(D_INODE, "writing %d pages, %d obdos in vector\n",
+	       num_io, num_obdos);
+	err = OPS(sb, brw)(WRITE, &sbi->osi_conn, num_obdos, obdos, oa_bufs,
 				bufs, counts, offsets, flags);
 
 	do {
-		put_page(pages[--last_io]);
-	} while ( last_io > 0 );
+		put_page(pages[--num_io]);
+	} while ( num_io > 0 );
 
 	EXIT;
 	return err;
@@ -200,7 +200,6 @@ int obdfs_do_vec_wr(struct super_block *sb, obd_count *num_io,
 static int obdfs_add_page_to_cache(struct inode *inode, struct page *page)
 {
 	struct obdfs_pgrq *pgrq;
-	int rc = 0; 
 
 	ENTRY;
 	pgrq = kmem_cache_alloc(obdfs_pgrq_cachep, SLAB_KERNEL);
@@ -213,21 +212,29 @@ static int obdfs_add_page_to_cache(struct inode *inode, struct page *page)
 	memset(pgrq, 0, sizeof(*pgrq)); 
 
 	pgrq->rq_page = page;
-	pgrq->rq_inode = inode;
 
 	get_page(pgrq->rq_page);
-	list_add(&pgrq->rq_ilist, obdfs_ilist(inode));
-	list_add(&pgrq->rq_slist, obdfs_slist(inode));
 
+	/* If this page isn't already in the inode page list, add it */
+	if ( !obdfs_find_in_page_list(inode, page) ) {
+		CDEBUG(D_INODE, "adding page %p to inode list %p\n", page,
+		       obdfs_iplist(inode));
+		list_add(&pgrq->rq_plist, obdfs_iplist(inode));
+	}
+
+	/* If inode isn't already on the superblock inodes list, add it */
+	if ( list_empty(obdfs_islist(inode)) ) {
+		CDEBUG(D_INODE, "adding inode %p to superblock list %p\n",
+		       obdfs_islist(inode), obdfs_islist(inode));
+		list_add(obdfs_islist(inode), obdfs_slist(inode));
+	}
+
+	EXIT;
 	/* XXX For testing purposes, we write out the page here.
 	 *     In the future, a flush daemon will write out the page.
 	return 0;
 	 */
-	/*
-	rc = obdfs_flush_reqs(obdfs_slist(inode), 0, 0);
-	*/
-	EXIT;
-	return rc;
+	return obdfs_flush_reqs(obdfs_slist(inode), 0, 0);
 } /* obdfs_add_page_to_cache */
 
 

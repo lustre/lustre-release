@@ -269,7 +269,8 @@ int gen_copy_data(struct obd_conn *dst_conn, struct obdo *dst,
 	 *     and arrays to handle the request parameters.
 	 */
 	while (index < ((src->o_size + PAGE_SIZE - 1) >> PAGE_SHIFT)) {
-		obd_count	 num = 1;
+		obd_count	 num_oa = 1;
+		obd_count	 num_buf = 1;
 		char		*buf;
 		obd_size	 brw_count = PAGE_SIZE;
 		obd_off		 brw_offset = (page->index) << PAGE_SHIFT;
@@ -278,9 +279,9 @@ int gen_copy_data(struct obd_conn *dst_conn, struct obdo *dst,
 		
 		page->index = index;
 		buf = (char *)page_address(page); 
-		err = OBP(src_conn->oc_dev, brw)(READ, src_conn, &num, &src,
-						 &buf, &brw_count, &brw_offset,
-						 &flagr);
+		err = OBP(src_conn->oc_dev, brw)(READ, src_conn, num_oa, &src,
+						 &num_buf, &buf, &brw_count,
+						 &brw_offset, &flagr);
 
 		if ( err ) {
 			EXIT;
@@ -288,9 +289,9 @@ int gen_copy_data(struct obd_conn *dst_conn, struct obdo *dst,
 		}
 		CDEBUG(D_INODE, "Read page %ld ...\n", page->index);
 
-		err = OBP(dst_conn->oc_dev, brw)(WRITE, dst_conn, &num, &dst,
-						 &buf, &brw_count, &brw_offset,
-						 &flagw);
+		err = OBP(dst_conn->oc_dev, brw)(WRITE, dst_conn, num_oa, &dst,
+						 &num_buf, &buf, &brw_count,
+						 &brw_offset, &flagw);
 
 		/* XXX should handle dst->o_size, dst->o_blocks here */
 		if ( err ) {

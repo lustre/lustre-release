@@ -3,6 +3,7 @@
 
 #define OBD_EXT2_RUNIT           _IOWR('f', 61, long)
 
+#include <linux/iobuf.h>
 
 struct ext2_obd {
 	struct super_block * ext2_sb;

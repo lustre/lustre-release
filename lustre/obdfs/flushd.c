@@ -51,55 +51,41 @@ struct {
 } pupd_prm = {40, 500, 64, 256, 5*HZ, 30*HZ, 5*HZ }; 
 
 
-/* Remove writeback requests from an inode */
-int obdfs_flush_reqs(struct list_head *page_list, 
-			    int flush_inode, int check_time)
+static int obdfs_enqueue_pages(struct inode *inode, struct obdo **obdo,
+			       int nr_slots, struct page **pages, char **bufs,
+			       obd_size *counts, obd_off *offsets,
+			       obd_flag *flag, int check_time)
 {
-	struct list_head *tmp = page_list;
-	obd_count	  num_io = 0;
-	struct inode	 *inode = NULL;
-	struct obdo	 *oa = NULL;
-	struct obdo	 *obdos[MAX_IOVEC];
-	struct page	 *pages[MAX_IOVEC];
-	char		 *bufs[MAX_IOVEC];
-	obd_size	  counts[MAX_IOVEC];
-	obd_off		  offsets[MAX_IOVEC];
-	obd_flag	  flags[MAX_IOVEC];
-	int		  err = 0;
-	int i;
+	struct list_head *page_list = obdfs_iplist(inode);
+	struct list_head *tmp;
+	int i = 0;
 
 	ENTRY;
-
-	if (!page_list) {
-		CDEBUG(D_INODE, "no list\n");
+	if (list_empty(obdfs_iplist(inode))) {
+		list_del(obdfs_islist(inode));
+		CDEBUG(D_INODE, "empty list\n");
 		EXIT;
 		return 0;
 	}
 
-	if ( list_empty(page_list)) {
-		CDEBUG(D_INODE, "list empty\n");
+	*obdo = obdo_fromid(IID(inode), inode->i_ino, OBD_MD_FLNOTOBD);
+	if ( IS_ERR(*obdo) ) {
 		EXIT;
-		return 0;
+		return PTR_ERR(*obdo);
 	}
 
+	obdfs_from_inode(*obdo, inode);
+	*flag = OBD_BRW_CREATE;
 
-	/* add all of the outstanding pages to a write vector, and write it */
-	while ( (tmp = tmp->next) != page_list ) {
-		struct obdfs_pgrq *pgrq;
-		struct page	  *page;
-
-		if ( flush_inode )
-			pgrq = list_entry(tmp, struct obdfs_pgrq, rq_ilist);
-		else
-			pgrq = list_entry(tmp, struct obdfs_pgrq, rq_slist);
-		page = pgrq->rq_page;
-		inode = pgrq->rq_inode;
-
-		if ( !inode ) {
-			CDEBUG(D_INODE, "no inode\n");
-			EXIT;
-			return 0;
-		}
+	tmp = page_list;
+	while ( (tmp = tmp->next) != page_list && (i < nr_slots) ) {
+		struct obdfs_pgrq *req;
+		struct page *page;
+		
+		req = list_entry(tmp, struct obdfs_pgrq, rq_plist);
+		/* remove request from list before write to avoid conflict */
+		obdfs_pgrq_del(req);
+		page = req->rq_page;
 
 		if ( !page  ) {
 			CDEBUG(D_INODE, "no page \n");
@@ -107,55 +93,105 @@ int obdfs_flush_reqs(struct list_head *page_list,
 			return 0;
 		}
 
-
 		if (check_time && 
-		    pgrq->rq_jiffies > (jiffies - pupd_prm.age_buffer))
+		    req->rq_jiffies > (jiffies - pupd_prm.age_buffer))
 			continue;
 		
-		oa = obdo_fromid(IID(inode), inode->i_ino, OBD_MD_FLNOTOBD);
-		if ( IS_ERR(oa) ) {
-			EXIT;
-			return PTR_ERR(oa);
-		}
-		obdfs_from_inode(oa, inode);
-
 		CDEBUG(D_INODE, "adding page %p to vector\n", page);
-		obdos[num_io] = oa;
-		bufs[num_io] = (char *)page_address(page);
-		pages[num_io] = page;
-		counts[num_io] = PAGE_SIZE;
-		offsets[num_io] = ((obd_off)page->index) << PAGE_SHIFT;
-		flags[num_io] = OBD_BRW_CREATE;
-		num_io++;
+		bufs[i] = (char *)page_address(page);
+		pages[i] = page;
+		counts[i] = PAGE_SIZE;
+		offsets[i] = ((obd_off)page->index) << PAGE_SHIFT;
+		i++;
+	}
 
-		/* remove request from list before write to avoid conflict */
-		obdfs_pgrq_del(pgrq);
+	/* If no more pages for this inode, remove from superblock list */
+	if ( list_empty(obdfs_iplist(inode)) )
+		list_del(obdfs_islist(inode));
+
+	EXIT;
+	return i;  
+}
+
+
+/* Remove writeback requests from an inode */
+int obdfs_flush_reqs(struct list_head *inode_list, int flush_inode,
+		     int check_time)
+{
+	struct list_head *tmp = inode_list;
+	obd_count	  num_io = 0;
+	obd_count         num_obdos = 0;
+	struct inode	 *inodes[MAX_IOVEC];
+	struct obdo	 *obdos[MAX_IOVEC];
+	struct page	 *pages[MAX_IOVEC];
+	char		 *bufs[MAX_IOVEC];
+	obd_size	  counts[MAX_IOVEC];
+	obd_off		  offsets[MAX_IOVEC];
+	obd_flag	  flags[MAX_IOVEC];
+	obd_count         bufs_per_obdo[MAX_IOVEC];
+	int		  err = 0;
+	int i;
+
+	ENTRY;
+
+	if (!inode_list) {
+		CDEBUG(D_INODE, "no list\n");
+		EXIT;
+		return 0;
+	}
+
+	if ( list_empty(inode_list)) {
+		CDEBUG(D_INODE, "list empty\n");
+		EXIT;
+		return 0;
+	}
+
+
+	/* add all of the outstanding pages to a write vector, and write it */
+	while ( (tmp = tmp->next) != inode_list ) {
+		struct obdfs_inode_info *ii;
+		int res;
+
+		ii = list_entry(tmp, struct obdfs_inode_info, oi_inodes);
+		inodes[num_obdos] = list_entry(ii, struct inode, u);
+
+		res = obdfs_enqueue_pages(inodes[num_obdos], &obdos[num_obdos],
+					  MAX_IOVEC - num_io, &pages[num_io],
+					  &bufs[num_io], &counts[num_io],
+					  &offsets[num_io], &flags[num_obdos],1);
+		if ( res < 0 ) {
+			return -EIO;
+		}
+		
+		bufs_per_obdo[num_obdos] = res;
+		num_io += res;
+		num_obdos++;
 
 		if ( num_io == MAX_IOVEC ) {
-			err = obdfs_do_vec_wr(inode->i_sb, &num_io, obdos, 
-					      pages,
-					      bufs, counts, offsets, flags);
-			for (i = 0 ; i < MAX_IOVEC ; i++) {
+			err = obdfs_do_vec_wr(inodes[0]->i_sb, num_io,
+					      num_obdos, obdos, bufs_per_obdo,
+					      pages, bufs, counts, offsets,
+					      flags);
+			for (i = 0 ; i < num_obdos ; i++) {
+				obdfs_to_inode(inodes[i], obdos[i]);
 				obdo_free(obdos[i]);
+			}
 			if ( err ) {
-				/* XXX Probably should handle error here -
-				 *     discard other writes, or put
-				 *     (MAX_IOVEC - num_io) I/Os back to list?
-				 */
 				EXIT;
 				goto ERR;
 			}
-			}
 			num_io = 0;
+			num_obdos = 0;
 		}
 	} 
 
 	/* flush any remaining I/Os */
 	if ( num_io ) {
-		i = num_io - 1;
-		err = obdfs_do_vec_wr(inode->i_sb, &num_io, obdos, pages, bufs,
+		err = obdfs_do_vec_wr(inodes[0]->i_sb, num_io, num_obdos, 
+				      obdos, bufs_per_obdo, pages, bufs,
 				      counts, offsets, flags);
-		for (  ; i>=0 ; i-- ) {
+		for (i = 0 ; i < num_obdos ; i++) {
+			obdfs_to_inode(inodes[i], obdos[i]);
 			obdo_free(obdos[i]);
 		}
 	}
@@ -176,7 +212,7 @@ static void obdfs_flush_dirty_pages(int check_time)
 			list_entry(sl, struct obdfs_sb_info, osi_list);
 
 		/* walk write requests here, use the sb, check the time */
-		obdfs_flush_reqs(&sbi->osi_pages, 0, 1);
+		obdfs_flush_reqs(&sbi->osi_inodes, 0, 1);
 	}
 
 #if 0

@@ -76,7 +76,7 @@ struct obdo {
 #define OBD_MD_FLGENER	(0x00002000UL)
 #define OBD_MD_FLINLINE	(0x00004000UL)
 #define OBD_MD_FLOBDMD	(0x00008000UL)
-#define OBD_MD_FLNOTOBD	(~(OBD_MD_FLOBDMD | OBD_MD_FLOBDFLG))
+#define OBD_MD_FLNOTOBD	(~(OBD_MD_FLOBDMD | OBD_MD_FLOBDFLG | OBD_MD_FLBLOCKS))
 
 /*
  *  ======== OBD Device Declarations ===========
@@ -151,9 +151,9 @@ struct obd_ops {
 		      obd_size *count, obd_off offset);
 	int (*o_write)(struct obd_conn *conn, struct obdo *oa, char *buf,
 		       obd_size *count, obd_off offset);
-	int (*o_brw)(int rw, struct obd_conn *conn, obd_count *num_io,
-		     struct obdo **oa, char **buf, obd_size *count,
-		     obd_off *offset, obd_flag *flags);
+	int (*o_brw)(int rw, struct obd_conn *conn, obd_count num_oa,
+		     struct obdo **oa, obd_count *oa_bufs, char **buf,
+		     obd_size *count, obd_off *offset, obd_flag *flags);
 	int (*o_punch)(struct obd_conn *conn, struct obdo *tgt, obd_size count,
 		       obd_off offset);
 	int (*o_sync)(struct obd_conn *conn, struct obdo *tgt, obd_size count,
@@ -169,6 +169,9 @@ struct obd_ops {
 
 #define OBT(dev)	dev->obd_type->typ_ops
 #define OBP(dev,op)	dev->obd_type->typ_ops->o_ ## op
+
+/* This value is not arbitrarily chosen.  KIO_STATIC_PAGES from linux/iobuf.h */
+#define MAX_IOVEC	(KIO_STATIC_PAGES - 1)
 
 
 /*

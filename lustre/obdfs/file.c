@@ -79,7 +79,7 @@ struct file_operations obdfs_file_operations = {
 	NULL,			/* readdir - bad */
 	NULL,			/* poll - default */
 	NULL,			/* ioctl */
-	NULL,			/* mmap */
+	generic_file_mmap,	/* mmap */
 	NULL,			/* no special open code */
 	NULL,			/* flush */
 	NULL,			/* no special release code */

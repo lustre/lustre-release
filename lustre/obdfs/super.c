@@ -195,7 +195,7 @@ static struct super_block * obdfs_read_super(struct super_block *sb,
 		goto ERR;
 	}
 
-	INIT_LIST_HEAD(&sbi->osi_pages);
+	INIT_LIST_HEAD(&sbi->osi_inodes);
 
 	sbi->osi_super = sb;
 
@@ -287,13 +287,15 @@ static void obdfs_put_super(struct super_block *sb)
 	EXIT;
 } /* obdfs_put_super */
 
+
 /* all filling in of inodes postponed until lookup */
 void obdfs_read_inode(struct inode *inode)
 {
 	struct obdo *oa;
 
 	ENTRY;
-	oa = obdo_fromid(IID(inode), inode->i_ino, OBD_MD_FLNOTOBD);
+	oa = obdo_fromid(IID(inode), inode->i_ino,
+			 OBD_MD_FLNOTOBD | OBD_MD_FLBLOCKS);
 	if ( IS_ERR(oa) ) {
 		printk("obdfs_read_inode: obdo_fromid failed\n");
 		EXIT;
@@ -302,7 +304,8 @@ void obdfs_read_inode(struct inode *inode)
 
 	ODEBUG(oa);
 	obdfs_to_inode(inode, oa);
-	INIT_LIST_HEAD(obdfs_ilist(inode));
+	INIT_LIST_HEAD(obdfs_iplist(inode)); /* list of dirty pages on inode */
+	INIT_LIST_HEAD(obdfs_islist(inode)); /* list of inodes in superblock */
 
 	obdo_free(oa);
 	OIDEBUG(inode);

@@ -54,15 +54,14 @@ struct dentry *obdfs_follow_link(struct dentry *, struct dentry *, unsigned int)
 struct list_head obdfs_super_list;
 
 struct obdfs_pgrq {
-	struct list_head	 rq_ilist;	/* linked list of req's */
-	struct list_head	 rq_slist;	/* linked list of req's */
-	unsigned long          rq_jiffies;
-	struct inode 		*rq_inode;	/* dentry referenced */
+	struct list_head	 rq_plist;	/* linked list of req's */
+	unsigned long            rq_jiffies;
 	struct page 		*rq_page;	/* page to be written */
 };
+
 inline void obdfs_pgrq_del(struct obdfs_pgrq *pgrq);
-int obdfs_do_vec_wr(struct super_block *sb, obd_count *num_io, 
-			   struct obdo **obdos,
+int obdfs_do_vec_wr(struct super_block *sb, obd_count num_io, obd_count num_oa,
+			   struct obdo **obdos, obd_count *oa_bufs,
 			   struct page **pages, char **bufs, obd_size *counts,
 			   obd_off *offsets, obd_flag *flags);
 
@@ -75,27 +74,33 @@ struct obdfs_sb_info {
 	struct obd_ops		*osi_ops;     
 	ino_t			 osi_rootino; /* which root inode */
 	int			 osi_minor;   /* minor of /dev/obdX */
-	struct list_head	 osi_pages;  /* linked list of inodes to write */
+	struct list_head	 osi_inodes;  /* linked list of dirty inodes */
 };
 
 struct obdfs_inode_info {
 	int		 oi_flags;
+	struct list_head oi_inodes;
 	struct list_head oi_pages;
 	char 		 oi_inline[OBD_INLINESZ];
 };
 
-#define MAX_IOVEC	16
-
-static inline struct list_head *obdfs_ilist(struct inode *inode) 
+static inline struct list_head *obdfs_iplist(struct inode *inode) 
 {
 	struct obdfs_inode_info *info = (struct obdfs_inode_info *)&inode->u.generic_ip;
 
 	return &info->oi_pages;
 }
 
+static inline struct list_head *obdfs_islist(struct inode *inode) 
+{
+	struct obdfs_inode_info *info = (struct obdfs_inode_info *)&inode->u.generic_ip;
+
+	return &info->oi_inodes;
+}
+
 static inline struct list_head *obdfs_slist(struct inode *inode) {
 	struct obdfs_sb_info *sbi = (struct obdfs_sb_info *)(&inode->i_sb->u.generic_sbp);
-	return &sbi->osi_pages;
+	return &sbi->osi_inodes;
 }
 
 #define OBDFS_INFO(inode) ((struct obdfs_inode_info *)(&(inode)->u.generic_ip))
