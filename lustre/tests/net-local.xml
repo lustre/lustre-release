@@ -5,7 +5,7 @@
   <node name="local" uuid="local-UUID">
     <network type='tcp' name='net-local' uuid="net-local-UUID" >
       <server>localhost</server>
-      <port>1234</port>
+      <port>2432</port>
     </network>
     <profile_id num="1" name="local-profile" uuid="local-profile-UUID"/>
   </node>
