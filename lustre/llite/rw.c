@@ -213,8 +213,8 @@ static int ll_commit_write(struct file *file, struct page *page,
         if (!PageLocked(page))
                 LBUG();
 
-        CDEBUG(D_INODE, "commit_page writing (at %d) to %d, count %Ld\n",
-               from, to, (unsigned long long)pg.count);
+        CDEBUG(D_INODE, "commit_page writing (off "LPD64"), count %ld\n",
+               pg.off, pg.count);
 
         err = obd_brw(OBD_BRW_WRITE, ll_i2obdconn(inode), md,
                       1, &pg, ll_sync_io_cb, cbd);
@@ -245,8 +245,8 @@ void ll_truncate(struct inode *inode)
         oa.o_id = md->lmd_object_id;
         oa.o_size = inode->i_size;
 
-        CDEBUG(D_INFO, "calling punch for %ld (all bytes after %Ld)\n",
-               (long)oa.o_id, (unsigned long long)oa.o_size);
+        CDEBUG(D_INFO, "calling punch for "LPX64" (all bytes after "LPD64")\n",
+               oa.o_id, oa.o_size);
 
         err = ll_size_lock(inode, md, oa.o_size, LCK_PW, &lockhs);
         if (err) {
@@ -259,7 +259,7 @@ void ll_truncate(struct inode *inode)
         /* truncate == punch to/from start from/to end:
            set end to -1 for that. */
         err = obd_punch(ll_i2obdconn(inode), &oa, md, inode->i_size,
-                        0xffffffffffffffff);
+                        OBD_PUNCH_EOF);
         if (err)
                 CERROR("obd_truncate fails (%d)\n", err);
         else

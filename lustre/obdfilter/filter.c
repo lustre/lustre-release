@@ -700,10 +700,10 @@ static int filter_truncate(struct lustre_handle *conn, struct obdo *oa,
         int error;
         ENTRY;
 
-        if (end != 0xffffffffffffffff)
+        if (end != OBD_PUNCH_EOF)
                 CERROR("PUNCH not supported, only truncate works\n");
 
-        CDEBUG(D_INODE, "calling truncate for object #"LPD64", valid = %x, "
+        CDEBUG(D_INODE, "calling truncate for object "LPX64", valid = %x, "
                "o_size = "LPD64"\n", oa->o_id, oa->o_valid, start);
         oa->o_size = start;
         error = filter_setattr(conn, oa, NULL);
