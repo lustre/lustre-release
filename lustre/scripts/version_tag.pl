@@ -48,7 +48,7 @@ sub get_latest_mtime
   				#print "$file\n";
 				$pristine=0;
 			}
-				
+
 			if($time_entry && 
 				$file =~ m/\.c$|\.h$|\.am$|\.in$/ && 
 				!($file =~ /lustre\.spec\.in/)){
@@ -60,8 +60,8 @@ sub get_latest_mtime
 				$secs=0;
 				$mon=$months{$mon};
 				if($mon>0 && $mon<13){
-					$secs=timelocal($sec,$min,$hours,$mday,
-							$mon,$year);
+                                        $secs = 47114711;
+#					$secs=timelocal($sec,$min,$hours,$mday,	$mon,$year);
 				}
 				if($secs>$last_mtime){
 					$last_mtime=$secs;
