@@ -98,8 +98,8 @@ int rd_kbfree(char* page, char **start, off_t off, int count, int *eof,
         return len;  
 }
 
-int rd_files(char* page, char **start, off_t off, int count, int *eof, 
-             void *data)
+int rd_filestotal(char* page, char **start, off_t off, int count, int *eof, 
+                  void *data)
 {
         struct obd_device* temp = (struct obd_device*)data;
         struct ost_obd *ost = &temp->u.ost;
@@ -129,8 +129,8 @@ int rd_filesfree(char* page, char **start, off_t off, int count, int *eof,
         
 }
 
-int rd_objgroups(char* page, char **start, off_t off, int count, int *eof, 
-                 void *data)
+int rd_filegroups(char* page, char **start, off_t off, int count, int *eof, 
+                  void *data)
 {
         return 0;
 }
@@ -140,9 +140,9 @@ struct lprocfs_vars status_var_nm_1[] = {
         {"status/blocksize",rd_blksize, 0, 0},
         {"status/kbytesfree", rd_kbfree, 0, 0},
         {"status/kbytestotal", rd_kbtotal, 0, 0},
-        {"status/files", rd_files, 0, 0},
+        {"status/filestotal", rd_filestotal, 0, 0},
         {"status/filesfree", rd_filesfree, 0, 0},
-        {"status/objectgroups", rd_objgroups, 0, 0},
+        {"status/filegroups", rd_filegroups, 0, 0},
         {0}
 };
 

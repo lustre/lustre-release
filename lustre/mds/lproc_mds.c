@@ -114,8 +114,8 @@ int rd_fstype(char* page, char **start, off_t off, int count, int *eof,
  
 }
 
-int rd_files(char* page, char **start, off_t off, int count, int *eof, 
-             void *data)
+int rd_filestotal(char* page, char **start, off_t off, int count, int *eof, 
+                  void *data)
 {
         struct obd_device* temp = (struct obd_device*)data;
         struct mds_obd *mds = &temp->u.mds;
@@ -152,8 +152,8 @@ int rd_filesfree(char* page, char **start, off_t off, int count, int *eof,
         return len; 
 }
 
-int rd_filesets(char* page, char **start, off_t off, int count, int *eof, 
-                void *data)
+int rd_filegroups(char* page, char **start, off_t off, int count, int *eof, 
+                  void *data)
 {
         return 0;
 }
@@ -163,9 +163,9 @@ struct lprocfs_vars status_var_nm_1[]={
         {"status/kbytestotal",rd_kbtotal, 0, 0},
         {"status/kbytesfree", rd_kbfree, 0, 0},
         {"status/fstype", rd_fstype, 0, 0},
-        {"status/files", rd_files, 0, 0},
+        {"status/filestotal", rd_filestotal, 0, 0},
         {"status/filesfree", rd_filesfree, 0, 0},
-        {"status/filesets", rd_filesets, 0, 0},
+        {"status/filegroups", rd_filegroups, 0, 0},
         {0}
 };
 int rd_numrefs(char* page, char **start, off_t off, int count, int *eof, 

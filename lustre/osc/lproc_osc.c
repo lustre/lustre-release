@@ -38,38 +38,32 @@ int rd_blksize(char* page, char **start, off_t off, int count, int *eof,
 {
         return 0;
 }
-int rd_blktotal(char* page, char **start, off_t off, int count, int *eof, 
-                void *data)
+int rd_kbytestotal(char* page, char **start, off_t off, int count, int *eof, 
+                   void *data)
 {
         return 0;
 }
 
-int rd_blkfree(char* page, char **start, off_t off, int count, int *eof, 
-               void *data)
-{
-        return 0;
-}
-
-int rd_kbfree(char* page, char **start, off_t off, int count, int *eof, 
-              void *data)
-{
-        return 0;
-}
-
-int rd_numobjects(char* page, char **start, off_t off, int count, int *eof, 
+int rd_kbytesfree(char* page, char **start, off_t off, int count, int *eof, 
                   void *data)
 {
         return 0;
 }
 
-int rd_objfree(char* page, char **start, off_t off, int count, int *eof, 
-               void *data)
+int rd_filestotal(char* page, char **start, off_t off, int count, int *eof, 
+                  void *data)
 {
         return 0;
 }
 
-int rd_objgroups(char* page, char **start, off_t off, int count, int *eof, 
+int rd_filesfree(char* page, char **start, off_t off, int count, int *eof, 
                  void *data)
+{
+        return 0;
+}
+
+int rd_filegroups(char* page, char **start, off_t off, int count, int *eof, 
+                  void *data)
 {
         return 0;
 }
@@ -100,13 +94,12 @@ int rd_conn_uuid(char* page, char **start, off_t off, int count, int *eof,
 
 struct lprocfs_vars status_var_nm_1[] = {
         {"status/uuid", rd_uuid, 0, 0},
-        {"status/f_blocksize",rd_blksize, 0, 0},
-        {"status/f_blockstotal",rd_blktotal, 0, 0},
-        {"status/f_blocksfree",rd_blkfree, 0, 0},
-        {"status/f_kbytesfree", rd_kbfree, 0, 0},
-        {"status/f_objects", rd_numobjects, 0, 0},
-        {"status/f_objectsfree", rd_objfree, 0, 0},
-        {"status/f_objectgroups", rd_objgroups, 0, 0},
+        {"status/blocksize",rd_blksize, 0, 0},
+        {"status/kbytestotal", rd_kbytestotal, 0, 0},
+        {"status/kbytesfree", rd_kbytesfree, 0, 0},
+        {"status/filestotal", rd_filestotal, 0, 0},
+        {"status/filesfree", rd_filesfree, 0, 0},
+        {"status/filegroups", rd_filegroups, 0, 0},
         {"status/ost_server_uuid", rd_server_uuid, 0, 0},
         {"status/ost_conn_uuid", rd_conn_uuid, 0, 0},
         {0}
