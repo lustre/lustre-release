@@ -1,0 +1,193 @@
+#!/bin/bash
+
+cluster=adev
+servers=(4 7)
+server_disks=([4]=sdd [7]=sdd)
+clients=(8-15 0-1)
+
+min_clients=1
+max_clients=10
+
+per_client_size=4G
+transfer_size=1M
+tasks_per_client=1
+file_per_task=1
+
+IOR="/home/ericb/ior/src/C/IOR"
+script="/home/ericb/eeb_ior_script"
+
+testfile=/mnt/lustre/ior_survey_testfile
+
+
+################################################################################
+cat > $script <<EOF
+IOR START
+#                                      -f <this file>
+#   blockSize=<set from cmdline>       -b 8G
+#   transferSize=<set from cmdline>    -t 1M
+#   filePerProc=<set from cmdline>     -F
+#   testFile=<set from cmdline>        -o /mnt/lustre/ior_testfile
+#   uniqueDir=<set from cmdline>       -u
+#   verbose=<set from cmdline>         -v
+#   reorderTasks=<set from cmdline>    -C
+
+# unused options  
+#   collective=0 (MPI only)
+#   individualDataSets=0 [not working]
+#   noFill=0 (HDF5 only)    
+#   preallocate=0 (MPI only)
+#   useSharedFilePointer=0 [not working]
+#   useFileView=<MPI only>
+#   useStridedDataType=0(MPI only)
+#   showHints=0
+#   showHelp=0
+
+# setup
+    api=POSIX
+    fsync=1
+    repetitions=1
+    useO_DIRECT=0
+    interTestDelay=10
+    intraTestBarriers=1
+    storeFileOffset=0
+    quitOnError=1
+    segmentCount=1
+    singleXferAttempt=0
+
+# write
+    readFile=0
+    writeFile=1
+    useExistingTestFile=0
+    keepFile=1
+    RUN
+
+# rewrite
+    useExistingTestFile=1
+    RUN
+
+# read
+    readFile=1
+    writeFile=0
+    useExistingTestFile=1
+    RUN
+
+# reread (bug in ior means it needs each run needs at least 1 directive)
+    readFile=1
+    RUN
+
+# write again
+    readFile=0
+    writeFile=1
+    useExistingTestFile=1
+    keepFile=0
+    RUN
+IOR STOP
+
+EOF
+
+################################################################################
+
+count_range() {
+    echo $1 | awk '{ nvals=split($1, vals, "-");\
+	             if (nvals == 1) print 1;\
+	             else if (nvals == 2) printf "%d\n", vals[2] - vals[1] + 1;}'
+}
+
+base_range() {
+    echo $1 | awk '{ split($1, vals, "-"); print vals[1]; }'
+}
+
+idx2nodenum() {
+    n=$1; shift
+    while ((1)); do
+	range=$1; shift
+	if [ -z "$range" ]; then
+	    return
+	fi
+	chunk=`count_range $range`
+	if ((chunk > n)); then
+	    base=`base_range $range`
+	    echo $((base + n))
+	    return
+	fi
+	n=$((n-chunk))
+    done
+}
+
+n2noderange() {
+    n=$1; shift
+    sep=""
+    nodes="["
+    while ((n > 0)); do
+	range=$1; shift
+	if [ -z "$range" ]; then
+            return
+	fi
+	base=`base_range $range`
+	chunk=`count_range $range`
+	if ((chunk > n)); then chunk=n; fi
+	nodes="${nodes}${sep}${base}"; sep=","
+	if ((chunk > 1)); then nodes="${nodes}-$((base+chunk-1))"; fi
+	n=$((n-chunk))
+    done
+    echo "${nodes}]"
+}
+
+countnodes() {
+    radix=16384
+    n=0
+    while ((radix > 0)); do
+	nodes=`n2noderange $((n+radix)) $@`
+	if [ -n "$nodes" ]; then
+	    n=$((n+radix))
+        fi
+	radix=$((radix/2))
+    done
+    echo $n
+}
+
+parse_number() {
+    str=$1
+    case $str in
+	*G|*g) n=`echo $str | sed 's/[gG]//'`; echo $((n*1024*1024*1024));;
+	*M|*m) n=`echo $str | sed 's/[Mm]//'`; echo $((n*1024*1024));;
+	*K|*k) n=`echo $str | sed 's/[Kk]//'`; echo $((n*1024));;
+	*)     echo $1;;
+    esac
+}
+
+pp_number() {
+    n=$1
+    G=$((1024*1024*1024))
+    M=$((1024*1024))
+    K=$((1024))
+    if ((n%G == 0 && n >= G)); then
+	echo "$((n/G))G"
+    elif ((n%M == 0 && n >= M)); then
+	echo "$((n/M))M"
+    elif ((n%K == 0 && n >= K)); then
+	echo "$((n/K))K"
+    else
+	echo $n
+    fi
+}
+
+nservers=`countnodes ${servers[@]}`
+nclients=`countnodes ${clients[@]}`
+
+if ((max_clients > nclients)); then max_clients=$nclients; fi
+if ((file_per_task)); then minusFopt=-F; else minusFopt=""; fi
+
+for ((i=min_clients - 1;i<max_clients;i++)); do
+    tc=`printf "%3d tasks, %4d clients" $tasks_per_client $((i+1))`
+    echo "=================================== $tc ================================================"
+
+    clients="${cluster}`n2noderange $((i+1)) ${clients[@]}`"
+    per_task_size=$((`parse_number $per_client_size`/tasks_per_client))
+    per_task_size=`pp_number $per_task_size`
+
+    pdsh -b -Rmqsh -w "$clients" -n $tasks_per_client \
+         $IOR -b${per_task_size} -t${transfer_size} $minusFopt -o $testfile -f $script
+
+done
+
