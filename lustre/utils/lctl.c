@@ -79,7 +79,7 @@ command_t cmdlist[] = {
         {"add_peer", jt_ptl_add_peer, 0, "add an peer entry\n"
          "usage: add_peer <nid> <host> <port>"},
         {"del_peer", jt_ptl_del_peer, 0, "remove an peer entry\n"
-         "usage: del_peer [<nid>] [<host>] [ks]"},
+         "usage: del_peer [<nid> [<netid> [<host> [ks]]]]"},
         {"conn_list", jt_ptl_print_connections, 0, "print all the connected remote nid\n"
          "usage: conn_list"},
         {"connect", jt_ptl_connect, 0, "connect to a remote nid\n"
@@ -91,7 +91,7 @@ command_t cmdlist[] = {
         {"mynid", jt_ptl_mynid, 0, "inform the socknal of the local nid. "
          "The nid defaults to hostname for tcp networks and is automatically "
          "setup for elan/myrinet networks.\n"
-         "usage: mynid [<nid>]"},
+         "usage: mynid [<netid> [<nid>]]"},
         {"shownid", jt_ptl_shownid, 0, "print the local NID\n"
          "usage: shownid"},
         {"add_uuid", jt_lcfg_add_uuid, 0, "associate a UUID with a nid\n"
