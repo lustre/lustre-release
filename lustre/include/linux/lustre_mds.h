@@ -44,6 +44,8 @@ struct obd_device;
 #define LUSTRE_MDC_NAME "mdc"
 
 struct mds_update_record {
+        __u32 ur_fsuid;
+        __u32 ur_fsgid;
         __u32 ur_opcode;
         struct ll_fid *ur_fid1;
         struct ll_fid *ur_fid2;

@@ -20,6 +20,8 @@
 #define DEBUG_SUBSYSTEM S_OSC
 
 #include <linux/module.h>
+#include <linux/mm.h>
+#include <linux/highmem.h>
 #include <linux/lustre_dlm.h>
 #include <linux/lustre_mds.h> /* for mds_objid */
 #include <linux/obd_ost.h>

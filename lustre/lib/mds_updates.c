@@ -78,6 +78,9 @@ static void mds_pack_body(struct mds_body *b)
         if (b == NULL)
                 LBUG();
 
+        b->fsuid = HTON__u32(current->fsuid);
+        b->fsgid = HTON__u32(current->fsgid);
+
         mds_pack_fid(&b->fid1);
         mds_pack_fid(&b->fid2);
         b->extra = HTON__u64(b->extra);
@@ -138,6 +141,8 @@ void mds_create_pack(struct ptlrpc_request *req, int offset,
 
         /* XXX do something about time, uid, gid */
         rec->cr_opcode = HTON__u32(REINT_CREATE);
+        rec->cr_fsuid = HTON__u32(current->fsuid);
+        rec->cr_fsgid = HTON__u32(current->fsgid);
         ll_inode2fid(&rec->cr_fid, inode);
         rec->cr_mode = HTON__u32(mode);
         rec->cr_rdev = HTON__u64(rdev);
@@ -162,6 +167,8 @@ void mds_setattr_pack(struct ptlrpc_request *req, int offset,
         rec = lustre_msg_buf(req->rq_reqmsg, offset);
 
         rec->sa_opcode = HTON__u32(REINT_SETATTR);
+        rec->sa_fsuid = HTON__u32(current->fsuid);
+        rec->sa_fsgid = HTON__u32(current->fsgid);
         ll_inode2fid(&rec->sa_fid, inode);
         rec->sa_valid = HTON__u32(iattr->ia_valid);
         rec->sa_mode = HTON__u32(iattr->ia_mode);
@@ -190,6 +197,8 @@ void mds_unlink_pack(struct ptlrpc_request *req, int offset,
         rec = lustre_msg_buf(req->rq_reqmsg, offset);
 
         rec->ul_opcode = HTON__u32(REINT_UNLINK);
+        rec->ul_fsuid = HTON__u32(current->fsuid);
+        rec->ul_fsgid = HTON__u32(current->fsgid);
         rec->ul_mode = HTON__u32(mode);
         ll_inode2fid(&rec->ul_fid1, inode);
         if (child)
@@ -209,6 +218,8 @@ void mds_link_pack(struct ptlrpc_request *req, int offset,
         rec = lustre_msg_buf(req->rq_reqmsg, offset);
 
         rec->lk_opcode = HTON__u32(REINT_LINK);
+        rec->lk_fsuid = HTON__u32(current->fsuid);
+        rec->lk_fsgid = HTON__u32(current->fsgid);
         ll_inode2fid(&rec->lk_fid1, inode);
         ll_inode2fid(&rec->lk_fid2, dir);
 
@@ -227,6 +238,8 @@ void mds_rename_pack(struct ptlrpc_request *req, int offset,
 
         /* XXX do something about time, uid, gid */
         rec->rn_opcode = HTON__u32(REINT_RENAME);
+        rec->rn_fsuid = HTON__u32(current->fsuid);
+        rec->rn_fsgid = HTON__u32(current->fsgid);
         ll_inode2fid(&rec->rn_fid1, srcdir);
         ll_inode2fid(&rec->rn_fid2, tgtdir);
 
@@ -252,6 +265,8 @@ void mds_unpack_body(struct mds_body *b)
         if (b == NULL)
                 LBUG();
 
+        b->fsuid = NTOH__u32(b->fsuid);
+        b->fsgid = NTOH__u32(b->fsgid);
         mds_unpack_fid(&b->fid1);
         mds_unpack_fid(&b->fid2);
         b->extra = NTOH__u64(b->extra);
@@ -282,6 +297,8 @@ static int mds_setattr_unpack(struct ptlrpc_request *req, int offset,
             req->rq_reqmsg->buflens[offset] != sizeof(*rec))
                 RETURN(-EFAULT);
 
+        r->ur_fsuid = NTOH__u32(rec->sa_fsuid);
+        r->ur_fsgid = NTOH__u32(rec->sa_fsgid);
         r->ur_fid1 = &rec->sa_fid;
         attr->ia_valid = NTOH__u32(rec->sa_valid);
         attr->ia_mode = NTOH__u32(rec->sa_mode);
@@ -312,6 +329,8 @@ static int mds_create_unpack(struct ptlrpc_request *req, int offset,
             req->rq_reqmsg->buflens[offset] != sizeof(*rec))
                 RETURN(-EFAULT);
 
+        r->ur_fsuid = NTOH__u32(rec->cr_fsuid);
+        r->ur_fsgid = NTOH__u32(rec->cr_fsgid);
         r->ur_fid1 = &rec->cr_fid;
         r->ur_mode = NTOH__u32(rec->cr_mode);
         r->ur_rdev = NTOH__u64(rec->cr_rdev);
@@ -337,6 +356,8 @@ static int mds_link_unpack(struct ptlrpc_request *req, int offset,
             req->rq_reqmsg->buflens[offset] != sizeof(*rec))
                 RETURN(-EFAULT);
 
+        r->ur_fsuid = NTOH__u32(rec->lk_fsuid);
+        r->ur_fsgid = NTOH__u32(rec->lk_fsgid);
         r->ur_fid1 = &rec->lk_fid1;
         r->ur_fid2 = &rec->lk_fid2;
 
@@ -355,6 +376,8 @@ static int mds_unlink_unpack(struct ptlrpc_request *req, int offset,
             req->rq_reqmsg->buflens[offset] != sizeof(*rec))
                 RETURN(-EFAULT);
 
+        r->ur_fsuid = NTOH__u32(rec->ul_fsuid);
+        r->ur_fsgid = NTOH__u32(rec->ul_fsgid);
         r->ur_mode = NTOH__u32(rec->ul_mode);
         r->ur_fid1 = &rec->ul_fid1;
         r->ur_fid2 = &rec->ul_fid2;
@@ -374,6 +397,8 @@ static int mds_rename_unpack(struct ptlrpc_request *req, int offset,
             req->rq_reqmsg->buflens[offset] != sizeof(*rec))
                 RETURN(-EFAULT);
 
+        r->ur_fsuid = NTOH__u32(rec->rn_fsuid);
+        r->ur_fsgid = NTOH__u32(rec->rn_fsgid);
         r->ur_fid1 = &rec->rn_fid1;
         r->ur_fid2 = &rec->rn_fid2;
 

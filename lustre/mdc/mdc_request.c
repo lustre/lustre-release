@@ -125,6 +125,7 @@ int mdc_getattr(struct lustre_handle *conn,
         body = lustre_msg_buf(req->rq_reqmsg, 0);
         ll_ino2fid(&body->fid1, ino, 0, type);
         body->valid = valid;
+        mds_pack_req_body(req); 
 
         if (S_ISREG(type)) {
                 struct client_obd *mdc = &class_conn2obd(conn)->u.cli;
