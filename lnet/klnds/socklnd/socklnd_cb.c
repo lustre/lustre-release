@@ -213,7 +213,9 @@ ksocknal_send_kiov (ksock_conn_t *conn, ksock_tx_t *tx)
                 struct iovec *scratchiov = &scratch;
                 int           niov = 1;
 #else
+#ifdef CONFIG_HIGHMEM
 #warning "XXX risk of kmap deadlock on multiple frags..."
+#endif
                 struct iovec *scratchiov = conn->ksnc_tx_scratch_iov;
                 int           niov = tx->tx_nkiov;
 #endif
@@ -456,10 +458,12 @@ ksocknal_recv_kiov (ksock_conn_t *conn)
         struct iovec *scratchiov = &scratch;
         int           niov = 1;
 #else
+#ifdef CONFIG_HIGHMEM
 #warning "XXX risk of kmap deadlock on multiple frags..."
+#endif
         struct iovec *scratchiov = conn->ksnc_rx_scratch_iov;
         int           niov = conn->ksnc_rx_nkiov;
-#endif   
+#endif
         ptl_kiov_t   *kiov = conn->ksnc_rx_kiov;
         struct msghdr msg = {
                 .msg_name       = NULL,

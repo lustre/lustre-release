@@ -113,7 +113,7 @@
 #else
 # define SOCKNAL_RISK_KMAP_DEADLOCK  1
 #endif
-                                                
+
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,72))
 # define sk_allocation  allocation
 # define sk_data_ready	data_ready
