@@ -1116,13 +1116,14 @@ sub HTML_rightpane
 	print $HTMHANDLE $summary_indent_string x $summary_indent;
 	print $HTMHANDLE "$text\n</A>";
     } elsif ($text =~ /rpcxid #(\d+)(.*)/) {
-	if ($text =~ /link=/) {
-	    $tmprpc = shift;
-	    $pidhashref = shift;
 	    my $allexist = ($tmprpc->[$e_srvRPCent] &&
 			    $tmprpc->[$e_srvRPCexit] &&
 			    $tmprpc->[$e_cliRPCent] &&
 			    $tmprpc->[$e_cliRPCexit]);
+	 if ($text =~ /link=/) {
+	     $tmprpc = shift;
+	     $pidhashref = shift;
+	     
 	    if ($tmprpc->[$e_rpcopc] < 104) {
 		$anchortag = sprintf "%s_%s_%s_%s", 
 		$tmprpc->[$e_rpcopc], $tmprpc->[$e_rpcxid],
