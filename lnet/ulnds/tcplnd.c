@@ -64,8 +64,7 @@ int tcpnal_send(nal_cb_t *n,
 {
     connection c;
     bridge b=(bridge)n->nal_data;
-    struct iovec tiov[2];
-    int count = 1;
+    struct iovec tiov[65];
 
     if (!(c=force_tcp_connection((manager)b->lower,
                                  PNAL_IP(nid,b),
@@ -83,18 +82,15 @@ int tcpnal_send(nal_cb_t *n,
     LASSERT (niov <= 1);
     if (len) syscall(SYS_write, c->fd,iov[0].iov_base,len);
 #else
-    LASSERT (niov <= 1);
+    LASSERT (niov <= 64);
 
     tiov[0].iov_base = hdr;
     tiov[0].iov_len = sizeof(ptl_hdr_t);
 
-    if (len) {
-            tiov[1].iov_base = iov[0].iov_base;
-            tiov[1].iov_len = len;
-            count++;
-    }
+    if (niov > 0)
+            memcpy(&tiov[1], iov, niov * sizeof(struct iovec));
 
-    syscall(SYS_writev, c->fd, tiov, count);
+    syscall(SYS_writev, c->fd, tiov, niov+1);
 #endif
     lib_finalize(n, private, cookie);
         
