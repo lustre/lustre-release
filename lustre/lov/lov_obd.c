@@ -542,7 +542,7 @@ static __u64 lov_offset(struct lov_stripe_md *lsm, __u64 lov_off, int stripeno)
         else
                 stripe_off -= stripeno * ssize;
 
-        return lov_off + stripe_off;
+        return lov_off * ssize + stripe_off;
 }
 
 /* compute which stripe offset "lov_off" will be written into */
