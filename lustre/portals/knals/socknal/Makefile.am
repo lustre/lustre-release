@@ -11,7 +11,7 @@ EXTRA_PROGRAMS = ksocknal
 
 # If you don't build with -O2, your modules won't insert, becahse htonl is
 # just special that way.
-CFLAGS += -O2
+AM_CFLAGS = -O2
 
 DEFS =
 ksocknal_SOURCES = socknal.c socknal_cb.c socknal.h

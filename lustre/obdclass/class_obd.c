@@ -916,7 +916,7 @@ static void cleanup_obdclass(void)
  * kernel patch */
 #ifdef __KERNEL__
 #include <linux/lustre_version.h>
-#define LUSTRE_MIN_VERSION 23
+#define LUSTRE_MIN_VERSION 21
 #define LUSTRE_MAX_VERSION 23
 #if (LUSTRE_KERNEL_VERSION < LUSTRE_MIN_VERSION)
 # error Cannot continue: Your Lustre kernel patch is older than the sources

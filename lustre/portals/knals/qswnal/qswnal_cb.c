@@ -674,6 +674,7 @@ kqswnal_sendmsg (nal_cb_t     *nal,
         rc = kqswnal_launch (ktx);
         if (rc != 0) {                    /* failed? */
                 CERROR ("Failed to send packet to "LPX64": %d\n", nid, rc);
+                kqswnal_put_idle_tx (ktx);
                 return (PTL_FAIL);
         }
 
