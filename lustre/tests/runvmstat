@@ -1,2 +1,5 @@
 #!/bin/sh
-vmstat 1 | while read LINE ; do echo "`date +%s`: $LINE" ; done
+vmstat 1 | while read LINE ; do
+	echo "`date +s`: $LINE"
+	[ "$1" ] && echo "`date +s`: $LINE" >> $1
+done
