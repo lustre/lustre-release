@@ -22,50 +22,68 @@ EXTNI = extN_fs.h extN_fs_i.h extN_fs_sb.h extN_jbd.h
 EXTN_EXTRA = include/linux/xattr.h include/linux/extN_xattr.h fs/extN/xattr.c fs/extN/hash.c include/linux/extN_fs.h
 extN_SOURCES = $(EXTNC) xattr.c # punch.c
 extN_DEPENDENCIES = patch-stamp
-EXTRA_DIST = $(EXTNP) extN-2.4.18-ino_sb_fixup.diff extN-2.4.18-exports.diff
-DISTCLEANFILES = $(extN_SOURCES) patch-stamp *.orig *.rej
+EXTRA_DIST = $(EXTNP) extN-2.4.18-ino_sb_fixup.diff extN-2.4.18-exports.diff \
+	$(wildcard extN.patch-*)
+DISTCLEANFILES = $(extN_SOURCES) sed-stamp patch-stamp *.orig *.rej
 SUB=-e "s/ext3/extN/g" -e "s/EXT3/EXTN/g"
 
 include $(top_srcdir)/Rules
 
-# Create a fresh ext2 patch.
+# Create a fresh extN patch.
+# This is for when the patch-stamp target fails for your kernel.
+# Just edit the files until you like them, then do `make diff', and
+# it will create a specialized patch for your particular kernel.
+# Check it in, and the build should work for you without disrupting
+# the other developers.
+# Of course, the ideal is to merge changes so that the default patch
+# set works for nearly everybody.  This is mainly for damage control.
 diff:
 	$(RM) extN.patchT
-	for f in $(EXTNC); do diff -u $(top_srcdir)/fs/extN/$$f $$f >> extN.patchT ; done
-	mv -f ext2.patchT $(srcdir)/ext2.patch-$(RELEASE)
+	for f in $(EXTNC); do diff -u extN.orig/$$f $$f >> extN.patchT ; done
+	mv -f extN.patchT $(srcdir)/extN.patch-$(RELEASE)
+	f=extN.patch-$(RELEASE); if cvs update $$f 2>&1 | grep 'cvs add' >/dev/null; then \
+	  cvs add $$f; \
+	fi
 .PHONY: diff
+
+# Just do the SUB transformation on all our source files.
+sed-stamp:
+	$(RM) $@
+	rm -rf extN.orig extN.orig-include
+	mkdir extN.orig extN.orig-include
+	set -vx;                                                              \
+	list='$(EXTNC)'; for f in $$list; do                                  \
+	sed $(SUB) $(LINUX)/fs/ext3/$$f > extN.orig/$$f;	          \
+	done
+	set -vx;                                                              \
+	list='$(EXTNI)'; for i in $$list; do                                  \
+	s=`echo $$i | sed "s/extN/ext3/"`;                                    \
+	sed $(SUB) $(LINUX)/include/linux/$$s >                               \
+		extN.orig-include/$$i;                              \
+	done
+	echo timestamp > $@
 
 # Patch the kernel files with our ext3 patches.  We need to go through some
 # extra hoops because the include files are in a different tree and because
 # patch likes to make local copies of files with (sym)links when it is patching
 # them.  To avoid this, we copy/patch in the source dir instead of the build
 # dir (if they are different).
-patch-stamp: $(EXTNP)
-	$(RM) $@
-	test -e $(top_srcdir)/fs || ln -sf . $(top_srcdir)/fs
-	set -vx;                                                              \
-	list='$(EXTN_EXTRA)'; for f in $$list; do $(RM) $(top_srcdir)/$$f; done
-	set -vx;                                                              \
-	list='$(EXTNC)'; for f in $$list; do                                  \
-	sed $(SUB) $(LINUX)/fs/ext3/$$f > $(top_srcdir)/fs/extN/$$f;          \
-	done
-	set -vx;                                                              \
-	list='$(EXTNI)'; for i in $$list; do                                  \
-	s=`echo $$i | sed "s/extN/ext3/"`;                                    \
-	sed $(SUB) $(LINUX)/include/linux/$$s >                               \
-		$(top_srcdir)/include/linux/$$i;                              \
-	done
+# We also want to preserve the pristine transformed files for the diff target.
+patch-stamp: sed-stamp $(EXTNP)
+	cp -a extN.orig/* $(srcdir)
+	cp -a extN.orig-include/* $(top_srcdir)/include/linux
+	test -e $(top_srcdir)/fs || ln -s . $(top_srcdir)/fs
 	set -vx;                                                              \
 	if [ -f $(srcdir)/extN.patch-$(RELEASE) ]; then                       \
-		patch -p0 < $(srcdir)/extN.patch-$(RELEASE);                  \
+		(cd $(srcdir) && patch -p0) < $(srcdir)/extN.patch-$(RELEASE);                  \
 	else                                                                  \
 		echo "If first patch fails, read NOTE in extN/Makefile.am";   \
 		list='$(EXTNP)'; for p in $$list; do                          \
-		sed $(SUB) $(srcdir)/$$p|(cd $(top_srcdir);patch -p1)||exit -1;\
+		sed $(SUB) $(srcdir)/$$p | (cd $(top_srcdir) && patch -p1) || exit $$?;\
 		done;                                                         \
 		echo "It is OK if the following patch fails";		      \
-		(cd $(top_srcdir); patch -N -p1) < $(srcdir)/extN-2.4.18-exports.diff; \
-		(cd $(top_srcdir); patch -p1) < $(srcdir)/extN-2.4.18-ino_sb_fixup.diff; \
+		(cd $(top_srcdir) && patch -N -p1) < $(srcdir)/extN-2.4.18-exports.diff; \
+		(cd $(top_srcdir) && patch -p1) < $(srcdir)/extN-2.4.18-ino_sb_fixup.diff || exit $$?; \
 	fi
 	echo timestamp > $@
 
