@@ -47,6 +47,30 @@ stop() {
     do_facet $facet $LCONF --select ${facet}1=${active}_facet --node ${active}_facet $@ --cleanup $XMLCONFIG
 }
 
+zconf_mount() {
+    mnt=$1
+
+    [ -d $mnt ] || mkdir $mnt
+    
+    if [ -x /sbin/mount.lustre ] ; then
+	mount -t lustre `facet_host mds`:/mds1/client_facet $mnt
+    else
+       insmod $LUSTRE/llite/llite.o || :
+       $LUSTRE/utils/llmount `facet_host mds`:/mds1/client_facet $mnt
+    fi
+
+    [ -d /r ] && $LCTL modules > /r/tmp/ogdb-`hostname`
+
+    echo $TIMEOUT > /proc/sys/lustre/timeout
+    echo $UPCALL > /proc/sys/lustre/upcall
+}
+
+zconf_umount() {
+    mnt=$1
+    umount  $mnt || :
+    rmmod llite || :
+}
+
 replay_barrier() {
     local facet=$1
     do_facet $facet sync
