@@ -410,6 +410,7 @@ static void ll_read_inode2(struct inode *inode, void *opaque)
         ENTRY;
 
         sema_init(&ii->lli_open_sem, 1);
+        INIT_LIST_HEAD(&ii->lli_osc_locks);
 
         /* core attributes first */
         if (body->valid & OBD_MD_FLID)

@@ -111,13 +111,14 @@ typedef int (*ldlm_blocking_callback)(struct ldlm_lock *lock,
 typedef int (*ldlm_completion_callback)(struct ldlm_lock *lock, int flags); 
 
 struct ldlm_lock {
-        __u64                  l_random;
+        __u64                 l_random;
         int                   l_refc;
         struct ldlm_resource *l_resource;
         struct ldlm_lock     *l_parent;
         struct list_head      l_children;
         struct list_head      l_childof;
         struct list_head      l_res_link; /*position in one of three res lists*/
+        struct list_head      l_inode_link; /* position in inode info list */
 
         ldlm_mode_t           l_req_mode;
         ldlm_mode_t           l_granted_mode;

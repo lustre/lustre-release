@@ -136,6 +136,8 @@ static int ll_file_release(struct inode *inode, struct file *file)
         struct obdo *oa;
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct ll_inode_info *lli = ll_i2info(inode);
+        struct obd_device *obddev = class_conn2obd(&sbi->ll_osc_conn);
+        struct list_head *tmp, *next;
 
         ENTRY;
 
@@ -184,6 +186,23 @@ static int ll_file_release(struct inode *inode, struct file *file)
                 GOTO(out, rc);
         }
         ptlrpc_free_req(fd->fd_req);
+
+        l_lock(&obddev->obd_namespace->ns_lock);
+        list_for_each_safe(tmp, next, &lli->lli_osc_locks) {
+                struct ldlm_lock *lock;
+                struct lustre_handle lockh;
+                lock = list_entry(tmp, struct ldlm_lock, l_inode_link);
+
+                if (!list_empty(&lock->l_inode_link)) {
+                        list_del_init(&lock->l_inode_link);
+                        LDLM_LOCK_PUT(lock);
+                }
+                ldlm_lock2handle(lock, &lockh);
+                rc = ldlm_cli_cancel(&lockh);
+                if (rc < 0)
+                        CERROR("ldlm_cli_cancel: %d\n", rc);
+        }
+        l_unlock(&obddev->obd_namespace->ns_lock);
 
         EXIT;
 
@@ -236,15 +255,22 @@ static int ll_lock_callback(struct ldlm_lock *lock, struct ldlm_lock_desc *new,
         if (data_len != sizeof(struct inode))
                 LBUG();
 
-        /* FIXME: do something better than throwing away everything */
         if (inode == NULL)
                 LBUG();
         down(&inode->i_sem);
         CDEBUG(D_INODE, "invalidating obdo/inode %ld\n", inode->i_ino);
+        /* FIXME: do something better than throwing away everything */
         invalidate_inode_pages(inode);
         up(&inode->i_sem);
 
         ldlm_lock2handle(lock, &lockh);
+        l_lock(&lock->l_resource->lr_namespace->ns_lock);
+        if (!list_empty(&lock->l_inode_link)) {
+                list_del_init(&lock->l_inode_link);
+                LDLM_LOCK_PUT(lock);
+        }
+        l_unlock(&lock->l_resource->lr_namespace->ns_lock);
+
         rc = ldlm_cli_cancel(&lockh);
         if (rc != ELDLM_OK)
                 CERROR("ldlm_cli_cancel failed: %d\n", rc);
@@ -268,7 +294,7 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
         if (!(fd->fd_flags & LL_FILE_IGNORE_LOCK)) {
                 OBD_ALLOC(lockhs, md->lmd_stripe_count * sizeof(*lockhs));
                 if (!lockhs)
-                        RETURN(-ENOMEM); 
+                        RETURN(-ENOMEM);
 
                 extent.start = *ppos;
                 extent.end = *ppos + count;
@@ -280,7 +306,7 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
                                   ll_lock_callback, inode, sizeof(*inode),
                                   lockhs);
                 if (err != ELDLM_OK) {
-                        OBD_FREE(lockhs, md->lmd_stripe_count * sizeof(*lockhs));
+                        OBD_FREE(lockhs, md->lmd_stripe_count *sizeof(*lockhs));
                         CERROR("lock enqueue: err: %d\n", err);
                         RETURN(err);
                 }

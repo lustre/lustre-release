@@ -211,6 +211,7 @@ static struct dentry *ll_lookup2(struct inode * dir, struct dentry *dentry,
                 if (err) {
                         CERROR("failure %d inode %Ld\n", err, (long long)ino);
                         ptlrpc_free_req(request);
+#warning FIXME: must release lock here
                         RETURN(ERR_PTR(-abs(err)));
                 }
         }

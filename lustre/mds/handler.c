@@ -430,6 +430,52 @@ int mds_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
         RETURN(0);
 }
 
+static int mds_getattr_internal(struct mds_obd *mds, struct dentry *dentry,
+                                struct ptlrpc_request *req,
+                                int request_off, int reply_off)
+{
+        struct mds_body *request_body, *body;
+        struct inode *inode = dentry->d_inode;
+        int rc;
+        ENTRY;
+
+        if (inode == NULL)
+                RETURN(-ENOENT);
+
+        /* Did the client request the link name? */
+        request_body = lustre_msg_buf(req->rq_reqmsg, request_off);
+        body = lustre_msg_buf(req->rq_repmsg, reply_off);
+        if ((body->valid & OBD_MD_LINKNAME) && S_ISLNK(inode->i_mode)) {
+                char *tmp = lustre_msg_buf(req->rq_repmsg, reply_off + 1);
+
+                rc = inode->i_op->readlink(dentry, tmp, req->rq_repmsg->
+                                           buflens[reply_off + 1]);
+                if (rc < 0) {
+                        CERROR("readlink failed: %d\n", rc);
+                        RETURN(rc);
+                }
+
+                body->valid |= OBD_MD_LINKNAME;
+        }
+
+        mds_pack_inode2fid(&body->fid1, inode);
+        mds_pack_inode2body(body, inode);
+        if (S_ISREG(inode->i_mode)) {
+                struct lov_stripe_md *md;
+
+                md = lustre_msg_buf(req->rq_repmsg, reply_off + 1);
+                md->lmd_easize = mds->mds_max_mdsize;
+                rc = mds_fs_get_md(mds, inode, md);
+
+                if (rc < 0) {
+                        CERROR("mds_fs_get_md failed: %d\n", rc);
+                        RETURN(rc);
+                }
+                body->valid |= OBD_MD_FLEASIZE;
+        }
+        RETURN(0);
+}
+
 static int mds_getattr_name(int offset, struct ptlrpc_request *req)
 {
         struct mds_obd *mds = mds_req2mds(req);
@@ -440,7 +486,7 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req)
         struct inode *dir;
         struct lustre_handle lockh;
         char *name;
-        int namelen, flags, lock_mode, rc = 0;
+        int namelen, flags, lock_mode, rc = 0, old_offset = offset;
         __u64 res_id[3] = {0, 0, 0};
         ENTRY;
 
@@ -495,26 +541,7 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req)
                 GOTO(out_create_dchild, rc = -ESTALE);
         }
 
-        if (dchild->d_inode) {
-                struct mds_body *body;
-                struct inode *inode = dchild->d_inode;
-                CDEBUG(D_INODE, "child exists (dir %ld, name %s, ino %ld)\n",
-                       dir->i_ino, name, dchild->d_inode->i_ino);
-
-                body = lustre_msg_buf(req->rq_repmsg, offset);
-                mds_pack_inode2fid(&body->fid1, inode);
-                mds_pack_inode2body(body, inode);
-                if (S_ISREG(inode->i_mode)) {
-                        struct lov_stripe_md *md;
-                        md = lustre_msg_buf(req->rq_repmsg, offset + 1);
-                        md->lmd_easize = mds->mds_max_mdsize;
-                        /* FIXME: why don't we check (or use) rc of get_md? */
-                        mds_fs_get_md(mds, inode, md);
-                }
-                /* now a normal case for intent locking */
-                rc = 0;
-        } else
-                rc = -ENOENT;
+        rc = mds_getattr_internal(mds, dchild, req, old_offset, offset);
 
         EXIT;
 out_create_dchild:
@@ -529,7 +556,6 @@ out_pre_de:
         return 0;
 }
 
-
 static int mds_getattr(int offset, struct ptlrpc_request *req)
 {
         struct mds_obd *mds = mds_req2mds(req);
@@ -543,9 +569,8 @@ static int mds_getattr(int offset, struct ptlrpc_request *req)
         body = lustre_msg_buf(req->rq_reqmsg, offset);
         push_ctxt(&saved, &mds->mds_ctxt);
         de = mds_fid2dentry(mds, &body->fid1, NULL);
-        if (IS_ERR(de)) {
+        if (IS_ERR(de))
                 GOTO(out_pop, rc = -ENOENT);
-        }
 
         inode = de->d_inode;
         if (S_ISREG(body->fid1.f_type)) {
@@ -563,43 +588,7 @@ static int mds_getattr(int offset, struct ptlrpc_request *req)
                 GOTO(out, rc);
         }
 
-        if (body->valid & OBD_MD_LINKNAME) {
-                char *tmp = lustre_msg_buf(req->rq_repmsg, 1);
-
-                rc = inode->i_op->readlink(de, tmp, size[1]);
-
-                if (rc < 0) {
-                        CERROR("readlink failed: %d\n", rc);
-                        GOTO(out, rc);
-                }
-        }
-
-        body = lustre_msg_buf(req->rq_repmsg, 0);
-        body->ino = inode->i_ino;
-        body->generation = inode->i_generation;
-        body->atime = inode->i_atime;
-        body->ctime = inode->i_ctime;
-        body->mtime = inode->i_mtime;
-        body->uid = inode->i_uid;
-        body->gid = inode->i_gid;
-        body->size = inode->i_size;
-        body->mode = inode->i_mode;
-        body->nlink = inode->i_nlink;
-        body->valid = (OBD_MD_FLID | OBD_MD_FLATIME | OBD_MD_FLCTIME |
-                       OBD_MD_FLMTIME | OBD_MD_FLSIZE | OBD_MD_FLUID |
-                       OBD_MD_FLGID | OBD_MD_FLNLINK | OBD_MD_FLGENER |
-                       OBD_MD_FLMODE);
-
-        if (S_ISREG(inode->i_mode)) {
-                rc = mds_fs_get_md(mds, inode,
-                                   lustre_msg_buf(req->rq_repmsg, 1));
-                if (rc < 0) {
-                        CERROR("mds_fs_get_md failed: %d\n", rc);
-                        GOTO(out, rc);
-                }
-                body->valid |= OBD_MD_FLEASIZE;
-        } else if (S_ISLNK(inode->i_mode))
-                body->valid |= OBD_MD_LINKNAME;
+        rc = mds_getattr_internal(mds, de, req, offset, 0);
 
 out:
         l_dput(de);

@@ -228,7 +228,8 @@ int mdc_enqueue(struct lustre_handle *conn, int lock_type,
         struct ldlm_intent *lit;
         ENTRY;
 
-        LDLM_DEBUG_NOLOCK("mdsintent %s dir %ld", ldlm_it2str(it->it_op), dir->i_ino);
+        LDLM_DEBUG_NOLOCK("mdsintent %s dir %ld", ldlm_it2str(it->it_op),
+                          dir->i_ino);
 
         switch (it->it_op) {
         case IT_MKDIR:
