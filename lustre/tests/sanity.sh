@@ -16,6 +16,13 @@ start() {
 }
 START=start
 
+echo '==== O_CREAT|O_EXCL in subdir ==== test 22'
+mkdir /mnt/lustre/d22
+./toexcl /mnt/lustre/d22/f22
+./toexcl /mnt/lustre/d22/f22
+$CLEAN
+$START
+
 echo '== touch .../f ; rm .../f ========== test 0'
 touch /mnt/lustre/f
 rm /mnt/lustre/f
@@ -194,7 +201,6 @@ echo please fix test 22
 # ls -lR /mnt/lustre/d22/etc
 # $CLEAN
 # $START
-
 
 echo '=========== finished ==========='
 exit
