@@ -47,7 +47,6 @@
 #include <portals/lib-p30.h>
 #include <portals/p30.h>
 #include <linux/kp30.h>
-#include <linux/portals_compat25.h>
 #include <linux/kernel_compat.h>
 
 #define PORTAL_MINOR 240
