@@ -626,12 +626,6 @@ kibnal_queue_tx_locked (kib_tx_t *tx, kib_conn_t *conn)
         list_add_tail(&tx->tx_list, &conn->ibc_tx_queue);
 }
 
-static inline __u64
-kibnal_page2phys (struct page *p)
-{
-        return page_to_phys(p);
-}
-
 /* CAVEAT EMPTOR: We rely on tx/rx descriptor alignment to allow us to use the
  * lowest 2 bits of the work request id to stash the work item type (the op
  * field is not valid when the wc completes in error). */

@@ -499,13 +499,15 @@ kibnal_rx_complete (kib_rx_t *rx, vv_comp_status_t vvrc, int nob)
 
 #if IBNAL_WHOLE_MEM
 int
-kibnal_append_rdfrag(kib_rdma_desc_t *rd, int active,
-                     void *addr, int len)
+kibnal_append_rdfrag(kib_rdma_desc_t *rd, int active, struct page *page, 
+                     unsigned long page_offset, unsigned long len)
 {
         kib_rdma_frag_t *frag = &rd->rd_frags[rd->rd_nfrag];
         vv_l_key_t       l_key;
         vv_r_key_t       r_key;
-        void            *vaddr;
+        __u64            addr;
+        __u64            frag_addr;
+        void            *ptr;
         vv_mem_reg_h_t   mem_h;
         vv_return_t      vvrc;
 
@@ -514,8 +516,16 @@ kibnal_append_rdfrag(kib_rdma_desc_t *rd, int active,
                 return -EMSGSIZE;
         }
 
-        vvrc = vv_get_gen_mr_attrib(kibnal_data.kib_hca, addr, len, 
-                                    &mem_h, &l_key, &r_key);
+#if CONFIG_HIGHMEM
+# error "This probably doesn't work because of over/underflow when casting between __u64 and void *..."
+#endif
+        /* Try to create an address that adapter-tavor will munge into a valid
+         * network address, given how it maps all phys mem into 1 region */
+        addr = page_to_phys(page) + page_offset + PAGE_OFFSET;
+
+        vvrc = vv_get_gen_mr_attrib(kibnal_data.kib_hca, 
+                                    (void *)((unsigned long)addr),
+                                    len, &mem_h, &l_key, &r_key);
         LASSERT (vvrc == vv_return_ok);
 
         if (active) {
@@ -525,7 +535,7 @@ kibnal_append_rdfrag(kib_rdma_desc_t *rd, int active,
                         CERROR ("> 1 key for single RDMA desc\n");
                         return -EINVAL;
                 }
-                vaddr = addr;
+                frag_addr = addr;
         } else {
                 if (rd->rd_nfrag == 0) {
                         rd->rd_key = r_key;
@@ -533,17 +543,39 @@ kibnal_append_rdfrag(kib_rdma_desc_t *rd, int active,
                         CERROR ("> 1 key for single RDMA desc\n");
                         return -EINVAL;
                 }
-                vv_va2advertise_addr(kibnal_data.kib_hca, addr, &vaddr);
+                vv_va2advertise_addr(kibnal_data.kib_hca, 
+                                     (void *)((unsigned long)addr), &ptr);
+                frag_addr = (unsigned long)ptr;
         }
 
-        kibnal_rf_set(frag, (unsigned long)vaddr, len);
+        kibnal_rf_set(frag, frag_addr, len);
 
-        CDEBUG(D_NET,"map frag [%d][%d %x %08x%08x] %p\n", 
+        CDEBUG(D_NET,"map frag [%d][%d %x %08x%08x] "LPX64"\n", 
                rd->rd_nfrag, frag->rf_nob, rd->rd_key, 
-               frag->rf_addr_hi, frag->rf_addr_lo, addr);
+               frag->rf_addr_hi, frag->rf_addr_lo, frag_addr);
 
         rd->rd_nfrag++;
         return 0;
+}
+
+struct page *
+kibnal_kvaddr_to_page (unsigned long vaddr)
+{
+        struct page *page;
+
+        if (vaddr >= VMALLOC_START &&
+            vaddr < VMALLOC_END)
+                page = vmalloc_to_page ((void *)vaddr);
+#if CONFIG_HIGHMEM
+        else if (vaddr >= PKMAP_BASE &&
+                 vaddr < (PKMAP_BASE + LAST_PKMAP * PAGE_SIZE))
+                page = vmalloc_to_page ((void *)vaddr);
+        /* in 2.4 ^ just walks the page tables */
+#endif
+        else
+                page = virt_to_page (vaddr);
+
+        return VALID_PAGE(page) ? page : NULL;
 }
 
 int
@@ -557,6 +589,7 @@ kibnal_setup_rd_iov(kib_tx_t *tx, kib_rdma_desc_t *rd,
         int           fragnob;
         int           rc;
         unsigned long vaddr;
+        struct page  *page;
         int           page_offset;
 
         LASSERT (nob > 0);
@@ -576,12 +609,17 @@ kibnal_setup_rd_iov(kib_tx_t *tx, kib_rdma_desc_t *rd,
 
                 vaddr = ((unsigned long)iov->iov_base) + offset;
                 page_offset = vaddr & (PAGE_SIZE - 1);
+                page = kibnal_kvaddr_to_page(vaddr);
+                if (page == NULL) {
+                        CERROR ("Can't find page\n");
+                        return -EFAULT;
+                }
 
                 fragnob = min((int)(iov->iov_len - offset), nob);
                 fragnob = min(fragnob, (int)PAGE_SIZE - page_offset);
 
-                rc = kibnal_append_rdfrag(rd, active, 
-                                          (void *)vaddr, fragnob);
+                rc = kibnal_append_rdfrag(rd, active, page, 
+                                          page_offset, fragnob);
                 if (rc != 0)
                         return rc;
 
@@ -605,7 +643,6 @@ kibnal_setup_rd_kiov (kib_tx_t *tx, kib_rdma_desc_t *rd,
 {
         /* active if I'm sending */
         int            active = ((access & vv_acc_r_mem_write) == 0);
-        unsigned long  vaddr;
         int            fragnob;
         int            rc;
 
@@ -626,13 +663,10 @@ kibnal_setup_rd_kiov (kib_tx_t *tx, kib_rdma_desc_t *rd,
         do {
                 LASSERT (nkiov > 0);
                 fragnob = min((int)(kiov->kiov_len - offset), nob);
-                vaddr = ((unsigned long)kmap(kiov->kiov_page)) + 
-                        kiov->kiov_offset + offset;
-
-                rc = kibnal_append_rdfrag(rd, active,
-                                          (void *)vaddr, fragnob);
-                kunmap(kiov->kiov_page);
-
+                
+                rc = kibnal_append_rdfrag(rd, active, kiov->kiov_page,
+                                          kiov->kiov_offset + offset,
+                                          fragnob);
                 if (rc != 0)
                         return rc;
 
