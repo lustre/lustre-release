@@ -151,7 +151,7 @@ int class_attach(struct lustre_cfg *lcfg)
                 RETURN(-EINVAL);
         }
         memcpy(obd->obd_uuid.uuid, uuid, len);
-        
+
         /* do the attach */
         if (OBP(obd, attach))
                 err = OBP(obd,attach)(obd, sizeof *lcfg, lcfg);
