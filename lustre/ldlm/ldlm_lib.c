@@ -647,14 +647,13 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
                 GOTO(out, rc);
 
         /* lctl gets a backstage, all-access pass. */
-        if (!strcmp(cluuid.uuid, "OBD_CLASS_UUID"))
+        if (obd_uuid_equals(&cluuid, &lctl_fake_uuid))
                 goto dont_check_exports;
 
         spin_lock(&target->obd_dev_lock);
         list_for_each(p, &target->obd_exports) {
                 export = list_entry(p, struct obd_export, exp_obd_chain);
-                if (!memcmp(&cluuid, &export->exp_client_uuid,
-                            sizeof(export->exp_client_uuid))) {
+                if (obd_uuid_equals(&cluuid, &export->exp_client_uuid)) {
                         spin_unlock(&target->obd_dev_lock);
                         LASSERT(export->exp_obd == target);
 
@@ -786,6 +785,7 @@ static void abort_delayed_replies(struct obd_device *obd)
                 req->rq_type = PTL_RPC_MSG_ERR;
                 ptlrpc_reply(req);
                 list_del(&req->rq_list);
+                OBD_FREE(req->rq_reqmsg, req->rq_reqlen);
                 OBD_FREE(req, sizeof *req);
         }
 }
@@ -1190,13 +1190,8 @@ void target_send_reply(struct ptlrpc_request *req, int rc, int fail_id)
                         OBD_FREE(req->rq_repmsg, req->rq_replen);
                         req->rq_repmsg = NULL;
                 }
-                spin_lock_irqsave (&req->rq_lock, flags);
-                req->rq_want_ack = 0;
-                spin_unlock_irqrestore (&req->rq_lock, flags);
-                netrc = -ECOMM;
-                /* NB if we want this failure to simulate sending OK but
-                 * timing out on the ACK, we'll have to be smarter about
-                 * calling ptlrpc_abort_reply() below. */
+                init_waitqueue_head(&req->rq_wait_for_rep);
+                netrc = 0;
         }
 
         /* a failed send simulates the callbacks */
