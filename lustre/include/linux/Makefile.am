@@ -6,5 +6,9 @@
 
 pkginclude_HEADERS = lustre_lite.h  lustre_idl.h
 
-EXTRA_DIST = lprocfs_status.h lustre_debug.h lustre_ha.h lustre_lib.h lustre_mgmt.h obd_cache.h obd_lov.h obd_snap_support.h lustre_build_version.h lustre_dlm.h lustre_handles.h lustre_net.h  obd_class.h  obd_ost.h   obd_support.h  lustre_commit_confd.h lustre_export.h lustre_log.h obd_echo.h   obd_ptlbd.h  obd_trace.h lustre_compat25.h lustre_fsfilt.h  lustre_import.h  lustre_mds.h  obd.h obd_ext2.h   obd_snap.h lvfs.h lvfs_linux.h
- 
+EXTRA_DIST = lprocfs_status.h lustre_debug.h lustre_ha.h lustre_lib.h \
+  lustre_mgmt.h obd_cache.h obd_lov.h lustre_dlm.h lustre_handles.h \
+  lustre_net.h obd_class.h obd_ost.h obd_support.h lustre_commit_confd.h \
+  lustre_export.h lustre_log.h obd_echo.h obd_ptlbd.h obd_trace.h \
+  lustre_compat25.h lustre_fsfilt.h lustre_import.h lustre_mds.h obd.h \
+  lvfs.h lvfs_linux.h lustre_cfg.h
