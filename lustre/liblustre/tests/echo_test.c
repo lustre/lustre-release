@@ -19,6 +19,9 @@ struct ldlm_namespace;
 struct ldlm_res_id;
 struct obd_import;
 
+unsigned int portal_subsystem_debug = ~0 - (S_PORTALS | S_QSWNAL | S_SOCKNAL |
+                                            S_GMNAL | S_IBNAL);
+                                                                                                                        
 void *inter_module_get(char *arg)
 {
         if (!strcmp(arg, "tcpnal_ni"))
@@ -121,9 +124,10 @@ ptl_nid_t tcpnal_mynid;
 
 int init_lib_portals()
 {
+	int max_interfaces;
         int rc;
 
-        PtlInit();
+        PtlInit(&max_interfaces);
         rc = PtlNIInit(procbridge_interface, 0, 0, 0, &tcpnal_ni);
         if (rc != 0) {
                 CERROR("ksocknal: PtlNIInit failed: error %d\n", rc);
