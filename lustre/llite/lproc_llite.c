@@ -338,6 +338,7 @@ int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
         char name[MAX_STRING_SIZE + 1];
         int err, id;
         struct lprocfs_stats *svc_stats = NULL;
+        struct proc_dir_entry *mdc_symlink, *osc_symlink;
         struct proc_dir_entry *entry;
         ENTRY;
 
@@ -409,18 +410,14 @@ int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
         LASSERT(obd->obd_type != NULL);
         LASSERT(obd->obd_type->typ_name != NULL);
 
-        snprintf(name, MAX_STRING_SIZE, "%s/common_name",
-                 obd->obd_type->typ_name);
-        lvars[0].read_fptr = lprocfs_rd_name;
-        err = lprocfs_add_vars(sbi->ll_proc_root, lvars, obd);
-        if (err)
+        snprintf(name, MAX_STRING_SIZE, "../../%s/%s",
+                 obd->obd_type->typ_name, obd->obd_name);
+        mdc_symlink = proc_symlink(obd->obd_type->typ_name, sbi->ll_proc_root,
+                                   name);
+        if (mdc_symlink == NULL) {
+                err = -ENOMEM;
                 goto out;
-
-        snprintf(name, MAX_STRING_SIZE, "%s/uuid", obd->obd_type->typ_name);
-        lvars[0].read_fptr = lprocfs_rd_uuid;
-        err = lprocfs_add_vars(sbi->ll_proc_root, lvars, obd);
-        if (err)
-                goto out;
+        }
 
         /* OSC */
         obd = class_name2obd(osc);
@@ -429,16 +426,14 @@ int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
         LASSERT(obd->obd_type != NULL);
         LASSERT(obd->obd_type->typ_name != NULL);
 
-        snprintf(name, MAX_STRING_SIZE, "%s/common_name",
-                 obd->obd_type->typ_name);
-        lvars[0].read_fptr = lprocfs_rd_name;
-        err = lprocfs_add_vars(sbi->ll_proc_root, lvars, obd);
-        if (err)
-                goto out;
+       snprintf(name, MAX_STRING_SIZE, "../../%s/%s",
+                obd->obd_type->typ_name, obd->obd_name);
+       osc_symlink = proc_symlink(obd->obd_type->typ_name, sbi->ll_proc_root,
+                                  name);
+       if (osc_symlink == NULL)
+               err = -ENOMEM;
 
-        snprintf(name, MAX_STRING_SIZE, "%s/uuid", obd->obd_type->typ_name);
-        lvars[0].read_fptr = lprocfs_rd_uuid;
-        err = lprocfs_add_vars(sbi->ll_proc_root, lvars, obd);
+
 out:
         if (err) {
                 if (svc_stats)

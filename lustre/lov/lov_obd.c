@@ -211,6 +211,7 @@ static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
         struct lov_tgt_desc *tgt;
         struct obd_export *exp;
         int rc, rc2, i;
+        struct proc_dir_entry *lov_proc_dir;
         ENTRY;
 
         rc = class_connect(conn, obd, cluuid);
@@ -241,6 +242,9 @@ static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
         RETURN (0);
 
  out_disc:
+        if (lov_proc_dir)
+                lprocfs_remove(lov_proc_dir);
+
         while (i-- > 0) {
                 struct obd_uuid uuid;
                 --tgt;
@@ -314,6 +318,7 @@ static int lov_disconnect(struct obd_export *exp, int flags)
         struct obd_device *obd = class_exp2obd(exp);
         struct lov_obd *lov = &obd->u.lov;
         struct lov_tgt_desc *tgt;
+        struct proc_dir_entry *lov_proc_dir;
         int rc, i;
         ENTRY;
 
@@ -325,10 +330,26 @@ static int lov_disconnect(struct obd_export *exp, int flags)
         if (lov->refcount != 0)
                 goto out_local;
 
+        lov_proc_dir = lprocfs_register("target_obds", obd->obd_proc_entry,
+                                        NULL, NULL);
+        if (IS_ERR(lov_proc_dir)) {
+                CERROR("could not register /proc/fs/lustre/%s/%s/target_obds.",
+                       obd->obd_type->typ_name, obd->obd_name);
+                lov_proc_dir = NULL;
+        }
+
         for (i = 0, tgt = lov->tgts; i < lov->desc.ld_tgt_count; i++, tgt++) {
                 if (tgt->ltd_exp)
                         lov_disconnect_obd(obd, tgt, flags);
         }
+        lov_proc_dir = lprocfs_srch(obd->obd_proc_entry, "target_obds");
+        if (lov_proc_dir) {
+                lprocfs_remove(lov_proc_dir);
+        } else {
+                CERROR("/proc/fs/lustre/%s/%s/target_obds missing.",
+                       obd->obd_type->typ_name, obd->obd_name);
+        }
+
 
  out_local:
         rc = class_disconnect(exp, 0);
@@ -437,7 +458,7 @@ int lov_attach(struct obd_device *dev, obd_count len, void *data)
 #ifdef __KERNEL__
                 struct proc_dir_entry *entry;
 
-                entry = create_proc_entry("target_obd", 0444, 
+                entry = create_proc_entry("target_obd_status", 0444, 
                                           dev->obd_proc_entry);
                 if (entry == NULL) {
                         rc = -ENOMEM;

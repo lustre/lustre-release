@@ -36,7 +36,60 @@ struct lprocfs_vars lprocfs_mds_module_vars[] = { {0} };
 struct lprocfs_vars lprocfs_mdt_obd_vars[] = { {0} };
 struct lprocfs_vars lprocfs_mdt_module_vars[] = { {0} };
 
+atomic_t * lprocfs_alloc_mds_counters()
+{
+        return NULL;
+}
+void lprocfs_free_mds_counters(atomic_t *ptr)
+{
+        return;
+}
+
 #else
+
+struct ll_mdscounters_opcode {
+     __u32       opcode;
+     const char *opname;
+} ll_mdscounters_opcode_table[MDS_LAST_OPC_COUNT] = {
+       { MDS_OPEN_COUNT,          "mds_open" },
+       { MDS_CREATE_COUNT,        "mds_create" },
+       { MDS_CLOSE_COUNT,         "mds_close" },
+       { MDS_LINK_COUNT,          "mds_link" },
+       { MDS_UNLINK_COUNT,        "mds_unlink" },
+       { MDS_GETATTR_COUNT,       "mds_getattr" },
+       { MDS_GETATTR_NAME_COUNT,  "mds_getattr_name" },
+       { MDS_SETATTR_COUNT,       "mds_setattr" },
+       { MDS_RENAME_COUNT,        "mds_rename" },
+       { MDS_STATFS_COUNT,        "mds_statfs" },
+};
+
+const char* ll_mds_count_opcode2str(__u32 opcode)
+{
+        __u32 offset = opcode;
+
+        LASSERT(offset < MDS_LAST_OPC_COUNT);
+        LASSERT(ll_mdscounters_opcode_table[offset].opcode == opcode);
+        return ll_mdscounters_opcode_table[offset].opname;
+}
+
+struct lprocfs_stats * lprocfs_alloc_mds_counters()
+{
+        struct lprocfs_stats *counters;
+        int i;
+
+        counters = lprocfs_alloc_stats(MDS_LAST_OPC_COUNT);
+
+        for (i = 0; i < MDS_LAST_OPC_COUNT; i ++) {         
+            lprocfs_counter_init(counters, i, 0, 
+                                 (char *)ll_mds_count_opcode2str(i), "reqs");
+        }
+        return counters;
+}
+
+void lprocfs_free_mds_counters(struct lprocfs_stats *ptr)
+{
+        lprocfs_free_stats(ptr);
+}
 
 static int lprocfs_mds_rd_mntdev(char *page, char **start, off_t off, int count,
                                  int *eof, void *data)
@@ -108,6 +161,51 @@ static int lprocfs_mds_rd_recovery_status(char *page, char **start, off_t off,
         return len + n;
 }
 
+static int lprocfs_rd_mds_counters(char *page, char **start, off_t off,
+                                          int count, int *eof, void *data)
+{
+        struct obd_device* obd = (struct obd_device *)data;
+        int len = 0, n, i, j;
+        struct lprocfs_counter  t, ret = { .lc_min = ~(__u64)0 };
+        struct lprocfs_stats *stats;
+        struct timeval now;
+
+        LASSERT(obd != NULL);
+        if (obd->u.mds.mds_counters == NULL)
+                return 0;
+
+        do_gettimeofday(&now);
+
+        n = snprintf(page, count, "%-25s %lu.%lu secs.usecs\n",
+                               "snapshot_time", now.tv_sec, now.tv_usec);
+        page += n; len +=n; count -=n;
+
+        stats = obd->u.mds.mds_counters;
+
+        *eof = 1;
+        for (i = 0; i < MDS_LAST_OPC_COUNT; i ++) {
+                ret.lc_count = 0; 
+                for (j = 0; j < num_online_cpus(); j++) {
+                        struct lprocfs_counter *percpu_cntr =
+                                &(stats->ls_percpu[j])->lp_cntr[i];
+                        int centry;
+                        do {
+                                centry = 
+                                   atomic_read(&percpu_cntr->lc_cntl.la_entry); 
+                                t.lc_count = percpu_cntr->lc_count;
+                        } while (centry != 
+                                 atomic_read(&percpu_cntr->lc_cntl.la_entry) &&
+                                 centry != 
+                                 atomic_read(&percpu_cntr->lc_cntl.la_exit));
+                        ret.lc_count += t.lc_count;
+               } 
+                n = snprintf(page, count, "%-25s "LPU64" \n", 
+                                   ll_mds_count_opcode2str(i), ret.lc_count);
+                page += n; len +=n; count -=n;
+        }
+        return (len);
+}
+
 static int lprocfs_mds_wr_evict_client(struct file *file, const char *buffer,
                                        unsigned long count, void *data)
 {
@@ -166,6 +264,7 @@ struct lprocfs_vars lprocfs_mds_obd_vars[] = {
         { "evict_client", 0, lprocfs_mds_wr_evict_client, 0 },
         { "config_update", 0, lprocfs_mds_wr_config_update, 0 },
         { "num_exports",  lprocfs_rd_num_exports, 0, 0 },
+        { "counters", lprocfs_rd_mds_counters, 0, 0 },
         { 0 }
 };
 
@@ -183,6 +282,7 @@ struct lprocfs_vars lprocfs_mdt_module_vars[] = {
         { "num_refs",     lprocfs_rd_numrefs,     0, 0 },
         { 0 }
 };
+
 
 #endif
 

@@ -135,5 +135,8 @@ fid_equal(struct ll_fid *fid1, struct ll_fid *fid2)
         return 1;
 }
 
+/* lproc_lmv.c */
+extern struct file_operations lmv_proc_target_fops;
+
 #endif
 

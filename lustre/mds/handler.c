@@ -869,6 +869,8 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req,
 
         /* Swab now, before anyone looks inside the request */
 
+        MDS_UPDATE_COUNTER((&obd->u.mds), MDS_GETATTR_NAME_COUNT);
+
         body = lustre_swab_reqbuf(req, offset, sizeof(*body),
                                   lustre_swab_mds_body);
         if (body == NULL) {
@@ -1069,6 +1071,8 @@ static int mds_getattr(int offset, struct ptlrpc_request *req)
                 RETURN (-EFAULT);
         }
 
+        MDS_UPDATE_COUNTER(mds, MDS_GETATTR_COUNT);
+
         uc.luc_fsuid = body->fsuid;
         uc.luc_fsgid = body->fsgid;
         uc.luc_cap = body->capability;
@@ -1120,6 +1124,8 @@ static int mds_statfs(struct ptlrpc_request *req)
                 CERROR("mds: statfs lustre_pack_reply failed: rc = %d\n", rc);
                 GOTO(out, rc);
         }
+
+        MDS_UPDATE_COUNTER((&obd->u.mds), MDS_STATFS_COUNT);
 
         /* We call this so that we can cache a bit - 1 jiffie worth */
         rc = mds_obd_statfs(obd, lustre_msg_buf(req->rq_repmsg, 0, size),
@@ -2093,6 +2099,8 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
                            "mds_ldlm_client", &obd->obd_ldlm_client);
         obd->obd_replayable = 1;
 
+        mds->mds_counters = lprocfs_alloc_mds_counters();
+
         rc = mds_postsetup(obd);
         if (rc)
                 GOTO(err_fs, rc);
@@ -2301,6 +2309,10 @@ static int mds_cleanup(struct obd_device *obd, int flags)
         mds->mds_sb = 0;
 
         ldlm_namespace_free(obd->obd_namespace, flags & OBD_OPT_FORCE);
+
+        if (mds->mds_counters) {
+                lprocfs_free_mds_counters(mds->mds_counters);
+        }
 
         spin_lock_bh(&obd->obd_processing_task_lock);
         if (obd->obd_recovering) {

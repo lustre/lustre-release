@@ -30,6 +30,33 @@ static inline struct obd_device *req2obd(struct ptlrpc_request *req)
         return req->rq_export->exp_obd;
 }
 
+typedef enum {
+        MDS_OPEN_COUNT         = 0,
+        MDS_CREATE_COUNT       = 1,
+        MDS_CLOSE_COUNT        = 2,
+        MDS_LINK_COUNT         = 3,
+        MDS_UNLINK_COUNT       = 4,
+        MDS_GETATTR_COUNT      = 5,
+        MDS_GETATTR_NAME_COUNT = 6,
+        MDS_SETATTR_COUNT      = 7,
+        MDS_RENAME_COUNT       = 8,
+        MDS_STATFS_COUNT       = 9,
+        MDS_LAST_OPC_COUNT     = 10
+} mds_counters_t;
+
+struct lprocfs_stats * lprocfs_alloc_mds_counters(void);
+void lprocfs_free_mds_counters(struct lprocfs_stats *ptr);
+
+#ifndef LPROCFS
+#define MDS_UPDATE_COUNTER(mds, opcode) do {} while (0)
+#else
+
+#define MDS_UPDATE_COUNTER(mds, opcode) \
+        LASSERT( opcode < MDS_LAST_OPC_COUNT); \
+        LASSERT( mds->mds_counters != NULL); \
+        lprocfs_counter_incr(mds->mds_counters, opcode);
+#endif
+
 /* mds/mds_reint.c */
 int enqueue_ordered_locks(struct obd_device *obd, struct ldlm_res_id *p1_res_id,
                           struct lustre_handle *p1_lockh, int p1_lock_mode,

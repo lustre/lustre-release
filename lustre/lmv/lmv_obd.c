@@ -152,10 +152,11 @@ int lmv_attach(struct obd_device *dev, obd_count len, void *data)
 #ifdef __KERNEL__
                 struct proc_dir_entry *entry;
                 
-                entry = create_proc_entry("target_obd", 0444, dev->obd_proc_entry);
+                entry = create_proc_entry("target_obd_status", 0444, 
+                                           dev->obd_proc_entry);
                 if (entry == NULL)
                         RETURN(-ENOMEM);
-                /* entry->proc_fops = &lmv_proc_target_fops; */
+                entry->proc_fops = &lmv_proc_target_fops; 
                 entry->data = dev;
 #endif
        }
@@ -175,6 +176,7 @@ static int lmv_connect(struct lustre_handle *conn, struct obd_device *obd,
 {
         struct lmv_obd *lmv = &obd->u.lmv;
         struct obd_export *exp;
+        struct proc_dir_entry *lmv_proc_dir;
         int rc;
         ENTRY;
 
@@ -198,6 +200,15 @@ static int lmv_connect(struct lustre_handle *conn, struct obd_device *obd,
         lmv->connected = 0;
         lmv->exp = exp;
         sema_init(&lmv->init_sem, 1);
+
+        lmv_proc_dir = lprocfs_register("target_obds", obd->obd_proc_entry,
+                                        NULL, NULL);
+        if (IS_ERR(lmv_proc_dir)) {
+                CERROR("could not register /proc/fs/lustre/%s/%s/target_obds.",
+                       obd->obd_type->typ_name, obd->obd_name);
+                lmv_proc_dir = NULL;
+        }
+
 
         RETURN(0);
 }
@@ -224,11 +235,13 @@ void lmv_set_timeouts(struct obd_device *obd)
 }
 
 /* Performs a check if passed obd is connected. If no - connect it. */
+#define MAX_STRING_SIZE 128
 int lmv_check_connect(struct obd_device *obd)
 {
         struct lmv_obd *lmv = &obd->u.lmv;
         struct obd_uuid *cluuid;
         struct lmv_tgt_desc *tgts;
+        struct proc_dir_entry *lmv_proc_dir;
         struct obd_export *exp;
         int rc, rc2, i;
 
@@ -279,8 +292,9 @@ int lmv_check_connect(struct obd_device *obd)
                         CERROR("Target %s not set up\n", tgts->uuid.uuid);
                         GOTO(out_disc, rc = -EINVAL);
                 }
-                
-                rc = obd_connect(&conn, tgt_obd, &lmv_osc_uuid, lmv->connect_flags);
+
+                rc = obd_connect(&conn, tgt_obd, &lmv_osc_uuid,
+                                 lmv->connect_flags);
                 if (rc) {
                         CERROR("Target %s connect error %d\n",
                                 tgts->uuid.uuid, rc);
@@ -290,7 +304,7 @@ int lmv_check_connect(struct obd_device *obd)
 
                 obd_init_ea_size(tgts->ltd_exp, lmv->max_easize,
                                  lmv->max_cookiesize);
-                
+
                 rc = obd_register_observer(tgt_obd, obd);
                 if (rc) {
                         CERROR("Target %s register_observer error %d\n",
@@ -301,10 +315,35 @@ int lmv_check_connect(struct obd_device *obd)
 
                 lmv->desc.ld_active_tgt_count++;
                 tgts->active = 1;
-                
+
                 CDEBUG(D_OTHER, "connected to %s(%s) successfully (%d)\n",
                         tgt_obd->obd_name, tgt_obd->obd_uuid.uuid,
                         atomic_read(&obd->obd_refcount));
+
+                lmv_proc_dir = lprocfs_srch(obd->obd_proc_entry, "target_obds");
+                if (lmv_proc_dir) {
+                        struct obd_device *mdc_obd = class_conn2obd(&conn);
+                        struct proc_dir_entry *mdc_symlink;
+                        char name[MAX_STRING_SIZE + 1];
+
+                        LASSERT(mdc_obd != NULL);
+                        LASSERT(mdc_obd->obd_type != NULL);
+                        LASSERT(mdc_obd->obd_type->typ_name != NULL);
+                        name[MAX_STRING_SIZE] = '\0';
+                        snprintf(name, MAX_STRING_SIZE, "../../../%s/%s",
+                                 mdc_obd->obd_type->typ_name,
+                                 mdc_obd->obd_name);
+                        mdc_symlink = proc_symlink(mdc_obd->obd_name,
+                                                   lmv_proc_dir, name);
+                        if (mdc_symlink == NULL) {
+                                CERROR("could not register LMV target "
+                                       "/proc/fs/lustre/%s/%s/target_obds/%s.",
+                                       obd->obd_type->typ_name, obd->obd_name,
+                                       mdc_obd->obd_name);
+                                lprocfs_remove(lmv_proc_dir);
+                                lmv_proc_dir = NULL;
+                        }
+                }
         }
 
         lmv_set_timeouts(obd);
@@ -334,6 +373,7 @@ static int lmv_disconnect(struct obd_export *exp, int flags)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct lmv_obd *lmv = &obd->u.lmv;
+        struct proc_dir_entry *lmv_proc_dir;
         int rc, i;
         ENTRY;
 
@@ -345,9 +385,27 @@ static int lmv_disconnect(struct obd_export *exp, int flags)
         if (lmv->refcount != 0)
                 goto out_local;
 
+        lmv_proc_dir = lprocfs_srch(obd->obd_proc_entry, "target_obds");
+
         for (i = 0; i < lmv->desc.ld_tgt_count; i++) {
+                struct obd_device *mdc_obd; 
+                
                 if (lmv->tgts[i].ltd_exp == NULL)
                         continue;
+
+                mdc_obd = class_exp2obd(lmv->tgts[i].ltd_exp);
+                if (lmv_proc_dir) {
+                        struct proc_dir_entry *mdc_symlink;
+
+                        mdc_symlink = lprocfs_srch(lmv_proc_dir, mdc_obd->obd_name);
+                        if (mdc_symlink) {
+                                lprocfs_remove(mdc_symlink);
+                        } else {
+                                CERROR("/proc/fs/lustre/%s/%s/target_obds/%s missing.",
+                                       obd->obd_type->typ_name, obd->obd_name,
+                                       mdc_obd->obd_name);
+                        }
+                }
 
                 if (obd->obd_no_recov) {
                         /* Pass it on to our clients.
@@ -380,6 +438,14 @@ static int lmv_disconnect(struct obd_export *exp, int flags)
                 }
                 lmv->tgts[i].ltd_exp = NULL;
         }
+
+        if (lmv_proc_dir) {
+                lprocfs_remove(lmv_proc_dir);
+        } else {
+                CERROR("/proc/fs/lustre/%s/%s/target_obds missing.",
+                       obd->obd_type->typ_name, obd->obd_name);
+        }
+
 
 out_local:
         /* this is the case when no real connection is established by
@@ -1229,12 +1295,13 @@ int lmv_dirobj_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                 /* time to drop cached attrs for dirobj */
                 obj = lock->l_ast_data;
                 if (obj) {
-                        CDEBUG(D_OTHER, "cancel %s on %lu/%lu, master %lu/%lu/%lu\n",
-                               lock->l_resource->lr_name.name[3] == 1 ? "LOOKUP" : "UPDATE",
-                               (unsigned long)lock->l_resource->lr_name.name[0],
-                               (unsigned long)lock->l_resource->lr_name.name[1],
-                               (unsigned long)obj->fid.mds, (unsigned long)obj->fid.id,
-                               (unsigned long)obj->fid.generation);
+                        CDEBUG(D_OTHER, "cancel %s on "LPU64"/"LPU64
+                               ", master %u/"LPU64"/%u\n",
+                               lock->l_resource->lr_name.name[3] == 1 ?
+                                        "LOOKUP" : "UPDATE",
+                               lock->l_resource->lr_name.name[0],
+                               lock->l_resource->lr_name.name[1], obj->fid.mds,
+                               obj->fid.id, obj->fid.generation);
                         lmv_put_obj(obj);
                 }
                 break;

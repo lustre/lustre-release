@@ -400,6 +400,8 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
 
         MDS_CHECK_RESENT(req, reconstruct_reint_setattr(rec, offset, req));
 
+        MDS_UPDATE_COUNTER(mds, MDS_SETATTR_COUNT);
+
         if (rec->ur_iattr.ia_valid & ATTR_FROM_OPEN) {
                 de = mds_fid2dentry(mds, rec->ur_fid1, NULL);
                 if (IS_ERR(de))
@@ -597,6 +599,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                   rec->ur_name, rec->ur_mode);
 
         MDS_CHECK_RESENT(req, reconstruct_reint_create(rec, offset, req));
+
 
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_CREATE))
                 GOTO(cleanup, rc = -ESTALE);
@@ -876,6 +879,9 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 body = lustre_msg_buf(req->rq_repmsg, offset, sizeof (*body));
                 mds_pack_inode2fid(obd, &body->fid1, inode);
                 mds_pack_inode2body(obd, body, inode);
+                if (rc == 0) {
+                        MDS_UPDATE_COUNTER(mds, MDS_CREATE_COUNT);
+                }
         }
         EXIT;
 
@@ -1646,6 +1652,9 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                        req->rq_repmsg->buflens[offset + 2]);
         }
 
+        MDS_UPDATE_COUNTER(mds, MDS_UNLINK_COUNT);
+
+
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_UNLINK))
                 GOTO(cleanup, rc = -ENOENT);
 
@@ -2097,6 +2106,9 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
                   rec->ur_fid2->id, rec->ur_fid2->generation, rec->ur_name);
 
         MDS_CHECK_RESENT(req, mds_reconstruct_generic(req));
+        
+        MDS_UPDATE_COUNTER(mds, MDS_LINK_COUNT);
+
         
 //      memset(tgt_dir_lockh, 0, 2*sizeof(tgt_dir_lockh[0]));
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_LINK))
@@ -2743,6 +2755,8 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
                        lustre_msg_buf(req->rq_reqmsg, 3, 0),
                        req->rq_repmsg->buflens[2]);
         }
+
+        MDS_UPDATE_COUNTER(mds, MDS_RENAME_COUNT);
 
         if (rec->ur_namelen == 1) {
                 rc = mds_reint_rename_create_name(rec, offset, req);

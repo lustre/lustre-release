@@ -837,6 +837,8 @@ int mds_open(struct mds_update_record *rec, int offset,
 
         MDS_CHECK_RESENT(req, reconstruct_open(rec, offset, req, child_lockh));
 
+        MDS_UPDATE_COUNTER(mds, MDS_OPEN_COUNT);
+
         /* Step 0: If we are passed a fid, then we assume the client already
          * opened this file and is only replaying the RPC, so we open the
          * inode by fid (at some large expense in security). */
@@ -1054,6 +1056,9 @@ got_child:
                         CERROR("error on parent setattr: rc = %d\n", rc);
 
                 acc_mode = 0;           /* Don't check for permissions */
+                if (rc == 0) {
+                        MDS_UPDATE_COUNTER(mds, MDS_CREATE_COUNT);
+                }
         }
 
         LASSERT(!mds_inode_is_orphan(dchild->d_inode));
@@ -1357,6 +1362,8 @@ int mds_close(struct ptlrpc_request *req)
                               obd->u.mds.mds_max_cookiesize};
         ENTRY;
 
+        MDS_UPDATE_COUNTER((&obd->u.mds), MDS_CLOSE_COUNT);
+
         rc = lustre_pack_reply(req, 3, repsize, NULL);
         if (rc) {
                 CERROR("lustre_pack_reply: rc = %d\n", rc);
@@ -1371,6 +1378,7 @@ int mds_close(struct ptlrpc_request *req)
                        lustre_msg_buf(req->rq_reqmsg, 1, 0),
                        req->rq_repmsg->buflens[2]);
         }
+
 
         body = lustre_swab_reqbuf(req, 0, sizeof(*body), lustre_swab_mds_body);
         if (body == NULL) {
