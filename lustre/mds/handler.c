@@ -1382,9 +1382,9 @@ static int mdt_obj_create(struct ptlrpc_request *req)
                 fid.generation = body->oa.o_generation;
                 new = mds_fid2dentry(mds, &fid, NULL);
                 if (!IS_ERR(new) && new->d_inode) {
-                        CWARN("mkdir() repairing is on its way: %lu/%lu\n",
-                              (unsigned long) fid.id,
-                              (unsigned long) fid.generation);
+                        CDEBUG(D_HA, "mkdir() repairing is on its way: %lu/%lu\n",
+                               (unsigned long) fid.id,
+                               (unsigned long) fid.generation);
                         obdo_from_inode(&repbody->oa, new->d_inode,
                                         FILTER_VALID_FLAGS);
                         repbody->oa.o_id = new->d_inode->i_ino;
