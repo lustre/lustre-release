@@ -1,7 +1,7 @@
 Index: linux-2.4.24/fs/ext3/namei.c
 ===================================================================
---- linux-2.4.24.orig/fs/ext3/namei.c	2004-06-23 08:31:23.000000000 +0400
-+++ linux-2.4.24/fs/ext3/namei.c	2004-06-23 08:32:59.000000000 +0400
+--- linux-2.4.24.orig/fs/ext3/namei.c	2004-07-19 11:11:29.000000000 +0400
++++ linux-2.4.24/fs/ext3/namei.c	2004-07-19 11:11:29.000000000 +0400
 @@ -1099,6 +1099,23 @@
  	inode = NULL;
  	if (bh) {
@@ -186,8 +186,8 @@ Index: linux-2.4.24/fs/ext3/namei.c
  struct inode_operations ext3_dir_inode_operations = {
 Index: linux-2.4.24/fs/ext3/dir.c
 ===================================================================
---- linux-2.4.24.orig/fs/ext3/dir.c	2004-06-23 08:31:21.000000000 +0400
-+++ linux-2.4.24/fs/ext3/dir.c	2004-06-23 08:31:23.000000000 +0400
+--- linux-2.4.24.orig/fs/ext3/dir.c	2004-07-19 11:11:16.000000000 +0400
++++ linux-2.4.24/fs/ext3/dir.c	2004-07-30 23:56:03.000000000 +0400
 @@ -42,6 +42,9 @@
  
  static unsigned char get_dtype(struct super_block *sb, int filetype)
@@ -198,10 +198,23 @@ Index: linux-2.4.24/fs/ext3/dir.c
  	if (!EXT3_HAS_INCOMPAT_FEATURE(sb, EXT3_FEATURE_INCOMPAT_FILETYPE) ||
  	    (filetype >= EXT3_FT_MAX))
  		return DT_UNKNOWN;
+@@ -67,8 +70,10 @@
+ 	else if (((char *) de - bh->b_data) + rlen > dir->i_sb->s_blocksize)
+ 		error_msg = "directory entry across blocks";
+ 	else if (le32_to_cpu(de->inode) >
+-			le32_to_cpu(dir->i_sb->u.ext3_sb.s_es->s_inodes_count))
+-		error_msg = "inode out of bounds";
++			le32_to_cpu(dir->i_sb->u.ext3_sb.s_es->s_inodes_count)) {
++		if (de->file_type != 128)
++			error_msg = "inode out of bounds";
++	}
+ 
+ 	if (error_msg != NULL)
+ 		ext3_error (dir->i_sb, function,
 Index: linux-2.4.24/fs/ext3/ext3-exports.c
 ===================================================================
---- linux-2.4.24.orig/fs/ext3/ext3-exports.c	2004-06-23 08:31:22.000000000 +0400
-+++ linux-2.4.24/fs/ext3/ext3-exports.c	2004-06-23 08:31:23.000000000 +0400
+--- linux-2.4.24.orig/fs/ext3/ext3-exports.c	2004-07-19 11:11:16.000000000 +0400
++++ linux-2.4.24/fs/ext3/ext3-exports.c	2004-07-19 11:11:29.000000000 +0400
 @@ -26,3 +26,10 @@
  EXPORT_SYMBOL(ext3_decode_error);
  EXPORT_SYMBOL(__ext3_std_error);
@@ -215,9 +228,9 @@ Index: linux-2.4.24/fs/ext3/ext3-exports.c
 +
 Index: linux-2.4.24/include/linux/ext3_fs.h
 ===================================================================
---- linux-2.4.24.orig/include/linux/ext3_fs.h	2004-06-23 08:31:23.000000000 +0400
-+++ linux-2.4.24/include/linux/ext3_fs.h	2004-06-23 08:31:23.000000000 +0400
-@@ -445,7 +445,8 @@
+--- linux-2.4.24.orig/include/linux/ext3_fs.h	2004-07-19 11:11:29.000000000 +0400
++++ linux-2.4.24/include/linux/ext3_fs.h	2004-07-19 11:13:53.000000000 +0400
+@@ -446,7 +446,8 @@
  	__u8	s_def_hash_version;	/* Default hash version to use */
  	__u8	s_reserved_char_pad;
  	__u16	s_reserved_word_pad;
@@ -227,7 +240,7 @@ Index: linux-2.4.24/include/linux/ext3_fs.h
  };
  
  #ifdef __KERNEL__
-@@ -518,10 +519,12 @@
+@@ -519,10 +520,12 @@
  #define EXT3_FEATURE_INCOMPAT_FILETYPE		0x0002
  #define EXT3_FEATURE_INCOMPAT_RECOVER		0x0004 /* Needs recovery */
  #define EXT3_FEATURE_INCOMPAT_JOURNAL_DEV	0x0008 /* Journal device */
@@ -241,7 +254,7 @@ Index: linux-2.4.24/include/linux/ext3_fs.h
  #define EXT3_FEATURE_RO_COMPAT_SUPP	(EXT3_FEATURE_RO_COMPAT_SPARSE_SUPER| \
  					 EXT3_FEATURE_RO_COMPAT_LARGE_FILE| \
  					 EXT3_FEATURE_RO_COMPAT_BTREE_DIR)
-@@ -582,6 +585,9 @@
+@@ -583,6 +586,9 @@
  #define EXT3_DIR_ROUND			(EXT3_DIR_PAD - 1)
  #define EXT3_DIR_REC_LEN(name_len)	(((name_len) + 8 + EXT3_DIR_ROUND) & \
  					 ~EXT3_DIR_ROUND)
@@ -253,8 +266,8 @@ Index: linux-2.4.24/include/linux/ext3_fs.h
   * (c) Daniel Phillips, 2001
 Index: linux-2.4.24/include/linux/ext3_fs_sb.h
 ===================================================================
---- linux-2.4.24.orig/include/linux/ext3_fs_sb.h	2004-06-23 08:31:21.000000000 +0400
-+++ linux-2.4.24/include/linux/ext3_fs_sb.h	2004-06-23 08:31:23.000000000 +0400
+--- linux-2.4.24.orig/include/linux/ext3_fs_sb.h	2004-07-19 11:11:16.000000000 +0400
++++ linux-2.4.24/include/linux/ext3_fs_sb.h	2004-07-19 11:12:54.000000000 +0400
 @@ -86,6 +86,7 @@
  	wait_queue_head_t s_delete_thread_queue;
  	wait_queue_head_t s_delete_waiter_queue;
@@ -265,8 +278,8 @@ Index: linux-2.4.24/include/linux/ext3_fs_sb.h
  #endif	/* _LINUX_EXT3_FS_SB */
 Index: linux-2.4.24/include/linux/dcache.h
 ===================================================================
---- linux-2.4.24.orig/include/linux/dcache.h	2004-06-23 08:31:22.000000000 +0400
-+++ linux-2.4.24/include/linux/dcache.h	2004-06-23 08:31:23.000000000 +0400
+--- linux-2.4.24.orig/include/linux/dcache.h	2004-07-19 11:11:16.000000000 +0400
++++ linux-2.4.24/include/linux/dcache.h	2004-07-19 11:12:53.000000000 +0400
 @@ -120,6 +120,9 @@
  	atomic_t d_count;
  	unsigned int d_flags;
