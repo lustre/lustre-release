@@ -12,7 +12,6 @@
 #define EXPORT_SYMTAB
 #define DEBUG_SUBSYSTEM S_LDLM
 
-#include <linux/slab.h>
 #include <linux/lustre_dlm.h>
 
 kmem_cache_t *ldlm_resource_slab, *ldlm_lock_slab;
@@ -46,18 +45,62 @@ struct ldlm_namespace *ldlm_namespace_new(struct obd_device *obddev)
         return ns;
 }
 
+static int cleanup_resource(struct ldlm_resource *res, struct list_head *q)
+{
+        struct list_head *tmp, *pos;
+        int rc = 0;
+
+        list_for_each_safe(tmp, pos, q) {
+                struct ldlm_lock *lock;
+
+                if (rc) {
+                        /* Res was already cleaned up. */
+                        LBUG();
+                }
+
+                lock = list_entry(tmp, struct ldlm_lock, l_res_link);
+                spin_lock(&lock->l_lock);
+                ldlm_resource_del_lock(lock);
+                ldlm_lock_free(lock);
+
+                rc = ldlm_resource_put(res);
+        }
+
+        return rc;
+}
+
 int ldlm_namespace_free(struct ldlm_namespace *ns)
 {
-        spin_lock(&ns->ns_lock);
-        if (ns->ns_refcount) {
-                spin_unlock(&ns->ns_lock);
-                return -EBUSY;
+        struct list_head *tmp, *pos;
+        int i, rc;
+
+        /* We should probably take the ns_lock, but then ldlm_resource_put
+         * couldn't take it.  Hmm. */
+        for (i = 0; i < RES_HASH_SIZE; i++) {
+                list_for_each_safe(tmp, pos, &(ns->ns_hash[i])) {
+                        struct ldlm_resource *res;
+                        res = list_entry(tmp, struct ldlm_resource, lr_hash);
+
+                        spin_lock(&res->lr_lock);
+                        rc = cleanup_resource(res, &res->lr_granted);
+                        if (!rc)
+                                rc = cleanup_resource(res, &res->lr_converting);
+                        if (!rc)
+                                rc = cleanup_resource(res, &res->lr_waiting);
+
+                        if (rc == 0) {
+                                CERROR("Resource refcount nonzero after lock "
+                                       "cleanup; forcing cleanup.\n");
+                                res->lr_refcount = 1;
+                                rc = ldlm_resource_put(res);
+                        }
+                }
         }
 
         OBD_FREE(ns->ns_hash, sizeof(struct list_head) * RES_HASH_SIZE);
         OBD_FREE(ns, sizeof(*ns));
 
-        return 0;
+        return ELDLM_OK;
 }
 
 static __u32 ldlm_hash_fn(struct ldlm_resource *parent, __u64 *name)
@@ -78,8 +121,10 @@ static struct ldlm_resource *ldlm_resource_new(void)
         struct ldlm_resource *res;
 
         res = kmem_cache_alloc(ldlm_resource_slab, SLAB_KERNEL);
-        if (res == NULL)
+        if (res == NULL) {
                 LBUG();
+                return NULL;
+        }
         memset(res, 0, sizeof(*res));
 
         INIT_LIST_HEAD(&res->lr_children);
@@ -103,14 +148,18 @@ static struct ldlm_resource *ldlm_resource_add(struct ldlm_namespace *ns,
         struct list_head *bucket;
         struct ldlm_resource *res;
 
-        res = ldlm_resource_new();
-        if (!res)
+        if (type < 0 || type > LDLM_MAX_TYPE) 
                 LBUG();
+
+        res = ldlm_resource_new();
+        if (!res) {
+                LBUG();
+                return NULL;
+        }
 
         memcpy(res->lr_name, name, sizeof(res->lr_name));
         res->lr_namespace = ns;
-        if (type < 0 || type > LDLM_MAX_TYPE) 
-                LBUG();
+        ns->ns_refcount++;
 
         res->lr_type = type; 
         res->lr_most_restr = LCK_NL;
@@ -168,7 +217,7 @@ struct ldlm_resource *ldlm_resource_get(struct ldlm_namespace *ns,
         RETURN(res);
 }
 
-/* Args: unlocked resource
+/* Args: locked resource
  * Locks: takes and releases res->lr_lock
  *        takes and releases ns->ns_lock iff res->lr_refcount falls to 0
  */
@@ -176,11 +225,9 @@ int ldlm_resource_put(struct ldlm_resource *res)
 {
         int rc = 0; 
 
-        spin_lock(&res->lr_lock);
         res->lr_refcount--;
         if (res->lr_refcount < 0)
                 LBUG();
-        spin_unlock(&res->lr_lock);
 
         if (res->lr_refcount == 0) {
                 struct ldlm_namespace *ns = res->lr_namespace;
