@@ -1,4 +1,6 @@
-/*
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
+ *
  *  linux/fs/ext2/file.c
  *
  * This code is issued under the GNU General Public License.
@@ -44,97 +46,102 @@ extern inline struct obdo * ll_oa_from_inode(struct inode *inode, int valid);
 
 static int ll_file_open(struct inode *inode, struct file *file)
 {
-	int rc; 
-	int flags = 0; 
-	struct ptlrpc_request *req;
-	struct ll_file_data *fd;
-	struct obdo *oa;
+        int rc; 
+        struct ptlrpc_request *req;
+        struct ll_file_data *fd;
+        struct obdo *oa;
         struct ll_sb_info *sbi = ll_i2sbi(inode);
-	ENTRY;
+        ENTRY;
 
-	fd = kmem_cache_alloc(ll_file_data_slab, SLAB_KERNEL); 
-	if (!fd) { 
-		rc = -ENOMEM;
-		goto out;
-	}
+        if (file->private_data) 
+                BUG();
+
+        fd = kmem_cache_alloc(ll_file_data_slab, SLAB_KERNEL); 
+        if (!fd) { 
+                rc = -ENOMEM;
+                goto out;
+        }
 
         oa = ll_oa_from_inode(inode, (OBD_MD_FLMODE | OBD_MD_FLID));
         if (oa == NULL)
                 BUG();
-	rc = obd_open(ll_i2obdconn(inode), oa); 
+        rc = obd_open(ll_i2obdconn(inode), oa); 
         obdo_free(oa);
-	if (rc) { 
-		if (rc > 0) 
-			rc = -rc;
-		EXIT;
-		goto out;
-	}
+        if (rc) { 
+                if (rc > 0) 
+                        rc = -rc;
+                EXIT;
+                goto out;
+        }
 
-	rc = mdc_open(&sbi->ll_mds_client, inode->i_ino, S_IFREG, flags, 
-		      &fd->fd_mdshandle, &req); 
-	ptlrpc_free_req(req);
-	if (rc) { 
-		if (rc > 0) 
-			rc = -rc;
-		EXIT;
-		goto out;
-	}
-	file->private_data = fd;
+        rc = mdc_open(&sbi->ll_mds_client, inode->i_ino, S_IFREG,
+                      file->f_flags, &fd->fd_mdshandle, &req); 
+        if (!fd->fd_mdshandle) 
+                BUG();
 
-	EXIT; 
+        ptlrpc_free_req(req);
+        if (rc) { 
+                if (rc > 0) 
+                        rc = -rc;
+                EXIT;
+                goto out;
+        }
+        file->private_data = fd;
+
+        EXIT; 
  out:
-	if (rc && fd) { 
-		kmem_cache_free(ll_file_data_slab, fd); 
-	}
-	return rc;
+        if (rc && fd)
+                kmem_cache_free(ll_file_data_slab, fd); 
+
+        return rc;
 }
 
 
 static int ll_file_release(struct inode *inode, struct file *file)
 {
-	int rc;
-	struct ptlrpc_request *req;
-	struct ll_file_data *fd;
-	struct obdo *oa;
+        int rc;
+        struct ptlrpc_request *req;
+        struct ll_file_data *fd;
+        struct obdo *oa;
         struct ll_sb_info *sbi = ll_i2sbi(inode);
-	ENTRY;
+        ENTRY;
 
-	fd = (struct ll_file_data *)file->private_data;
-	if (!fd) { 
-		BUG();
+        fd = (struct ll_file_data *)file->private_data;
+        if (!fd || !fd->fd_mdshandle) { 
+                BUG();
                 rc = -EINVAL;
-		goto out;
-	}
+                goto out;
+        }
 
         oa = ll_oa_from_inode(inode, (OBD_MD_FLMODE | OBD_MD_FLID));
         if (oa == NULL)
                 BUG();
-	rc = obd_close(ll_i2obdconn(inode), oa); 
+        rc = obd_close(ll_i2obdconn(inode), oa); 
         obdo_free(oa);
-	if (rc) { 
-		if (rc > 0) 
-			rc = -rc;
-		EXIT;
-		goto out;
-	}
+        if (rc) { 
+                if (rc > 0) 
+                        rc = -rc;
+                EXIT;
+                goto out;
+        }
 
-	rc = mdc_close(&sbi->ll_mds_client, inode->i_ino, S_IFREG, 
-		      fd->fd_mdshandle, &req); 
-	ptlrpc_free_req(req);
-	if (rc) { 
-		if (rc > 0) 
-			rc = -rc;
-		EXIT;
-		goto out;
-	}
-	EXIT; 
+        rc = mdc_close(&sbi->ll_mds_client, inode->i_ino, S_IFREG, 
+                      fd->fd_mdshandle, &req); 
+        ptlrpc_free_req(req);
+        if (rc) { 
+                if (rc > 0) 
+                        rc = -rc;
+                EXIT;
+                goto out;
+        }
+        EXIT; 
 
  out:
-	if (!rc && fd) { 
-		kmem_cache_free(ll_file_data_slab, fd); 
-		file->private_data = NULL;
-	}
-	return rc;
+        if (!rc && fd) { 
+                kmem_cache_free(ll_file_data_slab, fd); 
+                file->private_data = NULL;
+        }
+        return rc;
 }
 
 
@@ -149,7 +156,7 @@ static inline void ll_remove_suid(struct inode *inode)
         mode &= inode->i_mode;
         if (mode && !capable(CAP_FSETID)) {
                 inode->i_mode &= ~mode;
-		// XXX careful here - we cannot change the size
+                // XXX careful here - we cannot change the size
         }
 }
 
@@ -167,12 +174,12 @@ ll_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
         retval = generic_file_write(file, buf, count, ppos);
         CDEBUG(D_INFO, "Wrote %d\n", retval);
 
-	/* update mtime/ctime/atime here, NOT size */
+        /* update mtime/ctime/atime here, NOT size */
         if (retval > 0) {
-		struct iattr attr;
-		attr.ia_valid = ATTR_MTIME | ATTR_CTIME | ATTR_ATIME;
-		attr.ia_mtime = attr.ia_ctime = attr.ia_atime =
-			CURRENT_TIME;
+                struct iattr attr;
+                attr.ia_valid = ATTR_MTIME | ATTR_CTIME | ATTR_ATIME;
+                attr.ia_mtime = attr.ia_ctime = attr.ia_atime =
+                        CURRENT_TIME;
                 ll_setattr(file->f_dentry, &attr);
         }
         EXIT;
@@ -184,21 +191,21 @@ ll_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
    call setattr */ 
 int ll_fsync(struct file *file, struct dentry *dentry, int data)
 {
-	return 0;
+        return 0;
 }
 
 struct file_operations ll_file_operations = {
         read: generic_file_read,
         write: ll_file_write,
-	open: ll_file_open,
-	release: ll_file_release,
+        open: ll_file_open,
+        release: ll_file_release,
         mmap: generic_file_mmap,
-	fsync: NULL
+        fsync: NULL
 };
 
 
 struct inode_operations ll_file_inode_operations = {
         truncate: ll_truncate,
-	setattr: ll_setattr
+        setattr: ll_setattr
 };
 
