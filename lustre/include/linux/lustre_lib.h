@@ -37,6 +37,9 @@ inline void lustre_put_page(struct page *page);
 struct page * lustre_get_page(struct inode *dir, unsigned long n);
 int lustre_prepare_page(unsigned from, unsigned to, struct page *page);
 int lustre_commit_page(struct page *page, unsigned from, unsigned to);
+
+/* simple.c */
+struct obd_run_ctxt;
 void push_ctxt(struct obd_run_ctxt *save, struct obd_run_ctxt *new);
 void pop_ctxt(struct obd_run_ctxt *saved);
 int simple_mkdir(struct dentry *dir, char *name, int mode);
