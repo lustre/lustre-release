@@ -86,11 +86,11 @@ static int llwp_consume_page(struct ll_writeback_pages *llwp,
         pg->pg = page;
         pg->off = off;
         pg->flag = OBD_BRW_CREATE;
-        pg->count = PAGE_SIZE;
+        pg->count = PAGE_CACHE_SIZE;
 
         /* catch partial writes for files that end mid-page */
-        if ( pg->off + pg->count > inode->i_size )
-                pg->count = inode->i_size & ~PAGE_MASK;
+        if (pg->off + pg->count > inode->i_size)
+                pg->count = inode->i_size & ~PAGE_CACHE_MASK;
 
         /*
          * matches ptlrpc_bulk_get assert that trickles down
@@ -243,24 +243,12 @@ static int should_writeback(void)
         return 0;
 }
 
-static int ll_alloc_brw(struct lustre_handle *conn,
-                        struct ll_writeback_pages *llwp)
+static int ll_alloc_brw(struct inode *inode, struct ll_writeback_pages *llwp)
 {
-        static char key[] = "brw_size";
-        __u32 brw_size;
-        __u32 vallen = sizeof(brw_size);
-        int rc;
-        ENTRY;
-
         memset(llwp, 0, sizeof(struct ll_writeback_pages));
 
-        rc = obd_get_info(conn, sizeof(key) - 1, key, &vallen, &brw_size);
-        if (rc != 0)
-                RETURN(rc);
-        LASSERT(brw_size >= PAGE_SIZE);
-
-        llwp->max = brw_size >> PAGE_SHIFT;
-        llwp->pga = kmalloc(llwp->max * sizeof(struct brw_page), GFP_ATOMIC);
+        llwp->max = inode->i_blksize >> PAGE_CACHE_SHIFT;
+        llwp->pga = kmalloc(llwp->max * sizeof(*llwp->pga), GFP_ATOMIC);
         if (llwp->pga == NULL)
                 RETURN(-ENOMEM);
         RETURN(0);
@@ -270,19 +258,15 @@ int ll_check_dirty(struct super_block *sb)
 {
         unsigned long old_flags; /* hack? */
         int making_progress;
-        struct ll_writeback_pages llwp;
         struct inode *inode;
         int rc = 0;
         ENTRY;
 
-        if ( ! should_writeback() )
+        if (!should_writeback())
                 return 0;
 
         old_flags = current->flags;
         current->flags |= PF_MEMALLOC;
-        rc = ll_alloc_brw(&ll_s2sbi(sb)->ll_osc_conn, &llwp);
-        if ( rc != 0)
-                GOTO(cleanup, rc);
 
         spin_lock(&inode_lock);
 
@@ -291,6 +275,7 @@ int ll_check_dirty(struct super_block *sb)
          * until the VM thinkgs we're ok again..
          */
         do {
+                struct ll_writeback_pages llwp;
                 struct list_head *pos;
                 inode = NULL;
                 making_progress = 0;
@@ -315,6 +300,10 @@ int ll_check_dirty(struct super_block *sb)
                 inode->i_state &= ~I_DIRTY_PAGES;
 
                 spin_unlock(&inode_lock);
+
+                rc = ll_alloc_brw(inode, &llwp);
+                if (rc != 0)
+                        GOTO(cleanup, rc);
 
                 do {
                         llwp.npgs = 0;
@@ -343,7 +332,7 @@ int ll_check_dirty(struct super_block *sb)
                         list_add(&inode->i_list, &inode->i_sb->s_dirty);
                 }
                 wake_up(&inode->i_wait);
-
+                kfree(llwp.pga);
         } while (making_progress && should_writeback());
 
         /*
@@ -367,16 +356,13 @@ int ll_check_dirty(struct super_block *sb)
         spin_unlock(&inode_lock);
 
 cleanup:
-        if ( llwp.pga != NULL )
-                kfree(llwp.pga);
         current->flags = old_flags;
 
         RETURN(rc);
 }
 #endif /* linux 2.5 */
 
-
-int ll_batch_writepage( struct inode *inode, struct page *page )
+int ll_batch_writepage(struct inode *inode, struct page *page)
 {
         unsigned long old_flags; /* hack? */
         struct ll_writeback_pages llwp;
@@ -385,21 +371,20 @@ int ll_batch_writepage( struct inode *inode, struct page *page )
 
         old_flags = current->flags;
         current->flags |= PF_MEMALLOC;
-        rc = ll_alloc_brw(&ll_i2sbi(inode)->ll_osc_conn, &llwp);
-        if ( rc != 0)
+        rc = ll_alloc_brw(inode, &llwp);
+        if (rc != 0)
                 GOTO(cleanup, rc);
 
-        llwp_consume_page(&llwp, inode, page);
+        if (llwp_consume_page(&llwp, inode, page) == 0)
+                ll_get_dirty_pages(inode, &llwp);
 
-        ll_get_dirty_pages(inode, &llwp);
-        if ( llwp.npgs ) {
+        if (llwp.npgs) {
                 INODE_IO_STAT_ADD(inode, wb_from_writepage, llwp.npgs);
                 ll_writeback(inode, &llwp);
         }
 
+        kfree(llwp.pga);
 cleanup:
-        if ( llwp.pga != NULL )
-                kfree(llwp.pga);
         current->flags = old_flags;
         RETURN(rc);
 }
@@ -414,8 +399,8 @@ struct offset_extent {
         unsigned long   oe_start, oe_end;
 };
 
-static struct offset_extent * ll_find_oe(rb_root_t *root,
-                                         struct offset_extent *needle)
+static struct offset_extent *ll_find_oe(rb_root_t *root,
+                                        struct offset_extent *needle)
 {
         struct rb_node_s *node = root->rb_node;
         struct offset_extent *oe;
