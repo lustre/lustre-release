@@ -728,8 +728,8 @@ portals_debug_msg(int subsys, int mask, char *file, const char *fn,
         do_gettimeofday(&tv);
 
         prefix_nob = snprintf(debug_buf + debug_off, max_nob,
-                              "%02x:%06x:%d:%lu.%06lu ",
-                              subsys >> 24, mask, smp_processor_id(),
+                              "%06x:%06x:%d:%lu.%06lu ",
+                              subsys, mask, smp_processor_id(),
                               tv.tv_sec, tv.tv_usec);
         max_nob -= prefix_nob;
 
@@ -752,7 +752,7 @@ portals_debug_msg(int subsys, int mask, char *file, const char *fn,
 
         va_start(ap, format);
         msg_nob += vsnprintf(debug_buf + debug_off + prefix_nob + msg_nob,
-                            max_nob, format, ap);
+                             max_nob, format, ap);
         max_nob -= msg_nob;
         va_end(ap);
 

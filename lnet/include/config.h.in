@@ -12,3 +12,8 @@
 /* IOCTL Buffer Size */
 #undef OBD_MAX_IOCTL_BUFFER
 
+/* temporary pinger */
+#undef ENABLE_PINGER
+
+/* experimental orphans */
+#undef ENABLE_ORPHANS

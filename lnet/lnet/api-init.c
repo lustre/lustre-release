@@ -26,7 +26,7 @@
 #include <portals/api-support.h>
 
 int ptl_init;
-unsigned int portal_subsystem_debug = 0xfff7e3ff;
+unsigned int portal_subsystem_debug = ~0 - (S_PORTALS | S_QSWNAL | S_SOCKNAL | S_GMNAL);
 unsigned int portal_debug = ~0;
 unsigned int portal_printk;
 unsigned int portal_stack;

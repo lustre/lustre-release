@@ -57,13 +57,14 @@ static int subsystem_array[1 << 8];
 static int debug_mask = ~0;
 
 static const char *portal_debug_subsystems[] =
-        {"undefined", "mdc", "mds", "osc", "ost", "class", "obdfs", "llite",
-         "rpc", "ext2obd", "portals", "socknal", "qswnal", "pinger", "filter",
-         "obdtrace", "echo", "ldlm", "lov", "gmnal", "router", "ptldb", NULL};
+        {"undefined", "mdc", "mds", "osc", "ost", "class", "log", "llite",
+         "rpc", "mgmt", "portals", "socknal", "qswnal", "pinger", "filter",
+         "ptlbd", "echo", "ldlm", "lov", "gmnal", "router", "cobd", NULL};
 static const char *portal_debug_masks[] =
         {"trace", "inode", "super", "ext2", "malloc", "cache", "info", "ioctl",
          "blocks", "net", "warning", "buffs", "other", "dentry", "portals",
-         "page", "dlmtrace", "error", "emerg", "ha", "rpctrace", "vfstrace", NULL};
+         "page", "dlmtrace", "error", "emerg", "ha", "rpctrace", "vfstrace",
+         NULL};
 
 struct debug_daemon_cmd {
         char *cmd;
@@ -230,7 +231,7 @@ static void dump_buffer(FILE *fd, char *buf, int size, int raw)
 {
         char *p, *z;
         unsigned long subsystem, debug, dropped = 0, kept = 0;
-        int max_sub, max_type;
+        int max_sub, max_type, warn = 0;
 
         for (max_sub = 0; portal_debug_subsystems[max_sub] != NULL; max_sub++)
                 ;
@@ -247,8 +248,13 @@ static void dump_buffer(FILE *fd, char *buf, int size, int raw)
                 z++;
                 /* for some reason %*s isn't working. */
                 *p = '\0';
-                if (subsystem < max_sub &&
-                    subsystem_array[subsystem] &&
+                if (subsystem >= max_sub && warn == 0) {
+                        fprintf(stderr, "warning: unrecognized debug subsystem "
+                                "%lx; did someone update kp30.h but not "
+                                "portals/utils/debug.c?\n", subsystem);
+                        warn = 1;
+                }
+                if ((subsystem >= max_sub || subsystem_array[subsystem]) &&
                     (!debug || (debug_mask & debug))) {
                         if (raw)
                                 fprintf(fd, "%s\n", buf);
