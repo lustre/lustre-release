@@ -46,10 +46,10 @@
 struct semaphore obd_conf_sem;   /* serialize configuration commands */
 struct obd_device obd_dev[MAX_OBD_DEVICES];
 struct list_head obd_types;
-unsigned long obd_memory = 0;
+unsigned long obd_memory;
 
 /* The following are visible and mutable through /proc/sys/lustre/. */
-unsigned long obd_fail_loc = 0;
+unsigned long obd_fail_loc;
 unsigned long obd_timeout = 100;
 char obd_recovery_upcall[128] = "/usr/lib/lustre/ha_assist";
 
@@ -270,9 +270,10 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 
         case OBD_IOC_ATTACH: {
                 struct obd_type *type;
+                int minor;
 
                 /* have we attached a type to this device */
-                if (obd->obd_flags & OBD_ATTACHED) {
+                if (obd->obd_flags & OBD_ATTACHED || obd->obd_type) {
                         CERROR("OBD: Device %d already typed as %s.\n",
                                obd->obd_minor, MKSTR(obd->obd_type->typ_name));
                         GOTO(out, err=-EBUSY);
@@ -298,8 +299,13 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                         GOTO(out, err=-EINVAL);
                 }
 
+                minor = obd->obd_minor;
+                memset(obd, 0, sizeof(*obd));
+                obd->obd_minor = minor;
                 obd->obd_type = type;
                 INIT_LIST_HEAD(&obd->obd_exports);
+                INIT_LIST_HEAD(&obd->obd_imports);
+                spin_lock_init(&obd->obd_dev_lock);
 
                 /* do the attach */
                 if (OBP(obd, attach))
@@ -308,6 +314,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                         obd->obd_type = NULL;
                 } else {
                         obd->obd_flags |= OBD_ATTACHED;
+
                         type->typ_refcnt++;
                         CDEBUG(D_IOCTL, "OBD: dev %d attached type %s\n",
                                obd->obd_minor, data->ioc_inlbuf1);
@@ -642,6 +649,7 @@ EXPORT_SYMBOL(ldlm_destroy_export);
 
 static int __init init_obdclass(void)
 {
+        struct obd_device *obd;
         int err;
         int i;
 
@@ -655,11 +663,9 @@ static int __init init_obdclass(void)
                 return err;
         }
 
-        for (i = 0; i < MAX_OBD_DEVICES; i++) {
-                memset(&(obd_dev[i]), 0, sizeof(obd_dev[i]));
-                obd_dev[i].obd_minor = i;
-                INIT_LIST_HEAD(&obd_dev[i].obd_exports);
-        }
+        /* This struct is already zerod for us (static global) */
+        for (i = 0, obd = obd_dev; i < MAX_OBD_DEVICES; i++, obd++)
+                obd->obd_minor = i;
 
         err = obd_init_caches();
         if (err)
