@@ -46,7 +46,7 @@ static char *ll_read_opt(const char *opt, char *data)
                 CERROR("out of memory!\n");
                 RETURN(NULL);
         }
-        
+
         memcpy(retval, value, strlen(value)+1);
         CDEBUG(D_SUPER, "Assigned option: %s, value %s\n", opt, retval);
         RETURN(retval);
@@ -120,7 +120,7 @@ static struct super_block * ll_read_super(struct super_block *sb,
                 GOTO(out_free, sb = NULL);
         }
 
-        obd = class_uuid2obd(mdc); 
+        obd = class_uuid2obd(mdc);
         if (!obd) {
                 CERROR("MDC %s: not setup or attached\n", mdc);
                 GOTO(out_free, sb = NULL);
@@ -131,7 +131,7 @@ static struct super_block * ll_read_super(struct super_block *sb,
                 CERROR("cannot connect to %s: rc = %d\n", mdc, err);
                 GOTO(out_free, sb = NULL);
         }
-        
+
 #warning Peter: is this the right place to raise the connection level?
         sbi2mdc(sbi)->cl_import.imp_connection->c_level = LUSTRE_CONN_FULL;
 
@@ -244,9 +244,9 @@ static void ll_clear_inode(struct inode *inode)
                 char *symlink_name = lli->lli_symlink_name;
 
                 if (md) {
-                        int size = sizeof(*md) + 
+                        int size = sizeof(*md) +
                                 md->lmd_stripe_count * sizeof(struct lov_oinfo);
-                        OBD_FREE(md, size); 
+                        OBD_FREE(md, size);
                         lli->lli_smd = NULL;
                 }
                 if (symlink_name) {
@@ -365,7 +365,7 @@ static int ll_statfs(struct super_block *sb, struct statfs *sfs)
         if (rc)
                 CERROR("obd_statfs fails: rc = %d\n", rc);
         else
-                CDEBUG(D_SUPER, "statfs shows blocks %ld/%ld objects %ld/%ld\n",
+                CDEBUG(D_SUPER, "statfs shows blocks %lu/%lu objects %lu/%lu\n",
                        sfs->f_bavail, sfs->f_blocks, sfs->f_ffree,sfs->f_files);
 
         /* temporary until mds_statfs returns statfs info for all OSTs */
@@ -377,8 +377,8 @@ static int ll_statfs(struct super_block *sb, struct statfs *sfs)
                         CERROR("obd_statfs fails: rc = %d\n", rc);
                         GOTO(out, rc);
                 }
-                CDEBUG(D_SUPER, "obd_statfs returns blocks %ld/%ld, "
-                       "objects %ld/%ld\n",
+                CDEBUG(D_SUPER, "obd_statfs returns blocks %lu/%lu, "
+                       "objects %lu/%lu\n",
                        obd_sfs.f_bavail, obd_sfs.f_blocks,
                        obd_sfs.f_ffree, obd_sfs.f_files);
 
@@ -436,7 +436,7 @@ static void ll_read_inode2(struct inode *inode, void *opaque)
 
 
         //if (body->valid & OBD_MD_FLEASIZE)
-        if (md && md->md && md->md->lmd_stripe_count) { 
+        if (md && md->md && md->md->lmd_stripe_count) {
                 struct lov_mds_md *smd = md->md;
                 int size;
                 if (md->md->lmd_easize != ll_stripe_mds_md_size(inode->i_sb)) {

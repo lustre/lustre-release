@@ -42,17 +42,34 @@ void obd_statfs_pack(struct obd_statfs *osfs, struct statfs *sfs)
         osfs->os_namelen = HTON__u32(sfs->f_namelen);
 }
 
+#if BITS_PER_LONG > 32
+#define statfs_max(val) val
+#else
+static inline long statfs_max(__u64 val)
+{
+        return ((long)val < val) ? (long)-1 : val;
+}
+#endif
+
+/*
+ * Note: since linux statfs is limited to a "long" for the statfs
+ * fields, we quickly overflow that.  If we wanted, we could start
+ * playing games with the blocksize until the blocks count fit into
+ * a long.  Note that it also appears that userspace interprets these
+ * fields as an unsigned long, which is helps us a bit, and it also
+ * appears to do 64-bit math for at least some of the computations.
+ */
 void obd_statfs_unpack(struct obd_statfs *osfs, struct statfs *sfs)
 {
         if (osfs == NULL || sfs == NULL)
                 LBUG();
 
         sfs->f_type = NTOH__u64(osfs->os_type);
-        sfs->f_blocks = NTOH__u64(osfs->os_blocks);
-        sfs->f_bfree = NTOH__u64(osfs->os_bfree);
-        sfs->f_bavail = NTOH__u64(osfs->os_bavail);
-        sfs->f_files = NTOH__u64(osfs->os_files);
-        sfs->f_ffree = NTOH__u64(osfs->os_ffree);
+        sfs->f_blocks = statfs_max(NTOH__u64(osfs->os_blocks));
+        sfs->f_bfree = statfs_max(NTOH__u64(osfs->os_bfree));
+        sfs->f_bavail = statfs_max(NTOH__u64(osfs->os_bavail));
+        sfs->f_files = statfs_max(NTOH__u64(osfs->os_files));
+        sfs->f_ffree = statfs_max(NTOH__u64(osfs->os_ffree));
         sfs->f_bsize = NTOH__u32(osfs->os_bsize);
         sfs->f_namelen = NTOH__u32(osfs->os_namelen);
 }
