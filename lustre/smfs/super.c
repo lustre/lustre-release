@@ -122,6 +122,7 @@ static int sm_mount_cache(struct super_block *sb,
 	smb = S2SMI(sb); 
 	smb->smsi_sb = mnt->mnt_sb;
 	smb->smsi_mnt = mnt;
+	sm_set_sb_ops(mnt->mnt_sb, sb);	
 err_out:
 	if (dev_name) 
 		SM_FREE(dev_name, strlen(dev_name) + 2);
@@ -165,7 +166,6 @@ smfs_read_super(
 		GOTO(out_err, 0);
 	}
 	/* set up the super block */
-	sb->s_op = &smfs_super_ops;
 
 	bottom_root = dget(S2SMI(sb)->smsi_sb->s_root);
 	if (!bottom_root) {
@@ -200,23 +200,25 @@ static DECLARE_FSTYPE(smfs_type, "smfs", smfs_read_super, 0);
 
 int init_smfs(void)
 {
-	int err;
+	int err = 0;
 
 	err = register_filesystem(&smfs_type);
 	if (err) {
 		CERROR("smfs: failed in register Storage Management filesystem!\n");
 	}
+	init_smfs_cache();		
 	return err;
 }
 
 int cleanup_smfs(void)
 {
-	int err;
+	int err = 0;
 
 	ENTRY;
 	err = unregister_filesystem(&smfs_type);
 	if (err) {
 		CERROR("smfs: failed to unregister Storage Management filesystem!\n");
 	}
+	cleanup_smfs_cache();		
 	return 0;
 }
