@@ -59,6 +59,16 @@ struct obdfs_pgrq {
 	struct page 		*rq_page;	/* page to be written */
 };
 
+void obdfs_print_list(struct list_head *page_list) {
+	struct list_head *tmp;
+
+	while ( (tmp = tmp->next) != page_list) {
+		struct obdfs_pgrq *pgrq;
+		pgrq = list_entry(tmp, struct obdfs_pgrq, rq_plist);
+		CDEBUG(D_INODE, "page %p\n", pgrq->rq_page);
+	}
+}
+
 inline void obdfs_pgrq_del(struct obdfs_pgrq *pgrq);
 int obdfs_do_vec_wr(struct super_block *sb, obd_count num_io, obd_count num_oa,
 			   struct obdo **obdos, obd_count *oa_bufs,

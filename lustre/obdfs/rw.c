@@ -144,7 +144,6 @@ obdfs_find_in_page_list(struct inode *inode, struct page *page)
 {
 	struct list_head *page_list = obdfs_iplist(inode);
 	struct list_head *tmp;
-	struct obdfs_pgrq *pgrq;
 
 	ENTRY;
 	CDEBUG(D_INODE, "looking for inode %ld page %p\n", inode->i_ino, page);
@@ -155,6 +154,8 @@ obdfs_find_in_page_list(struct inode *inode, struct page *page)
 	}
 	tmp = page_list;
 	while ( (tmp = tmp->next) != page_list ) {
+		struct obdfs_pgrq *pgrq;
+
 		pgrq = list_entry(tmp, struct obdfs_pgrq, rq_plist);
 		CDEBUG(D_INODE, "checking page %p\n", pgrq->rq_page);
 		if (pgrq->rq_page == page) {
@@ -228,6 +229,7 @@ static int obdfs_add_page_to_cache(struct inode *inode, struct page *page)
 		       obdfs_islist(inode), obdfs_islist(inode));
 		list_add(obdfs_islist(inode), obdfs_slist(inode));
 	}
+
 
 	EXIT;
 	/* XXX For testing purposes, we write out the page here.
