@@ -16,10 +16,10 @@
 #include <linux/version.h>
 #include <linux/lustre_lite.h>
 #include <linux/lustre_ha.h>
-#include <linux/obd_lov.h>
 #include <linux/lustre_dlm.h>
 #include <linux/init.h>
 #include <linux/fs.h>
+#include <linux/lprocfs_status.h>
 
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
 kmem_cache_t *ll_file_data_slab;
@@ -33,6 +33,8 @@ extern int ll_recover(struct recovd_data *, int);
 extern int ll_commitcbd_setup(struct ll_sb_info *);
 extern int ll_commitcbd_cleanup(struct ll_sb_info *);
 int ll_read_inode2(struct inode *inode, void *opaque);
+
+extern void ll_proc_namespace(struct super_block* sb, char* osc, char* mdc)
 
 static char *ll_read_opt(const char *opt, char *data)
 {
@@ -84,7 +86,7 @@ static void ll_options(char *options, char **ost, char **mds, int *flags)
                 CDEBUG(D_SUPER, "this_char %s\n", this_char);
                 if ( (!*ost && (*ost = ll_read_opt("osc", this_char)))||
                      (!*mds && (*mds = ll_read_opt("mdc", this_char)))||
-                     (!(*flags & LL_SBI_NOLCK) && ((*flags) = (*flags) | 
+                     (!(*flags & LL_SBI_NOLCK) && ((*flags) = (*flags) |
                       ll_set_opt("nolock", this_char, LL_SBI_NOLCK))) )
                         continue;
         }
@@ -219,7 +221,7 @@ static int ll_fill_super(struct super_block *sb, void *data, int silent)
 
         ptlrpc_req_finished(request);
         request = NULL;
-
+        ll_proc_namespace(sb, osc, mdc)
 out_dev:
         if (mdc)
                 OBD_FREE(mdc, strlen(mdc) + 1);
@@ -242,8 +244,8 @@ out_free:
         goto out_dev;
 } /* ll_fill_super */
 
-struct super_block * ll_get_sb(struct file_system_type *fs_type, 
-                                   int flags, char *devname, void * data)
+struct super_block * ll_get_sb(struct file_system_type *fs_type,
+                               int flags, char *devname, void * data)
 {
         return get_sb_nodev(fs_type, flags, data, ll_fill_super);
 }
@@ -266,6 +268,9 @@ static void ll_put_super(struct super_block *sb)
          */
         mdc_getstatus(&sbi->ll_mdc_conn, &rootfid);
 
+        lprocfs_dereg_mnt(sbi->ll_proc_root);
+        sbi->ll_proc_root = NULL;
+
         obd_disconnect(&sbi->ll_mdc_conn);
         OBD_FREE(sbi, sizeof(*sbi));
 
@@ -279,13 +284,10 @@ static void ll_clear_inode(struct inode *inode)
 
         if (atomic_read(&inode->i_count) == 0) {
                 struct ll_inode_info *lli = ll_i2info(inode);
-                struct lov_stripe_md *lsm = lli->lli_smd;
                 char *symlink_name = lli->lli_symlink_name;
 
-                if (lsm) {
-                        OBD_FREE(lsm, ll_ost_easize(inode->i_sb));
-                        lli->lli_smd = NULL;
-                }
+                if (lli->lli_smd)
+                        obd_free_memmd(&sbi->ll_osc_conn, &lli->lli_smd);
                 if (symlink_name) {
                         OBD_FREE(symlink_name, strlen(symlink_name) + 1);
                         lli->lli_symlink_name = NULL;
@@ -316,7 +318,6 @@ static void ll_delete_inode(struct inode *inode)
                         GOTO(out, -ENOMEM);
 
                 oa->o_id = lsm->lsm_object_id;
-                oa->o_easize = ll_mds_easize(inode->i_sb);
                 oa->o_mode = inode->i_mode;
                 oa->o_valid = OBD_MD_FLID | OBD_MD_FLEASIZE | OBD_MD_FLTYPE;
 
@@ -475,6 +476,7 @@ int ll_read_inode2(struct inode *inode, void *opaque)
         struct ll_read_inode2_cookie *lic = opaque;
         struct mds_body *body = lic->lic_body;
         struct ll_inode_info *lli = ll_i2info(inode);
+        int rc = 0;
         ENTRY;
 
         sema_init(&lli->lli_open_sem, 1);
@@ -483,38 +485,18 @@ int ll_read_inode2(struct inode *inode, void *opaque)
         ll_update_inode(inode, body);
 
         //if (body->valid & OBD_MD_FLEASIZE)
-        if (lic && lic->lic_lmm) {
-                struct lov_mds_md *lmm = lic->lic_lmm;
-                int size;
-
-                /* XXX This should probably not be an error in the future,
-                 *     when we allow LOV OSTs to be added.
-                 */
-                if (lmm->lmm_easize != ll_mds_easize(inode->i_sb)) {
-                        CERROR("Striping metadata size error %ld\n",
-                               inode->i_ino);
-                        LBUG();
-                }
-                size = ll_ost_easize(inode->i_sb);
-                OBD_ALLOC(lli->lli_smd, size);
-                if (!lli->lli_smd) {
-                        CERROR("No memory for %d\n", size);
-                        LBUG();
-                }
-                lov_unpackmd(lli->lli_smd, lmm);
-        } else {
-                lli->lli_smd = NULL;
-        }
+        LASSERT(!lli->lli_smd);
+        if (lic && lic->lic_lmm)
+                obd_unpackmd(ll_i2obdconn(inode), &lli->lli_smd, lic->lic_lmm);
 
         /* Get the authoritative file size */
-        if (lli->lli_smd && (inode->i_mode & S_IFREG)) {
-                int rc;
-
+        if (lli->lli_smd && S_ISREG(inode->i_mode)) {
                 rc = ll_file_size(inode, lli->lli_smd);
                 if (rc) {
                         CERROR("ll_file_size: %d\n", rc);
                         /* FIXME: need to somehow prevent inode creation */
                         LBUG();
+                        make_bad_inode(inode);
                 }
         }
 
@@ -538,14 +520,15 @@ int ll_read_inode2(struct inode *inode, void *opaque)
                                    kdev_t_to_nr(inode->i_rdev));
                 EXIT;
         }
-        return 0;
+
+        return rc;
 }
 
 static inline void invalidate_request_list(struct list_head *req_list)
 {
         struct list_head *tmp, *n;
         list_for_each_safe(tmp, n, req_list) {
-                struct ptlrpc_request *req = 
+                struct ptlrpc_request *req =
                         list_entry(tmp, struct ptlrpc_request, rq_list);
                 CERROR("invalidating req xid %d op %d to %s:%d\n",
                        (unsigned long long)req->rq_xid, req->rq_reqmsg->opc,
@@ -562,7 +545,7 @@ void ll_umount_begin(struct super_block *sb)
         struct list_head *ctmp;
 
         ENTRY;
-       
+
         list_for_each(ctmp, &sbi->ll_conn_chain) {
                 struct ptlrpc_connection *conn;
                 conn = list_entry(ctmp, struct ptlrpc_connection, c_sb_chain);
@@ -640,7 +623,7 @@ struct super_operations ll_super_operations =
 
 struct file_system_type lustre_lite_fs_type = {
         .owner  = THIS_MODULE,
-        .name =   "lustre_lite", 
+        .name =   "lustre_lite",
         .get_sb = ll_get_sb,
         .kill_sb = kill_litter_super,
 };
@@ -650,12 +633,12 @@ static int __init init_lustre_lite(void)
         int rc;
         printk(KERN_INFO "Lustre Lite 0.5.14, info@clusterfs.com\n");
         rc = ll_init_inodecache();
-        if (rc) 
+        if (rc)
                 return -ENOMEM;
         ll_file_data_slab = kmem_cache_create("ll_file_data",
                                               sizeof(struct ll_file_data), 0,
                                               SLAB_HWCACHE_ALIGN, NULL, NULL);
-        if (ll_file_data_slab == NULL) { 
+        if (ll_file_data_slab == NULL) {
                 ll_destroy_inodecache();
                 return -ENOMEM;
         }

@@ -11,13 +11,33 @@ OSTDEV1=$TMP/ost1
 OSTDEV2=$TMP/ost2
 OSTSIZE=100000
 
-MDSNODE=uml1
-OSTNODE=uml2
 # NOTE - You can't have different MDS/OST nodes and also have clients on the
 #        MDS/OST nodes without using --endlevel and --startlevel during lconf.
 #        You can put both MDS/OST on one node and client can be there too.
 #        CLIENTS is a space-separated list of client nodes.
+#
+#        The rule is that both the MDS and the OST must be set up before any
+#        of the clients can be started, so plan accordingly.
+
+# Three separate systems
+MDSNODE=uml1
+OSTNODE=uml2
 CLIENTS="uml3"
+
+# Single system with additional clients
+#MDSNODE=uml1
+#OSTNODE=uml1
+#CLIENTS="$MDSNODE client"
+
+# Two systems with client on MDS, and additional clients (set up OST first)
+#MDSNODE=uml1
+#OSTNODE=uml2
+#CLIENTS="$MDSNODE client"
+
+# Two systems with client on OST, and additional clients (set up MDS first)
+#MDSNODE=uml1
+#OSTNODE=uml2
+#CLIENTS="$OSTNODE client"
 
 rm -f $config
 
