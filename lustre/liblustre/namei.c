@@ -119,6 +119,31 @@ static int pnode_revalidate_finish(int flag, struct ptlrpc_request *request,
         RETURN(rc);
 }
 
+/*
+ * remove the stale inode from pnode
+ */
+void unhook_stale_inode(struct pnode *pno)
+{
+        struct inode *inode = pno->p_base->pb_ino;
+        ENTRY;
+
+        LASSERT(inode);
+        LASSERT(llu_i2info(inode)->lli_stale_flag);
+
+        pno->p_base->pb_ino = NULL;
+
+        if (!llu_i2info(inode)->lli_open_count) {
+                CDEBUG(D_INODE, "unhook inode %p (ino %lu) from pno %p\n",
+                                inode, llu_i2info(inode)->lli_st_ino, pno);
+                I_RELE(inode);
+                if (!inode->i_ref)
+                        _sysio_i_gone(inode);
+        }
+
+        EXIT;
+        return;
+}
+
 int llu_pb_revalidate(struct pnode *pnode, int flags, struct lookup_intent *it)
 {
         struct pnode_base *pb = pnode->p_base;
@@ -135,14 +160,14 @@ int llu_pb_revalidate(struct pnode *pnode, int flags, struct lookup_intent *it)
                 RETURN(0);
         }
 
-        /* if the inode has been marked as staled, simply reap it */
-        if (llu_i2info(pb->pb_ino)->lli_stale_flag) {
-                struct inode *inode = pb->pb_ino;
+        /* check stale inode */
+        if (llu_i2info(pb->pb_ino)->lli_stale_flag)
+                unhook_stale_inode(pnode);
 
-                pb->pb_ino = NULL;
-                I_RELE(inode);
-                _sysio_i_gone(inode);
-
+        /* check again because unhook_stale_inode() might generate
+         * negative pnode */
+        if (pb->pb_ino == NULL) {
+                CDEBUG(D_INODE, "negative pb\n");
                 RETURN(0);
         }
 
@@ -201,10 +226,8 @@ int llu_pb_revalidate(struct pnode *pnode, int flags, struct lookup_intent *it)
                         RETURN(1);
                 }
 
-                /* remove the staled inode right away */
-                pb->pb_ino = NULL;
-                I_RELE(inode);
-                _sysio_i_gone(inode);
+                lli->lli_stale_flag = 1;
+                unhook_stale_inode(pnode);
 
                 RETURN(0);
         }
