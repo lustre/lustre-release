@@ -369,7 +369,7 @@ void ll_put_super(struct super_block *sb)
 } /* ll_put_super */
 
 int lustre_process_log(struct lustre_mount_data *lmd, char * profile,
-                       struct config_llog_instance *cfg)
+                       struct config_llog_instance *cfg, int allow_recov)
 {
         struct lustre_cfg lcfg;
         struct portals_cfg pcfg;
@@ -440,6 +440,13 @@ int lustre_process_log(struct lustre_mount_data *lmd, char * profile,
         obd = class_name2obd(name);
         if (obd == NULL)
                 GOTO(out_cleanup, err = -EINVAL);
+
+        /* Disable initial recovery on this import */
+        err = obd_set_info(obd->obd_self_export, 
+                           strlen("initial_recov"), "initial_recov", 
+                           sizeof(allow_recov), &allow_recov);
+        if (err)
+                GOTO(out_cleanup, err);
 
         err = obd_connect(&mdc_conn, obd, &mdc_uuid);
         if (err) {
@@ -535,7 +542,7 @@ int lustre_fill_super(struct super_block *sb, void *data, int silent)
                 cfg.cfg_instance = sbi->ll_instance;
                 cfg.cfg_uuid = sbi->ll_sb_uuid;
                 cfg.cfg_local_nid = lmd->lmd_local_nid;
-                err = lustre_process_log(lmd, lmd->lmd_profile, &cfg);
+                err = lustre_process_log(lmd, lmd->lmd_profile, &cfg, 1);
                 if (err < 0) {
                         CERROR("Unable to process log: %s\n", lmd->lmd_profile);
 
@@ -598,7 +605,8 @@ out_free:
                         OBD_ALLOC(cln_prof, len);
                         sprintf(cln_prof, "%s-clean", sbi->ll_lmd->lmd_profile);
 
-                        err = lustre_process_log(sbi->ll_lmd, cln_prof, &cfg);
+                        err = lustre_process_log(sbi->ll_lmd, cln_prof, &cfg, 
+                                                 0);
                         if (err < 0) 
                                 CERROR("Unable to process log: %s\n", cln_prof);
                         OBD_FREE(cln_prof, len);
@@ -610,6 +618,35 @@ out_free:
 
         goto out_dev;
 } /* lustre_fill_super */
+
+static void lustre_manual_cleanup(struct ll_sb_info *sbi) 
+{
+        struct lustre_cfg lcfg;
+        struct obd_device *obd;
+        int next = 0; 
+
+        while ((obd = class_devices_in_group(&sbi->ll_sb_uuid, &next)) != NULL)
+        {
+                int err;
+
+                LCFG_INIT(lcfg, LCFG_CLEANUP, obd->obd_name);
+                err = class_process_config(&lcfg);
+                if (err) {
+                        CERROR("cleanup failed: %s\n", obd->obd_name);
+                        //continue;
+                }
+
+                LCFG_INIT(lcfg, LCFG_DETACH, obd->obd_name);
+                err = class_process_config(&lcfg);
+                if (err) {
+                        CERROR("detach failed: %s\n", obd->obd_name);
+                        //continue;
+                }
+        }
+
+        if (sbi->ll_lmd != NULL) 
+                class_del_profile(sbi->ll_lmd->lmd_profile);
+}
 
 void lustre_put_super(struct super_block *sb)
 {
@@ -632,9 +669,12 @@ void lustre_put_super(struct super_block *sb)
                 OBD_ALLOC(cln_prof, len);
                 sprintf(cln_prof, "%s-clean", sbi->ll_lmd->lmd_profile);
 
-                err = lustre_process_log(sbi->ll_lmd, cln_prof, &cfg);
-                if (err < 0)
-                        CERROR("Unable to process log: %s\n", cln_prof);
+                err = lustre_process_log(sbi->ll_lmd, cln_prof, &cfg, 0);
+                if (err < 0) {
+                        CERROR("Unable to process log: %s, doing manual cleanup"
+                               "\n", cln_prof);
+                        lustre_manual_cleanup(sbi);
+                }
 
                 OBD_FREE(cln_prof, len);
                 OBD_FREE(sbi->ll_lmd, sizeof(*sbi->ll_lmd));

@@ -158,13 +158,13 @@ int filter_recov_log_unlink_cb(struct llog_handle *llh,
         rc = obd_destroy(exp, oa, NULL, NULL);
         obdo_free(oa);
         if (rc == -ENOENT) {
-                CWARN("object already removed, send cookie\n");
+                CDEBUG(D_HA, "object already removed, send cookie\n");
                 llog_cancel(ctxt, NULL, 1, &cookie, 0);
                 RETURN(0);
         }
 
         if (rc == 0)
-                CWARN("object: "LPU64" in record is destroyed\n", oid);
+                CDEBUG(D_HA, "object: "LPU64" in record is destroyed\n", oid);
 
         RETURN(rc);
 }
