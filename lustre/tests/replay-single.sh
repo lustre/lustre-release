@@ -69,9 +69,7 @@ cleanup() {
     if [ $activemds != "mds" ]; then
         fail mds
     fi
-
-    umount  $MOUNT || :
-    rmmod llite || :
+    zconf_umount $MOUNT
     stop mds ${FORCE} $MDSLCONFARGS
     stop ost ${FORCE} --dump cleanup.log
 }
@@ -84,20 +82,10 @@ fi
 
 gen_config
 
-#start mds --write_conf --reformat $MDSLCONFARGS 
 start ost --reformat $OSTLCONFARGS 
 [ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
 start mds $MDSLCONFARGS --reformat
-
-# 0-conf client
-[ -d $MOUNT ] || mkdir /mnt/lustre
-insmod $LUSTRE/llite/llite.o || :
-cp $LUSTRE/utils/llmount /sbin/mount.lustre
-[ -d /r ] && $LCTL modules > /r/tmp/ogdb-`hostname`
-mount -t lustre `facet_host mds`:/mds1/client_facet $MOUNT
-
-echo $TIMEOUT > /proc/sys/lustre/timeout
-echo $UPCALL > /proc/sys/lustre/upcall
+zconf_mount $MOUNT
 
 if [ "$ONLY" == "setup" ]; then
     exit 0
