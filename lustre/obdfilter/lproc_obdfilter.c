@@ -22,68 +22,43 @@
 #define DEBUG_SUBSYSTEM S_CLASS
 
 #include <linux/version.h>
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
-#include <asm/statfs.h>
-#endif
 #include <linux/lprocfs_status.h>
 #include <linux/obd.h>
 
 #ifndef LPROCFS
-struct lprocfs_vars lprocfs_obd_vars[]  = { {0} };
-struct lprocfs_vars lprocfs_module_vars[] = { {0} };
+static struct lprocfs_vars lprocfs_obd_vars[]  = { {0} };
+static struct lprocfs_vars lprocfs_module_vars[] = { {0} };
 #else
 
-static inline int lprocfs_filter_statfs(void *data, struct statfs *sfs)
-{
-        struct obd_device *dev = (struct obd_device *) data;
-        LASSERT(dev != NULL);
-        return vfs_statfs(dev->u.filter.fo_sb, sfs);
-}
-
-DEFINE_LPROCFS_STATFS_FCT(rd_blksize,     lprocfs_filter_statfs);
-DEFINE_LPROCFS_STATFS_FCT(rd_kbytestotal, lprocfs_filter_statfs);
-DEFINE_LPROCFS_STATFS_FCT(rd_kbytesfree,  lprocfs_filter_statfs);
-DEFINE_LPROCFS_STATFS_FCT(rd_filestotal,  lprocfs_filter_statfs);
-DEFINE_LPROCFS_STATFS_FCT(rd_filesfree,   lprocfs_filter_statfs);
-DEFINE_LPROCFS_STATFS_FCT(rd_filegroups,  lprocfs_filter_statfs);
-
-int rd_fstype(char *page, char **start, off_t off, int count, int *eof,
-              void *data)
-{
-        struct obd_device *dev = (struct obd_device *)data;
-        LASSERT(dev != NULL);
-        return snprintf(page, count, "%s\n", dev->u.filter.fo_fstype);
-}
-
-int lprocfs_filter_rd_mntdev(char *page, char **start, off_t off, int count,
-                    int *eof, void *data)
+static int lprocfs_filter_rd_mntdev(char *page, char **start, off_t off,
+                                    int count, int *eof, void *data)
 {
         struct obd_device* obd = (struct obd_device *)data;
 
         LASSERT(obd != NULL);
         LASSERT(obd->u.filter.fo_vfsmnt->mnt_devname);
         *eof = 1;
-        return snprintf(page, count, "%s\n", 
+        return snprintf(page, count, "%s\n",
                         obd->u.filter.fo_vfsmnt->mnt_devname);
 }
 
-struct lprocfs_vars lprocfs_obd_vars[] = {
-        { "uuid",        lprocfs_rd_uuid,    0, 0 },
-        { "blocksize",   rd_blksize,         0, 0 },
-        { "kbytestotal", rd_kbytestotal,     0, 0 },
-        { "kbytesfree",  rd_kbytesfree,      0, 0 },
-        { "filestotal",  rd_filestotal,      0, 0 },
-        { "filesfree",   rd_filesfree,       0, 0 },
-        { "filegroups",  rd_filegroups,      0, 0 },
-        { "fstype",      rd_fstype,          0, 0 },
-        { "mntdev",      lprocfs_filter_rd_mntdev,    0, 0 },
+static struct lprocfs_vars lprocfs_obd_vars[] = {
+        { "uuid",         lprocfs_rd_uuid,          0, 0 },
+        { "blocksize",    lprocfs_rd_blksize,       0, 0 },
+        { "kbytestotal",  lprocfs_rd_kbytestotal,   0, 0 },
+        { "kbytesfree",   lprocfs_rd_kbytesfree,    0, 0 },
+        { "filestotal",   lprocfs_rd_filestotal,    0, 0 },
+        { "filesfree",    lprocfs_rd_filesfree,     0, 0 },
+        //{ "filegroups",   lprocfs_rd_filegroups,    0, 0 },
+        { "fstype",       lprocfs_rd_fstype,        0, 0 },
+        { "mntdev",       lprocfs_filter_rd_mntdev, 0, 0 },
         { 0 }
 };
 
-struct lprocfs_vars lprocfs_module_vars[] = {
-        { "num_refs",    lprocfs_rd_numrefs, 0, 0 },
+static struct lprocfs_vars lprocfs_module_vars[] = {
+        { "num_refs",     lprocfs_rd_numrefs,       0, 0 },
         { 0 }
 };
 
 #endif /* LPROCFS */
-LPROCFS_INIT_VARS(lprocfs_module_vars, lprocfs_obd_vars)
+LPROCFS_INIT_VARS(filter,lprocfs_module_vars, lprocfs_obd_vars)

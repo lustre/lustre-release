@@ -22,42 +22,32 @@
 #define DEBUG_SUBSYSTEM S_CLASS
 
 #include <linux/version.h>
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
-#include <asm/statfs.h>
-#endif
+#include <linux/vfs.h>
 #include <linux/obd_class.h>
 #include <linux/lprocfs_status.h>
 
 #ifndef LPROCFS
-struct lprocfs_vars lprocfs_obd_vars[] = { {0} };
-struct lprocfs_vars lprocfs_module_vars[] = { {0} };
+static struct lprocfs_vars lprocfs_obd_vars[] = { {0} };
+static struct lprocfs_vars lprocfs_module_vars[] = { {0} };
 #else
-
-DEFINE_LPROCFS_STATFS_FCT(rd_blksize,     obd_self_statfs);
-DEFINE_LPROCFS_STATFS_FCT(rd_kbytestotal, obd_self_statfs);
-DEFINE_LPROCFS_STATFS_FCT(rd_kbytesfree,  obd_self_statfs);
-DEFINE_LPROCFS_STATFS_FCT(rd_filestotal,  obd_self_statfs);
-DEFINE_LPROCFS_STATFS_FCT(rd_filesfree,   obd_self_statfs);
-DEFINE_LPROCFS_STATFS_FCT(rd_filegroups,  obd_self_statfs);
-
-struct lprocfs_vars lprocfs_obd_vars[] = {
+static struct lprocfs_vars lprocfs_obd_vars[] = {
         { "uuid",            lprocfs_rd_uuid,        0, 0 },
-        { "blocksize",       rd_blksize,             0, 0 },
-        { "kbytestotal",     rd_kbytestotal,         0, 0 },
-        { "kbytesfree",      rd_kbytesfree,          0, 0 },
-        { "filestotal",      rd_filestotal,          0, 0 },
-        { "filesfree",       rd_filesfree,           0, 0 },
-        { "filegroups",      rd_filegroups,          0, 0 },
+        { "blocksize",       lprocfs_rd_blksize,     0, 0 },
+        { "kbytestotal",     lprocfs_rd_kbytestotal, 0, 0 },
+        { "kbytesfree",      lprocfs_rd_kbytesfree,  0, 0 },
+        { "filestotal",      lprocfs_rd_filestotal,  0, 0 },
+        { "filesfree",       lprocfs_rd_filesfree,   0, 0 },
+        //{ "filegroups",      lprocfs_rd_filegroups,  0, 0 },
         { "mds_server_uuid", lprocfs_rd_server_uuid, 0, 0 },
         { "mds_conn_uuid",   lprocfs_rd_conn_uuid,   0, 0 },
         { 0 }
 };
 
-struct lprocfs_vars lprocfs_module_vars[] = {
+static struct lprocfs_vars lprocfs_module_vars[] = {
         { "num_refs",        lprocfs_rd_numrefs,     0, 0 },
         { 0 }
 };
 
 #endif /* LPROCFS */
 
-LPROCFS_INIT_VARS(lprocfs_module_vars, lprocfs_obd_vars)
+LPROCFS_INIT_VARS(mdc, lprocfs_module_vars, lprocfs_obd_vars)
