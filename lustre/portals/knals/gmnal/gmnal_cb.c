@@ -272,6 +272,17 @@ void gmnal_cb_sti(nal_cb_t *nal_cb, unsigned long *flags)
 	return;
 }
 
+void gmnal_cb_callback(nal_cb_t *nal_cb, void *private, lib_eq_t *eq, ptl_event_t *ev)
+{
+        /* holding cb_lock */
+
+        if (eq->event_callback != NULL)
+                eq->event_callback(ev);
+
+        /* We will wake theads sleeping in yield() here, AFTER the
+         * callback, when we implement blocking yield */
+}
+
 int gmnal_cb_dist(nal_cb_t *nal_cb, ptl_nid_t nid, unsigned long *dist)
 {
 	CDEBUG(D_TRACE, "gmnal_cb_dist\n");

@@ -47,35 +47,16 @@ void ptl_eq_ni_fini(nal_t * nal)
         /* Nothing to do anymore... */
 }
 
-int PtlEQGet(ptl_handle_eq_t eventq, ptl_event_t * ev)
+int ptl_get_event (ptl_eq_t *eq, ptl_event_t *ev)
 {
-        ptl_eq_t *eq;
-        int rc, new_index;
-        unsigned long flags;
-        ptl_event_t *new_event;
-        nal_t *nal;
+        int          new_index = eq->sequence & (eq->size - 1);
+        ptl_event_t *new_event = &eq->base[new_index];
         ENTRY;
 
-        if (!ptl_init)
-                RETURN(PTL_NOINIT);
-
-        nal = ptl_hndl2nal(&eventq);
-        if (!nal)
-                RETURN(PTL_INV_EQ);
-
-        eq = ptl_handle2usereq(&eventq);
-        nal->lock(nal, &flags);
-
-        /* size must be a power of 2 to handle a wrapped sequence # */
-        LASSERT (eq->size != 0 &&
-                 eq->size == LOWEST_BIT_SET (eq->size));
-
-        new_index = eq->sequence & (eq->size - 1);
-        new_event = &eq->base[new_index];
         CDEBUG(D_INFO, "new_event: %p, sequence: %lu, eq->size: %u\n",
                new_event, eq->sequence, eq->size);
+
         if (PTL_SEQ_GT (eq->sequence, new_event->sequence)) {
-                nal->unlock(nal, &flags);
                 RETURN(PTL_EQ_EMPTY);
         }
 
@@ -86,117 +67,75 @@ int PtlEQGet(ptl_handle_eq_t eventq, ptl_event_t * ev)
         if (eq->sequence != new_event->sequence) {
                 CERROR("DROPPING EVENT: eq seq %lu ev seq %lu\n",
                        eq->sequence, new_event->sequence);
-                rc = PTL_EQ_DROPPED;
-        } else {
-                rc = PTL_OK;
+                RETURN(PTL_EQ_DROPPED);
         }
 
         eq->sequence = new_event->sequence + 1;
-        nal->unlock(nal, &flags);
-        RETURN(rc);
+        RETURN(PTL_OK);
 }
 
+int PtlEQGet(ptl_handle_eq_t eventq, ptl_event_t * ev)
+{
+        int which;
+        
+        return (PtlEQPoll (&eventq, 1, 0, ev, &which));
+}
 
 int PtlEQWait(ptl_handle_eq_t eventq_in, ptl_event_t *event_out)
 {
-        int rc;
+        int which;
         
-        /* PtlEQGet does the handle checking */
-        while ((rc = PtlEQGet(eventq_in, event_out)) == PTL_EQ_EMPTY) {
-                nal_t *nal = ptl_hndl2nal(&eventq_in);
-                
-                if (nal->yield)
-                        nal->yield(nal);
-        }
-
-        return rc;
+        return (PtlEQPoll (&eventq_in, 1, PTL_TIME_FOREVER, 
+                           event_out, &which));
 }
 
-#ifndef __KERNEL__
-#if 0
-static jmp_buf eq_jumpbuf;
-
-static void eq_timeout(int signal)
+int PtlEQPoll(ptl_handle_eq_t *eventqs_in, int neq_in, int timeout,
+              ptl_event_t *event_out, int *which_out)
 {
-        sigset_t set;
+        nal_t        *nal;
+        int           i;
+        int           rc;
+        unsigned long flags;
+        
+        if (!ptl_init)
+                RETURN(PTL_NO_INIT);
 
-        /* signal will be automatically disabled in sig handler,
-         * must enable it before long jump
-         */
-        sigemptyset(&set);
-        sigaddset(&set, SIGALRM);
-        sigprocmask(SIG_UNBLOCK, &set, NULL);
+        if (neq_in < 1)
+                RETURN(PTL_EQ_INVALID);
+        
+        nal = ptl_hndl2nal(&eventqs_in[0]);
+        if (nal == NULL)
+                RETURN(PTL_EQ_INVALID);
 
-        longjmp(eq_jumpbuf, -1);
-}
+        nal->lock(nal, &flags);
 
-int PtlEQWait_timeout(ptl_handle_eq_t eventq_in, ptl_event_t * event_out,
-                      int timeout)
-{
-        static void (*prev) (int) = NULL;
-        static int left_over;
-        time_t time_at_start;
-        int rc;
+        for (;;) {
+                for (i = 0; i < neq_in; i++) {
+                        ptl_eq_t *eq = ptl_handle2usereq(&eventqs_in[i]);
 
-        if (setjmp(eq_jumpbuf)) {
-                signal(SIGALRM, prev);
-                alarm(left_over - timeout);
-                return PTL_EQ_EMPTY;
-        }
+                        if (i > 0 &&
+                            ptl_hndl2nal(&eventqs_in[i]) != nal) {
+                                nal->unlock(nal, &flags);
+                                RETURN (PTL_EQ_INVALID);
+                        }
 
-        left_over = alarm(timeout);
-        prev = signal(SIGALRM, eq_timeout);
-        time_at_start = time(NULL);
-        if (left_over && left_over < timeout)
-                alarm(left_over);
+                        /* size must be a power of 2 to handle a wrapped sequence # */
+                        LASSERT (eq->size != 0 &&
+                                 eq->size == LOWEST_BIT_SET (eq->size));
 
-        rc = PtlEQWait(eventq_in, event_out);
-
-        signal(SIGALRM, prev);
-        alarm(left_over);       /* Should compute how long we waited */
-
-        return rc;
-}
-#else
-#include <errno.h>
-
-/* FIXME
- * Here timeout need a trick with tcpnal, definitely unclean but OK for
- * this moment.
- */
-
-/* global variables defined by tcpnal */
-extern int __tcpnal_eqwait_timeout_value;
-extern int __tcpnal_eqwait_timedout;
-
-int PtlEQWait_timeout(ptl_handle_eq_t eventq_in, ptl_event_t * event_out,
-                      int timeout)
-{
-        int rc;
-
-        if (!timeout)
-                return PtlEQWait(eventq_in, event_out);
-
-        __tcpnal_eqwait_timeout_value = timeout;
-
-        while ((rc = PtlEQGet(eventq_in, event_out)) == PTL_EQ_EMPTY) {
-                nal_t *nal = ptl_hndl2nal(&eventq_in);
-                
-                if (nal->yield)
-                        nal->yield(nal);
-
-                if (__tcpnal_eqwait_timedout) {
-                        if (__tcpnal_eqwait_timedout != ETIMEDOUT)
-                                printf("Warning: yield return error %d\n",
-                                        __tcpnal_eqwait_timedout);
-                        rc = PTL_EQ_EMPTY;
-                        break;
+                        rc = ptl_get_event (eq, event_out);
+                        if (rc != PTL_EQ_EMPTY) {
+                                nal->unlock(nal, &flags);
+                                *which_out = i;
+                                RETURN(rc);
+                        }
                 }
+                
+                if (timeout == 0) {
+                        nal->unlock(nal, &flags);
+                        RETURN (PTL_EQ_EMPTY);
+                }
+                        
+                timeout = nal->yield(nal, &flags, timeout);
         }
-
-        __tcpnal_eqwait_timeout_value = 0;
-
-        return rc;
 }
-#endif
-#endif /* __KERNEL__ */

@@ -97,6 +97,18 @@ kscimacnal_sti(nal_cb_t *nal, unsigned long *flags)
 }
 
 
+static void 
+kscimacnal_callback(nal_cb_t *nal, void *private, lib_eq_t *eq, ptl_event_t *ev)
+{
+        /* holding ksci_dispatch_lock */
+
+        if (eq->event_callback != NULL)
+                eq->event_callback(ev);
+
+        /* We will wake theads sleeping in yield() here, AFTER the
+         * callback, when we implement blocking yield */
+}
+
 static int 
 kscimacnal_dist(nal_cb_t *nal, ptl_nid_t nid, unsigned long *dist)
 {
@@ -233,7 +245,7 @@ kscimacnal_sendmsg(nal_cb_t        *nal,
         /* save transaction info for later finalize and cleanup */
         PORTAL_ALLOC(ktx, (sizeof(kscimacnal_tx_t)));
         if (!ktx) {
-                return PTL_NOSPACE;
+                return PTL_NO_SPACE;
         }
 
         ktx->ktx_nmapped = 0; /* Start with no mapped pages :) */
@@ -248,7 +260,7 @@ kscimacnal_sendmsg(nal_cb_t        *nal,
                         kscimacnal_txrelease, ktx);
         if (!msg) {
                 PORTAL_FREE(ktx, (sizeof(kscimacnal_tx_t)));
-                return PTL_NOSPACE;
+                return PTL_NO_SPACE;
         }
         mac_put_mblk(msg, sizeof(ptl_hdr_t));
         lastblk=msg;
@@ -285,7 +297,7 @@ kscimacnal_sendmsg(nal_cb_t        *nal,
                 if(!newblk) {
                         mac_free_msg(msg);
                         PORTAL_FREE(ktx, (sizeof(kscimacnal_tx_t)));
-                        return PTL_NOSPACE;
+                        return PTL_NO_SPACE;
                 }
                 mac_put_mblk(newblk, nob);
                 mac_link_mblk(lastblk, newblk);
@@ -597,5 +609,6 @@ nal_cb_t kscimacnal_lib = {
         cb_printf:       kscimacnal_printf,
         cb_cli:          kscimacnal_cli,
         cb_sti:          kscimacnal_sti,
+        cb_callback:     kscimacnal_callback,
         cb_dist:         kscimacnal_dist
 };

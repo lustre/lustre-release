@@ -88,7 +88,7 @@ int do_PtlNIStatus(nal_cb_t * nal, void *private, void *v_args, void *v_ret)
         else if (args->register_in == PTL_SR_MSGS_MAX)
                 ret->status_out = count->msgs_max;
         else
-                ret->rc = PTL_INV_SR_INDX;
+                ret->rc = PTL_SR_INDEX_INVALID;
 
         return ret->rc;
 }
@@ -119,7 +119,7 @@ int do_PtlNIDist(nal_cb_t * nal, void *private, void *v_args, void *v_ret)
 
         if ((rc = nal->cb_dist(nal, nid, &dist)) != 0) {
                 ret->distance_out = (unsigned long) MAX_DIST;
-                return PTL_INV_PROC;
+                return PTL_PROCESS_INVALID;
         }
 
         ret->distance_out = dist;

@@ -45,15 +45,15 @@ int do_PtlMEAttach(nal_cb_t * nal, void *private, void *v_args, void *v_ret)
         lib_me_t *me;
 
         if (args->index_in >= tbl->size)
-                return ret->rc = PTL_INV_PTINDEX;
+                return ret->rc = PTL_PT_INDEX_INVALID;
 
         /* Should check for valid matchid, but not yet */
         if (0)
-                return ret->rc = PTL_INV_PROC;
+                return ret->rc = PTL_PROCESS_INVALID;
 
         me = lib_me_alloc (nal);
         if (me == NULL)
-                return (ret->rc = PTL_NOSPACE);
+                return (ret->rc = PTL_NO_SPACE);
 
         state_lock(nal, &flags);
 
@@ -87,7 +87,7 @@ int do_PtlMEInsert(nal_cb_t * nal, void *private, void *v_args, void *v_ret)
 
         new = lib_me_alloc (nal);
         if (new == NULL)
-                return (ret->rc = PTL_NOSPACE);
+                return (ret->rc = PTL_NO_SPACE);
 
         /* Should check for valid matchid, but not yet */
 
@@ -98,7 +98,7 @@ int do_PtlMEInsert(nal_cb_t * nal, void *private, void *v_args, void *v_ret)
                 lib_me_free (nal, new);
 
                 state_unlock (nal, &flags);
-                return (ret->rc = PTL_INV_ME);
+                return (ret->rc = PTL_ME_INVALID);
         }
 
         new->match_id = args->match_id_in;
@@ -132,7 +132,7 @@ int do_PtlMEUnlink(nal_cb_t * nal, void *private, void *v_args, void *v_ret)
 
         me = ptl_handle2me(&args->current_in, nal);
         if (me == NULL) {
-                ret->rc = PTL_INV_ME;
+                ret->rc = PTL_ME_INVALID;
         } else {
                 lib_me_unlink(nal, me);
                 ret->rc = PTL_OK;
@@ -174,7 +174,7 @@ int do_PtlTblDump(nal_cb_t * nal, void *private, void *v_args, void *v_ret)
         unsigned long flags;
 
         if (args->index_in < 0 || args->index_in >= tbl->size)
-                return ret->rc = PTL_INV_PTINDEX;
+                return ret->rc = PTL_PT_INDEX_INVALID;
 
         nal->cb_printf(nal, "Portal table index %d\n", args->index_in);
 
@@ -200,7 +200,7 @@ int do_PtlMEDump(nal_cb_t * nal, void *private, void *v_args, void *v_ret)
 
         me = ptl_handle2me(&args->current_in, nal);
         if (me == NULL) {
-                ret->rc = PTL_INV_ME;
+                ret->rc = PTL_ME_INVALID;
         } else {
                 lib_me_dump(nal, me);
                 ret->rc = PTL_OK;

@@ -315,7 +315,7 @@ int gmnal_api_shutdown(nal_t *, int);
 
 int gmnal_api_validate(nal_t *, void *, size_t);
 
-void gmnal_api_yield(nal_t *);
+void gmnal_api_yield(nal_t *, unsigned long *, int);
 
 void gmnal_api_lock(nal_t *, unsigned long *);
 
