@@ -1,6 +1,6 @@
 configurable-x86-stack-2.4.21-chaos.patch 
 dev_read_only_2.4.21-chaos.patch 
-exports_2.4.19-suse.patch
+exports-2.4.21-chaos.patch 
 lustre_version.patch
 vfs_intent-2.4.21-chaos.patch 
 invalidate_show-2.4.20-rh.patch
@@ -35,3 +35,6 @@ pagecache-lock-2.4.21-chaos.patch
 ext3-truncate-buffer-head.patch
 inode-max-readahead-2.4.24.patch
 dcache_refcount_debug.patch
+ext3-extents-2.4.21-chaos.patch 
+ext3-extents-asyncdel-2.4.21-chaos.patch 
+ext3-mballoc-2.4.21-chaos.patch 
