@@ -387,7 +387,7 @@ check_ldlm_reply (void)
 	CHECK_MEMBER (ldlm_reply, lock_mode);
 	CHECK_MEMBER (ldlm_reply, lock_resource_name);
 	CHECK_MEMBER (ldlm_reply, lock_handle);
-	CHECK_MEMBER (ldlm_reply, lock_data);
+	CHECK_MEMBER (ldlm_reply, lock_policy_data);
 	CHECK_MEMBER (ldlm_reply, lock_policy_res1);
 	CHECK_MEMBER (ldlm_reply, lock_policy_res2);
 }
