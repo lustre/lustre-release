@@ -39,6 +39,15 @@
   */
  
  #include <linux/fs.h>
+@@ -33,7 +33,7 @@
+ #include <linux/string.h>
+ #include <linux/locks.h>
+ #include <linux/quotaops.h>
+-
++#include <linux/slab.h>
+ 
+ /*
+  * define how far ahead to read directories while searching them.
 @@ -38,6 +42,432 @@
  #define NAMEI_RA_SIZE        (NAMEI_RA_CHUNKS * NAMEI_RA_BLOCKS)
  #define NAMEI_RA_INDEX(c,b)  (((c) * NAMEI_RA_BLOCKS) + (b))
@@ -574,7 +583,7 @@
  	nblocks = dir->i_size >> EXT3_BLOCK_SIZE_BITS(sb);
  	start = dir->u.ext3_i.i_dir_start_lookup;
  	if (start >= nblocks)
-@@ -237,6 +748,88 @@
+@@ -237,6 +748,92 @@
  		de->file_type = ext3_type_by_mode[(mode & S_IFMT)>>S_SHIFT];
  }
  
@@ -605,7 +614,7 @@
 +	u32 newblock;
 +	unsigned MAX_DX_MAP = PAGE_CACHE_SIZE/EXT3_DIR_REC_LEN(1) + 1;
 +	u32 hash2;
-+	struct dx_map_entry map[MAX_DX_MAP];
++	struct dx_map_entry *map;
 +	char *data1 = (*bh)->b_data, *data2, *data3;
 +	unsigned split;
 +	ext3_dirent *de, *de2;
@@ -625,6 +634,9 @@
 +
 +	data2 = bh2->b_data;
 +
++	map = kmalloc(sizeof(*map) * MAX_DX_MAP, GFP_KERNEL);
++	if (!map)
++		panic("no memory for do_split\n");
 +	count = dx_make_map ((ext3_dirent *) data1, blocksize, map);
 +	split = count/2; // need to adjust to actual middle
 +	dx_sort_map (map, count);
@@ -655,6 +667,7 @@
 +	brelse (bh2);
 +	ext3_journal_dirty_metadata (handle, frame->bh);
 +	dxtrace(dx_show_index ("frame", frame->entries));
++	kfree(map);
 +	return de;
 +}
 +#endif
