@@ -18,7 +18,12 @@
 #include <linux/obd_filter.h>
 
 struct lov_export_data {
+        spinlock_t       led_lock;
         struct list_head led_open_head;
+};
+
+struct ost_export_data {
+        __u8 oed_uuid[37]; /* client UUID */
 };
 
 struct obd_export {
@@ -32,12 +37,14 @@ struct obd_export {
                 struct mds_export_data    eu_mds_data;
                 struct filter_export_data eu_filter_data;
                 struct lov_export_data    eu_lov_data;
+                struct ost_export_data    eu_ost_data;
         } u;
 };
 
 #define exp_mds_data    u.eu_mds_data
 #define exp_lov_data    u.eu_lov_data
 #define exp_filter_data u.eu_filter_data
+#define exp_ost_data    u.eu_ost_data
 
 extern struct obd_export *class_conn2export(struct lustre_handle *conn);
 extern struct obd_device *class_conn2obd(struct lustre_handle *conn);

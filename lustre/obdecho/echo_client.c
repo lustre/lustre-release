@@ -173,7 +173,7 @@ static int echo_iocontrol(unsigned int cmd, struct lustre_handle *obdconn, int l
                                 void *addr = kmap(pgp->pg);
 
                                 rc = page_debug_check("test_brw", addr,
-                                                       PAGE_SIZE, pgp->off, id);
+                                                       pgp->count, pgp->off, id);
                                 kunmap(pgp->pg);
                         }
                         __free_pages(pgp->pg, 0);
@@ -184,7 +184,7 @@ static int echo_iocontrol(unsigned int cmd, struct lustre_handle *obdconn, int l
                 GOTO(out, rc);
         }
         default:
-                CERROR ("echo_ioctl(): unrecognised ioctl %#lx\n", cmd);
+                CERROR ("echo_ioctl(): unrecognised ioctl %#x\n", cmd);
                 GOTO (out, rc = -ENOTTY);
         }
 
@@ -209,23 +209,17 @@ static int echo_setup(struct obd_device *obddev, obd_count len, void *buf)
                 RETURN(-EINVAL);
         }
 
-        MOD_INC_USE_COUNT;
         tgt = class_uuid2obd(data->ioc_inlbuf1);
         if (!tgt || !(tgt->obd_flags & OBD_ATTACHED) ||
             !(tgt->obd_flags & OBD_SET_UP)) {
                 CERROR("device not attached or not set up (%d)\n",
                        data->ioc_dev);
-                GOTO(error_dec, rc = -EINVAL);
+                RETURN(rc = -EINVAL);
         }
 
         rc = obd_connect(&ec->conn, tgt, NULL, NULL, NULL);
-        if (rc) {
+        if (rc)
                 CERROR("fail to connect to device %d\n", data->ioc_dev);
-                GOTO(error_dec, rc = -EINVAL);
-        }
-        RETURN(rc);
-error_dec:
-        MOD_DEC_USE_COUNT;
         RETURN(rc);
 }
 
@@ -246,7 +240,6 @@ static int echo_cleanup(struct obd_device * obddev)
                 RETURN(-EINVAL);
         }
 
-        MOD_DEC_USE_COUNT;
         RETURN(0);
 }
 
@@ -258,6 +251,7 @@ static int echo_connect(struct lustre_handle *conn, struct obd_device *src,
 }
 
 static struct obd_ops echo_obd_ops = {
+        o_owner:       THIS_MODULE,
         o_setup:       echo_setup,
         o_cleanup:     echo_cleanup,
         o_iocontrol:   echo_iocontrol,
