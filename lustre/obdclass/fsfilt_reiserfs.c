@@ -48,13 +48,15 @@
 #include <linux/obd_class.h>
 #include <linux/module.h>
 
-static void *fsfilt_reiserfs_start(struct inode *inode, int op)
+static void *fsfilt_reiserfs_start(struct inode *inode, int op,
+                                   void *desc_private)
 {
         return (void *)0xf00f00be;
 }
 
 static void *fsfilt_reiserfs_brw_start(int objcount, struct fsfilt_objinfo *fso,
-                                   int niocount, struct niobuf_remote *nb)
+                                       int niocount, struct niobuf_remote *nb,
+                                       void *desc_private)
 {
         return (void *)0xf00f00be;
 }
@@ -131,8 +133,9 @@ static ssize_t fsfilt_reiserfs_readpage(struct file *file, char *buf, size_t cou
         return file->f_op->read(file, buf, count, offset);
 }
 
-static int fsfilt_reiserfs_set_last_rcvd(struct obd_device *obd, __u64 last_rcvd,
-                                         void *handle, fsfilt_cb_t cb_func)
+static int fsfilt_reiserfs_set_last_rcvd(struct obd_device *obd,
+                                         __u64 last_rcvd, void *handle,
+                                         fsfilt_cb_t cb_func, void *cb_data)
 {
         static long next = 0;
 
@@ -141,7 +144,7 @@ static int fsfilt_reiserfs_set_last_rcvd(struct obd_device *obd, __u64 last_rcvd
                 next = jiffies + 300 * HZ;
         }
 
-        cb_func(obd, last_rcvd, 0);
+        cb_func(obd, last_rcvd, cb_data, 0);
 
         return 0;
 }
