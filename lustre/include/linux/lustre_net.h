@@ -201,6 +201,7 @@ struct ptlrpc_bulk_desc {
         struct list_head b_page_list;
         __u32 b_page_count;
         __u32 b_finished_count;
+        void *b_journal_info;
 };
 
 struct ptlrpc_thread {
@@ -310,5 +311,4 @@ int lustre_pack_msg(int count, int *lens, char **bufs, int *len,
 int lustre_msg_size(int count, int *lengths);
 int lustre_unpack_msg(struct lustre_msg *m, int len);
 void *lustre_msg_buf(struct lustre_msg *m, int n);
-
 #endif
