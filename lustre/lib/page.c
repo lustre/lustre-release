@@ -156,7 +156,6 @@ struct page *lustre_get_page_read(struct inode *inode, unsigned long index)
                         CERROR("page index %lu has error\n", index);
                         GOTO(err_page, rc = -EIO);
                 }
-                kmap(page);
         }
         return page;
 
