@@ -63,6 +63,28 @@ kportal_put_ni (int nal)
         return;
 }
 
+struct ldlm_namespace;
+struct ldlm_res_id;
+struct obd_import;
+
+extern int ldlm_cli_cancel_unused(struct ldlm_namespace *ns, struct ldlm_res_id *res_id, int flags);
+extern int ldlm_namespace_cleanup(struct ldlm_namespace *ns, int local_only);
+extern int ldlm_replay_locks(struct obd_import *imp);
+
+void *inter_module_get(char *arg)
+{
+        if (!strcmp(arg, "tcpnal_ni"))
+                return &tcpnal_ni;
+        else if (!strcmp(arg, "ldlm_cli_cancel_unused"))
+                return ldlm_cli_cancel_unused;
+        else if (!strcmp(arg, "ldlm_namespace_cleanup"))
+                return ldlm_namespace_cleanup;
+        else if (!strcmp(arg, "ldlm_replay_locks"))
+                return ldlm_replay_locks;
+        else
+                return NULL;
+}
+
 void init_current(char *comm)
 { 
         current = malloc(sizeof(*current));
@@ -364,7 +386,9 @@ llu_fsswop_mount(const char *source,
         struct obd_uuid param_uuid;
         class_uuid_t uuid;
         struct obd_device *obd;
-        char *osc="lov1_UUID", *mdc="57f5ded574_MDC_lov1_mds1_a8c55ce8f1"; /* FIXME */
+        char *osc="lov1_UUID";
+//        char *mdc="57f5ded574_MDC_lov1_mds1_a8c55ce8f1"; /* FIXME */
+        char *mdc="853fe49c56_MDC_lov1_mds1_704cccf8fd";
         int err = -EINVAL;
 
         ENTRY;

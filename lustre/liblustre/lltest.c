@@ -93,7 +93,7 @@ main(int argc, char * const argv[])
 		perror(root_driver);
 		exit(1);
 	}
-
+#if 0
 	for (i=0; i< sizeof(files)/sizeof(char*); i++) {
 		printf("******** stat %s *********\n", files[i]);
 		/* XXX ugly, only for testing */
@@ -102,7 +102,7 @@ main(int argc, char * const argv[])
 			perror(root_driver);
 		printf("******** end stat %s: %d*********\n", files[i], err);
 	}
-
+#endif
 	printf("sysio is about shutdown\n");
 	/*
 	 * Clean up.
