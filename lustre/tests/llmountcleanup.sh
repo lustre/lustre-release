@@ -1,11 +1,11 @@
 #!/bin/sh
 
-SRCDIR="`dirname $0`"
+SRCDIR="`dirname $0`/"
 . $SRCDIR/common.sh
 
 $DBGCTL get_debug > /tmp/debug.1
 
-if [ "`mount | grep '/mnt/lustre'`" ]; then
+if mount | grep '/mnt/lustre'; then
 	umount /mnt/lustre || fail "cannot unmount"
 fi
 
@@ -44,6 +44,7 @@ rmmod obdext2
 rmmod ldlm
 rmmod ptlrpc
 rmmod obdclass
+rmmod extN
 
 $DBGCTL get_debug > /tmp/debug.2
 

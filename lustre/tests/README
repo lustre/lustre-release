@@ -82,6 +82,7 @@ marcus-obd-server.cfg:
    OSTFS=ext2
    OSTTYPE=obdext2
    SETUP_OST=y
+   SETUP_LDLM=y
 
 As with the echo test, you run "sh llsetup.sh marcus-obd-server.cfg" on
 the server to configure it.
@@ -94,5 +95,6 @@ For marcus-obd-client.cfg you only need to include the client data:
    SETUP_OSC=y
    OSCMT=/mnt/lustre
    SETUP_MOUNT=y
+   SETUP_LDLM=y
 
 You run the test via "sh runtests marcus-obd-client.cfg".

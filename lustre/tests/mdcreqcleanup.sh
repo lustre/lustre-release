@@ -1,6 +1,6 @@
 #!/bin/sh
 
-SRCDIR="`dirname $0`"
+SRCDIR="`dirname $0`/"
 . $SRCDIR/common.sh
 
 rmmod llite

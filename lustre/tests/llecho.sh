@@ -1,31 +1,13 @@
 #!/bin/sh
 
-SRCDIR="`dirname $0`"
+SRCDIR="`dirname $0`/"
 . $SRCDIR/common.sh
 
-NETWORK=tcp
-LOCALHOST=localhost
-SERVER=localhost
-PORT=1234
-
-setup_portals
-setup_lustre
-
-$OBDCTL <<EOF
-newdev
-attach obdecho OBDDEV
-setup
-newdev
-attach ost OSTDEV
-setup \$OBDDEV
-newdev
-attach osc OSCDEV
-setup -1
-quit
-EOF
+export DEBUG_WAIT=yes
+. $SRCDIR/llsetup.sh $SRCDIR/net-local.cfg $SRCDIR/obdecho.cfg $SRCDIR/client-echo.cfg
 
 cat <<EOF
 
 run getattr tests as:
-obdctl --device 2 test_getattr 1000000
+$OBDCTL --device `$OBDCTL name2dev OSCDEV` test_getattr 1000000
 EOF

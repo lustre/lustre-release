@@ -1,21 +1,13 @@
 #!/bin/sh
 
-SRCDIR="`dirname $0`"
+SRCDIR="`dirname $0`/"
 . $SRCDIR/common.sh
 
-NETWORK=tcp
-LOCALHOST=localhost
-SERVER=localhost
-PORT=1234
-
-setup_portals
-setup_lustre
-read
+export DEBUG_WAIT=yes
+. $SRCDIR/llsetup.sh $SRCDIR/net-local.cfg $SRCDIR/ldlm.cfg || exit 2
 
 $OBDCTL <<EOF
-device 0
-attach ldlm LDLMDEV
-setup
+name2dev LDLMDEV
 test_ldlm
 quit
 EOF
