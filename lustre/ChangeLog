@@ -26,6 +26,8 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- fix timeouts when evicting a client with a single lock held (2642)
 	- set deadline for the initial HELLO message to drain (2634)
 	- print out dotted-quad IP addresses in the socknal (2302)
+       * miscellania
+	- additional debugging for MDS client eviction problem (2443)
 
 2004-01-27  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.0.3

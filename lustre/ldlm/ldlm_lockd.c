@@ -49,7 +49,7 @@ extern int (*mds_getattr_name_p)(int offset, struct ptlrpc_request *req);
 static DECLARE_MUTEX(ldlm_ref_sem);
 static int ldlm_refcount = 0;
 
-/* LDLM state */ 
+/* LDLM state */
 
 static struct ldlm_state *ldlm ;
 
@@ -125,6 +125,7 @@ static int expired_lock_main(void *arg)
         wake_up(&expired_lock_thread.elt_waitq);
 
         while (1) {
+                struct list_head *tmp, *n, work_list;
                 l_wait_event(expired_lock_thread.elt_waitq,
                              have_expired_locks() ||
                              expired_lock_thread.elt_state == ELT_TERMINATE,
@@ -132,12 +133,32 @@ static int expired_lock_main(void *arg)
 
                 spin_lock_bh(&expired_lock_thread.elt_lock);
                 while (!list_empty(expired)) {
-                        struct ldlm_lock *lock = list_entry(expired->next,
-                                                            struct ldlm_lock,
-                                                            l_pending_chain);
+                        struct ldlm_lock *lock;
+
+                        list_add(&work_list, expired);
+                        list_del_init(expired);
+
+                        list_for_each_entry(lock, &work_list, l_pending_chain) {
+                                LDLM_DEBUG(lock, "moving to work list");
+                        }
+
                         spin_unlock_bh(&expired_lock_thread.elt_lock);
 
-                        ptlrpc_fail_export(lock->l_export);
+
+                        list_for_each_safe(tmp, n, &work_list) {
+                                 lock = list_entry(tmp, struct ldlm_lock,
+                                                   l_pending_chain);
+                                 ptlrpc_fail_export(lock->l_export);
+                        }
+
+
+                        if (!list_empty(&work_list)) {
+                                list_for_each_entry(lock, &work_list, l_pending_chain) {
+                                        LDLM_ERROR(lock, "still on work list!");
+                                }
+                        }
+                        LASSERTF (list_empty(&work_list),
+                                  "some exports not failed properly\n");
 
                         spin_lock_bh(&expired_lock_thread.elt_lock);
                 }
@@ -1125,7 +1146,7 @@ static int ldlm_setup(void)
                 ptlrpc_init_svc(LDLM_NEVENTS, LDLM_NBUFS, LDLM_BUFSIZE,
                                 LDLM_MAXREQSIZE, LDLM_CB_REQUEST_PORTAL,
                                 LDLM_CB_REPLY_PORTAL,
-                                ldlm_callback_handler, "ldlm_cbd", 
+                                ldlm_callback_handler, "ldlm_cbd",
                                 ldlm_svc_proc_dir);
 
         if (!ldlm->ldlm_cb_service) {
@@ -1137,7 +1158,7 @@ static int ldlm_setup(void)
                 ptlrpc_init_svc(LDLM_NEVENTS, LDLM_NBUFS, LDLM_BUFSIZE,
                                 LDLM_MAXREQSIZE, LDLM_CANCEL_REQUEST_PORTAL,
                                 LDLM_CANCEL_REPLY_PORTAL,
-                                ldlm_cancel_handler, "ldlm_canceld", 
+                                ldlm_cancel_handler, "ldlm_canceld",
                                 ldlm_svc_proc_dir);
 
         if (!ldlm->ldlm_cancel_service) {

@@ -295,7 +295,7 @@ struct ptlrpc_request {
 do {                                                                           \
 CDEBUG(level, "@@@ " fmt                                                       \
        " req@%p x"LPD64"/t"LPD64" o%d->%s@%s:%d lens %d/%d ref %d fl "         \
-       REQ_FLAGS_FMT"/%x/%x rc %x\n" ,  ## args, req, req->rq_xid,             \
+       REQ_FLAGS_FMT"/%x/%x rc %d/%d\n" , ## args, req, req->rq_xid,           \
        req->rq_transno,                                                        \
        req->rq_reqmsg ? req->rq_reqmsg->opc : -1,                              \
        req->rq_import ? (char *)req->rq_import->imp_target_uuid.uuid : "<?>",  \
@@ -308,7 +308,7 @@ CDEBUG(level, "@@@ " fmt                                                       \
        DEBUG_REQ_FLAGS(req),                                                   \
        req->rq_reqmsg ? req->rq_reqmsg->flags : 0,                             \
        req->rq_repmsg ? req->rq_repmsg->flags : 0,                             \
-       req->rq_status);                                                        \
+       req->rq_status, req->rq_repmsg ? req->rq_repmsg->status : 0);           \
 } while (0)
 
 struct ptlrpc_bulk_page {

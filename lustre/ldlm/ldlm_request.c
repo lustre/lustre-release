@@ -53,10 +53,12 @@ int ldlm_expired_completion_wait(void *data)
                            "server code, just going back to sleep");
                 if (time_after(jiffies, next_dump)) {
                         unsigned int debug = portal_debug;
-                        next_dump = jiffies + 300 * HZ;
                         portal_debug |= D_OTHER;
                         ldlm_namespace_dump(lock->l_resource->lr_namespace);
                         portal_debug = debug;
+                        if (next_dump == 0)
+                                portals_debug_dumplog();
+                        next_dump = jiffies + 300 * HZ;
                 }
                 RETURN(0);
         }
@@ -440,7 +442,7 @@ int ldlm_cli_convert(struct lustre_handle *lockh, int new_mode, int *flags)
 
         LDLM_DEBUG(lock, "client-side convert");
 
-        req = ptlrpc_prep_req(class_exp2cliimp(lock->l_conn_export), 
+        req = ptlrpc_prep_req(class_exp2cliimp(lock->l_conn_export),
                               LDLM_CONVERT, 1, &size, NULL);
         if (!req)
                 GOTO(out, rc = -ENOMEM);
@@ -834,10 +836,8 @@ int ldlm_namespace_foreach_res(struct ldlm_namespace *ns,
 }
 
 /* non-blocking function to manipulate a lock whose cb_data is being put away.*/
-void ldlm_change_cbdata(struct ldlm_namespace *ns, 
-                       struct ldlm_res_id *res_id, 
-                       ldlm_iterator_t iter,
-                       void *data)
+void ldlm_change_cbdata(struct ldlm_namespace *ns, struct ldlm_res_id *res_id,
+                        ldlm_iterator_t iter, void *data)
 {
         struct ldlm_resource *res;
         ENTRY;
