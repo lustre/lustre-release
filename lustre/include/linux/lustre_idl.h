@@ -43,32 +43,32 @@
  */ 
 
 struct lustre_msg { 
-	__u32 opc;
-	__u32 xid;
-	__u32 status;
-	__u32 type;
-	__u32   connid;
-	__u32   bufcount;
+        __u32 opc;
+        __u32 xid;
+        __u32 status;
+        __u32 type;
+        __u32   connid;
+        __u32   bufcount;
         __u32   buflens[0];
 };
 
 struct ptlreq_hdr { 
-	__u32 opc;
-	__u32 xid;
-	__u32 status;
-	__u32 type;
-	__u32   connid;
-	__u32   bufcount;
+        __u32 opc;
+        __u32 xid;
+        __u32 status;
+        __u32 type;
+        __u32   connid;
+        __u32   bufcount;
         __u32   buflens[0];
 };
 
 struct ptlrep_hdr { 
-	__u32 opc;
-	__u32 xid;
-	__u32 status;
-	__u32 type;
-	__u32   connid;
-	__u32   bufcount;
+        __u32 opc;
+        __u32 xid;
+        __u32 status;
+        __u32 type;
+        __u32   connid;
+        __u32   bufcount;
         __u32   buflens[0];
 };
 
@@ -159,19 +159,19 @@ struct obdo {
 #define OST_REQ_HAS_OA1  0x1
 
 struct ost_req { 
-	__u32   connid;
-	__u32   cmd; 
-	struct  obdo oa;
-	__u32   buflen1;
-	__u32   buflen2;
+        __u32   connid;
+        __u32   cmd; 
+        struct  obdo oa;
+        __u32   buflen1;
+        __u32   buflen2;
 };
 
 struct ost_rep {
-	__u32   result;
-	__u32   connid;
-	struct  obdo oa;
-	__u32   buflen1;
-	__u32   buflen2;
+        __u32   result;
+        __u32   connid;
+        struct  obdo oa;
+        __u32   buflen1;
+        __u32   buflen2;
 };
 
 struct obd_ioobj { 
@@ -200,9 +200,9 @@ struct obd_ioobj {
 #define REINT_MAX     4
 
 struct ll_fid { 
-	__u64 id;
-	__u32 generation;
-	__u32 f_type;
+        __u64 id;
+        __u32 generation;
+        __u32 f_type;
 };
 
 struct niobuf { 
@@ -215,13 +215,13 @@ struct niobuf {
 };
 
 struct mds_req {
-	struct ll_fid        fid1;
-	struct ll_fid        fid2;
+        struct ll_fid        fid1;
+        struct ll_fid        fid2;
         __u32                       namelen;
         __u32                       tgtlen;
         __u32                       opcode;
         __u32                       valid;
-        __u32 			    mode;
+        __u32                       mode;
         __u32                       uid;
         __u32                       gid;
         __u64                       objid;
@@ -238,12 +238,12 @@ struct mds_req {
 };
 
 struct mds_rep {
-	struct ll_fid               fid1;
-	struct ll_fid               fid2;
+        struct ll_fid               fid1;
+        struct ll_fid               fid2;
         __u32                       namelen;
         __u32                       tgtlen;
         __u32                       valid;
-        __u32 			    mode;
+        __u32                       mode;
         __u32                       uid;
         __u32                       gid;
         __u64                       objid;
@@ -268,28 +268,28 @@ struct mds_update_record_hdr {
 struct mds_rec_setattr { 
         __u32           sa_reclen;
         __u32           sa_opcode;
-	struct ll_fid   sa_fid;
-	__u32	        sa_valid;
-	__u32		sa_mode;
-	__u32		sa_uid;
-	__u32		sa_gid;
-	__u64		sa_size;
-	__u64		sa_atime;
-	__u64		sa_mtime;
-	__u64		sa_ctime;
-	__u32 	        sa_attr_flags;
+        struct ll_fid   sa_fid;
+        __u32           sa_valid;
+        __u32           sa_mode;
+        __u32           sa_uid;
+        __u32           sa_gid;
+        __u64           sa_size;
+        __u64           sa_atime;
+        __u64           sa_mtime;
+        __u64           sa_ctime;
+        __u32           sa_attr_flags;
 };
 
 struct mds_rec_create { 
         __u32           cr_reclen;
         __u32           cr_opcode;
-	struct ll_fid   cr_fid;
+        struct ll_fid   cr_fid;
         __u32           cr_uid;
         __u32           cr_gid;
         __u64           cr_time;
-	__u32		cr_mode;
+        __u32           cr_mode;
         /* overloaded: id for create, tgtlen for symlink, rdev for mknod */ 
-	__u64		cr_id; 
+        __u64           cr_id; 
         __u32           cr_namelen;
         __u32           cr_tgtlen;
         /* name here */
@@ -299,23 +299,24 @@ struct mds_rec_create {
 struct mds_rec_link { 
         __u32           lk_reclen;
         __u32           lk_opcode;
-	struct ll_fid   lk_fid1;
-	struct ll_fid   lk_fid2;
+        struct ll_fid   lk_fid1;
+        struct ll_fid   lk_fid2;
         __u32           lk_namelen;
 };
 
 struct mds_rec_unlink { 
         __u32           ul_reclen;
         __u32           ul_opcode;
-	struct ll_fid   ul_fid1;
+        struct ll_fid   ul_fid1;
+        struct ll_fid   ul_fid2;
         __u32           ul_namelen;
 };
 
 struct mds_rec_rename { 
         __u32           rn_reclen;
         __u32           rn_opcode;
-	struct ll_fid   rn_fid1;
-	struct ll_fid   rn_fid2;
+        struct ll_fid   rn_fid1;
+        struct ll_fid   rn_fid2;
         __u32           rn_namelen;
         __u32           rn_tgtlen;
 };
@@ -332,7 +333,8 @@ static inline void ll_ino2fid(struct ll_fid *fid, ino_t ino, __u32 generation,
 
 static inline void ll_inode2fid(struct ll_fid *fid, struct inode *inode)
 {
-        ll_ino2fid(fid, inode->i_ino, inode->i_generation, inode->i_mode &S_IFMT);
+        ll_ino2fid(fid, inode->i_ino, inode->i_generation,
+                   inode->i_mode & S_IFMT);
 }
 
 #endif 
@@ -386,74 +388,74 @@ struct ldlm_reply {
 #define OBD_IOCTL_VERSION 0x00010001
 
 struct obd_ioctl_data { 
-	uint32_t ioc_len;
-	uint32_t ioc_version;
+        uint32_t ioc_len;
+        uint32_t ioc_version;
         uint32_t ioc_conn1;
         uint32_t ioc_conn2;
-	struct obdo ioc_obdo1;
-	struct obdo ioc_obdo2;
+        struct obdo ioc_obdo1;
+        struct obdo ioc_obdo2;
         obd_size         ioc_count;
         obd_off          ioc_offset;
-	uint32_t         ioc_dev;
+        uint32_t         ioc_dev;
 
-	/* buffers the kernel will treat as user pointers */
-	uint32_t ioc_plen1;
-	char    *ioc_pbuf1;
-	uint32_t ioc_plen2;
-	char    *ioc_pbuf2;
+        /* buffers the kernel will treat as user pointers */
+        uint32_t ioc_plen1;
+        char    *ioc_pbuf1;
+        uint32_t ioc_plen2;
+        char    *ioc_pbuf2;
 
-	/* two inline buffers */
-	uint32_t ioc_inllen1;
-	char    *ioc_inlbuf1;
-	uint32_t ioc_inllen2;
-	char    *ioc_inlbuf2;
+        /* two inline buffers */
+        uint32_t ioc_inllen1;
+        char    *ioc_inlbuf1;
+        uint32_t ioc_inllen2;
+        char    *ioc_inlbuf2;
 
-	char    ioc_bulk[0];
+        char    ioc_bulk[0];
 };
 
 struct obd_ioctl_hdr { 
-	uint32_t ioc_len;
-	uint32_t ioc_version;
+        uint32_t ioc_len;
+        uint32_t ioc_version;
 };
 
 static inline int obd_ioctl_packlen(struct obd_ioctl_data *data)
 {
-	int len = sizeof(struct obd_ioctl_data);
-	len += size_round(data->ioc_inllen1);
-	len += size_round(data->ioc_inllen2);
-	return len;
+        int len = sizeof(struct obd_ioctl_data);
+        len += size_round(data->ioc_inllen1);
+        len += size_round(data->ioc_inllen2);
+        return len;
 }
 
 static inline int obd_ioctl_is_invalid(struct obd_ioctl_data *data)
 {
-	if (data->ioc_len > (1<<30)) { 
-		printk("OBD ioctl: ioc_len larger than 1<<30\n");
-		return 1;
-	}
-	if (data->ioc_inllen1 > (1<<30)) { 
-		printk("OBD ioctl: ioc_inllen1 larger than 1<<30\n");
-		return 1;
-	}
-	if (data->ioc_inllen2 > (1<<30)) { 
-		printk("OBD ioctl: ioc_inllen2 larger than 1<<30\n");
-		return 1;
-	}
-	if (data->ioc_inlbuf1 && !data->ioc_inllen1) {
-		printk("OBD ioctl: inlbuf1 pointer but 0 length\n");
-		return 1;
-	}
-	if (data->ioc_inlbuf2 && !data->ioc_inllen2) {
-		printk("OBD ioctl: inlbuf2 pointer but 0 length\n");
-		return 1;
-	}
-	if (data->ioc_pbuf1 && !data->ioc_plen1) {
-		printk("OBD ioctl: pbuf1 pointer but 0 length\n");
-		return 1;
-	}
-	if (data->ioc_pbuf2 && !data->ioc_plen2) {
-		printk("OBD ioctl: pbuf2 pointer but 0 length\n");
-		return 1;
-	}
+        if (data->ioc_len > (1<<30)) { 
+                printk("OBD ioctl: ioc_len larger than 1<<30\n");
+                return 1;
+        }
+        if (data->ioc_inllen1 > (1<<30)) { 
+                printk("OBD ioctl: ioc_inllen1 larger than 1<<30\n");
+                return 1;
+        }
+        if (data->ioc_inllen2 > (1<<30)) { 
+                printk("OBD ioctl: ioc_inllen2 larger than 1<<30\n");
+                return 1;
+        }
+        if (data->ioc_inlbuf1 && !data->ioc_inllen1) {
+                printk("OBD ioctl: inlbuf1 pointer but 0 length\n");
+                return 1;
+        }
+        if (data->ioc_inlbuf2 && !data->ioc_inllen2) {
+                printk("OBD ioctl: inlbuf2 pointer but 0 length\n");
+                return 1;
+        }
+        if (data->ioc_pbuf1 && !data->ioc_plen1) {
+                printk("OBD ioctl: pbuf1 pointer but 0 length\n");
+                return 1;
+        }
+        if (data->ioc_pbuf2 && !data->ioc_plen2) {
+                printk("OBD ioctl: pbuf2 pointer but 0 length\n");
+                return 1;
+        }
         /*
         if (data->ioc_inllen1 && !data->ioc_inlbuf1) {
                 printk("OBD ioctl: inllen1 set but NULL pointer\n");
@@ -472,51 +474,51 @@ static inline int obd_ioctl_is_invalid(struct obd_ioctl_data *data)
                 return 1;
         }
         */
-	if (obd_ioctl_packlen(data) != data->ioc_len ) {
-		printk("OBD ioctl: packlen exceeds ioc_len\n");
-		return 1;
-	}
-	if (data->ioc_inllen1 && 
-	    data->ioc_bulk[data->ioc_inllen1 - 1] != '\0') { 
-		printk("OBD ioctl: inlbuf1 not 0 terminated\n");
-		return 1;
-	}
-	if (data->ioc_inllen2 && 
-	    data->ioc_bulk[size_round(data->ioc_inllen1) + data->ioc_inllen2 - 1] != '\0') { 
-		printk("OBD ioctl: inlbuf2 not 0 terminated\n");
-		return 1;
-	}
-	return 0;
+        if (obd_ioctl_packlen(data) != data->ioc_len ) {
+                printk("OBD ioctl: packlen exceeds ioc_len\n");
+                return 1;
+        }
+        if (data->ioc_inllen1 && 
+            data->ioc_bulk[data->ioc_inllen1 - 1] != '\0') { 
+                printk("OBD ioctl: inlbuf1 not 0 terminated\n");
+                return 1;
+        }
+        if (data->ioc_inllen2 && 
+            data->ioc_bulk[size_round(data->ioc_inllen1) + data->ioc_inllen2 - 1] != '\0') { 
+                printk("OBD ioctl: inlbuf2 not 0 terminated\n");
+                return 1;
+        }
+        return 0;
 }
 
 #ifndef __KERNEL__
 static inline int obd_ioctl_pack(struct obd_ioctl_data *data, char **pbuf,
                                  int max)
 {
-	char *ptr;
-	struct obd_ioctl_data *overlay;
-	data->ioc_len = obd_ioctl_packlen(data);
-	data->ioc_version = OBD_IOCTL_VERSION;
+        char *ptr;
+        struct obd_ioctl_data *overlay;
+        data->ioc_len = obd_ioctl_packlen(data);
+        data->ioc_version = OBD_IOCTL_VERSION;
 
-	if (*pbuf && obd_ioctl_packlen(data) > max) 
-		return 1;
-	if (*pbuf == NULL) { 
-		*pbuf = malloc(data->ioc_len);
-	}
-	if (!*pbuf)
-		return 1;
-	overlay = (struct obd_ioctl_data *)*pbuf;
-	memcpy(*pbuf, data, sizeof(*data));
+        if (*pbuf && obd_ioctl_packlen(data) > max) 
+                return 1;
+        if (*pbuf == NULL) { 
+                *pbuf = malloc(data->ioc_len);
+        }
+        if (!*pbuf)
+                return 1;
+        overlay = (struct obd_ioctl_data *)*pbuf;
+        memcpy(*pbuf, data, sizeof(*data));
 
-	ptr = overlay->ioc_bulk;
-	if (data->ioc_inlbuf1)
-		LOGL(data->ioc_inlbuf1, data->ioc_inllen1, ptr);
-	if (data->ioc_inlbuf2)
-		LOGL(data->ioc_inlbuf2, data->ioc_inllen2, ptr);
-	if (obd_ioctl_is_invalid(overlay))
-		return 1;
+        ptr = overlay->ioc_bulk;
+        if (data->ioc_inlbuf1)
+                LOGL(data->ioc_inlbuf1, data->ioc_inllen1, ptr);
+        if (data->ioc_inlbuf2)
+                LOGL(data->ioc_inlbuf2, data->ioc_inllen2, ptr);
+        if (obd_ioctl_is_invalid(overlay))
+                return 1;
 
-	return 0;
+        return 0;
 }
 #else
 
@@ -524,57 +526,57 @@ static inline int obd_ioctl_pack(struct obd_ioctl_data *data, char **pbuf,
 /* buffer MUST be at least the size of obd_ioctl_hdr */
 static inline int obd_ioctl_getdata(char *buf, char *end, void *arg)
 {
-	struct obd_ioctl_hdr *hdr;
-	struct obd_ioctl_data *data;
-	int err;
-	ENTRY;
+        struct obd_ioctl_hdr *hdr;
+        struct obd_ioctl_data *data;
+        int err;
+        ENTRY;
 
-	hdr = (struct obd_ioctl_hdr *)buf;
-	data = (struct obd_ioctl_data *)buf;
+        hdr = (struct obd_ioctl_hdr *)buf;
+        data = (struct obd_ioctl_data *)buf;
 
-	err = copy_from_user(buf, (void *)arg, sizeof(*hdr));
-	if ( err ) {
-		EXIT;
-		return err;
-	}
+        err = copy_from_user(buf, (void *)arg, sizeof(*hdr));
+        if ( err ) {
+                EXIT;
+                return err;
+        }
 
-	if (hdr->ioc_version != OBD_IOCTL_VERSION) { 
-		printk("OBD: version mismatch kernel vs application\n");
-		return -EINVAL;
-	}
+        if (hdr->ioc_version != OBD_IOCTL_VERSION) { 
+                printk("OBD: version mismatch kernel vs application\n");
+                return -EINVAL;
+        }
 
-	if (hdr->ioc_len + buf >= end) { 
-		printk("OBD: user buffer exceeds kernel buffer\n");
-		return -EINVAL;
-	}
+        if (hdr->ioc_len + buf >= end) { 
+                printk("OBD: user buffer exceeds kernel buffer\n");
+                return -EINVAL;
+        }
 
 
-	if (hdr->ioc_len < sizeof(struct obd_ioctl_data)) { 
-		printk("OBD: user buffer too small for ioctl\n");
-		return -EINVAL;
-	}
+        if (hdr->ioc_len < sizeof(struct obd_ioctl_data)) { 
+                printk("OBD: user buffer too small for ioctl\n");
+                return -EINVAL;
+        }
 
-	err = copy_from_user(buf, (void *)arg, hdr->ioc_len);
-	if ( err ) {
-		EXIT;
-		return err;
-	}
+        err = copy_from_user(buf, (void *)arg, hdr->ioc_len);
+        if ( err ) {
+                EXIT;
+                return err;
+        }
 
-	if (obd_ioctl_is_invalid(data)) { 
-		printk("OBD: ioctl not correctly formatted\n");
-		return -EINVAL;
-	}
+        if (obd_ioctl_is_invalid(data)) { 
+                printk("OBD: ioctl not correctly formatted\n");
+                return -EINVAL;
+        }
 
-	if (data->ioc_inllen1) { 
-		data->ioc_inlbuf1 = &data->ioc_bulk[0];
-	}
+        if (data->ioc_inllen1) { 
+                data->ioc_inlbuf1 = &data->ioc_bulk[0];
+        }
 
-	if (data->ioc_inllen2) { 
-		data->ioc_inlbuf2 = &data->ioc_bulk[0] + size_round(data->ioc_inllen1);
-	}
+        if (data->ioc_inllen2) { 
+                data->ioc_inlbuf2 = &data->ioc_bulk[0] + size_round(data->ioc_inllen1);
+        }
 
-	EXIT;
-	return 0;
+        EXIT;
+        return 0;
 }
 #endif
 

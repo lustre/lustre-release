@@ -183,7 +183,8 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
         return inode;
 } /* ll_new_inode */
 
-int ll_mdc_unlink(struct inode *dir, const char *name, int len)
+int ll_mdc_unlink(struct inode *dir, struct inode *child,
+                  const char *name, int len)
 {
         struct ptlrpc_request *request;
         int err;
@@ -191,7 +192,7 @@ int ll_mdc_unlink(struct inode *dir, const char *name, int len)
 
         ENTRY;
 
-        err = mdc_unlink(&sbi->ll_mds_client, dir, name, len, &request);
+        err = mdc_unlink(&sbi->ll_mds_client, dir, child, name, len, &request);
         ptlrpc_free_req(request);
 
         EXIT;
@@ -406,7 +407,8 @@ static int ll_unlink(struct inode * dir, struct dentry *dentry)
         if (!de)
                 goto out;
         
-        err = ll_mdc_unlink(dir, dentry->d_name.name, dentry->d_name.len);
+        err = ll_mdc_unlink(dir, dentry->d_inode,
+                            dentry->d_name.name, dentry->d_name.len);
         if (err) 
                 goto out;
 

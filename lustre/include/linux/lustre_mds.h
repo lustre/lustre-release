@@ -71,7 +71,7 @@ int mds_update_unpack(char *buf, int len, struct mds_update_record *r);
 
 void mds_setattr_pack(struct mds_rec_setattr *rec, struct inode *inode, struct iattr *iattr);
 void mds_create_pack(struct mds_rec_create *rec, struct inode *inode, const char *name, int namelen, __u32 mode, __u64 id, __u32 uid, __u32 gid, __u64 time, const char *tgt, int tgtlen);
-void mds_unlink_pack(struct mds_rec_unlink *rec, struct inode *inode, const char *name, int namelen);
+void mds_unlink_pack(struct mds_rec_unlink *rec, struct inode *inode, struct inode *child, const char *name, int namelen);
 void mds_link_pack(struct mds_rec_link *rec, struct inode *inode, struct inode *dir, const char *name, int namelen);
 void mds_rename_pack(struct mds_rec_rename *rec, struct inode *srcdir, struct inode *tgtdir, const char *name, int namelen, const char *tgt, int tgtlen);
 
@@ -80,7 +80,7 @@ struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid, struct vf
 
 /* llight/request.c */
 int mdc_getattr(struct ptlrpc_client *peer, ino_t ino, int type, int valid, 
-		struct ptlrpc_request **);
+                struct ptlrpc_request **);
 int mdc_setattr(struct ptlrpc_client *peer, struct inode *inode,
                 struct iattr *iattr, struct ptlrpc_request **);
 int mdc_open(struct ptlrpc_client *cl, ino_t ino, int type, int flags,
@@ -90,19 +90,19 @@ int mdc_close(struct ptlrpc_client *cl, ino_t ino, int type, __u64 fh,
 int mdc_readpage(struct ptlrpc_client *peer, ino_t ino, int type, __u64 offset,
                  char *addr, struct ptlrpc_request **);
 int mdc_create(struct ptlrpc_client *peer, 
-	       struct inode *dir, const char *name, int namelen, 
-	       const char *tgt, int tgtlen, 
-	       int mode, __u64 id, __u32 uid, __u32 gid, __u64 time, 
+               struct inode *dir, const char *name, int namelen, 
+               const char *tgt, int tgtlen, 
+               int mode, __u64 id, __u32 uid, __u32 gid, __u64 time, 
                struct ptlrpc_request **);
-int mdc_unlink(struct ptlrpc_client *peer, 
-	       struct inode *dir, const char *name, int namelen, 
+int mdc_unlink(struct ptlrpc_client *peer, struct inode *dir,
+               struct inode *child, const char *name, int namelen, 
                struct ptlrpc_request **);
 int mdc_link(struct ptlrpc_client *peer, struct dentry *src, 
-	       struct inode *dir, const char *name, int namelen, 
+               struct inode *dir, const char *name, int namelen, 
                struct ptlrpc_request **);
 int mdc_rename(struct ptlrpc_client *peer, struct inode *src, 
-	       struct inode *tgt, const char *old, int oldlen, 
-	       const char *new, int newlen, 
+               struct inode *tgt, const char *old, int oldlen, 
+               const char *new, int newlen, 
                struct ptlrpc_request **);
 int mdc_create_client(char *uuid, struct ptlrpc_client *cl);
 
@@ -110,10 +110,10 @@ int mdc_create_client(char *uuid, struct ptlrpc_client *cl);
 #define IOC_REQUEST_TYPE                   'f'
 #define IOC_REQUEST_MIN_NR                 30
 
-#define IOC_REQUEST_GETATTR		_IOWR('f', 30, long)
-#define IOC_REQUEST_READPAGE		_IOWR('f', 31, long)
-#define IOC_REQUEST_SETATTR		_IOWR('f', 32, long)
-#define IOC_REQUEST_CREATE		_IOWR('f', 33, long)
+#define IOC_REQUEST_GETATTR             _IOWR('f', 30, long)
+#define IOC_REQUEST_READPAGE            _IOWR('f', 31, long)
+#define IOC_REQUEST_SETATTR             _IOWR('f', 32, long)
+#define IOC_REQUEST_CREATE              _IOWR('f', 33, long)
 #define IOC_REQUEST_MAX_NR               33
 
 #endif

@@ -209,6 +209,11 @@ static int mds_reint_unlink(struct mds_update_record *rec,
                 GOTO(out_unlink, (rc = -ESTALE));
         }
 
+        if (dchild->d_inode->i_ino != rec->ur_fid2->id)
+                LBUG();
+        if (dchild->d_inode->i_generation != rec->ur_fid2->generation)
+                LBUG();
+
         OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_UNLINK_WRITE);
 
         switch (dchild->d_inode->i_mode & S_IFMT) {

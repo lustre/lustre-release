@@ -153,8 +153,7 @@ struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
         /* stolen from NFS */
         struct super_block *sb = mds->mds_sb;
         unsigned long ino = fid->id;
-        //__u32 generation = fid->generation;
-        __u32 generation = 0;
+        __u32 generation = fid->generation;
         struct inode *inode;
         struct list_head *lp;
         struct dentry *result;
@@ -243,6 +242,7 @@ int mds_getattr(struct ptlrpc_request *req)
 
         inode = de->d_inode;
         rep->ino = inode->i_ino;
+        rep->generation = inode->i_generation;
         rep->atime = inode->i_atime;
         rep->ctime = inode->i_ctime;
         rep->mtime = inode->i_mtime;
