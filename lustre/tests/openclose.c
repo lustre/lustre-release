@@ -33,7 +33,7 @@ int main(int argc, char *argv[])
         }
 
         for (i = 0; i < count; i++) {
-                fd = open(filename, O_RDONLY);
+                fd = open(filename, O_RDONLY|O_LARGEFILE|O_DIRECT);
                 if (fd < 0) {
                         fprintf(stderr, "open(%s, O_RDONLY): %s\n", filename,
                                 strerror(errno));
