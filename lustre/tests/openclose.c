@@ -7,6 +7,10 @@
 #include <errno.h>
 #include <string.h>
 
+#ifndef O_DIRECT
+#define O_DIRECT         040000 /* direct disk access hint */
+#endif
+
 int main(int argc, char *argv[])
 {
         char *filename;
