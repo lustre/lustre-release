@@ -580,12 +580,12 @@ check_llogd_body(void)
 }
 
 void
-check_llog_ctxt_gen(void)
+check_llog_gen(void)
 {
         BLANK_LINE();
-        CHECK_STRUCT(llog_ctxt_gen);
-        CHECK_MEMBER(llog_ctxt_gen, mnt_cnt);
-        CHECK_MEMBER(llog_ctxt_gen, conn_cnt);
+        CHECK_STRUCT(llog_gen);
+        CHECK_MEMBER(llog_gen, mnt_cnt);
+        CHECK_MEMBER(llog_gen, conn_cnt);
 }
 
 void
