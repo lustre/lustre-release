@@ -240,8 +240,8 @@ diff -uprN linux/fs/nfsd/nfsfh.c linux-2.4.20/fs/nfsd/nfsfh.c
  
 diff -uprN linux/fs/nfsd/vfs.c linux-2.4.20/fs/nfsd/vfs.c
 --- linux/fs/nfsd/vfs.c	2002-11-29 05:23:15.000000000 +0530
-+++ linux-2.4.20/fs/nfsd/vfs.c	2003-09-11 12:56:06.000000000 +0530
-@@ -77,6 +77,133 @@ struct raparms {
++++ linux-2.4.20/fs/nfsd/vfs.c	2003-09-12 19:23:13.000000000 +0530
+@@ -77,6 +77,132 @@ struct raparms {
  static struct raparms *		raparml;
  static struct raparms *		raparm_cache;
  
@@ -340,7 +340,6 @@ diff -uprN linux/fs/nfsd/vfs.c linux-2.4.20/fs/nfsd/vfs.c
 +	struct nameidata new_nd = { .dentry = tdentry, .last = ndentry->d_name};
 +	struct inode_operations *op = old_nd.dentry->d_inode->i_op;
 +	err = op->rename_raw(&old_nd, &new_nd);
-+	d_move(odentry, ndentry);
 +
 +	return err;
 +}
@@ -375,7 +374,7 @@ diff -uprN linux/fs/nfsd/vfs.c linux-2.4.20/fs/nfsd/vfs.c
  /*
   * Look up one component of a pathname.
   * N.B. After this call _both_ fhp and resfh need an fh_put
-@@ -300,7 +427,10 @@ nfsd_setattr(struct svc_rqst *rqstp, str
+@@ -300,7 +426,10 @@ nfsd_setattr(struct svc_rqst *rqstp, str
  	}
  	err = nfserr_notsync;
  	if (!check_guard || guardtime == inode->i_ctime) {
@@ -387,7 +386,7 @@ diff -uprN linux/fs/nfsd/vfs.c linux-2.4.20/fs/nfsd/vfs.c
  		err = nfserrno(err);
  	}
  	if (size_change) {
-@@ -473,6 +603,15 @@ nfsd_open(struct svc_rqst *rqstp, struct
+@@ -473,6 +602,15 @@ nfsd_open(struct svc_rqst *rqstp, struct
  		filp->f_mode  = FMODE_READ;
  	}
  
@@ -403,7 +402,7 @@ diff -uprN linux/fs/nfsd/vfs.c linux-2.4.20/fs/nfsd/vfs.c
  	err = 0;
  	if (filp->f_op && filp->f_op->open) {
  		err = filp->f_op->open(inode, filp);
-@@ -487,7 +626,11 @@ nfsd_open(struct svc_rqst *rqstp, struct
+@@ -487,7 +625,11 @@ nfsd_open(struct svc_rqst *rqstp, struct
  			atomic_dec(&filp->f_count);
  		}
  	}
@@ -415,7 +414,7 @@ diff -uprN linux/fs/nfsd/vfs.c linux-2.4.20/fs/nfsd/vfs.c
  	if (err)
  		err = nfserrno(err);
  out:
-@@ -818,7 +961,7 @@ nfsd_create(struct svc_rqst *rqstp, stru
+@@ -818,7 +960,7 @@ nfsd_create(struct svc_rqst *rqstp, stru
  {
  	struct dentry	*dentry, *dchild;
  	struct inode	*dirp;
@@ -424,7 +423,7 @@ diff -uprN linux/fs/nfsd/vfs.c linux-2.4.20/fs/nfsd/vfs.c
  
  	err = nfserr_perm;
  	if (!flen)
-@@ -834,8 +977,24 @@ nfsd_create(struct svc_rqst *rqstp, stru
+@@ -834,8 +976,24 @@ nfsd_create(struct svc_rqst *rqstp, stru
  	dentry = fhp->fh_dentry;
  	dirp = dentry->d_inode;
  
@@ -450,7 +449,7 @@ diff -uprN linux/fs/nfsd/vfs.c linux-2.4.20/fs/nfsd/vfs.c
  		goto out;
  	/*
  	 * Check whether the response file handle has been verified yet.
-@@ -868,10 +1027,12 @@ nfsd_create(struct svc_rqst *rqstp, stru
+@@ -868,10 +1026,12 @@ nfsd_create(struct svc_rqst *rqstp, stru
  	 * Make sure the child dentry is still negative ...
  	 */
  	err = nfserr_exist;
@@ -467,7 +466,7 @@ diff -uprN linux/fs/nfsd/vfs.c linux-2.4.20/fs/nfsd/vfs.c
  	}
  
  	if (!(iap->ia_valid & ATTR_MODE))
-@@ -887,13 +1048,15 @@ nfsd_create(struct svc_rqst *rqstp, stru
+@@ -887,13 +1047,15 @@ nfsd_create(struct svc_rqst *rqstp, stru
  		err = vfs_create(dirp, dchild, iap->ia_mode);
  		break;
  	case S_IFDIR:
@@ -485,7 +484,7 @@ diff -uprN linux/fs/nfsd/vfs.c linux-2.4.20/fs/nfsd/vfs.c
  		break;
  	default:
  	        printk("nfsd: bad file type %o in nfsd_create\n", type);
-@@ -962,7 +1125,10 @@ nfsd_create_v3(struct svc_rqst *rqstp, s
+@@ -962,7 +1124,10 @@ nfsd_create_v3(struct svc_rqst *rqstp, s
  	/* Get all the sanity checks out of the way before
  	 * we lock the parent. */
  	err = nfserr_notdir;
@@ -497,7 +496,7 @@ diff -uprN linux/fs/nfsd/vfs.c linux-2.4.20/fs/nfsd/vfs.c
  		goto out;
  	fh_lock(fhp);
  
-@@ -1013,6 +1179,8 @@ nfsd_create_v3(struct svc_rqst *rqstp, s
+@@ -1013,6 +1178,8 @@ nfsd_create_v3(struct svc_rqst *rqstp, s
  		case NFS3_CREATE_GUARDED:
  			err = nfserr_exist;
  		}
@@ -506,7 +505,7 @@ diff -uprN linux/fs/nfsd/vfs.c linux-2.4.20/fs/nfsd/vfs.c
  		goto out;
  	}
  
-@@ -1119,7 +1287,7 @@ nfsd_symlink(struct svc_rqst *rqstp, str
+@@ -1119,7 +1286,7 @@ nfsd_symlink(struct svc_rqst *rqstp, str
  				struct iattr *iap)
  {
  	struct dentry	*dentry, *dnew;
@@ -515,7 +514,7 @@ diff -uprN linux/fs/nfsd/vfs.c linux-2.4.20/fs/nfsd/vfs.c
  
  	err = nfserr_noent;
  	if (!flen || !plen)
-@@ -1133,12 +1301,18 @@ nfsd_symlink(struct svc_rqst *rqstp, str
+@@ -1133,12 +1300,18 @@ nfsd_symlink(struct svc_rqst *rqstp, str
  		goto out;
  	fh_lock(fhp);
  	dentry = fhp->fh_dentry;
@@ -535,7 +534,19 @@ diff -uprN linux/fs/nfsd/vfs.c linux-2.4.20/fs/nfsd/vfs.c
  	if (!err) {
  		if (EX_ISSYNC(fhp->fh_export))
  			nfsd_sync_dir(dentry);
-@@ -1206,7 +1380,10 @@ nfsd_link(struct svc_rqst *rqstp, struct
+@@ -1148,7 +1321,10 @@ nfsd_symlink(struct svc_rqst *rqstp, str
+ 				iap->ia_valid |= ATTR_CTIME;
+ 				iap->ia_mode = (iap->ia_mode&S_IALLUGO)
+ 					| S_IFLNK;
+-				err = notify_change(dnew, iap);
++				if (dnew->d_inode->i_op && dnew->d_inode->i_op->setattr_raw)
++					err = setattr_raw(dnew->d_inode, iap);
++				else
++					err = notify_change(dnew, iap);
+ 				if (!err && EX_ISSYNC(fhp->fh_export))
+ 					write_inode_now(dentry->d_inode, 1);
+ 		       }
+@@ -1206,7 +1382,10 @@ nfsd_link(struct svc_rqst *rqstp, struct
  	dold = tfhp->fh_dentry;
  	dest = dold->d_inode;
  
@@ -547,7 +558,7 @@ diff -uprN linux/fs/nfsd/vfs.c linux-2.4.20/fs/nfsd/vfs.c
  	if (!err) {
  		if (EX_ISSYNC(ffhp->fh_export)) {
  			nfsd_sync_dir(ddir);
-@@ -1291,7 +1468,10 @@ nfsd_rename(struct svc_rqst *rqstp, stru
+@@ -1291,7 +1470,10 @@ nfsd_rename(struct svc_rqst *rqstp, stru
  			err = nfserr_perm;
  	} else
  #endif
@@ -559,7 +570,7 @@ diff -uprN linux/fs/nfsd/vfs.c linux-2.4.20/fs/nfsd/vfs.c
  	if (!err && EX_ISSYNC(tfhp->fh_export)) {
  		nfsd_sync_dir(tdentry);
  		nfsd_sync_dir(fdentry);
-@@ -1312,7 +1492,7 @@ nfsd_rename(struct svc_rqst *rqstp, stru
+@@ -1312,7 +1494,7 @@ nfsd_rename(struct svc_rqst *rqstp, stru
  	fill_post_wcc(tfhp);
  	double_up(&tdir->i_sem, &fdir->i_sem);
  	ffhp->fh_locked = tfhp->fh_locked = 0;
@@ -568,7 +579,7 @@ diff -uprN linux/fs/nfsd/vfs.c linux-2.4.20/fs/nfsd/vfs.c
  out:
  	return err;
  }
-@@ -1358,9 +1538,15 @@ nfsd_unlink(struct svc_rqst *rqstp, stru
+@@ -1358,9 +1540,15 @@ nfsd_unlink(struct svc_rqst *rqstp, stru
  			err = nfserr_perm;
  		} else
  #endif
