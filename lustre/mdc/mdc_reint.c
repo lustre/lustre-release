@@ -94,7 +94,7 @@ int mdc_setattr(struct lustre_handle *conn, struct mdc_op_data *data,
 
         if (iattr->ia_valid & (ATTR_MTIME | ATTR_CTIME))
                 CDEBUG(D_INODE, "setting mtime %lu, ctime %lu\n",
-                       iattr->ia_mtime, iattr->ia_ctime);
+                       LTIME_S(iattr->ia_mtime), LTIME_S(iattr->ia_ctime));
         mdc_setattr_pack(req, data, iattr, ea, ealen, ea2, ea2len);
 
         size[0] = sizeof(struct mds_body);
