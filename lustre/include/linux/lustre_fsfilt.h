@@ -55,7 +55,6 @@ struct fsfilt_operations {
         int     (* fs_get_md)(struct inode *inode, void *md, int size);
         ssize_t (* fs_readpage)(struct file *file, char *buf, size_t count,
                                 loff_t *offset);
-        int     (* fs_journal_data)(struct file *file);
         int     (* fs_set_last_rcvd)(struct obd_device *obd, __u64 last_rcvd,
                                      void *handle, fsfilt_cb_t cb_func,
                                      void *cb_data);
@@ -180,11 +179,6 @@ static inline ssize_t fsfilt_readpage(struct obd_device *obd,
                                       size_t count, loff_t *offset)
 {
         return obd->obd_fsops->fs_readpage(file, buf, count, offset);
-}
-
-static inline int fsfilt_journal_data(struct obd_device *obd, struct file *file)
-{
-        return obd->obd_fsops->fs_journal_data(file);
 }
 
 static inline int fsfilt_set_last_rcvd(struct obd_device *obd, __u64 last_rcvd,
