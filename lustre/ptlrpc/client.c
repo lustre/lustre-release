@@ -253,6 +253,35 @@ static int ptlrpc_check_queue_depth(void *data)
         return 0;
 }
 
+#define __ptlrpc_wait_event_interruptible(wq, condition, ret)           \
+do {                                                                    \
+        wait_queue_t __wait;                                            \
+        init_waitqueue_entry(&__wait, current);                         \
+                                                                        \
+        add_wait_queue_exclusive(&wq, &__wait);                         \
+        for (;;) {                                                      \
+                set_current_state(TASK_INTERRUPTIBLE);                  \
+                if (condition)                                          \
+                        break;                                          \
+                if (!signal_pending(current)) {                         \
+                        schedule();                                     \
+                        continue;                                       \
+                }                                                       \
+                ret = -ERESTARTSYS;                                     \
+                break;                                                  \
+        }                                                               \
+        current->state = TASK_RUNNING;                                  \
+        remove_wait_queue(&wq, &__wait);                                \
+} while (0)
+
+#define ptlrpc_wait_event_interruptible(wq, condition)                  \
+({                                                                      \
+        int __ret = 0;                                                  \
+        if (!(condition))                                               \
+                __ptlrpc_wait_event_interruptible(wq, condition, __ret);  \
+        __ret;                                                          \
+})
+
 int ptlrpc_queue_wait(struct ptlrpc_client *cl, struct ptlrpc_request *req)
 {
         int rc = 0;
@@ -261,8 +290,8 @@ int ptlrpc_queue_wait(struct ptlrpc_client *cl, struct ptlrpc_request *req)
         init_waitqueue_head(&req->rq_wait_for_rep);
 
         if (atomic_dec_and_test(&cl->cli_queue_length))
-                wait_event_interruptible(cl->cli_waitq,
-                                         ptlrpc_check_queue_depth(cl));
+                ptlrpc_wait_event_interruptible(cl->cli_waitq,
+                                                ptlrpc_check_queue_depth(cl));
 
         if (cl->cli_obd) {
                 /* Local delivery */
