@@ -4,7 +4,7 @@ export PATH=$PATH:/sbin:/usr/sbin
 [ -d /r ] && R=/r
 
 PORTALS=$SRCDIR../../portals
-LUSTRE=$SRCDIR../../obd
+LUSTRE=$SRCDIR../../lustre
 
 PTLCTL=$PORTALS/linux/utils/ptlctl
 DBGCTL=$PORTALS/linux/utils/debugctl
@@ -193,8 +193,8 @@ setup_portals() {
 setup_lustre() {
 	[ -c /dev/obd ] || mknod /dev/obd c 10 241
 
-	do_insmod $LUSTRE/class/obdclass.o || exit -1
-	do_insmod $LUSTRE/rpc/ptlrpc.o || exit -1
+	do_insmod $LUSTRE/obdclass/obdclass.o || exit -1
+	do_insmod $LUSTRE/ptlrpc/ptlrpc.o || exit -1
 	do_insmod $LUSTRE/ldlm/ldlm.o || exit -1
 	do_insmod $LUSTRE/extN/extN.o || \
 		echo "info: can't load extN.o module, not fatal if using ext3"
@@ -204,12 +204,12 @@ setup_lustre() {
 	do_insmod $LUSTRE/mds/mds_extN.o || \
 		echo "info: can't load mds_extN.o module, needs extN.o"
 	do_insmod $LUSTRE/obdecho/obdecho.o || exit -1
-	do_insmod $LUSTRE/ext2obd/obdext2.o || exit -1
-	do_insmod $LUSTRE/filterobd/obdfilter.o || exit -1
+	do_insmod $LUSTRE/obdext2/obdext2.o || exit -1
+	do_insmod $LUSTRE/obdfilter/obdfilter.o || exit -1
 	do_insmod $LUSTRE/ost/ost.o || exit -1
 	do_insmod $LUSTRE/osc/osc.o || exit -1
 	do_insmod $LUSTRE/mdc/mdc.o || exit -1
-	do_insmod $LUSTRE/llight/llite.o || exit -1
+	do_insmod $LUSTRE/llite/llite.o || exit -1
 
 	list_mods
 

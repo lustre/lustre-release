@@ -2,5 +2,5 @@
 
 [ -e /proc/sys/portals/debug ] && echo 0 > /proc/sys/portals/debug 
 cd /mnt/lustre
-cp /usr/src/obd/demos/dbench/client.txt .
-/usr/src/obd/demos/dbench/dbench $1
+cp /usr/src/lustre/demos/dbench/client.txt .
+/usr/src/lustre/demos/dbench/dbench $1
