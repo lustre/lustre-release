@@ -214,6 +214,7 @@ int lov_unpackmd(struct lustre_handle *conn, struct lov_stripe_md **lsmp,
         lsm = *lsmp;
         lsm->lsm_magic = LOV_MAGIC;
         lsm->lsm_stripe_count = stripe_count;
+        lsm->lsm_maxbytes = LUSTRE_STRIPE_MAXBYTES * stripe_count;
 
         if (!lmm)
                 RETURN(lsm_size);
