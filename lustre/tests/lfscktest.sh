@@ -1,19 +1,18 @@
 #!/bin/bash
 set -vx
-set -e
+#set -e
 
 . ./lfscktest_config.sh
 
+sh llmount.sh || exit 1
+
 #Create mount points on target OST and MDS
 #Create test directory 
-
 mkdir -p $OST_MOUNTPT
 mkdir -p $MDS_MOUNTPT
 mkdir -p $TEST_DIR
 
-export PATH=$LFSCK_PATH/e2fsck:`dirname $0`:`dirname $0`/../utils:$PATH
-
-sh llmount.sh || exit 1
+export PATH=$LFSCK_PATH:`dirname $0`:`dirname $0`/../utils:$PATH
 
 # Create some files on the filesystem
 for i in `seq 0 3`; do
@@ -27,16 +26,14 @@ for i in `seq 0 3`; do
 		done
 	done
 done
+
 # Create Files to be modified
-
 file_name=${TESTNAME}
-
 for FILE in `seq -f ${TEST_DIR}/${file_name}.%g 0 40`; do
-	dd if=/dev/zero count=1 bs=64k of=$FILE || exit 1
+	dd if=/dev/zero count=1 bs=64K of=$FILE || exit 1
 done
 
 #Create some more files
-
 for i in `seq 21 23`; do
 	mkdir -p ${MOUNT}/d$i
 	for j in `seq 0 5`; do
@@ -86,25 +83,25 @@ for i in $MDS_FILES; do
 done
 
 #Create EAs on files so objects are referenced twice from different mds files
-for i in `seq 40 59`; do
+for i in `seq 0 19`; do
 	touch $MDS_MOUNTPT/ROOT/${TESTNAME}/${TESTNAME}.bad.$i
 	copy_attr $MDS_MOUNTPT/ROOT/${TESTNAME}/${TESTNAME}.$i $MDS_MOUNTPT/ROOT/${TESTNAME}/${TESTNAME}.bad.$i || (umount $MDS_MOUNTPT && exit 1) 
 	i=`expr $i + 1`
 done
-	umount $MDS_MOUNTPT 
-	rmdir $MDS_MOUNTPT
-	rmdir $OST_MOUNTPT
+umount $MDS_MOUNTPT 
+rmdir $MDS_MOUNTPT
+rmdir $OST_MOUNTPT
 
 # Run e2fsck to get mds and ost info
 # a return status of 1 indicates e2fsck successfuly fixed problems found
 
-e2fsck -d -f -y --mdsdb $GPATH/mdsdb $MDSDEV 
+e2fsck -d -f -y --mdsdb $GPATH/mdsdb $MDSDEV
 RET=$?
 [ $RET -ne 0 -a $RET -ne 1 ] && exit 1
 i=0
 OSTDB_LIST=""
 while [ $i -lt $NUM_OSTS ]; do
-	e2fsck -d -f -y --mdsdb $GPATH/mdsdb --ostdb $GPATH/ostdb-$i $TMP/ost$i-`hostname`
+	e2fsck -d -f -y --mdsdb $GPATH/mdsdb --ostdb $GPATH/ostdb-$i $TMP/ost`expr $i + 1`-`hostname`
 	RET=$?
 	[ $RET -ne 0 -a $RET -ne 1 ] && exit 1
 	if [ -z "${OSTDB_LIST}" ]; then
