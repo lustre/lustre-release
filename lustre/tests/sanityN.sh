@@ -153,7 +153,7 @@ test_3() {
 run_test 3 "symlink on one mtpt, readlink on another ==========="
 
 test_4() {
-	./multifstat $DIR1/f6 $DIR2/f6
+	./multifstat $DIR1/f4 $DIR2/f4
 }
 run_test 4 "fstat validation on multiple mount points =========="
 
