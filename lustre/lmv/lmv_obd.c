@@ -78,10 +78,8 @@ static int lmv_set_mdc_active(struct lmv_obd *lmv, struct obd_uuid *uuid,
                 GOTO(out, rc = -EINVAL);
 
         obd = class_exp2obd(tgt->ltd_exp);
-        if (obd == NULL) {
-                /* This can happen if OST failure races with node shutdown */
+        if (obd == NULL)
                 GOTO(out, rc = -ENOTCONN);
-        }
 
         CDEBUG(D_INFO, "Found OBD %s=%s device %d (%p) type %s at LMV idx %d\n",
                obd->obd_name, obd->obd_uuid.uuid, obd->obd_minor, obd,
@@ -234,8 +232,9 @@ int lmv_check_connect(struct obd_device *obd) {
         lmv->connected = 1;
         cluuid = &lmv->cluuid;
         exp = lmv->exp;
+        
         CDEBUG(D_OTHER, "time to connect %s to %s\n",
-                        cluuid->uuid, obd->obd_name);
+               cluuid->uuid, obd->obd_name);
 
         for (i = 0, tgts = lmv->tgts; i < lmv->desc.ld_tgt_count; i++, tgts++) {
                 struct obd_device *tgt_obd;
@@ -362,11 +361,46 @@ static int lmv_disconnect(struct obd_export *exp, int flags)
                 lmv->tgts[i].ltd_exp = NULL;
         }
 
- out_local:
-        /* FIXME: cleanup here */
+out_local:
+        /* This is the case when no real connection is established by
+         * lmv_check_connect(). */
         if (!lmv->connected)
                 class_export_put(exp);
         rc = class_disconnect(exp, 0);
+        RETURN(rc);
+}
+
+static int lmv_iocontrol(unsigned int cmd, struct obd_export *exp,
+                         int len, void *karg, void *uarg)
+{
+        struct obd_device *obddev = class_exp2obd(exp);
+        struct lmv_obd *lmv = &obddev->u.lmv;
+        int i, rc = 0, set = 0;
+
+        ENTRY;
+
+        if (lmv->desc.ld_tgt_count == 0)
+                RETURN(-ENOTTY);
+        
+        for (i = 0; i < lmv->desc.ld_tgt_count; i++) {
+                int err;
+
+                err = obd_iocontrol(cmd, lmv->tgts[i].ltd_exp,
+                                    len, karg, uarg);
+                if (err) {
+                        if (lmv->tgts[i].active) {
+                                CERROR("error: iocontrol MDC %s on MDT"
+                                       "idx %d: err = %d\n",
+                                       lmv->tgts[i].uuid.uuid, i, err);
+                                if (!rc)
+                                        rc = err;
+                        }
+                } else
+                        set = 1;
+        }
+        if (!set && !rc)
+                rc = -EIO;
+
         RETURN(rc);
 }
 
@@ -418,8 +452,9 @@ static int lmv_setup(struct obd_device *obd, obd_count len, void *buf)
         for (i = 0, tgts = lmv->tgts; i < desc->ld_tgt_count; i++, tgts++)
                 tgts->uuid = uuids[i];
         
-        lmv->max_easize = sizeof(struct ll_fid) * desc->ld_tgt_count
-                + sizeof(struct mea);
+        lmv->max_easize = sizeof(struct ll_fid) *
+                desc->ld_tgt_count + sizeof(struct mea);
+        
         lmv->max_cookiesize = 0;
 
         RETURN(rc);
@@ -1163,8 +1198,8 @@ int lmv_readpage(struct obd_export *exp, struct ll_fid *mdc_fid,
         RETURN(rc);
 }
 
-int lmv_unlink_slaves(struct obd_export *exp,
-                         struct mdc_op_data *data, struct ptlrpc_request **req)
+int lmv_unlink_slaves(struct obd_export *exp, struct mdc_op_data *data,
+                      struct ptlrpc_request **req)
 {
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
@@ -1306,7 +1341,7 @@ int lmv_obd_create_single(struct obd_export *exp, struct obdo *oa,
  * to be called from MDS only
  */
 int lmv_obd_create(struct obd_export *exp, struct obdo *oa,
-               struct lov_stripe_md **ea, struct obd_trans_info *oti)
+                   struct lov_stripe_md **ea, struct obd_trans_info *oti)
 {
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
@@ -1382,7 +1417,7 @@ int lmv_obd_create(struct obd_export *exp, struct obdo *oa,
 }
 
 static int lmv_get_info(struct obd_export *exp, __u32 keylen,
-                           void *key, __u32 *vallen, void *val)
+                        void *key, __u32 *vallen, void *val)
 {
         struct obd_device *obd;
         struct lmv_obd *lmv;
@@ -1567,6 +1602,7 @@ struct obd_ops lmv_obd_ops = {
         .o_brw                  = lmv_brw,
         .o_init_ea_size         = lmv_init_ea_size,
         .o_notify               = lmv_notify,
+        .o_iocontrol            = lmv_iocontrol,
 };
 
 struct md_ops lmv_md_ops = {
