@@ -178,7 +178,7 @@ static int filter_lvbo_update(struct ldlm_resource *res, struct lustre_msg *m,
                        lvb->lvb_size, dentry->d_inode->i_size);
                 lvb->lvb_size = dentry->d_inode->i_size;
         }
-        if (dentry->d_inode->i_mtime > lvb->lvb_mtime || !increase) {
+        if (LTIME_S(dentry->d_inode->i_mtime) > lvb->lvb_mtime || !increase) {
                 CDEBUG(D_DLMTRACE, "res: "LPU64" updating lvb mtime from disk: "
                        LPU64" -> %lu\n", res->lr_name.name[0],
                        lvb->lvb_mtime, LTIME_S(dentry->d_inode->i_mtime));
