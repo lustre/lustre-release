@@ -46,7 +46,6 @@ struct loi_oap_pages {
 struct lov_oinfo {                 /* per-stripe data structure */
         __u64 loi_id;              /* object ID on the target OST */
         __u64 loi_gr;              /* object group on the target OST */
-        struct lustre_handle *loi_handle; /* open file handle for obj on OST */
         int loi_ost_idx;           /* OST stripe index in lov_tgt_desc->tgts */
         int loi_ost_gen;           /* generation of this loi_ost_idx */
 
