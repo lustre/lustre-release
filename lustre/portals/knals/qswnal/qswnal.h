@@ -39,15 +39,19 @@
 #include <linux/config.h>
 #include <linux/module.h>
 
-#include <elan3/elanregs.h>
-#include <elan3/elandev.h>
-#include <elan3/elanvp.h>
-#include <elan3/elan3mmu.h>
-#include <elan3/elanctxt.h>
-#include <elan3/elandebug.h>
-#include <elan3/urom_addrs.h>
-#include <elan3/busops.h>
-#include <elan3/kcomm.h>
+#if MULTIRAIL_EKC
+# include <elan/epcomms.h>
+#else
+# include <elan3/elanregs.h>
+# include <elan3/elandev.h>
+# include <elan3/elanvp.h>
+# include <elan3/elan3mmu.h>
+# include <elan3/elanctxt.h>
+# include <elan3/elandebug.h>
+# include <elan3/urom_addrs.h>
+# include <elan3/busops.h>
+# include <elan3/kcomm.h>
+#endif
 
 #include <linux/kernel.h>
 #include <linux/mm.h>
@@ -66,7 +70,7 @@
 #include <linux/file.h>
 #include <linux/stat.h>
 #include <linux/list.h>
-#include <asm/uaccess.h>
+#include <linux/sysctl.h>
 #include <asm/segment.h>
 
 #define DEBUG_SUBSYSTEM S_QSWNAL
@@ -74,8 +78,6 @@
 #include <linux/kp30.h>
 #include <portals/p30.h>
 #include <portals/lib-p30.h>
-
-#define KQSW_OPTIMIZE_GETS 1
 
 #define KQSW_CHECKSUM   0
 #if KQSW_CHECKSUM
@@ -85,13 +87,6 @@ typedef unsigned long kqsw_csum_t;
 #define KQSW_CSUM_SIZE  0
 #endif
 #define KQSW_HDR_SIZE   (sizeof (ptl_hdr_t) + KQSW_CSUM_SIZE)
-
-/*
- *  Elan NAL
- */
-#define EP_SVC_LARGE_PORTALS_SMALL      (0x10)  /* Portals over elan port number (large payloads) */
-#define EP_SVC_LARGE_PORTALS_LARGE      (0x11)  /* Portals over elan port number (small payloads) */
-/* NB small/large message sizes are GLOBAL constants */
 
 /*
  * Performance Tuning defines
@@ -112,6 +107,9 @@ typedef unsigned long kqsw_csum_t;
 #define KQSW_EP_ENVELOPES_SMALL         2048    /* # small ep envelopes */
 
 #define KQSW_RESCHED                    100     /* # busy loops that forces scheduler to yield */
+
+#define KQSW_OPTIMIZED_GETS             1       /* optimized gets? */
+#define KQSW_COPY_SMALL_FWD             0       /* copy small fwd messages to pre-mapped buffer? */
 
 /*
  * derived constants
@@ -136,8 +134,12 @@ typedef unsigned long kqsw_csum_t;
 /* Remote memory descriptor */
 typedef struct
 {
-        __u32            kqrmd_neiov;           /* # frags */
-        EP_IOVEC         kqrmd_eiov[0];         /* actual frags */
+        __u32            kqrmd_nfrag;           /* # frags */
+#if MULTIRAIL_EKC
+        EP_NMD           kqrmd_frag[0];         /* actual frags */
+#else
+        EP_IOVEC         kqrmd_frag[0];         /* actual frags */
+#endif
 } kqswnal_remotemd_t;
 
 typedef struct 
@@ -145,11 +147,16 @@ typedef struct
         struct list_head krx_list;              /* enqueue -> thread */
         EP_RCVR         *krx_eprx;              /* port to post receives to */
         EP_RXD          *krx_rxd;               /* receive descriptor (for repost) */
-        E3_Addr          krx_elanaddr;          /* Elan address of buffer (contiguous in elan vm) */
+#if MULTIRAIL_EKC
+        EP_NMD           krx_elanbuffer;        /* contiguous Elan buffer */
+#else
+        E3_Addr          krx_elanbuffer;        /* contiguous Elan buffer */
+#endif
         int              krx_npages;            /* # pages in receive buffer */
         int              krx_nob;               /* Number Of Bytes received into buffer */
-        atomic_t         krx_refcount;          /* who's using me? */
-        int              krx_rpc_completed;     /* I completed peer's RPC */
+        int              krx_rpc_reply_needed;  /* peer waiting for EKC RPC reply */
+        int              krx_rpc_reply_sent;    /* rpc reply sent */
+        atomic_t         krx_refcount;          /* how to tell when rpc is done */
         kpr_fwd_desc_t   krx_fwd;               /* embedded forwarding descriptor */
         struct page     *krx_pages[KQSW_NRXMSGPAGES_LARGE]; /* pages allocated */
         struct iovec     krx_iov[KQSW_NRXMSGPAGES_LARGE]; /* iovec for forwarding */
@@ -159,15 +166,15 @@ typedef struct
 {
         struct list_head  ktx_list;             /* enqueue idle/active */
         struct list_head  ktx_delayed_list;     /* enqueue delayedtxds */
-        int               ktx_isnblk:1;         /* reserved descriptor? */
-        int               ktx_state:7;          /* What I'm doing */
+        unsigned int      ktx_isnblk:1;         /* reserved descriptor? */
+        unsigned int      ktx_state:7;          /* What I'm doing */
+        unsigned int      ktx_firsttmpfrag:1;   /* ktx_frags[0] is in my ebuffer ? 0 : 1 */
         uint32_t          ktx_basepage;         /* page offset in reserved elan tx vaddrs for mapping pages */
         int               ktx_npages;           /* pages reserved for mapping messages */
         int               ktx_nmappedpages;     /* # pages mapped for current message */
         int               ktx_port;             /* destination ep port */
         ptl_nid_t         ktx_nid;              /* destination node */
         void             *ktx_args[2];          /* completion passthru */
-        E3_Addr           ktx_ebuffer;          /* elan address of ktx_buffer */
         char             *ktx_buffer;           /* pre-allocated contiguous buffer for hdr + small payloads */
         unsigned long     ktx_launchtime;       /* when (in jiffies) the transmit was launched */
 
@@ -176,10 +183,13 @@ typedef struct
         ptl_hdr_t        *ktx_wire_hdr;         /* portals header (wire endian) */
 
         int               ktx_nfrag;            /* # message frags */
-        union {
-                EP_IOVEC   iov[EP_MAXFRAG];     /* msg frags (elan vaddrs) */
-                EP_DATAVEC datav[EP_MAXFRAG];   /* DMA frags (eolan vaddrs) */
-        }                 ktx_frags;
+#if MULTIRAIL_EKC
+        EP_NMD            ktx_ebuffer;          /* elan mapping of ktx_buffer */
+        EP_NMD            ktx_frags[EP_MAXFRAG];/* elan mapping of msg frags */
+#else
+        E3_Addr           ktx_ebuffer;          /* elan address of ktx_buffer */
+        EP_IOVEC          ktx_frags[EP_MAXFRAG];/* msg frags (elan vaddrs) */
+#endif
 } kqswnal_tx_t;
 
 #define KTX_IDLE        0                       /* on kqn_(nblk_)idletxds */
@@ -191,8 +201,15 @@ typedef struct
 {
         char               kqn_init;            /* what's been initialised */
         char               kqn_shuttingdown;    /* I'm trying to shut down */
-        atomic_t           kqn_nthreads;        /* # threads still running */
+        atomic_t           kqn_nthreads;        /* # threads not terminated */
+        atomic_t           kqn_nthreads_running;/* # threads still running */
 
+        int                kqn_optimized_gets;  /* optimized GETs? */
+        int                kqn_copy_small_fwd;  /* fwd small msgs from pre-allocated buffer? */
+
+#if CONFIG_SYSCTL
+        struct ctl_table_header *kqn_sysctl;    /* sysctl interface */
+#endif        
         kqswnal_rx_t      *kqn_rxds;            /* all the receive descriptors */
         kqswnal_tx_t      *kqn_txds;            /* all the transmit descriptors */
 
@@ -212,12 +229,18 @@ typedef struct
 
         spinlock_t         kqn_statelock;       /* cb_cli/cb_sti */
         nal_cb_t          *kqn_cb;              /* -> kqswnal_lib */
-        EP_DEV            *kqn_epdev;           /* elan device */
+#if MULTIRAIL_EKC
+        EP_SYS            *kqn_ep;              /* elan system */
+        EP_NMH            *kqn_ep_tx_nmh;       /* elan reserved tx vaddrs */
+        EP_NMH            *kqn_ep_rx_nmh;       /* elan reserved rx vaddrs */
+#else
+        EP_DEV            *kqn_ep;              /* elan device */
+        ELAN3_DMA_HANDLE  *kqn_eptxdmahandle;   /* elan reserved tx vaddrs */
+        ELAN3_DMA_HANDLE  *kqn_eprxdmahandle;   /* elan reserved rx vaddrs */
+#endif
         EP_XMTR           *kqn_eptx;            /* elan transmitter */
         EP_RCVR           *kqn_eprx_small;      /* elan receiver (small messages) */
         EP_RCVR           *kqn_eprx_large;      /* elan receiver (large messages) */
-        ELAN3_DMA_HANDLE  *kqn_eptxdmahandle;   /* elan reserved tx vaddrs */
-        ELAN3_DMA_HANDLE  *kqn_eprxdmahandle;   /* elan reserved rx vaddrs */
         kpr_router_t       kqn_router;          /* connection to Kernel Portals Router module */
 
         ptl_nid_t          kqn_nid_offset;      /* this cluster's NID offset */
@@ -235,11 +258,15 @@ extern nal_cb_t        kqswnal_lib;
 extern nal_t           kqswnal_api;
 extern kqswnal_data_t  kqswnal_data;
 
+/* global pre-prepared replies to keep off the stack */
+extern EP_STATUSBLK    kqswnal_rpc_success;
+extern EP_STATUSBLK    kqswnal_rpc_failed;
+
 extern int kqswnal_thread_start (int (*fn)(void *arg), void *arg);
 extern void kqswnal_rxhandler(EP_RXD *rxd);
 extern int kqswnal_scheduler (void *);
 extern void kqswnal_fwd_packet (void *arg, kpr_fwd_desc_t *fwd);
-extern void kqswnal_reply_complete (EP_RXD *rxd);
+extern void kqswnal_dma_reply_complete (EP_RXD *rxd);
 extern void kqswnal_requeue_rx (kqswnal_rx_t *krx);
 
 static inline ptl_nid_t
@@ -278,6 +305,89 @@ static inline kqsw_csum_t kqsw_csum (kqsw_csum_t sum, void *base, int nob)
                 sum += *ptr++;
         
         return (sum);
+}
+#endif
+
+static inline void kqswnal_rx_done (kqswnal_rx_t *krx)
+{
+        LASSERT (atomic_read (&krx->krx_refcount) > 0);
+        if (atomic_dec_and_test (&krx->krx_refcount))
+                kqswnal_requeue_rx(krx);
+}
+
+#if MULTIRAIL_EKC
+
+#if (!defined(EP_RAILMASK_ALL) && !defined(EP_SHUTDOWN))
+/* These are making their way into the EKC subsystem.... */
+# define EP_RAILMASK_ALL    0xFFFF
+# define EP_SHUTDOWN        EP_ABORT
+#else
+/* ...Oh! they've got there already! */
+# error "qswnal.h older than EKC headers"
+#endif
+
+static inline int
+ep_nmd_merge (EP_NMD *merged, EP_NMD *a, EP_NMD *b)
+{
+        if (EP_NMD_NODEID(a) != EP_NMD_NODEID(b)) /* not generated on the same node */
+                return 0;
+
+        if ((EP_NMD_RAILMASK(a) & EP_NMD_RAILMASK(b)) == 0) /* no common rails */
+                return 0;
+
+        if (b->nmd_addr == (a->nmd_addr + a->nmd_len)) {
+                if (merged != NULL) {
+                        merged->nmd_addr = a->nmd_addr;
+                        merged->nmd_len  = a->nmd_len + b->nmd_len;
+                        merged->nmd_attr = EP_NMD_ATTR(EP_NMD_NODEID(a), EP_NMD_RAILMASK(a) & EP_NMD_RAILMASK(b));
+                }
+                return 1;
+        }
+    
+        if (a->nmd_addr == (b->nmd_addr + b->nmd_len)) {
+                if (merged != NULL) {
+                        merged->nmd_addr = b->nmd_addr;
+                        merged->nmd_len   = b->nmd_len + a->nmd_len;
+                        merged->nmd_attr  = EP_NMD_ATTR(EP_NMD_NODEID(b), EP_NMD_RAILMASK(a) & EP_NMD_RAILMASK(b));
+                }
+                return 1;
+        }
+
+        return 0;
+}
+#else
+/* multirail defines these in <elan/epcomms.h> */
+#define EP_MSG_SVC_PORTALS_SMALL      (0x10)  /* Portals over elan port number (large payloads) */
+#define EP_MSG_SVC_PORTALS_LARGE      (0x11)  /* Portals over elan port number (small payloads) */
+/* NB small/large message sizes are GLOBAL constants */
+
+/* A minimal attempt to minimise inline #ifdeffing */
+
+#define EP_SUCCESS      ESUCCESS
+#define EP_ENOMEM	ENOMEM
+
+static inline EP_XMTR *
+ep_alloc_xmtr(EP_DEV *e) 
+{
+        return (ep_alloc_large_xmtr(e));
+}
+
+static inline EP_RCVR *
+ep_alloc_rcvr(EP_DEV *e, int svc, int nenv)
+{
+        return (ep_install_large_rcvr(e, svc, nenv));
+}
+
+static inline void
+ep_free_xmtr(EP_XMTR *x) 
+{
+        ep_free_large_xmtr(x);
+}
+
+static inline void
+ep_free_rcvr(EP_RCVR *r)
+{
+        ep_remove_large_rcvr(r);
 }
 #endif
 

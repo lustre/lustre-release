@@ -841,10 +841,19 @@ def if2addr(iface):
     ip = string.split(addr, ':')[1]
     return ip
 
+def sys_get_elan_position_file():
+    procfiles = ["/proc/elan/device0/position",
+                 "/proc/qsnet/elan4/device0/position",
+                 "/proc/qsnet/elan3/device0/position"]
+    for p in procfiles:
+        if os.access(p, os.R_OK):
+            return p
+    return ""
+
 def sys_get_local_nid(net_type, wildcard, cluster_id):
     """Return the local nid."""
     local = ""
-    if os.access('/proc/elan/device0/position', os.R_OK):
+    if sys_get_elan_position_file():
         local = sys_get_local_address('elan', '*', cluster_id)
     else:
         local = sys_get_local_address(net_type, wildcard, cluster_id)
@@ -863,9 +872,12 @@ def sys_get_local_address(net_type, wildcard, cluster_id):
             host = socket.gethostname()
             local = socket.gethostbyname(host)
     elif net_type == 'elan':
-        # awk '/NodeId/ { print $2 }' '/proc/elan/device0/position'
+        # awk '/NodeId/ { print $2 }' 'sys_get_elan_position_file()'
+        f = sys_get_elan_position_file()
+        if not f:
+            panic ("unable to determine local Elan ID")
         try:
-            fp = open('/proc/elan/device0/position', 'r')
+            fp = open(f, 'r')
             lines = fp.readlines()
             fp.close()
             for l in lines:
@@ -2334,7 +2346,12 @@ def sys_tweak_socknal ():
         sysctl("socknal/typed", 0)
 
 def sys_optimize_elan ():
-        run ("echo 0 > /proc/elan/config/eventint_punt_loops")
+    procfiles = ["/proc/elan/config/eventint_punt_loops",
+                 "/proc/qsnet/elan3/config/eventint_punt_loops",
+                 "/proc/qsnet/elan4/config/elan4_mainint_punt_loops"]
+    for p in procfiles:
+        if os.access(p, os.R_OK):
+            run ("echo 0 > " + p)
 
 def sys_set_ptldebug(ptldebug):
     if config.ptldebug:
