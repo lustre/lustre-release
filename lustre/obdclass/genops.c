@@ -310,10 +310,11 @@ void class_destroy_export(struct obd_export *exp)
         list_del(&exp->exp_obd_chain);
         spin_unlock(&exp->exp_obd->obd_dev_lock);
 
-        spin_lock(&exp->exp_connection->c_lock);
+        /* XXXshaver no connection here... */
+        if (exp->exp_connection) spin_lock(&exp->exp_connection->c_lock);
         list_del(&exp->exp_conn_chain);
-        spin_unlock(&exp->exp_connection->c_lock);
-        
+        if (exp->exp_connection) spin_unlock(&exp->exp_connection->c_lock);
+
         /* XXXshaver these bits want to be hung off the export, instead of
          * XXXshaver hard-coded here.
          */
@@ -371,8 +372,9 @@ int class_disconnect(struct lustre_handle *conn)
                 CDEBUG(D_IOCTL, "disconnect: attempting to free "
                        "nonexistent client %Lx\n", conn->addr);
                 RETURN(-EINVAL);
-        } else
-                CDEBUG(D_IOCTL, "disconnect: addr %Lx cookie %Lx\n",
+        }
+
+        CDEBUG(D_IOCTL, "disconnect: addr %Lx cookie %Lx\n",
                        (long long)conn->addr, (long long)conn->cookie);
 
         class_destroy_export(export);
