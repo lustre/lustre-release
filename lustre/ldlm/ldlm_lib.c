@@ -971,10 +971,15 @@ target_send_reply_msg (struct ptlrpc_request *req, int rc, int fail_id)
                 DEBUG_REQ(D_ERROR, req, "dropping reply");
                 /* NB this does _not_ send with ACK disabled, to simulate
                  * sending OK, but timing out for the ACK */
-                if (req->rq_reply_state != NULL &&
-                    !req->rq_reply_state->rs_difficult) {
-                        lustre_free_reply_state (req->rq_reply_state);
-                        req->rq_reply_state = NULL;
+                if (req->rq_reply_state != NULL) {
+                        if (!req->rq_reply_state->rs_difficult) {
+                                lustre_free_reply_state (req->rq_reply_state);
+                                req->rq_reply_state = NULL;
+                        } else {
+                                struct ptlrpc_service *svc =
+                                        req->rq_rqbd->rqbd_srv_ni->sni_service;
+                                atomic_inc(&svc->srv_outstanding_replies);
+                        }
                 }
                 return (-ECOMM);
         }
