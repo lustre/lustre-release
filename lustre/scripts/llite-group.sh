@@ -36,7 +36,7 @@ start() {
 
 stop() {
         echo -n "Shutting down $SERVICE: "
-        python2 $LCONF -v --cleanup --failover $confopt
+        python2 $LCONF -v --cleanup --force --failover $confopt
         RETVAL=$?
         echo done
 }
