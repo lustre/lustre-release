@@ -926,8 +926,6 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req,
                         rc = PTR_ERR(dparent);
                         GOTO(cleanup, rc);
                 }
-                LASSERT(dparent != NULL);
-                LASSERT(dparent->d_inode != NULL);
                 // The user requested ONLY the inode number, so do a raw lookup
                 rc = lustre_pack_reply(req, 1, &size, NULL);
                 if (rc) {
