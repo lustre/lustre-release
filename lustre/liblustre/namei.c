@@ -290,10 +290,8 @@ int llu_pb_revalidate(struct pnode *pnode, int flags, struct lookup_intent *it)
                 ptlrpc_req_finished(req);
         if (rc == 0) {
                 LASSERT(pb->pb_ino);
-                if (S_ISDIR(llu_i2info(pb->pb_ino)->lli_st_mode))
-                        llu_invalidate_inode_pages(pb->pb_ino);
-                llu_i2info(pb->pb_ino)->lli_stale_flag = 1;
-                unhook_stale_inode(pnode);
+                I_RELE(pb->pb_ino);
+                pb->pb_ino = NULL;
         } else {
                 llu_lookup_finish_locks(it, pnode);
                 llu_i2info(pb->pb_ino)->lli_stale_flag = 0;

@@ -1239,7 +1239,7 @@ struct inode *llu_iget(struct filesys *fs, struct lustre_md *md)
                 struct llu_inode_info *lli = llu_i2info(inode);
 
                 if (lli->lli_stale_flag ||
-                    lli->lli_st_generation == md->body->generation)
+                    lli->lli_st_generation != md->body->generation)
                         I_RELE(inode);
                 else {
                         llu_update_inode(inode, md->body, md->lsm);
