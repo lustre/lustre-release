@@ -1,0 +1,12 @@
+
+
+
+ include/linux/lustre_version.h |    1 +
+ 1 files changed, 1 insertion(+)
+
+--- /dev/null	Fri Aug 30 17:31:37 2002
++++ linux-2.4.18-18.8.0-l7-root/include/linux/lustre_version.h	Mon Jan 20 12:24:45 2003
+@@ -0,0 +1 @@
++#define LUSTRE_KERNEL_VERSION 10
+
+_
