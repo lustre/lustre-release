@@ -256,6 +256,24 @@ int mdc_enqueue(struct lustre_handle *conn, int lock_type,
                                 old_de->d_name.name, old_de->d_name.len,
                                 de->d_name.name, de->d_name.len);
                 req->rq_replen = lustre_msg_size(3, repsize);
+        } else if (it->it_op == IT_LINK2) {
+                struct dentry *old_de = it->it_data;
+
+                size[2] = sizeof(struct mds_rec_link);
+                size[3] = de->d_name.len + 1;
+                req = ptlrpc_prep_req(class_conn2cliimp(conn), LDLM_ENQUEUE, 4,
+                                      size, NULL);
+                if (!req)
+                        RETURN(-ENOMEM);
+
+                /* pack the intent */
+                lit = lustre_msg_buf(req->rq_reqmsg, 1);
+                lit->opc = NTOH__u64((__u64)it->it_op);
+
+                /* pack the intended request */
+                mds_link_pack(req, 2, old_de->d_inode, dir,
+                                de->d_name.name, de->d_name.len);
+                req->rq_replen = lustre_msg_size(3, repsize);
         } else if (it->it_op == IT_UNLINK || it->it_op == IT_RMDIR) {
                 size[2] = sizeof(struct mds_rec_unlink);
                 size[3] = de->d_name.len + 1;
@@ -274,9 +292,8 @@ int mdc_enqueue(struct lustre_handle *conn, int lock_type,
                                 de->d_name.name, de->d_name.len);
 
                 req->rq_replen = lustre_msg_size(3, repsize);
-        } else if (it->it_op == IT_GETATTR || it->it_op == IT_RENAME ||
-                   it->it_op == IT_OPEN || it->it_op == IT_SETATTR ||
-                   it->it_op == IT_LOOKUP || it->it_op == IT_READLINK) {
+        } else if (it->it_op  & (IT_GETATTR | IT_RENAME | IT_LINK | 
+                   IT_OPEN |  IT_SETATTR | IT_LOOKUP | IT_READLINK)) {
                 size[2] = sizeof(struct mds_body);
                 size[3] = de->d_name.len + 1;
 

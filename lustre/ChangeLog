@@ -1,5 +1,12 @@
 2002-09-19  Peter Braam  <braam@clusterfs.com>
 
+	* version 0_5_10
+	* add hard link support
+	* change obdfile creation method
+	* kernel patch changed
+	
+2002-09-19  Peter Braam  <braam@clusterfs.com>
+
 	* version 0_5_9
 	* bug fix
 	  - stack overflow bug in extN fixed

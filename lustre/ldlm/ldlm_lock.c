@@ -59,6 +59,8 @@ char *ldlm_it2str(int it)
                 return "mkdir";
         case IT_LINK:
                 return "link";
+        case IT_LINK2:
+                return "link2";
         case IT_SYMLINK:
                 return "symlink";
         case IT_UNLINK:

@@ -602,14 +602,17 @@ static int filter_close(struct lustre_handle *conn, struct obdo *oa,
         return 0;
 } /* filter_close */
 
+extern struct dentry *simple_mknod(struct dentry *dir, char *name, int mode);
+
 static int filter_create(struct lustre_handle* conn, struct obdo *oa,
                          struct lov_stripe_md **ea)
 {
         char name[64];
         struct obd_run_ctxt saved;
-        struct file *file;
+        struct dentry *new;
         int mode;
         struct obd_device *obd = class_conn2obd(conn);
+        struct filter_obd *filter = &obd->u.filter;
         struct iattr;
         ENTRY;
 
@@ -625,21 +628,22 @@ static int filter_create(struct lustre_handle* conn, struct obdo *oa,
 
         oa->o_id = filter_next_id(obd);
 
-        filter_id(name, oa->o_id, oa->o_mode);
+        //filter_id(name, oa->o_id, oa->o_mode);
+        sprintf(name, "%Ld", oa->o_id);
         mode = (oa->o_mode & ~S_IFMT) | S_IFREG;
         push_ctxt(&saved, &obd->u.filter.fo_ctxt);
-        file = filp_open(name, O_RDONLY | O_CREAT, mode);
+        new = simple_mknod(filter->fo_dentry_O_mode[S_IFREG >> S_SHIFT], name, oa->o_mode);
         pop_ctxt(&saved);
-        if (IS_ERR(file)) {
-                CERROR("Error mknod obj %s, err %ld\n", name, PTR_ERR(file));
+        if (IS_ERR(new)) {
+                CERROR("Error mknod obj %s, err %ld\n", name, PTR_ERR(new));
                 return -ENOENT;
         }
 
         /* Set flags for fields we have set in the inode struct */
         oa->o_valid = OBD_MD_FLID | OBD_MD_FLBLKSZ | OBD_MD_FLBLOCKS |
                  OBD_MD_FLMTIME | OBD_MD_FLATIME | OBD_MD_FLCTIME;
-        filter_from_inode(oa, file->f_dentry->d_inode, oa->o_valid);
-        filp_close(file, 0);
+        filter_from_inode(oa, new->d_inode, oa->o_valid);
+        dput(new);
 
         return 0;
 }

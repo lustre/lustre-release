@@ -78,6 +78,39 @@ void pop_ctxt(struct obd_run_ctxt *saved)
 }
 
 /* utility to make a directory */
+struct dentry *simple_mknod(struct dentry *dir, char *name, int mode)
+{
+        struct dentry *dchild;
+        int err = 0;
+        ENTRY;
+
+        ASSERT_KERNEL_CTXT("kernel doing mkdir outside kernel context\n");
+        CDEBUG(D_INODE, "creating directory %*s\n", (int)strlen(name), name);
+        down(&dir->d_inode->i_sem);
+        dchild = lookup_one_len(name, dir, strlen(name));
+        if (IS_ERR(dchild))
+                GOTO(out, PTR_ERR(dchild));
+
+        if (dchild->d_inode) {
+                if (!S_ISDIR(dchild->d_inode->i_mode))
+                        GOTO(out, err = -ENOTDIR);
+
+                GOTO(out, dchild);
+        }
+
+        err = vfs_create(dir->d_inode, dchild, S_IFREG | mode);
+        EXIT;
+out:
+        up(&dir->d_inode->i_sem);
+        if (err) {
+                dput(dchild);
+                RETURN(ERR_PTR(err));
+        }
+
+        RETURN(dchild);
+}
+
+/* utility to make a directory */
 struct dentry *simple_mkdir(struct dentry *dir, char *name, int mode)
 {
         struct dentry *dchild;

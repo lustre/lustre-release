@@ -523,13 +523,16 @@ out_unlink:
 static int mds_reint_link(struct mds_update_record *rec, int offset,
                           struct ptlrpc_request *req)
 {
+        struct obd_device *obd = req->rq_export->exp_obd;
         struct dentry *de_src = NULL;
         struct dentry *de_tgt_dir = NULL;
         struct dentry *dchild = NULL;
         struct mds_obd *mds = mds_req2mds(req);
-        void *handle;
-        int rc = 0;
-        int err;
+        struct lustre_handle *handle, tgtlockh, srclockh;
+        int lock_mode;
+        __u64 res_id[3] = { 0 };
+        int flags = 0;
+        int rc = 0, err;
 
         ENTRY;
         de_src = mds_fid2dentry(mds, rec->ur_fid1, NULL);
@@ -537,19 +540,77 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
                 GOTO(out_link, rc = -ESTALE);
         }
 
+        /* plan to change the link count on this inode: write lock */
+        lock_mode = (req->rq_reqmsg->opc == MDS_REINT) ? LCK_PW : LCK_PW;
+        res_id[0] = de_src->d_inode->i_ino;
+
+        rc = ldlm_lock_match(obd->obd_namespace, res_id, LDLM_PLAIN,
+                             NULL, 0, lock_mode, &srclockh);
+        if (rc == 0) {
+                LDLM_DEBUG_NOLOCK("enqueue res "LPU64, res_id[0]);
+                rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace, NULL,
+                                      res_id, LDLM_PLAIN, NULL, 0, lock_mode,
+                                      &flags, ldlm_completion_ast,
+                                      mds_blocking_ast, NULL, 0, &srclockh);
+                if (rc != ELDLM_OK) {
+                        CERROR("lock enqueue: err: %d\n", rc);
+                        GOTO(out_link_src_put, rc = -EIO);
+                }
+        } else
+                ldlm_lock_dump((void *)(unsigned long)srclockh.addr);
+
         de_tgt_dir = mds_fid2dentry(mds, rec->ur_fid2, NULL);
         if (IS_ERR(de_tgt_dir)) {
-                GOTO(out_link_de_src, rc = -ESTALE);
+                GOTO(out_link_src, rc = -ESTALE);
         }
+
+        lock_mode = (req->rq_reqmsg->opc == MDS_REINT) ? LCK_PW : LCK_PW;
+        res_id[0] = de_tgt_dir->d_inode->i_ino;
+
+        rc = ldlm_lock_match(obd->obd_namespace, res_id, LDLM_PLAIN,
+                             NULL, 0, lock_mode, &tgtlockh);
+        if (rc == 0) {
+                LDLM_DEBUG_NOLOCK("enqueue res "LPU64, res_id[0]);
+                rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace, NULL,
+                                      res_id, LDLM_PLAIN, NULL, 0, lock_mode,
+                                      &flags, ldlm_completion_ast,
+                                      mds_blocking_ast, NULL, 0, &tgtlockh);
+                if (rc != ELDLM_OK) {
+                        CERROR("lock enqueue: err: %d\n", rc);
+                        GOTO(out_link_tgt_dir_put, rc = -EIO);
+                }
+        } else
+                ldlm_lock_dump((void *)(unsigned long)tgtlockh.addr);
 
         down(&de_tgt_dir->d_inode->i_sem);
         dchild = lookup_one_len(rec->ur_name, de_tgt_dir, rec->ur_namelen - 1);
         if (IS_ERR(dchild)) {
                 CERROR("child lookup error %ld\n", PTR_ERR(dchild));
-                GOTO(out_link_de_tgt_dir, rc = -ESTALE);
+                GOTO(out_link_tgt_dir, rc = -ESTALE);
         }
 
         if (dchild->d_inode) {
+                struct inode *inode = dchild->d_inode;
+                /* in intent case ship back attributes to client */
+                if (offset) { 
+                        struct mds_body *body = 
+                                lustre_msg_buf(req->rq_repmsg, 1);
+                        
+                        mds_pack_inode2fid(&body->fid1, inode);
+                        mds_pack_inode2body(body, inode);
+                        if (S_ISREG(inode->i_mode)) {
+                                struct lov_mds_md *lmm;
+                                
+                                lmm = lustre_msg_buf(req->rq_repmsg, 2);
+                                        lmm->lmm_easize = mds->mds_max_mdsize;
+                                        if ((rc = 
+                                             mds_fs_get_md(mds, inode, lmm)) < 0) {
+                                                CDEBUG(D_INFO,"No md for %ld: rc %d\n",
+                                                       inode->i_ino, rc);
+                                                memset(lmm, 0, lmm->lmm_easize);
+                                        }
+                        }
+                }
                 CERROR("child exists (dir %ld, name %s\n",
                        de_tgt_dir->d_inode->i_ino, rec->ur_name);
                 GOTO(out_link_dchild, rc = -EEXIST);
@@ -563,7 +624,8 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
                 GOTO(out_link_dchild, rc = PTR_ERR(handle));
 
         rc = vfs_link(de_src, de_tgt_dir->d_inode, dchild);
-
+        if (rc) 
+                CERROR("link error %d\n", rc);
         if (!rc)
                 rc = mds_update_last_rcvd(mds, handle, req);
 
@@ -575,12 +637,18 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
         }
         EXIT;
 
+
+
 out_link_dchild:
         l_dput(dchild);
-out_link_de_tgt_dir:
+out_link_tgt_dir:
+        ldlm_lock_decref(&tgtlockh, lock_mode);
+out_link_tgt_dir_put:
         up(&de_tgt_dir->d_inode->i_sem);
         l_dput(de_tgt_dir);
-out_link_de_src:
+out_link_src:
+        ldlm_lock_decref(&srclockh, lock_mode);
+out_link_src_put:
         l_dput(de_src);
 out_link:
         req->rq_status = rc;
@@ -606,7 +674,7 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
         if (IS_ERR(de_srcdir))
                 GOTO(out_rename, rc = -ESTALE);
 
-        lock_mode = (req->rq_reqmsg->opc == MDS_REINT) ? LCK_CW : LCK_PW;
+        lock_mode = (req->rq_reqmsg->opc == MDS_REINT) ? LCK_PW : LCK_PW;
         res_id[0] = de_srcdir->d_inode->i_ino;
 
         rc = ldlm_lock_match(obd->obd_namespace, res_id, LDLM_PLAIN,
@@ -628,7 +696,7 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
         if (IS_ERR(de_tgtdir))
                 GOTO(out_rename_srcdir, rc = -ESTALE);
 
-        lock_mode = (req->rq_reqmsg->opc == MDS_REINT) ? LCK_CW : LCK_PW;
+        lock_mode = (req->rq_reqmsg->opc == MDS_REINT) ? LCK_PW : LCK_PW;
         res_id[0] = de_tgtdir->d_inode->i_ino;
 
         rc = ldlm_lock_match(obd->obd_namespace, res_id, LDLM_PLAIN,

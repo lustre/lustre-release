@@ -107,7 +107,8 @@ int ll_lock(struct inode *dir, struct dentry *dentry,
         if ((it->it_op & (IT_CREAT | IT_MKDIR | IT_SETATTR | IT_MKNOD)))
                 lock_mode = LCK_PW;
         else if (it->it_op & (IT_READDIR | IT_GETATTR | IT_OPEN | IT_UNLINK |
-                              IT_RMDIR | IT_RENAME | IT_RENAME2 | IT_READLINK))
+                              IT_RMDIR | IT_RENAME | IT_RENAME2 | IT_READLINK|
+                              IT_LINK | IT_LINK2))
                 lock_mode = LCK_PR;
         else if (it->it_op & IT_SYMLINK) {
                 lock_mode = LCK_PW;
@@ -181,7 +182,7 @@ static struct dentry *ll_lookup2(struct inode *dir, struct dentry *dentry,
                         it->it_data = NULL;
                         if (it->it_status)
                                 GOTO(neg_req, NULL);
-                } else if (it->it_op & IT_RENAME) {
+                } else if (it->it_op & (IT_RENAME | IT_LINK)) {
                         /* For rename, we want the lookup to succeed */
                         if (it->it_status) {
                                 it->it_data = NULL;
@@ -198,11 +199,12 @@ static struct dentry *ll_lookup2(struct inode *dir, struct dentry *dentry,
                         it->it_data = NULL;
                         if (it->it_status && it->it_status != -EEXIST)
                                 GOTO(neg_req, NULL);
-                } else if (it->it_op == IT_RENAME2) {
+                } else if (it->it_op & (IT_RENAME2|IT_LINK2)) {
                         struct mds_body *body =
                                 lustre_msg_buf(request->rq_repmsg, offset);
                         it->it_data = NULL;
                         /* For rename2, this means the lookup is negative */
+                        /* For link2 also */
                         if (body->valid == 0)
                                 GOTO(neg_req, NULL);
                         goto iget; /* XXX not sure about this */
@@ -541,7 +543,18 @@ static int ll_link(struct dentry *old_dentry, struct inode * dir,
         int err;
         struct inode *inode = old_dentry->d_inode;
 
-#warning FIXME: still needs intent support
+        if (dentry->d_it && dentry->d_it->it_disposition) { 
+                int err = dentry->d_it->it_status;
+                if (err) 
+                        RETURN(err);
+                inode->i_ctime = CURRENT_TIME;
+                ext2_inc_count(inode);
+                atomic_inc(&inode->i_count);
+                d_instantiate(dentry, inode);
+                invalidate_inode_pages(dir);
+                RETURN(err);
+        }
+
         if (S_ISDIR(inode->i_mode))
                 return -EPERM;
 
@@ -674,7 +687,7 @@ static int ll_rename(struct inode * old_dir, struct dentry * old_dentry,
                      struct inode * new_dir, struct dentry * new_dentry)
 {
         struct inode * old_inode = old_dentry->d_inode;
-        struct inode * new_inode = new_dentry->d_inode;
+        struct inode * tgt_inode = new_dentry->d_inode;
         struct page * dir_page = NULL;
         struct ext2_dir_entry_2 * dir_de = NULL;
         struct ext2_dir_entry_2 * old_de;
@@ -682,9 +695,9 @@ static int ll_rename(struct inode * old_dir, struct dentry * old_dentry,
         int err = -ENOENT;
 
         if (new_dentry->d_it && new_dentry->d_it->it_disposition) { 
-		if (new_inode) {
-			new_inode->i_ctime = CURRENT_TIME;
-			new_inode->i_nlink--;
+		if (tgt_inode) {
+			tgt_inode->i_ctime = CURRENT_TIME;
+			tgt_inode->i_nlink--;
 		}
                 invalidate_inode_pages(old_dir);
                 invalidate_inode_pages(new_dir);
@@ -706,12 +719,12 @@ static int ll_rename(struct inode * old_dir, struct dentry * old_dentry,
                         goto out_old;
         }
 
-        if (new_inode) {
+        if (tgt_inode) {
                 struct page *new_page;
                 struct ext2_dir_entry_2 *new_de;
 
                 err = -ENOTEMPTY;
-                if (dir_de && !ext2_empty_dir (new_inode))
+                if (dir_de && !ext2_empty_dir (tgt_inode))
                         goto out_dir;
 
                 err = -ENOENT;
@@ -720,10 +733,10 @@ static int ll_rename(struct inode * old_dir, struct dentry * old_dentry,
                         goto out_dir;
                 ext2_inc_count(old_inode);
                 ext2_set_link(new_dir, new_de, new_page, old_inode);
-                new_inode->i_ctime = CURRENT_TIME;
+                tgt_inode->i_ctime = CURRENT_TIME;
                 if (dir_de)
-                        new_inode->i_nlink--;
-                ext2_dec_count(new_inode);
+                        tgt_inode->i_nlink--;
+                ext2_dec_count(tgt_inode);
         } else {
                 if (dir_de) {
                         err = -EMLINK;

@@ -1235,10 +1235,10 @@ static int ldlm_intent_policy(struct ldlm_lock *lock, void *req_cookie,
                         }
                         break;
                 case IT_CREAT:
-                case IT_LINK:
                 case IT_MKDIR:
                 case IT_MKNOD:
                 case IT_RENAME2:
+                case IT_LINK2:
                 case IT_RMDIR:
                 case IT_SYMLINK:
                 case IT_UNLINK:
@@ -1256,6 +1256,7 @@ static int ldlm_intent_policy(struct ldlm_lock *lock, void *req_cookie,
                 case IT_READDIR:
                 case IT_READLINK:
                 case IT_RENAME:
+                case IT_LINK:
                 case IT_SETATTR:
                         rc = mds_getattr_name(2, req);
                         /* FIXME: we need to sit down and decide on who should
@@ -1274,8 +1275,12 @@ static int ldlm_intent_policy(struct ldlm_lock *lock, void *req_cookie,
                         LBUG();
                 }
 
-                if (it->opc == IT_UNLINK || it->opc == IT_RMDIR ||
-                    it->opc == IT_RENAME || it->opc == IT_RENAME2)
+                /* XXX Why is this logical to abort lock acq 
+                   in these cases? .... PJB
+                */
+                if (it->opc & (IT_UNLINK | IT_RMDIR | 
+                               IT_LINK2 | IT_LINK | 
+                               IT_RENAME | IT_RENAME2))
                         RETURN(ELDLM_LOCK_ABORTED);
 
                 rep->lock_policy_res2 = req->rq_status;
