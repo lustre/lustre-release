@@ -95,7 +95,7 @@ int connmgr_iocontrol(long cmd, struct lustre_handle *hdl, int len, void *karg,
         if (!conn)
                 GOTO(out, rc = -EINVAL);
 
-        if (conn->c_recovd_data.rd_phase != RECOVD_PREPARING)
+        if (conn->c_recovd_data.rd_phase != RD_PREPARING)
                 GOTO(out, rc = -EALREADY);
 
         spin_lock(&conn->c_lock);
@@ -110,7 +110,7 @@ int connmgr_iocontrol(long cmd, struct lustre_handle *hdl, int len, void *karg,
         ptlrpc_readdress_connection(conn, conn->c_remote_uuid);
         spin_unlock(&conn->c_lock);
         
-        conn->c_recovd_data.rd_phase = RECOVD_PREPARED;
+        conn->c_recovd_data.rd_phase = RD_PREPARED;
         wake_up(&recovd->recovd_waitq);
  out:
         spin_unlock(&recovd->recovd_lock);

@@ -344,7 +344,7 @@ static int target_fence_failed_connection(struct ptlrpc_connection *conn)
         ENTRY;
 
         conn->c_level = LUSTRE_CONN_RECOVD;
-        conn->c_recovd_data.rd_phase = RECOVD_PREPARED;
+        conn->c_recovd_data.rd_phase = RD_PREPARED;
 
         RETURN(0);
 }

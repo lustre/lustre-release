@@ -23,14 +23,39 @@ static int interrupted_completion_wait(void *data)
 static int expired_completion_wait(void *data)
 {
         struct ldlm_lock *lock = data;
+        struct ptlrpc_connection *conn;
+        struct obd_device *obd;
+
         if (!lock)
                 CERROR("NULL lock\n");
-        else if (!lock->l_export)
-                CERROR("lock %p has NULL export\n", lock);
-        else
-                class_signal_connection_failure(lock->l_export->exp_connection);
+        else if (!lock->l_connh)
+                CERROR("lock %p has NULL connh\n", lock);
+        else if (!(obd = class_conn2obd(lock->l_connh)))
+                CERROR("lock %p has NULL obd\n", lock);
+        else if (!(conn = obd->u.cli.cl_import.imp_connection))
+                CERROR("lock %p has NULL connection\n", lock);
+        else {
+                class_signal_connection_failure(conn);
+        }
         RETURN(0);
 }
+
+#if 0
+static int expired_completion_wait(void *data)
+{
+        struct ldlm_lock *lock = data;
+        struct ptlrpc_connection *conn =
+                class_conn2cliimp(lock->l_connh)->imp_connection;
+
+        if (!conn) {
+                CERROR("lock %p has NULL import connection\n", lock);
+                RETURN(1);
+        }
+
+        class_signal_connection_failure(conn);
+        RETURN(0);
+}
+#endif
 
 int ldlm_completion_ast(struct ldlm_lock *lock, int flags)
 {

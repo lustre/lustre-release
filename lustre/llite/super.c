@@ -153,6 +153,7 @@ static struct super_block * ll_read_super(struct super_block *sb,
                 CERROR("OSC %s: not setup or attached\n", osc);
                 GOTO(out_mdc, sb = NULL);
         }
+
         err = obd_connect(&sbi->ll_osc_conn, obd, sbi->ll_sb_uuid);
         if (err) {
                 CERROR("cannot connect to %s: rc = %d\n", osc, err);

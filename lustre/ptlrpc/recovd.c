@@ -28,6 +28,8 @@ void recovd_conn_manage(struct ptlrpc_connection *conn,
 
         rd->rd_recovd = recovd;
         rd->rd_recover = recover;
+        rd->rd_phase = RD_IDLE;
+        rd->rd_next_phase = RD_TROUBLED;
 
         spin_lock(&recovd->recovd_lock);
         list_add(&rd->rd_managed_chain, &recovd->recovd_managed_items);
@@ -50,9 +52,10 @@ void recovd_conn_fail(struct ptlrpc_connection *conn)
 
 
         spin_lock(&recovd->recovd_lock);
-        if (rd->rd_phase != RECOVD_IDLE || rd->rd_next_phase != RECOVD_IDLE) {
+        if (rd->rd_phase != RD_IDLE) {
                 CDEBUG(D_INFO, "connection %p to %s already in recovery\n",
                        conn, conn->c_remote_uuid);
+                /* XXX need to distinguish from failure-in-recovery */
                 spin_unlock(&recovd->recovd_lock);
                 EXIT;
                 return;
@@ -61,7 +64,7 @@ void recovd_conn_fail(struct ptlrpc_connection *conn)
         CERROR("connection %p to %s failed\n", conn, conn->c_remote_uuid);
         list_del(&rd->rd_managed_chain);
         list_add_tail(&rd->rd_managed_chain, &recovd->recovd_troubled_items);
-        rd->rd_next_phase = RECOVD_PREPARING;
+        rd->rd_phase = RD_TROUBLED;
         spin_unlock(&recovd->recovd_lock);
 
         wake_up(&recovd->recovd_waitq);
@@ -69,14 +72,18 @@ void recovd_conn_fail(struct ptlrpc_connection *conn)
         EXIT;
 }
 
-/* this function must be called with conn->c_lock held */
+/* this function must be called with recovd->recovd_lock held */
 void recovd_conn_fixed(struct ptlrpc_connection *conn)
 {
         struct recovd_data *rd = &conn->c_recovd_data;
         ENTRY;
 
+        spin_lock(&rd->rd_recovd->recovd_lock);
         list_del(&rd->rd_managed_chain);
+        rd->rd_phase = RD_IDLE;
+        rd->rd_next_phase = RD_TROUBLED;
         list_add(&rd->rd_managed_chain, &rd->rd_recovd->recovd_managed_items);
+        spin_unlock(&rd->rd_recovd->recovd_lock);
 
         EXIT;
 }
@@ -100,9 +107,7 @@ static int recovd_check_event(struct recovd_obd *recovd)
                                                     rd_managed_chain);
 
                 if (rd->rd_phase == rd->rd_next_phase ||
-                    (rd->rd_phase == RECOVD_IDLE && 
-                     rd->rd_next_phase == RECOVD_PREPARING) ||
-                    rd->rd_phase == RECOVD_FAILED)
+                    rd->rd_phase == RD_FAILED)
                         GOTO(out, rc = 1);
         }
 
@@ -144,15 +149,12 @@ static int recovd_handle_event(struct recovd_obd *recovd)
                 struct recovd_data *rd = list_entry(tmp, struct recovd_data,
                                                     rd_managed_chain);
 
-                /* XXXshaver This is very ugly -- add a RECOVD_TROUBLED state! */
-                if (rd->rd_phase != RECOVD_FAILED &&
-                    !(rd->rd_phase == RECOVD_IDLE &&
-                      rd->rd_next_phase == RECOVD_PREPARING) &&
+                if (rd->rd_phase != RD_FAILED &&
                     rd->rd_phase != rd->rd_next_phase)
                         continue;
 
                 switch (rd->rd_phase) {
-                    case RECOVD_FAILED:
+                    case RD_FAILED:
                 cb_failed: /* must always reach here with recovd_lock held! */
                         CERROR("recovery FAILED for rd %p (conn %p): %d\n",
                                rd, class_rd2conn(rd), rc);
@@ -162,7 +164,7 @@ static int recovd_handle_event(struct recovd_obd *recovd)
                         spin_lock(&recovd->recovd_lock);
                         break;
                         
-                    case RECOVD_IDLE:
+                    case RD_TROUBLED:
                         if (!rd->rd_recover) {
                                 CERROR("no rd_recover for rd %p (conn %p)\n",
                                        rd, class_rd2conn(rd));
@@ -171,7 +173,7 @@ static int recovd_handle_event(struct recovd_obd *recovd)
                         }
                         CERROR("starting recovery for rd %p (conn %p)\n",
                                rd, class_rd2conn(rd));
-                        rd->rd_phase = RECOVD_PREPARING;
+                        rd->rd_phase = RD_PREPARING;
                         
                         spin_unlock(&recovd->recovd_lock);
                         rc = rd->rd_recover(rd, PTLRPC_RECOVD_PHASE_PREPARE);
@@ -179,11 +181,11 @@ static int recovd_handle_event(struct recovd_obd *recovd)
                         if (rc)
                                 goto cb_failed;
                         
-                        rd->rd_next_phase = RECOVD_PREPARED;
+                        rd->rd_next_phase = RD_PREPARED;
                         break;
                         
-                    case RECOVD_PREPARED:
-                        rd->rd_phase = RECOVD_RECOVERING;
+                    case RD_PREPARED:
+                        rd->rd_phase = RD_RECOVERING;
                         
                         CERROR("recovery prepared for rd %p (conn %p)\n",
                                rd, class_rd2conn(rd));
@@ -194,12 +196,12 @@ static int recovd_handle_event(struct recovd_obd *recovd)
                         if (rc)
                                 goto cb_failed;
                         
-                        rd->rd_next_phase = RECOVD_RECOVERED;
+                        rd->rd_next_phase = RD_RECOVERED;
                         break;
                         
-                    case RECOVD_RECOVERED:
-                        rd->rd_phase = RECOVD_IDLE;
-                        rd->rd_next_phase = RECOVD_PREPARING;
+                    case RD_RECOVERED:
+                        rd->rd_phase = RD_IDLE;
+                        rd->rd_next_phase = RD_TROUBLED;
                         
                         CERROR("recovery complete for rd %p (conn %p)\n",
                                rd, class_rd2conn(rd));

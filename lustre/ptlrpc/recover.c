@@ -80,6 +80,7 @@ static int ll_recover_upcall(struct ptlrpc_connection *conn)
 {
         char *argv[3];
         char *envp[3];
+        int rc;
 
         ENTRY;
         conn->c_level = LUSTRE_CONN_RECOVD;
@@ -92,7 +93,13 @@ static int ll_recover_upcall(struct ptlrpc_connection *conn)
         envp[1] = "PATH=/sbin:/bin:/usr/sbin:/usr/bin";
         envp[2] = NULL;
 
-        RETURN(call_usermodehelper(argv[0], argv, envp));
+        rc = call_usermodehelper(argv[0], argv, envp);
+        if (rc < 0) {
+                CERROR("Error invoking recovery upcall (%s): %d\n",
+                       obd_recovery_upcall, rc);
+                CERROR("Check /proc/sys/lustre/recovery_upcall?\n");
+        }
+        RETURN(rc);
 }
 
 static int ll_recover_reconnect(struct ptlrpc_connection *conn)
@@ -193,8 +200,13 @@ static int ll_recover_reconnect(struct ptlrpc_connection *conn)
 
 static int ll_retry_recovery(struct ptlrpc_connection *conn)
 {
+#if 0
         /* XXX use a timer, sideshow bob */
         recovd_conn_fail(conn);
+        /* XXX this is disabled until I fix it so that we don't just keep
+         * XXX retrying in the case of a missing upcall.
+         */
+#endif
         return 0;
 }
 

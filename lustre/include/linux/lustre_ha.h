@@ -12,12 +12,13 @@ struct recovd_obd;
 struct ptlrpc_connection;
 
 /* rd_phase/rd_next_phase values */
-#define RECOVD_IDLE              0
-#define RECOVD_PREPARING         1
-#define RECOVD_PREPARED          2
-#define RECOVD_RECOVERING        3
-#define RECOVD_RECOVERED         4
-#define RECOVD_FAILED            5
+#define RD_IDLE              0
+#define RD_TROUBLED          1
+#define RD_PREPARING         2
+#define RD_PREPARED          3
+#define RD_RECOVERING        4
+#define RD_RECOVERED         5
+#define RD_FAILED            6
 
 /* recovd_state values */
 #define RECOVD_READY             1
