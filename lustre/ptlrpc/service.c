@@ -91,9 +91,8 @@ ptlrpc_init_svc(__u32 bufsize, int req_portal, int rep_portal, char *uuid,
 
         OBD_ALLOC(service, sizeof(*service)); 
         if ( !service ) { 
-                CERROR("no memory\n");
                 LBUG();
-                return NULL;
+                RETURN(NULL);
         }
 
         memset(service, 0, sizeof(*service)); 
@@ -114,8 +113,7 @@ ptlrpc_init_svc(__u32 bufsize, int req_portal, int rep_portal, char *uuid,
         err = kportal_uuid_to_peer(uuid, &service->srv_self);
         if (err) { 
                 CERROR("cannot get peer for uuid %s", uuid); 
-                OBD_FREE(service, sizeof(*service));
-                return NULL; 
+                GOTO(err_free, NULL); 
         }
 
         service->srv_ring_length = RPC_RING_LENGTH;
@@ -129,7 +127,7 @@ ptlrpc_init_svc(__u32 bufsize, int req_portal, int rep_portal, char *uuid,
         if (rc != PTL_OK) {
                 CERROR("PtlEQAlloc failed: %d\n", rc);
                 LBUG();
-                return NULL;
+                GOTO(err_free, NULL);
         }
 
         for (i = 0; i < service->srv_ring_length; i++) {
@@ -137,7 +135,7 @@ ptlrpc_init_svc(__u32 bufsize, int req_portal, int rep_portal, char *uuid,
                 if (service->srv_buf[i] == NULL) {
                         CERROR("no memory\n");
                         LBUG();
-                        return NULL;
+                        GOTO(err_ring, NULL);
                 }
                 service->srv_ref_count[i] = 0; 
                 ptlrpc_link_svc_me(service, i); 
@@ -147,6 +145,13 @@ ptlrpc_init_svc(__u32 bufsize, int req_portal, int rep_portal, char *uuid,
                service->srv_req_portal);
 
         return service;
+err_ring:
+        service->srv_ring_length = i;
+        rpc_unregister_service(service); // XXX verify this is right
+        PtlEQFree(service->srv_eq_h);
+err_free:
+        OBD_FREE(service, sizeof(*service));
+        return NULL;
 }
 
 static int ptlrpc_main(void *arg)
