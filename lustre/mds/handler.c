@@ -309,11 +309,10 @@ struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
         if (!inode)
                 RETURN(ERR_PTR(-ENOENT));
 
-#warning "I think we need something another here -bzzz"
-#if 0
         /* here we disabled generation check, as root inode i_generation
          * of cache mds and real mds are different. */
-        if (generation && inode->i_generation != generation) {
+        if (inode->i_ino != mds->mds_rootfid.id && generation &&
+                        inode->i_generation != generation) {
                 /* we didn't find the right inode.. */
                 CERROR("bad inode %lu, link: %lu ct: %d or generation %u/%u\n",
                        inode->i_ino, (unsigned long)inode->i_nlink,
@@ -322,7 +321,6 @@ struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
                 dput(result);
                 RETURN(ERR_PTR(-ENOENT));
         }
-#endif
 
         if (mnt) {
                 *mnt = mds->mds_vfsmnt;

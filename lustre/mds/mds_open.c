@@ -818,6 +818,10 @@ int mds_open(struct mds_update_record *rec, int offset,
         int mea_size, update_mode;
         ENTRY;
 
+        DEBUG_REQ(D_INODE, req, "parent "LPU64"/%u name %*s mode %o",
+                  rec->ur_fid1->id, rec->ur_fid1->generation,
+                  rec->ur_namelen - 1, rec->ur_name, rec->ur_mode);
+
         parent_lockh[0].cookie = 0;
         parent_lockh[1].cookie = 0;
 
