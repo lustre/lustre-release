@@ -1,6 +1,12 @@
 #!/bin/sh
 
 [ -e /proc/sys/portals/debug ] && echo 0 > /proc/sys/portals/debug 
+if [ ! -e client.txt ]; then
+	if [ -e /usr/lib/dbench/client.txt ]; then
+		cp /usr/lib/dbench/client.txt /mnt/lustre/client.txt
+	elif [ -e /usr/lib/dbench/client_plain.txt ]; then
+		cp /usr/lib/dbench/client_plain.txt /mnt/lustre/client.txt
+	fi
+fi
 cd /mnt/lustre
-cp /usr/src/lustre/demos/dbench/client.txt .
-/usr/src/lustre/demos/dbench/dbench $1
+dbench $@
