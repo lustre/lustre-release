@@ -21,7 +21,7 @@ extern kmem_cache_t *ldlm_lock_slab;
 extern int (*mds_reint_p)(int offset, struct ptlrpc_request *req);
 extern int (*mds_getattr_name_p)(int offset, struct ptlrpc_request *req);
 
-static int _ldlm_enqueue(struct obd_device *obddev, struct ptlrpc_service *svc,
+static int ldlm_handle_enqueue(struct obd_device *obddev, struct ptlrpc_service *svc,
                          struct ptlrpc_request *req)
 {
         struct ldlm_reply *dlm_rep;
@@ -107,7 +107,7 @@ static int _ldlm_enqueue(struct obd_device *obddev, struct ptlrpc_service *svc,
         return 0;
 }
 
-static int _ldlm_convert(struct ptlrpc_service *svc, struct ptlrpc_request *req)
+static int ldlm_handle_convert(struct ptlrpc_service *svc, struct ptlrpc_request *req)
 {
         struct ldlm_request *dlm_req;
         struct ldlm_reply *dlm_rep;
@@ -144,7 +144,7 @@ static int _ldlm_convert(struct ptlrpc_service *svc, struct ptlrpc_request *req)
         RETURN(0);
 }
 
-static int _ldlm_cancel(struct ptlrpc_service *svc, struct ptlrpc_request *req)
+static int ldlm_handle_cancel(struct ptlrpc_service *svc, struct ptlrpc_request *req)
 {
         struct ldlm_request *dlm_req;
         struct ldlm_lock *lock;
@@ -177,7 +177,7 @@ static int _ldlm_cancel(struct ptlrpc_service *svc, struct ptlrpc_request *req)
         RETURN(0);
 }
 
-static int _ldlm_callback(struct ptlrpc_service *svc,
+static int ldlm_handle_callback(struct ptlrpc_service *svc,
                           struct ptlrpc_request *req)
 {
         struct ldlm_request *dlm_req;
@@ -281,25 +281,25 @@ static int lustre_handle(struct obd_device *dev, struct ptlrpc_service *svc,
         case LDLM_ENQUEUE:
                 CDEBUG(D_INODE, "enqueue\n");
                 OBD_FAIL_RETURN(OBD_FAIL_LDLM_ENQUEUE, 0);
-                rc = _ldlm_enqueue(req_dev, svc, req);
+                rc = ldlm_handle_enqueue(req_dev, svc, req);
                 break;
 
         case LDLM_CONVERT:
                 CDEBUG(D_INODE, "convert\n");
                 OBD_FAIL_RETURN(OBD_FAIL_LDLM_CONVERT, 0);
-                rc = _ldlm_convert(svc, req);
+                rc = ldlm_handle_convert(svc, req);
                 break;
 
         case LDLM_CANCEL:
                 CDEBUG(D_INODE, "cancel\n");
                 OBD_FAIL_RETURN(OBD_FAIL_LDLM_CANCEL, 0);
-                rc = _ldlm_cancel(svc, req);
+                rc = ldlm_hanel_cancel(svc, req);
                 break;
 
         case LDLM_CALLBACK:
                 CDEBUG(D_INODE, "callback\n");
                 OBD_FAIL_RETURN(OBD_FAIL_LDLM_CALLBACK, 0);
-                rc = _ldlm_callback(svc, req);
+                rc = ldlm_handle_callback(svc, req);
                 break;
 
         default:
