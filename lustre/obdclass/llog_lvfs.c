@@ -270,11 +270,11 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
                 reccookie->lgc_lgl = loghandle->lgh_id;
                 reccookie->lgc_index = index;
                 if (le32_to_cpu(rec->lrh_type) == MDS_UNLINK_REC)
-                        reccookie->lgc_subsys = LLOG_OBD_DEL_LOG_HANDLE;
+                        reccookie->lgc_subsys = LLOG_UNLINK_ORIG_CTXT;
                 else if (le32_to_cpu(rec->lrh_type) == OST_SZ_REC)
-                        reccookie->lgc_subsys = LLOG_OBD_SZ_LOG_HANDLE;
+                        reccookie->lgc_subsys = LLOG_SIZE_ORIG_CTXT;
                 else if (le32_to_cpu(rec->lrh_type) == OST_RAID1_REC)
-                        reccookie->lgc_subsys = LLOG_OBD_RD1_LOG_HANDLE;
+                        reccookie->lgc_subsys = LLOG_RD1_ORIG_CTXT;
                 else 
                         reccookie->lgc_subsys = -1;
                 rc = 1;
@@ -362,7 +362,7 @@ static int llog_lvfs_next_block(struct llog_handle *loghandle, int *cur_idx,
 
 /* This is a callback from the llog_* functions.
  * Assumes caller has already pushed us into the kernel context. */
-static int llog_lvfs_create(struct llog_obd_ctxt *ctxt,struct llog_handle **res,
+static int llog_lvfs_create(struct llog_ctxt *ctxt, struct llog_handle **res,
                             struct llog_logid *logid, char *name)
 {
         char logname[24];
@@ -415,8 +415,9 @@ static int llog_lvfs_create(struct llog_obd_ctxt *ctxt,struct llog_handle **res,
                 handle->lgh_id = *logid;
 
         } else if (name) {
-                LASSERT(strlen(name) <= 18);
-                sprintf(logname, "LOGS/%s", name);
+                //LASSERT(strlen(name) <= 18);
+                //sprintf(logname, "LOGS/%s", name);
+                LOG_NAME_LIMIT(logname, name);
 
                 handle->lgh_file = l_filp_open(logname, open_flags, 0644);
                 if (IS_ERR(handle->lgh_file)) {
@@ -457,7 +458,6 @@ static int llog_lvfs_create(struct llog_obd_ctxt *ctxt,struct llog_handle **res,
                 handle->lgh_id.lgl_ogen = oa->o_generation;
         }
 
-        handle->lgh_obd = obd;
         handle->lgh_ctxt = ctxt;
  finish:
         if (oa)

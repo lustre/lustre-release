@@ -125,6 +125,8 @@ int llog_init_handle(struct llog_handle *handle, int flags,
         if (llh == NULL)
                 RETURN(-ENOMEM);
         handle->lgh_hdr = llh;
+        /* first assign flags to use llog_client_ops */
+        llh->llh_flags = cpu_to_le32(flags);
         rc = llog_read_header(handle);
         if (rc == 0) {
                 LASSERT((le32_to_cpu(llh->llh_flags) & flags)== flags);
@@ -142,7 +144,6 @@ int llog_init_handle(struct llog_handle *handle, int flags,
         llh->llh_hdr.lrh_len = llh->llh_tail.lrt_len = cpu_to_le32(LLOG_CHUNK_SIZE);
         llh->llh_hdr.lrh_index = llh->llh_tail.lrt_index = 0;
         llh->llh_timestamp = cpu_to_le64(LTIME_S(CURRENT_TIME));
-        llh->llh_flags = cpu_to_le32(flags);
         if (uuid)
                 memcpy(&llh->llh_tgtuuid, uuid, sizeof(llh->llh_tgtuuid));
         llh->llh_bitmap_offset = cpu_to_le32(offsetof(typeof(*llh), llh_bitmap));
