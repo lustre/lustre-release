@@ -687,6 +687,7 @@ __s32 portals_debug_copy_to_user(char *buf, unsigned long len)
         list_for_each(pos, &my_pages) {
                 unsigned long to_copy;
                 page = list_entry(pos, struct page, list);
+                void *addr;
 
                 to_copy = min(total - off, PAGE_SIZE);
                 if (to_copy == 0) {
@@ -694,8 +695,9 @@ __s32 portals_debug_copy_to_user(char *buf, unsigned long len)
                         to_copy = min(debug_size - off, PAGE_SIZE);
                 }
 finish_partial:
-                memcpy(kmap(page), debug_buf + off, to_copy);
-                kunmap(page);
+                addr = kmap_atomic(page, KM_USER0);
+                memcpy(addr, debug_buf + off, to_copy);
+                kunmap_atomic(addr, KM_USER0);
                 copied += to_copy;
                 if (copied >= total)
                         break;
