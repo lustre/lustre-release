@@ -43,14 +43,17 @@ test_fail() {
 	echo "Running '$*'"
 	$* 
 
-	echo 0 > /proc/sys/lustre/fail_loc
-
 	echo "Cleaning up and restarting MDS"
 	umount /mnt/obd
 	$OBDCTL <<- EOF
 	device 0
 	cleanup
 	detach
+	EOF
+
+	echo 0 > /proc/sys/lustre/fail_loc
+
+	$OBDCTL <<- EOF
 	attach mds
 	setup ${MDS} ${MDSFS}
 	EOF
@@ -66,15 +69,15 @@ sync
 test_fail 0x10a chmod 000 /mnt/obd/foo
 ls -l /mnt/obd/foo
 
-# OBD_FAIL_MDS_REINT_CREATE_WRITE - MDS will discard data from create
+# OBD_FAIL_MDS_REINT_CREATE_WRITE - MDS will not create the file
 test_fail 0x10c touch /mnt/obd/bar
 ls /mnt/obd
 
-# OBD_FAIL_MDS_REINT_UNLINK_WRITE - MDS will discard data from create
+# OBD_FAIL_MDS_REINT_UNLINK_WRITE - MDS will discard data from unlink
 test_fail 0x10e rm /mnt/obd/foo
 ls /mnt/obd
 
-# OBD_FAIL_MDS_REINT_RENAME_WRITE - MDS will discard data from create
+# OBD_FAIL_MDS_REINT_RENAME_WRITE - MDS will discard data from rename
 test_fail 0x112 mv /mnt/obd/foo /mnt/obd/bar
 ls /mnt/obd
 
