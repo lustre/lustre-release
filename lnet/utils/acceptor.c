@@ -133,62 +133,6 @@ show_connection (int fd, __u32 net_ip)
                 host, txmem, rxmem, nonagle ? "disabled" : "enabled");
 }
 
-int
-sock_write (int cfd, void *buffer, int nob)
-{
-        while (nob > 0)
-        {
-                int rc = write (cfd, buffer, nob);
-
-                if (rc < 0)
-                {
-                        if (errno == EINTR)
-                                continue;
-                        
-                        return (rc);
-                }
-
-                if (rc == 0)
-                {
-                        fprintf (stderr, "Unexpected zero sock_write\n");
-                        abort();
-                }
-
-                nob -= rc;
-                buffer = (char *)buffer + nob;
-        }
-        
-        return (0);
-}
-
-int
-sock_read (int cfd, void *buffer, int nob)
-{
-        while (nob > 0)
-        {
-                int rc = read (cfd, buffer, nob);
-                
-                if (rc < 0)
-                {
-                        if (errno == EINTR)
-                                continue;
-                        
-                        return (rc);
-                }
-                
-                if (rc == 0)                    /* EOF */
-                {
-                        errno = ECONNABORTED;
-                        return (-1);
-                }
-                
-                nob -= rc;
-                buffer = (char *)buffer + nob;
-        }
-        
-        return (0);
-}
-
 void
 usage (char *myname)
 {
