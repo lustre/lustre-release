@@ -463,7 +463,22 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 
         }
         case OBD_IOC_LLOG_CANCEL:
-        case OBD_IOC_LLOG_REMOVE: 
+        case OBD_IOC_LLOG_REMOVE: {
+                struct llog_ctxt *ctxt = 
+                        llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
+
+#ifdef ENABLE_ORPHANS
+                obd_llog_finish(obd, mds->mds_lov_desc.ld_tgt_count);
+#endif
+                push_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_ctxt, NULL);
+                rc = llog_ioctl(ctxt, cmd, data);
+                pop_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_ctxt, NULL);
+      
+#ifdef ENABLE_ORPHANS                
+                llog_cat_initialize(obd, mds->mds_lov_desc.ld_tgt_count);
+#endif
+                RETURN(rc);
+        }                
         case OBD_IOC_LLOG_INFO:
         case OBD_IOC_LLOG_PRINT: {
                 struct llog_ctxt *ctxt = 
