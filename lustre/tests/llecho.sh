@@ -4,7 +4,7 @@ LCONF=${LCONF:-../utils/lconf}
 NAME=${NAME:-echo}
 
 config=$NAME.xml
-mkconfig=./$NAME.sh
+mkconfig=$NAME.sh
 
 sh $mkconfig $config || exit 1
 
