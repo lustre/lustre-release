@@ -311,40 +311,9 @@ static inline void kqswnal_rx_done (kqswnal_rx_t *krx)
 }
 
 #if MULTIRAIL_EKC
-
-#ifndef EP_RAILMASK_ALL
-# error "old (unsupported) version of EKC headers"
-#endif
-
-static inline int
-ep_nmd_merge (EP_NMD *merged, EP_NMD *a, EP_NMD *b)
-{
-        if (EP_NMD_NODEID(a) != EP_NMD_NODEID(b)) /* not generated on the same node */
-                return 0;
-
-        if ((EP_NMD_RAILMASK(a) & EP_NMD_RAILMASK(b)) == 0) /* no common rails */
-                return 0;
-
-        if (b->nmd_addr == (a->nmd_addr + a->nmd_len)) {
-                if (merged != NULL) {
-                        merged->nmd_addr = a->nmd_addr;
-                        merged->nmd_len  = a->nmd_len + b->nmd_len;
-                        merged->nmd_attr = EP_NMD_ATTR(EP_NMD_NODEID(a), EP_NMD_RAILMASK(a) & EP_NMD_RAILMASK(b));
-                }
-                return 1;
-        }
-    
-        if (a->nmd_addr == (b->nmd_addr + b->nmd_len)) {
-                if (merged != NULL) {
-                        merged->nmd_addr = b->nmd_addr;
-                        merged->nmd_len   = b->nmd_len + a->nmd_len;
-                        merged->nmd_attr  = EP_NMD_ATTR(EP_NMD_NODEID(b), EP_NMD_RAILMASK(a) & EP_NMD_RAILMASK(b));
-                }
-                return 1;
-        }
-
-        return 0;
-}
+# ifndef EP_RAILMASK_ALL
+#  error "old (unsupported) version of EKC headers"
+# endif
 #else
 /* multirail defines these in <elan/epcomms.h> */
 #define EP_MSG_SVC_PORTALS_SMALL      (0x10)  /* Portals over elan port number (large payloads) */
