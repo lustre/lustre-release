@@ -79,7 +79,5 @@ void __liblustre_setup_(void)
 
 void __liblustre_cleanup_(void)
 {
-	printf("about shutdown\n");
 	_sysio_shutdown();
-	printf("finish shutdown\n");
 }
