@@ -1,7 +1,7 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (C) 2001-2003 Cluster File Systems, Inc.
+ *  Copyright (C) 2003 Cluster File Systems, Inc.
  *   Author: Andreas Dilger <adilger@clusterfs.com>
  *
  *   This file is part of Lustre, http://www.lustre.org.
@@ -29,7 +29,7 @@
 #define DEBUG_SUBSYSTEM S_LOG
 
 #ifndef EXPORT_SYMTAB
-#define EXPORT_SYMTAB
+# define EXPORT_SYMTAB
 #endif
 
 #include <linux/fs.h>
@@ -37,13 +37,16 @@
 #include <linux/lustre_commit_confd.h>
 #include <portals/list.h>
 
+static struct llog_commit_master lustre_lcm;
+static struct llog_commit_master *lcm = &lustre_lcm;
+
 /* Allocate new commit structs in case we do not have enough */
-static int llcd_alloc(struct llog_commit_master *lcm)
+static int llcd_alloc(void)
 {
         struct llog_commit_data *llcd;
 
         OBD_ALLOC(llcd, PAGE_SIZE);
-        if (!llcd)
+        if (llcd == NULL)
                 return -ENOMEM;
 
         llcd->llcd_lcm = lcm;
@@ -57,7 +60,7 @@ static int llcd_alloc(struct llog_commit_master *lcm)
 }
 
 /* Get a free cookie struct from the list */
-struct llog_commit_data *llcd_grab(struct llog_commit_master *lcm)
+struct llog_commit_data *llcd_grab(void)
 {
         struct llog_commit_data *llcd;
 
@@ -65,9 +68,7 @@ struct llog_commit_data *llcd_grab(struct llog_commit_master *lcm)
         if (list_empty(&lcm->lcm_llcd_free)) {
                 spin_unlock(&lcm->lcm_llcd_lock);
                 CERROR("no free log commit data structs!\n");
-                llcd = kmalloc(GFP_ATOMIC, PAGE_SIZE);
-                if (llcd)
-                        llcd->llcd_lcm = lcm;
+                llcd = llcd_alloc(lcm);
                 return llcd;
         }
 
@@ -83,8 +84,7 @@ struct llog_commit_data *llcd_grab(struct llog_commit_master *lcm)
 }
 EXPORT_SYMBOL(llcd_grab);
 
-static void llcd_put(struct llog_commit_master *lcm,
-                     struct llog_commit_data *llcd)
+static void llcd_put(struct llog_commit_data *llcd)
 {
         if (atomic_read(&lcm->lcm_llcd_numfree) >= lcm->lcm_llcd_maxfree) {
                 OBD_FREE(llcd, PAGE_SIZE);
@@ -116,7 +116,7 @@ static int log_commit_thread(void *arg)
         int rc;
 
         OBD_ALLOC(lcd, sizeof(*lcd));
-        if (!lcd)
+        if (lcd == NULL)
                 RETURN(-ENOMEM);
 
         INIT_LIST_HEAD(&lcd->lcd_lcm_list);
@@ -285,7 +285,7 @@ static int log_commit_thread(void *arg)
         return 0;
 }
 
-int llog_start_commit_thread(struct llog_commit_master *lcm)
+int llog_start_commit_thread(void)
 {
         int rc;
         ENTRY;
@@ -300,3 +300,22 @@ int llog_start_commit_thread(struct llog_commit_master *lcm)
         RETURN(0);
 }
 EXPORT_SYMBOL(llog_start_commit_thread);
+
+int llog_init_commit_master(void)
+{
+        INIT_LIST_HEAD(&lcm->lcm_thread_busy);
+        INIT_LIST_HEAD(&lcm->lcm_thread_idle);
+        spin_lock_init(&lcm->lcm_thread_lock);
+        atomic_set(&lcm->lcm_thread_numidle, 0);
+        init_waitqueue_head(&lcm->lcm_waitq);
+        INIT_LIST_HEAD(&lcm->lcm_llcd_pending);
+        INIT_LIST_HEAD(&lcm->lcm_llcd_resend);
+        INIT_LIST_HEAD(&lcm->lcm_llcd_free);
+        spin_lock_init(&lcm->lcm_llcd_lock);
+        atomic_set(&lcm->lcm_llcd_numfree, 0);
+}
+
+int llog_cleanup_commit_master(void)
+{
+        return 0;
+}

@@ -65,8 +65,8 @@ struct llog_commit_daemon {
         struct llog_commit_master *lcd_lcm;       /* pointer back to parent */
 };
 
-int llog_start_commit_thread(struct llog_commit_master *lcm);
-struct llog_commit_data *llcd_grab(struct llog_commit_master *lcm);
+int llog_start_commit_thread(void);
+struct llog_commit_data *llcd_grab(void);
 void llcd_send(struct llog_commit_data *llcd);
 
 #endif /* _LUSTRE_COMMIT_CONFD_H */
