@@ -66,7 +66,16 @@ sub extractpid
     if ($line =~ m/\(\) ([0-9]*)\+[0-9]*\):/) {
 	return $1;
     }
-    if ($line =~ m/\(\) ([0-9]*) | [0-9]*\+[0-9]*\):/) {
+    if ($line =~ m/\(\) ([0-9]*) \| [0-9]*\+[0-9]*\):/) {
+	return $1;
+    }
+}
+
+sub extracthostpid
+{
+    $line = shift;
+#    print "$_\n";
+    if ($line =~ m/\(\) [0-9]* \| ([0-9]*)\+[0-9]*\):/) {
 	return $1;
     }
 }
@@ -213,6 +222,7 @@ sub unmatched_intents {
 
 while (<STDIN>) {
     $linepid = extractpid($_);
+    $linehpid = extracthostpid($_);
     $linemask = getmask($_);
     $linesubsys = getsubsys($_);
 
@@ -230,7 +240,7 @@ while (<STDIN>) {
         study_lock($_);
     }
 
-    if ( !$pid || $linepid == $pid) {
+    if ( !$pid || $linepid == $pid || $linehpid == $pid) {
         next if ($rpctrace && $linemask != $masks->{RPCTRACE});
         next if ($trace && $linemask != $masks->{TRACE});
 
