@@ -11,6 +11,7 @@ SERVER_CNT=62
 GW_START=1
 GW_CNT=31
 MDS=mcr23
+UUIDLIST=${UUIDLIST:-/home/bluearc/UUID.0920}
 
 # THis is needed for to create route for elan network
 CLIENT_LO=mcr40
@@ -70,10 +71,12 @@ do
    do
       echo "server: $server"
       ba=ba$server
+      OBD_UUID=`awk "/$OST / { print \\$3 }" $UUIDLIST`
+      [ "$OBD_UUID" ] && OBD_UUID="--obduuid=$OBD_UUID" || echo "$OST: no UUID"
       # server node
       ${LMC} --node $ba --tcpbuf $TCPBUF --net $ba tcp $PORT || exit 1
       # the device on the server
-      ${LMC} --lov lov1 --node $ba --ost bluearc || exit 3
+      ${LMC} --lov lov1 --node $ba $OBD_UUID --ost bluearc || exit 3
       # route to server
       ${LMC} --node $gwnode --route tcp `h2ip $gwnode` $ba || exit 2
       let server=$server+1 
