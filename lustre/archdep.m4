@@ -26,17 +26,31 @@ case ${host_cpu} in
         MOD_LINK=elf_i386
 ;;
 
-	alpha )
+	alphaev6 )
 	AC_MSG_RESULT($host_cpu)
-        KCFLAGS='-g -O2 -Wall -Wstrict-prototypes -pipe'
+        KCFLAGS='-g -O2  -Wall -Wstrict-prototypes -Wno-trigraphs -O2 -fomit-frame-pointer -fno-strict-aliasing -fno-common -pipe -mno-fp-regs -ffixed-8 -mcpu=ev5 -Wa,-mev6'
         KCPPFLAGS='-D__KERNEL__ -DMODULE '
-        MOD_LINK=elf64_alpha
+        MOD_LINK=elf64alpha
+;;
+
+	alphaev67 )
+	AC_MSG_RESULT($host_cpu)
+        KCFLAGS='-g -O2  -Wall -Wstrict-prototypes -Wno-trigraphs -O2 -fomit-frame-pointer -fno-strict-aliasing -fno-common -pipe -mno-fp-regs -ffixed-8 -mcpu=ev5 -Wa,-mev6'
+        KCPPFLAGS='-D__KERNEL__ -DMODULE '
+        MOD_LINK=elf64alpha
+;;
+
+	alpha* )
+	AC_MSG_RESULT($host_cpu)
+        KCFLAGS='-g -O2  -Wall -Wstrict-prototypes -Wno-trigraphs -O2 -fomit-frame-pointer -fno-strict-aliasing -fno-common -pipe -mno-fp-regs -ffixed-8 -mcpu=ev5 -Wa,-mev5'
+        KCPPFLAGS='-D__KERNEL__ -DMODULE '
+        MOD_LINK=elf64alpha
 ;;
 
 	ia64 )
 	AC_MSG_RESULT($host_cpu)
-	KCFLAGS='-Wall -Wstrict-prototypes -Wno-trigraphs -g -O2 -fno-strict-aliasing -fno-common -pipe -ffixed-r13 -mfixed-range=f10-f15,f32-f127 -falign-functions=32 -mb-step'
-        KCPPFLAGS='-D__KERNEL__ -DMODULE'
+        KCFLAGS='-Wall -Wstrict-prototypes -Wno-trigraphs -g -O2 -fno-strict-aliasing -fno-common -pipe -ffixed-r13 -mfixed-range=f10-f15,f32-f127 -falign-functions=32 -mb-step'
+	KCPPFLAGS='-D__KERNEL__ -DMODULE'
         MOD_LINK=elf64_ia64
 ;;
 
@@ -57,6 +71,7 @@ case ${host_cpu} in
 
         *)
 	AC_ERROR("Unknown Linux Platform: $host_cpu")
+;;
 esac
 
 AC_MSG_CHECKING(for MODVERSIONS)
