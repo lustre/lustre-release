@@ -4,6 +4,13 @@
 
 #ifndef _MDS_INTERNAL_H
 #define _MDS_INTERNAL_H
+
+struct mds_filter_data {
+        __u64 io_epoch;
+};
+
+#define MDS_FILTERDATA(inode) ((struct mds_filter_data *)(inode)->i_filterdata)
+
 static inline struct mds_obd *mds_req2mds(struct ptlrpc_request *req)
 {
         return &req->rq_export->exp_obd->u.mds;
