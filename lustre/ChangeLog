@@ -1,11 +1,18 @@
-TBD
+2002-10-23  Phil Schwan  <phil@clusterfs.com>
 	* version v0_5_15
 	* bug fixes:
 	  - in-use dentries weren't being reused properly (617851)
 	  - prevent multiple LDLM setup (599178)
-	  - fix LOV size caclulations for truncate (617853)
+	  - fix LOV size calculations for truncate (617853)
 	  - fix client handling of MDS intent errors (POSIX)
 	  - fix permission bug in lovstripe.c test (624321)
+	  - fix MDS thread deadlock (625069)
+	  - truncate past end of file could corrupt data
+	  - proper cleanup after timeouts, crashes, etc (592524, 550815)
+	  - a race in recovery could return ETIMEDOUT to apps (623947)
+	  - building outside the source directory was fixed
+	* the howto was brought (more) up to date (582544)
+	* major progress was made on recovery functionality
 
 2002-10-10  Phil Schwan  <phil@clusterfs.com>
 	* version v0_5_14
