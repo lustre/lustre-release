@@ -128,6 +128,7 @@ static struct super_block * obdfs_read_super(struct super_block *sb,
         unsigned long blocksize_bits;
         unsigned long root_ino;
         int scratch;
+	struct obdo *oa;
         
 
         ENTRY;
@@ -236,9 +237,21 @@ static struct super_block * obdfs_read_super(struct super_block *sb,
 
         /* make root inode */
         CDEBUG(D_INFO, "\n"); 
-        root = iget(sb, root_ino);
-        if (!root || is_bad_inode(root)) {
-            printk("OBDFS: bad iget for root\n");
+        oa = obdo_fromid(&sbi->osi_conn, root_ino,
+                         OBD_MD_FLNOTOBD | OBD_MD_FLBLOCKS);
+        CDEBUG(D_INFO, "\n"); 
+        if ( IS_ERR(oa) ) {
+                printk(__FUNCTION__ ": obdo_fromid failed\n");
+		iput(root); 
+                EXIT;
+                goto ERR;
+        }
+        CDEBUG(D_INFO, "\n"); 
+        root = iget4(sb, root_ino, NULL, oa);
+	obdo_free(oa);
+        CDEBUG(D_INFO, "\n"); 
+        if (!root) {
+            printk("OBDFS: bad iget4 for root\n");
             sb->s_dev = 0;
             err = -ENOENT;
             EXIT;
@@ -293,53 +306,6 @@ static void obdfs_put_super(struct super_block *sb)
         EXIT;
 } /* obdfs_put_super */
 
-
-/* all filling in of inodes postponed until lookup */
-static void obdfs_read_inode(struct inode *inode)
-{
-        struct obdo *oa;
-        ENTRY;
-        oa = obdo_fromid(IID(inode), inode->i_ino,
-                         OBD_MD_FLNOTOBD | OBD_MD_FLBLOCKS);
-        if ( IS_ERR(oa) ) {
-                printk(__FUNCTION__ ": obdo_fromid failed\n");
-                EXIT;
-                return /* PTR_ERR(oa) */;
-        }
-
-        ODEBUG(oa);
-        obdfs_to_inode(inode, oa);
-        INIT_LIST_HEAD(obdfs_iplist(inode)); /* list of dirty pages on inode */
-        INIT_LIST_HEAD(obdfs_islist(inode)); /* list of inodes in superblock */
-
-        obdo_free(oa);
-        /* OIDEBUG(inode); */
-
-        if (S_ISREG(inode->i_mode)) {
-                inode->i_op = &obdfs_file_inode_operations;
-                inode->i_fop = &obdfs_file_operations;
-                inode->i_mapping->a_ops = &obdfs_aops;
-                EXIT;
-        } else if (S_ISDIR(inode->i_mode)) {
-                inode->i_op = &obdfs_dir_inode_operations;
-                inode->i_fop = &obdfs_dir_operations; 
-                inode->i_mapping->a_ops = &obdfs_aops;
-                EXIT;
-        } else if (S_ISLNK(inode->i_mode)) {
-                if (inode->i_blocks) { 
-                        inode->i_op = &obdfs_symlink_inode_operations;
-                        inode->i_mapping->a_ops = &obdfs_aops;
-                }else {
-                        inode->i_op = &obdfs_fast_symlink_inode_operations;
-                }
-                EXIT;
-        } else {
-                init_special_inode(inode, inode->i_mode,
-                                   ((int *)obdfs_i2info(inode)->oi_inline)[0]);
-        }
-
-        return;
-}
 
 void obdfs_do_change_inode(struct inode *inode, int mask)
 {
@@ -520,15 +486,55 @@ static int obdfs_statfs(struct super_block *sb, struct statfs *buf)
         return err; 
 }
 
+static inline void obdfs_read_inode2(struct inode *inode, void *opaque)
+{
+	struct obdo *oa = opaque; 
+	
+	ENTRY;
+	obdfs_to_inode(inode, oa); 
+
+        INIT_LIST_HEAD(obdfs_iplist(inode)); /* list of dirty pages on inode */
+        INIT_LIST_HEAD(obdfs_islist(inode)); /* list of inodes in superblock */
+
+        /* OIDEBUG(inode); */
+
+        if (S_ISREG(inode->i_mode)) {
+                inode->i_op = &obdfs_file_inode_operations;
+                inode->i_fop = &obdfs_file_operations;
+                inode->i_mapping->a_ops = &obdfs_aops;
+                EXIT;
+        } else if (S_ISDIR(inode->i_mode)) {
+                inode->i_op = &obdfs_dir_inode_operations;
+                inode->i_fop = &obdfs_dir_operations; 
+                inode->i_mapping->a_ops = &obdfs_aops;
+                EXIT;
+        } else if (S_ISLNK(inode->i_mode)) {
+                if (inode->i_blocks) { 
+                        inode->i_op = &obdfs_symlink_inode_operations;
+                        inode->i_mapping->a_ops = &obdfs_aops;
+                }else {
+                        inode->i_op = &obdfs_fast_symlink_inode_operations;
+                }
+                EXIT;
+        } else {
+                init_special_inode(inode, inode->i_mode,
+                                   ((int *)obdfs_i2info(inode)->oi_inline)[0]);
+        }
+
+	EXIT;
+        return;
+}
+
 /* exported operations */
 struct super_operations obdfs_super_operations =
 {
-        read_inode: obdfs_read_inode,
+	read_inode2: obdfs_read_inode2,
         put_inode: obdfs_put_inode,
         delete_inode: obdfs_delete_inode,
         put_super: obdfs_put_super,
         statfs: obdfs_statfs
 };
+
 
 struct file_system_type obdfs_fs_type = {
    "obdfs", 0, obdfs_read_super, NULL
@@ -550,6 +556,7 @@ int init_obdfs(void)
         obdfs_flushd_init();
         return register_filesystem(&obdfs_fs_type);
 }
+
 
 struct address_space_operations obdfs_aops = {
         readpage: obdfs_readpage,

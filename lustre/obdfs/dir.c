@@ -406,11 +406,10 @@ void ext2_set_link(struct inode *dir, struct ext2_dir_entry_2 *de,
 		BUG();
 	de->inode = cpu_to_le32(inode->i_ino);
 	ext2_set_de_type (de, inode);
+	dir->i_mtime = dir->i_ctime = CURRENT_TIME;
 	err = ext2_commit_chunk(page, from, to);
 	UnlockPage(page);
 	ext2_put_page(page);
-	dir->i_mtime = dir->i_ctime = CURRENT_TIME;
-	obdfs_change_inode(dir);
 }
 
 /*
@@ -446,6 +445,10 @@ int ext2_add_link (struct dentry *dentry, struct inode *inode)
 				goto out_page;
 			name_len = EXT2_DIR_REC_LEN(de->name_len);
 			rec_len = le16_to_cpu(de->rec_len);
+			if ( n==npages && rec_len == 0) {
+				printk("Fatal dir behaviour\n");
+				goto out_page;
+			}
 			if (!de->inode && rec_len >= reclen)
 				goto got_it;
 			if (rec_len >= name_len + reclen)
@@ -474,9 +477,11 @@ got_it:
 	memcpy (de->name, name, namelen);
 	de->inode = cpu_to_le32(inode->i_ino);
 	ext2_set_de_type (de, inode);
-	err = ext2_commit_chunk(page, from, to);
 	dir->i_mtime = dir->i_ctime = CURRENT_TIME;
-	obdfs_change_inode(dir);
+	err = ext2_commit_chunk(page, from, to);
+
+	// change_inode happens with the commit_chunk
+        // obdfs_change_inode(dir);
 	/* OFFSET_CACHE */
 out_unlock:
 	UnlockPage(page);
@@ -514,11 +519,10 @@ int ext2_delete_entry (struct ext2_dir_entry_2 * dir, struct page * page )
 	if (pde)
 		pde->rec_len = cpu_to_le16(to-from);
 	dir->inode = 0;
+	inode->i_ctime = inode->i_mtime = CURRENT_TIME;
 	err = ext2_commit_chunk(page, from, to);
 	UnlockPage(page);
 	ext2_put_page(page);
-	inode->i_ctime = inode->i_mtime = CURRENT_TIME;
-	obdfs_change_inode(inode);
 	return err;
 }
 

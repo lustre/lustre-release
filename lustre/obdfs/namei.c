@@ -68,7 +68,8 @@ static inline void ext2_dec_count(struct inode *inode)
 
 static inline int ext2_add_nondir(struct dentry *dentry, struct inode *inode)
 {
-	int err = ext2_add_link(dentry, inode);
+	int err;
+	err = ext2_add_link(dentry, inode);
 	if (!err) {
 		d_instantiate(dentry, inode);
 		return 0;
@@ -81,19 +82,32 @@ static inline int ext2_add_nondir(struct dentry *dentry, struct inode *inode)
 /* methods */
 static struct dentry *obdfs_lookup(struct inode * dir, struct dentry *dentry)
 {
-	struct inode * inode;
+        struct obdo *oa;
+	struct inode * inode = NULL;
 	ino_t ino;
 	
+        ENTRY;
 	if (dentry->d_name.len > EXT2_NAME_LEN)
 		return ERR_PTR(-ENAMETOOLONG);
 
 	ino = ext2_inode_by_name(dir, dentry);
-	inode = NULL;
-	if (ino) {
-		inode = iget(dir->i_sb, ino);
-		if (!inode) 
-			return ERR_PTR(-EACCES);
-	}
+	if (!ino)
+		goto negative;
+
+        oa = obdo_fromid(IID(dir), ino, OBD_MD_FLNOTOBD | OBD_MD_FLBLOCKS);
+        if ( IS_ERR(oa) ) {
+                printk(__FUNCTION__ ": obdo_fromid failed\n");
+                EXIT;
+                return ERR_PTR(-EACCES); 
+        }
+
+	inode = iget4(dir->i_sb, ino, NULL, oa);
+        obdo_free(oa);
+
+	if (!inode) 
+		return ERR_PTR(-EACCES);
+
+ negative:
 	d_add(dentry, inode);
 	return NULL;
 }
@@ -146,26 +160,26 @@ static struct inode *obdfs_new_inode(struct inode *dir, int mode)
                 return ERR_PTR(err);
         }
 
-        inode = iget(dir->i_sb, (ino_t)oa->o_id);
+        inode = iget4(dir->i_sb, (ino_t)oa->o_id, NULL, oa);
+        obdo_free(oa);
 
         if (!inode) {
                 printk("new_inode -fatal:  %ld\n", (long)oa->o_id);
                 IOPS(dir, destroy)(IID(dir), oa);
-                obdo_free(oa);
                 EXIT;
                 return ERR_PTR(-EIO);
         }
 
         if (!list_empty(&inode->i_dentry)) {
-                printk("new_inode -fatal: aliases %ld, ct %d lnk %d\n", (long)oa->o_id,
- atomic_read(&inode->i_count), inode->i_nlink);
+                printk("new_inode -fatal: aliases %ld, ct %d lnk %d\n", 
+		       (long)oa->o_id,
+		       atomic_read(&inode->i_count), 
+		       inode->i_nlink);
                 IOPS(dir, destroy)(IID(dir), oa);
-                obdo_free(oa);
                 iput(inode);
                 EXIT;
                 return ERR_PTR(-EIO);
         }
-        obdo_free(oa);
 
         EXIT;
         return inode;
@@ -188,7 +202,6 @@ static int obdfs_create (struct inode * dir, struct dentry * dentry, int mode)
 		inode->i_op = &obdfs_file_inode_operations;
 		inode->i_fop = &obdfs_file_operations;
 		inode->i_mapping->a_ops = &obdfs_aops;
-		obdfs_change_inode(inode);
 		err = ext2_add_nondir(dentry, inode);
 	}
 	return err;

@@ -249,7 +249,7 @@ static __inline__ struct obdo *obdo_fromid(struct obd_conn *conn, obd_id id,
                 EXIT;
                 return ERR_PTR(-ENOMEM);
         }
-        memset(oa, 0, sizeof(*oa));
+
         oa->o_id = id;
         oa->o_valid = valid;
         if ((err = OBP(conn->oc_dev, getattr)(conn, oa))) {

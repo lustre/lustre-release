@@ -38,7 +38,7 @@
 
 void obdfs_change_inode(struct inode *inode);
 
-/* SYNCHRONOUS I/O for an inode */
+/* SYNCHRONOUS I/O to object storage for an inode -- object attr will be updated too */
 static int obdfs_brw(int rw, struct inode *inode, struct page *page, int create)
 {
         obd_count        num_obdo = 1;
@@ -56,21 +56,20 @@ static int obdfs_brw(int rw, struct inode *inode, struct page *page, int create)
                 return -EIO;
         }
 
-        oa = obdo_fromid(IID(inode), inode->i_ino, OBD_MD_FLNOTOBD);
-        if ( IS_ERR(oa) ) {
+        oa = obdo_alloc();
+        if ( !oa ) {
                 EXIT;
-                return PTR_ERR(oa);
+                return -ENOMEM;
         }
+	oa->o_valid = OBD_MD_FLNOTOBD;
         obdfs_from_inode(oa, inode);
 
         err = IOPS(inode, brw)(rw, IID(inode), num_obdo, &oa, &bufs_per_obdo,
                                &page, &count, &offset, &flags);
-
         if ( !err )
                 obdfs_to_inode(inode, oa); /* copy o_blocks to i_blocks */
 
         obdo_free(oa);
-        
         EXIT;
         return err;
 } /* obdfs_brw */
@@ -82,7 +81,13 @@ int obdfs_readpage(struct file *file, struct page *page)
         int rc;
 
         ENTRY;
-	
+
+	if ( ((inode->i_size + PAGE_CACHE_SIZE -1)>>PAGE_SHIFT) 
+	     <= page->index) {
+		memset(kmap(page), 0, PAGE_CACHE_SIZE);
+		goto readpage_out;
+	}
+
 	if (Page_Uptodate(page)) {
 		EXIT;
 		goto readpage_out;
