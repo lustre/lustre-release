@@ -582,6 +582,7 @@ static int filter_open(struct lustre_handle *conn, struct obdo *oa,
         obd = class_conn2obd(conn);
         dentry = filter_fid2dentry(obd, filter_parent(obd, oa->o_mode),
                                    oa->o_id, oa->o_mode);
+        oa->o_size = dentry->d_inode->i_size;
         if (IS_ERR(dentry))
                 RETURN(PTR_ERR(dentry));
 

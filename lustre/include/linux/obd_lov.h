@@ -11,7 +11,7 @@
 
 void lov_unpackdesc(struct lov_desc *ld);
 void lov_packdesc(struct lov_desc *ld);
-
+void lov_packmd(struct lov_mds_md *mdsmd, struct lov_stripe_md *md);
 
 #endif
 #endif

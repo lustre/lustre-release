@@ -31,6 +31,33 @@ struct brw_page {
         obd_flag flag;
 };
 
+struct lov_oinfo { /* per-child structure */
+        __u64 loi_id;
+        __u64 loi_size;
+};
+
+struct lov_stripe_md {
+        __u32 lmd_magic;
+        __u32 lmd_easize;          /* packed size for MDS of ea */
+        __u64 lmd_object_id;       /* lov object id */
+        __u64 lmd_stripe_offset;   /* offset of the stripe */ 
+        __u64 lmd_stripe_size;     /* size of the stripe */
+        __u32 lmd_stripe_count;    /* how many objects are being striped */
+        __u32 lmd_stripe_pattern;  /* per-lov object stripe pattern */
+        struct lov_oinfo lmd_oinfo[0];
+};
+
+struct lov_stripe_md_one {
+        __u32 lmd_magic;
+        __u32 lmd_easize;          /* packed size for MDS of ea */
+        __u64 lmd_object_id;       /* lov object id */
+        __u64 lmd_stripe_offset;   /* offset of the stripe */ 
+        __u64 lmd_stripe_size;     /* size of the stripe */
+        __u32 lmd_stripe_count;    /* how many objects are being striped */
+        __u32 lmd_stripe_pattern;  /* per-lov object stripe pattern */
+        struct lov_oinfo lmd_oinfo[1];
+};
+
 /* Individual type definitions */
 
 struct ext2_obd {

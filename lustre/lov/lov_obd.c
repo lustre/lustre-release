@@ -184,6 +184,16 @@ static inline int lov_stripe_md_size(struct obd_device *obd)
         int size;
 
         size = sizeof(struct lov_stripe_md) + 
+                lov->desc.ld_tgt_count * sizeof(struct lov_oinfo); 
+        return size;
+}
+
+static inline int lov_mds_md_size(struct obd_device *obd)
+{
+        struct lov_obd *lov = &obd->u.lov;
+        int size;
+
+        size = sizeof(struct lov_mds_md) + 
                 lov->desc.ld_tgt_count * sizeof(struct lov_object_id); 
         return size;
 }
@@ -214,7 +224,7 @@ static int lov_create(struct lustre_handle *conn, struct obdo *oa, struct lov_st
         }
 
         md = *ea;
-        md->lmd_easize = oa->o_easize;
+        md->lmd_easize = lov_mds_md_size(export->exp_obd);
         md->lmd_object_id = oa->o_id;
         if (!md->lmd_stripe_count) { 
                 md->lmd_stripe_count = lov->desc.ld_default_stripe_count;
@@ -234,7 +244,8 @@ static int lov_create(struct lustre_handle *conn, struct obdo *oa, struct lov_st
                 rc = obd_create(&lov->tgts[i].conn, &tmp, &obj_mdp);
                 if (rc) 
                         GOTO(out_cleanup, rc); 
-                md->lmd_objects[i].l_object_id = tmp.o_id;
+                md->lmd_oinfo[i].loi_id = tmp.o_id;
+                md->lmd_oinfo[i].loi_size = tmp.o_size;
         }
 
  out_cleanup: 
@@ -242,7 +253,7 @@ static int lov_create(struct lustre_handle *conn, struct obdo *oa, struct lov_st
                 int i2, rc2;
                 for (i2 = 0 ; i2 < i ; i2++) { 
                         /* destroy already created objects here */ 
-                        tmp.o_id = md->lmd_objects[i].l_object_id;
+                        tmp.o_id = md->lmd_oinfo[i].loi_id;
                         rc2 = obd_destroy(&lov->tgts[i].conn, &tmp, NULL);
                         if (rc2) { 
                                 CERROR("Failed to remove object from target %d\n", 
@@ -274,7 +285,7 @@ static int lov_destroy(struct lustre_handle *conn, struct obdo *oa,
         for (i = 0; i < md->lmd_stripe_count; i++) {
                 /* create data objects with "parent" OA */ 
                 memcpy(&tmp, oa, sizeof(tmp));
-                tmp.o_id = md->lmd_objects[i].l_object_id; 
+                tmp.o_id = md->lmd_oinfo[i].loi_id; 
                 rc = obd_destroy(&lov->tgts[i].conn, &tmp, NULL);
                 if (!rc) { 
                         CERROR("Error destroying object %Ld on %d\n",
@@ -305,7 +316,7 @@ static int lov_getattr(struct lustre_handle *conn, struct obdo *oa,
         for (i = 0; i < md->lmd_stripe_count; i++) {
                 /* create data objects with "parent" OA */ 
                 memcpy(&tmp, oa, sizeof(tmp));
-                oa->o_id = md->lmd_objects[i].l_object_id; 
+                oa->o_id = md->lmd_oinfo[i].loi_id; 
 
                 rc = obd_getattr(&lov->tgts[i].conn, &tmp, NULL);
                 if (!rc) { 
@@ -346,7 +357,7 @@ static int lov_setattr(struct lustre_handle *conn, struct obdo *oa,
         for (i = 0; i < md->lmd_stripe_count; i++) {
                 /* create data objects with "parent" OA */ 
                 memcpy(&tmp, oa, sizeof(tmp));
-                oa->o_id = md->lmd_objects[i].l_object_id; 
+                oa->o_id = md->lmd_oinfo[i].loi_id; 
 
                 rc = obd_setattr(&lov->tgts[i].conn, &tmp, NULL);
                 if (!rc) { 
@@ -378,7 +389,7 @@ static int lov_open(struct lustre_handle *conn, struct obdo *oa,
         for (i = 0; i < md->lmd_stripe_count; i++) {
                 /* create data objects with "parent" OA */ 
                 memcpy(&tmp, oa, sizeof(tmp));
-                oa->o_id = md->lmd_objects[i].l_object_id; 
+                tmp.o_id = md->lmd_oinfo[i].loi_id; 
 
                 rc = obd_open(&lov->tgts[i].conn, &tmp, NULL);
                 if (rc) { 
@@ -412,7 +423,7 @@ static int lov_close(struct lustre_handle *conn, struct obdo *oa,
         for (i = 0; i < md->lmd_stripe_count; i++) {
                 /* create data objects with "parent" OA */ 
                 memcpy(&tmp, oa, sizeof(tmp));
-                oa->o_id = md->lmd_objects[i].l_object_id; 
+                tmp.o_id = md->lmd_oinfo[i].loi_id; 
 
                 rc = obd_close(&lov->tgts[i].conn, &tmp, NULL);
                 if (!rc) { 
@@ -502,7 +513,7 @@ static int lov_punch(struct lustre_handle *conn, struct obdo *oa,
                         continue;
                 /* create data objects with "parent" OA */ 
                 memcpy(&tmp, oa, sizeof(tmp));
-                oa->o_id = md->lmd_objects[i].l_object_id; 
+                oa->o_id = md->lmd_oinfo[i].loi_id; 
 
                 rc = obd_punch(&lov->tgts[i].conn, &tmp, NULL,
                                starti, endi);
@@ -577,7 +588,7 @@ static inline int lov_brw(int cmd, struct lustre_handle *conn,
                         stripeinfo[i].index = 
                                 stripeinfo[i-1].index + stripeinfo[i-1].bufct;
                 stripeinfo[i].md.lmd_object_id = 
-                        md->lmd_objects[i].l_object_id;
+                        md->lmd_oinfo[i].loi_id;
         }
 
         for (i=0 ; i < oa_bufs ; i++ ) { 
@@ -614,6 +625,7 @@ static int lov_enqueue(struct lustre_handle *conn, struct lov_stripe_md *md,
         int rc = 0, i;
         struct obd_export *export = class_conn2export(conn);
         struct lov_obd *lov;
+        struct lov_stripe_md submd;
         ENTRY;
 
         if (!md) { 
@@ -628,14 +640,13 @@ static int lov_enqueue(struct lustre_handle *conn, struct lov_stripe_md *md,
         for (i = 0; i < md->lmd_stripe_count; i++) {
                 struct ldlm_extent *extent = (struct ldlm_extent *)cookie;
                 struct ldlm_extent sub_ext;
-                struct lov_stripe_md submd;
 
                 sub_ext.start = lov_offset(md, extent->start, i); 
                 sub_ext.end = lov_offset(md, extent->end, i); 
                 if ( sub_ext.start == sub_ext.end ) 
                         continue;
 
-                submd.lmd_object_id = md->lmd_objects[i].l_object_id;
+                submd.lmd_object_id = md->lmd_oinfo[i].loi_id;
                 submd.lmd_easize = sizeof(submd);
                 submd.lmd_stripe_count = md->lmd_stripe_count;
                 /* XXX submd is not fully initialized here */
@@ -644,7 +655,7 @@ static int lov_enqueue(struct lustre_handle *conn, struct lov_stripe_md *md,
                 // XXX add a lock debug statement here
                 if (rc) { 
                         CERROR("Error obd_enqueu object %Ld subobj %Ld\n", md->lmd_object_id,
-                               md->lmd_objects[i].l_object_id); 
+                               md->lmd_oinfo[i].loi_id); 
                 }
         }
         RETURN(rc);
@@ -673,12 +684,12 @@ static int lov_cancel(struct lustre_handle *conn, struct lov_stripe_md *md, __u3
                 if ( lockhs[i].addr == 0 )
                         continue;
 
-                submd.lmd_object_id = md->lmd_objects[i].l_object_id;
+                submd.lmd_object_id = md->lmd_oinfo[i].loi_id;
                 submd.lmd_easize = sizeof(submd);
                 rc = obd_cancel(&lov->tgts[i].conn, &submd, mode, &lockhs[i]);
                 if (!rc) { 
                         CERROR("Error punch object %Ld subobj %Ld\n", md->lmd_object_id,
-                               md->lmd_objects[i].l_object_id); 
+                               md->lmd_oinfo[i].loi_id); 
                 }
         }
         RETURN(rc);

@@ -108,7 +108,7 @@ static int mds_extN_setattr(struct dentry *dentry, void *handle,
 }
 
 static int mds_extN_set_md(struct inode *inode, void *handle,
-                           struct lov_stripe_md *md)
+                           struct lov_mds_md *md)
 {
         int rc;
 
@@ -134,7 +134,7 @@ static int mds_extN_set_md(struct inode *inode, void *handle,
         return rc;
 }
 
-static int mds_extN_get_md(struct inode *inode, struct lov_stripe_md *md)
+static int mds_extN_get_md(struct inode *inode, struct lov_mds_md *md)
 {
         int rc;
         int size = md->lmd_easize;

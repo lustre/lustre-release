@@ -406,7 +406,7 @@ static int mds_getlovinfo(struct ptlrpc_request *req)
                 RETURN(0);
         }
 
-        mds->mds_max_mdsize = sizeof(struct lov_stripe_md) + 
+        mds->mds_max_mdsize = sizeof(struct lov_mds_md) + 
                 tgt_count * sizeof(struct lov_object_id);
         rc = mds_get_lovtgts(req->rq_obd, tgt_count,
                              lustre_msg_buf(req->rq_repmsg, 1));
@@ -475,7 +475,7 @@ static int mds_getattr_internal(struct mds_obd *mds, struct dentry *dentry,
         mds_pack_inode2fid(&body->fid1, inode);
         mds_pack_inode2body(body, inode);
         if (S_ISREG(inode->i_mode)) {
-                struct lov_stripe_md *md;
+                struct lov_mds_md *md;
 
                 md = lustre_msg_buf(req->rq_repmsg, reply_off + 1);
                 md->lmd_easize = mds->mds_max_mdsize;
@@ -697,7 +697,7 @@ static int mds_open(struct ptlrpc_request *req)
         /* check if this inode has seen a delayed object creation */
         if (req->rq_reqmsg->bufcount > 1) {
                 void *handle;
-                struct lov_stripe_md *md;
+                struct lov_mds_md *md;
                 struct inode *inode = de->d_inode;
                 int rc;
 
@@ -1089,7 +1089,7 @@ static int mds_setup(struct obd_device *obddev, obd_count len, void *buf)
         if (!mds->mds_sb)
                 GOTO(err_put, rc = -ENODEV);
 
-        mds->mds_max_mdsize = sizeof(struct lov_stripe_md);
+        mds->mds_max_mdsize = sizeof(struct lov_mds_md);
         rc = mds_fs_setup(obddev, mnt);
         if (rc) {
                 CERROR("MDS filesystem method init failed: rc = %d\n", rc);
@@ -1311,7 +1311,7 @@ static int ldlm_intent_policy(struct ldlm_lock *lock, void *req_cookie,
                 /* If the client is about to open a file that doesn't have an MD
                  * stripe record, it's going to need a write lock. */
                 if (it->opc & IT_OPEN) {
-                        struct lov_stripe_md *md =
+                        struct lov_mds_md *md =
                                 lustre_msg_buf(req->rq_repmsg, 2);
                         if (md->lmd_easize == 0) {
                                 LDLM_DEBUG(lock, "open with no EA; returning PW"

@@ -105,7 +105,7 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
                            LDLM_REPLY_PORTAL, mdc->cl_ldlm_client);
         mdc->cl_client->cli_name = "mdc";
         mdc->cl_ldlm_client->cli_name = "ldlm";
-        mdc->cl_max_mdsize = sizeof(struct lov_stripe_md);
+        mdc->cl_max_mdsize = sizeof(struct lov_mds_md);
 
         MOD_INC_USE_COUNT;
         RETURN(0);

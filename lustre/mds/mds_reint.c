@@ -235,7 +235,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
         if (dchild->d_inode) {
                 struct mds_body *body;
                 struct inode *inode = dchild->d_inode;
-                struct lov_stripe_md *md;
+                struct lov_mds_md *md;
                 CDEBUG(D_INODE, "child exists (dir %ld, name %s, ino %ld)\n",
                        dir->i_ino, rec->ur_name, dchild->d_inode->i_ino);
 
@@ -316,7 +316,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
 
                 CDEBUG(D_INODE, "created ino %ld\n", dchild->d_inode->i_ino);
                 if (!offset && type == S_IFREG) {
-                        struct lov_stripe_md *md;
+                        struct lov_mds_md *md;
                         md = lustre_msg_buf(req->rq_reqmsg, 2);
                         rc = mds_fs_set_md(mds, inode, handle, md);
                         if (rc) {
@@ -447,7 +447,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                 break;
         case S_IFREG:
                 if ((inode->i_mode & S_IFMT) == S_IFREG && offset) {
-                        struct lov_stripe_md *md;
+                        struct lov_mds_md *md;
 
                         md = lustre_msg_buf(req->rq_repmsg, 2);
                         md->lmd_easize = mds->mds_max_mdsize;

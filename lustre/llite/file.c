@@ -100,7 +100,7 @@ static int ll_file_open(struct inode *inode, struct file *file)
 
         oa->o_id = lli->lli_smd->lmd_object_id;
         oa->o_mode = S_IFREG | inode->i_mode;
-        oa->o_valid = OBD_MD_FLMODE | OBD_MD_FLID;
+        oa->o_valid = OBD_MD_FLMODE | OBD_MD_FLID | OBD_MD_FLSIZE;
         rc = obd_open(ll_i2obdconn(inode), oa, lli->lli_smd);
         obdo_free(oa);
         oa = NULL;

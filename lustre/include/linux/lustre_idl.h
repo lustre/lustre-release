@@ -197,7 +197,7 @@ struct lov_object_id { /* per-child structure */
 
 #define LOV_MAGIC  0x0BD00BD0
 
-struct lov_stripe_md {
+struct lov_mds_md {
         __u32 lmd_magic;
         __u32 lmd_easize;          /* packed size of extended */
         __u64 lmd_object_id;       /* lov object id */

@@ -128,7 +128,7 @@ int mdc_getlovinfo(struct obd_device *obd, struct lustre_handle *mdc_connh,
                 *uuids = lustre_msg_buf(req->rq_repmsg, 1);
                 lov_unpackdesc(desc);
                 mdc->cl_max_mdsize = sizeof(struct lov_stripe_md) +
-                        desc->ld_tgt_count * sizeof(struct lov_object_id);
+                        desc->ld_tgt_count * sizeof(struct lov_oinfo);
         }
 
         EXIT;
@@ -386,7 +386,7 @@ int mdc_open(struct lustre_handle *conn, obd_id ino, int type, int flags,
         body->extra = cookie;
 
         if (smd != NULL)
-                memcpy(lustre_msg_buf(req->rq_reqmsg, 1), smd, smd->lmd_easize);
+                lov_packmd(lustre_msg_buf(req->rq_reqmsg, 1), smd);
 
         req->rq_replen = lustre_msg_size(1, size);
 

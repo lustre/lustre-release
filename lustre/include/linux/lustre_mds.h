@@ -193,9 +193,9 @@ struct mds_fs_operations {
         int     (* fs_setattr)(struct dentry *dentry, void *handle,
                                struct iattr *iattr);
         int     (* fs_set_md)(struct inode *inode, void *handle,
-                              struct lov_stripe_md *md);
+                              struct lov_mds_md *md);
         int     (* fs_get_md)(struct inode *inode,
-                              struct lov_stripe_md *md);
+                              struct lov_mds_md *md);
         ssize_t (* fs_readpage)(struct file *file, char *buf, size_t count,
                                 loff_t *offset);
         void    (* fs_delete_inode)(struct inode *inode);
@@ -236,13 +236,13 @@ static inline int mds_fs_setattr(struct mds_obd *mds, struct dentry *dentry,
 }
 
 static inline int mds_fs_set_md(struct mds_obd *mds, struct inode *inode,
-                                  void *handle, struct lov_stripe_md *md)
+                                  void *handle, struct lov_mds_md *md)
 {
         return mds->mds_fsops->fs_set_md(inode, handle, md);
 }
 
 static inline int mds_fs_get_md(struct mds_obd *mds, struct inode *inode,
-                                  struct lov_stripe_md *md)
+                                  struct lov_mds_md *md)
 {
         return mds->mds_fsops->fs_get_md(inode, md);
 }
