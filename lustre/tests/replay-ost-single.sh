@@ -12,7 +12,8 @@ init_test_env $@
 ostfailover_HOST=${ostfailover_HOST:-$ost_HOST}
 
 # Skip these tests
-ALWAYS_EXCEPT=""
+ALWAYS_EXCEPT="5"
+# test 5 needs a larger fs than what local normally has
 
 gen_config() {
     rm -f $XMLCONFIG
@@ -33,7 +34,7 @@ cleanup() {
     if [ $activeost != "ost" ]; then
         fail ost
     fi
-    zconf_umount $MOUNT
+    zconf_umount `hostname` $MOUNT
     stop mds ${FORCE} $MDSLCONFARGS
     stop ost ${FORCE} --dump cleanup.log
 }
@@ -51,21 +52,14 @@ rm -f ostactive
 gen_config
 
 start ost --reformat $OSTLCONFARGS
-PINGER=`cat /proc/fs/lustre/pinger`
 
-if [ "$PINGER" != "on" ]; then
-    echo "ERROR: Lustre must be built with --enable-pinger for this test."
-    stop ost
-    exit 1
-fi
 [ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
 start mds --reformat $MDSLCONFARGS
-zconf_mount $MOUNT
+zconf_mount `hostname` $MOUNT
 
 mkdir -p $DIR
 
 test_0() {
-    replay_barrier ost
     fail ost
     cp /etc/profile  $DIR/$tfile
     sync
@@ -74,7 +68,6 @@ test_0() {
 run_test 0 "empty replay"
 
 test_1() {
-    replay_barrier ost
     date > $DIR/$tfile
     fail ost
     $CHECKSTAT -t file $DIR/$tfile || return 1
@@ -82,7 +75,6 @@ test_1() {
 run_test 1 "touch"
 
 test_2() {
-    replay_barrier ost
     for i in `seq 10`; do
         echo "tag-$i" > $DIR/$tfile-$i
     done 
@@ -119,6 +111,17 @@ test_4() {
     rm -f $verify $DIR/$tfile
 }
 run_test 4 "Fail OST during read, with verification"
+
+test_5() {
+    IOZONE_OPTS="-i 0 -i 1 -i 2 -+d -r 64 -s 1g"
+    iozone $IOZONE_OPTS -f $DIR/$tfile &
+    PID=$!
+    
+    sleep 10
+    fail ost
+    wait $PID || return 1
+}
+run_test 5 "Fail OST during iozone"
 
 equals_msg test complete, cleaning up
 cleanup
