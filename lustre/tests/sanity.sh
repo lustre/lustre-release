@@ -1696,22 +1696,24 @@ test_51() {
 run_test 51 "special situations: split htree with empty entry =="
 
 test_51b() {
-	check_kernel_version 39 || return 0
+	NUMTEST=70000
+	check_kernel_version 40 || NUMTEST=31000
 	NUMFREE=`df -i -P $DIR | tail -n 1 | awk '{ print $4 }'`
-	[ $NUMFREE -lt 70000 ] && \
+	[ $NUMFREE -lt $NUMTEST ] && \
 		echo "skipping test 51b, not enough free inodes($NUMFREE)" && \
 		return
 	mkdir -p $DIR/d51b
-        (cd $DIR/d51b; mkdirmany t 70001)
+	(cd $DIR/d51b; mkdirmany t $NUMTEST)
 }
 run_test 51b "mkdir .../t-0 --- .../t-70000 ===================="
 
 test_51c() {
-	check_kernel_version 39 || return 0
+	NUMTEST=70000
+	check_kernel_version 40 || NUMTEST=31000
 	NUMFREE=`df -i -P $DIR | tail -n 1 | awk '{ print $4 }'`
-	[ $NUMFREE -lt 70000 ] && echo "skipping test 51c" && return
+	[ $NUMFREE -lt $NUMTEST ] && echo "skipping test 51c" && return
 	mkdir -p $DIR/d51b
-	(cd $DIR/d51b; rmdirmany t 70001)
+	(cd $DIR/d51b; rmdirmany t $NUMTEST)
 }
 run_test 51c "rmdir .../t-0 --- .../t-70000 ===================="
 
