@@ -545,8 +545,6 @@ ptlrpc_server_handle_request (struct ptlrpc_service *svc)
 
         rc = svc->srv_handler(request);
 
-        LASSERT(request);
-
         request->rq_phase = RQ_PHASE_COMPLETE;
 
         CDEBUG(D_RPCTRACE, "Handled RPC pname:cluuid+ref:pid:xid:ni:nid:opc "
