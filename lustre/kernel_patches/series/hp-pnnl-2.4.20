@@ -2,7 +2,7 @@ configurable-x86-stack-2.4.20.patch
 dev_read_only_hp_2.4.20.patch
 exports_2.4.20-rh-hp.patch
 lustre_version.patch
-vfs_intent-2.4.20-hp.patch
+vfs_intent-2.4.20-hp.patch 
 invalidate_show-2.4.20-hp.patch 
 export-truncate.patch
 iod-stock-24-exports_hp.patch

@@ -1474,14 +1474,36 @@ test_47() {
 }
 run_test 47 "Device nodes check ================================"
 
-test_48() {
-        mkdir $DIR/d48
-        cd $DIR/d48
-        mv $DIR/d48 $DIR/d48.new || error "move directory failed"
-        mkdir $DIR/d48 || error "recreate diectory failed"
-        ls || error "can't list after recreate directory"
+test_48a() {
+	mkdir $DIR/d48a
+	cd $DIR/d48a
+	mv $DIR/d48a $DIR/d48.new || error "move directory failed"
+	mkdir $DIR/d48a || error "recreate directory failed"
+	touch foo || error "'touch foo' failed after recreating cwd"
+	mkdir bar || error "'mkdir foo' failed after recreating cwd"
+	ls . || error "'ls .' failed after recreating cwd"
+	ls .. || error "'ls ..' failed after removing cwd"
+	cd . || error "'cd .' failed after recreating cwd"
+	mkdir . && error "'mkdir .' worked after recreating cwd"
+	rmdir . && error "'rmdir .' worked after recreating cwd"
+	ln -s . baz || error "'ln -s .' failed after recreating cwd"
 }
-run_test 48 "Access renamed current working directory =========="
+run_test 48a "Access renamed working dir (should return errors)="
+
+test_48b() {
+	mkdir $DIR/d48b
+	cd $DIR/d48b
+	rmdir $DIR/d48b || error "remove cwd $DIR/d48b failed"
+	touch foo && error "'touch foo' worked after removing cwd"
+	mkdir foo && error "'mkdir foo' worked after removing cwd"
+	ls . && error "'ls .' worked after removing cwd"
+	ls .. || error "'ls ..' failed after removing cwd"
+	cd . && error "'cd .' worked after recreate cwd"
+	mkdir . && error "'mkdir .' worked after removing cwd"
+	rmdir . && error "'rmdir .' worked after removing cwd"
+	ln -s . foo && error "'ln -s .' worked after removing cwd" || true
+}
+run_test 48b "Access removed working dir (should return errors)="
 
 test_50() {
 	# bug 1485
