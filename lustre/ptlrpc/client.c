@@ -504,20 +504,16 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
  resend:
         req->rq_time = CURRENT_TIME;
         req->rq_timeout = obd_timeout;
-        rc = ptl_send_rpc(req);
-        if (rc) {
-                CERROR("error %d, opcode %d\n", rc, req->rq_reqmsg->opc);
-                if ( rc > 0 ) 
-                        rc = -rc;
-                ptlrpc_cleanup_request_buf(req);
-                // up(&cli->cli_rpc_sem);
-                RETURN(-rc);
-        }
-
         spin_lock(&conn->c_lock);
         list_del(&req->rq_list);
         list_add_tail(&req->rq_list, &conn->c_sending_head);
         spin_unlock(&conn->c_lock);
+        rc = ptl_send_rpc(req);
+        if (rc) {
+                CERROR("error %d, opcode %d, need recovery\n", rc,
+                       req->rq_reqmsg->opc);
+                /* the sleep below will time out, triggering recovery */
+        }
 
         CDEBUG(D_OTHER, "-- sleeping\n");
         lwi = LWI_TIMEOUT_INTR(req->rq_timeout * HZ, expired_request,
