@@ -1,4 +1,4 @@
-CFLAGS:=-g -I. -I/usr/include/glib-1.2 -I/usr/lib/glib/include -I../include -Wall
+CFLAGS:=-g -I. -I/usr/include/glib-1.2 -I/usr/lib/glib/include -I../include -Wall -D_LARGEFILE64_SOURCE
 KFLAGS:=
 CPPFLAGS :=
 # LDADD := -lreadline -ltermcap # -lefence
