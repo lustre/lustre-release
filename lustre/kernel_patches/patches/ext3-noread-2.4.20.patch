@@ -3,8 +3,8 @@
  include/linux/ext3_fs.h |    2 +
  3 files changed, 121 insertions(+), 24 deletions(-)
 
---- linux-2.4.20/fs/ext3/ialloc.c~extN-noread-2.4.20	2003-05-04 16:41:22.000000000 +0800
-+++ linux-2.4.20-root/fs/ext3/ialloc.c	2003-05-04 17:19:29.000000000 +0800
+--- linux-2.4.20/fs/ext3/ialloc.c~ext3-noread-2.4.20	2003-05-16 12:21:39.000000000 +0800
++++ linux-2.4.20-root/fs/ext3/ialloc.c	2003-05-16 12:21:46.000000000 +0800
 @@ -289,6 +289,37 @@ error_return:
  }
  
@@ -73,8 +73,8 @@
  	
  	unlock_super (sb);
  	if(DQUOT_ALLOC_INODE(inode)) {
---- linux-2.4.20/fs/ext3/inode.c~extN-noread-2.4.20	2003-05-04 16:41:26.000000000 +0800
-+++ linux-2.4.20-root/fs/ext3/inode.c	2003-05-04 17:22:49.000000000 +0800
+--- linux-2.4.20/fs/ext3/inode.c~ext3-noread-2.4.20	2003-05-16 12:21:41.000000000 +0800
++++ linux-2.4.20-root/fs/ext3/inode.c	2003-05-16 12:22:15.000000000 +0800
 @@ -2013,14 +2013,19 @@ out_stop:
  	ext3_journal_stop(handle, inode);
  }
@@ -158,7 +158,7 @@
 + 		block_end = block + NUM_INODE_PREREAD;
 + 		if (block_end > itable_end)
 + 			block_end = itable_end;
-+ 
++		block++; 
 + 		for (; block < block_end; block++) {
 + 			bh[count] = sb_getblk(inode->i_sb, block);
 + 			if (count && (buffer_uptodate(bh[count]) ||
@@ -203,8 +203,8 @@
  void ext3_read_inode(struct inode * inode)
  {
  	struct ext3_iloc iloc;
---- linux-2.4.20/include/linux/ext3_fs.h~extN-noread-2.4.20	2003-05-04 16:41:22.000000000 +0800
-+++ linux-2.4.20-root/include/linux/ext3_fs.h	2003-05-04 17:19:29.000000000 +0800
+--- linux-2.4.20/include/linux/ext3_fs.h~ext3-noread-2.4.20	2003-05-16 12:21:39.000000000 +0800
++++ linux-2.4.20-root/include/linux/ext3_fs.h	2003-05-16 12:21:46.000000000 +0800
 @@ -683,6 +683,8 @@ extern int ext3_forget(handle_t *, int, 
  extern struct buffer_head * ext3_getblk (handle_t *, struct inode *, long, int, int *);
  extern struct buffer_head * ext3_bread (handle_t *, struct inode *, int, int, int *);
