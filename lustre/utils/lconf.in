@@ -1750,7 +1750,7 @@ def sys_set_timeout(timeout):
     # the command overrides the value in the node config
     if config.timeout > 0:
         timeout = config.timeout
-    if timeout > 0:
+    if timeout != None and timeout > 0:
         sysctl('lustre/timeout', timeout)
 
 def sys_set_ptldebug():
