@@ -33,12 +33,14 @@ runthreads() {
 
 	if [ -e endrun ]; then
 		rm endrun
-		echo "exiting because of endrun"
+		echo "exiting because endrun file was found"
 		exit 0
 	fi
 
 	$OBDCTL --threads $THR v '$OSCDEV' $DO $CNT $RW $V $PGS $OID || exit 1
 }
+
+OID=`$OBDCTL --device '$OSCDEV' create 1 | awk '/is object id/ { print $6 }'`
 
 # TODO: obdctl needs to check on the progress of each forked thread
 #       (IPC SHM, sockets?) to see if it hangs.
@@ -50,8 +52,6 @@ for CMD in test_getattr test_brw_write test_brw_read; do
 	test_getattr)
 		PG=
 		PGV=
-		OID=`$OBDCTL --device '$OSCDEV' create 1 | \
-			awk '/is object id/ { print $6 }'`
 		;;
 	test_brw_write)
 		PG=1
@@ -60,7 +60,7 @@ for CMD in test_getattr test_brw_write test_brw_read; do
 
 	test_brw_read)
 		PG=1
-		PGV=16
+		#PGV=16 # disabled until the BA OST code is updated
 		;;
 	esac
 
@@ -68,12 +68,6 @@ for CMD in test_getattr test_brw_write test_brw_read; do
 	# obdctl can monitor the forked thread for progress (TODO).
 	runthreads 1 $CMD 1 1 $PG
 	runthreads 1 $CMD 100 1 $PG
-
-	#cleanup_client || exit -1
-	#cleanup_server || exit -1
-
-	#setup_server || exit -1
-	#setup_client || exit -1
 
 	debug_server_off
 	debug_client_off
@@ -99,12 +93,11 @@ for CMD in test_getattr test_brw_write test_brw_read; do
 	[ "$PGV" ] && runthreads 10 $CMD 1000 1000 $PGV
 
 	runthreads 100 $CMD 10000 -30 $PG
-
-	[ "$CMD" = "test_brw_read" ] && $OBDCTL --device '$OSCDEV' destroy $OID
-
-	cleanup_client || exit -1
-	cleanup_server || exit -1
 done
 
+$OBDCTL --device '$OSCDEV' destroy $OID
+
+cleanup_client || exit -1
+cleanup_server || exit -1
 cleanup_lustre
 cleanup_portals
