@@ -354,6 +354,13 @@ static int lmv_disconnect(struct obd_export *exp, int flags)
                 obd_register_observer(lmv->tgts[i].ltd_exp->exp_obd, NULL);
 
                 rc = obd_disconnect(lmv->tgts[i].ltd_exp, flags);
+                if (rc) {
+                        if (lmv->tgts[i].active) {
+                                CERROR("Target %s disconnect error %d\n",
+                                       lmv->tgts[i].uuid.uuid, rc);
+                        }
+                        rc = 0;
+                }
                 if (lmv->tgts[i].active) {
                         lmv->desc.ld_active_tgt_count--;
                         lmv->tgts[i].active = 0;
