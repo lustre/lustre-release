@@ -164,12 +164,14 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                         if (!obd->obd_type)
                                 continue;
                         if (obd->obd_flags & OBD_SET_UP)
-                                status = "*";
+                                status = "UP";
+                        else if (obd->obd_flags & OBD_ATTACHED)
+                                status = "AT";
                         else
-                                status = " ";
-                        l = snprintf(buf2, remains, "%2d %s %s %s %s\n",
+                                status = "-";
+                        l = snprintf(buf2, remains, "%2d %s %s %s %s %d\n",
                                      i, status, obd->obd_type->typ_name,
-                                     obd->obd_name, obd->obd_uuid);
+                                     obd->obd_name, obd->obd_uuid, obd->obd_type->typ_refcnt);
                         buf2 +=l;
                         remains -=l;
                         if (remains <= 0) {
