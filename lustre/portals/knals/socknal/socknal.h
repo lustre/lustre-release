@@ -59,7 +59,7 @@
 #include <portals/lib-p30.h>
 
 #if CONFIG_SMP
-# define SOCKNAL_N_SCHED        smp_num_cpus    /* # socknal schedulers */
+# define SOCKNAL_N_SCHED       num_online_cpus() /* # socknal schedulers */
 #else
 # define SOCKNAL_N_SCHED        1               /* # socknal schedulers */
 #endif
