@@ -536,8 +536,8 @@ static int fsfilt_extN_read_record(struct file * file, void *buf,
         return size;
 }
 
-static int fsfilt_extN_write_record(struct file * file, void *buf,
-                                    int size, loff_t *offs)
+static int fsfilt_extN_write_record(struct file *file, void *buf, int size,
+                                    loff_t *offs, int force_sync)
 {
         struct buffer_head *bh;
         unsigned long block, boffs;
@@ -596,6 +596,9 @@ static int fsfilt_extN_write_record(struct file * file, void *buf,
                 goto out;
         }
         err = size;
+
+        if (force_sync)
+                handle->h_sync = 1; /* recovery likes this */
 out:
         if (bh)
                 brelse(bh);
