@@ -117,9 +117,9 @@ int ldlm_namespace_free(struct ldlm_namespace *ns)
                         if (rc == 0) {
                                 CERROR("Resource refcount nonzero (%d) after "
                                        "lock cleanup; forcing cleanup.\n",
-                                       res->lr_refcount);
+                                       atomic_read(&res->lr_refcount));
                                 ldlm_resource_dump(res);
-                                res->lr_refcount = 1;
+                                atomic_set(&res->lr_refcount, 1);
                                 rc = ldlm_resource_put(res);
                         }
                 }
@@ -319,9 +319,9 @@ void ldlm_resource_add_lock(struct ldlm_resource *res, struct list_head *head,
 
 void ldlm_resource_del_lock(struct ldlm_lock *lock)
 {
-        l_lock(&res->lr_namespace->ns_lock);
+        l_lock(&lock->l_resource->lr_namespace->ns_lock);
         list_del_init(&lock->l_res_link);
-        l_unlock(&res->lr_namespace->ns_lock);
+        l_unlock(&lock->l_resource->lr_namespace->ns_lock);
 }
 
 int ldlm_get_resource_handle(struct ldlm_resource *res, struct lustre_handle *h)
@@ -351,7 +351,7 @@ void ldlm_resource_dump(struct ldlm_resource *res)
                  (unsigned long long)res->lr_name[2]);
 
         CDEBUG(D_OTHER, "--- Resource: %p (%s) (rc: %d)\n", res, name,
-               res->lr_refcount);
+               atomic_read(&res->lr_refcount));
         CDEBUG(D_OTHER, "Namespace: %p (%s)\n", res->lr_namespace,
                res->lr_namespace->ns_name);
         CDEBUG(D_OTHER, "Parent: %p, root: %p\n", res->lr_parent, res->lr_root);

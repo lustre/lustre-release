@@ -123,3 +123,8 @@ echo "trucating to 4 bytes now..."
 ./truncate /mnt/lustre/iotest 4
 cat  /mnt/lustre/iotest
 
+umount /mnt/lustre
+mount -t lustre_lite -o ost=$OST,mds=$MDS none /mnt/lustre
+
+ls /mnt/lustre
+rmdir /mnt/lustre/foo
