@@ -614,7 +614,7 @@ Index: linux-2.4.19-pre1/fs/namei.c
 +
  /* SMP-safe */
 -static struct dentry *lookup_create(struct nameidata *nd, int is_dir)
-+static struct dentry *lookup_create(struct nameidata *nd, int is_dir,
++struct dentry *lookup_create(struct nameidata *nd, int is_dir,
 +				    struct lookup_intent *it)
  {
  	struct dentry *dentry;
@@ -1775,12 +1775,14 @@ Index: linux-2.4.19-pre1/include/linux/fs.h
  
  	/* Following are for knfsd to interact with "interesting" filesystems
  	 * Currently just reiserfs, but possibly FAT and others later
-@@ -1049,10 +1068,14 @@
+@@ -1049,10 +1068,16 @@
  
  asmlinkage long sys_open(const char *, int, int);
  asmlinkage long sys_close(unsigned int);	/* yes, it's really unsigned */
 -extern int do_truncate(struct dentry *, loff_t start);
 +extern int do_truncate(struct dentry *, loff_t start, int called_from_open);
++struct dentry *lookup_create(struct nameidata *nd, int is_dir,
++				    struct lookup_intent *it);
  
  extern struct file *filp_open(const char *, int, int);
  extern struct file * dentry_open(struct dentry *, struct vfsmount *, int);
@@ -1888,12 +1890,13 @@ Index: linux-2.4.19-pre1/kernel/ksyms.c
 ===================================================================
 --- linux-2.4.19-pre1.orig/kernel/ksyms.c	2003-11-21 02:51:37.000000000 +0300
 +++ linux-2.4.19-pre1/kernel/ksyms.c	2003-11-21 02:51:38.000000000 +0300
-@@ -260,6 +260,8 @@
+@@ -260,6 +260,9 @@
  EXPORT_SYMBOL(set_page_dirty);
  EXPORT_SYMBOL(vfs_readlink);
  EXPORT_SYMBOL(vfs_follow_link);
 +EXPORT_SYMBOL(vfs_follow_link_it);
 +EXPORT_SYMBOL(do_umount);
++EXPORT_SYMBOL(lookup_create);
  EXPORT_SYMBOL(page_readlink);
  EXPORT_SYMBOL(page_follow_link);
  EXPORT_SYMBOL(page_symlink_inode_operations);
