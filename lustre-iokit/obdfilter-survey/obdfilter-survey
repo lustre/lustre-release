@@ -1,0 +1,342 @@
+#!/bin/bash
+
+######################################################################
+# customize per survey
+
+# specify either the obdecho client names or the obdfilter names
+client_names=()
+ost_names=(ost{1,2,3,4,5,6,7,8})
+
+# result file prefix
+rslt=/tmp/obdfilter_survey
+
+# lustre root (leave blank unless running with own source)
+lustre_root=
+
+# what to do (we always do an initial write)
+#tests="rewrite read reread rewrite_again"
+tests="rewrite read"
+
+# total size (MBytes)
+# large enough to avoid cache effects
+size=8192
+
+# record size (KBytes)
+rszlo=1024
+rszhi=1024
+
+# number of objects per OST
+nobjlo=1
+nobjhi=32
+
+# threads per OST (1024 max)
+thrlo=1
+thrhi=128
+
+# restart from here iff all are defined
+restart_rsz=
+restart_thr=1
+restart_nobj=1
+
+# machine's page size
+PAGE_SIZE=64
+
+# max buffer_mem (total_threads * buffer size)
+# (to avoid lctl ENOMEM problems)
+max_buffer_mem=$((256*1024))
+
+#####################################################################
+
+snap=1
+verify=1
+
+check_obdecho() {
+    lsmod | grep obdecho > /dev/null 2>&1
+}
+
+check_obdecho
+load_obdecho=$(($? != 0))
+
+if [ -z "$lustre_root" ]; then
+    lctl=lctl
+    if ((load_obdecho)); then
+	modprobe obdecho
+    fi
+else
+    lctl=${lustre_root}/lctl
+    if ((load_obdecho)); then
+	if [ -f ${lustre_root}/obdecho/obdecho.ko ]; then
+	    insmod ${lustre_root}/obdecho/obdecho.ko
+	else
+	    insmod ${lustre_root}/obdecho/obdecho.o
+	fi
+    fi
+fi
+
+check_obdecho || (echo "Can't load obdecho"; exit 1)
+
+get_devno () {
+    local type=$1
+    local name=$2
+    $lctl device_list | awk "{if (\$2 == \"UP\" && \$3 == \"$type\" && \$4 == \"$name\") {\
+	                         print \$1; exit}}"
+}
+
+get_ec_devno () {
+    local idx=$1
+    local client_name=${client_names[idx]}
+    local ost_name=${ost_names[idx]}
+    if [ -z "$client_name" ]; then
+	if [ -z "$ost_name" ]; then
+	    echo "client and ost name both null" 1>&2
+	    return
+	fi
+	client_name=${ost_name}_echo_client
+    fi
+    ec=`get_devno echo_client $client_name`
+    if [ -n "$ec" ]; then
+	echo $ec $client_name 
+	return
+    fi
+    if [ -z "$ost_name" ]; then
+	echo "no echo client and ost_name not set" 1>&2
+	return
+    fi
+    ost=`get_devno obdfilter $ost_name`
+    if [ -z "$ost" ]; then
+	echo "OST $ost_name not setup" 1>&2
+	return
+    fi
+    $lctl <<EOF
+        attach echo_client $client_name ${client_name}_UUID
+	setup $ost_name
+EOF
+    ec=`get_devno echo_client $client_name`
+    if [ -z "$ec" ]; then
+	echo "Can't setup echo client" 1>&2
+	return
+    fi
+    echo $ec $client_name 1
+}
+
+teardown_ec_devno () {
+    local idx=$1
+    local client_name=${client_names[$idx]}
+    if ((do_teardown_ec[$idx])); then
+	$lctl <<EOF
+	cfg $client_name
+	cleanup
+	detach
+EOF
+   fi
+}
+
+create_objects () {
+    # create a set of objects, check there are 'n' contiguous ones and
+    # return the first or 'ERROR'
+    local devno=$1
+    local nobj=$2
+    local rfile=$3
+    $lctl --device $devno create $nobj > $rfile 2>&1
+    n=(`awk < $rfile \
+	'/is object id/ {obj=strtonum($6);\
+	                 first=!not_first; not_first=1;\
+	                 if (first) first_obj=obj;
+		         else if (obj != prev + 1) exit;\
+	                 prev=obj; n++}\
+            END {printf "%d %d\n", first_obj, n}'`)
+    if ((n[1] != nobj)); then
+	echo "ERROR"
+    else
+	echo ${n[0]}
+    fi
+}
+
+destroy_objects () {
+    local devno=$1
+    local obj0=$2
+    local nobj=$3
+    local rfile=$4
+    $lctl --device $devno destroy $obj0 $nobj > $rfile 2>&1
+}
+
+get_stats () {
+    local rfile=$1
+    awk < $rfile \
+	'/^Selected device [0-9]+$/ {n = 0; next}\
+	/error/ {n = -1; exit}\
+	/^[0-9]+\/[0-9]+ Total: [0-9]+\.[0-9]+\/second$/ {n++; v=strtonum($3); \
+	                                                  if (n == 1 || v < min) min = v;\
+	                                                  if (n == 1 || v > max) max = v;\
+	                                                  next}\
+        {if (n != 0) {n = -1; exit}}\
+	END {printf "%d %f %f\n", n, min, max}'
+}
+
+get_global_stats () {
+    local rfile=$1
+    awk < $rfile 'BEGIN {n = 0;}\
+	          {n++; if (n == 1) {err = $1; min = $2; max = $3} else\
+	                            {if ($1 < err) err = $1;\
+                                     if ($2 < min) min = $2;\
+				     if ($3 > max) max = $3}}\
+	          END {if (n == 0) err = 0;\
+		       printf "%d %f %f\n", err, min, max}'
+}
+
+testname2type () {
+    # 'x' disables data check
+    if ((verify)); then
+	x=""
+    else
+	x="x"
+    fi
+    case $1 in
+	*write*)  echo "w$x";;
+	*)        echo "r$x";;
+    esac
+}
+
+start=`date +%F@%R`
+rsltf="${rslt}_${start}.summary"
+echo -n > $rsltf
+workf="${rslt}_${start}.detail"
+echo -n > $workf
+
+print_summary () {
+    if [ "$1" = "-n" ]; then
+	minusn=$1; shift
+    else
+	minusn=""
+    fi
+    echo $minusn "$*" >> $rsltf
+    echo $minusn "$*"
+}
+
+ndevs=${#client_names[@]}
+if ((ndevs < ${#ost_names[@]} )); then
+    ndevs=${#ost_names[@]}
+fi
+
+for ((idx = 0; idx < ndevs; idx++)); do
+    devno=(`get_ec_devno $idx`)
+    if ((${#devno[@]} < 2)); then
+	exit 1
+    fi
+    devnos[$idx]=${devno[0]}
+    client_names[$idx]=${devno[1]}
+    do_teardown_ec[$idx]=$((${#devno[@]} > 2))
+done
+
+echo 0 > /proc/sys/portals/debug
+
+for ((rsz=$rszlo;rsz<=$rszhi;rsz*=2)); do
+    for ((nobj=$nobjlo;nobj<=$nobjhi;nobj*=2)); do 
+	for ((thr=$thrlo;thr<=$thrhi;thr*=2)); do
+	    if ((thr < nobj)); then
+		continue
+	    fi
+	    # restart?
+	    if [ -n "$restart_rsz" -a\
+		 -n "$restart_nobj" -a\
+		 -n "$restart_thr" ]; then
+		if ((rsz < restart_rsz ||\
+		     (rsz == restart_rsz &&\
+		      (nobj < restart_nobj ||\
+		       (nobj == restart_nobj &&\
+			thr < restart_thr))))); then
+		    continue;
+		fi
+	    fi
+	    # compute parameters
+	    total_thr=$((ndevs*thr))
+	    total_nobj=$((ndevs*nobj))
+	    pages=$((rsz/PAGE_SIZE))
+	    actual_rsz=$((pages*PAGE_SIZE))
+	    count=$((size*1024/(actual_rsz*thr)))
+	    actual_size=$((actual_rsz*count*thr))
+            total_size=$((actual_size*ndevs))
+	    # show computed parameters
+	    str=`printf 'ost %2d sz %8dK rsz %4d obj %4d thr %4d ' \
+		     $ndevs $total_size $actual_rsz $total_nobj $total_thr`
+	    echo "=======================> $str" >> $workf
+	    print_summary -n "$str"
+	    if ((total_thr * actual_rsz > max_buffer_mem)); then
+		print_summary "Too much buffer space"
+		continue
+	    fi
+	    # create the objects
+	    tmpf="${workf}_tmp"
+	    for ((idx=0; idx < ndevs; idx++)); do
+		devno=${devnos[$idx]}
+		first_obj=`create_objects $devno $nobj $tmpf`
+		echo "========> Create [$idx]" >> $workf
+		cat $tmpf >> $workf
+		rm $tmpf
+		if [ $first_obj = "ERROR" ]; then
+		    print_summary "created object #s [$idx] not contiguous"
+		    exit 1
+		fi
+		first_objs[$idx]=$first_obj
+	    done
+	    for test in write $tests; do
+		print_summary -n "$test "
+		t0=`date +%s.%N`
+		for ((idx=0; idx < ndevs; idx++)); do
+		    devno=${devnos[$idx]}
+		    tmpfi="${tmpf}_$idx"
+		    first_obj=${first_objs[$idx]}
+		    $lctl > $tmpfi 2>&1 \
+			--threads $thr -$snap $devno \
+			test_brw $count `testname2type $test` q $pages ${thr}t${first_obj} &
+		done
+		wait
+		t1=`date +%s.%N`
+		str=`awk "BEGIN {printf \"%7.2f \",\
+		         $total_size / (( $t1 - $t0 ) * 1024)}"`
+		print_summary -n "$str"
+		echo -n > $tmpf
+		for ((idx=0; idx < ndevs; idx++)); do
+		    tmpfi="${tmpf}_$idx"
+		    echo "========> $test [$idx]" >> $workf
+		    cat $tmpfi >> $workf
+		    get_stats $tmpfi >> $tmpf
+		    rm $tmpfi
+		done
+		echo "========> $test [$idx] global" >> $workf
+		cat $tmpf >> $workf
+		stats=(`get_global_stats $tmpf`)
+		rm $tmpf
+		if ((stats[0] <= 0)); then
+		    if ((stats[0] < 0)); then
+			str=`printf "%15s " ERROR`
+		    else
+			str=`printf "%15s " SHORT`
+		    fi
+		else
+		    str=`awk "BEGIN {printf \"[%6.2f,%6.2f] \",\
+			     (${stats[1]} * $actual_rsz)/1024,\
+			     (${stats[2]} * $actual_rsz)/1024; exit}"`
+		fi
+		print_summary -n "$str"
+	    done
+	    print_summary ""
+	    for ((idx=0; idx < ndevs; idx++)); do
+		devno=${devnos[$idx]}
+		first_obj=${first_objs[$idx]}
+		destroy_objects $devno $first_obj $nobj $tmpf
+		echo "========> Destroy [$idx]" >> $workf
+		cat $tmpf >> $workf
+		rm $tmpf
+	    done
+	done
+    done
+done
+
+for ((idx=0; idx < ndevs; idx++)); do
+    teardown_ec_devno $idx
+done
+
+if ((load_obdecho)); then
+    rmmod obdecho
+fi

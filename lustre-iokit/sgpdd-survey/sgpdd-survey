@@ -74,8 +74,8 @@ for ((rsz=$rszlo;rsz<=$rszhi;rsz*=2)); do
 	    # show computed parameters
 	    actual_rsz=$((bpt*bs/1024))
 	    actual_size=$((bs*count*crg/1024))
-	    str=`printf 'total_size %8dK rsz %4d thr %5d crg %3d ' \
-		         $actual_size $actual_rsz $thr $crg`
+	    str=`printf 'total_size %8dK rsz %4d crg %5d thr %3d ' \
+		         $actual_size $actual_rsz $crg $thr`
 	    echo "==============> $str" >> $workf
 	    print_summary -n "$str"
 	    freemem=`awk < /proc/meminfo '/^MemTotal:/ {printf "%d\n", $2}'`

@@ -1,0 +1,98 @@
+
+Requirements
+------------
+
+. lustre OSS up and running
+
+
+Overview
+--------
+
+This survey may be used to characterise the performance of a lustre OSS.
+It can exercise the OSS either locally or remotely via the network.
+
+The script uses lctl::test_brw to drive the echo_client doing sequential
+I/O with varying numbers of threads and objects.  One instance of lctl is
+spawned for each OST.
+
+
+Running
+-------
+
+The script must be customised according to the particular device under test
+and where it should keep its working files.   Customisation variables are
+described clearly at the start of the script.
+
+When the script runs, it creates a number of working files and a pair of
+result files.  All files start with the prefix given by ${rslt}.
+
+${rslt}_<date/time>.summary       same as stdout
+${rslt}_<date/time>.detail_tmp*   tmp files
+${rslt}_<date/time>.detail        collected tmp files for post-mortem
+
+The script iterates over the given numbers of threads and objects
+performing all the specified tests and checking that all test processes
+completed successfully.
+
+
+Local OSS
+---------
+
+To test a local OSS, setup 'ost_names' with the names of each OST.  If you
+are unsure, do 'lctl device_list' and looks for obdfilter instanced e.g...
+
+[root@ns9 root]# lctl device_list
+  0 UP confobd conf_ost3 OSD_ost3_ns9_UUID 1
+  1 UP obdfilter ost3 ost3_UUID 1
+  2 UP ost OSS OSS_UUID 1
+  3 AT confobd conf_ost12 OSD_ost12_ns9_UUID 1
+[root@ns9 root]# 
+
+Here device number 1 is an obdfilter instance called 'ost3'.
+
+The script configures an instance of echo_client for each name in ost_names
+and tears it down on normal completion.  Note that it does NOT clean up
+properly (i.e. manual cleanup is required) if it is not allowed to run to
+completion.
+
+
+Remote OSS
+----------
+
+To test OSS performance over the network, you need to create a lustre
+configuration that creates echo_client instances for each OST.
+
+
+Script output
+-------------
+
+The summary file and stdout contain lines like...
+
+ost 8 sz 67108864K rsz 1024 obj    8 thr    8 write  613.54 [ 64.00, 82.00] 
+
+ost 8          is the total number of OSTs under test.
+sz 67108864K   is the total amount of data read or written (in K).
+rsz 1024       is the record size (size of each echo_client I/O).
+obj    8       is the total number of objects over all OSTs
+thr    8       is the total number of threads over all OSTs and objects
+write          is the test name.  If more tests have been specified they
+               all appear on the same line.
+613.54         is the aggregate bandwidth over all OSTs measured by
+	       dividing the total number of MB by the elapsed time.
+[64.00, 82.00] are the minimum and maximum instantaneous bandwidths seen on
+               any individual OST.  
+
+Note that although the numbers of threads and objects are specifed per-OST
+in the customisation section of the script, results are reported aggregated
+over all OSTs.
+
+
+Visualising Results
+-------------------
+
+I've found it most useful to import the summary data (it's fixed width)
+into Excel (or any graphing package) and graph bandwidth v. # threads for
+varying numbers of concurrent regions.  This shows how the device performs
+with varying queue depth.  If the series (varying numbers of concurrent
+regions) all seem to land on top of each other, it shows the device is
+phased by seeks at the given record size.
