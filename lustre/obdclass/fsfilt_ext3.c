@@ -267,18 +267,22 @@ static int fsfilt_ext3_setattr(struct dentry *dentry, void *handle,
         if (iattr->ia_valid & ATTR_SIZE && !do_trunc) {
                 /* ATTR_SIZE would invoke truncate: clear it */
                 iattr->ia_valid &= ~ATTR_SIZE;
-                inode->i_size = iattr->ia_size;
+                EXT3_I(inode)->i_disksize = inode->i_size = iattr->ia_size;
 
                 /* make sure _something_ gets set - so new inode
                  * goes to disk (probably won't work over XFS */
-                if (!iattr->ia_valid & ATTR_MODE) {
+                if (!(iattr->ia_valid & (ATTR_MODE | ATTR_MTIME | ATTR_CTIME))){
                         iattr->ia_valid |= ATTR_MODE;
                         iattr->ia_mode = inode->i_mode;
                 }
         }
-        if (inode->i_op->setattr)
+
+        /* Don't allow setattr to change file type */
+        iattr->ia_mode = (inode->i_mode & S_IFMT)|(iattr->ia_mode & ~S_IFMT);
+
+        if (inode->i_op->setattr) {
                 rc = inode->i_op->setattr(dentry, iattr);
-        else{
+        } else {
                 rc = inode_change_ok(inode, iattr);
                 if (!rc)
                         rc = inode_setattr(inode, iattr);
