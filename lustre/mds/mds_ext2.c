@@ -56,9 +56,11 @@ static int mds_ext2_setattr(struct inode *inode, void *handle,
  * FIXME: nasty hack - store the object id in the first two
  *        direct block spots.  This should be done with EAs...
  */
+#define EXT2_OBJID_FL   0x40000000
 static int mds_ext2_set_objid(struct inode *inode, void *handle, obd_id id)
 {
         memcpy(inode->u.ext2_i.i_data, &id, sizeof(id));
+        inode->u.ext2_i.i_flags |= EXT2_OBJID_FL;
         return 0;
 }
 
@@ -78,13 +80,12 @@ static ssize_t mds_ext2_readpage(struct file *file, char *buf, size_t count,
 
 struct mds_fs_operations mds_ext2_fs_ops;
 
-void mds_ext2_delete_inode(struct inode * inode)
+void mds_ext2_delete_inode(struct inode *inode)
 {
-        if (!S_ISDIR(inode->i_mode))
+        if (inode->u.ext2_i.i_flags & EXT2_OBJID_FL)
                 mds_ext2_set_objid(inode, NULL, 0);
 
-        if (mds_ext2_fs_ops.cl_delete_inode)
-                mds_ext2_fs_ops.cl_delete_inode(inode);
+        mds_ext2_fs_ops.cl_delete_inode(inode);
 }
 
 struct mds_fs_operations mds_ext2_fs_ops = {
@@ -95,5 +96,5 @@ struct mds_fs_operations mds_ext2_fs_ops = {
         fs_get_objid:   mds_ext2_get_objid,
         fs_readpage:    mds_ext2_readpage,
         fs_delete_inode:mds_ext2_delete_inode,
-        cl_delete_inode:NULL,
+        cl_delete_inode:clear_inode,
 };

@@ -79,10 +79,11 @@ static int mds_ext3_setattr(struct inode *inode, void *handle,
  * FIXME: nasty hack - store the object id in the first two
  *        direct block spots.  This should be done with EAs...
  */
+#define EXT3_OBJID_FL   0x40000000
 static int mds_ext3_set_objid(struct inode *inode, void *handle, obd_id id)
 {
         memcpy(&EXT3_I(inode)->i_data, &id, sizeof(id));
-
+        EXT3_I(inode)->i_flags |= EXT3_OBJID_FL;
         return 0;
 }
 
@@ -124,10 +125,10 @@ void mds_ext3_delete_inode(struct inode * inode)
 {
         void *handle;
 
-        if (!S_ISDIR(inode->i_mode)) {
+        if (EXT3_I(inode)->i_flags & EXT3_OBJID_FL) {
                 handle = mds_ext3_start(inode, MDS_FSOP_UNLINK);
 
-                if (!IS_ERR(handle)) {
+                if (IS_ERR(handle)) {
                         CERROR("unable to start transaction");
                         EXIT;
                         return;
@@ -140,7 +141,7 @@ void mds_ext3_delete_inode(struct inode * inode)
 
                 if (mds_ext3_commit(inode, handle))
                         CERROR("error closing handle on %ld\n", inode->i_ino);
-        } else if (mds_ext3_fs_ops.cl_delete_inode)
+        } else
                 mds_ext3_fs_ops.cl_delete_inode(inode);
 }
 
@@ -152,5 +153,5 @@ struct mds_fs_operations mds_ext3_fs_ops = {
         fs_get_objid:   mds_ext3_get_objid,
         fs_readpage:    mds_ext3_readpage,
         fs_delete_inode:mds_ext3_delete_inode,
-        cl_delete_inode:NULL,
+        cl_delete_inode:clear_inode,
 };
