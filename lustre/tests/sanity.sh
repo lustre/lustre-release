@@ -473,6 +473,21 @@ pass
 $CLEAN
 $START
 
+echo '== IT_GETATTR regression  ======================== test28'
+mkdir $MOUNT/d28
+touch $MOUNT/d28/foo
+MDCDIR=${MDCDIR:-/proc/lustre/devices/ldlm/MDC_mds1}
+LOCKCOUNTORIG=`cat $MDCDIR/lock_count`
+LOCKUNUSEDCOUNTORIG=`cat $MDCDIR/lock_unused_count`
+ls -l $MOUNT/d28
+LOCKCOUNTCURRENT=`cat $MDCDIR/lock_count`
+LOCKUNUSEDCOUNTCURRENT=`cat $MDCDIR/lock_unused_count`
+if [ $LOCKCOUNTCURRENT -gt $LOCKCOUNTORIG ] || [ $LOCKUNUSEDCOUNTCURRENT -gt $LOCKUNUSEDCOUNTORIG ]; then
+    error
+fi
+pass
+$CLEAN
+$START
 
 echo '== cleanup ============================================='
 rm -r $MOUNT/[Rdfs][1-9]*
