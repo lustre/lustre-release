@@ -127,6 +127,8 @@ kportal_descriptor_setup (nal_cb_t *nal)
 void
 kportal_descriptor_cleanup (nal_cb_t *nal)
 {
+        int rc;
+
         if (--ptl_slab_users != 0)
                 return;
 
@@ -135,14 +137,26 @@ kportal_descriptor_cleanup (nal_cb_t *nal)
         LASSERT (atomic_read (&eq_in_use_count) == 0);
         LASSERT (atomic_read (&msg_in_use_count) == 0);
 
-        if (ptl_md_slab != NULL)
-                kmem_cache_destroy(ptl_md_slab);
-        if (ptl_msg_slab != NULL)
-                kmem_cache_destroy(ptl_msg_slab);
-        if (ptl_me_slab != NULL)
-                kmem_cache_destroy(ptl_me_slab);
-        if (ptl_eq_slab != NULL)
-                kmem_cache_destroy(ptl_eq_slab);
+        if (ptl_md_slab != NULL) {
+                rc = kmem_cache_destroy(ptl_md_slab);
+                if (rc != 0)
+                        CERROR("unable to free MD slab\n");
+        }
+        if (ptl_msg_slab != NULL) {
+                rc = kmem_cache_destroy(ptl_msg_slab);
+                if (rc != 0)
+                        CERROR("unable to free MSG slab\n");
+        }
+        if (ptl_me_slab != NULL) {
+                rc = kmem_cache_destroy(ptl_me_slab);
+                if (rc != 0)
+                        CERROR("unable to free ME slab\n");
+        }
+        if (ptl_eq_slab != NULL) {
+                rc = kmem_cache_destroy(ptl_eq_slab);
+                if (rc != 0)
+                        CERROR("unable to free EQ slab\n");
+        }
 }
 #else
 
