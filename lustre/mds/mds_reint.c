@@ -2219,10 +2219,10 @@ static int mds_reint_link_acquire(struct mds_update_record *rec,
         de_src->d_inode->i_nlink++;
         mark_inode_dirty(de_src->d_inode);
 
+        EXIT;
 cleanup:
         rc = mds_finish_transno(mds, de_src ? de_src->d_inode : NULL,
                                         handle, req, rc, 0);
-        EXIT;
         switch (cleanup_phase) {
                 case 2:
                         if (rc)
@@ -2277,9 +2277,8 @@ static int mds_reint_link_to_remote(struct mds_update_record *rec,
         if (op_data == NULL)
                 GOTO(cleanup, rc = -ENOMEM);
 
+        memset(op_data, 0, sizeof(*op_data));
         op_data->id1 = *(rec->ur_id1);
-        op_data->namelen = 0;
-        op_data->name = NULL;
         rc = md_link(mds->mds_md_exp, op_data, &request);
         OBD_FREE(op_data, sizeof(*op_data));
         if (rc)
@@ -2297,22 +2296,40 @@ static int mds_reint_link_to_remote(struct mds_update_record *rec,
                 GOTO(cleanup, rc);
         }
         
+        cleanup_phase = 3;
+
         rc = fsfilt_add_dir_entry(obd, de_tgt_dir, rec->ur_name,
                                   rec->ur_namelen - 1, id_ino(rec->ur_id1),
                                   id_gen(rec->ur_id1), id_group(rec->ur_id1),
                                   id_fid(rec->ur_id1));
-        cleanup_phase = 3;
-
+        EXIT;
 cleanup:
         rc = mds_finish_transno(mds, de_tgt_dir ? de_tgt_dir->d_inode : NULL,
                                 handle, req, rc, 0);
-        EXIT;
 
         switch (cleanup_phase) {
                 case 3:
                         if (rc) {
-                                /* FIXME: drop i_nlink on remote inode here */
-                                CERROR("MUST drop drop i_nlink here\n");
+                                OBD_ALLOC(op_data, sizeof(*op_data));
+                                if (op_data != NULL) {
+                                        request = NULL;
+                                        memset(op_data, 0, sizeof(*op_data));
+
+                                        op_data->id1 = *(rec->ur_id1);
+                                        op_data->create_mode = rec->ur_mode;
+                                        
+                                        rc = md_unlink(mds->mds_md_exp, op_data, &request);
+                                        OBD_FREE(op_data, sizeof(*op_data));
+                                        if (request)
+                                                ptlrpc_req_finished(request);
+                                        if (rc) {
+                                                CERROR("error %d while dropping i_nlink on "
+                                                       "remote inode\n", rc);
+                                        }
+                                } else {
+                                        CERROR("rc %d prevented dropping i_nlink on "
+                                               "remote inode\n", -ENOMEM);
+                                }
                         }
                 case 2:
                 case 1:
@@ -2369,7 +2386,6 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
         MDS_CHECK_RESENT(req, mds_reconstruct_generic(req));
         MD_COUNTER_INCREMENT(obd, link);
         
-//      memset(tgt_dir_lockh, 0, 2*sizeof(tgt_dir_lockh[0]));
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_LINK))
                 GOTO(cleanup, rc = -ENOENT);
 
@@ -2855,8 +2871,7 @@ static int mds_check_for_rename(struct obd_device *obd,
 
 static int mds_add_local_dentry(struct mds_update_record *rec, int offset,
                                 struct ptlrpc_request *req, struct lustre_id *id,
-                                struct dentry *de_dir, struct dentry *de,
-                                int del_cross_ref)
+                                struct dentry *de_dir, struct dentry *de)
 {
         struct obd_device *obd = req->rq_export->exp_obd;
         struct mds_obd *mds = mds_req2mds(req);
@@ -2906,22 +2921,16 @@ static int mds_add_local_dentry(struct mds_update_record *rec, int offset,
                  * so add this notice here just to make it visible for the rest
                  * of developers and do not forget about. And when this check
                  * will be added, del_cross_ref should gone, that is local
-                 * dentry is able to be removed if all checks passed.
-                 * 
-                 * Currently -EEXISTS is returned by fsfilt_add_dir_entry() what
-                 * is not fully correct. --umka
+                 * dentry is able to be removed if all checks passed. --umka
                  */
 
-                if (del_cross_ref) {
-                        handle = fsfilt_start(obd, de_dir->d_inode,
-                                              FSFILT_OP_RENAME, NULL);
-                        if (IS_ERR(handle))
-                                GOTO(cleanup, rc = PTR_ERR(handle));
-                        rc = fsfilt_del_dir_entry(req->rq_export->exp_obd, de);
-                        if (rc)
-                                GOTO(cleanup, rc);
-                }
-                
+                handle = fsfilt_start(obd, de_dir->d_inode,
+                                      FSFILT_OP_RENAME, NULL);
+                if (IS_ERR(handle))
+                        GOTO(cleanup, rc = PTR_ERR(handle));
+                rc = fsfilt_del_dir_entry(req->rq_export->exp_obd, de);
+                if (rc)
+                        GOTO(cleanup, rc);
         } else {
                 /* name doesn't exist. the simplest case. */
                 handle = fsfilt_start(obd, de_dir->d_inode,
@@ -2938,12 +2947,12 @@ static int mds_add_local_dentry(struct mds_update_record *rec, int offset,
                 GOTO(cleanup, rc);
         }
 
-cleanup:
         EXIT;
+cleanup:
         rc = mds_finish_transno(mds, de_dir ? de_dir->d_inode : NULL,
                                 handle, req, rc, 0);
 
-        RETURN(rc);
+        return rc;
 }
 
 static int mds_del_local_dentry(struct mds_update_record *rec, int offset,
@@ -2962,11 +2971,11 @@ static int mds_del_local_dentry(struct mds_update_record *rec, int offset,
         rc = fsfilt_del_dir_entry(obd, de);
         d_drop(de);
 
-cleanup:
         EXIT;
+cleanup:
         rc = mds_finish_transno(mds, de_dir ? de_dir->d_inode : NULL,
                                 handle, req, rc, 0);
-        RETURN(0);
+        return rc;
 }
 
 static int mds_reint_rename_create_name(struct mds_update_record *rec,
@@ -3005,7 +3014,7 @@ static int mds_reint_rename_create_name(struct mds_update_record *rec,
         LASSERT(de_new);
 
         rc = mds_add_local_dentry(rec, offset, req, rec->ur_id1,
-                                  de_tgtdir, de_new, 0);
+                                  de_tgtdir, de_new);
 
         EXIT;
 cleanup:
@@ -3284,7 +3293,7 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
                 mds_pack_dentry2id(obd, &old_id, de_old, 1);
 
                 rc = mds_add_local_dentry(rec, offset, req, &old_id,
-                                          de_tgtdir, de_new, 1);
+                                          de_tgtdir, de_new);
                 if (rc)
                         GOTO(cleanup, rc);
 

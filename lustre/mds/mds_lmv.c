@@ -1153,7 +1153,14 @@ int mds_lock_and_check_slave(int offset, struct ptlrpc_request *req,
         }
         cleanup_phase = 1;
 
-        LASSERT(S_ISDIR(dentry->d_inode->i_mode));
+        /* 
+         * handling the case when remote MDS checks if dir is empty before
+         * rename. But it also does it for all entries, because inode is stored
+         * here and remote MDS does not know if rename point to dir or to reg
+         * file. So we check it here.
+         */
+	if (!S_ISDIR(dentry->d_inode->i_mode))
+		GOTO(cleanup, rc = 0);
 
         rc = mds_init_ucred(&uc, rsd);
         if (rc) {
