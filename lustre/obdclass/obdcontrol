@@ -73,13 +73,14 @@ eval 'sub OBD_SNAP_RESTORE() { &_IOC(3, ord(\'f\'), 43, 4);}' unless
 eval 'sub OBD_EXT2_RUNIT () { &_IOC(3, ord(\'f\'), 61, 4);}' unless
   defined(&OBD_EXT2_RUNIT);
 
-eval 'sub ATTR_MODE () {1;}' unless defined(&ATTR_MODE);
-eval 'sub ATTR_UID () {2;}' unless defined(&ATTR_UID);
-eval 'sub ATTR_GID () {4;}' unless defined(&ATTR_GID);
-eval 'sub ATTR_SIZE () {8;}' unless defined(&ATTR_SIZE);
-eval 'sub ATTR_ATIME () {16;}' unless defined(&ATTR_ATIME);
-eval 'sub ATTR_MTIME () {32;}' unless defined(&ATTR_MTIME);
-eval 'sub ATTR_CTIME () {64;}' unless defined(&ATTR_CTIME);
+eval 'sub OBD_MD_FLALL   () {~0;}'   unless defined(&OBD_MD_FLALL);
+eval 'sub OBD_MD_FLATIME () {1<<1;}' unless defined(&OBD_MD_FLATIME);
+eval 'sub OBD_MD_FLMTIME () {1<<2;}' unless defined(&OBD_MD_FLMTIME);
+eval 'sub OBD_MD_FLCTIME () {1<<3;}' unless defined(&OBD_MD_FLCTIME);
+eval 'sub OBD_MD_FLSIZE  () {1<<4;}' unless defined(&OBD_MD_FLSIZE);
+eval 'sub OBD_MD_FLMODE  () {1<<7;}' unless defined(&OBD_MD_FLMODE);
+eval 'sub OBD_MD_FLUID   () {1<<8;}' unless defined(&OBD_MD_FLUID);
+eval 'sub OBD_MD_FLGID   () {1<<9;}' unless defined(&OBD_MD_FLGID);
 
 use Getopt::Long;
 use File::stat;
@@ -171,7 +172,7 @@ sub obdo_print {
 
     my $obdo = shift;
 
-    printf "id: %d\ngrp: %d\natime: %s\nmtime: %s\nctime: %s\nsize: %d\nblocks: %d\nblksize: %d\nmode: %x\nuid: %d\ngid: %d\nflags: %x\nobdflags: %x\nnlink: %d\nvalid: %x\ninline: %s\nobdmd: %s\n", 
+    printf "id: %d\ngrp: %d\natime: %s\nmtime: %s\nctime: %s\nsize: %d\nblocks: %d\nblksize: %d\nmode: %o\nuid: %d\ngid: %d\nflags: %x\nobdflags: %x\nnlink: %d\nvalid: %x\ninline: %s\nobdmd: %s\n",
     $obdo->{id},
     $obdo->{gr},
     $obdo->{atime},
@@ -185,8 +186,8 @@ sub obdo_print {
     $obdo->{gid},
     $obdo->{flags},
     $obdo->{obdflags},
-    $obdo->{nlink}, 	
-    $obdo->{valid},	
+    $obdo->{nlink},
+    $obdo->{valid},
     $obdo->{inline},
     $obdo->{obdmd};
 }
@@ -384,7 +385,8 @@ usage:
 	$data = pack("iii", $snapdev, $snapidx, $tableno);
 	$datalen = 3 * 4;
     } elsif ($type eq "ext2_obd") {
-	1;
+	$data = pack("i", 4711);   # bogus data
+	$datalen = 0;
     } else {
 	print "error: unknown attach type $type\n";
 	goto usage;
@@ -938,8 +940,8 @@ sub Create {
 	print "Creating 1 object...\n";
 	$rc = ioctl(DEV_OBD, &OBD_IOC_CREATE, $packed);
 	if (!defined($quiet)) {
-	    my $ino = unpack("L", $packed);
-	    print "Created object #$ino.\n";
+	    my $obdo = obdo_unpack($packed, 4);
+	    print "Created object #$obdo->{id}.\n";
 	}
     } else {
 	my $i;
@@ -989,7 +991,7 @@ sub Destroy {
     my $arg = shift;
 
     if (!defined($arg) || scalar($arg) < 1) {
-	print "destroy requires the object number to destroy.\n";
+	print "usage: destroy <object number>\n";
 	return;
     }
 
@@ -1022,6 +1024,7 @@ sub Getattr {
     # see Setattr
     my $obdo;
     $obdo->{id} = $inode;
+    $obdo->{valid} = &OBD_MD_FLALL;
     my $packed = pack("L", $::client_id) . obdo_pack($obdo);
     my $rc = ioctl(DEV_OBD, &OBD_IOC_GETATTR, $packed);
 
@@ -1043,58 +1046,48 @@ sub Setattr {
     }
 
     my $inode = shift;
-    my $valid = 0;
-    my $mode = oct(shift);
-    my $uid = shift;
-    my $gid = shift;
-    my $size = shift;
-    my $atime = shift;
-    my $mtime = shift;
-    my $ctime = shift;
-
-    if (defined($uid)) {
-	$valid |= &ATTR_UID;
-    }
-    if (defined($gid)) {
-	$valid |= &ATTR_GID;
-    }
-    if (defined($size)) {
-	$valid |= &ATTR_SIZE;
-    }
-    if (defined($atime)) {
-	$valid |= &ATTR_ATIME;
-    }
-    if (defined($mtime)) {
-	$valid |= &ATTR_MTIME;
-    }
-    if (defined($ctime)) {
-	$valid |= &ATTR_CTIME;
-    }
-    if (defined($mode)) {
-	$valid |= &ATTR_MODE;
-    }
 
     if (!defined($inode) || scalar($inode) < 1) {
 	print "invalid arguments; type \"help setattr\" for a synopsis\n";
 	return;
     }
 
-    #struct iattr {
-    #        unsigned int    ia_valid; (32)
-    #        umode_t         ia_mode; (16)
-    #        uid_t           ia_uid; (16)
-    #        gid_t           ia_gid; (16)
-    # -- 16 bit alignment here! --
-    #        off_t           ia_size; (32)
-    #        time_t          ia_atime; (32)
-    #        time_t          ia_mtime; (32)
-    #        time_t          ia_ctime; (32)
-    #        unsigned int    ia_attr_flags; (32)
-    #};
+    # XXX we do not currently set all of the fields in the obdo
+    my $obdo;
+    $obdo->{id} = $inode;
+    $obdo->{mode} = oct(shift);
+    $obdo->{uid} = shift;
+    $obdo->{gid} = shift;
+    $obdo->{size} = shift;
+    $obdo->{atime} = shift;
+    $obdo->{mtime} = shift;
+    $obdo->{ctime} = shift;
+    $obdo->{valid} = 0;
 
-    printf "valid is %x, mode is %o\n", $valid, $mode;
-    my $packed = pack("ILLSssx2ILLLL", $::client_id, $inode, $valid, $mode,
-		      $uid, $gid, $size, $atime, $mtime, $ctime, 0);
+    if (defined($obdo->{atime})) {
+	$obdo->{valid} |= &OBD_MD_FLATIME;
+    }
+    if (defined($obdo->{mtime})) {
+	$obdo->{valid} |= &OBD_MD_FLMTIME;
+    }
+    if (defined($obdo->{ctime})) {
+	$obdo->{valid} |= &OBD_MD_FLCTIME;
+    }
+    if (defined($obdo->{size})) {
+	$obdo->{valid} |= &OBD_MD_FLSIZE;
+    }
+    if (defined($obdo->{mode})) {
+	$obdo->{valid} |= &OBD_MD_FLMODE;
+    }
+    if (defined($obdo->{uid})) {
+	$obdo->{valid} |= &OBD_MD_FLUID;
+    }
+    if (defined($obdo->{gid})) {
+	$obdo->{valid} |= &OBD_MD_FLGID;
+    }
+
+    printf "valid is %x, mode is %o\n", $obdo->{valid}, $obdo->{mode};
+    my $packed = pack("L", $::client_id) . obdo_pack($obdo);
     my $rc = ioctl(DEV_OBD, &OBD_IOC_SETATTR, $packed);
 
     if (!defined $rc) {

@@ -130,7 +130,6 @@ static struct super_block * obdfs_read_super(struct super_block *sb,
         struct inode *root = 0; 
 	struct obdfs_sb_info *sbi = (struct obdfs_sb_info *)(&sb->u.generic_sbp);
 	struct obd_device *obddev;
-        int error = 0;
 	char *device = NULL;
 	char *version = NULL;
 	int devno;
@@ -139,7 +138,6 @@ static struct super_block * obdfs_read_super(struct super_block *sb,
 	unsigned long blocksize_bits;
 	unsigned long root_ino;
 	int scratch;
-	
 
 	ENTRY;
         MOD_INC_USE_COUNT; 
@@ -155,7 +153,7 @@ static struct super_block * obdfs_read_super(struct super_block *sb,
 	}
 
 	if ( (err = obdfs_getdev(device, &devno)) ) {
-		printk("Cannot get devno of %s, error %d\n", device, err);
+		printk("Cannot get devno of %s, err %d\n", device, err);
 		MOD_DEC_USE_COUNT;
 		EXIT;
 		return NULL;
@@ -190,44 +188,41 @@ static struct super_block * obdfs_read_super(struct super_block *sb,
 	sbi->osi_ops = sbi->osi_obd->obd_type->typ_ops;
 	
 	sbi->osi_conn.oc_dev = obddev;
-        error  = sbi->osi_ops->o_connect(&sbi->osi_conn);
-	if ( error ) {
+        err  = sbi->osi_ops->o_connect(&sbi->osi_conn);
+	if ( err ) {
 		printk("OBDFS: cannot connect to %s\n", device);
-		goto error;
+		goto ERR;
 	}
 
 	INIT_LIST_HEAD(&sbi->osi_list);
 
 	sbi->osi_super = sb;
 
-	error = sbi->osi_ops->o_get_info(&sbi->osi_conn,
+	err = sbi->osi_ops->o_get_info(&sbi->osi_conn,
 					 strlen("blocksize"), 
 					 "blocksize", 
 					 &scratch, (void *)&blocksize);
-	if ( error ) {
+	if ( err ) {
 		printk("Getinfo call to drive failed (blocksize)\n");
-		goto error;
+		goto ERR;
 	}
 
-	error = sbi->osi_ops->o_get_info(&sbi->osi_conn,
-					 strlen("blocksize_bits"), 
-					 "blocksize_bits", 
-					 &scratch, (void *)&blocksize_bits);
-	if ( error ) {
+	err = sbi->osi_ops->o_get_info(&sbi->osi_conn, strlen("blocksize_bits"),
+				       "blocksize_bits", &scratch,
+				       (void *)&blocksize_bits);
+	if ( err ) {
 		printk("Getinfo call to drive failed (blocksize_bits)\n");
-		goto error;
+		goto ERR;
 	}
 
-	error = sbi->osi_ops->o_get_info(&sbi->osi_conn,
+	err = sbi->osi_ops->o_get_info(&sbi->osi_conn,
 					 strlen("root_ino"), 
 					 "root_ino", 
 					 &scratch, (void *)&root_ino);
-	if ( error ) {
+	if ( err ) {
 		printk("Getinfo call to drive failed (root_ino)\n");
-		goto error;
+		goto ERR;
 	}
-	
-
 
         lock_super(sb);
 	
@@ -241,9 +236,9 @@ static struct super_block * obdfs_read_super(struct super_block *sb,
         if (!root || is_bad_inode(root)) {
 	    printk("OBDFS: bad iget for root\n");
 	    sb->s_dev = 0;
-	    error = ENOENT;
+	    err = ENOENT;
 	    unlock_super(sb);
-	    goto error;
+	    goto ERR;
 	} 
 	
 
@@ -256,7 +251,7 @@ static struct super_block * obdfs_read_super(struct super_block *sb,
 	EXIT;  
         return sb;
 
- error:
+ERR:
 	EXIT;  
 	MOD_DEC_USE_COUNT;
 	if (sbi) {
@@ -275,8 +270,6 @@ static void obdfs_put_super(struct super_block *sb)
         struct obdfs_sb_info *sbi;
 
         ENTRY;
-
-
         sb->s_dev = 0;
 	
 	/* XXX flush stuff */
@@ -295,16 +288,31 @@ static void obdfs_put_super(struct super_block *sb)
 /* all filling in of inodes postponed until lookup */
 void obdfs_read_inode(struct inode *inode)
 {
-	int error;
-	ENTRY;
+	struct obdo *oa;
+	int err;
 
-	error = IOPS(inode, getattr)(IID(inode), inode);
-	if (error) {
-		printk("obdfs_read_inode: obd_getattr fails (%d)\n", error);
+	ENTRY;
+	oa = obdo_alloc();
+	if (!oa) {
+		printk("obdfs_read_inode: obdo_alloc failed\n");
+		EXIT;
 		return;
 	}
-	CDEBUG(D_INODE, "ino %ld, mode: %o\n", inode->i_ino, inode->i_mode);
+	oa->o_valid = OBD_MD_FLALL;
+	oa->o_id = inode->i_ino;
+	err = IOPS(inode, getattr)(IID(inode), oa);
+	if (err) {
+		printk("obdfs_read_inode: obd_getattr fails (%d)\n", err);
+		obdo_free(oa);
+		EXIT;
+		return;
+	}
+
+	ODEBUG(oa);
+	obdo_to_inode(inode, oa);
+	obdo_free(oa);
 	IDEBUG(inode);
+
 	if (S_ISREG(inode->i_mode))
 		inode->i_op = &obdfs_file_inode_operations;
 	else if (S_ISDIR(inode->i_mode))
@@ -314,16 +322,24 @@ void obdfs_read_inode(struct inode *inode)
 	else
 		/* XXX what do we pass here??? */
 		init_special_inode(inode, inode->i_mode, 0 /* XXX XXX */ );
+
 	return;
 }
 
 static void obdfs_write_inode(struct inode *inode) 
 {
-	int error;
+	struct obdo *oa;
+	int err;
 	
-	error = IOPS(inode, setattr)(IID(inode), inode);
-	if (error) {
-		printk("obdfs_write_inode: obd_setattr fails (%d)\n", error);
+	oa = obdo_alloc();
+	oa->o_valid = OBD_MD_FLALL;
+	obdo_from_inode(oa, inode);
+	err = IOPS(inode, setattr)(IID(inode), oa);
+
+	obdo_free(oa);
+
+	if (err) {
+		printk("obdfs_write_inode: obd_setattr fails (%d)\n", err);
 		return;
 	}
 	
@@ -332,38 +348,88 @@ static void obdfs_write_inode(struct inode *inode)
 
 static void obdfs_delete_inode(struct inode *inode)
 {
-	int error;
+	struct obdo *oa;
+	int err;
         ENTRY;
 
-	error = IOPS(inode, destroy)(IID(inode), inode);
-	if (error) {
-		printk("obdfs_delete_node: ibd_destroy fails (%d)\n", error);
+	oa = obdo_alloc();
+	/* XXX we currently assume "id" is all that's needed for destroy */
+	oa->o_id = inode->i_ino;
+	err = IOPS(inode, destroy)(IID(inode), oa);
+	obdo_free(oa);
+
+	if (err) {
+		printk("obdfs_delete_node: obd_destroy fails (%d)\n", err);
 		return;
 	}
 
 	EXIT;
 }
 
-static int  obdfs_notify_change(struct dentry *de, struct iattr *iattr)
+
+static void obdo_setattr(struct obdo *oa, struct iattr *attr)
+{
+	unsigned int ia_valid = attr->ia_valid;
+
+	if (ia_valid & ATTR_ATIME) {
+		oa->o_atime = attr->ia_atime;
+		oa->o_valid |= OBD_MD_FLATIME;
+	}
+	if (ia_valid & ATTR_MTIME) {
+		oa->o_mtime = attr->ia_mtime;
+		oa->o_valid |= OBD_MD_FLMTIME;
+	}
+	if (ia_valid & ATTR_CTIME) {
+		oa->o_ctime = attr->ia_ctime;
+		oa->o_valid |= OBD_MD_FLCTIME;
+	}
+	if (ia_valid & ATTR_SIZE) {
+		oa->o_size = attr->ia_size;
+		oa->o_valid |= OBD_MD_FLSIZE;
+	}
+	if (ia_valid & ATTR_MODE) {
+		oa->o_mode = attr->ia_mode;
+		oa->o_valid |= OBD_MD_FLMODE;
+		if (!in_group_p(oa->o_gid) && !capable(CAP_FSETID))
+			oa->o_mode &= ~S_ISGID;
+	}
+	if (ia_valid & ATTR_UID)
+	{
+		oa->o_uid = attr->ia_uid;
+		oa->o_valid |= OBD_MD_FLUID;
+	}
+	if (ia_valid & ATTR_GID) {
+		oa->o_gid = attr->ia_gid;
+		oa->o_valid |= OBD_MD_FLGID;
+	}
+}
+
+
+static int obdfs_notify_change(struct dentry *de, struct iattr *attr)
 {
 	struct inode *inode = de->d_inode;
-	struct iattr saved_copy;
-	int error;
+	struct obdo *oa;
+	int err;
 
 	ENTRY;
-	inode_to_iattr(inode, &saved_copy);
-
-	inode_setattr(inode, iattr);
-        error = IOPS(inode, setattr)(IID(inode), inode);
-	if ( error ) {
-		inode_setattr(inode, &saved_copy);
-		printk("obdfs_notify_change: obd_setattr fails (%d)\n", error);
-		return error;
+	oa = obdo_alloc();
+	if (!oa) {
+		printk("obdfs_notify_change: obdo_alloc fails\n");
+		return -ENOMEM;
 	}
+
+	oa->o_id = inode->i_ino;
+	obdo_setattr(oa, attr);
+        err = IOPS(inode, setattr)(IID(inode), oa);
+	if ( err ) {
+		printk("obdfs_notify_change: obd_setattr fails (%d)\n", err);
+		return err;
+	}
+	inode_setattr(inode, attr);
 
 	CDEBUG(D_INODE, "inode blocks now %ld\n", inode->i_blocks);
 	EXIT;
-        return error;
+        return err;
 }
 
 
@@ -371,20 +437,20 @@ static int obdfs_statfs(struct super_block *sb, struct statfs *buf,
 		       int bufsize)
 {
 	struct statfs tmp;
-	int error;
+	int err;
 
 	ENTRY;
 
-	error = OPS(sb,statfs)(ID(sb), &tmp);
-	if ( error ) { 
-		printk("obdfs_notify_change: obd_statfs fails (%d)\n", error);
-		return error;
+	err = OPS(sb,statfs)(ID(sb), &tmp);
+	if ( err ) { 
+		printk("obdfs_notify_change: obd_statfs fails (%d)\n", err);
+		return err;
 	}
 	copy_to_user(buf, &tmp, (bufsize<sizeof(tmp)) ? bufsize : sizeof(tmp));
 
 	EXIT;
 
-	return error; 
+	return err; 
 }
 
 struct file_system_type obdfs_fs_type = {
