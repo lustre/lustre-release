@@ -834,11 +834,14 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                         CDEBUG(D_INODE, "recreated ino %lu with gen %u\n",
                                inode->i_ino, inode->i_generation);
                 } else {
+#if 0
                         struct lustre_handle child_ino_lockh;
+#endif
 
                         CDEBUG(D_INODE, "created ino %lu with gen %x\n",
                                inode->i_ino, inode->i_generation);
 
+#if 0
                         /* The inode we were allocated may have just been freed
                          * by an unlink operation.  We take this lock to
                          * synchronize against the matching reply-ack-lock taken
@@ -852,6 +855,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                         } else {
                                 ldlm_lock_decref(&child_ino_lockh, LCK_EX);
                         }
+#endif
                 }
 
                 rc = fsfilt_setattr(obd, dchild, handle, &iattr, 0);
@@ -1607,7 +1611,10 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
         struct mds_body *body = NULL;
         struct inode *child_inode;
         struct lustre_handle parent_lockh[2] = {{0}, {0}}; 
-        struct lustre_handle child_lockh = {0}, child_reuse_lockh = {0};
+        struct lustre_handle child_lockh = {0};
+#if 0
+        struct lustre_handle child_reuse_lockh = {0};
+#endif
         struct lustre_handle * slave_lockh = NULL;
         char fidname[LL_FID_NAMELEN];
         void *handle = NULL;
@@ -1713,12 +1720,13 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
         if (rc)
                 GOTO(cleanup, rc);
 
+#if 0
         /* Step 4: Get a lock on the ino to sync with creation WRT inode
          * reuse (see bug 2029). */
         rc = mds_lock_new_child(obd, child_inode, &child_reuse_lockh);
         if (rc != ELDLM_OK)
                 GOTO(cleanup, rc);
-
+#endif
         cleanup_phase = 3; /* child inum lock */
 
         OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_UNLINK_WRITE, dparent->d_inode->i_sb);
@@ -1837,6 +1845,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                         (void)obd_set_info(mds->mds_osc_exp, strlen("unlinked"),
                                            "unlinked", 0, NULL);
         case 3: /* child ino-reuse lock */
+#if 0
                 if (rc && body != NULL) {
                         // Don't unlink the OST objects if the MDS unlink failed
                         body->valid = 0;
@@ -1845,6 +1854,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                         ldlm_lock_decref(&child_reuse_lockh, LCK_EX);
                 else
                         ptlrpc_save_lock(req, &child_reuse_lockh, LCK_EX);
+#endif
         case 2: /* child lock */
                 mds_unlock_slave_objs(obd, dchild, slave_lockh);
                 if (child_lockh.cookie)

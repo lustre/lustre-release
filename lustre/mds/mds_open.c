@@ -1128,7 +1128,9 @@ got_child:
                                        err);
                         }
                 } else if (created) {
+#if 0
                         mds_lock_new_child(obd, dchild->d_inode, NULL);
+#endif
                 }
                 l_dput(dchild);
         case 1:
