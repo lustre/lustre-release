@@ -92,15 +92,14 @@ static int obd_class_name2dev(char *name)
         int res = -1;
         int i;
 
-        for (i=0; i < MAX_OBD_DEVICES; i++) { 
+        for (i=0; i < MAX_OBD_DEVICES; i++) {
                 struct obd_device *obd = &obd_dev[i];
-                if (obd->obd_name && 
-                    strcmp(name, obd->obd_name) == 0) {
-                        res = i; 
+                if (obd->obd_name && strcmp(name, obd->obd_name) == 0) {
+                        res = i;
                         return res;
                 }
         }
-                
+
         return res;
 }
 
@@ -162,8 +161,8 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
             && cmd != OBD_IOC_NAME2DEV) {
                 CERROR("OBD ioctl: No device\n");
                 RETURN(-EINVAL);
-        } 
-        if (obd_ioctl_getdata(buf, buf + 800, (void *)arg)) { 
+        }
+        if (obd_ioctl_getdata(buf, buf + 800, (void *)arg)) {
                 CERROR("OBD ioctl: data error\n");
                 RETURN(-EINVAL);
         }
@@ -172,10 +171,9 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
         switch (cmd) {
         case TCGETS:
                 RETURN(-EINVAL);
-        case OBD_IOC_DEVICE: { 
+        case OBD_IOC_DEVICE: {
                 CDEBUG(D_IOCTL, "\n");
-                if (data->ioc_dev >= MAX_OBD_DEVICES ||
-                    data->ioc_dev < 0) { 
+                if (data->ioc_dev >= MAX_OBD_DEVICES || data->ioc_dev < 0) {
                         CERROR("OBD ioctl: DEVICE insufficient devices\n");
                         RETURN(-EINVAL);
                 }
@@ -185,21 +183,24 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 RETURN(0);
         }
 
-        case OBD_IOC_NAME2DEV: { 
+        case OBD_IOC_NAME2DEV: {
                 int dev;
-                if (!data->ioc_inlbuf1) { 
+
+                filp->private_data = NULL;
+
+                if (!data->ioc_inlbuf1) {
                         CERROR("No name passed!\n");
                         RETURN(-EINVAL);
                 }
                 CDEBUG(D_IOCTL, "device name %s\n", data->ioc_inlbuf1);
                 dev = obd_class_name2dev(data->ioc_inlbuf1);
-                data->ioc_dev= dev;
-                if (dev == -1) { 
+                data->ioc_dev = dev;
+                if (dev == -1) {
                         CERROR("No device for name %s!\n", data->ioc_inlbuf1);
                         RETURN(-EINVAL);
                 }
 
-                CDEBUG(D_IOCTL, "device name %s, dev %d\n", data->ioc_inlbuf1, 
+                CDEBUG(D_IOCTL, "device name %s, dev %d\n", data->ioc_inlbuf1,
                        dev);
                 filp->private_data = &obd_dev[data->ioc_dev];
                 err = copy_to_user((int *)arg, data, sizeof(*data));
@@ -216,7 +217,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                         RETURN(-EBUSY);
                 }
 
-                CDEBUG(D_IOCTL, "attach %s %s\n",  MKSTR(data->ioc_inlbuf1), 
+                CDEBUG(D_IOCTL, "attach %s %s\n", MKSTR(data->ioc_inlbuf1),
                        MKSTR(data->ioc_inlbuf2));
 
                 /* find the type */
@@ -239,15 +240,15 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 } else {
                         obd->obd_flags |=  OBD_ATTACHED;
                         type->typ_refcnt++;
-                        CDEBUG(D_IOCTL, "OBD: dev %d attached type %s\n", 
+                        CDEBUG(D_IOCTL, "OBD: dev %d attached type %s\n",
                                obd->obd_minor, data->ioc_inlbuf1);
-                        obd->obd_proc_entry = 
+                        obd->obd_proc_entry =
                                 proc_lustre_register_obd_device(obd);
-                        if (data->ioc_inlbuf2) { 
+                        if (data->ioc_inlbuf2) {
                                 int len = strlen(data->ioc_inlbuf2);
-                                OBD_ALLOC(obd->obd_name, len + 1); 
-                                if (!obd->obd_name) { 
-                                        CERROR("no memory\n"); 
+                                OBD_ALLOC(obd->obd_name, len + 1);
+                                if (!obd->obd_name) {
+                                        CERROR("no memory\n");
                                         LBUG();
                                 }
                                 memcpy(obd->obd_name, data->ioc_inlbuf2, len+1);
