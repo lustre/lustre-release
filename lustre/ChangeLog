@@ -20,6 +20,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- use kmalloc instead of slabs in portals (2430)
 	- don't create duplicate records when a failover MDS is present (2442)
 	- remove unnecessary mount age check (2332)
+	- don't remove directory inodes from locks prematurely (2451)
 
 2003-12-13  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.0.1

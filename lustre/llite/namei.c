@@ -289,6 +289,9 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
 
                         LASSERT(lsm->lsm_object_id != 0);
 
+                        /* bug 2334: drop MDS lock before acquiring OST lock */
+                        ll_intent_drop_lock(it);
+
                         rc = ll_extent_lock(NULL, inode, lsm, LCK_PR, &extent,
                                             &lockh);
                         if (rc != ELDLM_OK) {
@@ -347,9 +350,6 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
                              NULL, it, flags, &req, ll_mdc_blocking_ast);
         if (rc < 0)
                 GOTO(out, retval = ERR_PTR(rc));
-
-        /* bug 2334: drop MDS lock before acquiring OST lock */
-        ll_intent_drop_lock(it);
 
         rc = lookup_it_finish(req, 1, it, &icbd);
         if (rc != 0) {
