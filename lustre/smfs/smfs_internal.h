@@ -69,10 +69,6 @@ do{                                                 \
 
 
 extern int init_smfs_proc_sys(void);
-/*options.c*/
-extern int get_opt(struct option **option, char **pos);
-extern void cleanup_option(void);
-extern int init_option(char *data);
 /*cache.c*/
 extern void sm_set_inode_ops(struct inode *cache_inode, struct inode *inode);
 extern void sm_set_sb_ops(struct super_block *cache_sb, struct super_block *sb);
@@ -81,10 +77,7 @@ extern void cleanup_smfs_cache(void);
 extern void sm_set_journal_ops(struct super_block *sb, char *cache_type);
 extern int smfs_init_sm_ops(struct smfs_super_info *smb);
 extern void smfs_cleanup_sm_ops(struct smfs_super_info *smb);
-static inline struct super_operations *cache_sops(struct smfs_super_info *smb)
-{
-        return &smb->sm_ops->sm_sb_ops;
-}
+
 static inline struct inode_operations *cache_diops(struct smfs_super_info *smb)
 {
         return &smb->sm_ops->sm_dir_iops;
@@ -278,42 +271,6 @@ static inline int get_active_entry(struct inode *dir, __u64 *active_entry)
                 rc = 0;
         RETURN(rc);
 }
-
-#define PRE_HOOK          0
-#define POST_HOOK         1
-
-#define SMFS_HOOK(inode, dentry, data1, data2, op, handle, flag, rc, label)    \
-do {                                                                           \
-        LASSERT(inode->i_sb);                                                  \
-        if (!rc) {                                                             \
-                struct smfs_super_info *smb = S2SMI(inode->i_sb);              \
-                struct list_head *hlist = &smb->smsi_hook_list;                \
-                struct list_head *p;                                           \
-                                                                               \
-                list_for_each(p, hlist) {                                      \
- 		        struct smfs_hook_ops *hops;                            \
-                                                                               \
-                        hops = list_entry(p, typeof(*hops), smh_list);         \
-                        if (flag == PRE_HOOK && hops->smh_pre_op)              \
-                                rc = hops->smh_pre_op(inode, dentry, data1,    \
-                                                      data2, op, handle);      \
-                        else if (flag == POST_HOOK && hops->smh_post_op)       \
-                                rc = hops->smh_post_op(inode, dentry, data1,   \
-                                                       data2, op, handle);     \
-                        if (rc)                                                \
-                                break;                                         \
-                }                                                              \
-        }                                                                      \
-        if (rc)                                                                \
-                GOTO(label, rc);                                               \
-} while(0)                                                                     \
-
-#define SMFS_IGET(dir, hash, inode, rc, label)          \
-do {                                                                    \
-        inode = smfs_get_inode(dir->i_sb, hash, dir, 0);         \
-        if (!inode)                                                     \
-                GOTO(label, rc = -ENOENT);                              \
-} while(0)      
 
 #if CONFIG_SNAPFS
 int smfs_cow_init(struct super_block *sb);

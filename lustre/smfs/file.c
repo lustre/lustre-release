@@ -48,13 +48,18 @@ static ssize_t smfs_write(struct file *filp, const char *buf, size_t count,
 {
         struct inode *cache_inode;
         struct smfs_file_info *sfi;
-        loff_t tmp_ppos;
         loff_t *cache_ppos = NULL;
         int rc = 0;
+        struct hook_write_msg msg = {
+                .inode = filp->f_dentry->d_inode,
+                .dentry = filp->f_dentry,
+                .count = count,
+                .pos = *ppos
+        };
+         
         ENTRY;
 
         cache_inode = I2CI(filp->f_dentry->d_inode);
-
         if (!cache_inode || !cache_inode->i_fop->write)
                 RETURN(-ENOENT);
 
@@ -64,34 +69,29 @@ static ssize_t smfs_write(struct file *filp, const char *buf, size_t count,
                 LBUG();
 
         if (filp->f_flags & O_APPEND)
-                tmp_ppos = filp->f_dentry->d_inode->i_size;
-        else {
-                tmp_ppos = *ppos;
-        }
+                msg.pos = filp->f_dentry->d_inode->i_size;
         
-        SMFS_HOOK(filp->f_dentry->d_inode, filp->f_dentry, &count, &tmp_ppos,
-                  HOOK_WRITE, NULL, PRE_HOOK, rc, exit);
+        pre_smfs_inode(filp->f_dentry->d_inode, cache_inode);
+
+        SMFS_PRE_HOOK(filp->f_dentry->d_sb, HOOK_WRITE, &msg);
 
         if (ppos != &(filp->f_pos)) {
-                cache_ppos = &tmp_ppos;
+                cache_ppos = &msg.pos;
         } else {
                 cache_ppos = &sfi->c_file->f_pos;
         }
         
         *cache_ppos = *ppos;
 
-        pre_smfs_inode(filp->f_dentry->d_inode, cache_inode);
-
         rc = cache_inode->i_fop->write(sfi->c_file, buf, count,
                                        cache_ppos);
         
-        SMFS_HOOK(filp->f_dentry->d_inode, filp->f_dentry, ppos, &count,
-                  HOOK_WRITE, NULL, POST_HOOK, rc, exit);
+        SMFS_POST_HOOK(filp->f_dentry->d_sb, HOOK_WRITE, &msg, rc);
         
-exit:
         post_smfs_inode(filp->f_dentry->d_inode, cache_inode);
         *ppos = *cache_ppos;
         duplicate_file(filp, sfi->c_file);
+        
         RETURN(rc);
 }
 
@@ -229,20 +229,22 @@ static int smfs_init_cache_file(struct inode *inode, struct file *filp)
                 RETURN(-ENOMEM);
 
         cache_filp = get_empty_filp();
-        if (!cache_filp)
-                GOTO(err_exit, rc = -ENOMEM);
+        if (!cache_filp) {
+                rc = -ENOMEM;
+                goto err_exit;
+        }
 
         sfi->magic = SMFS_FILE_MAGIC;
 
         cache_dentry = pre_smfs_dentry(NULL, I2CI(inode), filp->f_dentry);
-        if (!cache_dentry)
-                GOTO(err_exit, rc = -ENOMEM);
+        if (!cache_dentry) {
+                rc = -ENOMEM;
+                goto err_exit;
+        }
 
         cache_filp->f_vfsmnt = filp->f_vfsmnt;
-
         cache_filp->f_dentry = cache_dentry;
         duplicate_file(cache_filp, filp);
-
         sfi->c_file = cache_filp;
 
         if (filp->private_data != NULL)
@@ -250,7 +252,7 @@ static int smfs_init_cache_file(struct inode *inode, struct file *filp)
 
         filp->private_data = sfi;
 
-        RETURN(rc);
+        RETURN(0);
 err_exit:
         if (sfi)
                 OBD_FREE(sfi, sizeof(struct smfs_file_info));
@@ -262,11 +264,12 @@ err_exit:
 static int smfs_cleanup_cache_file(struct file *filp)
 {
         struct smfs_file_info *sfi = NULL;
-        int rc = 0;
+                
         ENTRY;
 
         if (!filp)
-                RETURN(rc);
+                RETURN(0);
+        
         sfi = F2SMFI(filp);
 
         post_smfs_dentry(sfi->c_file->f_dentry);
@@ -277,13 +280,14 @@ static int smfs_cleanup_cache_file(struct file *filp)
 
         filp->private_data = NULL;
 
-        RETURN(rc);
+        RETURN(0);
 }
 
 int smfs_open(struct inode *inode, struct file *filp)
 {
         struct inode *cache_inode = NULL;
         int rc = 0;
+        
         ENTRY;
         
         cache_inode = I2CI(inode);
@@ -297,6 +301,7 @@ int smfs_open(struct inode *inode, struct file *filp)
                 rc = cache_inode->i_fop->open(cache_inode, F2CF(filp));
                 duplicate_file(filp, F2CF(filp));
         }
+
         RETURN(rc);
 }
 
@@ -397,6 +402,12 @@ int smfs_setattr(struct dentry *dentry, struct iattr *attr)
         struct dentry *cache_dentry;
         void  *handle = NULL;
         int rc = 0;
+        struct hook_setattr_msg msg = {
+                .inode = dentry->d_inode,
+                .dentry = dentry,
+                .attr = attr
+        };
+
 
         cache_inode = I2CI(dentry->d_inode);
         if (!cache_inode || !cache_inode->i_op->setattr)
@@ -408,26 +419,22 @@ int smfs_setattr(struct dentry *dentry, struct iattr *attr)
 
         handle = smfs_trans_start(dentry->d_inode, FSFILT_OP_SETATTR, NULL);
         if (IS_ERR(handle) ) {
-                CERROR("smfs_do_mkdir: no space for transaction\n");
-                GOTO(exit, rc = -ENOSPC);
+                rc = -ENOSPC;
+                goto exit;
         }
 
         pre_smfs_inode(dentry->d_inode, cache_inode);
         
-        SMFS_HOOK(dentry->d_inode, dentry, attr, NULL, HOOK_SETATTR, NULL, 
-                  PRE_HOOK, rc, exit); 
+        SMFS_PRE_HOOK(dentry->d_sb, HOOK_SETATTR, &msg); 
                   
         rc = cache_inode->i_op->setattr(cache_dentry, attr);
         
-        post_smfs_dentry(cache_dentry);
-
-        SMFS_HOOK(dentry->d_inode, dentry, attr, NULL, HOOK_SETATTR, NULL, 
-                  POST_HOOK, rc, exit); 
-
+        SMFS_POST_HOOK(dentry->d_sb, HOOK_SETATTR, &msg, rc);
+        
         post_smfs_inode(dentry->d_inode, cache_inode);
-                  
-exit:
         smfs_trans_commit(dentry->d_inode, handle, 0);
+exit:
+        post_smfs_dentry(cache_dentry);
         RETURN(rc);
 }
 
@@ -539,3 +546,4 @@ struct inode_operations smfs_file_iops = {
         .listxattr      = smfs_listxattr,         /* BKL held */
         .removexattr    = smfs_removexattr,       /* BKL held */
 };
+

@@ -221,64 +221,6 @@ static void setup_sm_symlink_ops(struct inode *cache_inode, struct inode *inode,
         unlock_kernel();
 }
 
-static void setup_sm_sb_ops(struct super_block *cache_sb, struct super_block *sb,
-                            struct super_operations *smfs_sops)
-{
-        struct smfs_super_info *smb;
-        struct super_operations *sops;
-
-        ENTRY;
-
-        smb = S2SMI(sb);
-
-        if (smb->smsi_ops_check & SB_OPS_CHECK)
-                return;
-
-        sops = cache_sops(smb);
-        memset(sops, 0, sizeof (struct super_operations));
-
-        if (cache_sb->s_op) {
-                if (cache_sb->s_op->dirty_inode)
-                        sops->dirty_inode = smfs_sops->dirty_inode;
-                if (cache_sb->s_op->write_inode)
-                        sops->write_inode = smfs_sops->write_inode;
-                if (cache_sb->s_op->put_inode)
-                        sops->put_inode = smfs_sops->put_inode;
-                if (cache_sb->s_op->delete_inode)
-                        sops->delete_inode = smfs_sops->delete_inode;
-                if (cache_sb->s_op->put_super)
-                        sops->put_super = smfs_sops->put_super;
-                if (cache_sb->s_op->write_super)
-                        sops->write_super = smfs_sops->write_super;
-                if (cache_sb->s_op->write_super_lockfs)
-                        sops->write_super_lockfs = smfs_sops->write_super_lockfs;
-                if (cache_sb->s_op->unlockfs)
-                        sops->unlockfs = smfs_sops->unlockfs;
-                if (cache_sb->s_op->statfs)
-                        sops->statfs = smfs_sops->statfs;
-                if (cache_sb->s_op->remount_fs)
-                        sops->remount_fs = smfs_sops->remount_fs;
-                if (cache_sb->s_op->umount_begin)
-                        sops->umount_begin = smfs_sops->umount_begin;
-
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-                if (cache_sb->s_op->fh_to_dentry)
-                        sops->fh_to_dentry = smfs_sops->fh_to_dentry;
-                if (cache_sb->s_op->dentry_to_fh)
-                        sops->dentry_to_fh = smfs_sops->dentry_to_fh;
-                if (cache_sb->s_op->show_options)
-                        sops->show_options = smfs_sops->show_options;
-                sops->read_inode2 = smfs_sops->read_inode2;
-#endif
-                /* FIXME-WANGDI we need this method to clear the cache inode. */
-                sops->clear_inode = smfs_sops->clear_inode;
-        }
-
-        lock_kernel();
-        smb->smsi_ops_check |= SB_OPS_CHECK;
-        unlock_kernel();
-        return;
-}
 
 void sm_set_inode_ops(struct inode *cache_inode, struct inode *inode)
 {
@@ -311,15 +253,60 @@ void sm_set_inode_ops(struct inode *cache_inode, struct inode *inode)
         }
 }
 
+
 void sm_set_sb_ops(struct super_block *cache_sb, struct super_block *sb)
 {
-        struct smfs_super_info *smb;
+        struct smfs_super_info *smb = S2SMI(sb);
+        struct super_operations *sops = &smb->sm_ops->sm_sb_ops;
+        struct super_operations *smfs_sops = &smfs_super_ops;
+        ENTRY;
 
-        smb = S2SMI(sb);
+        if (smb->smsi_ops_check & SB_OPS_CHECK)
+                return;
+        
+        //set up only operations exist in backfs
+        memset(sops, 0, sizeof (struct super_operations));
+        if (cache_sb->s_op) {
+                if (cache_sb->s_op->dirty_inode)
+                        sops->dirty_inode = smfs_sops->dirty_inode;
+                if (cache_sb->s_op->write_inode)
+                        sops->write_inode = smfs_sops->write_inode;
+                if (cache_sb->s_op->put_super)
+                        sops->put_super = smfs_sops->put_super;
+                if (cache_sb->s_op->write_super)
+                        sops->write_super = smfs_sops->write_super;
+                if (cache_sb->s_op->write_super_lockfs)
+                        sops->write_super_lockfs = smfs_sops->write_super_lockfs;
+                if (cache_sb->s_op->unlockfs)
+                        sops->unlockfs = smfs_sops->unlockfs;
+                if (cache_sb->s_op->statfs)
+                        sops->statfs = smfs_sops->statfs;
+                if (cache_sb->s_op->remount_fs)
+                        sops->remount_fs = smfs_sops->remount_fs;
+                //if (cache_sb->s_op->umount_begin)
+                //      sops->umount_begin = smfs_sops->umount_begin;
 
-        setup_sm_sb_ops(cache_sb, sb, &smfs_super_ops);
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+                if (cache_sb->s_op->fh_to_dentry)
+                        sops->fh_to_dentry = smfs_sops->fh_to_dentry;
+                if (cache_sb->s_op->dentry_to_fh)
+                        sops->dentry_to_fh = smfs_sops->dentry_to_fh;
+                if (cache_sb->s_op->show_options)
+                        sops->show_options = smfs_sops->show_options;
+                
+                sops->read_inode2 = smfs_sops->read_inode2;
+#endif
+                /* these ops are needed always */
+                sops->clear_inode = smfs_sops->clear_inode;
+                sops->delete_inode = smfs_sops->delete_inode;
 
-        sb->s_op = cache_sops(smb);
+        }
+
+        lock_kernel();
+        smb->smsi_ops_check |= SB_OPS_CHECK;
+        unlock_kernel();
+        sb->s_op = sops;
         return;
 }
+
 

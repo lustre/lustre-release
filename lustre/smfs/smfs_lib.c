@@ -128,12 +128,6 @@ err_out:
 
 static int smfs_umount_cache(struct smfs_super_info *smb)
 {
-        //struct dentry *root = smb->smsi_sb->s_root;
-        
-        //dput(root);
-        //if (atomic_read(&root->d_inode->i_count) == 0)
-        //        igrab(root->d_inode); 
-        
         mntput(smb->smsi_mnt);
         smfs_cleanup_sm_ops(smb);
         smfs_cleanup_fsfilt_ops(smb);
@@ -151,7 +145,7 @@ static int smfs_init_hook_ops(struct smfs_super_info *smb)
 {
         ENTRY;
         INIT_LIST_HEAD(&smb->smsi_hook_list);
-        INIT_LIST_HEAD(&smfs_plg_list);
+        INIT_LIST_HEAD(&smb->smsi_plg_list);
         RETURN(0); 
 }
 
@@ -422,10 +416,10 @@ void smfs_trans_commit(struct inode *inode, void *handle, int force_sync)
 }
 
 
-int smfs_register_plugin(struct smfs_plugin * new_plugin) 
+int smfs_register_plugin(struct super_block * sb, struct smfs_plugin * new_plugin) 
 {
         struct smfs_plugin * plg = NULL;
-        struct list_head * plist = &smfs_plg_list;
+        struct list_head * plist = &S2SMI(sb)->smsi_plg_list;
         
         ENTRY;
         
@@ -448,10 +442,10 @@ int smfs_register_plugin(struct smfs_plugin * new_plugin)
         RETURN(0);
 }
 
-void * smfs_deregister_plugin(int type)
+void * smfs_deregister_plugin(struct super_block * sb, int type)
 {
         struct smfs_plugin * plg = NULL;
-        struct list_head * plist = &smfs_plg_list;
+        struct list_head * plist = &S2SMI(sb)->smsi_plg_list;
         void * priv = NULL;
         
         ENTRY;
