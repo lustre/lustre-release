@@ -59,8 +59,6 @@ get_save_fops(struct file* filp, int mode)
 static inline void save_fops(struct file *filp, struct inode *inode,
                              struct file_operations *sfops) 
 {
-        struct ll_inode_info *lli = ll_i2info(inode);
-        
         if (sfops != filp->f_op) {
                 struct file_operations** pfop = get_save_fops (filp, FILE_OPS);
                 struct module   *save_module = NULL;
