@@ -152,16 +152,13 @@ int client_import_disconnect(struct lustre_handle *dlm_handle, int failover)
 
         /* Yeah, obd_no_recov also (mainly) means "forced shutdown". */
         if (obd->obd_no_recov) {
-                ptlrpc_abort_inflight(imp);
+                ptlrpc_set_import_active(imp, 0);
         } else {
                 request = ptlrpc_prep_req(imp, rq_opc, 0, NULL, NULL);
                 if (!request)
                         GOTO(out_req, rc = -ENOMEM);
 
                 request->rq_replen = lustre_msg_size(0, NULL);
-
-                /* Process disconnects even if we're waiting for recovery. */
-                request->rq_level = LUSTRE_CONN_RECOVD;
 
                 rc = ptlrpc_queue_wait(request);
                 if (rc)
@@ -472,6 +469,7 @@ void target_abort_recovery(void *data)
         class_disconnect_exports(obd, 0);
         abort_delayed_replies(obd);
         abort_recovery_queue(obd);
+        ptlrpc_run_recovery_over_upcall(obd);
 }
 
 static void target_recovery_expired(unsigned long castmeharder)
