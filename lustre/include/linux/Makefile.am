@@ -1,0 +1,10 @@
+# Copyright (C) 2001  Cluster File Systems, Inc.
+#
+# This code is issued under the GNU General Public License.
+# See the file COPYING in this distribution
+
+
+pkginclude_HEADERS = lustre_lite.h  lustre_idl.h
+
+EXTRA_DIST = lprocfs_status.h lustre_debug.h lustre_ha.h lustre_lib.h lustre_mgmt.h obd_cache.h obd_lov.h obd_snap_support.h lustre_build_version.h lustre_dlm.h lustre_handles.h lustre_net.h  obd_class.h  obd_ost.h   obd_support.h  lustre_commit_confd.h lustre_export.h lustre_log.h lustre_otree.h obd_echo.h   obd_ptlbd.h  obd_trace.h lustre_compat25.h lustre_fsfilt.h  lustre_import.h  lustre_mds.h  obd.h obd_ext2.h   obd_snap.h
+ 
