@@ -115,11 +115,14 @@ void ldlm_lock_destroy(struct ldlm_lock *lock)
         if (lock->l_readers || lock->l_writers) {
                 CDEBUG(D_INFO, "lock still has references (%d readers, %d "
                        "writers)\n", lock->l_readers, lock->l_writers);
+                ldlm_lock_dump(lock);
                 LBUG();
         }
 
-        if (!list_empty(&lock->l_res_link))
+        if (!list_empty(&lock->l_res_link)) {
+                ldlm_lock_dump(lock);
                 LBUG();
+        }
 
         if (lock->l_flags & LDLM_FL_DESTROYED) {
                 l_unlock(&lock->l_resource->lr_namespace->ns_lock);
