@@ -485,31 +485,31 @@ int mds_splitting_expected(struct obd_device *obd, struct dentry *dentry)
 
 	/* clustered MD ? */
 	if (!mds->mds_lmv_obd)
-		RETURN(0);
+		RETURN(MDS_NO_SPLITTABLE);
 
         /* inode exist? */
         if (dentry->d_inode == NULL)
-                return 0;
+                return MDS_NO_SPLITTABLE;
 
         /* a dir can be splitted only */
         if (!S_ISDIR(dentry->d_inode->i_mode))
-                return 0;
-
-        /* large enough to be splitted? */
-        if (dentry->d_inode->i_size < MAX_DIR_SIZE)
-                return 0;
+                return MDS_NO_SPLITTABLE;
 
         /* don't split root directory */
         if (dentry->d_inode->i_ino == mds->mds_rootfid.id)
-                return 0;
+                return MDS_NO_SPLITTABLE;
+
+        /* large enough to be splitted? */
+        if (dentry->d_inode->i_size < MAX_DIR_SIZE)
+                return MDS_NO_SPLIT_EXPECTED;
 
         mds_get_lmv_attr(obd, dentry->d_inode, &mea, &size);
         if (mea) {
                 /* already splitted or slave object: shouldn't be splitted */
-                rc = 0;
+                rc = MDS_NO_SPLITTABLE;
         } else {
                 /* may be splitted */
-                rc = 1;
+                rc = MDS_EXPECT_SPLIT;
         }
 
         if (mea)
@@ -532,8 +532,8 @@ int mds_try_to_split_dir(struct obd_device *obd,
 	ENTRY;
 
         /* TODO: optimization possible - we already may have mea here */
-        if (!mds_splitting_expected(obd, dentry))
-                RETURN(0);
+        if (mds_splitting_expected(obd, dentry) != MDS_EXPECT_SPLIT)
+                return 0;
         LASSERT(mea == NULL || *mea == NULL);
 
         CDEBUG(D_OTHER, "%s: split directory %u/%lu/%lu\n",

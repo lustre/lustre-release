@@ -17,6 +17,10 @@ struct mds_filter_data {
 #define DENTRY_VALID(dentry)    \
         ((dentry)->d_inode || ((dentry)->d_flags & DCACHE_CROSS_REF))
 
+#define MDS_NO_SPLIT_EXPECTED   0
+#define MDS_EXPECT_SPLIT        1
+#define MDS_NO_SPLITTABLE       2
+
 static inline struct mds_obd *mds_req2mds(struct ptlrpc_request *req)
 {
         return &req->rq_export->exp_obd->u.mds;

@@ -158,7 +158,7 @@ static int mds_sendpage(struct ptlrpc_request *req, struct file *file,
 int mds_lock_mode_for_dir(struct obd_device *obd,
                               struct dentry *dentry, int mode)
 {
-        int ret_mode;
+        int ret_mode, split;
 
         /* any dir access needs couple locks:
          * 1) on part of dir we gonna lookup/modify in
@@ -174,23 +174,32 @@ int mds_lock_mode_for_dir(struct obd_device *obd,
          *    for splitting then we need to protect it from any
          *    type of access (lookup/modify/split) - LCK_EX -bzzz */
 
-        if (mode == LCK_PR) {
-                ret_mode = LCK_CR;
-        } else if (mode == LCK_PW) {
-                /* caller gonna modify directory.we use concurrent
-                   write lock here to retract client's cache for readdir */
-                ret_mode = LCK_CW;
-                if (mds_splitting_expected(obd, dentry)) {
-                        /* splitting possible. serialize any access */
-                        CDEBUG(D_OTHER, "%s: gonna split %lu/%lu\n",
-                               obd->obd_name,
-                               (unsigned long) dentry->d_inode->i_ino,
-                               (unsigned long) dentry->d_inode->i_generation);
+        split = mds_splitting_expected(obd, dentry);
+        if (split == MDS_NO_SPLITTABLE) {
+                /* this inode won't be splitted. so we need not to protect from
+                 * just flush client's cache on modification */
+                ret_mode = 0;
+                if (mode == LCK_PW)
+                        ret_mode = LCK_CW;
+        } else {
+                if (mode == LCK_PR) {
+                        ret_mode = LCK_CR;
+                } else if (mode == LCK_PW) {
+                        /* caller gonna modify directory.we use concurrent
+                           write lock here to retract client's cache for readdir */
+                        ret_mode = LCK_CW;
+                        if (split == MDS_EXPECT_SPLIT) {
+                                /* splitting possible. serialize any access */
+                                CDEBUG(D_OTHER, "%s: gonna split %u/%u\n",
+                                       obd->obd_name,
+                                       (unsigned) dentry->d_inode->i_ino,
+                                       (unsigned) dentry->d_inode->i_generation);
+                                ret_mode = LCK_EX;
+                        }
+                } else {
+                        CWARN("unexpected lock mode %d\n", mode);
                         ret_mode = LCK_EX;
                 }
-        } else {
-                CWARN("unexpected lock mode %d\n", mode);
-                ret_mode = LCK_EX;
         }
         return ret_mode;
 }
@@ -221,15 +230,17 @@ struct dentry *mds_fid2locked_dentry(struct obd_device *obd, struct ll_fid *fid,
                         { .l_inodebits = { MDS_INODELOCK_UPDATE } };
                 LASSERT(mode != NULL);
                 *mode = mds_lock_mode_for_dir(obd, de, lock_mode);
-                rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace,
-                                res_id, LDLM_IBITS,
-                                &cpolicy, *mode, &flags,
-                                mds_blocking_ast,
-                                ldlm_completion_ast, NULL, NULL,
-                                NULL, 0, NULL, lockh + 1);
-                if (rc != ELDLM_OK) {
-                        l_dput(de);
-                        RETURN(ERR_PTR(-ENOLCK));
+                if (*mode) {
+                        rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace,
+                                              res_id, LDLM_IBITS,
+                                              &cpolicy, *mode, &flags,
+                                              mds_blocking_ast,
+                                              ldlm_completion_ast, NULL, NULL,
+                                              NULL, 0, NULL, lockh + 1);
+                        if (rc != ELDLM_OK) {
+                                l_dput(de);
+                                RETURN(ERR_PTR(-ENOLCK));
+                        }
                 }
                 flags = 0;
 

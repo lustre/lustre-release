@@ -1221,15 +1221,20 @@ int mds_get_parent_child_locked(struct obd_device *obd, struct mds_obd *mds,
                 ldlm_policy_data_t policy;
                 int flags = 0;
                 *update_mode = mds_lock_mode_for_dir(obd, *dparentp, parent_mode);
-                res_id.name[0] = (*dparentp)->d_inode->i_ino;
-                res_id.name[1] = (*dparentp)->d_inode->i_generation;
-                policy.l_inodebits.bits = MDS_INODELOCK_UPDATE;
-                rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace, res_id,
-                                      LDLM_IBITS, &policy, *update_mode, &flags,
-                                      mds_blocking_ast, ldlm_completion_ast,
-                                      NULL, NULL, NULL, 0, NULL, parent_lockh+1);
-                if (rc != ELDLM_OK)
-                        RETURN(-ENOLCK);
+                if (*update_mode) {
+                        res_id.name[0] = (*dparentp)->d_inode->i_ino;
+                        res_id.name[1] = (*dparentp)->d_inode->i_generation;
+                        policy.l_inodebits.bits = MDS_INODELOCK_UPDATE;
+                        rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace,
+                                              res_id, LDLM_IBITS, &policy,
+                                              *update_mode, &flags,
+                                              mds_blocking_ast,
+                                              ldlm_completion_ast,
+                                              NULL, NULL, NULL, 0, NULL,
+                                              parent_lockh + 1);
+                        if (rc != ELDLM_OK)
+                                RETURN(-ENOLCK);
+                }
 
                 parent_res_id.name[2] = full_name_hash(name, namelen - 1);
                 CDEBUG(D_INFO, "take lock on %lu:%u:"LPX64"\n",
@@ -2059,13 +2064,16 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
         if (IS_PDIROPS(de_tgt_dir->d_inode)) {
                 int flags = 0;
                 update_mode = mds_lock_mode_for_dir(obd, de_tgt_dir, LCK_EX);
-                rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace,
-                                      tgt_dir_res_id, LDLM_IBITS, &src_policy,
-                                      update_mode, &flags, mds_blocking_ast,
-                                      ldlm_completion_ast, NULL, NULL,
-                                      NULL, 0, NULL, tgt_dir_lockh + 1);
-                if (rc != ELDLM_OK)
-                        GOTO(cleanup, rc = -ENOLCK);
+                if (update_mode) {
+                        rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace,
+                                              tgt_dir_res_id, LDLM_IBITS,
+                                              &src_policy, update_mode, &flags,
+                                              mds_blocking_ast,
+                                              ldlm_completion_ast, NULL, NULL,
+                                              NULL, 0, NULL, tgt_dir_lockh + 1);
+                        if (rc != ELDLM_OK)
+                                GOTO(cleanup, rc = -ENOLCK);
+                }
 
                 tgt_dir_res_id.name[2] = full_name_hash(rec->ur_name,
                                                         rec->ur_namelen - 1);
