@@ -385,6 +385,9 @@ int lustre_process_log(struct lustre_mount_data *lmd, char * profile,
         int err;
         ENTRY;
 
+        if (lmd_bad_magic(lmd))
+                RETURN(-EINVAL);
+
         generate_random_uuid(uuid);
         class_uuid_unparse(uuid, &mdc_uuid);
 
@@ -510,10 +513,9 @@ int lustre_fill_super(struct super_block *sb, void *data, int silent)
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op: sb %p\n", sb);
-        if (lmd == NULL) {
-                CERROR("lustre_mount_data is NULL: check that /sbin/mount.lustre exists?\n");
+        if (lmd_bad_magic(lmd))
                 RETURN(-EINVAL);
-        }
+
         sbi = lustre_init_sbi(sb);
         if (!sbi)
                 RETURN(-ENOMEM);
