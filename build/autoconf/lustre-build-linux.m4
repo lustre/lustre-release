@@ -66,6 +66,55 @@ AC_SUBST(KMODEXT)
 ])
 
 #
+# LB_LINUX_RELEASE
+#
+# get the release version of linux
+#
+AC_DEFUN([LB_LINUX_RELEASE],
+[LINUXRELEASE=
+rm -f build/conftest.i
+AC_MSG_CHECKING([for Linux release])
+LB_LINUX_TRY_MAKE([
+	#include <linux/version.h>
+],[
+	char *LINUXRELEASE;
+	LINUXRELEASE=UTS_RELEASE;
+],[
+	$makerule LUSTRE_KERNEL_TEST=conftest.i
+],[
+	test -s build/conftest.i
+],[
+	# LINUXRELEASE="UTS_RELEASE"
+	eval $(grep "LINUXRELEASE=" build/conftest.i)
+],[
+	AC_MSG_RESULT([unknown])
+	AC_MSG_ERROR([Could not preprocess test program.  Consult config.log for details.])
+])
+rm -f build/conftest.i
+if test x$LINUXRELEASE = x ; then
+	AC_MSG_RESULT([unknown])
+	AC_MSG_ERROR([Could not determine Linux release version from linux/version.h.])
+fi
+AC_MSG_RESULT([$LINUXRELEASE])
+AC_SUBST(LINUXRELEASE)
+
+moduledir='/lib/modules/'$LINUXRELEASE/kernel
+AC_SUBST(moduledir)
+
+modulefsdir='$(moduledir)/fs/$(PACKAGE)'
+AC_SUBST(modulefsdir)
+
+modulenetdir='$(moduledir)/net/$(PACKAGE)'
+AC_SUBST(modulenetdir)
+
+# ------------ RELEASE --------------------------------
+AC_MSG_CHECKING([for Lustre release])
+RELEASE="`echo ${LINUXRELEASE} | tr '-' '_'`_`date +%Y%m%d%H%M`"
+AC_MSG_RESULT($RELEASE)
+AC_SUBST(RELEASE)
+])
+
+#
 # LB_LINUX_PATH
 #
 # Find paths for linux, handling kernel-source rpms
@@ -152,6 +201,8 @@ LB_LINUX_TRY_COMPILE([],[],[
 	AC_MSG_WARN([If you are trying to build with a kernel-source rpm, consult README.kernel-source])
 	AC_MSG_ERROR([Kernel modules could not be built.])
 ])
+
+LB_LINUX_RELEASE
 ])
 
 #

@@ -264,6 +264,9 @@ AC_SUBST(sysconfdir)
 # Directories for documentation and demos.
 docdir='${datadir}/doc/$(PACKAGE)'
 AC_SUBST(docdir)
+
+LP_PATH_DEFAULTS
+LC_PATH_DEFAULTS
 ])
 
 #
@@ -366,7 +369,10 @@ LB_CONFIG_TESTS
 
 LB_CONFIG_MODULES
 
-LB_CONFIG_LIBLUSTRE
+LC_CONFIG_LIBLUSTRE
+
+LP_CONFIGURE
+LC_CONFIGURE
 
 LB_CONDITIONALS
 LB_CONFIG_HEADERS
@@ -375,6 +381,7 @@ AC_CONFIG_FILES(
 [Makefile:build/Makefile.in.toplevel]
 [autoMakefile
 build/autoMakefile
+build/autoconf/Makefile
 build/Rules
 build/lustre.spec
 ])
