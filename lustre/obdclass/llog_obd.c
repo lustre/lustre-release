@@ -77,17 +77,18 @@ int llog_cleanup(struct llog_ctxt *ctxt)
 }
 EXPORT_SYMBOL(llog_cleanup);
 
-int llog_precleanup(struct llog_ctxt *ctxt)
+int llog_precleanup(struct llog_ctxt *ctxt, struct obd_export *exp)
 {
+        int rc = 0;
         ENTRY;
 
         if (!ctxt)
                 RETURN(0);
 
-        if (ctxt->loc_llcd)
-                llog_cancel(ctxt, NULL, 0, NULL, OBD_LLOG_FL_SENDNOW);
+        if (ctxt->loc_llcd && CTXTP(ctxt, precleanup))
+                rc = CTXTP(ctxt, precleanup)(ctxt, exp);
 
-        RETURN(0);
+        RETURN(rc);
 }
 EXPORT_SYMBOL(llog_precleanup);
 
