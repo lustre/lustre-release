@@ -1,69 +1,177 @@
 #!/usr/bin/env python
 
-# Author: Devendra Garg <dgarg@india.hp.com>
+# lstat : This utility prints lustre proc entries in formatted/readable way.
+# Author: Devendra Garg <devendra@india.hp.com>
 
-import os.path,sys
+import sys, string
+import os.path
 
-pathname='/proc/fs/lustre'
+join = os.path.join
+basename = os.path.basename
+realpath = os.path.realpath
+
+pathname = '/proc/fs/lustre/'
 indent = 0
 
-def logdir(msg,i):
+def usage():
+    print 'lstat [-h|--help]|[-a|--all]'
+    print "prints the /proc/fs/lustre entries in formatted/readable way."
+
+def print_name(msg,i):
+    print
     print ("%s%s:")%(getindent(i),msg)
 
-def logname(filename,i):
+def print_msg(msg,i):
+    print ("%s%s")%(getindent(i),msg)
+
+# Opens the files and print all the entries in the file in formatted way.
+def print_file(filename,i):
     msg = ''
     try:
         f = open(filename)
-        msg = f.readline() 
-    except: msg = ''
+        msges = f.readlines() 
+    except: msges = None
+    
+    if msges:
+        msg = msges[0]
+        if (msg != '') and (msg[ len(msg)-1 ] == '\n' ): msg = msg[:len(msg)-1]
+        print ("%s%-15s ----> %s")%(getindent(i),os.path.basename(filename),msg)
 
-    #trim new line
-    if (msg != '') and (msg[ len(msg)-1 ] == '\n' ): msg = msg[:len(msg)-1]
-    print ("%s%s ----> %s")%(getindent(i),os.path.basename(filename),msg)    
+    for j in range(1,len(msges)):
+        msg = msges[j]
+
+        #trim new line
+        if (msg != '') and (msg[ len(msg)-1 ] == '\n' ): msg = msg[:len(msg)-1]
+
+        print ("%s%-15s |---> %s")%(getindent(i),'',msg)    
+
+#For links print the target directory name then link name.
+def print_link(msg,i):
+    print
+    dname = os.path.basename(msg)
+    lname = os.path.basename( os.path.realpath(msg) )
+    #If this is link, prefix 'osc'
+    if string.find(os.path.realpath(msg),'lustre/osc/') != -1:
+        print ("%s%s -> %s:")%(getindent(i),'osc',lname)
+        return
+    
+    print ("%s%s -> %s:")%(getindent(i),dname,lname)
 
 def getindent(i):
     space = ''
     for j in range(i): space = space + '  '
     return space
 
-def visit1(path):
+#Recursive functions that calls itself for all the subdirectory of dir passed.
+def visit(path):
 
     global indent
     indent = indent + 1
- 
+
+    is_link = 0
+
+    if os.path.islink(path):
+        print_link(path,indent)
+        is_link = 1
+    else:
+        print_name(os.path.basename(path),indent)
+
     files = os.listdir(path)
     dirs = []
-    print 
-    if os.path.basename(path) == 'llite':
-        logdir( os.path.basename(path)+' * -- Client Information -- * ',indent )
-    elif  os.path.basename(path) == 'mds' :
-        logdir( os.path.basename(path)+' * -- MDS Information -- * ',indent )
-    elif  os.path.basename(path) == 'ost' :
-        logdir( os.path.basename(path)+' * -- OST Information -- * ',indent )
-    elif  os.path.basename(path) == 'ldlm' :
-        logdir( os.path.basename(path)+' * -- LDLM Information -- * ',indent )
-    else:
-        logdir( os.path.basename(path),indent )
+
     for file in files:
         if os.path.isdir ( os.path.join(path,file) ):
             dirs.append( (os.path.join(path,file),indent+1 ))
         else:
-            logname( os.path.join(path,file), indent+1 )
+            if not is_link:
+                print_file( os.path.join(path,file), indent+1 )
     for dir in dirs:
-        visit1(dir[0])
+        visit(dir[0])
 
     indent = indent - 1
 
+# Returns the target directory name for the link name
+def get_realname(link):
+    os.path.basename( os.path.realpath(link) )
+
+def getfile_content(filename):
+    f = open(filename,'r')
+    msg = f.readline()
+    if (msg != '') and (msg[ len(msg)-1 ] == '\n' ): msg = msg[:len(msg)-1]
+    return msg 
+
+def get_osc_summary(osc):
+    oscname = basename( realpath(osc) ) 
+    ost_c = getfile_content( join(osc, 'ost_conn_uuid')  )
+    ost_s = getfile_content( join(osc, 'ost_server_uuid')  )
+
+    return ("OSC: %s -> NET: %s -> OST: %s") %(oscname, ost_c, ost_s) 
+
+def get_mdc_summary(mdc):
+    mdcname = basename( realpath(mdc) ) 
+    mds_c = getfile_content( join(mdc, 'mds_conn_uuid')  )
+    mds_s = getfile_content( join(mdc, 'mds_server_uuid')  )
+
+    return ("MDC: %s -> NET: %s -> MDS: %s") %(mdcname, mds_c, mds_s) 
+
+#this prints summary for client file system.
+def print_summary():
+    format = 0
+    llite_path = os.path.join(pathname, 'llite')
+    if os.path.exists(llite_path):
+        print '=====> SUMMARY'
+        print
+        files = os.listdir(llite_path)
+        for file in files:
+            fs = file
+            print_msg("MNT: "+fs+"",1)
+            print
+            fs_path = os.path.join(llite_path,fs)
+            osc_path = os.path.join(fs_path, 'osc')
+            lov_path = os.path.join(fs_path, 'lov')
+            mdc_path = os.path.join(fs_path, 'mdc')
+            if os.path.exists( mdc_path ):
+                mdcname = get_realname(mdc_path)
+                print_msg(get_mdc_summary(mdc_path),2)
+                print
+            if os.path.exists(osc_path):
+                oscname = get_osc_summary(osc_path)
+                print_msg(oscname,2)
+                print
+            if os.path.exists(lov_path):
+                lovname = basename( realpath(lov_path) )
+                print_msg("LOV: "+lovname,2)
+                print
+
+                obd_path = join(lov_path, 'target_obds')
+                oscs = os.listdir( obd_path )
+                for osc in oscs:
+                    print_msg( get_osc_summary( join(obd_path, osc)),3 )
+
+                print
+                print_msg( get_mdc_summary( join(lov_path,'target_mdc')),3)                    
 def main():
 
-    llitepath = os.path.join(pathname,'llite')
-    visit1 ( llitepath )
-    mdspath = os.path.join(pathname,'mds')
-    visit1 ( mdspath )
-    ostpath = os.path.join(pathname,'ost')
-    visit1 ( ostpath )
-    ldlmpath = os.path.join(pathname,'ldlm')
-    visit1 ( ldlmpath )
+    if len(sys.argv) > 1 and sys.argv[1] in ('-h','--help'):
+        usage()
+        sys.exit(0)
+
+    if not os.path.exists(pathname):
+        print "Lustre modules are not loaded"
+        sys.exit(1)
+
+    print
+    print_summary()
+    print
+
+    if not (len(sys.argv) > 1 and sys.argv[1] in ('--all','-a') ):
+        sys.exit(0)
+
+    top_dir = os.listdir(pathname)
+    for dir in top_dir:
+        print
+        print ('%s %s%s %s') %('=====>', dir,'-information','')
+        visit(os.path.join(pathname,dir))
 
 if __name__ == "__main__":
     main()
