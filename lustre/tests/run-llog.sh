@@ -2,11 +2,15 @@
 PATH=`dirname $0`:`dirname $0`/../utils:$PATH
 TMP=${TMP:-/tmp}
 
-MDS=`ls /proc/fs/lustre/mds | grep -v num_refs | head -n 1`
+MDS=`find /proc/fs/lustre/mds/* -type d | head -n1 | sed 's/.*\///'`
 [ -z "$MDS" ] && echo "no MDS available, skipping llog test" && exit 0
 
 insmod ../obdclass/llog_test.o || exit 1
 lctl modules > $TMP/ogdb-`hostname`
+
+# take care of UML developers
+[ -f /r/$TMP/ogdb-`hostname` ] && 
+    cp -f $TMP/ogdb-`hostname` /r/$TMP/ogdb-`hostname`
 echo "NOW reload debugging syms.."
 
 RC=0

@@ -28,10 +28,7 @@
 static struct lprocfs_vars lprocfs_module_vars[] = { {0} };
 static struct lprocfs_vars lprocfs_obd_vars[] = { {0} };
 #else
-
 static struct lprocfs_vars lprocfs_module_vars[] = { {0} };
 static struct lprocfs_vars lprocfs_obd_vars[] = { {0} };
-
 #endif /* LPROCFS */
-
 LPROCFS_INIT_VARS(cmobd, lprocfs_module_vars, lprocfs_obd_vars)

@@ -253,7 +253,7 @@ int lmv_intent_getattr(struct obd_export *exp, struct lustre_id *pid,
                                 mds = id_group(&rpid);
                         }
                         lmv_put_obj(obj);
-               }
+                }
 #endif
         } else {
                 CDEBUG(D_OTHER, "INTENT getattr for %*s on "DLID4"\n",
