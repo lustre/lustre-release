@@ -596,5 +596,21 @@ test_31() {
 }
 run_test 31 "open(O_CREAT) two, unlink one, |X| unlink one, close two (test mds_cleanup_orphans)"
 
+# tests for bug 2104; completion without crashing is success.  The close is
+# stale, but we always return 0 for close, so the app never sees it.
+test_32() {
+    multiop $DIR/$tfile O_c &
+    pid1=$!
+    multiop $DIR/$tfile O_c &
+    pid2=$!
+    # give multiop a chance to open
+    sleep 1
+    mds_evict_client
+    kill -USR1 $pid1
+    kill -USR1 $pid2
+    return 0
+}
+run_test 32 "close() notices client eviction; close() after client eviction"
+
 equals_msg test complete, cleaning up
 cleanup
