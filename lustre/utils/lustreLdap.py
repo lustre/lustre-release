@@ -452,7 +452,7 @@ class LustreNode:
 		try:
 			conn_id.add_s(dn,modlist)
 		except _ldap.LDAPError:
-			print "not added"
+			debug("lustre Node: "+ id +" already added")
 		return status
 
         def initobj(self,*args):
@@ -552,8 +552,7 @@ class LustreClient:
 		try:
 			conn_id.add_s(dn, modlist)
 		except _ldap.LDAPError:
-			print "not added"
-			sys.exit(1)
+			debug("lustre client: "+ clientUUID +" already added")
 		return status
 
         def initobj(self,*args):
@@ -644,8 +643,7 @@ class LustreMount:
 		try:
 			conn_id.add_s(dn,modlist)
 		except _ldap.LDAPError:
-			print "not added"
-			sys.exit(1)
+			debug("lustre Mount: "+ mountUUID +" already added")
 		return status
 
         def initobj(self,*args):
@@ -736,8 +734,7 @@ class LustreOsc:
 		try:
 			conn_id.add_s(dn,modlist)
 		except _ldap.LDAPError:
-			print "not added"
-			sys.exit(1)
+			debug("lustre OSC : "+ oscUUID +" already added")
 		return status
 
         def initobj(self,*args):
@@ -890,8 +887,7 @@ class LustreOst:
 		try:
 			conn_id.add_s(dn, modlist)
 		except _ldap.LDAPError:
-			print "not added"
-			sys.exit(1)
+			debug("lustre OST : "+ ostUUID +" already added")
 		return status
 
         def initobj(self,*args):
@@ -982,8 +978,7 @@ class LustreMds:
 		try:
 			conn_id.add_s(dn,modlist)
 		except _ldap.LDAPError:
-			print "not added"
-			sys.exit(1)
+			debug("lustre MDS : "+ mdsUUID +" already added")
 		return status
 
         def initobj(self,*args):
@@ -1082,8 +1077,7 @@ class LustreLov:
 		try:
 			conn_id.add_s(dn,modlist)
 		except _ldap.LDAPError:
-			print "not added"
-			sys.exit(1)
+			debug("lustre LOV: "+ lovUUID +" already added")
 		return status
 
         def initobj(self,*args):
@@ -1183,8 +1177,7 @@ class LustreDevice:
 		try:
 			conn_id.add_s(dn,modlist)
 		except _ldap.LDAPError:
-			print "not added"
-			#sys.exit(1)
+			debug("lustre Device : "+ devUUID +" already added")
 		return status
 
         def initobj(self,*args):
@@ -1265,8 +1258,7 @@ class LustreObd:
 		try:
 			conn_id.add_s(dn, modlist)
 		except _ldap.LDAPError:
-			print "not added"
-			sys.exit(1)
+			debug("lustre OBD : "+ obdUUID +" already added")
 		return status
 
         def initobj(self,*args):
@@ -1332,8 +1324,8 @@ class LustreLdlm:
 		try:
 			conn_id.add_s(dn,modlist)
 		except _ldap.LDAPError:
-			print "not added"
-			#sys.exit(1)
+			debug("LDLM UUID: "+ ldlmUUID +" already added")
+			#debug("LDLM UUID: "+ _ldap.LDAPError +" already added")
 		return status
 
         def initobj(self,*args):
@@ -1417,8 +1409,7 @@ class LustreNet:
 		try:
 			conn_id.add_s(dn,modlist)
 		except _ldap.LDAPError:
-			print "not added"
-			#sys.exit(1)
+			debug("lustre Network : "+ netUUID +" already added")
 		return status
 
         def initobj(self,*args):
@@ -1501,8 +1492,7 @@ class LustreNodeProfile:
 		try:
 			conn_id.add_s(dn,modlist)
 		except _ldap.LDAPError:
-			print "not added"
-			sys.exit(1)
+			debug("lustre Profile: "+ profileUUID +" already added")
 		return status
 
         def initobj(self,*args):
@@ -1568,7 +1558,6 @@ def loadNetworkconfig(dom_node,node):
       net_uuids.append(net.uuid)
       failnetUUID = net.uuid
       lustreNet = LustreNet()
-      lustreNet.initobj(node_name,net.uuid,failnetUUID,net.net_type,net.nid,net.port,net.send_mem,net.recv_mem)
       lustreNet.addEntry_into_ldap(connId, node_name, net.uuid, failnetUUID, net.net_type, str(net.nid), str(net.port), str(net.send_mem), str(net.recv_mem))
 
 
@@ -1579,22 +1568,23 @@ def loadLDLMconfig(dom_node,node):
     ldlm  = LDLM(dom_node)
     ldlm_uuid = ldlm.uuid
     lustreLdlm = LustreLdlm()
-    lustreLdlm.initobj(ldlm.uuid,ldlm.name) 
     lustreLdlm.addEntry_into_ldap(connId, ldlm.uuid, ldlm.name)
 
 lov_uuids = []
+lovUUID = 0
 def loadLOVconfig(dom_node,node): 
         global lov_uuids
+        global lovUUID
         lov_uuid = get_first_ref(dom_node, 'lov')
         lov_node = lookup(dom_node.parentNode, lov_uuid)
         lov = LOV(lov_node)
         lov_uuids.append(lov.uuid)
+        lovUUID = lov.uuid
         node_name = get_attr(node,'name')
         osc_uuids = []
         for uuid in lov.devlist:
               osc_uuids.append(str(uuid))
         objlov = LustreLov()
-        objlov.initobj( lov.uuid, lov.name, osc_uuids, lov.stripe_off, lov.stripe_sz, lov.stripe_cnt, lov.pattern)
         objlov.addEntry_into_ldap(connId, lov.uuid, lov.name, osc_uuids, str(lov.stripe_off), str(lov.stripe_sz), str(lov.stripe_cnt), str(lov.pattern))
 
 	lov_devs = lov_node.getElementsByTagName('devices')
@@ -1603,12 +1593,12 @@ def loadLOVconfig(dom_node,node):
             osc_node = lookup(dom_node.parentNode,osc_uuid)
             osc = OSC(osc_node) 
             lustreOsc = LustreOsc()
-            lustreOsc .initobj( osc.uuid, osc.name, str(osc.obd_uuid), str(osc.ost_uuid))
             lustreOsc .addEntry_into_ldap(connId, osc.uuid, osc.name, str(osc.obd_uuid), str(osc.ost_uuid))
 
 mds_uuids = []
 def loadMDSconfig( dom_node,node):
     global mds_uuids 
+    global lovUUID
     node_name = getName(node) 
     mds = MDS(dom_node)
     mds_net = mds.get_server()
@@ -1621,20 +1611,24 @@ def loadMDSconfig( dom_node,node):
     lov_uuid = get_first_ref(dom_node, 'lov')
 
     objdevice = LustreDevice()
-    objdevice.initobj( devuuid, netuuid, netuuid, node_name, node_name, mds.devname, str(mds.format), str(mds.fstype), str(mds.size))
     objdevice.addEntry_into_ldap(connId, devuuid, netuuid, netuuid, node_name, node_name, str(mds.devname), str(mds.format), str(mds.fstype), str(mds.size))
 
-    lovcfg_uuid = get_first_ref(node, 'lovconfig')
-    lovcfg = 0
-    if lovcfg_uuid:
-        lovcfg_node = lookup(dom_node.parentNode, lovcfg_uuid )
-        lovcfg = LOVConfig(lovcfg_node)
-    lov_uuid = 0
-    if lovcfg:
-	lov_uuid = str(lovcfg.lov_uuid)
+    lovcfg_uuids = get_all_refs(node, 'lovconfig')
+    for lovcfg_uuid in lovcfg_uuids:
+        lovcfg = 0
+        if lovcfg_uuid:
+            lovcfg_node = lookup(dom_node.parentNode, lovcfg_uuid )
+            lovcfg = LOVConfig(lovcfg_node)
+        lov_uuid = 0
+        if lovcfg:
+	    lov_uuid = str(lovcfg.lov_uuid)
+            lov_node = lookup(dom_node.parentNode, lov_uuid)
+            lov = LOV(lov_node)
+            if mds.uuid == lov.mds_uuid:
+                  #print "Match found"
+                  break
 	
     lustreMds = LustreMds()
-    lustreMds.initobj(mds.uuid,mds.name,devuuid, lov_uuid, mds.uuid)
     lustreMds.addEntry_into_ldap(connId, mds.uuid, mds.name, devuuid, lov_uuid, mds.uuid)
     mds_uuids.append(mds.uuid)
       
@@ -1647,11 +1641,9 @@ def loadOBDconfig(dom_node,node):
      devuuid = new_uuid(device_name)
 
      lustreDev = LustreDevice()
-     lustreDev.initobj(devuuid, net_uuids[0], net_uuids[0], node_name, node_name, str(obd.devname), str(obd.format), str(obd.fstype), str(obd.size))
      lustreDev.addEntry_into_ldap(connId, devuuid, net_uuids[0], net_uuids[0], node_name, node_name, str(obd.devname), str(obd.format), str(obd.fstype), str(obd.size))
 
      lustreObd = LustreObd()
-     lustreObd.initobj(obd.uuid, obd.name, obd.obdtype, devuuid, obd.uuid)
      lustreObd.addEntry_into_ldap(connId, obd.uuid, obd.name, devuuid, obd.uuid)
 
 
@@ -1664,7 +1656,6 @@ def loadMountpointconfig(dom_node,node):
     mountuuid = new_uuid(mount.name)
     mount_uuids.append(mountuuid)
     lustreMount = LustreMount()
-    lustreMount.initobj( mountuuid, str(mount.mds_uuid), str(mount.lov_uuid), str(mount.path), "No")
     lustreMount.addEntry_into_ldap(connId, mountuuid, str(mount.mds_uuid), str(mount.lov_uuid),str(mount.path), "No")
     
 
@@ -1676,7 +1667,6 @@ def loadOSTconfig(dom_node,node):
     node_name = get_attr(node,'name')
 
     lustreOst = LustreOst()
-    lustreOst.initobj(ost.uuid, ost.name, ost.obd_uuid)
     lustreOst.addEntry_into_ldap(connId, ost.uuid, ost.name, str(ost.obd_uuid))
     ost_uuids.append(ost.uuid)
  	
@@ -1721,13 +1711,11 @@ def LoadProfile(lustreNode,profileNode,node):
         clientuuid = node_name + "clientUUID"	
         lustre_Node = LustreNode(node_name)
         lustreClient = LustreClient(lustre_Node)
-        lustreClient.initobj(clientuuid, mount_uuids, net_uuids)
         lustreClient.addEntry_into_ldap(connId, clientuuid, mount_uuids, net_uuids)
 
 
     profile_uuid = str(node_name+"profileUUID")
     nodeprofile = LustreNodeProfile()
-    nodeprofile.initobj(profile_uuid, mds_uuids, ost_uuids, clientuuid)
     nodeprofile.addEntry_into_ldap(connId, profile_uuid, mds_uuids, ost_uuids, clientuuid)
      
 def Initilize_globals():
@@ -1742,6 +1730,7 @@ def Initilize_globals():
     mds_uuids = []
     ost_uuids = []
     net_uuids = []
+    lov_uuids = []
     clientuuid = 0
     profile_uuid = 0
     ldlm_uuid = 0
@@ -1760,6 +1749,7 @@ def print_globals():
     print "profile_uuid :", profile_uuid 
     print "ldlm_uuid :", ldlm_uuid 
 
+connId = 0
 def loadXml(lustreNode):
     global net_uuids
     global ldlm_uuid
@@ -1780,7 +1770,6 @@ def loadXml(lustreNode):
     nodelist = lustreNode.getElementsByTagName('node')
     for i in range(len(nodelist)):
         node_name = getName(nodelist[i])
-        print "node name in loadXml :", node_name
 	node_uuid = getUUID(nodelist[i])
         dom_node = getByName(lustreNode, node_name, 'node') 
         if dom_node == None:
@@ -1790,10 +1779,7 @@ def loadXml(lustreNode):
         if reflist:
             for profile in reflist:
        	        LoadProfile(lustreNode,profile,dom_node)
-	Node.initobj(node_name,node_uuid,net_uuids,profile_uuid,net_uuids,ldlm_uuid)
 	Node.addEntry_into_ldap(connId,node_name,node_uuid,net_uuids,profile_uuid,net_uuids,ldlm_uuid)
         Initilize_globals()
-	print "initilized for node:", node_name
 
         
-connId = 0
