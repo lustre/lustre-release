@@ -38,7 +38,13 @@ static int llog_test_rand;
 static struct obd_uuid uuid = { .uuid = "test_uuid" };
 static struct llog_logid cat_logid;
 
-static int verify_handle(char * test, struct llog_handle *llh, int num_recs)
+struct llog_mini_rec {
+        struct llog_rec_hdr     lmr_hdr;
+        __u32                   padding[2];
+        struct llog_rec_tail    lmr_tail;
+} __attribute__((packed));
+
+static int verify_handle(char *test, struct llog_handle *llh, int num_recs)
 {
         int i;
         int last_idx = 0;
@@ -73,7 +79,7 @@ static int verify_handle(char * test, struct llog_handle *llh, int num_recs)
 }
 
 /* Test named-log create/open, close */
-static int llog_test_1(struct obd_device *obd, char * name)
+static int llog_test_1(struct obd_device *obd, char *name)
 {
         struct llog_handle *llh;
         struct llog_ctxt *ctxt = llog_get_context(obd, LLOG_TEST_ORIG_CTXT);
@@ -106,7 +112,8 @@ static int llog_test_1(struct obd_device *obd, char * name)
 }
 
 /* Test named-log reopen; returns opened log on success */
-static int llog_test_2(struct obd_device *obd, char * name, struct llog_handle **llh)
+static int llog_test_2(struct obd_device *obd, char *name,
+                       struct llog_handle **llh)
 {
         struct llog_handle *loghandle;
         struct llog_logid logid;
@@ -150,7 +157,7 @@ static int llog_test_2(struct obd_device *obd, char * name, struct llog_handle *
                 RETURN(rc);
         }
         llog_free_handle(loghandle);
-        
+
         RETURN(rc);
 }
 
@@ -193,10 +200,10 @@ static int llog_test_3(struct obd_device *obd, struct llog_handle *llh)
                 if ((rc = verify_handle("3c", llh, num_recs)))
                         RETURN(rc);
         }
-        
+
         if ((rc = verify_handle("3b", llh, num_recs)))
                 RETURN(rc);
-        
+
         CERROR("3c: write 1000 more log records\n");
         for (i = 0; i < 1000; i++) {
                 rc = llog_write_rec(llh, &lcr.lcr_hdr, NULL, 0, NULL, -1);
@@ -212,7 +219,7 @@ static int llog_test_3(struct obd_device *obd, struct llog_handle *llh)
 
         if ((rc = verify_handle("3c", llh, num_recs)))
                 RETURN(rc);
-                
+
         RETURN(rc);
 }
 
@@ -231,7 +238,8 @@ static int llog_test_4(struct obd_device *obd)
 
         ENTRY;
 
-        lmr.lmr_hdr.lrh_len = lmr.lmr_tail.lrt_len = cpu_to_le32(LLOG_MIN_REC_SIZE);
+        lmr.lmr_hdr.lrh_len = lmr.lmr_tail.lrt_len =
+                cpu_to_le32(LLOG_MIN_REC_SIZE);
         lmr.lmr_hdr.lrh_type = cpu_to_le32(0xf00f00);
 
         sprintf(name, "%x", llog_test_rand+1);
@@ -251,7 +259,7 @@ static int llog_test_4(struct obd_device *obd)
                 CERROR("4b: write 1 catalog record failed at: %d\n", rc);
                 GOTO(out, rc);
         }
-        num_recs++; 
+        num_recs++;
         if ((rc = verify_handle("4b", cath, 2)))
                 RETURN(rc);
 
@@ -308,7 +316,8 @@ static int llog_test_4(struct obd_device *obd)
         RETURN(rc);
 }
 
-static int cat_print_cb(struct llog_handle *llh, struct llog_rec_hdr *rec, void *data)
+static int cat_print_cb(struct llog_handle *llh, struct llog_rec_hdr *rec,
+                        void *data)
 {
         struct llog_logid_rec *lir = (struct llog_logid_rec *)rec;
 
@@ -317,24 +326,26 @@ static int cat_print_cb(struct llog_handle *llh, struct llog_rec_hdr *rec, void 
                 RETURN(-EINVAL);
         }
 
-        CERROR("seeing record at index %d in log "LPX64"\n", le32_to_cpu(rec->lrh_index), 
-               lir->lid_id.lgl_oid);
+        CERROR("seeing record at index %d in log "LPX64"\n",
+               le32_to_cpu(rec->lrh_index), lir->lid_id.lgl_oid);
         RETURN(0);
 }
 
-static int plain_print_cb(struct llog_handle *llh, struct llog_rec_hdr *rec, void *data)
+static int plain_print_cb(struct llog_handle *llh, struct llog_rec_hdr *rec,
+                          void *data)
 {
         if (!le32_to_cpu(llh->lgh_hdr->llh_flags) & LLOG_F_IS_PLAIN) {
                 CERROR("log is not plain\n");
                 RETURN(-EINVAL);
         }
 
-        CERROR("seeing record at index %d in log "LPX64"\n", 
+        CERROR("seeing record at index %d in log "LPX64"\n",
                le32_to_cpu(rec->lrh_index), llh->lgh_id.lgl_oid);
         RETURN(0);
 }
 
-static int llog_cancel_rec_cb(struct llog_handle *llh, struct llog_rec_hdr *rec, void *data)
+static int llog_cancel_rec_cb(struct llog_handle *llh, struct llog_rec_hdr *rec,
+                              void *data)
 {
         struct llog_cookie cookie;
         static int i = 0;
@@ -346,7 +357,7 @@ static int llog_cancel_rec_cb(struct llog_handle *llh, struct llog_rec_hdr *rec,
 
         cookie.lgc_lgl = llh->lgh_id;
         cookie.lgc_index = le32_to_cpu(rec->lrh_index);
-        
+
         llog_cat_cancel_records(llh->u.phd.phd_cat_handle, 1, &cookie);
         i++;
         if (i == 40000)
@@ -367,7 +378,8 @@ static int llog_test_5(struct obd_device *obd)
 
         ENTRY;
 
-        lmr.lmr_hdr.lrh_len = lmr.lmr_tail.lrt_len = cpu_to_le32(LLOG_MIN_REC_SIZE);
+        lmr.lmr_hdr.lrh_len = lmr.lmr_tail.lrt_len =
+                cpu_to_le32(LLOG_MIN_REC_SIZE);
         lmr.lmr_hdr.lrh_type = cpu_to_le32(0xf00f00);
 
         CERROR("5a: re-open catalog by id\n");
@@ -424,13 +436,13 @@ static int llog_test_5(struct obd_device *obd)
 }
 
 /* Test client api; open log by name and process */
-static int llog_test_6(struct obd_device *obd, char * name)
+static int llog_test_6(struct obd_device *obd, char *name)
 {
         struct obd_device *mdc_obd;
         struct llog_ctxt *ctxt = llog_get_context(obd, LLOG_TEST_ORIG_CTXT);
         struct obd_uuid *mds_uuid = &ctxt->loc_exp->exp_obd->obd_uuid;
         struct lustre_handle exph = {0, };
-        struct obd_export * exp;
+        struct obd_export *exp;
         struct obd_uuid uuid = {"LLOG_TEST6_UUID"};
         struct llog_handle *llh = NULL;
         struct llog_ctxt *nctxt;
@@ -439,7 +451,7 @@ static int llog_test_6(struct obd_device *obd, char * name)
         CERROR("6a: re-open log %s using client API\n", name);
         mdc_obd = class_find_client_obd(mds_uuid, LUSTRE_MDC_NAME, NULL);
         if (mdc_obd == NULL) {
-                CERROR("6: no MDC devices connected to %s found.\n", 
+                CERROR("6: no MDC devices connected to %s found.\n",
                        mds_uuid->uuid);
                 RETURN(-ENOENT);
         }
@@ -465,7 +477,7 @@ static int llog_test_6(struct obd_device *obd, char * name)
         }
 
         rc = llog_process(llh, (llog_cb_t)plain_print_cb, NULL);
-        if (rc) 
+        if (rc)
                 CERROR("6: llog_process failed %d\n", rc);
 
 parse_out:
@@ -475,7 +487,7 @@ parse_out:
         }
 
         rc = obd_disconnect(exp, 0);
-        
+
         RETURN(rc);
 }
 
@@ -540,7 +552,7 @@ static int llog_test_llog_init(struct obd_device *obd, struct obd_device *tgt,
 {
         int rc;
         ENTRY;
-        
+
         rc = llog_setup(obd, LLOG_TEST_ORIG_CTXT, tgt, 0, NULL, &llog_lvfs_ops);
         RETURN(rc);
 }
