@@ -140,9 +140,9 @@ void mdc_set_lock_data(__u64 *l, void *data)
         LASSERT(lock != NULL);
         l_lock(&lock->l_resource->lr_namespace->ns_lock);
 #if !defined(LIBLUSTRE)
-        if (lock->l_data && lock->l_data != data) {
+        if (lock->l_ast_data && lock->l_ast_data != data) {
                 struct inode *new_inode = data;
-                struct inode *old_inode = lock->l_data;
+                struct inode *old_inode = lock->l_ast_data;
                 unsigned long state = old_inode->i_state & I_FREEING;
                 CERROR("Found existing inode %p/%lu/%u state %lu in lock: "
                        "setting data to %p/%lu/%u\n", old_inode,
@@ -151,7 +151,7 @@ void mdc_set_lock_data(__u64 *l, void *data)
                 LASSERT(state);
         }
 #endif
-        lock->l_data = data;
+        lock->l_ast_data = data;
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
         LDLM_LOCK_PUT(lock);
 
@@ -527,7 +527,7 @@ int mdc_intent_lock(struct obd_export *exp, struct ll_uctxt *uctxt,
         /* If we already have a matching lock, then cancel the new
          * one.  We have to set the data here instead of in
          * mdc_enqueue, because we need to use the child's inode as
-         * the l_data to match, and that's not available until
+         * the l_ast_data to match, and that's not available until
          * intent_finish has performed the iget().) */
         lock = ldlm_handle2lock(&lockh);
         if (lock) {

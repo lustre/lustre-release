@@ -60,8 +60,8 @@ static int filter_direct_io(int rw, struct inode *inode, struct kiobuf *iobuf)
 {
         struct page *page;
         unsigned long *b = iobuf->blocks;
-        int rc, i, create = (rw == OBD_BRW_WRITE), blocks_per_page, *created;
-        int *cr, cleanup_phase = 0;
+        int rc, i, create = (rw == OBD_BRW_WRITE), blocks_per_page;
+        int *cr, cleanup_phase = 0, *created = NULL;
         ENTRY;
 
         blocks_per_page = PAGE_SIZE >> inode->i_blkbits;
