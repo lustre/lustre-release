@@ -29,8 +29,6 @@
 #include <linux/pagemap.h> // XXX kill me soon
 #include <linux/version.h>
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-
 #define DEBUG_SUBSYSTEM S_FILTER
 
 #include <linux/iobuf.h>
@@ -341,6 +339,3 @@ cleanup:
 
         RETURN(rc);
 }
-
-#endif
-
