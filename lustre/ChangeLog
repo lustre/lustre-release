@@ -1,3 +1,9 @@
+2002-09-19  Peter Braam  <braam@clusterfs.com>
+
+	* version 0_5_9
+	* bug fix
+	  - stack overflow bug in extN fixed
+
 2002-09-18  Andreas Dilger  <adilger@clusterfs.com>
 	* version 0_5_8
 	* documentation updates
