@@ -40,6 +40,31 @@
 
 #include "llite_lib.h"
 
+static void ll_intent_release(struct lookup_intent *it)
+{
+        struct lustre_handle *handle;
+        ENTRY;
+
+        /* LASSERT(ll_d2d(de) != NULL); */
+
+        if (it->d.lustre.it_lock_mode) {
+                handle = (struct lustre_handle *)&it->d.lustre.it_lock_handle;
+                CDEBUG(D_DLMTRACE, "releasing lock with cookie "LPX64
+                       " from it %p\n",
+                       handle->cookie, it);
+                ldlm_lock_decref(handle, it->d.lustre.it_lock_mode);
+
+                /* intent_release may be called multiple times, from
+                   this thread and we don't want to double-decref this
+                   lock (see bug 494) */
+                it->d.lustre.it_lock_mode = 0;
+        }
+        it->it_magic = 0;
+        it->it_op_release = 0;
+        EXIT;
+}
+
+#if 0
 static void llu_mdc_lock_set_inode(struct lustre_handle *lockh,
                                    struct inode *inode)
 {
@@ -355,6 +380,238 @@ static int llu_lookup2(struct inode *parent, struct pnode *pnode,
 
         RETURN(rc);
 }
+#endif
+
+static int lookup_it_finish(struct ptlrpc_request *request, int offset,
+                            struct lookup_intent *it, void *data)
+{
+        struct it_cb_data *icbd = data;
+        struct pnode *child = icbd->icbd_child;
+        struct inode *parent = icbd->icbd_parent;
+        struct llu_sb_info *sbi = llu_i2sbi(parent);
+//        struct dentry *dentry = *de, *saved = *de;
+        struct inode *inode = NULL;
+        int rc;
+
+        /* NB 1 request reference will be taken away by ll_intent_lock()
+         * when I return */
+        if (!it_disposition(it, DISP_LOOKUP_NEG)) {
+                struct lustre_md md;
+                struct llu_inode_info *lli;
+                ENTRY;
+
+                rc = mdc_req2lustre_md(request, offset, sbi->ll_osc_exp, &md);
+                if (rc)
+                        RETURN(rc);
+
+                inode = llu_iget(parent->i_fs, (obd_id)md.body->ino, &md);
+                if (!inode) {
+                        /* free the lsm if we allocated one above */
+                        if (md.lsm != NULL)
+                                obd_free_memmd(sbi->ll_osc_exp, &md.lsm);
+                        RETURN(-ENOMEM);
+                } else if (md.lsm != NULL &&
+                           llu_i2info(inode)->lli_smd != md.lsm) {
+                        obd_free_memmd(sbi->ll_osc_exp, &md.lsm);
+                }
+
+                lli = llu_i2info(inode);
+
+                /* If this is a stat, get the authoritative file size */
+                if (it->it_op == IT_GETATTR && S_ISREG(lli->lli_st_mode) &&
+                    lli->lli_smd != NULL) {
+                        struct ldlm_extent extent = {0, OBD_OBJECT_EOF};
+                        struct lustre_handle lockh = {0};
+                        struct lov_stripe_md *lsm = lli->lli_smd;
+                        ldlm_error_t rc;
+
+                        LASSERT(lsm->lsm_object_id != 0);
+
+                        rc = llu_extent_lock(NULL, inode, lsm, LCK_PR, &extent,
+                                            &lockh);
+                        if (rc != ELDLM_OK) {
+                                I_RELE(inode);
+                                RETURN(-EIO);
+                        }
+                        llu_extent_unlock(NULL, inode, lsm, LCK_PR, &lockh);
+                }
+        } else {
+                ENTRY;
+        }
+
+/*
+        dentry->d_op = &ll_d_ops;
+        ll_set_dd(dentry);
+
+        if (dentry == saved)
+                d_add(dentry, inode);
+*/
+        child->p_base->pb_ino = inode;
+
+        RETURN(0);
+}
+
+void llu_lookup_finish_locks(struct lookup_intent *it, struct pnode *pnode)
+{
+        LASSERT(it);
+        LASSERT(pnode);
+
+        /* drop IT_LOOKUP locks */
+        if (it->it_op == IT_LOOKUP)
+                ll_intent_release(it);
+
+        if (it && pnode->p_base->pb_ino != NULL) {
+                struct inode *inode = pnode->p_base->pb_ino;
+                CDEBUG(D_DLMTRACE, "setting l_data to inode %p (%lu/%lu)\n",
+                       inode, llu_i2info(inode)->lli_st_ino,
+                       llu_i2info(inode)->lli_st_generation);
+                mdc_set_lock_data(&it->d.lustre.it_lock_handle, inode);
+        }
+}
+
+struct inode *llu_inode_from_lock(struct ldlm_lock *lock)
+{
+        struct inode *inode;
+        l_lock(&lock->l_resource->lr_namespace->ns_lock);
+
+        if (lock->l_data) {
+                inode = (struct inode *)lock->l_data;
+                I_REF(inode);
+        } else
+                inode = NULL;
+
+        l_unlock(&lock->l_resource->lr_namespace->ns_lock);
+        return inode;
+}
+
+static inline void ll_invalidate_inode_pages(struct inode * inode)
+{
+        /* do nothing */
+}
+
+static int llu_mdc_blocking_ast(struct ldlm_lock *lock,
+                                struct ldlm_lock_desc *desc,
+                                void *data, int flag)
+{
+        int rc;
+        struct lustre_handle lockh;
+        ENTRY;
+
+
+        switch (flag) {
+        case LDLM_CB_BLOCKING:
+                ldlm_lock2handle(lock, &lockh);
+                rc = ldlm_cli_cancel(&lockh);
+                if (rc < 0) {
+                        CDEBUG(D_INODE, "ldlm_cli_cancel: %d\n", rc);
+                        RETURN(rc);
+                }
+                break;
+        case LDLM_CB_CANCELING: {
+                struct inode *inode = llu_inode_from_lock(lock);
+                struct llu_inode_info *lli;
+
+                /* Invalidate all dentries associated with this inode */
+                if (inode == NULL)
+                        break;
+
+                lli =  llu_i2info(inode);
+
+                clear_bit(LLI_F_HAVE_MDS_SIZE_LOCK, &lli->lli_flags);
+
+                if (lock->l_resource->lr_name.name[0] != lli->lli_st_ino ||
+                    lock->l_resource->lr_name.name[1] != lli->lli_st_generation) {
+                        LDLM_ERROR(lock, "data mismatch with ino %lu/%lu",
+                                   lli->lli_st_ino, lli->lli_st_generation);
+                }
+                if (S_ISDIR(lli->lli_st_mode)) {
+                        CDEBUG(D_INODE, "invalidating inode %lu\n",
+                               lli->lli_st_ino);
+
+                        ll_invalidate_inode_pages(inode);
+                }
+
+/*
+                if (inode->i_sb->s_root &&
+                    inode != inode->i_sb->s_root->d_inode)
+                        ll_unhash_aliases(inode);
+*/
+                I_RELE(inode);
+                break;
+        }
+        default:
+                LBUG();
+        }
+
+        RETURN(0);
+}
+
+/* XXX */
+#define EXT2_NAME_LEN (255)
+
+static int llu_lookup_it(struct inode *parent, struct pnode *pnode,
+                         struct lookup_intent *it, int flags)
+{
+        struct ll_fid pfid;
+        struct ll_uctxt ctxt;
+        struct it_cb_data icbd;
+        struct ptlrpc_request *req = NULL;
+        struct lookup_intent lookup_it = { .it_op = IT_LOOKUP };
+        int rc;
+        ENTRY;
+
+        if (pnode->p_base->pb_name.len > EXT2_NAME_LEN)
+                RETURN(-ENAMETOOLONG);
+
+
+/*
+        CDEBUG(D_VFSTRACE, "VFS Op:name=%s,dir=%lu/%u(%p),intent=%s\n",
+               dentry->d_name.name, parent->i_ino, parent->i_generation,
+               parent, LL_IT2STR(it));
+
+        if (d_mountpoint(dentry))
+                CERROR("Tell Peter, lookup on mtpt, it %s\n", LL_IT2STR(it));
+
+        ll_frob_intent(&it, &lookup_it);
+*/
+
+        if (!it) {
+                it = &lookup_it;
+                it->it_op_release = ll_intent_release;
+        }
+
+        icbd.icbd_child = pnode;
+        icbd.icbd_parent = parent;
+        icbd.icbd_child = pnode;
+        ll_inode2fid(&pfid, parent);
+        ll_i2uctxt(&ctxt, parent, NULL);
+
+        rc = mdc_intent_lock(llu_i2mdcexp(parent), &ctxt, &pfid,
+                             pnode->p_base->pb_name.name,
+                             pnode->p_base->pb_name.len,
+                             NULL, it, flags, &req, llu_mdc_blocking_ast);
+        if (rc < 0)
+                GOTO(out, rc);
+        
+        rc = lookup_it_finish(req, 1, it, &icbd);
+        if (rc != 0) {
+                ll_intent_release(it);
+                GOTO(out, rc);
+        }
+
+        llu_lookup_finish_locks(it, pnode);
+
+/*
+        if (dentry == save)
+                GOTO(out, retval = NULL);
+        else
+                GOTO(out, retval = dentry);
+*/
+ out:
+        if (req)
+                ptlrpc_req_finished(req);
+        return rc;
+}
 
 static struct lookup_intent*
 translate_lookup_intent(struct intent *intent, const char *path)
@@ -420,6 +677,9 @@ translate_lookup_intent(struct intent *intent, const char *path)
                 OBD_FREE(it, sizeof(*it));
                 it = NULL;
         }
+        if (it)
+                it->it_op_release = ll_intent_release;
+
         CDEBUG(D_VFSTRACE, "final intent 0x%x\n", it ? it->it_op : 0);
         return it;
 }
@@ -448,15 +708,15 @@ int llu_iop_lookup(struct pnode *pnode,
                 RETURN(-EINVAL);
 
         it = translate_lookup_intent(intnt, path);
-
+#if 0
         /* param flags is not used, let it be 0 */
         if (llu_pb_revalidate(pnode, 0, it)) {
                 LASSERT(pnode->p_base->pb_ino);
                 *inop = pnode->p_base->pb_ino;
                 RETURN(0);
         }
-
-        rc = llu_lookup2(pnode->p_parent->p_base->pb_ino, pnode, it);
+#endif
+        rc = llu_lookup_it(pnode->p_parent->p_base->pb_ino, pnode, it, 0);
         if (!rc) {
                 if (!pnode->p_base->pb_ino)
                         rc = -ENOENT;
