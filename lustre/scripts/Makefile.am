@@ -3,8 +3,11 @@
 # This code is issued under the GNU General Public License.
 # See the file COPYING in this distribution
 
-EXTRA_DIST = license-status maketags.sh lustre.spec version_tag.pl $(initd_SCRIPTS)
+EXTRA_DIST = license-status maketags.sh lustre.spec version_tag.pl $(initd_SCRIPTS) $(sbin_SCRIPTS)
 initddir = $(sysconfdir)/init.d
 initd_SCRIPTS = lustre
+
+sbin_SCRIPTS = lwizard
+
 include $(top_srcdir)/Rules
 
