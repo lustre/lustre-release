@@ -319,23 +319,14 @@ void t11()
 void t12()
 {
         char *dir="/mnt/lustre/test_t11_dir";
-        char *file1="/mnt/lustre/test_t11_dir/file1";
-        char *file2="/mnt/lustre/test_t11_dir/file2";
-        char *file3="/mnt/lustre/test_t11_dir/file3";
         char buf[1024*128];
         int fd;
-        ENTRY("simple readdir");
+        ENTRY("empty directory readdir");
 
         t_mkdir(dir);
-        t_touch(file1);
-        t_touch(file2);
-        t_touch(file3);
         fd = t_open(dir);
         t_ls(fd, buf, sizeof(buf));
         t_close(fd);
-        t_unlink(file1);
-        t_unlink(file2);
-        t_unlink(file3);
         t_rmdir(dir);
         LEAVE();
 }
@@ -344,11 +335,11 @@ void t13()
 {
         char *dir="/mnt/lustre/test_t12_dir/";
         char name[1024];
-        char buf[1024*4];
-        const int nfiles = 300;
-        char *prefix = "test12_file_name_prefix_PPPPPPPPPP___";
+        char buf[1024];
+        const int nfiles = 20;
+        char *prefix = "test12_filename_prefix_";
         int fd, i;
-        ENTRY("large directory readdir");
+        ENTRY("multiple entries directory readdir");
 
         t_mkdir(dir);
         printf("Creating %d files...\n", nfiles);
@@ -368,6 +359,33 @@ void t13()
         LEAVE();
 }
 
+void t14()
+{
+        char *dir="/mnt/lustre/test_t12_dir/";
+        char name[1024];
+        char buf[1024];
+        const int nfiles = 256;
+        char *prefix = "test12_filename_long_prefix_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA___";
+        int fd, i;
+        ENTRY(">1 block(4k) directory readdir");
+
+        t_mkdir(dir);
+        printf("Creating %d files...\n", nfiles);
+        for (i = 0; i < nfiles; i++) {
+                sprintf(name, "%s%s%05d", dir, prefix, i);
+                t_touch(name);
+        }
+        fd = t_open(dir);
+        t_ls(fd, buf, sizeof(buf));
+        t_close(fd);
+        printf("Cleanup...\n");
+        for (i = 0; i < nfiles; i++) {
+                sprintf(name, "%s%s%05d", dir, prefix, i);
+                t_unlink(name);
+        }
+        t_rmdir(dir);
+        LEAVE();
+}
 extern void __liblustre_setup_(void);
 extern void __liblustre_cleanup_(void);
 
@@ -428,9 +446,8 @@ int main(int argc, char * const argv[])
         t10();
         t11();
         t12();
-/*
         t13();
-*/
+        t14();
 #endif
 
 	printf("liblustre is about shutdown\n");

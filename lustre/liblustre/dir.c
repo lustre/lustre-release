@@ -214,7 +214,7 @@ ssize_t llu_iop_getdirentries(struct inode *ino, char *buf, size_t nbytes,
                 free_page(page);
         }
 done:
-        lli->lli_dir_pos += pgidx << PAGE_CACHE_SHIFT | offset;
+        lli->lli_dir_pos = pgidx << PAGE_CACHE_SHIFT | offset;
         *basep = lli->lli_dir_pos;
         RETURN(filled);
 }
