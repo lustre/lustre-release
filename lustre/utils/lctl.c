@@ -193,6 +193,9 @@ command_t cmdlist[] = {
         {"test_getattr", jt_obd_test_getattr, 0,
          "do <num> getattrs (on OST object <objid> (objid+1 on each thread))\n"
          "usage: test_getattr <num> [verbose [[t]objid]]"},
+        {"test_setattr", jt_obd_test_setattr, 0,
+         "do <num> setattrs (on OST object <objid> (objid+1 on each thread))\n"
+         "usage: test_setattr <num> [verbose [[t]objid]]"},
         {"test_brw", jt_obd_test_brw, 0,
          "do <num> bulk read/writes (<npages> per I/O, on OST object <objid>)\n"
          "usage: test_brw [t]<num> [write [verbose [npages [[t]objid]]]]"},

@@ -76,6 +76,21 @@ static int echo_disconnect(struct obd_export *exp, int flags)
         exp->exp_flags = flags;
         spin_unlock_irqrestore(&exp->exp_lock, irqflags);
 
+        /* complete all outstanding replies */
+        spin_lock_irqsave(&exp->exp_lock, irqflags);
+        while (!list_empty(&exp->exp_outstanding_replies)) {
+                struct ptlrpc_reply_state *rs =
+                        list_entry(exp->exp_outstanding_replies.next,
+                                   struct ptlrpc_reply_state, rs_exp_list);
+                struct ptlrpc_service *svc = rs->rs_srv_ni->sni_service;
+
+                spin_lock(&svc->srv_lock);
+                list_del_init(&rs->rs_exp_list);
+                ptlrpc_schedule_difficult_reply(rs);
+                spin_unlock(&svc->srv_lock);
+        }
+        spin_unlock_irqrestore(&exp->exp_lock, irqflags);
+
         return class_disconnect(exp, flags);
 }
 
@@ -122,7 +137,6 @@ int echo_create(struct obd_export *exp, struct obdo *oa,
 
         oa->o_id = echo_next_id(obd);
         oa->o_valid = OBD_MD_FLID;
-        atomic_inc(&obd->u.echo.eo_create);
 
         return 0;
 }
@@ -148,8 +162,6 @@ int echo_destroy(struct obd_export *exp, struct obdo *oa,
                 RETURN(-EINVAL);
         }
 
-        atomic_inc(&obd->u.echo.eo_destroy);
-
         return 0;
 }
 
@@ -170,7 +182,7 @@ static int echo_getattr(struct obd_export *exp, struct obdo *oa,
                 RETURN(-EINVAL);
         }
 
-        obdo_cpy_md(oa, &obd->u.echo.oa, oa->o_valid);
+        obdo_cpy_md(oa, &obd->u.echo.eo_oa, oa->o_valid);
         oa->o_id = id;
 
         return 0;
@@ -192,9 +204,14 @@ static int echo_setattr(struct obd_export *exp, struct obdo *oa,
                 RETURN(-EINVAL);
         }
 
-        memcpy(&obd->u.echo.oa, oa, sizeof(*oa));
+        memcpy(&obd->u.echo.eo_oa, oa, sizeof(*oa));
 
-        atomic_inc(&obd->u.echo.eo_setattr);
+        if (oa->o_id & 4) {
+                /* Save lock to force ACKed reply */
+                ldlm_lock_addref (&obd->u.echo.eo_nl_lock, LCK_NL);
+                oti->oti_ack_locks[0].mode = LCK_NL;
+                oti->oti_ack_locks[0].lock = obd->u.echo.eo_nl_lock;
+        }
 
         return 0;
 }
@@ -288,6 +305,9 @@ int echo_preprw(int cmd, struct obd_export *export, struct obdo *oa,
         for (i = 0; i < objcount; i++, obj++) {
                 int gfp_mask = (obj->ioo_id & 1) ? GFP_HIGHUSER : GFP_KERNEL;
                 int ispersistent = obj->ioo_id == ECHO_PERSISTENT_OBJID;
+                int debug_setup = (!ispersistent &&
+                                   (oa->o_valid & OBD_MD_FLFLAGS) != 0 &&
+                                   (oa->o_flags & OBD_FL_DEBUG_CHECK) != 0);
                 int j;
 
                 for (j = 0 ; j < obj->ioo_bufcnt ; j++, nb++, r++) {
@@ -322,7 +342,7 @@ int echo_preprw(int cmd, struct obd_export *export, struct obdo *oa,
                         if (cmd & OBD_BRW_READ)
                                 r->rc = r->len;
 
-                        if (!ispersistent)
+                        if (debug_setup)
                                 echo_page_debug_setup(r->page, cmd, obj->ioo_id,
                                                       r->offset, r->len);
                 }
@@ -391,7 +411,9 @@ int echo_commitrw(int cmd, struct obd_export *export, struct obdo *oa,
 
         for (i = 0; i < objcount; i++, obj++) {
                 int verify = (rc == 0 &&
-                              obj->ioo_id != ECHO_PERSISTENT_OBJID);
+                              obj->ioo_id != ECHO_PERSISTENT_OBJID &&
+                              (oa->o_valid & OBD_MD_FLFLAGS) != 0 &&
+                              (oa->o_flags & OBD_FL_DEBUG_CHECK) != 0);
                 int j;
 
                 for (j = 0 ; j < obj->ioo_bufcnt ; j++, r++) {
@@ -443,6 +465,9 @@ commitrw_cleanup:
 static int echo_setup(struct obd_device *obd, obd_count len, void *buf)
 {
         struct lprocfs_static_vars lvars;
+        int                        rc;
+        int                        lock_flags = 0;
+        struct ldlm_res_id         res_id = {.name = {1}};
         ENTRY;
 
         spin_lock_init(&obd->u.echo.eo_lock);
@@ -454,6 +479,12 @@ static int echo_setup(struct obd_device *obd, obd_count len, void *buf)
                 LBUG();
                 RETURN(-ENOMEM);
         }
+
+        rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace, res_id,
+                              LDLM_PLAIN, NULL, LCK_NL, &lock_flags,
+                              NULL, ldlm_completion_ast, NULL, NULL,
+                              NULL, 0, NULL, &obd->u.echo.eo_nl_lock);
+        LASSERT (rc == ELDLM_OK);
 
         lprocfs_init_vars(echo, &lvars);
         if (lprocfs_obd_setup(obd, lvars.obd_vars) == 0 &&
@@ -479,6 +510,13 @@ static int echo_cleanup(struct obd_device *obd, int flags)
         lprocfs_free_obd_stats(obd);
         lprocfs_obd_cleanup(obd);
 
+        ldlm_lock_decref (&obd->u.echo.eo_nl_lock, LCK_NL);
+
+        /* XXX Bug 3413; wait for a bit to ensure the BL callback has
+         * happened before calling ldlm_namespace_free() */
+        set_current_state (TASK_UNINTERRUPTIBLE);
+        schedule_timeout (HZ);
+        
         ldlm_namespace_free(obd->obd_namespace, flags & OBD_OPT_FORCE);
 
         leaked = atomic_read(&obd->u.echo.eo_prep);

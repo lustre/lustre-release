@@ -29,6 +29,7 @@
 #include <linux/iobuf.h>
 #endif
 #include <asm/div64.h>
+#include <linux/smp_lock.h>
 #else
 #include <liblustre.h>
 #endif
@@ -499,13 +500,13 @@ static int echo_client_kbrw(struct obd_device *obd, int rw, struct obdo *oa,
         obd_off                 off;
         int                     i;
         int                     rc;
-        int                     verify = 0;
+        int                     verify;
         int                     gfp_mask;
 
-        /* oa_id == ECHO_PERSISTENT_OBJID => speed test (no verification).
-         * oa & 1                         => use HIGHMEM */
+        verify = ((oa->o_id) != ECHO_PERSISTENT_OBJID &&
+                  (oa->o_valid & OBD_MD_FLFLAGS) != 0 &&
+                  (oa->o_flags & OBD_FL_DEBUG_CHECK) != 0);
 
-        verify = (oa->o_id) != ECHO_PERSISTENT_OBJID;
         gfp_mask = ((oa->o_id & 2) == 0) ? GFP_KERNEL : GFP_HIGHUSER;
 
         LASSERT(rw == OBD_BRW_WRITE || rw == OBD_BRW_READ);
@@ -658,6 +659,10 @@ struct echo_async_page {
         struct list_head        eap_item;
 };
 
+#define EAP_FROM_COOKIE(c)                                                      \
+        (LASSERT(((struct echo_async_page *)(c))->eap_magic == EAP_MAGIC),      \
+         (struct echo_async_page *)(c))
+
 struct echo_async_state {
         spinlock_t              eas_lock;
         obd_off                 eas_next_offset;
@@ -681,14 +686,6 @@ static int eas_should_wake(struct echo_async_state *eas)
         return rc;
 };
 
-struct echo_async_page *eap_from_cookie(void *cookie)
-{
-        struct echo_async_page *eap = cookie;
-        if (eap->eap_magic != EAP_MAGIC)
-                return ERR_PTR(-EINVAL);
-        return eap;
-};
-
 static int ec_ap_make_ready(void *data, int cmd)
 {
         /* our pages are issued ready */
@@ -703,26 +700,23 @@ static int ec_ap_refresh_count(void *data, int cmd)
 }
 static void ec_ap_fill_obdo(void *data, int cmd, struct obdo *oa)
 {
-        struct echo_async_page *eap;
-        eap = eap_from_cookie(data);
-        if (IS_ERR(eap))
-                return;
+        struct echo_async_page *eap = EAP_FROM_COOKIE(data);
 
         memcpy(oa, &eap->eap_eas->eas_oa, sizeof(*oa));
 }
 
 static void ec_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
 {
-        struct echo_async_page *eap = eap_from_cookie(data);
+        struct echo_async_page *eap = EAP_FROM_COOKIE(data);
         struct echo_async_state *eas;
         unsigned long flags;
 
-        if (IS_ERR(eap))
-                return;
         eas = eap->eap_eas;
 
         if (cmd == OBD_BRW_READ &&
-            eas->eas_oa.o_id != ECHO_PERSISTENT_OBJID)
+            eas->eas_oa.o_id != ECHO_PERSISTENT_OBJID &&
+            (eas->eas_oa.o_valid & OBD_MD_FLFLAGS) != 0 &&
+            (eas->eas_oa.o_flags & OBD_FL_DEBUG_CHECK) != 0)
                 echo_client_page_debug_check(eas->eas_lsm, eap->eap_page, 
                                              eas->eas_oa.o_id, eap->eap_off,
                                              PAGE_SIZE);
@@ -758,11 +752,12 @@ static int echo_client_async_page(struct obd_export *exp, int rw,
 #if 0
         int                     verify;
         int                     gfp_mask;
-        /* oa_id  == 0    => speed test (no verification) else...
-         * oa & 1         => use HIGHMEM
-         */
-        verify = (oa->o_id != 0);
-        gfp_mask = ((oa->o_id & 1) == 0) ? GFP_KERNEL : GFP_HIGHUSER;
+
+        verify = ((oa->o_id) != ECHO_PERSISTENT_OBJID &&
+                  (oa->o_valid & OBD_MD_FLFLAGS) != 0 &&
+                  (oa->o_flags & OBD_FL_DEBUG_CHECK) != 0);
+
+        gfp_mask = ((oa->o_id & 2) == 0) ? GFP_KERNEL : GFP_HIGHUSER;
 #endif
 
         LASSERT(rw == OBD_BRW_WRITE || rw == OBD_BRW_READ);
@@ -847,7 +842,9 @@ static int echo_client_async_page(struct obd_export *exp, int rw,
                         break;
                 }
 
-                if (oa->o_id != ECHO_PERSISTENT_OBJID)
+                if (oa->o_id != ECHO_PERSISTENT_OBJID &&
+                    (oa->o_valid & OBD_MD_FLFLAGS) != 0 &&
+                    (oa->o_flags & OBD_FL_DEBUG_CHECK) != 0)
                         echo_client_page_debug_setup(lsm, eap->eap_page, rw, 
                                                      oa->o_id, 
                                                      eap->eap_off, PAGE_SIZE);
@@ -951,7 +948,9 @@ static int echo_client_prep_commit(struct obd_export *exp, int rw,
                         if (page == NULL && lnb[i].rc == 0)
                                 continue;
 
-                        if (oa->o_id == ECHO_PERSISTENT_OBJID)
+                        if (oa->o_id == ECHO_PERSISTENT_OBJID ||
+                            (oa->o_valid & OBD_MD_FLFLAGS) == 0 ||
+                            (oa->o_flags & OBD_FL_DEBUG_CHECK) == 0)
                                 continue;
 
                         if (rw == OBD_BRW_WRITE)
@@ -1194,6 +1193,8 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp,
         int                     i;
         ENTRY;
 
+        unlock_kernel();
+
         memset(&dummy_oti, 0, sizeof(dummy_oti));
 
         obd = exp->exp_obd;
@@ -1311,6 +1312,8 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp,
                         break;
                 ldlm_lock_decref(&ack_lock->lock, ack_lock->mode);
         }
+
+        lock_kernel();
 
         return rc;
 }

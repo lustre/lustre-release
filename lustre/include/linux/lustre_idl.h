@@ -245,6 +245,7 @@ typedef uint32_t        obd_count;
 #define OBD_FL_NORPC        (0x00000008) // if set in o_flags set in OSC not OST
 #define OBD_FL_IDONLY       (0x00000010) // if set in o_flags only adjust obj id
 #define OBD_FL_RECREATE_OBJS (0x00000020) // recreate missing obj
+#define OBD_FL_DEBUG_CHECK  (0x00000040) /* echo client/server debug check */
 
 #define OBD_INLINESZ    64
 

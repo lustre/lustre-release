@@ -36,6 +36,7 @@ int jt_obd_abort_recovery(int argc, char **argv);
 int jt_obd_list(int argc, char **argv);
 int jt_obd_create(int argc, char **argv);
 int jt_obd_setattr(int argc, char **argv);
+int jt_obd_test_setattr(int argc, char **argv);
 int jt_obd_destroy(int argc, char **argv);
 int jt_obd_getattr(int argc, char **argv);
 int jt_obd_test_getattr(int argc, char **argv);

@@ -320,16 +320,11 @@ struct mds_obd {
 };
 
 struct echo_obd {
-        struct obdo oa;
-        spinlock_t eo_lock;
-        __u64 eo_lastino;
-        atomic_t eo_getattr;
-        atomic_t eo_setattr;
-        atomic_t eo_create;
-        atomic_t eo_destroy;
-        atomic_t eo_prep;
-        atomic_t eo_read;
-        atomic_t eo_write;
+        struct obdo          eo_oa;
+        spinlock_t           eo_lock;
+        __u64                eo_lastino;
+        struct lustre_handle eo_nl_lock;
+        atomic_t             eo_prep;
 };
 
 /*

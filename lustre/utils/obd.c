@@ -58,20 +58,26 @@
 #include <portals/ptlctl.h>
 #include "parser.h"
 #include <stdio.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
+#include <pthread.h>
 
-#define SHMEM_STATS 1
 #define MAX_STRING_SIZE 128
 #define DEVICES_LIST "/proc/fs/lustre/devices"
 
-#if SHMEM_STATS
-# include <sys/ipc.h>
-# include <sys/shm.h>
-
-# define MAX_SHMEM_COUNT 1024
-static long long *shared_counters;
-static long long counter_snapshot[2][MAX_SHMEM_COUNT];
+#define MAX_THREADS 1024
+struct shared_data {
+        __u64 counters[MAX_THREADS];
+        __u64 offsets[MAX_THREADS];
+        int   running;
+        int   barrier;
+        pthread_mutex_t mutex;
+        pthread_cond_t  cond;
+};
+static struct shared_data *shared_data;
+static __u64 counter_snapshot[2][MAX_THREADS];
+static int prev_valid;
 struct timeval prev_time;
-#endif
 
 static int jt_recording;
 static char rawbuf[8192];
@@ -79,6 +85,7 @@ static char *buf = rawbuf;
 static int max = sizeof(rawbuf);
 
 static int thread;
+static int nthreads;
 
 static uint32_t cur_device = MAX_OBD_DEVICES;
 
@@ -228,7 +235,7 @@ int parse_devname(char *func, char *name)
                 /* Assume it's a number.  This means that bogus strings become
                  * 0.  I might care about that some day. */
                 ret = strtoul(name, NULL, 0);
-                printf("Selected device %d\n", ret);
+                // printf("Selected device %d\n", ret);
         }
 
         return ret;
@@ -426,25 +433,24 @@ int do_disconnect(char *func, int verbose)
         return 0;
 }
 
-#if SHMEM_STATS
 static void shmem_setup(void)
 {
         /* Create new segment */
-        int shmid = shmget(IPC_PRIVATE, sizeof(counter_snapshot[0]), 0600);
+        int shmid = shmget(IPC_PRIVATE, sizeof(*shared_data), 0600);
 
         if (shmid == -1) {
-                fprintf(stderr, "Can't create shared memory counters: %s\n",
+                fprintf(stderr, "Can't create shared data: %s\n",
                         strerror(errno));
                 return;
         }
 
         /* Attatch to new segment */
-        shared_counters = (long long *)shmat(shmid, NULL, 0);
+        shared_data = (struct shared_data *)shmat(shmid, NULL, 0);
 
-        if (shared_counters == (long long *)(-1)) {
-                fprintf(stderr, "Can't attach shared memory counters: %s\n",
+        if (shared_data == (struct shared_data *)(-1)) {
+                fprintf(stderr, "Can't attach shared data: %s\n",
                         strerror(errno));
-                shared_counters = NULL;
+                shared_data = NULL;
                 return;
         }
 
@@ -452,47 +458,60 @@ static void shmem_setup(void)
          * Forks will inherit attached segments, so we should be OK.
          */
         if (shmctl(shmid, IPC_RMID, NULL) == -1) {
-                fprintf(stderr, "Can't destroy shared memory counters: %s\n",
+                fprintf(stderr, "Can't destroy shared data: %s\n",
                         strerror(errno));
         }
 }
 
-static inline void shmem_reset(void)
+static inline void shmem_reset(int total_threads)
 {
-        if (shared_counters == NULL)
+        if (shared_data == NULL)
                 return;
 
-        memset(shared_counters, 0, sizeof(counter_snapshot[0]));
+        memset(shared_data, 0, sizeof(*shared_data));
+        pthread_mutex_init(&shared_data->mutex, NULL);
+        pthread_cond_init(&shared_data->cond, NULL);
         memset(counter_snapshot, 0, sizeof(counter_snapshot));
-        gettimeofday(&prev_time, NULL);
+        prev_valid = 0;
+        shared_data->barrier = total_threads;
 }
 
 static inline void shmem_bump(void)
 {
-        if (shared_counters == NULL || thread <= 0 || thread > MAX_SHMEM_COUNT)
+        static int bumped_running;
+
+        if (shared_data == NULL || thread <= 0 || thread > MAX_THREADS)
                 return;
 
-        shared_counters[thread - 1]++;
+        pthread_mutex_lock(&shared_data->mutex);
+        shared_data->counters[thread - 1]++;
+        if (!bumped_running)
+                shared_data->running++;
+        pthread_mutex_unlock(&shared_data->mutex);
+        bumped_running = 1;
 }
 
-static void shmem_snap(int n)
+static void shmem_snap(int total_threads, int live_threads)
 {
         struct timeval this_time;
         int non_zero = 0;
-        long long total = 0;
+        __u64 total = 0;
         double secs;
+        int running;
         int i;
 
-        if (shared_counters == NULL || n > MAX_SHMEM_COUNT)
+        if (shared_data == NULL || total_threads > MAX_THREADS)
                 return;
 
-        memcpy(counter_snapshot[1], counter_snapshot[0],
-               n * sizeof(counter_snapshot[0][0]));
-        memcpy(counter_snapshot[0], shared_counters,
-               n * sizeof(counter_snapshot[0][0]));
+        pthread_mutex_lock(&shared_data->mutex);
+        memcpy(counter_snapshot[0], shared_data->counters,
+               total_threads * sizeof(counter_snapshot[0][0]));
+        running = shared_data->running;
+        pthread_mutex_unlock(&shared_data->mutex);
+
         gettimeofday(&this_time, NULL);
 
-        for (i = 0; i < n; i++) {
+        for (i = 0; i < total_threads; i++) {
                 long long this_count =
                         counter_snapshot[0][i] - counter_snapshot[1][i];
 
@@ -503,23 +522,20 @@ static void shmem_snap(int n)
         }
 
         secs = (this_time.tv_sec + this_time.tv_usec / 1000000.0) -
-                (prev_time.tv_sec + prev_time.tv_usec / 1000000.0);
+               (prev_time.tv_sec + prev_time.tv_usec / 1000000.0);
 
-        printf("%d/%d Total: %f/second\n", non_zero, n, total / secs);
+        if (prev_valid && 
+            live_threads == total_threads &&
+            secs > 0.0)                    /* someone screwed with the time? */
+                printf("%d/%d Total: %f/second\n", non_zero, total_threads, total / secs);
 
+        memcpy(counter_snapshot[1], counter_snapshot[0],
+               total_threads * sizeof(counter_snapshot[0][0]));
         prev_time = this_time;
+        if (!prev_valid && 
+            running == total_threads)
+                prev_valid = 1;
 }
-
-#define SHMEM_SETUP()   shmem_setup()
-#define SHMEM_RESET()   shmem_reset()
-#define SHMEM_BUMP()    shmem_bump()
-#define SHMEM_SNAP(n)   shmem_snap(n)
-#else
-#define SHMEM_SETUP()
-#define SHMEM_RESET()
-#define SHMEM_BUMP()
-#define SHMEM_SNAP(n)
-#endif
 
 extern command_t cmdlist[];
 
@@ -583,8 +599,18 @@ int jt_opt_device(int argc, char **argv)
         return rc;
 }
 
+static void parent_sighandler (int sig)
+{
+        return;
+}
+
 int jt_opt_threads(int argc, char **argv)
 {
+        sigset_t         saveset;
+        sigset_t         sigset;
+        struct sigaction sigact;
+        struct sigaction saveact1;
+        struct sigaction saveact2;
         __u64 threads, next_thread;
         int verbose;
         int rc = 0;
@@ -595,8 +621,8 @@ int jt_opt_threads(int argc, char **argv)
                 return CMD_HELP;
 
         threads = strtoull(argv[1], &end, 0);
-        if (*end) {
-                fprintf(stderr, "error: %s: invalid page count '%s'\n",
+        if (*end || threads > MAX_THREADS) {
+                fprintf(stderr, "error: %s: invalid thread count '%s'\n",
                         jt_cmdname(argv[0]), argv[1]);
                 return CMD_HELP;
         }
@@ -609,7 +635,14 @@ int jt_opt_threads(int argc, char **argv)
                 printf("%s: starting "LPD64" threads on device %s running %s\n",
                        argv[0], threads, argv[3], argv[4]);
 
-        SHMEM_RESET();
+        shmem_reset(threads);
+
+        sigemptyset(&sigset);
+        sigaddset(&sigset, SIGALRM);
+        sigaddset(&sigset, SIGCHLD);
+        sigprocmask(SIG_BLOCK, &sigset, &saveset);
+
+        nthreads = threads;
 
         for (i = 1, next_thread = verbose; i <= threads; i++) {
                 rc = fork();
@@ -618,6 +651,8 @@ int jt_opt_threads(int argc, char **argv)
                                 strerror(rc = errno));
                         break;
                 } else if (rc == 0) {
+                        sigprocmask(SIG_SETMASK, &saveset, NULL);
+
                         thread = i;
                         argv[2] = "--device";
                         return jt_opt_device(argc - 2, argv + 2);
@@ -630,45 +665,64 @@ int jt_opt_threads(int argc, char **argv)
         if (!thread) {          /* parent process */
                 int live_threads = threads;
 
+                sigemptyset(&sigset);
+                sigemptyset(&sigact.sa_mask);
+                sigact.sa_handler = parent_sighandler;
+                sigact.sa_flags = 0;
+                
+                sigaction(SIGALRM, &sigact, &saveact1);
+                sigaction(SIGCHLD, &sigact, &saveact2);
+
                 while (live_threads > 0) {
                         int status;
                         pid_t ret;
 
-                        ret = waitpid(0, &status, verbose < 0 ? WNOHANG : 0);
-                        if (ret == 0) {
-                                if (verbose >= 0)
-                                        abort();
+                        if (verbose < 0)        /* periodic stats */
+                                alarm(-verbose);
 
-                                sleep(-verbose);
-                                SHMEM_SNAP(threads);
-                                continue;
+                        sigsuspend(&sigset);
+                        alarm(0);
+
+                        while (live_threads > 0) {
+                                ret = waitpid(0, &status, WNOHANG);
+                                if (ret == 0)
+                                        break;
+                                
+                                if (ret < 0) {
+                                        fprintf(stderr, "error: %s: wait - %s\n",
+                                                argv[0], strerror(errno));
+                                        if (!rc)
+                                                rc = errno;
+                                        continue;
+                                } else {
+                                        /*
+                                         * This is a hack.  We _should_ be able
+                                         * to use WIFEXITED(status) to see if
+                                         * there was an error, but it appears
+                                         * to be broken and it always returns 1
+                                         * (OK).  See wait(2).
+                                         */
+                                        int err = WEXITSTATUS(status);
+                                        if (err || WIFSIGNALED(status))
+                                                fprintf(stderr,
+                                                        "%s: PID %d had rc=%d\n",
+                                                        argv[0], ret, err);
+                                        if (!rc)
+                                                rc = err;
+
+                                        live_threads--;
+                                }
                         }
 
-                        if (ret < 0) {
-                                fprintf(stderr, "error: %s: wait - %s\n",
-                                        argv[0], strerror(errno));
-                                if (!rc)
-                                        rc = errno;
-                        } else {
-                                /*
-                                 * This is a hack.  We _should_ be able to use
-                                 * WIFEXITED(status) to see if there was an
-                                 * error, but it appears to be broken and it
-                                 * always returns 1 (OK).  See wait(2).
-                                 */
-                                int err = WEXITSTATUS(status);
-                                if (err || WIFSIGNALED(status))
-                                        fprintf(stderr,
-                                                "%s: PID %d had rc=%d\n",
-                                                argv[0], ret, err);
-                                if (!rc)
-                                        rc = err;
-
-                                live_threads--;
-                        }
+                        /* Show stats while all threads running */
+                        if (verbose < 0)
+                                shmem_snap(threads, live_threads);
                 }
+                sigaction(SIGCHLD, &saveact2, NULL);
+                sigaction(SIGALRM, &saveact1, NULL);
         }
 
+        sigprocmask(SIG_SETMASK, &saveset, NULL);
         return rc;
 }
 
@@ -1001,7 +1055,7 @@ int jt_obd_create(int argc, char **argv)
                 IOC_PACK(argv[0], data);
                 rc = l2_ioctl(OBD_DEV_ID, OBD_IOC_CREATE, buf);
                 IOC_UNPACK(argv[0], data);
-                SHMEM_BUMP();
+                shmem_bump();
                 if (rc < 0) {
                         fprintf(stderr, "error: %s: #%d - %s\n",
                                 jt_cmdname(argv[0]), i, strerror(rc = errno));
@@ -1054,6 +1108,90 @@ int jt_obd_setattr(int argc, char **argv)
         return rc;
 }
 
+int jt_obd_test_setattr(int argc, char **argv)
+{
+        struct obd_ioctl_data data;
+        struct timeval start, next_time;
+        __u64 i, count, next_count;
+        int verbose = 1;
+        obd_id objid = 3;
+        char *end;
+        int rc = 0;
+
+        if (argc < 2 || argc > 4)
+                return CMD_HELP;
+
+        IOC_INIT(data);
+        count = strtoull(argv[1], &end, 0);
+        if (*end) {
+                fprintf(stderr, "error: %s: invalid iteration count '%s'\n",
+                        jt_cmdname(argv[0]), argv[1]);
+                return CMD_HELP;
+        }
+
+        if (argc >= 3) {
+                verbose = get_verbose(argv[0], argv[2]);
+                if (verbose == BAD_VERBOSE)
+                        return CMD_HELP;
+        }
+
+        if (argc >= 4) {
+                if (argv[3][0] == 't') {
+                        objid = strtoull(argv[3] + 1, &end, 0);
+                        if (thread)
+                                objid += thread - 1;
+                } else
+                        objid = strtoull(argv[3], &end, 0);
+                if (*end) {
+                        fprintf(stderr, "error: %s: invalid objid '%s'\n",
+                                jt_cmdname(argv[0]), argv[3]);
+                        return CMD_HELP;
+                }
+        }
+
+        gettimeofday(&start, NULL);
+        next_time.tv_sec = start.tv_sec - verbose;
+        next_time.tv_usec = start.tv_usec;
+        if (verbose != 0)
+                printf("%s: setting "LPD64" attrs (objid "LPX64"): %s",
+                       jt_cmdname(argv[0]), count, objid, ctime(&start.tv_sec));
+
+        for (i = 1, next_count = verbose; i <= count; i++) {
+                data.ioc_obdo1.o_id = objid;
+                data.ioc_obdo1.o_mode = S_IFREG;
+                data.ioc_obdo1.o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLMODE;
+                IOC_PACK(argv[0], data);
+                rc = l2_ioctl(OBD_DEV_ID, OBD_IOC_SETATTR, &data);
+                shmem_bump();
+                if (rc < 0) {
+                        fprintf(stderr, "error: %s: #"LPD64" - %d:%s\n",
+                                jt_cmdname(argv[0]), i, errno, strerror(rc = errno));
+                        break;
+                } else {
+                        if (be_verbose
+                            (verbose, &next_time, i, &next_count, count))
+                                printf("%s: set attr #"LPD64"\n",
+                                       jt_cmdname(argv[0]), i);
+                }
+        }
+
+        if (!rc) {
+                struct timeval end;
+                double diff;
+
+                gettimeofday(&end, NULL);
+
+                diff = difftime(&end, &start);
+
+                --i;
+                if (verbose != 0)
+                        printf("%s: "LPD64" attrs in %.3fs (%.3f attr/s): %s",
+                               jt_cmdname(argv[0]), i, diff, i / diff,
+                               ctime(&end.tv_sec));
+        }
+        return rc;
+}
+
 int jt_obd_destroy(int argc, char **argv)
 {
         struct obd_ioctl_data data;
@@ -1102,7 +1240,7 @@ int jt_obd_destroy(int argc, char **argv)
                 IOC_PACK(argv[0], data);
                 rc = l2_ioctl(OBD_DEV_ID, OBD_IOC_DESTROY, buf);
                 IOC_UNPACK(argv[0], data);
-                SHMEM_BUMP();
+                shmem_bump();
                 if (rc < 0) {
                         fprintf(stderr, "error: %s: objid "LPX64": %s\n",
                                 jt_cmdname(argv[0]), id, strerror(rc = errno));
@@ -1161,7 +1299,7 @@ int jt_obd_test_getattr(int argc, char **argv)
         char *end;
         int rc = 0;
 
-        if (argc < 2 && argc > 4)
+        if (argc < 2 || argc > 4)
                 return CMD_HELP;
 
         IOC_INIT(data);
@@ -1205,7 +1343,7 @@ int jt_obd_test_getattr(int argc, char **argv)
                 data.ioc_obdo1.o_valid = 0xffffffff;
                 IOC_PACK(argv[0], data);
                 rc = l2_ioctl(OBD_DEV_ID, OBD_IOC_GETATTR, &data);
-                SHMEM_BUMP();
+                shmem_bump();
                 if (rc < 0) {
                         fprintf(stderr, "error: %s: #"LPD64" - %d:%s\n",
                                 jt_cmdname(argv[0]), i, errno, strerror(rc = errno));
@@ -1239,9 +1377,14 @@ int jt_obd_test_brw(int argc, char **argv)
 {
         struct obd_ioctl_data data;
         struct timeval start, next_time;
-        __u64 count, next_count, len, thr_offset = 0, objid = 3;
+        __u64 count, next_count, len, stride, thr_offset = 0, objid = 3;
         int write = 0, verbose = 1, cmd, i, rc = 0, pages = 1;
+        long n;
         int repeat_offset = 0;
+        unsigned long long ull;
+        int  nthr_per_obj = 0;
+        int  verify = 1;
+        int  obj_idx = 0;
         char *end;
 
         if (argc < 2 || argc > 7) {
@@ -1250,14 +1393,7 @@ int jt_obd_test_brw(int argc, char **argv)
                 return CMD_HELP;
         }
 
-        /* make each thread write to a different offset */
-        if (argv[1][0] == 't') {
-                count = strtoull(argv[1] + 1, &end, 0);
-                if (thread)
-                        thr_offset = thread - 1;
-        } else
-                count = strtoull(argv[1], &end, 0);
-
+        count = strtoull(argv[1], &end, 0);
         if (*end) {
                 fprintf(stderr, "error: %s: bad iteration count '%s'\n",
                         jt_cmdname(argv[0]), argv[1]);
@@ -1269,9 +1405,22 @@ int jt_obd_test_brw(int argc, char **argv)
                         write = 1;
                 /* else it's a read */
 
-                if (argv[2][0] != 0 &&
-                    argv[2][1] == 'r')
-                        repeat_offset = 1;
+                if (argv[2][0] != 0)
+                        for (i = 1; argv[2][i] != 0; i++)
+                                switch (argv[2][i]) {
+                                case 'r':
+                                        repeat_offset = 1;
+                                        break;
+                                        
+                                case 'x':
+                                        verify = 0;
+                                        break;
+                                        
+                                default:
+                                        fprintf (stderr, "Can't parse cmd '%s'\n",
+                                                 argv[2]);
+                                        return CMD_HELP;
+                                }
         }
 
         if (argc >= 4) {
@@ -1288,13 +1437,23 @@ int jt_obd_test_brw(int argc, char **argv)
                         return CMD_HELP;
                 }
         }
+
         if (argc >= 6) {
-                if (argv[5][0] == 't') {
+                if (thread &&
+                    (n = strtol(argv[5], &end, 0)) > 0 &&
+                    *end == 't' &&
+                    (ull = strtoull(end + 1, &end, 0)) > 0 &&
+                    *end == 0) {
+                        nthr_per_obj = n;
+                        objid = ull;
+                } else if (thread &&
+                           argv[5][0] == 't') {
+                        nthr_per_obj = 1;
                         objid = strtoull(argv[5] + 1, &end, 0);
-                        if (thread)
-                                objid += thread - 1;
-                } else
+                } else {
+                        nthr_per_obj = 0;
                         objid = strtoull(argv[5], &end, 0);
+                }
                 if (*end) {
                         fprintf(stderr, "error: %s: bad objid '%s'\n",
                                 jt_cmdname(argv[0]), argv[5]);
@@ -1338,12 +1497,39 @@ int jt_obd_test_brw(int argc, char **argv)
         }
 
         len = pages * PAGE_SIZE;
+        stride = len;
+
+        if (thread) {
+                pthread_mutex_lock (&shared_data->mutex);
+                if (nthr_per_obj != 0) {
+                        /* threads interleave */
+                        obj_idx = (thread - 1)/nthr_per_obj;
+                        objid += obj_idx;
+                        stride *= nthr_per_obj;
+                        thr_offset = ((thread - 1) % nthr_per_obj) * len;
+                        if (thr_offset == 0)
+                                shared_data->offsets[obj_idx] = stride;
+                } else {
+                        /* threads disjoint */
+                        thr_offset = (thread - 1) * len;
+                }
+
+                shared_data->barrier--;
+                if (shared_data->barrier == 0)
+                        pthread_cond_broadcast(&shared_data->cond);
+                else
+                        pthread_cond_wait(&shared_data->cond,
+                                          &shared_data->mutex);
+
+                pthread_mutex_unlock (&shared_data->mutex);
+        }
 
         data.ioc_obdo1.o_id = objid;
         data.ioc_obdo1.o_mode = S_IFREG;
-        data.ioc_obdo1.o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLMODE;
+        data.ioc_obdo1.o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLMODE | OBD_MD_FLFLAGS;
+        data.ioc_obdo1.o_flags = (verify ? OBD_FL_DEBUG_CHECK : 0);
         data.ioc_count = len;
-        data.ioc_offset = thr_offset * len * count;
+        data.ioc_offset = (repeat_offset ? 0 : thr_offset);
 
         gettimeofday(&start, NULL);
         next_time.tv_sec = start.tv_sec - verbose;
@@ -1359,18 +1545,28 @@ int jt_obd_test_brw(int argc, char **argv)
                 data.ioc_obdo1.o_valid &= ~(OBD_MD_FLBLOCKS|OBD_MD_FLGRANT);
                 IOC_PACK(argv[0], data);
                 rc = l2_ioctl(OBD_DEV_ID, cmd, buf);
-                SHMEM_BUMP();
+                shmem_bump();
                 if (rc) {
                         fprintf(stderr, "error: %s: #%d - %s on %s\n",
                                 jt_cmdname(argv[0]), i, strerror(rc = errno),
                                 write ? "write" : "read");
                         break;
                 } else if (be_verbose(verbose, &next_time,i, &next_count,count))
-                        printf("%s: %s number %dx%d\n", jt_cmdname(argv[0]),
-                               write ? "write" : "read", i, pages);
+                        printf("%s: %s number %d @ "LPD64":"LPU64" for %d\n",
+                               jt_cmdname(argv[0]), write ? "write" : "read", i,
+                               data.ioc_obdo1.o_id, data.ioc_offset,
+                               (int)(pages * PAGE_SIZE));
 
-                if (!repeat_offset)
-                        data.ioc_offset += len;
+                if (!repeat_offset) {
+                        if (stride == len) {
+                                data.ioc_offset += stride;
+                        } else if (i < count) {
+                                pthread_mutex_lock (&shared_data->mutex);
+                                data.ioc_offset = shared_data->offsets[obj_idx];
+                                shared_data->offsets[obj_idx] += len;
+                                pthread_mutex_unlock (&shared_data->mutex);
+                        }
+                }
         }
 
         if (!rc) {
@@ -1988,7 +2184,7 @@ int jt_llog_remove(int argc, char **argv)
                 if (argc == 3)
                         fprintf(stdout, "log %s are removed.\n", argv[2]);
                 else
-                        fprintf(stdout, "the log in catlog %s are removed. \n", argv[1]);
+                        fprintf(stdout, "the log in catalog %s are removed. \n", argv[1]);
         } else
                 fprintf(stderr, "OBD_IOC_LLOG_REMOVE failed: %s\n",
                         strerror(errno));
@@ -2007,7 +2203,7 @@ static void signal_server(int sig)
 
 int obd_initialize(int argc, char **argv)
 {
-        SHMEM_SETUP();
+        shmem_setup();
         register_ioc_dev(OBD_DEV_ID, OBD_DEV_PATH);
 
         return 0;
