@@ -38,12 +38,12 @@ CONFIG_KERNEL_HALF_GIGS=1
 # CONFIG_HIGHMEM is not set
 # CONFIG_PROC_MM is not set
 CONFIG_KERNEL_STACK_ORDER=2
-CONFIG_MODE_TT=y
+
 #
 # Loadable module support
 #
 CONFIG_MODULES=y
-# CONFIG_KMOD is not set
+CONFIG_KMOD=y
 
 #
 # Character Devices
