@@ -2,6 +2,10 @@
 
 set -e
 
+#
+# This test needs to be run on the client
+#
+
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 . $LUSTRE/tests/test-framework.sh
 
@@ -11,11 +15,21 @@ init_test_env
 ALWAYS_EXCEPT=""
 
 # XXX I wish all this stuff was in some default-config.sh somewhere
+mds_HOST=${mds_HOST:-`hostname`}
+mdsfailover_HOST=${mdsfailover_HOST}
+ost_HOST=${ost_HOST:-`hostname`}
+client_HOST=${client_HOST:-`hostname`}
+
+NETWORKTYPE=tcp
+
+PDSH=${PDSH:-no_dsh}
+
 MOUNT=${MOUNT:-/mnt/lustre}
 DIR=${DIR:-$MOUNT}
-MDSDEV=${MDSDEV:-/tmp/mds-`hostname`}
+MDSDEV=${MDSDEV:-$ROOT/tmp/mds-`hostname`}
+MDSFAILOVERDEV=${MDSFAILOVERDEV:-$MDSDEV}
 MDSSIZE=${MDSSIZE:-10000}
-OSTDEV=${OSTDEV:-/tmp/ost-`hostname`}
+OSTDEV=${OSTDEV:-$ROOT/tmp/ost-`hostname`}
 OSTSIZE=${OSTSIZE:-10000}
 UPCALL=${UPCALL:-$PWD/replay-single-upcall.sh}
 FSTYPE=${FSTYPE:-ext3}
@@ -24,13 +38,19 @@ TIMEOUT=${TIMEOUT:-5}
 STRIPE_BYTES=65536
 STRIPES_PER_OBJ=0
 
+
 gen_config() {
-    rm -f replay-single.xml
+    rm -f $XMLCONFIG
     add_facet mds
     add_facet ost
     add_facet client --lustre_upcall $UPCALL
     do_lmc --add mds --node mds_facet --mds mds1 --dev $MDSDEV --size $MDSSIZE
-
+    if [ ! -z "$mdsfailover_HOST" ]; then
+	 add_facet mdsfailover
+         do_lmc --add mds --failover --node mdsfailover_facet \
+		--mds mds1 --dev $MDSFAILOVERDEV --size $MDSSIZE
+    fi
+    
     do_lmc --add lov --mds mds1 --lov lov1 --stripe_sz $STRIPE_BYTES --stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0
     do_lmc --add ost --lov lov1 --node ost_facet --ost ost1 --dev $OSTDEV --size $OSTSIZE
     do_lmc --add ost --lov lov1 --node ost_facet --ost ost2 --dev ${OSTDEV}-2 --size $OSTSIZE
@@ -43,8 +63,15 @@ gen_config() {
 build_test_filter
 
 cleanup() {
-    lconf --cleanup --zeroconf --mds_uuid mds1_UUID --mds_nid localhost \
-       --local_nid localhost --profile client_facet --mount $MOUNT
+    # make sure we are using the primary MDS, so the config log will
+    # be able to clean up properly.
+    activemds=`facet_active mds`
+    if [ $activemds != "mds" ]; then
+        fail mds
+    fi
+
+    lconf  --cleanup --zeroconf --mds_uuid mds1_UUID --mds_nid $mds_HOST \
+       --local_nid $client_HOST --profile client_facet --mount $MOUNT
     stop mds ${FORCE} $MDSLCONFARGS
     stop ost ${FORCE} --dump cleanup.log
 }
@@ -57,14 +84,17 @@ fi
 
 gen_config
 
-start mds --write_conf --reformat $MDSLCONFARGS -v
-start ost --reformat $OSTLCONFARGS
+start mds --write_conf --reformat $MDSLCONFARGS 
+start ost --reformat $OSTLCONFARGS 
 [ "$DAEMONFILE" ] && lctl debug_daemon start $DAEMONFILE $DAEMONSIZE
 start mds $MDSLCONFARGS --gdb
 
 # 0-conf client
-lconf --zeroconf --mds_uuid mds1_UUID --mds_nid localhost \
-    --local_nid localhost --profile client_facet --mount $MOUNT
+lconf --zeroconf --mds_uuid mds1_UUID --mds_nid `h2$NETWORKTYPE $mds_HOST` \
+    --local_nid `h2$NETWORKTYPE $client_HOST` --profile client_facet --mount $MOUNT
+
+echo $TIMEOUT > /proc/sys/lustre/timeout
+echo $UPCALL > /proc/sys/lustre/upcall
 
 if [ "$ONLY" == "setup" ]; then
     exit 0
