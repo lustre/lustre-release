@@ -6,11 +6,11 @@
  * This code is issued under the GNU General Public License.
  * See the file COPYING in this distribution
  *
- * Copryright (C) 1996 Peter J. Braam <braam@stelias.com>
- * Copryright (C) 1999 Stelias Computing Inc. <braam@stelias.com>
- * Copryright (C) 1999 Seagate Technology Inc.
- * Copryright (C) 2001 Mountain View Data, Inc.
- * Copryright (C) 2002 Cluster File Systems, Inc.
+ * Copyright (C) 1996 Peter J. Braam <braam@stelias.com>
+ * Copyright (C) 1999 Stelias Computing Inc. <braam@stelias.com>
+ * Copyright (C) 1999 Seagate Technology Inc.
+ * Copyright (C) 2001 Mountain View Data, Inc.
+ * Copyright (C) 2002 Cluster File Systems, Inc.
  *
  */
 
@@ -52,23 +52,55 @@ int ptlrpc_reconnect_import(struct obd_import *imp, int rq_opc)
         request->rq_reqmsg->cookie = ldlmexp->exp_cookie;
         rc = ptlrpc_queue_wait(request);
         rc = ptlrpc_check_status(request, rc);
-        if (rc) {
+        switch (rc) {
+            case EALREADY:
+            case -EALREADY:
+                /* already connected! */
+                memset(&old_hdl, 0, sizeof(old_hdl));
+                if (!memcmp(&old_hdl.addr, &request->rq_repmsg->addr,
+                            sizeof (old_hdl.addr)) &&
+                    !memcmp(&old_hdl.cookie, &request->rq_repmsg->cookie,
+                            sizeof (old_hdl.cookie))) {
+                        CERROR("%s@%s didn't like our handle %Lx/%Lx, failed\n",
+                               cli->cl_target_uuid, conn->c_remote_uuid,
+                               (__u64)(unsigned long)ldlmexp,
+                               ldlmexp->exp_cookie);
+                        GOTO(out_disc, rc = -ENOTCONN);
+                }
+
+                old_hdl.addr = request->rq_repmsg->addr;
+                old_hdl.cookie = request->rq_repmsg->cookie;
+                if (memcmp(&imp->imp_handle, &old_hdl, sizeof(old_hdl))) {
+                        CERROR("%s@%s changed handle from %Lx/%Lx to %Lx/%Lx; "
+                               "copying, but this may foreshadow disaster\n",
+                               cli->cl_target_uuid, conn->c_remote_uuid,
+                               old_hdl.addr, old_hdl.cookie,
+                               imp->imp_handle.addr, imp->imp_handle.cookie);
+                        imp->imp_handle.addr = request->rq_repmsg->addr;
+                        imp->imp_handle.cookie = request->rq_repmsg->cookie;
+                        GOTO(out_disc, rc = EALREADY);
+                }
+                
+                CERROR("reconnected to %s@%s after partition\n",
+                       cli->cl_target_uuid, conn->c_remote_uuid);
+                GOTO(out_disc, rc = EALREADY);
+            case 0:
+                old_hdl = imp->imp_handle;
+                imp->imp_handle.addr = request->rq_repmsg->addr;
+                imp->imp_handle.cookie = request->rq_repmsg->cookie;
+                CERROR("now connected to %s@%s (%Lx/%Lx, was %Lx/%Lx)!\n",
+                       cli->cl_target_uuid, conn->c_remote_uuid,
+                       imp->imp_handle.addr, imp->imp_handle.cookie,
+                       old_hdl.addr, old_hdl.cookie);
+                GOTO(out_disc, rc = 0);
+            default:
                 CERROR("cannot connect to %s@%s: rc = %d\n",
                        cli->cl_target_uuid, conn->c_remote_uuid, rc);
-                ptlrpc_free_req(request);
-                GOTO(out_disc, rc = -ENOTCONN);
+                GOTO(out_disc, rc = -ENOTCONN); /* XXX preserve rc? */
         }
-        
-        old_hdl = imp->imp_handle;
-        imp->imp_handle.addr = request->rq_repmsg->addr;
-        imp->imp_handle.cookie = request->rq_repmsg->cookie;
-        CERROR("reconnected to %s@%s (%Lx/%Lx, was %Lx/%Lx)!\n",
-               cli->cl_target_uuid, conn->c_remote_uuid,
-               imp->imp_handle.addr, imp->imp_handle.cookie,
-               old_hdl.addr, old_hdl.cookie);
-        ptlrpc_req_finished(request);
 
  out_disc:
+        ptlrpc_req_finished(request);
         return rc;
 }
 
@@ -152,7 +184,7 @@ static char *replay_state2str(int state) {
         return state_strings[state];
 }
 
-int ptlrpc_replay(struct obd_import *imp)
+int ptlrpc_replay(struct obd_import *imp, int unreplied_only)
 {
         int rc = 0, state;
         struct list_head *tmp, *pos;
@@ -180,6 +212,15 @@ int ptlrpc_replay(struct obd_import *imp)
 
         list_for_each_safe(tmp, pos, &imp->imp_request_list) { 
                 req = list_entry(tmp, struct ptlrpc_request, rq_list);
+
+                if (unreplied_only) {
+                        if (!(req->rq_flags & PTL_RPC_FL_REPLIED)) {
+                                DEBUG_REQ(D_HA, req, "UNREPLIED:");
+                                ptlrpc_restart_req(req);
+                        }
+                        continue;
+                }
+
                 state = replay_state(req, committed);
 
                 if (req->rq_transno == imp->imp_max_transno) {
@@ -187,7 +228,7 @@ int ptlrpc_replay(struct obd_import *imp)
                         DEBUG_REQ(D_HA, req, "last for replay");
                         LASSERT(state != REPLAY_COMMITTED);
                 }
-                
+
                 switch (state) {
                     case REPLAY_REPLAY:
                         DEBUG_REQ(D_HA, req, "REPLAY:");
