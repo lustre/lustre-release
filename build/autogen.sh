@@ -39,7 +39,7 @@ error_msg() {
 
 		You may be able to download newer version from:
 
-		http://ftp.gnu.org/gnu/$cmd/$cmd-$required.tar.gz
+		http://ftp.gnu.org/gnu/$tool/$tool-$required.tar.gz
 	EOF
 	fi
 	[ "$cmd" = "autoconf" -a "$required" = "2.57" ] && cat >&2 <<EOF
