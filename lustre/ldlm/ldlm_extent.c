@@ -12,8 +12,13 @@
  */
 
 #define DEBUG_SUBSYSTEM S_LDLM
+#ifndef __KERNEL__
+#include <liblustre.h>
+#endif
 
 #include <linux/lustre_dlm.h>
+#include <linux/obd_support.h>
+#include <linux/lustre_lib.h>
 
 /* This function will be called to judge if the granted queue of another child
  * (read: another extent) is conflicting and needs its granted queue walked to
