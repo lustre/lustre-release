@@ -279,6 +279,49 @@ int snap_snap_list(int argc, char **argv)
 	}
 	return rc;
 }
+int snap_snap_del(int argc, char **argv)
+{
+	int    rc = 0, i;
+	
+	if (argc != 3 && argc !=2) {
+		fprintf(stderr, "The argument count is not right \n");
+		return CMD_HELP;
+	}
+
+	if (open_device_table.count == 0) {
+		fprintf(stderr, "Please open a snapdevice first\n");
+		return (-EINVAL);
+	}
+	for (i = 0; i < open_device_table.count; i++) {
+		struct ioc_snap_tbl_data *snap_ioc_data;
+
+		IOC_INIT(snap_ioc_data);
+
+		snap_ioc_data->count = 1;
+		snap_ioc_data->dev = open_device_table.device[i].dev;
+
+		if (argc == 3) { 
+			snap_ioc_data->no = atoi(argv[1]);
+			memcpy(snap_ioc_data->snaps[0].name, 
+			       argv[2], strlen(argv[2]));
+		} else { 
+			snap_ioc_data->no = 0;
+			memcpy(snap_ioc_data->snaps[0].name, 
+			       argv[1], strlen(argv[1]));
+		}
+		snap_ioc_data->snaps[0].time = time(NULL);
+		
+		IOC_PACK(sizeof(struct ioc_snap_tbl_data) + sizeof(struct snap));
+
+		if ((rc = ioctl(open_device_table.device[i].fd, 
+					IOC_SNAP_DELETE, buf))) {
+			fprintf(stderr, "del %s failed \n", argv[1]);
+		} else {
+			fprintf(stderr, "del %s success\n", argv[1]);
+		}
+	}
+	return rc;
+}
 int snap_snap_add(int argc, char **argv)
 {
 	int    rc = 0, i;
