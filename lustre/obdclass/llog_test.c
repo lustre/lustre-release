@@ -51,6 +51,17 @@ static int llog_test_1(struct obd_device *obd)
                 RETURN(rc);
         }
 
+        if (llh->lgh_last_idx != 0) {
+                CERROR("1a: handle->last_idx is %d, expected 0 after create\n",
+                       llh->lgh_last_idx);
+                RETURN(-ERANGE);
+        }
+        if (llh->lgh_hdr->llh_count != 0) {
+                CERROR("1a: header->count is %d, expected 0 after create\n",
+                       llh->lgh_hdr->llh_count);
+                RETURN(-ERANGE);
+        }
+
         CERROR("1b: close newly-created log\n");
         rc = llog_close(llh);
         if (rc)
@@ -68,8 +79,21 @@ static int llog_test_2(struct obd_device *obd, struct llog_handle **llh)
         CERROR("2: re-open a log with a name\n");
         sprintf(name, "%x", llog_test_rand);
         rc = llog_create(obd, llh, NULL, name);
-        if (rc)
+        if (rc) {
                 CERROR("2: re-open log with name %s failed: %d\n", name, rc);
+                RETURN(rc);
+        }
+
+        if ((*llh)->lgh_last_idx != 0) {
+                CERROR("2: handle->last_idx is %d, expected 0 after reopen\n",
+                       (*llh)->lgh_last_idx);
+                RETURN(-ERANGE);
+        }
+        if ((*llh)->lgh_hdr->llh_count != 0) {
+                CERROR("2: header->count is %d, expected 0 after reopen\n",
+                       (*llh)->lgh_hdr->llh_count);
+                RETURN(-ERANGE);
+        }
 
         RETURN(rc);
 }
@@ -91,6 +115,21 @@ static int llog_test_3(struct obd_device *obd, struct llog_handle *llh)
                 RETURN(rc);
         }
 
+        if (llh->lgh_last_idx != 1) {
+                CERROR("3: handle->last_idx is %d, expected 1 after write\n",
+                       llh->lgh_last_idx);
+                RETURN(-ERANGE);
+        }
+        if (llh->lgh_hdr->llh_count != 1) {
+                CERROR("3: header->count is %d, expected 1 after write\n",
+                       llh->lgh_hdr->llh_count);
+                RETURN(-ERANGE);
+        }
+        if (!ext2_test_bit(0, llh->lgh_hdr->llh_bitmap)) {
+                CERROR("3: first bit in bitmap should be set after write\n");
+                RETURN(-ERANGE);
+        }
+
         CERROR("3b: write 1000 more log records\n");
         for (i = 0; i < 1000; i++) {
                 rc = llog_write_rec(llh, &rec, NULL, 0, NULL, -1);
@@ -98,6 +137,29 @@ static int llog_test_3(struct obd_device *obd, struct llog_handle *llh)
                         CERROR("3b: write 1000 records failed at #%d: %d\n",
                                i + 1, rc);
                         RETURN(rc);
+                }
+        }
+
+        if (llh->lgh_last_idx != 1001) {
+                CERROR("3: handle->last_idx is %d, expected 1001 after write\n",
+                       llh->lgh_last_idx);
+                RETURN(-ERANGE);
+        }
+        if (llh->lgh_hdr->llh_count != 1001) {
+                CERROR("3: header->count is %d, expected 1001 after write\n",
+                       llh->lgh_hdr->llh_count);
+                RETURN(-ERANGE);
+        }
+        for (i = 0; i < 1001; i++) {
+                if (!ext2_test_bit(i, llh->lgh_hdr->llh_bitmap)) {
+                        CERROR("3: bit %d not set after 1001 writes\n", i);
+                        RETURN(-ERANGE);
+                }
+        }
+        for (i = 1001; i < LLOG_BITMAP_BYTES * 8; i++) {
+                if (ext2_test_bit(i, llh->lgh_hdr->llh_bitmap)) {
+                        CERROR("3: bit %d is set, but should not be\n", i);
+                        RETURN(-ERANGE);
                 }
         }
 
@@ -110,8 +172,11 @@ static int llog_test_3(struct obd_device *obd, struct llog_handle *llh)
 static int llog_run_tests(struct obd_device *obd)
 {
         struct llog_handle *llh;
+        struct obd_run_ctxt saved;
         int rc, err, cleanup_phase = 0;
         ENTRY;
+
+        push_ctxt(&saved, &obd->obd_log_exp->exp_obd->obd_ctxt, NULL);
 
         rc = llog_test_1(obd);
         if (rc)
@@ -135,6 +200,8 @@ static int llog_run_tests(struct obd_device *obd)
                         CERROR("cleanup: llog_close failed: %d\n", err);
                 if (!rc)
                         rc = err;
+        case 0:
+                pop_ctxt(&saved, &obd->obd_log_exp->exp_obd->obd_ctxt, NULL);
         }
 
         return rc;
@@ -176,6 +243,8 @@ static int llog_test_setup(struct obd_device *obd, obd_count len, void *buf)
         }
         obd->obd_log_exp = class_conn2export(&conn);
 
+        llog_test_rand = ll_insecure_random_int();
+
         rc = llog_run_tests(obd);
         if (rc)
                 llog_test_cleanup(obd, 0);
@@ -206,8 +275,6 @@ static struct obd_ops llog_obd_ops = {
 static int __init llog_test_init(void)
 {
         struct lprocfs_static_vars lvars;
-
-        llog_test_rand = ll_insecure_random_int();
 
         lprocfs_init_multi_vars(0, &lvars);
         return class_register_type(&llog_obd_ops,lvars.module_vars,"llog_test");
