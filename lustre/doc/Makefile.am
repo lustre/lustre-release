@@ -23,27 +23,27 @@ all: $(DOCS)
 
 # update date and version in document
 tag := $(shell cat $(srcdir)/CVS/Tag 2>/dev/null || echo HEAD)
-addstamp = sed "s|^Date:.*|Date: `date +%x`|g; s|^Version:.*|Version: $(tag)|g"
+addversion = sed -e 's|@T''AG@|$(tag)|g; s|@VER''SION@|$(VERSION)|g'
 
 DOCVERSION:
 	echo $(tag) > DOCVERSION
 
 .lyx.pdf:
 	rm -f $<T
-	$(addstamp) $< > $<T
-	@$(LYX2PDF) $< || printf "\n*** Warning: not creating PDF docs; install lyx to rectify this\n"
+	$(addversion) $< > $<T
+	@$(LYX2PDF) $<T || printf "\n*** Warning: not creating PDF docs; install lyx to rectify this\n"
 	rm -f $<T
 
 .lyx.txt:
 	rm -f $<T
-	$(addstamp) $< > $<T
-	@$(LYX2TXT) $< || printf "\n*** Warning: not creating text docs; install lyx to rectify this\n"
+	$(addversion) $< > $<T
+	@$(LYX2TXT) $<T || printf "\n*** Warning: not creating text docs; install lyx to rectify this\n"
 	rm -f $<T
 
 .lyx.html:
 	rm -f $<T
-	$(addstamp) $< > $<T
-	@$(LYX2HTML) $< || printf "\n*** Warning: not creating HTML docs; install lyx to rectify this\n"
+	$(addversion) $< > $<T
+	@$(LYX2HTML) $<T || printf "\n*** Warning: not creating HTML docs; install lyx to rectify this\n"
 	rm -f $<T
 
 .fig.eps:
