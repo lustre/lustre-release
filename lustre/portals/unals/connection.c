@@ -39,6 +39,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <connection.h>
+#include <pthread.h>
 #include <errno.h>
 
 
@@ -172,7 +173,9 @@ static int new_connection(void *z)
     unsigned int nid=*((unsigned int *)&s.sin_addr);
     /* cfs specific hack */
     //unsigned short pid=s.sin_port;
+    pthread_mutex_lock(&m->conn_lock);
     allocate_connection(m,htonl(nid),0/*pid*/,fd);
+    pthread_mutex_unlock(&m->conn_lock);
     return(1);
 }
 
@@ -187,16 +190,19 @@ connection force_tcp_connection(manager m,
                                 unsigned int ip,
                                 unsigned short port)
 {
-    connection c;
+    connection conn;
     struct sockaddr_in addr;
     unsigned int id[2];
 
     port = tcpnal_acceptor_port;
 
-    id[0]=ip;
-    id[1]=port;
+    id[0] = ip;
+    id[1] = port;
 
-    if (!(c=hash_table_find(m->connections,id))){
+    pthread_mutex_lock(&m->conn_lock);
+
+    conn = hash_table_find(m->connections, id);
+    if (!conn) {
         int fd;
 
         bzero((char *) &addr, sizeof(addr));
@@ -208,16 +214,16 @@ connection force_tcp_connection(manager m,
             perror("tcpnal socket failed");
             exit(-1);
         }
-        if (connect(fd,
-                    (struct sockaddr *)&addr,
-                    sizeof(struct sockaddr_in)))
-            {
-                perror("tcpnal connect");
-                return(0);
-            }
-        return(allocate_connection(m,ip,port,fd));
+        if (connect(fd, (struct sockaddr *)&addr,
+                    sizeof(struct sockaddr_in))) {
+            perror("tcpnal connect");
+            return(0);
+        }
+        conn = allocate_connection(m, ip, port, fd);
     }
-    return(c);
+
+    pthread_mutex_unlock(&m->conn_lock);
+    return (conn);
 }
 
 
@@ -284,11 +290,15 @@ manager init_connections(unsigned short pid,
                          int (*input)(void *, void *),
                          void *a)
 {
-    manager m=(manager)malloc(sizeof(struct manager));
-    m->connections=hash_create_table(compare_connection,connection_key);
-    m->handler=input;
-    m->handler_arg=a;
-    if (bind_socket(m,pid)) return(m);
+    manager m = (manager)malloc(sizeof(struct manager));
+    m->connections = hash_create_table(compare_connection,connection_key);
+    m->handler = input;
+    m->handler_arg = a;
+    pthread_mutex_init(&m->conn_lock, 0);
+
+    if (bind_socket(m,pid))
+        return(m);
+
     free(m);
     return(0);
 }
