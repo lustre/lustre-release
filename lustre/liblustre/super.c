@@ -393,15 +393,13 @@ llu_fsswop_mount(const char *source,
 
         /* setup mdc */
         /* FIXME need recover stuff */
-        err = obd_connect(&sbi->ll_mdc_conn, obd, &sbi->ll_sb_uuid,
-                          NULL, NULL); /*ptlrpc_recovd, ll_recover);*/
+        err = obd_connect(&sbi->ll_mdc_conn, obd, &sbi->ll_sb_uuid);
         if (err) {
                 CERROR("cannot connect to %s: rc = %d\n", mdc, err);
                 goto out_free;
         }
 
-        mdc_conn = sbi2mdc(sbi)->cl_import.imp_connection;
-        list_add(&mdc_conn->c_sb_chain, &sbi->ll_conn_chain);
+        mdc_conn = sbi2mdc(sbi)->cl_import->imp_connection;
 
         /* setup osc */
         strncpy(param_uuid.uuid, osc, sizeof(param_uuid.uuid));
@@ -412,8 +410,7 @@ llu_fsswop_mount(const char *source,
                 goto out_mdc;
         }
 
-        err = obd_connect(&sbi->ll_osc_conn, obd, &sbi->ll_sb_uuid,
-                          NULL, NULL); /*ptlrpc_recovd, ll_recover);*/
+        err = obd_connect(&sbi->ll_osc_conn, obd, &sbi->ll_sb_uuid);
         if (err) {
                 CERROR("cannot connect to %s: rc = %d\n", osc, err);
                 goto out_mdc;
