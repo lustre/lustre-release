@@ -148,7 +148,7 @@ static struct dentry *ll_lookup2(struct inode * dir, struct dentry *dentry,
         err = ll_lock(dir, dentry, it, &lockh);
         memcpy(it->it_lock_handle, &lockh, sizeof(lockh));
 
-        if ( (it->it_op & (IT_CREAT | IT_MKDIR | IT_SYMLINK)) &&
+        if ( (it->it_op & (IT_CREAT | IT_MKDIR | IT_SYMLINK | IT_MKNOD)) &&
              it->it_disposition && !it->it_status)
                 GOTO(negative, NULL);
 

@@ -214,8 +214,11 @@ void ptlrpc_req_finished(struct ptlrpc_request *request)
 
 void ptlrpc_free_req(struct ptlrpc_request *request)
 {
-        if (request == NULL)
+        ENTRY;
+        if (request == NULL) {
+                EXIT;
                 return;
+        }
 
         if (request->rq_repmsg != NULL)
                 OBD_FREE(request->rq_repmsg, request->rq_replen);
@@ -231,6 +234,7 @@ void ptlrpc_free_req(struct ptlrpc_request *request)
         ptlrpc_put_connection(request->rq_connection);
 
         OBD_FREE(request, sizeof(*request));
+        EXIT;
 }
 
 static int ptlrpc_check_reply(struct ptlrpc_request *req)

@@ -68,6 +68,9 @@ EOF
 
 rmmod kqswnal
 rmmod ksocknal
+
+$DBGCTL debug_kernel /tmp/debug.3.$TIME 1
+
 rmmod portals
 
 losetup -d ${LOOP}0

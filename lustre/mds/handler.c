@@ -976,6 +976,9 @@ static int mds_cleanup(struct obd_device * obddev)
         ldlm_namespace_free(mds->mds_local_namespace);
         ldlm_namespace_free(obddev->obd_namespace);
 
+        if (mds->mds_ldlm_conn != NULL)
+                ptlrpc_put_connection(mds->mds_ldlm_conn);
+
         OBD_FREE(mds->mds_ldlm_client, sizeof(*mds->mds_ldlm_client));
 
         lock_kernel();

@@ -330,6 +330,8 @@ static int ldlm_iocontrol(long cmd, struct obd_conn *conn, int len, void *karg,
                 RETURN(-EINVAL);
         }
 
+        OBD_ALLOC(obddev->u.ldlm.ldlm_client,
+                  sizeof(*obddev->u.ldlm.ldlm_client));
         ptlrpc_init_client(NULL, NULL,
                            LDLM_REQUEST_PORTAL, LDLM_REPLY_PORTAL,
                            obddev->u.ldlm.ldlm_client);
@@ -350,6 +352,8 @@ static int ldlm_iocontrol(long cmd, struct obd_conn *conn, int len, void *karg,
  out:
         if (connection)
                 ptlrpc_put_connection(connection);
+        OBD_FREE(obddev->u.ldlm.ldlm_client,
+                 sizeof(*obddev->u.ldlm.ldlm_client));
         return err;
 }
 
@@ -403,7 +407,6 @@ static int ldlm_cleanup(struct obd_device *obddev)
                 CERROR("Request list not empty!\n");
         }
 
-        OBD_FREE(ldlm->ldlm_client, sizeof(*ldlm->ldlm_client));
         OBD_FREE(ldlm->ldlm_service, sizeof(*ldlm->ldlm_service));
 
         if (mds_reint_p != NULL)

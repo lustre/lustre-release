@@ -232,6 +232,7 @@ static void ll_put_super(struct super_block *sb)
         ll_commitcbd_cleanup(sbi);
         obd_disconnect(&sbi->ll_osc_conn);
         obd_disconnect(&sbi->ll_mdc_conn);
+        OBD_FREE(sbi, sizeof(*sbi));
 
         MOD_DEC_USE_COUNT;
         EXIT;

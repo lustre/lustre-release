@@ -92,7 +92,7 @@ int ptlrpc_put_connection(struct ptlrpc_connection *c)
                 rc = 1;
         }
         if (atomic_read(&c->c_refcount) < 0)
-                CERROR("refcount < 0 for connection %p!\n", c);
+                CDEBUG(D_INFO, "refcount < 0 for connection %p!\n", c);
 
         RETURN(rc);
 }

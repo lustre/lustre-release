@@ -694,6 +694,8 @@ static int ost_cleanup(struct obd_device * obddev)
                 RETURN(-EINVAL);
         }
 
+        ldlm_namespace_free(obddev->obd_namespace);
+
         MOD_DEC_USE_COUNT;
         RETURN(0);
 }
