@@ -65,7 +65,7 @@ case ${host_cpu} in
 	KCFLAGS='-g -Wall -pipe -Wno-trigraphs -Wstrict-prototypes -fno-strict-aliasing -fno-common '
         case ${linux25} in
                 yes )
-                KCPPFLAGS='-D__KERNEL__ -U__i386__ -Ui386 -DUM_FASTCALL -D__arch_um__ -DSUBARCH="i386" -DNESTING=0 -D_LARGEFILE64_SOURCE  -Derrno=kernel_errno -DPATCHLEVEL=4 -DMODULE -I$(LINUX)/arch/um/include -I$(LINUX)/arch/um/kernel/tt/include -I$(LINUX)/arch/um/kernel/skas/include -O2 -nostdinc -iwithprefix include -DKBUILD_BASENAME=$(MODULE) -DKBUILD_MODNAME=$(MODULE) '
+                KCPPFLAGS='-D__KERNEL__ -U__i386__ -Ui386 -DUM_FASTCALL -D__arch_um__ -DSUBARCH="i386" -DNESTING=0 -D_LARGEFILE64_SOURCE  -Derrno=kernel_errno -DPATCHLEVEL=4 -DMODULE -I$(LINUX)/arch/um/include -I$(LINUX)/arch/um/kernel/tt/include -I$(LINUX)/arch/um/kernel/skas/include -O2 -nostdinc -iwithprefix include'
         ;;
                 * )
                 KCPPFLAGS='-D__KERNEL__ -U__i386__ -Ui386 -DUM_FASTCALL -D__arch_um__ -DSUBARCH="i386" -DNESTING=0 -D_LARGEFILE64_SOURCE  -Derrno=kernel_errno -DPATCHLEVEL=4 -DMODULE -I$(LINUX)/arch/um/kernel/tt/include -I$(LINUX)/arch/um/include '
@@ -206,11 +206,10 @@ if test $host_cpu != "lib" ; then
   AC_MSG_CHECKING(for MODVERSIONS)
   if egrep -e 'MODVERSIONS.*1' $LINUX/include/linux/autoconf.h >/dev/null 2>&1;
   then
-        MFLAGS="-DMODULE -DMODVERSIONS -include $LINUX/include/linux/modversions.h -DEXPORT_SYMTAB"
-        AC_MSG_RESULT(yes)
-  else
-        MFLAGS=
-        AC_MSG_RESULT(no)
+	if test $linux25 != "yes"; then
+                MFLAGS="-DMODULE -DMODVERSIONS -include $LINUX/include/linux/modversions.h -DEXPORT_SYMTAB"
+                AC_MSG_RESULT(yes)
+        fi
   fi
 fi
 

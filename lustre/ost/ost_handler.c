@@ -1124,9 +1124,9 @@ static int ost_setup(struct obd_device *obddev, obd_count len, void *buf)
         int rc;
         ENTRY;
 
-        /* Get rid of unneeded supplementary groups */
-        current->ngroups = 0;
-        memset(current->groups, 0, sizeof(current->groups));
+        rc = cleanup_group_info();
+        if (rc)
+                RETURN(rc);
 
         rc = llog_start_commit_thread();
         if (rc < 0)

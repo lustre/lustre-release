@@ -1,0 +1,57 @@
+Index: linux-2.6.3/fs/open.c
+===================================================================
+--- linux-2.6.3.orig/fs/open.c	2004-02-23 14:36:25.000000000 -0800
++++ linux-2.6.3/fs/open.c	2004-02-23 20:09:34.000000000 -0800
+@@ -881,6 +881,7 @@
+ 	return ERR_PTR(error);
+ }
+ 
++EXPORT_SYMBOL(filp_open);
+ 
+ struct file *dentry_open(struct dentry *dentry, struct vfsmount *mnt, int flags)
+ {
+Index: linux-2.6.3/fs/jbd/journal.c
+===================================================================
+--- linux-2.6.3.orig/fs/jbd/journal.c	2004-01-08 22:59:10.000000000 -0800
++++ linux-2.6.3/fs/jbd/journal.c	2004-02-23 20:09:34.000000000 -0800
+@@ -71,6 +71,7 @@
+ EXPORT_SYMBOL(journal_errno);
+ EXPORT_SYMBOL(journal_ack_err);
+ EXPORT_SYMBOL(journal_clear_err);
++EXPORT_SYMBOL(log_start_commit);
+ EXPORT_SYMBOL(log_wait_commit);
+ EXPORT_SYMBOL(journal_start_commit);
+ EXPORT_SYMBOL(journal_wipe);
+Index: linux-2.6.3/fs/ext3/super.c
+===================================================================
+--- linux-2.6.3.orig/fs/ext3/super.c	2004-02-23 14:36:26.000000000 -0800
++++ linux-2.6.3/fs/ext3/super.c	2004-02-23 20:24:30.000000000 -0800
+@@ -115,6 +115,8 @@
+ 		handle->h_err = err;
+ }
+ 
++EXPORT_SYMBOL(ext3_journal_abort_handle);
++
+ static char error_buf[1024];
+ 
+ /* Deal with the reporting of failure conditions on a filesystem such as
+@@ -1772,6 +1774,8 @@
+ 	return ret;
+ }
+ 
++EXPORT_SYMBOL(ext3_force_commit);
++
+ /*
+  * Ext3 always journals updates to the superblock itself, so we don't
+  * have to propagate any other updates to the superblock on disk at this
+@@ -2059,6 +2063,10 @@
+                         unsigned long *blocks, int *created, int create);
+ EXPORT_SYMBOL(ext3_map_inode_page);
+ 
++EXPORT_SYMBOL(ext3_xattr_get);
++EXPORT_SYMBOL(ext3_xattr_set_handle);
++EXPORT_SYMBOL(ext3_bread);
++
+ MODULE_AUTHOR("Remy Card, Stephen Tweedie, Andrew Morton, Andreas Dilger, Theodore Ts'o and others");
+ MODULE_DESCRIPTION("Second Extended Filesystem with journaling extensions");
+ MODULE_LICENSE("GPL");

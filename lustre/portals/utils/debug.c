@@ -43,10 +43,10 @@
 #include <sys/stat.h>
 #include <sys/mman.h>
 
-#define BUG()                            /* workaround for module.h includes */
 #include <linux/version.h>
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+#define BUG()                            /* workaround for module.h includes */
 #include <linux/module.h>
 #endif
 
@@ -524,41 +524,43 @@ int jt_dbg_mark_debug_buf(int argc, char **argv)
         return 0;
 }
 
+static struct mod_paths {
+        char *name, *path;
+} mod_paths[] = {
+        {"portals", "lustre/portals/libcfs"},
+        {"ksocknal", "lustre/portals/knals/socknal"},
+        {"kptlrouter", "lustre/portals/router"},
+        {"lvfs", "lustre/lvfs"},
+        {"obdclass", "lustre/obdclass"},
+        {"llog_test", "lustre/obdclass"},
+        {"ptlrpc", "lustre/ptlrpc"},
+        {"obdext2", "lustre/obdext2"},
+        {"ost", "lustre/ost"},
+        {"osc", "lustre/osc"},
+        {"mds", "lustre/mds"},
+        {"mdc", "lustre/mdc"},
+        {"llite", "lustre/llite"},
+        {"obdecho", "lustre/obdecho"},
+        {"ldlm", "lustre/ldlm"},
+        {"obdfilter", "lustre/obdfilter"},
+        {"extN", "lustre/extN"},
+        {"lov", "lustre/lov"},
+        {"fsfilt_ext3", "lustre/lvfs"},
+        {"fsfilt_extN", "lustre/lvfs"},
+        {"fsfilt_reiserfs", "lustre/lvfs"},
+        {"mds_ext2", "lustre/mds"},
+        {"mds_ext3", "lustre/mds"},
+        {"mds_extN", "lustre/mds"},
+        {"ptlbd", "lustre/ptlbd"},
+        {"mgmt_svc", "lustre/mgmt"},
+        {"mgmt_cli", "lustre/mgmt"},
+        {NULL, NULL}
+};
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 int jt_dbg_modules(int argc, char **argv)
 {
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-        struct mod_paths {
-                char *name, *path;
-        } *mp, mod_paths[] = {
-                {"portals", "lustre/portals/libcfs"},
-                {"ksocknal", "lustre/portals/knals/socknal"},
-                {"kptlrouter", "lustre/portals/router"},
-                {"lvfs", "lustre/lvfs"},
-                {"obdclass", "lustre/obdclass"},
-                {"llog_test", "lustre/obdclass"},
-                {"ptlrpc", "lustre/ptlrpc"},
-                {"obdext2", "lustre/obdext2"},
-                {"ost", "lustre/ost"},
-                {"osc", "lustre/osc"},
-                {"mds", "lustre/mds"},
-                {"mdc", "lustre/mdc"},
-                {"llite", "lustre/llite"},
-                {"obdecho", "lustre/obdecho"},
-                {"ldlm", "lustre/ldlm"},
-                {"obdfilter", "lustre/obdfilter"},
-                {"extN", "lustre/extN"},
-                {"lov", "lustre/lov"},
-                {"fsfilt_ext3", "lustre/lvfs"},
-                {"fsfilt_extN", "lustre/lvfs"},
-                {"fsfilt_reiserfs", "lustre/lvfs"},
-                {"mds_ext2", "lustre/mds"},
-                {"mds_ext3", "lustre/mds"},
-                {"mds_extN", "lustre/mds"},
-                {"ptlbd", "lustre/ptlbd"},
-                {"mgmt_svc", "lustre/mgmt"},
-                {"mgmt_cli", "lustre/mgmt"},
-                {NULL, NULL}
-        };
+        struct mod_paths *mp;
         char *path = "..";
         char *kernel = "linux";
 
@@ -592,11 +594,49 @@ int jt_dbg_modules(int argc, char **argv)
         }
 
         return 0;
-#else
-        printf("jt_dbg_module is not yet implemented for Linux 2.5\n");
-        return 0;
-#endif /* linux 2.5 */
 }
+#else
+int jt_dbg_modules(int argc, char **argv)
+{
+        struct mod_paths *mp;
+        char *path = "..";
+        char *kernel = "linux";
+        const char *proc = "/proc/modules";
+        char modname[128], others[128];
+        long modaddr;
+        int rc;
+        FILE *file;
+
+        if (argc >= 2)
+                path = argv[1];
+        if (argc == 3)
+                kernel = argv[2];
+        if (argc > 3) {
+                printf("%s [path] [kernel]\n", argv[0]);
+                return 0;
+        }
+
+        file = fopen(proc, "r");
+        if (!file) {
+                printf("failed open %s: %s\n", proc, strerror(errno));
+                return 0;
+        }
+
+        while ((rc = fscanf(file, "%s %s %s %s %s %lx\n",
+                modname, others, others, others, others, &modaddr)) == 6) {
+                for (mp = mod_paths; mp->name != NULL; mp++) {
+                        if (!strcmp(mp->name, modname))
+                                break;
+                }
+                if (mp->name) {
+                        printf("add-symbol-file %s/%s/%s.o 0x%0lx\n", path,
+                               mp->path, mp->name, modaddr);
+                }
+        }
+
+        return 0;
+}
+#endif /* linux 2.5 */
 
 int jt_dbg_panic(int argc, char **argv)
 {

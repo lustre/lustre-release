@@ -139,7 +139,7 @@ struct address_space_operations ll_aops = {
         writepage: ll_writepage_26,
         writepages: generic_writepages,
         set_page_dirty: __set_page_dirty_nobuffers,
-        sync_page: ll_sync_page,
+        sync_page: NULL,
         prepare_write: ll_prepare_write,
         commit_write: ll_commit_write,
         removepage: ll_removepage,

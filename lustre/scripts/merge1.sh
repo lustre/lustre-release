@@ -1,7 +1,7 @@
 #!/bin/sh -e 
 
 CONFLICTS=cvs-merge-conflicts
-CVS=cvs
+CVS="cvs -z3"
 
 if [ -f .mergeinfo ] ; then
     echo ".mergeinfo exists - clean up first"

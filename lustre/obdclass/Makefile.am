@@ -37,3 +37,15 @@ lustre_build_version:
 endif
 
 include $(top_srcdir)/Rules
+
+if LINUX25
+# workaround for llog_test
+llog_test.o: llog_test.c
+	$(COMPILE) -UKBUILD_MODNAME -DKBUILD_MODNAME=llog_test -c -o llog_test_tmp.o $<
+	rm -f llog_test_tmp.c
+	$(LINUX)/scripts/modpost $(LINUX)/vmlinux llog_test_tmp.o
+	$(COMPILE) -UKBUILD_MODNAME -UKBUILD_BASENAME -DKBUILD_BASENAME=llog_test \
+		-c llog_test_tmp.mod.c
+	$(LD) -m "`$(LD) --help | awk '/supported emulations/ {print $$4}'`" -r \
+		-o llog_test.o llog_test_tmp.o llog_test_tmp.mod.o
+endif

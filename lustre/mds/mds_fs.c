@@ -370,10 +370,9 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
         int rc;
         ENTRY;
 
-
-        /* Get rid of unneeded supplementary groups */
-        current->ngroups = 0;
-        memset(current->groups, 0, sizeof(current->groups));
+        rc = cleanup_group_info();
+        if (rc)
+                RETURN(rc);
 
         mds->mds_vfsmnt = mnt;
         mds->mds_sb = mnt->mnt_root->d_inode->i_sb;
