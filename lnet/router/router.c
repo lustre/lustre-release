@@ -580,8 +580,10 @@ kpr_add_route (int gateway_nalid, ptl_nid_t gateway_nid,
         atomic_set (&ge->kpge_weight, 0);
 
         PORTAL_ALLOC (re, sizeof (*re));
-        if (re == NULL)
+        if (re == NULL) {
+                PORTAL_FREE (ge, sizeof (*ge));
                 return (-ENOMEM);
+        }
 
         re->kpre_lo_nid = lo_nid;
         re->kpre_hi_nid = hi_nid;
