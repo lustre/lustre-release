@@ -308,7 +308,7 @@ void obdfs_read_inode(struct inode *inode)
 	INIT_LIST_HEAD(obdfs_islist(inode)); /* list of inodes in superblock */
 
 	obdo_free(oa);
-	OIDEBUG(inode);
+	/* OIDEBUG(inode); */
 
 	if (S_ISREG(inode->i_mode)) {
 		inode->i_op = &obdfs_file_inode_operations;
@@ -373,6 +373,9 @@ static void obdfs_delete_inode(struct inode *inode)
 	}
 	oa->o_valid = OBD_MD_FLNOTOBD;
 	obdfs_from_inode(oa, inode);
+
+	/* free the cache pages that might be hangning around */
+	obdfs_dequeue_reqs(inode);
 
 	err = IOPS(inode, destroy)(IID(inode), oa);
 	obdo_free(oa);

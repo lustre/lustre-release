@@ -51,6 +51,13 @@ struct {
 /* } pupd_prm = {40, 500, 64, 256, 5*HZ, 30*HZ, 5*HZ };  */
 } pupd_prm = {40, 500, 64, 256, 10*HZ, 30*HZ, 5*HZ }; 
 
+#if 0
+static void obdfs_lock_page(struct page *page)
+{
+        while (TryLockPage(page))
+                ___wait_on_page(page);
+}
+#endif
 
 static int obdfs_enqueue_pages(struct inode *inode, struct obdo **obdo,
 			       int nr_slots, struct page **pages, char **bufs,
@@ -74,13 +81,14 @@ static int obdfs_enqueue_pages(struct inode *inode, struct obdo **obdo,
 	*flag = OBD_BRW_CREATE;
 
 	tmp = page_list;
-	while ( (tmp = tmp->next) != page_list && (num < nr_slots) ) {
+	while ( ((tmp = tmp->next) != page_list) && (num < nr_slots) ) {
 		struct obdfs_pgrq *req;
 		struct page *page;
 		
 		req = list_entry(tmp, struct obdfs_pgrq, rq_plist);
 		page = req->rq_page;
 
+		
 		if (check_time && 
 		    (jiffies - req->rq_jiffies) < pupd_prm.age_buffer)
 			continue;
@@ -89,17 +97,20 @@ static int obdfs_enqueue_pages(struct inode *inode, struct obdo **obdo,
 		 * Note that obdfs_pgrq_del() also deletes the request.
 		 */
 		obdfs_pgrq_del(req);
-		
+		/* 
+		obdfs_lock_page(page);
+		*/
 		if ( !page ) {
 			CDEBUG(D_INODE, "no page \n");
 			continue;
 		}
 
-		CDEBUG(D_INODE, "adding page %p to vector\n", page);
 		bufs[num] = (char *)page_address(page);
 		pages[num] = page;
 		counts[num] = PAGE_SIZE;
 		offsets[num] = ((obd_off)page->index) << PAGE_SHIFT;
+		CDEBUG(D_INODE, "ENQ inode %ld, page %p addr %p to vector\n", 
+		       inode->i_ino, page, (char *)page_address(page));
 		num++;
 	}
 
@@ -111,10 +122,40 @@ static int obdfs_enqueue_pages(struct inode *inode, struct obdo **obdo,
 	return num;  
 }
 
+/* dequeue requests for a dying inode */
+void obdfs_dequeue_reqs(struct inode *inode)
+{
+
+	struct list_head *tmp;
+
+	tmp = obdfs_islist(inode);
+	if ( list_empty(tmp) ) {
+		EXIT;
+		return;
+	}
+
+	/* take it out of the super list */
+	list_del(tmp);
+	INIT_LIST_HEAD(obdfs_islist(inode));
+
+	tmp = obdfs_iplist(inode);
+	while ( (tmp = tmp->next) != obdfs_iplist(inode) ) {
+		struct obdfs_pgrq *req;
+		struct page *page;
+		
+		req = list_entry(tmp, struct obdfs_pgrq, rq_plist);
+		page = req->rq_page;
+		/* take it out of the list and free */
+		obdfs_pgrq_del(req);
+		/* now put the page away */
+		put_page(page);
+	}
+
+}
+
 
 /* Remove writeback requests for the superblock */
-int obdfs_flush_reqs(struct list_head *inode_list, int flush_inode,
-		     int check_time)
+int obdfs_flush_reqs(struct list_head *inode_list, int check_time)
 {
 	struct list_head *tmp = inode_list;
 	int		  total_io = 0;
@@ -169,6 +210,8 @@ int obdfs_flush_reqs(struct list_head *inode_list, int flush_inode,
 						  &counts[num_io],
 						  &offsets[num_io],
 						  &flags[num_obdos],1);
+			CDEBUG(D_INODE, "FLUSHED inode %ld, pages flushed: %d\n", 
+			       inode->i_ino, res);
 			if ( res < 0 ) {
 				err = res;
 				goto ERR;
@@ -220,7 +263,7 @@ ERR:
 } /* obdfs_remove_pages_from_cache */
 
 
-static void obdfs_flush_dirty_pages(int check_time)
+void obdfs_flush_dirty_pages(int check_time)
 {
 	struct list_head *sl;
 
@@ -230,20 +273,9 @@ static void obdfs_flush_dirty_pages(int check_time)
 			list_entry(sl, struct obdfs_sb_info, osi_list);
 
 		/* walk write requests here, use the sb, check the time */
-		obdfs_flush_reqs(&sbi->osi_inodes, 0, 1);
+		obdfs_flush_reqs(&sbi->osi_inodes, 0);
 	}
 
-#if 0
-	/* again, but now we wait for completion */
-	sl = &obdfs_super_list;
-	while ( (sl = sl->next) != &obdfs_super_list ) {
-		struct obdfs_sb_info *sbi = 
-			list_entry(sl, struct obdfs_sb_info, sl_chain);
-
-		/* walk write requests here */
-		obdfs_flush_reqs(&sbi->osi_pages, 0, check_time);
-	}
-#endif
 }
 
 
@@ -285,6 +317,7 @@ static int pupdate(void *unused)
 		else
 		{
 		stop_pupdate:
+			obdfs_flush_dirty_pages(0);
 			tsk->state = TASK_STOPPED;
 			/* MOD_DEC_USE_COUNT; */
 			printk("pupdated stopped...\n");
@@ -307,7 +340,7 @@ static int pupdate(void *unused)
 		}
 		/* asynchronous setattr etc for the future ... */
 		/* flush_inodes(); */
-		obdfs_flush_dirty_pages(1);
+		obdfs_flush_dirty_pages(1); 
 	}
 }
 
@@ -337,7 +370,8 @@ int flushd_cleanup(void)
 		/* XXX need to do something like this here:
 		send_sig(SIGTERM, current, 0);
 		 */
-		1;
+                1;
+		/*obdfs_flush_dirty_pages(0); */
 	}
 
 	/* not reached */

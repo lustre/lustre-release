@@ -37,6 +37,7 @@
 int obdfs_flush_reqs(struct list_head *page_list, 
 		     int flush_inode, int check_time);
 
+void obdfs_flush_dirty_pages(int check_time);
 
 /* SYNCHRONOUS I/O for an inode */
 static int obdfs_brw(int rw, struct inode *inode, struct page *page, int create)
@@ -89,6 +90,7 @@ int obdfs_readpage(struct dentry *dentry, struct page *page)
 } /* obdfs_readpage */
 
 static kmem_cache_t *obdfs_pgrq_cachep = NULL;
+static int obdfs_cache_count = 0;
 
 int obdfs_init_pgrqcache(void)
 {
@@ -116,7 +118,8 @@ int obdfs_init_pgrqcache(void)
 
 inline void obdfs_pgrq_del(struct obdfs_pgrq *pgrq)
 {
-	CDEBUG(D_INODE, "deleting page %p from list\n", pgrq->rq_page);
+	obdfs_cache_count--;
+	CDEBUG(D_INODE, "deleting page %p from list [count %d]\n", pgrq->rq_page, obdfs_cache_count);
 	list_del(&pgrq->rq_plist);
 	kmem_cache_free(obdfs_pgrq_cachep, pgrq);
 }
@@ -125,8 +128,8 @@ void obdfs_cleanup_pgrqcache(void)
 {
 	ENTRY;
 	if (obdfs_pgrq_cachep != NULL) {
-		CDEBUG(D_INODE, "destroying obdfs_pgrqcache at %p\n",
-		       obdfs_pgrq_cachep);
+		CDEBUG(D_INODE, "destroying obdfs_pgrqcache at %p, count %d\n",
+		       obdfs_pgrq_cachep, obdfs_cache_count);
 		if (kmem_cache_destroy(obdfs_pgrq_cachep))
 			printk(KERN_INFO "obd_cleanup_pgrqcache: unable to free all of cache\n");
 	} else
@@ -172,6 +175,40 @@ obdfs_find_in_page_list(struct inode *inode, struct page *page)
 } /* obdfs_find_in_page_list */
 
 
+static struct page*
+obdfs_find_page_index(struct inode *inode, unsigned long index)
+{
+	struct list_head *page_list = obdfs_iplist(inode);
+	struct list_head *tmp;
+	struct page *page;
+
+	ENTRY;
+
+	CDEBUG(D_INODE, "looking for inode %ld pageindex %ld\n", inode->i_ino, index);
+	OIDEBUG(inode);
+
+	if (list_empty(page_list)) {
+		EXIT;
+		return NULL;
+	}
+	tmp = page_list;
+	while ( (tmp = tmp->next) != page_list ) {
+		struct obdfs_pgrq *pgrq;
+
+		pgrq = list_entry(tmp, struct obdfs_pgrq, rq_plist);
+		page = pgrq->rq_page;
+		if (index == page->index) {
+			CDEBUG(D_INODE, "INDEX SEARC found page %p in list, index %ld\n", page, index);
+			EXIT;
+			return page;
+		}
+	} 
+
+	EXIT;
+	return NULL;
+} /* obdfs_find_in_page_list */
+
+
 /* call and free pages from Linux page cache */
 int obdfs_do_vec_wr(struct inode **inodes, obd_count num_io,
 		    obd_count num_obdos, struct obdo **obdos,
@@ -191,7 +228,10 @@ int obdfs_do_vec_wr(struct inode **inodes, obd_count num_io,
 	/* release the pages from the page cache */
 	while ( num_io > 0 ) {
 		num_io--;
-		CDEBUG(D_INODE, "calling put_page for %p\n", pages[num_io]);
+		CDEBUG(D_INODE, "calling put_page for %p, index %ld\n", pages[num_io], pages[num_io]->index);
+		/*
+		UnlockPage(pages[num_io]);
+		*/
 		put_page(pages[num_io]);
 	}
 
@@ -213,43 +253,44 @@ int obdfs_do_vec_wr(struct inode **inodes, obd_count num_io,
  */
 static int obdfs_add_page_to_cache(struct inode *inode, struct page *page)
 {
-	struct obdfs_pgrq *pgrq;
+	int res = 0;
 
 	ENTRY;
-	pgrq = kmem_cache_alloc(obdfs_pgrq_cachep, SLAB_KERNEL);
-	CDEBUG(D_INODE, "adding inode %ld page %p, pgrq: %p\n",
-	       inode->i_ino, page, pgrq);
-	if (!pgrq) {
-		EXIT;
-		return -ENOMEM;
-	}
-	memset(pgrq, 0, sizeof(*pgrq)); 
-
-	pgrq->rq_page = page;
-
-	get_page(pgrq->rq_page);
 
 	/* If this page isn't already in the inode page list, add it */
 	if ( !obdfs_find_in_page_list(inode, page) ) {
-		CDEBUG(D_INODE, "adding page %p to inode list %p\n", page,
-		       obdfs_iplist(inode));
+		struct obdfs_pgrq *pgrq;
+		pgrq = kmem_cache_alloc(obdfs_pgrq_cachep, SLAB_KERNEL);
+		CDEBUG(D_INODE, "adding inode %ld page %p, pgrq: %p, cache count [%d]\n",
+		       inode->i_ino, page, pgrq, obdfs_cache_count);
+		if (!pgrq) {
+			EXIT;
+			return -ENOMEM;
+		}
+		memset(pgrq, 0, sizeof(*pgrq)); 
+		
+		pgrq->rq_page = page;
+		get_page(pgrq->rq_page);
 		list_add(&pgrq->rq_plist, obdfs_iplist(inode));
 	}
 
 	/* If inode isn't already on the superblock inodes list, add it */
 	if ( list_empty(obdfs_islist(inode)) ) {
-		CDEBUG(D_INODE, "adding inode %p to superblock list %p\n",
-		       obdfs_islist(inode), obdfs_slist(inode));
+		CDEBUG(D_INODE, "adding inode %ld to superblock list %p\n",
+		       inode->i_ino, obdfs_slist(inode));
 		list_add(obdfs_islist(inode), obdfs_slist(inode));
 	}
 
 
-	EXIT;
 	/* XXX For testing purposes, we write out the page here.
 	 *     In the future, a flush daemon will write out the page.
-	return obdfs_flush_reqs(obdfs_slist(inode), 0, 0);
+	res = obdfs_flush_reqs(obdfs_slist(inode), 0);
+	obdfs_flush_dirty_pages(1);
 	 */
-	return 0;
+
+	EXIT;
+	return res;
+	/*return 0;*/
 } /* obdfs_add_page_to_cache */
 
 
@@ -259,15 +300,17 @@ int obdfs_do_writepage(struct inode *inode, struct page *page, int sync)
 	int err;
 
 	ENTRY;
-	PDEBUG(page, "WRITEPAGE");
+	/* PDEBUG(page, "WRITEPAGE"); */
 	if ( sync )
 		err = obdfs_brw(WRITE, inode, page, 1);
-	else
+	else {
 		err = obdfs_add_page_to_cache(inode, page);
+		CDEBUG(D_IOCTL, "DO_WR ino: %ld, page %p, err %d, uptodata %d\n", inode->i_ino, page, err, Page_Uptodate(page));
+	}
 		
 	if ( !err )
 		SetPageUptodate(page);
-	PDEBUG(page,"WRITEPAGE");
+	/* PDEBUG(page,"WRITEPAGE"); */
 	EXIT;
 	return err;
 } /* obdfs_do_writepage */
@@ -361,6 +404,11 @@ struct page *obdfs_getpage(struct inode *inode, unsigned long offset, int create
 		EXIT;
 		return page;
 	} 
+
+
+	if ( obdfs_find_page_index(inode, offset) ) {
+		printk("OVERWRITE: found dirty page %p, index %ld\n", page, page->index);
+	}
 
 	err = obdfs_brw(READ, inode, page, create);
 

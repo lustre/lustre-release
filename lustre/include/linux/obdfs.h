@@ -29,6 +29,7 @@ int obdfs_readpage(struct dentry *dentry, struct page *page);
 int obdfs_writepage(struct dentry *dentry, struct page *page);
 struct page *obdfs_getpage(struct inode *inode, unsigned long offset, int create, int locked);
 int obdfs_write_one_page(struct file *file, struct page *page, unsigned long offset, unsigned long bytes, const char * buf);
+void obdfs_dequeue_reqs(struct inode *inode);
 
 /* namei.c */
 struct dentry *obdfs_lookup(struct inode * dir, struct dentry *dentry);
