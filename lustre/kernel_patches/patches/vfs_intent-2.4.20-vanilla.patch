@@ -3,11 +3,12 @@
  fs/namei.c             |  378 ++++++++++++++++++++++++++++++++++++++++++-------
  fs/nfsd/vfs.c          |    2 
  fs/open.c              |  126 ++++++++++++++--
+ fs/proc/base.c         |    3 
  fs/stat.c              |   24 ++-
  include/linux/dcache.h |   31 ++++
  include/linux/fs.h     |   32 +++-
  kernel/ksyms.c         |    1 
- 9 files changed, 540 insertions(+), 89 deletions(-)
+ 10 files changed, 543 insertions(+), 89 deletions(-)
 
 --- linux-2.4.20-l18/fs/exec.c~vfs_intent-2.4.20-vanilla	Thu Nov 28 18:53:15 2002
 +++ linux-2.4.20-l18-phil/fs/exec.c	Wed May 28 01:39:18 2003
@@ -1403,6 +1404,18 @@
  		path_release(&nd);
  	}
  	return error;
+--- linux-2.4.20-l18/fs/proc/base.c~vfs_intent-2.4.20-vanilla	Wed Jun  4 22:53:14 2003
++++ linux-2.4.20-l18-phil/fs/proc/base.c	Wed Jun  4 22:50:35 2003
+@@ -464,6 +464,9 @@ static int proc_pid_follow_link(struct d
+ 
+ 	error = inode->u.proc_i.op.proc_get_link(inode, &nd->dentry, &nd->mnt);
+ 	nd->last_type = LAST_BIND;
++
++        if (nd->it != NULL)
++                nd->it->it_int_flags |= IT_FL_FOLLOWED;
+ out:
+ 	return error;
+ }
 --- linux-2.4.20-l18/include/linux/dcache.h~vfs_intent-2.4.20-vanilla	Thu Nov 28 18:53:15 2002
 +++ linux-2.4.20-l18-phil/include/linux/dcache.h	Sun Jun  1 22:35:10 2003
 @@ -7,6 +7,28 @@
