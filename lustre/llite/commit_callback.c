@@ -72,7 +72,11 @@ static int ll_commitcbd_main(void *arg)
         unlock_kernel();
 
         /* Record that the  thread is running */
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         sbi->ll_commitcbd_waketime = CURRENT_TIME;
+#else
+        sbi->ll_commitcbd_waketime = CURRENT_TIME.tv_sec;
+#endif
         sbi->ll_commitcbd_timeout = 10 * HZ;
         sbi->ll_commitcbd_thread = current;
         sbi->ll_commitcbd_flags =  LL_COMMITCBD_RUNNING;
