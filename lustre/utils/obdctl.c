@@ -54,7 +54,17 @@ char rawbuf[8192];
 char *buf = rawbuf;
 int max = 8192;
 
-#define IOCINIT(data) do { memset(&data, 0, sizeof(data)); data.ioc_version = OBD_IOCTL_VERSION; data.ioc_conn1 = connid; data.ioc_len = sizeof(data); if (fd < 0) { printf("No device open, use device\n"); return 1;}} while (0)
+#define IOCINIT(data)                                                   \
+do {                                                                    \
+        memset(&data, 0, sizeof(data));                                 \
+        data.ioc_version = OBD_IOCTL_VERSION;                           \
+        data.ioc_conn1 = connid;                                        \
+        data.ioc_len = sizeof(data);                                    \
+        if (fd < 0) {                                                   \
+                fprintf(stderr, "No device open, use device\n");        \
+                return 1;                                               \
+        }                                                               \
+} while (0)
 
 /*
     pack "LL LL LL LL LL LL LL L L L L L L L L L a60 a60 L L L", 
@@ -143,10 +153,11 @@ static int do_disconnect()
 {
         struct obd_ioctl_data data;
         int rc;
-        IOCINIT(data);
         
         if (connid == -1) 
                 return 0;
+
+        IOCINIT(data);
 
         rc = ioctl(fd, OBD_IOC_DISCONNECT , &data);
         if (rc < 0) {
@@ -489,8 +500,9 @@ command_t list[] = {
 static void signal_server(int sig)
 {
         if (sig == SIGINT) { 
-                printf("Disconnecting existing connection");
+                fprintf(stderr,"\nDisconnecting any existing connections...\n");
                 do_disconnect();
+                exit(1);
         }
 }
 
@@ -508,6 +520,7 @@ int main(int argc, char **argv)
 
         Parser_init("obdctl > ", list);
         Parser_commands();
+        do_disconnect();
 
         return 0;
 }

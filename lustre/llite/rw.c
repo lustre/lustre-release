@@ -294,8 +294,8 @@ int ll_commit_write(struct file *file, struct page *page,
 	CDEBUG(D_INODE, "commit_page writing (at %d) to %d, count %Ld\n", 
 	       from, to, count);
 
-        err = obd_brw(OBD_BRW_WRITE, ll_i2obdconn(inode), num_obdo, &oa, &bufs_per_obdo,
-		      &page, &count, &offset, &flags);
+        err = obd_brw(OBD_BRW_WRITE, ll_i2obdconn(inode), num_obdo, &oa,
+                      &bufs_per_obdo, &page, &count, &offset, &flags);
         if ( !err ) {
                 SetPageUptodate(page);
 		set_page_clean(page);

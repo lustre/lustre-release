@@ -60,7 +60,7 @@ static int ll_dir_readpage(struct file *file, struct page *page)
 	char *buf;
 	__u64 offset;
         int rc = 0;
-	struct ptlrep_hdr *hdr;
+	struct ptlrpc_request *request;
 
         ENTRY;
 
@@ -80,24 +80,15 @@ static int ll_dir_readpage(struct file *file, struct page *page)
 	offset = page->index << PAGE_SHIFT; 
 	buf = kmap(page);
         rc = mdc_readpage(&sbi->ll_mds_client, inode->i_ino, S_IFDIR, offset, 
-			  buf, NULL, &hdr);
+			  buf, &request);
 	kunmap(page); 
-        if ( rc ) {
-		EXIT; 
-		goto readpage_out;
-        } 
+        ptlrpc_free_req(request);
+        if ( !rc )
+                SetPageUptodate(page);
 
-	if ((rc = hdr->status)) {
-		EXIT;
-		goto readpage_out;
-	}
-
-        /* PDEBUG(page, "READ"); */
-
-	SetPageUptodate(page);
+        EXIT;
  readpage_out:
 	UnlockPage(page);
-        EXIT;
         return rc;
 } /* ll_dir_readpage */
 

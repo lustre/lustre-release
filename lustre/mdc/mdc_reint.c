@@ -54,176 +54,138 @@ extern int mdc_reint(struct ptlrpc_client *peer, struct ptlrpc_request *request)
 
 int mdc_setattr(struct ptlrpc_client *peer, 
 		struct inode *inode, struct iattr *iattr,
-		struct mds_rep **rep, struct ptlrep_hdr **hdr)
+		struct ptlrpc_request **request)
 {
 	int rc; 
-	struct ptlrpc_request *request;
 	struct mds_rec_setattr *rec;
+        ENTRY;
 
-	request = ptlrpc_prep_req(peer, MDS_REINT, 0, NULL, sizeof(*rec), NULL);
-	if (!request) { 
+	*request = ptlrpc_prep_req(peer, MDS_REINT, 0, NULL, sizeof(*rec), NULL);
+	if (!(*request)) { 
 		CERROR("mdc request: cannot pack\n");
 		return -ENOMEM;
 	}
 
-	rec = mds_req_tgt(request->rq_req.mds);
+	rec = mds_req_tgt((*request)->rq_req.mds);
 	mds_setattr_pack(rec, inode, iattr); 
-	request->rq_req.mds->opcode = HTON__u32(REINT_SETATTR);
-	request->rq_replen = 
+	(*request)->rq_req.mds->opcode = HTON__u32(REINT_SETATTR);
+	(*request)->rq_replen = 
 		sizeof(struct ptlrep_hdr) + sizeof(struct mds_rep);
 
-	rc = mdc_reint(peer, request);
-	if (rc)
-		return rc;
+	rc = mdc_reint(peer, *request);
 
-	if (rep) { 
-		*rep = request->rq_rep.mds;
-	}
-	if (hdr) { 
-		*hdr = request->rq_rephdr;
-	}
-
-	return 0;
+        EXIT;
+        return rc;
 }
 
 int mdc_create(struct ptlrpc_client *peer, 
 	       struct inode *dir, const char *name, int namelen, 
 	       const char *tgt, int tgtlen, 
 	       int mode, __u64 id, __u32 uid, __u32 gid, __u64 time, 
-		struct mds_rep **rep, struct ptlrep_hdr **hdr)
+               struct ptlrpc_request **request)
 {
 	int rc; 
-	struct ptlrpc_request *request;
 	struct mds_rec_create *rec;
+        ENTRY;
 
-	request = ptlrpc_prep_req(peer, MDS_REINT, 0, NULL, 
+	(*request) = ptlrpc_prep_req(peer, MDS_REINT, 0, NULL, 
 			       sizeof(*rec) + size_round0(namelen) + 
 			       size_round0(tgtlen), NULL);
-	if (!request) { 
+	if (!(*request)) { 
 		CERROR("mdc_create: cannot pack\n");
 		return -ENOMEM;
 	}
 
-	request->rq_replen = 
+	(*request)->rq_replen = 
 		sizeof(struct ptlrep_hdr) + sizeof(struct mds_rep);
 
-	rec = mds_req_tgt(request->rq_req.mds);
+	rec = mds_req_tgt((*request)->rq_req.mds);
 	mds_create_pack(rec, dir, name, namelen, mode, id, uid, gid, time, 
 			tgt, tgtlen); 
 
-	rc = mdc_reint(peer, request);
+	rc = mdc_reint(peer, (*request));
 
-	if (rep) { 
-		*rep = request->rq_rep.mds;
-	}
-	if (hdr) { 
-		*hdr = request->rq_rephdr;
-	}
-
-        OBD_FREE(request, sizeof(*request));
+        EXIT;
 	return rc;
 }
 
 int mdc_unlink(struct ptlrpc_client *peer, 
 	       struct inode *dir, const char *name, int namelen, 
-		struct mds_rep **rep, struct ptlrep_hdr **hdr)
+               struct ptlrpc_request **request)
 {
 	int rc; 
-	struct ptlrpc_request *request;
 	struct mds_rec_unlink *rec;
 
-	request = ptlrpc_prep_req(peer, MDS_REINT, 0, NULL, 
+	(*request) = ptlrpc_prep_req(peer, MDS_REINT, 0, NULL, 
 			       sizeof(*rec) + size_round0(namelen), NULL);
-	if (!request) { 
+	if (!(*request)) { 
 		CERROR("mdc_unlink: cannot pack\n");
 		return -ENOMEM;
 	}
 
-	request->rq_replen = 
+	(*request)->rq_replen = 
 		sizeof(struct ptlrep_hdr) + sizeof(struct mds_rep);
 
-	rec = mds_req_tgt(request->rq_req.mds);
+	rec = mds_req_tgt((*request)->rq_req.mds);
 	mds_unlink_pack(rec, dir, name, namelen);
 
-	rc = mdc_reint(peer, request);
+	rc = mdc_reint(peer, (*request));
 
-	if (rep) { 
-		*rep = request->rq_rep.mds;
-	}
-	if (hdr) { 
-		*hdr = request->rq_rephdr;
-	}
-
-        OBD_FREE(request, sizeof(*request));
+        EXIT;
 	return rc;
 }
 
 int mdc_link(struct ptlrpc_client *peer, struct dentry *src, 
 	     struct inode *dir, const char *name, int namelen, 
-		struct mds_rep **rep, struct ptlrep_hdr **hdr)
+             struct ptlrpc_request **request)
 {
 	int rc; 
-	struct ptlrpc_request *request;
 	struct mds_rec_link *rec;
+        ENTRY;
 
-	request = ptlrpc_prep_req(peer, MDS_REINT, 0, NULL, 
+	(*request) = ptlrpc_prep_req(peer, MDS_REINT, 0, NULL, 
 			       sizeof(*rec) + size_round0(namelen), NULL);
-	if (!request) { 
+	if (!(*request)) { 
 		CERROR("mdc_link: cannot pack\n");
 		return -ENOMEM;
 	}
 
-	request->rq_replen = 
+	(*request)->rq_replen = 
 		sizeof(struct ptlrep_hdr) + sizeof(struct mds_rep);
 
-	rec = mds_req_tgt(request->rq_req.mds);
+	rec = mds_req_tgt((*request)->rq_req.mds);
 	mds_link_pack(rec, src->d_inode, dir, name, namelen);
 
-	rc = mdc_reint(peer, request);
-
-	if (rep) { 
-		*rep = request->rq_rep.mds;
-	}
-	if (hdr) { 
-		*hdr = request->rq_rephdr;
-	}
-
-        OBD_FREE(request, sizeof(*request));
+	rc = mdc_reint(peer, (*request));
+        EXIT;
 	return rc;
 }
 
 int mdc_rename(struct ptlrpc_client *peer, struct inode *src, 
 	       struct inode *tgt, const char *old, int oldlen, 
 	       const char *new, int newlen, 
-	       struct mds_rep **rep, struct ptlrep_hdr **hdr)
+               struct ptlrpc_request **request)
 {
 	int rc; 
-	struct ptlrpc_request *request;
 	struct mds_rec_rename *rec;
+        ENTRY;
 
-	request = ptlrpc_prep_req(peer, MDS_REINT, 0, NULL, 
+	(*request) = ptlrpc_prep_req(peer, MDS_REINT, 0, NULL, 
 			       sizeof(*rec) + size_round0(oldlen)
 			       + size_round0(newlen), NULL);
-	if (!request) { 
+	if (!(*request)) { 
 		CERROR("mdc_link: cannot pack\n");
 		return -ENOMEM;
 	}
 
-	request->rq_replen = 
+	(*request)->rq_replen = 
 		sizeof(struct ptlrep_hdr) + sizeof(struct mds_rep);
 
-	rec = mds_req_tgt(request->rq_req.mds);
+	rec = mds_req_tgt((*request)->rq_req.mds);
 	mds_rename_pack(rec, src, tgt, old, oldlen, new, newlen);
 
-	rc = mdc_reint(peer, request);
+	rc = mdc_reint(peer, (*request));
 
-	if (rep) { 
-		*rep = request->rq_rep.mds;
-	}
-	if (hdr) { 
-		*hdr = request->rq_rephdr;
-	}
-
-        OBD_FREE(request, sizeof(*request));
+        EXIT;
 	return rc;
 }

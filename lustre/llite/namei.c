@@ -82,8 +82,7 @@ static inline int ext2_add_nondir(struct dentry *dentry, struct inode *inode)
 /* methods */
 static struct dentry *ll_lookup(struct inode * dir, struct dentry *dentry)
 {
-	struct mds_rep *rep; 
-	struct ptlrep_hdr *hdr = NULL; 
+	struct ptlrpc_request *request;
 	struct inode * inode = NULL;
         struct ll_sb_info *sbi = ll_i2sbi(dir);
 	int err;
@@ -99,20 +98,18 @@ static struct dentry *ll_lookup(struct inode * dir, struct dentry *dentry)
 		goto negative;
 
 	err = mdc_getattr(&sbi->ll_mds_client, ino, type,
-			  OBD_MD_FLNOTOBD|OBD_MD_FLBLOCKS, &rep, &hdr);
+			  OBD_MD_FLNOTOBD|OBD_MD_FLBLOCKS, &request);
         if ( err ) {
                 CERROR("obdo_fromid failed\n");
                 EXIT;
-                return ERR_PTR(-EACCES); 
+                return ERR_PTR(-abs(err)); 
         }
 
-	inode = iget4(dir->i_sb, ino, NULL, rep);
+	inode = iget4(dir->i_sb, ino, NULL, request->rq_rep.mds);
 
-        /* FIXME: this is not the right way to get this size */
-        OBD_FREE(hdr, sizeof(struct ptlrep_hdr) + sizeof(struct mds_rep));
-
+        ptlrpc_free_req(request);
 	if (!inode) 
-		return ERR_PTR(-EACCES);
+		return ERR_PTR(-ENOMEM);
 
  negative:
 	d_add(dentry, inode);
@@ -141,8 +138,8 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
 				    int mode, __u64 id)
 {
         struct inode *inode;
-	struct mds_rep *rep;
-	struct ptlrep_hdr *hdr;
+	struct ptlrpc_request *request;
+        struct mds_rep *rep;
         int err;
 	time_t time = CURRENT_TIME;
         struct ll_sb_info *sbi = ll_i2sbi(dir);
@@ -150,16 +147,14 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
         ENTRY;
 
      	err = mdc_create(&sbi->ll_mds_client, dir, name, namelen, tgt, tgtlen,
-			 mode, id, 
-			 current->uid, current->gid, time, &rep, &hdr); 
+			 mode, id,  current->uid, current->gid, time, &request);
 	if (err) { 
+                ptlrpc_free_req(request);
+                inode = ERR_PTR(err);
                 EXIT;
-		return ERR_PTR(err);
+                goto out;
 	}
-	if ( hdr->status) {
-		EXIT;
-		return ERR_PTR(hdr->status);
-	}
+        rep = request->rq_rep.mds;
 	rep->valid = OBD_MD_FLNOTOBD;
 
 	rep->objid = id; 
@@ -172,8 +167,9 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
         inode = iget4(dir->i_sb, rep->ino, NULL, rep);
         if (IS_ERR(inode)) {
                 CERROR("new_inode -fatal:  %ld\n", PTR_ERR(inode));
+                inode = ERR_PTR(-EIO);
                 EXIT;
-                return ERR_PTR(-EIO);
+                goto out;
         }
 
         if (!list_empty(&inode->i_dentry)) {
@@ -181,68 +177,52 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
 		       rep->ino, atomic_read(&inode->i_count), 
 		       inode->i_nlink);
                 iput(inode);
+                inode = ERR_PTR(-EIO);
                 EXIT;
-                return ERR_PTR(-EIO);
+                goto out;
         }
 
         EXIT;
+ out:
+        ptlrpc_free_req(request);
         return inode;
 } /* ll_new_inode */
 
 int ll_mdc_unlink(struct inode *dir, const char *name, int len)
 {
-	struct mds_rep *rep;
-	struct ptlrep_hdr *hdr;
+	struct ptlrpc_request *request;
         int err;
         struct ll_sb_info *sbi = ll_i2sbi(dir);
 
         ENTRY;
 
-     	err = mdc_unlink(&sbi->ll_mds_client, dir, name, len, &rep, &hdr); 
-
-	if (err) { 
-                EXIT;
-		return err;
-	}
-	if ( hdr->status) {
-		EXIT;
-		return hdr->status;
-	}
+     	err = mdc_unlink(&sbi->ll_mds_client, dir, name, len, &request);
+        ptlrpc_free_req(request);
 
         EXIT;
-	return 0;
+	return err;
 }
 
 int ll_mdc_link(struct dentry *src, struct inode *dir, 
 		const char *name, int len)
 {
-	struct mds_rep *rep;
-	struct ptlrep_hdr *hdr;
+	struct ptlrpc_request *request;
         int err;
         struct ll_sb_info *sbi = ll_i2sbi(dir);
 
         ENTRY;
 
-     	err = mdc_link(&sbi->ll_mds_client, src, dir, name, len, &rep, &hdr); 
-
-	if (err) { 
-                EXIT;
-		return err;
-	}
-	if ( hdr->status) {
-		EXIT;
-		return hdr->status;
-	}
+     	err = mdc_link(&sbi->ll_mds_client, src, dir, name, len, &request);
+        ptlrpc_free_req(request);
 
         EXIT;
-	return 0;
+	return err;
 }
 
 int ll_mdc_rename(struct inode *src, struct inode *tgt, 
 		  struct dentry *old, struct dentry *new)
 {
-	struct mds_rep *rep;
-	struct ptlrep_hdr *hdr;
+	struct ptlrpc_request *request;
         int err;
         struct ll_sb_info *sbi = ll_i2sbi(src);
 
@@ -250,20 +230,11 @@ int ll_mdc_rename(struct inode *src, struct inode *tgt,
 
      	err = mdc_rename(&sbi->ll_mds_client, src, tgt, 
 			 old->d_name.name, old->d_name.len, 
-			 new->d_name.name, new->d_name.len, 
-			 &rep, &hdr); 
-
-	if (err) { 
-                EXIT;
-		return err;
-	}
-	if ( hdr->status) {
-		EXIT;
-		return hdr->status;
-	}
+			 new->d_name.name, new->d_name.len, &request);
+        ptlrpc_free_req(request);
 
         EXIT;
-	return 0;
+	return err;
 }
 
 /*
@@ -294,8 +265,7 @@ static int ll_create (struct inode * dir, struct dentry * dentry, int mode)
         CDEBUG(D_DENTRY, "name %s mode %o o_id %lld\n", 
 	       dentry->d_name.name, mode, oa.o_id);
 	inode = ll_create_node(dir, dentry->d_name.name, dentry->d_name.len, 
-			       NULL, 0,
-			       mode, oa.o_id);
+			       NULL, 0, mode, oa.o_id);
 	err = PTR_ERR(inode);
 	if (!IS_ERR(inode)) {
 		// XXX clean up the object

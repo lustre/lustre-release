@@ -101,8 +101,7 @@ static struct super_block * ll_read_super(struct super_block *sb,
 	int connected = 0;
         int devno;
         int err;
-	struct mds_rep *rep; 
-	struct ptlrep_hdr *hdr = NULL; 
+	struct ptlrpc_request *request = NULL;
 
         ENTRY;
         MOD_INC_USE_COUNT; 
@@ -163,15 +162,14 @@ static struct super_block * ll_read_super(struct super_block *sb,
 
         /* make root inode */
 	err = mdc_getattr(&sbi->ll_mds_client, sbi->ll_rootino, S_IFDIR, 
-			  OBD_MD_FLNOTOBD|OBD_MD_FLBLOCKS, 
-			  &rep, &hdr);
+                          OBD_MD_FLNOTOBD|OBD_MD_FLBLOCKS, &request);
         if (err) {
-                CERROR("mds_getattr failed for root %d\n", err);
+                CERROR("mdc_getattr failed for root %d\n", err);
 		sb = NULL; 
                 goto ERR;
         }
-                         
-        root = iget4(sb, sbi->ll_rootino, NULL, rep);
+
+        root = iget4(sb, sbi->ll_rootino, NULL, request->rq_rep.mds);
         if (root) {
 		sb->s_root = d_alloc_root(root);
 	} else {
@@ -179,12 +177,9 @@ static struct super_block * ll_read_super(struct super_block *sb,
 	    sb = NULL; 
             goto ERR;
         } 
-        
+
 ERR:
-	if (hdr)
-                /* FIXME: sigh, another stupid hardcoded size */
-                OBD_FREE(hdr, sizeof(struct ptlrep_hdr) +
-                         sizeof(struct mds_rep));
+        ptlrpc_free_req(request);
         if (device)
                 OBD_FREE(device, strlen(device) + 1);
         if (version)
@@ -268,7 +263,7 @@ out:
 
 int ll_inode_setattr(struct inode *inode, struct iattr *attr, int do_trunc)
 {
-	struct ptlrep_hdr *hdr = NULL;
+	struct ptlrpc_request *request;
         struct ll_sb_info *sbi = ll_i2sbi(inode);
 	int err;
 
@@ -277,9 +272,11 @@ int ll_inode_setattr(struct inode *inode, struct iattr *attr, int do_trunc)
 	/* change incore inode */
 	ll_attr2inode(inode, attr, do_trunc);
 
-	err = mdc_setattr(&sbi->ll_mds_client, inode, attr, NULL, &hdr); 
-        if ( err )
-                CERROR("ll_setattr fails (%d)\n", err);
+	err = mdc_setattr(&sbi->ll_mds_client, inode, attr, &request);
+        if (err)
+                CERROR("mdc_setattr fails (%d)\n", err);
+
+        ptlrpc_free_req(request);
 
         EXIT;
         return err;

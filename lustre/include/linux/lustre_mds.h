@@ -100,27 +100,26 @@ struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid, struct vf
 
 /* llight/request.c */
 int mdc_getattr(struct ptlrpc_client *peer, ino_t ino, int type, int valid, 
-		struct mds_rep  **mds_reply, struct ptlrep_hdr **hdr);
+		struct ptlrpc_request **);
 int mdc_setattr(struct ptlrpc_client *peer, struct inode *inode,
-                struct iattr *iattr, struct mds_rep  **mds_reply,
-                struct ptlrep_hdr **hdr);
+                struct iattr *iattr, struct ptlrpc_request **);
 int mdc_readpage(struct ptlrpc_client *peer, ino_t ino, int type, __u64 offset,
-                 char *addr, struct mds_rep  **rep, struct ptlrep_hdr **hdr);
+                 char *addr, struct ptlrpc_request **);
 int mdc_create(struct ptlrpc_client *peer, 
 	       struct inode *dir, const char *name, int namelen, 
 	       const char *tgt, int tgtlen, 
 	       int mode, __u64 id, __u32 uid, __u32 gid, __u64 time, 
-               struct mds_rep **rep, struct ptlrep_hdr **hdr);
+               struct ptlrpc_request **);
 int mdc_unlink(struct ptlrpc_client *peer, 
 	       struct inode *dir, const char *name, int namelen, 
-               struct mds_rep **rep, struct ptlrep_hdr **hdr);
+               struct ptlrpc_request **);
 int mdc_link(struct ptlrpc_client *peer, struct dentry *src, 
 	       struct inode *dir, const char *name, int namelen, 
-               struct mds_rep **rep, struct ptlrep_hdr **hdr);
+               struct ptlrpc_request **);
 int mdc_rename(struct ptlrpc_client *peer, struct inode *src, 
 	       struct inode *tgt, const char *old, int oldlen, 
 	       const char *new, int newlen, 
-	       struct mds_rep **rep, struct ptlrep_hdr **hdr);
+               struct ptlrpc_request **);
 int mdc_create_client(char *uuid, struct ptlrpc_client *cl);
 
 /* ioctls for trying requests */

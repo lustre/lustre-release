@@ -383,8 +383,6 @@ int osc_brw_read(struct obd_conn *conn, obd_count num_oa, struct obdo **oa,
         /* FIXME: if we've called ptlrpc_wait_bulk but rc != 0, we need to
          * abort those bulk listeners. */
 
-        if (request->rq_rephdr)
-                OBD_FREE(request->rq_rephdr, request->rq_replen);
         n = 0;
         for (i = 0; i < num_oa; i++) {
                 for (j = 0; j < oa_bufs[i]; j++) {
@@ -472,8 +470,6 @@ int osc_brw_write(struct obd_conn *conn, obd_count num_oa, struct obdo **oa,
 	}
         OBD_FREE(src, size2);
  out:
-	if (request->rq_rephdr)
-		OBD_FREE(request->rq_rephdr, request->rq_replen);
 	n = 0;
         for (i = 0; i < num_oa; i++) {
                 for (j = 0; j < oa_bufs[i]; j++) {

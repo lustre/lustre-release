@@ -220,6 +220,7 @@ struct ptlrpc_request *ptlrpc_prep_req(struct ptlrpc_client *cl,
                                        int tgtlen, char *tgt);
 void ptlrpc_free_req(struct ptlrpc_request *request);
 struct ptlrpc_bulk_desc *ptlrpc_prep_bulk(struct lustre_peer *);
+int ptlrpc_check_status(struct ptlrpc_request *req, int err);
 
 /* rpc/service.c */
 struct ptlrpc_service *

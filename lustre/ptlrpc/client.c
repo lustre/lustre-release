@@ -157,6 +157,9 @@ struct ptlrpc_request *ptlrpc_prep_req(struct ptlrpc_client *cl,
 
 void ptlrpc_free_req(struct ptlrpc_request *request)
 {
+        if (request == NULL)
+                return;
+
         if (request->rq_repbuf != NULL)
                 OBD_FREE(request->rq_repbuf, request->rq_replen);
 	OBD_FREE(request, sizeof(*request));
@@ -177,6 +180,40 @@ static int ptlrpc_check_reply(struct ptlrpc_request *req)
                 return 1;
         }
 
+        return 0;
+}
+
+int ptlrpc_check_status(struct ptlrpc_request *req, int err)
+{
+        ENTRY;
+
+        if (err != 0) {
+                CERROR("err is %d\n", err);
+                EXIT;
+                return err;
+        }
+
+        if (req == NULL) {
+                CERROR("req == NULL\n");
+                EXIT;
+                return -ENOMEM;
+        }
+
+        if (req->rq_rephdr == NULL) {
+                CERROR("req->rq_rephdr == NULL\n");
+                EXIT;
+                return -ENOMEM;
+        }
+
+        if (req->rq_rephdr->status != 0) {
+                CERROR("req->rq_rephdr->status is %d\n",
+                       req->rq_rephdr->status);
+                EXIT;
+                /* XXX: translate this error from net to host */
+                return req->rq_rephdr->status;
+        }
+
+        EXIT;
         return 0;
 }
 
@@ -243,7 +280,7 @@ int ptlrpc_queue_wait(struct ptlrpc_client *cl, struct ptlrpc_request *req)
         CDEBUG(D_NET, "got rep %d\n", req->rq_rephdr->xid);
 
 	if ( req->rq_rephdr->status == 0 )
-                CDEBUG(0, "--> buf %p len %d status %d\n", req->rq_repbuf,
+                CDEBUG(D_NET, "--> buf %p len %d status %d\n", req->rq_repbuf,
                        req->rq_replen, req->rq_rephdr->status);
 
 	EXIT;

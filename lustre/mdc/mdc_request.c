@@ -56,15 +56,19 @@ extern int mds_queue_req(struct ptlrpc_request *);
 
 
 int mdc_getattr(struct ptlrpc_client *cl, ino_t ino, int type, int valid, 
-		struct mds_rep  **rep, struct ptlrep_hdr **hdr)
+		struct ptlrpc_request **req)
 {
-	struct ptlrpc_request *request;
-	int rc; 
+	int rc;
+        struct ptlrpc_request *request;
+
+        ENTRY;
 
 	request = ptlrpc_prep_req(cl, MDS_GETATTR, 0, NULL, 0, NULL); 
 	if (!request) { 
 		CERROR("llight request: cannot pack\n");
-		return -ENOMEM;
+		rc = -ENOMEM;
+                EXIT;
+                goto out;
 	}
 
 	ll_ino2fid(&request->rq_req.mds->fid1, ino, 0, type);
@@ -74,27 +78,19 @@ int mdc_getattr(struct ptlrpc_client *cl, ino_t ino, int type, int valid,
 		sizeof(struct ptlrep_hdr) + sizeof(struct mds_rep);
 
 	rc = ptlrpc_queue_wait(cl, request);
-	if (rc) { 
-		CERROR("llight request: error in handling %d\n", rc); 
-		goto out;
-	}
+	rc = ptlrpc_check_status(request, rc);
 
-        CDEBUG(0, "mode: %o\n", request->rq_rep.mds->mode);
+        if (!rc)
+                CDEBUG(D_NET, "mode: %o\n", request->rq_rep.mds->mode);
 
-	if (rep) { 
-		*rep = request->rq_rep.mds;
-	}
-	if (hdr) { 
-		*hdr = request->rq_rephdr;
-	}
-
- out: 
-	ptlrpc_free_req(request);
-	return rc;
+        EXIT;
+ out:
+        *req = request;
+        return rc;
 }
 
 int mdc_open(struct ptlrpc_client *cl, ino_t ino, int type, int flags,
-                __u64 *fh, struct mds_rep  **rep, struct ptlrep_hdr **hdr)
+             __u64 *fh, struct ptlrpc_request **req)
 {
 	struct ptlrpc_request *request;
 	int rc; 
@@ -102,7 +98,8 @@ int mdc_open(struct ptlrpc_client *cl, ino_t ino, int type, int flags,
 	request = ptlrpc_prep_req(cl, MDS_OPEN, 0, NULL, 0, NULL); 
 	if (!request) { 
 		CERROR("llight request: cannot pack\n");
-		return -ENOMEM;
+		rc = -ENOMEM;
+                goto out;
 	}
 
 	ll_ino2fid(&request->rq_req.mds->fid1, ino, 0, type);
@@ -116,22 +113,16 @@ int mdc_open(struct ptlrpc_client *cl, ino_t ino, int type, int flags,
 		goto out;
 	}
 
-	if (rep) { 
-		*rep = request->rq_rep.mds;
-	}
-	if (hdr) { 
-		*hdr = request->rq_rephdr;
-	}
         *fh = request->rq_rep.mds->objid; 
 
  out: 
-	ptlrpc_free_req(request);
+        *req = request;
 	return rc;
 }
 
 
 int mdc_close(struct ptlrpc_client *cl, ino_t ino, int type, __u64 fh, 
-		struct mds_rep  **rep, struct ptlrep_hdr **hdr)
+              struct ptlrpc_request **req)
 {
 	struct ptlrpc_request *request;
 	int rc; 
@@ -139,7 +130,8 @@ int mdc_close(struct ptlrpc_client *cl, ino_t ino, int type, __u64 fh,
 	request = ptlrpc_prep_req(cl, MDS_CLOSE, 0, NULL, 0, NULL); 
 	if (!request) { 
 		CERROR("llight request: cannot pack\n");
-		return -ENOMEM;
+		rc = -ENOMEM;
+                goto out;
 	}
 
 	ll_ino2fid(&request->rq_req.mds->fid1, ino, 0, type);
@@ -153,23 +145,16 @@ int mdc_close(struct ptlrpc_client *cl, ino_t ino, int type, __u64 fh,
 		goto out;
 	}
 
-	if (rep) { 
-		*rep = request->rq_rep.mds;
-	}
-	if (hdr) { 
-		*hdr = request->rq_rephdr;
-	}
-
  out: 
-	ptlrpc_free_req(request);
+        *req = request;
 	return rc;
 }
 
 int mdc_readpage(struct ptlrpc_client *cl, ino_t ino, int type, __u64 offset,
-		 char *addr, struct mds_rep  **rep, struct ptlrep_hdr **hdr)
+                 char *addr, struct ptlrpc_request **req)
 {
-	struct ptlrpc_request *request;
-        struct ptlrpc_bulk_desc *bulk;
+	struct ptlrpc_request *request = NULL;
+        struct ptlrpc_bulk_desc *bulk = NULL;
 	struct niobuf niobuf;
 	int rc; 
 
@@ -180,15 +165,16 @@ int mdc_readpage(struct ptlrpc_client *cl, ino_t ino, int type, __u64 offset,
         bulk = ptlrpc_prep_bulk(&cl->cli_server);
         if (bulk == NULL) {
                 CERROR("%s: cannot init bulk desc\n", __FUNCTION__);
-                return -ENOMEM;
+                rc = -ENOMEM;
+                goto out;
         }
 
 	request = ptlrpc_prep_req(cl, MDS_READPAGE, 0, NULL,
                                   sizeof(struct niobuf), (char *)&niobuf);
 	if (!request) { 
-                OBD_FREE(bulk, sizeof(*bulk));
 		CERROR("%s: cannot pack\n", __FUNCTION__);
-		return -ENOMEM;
+		rc = -ENOMEM;
+                goto out;
 	}
 
         bulk->b_buflen = PAGE_SIZE;
@@ -217,16 +203,10 @@ int mdc_readpage(struct ptlrpc_client *cl, ino_t ino, int type, __u64 offset,
 
         CDEBUG(D_INODE, "mode: %o\n", request->rq_rep.mds->mode);
 
-	if (rep) { 
-		*rep = request->rq_rep.mds;
-	}
-	if (hdr) { 
-		*hdr = request->rq_rephdr;
-	}
-
  out:
-	ptlrpc_free_req(request);
-        OBD_FREE(bulk, sizeof(*bulk));
+        *req = request;
+        if (bulk != NULL)
+                OBD_FREE(bulk, sizeof(*bulk));
 	return rc;
 }
 
@@ -247,6 +227,7 @@ static int request_ioctl(struct inode *inode, struct file *file,
 {
 	int err;
 	struct ptlrpc_client cl;
+        struct ptlrpc_request *request;
 
 	ENTRY;
 
@@ -273,20 +254,14 @@ static int request_ioctl(struct inode *inode, struct file *file,
 	
 	switch (cmd) {
 	case IOC_REQUEST_GETATTR: { 
-		struct ptlrep_hdr *hdr = NULL;
 		CERROR("-- getting attr for ino 2\n"); 
-		err = mdc_getattr(&cl, 2, S_IFDIR, ~0, NULL, &hdr);
-		if (hdr) {
-                        /* FIXME: there must be a better way to get the size */
-			OBD_FREE(hdr, sizeof(struct ptlrep_hdr) +
-                                 sizeof(struct mds_rep));
-                }
+		err = mdc_getattr(&cl, 2, S_IFDIR, ~0, &request);
+
 		CERROR("-- done err %d\n", err);
 		break;
 	}
 
 	case IOC_REQUEST_READPAGE: { 
-		struct ptlrep_hdr *hdr = NULL;
 		char *buf;
 		OBD_ALLOC(buf, PAGE_SIZE);
 		if (!buf) { 
@@ -294,22 +269,14 @@ static int request_ioctl(struct inode *inode, struct file *file,
 			break;
 		}
 		CERROR("-- readpage 0 for ino 2\n"); 
-		err = mdc_readpage(&cl, 2, S_IFDIR, 0, buf, NULL, &hdr);
+		err = mdc_readpage(&cl, 2, S_IFDIR, 0, buf, &request);
 		CERROR("-- done err %d\n", err);
-		if (!err) { 
-			CERROR("-- status: %d\n", hdr->status); 
-			err = hdr->status;
-                        if (hdr)
-                                OBD_FREE(hdr, sizeof(struct ptlrep_hdr) +
-                                         sizeof(struct mds_rep));
-		}
 		OBD_FREE(buf, PAGE_SIZE);
 		break;
 	}
 
 	case IOC_REQUEST_SETATTR: { 
 		struct inode inode;
-		struct ptlrep_hdr *hdr;
 		struct iattr iattr; 
 
 		inode.i_ino = 2;
@@ -317,21 +284,13 @@ static int request_ioctl(struct inode *inode, struct file *file,
 		iattr.ia_atime = 0;
 		iattr.ia_valid = ATTR_MODE | ATTR_ATIME;
 
-		err = mdc_setattr(&cl, &inode, &iattr, NULL, &hdr);
+		err = mdc_setattr(&cl, &inode, &iattr, &request);
 		CERROR("-- done err %d\n", err);
-		if (!err) { 
-			CERROR("-- status: %d\n", hdr->status); 
-			err = hdr->status;
-		} else {
-                        OBD_FREE(hdr, sizeof(struct ptlrep_hdr) +
-                                 sizeof(struct mds_rep));
-		}
 		break;
 	}
 
 	case IOC_REQUEST_CREATE: { 
 		struct inode inode;
-		struct ptlrep_hdr *hdr;
 		struct iattr iattr; 
 
 		inode.i_ino = 2;
@@ -342,14 +301,8 @@ static int request_ioctl(struct inode *inode, struct file *file,
 		err = mdc_create(&cl, &inode, 
 				 "foofile", strlen("foofile"), 
 				 NULL, 0, 0100707, 47114711, 
-				 11, 47, 0, NULL, &hdr);
+				 11, 47, 0, &request);
 		CERROR("-- done err %d\n", err);
-		if (!err) { 
-			CERROR("-- status: %d\n", hdr->status); 
-			err = hdr->status;
-		}
-                OBD_FREE(hdr, sizeof(struct ptlrep_hdr) +
-                         sizeof(struct mds_rep));
 		break;
 	}
 
