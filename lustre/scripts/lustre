@@ -35,19 +35,37 @@ fi
 
 [ -x ${LCONF} -a -f ${LUSTRE_CONFIG_XML} ] || exit 0
 
+# Create /var/lustre directory 
+# This is used by snmp agent for checking lustre services	 \
+#    status online/offline/online pending/offline pending.
+
+[ -d ${STATUS_DIR:=/var/lustre} ] || mkdir -p $STATUS_DIR
+STATUS=${STATUS_DIR}/sysStatus
+
 start() {
         echo -n "Starting $SERVICE: "
-	${LCONF} ${LCONF_START_ARGS}
+        ${LCONF} ${LCONF_START_ARGS}
         RETVAL=$?
         echo $SERVICE
-        [ $RETVAL -eq 0 ] && touch $LOCK
+        if [ $RETVAL -eq 0 ]; then
+               touch $LOCK
+              echo "online" >$STATUS
+        else
+              echo "online pending" >$STATUS
+        fi
 }
 
 stop() {
         echo -n "Shutting down $SERVICE: "
-	${LCONF} ${LCONF_STOP_ARGS}
-	echo $SERVICE
-	rm -f $LOCK
+        ${LCONF} ${LCONF_STOP_ARGS}
+        RETVAL=$?
+        echo $SERVICE
+        rm -f $LOCK 
+        if [ $RETVAL -eq 0 ]; then
+              echo "offline" >$STATUS
+        else
+              echo "offline pending" >$STATUS
+        fi
 }
 
 restart() {
