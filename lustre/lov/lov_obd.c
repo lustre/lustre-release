@@ -677,9 +677,8 @@ static inline int lov_brw(int cmd, struct lustre_handle *conn,
                         atomic_inc(&our_cb->refcount);
         }
 
-        for (i = 0, loi = lsm->lsm_oinfo, si = si_last = stripeinfo;
-             i < stripe_count;
-             i++, loi++, si_last = si, si++) {
+        for (i = 0, loi = lsm->lsm_oinfo, si_last = si = stripeinfo;
+             i < stripe_count; i++, loi++, si_last = si, si++) {
                 if (i > 0)
                         si->index = si_last->index + si_last->bufct;
                 si->lsm.lsm_object_id = loi->loi_id;
@@ -697,7 +696,7 @@ static inline int lov_brw(int cmd, struct lustre_handle *conn,
                 stripeinfo[which].subcount++;
         }
 
-        for (i = 0, si = stripeinfo; i < stripe_count; i++) {
+        for (i = 0, si = stripeinfo; i < stripe_count; i++, si++) {
                 int shift = si->index;
 
                 if (si->bufct) {
