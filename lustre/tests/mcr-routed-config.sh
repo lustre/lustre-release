@@ -10,12 +10,13 @@ SERVER_START=1
 SERVER_CNT=62
 GW_START=1
 GW_CNT=31
-MDS=mcr23
-UUIDLIST=${UUIDLIST:-/home/bluearc/UUID.0920}
+BASE=mcr
+MDS=23
+UUIDLIST=${UUIDLIST:-/usr/local/admin/ba-ost/UUID.txt}
 
 # THis is needed for to create route for elan network
-CLIENT_LO=mcr40
-CLIENT_HI=mcr96
+CLIENT_LO=40
+CLIENT_HI=96
 
 TCPBUF=1048576
  
