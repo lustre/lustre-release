@@ -373,28 +373,38 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
         obdo_from_inode(oa, inode, OBD_MD_FLTYPE|OBD_MD_FLATIME|OBD_MD_FLMTIME|
                         OBD_MD_FLCTIME);
 
-        /* check if things like lstripe/lfs stripe are sending us the ea */
-        if (rec->ur_flags & MDS_OPEN_HAS_EA) {
-                rc = obd_iocontrol(OBD_IOC_LOV_SETSTRIPE, mds->mds_osc_exp,
-                                   0, &lsm, rec->ur_eadata);
-                if (rc)
-                        GOTO(out_oa, rc);
-        }
-
-        rc = obd_create(mds->mds_osc_exp, oa, &lsm, &oti);
-        if (rc) {
-                int level = D_ERROR;
-                if (rc == -ENOSPC)
-                        level = D_INODE;
-                CDEBUG(level, "error creating objects for inode %lu: rc = %d\n",
-                       inode->i_ino, rc);
-                if (rc > 0) {
-                        CERROR("obd_create returned invalid rc %d\n", rc);
-                        rc = -EIO;
+        if (!(rec->ur_flags & MDS_OPEN_HAS_OBJS)) {
+                /* check if things like lstripe/lfs stripe are sending us the ea */
+                if (rec->ur_flags & MDS_OPEN_HAS_EA) {
+                        rc = obd_iocontrol(OBD_IOC_LOV_SETSTRIPE, 
+                                           mds->mds_osc_exp,
+                                           0, &lsm, rec->ur_eadata);
+                        if (rc)
+                                GOTO(out_oa, rc);
                 }
-                GOTO(out_oa, rc);
+                rc = obd_create(mds->mds_osc_exp, oa, &lsm, &oti);
+                if (rc) {
+                        int level = D_ERROR;
+                        if (rc == -ENOSPC)
+                                level = D_INODE;
+                        CDEBUG(level, "error creating objects for "
+                                      "inode %lu: rc = %d\n",
+                               inode->i_ino, rc);
+                        if (rc > 0) {
+                                CERROR("obd_create returned invalid "
+                                       "rc %d\n", rc);
+                                rc = -EIO;
+                        }
+                        GOTO(out_oa, rc);
+                }
+        } else {
+                rc = obd_iocontrol(OBD_IOC_LOV_SETEA, mds->mds_osc_exp,
+                                   0, &lsm, rec->ur_eadata);
+                if (rc) {
+                        GOTO(out_oa, rc);
+                }
+                lsm->lsm_object_id = oa->o_id;
         }
-
         if (inode->i_size) {
                 oa->o_size = inode->i_size;
                 obdo_from_inode(oa, inode, OBD_MD_FLTYPE|OBD_MD_FLATIME|
