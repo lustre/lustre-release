@@ -8,34 +8,37 @@ GetOptions("pid=i" => \$pid,
            "silent!" => \$silent, 
            "rpctrace!" => \$rpctrace, 
            "nodlm!" => \$nodlm,
+           "dlm_ns=s" => \$dlm_ns,
            "noclass!" => \$noclass,
-           "nonet!" => \$nonet);
+           "nonet!" => \$nonet,
+           "extract_start=s" => \$extract_start,
+           "extract_end=s" => \$extract_end);
 
 
 
-$subsys->{UNDEFINED} = 0;
-$subsys->{MDC} = 1;
-$subsys->{MDS} = 2;
-$subsys->{OSC} = 3;
-$subsys->{OST} = 4;
-$subsys->{CLASS} = 5;
-$subsys->{OBDFS} = 6;
-$subsys->{LLITE} = 7;
-$subsys->{RPC} = 8;
-$subsys->{EXT2OBD} = 9;
-$subsys->{PORTALS} = 10;
-$subsys->{SOCKNAL} = 11;
-$subsys->{QSWNAL} = 12;
-$subsys->{PINGER} = 13;
-$subsys->{FILTER} = 14;
-$subsys->{TRACE} = 15; # obdtrace, not to be confused with D_TRACE */
-$subsys->{ECHO} = 16;
-$subsys->{LDLM} = 17;
-$subsys->{LOV} = 18;
-$subsys->{GMNAL} = 19;
-$subsys->{PTLROUTER} = 20;
-$subsys->{COBD} = 21;
-$subsys->{IBNAL} = 22;
+$subsys->{UNDEFINED} = 1 << 0;
+$subsys->{MDC} = 1 << 1;
+$subsys->{MDS} = 1 << 2;
+$subsys->{OSC} = 1 << 3;
+$subsys->{OST} = 1 << 4;
+$subsys->{CLASS} = 1 << 5;
+$subsys->{LOG} = 1 << 6;
+$subsys->{LLITE} = 1 << 7;
+$subsys->{RPC} = 1 << 8;
+$subsys->{MGMT} = 1 << 9;
+$subsys->{PORTALS} = 1 << 10;
+$subsys->{SOCKNAL} = 1 << 11;
+$subsys->{QSWNAL} = 1 << 12;
+$subsys->{PINGER} = 1 << 13;
+$subsys->{FILTER} = 1 << 14;
+$subsys->{PTLBD} = 1 << 15;
+$subsys->{ECHO} = 1 << 16;
+$subsys->{LDLM} = 1 << 17;
+$subsys->{LOV} = 1 << 18;
+$subsys->{GMNAL} = 1 << 19;
+$subsys->{PTLROUTER} = 1 << 20;
+$subsys->{COBD} = 1 << 21;
+$subsys->{IBNAL} = 1 << 22;
 
 
 $masks->{TRACE} = 1 << 0; # /* ENTRY/EXIT markers */
@@ -263,8 +266,23 @@ if ($ARGV[1]) {
    $width = $ARGV[1];
 }
 
-print "pid: $pid, nodlm $nodlm nonet $nonet trace $trace\n";
+print "nodlm $nodlm, nonet $nonet, trace $trace\n";
+print "pid: $pid, dlm_ns: $dlm_ns\n";
+print "extract_start: $extract_start\n";
+print "extract_end:   $extract_end\n";
 while (<LOG>) {
+    if ($extract_start && $extract_start != LLANAYZE_FOUND) {
+        next if (index($_, $extract_start, 0) == -1);
+        $extract_start = LLANAYZE_FOUND;
+    }
+
+    if ($extract_end) {
+        next if ($extract_end == LLANAYZE_FOUND);
+        if (index($_, $extract_end, 0) != -1) {
+             $extract_end = LLANAYZE_FOUND;
+        }
+    }
+
     $linepid = extractpid($_);
     $linehpid = extracthostpid($_);
     $linemask = getmask($_);
@@ -287,13 +305,13 @@ while (<LOG>) {
     if ( !$pid || $linepid == $pid || $linehpid == $pid) {
         next if (!$entering_rpc && $rpctrace && $linemask != $masks->{RPCTRACE});
         next if ($trace && $linemask != $masks->{TRACE});
-
-
         next if ($nodlm && 
                  (  $linesubsys == $subsys->{LDLM}));
+        next if ($dlm_ns &&
+                 (  $linesubsys != $subsys->{LDLM}));
+        next if (($found_dlm_ns = index( $_, $dlm_ns, 0)) == -1);
         next if ($noclass && 
                  (  $linesubsys == $subsys->{CLASS}));
-
         next if ($nonet && 
                  (  $linesubsys == $subsys->{RPC} ||
                     $linesubsys == $subsys->{NET} ||
