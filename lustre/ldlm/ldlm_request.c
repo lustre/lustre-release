@@ -485,8 +485,11 @@ int ldlm_cli_cancel_unused(struct ldlm_namespace *ns, __u64 *res_id,
         ENTRY;
 
         res = ldlm_resource_get(ns, NULL, res_id, 0, 0);
-        if (res == NULL)
-                RETURN(-EINVAL);
+        if (res == NULL) {
+                /* This is not a problem. */
+                CDEBUG(D_INFO, "No resource "LPU64"\n", res_id[0]);
+                RETURN(0);
+        }
 
         l_lock(&ns->ns_lock);
         list_for_each(tmp, &res->lr_granted) {
