@@ -11,7 +11,7 @@
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
-#include <asm/byteorder.h>
+#include <asm/byteorder.h> /* sigh.  for __cpu_to_* */
 #include <syslog.h>
 
 #include <errno.h>

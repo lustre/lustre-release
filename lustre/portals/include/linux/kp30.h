@@ -80,9 +80,9 @@ extern unsigned int portal_printk;
 # include <linux/sched.h> /* THREAD_SIZE */
 
 #ifdef  __ia64__
-#define CDEBUG_STACK() ((unsigned long)__builtin_dwarf_cfa()&(THREAD_SIZE - 1))
+#define CDEBUG_STACK ((unsigned long)__builtin_dwarf_cfa()&(THREAD_SIZE - 1))
 #else
-#define CDEBUG_STACK() (THREAD_SIZE -                                      \
+#define CDEBUG_STACK (THREAD_SIZE -                                      \
                         ((unsigned long)__builtin_frame_address(0) &       \
                          (THREAD_SIZE - 1)))
 #endif
@@ -100,19 +100,19 @@ extern unsigned int portal_printk;
         } while (0)
 #else
 #define CHECK_STACK(stack) do{}while(0)
-#define CDEBUG_STACK(var) (0L)
+#define CDEBUG_STACK (0L)
 #endif
 
 #if 1
 #define CDEBUG(mask, format, a...)                                            \
 do {                                                                          \
-        CHECK_STACK(CDEBUG_STACK());                                          \
+        CHECK_STACK(CDEBUG_STACK);                                            \
         if (!(mask) || ((mask) & (D_ERROR | D_EMERG)) ||                      \
             (portal_debug & (mask) &&                                         \
              portal_subsystem_debug & (1 << (DEBUG_SUBSYSTEM >> 24))))        \
                 portals_debug_msg(DEBUG_SUBSYSTEM, mask,                      \
                                   __FILE__, __FUNCTION__, __LINE__,           \
-                                  CDEBUG_STACK(), format , ## a);             \
+                                  CDEBUG_STACK, format , ## a);               \
 } while (0)
 
 #define CWARN(format, a...) CDEBUG(D_WARNING, format, ## a)
