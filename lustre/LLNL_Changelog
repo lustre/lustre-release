@@ -1,0 +1,17 @@
+2003-08-19  Brian Behlendorf  <behlendorf1@llnl.gov>
+       * version llnl_0proda tagged
+       * bug fixes:
+         - #1642
+           - backport some small cleanups to the dentry refcounts and cleanup
+           - Zach's fix from llpio which fixes a race condition in the
+             partial read
+         - #1592 fixes trying to read a single page that was entirely past
+           EOF, we would later oops in commitrw on the OST trying to dput
+           a NULL dentry.  This fixes the 'make' issue Richard discovered.
+         - #1505 patch to quiet four messages
+           - "lustre_commitd quitting"
+           - "processing error -107" after server is restarted
+           - no need to print statfs() errors to the console
+           - print one reconnect message instead of two
+         - Adjusted version_tag.pl to use portals version string if no
+           /CVS/Tag exists.  This resolves rpms using only the HEAD tag.
