@@ -83,6 +83,21 @@ EOF
 	sep4="$sep4||"
 done
 
+
+doit() {
+        $*
+}
+nop() {
+        local nothing;
+}
+if which opcontrol; then
+        echo generating oprofile results
+        oprofile=doit
+else
+        echo not using oprofile
+        oprofile=nop
+fi
+ 
 tmp_dir=`mktemp -d /tmp/echo_client_survey_XXXXXX` || die "mktemp failed"
 
 TOT_PAGES=${TOT_PAGES:-524288}
@@ -150,6 +165,15 @@ for order_threads in `seq 0 3`; do
 			for a in 1 2; do
 				total_maxtime="0.0"
 				pids=""
+
+				$oprofile opcontrol --start				
+
+				echo 'nice -19 vmstat 5' > $tmp_dir/vmstat-log
+				nice -19 vmstat 5 >> $tmp_dir/vmstat-log &
+				vmstat_pid="$!"
+
+				$oprofile opcontrol --reset
+
 				# start a test_brw thread in the background
 				# for each given filter
 				for i in `seq 0 $last_filter`; do
@@ -159,9 +183,18 @@ for order_threads in `seq 0 3`; do
 							tee $tmp_dir/$i &
 					pids="$pids $!"
 				done
+				echo ------ waiting for $nthreads obj per thread $obj_per_thread rw: $a ----
 				for p in $pids; do 
 					wait $p
 				done
+				$oprofile opcontrol --shutdown
+				echo ------ finished $nthreads obj per thread $obj_per_thread rw: $a ----
+				kill $vmstat_pid
+				cat $tmp_dir/vmstat-log
+				rm $tmp_dir/vmstat-log
+
+			        $oprofile opreport
+				$oprofile opreport -c -l
 
 				for t in `seq 1 $nthreads`; do
 					thread_row[$t]="${thread_row[$t]} ||"
