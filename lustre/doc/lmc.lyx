@@ -142,6 +142,34 @@ To generate configuration data associated with systems in a Lustre cluster:
 -
 \emph default 
 -add\SpecialChar ~
+node Adds a new node in the cluster configuration.
+ 
+\begin_deeper 
+\layout Standard
+
+The arguments required are:
+\layout Description
+
+--node\SpecialChar ~
+''node_name'' This will create a new node with the given name if not
+ already present.
+\layout Description
+
+--timeout\SpecialChar ~
+<num> Timeout before going into recovery
+\layout Description
+
+--recovery_upcall\SpecialChar ~
+<path> Specify the location of the upcall scripts used
+ by the client for recovery
+\end_deeper 
+\layout Description
+
+
+\emph on 
+-
+\emph default 
+-add\SpecialChar ~
 net Adds a network device descriptor for the given node, with parameters
  as indicated.
 \begin_deeper 
@@ -217,6 +245,18 @@ profiles
 
 --tcpbuf\SpecialChar ~
 <size> Optional argument.
+ The default TCP buffer size is 1MB.
+\layout Description
+
+--irq_affinity\SpecialChar ~
+0|1 Optional arguement
+\layout Description
+
+--nid_exchange\SpecialChar ~
+0|1 Optional arguement since some OSTs might not have the
+ required support.
+ This is turned off by default, value of 1 will turn it ON.
+ 
 \end_deeper 
 \layout Description
 
@@ -246,6 +286,22 @@ mds
 --node
 \emph default 
  argument, and it must not be a profile node.
+\layout Description
+
+--fstype\SpecialChar ~
+extN|ext3 Optional arguement used to specify the file system type.
+\layout Description
+
+--journal_size\SpecialChar ~
+<size> Optional arguement to specify the journal size for
+ the ext2/ext3 file system.
+ The size should be in the units expected by 
+\series bold 
+mkfs
+\series default 
+, so for ext3 it should be in MB.
+ If this is option is not used, the ext2/ext3 filesystem will be configured
+ with the default journal size.
 \end_deeper 
 \layout Description
 
@@ -272,11 +328,12 @@ mds_name
 \layout Description
 
 --stripe_cnt\SpecialChar ~
-<count>
+<count> A value of 0 for this means to stripe on all available
+ OSTs.
 \layout Description
 
 --stripe_pattern\SpecialChar ~
-<pattern> Pattern can be 0.
+<pattern> Only Pattern 0 (RAID 0) is supported currently.
 \end_deeper 
 \layout Description
 
@@ -286,8 +343,8 @@ ost Creates an OBD, OST, and OSC.
 \begin_deeper 
 \layout Description
 
---obd\SpecialChar ~
-<name> Assign a name to the OBD device.
+--ost\SpecialChar ~
+<name> Assign a name to the OST device.
 \layout Description
 
 --node\SpecialChar ~
@@ -305,18 +362,35 @@ ost Creates an OBD, OST, and OSC.
 [size]
 \layout Description
 
+--osdtype\SpecialChar ~
+obdfilter|obdecho 
+\layout Description
+
 --lov\SpecialChar ~
-<name> Name of LOV to which this OSC will be attached.
+<name> Optional arguement.
+ Name of LOV to which this OSC will be attached.
  
 \layout Description
 
---obduuid\SpecialChar ~
-UUID Specify the UUID of the OBD device.
- The default value is 
-\emph on 
-OBD_nodename_UUID
-\emph default 
-.
+--ostuuid\SpecialChar ~
+UUID Specify the UUID of the OST device.
+ 
+\layout Description
+
+--fstype\SpecialChar ~
+extN|ext3 Optional arguement used to specify the file system type.
+\layout Description
+
+--journal_size\SpecialChar ~
+<size> Optional arguement to specify the journal size for
+ the ext2/ext3 file system.
+ The size should be in the units expected by 
+\series bold 
+mkfs
+\series default 
+, so for ext3 it should be in MB.
+ If this is option is not used, the ext2/ext3 filesystem will be configured
+ with the default journal size.
 \end_deeper 
 \layout Description
 
@@ -343,8 +417,8 @@ mtpt
 mds_name 
 \layout Description
 
---obd\SpecialChar ~
-obd_name\SpecialChar ~
+--ost\SpecialChar ~
+ost_name\SpecialChar ~
 |\SpecialChar ~
 --lov\SpecialChar ~
 lov_name
@@ -396,7 +470,8 @@ nid.
 \layout Description
 
 --add\SpecialChar ~
-echo-client Used for testing purpose only
+echo-client Used for testing purpose only.
+ 
 \begin_deeper 
 \layout Description
 
