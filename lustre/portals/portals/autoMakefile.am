@@ -3,8 +3,8 @@
 # This code is issued under the GNU General Public License.
 # See the file COPYING in this distribution
 
-my_sources = api-eq.c api-init.c api-me.c api-errno.c api-ni.c api-wrap.c \
-		lib-dispatch.c lib-init.c lib-me.c lib-msg.c lib-eq.c \
+my_sources =    api-errno.c api-ni.c api-wrap.c \
+		lib-init.c lib-me.c lib-msg.c lib-eq.c \
 		lib-md.c lib-move.c lib-ni.c lib-pid.c
 
 if !CRAY_PORTALS

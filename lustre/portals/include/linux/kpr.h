@@ -4,7 +4,7 @@
 #ifndef _KPR_H
 #define _KPR_H
 
-# include <portals/lib-nal.h> /* for ptl_hdr_t */
+# include <portals/lib-types.h> /* for ptl_hdr_t */
 
 /******************************************************************************/
 /* Kernel Portals Router interface */
