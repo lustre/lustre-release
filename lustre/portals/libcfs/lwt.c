@@ -99,7 +99,11 @@ lwt_control (int enable, int clear)
 
         lwt_enabled = enable;
         mb();
-        
+        if (!enable) {
+                /* give people some time to stop adding traces */
+                schedule_timeout(10);
+        }
+
         return (0);
 }
 
@@ -138,6 +142,128 @@ lwt_snapshot (int *ncpu, int *total_size,
         }
 
         return (0);
+}
+
+void
+lwt_migrate_to (int cpu)
+{
+#if 0
+        current->cpus_allowed = 1UL << cpu;
+        while (smp_processor_id() != cpu)
+                schedule ();
+#endif
+        set_cpus_allowed (current, 1UL << cpu);
+}
+
+static volatile cycles_t helper_cycles;
+static volatile int      helper_control;
+
+#define LWT_HELPER_IDLE      0
+#define LWT_HELPER_GO        1
+#define LWT_HELPER_DONE      2
+#define LWT_HELPER_EXIT      3
+#define LWT_HELPER_EXITED    4
+
+int
+lwt_helper (void *arg) 
+{
+        long      cpu = (long)arg;
+
+        kportal_daemonize ("lwt_helper");
+        kportal_blockallsigs ();
+
+        lwt_migrate_to (cpu);
+
+        LASSERT (helper_control == LWT_HELPER_IDLE);
+        helper_control = LWT_HELPER_DONE;
+        mb();
+
+        for (;;) 
+                switch (helper_control) {
+                default: LBUG();
+                        
+                case LWT_HELPER_DONE:
+                        continue;
+                        
+                case LWT_HELPER_GO:
+                        helper_cycles = get_cycles();
+                        mb ();
+                        helper_control = LWT_HELPER_DONE;
+                        mb ();
+                        continue;
+                        
+                case LWT_HELPER_EXIT:
+                        helper_control = LWT_HELPER_EXITED;
+                        mb ();
+                        return (0);
+                }
+}
+
+long
+lwt_get_cpu_cycles_offset1 (long cpu, long *diff)
+{
+        cycles_t     tzero0;
+        cycles_t     tzero1;
+        
+        LASSERT (cpu != 0);
+
+        tzero0 = get_cycles();
+        mb();
+
+        helper_control = LWT_HELPER_GO;
+        mb();
+
+        while (helper_control != LWT_HELPER_DONE)
+                ;
+        
+        tzero1 = get_cycles();
+        
+        *diff = tzero1 - tzero0;
+        return (((tzero1 + tzero0) >> 1) - helper_cycles);
+}
+
+long
+lwt_get_cpu_cycles_offset (int cpu)
+{
+        long            pid;
+        long            elapsed;
+        long            offset;
+        long            min_elapsed;
+        long            min_offset;
+        int             i;
+
+        LASSERT(cpu != 0);
+
+        helper_control = LWT_HELPER_IDLE;
+        pid = kernel_thread (lwt_helper, (void *)cpu, 0);
+        if (pid < 0) {
+                CERROR ("Can't spawn helper: %ld\n", pid);
+                return (0);
+        }
+
+        lwt_migrate_to(0);
+
+        while (helper_control == LWT_HELPER_IDLE)
+                our_cond_resched();
+        
+        offset = min_offset = lwt_get_cpu_cycles_offset1(cpu, &elapsed);
+        min_elapsed = elapsed;
+        
+        for (i = 0; i < 1024; i++) {
+                offset = lwt_get_cpu_cycles_offset1(cpu, &elapsed);
+                if (elapsed < min_elapsed) {
+                        min_offset = offset;
+                        min_elapsed = elapsed;
+                }
+        }
+
+        helper_control = LWT_HELPER_EXIT;
+        mb();
+        while (helper_control != LWT_HELPER_EXITED)
+                ;
+
+        CDEBUG (D_INFO, "cycle offset %d: min %ld, offset %ld\n", cpu, min_elapsed, min_offset);
+        return (min_offset);
 }
 
 int
@@ -187,6 +313,10 @@ lwt_init ()
 			}
                 }
 
+        lwt_cpus[0].lwtc_offset = 0;
+        for (i = 1; i < num_online_cpus(); i++)
+                lwt_cpus[i].lwtc_offset = lwt_get_cpu_cycles_offset(i);
+                
         lwt_enabled = 1;
         mb();
 
