@@ -811,13 +811,19 @@ int ptlrpc_expire_one_request(struct ptlrpc_request *req)
 {
         unsigned long      flags;
         struct obd_import *imp = req->rq_import;
+        int replied = 0;
         ENTRY;
 
-        DEBUG_REQ(D_ERROR, req, "timeout");
-
         spin_lock_irqsave (&req->rq_lock, flags);
-        req->rq_timedout = 1;
+        replied = req->rq_replied;
+        if (!replied)
+                req->rq_timedout = 1;
         spin_unlock_irqrestore (&req->rq_lock, flags);
+
+        if (replied)
+                RETURN(0);
+
+        DEBUG_REQ(D_ERROR, req, "timeout");
 
         ptlrpc_unregister_reply (req);
 
