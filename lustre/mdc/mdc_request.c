@@ -79,15 +79,15 @@ int mdc_connect(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
 
 
 int mdc_getattr(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
-                ino_t ino, int type, unsigned long valid,
+                ino_t ino, int type, unsigned long valid, size_t ea_size,
                 struct ptlrpc_request **request)
 {
         struct ptlrpc_request *req;
         struct mds_body *body;
-        int rc, size = sizeof(*body);
+        int rc, size[2] = {sizeof(*body), 0}, bufcount = 1;
         ENTRY;
 
-        req = ptlrpc_prep_req(cl, conn, MDS_GETATTR, 1, &size, NULL);
+        req = ptlrpc_prep_req(cl, conn, MDS_GETATTR, 1, size, NULL);
         if (!req)
                 GOTO(out, rc = -ENOMEM);
 
@@ -95,7 +95,11 @@ int mdc_getattr(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
         ll_ino2fid(&body->fid1, ino, 0, type);
         body->valid = valid;
 
-        req->rq_replen = lustre_msg_size(1, &size);
+        if (valid & OBD_MD_LINKNAME) {
+                bufcount = 2;
+                size[1] = ea_size;
+        }
+        req->rq_replen = lustre_msg_size(bufcount, size);
         req->rq_level = LUSTRE_CONN_FULL;
 
         rc = ptlrpc_queue_wait(req);
@@ -263,7 +267,7 @@ static int request_ioctl(struct inode *inode, struct file *file,
         switch (cmd) {
         case IOC_REQUEST_GETATTR: {
                 CERROR("-- getting attr for ino %lu\n", arg);
-                err = mdc_getattr(&cl, conn, arg, S_IFDIR, ~0, &request);
+                err = mdc_getattr(&cl, conn, arg, S_IFDIR, ~0, 0, &request);
                 CERROR("-- done err %d\n", err);
 
                 GOTO(out, err);

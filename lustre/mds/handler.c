@@ -97,10 +97,9 @@ struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
             (generation && inode->i_generation != generation)) {
                 /* we didn't find the right inode.. */
                 CERROR("bad inode %lu, link: %d ct: %d or version  %u/%u\n",
-                        inode->i_ino,
-                        inode->i_nlink, atomic_read(&inode->i_count),
-                        inode->i_generation,
-                        generation);
+                       inode->i_ino, inode->i_nlink,
+                       atomic_read(&inode->i_count), inode->i_generation,
+                       generation);
                 LBUG();
                 iput(inode);
                 return ERR_PTR(-ESTALE);
@@ -302,15 +301,8 @@ int mds_getattr(struct ptlrpc_request *req)
         struct inode *inode;
         struct mds_body *body;
         struct mds_obd *mds = &req->rq_obd->u.mds;
-        int rc, size = sizeof(*body);
+        int rc, size[2] = {sizeof(*body)}, count = 1;
         ENTRY;
-
-        rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repmsg);
-        if (rc || OBD_FAIL_CHECK(OBD_FAIL_MDS_GETATTR_PACK)) {
-                CERROR("mds: out of memory\n");
-                req->rq_status = -ENOMEM;
-                RETURN(0);
-        }
 
         body = lustre_msg_buf(req->rq_reqmsg, 0);
         de = mds_fid2dentry(mds, &body->fid1, NULL);
@@ -318,9 +310,37 @@ int mds_getattr(struct ptlrpc_request *req)
                 req->rq_status = -ENOENT;
                 RETURN(0);
         }
+        inode = de->d_inode;
+        if (body->valid & OBD_MD_LINKNAME) {
+                count = 2;
+                size[1] = inode->i_size;
+        }
+
+        rc = lustre_pack_msg(count, size, NULL, &req->rq_replen,
+                             &req->rq_repmsg);
+        if (rc || OBD_FAIL_CHECK(OBD_FAIL_MDS_GETATTR_PACK)) {
+                CERROR("mds: out of memory\n");
+                req->rq_status = -ENOMEM;
+                GOTO(out, 0);
+        }
+
+        if (body->valid & OBD_MD_LINKNAME) {
+                char *tmp = lustre_msg_buf(req->rq_repmsg, 1);
+                mm_segment_t oldfs;
+
+                oldfs = get_fs();
+                set_fs(KERNEL_DS);
+                rc = inode->i_op->readlink(de, tmp, size[1]);
+                set_fs(oldfs);
+
+                if (rc < 0) {
+                        req->rq_status = rc;
+                        CERROR("readlink failed: %d\n", req->rq_status);
+                        GOTO(out, 0);
+                }
+        }
 
         body = lustre_msg_buf(req->rq_repmsg, 0);
-        inode = de->d_inode;
         body->ino = inode->i_ino;
         body->generation = inode->i_generation;
         body->atime = inode->i_atime;
@@ -333,6 +353,7 @@ int mds_getattr(struct ptlrpc_request *req)
         body->nlink = inode->i_nlink;
         body->valid = ~0;
         mds_fs_get_objid(mds, inode, &body->objid);
+ out:
         l_dput(de);
         RETURN(0);
 }

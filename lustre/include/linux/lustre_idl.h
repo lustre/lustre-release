@@ -156,7 +156,9 @@ struct obdo {
 #define OBD_MD_FLINLINE (0x00008000UL)
 #define OBD_MD_FLOBDMD  (0x00010000UL)
 #define OBD_MD_FLOBJID  (0x00020000UL)
-#define OBD_MD_FLNOTOBD (~(OBD_MD_FLOBDMD | OBD_MD_FLOBDFLG | OBD_MD_FLBLOCKS))
+#define OBD_MD_LINKNAME (0x00040000UL)
+#define OBD_MD_FLNOTOBD (~(OBD_MD_FLOBDMD | OBD_MD_FLOBDFLG | OBD_MD_FLBLOCKS |\
+                           OBD_MD_LINKNAME))
 
 /* request structure for OST's */
 

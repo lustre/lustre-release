@@ -259,10 +259,9 @@ static int ptlrpc_check_reply(struct ptlrpc_request *req)
                 if (req->rq_client && req->rq_client->cli_recovd)
                         recovd_cli_fail(req->rq_client);
                 if (req->rq_level < LUSTRE_CONN_FULL)
-                        rc = -ETIMEDOUT;
-                else 
+                        rc = 1;
+                else
                         rc = 0;
-
                 GOTO(out, rc);
         }
 
@@ -489,15 +488,17 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
         }
 
         up(&cli->cli_rpc_sem);
+        if (req->rq_flags & PTL_RPC_FL_TIMEOUT)
+                GOTO(out, rc = -ETIMEDOUT);
+
         if (req->rq_flags & PTL_RPC_FL_INTR) {
                 /* Clean up the dangling reply buffers */
                 ptlrpc_abort(req);
                 GOTO(out, rc = -EINTR);
         }
 
-        if (! (req->rq_flags & PTL_RPC_FL_REPLIED)) {
+        if (!(req->rq_flags & PTL_RPC_FL_REPLIED))
                 GOTO(out, rc = req->rq_status);
-        }
 
         rc = lustre_unpack_msg(req->rq_repmsg, req->rq_replen);
         if (rc) {

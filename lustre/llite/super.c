@@ -167,7 +167,7 @@ static struct super_block * ll_read_super(struct super_block *sb,
         /* make root inode */
         err = mdc_getattr(&sbi->ll_mds_client, sbi->ll_mds_conn,
                           sbi->ll_rootino, S_IFDIR,
-                          OBD_MD_FLNOTOBD|OBD_MD_FLBLOCKS, &request);
+                          OBD_MD_FLNOTOBD|OBD_MD_FLBLOCKS, 0, &request);
         if (err) {
                 CERROR("mdc_getattr failed for root: rc = %d\n", err);
                 GOTO(out_req, sb = NULL);

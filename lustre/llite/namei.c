@@ -108,7 +108,7 @@ static struct dentry *ll_lookup(struct inode * dir, struct dentry *dentry)
                 GOTO(negative, NULL);
 
         err = mdc_getattr(&sbi->ll_mds_client, sbi->ll_mds_conn, ino, type,
-                          OBD_MD_FLNOTOBD|OBD_MD_FLBLOCKS, &request);
+                          OBD_MD_FLNOTOBD|OBD_MD_FLBLOCKS, 0, &request);
         if (err) {
                 CERROR("failure %d inode %ld\n", err, (long)ino);
                 ptlrpc_free_req(request);

@@ -128,7 +128,8 @@ int mdc_connect(struct ptlrpc_client *, struct ptlrpc_connection *,
                 struct ll_fid *rootfid, __u64 *last_committed, __u64 *last_rcvd,
                 __u32 *last_xid, struct ptlrpc_request **);
 int mdc_getattr(struct ptlrpc_client *, struct ptlrpc_connection *, ino_t ino,
-                int type, unsigned long valid, struct ptlrpc_request **);
+                int type, unsigned long valid, size_t ea_size,
+                struct ptlrpc_request **);
 int mdc_setattr(struct ptlrpc_client *, struct ptlrpc_connection *,
                 struct inode *, struct iattr *iattr, struct ptlrpc_request **);
 int mdc_open(struct ptlrpc_client *, struct ptlrpc_connection *, ino_t ino,
