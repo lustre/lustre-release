@@ -482,7 +482,7 @@ static int llu_file_release(struct inode *inode)
                 memcpy(&oa.o_inline, &fd->fd_ost_och, FD_OSTDATA_SIZE);
                 oa.o_valid |= OBD_MD_FLHANDLE;
 
-                rc = obd_close(&sbi->ll_osc_conn, &oa, lsm, NULL);
+                rc = obd_close(ll_s2obdexp(sbi), &oa, lsm, NULL);
                 if (rc)
                         CERROR("inode %lu object close failed: rc = "
                                "%d\n", lli->lli_st_ino, rc);
