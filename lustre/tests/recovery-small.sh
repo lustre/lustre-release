@@ -29,7 +29,7 @@ MDSDEV=${MDSDEV:-/tmp/mds}
 OSTDEV=${OSTDEV:-/tmp/ost}
 MDSSIZE=${MDSSIZE:-100000}
 OSTSIZE=${OSTSIZE:-100000}
-UPCALL=${UPCALL:-$LTESTDIR/functional/llite/09/client-upcall.sh}
+UPCALL=${UPCALL:-$RLUSTRE/tests/recovery-small-upcall.sh}
 
 do_mds() {
     $PDSH $MDSNODE "PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests; cd $RPWD; $@" || exit $?
