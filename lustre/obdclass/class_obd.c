@@ -758,7 +758,6 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 struct lov_stripe_md *ea = NULL;
                 obd_data2conn(&conn, data);
 
-
                 err = obd_create(&conn, &data->ioc_obdo1, &ea);
                 if (err)
                         GOTO(out, err);
@@ -797,6 +796,23 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                         GOTO(out, err);
 
                 err = copy_to_user((int *)arg, data, sizeof(*data));
+                GOTO(out, err);
+        }
+
+        case OBD_IOC_OPEN: {
+                struct lov_stripe_md *md; // XXX fill in md from create
+
+                obd_data2conn(&conn, data);
+                err = obd_open(&conn, &data->ioc_obdo1, NULL);
+                GOTO(out, err);
+        }
+
+        case OBD_IOC_CLOSE: {
+                struct lov_stripe_md *md; // XXX fill in md from create
+
+                obd_data2conn(&conn, data);
+                obd_data2conn(&conn, data);
+                err = obd_close(&conn, &data->ioc_obdo1, NULL);
                 GOTO(out, err);
         }
 
