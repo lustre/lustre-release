@@ -1,7 +1,7 @@
 Index: linux-2.4.20-rh/drivers/net/netconsole.c
 ===================================================================
 --- linux-2.4.20-rh.orig/drivers/net/netconsole.c	2003-07-22 16:02:23.000000000 +0800
-+++ linux-2.4.20-rh/drivers/net/netconsole.c	2003-10-31 07:24:53.000000000 +0800
++++ linux-2.4.20-rh/drivers/net/netconsole.c	2003-11-11 07:42:33.000000000 +0800
 @@ -12,6 +12,8 @@
   *
   * 2001-09-17    started by Ingo Molnar.
@@ -19,7 +19,7 @@ Index: linux-2.4.20-rh/drivers/net/netconsole.c
  
  static struct net_device *netconsole_dev;
  static u16 source_port, netdump_target_port, netlog_target_port, syslog_target_port;
-@@ -62,7 +65,6 @@
+@@ -62,12 +65,11 @@
  static unsigned int mhz = 500, idle_timeout;
  static unsigned long long mhz_cycles, jiffy_cycles;
  
@@ -27,32 +27,18 @@ Index: linux-2.4.20-rh/drivers/net/netconsole.c
  
  #define MAX_UDP_CHUNK 1460
  #define MAX_PRINT_CHUNK (MAX_UDP_CHUNK-HEADER_LEN)
-@@ -188,6 +190,42 @@
+ 
+-#define DEBUG 0
++#define DEBUG 0 
+ #if DEBUG
+ # define Dprintk(x...) printk(KERN_INFO x)
+ #else
+@@ -187,6 +189,22 @@
+ 		}
  	}
  }
- 
-+static int thread_stopped = 0;
-+/*Interrupt function for netdump */
 +void (*irqfunc)(int, void *, struct pt_regs *);
-+static int sysrq_mode = 0;
-+static int stop_sysrq_thread = 0;
-+#define Set_Sysrq_mode()       (sysrq_mode = 1)
-+#define Clear_Sysrq_mode()     (sysrq_mode = 0)
-+wait_queue_head_t sysrq_thread_queue;
-+wait_queue_head_t sysrq_thread_waiter_queue;
 +
-+void netconsole_do_sysrq(req_t *req)
-+{
-+        struct pt_regs regs;
-+	struct net_device *dev = netconsole_dev;
-+
-+	if (!dev)
-+		return;
-+	Set_Sysrq_mode();
-+	get_current_regs(&regs);
-+	handle_sysrq((int)req->from, &regs, NULL);
-+	Clear_Sysrq_mode();
-+}
 +static void netdump_poll(struct net_device *dev)
 +{
 +	int budget = 1;
@@ -67,10 +53,10 @@ Index: linux-2.4.20-rh/drivers/net/netconsole.c
 +	enable_irq(dev->irq);
 +
 +}
+ 
  static struct sk_buff * alloc_netconsole_skb(struct net_device *dev, int len, int reserve)
  {
- 	int once = 1;
-@@ -209,7 +247,7 @@
+@@ -209,7 +227,7 @@
  				once = 0;
  			}
  			Dprintk("alloc skb: polling controller ...\n");
@@ -79,7 +65,7 @@ Index: linux-2.4.20-rh/drivers/net/netconsole.c
  			goto repeat;
  		}
  	}
-@@ -231,7 +269,7 @@
+@@ -231,7 +249,7 @@
  		spin_unlock(&dev->xmit_lock);
  
  		Dprintk("xmit skb: polling controller ...\n");
@@ -88,11 +74,56 @@ Index: linux-2.4.20-rh/drivers/net/netconsole.c
  		zap_completion_queue();
  		goto repeat_poll;
  	}
-@@ -426,18 +464,19 @@
+@@ -426,18 +444,79 @@
  static spinlock_t sequence_lock = SPIN_LOCK_UNLOCKED;
  static unsigned int log_offset;
  
++static int thread_stopped = 0;
++/*Interrupt function for netdump */
++static int sysrq_mode = 0;
++static int stop_sysrq_thread = 0;
++#define Set_Sysrq_mode()       (sysrq_mode = 1)
++#define Clear_Sysrq_mode()     (sysrq_mode = 0)
++static char send_cache[MAX_PRINT_CHUNK];
++static unsigned int send_cache_pos = 0;
++wait_queue_head_t sysrq_thread_queue;
++wait_queue_head_t sysrq_thread_waiter_queue;
 +
++#define SEND_MSG_BUFFER(buf, len) 			\
++do							\
++{							\
++	reply_t reply; 					\
++	unsigned int flags; 				\
++	__save_flags(flags); 				\
++	__cli(); 					\
++	reply.code = REPLY_LOG;				\
++	reply.nr = 0; 					\
++	reply.info = 0; 				\
++	spin_lock(&sequence_lock);			\
++	send_netlog_skb(dev, buf, len, &reply);	\
++	spin_unlock(&sequence_lock);			\
++	__restore_flags(flags);				\
++}while(0);
++
++void netconsole_do_sysrq(req_t *req)
++{
++        struct pt_regs regs;
++	struct net_device *dev = netconsole_dev;
++
++	if (!dev)
++		return;
++	Set_Sysrq_mode();
++	get_current_regs(&regs);
++	handle_sysrq((int)req->from, &regs, NULL);
++	
++	if (send_cache_pos != 0){
++		SEND_MSG_BUFFER(send_cache, send_cache_pos);
++		memset(send_cache, 0, MAX_PRINT_CHUNK);
++		send_cache_pos = 0;
++	} 
++
++	Clear_Sysrq_mode();
++}
  static void write_netconsole_msg(struct console *con, const char *msg0, unsigned int msg_len)
  {
  	int len, left, i;
@@ -104,13 +135,29 @@ Index: linux-2.4.20-rh/drivers/net/netconsole.c
  	dev = netconsole_dev;
  	if (!dev || netdump_mode)
  		return;
- 
+-
 -	if (dev->poll_controller && netif_running(dev)) {
-+	if (netif_running(dev)) {
++	if (sysrq_mode){
++		unsigned long total_len = send_cache_pos + msg_len;
++		unsigned long left_len = msg_len;
++		while (total_len >=  MAX_PRINT_CHUNK){
++			unsigned long send_len = MAX_PRINT_CHUNK - send_cache_pos; 
++			memcpy(send_cache + send_cache_pos, msg, send_len);
++			SEND_MSG_BUFFER(send_cache, MAX_PRINT_CHUNK);
++			send_cache_pos = 0;
++			total_len -= MAX_PRINT_CHUNK;
++			left_len -= send_len; 
++		}
++		if (left_len > 0){
++			memcpy(send_cache + send_cache_pos, msg + (msg_len -left_len), left_len);
++			send_cache_pos += left_len;
++		}
++		return; 
++	}else if (netif_running(dev)) {
  		unsigned long flags;
  
  		__save_flags(flags);
-@@ -567,8 +606,6 @@
+@@ -567,8 +646,6 @@
  	req_t *req;
  	struct net_device *dev;
  
@@ -119,7 +166,7 @@ Index: linux-2.4.20-rh/drivers/net/netconsole.c
  #if DEBUG
  	{
  		static int packet_count;
-@@ -722,8 +759,16 @@
+@@ -722,8 +799,16 @@
  	Dprintk("... netdump from:    %08x.\n", req->from);
  	Dprintk("... netdump to:      %08x.\n", req->to);
  
@@ -137,7 +184,7 @@ Index: linux-2.4.20-rh/drivers/net/netconsole.c
  	return NET_RX_DROP;
  }
  
-@@ -763,6 +808,7 @@
+@@ -763,6 +848,7 @@
  	kunmap_atomic(kaddr, KM_NETDUMP);
  }
  
@@ -145,7 +192,7 @@ Index: linux-2.4.20-rh/drivers/net/netconsole.c
  /*
   * This function waits for the client to acknowledge the receipt
   * of the netdump startup reply, with the possibility of packets
-@@ -792,7 +838,7 @@
+@@ -792,7 +878,7 @@
  		// wait 1 sec.
  		udelay(100);
  		Dprintk("handshake: polling controller ...\n");
@@ -154,7 +201,7 @@ Index: linux-2.4.20-rh/drivers/net/netconsole.c
  		zap_completion_queue();
  		req = get_new_req();
  		if (req)
-@@ -904,7 +950,7 @@
+@@ -904,7 +990,7 @@
  	while (netdump_mode) {
  		__cli();
  		Dprintk("main netdump loop: polling controller ...\n");
@@ -163,7 +210,7 @@ Index: linux-2.4.20-rh/drivers/net/netconsole.c
  		zap_completion_queue();
  #if !CLI
  		__sti();
-@@ -1009,6 +1055,32 @@
+@@ -1009,6 +1095,32 @@
  	printk("NETDUMP END!\n");
  	__restore_flags(flags);
  }
@@ -196,7 +243,7 @@ Index: linux-2.4.20-rh/drivers/net/netconsole.c
  
  static char *dev;
  static int netdump_target_eth_byte0 = 255;
-@@ -1087,11 +1159,12 @@
+@@ -1087,11 +1199,12 @@
  
  static struct console netconsole =
  	 { flags: CON_ENABLED, write: write_netconsole_msg };
@@ -210,7 +257,7 @@ Index: linux-2.4.20-rh/drivers/net/netconsole.c
  
  	printk(KERN_INFO "netlog: using network device <%s>\n", dev);
  	// this will be valid once the device goes up.
-@@ -1101,10 +1174,6 @@
+@@ -1101,10 +1214,6 @@
  		printk(KERN_ERR "netlog: network device %s does not exist, aborting.\n", dev);
  		return -1;
  	}
@@ -221,7 +268,7 @@ Index: linux-2.4.20-rh/drivers/net/netconsole.c
  	in_dev = in_dev_get(ndev);
  	if (!in_dev) {
  		printk(KERN_ERR "netlog: network device %s is not an IP protocol device, aborting.\n", dev);
-@@ -1137,8 +1206,6 @@
+@@ -1137,8 +1246,6 @@
  	if (!netdump_target_ip && !netlog_target_ip && !syslog_target_ip) {
  		printk(KERN_ERR "netlog: target_ip parameter not specified, aborting.\n");
  		return -1;
@@ -230,7 +277,7 @@ Index: linux-2.4.20-rh/drivers/net/netconsole.c
  #define IP(x) ((unsigned char *)&netdump_target_ip)[x]
  		printk(KERN_INFO "netlog: using netdump target IP %u.%u.%u.%u\n",
  			IP(3), IP(2), IP(1), IP(0));
-@@ -1214,12 +1281,27 @@
+@@ -1214,12 +1321,27 @@
  
  	mhz_cycles = (unsigned long long)mhz * 1000000ULL;
  	jiffy_cycles = (unsigned long long)mhz * (1000000/HZ);
@@ -261,7 +308,7 @@ Index: linux-2.4.20-rh/drivers/net/netconsole.c
  #define STARTUP_MSG "[...network console startup...]\n"
  	write_netconsole_msg(NULL, STARTUP_MSG, strlen(STARTUP_MSG));
  
-@@ -1230,7 +1312,11 @@
+@@ -1230,7 +1352,11 @@
  
  static void cleanup_netconsole(void)
  {

@@ -102,7 +102,7 @@ int class_attach(struct lustre_cfg *lcfg)
         }
 
 	obd = class_newdev(&dev);
-	if (dev == -1)
+	if (obd == NULL)
 		RETURN(-EINVAL);
 
 	/* have we attached a type to this device */
@@ -152,7 +152,7 @@ int class_attach(struct lustre_cfg *lcfg)
                 RETURN(-EINVAL);
         }
         memcpy(obd->obd_uuid.uuid, uuid, len);
-        
+
         /* do the attach */
         if (OBP(obd, attach))
                 err = OBP(obd,attach)(obd, sizeof *lcfg, lcfg);
