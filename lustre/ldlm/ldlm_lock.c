@@ -834,6 +834,9 @@ void ldlm_lock_dump(struct ldlm_lock *lock)
                  lock->l_version[2], lock->l_version[3]);
 
         CDEBUG(D_OTHER, "  -- Lock dump: %p (%s)\n", lock, ver);
+        CDEBUG(D_OTHER, "  Node: NID %x (rhandle: %Lx)\n",
+               lock->l_connection->c_peer.peer_nid,
+               lock->l_remote_handle.addr);
         CDEBUG(D_OTHER, "  Parent: %p\n", lock->l_parent);
         CDEBUG(D_OTHER, "  Resource: %p (%Ld)\n", lock->l_resource,
                lock->l_resource->lr_name[0]);
