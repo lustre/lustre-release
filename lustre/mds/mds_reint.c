@@ -83,7 +83,9 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
 {
         struct mds_obd *mds = mds_req2mds(req);
         struct obd_device *obd = req->rq_export->exp_obd;
+        struct mds_body *body;
         struct dentry *de;
+        struct inode *inode;
         void *handle;
         struct lustre_handle child_lockh;
         int rc = 0, err;
@@ -118,16 +120,22 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                         GOTO(out_setattr_de, rc = -ESTALE);
                 }
         }
-        CDEBUG(D_INODE, "ino %ld\n", de->d_inode->i_ino);
+        inode = de->d_inode;
+        CDEBUG(D_INODE, "ino %ld\n", inode->i_ino);
 
-        OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_SETATTR_WRITE,
-                       de->d_inode->i_sb->s_dev);
+        OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_SETATTR_WRITE, inode->i_sb->s_dev);
 
-        handle = mds_fs_start(mds, de->d_inode, MDS_FSOP_SETATTR);
+        handle = mds_fs_start(mds, inode, MDS_FSOP_SETATTR);
         if (!handle)
                 GOTO(out_setattr_de, rc = PTR_ERR(handle));
 
         rc = mds_fs_setattr(mds, de, handle, &rec->ur_iattr);
+
+        if (offset) {
+                body = lustre_msg_buf(req->rq_repmsg, 1);
+                mds_pack_inode2fid(&body->fid1, inode);
+                mds_pack_inode2body(body, inode);
+        }
 
         if (!rc)
                 rc = mds_update_last_rcvd(mds, handle, req);
@@ -178,8 +186,8 @@ static int mds_reint_recreate(struct mds_update_record *rec, int offset,
                 struct mds_body *body;
                 rc = 0;
                 body = lustre_msg_buf(req->rq_repmsg, 0);
-                body->ino = dchild->d_inode->i_ino;
-                body->generation = dchild->d_inode->i_generation;
+                mds_pack_inode2fid(&body->fid1, dchild->d_inode);
+                mds_pack_inode2body(body, dchild->d_inode);
         } else {
                 CERROR("child doesn't exist (dir %ld, name %s)\n",
                        dir->i_ino, rec->ur_name);
@@ -362,9 +370,8 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 }
 
                 body = lustre_msg_buf(req->rq_repmsg, offset);
-                body->ino = inode->i_ino;
-                body->generation = inode->i_generation;
-                body->valid = OBD_MD_FLID | OBD_MD_FLGENER;
+                mds_pack_inode2fid(&body->fid1, inode);
+                mds_pack_inode2body(body, inode);
         }
         EXIT;
 out_create_commit:
@@ -455,6 +462,9 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
         }
 
         if (offset) {
+                /* XXX offset? */
+                offset = 1;
+
                 body = lustre_msg_buf(req->rq_repmsg, offset);
                 mds_pack_inode2fid(&body->fid1, inode);
                 mds_pack_inode2body(body, inode);
