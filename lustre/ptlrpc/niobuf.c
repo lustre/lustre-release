@@ -438,10 +438,8 @@ int ptl_send_rpc(struct ptlrpc_request *request)
         LASSERT (request->rq_replen != 0);
         if (request->rq_repmsg == NULL)
                 OBD_ALLOC(request->rq_repmsg, request->rq_replen);
-        if (request->rq_repmsg == NULL) {
-                LBUG();
+        if (request->rq_repmsg == NULL)
                 GOTO(cleanup_bulk, rc = -ENOMEM);
-        }
 
         rc = PtlMEAttach(connection->c_peer.peer_ni->pni_ni_h,
                          request->rq_reply_portal, /* XXX FIXME bug 249 */
@@ -450,7 +448,6 @@ int ptl_send_rpc(struct ptlrpc_request *request)
         if (rc != PTL_OK) {
                 CERROR("PtlMEAttach failed: %d\n", rc);
                 LASSERT (rc == PTL_NOSPACE);
-                LBUG();
                 GOTO(cleanup_repmsg, rc = -ENOMEM);
         }
 
@@ -477,7 +474,6 @@ int ptl_send_rpc(struct ptlrpc_request *request)
         if (rc != PTL_OK) {
                 CERROR("PtlMDAttach failed: %d\n", rc);
                 LASSERT (rc == PTL_NOSPACE);
-                LBUG();
                 GOTO(cleanup_me, rc -ENOMEM);
         }
 

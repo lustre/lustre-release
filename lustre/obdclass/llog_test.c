@@ -548,7 +548,7 @@ static int llog_run_tests(struct obd_device *obd)
 
 
 static int llog_test_llog_init(struct obd_device *obd, struct obd_device *tgt,
-                               int count, struct llog_logid *logid)
+                               int count, struct llog_catid *logid)
 {
         int rc;
         ENTRY;

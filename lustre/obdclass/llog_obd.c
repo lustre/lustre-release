@@ -280,17 +280,15 @@ EXPORT_SYMBOL(llog_obd_origin_add);
 
 int llog_cat_initialize(struct obd_device *obd, int count)
 {
-        struct llog_logid *idarray;
+        struct llog_catid *idarray;
         int size = sizeof(*idarray) * count;
-        char name[32] = "CATLIST";
+        char name[32] = CATLIST;
         int rc;
         ENTRY;
 
         OBD_ALLOC(idarray, size);
         if (!idarray)
                 RETURN(-ENOMEM);
-
-        memset(idarray, 0, size);
 
         rc = llog_get_cat_list(obd, obd, name, count, idarray);
         if (rc) {
@@ -317,7 +315,7 @@ int llog_cat_initialize(struct obd_device *obd, int count)
 EXPORT_SYMBOL(llog_cat_initialize);
 
 int obd_llog_init(struct obd_device *obd, struct obd_device *disk_obd,
-                  int count, struct llog_logid *logid)
+                  int count, struct llog_catid *logid)
 {
         int rc;
         ENTRY;

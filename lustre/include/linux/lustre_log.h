@@ -121,7 +121,7 @@ int llog_obd_origin_add(struct llog_ctxt *ctxt,
 
 int llog_cat_initialize(struct obd_device *obd, int count);
 int obd_llog_init(struct obd_device *obd, struct obd_device *disk_obd,
-                  int count, struct llog_logid *logid);
+                  int count, struct llog_catid *logid);
 
 int obd_llog_finish(struct obd_device *obd, int count);
 
@@ -174,10 +174,9 @@ struct llog_operations {
 };
 
 /* llog_lvfs.c */
-int llog_get_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
-                      char *name, int count, struct llog_logid *idarray);
 extern struct llog_operations llog_lvfs_ops;
-
+int llog_get_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
+                      char *name, int count, struct llog_catid *idarray);
 
 struct llog_ctxt {
         int                      loc_idx; /* my index the obd array of ctxt's */
@@ -222,7 +221,7 @@ static inline int llog_obd2ops(struct llog_ctxt *ctxt,
 {
        if (ctxt == NULL)
                 return -ENOTCONN;
-        
+
         *lop = ctxt->loc_logops;
         if (*lop == NULL)
                 return -EOPNOTSUPP;

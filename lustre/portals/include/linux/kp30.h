@@ -234,6 +234,12 @@ extern void kportal_assertion_failed(char *expr, char *file, const char *func,
 #define LASSERTF(cond, fmt...) do { } while (0)
 #endif
 
+#ifdef CONFIG_SMP
+#define LASSERT_SPIN_LOCKED(lock) LASSERT(spin_is_locked(lock))
+#else
+#define LASSERT_SPIN_LOCKED(lock) do {} while(0)
+#endif
+
 #ifdef __arch_um__
 #define LBUG_WITH_LOC(file, func, line)                                 \
 do {                                                                    \

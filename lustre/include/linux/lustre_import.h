@@ -39,6 +39,11 @@ static inline char * ptlrpc_import_state_name(enum lustre_imp_state state)
         return import_state_names[state];
 }
 
+enum obd_import_event {
+        IMP_EVENT_DISCON     = 0x808001,
+        IMP_EVENT_INVALIDATE = 0x808002,
+        IMP_EVENT_ACTIVE     = 0x808003,
+};
 
 struct obd_import {
         struct portals_handle     imp_handle;
@@ -75,7 +80,8 @@ struct obd_import {
         /* flags */
         int                       imp_invalid:1, imp_replayable:1,
                                   imp_dlm_fake:1, imp_server_timeout:1,
-                                  imp_initial_recov:1;
+                                  imp_initial_recov:1, imp_force_verify:1,
+                                  imp_pingable:1;
         __u32                     imp_connect_op;
 };
 

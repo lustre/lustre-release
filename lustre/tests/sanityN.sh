@@ -214,7 +214,7 @@ test_9() {
 		[ "$MTPT" -eq 1 ] && MTPT=2 || MTPT=1
 	done
 	[ "`cat $DIR1/f9`" = "abcdefghijkl" ] || \
-		error "`od -a $DIR1/f10` != abcdefghijkl"
+		error "`od -a $DIR1/f9` != abcdefghijkl"
 }
 run_test 9 "append of file with sub-page size on multiple mounts"
 

@@ -66,7 +66,8 @@ static int debug_mask = ~0;
 static const char *portal_debug_subsystems[] =
         {"undefined", "mdc", "mds", "osc", "ost", "class", "log", "llite",
          "rpc", "mgmt", "portals", "socknal", "qswnal", "pinger", "filter",
-         "ptlbd", "echo", "ldlm", "lov", "gmnal", "router", "cobd", NULL};
+         "ptlbd", "echo", "ldlm", "lov", "gmnal", "router", "cobd", "ibnal",
+         NULL};
 static const char *portal_debug_masks[] =
         {"trace", "inode", "super", "ext2", "malloc", "cache", "info", "ioctl",
          "blocks", "net", "warning", "buffs", "other", "dentry", "portals",

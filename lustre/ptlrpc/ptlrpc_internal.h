@@ -40,6 +40,7 @@ int ptlrpc_import_in_recovery(struct obd_import *imp);
 int ptlrpc_set_import_discon(struct obd_import *imp);
 void ptlrpc_handle_failed_import(struct obd_import *imp);
 int ptlrpc_replay_next(struct obd_import *imp, int *inflight);
+void ptlrpc_initiate_recovery(struct obd_import *imp);
 
 
 #ifdef __KERNEL__
@@ -111,5 +112,6 @@ int ptlrpc_expire_one_request(struct ptlrpc_request *req);
 int ptlrpc_start_pinger(void);
 int ptlrpc_stop_pinger(void);
 void ptlrpc_pinger_sending_on_import(struct obd_import *imp);
+void ptlrpc_pinger_wake_up(void);
 
 #endif /* PTLRPC_INTERNAL_H */

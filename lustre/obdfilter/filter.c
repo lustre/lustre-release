@@ -1411,6 +1411,92 @@ static int filter_precleanup(struct obd_device *obd, int flags)
         RETURN(rc);
 }
 
+/* Do extra sanity checks for grant accounting.  We do this at connect,
+ * disconnect, and statfs RPC time, so it shouldn't be too bad.  We can
+ * always get rid of it or turn it off when we know accounting is good. */
+static void filter_grant_sanity_check(struct obd_device *obd, char *func)
+{
+        struct filter_export_data *fed;
+        struct obd_export *exp;
+        obd_size maxsize = obd->obd_osfs.os_blocks * obd->obd_osfs.os_bsize;
+        obd_size tot_dirty = 0, tot_pending = 0, tot_granted = 0;
+        obd_size fo_tot_dirty, fo_tot_pending, fo_tot_granted;
+
+        spin_lock(&obd->obd_osfs_lock);
+        spin_lock(&obd->obd_dev_lock);
+        list_for_each_entry(exp, &obd->obd_exports, exp_obd_chain) {
+                fed = &exp->exp_filter_data;
+                LASSERTF(fed->fed_grant + fed->fed_pending <= maxsize,
+                         "cli %s/%p %lu+%lu > "LPU64"\n",
+                         exp->exp_client_uuid.uuid, exp,
+                         fed->fed_grant, fed->fed_pending, maxsize);
+                LASSERTF(fed->fed_dirty <= maxsize, "cli %s/%p %lu > "LPU64"\n",
+                         exp->exp_client_uuid.uuid, exp,fed->fed_dirty,maxsize);
+                CDEBUG(D_CACHE,"%s: cli %s/%p dirty %lu pend %lu grant %lu\n",
+                       obd->obd_name, exp->exp_client_uuid.uuid, exp,
+                       fed->fed_dirty, fed->fed_pending, fed->fed_grant);
+                tot_granted += fed->fed_grant + fed->fed_pending;
+                tot_pending += fed->fed_pending;
+                tot_dirty += fed->fed_dirty;
+        }
+        fo_tot_granted = obd->u.filter.fo_tot_granted;
+        fo_tot_pending = obd->u.filter.fo_tot_pending;
+        fo_tot_dirty = obd->u.filter.fo_tot_dirty;
+        spin_unlock(&obd->obd_dev_lock);
+        spin_unlock(&obd->obd_osfs_lock);
+
+        /* Do these assertions outside the spinlocks so we don't kill system */
+        LASSERTF(tot_granted == fo_tot_granted, "%s "LPU64" != "LPU64"\n",
+                 func, tot_granted, fo_tot_granted);
+        LASSERTF(tot_pending == fo_tot_pending, "%s "LPU64" != "LPU64"\n",
+                 func, tot_pending, fo_tot_pending);
+        LASSERTF(tot_dirty == fo_tot_dirty, "%s "LPU64" != "LPU64"\n",
+                 func, tot_dirty, fo_tot_dirty);
+        LASSERTF(tot_pending <= tot_granted, "%s "LPU64" > "LPU64"\n",
+                 func, tot_pending, tot_granted);
+        LASSERTF(tot_granted <= maxsize, "%s "LPU64" > "LPU64"\n",
+                 func, tot_granted, maxsize);
+        LASSERTF(tot_dirty <= maxsize, "%s "LPU64" > "LPU64"\n",
+                 func, tot_dirty, maxsize);
+}
+
+/* Remove this client from the grant accounting totals.  This is done at
+ * disconnect time and also at export destroy time in case there was a race
+ * between removing the export and an incoming BRW updating the client grant.
+ * The client should do something similar when it invalidates its import. */
+static void filter_grant_discard(struct obd_export *exp)
+{
+        struct obd_device *obd = exp->exp_obd;
+        struct filter_obd *filter = &obd->u.filter;
+        struct filter_export_data *fed = &exp->exp_filter_data;
+
+        filter_grant_sanity_check(obd, __FUNCTION__);
+
+        spin_lock(&obd->obd_osfs_lock);
+        CDEBUG(D_CACHE, "%s: cli %s/%p dirty %lu pend %lu grant %lu\n",
+               obd->obd_name, exp->exp_client_uuid.uuid, exp,
+               fed->fed_dirty, fed->fed_pending, fed->fed_grant);
+
+        LASSERTF(filter->fo_tot_granted >= fed->fed_grant,
+                 "%s: tot_granted "LPU64" cli %s/%p fed_grant %lu\n",
+                 obd->obd_name, filter->fo_tot_granted,
+                 exp->exp_client_uuid.uuid, exp, fed->fed_grant);
+        filter->fo_tot_granted -= fed->fed_grant;
+        LASSERTF(exp->exp_obd->u.filter.fo_tot_pending >= fed->fed_pending,
+                 "%s: tot_pending "LPU64" cli %s/%p fed_pending %lu\n",
+                 obd->obd_name, filter->fo_tot_pending,
+                 exp->exp_client_uuid.uuid, exp, fed->fed_pending);
+        LASSERTF(filter->fo_tot_dirty >= fed->fed_dirty,
+                 "%s: tot_dirty "LPU64" cli %s/%p fed_dirty %lu\n",
+                 obd->obd_name, filter->fo_tot_dirty,
+                 exp->exp_client_uuid.uuid, exp, fed->fed_dirty);
+        filter->fo_tot_dirty -= fed->fed_dirty;
+        fed->fed_dirty = 0;
+        fed->fed_grant = 0;
+
+        spin_unlock(&obd->obd_osfs_lock);
+}
+
 static int filter_destroy_export(struct obd_export *exp)
 {
         ENTRY;
@@ -1424,62 +1510,46 @@ static int filter_destroy_export(struct obd_export *exp)
 
         if (exp->exp_obd->obd_replayable)
                 filter_client_free(exp, exp->exp_flags);
+
+        filter_grant_sanity_check(exp->exp_obd, __FUNCTION__);
+
         RETURN(0);
 }
 
 /* also incredibly similar to mds_disconnect */
 static int filter_disconnect(struct obd_export *exp, int flags)
 {
-        struct filter_obd *filter = &exp->exp_obd->u.filter;
-        struct filter_export_data *fed = &exp->exp_filter_data;
+        struct obd_device *obd = exp->exp_obd;
         unsigned long irqflags;
         struct llog_ctxt *ctxt;
         int rc;
         ENTRY;
 
         LASSERT(exp);
-
-        /* This would imply RPCs still in flight or preprw/commitrw imbalance */
-        if (fed->fed_pending)
-                CWARN("%s: cli %s has %lu pending at disconnect time\n",
-                       exp->exp_obd->obd_name, exp->exp_client_uuid.uuid,
-                       fed->fed_pending);
-
-        /* Forget what this client had cached.  This is also done on the
-         * client when it invalidates its import.  Do this before unlinking
-         * from the export list so filter_grant_sanity_check totals are OK. */
-        spin_lock(&exp->exp_obd->obd_osfs_lock);
-        LASSERTF(exp->exp_obd->u.filter.fo_tot_dirty >= fed->fed_dirty,
-                 "%s: tot_dirty "LPU64" cli %s/%p fed_dirty %lu\n",
-                 exp->exp_obd->obd_name, exp->exp_obd->u.filter.fo_tot_dirty,
-                 exp->exp_client_uuid.uuid, exp, fed->fed_dirty);
-        exp->exp_obd->u.filter.fo_tot_dirty -= fed->fed_dirty;
-        LASSERTF(exp->exp_obd->u.filter.fo_tot_granted >= fed->fed_grant,
-                 "%s: tot_granted "LPU64" cli %s/%p fed_grant %lu\n",
-                 exp->exp_obd->obd_name, exp->exp_obd->u.filter.fo_tot_granted,
-                 exp->exp_client_uuid.uuid, exp, fed->fed_grant);
-        exp->exp_obd->u.filter.fo_tot_granted -= fed->fed_grant;
-        LASSERTF(exp->exp_obd->u.filter.fo_tot_pending >= fed->fed_pending,
-                 "%s: tot_pending "LPU64" cli %s/%p fed_pending %lu\n",
-                 exp->exp_obd->obd_name, exp->exp_obd->u.filter.fo_tot_pending,
-                 exp->exp_client_uuid.uuid, exp, fed->fed_pending);
-        fed->fed_dirty = 0;
-        fed->fed_grant = 0;
-        spin_unlock(&exp->exp_obd->obd_osfs_lock);
-
-        ldlm_cancel_locks_for_export(exp);
+        class_export_get(exp);
 
         spin_lock_irqsave(&exp->exp_lock, irqflags);
         exp->exp_flags = flags;
         spin_unlock_irqrestore(&exp->exp_lock, irqflags);
 
-        fsfilt_sync(exp->exp_obd, filter->fo_sb);
+        filter_grant_discard(exp);
+
+        /* Disconnect early so that clients can't keep using export */
+        rc = class_disconnect(exp, flags);
+
+        /* Do this twice in case a BRW arrived between the first call and
+         * the class_export_unlink() call (bug 2663) */
+        filter_grant_discard(exp);
+
+        ldlm_cancel_locks_for_export(exp);
+
+        fsfilt_sync(obd, obd->u.filter.fo_sb);
 
         /* flush any remaining cancel messages out to the target */
-        ctxt = llog_get_context(exp->exp_obd, LLOG_UNLINK_REPL_CTXT);
+        ctxt = llog_get_context(obd, LLOG_UNLINK_REPL_CTXT);
         llog_sync(ctxt, exp);
 
-        rc = class_disconnect(exp, flags);
+        class_export_put(exp);
         RETURN(rc);
 }
 
@@ -2091,59 +2161,10 @@ static int filter_sync(struct obd_export *exp, struct obdo *oa,
         RETURN(rc);
 }
 
-/* debugging to make sure that nothing bad happens, can be turned off soon.
- * caller must hold osfs lock */
-static void filter_grant_total_exports(struct obd_device *obd,
-                                       obd_size *tot_dirty,
-                                       obd_size *tot_pending,
-                                       obd_size *tot_granted,
-                                       obd_size maxsize)
-{
-        struct filter_export_data *fed;
-        struct obd_export *exp_pos;
-
-        spin_lock(&obd->obd_dev_lock);
-        list_for_each_entry(exp_pos, &obd->obd_exports, exp_obd_chain) {
-                fed = &exp_pos->exp_filter_data;
-                LASSERTF(fed->fed_dirty <= maxsize, "cli %s/%p %lu > "LPU64"\n",
-                         exp_pos->exp_client_uuid.uuid, exp_pos,
-                         fed->fed_dirty, maxsize);
-                LASSERTF(fed->fed_grant + fed->fed_pending <= maxsize,
-                         "cli %s/%p %lu+%lu > "LPU64"\n",
-                         exp_pos->exp_client_uuid.uuid, exp_pos,
-                         fed->fed_grant, fed->fed_pending, maxsize);
-                *tot_dirty += fed->fed_dirty;
-                *tot_pending += fed->fed_pending;
-                *tot_granted += fed->fed_grant + fed->fed_pending;
-        }
-        spin_unlock(&obd->obd_dev_lock);
-}
-
-static void filter_grant_sanity_check(obd_size tot_dirty, obd_size tot_pending,
-                                      obd_size tot_granted,
-                                      obd_size fo_tot_dirty,
-                                      obd_size fo_tot_pending,
-                                      obd_size fo_tot_granted, obd_size maxsize)
-{
-        LASSERTF(tot_dirty == fo_tot_dirty, LPU64" != "LPU64"\n",
-                 tot_dirty, fo_tot_dirty);
-        LASSERTF(tot_pending == fo_tot_pending, LPU64" != "LPU64"\n",
-                 tot_pending, fo_tot_pending);
-        LASSERTF(tot_granted == fo_tot_granted, LPU64" != "LPU64"\n",
-                 tot_granted, fo_tot_granted);
-        LASSERTF(tot_dirty <= maxsize, LPU64" > "LPU64"\n", tot_dirty, maxsize);
-        LASSERTF(tot_pending <= tot_granted, LPU64" > "LPU64"\n", tot_pending,
-                 tot_granted);
-        LASSERTF(tot_granted <= maxsize, LPU64" > "LPU64"\n",
-                 tot_granted, maxsize);
-}
-
 static int filter_statfs(struct obd_device *obd, struct obd_statfs *osfs,
                          unsigned long max_age)
 {
         struct filter_obd *filter = &obd->u.filter;
-        obd_size tot_cached = 0, tot_pending = 0, tot_granted = 0;
-        obd_size fo_tot_cached, fo_tot_pending, fo_tot_granted;
         int blockbits = filter->fo_sb->s_blocksize_bits;
         int rc;
         ENTRY;
@@ -2154,26 +2175,20 @@ static int filter_statfs(struct obd_device *obd, struct obd_statfs *osfs,
         spin_lock(&obd->obd_osfs_lock);
         rc = fsfilt_statfs(obd, filter->fo_sb, max_age);
         memcpy(osfs, &obd->obd_osfs, sizeof(*osfs));
-        filter_grant_total_exports(obd, &tot_cached, &tot_pending, &tot_granted,
-                                   osfs->os_blocks << blockbits);
-        fo_tot_cached = filter->fo_tot_dirty;
-        fo_tot_pending = filter->fo_tot_pending;
-        fo_tot_granted = filter->fo_tot_granted;
         spin_unlock(&obd->obd_osfs_lock);
-
-        /* Do check outside spinlock, to avoid wedging system on failure */
-        filter_grant_sanity_check(tot_cached, tot_pending, tot_granted,
-                                  fo_tot_cached, fo_tot_pending,
-                                  fo_tot_granted, osfs->os_blocks << blockbits);
 
         CDEBUG(D_SUPER | D_CACHE, "blocks cached "LPU64" granted "LPU64
                "pending "LPU64" free "LPU64" avail "LPU64"\n",
-               tot_cached >> blockbits, tot_granted >> blockbits,
-               tot_pending >> blockbits, osfs->os_bfree, osfs->os_bavail);
+               filter->fo_tot_dirty >> blockbits,
+               filter->fo_tot_granted >> blockbits,
+               filter->fo_tot_pending >> blockbits,
+               osfs->os_bfree, osfs->os_bavail);
+
+        filter_grant_sanity_check(obd, __FUNCTION__);
 
         osfs->os_bavail -= min(osfs->os_bavail,
-                               (tot_cached +tot_pending +osfs->os_bsize -1) >>
-                                        blockbits);
+                               (filter->fo_tot_dirty + filter->fo_tot_pending +
+                                osfs->os_bsize -1) >> blockbits);
 
         RETURN(rc);
 }
@@ -2312,7 +2327,7 @@ static struct llog_operations filter_size_orig_logops = {
 };
 
 static int filter_llog_init(struct obd_device *obd, struct obd_device *tgt,
-                            int count, struct llog_logid *logid)
+                            int count, struct llog_catid *logid)
 {
         struct llog_ctxt *ctxt;
         int rc;

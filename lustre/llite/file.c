@@ -569,7 +569,7 @@ static int ll_glimpse_callback(struct ldlm_lock *lock, void *reqp)
                 LBUG();
         }
 
-        LDLM_DEBUG(lock, "i_size: %Lu -> stripe number %d -> size %Lu",
+        LDLM_DEBUG(lock, "i_size: %llu -> stripe number %u -> size "LPU64,
                    inode->i_size, data.stripe_number, data.size);
 
         rc = lustre_pack_reply(req, 1, &size, NULL);
@@ -720,8 +720,8 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
                 inode->i_size = kms;
         }
 
-        CDEBUG(D_INFO, "Reading inode %lu, "LPSZ" bytes, offset %Ld, i_size "
-               LPU64"\n", inode->i_ino, count, *ppos, inode->i_size);
+        CDEBUG(D_INFO, "Read ino %lu, "LPSZ" bytes, offset %lld, i_size %llu\n",
+               inode->i_ino, count, *ppos, inode->i_size);
 
         /* turn off the kernel's read-ahead */
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))

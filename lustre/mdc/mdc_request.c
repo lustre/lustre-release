@@ -812,6 +812,39 @@ static int mdc_detach(struct obd_device *dev)
         return lprocfs_obd_detach(dev);
 }
 
+static int mdc_import_event(struct obd_device *obd,
+                            struct obd_import *imp, 
+                            enum obd_import_event event)
+{
+        int rc = 0;
+
+        LASSERT(imp->imp_obd == obd);
+
+        switch (event) {
+        case IMP_EVENT_DISCON: {
+                break;
+        }
+        case IMP_EVENT_INVALIDATE: {
+                struct ldlm_namespace *ns = obd->obd_namespace;
+                
+                ldlm_namespace_cleanup(ns, LDLM_FL_LOCAL_ONLY);
+
+                if (obd->obd_observer)
+                        rc = obd_notify(obd->obd_observer, obd, 0);
+                break;
+        }
+        case IMP_EVENT_ACTIVE: {
+                if (obd->obd_observer)
+                        rc = obd_notify(obd->obd_observer, obd, 1);
+                break;
+        }
+        default:
+                CERROR("Unknown import event %d\n", event);
+                LBUG();
+        }
+        RETURN(rc);
+}
+
 static int mdc_setup(struct obd_device *obd, obd_count len, void *buf)
 {
         struct client_obd *cli = &obd->u.cli;
@@ -906,7 +939,7 @@ static int mdc_cleanup(struct obd_device *obd, int flags)
 
 
 static int mdc_llog_init(struct obd_device *obd, struct obd_device *tgt,
-                         int count, struct llog_logid *logid)
+                         int count, struct llog_catid *logid)
 {
         struct llog_ctxt *ctxt;
         int rc;
@@ -916,7 +949,7 @@ static int mdc_llog_init(struct obd_device *obd, struct obd_device *tgt,
                         &llog_client_ops);
         if (rc == 0) {
                 ctxt = llog_get_context(obd, LLOG_CONFIG_REPL_CTXT);
-                ctxt->loc_imp = obd->u.cli.cl_import; 
+                ctxt->loc_imp = obd->u.cli.cl_import;
         }
 
         RETURN(rc);
@@ -945,6 +978,7 @@ struct obd_ops mdc_obd_ops = {
         o_statfs:      mdc_statfs,
         o_pin:         mdc_pin,
         o_unpin:       mdc_unpin,
+        o_import_event: mdc_import_event,
         o_llog_init:   mdc_llog_init,
         o_llog_finish: mdc_llog_finish,
 };

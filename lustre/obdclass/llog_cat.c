@@ -51,7 +51,7 @@ static struct llog_handle *llog_cat_new_log(struct llog_handle *cathandle)
 {
         struct llog_handle *loghandle;
         struct llog_log_hdr *llh;
-        struct llog_logid_rec rec;
+        struct llog_logid_rec rec = { { 0 }, };
         int rc, index, bitmap_size;
         ENTRY;
 
@@ -264,6 +264,14 @@ int llog_cat_add_rec(struct llog_handle *cathandle, struct llog_rec_hdr *rec,
         /* loghandle is already locked by llog_cat_current_log() for us */
         rc = llog_write_rec(loghandle, rec, reccookie, 1, buf, -1);
         up_write(&loghandle->lgh_lock);
+        if (rc == -ENOSPC) {
+                /* to create a new plain log */
+                loghandle = llog_cat_current_log(cathandle, 1);
+                if (IS_ERR(loghandle))
+                        RETURN(PTR_ERR(loghandle));
+                rc = llog_write_rec(loghandle, rec, reccookie, 1, buf, -1);
+                up_write(&loghandle->lgh_lock);
+        }
 
         RETURN(rc);
 }

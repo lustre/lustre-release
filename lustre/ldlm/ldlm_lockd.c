@@ -643,12 +643,6 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req,
 
         EXIT;
  out:
-        if (lock->l_resource->lr_lvb_len > 0) {
-                void *lvb = lustre_msg_buf(req->rq_repmsg, 1,
-                                           lock->l_resource->lr_lvb_len);
-                memcpy(lvb, lock->l_resource->lr_lvb_data,
-                       lock->l_resource->lr_lvb_len);
-        }
         req->rq_status = err;
 
         /* The LOCK_CHANGED code in ldlm_lock_enqueue depends on this
@@ -656,6 +650,14 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req,
         if (lock) {
                 LDLM_DEBUG(lock, "server-side enqueue handler, sending reply"
                            "(err=%d)", err);
+
+                if (lock->l_resource->lr_lvb_len > 0) {
+                        void *lvb = lustre_msg_buf(req->rq_repmsg, 1,
+                                                  lock->l_resource->lr_lvb_len);
+                        memcpy(lvb, lock->l_resource->lr_lvb_data,
+                               lock->l_resource->lr_lvb_len);
+                }
+
                 if (!err && dlm_req->lock_desc.l_resource.lr_type != LDLM_FLOCK)
                         ldlm_reprocess_all(lock->l_resource);
                 LDLM_LOCK_PUT(lock);
@@ -754,7 +756,7 @@ int ldlm_handle_cancel(struct ptlrpc_request *req)
                                 (res, NULL, 0);
                                 //(res, req->rq_reqmsg, 1);
                 }
-                        
+
                 ldlm_lock_cancel(lock);
                 if (ldlm_del_waiting_lock(lock))
                         CDEBUG(D_DLMTRACE, "cancelled waiting lock %p\n", lock);
@@ -902,9 +904,11 @@ static void ldlm_handle_gl_callback(struct ptlrpc_request *req,
 static int ldlm_callback_reply(struct ptlrpc_request *req, int rc)
 {
         req->rq_status = rc;
-        rc = lustre_pack_reply(req, 0, NULL, NULL);
-        if (rc)
-                return rc;
+        if (req->rq_reply_state == NULL) {
+                rc = lustre_pack_reply(req, 0, NULL, NULL);
+                if (rc)
+                        return rc;
+        }
         return ptlrpc_reply(req);
 }
 
@@ -969,57 +973,47 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
                 RETURN(0);
         }
 
-        if (req->rq_reqmsg->opc == LDLM_BL_CALLBACK) {
-                OBD_FAIL_RETURN(OBD_FAIL_LDLM_BL_CALLBACK, 0);
-        } else if (req->rq_reqmsg->opc == LDLM_CP_CALLBACK) {
-                OBD_FAIL_RETURN(OBD_FAIL_LDLM_CP_CALLBACK, 0);
-        } else if (req->rq_reqmsg->opc == LDLM_GL_CALLBACK) {
-                OBD_FAIL_RETURN(OBD_FAIL_LDLM_GL_CALLBACK, 0);
-        } else if (req->rq_reqmsg->opc == OBD_LOG_CANCEL) {
-                OBD_FAIL_RETURN(OBD_FAIL_OBD_LOG_CANCEL_NET, 0);
-        } else if (req->rq_reqmsg->opc == LLOG_ORIGIN_HANDLE_CREATE) {
-                OBD_FAIL_RETURN(OBD_FAIL_OBD_LOGD_NET, 0);
-        } else if (req->rq_reqmsg->opc == LLOG_ORIGIN_HANDLE_NEXT_BLOCK) {
-                OBD_FAIL_RETURN(OBD_FAIL_OBD_LOGD_NET, 0);
-        } else if (req->rq_reqmsg->opc == LLOG_ORIGIN_HANDLE_READ_HEADER) {
-                OBD_FAIL_RETURN(OBD_FAIL_OBD_LOGD_NET, 0);
-        } else if (req->rq_reqmsg->opc == LLOG_ORIGIN_HANDLE_CLOSE) {
-                OBD_FAIL_RETURN(OBD_FAIL_OBD_LOGD_NET, 0);
-        } else {
-                ldlm_callback_reply(req, -EPROTO);
-                RETURN(0);
-        }
-
         LASSERT(req->rq_export != NULL);
         LASSERT(req->rq_export->exp_obd != NULL);
 
-        /* FIXME - how to send reply */
-        if (req->rq_reqmsg->opc == OBD_LOG_CANCEL) {
-                int rc = llog_origin_handle_cancel(req);
+        switch(req->rq_reqmsg->opc) {
+        case LDLM_BL_CALLBACK:
+                OBD_FAIL_RETURN(OBD_FAIL_LDLM_BL_CALLBACK, 0);
+                break;
+        case LDLM_CP_CALLBACK:
+                OBD_FAIL_RETURN(OBD_FAIL_LDLM_CP_CALLBACK, 0);
+                break;
+        case LDLM_GL_CALLBACK:
+                OBD_FAIL_RETURN(OBD_FAIL_LDLM_GL_CALLBACK, 0);
+                break;
+        case OBD_LOG_CANCEL:
+                OBD_FAIL_RETURN(OBD_FAIL_OBD_LOG_CANCEL_NET, 0);
+                rc = llog_origin_handle_cancel(req);
                 ldlm_callback_reply(req, rc);
                 RETURN(0);
-        }
-        if (req->rq_reqmsg->opc == LLOG_ORIGIN_HANDLE_CREATE) {
-                int rc = llog_origin_handle_create(req);
-                req->rq_status = rc;
-                ptlrpc_reply(req);
-                RETURN(0);
-        }
-        if (req->rq_reqmsg->opc == LLOG_ORIGIN_HANDLE_NEXT_BLOCK) {
-                int rc = llog_origin_handle_next_block(req);
-                req->rq_status = rc;
-                ptlrpc_reply(req);
-                RETURN(0);
-        }
-        if (req->rq_reqmsg->opc == LLOG_ORIGIN_HANDLE_READ_HEADER) {
-                int rc = llog_origin_handle_read_header(req);
-                req->rq_status = rc;
-                ptlrpc_reply(req);
-                RETURN(0);
-        }
-        if (req->rq_reqmsg->opc == LLOG_ORIGIN_HANDLE_CLOSE) {
-                int rc = llog_origin_handle_close(req);
+        case LLOG_ORIGIN_HANDLE_CREATE:
+                OBD_FAIL_RETURN(OBD_FAIL_OBD_LOGD_NET, 0);
+                rc = llog_origin_handle_create(req);
                 ldlm_callback_reply(req, rc);
+                RETURN(0);
+        case LLOG_ORIGIN_HANDLE_NEXT_BLOCK:
+                OBD_FAIL_RETURN(OBD_FAIL_OBD_LOGD_NET, 0);
+                rc = llog_origin_handle_next_block(req);
+                ldlm_callback_reply(req, rc);
+                RETURN(0);
+        case LLOG_ORIGIN_HANDLE_READ_HEADER:
+                OBD_FAIL_RETURN(OBD_FAIL_OBD_LOGD_NET, 0);
+                rc = llog_origin_handle_read_header(req);
+                ldlm_callback_reply(req, rc);
+                RETURN(0);
+        case LLOG_ORIGIN_HANDLE_CLOSE:
+                OBD_FAIL_RETURN(OBD_FAIL_OBD_LOGD_NET, 0);
+                rc = llog_origin_handle_close(req);
+                ldlm_callback_reply(req, rc);
+                RETURN(0);
+        default:
+                CERROR("unknown opcode %u\n", req->rq_reqmsg->opc);
+                ldlm_callback_reply(req, -EPROTO);
                 RETURN(0);
         }
 
@@ -1053,8 +1047,6 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
          * cancelling right now, because it's unused, or have an intent result
          * in the reply, so we might have to push the responsibility for sending
          * the reply down into the AST handlers, alas. */
-        if (req->rq_reqmsg->opc == LDLM_CP_CALLBACK)
-                ldlm_callback_reply(req, 0);
 
         switch (req->rq_reqmsg->opc) {
         case LDLM_BL_CALLBACK:
@@ -1070,6 +1062,7 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
                 break;
         case LDLM_CP_CALLBACK:
                 CDEBUG(D_INODE, "completion ast\n");
+                ldlm_callback_reply(req, 0);
                 ldlm_handle_cp_callback(req, ns, dlm_req, lock);
                 break;
         case LDLM_GL_CALLBACK:

@@ -864,6 +864,13 @@ struct llog_logid {
         __u32                   lgl_ogen;
 } __attribute__((packed));
 
+/* Records written to the CATALOGS list */
+#define CATLIST "CATALOGS"
+struct llog_catid {
+        struct llog_logid       lci_logid;
+        __u32                   lci_padding[3];
+} __attribute__((packed));
+
 /* Log data record types - there is no specific reason that these need to
  * be related to the RPC opcodes, but no reason not to (may be handy later?)
  */
@@ -875,7 +882,7 @@ typedef enum {
         PTL_CFG_REC      = 0x10630000,
         LLOG_GEN_REC     = 0x10640000,
         LLOG_HDR_MAGIC   = 0x10645539,
-        LLOG_LOGID_MAGIC = 0x1064553a,
+        LLOG_LOGID_MAGIC = 0x1064553b,
 } llog_op_type;
 
 /* Log record header - stored in little endian order.
@@ -897,7 +904,7 @@ struct llog_rec_tail {
 struct llog_logid_rec {
         struct llog_rec_hdr     lid_hdr;
         struct llog_logid       lid_id;
-        __u32                   padding;
+        __u32                   padding[5];
         struct llog_rec_tail    lid_tail;
 } __attribute__((packed));
 

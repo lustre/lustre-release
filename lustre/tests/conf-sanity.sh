@@ -14,6 +14,7 @@ PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$PATH
 
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 RLUSTRE=${RLUSTRE:-$LUSTRE}
+MOUNTLUSTRE=${MOUNTLUSTRE:-/sbin/mount.lustre}
 
 . $LUSTRE/tests/test-framework.sh
 
@@ -533,5 +534,32 @@ test_14() {
         gen_config
 }
 run_test 14 "test mkfsoptions of ost for lmc and lconf"
+
+test_15() {
+        start_ost
+        start_mds
+        echo "mount lustre on ${MOUNT} with $MOUNTLUSTRE....."
+        [ -f "$MOUNTLUSTRE" ] && rm -f $MOUNTLUSTRE
+        [ ! `cp $LUSTRE/utils/llmount $MOUNTLUSTRE` ] || return $?
+        do_node `hostname` mkdir $MOUNT 2> /dev/null || :
+        do_node `hostname` mount -t lustre -o nettype=$NETTYPE `facet_active_host mds`:/mds_svc/client_facet $MOUNT || return $?
+        echo "mount lustre on ${MOUNT} with $MOUNTLUSTRE: success"
+        [ -d /r ] && $LCTL modules > /r/tmp/ogdb-`hostname`
+        check_mount || return 41
+        cleanup || return $?
+
+        start_ost
+        start_mds
+        [ -f "$MOUNTLUSTRE" ] && rm -f $MOUNTLUSTRE
+        echo "mount lustre on ${MOUNT} without $MOUNTLUSTRE....."
+        do_node `hostname` mkdir $MOUNT 2> /dev/null || :
+        do_node `hostname` mount -t lustre -o nettype=$NETTYPE `facet_active_host mds`:/mds_svc/client_facet $MOUNT && return $?
+        echo "mount lustre on ${MOUNT} without $MOUNTLUSTRE should return error: success"
+        [ -d /r ] && $LCTL modules > /r/tmp/ogdb-`hostname`
+        check_mount || return 41
+        cleanup || return $?
+
+}
+run_test 15 "zconf-mount without /sbin/mount.lustre, should return error"
 
 equals_msg "Done"

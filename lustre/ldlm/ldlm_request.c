@@ -913,7 +913,8 @@ static int replay_one_lock(struct obd_import *imp, struct ldlm_lock *lock)
         struct ptlrpc_request *req;
         struct ldlm_request *body;
         struct ldlm_reply *reply;
-        int size;
+        int buffers = 1;
+        int size[2];
         int flags;
 
         /*
@@ -939,8 +940,8 @@ static int replay_one_lock(struct obd_import *imp, struct ldlm_lock *lock)
         else
                 flags = LDLM_FL_REPLAY;
 
-        size = sizeof(*body);
-        req = ptlrpc_prep_req(imp, LDLM_ENQUEUE, 1, &size, NULL);
+        size[0] = sizeof(*body);
+        req = ptlrpc_prep_req(imp, LDLM_ENQUEUE, 1, size, NULL);
         if (!req)
                 RETURN(-ENOMEM);
 
@@ -952,8 +953,12 @@ static int replay_one_lock(struct obd_import *imp, struct ldlm_lock *lock)
         body->lock_flags = flags;
 
         ldlm_lock2handle(lock, &body->lock_handle1);
-        size = sizeof(*reply);
-        req->rq_replen = lustre_msg_size(1, &size);
+        size[0] = sizeof(*reply);
+        if (lock->l_lvb_len != 0) {
+                buffers = 2;
+                size[1] = lock->l_lvb_len;
+        }
+        req->rq_replen = lustre_msg_size(buffers, size);
 
         LDLM_DEBUG(lock, "replaying lock:");
 

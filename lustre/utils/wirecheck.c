@@ -523,6 +523,14 @@ check_llog_logid(void)
 }
 
 void
+check_llog_catid(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(llog_catid);
+        CHECK_MEMBER(llog_catid, lci_logid);
+}
+
+void
 check_llog_rec_hdr(void)
 {
         BLANK_LINE();
@@ -878,6 +886,7 @@ main(int argc, char **argv)
         check_ptlbd_niob();
         check_ptlbd_rsp();
         check_llog_logid();
+        check_llog_catid();
         check_llog_rec_hdr();
         check_llog_rec_tail();
         check_llog_logid_rec();

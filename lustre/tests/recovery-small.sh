@@ -91,6 +91,7 @@ run_test 4 "open: drop req, drop rep"
 test_5() {
     drop_request "mv $MOUNT/resolv.conf $MOUNT/renamed" || return 1
     drop_reply "mv $MOUNT/renamed $MOUNT/renamed-again" || return 2
+    do_facet client "checkstat -v $MOUNT/renamed-again"  || return 3
 }
 run_test 5 "rename: drop req, drop rep"
 
@@ -155,11 +156,12 @@ run_test 11 "wake up a thead waiting for completion after eviction (b=2460)"
 #b=2494
 test_12(){
     $LCTL mark multiop $MOUNT/$tfile OS_c 
+    do_facet mds "sysctl -w lustre.fail_loc=0x115"
+    clear_failloc mds $((TIMEOUT * 2)) &
     multiop $MOUNT/$tfile OS_c  &
     PID=$!
 #define OBD_FAIL_MDS_CLOSE_NET           0x115
-    do_facet mds "sysctl -w lustre.fail_loc=0x115"
-    clear_failloc mds $((TIMEOUT * 2)) &
+    sleep 2
     kill -USR1 $PID
     echo "waiting for multiop $PID"
     wait $PID || return 2

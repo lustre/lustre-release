@@ -121,6 +121,32 @@ void ptlrpc_run_failed_import_upcall(struct obd_import* imp)
 #endif
 }
 
+/* This might block waiting for the upcall to start, so it should
+ * not be called from a thread that shouldn't block. (Like ptlrpcd) */
+void ptlrpc_initiate_recovery(struct obd_import *imp)
+{
+        ENTRY;
+
+        LASSERT (obd_lustre_upcall != NULL);
+        
+        if (strcmp(obd_lustre_upcall, "DEFAULT") == 0) {
+                CDEBUG(D_ERROR, "%s: starting recovery without upcall\n",
+                        imp->imp_target_uuid.uuid);
+                ptlrpc_connect_import(imp, NULL);
+        } 
+        else if (strcmp(obd_lustre_upcall, "NONE") == 0) {
+                CDEBUG(D_ERROR, "%s: recovery diabled\n",
+                        imp->imp_target_uuid.uuid);
+        } 
+        else {
+                CDEBUG(D_ERROR, "%s: calling upcall to start recovery\n",
+                        imp->imp_target_uuid.uuid);
+                ptlrpc_run_failed_import_upcall(imp);
+        }
+
+        EXIT;
+}
+
 int ptlrpc_replay_next(struct obd_import *imp, int *inflight)
 {
         int rc = 0;
@@ -220,35 +246,6 @@ void ptlrpc_wake_delayed(struct obd_import *imp)
         spin_unlock_irqrestore(&imp->imp_lock, flags);
 }
 
-inline void ptlrpc_invalidate_import_state(struct obd_import *imp)
-{
-        struct obd_device *obd = imp->imp_obd;
-        struct ldlm_namespace *ns = obd->obd_namespace;
-
-        ptlrpc_abort_inflight(imp);
-
-        obd_invalidate_import(obd, imp);
-
-        ldlm_namespace_cleanup(ns, LDLM_FL_LOCAL_ONLY);
-}
-
-void ptlrpc_handle_failed_import(struct obd_import *imp)
-{
-        ENTRY;
-
-        if (!imp->imp_replayable) {
-                CDEBUG(D_HA,
-                       "import %s@%s for %s not replayable, deactivating\n",
-                       imp->imp_target_uuid.uuid,
-                       imp->imp_connection->c_remote_uuid.uuid,
-                       imp->imp_obd->obd_name);
-                ptlrpc_set_import_active(imp, 0);
-        }
-
-        ptlrpc_run_failed_import_upcall(imp);
-        EXIT;
-}
-
 void ptlrpc_request_handle_notconn(struct ptlrpc_request *failed_req)
 {
         int rc;
@@ -275,43 +272,41 @@ void ptlrpc_request_handle_notconn(struct ptlrpc_request *failed_req)
         EXIT;
 }
 
+/*
+ * This should only be called by the ioctl interface, currently
+ * with the lctl deactivate and activate commands.
+ */
 int ptlrpc_set_import_active(struct obd_import *imp, int active)
 {
         struct obd_device *obd = imp->imp_obd;
         unsigned long flags;
+        int rc = 0;
 
         LASSERT(obd);
 
         /* When deactivating, mark import invalid, and abort in-flight
          * requests. */
         if (!active) {
-                spin_lock_irqsave(&imp->imp_lock, flags);
-                /* This is a bit of a hack, but invalidating replayable
-                 * imports makes a temporary reconnect failure into a much more
-                 * ugly -- and hard to remedy -- situation. */
-                if (!imp->imp_replayable) {
-                        CDEBUG(D_HA, "setting import %s INVALID\n",
-                               imp->imp_target_uuid.uuid);
-                        imp->imp_invalid = 1;
-                }
-                imp->imp_generation++;
-                spin_unlock_irqrestore(&imp->imp_lock, flags);
-                ptlrpc_invalidate_import_state(imp);
-        }
+                ptlrpc_invalidate_import(imp);
+        } 
 
-        /* When activating, mark import valid */
+        /* When activating, mark import valid, and attempt recovery */
         if (active) {
                 CDEBUG(D_HA, "setting import %s VALID\n",
                        imp->imp_target_uuid.uuid);
                 spin_lock_irqsave(&imp->imp_lock, flags);
                 imp->imp_invalid = 0;
                 spin_unlock_irqrestore(&imp->imp_lock, flags);
+
+                rc = ptlrpc_recover_import(imp, NULL);
+                if (rc) {
+                        spin_lock_irqsave(&imp->imp_lock, flags);
+                        imp->imp_invalid = 1;
+                        spin_unlock_irqrestore(&imp->imp_lock, flags);
+                }
         }
 
-        if (obd->obd_observer)
-                RETURN(obd_notify(obd->obd_observer, obd, active));
-
-        RETURN(0);
+        RETURN(rc);
 }
 
 int ptlrpc_recover_import(struct obd_import *imp, char *new_uuid)

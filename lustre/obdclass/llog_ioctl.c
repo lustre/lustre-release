@@ -366,8 +366,9 @@ int llog_catlog_list(struct obd_device *obd, int count,
                      struct obd_ioctl_data *data)
 {
         int size, i;
-        struct llog_logid *idarray, *id;
-        char name[32] = "CATLIST";
+        struct llog_catid *idarray;
+        struct llog_logid *id;
+        char name[32] = CATLIST;
         char *out;
         int l, remains, rc = 0;
 
@@ -386,12 +387,11 @@ int llog_catlog_list(struct obd_device *obd, int count,
 
         out = data->ioc_bulk;
         remains = data->ioc_inllen1;
-        id = idarray;
         for (i = 0; i < count; i++) {
+                id = &idarray[i].lci_logid;
                 l = snprintf(out, remains,
                              "catalog log: #"LPX64"#"LPX64"#%08x\n",
                              id->lgl_oid, id->lgl_ogr, id->lgl_ogen);
-                id++;
                 out += l;
                 remains -= l;
                 if (remains <= 0) {

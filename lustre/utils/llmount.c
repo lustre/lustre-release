@@ -70,6 +70,7 @@ int
 init_options(struct lustre_mount_data *lmd)
 {
         memset(lmd, 0, sizeof(lmd));
+        lmd->lmd_magic = LMD_MAGIC;
         lmd->lmd_server_nid = PTL_NID_ANY;
         lmd->lmd_local_nid = PTL_NID_ANY;
         lmd->lmd_port = 988;    /* XXX define LUSTRE_DEFAULT_PORT */
@@ -98,7 +99,7 @@ parse_options(char * options, struct lustre_mount_data *lmd)
         int val;
         char *opt;
         char * opteq;
-        
+
         /* parsing ideas here taken from util-linux/mount/nfsmount.c */
         for (opt = strtok(options, ","); opt; opt = strtok(NULL, ",")) {
                 if ((opteq = strchr(opt, '='))) {
@@ -192,7 +193,7 @@ set_local(struct lustre_mount_data *lmd)
                         rc = get_local_elan_id(pfiles[i], buf);
                 } while (rc != 0 &&
                          pfiles[++i] != NULL);
-                
+
                 if (rc != 0) {
                         fprintf(stderr, "mount: can't read elan ID"
                                 " from /proc\n");
@@ -201,7 +202,7 @@ set_local(struct lustre_mount_data *lmd)
         }
 
         if (ptl_parse_nid (&nid, buf) != 0) {
-                fprintf (stderr, "mount: can't parse NID %s\n", 
+                fprintf (stderr, "mount: can't parse NID %s\n",
                          buf);
                 return (-1);
         }
@@ -261,6 +262,9 @@ build_data(char *source, char *options, struct lustre_mount_data *lmd)
         char *s;
         int rc;
 
+        if (lmd_bad_magic(lmd))
+                return -EINVAL;
+
         if (strlen(source) > sizeof(target) + 1) {
                 fprintf(stderr, "mount: "
                         "exessively long host:/mds/profile argument\n");
@@ -315,7 +319,6 @@ build_data(char *source, char *options, struct lustre_mount_data *lmd)
         }
         strcpy(lmd->lmd_profile, profile);
 
-        
         if (verbose)
                 print_options(lmd);
         return 0;
