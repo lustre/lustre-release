@@ -374,6 +374,12 @@ lmv_cleanup_mgr(struct obd_device *obd)
                         continue;
 
                 obj->state |= O_FREEING;
+                if (atomic_read(&obj->count) > 1)
+                        CERROR("obj %lu/%lu/%lu has count > 1 (%d)\n",
+                               (unsigned long) obj->fid.mds,
+                               (unsigned long) obj->fid.id,
+                               (unsigned long) obj->fid.generation,
+                               atomic_read(&obj->count));
                 __put_obj(obj);
         }
         spin_unlock(&lmv_obj_list_lock);
