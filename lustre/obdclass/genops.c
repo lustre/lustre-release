@@ -19,7 +19,7 @@
 #include <linux/random.h>
 #include <linux/slab.h>
 
-extern struct list_head obd_types; 
+extern struct list_head obd_types;
 extern struct obd_device obd_dev[MAX_OBD_DEVICES];
 kmem_cache_t *obdo_cachep = NULL;
 kmem_cache_t *export_cachep = NULL;
@@ -162,19 +162,19 @@ void obd_cleanup_caches(void)
 {
         int rc;
         ENTRY;
-        if (obdo_cachep) { 
+        if (obdo_cachep) {
                 rc = kmem_cache_destroy(obdo_cachep);
                 if (rc)
                         CERROR("Cannot destory obdo_cachep\n");
                 obdo_cachep = NULL;
         }
-        if (import_cachep) { 
+        if (import_cachep) {
                 rc = kmem_cache_destroy(import_cachep);
                 if (rc)
                         CERROR("Cannot destory import_cachep\n");
                 import_cachep = NULL;
         }
-        if (export_cachep) { 
+        if (export_cachep) {
                 rc = kmem_cache_destroy(export_cachep);
                 if (rc)
                         CERROR("Cannot destory import_cachep\n");
@@ -254,8 +254,8 @@ struct obd_export *class_conn2export(struct lustre_handle *conn)
 struct obd_device *class_conn2obd(struct lustre_handle *conn)
 {
         struct obd_export *export;
-        export = class_conn2export(conn); 
-        if (export) 
+        export = class_conn2export(conn);
+        if (export)
                 return export->exp_obd;
         fixme();
         return NULL;
@@ -267,14 +267,24 @@ int class_connect (struct lustre_handle *conn, struct obd_device *obd)
 {
         struct obd_export * export;
 
-        export = kmem_cache_alloc(export_cachep, GFP_KERNEL); 
+        if (conn == NULL) {
+                LBUG();
+                return -EINVAL;
+        }
+
+        if (obd == NULL) {
+                LBUG();
+                return -EINVAL;
+        }
+
+        export = kmem_cache_alloc(export_cachep, GFP_KERNEL);
         if ( !export ) {
                 CERROR("no memory! (minor %d)\n", obd->obd_minor);
                 return -ENOMEM;
         }
 
         memset(export, 0, sizeof(*export));
-        get_random_bytes(&export->exp_cookie, sizeof(__u64));
+        get_random_bytes(&export->exp_cookie, sizeof(export->exp_cookie));
         export->exp_obd = obd;
         export->exp_rconnh.addr = conn->addr;
         export->exp_rconnh.cookie = conn->cookie;
@@ -337,11 +347,11 @@ int class_multi_setup(struct obd_device *obddev, uint32_t len, void *data)
                         CERROR("invalid device ID starting at: %s\n", p);
                         GOTO(err_disconnect, rc = -EINVAL);
                 }
-                
-                if (tmp < 0 || tmp >= MAX_OBD_DEVICES) { 
-                        CERROR("Trying to sub dev %d  - dev no too large\n", 
+
+                if (tmp < 0 || tmp >= MAX_OBD_DEVICES) {
+                        CERROR("Trying to sub dev %d  - dev no too large\n",
                                tmp);
-                        GOTO(err_disconnect, rc  = -EINVAL); 
+                        GOTO(err_disconnect, rc  = -EINVAL);
                 }
 
                 rc = obd_connect(&obddev->obd_multi_conn[count], &obd_dev[tmp]);
@@ -380,8 +390,8 @@ int class_multi_cleanup(struct obd_device *obddev)
                 int rc;
                 struct obd_device *obd = class_conn2obd(&obddev->obd_multi_conn[i]);
 
-                if (!obd) { 
-                        CERROR("no such device [i %d]\n", i); 
+                if (!obd) {
+                        CERROR("no such device [i %d]\n", i);
                         RETURN(-EINVAL);
                 }
 

@@ -390,6 +390,7 @@ static int ll_create(struct inode * dir, struct dentry * dentry, int mode)
                 rc = PTR_ERR(inode);
                 CERROR("error creating MDS object for id %Ld: rc = %d\n",
                        (unsigned long long)oa.o_id, rc);
+#warning FIXME: 'ii' needs to be set before this goto
                 GOTO(out_destroy, rc);
         }
 
