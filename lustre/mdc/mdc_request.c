@@ -200,7 +200,7 @@ static int mdc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                 struct inode *inode = data;
 
 #warning "FIXME: what tells us that 'inode' is valid at all?"
-                if (!(inode->i_state & I_FREEING))
+                if (inode->i_state & I_FREEING)
                         break;
 
                 LASSERT(inode != NULL);
