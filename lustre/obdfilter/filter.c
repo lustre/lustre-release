@@ -381,13 +381,12 @@ static int filter_setup(struct obd_device *obddev, obd_count len, void *buf)
                 GOTO(err_dec, err);
 
         filter = &obddev->u.filter;;
+        filter->fo_vfsmnt = mnt;
+        filter->fo_fstype = strdup(data->ioc_inlbuf2);
         filter->fo_sb = mnt->mnt_root->d_inode->i_sb;
         /* XXX is this even possible if do_kern_mount succeeded? */
         if (!filter->fo_sb)
-                GOTO(err_put, err = -ENODEV);
-
-        filter->fo_vfsmnt = mnt;
-        filter->fo_fstype = strdup(data->ioc_inlbuf2);
+                GOTO(err_kfree, err = -ENODEV);
 
         OBD_SET_CTXT_MAGIC(&filter->fo_ctxt);
         filter->fo_ctxt.pwdmnt = mnt;
@@ -408,7 +407,6 @@ static int filter_setup(struct obd_device *obddev, obd_count len, void *buf)
 
 err_kfree:
         kfree(filter->fo_fstype);
-err_put:
         unlock_kernel();
         mntput(filter->fo_vfsmnt);
         filter->fo_sb = 0;
