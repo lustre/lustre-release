@@ -320,14 +320,8 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
 }
 
 
-#if (LUSTRE_KERNEL_VERSION < 33)
 static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
                                    struct lookup_intent *it, int flags)
-#else
-static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
-                                   struct nameidata *nd,
-                                   struct lookup_intent *it, int flags)
-#endif
 {
         struct dentry *save = dentry, *retval;
         struct ll_fid pfid;
