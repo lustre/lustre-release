@@ -304,7 +304,7 @@ int ll_gns_umount_all(struct ll_sb_info *sbi, int timeout)
 }
 
 static struct list_head gns_sbi_list = LIST_HEAD_INIT(gns_sbi_list);
-static struct semaphore gns_sem;
+static spinlock_t gns_lock = SPIN_LOCK_UNLOCKED;
 static struct ptlrpc_thread gns_thread;
 
 void ll_gns_timer_callback(unsigned long data)
@@ -312,10 +312,10 @@ void ll_gns_timer_callback(unsigned long data)
         struct ll_sb_info *sbi = (void *)data;
         ENTRY;
 
-        down(&gns_sem);
+        spin_lock(&gns_lock);
         if (list_empty(&sbi->ll_gns_sbi_head))
                 list_add(&sbi->ll_gns_sbi_head, &gns_sbi_list);
-        up(&gns_sem);
+        spin_unlock(&gns_lock);
         wake_up(&gns_thread.t_ctl_waitq);
         mod_timer(&sbi->ll_gns_timer, jiffies + GNS_TICK * HZ);
 }
@@ -323,10 +323,16 @@ void ll_gns_timer_callback(unsigned long data)
 static int gns_check_event(void)
 {
         int rc;
-        down(&gns_sem);
+        spin_lock(&gns_lock);
         rc = !list_empty(&gns_sbi_list);
-        up(&gns_sem);
+        spin_unlock(&gns_lock);
         return rc;
+}
+
+static int inline gns_check_stopping(void)
+{
+        mb();
+        return (gns_thread.t_flags & SVC_STOPPING) ? 1 : 0;
 }
 
 static int ll_gns_thread_main(void *arg)
@@ -347,21 +353,23 @@ static int ll_gns_thread_main(void *arg)
         gns_thread.t_flags = SVC_RUNNING;
         wake_up(&gns_thread.t_ctl_waitq);
 
-        while ((gns_thread.t_flags & SVC_STOPPING) == 0) {
+        while (!gns_check_stopping()) {
                 struct l_wait_info lwi = { 0 };
 
                 l_wait_event(gns_thread.t_ctl_waitq, gns_check_event() ||
-                             gns_thread.t_flags & SVC_STOPPING, &lwi);
+                             gns_check_stopping(), &lwi);
 
-                down(&gns_sem);
+                spin_lock(&gns_lock);
                 while (!list_empty(&gns_sbi_list)) {
                         struct ll_sb_info *sbi =
                                 list_entry(gns_sbi_list.prev, struct ll_sb_info,
                                            ll_gns_sbi_head);
                         list_del_init(&sbi->ll_gns_sbi_head);
+                        spin_unlock(&gns_lock);
                         ll_gns_umount_all(sbi, 1);
+                        spin_lock(&gns_lock);
                 }
-                up(&gns_sem);
+                spin_unlock(&gns_lock);
         }
 
         gns_thread.t_flags = SVC_STOPPED;
@@ -386,7 +394,6 @@ int ll_gns_start_thread(void)
         int rc;
 
         LASSERT(gns_thread.t_flags == 0);
-        sema_init(&gns_sem, 1);
 
         init_waitqueue_head(&gns_thread.t_ctl_waitq);
         rc = kernel_thread(ll_gns_thread_main, NULL, CLONE_VM | CLONE_FILES);
@@ -403,9 +410,7 @@ void ll_gns_stop_thread(void)
 {
         struct l_wait_info lwi = { 0 };
 
-        down(&gns_sem);
         gns_thread.t_flags = SVC_STOPPING;
-        up(&gns_sem);
 
         wake_up(&gns_thread.t_ctl_waitq);
         l_wait_event(gns_thread.t_ctl_waitq, gns_thread.t_flags & SVC_STOPPED,
