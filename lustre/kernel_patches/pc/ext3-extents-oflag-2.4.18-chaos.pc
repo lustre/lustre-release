@@ -16,3 +16,4 @@ include/asm-sh/fcntl.h
 include/asm-sparc64/fcntl.h
 include/asm-sparc/fcntl.h
 include/linux/ext3_fs.h
+fs/ext3/inode.c
