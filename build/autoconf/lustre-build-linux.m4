@@ -282,6 +282,16 @@ LC_PROG_LINUX
 ])
 
 #
+# LB_LINUX_CONDITIONALS
+#
+# AM_CONDITIONALS for linux
+#
+AC_DEFUN([LB_LINUX_CONDITIONALS],
+[AM_CONDITIONAL(INKERNEL, test x$enable_inkernel = xyes)
+AM_CONDITIONAL(LINUX25, test x$linux25 = xyes)
+])
+
+#
 # LB_LINUX_STRUCT_PAGE_LIST
 #
 # 2.6.4 no longer has page->list

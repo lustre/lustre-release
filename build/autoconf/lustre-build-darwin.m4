@@ -1,4 +1,13 @@
 #
+# LB_DARWIN_CONDITIONALS
+#
+# AM_CONDITIONALs for darwin
+#
+AC_DEFUN([LB_DARWIN_CONDITIONALS],
+[
+])
+
+#
 # LB_PROG_DARWIN
 #
 # darwin tests

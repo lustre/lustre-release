@@ -24,10 +24,12 @@ EOF
 }
 
 # portalstag="HEAD"
-portalstag="b1_4"
 buildtag="HEAD"
+portalstag="b1_4"
+lustretag="$1"
+libsysiotag="head_0607"
 
-case "$1" in
+case "$lustretag" in
     '')
         warn "a lustretag is required."
 	usage >&2
@@ -45,6 +47,10 @@ case "$1" in
 	portalstag="b1_4_bgl"
 	;;
 
+    b_newsysio | b_sec)
+        libsysiotag="head_0809"
+	;;
+
 esac
 
 cvs_cmd ()
@@ -53,15 +59,20 @@ cvs_cmd ()
     local module="$2"
     local tag="$3"
 
+    if [ "$tag" != "HEAD" ] ; then
+	cvstag="-r $tag"
+    fi
+
     if [ -d "$dir" ] ; then
-	echo "$progname: Updating $dir to -r $tag"
-	( cd "$dir" && cvs up -r "$tag" )
+	echo "$progname: Updating $dir to $tag"
+	( cd "$dir" && cvs up $cvstag )
     else
-	echo "$progname: Checking out $dir from -r $tag"
-	cvs co -r "$tag" -d "$dir" "$module"
+	echo "$progname: Checking out $dir from $tag"
+	cvs co $cvstag -d "$dir" "$module"
     fi
 }
 
-cvs_cmd build build "$buildtag"
+cvs_cmd build lustre-build "$buildtag"
+cvs_cmd libsysio libsysio "$libsysiotag"
 cvs_cmd portals portals "$portalstag"
 cvs_cmd lustre lustre-core "$lustretag"
