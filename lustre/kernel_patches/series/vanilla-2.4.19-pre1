@@ -1,3 +1,4 @@
+configurable-x86-stack-2.4.19-pre1.patch
 dev_read_only_2.4.20.patch
 exports_2.4.19-pre1.patch 
 lustre_version.patch

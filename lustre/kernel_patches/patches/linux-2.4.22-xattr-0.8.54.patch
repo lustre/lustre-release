@@ -67,7 +67,7 @@
 Index: linux-2.4.22-vanilla/Documentation/Configure.help
 ===================================================================
 --- linux-2.4.22-vanilla.orig/Documentation/Configure.help	2003-11-03 23:41:26.000000000 +0300
-+++ linux-2.4.22-vanilla/Documentation/Configure.help	2003-11-03 23:41:29.000000000 +0300
++++ linux-2.4.22-vanilla/Documentation/Configure.help	2003-12-02 23:55:38.000000000 +0300
 @@ -15613,6 +15613,39 @@
    be compiled as a module, and so this could be dangerous.  Most
    everyone wants to say Y here.
@@ -151,7 +151,7 @@ Index: linux-2.4.22-vanilla/Documentation/Configure.help
 Index: linux-2.4.22-vanilla/arch/alpha/defconfig
 ===================================================================
 --- linux-2.4.22-vanilla.orig/arch/alpha/defconfig	2003-11-03 23:41:26.000000000 +0300
-+++ linux-2.4.22-vanilla/arch/alpha/defconfig	2003-11-03 23:41:29.000000000 +0300
++++ linux-2.4.22-vanilla/arch/alpha/defconfig	2003-12-02 23:55:38.000000000 +0300
 @@ -1,6 +1,13 @@
  #
  # Automatically generated make config: don't edit
@@ -169,7 +169,7 @@ Index: linux-2.4.22-vanilla/arch/alpha/defconfig
 Index: linux-2.4.22-vanilla/arch/alpha/kernel/entry.S
 ===================================================================
 --- linux-2.4.22-vanilla.orig/arch/alpha/kernel/entry.S	2003-11-03 23:41:26.000000000 +0300
-+++ linux-2.4.22-vanilla/arch/alpha/kernel/entry.S	2003-11-03 23:41:29.000000000 +0300
++++ linux-2.4.22-vanilla/arch/alpha/kernel/entry.S	2003-12-02 23:55:38.000000000 +0300
 @@ -1154,6 +1154,18 @@
  	.quad sys_readahead
  	.quad sys_ni_syscall			/* 380, sys_security */
@@ -192,7 +192,7 @@ Index: linux-2.4.22-vanilla/arch/alpha/kernel/entry.S
 Index: linux-2.4.22-vanilla/arch/arm/defconfig
 ===================================================================
 --- linux-2.4.22-vanilla.orig/arch/arm/defconfig	2003-11-03 23:41:26.000000000 +0300
-+++ linux-2.4.22-vanilla/arch/arm/defconfig	2003-11-03 23:41:29.000000000 +0300
++++ linux-2.4.22-vanilla/arch/arm/defconfig	2003-12-02 23:55:38.000000000 +0300
 @@ -1,6 +1,13 @@
  #
  # Automatically generated make config: don't edit
@@ -210,7 +210,7 @@ Index: linux-2.4.22-vanilla/arch/arm/defconfig
 Index: linux-2.4.22-vanilla/arch/arm/kernel/calls.S
 ===================================================================
 --- linux-2.4.22-vanilla.orig/arch/arm/kernel/calls.S	2003-11-03 23:41:26.000000000 +0300
-+++ linux-2.4.22-vanilla/arch/arm/kernel/calls.S	2003-11-03 23:41:29.000000000 +0300
++++ linux-2.4.22-vanilla/arch/arm/kernel/calls.S	2003-12-02 23:55:38.000000000 +0300
 @@ -240,18 +240,18 @@
  		.long	SYMBOL_NAME(sys_ni_syscall) /* Security */
  		.long	SYMBOL_NAME(sys_gettid)
@@ -245,7 +245,7 @@ Index: linux-2.4.22-vanilla/arch/arm/kernel/calls.S
 Index: linux-2.4.22-vanilla/arch/i386/defconfig
 ===================================================================
 --- linux-2.4.22-vanilla.orig/arch/i386/defconfig	2003-11-03 23:41:26.000000000 +0300
-+++ linux-2.4.22-vanilla/arch/i386/defconfig	2003-11-03 23:41:29.000000000 +0300
++++ linux-2.4.22-vanilla/arch/i386/defconfig	2003-12-02 23:55:38.000000000 +0300
 @@ -1,6 +1,13 @@
  #
  # Automatically generated make config: don't edit
@@ -263,7 +263,7 @@ Index: linux-2.4.22-vanilla/arch/i386/defconfig
 Index: linux-2.4.22-vanilla/arch/ia64/defconfig
 ===================================================================
 --- linux-2.4.22-vanilla.orig/arch/ia64/defconfig	2003-11-03 23:41:26.000000000 +0300
-+++ linux-2.4.22-vanilla/arch/ia64/defconfig	2003-11-03 23:41:29.000000000 +0300
++++ linux-2.4.22-vanilla/arch/ia64/defconfig	2003-12-02 23:55:38.000000000 +0300
 @@ -1,6 +1,13 @@
  #
  # Automatically generated make config: don't edit
@@ -281,7 +281,7 @@ Index: linux-2.4.22-vanilla/arch/ia64/defconfig
 Index: linux-2.4.22-vanilla/arch/m68k/defconfig
 ===================================================================
 --- linux-2.4.22-vanilla.orig/arch/m68k/defconfig	2003-11-03 23:41:26.000000000 +0300
-+++ linux-2.4.22-vanilla/arch/m68k/defconfig	2003-11-03 23:41:29.000000000 +0300
++++ linux-2.4.22-vanilla/arch/m68k/defconfig	2003-12-02 23:55:38.000000000 +0300
 @@ -1,6 +1,13 @@
  #
  # Automatically generated make config: don't edit
@@ -299,7 +299,7 @@ Index: linux-2.4.22-vanilla/arch/m68k/defconfig
 Index: linux-2.4.22-vanilla/arch/mips/defconfig
 ===================================================================
 --- linux-2.4.22-vanilla.orig/arch/mips/defconfig	2003-11-03 23:41:26.000000000 +0300
-+++ linux-2.4.22-vanilla/arch/mips/defconfig	2003-11-03 23:41:29.000000000 +0300
++++ linux-2.4.22-vanilla/arch/mips/defconfig	2003-12-02 23:55:38.000000000 +0300
 @@ -1,6 +1,13 @@
  #
  # Automatically generated make config: don't edit
@@ -317,7 +317,7 @@ Index: linux-2.4.22-vanilla/arch/mips/defconfig
 Index: linux-2.4.22-vanilla/arch/mips64/defconfig
 ===================================================================
 --- linux-2.4.22-vanilla.orig/arch/mips64/defconfig	2003-11-03 23:41:26.000000000 +0300
-+++ linux-2.4.22-vanilla/arch/mips64/defconfig	2003-11-03 23:41:29.000000000 +0300
++++ linux-2.4.22-vanilla/arch/mips64/defconfig	2003-12-02 23:55:38.000000000 +0300
 @@ -1,6 +1,13 @@
  #
  # Automatically generated make config: don't edit
@@ -335,7 +335,7 @@ Index: linux-2.4.22-vanilla/arch/mips64/defconfig
 Index: linux-2.4.22-vanilla/arch/s390/defconfig
 ===================================================================
 --- linux-2.4.22-vanilla.orig/arch/s390/defconfig	2003-11-03 23:41:26.000000000 +0300
-+++ linux-2.4.22-vanilla/arch/s390/defconfig	2003-11-03 23:41:29.000000000 +0300
++++ linux-2.4.22-vanilla/arch/s390/defconfig	2003-12-02 23:55:38.000000000 +0300
 @@ -1,6 +1,13 @@
  #
  # Automatically generated make config: don't edit
@@ -353,7 +353,7 @@ Index: linux-2.4.22-vanilla/arch/s390/defconfig
 Index: linux-2.4.22-vanilla/arch/s390/kernel/entry.S
 ===================================================================
 --- linux-2.4.22-vanilla.orig/arch/s390/kernel/entry.S	2003-11-03 23:41:26.000000000 +0300
-+++ linux-2.4.22-vanilla/arch/s390/kernel/entry.S	2003-11-03 23:41:29.000000000 +0300
++++ linux-2.4.22-vanilla/arch/s390/kernel/entry.S	2003-12-02 23:55:38.000000000 +0300
 @@ -558,18 +558,18 @@
          .long  sys_fcntl64 
  	.long  sys_readahead
@@ -388,7 +388,7 @@ Index: linux-2.4.22-vanilla/arch/s390/kernel/entry.S
 Index: linux-2.4.22-vanilla/arch/s390x/defconfig
 ===================================================================
 --- linux-2.4.22-vanilla.orig/arch/s390x/defconfig	2003-11-03 23:41:26.000000000 +0300
-+++ linux-2.4.22-vanilla/arch/s390x/defconfig	2003-11-03 23:41:29.000000000 +0300
++++ linux-2.4.22-vanilla/arch/s390x/defconfig	2003-12-02 23:55:38.000000000 +0300
 @@ -1,6 +1,13 @@
  #
  # Automatically generated make config: don't edit
@@ -406,7 +406,7 @@ Index: linux-2.4.22-vanilla/arch/s390x/defconfig
 Index: linux-2.4.22-vanilla/arch/s390x/kernel/entry.S
 ===================================================================
 --- linux-2.4.22-vanilla.orig/arch/s390x/kernel/entry.S	2003-11-03 23:41:26.000000000 +0300
-+++ linux-2.4.22-vanilla/arch/s390x/kernel/entry.S	2003-11-03 23:41:29.000000000 +0300
++++ linux-2.4.22-vanilla/arch/s390x/kernel/entry.S	2003-12-02 23:55:38.000000000 +0300
 @@ -591,18 +591,18 @@
  	.long  SYSCALL(sys_ni_syscall,sys32_fcntl64_wrapper)
  	.long  SYSCALL(sys_readahead,sys32_readahead)
@@ -441,7 +441,7 @@ Index: linux-2.4.22-vanilla/arch/s390x/kernel/entry.S
 Index: linux-2.4.22-vanilla/arch/s390x/kernel/wrapper32.S
 ===================================================================
 --- linux-2.4.22-vanilla.orig/arch/s390x/kernel/wrapper32.S	2003-11-03 23:41:26.000000000 +0300
-+++ linux-2.4.22-vanilla/arch/s390x/kernel/wrapper32.S	2003-11-03 23:41:29.000000000 +0300
++++ linux-2.4.22-vanilla/arch/s390x/kernel/wrapper32.S	2003-12-02 23:55:38.000000000 +0300
 @@ -1098,6 +1098,98 @@
  	llgfr	%r4,%r4			# long
  	jg	sys32_fstat64		# branch to system call
@@ -544,7 +544,7 @@ Index: linux-2.4.22-vanilla/arch/s390x/kernel/wrapper32.S
 Index: linux-2.4.22-vanilla/arch/sparc64/defconfig
 ===================================================================
 --- linux-2.4.22-vanilla.orig/arch/sparc64/defconfig	2003-11-03 23:41:26.000000000 +0300
-+++ linux-2.4.22-vanilla/arch/sparc64/defconfig	2003-11-03 23:41:29.000000000 +0300
++++ linux-2.4.22-vanilla/arch/sparc64/defconfig	2003-12-02 23:55:38.000000000 +0300
 @@ -1,6 +1,13 @@
  #
  # Automatically generated make config: don't edit
@@ -562,7 +562,7 @@ Index: linux-2.4.22-vanilla/arch/sparc64/defconfig
 Index: linux-2.4.22-vanilla/fs/Config.in
 ===================================================================
 --- linux-2.4.22-vanilla.orig/fs/Config.in	2003-11-03 23:41:26.000000000 +0300
-+++ linux-2.4.22-vanilla/fs/Config.in	2003-11-03 23:41:29.000000000 +0300
++++ linux-2.4.22-vanilla/fs/Config.in	2003-12-02 23:55:38.000000000 +0300
 @@ -29,6 +29,11 @@
  dep_tristate 'BFS file system support (EXPERIMENTAL)' CONFIG_BFS_FS $CONFIG_EXPERIMENTAL
  
@@ -600,8 +600,8 @@ Index: linux-2.4.22-vanilla/fs/Config.in
  source fs/partitions/Config.in
 Index: linux-2.4.22-vanilla/fs/Makefile
 ===================================================================
---- linux-2.4.22-vanilla.orig/fs/Makefile	2003-11-03 23:41:26.000000000 +0300
-+++ linux-2.4.22-vanilla/fs/Makefile	2003-11-03 23:41:29.000000000 +0300
+--- linux-2.4.22-vanilla.orig/fs/Makefile	2003-12-02 23:55:36.000000000 +0300
++++ linux-2.4.22-vanilla/fs/Makefile	2003-12-02 23:55:38.000000000 +0300
 @@ -77,6 +77,9 @@
  
  obj-$(CONFIG_BINFMT_ELF)	+= binfmt_elf.o
@@ -615,7 +615,7 @@ Index: linux-2.4.22-vanilla/fs/Makefile
 Index: linux-2.4.22-vanilla/fs/ext2/Makefile
 ===================================================================
 --- linux-2.4.22-vanilla.orig/fs/ext2/Makefile	2003-11-03 23:41:26.000000000 +0300
-+++ linux-2.4.22-vanilla/fs/ext2/Makefile	2003-11-03 23:41:29.000000000 +0300
++++ linux-2.4.22-vanilla/fs/ext2/Makefile	2003-12-02 23:55:38.000000000 +0300
 @@ -13,4 +13,8 @@
  		ioctl.o namei.o super.o symlink.o
  obj-m    := $(O_TARGET)
@@ -628,7 +628,7 @@ Index: linux-2.4.22-vanilla/fs/ext2/Makefile
 Index: linux-2.4.22-vanilla/fs/ext2/file.c
 ===================================================================
 --- linux-2.4.22-vanilla.orig/fs/ext2/file.c	2003-11-03 23:41:26.000000000 +0300
-+++ linux-2.4.22-vanilla/fs/ext2/file.c	2003-11-03 23:41:29.000000000 +0300
++++ linux-2.4.22-vanilla/fs/ext2/file.c	2003-12-02 23:55:38.000000000 +0300
 @@ -20,6 +20,7 @@
  
  #include <linux/fs.h>
@@ -649,7 +649,7 @@ Index: linux-2.4.22-vanilla/fs/ext2/file.c
 Index: linux-2.4.22-vanilla/fs/ext2/ialloc.c
 ===================================================================
 --- linux-2.4.22-vanilla.orig/fs/ext2/ialloc.c	2003-11-03 23:41:26.000000000 +0300
-+++ linux-2.4.22-vanilla/fs/ext2/ialloc.c	2003-11-03 23:41:29.000000000 +0300
++++ linux-2.4.22-vanilla/fs/ext2/ialloc.c	2003-12-02 23:55:38.000000000 +0300
 @@ -15,6 +15,7 @@
  #include <linux/config.h>
  #include <linux/fs.h>
@@ -669,7 +669,7 @@ Index: linux-2.4.22-vanilla/fs/ext2/ialloc.c
 Index: linux-2.4.22-vanilla/fs/ext2/inode.c
 ===================================================================
 --- linux-2.4.22-vanilla.orig/fs/ext2/inode.c	2003-11-03 23:41:26.000000000 +0300
-+++ linux-2.4.22-vanilla/fs/ext2/inode.c	2003-11-03 23:41:29.000000000 +0300
++++ linux-2.4.22-vanilla/fs/ext2/inode.c	2003-12-02 23:55:38.000000000 +0300
 @@ -39,6 +39,18 @@
  static int ext2_update_inode(struct inode * inode, int do_sync);
  
@@ -755,7 +755,7 @@ Index: linux-2.4.22-vanilla/fs/ext2/inode.c
 Index: linux-2.4.22-vanilla/fs/ext2/namei.c
 ===================================================================
 --- linux-2.4.22-vanilla.orig/fs/ext2/namei.c	2003-11-03 23:41:26.000000000 +0300
-+++ linux-2.4.22-vanilla/fs/ext2/namei.c	2003-11-03 23:41:29.000000000 +0300
++++ linux-2.4.22-vanilla/fs/ext2/namei.c	2003-12-02 23:55:38.000000000 +0300
 @@ -31,6 +31,7 @@
  
  #include <linux/fs.h>
@@ -792,7 +792,7 @@ Index: linux-2.4.22-vanilla/fs/ext2/namei.c
 Index: linux-2.4.22-vanilla/fs/ext2/super.c
 ===================================================================
 --- linux-2.4.22-vanilla.orig/fs/ext2/super.c	2003-11-03 23:41:26.000000000 +0300
-+++ linux-2.4.22-vanilla/fs/ext2/super.c	2003-11-03 23:41:29.000000000 +0300
++++ linux-2.4.22-vanilla/fs/ext2/super.c	2003-12-02 23:55:38.000000000 +0300
 @@ -21,6 +21,7 @@
  #include <linux/string.h>
  #include <linux/fs.h>
@@ -865,7 +865,7 @@ Index: linux-2.4.22-vanilla/fs/ext2/super.c
 Index: linux-2.4.22-vanilla/fs/ext2/symlink.c
 ===================================================================
 --- linux-2.4.22-vanilla.orig/fs/ext2/symlink.c	2003-11-03 23:41:26.000000000 +0300
-+++ linux-2.4.22-vanilla/fs/ext2/symlink.c	2003-11-03 23:41:29.000000000 +0300
++++ linux-2.4.22-vanilla/fs/ext2/symlink.c	2003-12-02 23:55:38.000000000 +0300
 @@ -19,6 +19,7 @@
  
  #include <linux/fs.h>
@@ -897,8 +897,8 @@ Index: linux-2.4.22-vanilla/fs/ext2/symlink.c
  };
 Index: linux-2.4.22-vanilla/fs/ext2/xattr.c
 ===================================================================
---- linux-2.4.22-vanilla.orig/fs/ext2/xattr.c	2003-11-03 23:41:29.000000000 +0300
-+++ linux-2.4.22-vanilla/fs/ext2/xattr.c	2003-11-03 23:41:29.000000000 +0300
+--- linux-2.4.22-vanilla.orig/fs/ext2/xattr.c	2003-12-02 23:55:38.000000000 +0300
++++ linux-2.4.22-vanilla/fs/ext2/xattr.c	2003-12-02 23:55:38.000000000 +0300
 @@ -0,0 +1,1212 @@
 +/*
 + * linux/fs/ext2/xattr.c
@@ -2114,8 +2114,8 @@ Index: linux-2.4.22-vanilla/fs/ext2/xattr.c
 +#endif  /* CONFIG_EXT2_FS_XATTR_SHARING */
 Index: linux-2.4.22-vanilla/fs/ext2/xattr_user.c
 ===================================================================
---- linux-2.4.22-vanilla.orig/fs/ext2/xattr_user.c	2003-11-03 23:41:29.000000000 +0300
-+++ linux-2.4.22-vanilla/fs/ext2/xattr_user.c	2003-11-03 23:41:29.000000000 +0300
+--- linux-2.4.22-vanilla.orig/fs/ext2/xattr_user.c	2003-12-02 23:55:38.000000000 +0300
++++ linux-2.4.22-vanilla/fs/ext2/xattr_user.c	2003-12-02 23:55:38.000000000 +0300
 @@ -0,0 +1,103 @@
 +/*
 + * linux/fs/ext2/xattr_user.c
@@ -2222,8 +2222,8 @@ Index: linux-2.4.22-vanilla/fs/ext2/xattr_user.c
 +}
 Index: linux-2.4.22-vanilla/fs/ext3/Makefile
 ===================================================================
---- linux-2.4.22-vanilla.orig/fs/ext3/Makefile	2003-11-03 23:41:26.000000000 +0300
-+++ linux-2.4.22-vanilla/fs/ext3/Makefile	2003-11-03 23:41:29.000000000 +0300
+--- linux-2.4.22-vanilla.orig/fs/ext3/Makefile	2003-12-02 23:55:37.000000000 +0300
++++ linux-2.4.22-vanilla/fs/ext3/Makefile	2003-12-02 23:55:38.000000000 +0300
 @@ -1,5 +1,5 @@
  #
 -# Makefile for the linux ext2-filesystem routines.
@@ -2250,8 +2250,8 @@ Index: linux-2.4.22-vanilla/fs/ext3/Makefile
  include $(TOPDIR)/Rules.make
 Index: linux-2.4.22-vanilla/fs/ext3/file.c
 ===================================================================
---- linux-2.4.22-vanilla.orig/fs/ext3/file.c	2003-11-03 23:41:26.000000000 +0300
-+++ linux-2.4.22-vanilla/fs/ext3/file.c	2003-11-03 23:41:29.000000000 +0300
+--- linux-2.4.22-vanilla.orig/fs/ext3/file.c	2003-12-02 23:55:37.000000000 +0300
++++ linux-2.4.22-vanilla/fs/ext3/file.c	2003-12-02 23:55:38.000000000 +0300
 @@ -23,6 +23,7 @@
  #include <linux/locks.h>
  #include <linux/jbd.h>
@@ -2273,7 +2273,7 @@ Index: linux-2.4.22-vanilla/fs/ext3/file.c
 Index: linux-2.4.22-vanilla/fs/ext3/ialloc.c
 ===================================================================
 --- linux-2.4.22-vanilla.orig/fs/ext3/ialloc.c	2003-11-03 23:41:26.000000000 +0300
-+++ linux-2.4.22-vanilla/fs/ext3/ialloc.c	2003-11-03 23:41:29.000000000 +0300
++++ linux-2.4.22-vanilla/fs/ext3/ialloc.c	2003-12-02 23:55:38.000000000 +0300
 @@ -17,6 +17,7 @@
  #include <linux/jbd.h>
  #include <linux/ext3_fs.h>
@@ -2293,7 +2293,7 @@ Index: linux-2.4.22-vanilla/fs/ext3/ialloc.c
 Index: linux-2.4.22-vanilla/fs/ext3/inode.c
 ===================================================================
 --- linux-2.4.22-vanilla.orig/fs/ext3/inode.c	2003-11-03 23:41:26.000000000 +0300
-+++ linux-2.4.22-vanilla/fs/ext3/inode.c	2003-11-03 23:41:29.000000000 +0300
++++ linux-2.4.22-vanilla/fs/ext3/inode.c	2003-12-02 23:55:38.000000000 +0300
 @@ -39,6 +39,18 @@
   */
  #undef SEARCH_FROM_ZERO
@@ -2386,8 +2386,8 @@ Index: linux-2.4.22-vanilla/fs/ext3/inode.c
  	return;
 Index: linux-2.4.22-vanilla/fs/ext3/namei.c
 ===================================================================
---- linux-2.4.22-vanilla.orig/fs/ext3/namei.c	2003-11-03 23:41:26.000000000 +0300
-+++ linux-2.4.22-vanilla/fs/ext3/namei.c	2003-11-03 23:41:29.000000000 +0300
+--- linux-2.4.22-vanilla.orig/fs/ext3/namei.c	2003-12-02 23:55:37.000000000 +0300
++++ linux-2.4.22-vanilla/fs/ext3/namei.c	2003-12-02 23:55:38.000000000 +0300
 @@ -29,6 +29,7 @@
  #include <linux/sched.h>
  #include <linux/ext3_fs.h>
@@ -2451,8 +2451,8 @@ Index: linux-2.4.22-vanilla/fs/ext3/namei.c
 +
 Index: linux-2.4.22-vanilla/fs/ext3/super.c
 ===================================================================
---- linux-2.4.22-vanilla.orig/fs/ext3/super.c	2003-11-03 23:41:26.000000000 +0300
-+++ linux-2.4.22-vanilla/fs/ext3/super.c	2003-11-03 23:41:29.000000000 +0300
+--- linux-2.4.22-vanilla.orig/fs/ext3/super.c	2003-12-02 23:55:37.000000000 +0300
++++ linux-2.4.22-vanilla/fs/ext3/super.c	2003-12-02 23:56:03.000000000 +0300
 @@ -24,6 +24,7 @@
  #include <linux/jbd.h>
  #include <linux/ext3_fs.h>
@@ -2504,12 +2504,18 @@ Index: linux-2.4.22-vanilla/fs/ext3/super.c
  	if (!parse_options ((char *) data, &sb_block, sbi, &journal_inum, 0)) {
  		sb->s_dev = 0;
  		goto out_fail;
-@@ -1827,17 +1843,29 @@
+@@ -1822,22 +1838,35 @@
+ 
+ static int __init init_ext3_fs(void)
+ {
++	int error;
+ #ifdef CONFIG_QUOTA
+ 	init_dquot_operations(&ext3_qops);
  	old_sync_dquot = ext3_qops.sync_dquot;
  	ext3_qops.sync_dquot = ext3_sync_dquot;
  #endif
 -        return register_filesystem(&ext3_fs_type);
-+	int error = init_ext3_xattr();
++	error = init_ext3_xattr();
 +	if (error)
 +		return error;
 +	error = init_ext3_xattr_user();
@@ -2541,7 +2547,7 @@ Index: linux-2.4.22-vanilla/fs/ext3/super.c
 Index: linux-2.4.22-vanilla/fs/ext3/symlink.c
 ===================================================================
 --- linux-2.4.22-vanilla.orig/fs/ext3/symlink.c	2003-11-03 23:41:26.000000000 +0300
-+++ linux-2.4.22-vanilla/fs/ext3/symlink.c	2003-11-03 23:41:29.000000000 +0300
++++ linux-2.4.22-vanilla/fs/ext3/symlink.c	2003-12-02 23:55:38.000000000 +0300
 @@ -20,6 +20,7 @@
  #include <linux/fs.h>
  #include <linux/jbd.h>
@@ -2573,8 +2579,8 @@ Index: linux-2.4.22-vanilla/fs/ext3/symlink.c
  };
 Index: linux-2.4.22-vanilla/fs/ext3/xattr.c
 ===================================================================
---- linux-2.4.22-vanilla.orig/fs/ext3/xattr.c	2003-11-03 23:41:29.000000000 +0300
-+++ linux-2.4.22-vanilla/fs/ext3/xattr.c	2003-11-03 23:41:29.000000000 +0300
+--- linux-2.4.22-vanilla.orig/fs/ext3/xattr.c	2003-12-02 23:55:38.000000000 +0300
++++ linux-2.4.22-vanilla/fs/ext3/xattr.c	2003-12-02 23:55:38.000000000 +0300
 @@ -0,0 +1,1225 @@
 +/*
 + * linux/fs/ext3/xattr.c
@@ -3803,8 +3809,8 @@ Index: linux-2.4.22-vanilla/fs/ext3/xattr.c
 +#endif  /* CONFIG_EXT3_FS_XATTR_SHARING */
 Index: linux-2.4.22-vanilla/fs/ext3/xattr_user.c
 ===================================================================
---- linux-2.4.22-vanilla.orig/fs/ext3/xattr_user.c	2003-11-03 23:41:29.000000000 +0300
-+++ linux-2.4.22-vanilla/fs/ext3/xattr_user.c	2003-11-03 23:41:29.000000000 +0300
+--- linux-2.4.22-vanilla.orig/fs/ext3/xattr_user.c	2003-12-02 23:55:38.000000000 +0300
++++ linux-2.4.22-vanilla/fs/ext3/xattr_user.c	2003-12-02 23:55:39.000000000 +0300
 @@ -0,0 +1,111 @@
 +/*
 + * linux/fs/ext3/xattr_user.c
@@ -3920,7 +3926,7 @@ Index: linux-2.4.22-vanilla/fs/ext3/xattr_user.c
 Index: linux-2.4.22-vanilla/fs/jfs/jfs_xattr.h
 ===================================================================
 --- linux-2.4.22-vanilla.orig/fs/jfs/jfs_xattr.h	2003-11-03 23:41:26.000000000 +0300
-+++ linux-2.4.22-vanilla/fs/jfs/jfs_xattr.h	2003-11-03 23:41:29.000000000 +0300
++++ linux-2.4.22-vanilla/fs/jfs/jfs_xattr.h	2003-12-02 23:55:39.000000000 +0300
 @@ -52,8 +52,10 @@
  #define	END_EALIST(ealist) \
  	((struct jfs_ea *) (((char *) (ealist)) + EALIST_SIZE(ealist)))
@@ -3937,7 +3943,7 @@ Index: linux-2.4.22-vanilla/fs/jfs/jfs_xattr.h
 Index: linux-2.4.22-vanilla/fs/jfs/xattr.c
 ===================================================================
 --- linux-2.4.22-vanilla.orig/fs/jfs/xattr.c	2003-11-03 23:41:26.000000000 +0300
-+++ linux-2.4.22-vanilla/fs/jfs/xattr.c	2003-11-03 23:41:29.000000000 +0300
++++ linux-2.4.22-vanilla/fs/jfs/xattr.c	2003-12-02 23:55:39.000000000 +0300
 @@ -641,7 +641,7 @@
  }
  
@@ -3967,8 +3973,8 @@ Index: linux-2.4.22-vanilla/fs/jfs/xattr.c
  	if (value == NULL) {	/* empty EA, do not remove */
 Index: linux-2.4.22-vanilla/fs/mbcache.c
 ===================================================================
---- linux-2.4.22-vanilla.orig/fs/mbcache.c	2003-11-03 23:41:29.000000000 +0300
-+++ linux-2.4.22-vanilla/fs/mbcache.c	2003-11-03 23:41:29.000000000 +0300
+--- linux-2.4.22-vanilla.orig/fs/mbcache.c	2003-12-02 23:55:38.000000000 +0300
++++ linux-2.4.22-vanilla/fs/mbcache.c	2003-12-02 23:55:39.000000000 +0300
 @@ -0,0 +1,648 @@
 +/*
 + * linux/fs/mbcache.c
@@ -4621,7 +4627,7 @@ Index: linux-2.4.22-vanilla/fs/mbcache.c
 Index: linux-2.4.22-vanilla/include/asm-arm/unistd.h
 ===================================================================
 --- linux-2.4.22-vanilla.orig/include/asm-arm/unistd.h	2003-11-03 23:41:26.000000000 +0300
-+++ linux-2.4.22-vanilla/include/asm-arm/unistd.h	2003-11-03 23:41:29.000000000 +0300
++++ linux-2.4.22-vanilla/include/asm-arm/unistd.h	2003-12-02 23:55:39.000000000 +0300
 @@ -250,7 +250,6 @@
  #define __NR_security			(__NR_SYSCALL_BASE+223)
  #define __NR_gettid			(__NR_SYSCALL_BASE+224)
@@ -4641,7 +4647,7 @@ Index: linux-2.4.22-vanilla/include/asm-arm/unistd.h
 Index: linux-2.4.22-vanilla/include/asm-ppc64/unistd.h
 ===================================================================
 --- linux-2.4.22-vanilla.orig/include/asm-ppc64/unistd.h	2003-11-03 23:41:26.000000000 +0300
-+++ linux-2.4.22-vanilla/include/asm-ppc64/unistd.h	2003-11-03 23:41:29.000000000 +0300
++++ linux-2.4.22-vanilla/include/asm-ppc64/unistd.h	2003-12-02 23:55:39.000000000 +0300
 @@ -218,6 +218,7 @@
  #define __NR_mincore		206
  #define __NR_gettid		207
@@ -4661,7 +4667,7 @@ Index: linux-2.4.22-vanilla/include/asm-ppc64/unistd.h
 Index: linux-2.4.22-vanilla/include/asm-s390/unistd.h
 ===================================================================
 --- linux-2.4.22-vanilla.orig/include/asm-s390/unistd.h	2003-11-03 23:41:26.000000000 +0300
-+++ linux-2.4.22-vanilla/include/asm-s390/unistd.h	2003-11-03 23:41:29.000000000 +0300
++++ linux-2.4.22-vanilla/include/asm-s390/unistd.h	2003-12-02 23:55:39.000000000 +0300
 @@ -213,9 +213,18 @@
  #define __NR_getdents64		220
  #define __NR_fcntl64		221
@@ -4687,7 +4693,7 @@ Index: linux-2.4.22-vanilla/include/asm-s390/unistd.h
 Index: linux-2.4.22-vanilla/include/asm-s390x/unistd.h
 ===================================================================
 --- linux-2.4.22-vanilla.orig/include/asm-s390x/unistd.h	2003-11-03 23:41:26.000000000 +0300
-+++ linux-2.4.22-vanilla/include/asm-s390x/unistd.h	2003-11-03 23:41:29.000000000 +0300
++++ linux-2.4.22-vanilla/include/asm-s390x/unistd.h	2003-12-02 23:55:39.000000000 +0300
 @@ -181,9 +181,18 @@
  #define __NR_mincore            218
  #define __NR_madvise            219
@@ -4712,8 +4718,8 @@ Index: linux-2.4.22-vanilla/include/asm-s390x/unistd.h
  
 Index: linux-2.4.22-vanilla/include/linux/cache_def.h
 ===================================================================
---- linux-2.4.22-vanilla.orig/include/linux/cache_def.h	2003-11-03 23:41:29.000000000 +0300
-+++ linux-2.4.22-vanilla/include/linux/cache_def.h	2003-11-03 23:41:29.000000000 +0300
+--- linux-2.4.22-vanilla.orig/include/linux/cache_def.h	2003-12-02 23:55:38.000000000 +0300
++++ linux-2.4.22-vanilla/include/linux/cache_def.h	2003-12-02 23:55:39.000000000 +0300
 @@ -0,0 +1,15 @@
 +/*
 + * linux/cache_def.h
@@ -4733,7 +4739,7 @@ Index: linux-2.4.22-vanilla/include/linux/cache_def.h
 Index: linux-2.4.22-vanilla/include/linux/errno.h
 ===================================================================
 --- linux-2.4.22-vanilla.orig/include/linux/errno.h	2003-11-03 23:41:26.000000000 +0300
-+++ linux-2.4.22-vanilla/include/linux/errno.h	2003-11-03 23:41:29.000000000 +0300
++++ linux-2.4.22-vanilla/include/linux/errno.h	2003-12-02 23:55:39.000000000 +0300
 @@ -23,4 +23,8 @@
  
  #endif
@@ -4746,7 +4752,7 @@ Index: linux-2.4.22-vanilla/include/linux/errno.h
 Index: linux-2.4.22-vanilla/include/linux/ext2_fs.h
 ===================================================================
 --- linux-2.4.22-vanilla.orig/include/linux/ext2_fs.h	2003-11-03 23:41:26.000000000 +0300
-+++ linux-2.4.22-vanilla/include/linux/ext2_fs.h	2003-11-03 23:41:29.000000000 +0300
++++ linux-2.4.22-vanilla/include/linux/ext2_fs.h	2003-12-02 23:55:39.000000000 +0300
 @@ -57,8 +57,6 @@
   */
  #define	EXT2_BAD_INO		 1	/* Bad blocks inode */
@@ -4831,8 +4837,8 @@ Index: linux-2.4.22-vanilla/include/linux/ext2_fs.h
  #endif	/* __KERNEL__ */
 Index: linux-2.4.22-vanilla/include/linux/ext2_xattr.h
 ===================================================================
---- linux-2.4.22-vanilla.orig/include/linux/ext2_xattr.h	2003-11-03 23:41:29.000000000 +0300
-+++ linux-2.4.22-vanilla/include/linux/ext2_xattr.h	2003-11-03 23:41:29.000000000 +0300
+--- linux-2.4.22-vanilla.orig/include/linux/ext2_xattr.h	2003-12-02 23:55:38.000000000 +0300
++++ linux-2.4.22-vanilla/include/linux/ext2_xattr.h	2003-12-02 23:55:39.000000000 +0300
 @@ -0,0 +1,157 @@
 +/*
 +  File: linux/ext2_xattr.h
@@ -4993,8 +4999,8 @@ Index: linux-2.4.22-vanilla/include/linux/ext2_xattr.h
 +
 Index: linux-2.4.22-vanilla/include/linux/ext3_fs.h
 ===================================================================
---- linux-2.4.22-vanilla.orig/include/linux/ext3_fs.h	2003-11-03 23:41:26.000000000 +0300
-+++ linux-2.4.22-vanilla/include/linux/ext3_fs.h	2003-11-03 23:41:29.000000000 +0300
+--- linux-2.4.22-vanilla.orig/include/linux/ext3_fs.h	2003-12-02 23:55:37.000000000 +0300
++++ linux-2.4.22-vanilla/include/linux/ext3_fs.h	2003-12-02 23:55:39.000000000 +0300
 @@ -63,8 +63,6 @@
   */
  #define	EXT3_BAD_INO		 1	/* Bad blocks inode */
@@ -5079,8 +5085,8 @@ Index: linux-2.4.22-vanilla/include/linux/ext3_fs.h
  
 Index: linux-2.4.22-vanilla/include/linux/ext3_jbd.h
 ===================================================================
---- linux-2.4.22-vanilla.orig/include/linux/ext3_jbd.h	2003-11-03 23:41:26.000000000 +0300
-+++ linux-2.4.22-vanilla/include/linux/ext3_jbd.h	2003-11-03 23:41:29.000000000 +0300
+--- linux-2.4.22-vanilla.orig/include/linux/ext3_jbd.h	2003-12-02 23:55:37.000000000 +0300
++++ linux-2.4.22-vanilla/include/linux/ext3_jbd.h	2003-12-02 23:55:39.000000000 +0300
 @@ -30,13 +30,19 @@
  
  #define EXT3_SINGLEDATA_TRANS_BLOCKS	8U
@@ -5104,8 +5110,8 @@ Index: linux-2.4.22-vanilla/include/linux/ext3_jbd.h
  
 Index: linux-2.4.22-vanilla/include/linux/ext3_xattr.h
 ===================================================================
---- linux-2.4.22-vanilla.orig/include/linux/ext3_xattr.h	2003-11-03 23:41:29.000000000 +0300
-+++ linux-2.4.22-vanilla/include/linux/ext3_xattr.h	2003-11-03 23:41:29.000000000 +0300
+--- linux-2.4.22-vanilla.orig/include/linux/ext3_xattr.h	2003-12-02 23:55:38.000000000 +0300
++++ linux-2.4.22-vanilla/include/linux/ext3_xattr.h	2003-12-02 23:55:39.000000000 +0300
 @@ -0,0 +1,157 @@
 +/*
 +  File: linux/ext3_xattr.h
@@ -5266,8 +5272,8 @@ Index: linux-2.4.22-vanilla/include/linux/ext3_xattr.h
 +
 Index: linux-2.4.22-vanilla/include/linux/fs.h
 ===================================================================
---- linux-2.4.22-vanilla.orig/include/linux/fs.h	2003-11-03 23:41:26.000000000 +0300
-+++ linux-2.4.22-vanilla/include/linux/fs.h	2003-11-03 23:41:29.000000000 +0300
+--- linux-2.4.22-vanilla.orig/include/linux/fs.h	2003-12-02 23:55:35.000000000 +0300
++++ linux-2.4.22-vanilla/include/linux/fs.h	2003-12-02 23:55:39.000000000 +0300
 @@ -913,7 +913,7 @@
  	int (*setattr) (struct dentry *, struct iattr *);
  	int (*setattr_raw) (struct inode *, struct iattr *);
@@ -5279,8 +5285,8 @@ Index: linux-2.4.22-vanilla/include/linux/fs.h
  	int (*removexattr) (struct dentry *, const char *);
 Index: linux-2.4.22-vanilla/include/linux/mbcache.h
 ===================================================================
---- linux-2.4.22-vanilla.orig/include/linux/mbcache.h	2003-11-03 23:41:29.000000000 +0300
-+++ linux-2.4.22-vanilla/include/linux/mbcache.h	2003-11-03 23:41:29.000000000 +0300
+--- linux-2.4.22-vanilla.orig/include/linux/mbcache.h	2003-12-02 23:55:38.000000000 +0300
++++ linux-2.4.22-vanilla/include/linux/mbcache.h	2003-12-02 23:55:39.000000000 +0300
 @@ -0,0 +1,69 @@
 +/*
 +  File: linux/mbcache.h
@@ -5353,8 +5359,8 @@ Index: linux-2.4.22-vanilla/include/linux/mbcache.h
 +#endif
 Index: linux-2.4.22-vanilla/kernel/ksyms.c
 ===================================================================
---- linux-2.4.22-vanilla.orig/kernel/ksyms.c	2003-11-03 23:41:26.000000000 +0300
-+++ linux-2.4.22-vanilla/kernel/ksyms.c	2003-11-03 23:41:29.000000000 +0300
+--- linux-2.4.22-vanilla.orig/kernel/ksyms.c	2003-12-02 23:55:34.000000000 +0300
++++ linux-2.4.22-vanilla/kernel/ksyms.c	2003-12-02 23:55:39.000000000 +0300
 @@ -11,6 +11,7 @@
  
  #include <linux/config.h>
@@ -5371,7 +5377,7 @@ Index: linux-2.4.22-vanilla/kernel/ksyms.c
  
  /* internal kernel memory management */
  EXPORT_SYMBOL(_alloc_pages);
-@@ -109,6 +111,8 @@
+@@ -108,6 +110,8 @@
  EXPORT_SYMBOL(kmem_cache_alloc);
  EXPORT_SYMBOL(kmem_cache_free);
  EXPORT_SYMBOL(kmem_cache_size);
@@ -5383,7 +5389,7 @@ Index: linux-2.4.22-vanilla/kernel/ksyms.c
 Index: linux-2.4.22-vanilla/mm/vmscan.c
 ===================================================================
 --- linux-2.4.22-vanilla.orig/mm/vmscan.c	2003-11-03 23:41:27.000000000 +0300
-+++ linux-2.4.22-vanilla/mm/vmscan.c	2003-11-03 23:41:29.000000000 +0300
++++ linux-2.4.22-vanilla/mm/vmscan.c	2003-12-02 23:55:39.000000000 +0300
 @@ -18,6 +18,7 @@
  #include <linux/kernel_stat.h>
  #include <linux/swap.h>
@@ -5442,8 +5448,8 @@ Index: linux-2.4.22-vanilla/mm/vmscan.c
  #endif
 Index: linux-2.4.22-vanilla/fs/ext3/ext3-exports.c
 ===================================================================
---- linux-2.4.22-vanilla.orig/fs/ext3/ext3-exports.c	2003-11-03 23:41:29.000000000 +0300
-+++ linux-2.4.22-vanilla/fs/ext3/ext3-exports.c	2003-11-03 23:41:29.000000000 +0300
+--- linux-2.4.22-vanilla.orig/fs/ext3/ext3-exports.c	2003-12-02 23:55:38.000000000 +0300
++++ linux-2.4.22-vanilla/fs/ext3/ext3-exports.c	2003-12-02 23:55:39.000000000 +0300
 @@ -0,0 +1,13 @@
 +#include <linux/config.h>
 +#include <linux/module.h>

@@ -1395,30 +1395,35 @@ ksocknal_cmd(struct portals_cfg *pcfg, void * private)
 }
 
 void
+ksocknal_free_fmbs (ksock_fmb_pool_t *p)
+{
+        ksock_fmb_t *fmb;
+        int          i;
+
+        LASSERT (list_empty(&p->fmp_blocked_conns));
+        LASSERT (p->fmp_nactive_fmbs == 0);
+        
+        while (!list_empty(&p->fmp_idle_fmbs)) {
+
+                fmb = list_entry(p->fmp_idle_fmbs.next,
+                                 ksock_fmb_t, fmb_list);
+                
+                for (i = 0; i < fmb->fmb_npages; i++)
+                        if (fmb->fmb_pages[i] != NULL)
+                                __free_page(fmb->fmb_pages[i]);
+                
+                list_del(&fmb->fmb_list);
+                PORTAL_FREE(fmb, sizeof(*fmb));
+        }
+}
+
+void
 ksocknal_free_buffers (void)
 {
-        if (ksocknal_data.ksnd_fmbs != NULL) {
-                ksock_fmb_t *fmb = (ksock_fmb_t *)ksocknal_data.ksnd_fmbs;
-                int          i;
-                int          j;
+        ksocknal_free_fmbs(&ksocknal_data.ksnd_small_fmp);
+        ksocknal_free_fmbs(&ksocknal_data.ksnd_large_fmp);
 
-                for (i = 0;
-                     i < (SOCKNAL_SMALL_FWD_NMSGS + SOCKNAL_LARGE_FWD_NMSGS);
-                     i++, fmb++)
-                        for (j = 0; j < fmb->fmb_npages; j++)
-                                if (fmb->fmb_pages[j] != NULL)
-                                        __free_page (fmb->fmb_pages[j]);
-
-                PORTAL_FREE (ksocknal_data.ksnd_fmbs,
-                             sizeof (ksock_fmb_t) * (SOCKNAL_SMALL_FWD_NMSGS +
-                                                     SOCKNAL_LARGE_FWD_NMSGS));
-        }
-
-        LASSERT (ksocknal_data.ksnd_active_ltxs == 0);
-        if (ksocknal_data.ksnd_ltxs != NULL)
-                PORTAL_FREE (ksocknal_data.ksnd_ltxs,
-                             sizeof (ksock_ltx_t) * (SOCKNAL_NLTXS +
-                                                     SOCKNAL_NNBLK_LTXS));
+        LASSERT (atomic_read(&ksocknal_data.ksnd_nactive_ltxs) == 0);
 
         if (ksocknal_data.ksnd_schedulers != NULL)
                 PORTAL_FREE (ksocknal_data.ksnd_schedulers,
@@ -1572,7 +1577,7 @@ ksocknal_module_init (void)
         PORTAL_ALLOC (ksocknal_data.ksnd_peers,
                       sizeof (struct list_head) * ksocknal_data.ksnd_peer_hash_size);
         if (ksocknal_data.ksnd_peers == NULL)
-                RETURN (-ENOMEM);
+                return (-ENOMEM);
 
         for (i = 0; i < ksocknal_data.ksnd_peer_hash_size; i++)
                 INIT_LIST_HEAD(&ksocknal_data.ksnd_peers[i]);
@@ -1589,11 +1594,6 @@ ksocknal_module_init (void)
         spin_lock_init(&ksocknal_data.ksnd_large_fmp.fmp_lock);
         INIT_LIST_HEAD(&ksocknal_data.ksnd_large_fmp.fmp_idle_fmbs);
         INIT_LIST_HEAD(&ksocknal_data.ksnd_large_fmp.fmp_blocked_conns);
-
-        spin_lock_init(&ksocknal_data.ksnd_idle_ltx_lock);
-        INIT_LIST_HEAD(&ksocknal_data.ksnd_idle_nblk_ltx_list);
-        INIT_LIST_HEAD(&ksocknal_data.ksnd_idle_ltx_list);
-        init_waitqueue_head(&ksocknal_data.ksnd_idle_ltx_waitq);
 
         spin_lock_init (&ksocknal_data.ksnd_reaper_lock);
         INIT_LIST_HEAD (&ksocknal_data.ksnd_zombie_conns);
@@ -1614,7 +1614,7 @@ ksocknal_module_init (void)
                      sizeof(ksock_sched_t) * SOCKNAL_N_SCHED);
         if (ksocknal_data.ksnd_schedulers == NULL) {
                 ksocknal_module_fini ();
-                RETURN(-ENOMEM);
+                return (-ENOMEM);
         }
 
         for (i = 0; i < SOCKNAL_N_SCHED; i++) {
@@ -1629,35 +1629,11 @@ ksocknal_module_init (void)
                 init_waitqueue_head (&kss->kss_waitq);
         }
 
-        CDEBUG (D_MALLOC, "ltx "LPSZ", total "LPSZ"\n", sizeof (ksock_ltx_t),
-                sizeof (ksock_ltx_t) * (SOCKNAL_NLTXS + SOCKNAL_NNBLK_LTXS));
-
-        PORTAL_ALLOC(ksocknal_data.ksnd_ltxs,
-                     sizeof(ksock_ltx_t) * (SOCKNAL_NLTXS +SOCKNAL_NNBLK_LTXS));
-        if (ksocknal_data.ksnd_ltxs == NULL) {
-                ksocknal_module_fini ();
-                return (-ENOMEM);
-        }
-
-        /* Deterministic bugs please */
-        memset (ksocknal_data.ksnd_ltxs, 0xeb,
-                sizeof (ksock_ltx_t) * (SOCKNAL_NLTXS + SOCKNAL_NNBLK_LTXS));
-
-        for (i = 0; i < SOCKNAL_NLTXS + SOCKNAL_NNBLK_LTXS; i++) {
-                ksock_ltx_t *ltx = &((ksock_ltx_t *)ksocknal_data.ksnd_ltxs)[i];
-
-                ltx->ltx_tx.tx_hdr = &ltx->ltx_hdr;
-                ltx->ltx_idle = i < SOCKNAL_NLTXS ?
-                                &ksocknal_data.ksnd_idle_ltx_list :
-                                &ksocknal_data.ksnd_idle_nblk_ltx_list;
-                list_add (&ltx->ltx_tx.tx_list, ltx->ltx_idle);
-        }
-
         rc = PtlNIInit(ksocknal_init, 32, 4, 0, &ksocknal_ni);
         if (rc != 0) {
                 CERROR("ksocknal: PtlNIInit failed: error %d\n", rc);
                 ksocknal_module_fini ();
-                RETURN (rc);
+                return (rc);
         }
         PtlNIDebug(ksocknal_ni, ~0);
 
@@ -1670,7 +1646,7 @@ ksocknal_module_init (void)
                         CERROR("Can't spawn socknal scheduler[%d]: %d\n",
                                i, rc);
                         ksocknal_module_fini ();
-                        RETURN (rc);
+                        return (rc);
                 }
         }
 
@@ -1679,7 +1655,7 @@ ksocknal_module_init (void)
                 if (rc != 0) {
                         CERROR("Can't spawn socknal autoconnectd: %d\n", rc);
                         ksocknal_module_fini ();
-                        RETURN (rc);
+                        return (rc);
                 }
         }
 
@@ -1687,7 +1663,7 @@ ksocknal_module_init (void)
         if (rc != 0) {
                 CERROR ("Can't spawn socknal reaper: %d\n", rc);
                 ksocknal_module_fini ();
-                RETURN (rc);
+                return (rc);
         }
 
         rc = kpr_register(&ksocknal_data.ksnd_router,
@@ -1698,23 +1674,15 @@ ksocknal_module_init (void)
         } else {
                 /* Only allocate forwarding buffers if I'm on a gateway */
 
-                PORTAL_ALLOC(ksocknal_data.ksnd_fmbs,
-                             sizeof(ksock_fmb_t) * (SOCKNAL_SMALL_FWD_NMSGS +
-                                                    SOCKNAL_LARGE_FWD_NMSGS));
-                if (ksocknal_data.ksnd_fmbs == NULL) {
-                        ksocknal_module_fini ();
-                        RETURN(-ENOMEM);
-                }
-
-                /* NULL out buffer pointers etc */
-                memset(ksocknal_data.ksnd_fmbs, 0,
-                       sizeof(ksock_fmb_t) * (SOCKNAL_SMALL_FWD_NMSGS +
-                                              SOCKNAL_LARGE_FWD_NMSGS));
-
                 for (i = 0; i < (SOCKNAL_SMALL_FWD_NMSGS +
                                  SOCKNAL_LARGE_FWD_NMSGS); i++) {
-                        ksock_fmb_t *fmb =
-                                &((ksock_fmb_t *)ksocknal_data.ksnd_fmbs)[i];
+                        ksock_fmb_t *fmb;
+                        
+                        PORTAL_ALLOC(fmb, sizeof(*fmb));
+                        if (fmb == NULL) {
+                                ksocknal_module_fini();
+                                return (-ENOMEM);
+                        }
 
                         if (i < SOCKNAL_SMALL_FWD_NMSGS) {
                                 fmb->fmb_npages = SOCKNAL_SMALL_FWD_PAGES;
@@ -1724,7 +1692,6 @@ ksocknal_module_init (void)
                                 fmb->fmb_pool = &ksocknal_data.ksnd_large_fmp;
                         }
 
-                        LASSERT (fmb->fmb_npages > 0);
                         for (j = 0; j < fmb->fmb_npages; j++) {
                                 fmb->fmb_pages[j] = alloc_page(GFP_KERNEL);
 
@@ -1733,8 +1700,7 @@ ksocknal_module_init (void)
                                         return (-ENOMEM);
                                 }
 
-                                LASSERT(page_address (fmb->fmb_pages[j]) !=
-                                        NULL);
+                                LASSERT(page_address(fmb->fmb_pages[j]) != NULL);
                         }
 
                         list_add(&fmb->fmb_list, &fmb->fmb_pool->fmp_idle_fmbs);

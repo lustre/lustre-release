@@ -1389,7 +1389,8 @@ lwt_control(int enable, int clear)
 }
 
 static int
-lwt_snapshot(int *ncpu, int *totalsize, lwt_event_t *events, int size)
+lwt_snapshot(cycles_t *now, int *ncpu, int *totalsize, 
+             lwt_event_t *events, int size)
 {
         struct portal_ioctl_data data;
         int                      rc;
@@ -1408,6 +1409,9 @@ lwt_snapshot(int *ncpu, int *totalsize, lwt_event_t *events, int size)
         LASSERT (data.ioc_count != 0);
         LASSERT (data.ioc_misc != 0);
         
+        if (now != NULL)
+                *now = data.ioc_nid;
+
         if (ncpu != NULL)
                 *ncpu = data.ioc_count;
 
@@ -1517,14 +1521,13 @@ get_cycles_per_usec ()
 int
 jt_ptl_lwt(int argc, char **argv)
 {
-#define MAX_CPUS 8
         int             ncpus;
         int             totalspace;
         int             nevents_per_cpu;
         lwt_event_t    *events;
-        lwt_event_t    *cpu_event[MAX_CPUS + 1];
-        lwt_event_t    *next_event[MAX_CPUS];
-        lwt_event_t    *first_event[MAX_CPUS];
+        lwt_event_t    *cpu_event[LWT_MAX_CPUS + 1];
+        lwt_event_t    *next_event[LWT_MAX_CPUS];
+        lwt_event_t    *first_event[LWT_MAX_CPUS];
         int             cpu;
         lwt_event_t    *e;
         int             rc;
@@ -1532,6 +1535,9 @@ jt_ptl_lwt(int argc, char **argv)
         double          mhz;
         cycles_t        t0;
         cycles_t        tlast;
+        cycles_t        tnow;
+        struct timeval  tvnow;
+        int             printed_date = 0;
         FILE           *f = stdout;
 
         if (argc < 2 ||
@@ -1559,11 +1565,12 @@ jt_ptl_lwt(int argc, char **argv)
                 return (0);
         }
                 
-        if (lwt_snapshot(&ncpus, &totalspace, NULL, 0) != 0)
+        if (lwt_snapshot(NULL, &ncpus, &totalspace, NULL, 0) != 0)
                 return (-1);
 
-        if (ncpus > MAX_CPUS) {
-                fprintf(stderr, "Too many cpus: %d (%d)\n", ncpus, MAX_CPUS);
+        if (ncpus > LWT_MAX_CPUS) {
+                fprintf(stderr, "Too many cpus: %d (%d)\n", 
+                        ncpus, LWT_MAX_CPUS);
                 return (-1);
         }
 
@@ -1578,10 +1585,13 @@ jt_ptl_lwt(int argc, char **argv)
                 return (-1);
         }
 
-        if (lwt_snapshot(NULL, NULL, events, totalspace)) {
+        if (lwt_snapshot(&tnow, NULL, NULL, events, totalspace)) {
                 free(events);
                 return (-1);
         }
+
+        /* we want this time to be sampled at snapshot time */
+        gettimeofday(&tvnow, NULL);
 
         if (argc > 2) {
                 f = fopen (argv[2], "w");
@@ -1663,6 +1673,17 @@ jt_ptl_lwt(int argc, char **argv)
                 
                 if (t0 <= next_event[cpu]->lwte_when) {
                         /* on or after the first event */
+                        if (!printed_date) {
+                                cycles_t du = (tnow - t0) / mhz;
+                                time_t   then = tvnow.tv_sec - du/1000000;
+                                
+                                if (du % 1000000 > tvnow.tv_usec)
+                                        then--;
+
+                                fprintf(f, "%s", ctime(&then));
+                                printed_date = 1;
+                        }
+                        
                         rc = lwt_print(f, t0, tlast, mhz, cpu, next_event[cpu]);
                         if (rc != 0)
                                 break;
@@ -1684,5 +1705,48 @@ jt_ptl_lwt(int argc, char **argv)
 
         free(events);
         return (0);
-#undef MAX_CPUS
 }
+
+int jt_ptl_memhog(int argc, char **argv)
+{
+        static int                gfp = 0;        /* sticky! */
+
+        struct portal_ioctl_data  data;
+        int                       rc;
+        int                       count;
+        char                     *end;
+        
+        if (argc < 2)  {
+                fprintf(stderr, "usage: %s <npages> [<GFP flags>]\n", argv[0]);
+                return 0;
+        }
+
+        count = strtol(argv[1], &end, 0);
+        if (count < 0 || *end != 0) {
+                fprintf(stderr, "Can't parse page count '%s'\n", argv[1]);
+                return -1;
+        }
+
+        if (argc >= 3) {
+                rc = strtol(argv[2], &end, 0);
+                if (*end != 0) {
+                        fprintf(stderr, "Can't parse gfp flags '%s'\n", argv[2]);
+                        return -1;
+                }
+                gfp = rc;
+        }
+        
+        PORTAL_IOC_INIT(data);
+        data.ioc_count = count;
+        data.ioc_flags = gfp;
+        rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_MEMHOG, &data);
+
+        if (rc != 0) {
+                fprintf(stderr, "memhog %d failed: %s\n", count, strerror(errno));
+                return -1;
+        }
+        
+        printf("memhog %d OK\n", count);
+        return 0;
+}
+
