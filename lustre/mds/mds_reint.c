@@ -61,6 +61,7 @@ int mds_update_last_rcvd(struct mds_obd *mds, void *handle,
                          struct ptlrpc_request *req)
 {
         /* get from req->rq_connection-> or req->rq_client */
+        struct obd_run_ctxt saved;
         struct mds_client_info *mci;
         loff_t off;
         int rc;
@@ -83,8 +84,10 @@ int mds_update_last_rcvd(struct mds_obd *mds, void *handle,
         mci->mci_mcd->mcd_last_xid = cpu_to_le32(req->rq_reqmsg->xid);
 
         mds_fs_set_last_rcvd(mds, handle);
+        push_ctxt(&saved, &mds->mds_ctxt);
         rc = lustre_fwrite(mds->mds_rcvd_filp, (char *)mci->mci_mcd,
                            sizeof(*mci->mci_mcd), &off);
+        pop_ctxt(&saved);
         CDEBUG(D_INODE, "wrote trans #%Ld for client '%s' at #%d: rc = %d\n",
                mds->mds_last_rcvd, mci->mci_mcd->mcd_uuid, mci->mci_off, rc);
         // store new value and last committed value in req struct
