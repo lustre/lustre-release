@@ -51,7 +51,8 @@ extern void mds_start_transno(struct mds_obd *mds);
 extern int mds_finish_transno(struct mds_obd *mds, void *handle,
                               struct ptlrpc_request *req, int rc);
 
-int mds_open(struct mds_update_record *rec, int offset, struct ptlrpc_request *req)
+int mds_open(struct mds_update_record *rec, int offset,
+             struct ptlrpc_request *req)
 {
         struct mds_obd *mds = mds_req2mds(req);
         struct obd_device *obd = req->rq_export->exp_obd;
@@ -68,7 +69,7 @@ int mds_open(struct mds_update_record *rec, int offset, struct ptlrpc_request *r
         struct vfsmount *mnt = mds->mds_vfsmnt;
         __u32 flags;
         struct list_head *tmp;
-        int rc;
+        int rc = 0;
         ENTRY;
 
 #warning replay of open needs to be redone
@@ -97,7 +98,8 @@ int mds_open(struct mds_update_record *rec, int offset, struct ptlrpc_request *r
         }
 
         lock_mode = (rec->ur_flags & O_CREAT) ? LCK_PW : LCK_PR;
-        parent = mds_fid2locked_dentry(obd, rec->ur_fid1, NULL, lock_mode, &lockh);
+        parent = mds_fid2locked_dentry(obd, rec->ur_fid1, NULL, lock_mode,
+                                       &lockh);
         if (IS_ERR(parent)) {
                 rc = PTR_ERR(parent);
                 CERROR("parent lookup error %d\n", rc);
@@ -107,15 +109,15 @@ int mds_open(struct mds_update_record *rec, int offset, struct ptlrpc_request *r
         dir = parent->d_inode;
 
         down(&dir->i_sem);
-        dchild = lookup_one_len(lustre_msg_buf(req->rq_reqmsg, 3), 
-                                parent, req->rq_reqmsg->buflens[3]- 1);
-	if (IS_ERR(dchild)) {
-		up(&dir->i_sem);
-		GOTO(out_unlock, rc = PTR_ERR(dchild));
-	}
+        dchild = lookup_one_len(lustre_msg_buf(req->rq_reqmsg, 3),
+                                parent, req->rq_reqmsg->buflens[3] - 1);
+        if (IS_ERR(dchild)) {
+                up(&dir->i_sem);
+                GOTO(out_unlock, rc = PTR_ERR(dchild));
+        }
 
-	/* Negative dentry, just create the file */
-	if ((rec->ur_flags & O_CREAT) && !dchild->d_inode) {
+        /* Negative dentry, just create the file */
+        if ((rec->ur_flags & O_CREAT) && !dchild->d_inode) {
                 int err;
                 void *handle;
                 mds_start_transno(mds);
@@ -125,9 +127,9 @@ int mds_open(struct mds_update_record *rec, int offset, struct ptlrpc_request *r
                         mds_finish_transno(mds, handle, req, rc);
                         GOTO(out_ldput, rc);
                 }
-		rc = vfs_create(dir, dchild, rec->ur_mode);
-		up(&dir->i_sem);
-		if (rc)
+                rc = vfs_create(dir, dchild, rec->ur_mode);
+                up(&dir->i_sem);
+                if (rc)
                         GOTO(out_unlock, rc);
                 rc = mds_finish_transno(mds, handle, req, rc);
                 err = fsfilt_commit(obd, dir, handle);
@@ -137,15 +139,15 @@ int mds_open(struct mds_update_record *rec, int offset, struct ptlrpc_request *r
                                 rc = err;
                         GOTO(out_ldput, rc);
                 }
-	} else if (!dchild->d_inode) { 
-		up(&dir->i_sem);
+        } else if (!dchild->d_inode) {
+                up(&dir->i_sem);
                 GOTO(out_ldput, rc = -ENOENT);
         }
 
-	/*
-	 * It already exists.
-	 */
-	up(&dir->i_sem);
+        /*
+         * It already exists.
+         */
+        up(&dir->i_sem);
         mds_pack_inode2fid(&body->fid1, dchild->d_inode);
         mds_pack_inode2body(body, dchild->d_inode);
 
@@ -171,10 +173,10 @@ int mds_open(struct mds_update_record *rec, int offset, struct ptlrpc_request *r
         list_add(&mfd->mfd_list, &med->med_open_head);
         spin_unlock(&med->med_open_lock);
 
- out_unlock: 
+ out_unlock:
         l_dput(parent);
         ldlm_lock_decref(&lockh, lock_mode);
-        if (rc && rc != -EEXIST && mfd)
+        if (rc && rc != -EEXIST && mfd != NULL)
                 kmem_cache_free(mds_file_cache, mfd);
         if (rc)
                 RETURN(rc);
