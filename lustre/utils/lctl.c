@@ -86,8 +86,8 @@ command_t cmdlist[] = {
          "The nid defaults to hostname for tcp networks and is automatically "
          "setup for elan/myrinet networks.\n"
          "usage: mynid [nid]"},
-        {"add_uuid", jt_net_add_uuid, 0, "associate a name/uuid with a nid\n"
-         "usage: add_uuid <name> <uuid> <nid>"},
+        {"add_uuid", jt_net_add_uuid, 0, "associate a uuid with a nid\n"
+         "usage: add_uuid <uuid> <nid>"},
         {"del_uuid", jt_net_del_uuid, 0, "delete a uuid association\n"
          "usage: del_uuid <uuid>"},
         {"add_route", jt_net_add_route, 0,
@@ -136,7 +136,7 @@ command_t cmdlist[] = {
          "usage: detach"},
         {"lovconfig", jt_dev_lov_config, 0,
          "write lov configuration to a mds device\n"
-         "usage: lovconfig"},
+         "usage: lovconfig lov-uuid stripcount stripsize pattern UUID1 [UUID2 ...]"},
 
         /* Device operations */
         {"=== device operations ==", jt_noop, 0, "device operations"},

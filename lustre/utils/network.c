@@ -260,7 +260,7 @@ int jt_net_connect(int argc, char **argv) {
                         fprintf(stderr, "Can't get nagle: %s\n",
                                 strerror(errno));
 
-                fprintf(stderr, "Connected to %s (snd %d, rcv %d, nagle %s)\n",
+                printf("Connected to %s (snd %d, rcv %d, nagle %s)\n",
                         argv[1],txmem,rxmem,nonagle ? "Disabled" : "Enabled");
 
                 PORTAL_IOC_INIT(data);
@@ -276,7 +276,7 @@ int jt_net_connect(int argc, char **argv) {
                 }
 
                 g_nid = ntohl (srvaddr.sin_addr.s_addr); /* HOST byte order */
-                fprintf(stderr, "Connection to 0x%x registered with socknal\n",
+                printf("Connection to 0x%x registered with socknal\n",
                         g_nid);
 
                 rc = close(fd);
@@ -300,7 +300,7 @@ int jt_net_disconnect(int argc, char **argv) {
                 return CMD_HELP;
         
         if (g_nal == 0) {
-                fprintf(stderr, "Error: you must run the 'setup' command "
+                fprintf(stderr, "Error: you must run the 'network' command "
                         "first.\n");
                 return -1;
         }
@@ -333,10 +333,10 @@ int jt_net_disconnect(int argc, char **argv) {
                         return -1;
                 }
         } else if (g_nal == QSWNAL) {
-                fprintf(stderr, "'disconnect' doesn't make any sense for "
+                printf("'disconnect' doesn't make any sense for "
                         "elan.\n");
         } else if (g_nal == GMNAL) {
-                fprintf(stderr, "'disconnect' doesn't make any sense for "
+                printf("'disconnect' doesn't make any sense for "
                         "GM.\n");
         } else {
                 fprintf(stderr, "This should never happen.  Also it is very "
@@ -464,7 +464,7 @@ int jt_net_mynid(int argc, char **argv) {
                 fprintf(stderr, "IOC_PORTAL_REGISTER_MYNID failed: %s\n",
                        strerror(errno));
         else
-                fprintf(stderr, "registered my nid 0x%Lx (%s)\n",
+                printf("registered my nid 0x%Lx (%s)\n",
                         mynid, hostname);
         return 0;
 }
@@ -506,7 +506,7 @@ int jt_net_add_uuid(int argc, char **argv) {
                 return -1;
         }
 
-        fprintf (stderr, "Added uuid %s: %s\n", argv[1], nid2str (tmp, nid));
+        printf ("Added uuid %s: %s\n", argv[1], nid2str (tmp, nid));
         return 0;
 }
 
