@@ -5,7 +5,7 @@
 
 --- linux-2.4.18-18.8.0-l15/fs/ext3/super.c~ext3-delete_thread-2.4.18	Tue Jun  3 17:26:21 2003
 +++ linux-2.4.18-18.8.0-l15-adilger/fs/ext3/super.c	Wed Jun 18 11:59:14 2003
-@@ -396,6 +396,218 @@ static void dump_orphan_list(struct supe
+@@ -396,6 +396,219 @@ static void dump_orphan_list(struct supe
  	}
  }
  
@@ -158,7 +158,8 @@
 +		return;
 +	}
 +
-+	if (EXT3_I(old_inode)->i_state & EXT3_STATE_DELETE) {
++	if ((EXT3_I(old_inode)->i_state & EXT3_STATE_DELETE) ||
++	    (EXT3_SB(old_inode->i_sb)->s_mount_state & EXT3_ORPHAN_FS)) {
 +		ext3_debug("doing deferred inode %lu delete (%lu blocks)\n",
 +			   old_inode->i_ino, blocks);
 +		ext3_delete_inode(old_inode);
