@@ -20,28 +20,25 @@ MDS=$LOOPDEV
 echo 0xffffffff > /proc/sys/portals/debug
 
 $OBDCTL <<EOF
-device 0
+newdev
 attach mds MDSDEV
 setup ${MDS} ${MDSFS}
-device 1
-attach obdfilter OBDDEV
+newdev
+attach obdext2 OBDDEV
 setup ${OST}
-device 2
+newdev
 attach ost OSTDEV
-setup 1
-device 3
-attach ptlrpc RPCDEV
-setup
-device 4
+setup \$OBDDEV
+newdev
 attach ldlm LDLMDEV
 setup
-device 5
+newdev
 attach osc OSCDEV
 setup -1
 quit
 EOF
 
-MNT='mount -t lustre_lite -o device=`$OBDCTL name2dev OSCDEV` none /mnt/lustre'
+MNT="mount -t lustre_lite -o device=`$OBDCTL name2dev OSCDEV` none /mnt/lustre"
 $MNT
 
 test_fail() {
@@ -53,7 +50,7 @@ test_fail() {
 	echo "Cleaning up and restarting MDS"
 	umount /mnt/lustre || fail "unable to unmount"
 	$OBDCTL <<- EOF
-	device 0
+	name2dev MDSDEV
 	cleanup
 	detach
 	quit
@@ -62,8 +59,8 @@ test_fail() {
 	echo 0 > /proc/sys/lustre/fail_loc
 
 	$OBDCTL <<- EOF
-	device 0
-	attach mds
+	newdev
+	attach mds MDSDEV
 	setup ${MDS} ${MDSFS}
 	quit
 	EOF

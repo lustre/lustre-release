@@ -58,15 +58,15 @@ int mdc_connect(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
                 mds_unpack_rep_body(req);
                 body = lustre_msg_buf(req->rq_repmsg, 0);
                 memcpy(rootfid, &body->fid1, sizeof(*rootfid));
-                *last_committed = body->last_committed;
-                *last_rcvd = body->last_rcvd;
+                *last_committed = req->rq_repmsg->last_committed;
+                *last_rcvd = req->rq_repmsg->last_rcvd;
                 *last_xid = body->last_xid;
 
-                CDEBUG(D_NET, "root ino=%ld, last_committed=%ld, last_rcvd=%ld,"
+                CDEBUG(D_NET, "root ino=%ld, last_committed=%Lu, last_rcvd=%Lu,"
                        " last_xid=%d\n",
                        (unsigned long)rootfid->id,
-                       (unsigned long)body->last_committed,
-                       (unsigned long)body->last_rcvd,
+                       (unsigned long long)*last_committed,
+                       (unsigned long long)*last_rcvd,
                        body->last_xid);
         }
 
@@ -123,6 +123,7 @@ int mdc_open(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
         if (!req)
                 GOTO(out, rc = -ENOMEM);
 
+        req->rq_flags |= PTL_RPC_FL_RETAIN;
         body = lustre_msg_buf(req->rq_reqmsg, 0);
         ll_ino2fid(&body->fid1, ino, 0, type);
         body->flags = HTON__u32(flags);
@@ -159,7 +160,7 @@ int mdc_close(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
         ll_ino2fid(&body->fid1, ino, 0, type);
         body->objid = fh;
 
-        req->rq_replen = lustre_msg_size(1, &size);
+        req->rq_replen = lustre_msg_size(0, NULL);
 
         rc = ptlrpc_queue_wait(req);
         rc = ptlrpc_check_status(req, rc);
@@ -251,7 +252,8 @@ static int request_ioctl(struct inode *inode, struct file *file,
                 RETURN(-EINVAL);
         }
 
-        ptlrpc_init_client(NULL, MDS_REQUEST_PORTAL, MDC_REPLY_PORTAL, &cl);
+        ptlrpc_init_client(NULL, NULL, 
+                           MDS_REQUEST_PORTAL, MDC_REPLY_PORTAL, &cl);
         conn = ptlrpc_uuid_to_connection("mds");
         if (!conn) {
                 CERROR("cannot create client\n");
@@ -345,6 +347,7 @@ static int request_ioctl(struct inode *inode, struct file *file,
  out:
         ptlrpc_free_req(request);
         ptlrpc_put_connection(conn);
+        ptlrpc_cleanup_client(&cl);
 
         RETURN(err);
 }

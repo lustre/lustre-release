@@ -26,6 +26,8 @@ kmem_cache_t *ll_file_data_slab;
 extern struct address_space_operations ll_aops;
 extern struct address_space_operations ll_dir_aops;
 struct super_operations ll_super_operations;
+
+extern void ll_recover(struct ptlrpc_client *);
 extern int ll_commitcbd_setup(struct ll_sb_info *);
 extern int ll_commitcbd_cleanup(struct ll_sb_info *);
 
@@ -119,7 +121,8 @@ static struct super_block * ll_read_super(struct super_block *sb,
                 GOTO(out_free, sb = NULL);
         }
 
-        ptlrpc_init_client(ptlrpc_connmgr, MDS_REQUEST_PORTAL, MDC_REPLY_PORTAL,
+        ptlrpc_init_client(ptlrpc_connmgr, ll_recover,
+                           MDS_REQUEST_PORTAL, MDC_REPLY_PORTAL,
                            &sbi->ll_mds_client);
 
         sbi->ll_mds_conn = ptlrpc_uuid_to_connection("mds");
@@ -164,7 +167,6 @@ static struct super_block * ll_read_super(struct super_block *sb,
         }
 
         /* initialize committed transaction callback daemon */
-        INIT_LIST_HEAD(&sbi->ll_commitcbd_not_committed);
         spin_lock_init(&sbi->ll_commitcbd_lock); 
         init_waitqueue_head(&sbi->ll_commitcbd_waitq);
         init_waitqueue_head(&sbi->ll_commitcbd_ctl_waitq);
@@ -208,6 +210,7 @@ static void ll_put_super(struct super_block *sb)
         ll_commitcbd_cleanup(sbi);
         obd_disconnect(&sbi->ll_conn);
         ptlrpc_put_connection(sbi->ll_mds_conn);
+        ptlrpc_cleanup_client(&sbi->ll_mds_client);
         OBD_FREE(sb->u.generic_sbp, sizeof(*sbi));
         MOD_DEC_USE_COUNT;
         EXIT;
@@ -283,7 +286,7 @@ int ll_inode_setattr(struct inode *inode, struct iattr *attr, int do_trunc)
         if (err)
                 CERROR("mdc_setattr fails (%d)\n", err);
 
-        ptlrpc_free_req(request);
+        ptlrpc_req_finished(request);
 
         RETURN(err);
 }

@@ -313,18 +313,7 @@ int mds_connect(struct ptlrpc_request *req)
                 CDEBUG(D_INFO, "found existing data for UUID '%s' at #%d\n",
                        mcd->mcd_uuid, mci->mci_off);
         }
-        /* Still not 100% sure whether we should reply with the server
-         * last_rcvd or that of this client.  I'm not sure it even makes
-         * a difference on a per-client basis, because last_rcvd is global
-         * and we are not supposed to allow transactions while in recovery.
-         */
-        body->last_xid = le32_to_cpu(mcd->mcd_last_xid);
-        body->last_rcvd = le64_to_cpu(mcd->mcd_last_rcvd);
-        //body->last_rcvd = mds->mds_last_rcvd;
-        body->last_committed = mds->mds_last_committed;
-        CDEBUG(D_INFO, "last_rcvd %ld, last_committed %ld, last_xid %d\n",
-               (unsigned long)body->last_rcvd,
-               (unsigned long)body->last_committed, body->last_xid);
+        body->last_xid = HTON__u32(mcd->mcd_last_xid);
         mds_pack_rep_body(req);
         RETURN(0);
 }
@@ -365,7 +354,6 @@ int mds_getattr(struct ptlrpc_request *req)
         body->mode = inode->i_mode;
         body->nlink = inode->i_nlink;
         body->valid = ~0;
-        body->last_committed = mds->mds_last_committed;
         mds_fs_get_objid(mds, inode, &body->objid);
         l_dput(de);
         RETURN(0);
@@ -404,7 +392,6 @@ int mds_open(struct ptlrpc_request *req)
 
         body = lustre_msg_buf(req->rq_repmsg, 0);
         body->objid = (__u64) (unsigned long)file;
-        body->last_committed = mds->mds_last_committed;
         RETURN(0);
 }
 
@@ -433,6 +420,7 @@ int mds_close(struct ptlrpc_request *req)
 
         file = (struct file *)(unsigned long)body->objid;
         req->rq_status = filp_close(file, 0);
+
         l_dput(de);
         mntput(mnt);
 
@@ -508,6 +496,7 @@ int mds_reint(struct ptlrpc_request *req)
 int mds_handle(struct obd_device *dev, struct ptlrpc_service *svc,
                struct ptlrpc_request *req)
 {
+        struct mds_obd *mds = &req->rq_obd->u.mds;
         int rc;
         ENTRY;
 
@@ -570,6 +559,16 @@ int mds_handle(struct obd_device *dev, struct ptlrpc_service *svc,
 
         EXIT;
 out:
+        /* Still not 100% sure whether we should reply with the server
+         * last_rcvd or that of this client.  I'm not sure it even makes
+         * a difference on a per-client basis, because last_rcvd is global
+         * and we are not supposed to allow transactions while in recovery.
+         */
+        req->rq_repmsg->last_rcvd = HTON__u64(mds->mds_last_rcvd);
+        req->rq_repmsg->last_committed = HTON__u64(mds->mds_last_committed);
+        CDEBUG(D_INFO, "last_rcvd %Lu, last_committed %Lu\n",
+               (unsigned long long)mds->mds_last_rcvd,
+               (unsigned long long)mds->mds_last_committed);
         if (rc) {
                 ptlrpc_error(svc, req);
         } else {
@@ -624,12 +623,12 @@ int mds_read_last_rcvd(struct mds_obd *mds, struct file *f)
          */
         last_rcvd = le64_to_cpu(msd->msd_last_rcvd);
         mds->mds_last_rcvd = last_rcvd;
-        CDEBUG(D_INODE, "got %Ld for server last_rcvd value\n",
+        CDEBUG(D_INODE, "got %Lu for server last_rcvd value\n",
                (unsigned long long)last_rcvd);
 
         last_mount = le64_to_cpu(msd->msd_mount_count);
         mds->mds_mount_count = last_mount;
-        CDEBUG(D_INODE, "got %Ld for server last_mount value\n",
+        CDEBUG(D_INODE, "got %Lu for server last_mount value\n",
                (unsigned long long)last_mount);
 
         for (off = MDS_LR_CLIENT, cl_off = 0, rc = sizeof(*mcd);
@@ -668,12 +667,12 @@ int mds_read_last_rcvd(struct mds_obd *mds, struct file *f)
 
                 if (last_rcvd > mds->mds_last_rcvd) {
                         CDEBUG(D_OTHER,
-                               "client at offset %d has last_rcvd = %Ld\n",
+                               "client at offset %d has last_rcvd = %Lu\n",
                                cl_off, (unsigned long long)last_rcvd);
                         mds->mds_last_rcvd = last_rcvd;
                 }
         }
-        CDEBUG(D_INODE, "got %Ld for highest last_rcvd value, %d clients\n",
+        CDEBUG(D_INODE, "got %Lu for highest last_rcvd value, %d clients\n",
                (unsigned long long)mds->mds_last_rcvd, mds->mds_client_count);
 
         /* After recovery, there can be no local uncommitted transactions */
@@ -824,7 +823,7 @@ int mds_update_server_data(struct mds_obd *mds)
         msd->msd_last_rcvd = cpu_to_le64(mds->mds_last_rcvd);
         msd->msd_mount_count = cpu_to_le64(mds->mds_mount_count);
 
-        CDEBUG(D_SUPER, "MDS mount_count is %Ld, last_rcvd is %Ld\n",
+        CDEBUG(D_SUPER, "MDS mount_count is %Lu, last_rcvd is %Lu\n",
                (unsigned long long)mds->mds_mount_count,
                (unsigned long long)mds->mds_last_rcvd);
         push_ctxt(&saved, &mds->mds_ctxt);

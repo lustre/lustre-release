@@ -56,14 +56,20 @@
 /* default rpc ring length */
 #define RPC_RING_LENGTH    2
 
-#define SVC_STOPPING 1
-#define SVC_RUNNING  2
-#define SVC_STOPPED  4
-#define SVC_KILLED   8
-#define SVC_EVENT    16
-#define SVC_HA_EVENT 32
-#define SVC_SIGNAL   64
+#define SVC_KILLED 1
+#define SVC_EVENT  2
+#define SVC_SIGNAL 4
+#define SVC_RUNNING 8
+#define SVC_STOPPING 16
+#define SVC_STOPPED  32
 
+#define RECOVD_STOPPING      1     /* how cleanup tells recovd to quit */
+#define RECOVD_IDLE          2     /* normal state */
+#define RECOVD_STOPPED       4     /* after recovd has stopped */
+#define RECOVD_FAIL          8     /* RPC timeout: wakeup recovd, sets flag */
+#define RECOVD_TIMEOUT       16    /* set when recovd detects a timeout */
+#define RECOVD_UPCALL_WAIT   32    /* an upcall has been placed */
+#define RECOVD_UPCALL_ANSWER 64    /* an upcall has been answered */
 
 #define LUSTRE_CONN_NEW    1
 #define LUSTRE_CONN_CON    2
@@ -95,13 +101,18 @@ struct ptlrpc_client {
         struct obd_device *cli_obd;
         __u32 cli_request_portal;
         __u32 cli_reply_portal;
+        __u64 cli_last_rcvd;
+        __u64 cli_last_committed;
 
         struct semaphore cli_rpc_sem; /* limits outstanding requests */
 
         spinlock_t cli_lock; /* protects lists */
         struct list_head cli_sending_head;
         struct list_head cli_sent_head;
+        struct list_head cli_replied_head;
+        struct list_head cli_replay_head;
         struct list_head cli_ha_item; 
+        void (*cli_recover)(struct ptlrpc_client *); 
 
         struct recovd_obd *cli_recovd;
 };
@@ -111,13 +122,17 @@ struct ptlrpc_client {
 #define PTL_RPC_TYPE_REPLY   3
 
 /* state flags of requests */
-#define PTL_RPC_FL_INTR    1
-#define PTL_RPC_FL_REPLY   2
-#define PTL_RPC_FL_SENT    4
-#define PTL_BULK_FL_SENT   8
-#define PTL_BULK_FL_RCVD   16
-#define PTL_RPC_FL_ERR     32
-#define PTL_RPC_FL_TIMEOUT 64
+#define PTL_RPC_FL_INTR      (1 << 0)
+#define PTL_RPC_FL_REPLY     (1 << 1)
+#define PTL_RPC_FL_SENT      (1 << 2)
+#define PTL_BULK_FL_SENT     (1 << 3)
+#define PTL_BULK_FL_RCVD     (1 << 4)
+#define PTL_RPC_FL_ERR       (1 << 5)
+#define PTL_RPC_FL_TIMEOUT   (1 << 6)
+#define PTL_RPC_FL_RESEND    (1 << 7)
+#define PTL_RPC_FL_COMMITTED (1 << 8)
+#define PTL_RPC_FL_FINISHED  (1 << 9)
+#define PTL_RPC_FL_RETAIN    (1 << 10)
 
 struct ptlrpc_request { 
         int rq_type; /* one of PTL_RPC_REQUEST, PTL_RPC_REPLY, PTL_RPC_BULK */
@@ -127,17 +142,20 @@ struct ptlrpc_request {
         int rq_status;
         int rq_flags; 
         __u32 rq_connid;
+        atomic_t rq_refcount;
 
         int rq_reqlen;
         struct lustre_msg *rq_reqmsg;
 
         int rq_replen;
         struct lustre_msg *rq_repmsg;
+        __u64 rq_transno;
 
         char *rq_bulkbuf;
         int rq_bulklen;
 
         time_t rq_time;
+        time_t rq_timeout;
         //        void * rq_reply_handle;
         wait_queue_head_t rq_wait_for_rep;
 
@@ -225,12 +243,16 @@ int ptlrpc_register_bulk(struct ptlrpc_bulk_desc *);
 int ptlrpc_abort_bulk(struct ptlrpc_bulk_desc *bulk);
 int ptlrpc_reply(struct ptlrpc_service *svc, struct ptlrpc_request *req);
 int ptlrpc_error(struct ptlrpc_service *svc, struct ptlrpc_request *req);
+void ptlrpc_resend_req(struct ptlrpc_request *request);
 int ptl_send_rpc(struct ptlrpc_request *request);
 void ptlrpc_link_svc_me(struct ptlrpc_service *service, int i);
 
 /* rpc/client.c */
-void ptlrpc_init_client(struct recovd_obd *, int req_portal, int rep_portal,
+void ptlrpc_init_client(struct recovd_obd *, 
+                        void (*recover)(struct ptlrpc_client *),
+                        int req_portal, int rep_portal,
                         struct ptlrpc_client *);
+void ptlrpc_cleanup_client(struct ptlrpc_client *cli);
 __u8 *ptlrpc_req_to_uuid(struct ptlrpc_request *req);
 struct ptlrpc_connection *ptlrpc_uuid_to_connection(char *uuid);
 int ptlrpc_queue_wait(struct ptlrpc_request *req);
@@ -239,6 +261,7 @@ struct ptlrpc_request *ptlrpc_prep_req(struct ptlrpc_client *cl,
                                        int count, int *lengths, char **bufs);
 void ptlrpc_free_bulk(struct ptlrpc_bulk_desc *bulk);
 void ptlrpc_free_req(struct ptlrpc_request *request);
+void ptlrpc_req_finished(struct ptlrpc_request *request);
 struct ptlrpc_bulk_desc *ptlrpc_prep_bulk(struct ptlrpc_connection *);
 int ptlrpc_check_status(struct ptlrpc_request *req, int err);
 

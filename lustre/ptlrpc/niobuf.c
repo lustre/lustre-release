@@ -228,6 +228,16 @@ int ptlrpc_error(struct ptlrpc_service *svc, struct ptlrpc_request *req)
         RETURN(rc);
 }
 
+void ptlrpc_resend_req(struct ptlrpc_request *req)
+{
+        ENTRY;
+        req->rq_flags |= PTL_RPC_FL_RESEND;
+        req->rq_flags &= ~PTL_RPC_FL_TIMEOUT;
+        wake_up_interruptible(&req->rq_wait_for_rep);
+        EXIT;
+        return; 
+}
+
 int ptl_send_rpc(struct ptlrpc_request *request)
 {
         ptl_process_id_t local_id;
@@ -286,7 +296,7 @@ int ptl_send_rpc(struct ptlrpc_request *request)
 
         CDEBUG(D_NET, "Setup reply buffer: %u bytes, xid %u, portal %u\n",
                request->rq_replen, request->rq_reqmsg->xid,
-               request->rq_client->cli_request_portal);
+               request->rq_client->cli_reply_portal);
 
         spin_lock(&request->rq_client->cli_lock);
         list_add(&request->rq_list, &request->rq_client->cli_sending_head);

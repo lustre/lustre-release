@@ -248,7 +248,8 @@ static int ldlm_iocontrol(int cmd, struct obd_conn *conn, int len, void *karg,
                 RETURN(-EINVAL);
         }
 
-        ptlrpc_init_client(NULL, LDLM_REQUEST_PORTAL, LDLM_REPLY_PORTAL,
+        ptlrpc_init_client(NULL, NULL,
+                           LDLM_REQUEST_PORTAL, LDLM_REPLY_PORTAL,
                            obddev->u.ldlm.ldlm_client);
         connection = ptlrpc_uuid_to_connection("ldlm");
         if (!connection)
@@ -293,7 +294,8 @@ static int ldlm_setup(struct obd_device *obddev, obd_count len, void *data)
         OBD_ALLOC(ldlm->ldlm_client, sizeof(*ldlm->ldlm_client));
         if (ldlm->ldlm_client == NULL)
                 LBUG();
-        ptlrpc_init_client(NULL, LDLM_REQUEST_PORTAL, LDLM_REPLY_PORTAL,
+        ptlrpc_init_client(NULL, NULL,
+                           LDLM_REQUEST_PORTAL, LDLM_REPLY_PORTAL,
                            ldlm->ldlm_client);
 
         MOD_INC_USE_COUNT;

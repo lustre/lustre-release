@@ -77,6 +77,7 @@ int mds_update_last_rcvd(struct mds_obd *mds, void *handle,
         off = MDS_LR_CLIENT + mci->mci_off * MDS_LR_SIZE;
 
         ++mds->mds_last_rcvd;   /* lock this, or make it an LDLM function? */
+        req->rq_repmsg->transno = HTON__u64(mds->mds_last_rcvd);
         mci->mci_mcd->mcd_last_rcvd = cpu_to_le64(mds->mds_last_rcvd);
         mci->mci_mcd->mcd_mount_count = cpu_to_le64(mds->mds_mount_count);
         mci->mci_mcd->mcd_last_xid = cpu_to_le32(req->rq_reqmsg->xid);
@@ -247,8 +248,6 @@ static int mds_reint_create(struct mds_update_record *rec,
                 body = lustre_msg_buf(req->rq_repmsg, 0);
                 body->ino = inode->i_ino;
                 body->generation = inode->i_generation;
-                body->last_rcvd = mds->mds_last_rcvd;
-                body->last_committed = mds->mds_last_committed;
         }
 
 out_create_commit:
@@ -499,5 +498,6 @@ int mds_reint_rec(struct mds_update_record *rec, struct ptlrpc_request *req)
         }
 
         rc = reinters[rec->ur_opcode](rec, req);
+
         return rc;
 }

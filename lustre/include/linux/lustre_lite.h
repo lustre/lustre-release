@@ -25,6 +25,7 @@
 extern kmem_cache_t *ll_file_data_slab;
 struct ll_file_data { 
         __u64 fd_mdshandle; 
+        struct ptlrpc_request *fd_req; 
 };
 
 #define LL_INLINESZ      60
@@ -48,7 +49,6 @@ struct ll_sb_info {
         struct ptlrpc_client      ll_ost_client;
         struct ptlrpc_connection *ll_ost_conn;
 
-        struct list_head          ll_commitcbd_not_committed;
         wait_queue_head_t         ll_commitcbd_waitq;
         wait_queue_head_t         ll_commitcbd_ctl_waitq;
         int                       ll_commitcbd_flags;

@@ -112,9 +112,10 @@ struct recovd_obd {
         struct ptlrpc_service *recovd_service;
         struct ptlrpc_client  *recovd_client;
         __u32                  recovd_flags; 
+        __u32                  recovd_wakeup_flag; 
         spinlock_t             recovd_lock;
-        struct list_head      recovd_connections_lh; /* connections managed by the mgr */
-        struct list_head      recovd_troubled_lh; /* connections in trouble */
+        struct list_head      recovd_clients_lh; /* clients managed  */
+        struct list_head      recovd_troubled_lh; /* clients in trouble */
         wait_queue_head_t     recovd_recovery_waitq;
         wait_queue_head_t     recovd_ctl_waitq;
         wait_queue_head_t     recovd_waitq;

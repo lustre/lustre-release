@@ -94,6 +94,8 @@ do {                                                                         \
         if (OBD_FAIL_CHECK(id)) {                                            \
                 CERROR("obd_fail_loc=%x, fail operation rc=%d\n", id, ret);  \
                 obd_fail_loc |= OBD_FAILED;                                  \
+                if ((id) & OBD_FAIL_ONCE)                                    \
+                        obd_fail_loc |= OBD_FAIL_ONCE;                       \
                 RETURN(ret);                                                 \
         }                                                                    \
 } while(0)

@@ -456,7 +456,7 @@ int osc_brw_read(struct obd_conn *conn, obd_count num_oa, struct obdo **oa,
                         if (bulk[pages] == NULL)
                                 continue;
                         kunmap(buf[pages]);
-                        OBD_FREE(bulk[pages], sizeof(**bulk));
+                        ptlrpc_free_bulk(bulk[pages]);
                 }
         }
 
@@ -572,9 +572,9 @@ static int osc_setup(struct obd_device *obddev, obd_count len, void *buf)
         if (osc->osc_ldlm_client == NULL)
                 GOTO(out_client, rc = -ENOMEM);
 
-        ptlrpc_init_client(NULL, OST_REQUEST_PORTAL, OSC_REPLY_PORTAL,
+        ptlrpc_init_client(NULL, NULL, OST_REQUEST_PORTAL, OSC_REPLY_PORTAL,
                            osc->osc_client);
-        ptlrpc_init_client(NULL, LDLM_REQUEST_PORTAL, LDLM_REPLY_PORTAL,
+        ptlrpc_init_client(NULL, NULL, LDLM_REQUEST_PORTAL, LDLM_REPLY_PORTAL,
                            osc->osc_ldlm_client);
 
         MOD_INC_USE_COUNT;
@@ -591,7 +591,9 @@ static int osc_cleanup(struct obd_device * obddev)
 {
         struct osc_obd *osc = &obddev->u.osc;
 
+        ptlrpc_cleanup_client(osc->osc_client);
         OBD_FREE(osc->osc_client, sizeof(*osc->osc_client));
+        ptlrpc_cleanup_client(osc->osc_ldlm_client);
         OBD_FREE(osc->osc_ldlm_client, sizeof(*osc->osc_ldlm_client));
         ptlrpc_put_connection(osc->osc_conn);
 

@@ -44,9 +44,6 @@ static int ll_commitcbd_check_event(struct ll_sb_info *sbi)
                 GOTO(out, rc = 1);
         }
 
-        if (!list_empty(&sbi->ll_commitcbd_not_committed))
-                GOTO(out, rc = 1);
-
  out:
         spin_unlock(&sbi->ll_commitcbd_lock);
         RETURN(rc);
@@ -83,10 +80,12 @@ static int ll_commitcbd_main(void *arg)
                 spin_lock(&sbi->ll_commitcbd_lock);
                 if (sbi->ll_commitcbd_flags & LL_COMMITCBD_STOPPING) {
                         spin_unlock(&sbi->ll_commitcbd_lock);
-                        CERROR("lustre_hamgr quitting\n"); 
+                        CERROR("lustre_commitd quitting\n"); 
                         EXIT;
                         break;
                 }
+                if (!list_empty(&sbi->ll_mds_client.cli_replied_head))
+                        CERROR("** clean up committed reqs here **\n"); 
 
                 schedule_timeout(sbi->ll_commitcbd_timeout);
                 CERROR("commit callback daemon woken up - FIXME\n"); 
@@ -99,6 +98,8 @@ static int ll_commitcbd_main(void *arg)
         CDEBUG(D_NET, "commit callback daemon exiting %d\n", current->pid);
         RETURN(0);
 }
+
+
 
 int ll_commitcbd_setup(struct ll_sb_info *sbi)
 {

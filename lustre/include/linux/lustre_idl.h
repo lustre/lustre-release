@@ -51,6 +51,9 @@ struct lustre_msg {
 
         __u32 opc;
         __u32 xid;
+        __u64 last_rcvd;
+        __u64 last_committed;
+        __u64 transno;
         __u32 status;
         __u32 type;
         __u32   connid;
@@ -210,8 +213,6 @@ struct mds_body {
         __u32          nlink;
         __u32          generation;
         __u32          last_xid;
-        __u64          last_committed;
-        __u64          last_rcvd;
 };
 
 /* MDS update records */
@@ -554,6 +555,8 @@ static inline int obd_ioctl_getdata(char *buf, char *end, void *arg)
 #define OBD_IOC_BRW_WRITE              _IOWR('f', 28, long)
 #define OBD_IOC_NAME2DEV               _IOWR('f', 29, long)
 #define OBD_IOC_NEWDEV                 _IOWR('f', 30, long)
+
+#define OBD_RECOVD_NEWCONN             _IOWR('f', 31, long)
 
 #define OBD_IOC_DEC_FS_USE_COUNT       _IO  ('f', 32      )
 

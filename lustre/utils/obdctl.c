@@ -913,6 +913,25 @@ static int jt_test_ldlm(int argc, char **argv)
         return rc;
 }
 
+static int jt_newconn(int argc, char **argv)
+{
+        struct obd_ioctl_data data;
+        int rc;
+
+        IOCINIT(data);
+        if (argc != 1) {
+                fprintf(stderr, "usage: %s\n", cmdname(argv[0]));
+                return -1;
+        }
+
+        rc = ioctl(fd, OBD_RECOVD_NEWCONN , &data);
+        if (rc < 0)
+                fprintf(stderr, "error: %s: %s\n", cmdname(argv[0]),
+                        strerror(rc = errno));
+
+        return rc;
+}
+
 command_t cmdlist[] = {
         /* Metacommands */
         {"--device", jt__device, 0, "--device <devno> <command [args ...]>"},
@@ -938,6 +957,7 @@ command_t cmdlist[] = {
         {"destroy", jt_destroy, 0, "destroy <id>"},
         {"getattr", jt_getattr, 0, "getattr <id>"},
         {"setattr", jt_setattr, 0, "setattr <id> <mode>"},
+        {"newconn", jt_newconn, 0, "newconn [newuuid]"},
         {"test_getattr", jt_test_getattr, 0, "test_getattr <count> [verbose]"},
         {"test_brw", jt_test_brw, 0, "test_brw <count> [write [verbose]]"},
         {"test_ldlm", jt_test_ldlm, 0, "test lock manager (no args)"},

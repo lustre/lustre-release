@@ -14,7 +14,7 @@ page.c:
 
 
 LINX=page.c
-llite_SOURCES =  commit_callback.c page.c super.c rw.c file.c dir.c sysctl.c namei.c symlink.c
+llite_SOURCES =  recover.c commit_callback.c page.c super.c rw.c file.c dir.c sysctl.c namei.c symlink.c
 
 dist-hook:
 	list='$(LINX)'; for f in $$list; do rm -f $(distdir)/$$f; done
