@@ -393,7 +393,7 @@ def prepare_osc(node):
     print 'OSC:', name, uuid, obduuid, ostuuid
     net = lookup(node.parentNode, ostuuid)
     srvname, srvuuid, net, server, port, send_buf, read_buf = getNetworkInfo(net)
-    lctl.connect(net, server, port, ostuuid)
+    lctl.connect(net, server, port, ostuuid, send_buf, read_buf)
     lctl.newdev(attach="osc %s %s" % (name, uuid),
                 setup ="%s %s" %(obduuid, ostuuid))
 
@@ -405,7 +405,7 @@ def prepare_mdc(node):
     mds = lookup(node.parentNode, mdsuuid)
     if mds == None:
         panic(mdsuuid, "not found.")
-    lctl.connect(net, server, port, netuuid)
+    lctl.connect(net, server, port, netuuid, send_buf, read_buf)
     lctl.newdev(attach="mdc %s %s" % (name, uuid),
                 setup ="%s %s" %(mdsuuid, netuuid))
 
