@@ -6,37 +6,53 @@
  include/linux/ext3_fs_i.h |    3 
  6 files changed, 615 insertions(+), 11 deletions(-)
 
---- linux-2.4.22-ac1/fs/ext3/ialloc.c~ext3-ea-in-inode-2.4.22-rh	2003-10-08 13:57:56.000000000 +0400
-+++ linux-2.4.22-ac1-alexey/fs/ext3/ialloc.c	2003-10-08 15:13:31.000000000 +0400
-@@ -715,6 +715,12 @@ have_bit_and_group:
+Index: linux-2.4.24/fs/ext3/ialloc.c
+===================================================================
+--- linux-2.4.24.orig/fs/ext3/ialloc.c	2004-07-13 11:07:17.000000000 +0400
++++ linux-2.4.24/fs/ext3/ialloc.c	2004-07-14 18:04:43.000000000 +0400
+@@ -576,6 +576,13 @@
  	insert_inode_hash(inode);
  	inode->i_generation = sb->u.ext3_sb.s_next_generation++;
  
 +	if (EXT3_INODE_SIZE(inode->i_sb) > EXT3_GOOD_OLD_INODE_SIZE) {
 +		inode->u.ext3_i.i_extra_isize = sizeof(__u16)	/* i_extra_isize */
 +				+ sizeof(__u16);	/* i_pad1 */
++		inode->u.ext3_i.i_flags |= EXT3_EXTRA_ISIZE;
 +	} else
 +		inode->u.ext3_i.i_extra_isize = 0;
 +
  	inode->u.ext3_i.i_state = EXT3_STATE_NEW;
-  	err = ext3_get_inode_loc_new(inode, &iloc, 1);
-   	if (err) goto fail;
---- linux-2.4.22-ac1/fs/ext3/inode.c~ext3-ea-in-inode-2.4.22-rh	2003-10-08 13:57:57.000000000 +0400
-+++ linux-2.4.22-ac1-alexey/fs/ext3/inode.c	2003-10-08 15:14:57.000000000 +0400
-@@ -2229,6 +2229,12 @@ void ext3_read_inode(struct inode * inod
+ 	err = ext3_get_inode_loc_new(inode, &iloc, 1);
+ 	if (err) goto fail;
+Index: linux-2.4.24/fs/ext3/inode.c
+===================================================================
+--- linux-2.4.24.orig/fs/ext3/inode.c	2004-07-13 11:07:18.000000000 +0400
++++ linux-2.4.24/fs/ext3/inode.c	2004-07-14 18:11:39.000000000 +0400
+@@ -2225,6 +2225,23 @@
  		inode->u.ext3_i.i_data[block] = iloc.raw_inode->i_block[block];
  	INIT_LIST_HEAD(&inode->u.ext3_i.i_orphan);
  
-+	if (EXT3_INODE_SIZE(inode->i_sb) > EXT3_GOOD_OLD_INODE_SIZE)
++	inode->u.ext3_i.i_extra_isize = 0;
++	if (inode->u.ext3_i.i_flags & EXT3_EXTRA_ISIZE) {
++		BUG_ON(EXT3_INODE_SIZE(inode->i_sb) <= EXT3_GOOD_OLD_INODE_SIZE);
 +		inode->u.ext3_i.i_extra_isize =
 +			le16_to_cpu(raw_inode->i_extra_isize);
-+	else
-+		inode->u.ext3_i.i_extra_isize = 0;
++	} else if (EXT3_INODE_SIZE(inode->i_sb) > EXT3_GOOD_OLD_INODE_SIZE) {
++		/* this is dirty hack for already formatted filesystems:
++		 * inodes with inum <= 11 are created by mke2fs that doesn't
++		 * initialize extra space and inodes with larger inum are
++		 * created by ext3 itself that initializes extra space -bzzz */
++		if (inode->i_ino > 11)
++			inode->u.ext3_i.i_extra_isize =
++				le16_to_cpu(raw_inode->i_extra_isize);
++	}
++	block = EXT3_INODE_SIZE(inode->i_sb) - EXT3_GOOD_OLD_INODE_SIZE;
++	BUG_ON(inode->u.ext3_i.i_extra_isize > block);
 +
  	if (S_ISREG(inode->i_mode)) {
  		inode->i_op = &ext3_file_inode_operations;
  		inode->i_fop = &ext3_file_operations;
-@@ -2277,6 +2283,8 @@ static int ext3_do_update_inode(handle_t
+@@ -2273,6 +2290,8 @@
  		if (err)
  			goto out_brelse;
  	}
@@ -45,7 +61,7 @@
  	raw_inode->i_mode = cpu_to_le16(inode->i_mode);
  	if(!(test_opt(inode->i_sb, NO_UID32))) {
  		raw_inode->i_uid_low = cpu_to_le16(low_16_bits(inode->i_uid));
-@@ -2360,6 +2368,10 @@ static int ext3_do_update_inode(handle_t
+@@ -2356,6 +2375,10 @@
  	else for (block = 0; block < EXT3_N_BLOCKS; block++)
  		raw_inode->i_block[block] = inode->u.ext3_i.i_data[block];
  
@@ -56,9 +72,11 @@
  	BUFFER_TRACE(bh, "call ext3_journal_dirty_metadata");
  	rc = ext3_journal_dirty_metadata(handle, bh);
  	if (!err)
---- linux-2.4.22-ac1/fs/ext3/super.c~ext3-ea-in-inode-2.4.22-rh	2003-10-08 13:57:57.000000000 +0400
-+++ linux-2.4.22-ac1-alexey/fs/ext3/super.c	2003-10-08 15:13:31.000000000 +0400
-@@ -1299,8 +1299,10 @@ struct super_block * ext3_read_super (st
+Index: linux-2.4.24/fs/ext3/super.c
+===================================================================
+--- linux-2.4.24.orig/fs/ext3/super.c	2004-07-13 11:07:19.000000000 +0400
++++ linux-2.4.24/fs/ext3/super.c	2004-07-14 18:00:14.000000000 +0400
+@@ -1203,8 +1203,10 @@
  	} else {
  		sbi->s_inode_size = le16_to_cpu(es->s_inode_size);
  		sbi->s_first_ino = le32_to_cpu(es->s_first_ino);
@@ -71,8 +89,10 @@
  				"EXT3-fs: unsupported inode size: %d\n",
  				sbi->s_inode_size);
  			goto failed_mount;
---- linux-2.4.22-ac1/fs/ext3/xattr.c~ext3-ea-in-inode-2.4.22-rh	2003-10-08 13:57:56.000000000 +0400
-+++ linux-2.4.22-ac1-alexey/fs/ext3/xattr.c	2003-10-12 16:36:07.000000000 +0400
+Index: linux-2.4.24/fs/ext3/xattr.c
+===================================================================
+--- linux-2.4.24.orig/fs/ext3/xattr.c	2004-07-13 11:07:16.000000000 +0400
++++ linux-2.4.24/fs/ext3/xattr.c	2004-07-14 18:00:14.000000000 +0400
 @@ -100,6 +100,9 @@
  static int ext3_xattr_set2(handle_t *, struct inode *, struct buffer_head *,
  			   struct ext3_xattr_header *);
@@ -83,7 +103,7 @@
  #ifdef CONFIG_EXT3_FS_XATTR_SHARING
  
  static int ext3_xattr_cache_insert(struct buffer_head *);
-@@ -348,17 +351,12 @@ ext3_removexattr(struct dentry *dentry, 
+@@ -348,17 +351,12 @@
  }
  
  /*
@@ -104,7 +124,7 @@
  	       void *buffer, size_t buffer_size)
  {
  	struct buffer_head *bh = NULL;
-@@ -447,6 +445,94 @@ cleanup:
+@@ -447,6 +445,94 @@
  }
  
  /*
@@ -199,7 +219,7 @@
   * ext3_xattr_list()
   *
   * Copy a list of attribute names into the buffer
-@@ -457,7 +543,7 @@ cleanup:
+@@ -457,7 +543,7 @@
   * used / required on success.
   */
  int
@@ -208,7 +228,7 @@
  {
  	struct buffer_head *bh = NULL;
  	struct ext3_xattr_entry *entry;
-@@ -530,6 +616,131 @@ cleanup:
+@@ -530,6 +616,131 @@
  	return error;
  }
  
@@ -340,7 +360,7 @@
  /*
   * If the EXT3_FEATURE_COMPAT_EXT_ATTR feature of this file system is
   * not set, set it.
-@@ -553,6 +764,279 @@ static void ext3_xattr_update_super_bloc
+@@ -553,6 +764,279 @@
  }
  
  /*
@@ -620,7 +640,7 @@
   * ext3_xattr_set()
   *
   * Create, replace or remove an extended attribute for this inode. Buffer
-@@ -566,6 +1050,101 @@ static void ext3_xattr_update_super_bloc
+@@ -566,6 +1050,101 @@
   */
  int
  ext3_xattr_set(handle_t *handle, struct inode *inode, int name_index,
@@ -722,7 +742,7 @@
  	       const char *name, const void *value, size_t value_len, int flags)
  {
  	struct super_block *sb = inode->i_sb;
-@@ -603,6 +1181,7 @@ ext3_xattr_set(handle_t *handle, struct 
+@@ -603,6 +1182,7 @@
  	name_len = strlen(name);
  	if (name_len > 255 || value_len > sb->s_blocksize)
  		return -ERANGE;
@@ -730,9 +750,19 @@
  	down(&ext3_xattr_sem);
  
  	if (block) {
---- linux-2.4.22-ac1/include/linux/ext3_fs.h~ext3-ea-in-inode-2.4.22-rh	2003-10-08 13:57:57.000000000 +0400
-+++ linux-2.4.22-ac1-alexey/include/linux/ext3_fs.h	2003-10-08 15:13:31.000000000 +0400
-@@ -265,6 +265,8 @@ struct ext3_inode {
+Index: linux-2.4.24/include/linux/ext3_fs.h
+===================================================================
+--- linux-2.4.24.orig/include/linux/ext3_fs.h	2004-07-13 11:07:18.000000000 +0400
++++ linux-2.4.24/include/linux/ext3_fs.h	2004-07-14 18:04:43.000000000 +0400
+@@ -183,6 +183,7 @@
+ #define EXT3_INDEX_FL			0x00001000 /* hash-indexed directory */
+ #define EXT3_IMAGIC_FL			0x00002000 /* AFS directory */
+ #define EXT3_JOURNAL_DATA_FL		0x00004000 /* file data should be journaled */
++#define EXT3_EXTRA_ISIZE		0x00008000 /* inode has initialized i_extra_isize */
+ #define EXT3_RESERVED_FL		0x80000000 /* reserved for ext3 lib */
+ 
+ #define EXT3_FL_USER_VISIBLE		0x00005FFF /* User visible flags */
+@@ -264,6 +265,8 @@
  			__u32	m_i_reserved2[2];
  		} masix2;
  	} osd2;				/* OS dependent 2 */
@@ -741,9 +771,11 @@
  };
  
  #define i_size_high	i_dir_acl
---- linux-2.4.22-ac1/include/linux/ext3_fs_i.h~ext3-ea-in-inode-2.4.22-rh	2003-09-26 00:54:44.000000000 +0400
-+++ linux-2.4.22-ac1-alexey/include/linux/ext3_fs_i.h	2003-10-08 15:13:31.000000000 +0400
-@@ -62,6 +62,9 @@ struct ext3_inode_info {
+Index: linux-2.4.24/include/linux/ext3_fs_i.h
+===================================================================
+--- linux-2.4.24.orig/include/linux/ext3_fs_i.h	2001-11-22 22:46:19.000000000 +0300
++++ linux-2.4.24/include/linux/ext3_fs_i.h	2004-07-14 18:00:14.000000000 +0400
+@@ -62,6 +62,9 @@
  	 */
  	loff_t	i_disksize;
  
@@ -753,5 +785,3 @@
  	/*
  	 * truncate_sem is for serialising ext3_truncate() against
  	 * ext3_getblock().  In the 2.4 ext2 design, great chunks of inode's
-
-_
