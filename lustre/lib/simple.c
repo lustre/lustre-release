@@ -24,13 +24,16 @@
 #include <linux/lustre_lib.h>
 #include <linux/lustre_net.h>
 
-#if 1
+#ifdef CTXT_DEBUG
 /* Debugging check only needed during development */
+#define ASSERT_CTXT_MAGIC(magic) do { if ((magic) != OBD_RUN_CTXT_MAGIC) { \
+                                CERROR("bad ctxt magic\n"); LBUG(); } } while(0)
 #define ASSERT_NOT_KERNEL_CTXT(msg) do { if (segment_eq(get_fs(), get_ds())) { \
                                         CERROR(msg); LBUG(); } } while(0)
 #define ASSERT_KERNEL_CTXT(msg) do { if (!segment_eq(get_fs(), get_ds())) { \
                                         CERROR(msg); LBUG(); } } while(0)
 #else
+#define ASSERT_CTXT_MAGIC(magic) do {} while(0)
 #define ASSERT_NOT_KERNEL_CTXT(msg) do {} while(0)
 #define ASSERT_KERNEL_CTXT(msg) do {} while(0)
 #endif
@@ -39,6 +42,8 @@
 void push_ctxt(struct obd_run_ctxt *save, struct obd_run_ctxt *new)
 {
         //ASSERT_NOT_KERNEL_CTXT("already in kernel context!\n");
+        ASSERT_CTXT_MAGIC(new->magic);
+        OBD_SET_CTXT_MAGIC(save->magic);
         save->fs = get_fs();
         save->pwd = dget(current->fs->pwd);
         save->pwdmnt = mntget(current->fs->pwdmnt);
@@ -49,7 +54,8 @@ void push_ctxt(struct obd_run_ctxt *save, struct obd_run_ctxt *new)
 
 void pop_ctxt(struct obd_run_ctxt *saved)
 {
-        ASSERT_KERNEL_CTXT( "popping non-kernel context!\n");
+        ASSERT_KERNEL_CTXT("popping non-kernel context!\n");
+        ASSERT_CTXT_MAGIC(saved->magic);
         set_fs(saved->fs);
         set_fs_pwd(current->fs, saved->pwdmnt, saved->pwd);
 
