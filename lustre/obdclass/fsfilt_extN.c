@@ -216,12 +216,18 @@ static void *fsfilt_extN_brw_start(int objcount, struct fsfilt_objinfo *fso,
         RETURN(handle);
 }
 
-static int fsfilt_extN_commit(struct inode *inode, void *handle)
+static int fsfilt_extN_commit(struct inode *inode, void *h /*, force_sync */)
 {
         int rc;
+        handle_t *handle = h;
+
+#if 0
+        if (force_sync)
+                handle->h_sync = 1; /* recovery likes this */
+#endif
 
         lock_kernel();
-        rc = journal_stop((handle_t *)handle);
+        rc = journal_stop(handle);
         unlock_kernel();
 
         return rc;
