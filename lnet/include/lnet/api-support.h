@@ -19,9 +19,4 @@
 
 #include <portals/internal.h>
 #include <portals/nal.h>
-#include <portals/arg-blocks.h>
 
-/* Hack for 2.4.18 macro name collision */
-#ifdef yield
-#undef yield
-#endif
