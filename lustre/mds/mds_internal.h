@@ -62,6 +62,7 @@ int mds_lov_set_nextid(struct obd_device *obd);
 int mds_set_lovdesc(struct obd_device *obd, struct lov_desc *desc,
                     struct obd_uuid *uuidarray);
 int mds_post_mds_lovconf(struct obd_device *obd);
+int mds_notify(struct obd_device *obd, struct obd_device *watched, int active);
 int mds_convert_lov_ea(struct obd_device *obd, struct inode *inode,
                        struct lov_mds_md *lmm, int lmm_size);
 
