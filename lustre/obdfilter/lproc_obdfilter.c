@@ -58,6 +58,32 @@ static int lprocfs_filter_rd_last_id(char *page, char **start, off_t off,
                         filter_last_id(&obd->u.filter, 0));
 }
 
+int lprocfs_filter_rd_readcache(char *page, char **start, off_t off, int count,
+                                int *eof, void *data)
+{
+        struct obd_device *obd = data;
+        int rc;
+
+        rc = snprintf(page, count, LPU64"\n",
+                      obd->u.filter.fo_readcache_max_filesize);
+        return rc;
+}
+
+int lprocfs_filter_wr_readcache(struct file *file, const char *buffer,
+                                unsigned long count, void *data)
+{
+        struct obd_device *obd = data;
+        __u64 val;
+        int rc;
+
+        rc = lprocfs_write_u64_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+
+        obd->u.filter.fo_readcache_max_filesize = val;
+        return count;
+}
+
 static struct lprocfs_vars lprocfs_obd_vars[] = {
         { "uuid",         lprocfs_rd_uuid,          0, 0 },
         { "blocksize",    lprocfs_rd_blksize,       0, 0 },
@@ -68,7 +94,10 @@ static struct lprocfs_vars lprocfs_obd_vars[] = {
         //{ "filegroups",   lprocfs_rd_filegroups,    0, 0 },
         { "fstype",       lprocfs_rd_fstype,        0, 0 },
         { "mntdev",       lprocfs_filter_rd_mntdev, 0, 0 },
-        { "last_id",      lprocfs_filter_rd_last_id, 0, 0 },
+        { "last_id",      lprocfs_filter_rd_last_id,0, 0 },
+        { "readcache_max_filesize",
+                          lprocfs_filter_rd_readcache,
+                          lprocfs_filter_wr_readcache, 0 },
         { 0 }
 };
 
