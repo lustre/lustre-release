@@ -15,9 +15,9 @@ LMC_REAL="../../lustre/utils/lmc -m $config"
 
 # TCP/IP servers
 SERVER_START=0
-SERVER_CNT=32
+SERVER_CNT=4
 GW_START=0
-GW_CNT=16
+GW_CNT=2
 MDS=${BASE}23
 UUIDLIST=${UUIDLIST:-/usr/local/admin/ba-ost/UUID.txt}
 
@@ -74,8 +74,8 @@ do
    do
       OST=${OSTBASE}$server
       echo "server: $OST"
-      OBD_UUID=`awk "/$OST / { print \\$3 }" $UUIDLIST`
-      [ "$OBD_UUID" ] && OBD_UUID="--obduuid $OBD_UUID" || echo "$OST: no UUID"
+#      OBD_UUID=`awk "/$OST / { print \\$3 }" $UUIDLIST`
+#      [ "$OBD_UUID" ] && OBD_UUID="--obduuid $OBD_UUID" || echo "$OST: no UUID"
       # server node
       ${LMC} --add net --node $OST --tcpbuf $TCPBUF --nid $OST --nettype tcp || exit 1
       # the device on the server
