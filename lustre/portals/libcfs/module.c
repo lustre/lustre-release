@@ -143,7 +143,7 @@ kportal_memhog_alloc (struct portals_device_userstate *pdu, int npages, int flag
 
         if (npages == 0)
                 return 0;
-        
+
         level0p = &pdu->pdu_memhog_root_page;
         *level0p = alloc_page(flags);
         if (*level0p == NULL)
@@ -665,7 +665,7 @@ static int kportal_ioctl(struct inode *inode, struct file *file,
                         kportal_memhog_free(file->private_data);
                         err = kportal_memhog_alloc(file->private_data,
                                                    data->ioc_count,
-                                                   GFP_NOFS);
+                                                   data->ioc_flags);
                         if (err != 0)
                                 kportal_memhog_free(file->private_data);
                 }

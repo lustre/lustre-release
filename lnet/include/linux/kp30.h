@@ -283,13 +283,13 @@ do {                                                                          \
 #define GFP_MEMALLOC 0
 #endif
 
-#define PORTAL_ALLOC(ptr, size)                                           \
+#define PORTAL_ALLOC_GFP(ptr, size, mask)                                 \
 do {                                                                      \
         LASSERT (!in_interrupt());                                        \
         if ((size) > PORTAL_VMALLOC_SIZE)                                 \
                 (ptr) = vmalloc(size);                                    \
         else                                                              \
-                (ptr) = kmalloc((size), (GFP_KERNEL | GFP_MEMALLOC));     \
+                (ptr) = kmalloc((size), (mask));                          \
         if ((ptr) == NULL) {                                              \
                 CERROR("PORTALS: out of memory at %s:%d (tried to alloc '"\
                        #ptr "' = %d)\n", __FILE__, __LINE__, (int)(size));\
@@ -302,6 +302,12 @@ do {                                                                      \
         CDEBUG(D_MALLOC, "kmalloced '" #ptr "': %d at %p (tot %d).\n",    \
                (int)(size), (ptr), atomic_read (&portal_kmemory));        \
 } while (0)
+
+#define PORTAL_ALLOC(ptr, size) \
+        PORTAL_ALLOC_GFP(ptr, size, (GFP_KERNEL | GFP_MEMALLOC))
+
+#define PORTAL_ALLOC_ATOMIC(ptr, size) \
+        PORTAL_ALLOC_GFP(ptr, size, (GFP_ATOMIC | GFP_MEMALLOC))
 
 #define PORTAL_FREE(ptr, size)                                          \
 do {                                                                    \

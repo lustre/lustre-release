@@ -1691,13 +1691,15 @@ jt_ptl_lwt(int argc, char **argv)
 
 int jt_ptl_memhog(int argc, char **argv)
 {
+        static int                gfp = 0;        /* sticky! */
+
         struct portal_ioctl_data  data;
         int                       rc;
         int                       count;
         char                     *end;
         
-        if (argc != 2)  {
-                fprintf(stderr, "usage: %s <npages>\n", argv[0]);
+        if (argc < 2)  {
+                fprintf(stderr, "usage: %s <npages> [<GFP flags>]\n", argv[0]);
                 return 0;
         }
 
@@ -1707,8 +1709,18 @@ int jt_ptl_memhog(int argc, char **argv)
                 return -1;
         }
 
+        if (argc >= 3) {
+                rc = strtol(argv[2], &end, 0);
+                if (*end != 0) {
+                        fprintf(stderr, "Can't parse gfp flags '%s'\n", argv[2]);
+                        return -1;
+                }
+                gfp = rc;
+        }
+        
         PORTAL_IOC_INIT(data);
         data.ioc_count = count;
+        data.ioc_flags = gfp;
         rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_MEMHOG, &data);
 
         if (rc != 0) {
