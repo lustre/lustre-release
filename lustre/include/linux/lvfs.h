@@ -3,6 +3,8 @@
 
 #include <linux/kp30.h>
 
+#define LL_FID_NAMELEN	(16 + 1 + 8 + 1)
+
 #if defined __KERNEL__
 #include <linux/lvfs_linux.h>
 #endif 
@@ -59,7 +61,7 @@ struct dentry *simple_mknod(struct dentry *dir, char *name, int mode);
 int lustre_fread(struct file *file, void *buf, int len, loff_t *off);
 int lustre_fwrite(struct file *file, const void *buf, int len, loff_t *off);
 int lustre_fsync(struct file *file);
-long l_readdir(struct file * file, void * dirent, unsigned int count);
+long l_readdir(struct file * file, struct list_head *dentry_list);
 
 static inline void l_dput(struct dentry *de)
 {
@@ -96,7 +98,6 @@ static inline void ll_sleep(int t)
 }
 #endif
 
-#define LL_FID_NAMELEN         (16 + 1 + 8 + 1)
 static inline int ll_fid2str(char *str, __u64 id, __u32 generation)
 {
         return sprintf(str, "%llx:%08x", (unsigned long long)id, generation);

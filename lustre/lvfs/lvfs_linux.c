@@ -308,47 +308,41 @@ static int l_filldir(void *__buf, const char *name, int namlen, loff_t offset,
 {
         struct l_linux_dirent *dirent;
         struct l_readdir_callback *buf = (struct l_readdir_callback *)__buf;
-        int reclen = size_round(offsetof(struct l_linux_dirent, d_name) + namlen + 1);
         
-        buf->error = -EINVAL;
-        if (reclen > buf->count)
-                return -EINVAL;
-        dirent = buf->previous;
+        dirent = buf->lrc_dirent;
         if (dirent)
-               dirent->d_off = offset; 
-        dirent = buf->current_dir;
-        buf->previous = dirent;
-        dirent->d_ino = ino;
-        dirent->d_reclen = reclen;
-        memcpy(dirent->d_name, name, namlen);
-        ((char *)dirent) += reclen;
-        buf->current_dir = dirent;
-        buf->count -= reclen; 
+               dirent->lld_off = offset; 
+
+        PORTAL_ALLOC(dirent, sizeof(*dirent));
+
+        list_add_tail(&dirent->lld_list, buf->lrc_list);
+
+        buf->lrc_dirent = dirent;
+        dirent->lld_ino = ino;
+        LASSERT(sizeof(dirent->lld_name) >= strlen(name) + 1);
+        memcpy(dirent->lld_name, name, strlen(name));
+
         return 0;
 }
 
-long l_readdir(struct file * file, void * dirent, unsigned int count)
+long l_readdir(struct file *file, struct list_head *dentry_list)
 {
-        struct l_linux_dirent * lastdirent;
+        struct l_linux_dirent *lastdirent;
         struct l_readdir_callback buf;
         int error;
 
-        buf.current_dir = (struct l_linux_dirent *)dirent;
-        buf.previous = NULL;
-        buf.count = count;
-        buf.error = 0;
+        buf.lrc_dirent = NULL;
+        buf.lrc_list = dentry_list; 
 
         error = vfs_readdir(file, l_filldir, &buf);
         if (error < 0)
                 return error;
-        error = buf.error;
-        lastdirent = buf.previous;
 
-        if (lastdirent) {
-                lastdirent->d_off = file->f_pos;
-                error = count - buf.count;        
-        }
-        return error; 
+        lastdirent = buf.lrc_dirent;
+        if (lastdirent)
+                lastdirent->lld_off = file->f_pos;
+
+        return 0; 
 }
 EXPORT_SYMBOL(l_readdir);
 
