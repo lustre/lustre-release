@@ -132,39 +132,34 @@ int ll_process_log(char *mds, char *config, struct config_llog_instance *cfg)
         struct obd_device *obd;
         struct lustre_handle mdc_conn = {0, };
         struct obd_export *exp;
+        char * name = "mdc_dev";
         struct obd_uuid uuid = { "MDC_mount_UUID" };
         int rc = 0;
         int err;
         ENTRY;
 
-        lcfg.lcfg_command = LCFG_ATTACH;
-        lcfg.lcfg_dev_name = "mdc_dev";
-        lcfg.lcfg_dev_namelen = strlen(lcfg.lcfg_dev_name) + 1;
+        LCFG_INIT(lcfg, LCFG_ATTACH, name);
         lcfg.lcfg_inlbuf1 = "mdc";
         lcfg.lcfg_inllen1 = strlen(lcfg.lcfg_inlbuf1) + 1;
         lcfg.lcfg_inlbuf2 = "mdc_dev_UUID";
         lcfg.lcfg_inllen2 = strlen(lcfg.lcfg_inlbuf2) + 1;
-        dev = class_attach(&lcfg);
-        if (dev < 0)
-                GOTO(out, err = dev);
+        err = class_process_config(&lcfg);
+        if (err < 0)
+                GOTO(out, err);
 
-        obd = class_name2obd("mdc_dev");
-        if (obd == NULL)
-                GOTO(out, err = -EINVAL);
-        
-        memset(&lcfg, 0, sizeof(lcfg));
-
-        lcfg.lcfg_command = LCFG_SETUP;
-        lcfg.lcfg_dev_name = "mdc_dev";
-        lcfg.lcfg_dev_namelen = strlen(lcfg.lcfg_dev_name) + 1;
+        LCFG_INIT(lcfg, LCFG_SETUP, name);
         lcfg.lcfg_inlbuf1 = mds;
         lcfg.lcfg_inllen1 = strlen(lcfg.lcfg_inlbuf1) + 1;
         lcfg.lcfg_inlbuf2 = "NET_mds_facet_tcp_UUID";
         lcfg.lcfg_inllen2 = strlen(lcfg.lcfg_inlbuf2) + 1;
-        err = class_setup(obd, &lcfg);
+        err = class_process_config(&lcfg);
         if (err < 0)
                 GOTO(out, err);
         
+        obd = class_name2obd(name);
+        if (obd == NULL)
+                GOTO(out, err = -EINVAL);
+
         err = obd_connect(&mdc_conn, obd, &uuid);
         if (err) {
                 CERROR("cannot connect to %s: rc = %d\n", mds, err);
@@ -180,17 +175,13 @@ int ll_process_log(char *mds, char *config, struct config_llog_instance *cfg)
 
         err = obd_disconnect(exp, 0);
 
-        memset(&lcfg, 0, sizeof(lcfg));
-        lcfg.lcfg_command = LCFG_CLEANUP;
-        lcfg.lcfg_dev_name = "mdc_dev";
-        err = class_cleanup(obd, &lcfg);
+        LCFG_INIT(lcfg, LCFG_CLEANUP, name);
+        err = class_process_config(&lcfg);
         if (err < 0)
                 GOTO(out, err);
 
-        memset(&lcfg, 0, sizeof(lcfg));
-        lcfg.lcfg_command = LCFG_DETACH;
-        lcfg.lcfg_dev_name = "mdc_dev";
-        err = class_detach(obd, &lcfg);
+        LCFG_INIT(lcfg, LCFG_DETACH, name);
+        err = class_process_config(&lcfg);
         if (err < 0)
                 GOTO(out, err);
         
