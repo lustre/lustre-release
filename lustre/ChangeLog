@@ -2,7 +2,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.0
        * bug fixes
 
-tbd         Cluster File Systems, Inc. <info@clusterfs.com>
+2004-01-27  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.0.3
        * kernel patches
 	- add series for the vanilla 2.6.0 kernel
@@ -26,6 +26,11 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- increase UML stack to avoid overflow
 	- update lconf's list of debug and subsystem masks
 	- fix lfs find --obd (2510)
+	- /proc tunable for disabling filter read caching (2591)
+	- stop rpm packages from altering slapd.conf (2301)
+	- disable nagle in the socknal under 0conf (2578)
+	- choose mds inode size based on stripe count (2572)
+	- fix kernel-source rpm problems (2516)
        * miscellania
 	- add --disable-doc to avoid pdf generation (2421)
 	- update documentation, tests, type-os, comments
