@@ -90,7 +90,7 @@ command_t cmdlist[] = {
         {"add_uuid", jt_lcfg_add_uuid, 0, "associate a UUID with a nid\n"
          "usage: add_uuid <uuid> <nid> <net_type>"},
         {"close_uuid", jt_obd_close_uuid, 0, "disconnect a UUID\n"
-         "usage: close_uuid <uuid> <net-type>)"},
+         "usage: close_uuid <uuid> <net_type>"},
         {"del_uuid", jt_lcfg_del_uuid, 0, "delete a UUID association\n"
          "usage: del_uuid <uuid>"},
         {"add_route", jt_ptl_add_route, 0,
@@ -127,7 +127,7 @@ command_t cmdlist[] = {
          "usage: device <%name|$name|devno>"},
         {"cfg_device", jt_lcfg_device, 0,
          "set current device being configured to <$name>\n"
-         "usage: device <name>"},
+         "usage: cfg_device <name>"},
         {"device_list", jt_obd_list, 0, "show all devices\n"
          "usage: device_list"},
         {"dl", jt_obd_list, 0, "show all devices\n"
@@ -261,16 +261,16 @@ command_t cmdlist[] = {
         /* Debug commands */
         {"======== debug =========", jt_noop, 0, "debug"},
         {"debug_daemon", jt_dbg_debug_daemon, 0,
-         "debug daemon control and dump to a file"
+         "debug daemon control and dump to a file\n"
          "usage: debug_daemon [start file <#MB>|stop|pause|continue]"},
         {"debug_kernel", jt_dbg_debug_kernel, 0,
-         "get debug buffer and dump to a file"
+         "get debug buffer and dump to a file\n"
          "usage: debug_kernel [file] [raw]"},
         {"dk", jt_dbg_debug_kernel, 0,
-         "get debug buffer and dump to a file"
+         "get debug buffer and dump to a file\n"
          "usage: dk [file] [raw]"},
         {"debug_file", jt_dbg_debug_file, 0,
-         "read debug buffer from input and dump to output"
+         "read debug buffer from input and dump to output\n"
          "usage: debug_file <input> [output] [raw]"},
         {"clear", jt_dbg_clear_debug_buf, 0, "clear kernel debug buffer\n"
          "usage: clear"},
@@ -278,7 +278,7 @@ command_t cmdlist[] = {
          "usage: mark <text>"},
         {"filter", jt_dbg_filter, 0, "filter message type\n"
          "usage: filter <subsystem id/debug mask>"},
-        {"show", jt_dbg_show, 0, "show message type\n"
+        {"show", jt_dbg_show, 0, "Show specific type of messages\n"
          "usage: show <subsystem id/debug mask>"},
         {"debug_list", jt_dbg_list, 0, "list subsystem and debug types\n"
          "usage: debug_list <subs/types>"},
