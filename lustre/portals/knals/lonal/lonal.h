@@ -1,7 +1,7 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (C) 2001 Cluster File Systems, Inc. <braam@clusterfs.com>
+ *  Copyright (C) 2004 Cluster File Systems, Inc.
  *
  *   This file is part of Lustre, http://www.lustre.org.
  *
@@ -17,9 +17,6 @@
  *   You should have received a copy of the GNU General Public License
  *   along with Lustre; if not, write to the Free Software
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
- *
- * Basic library routines. 
- *
  */
 
 #ifndef _LONAL_H
