@@ -21,6 +21,9 @@ detach
 quit
 EOF
 
+plog rmmod xfs
+plog rmmod xfs_support
+plog rmmod pagebuf
 plog rmmod obdfilter
 plog rmmod obdext2
 plog rmmod obdclass

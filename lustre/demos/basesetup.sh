@@ -58,8 +58,8 @@ fi
 
 
 if [ "$BASEDEV" ]; then
-#     echo "No mke2fs!!"
-    mke2fs -r 0 -b 4096 $BASEDEV
+     echo "No mke2fs!!"
+    # mke2fs -r 0 -b 4096 $BASEDEV
 else
     echo "\$BASEDEV not defined in demos/config.sh.  Please fix!"
     [ "$LOOPDEV" ] && losetup -d $LOOPDEV 

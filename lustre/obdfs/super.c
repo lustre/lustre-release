@@ -1,3 +1,4 @@
+
 /*
  * OBDFS Super operations
  *
@@ -238,9 +239,9 @@ static struct super_block * obdfs_read_super(struct super_block *sb,
 
         /* make root inode */
         CDEBUG(D_INFO, "\n"); 
-        oa = obdo_fromid(&sbi->osi_conn, root_ino,
+        oa = obdo_fromid(&sbi->osi_conn, root_ino, S_IFDIR,
                          OBD_MD_FLNOTOBD | OBD_MD_FLBLOCKS);
-        CDEBUG(D_INFO, "\n"); 
+        CDEBUG(D_INFO, "mode %o\n", oa->o_mode); 
         if ( IS_ERR(oa) ) {
                 printk(__FUNCTION__ ": obdo_fromid failed\n");
 		iput(root); 
@@ -331,6 +332,7 @@ void obdfs_do_change_inode(struct inode *inode, int valid)
 
         oa->o_valid = OBD_MD_FLNOTOBD & (valid | OBD_MD_FLID);
         obdfs_from_inode(oa, inode);
+	oa->o_mode = inode->i_mode;
         err = IOPS(inode, setattr)(IID(inode), oa);
 
         if ( err )
@@ -459,6 +461,7 @@ int obdfs_setattr(struct dentry *de, struct iattr *attr)
 
 	obdfs_attr2inode(inode, attr);
         oa->o_id = inode->i_ino;
+	oa->o_mode = inode->i_mode;
         obdo_from_iattr(oa, attr);
         err = IOPS(inode, setattr)(IID(inode), oa);
 

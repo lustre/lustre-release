@@ -229,6 +229,17 @@ static unsigned char ext2_filetype_table[EXT2_FT_MAX] = {
 	[EXT2_FT_SYMLINK]	DT_LNK,
 };
 
+static unsigned int obdfs_dt2fmt[DT_WHT + 1] = {
+	[EXT2_FT_UNKNOWN]	0, 
+	[EXT2_FT_REG_FILE]	S_IFREG,
+	[EXT2_FT_DIR]		S_IFDIR,
+	[EXT2_FT_CHRDEV]	S_IFCHR,
+	[EXT2_FT_BLKDEV]	S_IFBLK, 
+	[EXT2_FT_FIFO]		S_IFIFO,
+	[EXT2_FT_SOCK]		S_IFSOCK,
+	[EXT2_FT_SYMLINK]	S_IFLNK
+};
+	
 #define S_SHIFT 12
 static unsigned char ext2_type_by_mode[S_IFMT >> S_SHIFT] = {
 	[S_IFREG >> S_SHIFT]	EXT2_FT_REG_FILE,
@@ -242,14 +253,8 @@ static unsigned char ext2_type_by_mode[S_IFMT >> S_SHIFT] = {
 
 static inline void ext2_set_de_type(ext2_dirent *de, struct inode *inode)
 {
-	/* XXX
 	mode_t mode = inode->i_mode;
-	if (EXT2_HAS_INCOMPAT_FEATURE(inode->i_sb, EXT2_FEATURE_INCOMPAT_FILETYPE))
-		de->file_type = ext2_type_by_mode[(mode & S_IFMT)>>S_SHIFT];
-	else
-		de->file_type = 0;
-	*/
-	de->file_type = 0;
+	de->file_type = ext2_type_by_mode[(mode & S_IFMT)>>S_SHIFT];
 }
 
 int
@@ -268,8 +273,7 @@ new_obdfs_readdir (struct file * filp, void * dirent, filldir_t filldir)
 	if (pos > inode->i_size - EXT2_DIR_REC_LEN(1))
 		goto done;
 
-	//if (EXT2_HAS_INCOMPAT_FEATURE(sb, EXT2_FEATURE_INCOMPAT_FILETYPE))
-	//types = ext2_filetype_table;
+	types = ext2_filetype_table;
 
 	for ( ; n < npages; n++, offset = 0) {
 		char *kaddr, *limit;
@@ -376,7 +380,7 @@ struct ext2_dir_entry_2 * ext2_dotdot (struct inode *dir, struct page **p)
 	return de;
 }
 
-ino_t ext2_inode_by_name(struct inode * dir, struct dentry *dentry)
+ino_t obdfs_inode_by_name(struct inode * dir, struct dentry *dentry, int *type)
 {
 	ino_t res = 0;
 	struct ext2_dir_entry_2 * de;
@@ -385,6 +389,7 @@ ino_t ext2_inode_by_name(struct inode * dir, struct dentry *dentry)
 	de = ext2_find_entry (dir, dentry, &page);
 	if (de) {
 		res = le32_to_cpu(de->inode);
+		*type = obdfs_dt2fmt[de->file_type];
 		kunmap(page);
 		page_cache_release(page);
 	}
@@ -476,6 +481,7 @@ got_it:
 	memcpy (de->name, name, namelen);
 	de->inode = cpu_to_le32(inode->i_ino);
 	ext2_set_de_type (de, inode);
+	CDEBUG(D_INODE, "type set to %o\n", de->file_type);
 	dir->i_mtime = dir->i_ctime = CURRENT_TIME;
 	err = ext2_commit_chunk(page, from, to);
 

@@ -692,7 +692,7 @@ void obdfs_truncate(struct inode *inode)
                 obdo.o_valid = OBD_MD_FLNOTOBD;
                 obdfs_from_inode(&obdo, inode);
 
-                err = IOPS(inode, punch)(IID(inode), &obdo, obdo.o_size, 0);
+                err = IOPS(inode, punch)(IID(inode), &obdo, 0, obdo.o_size);
         } else {
                 oa->o_valid = OBD_MD_FLNOTOBD;
                 obdfs_from_inode(oa, inode);

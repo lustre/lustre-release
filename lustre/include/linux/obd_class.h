@@ -184,14 +184,15 @@ struct obd_ioctl_data {
 #define OBD_MD_FLBLOCKS (0x00000020UL)
 #define OBD_MD_FLBLKSZ  (0x00000040UL)
 #define OBD_MD_FLMODE   (0x00000080UL)
-#define OBD_MD_FLUID    (0x00000100UL)
-#define OBD_MD_FLGID    (0x00000200UL)
-#define OBD_MD_FLFLAGS  (0x00000400UL)
-#define OBD_MD_FLOBDFLG (0x00000800UL)
-#define OBD_MD_FLNLINK  (0x00001000UL)
-#define OBD_MD_FLGENER  (0x00002000UL)
-#define OBD_MD_FLINLINE (0x00004000UL)
-#define OBD_MD_FLOBDMD  (0x00008000UL)
+#define OBD_MD_FLTYPE   (0x00000100UL)
+#define OBD_MD_FLUID    (0x00000200UL)
+#define OBD_MD_FLGID    (0x00000400UL)
+#define OBD_MD_FLFLAGS  (0x00000800UL)
+#define OBD_MD_FLOBDFLG (0x00001000UL)
+#define OBD_MD_FLNLINK  (0x00002000UL)
+#define OBD_MD_FLGENER  (0x00004000UL)
+#define OBD_MD_FLINLINE (0x00008000UL)
+#define OBD_MD_FLOBDMD  (0x00010000UL)
 #define OBD_MD_FLNOTOBD (~(OBD_MD_FLOBDMD | OBD_MD_FLOBDFLG | OBD_MD_FLBLOCKS))
 
 /*
@@ -352,7 +353,7 @@ static __inline__ void obdo_free(struct obdo *oa)
 
 
 static __inline__ struct obdo *obdo_fromid(struct obd_conn *conn, obd_id id,
-                                           obd_flag valid)
+					   obd_mode mode, obd_flag valid)
 {
         struct obdo *oa;
         int err;
@@ -365,6 +366,7 @@ static __inline__ struct obdo *obdo_fromid(struct obd_conn *conn, obd_id id,
         }
 
         oa->o_id = id;
+	oa->o_mode = mode;
         oa->o_valid = valid;
         if ((err = OBP(conn->oc_dev, getattr)(conn, oa))) {
                 obdo_free(oa);
@@ -416,7 +418,8 @@ static inline void obdo_from_iattr(struct obdo *oa, struct iattr *attr)
 static inline void iattr_from_obdo(struct iattr *attr, struct obdo *oa)
 {
         unsigned int ia_valid = oa->o_valid;
-
+	
+	memset(attr, 0, sizeof(*attr));
         if (ia_valid & OBD_MD_FLATIME) {
                 attr->ia_atime = oa->o_atime;
                 attr->ia_valid |= ATTR_ATIME;
