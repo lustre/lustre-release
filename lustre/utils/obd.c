@@ -771,6 +771,7 @@ int jt_obd_create(int argc, char **argv)
         struct timeval next_time;
         int count = 1, next_count;
         int verbose = 1;
+        int mode = 0100644;
         int rc = 0, i;
         char *end;
 
@@ -786,15 +787,13 @@ int jt_obd_create(int argc, char **argv)
         }
 
         if (argc > 2) {
-                data.ioc_obdo1.o_mode = strtoul(argv[2], &end, 0);
+                mode = strtoul(argv[2], &end, 0);
                 if (*end) {
                         fprintf(stderr, "error: %s: invalid mode '%s'\n",
                                 cmdname(argv[0]), argv[2]);
                         return CMD_HELP;
                 }
-        } else
-                data.ioc_obdo1.o_mode = 0100644;
-        data.ioc_obdo1.o_valid = OBD_MD_FLMODE;
+        }
 
         if (argc > 3) {
                 verbose = get_verbose(argv[0], argv[3]);
@@ -807,6 +806,9 @@ int jt_obd_create(int argc, char **argv)
         next_time.tv_sec -= verbose;
 
         for (i = 1, next_count = verbose; i <= count; i++) {
+                data.ioc_obdo1.o_mode = mode;
+                data.ioc_obdo1.o_valid = OBD_MD_FLMODE;
+
                 rc = ioctl(fd, OBD_IOC_CREATE, &data);
                 SHMEM_BUMP();
                 if (rc < 0) {
@@ -814,9 +816,16 @@ int jt_obd_create(int argc, char **argv)
                                 cmdname(argv[0]), i, strerror(rc = errno));
                         break;
                 }
+                if (!(data.ioc_obdo1.o_valid & OBD_MD_FLID)) {
+                        fprintf(stderr, "error: %s: objid not valid #%d:%08x\n",
+                                cmdname(argv[0]), i, data.ioc_obdo1.o_valid);
+                        rc = EINVAL;
+                        break;
+                }
+
                 if (be_verbose(verbose, &next_time, i, &next_count, count))
                         printf("%s: #%d is object id %Ld\n", cmdname(argv[0]),
-                               i, data.ioc_obdo1.o_id);
+                               i, (long long)data.ioc_obdo1.o_id);
         }
         return rc;
 }
@@ -831,7 +840,7 @@ int jt_obd_setattr(int argc, char **argv)
         if (argc != 2)
                 return CMD_HELP;
 
-        data.ioc_obdo1.o_id = strtoul(argv[1], &end, 0);
+        data.ioc_obdo1.o_id = strtoull(argv[1], &end, 0);
         if (*end) {
                 fprintf(stderr, "error: %s: invalid objid '%s'\n",
                         cmdname(argv[0]), argv[1]);
@@ -843,7 +852,7 @@ int jt_obd_setattr(int argc, char **argv)
                         cmdname(argv[0]), argv[2]);
                 return CMD_HELP;
         }
-        data.ioc_obdo1.o_valid = OBD_MD_FLMODE;
+        data.ioc_obdo1.o_valid = OBD_MD_FLID | OBD_MD_FLMODE;
 
         rc = ioctl(fd, OBD_IOC_SETATTR, &data);
         if (rc < 0)
@@ -863,7 +872,7 @@ int jt_obd_destroy(int argc, char **argv)
         if (argc != 2)
                 return CMD_HELP;
 
-        data.ioc_obdo1.o_id = strtoul(argv[1], &end, 0);
+        data.ioc_obdo1.o_id = strtoull(argv[1], &end, 0);
         if (*end) {
                 fprintf(stderr, "error: %s: invalid objid '%s'\n",
                         cmdname(argv[0]), argv[1]);
@@ -916,11 +925,12 @@ int jt_obd_test_getattr(int argc, char **argv)
         struct obd_ioctl_data data;
         struct timeval start, next_time;
         int i, count, next_count;
-        int verbose;
+        int verbose = 1;
+        obd_id id = 3;
         char *end;
         int rc = 0;
 
-        if (argc != 2 && argc != 3)
+        if (argc < 2 && argc > 4)
                 return CMD_HELP;
 
         IOCINIT(data);
@@ -931,15 +941,21 @@ int jt_obd_test_getattr(int argc, char **argv)
                 return CMD_HELP;
         }
 
-        if (argc == 3) {
+        if (argc >= 3) {
                 verbose = get_verbose(argv[0], argv[2]);
                 if (verbose == BAD_VERBOSE)
                         return CMD_HELP;
-        } else
-                verbose = 1;
+        }
 
-        data.ioc_obdo1.o_valid = 0xffffffff;
-        data.ioc_obdo1.o_id = 2;
+        if (argc >= 4) {
+                id = strtoull(argv[3], &end, 0);
+                if (*end) {
+                        fprintf(stderr, "error: %s: invalid objid '%s'\n",
+                                cmdname(argv[0]), argv[3]);
+                        return CMD_HELP;
+                }
+        }
+
         gettimeofday(&start, NULL);
         next_time.tv_sec = start.tv_sec - verbose;
         next_time.tv_usec = start.tv_usec;
@@ -948,6 +964,8 @@ int jt_obd_test_getattr(int argc, char **argv)
                        cmdname(argv[0]), count, ctime(&start.tv_sec));
 
         for (i = 1, next_count = verbose; i <= count; i++) {
+                data.ioc_obdo1.o_id = id;
+                data.ioc_obdo1.o_valid = 0xffffffff;
                 rc = ioctl(fd, OBD_IOC_GETATTR, &data);
                 SHMEM_BUMP();
                 if (rc < 0) {
@@ -1009,7 +1027,9 @@ int jt_obd_test_brw(int argc, char **argv)
                         write = 1;
                 else if (argv[2][0] == 'r' || argv[2][0] == '0')
                         write = 0;
+        }
 
+        if (argc >= 4) {
                 verbose = get_verbose(argv[0], argv[3]);
                 if (verbose == BAD_VERBOSE)
                         return CMD_HELP;
@@ -1024,7 +1044,7 @@ int jt_obd_test_brw(int argc, char **argv)
                 }
         }
         if (argc >= 6) {
-                objid = strtoul(argv[5], &end, 0);
+                objid = strtoull(argv[5], &end, 0);
                 if (*end) {
                         fprintf(stderr, "error: %s: bad objid '%s'\n",
                                 cmdname(argv[0]), argv[5]);
