@@ -121,9 +121,8 @@ struct ldlm_lock {
         struct list_head      l_children;
         struct list_head      l_childof;
         struct list_head      l_res_link; /*position in one of three res lists*/
-        struct list_head      l_inode_link; /* position in inode info list */
         struct list_head      l_export_chain; /* per-export chain of locks */
-        struct list_head      l_pending_chain; /* locks with callbacks pending */
+        struct list_head      l_pending_chain; /* locks with callbacks pending*/
         unsigned long         l_callback_timeout;
 
         ldlm_mode_t           l_req_mode;
@@ -271,6 +270,7 @@ do {                                            \
         lock;                                   \
 })
 
+struct ldlm_lock *ldlm_lock_get(struct ldlm_lock *lock);
 void ldlm_lock_put(struct ldlm_lock *lock);
 void ldlm_lock_destroy(struct ldlm_lock *lock);
 void ldlm_lock2desc(struct ldlm_lock *lock, struct ldlm_lock_desc *desc);
@@ -359,6 +359,7 @@ int ldlm_server_ast(struct lustre_handle *lockh, struct ldlm_lock_desc *new,
                     void *data, __u32 data_len);
 int ldlm_cli_convert(struct lustre_handle *, int new_mode, int *flags);
 int ldlm_cli_cancel(struct lustre_handle *lockh);
+int ldlm_cli_cancel_unused(struct ldlm_namespace *ns, __u64 *res_id);
 
 /* mds/handler.c */
 /* This has to be here because recurisve inclusion sucks. */

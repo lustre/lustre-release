@@ -442,7 +442,6 @@ static void ll_read_inode2(struct inode *inode, void *opaque)
         ENTRY;
 
         sema_init(&ii->lli_open_sem, 1);
-        INIT_LIST_HEAD(&ii->lli_osc_locks);
 
         /* core attributes first */
         if (body->valid & OBD_MD_FLID)
@@ -467,8 +466,8 @@ static void ll_read_inode2(struct inode *inode, void *opaque)
                 inode->i_generation = body->generation;
         if (body->valid & OBD_MD_FLRDEV)
                 inode->i_rdev = body->extra;
-        //if (body->valid & OBD_MD_FLSIZE)
-        //        inode->i_size = body->size;
+        if (body->valid & OBD_MD_FLSIZE)
+                inode->i_size = body->size;
 
 
         //if (body->valid & OBD_MD_FLEASIZE)

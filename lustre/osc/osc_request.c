@@ -598,9 +598,6 @@ static int osc_enqueue(struct lustre_handle *connh, struct lov_stripe_md *md,
         __u64 res_id[RES_NAME_SIZE] = { md->lmd_object_id };
         struct obd_device *obddev = class_conn2obd(connh);
         struct ldlm_extent *extent = extentp;
-        struct ldlm_lock *lock;
-        struct inode *inode = data;
-        struct ll_inode_info *lli = ll_i2info(inode);
         int rc;
         __u32 mode2;
 
@@ -651,20 +648,6 @@ static int osc_enqueue(struct lustre_handle *connh, struct lov_stripe_md *md,
                               parent_lock, res_id, type, extent,
                               sizeof(extent), mode, flags, ldlm_completion_ast,
                               callback, data, datalen, lockh);
-        if (rc)
-                return rc;
-
-        /* This code must change if we ever stop passing an inode in as data */
-        /* This is ldlm and llite code.  It makes me sad that it's in
-         * osc_request.c --phil */
-        lock = ldlm_handle2lock(lockh);
-        if (lock) {
-                /* Lock already has an extra ref from handle2lock */
-                l_lock(&obddev->obd_namespace->ns_lock);
-                list_add(&lock->l_inode_link, &lli->lli_osc_locks);
-                l_unlock(&obddev->obd_namespace->ns_lock);
-        }
-
         return rc;
 }
 

@@ -192,7 +192,7 @@ void ldlm_lock_destroy(struct ldlm_lock *lock)
 
         list_del(&lock->l_export_chain);
         lock->l_export = NULL;
-        lock->l_flags = LDLM_FL_DESTROYED;
+        lock->l_flags |= LDLM_FL_DESTROYED;
 
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
         LDLM_LOCK_PUT(lock);
@@ -229,7 +229,6 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_lock *parent,
         lock->l_refc = 1;
         INIT_LIST_HEAD(&lock->l_children);
         INIT_LIST_HEAD(&lock->l_res_link);
-        INIT_LIST_HEAD(&lock->l_inode_link);
         INIT_LIST_HEAD(&lock->l_export_chain);
         INIT_LIST_HEAD(&lock->l_pending_chain);
         init_waitqueue_head(&lock->l_waitq);
@@ -511,7 +510,7 @@ static struct ldlm_lock *search_queue(struct list_head *queue, ldlm_mode_t mode,
         list_for_each(tmp, queue) {
                 lock = list_entry(tmp, struct ldlm_lock, l_res_link);
 
-                if (lock->l_flags & LDLM_FL_CBPENDING)
+                if (lock->l_flags & (LDLM_FL_CBPENDING | LDLM_FL_DESTROYED))
                         continue;
 
                 /* lock_convert() takes the resource lock, so we're sure that

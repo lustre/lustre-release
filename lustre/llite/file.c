@@ -177,8 +177,6 @@ static int ll_file_release(struct inode *inode, struct file *file)
         struct obdo oa;
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct ll_inode_info *lli = ll_i2info(inode);
-        //struct obd_device *obddev = class_conn2obd(&sbi->ll_osc_conn);
-        struct list_head *tmp, *next;
 
         ENTRY;
 
@@ -243,23 +241,7 @@ static int ll_file_release(struct inode *inode, struct file *file)
         }
         ptlrpc_free_req(fd->fd_req);
 
-        // XXX Phil lov devices have no namespace
-        //l_lock(&obddev->obd_namespace->ns_lock);
-        list_for_each_safe(tmp, next, &lli->lli_osc_locks) {
-                struct ldlm_lock *lock;
-                struct lustre_handle lockh;
-                lock = list_entry(tmp, struct ldlm_lock, l_inode_link);
-
-                if (!list_empty(&lock->l_inode_link)) {
-                        list_del_init(&lock->l_inode_link);
-                        LDLM_LOCK_PUT(lock);
-                }
-                ldlm_lock2handle(lock, &lockh);
-                rc = ldlm_cli_cancel(&lockh);
-                if (rc < 0)
-                        CERROR("ldlm_cli_cancel: %d\n", rc);
-        }
-        //l_unlock(&obddev->obd_namespace->ns_lock);
+        //ldlm_cli_cancel_unused();
 
         EXIT;
 
@@ -321,13 +303,6 @@ int ll_lock_callback(struct ldlm_lock *lock, struct ldlm_lock_desc *new,
         up(&inode->i_sem);
 
         ldlm_lock2handle(lock, &lockh);
-        l_lock(&lock->l_resource->lr_namespace->ns_lock);
-        if (!list_empty(&lock->l_inode_link)) {
-                list_del_init(&lock->l_inode_link);
-                LDLM_LOCK_PUT(lock);
-        }
-        l_unlock(&lock->l_resource->lr_namespace->ns_lock);
-
         rc = ldlm_cli_cancel(&lockh);
         if (rc != ELDLM_OK)
                 CERROR("ldlm_cli_cancel failed: %d\n", rc);

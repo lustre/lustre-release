@@ -47,7 +47,6 @@ struct ll_inode_info {
         char                 *lli_symlink_name;
         struct lustre_handle  lli_intent_lock_handle;
         struct semaphore      lli_open_sem;
-        struct list_head      lli_osc_locks;
 };
 
 #define LL_SUPER_MAGIC 0x0BD00BD0
