@@ -132,23 +132,21 @@ static int oscc_precreate(struct osc_creator *oscc, struct osc_created *osccd,
         RETURN(rc);
 }
 
-int osc_create(struct lustre_handle *exph, struct obdo *oa,
+int osc_create(struct obd_export *exp, struct obdo *oa,
                struct lov_stripe_md **ea, struct obd_trans_info *oti)
 {
         struct lov_stripe_md *lsm;
-        struct obd_export *export = class_conn2export(exph);
-        struct osc_creator *oscc = &export->u.eu_osc_data.oed_oscc;
+        struct osc_creator *oscc = &exp->u.eu_osc_data.oed_oscc;
         struct osc_created *osccd = oscc->oscc_osccd;
         int try_again = 1, rc = 0;
         ENTRY;
 
-        class_export_put(export);
         LASSERT(oa);
         LASSERT(ea);
 
         lsm = *ea;
         if (lsm == NULL) {
-                rc = obd_alloc_memmd(exph, &lsm);
+                rc = obd_alloc_memmd(exp, &lsm);
                 if (rc < 0)
                         RETURN(rc);
         }
@@ -157,7 +155,7 @@ int osc_create(struct lustre_handle *exph, struct obdo *oa,
 	if (oa->o_valid == (OBD_MD_FLID | OBD_MD_FLFLAGS) &&
 	    oa->o_flags == OBD_FL_DELORPHAN) {
 		oa->o_id = oscc->oscc_next_id - 1;
-                rc = osc_real_create(oscc->oscc_exph, oa, ea, NULL);
+                rc = osc_real_create(oscc->oscc_exp, oa, ea, NULL);
 		RETURN(rc);
 	}
 
@@ -178,7 +176,7 @@ int osc_create(struct lustre_handle *exph, struct obdo *oa,
         if (rc == 0)
                 CDEBUG(D_INFO, "returning objid "LPU64"\n", lsm->lsm_object_id);
         else if (*ea == NULL)
-                obd_free_memmd(exph, &lsm);
+                obd_free_memmd(exp, &lsm);
         RETURN(rc);
 }
 
@@ -200,7 +198,7 @@ void osccd_do_create(struct osc_created *osccd)
                 spin_unlock(&oscc->oscc_lock);
                 spin_unlock(&osccd->osccd_lock);
 
-                rc = osc_real_create(oscc->oscc_exph, &oscc->oscc_oa,
+                rc = osc_real_create(oscc->oscc_exp, &oscc->oscc_oa,
                                      &oscc->oscc_ea, NULL);
 
                 spin_lock(&osccd->osccd_lock);
@@ -277,7 +275,7 @@ void oscc_init(struct lustre_handle *exph)
         INIT_LIST_HEAD(&oed->oed_oscc.oscc_list);
         init_waitqueue_head(&oed->oed_oscc.oscc_waitq);
         spin_lock_init(&oed->oed_oscc.oscc_lock);
-        oed->oed_oscc.oscc_exph = exph;
+        oed->oed_oscc.oscc_exp = exp;
         oed->oed_oscc.oscc_osccd = &osc_created;
         oed->oed_oscc.oscc_kick_barrier = 50;
         oed->oed_oscc.oscc_grow_count = 100;
@@ -287,8 +285,6 @@ void oscc_init(struct lustre_handle *exph)
         oed->oed_oscc.oscc_last_id = 1;
         /* XXX the export handle should give the oscc the last object */
         /* oed->oed_oscc.oscc_last_id = exph->....; */
-
-        class_export_put(exp);
 }
 
 int osccd_setup(void)
