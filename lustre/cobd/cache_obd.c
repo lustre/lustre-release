@@ -144,19 +144,18 @@ cobd_get_info(struct lustre_handle *conn, obd_count keylen,
         return obd_get_info(&cobd->cobd_target, keylen, key, vallen, val);
 }
 
-static int
-cobd_statfs(struct lustre_handle *conn, struct obd_statfs *osfs)
+static int cobd_statfs(struct obd_export *exp, struct obd_statfs *osfs)
 {
-        struct obd_device *obd = class_conn2obd(conn);
-        struct cache_obd  *cobd;
+        struct obd_export *cobd_exp;
+        int rc;
 
-        if (obd == NULL) {
-                CERROR("invalid client cookie "LPX64"\n", conn->cookie);
+        if (exp->exp_obd == NULL)
                 return -EINVAL;
-        }
 
-        cobd = &obd->u.cobd;
-        return (obd_statfs (&cobd->cobd_target, osfs));
+        cobd_exp = class_conn2export(&exp->exp_obd->u.cobd.cobd_target);
+        rc = obd_statfs(cobd_exp, osfs);
+        class_export_put(cobd_exp);
+        return rc;
 }
 
 static int
@@ -208,7 +207,7 @@ cobd_close(struct lustre_handle *conn, struct obdo *oa,
         return (obd_close (&cobd->cobd_target, oa, lsm, oti));
 }
 
-static int cobd_preprw(int cmd, struct obd_export *exp,
+static int cobd_preprw(int cmd, struct obd_export *exp, struct obdo *obdo,
                        int objcount, struct obd_ioobj *obj,
                        int niocount, struct niobuf_remote *nb,
                        struct niobuf_local *res, void **desc_private,
@@ -224,7 +223,7 @@ static int cobd_preprw(int cmd, struct obd_export *exp,
                 return -EOPNOTSUPP;
 
         cobd_exp = class_conn2export(&exp->exp_obd->u.cobd.cobd_target);
-        rc = obd_preprw(cmd, cobd_exp, objcount, obj, niocount, nb, res,
+        rc = obd_preprw(cmd, cobd_exp, obdo, objcount, obj, niocount, nb, res,
                         desc_private, oti);
         class_export_put(cobd_exp);
         return rc;
