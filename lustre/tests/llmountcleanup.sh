@@ -1,6 +1,10 @@
 #!/bin/sh
 
-SRCDIR="`dirname $0`/"
-. $SRCDIR/common.sh
+LCONF=../utils/lconf
 
-. $SRCDIR/llcleanup.sh $SRCDIR/net-local.cfg $SRCDIR/mds.cfg $SRCDIR/obdfilter.cfg $SRCDIR/client-mount.cfg $SRCDIR/ldlm.cfg || exit 2
+if [ ! -f local.xml ]; then
+   ./local.sh
+fi
+
+${LCONF} --cleanup local.xml
+
