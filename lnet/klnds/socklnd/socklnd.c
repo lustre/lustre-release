@@ -56,7 +56,7 @@ static ctl_table ksocknal_ctl_table[] = {
          &ksocknal_data.ksnd_eager_ack, sizeof (int),
          0644, NULL, &proc_dointvec},
 #if SOCKNAL_ZC
-        {SOCKNAL_SYSCTL_EAGER_ACK, "zero_copy", 
+        {SOCKNAL_SYSCTL_ZERO_COPY, "zero_copy", 
          &ksocknal_data.ksnd_zc_min_frag, sizeof (int),
          0644, NULL, &proc_dointvec},
 #endif
@@ -91,10 +91,6 @@ ksocknal_api_forward(nal_t *nal, int id, void *args, size_t args_len,
 int
 ksocknal_api_shutdown(nal_t *nal, int ni)
 {
-        CDEBUG (D_NET, "closing all connections\n");
-
-        ksocknal_del_route (PTL_NID_ANY, 0, 0, 0);
-        ksocknal_close_matching_conns (PTL_NID_ANY, 0);
         return PTL_OK;
 }
 
@@ -206,7 +202,7 @@ ksocknal_bind_irq (unsigned int irq)
 
 ksock_route_t *
 ksocknal_create_route (__u32 ipaddr, int port, int buffer_size,
-                       int nonagel, int irq_affinity, int eager)
+                       int irq_affinity, int eager)
 {
         ksock_route_t *route;
 
@@ -223,7 +219,6 @@ ksocknal_create_route (__u32 ipaddr, int port, int buffer_size,
         route->ksnr_port = port;
         route->ksnr_buffer_size = buffer_size;
         route->ksnr_irq_affinity = irq_affinity;
-        route->ksnr_nonagel = nonagel;
         route->ksnr_eager = eager;
         route->ksnr_connecting = 0;
         route->ksnr_connected = 0;
@@ -277,9 +272,6 @@ ksocknal_create_peer (ptl_nid_t nid)
         INIT_LIST_HEAD (&peer->ksnp_routes);
         INIT_LIST_HEAD (&peer->ksnp_tx_queue);
 
-        /* Can't unload while peers exist; ensures all I/O has terminated
-         * before unload attempts */
-        PORTAL_MODULE_USE;
         atomic_inc (&ksocknal_data.ksnd_npeers);
         return (peer);
 }
@@ -301,7 +293,6 @@ ksocknal_destroy_peer (ksock_peer_t *peer)
          * that _all_ state to do with this peer has been cleaned up when
          * its refcount drops to zero. */
         atomic_dec (&ksocknal_data.ksnd_npeers);
-        PORTAL_MODULE_UNUSE;
 }
 
 void
@@ -403,7 +394,7 @@ ksocknal_get_route_by_idx (int index)
 
 int
 ksocknal_add_route (ptl_nid_t nid, __u32 ipaddr, int port, int bufnob,
-                    int nonagle, int bind_irq, int share, int eager)
+                    int bind_irq, int share, int eager)
 {
         unsigned long      flags;
         ksock_peer_t      *peer;
@@ -421,7 +412,7 @@ ksocknal_add_route (ptl_nid_t nid, __u32 ipaddr, int port, int bufnob,
                 return (-ENOMEM);
 
         route = ksocknal_create_route (ipaddr, port, bufnob, 
-                                       nonagle, bind_irq, eager);
+                                       bind_irq, eager);
         if (route == NULL) {
                 ksocknal_put_peer (peer);
                 return (-ENOMEM);
@@ -805,6 +796,10 @@ ksocknal_create_conn (ksock_route_t *route, struct socket *sock,
         peer->ksnp_last_alive = jiffies;
         peer->ksnp_error = 0;
 
+        /* Set the deadline for the outgoing HELLO to drain */
+        conn->ksnc_tx_deadline = jiffies +
+                                 ksocknal_data.ksnd_io_timeout * HZ;
+
         list_add (&conn->ksnc_list, &peer->ksnp_conns);
         atomic_inc (&conn->ksnc_refcount);
 
@@ -836,7 +831,9 @@ ksocknal_create_conn (ksock_route_t *route, struct socket *sock,
         write_unlock_irqrestore (&ksocknal_data.ksnd_global_lock, flags);
 
         if (rc != 0)
-                CERROR ("Closed %d stale conns to "LPX64"\n", rc, nid);
+                CERROR ("Closed %d stale conns to nid "LPX64" ip %d.%d.%d.%d\n",
+                        rc, conn->ksnc_peer->ksnp_nid,
+                        HIPQUAD(conn->ksnc_ipaddr));
 
         if (bind_irq)                           /* irq binding required */
                 ksocknal_bind_irq (irq);
@@ -845,8 +842,8 @@ ksocknal_create_conn (ksock_route_t *route, struct socket *sock,
         ksocknal_data_ready (sock->sk, 0);
         ksocknal_write_space (sock->sk);
 
-        CDEBUG(D_IOCTL, "conn [%p] registered for nid "LPX64"\n",
-               conn, conn->ksnc_peer->ksnp_nid);
+        CDEBUG(D_IOCTL, "conn [%p] registered for nid "LPX64" ip %d.%d.%d.%d\n",
+               conn, conn->ksnc_peer->ksnp_nid, HIPQUAD(conn->ksnc_ipaddr));
 
         ksocknal_put_conn (conn);
         return (0);
@@ -856,7 +853,7 @@ void
 ksocknal_close_conn_locked (ksock_conn_t *conn, int error)
 {
         /* This just does the immmediate housekeeping, and queues the
-         * connection for the reaper to terminate. 
+         * connection for the reaper to terminate.
          * Caller holds ksnd_global_lock exclusively in irq context */
         ksock_peer_t   *peer = conn->ksnc_peer;
         ksock_route_t  *route;
@@ -996,15 +993,11 @@ ksocknal_destroy_conn (ksock_conn_t *conn)
         /* complete current receive if any */
         switch (conn->ksnc_rx_state) {
         case SOCKNAL_RX_BODY:
-#if 0
-                lib_finalize (&ksocknal_lib, NULL, conn->ksnc_cookie);
-#else
-                CERROR ("Refusing to complete a partial receive from "
-                        LPX64", ip %08x\n", conn->ksnc_peer->ksnp_nid,
-                        conn->ksnc_ipaddr);
-                CERROR ("This may hang communications and "
-                        "prevent modules from unloading\n");
-#endif
+                CERROR("Completing partial receive from "LPX64
+                       ", ip %d.%d.%d.%d:%d, with error\n",
+                       conn->ksnc_peer->ksnp_nid,
+                       HIPQUAD(conn->ksnc_ipaddr), conn->ksnc_port);
+                lib_finalize (&ksocknal_lib, NULL, conn->ksnc_cookie, PTL_FAIL);
                 break;
         case SOCKNAL_RX_BODY_FWD:
                 ksocknal_fmb_callback (conn->ksnc_cookie, -ECONNABORTED);
@@ -1318,8 +1311,7 @@ ksocknal_cmd(struct portals_cfg *pcfg, void * private)
                         pcfg->pcfg_count = route->ksnr_conn_count;
                         pcfg->pcfg_size  = route->ksnr_buffer_size;
                         pcfg->pcfg_wait  = route->ksnr_sharecount;
-                        pcfg->pcfg_flags = (route->ksnr_nonagel      ? 1 : 0) |
-                                           (route->ksnr_irq_affinity ? 2 : 0) |
+                        pcfg->pcfg_flags = (route->ksnr_irq_affinity ? 2 : 0) |
                                            (route->ksnr_eager        ? 4 : 0);
                         ksocknal_put_route (route);
                 }
@@ -1328,7 +1320,6 @@ ksocknal_cmd(struct portals_cfg *pcfg, void * private)
         case NAL_CMD_ADD_AUTOCONN: {
                 rc = ksocknal_add_route (pcfg->pcfg_nid, pcfg->pcfg_id,
                                          pcfg->pcfg_misc, pcfg->pcfg_size,
-                                         (pcfg->pcfg_flags & 0x01) != 0,
                                          (pcfg->pcfg_flags & 0x02) != 0,
                                          (pcfg->pcfg_flags & 0x04) != 0,
                                          (pcfg->pcfg_flags & 0x08) != 0);
@@ -1456,7 +1447,28 @@ ksocknal_module_fini (void)
                 /* fall through */
 
         case SOCKNAL_INIT_PTL:
+                /* No more calls to ksocknal_cmd() to create new
+                 * autoroutes/connections since we're being unloaded. */
                 PtlNIFini(ksocknal_ni);
+
+                /* Delete all autoroute entries */
+                ksocknal_del_route(PTL_NID_ANY, 0, 0, 0);
+
+                /* Delete all connections */
+                ksocknal_close_matching_conns (PTL_NID_ANY, 0);
+                
+                /* Wait for all peer state to clean up */
+                i = 2;
+                while (atomic_read (&ksocknal_data.ksnd_npeers) != 0) {
+                        i++;
+                        CDEBUG(((i & (-i)) == i) ? D_WARNING : D_NET, /* power of 2? */
+                               "waiting for %d peers to disconnect\n",
+                               atomic_read (&ksocknal_data.ksnd_npeers));
+                        set_current_state (TASK_UNINTERRUPTIBLE);
+                        schedule_timeout (HZ);
+                }
+
+                /* Tell lib we've stopped calling into her. */
                 lib_fini(&ksocknal_lib);
                 /* fall through */
 
