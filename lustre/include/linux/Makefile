@@ -1,0 +1,3 @@
+
+all .DEFAULT: 
+	$(MAKE) -C ../..  $@
