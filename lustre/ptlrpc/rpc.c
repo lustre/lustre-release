@@ -145,6 +145,7 @@ static void __exit ptlrpc_exit(void)
 }
 
 /* connmgr.c */
+EXPORT_SYMBOL(ptlrpc_connmgr);
 EXPORT_SYMBOL(connmgr_connect);
 EXPORT_SYMBOL(connmgr_handle);
 EXPORT_SYMBOL(recovd_cli_fail);
