@@ -28,7 +28,6 @@ rmmod loop > /dev/null 2>&1
 
 if [ "$TMPFILE" -a -f "$TMPFILE" ]; then
     echo -n "Remove $TMPFILE [N/y]? "
-    read ANS
-    [ "`echo $ANS | cut -c1 | tr A-Z a-z`" = "y" ] && rm $TMPFILE
+    rm -i $TMPFILE
 fi
 

@@ -447,6 +447,7 @@ struct inode *obdfs_new_inode(struct inode *dir)
 {
 	struct obdo *obdo;
 	struct inode *inode;
+	struct obdfs_inode_info *oinfo;
 	int err;
 
 	obdo = obdo_alloc();
@@ -474,8 +475,10 @@ struct inode *obdfs_new_inode(struct inode *dir)
 		return ERR_PTR(-EIO);
 	}
 
-
 	obdo_free(obdo);
+
+	oinfo = inode->u.generic_ip;
+	INIT_LIST_HEAD(&oinfo->oi_list);
 	EXIT;
 	return inode;
 }
@@ -835,6 +838,7 @@ int obdfs_symlink (struct inode * dir, struct dentry *dentry, const char * symna
 {
 	struct ext2_dir_entry_2 * de;
 	struct inode * inode;
+	struct obdfs_inode_info *oinfo;
 	struct page* page = NULL, * name_page = NULL;
 	char * link;
 	int i, l, err = -EIO;
@@ -842,6 +846,7 @@ int obdfs_symlink (struct inode * dir, struct dentry *dentry, const char * symna
 
         ENTRY;
 	inode = obdfs_new_inode(dir);
+	oinfo = inode->u.generic_ip;
 	if ( IS_ERR(inode) ) {
 		EXIT;
 		return PTR_ERR(inode);
@@ -853,7 +858,7 @@ int obdfs_symlink (struct inode * dir, struct dentry *dentry, const char * symna
 	     symname [l]; l++)
 		;
 
-	if (l >= sizeof (inode->u.ext2_i.i_data)) {
+	if (l >= sizeof (oinfo->oi_inline)) {
 		CDEBUG(D_INODE, "l=%d, normal symlink\n", l);
 
 		name_page = obdfs_getpage(inode, 0, 1, LOCKED);
@@ -866,7 +871,8 @@ int obdfs_symlink (struct inode * dir, struct dentry *dentry, const char * symna
 		}
 		link = (char *)page_address(name_page);
 	} else {
-		link = (char *) inode->u.ext2_i.i_data;
+		link = oinfo->oi_inline;
+		oinfo->oi_flags |= OBD_FL_INLINEDATA;
 
 		CDEBUG(D_INODE, "l=%d, fast symlink\n", l);
 

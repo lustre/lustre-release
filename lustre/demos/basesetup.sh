@@ -12,8 +12,9 @@ OBDDIR="`dirname $0`/.."
 
 # temp file
 if [ "$TMPFILE" -a -f $TMPFILE ]; then 
-    echo "$TMPFILE exists; I'm unwilling to overwrite it." 1>&2
-    exit 1
+    echo "$TMPFILE exists; I'm unwilling to overwrite it.  Remove [N/y]?" 1>&2
+    rm -i $TMPFILE
+    [ -f $TMPFILE ] && exit 1
 fi
 [ "$TMPFILE" ] && dd if=/dev/zero of=$TMPFILE bs=1k count=10k
 

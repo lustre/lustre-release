@@ -24,6 +24,7 @@ int flushd_init(void);
 /* rw.c */
 int obdfs_do_writepage(struct inode *, struct page *, int sync);
 int obdfs_init_wreqcache(void);
+void obdfs_cleanup_wreqcache(void);
 int obdfs_readpage(struct dentry *dentry, struct page *page);
 int obdfs_writepage(struct dentry *dentry, struct page *page);
 struct page *obdfs_getpage(struct inode *inode, unsigned long offset, int create, int locked);
@@ -69,6 +70,11 @@ struct obdfs_sb_info {
 	struct list_head osi_list;  /* linked list of inodes to write */
 };
 
+struct obdfs_inode_info {
+	int		 oi_flags;
+	struct list_head oi_list;
+	char 		*oi_inline;
+};
 
 #define WB_NEXT(req)	((struct obdfs_wreq *) ((req)->wb_list.next))
 /* XXX page list should go on each inode instead of supberblock */
@@ -77,7 +83,6 @@ struct obdfs_sb_info {
 
 void obdfs_sysctl_init(void);
 void obdfs_sysctl_clean(void);
-
 
 extern struct file_operations obdfs_file_operations;
 extern struct inode_operations obdfs_file_inode_operations;

@@ -292,6 +292,35 @@ static void obdfs_put_super(struct super_block *sb)
 	EXIT;
 }
 
+inline int obdfs_has_inline(struct inode *inode)
+{
+	struct obdfs_inode_info *oinfo = inode->u.generic_ip;
+	
+	return (oinfo->oi_flags & OBD_FL_INLINEDATA);
+}
+
+void inline obdfs_from_inode(struct obdo *oa, struct inode *inode)
+{
+	struct obdfs_inode_info *oinfo = inode->u.generic_ip;
+
+	obdo_from_inode(oa, inode);
+	if (obdfs_has_inline(inode)) {
+		memcpy(oa->o_inline, oinfo->oi_inline, OBD_INLINESZ);
+		oa->o_flags |= OBD_FL_INLINEDATA;
+	}
+}
+
+void inline obdfs_to_inode(struct inode *inode, struct obdo *oa)
+{
+	struct obdfs_inode_info *oinfo = inode->u.generic_ip;
+
+	obdo_to_inode(inode, oa);
+	if (obdo_has_inline(oa)) {
+		memcpy(oinfo->oi_inline, oa->o_inline, OBD_INLINESZ);
+		oinfo->oi_flags |= OBD_FL_INLINEDATA;
+	}
+}
+
 /* all filling in of inodes postponed until lookup */
 void obdfs_read_inode(struct inode *inode)
 {
@@ -316,7 +345,7 @@ void obdfs_read_inode(struct inode *inode)
 	}
 
 	ODEBUG(oa);
-	obdo_to_inode(inode, oa);
+	obdfs_to_inode(inode, oa);
 	obdo_free(oa);
 	IDEBUG(inode);
 
@@ -339,7 +368,7 @@ static void obdfs_write_inode(struct inode *inode)
 	
 	oa = obdo_alloc();
 	oa->o_valid = OBD_MD_FLALL;
-	obdo_from_inode(oa, inode);
+	obdfs_from_inode(oa, inode);
 	err = IOPS(inode, setattr)(IID(inode), oa);
 
 	obdo_free(oa);
@@ -391,6 +420,8 @@ static int obdfs_notify_change(struct dentry *de, struct iattr *attr)
 	oa->o_id = inode->i_ino;
 	obdo_from_iattr(oa, attr);
         err = IOPS(inode, setattr)(IID(inode), oa);
+	obdo_free(oa);
+
 	if ( err ) {
 		printk("obdfs_notify_change: obd_setattr fails (%d)\n", err);
 		return err;
@@ -459,6 +490,7 @@ void cleanup_module(void)
         ENTRY;
 
 	obdfs_sysctl_clean();
+	obdfs_cleanup_wreqcache();
 	unregister_filesystem(&obdfs_fs_type);
 }
 

@@ -60,22 +60,22 @@ struct obdo {
 };
 
 #define OBD_MD_FLALL	(~0UL)
-#define OBD_MD_FLID	(1UL)
-#define OBD_MD_FLATIME	(1UL<<1)
-#define OBD_MD_FLMTIME	(1UL<<2)
-#define OBD_MD_FLCTIME	(1UL<<3)
-#define OBD_MD_FLSIZE	(1UL<<4)
-#define OBD_MD_FLBLOCKS	(1UL<<5)
-#define OBD_MD_FLBLKSZ	(1UL<<6)
-#define OBD_MD_FLMODE	(1UL<<7)
-#define OBD_MD_FLUID	(1UL<<8)
-#define OBD_MD_FLGID	(1UL<<9)
-#define OBD_MD_FLFLAGS	(1UL<<10)
-#define OBD_MD_FLOBDFLG	(1UL<<11)
-#define OBD_MD_FLNLINK	(1UL<<12)
-#define OBD_MD_FLGENER	(1UL<<13)
-#define OBD_MD_FLINLINE	(1UL<<14)
-#define OBD_MD_FLOBDMD	(1UL<<15)
+#define OBD_MD_FLID	(0x0001UL)
+#define OBD_MD_FLATIME	(0x0002UL)
+#define OBD_MD_FLMTIME	(0x0004UL)
+#define OBD_MD_FLCTIME	(0x0008UL)
+#define OBD_MD_FLSIZE	(0x0010UL)
+#define OBD_MD_FLBLOCKS	(0x0020UL)
+#define OBD_MD_FLBLKSZ	(0x0040UL)
+#define OBD_MD_FLMODE	(0x0080UL)
+#define OBD_MD_FLUID	(0x0100UL)
+#define OBD_MD_FLGID	(0x0200UL)
+#define OBD_MD_FLFLAGS	(0x0400UL)
+#define OBD_MD_FLOBDFLG	(0x0800UL)
+#define OBD_MD_FLNLINK	(0x1000UL)
+#define OBD_MD_FLGENER	(0x2000UL)
+#define OBD_MD_FLINLINE	(0x4000UL)
+#define OBD_MD_FLOBDMD	(0x8000UL)
 
 /*
  *  ======== OBD Device Declarations ===========
@@ -254,7 +254,7 @@ static inline void obdo_from_iattr(struct obdo *oa, struct iattr *attr)
 
 static __inline__ void obdo_cpy_md(struct obdo *dst, struct obdo *src)
 {
-	CDEBUG(D_INODE, "flags %x\n", src->o_valid);
+	CDEBUG(D_INODE, "flags 0x%x\n", src->o_valid);
 	if ( src->o_valid & OBD_MD_FLATIME ) 
 		dst->o_atime = src->o_atime;
 	if ( src->o_valid & OBD_MD_FLMTIME ) 

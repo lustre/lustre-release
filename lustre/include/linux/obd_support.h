@@ -78,7 +78,7 @@ extern int obd_print_entry;
 		       __FUNCTION__ , __LINE__, \
 		       obdo->o_id, obdo->o_atime, obdo->o_mtime,\
 		       obdo->o_ctime, obdo->o_size, obdo->o_blocks);\
-		printk("]]%s line %d[[  mode %o, uid %d, gid %d, flg %0x, obdflg %0x, nlnk %d, valid %0x\n", \
+		printk("]]%s line %d[[  mode %o, uid %d, gid %d, flg 0x%0x, obdflg 0x%0x, nlnk %d, valid 0x%0x\n", \
 		       __FUNCTION__ , __LINE__, \
 		       obdo->o_mode, obdo->o_uid, obdo->o_gid,\
 		       obdo->o_flags, obdo->o_obdflags, obdo->o_nlink,\

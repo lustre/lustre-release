@@ -913,8 +913,8 @@ void cleanup_module(void)
 		} 
 	}
 
-	obd_cleanup_obdo_cache();
 	obd_sysctl_clean();
+	obd_cleanup_obdo_cache();
 	obd_init_magic = 0;
 	EXIT;
 }

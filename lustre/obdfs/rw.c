@@ -99,6 +99,15 @@ int obdfs_init_wreqcache(void)
 	return 0;
 }
 
+void obdfs_cleanup_wreqcache(void)
+{
+	if (obdfs_wreq_cachep != NULL)
+		kmem_cache_destroy(obdfs_wreq_cachep);
+	
+	obdfs_wreq_cachep = NULL;
+}
+
+
 /*
  * Find a specific page in the page cache.  If it is found, we return
  * the write request struct associated with it, if not found return NULL.
