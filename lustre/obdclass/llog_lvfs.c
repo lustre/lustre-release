@@ -51,8 +51,8 @@ static int llog_lvfs_pad(struct l_file *file, int len, int index)
         
         LASSERT(len >= LLOG_MIN_REC_SIZE && (len & 0xf) == 0);
 
-        tail.lrt_len = rec.lrh_len = len;
-        tail.lrt_index = rec.lrh_index = index;
+        tail.lrt_len = rec.lrh_len = cpu_to_le16(len);
+        tail.lrt_index = rec.lrh_index = cpu_to_le16(index);
         rec.lrh_type = 0;
 
         rc = lustre_fwrite(file, &rec, sizeof(rec), &file->f_pos);
@@ -84,8 +84,9 @@ static int llog_lvfs_write_blob(struct l_file *file, struct llog_rec_hdr *rec,
         file->f_pos = off;
 
         if (!buf) {
-                rc = lustre_fwrite(file, rec, rec->lrh_len, &file->f_pos);
-                if (rc != rec->lrh_len) {
+                buflen = le16_to_cpu(rec->lrh_len);
+                rc = lustre_fwrite(file, rec, buflen, &file->f_pos);
+                if (rc != buflen) {
                         CERROR("error writing log record: rc %d\n", rc);
                         GOTO(out, rc < 0 ? rc : rc = -ENOSPC);
                 }
@@ -93,8 +94,8 @@ static int llog_lvfs_write_blob(struct l_file *file, struct llog_rec_hdr *rec,
         }
 
         /* the buf case */
-        buflen = rec->lrh_len;
-        rec->lrh_len = sizeof(*rec) + size_round(buflen) + sizeof(end);
+        buflen = le16_to_cpu(rec->lrh_len);
+        rec->lrh_len = cpu_to_le16(sizeof(*rec) + size_round(buflen) + sizeof(end));
         rc = lustre_fwrite(file, rec, sizeof(*rec), &file->f_pos);
         if (rc != sizeof(*rec)) {
                 CERROR("error writing log hdr: rc %d\n", rc);
@@ -163,7 +164,7 @@ static int llog_lvfs_read_header(struct llog_handle *handle)
         if (rc)
                 CERROR("error reading log tail\n");
 
-        handle->lgh_last_idx = tail.lrt_index;
+        handle->lgh_last_idx = le16_to_cpu(tail.lrt_index);
         handle->lgh_file->f_pos = handle->lgh_file->f_dentry->d_inode->i_size;
 
         RETURN(rc);
@@ -177,7 +178,7 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
                                void *buf, int idx)
 {
         struct llog_log_hdr *llh;
-        int reclen = rec->lrh_len, index, rc;
+        int reclen = le16_to_cpu(rec->lrh_len), index, rc;
         struct llog_rec_tail *lrt;
         struct file *file;
         loff_t offset;
@@ -196,8 +197,8 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
                         LBUG();
                 }
 
-                if (loghandle->lgh_hdr->llh_size &&
-                    loghandle->lgh_hdr->llh_size != rec->lrh_len)
+                if (llh->llh_size &&
+                    llh->llh_size != rec->lrh_len)
                         RETURN(-EINVAL);
 
                 rc = llog_lvfs_write_blob(file, &llh->llh_hdr, NULL, 0);
@@ -205,8 +206,13 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
                 if (rc || idx == 0)
                         RETURN(rc);
 
-                saved_offset = sizeof(*llh) + (idx-1) * rec->lrh_len;
+                saved_offset = sizeof(*llh) + (idx-1) * le16_to_cpu(rec->lrh_len);
                 rc = llog_lvfs_write_blob(file, rec, buf, saved_offset);
+                if (rc == 0 && reccookie) {
+                        reccookie->lgc_lgl = loghandle->lgh_id;
+                        reccookie->lgc_index = idx;
+                        rc = 1;
+                }       
                 RETURN(rc);
         }
 
@@ -219,7 +225,7 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
          */
         left = LLOG_CHUNK_SIZE - (file->f_pos & (LLOG_CHUNK_SIZE - 1));
         if (buf) 
-                reclen = sizeof(*rec) + size_round(rec->lrh_len) + 
+                reclen = sizeof(*rec) + size_round(le16_to_cpu(rec->lrh_len)) + 
                         sizeof(struct llog_rec_tail);
 
         /* NOTE: padding is a record, but no bit is set */
@@ -232,9 +238,9 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
 
         loghandle->lgh_last_idx++;
         index = loghandle->lgh_last_idx;
-        rec->lrh_index = index;
+        rec->lrh_index = cpu_to_le16(index);
         if (buf == NULL) {
-                lrt = (void *)rec + rec->lrh_len - sizeof(*lrt);
+                lrt = (void *)rec + le16_to_cpu(rec->lrh_len) - sizeof(*lrt);
                 lrt->lrt_len = rec->lrh_len;
                 lrt->lrt_index = rec->lrh_index;
         }
@@ -242,7 +248,7 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
                 CERROR("argh, index %u already set in log bitmap?\n", index);
                 LBUG(); /* should never happen */
         }
-        llh->llh_count++;
+        llh->llh_count = cpu_to_le32(le32_to_cpu(llh->llh_count) + 1);
 
         offset = 0;
         rc = llog_lvfs_write_blob(file, &llh->llh_hdr, NULL, 0);
@@ -254,18 +260,19 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
                 RETURN(rc);
 
         CDEBUG(D_HA, "added record "LPX64": idx: %u, %u bytes\n",
-               loghandle->lgh_id.lgl_oid, index, rec->lrh_len);
+               loghandle->lgh_id.lgl_oid, index, le16_to_cpu(rec->lrh_len));
         if (rc == 0 && reccookie) {
                 reccookie->lgc_lgl = loghandle->lgh_id;
                 reccookie->lgc_index = index;
-                if (rec->lrh_type == MDS_UNLINK_REC)
+                if (le32_to_cpu(rec->lrh_type) == MDS_UNLINK_REC)
                         reccookie->lgc_subsys = LLOG_OBD_DEL_LOG_HANDLE;
-                else if (rec->lrh_type == OST_SZ_REC)
+                else if (le32_to_cpu(rec->lrh_type) == OST_SZ_REC)
                         reccookie->lgc_subsys = LLOG_OBD_SZ_LOG_HANDLE;
-                else if (rec->lrh_type == OST_RAID1_REC)
+                else if (le32_to_cpu(rec->lrh_type) == OST_RAID1_REC)
                         reccookie->lgc_subsys = LLOG_OBD_RD1_LOG_HANDLE;
                 else 
                         reccookie->lgc_subsys = -1;
+                rc = 1;
         }
         RETURN(rc);
 }
@@ -323,7 +330,7 @@ static int llog_lvfs_next_block(struct llog_handle *loghandle, int *cur_idx,
                 }
 
                 tail = buf + rc - sizeof(struct llog_rec_tail);
-                *cur_idx = tail->lrt_index;
+                *cur_idx = le16_to_cpu(tail->lrt_index);
 
                 /* this shouldn't happen */
                 if (tail->lrt_index == 0) {
@@ -336,9 +343,9 @@ static int llog_lvfs_next_block(struct llog_handle *loghandle, int *cur_idx,
                 /* sanity check that the start of the new buffer is no farther
                  * than the record that we wanted.  This shouldn't happen. */
                 rec = buf;
-                if (rec->lrh_index > next_idx) {
+                if (le16_to_cpu(rec->lrh_index) > next_idx) {
                         CERROR("missed desired record? %u > %u\n",
-                               rec->lrh_index, next_idx);
+                               le16_to_cpu(rec->lrh_index), next_idx);
                         RETURN(-ENOENT);
                 }
                 RETURN(0);

@@ -63,14 +63,15 @@ static struct llog_handle *llog_cat_new_log(struct llog_handle *cathandle)
         /* Find first free entry */
         llh = cathandle->lgh_hdr;
         bitmap_size = sizeof(llh->llh_bitmap) * 8;
-        for (i = 0, index = llh->llh_count; i < bitmap_size; i++, index++) {
+        for (i = 0, index = le32_to_cpu(llh->llh_count); i < bitmap_size; 
+             i++, index++) {
                 index %= bitmap_size;
                 if (ext2_set_bit(index, llh->llh_bitmap)) {
                         /* XXX This should trigger log clean up or similar */
                         CERROR("catalog index %d is still in use\n", index);
                 } else {
                         cathandle->lgh_last_idx = index;
-                        llh->llh_count++;
+                        llh->llh_count = cpu_to_le32(le32_to_cpu(llh->llh_count) + 1);
                         break;
                 }
         }
@@ -83,12 +84,12 @@ static struct llog_handle *llog_cat_new_log(struct llog_handle *cathandle)
                loghandle->lgh_id.lgl_oid, index);
 
         /* build the record for this log in the catalog */
-        rec.lid_hdr.lrh_len = sizeof(rec);
-        rec.lid_hdr.lrh_index = index;
-        rec.lid_hdr.lrh_type = LLOG_LOGID_MAGIC;
+        rec.lid_hdr.lrh_len = cpu_to_le16(sizeof(rec));
+        rec.lid_hdr.lrh_index = cpu_to_le16(index);
+        rec.lid_hdr.lrh_type = cpu_to_le32(LLOG_LOGID_MAGIC);
         rec.lid_id = loghandle->lgh_id;
-        rec.lid_tail.lrt_len = sizeof(rec);
-        rec.lid_tail.lrt_index = index;
+        rec.lid_tail.lrt_len = cpu_to_le16(sizeof(rec));
+        rec.lid_tail.lrt_index = cpu_to_le16(index);
 
         /* update the catalog: header and record */
         rc = llog_write_rec(cathandle, &rec.lid_hdr, 
@@ -102,7 +103,7 @@ static struct llog_handle *llog_cat_new_log(struct llog_handle *cathandle)
         list_add_tail(&loghandle->u.phd.phd_entry, &cathandle->u.chd.chd_head);
 
  out_destroy:
-        if (rc)
+        if (rc < 0)
                 llog_destroy(loghandle);
 
         RETURN(loghandle);
@@ -209,7 +210,7 @@ int llog_cat_add_rec(struct llog_handle *cathandle, struct llog_rec_hdr *rec,
         int rc;
         ENTRY;
 
-        LASSERT(rec->lrh_len <= LLOG_CHUNK_SIZE);
+        LASSERT(le16_to_cpu(rec->lrh_len) <= LLOG_CHUNK_SIZE);
         down(&cathandle->lgh_lock);
         loghandle = llog_cat_current_log(cathandle, 1);
         if (IS_ERR(loghandle)) {
@@ -260,7 +261,8 @@ int llog_cat_cancel_records(struct llog_handle *cathandle, int count,
                 if (!ext2_clear_bit(cookies->lgc_index, llh->llh_bitmap)) {
                         CERROR("log index %u in "LPX64":%x already clear?\n",
                                cookies->lgc_index, lgl->lgl_oid, lgl->lgl_ogen);
-                } else if (--llh->llh_count == 1 &&
+                } else if ((llh->llh_count = cpu_to_le32(le32_to_cpu(llh->llh_count) - 1)) &&
+                           le32_to_cpu(llh->llh_count) == 1 &&
                            loghandle != llog_cat_current_log(cathandle, 0)) {
                         rc = llog_close(loghandle);
                 } else {
@@ -289,7 +291,7 @@ int llog_cat_process_cb(struct llog_handle *cat_llh, struct llog_rec_hdr *rec, v
         struct llog_handle *llh;
         int rc;
 
-        if (rec->lrh_type != LLOG_LOGID_MAGIC) {
+        if (le32_to_cpu(rec->lrh_type) != LLOG_LOGID_MAGIC) {
                 CERROR("invalid record in catalog\n");
                 RETURN(-EINVAL);
         }
