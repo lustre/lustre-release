@@ -5,11 +5,12 @@
 
 include $(src)/../portals/Kernelenv
 
-obj-y += obdclass.o
+obj-y += obdclass.o confobd.o
 obdclass-objs := class_obd.o debug.o \
 		genops.o sysctl.o uuid.o lprocfs_status.o lustre_handles.o \
 		lustre_peer.o statfs_pack.o obdo.o llog_obd.o \
 		obd_config.o llog_ioctl.o
+confobd-objs := conf_obd.o
 
 $(obj)/class_obd.o: lustre_build_version
 
