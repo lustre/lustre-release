@@ -41,3 +41,4 @@ jbd-flushtime.patch
 jbd-get_write_access.patch
 nfs_export_kernel-2.4.20.patch
 ext3-raw-lookup.patch
+ext3-ea-in-inode-2.4.20.patch
