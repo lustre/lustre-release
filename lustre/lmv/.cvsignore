@@ -1,3 +1,7 @@
 .deps
 Makefile
 Makefile.in
+.*.flags
+.depend
+autoMakefile.in
+autoMakefile
