@@ -301,8 +301,8 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                                         LBUG();
                                 }
                                 memcpy(obd->obd_name, data->ioc_inlbuf2, len);
-                                //obd->obd_proc_entry =
-                                //        proc_lustre_register_obd_device(obd);
+                                obd->obd_proc_entry =
+                                        proc_lustre_register_obd_device(obd);
                         } else {
                                 CERROR("WARNING: unnamed obd device\n");
                                 obd->obd_proc_entry = NULL;
@@ -348,8 +348,8 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                         obd->obd_name = NULL;
                 }
 
-                //if (obd->obd_proc_entry)
-                  //      proc_lustre_release_obd_device(obd);
+                if (obd->obd_proc_entry)
+                        proc_lustre_release_obd_device(obd);
 
                 obd->obd_flags &= ~OBD_ATTACHED;
                 obd->obd_type->typ_refcnt--;

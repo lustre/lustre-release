@@ -187,18 +187,13 @@ int mdc_getattr(struct lustre_handle *conn,
         return rc;
 }
 
-static int mdc_lock_callback(struct lustre_handle *lockh,
-                             struct ldlm_lock_desc *desc, void *data,
-                             int data_len, struct ptlrpc_request **req)
+static int mdc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
+                            void *data, __u32 data_len)
 {
         int rc;
         struct inode *inode = data;
+        struct lustre_handle lockh;
         ENTRY;
-
-        if (desc == NULL) {
-                /* Completion AST.  Do nothing. */
-                RETURN(0);
-        }
 
         if (data_len != sizeof(*inode)) {
                 CERROR("data_len should be %d, but is %d\n", sizeof(*inode),
@@ -215,7 +210,8 @@ static int mdc_lock_callback(struct lustre_handle *lockh,
                 invalidate_inode_pages(inode);
         }
 
-        rc = ldlm_cli_cancel(lockh);
+        ldlm_lock2handle(lock, &lockh);
+        rc = ldlm_cli_cancel(&lockh);
         if (rc < 0) {
                 CERROR("ldlm_cli_cancel: %d\n", rc);
                 LBUG();
@@ -340,10 +336,15 @@ int mdc_enqueue(struct lustre_handle *conn, int lock_type,
                 RETURN(-EINVAL);
         }
 #warning FIXME: the data here needs to be different if a lock was granted for a different inode
-        rc = ldlm_cli_enqueue(conn, req, obddev->obd_namespace, NULL, res_id, lock_type,
-                              NULL, 0, lock_mode, &flags, ldlm_completion_ast,
-                              (void *)mdc_lock_callback, data, datalen, lockh);
-        if (rc == -ENOENT || rc == ELDLM_LOCK_ABORTED) {
+        rc = ldlm_cli_enqueue(conn, req, obddev->obd_namespace, NULL, res_id,
+                              lock_type, NULL, 0, lock_mode, &flags,
+                              ldlm_completion_ast, mdc_blocking_ast, data,
+                              datalen, lockh);
+        if (rc == -ENOENT) {
+                /* This can go when we're sure that this can never happen */
+                LBUG();
+        }
+        if (rc == ELDLM_LOCK_ABORTED) {
                 lock_mode = 0;
                 memset(lockh, 0, sizeof(*lockh));
                 /* rc = 0 */

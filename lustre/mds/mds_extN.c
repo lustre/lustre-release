@@ -98,11 +98,9 @@ static int mds_extN_setattr(struct dentry *dentry, void *handle,
 }
 
 static int mds_extN_set_md(struct inode *inode, void *handle,
-                             struct lov_stripe_md *md)
+                           struct lov_stripe_md *md)
 {
         int rc;
-
-
 
         lock_kernel();
         down(&inode->i_sem);
@@ -118,9 +116,11 @@ static int mds_extN_set_md(struct inode *inode, void *handle,
         up(&inode->i_sem);
         unlock_kernel();
 
-        if (rc)
-                CERROR("error adding objectid %Ld to inode %ld\n",
-                       (unsigned long long)md->lmd_object_id, inode->i_ino);
+        if (rc) {
+                CERROR("error adding objectid %Ld to inode %ld: %d\n",
+                       (unsigned long long)md->lmd_object_id, inode->i_ino, rc);
+                LBUG();
+        }
         return rc;
 }
 

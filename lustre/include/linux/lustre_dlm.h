@@ -7,6 +7,7 @@
 
 #ifdef __KERNEL__
 
+#include <linux/proc_fs.h>
 #include <linux/obd_class.h>
 #include <linux/lustre_net.h>
 
@@ -80,13 +81,15 @@ static inline int lockmode_compat(ldlm_mode_t exist, ldlm_mode_t new)
 */
 
 struct ldlm_namespace {
-        char                 *ns_name;
-        struct ptlrpc_client  ns_rpc_client; /* used for revocation callbacks */
-        __u32                 ns_client; /* is this a client-side lock tree? */
-        struct list_head     *ns_hash; /* hash table for ns */
-        __u32                 ns_refcount; /* count of resources in the hash */
-        struct list_head      ns_root_list; /* all root resources in ns */
-        struct lustre_lock    ns_lock; /* protects hash, refcount, list */
+        char                  *ns_name;
+        struct ptlrpc_client   ns_rpc_client;/* used for revocation callbacks */
+        __u32                  ns_client; /* is this a client-side lock tree? */
+        struct list_head      *ns_hash; /* hash table for ns */
+        __u32                  ns_refcount; /* count of resources in the hash */
+        struct list_head       ns_root_list; /* all root resources in ns */
+        struct lustre_lock     ns_lock; /* protects hash, refcount, list */
+        struct list_head       ns_list_chain; /* position in global NS list */
+        struct proc_dir_entry *ns_proc_dir;
 };
 
 /* 
@@ -101,9 +104,9 @@ struct ldlm_namespace {
 
 struct ldlm_lock;
 
-typedef int (*ldlm_lock_callback)(struct lustre_handle *lockh,
-                                  struct ldlm_lock_desc *new, void *data,
-                                  __u32 data_len);
+typedef int (*ldlm_blocking_callback)(struct ldlm_lock *lock,
+                                      struct ldlm_lock_desc *new, void *data,
+                                      __u32 data_len);
 
 typedef int (*ldlm_completion_callback)(struct ldlm_lock *lock, int flags); 
 
@@ -120,7 +123,7 @@ struct ldlm_lock {
         ldlm_mode_t           l_granted_mode;
 
         ldlm_completion_callback    l_completion_ast;
-        ldlm_lock_callback    l_blocking_ast;
+        ldlm_blocking_callback    l_blocking_ast;
 
         struct ptlrpc_connection *l_connection;
         struct ptlrpc_client *l_client;
@@ -160,10 +163,10 @@ extern ldlm_res_policy ldlm_res_policy_table [];
 struct ldlm_resource {
         struct ldlm_namespace *lr_namespace;
         struct list_head       lr_hash;
-        struct list_head       lr_rootlink; /* link all root resources in NS */
         struct ldlm_resource  *lr_parent;   /* 0 for a root resource */
         struct list_head       lr_children; /* list head for child resources */
-        struct list_head       lr_childof;  /* part of child list of parent */
+        struct list_head       lr_childof;  /* part of ns_root_list if root res,
+                                             * part of lr_children if child */
 
         struct list_head       lr_granted;
         struct list_head       lr_converting;
@@ -275,7 +278,7 @@ ldlm_lock_create(struct ldlm_namespace *ns,
 ldlm_error_t ldlm_lock_enqueue(struct ldlm_lock *lock, void *cookie,
                                int cookie_len, int *flags,
                                ldlm_completion_callback completion,
-                               ldlm_lock_callback blocking);
+                               ldlm_blocking_callback blocking);
 struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
                                         int *flags);
 void ldlm_lock_cancel(struct ldlm_lock *lock);
@@ -289,6 +292,8 @@ int ldlm_test(struct obd_device *device, struct ptlrpc_connection *conn);
 /* resource.c */
 struct ldlm_namespace *ldlm_namespace_new(char *name, __u32 local);
 int ldlm_namespace_free(struct ldlm_namespace *ns);
+int ldlm_proc_setup(struct obd_device *obd);
+void ldlm_proc_cleanup(struct obd_device *obd);
 
 /* resource.c - internal */
 struct ldlm_resource *ldlm_resource_get(struct ldlm_namespace *ns,
@@ -300,8 +305,10 @@ void ldlm_resource_add_lock(struct ldlm_resource *res, struct list_head *head,
                             struct ldlm_lock *lock);
 void ldlm_resource_unlink_lock(struct ldlm_lock *lock);
 void ldlm_res2desc(struct ldlm_resource *res, struct ldlm_resource_desc *desc);
-void ldlm_resource_dump(struct ldlm_resource *res);
-int ldlm_lock_change_resource(struct ldlm_lock *lock, __u64 new_resid[3]);
+void ldlm_dump_all_namespaces(void);
+void ldlm_namespace_dump(struct ldlm_namespace *);
+void ldlm_resource_dump(struct ldlm_resource *);
+int ldlm_lock_change_resource(struct ldlm_lock *, __u64 new_resid[3]);
 
 /* ldlm_request.c */
 int ldlm_completion_ast(struct ldlm_lock *lock, int flags);
@@ -315,7 +322,7 @@ int ldlm_cli_enqueue(struct lustre_handle *conn,
                      ldlm_mode_t mode,
                      int *flags,
                      ldlm_completion_callback completion,
-                     ldlm_lock_callback callback,
+                     ldlm_blocking_callback callback,
                      void *data,
                      __u32 data_len,
                      struct lustre_handle *lockh);
@@ -329,7 +336,7 @@ int ldlm_match_or_enqueue(struct lustre_handle *connh,
                           ldlm_mode_t mode,
                           int *flags,
                           ldlm_completion_callback completion,
-                          ldlm_lock_callback callback,
+                          ldlm_blocking_callback callback,
                           void *data,
                           __u32 data_len,
                           struct lustre_handle *lockh);
@@ -338,6 +345,11 @@ int ldlm_server_ast(struct lustre_handle *lockh, struct ldlm_lock_desc *new,
 int ldlm_cli_convert(struct lustre_handle *, int new_mode, int *flags);
 int ldlm_cli_cancel(struct lustre_handle *lockh);
 
+/* mds/handler.c */
+/* This has to be here because recurisve inclusion sucks. */
+int mds_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
+                     void *data, __u32 data_len);
+
 #endif /* __KERNEL__ */
 
 /* ioctls for trying requests */
@@ -345,6 +357,7 @@ int ldlm_cli_cancel(struct lustre_handle *lockh);
 #define IOC_LDLM_MIN_NR                 40
 
 #define IOC_LDLM_TEST                   _IOWR('f', 40, long)
+#define IOC_LDLM_DUMP                   _IOWR('f', 41, long)
 #define IOC_LDLM_MAX_NR                 41
 
 #endif

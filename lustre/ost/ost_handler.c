@@ -514,15 +514,13 @@ static int ost_handle(struct ptlrpc_request *req)
                 if (rc)
                         break;
                 RETURN(0);
-        case LDLM_CALLBACK:
+        case LDLM_BL_CALLBACK:
+        case LDLM_CP_CALLBACK:
                 CDEBUG(D_INODE, "callback\n");
-                CERROR("callbacks should not happen on MDS\n");
+                CERROR("callbacks should not happen on OST\n");
                 LBUG();
-                OBD_FAIL_RETURN(OBD_FAIL_LDLM_CALLBACK, 0);
+                OBD_FAIL_RETURN(OBD_FAIL_LDLM_BL_CALLBACK, 0);
                 break;
-
-
-
         default:
                 req->rq_status = -ENOTSUPP;
                 rc = ptlrpc_error(req->rq_svc, req);

@@ -169,14 +169,17 @@ static struct dentry *ll_lookup2(struct inode * dir, struct dentry *dentry,
                         //else
                         //        GOTO(err, it->it_status);
                 } else if (it->it_op & (IT_RENAME | IT_GETATTR | IT_UNLINK |
-                                        IT_RMDIR | IT_SETATTR | IT_LOOKUP |
-                                        IT_OPEN)) {
+                                        IT_RMDIR | IT_SETATTR | IT_LOOKUP)) {
                         /* For remove/check, we want the lookup to succeed */
                         request = (struct ptlrpc_request *)it->it_data;
                         if (it->it_status)
                                 GOTO(negative, NULL);
                         //else
                         //        GOTO(err, it->it_status);
+                } else if (it->it_op == IT_OPEN) {
+                        request = (struct ptlrpc_request *)it->it_data;
+                        if (it->it_status && it->it_status != -EEXIST)
+                                GOTO(negative, NULL);
                 } else if (it->it_op == IT_RENAME2) {
                         /* Set below to be a dentry from the IT_RENAME op */
                         inode = ((struct dentry *)(it->it_data))->d_inode;
@@ -224,7 +227,7 @@ static struct dentry *ll_lookup2(struct inode * dir, struct dentry *dentry,
  negative:
         dentry->d_op = &ll_d_ops;
         d_add(dentry, inode);
-        if (it->it_op == IT_LOOKUP || (it->it_op == IT_OPEN && it->it_status)) {
+        if (it->it_op == IT_LOOKUP) {
                 ll_intent_release(dentry);
                 ptlrpc_free_req(request);
         }
@@ -396,7 +399,6 @@ static int ll_create(struct inode * dir, struct dentry * dentry, int mode)
 
         if (dentry->d_it->it_disposition) {
                 ii = ll_i2info(inode);
-                ii->lli_flags |= OBD_FL_CREATEONOPEN;
                 memcpy(&ii->lli_intent_lock_handle,
                        dentry->d_it->it_lock_handle,
                        sizeof(struct lustre_handle));

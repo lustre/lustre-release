@@ -675,6 +675,11 @@ static int filter_destroy(struct lustre_handle *conn, struct obdo *oa,
                 GOTO(out, rc = -ENOENT);
 
         inode = object_dentry->d_inode;
+        if (inode == NULL) {
+                CERROR("trying to destroy negative inode %Ld!\n", oa->o_id);
+                GOTO(out, rc = -ENOENT);
+        }
+
         if (inode->i_nlink != 1) {
                 CERROR("destroying inode with nlink = %d\n", inode->i_nlink);
                 LBUG();

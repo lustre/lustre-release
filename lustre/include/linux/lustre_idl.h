@@ -165,7 +165,6 @@ typedef uint32_t        obd_count;
 
 #define OBD_FL_INLINEDATA       (0x00000001)
 #define OBD_FL_OBDMDEXISTS      (0x00000002)
-#define OBD_FL_CREATEONOPEN     (0x00000004)
 
 #define OBD_INLINESZ    60
 
@@ -422,7 +421,8 @@ struct lov_desc {
 #define LDLM_ENQUEUE       101
 #define LDLM_CONVERT       102
 #define LDLM_CANCEL        103
-#define LDLM_CALLBACK      104
+#define LDLM_BL_CALLBACK   104
+#define LDLM_CP_CALLBACK   105
 
 #define RES_NAME_SIZE 3
 #define RES_VERSION_SIZE 4
@@ -470,6 +470,7 @@ struct ldlm_request {
 struct ldlm_reply {
         __u32 lock_flags;
         __u64 lock_resource_name[RES_NAME_SIZE];
+        __u32 lock_mode;
         struct lustre_handle lock_handle;
         struct ldlm_extent lock_extent;   /* XXX make this policy 1 &2 */
         __u64  lock_policy_res1;

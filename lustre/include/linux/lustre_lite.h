@@ -42,14 +42,10 @@ struct ll_inode_md {
 
 #define LL_INLINESZ      60
 struct ll_inode_info {
-        int              lli_flags;
-        //        struct obdo     *lli_obdo;
-        struct  lov_stripe_md *lli_smd;
-        //        int              lli_obdo_mdsz;
-        //void            *lli_obdo_md;
-        char            *lli_symlink_name;
-        char             lli_inline[LL_INLINESZ];
-        struct lustre_handle lli_intent_lock_handle;
+        struct lov_stripe_md *lli_smd;
+        char                 *lli_symlink_name;
+        struct lustre_handle  lli_intent_lock_handle;
+        struct semaphore      lli_open_sem;
 };
 
 #define LL_SUPER_MAGIC 0x0BD00BD0
@@ -100,12 +96,6 @@ static inline struct ll_inode_info *ll_i2info(struct inode *inode)
 {
         return (struct ll_inode_info *)&(inode->u.generic_ip);
 }
-
-static inline int ll_has_inline(struct inode *inode)
-{
-        return (ll_i2info(inode)->lli_flags & OBD_FL_INLINEDATA);
-}
-
 
 static inline struct lustre_handle *ll_i2obdconn(struct inode *inode)
 {

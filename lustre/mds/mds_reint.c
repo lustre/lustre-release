@@ -128,17 +128,17 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
         }
 
         EXIT;
- out_unlock:
+      out_unlock:
         unlock_kernel();
- out_setattr_de:
+      out_setattr_de:
         l_dput(de);
- out_setattr:
+      out_setattr:
         req->rq_status = rc;
-        return(0);
+        return (0);
 }
 
 static int mds_reint_recreate(struct mds_update_record *rec, int offset,
-                            struct ptlrpc_request *req)
+                              struct ptlrpc_request *req)
 {
         struct dentry *de = NULL;
         struct mds_obd *mds = mds_req2mds(req);
@@ -177,10 +177,10 @@ static int mds_reint_recreate(struct mds_update_record *rec, int offset,
                 LBUG();
         }
 
-out_create_dchild:
+      out_create_dchild:
         l_dput(dchild);
         up(&dir->i_sem);
-out_create_de:
+      out_create_de:
         l_dput(de);
         req->rq_status = rc;
         return 0;
@@ -262,7 +262,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
         }
 
         switch (type) {
-        case S_IFREG: {
+        case S_IFREG:{
                 handle = mds_fs_start(mds, dir, MDS_FSOP_CREATE);
                 if (!handle)
                         GOTO(out_create_dchild, PTR_ERR(handle));
@@ -270,7 +270,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 EXIT;
                 break;
         }
-        case S_IFDIR: {
+        case S_IFDIR:{
                 handle = mds_fs_start(mds, dir, MDS_FSOP_MKDIR);
                 if (!handle)
                         GOTO(out_create_dchild, PTR_ERR(handle));
@@ -278,7 +278,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 EXIT;
                 break;
         }
-        case S_IFLNK: {
+        case S_IFLNK:{
                 handle = mds_fs_start(mds, dir, MDS_FSOP_SYMLINK);
                 if (!handle)
                         GOTO(out_create_dchild, PTR_ERR(handle));
@@ -289,7 +289,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
         case S_IFCHR:
         case S_IFBLK:
         case S_IFIFO:
-        case S_IFSOCK: {
+        case S_IFSOCK:{
                 int rdev = rec->ur_rdev;
                 handle = mds_fs_start(mds, dir, MDS_FSOP_MKNOD);
                 if (!handle)
@@ -299,7 +299,8 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 break;
         }
         default:
-                CERROR("bad file type %o for create of %s\n",type,rec->ur_name);
+                CERROR("bad file type %o for create of %s\n", type,
+                       rec->ur_name);
                 GOTO(out_create_dchild, rc = -EINVAL);
         }
 
@@ -351,29 +352,29 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 body->valid = OBD_MD_FLID | OBD_MD_FLGENER;
         }
         EXIT;
-out_create_commit:
+      out_create_commit:
         err = mds_fs_commit(mds, dir, handle);
         if (err) {
                 CERROR("error on commit: err = %d\n", err);
                 if (!rc)
                         rc = err;
         }
-out_create_dchild:
+      out_create_dchild:
         l_dput(dchild);
         ldlm_lock_decref(&lockh, lock_mode);
-out_create_de:
+      out_create_de:
         up(&dir->i_sem);
         l_dput(de);
-out_create:
+      out_create:
         req->rq_status = rc;
         return 0;
 
-out_create_unlink:
+      out_create_unlink:
         /* Destroy the file we just created.  This should not need extra
          * journal credits, as we have already modified all of the blocks
          * needed in order to create the file in the first place.
          */
-        switch(type) {
+        switch (type) {
         case S_IFDIR:
                 err = vfs_rmdir(dir, dchild);
                 if (err)
@@ -407,8 +408,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
 
         /* a name was supplied by the client; fid1 is the directory */
         lock_mode = (req->rq_reqmsg->opc == MDS_REINT) ? LCK_CW : LCK_PW;
-        de = mds_fid2locked_dentry(obd, rec->ur_fid1, NULL, lock_mode,
-                                    &lockh);
+        de = mds_fid2locked_dentry(obd, rec->ur_fid1, NULL, lock_mode, &lockh);
         if (IS_ERR(de)) {
                 LBUG();
                 RETURN(PTR_ERR(de));
@@ -417,7 +417,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
         name = lustre_msg_buf(req->rq_reqmsg, offset + 1);
         namelen = req->rq_reqmsg->buflens[offset + 1] - 1;
         dchild = mds_name2locked_dentry(obd, de, NULL, name, namelen,
-                                    LCK_EX, &child_lockh, lock_mode);
+                                        LCK_EX, &child_lockh, lock_mode);
 
         if (IS_ERR(dchild) || OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_UNLINK)) {
                 LBUG();
@@ -431,10 +431,10 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
         if (!inode) {
                 CDEBUG(D_INODE, "child doesn't exist (dir %ld, name %s\n",
                        dir->i_ino, rec->ur_name);
-                /* XXX should be out_unlink_cancel, or do we keep child_lockh?*/
+                /* XXX should be out_unlink_cancel, or do we keep child_lockh? */
                 GOTO(out_unlink_dchild, rc = -ENOENT);
         } else if (offset) {
-                struct mds_body *body = lustre_msg_buf(req->rq_repmsg, 1); 
+                struct mds_body *body = lustre_msg_buf(req->rq_repmsg, 1);
                 mds_pack_inode2fid(&body->fid1, inode);
                 mds_pack_inode2body(body, inode);
         }
@@ -456,7 +456,8 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                         md = lustre_msg_buf(req->rq_repmsg, 2);
                         md->lmd_easize = mds->mds_max_mdsize;
                         if ((rc = mds_fs_get_md(mds, inode, md)) < 0) {
-                                CDEBUG(D_INFO, "No md for ino %ld: rc = %d\n",
+                                CDEBUG(D_INFO,
+                                       "No md for ino %ld: rc = %d\n",
                                        inode->i_ino, rc);
                                 memset(md, 0, md->lmd_easize);
                         }
@@ -481,18 +482,18 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
 
         EXIT;
 
- out_unlink_cancel:
+      out_unlink_cancel:
         ldlm_lock_decref(&child_lockh, LCK_EX);
         err = ldlm_cli_cancel(&child_lockh);
         if (err < 0) {
                 CERROR("failed to cancel child inode lock: err = %d\n", err);
                 if (!rc)
-                        rc = -ENOLCK; /*XXX translate LDLM lock error */
+                        rc = -ENOLCK;   /*XXX translate LDLM lock error */
         }
-out_unlink_dchild:
+      out_unlink_dchild:
         l_dput(dchild);
         up(&dir->i_sem);
-out_unlink:
+      out_unlink:
         ldlm_lock_decref(&lockh, lock_mode);
         l_dput(de);
         req->rq_status = rc;
@@ -500,7 +501,7 @@ out_unlink:
 }
 
 static int mds_reint_link(struct mds_update_record *rec, int offset,
-                            struct ptlrpc_request *req)
+                          struct ptlrpc_request *req)
 {
         struct dentry *de_src = NULL;
         struct dentry *de_tgt_dir = NULL;
@@ -554,14 +555,14 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
         }
         EXIT;
 
-out_link_dchild:
+      out_link_dchild:
         l_dput(dchild);
-out_link_de_tgt_dir:
+      out_link_de_tgt_dir:
         up(&de_tgt_dir->d_inode->i_sem);
         l_dput(de_tgt_dir);
-out_link_de_src:
+      out_link_de_src:
         l_dput(de_src);
-out_link:
+      out_link:
         req->rq_status = rc;
         return 0;
 }
@@ -578,7 +579,7 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
         struct lustre_handle tgtlockh, srclockh, oldhandle;
         int flags, lock_mode, rc = 0, err;
         void *handle;
-        __u64 res_id[3] = {0};
+        __u64 res_id[3] = { 0 };
         ENTRY;
 
         de_srcdir = mds_fid2dentry(mds, rec->ur_fid1, NULL);
@@ -589,13 +590,13 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
         res_id[0] = de_srcdir->d_inode->i_ino;
 
         rc = ldlm_lock_match(obd->obd_namespace, res_id, LDLM_PLAIN,
-                                   NULL, 0, lock_mode, &srclockh);
+                             NULL, 0, lock_mode, &srclockh);
         if (rc == 0) {
                 LDLM_DEBUG_NOLOCK("enqueue res %Lu", res_id[0]);
                 rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace, NULL,
                                       res_id, LDLM_PLAIN, NULL, 0, lock_mode,
-                                      &flags, ldlm_completion_ast, (void *)mds_lock_callback, NULL,
-                                      0, &srclockh);
+                                      &flags, ldlm_completion_ast,
+                                      mds_blocking_ast, NULL, 0, &srclockh);
                 if (rc != ELDLM_OK) {
                         CERROR("lock enqueue: err: %d\n", rc);
                         GOTO(out_rename_srcput, rc = -EIO);
@@ -611,13 +612,13 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
         res_id[0] = de_tgtdir->d_inode->i_ino;
 
         rc = ldlm_lock_match(obd->obd_namespace, res_id, LDLM_PLAIN,
-                                   NULL, 0, lock_mode, &tgtlockh);
+                             NULL, 0, lock_mode, &tgtlockh);
         if (rc == 0) {
                 LDLM_DEBUG_NOLOCK("enqueue res %Lu", res_id[0]);
                 rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace, NULL,
                                       res_id, LDLM_PLAIN, NULL, 0, lock_mode,
-                                      &flags, ldlm_completion_ast, (void *)mds_lock_callback, NULL,
-                                      0, &tgtlockh);
+                                      &flags, ldlm_completion_ast,
+                                      mds_blocking_ast, NULL, 0, &tgtlockh);
                 if (rc != ELDLM_OK) {
                         CERROR("lock enqueue: err: %d\n", rc);
                         GOTO(out_rename_tgtput, rc = -EIO);
@@ -625,7 +626,7 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
         } else
                 ldlm_lock_dump((void *)(unsigned long)tgtlockh.addr);
 
-	double_lock(de_tgtdir, de_srcdir);
+        double_lock(de_tgtdir, de_srcdir);
 
         de_old = lookup_one_len(rec->ur_name, de_srcdir, rec->ur_namelen - 1);
         if (IS_ERR(de_old)) {
@@ -663,21 +664,20 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
         }
         EXIT;
 
-out_rename_denew:
+      out_rename_denew:
         l_dput(de_new);
-out_rename_deold:
-        if (!rc) { 
+      out_rename_deold:
+        if (!rc) {
                 res_id[0] = de_old->d_inode->i_ino;
                 /* Take an exclusive lock on the resource that we're
                  * about to free, to force everyone to drop their
                  * locks. */
                 LDLM_DEBUG_NOLOCK("getting EX lock res %Lu", res_id[0]);
-                rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace, NULL, 
-                                      res_id,
-                                      LDLM_PLAIN, NULL, 0, LCK_EX, &flags,
-                                      ldlm_completion_ast, (void *)mds_lock_callback, NULL, 0, 
-                                      &oldhandle);
-                if (rc) 
+                rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace, NULL,
+                                      res_id, LDLM_PLAIN, NULL, 0, LCK_EX,
+                                      &flags, ldlm_completion_ast,
+                                      mds_blocking_ast, NULL, 0, &oldhandle);
+                if (rc)
                         CERROR("failed to get child inode lock (child ino %Ld, "
                                "dir ino %ld)\n",
                                res_id[0], de_old->d_inode->i_ino);
@@ -685,37 +685,37 @@ out_rename_deold:
 
         l_dput(de_old);
 
-        if (!rc) { 
+        if (!rc) {
                 ldlm_lock_decref(&oldhandle, LCK_EX);
                 rc = ldlm_cli_cancel(&oldhandle);
                 if (rc < 0)
                         CERROR("failed to cancel child inode lock ino "
                                "%Ld: %d\n", res_id[0], rc);
         }
- out_rename_tgtdir:
+      out_rename_tgtdir:
         double_up(&de_srcdir->d_inode->i_sem, &de_tgtdir->d_inode->i_sem);
         ldlm_lock_decref(&tgtlockh, lock_mode);
- out_rename_tgtput:
+      out_rename_tgtput:
         l_dput(de_tgtdir);
- out_rename_srcdir:
+      out_rename_srcdir:
         ldlm_lock_decref(&srclockh, lock_mode);
- out_rename_srcput:
+      out_rename_srcput:
         l_dput(de_srcdir);
- out_rename:
+      out_rename:
         req->rq_status = rc;
         return 0;
 }
 
-typedef int (*mds_reinter)(struct mds_update_record *, int offset,
-                           struct ptlrpc_request *);
+typedef int (*mds_reinter) (struct mds_update_record *, int offset,
+                            struct ptlrpc_request *);
 
-static mds_reinter reinters[REINT_MAX+1] = {
-        [REINT_SETATTR]   mds_reint_setattr,
-        [REINT_CREATE]    mds_reint_create,
-        [REINT_UNLINK]    mds_reint_unlink,
-        [REINT_LINK]      mds_reint_link,
-        [REINT_RENAME]    mds_reint_rename,
-        [REINT_RECREATE]  mds_reint_recreate,
+static mds_reinter reinters[REINT_MAX + 1] = {
+        [REINT_SETATTR] mds_reint_setattr,
+        [REINT_CREATE] mds_reint_create,
+        [REINT_UNLINK] mds_reint_unlink,
+        [REINT_LINK] mds_reint_link,
+        [REINT_RENAME] mds_reint_rename,
+        [REINT_RECREATE] mds_reint_recreate,
 };
 
 int mds_reint_rec(struct mds_update_record *rec, int offset,
@@ -733,7 +733,7 @@ int mds_reint_rec(struct mds_update_record *rec, int offset,
         }
 
         push_ctxt(&saved, &mds->mds_ctxt);
-        rc = reinters[rec->ur_opcode](rec, offset, req);
+        rc = reinters[rec->ur_opcode] (rec, offset, req);
         pop_ctxt(&saved);
 
         return rc;

@@ -38,7 +38,7 @@
 #include <linux/lustre_net.h>
 #include <linux/lustre_dlm.h>
 
-struct client_obd *client_conn2cli(struct lustre_handle *conn) 
+struct client_obd *client_conn2cli(struct lustre_handle *conn)
 {
         struct obd_export *export = class_conn2export(conn);
         if (!export)
@@ -85,7 +85,7 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
 
         mdc->cl_conn = ptlrpc_uuid_to_connection(server_uuid);
         if (!mdc->cl_conn)
-                RETURN(-ENOENT); 
+                RETURN(-ENOENT);
 
         OBD_ALLOC(mdc->cl_client, sizeof(*mdc->cl_client));
         if (mdc->cl_client == NULL)
@@ -133,36 +133,37 @@ int client_obd_connect(struct lustre_handle *conn, struct obd_device *obd)
 {
         struct client_obd *cli = &obd->u.cli;
         struct ptlrpc_request *request;
-        int rc, size[] = {sizeof(cli->cl_target_uuid), 
+        int rc, size[] = {sizeof(cli->cl_target_uuid),
                           sizeof(obd->obd_uuid) };
         char *tmp[] = {cli->cl_target_uuid, obd->obd_uuid};
         int rq_opc = (obd->obd_type->typ_ops->o_getattr) ? OST_CONNECT : MDS_CONNECT;
 
         ENTRY;
-        down(&cli->cl_sem); 
+        down(&cli->cl_sem);
         MOD_INC_USE_COUNT;
         rc = class_connect(conn, obd);
-        if (!rc) 
+        if (!rc)
                 cli->cl_conn_count++;
-        else { 
+        else {
                 MOD_DEC_USE_COUNT;
                 up(&cli->cl_sem);
                 RETURN(rc);
         }
-                
-        if (cli->cl_conn_count > 1) { 
+
+        if (cli->cl_conn_count > 1) {
                 up(&cli->cl_sem);
                 RETURN(0);
         }
 
-        obd->obd_namespace =
-                ldlm_namespace_new("cli", LDLM_NAMESPACE_CLIENT);
-        if (obd->obd_namespace == NULL) { 
+        obd->obd_namespace = ldlm_namespace_new(obd->obd_name,
+                                                LDLM_NAMESPACE_CLIENT);
+        if (obd->obd_namespace == NULL) {
                 up(&cli->cl_sem);
                 RETURN(-ENOMEM);
         }
 
-        request = ptlrpc_prep_req(cli->cl_client, cli->cl_conn, rq_opc, 2, size, tmp);
+        request = ptlrpc_prep_req(cli->cl_client, cli->cl_conn, rq_opc, 2, size,
+                                  tmp);
         if (!request)
                 GOTO(out_disco, -ENOMEM);
 
@@ -202,18 +203,18 @@ int client_obd_disconnect(struct lustre_handle *conn)
         ENTRY;
 
         down(&obd->u.cli.cl_sem);
-        if (!obd->u.cli.cl_conn_count) { 
-                CERROR("disconnecting disconnected device (%s)\n", 
-                       obd->obd_name); 
+        if (!obd->u.cli.cl_conn_count) {
+                CERROR("disconnecting disconnected device (%s)\n",
+                       obd->obd_name);
                 RETURN(0);
         }
 
-        obd->u.cli.cl_conn_count--; 
+        obd->u.cli.cl_conn_count--;
         if (obd->u.cli.cl_conn_count)
                 GOTO(class_only, 0);
 
         ldlm_namespace_free(obd->obd_namespace);
-        obd->obd_namespace = NULL; 
+        obd->obd_namespace = NULL;
         request = ptlrpc_prep_req2(conn, rq_opc, 0, NULL, NULL);
         if (!request)
                 RETURN(-ENOMEM);
@@ -221,14 +222,14 @@ int client_obd_disconnect(struct lustre_handle *conn)
         request->rq_replen = lustre_msg_size(0, NULL);
 
         rc = ptlrpc_queue_wait(request);
-        if (rc) 
+        if (rc)
                 GOTO(out, rc);
  class_only:
         rc = class_disconnect(conn);
         if (!rc)
                 MOD_DEC_USE_COUNT;
  out:
-        if (request) 
+        if (request)
                 ptlrpc_free_req(request);
         up(&obd->u.cli.cl_sem);
         RETURN(rc);

@@ -12,6 +12,7 @@
 #include <linux/fs.h>
 #include <linux/list.h>
 #include <linux/smp_lock.h>
+#include <linux/proc_fs.h>
 
 #include <linux/lustre_idl.h>
 

@@ -21,7 +21,38 @@ extern kmem_cache_t *ldlm_lock_slab;
 extern int (*mds_reint_p)(int offset, struct ptlrpc_request *req);
 extern int (*mds_getattr_name_p)(int offset, struct ptlrpc_request *req);
 
-int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags)
+static int ldlm_server_blocking_ast(struct ldlm_lock *lock,
+                                    struct ldlm_lock_desc *desc,
+                                    void *data, __u32 data_len)
+{
+        struct ldlm_request *body;
+        struct ptlrpc_request *req;
+        struct ptlrpc_client *cl;
+        int rc = 0, size = sizeof(*body);
+        ENTRY;
+
+        cl = &lock->l_resource->lr_namespace->ns_rpc_client;
+        req = ptlrpc_prep_req(cl, lock->l_connection, LDLM_BL_CALLBACK, 1,
+                              &size, NULL);
+        if (!req)
+                RETURN(-ENOMEM);
+
+        body = lustre_msg_buf(req->rq_reqmsg, 0);
+        memcpy(&body->lock_handle1, &lock->l_remote_handle,
+               sizeof(body->lock_handle1));
+        memcpy(&body->lock_desc, desc, sizeof(*desc));
+
+        LDLM_DEBUG(lock, "server preparing blocking AST");
+        req->rq_replen = lustre_msg_size(0, NULL);
+
+        rc = ptlrpc_queue_wait(req);
+        rc = ptlrpc_check_status(req, rc);
+        ptlrpc_free_req(req);
+
+        RETURN(rc);
+}
+
+static int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags)
 {
         struct ldlm_request *body;
         struct ptlrpc_request *req;
@@ -35,7 +66,7 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags)
         }
 
         cl = &lock->l_resource->lr_namespace->ns_rpc_client;
-        req = ptlrpc_prep_req(cl, lock->l_connection, LDLM_CALLBACK, 1,
+        req = ptlrpc_prep_req(cl, lock->l_connection, LDLM_CP_CALLBACK, 1,
                               &size, NULL);
         if (!req)
                 RETURN(-ENOMEM);
@@ -44,6 +75,7 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags)
         memcpy(&body->lock_handle1, &lock->l_remote_handle,
                sizeof(body->lock_handle1));
         body->lock_flags = flags;
+        ldlm_lock2desc(lock, &body->lock_desc);
 
         LDLM_DEBUG(lock, "server preparing completion AST");
         req->rq_replen = lustre_msg_size(0, NULL);
@@ -101,7 +133,8 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req)
 
         flags = dlm_req->lock_flags;
         err = ldlm_lock_enqueue(lock, cookie, cookielen, &flags,
-                                ldlm_server_completion_ast, ldlm_server_ast);
+                                ldlm_server_completion_ast,
+                                ldlm_server_blocking_ast);
         if (err != ELDLM_OK)
                 GOTO(out, err);
 
@@ -112,9 +145,11 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req)
         if (dlm_req->lock_desc.l_resource.lr_type == LDLM_EXTENT)
                 memcpy(&dlm_rep->lock_extent, &lock->l_extent,
                        sizeof(lock->l_extent));
-        if (dlm_rep->lock_flags & LDLM_FL_LOCK_CHANGED)
+        if (dlm_rep->lock_flags & LDLM_FL_LOCK_CHANGED) {
                 memcpy(dlm_rep->lock_resource_name, lock->l_resource->lr_name,
                        sizeof(dlm_rep->lock_resource_name));
+                dlm_rep->lock_mode = lock->l_req_mode;
+        }
 
         lock->l_connection = ptlrpc_connection_addref(req->rq_connection);
         EXIT;
@@ -213,96 +248,103 @@ int ldlm_handle_cancel(struct ptlrpc_request *req)
         RETURN(0);
 }
 
-static int ldlm_handle_callback(struct ptlrpc_request *req)
+static int ldlm_handle_bl_callback(struct ptlrpc_request *req)
 {
         struct ldlm_request *dlm_req;
-        struct ldlm_lock_desc *descp = NULL;
         struct ldlm_lock *lock;
-        __u64 is_blocking_ast = 0;
-        int rc;
+        int rc, do_ast;
         ENTRY;
 
         rc = lustre_pack_msg(0, NULL, NULL, &req->rq_replen, &req->rq_repmsg);
-        if (rc) {
-                CERROR("out of memory\n");
+        if (rc)
                 RETURN(-ENOMEM);
-        }
-        dlm_req = lustre_msg_buf(req->rq_reqmsg, 0);
-
-        /* We must send the reply first, so that the thread is free to handle
-         * any requests made in common_callback() */
         rc = ptlrpc_reply(req->rq_svc, req);
-        if (rc != 0)
+        if (rc)
                 RETURN(rc);
+
+        dlm_req = lustre_msg_buf(req->rq_reqmsg, 0);
 
         lock = ldlm_handle2lock(&dlm_req->lock_handle1);
         if (!lock) {
-                CERROR("callback on lock %Lx - lock disappeared\n",
+                CERROR("blocking callback on lock %Lx - lock disappeared\n",
                        dlm_req->lock_handle1.addr);
                 RETURN(0);
         }
 
-        /* check if this is a blocking AST */
-        if (dlm_req->lock_desc.l_req_mode !=
-            dlm_req->lock_desc.l_granted_mode) {
-                descp = &dlm_req->lock_desc;
-                is_blocking_ast = 1;
-        }
+        LDLM_DEBUG(lock, "client blocking AST callback handler START");
 
-        LDLM_DEBUG(lock, "client %s callback handler START",
-                   is_blocking_ast ? "blocked" : "completion");
+        l_lock(&lock->l_resource->lr_namespace->ns_lock);
+        lock->l_flags |= LDLM_FL_CBPENDING;
+        do_ast = (!lock->l_readers && !lock->l_writers);
+        l_unlock(&lock->l_resource->lr_namespace->ns_lock);
 
-        if (descp) {
-                int do_ast;
-                l_lock(&lock->l_resource->lr_namespace->ns_lock);
-                lock->l_flags |= LDLM_FL_CBPENDING;
-                do_ast = (!lock->l_readers && !lock->l_writers);
-                l_unlock(&lock->l_resource->lr_namespace->ns_lock);
-
-                if (do_ast) {
-                        LDLM_DEBUG(lock, "already unused, calling "
-                                   "callback (%p)", lock->l_blocking_ast);
-                        if (lock->l_blocking_ast != NULL) {
-                                struct lustre_handle lockh;
-                                ldlm_lock2handle(lock, &lockh);
-                                lock->l_blocking_ast(&lockh, descp,
-                                                     lock->l_data,
-                                                     lock->l_data_len);
-                        }
-                } else {
-                        LDLM_DEBUG(lock, "Lock still has references, will be"
-                                   " cancelled later");
+        if (do_ast) {
+                LDLM_DEBUG(lock, "already unused, calling "
+                           "callback (%p)", lock->l_blocking_ast);
+                if (lock->l_blocking_ast != NULL) {
+                        lock->l_blocking_ast(lock, &dlm_req->lock_desc,
+                                             lock->l_data, lock->l_data_len);
                 }
-                LDLM_LOCK_PUT(lock);
-        } else {
-                struct list_head ast_list = LIST_HEAD_INIT(ast_list);
+        } else
+                LDLM_DEBUG(lock, "Lock still has references, will be"
+                           " cancelled later");
 
-                l_lock(&lock->l_resource->lr_namespace->ns_lock);
-                lock->l_req_mode = dlm_req->lock_desc.l_granted_mode;
-
-                /* If we receive the completion AST before the actual enqueue
-                 * returned, then we might need to switch resources. */
-                ldlm_resource_unlink_lock(lock);
-                if (memcmp(dlm_req->lock_desc.l_resource.lr_name,
-                           lock->l_resource->lr_name,
-                           sizeof(__u64) * RES_NAME_SIZE) != 0) {
-                        ldlm_lock_change_resource(lock, dlm_req->lock_desc.l_resource.lr_name);
-                        LDLM_DEBUG(lock, "completion AST, new resource");
-                }
-                lock->l_resource->lr_tmp = &ast_list;
-                ldlm_grant_lock(lock);
-                lock->l_resource->lr_tmp = NULL;
-                l_unlock(&lock->l_resource->lr_namespace->ns_lock);
-                LDLM_LOCK_PUT(lock);
-
-                ldlm_run_ast_work(&ast_list);
-        }
-
-        LDLM_DEBUG_NOLOCK("client %s callback handler END (lock %p)",
-                          is_blocking_ast ? "blocked" : "completion", lock);
+        LDLM_DEBUG(lock, "client blocking callback handler END");
+        LDLM_LOCK_PUT(lock);
         RETURN(0);
 }
 
+static int ldlm_handle_cp_callback(struct ptlrpc_request *req)
+{
+        struct list_head ast_list = LIST_HEAD_INIT(ast_list);
+        struct ldlm_request *dlm_req;
+        struct ldlm_lock *lock;
+        int rc;
+        ENTRY;
+
+        rc = lustre_pack_msg(0, NULL, NULL, &req->rq_replen, &req->rq_repmsg);
+        if (rc)
+                RETURN(-ENOMEM);
+        rc = ptlrpc_reply(req->rq_svc, req);
+        if (rc)
+                RETURN(rc);
+
+        dlm_req = lustre_msg_buf(req->rq_reqmsg, 0);
+
+        lock = ldlm_handle2lock(&dlm_req->lock_handle1);
+        if (!lock) {
+                CERROR("completion callback on lock %Lx - lock disappeared\n",
+                       dlm_req->lock_handle1.addr);
+                RETURN(0);
+        }
+
+        LDLM_DEBUG(lock, "client completion callback handler START");
+
+        l_lock(&lock->l_resource->lr_namespace->ns_lock);
+        lock->l_req_mode = dlm_req->lock_desc.l_granted_mode;
+
+        /* If we receive the completion AST before the actual enqueue returned,
+         * then we might need to switch resources. */
+        ldlm_resource_unlink_lock(lock);
+        if (memcmp(dlm_req->lock_desc.l_resource.lr_name,
+                   lock->l_resource->lr_name,
+                   sizeof(__u64) * RES_NAME_SIZE) != 0) {
+                ldlm_lock_change_resource(lock, dlm_req->lock_desc.l_resource.lr_name);
+                LDLM_DEBUG(lock, "completion AST, new resource");
+        }
+        lock->l_resource->lr_tmp = &ast_list;
+        ldlm_grant_lock(lock);
+        lock->l_resource->lr_tmp = NULL;
+        l_unlock(&lock->l_resource->lr_namespace->ns_lock);
+        LDLM_DEBUG(lock, "callback handler finished, about to run_ast_work");
+        LDLM_LOCK_PUT(lock);
+
+        ldlm_run_ast_work(&ast_list);
+
+        LDLM_DEBUG_NOLOCK("client completion callback handler END (lock %p)",
+                          lock);
+        RETURN(0);
+}
 
 static int ldlm_callback_handler(struct ptlrpc_request *req)
 {
@@ -321,10 +363,15 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
                 GOTO(out, rc = -EINVAL);
         }
         switch (req->rq_reqmsg->opc) {
-        case LDLM_CALLBACK:
-                CDEBUG(D_INODE, "callback\n");
-                OBD_FAIL_RETURN(OBD_FAIL_LDLM_CALLBACK, 0);
-                rc = ldlm_handle_callback(req);
+        case LDLM_BL_CALLBACK:
+                CDEBUG(D_INODE, "blocking ast\n");
+                OBD_FAIL_RETURN(OBD_FAIL_LDLM_BL_CALLBACK, 0);
+                rc = ldlm_handle_bl_callback(req);
+                break;
+        case LDLM_CP_CALLBACK:
+                CDEBUG(D_INODE, "completion ast\n");
+                OBD_FAIL_RETURN(OBD_FAIL_LDLM_CP_CALLBACK, 0);
+                rc = ldlm_handle_cp_callback(req);
                 break;
 
         default:
@@ -345,7 +392,7 @@ static int ldlm_iocontrol(long cmd, struct lustre_handle *conn, int len,
 {
         struct obd_device *obddev = class_conn2obd(conn);
         struct ptlrpc_connection *connection;
-        int err;
+        int err = 0;
         ENTRY;
 
         if (_IOC_TYPE(cmd) != IOC_LDLM_TYPE || _IOC_NR(cmd) < IOC_LDLM_MIN_NR ||
@@ -365,11 +412,13 @@ static int ldlm_iocontrol(long cmd, struct lustre_handle *conn, int len,
                 CERROR("No LDLM UUID found: assuming ldlm is local.\n");
 
         switch (cmd) {
-        case IOC_LDLM_TEST: {
+        case IOC_LDLM_TEST:
                 err = ldlm_test(obddev, connection);
                 CERROR("-- done err %d\n", err);
                 GOTO(out, err);
-        }
+        case IOC_LDLM_DUMP:
+                ldlm_dump_all_namespaces();
+                GOTO(out, err);
         default:
                 GOTO(out, err = -EINVAL);
         }
@@ -387,17 +436,20 @@ static int ldlm_iocontrol(long cmd, struct lustre_handle *conn, int len,
 static int ldlm_setup(struct obd_device *obddev, obd_count len, void *buf)
 {
         struct ldlm_obd *ldlm = &obddev->u.ldlm;
-        int rc;
-        int i;
+        int rc, i;
         ENTRY;
 
         MOD_INC_USE_COUNT;
-        ldlm->ldlm_service =
-                ptlrpc_init_svc(64 * 1024, LDLM_REQUEST_PORTAL,
-                                LDLM_REPLY_PORTAL, "self", ldlm_callback_handler);
+        rc = ldlm_proc_setup(obddev);
+        if (rc != 0)
+                GOTO(out_dec, rc);
+
+        ldlm->ldlm_service = ptlrpc_init_svc(64 * 1024, LDLM_REQUEST_PORTAL,
+                                             LDLM_REPLY_PORTAL, "self",
+                                             ldlm_callback_handler);
         if (!ldlm->ldlm_service) {
                 LBUG();
-                GOTO(out_dec, rc = -ENOMEM);
+                GOTO(out_proc, rc = -ENOMEM);
         }
 
         for (i = 0; i < LDLM_NUM_THREADS; i++) {
@@ -413,10 +465,12 @@ static int ldlm_setup(struct obd_device *obddev, obd_count len, void *buf)
 
         RETURN(0);
 
-out_thread:
+ out_thread:
         ptlrpc_stop_all_threads(ldlm->ldlm_service);
         ptlrpc_unregister_service(ldlm->ldlm_service);
-out_dec:
+ out_proc:
+        ldlm_proc_cleanup(obddev);
+ out_dec:
         MOD_DEC_USE_COUNT;
         return rc;
 }
@@ -428,6 +482,7 @@ static int ldlm_cleanup(struct obd_device *obddev)
 
         ptlrpc_stop_all_threads(ldlm->ldlm_service);
         ptlrpc_unregister_service(ldlm->ldlm_service);
+        ldlm_proc_cleanup(obddev);
 
         MOD_DEC_USE_COUNT;
         RETURN(0);
@@ -440,7 +495,6 @@ struct obd_ops ldlm_obd_ops = {
         o_connect:     class_connect,
         o_disconnect:  class_disconnect
 };
-
 
 static int __init ldlm_init(void)
 {
@@ -483,6 +537,7 @@ EXPORT_SYMBOL(ldlm_unregister_intent);
 EXPORT_SYMBOL(ldlm_lockname);
 EXPORT_SYMBOL(ldlm_typename);
 EXPORT_SYMBOL(ldlm_handle2lock);
+EXPORT_SYMBOL(ldlm_lock2handle);
 EXPORT_SYMBOL(ldlm_lock_match);
 EXPORT_SYMBOL(ldlm_lock_addref);
 EXPORT_SYMBOL(ldlm_lock_decref);

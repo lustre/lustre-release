@@ -27,21 +27,13 @@ static spinlock_t ctl_lock = SPIN_LOCK_UNLOCKED;
 static struct list_head ctl_threads;
 static int regression_running = 0;
 
-static int ldlm_test_callback(struct lustre_handle *lockh,
-                              struct ldlm_lock_desc *new,
-                              void *data, __u32 data_len)
+static int ldlm_blocking_ast(struct ldlm_lock *lock,
+                             struct ldlm_lock_desc *new,
+                             void *data, __u32 data_len)
 {
-        struct ldlm_lock *lock;
         ENTRY;
-
-        lock = ldlm_handle2lock(lockh);
-        if (lock == NULL) {
-                CERROR("invalid handle in callback\n");
-                RETURN(0);
-        }
-
-        printk("ldlm_test_callback: lock=%Lu, new=%p\n", lockh->addr, new);
-        return 0;
+        CERROR("ldlm_blocking_ast: lock=%p, new=%p\n", lock, new);
+        RETURN(0);
 }
 
 int ldlm_test_basics(struct obd_device *obddev)
@@ -61,7 +53,7 @@ int ldlm_test_basics(struct obd_device *obddev)
         if (lock1 == NULL)
                 LBUG();
         err = ldlm_lock_enqueue(lock1, NULL, 0, &flags,
-                                ldlm_completion_ast, ldlm_test_callback);
+                                ldlm_completion_ast, ldlm_blocking_ast);
         if (err != ELDLM_OK)
                 LBUG();
 
@@ -69,7 +61,7 @@ int ldlm_test_basics(struct obd_device *obddev)
         if (lock == NULL)
                 LBUG();
         err = ldlm_lock_enqueue(lock, NULL, 0, &flags,
-                                ldlm_completion_ast, ldlm_test_callback);
+                                ldlm_completion_ast, ldlm_blocking_ast);
         if (err != ELDLM_OK)
                 LBUG();
         if (!(flags & LDLM_FL_BLOCK_GRANTED))
@@ -169,9 +161,9 @@ static int ldlm_test_network(struct obd_device *obddev,
 
         /* FIXME: this needs a connh as 3rd paramter, before it will work */
 
-        err = ldlm_cli_enqueue(NULL, NULL, obddev->obd_namespace, NULL, res_id, LDLM_EXTENT,
-                               &ext, sizeof(ext), LCK_PR, &flags, NULL, NULL, NULL, 0,
-                               &lockh1);
+        err = ldlm_cli_enqueue(NULL, NULL, obddev->obd_namespace, NULL, res_id,
+                               LDLM_EXTENT, &ext, sizeof(ext), LCK_PR, &flags,
+                               NULL, NULL, NULL, 0, &lockh1);
         CERROR("ldlm_cli_enqueue: %d\n", err);
         if (err == ELDLM_OK)
                 ldlm_lock_decref(&lockh1, LCK_PR);
@@ -221,8 +213,8 @@ static int ldlm_test_main(void *data)
 
                 rc = ldlm_cli_enqueue(NULL, NULL, ns, NULL,
                                       res_id, LDLM_PLAIN, NULL, 0, lock_mode,
-                                      &flags, ldlm_completion_ast, ldlm_test_callback, NULL, 0,
-                                      &lockh);
+                                      &flags, ldlm_completion_ast,
+                                      ldlm_blocking_ast, NULL, 0, &lockh);
                 if (rc < 0) {
                         CERROR("ldlm_cli_enqueue: %d\n", rc);
                         LBUG();

@@ -15,6 +15,30 @@
 
 kmem_cache_t *ldlm_resource_slab, *ldlm_lock_slab;
 
+spinlock_t ldlm_namespace_lock = SPIN_LOCK_UNLOCKED;
+struct list_head ldlm_namespace_list = LIST_HEAD_INIT(ldlm_namespace_list);
+static struct proc_dir_entry *ldlm_ns_proc_dir = NULL;
+
+int ldlm_proc_setup(struct obd_device *obd)
+{
+        ENTRY;
+
+        if (obd->obd_proc_entry == NULL)
+                RETURN(-EINVAL);
+
+        ldlm_ns_proc_dir = proc_mkdir("namespaces", obd->obd_proc_entry);
+        if (ldlm_ns_proc_dir == NULL) {
+                CERROR("Couldn't create /proc/lustre/ldlm/namespaces\n");
+                RETURN(-EPERM);
+        }
+        RETURN(0);
+}
+
+void ldlm_proc_cleanup(struct obd_device *obd)
+{
+        proc_lustre_remove_obd_entry("namespaces", obd);
+}
+
 struct ldlm_namespace *ldlm_namespace_new(char *name, __u32 client)
 {
         struct ldlm_namespace *ns = NULL;
@@ -50,6 +74,14 @@ struct ldlm_namespace *ldlm_namespace_new(char *name, __u32 client)
         for (bucket = ns->ns_hash + RES_HASH_SIZE - 1; bucket >= ns->ns_hash;
              bucket--)
                 INIT_LIST_HEAD(bucket);
+
+        spin_lock(&ldlm_namespace_lock);
+        list_add(&ns->ns_list_chain, &ldlm_namespace_list);
+        ns->ns_proc_dir = proc_mkdir(ns->ns_name, ldlm_ns_proc_dir);
+        if (ns->ns_proc_dir == NULL)
+                CERROR("Unable to create proc directory for namespace.\n");
+        spin_unlock(&ldlm_namespace_lock);
+
         RETURN(ns);
 
  out:
@@ -103,6 +135,11 @@ int ldlm_namespace_free(struct ldlm_namespace *ns)
 
         if (!ns)
                 RETURN(ELDLM_OK);
+
+        spin_lock(&ldlm_namespace_lock);
+        list_del(&ns->ns_list_chain);
+        remove_proc_entry(ns->ns_name, ldlm_ns_proc_dir);
+        spin_unlock(&ldlm_namespace_lock);
 
         l_lock(&ns->ns_lock);
 
@@ -201,10 +238,9 @@ static struct ldlm_resource *ldlm_resource_add(struct ldlm_namespace *ns,
         bucket = ns->ns_hash + ldlm_hash_fn(parent, name);
         list_add(&res->lr_hash, bucket);
 
-        if (parent == NULL) {
-                res->lr_parent = res;
-                list_add(&res->lr_rootlink, &ns->ns_root_list);
-        } else {
+        if (parent == NULL)
+                list_add(&res->lr_childof, &ns->ns_root_list);
+        else {
                 res->lr_parent = parent;
                 list_add(&res->lr_childof, &parent->lr_children);
         }
@@ -288,7 +324,6 @@ int ldlm_resource_put(struct ldlm_resource *res)
 
                 ns->ns_refcount--;
                 list_del(&res->lr_hash);
-                list_del(&res->lr_rootlink);
                 list_del(&res->lr_childof);
 
                 kmem_cache_free(ldlm_resource_slab, res);
@@ -331,6 +366,40 @@ void ldlm_res2desc(struct ldlm_resource *res, struct ldlm_resource_desc *desc)
         desc->lr_type = res->lr_type;
         memcpy(desc->lr_name, res->lr_name, sizeof(desc->lr_name));
         memcpy(desc->lr_version, res->lr_version, sizeof(desc->lr_version));
+}
+
+void ldlm_dump_all_namespaces(void)
+{
+        struct list_head *tmp;
+
+        spin_lock(&ldlm_namespace_lock);
+
+        list_for_each(tmp, &ldlm_namespace_list) {
+                struct ldlm_namespace *ns;
+                ns = list_entry(tmp, struct ldlm_namespace, ns_list_chain);
+                ldlm_namespace_dump(ns);
+        }
+
+        spin_unlock(&ldlm_namespace_lock);
+}
+
+void ldlm_namespace_dump(struct ldlm_namespace *ns)
+{
+        struct list_head *tmp;
+
+        l_lock(&ns->ns_lock);
+        CDEBUG(D_OTHER, "--- Namespace: %s (rc: %d, client: %d)\n", ns->ns_name,
+               ns->ns_refcount, ns->ns_client);
+
+        list_for_each(tmp, &ns->ns_root_list) {
+                struct ldlm_resource *res;
+                res = list_entry(tmp, struct ldlm_resource, lr_childof);
+
+                /* Once we have resources with children, this should really dump
+                 * them recursively. */
+                ldlm_resource_dump(res);
+        }
+        l_unlock(&ns->ns_lock);
 }
 
 void ldlm_resource_dump(struct ldlm_resource *res)

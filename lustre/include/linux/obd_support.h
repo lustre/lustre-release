@@ -83,7 +83,8 @@ extern unsigned long obd_fail_loc;
 #define OBD_FAIL_LDLM_ENQUEUE            0x302
 #define OBD_FAIL_LDLM_CONVERT            0x303
 #define OBD_FAIL_LDLM_CANCEL             0x304
-#define OBD_FAIL_LDLM_CALLBACK           0x305
+#define OBD_FAIL_LDLM_BL_CALLBACK        0x305
+#define OBD_FAIL_LDLM_CP_CALLBACK        0x306
 
 /* preparation for a more advanced failure testbed (not functional yet) */
 #define OBD_FAIL_MASK_SYS    0x0000FF00

@@ -94,9 +94,9 @@ static int mds_sendpage(struct ptlrpc_request *req, struct file *file,
 }
 
 /* 'dir' is a inode for which a lock has already been taken */
-struct dentry *mds_name2locked_dentry(struct obd_device *obd, struct dentry *dir,
-                                      struct vfsmount **mnt, char *name,
-                                      int namelen, int lock_mode,
+struct dentry *mds_name2locked_dentry(struct obd_device *obd,
+                                      struct dentry *dir, struct vfsmount **mnt,
+                                      char *name, int namelen, int lock_mode,
                                       struct lustre_handle *lockh,
                                       int dir_lock_mode)
 {
@@ -124,8 +124,8 @@ struct dentry *mds_name2locked_dentry(struct obd_device *obd, struct dentry *dir
         res_id[0] = dchild->d_inode->i_ino;
         rc = ldlm_match_or_enqueue(NULL, NULL, obd->obd_namespace, NULL,
                                    res_id, LDLM_PLAIN, NULL, 0, lock_mode,
-                                   &flags, ldlm_completion_ast, (void *)mds_lock_callback, NULL,
-                                   0, lockh);
+                                   &flags, ldlm_completion_ast,
+                                   mds_blocking_ast, NULL, 0, lockh);
         if (rc != ELDLM_OK) {
                 l_dput(dchild);
                 up(&dir->d_inode->i_sem);
@@ -151,8 +151,8 @@ struct dentry *mds_fid2locked_dentry(struct obd_device *obd, struct ll_fid *fid,
         res_id[0] = de->d_inode->i_ino;
         rc = ldlm_match_or_enqueue(NULL, NULL, obd->obd_namespace, NULL,
                                    res_id, LDLM_PLAIN, NULL, 0, lock_mode,
-                                   &flags, ldlm_completion_ast, (void *)mds_lock_callback, NULL,
-                                   0, lockh);
+                                   &flags, ldlm_completion_ast,
+                                   mds_blocking_ast, NULL, 0, lockh);
         if (rc != ELDLM_OK) {
                 l_dput(de);
                 retval = ERR_PTR(-ENOLCK); /* XXX translate ldlm code */
@@ -349,17 +349,14 @@ static int mds_getlovinfo(struct ptlrpc_request *req)
         RETURN(0);
 }
 
-int mds_lock_callback(struct lustre_handle *lockh, struct ldlm_lock_desc *desc,
-                      void *data, int data_len, struct ptlrpc_request **reqp)
+int mds_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
+                     void *data, __u32 data_len)
 {
+        struct lustre_handle lockh;
         ENTRY;
 
-        if (desc == NULL) {
-                /* Completion AST.  Do nothing */
-                RETURN(0);
-        }
-
-        if (ldlm_cli_cancel(lockh) < 0)
+        ldlm_lock2handle(lock, &lockh);
+        if (ldlm_cli_cancel(&lockh) < 0)
                 LBUG();
         RETURN(0);
 }
@@ -412,8 +409,8 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req)
                 LDLM_DEBUG_NOLOCK("enqueue res %Lu", res_id[0]);
                 rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace, NULL,
                                       res_id, LDLM_PLAIN, NULL, 0, lock_mode,
-                                      &flags, ldlm_completion_ast, (void *)mds_lock_callback,
-                                      NULL, 0, &lockh);
+                                      &flags, ldlm_completion_ast,
+                                      mds_blocking_ast, NULL, 0, &lockh);
                 if (rc != ELDLM_OK) {
                         CERROR("lock enqueue: err: %d\n", rc);
                         GOTO(out_create_de, rc = -EIO);
@@ -892,14 +889,13 @@ int mds_handle(struct ptlrpc_request *req)
                 if (rc)
                         break;
                 RETURN(0);
-        case LDLM_CALLBACK:
+        case LDLM_BL_CALLBACK:
+        case LDLM_CP_CALLBACK:
                 CDEBUG(D_INODE, "callback\n");
                 CERROR("callbacks should not happen on MDS\n");
                 LBUG();
-                OBD_FAIL_RETURN(OBD_FAIL_LDLM_CALLBACK, 0);
+                OBD_FAIL_RETURN(OBD_FAIL_LDLM_BL_CALLBACK, 0);
                 break;
-
-
         default:
                 rc = ptlrpc_error(req->rq_svc, req);
                 RETURN(rc);
@@ -1142,7 +1138,8 @@ static int ldlm_intent_policy(struct ldlm_lock *lock, void *req_cookie,
 
                 it->opc = NTOH__u64(it->opc);
 
-                LDLM_DEBUG(lock, "intent policy, opc: %s", ldlm_it2str(it->opc));
+                LDLM_DEBUG(lock, "intent policy, opc: %s",
+                           ldlm_it2str(it->opc));
 
                 /* prepare reply */
                 switch((long)it->opc) {
@@ -1183,8 +1180,15 @@ static int ldlm_intent_policy(struct ldlm_lock *lock, void *req_cookie,
 
                 /* execute policy */
                 switch ((long)it->opc) {
-                case IT_CREAT:
                 case IT_CREAT|IT_OPEN:
+                        rc = mds_reint(2, req);
+                        if (rc || (req->rq_status != 0 &&
+                                   req->rq_status != -EEXIST)) {
+                                rep->lock_policy_res2 = req->rq_status;
+                                RETURN(ELDLM_LOCK_ABORTED);
+                        }
+                        break;
+                case IT_CREAT:
                 case IT_LINK:
                 case IT_MKDIR:
                 case IT_MKNOD:
@@ -1259,7 +1263,7 @@ static int ldlm_intent_policy(struct ldlm_lock *lock, void *req_cookie,
 
 
 extern int mds_iocontrol(long cmd, struct lustre_handle *conn, 
-                          int len, void *karg, void *uarg);
+                         int len, void *karg, void *uarg);
 
 /* use obd ops to offer management infrastructure */
 static struct obd_ops mds_obd_ops = {

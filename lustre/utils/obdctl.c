@@ -50,7 +50,7 @@
 #include <errno.h>
 #include <string.h>
 
-#include <asm/page.h>   /* needed for PAGE_SIZE - rread*/ 
+#include <asm/page.h>           /* needed for PAGE_SIZE - rread */
 
 #define __KERNEL__
 #include <linux/list.h>
@@ -61,13 +61,13 @@
 
 #define SHMEM_STATS 1
 #if SHMEM_STATS
-#include <sys/ipc.h>
-#include <sys/shm.h>
+# include <sys/ipc.h>
+# include <sys/shm.h>
 
-#define MAX_SHMEM_COUNT 1024
+# define MAX_SHMEM_COUNT 1024
 static long long *shared_counters;
-static long long  counter_snapshot[2][MAX_SHMEM_COUNT];
-struct timeval    prev_time;
+static long long counter_snapshot[2][MAX_SHMEM_COUNT];
+struct timeval prev_time;
 #endif
 
 static int jt_newdev(int argc, char **argv);
@@ -123,7 +123,7 @@ do {                                                                    \
 
 */
 
-char * obdo_print(struct obdo *obd)
+char *obdo_print(struct obdo *obd)
 {
         char buf[1024];
 
@@ -141,10 +141,7 @@ char * obdo_print(struct obdo *obd)
                 obd->o_mode,
                 obd->o_uid,
                 obd->o_gid,
-                obd->o_flags,
-                obd->o_obdflags,
-                obd->o_nlink,
-                obd->o_valid);
+                obd->o_flags, obd->o_obdflags, obd->o_nlink, obd->o_valid);
         return strdup(buf);
 }
 
@@ -199,7 +196,7 @@ static int be_verbose(int verbose, struct timeval *next_time,
         }
 
         /* A negative verbosity means to print at most each X seconds */
-        if (verbose < 0 && next_time != NULL && difftime(&now, next_time) >= 0){
+        if (verbose < 0 && next_time != NULL && difftime(&now, next_time) >= 0) {
                 next_time->tv_sec = now.tv_sec - verbose;
                 next_time->tv_usec = now.tv_usec;
                 if (next_num)
@@ -219,7 +216,7 @@ static int get_verbose(const char *arg)
         else if (arg[0] == 's' || arg[0] == 'q')
                 verbose = 0;
         else
-                verbose = (int) strtoul(arg, NULL, 0);
+                verbose = (int)strtoul(arg, NULL, 0);
 
         if (verbose < 0)
                 printf("Print status every %d seconds\n", -verbose);
@@ -235,12 +232,12 @@ static int do_disconnect(char *func, int verbose)
 {
         struct obd_ioctl_data data;
 
-        if (conn_addr == -1) 
-                return 0; 
+        if (conn_addr == -1)
+                return 0;
 
         IOCINIT(data);
 
-        rc = ioctl(fd, OBD_IOC_DISCONNECT , &data);
+        rc = ioctl(fd, OBD_IOC_DISCONNECT, &data);
         if (rc < 0) {
                 fprintf(stderr, "error: %s: %x %s\n", cmdname(func),
                         OBD_IOC_DISCONNECT, strerror(errno));
@@ -255,79 +252,75 @@ static int do_disconnect(char *func, int verbose)
 }
 
 #if SHMEM_STATS
-static void
-shmem_setup ()
+static void shmem_setup(void)
 {
-        int shmid = shmget (IPC_PRIVATE, sizeof (counter_snapshot[0]), 0600);
+        int shmid = shmget(IPC_PRIVATE, sizeof(counter_snapshot[0]), 0600);
 
-        if (shmid == -1)
-        {
-                fprintf (stderr, "Can't create shared memory counters: %s\n", strerror (errno));
+        if (shmid == -1) {
+                fprintf(stderr, "Can't create shared memory counters: %s\n",
+                        strerror(errno));
                 return;
         }
-        
-        shared_counters = (long long *)shmat (shmid, NULL, 0);
 
-        if (shared_counters == (long long *)(-1))
-        {
-                fprintf (stderr, "Can't attach shared memory counters: %s\n", strerror (errno));
+        shared_counters = (long long *)shmat(shmid, NULL, 0);
+
+        if (shared_counters == (long long *)(-1)) {
+                fprintf(stderr, "Can't attach shared memory counters: %s\n",
+                        strerror(errno));
                 shared_counters = NULL;
                 return;
         }
 }
 
-static inline void
-shmem_reset ()
+static inline void shmem_reset(void)
 {
         if (shared_counters == NULL)
                 return;
-        
-        memset (shared_counters, 0, sizeof (counter_snapshot[0]));
-        memset (counter_snapshot, 0, sizeof (counter_snapshot));
-        gettimeofday (&prev_time, NULL);
+
+        memset(shared_counters, 0, sizeof(counter_snapshot[0]));
+        memset(counter_snapshot, 0, sizeof(counter_snapshot));
+        gettimeofday(&prev_time, NULL);
 }
 
-static inline void
-shmem_bump ()
+static inline void shmem_bump(void)
 {
-        if (shared_counters == NULL || 
-            thread <= 0 || thread > MAX_SHMEM_COUNT)
+        if (shared_counters == NULL || thread <= 0 || thread > MAX_SHMEM_COUNT)
                 return;
-        
+
         shared_counters[thread - 1]++;
 }
 
-static void
-shmem_snap (int n)
+static void shmem_snap(int n)
 {
         struct timeval this_time;
-        int            non_zero = 0;
-        long long      total = 0;
-        double         secs;
-        int            i;
-        
+        int non_zero = 0;
+        long long total = 0;
+        double secs;
+        int i;
+
         if (shared_counters == NULL || n > MAX_SHMEM_COUNT)
                 return;
 
-        memcpy (counter_snapshot[1], counter_snapshot[0], n * sizeof (counter_snapshot[0][0]));
-        memcpy (counter_snapshot[0], shared_counters, n * sizeof (counter_snapshot[0][0]));
-        gettimeofday (&this_time, NULL);
-        
-        for (i = 0; i < n; i++)
-        {
-                long long this_count = counter_snapshot[0][i] - counter_snapshot[1][i];
-                
-                if (this_count != 0)
-                {
+        memcpy(counter_snapshot[1], counter_snapshot[0],
+               n * sizeof(counter_snapshot[0][0]));
+        memcpy(counter_snapshot[0], shared_counters,
+               n * sizeof(counter_snapshot[0][0]));
+        gettimeofday(&this_time, NULL);
+
+        for (i = 0; i < n; i++) {
+                long long this_count =
+                        counter_snapshot[0][i] - counter_snapshot[1][i];
+
+                if (this_count != 0) {
                         non_zero++;
                         total += this_count;
                 }
         }
-        
-        secs = (this_time.tv_sec + this_time.tv_usec/1000000.0) -
-               (prev_time.tv_sec + prev_time.tv_usec/1000000.0);
-        
-        printf ("%d/%d Total: %f/second\n", non_zero, n, total / secs);
+
+        secs = (this_time.tv_sec + this_time.tv_usec / 1000000.0) -
+                (prev_time.tv_sec + prev_time.tv_usec / 1000000.0);
+
+        printf("%d/%d Total: %f/second\n", non_zero, n, total / secs);
 
         prev_time = this_time;
 }
@@ -345,12 +338,13 @@ shmem_snap (int n)
 
 extern command_t cmdlist[];
 
-static int xml_command(char *cmd, ...) {
+static int xml_command(char *cmd, ...)
+{
         va_list args;
         char *arg, *cmds[8];
         int i = 1, j;
-       
-        cmds[0] = cmd; 
+
+        cmds[0] = cmd;
         va_start(args, cmd);
 
         while (((arg = va_arg(args, char *)) != NULL) && (i < 8)) {
@@ -362,7 +356,7 @@ static int xml_command(char *cmd, ...) {
 
         printf("obdctl > ");
         for (j = 0; j < i; j++)
-          printf("%s ", cmds[j]);
+                printf("%s ", cmds[j]);
 
         printf("\n");
 
@@ -370,15 +364,16 @@ static int xml_command(char *cmd, ...) {
 }
 
 #if 0
-static network_t *xml_network(xmlDocPtr doc, xmlNodePtr root) {
+static network_t *xml_network(xmlDocPtr doc, xmlNodePtr root)
+{
         xmlNodePtr cur = root->xmlChildrenNode;
         network_t *net;
-        
-        if ((net = (network_t *)calloc(1, sizeof(network_t))) == NULL) {
+
+        if ((net = (network_t *) calloc(1, sizeof(network_t))) == NULL) {
                 printf("error: unable to malloc network_t\n");
                 return NULL;
         }
-        
+
         net->type = xmlGetProp(root, "type");
         if (net->type == NULL) {
                 printf("error: type attrib required (tcp, elan, myrinet)\n");
@@ -394,20 +389,21 @@ static network_t *xml_network(xmlDocPtr doc, xmlNodePtr root) {
                         net->port = atoi(xmlNodeGetContent(cur));
 
                 cur = cur->next;
-        } 
+        }
 
         if (net->server == NULL) {
                 printf("error: <server> tag required\n");
                 free(net);
                 return NULL;
         }
-        
+
         return net;
 }
 #endif
 
-static int xml_mds(xmlDocPtr doc, xmlNodePtr root, 
-                   char *serv_name, char *serv_uuid) {
+static int xml_mds(xmlDocPtr doc, xmlNodePtr root,
+                   char *serv_name, char *serv_uuid)
+{
         xmlNodePtr cur = root->xmlChildrenNode;
         char *fstype = NULL, *device = NULL;
         int rc;
@@ -419,7 +415,7 @@ static int xml_mds(xmlDocPtr doc, xmlNodePtr root,
 
                 if (!xmlStrcmp(cur->name, "device"))
                         device = xmlNodeGetContent(cur);
- 
+
                 /* FIXME: Parse the network bits
                  * if (!xmlStrcmp(cur->name, "network")) {
                  *       net = xml_network(doc, cur);
@@ -429,7 +425,7 @@ static int xml_mds(xmlDocPtr doc, xmlNodePtr root,
                  * free(net);
                  */
                 cur = cur->next;
-        } 
+        }
 
         if ((fstype == NULL) || (device == NULL)) {
                 printf("error: <fstype> and <device> tags required\n");
@@ -439,7 +435,8 @@ static int xml_mds(xmlDocPtr doc, xmlNodePtr root,
         if ((rc = xml_command("newdev", NULL)) != 0)
                 return rc;
 
-        if ((rc = xml_command("attach","mds",serv_name,serv_uuid,NULL)) != 0)
+        if ((rc =
+             xml_command("attach", "mds", serv_name, serv_uuid, NULL)) != 0)
                 return rc;
 
         if ((rc = xml_command("setup", device, fstype, NULL)) != 0)
@@ -447,9 +444,10 @@ static int xml_mds(xmlDocPtr doc, xmlNodePtr root,
 
         return 0;
 }
-        
-static int xml_obd(xmlDocPtr doc, xmlNodePtr root, 
-                   char *serv_name, char *serv_uuid) {
+
+static int xml_obd(xmlDocPtr doc, xmlNodePtr root,
+                   char *serv_name, char *serv_uuid)
+{
         char *obdtype, *format = NULL, *fstype = NULL, *device = NULL;
         xmlNodePtr cur = root->xmlChildrenNode;
         int rc;
@@ -463,12 +461,12 @@ static int xml_obd(xmlDocPtr doc, xmlNodePtr root,
 
                 if (!xmlStrcmp(cur->name, "device"))
                         device = xmlNodeGetContent(cur);
- 
+
                 if (!xmlStrcmp(cur->name, "autoformat"))
                         format = xmlNodeGetContent(cur);
 
                 cur = cur->next;
-        } 
+        }
 
         if ((obdtype == NULL) || (fstype == NULL) || (device == NULL)) {
                 printf("error: 'type' attrib and <fstype> "
@@ -480,12 +478,12 @@ static int xml_obd(xmlDocPtr doc, xmlNodePtr root,
          * but is currently unsupported.  You'll have to use the scripts
          * for now until support is added, or specify a real device.
          */
-        
+
         if ((rc = xml_command("newdev", NULL)) != 0)
                 return rc;
 
         if ((rc = xml_command("attach", obdtype,
-            serv_name,serv_uuid, NULL)) != 0)
+                              serv_name, serv_uuid, NULL)) != 0)
                 return rc;
 
         if ((rc = xml_command("setup", device, fstype, NULL)) != 0)
@@ -494,8 +492,9 @@ static int xml_obd(xmlDocPtr doc, xmlNodePtr root,
         return 0;
 }
 
-static int xml_ost(xmlDocPtr doc, xmlNodePtr root, 
-                   char *serv_name, char *serv_uuid) {
+static int xml_ost(xmlDocPtr doc, xmlNodePtr root,
+                   char *serv_name, char *serv_uuid)
+{
         char *server_name = NULL, *server_uuid = NULL;
         char *failover_name = NULL, *failover_uuid = NULL;
         xmlNodePtr cur = root->xmlChildrenNode;
@@ -517,17 +516,18 @@ static int xml_ost(xmlDocPtr doc, xmlNodePtr root,
                 }
 
                 cur = cur->next;
-        } 
+        }
 
         if ((server_name == NULL) || (server_uuid == NULL)) {
                 printf("error: atleast the <server_id> tag is required\n");
                 return -1;
         }
-        
+
         if ((rc = xml_command("newdev", NULL)) != 0)
                 return rc;
 
-        if ((rc = xml_command("attach","ost",serv_name,serv_uuid,NULL)) != 0)
+        if ((rc =
+             xml_command("attach", "ost", serv_name, serv_uuid, NULL)) != 0)
                 return rc;
 
         if ((rc = xml_command("setup", server_name, NULL)) != 0)
@@ -536,8 +536,9 @@ static int xml_ost(xmlDocPtr doc, xmlNodePtr root,
         return 0;
 }
 
-static int xml_osc(xmlDocPtr doc, xmlNodePtr root, 
-                   char *serv_name, char *serv_uuid) {
+static int xml_osc(xmlDocPtr doc, xmlNodePtr root,
+                   char *serv_name, char *serv_uuid)
+{
         char *ost_name = NULL, *ost_uuid = NULL;
         xmlNodePtr cur = root->xmlChildrenNode;
         int ost_num, rc = 0;
@@ -551,7 +552,7 @@ static int xml_osc(xmlDocPtr doc, xmlNodePtr root,
                 }
 
                 cur = cur->next;
-        } 
+        }
 
         if ((ost_name == NULL) || (ost_uuid == NULL)) {
                 printf("error: atleast the <service_id> tag is required\n");
@@ -561,7 +562,8 @@ static int xml_osc(xmlDocPtr doc, xmlNodePtr root,
         if ((rc = xml_command("newdev", NULL)) != 0)
                 return rc;
 
-        if ((rc = xml_command("attach","osc",serv_name,serv_uuid,NULL)) != 0)
+        if ((rc =
+             xml_command("attach", "osc", serv_name, serv_uuid, NULL)) != 0)
                 return rc;
 
         if ((rc = xml_command("setup", ost_uuid, "localhost", NULL)) != 0)
@@ -570,8 +572,9 @@ static int xml_osc(xmlDocPtr doc, xmlNodePtr root,
         return 0;
 }
 
-static int xml_mdc(xmlDocPtr doc, xmlNodePtr root, 
-                   char *serv_name, char *serv_uuid) {
+static int xml_mdc(xmlDocPtr doc, xmlNodePtr root,
+                   char *serv_name, char *serv_uuid)
+{
         char *mds_name = NULL, *mds_uuid = NULL;
         xmlNodePtr cur = root->xmlChildrenNode;
         int mds_num, rc = 0;
@@ -585,46 +588,51 @@ static int xml_mdc(xmlDocPtr doc, xmlNodePtr root,
                 }
 
                 cur = cur->next;
-        } 
+        }
 
         if ((mds_name == NULL) || (mds_uuid == NULL)) {
                 printf("error: atleast the <service_id> tag is required\n");
                 return -1;
         }
 
-        if ((rc = xml_command("newdev", NULL)) != 0) 
+        if ((rc = xml_command("newdev", NULL)) != 0)
                 return rc;
 
-        if ((rc = xml_command("attach","mdc",serv_name,serv_uuid,NULL)) != 0)
+        if ((rc =
+             xml_command("attach", "mdc", serv_name, serv_uuid, NULL)) != 0)
                 return rc;
 
         if ((rc = xml_command("setup", mds_uuid, "localhost", NULL)) != 0)
                 return rc;
-                
+
         return 0;
 }
 
-static int xml_lov(xmlDocPtr doc, xmlNodePtr root, 
-                   char *serv_name, char *serv_uuid) {
+static int xml_lov(xmlDocPtr doc, xmlNodePtr root,
+                   char *serv_name, char *serv_uuid)
+{
         printf("--- Setting up LOV ---\n");
         return 0;
 }
 
-static int xml_router(xmlDocPtr doc, xmlNodePtr root, 
-                   char *serv_name, char *serv_uuid) {
+static int xml_router(xmlDocPtr doc, xmlNodePtr root,
+                      char *serv_name, char *serv_uuid)
+{
         printf("--- Setting up ROUTER ---\n");
         return 0;
 }
 
-static int xml_ldlm(xmlDocPtr doc, xmlNodePtr root, 
-                   char *serv_name, char *serv_uuid) {
+static int xml_ldlm(xmlDocPtr doc, xmlNodePtr root,
+                    char *serv_name, char *serv_uuid)
+{
         int rc;
 
         printf("--- Setting up LDLM ---\n");
         if ((rc = xml_command("newdev", NULL)) != 0)
                 return rc;
 
-        if ((rc = xml_command("attach","ldlm",serv_name,serv_uuid,NULL)) != 0)
+        if ((rc =
+             xml_command("attach", "ldlm", serv_name, serv_uuid, NULL)) != 0)
                 return rc;
 
         if ((rc = xml_command("setup", NULL)) != 0)
@@ -633,8 +641,9 @@ static int xml_ldlm(xmlDocPtr doc, xmlNodePtr root,
         return 0;
 }
 
-static int xml_service(xmlDocPtr doc, xmlNodePtr root, 
-                       int serv_num, char *serv_name, char *serv_uuid) {
+static int xml_service(xmlDocPtr doc, xmlNodePtr root,
+                       int serv_num, char *serv_name, char *serv_uuid)
+{
         xmlNodePtr cur = root;
         char *name, *uuid;
 
@@ -642,8 +651,7 @@ static int xml_service(xmlDocPtr doc, xmlNodePtr root,
                 name = xmlGetProp(cur, "name");
                 uuid = xmlGetProp(cur, "uuid");
 
-                if (xmlStrcmp(name, serv_name) ||
-                    xmlStrcmp(uuid, serv_uuid)) {
+                if (xmlStrcmp(name, serv_name) || xmlStrcmp(uuid, serv_uuid)) {
                         cur = cur->next;
                         continue;
                 }
@@ -665,18 +673,19 @@ static int xml_service(xmlDocPtr doc, xmlNodePtr root,
                 else if (!xmlStrcmp(cur->name, "ldlm"))
                         return xml_ldlm(doc, cur, name, uuid);
                 else
-                        return -1;        
+                        return -1;
 
                 cur = cur->next;
         }
 
         printf("error: No XML config branch for name=%s uuid=%s\n",
-                serv_name, serv_uuid); 
-        return -1; 
+               serv_name, serv_uuid);
+        return -1;
 }
 
-static int xml_profile(xmlDocPtr doc, xmlNodePtr root, 
-                       int prof_num, char *prof_name, char *prof_uuid) {
+static int xml_profile(xmlDocPtr doc, xmlNodePtr root,
+                       int prof_num, char *prof_name, char *prof_uuid)
+{
         xmlNodePtr parent, cur = root;
         char *name, *uuid, *srv_name, *srv_uuid;
         int rc = 0, num;
@@ -685,16 +694,15 @@ static int xml_profile(xmlDocPtr doc, xmlNodePtr root,
                 name = xmlGetProp(cur, "name");
                 uuid = xmlGetProp(cur, "uuid");
 
-                if (xmlStrcmp(cur->name, "profile") || 
-                    xmlStrcmp(name, prof_name)          ||
-                    xmlStrcmp(uuid, prof_uuid)) {
+                if (xmlStrcmp(cur->name, "profile") ||
+                    xmlStrcmp(name, prof_name) || xmlStrcmp(uuid, prof_uuid)) {
                         cur = cur->next;
                         continue;
                 }
 
                 /* FIXME: Doesn't understand mountpoints yet
                  *        xml_mountpoint(doc, root, ...);
-                 */    
+                 */
 
                 /* Setup each service in turn
                  * FIXME: Should be sorted by "num" attr, we shouldn't
@@ -706,8 +714,10 @@ static int xml_profile(xmlDocPtr doc, xmlNodePtr root,
                         if (!xmlStrcmp(cur->name, "service_id")) {
                                 num = atoi(xmlGetProp(cur, "num"));
                                 rc = xml_service(doc, root, num,
-                                        srv_name = xmlGetProp(cur, "name"),
-                                        srv_uuid = xmlGetProp(cur, "uuid"));
+                                                 srv_name =
+                                                 xmlGetProp(cur, "name"),
+                                                 srv_uuid =
+                                                 xmlGetProp(cur, "uuid"));
                                 if (rc != 0) {
                                         printf("error: service config\n");
                                         return rc;
@@ -720,14 +730,15 @@ static int xml_profile(xmlDocPtr doc, xmlNodePtr root,
                 cur = parent->next;
         }
 
-        return rc; 
+        return rc;
 }
 
-static int xml_node(xmlDocPtr doc, xmlNodePtr root) {
+static int xml_node(xmlDocPtr doc, xmlNodePtr root)
+{
         xmlNodePtr parent, cur = root;
         char *name, *uuid;
         int rc = 0, num;
-        
+
         /* Walk the node tags looking for ours */
         while (cur != NULL) {
                 if (xmlStrcmp(cur->name, "node")) {
@@ -781,7 +792,7 @@ static int do_xml(char *func, char *file)
         doc = xmlParseFile(file);
         if (doc == NULL) {
                 fprintf(stderr, "error: Unable to parse XML\n");
-                return -1; 
+                return -1;
         }
 
         cur = xmlDocGetRootElement(doc);
@@ -790,7 +801,7 @@ static int do_xml(char *func, char *file)
                 xmlFreeDoc(doc);
                 return -1;
         }
-        
+
         if (xmlStrcmp(cur->name, (const xmlChar *)"lustre")) {
                 fprintf(stderr, "error: Root node != <lustre>\n");
                 xmlFreeDoc(doc);
@@ -798,13 +809,13 @@ static int do_xml(char *func, char *file)
         }
 
         /* FIXME: Validate the XML against the DTD here */
-    
+
         /* FIXME: Merge all the text nodes under each branch and 
          *        prune empty nodes.  Just to make the parsing more
          *        tolerant, the exact location of nested tags isn't
          *        critical for this.
          */
-        
+
         rc = xml_node(doc, cur->xmlChildrenNode);
         xmlFreeDoc(doc);
 
@@ -827,7 +838,7 @@ static int do_device(char *func, int dev)
                 return -2;
         }
 
-        return ioctl(fd, OBD_IOC_DEVICE , buf);
+        return ioctl(fd, OBD_IOC_DEVICE, buf);
 }
 
 static int jt_device(int argc, char **argv)
@@ -861,13 +872,13 @@ static int jt_connect(int argc, char **argv)
                 return -1;
         }
 
-        rc = ioctl(fd, OBD_IOC_CONNECT , &data);
+        rc = ioctl(fd, OBD_IOC_CONNECT, &data);
         if (rc < 0)
                 fprintf(stderr, "error: %s: %x %s\n", cmdname(argv[0]),
                         OBD_IOC_CONNECT, strerror(rc = errno));
         else
                 conn_addr = data.ioc_addr;
-                conn_cookie = data.ioc_cookie;
+        conn_cookie = data.ioc_cookie;
         return rc;
 }
 
@@ -946,7 +957,7 @@ static int jt__threads(int argc, char **argv)
                        argv[0], threads, argv[3], argv[4]);
 
         SHMEM_RESET();
-        
+
         for (i = 1, next_thread = verbose; i <= threads; i++) {
                 rc = fork();
                 if (rc < 0) {
@@ -963,22 +974,20 @@ static int jt__threads(int argc, char **argv)
                 rc = 0;
         }
 
-        if (!thread) { /* parent process */
+        if (!thread) {          /* parent process */
                 int live_threads = threads;
-                
-                while (live_threads > 0)
-                {
-                        int    status;
-                        pid_t  ret;
 
-                        ret = waitpid (0, &status, verbose < 0 ? WNOHANG : 0);
-                        if (ret == 0)
-                        {
+                while (live_threads > 0) {
+                        int status;
+                        pid_t ret;
+
+                        ret = waitpid(0, &status, verbose < 0 ? WNOHANG : 0);
+                        if (ret == 0) {
                                 if (verbose >= 0)
-                                        abort ();
+                                        abort();
 
-                                sleep (-verbose);
-                                SHMEM_SNAP (threads);
+                                sleep(-verbose);
+                                SHMEM_SNAP(threads);
                                 continue;
                         }
 
@@ -1026,10 +1035,10 @@ static int jt_detach(int argc, char **argv)
                 return -2;
         }
 
-        rc = ioctl(fd, OBD_IOC_DETACH , buf);
+        rc = ioctl(fd, OBD_IOC_DETACH, buf);
         if (rc < 0)
                 fprintf(stderr, "error: %s: %s\n", cmdname(argv[0]),
-                        strerror(rc=errno));
+                        strerror(rc = errno));
 
         return rc;
 }
@@ -1045,10 +1054,10 @@ static int jt_cleanup(int argc, char **argv)
                 return -1;
         }
 
-        rc = ioctl(fd, OBD_IOC_CLEANUP , &data);
+        rc = ioctl(fd, OBD_IOC_CLEANUP, &data);
         if (rc < 0)
                 fprintf(stderr, "error: %s: %s\n", cmdname(argv[0]),
-                        strerror(rc=errno));
+                        strerror(rc = errno));
 
         return rc;
 }
@@ -1067,10 +1076,10 @@ static int jt_newdev(int argc, char **argv)
                 return -1;
         }
 
-        rc = ioctl(fd, OBD_IOC_NEWDEV , &data);
+        rc = ioctl(fd, OBD_IOC_NEWDEV, &data);
         if (rc < 0)
                 fprintf(stderr, "error: %s: %s\n", cmdname(argv[0]),
-                        strerror(rc=errno));
+                        strerror(rc = errno));
         else {
                 printf("Current device set to %d\n", data.ioc_dev);
         }
@@ -1098,10 +1107,10 @@ static int jt_list(int argc, char **argv)
                 return -1;
         }
 
-        rc = ioctl(fd, OBD_IOC_LIST , data);
+        rc = ioctl(fd, OBD_IOC_LIST, data);
         if (rc < 0)
                 fprintf(stderr, "error: %s: %s\n", cmdname(argv[0]),
-                        strerror(rc=errno));
+                        strerror(rc = errno));
         else {
                 printf("%s", data->ioc_bulk);
         }
@@ -1121,7 +1130,7 @@ static int jt_attach(int argc, char **argv)
                 return -1;
         }
 
-        data.ioc_inllen1 =  strlen(argv[1]) + 1;
+        data.ioc_inllen1 = strlen(argv[1]) + 1;
         data.ioc_inlbuf1 = argv[1];
         if (argc >= 3) {
                 data.ioc_inllen2 = strlen(argv[2]) + 1;
@@ -1138,7 +1147,7 @@ static int jt_attach(int argc, char **argv)
                 return -2;
         }
 
-        rc = ioctl(fd, OBD_IOC_ATTACH , buf);
+        rc = ioctl(fd, OBD_IOC_ATTACH, buf);
         if (rc < 0)
                 fprintf(stderr, "error: %s: %x %s\n", cmdname(argv[0]),
                         OBD_IOC_ATTACH, strerror(rc = errno));
@@ -1158,7 +1167,7 @@ static int jt_attach(int argc, char **argv)
         return rc;
 }
 
-#define N2D_OFF 0x100    /* So we can tell between error codes and devices */
+#define N2D_OFF 0x100      /* So we can tell between error codes and devices */
 
 static int do_name2dev(char *func, char *name)
 {
@@ -1176,7 +1185,7 @@ static int do_name2dev(char *func, char *name)
                 fprintf(stderr, "error: %s: invalid ioctl\n", cmdname(func));
                 return -2;
         }
-        rc = ioctl(fd, OBD_IOC_NAME2DEV , buf);
+        rc = ioctl(fd, OBD_IOC_NAME2DEV, buf);
         if (rc < 0) {
                 fprintf(stderr, "error: %s: %s - %s\n", cmdname(func),
                         name, strerror(rc = errno));
@@ -1191,7 +1200,7 @@ static int do_name2dev(char *func, char *name)
 static int jt_name2dev(int argc, char **argv)
 {
         if (argc != 2) {
-                Parser_printhelp("name2dev"); 
+                Parser_printhelp("name2dev");
                 return -1;
         }
 
@@ -1211,7 +1220,7 @@ static int jt_setup(int argc, char **argv)
 
         IOCINIT(data);
 
-        if ( argc > 3) {
+        if (argc > 3) {
                 fprintf(stderr, "usage: %s [device] [fstype]\n",
                         cmdname(argv[0]));
                 return -1;
@@ -1231,7 +1240,7 @@ static int jt_setup(int argc, char **argv)
                 data.ioc_inllen1 = strlen(argv[1]) + 1;
                 data.ioc_inlbuf1 = argv[1];
         }
-        if ( argc == 3 ) {
+        if (argc == 3) {
                 data.ioc_inllen2 = strlen(argv[2]) + 1;
                 data.ioc_inlbuf2 = argv[2];
         }
@@ -1240,7 +1249,7 @@ static int jt_setup(int argc, char **argv)
                 fprintf(stderr, "error: %s: invalid ioctl\n", cmdname(argv[0]));
                 return -2;
         }
-        rc = ioctl(fd, OBD_IOC_SETUP , buf);
+        rc = ioctl(fd, OBD_IOC_SETUP, buf);
         if (rc < 0)
                 fprintf(stderr, "error: %s: %s\n", cmdname(argv[0]),
                         strerror(rc = errno));
@@ -1277,8 +1286,8 @@ static int jt_create(int argc, char **argv)
         gettimeofday(&next_time, NULL);
         next_time.tv_sec -= verbose;
 
-        for (i = 1, next_count = verbose; i <= count ; i++) {
-                rc = ioctl(fd, OBD_IOC_CREATE , &data);
+        for (i = 1, next_count = verbose; i <= count; i++) {
+                rc = ioctl(fd, OBD_IOC_CREATE, &data);
                 SHMEM_BUMP();
                 if (rc < 0) {
                         fprintf(stderr, "error: %s: #%d - %s\n",
@@ -1306,7 +1315,7 @@ static int jt_setattr(int argc, char **argv)
         data.ioc_obdo1.o_mode = S_IFREG | strtoul(argv[2], NULL, 0);
         data.ioc_obdo1.o_valid = OBD_MD_FLMODE;
 
-        rc = ioctl(fd, OBD_IOC_SETATTR , &data);
+        rc = ioctl(fd, OBD_IOC_SETATTR, &data);
         if (rc < 0)
                 fprintf(stderr, "error: %s: %s\n", cmdname(argv[0]),
                         strerror(rc = errno));
@@ -1325,9 +1334,9 @@ static int jt_destroy(int argc, char **argv)
         }
 
         data.ioc_obdo1.o_id = strtoul(argv[1], NULL, 0);
-        data.ioc_obdo1.o_mode = S_IFREG|0644;
+        data.ioc_obdo1.o_mode = S_IFREG | 0644;
 
-        rc = ioctl(fd, OBD_IOC_DESTROY , &data);
+        rc = ioctl(fd, OBD_IOC_DESTROY, &data);
         if (rc < 0)
                 fprintf(stderr, "error: %s: %s\n", cmdname(argv[0]),
                         strerror(rc = errno));
@@ -1351,10 +1360,10 @@ static int jt_getattr(int argc, char **argv)
         data.ioc_obdo1.o_valid = 0xffffffff;
         printf("%s: object id %Ld\n", cmdname(argv[0]), data.ioc_obdo1.o_id);
 
-        rc = ioctl(fd, OBD_IOC_GETATTR , &data);
+        rc = ioctl(fd, OBD_IOC_GETATTR, &data);
         if (rc) {
                 fprintf(stderr, "error: %s: %s\n", cmdname(argv[0]),
-                        strerror(rc=errno));
+                        strerror(rc = errno));
         } else {
                 printf("%s: object id %Ld, mode %o\n", cmdname(argv[0]),
                        data.ioc_obdo1.o_id, data.ioc_obdo1.o_mode);
@@ -1370,7 +1379,8 @@ static int jt_test_getattr(int argc, char **argv)
         int verbose;
 
         if (argc != 2 && argc != 3) {
-                fprintf(stderr, "usage: %s count [verbose]\n",cmdname(argv[0]));
+                fprintf(stderr, "usage: %s count [verbose]\n",
+                        cmdname(argv[0]));
                 return -1;
         }
 
@@ -1388,21 +1398,23 @@ static int jt_test_getattr(int argc, char **argv)
         next_time.tv_sec = start.tv_sec - verbose;
         next_time.tv_usec = start.tv_usec;
         if (verbose != 0)
-                printf("%s: getting %d attrs (testing only): %s", cmdname(argv[0]),
-                       count, ctime(&start.tv_sec));
+                printf("%s: getting %d attrs (testing only): %s",
+                       cmdname(argv[0]), count, ctime(&start.tv_sec));
 
         for (i = 1, next_count = verbose; i <= count; i++) {
-                rc = ioctl(fd, OBD_IOC_GETATTR , &data);
+                rc = ioctl(fd, OBD_IOC_GETATTR, &data);
                 SHMEM_BUMP();
                 if (rc < 0) {
                         fprintf(stderr, "error: %s: #%d - %s\n",
                                 cmdname(argv[0]), i, strerror(rc = errno));
                         break;
                 } else {
-                        if (be_verbose(verbose, &next_time, i,&next_count,count))
-                        printf("%s: got attr #%d\n", cmdname(argv[0]), i);
-        	}
-	}
+                        if (be_verbose
+                            (verbose, &next_time, i, &next_count, count))
+                                printf("%s: got attr #%d\n", cmdname(argv[0]),
+                                       i);
+                }
+        }
 
         if (!rc) {
                 struct timeval end;
@@ -1518,7 +1530,8 @@ static int jt_test_brw(int argc, char **argv)
                                 cmdname(argv[0]), i, strerror(rc = errno),
                                 write ? "write" : "read");
                         break;
-                } else if (be_verbose(verbose, &next_time, i,&next_count,count))
+                } else if (be_verbose
+                           (verbose, &next_time, i, &next_count, count))
                         printf("%s: %s number %d\n", cmdname(argv[0]),
                                write ? "write" : "read", i);
         }
@@ -1536,8 +1549,9 @@ static int jt_test_brw(int argc, char **argv)
                 --i;
                 if (verbose != 0)
                         printf("%s: %s %dx%dx%d pages in %.4gs (%.4g pg/s): %s",
-                               cmdname(argv[0]), write ? "wrote" : "read", obdos,
-                               pages, i, diff, (double)obdos * i * pages / diff,
+                               cmdname(argv[0]), write ? "wrote" : "read",
+                               obdos, pages, i, diff,
+                               (double)obdos * i * pages / diff,
                                ctime(&end.tv_sec));
         }
         return rc;
@@ -1546,53 +1560,52 @@ static int jt_test_brw(int argc, char **argv)
 static int jt_lov_config(int argc, char **argv)
 {
         struct obd_ioctl_data data;
-        struct lov_desc desc; 
+        struct lov_desc desc;
         uuid_t *uuidarray;
         int size, i;
         IOCINIT(data);
 
-        printf("WARNING: obdctl lovconfig NOT MAINTAINED\n"); 
+        printf("WARNING: obdctl lovconfig NOT MAINTAINED\n");
         return -1;
 
-        if (argc <= 5 ){
-                Parser_printhelp("lovconfig"); 
+        if (argc <= 5) {
+                Parser_printhelp("lovconfig");
                 return -1;
         }
 
-        if (strlen(argv[1]) > sizeof(uuid_t) - 1) { 
-                fprintf(stderr, "lov_config: no %dB memory for uuid's\n", 
+        if (strlen(argv[1]) > sizeof(uuid_t) - 1) {
+                fprintf(stderr, "lov_config: no %dB memory for uuid's\n",
                         strlen(argv[1]));
                 return -ENOMEM;
         }
-            
-        memset(&desc, 0, sizeof(desc)); 
-        strcpy(desc.ld_uuid, argv[1]); 
-        desc.ld_default_stripe_count = strtoul(argv[2], NULL, 0); 
-        desc.ld_default_stripe_size = strtoul(argv[3], NULL, 0); 
-        desc.ld_pattern = strtoul(argv[4], NULL, 0); 
+
+        memset(&desc, 0, sizeof(desc));
+        strcpy(desc.ld_uuid, argv[1]);
+        desc.ld_default_stripe_count = strtoul(argv[2], NULL, 0);
+        desc.ld_default_stripe_size = strtoul(argv[3], NULL, 0);
+        desc.ld_pattern = strtoul(argv[4], NULL, 0);
         desc.ld_tgt_count = argc - 5;
 
 
         size = sizeof(uuid_t) * desc.ld_tgt_count;
         uuidarray = malloc(size);
-        if (!uuidarray) { 
-                fprintf(stderr, "lov_config: no %dB memory for uuid's\n", 
-                        size);
+        if (!uuidarray) {
+                fprintf(stderr, "lov_config: no %dB memory for uuid's\n", size);
                 return -ENOMEM;
         }
-        memset(uuidarray, 0, size); 
-        for (i=5 ; i < argc ; i++) { 
-                char *buf = (char *) (uuidarray + i -5 );
-                if (strlen(argv[i]) >= sizeof(uuid_t)) { 
-                        fprintf(stderr, "lov_config: arg %d (%s) too long\n",  
+        memset(uuidarray, 0, size);
+        for (i = 5; i < argc; i++) {
+                char *buf = (char *)(uuidarray + i - 5);
+                if (strlen(argv[i]) >= sizeof(uuid_t)) {
+                        fprintf(stderr, "lov_config: arg %d (%s) too long\n",
                                 i, argv[i]);
                         free(uuidarray);
                         return -EINVAL;
                 }
-                strcpy(buf, argv[i]); 
+                strcpy(buf, argv[i]);
         }
 
-        data.ioc_inllen1 = sizeof(desc); 
+        data.ioc_inllen1 = sizeof(desc);
         data.ioc_inlbuf1 = (char *)&desc;
         data.ioc_inllen2 = size;
         data.ioc_inlbuf2 = (char *)uuidarray;
@@ -1602,14 +1615,13 @@ static int jt_lov_config(int argc, char **argv)
                 return -EINVAL;
         }
 
-        rc = ioctl(fd, OBD_IOC_LOV_CONFIG , buf);
+        rc = ioctl(fd, OBD_IOC_LOV_CONFIG, buf);
         if (rc < 0)
-                fprintf(stderr, "lov_config: error: %s: %s\n", 
-                        cmdname(argv[0]),strerror(rc = errno));
+                fprintf(stderr, "lov_config: error: %s: %s\n",
+                        cmdname(argv[0]), strerror(rc = errno));
         free(uuidarray);
         return rc;
 }
-
 
 static int jt_test_ldlm(int argc, char **argv)
 {
@@ -1628,6 +1640,23 @@ static int jt_test_ldlm(int argc, char **argv)
         return rc;
 }
 
+static int jt_dump_ldlm(int argc, char **argv)
+{
+        struct obd_ioctl_data data;
+
+        IOCINIT(data);
+        if (argc != 1) {
+                fprintf(stderr, "usage: %s\n", cmdname(argv[0]));
+                return 1;
+        }
+
+        rc = ioctl(fd, IOC_LDLM_DUMP, &data);
+        if (rc)
+                fprintf(stderr, "error: %s failed: %s\n",
+                        cmdname(argv[0]), strerror(rc = errno));
+        return rc;
+}
+
 static int jt_newconn(int argc, char **argv)
 {
         struct obd_ioctl_data data;
@@ -1638,7 +1667,7 @@ static int jt_newconn(int argc, char **argv)
                 return -1;
         }
 
-        rc = ioctl(fd, OBD_IOC_RECOVD_NEWCONN , &data);
+        rc = ioctl(fd, OBD_IOC_RECOVD_NEWCONN, &data);
         if (rc < 0)
                 fprintf(stderr, "error: %s: %s\n", cmdname(argv[0]),
                         strerror(rc = errno));
@@ -1658,15 +1687,16 @@ command_t cmdlist[] = {
         {"--xml", jt__xml, 0, "--xml <xml file> <command [args ...]>"},
         {"--device", jt__device, 0, "--device <devno> <command [args ...]>"},
         {"--threads", jt__threads, 0,
-                "--threads <threads> <devno> <command [args ...]>"},
+         "--threads <threads> <devno> <command [args ...]>"},
 
         /* Device configuration commands */
         {"lovconfig", jt_lov_config, 0, "configure lov data on MDS "
-         "[usage: lovconfig lov-uuid stripecount, stripesize, pattern, UUID1, [UUID2, ...]"}, 
+         "[usage: lovconfig lov-uuid stripecount, stripesize, pattern, UUID1, [UUID2, ...]"},
         {"list", jt_list, 0, "list the devices (no args)"},
         {"newdev", jt_newdev, 0, "set device to a new unused obd (no args)"},
         {"device", jt_device, 0, "set current device (args device_no name)"},
-        {"name2dev", jt_name2dev, 0, "set device by name [usage: name2dev devname]"},
+        {"name2dev", jt_name2dev, 0,
+         "set device by name [usage: name2dev devname]"},
         {"attach", jt_attach, 0, "name the type of device (args: type data"},
         {"setup", jt_setup, 0, "setup device (args: <blkdev> [data]"},
         {"detach", jt_detach, 0, "detach the current device (arg: )"},
@@ -1675,7 +1705,7 @@ command_t cmdlist[] = {
         /* Session commands */
         {"connect", jt_connect, 0, "connect - get a connection to device"},
         {"disconnect", jt_disconnect, 0,
-                "disconnect - break connection to device"},
+         "disconnect - break connection to device"},
 
         /* Session operations */
         {"create", jt_create, 0, "create [count [mode [verbose]]]"},
@@ -1686,12 +1716,13 @@ command_t cmdlist[] = {
         {"test_getattr", jt_test_getattr, 0, "test_getattr <count> [verbose]"},
         {"test_brw", jt_test_brw, 0, "test_brw <count> [write [verbose]]"},
         {"test_ldlm", jt_test_ldlm, 0, "test lock manager (no args)"},
+        {"dump_ldlm", jt_dump_ldlm, 0, "dump all lock manager state (no args)"},
 
         /* User interface commands */
         {"help", Parser_help, 0, "help"},
         {"exit", jt_quit, 0, "quit"},
         {"quit", jt_quit, 0, "quit"},
-        { 0, 0, 0, NULL }
+        {0, 0, 0, NULL}
 };
 
 
@@ -1700,9 +1731,8 @@ static void signal_server(int sig)
         if (sig == SIGINT) {
                 do_disconnect("sigint", 1);
                 exit(1);
-        } else {
+        } else
                 fprintf(stderr, "%s: got signal %d\n", cmdname("sigint"), sig);
-        }
 }
 
 int main(int argc, char **argv)
@@ -1714,9 +1744,9 @@ int main(int argc, char **argv)
         sigact.sa_flags = SA_RESTART;
         sigaction(SIGINT, &sigact, NULL);
 
-        setlinebuf (stdout);
+        setlinebuf(stdout);
         SHMEM_SETUP();
-        
+
         if (argc > 1) {
                 rc = Parser_execarg(argc - 1, argv + 1, cmdlist);
         } else {
@@ -1727,4 +1757,3 @@ int main(int argc, char **argv)
         do_disconnect(argv[0], 1);
         return rc;
 }
-

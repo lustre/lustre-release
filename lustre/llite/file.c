@@ -48,23 +48,32 @@ static int ll_file_open(struct inode *inode, struct file *file)
         /*  delayed create of object (intent created inode) */
         /*  XXX object needs to be cleaned up if mdc_open fails */
         /*  XXX error handling appropriate here? */
-        if (lli->lli_smd == NULL || lli->lli_smd->lmd_object_id == 0) {
+        if (lli->lli_smd == NULL) {
                 struct client_obd *mdc = sbi2mdc(ll_s2sbi(inode->i_sb));
                 struct inode * inode = file->f_dentry->d_inode;
 
-                lli->lli_smd = NULL; 
-                oa =  obdo_alloc();
-                if (!oa) { 
-                        RETURN(-ENOMEM);
+                down(&lli->lli_open_sem);
+                /* Check to see if we lost the race */
+                if (lli->lli_smd == NULL) {
+                        oa = obdo_alloc();
+                        if (!oa) {
+                                up(&lli->lli_open_sem);
+                                RETURN(-ENOMEM);
+                        }
+                        oa->o_mode = S_IFREG | 0600;
+                        oa->o_easize = mdc->cl_max_mdsize;
+                        oa->o_valid = OBD_MD_FLMODE | OBD_MD_FLEASIZE;
+                        rc = obd_create(ll_i2obdconn(inode), oa, &lli->lli_smd);
+                        if (rc) {
+                                obdo_free(oa);
+                                up(&lli->lli_open_sem);
+                                RETURN(rc);
+                        }
+                        md = lli->lli_smd;
                 }
-                oa->o_mode = S_IFREG | 0600;
-                oa->o_easize = mdc->cl_max_mdsize;
-                oa->o_valid = OBD_MD_FLMODE | OBD_MD_FLEASIZE;
-                rc = obd_create(ll_i2obdconn(inode), oa, &lli->lli_smd);
-                if (rc)
-                        RETURN(rc);
-                md = lli->lli_smd;
-                lli->lli_flags &= ~OBD_FL_CREATEONOPEN;
+                if (lli->lli_smd && lli->lli_smd->lmd_object_id == 0)
+                        LBUG();
+                up(&lli->lli_open_sem);
         }
 
         fd = kmem_cache_alloc(ll_file_data_slab, SLAB_KERNEL);

@@ -397,43 +397,47 @@ inline int ll_stripe_md_size(struct super_block *sb)
         return mdc->cl_max_mdsize;
 }
 
-static void ll_to_inode(struct inode *dst, struct ll_inode_md *md)
+static void ll_read_inode2(struct inode *inode, void *opaque)
 {
+        struct ll_inode_md *md = opaque;
         struct mds_body *body = md->body;
-        struct ll_inode_info *ii = ll_i2info(dst);
+        struct ll_inode_info *ii = ll_i2info(inode);
+        ENTRY;
+
+        sema_init(&ii->lli_open_sem, 1);
 
         /* core attributes first */
         if (body->valid & OBD_MD_FLID)
-                dst->i_ino = body->ino;
+                inode->i_ino = body->ino;
         if (body->valid & OBD_MD_FLATIME)
-                dst->i_atime = body->atime;
+                inode->i_atime = body->atime;
         if (body->valid & OBD_MD_FLMTIME)
-                dst->i_mtime = body->mtime;
+                inode->i_mtime = body->mtime;
         if (body->valid & OBD_MD_FLCTIME)
-                dst->i_ctime = body->ctime;
+                inode->i_ctime = body->ctime;
         if (body->valid & OBD_MD_FLSIZE)
-                dst->i_size = body->size;
+                inode->i_size = body->size;
         if (body->valid & OBD_MD_FLMODE)
-                dst->i_mode = body->mode;
+                inode->i_mode = body->mode;
         if (body->valid & OBD_MD_FLUID)
-                dst->i_uid = body->uid;
+                inode->i_uid = body->uid;
         if (body->valid & OBD_MD_FLGID)
-                dst->i_gid = body->gid;
+                inode->i_gid = body->gid;
         if (body->valid & OBD_MD_FLFLAGS)
-                dst->i_flags = body->flags;
+                inode->i_flags = body->flags;
         if (body->valid & OBD_MD_FLNLINK)
-                dst->i_nlink = body->nlink;
+                inode->i_nlink = body->nlink;
         if (body->valid & OBD_MD_FLGENER)
-                dst->i_generation = body->generation;
+                inode->i_generation = body->generation;
         if (body->valid & OBD_MD_FLRDEV)
-                dst->i_rdev = body->extra;
+                inode->i_rdev = body->extra;
         //if (body->valid & OBD_MD_FLEASIZE)
         if (md && md->md && md->md->lmd_stripe_count) { 
                 struct lov_stripe_md *smd = md->md;
-                int size = ll_stripe_md_size(dst->i_sb);
+                int size = ll_stripe_md_size(inode->i_sb);
                 if (md->md->lmd_easize != size) { 
                         CERROR("Striping metadata size error %ld\n",
-                               dst->i_ino); 
+                               inode->i_ino); 
                         LBUG();
                 }
                 OBD_ALLOC(ii->lli_smd, size);
@@ -443,14 +447,6 @@ static void ll_to_inode(struct inode *dst, struct ll_inode_md *md)
                 }
                 memcpy(ii->lli_smd, smd, size);
         }
-} /* ll_to_inode */
-
-static void ll_read_inode2(struct inode *inode, void *opaque)
-{
-        struct ll_inode_md *md = opaque;
-
-        ENTRY;
-        ll_to_inode(inode, md);
 
         /* OIDEBUG(inode); */
 
@@ -468,8 +464,7 @@ static void ll_read_inode2(struct inode *inode, void *opaque)
                 inode->i_op = &ll_fast_symlink_inode_operations;
                 EXIT;
         } else {
-                init_special_inode(inode, inode->i_mode,
-                                   ((int *)ll_i2info(inode)->lli_inline)[0]);
+                init_special_inode(inode, inode->i_mode, inode->i_rdev);
                 EXIT;
         }
 
