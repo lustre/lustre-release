@@ -368,9 +368,9 @@ static int log_commit_thread(void *arg)
                                 ptlrpc_req_finished(request);
                                 continue;
                         }
+                        up(&llcd->llcd_ctxt->loc_sem);
                         rc = ptlrpc_queue_wait(request);
                         ptlrpc_req_finished(request);
-                        up(&llcd->llcd_ctxt->loc_sem);
 
                         /* If the RPC failed, we put this and the remaining
                          * messages onto the resend list for another time. */
