@@ -45,7 +45,7 @@ TEST_FILE=${TEST_FILE:-ChangeLog} # does this need to be smarter?
 check_tag() {
 	[ -z "$1" ] && echo "check_tag() missing arg" && exit3
 	[ "$1" = "HEAD" ] && return
-	$CVS log $TEST_FILE | grep -q "	$1: " && return
+	$CVS log $TEST_FILE 2> /dev/null | grep -q "	$1: " && return
 	echo "$0: tag $1 not found in $TEST_FILE"
 	exit 2
 }
