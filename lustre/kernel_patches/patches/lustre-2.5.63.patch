@@ -1,22 +1,22 @@
- arch/um/kernel/mem.c   |   18 ++++++
- fs/dcache.c            |   12 +++-
- fs/namei.c             |  132 ++++++++++++++++++++++++++++++++++++++-----------
+ arch/um/kernel/mem.c   |   18 ++++-
+ fs/dcache.c            |   12 ++-
+ fs/namei.c             |  168 +++++++++++++++++++++++++++++++++++++++----------
  fs/namespace.c         |    1 
  fs/nfsd/vfs.c          |    2 
- fs/open.c              |   39 ++++++++++++--
- fs/stat.c              |    2 
+ fs/open.c              |   39 +++++++++--
+ fs/stat.c              |   10 ++
  fs/sysfs/inode.c       |    2 
- include/linux/dcache.h |   28 ++++++++++
- include/linux/fs.h     |   20 +++++++
- include/linux/namei.h  |    3 -
+ include/linux/dcache.h |   28 ++++++++
+ include/linux/fs.h     |   20 +++++
+ include/linux/namei.h  |    3 
  include/linux/slab.h   |    1 
  kernel/ksyms.c         |    7 ++
  mm/slab.c              |    5 +
  net/unix/af_unix.c     |    2 
- 15 files changed, 231 insertions(+), 43 deletions(-)
+ 15 files changed, 269 insertions(+), 49 deletions(-)
 
---- linux-2.5.63-nointent/arch/um/kernel/mem.c~lustre-2.5.63	Tue Mar 18 15:02:10 2003
-+++ linux-2.5.63-nointent-root/arch/um/kernel/mem.c	Tue Mar 18 15:02:10 2003
+--- linux-2.5.63/arch/um/kernel/mem.c~lustre-2.5.63	Mon Mar 31 22:26:55 2003
++++ linux-2.5.63-root/arch/um/kernel/mem.c	Mon Mar 31 22:26:55 2003
 @@ -660,6 +660,22 @@ struct page *pte_mem_map(pte_t pte)
  	return(phys_mem_map(pte_val(pte)));
  }
@@ -49,24 +49,22 @@
  	return(0);
  }
  
---- linux-2.5.63-nointent/fs/namei.c~lustre-2.5.63	Tue Mar 18 15:02:10 2003
-+++ linux-2.5.63-nointent-root/fs/namei.c	Mon Mar 24 17:08:18 2003
-@@ -101,6 +101,14 @@
+--- linux-2.5.63/fs/namei.c~lustre-2.5.63	Mon Mar 31 22:26:55 2003
++++ linux-2.5.63-root/fs/namei.c	Mon Mar 31 22:29:22 2003
+@@ -101,6 +101,12 @@
   * any extra contention...
   */
  
-+void intent_release(struct dentry *de, struct lookup_intent *it)
++void intent_release(struct dentry * de, struct lookup_intent *it)
 +{
-+	if (it && de->d_op && de->d_op->d_intent_release)
-+		de->d_op->d_intent_release(de, it);
-+
++	if (it && de->d_op && de->d_op->d_intent_release)		
++		de->d_op->d_intent_release(de, it);			
 +}
-+
 +
  /* In order to reduce some races, while at the same time doing additional
   * checking and hopefully speeding things up, we copy filenames to the
   * kernel data space before using them..
-@@ -273,10 +281,18 @@ void path_release(struct nameidata *nd)
+@@ -273,10 +279,18 @@ void path_release(struct nameidata *nd)
   * Internal lookup() using the new generic dcache.
   * SMP-safe
   */
@@ -86,7 +84,7 @@
  	if (dentry && dentry->d_op && dentry->d_op->d_revalidate) {
  		if (!dentry->d_op->d_revalidate(dentry, flags) && !d_invalidate(dentry)) {
  			dput(dentry);
-@@ -330,7 +346,7 @@ ok:
+@@ -330,7 +344,7 @@ ok:
   * make sure that nobody added the entry to the dcache in the meantime..
   * SMP-safe
   */
@@ -95,7 +93,7 @@
  {
  	struct dentry * result;
  	struct inode *dir = parent->d_inode;
-@@ -348,7 +364,10 @@ static struct dentry * real_lookup(struc
+@@ -348,7 +362,10 @@ static struct dentry * real_lookup(struc
  		struct dentry * dentry = d_alloc(parent, name);
  		result = ERR_PTR(-ENOMEM);
  		if (dentry) {
@@ -107,7 +105,7 @@
  			if (result)
  				dput(dentry);
  			else {
-@@ -370,6 +389,12 @@ static struct dentry * real_lookup(struc
+@@ -370,6 +387,12 @@ static struct dentry * real_lookup(struc
  			dput(result);
  			result = ERR_PTR(-ENOENT);
  		}
@@ -120,7 +118,15 @@
  	}
  	return result;
  }
-@@ -402,6 +427,7 @@ static inline int do_follow_link(struct 
+@@ -398,10 +421,14 @@ static inline int do_follow_link(struct 
+ 	current->link_count++;
+ 	current->total_link_count++;
+ 	UPDATE_ATIME(dentry->d_inode);
+-	err = dentry->d_inode->i_op->follow_link(dentry, nd);
++	if (dentry->d_inode->i_op->follow_link2)
++		err = dentry->d_inode->i_op->follow_link2(dentry, nd, &nd->it);
++	else
++		err = dentry->d_inode->i_op->follow_link(dentry, nd);
  	current->link_count--;
  	return err;
  loop:
@@ -128,7 +134,7 @@
  	path_release(nd);
  	return err;
  }
-@@ -447,15 +473,26 @@ static int follow_mount(struct vfsmount 
+@@ -447,15 +474,26 @@ static int follow_mount(struct vfsmount 
  	return res;
  }
  
@@ -156,7 +162,7 @@
  		dput(*dentry);
  		mntput(mounted->mnt_parent);
  		*dentry = dget(mounted->mnt_root);
-@@ -467,7 +504,7 @@ static inline int __follow_down(struct v
+@@ -467,7 +505,7 @@ static inline int __follow_down(struct v
  
  int follow_down(struct vfsmount **mnt, struct dentry **dentry)
  {
@@ -165,7 +171,7 @@
  }
   
  static inline void follow_dotdot(struct vfsmount **mnt, struct dentry **dentry)
-@@ -531,7 +568,7 @@ done:
+@@ -531,7 +569,7 @@ done:
  	return 0;
  
  need_lookup:
@@ -174,7 +180,16 @@
  	if (IS_ERR(dentry))
  		goto fail;
  	goto done;
-@@ -665,7 +702,7 @@ int link_path_walk(const char * name, st
+@@ -645,7 +683,7 @@ int link_path_walk(const char * name, st
+ 		if (!inode->i_op)
+ 			goto out_dput;
+ 
+-		if (inode->i_op->follow_link) {
++		if (inode->i_op->follow_link || inode->i_op->follow_link2) {
+ 			mntget(next.mnt);
+ 			err = do_follow_link(next.dentry, nd);
+ 			dput(next.dentry);
+@@ -665,7 +703,7 @@ int link_path_walk(const char * name, st
  			nd->dentry = next.dentry;
  		}
  		err = -ENOTDIR; 
@@ -183,7 +198,17 @@
  			break;
  		continue;
  		/* here ends the main loop */
-@@ -716,7 +753,8 @@ last_component:
+@@ -698,7 +736,8 @@ last_component:
+ 		follow_mount(&next.mnt, &next.dentry);
+ 		inode = next.dentry->d_inode;
+ 		if ((lookup_flags & LOOKUP_FOLLOW)
+-		    && inode && inode->i_op && inode->i_op->follow_link) {
++		    && inode && inode->i_op && 
++		    (inode->i_op->follow_link || inode->i_op->follow_link2)) {
+ 			mntget(next.mnt);
+ 			err = do_follow_link(next.dentry, nd);
+ 			dput(next.dentry);
+@@ -716,7 +755,8 @@ last_component:
  			break;
  		if (lookup_flags & LOOKUP_DIRECTORY) {
  			err = -ENOTDIR; 
@@ -193,15 +218,16 @@
  				break;
  		}
  		goto return_base;
-@@ -735,6 +773,7 @@ out_dput:
+@@ -735,6 +775,8 @@ out_dput:
  		dput(next.dentry);
  		break;
  	}
-+	intent_release(nd->dentry, &nd->it);
++	if(err)
++		intent_release(nd->dentry, &nd->it);
  	path_release(nd);
  return_err:
  	return err;
-@@ -857,7 +896,8 @@ int path_lookup(const char *name, unsign
+@@ -857,7 +899,8 @@ int path_lookup(const char *name, unsign
   * needs parent already locked. Doesn't follow mounts.
   * SMP-safe.
   */
@@ -211,7 +237,7 @@
  {
  	struct dentry * dentry;
  	struct inode *inode;
-@@ -880,13 +920,16 @@ struct dentry * lookup_hash(struct qstr 
+@@ -880,13 +923,16 @@ struct dentry * lookup_hash(struct qstr 
  			goto out;
  	}
  
@@ -230,7 +256,7 @@
  		if (!dentry) {
  			dentry = new;
  			security_inode_post_lookup(inode, dentry);
-@@ -898,7 +941,7 @@ out:
+@@ -898,7 +944,7 @@ out:
  }
  
  /* SMP-safe */
@@ -239,7 +265,7 @@
  {
  	unsigned long hash;
  	struct qstr this;
-@@ -918,11 +961,16 @@ struct dentry * lookup_one_len(const cha
+@@ -918,11 +964,16 @@ struct dentry * lookup_one_len(const cha
  	}
  	this.hash = end_name_hash(hash);
  
@@ -257,7 +283,7 @@
  /*
   *	namei()
   *
-@@ -1224,6 +1272,9 @@ int open_namei(const char * pathname, in
+@@ -1224,6 +1275,9 @@ int open_namei(const char * pathname, in
  	/*
  	 * Create - we need to know the parent.
  	 */
@@ -267,7 +293,7 @@
  	error = path_lookup(pathname, LOOKUP_PARENT, nd);
  	if (error)
  		return error;
-@@ -1239,7 +1290,7 @@ int open_namei(const char * pathname, in
+@@ -1239,7 +1293,7 @@ int open_namei(const char * pathname, in
  
  	dir = nd->dentry;
  	down(&dir->d_inode->i_sem);
@@ -276,7 +302,7 @@
  
  do_last:
  	error = PTR_ERR(dentry);
-@@ -1247,7 +1298,8 @@ do_last:
+@@ -1247,7 +1301,8 @@ do_last:
  		up(&dir->d_inode->i_sem);
  		goto exit;
  	}
@@ -286,7 +312,7 @@
  	/* Negative dentry, just create the file */
  	if (!dentry->d_inode) {
  		if (!IS_POSIXACL(dir->d_inode))
-@@ -1277,7 +1329,7 @@ do_last:
+@@ -1277,12 +1332,14 @@ do_last:
  		error = -ELOOP;
  		if (flag & O_NOFOLLOW)
  			goto exit_dput;
@@ -295,7 +321,15 @@
  	}
  	error = -ENOENT;
  	if (!dentry->d_inode)
-@@ -1297,8 +1349,10 @@ ok:
+ 		goto exit_dput;
+-	if (dentry->d_inode->i_op && dentry->d_inode->i_op->follow_link)
++	if (dentry->d_inode->i_op && 
++	   (dentry->d_inode->i_op->follow_link || 
++	    dentry->d_inode->i_op->follow_link2))
+ 		goto do_link;
+ 
+ 	dput(nd->dentry);
+@@ -1297,8 +1354,10 @@ ok:
  	return 0;
  
  exit_dput:
@@ -306,7 +340,7 @@
  	path_release(nd);
  	return error;
  
-@@ -1320,7 +1374,12 @@ do_link:
+@@ -1320,7 +1379,12 @@ do_link:
  	if (error)
  		goto exit_dput;
  	UPDATE_ATIME(dentry->d_inode);
@@ -320,7 +354,7 @@
  	dput(dentry);
  	if (error)
  		return error;
-@@ -1342,7 +1401,7 @@ do_link:
+@@ -1342,7 +1406,7 @@ do_link:
  	}
  	dir = nd->dentry;
  	down(&dir->d_inode->i_sem);
@@ -329,7 +363,7 @@
  	putname(nd->last.name);
  	goto do_last;
  }
-@@ -1356,7 +1415,7 @@ static struct dentry *lookup_create(stru
+@@ -1356,7 +1420,7 @@ static struct dentry *lookup_create(stru
  	dentry = ERR_PTR(-EEXIST);
  	if (nd->last_type != LAST_NORM)
  		goto fail;
@@ -338,7 +372,33 @@
  	if (IS_ERR(dentry))
  		goto fail;
  	if (!is_dir && nd->last.name[nd->last.len] && !dentry->d_inode)
-@@ -1588,7 +1647,7 @@ asmlinkage long sys_rmdir(const char * p
+@@ -1478,6 +1542,17 @@ asmlinkage long sys_mkdir(const char * p
+ 		error = path_lookup(tmp, LOOKUP_PARENT, &nd);
+ 		if (error)
+ 			goto out;
++		if (nd.dentry->d_inode->i_op->mkdir2) {
++			struct inode_operations *op = nd.dentry->d_inode->i_op;
++			error = op->mkdir2(nd.dentry->d_inode,
++					nd.last.name,
++					nd.last.len,
++					mode);
++			/* the file system wants to use normal vfs path now */
++			if (error != -EOPNOTSUPP)
++				goto out2;
++		}
++
+ 		dentry = lookup_create(&nd, 1);
+ 		error = PTR_ERR(dentry);
+ 		if (!IS_ERR(dentry)) {
+@@ -1487,6 +1562,7 @@ asmlinkage long sys_mkdir(const char * p
+ 			dput(dentry);
+ 		}
+ 		up(&nd.dentry->d_inode->i_sem);
++out2:		
+ 		path_release(&nd);
+ out:
+ 		putname(tmp);
+@@ -1588,7 +1664,7 @@ asmlinkage long sys_rmdir(const char * p
  			goto exit1;
  	}
  	down(&nd.dentry->d_inode->i_sem);
@@ -347,7 +407,7 @@
  	error = PTR_ERR(dentry);
  	if (!IS_ERR(dentry)) {
  		error = vfs_rmdir(nd.dentry->d_inode, dentry);
-@@ -1654,8 +1713,18 @@ asmlinkage long sys_unlink(const char * 
+@@ -1654,8 +1730,18 @@ asmlinkage long sys_unlink(const char * 
  	error = -EISDIR;
  	if (nd.last_type != LAST_NORM)
  		goto exit1;
@@ -367,7 +427,32 @@
  	error = PTR_ERR(dentry);
  	if (!IS_ERR(dentry)) {
  		/* Why not before? Because we want correct error value */
-@@ -1859,7 +1928,8 @@ exit:
+@@ -1725,6 +1811,16 @@ asmlinkage long sys_symlink(const char *
+ 		error = path_lookup(to, LOOKUP_PARENT, &nd);
+ 		if (error)
+ 			goto out;
++		if (nd.dentry->d_inode->i_op->symlink2) {
++			struct inode_operations *op = nd.dentry->d_inode->i_op;
++			error = op->symlink2(nd.dentry->d_inode,
++					nd.last.name,
++					nd.last.len,
++					from);
++			/* the file system wants to use normal vfs path now */
++			if (error != -EOPNOTSUPP)
++				goto out2;
++		}
+ 		dentry = lookup_create(&nd, 0);
+ 		error = PTR_ERR(dentry);
+ 		if (!IS_ERR(dentry)) {
+@@ -1732,6 +1828,7 @@ asmlinkage long sys_symlink(const char *
+ 			dput(dentry);
+ 		}
+ 		up(&nd.dentry->d_inode->i_sem);
++out2:		
+ 		path_release(&nd);
+ out:
+ 		putname(to);
+@@ -1859,7 +1956,8 @@ exit:
   *	   locking].
   */
  int vfs_rename_dir(struct inode *old_dir, struct dentry *old_dentry,
@@ -377,7 +462,7 @@
  {
  	int error = 0;
  	struct inode *target;
-@@ -1887,6 +1957,7 @@ int vfs_rename_dir(struct inode *old_dir
+@@ -1887,6 +1985,7 @@ int vfs_rename_dir(struct inode *old_dir
  		error = -EBUSY;
  	else 
  		error = old_dir->i_op->rename(old_dir, old_dentry, new_dir, new_dentry);
@@ -385,7 +470,7 @@
  	if (target) {
  		if (!error)
  			target->i_flags |= S_DEAD;
-@@ -1904,7 +1975,8 @@ int vfs_rename_dir(struct inode *old_dir
+@@ -1904,7 +2003,8 @@ int vfs_rename_dir(struct inode *old_dir
  }
  
  int vfs_rename_other(struct inode *old_dir, struct dentry *old_dentry,
@@ -395,7 +480,7 @@
  {
  	struct inode *target;
  	int error;
-@@ -1921,6 +1993,7 @@ int vfs_rename_other(struct inode *old_d
+@@ -1921,6 +2021,7 @@ int vfs_rename_other(struct inode *old_d
  		error = -EBUSY;
  	else
  		error = old_dir->i_op->rename(old_dir, old_dentry, new_dir, new_dentry);
@@ -403,7 +488,7 @@
  	if (!error) {
  		/* The following d_move() should become unconditional */
  		if (!(old_dir->i_sb->s_type->fs_flags & FS_ODD_RENAME))
-@@ -1934,7 +2007,8 @@ int vfs_rename_other(struct inode *old_d
+@@ -1934,7 +2035,8 @@ int vfs_rename_other(struct inode *old_d
  }
  
  int vfs_rename(struct inode *old_dir, struct dentry *old_dentry,
@@ -413,7 +498,7 @@
  {
  	int error;
  	int is_dir = S_ISDIR(old_dentry->d_inode->i_mode);
-@@ -1960,9 +2034,9 @@ int vfs_rename(struct inode *old_dir, st
+@@ -1960,9 +2062,9 @@ int vfs_rename(struct inode *old_dir, st
  	DQUOT_INIT(new_dir);
  
  	if (is_dir)
@@ -425,7 +510,7 @@
  	if (!error) {
  		if (old_dir == new_dir)
  			inode_dir_notify(old_dir, DN_RENAME);
-@@ -2005,7 +2079,7 @@ static inline int do_rename(const char *
+@@ -2005,7 +2107,7 @@ static inline int do_rename(const char *
  
  	trap = lock_rename(new_dir, old_dir);
  
@@ -434,7 +519,7 @@
  	error = PTR_ERR(old_dentry);
  	if (IS_ERR(old_dentry))
  		goto exit3;
-@@ -2025,7 +2099,7 @@ static inline int do_rename(const char *
+@@ -2025,7 +2127,7 @@ static inline int do_rename(const char *
  	error = -EINVAL;
  	if (old_dentry == trap)
  		goto exit4;
@@ -443,7 +528,7 @@
  	error = PTR_ERR(new_dentry);
  	if (IS_ERR(new_dentry))
  		goto exit4;
-@@ -2035,7 +2109,7 @@ static inline int do_rename(const char *
+@@ -2035,7 +2137,7 @@ static inline int do_rename(const char *
  		goto exit5;
  
  	error = vfs_rename(old_dir->d_inode, old_dentry,
@@ -452,8 +537,8 @@
  exit5:
  	dput(new_dentry);
  exit4:
---- linux-2.5.63-nointent/fs/nfsd/vfs.c~lustre-2.5.63	Tue Mar 18 15:02:10 2003
-+++ linux-2.5.63-nointent-root/fs/nfsd/vfs.c	Tue Mar 18 15:02:10 2003
+--- linux-2.5.63/fs/nfsd/vfs.c~lustre-2.5.63	Mon Mar 31 22:26:55 2003
++++ linux-2.5.63-root/fs/nfsd/vfs.c	Mon Mar 31 22:26:55 2003
 @@ -1337,7 +1337,7 @@ nfsd_rename(struct svc_rqst *rqstp, stru
  			err = nfserr_perm;
  	} else
@@ -463,8 +548,8 @@
  	if (!err && EX_ISSYNC(tfhp->fh_export)) {
  		nfsd_sync_dir(tdentry);
  		nfsd_sync_dir(fdentry);
---- linux-2.5.63-nointent/fs/sysfs/inode.c~lustre-2.5.63	Tue Mar 18 15:02:10 2003
-+++ linux-2.5.63-nointent-root/fs/sysfs/inode.c	Tue Mar 18 15:02:10 2003
+--- linux-2.5.63/fs/sysfs/inode.c~lustre-2.5.63	Mon Mar 31 22:26:55 2003
++++ linux-2.5.63-root/fs/sysfs/inode.c	Mon Mar 31 22:26:55 2003
 @@ -540,7 +540,7 @@ static struct dentry * get_dentry(struct
  	qstr.name = name;
  	qstr.len = strlen(name);
@@ -474,8 +559,8 @@
  }
  
  
---- linux-2.5.63-nointent/include/linux/dcache.h~lustre-2.5.63	Tue Mar 18 15:02:10 2003
-+++ linux-2.5.63-nointent-root/include/linux/dcache.h	Tue Mar 18 15:02:10 2003
+--- linux-2.5.63/include/linux/dcache.h~lustre-2.5.63	Mon Mar 31 22:26:55 2003
++++ linux-2.5.63-root/include/linux/dcache.h	Mon Mar 31 22:26:55 2003
 @@ -12,6 +12,27 @@
  
  struct vfsmount;
@@ -539,8 +624,8 @@
  
  extern spinlock_t dcache_lock;
  extern rwlock_t dparent_lock;
---- linux-2.5.63-nointent/include/linux/fs.h~lustre-2.5.63	Tue Mar 18 15:02:10 2003
-+++ linux-2.5.63-nointent-root/include/linux/fs.h	Tue Mar 18 15:02:10 2003
+--- linux-2.5.63/include/linux/fs.h~lustre-2.5.63	Mon Mar 31 22:26:55 2003
++++ linux-2.5.63-root/include/linux/fs.h	Mon Mar 31 22:26:55 2003
 @@ -234,6 +234,9 @@ typedef int (get_blocks_t)(struct inode 
  #define ATTR_ATTR_FLAG	1024
  #define ATTR_KILL_SUID	2048
@@ -602,8 +687,8 @@
  extern long do_mount(char *, char *, char *, unsigned long, void *);
  
  extern int vfs_statfs(struct super_block *, struct statfs *);
---- linux-2.5.63-nointent/include/linux/namei.h~lustre-2.5.63	Tue Mar 18 15:02:10 2003
-+++ linux-2.5.63-nointent-root/include/linux/namei.h	Tue Mar 18 15:02:10 2003
+--- linux-2.5.63/include/linux/namei.h~lustre-2.5.63	Mon Mar 31 22:26:55 2003
++++ linux-2.5.63-root/include/linux/namei.h	Mon Mar 31 22:26:55 2003
 @@ -11,6 +11,7 @@ struct nameidata {
  	struct qstr	last;
  	unsigned int	flags;
@@ -621,8 +706,8 @@
  
  extern int follow_down(struct vfsmount **, struct dentry **);
  extern int follow_up(struct vfsmount **, struct dentry **);
---- linux-2.5.63-nointent/include/linux/slab.h~lustre-2.5.63	Tue Mar 18 15:02:10 2003
-+++ linux-2.5.63-nointent-root/include/linux/slab.h	Tue Mar 18 15:02:10 2003
+--- linux-2.5.63/include/linux/slab.h~lustre-2.5.63	Mon Mar 31 22:26:55 2003
++++ linux-2.5.63-root/include/linux/slab.h	Mon Mar 31 22:26:55 2003
 @@ -55,6 +55,7 @@ extern int kmem_cache_destroy(kmem_cache
  extern int kmem_cache_shrink(kmem_cache_t *);
  extern void *kmem_cache_alloc(kmem_cache_t *, int);
@@ -631,8 +716,8 @@
  extern unsigned int kmem_cache_size(kmem_cache_t *);
  
  extern void *kmalloc(size_t, int);
---- linux-2.5.63-nointent/kernel/ksyms.c~lustre-2.5.63	Tue Mar 18 15:02:10 2003
-+++ linux-2.5.63-nointent-root/kernel/ksyms.c	Tue Mar 18 15:02:10 2003
+--- linux-2.5.63/kernel/ksyms.c~lustre-2.5.63	Mon Mar 31 22:26:55 2003
++++ linux-2.5.63-root/kernel/ksyms.c	Mon Mar 31 22:26:55 2003
 @@ -377,6 +377,7 @@ EXPORT_SYMBOL(unregister_filesystem);
  EXPORT_SYMBOL(kern_mount);
  EXPORT_SYMBOL(__mntput);
@@ -654,8 +739,8 @@
  /* waitqueue handling */
  EXPORT_SYMBOL(add_wait_queue);
  EXPORT_SYMBOL(add_wait_queue_exclusive);
---- linux-2.5.63-nointent/mm/slab.c~lustre-2.5.63	Tue Mar 18 15:02:10 2003
-+++ linux-2.5.63-nointent-root/mm/slab.c	Tue Mar 18 15:02:10 2003
+--- linux-2.5.63/mm/slab.c~lustre-2.5.63	Mon Mar 31 22:26:55 2003
++++ linux-2.5.63-root/mm/slab.c	Mon Mar 31 22:26:55 2003
 @@ -1792,6 +1792,11 @@ static inline void __cache_free (kmem_ca
  	}
  }
@@ -668,8 +753,8 @@
  /**
   * kmem_cache_alloc - Allocate an object
   * @cachep: The cache to allocate from.
---- linux-2.5.63-nointent/net/unix/af_unix.c~lustre-2.5.63	Tue Mar 18 15:02:10 2003
-+++ linux-2.5.63-nointent-root/net/unix/af_unix.c	Tue Mar 18 15:02:10 2003
+--- linux-2.5.63/net/unix/af_unix.c~lustre-2.5.63	Mon Mar 31 22:26:55 2003
++++ linux-2.5.63-root/net/unix/af_unix.c	Mon Mar 31 22:26:55 2003
 @@ -720,7 +720,7 @@ static int unix_bind(struct socket *sock
  		/*
  		 * Do the final lookup.
@@ -679,8 +764,8 @@
  		err = PTR_ERR(dentry);
  		if (IS_ERR(dentry))
  			goto out_mknod_unlock;
---- linux-2.5.63-nointent/fs/dcache.c~lustre-2.5.63	Tue Mar 18 15:02:10 2003
-+++ linux-2.5.63-nointent-root/fs/dcache.c	Tue Mar 18 15:02:10 2003
+--- linux-2.5.63/fs/dcache.c~lustre-2.5.63	Mon Mar 31 22:26:55 2003
++++ linux-2.5.63-root/fs/dcache.c	Mon Mar 31 22:26:55 2003
 @@ -1111,15 +1111,21 @@ void d_delete(struct dentry * dentry)
   * Adds a dentry to the hash according to its name.
   */
@@ -706,8 +791,8 @@
  }
  
  #define do_switch(x,y) do { \
---- linux-2.5.63-nointent/fs/namespace.c~lustre-2.5.63	Tue Mar 18 15:02:10 2003
-+++ linux-2.5.63-nointent-root/fs/namespace.c	Tue Mar 18 15:02:10 2003
+--- linux-2.5.63/fs/namespace.c~lustre-2.5.63	Mon Mar 31 22:26:55 2003
++++ linux-2.5.63-root/fs/namespace.c	Mon Mar 31 22:26:55 2003
 @@ -925,6 +925,7 @@ void set_fs_pwd(struct fs_struct *fs, st
  		mntput(old_pwdmnt);
  	}
@@ -716,8 +801,8 @@
  
  static void chroot_fs_refs(struct nameidata *old_nd, struct nameidata *new_nd)
  {
---- linux-2.5.63-nointent/fs/open.c~lustre-2.5.63	Thu Mar 20 12:43:39 2003
-+++ linux-2.5.63-nointent-root/fs/open.c	Mon Mar 24 16:25:47 2003
+--- linux-2.5.63/fs/open.c~lustre-2.5.63	Mon Mar 31 22:26:55 2003
++++ linux-2.5.63-root/fs/open.c	Mon Mar 31 22:29:31 2003
 @@ -97,7 +97,8 @@ static inline long do_sys_truncate(const
  	struct nameidata nd;
  	struct inode * inode;
@@ -840,9 +925,16 @@
  	return f;
  
  cleanup_all:
---- linux-2.5.63-nointent/fs/stat.c~lustre-2.5.63	Fri Mar 21 21:15:40 2003
-+++ linux-2.5.63-nointent-root/fs/stat.c	Fri Mar 21 21:16:53 2003
-@@ -65,6 +65,7 @@ int vfs_stat(char *name, struct kstat *s
+--- linux-2.5.63/fs/stat.c~lustre-2.5.63	Mon Mar 31 22:26:55 2003
++++ linux-2.5.63-root/fs/stat.c	Mon Mar 31 22:29:44 2003
+@@ -60,10 +60,13 @@ int vfs_stat(char *name, struct kstat *s
+ {
+ 	struct nameidata nd;
+ 	int error;
+-
++        struct lookup_intent it = { .it_op = IT_GETATTR };
++	nd.it = it;
++	
  	error = user_path_walk(name, &nd);
  	if (!error) {
  		error = vfs_getattr(nd.mnt, nd.dentry, stat);
@@ -850,7 +942,14 @@
  		path_release(&nd);
  	}
  	return error;
-@@ -80,6 +81,7 @@ int vfs_lstat(char *name, struct kstat *
+@@ -73,10 +76,13 @@ int vfs_lstat(char *name, struct kstat *
+ {
+ 	struct nameidata nd;
+ 	int error;
+-
++        struct lookup_intent it = { .it_op = IT_GETATTR };
++	nd.it = it;
++	
  	error = user_path_walk_link(name, &nd);
  	if (!error) {
  		error = vfs_getattr(nd.mnt, nd.dentry, stat);
