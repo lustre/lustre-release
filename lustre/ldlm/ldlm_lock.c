@@ -160,7 +160,10 @@ static int ldlm_intent_policy(struct ldlm_lock *lock, void *req_cookie,
 
                 CDEBUG(D_INFO, "remote intent: locking %d instead of"
                        "%ld\n", mds_rep->ino, (long)old_res);
-                ldlm_resource_put(lock->l_resource);
+                spin_lock(&lock->l_resource->lr_lock);
+                if (!ldlm_resource_put(lock->l_resource))
+                        /* unlock it unless the resource was freed */
+                        spin_unlock(&lock->l_resource->lr_lock);
 
                 lock->l_resource =
                         ldlm_resource_get(ns, NULL, new_resid, type, 1);
@@ -525,7 +528,9 @@ ldlm_error_t ldlm_local_lock_enqueue(struct lustre_handle *lockh,
                 ldlm_resource_put(res);
 
                 if (rc == ELDLM_LOCK_CHANGED) {
+                        spin_unlock(&res->lr_lock);
                         res = lock->l_resource;
+                        spin_lock(&res->lr_lock);
                         *flags |= LDLM_FL_LOCK_CHANGED;
                 } else if (rc == ELDLM_LOCK_ABORTED) {
                         /* Abort. */
