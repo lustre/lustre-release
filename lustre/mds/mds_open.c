@@ -163,6 +163,13 @@ int mds_open(struct mds_update_record *rec, int offset,
         if (!S_ISREG(dchild->d_inode->i_mode))
                 GOTO(out_ldput, rc = 0);
 
+        rc = mds_pack_md(obd, req->rq_repmsg, 3, body, dchild->d_inode);
+        if (rc) {
+                CERROR("failure to get EA for %ld\n", 
+                       dchild->d_inode->i_ino);
+                GOTO(out_ldput, req->rq_status = rc);
+        }
+
         rep->lock_policy_res1 |= IT_OPEN_OPEN;
         mfd = kmem_cache_alloc(mds_file_cache, GFP_KERNEL);
         if (!mfd) {
