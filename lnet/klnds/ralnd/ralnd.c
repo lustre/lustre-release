@@ -877,7 +877,7 @@ kranal_conn_handshake (struct socket *sock, kra_peer_t *peer)
 
         /* Schedule all packets blocking for a connection */
         while (!list_empty(&peer->rap_tx_queue)) {
-                tx = list_entry(&peer->rap_tx_queue.next,
+                tx = list_entry(peer->rap_tx_queue.next,
                                 kra_tx_t, tx_list);
 
                 list_del(&tx->tx_list);
@@ -929,14 +929,14 @@ kranal_connect (kra_peer_t *peer)
 
                 /* reset reconnection timeouts */
                 peer->rap_reconnect_interval = RANAL_MIN_RECONNECT_INTERVAL;
-                peer->rap_reconnect_time = CURRENT_TIME;
+                peer->rap_reconnect_time = CURRENT_SECONDS;
 
                 write_unlock_irqrestore(&kranal_data.kra_global_lock, flags);
                 return;
         }
 
         LASSERT (peer->rap_reconnect_interval != 0);
-        peer->rap_reconnect_time = CURRENT_TIME + peer->rap_reconnect_interval;
+        peer->rap_reconnect_time = CURRENT_SECONDS + peer->rap_reconnect_interval;
         peer->rap_reconnect_interval = MAX(RANAL_MAX_RECONNECT_INTERVAL,
                                            1 * peer->rap_reconnect_interval);
 
@@ -1268,7 +1268,7 @@ kranal_create_peer (ptl_nid_t nid)
         INIT_LIST_HEAD(&peer->rap_conns);
         INIT_LIST_HEAD(&peer->rap_tx_queue);
 
-        peer->rap_reconnect_time = CURRENT_TIME;
+        peer->rap_reconnect_time = CURRENT_SECONDS;
         peer->rap_reconnect_interval = RANAL_MIN_RECONNECT_INTERVAL;
 
         atomic_inc(&kranal_data.kra_npeers);
@@ -1998,7 +1998,7 @@ kranal_api_startup (nal_t *nal, ptl_pid_t requested_pid,
         }
 
         for (i = 0; i < RANAL_N_CONND; i++) {
-                rc = kranal_thread_start(kranal_connd, (void *)i);
+                rc = kranal_thread_start(kranal_connd, (void *)(unsigned long)i);
                 if (rc != 0) {
                         CERROR("Can't spawn ranal connd[%d]: %d\n",
                                i, rc);

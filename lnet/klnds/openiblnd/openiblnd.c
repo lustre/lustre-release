@@ -161,6 +161,11 @@ kibnal_unpack_msg(kib_msg_t *msg, int nob)
                 __swab64s(&msg->ibm_dststamp);
         }
         
+        if (msg->ibm_srcnid == PTL_NID_ANY) {
+                CERROR("Bad src nid: "LPX64"\n", msg->ibm_srcnid);
+                return -EPROTO;
+        }
+
         switch (msg->ibm_type) {
         default:
                 CERROR("Unknown message type %x\n", msg->ibm_type);

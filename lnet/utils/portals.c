@@ -369,11 +369,6 @@ ptl_parse_nid (ptl_nid_t *nidp, char *str)
         char               *end;
         unsigned long long  ullval;
         
-        if (!strcmp (str, "_all_")) {
-                *nidp = PTL_NID_ANY;
-                return (0);
-        }
-
         if (ptl_parse_ipaddr (&ipaddr, str) == 0) {
 #if !CRAY_PORTALS
                 *nidp = (ptl_nid_t)ipaddr;
@@ -384,13 +379,24 @@ ptl_parse_nid (ptl_nid_t *nidp, char *str)
         }
 
         ullval = strtoull(str, &end, 0);
-        if (*end == 0) {
-                /* parsed whole string */
+        if (end != str && *end == 0) {
+                /* parsed whole non-empty string */
                 *nidp = (ptl_nid_t)ullval;
                 return (0);
         }
 
         return (-1);
+}
+
+int
+ptl_parse_anynid (ptl_nid_t *nidp, char *str)
+{
+        if (!strcmp (str, "_all_")) {
+                *nidp = PTL_NID_ANY;
+                return 0;
+        }
+
+        return ptl_parse_nid(nidp, str);
 }
 
 __u64 ptl_nid2u64(ptl_nid_t nid)
@@ -791,7 +797,7 @@ jt_ptl_del_peer (int argc, char **argv)
         }
                 
         if (argc > 1 &&
-            ptl_parse_nid (&nid, argv[1]) != 0) {
+            ptl_parse_anynid (&nid, argv[1]) != 0) {
                 fprintf (stderr, "Can't parse nid: %s\n", argv[1]);
                 return -1;
         }
@@ -1040,7 +1046,7 @@ int jt_ptl_disconnect(int argc, char **argv)
                 return 0;
 
         if (argc >= 2 &&
-            ptl_parse_nid (&nid, argv[1]) != 0) {
+            ptl_parse_anynid (&nid, argv[1]) != 0) {
                 fprintf (stderr, "Can't parse nid %s\n", argv[1]);
                 return -1;
         }
@@ -1082,7 +1088,7 @@ int jt_ptl_push_connection (int argc, char **argv)
                 return -1;
         
         if (argc > 1 &&
-            ptl_parse_nid (&nid, argv[1]) != 0) {
+            ptl_parse_anynid (&nid, argv[1]) != 0) {
                 fprintf(stderr, "Can't parse nid: %s\n", argv[1]);
                 return -1;
         }
@@ -1289,7 +1295,7 @@ jt_ptl_fail_nid (int argc, char **argv)
 
         if (!strcmp (argv[1], "_all_"))
                 nid = PTL_NID_ANY;
-        else if (ptl_parse_nid (&nid, argv[1]) != 0)
+        else if (ptl_parse_anynid (&nid, argv[1]) != 0)
         {
                 fprintf (stderr, "Can't parse nid \"%s\"\n", argv[1]);
                 return (-1);

@@ -1272,7 +1272,7 @@ kibnal_sendmsg(lib_nal_t    *nal,
 
                 /* Will it fit in a message? */
                 nob = offsetof(kib_msg_t, ibm_u.immediate.ibim_payload[payload_nob]);
-                if (nob >= IBNAL_MSG_SIZE) {
+                if (nob > IBNAL_MSG_SIZE) {
                         CERROR("REPLY for "LPX64" too big (RDMA not requested): %d\n", 
                                nid, payload_nob);
                         return (PTL_FAIL);

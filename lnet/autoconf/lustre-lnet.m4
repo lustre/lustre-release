@@ -278,7 +278,7 @@ AC_DEFUN([LP_CONFIG_RANAL],
 [#### Rapid Array
 AC_MSG_CHECKING([if RapidArray kernel headers are present])
 # placeholder
-RACPPFLAGS="-I/tmp"
+RACPPFLAGS="-I${LINUX}/drivers/xd1/include"
 EXTRA_KCFLAGS_save="$EXTRA_KCFLAGS"
 EXTRA_KCFLAGS="$EXTRA_KCFLAGS $RACPPFLAGS"
 LB_LINUX_TRY_COMPILE([

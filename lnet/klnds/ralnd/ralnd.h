@@ -49,10 +49,12 @@
 #include <linux/sysctl.h>
 
 #include <net/sock.h>
+#include <linux/in.h>
 
 #define DEBUG_SUBSYSTEM S_NAL
 
 #include <linux/kp30.h>
+#include <linux/portals_compat25.h>
 #include <portals/p30.h>
 #include <portals/lib-p30.h>
 #include <portals/nal.h>
@@ -350,7 +352,7 @@ typedef struct kra_peer
         atomic_t            rap_refcount;       /* # users */
         int                 rap_persistence;    /* "known" peer refs */
         int                 rap_connecting;     /* connection forming */
-        unsigned long       rap_reconnect_time; /* CURRENT_TIME when reconnect OK */
+        unsigned long       rap_reconnect_time; /* CURRENT_SECONDS when reconnect OK */
         unsigned long       rap_reconnect_interval; /* exponential backoff */
 } kra_peer_t;
 
@@ -455,17 +457,11 @@ kranal_tx_mapped (kra_tx_t *tx)
                 tx->tx_buftype == RANAL_BUF_PHYS_MAPPED);
 }
 
-#if CONFIG_X86
 static inline __u64
 kranal_page2phys (struct page *p)
 {
-        __u64 page_number = p - mem_map;
-        
-        return (page_number << PAGE_SHIFT);
+        return page_to_phys(p);
 }
-#else
-# error "no page->phys"
-#endif
 
 extern void kranal_free_acceptsock (kra_acceptsock_t *ras);
 extern int kranal_listener_procint (ctl_table *table, 
@@ -479,7 +475,7 @@ extern kra_peer_t *kranal_create_peer (ptl_nid_t nid);
 extern kra_peer_t *kranal_find_peer_locked (ptl_nid_t nid);
 extern void kranal_post_fma (kra_conn_t *conn, kra_tx_t *tx);
 extern int kranal_del_peer (ptl_nid_t nid, int single_share);
-extern void kranal_device_callback (RAP_INT32 devid);
+extern void kranal_device_callback (RAP_INT32 devid, RAP_PVOID arg);
 extern int kranal_thread_start (int(*fn)(void *arg), void *arg);
 extern int kranal_connd (void *arg);
 extern int kranal_reaper (void *arg);

@@ -38,7 +38,7 @@ kranal_dist(lib_nal_t *nal, ptl_nid_t nid, unsigned long *dist)
 }
 
 void
-kranal_device_callback(RAP_INT32 devid)
+kranal_device_callback(RAP_INT32 devid, RAP_PVOID arg)
 {
         kra_device_t *dev;
         int           i;
@@ -255,13 +255,13 @@ kranal_setup_phys_buffer (kra_tx_t *tx, int nkiov, ptl_kiov_t *kiov,
                         /* Can't have gaps */
                         CERROR("Can't make payload contiguous in I/O VM:"
                                "page %d, offset %d, len %d \n", 
-                               phys - tx->tx_phys, 
+                               (int)(phys - tx->tx_phys), 
                                kiov->kiov_offset, kiov->kiov_len);                        
                         return -EINVAL;
                 }
 
                 if ((phys - tx->tx_phys) == PTL_MD_MAX_IOV) {
-                        CERROR ("payload too big (%d)\n", phys - tx->tx_phys);
+                        CERROR ("payload too big (%d)\n", (int)(phys - tx->tx_phys));
                         return -EMSGSIZE;
                 }
 
@@ -481,7 +481,7 @@ kranal_launch_tx (kra_tx_t *tx, ptl_nid_t nid)
         if (!peer->rap_connecting) {
                 LASSERT (list_empty(&peer->rap_tx_queue));
                 
-                now = CURRENT_TIME;
+                now = CURRENT_SECONDS;
                 if (now < peer->rap_reconnect_time) {
                         write_unlock_irqrestore(g_lock, flags);
                         kranal_tx_done(tx, -EHOSTUNREACH);
@@ -583,8 +583,8 @@ kranal_do_send (lib_nal_t    *nal,
                 unsigned int  niov, 
                 struct iovec *iov, 
                 ptl_kiov_t   *kiov,
-                size_t        offset,
-                size_t        nob)
+                int           offset,
+                int           nob)
 {
         kra_conn_t *conn;
         kra_tx_t   *tx;
@@ -592,8 +592,8 @@ kranal_do_send (lib_nal_t    *nal,
 
         /* NB 'private' is different depending on what we're sending.... */
 
-        CDEBUG(D_NET, "sending "LPSZ" bytes in %d frags to nid:"LPX64
-               " pid %d\n", nob, niov, nid , pid);
+        CDEBUG(D_NET, "sending %d bytes in %d frags to nid:"LPX64" pid %d\n",
+               nob, niov, nid, pid);
 
         LASSERT (nob == 0 || niov > 0);
         LASSERT (niov <= PTL_MD_MAX_IOV);
@@ -765,9 +765,9 @@ kranal_send_pages (lib_nal_t *nal, void *private, lib_msg_t *cookie,
 }
 
 ptl_err_t
-kranal_recvmsg (lib_nal_t *nal, void *private, lib_msg_t *libmsg,
+kranal_do_recv (lib_nal_t *nal, void *private, lib_msg_t *libmsg,
                 unsigned int niov, struct iovec *iov, ptl_kiov_t *kiov,
-                size_t offset, size_t mlen, size_t rlen)
+                int offset, int mlen, int rlen)
 {
         kra_conn_t  *conn = private;
         kra_msg_t   *rxmsg = conn->rac_rxmsg;
@@ -860,7 +860,7 @@ kranal_recv (lib_nal_t *nal, void *private, lib_msg_t *msg,
              unsigned int niov, struct iovec *iov, 
              size_t offset, size_t mlen, size_t rlen)
 {
-        return kranal_recvmsg(nal, private, msg, niov, iov, NULL,
+        return kranal_do_recv(nal, private, msg, niov, iov, NULL,
                               offset, mlen, rlen);
 }
 
@@ -869,7 +869,7 @@ kranal_recv_pages (lib_nal_t *nal, void *private, lib_msg_t *msg,
                    unsigned int niov, ptl_kiov_t *kiov, 
                    size_t offset, size_t mlen, size_t rlen)
 {
-        return kranal_recvmsg(nal, private, msg, niov, NULL, kiov,
+        return kranal_do_recv(nal, private, msg, niov, NULL, kiov,
                               offset, mlen, rlen);
 }
 
