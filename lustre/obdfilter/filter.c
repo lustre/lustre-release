@@ -919,7 +919,9 @@ static void *ext3_filter_journal_start(struct filter_obd *filter,
                 needed = journal->j_max_transaction_buffers;
         }
 
+        lock_kernel();
         handle = journal_start(journal, needed);
+        unlock_kernel();
         if (IS_ERR(handle))
                 CERROR("can't get handle for %d credits: rc = %ld\n", needed,
                        PTR_ERR(handle));
@@ -962,7 +964,9 @@ static int ext3_filter_journal_stop(void *handle)
          * osc to call back into filterobd to close the handle.  The
          * remaining references will be dropped in commit_write.
          */
+        lock_kernel();
         rc = journal_stop((handle_t *)handle);
+        unlock_kernel();
 
         return rc;
 }
