@@ -99,21 +99,21 @@ static struct super_block * ll_read_super(struct super_block *sb,
 
         ll_options(data, &device, &version);
 
-        if ( !device ) {
+        if (!device) {
                 CERROR("no device\n");
                 GOTO(out_free, sb = NULL);
         }
 
         devno = simple_strtoul(device, NULL, 0);
-        if ( devno >= MAX_OBD_DEVICES ) {
+        if (devno >= MAX_OBD_DEVICES) {
                 CERROR("device of %s too high\n", device);
                 GOTO(out_free, sb = NULL);
         }
 
         sbi->ll_conn.oc_dev = &obd_dev[devno];
         err = obd_connect(&sbi->ll_conn);
-        if ( err ) {
-                CERROR("cannot connect to %s\n", device);
+        if (err) {
+                CERROR("cannot connect to %s: rc = %d\n", device, err);
                 GOTO(out_free, sb = NULL);
         }
 
@@ -128,20 +128,20 @@ static struct super_block * ll_read_super(struct super_block *sb,
 
         err = connmgr_connect(ptlrpc_connmgr, sbi->ll_mds_conn);
         if (err) {
-                CERROR("cannot connect to MDS\n");
+                CERROR("cannot connect to MDS: rc = %d\n", err);
                 ptlrpc_put_connection(sbi->ll_mds_conn);
                 GOTO(out_disc, sb = NULL);
         }
 
         sbi->ll_mds_conn->c_level = LUSTRE_CONN_FULL;
 
-        err= mdc_connect(&sbi->ll_mds_client, sbi->ll_mds_conn, 
-                    &rootfid, &request); 
-        CERROR("rootfid %Ld\n", rootfid.id);
-        if (err) { 
-                CERROR("cannot mds_connect %d\n", err);
+        err = mdc_connect(&sbi->ll_mds_client, sbi->ll_mds_conn,
+                          &rootfid, &request);
+        if (err) {
+                CERROR("cannot mds_connect: rc = %d\n", err);
                 GOTO(out_disc, sb = NULL);
         }
+        CERROR("rootfid %Ld\n", rootfid.id);
         sbi->ll_rootino = rootfid.id;
 
         sb->s_maxbytes = 1ULL << 36;
@@ -155,7 +155,7 @@ static struct super_block * ll_read_super(struct super_block *sb,
                           sbi->ll_rootino, S_IFDIR,
                           OBD_MD_FLNOTOBD|OBD_MD_FLBLOCKS, &request);
         if (err) {
-                CERROR("mdc_getattr failed for root %d\n", err);
+                CERROR("mdc_getattr failed for root: rc = %d\n", err);
                 GOTO(out_req, sb = NULL);
         }
 
@@ -166,9 +166,9 @@ static struct super_block * ll_read_super(struct super_block *sb,
         init_waitqueue_head(&sbi->ll_commitcbd_ctl_waitq);
         sbi->ll_commitcbd_flags = 0;
         err = ll_commitcbd_setup(sbi);
-        if (err) { 
-                CERROR("failed to start commit callback daemon\n");
-                GOTO(out_req, sb = NULL); 
+        if (err) {
+                CERROR("failed to start commit callback daemon: rc = %d\n",err);
+                GOTO(out_req, sb = NULL);
         }
 
         root = iget4(sb, sbi->ll_rootino, NULL,
@@ -189,7 +189,7 @@ out_free:
                 MOD_DEC_USE_COUNT;
                 OBD_FREE(sbi, sizeof(*sbi));
         }
-        if (device) 
+        if (device)
                 OBD_FREE(device, strlen(device) + 1);
         if (version)
                 OBD_FREE(version, strlen(version) + 1);
