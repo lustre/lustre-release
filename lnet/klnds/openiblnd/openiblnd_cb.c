@@ -1617,8 +1617,6 @@ kibnal_connreq_done (kib_conn_t *conn, int active, int status)
         if (status == 0) {                         
                 /* connection established... */
                 LASSERT (state == IBNAL_CONN_CONNECTING);
-                conn->ibc_state = IBNAL_CONN_ESTABLISHED;
-
                 if (!kibnal_peer_active(peer)) {
                         /* ...but peer deleted meantime */
                         status = -ECONNABORTED;
@@ -1632,6 +1630,7 @@ kibnal_connreq_done (kib_conn_t *conn, int active, int status)
                 /* Everything worked! */
 
                 peer->ibp_connecting--;
+                conn->ibc_state = IBNAL_CONN_ESTABLISHED;
 
                 /* +1 ref for ibc_list; caller(== CM)'s ref remains until
                  * the IB_CM_IDLE callback */
