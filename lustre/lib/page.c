@@ -112,8 +112,11 @@ void lustre_prepare_page(unsigned from, unsigned to, struct page *page)
 
 	lock_page(page);
 	err = page->mapping->a_ops->prepare_write(NULL, page, from, to);
-	if (err)
+	if (err) { 
+                CERROR("page index %ld from %d to %d err %d\n", 
+                                page->index, from, to, err); 
 		BUG();
+        }
 
 }
 

@@ -457,7 +457,7 @@ int mds_main(void *arg)
 
 		wake_up(&mds->mds_done_waitq);
 		interruptible_sleep_on(&mds->mds_waitq);
-
+		barrier();
 		CDEBUG(D_INODE, "lustre_mds wakes\n");
 		CDEBUG(D_INODE, "pick up req here and continue\n"); 
 
@@ -587,6 +587,7 @@ static int mds_setup(struct obd_device *obddev, obd_count len,
 		if (mds->mds_service == NULL)
 			return -ENOMEM;
 		mds->mds_service->srv_buf_size = 64 * 1024;
+		//mds->mds_service->srv_buf_size = 1024;
 		mds->mds_service->srv_portal = MDS_REQUEST_PORTAL;
 		memcpy(&mds->mds_service->srv_self, &peer, sizeof(peer));
 		mds->mds_service->srv_wait_queue = &mds->mds_waitq;

@@ -37,11 +37,12 @@ static ptl_handle_eq_t req_eq, bulk_source_eq, bulk_sink_eq;
  * 1. Free the request buffer after it has gone out on the wire
  * 2. Wake up the thread waiting for the reply once it comes in.
  */
-static int request_callback(ptl_event_t *ev, void *data)
+static int client_packet_callback(ptl_event_t *ev, void *data)
 {
         struct ptlrpc_request *rpc = ev->mem_desc.user_ptr;
 
         ENTRY;
+        // XXX make sure we understand all events, including ACK's
 
         if (ev->type == PTL_EVENT_SENT) {
                 OBD_FREE(ev->mem_desc.start, ev->mem_desc.length);
@@ -54,7 +55,7 @@ static int request_callback(ptl_event_t *ev, void *data)
         return 1;
 }
 
-static int incoming_callback(ptl_event_t *ev, void *data)
+static int server_request_callback(ptl_event_t *ev, void *data)
 {
         struct ptlrpc_service *service = data;
 	int rc;
@@ -79,13 +80,13 @@ static int incoming_callback(ptl_event_t *ev, void *data)
 	service->srv_ref_count[service->srv_md_active]++;
 
 	if (ev->offset >= (service->srv_buf_size - 1024)) {
-		CERROR("Unlinking ME %d\n", service->srv_me_active);
+		CDEBUG(D_INODE, "Unlinking ME %d\n", service->srv_me_active);
 
 		rc = PtlMEUnlink(service->srv_me_h[service->srv_me_active]);
 		service->srv_me_h[service->srv_me_active] = 0;
 
 		if (rc != PTL_OK) {
-			CERROR("PtlMEUnlink failed: %d\n", rc);	
+			CERROR("PtlMEUnlink failed - DROPPING soon: %d\n", rc);
 			return rc;
 		}
 
@@ -281,15 +282,7 @@ int ptl_received_rpc(struct ptlrpc_service *service) {
 	if ((service->srv_ref_count[index] <= 0) &&
 	    (service->srv_me_h[index] == 0)) {
 
-		rc = PtlMDUnlink(service->srv_md_h[index]);
-		CDEBUG(D_INFO, "Removing MD at index %d, rc %d\n", index, rc);
-
-                if (rc)
-                        CERROR(": PtlMDUnlink failed: index %d rc %d\n", 
-                               index, rc);
-
                 /* Replace the unlinked ME and MD */
-
                 rc = PtlMEInsert(service->srv_me_h[service->srv_me_tail],
                         service->srv_id, 0, ~0, PTL_RETAIN,
                         PTL_INS_AFTER, &(service->srv_me_h[index]));
@@ -345,7 +338,7 @@ int rpc_register_service(struct ptlrpc_service *service, char *uuid)
         service->srv_id.gid = PTL_ID_ANY;
         service->srv_id.rid = PTL_ID_ANY;
 
-        rc = PtlEQAlloc(peer.peer_ni, 128, incoming_callback,
+        rc = PtlEQAlloc(peer.peer_ni, 128, server_request_callback,
                 service, &(service->srv_eq_h));
 
         if (rc != PTL_OK) {
@@ -441,7 +434,7 @@ static int req_init_portals(void)
         }
         ni = *nip;
 
-        rc = PtlEQAlloc(ni, 128, request_callback, NULL, &req_eq);
+        rc = PtlEQAlloc(ni, 128, client_packet_callback, NULL, &req_eq);
         if (rc != PTL_OK)
                 CERROR("PtlEQAlloc failed: %d\n", rc);
 

@@ -1,58 +1,26 @@
-diff -u -r linux-2.4.17-stock/include/linux/fs.h linux-2.4.17/include/linux/fs.h
---- linux-2.4.17-stock/include/linux/fs.h	Fri Dec 21 09:42:03 2001
-+++ linux-2.4.17/include/linux/fs.h	Wed Feb 20 13:39:51 2002
-@@ -984,6 +984,7 @@
+--- linux-2.4.17/kernel/ksyms.c.lustre	Fri Feb 22 15:26:38 2002
++++ linux-2.4.17/kernel/ksyms.c	Fri Feb 22 15:27:44 2002
+@@ -282,6 +282,12 @@
+ EXPORT_SYMBOL(lock_may_write);
+ EXPORT_SYMBOL(dcache_readdir);
+ 
++/* lustre */
++EXPORT_SYMBOL(pagecache_lock);
++EXPORT_SYMBOL(do_kern_mount);
++EXPORT_SYMBOL(module_list);
++
++
+ /* for stackable file systems (lofs, wrapfs, cryptfs, etc.) */
+ EXPORT_SYMBOL(default_llseek);
+ EXPORT_SYMBOL(dentry_open);
+--- linux-2.4.17/include/linux/fs.h.lustre	Fri Feb 22 15:27:53 2002
++++ linux-2.4.17/include/linux/fs.h	Fri Feb 22 15:28:52 2002
+@@ -983,7 +983,7 @@
+ extern struct vfsmount *kern_mount(struct file_system_type *);
  extern int may_umount(struct vfsmount *);
  extern long do_mount(char *, char *, char *, unsigned long, void *);
- 
+-
 +struct vfsmount *do_kern_mount(char *type, int flags, char *name, void *data);
  #define kern_umount mntput
  
  extern int vfs_statfs(struct super_block *, struct statfs *);
-@@ -1042,6 +1045,6 @@
- 		return __get_lease(inode, mode);
- 	return 0;
- }
- 
- /* fs/open.c */
- 
---- linux-2.4.17-stock/kernel/ksyms.c	Fri Dec 21 09:42:04 2001
-+++ linux-2.4.17/kernel/ksyms.c	Wed Feb 20 12:57:32 2002
-@@ -280,7 +290,11 @@
- EXPORT_SYMBOL(lock_page);
- EXPORT_SYMBOL(unlock_page);
- 
-+/* Lustre symbols */
-+EXPORT_SYMBOL(pagecache_lock);
-+EXPORT_SYMBOL(do_kern_mount);
-+EXPORT_SYMBOL(module_list);
- 
- /* device registration */
- EXPORT_SYMBOL(register_chrdev);
- EXPORT_SYMBOL(unregister_chrdev);
---- linux-2.4.17-stock/mm/filemap.c	Fri Dec 21 09:42:04 2001
-+++ linux-2.4.17/mm/filemap.c	Wed Feb 20 15:18:17 2002
-@@ -2862,8 +2880,10 @@
- 	if ((ssize_t) count < 0)
- 		return -EINVAL;
- 
-+#if 0
- 	if (!access_ok(VERIFY_READ, buf, count))
- 		return -EFAULT;
-+#endif
- 
- 	cached_page = NULL;
- 
-@@ -2987,10 +3007,12 @@
- 		 * same page as we're writing to, without it being marked
- 		 * up-to-date.
- 		 */
-+#if 0
- 		{ volatile unsigned char dummy;
- 			__get_user(dummy, buf);
- 			__get_user(dummy, buf+bytes-1);
- 		}
-+#endif
- 
- 		status = -ENOMEM;	/* we'll assign it later anyway */
- 		page = __grab_cache_page(mapping, index, &cached_page);

@@ -117,10 +117,10 @@ static struct obd_type *obd_nm_to_type(char *nm)
 #ifdef CONFIG_KMOD
 	if ( !type ) {
 		if ( !request_module(nm) ) {
-			CDEBUG(D_PSDEV, "Loaded module '%s'\n", nm);
+			CDEBUG(D_INFO, "Loaded module '%s'\n", nm);
 			type = obd_search_type(nm);
 		} else {
-			CDEBUG(D_PSDEV, "Can't load module '%s'\n", nm);
+			CDEBUG(D_INFO, "Can't load module '%s'\n", nm);
 		}
 	}
 #endif
@@ -652,10 +652,10 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 #ifdef CONFIG_KMOD
                 if ( !type ) {
                         if ( !request_module(nm) ) {
-                                CDEBUG(D_PSDEV, "Loaded module '%s'\n", nm);
+                                CDEBUG(D_INFO, "Loaded module '%s'\n", nm);
                                 type = obd_nm_to_type(nm);
                         } else {
-                                CDEBUG(D_PSDEV, "Can't load module '%s'\n", nm);
+                                CDEBUG(D_INFO, "Can't load module '%s'\n", nm);
                         }
                 }
 #endif
