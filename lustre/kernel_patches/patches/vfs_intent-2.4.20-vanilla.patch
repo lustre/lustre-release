@@ -1302,7 +1302,7 @@ Index: lum/fs/open.c
  	error = -EPERM;
  	if (IS_IMMUTABLE(inode) || IS_APPEND(inode))
  		goto out;
-@@ -638,7 +701,7 @@ asmlinkage long sys_fchown(unsigned int 
+@@ -638,6 +701,7 @@ asmlinkage long sys_fchown(unsigned int 
  {
  	int namei_flags, error;
  	struct nameidata nd;
