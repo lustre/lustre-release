@@ -3,26 +3,27 @@
 # the CVS HEAD are allowed.
 set -vxe
 
-if [ "$RUNTESTS" != "no" ]; then
-	sh local.sh
-	sh runtests --reformat local.xml
+if [ "$LOCAL" != no ]; then
+	export NAME=${LOCAL:-local}
+	sh ${NAME}.sh
+	[ "$RUNTESTS" != "no" ] && sh runtests --reformat ${NAME}.xml
 
-	sh lov.sh
-	sh runtests --reformat lov.xml
+	mount | grep lustre_lite || sh llmount.sh
+	[ "$SANITY" != "no" ] && sh sanity.sh
+	[ "$DBENCH" != "no" ]  && sh rundbench 1
+	[ "$BONNIE" != "no" ] && bonnie++ -s 0 -n 10 -u 0 -d /mnt/lustre
+	sync; sync
+	sh llmountcleanup.sh
 fi
 
-export NAME=local
-sh llmount.sh
-[ "$SANITY" != "no" ] && sh sanity.sh
-[ "$DBENCH" != "no" ]  && sh rundbench 1
-[ "$BONNIE" != "no" ] && bonnie++ -s 0 -n 10 -u 0 -d /mnt/lustre
-sync; sync
-sh llmountcleanup.sh
-
-export NAME=lov
-llmount.sh
-[ "$SANITY" != "no" ] && sh sanity.sh
-[ "$DBENCH" != "no" ] && sh rundbench 1
-[ "$BONNIE" != "no" ] && bonnie++ -s 0 -n 10 -u 0 -d /mnt/lustre
-sync; sync
-sh llmountcleanup.sh
+if [ "$LOV" != no ]; then
+	export NAME=${LOV:-lov}
+	sh ${NAME}.sh
+	[ "$RUNTESTS" != "no" ] && sh runtests --reformat ${NAME}.xml
+	mount | grep lustre_lite || sh llmount.sh
+	[ "$SANITY" != "no" ] && sh sanity.sh
+	[ "$DBENCH" != "no" ] && sh rundbench 1
+	[ "$BONNIE" != "no" ] && bonnie++ -s 0 -n 10 -u 0 -d /mnt/lustre
+	sync; sync
+	sh llmountcleanup.sh
+fi
