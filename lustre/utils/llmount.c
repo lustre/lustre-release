@@ -226,7 +226,8 @@ static int parse_route(char *opteq, char *opttgts)
 static int ignored_option(const char *check)
 {
         char *ignore[] = { "noatime", "async", "rw", "suid", "dev",
-                           "exec", "nouser", "auto", "noauto", NULL };
+                           "exec", "nouser", "auto", "noauto", "_netdev", 
+                           NULL };
         char **which = ignore;
 
         while (*which != NULL) {
