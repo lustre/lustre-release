@@ -116,6 +116,8 @@ static int cache_leaf_node(struct dentry *dentry, __u64 *active_entry)
 {
         struct inode *inode = dentry->d_inode;
 
+        if (!dentry->d_inode)
+                return 0;
         if (S_ISDIR(inode->i_mode)) {
                 if (inode->i_nlink != 2)
                         return 0;

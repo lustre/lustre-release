@@ -152,9 +152,6 @@ static struct dentry *smfs_lookup(struct inode *dir, struct dentry *dentry,
                         GOTO(exit, rc = NULL);
                 }
                 SMFS_GET_INODE(dir->i_sb, cache_inode, dir, inode, rc2, exit);
-        } else {
-                d_add(dentry, NULL);
-                GOTO(exit, rc);
         }
 
         d_add(dentry, inode);

@@ -163,6 +163,11 @@ err_out:
 
 static int smfs_umount_cache(struct smfs_super_info *smb)
 {
+        struct dentry *root = smb->smsi_sb->s_root;
+        
+        dput(root);
+        if (atomic_read(&root->d_inode->i_count) == 0)
+                igrab(root->d_inode); 
         
         mntput(smb->smsi_mnt);
         smfs_cleanup_sm_ops(smb);

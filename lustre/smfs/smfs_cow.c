@@ -177,6 +177,9 @@ static int smfs_init_snap_inode_info(struct inode *inode, struct inode *dir, int
         int rc = 0;
         ENTRY;
 
+        if (!inode)
+                RETURN(0);
+
         if (dir) {
                 I2SNAPI(inode)->sn_flags = I2SNAPI(dir)->sn_flags;
                 I2SNAPI(inode)->sn_gen = I2SNAPI(dir)->sn_gen;
@@ -710,7 +713,7 @@ static struct snap_info * smfs_find_create_snap_info(struct super_block *sb,
         struct snap_super_info   *snap_sinfo = S2SNAPI(sb);
         struct fsfilt_operations *sops = snap_sinfo->snap_cache_fsfilt;
         struct snap_info *snap_info, *tmp;
-        ino_t *snap_root;
+        ino_t *snap_root = NULL;
         int    rino_size, snap_count_size, rc = 0;
         ENTRY;
         
@@ -768,6 +771,8 @@ exit:
                 smfs_cleanup_snap_info(snap_info); 
                 OBD_FREE(snap_info, sizeof(struct snap_info));
         }
+        if (snap_root)
+                OBD_FREE(snap_root, rino_size); 
         RETURN(snap_info);  
 }         
 
@@ -1369,39 +1374,82 @@ static cow_funcs smfs_cow_pre_funcs[HOOK_MAX + 1] = {
         [HOOK_WRITE]    smfs_cow_write_pre,
         [HOOK_READDIR]  smfs_cow_readdir_pre,
 };
+
+static int smfs_revalidate_dotsnap_dentry(struct dentry *dentry, 
+                                          struct inode *dir, int index)
+{
+        struct inode *inode = dentry->d_inode;
+        ENTRY;       
+ 
+        if (!inode)
+                RETURN(0);
+
+        if (index > 0 && index != DOT_SNAP_INDEX) {
+                struct fsfilt_operations *sops = I2SNAPCOPS(inode); 
+                struct inode *cache_ind = NULL;
+
+                cache_ind = sops->fs_get_indirect(I2CI(inode), NULL, index);
+                
+                if (cache_ind) {
+                        struct inode *ind_inode = NULL;
+
+                        LASSERT(cache_ind->i_ino != I2CI(inode)->i_ino);
+                        
+                        ind_inode = smfs_get_inode(inode->i_sb, cache_ind->i_ino,
+                                                   dir, index);
+                        list_del_init(&dentry->d_alias);
+                        iput(inode);
+                        d_instantiate(dentry, ind_inode);                         
+                        iput(cache_ind); 
+                }
+        }
+        RETURN(0);
+}
+
+static int smfs_revalidate_nd(struct dentry *dentry, struct nameidata *nd)
+{
+        struct inode *inode = dentry->d_inode;
+        ENTRY;
+
+        if (!inode)
+                RETURN(0);
+        
+        if (smfs_under_dotsnap_inode(inode)) {
+                struct inode *dir = dentry->d_parent->d_inode;
+                int index = I2SNAPI(inode)->sn_index;
+                
+                smfs_revalidate_dotsnap_dentry(dentry, dir, index);
+                smfs_init_snap_inode_info(dentry->d_inode, dir, index);
+        }
+
+        RETURN(0);
+}
+
+static int smfs_delete_dentry(struct dentry *dentry)
+{
+        dentry->d_op = NULL; 
+        return 0;
+}
+ 
+struct dentry_operations smfs_cow_dops = {
+        .d_revalidate = smfs_revalidate_nd,
+        .d_delete     = smfs_delete_dentry,
+};
+
 int smfs_cow_lookup_post(struct inode *dir, void *de, void *data1,
                          void *data2)
 {
         struct dentry *dentry = (struct dentry*)de;
         struct inode *inode = dentry->d_inode; 
-        struct fsfilt_operations *sops = I2SNAPCOPS(inode); 
-        int index = I2SNAPI(dir)->sn_index;
         ENTRY;
 
-        LASSERT(inode);
-      
-        if (index > 0) {
-                struct inode *cache_ind = NULL;
-
-                cache_ind = sops->fs_get_indirect(I2CI(inode), NULL, index);
-                if (cache_ind) {
-                        struct inode *ind_inode = NULL;
-
-                        LASSERT(cache_ind->i_ino != I2CI(inode)->i_ino);
-                        ind_inode = smfs_get_inode(dir->i_sb, cache_ind->i_ino,
-                                                   dir, index);
-                        /*replace the ind_inode here*/ 
-                        list_del_init(&dentry->d_alias);
-                        iput(inode);
-                        d_instantiate(dentry, ind_inode); 
-                }
-                if (cache_ind)
-                        iput(cache_ind);
-        }
-        inode = dentry->d_inode;
- 
-        smfs_init_snap_inode_info(inode, dir, index);
+        if (inode && smfs_under_dotsnap_inode(inode)) {
+                int index = I2SNAPI(dir)->sn_index;
         
+                smfs_revalidate_dotsnap_dentry(dentry, dir, index);
+                smfs_init_snap_inode_info(inode, dir, index);
+        }
+        dentry->d_op = &smfs_cow_dops;  
         RETURN(0);
 }
 
