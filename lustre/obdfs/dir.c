@@ -387,7 +387,7 @@ ino_t obdfs_inode_by_name(struct inode * dir, struct dentry *dentry, int *type)
         ino_t res = 0;
         struct ext2_dir_entry_2 * de;
         struct page *page;
-        
+
         de = ext2_find_entry (dir, dentry, &page);
         if (de) {
                 res = le32_to_cpu(de->inode);

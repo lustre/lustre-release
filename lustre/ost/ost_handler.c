@@ -443,11 +443,6 @@ static int ost_handle(struct ptlrpc_request *req)
                 OBD_FAIL_RETURN(OBD_FAIL_OST_DISCONNECT_NET, 0);
                 rc = target_handle_disconnect(req);
                 break;
-        case OST_GET_INFO:
-                CDEBUG(D_INODE, "get_info\n");
-                OBD_FAIL_RETURN(OBD_FAIL_OST_GET_INFO_NET, 0);
-                rc = ost_get_info(req);
-                break;
         case OST_CREATE:
                 CDEBUG(D_INODE, "create\n");
                 OBD_FAIL_RETURN(OBD_FAIL_OST_CREATE_NET, 0);
@@ -611,7 +606,7 @@ static void __exit ost_exit(void)
         class_unregister_type(LUSTRE_OST_NAME);
 }
 
-MODULE_AUTHOR("Peter J. Braam <braam@clusterfs.com>");
+MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre Object Storage Target (OST) v0.01");
 MODULE_LICENSE("GPL");
 

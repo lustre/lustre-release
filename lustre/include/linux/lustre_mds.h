@@ -198,6 +198,7 @@ struct mds_fs_operations {
         void    (* cl_delete_inode)(struct inode *inode);
         int     (* fs_journal_data)(struct file *file);
         int     (* fs_set_last_rcvd)(struct mds_obd *mds, void *handle);
+        int     (* fs_statfs)(struct super_block *sb, struct statfs *sfs);
 };
 
 extern int mds_register_fs_type(struct mds_fs_operations *op, const char *name);
@@ -261,6 +262,14 @@ static inline ssize_t mds_fs_journal_data(struct mds_obd *mds,
                                           struct file *file)
 {
         return mds->mds_fsops->fs_journal_data(file);
+}
+
+static inline int mds_fs_statfs(struct mds_obd *mds, struct statfs *sfs)
+{
+        if (mds->mds_fsops->fs_statfs)
+                return mds->mds_fsops->fs_statfs(mds->mds_sb, sfs);
+
+        return vfs_statfs(mds->mds_sb, sfs);
 }
 
 #define MDS_FSOP_UNLINK         1

@@ -347,7 +347,6 @@ int ll_setattr(struct dentry *de, struct iattr *attr)
 static int ll_statfs(struct super_block *sb, struct statfs *sfs)
 {
         struct ptlrpc_request *request = NULL;
-        struct statfs obd_sfs;
         struct ll_sb_info *sbi = ll_s2sbi(sb);
         int rc;
         ENTRY;
@@ -355,25 +354,32 @@ static int ll_statfs(struct super_block *sb, struct statfs *sfs)
         memset(sfs, 0, sizeof(*sfs));
         rc = mdc_statfs(&sbi->ll_mdc_conn, sfs, &request);
         ptlrpc_req_finished(request);
-        if (rc) {
+        if (rc)
                 CERROR("obd_statfs fails: rc = %d\n", rc);
-                GOTO(out, rc);
-        }
-        CDEBUG(D_SUPER, "statfs returns blocks %ld/%ld objects %ld/%ld\n",
-               sfs->f_bavail, sfs->f_blocks, sfs->f_files,sfs->f_ffree);
+        else
+                CDEBUG(D_SUPER, "statfs shows blocks %ld/%ld objects %ld/%ld\n",
+                       sfs->f_bavail, sfs->f_blocks, sfs->f_files,sfs->f_ffree);
 
         /* temporary until mds_statfs returns statfs info for all OSTs */
-        rc = obd_statfs(&sbi->ll_osc_conn, &obd_sfs);
-        if (rc) {
-                CERROR("obd_statfs fails: rc = %d\n", rc);
-                GOTO(out, rc);
-        }
-        CDEBUG(D_SUPER, "obd_statfs returns blocks %ld/%ld\n",
-               obd_sfs.f_bavail, obd_sfs.f_blocks);
+        if (!rc) {
+                struct statfs obd_sfs;
 
-        sfs->f_bfree = obd_sfs.f_bfree;
-        sfs->f_bavail = obd_sfs.f_bavail;
-        sfs->f_blocks = obd_sfs.f_blocks;
+                rc = obd_statfs(&sbi->ll_osc_conn, &obd_sfs);
+                if (rc) {
+                        CERROR("obd_statfs fails: rc = %d\n", rc);
+                        GOTO(out, rc);
+                }
+                CDEBUG(D_SUPER, "obd_statfs returns blocks %ld/%ld, "
+                       "objects %ld/%ld\n",
+                       obd_sfs.f_bavail, obd_sfs.f_blocks,
+                       obd_sfs.f_ffree, obd_sfs.f_files);
+
+                sfs->f_bfree = obd_sfs.f_bfree;
+                sfs->f_bavail = obd_sfs.f_bavail;
+                sfs->f_blocks = obd_sfs.f_blocks;
+                if (obd_sfs.f_ffree < sfs->f_ffree)
+                        sfs->f_ffree = obd_sfs.f_ffree;
+        }
 
 out:
         RETURN(rc);
@@ -478,7 +484,7 @@ struct file_system_type lustre_lite_fs_type = {
 
 static int __init init_lustre_lite(void)
 {
-        printk(KERN_INFO "Lustre Lite 0.0.1, braam@clusterfs.com\n");
+        printk(KERN_INFO "Lustre Lite 0.0.1, info@clusterfs.com\n");
         ll_file_data_slab = kmem_cache_create("ll_file_data",
                                               sizeof(struct ll_file_data), 0,
                                                SLAB_HWCACHE_ALIGN, NULL, NULL);
@@ -493,7 +499,7 @@ static void __exit exit_lustre_lite(void)
         kmem_cache_destroy(ll_file_data_slab);
 }
 
-MODULE_AUTHOR("Peter J. Braam <braam@clusterfs.com>");
+MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre Lite Client File System v1.0");
 MODULE_LICENSE("GPL");
 

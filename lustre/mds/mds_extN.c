@@ -279,6 +279,23 @@ static int mds_extN_journal_data(struct file *filp)
         return 0;
 }
 
+/*
+ * We need to hack the return value for the free inode counts because
+ * the current EA code requires one filesystem block per inode with EAs,
+ * so it is possible to run out of blocks before we run out of inodes.
+ *
+ * This can be removed when the extN EA code is fixed.
+ */
+static int mds_extN_statfs(struct super_block *sb, struct statfs *sfs)
+{
+        int rc = vfs_statfs(sb, sfs);
+
+        if (!rc && sfs->f_bfree < sfs->f_ffree)
+                sfs->f_ffree = sfs->f_bfree;
+
+        return rc;
+}
+
 static struct mds_fs_operations mds_extN_fs_ops = {
         fs_start:               mds_extN_start,
         fs_commit:              mds_extN_commit,
@@ -290,6 +307,7 @@ static struct mds_fs_operations mds_extN_fs_ops = {
         cl_delete_inode:        clear_inode,
         fs_journal_data:        mds_extN_journal_data,
         fs_set_last_rcvd:       mds_extN_set_last_rcvd,
+        fs_statfs:              mds_extN_statfs,
 };
 
 static int __init mds_extN_init(void)
@@ -327,7 +345,7 @@ static void __exit mds_extN_exit(void)
         //rc = extN_xattr_unregister();
 }
 
-MODULE_AUTHOR("Cluster File Systems, Inc. <adilger@clusterfs.com>");
+MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre MDS extN Filesystem Helper v0.1");
 MODULE_LICENSE("GPL");
 

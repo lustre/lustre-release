@@ -159,10 +159,10 @@ static int mdc_lock_callback(struct lustre_handle *lockh,
         RETURN(0);
 }
 
-int mdc_enqueue(struct lustre_handle *conn, int lock_type, struct lookup_intent *it, 
-                int lock_mode, struct inode *dir, struct dentry *de,
-                struct lustre_handle *lockh, __u64 id, char *tgt, int tgtlen,
-                void *data, int datalen)
+int mdc_enqueue(struct lustre_handle *conn, int lock_type,
+                struct lookup_intent *it, int lock_mode, struct inode *dir,
+                struct dentry *de, struct lustre_handle *lockh, __u64 id,
+                char *tgt, int tgtlen, void *data, int datalen)
 {
         struct ptlrpc_request *req;
         struct obd_device *obddev = class_conn2obd(conn);
