@@ -108,9 +108,14 @@ static int pupdate(void *unused)
 	struct task_struct * tsk = current;
 	int interval;
 	
+	pupdated = current;
+
+	exit_files(current);
+	exit_mm(current);
+
 	tsk->session = 1;
 	tsk->pgrp = 1;
-	strcpy(tsk->comm, "pupdate");
+	sprintf(tsk->comm, "pupd");
 	pupdated = current;
 
 	printk("pupdate() activated...\n");
@@ -136,16 +141,17 @@ static int pupdate(void *unused)
 			printk("pupdate() stopped...\n");
 			tsk->state = TASK_STOPPED;
 			MOD_DEC_USE_COUNT;
-			schedule(); /* wait for SIGCONT */
+			printk("RETURN from PUPD\n");
+			return 0;
 		}
 		/* check for sigstop */
 		if (signal_pending(tsk))
 		{
 			int stopped = 0;
 			spin_lock_irq(&tsk->sigmask_lock);
-			if (sigismember(&tsk->signal, SIGSTOP))
+			if (sigismember(&tsk->signal, SIGTERM))
 			{
-				sigdelset(&tsk->signal, SIGSTOP);
+				sigdelset(&tsk->signal, SIGTERM);
 				stopped = 1;
 			}
 			recalc_sigpending(tsk);
@@ -163,7 +169,8 @@ int flushd_init(void)
 {
 	/*	kernel_thread(bdflush, NULL, CLONE_FS | CLONE_FILES | CLONE_SIGHAND); */
 	MOD_INC_USE_COUNT;
-	kernel_thread(pupdate, NULL, CLONE_FS | CLONE_FILES | CLONE_SIGHAND);
+	kernel_thread(pupdate, NULL, 0);
+	printk("flushd inited\n");
 	return 0;
 }
 
