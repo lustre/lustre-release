@@ -597,7 +597,7 @@ test_15() {
 	fi
 	[ -f "$MOUNTLUSTRE" ] && echo "can't move $MOUNTLUSTRE" && return 40
 	trap cleanup_15 EXIT INT
-	[ ! `cp $LUSTRE/utils/llmount $MOUNTLUSTRE` ] || return $?
+	[ ! `cp $(which llmount) $MOUNTLUSTRE` ] || return $?
 	do_node `hostname` mkdir -p $MOUNT 2> /dev/null
 	# load llite module on the client if it isn't in /lib/modules
 	do_node `hostname` lconf --nosetup --node client_facet $XMLCONFIG
