@@ -1547,6 +1547,21 @@ def sys_make_devices():
     if not os.access('/dev/obd', os.R_OK):
         run('mknod /dev/obd c 10 241')
 
+
+# Add dir to the global PATH, if not already there.
+def add_to_path(new_dir):
+    syspath = string.split(os.environ['PATH'], ':')
+    if new_dir in syspath:
+        return
+    os.environ['PATH'] = os.environ['PATH'] + ':' + new_dir
+    
+
+DEFAULT_PATH = ('/sbin', '/usr/sbin', '/bin', '/usr/bin')
+# ensure basic elements are in the system path
+def sanitise_path():
+    for dir in DEFAULT_PATH:
+        add_to_path(dir)
+
 # Initialize or shutdown lustre according to a configuration file
 #   * prepare the system for lustre
 #   * configure devices with lctl
@@ -1555,6 +1570,8 @@ def sys_make_devices():
 def main():
     global TCP_ACCEPTOR, lctl, MAXTCPBUF
     host = socket.gethostname()
+
+    sanitise_path()
 
     args = parse_cmdline(sys.argv[1:])
     if len(args) > 0:
