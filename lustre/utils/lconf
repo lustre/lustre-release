@@ -120,6 +120,7 @@ subsystem_names = {
     "asobd" :        (1 << 24),
     "lmv" :          (1 << 25),
     "cmobd" :        (1 << 26),
+    "lonal" :        (1 << 27),
     }
 
 
@@ -1077,6 +1078,8 @@ def sys_get_local_address(net_type, wildcard, cluster_id):
                 local = elan_id
         except IOError, e:
             log(e)
+    elif net_type == 'lo':
+        fixme("automatic local address for loopback")
     elif net_type == 'gm':
         fixme("automatic local address for GM")
 
@@ -1364,6 +1367,8 @@ class Network(Module):
             manager.add_portals_module("knals/openibnal", 'kopenibnal')
         if self.net_type == 'iib':
             manager.add_portals_module("knals/iibnal", 'kiibnal')
+        if self.net_type == 'lo':
+            manager.add_portals_module("knals/lonal", 'klonal')
 
     def nid_to_uuid(self, nid):
         return "NID_%s_UUID" %(nid,)

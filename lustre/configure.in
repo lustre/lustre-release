@@ -226,6 +226,8 @@ portals/knals/qswnal/Makefile
 portals/knals/qswnal/autoMakefile
 portals/knals/socknal/Makefile
 portals/knals/socknal/autoMakefile
+portals/knals/lonal/Makefile
+portals/knals/lonal/autoMakefile
 portals/libcfs/Makefile
 portals/libcfs/autoMakefile
 portals/portals/Makefile

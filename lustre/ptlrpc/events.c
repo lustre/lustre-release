@@ -616,11 +616,13 @@ int ptlrpc_init_portals(void)
                 char *name;
         } ptl_nis[] = {
 #ifndef CRAY_PORTALS
-                {QSWNAL,  "qswnal"},
-                {SOCKNAL, "socknal"},
-                {GMNAL,   "gmnal"},
-                {OPENIBNAL,   "openibnal"},
-                {TCPNAL,  "tcpnal"},
+                {QSWNAL,    "qswnal"},
+                {SOCKNAL,   "socknal"},
+                {GMNAL,     "gmnal"},
+                {OPENIBNAL, "openibnal"},
+                {IIBNAL,    "iibnal"},
+                {TCPNAL,    "tcpnal"},
+                {LONAL,     "lonal"},
 #else
                 {CRAY_KB_ERNAL, "cray_kb_ernal"},
 #endif

@@ -653,6 +653,7 @@ enum {
         ROUTER    = 6,
         OPENIBNAL = 7,
         IIBNAL    = 8,
+        LONAL     = 9,
         NAL_ENUM_END_MARKER
 };
 
