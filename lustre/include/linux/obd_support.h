@@ -60,13 +60,18 @@ extern int obd_print_entry;
 #define CMD(cmd) (( cmd == READ ) ? "read" : "write")
 
 #define IDEBUG(inode) { \
-	if ( !list_empty(&inode->i_data.pages) || inode->i_data.nrpages ) {\
-		struct page * page;\
-		printk("XXXXX: func %s line %d ino %ld list not empty, pages %ld\n", __FUNCTION__ , __LINE__,\
-		       inode->i_ino, inode->i_data.nrpages);\
-		page = list_entry(inode->i_data.pages.next, struct page , list);\
-		PDEBUG(page, "READ INODE");\
-	}}
+		printk("]]%s line %d[[  ino %ld, blocks %ld, size %Ld, atm %ld, ctim %ld, mtm %ld, mode %o, uid %d, gid %d\n", \
+		       __FUNCTION__ , __LINE__, \
+		       inode->i_ino, inode->i_blocks, inode->i_size,\
+		       inode->i_atime, inode->i_ctime, inode->i_mtime,\
+		       inode->i_mode, inode->i_uid, inode->i_gid);\
+		printk("blk: %d %d %d %d %d %d %d %d %d %d\n",\
+		       inode->u.ext2_i.i_data[0], inode->u.ext2_i.i_data[1],\
+		       inode->u.ext2_i.i_data[2], inode->u.ext2_i.i_data[3],\
+		       inode->u.ext2_i.i_data[4], inode->u.ext2_i.i_data[5],\
+		       inode->u.ext2_i.i_data[6], inode->u.ext2_i.i_data[7],\
+		       inode->u.ext2_i.i_data[8], inode->u.ext2_i.i_data[9]);\
+	}
 
 
 #define PDEBUG(page,cmd)	{if (page){\
@@ -128,6 +133,10 @@ static inline void inode_to_iattr(struct inode *inode, struct iattr *tmp)
 	tmp->ia_valid = ~0;
 }
 
+
+#define OBD_MAGIC_INL 0x77777770
+
+
 static inline void inode_cpy(struct inode *dest, struct inode *src)
 {
 	dest->i_mode = src->i_mode;
@@ -140,7 +149,8 @@ static inline void inode_cpy(struct inode *dest, struct inode *src)
 	dest->i_flags = src->i_flags;
 	/* allocation of space */
 	dest->i_blocks = src->i_blocks;
-	if ( !dest->i_blocks) {
+	if ( !src->i_blocks || 
+	     OBD_MAGIC_INL == (OBD_MAGIC_INL & src->u.ext2_i.i_data[0])) {
 		CDEBUG(D_IOCTL, "copying inline data: ino %ld\n", dest->i_ino);
 		memcpy(&dest->u.ext2_i.i_data, &src->u.ext2_i.i_data, 
 		       sizeof(src->u.ext2_i.i_data));

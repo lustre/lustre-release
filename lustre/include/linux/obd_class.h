@@ -222,6 +222,7 @@ static __inline__ obdattr *obd_empty_oa(void)
 {
 	obdattr *res = NULL;
 	OBD_ALLOC(res, obdattr *, sizeof(*res));
+	memset(res, 0, sizeof (*res));
 	return res;
 }
 
@@ -239,32 +240,102 @@ static __inline__ obdattr *obd_oa_fromid(struct obd_conn *conn,  objid id)
 	obdattr *res = NULL;
 
 	OBD_ALLOC(res, obdattr *, sizeof(*res));
-	if ( !res ) 
+	if ( !res ) {
+		EXIT;
 		return NULL;
+	}
 	memset(res, 0, sizeof(*res));
 	res->i_ino = id;
 	if (conn->oc_dev->obd_type->typ_ops->o_getattr(conn, res)) {
 		OBD_FREE(res, sizeof(*res));
+		EXIT;
 		return NULL;
 	}
-	
+	EXIT;
 	return res;
 }
 
-/* #define obd_cpy_obdo(a,b) memcpy(a, b, sizeof(*a)) */
+#define OBD_MD_FLMODE   (1UL<<1)
+#define OBD_MD_FLUID    (1UL<<2)
+#define OBD_MD_FLGID    (1UL<<3)
+#define OBD_MD_FLSIZE   (1UL<<4)
+#define OBD_MD_FLATIME  (1UL<<5)
+#define OBD_MD_FLMTIME  (1UL<<6)
+#define OBD_MD_FLCTIME  (1UL<<7)
+#define OBD_MD_FLFLAGS  (1UL<<8)
+#define OBD_MD_FLBLOCKS (1UL<<9)
+#define OBD_MD_FLOBDMD  (1UL<<10)
 
-static __inline__ void obd_cpy_appmd(obdattr *a, obdattr *b)
+
+static __inline__ void obdo_cpy_md(obdattr *dst, obdattr *src, int mask)
 {
-	a->i_mode = b->i_mode;
-	a->i_uid = b->i_uid;
-	a->i_gid = b->i_gid;
-	a->i_size = b->i_size;
-	a->i_atime = b->i_atime;
-	a->i_mtime = b->i_mtime;
-	a->i_ctime = b->i_ctime;
-	a->i_flags = b->i_flags;
+	CDEBUG(D_INODE, "flags %x\n", mask);
+	if ( ! (mask & OBD_MD_FLMODE) ) 
+		dst->i_mode = src->i_mode;
+	if ( ! (mask & OBD_MD_FLUID) ) 
+		dst->i_uid = src->i_uid;
+	if ( ! (mask & OBD_MD_FLGID) ) 
+		dst->i_gid = src->i_gid;
+	if ( ! (mask & OBD_MD_FLSIZE) ) 
+		dst->i_size = src->i_size;
+	if ( ! (mask & OBD_MD_FLATIME) ) 
+		dst->i_atime = src->i_atime;
+	if ( ! (mask & OBD_MD_FLMTIME) ) 
+		dst->i_mtime = src->i_mtime;
+	if ( ! (mask & OBD_MD_FLCTIME) ) 
+		dst->i_ctime = src->i_ctime;
+	if ( ! (mask & OBD_MD_FLFLAGS) ) 
+		dst->i_flags = src->i_flags;
 	/* allocation of space */
-	a->i_blocks = b->i_blocks;
+	if ( ! (mask & OBD_MD_FLBLOCKS) ) 
+		dst->i_blocks = src->i_blocks;
+	if ( ! (mask & OBD_MD_FLOBDMD)  &&  !src->i_blocks ) {
+		CDEBUG(D_IOCTL, "copying inline data: ino %ld\n", dst->i_ino);
+		memcpy(&dst->u.ext2_i.i_data, &src->u.ext2_i.i_data, 
+		       sizeof(src->u.ext2_i.i_data));
+	} else {
+			CDEBUG(D_INODE, "XXXX cpy_obdmd: ino %ld iblocks not 0!\n", src->i_ino);
+	}
+}
+
+static __inline__ int obdo_cmp_md(obdattr *dst, obdattr *src, int mask)
+{
+	int res = 1;
+	if ( ! (mask & OBD_MD_FLMODE) ) 
+		res = (res && (dst->i_mode == src->i_mode));
+	if ( ! (mask & OBD_MD_FLUID) ) 
+		res = (res && (dst->i_uid == src->i_uid));
+	if ( ! (mask & OBD_MD_FLGID) ) 
+		res = (res && (dst->i_gid == src->i_gid));
+	if ( ! (mask & OBD_MD_FLSIZE) ) 
+		res = (res && (dst->i_size == src->i_size));
+	if ( ! (mask & OBD_MD_FLATIME) ) 
+		res = (res && (dst->i_atime == src->i_atime));
+	if ( ! (mask & OBD_MD_FLMTIME) ) 
+		res = (res && (dst->i_mtime == src->i_mtime));
+	if ( ! (mask & OBD_MD_FLCTIME) ) 
+		res = (res && (dst->i_ctime == src->i_ctime));
+	if ( ! (mask & OBD_MD_FLFLAGS) ) 
+		res = (res && (dst->i_flags == src->i_flags));
+	/* allocation of space */
+	if ( ! (mask & OBD_MD_FLBLOCKS) ) 
+		res = (res && (dst->i_blocks == src->i_blocks));
+	return res;
+}
+
+
+static __inline__ void obd_cpy_appmd(obdattr *dst, obdattr *src)
+{
+	dst->i_mode = src->i_mode;
+	dst->i_uid = src->i_uid;
+	dst->i_gid = src->i_gid;
+	dst->i_size = src->i_size;
+	dst->i_atime = src->i_atime;
+	dst->i_mtime = src->i_mtime;
+	dst->i_ctime = src->i_ctime;
+	dst->i_flags = src->i_flags;
+	/* allocation of space */
+	dst->i_blocks = src->i_blocks;
 }
 
 #endif /* __LINUX_CLASS_OBD_H */

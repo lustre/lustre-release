@@ -1,8 +1,7 @@
 #ifndef _OBD_SNAP
 #define _OBD_SNAP
 
-#define OBD_SNAP_MAGIC 0x47224722
-
+#define OBD_SNAP_MAGIC 0xfffffff3   /* an unlikely block number */
 
 /* maximum number of snapshot tables we maintain in the kernel */
 #define SNAP_MAX_TABLES 8
@@ -10,13 +9,14 @@
 
 /* maximum number of snapshots per device 
    must fit in "u" area of struct inode */
-#define SNAP_MAX  8 
+#define SNAP_MAX  (EXT2_N_BLOCKS-1)
 
 
 /* ioctls for manipulating snapshots 40 - 60 */
 #define OBD_SNAP_SETTABLE	_IOWR('f', 40, long)
 #define OBD_SNAP_PRINTTABLE	_IOWR('f', 41, long)
-#define OBD_SNAP_RUNIT		_IOWR('f', 42, long)
+#define OBD_SNAP_DELETE	_IOWR('f', 42, long)
+#define OBD_SNAP_RESTORE	_IOWR('f', 43, long)
 
 
 
@@ -66,10 +66,8 @@ struct snap_obd {
 struct snap_object_data {
 	int od_magic;
 	/* id of snaps of object; slot 0 has the current data */
-	unsigned long od_ids[SNAP_MAX + 1]; 
+	unsigned long od_ids[SNAP_MAX];
 };
-
-#define	this_snapidx(obd) (obd->u.snap.snap_index)
 
 void snap_use(int table_no, int snap_index) ;
 void snap_unuse(int table_no, int snap_index) ;

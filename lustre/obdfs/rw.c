@@ -159,27 +159,7 @@ struct page *obdfs_getpage(struct inode *inode, unsigned long offset, int create
 	CDEBUG(D_INODE, "page_cache %p\n", page_cache);
 
 	hash = page_hash(&inode->i_data, offset);
- repeat:
-	CDEBUG(D_INODE, "Finding page\n");
-	IDEBUG(inode);
-
-	page = __find_lock_page(&inode->i_data, offset, hash); 
-	if ( page ) {
-		CDEBUG(D_INODE, "Page found freeing\n");
-		page_cache_free(page_cache);
-	} else {
-		page = page_cache;
-		if ( page->buffers ) {
-			PDEBUG(page, "GETPAGE: buffers bug\n");
-			UnlockPage(page);
-			return NULL;
-		}
-		if (add_to_page_cache_unique(page, &inode->i_data, offset, hash)) {
-			page_cache_release(page);
-			CDEBUG(D_INODE, "Someone raced: try again\n");
-			goto repeat;
-		}
-	}
+	page = grab_cache_page(&inode->i_data, offset);
 
 	PDEBUG(page, "GETPAGE: got page - before reading\n");
 	/* now check if the data in the page is up to date */
@@ -247,9 +227,7 @@ struct inode_operations obdfs_inode_ops = {
 	NULL,           /* get_block */
 	obdfs_readpage,	/* readpage */
 	obdfs_writepage, /* writepage */
-	NULL,		/* flushpage */
 	NULL,		/* truncate */
 	NULL,		/* permission */
-	NULL,		/* smap */
 	NULL            /* revalidate */
 };
