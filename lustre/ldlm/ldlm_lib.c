@@ -1161,3 +1161,18 @@ int target_handle_ping(struct ptlrpc_request *req)
 {
         return lustre_pack_reply(req, 0, NULL, NULL);
 }
+
+void target_committed_to_req(struct ptlrpc_request *req)
+{
+        struct obd_device *obd = req->rq_export->exp_obd;
+
+        if (!obd->obd_no_transno)
+                req->rq_repmsg->last_committed = obd->obd_last_committed;
+        else
+                DEBUG_REQ(D_IOCTL, req,
+                          "not sending last_committed update");
+
+        CDEBUG(D_INFO, "last_committed "LPU64", xid "LPX64"\n",
+               obd->obd_last_committed, req->rq_xid);
+}
+EXPORT_SYMBOL(target_committed_to_req);

@@ -367,7 +367,7 @@ obd_count ost_checksum_bulk(struct ptlrpc_bulk_desc *desc)
 }
 #endif
 
-static int ost_brw_read(struct ptlrpc_request *req)
+static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
 {
         struct ptlrpc_bulk_desc *desc;
         struct niobuf_remote    *remote_nb;
@@ -376,7 +376,6 @@ static int ost_brw_read(struct ptlrpc_request *req)
         struct obd_ioobj        *ioo;
         struct ost_body         *body, *repbody;
         struct l_wait_info       lwi;
-        struct obd_trans_info    oti = { 0 };
         int                      size[1] = { sizeof(*body) };
         int                      comms_error = 0;
         int                      niocount;
@@ -436,7 +435,7 @@ static int ost_brw_read(struct ptlrpc_request *req)
                 GOTO(out_local, rc = -ENOMEM);
 
         rc = obd_preprw(OBD_BRW_READ, req->rq_export, &body->oa, 1,
-                        ioo, npages, pp_rnb, local_nb, &oti);
+                        ioo, npages, pp_rnb, local_nb, oti);
         if (rc != 0)
                 GOTO(out_bulk, rc);
 
@@ -498,7 +497,7 @@ static int ost_brw_read(struct ptlrpc_request *req)
 
         /* Must commit after prep above in all cases */
         rc = obd_commitrw(OBD_BRW_READ, req->rq_export, &body->oa, 1,
-                          ioo, npages, local_nb, &oti, rc);
+                          ioo, npages, local_nb, oti, rc);
 
         if (rc == 0) {
                 repbody = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*repbody));
@@ -520,9 +519,11 @@ static int ost_brw_read(struct ptlrpc_request *req)
         LASSERT(rc <= 0);
         if (rc == 0) {
                 req->rq_status = nob;
+                target_committed_to_req(req);
                 ptlrpc_reply(req);
         } else if (!comms_error) {
                 /* only reply if comms OK */
+                target_committed_to_req(req);
                 req->rq_status = rc;
                 ptlrpc_error(req);
         } else {
@@ -717,9 +718,11 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
  out:
         if (rc == 0) {
                 oti_to_request(oti, req);
+                target_committed_to_req(req);
                 rc = ptlrpc_reply(req);
         } else if (!comms_error) {
                 /* Only reply if there was no comms problem with bulk */
+                target_committed_to_req(req);
                 req->rq_status = rc;
                 ptlrpc_error(req);
         } else {
@@ -808,11 +811,13 @@ static int ost_san_brw(struct ptlrpc_request *req, int cmd)
 out_pp_rnb:
         free_per_page_niobufs(npages, pp_rnb, remote_nb);
 out:
+        target_committed_to_req(req);
         if (rc) {
                 req->rq_status = rc;
                 ptlrpc_error(req);
-        } else
+        } else {
                 ptlrpc_reply(req);
+        }
 
         return rc;
 }
@@ -992,7 +997,7 @@ static int ost_handle(struct ptlrpc_request *req)
         case OST_READ:
                 CDEBUG(D_INODE, "read\n");
                 OBD_FAIL_RETURN(OBD_FAIL_OST_BRW_NET, 0);
-                rc = ost_brw_read(req);
+                rc = ost_brw_read(req, oti);
                 LASSERT(current->journal_info == NULL);
                 /* ost_brw sends its own replies */
                 RETURN(rc);
@@ -1089,17 +1094,8 @@ static int ost_handle(struct ptlrpc_request *req)
 
         EXIT;
         /* If we're DISCONNECTing, the export_data is already freed */
-        if (!rc && req->rq_reqmsg->opc != OST_DISCONNECT) {
-                if (!obd->obd_no_transno) {
-                        req->rq_repmsg->last_committed =
-                                obd->obd_last_committed;
-                } else {
-                        DEBUG_REQ(D_IOCTL, req,
-                                  "not sending last_committed update");
-                }
-                CDEBUG(D_INFO, "last_committed "LPU64", xid "LPX64"\n",
-                       obd->obd_last_committed, req->rq_xid);
-        }
+        if (!rc && req->rq_reqmsg->opc != OST_DISCONNECT)
+                target_committed_to_req(req);
 
 out:
         if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_LAST_REPLAY) {

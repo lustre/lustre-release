@@ -1331,17 +1331,7 @@ int mds_handle(struct ptlrpc_request *req)
                 req->rq_repmsg->last_xid =
                         le64_to_cpu(med->med_mcd->mcd_last_xid);
 
-                if (!obd->obd_no_transno) {
-                        req->rq_repmsg->last_committed =
-                                obd->obd_last_committed;
-                } else {
-                        DEBUG_REQ(D_IOCTL, req,
-                                  "not sending last_committed update");
-                }
-                CDEBUG(D_INFO, "last_transno "LPU64", last_committed "LPU64
-                       ", xid "LPU64"\n",
-                       mds->mds_last_transno, obd->obd_last_committed,
-                       req->rq_xid);
+                target_committed_to_req(req);
         }
  out:
 

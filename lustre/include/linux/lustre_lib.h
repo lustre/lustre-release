@@ -81,6 +81,8 @@ void target_destroy_export(struct obd_export *exp);
 int target_handle_reconnect(struct lustre_handle *conn, struct obd_export *exp,
                             struct obd_uuid *cluuid);
 int target_handle_ping(struct ptlrpc_request *req);
+void target_committed_to_req(struct ptlrpc_request *req);
+
 void target_cancel_recovery_timer(struct obd_device *obd);
 
 #define OBD_RECOVERY_TIMEOUT (obd_timeout * 5 * HZ / 2) /* *waves hands* */
@@ -706,8 +708,6 @@ do {                                                                           \
         __ret;                                                                 \
 })
 
-#endif /* _LUSTRE_LIB_H */
-
 #define LMD_MAGIC 0xbdacbdac
 
 #define lmd_bad_magic(LMDP)                                             \
@@ -726,4 +726,6 @@ do {                                                                           \
         }                                                               \
         _ret__;                                                         \
 })
+
+#endif /* _LUSTRE_LIB_H */
 
