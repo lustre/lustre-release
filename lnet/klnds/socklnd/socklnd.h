@@ -61,6 +61,7 @@
 
 #include <linux/kp30.h>
 #include <linux/portals_compat25.h>
+#include <linux/kpr.h>
 #include <portals/p30.h>
 #include <portals/lib-p30.h>
 #include <portals/socknal.h>
@@ -157,6 +158,7 @@ typedef struct {
 
         nal_cb_t         *ksnd_nal_cb;
         spinlock_t        ksnd_nal_cb_lock;     /* lib cli/sti lock */
+        wait_queue_head_t ksnd_yield_waitq;     /* where yield waits */
 
         atomic_t          ksnd_nthreads;        /* # live threads */
         int               ksnd_shuttingdown;    /* tell threads to exit */
