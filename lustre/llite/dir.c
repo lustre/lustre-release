@@ -407,7 +407,7 @@ done:
         filp->f_pos = (n << PAGE_CACHE_SHIFT) | offset;
         filp->f_version = inode->i_version;
         UPDATE_ATIME(inode);
-        return 0;
+        RETURN(0);
 }
 
 /*
