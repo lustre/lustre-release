@@ -1193,6 +1193,7 @@ static int mds_setup(struct obd_device *obddev, obd_count len, void *buf)
                 GOTO(err_kfree, rc);
         }
 
+        CERROR("%s: mnt is %p\n", data->ioc_inlbuf1, mnt);
         mds->mds_sb = mnt->mnt_root->d_inode->i_sb;
         if (!mds->mds_sb)
                 GOTO(err_put, rc = -ENODEV);
