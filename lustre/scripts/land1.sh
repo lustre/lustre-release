@@ -107,4 +107,4 @@ else
 fi
 echo "done"
 
-echo "Test, commit and then run land2.sh (no arguments)"
+echo "Build, test, commit and then run land2.sh (no arguments)"
