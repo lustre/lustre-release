@@ -43,7 +43,7 @@
 #include <linux/lprocfs_status.h>
 #include <linux/lustre_fsfilt.h>
 
-#ifdef LPROCFS
+#if defined(LPROCFS) && defined(__KERNEL__)
 
 struct proc_dir_entry *lprocfs_srch(struct proc_dir_entry *head,
                                     const char *name)

@@ -38,7 +38,7 @@
 /* obd.c */
 int do_disconnect(char *func, int verbose);
 int obd_initialize(int argc, char **argv);
-void obd_cleanup(int argc, char **argv);
+void obd_finalize(int argc, char **argv);
 
 
 int jt_opt_device(int argc, char **argv);
