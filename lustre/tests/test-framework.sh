@@ -33,7 +33,7 @@ init_test_env() {
     export LCONF=${LCONF:-"lconf"}
     export LMC=${LMC:-"lmc"}
     export LCTL=${LCTL:-"lctl"}
-    export CHECKSTAT="${CHECKSTAT:-checkstat} -v"
+    export CHECKSTAT="${CHECKSTAT:-checkstat} "
 
     # Paths on remote nodes, if different 
     export RLUSTRE=${RLUSTRE:-$LUSTRE}
@@ -113,7 +113,7 @@ reboot_facet() {
 wait_for_host() {
    HOST=$1
    check_network  $HOST 900
-   while ! $PDSH $HOST "$CHECKSTAT -t dir $LUSTRE"; do sleep 5; done
+   while ! do_node $HOST "$CHECKSTAT -t dir $LUSTRE"; do sleep 5; done
 }
 
 wait_for() {
@@ -125,7 +125,7 @@ wait_for() {
 client_df() {
     # not every config has many clients
     if [ ! -z "$CLIENTS" ]; then
-	$PDSH $CLIENTS "df $MOUNT" | dshbak -c
+	$PDSH $CLIENTS "df $MOUNT" > /dev/null
     fi
 }
 
