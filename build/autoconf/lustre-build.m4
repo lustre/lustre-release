@@ -20,6 +20,7 @@ AC_DEFUN([LB_PATH_LIBSYSIO],
 			[set path to libsysio source (default is included libsysio)]),
 	[],[with_sysio='yes'])
 AC_MSG_CHECKING([location of libsysio])
+enable_sysio="$with_sysio"
 case x$with_sysio in
 	xyes)
 		AC_MSG_RESULT([internal])
@@ -39,6 +40,7 @@ case x$with_sysio in
 			AC_MSG_ERROR([A complete (built) external libsysio was not found.])
 		])
 		SYSIO=$with_sysio
+		enable_sysio="yes"
 		;;
 esac
 AC_SUBST(LIBSYSIO_SUBDIR)
@@ -124,7 +126,7 @@ AC_ARG_ENABLE([modules],
 			[disable building of Lustre kernel modules]),
 	[],[
 		case $target_os in
-			linux* | darwin)
+			linux* | darwin*)
 				enable_modules='yes'
 				;;
 			*)
@@ -137,10 +139,12 @@ AC_MSG_RESULT([$enable_modules ($target_os)])
 if test x$enable_modules = xyes ; then
 	case $target_os in
 		linux*)
-			LB_PROG_LINUX
+			LC_LINUX_SUPPORTED([LB_PROG_LINUX],
+				[AC_MSG_ERROR([Modules are not supported on $target_os])])
 			;;
-		darwin)
-			LB_PROG_DARWIN
+		darwin*)
+			LC_DARWIN_SUPPORTED([LB_PROG_DARWIN],
+				[AC_MSG_ERROR([Modules are not supported on $target_os])])
 			;;
 		*)
 			AC_MSG_ERROR([Modules are not supported on $target_os])
@@ -276,7 +280,6 @@ LC_PATH_DEFAULTS
 #
 AC_DEFUN([LB_PROG_CC],
 [AC_PROG_RANLIB
-AC_PROG_CC
 AC_MSG_CHECKING([for buggy compiler])
 CC_VERSION=`$CC -v 2>&1 | grep "^gcc version"`
 bad_cc() {
