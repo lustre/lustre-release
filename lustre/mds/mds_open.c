@@ -118,9 +118,9 @@ int mds_open(struct mds_update_record *rec, int offset,
                 GOTO(out_unlock, rc = PTR_ERR(dchild));
         }
 
-        if (dchild->d_inode) 
+        if (dchild->d_inode)
                 rep->lock_policy_res1 |= IT_OPEN_POS;
-        else 
+        else
                 rep->lock_policy_res1 |= IT_OPEN_NEG;
 
         /* Negative dentry, just create the file */
@@ -165,8 +165,7 @@ int mds_open(struct mds_update_record *rec, int offset,
 
         rc = mds_pack_md(obd, req->rq_repmsg, 3, body, dchild->d_inode);
         if (rc) {
-                CERROR("failure to get EA for %ld\n", 
-                       dchild->d_inode->i_ino);
+                CERROR("failure to get EA for %ld\n", dchild->d_inode->i_ino);
                 GOTO(out_ldput, req->rq_status = rc);
         }
 
