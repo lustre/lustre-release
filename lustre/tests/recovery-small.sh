@@ -3,23 +3,30 @@
 set -ex
 
 LUSTRE=${LUSTRE:-`dirname $0`/..}
+LTESTDIR=${LTESTDIR:-$LUSTRE/../ltest}
 PATH=$PATH:$LUSTRE/utils:$LUSTRE/tests
 
-. $LUSTRE/../ltest/functional/llite/common/common.sh
+. $LTESTDIR/functional/llite/common/common.sh
+
+# Allow us to override the setup if we already have a mounted system by
+# setting SETUP=" " and CLEANUP=" "
+SETUP=${SETUP:-"setup"}
+CLEANUP=${CLEANUP:-"cleanup"}
 
 PDSH='pdsh -S -w'
 
 # XXX I wish all this stuff was in some default-config.sh somewhere
 MDSNODE=${MDSNODE:-mdev6}
 OSTNODE=${OSTNODE:-mdev7}
-CLIENT=${CLIENTNODE:-mdev8}
+CLIENT=${CLIENT:-mdev8}
 NETWORKTYPE=${NETWORKTYPE:-tcp}
 MOUNTPT=${MOUNTPT:-/mnt/lustre}
-CONFIG=recovery-small.xml
-MDSDEV=/tmp/mds
-OSTDEV=/tmp/ost
-MDSSIZE=100000
-OSTSIZE=100000
+CONFIG=${CONFIG:-recovery-small.xml}
+MDSDEV=${MDSDEV:-/tmp/mds}
+OSTDEV=${OSTDEV:-/tmp/ost}
+MDSSIZE=${MDSSIZE:-100000}
+OSTSIZE=${OSTSIZE:-100000}
+UPCALL=${UPCALL:-$LTESTDIR/functional/llite/09/client-upcall.sh}
 
 do_mds() {
     $PDSH $MDSNODE "PATH=\$PATH:$LUSTRE/utils:$LUSTRE/tests; cd $PWD; $@"
@@ -89,7 +96,7 @@ setup() {
     start_ost ${REFORMAT:---reformat}
     # XXX we should write our own upcall, when we move this somewhere better.
     mount_client --timeout=${TIMEOUT:-5} \
-        --recovery_upcall=$PWD/../../ltest/functional/llite/09/client-upcall.sh
+        --recovery_upcall=$UPCALL
 }
 
 cleanup() {
@@ -114,7 +121,8 @@ if [ ! -z "$ONLY" ]; then
     exit $?
 fi
 
-setup
+$SETUP
+
 drop_request "mcreate /mnt/lustre/1"
 drop_reply "mcreate /mnt/lustre/2"
 # replay "mcreate /mnt/lustre/3"
@@ -140,5 +148,4 @@ drop_reply "mlink /mnt/lustre/renamed-again /mnt/lustre/link2"
 drop_request "munlink /mnt/lustre/link1"
 drop_reply "munlink /mnt/lustre/link2"
 
-
-cleanup
+$CLEANUP
