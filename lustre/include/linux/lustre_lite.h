@@ -184,9 +184,21 @@ void ll_sysctl_clean(void);
 
 #endif /* __KERNEL__ */
 
+#include <asm/types.h>
+
 #define LL_IOC_GETFLAGS                 _IOR ('f', 151, long)
 #define LL_IOC_SETFLAGS                 _IOW ('f', 152, long)
 #define LL_IOC_CLRFLAGS                 _IOW ('f', 153, long)
+#define LL_IOC_LOV_SETSTRIPE            _IOW ('f', 154, long)
+
+struct lov_user_md {
+        __u64 lum_stripe_size;
+        __u32 lum_stripe_pattern;
+        __u32 lum_stripe_offset;
+        __u32 lum_stripe_count;
+};
+
+#define O_LOV_DELAY_CREATE 0100000000  /* hopefully this does not conflict */
 
 #define LL_FILE_IGNORE_LOCK             0x00000001
 
