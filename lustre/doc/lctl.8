@@ -226,13 +226,16 @@ Close the lctl session.
 
 .SH OPTIONS
 The following options can be used to invoke lctl. 
-.PP
+.TP
 .B --device 
 The device number to be used for the operation. The value of devno is an integer, normally found by calling lctl name2dev on a device name. 
+.TP
 .B --threads 
 How many threads should be forked doing the command specified. The numthreads variable is a strictly positive integer indicating how many threads should be started. The devno option is used as above.
+.TP
 .B --ignore_errors | ignore_errors 
 Ignore errors during script processing
+.TP
 .B dump 
 Save ioctls to a file 
 .SH EXAMPLES
