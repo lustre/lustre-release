@@ -2,20 +2,45 @@
 
 config=${1:-mcr.xml}
 
-LMC=../utils/lmc
+LMC="../utils/lmc -m $config"
 
-# create nodes
-${LMC} -o $config --node client --net '*' elan || exit 1
-${LMC} -m $config --node mdev2 --net mdev2 tcp || exit 1
-${LMC} -m $config --router --node mdev3 --net mdev3  tcp || exit 1
-${LMC} -m $config --node mdev3 --net 3  elan || exit 1
+# TCP/IP servers
+SERVERS="ba-ost-1  ba-ost-2"
+ROUTER=mdev3
 
-${LMC} -m $config --node mdev3 --route elan 3 2 25 || exit 2
-${LMC} -m $config --node mdev3 --route tcp mdev3 mdev2 || exit 2
+# Elan clients
+CLIENT_LO=mdev2
+CLIENT_HI=mdev25
 
+PORT=2432
+TCPBUF=1048576
+ 
 
-# configure ost
-${LMC} -m $config --format --node mdev2 --obdtype=obdecho --ost || exit 3
+h2elan () {
+    echo $1 | sed 's/[^0-9]*//g'
+}
 
-# create client config
-${LMC} -m $config --node client --osc  OSC_mdev2 || exit 4
+h2ip () {
+    echo "${1}"
+}
+
+[ -f $config ] && rm $config
+
+# Client node
+${LMC} --node client --net '*' elan || exit 1
+# Router node
+${LMC} --router --node $ROUTER --net `h2ip $ROUTER`  tcp $PORT || exit 1
+${LMC} --node $ROUTER --net `h2elan $ROUTER` elan|| exit 1
+${LMC} --node $ROUTER --route elan `h2elan $ROUTER` `h2elan $CLIENT_LO` `h2elan $CLIENT_HI` || exit 2
+
+for s in $SERVERS
+ do
+   # server node
+   ${LMC} --node $s --net $s tcp $PORT || exit 1
+   # route to server
+   ${LMC} --node $ROUTER --route tcp `h2ip $ROUTER` $s || exit 2
+   # the device on the server
+   ${LMC} --format --node $s --obdtype=obdecho --ost || exit 3
+   # attach to the device on the client (this would normally be a moun)
+   ${LMC} --node client --osc  OSC_$s || exit 4
+done

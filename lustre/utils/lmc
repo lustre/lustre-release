@@ -47,7 +47,7 @@ lmc - lustre configurtion data  manager
 
 """
 
-import sys, getopt, string
+import sys, os, getopt, string
 import xml.dom.minidom
 from xml.dom.ext import PrettyPrint
 
@@ -736,7 +736,10 @@ def main():
 
     if options.has_key('merge'):
         outFile = options['merge']
-        doc = xml.dom.minidom.parse(outFile)
+        if os.access(outFile, os.R_OK):
+            doc = xml.dom.minidom.parse(outFile)
+        else:
+            doc = new_lustre(xml.dom.minidom)
     elif options.has_key('in'):
         doc = xml.dom.minidom.parse(options['in'])
     else:

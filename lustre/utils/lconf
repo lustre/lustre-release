@@ -151,6 +151,8 @@ def panic(*args):
     msg = string.join(map(str,args))
     if not config.noexec():
         raise LconfError(msg)
+    else:
+        print "! " + msg
 
 def log(*args):
     msg = string.join(map(str,args))
@@ -276,18 +278,18 @@ class LCTLInterface:
     # add a route to a range
     def add_route(self, net, gw, lo, hi):
         cmds =  """
-    network %s
-    add_route %s %s %s
-        """ % (net, gw, lo, hi)
+  network %s
+  add_route %s %s %s
+  quit  """ % (net, gw, lo, hi)
         self.run(cmds)
 
     # add a route to a host
     def add_route_host(self, net, uuid, gw, tgt):
         cmds =  """
-    network %s
-    add_uuid %s %s
-    add_route %s %s
-        """ % (net, uuid, tgt, gw, tgt)
+  network %s
+  add_uuid %s %s
+  add_route %s %s
+  quit """ % (net, uuid, tgt, gw, tgt)
         self.run(cmds)
 
     # disconnect one connection
@@ -805,7 +807,10 @@ class OSC(Module):
             lctl.connect(srv.net_type, srv.nid, srv.port, srv.uuid, srv.send_buf, srv.read_buf)
         else:
             r =  find_route(srv)
-            lctl.add_route_host(r[0], srv.uuid, r[1], r[2])
+            if r:
+                lctl.add_route_host(r[0], srv.uuid, r[1], r[2])
+            else:
+                panic ("no route to",  srv.nid)
             
         lctl.newdev(attach="osc %s %s" % (self.name, self.uuid),
                     setup ="%s %s" %(self.obd_uuid, srv.uuid))
