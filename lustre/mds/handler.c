@@ -452,23 +452,6 @@ static int mds_disconnect(struct lustre_handle *conn, int flags)
         pop_ctxt(&saved, &obd->u.mds.mds_ctxt, NULL);
 
         ldlm_cancel_locks_for_export(export);
-        if (export->exp_outstanding_reply) {
-                struct ptlrpc_request *req = export->exp_outstanding_reply;
-                unsigned long          flags;
-
-                /* Fake the ack, so the locks get cancelled. */
-                LBUG ();
-                /* Actually we can't do this because it prevents us knowing
-                 * if the ACK callback ran or not */
-                spin_lock_irqsave (&req->rq_lock, flags);
-                req->rq_want_ack = 0;
-                req->rq_err = 1;
-                wake_up(&req->rq_wait_for_rep);
-                spin_unlock_irqrestore (&req->rq_lock, flags);
-
-                export->exp_outstanding_reply = NULL;
-        }
-
         if (!(flags & OBD_OPT_FAILOVER))
                 mds_client_free(export);
 
