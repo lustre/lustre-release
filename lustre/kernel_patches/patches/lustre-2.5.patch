@@ -1,31 +1,19 @@
-# This is a BitKeeper generated patch for the following project:
-# Project Name: Linux kernel tree
-# This patch format is intended for GNU patch command version 2.5 or higher.
-# This patch includes the following deltas:
-#	           ChangeSet	1.810   -> 1.811  
-#	      kernel/ksyms.c	1.149   -> 1.150  
-#	 fs/driverfs/inode.c	1.52    -> 1.53   
-#	  include/linux/fs.h	1.175   -> 1.176  
-#	include/linux/namei.h	1.3     -> 1.4    
-#	          fs/namei.c	1.56    -> 1.57   
-#	       fs/nfsd/vfs.c	1.44    -> 1.45   
-#	arch/um/kernel/mem.c	1.5     -> 1.6    
-#	  net/unix/af_unix.c	1.29    -> 1.30   
-#	           mm/slab.c	1.33    -> 1.34   
-#	    fs/sysfs/inode.c	1.55    -> 1.56   
-#	include/linux/slab.h	1.13    -> 1.14   
-#	include/linux/dcache.h	1.19    -> 1.20   
-#
-# The following is the BitKeeper ChangeSet Log
-# --------------------------------------------
-# 02/10/20	braam@clusterfs.com	1.811
-# Changes for Lustre
-# --------------------------------------------
-#
-diff -Nru a/arch/um/kernel/mem.c b/arch/um/kernel/mem.c
---- a/arch/um/kernel/mem.c	Sun Dec  8 02:49:38 2002
-+++ b/arch/um/kernel/mem.c	Sun Dec  8 02:49:38 2002
-@@ -656,6 +656,22 @@
+ arch/um/kernel/mem.c   |   18 +++++++++++-
+ fs/namei.c             |   71 +++++++++++++++++++++++++++++++++++--------------
+ fs/nfsd/vfs.c          |    2 -
+ fs/sysfs/inode.c       |    2 -
+ include/linux/dcache.h |   28 +++++++++++++++++++
+ include/linux/fs.h     |   16 ++++++++++-
+ include/linux/namei.h  |    3 +-
+ include/linux/slab.h   |    1 
+ kernel/ksyms.c         |    7 ++++
+ mm/slab.c              |    5 +++
+ net/unix/af_unix.c     |    2 -
+ 11 files changed, 129 insertions(+), 26 deletions(-)
+
+--- uml-2.5.59/arch/um/kernel/mem.c~lustre-2.5	2003-02-10 18:16:21.000000000 +0800
++++ uml-2.5.59-root/arch/um/kernel/mem.c	2003-02-10 18:16:21.000000000 +0800
+@@ -639,6 +639,22 @@ struct page *pte_mem_map(pte_t pte)
  	return(phys_mem_map(pte_val(pte)));
  }
  
@@ -48,7 +36,7 @@ diff -Nru a/arch/um/kernel/mem.c b/arch/um/kernel/mem.c
  struct mem_region *page_region(struct page *page, int *index_out)
  {
  	int i;
-@@ -743,7 +759,7 @@
+@@ -726,7 +742,7 @@ extern unsigned long region_pa(void *vir
  		   (addr <= region->start + region->len))
  			return(mk_phys(addr - region->start, i));
  	}
@@ -57,22 +45,9 @@ diff -Nru a/arch/um/kernel/mem.c b/arch/um/kernel/mem.c
  	return(0);
  }
  
-diff -Nru a/fs/driverfs/inode.c b/fs/driverfs/inode.c
---- a/fs/driverfs/inode.c	Sun Dec  8 02:49:38 2002
-+++ b/fs/driverfs/inode.c	Sun Dec  8 02:49:38 2002
-@@ -523,7 +523,7 @@
- 	qstr.name = name;
- 	qstr.len = strlen(name);
- 	qstr.hash = full_name_hash(name,qstr.len);
--	return lookup_hash(&qstr,parent);
-+	return lookup_hash(&qstr,parent, NULL);
- }
- 
- /**
-diff -Nru a/fs/namei.c b/fs/namei.c
---- a/fs/namei.c	Sun Dec  8 02:49:38 2002
-+++ b/fs/namei.c	Sun Dec  8 02:49:38 2002
-@@ -265,6 +265,9 @@
+--- uml-2.5.59/fs/namei.c~lustre-2.5	2003-02-10 18:16:21.000000000 +0800
++++ uml-2.5.59-root/fs/namei.c	2003-02-10 18:16:21.000000000 +0800
+@@ -265,6 +265,9 @@ int deny_write_access(struct file * file
  
  void path_release(struct nameidata *nd)
  {
@@ -82,7 +57,7 @@ diff -Nru a/fs/namei.c b/fs/namei.c
  	dput(nd->dentry);
  	mntput(nd->mnt);
  }
-@@ -273,10 +276,18 @@
+@@ -273,10 +276,18 @@ void path_release(struct nameidata *nd)
   * Internal lookup() using the new generic dcache.
   * SMP-safe
   */
@@ -102,7 +77,7 @@ diff -Nru a/fs/namei.c b/fs/namei.c
  	if (dentry && dentry->d_op && dentry->d_op->d_revalidate) {
  		if (!dentry->d_op->d_revalidate(dentry, flags) && !d_invalidate(dentry)) {
  			dput(dentry);
-@@ -351,7 +362,7 @@
+@@ -351,7 +362,7 @@ ok:
   * make sure that nobody added the entry to the dcache in the meantime..
   * SMP-safe
   */
@@ -111,7 +86,7 @@ diff -Nru a/fs/namei.c b/fs/namei.c
  {
  	struct dentry * result;
  	struct inode *dir = parent->d_inode;
-@@ -369,7 +380,10 @@
+@@ -369,7 +380,10 @@ static struct dentry * real_lookup(struc
  		struct dentry * dentry = d_alloc(parent, name);
  		result = ERR_PTR(-ENOMEM);
  		if (dentry) {
@@ -123,7 +98,7 @@ diff -Nru a/fs/namei.c b/fs/namei.c
  			if (result)
  				dput(dentry);
  			else {
-@@ -391,6 +405,12 @@
+@@ -391,6 +405,12 @@ static struct dentry * real_lookup(struc
  			dput(result);
  			result = ERR_PTR(-ENOENT);
  		}
@@ -136,7 +111,7 @@ diff -Nru a/fs/namei.c b/fs/namei.c
  	}
  	return result;
  }
-@@ -534,7 +554,7 @@
+@@ -534,7 +554,7 @@ dcache_miss:
  	unlock_nd(nd);
  
  need_lookup:
@@ -145,7 +120,7 @@ diff -Nru a/fs/namei.c b/fs/namei.c
  	if (IS_ERR(dentry))
  		goto fail;
  	mntget(mnt);
-@@ -684,7 +704,7 @@
+@@ -684,7 +704,7 @@ int link_path_walk(const char * name, st
  			nd->dentry = next.dentry;
  		}
  		err = -ENOTDIR; 
@@ -154,7 +129,7 @@ diff -Nru a/fs/namei.c b/fs/namei.c
  			break;
  		continue;
  		/* here ends the main loop */
-@@ -737,7 +757,8 @@
+@@ -737,7 +757,8 @@ last_component:
  			break;
  		if (lookup_flags & LOOKUP_DIRECTORY) {
  			err = -ENOTDIR; 
@@ -164,7 +139,7 @@ diff -Nru a/fs/namei.c b/fs/namei.c
  				break;
  		}
  		goto return_base;
-@@ -886,7 +907,8 @@
+@@ -886,7 +907,8 @@ int path_lookup(const char *name, unsign
   * needs parent already locked. Doesn't follow mounts.
   * SMP-safe.
   */
@@ -174,7 +149,7 @@ diff -Nru a/fs/namei.c b/fs/namei.c
  {
  	struct dentry * dentry;
  	struct inode *inode;
-@@ -909,13 +931,16 @@
+@@ -909,13 +931,16 @@ struct dentry * lookup_hash(struct qstr 
  			goto out;
  	}
  
@@ -192,8 +167,8 @@ diff -Nru a/fs/namei.c b/fs/namei.c
 +                        dentry = inode->i_op->lookup(inode, new);
  		if (!dentry) {
  			dentry = new;
- 			security_ops->inode_post_lookup(inode, dentry);
-@@ -927,7 +952,7 @@
+ 			security_inode_post_lookup(inode, dentry);
+@@ -927,7 +952,7 @@ out:
  }
  
  /* SMP-safe */
@@ -202,7 +177,7 @@ diff -Nru a/fs/namei.c b/fs/namei.c
  {
  	unsigned long hash;
  	struct qstr this;
-@@ -947,11 +972,16 @@
+@@ -947,11 +972,16 @@ struct dentry * lookup_one_len(const cha
  	}
  	this.hash = end_name_hash(hash);
  
@@ -220,7 +195,7 @@ diff -Nru a/fs/namei.c b/fs/namei.c
  /*
   *	namei()
   *
-@@ -1268,7 +1298,7 @@
+@@ -1268,7 +1298,7 @@ int open_namei(const char * pathname, in
  
  	dir = nd->dentry;
  	down(&dir->d_inode->i_sem);
@@ -229,7 +204,7 @@ diff -Nru a/fs/namei.c b/fs/namei.c
  
  do_last:
  	error = PTR_ERR(dentry);
-@@ -1370,7 +1400,7 @@
+@@ -1371,7 +1401,7 @@ do_link:
  	}
  	dir = nd->dentry;
  	down(&dir->d_inode->i_sem);
@@ -238,7 +213,7 @@ diff -Nru a/fs/namei.c b/fs/namei.c
  	putname(nd->last.name);
  	goto do_last;
  }
-@@ -1384,7 +1414,7 @@
+@@ -1385,7 +1415,7 @@ static struct dentry *lookup_create(stru
  	dentry = ERR_PTR(-EEXIST);
  	if (nd->last_type != LAST_NORM)
  		goto fail;
@@ -247,7 +222,7 @@ diff -Nru a/fs/namei.c b/fs/namei.c
  	if (IS_ERR(dentry))
  		goto fail;
  	if (!is_dir && nd->last.name[nd->last.len] && !dentry->d_inode)
-@@ -1614,7 +1644,7 @@
+@@ -1617,7 +1647,7 @@ asmlinkage long sys_rmdir(const char * p
  			goto exit1;
  	}
  	down(&nd.dentry->d_inode->i_sem);
@@ -256,7 +231,7 @@ diff -Nru a/fs/namei.c b/fs/namei.c
  	error = PTR_ERR(dentry);
  	if (!IS_ERR(dentry)) {
  		error = vfs_rmdir(nd.dentry->d_inode, dentry);
-@@ -1675,7 +1705,7 @@
+@@ -1677,7 +1707,7 @@ asmlinkage long sys_unlink(const char * 
  	if (nd.last_type != LAST_NORM)
  		goto exit1;
  	down(&nd.dentry->d_inode->i_sem);
@@ -265,7 +240,7 @@ diff -Nru a/fs/namei.c b/fs/namei.c
  	error = PTR_ERR(dentry);
  	if (!IS_ERR(dentry)) {
  		/* Why not before? Because we want correct error value */
-@@ -1949,7 +1979,8 @@
+@@ -1951,7 +1981,8 @@ int vfs_rename_other(struct inode *old_d
  }
  
  int vfs_rename(struct inode *old_dir, struct dentry *old_dentry,
@@ -275,7 +250,7 @@ diff -Nru a/fs/namei.c b/fs/namei.c
  {
  	int error;
  	int is_dir = S_ISDIR(old_dentry->d_inode->i_mode);
-@@ -2020,7 +2051,7 @@
+@@ -2022,7 +2053,7 @@ static inline int do_rename(const char *
  
  	trap = lock_rename(new_dir, old_dir);
  
@@ -284,7 +259,7 @@ diff -Nru a/fs/namei.c b/fs/namei.c
  	error = PTR_ERR(old_dentry);
  	if (IS_ERR(old_dentry))
  		goto exit3;
-@@ -2040,7 +2071,7 @@
+@@ -2042,7 +2073,7 @@ static inline int do_rename(const char *
  	error = -EINVAL;
  	if (old_dentry == trap)
  		goto exit4;
@@ -293,7 +268,7 @@ diff -Nru a/fs/namei.c b/fs/namei.c
  	error = PTR_ERR(new_dentry);
  	if (IS_ERR(new_dentry))
  		goto exit4;
-@@ -2050,7 +2081,7 @@
+@@ -2052,7 +2083,7 @@ static inline int do_rename(const char *
  		goto exit5;
  
  	error = vfs_rename(old_dir->d_inode, old_dentry,
@@ -302,10 +277,9 @@ diff -Nru a/fs/namei.c b/fs/namei.c
  exit5:
  	dput(new_dentry);
  exit4:
-diff -Nru a/fs/nfsd/vfs.c b/fs/nfsd/vfs.c
---- a/fs/nfsd/vfs.c	Sun Dec  8 02:49:38 2002
-+++ b/fs/nfsd/vfs.c	Sun Dec  8 02:49:38 2002
-@@ -1292,7 +1292,7 @@
+--- uml-2.5.59/fs/nfsd/vfs.c~lustre-2.5	2003-02-10 18:16:21.000000000 +0800
++++ uml-2.5.59-root/fs/nfsd/vfs.c	2003-02-10 18:16:21.000000000 +0800
+@@ -1337,7 +1337,7 @@ nfsd_rename(struct svc_rqst *rqstp, stru
  			err = nfserr_perm;
  	} else
  #endif
@@ -314,10 +288,9 @@ diff -Nru a/fs/nfsd/vfs.c b/fs/nfsd/vfs.c
  	if (!err && EX_ISSYNC(tfhp->fh_export)) {
  		nfsd_sync_dir(tdentry);
  		nfsd_sync_dir(fdentry);
-diff -Nru a/fs/sysfs/inode.c b/fs/sysfs/inode.c
---- a/fs/sysfs/inode.c	Sun Dec  8 02:49:39 2002
-+++ b/fs/sysfs/inode.c	Sun Dec  8 02:49:39 2002
-@@ -471,7 +471,7 @@
+--- uml-2.5.59/fs/sysfs/inode.c~lustre-2.5	2003-02-10 18:16:21.000000000 +0800
++++ uml-2.5.59-root/fs/sysfs/inode.c	2003-02-10 18:16:21.000000000 +0800
+@@ -539,7 +539,7 @@ static struct dentry * get_dentry(struct
  	qstr.name = name;
  	qstr.len = strlen(name);
  	qstr.hash = full_name_hash(name,qstr.len);
@@ -325,36 +298,39 @@ diff -Nru a/fs/sysfs/inode.c b/fs/sysfs/inode.c
 +	return lookup_hash(&qstr,parent,NULL);
  }
  
- /**
-diff -Nru a/include/linux/dcache.h b/include/linux/dcache.h
---- a/include/linux/dcache.h	Sun Dec  8 02:49:39 2002
-+++ b/include/linux/dcache.h	Sun Dec  8 02:49:39 2002
-@@ -9,6 +9,24 @@
- #include <linux/spinlock.h>
- #include <asm/page.h>			/* for BUG() */
  
-+#define IT_OPEN  (1)
-+#define IT_CREAT  (1<<1)
-+#define IT_MKDIR  (1<<2)
-+#define IT_LINK  (1<<3)
-+#define IT_LINK2  (1<<4)
-+#define IT_SYMLINK  (1<<5)
-+#define IT_UNLINK  (1<<6)
-+#define IT_RMDIR  (1<<7)
-+#define IT_RENAME  (1<<8)
-+#define IT_RENAME2  (1<<9)
-+#define IT_READDIR  (1<<10)
-+#define IT_GETATTR  (1<<11)
-+#define IT_SETATTR  (1<<12)
-+#define IT_READLINK  (1<<13)
-+#define IT_MKNOD  (1<<14)
-+#define IT_LOOKUP  (1<<15)
+--- uml-2.5.59/include/linux/dcache.h~lustre-2.5	2003-02-10 18:16:21.000000000 +0800
++++ uml-2.5.59-root/include/linux/dcache.h	2003-02-17 22:29:49.000000000 +0800
+@@ -11,6 +11,28 @@
+ 
+ struct vfsmount;
+ 
++#define IT_OPEN     (1)
++#define IT_CREAT    (1<<1)
++#define IT_READDIR  (1<<2)
++#define IT_GETATTR  (1<<3)
++#define IT_SETATTR  (1<<4)
++#define IT_TRUNC    (1<<5)
++#define IT_READLINK (1<<6)
++#define IT_LOOKUP   (1<<7)
++
++struct lookup_intent {
++       int it_op;
++       int it_mode;
++       int it_flags;
++       int it_disposition;
++       int it_status;
++       struct iattr *it_iattr;
++       __u64 it_lock_handle[2];
++       int it_lock_mode;
++       void *it_data;
++};
 +
 +
  /*
   * linux/include/linux/dcache.h
   *
-@@ -30,6 +48,8 @@
+@@ -32,6 +54,8 @@ struct qstr {
  	unsigned int hash;
  };
  
@@ -363,7 +339,7 @@ diff -Nru a/include/linux/dcache.h b/include/linux/dcache.h
  struct dentry_stat_t {
  	int nr_dentry;
  	int nr_unused;
-@@ -79,6 +99,7 @@
+@@ -81,6 +105,7 @@ struct dentry {
  	struct list_head d_subdirs;	/* our children */
  	struct list_head d_alias;	/* inode alias list */
  	int d_mounted;
@@ -371,7 +347,7 @@ diff -Nru a/include/linux/dcache.h b/include/linux/dcache.h
  	struct qstr d_name;
  	unsigned long d_time;		/* used by d_revalidate */
  	struct dentry_operations  *d_op;
-@@ -96,6 +117,8 @@
+@@ -100,6 +125,8 @@ struct dentry_operations {
  	int (*d_delete)(struct dentry *);
  	void (*d_release)(struct dentry *);
  	void (*d_iput)(struct dentry *, struct inode *);
@@ -380,10 +356,17 @@ diff -Nru a/include/linux/dcache.h b/include/linux/dcache.h
  };
  
  /* the dentry parameter passed to d_hash and d_compare is the parent
-diff -Nru a/include/linux/fs.h b/include/linux/fs.h
---- a/include/linux/fs.h	Sun Dec  8 02:49:38 2002
-+++ b/include/linux/fs.h	Sun Dec  8 02:49:38 2002
-@@ -700,7 +700,7 @@
+@@ -139,6 +166,7 @@ d_iput:		no		no		yes
+       */
+ 
+ #define DCACHE_REFERENCED	0x0008  /* Recently used, don't discard. */
++#define DCACHE_LUSTRE_INVALID  	0x0010  /* Lustre invalidated */
+ 
+ extern spinlock_t dcache_lock;
+ extern rwlock_t dparent_lock;
+--- uml-2.5.59/include/linux/fs.h~lustre-2.5	2003-02-10 18:16:21.000000000 +0800
++++ uml-2.5.59-root/include/linux/fs.h	2003-02-17 23:45:08.000000000 +0800
+@@ -676,7 +676,7 @@ extern int vfs_symlink(struct inode *, s
  extern int vfs_link(struct dentry *, struct inode *, struct dentry *);
  extern int vfs_rmdir(struct inode *, struct dentry *);
  extern int vfs_unlink(struct inode *, struct dentry *);
@@ -392,45 +375,47 @@ diff -Nru a/include/linux/fs.h b/include/linux/fs.h
  
  /*
   * File types
-@@ -769,6 +769,8 @@
+@@ -762,16 +762,29 @@ struct file_operations {
  struct inode_operations {
  	int (*create) (struct inode *,struct dentry *,int);
  	struct dentry * (*lookup) (struct inode *,struct dentry *);
 +	struct dentry * (*lookup2) (struct inode *,struct dentry *, 
 +                                    struct lookup_intent *);
  	int (*link) (struct dentry *,struct inode *,struct dentry *);
++	int (*link2) (struct inode *,struct inode *, const char *, int);
  	int (*unlink) (struct inode *,struct dentry *);
++	int (*unlink2) (struct inode *, const char *, int);
  	int (*symlink) (struct inode *,struct dentry *,const char *);
-@@ -995,6 +997,7 @@
++	int (*symlink2) (struct inode *, const char *, int, const char *);
+ 	int (*mkdir) (struct inode *,struct dentry *,int);
++	int (*mkdir2) (struct inode *, const char *, int,int);
+ 	int (*rmdir) (struct inode *,struct dentry *);
++	int (*rmdir2) (struct inode *, const char *, int);
+ 	int (*mknod) (struct inode *,struct dentry *,int,dev_t);
++	int (*mknod2) (struct inode *, const char *, int,int,int);
+ 	int (*rename) (struct inode *, struct dentry *,
+ 			struct inode *, struct dentry *);
++	int (*rename2) (struct inode *, struct inode *,
++			const char *oldname, int oldlen,
++			const char *newname, int newlen);
+ 	int (*readlink) (struct dentry *, char *,int);
+ 	int (*follow_link) (struct dentry *, struct nameidata *);
++	int (*follow_link2) (struct dentry *, struct nameidata *,
++				struct lookup_intent *it);
+ 	void (*truncate) (struct inode *);
+ 	int (*permission) (struct inode *, int);
+ 	int (*setattr) (struct dentry *, struct iattr *);
+@@ -987,6 +1000,7 @@ extern int register_filesystem(struct fi
  extern int unregister_filesystem(struct file_system_type *);
  extern struct vfsmount *kern_mount(struct file_system_type *);
  extern int may_umount(struct vfsmount *);
 +struct vfsmount *do_kern_mount(const char *type, int flags, char *name, void *data);
  extern long do_mount(char *, char *, char *, unsigned long, void *);
  
- #define kern_umount mntput
-diff -Nru a/include/linux/namei.h b/include/linux/namei.h
---- a/include/linux/namei.h	Sun Dec  8 02:49:38 2002
-+++ b/include/linux/namei.h	Sun Dec  8 02:49:38 2002
-@@ -5,6 +5,17 @@
- 
- struct vfsmount;
- 
-+struct lookup_intent {
-+	int it_op;
-+	int it_mode;
-+	int it_disposition;
-+	int it_status;
-+	struct iattr *it_iattr;
-+	__u64 it_lock_handle[2];
-+	int it_lock_mode;
-+	void *it_data;
-+};
-+
- struct nameidata {
- 	struct dentry	*dentry;
- 	struct vfsmount *mnt;
-@@ -13,6 +24,7 @@
+ extern int vfs_statfs(struct super_block *, struct statfs *);
+--- uml-2.5.59/include/linux/namei.h~lustre-2.5	2003-02-10 18:16:21.000000000 +0800
++++ uml-2.5.59-root/include/linux/namei.h	2003-02-17 22:29:10.000000000 +0800
+@@ -13,6 +13,7 @@ struct nameidata {
  	int		last_type;
  	struct dentry	*old_dentry;
  	struct vfsmount	*old_mnt;
@@ -438,7 +423,7 @@ diff -Nru a/include/linux/namei.h b/include/linux/namei.h
  };
  
  /*
-@@ -46,7 +58,7 @@
+@@ -46,7 +47,7 @@ extern int FASTCALL(link_path_walk(const
  extern void path_release(struct nameidata *);
  
  extern struct dentry * lookup_one_len(const char *, struct dentry *, int);
@@ -447,10 +432,9 @@ diff -Nru a/include/linux/namei.h b/include/linux/namei.h
  
  extern int follow_down(struct vfsmount **, struct dentry **);
  extern int follow_up(struct vfsmount **, struct dentry **);
-diff -Nru a/include/linux/slab.h b/include/linux/slab.h
---- a/include/linux/slab.h	Sun Dec  8 02:49:39 2002
-+++ b/include/linux/slab.h	Sun Dec  8 02:49:39 2002
-@@ -56,6 +56,7 @@
+--- uml-2.5.59/include/linux/slab.h~lustre-2.5	2003-02-10 18:16:21.000000000 +0800
++++ uml-2.5.59-root/include/linux/slab.h	2003-02-10 18:16:21.000000000 +0800
+@@ -56,6 +56,7 @@ extern int kmem_cache_destroy(kmem_cache
  extern int kmem_cache_shrink(kmem_cache_t *);
  extern void *kmem_cache_alloc(kmem_cache_t *, int);
  extern void kmem_cache_free(kmem_cache_t *, void *);
@@ -458,90 +442,46 @@ diff -Nru a/include/linux/slab.h b/include/linux/slab.h
  extern unsigned int kmem_cache_size(kmem_cache_t *);
  
  extern void *kmalloc(size_t, int);
-diff -Nru a/kernel/ksyms.c b/kernel/ksyms.c
---- a/kernel/ksyms.c	Sun Dec  8 02:49:38 2002
-+++ b/kernel/ksyms.c	Sun Dec  8 02:49:38 2002
-@@ -365,6 +365,13 @@
- EXPORT_SYMBOL(tty_get_baud_rate);
- EXPORT_SYMBOL(do_SAK);
+--- uml-2.5.59/kernel/ksyms.c~lustre-2.5	2003-02-10 18:16:21.000000000 +0800
++++ uml-2.5.59-root/kernel/ksyms.c	2003-02-11 21:19:30.000000000 +0800
+@@ -376,6 +376,7 @@ EXPORT_SYMBOL(unregister_filesystem);
+ EXPORT_SYMBOL(kern_mount);
+ EXPORT_SYMBOL(__mntput);
+ EXPORT_SYMBOL(may_umount);
++EXPORT_SYMBOL(reparent_to_init);
+ 
+ /* executable format registration */
+ EXPORT_SYMBOL(register_binfmt);
+@@ -406,6 +407,12 @@ EXPORT_SYMBOL(request_irq);
+ EXPORT_SYMBOL(free_irq);
+ EXPORT_SYMBOL(irq_stat);
  
 +/* lustre */
-+EXPORT_SYMBOL(panic_notifier_list);
-+//EXPORT_SYMBOL(pagecache_lock_cacheline);
 +EXPORT_SYMBOL(do_kern_mount);
 +EXPORT_SYMBOL(exit_files);
 +EXPORT_SYMBOL(kmem_cache_validate);
 +
- /* filesystem registration */
- EXPORT_SYMBOL(register_filesystem);
- EXPORT_SYMBOL(unregister_filesystem);
-diff -Nru a/mm/slab.c b/mm/slab.c
---- a/mm/slab.c	Sun Dec  8 02:49:39 2002
-+++ b/mm/slab.c	Sun Dec  8 02:49:39 2002
-@@ -1236,6 +1236,59 @@
-  * Called with the cache-lock held.
-  */
++
+ /* waitqueue handling */
+ EXPORT_SYMBOL(add_wait_queue);
+ EXPORT_SYMBOL(add_wait_queue_exclusive);
+--- uml-2.5.59/mm/slab.c~lustre-2.5	2003-02-10 18:16:21.000000000 +0800
++++ uml-2.5.59-root/mm/slab.c	2003-02-11 21:56:47.000000000 +0800
+@@ -1793,6 +1793,11 @@ static inline void __cache_free (kmem_ca
+ 	}
+ }
  
-+extern struct page *check_get_page(unsigned long kaddr);
-+struct page *page_mem_map(struct page *page);
-+static int kmem_check_cache_obj (kmem_cache_t * cachep,
-+				 slab_t *slabp, void * objp)
++int kmem_cache_validate(kmem_cache_t *cachep, void *objp)
 +{
-+	int i;
-+	unsigned int objnr;
-+
-+#if DEBUG
-+	if (cachep->flags & SLAB_RED_ZONE) {
-+		objp -= BYTES_PER_WORD;
-+		if ( *(unsigned long *)objp != RED_MAGIC2)
-+			/* Either write before start, or a double free. */
-+			return 0;
-+		if (*(unsigned long *)(objp+cachep->objsize -
-+				BYTES_PER_WORD) != RED_MAGIC2)
-+			/* Either write past end, or a double free. */
-+			return 0;
-+	}
-+#endif
-+
-+	objnr = (objp-slabp->s_mem)/cachep->objsize;
-+	if (objnr >= cachep->num)
-+		return 0;
-+	if (objp != slabp->s_mem + objnr*cachep->objsize)
-+		return 0;
-+
-+	/* Check slab's freelist to see if this obj is there. */
-+	for (i = slabp->free; i != BUFCTL_END; i = slab_bufctl(slabp)[i]) {
-+		if (i == objnr)
-+			return 0;
-+	}
 +	return 1;
 +}
 +
-+
-+int kmem_cache_validate(kmem_cache_t *cachep, void *objp)
-+{
-+	struct page *page = check_get_page((unsigned long)objp);
-+
-+	if (!page_mem_map(page))
-+		return 0;
-+
-+	if (!PageSlab(page))
-+		return 0;
-+
-+	/* XXX check for freed slab objects ? */
-+	if (!kmem_check_cache_obj(cachep, GET_PAGE_SLAB(page), objp))
-+		return 0;
-+
-+	return (cachep == GET_PAGE_CACHE(page));
-+}
-+
- #if DEBUG
- static int kmem_extra_free_checks (kmem_cache_t * cachep,
- 			slab_t *slabp, void * objp)
-diff -Nru a/net/unix/af_unix.c b/net/unix/af_unix.c
---- a/net/unix/af_unix.c	Sun Dec  8 02:49:38 2002
-+++ b/net/unix/af_unix.c	Sun Dec  8 02:49:38 2002
-@@ -715,7 +715,7 @@
+ /**
+  * kmem_cache_alloc - Allocate an object
+  * @cachep: The cache to allocate from.
+--- uml-2.5.59/net/unix/af_unix.c~lustre-2.5	2003-02-10 18:16:21.000000000 +0800
++++ uml-2.5.59-root/net/unix/af_unix.c	2003-02-10 18:24:55.000000000 +0800
+@@ -719,7 +719,7 @@ static int unix_bind(struct socket *sock
  		/*
  		 * Do the final lookup.
  		 */
@@ -550,3 +490,5 @@ diff -Nru a/net/unix/af_unix.c b/net/unix/af_unix.c
  		err = PTR_ERR(dentry);
  		if (IS_ERR(dentry))
  			goto out_mknod_unlock;
+
+_
