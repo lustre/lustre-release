@@ -322,7 +322,7 @@ static int lov_getattr(struct lustre_handle *conn, struct obdo *oa,
                 tmp.o_id = md->lmd_oinfo[i].loi_id; 
 
                 rc = obd_getattr(&lov->tgts[i].conn, &tmp, NULL);
-                if (!rc) { 
+                if (rc) { 
                         CERROR("Error getattr object %Ld on %d\n",
                                tmp.o_id, i); 
                 }
@@ -361,7 +361,7 @@ static int lov_setattr(struct lustre_handle *conn, struct obdo *oa,
         for (i = 0; i < md->lmd_stripe_count; i++) {
                 /* create data objects with "parent" OA */ 
                 memcpy(&tmp, oa, sizeof(tmp));
-                oa->o_id = md->lmd_oinfo[i].loi_id; 
+                tmp.o_id = md->lmd_oinfo[i].loi_id; 
 
                 rc = obd_setattr(&lov->tgts[i].conn, &tmp, NULL);
                 if (!rc) { 
@@ -517,7 +517,7 @@ static int lov_punch(struct lustre_handle *conn, struct obdo *oa,
                         continue;
                 /* create data objects with "parent" OA */ 
                 memcpy(&tmp, oa, sizeof(tmp));
-                oa->o_id = md->lmd_oinfo[i].loi_id; 
+                tmp.o_id = md->lmd_oinfo[i].loi_id; 
 
                 rc = obd_punch(&lov->tgts[i].conn, &tmp, NULL,
                                starti, endi);
