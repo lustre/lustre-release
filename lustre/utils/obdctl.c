@@ -65,7 +65,7 @@ command_t cmdlist[] = {
 
         /* Session operations */
         {"create", jt_obd_create, 0, "create [count [mode [verbose]]]"},
-        {"destroy", jt_obd_destroy, 0, "destroy <id>"},
+        {"destroy", jt_obd_destroy, 0, "destroy <id> [count [verbose]]"},
         {"getattr", jt_obd_getattr, 0, "getattr <id>"},
         {"setattr", jt_obd_setattr, 0, "setattr <id> <mode>"},
         {"newconn", jt_obd_newconn, 0, "newconn <olduuid> [newuuid]"},

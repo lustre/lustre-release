@@ -878,25 +878,59 @@ int jt_obd_setattr(int argc, char **argv)
 int jt_obd_destroy(int argc, char **argv)
 {
         struct obd_ioctl_data data;
+        struct timeval next_time;
+        __u64 count = 1, next_count;
+        int verbose = 1;
+        __u64 id;
         char *end;
-        int rc;
+        int rc = 0, i;
 
         IOCINIT(data);
-        if (argc != 2)
+        if (argc < 2 || argc > 4)
                 return CMD_HELP;
 
-        data.ioc_obdo1.o_id = strtoull(argv[1], &end, 0);
+        id = strtoull(argv[1], &end, 0);
         if (*end) {
                 fprintf(stderr, "error: %s: invalid objid '%s'\n",
                         cmdname(argv[0]), argv[1]);
                 return CMD_HELP;
         }
-        data.ioc_obdo1.o_mode = S_IFREG | 0644;
+        if (argc > 2) {
+                count = strtoull(argv[2], &end, 0);
+                if (*end) {
+                        fprintf(stderr,
+                                "error: %s: invalid iteration count '%s'\n",
+                                cmdname(argv[0]), argv[2]);
+                        return CMD_HELP;
+                }
+        }
 
-        rc = ioctl(fd, OBD_IOC_DESTROY, &data);
-        if (rc < 0)
-                fprintf(stderr, "error: %s: %s\n", cmdname(argv[0]),
-                        strerror(rc = errno));
+        if (argc > 3) {
+                verbose = get_verbose(argv[0], argv[3]);
+                if (verbose == BAD_VERBOSE)
+                        return CMD_HELP;
+        }
+
+        printf("%s: "LPD64" objects\n", cmdname(argv[0]), count);
+        gettimeofday(&next_time, NULL);
+        next_time.tv_sec -= verbose;
+
+        for (i = 1, next_count = verbose; i <= count; i++, id++) {
+                data.ioc_obdo1.o_id = id;
+                data.ioc_obdo1.o_mode = S_IFREG | 0644;
+
+                rc = ioctl(fd, OBD_IOC_DESTROY, &data);
+                SHMEM_BUMP();
+                if (rc < 0) {
+                        fprintf(stderr, "error: %s: objid "LPX64": %s\n",
+                                cmdname(argv[0]), id, strerror(rc = errno));
+                        break;
+                }
+
+                if (be_verbose(verbose, &next_time, i, &next_count, count))
+                        printf("%s: #%d is object id 0x%Lx\n", cmdname(argv[0]),
+                               i, (long long)data.ioc_obdo1.o_id);
+        }
 
         return rc;
 }
