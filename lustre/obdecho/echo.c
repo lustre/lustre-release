@@ -12,8 +12,8 @@
  * and Andreas Dilger <adilger@clusterfs.com>
  */
 
-static char rcsid[] __attribute ((unused)) = "$Id: echo.c,v 1.45 2002/11/08 18:25:53 adilger Exp $";
-#define OBDECHO_VERSION "$Revision: 1.45 $"
+static char rcsid[] __attribute ((unused)) = "$Id: echo.c,v 1.46 2002/11/08 19:02:41 adilger Exp $";
+#define OBDECHO_VERSION "$Revision: 1.46 $"
 
 #define EXPORT_SYMTAB
 
@@ -272,7 +272,7 @@ int echo_preprw(int cmd, struct lustre_handle *conn, int objcount,
 
         *desc_private = (void *)DESC_PRIV;
 
-        obd_highmem_get(niocount);
+        obd_kmap_get(niocount, 1);
 
         for (i = 0; i < objcount; i++, obj++) {
                 int gfp_mask = (obj->ioo_id & 1) ? GFP_HIGHUSER : GFP_KERNEL;
@@ -321,7 +321,7 @@ preprw_cleanup:
                 __free_pages(r->page, 0);
                 atomic_dec(&obd->u.echo.eo_prep);
         }
-        obd_highmem_put(niocount);
+        obd_kmap_put(niocount);
         memset(res, 0, sizeof(*res) * niocount);
 
         return rc;
@@ -384,7 +384,7 @@ int echo_commitrw(int cmd, struct lustre_handle *conn, int objcount,
                                                  r->offset, obj->ioo_id);
 
                         kunmap(page);
-                        obd_highmem_put(1);
+                        obd_kmap_put(1);
                         __free_pages(page, 0);
                         atomic_dec(&obd->u.echo.eo_prep);
                 }
@@ -400,7 +400,7 @@ commitrw_cleanup:
                 struct page *page = r->page;
 
                 kunmap(page);
-                obd_highmem_put(1);
+                obd_kmap_put(1);
                 __free_pages(page, 0);
                 atomic_dec(&obd->u.echo.eo_prep);
         }

@@ -177,10 +177,10 @@ do {                                                                    \
 } while (0)
 
 #ifdef CONFIG_HIGHMEM
-extern void obd_highmem_get(int count);
-extern void obd_highmem_put(int count);
+extern void obd_kmap_get(int count, int server);
+extern void obd_kmap_put(int count);
 #else
-#define obd_highmem_get(count) do {} while (0)
-#define obd_highmem_put(count) do {} while (0)
+#define obd_kmap_get(count, server) do {} while (0)
+#define obd_kmap_put(count) do {} while (0)
 #endif
 #endif

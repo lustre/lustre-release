@@ -326,7 +326,7 @@ static void unmap_and_decref_bulk_desc(void *data)
                 bulk = list_entry(tmp, struct ptlrpc_bulk_page, bp_link);
 
                 kunmap(bulk->bp_page);
-                obd_highmem_put(1);
+                obd_kmap_put(1);
         }
 
         ptlrpc_bulk_decref(desc);
@@ -413,7 +413,7 @@ static int osc_brw_read(struct lustre_handle *conn, struct lov_stripe_md *lsm,
         xid = ++connection->c_xid_out;       /* single xid for all pages */
         spin_unlock(&connection->c_lock);
 
-        obd_highmem_get(page_count);
+        obd_kmap_get(page_count, 0);
 
         for (mapped = 0; mapped < page_count; mapped++) {
                 struct ptlrpc_bulk_page *bulk = ptlrpc_prep_bulk_page(desc);
@@ -477,7 +477,7 @@ out_req:
 out_unmap:
         while (mapped-- > 0)
                 kunmap(pga[mapped].pg);
-        obd_highmem_put(page_count);
+        obd_kmap_put(page_count);
         OBD_FREE(cb_data, sizeof(*cb_data));
 out_desc:
         ptlrpc_bulk_decref(desc);
@@ -538,7 +538,7 @@ static int osc_brw_write(struct lustre_handle *conn, struct lov_stripe_md *md,
         cb_data->obd_data = local;
         cb_data->obd_size = page_count * sizeof(*local);
 
-        obd_highmem_get(page_count);
+        obd_kmap_get(page_count, 0);
 
         for (mapped = 0; mapped < page_count; mapped++) {
                 local[mapped].addr = kmap(pga[mapped].pg);
@@ -612,7 +612,7 @@ out_unmap:
         while (mapped-- > 0)
                 kunmap(pga[mapped].pg);
 
-        obd_highmem_put(page_count);
+        obd_kmap_put(page_count);
 
         OBD_FREE(local, page_count * sizeof(*local));
 out_cb:
