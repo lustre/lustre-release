@@ -2,9 +2,16 @@
  * vim:expandtab:shiftwidth=8:tabstop=8:
  */
 #ifndef _LIBCFS_H
-
+#define _LIBCFS_H
 
 #define PORTAL_DEBUG
+
+#ifdef __KERNEL__
+# include <linux/time.h>
+#else
+# include <sys/time.h>
+# define do_gettimeofday(tv) gettimeofday(tv, NULL);
+#endif
 
 /* I think this beast is just trying to get cycles_t and get_cycles().
  * this should be in its own header. */
@@ -19,8 +26,6 @@
 #   include <asm/timex.h>
 #  else
 #   include <sys/time.h>
-/* CAVEAT EMPTOR!  the size and type of cycles_t in userspace MUST AGREE
- * with the kernel, otherwise LWT is hosed. */
 typedef unsigned long long cycles_t;
 static inline cycles_t get_cycles(void) 
 {
