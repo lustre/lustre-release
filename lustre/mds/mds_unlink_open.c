@@ -68,9 +68,9 @@ int mds_open_unlink_rename(struct mds_update_record *rec,
         fidlen = ll_fid2str(fidname, dchild->d_inode->i_ino,
                             dchild->d_inode->i_generation);
 
-        CDEBUG(D_ERROR, "pending destroy of %dx open file %s = %s\n",
-               mds_open_orphan_count(dchild->d_inode),
-               rec->ur_name, fidname);
+        CWARN("pending destroy of %dx open file %s = %s\n",
+              mds_open_orphan_count(dchild->d_inode),
+              rec->ur_name, fidname);
 
         pending_child = lookup_one_len(fidname, mds->mds_pending_dir, fidlen);
         if (IS_ERR(pending_child))
