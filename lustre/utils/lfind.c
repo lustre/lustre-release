@@ -11,6 +11,10 @@
 #include <errno.h>
 #include <sys/ioctl.h>
 #include <sys/types.h>
+
+
+#include <liblustre.h>
+#include <linux/obd.h>
 #include <linux/lustre_lib.h>
 #include <linux/lustre_lite.h>
 #include <linux/obd_lov.h>
