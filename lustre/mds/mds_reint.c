@@ -30,6 +30,7 @@
 #define DEBUG_SUBSYSTEM S_MDS
 
 #include <linux/obd_support.h>
+#include <linux/obd_class.h>
 #include <linux/obd.h>
 #include <linux/lustre_lib.h>
 #include <linux/lustre_idl.h>
@@ -42,7 +43,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, struct ptlrpc_reques
 {
 	struct dentry *de;
 
-	de = mds_fid2dentry(req->rq_obd, rec->ur_fid1, NULL);
+	de = mds_fid2dentry(&req->rq_obd->u.mds, rec->ur_fid1, NULL);
 	if (IS_ERR(de)) { 
 		req->rq_rephdr->status = -ESTALE;
 		return 0;
@@ -98,7 +99,7 @@ static int mds_reint_create(struct mds_update_record *rec,
 	int rc;
 	ENTRY;
 
-	de = mds_fid2dentry(req->rq_obd, rec->ur_fid1, NULL);
+	de = mds_fid2dentry(&req->rq_obd->u.mds, rec->ur_fid1, NULL);
 	if (IS_ERR(de)) { 
 		req->rq_rephdr->status = -ESTALE;
 		EXIT;
@@ -179,7 +180,7 @@ static int mds_reint_unlink(struct mds_update_record *rec,
 	int rc;
 	ENTRY;
 
-	de = mds_fid2dentry(req->rq_obd, rec->ur_fid1, NULL);
+	de = mds_fid2dentry(&req->rq_obd->u.mds, rec->ur_fid1, NULL);
 	if (IS_ERR(de)) { 
 		req->rq_rephdr->status = -ESTALE;
 		EXIT;
@@ -235,13 +236,13 @@ static int mds_reint_link(struct mds_update_record *rec,
 	ENTRY;
 
 	rc = -ESTALE;
-	de_src = mds_fid2dentry(req->rq_obd, rec->ur_fid1, NULL);
+	de_src = mds_fid2dentry(&req->rq_obd->u.mds, rec->ur_fid1, NULL);
 	if (IS_ERR(de_src)) { 
 		EXIT;
 		goto out_link;
 	}
 
-	de_tgt_dir = mds_fid2dentry(req->rq_obd, rec->ur_fid2, NULL);
+	de_tgt_dir = mds_fid2dentry(&req->rq_obd->u.mds, rec->ur_fid2, NULL);
 	if (IS_ERR(de_tgt_dir)) { 
 		rc = -ESTALE;
 		EXIT;
@@ -285,13 +286,13 @@ static int mds_reint_rename(struct mds_update_record *rec,
 	ENTRY;
 
 	rc = -ESTALE;
-	de_srcdir = mds_fid2dentry(req->rq_obd, rec->ur_fid1, NULL);
+	de_srcdir = mds_fid2dentry(&req->rq_obd->u.mds, rec->ur_fid1, NULL);
 	if (IS_ERR(de_srcdir)) { 
 		EXIT;
 		goto out_rename;
 	}
 
-	de_tgtdir = mds_fid2dentry(req->rq_obd, rec->ur_fid2, NULL);
+	de_tgtdir = mds_fid2dentry(&req->rq_obd->u.mds, rec->ur_fid2, NULL);
 	if (IS_ERR(de_tgtdir)) { 
 		rc = -ESTALE;
 		EXIT;
@@ -351,7 +352,7 @@ int mds_reint_rec(struct mds_update_record *rec, struct ptlrpc_request *req)
 		rc = req->rq_status = -ENOMEM;
 		return rc;
 	}
-	req->rq_rephdr->seqno = req->rq_reqhdr->seqno;
+	req->rq_rephdr->xid = req->rq_reqhdr->xid;
 
 	rc = reinters[rec->ur_opcode](rec, req); 
 	req->rq_status = rc;

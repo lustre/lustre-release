@@ -39,7 +39,6 @@
 extern struct address_space_operations ll_aops;
 extern struct address_space_operations ll_dir_aops;
 struct super_operations ll_super_operations;
-long obd_memory = 0;
 
 static char *ll_read_opt(const char *opt, char *data)
 {
@@ -140,9 +139,16 @@ static struct super_block * ll_read_super(struct super_block *sb,
         }
 	connected = 1;
 
-	err = mdc_create_client("mds", &sbi->ll_mds_client); 
-	if (err) { 
-		CERROR("cannot find MDS\n"); 
+	/* the first parameter should become an mds device no */
+	err = ptlrpc_connect_client(-1, "mds", 
+				    MDS_REQUEST_PORTAL,
+				    MDC_REPLY_PORTAL,
+				    mds_pack_req,
+				    mds_unpack_rep, 
+				    &sbi->ll_mds_client);
+	
+	if (err) {
+ 		CERROR("cannot find MDS\n");  
 		sb = NULL;
 		goto ERR;
 	}
@@ -218,7 +224,7 @@ static void ll_delete_inode(struct inode *inode)
 			CERROR("no memory\n"); 
 		}
 
-		err = obd_destroy(IID(inode), oa); 
+		err = obd_destroy(ll_i2obdconn(inode), oa); 
                 CDEBUG(D_INODE, "obd destroy of %Ld error %d\n",
                        oa->o_id, err);
 		obdo_free(oa);

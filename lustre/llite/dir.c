@@ -35,6 +35,7 @@
 #define DEBUG_SUBSYSTEM S_LLIGHT
 
 #include <linux/obd_support.h>
+#include <linux/obd_class.h>
 #include <linux/lustre_lib.h>
 #include <linux/lustre_idl.h>
 #include <linux/lustre_mds.h>
@@ -63,10 +64,11 @@ static int ll_dir_readpage(struct file *file, struct page *page)
 
         ENTRY;
 
-	if ( ((inode->i_size + PAGE_CACHE_SIZE -1)>>PAGE_SHIFT) 
-	     <= page->index) {
+	if ( ((inode->i_size + PAGE_CACHE_SIZE -1)>>PAGE_SHIFT)
+             <= page->index) {
 		memset(kmap(page), 0, PAGE_CACHE_SIZE);
 		kunmap(page);
+                EXIT;
 		goto readpage_out;
 	}
 
@@ -94,7 +96,7 @@ static int ll_dir_readpage(struct file *file, struct page *page)
 
 	SetPageUptodate(page);
  readpage_out:
-	obd_unlock_page(page);
+	UnlockPage(page);
         EXIT;
         return rc;
 } /* ll_dir_readpage */

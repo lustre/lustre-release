@@ -27,6 +27,7 @@
 #define DEBUG_SUBSYSTEM S_LLIGHT
 
 #include <linux/obd_support.h>
+#include <linux/obd_class.h>
 #include <linux/lustre_lib.h>
 #include <linux/lustre_idl.h>
 #include <linux/lustre_mds.h>
@@ -214,7 +215,7 @@ int ll_readpage(struct file *file, struct page *page)
 
  readpage_out:
 	SetPageUptodate(page);
-	obd_unlock_page(page);
+	UnlockPage(page);
         EXIT;
         return 0;
 } /* ll_readpage */

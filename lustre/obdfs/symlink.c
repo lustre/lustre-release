@@ -58,9 +58,7 @@ static int obdfs_readlink(struct dentry *dentry, char *buffer, int buflen)
         int res;
 
         ENTRY;
-        OIDEBUG(dentry->d_inode);
         page = obdfs_getpage(dentry->d_inode, 0, 0, 0);
-        /* PDEBUG(page, "readlink"); */
         if (!page) {
                 EXIT;
                 return 0;
@@ -78,9 +76,7 @@ static int obdfs_follow_link(struct dentry * dentry,
         int res;
 
         ENTRY;
-        OIDEBUG(dentry->d_inode);
         page = obdfs_getpage(dentry->d_inode, 0, 0, 0);
-        /* PDEBUG(page, "follow_link"); */
         if (!page) {
                 dput(nd->dentry);
                 EXIT;

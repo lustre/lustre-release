@@ -28,8 +28,8 @@
 
 
 #include <linux/obd_support.h>
+#include <linux/obd_class.h>
 #include <linux/lustre_idl.h>
-#include <linux/lustre_net.h>
 
 static inline void l_dput(struct dentry *de) 
 {
@@ -44,33 +44,20 @@ struct mds_run_ctxt {
 	mm_segment_t     fs;
 };
 
-#define MDS_STOPPING 1
-#define MDS_RUNNING 2
-#define MDS_STOPPED 4
 #define LUSTRE_MDS_NAME "mds"
 
 struct mds_obd {
+        struct ptlrpc_service *mds_service;
+
 	char *mds_fstype;
-	struct task_struct *mds_thread;
-        __u32 mds_remote_nid;
-	wait_queue_head_t mds_waitq;
-	wait_queue_head_t mds_done_waitq;
-	struct timer_list *mds_timer;
-	int mds_interval; 
-	int mds_flags;
-	struct list_head mds_reqs;
         struct super_block * mds_sb;
 	struct vfsmount *mds_vfsmnt;
 	struct mds_run_ctxt  mds_ctxt;
-	spinlock_t mds_lock;
-	__u64 mds_lastino;
 	struct file_operations *mds_fop; 
 	struct inode_operations *mds_iop;
 	struct address_space_operations *mds_aops;
 
-        struct ptlrpc_service *mds_service;
 };
-
 
 struct mds_update_record { 
         __u32 ur_reclen;

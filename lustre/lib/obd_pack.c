@@ -53,13 +53,14 @@
 #include <linux/lustre_idl.h>
 
 int ost_pack_req(char *buf1, int buflen1, char *buf2, int buflen2, 
-		 struct ptlreq_hdr **hdr, struct ost_req **req, 
+		 struct ptlreq_hdr **hdr, union ptl_req *r,
 		 int *len, char **buf)
 {
+        struct ost_req *req;
 	char *ptr;
 
 	*len = sizeof(**hdr) + size_round(buflen1) + size_round(buflen2) + 
-		sizeof(**req); 
+		sizeof(*req); 
 
 	OBD_ALLOC(*buf, *len);
 	if (!*buf) {
@@ -69,18 +70,19 @@ int ost_pack_req(char *buf1, int buflen1, char *buf2, int buflen2,
 
 	memset(*buf, 0, *len); 
 	*hdr = (struct ptlreq_hdr *)(*buf);
-	*req = (struct ost_req *)(*buf + sizeof(**hdr));
+	req = (struct ost_req *)(*buf + sizeof(**hdr));
+        r->ost = req;
 
-	ptr = *buf + sizeof(**hdr) + sizeof(**req);
+	ptr = *buf + sizeof(**hdr) + sizeof(*req);
 
 	(*hdr)->type =  OST_TYPE_REQ;
 
-	(*req)->buflen1 = NTOH__u32(buflen1);
+	req->buflen1 = NTOH__u32(buflen1);
 	if (buf1) { 
 		LOGL(buf1, buflen1, ptr); 
 	} 
 
-	(*req)->buflen2 = NTOH__u32(buflen2);
+	req->buflen2 = NTOH__u32(buflen2);
 	if (buf2) { 
 		LOGL(buf2, buflen2, ptr);
 	}
@@ -88,22 +90,24 @@ int ost_pack_req(char *buf1, int buflen1, char *buf2, int buflen2,
 }
 
 int ost_unpack_req(char *buf, int len, 
-		   struct ptlreq_hdr **hdr, struct ost_req **req)
+		   struct ptlreq_hdr **hdr,  union ptl_req *r)
 {
+        struct ost_req *req;
 
-	if (len < sizeof(**hdr) + sizeof(**req)) { 
+	if (len < sizeof(**hdr) + sizeof(*req)) { 
 		EXIT;
 		return -EINVAL;
 	}
 
 	*hdr = (struct ptlreq_hdr *) (buf);
-	*req = (struct ost_req *) (buf + sizeof(**hdr));
+	req = (struct ost_req *) (buf + sizeof(**hdr));
+        r->ost = req;
 
-	(*req)->buflen1 = NTOH__u32((*req)->buflen1); 
-	(*req)->buflen2 = NTOH__u32((*req)->buflen2); 
+	req->buflen1 = NTOH__u32(req->buflen1); 
+	req->buflen2 = NTOH__u32(req->buflen2); 
 
-	if (len < sizeof(**hdr) + sizeof(**req) + 
-            size_round((*req)->buflen1) + size_round((*req)->buflen2) ) { 
+	if (len < sizeof(**hdr) + sizeof(*req) + 
+            size_round(req->buflen1) + size_round(req->buflen2) ) { 
 		EXIT;
 		return -EINVAL;
 	}
@@ -128,14 +132,15 @@ void *ost_req_buf2(struct ost_req *req)
                         size_round(req->buflen1)); 
 }
 
-int ost_pack_rep(void *buf1, __u32 buflen1, void *buf2, __u32 buflen2,
-		 struct ptlrep_hdr **hdr, struct ost_rep **rep, 
+int ost_pack_rep(char *buf1, int buflen1, char *buf2, int buflen2,
+		 struct ptlrep_hdr **hdr, union ptl_rep *r,
 		 int *len, char **buf)
 {
 	char *ptr;
+        struct ost_rep *rep;
 
 	*len = sizeof(**hdr) + size_round(buflen1) + size_round(buflen2) + 
-		sizeof(**rep); 
+		sizeof(*rep); 
 
 	OBD_ALLOC(*buf, *len);
 	if (!*buf) {
@@ -145,15 +150,17 @@ int ost_pack_rep(void *buf1, __u32 buflen1, void *buf2, __u32 buflen2,
 
 	memset(*buf, 0, *len); 
 	*hdr = (struct ptlrep_hdr *)(*buf);
-	*rep = (struct ost_rep *)(*buf + sizeof(**hdr));
-	ptr = *buf + sizeof(**hdr) + sizeof(**rep);
+	rep = (struct ost_rep *)(*buf + sizeof(**hdr));
+        r->ost = rep;
 
-	(*rep)->buflen1 = NTOH__u32(buflen1);
+	ptr = *buf + sizeof(**hdr) + sizeof(*rep);
+
+	rep->buflen1 = NTOH__u32(buflen1);
 	if (buf1) { 
 		LOGL(buf1, buflen1, ptr); 
 	} 
 
-	(*rep)->buflen2 = NTOH__u32(buflen2);
+	rep->buflen2 = NTOH__u32(buflen2);
 	if (buf2) { 
 		LOGL(buf2, buflen2, ptr);
 	}
@@ -162,21 +169,24 @@ int ost_pack_rep(void *buf1, __u32 buflen1, void *buf2, __u32 buflen2,
 
 
 int ost_unpack_rep(char *buf, int len, 
-		   struct ptlrep_hdr **hdr, struct ost_rep **rep)
+		   struct ptlrep_hdr **hdr, union ptl_rep *r)
 {
-	if (len < sizeof(**hdr) + sizeof(**rep)) { 
+        struct ost_rep *rep;
+
+	if (len < sizeof(**hdr) + sizeof(*rep)) { 
 		EXIT;
 		return -EINVAL;
 	}
 
 	*hdr = (struct ptlrep_hdr *) (buf);
-	*rep = (struct ost_rep *) (buf + sizeof(**hdr));
+	rep = (struct ost_rep *) (buf + sizeof(**hdr));
+        r->ost = rep;
 
-	(*rep)->buflen1 = NTOH__u32((*rep)->buflen1); 
-	(*rep)->buflen2 = NTOH__u32((*rep)->buflen2); 
+	rep->buflen1 = NTOH__u32(rep->buflen1); 
+	rep->buflen2 = NTOH__u32(rep->buflen2); 
 
-	if (len < sizeof(**hdr) + sizeof(**rep) + 
-            size_round((*rep)->buflen1) + size_round((*rep)->buflen2) ) { 
+	if (len < sizeof(**hdr) + sizeof(*rep) + 
+            size_round(rep->buflen1) + size_round(rep->buflen2) ) { 
 		EXIT;
 		return -EINVAL;
 	}

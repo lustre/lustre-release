@@ -274,6 +274,7 @@ int ll_mdc_rename(struct inode *src, struct inode *tgt,
  * If the create succeeds, we fill in the inode information
  * with d_instantiate(). 
  */
+
 static int ll_create (struct inode * dir, struct dentry * dentry, int mode)
 {
 	int err; 

@@ -278,7 +278,7 @@ int obdfs_readpage(struct file *file, struct page *page)
 
  readpage_out:
 	SetPageUptodate(page);
-	obd_unlock_page(page);
+	UnlockPage(page);
         EXIT;
         return 0;
 } /* obdfs_readpage */
@@ -440,9 +440,7 @@ int obdfs_do_vec_wr(struct inode **inodes, obd_count num_io,
                 --num_io;
                 CDEBUG(D_INFO, "calling put_page for %p, index %ld\n",
                        pages[num_io], pages[num_io]->index);
-                /* PDEBUG(pages[num_io], "do_vec_wr"); */
                 put_page(pages[num_io]);
-                /* PDEBUG(pages[num_io], "do_vec_wr"); */
         }
         CDEBUG(D_INFO, "put_page done\n");
 
@@ -546,7 +544,6 @@ int obdfs_do_writepage(struct page *page, int sync)
         int err;
 
         ENTRY;
-        /* PDEBUG(page, "WRITEPAGE"); */
         if ( sync )
                 err = obdfs_brw(OBD_BRW_WRITE, inode, page, 1);
         else {
@@ -559,7 +556,6 @@ int obdfs_do_writepage(struct page *page, int sync)
                 SetPageUptodate(page);
 		set_page_clean(page);
 	}
-        /* PDEBUG(page,"WRITEPAGE"); */
         EXIT;
         return err;
 } /* obdfs_do_writepage */
@@ -663,12 +659,11 @@ struct page *obdfs_getpage(struct inode *inode, unsigned long offset,
             return NULL;
         }
 
-        /* PDEBUG(page, "GETPAGE: got page - before reading\n"); */
         /* now check if the data in the page is up to date */
         if ( Page_Uptodate(page)) { 
                 if (!locked) {
                         if (PageLocked(page))
-                                obd_unlock_page(page);
+                                UnlockPage(page);
                 } else {
                         CERROR("expecting locked page\n");
                 }
@@ -680,15 +675,14 @@ struct page *obdfs_getpage(struct inode *inode, unsigned long offset,
 
         if ( err ) {
                 SetPageError(page);
-                obd_unlock_page(page);
+                UnlockPage(page);
                 EXIT;
                 return page;
         }
 
         if ( !locked )
-                obd_unlock_page(page);
+                UnlockPage(page);
         SetPageUptodate(page);
-        /* PDEBUG(page,"GETPAGE - after reading"); */
         EXIT;
         return page;
 } /* obdfs_getpage */

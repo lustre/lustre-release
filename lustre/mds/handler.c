@@ -31,49 +31,13 @@
 #define DEBUG_SUBSYSTEM S_MDS
 
 #include <linux/obd_support.h>
+#include <linux/obd_class.h>
 #include <linux/obd.h>
 #include <linux/lustre_lib.h>
 #include <linux/lustre_idl.h>
 #include <linux/lustre_mds.h>
 #include <linux/lustre_net.h>
 #include <linux/obd_class.h>
-
-// XXX for testing
-static struct mds_obd *MDS;
-
-// XXX make this networked!  
-static int mds_queue_req(struct ptlrpc_request *req)
-{
-	struct ptlrpc_request *srv_req;
-	
-	if (!MDS) { 
-		EXIT;
-		return -1;
-	}
-
-	OBD_ALLOC(srv_req, sizeof(*srv_req));
-	if (!srv_req) { 
-		EXIT;
-		return -ENOMEM;
-	}
-
-        CDEBUG(0, "---> MDS at %d %p, incoming req %p, srv_req %p\n",
-	       __LINE__, MDS, req, srv_req);
-
-	memset(srv_req, 0, sizeof(*req)); 
-
-	/* move the request buffer */
-	srv_req->rq_reqbuf = req->rq_reqbuf;
-	srv_req->rq_reqlen = req->rq_reqlen;
-	srv_req->rq_obd = MDS;
-
-	/* remember where it came from */
-	srv_req->rq_reply_handle = req;
-
-	list_add(&srv_req->rq_list, &MDS->mds_reqs); 
-	wake_up(&MDS->mds_waitq);
-	return 0;
-}
 
 int mds_sendpage(struct ptlrpc_request *req, struct file *file, 
                  __u64 offset, struct niobuf *dst)
@@ -91,12 +55,20 @@ int mds_sendpage(struct ptlrpc_request *req, struct file *file,
 		if (rc != PAGE_SIZE) 
 			return -EIO;
 	} else {
+                struct ptlrpc_bulk_desc *bulk;
 		char *buf;
-                DECLARE_WAITQUEUE(wait, current);
+
+                bulk = ptlrpc_prep_bulk(&req->rq_peer);
+                if (bulk == NULL)
+                        return -ENOMEM;
+
+                bulk->b_xid = req->rq_xid;
 
 		OBD_ALLOC(buf, PAGE_SIZE);
-		if (!buf)
+		if (!buf) {
+                        OBD_FREE(bulk, sizeof(*bulk));
 			return -ENOMEM;
+                }
 
 		set_fs(KERNEL_DS); 
 		rc = generic_file_read(file, buf, PAGE_SIZE, &offset); 
@@ -107,96 +79,24 @@ int mds_sendpage(struct ptlrpc_request *req, struct file *file,
 			return -EIO;
                 }
 
-                req->rq_type = PTLRPC_BULK;
-		req->rq_bulkbuf = buf;
-		req->rq_bulklen = PAGE_SIZE;
+		bulk->b_buf = buf;
+		bulk->b_buflen = PAGE_SIZE;
 
-		init_waitqueue_head(&req->rq_wait_for_bulk);
-		rc = ptl_send_buf(req, &req->rq_peer, MDS_BULK_PORTAL);
-                add_wait_queue(&req->rq_wait_for_bulk, &wait);
-                /* The bulk callback will set rq->bulkbuf to NULL when it's
-                 * been ACKed and it's finished using it. */
-                while (req->rq_bulkbuf != NULL) {
-                        set_current_state(TASK_INTERRUPTIBLE);
+		rc = ptlrpc_send_bulk(bulk, MDS_BULK_PORTAL);
+                wait_event_interruptible(bulk->b_waitq,
+                                         ptlrpc_check_bulk_sent(bulk));
 
-                        /* if this process really wants to die, let it go */
-                        if (sigismember(&(current->pending.signal), SIGKILL) ||
-                            sigismember(&(current->pending.signal), SIGINT))
-                                break;
-
-                        schedule();
-                }
-                remove_wait_queue(&req->rq_wait_for_bulk, &wait);
-                set_current_state(TASK_RUNNING);
-
-                if (req->rq_bulkbuf != NULL) {
+                if (bulk->b_flags == PTL_RPC_INTR) {
                         EXIT;
+                        /* FIXME: hey hey, we leak here. */
                         return -EINTR;
                 }
 
+                OBD_FREE(bulk, sizeof(*bulk));
                 OBD_FREE(buf, PAGE_SIZE);
-		req->rq_bulklen = 0; /* FIXME: eek. */
 	}
 
 	return 0;
-}
-
-int mds_reply(struct ptlrpc_request *req)
-{
-	struct ptlrpc_request *clnt_req = req->rq_reply_handle;
-
-	ENTRY;
-	
-	if (req->rq_obd->mds_service != NULL) {
-		/* This is a request that came from the network via portals. */
-
-		/* FIXME: we need to increment the count of handled events */
-                req->rq_type = PTLRPC_REPLY;
-		ptl_send_buf(req, &req->rq_peer, MDS_REPLY_PORTAL);
-	} else {
-		/* This is a local request that came from another thread. */
-
-		/* move the reply to the client */ 
-		clnt_req->rq_replen = req->rq_replen;
-		clnt_req->rq_repbuf = req->rq_repbuf;
-		req->rq_repbuf = NULL;
-		req->rq_replen = 0;
-
-		/* free the request buffer */
-		OBD_FREE(req->rq_reqbuf, req->rq_reqlen);
-		req->rq_reqbuf = NULL;
-
-		/* wake up the client */ 
-		wake_up_interruptible(&clnt_req->rq_wait_for_rep); 
-	}
-
-	EXIT;
-	return 0;
-}
-
-int mds_error(struct ptlrpc_request *req)
-{
-	struct ptlrep_hdr *hdr;
-
-	ENTRY;
-
-	OBD_ALLOC(hdr, sizeof(*hdr));
-	if (!hdr) { 
-		EXIT;
-		return -ENOMEM;
-	}
-
-	memset(hdr, 0, sizeof(*hdr));
-	
-	hdr->seqno = req->rq_reqhdr->seqno;
-	hdr->status = req->rq_status; 
-	hdr->type = MDS_TYPE_ERR;
-
-	req->rq_repbuf = (char *)hdr;
-	req->rq_replen = sizeof(*hdr); 
-
-	EXIT;
-	return mds_reply(req);
 }
 
 struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
@@ -284,10 +184,10 @@ int mds_getattr(struct ptlrpc_request *req)
 		return 0;
 	}
 
-	req->rq_rephdr->seqno = req->rq_reqhdr->seqno;
+	req->rq_rephdr->xid = req->rq_reqhdr->xid;
 	rep = req->rq_rep.mds;
 
-	de = mds_fid2dentry(req->rq_obd, &req->rq_req.mds->fid1, NULL);
+	de = mds_fid2dentry(&req->rq_obd->u.mds, &req->rq_req.mds->fid1, NULL);
 	if (IS_ERR(de)) { 
 		EXIT;
 		req->rq_rephdr->status = -ENOENT;
@@ -313,7 +213,6 @@ int mds_getattr(struct ptlrpc_request *req)
 int mds_open(struct ptlrpc_request *req)
 {
 	struct dentry *de;
-	struct inode *inode;
 	struct mds_rep *rep;
 	struct file *file;
 	struct vfsmount *mnt;
@@ -329,10 +228,10 @@ int mds_open(struct ptlrpc_request *req)
 		return 0;
 	}
 
-	req->rq_rephdr->seqno = req->rq_reqhdr->seqno;
+	req->rq_rephdr->xid = req->rq_reqhdr->xid;
 	rep = req->rq_rep.mds;
 
-	de = mds_fid2dentry(req->rq_obd, &req->rq_req.mds->fid1, &mnt);
+	de = mds_fid2dentry(&req->rq_obd->u.mds, &req->rq_req.mds->fid1, &mnt);
 	if (IS_ERR(de)) { 
 		EXIT;
 		req->rq_rephdr->status = -ENOENT;
@@ -346,7 +245,7 @@ int mds_open(struct ptlrpc_request *req)
 	}		
 	
 	rep->objid = (__u64) (unsigned long)file; 
-	mds_get_objid(inode, &rep->objid);
+	//mds_get_objid(inode, &rep->objid);
 	dput(de); 
 	return 0;
 }
@@ -370,10 +269,10 @@ int mds_readpage(struct ptlrpc_request *req)
 		return 0;
 	}
 
-	req->rq_rephdr->seqno = req->rq_reqhdr->seqno;
+	req->rq_rephdr->xid = req->rq_reqhdr->xid;
 	rep = req->rq_rep.mds;
 
-	de = mds_fid2dentry(req->rq_obd, &req->rq_req.mds->fid1, &mnt);
+	de = mds_fid2dentry(&req->rq_obd->u.mds, &req->rq_req.mds->fid1, &mnt);
 	if (IS_ERR(de)) { 
 		EXIT;
 		req->rq_rephdr->status = PTR_ERR(de); 
@@ -421,8 +320,8 @@ int mds_reint(struct ptlrpc_request *req)
 	return 0; 
 }
 
-//int mds_handle(struct mds_conn *conn, int len, char *buf)
-int mds_handle(struct ptlrpc_request *req)
+int mds_handle(struct obd_device *dev, struct ptlrpc_service *svc,
+               struct ptlrpc_request *req)
 {
 	int rc;
 	struct ptlreq_hdr *hdr;
@@ -464,7 +363,7 @@ int mds_handle(struct ptlrpc_request *req)
 		break;
 
 	default:
-		return mds_error(req);
+		return ptlrpc_error(dev, svc, req);
 	}
 
 out:
@@ -474,191 +373,15 @@ out:
 	}
 
 	if( req->rq_status) { 
-		mds_error(req);
+		ptlrpc_error(dev, svc, req);
 	} else { 
 		CDEBUG(D_INODE, "sending reply\n"); 
-		mds_reply(req); 
+		ptlrpc_reply(dev, svc, req); 
 	}
 
 	return 0;
 }
 
-
-static void mds_timer_run(unsigned long __data)
-{
-	struct task_struct * p = (struct task_struct *) __data;
-
-	wake_up_process(p);
-}
-
-int mds_main(void *arg)
-{
-	struct mds_obd *mds = (struct mds_obd *) arg;
-	struct timer_list timer;
-        DECLARE_WAITQUEUE(wait, current);
-
-	lock_kernel();
-	daemonize();
-	spin_lock_irq(&current->sigmask_lock);
-	sigfillset(&current->blocked);
-	recalc_sigpending(current);
-	spin_unlock_irq(&current->sigmask_lock);
-
-	sprintf(current->comm, "lustre_mds");
-
-	/* Set up an interval timer which can be used to trigger a
-           wakeup after the interval expires */
-	init_timer(&timer);
-	timer.data = (unsigned long) current;
-	timer.function = mds_timer_run;
-	mds->mds_timer = &timer;
-
-	/* Record that the  thread is running */
-	mds->mds_thread = current;
-        mds->mds_flags = MDS_RUNNING;
-	wake_up(&mds->mds_done_waitq); 
-
-	/* And now, wait forever for commit wakeup events. */
-	while (1) {
-                int signal;
-		int rc;
-
-		wake_up(&mds->mds_done_waitq);
-		CDEBUG(D_INODE, "mds_wakes pick up req here and continue\n"); 
-
-		if (mds->mds_service != NULL) {
-			ptl_event_t ev;
-                        struct ptlrpc_request request;
-                        struct ptlrpc_service *service;
-
-                        CDEBUG(D_IOCTL, "-- sleeping\n");
-                        signal = 0;
-                        add_wait_queue(&mds->mds_waitq, &wait);
-                        while (1) {
-                                set_current_state(TASK_INTERRUPTIBLE);
-				rc = PtlEQGet(mds->mds_service->srv_eq_h, &ev);
-                                if (rc == PTL_OK || rc == PTL_EQ_DROPPED)
-                                        break;
-                                CERROR("EQGet rc %d\n", rc); 
-                                if (mds->mds_flags & MDS_STOPPING)
-                                        break;
-
-                                /* if this process really wants to die,
-                                 * let it go */
-                                if (sigismember(&(current->pending.signal),
-                                                SIGKILL) ||
-                                    sigismember(&(current->pending.signal),
-                                                SIGINT)) {
-                                        signal = 1;
-                                        break;
-                                }
-
-                                schedule();
-                        }
-                        remove_wait_queue(&mds->mds_waitq, &wait);
-                        set_current_state(TASK_RUNNING);
-                        CDEBUG(D_IOCTL, "-- done\n");
-
-                        if (signal == 1) {
-                                /* We broke out because of a signal */
-                                EXIT;
-                                break;
-                        }
-                        if (mds->mds_flags & MDS_STOPPING) { 
-                                break;
-                        }
-
-                        service = (struct ptlrpc_service *)ev.mem_desc.user_ptr;
-
-                        /* FIXME: If we move to an event-driven model,
-                         * we should put the request on the stack of
-                         * mds_handle instead. */
-                        memset(&request, 0, sizeof(request));
-                        request.rq_reqbuf = ev.mem_desc.start + ev.offset;
-                        request.rq_reqlen = ev.mem_desc.length;
-                        request.rq_obd = MDS;
-                        request.rq_xid = ev.match_bits;
-                        CERROR("got req %d\n", request.rq_xid);
-
-                        request.rq_peer.peer_nid = ev.initiator.nid;
-                        /* FIXME: this NI should be the incoming NI.
-                         * We don't know how to find that from here. */
-                        request.rq_peer.peer_ni =
-                                mds->mds_service->srv_self.peer_ni;
-                        rc = mds_handle(&request);
-
-                        /* Inform the rpc layer the event has been handled */ 
-                        ptl_received_rpc(service);
-		} else {
-			struct ptlrpc_request *request;
-
-                        CDEBUG(D_IOCTL, "-- sleeping\n");
-                        add_wait_queue(&mds->mds_waitq, &wait);
-                        while (1) {
-                                spin_lock(&mds->mds_lock);
-                                if (!list_empty(&mds->mds_reqs))
-                                        break;
-
-                                set_current_state(TASK_INTERRUPTIBLE);
-
-                                /* if this process really wants to die,
-                                 * let it go */
-                                if (sigismember(&(current->pending.signal),
-                                                SIGKILL) ||
-                                    sigismember(&(current->pending.signal),
-                                                SIGINT))
-                                        break;
-
-                                spin_unlock(&mds->mds_lock);
-
-                                schedule();
-                        }
-                        remove_wait_queue(&mds->mds_waitq, &wait);
-                        set_current_state(TASK_RUNNING);
-                        CDEBUG(D_IOCTL, "-- done\n");
-
-			if (list_empty(&mds->mds_reqs)) {
-				CDEBUG(D_INODE, "woke because of signal\n");
-                                spin_unlock(&mds->mds_lock);
-			} else {
-				request = list_entry(mds->mds_reqs.next,
-						     struct ptlrpc_request,
-						     rq_list);
-				list_del(&request->rq_list);
-                                spin_unlock(&mds->mds_lock);
-				rc = mds_handle(request);
-			}
-		}
-	}
-
-	del_timer_sync(mds->mds_timer);
-
-	/* XXX maintain a list of all managed devices: cleanup here */
-
-	mds->mds_thread = NULL;
-	wake_up(&mds->mds_done_waitq);
-	CERROR("lustre_mds: exiting\n");
-	return 0;
-}
-
-static void mds_stop_srv_thread(struct mds_obd *mds)
-{
-	mds->mds_flags |= MDS_STOPPING;
-
-	while (mds->mds_thread) {
-		wake_up(&mds->mds_waitq);
-		sleep_on(&mds->mds_done_waitq);
-	}
-}
-
-static void mds_start_srv_thread(struct mds_obd *mds)
-{
-	init_waitqueue_head(&mds->mds_waitq);
-	init_waitqueue_head(&mds->mds_done_waitq);
-	kernel_thread(mds_main, (void *)mds, CLONE_VM | CLONE_FS | CLONE_FILES);
-	while (!mds->mds_thread) 
-		sleep_on(&mds->mds_done_waitq);
-}
 
 /* mount the file system (secretly) */
 static int mds_setup(struct obd_device *obddev, obd_count len,
@@ -668,10 +391,8 @@ static int mds_setup(struct obd_device *obddev, obd_count len,
 	struct obd_ioctl_data* data = buf;
 	struct mds_obd *mds = &obddev->u.mds;
 	struct vfsmount *mnt;
-	struct lustre_peer peer;
 	int err; 
         ENTRY;
-
 
 	mnt = do_kern_mount(data->ioc_inlbuf2, 0, data->ioc_inlbuf1, NULL); 
 	err = PTR_ERR(mnt);
@@ -692,31 +413,22 @@ static int mds_setup(struct obd_device *obddev, obd_count len,
 	mds->mds_ctxt.pwdmnt = mnt;
 	mds->mds_ctxt.pwd = mnt->mnt_root;
 	mds->mds_ctxt.fs = KERNEL_DS;
-	mds->mds_remote_nid = 0;
 
-	INIT_LIST_HEAD(&mds->mds_reqs);
-	mds->mds_thread = NULL;
-	mds->mds_flags = 0;
-	mds->mds_interval = 3 * HZ;
-	MDS = mds;
+        mds->mds_service = ptlrpc_init_svc( 64 * 1024, 
+                                            MDS_REQUEST_PORTAL,
+                                            MDC_REPLY_PORTAL,
+                                            "self", 
+                                            mds_unpack_req,
+                                            mds_pack_rep,
+                                            mds_handle);
 
-	spin_lock_init(&obddev->u.mds.mds_lock);
+        rpc_register_service(mds->mds_service, "self");
 
-	err = kportal_uuid_to_peer("self", &peer);
-	if (err == 0) {
-		OBD_ALLOC(mds->mds_service, sizeof(*mds->mds_service));
-		if (mds->mds_service == NULL)
-			return -ENOMEM;
-		mds->mds_service->srv_buf_size = 64 * 1024;
-		//mds->mds_service->srv_buf_size = 1024;
-		mds->mds_service->srv_portal = MDS_REQUEST_PORTAL;
-		memcpy(&mds->mds_service->srv_self, &peer, sizeof(peer));
-		mds->mds_service->srv_wait_queue = &mds->mds_waitq;
-
-		rpc_register_service(mds->mds_service, "self");
-	}
-
-	mds_start_srv_thread(mds);
+        err = ptlrpc_start_thread(obddev, mds->mds_service, "lustre_mds"); 
+        if (err) { 
+                CERROR("cannot start thread\n");
+        }
+                
 
         MOD_INC_USE_COUNT;
         EXIT; 
@@ -741,8 +453,14 @@ static int mds_cleanup(struct obd_device * obddev)
                 return -EBUSY;
         }
 
-	MDS = NULL;
-	mds_stop_srv_thread(mds);
+	ptlrpc_stop_thread(mds->mds_service);
+	rpc_unregister_service(mds->mds_service);
+
+	if (!list_empty(&mds->mds_service->srv_reqs)) {
+		// XXX reply with errors and clean up
+		CERROR("Request list not empty!\n");
+	}
+
         rpc_unregister_service(mds->mds_service);
         OBD_FREE(mds->mds_service, sizeof(*mds->mds_service));
 
@@ -751,11 +469,6 @@ static int mds_cleanup(struct obd_device * obddev)
                 EXIT;
                 return 0;
         }
-
-	if (!list_empty(&mds->mds_reqs)) {
-		// XXX reply with errors and clean up
-		CDEBUG(D_INODE, "Request list not empty!\n");
-	}
 
 	unlock_kernel();
 	mntput(mds->mds_vfsmnt); 
@@ -788,10 +501,6 @@ static void __exit mds_exit(void)
 MODULE_AUTHOR("Peter J. Braam <braam@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre Metadata Server (MDS) v0.01");
 MODULE_LICENSE("GPL");
-
-
-// for testing (maybe this stays)
-EXPORT_SYMBOL(mds_queue_req);
 
 module_init(mds_init);
 module_exit(mds_exit);

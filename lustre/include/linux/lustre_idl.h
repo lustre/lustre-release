@@ -56,6 +56,7 @@
 #define OST_CONNECT    7
 #define OST_DISCONNECT 8
 #define OST_PUNCH      9
+#define OST_BRW_COMPLETE 10
 
 /* packet types */
 #define OST_TYPE_REQ 1
@@ -64,14 +65,14 @@
 
 struct ptlreq_hdr { 
 	__u32 opc;
-	__u64 seqno;
+	__u32 xid;
 	__u32 status;
 	__u32 type;
 };
 
 struct ptlrep_hdr { 
 	__u32 opc;
-	__u64 seqno;
+	__u32 xid;
 	__u32 status;
 	__u32 type;
 };

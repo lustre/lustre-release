@@ -43,7 +43,6 @@ extern struct address_space_operations obdfs_aops;
 struct super_operations obdfs_super_operations;
 long obdfs_cache_count = 0;
 long obdfs_mutex_start = 0;
-long obd_memory = 0;
 
 static char *obdfs_read_opt(const char *opt, char *data)
 {

@@ -45,6 +45,7 @@
 #define DEBUG_SUBSYSTEM S_MDC
 
 #include <linux/obd_support.h>
+#include <linux/obd_class.h>
 #include <linux/lustre_lib.h>
 #include <linux/lustre_idl.h>
 #include <linux/lustre_mds.h>
@@ -54,13 +55,13 @@
 extern int mds_queue_req(struct ptlrpc_request *);
 
 
-int mdc_getattr(struct ptlrpc_client *peer, ino_t ino, int type, int valid, 
+int mdc_getattr(struct ptlrpc_client *cl, ino_t ino, int type, int valid, 
 		struct mds_rep  **rep, struct ptlrep_hdr **hdr)
 {
 	struct ptlrpc_request *request;
 	int rc; 
 
-	request = ptlrpc_prep_req(peer, MDS_GETATTR, 0, NULL, 0, NULL); 
+	request = ptlrpc_prep_req(cl, MDS_GETATTR, 0, NULL, 0, NULL); 
 	if (!request) { 
 		CERROR("llight request: cannot pack\n");
 		return -ENOMEM;
@@ -72,7 +73,7 @@ int mdc_getattr(struct ptlrpc_client *peer, ino_t ino, int type, int valid,
 	request->rq_replen = 
 		sizeof(struct ptlrep_hdr) + sizeof(struct mds_rep);
 
-	rc = ptlrpc_queue_wait(request, peer);
+	rc = ptlrpc_queue_wait(cl, request);
 	if (rc) { 
 		CERROR("llight request: error in handling %d\n", rc); 
 		goto out;
@@ -92,13 +93,13 @@ int mdc_getattr(struct ptlrpc_client *peer, ino_t ino, int type, int valid,
 	return rc;
 }
 
-int mdc_open(struct ptlrpc_client *peer, ino_t ino, int type, int flags,
+int mdc_open(struct ptlrpc_client *cl, ino_t ino, int type, int flags,
                 __u64 *fh, struct mds_rep  **rep, struct ptlrep_hdr **hdr)
 {
 	struct ptlrpc_request *request;
 	int rc; 
 
-	request = ptlrpc_prep_req(peer, MDS_OPEN, 0, NULL, 0, NULL); 
+	request = ptlrpc_prep_req(cl, MDS_OPEN, 0, NULL, 0, NULL); 
 	if (!request) { 
 		CERROR("llight request: cannot pack\n");
 		return -ENOMEM;
@@ -109,7 +110,7 @@ int mdc_open(struct ptlrpc_client *peer, ino_t ino, int type, int flags,
 	request->rq_replen = 
 		sizeof(struct ptlrep_hdr) + sizeof(struct mds_rep);
 
-	rc = ptlrpc_queue_wait(request, peer);
+	rc = ptlrpc_queue_wait(cl, request);
 	if (rc) { 
 		CERROR("llight request: error in handling %d\n", rc); 
 		goto out;
@@ -129,13 +130,13 @@ int mdc_open(struct ptlrpc_client *peer, ino_t ino, int type, int flags,
 }
 
 
-int mdc_close(struct ptlrpc_client *peer, ino_t ino, int type, __u64 fh, 
+int mdc_close(struct ptlrpc_client *cl, ino_t ino, int type, __u64 fh, 
 		struct mds_rep  **rep, struct ptlrep_hdr **hdr)
 {
 	struct ptlrpc_request *request;
 	int rc; 
 
-	request = ptlrpc_prep_req(peer, MDS_CLOSE, 0, NULL, 0, NULL); 
+	request = ptlrpc_prep_req(cl, MDS_CLOSE, 0, NULL, 0, NULL); 
 	if (!request) { 
 		CERROR("llight request: cannot pack\n");
 		return -ENOMEM;
@@ -146,7 +147,7 @@ int mdc_close(struct ptlrpc_client *peer, ino_t ino, int type, __u64 fh,
 	request->rq_replen = 
 		sizeof(struct ptlrep_hdr) + sizeof(struct mds_rep);
 
-	rc = ptlrpc_queue_wait(request, peer);
+	rc = ptlrpc_queue_wait(cl, request);
 	if (rc) { 
 		CERROR("llight request: error in handling %d\n", rc); 
 		goto out;
@@ -164,10 +165,11 @@ int mdc_close(struct ptlrpc_client *peer, ino_t ino, int type, __u64 fh,
 	return rc;
 }
 
-int mdc_readpage(struct ptlrpc_client *peer, ino_t ino, int type, __u64 offset,
+int mdc_readpage(struct ptlrpc_client *cl, ino_t ino, int type, __u64 offset,
 		 char *addr, struct mds_rep  **rep, struct ptlrep_hdr **hdr)
 {
 	struct ptlrpc_request *request;
+        struct ptlrpc_bulk_desc *bulk;
 	struct niobuf niobuf;
 	int rc; 
 
@@ -175,31 +177,48 @@ int mdc_readpage(struct ptlrpc_client *peer, ino_t ino, int type, __u64 offset,
 
         CDEBUG(D_INODE, "inode: %ld\n", ino);
 
-	request = ptlrpc_prep_req(peer, MDS_READPAGE, 0, NULL,
+        bulk = ptlrpc_prep_bulk(&cl->cli_server);
+        if (bulk == NULL) {
+                CERROR("%s: cannot init bulk desc\n", __FUNCTION__);
+                return -ENOMEM;
+        }
+
+	request = ptlrpc_prep_req(cl, MDS_READPAGE, 0, NULL,
                                   sizeof(struct niobuf), (char *)&niobuf);
 	if (!request) { 
-		CERROR("mdc request: cannot pack\n");
+                OBD_FREE(bulk, sizeof(*bulk));
+		CERROR("%s: cannot pack\n", __FUNCTION__);
 		return -ENOMEM;
 	}
+
+        bulk->b_buflen = PAGE_SIZE;
+        bulk->b_buf = (void *)(long)niobuf.addr;
+	bulk->b_portal = MDS_BULK_PORTAL;
+
+        spin_lock(&cl->cli_lock);
+        bulk->b_xid = cl->cli_xid++;
+        spin_unlock(&cl->cli_lock);
+
+        rc = ptlrpc_wait_bulk(bulk);
+        if (rc) {
+                CERROR("%s: couldn't setup bulk sink: error %d.\n",
+                       __FUNCTION__, rc);
+                goto out;
+        }
 
 	request->rq_req.mds->fid1.id = ino;
 	request->rq_req.mds->fid1.f_type = type;
 	request->rq_req.mds->size = offset;
 	request->rq_req.mds->tgtlen = sizeof(niobuf); 
+	request->rq_replen = sizeof(struct ptlrep_hdr) + sizeof(struct mds_rep);
 
-        request->rq_bulklen = PAGE_SIZE;
-        request->rq_bulkbuf = (void *)(long)niobuf.addr;
-	request->rq_bulk_portal = MDS_BULK_PORTAL;
-	request->rq_replen = 
-		sizeof(struct ptlrep_hdr) + sizeof(struct mds_rep);
-
-	rc = ptlrpc_queue_wait(request, peer);
+	rc = ptlrpc_queue_wait(cl, request);
 	if (rc) { 
 		CERROR("mdc request: error in handling %d\n", rc); 
 		goto out;
 	}
 
-        CDEBUG(0, "mode: %o\n", request->rq_rep.mds->mode);
+        CDEBUG(D_INODE, "mode: %o\n", request->rq_rep.mds->mode);
 
 	if (rep) { 
 		*rep = request->rq_rep.mds;
@@ -208,16 +227,17 @@ int mdc_readpage(struct ptlrpc_client *peer, ino_t ino, int type, __u64 offset,
 		*hdr = request->rq_rephdr;
 	}
 
- out: 
+ out:
 	ptlrpc_free_req(request);
+        OBD_FREE(bulk, sizeof(*bulk));
 	return rc;
 }
 
-int mdc_reint(struct ptlrpc_client *peer, struct ptlrpc_request *request)
+int mdc_reint(struct ptlrpc_client *cl, struct ptlrpc_request *request)
 {
 	int rc; 
 
-	rc = ptlrpc_queue_wait(request, peer);
+	rc = ptlrpc_queue_wait(cl, request);
 	if (rc) { 
 		CERROR("mdc request: error in handling %d\n", rc); 
 	}
@@ -225,30 +245,11 @@ int mdc_reint(struct ptlrpc_client *peer, struct ptlrpc_request *request)
 	return rc;
 }
 
-int mdc_create_client(char *uuid, struct ptlrpc_client *cl)
-{
-        int err; 
-
-        memset(cl, 0, sizeof(*cl));
-	cl->cli_xid = 0;
-	cl->cli_rep_unpack = mds_unpack_rep;
-	cl->cli_req_pack = mds_pack_req;
-	err = kportal_uuid_to_peer("mds", &cl->cli_server);
-	if (err == 0) { 
-		cl->cli_request_portal = MDS_REQUEST_PORTAL;
-		cl->cli_reply_portal = MDS_REPLY_PORTAL;
-		
-	} else { 
-		cl->cli_enqueue = mds_queue_req;
-	}
-        return 0;
-}
-
 static int request_ioctl(struct inode *inode, struct file *file, 
                          unsigned int cmd, unsigned long arg)
 {
 	int err;
-	struct ptlrpc_client peer;
+	struct ptlrpc_client cl;
 
 	ENTRY;
 
@@ -266,7 +267,8 @@ static int request_ioctl(struct inode *inode, struct file *file,
                 return -EINVAL;
         }
 
-        err = mdc_create_client("mds", &peer);
+        /* XXX complete this to get debugging working again */
+        err = -1;
 	if (err) {
                 CERROR("cannot create client"); 
                 return -EINVAL;
@@ -276,7 +278,7 @@ static int request_ioctl(struct inode *inode, struct file *file,
 	case IOC_REQUEST_GETATTR: { 
 		struct ptlrep_hdr *hdr = NULL;
 		CERROR("-- getting attr for ino 2\n"); 
-		err = mdc_getattr(&peer, 2, S_IFDIR, ~0, NULL, &hdr);
+		err = mdc_getattr(&cl, 2, S_IFDIR, ~0, NULL, &hdr);
 		if (hdr) {
                         /* FIXME: there must be a better way to get the size */
 			OBD_FREE(hdr, sizeof(struct ptlrep_hdr) +
@@ -295,7 +297,7 @@ static int request_ioctl(struct inode *inode, struct file *file,
 			break;
 		}
 		CERROR("-- readpage 0 for ino 2\n"); 
-		err = mdc_readpage(&peer, 2, S_IFDIR, 0, buf, NULL, &hdr);
+		err = mdc_readpage(&cl, 2, S_IFDIR, 0, buf, NULL, &hdr);
 		CERROR("-- done err %d\n", err);
 		if (!err) { 
 			CERROR("-- status: %d\n", hdr->status); 
@@ -318,7 +320,7 @@ static int request_ioctl(struct inode *inode, struct file *file,
 		iattr.ia_atime = 0;
 		iattr.ia_valid = ATTR_MODE | ATTR_ATIME;
 
-		err = mdc_setattr(&peer, &inode, &iattr, NULL, &hdr);
+		err = mdc_setattr(&cl, &inode, &iattr, NULL, &hdr);
 		CERROR("-- done err %d\n", err);
 		if (!err) { 
 			CERROR("-- status: %d\n", hdr->status); 
@@ -340,7 +342,7 @@ static int request_ioctl(struct inode *inode, struct file *file,
 		iattr.ia_atime = 0;
 		iattr.ia_valid = ATTR_MODE | ATTR_ATIME;
 
-		err = mdc_create(&peer, &inode, 
+		err = mdc_create(&cl, &inode, 
 				 "foofile", strlen("foofile"), 
 				 NULL, 0, 0100707, 47114711, 
 				 11, 47, 0, NULL, &hdr);
@@ -392,7 +394,6 @@ MODULE_AUTHOR("Peter J. Braam <braam@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre MDS Request Tester v1.0");
 MODULE_LICENSE("GPL");
 
-EXPORT_SYMBOL(mdc_create_client); 
 EXPORT_SYMBOL(mdc_create); 
 EXPORT_SYMBOL(mdc_unlink); 
 EXPORT_SYMBOL(mdc_rename); 

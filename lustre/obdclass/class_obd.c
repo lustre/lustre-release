@@ -60,7 +60,7 @@
 static int obd_init_magic;
 int obd_print_entry = 1;
 int obd_debug_level = ~0;
-long obd_memory = 0;
+unsigned long obd_memory = 0;
 struct obd_device obd_dev[MAX_OBD_DEVICES];
 struct list_head obd_types;
 
@@ -194,6 +194,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 obd->obd_type = type;
                 obd->obd_multi_count = 0;
                 INIT_LIST_HEAD(&obd->obd_gen_clients);
+                INIT_LIST_HEAD(&obd->obd_req_list);
 
                 /* do the attach */
                 if ( OBT(obd) && OBP(obd, attach) ) {
@@ -229,6 +230,11 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 }
                 if ( !list_empty(&obd->obd_gen_clients) ) {
                         CERROR("OBD device %d has connected clients\n",
+                               obd->obd_minor);
+                        return -EBUSY;
+                }
+                if ( !list_empty(&obd->obd_req_list) ) {
+                        CERROR("OBD device %d has hanging requests\n",
                                obd->obd_minor);
                         return -EBUSY;
                 }
@@ -272,11 +278,6 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
         }
         case OBD_IOC_CLEANUP: {
                 ENTRY;
-
-		if ( !(obd->obd_flags & OBD_SET_UP) ) {
-			EXIT;
-			return -EINVAL;
-		}
 
                 err = obd_cleanup(obd);
                 if ( err ) {
@@ -432,7 +433,6 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 err = OBP(obd, read)(&conn, &rw_s->obdo, rw_s->buf, 
                                         &rw_s->count, rw_s->offset);
                 
-                ODEBUG(&rw_s->obdo);
                 CDEBUG(D_INFO, "READ: conn %d, count %Ld, offset %Ld, '%s'\n",
                        rw_s->conn_id, rw_s->count, rw_s->offset, rw_s->buf);
                 if ( err ) {
@@ -466,7 +466,6 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 
                 err = OBP(obd, write)(&conn, &rw_s->obdo, rw_s->buf, 
                                          &rw_s->count, rw_s->offset);
-                ODEBUG(&rw_s->obdo);
                 if ( err ) {
                         EXIT;
                         return err;
@@ -618,7 +617,6 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                        rw_s->conn_id, rw_s->count, rw_s->offset);
                 err = OBP(obd, punch)(&conn, &rw_s->obdo, rw_s->count,
                                          rw_s->offset);
-                ODEBUG(&rw_s->obdo);
                 if ( err ) {
                         EXIT;
                         return err;
@@ -769,33 +767,6 @@ static struct miscdevice obd_psdev = {
         &obd_psdev_fops
 };
 
-int init_obd(void)
-{
-        int err;
-        int i;
-
-        printk(KERN_INFO "OBD class driver  v0.01, braam@stelias.com\n");
-        
-        INIT_LIST_HEAD(&obd_types);
-        
-	if ( (err = misc_register(&obd_psdev)) ) { 
-                CERROR("cannot register %d err %d\n", OBD_MINOR, err);
-                return -EIO;
-        }
-
-        for (i = 0; i < MAX_OBD_DEVICES; i++) {
-                memset(&(obd_dev[i]), 0, sizeof(obd_dev[i]));
-                obd_dev[i].obd_minor = i;
-                INIT_LIST_HEAD(&obd_dev[i].obd_gen_clients);
-        }
-
-        err = obd_init_obdo_cache();
-        if (err)
-                return err;
-        obd_sysctl_init();
-        obd_init_magic = 0x11223344;
-        return 0;
-}
 
 EXPORT_SYMBOL(obd_register_type);
 EXPORT_SYMBOL(obd_unregister_type);
@@ -816,13 +787,37 @@ EXPORT_SYMBOL(gen_multi_setup);
 EXPORT_SYMBOL(gen_multi_cleanup);
 EXPORT_SYMBOL(obd_memory);
 
-#ifdef MODULE
-int init_module(void)
+static int __init init_obdclass(void)
 {
-        return init_obd();
+        int err;
+        int i;
+
+        printk(KERN_INFO "OBD class driver  v0.01, braam@stelias.com\n");
+        
+        INIT_LIST_HEAD(&obd_types);
+        
+	if ( (err = misc_register(&obd_psdev)) ) { 
+                CERROR("cannot register %d err %d\n", OBD_MINOR, err);
+                return -EIO;
+        }
+
+        for (i = 0; i < MAX_OBD_DEVICES; i++) {
+                memset(&(obd_dev[i]), 0, sizeof(obd_dev[i]));
+                obd_dev[i].obd_minor = i;
+                INIT_LIST_HEAD(&obd_dev[i].obd_gen_clients);
+                INIT_LIST_HEAD(&obd_dev[i].obd_req_list);
+		init_waitqueue_head(&obd_dev[i].obd_req_waitq);
+        }
+
+        err = obd_init_obdo_cache();
+        if (err)
+                return err;
+        obd_sysctl_init();
+        obd_init_magic = 0x11223344;
+        return 0;
 }
 
-void cleanup_module(void)
+static void __exit cleanup_obdclass(void)
 {
         int i;
         ENTRY;
@@ -844,4 +839,10 @@ void cleanup_module(void)
         obd_init_magic = 0;
         EXIT;
 }
-#endif
+
+MODULE_AUTHOR("Cluster File Systems, Inc. <braam@clusterfs.com>");
+MODULE_DESCRIPTION("Lustre Class Driver v1.0");
+MODULE_LICENSE("GPL"); 
+
+module_init(init_obdclass);
+module_exit(cleanup_obdclass);

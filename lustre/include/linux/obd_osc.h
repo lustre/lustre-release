@@ -30,12 +30,12 @@
 #include <linux/obd_support.h>
 #include <linux/lustre_net.h>
 
-#define OST_EXIT 1
-#define LUSTRE_OST_NAME "ost"
-
 struct osc_obd {
 	struct obd_device *osc_tgt;
-        struct lustre_peer osc_peer;
+        struct ptlrpc_client osc_peer;
 };
+
+#define OST_EXIT 1
+#define LUSTRE_OST_NAME "ost"
 
 #endif

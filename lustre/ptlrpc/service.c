@@ -37,10 +37,8 @@ extern int server_request_callback(ptl_event_t *ev, void *data);
 static int ptlrpc_check_event(struct ptlrpc_service *svc)
 {
         
-        if (sigismember(&(current->pending.signal),
-                        SIGKILL) ||
-            sigismember(&(current->pending.signal),
-                        SIGINT)) { 
+        if (sigismember(&(current->pending.signal), SIGKILL) ||
+            sigismember(&(current->pending.signal), SIGINT)) { 
                 svc->srv_flags |= SVC_KILLED;
                 EXIT;
                 return 1;
@@ -80,13 +78,9 @@ static int ptlrpc_check_event(struct ptlrpc_service *svc)
         return 0;
 }
 
-struct ptlrpc_service *ptlrpc_init_svc(__u32 bufsize, 
-                                       int portal, 
-                                       char *uuid, 
-                                       req_unpack_t unpack, 
-                                       rep_pack_t pack,
-                                       svc_handler_t handler
-                                       )
+struct ptlrpc_service *
+ptlrpc_init_svc(__u32 bufsize, int req_portal, int rep_portal, char *uuid,
+                req_unpack_t unpack, rep_pack_t pack, svc_handler_t handler)
 {
         int err;
         struct ptlrpc_service *svc;
@@ -108,7 +102,8 @@ struct ptlrpc_service *ptlrpc_init_svc(__u32 bufsize,
 	svc->srv_flags = 0;
 
         svc->srv_buf_size = bufsize;
-        svc->srv_portal = portal;
+        svc->srv_rep_portal = rep_portal;
+        svc->srv_req_portal = req_portal;
         svc->srv_req_unpack = unpack;
         svc->srv_rep_pack = pack;
         svc->srv_handler = handler;
@@ -169,6 +164,7 @@ static int ptlrpc_main(void *arg)
                          * we should put the request on the stack of
                          * mds_handle instead. */
                         memset(&request, 0, sizeof(request));
+                        request.rq_obd = obddev;
                         request.rq_reqbuf = svc->srv_ev.mem_desc.start + svc->srv_ev.offset;
                         request.rq_reqlen = svc->srv_ev.mem_desc.length;
                         request.rq_xid = svc->srv_ev.match_bits;
@@ -203,7 +199,7 @@ static int ptlrpc_main(void *arg)
 	svc->srv_thread = NULL;
         svc->srv_flags = SVC_STOPPED;
 	wake_up(&svc->srv_ctl_waitq);
-	CERROR("svc %s: exiting\n", data->name);
+	CERROR("svc exiting process %d\n", current->pid);
 	return 0;
 }
 
@@ -212,7 +208,8 @@ void ptlrpc_stop_thread(struct ptlrpc_service *svc)
 	svc->srv_flags = SVC_STOPPING;
 
         wake_up(&svc->srv_waitq);
-        wait_event_interruptible(svc->srv_ctl_waitq,  (svc->srv_flags & SVC_STOPPED));
+        wait_event_interruptible(svc->srv_ctl_waitq, 
+                                 (svc->srv_flags & SVC_STOPPED));
 }
 
 int ptlrpc_start_thread(struct obd_device *dev, struct ptlrpc_service *svc,
@@ -270,7 +267,7 @@ int rpc_register_service(struct ptlrpc_service *service, char *uuid)
         }
 
         /* Attach the leading ME on which we build the ring */
-        rc = PtlMEAttach(peer.peer_ni, service->srv_portal,
+        rc = PtlMEAttach(peer.peer_ni, service->srv_req_portal,
                          service->srv_id, 0, ~0, PTL_RETAIN,
                          &(service->srv_me_h[0]));
 
@@ -333,8 +330,10 @@ int rpc_unregister_service(struct ptlrpc_service *service)
                 rc = PtlMEUnlink(service->srv_me_h[i]);
                 if (rc)
                         CERROR("PtlMEUnlink failed: %d\n", rc);
-        
-                OBD_FREE(service->srv_buf[i], service->srv_buf_size);                
+
+                if (service->srv_buf[i] != NULL)
+                        OBD_FREE(service->srv_buf[i], service->srv_buf_size);
+                service->srv_buf[i] = NULL;
         }
 
         rc = PtlEQFree(service->srv_eq_h);

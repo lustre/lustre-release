@@ -33,6 +33,7 @@
 #include <linux/lustre_net.h>
 
 ptl_handle_eq_t sent_pkt_eq, rcvd_rep_eq, bulk_source_eq, bulk_sink_eq;
+static const ptl_handle_ni_t *socknal_nip = NULL, *qswnal_nip = NULL;
 
 /*
  *  Free the packet when it has gone out
@@ -131,7 +132,7 @@ int server_request_callback(ptl_event_t *ev, void *data)
 
 static int bulk_source_callback(ptl_event_t *ev, void *data)
 {
-        struct ptlrpc_request *rpc = ev->mem_desc.user_ptr;
+        struct ptlrpc_bulk_desc *bulk = ev->mem_desc.user_ptr;
 
         ENTRY;
 
@@ -139,7 +140,8 @@ static int bulk_source_callback(ptl_event_t *ev, void *data)
                 CDEBUG(D_NET, "got SENT event\n");
         } else if (ev->type == PTL_EVENT_ACK) {
                 CDEBUG(D_NET, "got ACK event\n");
-                wake_up_interruptible(&rpc->rq_wait_for_bulk);
+                bulk->b_flags = PTL_BULK_SENT;
+                wake_up_interruptible(&bulk->b_waitq);
         } else {
                 CERROR("Unexpected event type!\n");
                 BUG();
@@ -151,14 +153,15 @@ static int bulk_source_callback(ptl_event_t *ev, void *data)
 
 static int bulk_sink_callback(ptl_event_t *ev, void *data)
 {
-        struct ptlrpc_request *rpc = ev->mem_desc.user_ptr;
+        struct ptlrpc_bulk_desc *bulk = ev->mem_desc.user_ptr;
 
         ENTRY;
 
         if (ev->type == PTL_EVENT_PUT) {
-                if (rpc->rq_bulkbuf != ev->mem_desc.start + ev->offset)
+                if (bulk->b_buf != ev->mem_desc.start + ev->offset)
                         CERROR("bulkbuf != mem_desc -- why?\n");
-                wake_up_interruptible(&rpc->rq_wait_for_bulk);
+                bulk->b_flags = PTL_BULK_RCVD;
+                wake_up_interruptible(&bulk->b_waitq);
         } else {
                 CERROR("Unexpected event type!\n");
                 BUG();
@@ -171,15 +174,20 @@ static int bulk_sink_callback(ptl_event_t *ev, void *data)
 int ptlrpc_init_portals(void)
 {
         int rc;
-        const ptl_handle_ni_t *nip;
         ptl_handle_ni_t ni;
 
-        nip = inter_module_get_request(LUSTRE_NAL "_ni", LUSTRE_NAL);
-        if (nip == NULL) {
-                CERROR("get_ni failed: is the NAL module loaded?\n");
+        socknal_nip = inter_module_get_request("ksocknal_ni", "ksocknal");
+        qswnal_nip = inter_module_get_request("kqswnal_ni", "kqswnal");
+        if (socknal_nip == NULL && qswnal_nip == NULL) {
+                CERROR("get_ni failed: is a NAL module loaded?\n");
                 return -EIO;
         }
-        ni = *nip;
+
+        /* Use the qswnal if it's there */
+        if (qswnal_nip != NULL)
+                ni = *qswnal_nip;
+        else
+                ni = *socknal_nip;
 
         rc = PtlEQAlloc(ni, 128, sent_packet_callback, NULL, &sent_pkt_eq);
         if (rc != PTL_OK)
@@ -207,5 +215,8 @@ void ptlrpc_exit_portals(void)
         PtlEQFree(bulk_source_eq);
         PtlEQFree(bulk_sink_eq);
 
-        inter_module_put(LUSTRE_NAL "_ni");
+        if (qswnal_nip != NULL)
+                inter_module_put("kqswnal_ni");
+        if (socknal_nip != NULL)
+                inter_module_put("ksocknal_ni");
 }

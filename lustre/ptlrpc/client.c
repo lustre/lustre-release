@@ -32,8 +32,7 @@
 #include <linux/obd_class.h>
 #include <linux/lustre_net.h>
 
-int ptlrpc_enqueue(struct ptlrpc_client *peer, 
-                     struct ptlrpc_request *req)
+int ptlrpc_enqueue(struct ptlrpc_client *peer, struct ptlrpc_request *req)
 {
 	struct ptlrpc_request *srv_req;
 	
@@ -66,14 +65,20 @@ int ptlrpc_enqueue(struct ptlrpc_client *peer,
 	return 0;
 }
 
-int ptlrpc_connect_client(int dev, char *uuid, 
-			      struct ptlrpc_client *cl)
+int ptlrpc_connect_client(int dev, char *uuid, int req_portal, int rep_portal, 
+                          req_pack_t req_pack, rep_unpack_t rep_unpack,
+                          struct ptlrpc_client *cl)
 {
         int err; 
 
         memset(cl, 0, sizeof(*cl));
-	cl->cli_xid = 0;
+        spin_lock_init(&cl->cli_lock);
+	cl->cli_xid = 1;
 	cl->cli_obd = NULL; 
+	cl->cli_request_portal = req_portal;
+	cl->cli_reply_portal = rep_portal;
+	cl->cli_rep_unpack = rep_unpack;
+	cl->cli_req_pack = req_pack;
 
 	/* non networked client */
 	if (dev >= 0 && dev < MAX_OBD_DEVICES) {
@@ -84,6 +89,10 @@ int ptlrpc_connect_client(int dev, char *uuid,
 			CERROR("target device %d not att or setup\n", dev);
 			return -EINVAL;
 		}
+                if (strcmp(obd->obd_type->typ_name, "ost") && 
+                    strcmp(obd->obd_type->typ_name, "mds")) { 
+                        return -EINVAL;
+                }
 
 		cl->cli_obd = &obd_dev[dev];
 		return 0;
@@ -91,11 +100,25 @@ int ptlrpc_connect_client(int dev, char *uuid,
 
 	/* networked */
 	err = kportal_uuid_to_peer(uuid, &cl->cli_server);
-	if (err == 0) { 
-		CERROR("cannot find peer!"); 
+	if (err != 0) { 
+		CERROR("cannot find peer %s!", uuid); 
 	}
 
         return err;
+}
+
+struct ptlrpc_bulk_desc *ptlrpc_prep_bulk(struct lustre_peer *peer)
+{
+        struct ptlrpc_bulk_desc *bulk;
+
+        OBD_ALLOC(bulk, sizeof(*bulk));
+        if (bulk != NULL) {
+                memset(bulk, 0, sizeof(*bulk));
+                memcpy(&bulk->b_peer, peer, sizeof(*peer));
+                init_waitqueue_head(&bulk->b_waitq);
+        }
+
+        return bulk;
 }
 
 struct ptlrpc_request *ptlrpc_prep_req(struct ptlrpc_client *cl, 
@@ -113,7 +136,10 @@ struct ptlrpc_request *ptlrpc_prep_req(struct ptlrpc_client *cl,
 	}
 
 	memset(request, 0, sizeof(*request));
+
+        spin_lock(&cl->cli_lock);
 	request->rq_xid = cl->cli_xid++;
+        spin_unlock(&cl->cli_lock);
 
 	rc = cl->cli_req_pack(name, namelen, tgt, tgtlen,
 			  &request->rq_reqhdr, &request->rq_req,
@@ -123,7 +149,7 @@ struct ptlrpc_request *ptlrpc_prep_req(struct ptlrpc_client *cl,
 		return NULL;
 	}
 	request->rq_reqhdr->opc = opcode;
-	request->rq_reqhdr->seqno = request->rq_xid;
+	request->rq_reqhdr->xid = request->rq_xid;
 
 	EXIT;
 	return request;
@@ -134,11 +160,43 @@ void ptlrpc_free_req(struct ptlrpc_request *request)
 	OBD_FREE(request, sizeof(*request));
 }
 
+static int ptlrpc_check_reply(struct ptlrpc_request *req)
+{
+        if (req->rq_repbuf != NULL) {
+                req->rq_flags = PTL_RPC_REPLY;
+                EXIT;
+                return 1;
+        }
+
+        if (sigismember(&(current->pending.signal), SIGKILL) ||
+            sigismember(&(current->pending.signal), SIGINT)) { 
+                req->rq_flags = PTL_RPC_INTR;
+                EXIT;
+                return 1;
+        }
+
+        return 0;
+}
+
+/* Abort this request and cleanup any resources associated with it. */
+int ptlrpc_abort(struct ptlrpc_request *request)
+{
+        /* First remove the MD for the reply; in theory, this means
+         * that we can tear down the buffer safely. */
+        PtlMEUnlink(request->rq_reply_me_h);
+        PtlMDUnlink(request->rq_reply_md_h);
+        OBD_FREE(request->rq_repbuf, request->rq_replen);
+        request->rq_repbuf = NULL;
+        request->rq_replen = 0;
+
+        return 0;
+}
+
 int ptlrpc_queue_wait(struct ptlrpc_client *cl, struct ptlrpc_request *req)
                              
 {
 	int rc;
-        DECLARE_WAITQUEUE(wait, current);
+        ENTRY;
 
 	init_waitqueue_head(&req->rq_wait_for_rep);
 
@@ -153,43 +211,38 @@ int ptlrpc_queue_wait(struct ptlrpc_client *cl, struct ptlrpc_request *req)
 		rc = ptl_send_rpc(req, &cl->cli_server);
 	}
 	if (rc) { 
-		CERROR("error %d, opcode %d\n", rc, 
-		       req->rq_reqhdr->opc); 
+                CERROR("error %d, opcode %d\n", rc, req->rq_reqhdr->opc);
 		return -rc;
 	}
 
         CDEBUG(0, "-- sleeping\n");
-        add_wait_queue(&req->rq_wait_for_rep, &wait);
-        while (req->rq_repbuf == NULL) {
-                set_current_state(TASK_INTERRUPTIBLE);
-
-                /* if this process really wants to die, let it go */
-                if (sigismember(&(current->pending.signal), SIGKILL) ||
-                    sigismember(&(current->pending.signal), SIGINT))
-                        break;
-
-                schedule();
-        }
-        remove_wait_queue(&req->rq_wait_for_rep, &wait);
-        set_current_state(TASK_RUNNING);
+        wait_event_interruptible(req->rq_wait_for_rep, ptlrpc_check_reply(req));
         CDEBUG(0, "-- done\n");
-
-        if (req->rq_repbuf == NULL) {
-                /* We broke out because of a signal */
+        
+        if (req->rq_flags == PTL_RPC_INTR) { 
+                /* Clean up the dangling reply buffers */
+                ptlrpc_abort(req);
                 EXIT;
                 return -EINTR;
         }
 
-	rc = cl->cli_rep_unpack(req->rq_repbuf, req->rq_replen, &req->rq_rephdr, &req->rq_rep);
+        if (req->rq_flags != PTL_RPC_REPLY) { 
+                CERROR("Unknown reason for wakeup\n");
+                EXIT;
+                return -EINTR;
+        }
+
+	rc = cl->cli_rep_unpack(req->rq_repbuf, req->rq_replen,
+                                &req->rq_rephdr, &req->rq_rep);
 	if (rc) {
 		CERROR("unpack_rep failed: %d\n", rc);
 		return rc;
 	}
-        CERROR("got rep %lld\n", req->rq_rephdr->seqno);
+        CERROR("got rep %d\n", req->rq_rephdr->xid);
+
 	if ( req->rq_rephdr->status == 0 )
-                CDEBUG(0, "--> buf %p len %d status %d\n",
-		       req->rq_repbuf, req->rq_replen, 
-		       req->rq_rephdr->status); 
+                CDEBUG(0, "--> buf %p len %d status %d\n", req->rq_repbuf,
+                       req->rq_replen, req->rq_rephdr->status);
 
 	EXIT;
 	return 0;
