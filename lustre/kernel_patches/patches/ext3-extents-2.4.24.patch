@@ -1,7 +1,7 @@
 Index: linux-2.4.24/fs/ext3/extents.c
 ===================================================================
 --- linux-2.4.24.orig/fs/ext3/extents.c	2003-01-30 13:24:37.000000000 +0300
-+++ linux-2.4.24/fs/ext3/extents.c	2004-08-10 03:52:42.000000000 +0400
++++ linux-2.4.24/fs/ext3/extents.c	2004-09-12 17:37:14.000000000 +0400
 @@ -0,0 +1,2262 @@
 +/*
 + * Copyright (c) 2003, Cluster File Systems, Inc, info@clusterfs.com
@@ -2268,8 +2268,8 @@ Index: linux-2.4.24/fs/ext3/extents.c
 Index: linux-2.4.24/fs/ext3/ialloc.c
 ===================================================================
 --- linux-2.4.24.orig/fs/ext3/ialloc.c	2004-08-07 16:35:25.000000000 +0400
-+++ linux-2.4.24/fs/ext3/ialloc.c	2004-08-10 03:25:26.000000000 +0400
-@@ -593,10 +593,14 @@
++++ linux-2.4.24/fs/ext3/ialloc.c	2004-09-12 17:49:24.000000000 +0400
+@@ -593,10 +593,21 @@
  		iloc.bh = NULL;
  		goto fail;
  	}
@@ -2279,7 +2279,14 @@ Index: linux-2.4.24/fs/ext3/ialloc.c
 + 	if (test_opt(sb, EXTENTS)) {
 + 		EXT3_I(inode)->i_flags |= EXT3_EXTENTS_FL;
 + 		ext3_extents_initialize_blockmap(handle, inode);
-+ 	}
++		if (!EXT3_HAS_INCOMPAT_FEATURE(sb, EXT3_FEATURE_INCOMPAT_EXTENTS)) {
++			err = ext3_journal_get_write_access(handle, EXT3_SB(sb)->s_sbh);
++			if (err) goto fail;
++			EXT3_SET_INCOMPAT_FEATURE(sb, EXT3_FEATURE_INCOMPAT_EXTENTS);
++			BUFFER_TRACE(EXT3_SB(sb)->s_sbh, "call ext3_journal_dirty_metadata");
++			err = ext3_journal_dirty_metadata(handle, EXT3_SB(sb)->s_sbh);
++		}
++	}
  
 +	err = ext3_mark_iloc_dirty(handle, inode, &iloc);
 +	if (err) goto fail;
@@ -2289,7 +2296,7 @@ Index: linux-2.4.24/fs/ext3/ialloc.c
 Index: linux-2.4.24/fs/ext3/inode.c
 ===================================================================
 --- linux-2.4.24.orig/fs/ext3/inode.c	2004-08-07 16:35:25.000000000 +0400
-+++ linux-2.4.24/fs/ext3/inode.c	2004-08-10 03:25:26.000000000 +0400
++++ linux-2.4.24/fs/ext3/inode.c	2004-09-12 17:37:14.000000000 +0400
 @@ -848,6 +848,15 @@
  	goto reread;
  }
@@ -2374,7 +2381,7 @@ Index: linux-2.4.24/fs/ext3/inode.c
 Index: linux-2.4.24/fs/ext3/Makefile
 ===================================================================
 --- linux-2.4.24.orig/fs/ext3/Makefile	2004-08-07 16:35:25.000000000 +0400
-+++ linux-2.4.24/fs/ext3/Makefile	2004-08-10 03:25:26.000000000 +0400
++++ linux-2.4.24/fs/ext3/Makefile	2004-09-12 17:37:14.000000000 +0400
 @@ -13,7 +13,9 @@
  
  obj-y    := balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o iopen.o \
@@ -2389,7 +2396,7 @@ Index: linux-2.4.24/fs/ext3/Makefile
 Index: linux-2.4.24/fs/ext3/super.c
 ===================================================================
 --- linux-2.4.24.orig/fs/ext3/super.c	2004-08-07 16:35:25.000000000 +0400
-+++ linux-2.4.24/fs/ext3/super.c	2004-08-10 03:25:26.000000000 +0400
++++ linux-2.4.24/fs/ext3/super.c	2004-09-12 17:37:14.000000000 +0400
 @@ -530,6 +530,7 @@
  	int i;
  
@@ -2421,7 +2428,7 @@ Index: linux-2.4.24/fs/ext3/super.c
 Index: linux-2.4.24/fs/ext3/ioctl.c
 ===================================================================
 --- linux-2.4.24.orig/fs/ext3/ioctl.c	2004-08-07 16:35:23.000000000 +0400
-+++ linux-2.4.24/fs/ext3/ioctl.c	2004-08-10 03:25:26.000000000 +0400
++++ linux-2.4.24/fs/ext3/ioctl.c	2004-09-12 17:37:14.000000000 +0400
 @@ -174,6 +174,10 @@
  			return ret;
  		}
@@ -2436,7 +2443,7 @@ Index: linux-2.4.24/fs/ext3/ioctl.c
 Index: linux-2.4.24/include/linux/ext3_fs.h
 ===================================================================
 --- linux-2.4.24.orig/include/linux/ext3_fs.h	2004-08-07 16:35:25.000000000 +0400
-+++ linux-2.4.24/include/linux/ext3_fs.h	2004-08-10 03:25:26.000000000 +0400
++++ linux-2.4.24/include/linux/ext3_fs.h	2004-09-12 17:45:20.000000000 +0400
 @@ -185,6 +185,7 @@
  #define EXT3_JOURNAL_DATA_FL		0x00004000 /* file data should be journaled */
  #define EXT3_EXTRA_ISIZE		0x00008000 /* inode has initialized i_extra_isize */
@@ -2464,7 +2471,21 @@ Index: linux-2.4.24/include/linux/ext3_fs.h
  
  /* Compatibility, for having both ext2_fs.h and ext3_fs.h included at once */
  #ifndef _LINUX_EXT2_FS_H
-@@ -689,6 +695,7 @@
+@@ -504,10 +510,12 @@
+ #define EXT3_FEATURE_INCOMPAT_FILETYPE		0x0002
+ #define EXT3_FEATURE_INCOMPAT_RECOVER		0x0004 /* Needs recovery */
+ #define EXT3_FEATURE_INCOMPAT_JOURNAL_DEV	0x0008 /* Journal device */
++#define EXT3_FEATURE_INCOMPAT_EXTENTS		0x0040 /* extents support */
+ 
+ #define EXT3_FEATURE_COMPAT_SUPP	EXT2_FEATURE_COMPAT_EXT_ATTR
+ #define EXT3_FEATURE_INCOMPAT_SUPP	(EXT3_FEATURE_INCOMPAT_FILETYPE| \
+-					 EXT3_FEATURE_INCOMPAT_RECOVER)
++					 EXT3_FEATURE_INCOMPAT_RECOVER| \
++					 EXT3_FEATURE_INCOMPAT_EXTENTS)
+ #define EXT3_FEATURE_RO_COMPAT_SUPP	(EXT3_FEATURE_RO_COMPAT_SPARSE_SUPER| \
+ 					 EXT3_FEATURE_RO_COMPAT_LARGE_FILE| \
+ 					 EXT3_FEATURE_RO_COMPAT_BTREE_DIR)
+@@ -689,6 +697,7 @@
  extern unsigned long ext3_count_free (struct buffer_head *, unsigned);
  
  /* inode.c */
@@ -2472,7 +2493,7 @@ Index: linux-2.4.24/include/linux/ext3_fs.h
  extern int ext3_forget(handle_t *, int, struct inode *, struct buffer_head *, int);
  extern struct buffer_head * ext3_getblk (handle_t *, struct inode *, long, int, int *);
  extern struct buffer_head * ext3_bread (handle_t *, struct inode *, int, int, int *);
-@@ -770,6 +777,14 @@
+@@ -770,6 +779,14 @@
  extern struct inode_operations ext3_symlink_inode_operations;
  extern struct inode_operations ext3_fast_symlink_inode_operations;
  
@@ -2490,7 +2511,7 @@ Index: linux-2.4.24/include/linux/ext3_fs.h
 Index: linux-2.4.24/include/linux/ext3_extents.h
 ===================================================================
 --- linux-2.4.24.orig/include/linux/ext3_extents.h	2003-01-30 13:24:37.000000000 +0300
-+++ linux-2.4.24/include/linux/ext3_extents.h	2004-08-10 03:49:41.000000000 +0400
++++ linux-2.4.24/include/linux/ext3_extents.h	2004-09-12 17:37:14.000000000 +0400
 @@ -0,0 +1,237 @@
 +/*
 + * Copyright (c) 2003, Cluster File Systems, Inc, info@clusterfs.com
@@ -2732,7 +2753,7 @@ Index: linux-2.4.24/include/linux/ext3_extents.h
 Index: linux-2.4.24/include/linux/ext3_fs_i.h
 ===================================================================
 --- linux-2.4.24.orig/include/linux/ext3_fs_i.h	2004-08-07 16:35:25.000000000 +0400
-+++ linux-2.4.24/include/linux/ext3_fs_i.h	2004-08-10 03:25:26.000000000 +0400
++++ linux-2.4.24/include/linux/ext3_fs_i.h	2004-09-12 17:37:14.000000000 +0400
 @@ -76,6 +76,8 @@
  	 * by other means, so we have truncate_sem.
  	 */

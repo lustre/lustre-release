@@ -37,7 +37,7 @@ ext3-extents-asyncdel-2.4.24.patch
 dynamic-locks-2.4.21-suse2.patch
 vfs-pdirops-2.4.21-suse2.patch 
 ext3-pdirops-2.4.24-chaos.patch
-ext3-mds-num-2.4.21-suse.patch
+ext3-mds-num-2.4.21-suse.patch 
 ext3-inode-reuse-2.4.20.patch
 ext3-raw-lookup-pdirops.patch
 ext3-extents-in-ea-2.4.21-suse2.patch

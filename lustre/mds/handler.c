@@ -1563,6 +1563,8 @@ repeat:
         rc = vfs_mkdir(parent_inode, new, body->oa.o_mode);
         if (rc == 0) {
                 if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
+                        new->d_inode->i_generation = body->oa.o_generation;
+                        mark_inode_dirty(new->d_inode);
                         LASSERTF(body->oa.o_id == new->d_inode->i_ino, 
                                  "BUG 3550: failed to recreate obj "
                                  LPU64" -> %lu\n",
@@ -1574,10 +1576,6 @@ repeat:
                                  body->oa.o_id, body->oa.o_generation,
                                  new->d_inode->i_ino, 
                                  new->d_inode->i_generation);
-                }
-                if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
-                        new->d_inode->i_generation = body->oa.o_generation;
-                        mark_inode_dirty(new->d_inode);
                 }
 
                 obdo_from_inode(&repbody->oa, new->d_inode, FILTER_VALID_FLAGS);
