@@ -4,10 +4,7 @@
  * Copyright (C) 2002 Cluster File Systems, Inc.
  *   Author: Eric Barton <eric@bartonsoftware.com>
  *
- * Copyright (C) 2002, Lawrence Livermore National Labs (LLNL)
- * W. Marcus Miller - Based on ksocknal
- *
- * This file is part of Portals, http://www.sf.net/projects/sandiaportals/
+ * This file is part of Portals, http://www.lustre.org
  *
  * Portals is free software; you can redistribute it and/or
  * modify it under the terms of version 2 of the GNU General Public

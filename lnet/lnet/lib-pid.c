@@ -5,10 +5,8 @@
  *
  * Process identification routines
  * Copyright (C) 2001-2003 Cluster File Systems, Inc.
- * Copyright (C) 2001-2003 Cluster File Systems, Inc.
  *
- *
- *   This file is part of Lustre, http://www.sf.net/projects/lustre/
+ *   This file is part of Lustre, http://www.lustre.org
  *
  *   Lustre is free software; you can redistribute it and/or
  *   modify it under the terms of version 2 of the GNU General Public

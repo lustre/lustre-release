@@ -1,13 +1,12 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Copyright (C) 2001, 2002 Cluster File Systems, Inc.
  *   Author: Zach Brown <zab@zabbo.net>
  *   Author: Peter J. Braam <braam@clusterfs.com>
  *   Author: Phil Schwan <phil@clusterfs.com>
  *   Author: Eric Barton <eric@bartonsoftware.com>
  *
- *   This file is part of Portals, http://www.sf.net/projects/lustre/
+ *   This file is part of Lustre, http://www.lustre.org
  *
  *   Portals is free software; you can redistribute it and/or
  *   modify it under the terms of version 2 of the GNU General Public

@@ -6,9 +6,8 @@
  * Called by the NAL when it initializes.  Safe to call multiple times.
  *
  *  Copyright (c) 2001-2003 Cluster File Systems, Inc.
- *  Copyright (c) 2001-2002 Sandia National Laboratories
  *
- *   This file is part of Lustre, http://www.sf.net/projects/lustre/
+ *   This file is part of Lustre, http://www.lustre.org
  *
  *   Lustre is free software; you can redistribute it and/or
  *   modify it under the terms of version 2 of the GNU General Public
@@ -30,9 +29,6 @@
 #ifdef __KERNEL__
 # include <linux/string.h>      /* for memset() */
 # include <linux/kp30.h>
-# ifdef KERNEL_ADDR_CACHE
-#  include <compute/OS/addrCache/cache.h>
-# endif
 #else
 # include <string.h>
 # include <sys/time.h>

@@ -5,9 +5,8 @@
  * Match Entry management routines
  *
  *  Copyright (c) 2001-2003 Cluster File Systems, Inc.
- *  Copyright (c) 2001-2002 Sandia National Laboratories
  *
- *   This file is part of Lustre, http://www.sf.net/projects/lustre/
+ *   This file is part of Lustre, http://www.lustre.org
  *
  *   Lustre is free software; you can redistribute it and/or
  *   modify it under the terms of version 2 of the GNU General Public
@@ -49,8 +48,6 @@ lib_api_me_attach(nal_t *apinal,
 
         if (portal >= tbl->size)
                 return PTL_PT_INDEX_INVALID;
-
-        /* Should check for valid matchid, but not yet */
 
         me = lib_me_alloc (nal);
         if (me == NULL)
@@ -95,8 +92,6 @@ lib_api_me_insert(nal_t *apinal,
         new_me = lib_me_alloc (nal);
         if (new_me == NULL)
                 return PTL_NO_SPACE;
-
-        /* Should check for valid matchid, but not yet */
 
         LIB_LOCK(nal, flags);
 
