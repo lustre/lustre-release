@@ -427,8 +427,8 @@ static int lov_set_osc_active(struct lov_obd *lov, struct obd_uuid *uuid,
 static int lov_notify(struct obd_device *obd, struct obd_device *watched,
                       int active, void *data)
 {
-        int rc;
         struct obd_uuid *uuid;
+        int rc;
         ENTRY;
 
         if (strcmp(watched->obd_type->typ_name, LUSTRE_OSC_NAME)) {

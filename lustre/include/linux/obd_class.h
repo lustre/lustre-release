@@ -658,7 +658,8 @@ static inline int obd_add_conn(struct obd_import *imp, struct obd_uuid *uuid,
         RETURN(rc);
 }
 
-static inline int obd_del_conn(struct obd_import *imp, struct obd_uuid *uuid)
+static inline int obd_del_conn(struct obd_import *imp,
+                               struct obd_uuid *uuid)
 {
         struct obd_device *obd = imp->imp_obd;
         int rc;
@@ -674,8 +675,9 @@ static inline int obd_del_conn(struct obd_import *imp, struct obd_uuid *uuid)
 
 
 static inline int obd_connect(struct lustre_handle *conn,
-                              struct obd_device *obd, struct obd_uuid *cluuid,
-                              unsigned long connect_flags)
+                              struct obd_device *obd,
+                              struct obd_uuid *cluuid,
+                              unsigned long flags)
 {
         int rc;
         ENTRY;
@@ -684,11 +686,12 @@ static inline int obd_connect(struct lustre_handle *conn,
         OBD_CHECK_OP(obd, connect, -EOPNOTSUPP);
         OBD_COUNTER_INCREMENT(obd, connect);
 
-        rc = OBP(obd, connect)(conn, obd, cluuid, connect_flags);
+        rc = OBP(obd, connect)(conn, obd, cluuid, flags);
         RETURN(rc);
 }
 
-static inline int obd_connect_post(struct obd_export *exp, unsigned long flags)
+static inline int obd_connect_post(struct obd_export *exp,
+                                   unsigned long flags)
 {
         int rc;
         ENTRY;
@@ -701,7 +704,8 @@ static inline int obd_connect_post(struct obd_export *exp, unsigned long flags)
         RETURN(rc);
 }
 
-static inline int obd_disconnect(struct obd_export *exp, unsigned long flags)
+static inline int obd_disconnect(struct obd_export *exp,
+                                 unsigned long flags)
 {
         int rc;
         ENTRY;

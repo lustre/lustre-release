@@ -441,6 +441,9 @@ static int lmv_disconnect(struct obd_export *exp, unsigned long flags)
 
                 mdc_obd = class_exp2obd(lmv->tgts[i].ltd_exp);
 
+                if (mdc_obd)
+                        mdc_obd->obd_no_recov = obd->obd_no_recov;
+
 #ifdef __KERNEL__
                 if (lmv_proc_dir) {
                         struct proc_dir_entry *mdc_symlink;
@@ -455,10 +458,6 @@ static int lmv_disconnect(struct obd_export *exp, unsigned long flags)
                         }
                 }
 #endif
-                if (obd->obd_no_recov) {
-                        if (mdc_obd)
-                                mdc_obd->obd_no_recov = 1;
-                }
                 CDEBUG(D_OTHER, "disconnected from %s(%s) successfully\n",
                         lmv->tgts[i].ltd_exp->exp_obd->obd_name,
                         lmv->tgts[i].ltd_exp->exp_obd->obd_uuid.uuid);

@@ -455,7 +455,9 @@ int client_disconnect_export(struct obd_export *exp, unsigned long flags)
                 obd->obd_namespace = NULL;
         }
 
-        /* Yeah, obd_no_recov also (mainly) means "forced shutdown". */
+        /* 
+         * Yeah, obd_no_recov also (mainly) means "forced shutdown".
+         */
         if (obd->obd_no_recov)
                 ptlrpc_invalidate_import(imp, 0);
         else
