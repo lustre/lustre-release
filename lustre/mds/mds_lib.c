@@ -198,6 +198,7 @@ static int mds_link_unpack(struct ptlrpc_request *req, int offset,
         r->ur_suppgid2 = rec->lk_suppgid2;
         r->ur_fid1 = &rec->lk_fid1;
         r->ur_fid2 = &rec->lk_fid2;
+        r->ur_time = rec->lk_time;
 
         LASSERT_REQSWAB (req, offset + 1);
         r->ur_name = lustre_msg_string (req->rq_reqmsg, offset + 1, 0);
@@ -226,6 +227,7 @@ static int mds_unlink_unpack(struct ptlrpc_request *req, int offset,
         r->ur_suppgid2 = -1;
         r->ur_fid1 = &rec->ul_fid1;
         r->ur_fid2 = &rec->ul_fid2;
+        r->ur_time = rec->ul_time;
 
         LASSERT_REQSWAB (req, offset + 1);
         r->ur_name = lustre_msg_string(req->rq_reqmsg, offset + 1, 0);
@@ -253,6 +255,7 @@ static int mds_rename_unpack(struct ptlrpc_request *req, int offset,
         r->ur_suppgid2 = rec->rn_suppgid2;
         r->ur_fid1 = &rec->rn_fid1;
         r->ur_fid2 = &rec->rn_fid2;
+        r->ur_time = rec->rn_time;
 
         LASSERT_REQSWAB (req, offset + 1);
         r->ur_name = lustre_msg_string(req->rq_reqmsg, offset + 1, 0);

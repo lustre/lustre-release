@@ -174,14 +174,6 @@ check_mds_status_req (void)
 }
 
 void
-check_mds_fileh_body (void)
-{
-	BLANK_LINE ();
-	CHECK_STRUCT (mds_fileh_body);
-	CHECK_MEMBER (mds_fileh_body, f_fid);
-}
-
-void
 check_mds_body (void)
 {
 	BLANK_LINE ();
@@ -263,6 +255,7 @@ check_mds_rec_link (void)
 	CHECK_MEMBER (mds_rec_link, lk_suppgid2);
 	CHECK_MEMBER (mds_rec_link, lk_fid1);
 	CHECK_MEMBER (mds_rec_link, lk_fid2);
+	CHECK_MEMBER (mds_rec_link, lk_time);
 }
 
 void
@@ -274,11 +267,11 @@ check_mds_rec_unlink (void)
 	CHECK_MEMBER (mds_rec_unlink, ul_fsuid);
 	CHECK_MEMBER (mds_rec_unlink, ul_fsgid);
 	CHECK_MEMBER (mds_rec_unlink, ul_cap);
-	CHECK_MEMBER (mds_rec_unlink, ul_reserved);
-	CHECK_MEMBER (mds_rec_unlink, ul_mode);
 	CHECK_MEMBER (mds_rec_unlink, ul_suppgid);
+	CHECK_MEMBER (mds_rec_unlink, ul_mode);
 	CHECK_MEMBER (mds_rec_unlink, ul_fid1);
 	CHECK_MEMBER (mds_rec_unlink, ul_fid2);
+	CHECK_MEMBER (mds_rec_unlink, ul_time);
 }
 
 void
@@ -294,6 +287,7 @@ check_mds_rec_rename (void)
 	CHECK_MEMBER (mds_rec_rename, rn_suppgid2);
 	CHECK_MEMBER (mds_rec_rename, rn_fid1);
 	CHECK_MEMBER (mds_rec_rename, rn_fid2);
+	CHECK_MEMBER (mds_rec_rename, rn_time);
 }
 
 void
@@ -571,7 +565,6 @@ main (int argc, char **argv)
 	check_ost_body ();
 	check_ll_fid ();
 	check_mds_status_req ();
-	check_mds_fileh_body ();
 	check_mds_body ();
 	check_mds_rec_setattr ();
 	check_mds_rec_create ();
