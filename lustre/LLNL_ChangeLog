@@ -1,9 +1,19 @@
+2003-08-08  Brian Behlendorf  <behlendorf1@llnl.gov>
+       * version llnl_3devel tagged
+       * bug fixes:
+         - lconf fix to ensure all connections on the router are cleaned up
+         - #1505 patch to quiet two messages
+           - "lustre_commitd quitting"
+           - "processing error -107" after server is restarted
+         - #1684 patches which add extra assertions to track this bug
+         - #1558 refcount on the export for the entire life of the lock
+
 2003-08-05  Brian Behlendorf  <behlendorf1@llnl.gov>
-       * version llnl_2devel
+       * version llnl_2devel tagged
        * landed b_multinet on b_llnl_devel and tagged as llnl_2devel
 
 2003-08-05  Brian Behlendorf  <behlendorf1@llnl.gov>
-       * version llnl_1devel
+       * version llnl_1devel tagged
        * initial b_llnl_devel branch creation from HEAD on 2003-8-1
        * bug fixes
         - obdo_refresh_inode clobbers client blksize, neuters readahead (1598)
