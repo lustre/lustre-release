@@ -1718,6 +1718,11 @@ kqswnal_recvmsg (lib_nal_t    *nal,
 
         CDEBUG(D_NET,"kqswnal_recv, mlen="LPSZ", rlen="LPSZ"\n", mlen, rlen);
 
+        if (libmsg == NULL) {                   /* portals is discarding. */
+                LASSERT (mlen == 0);
+                return PTL_OK;                  /* ignored by caller! */
+        }
+        
         if (krx->krx_rpc_reply_needed &&
             hdr->type == PTL_MSG_PUT) {
                 /* This must be an optimized PUT */
