@@ -1301,6 +1301,7 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         spin_lock_init(&mds->mds_transno_lock);
         mds->mds_max_mdsize = sizeof(struct lov_mds_md);
         mds->mds_max_cookiesize = sizeof(struct llog_cookie);
+        atomic_set(&mds->mds_open_count, 0);
 
         obd->obd_namespace = ldlm_namespace_new("mds_server",
                                                 LDLM_NAMESPACE_SERVER);

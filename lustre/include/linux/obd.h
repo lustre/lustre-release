@@ -258,6 +258,8 @@ struct mds_obd {
         struct file                     *mds_lov_objid_filp;
         unsigned long                   *mds_client_bitmap;
         struct semaphore                 mds_orphan_recovery_sem;
+
+        atomic_t                         mds_open_count;
 };
 
 struct echo_obd {

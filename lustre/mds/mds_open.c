@@ -963,6 +963,8 @@ int mds_open(struct mds_update_record *rec, int offset,
                 else
                         ldlm_put_lock_into_req(req, &parent_lockh, parent_mode);
         }
+        if (rc == 0)
+                atomic_inc(&mds->mds_open_count);
         RETURN(rc);
 }
 
@@ -1085,6 +1087,7 @@ int mds_mfd_close(struct ptlrpc_request *req, struct obd_device *obd,
         mds_mfd_destroy(mfd);
 
  cleanup:
+        atomic_dec(&mds->mds_open_count);
         if (req) {
                 rc = mds_finish_transno(mds, pending_dir, handle, req, rc, 0);
         } else if (handle) {
