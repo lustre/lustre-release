@@ -86,7 +86,8 @@ static void smfs_clear_inode(struct inode *inode)
 		atomic_dec(&cache_inode->i_count);
 	}
 	iput(cache_inode);
-
+	
+	I2CI(inode) = NULL;
 	return;	
 }
 static void smfs_delete_inode(struct inode *inode)
@@ -128,6 +129,7 @@ static void smfs_delete_inode(struct inode *inode)
 
 	duplicate_inode(cache_inode, inode); 
 	
+	I2CI(inode) = NULL;
 	return;
 }
 static void smfs_write_inode(struct inode *inode, int wait)
