@@ -1,6 +1,6 @@
 #LyX 1.2 created this file. For more info see http://www.lyx.org/
 \lyxformat 220
-\textclass manpage
+\textclass amsart-plain
 \language english
 \inputencoding auto
 \fontscheme times
@@ -26,11 +26,14 @@
 
 \layout Section
 
+LCTL
+\layout Subsection
+
 NAME
 \layout Standard
 
 lctl - low level Lustre file system configuration utility
-\layout Section
+\layout Subsection
 
 SYNOPSIS
 \layout Standard
@@ -56,7 +59,7 @@ lctl\SpecialChar ~
 <verbose>\SpecialChar ~
 <devno>\SpecialChar ~
 <command [args]>
-\layout Section
+\layout Subsection
 
 DESCRIPTION
 \layout Standard
@@ -99,7 +102,7 @@ on a device name.
 devno 
 \emph default 
 is used as above.
-\layout Section
+\layout Subsection
 
 SUBCOMMANDS
 \layout Description
@@ -282,16 +285,16 @@ exit
 
 quit 
 \end_deeper 
-\layout Section
+\layout Subsection
 
 EXAMPLES
-\layout Section
+\layout Subsection
 
 BUGS
 \layout Standard
 
 None are known.
-\layout Section
+\layout Subsection
 
 AUTHOR
 \layout Standard
