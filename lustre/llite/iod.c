@@ -328,12 +328,12 @@ int ll_check_dirty(struct super_block *sb)
                         llwp.npgs = 0;
                         ll_get_dirty_pages(inode, &llwp);
                         if (llwp.npgs) {
-                               lprocfs_counter_add(ll_i2sbi(inode)->ll_stats,
-                                                   LPROC_LL_WB_PRESSURE,
-                                                   llwp.npgs);
-                               ll_writeback(inode, &llwp);
-                               rc += llwp.npgs;
-                               making_progress = 1;
+                                lprocfs_counter_add(ll_i2sbi(inode)->ll_stats,
+                                                    LPROC_LL_WB_PRESSURE,
+                                                    llwp.npgs);
+                                ll_writeback(inode, &llwp);
+                                rc += llwp.npgs;
+                                making_progress = 1;
                         }
                 } while (llwp.npgs && should_writeback());
 
