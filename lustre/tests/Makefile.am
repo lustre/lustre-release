@@ -8,7 +8,8 @@ EXTRA_DIST = $(pkgexample_SCRIPTS) $(noinst_SCRIPTS) $(noinst_DATA) \
 	common.sh lustre.cfg \
 	client-echo.cfg    elan-server.cfg  net-client.cfg  obdecho.cfg \
 	client-mount.cfg   ldlm.cfg         net-local.cfg   obdfilter.cfg \
-	client-mount2.cfg  lustre.cfg       net-server.cfg \
+	client-mount2.cfg  lustre.cfg       net-server.cfg  sanity.sh	\
+	rundbench \
 	elan-client.cfg    mds.cfg 	trivial.sh
 pkgexampledir = '${exec_prefix}/usr/lib/$(PACKAGE)/examples'
 pkgexample_SCRIPTS = llmount.sh llmountcleanup.sh llecho.sh local.sh uml.sh lov.sh
