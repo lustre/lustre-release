@@ -547,7 +547,7 @@ static void reconstruct_reint_create(struct mds_update_record *rec, int offset,
                 DEBUG_REQ(D_ERROR, req, "parent "LPU64"/%u name %s mode %o",
                           rec->ur_fid1->id, rec->ur_fid1->generation,
                           rec->ur_name, rec->ur_mode);
-                LASSERTF(child->d_inode != NULL, "BUG 3488");
+                LASSERTF(child->d_inode != NULL, "BUG 3869");
         }
         body = lustre_msg_buf(req->rq_repmsg, offset, sizeof (*body));
         mds_pack_inode2fid(req2obd(req), &body->fid1, child->d_inode);
