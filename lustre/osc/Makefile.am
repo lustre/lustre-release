@@ -8,7 +8,7 @@ DEFS=
 
 if LIBLUSTRE
 lib_LIBRARIES = libosc.a
-LINX= obd_pack.c client.c
+LINX= obd_pack.c
 libosc_a_SOURCES = osc_request.c  $(LINX)
 else
 MODULE = osc
