@@ -501,6 +501,99 @@ static int fsfilt_ext3_prep_san_write(struct inode *inode, long *blocks,
         return ext3_prep_san_write(inode, blocks, nblocks, newsize);
 }
 
+static int fsfilt_ext3_read_record(struct file * file, char * buf,
+                loff_t size, loff_t *offs)
+{
+        struct buffer_head *bh;
+        unsigned long block, boffs;
+        struct inode *inode = file->f_dentry->d_inode;
+        int err;
+
+        if (inode->i_size < *offs + size) {
+                CERROR("file is too short for this request\n");
+                return -EIO;
+        } 
+
+        block = *offs >> inode->i_blkbits;
+        bh = ext3_bread(NULL, inode, block, 0, &err);
+        if (!bh) {
+                CERROR("can't read block: %d\n", err);
+                return err;
+        }
+
+        boffs = (unsigned)*offs / bh->b_size;
+        if (boffs + size > bh->b_size) {
+                CERROR("request crosses block's border. offset %lu, size %lu\n",
+                       (unsigned long)*offs, (unsigned long)size);
+                brelse(bh);
+                return -EIO;
+        }
+
+        memcpy(buf, bh->b_data + boffs, size);
+        brelse(bh);
+        *offs += size;
+        return size;
+}
+
+static int fsfilt_ext3_write_record(struct file * file, char * buf,
+                loff_t size, loff_t *offs)
+{
+        struct buffer_head *bh;
+        unsigned long block, boffs;
+        struct inode *inode = file->f_dentry->d_inode;
+        journal_t *journal;
+        handle_t *handle;
+        int err;
+
+        journal = EXT3_SB(inode->i_sb)->s_journal;
+        handle = journal_start(journal, EXT3_DATA_TRANS_BLOCKS + 2);
+        if (handle == NULL) {
+                CERROR("can't start transaction\n");
+                return -EIO;
+        }
+
+        block = *offs >> inode->i_blkbits;
+        if (block > inode->i_size >> inode->i_blkbits) {
+                down(&inode->i_sem);
+                if (block > inode->i_size >> inode->i_blkbits) 
+                        inode->i_size = block << inode->i_blkbits;
+                up(&inode->i_sem);
+        }
+        bh = ext3_bread(handle, inode, block, 1, &err);
+        if (!bh) {
+                CERROR("can't read/create block: %d\n", err);
+                goto out;
+        }
+
+        boffs = (unsigned)*offs / bh->b_size;
+        if (boffs + size > bh->b_size) {
+                CERROR("request crosses block's border. offset %lu, size %lu\n",
+                       (unsigned long)*offs, (unsigned long)size);
+                err = -EIO;
+                goto out;
+        }
+
+        err = ext3_journal_get_write_access(handle, bh);
+        if (err) {
+                CERROR("journal_get_write_access() returned error %d\n", err);
+                goto out;
+        }
+        memcpy(bh->b_data + boffs, buf, size);
+        err = ext3_journal_dirty_metadata(handle, bh);
+        if (err) {
+                CERROR("journal_dirty_metadata() returned error %d\n", err);
+                goto out; 
+        }
+        err = size;
+out:
+        if (bh)
+                brelse(bh);
+        journal_stop(handle);
+        if (err > 0)
+                *offs += size;
+        return err;
+}
+
 static struct fsfilt_operations fsfilt_ext3_ops = {
         fs_type:                "ext3",
         fs_owner:               THIS_MODULE,
@@ -516,6 +609,8 @@ static struct fsfilt_operations fsfilt_ext3_ops = {
         fs_statfs:              fsfilt_ext3_statfs,
         fs_sync:                fsfilt_ext3_sync,
         fs_prep_san_write:      fsfilt_ext3_prep_san_write,
+        fs_write_record:        fsfilt_ext3_write_record,
+        fs_read_record:         fsfilt_ext3_read_record,
 };
 
 static int __init fsfilt_ext3_init(void)
