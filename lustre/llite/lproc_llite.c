@@ -24,226 +24,135 @@
 #include <linux/lustre_lite.h>
 #include <linux/lprocfs_status.h>
 
+/* /proc/lustre/llite mount point registration */
+
+#ifndef LPROCFS
+int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
+                                struct super_block* sb, char* osc, char* mdc)
+{
+        return 0;
+
+}
+#else
+
+__u64 mnt_instance;
+
+static inline 
+int lprocfs_llite_statfs(void* data, struct statfs *sfs)
+{
+        struct super_block *sb = (struct super_block*)data;
+        return (sb->s_op->statfs)(sb, sfs);
+}
+
+DEFINE_LPROCFS_STATFS_FCT(rd_blksize,     lprocfs_llite_statfs);
+DEFINE_LPROCFS_STATFS_FCT(rd_kbytestotal, lprocfs_llite_statfs);
+DEFINE_LPROCFS_STATFS_FCT(rd_kbytesfree,  lprocfs_llite_statfs);
+DEFINE_LPROCFS_STATFS_FCT(rd_filestotal,  lprocfs_llite_statfs);
+DEFINE_LPROCFS_STATFS_FCT(rd_filesfree,   lprocfs_llite_statfs);
+DEFINE_LPROCFS_STATFS_FCT(rd_filegroups,  lprocfs_llite_statfs);
 
 int rd_path(char* page, char **start, off_t off, int count, int *eof,
-            void *data)
+                  void *data)
 {
         return 0;
 }
 
 int rd_fstype(char* page, char **start, off_t off, int count, int *eof,
-              void *data)
-{
-        int len = 0;
-        struct super_block *sb = (struct super_block*)data;
-
-        len += snprintf(page, count, "%s\n", sb->s_type->name);
-        return len;
-}
-
-int rd_blksize(char* page, char **start, off_t off, int count, int *eof,
-               void *data)
-{
-        int len = 0;
-        struct super_block *sb = (struct super_block*)data;
-        struct statfs mystats;
-
-        (sb->s_op->statfs)(sb, &mystats);
-        len += snprintf(page, count, "%lu\n", mystats.f_bsize);
-        return len;
-
-}
-
-int rd_kbytestotal(char* page, char **start, off_t off, int count, int *eof,
-                   void *data)
-{
-        int len = 0;
-        struct super_block *sb = (struct super_block*)data;
-        struct statfs mystats;
-        __u32 blk_size;
-        __u64 result;
-
-        (sb->s_op->statfs)(sb, &mystats);
-        blk_size = mystats.f_bsize;
-        blk_size >>= 10;
-        result = mystats.f_blocks;
-
-        while(blk_size >>= 1)
-                result <<= 1;
-
-        len += snprintf(page, count, LPU64"\n", result);
-        return len;
-}
-
-
-int rd_kbytesfree(char* page, char **start, off_t off, int count, int *eof,
-                  void *data)
-{
-        int len = 0;
-        struct super_block *sb = (struct super_block*)data;
-        struct statfs mystats;
-        __u32 blk_size;
-        __u64 result;
-
-        (sb->s_op->statfs)(sb, &mystats);
-        blk_size = mystats.f_bsize;
-        blk_size >>= 10;
-        result = mystats.f_bfree;
-
-        while(blk_size >>= 1)
-                result <<= 1;
-
-        len += snprintf(page, count, LPU64"\n", result);
-        return len;
-}
-
-int rd_filestotal(char* page, char **start, off_t off, int count, int *eof,
-                  void *data)
-{
-        int len = 0;
-        struct super_block *sb = (struct super_block*)data;
-        struct statfs mystats;
-
-        (sb->s_op->statfs)(sb, &mystats);
-        len += snprintf(page, count, LPU64"\n", (__u64)(mystats.f_files));
-        return len;
-}
-
-int rd_filesfree(char* page, char **start, off_t off, int count, int *eof,
                  void *data)
 {
-        int len = 0;
         struct super_block *sb = (struct super_block*)data;
-        struct statfs mystats;
-
-        (sb->s_op->statfs)(sb, &mystats);
-        len += snprintf(page, count, LPU64"\n", (__u64)(mystats.f_ffree));
-        return len;
+        int rc = snprintf(page, count, "%s\n", sb->s_type->name);
+        *eof = 1;
+        return rc;
 }
 
-int rd_filegroups(char* page, char **start, off_t off, int count, int *eof,
-                  void *data)
-{
-        return 0;
-}
-int rd_uuid(char* page, char **start, off_t off, int count, int *eof,
+int rd_sb_uuid(char* page, char **start, off_t off, int count, int *eof,
             void *data)
 {
-        int len = 0;
         struct super_block *sb = (struct super_block*)data;
         struct ll_sb_info *sbi = ll_s2sbi(sb);
-
-        len += snprintf(page, count, "%s\n", sbi->ll_sb_uuid);
-
-        return len;
-
+        int rc = snprintf(page, count, "%s\n", sbi->ll_sb_uuid);
+        *eof = 1;
+        return rc;
 }
-int rd_dev_name(char* page, char **start, off_t off, int count, int *eof,
-                void *data)
-{
-        int len = 0;
-        struct obd_device* dev = (struct obd_device*)data;
-        len += snprintf(page, count, "%s\n", dev->obd_name);
-        return len;
-}
-
-int rd_dev_uuid(char* page, char **start, off_t off, int count, int *eof,
-                void *data)
-{
-        int len = 0;
-        struct obd_device* dev = (struct obd_device*)data;
-        len += snprintf(page, count, "%s\n", dev->obd_uuid);
-        return len;
-}
-
 
 struct lprocfs_vars status_var_nm_1[] = {
-        {"status/uuid", rd_uuid, 0, 0},
-        {"status/mntpt_path", rd_path, 0, 0},
-        {"status/fstype", rd_fstype, 0, 0},
-        {"status/blocksize",rd_blksize, 0, 0},
-        {"status/kbytestotal",rd_kbytestotal, 0, 0},
-        {"status/kbytesfree", rd_kbytesfree, 0, 0},
-        {"status/filestotal", rd_filestotal, 0, 0},
-        {"status/filesfree", rd_filesfree, 0, 0},
-        {"status/filegroups", rd_filegroups, 0, 0},
+        {"uuid", rd_sb_uuid, 0, 0},
+        {"mntpt_path", rd_path, 0, 0},
+        {"fstype", rd_fstype, 0, 0},
+        {"blocksize",rd_blksize, 0, 0},
+        {"kbytestotal",rd_kbytestotal, 0, 0},
+        {"kbytesfree", rd_kbytesfree, 0, 0},
+        {"filestotal", rd_filestotal, 0, 0},
+        {"filesfree", rd_filesfree, 0, 0},
+        {"filegroups", rd_filegroups, 0, 0},
         {0}
 };
 
-/*
- * Proc registration function for Lustre
- * file system
- */
-
-
-#define MAX_STRING_SIZE 100
-void ll_proc_namespace(struct super_block* sb, char* osc, char* mdc)
+#define MAX_STRING_SIZE 128
+int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
+                                struct super_block* sb, char* osc, char* mdc)
 {
-        char mnt_name[MAX_STRING_SIZE+1];
-        char uuid_name[MAX_STRING_SIZE+1];
-        struct lprocfs_vars d_vars[3];
+        struct lprocfs_vars lvars[2];
         struct ll_sb_info *sbi = ll_s2sbi(sb);
         struct obd_device* obd;
         int err;
 
-        /* Register this mount instance with LProcFS */
-        snprintf(mnt_name, MAX_STRING_SIZE, "mount_%s", sbi->ll_sb_uuid);
-        mnt_name[MAX_STRING_SIZE] = '\0';
-        sbi->ll_proc_root = lprocfs_reg_mnt(mnt_name);
-        if (sbi->ll_proc_root == NULL) {
-                CDEBUG(D_OTHER, "Could not register FS");
-                return;
-        }
-        /* Add the static configuration info */
-        err = lprocfs_add_vars(sbi->ll_proc_root,status_var_nm_1, sb);
-        if (err) {
-                CDEBUG(D_OTHER, "Unable to add procfs variables\n");
-                return;
-        }
-        /* MDC */
-        obd = class_uuid2obd(mdc);
-        snprintf(mnt_name, MAX_STRING_SIZE, "status/%s/common_name",
-                 obd->obd_type->typ_name);
-        mnt_name[MAX_STRING_SIZE] = '\0';
-        memset(d_vars, 0, sizeof(d_vars));
-        d_vars[0].read_fptr = rd_dev_name;
-        d_vars[0].write_fptr = NULL;
-        d_vars[0].name = mnt_name;
-        snprintf(uuid_name, MAX_STRING_SIZE, "status/%s/uuid",
-                 obd->obd_type->typ_name);
-        uuid_name[MAX_STRING_SIZE] = '\0';
-        d_vars[1].read_fptr = rd_dev_uuid;
-        d_vars[1].write_fptr = NULL;
-        d_vars[1].name = uuid_name;
+        memset(lvars, 0, sizeof(lvars));
 
-        err = lprocfs_add_vars(sbi->ll_proc_root, d_vars, obd);
-        if (err) {
-                CDEBUG(D_OTHER, "Unable to add fs proc dynamic variables\n");
-                return;
-        }
-        /* OSC or LOV*/
+        OBD_ALLOC(lvars[0].name, MAX_STRING_SIZE);
+        if (!lvars[0].name)
+                return -ENOMEM;
+
+        /* Mount info */
+        snprintf(lvars[0].name, MAX_STRING_SIZE, "fs"LPU64, mnt_instance);
+
+        mnt_instance++;
+        sbi->ll_proc_root = lprocfs_register(lvars[0].name, parent,
+                                             NULL, NULL);
+        if (IS_ERR(sbi->ll_proc_root))
+                GOTO(out, err = PTR_ERR(sbi->ll_proc_root));
+
+        /* Static configuration info */
+        err = lprocfs_add_vars(sbi->ll_proc_root, status_var_nm_1, sb);
+        if (err) 
+                GOTO(out, err);
+
+        /* MDC info */
+        obd = class_uuid2obd(mdc);
+        snprintf(lvars[0].name, MAX_STRING_SIZE, "%s/common_name",
+                 obd->obd_type->typ_name);
+        lvars[0].read_fptr = lprocfs_rd_name;
+        err = lprocfs_add_vars(sbi->ll_proc_root, lvars, obd);
+        if (err) 
+                GOTO(out, err);
+
+        snprintf(lvars[0].name, MAX_STRING_SIZE, "%s/uuid",
+                 obd->obd_type->typ_name);
+        lvars[0].read_fptr = lprocfs_rd_uuid;
+        err = lprocfs_add_vars(sbi->ll_proc_root, lvars, obd);
+        if (err < 0) 
+                GOTO(out, err);
+
+        /* OSC */
         obd = class_uuid2obd(osc);
 
-        /* Reuse mnt_name */
-        snprintf(mnt_name, MAX_STRING_SIZE,
-                 "status/%s/common_name", obd->obd_type->typ_name);
-        mnt_name[MAX_STRING_SIZE] = '\0';
-        memset(d_vars, 0, sizeof(d_vars));
-        d_vars[0].read_fptr = rd_dev_name;
-        d_vars[0].write_fptr = NULL;
-        d_vars[0].name = mnt_name;
-
-        snprintf(uuid_name, MAX_STRING_SIZE, "status/%s/uuid",
+        snprintf(lvars[0].name, MAX_STRING_SIZE, "%s/common_name",
                  obd->obd_type->typ_name);
-        uuid_name[MAX_STRING_SIZE] = '\0';
-        d_vars[1].read_fptr = rd_dev_uuid;
-        d_vars[1].write_fptr = NULL;
-        d_vars[1].name = uuid_name;
+        lvars[0].read_fptr = lprocfs_rd_name;
+        err = lprocfs_add_vars(sbi->ll_proc_root, lvars, obd);
+        if (err) 
+                GOTO(out, err);
 
-        err = lprocfs_add_vars(sbi->ll_proc_root, d_vars, obd);
-        if (err) {
-                CDEBUG(D_OTHER, "Unable to add fs proc dynamic variables\n");
-                return;
-        }
+        snprintf(lvars[0].name, MAX_STRING_SIZE, "%s/uuid",
+                 obd->obd_type->typ_name);
+        lvars[0].read_fptr = lprocfs_rd_uuid;
+        err = lprocfs_add_vars(sbi->ll_proc_root, lvars, obd);
+
+ out:
+        OBD_FREE(lvars[0].name, MAX_STRING_SIZE); 
+        return err;
 }
+
 #undef MAX_STRING_SIZE
+#endif /* LPROCFS */
