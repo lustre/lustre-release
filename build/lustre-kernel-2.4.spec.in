@@ -451,8 +451,10 @@ EOF
 /boot/efi/redhat/%{kernel_glob}${flavor}
 %endif
 %if %{linux26}
+%if %{susebuild}
 /boot/Kerntypes-%{KVERREL}${flavor}
 /boot/symvers-%{KVERREL}-%{_target_cpu}${flavor}.gz
+%endif
 %endif
 EOF
 
