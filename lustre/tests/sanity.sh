@@ -745,11 +745,11 @@ test_27g() {
 	$MCREATE $DIR/d27/fnone || error
 	pass
 	log "== test 27h: lfind with no objects ============================"
-	$LFIND $DIR/d27/fnone 2>&1 | grep -q "no stripe info" || error
+	$LFIND $DIR/d27/fnone 2>&1 | grep "no stripe info" || error
 	pass
 	log "== test 27i: lfind with some objects =========================="
 	touch $DIR/d27/fsome || error
-	$LFIND $DIR/d27/fsome | grep -q obdidx || error
+	$LFIND $DIR/d27/fsome | grep obdidx || error
 }
 run_test 27g "test lfind ======================================="
 
@@ -1034,20 +1034,20 @@ test_32q() {
 	mkdir -p $DIR/d32q
         touch $DIR/d32q/under_the_mount
 	mount -t ext2 -o loop $EXT2_DEV $DIR/d32q
-	ls $DIR/d32q/under_the_mount &&  error || true
+	ls $DIR/d32q/under_the_mount && error || true
 	umount $DIR/d32q || error
 }
-run_test 32q "stat follows mountpoints in Lustre ========================="
+run_test 32q "stat follows mountpoints in Lustre (should return error)"
 
 test_32r() {
 	[ -e $DIR/d32r ] && rm -fr $DIR/d32r
 	mkdir -p $DIR/d32r
         touch $DIR/d32r/under_the_mount
 	mount -t ext2 -o loop $EXT2_DEV $DIR/d32r
-	ls $DIR/d32r | grep -q under_the_mount &&  error || true
+	ls $DIR/d32r | grep -q under_the_mount && error || true
 	umount $DIR/d32r || error
 }
-run_test 32r "opendir follows mountpoints in Lustre ========================="
+run_test 32r "opendir follows mountpoints in Lustre (should return error)"
 
 #   chmod 444 /mnt/lustre/somefile
 #   open(/mnt/lustre/somefile, O_RDWR)
@@ -1642,8 +1642,8 @@ test_62() {
         echo foo > $f
         cancel_lru_locks OSC
         echo 0x405 > /proc/sys/lustre/fail_loc
-        cat $f && error # expect -EIO
-        multiop $f Owc && error
+        cat $f && error "cat succeeded, expect -EIO"
+        multiop $f Owc && error "multiop succeeded, expect -EIO"
         echo 0 > /proc/sys/lustre/fail_loc
 }
 run_test 62 "verify obd_match failure doesn't LBUG (should -EIO)"
