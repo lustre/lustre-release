@@ -98,11 +98,15 @@ static struct obd_ops ptlbd_sv_obd_ops = {
         o_disconnect:   class_disconnect,
 };
 
+static struct lprocfs_vars lprocfs_obd_vars[] = { {0} };
+static struct lprocfs_vars lprocfs_module_vars[] = { {0} };
+LPROCFS_INIT_VARS(ptlbd_sv, lprocfs_module_vars, lprocfs_obd_vars)
+
 int ptlbd_sv_init(void)
 {
         struct lprocfs_static_vars lvars;
 
-        lprocfs_init_vars(ptlbd,&lvars);
+        lprocfs_init_vars(ptlbd_sv,&lvars);
         return class_register_type(&ptlbd_sv_obd_ops, lvars.module_vars,
                                    OBD_PTLBD_SV_DEVICENAME);
 }
