@@ -1,5 +1,5 @@
 dev_read_only_hp_2.4.20.patch
-exports_2.4.20.patch
+exports_hp_2.4.20.patch
 kmem_cache_validate_hp.patch
 lustre_version.patch
 vfs_intent-2.4.20-vanilla.patch
