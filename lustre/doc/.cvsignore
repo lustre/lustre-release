@@ -12,4 +12,6 @@ OBD-HOWTO.txt
 lustre-HOWTO.txt
 *.eps
 lustre.lyx
-lustre.pdf
+*.tex
+*.pdf
+*.aux
