@@ -44,6 +44,7 @@
     <device size='50000'>/tmp/mds1</device>
     <autoformat>yes</autoformat>
     <network_ref uuidref='NET_uml1_tcp_UUID'/>
+    <node_ref uuidref='uml1_UUID'/>
   </mds>
   <mdc name='MDC_mds1' uuid='MDC_mds1_UUID'>
     <mds_ref uuidref='mds1_UUID'/>
