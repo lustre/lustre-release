@@ -100,6 +100,8 @@ int server_request_callback(ptl_event_t *ev, void *data)
 
         service->srv_ref_count[service->srv_md_active]++;
 
+        CDEBUG(D_INODE, "event offset %d buf size %d\n", 
+               ev->offset, service->srv_buf_size);
         if (ev->offset >= (service->srv_buf_size - 1024)) {
                 CDEBUG(D_INODE, "Unlinking ME %d\n", service->srv_me_active);
 

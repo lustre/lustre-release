@@ -29,6 +29,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <stdio.h>
+#include <signal.h>
 #define printk printf
 #include <linux/lustre_lib.h>
 #include <linux/lustre_idl.h>
@@ -38,6 +39,7 @@
 #include <netinet/in.h>
 #include <errno.h>
 #include <string.h>
+#include <linux/module.h>
 
 #define __KERNEL__
 #include <linux/list.h>
@@ -82,329 +84,350 @@ int max = 8192;
 
 char * obdo_print(struct obdo *obd)
 {
-	char buf[1024];
+        char buf[1024];
 
-	sprintf(buf, "id: %Ld\ngrp: %Ld\natime: %Ld\nmtime: %Ld\nctime: %Ld\nsize: %Ld\nblocks: %Ld\nblksize: %d\nmode: %o\nuid: %d\ngid: %d\nflags: %x\nobdflags: %x\nnlink: %d,\nvalid %x\n",
-		obd->o_id,
-		obd->o_gr,
-		obd->o_atime,
-		obd->o_mtime,
-		obd->o_ctime,
-		obd->o_size,
-		obd->o_blocks,
-		obd->o_blksize,
-		obd->o_mode,
-		obd->o_uid,
-		obd->o_gid,
-		obd->o_flags,
-		obd->o_obdflags,
-		obd->o_nlink,
-		obd->o_valid);
-	return strdup(buf);
+        sprintf(buf, "id: %Ld\ngrp: %Ld\natime: %Ld\nmtime: %Ld\nctime: %Ld\nsize: %Ld\nblocks: %Ld\nblksize: %d\nmode: %o\nuid: %d\ngid: %d\nflags: %x\nobdflags: %x\nnlink: %d,\nvalid %x\n",
+                obd->o_id,
+                obd->o_gr,
+                obd->o_atime,
+                obd->o_mtime,
+                obd->o_ctime,
+                obd->o_size,
+                obd->o_blocks,
+                obd->o_blksize,
+                obd->o_mode,
+                obd->o_uid,
+                obd->o_gid,
+                obd->o_flags,
+                obd->o_obdflags,
+                obd->o_nlink,
+                obd->o_valid);
+        return strdup(buf);
 }
 
 static int jt_device(int argc, char **argv)
 {
-	struct obd_ioctl_data data;
-	int rc;
+        struct obd_ioctl_data data;
+        int rc;
 
-	memset(&data, 0, sizeof(data));
-	if ( argc != 2 ) {
-		fprintf(stderr, "Usage: %s devno\n", argv[0]);
-		return 1;
-	}
+        memset(&data, 0, sizeof(data));
+        if ( argc != 2 ) {
+                fprintf(stderr, "Usage: %s devno\n", argv[0]);
+                return 1;
+        }
 
-	data.ioc_dev = atoi(argv[1]);
+        data.ioc_dev = atoi(argv[1]);
 
-	if (obd_ioctl_pack(&data, &buf, max)) { 
-		printf("invalid ioctl\n"); 
-		return 1;
-	}
+        if (obd_ioctl_pack(&data, &buf, max)) { 
+                printf("invalid ioctl\n"); 
+                return 1;
+        }
 
-	if (fd == -1) 
-		fd = open("/dev/obd", O_RDWR);
-	if (fd == -1) {
-		printf("Opening /dev/obd: %s\n", strerror(errno));
-		return 1;
-	}
+        if (fd == -1) 
+                fd = open("/dev/obd", O_RDWR);
+        if (fd == -1) {
+                printf("Opening /dev/obd: %s\n", strerror(errno));
+                return 1;
+        }
 
-	rc = ioctl(fd, OBD_IOC_DEVICE , buf);
-	if (rc < 0) {
-		printf("Device: %x %s\n", OBD_IOC_DEVICE, strerror(errno));
-		return 1;
-	}
+        rc = ioctl(fd, OBD_IOC_DEVICE , buf);
+        if (rc < 0) {
+                printf("Device: %x %s\n", OBD_IOC_DEVICE, strerror(errno));
+                return 1;
+        }
 
-	return 0;
+        return 0;
+}
+
+static int do_disconnect()
+{
+        struct obd_ioctl_data data;
+        int rc;
+        IOCINIT(data);
+        
+        if (connid == -1) 
+                return 0;
+
+        rc = ioctl(fd, OBD_IOC_DISCONNECT , &data);
+        if (rc < 0) {
+                printf("Device: %x %s\n", OBD_IOC_DISCONNECT, strerror(errno));
+                return 0;
+        }
+        connid = -1;
+
+        return 0;
 }
 
 static int jt_connect(int argc, char **argv)
 {
-	struct obd_ioctl_data data;
-	int rc;
+        struct obd_ioctl_data data;
+        int rc;
 
-	IOCINIT(data);
+        IOCINIT(data);
 
-	if ( argc != 1 ) {
-		fprintf(stderr, "Usage: %s\n", argv[0]);
-		return 1;
-	}
+        do_disconnect();
 
-	rc = ioctl(fd, OBD_IOC_CONNECT , &data);
-	if (rc < 0) {
-		printf("Device: %x %s\n", OBD_IOC_CONNECT, strerror(errno));
-		return 1;
-	}
-	connid = data.ioc_conn1;
+        if ( argc != 1 ) {
+                fprintf(stderr, "Usage: %s\n", argv[0]);
+                return 1;
+        }
 
-	return 0;
+        rc = ioctl(fd, OBD_IOC_CONNECT , &data);
+        if (rc < 0) {
+                printf("Device: %x %s\n", OBD_IOC_CONNECT, strerror(errno));
+                return 1;
+        }
+        connid = data.ioc_conn1;
+
+        return 0;
 }
 
 static int jt_disconnect(int argc, char **argv)
 {
-	struct obd_ioctl_data data;
-	int rc;
+        struct obd_ioctl_data data;
+        int rc;
 
-	IOCINIT(data);
+        IOCINIT(data);
 
-	if ( argc != 1 ) {
-		fprintf(stderr, "Usage: %s\n", argv[0]);
-		return 1;
-	}
+        if ( argc != 1 ) {
+                fprintf(stderr, "Usage: %s\n", argv[0]);
+                return 1;
+        }
 
-	rc = ioctl(fd, OBD_IOC_DISCONNECT , &data);
-	if (rc < 0) {
-		printf("Device: %x %s\n", OBD_IOC_DISCONNECT, strerror(errno));
-		return 1;
-	}
-	connid = -1;
+        rc = ioctl(fd, OBD_IOC_DISCONNECT , &data);
+        if (rc < 0) {
+                printf("Device: %x %s\n", OBD_IOC_DISCONNECT, strerror(errno));
+                return 1;
+        }
+        connid = -1;
 
-	return 0;
+        return 0;
 }
 
 
 static int jt_detach(int argc, char **argv)
 {
-	struct obd_ioctl_data data;
-	int rc;
+        struct obd_ioctl_data data;
+        int rc;
 
-	IOCINIT(data);
+        IOCINIT(data);
 
-	if ( argc != 1 ) {
-		fprintf(stderr, "Usage: %s\n", argv[0]);
-		return 1;
-	}
+        if ( argc != 1 ) {
+                fprintf(stderr, "Usage: %s\n", argv[0]);
+                return 1;
+        }
 
-	if (obd_ioctl_pack(&data, &buf, max)) { 
-		printf("invalid ioctl\n"); 
-		return 1;
-	}
+        if (obd_ioctl_pack(&data, &buf, max)) { 
+                printf("invalid ioctl\n"); 
+                return 1;
+        }
 
-	rc = ioctl(fd, OBD_IOC_DETACH , buf);
-	if (rc < 0) {
-		printf("Detach: %s\n", strerror(errno));
-		return 1;
-	}
-	return 0;
+        rc = ioctl(fd, OBD_IOC_DETACH , buf);
+        if (rc < 0) {
+                printf("Detach: %s\n", strerror(errno));
+                return 1;
+        }
+        return 0;
 }
 
 static int jt_cleanup(int argc, char **argv)
 {
-	struct obd_ioctl_data data;
-	int rc;
+        struct obd_ioctl_data data;
+        int rc;
 
-	IOCINIT(data);
+        IOCINIT(data);
 
-	if ( argc != 1 ) {
-		fprintf(stderr, "Usage: %s\n", argv[0]);
-		return 1;
-	}
+        if ( argc != 1 ) {
+                fprintf(stderr, "Usage: %s\n", argv[0]);
+                return 1;
+        }
 
-	rc = ioctl(fd, OBD_IOC_CLEANUP , &data);
-	if (rc < 0) {
-		printf("Detach: %s\n", strerror(errno));
-		return 1;
-	}
-	return 0;
+        rc = ioctl(fd, OBD_IOC_CLEANUP , &data);
+        if (rc < 0) {
+                printf("Detach: %s\n", strerror(errno));
+                return 1;
+        }
+        return 0;
 }
 
 static int jt_attach(int argc, char **argv)
 {
-	struct obd_ioctl_data data;
-	int rc;
+        struct obd_ioctl_data data;
+        int rc;
 
-	IOCINIT(data);
+        IOCINIT(data);
 
-	if ( argc != 2 && argc != 3  ) {
-		fprintf(stderr, "Usage: %s type [data]\n", argv[0]);
-		return 1;
-	}
+        if ( argc != 2 && argc != 3  ) {
+                fprintf(stderr, "Usage: %s type [data]\n", argv[0]);
+                return 1;
+        }
 
-	data.ioc_inllen1 =  strlen(argv[1]) + 1;
-	data.ioc_inlbuf1 = argv[1];
-	if ( argc == 3 ) { 
-		data.ioc_inllen2 = strlen(argv[2]) + 1;
-		data.ioc_inlbuf2 = argv[2];
-	}
+        data.ioc_inllen1 =  strlen(argv[1]) + 1;
+        data.ioc_inlbuf1 = argv[1];
+        if ( argc == 3 ) { 
+                data.ioc_inllen2 = strlen(argv[2]) + 1;
+                data.ioc_inlbuf2 = argv[2];
+        }
 
-	printf("attach len %d addr %p type %s data %s\n", data.ioc_len, buf, 
-	       MKSTR(data.ioc_inlbuf1), MKSTR(data.ioc_inlbuf2));
+        printf("attach len %d addr %p type %s data %s\n", data.ioc_len, buf, 
+               MKSTR(data.ioc_inlbuf1), MKSTR(data.ioc_inlbuf2));
 
-	if (obd_ioctl_pack(&data, &buf, max)) { 
-		printf("invalid ioctl\n"); 
-		return 1;
-	}
-	printf("attach len %d addr %p raw %p type %s data %s and %s\n", data.ioc_len, buf, rawbuf,
-	       MKSTR(data.ioc_inlbuf1), MKSTR(data.ioc_inlbuf2), &buf[516]);
+        if (obd_ioctl_pack(&data, &buf, max)) { 
+                printf("invalid ioctl\n"); 
+                return 1;
+        }
+        printf("attach len %d addr %p raw %p type %s data %s and %s\n", data.ioc_len, buf, rawbuf,
+               MKSTR(data.ioc_inlbuf1), MKSTR(data.ioc_inlbuf2), &buf[516]);
 
-	rc = ioctl(fd, OBD_IOC_ATTACH , buf);
-	if (rc < 0) {
-		printf("Attach: %x %s\n", OBD_IOC_ATTACH, strerror(errno));
-		return 1;
-	}
-	return 0;
+        rc = ioctl(fd, OBD_IOC_ATTACH , buf);
+        if (rc < 0) {
+                printf("Attach: %x %s\n", OBD_IOC_ATTACH, strerror(errno));
+                return 1;
+        }
+        return 0;
 }
 
 static int jt_setup(int argc, char **argv)
 {
-	struct obd_ioctl_data data;
-	int rc;
+        struct obd_ioctl_data data;
+        int rc;
 
-	IOCINIT(data);
+        IOCINIT(data);
 
-	if ( argc > 3  ) {
-		fprintf(stderr, "Usage: %s [device] [fstype]\n", argv[0]);
-		return 1;
-	}
+        if ( argc > 3  ) {
+                fprintf(stderr, "Usage: %s [device] [fstype]\n", argv[0]);
+                return 1;
+        }
 
-	if (argc > 1) {
-		data.ioc_inllen1 =  strlen(argv[1]) + 1;
-		data.ioc_inlbuf1 = argv[1];
-		data.ioc_dev = strtoul(argv[1], NULL, 0);
-	} else {
-		data.ioc_dev = -1;
-	}
-	if ( argc == 3 ) { 
-		data.ioc_inllen2 = strlen(argv[2]) + 1;
-		data.ioc_inlbuf2 = argv[2];
-	}
+        if (argc > 1) {
+                data.ioc_inllen1 =  strlen(argv[1]) + 1;
+                data.ioc_inlbuf1 = argv[1];
+                data.ioc_dev = strtoul(argv[1], NULL, 0);
+        } else {
+                data.ioc_dev = -1;
+        }
+        if ( argc == 3 ) { 
+                data.ioc_inllen2 = strlen(argv[2]) + 1;
+                data.ioc_inlbuf2 = argv[2];
+        }
 
-	printf("setup len %d addr %p device %s type %s\n", data.ioc_len, buf, 
-	       MKSTR(data.ioc_inlbuf1), MKSTR(data.ioc_inlbuf2));
+        printf("setup len %d addr %p device %s type %s\n", data.ioc_len, buf, 
+               MKSTR(data.ioc_inlbuf1), MKSTR(data.ioc_inlbuf2));
 
-	if (obd_ioctl_pack(&data, &buf, max)) { 
-		printf("invalid ioctl\n"); 
-		return 1;
-	}
-	printf("setup len %d addr %p raw %p device %s type %s\n", 
-	       data.ioc_len, buf, rawbuf,
-	       MKSTR(data.ioc_inlbuf1), MKSTR(data.ioc_inlbuf2));
+        if (obd_ioctl_pack(&data, &buf, max)) { 
+                printf("invalid ioctl\n"); 
+                return 1;
+        }
+        printf("setup len %d addr %p raw %p device %s type %s\n", 
+               data.ioc_len, buf, rawbuf,
+               MKSTR(data.ioc_inlbuf1), MKSTR(data.ioc_inlbuf2));
 
-	rc = ioctl(fd, OBD_IOC_SETUP , buf);
-	if (rc < 0) {
-		printf("setup: %x %s\n", OBD_IOC_SETUP, strerror(errno));
-		return 1;
-	}
-	return 0;
+        rc = ioctl(fd, OBD_IOC_SETUP , buf);
+        if (rc < 0) {
+                printf("setup: %x %s\n", OBD_IOC_SETUP, strerror(errno));
+                return 1;
+        }
+        return 0;
 }
 
 
 static int jt_create(int argc, char **argv)
 {
-	struct obd_ioctl_data data;
-	int num = 1;
-	int silent = 0;
-	int i;
-	int rc;
+        struct obd_ioctl_data data;
+        int num = 1;
+        int silent = 0;
+        int i;
+        int rc;
 
-	IOCINIT(data);
-	if (argc > 1) { 
-		num = strtoul(argv[1], NULL, 0);
-	} else { 
-		printf("usage %s num [mode] [silent]\n", argv[0]); 
-	}
+        IOCINIT(data);
+        if (argc > 1) { 
+                num = strtoul(argv[1], NULL, 0);
+        } else { 
+                printf("usage %s num [mode] [silent]\n", argv[0]); 
+        }
 
-	if (argc > 2) { 
-		data.ioc_obdo1.o_mode = strtoul(argv[2], NULL, 0);
-	} else { 
-		data.ioc_obdo1.o_mode = 0100644;
-	}
-	data.ioc_obdo1.o_valid = OBD_MD_FLMODE;
+        if (argc > 2) { 
+                data.ioc_obdo1.o_mode = strtoul(argv[2], NULL, 0);
+        } else { 
+                data.ioc_obdo1.o_mode = 0100644;
+        }
+        data.ioc_obdo1.o_valid = OBD_MD_FLMODE;
 
-	if (argc > 3) { 
-		silent = strtoul(argv[3], NULL, 0);
-	}
-		
-	printf("Creating %d obdos\n", num);
+        if (argc > 3) { 
+                silent = strtoul(argv[3], NULL, 0);
+        }
+                
+        printf("Creating %d obdos\n", num);
 
-	for (i = 0 ; i<num ; i++) { 
-		rc = ioctl(fd, OBD_IOC_CREATE , &data);
-		if (rc < 0) {
-			printf("Create: %x %s\n", OBD_IOC_CREATE, 
-			       strerror(errno));
-			return 1;
-		}
-		printf("created obdo %Ld\n", data.ioc_obdo1.o_id);
-	}
-	return 0;
+        for (i = 0 ; i<num ; i++) { 
+                rc = ioctl(fd, OBD_IOC_CREATE , &data);
+                if (rc < 0) {
+                        printf("Create: %x %s\n", OBD_IOC_CREATE, 
+                               strerror(errno));
+                        return 1;
+                }
+                printf("created obdo %Ld\n", data.ioc_obdo1.o_id);
+        }
+        return 0;
 }
 
 static int jt_setattr(int argc, char **argv)
 {
-	struct obd_ioctl_data data;
-	int rc;
+        struct obd_ioctl_data data;
+        int rc;
 
-	IOCINIT(data);
-	if (argc < 2) { 
-		printf("usage: %s id mode\n", argv[0]); 
-		return -1;
-	}
+        IOCINIT(data);
+        if (argc < 2) { 
+                printf("usage: %s id mode\n", argv[0]); 
+                return -1;
+        }
 
         data.ioc_obdo1.o_id = strtoul(argv[1], NULL, 0);
         data.ioc_obdo1.o_mode = strtoul(argv[2], NULL, 0);
         data.ioc_obdo1.o_valid = OBD_MD_FLMODE; 
 
-	rc = ioctl(fd, OBD_IOC_SETATTR , &data);
-	if (rc < 0) {
-		printf("setattr: %x %s\n", OBD_IOC_SETATTR, strerror(errno));
-	}
-	return rc;
+        rc = ioctl(fd, OBD_IOC_SETATTR , &data);
+        if (rc < 0) {
+                printf("setattr: %x %s\n", OBD_IOC_SETATTR, strerror(errno));
+        }
+        return rc;
 }
 
 static int jt_destroy(int argc, char **argv)
 {
-	struct obd_ioctl_data data;
-	int rc;
+        struct obd_ioctl_data data;
+        int rc;
 
-	IOCINIT(data);
-	if (argc < 1) { 
-		printf("usage %s id\n", argv[0]); 
-	}
+        IOCINIT(data);
+        if (argc < 1) { 
+                printf("usage %s id\n", argv[0]); 
+        }
 
         data.ioc_obdo1.o_id = strtoul(argv[1], NULL, 0);
 
-	rc = ioctl(fd, OBD_IOC_DESTROY , &data);
-	if (rc < 0) {
-		printf("setattr: %x %s\n", OBD_IOC_DESTROY, strerror(errno));
-	}
-	return rc;
+        rc = ioctl(fd, OBD_IOC_DESTROY , &data);
+        if (rc < 0) {
+                printf("setattr: %x %s\n", OBD_IOC_DESTROY, strerror(errno));
+        }
+        return rc;
 }
 
 static int jt_multi_getattr(int argc, char **argv)
 {
-	struct obd_ioctl_data data;
+        struct obd_ioctl_data data;
         int count, i;
-	int rc;
+        int rc;
 
-	IOCINIT(data);
-	if (argc == 2) { 
-		count = strtoul(argv[1], NULL, 0);
-		data.ioc_obdo1.o_valid = 0xffffffff;
+        IOCINIT(data);
+        if (argc == 2) { 
+                count = strtoul(argv[1], NULL, 0);
+                data.ioc_obdo1.o_valid = 0xffffffff;
                 data.ioc_obdo1.o_id = 2;
-		printf("getting %d attrs (testing only)\n", count);
-	} else { 
-		printf("usage %s id\n", argv[0]); 
-		return 0;
-	}
+                printf("getting %d attrs (testing only)\n", count);
+        } else { 
+                printf("usage %s id\n", argv[0]); 
+                return 0;
+        }
 
         for (i = 0 ; i < count; i++) {
                 rc = ioctl(fd, OBD_IOC_GETATTR , &data);
@@ -414,37 +437,37 @@ static int jt_multi_getattr(int argc, char **argv)
                 } else { 
                         printf("attr number %d\n", i);
                 }
-	}
-	return 0;
+        }
+        return 0;
 }
 
 static int jt_getattr(int argc, char **argv)
 {
-	struct obd_ioctl_data data;
-	int rc;
+        struct obd_ioctl_data data;
+        int rc;
 
-	IOCINIT(data);
-	if (argc == 2) { 
-		data.ioc_obdo1.o_id = strtoul(argv[1], NULL, 0);
-		data.ioc_obdo1.o_valid = 0xffffffff;
-		printf("getting attr for %Ld\n", data.ioc_obdo1.o_id);
-	} else { 
-		printf("usage %s id\n", argv[0]); 
-		return 0;
-	}
+        IOCINIT(data);
+        if (argc == 2) { 
+                data.ioc_obdo1.o_id = strtoul(argv[1], NULL, 0);
+                data.ioc_obdo1.o_valid = 0xffffffff;
+                printf("getting attr for %Ld\n", data.ioc_obdo1.o_id);
+        } else { 
+                printf("usage %s id\n", argv[0]); 
+                return 0;
+        }
 
-	rc = ioctl(fd, OBD_IOC_GETATTR , &data);
-	if (rc) { 
-		printf("Error: %s\n", strerror(rc)); 
-	} else { 
-		printf("attr obdo %Ld, mode %o\n", data.ioc_obdo1.o_id, 
-		       data.ioc_obdo1.o_mode);
-	}
-	return 0;
+        rc = ioctl(fd, OBD_IOC_GETATTR , &data);
+        if (rc) { 
+                printf("Error: %s\n", strerror(rc)); 
+        } else { 
+                printf("attr obdo %Ld, mode %o\n", data.ioc_obdo1.o_id, 
+                       data.ioc_obdo1.o_mode);
+        }
+        return 0;
 }
 
 command_t list[] = {
-	{"device", jt_device, 0, "set current device (args device no)"},
+        {"device", jt_device, 0, "set current device (args device no)"},
         {"attach", jt_attach, 0, "name the typed of device (args: type data"},
         {"setup", jt_setup, 0, "setup device (args: blkdev, data"},
         {"detach", jt_detach, 0, "detach the current device (arg: )"},
@@ -462,16 +485,30 @@ command_t list[] = {
         { 0, 0, 0, NULL }
 };
 
+
+static void signal_server(int sig)
+{
+        if (sig == SIGINT) { 
+                printf("Disconnecting existing connection");
+                do_disconnect();
+        }
+}
+
 int main(int argc, char **argv)
 {
+        struct sigaction sigact;
+        sigact.sa_handler = signal_server;
+        sigfillset(&sigact.sa_mask);
+        sigact.sa_flags = SA_RESTART;
+        sigaction(SIGINT, &sigact, NULL);
 
-	if (argc > 1) { 
-		return Parser_execarg(argc - 1, &argv[1], list);
-	}
+        if (argc > 1) { 
+                return Parser_execarg(argc - 1, &argv[1], list);
+        }
 
-	Parser_init("obdctl > ", list);
-	Parser_commands();
+        Parser_init("obdctl > ", list);
+        Parser_commands();
 
-	return 0;
+        return 0;
 }
 

@@ -99,7 +99,7 @@ ptlrpc_init_svc(__u32 bufsize, int req_portal, int rep_portal, char *uuid,
         init_waitqueue_head(&svc->srv_waitq); 
 
         svc->srv_thread = NULL;
-	svc->srv_flags = 0;
+        svc->srv_flags = 0;
 
         svc->srv_buf_size = bufsize;
         svc->srv_rep_portal = rep_portal;
@@ -107,7 +107,7 @@ ptlrpc_init_svc(__u32 bufsize, int req_portal, int rep_portal, char *uuid,
         svc->srv_req_unpack = unpack;
         svc->srv_rep_pack = pack;
         svc->srv_handler = handler;
-	err = kportal_uuid_to_peer(uuid, &svc->srv_self);
+        err = kportal_uuid_to_peer(uuid, &svc->srv_self);
         if (err) { 
                 CERROR("cannot get peer for uuid %s", uuid); 
                 OBD_FREE(svc, sizeof(*svc));
@@ -120,29 +120,29 @@ static int ptlrpc_main(void *arg)
 {
         int rc;
         struct ptlrpc_svc_data *data = (struct ptlrpc_svc_data *)arg;
-	struct obd_device *obddev = data->dev;
+        struct obd_device *obddev = data->dev;
         struct ptlrpc_service *svc = data->svc;
 
-	ENTRY;
+        ENTRY;
 
-	lock_kernel();
-	daemonize();
-	spin_lock_irq(&current->sigmask_lock);
-	sigfillset(&current->blocked);
-	recalc_sigpending(current);
-	spin_unlock_irq(&current->sigmask_lock);
+        lock_kernel();
+        daemonize();
+        spin_lock_irq(&current->sigmask_lock);
+        sigfillset(&current->blocked);
+        recalc_sigpending(current);
+        spin_unlock_irq(&current->sigmask_lock);
 
-	sprintf(current->comm, data->name);
+        sprintf(current->comm, data->name);
 
-	/* Record that the  thread is running */
-	svc->srv_thread = current;
+        /* Record that the  thread is running */
+        svc->srv_thread = current;
         svc->srv_flags = SVC_RUNNING;
-	wake_up(&svc->srv_ctl_waitq); 
+        wake_up(&svc->srv_ctl_waitq); 
 
-	/* XXX maintain a list of all managed devices: insert here */
+        /* XXX maintain a list of all managed devices: insert here */
 
-	/* And now, loop forever on requests */
-	while (1) {
+        /* And now, loop forever on requests */
+        while (1) {
 
                 wait_event(svc->srv_waitq, ptlrpc_check_event(svc));
                 
@@ -157,7 +157,7 @@ static int ptlrpc_main(void *arg)
                 }
 
                 if (svc->srv_flags & SVC_EVENT) { 
-			struct ptlrpc_request request;
+                        struct ptlrpc_request request;
                         svc->srv_flags = SVC_RUNNING; 
 
                         /* FIXME: If we move to an event-driven model,
@@ -180,7 +180,7 @@ static int ptlrpc_main(void *arg)
                 }
 
                 if (svc->srv_flags & SVC_LIST) { 
-			struct ptlrpc_request *request;
+                        struct ptlrpc_request *request;
                         svc->srv_flags = SVC_RUNNING; 
 
                         spin_lock(&svc->srv_lock);
@@ -196,16 +196,16 @@ static int ptlrpc_main(void *arg)
                 break; 
         }
 
-	svc->srv_thread = NULL;
+        svc->srv_thread = NULL;
         svc->srv_flags = SVC_STOPPED;
-	wake_up(&svc->srv_ctl_waitq);
-	CERROR("svc exiting process %d\n", current->pid);
-	return 0;
+        wake_up(&svc->srv_ctl_waitq);
+        CERROR("svc exiting process %d\n", current->pid);
+        return 0;
 }
 
 void ptlrpc_stop_thread(struct ptlrpc_service *svc)
 {
-	svc->srv_flags = SVC_STOPPING;
+        svc->srv_flags = SVC_STOPPING;
 
         wake_up(&svc->srv_waitq);
         wait_event_interruptible(svc->srv_ctl_waitq, 
@@ -217,16 +217,16 @@ int ptlrpc_start_thread(struct obd_device *dev, struct ptlrpc_service *svc,
 {
         struct ptlrpc_svc_data d;
         int rc;
-	ENTRY;
+        ENTRY;
 
         d.dev = dev;
         d.svc = svc;
         d.name = name;
 
-	init_waitqueue_head(&svc->srv_waitq);
+        init_waitqueue_head(&svc->srv_waitq);
 
-	init_waitqueue_head(&svc->srv_ctl_waitq);
-	rc = kernel_thread(ptlrpc_main, (void *) &d, 
+        init_waitqueue_head(&svc->srv_ctl_waitq);
+        rc = kernel_thread(ptlrpc_main, (void *) &d, 
                            CLONE_VM | CLONE_FS | CLONE_FILES);
         if (rc < 0) { 
                 CERROR("cannot start thread\n"); 
@@ -234,7 +234,7 @@ int ptlrpc_start_thread(struct obd_device *dev, struct ptlrpc_service *svc,
         }
         wait_event(svc->srv_ctl_waitq, svc->srv_flags & SVC_RUNNING);
 
-	EXIT;
+        EXIT;
         return 0;
 }
 
@@ -298,11 +298,12 @@ int rpc_register_service(struct ptlrpc_service *service, char *uuid)
                 }
 
                 service->srv_ref_count[i] = 0;
-                service->srv_md[i].start        = service->srv_buf[i];
+                service->srv_md[i].start         = service->srv_buf[i];
                 service->srv_md[i].length        = service->srv_buf_size;
-                service->srv_md[i].threshold        = PTL_MD_THRESH_INF;
-                service->srv_md[i].options        = PTL_MD_OP_PUT;
-                service->srv_md[i].user_ptr        = service;
+                service->srv_md[i].max_offset    = service->srv_buf_size;
+                service->srv_md[i].threshold     = PTL_MD_THRESH_INF;
+                service->srv_md[i].options       = PTL_MD_OP_PUT;
+                service->srv_md[i].user_ptr      = service;
                 service->srv_md[i].eventq        = service->srv_eq_h;
 
                 rc = PtlMDAttach(service->srv_me_h[i], service->srv_md[i],
