@@ -145,7 +145,7 @@ fi
 # ------------ include paths ------------------
 
 if test $host_cpu != "lib" ; then 
-    KINCFLAGS='-I$(top_srcdir)/include -I$(top_srcdir)/portals/include -I$(LINUX)/include'
+    KINCFLAGS="-I\$(top_srcdir)/include -I\$(top_srcdir)/portals/include -I$LINUX/include"
 else
     KINCFLAGS='-I$(top_srcdir)/include -I$(top_srcdir)/portals/include'
 fi
@@ -310,8 +310,8 @@ AC_TRY_LINK([#define __KERNEL__
              #include <linux/sched.h>],
             [struct task_struct p;
              p.sighand = NULL;],
-            [RH_2_4_20=0],
-            [RH_2_4_20=1])
+            [RH_2_4_20=1],
+            [RH_2_4_20=0])
 
 CPPFLAGS=$SAVE_CPPFLAGS
 CFLAGS=$SAVE_CFLAGS
