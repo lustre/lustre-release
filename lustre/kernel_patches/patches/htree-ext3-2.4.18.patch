@@ -595,7 +595,7 @@
 +		ext3_dirent *de = (ext3_dirent *) (from + map->offs);
 +		rec_len = EXT3_DIR_REC_LEN(de->name_len);
 +		memcpy (to, de, rec_len);
-+		((ext3_dirent *) to)->rec_len = rec_len;
++		((ext3_dirent *)to)->rec_len = le16_to_cpu(rec_len);
 +		to += rec_len;
 +		map++;
 +	}
@@ -644,9 +644,9 @@
 +
 +	/* Fancy dance to stay within two buffers */
 +	de2 = dx_copy_dirents (data1, data2, map + split, count - split);
-+	data3 = (char *) de2 + de2->rec_len;
++	data3 = (char *) de2 + le16_to_cpu(de2->rec_len);
 +	de = dx_copy_dirents (data1, data3, map, split);
-+	memcpy(data1, data3, (char *) de + de->rec_len - data3);
++	memcpy(data1, data3, (char *) de + le16_to_cpu(de->rec_len) - data3);
 +	de = (ext3_dirent *) ((char *) de - data3 + data1); // relocate de
 +	de->rec_len = cpu_to_le16(data1 + dir->i_sb->s_blocksize - (char *)de);
 +	de2->rec_len = cpu_to_le16(data2 + dir->i_sb->s_blocksize-(char *)de2);
@@ -1136,7 +1136,38 @@
  	if (IS_ERR(handle))
  		return PTR_ERR(handle);
  
-@@ -1077,7 +1844,7 @@
+@@ -1069,14 +1837,37 @@
+ 	/*
+ 	 * ok, that's it
+ 	 */
+-	ext3_delete_entry(handle, old_dir, old_de, old_bh);
++	if (le32_to_cpu(old_de->inode) != old_inode->i_ino ||
++	    old_de->name_len != old_dentry->d_name.len ||
++	    strncmp(old_de->name, old_dentry->d_name.name, old_de->name_len) ||
++	    (retval = ext3_delete_entry(handle, old_dir,
++					old_de, old_bh)) == -ENOENT) {
++		/* old_de could have moved from under us during htree split, so
++		 * make sure that we are deleting the right entry.  We might
++		 * also be pointing to a stale entry in the unused part of
++		 * old_bh so just checking inum and the name isn't enough. */
++		struct buffer_head *old_bh2;
++		struct ext3_dir_entry_2 *old_de2;
++		
++		old_bh2 = ext3_find_entry(old_dentry, &old_de2);
++		if (old_bh2) {
++			retval = ext3_delete_entry(handle, old_dir,
++						   old_de2, old_bh2);
++			brelse(old_bh2);
++		}
++	}
++	if (retval) {
++		ext3_warning(old_dir->i_sb, "ext3_rename",
++				"Deleting old file (%lu), %d, error=%d",
++				old_dir->i_ino, old_dir->i_nlink, retval);
++	}
+ 
+ 	if (new_inode) {
+ 		new_inode->i_nlink--;
  		new_inode->i_ctime = CURRENT_TIME;
  	}
  	old_dir->i_ctime = old_dir->i_mtime = CURRENT_TIME;
