@@ -1,0 +1,12 @@
+drivers/e1000/e1000.h
+drivers/e1000/e1000_mac.c
+drivers/e1000/e1000_mac.h
+drivers/e1000/e1000_main.c
+drivers/e1000/e1000_osdep.h
+drivers/e1000/e1000_phy.c
+drivers/e1000/e1000_phy.h
+drivers/e1000/e1000_proc.c
+drivers/e1000/e1000_proc.h
+drivers/e1000/Makefile
+drivers/Makefile
+Makefile
