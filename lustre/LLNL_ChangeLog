@@ -1,4 +1,4 @@
-2003-08-12  Brian Behlendorf  <behlendorf1@llnl.gov>
+2003-08-15  Brian Behlendorf  <behlendorf1@llnl.gov>
        * tip of b_llnl_devel
        * bug fixes:
          - #1592 fixes trying to read a single page that was entirely past
@@ -8,6 +8,9 @@
            at disconnect time.  Remove all exp_outstanding_reply
            manipulation in mds_disconnect.
          - #1732 fixes the lprocfs unresolved symbol error.
+         - #1763 fixes timestamps on files getting advanced incorrectly.
+         - #1639 client VFS truncate/write lock inversion.  This caused
+           the bug in Joe Koning music code.
 
 2003-08-12  Brian Behlendorf  <behlendorf1@llnl.gov>
        * version llnl_5devel tagged
