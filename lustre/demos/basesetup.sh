@@ -8,7 +8,13 @@ OBDDIR="`dirname $0`/.."
 # module configuration
 if [ "$MODCONF" -a -f $MODCONF ]; then
     if [ -z "`grep -i "alias  *char-major-$OBDMAJ  *obdclass" $MODCONF`" ]; then
-         echo "alias char-major-${OBDMAJ} obdclass" >>$MODCONF
+	if [ -d /etc/modutils ]; then
+	    # Debian-style modules configuration.
+	    echo "alias char-major-${OBDMAJ} obdclass" > /etc/modutils/obd
+	    update-modules
+	else
+	    echo "alias char-major-${OBDMAJ} obdclass" >>$MODCONF
+	fi
     fi
 fi
 

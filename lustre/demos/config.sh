@@ -15,7 +15,8 @@ OBDMAJ=186
 # If TMPFILE is empty (""), then no temporary file will be created for loop.
 [ "$TMPFILE" ] || TMPFILE="/tmp/obdfs.tmpfile"
 [ "$TMPSIZE" ] || TMPSIZE=10240
-LOOPDEV="/dev/loop0"
+[ -b /dev/loop/0 ] && LOOPDEV=/dev/loop/0
+[ -z "$LOOPDEV" -a -b /dev/loop0 ] && LOOPDEV="/dev/loop0"
 
 # If LOOPDEV is empty, then it is assumed that BASEDEV is a real block device
 # that doesn't mind being overwritten - don't use a partition with data on it!!

@@ -17,6 +17,7 @@ fi
 
 plog log "ATTACHING /dev/obd0, SETUP $BASEDEV"
 $OBDDIR/class/obdcontrol -f << EOF
+device /dev/obd0
 attach obdext2
 setup $BASEDEV
 quit

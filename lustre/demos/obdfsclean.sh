@@ -9,6 +9,7 @@ plog rmmod obdfs
 
 plog log "CLEANUP/DETACH"
 $OBDDIR/class/obdcontrol -f << EOF
+device /dev/obd0
 cleanup
 detach
 quit
