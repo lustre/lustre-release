@@ -182,7 +182,7 @@ int llog_obd_origin_setup(struct obd_device *obd, int index,
 }
 EXPORT_SYMBOL(llog_obd_origin_setup);
 
-int obd_llog_cat_initialize(struct obd_device *obd, int count, char *name)
+int obd_llog_cat_initialize(struct obd_device *obd, int count, const char *name)
 {
         struct llog_catid *idarray;
         int size = sizeof(*idarray) * count;
