@@ -21,6 +21,10 @@
  */
 #define DEBUG_SUBSYSTEM S_CLASS
 
+#include <linux/version.h>
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
+#include <asm/statfs.h>
+#endif
 #include <linux/lprocfs_status.h>
 #include <linux/obd.h>
 
@@ -32,6 +36,7 @@ struct lprocfs_vars lprocfs_module_vars[] = { {0} };
 static inline int lprocfs_filter_statfs(void *data, struct statfs *sfs)
 {
         struct obd_device *dev = (struct obd_device *) data;
+        LASSERT(dev != NULL);
         return vfs_statfs(dev->u.filter.fo_sb, sfs);
 }
 
@@ -46,6 +51,7 @@ int rd_fstype(char *page, char **start, off_t off, int count, int *eof,
               void *data)
 {
         struct obd_device *dev = (struct obd_device *)data;
+        LASSERT(dev != NULL);
         return snprintf(page, count, "%s\n", dev->u.filter.fo_fstype);
 }
 
