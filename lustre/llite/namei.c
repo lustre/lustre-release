@@ -644,7 +644,7 @@ static int ll_common_unlink(struct inode *dir, struct dentry *dentry,__u32 mode)
                 GOTO(out, rc);
 
         rc = ext2_delete_entry(de, page);
-        if (err)
+        if (rc)
                 goto out;
 
         /* AED: not sure if needed - directory lock revocation should do it
