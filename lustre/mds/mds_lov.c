@@ -271,13 +271,15 @@ int mds_iocontrol(unsigned int cmd, struct lustre_handle *conn,
 
                 RETURN(rc);
 
-        case OBD_IOC_SET_READONLY:
+        case OBD_IOC_SET_READONLY: {
+                BDEVNAME_DECLARE_STORAGE(tmp);
                 CERROR("setting device %s read-only\n",
-                       ll_bdevname(obd->u.mds.mds_sb->s_dev));
+                       ll_bdevname(obd->u.mds.mds_sb->s_dev, tmp));
 #ifdef CONFIG_DEV_RDONLY
                 dev_set_rdonly(obd->u.mds.mds_sb->s_dev, 2);
 #endif
                 RETURN(0);
+        }
 
         case OBD_IOC_ABORT_RECOVERY:
                 CERROR("aborting recovery for device %s\n", obd->obd_name);
