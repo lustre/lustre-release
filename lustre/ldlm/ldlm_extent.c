@@ -45,6 +45,7 @@ ldlm_extent_internal_policy(struct list_head *queue, struct ldlm_lock *req,
         ldlm_mode_t req_mode = req->l_req_mode;
         __u64 req_start = req->l_req_extent.start;
         __u64 req_end = req->l_req_extent.end;
+        int conflicting = 0;
         ENTRY;
 
         lockmode_verify(req_mode);
@@ -65,13 +66,19 @@ ldlm_extent_internal_policy(struct list_head *queue, struct ldlm_lock *req,
                 if (req == lock)
                         continue;
 
+                /* Locks are compatible, overlap doesn't matter */
+                if (lockmode_compat(lock->l_req_mode, req_mode))
+                        continue;
+
+                /* If this is a high-traffic lock, don't grow downwards at all
+                 * or grow upwards too much */
+                ++conflicting;
+                if (conflicting > 4)
+                        new_ex->start = req_start;
+
                 /* If lock doesn't overlap new_ex, skip it. */
                 if (l_extent->end < new_ex->start ||
                     l_extent->start > new_ex->end)
-                        continue;
-
-                /* Locks are compatible, overlap doesn't matter */
-                if (lockmode_compat(lock->l_req_mode, req_mode))
                         continue;
 
                 /* Locks conflicting in requested extents and we can't satisfy
@@ -85,10 +92,10 @@ ldlm_extent_internal_policy(struct list_head *queue, struct ldlm_lock *req,
                 /* We grow extents downwards only as far as they don't overlap
                  * with already-granted locks, on the assumtion that clients
                  * will be writing beyond the initial requested end and would
-                 * then need to enqueue a new lock beyond the previous request.
-                 * We don't grow downwards if there are lots of lockers. */
-                if (l_extent->start < req_start) {
-                        if (atomic_read(&req->l_resource->lr_refcount) > 20)
+                 * then need to enqueue a new lock beyond previous request.
+                 * l_req_extent->end strictly < req_start, checked above. */
+                if (l_extent->start < req_start && new_ex->start != req_start) {
+                        if (l_extent->end >= req_start)
                                 new_ex->start = req_start;
                         else
                                 new_ex->start = min(l_extent->end+1, req_start);
@@ -106,6 +113,13 @@ ldlm_extent_internal_policy(struct list_head *queue, struct ldlm_lock *req,
                         else
                                 new_ex->end = max(l_extent->start - 1, req_end);
                 }
+        }
+
+#define LDLM_MAX_GROWN_EXTENT (32 * 1024 * 1024 - 1)
+        if (conflicting > 32 && (req_mode == LCK_PW || req_mode == LCK_CW)) {
+                if (req_end < req_start + LDLM_MAX_GROWN_EXTENT)
+                        new_ex->end = min(req_start + LDLM_MAX_GROWN_EXTENT,
+                                          new_ex->end);
         }
         EXIT;
 }

@@ -21,6 +21,7 @@ tbd  Cluster File Systems, Inc. <info@clusterfs.com>
 	- don't oops on a deleted current working directory (2399)
 	- handle hard links to targets without a parent properly (2517)
 	- don't dereference NULL lock when racing during eviction (2867)
+	- don't grow lock extents when there are lots of conflicting locks (2919)
 
 2004-03-04  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.0
