@@ -69,7 +69,8 @@ int target_handle_connect(struct ptlrpc_request *req)
 
         rc = obd_connect(&conn, target, cluuid, ptlrpc_recovd,
                          target_revoke_connection);
-        if (rc)
+        /* EALREADY indicates a reconnection, send the reply normally. */
+        if (rc && rc != EALREADY)
                 GOTO(out, rc);
 
         rc = lustre_pack_msg(0, NULL, NULL, &req->rq_replen, &req->rq_repmsg);
