@@ -6,14 +6,14 @@ CHECKSTAT=${CHECKSTAT:-"./checkstat -v"}
 MOUNT=${MOUNT:-/mnt/lustre}
 export NAME=$NAME
 clean() {
-        echo -n "cleanup..."
+        echo -n "cln.."
         sh llmountcleanup.sh > /dev/null
 }
 CLEAN=${CLEAN:-clean}
 start() {
-        echo -n "mounting..."
+        echo -n "mnt.."
         sh llrmount.sh > /dev/null
-        echo -n "mounted"
+        echo -n "done"
 }
 START=${START:-start}
 
@@ -144,7 +144,7 @@ $CLEAN
 $START
 
 
-echo '== mkdir .../d10; mkdir .../d10/d2; touch .../d10/d2/f = test 10'
+echo '== mkdir .../d10 .../d10/d2; touch .../d10/d2/f = test 10'
 mkdir $MOUNT/d10
 mkdir $MOUNT/d10/d2
 touch $MOUNT/d10/d2/f
@@ -153,7 +153,7 @@ pass
 $CLEAN
 $START
 
-echo '== mkdir .../d11 d11/d2; chmod .../d11/d2 .../d11/d2 == test 11'
+echo '== mkdir .../d11 d11/d2; chmod .../d11/d2 ======= test 11'
 mkdir $MOUNT/d11
 mkdir $MOUNT/d11/d2
 chmod 0666 $MOUNT/d11/d2
@@ -163,7 +163,7 @@ pass
 $CLEAN
 $START
 
-echo '== mkdir .../d12; touch .../d12/f; chmod .../d12/f d12/f == test 12'
+echo '== mkdir .../d12; touch .../d12/f; chmod .../d12/f == test 12'
 mkdir $MOUNT/d12
 touch $MOUNT/d12/f
 chmod 0666 $MOUNT/d12/f
@@ -229,14 +229,14 @@ pass
 $CLEAN
 $START
 
-echo "== touch $MOUNT/f ; ls $MOUNT ==================== test 18"
+echo "== touch .../f ; ls ... ========================= test 18"
 touch $MOUNT/f
 ls $MOUNT || error
 pass
 $CLEAN
 $START
 
-echo "== touch $MOUNT/f ; ls -l $MOUNT ================= test 19"
+echo "== touch .../f ; ls -l ... ====================== test 19"
 touch $MOUNT/f
 ls -l $MOUNT
 rm $MOUNT/f
@@ -245,7 +245,7 @@ pass
 $CLEAN
 $START
 
-echo "== touch $MOUNT/f ; ls -l $MOUNT ================= test 20"
+echo "== touch .../f ; ls -l ... ====================== test 20"
 touch $MOUNT/f
 rm $MOUNT/f
 echo "1 done"
@@ -397,6 +397,7 @@ pass
 $CLEAN
 $START
 
+echo '== symlink sanity ================================ test25'
 echo "--test 25.1 create file in symlinked directory"
 mkdir $MOUNT/d25
 ln -s d25 $MOUNT/s25
@@ -437,6 +438,9 @@ chmod 0666 $MOUNT/s26.2-3/foo
 pass
 $CLEAN
 $START
+
+echo '== cleanup ========================================='
+rm -r $MOUNT/[Rdfs][1-9]*
 
 echo '======================= finished ======================='
 exit
