@@ -436,11 +436,6 @@ void ll_put_super(struct super_block *sb)
         list_del(&sbi->ll_conn_chain);
         obd_disconnect(sbi->ll_osc_exp, 0);
 
-        /* Force sync on the MDS, and get the last_committed value to flush
-         * remaining RPCs from the sending queue on client. */
-        if (!class_exp2obd(sbi->ll_mdc_exp)->obd_no_recov)
-                mdc_sync(sbi->ll_mdc_exp, NULL, NULL);
-
         lprocfs_unregister_mountpoint(sbi);
         if (sbi->ll_proc_root) {
                 lprocfs_remove(sbi->ll_proc_root);
@@ -469,8 +464,7 @@ void ll_put_super(struct super_block *sb)
                 OBD_ALLOC(cln_prof, len);
                 sprintf(cln_prof, "%s-clean", sbi->ll_profile);
 
-                err = ll_process_log(sbi->ll_mds_uuid.uuid, cln_prof, 
-                                     &cfg);
+                err = ll_process_log(sbi->ll_mds_uuid.uuid, cln_prof, &cfg);
                 if (err < 0)
                         CERROR("Unable to process log: %s\n", cln_prof);
 
