@@ -27,8 +27,11 @@ profileRef: <value-of select="@uuidref"/>
 <if test="timeout">
 timeout: <value-of select="timeout"/>
 </if>
-<if test="recoveryUpcall">
-recoveryUpcall: <value-of select="recoveryUpcall"/>
+<if test="lustreUpcall">
+lustreUpcall: <value-of select="lustreUpcall"/>
+</if>
+<if test="portalsUpcall">
+portalsUpcall: <value-of select="portalsUpcall"/>
 </if>
 <text>
 </text>
