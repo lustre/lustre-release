@@ -500,6 +500,44 @@ int lov_setstripe(struct obd_export *exp, struct lov_stripe_md **lsmp,
         RETURN(0);
 }
 
+int lov_setea(struct obd_export *exp, struct lov_stripe_md **lsmp,
+                  struct lov_user_md *lump)
+{
+        int i;
+        int rc;
+        struct obd_export *oexp;
+        struct lov_obd *lov = &exp->exp_obd->u.lov;
+        obd_id last_id = 0;
+
+        for (i = 0; i < lump->lmm_stripe_count; i++) {
+                __u32 len = sizeof(last_id);
+                oexp = lov->tgts[lump->lmm_objects[i].l_ost_idx].ltd_exp;
+                rc = obd_get_info(oexp, strlen("last_id"), "last_id", 
+                                  &len, &last_id); 
+                if (rc)
+                        RETURN(rc);
+                if (last_id < lump->lmm_objects[i].l_object_id) {
+                        CERROR("Setting EA for object > than last id on "
+                          "ost idx %d "LPD64" > "LPD64" \n", 
+                          lump->lmm_objects[i].l_ost_idx,
+                          lump->lmm_objects[i].l_object_id, last_id);
+                        RETURN(-EINVAL);
+                }
+        }
+
+        rc = lov_setstripe(exp, lsmp, lump);
+        if (rc) 
+                RETURN(rc);
+        for (i = 0; i < lump->lmm_stripe_count; i++) {
+                (*lsmp)->lsm_oinfo[i].loi_ost_idx = 
+                                                 lump->lmm_objects[i].l_ost_idx;
+                (*lsmp)->lsm_oinfo[i].loi_id = lump->lmm_objects[i].l_object_id;
+                (*lsmp)->lsm_oinfo[i].loi_gr = lump->lmm_objects[i].l_object_gr;
+        }
+        RETURN(0);
+}
+
+
 /* Retrieve object striping information.
  *
  * @lump is a pointer to an in-core struct with lmm_ost_count indicating
