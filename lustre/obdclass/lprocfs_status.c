@@ -414,13 +414,14 @@ static int lprocfs_stats_seq_show(struct seq_file *p, void *v)
                struct lprocfs_counter *percpu_cntr =
                        &(stats->ls_percpu[i])->lp_cntr[idx];
                int centry;
+
                do {
-                        centry = atomic_read(&percpu_cntr->lc_cntl.la_entry);
-                        t.lc_count = percpu_cntr->lc_count;
-                        t.lc_sum = percpu_cntr->lc_sum;
-                        t.lc_min = percpu_cntr->lc_min;
-                        t.lc_max = percpu_cntr->lc_max;
-                        t.lc_sumsquare = percpu_cntr->lc_sumsquare;
+                       centry = atomic_read(&percpu_cntr->lc_cntl.la_entry);
+                       t.lc_count = percpu_cntr->lc_count;
+                       t.lc_sum = percpu_cntr->lc_sum;
+                       t.lc_min = percpu_cntr->lc_min;
+                       t.lc_max = percpu_cntr->lc_max;
+                       t.lc_sumsquare = percpu_cntr->lc_sumsquare;
                } while (centry != atomic_read(&percpu_cntr->lc_cntl.la_entry) &&
                         centry != atomic_read(&percpu_cntr->lc_cntl.la_exit));
                ret.lc_count += t.lc_count;
