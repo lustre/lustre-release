@@ -215,6 +215,8 @@ static int smfs_link(struct dentry * old_dentry,
 		rc = cache_dir->i_op->link(&cache_old_dentry, cache_dir, &cache_dentry);		
 	
 	if (rc == 0) {
+		atomic_inc(&inode->i_count);
+		duplicate_inode(cache_old_dentry.d_inode, inode);
 		d_instantiate(dentry, inode);
 	} 	
 	

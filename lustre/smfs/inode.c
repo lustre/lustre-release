@@ -73,6 +73,18 @@ static void smfs_clear_inode(struct inode *inode)
 	
 	cache_sb = S2CSB(inode->i_sb);
 	cache_inode = I2CI(inode);
+
+	/*FIXME: because i_count of cache_inode may not 
+         * be 0 or 1 in before smfs_delete inode, So we 
+         * need to dec it to 1 before we call delete_inode
+         * of the bellow cache filesystem Check again latter*/
+
+	if (atomic_read(&cache_inode->i_count) < 1)
+		BUG();
+	
+	while (atomic_read(&cache_inode->i_count) != 1) {
+		atomic_dec(&cache_inode->i_count);
+	}
 	iput(cache_inode);
 
 	return;	
