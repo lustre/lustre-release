@@ -819,8 +819,12 @@ struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
                         if (lock->l_completion_ast)
                                 lock->l_completion_ast(lock, 0);
                 }
-        } else
+        } else {
+                /* FIXME: We should try the conversion right away and possibly
+                 * return success without the need for an extra AST */
                 list_add_tail(&lock->l_res_link, &res->lr_converting);
+                *flags |= LDLM_FL_BLOCK_CONV;
+        }
 
         l_unlock(&ns->ns_lock);
 
