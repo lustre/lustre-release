@@ -163,6 +163,7 @@ static void smfs_dirty_inode(struct inode *inode)
 	if (!cache_inode || !cache_sb)
 		return;
 		
+	duplicate_inode(inode, cache_inode); 
 	if (cache_sb->s_op->dirty_inode)
 		cache_sb->s_op->dirty_inode(cache_inode);
 
