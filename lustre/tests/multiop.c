@@ -4,6 +4,7 @@
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <signal.h>
 #include <stdlib.h>
 #include <unistd.h>
 
@@ -23,6 +24,8 @@ char usage[] =
 "        s  stat\n"
 "        S  fstat\n";
 
+void null_handler(int unused) { }
+
 int main(int argc, char **argv)
 {
         char *fname, *commands;
@@ -33,6 +36,8 @@ int main(int argc, char **argv)
                 fprintf(stderr, usage, argv[0]);
                 exit(1);
         }
+
+        signal(SIGUSR1, null_handler);
 
         fname = argv[1];
         commands = argv[2];
