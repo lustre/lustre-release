@@ -64,6 +64,16 @@ config.xml          Lustre configuration in xml format.
 --nosetup           Skip device setup/cleanup step.
 --reformat          Reformat all devices (without question)
 --dump <file>       Dump the kernel debug log before portals is unloaded
+--startlevel <num>  Specify the level of services to start with (default 0)
+--endlevel <num>    Specify the level of services to end with (default 100)
+                    Levels are aproximatly like:
+                            10 - network
+                            20 - device, ldlm
+                            30 - obd, mdd
+                            40 - mds, ost
+                            50 - mdc, osc
+                            60 - lov, lovconfig
+                            70 - mountpoint
 """
     TODO = """
 --ldap server       LDAP server with lustre config database
@@ -96,6 +106,8 @@ class Config:
         self._debug_path = '/tmp/lustre-log'
         self._dump_file = None
         self._src_dir = None
+	self._start_level = 0
+	self._end_level = 100
 
     def verbose(self, flag = None):
         if flag: self._verbose = flag
@@ -156,6 +168,16 @@ class Config:
     def dump_file(self, val = None):
         if val: self._dump_file = val
         return self._dump_file
+
+    def startlevel(self, val = None):
+        if val: self._start_level = int(val)
+        return self._start_level
+
+    def endlevel(self, val = None):
+        if val: self._end_level = int(val)
+        return self._end_level
+
+
 
 config = Config()
 
@@ -1200,21 +1222,25 @@ def getServiceType(dom_node):
 # the order of iniitailization is based on level. 
 def getServiceLevel(dom_node):
     type = getServiceType(dom_node)
+    ret=0;
     if type in ('network',):
-        return 10
+        ret = 10
     elif type in ('device', 'ldlm'):
-        return 20
+        ret = 20
     elif type in ('obd', 'mdd'):
-        return 30
+        ret = 30
     elif type in ('mds','ost'):
-        return 40
+        ret = 40
     elif type in ('mdc','osc'):
-        return 50
+        ret = 50
     elif type in ('lov', 'lovconfig'):
-        return 60
+        ret = 60
     elif type in ('mountpoint',):
-        return 70
-    return 0
+        ret = 70
+
+    if ret < config.startlevel() or ret > config.endlevel():
+        ret = 0 
+    return ret
 
 #
 # return list of services in a profile. list is a list of tuples
@@ -1228,7 +1254,8 @@ def getServices(lustreNode, profileNode):
                 print n
                 panic('service not found: ' + getRef(n))
             level = getServiceLevel(servNode)
-            list.append((level, servNode))
+	    if level > 0:
+                list.append((level, servNode))
     list.sort()
     return list
 
@@ -1460,7 +1487,7 @@ def parse_cmdline(argv):
     long_opts = ["ldap", "reformat", "lustre=", "verbose", "gdb",
                  "portals=", "makeldiff", "cleanup", "noexec",
                  "help", "node=", "nomod", "nosetup",
-                 "dump=", "force"]
+                 "dump=", "force", "startlevel=", "endlevel="]
     opts = []
     args = []
     try:
@@ -1497,6 +1524,11 @@ def parse_cmdline(argv):
             config.dump_file(a)
         if o in ("-f", "--force"):
             config.force(1)
+	if o in ("--startlevel",):
+		config.startlevel(a)
+        if o in ("--endlevel",):
+                config.endlevel(a)
+
     return args
 
 def fetch(url):
