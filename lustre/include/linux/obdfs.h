@@ -185,6 +185,8 @@ int obdfs_init_pgrqcache(void);
 void obdfs_cleanup_pgrqcache(void);
 inline void obdfs_pgrq_del(struct obdfs_pgrq *pgrq);
 int obdfs_readpage(struct file *file, struct page *page);
+int obdfs_prepare_write(struct file *file, struct page *page, unsigned from, unsigned to);
+int obdfs_commit_write(struct file *file, struct page *page, unsigned from, unsigned to);
 int obdfs_writepage(struct page *page);
 struct page *obdfs_getpage(struct inode *inode, unsigned long offset,
                            int create, int locked);

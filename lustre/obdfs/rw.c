@@ -91,6 +91,37 @@ int obdfs_readpage(struct file *file, struct page *page)
         return rc;
 } /* obdfs_readpage */
 
+int obdfs_prepare_write(struct file *file, struct page *page, unsigned from, unsigned to)
+{
+        struct inode *inode = page->mapping->host;
+        obd_off offset = ((obd_off)page->index) << PAGE_SHIFT;
+        int rc;
+        ENTRY; 
+        
+        /* PDEBUG(page, "READ"); */
+        if (Page_Uptodate(page)) { 
+                EXIT;
+                return 0; 
+        }
+
+        if ( (from <= offset) && (to >= offset + PAGE_SIZE) ) {
+                EXIT;
+                return 0;
+        }
+        
+        rc = obdfs_brw(READ, inode, page, 0);
+        if ( !rc ) {
+                SetPageUptodate(page);
+                /* obd_unlock_page(page); */ 
+        } 
+        /* PDEBUG(page, "READ"); */
+        EXIT;
+        return rc;
+}
+
+
+
+
 static kmem_cache_t *obdfs_pgrq_cachep = NULL;
 
 int obdfs_init_pgrqcache(void)
@@ -329,10 +360,26 @@ int obdfs_do_writepage(struct page *page, int sync)
         return err;
 } /* obdfs_do_writepage */
 
+
+
 /* returns the page unlocked, but with a reference */
 int obdfs_writepage(struct page *page)
 {
         return obdfs_do_writepage(page, 0);
+}
+
+int obdfs_commit_write(struct file *file, struct page *page, unsigned from, unsigned to)
+{
+        int rc;
+        struct inode *inode = page->mapping->host;
+        loff_t pos = ((loff_t)page->index << PAGE_CACHE_SHIFT) + to;
+        rc = obdfs_writepage(page);
+        kunmap(page);
+        if (pos > inode->i_size) {
+                inode->i_size = pos;
+                mark_inode_dirty(inode);
+        }
+        return 0;
 }
 
 

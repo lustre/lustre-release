@@ -411,7 +411,7 @@ static void obdfs_delete_inode(struct inode *inode)
         ODEBUG(oa);
         err = IOPS(inode, destroy)(IID(inode), oa);
         obdo_free(oa);
-
+        clear_inode(inode);
         if (err) {
                 printk(__FUNCTION__ ": obd_destroy fails (%d)\n", err);
                 EXIT;
@@ -509,8 +509,8 @@ struct address_space_operations obdfs_aops = {
         readpage: obdfs_readpage,
         writepage: obdfs_writepage,
         sync_page: block_sync_page,
-        prepare_write: NULL, 
-        commit_write: generic_commit_write,
+        prepare_write: obdfs_prepare_write, 
+        commit_write: obdfs_commit_write,
         bmap: NULL
 };
 
