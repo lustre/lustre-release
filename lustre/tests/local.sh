@@ -29,7 +29,7 @@ ${LMC} -o $config --node localhost --net localhost tcp || exit 1
 ${LMC} -m $config --format --node localhost $FSTYPE --mds mds1 $MDSDEV $MDSSIZE || exit 2
 
 # configure ost
-${LMC} -m $config --format --node localhost --ost $OSTDEV $OSTSIZE || exit 3
+${LMC} -m $config --format --node localhost $FSTYPE --ost $OSTDEV $OSTSIZE || exit 3
 
 # create client config
 ${LMC} -m $config --node localhost --mtpt /mnt/lustre mds1 OSC_localhost || exit 4
