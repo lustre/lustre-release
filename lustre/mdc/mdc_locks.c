@@ -506,9 +506,13 @@ int mdc_intent_lock(struct obd_export *exp, struct lustre_id *pid,
          * this and use the request from revalidate.  In this case, revalidate
          * never dropped its reference, so the refcounts are all OK */
         if (!it_disposition(it, DISP_ENQ_COMPLETE)) {
-                struct mdc_op_data op_data;
+                struct mdc_op_data *op_data;
 
-                mdc_id2mdc_data(&op_data, pid, cid, name, len, 0);
+                OBD_ALLOC(op_data, sizeof(*op_data));
+                if (op_data == NULL)
+                        RETURN(-ENOMEM);
+
+                mdc_id2mdc_data(op_data, pid, cid, name, len, 0);
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
                 /* 
@@ -526,14 +530,15 @@ int mdc_intent_lock(struct obd_export *exp, struct lustre_id *pid,
                          * invalid fid in inode.
                          */
                         if (cid == NULL && name != NULL)
-                                op_data.valid |= OBD_MD_FID;
+                                op_data->valid |= OBD_MD_FID;
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
                 }
 #endif
 
                 rc = mdc_enqueue(exp, LDLM_IBITS, it, it_to_lock_mode(it),
-                                 &op_data, &lockh, lmm, lmmsize,
+                                 op_data, &lockh, lmm, lmmsize,
                                  ldlm_completion_ast, cb_blocking, NULL);
+                OBD_FREE(op_data, sizeof(*op_data));
                 if (rc < 0)
                         RETURN(rc);
                 
