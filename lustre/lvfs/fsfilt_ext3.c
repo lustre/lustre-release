@@ -57,6 +57,9 @@ struct fsfilt_cb_data {
         void *cb_data;                  /* MDS/OST completion function data */
 };
 
+#ifndef EXT3_XATTR_INDEX_TRUSTED        /* temporary until we hit l28 kernel */
+#define EXT3_XATTR_INDEX_TRUSTED        4
+#endif
 #define XATTR_LUSTRE_MDS_LOV_EA         "lov"
 
 #define EXT3_XATTR_INDEX_LUSTRE         5                         /* old */
