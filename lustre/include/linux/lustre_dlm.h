@@ -32,6 +32,7 @@ typedef enum {
 #define LDLM_FL_BLOCK_WAIT     (1 << 3)
 #define LDLM_FL_CBPENDING      (1 << 4)
 #define LDLM_FL_AST_SENT       (1 << 5)
+#define LDLM_FL_DESTROYED    (1 << 6)
 
 #define L2B(c) (1 << c)
 
@@ -104,6 +105,8 @@ typedef int (*ldlm_lock_callback)(struct ldlm_lock *lock,
                                   __u32 data_len, struct ptlrpc_request **req);
 
 struct ldlm_lock {
+        __u64                  l_random;
+        int                   l_refc;
         struct ldlm_resource *l_resource;
         struct ldlm_lock     *l_parent;
         struct list_head      l_children;
@@ -220,7 +223,7 @@ ldlm_error_t ldlm_lock_enqueue(struct ldlm_lock *lock, void *cookie,
                                ldlm_lock_callback blocking);
 struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
                                         int *flags);
-struct ldlm_resource *ldlm_lock_cancel(struct ldlm_lock *lock);
+void ldlm_lock_cancel(struct ldlm_lock *lock);
 void ldlm_reprocess_all(struct ldlm_resource *res);
 void ldlm_lock_dump(struct ldlm_lock *lock);
 
@@ -235,11 +238,11 @@ int ldlm_namespace_free(struct ldlm_namespace *ns);
 struct ldlm_resource *ldlm_resource_get(struct ldlm_namespace *ns,
                                         struct ldlm_resource *parent,
                                         __u64 *name, __u32 type, int create);
-struct ldlm_resource *ldlm_resource_addref(struct ldlm_resource *res);
+struct ldlm_resource *ldlm_resource_getref(struct ldlm_resource *res);
 int ldlm_resource_put(struct ldlm_resource *res);
 void ldlm_resource_add_lock(struct ldlm_resource *res, struct list_head *head,
                             struct ldlm_lock *lock);
-void ldlm_resource_del_lock(struct ldlm_lock *lock);
+void ldlm_resource_unlink_lock(struct ldlm_lock *lock);
 void ldlm_res2desc(struct ldlm_resource *res, struct ldlm_resource_desc *desc);
 void ldlm_resource_dump(struct ldlm_resource *res);
 int ldlm_lock_change_resource(struct ldlm_lock *lock, __u64 new_resid[3]);

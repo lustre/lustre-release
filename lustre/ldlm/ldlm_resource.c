@@ -317,7 +317,7 @@ void ldlm_resource_add_lock(struct ldlm_resource *res, struct list_head *head,
         l_unlock(&res->lr_namespace->ns_lock);
 }
 
-void ldlm_resource_del_lock(struct ldlm_lock *lock)
+void ldlm_resource_unlink_lock(struct ldlm_lock *lock)
 {
         l_lock(&lock->l_resource->lr_namespace->ns_lock);
         list_del_init(&lock->l_res_link);

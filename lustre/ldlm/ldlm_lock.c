@@ -15,6 +15,7 @@
 
 #include <linux/slab.h>
 #include <linux/module.h>
+#include <linux/random.h>
 #include <linux/lustre_dlm.h>
 #include <linux/lustre_mds.h>
 
@@ -38,13 +39,13 @@ ldlm_res_policy ldlm_res_policy_table [] = {
         [LDLM_MDSINTENT] ldlm_intent_policy
 };
 
-void ldlm_lock2handle(struct ldlm_lock *lock, struct ldlm_handle *lockh)
+void ldlm_lock2handle(struct ldlm_lock *lock, struct lustre_handle *lockh)
 {
-        handle->addr = (__u64)(unsigned long)lock;
-        handle->cookie = lock->l_cookie;
+        lockh->addr = (__u64)(unsigned long)lock;
+        lockh->cookie = lock->l_random;
 }
 
-struct *ldlm_handle2lock(struct ldlm_handle *handle)
+struct ldlm_lock *ldlm_handle2lock(struct lustre_handle *handle)
 {
         struct ldlm_lock *lock = NULL;
         ENTRY;
@@ -57,7 +58,7 @@ struct *ldlm_handle2lock(struct ldlm_handle *handle)
                 RETURN(NULL);
 
         l_lock(&lock->l_resource->lr_namespace->ns_lock);
-        if (lock->l_cookie != handle->cookie)
+        if (lock->l_random != handle->cookie)
                 GOTO(out, handle = NULL);
 
         if (lock->l_flags & LDLM_FL_DESTROYED)
@@ -67,7 +68,7 @@ struct *ldlm_handle2lock(struct ldlm_handle *handle)
         EXIT;
  out:
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
-        return  handle;
+        return  lock;
 }
 
 struct ldlm_lock *ldlm_lock_get(struct ldlm_lock *lock)
@@ -81,10 +82,10 @@ struct ldlm_lock *ldlm_lock_get(struct ldlm_lock *lock)
 
 void ldlm_lock_put(struct ldlm_lock *lock)
 {
-        struct l_lock *nslock = &lock->l_resource->lr_namespace->ns_lock;
+        struct lustre_lock *nslock = &lock->l_resource->lr_namespace->ns_lock;
         ENTRY;
 
-        l_lock(&nslock);
+        l_lock(nslock);
         lock->l_refc--;
         if (lock->l_refc < 0)
                 LBUG();
@@ -98,7 +99,7 @@ void ldlm_lock_put(struct ldlm_lock *lock)
                         ptlrpc_put_connection(lock->l_connection);
                 kmem_cache_free(ldlm_lock_slab, lock);
         }
-        l_unlock(&nslock);
+        l_unlock(nslock);
         EXIT;
         return;
 }
@@ -120,7 +121,7 @@ void ldlm_lock_destroy(struct ldlm_lock *lock)
                 LBUG();
         }
 
-        if (!list_empty(lock->l_res))
+        if (!list_empty(&lock->l_res_link))
                 LBUG();
 
         lock->l_flags = LDLM_FL_DESTROYED;
@@ -184,7 +185,7 @@ int ldlm_lock_change_resource(struct ldlm_lock *lock, __u64 new_resid[3])
         /* move references over */ 
         for (i = 0; i < lock->l_refc; i++) {
                 int rc;
-                ldlm_resource_addref(lock->l_resource);
+                ldlm_resource_getref(lock->l_resource);
                 rc = ldlm_resource_put(lock->l_resource);
                 if (rc == 1 && i != lock->l_refc - 1)
                         LBUG();
@@ -209,8 +210,6 @@ static int ldlm_intent_policy(struct ldlm_lock *lock, void *req_cookie,
                 struct ldlm_intent *it = lustre_msg_buf(req->rq_reqmsg, 1);
                 struct mds_body *mds_rep;
                 struct ldlm_reply *rep;
-                struct ldlm_namespace *ns = lock->l_resource->lr_namespace;
-                __u32 type = lock->l_resource->lr_type;
                 __u64 new_resid[3] = {0, 0, 0}, old_res;
                 int bufcount = -1, rc, size[3] = {sizeof(struct ldlm_reply),
                                                   sizeof(struct mds_body),
@@ -507,7 +506,7 @@ void ldlm_grant_lock(struct ldlm_lock *lock)
                 lock->l_completion_ast(lock, NULL, lock->l_data,
                                        lock->l_data_len, &req);
                 if (req != NULL) {
-                        struct list_head *list = &res->lr_tmp;
+                        struct list_head *list = res->lr_tmp;
                         if (list == NULL) {
                                 LBUG();
                                 return;
@@ -519,16 +518,16 @@ void ldlm_grant_lock(struct ldlm_lock *lock)
         EXIT;
 }
 
-static int search_queue(struct list_head *queue, ldlm_mode_t mode,
-                        struct ldlm_extent *extent, struct lustre_handle *lockh)
+static struct ldlm_lock *search_queue(struct list_head *queue, ldlm_mode_t mode,
+                                      struct ldlm_extent *extent)
 {
+        struct ldlm_lock *lock;
         struct list_head *tmp;
 
         list_for_each(tmp, queue) {
-                struct ldlm_lock *lock;
                 lock = list_entry(tmp, struct ldlm_lock, l_res_link);
 
-                if (lock->l_flags & LDLM_FL_DYING)
+                if (lock->l_flags & LDLM_FL_CBPENDING)
                         continue;
 
                 /* lock_convert() takes the resource lock, so we're sure that
@@ -542,23 +541,22 @@ static int search_queue(struct list_head *queue, ldlm_mode_t mode,
                         continue;
 
                 ldlm_lock_addref(lock, mode);
-                ldlm_object2handle(lock, lockh);
-                return 1;
+                return lock;
         }
 
-        return 0;
+        return NULL;
 }
 
 /* Must be called with no resource or lock locks held.
  *
  * Returns 1 if it finds an already-existing lock that is compatible; in this
  * case, lockh is filled in with a addref()ed lock */
-int ldlm_local_lock_match(struct ldlm_namespace *ns, __u64 *res_id, __u32 type,
-                          void *cookie, int cookielen, ldlm_mode_t mode,
-                          struct lustre_handle *lockh)
+int ldlm_lock_match(struct ldlm_namespace *ns, __u64 *res_id, __u32 type,
+                    void *cookie, int cookielen, ldlm_mode_t mode,
+                    struct lustre_handle *lockh)
 {
         struct ldlm_resource *res;
-        struct ldlm_namespace *ns;
+        struct ldlm_lock *lock;
         int rc = 0;
         ENTRY;
 
@@ -569,11 +567,11 @@ int ldlm_local_lock_match(struct ldlm_namespace *ns, __u64 *res_id, __u32 type,
         ns = res->lr_namespace;
         l_lock(&ns->ns_lock);
 
-        if (search_queue(&res->lr_granted, mode, cookie, lockh))
+        if ((lock = search_queue(&res->lr_granted, mode, cookie)))
                 GOTO(out, rc = 1);
-        if (search_queue(&res->lr_converting, mode, cookie, lockh))
+        if ((lock = search_queue(&res->lr_converting, mode, cookie)))
                 GOTO(out, rc = 1);
-        if (search_queue(&res->lr_waiting, mode, cookie, lockh))
+        if ((lock = search_queue(&res->lr_waiting, mode, cookie)))
                 GOTO(out, rc = 1);
 
         EXIT;
@@ -581,21 +579,21 @@ int ldlm_local_lock_match(struct ldlm_namespace *ns, __u64 *res_id, __u32 type,
         ldlm_resource_put(res);
         l_unlock(&ns->ns_lock);
 
-        wait_event_interruptible(lock->l_waitq, lock->l_req_mode ==
-                                 lock->l_granted_mode);
+        if (lock)
+                wait_event_interruptible(lock->l_waitq, lock->l_req_mode ==
+                                         lock->l_granted_mode);
 
         return rc;
 }
 
 /* Must be called without the resource lock held.  Returns a referenced,
  * unlocked ldlm_lock. */
-struct ldlm_lock *
-ldlm_local_lock_create(struct ldlm_namespace *ns,
-                       struct lustre_handle *parent_lock_handle,
-                       __u64 *res_id, __u32 type,
-                       ldlm_mode_t mode,
-                       void *data,
-                       __u32 data_len)
+struct ldlm_lock *ldlm_lock_create(struct ldlm_namespace *ns,
+                                   struct lustre_handle *parent_lock_handle,
+                                   __u64 *res_id, __u32 type,
+                                   ldlm_mode_t mode,
+                                   void *data,
+                                   __u32 data_len)
 {
         struct ldlm_resource *res, *parent_res = NULL;
         struct ldlm_lock *lock, *parent_lock;
@@ -623,19 +621,17 @@ ldlm_local_lock_create(struct ldlm_namespace *ns,
 }
 
 /* Must be called with lock->l_lock and lock->l_resource->lr_lock not held */
-ldlm_error_t ldlm_lock_enqueue(struct lustre_lock *lock,
+ldlm_error_t ldlm_lock_enqueue(struct ldlm_lock *lock,
                                void *cookie, int cookie_len,
                                int *flags,
                                ldlm_lock_callback completion,
                                ldlm_lock_callback blocking)
 {
         struct ldlm_resource *res;
-        struct ldlm_lock *lock;
-        int incompat = 0, local;
+        int local;
         ldlm_res_policy policy;
         ENTRY;
 
-        lock = lustre_handle2object(lockh);
         res = lock->l_resource;
         local = res->lr_namespace->ns_client;
 
@@ -650,7 +646,7 @@ ldlm_error_t ldlm_lock_enqueue(struct lustre_lock *lock,
 
                 /* We do this dancing with refcounts and locks because the
                  * policy function could send an RPC */
-                ldlm_resource_addref(res);
+                ldlm_resource_getref(res);
 
                 rc = policy(lock, cookie, lock->l_req_mode, NULL);
 
@@ -687,7 +683,7 @@ ldlm_error_t ldlm_lock_enqueue(struct lustre_lock *lock,
                 else if (*flags & (LDLM_FL_BLOCK_WAIT | LDLM_FL_BLOCK_GRANTED))
                         ldlm_resource_add_lock(res, res->lr_waiting.prev, lock);
                 else
-                        ldlm_grant_lock(res, lock);
+                        ldlm_grant_lock(lock);
                 GOTO(out, ELDLM_OK);
         }
 
@@ -708,7 +704,7 @@ ldlm_error_t ldlm_lock_enqueue(struct lustre_lock *lock,
                 GOTO(out, ELDLM_OK);
         }
 
-        ldlm_grant_lock(res, lock);
+        ldlm_grant_lock(lock);
         EXIT;
  out:
         /* Don't set 'completion_ast' until here so that if the lock is granted
@@ -734,7 +730,7 @@ static int ldlm_reprocess_queue(struct ldlm_resource *res,
                         RETURN(1);
 
                 list_del_init(&pending->l_res_link);
-                ldlm_grant_lock(res, pending);
+                ldlm_grant_lock(pending);
 
                 ldlm_lock_addref(pending, pending->l_req_mode);
                 ldlm_lock_decref(pending, pending->l_granted_mode);
