@@ -84,6 +84,7 @@ Object creation command summary:
 --add mds
   --node node_name
   --mds mds_name
+  --failover
   --dev path
   --backdev path
   --fstype extN|ext3
@@ -92,6 +93,8 @@ Object creation command summary:
   --nspath
   --journal_size size
   --inode_size size
+  --mkfsoptions options
+  --mountfsoptions options
 
 --add lov
   --lov lov_name
@@ -103,6 +106,7 @@ Object creation command summary:
 --add ost
   --node node_name
   --ost ost_name 
+  --failover
   --lov lov_name 
   --dev path
   --backdev path
@@ -111,8 +115,11 @@ Object creation command summary:
   --backfstype ext3|tmpfs
   --journal_size size
   --inode_size size
-  --obdtype obdecho|obdfilter
+  --osdtype obdecho|obdfilter
   --ostuuid uuid
+  --mkfsoptions options
+  --mountfsoptions options
+  --nspath
  
 --add mtpt  - Mountpoint
   --node node_name
@@ -122,8 +129,10 @@ Object creation command summary:
 
 --add route
   --node nodename
+  --router
   --gw nid
-  --tgt nid
+  --gateway_cluster_id nid
+  --target_cluster_id nid
   --lo nid
   --hi nid
 
@@ -133,6 +142,11 @@ Object creation command summary:
 --add mgmt  - Management/monitoring service
   --node node_name
   --mgmt mgmt_service_name
+
+--add cobd
+  --node node_name
+  --real_obd obd_name
+  --cache_obd obd_name
 """
 
 PARAM = Lustre.Options.PARAM
@@ -206,8 +220,8 @@ lmc_options = [
     ('stripe_pattern', "Specify the stripe pattern. RAID 0 is the only one currently supported.", PARAM, 0),
 
     # cobd
-    ('real_obd', "", PARAM),
-    ('cache_obd', "", PARAM),
+    ('real_obd', "Specify the real device for the cache obd system.", PARAM),
+    ('cache_obd', "Specify the cache device for the cache obd system.", PARAM),
 
     ('mgmt', "Specify management/monitoring service name.", PARAM, ""),
     ]
