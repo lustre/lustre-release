@@ -637,7 +637,7 @@ static int ll_common_unlink(struct inode *dir, struct dentry *dentry,__u32 mode)
 
         de = ext2_find_entry(dir, dentry, &page);
         if (!de)
-                goto out;
+                GOTO(out, rc = -ENOENT);
         rc = ll_mdc_unlink(dir, dentry->d_inode, mode,
                             dentry->d_name.name, dentry->d_name.len);
         if (rc)
@@ -645,7 +645,7 @@ static int ll_common_unlink(struct inode *dir, struct dentry *dentry,__u32 mode)
 
         rc = ext2_delete_entry(de, page);
         if (rc)
-                goto out;
+                GOTO(out, rc);
 
         /* AED: not sure if needed - directory lock revocation should do it
          * in the case where the client has cached it for non-intent ops.
