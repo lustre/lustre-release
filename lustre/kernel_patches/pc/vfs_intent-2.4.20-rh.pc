@@ -1,10 +1,13 @@
 fs/dcache.c
+fs/exec.c
 fs/namei.c
-fs/nfsd/vfs.c
+fs/namespace.c
 fs/open.c
+fs/proc/base.c
 fs/stat.c
 include/linux/dcache.h
 include/linux/fs.h
+include/linux/fs_struct.h
 kernel/ksyms.c
-fs/exec.c
-fs/proc/base.c
+kernel/fork.c
+kernel/exit.c
