@@ -45,6 +45,15 @@
 
 extern spinlock_t inode_lock;
 
+#define LLWP_MAX_PAGES (PTL_MD_MAX_IOV)
+struct ll_writeback_pages {
+        unsigned        has_whole_pages:1,
+                        num_frags:2,
+                        num_pages:29; 
+        struct brw_page pgs[LLWP_MAX_PAGES];
+};
+
+
 /*
  * ugh, we want disk allocation on the target to happen in offset order.  we'll
  * follow sedgewicks advice and stick to the dead simple shellsort -- it'll do
@@ -84,15 +93,21 @@ void sort_brw_pages(struct brw_page *array, int num)
  * than the page we can unlock the page because truncate_inode_pages will
  * be waiting to cleanup the page
  */
-static int brw_pack_valid_page(struct brw_page *pg,
-                                   struct inode *inode,
-                                   struct page *page)
+static int llwp_consume_page(struct ll_writeback_pages *llwp, 
+                             struct inode *inode, struct page *page)
 {
         obd_off off = ((obd_off)page->index) << PAGE_SHIFT;
+        struct brw_page *pg;
 
         /* we raced with truncate? */
-        if ( off >= inode->i_size )
-                return -1;
+        if ( off >= inode->i_size ) {
+                unlock_page(page);
+                goto out;
+        }
+
+        page_cache_get(page);
+        llwp->num_pages++;
+        pg = &llwp->pgs[llwp->num_pages];
 
         pg->pg = page;
         pg->off = off;
@@ -102,6 +117,15 @@ static int brw_pack_valid_page(struct brw_page *pg,
         /* catch partial writes for files that end mid-page */
         if ( pg->off + pg->count > inode->i_size )
                 pg->count = inode->i_size & ~PAGE_MASK;
+
+        if ( pg->count == PAGE_SIZE ) {
+                if ( ! llwp->has_whole_pages ) {
+                        llwp->has_whole_pages = 1;
+                        llwp->num_frags++;
+                }
+        } else {
+                llwp->num_frags++;
+        }
 
         /*
          * matches ptlrpc_bulk_get assert that trickles down
@@ -113,6 +137,10 @@ static int brw_pack_valid_page(struct brw_page *pg,
         CDEBUG(D_CACHE, "brw_page %p: off %lld cnt %d, page %p: ind %ld\n",
                         pg, pg->off, pg->count, page, page->index);
 
+out:
+        if ( llwp->num_frags == 3 || llwp->num_pages == LLWP_MAX_PAGES )
+                return -1;
+
         return 0;
 }
 
@@ -122,20 +150,17 @@ static int brw_pack_valid_page(struct brw_page *pg,
  * this duplicates filemap_fdatasync and gives us an opportunity to grab lots
  * of dirty pages.. 
  */
-static int ll_get_dirty_pages(struct inode *inode, struct brw_page *pgs, 
-                                int nrmax)
+static void ll_get_dirty_pages(struct inode *inode, 
+                               struct ll_writeback_pages *llwp)
 {
         struct address_space *mapping = inode->i_mapping;
         struct page *page;
         struct list_head *pos, *n;
-        int ret = 0;
         ENTRY;
 
         spin_lock(&pagecache_lock);
 
         list_for_each_prev_safe(pos, n, &mapping->dirty_pages) {
-                if ( ret == nrmax )
-                        break;
                 page = list_entry(pos, struct page, list);
 
                 if (TryLockPage(page))
@@ -150,38 +175,36 @@ static int ll_get_dirty_pages(struct inode *inode, struct brw_page *pgs,
                 }
                 ClearPageDirty(page);
 
-                if ( brw_pack_valid_page(&pgs[ret], inode, page) != 0) {
-                        unlock_page(page);
-                        continue;
-                }
-                page_cache_get(page);
-                ret++;
+                if ( llwp_consume_page(llwp, inode, page) != 0)
+                        break;
         }
 
         spin_unlock(&pagecache_lock);
-        RETURN(ret);
+        EXIT;
 }
 
-static void ll_brw_pages_unlock( struct inode *inode, struct brw_page *pgs, 
-                int npgs, struct obd_brw_set *set)
+static void ll_brw_pages_unlock( struct inode *inode, 
+                                 struct ll_writeback_pages *llwp)
 {
         int rc, i;
+        struct obd_brw_set set;
         ENTRY;
 
-        sort_brw_pages(pgs, npgs);
+        sort_brw_pages(llwp->pgs, llwp->num_pages);
 
-        memset(set, 0, sizeof(struct obd_brw_set));
-        init_waitqueue_head(&set->brw_waitq);
-        INIT_LIST_HEAD(&set->brw_desc_head);
-        atomic_set(&set->brw_refcount, 0);
-        set->brw_callback = ll_brw_sync_wait;
+        memset(&set, 0, sizeof(struct obd_brw_set));
+        init_waitqueue_head(&set.brw_waitq);
+        INIT_LIST_HEAD(&set.brw_desc_head);
+        atomic_set(&set.brw_refcount, 0);
+        set.brw_callback = ll_brw_sync_wait;
 
         rc = obd_brw(OBD_BRW_WRITE, ll_i2obdconn(inode),
-                     ll_i2info(inode)->lli_smd, npgs, pgs, set, NULL);
+                     ll_i2info(inode)->lli_smd, llwp->num_pages, llwp->pgs, 
+                     &set, NULL);
         if (rc) {
                 CERROR("error from obd_brw: rc = %d\n", rc);
         } else {
-                rc = ll_brw_sync_wait(set, CB_PHASE_START);
+                rc = ll_brw_sync_wait(&set, CB_PHASE_START);
                 if (rc)
                         CERROR("error from callback: rc = %d\n", rc);
         }
@@ -189,8 +212,8 @@ static void ll_brw_pages_unlock( struct inode *inode, struct brw_page *pgs,
         /* XXX this doesn't make sense to me */
         rc = 0;
 
-        for ( i = 0 ; i < npgs ; i++) {
-                struct page *page = pgs[i].pg;
+        for ( i = 0 ; i < llwp->num_pages ; i++) {
+                struct page *page = llwp->pgs[i].pg;
 
                 CDEBUG(D_CACHE, "cleaning page %p\n", page);
                 LASSERT(PageLocked(page));
@@ -212,25 +235,23 @@ static void ll_brw_pages_unlock( struct inode *inode, struct brw_page *pgs,
  */
 int ll_sb_sync( struct super_block *sb, struct inode *callers_inode )
 {
-        struct obd_brw_set *set = NULL;
-        struct brw_page *pgs = NULL;
         unsigned long old_flags; /* hack? */
         int making_progress;
+        struct ll_writeback_pages *llwp;
         int rc = 0;
         ENTRY;
 
         old_flags = current->flags;
         current->flags |= PF_MEMALLOC;
-        set = obd_brw_set_new();
-        pgs = kmalloc(LIOD_FLUSH_NR * sizeof(struct brw_page), GFP_ATOMIC);
-        if ( pgs == NULL || set == NULL )
+        llwp = kmalloc(sizeof(struct ll_writeback_pages), GFP_ATOMIC);
+        if ( llwp == NULL )
                 GOTO(cleanup, rc = -ENOMEM);
+        memset(llwp, 0, offsetof(struct ll_writeback_pages, pgs));
 
         spin_lock(&inode_lock);
 
         do {
                 struct list_head *pos;
-                int npgs;
                 struct inode *inode = NULL;
 
                 making_progress = 0;
@@ -256,13 +277,13 @@ int ll_sb_sync( struct super_block *sb, struct inode *callers_inode )
                 spin_unlock(&inode_lock);
 
                 do { 
-                        npgs = ll_get_dirty_pages(inode, pgs, LIOD_FLUSH_NR);
-                        if ( npgs ) {
-                                ll_brw_pages_unlock(inode, pgs, npgs, set);
-                                rc += npgs;
+                        ll_get_dirty_pages(inode, llwp);
+                        if ( llwp->num_pages ) {
+                                ll_brw_pages_unlock(inode, llwp);
+                                rc += llwp->num_pages;
                                 making_progress = 1;
                         }
-                } while (npgs);
+                } while (llwp->num_pages);
 
                 spin_lock(&inode_lock);
 
@@ -282,10 +303,8 @@ int ll_sb_sync( struct super_block *sb, struct inode *callers_inode )
         spin_unlock(&inode_lock);
 
 cleanup:
-        if ( set != NULL )
-                obd_brw_set_free(set);
-        if ( pgs != NULL )
-                kfree(pgs);
+        if ( llwp != NULL )
+                kfree(llwp);
         current->flags = old_flags;
 
         RETURN(rc);
@@ -293,35 +312,27 @@ cleanup:
 
 int ll_batch_writepage( struct inode *inode, struct page *page )
 {
-        struct obd_brw_set *set = NULL;
-        struct brw_page *pgs = NULL;
         unsigned long old_flags; /* hack? */
-        int npgs = 0;
+        struct ll_writeback_pages *llwp;
         int rc = 0;
         ENTRY;
 
         old_flags = current->flags;
         current->flags |= PF_MEMALLOC;
-        set = obd_brw_set_new();
-        pgs = kmalloc(LIOD_FLUSH_NR * sizeof(struct brw_page), GFP_ATOMIC);
-        if ( pgs == NULL || set == NULL )
+        llwp = kmalloc(sizeof(struct ll_writeback_pages), GFP_ATOMIC);
+        if ( llwp == NULL )
                 GOTO(cleanup, rc = -ENOMEM);
+        memset(llwp, 0, offsetof(struct ll_writeback_pages, pgs));
 
-        if ( brw_pack_valid_page(pgs, inode, page) == 0) {
-                page_cache_get(page);
-                npgs++;
-        } else  {
-                unlock_page(page);
-        }
+        llwp_consume_page(llwp, inode, page);
 
-        npgs += ll_get_dirty_pages(inode, &pgs[npgs], LIOD_FLUSH_NR - npgs);
-        ll_brw_pages_unlock(inode, pgs, npgs, set);
+        ll_get_dirty_pages(inode, llwp);
+        if ( llwp->num_pages )
+                ll_brw_pages_unlock(inode, llwp);
 
 cleanup:
-        if ( set != NULL )
-                obd_brw_set_free(set);
-        if ( pgs != NULL )
-                kfree(pgs);
+        if ( llwp != NULL )
+                kfree(llwp);
         current->flags = old_flags;
         RETURN(rc);
 }
