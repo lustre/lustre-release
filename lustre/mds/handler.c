@@ -495,10 +495,9 @@ int mds_read_last_rcvd(struct mds_obd *mds, struct file *f)
         struct mds_server_data *msd;
         struct mds_client_data *mcd = NULL;
         loff_t fsize = f->f_dentry->d_inode->i_size;
-        loff_t off = 0;
+        loff_t off = 0, cl_off;
         __u64 last_rcvd = 0;
         __u64 last_mount;
-        int cl_off;
         int rc = 0;
 
         OBD_ALLOC(msd, sizeof(*msd));
@@ -520,15 +519,17 @@ int mds_read_last_rcvd(struct mds_obd *mds, struct file *f)
 
         last_rcvd = le64_to_cpu(msd->msd_last_rcvd);
         mds->mds_last_rcvd = last_rcvd;
-        CDEBUG(D_INODE, "got %Ld for server last_rcvd value\n", last_rcvd);
+        CDEBUG(D_INODE, "got %Ld for server last_rcvd value\n",
+               (unsigned long long)last_rcvd);
 
         last_mount = le64_to_cpu(msd->msd_mount_count);
         mds->mds_mount_count = last_mount;
-        CDEBUG(D_INODE, "got %Ld for server last_mount value\n", last_rcvd);
+        CDEBUG(D_INODE, "got %Ld for server last_mount value\n",
+               (unsigned long long)last_rcvd);
 
-        for (off = MDS_LR_CLIENT, rc = sizeof(*mcd), cl_off = 0;
+        for (off = cl_off = MDS_LR_CLIENT, rc = sizeof(*mcd);
              off <= fsize - sizeof(*mcd) && rc == sizeof(*mcd);
-             cl_off++, off = MDS_LR_CLIENT + cl_off * MDS_LR_SIZE) {
+             off = cl_off + MDS_LR_SIZE) {
                 if (!mcd)
                         OBD_ALLOC(mcd, sizeof(*mcd));
                 if (!mcd)
@@ -536,8 +537,8 @@ int mds_read_last_rcvd(struct mds_obd *mds, struct file *f)
 
                 rc = lustre_fread(f, (char *)mcd, sizeof(*mcd), &off);
                 if (rc != sizeof(*mcd)) {
-                        CERROR("error reading MDS %s client %d: rc = %d\n",
-                               LAST_RCVD, cl_off, rc);
+                        CERROR("error reading MDS %s offset %Ld: rc = %d\n",
+                               LAST_RCVD, (unsigned long long)cl_off, rc);
                         if (rc > 0)
                                 rc = -EIO;
                         break;
@@ -558,13 +559,14 @@ int mds_read_last_rcvd(struct mds_obd *mds, struct file *f)
 
                 if (last_rcvd > mds->mds_last_rcvd) {
                         CDEBUG(D_OTHER,
-                               "client at offset %d has last_rcvd = %Ld\n",
-                               cl_off, last_rcvd);
+                               "client at offset %Ld has last_rcvd = %Ld\n",
+                               (unsigned long long)cl_off,
+                               (unsigned long long)last_rcvd);
                         mds->mds_last_rcvd = last_rcvd;
                 }
         }
         CDEBUG(D_INODE, "got %Ld for highest last_rcvd value, %d clients\n",
-               mds->mds_last_rcvd, mds->mds_client_count);
+               (unsigned long long)mds->mds_last_rcvd, mds->mds_client_count);
 
         return 0;
 
@@ -734,7 +736,7 @@ static int mds_recover(struct obd_device *obddev)
         return rc;
 }
 
-static int mds_cleanup(struct obd_device * obddev);
+static int mds_cleanup(struct obd_device *obddev);
 
 /* mount the file system (secretly) */
 static int mds_setup(struct obd_device *obddev, obd_count len, void *buf)
