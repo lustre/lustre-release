@@ -328,6 +328,7 @@ struct mds_obd {
         int                              mds_lov_objids_valid;
         int                              mds_lov_nextid_set;
         struct file                     *mds_lov_objid_filp;
+        spinlock_t                      mds_lov_lock;
         unsigned long                   *mds_client_bitmap;
         struct semaphore                 mds_orphan_recovery_sem;
         /*add mds num here for real mds and cache mds create

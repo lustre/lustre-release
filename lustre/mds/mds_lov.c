@@ -61,11 +61,11 @@ void mds_lov_update_objids(struct obd_device *obd, obd_id *ids)
         int i;
         ENTRY;
 
-        lock_kernel();
+        spin_lock(&mds->mds_lov_lock);
         for (i = 0; i < mds->mds_lov_desc.ld_tgt_count; i++)
                 if (ids[i] > (mds->mds_lov_objids)[i])
                         (mds->mds_lov_objids)[i] = ids[i];
-        unlock_kernel();
+        spin_unlock(&mds->mds_lov_lock);
         EXIT;
 }
 
@@ -207,6 +207,7 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
         if (mds->mds_osc_obd)
                 RETURN(0);
 
+        spin_lock_init(&mds->mds_lov_lock);
         mds->mds_osc_obd = class_name2obd(lov_name);
         if (!mds->mds_osc_obd) {
                 CERROR("MDS cannot locate LOV %s\n",
