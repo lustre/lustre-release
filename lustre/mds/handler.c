@@ -189,7 +189,12 @@ int mds_lock_mode_for_dir(struct obd_device *obd,
                            write lock here to retract client's cache for readdir */
                         ret_mode = LCK_CW;
                         if (split == MDS_EXPECT_SPLIT) {
-                                /* splitting possible. serialize any access */
+                                /* splitting possible. serialize any access
+                                 * the idea is that first one seen dir is
+                                 * splittable is given exclusive lock and
+                                 * split directory. caller passes lock mode
+                                 * to mds_try_to_split_dir() and splitting
+                                 * would be done with exclusive lock only -bzzz */
                                 CDEBUG(D_OTHER, "%s: gonna split %u/%u\n",
                                        obd->obd_name,
                                        (unsigned) dentry->d_inode->i_ino,
@@ -1457,7 +1462,10 @@ repeat:
                        obd->obd_name, new->d_inode->i_ino,
                        new->d_inode->i_generation, flags);
         } else if (body->oa.o_easize) {
-                mds_try_to_split_dir(obd, new, NULL, body->oa.o_easize);
+                /* we pass LCK_EX to split routine to signal that we have
+                 * exclusive access to the directory. simple because nobody
+                 * knows it already exists -bzzz */
+                mds_try_to_split_dir(obd, new, NULL, body->oa.o_easize, LCK_EX);
         }
 
 cleanup:

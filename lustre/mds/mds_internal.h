@@ -132,7 +132,7 @@ int mds_lmv_postsetup(struct obd_device *obd);
 int mds_lmv_connect(struct obd_device *obd, char * lov_name);
 int mds_lmv_disconnect(struct obd_device *obd, int flags);
 int mds_try_to_split_dir(struct obd_device *, struct dentry *, struct mea **,
-                         int);
+                         int, int);
 int mds_get_lmv_attr(struct obd_device *, struct inode *, struct mea **, int *);
 int mds_choose_mdsnum(struct obd_device *, const char *, int, int);
 int mds_lmv_postsetup(struct obd_device *);

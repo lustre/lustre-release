@@ -624,7 +624,8 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
         OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_CREATE_WRITE, dir->i_sb);
 
         if (type == S_IFREG || type == S_IFDIR) {
-                if ((rc = mds_try_to_split_dir(obd, dparent, &mea, 0))) {
+                if ((rc = mds_try_to_split_dir(obd, dparent, &mea, 
+                                               0, parent_mode))) {
                         if (rc > 0) {
                                 /* dir got splitted */
                                 CERROR("%s: splitted %lu/%u - %d/%d\n",
@@ -681,8 +682,13 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                                 nstripes = *(u16 *)rec->ur_eadata;
 
                         if (rc == 0 && nstripes) {
+                                /* we pass LCK_EX to split routine to
+                                 * signalthat we have exclusive access
+                                 * to the directory. simple because
+                                 * nobody knows it already exists -bzzz */
                                 if ((rc = mds_try_to_split_dir(obd, dchild,
-                                                               NULL, nstripes))) {
+                                                               NULL, nstripes,
+                                                               LCK_EX))) {
                                         if (rc > 0) {
                                                 /* dir got splitted */
                                         CERROR("%s: splitted %lu/%u - %d\n",
@@ -1407,7 +1413,7 @@ int mds_create_local_dentry(struct mds_update_record *rec,
         }
 
         if (IS_ERR(child)) {
-                CERROR("can't get victim\n");
+                CERROR("can't get victim: %d\n", (int) PTR_ERR(child));
                 GOTO(cleanup, rc = PTR_ERR(child));
         }
         cleanup_phase = 2;

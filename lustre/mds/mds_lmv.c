@@ -521,7 +521,7 @@ int mds_splitting_expected(struct obd_device *obd, struct dentry *dentry)
  * must not be called on already splitted directories.
  */
 int mds_try_to_split_dir(struct obd_device *obd, struct dentry *dentry,
-                         struct mea **mea, int nstripes)
+                         struct mea **mea, int nstripes, int update_mode)
 {
         struct inode *dir = dentry->d_inode;
         struct mds_obd *mds = &obd->u.mds;
@@ -531,6 +531,8 @@ int mds_try_to_split_dir(struct obd_device *obd, struct dentry *dentry,
 	void *handle;
 	ENTRY;
 
+        if (update_mode != LCK_EX)
+                return 0;
         /* TODO: optimization possible - we already may have mea here */
         rc = mds_splitting_expected(obd, dentry);
         if (rc == MDS_NO_SPLITTABLE)

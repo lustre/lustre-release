@@ -977,7 +977,8 @@ got_child:
                 struct iattr iattr;
                 struct inode *inode;
 
-                if ((rc = mds_try_to_split_dir(obd, dparent, &mea, 0))) {
+                if ((rc = mds_try_to_split_dir(obd, dparent, &mea,
+                                               0, update_mode))) {
                         if (rc > 0) {
                                 /* dir got splitted */
                                 CERROR("%s: splitted %lu/%u - %d\n", obd->obd_name,
