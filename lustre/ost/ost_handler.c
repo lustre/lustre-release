@@ -393,6 +393,11 @@ int ost_brw(struct ost_obd *obddev, struct ptlrpc_request *req)
 		(cmd, &conn, objcount, (struct obd_ioobj *)tmp1, 
 		 niocount, (struct niobuf *)tmp2, (struct niobuf *)res); 
 
+	if (req->rq_rep.ost->result) {
+		EXIT;
+		goto out;
+	}
+
 	if (cmd == OBD_BRW_WRITE) { 
 		for (i=0; i<niocount; i++) { 
 			src = &((struct niobuf *)tmp2)[i];
@@ -401,6 +406,7 @@ int ost_brw(struct ost_obd *obddev, struct ptlrpc_request *req)
 			       (void *)(unsigned long)src->addr, 
 			       src->len);
 		}
+		barrier();
 	} else { 
 		for (i=0; i<niocount; i++) { 
 			dst = &((struct niobuf *)tmp2)[i];
@@ -409,6 +415,7 @@ int ost_brw(struct ost_obd *obddev, struct ptlrpc_request *req)
 			       (void *)(unsigned long)src->addr, 
 			       PAGE_SIZE); 
 		}
+		barrier();
 	}
 
 	req->rq_rep.ost->result = 
@@ -416,6 +423,7 @@ int ost_brw(struct ost_obd *obddev, struct ptlrpc_request *req)
 		(cmd, &conn, objcount, (struct obd_ioobj *)tmp1, 
 		 niocount, (struct niobuf *)res); 
 
+ out:
 	EXIT;
 	return 0;
 }
@@ -532,22 +540,18 @@ int ost_main(void *arg)
 		wake_up(&ost->ost_done_waitq);
 		interruptible_sleep_on(&ost->ost_waitq);
 		barrier();
-		CDEBUG(D_INODE, "lustre_ost wakes\n");
-		CDEBUG(D_INODE, "pick up req here and continue\n"); 
+		CDEBUG(D_INODE, "ost_wakes: pick up req here and continue\n"); 
 
 
 		if (ost->ost_service != NULL) {
 			ptl_event_t ev;
 
-			CDEBUG(D_INODE, "\n"); 
 			while (1) {
 				struct ptlrpc_request request;
 				struct ptlrpc_service *service;
-				CDEBUG(D_INODE, "\n"); 
 				rc = PtlEQGet(ost->ost_service->srv_eq_h, &ev);
 				if (rc != PTL_OK && rc != PTL_EQ_DROPPED)
 					break;
-				CDEBUG(D_INODE, "\n"); 
 
 				service = (struct ptlrpc_service *)ev.mem_desc.user_ptr;
 

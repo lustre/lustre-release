@@ -457,9 +457,7 @@ int mds_main(void *arg)
 
 		wake_up(&mds->mds_done_waitq);
 		interruptible_sleep_on(&mds->mds_waitq);
-		barrier();
-		CDEBUG(D_INODE, "lustre_mds wakes\n");
-		CDEBUG(D_INODE, "pick up req here and continue\n"); 
+		CDEBUG(D_INODE, "mds_wakes pick up req here and continue\n"); 
 
 		if (mds->mds_service != NULL) {
 			ptl_event_t ev;

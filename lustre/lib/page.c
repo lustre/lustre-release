@@ -106,7 +106,7 @@ fail:
 	return ERR_PTR(-EIO);
 }
 
-void lustre_prepare_page(unsigned from, unsigned to, struct page *page)
+int lustre_prepare_page(unsigned from, unsigned to, struct page *page)
 {
 	int err;
 
@@ -115,9 +115,8 @@ void lustre_prepare_page(unsigned from, unsigned to, struct page *page)
 	if (err) { 
                 CERROR("page index %ld from %d to %d err %d\n", 
                                 page->index, from, to, err); 
-		BUG();
         }
-
+        return err;
 }
 
 int lustre_commit_page(struct page *page, unsigned from, unsigned to)
