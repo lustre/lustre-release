@@ -434,9 +434,11 @@ void ll_pgcache_remove_extent(struct inode *inode, struct lov_stripe_md *lsm,
                 unlock_page(page);
                 page_cache_release(page);
         }
-        LASSERTF(tmpex.l_extent.start <= lock->l_policy_data.l_extent.end + 1,
-                 "loop too long "LPU64" != "LPU64" start %lu i %lu end %lu\n",
-                 tmpex.l_extent.start, lock->l_policy_data.l_extent.end + 1,
+        LASSERTF(tmpex.l_extent.start <=
+                 (lock->l_policy_data.l_extent.end == ~0ULL ? ~0ULL :
+                  lock->l_policy_data.l_extent.end + 1),
+                 "loop too long "LPU64" > "LPU64" start %lu i %lu end %lu\n",
+                 tmpex.l_extent.start, lock->l_policy_data.l_extent.end,
                  start, i, end);
         EXIT;
 }
