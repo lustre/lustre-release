@@ -47,9 +47,10 @@ addstamp = sed "s|^Date:.*|Date: `date +%D`|g; s|^Version:.*|Version: $(tag)|g"
 	-fig2dev -L eps $< > $@
 
 lustre.lyx: master.lyx $(IMAGES)
-	(ver=`awk -F/ -v key=$<  '$$2 == key {print $$3}' CVS/Entries`;\
+	(ver="`cat CVS/Tag`"  ; if [ ! "$$ver" ]; then ver=HEAD ; fi ;\
 	echo "version for $< is $$ver";\
-	sed "s/version .*/version $$ver/" < $< > lustre.lyx;\
+	sed "s/VERSION/version $$ver/" < $< > lustre.lyx.tmp ;\
+	thedate=`date` ; sed "s/DATE/$$thedate/" < lustre.lyx.tmp > lustre.lyx ;\
 	)
 
 syncweb: lustre.pdf
