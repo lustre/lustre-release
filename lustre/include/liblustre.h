@@ -93,7 +93,7 @@ static inline void *kmalloc(int size, int prot)
 #define kfree(a) free(a)
 #define GFP_KERNEL 1
 #define GFP_HIGHUSER 1
-#define IS_ERR(a) ((abc && abs((int)(a)) < 500) ? 1 : 0)
+#define IS_ERR(a) (((a) && abs((int)(a)) < 500) ? 1 : 0)
 #define PTR_ERR(a) ((int)(a))
 
 #define capable(foo) 1
