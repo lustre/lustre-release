@@ -230,9 +230,11 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
         loghandle->lgh_last_idx++;
         index = loghandle->lgh_last_idx;
         rec->lrh_index = index;
-        lrt = (void *)rec + rec->lrh_len - sizeof(*lrt);
-        lrt->lrt_len = rec->lrh_len;
-        lrt->lrt_index = rec->lrh_index;
+        if (buf == NULL) {
+                lrt = (void *)rec + rec->lrh_len - sizeof(*lrt);
+                lrt->lrt_len = rec->lrh_len;
+                lrt->lrt_index = rec->lrh_index;
+        }
         if (ext2_set_bit(index, llh->llh_bitmap)) {
                 CERROR("argh, index %u already set in log bitmap?\n", index);
                 LBUG(); /* should never happen */
