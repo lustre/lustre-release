@@ -39,14 +39,14 @@
 
 int mds_llog_setup(struct obd_device *obd, struct obd_device *disk_obd,
                    int index, int count, struct llog_logid *logid)
-
 {
         int rc;
         ENTRY;
 
         OBD_CHECK_OP(obd->u.mds.mds_osc_obd, llog_setup);
-        rc = OBP(obd->u.mds.mds_osc_obd, llog_setup)(obd->u.mds.mds_osc_obd, 
-                                                     disk_obd, index, count, logid);
+        rc = OBP(obd->u.mds.mds_osc_obd, llog_setup)(obd->u.mds.mds_osc_obd,
+                                                     disk_obd, index, count,
+                                                     logid);
         RETURN(rc);
 }
 
@@ -60,19 +60,18 @@ int mds_llog_cleanup(struct obd_device *obd)
         RETURN(rc);
 }
 
-int mds_llog_origin_add(struct obd_export *exp,
-                        int index,
+int mds_llog_origin_add(struct obd_export *exp, int index,
                         struct llog_rec_hdr *rec, struct lov_stripe_md *lsm,
                         struct llog_cookie *logcookies, int numcookies)
 {
         int rc;
-        ENTRY;
         struct obd_export *lov_exp = exp->exp_obd->u.mds.mds_osc_exp;
+        ENTRY;
 
         EXP_CHECK_OP(lov_exp, llog_origin_add);
 
-        rc = OBP(lov_exp->exp_obd, llog_origin_add)(lov_exp, index, rec, lsm, 
-                                           logcookies, numcookies);
+        rc = OBP(lov_exp->exp_obd, llog_origin_add)(lov_exp, index, rec, lsm,
+                                                    logcookies, numcookies);
         RETURN(rc);
 }
 
@@ -80,18 +79,18 @@ int mds_llog_repl_cancel(struct obd_device *obd, struct lov_stripe_md *lsm,
                           int count, struct llog_cookie *cookies, int flags)
 {
         int rc;
-        ENTRY;
         struct obd_device *lov_obd = obd->u.mds.mds_osc_obd;
+        ENTRY;
 
         OBD_CHECK_OP(obd, llog_repl_cancel);
 
-        rc = OBP(lov_obd, llog_repl_cancel)(lov_obd, lsm, count, cookies, flags);
+        rc = OBP(lov_obd, llog_repl_cancel)(lov_obd, lsm, count, cookies,
+                                            flags);
         RETURN(rc);
 }
 
-int mds_log_op_unlink(struct obd_device *obd, 
-                      struct inode *inode, struct lustre_msg *repmsg,
-                      int offset)
+int mds_log_op_unlink(struct obd_device *obd, struct inode *inode,
+                      struct lustre_msg *repmsg, int offset)
 {
         struct mds_obd *mds = &obd->u.mds;
         struct lov_stripe_md *lsm = NULL;
@@ -119,7 +118,8 @@ int mds_log_op_unlink(struct obd_device *obd,
 #ifdef ENABLE_ORPHANS
         rc = obd_llog_origin_add(mds->mds_osc_exp, 0, &lur->lur_hdr,
                                  lsm, lustre_msg_buf(repmsg, offset + 1, 0),
-                                 repmsg->buflens[offset+1]/sizeof(struct llog_cookie));
+                                 repmsg->buflens[offset + 1] /
+                                 sizeof(struct llog_cookie));
 #endif
 
         obd_free_memmd(mds->mds_osc_exp, &lsm);
@@ -127,5 +127,3 @@ int mds_log_op_unlink(struct obd_device *obd,
 
         RETURN(rc);
 }
-
-
