@@ -1398,8 +1398,8 @@ Index: linux-2.4.21-suse2/fs/stat.c
  {
  	struct inode * inode = dentry->d_inode;
 -	if (inode->i_op && inode->i_op->revalidate)
-+        if (!inode)
-+                return -ENOENT;
++	if (!inode)
++		return -ENOENT;
 +	if (inode->i_op && inode->i_op->revalidate_it)
 +		return inode->i_op->revalidate_it(dentry, it);
 +	else if (inode->i_op && inode->i_op->revalidate)
