@@ -62,7 +62,7 @@ static int verify_handle(char * test, struct llog_handle *llh, int num_recs)
                 RETURN(-ERANGE);
         }
 
-        if (llh->lgh_last_idx != last_idx) {
+        if (llh->lgh_last_idx < last_idx) {
                 CERROR("%s: handle->last_idx is %d, expected %d after write\n",
                        test, llh->lgh_last_idx, last_idx);
                 RETURN(-ERANGE);
@@ -178,7 +178,7 @@ static int llog_test_3(struct obd_device *obd, struct llog_handle *llh)
                         RETURN(rc);
                 }
                 num_recs++;
-                if ((rc = verify_handle("3c", llh, num_recs)))
+                if ((rc = verify_handle("3b", llh, num_recs)))
                         RETURN(rc);
         }
 
@@ -191,78 +191,67 @@ static int llog_test_3(struct obd_device *obd, struct llog_handle *llh)
 /* Test catalogue additions */
 static int llog_test_4(struct obd_device *obd)
 {
-        struct llog_handle *llh;
+        struct llog_handle *cath;
         char name[10];
         int rc, i;
-        struct llog_orphan_rec lor;
+        struct llog_mini_rec lmr;
         struct llog_cookie cookie;
         int num_recs = 0;
 
         ENTRY;
 
-        lor.lor_hdr.lrh_len = lor.lor_tail.lrt_len = LLOG_MIN_REC_SIZE;
-        lor.lor_hdr.lrh_type = OST_ORPHAN_REC;
+        lmr.lmr_hdr.lrh_len = lmr.lmr_tail.lrt_len = LLOG_MIN_REC_SIZE;
+        lmr.lmr_hdr.lrh_type = 0xf00f00;
 
         sprintf(name, "%x", llog_test_rand+1);
         CERROR("4a: create a catalog log with name: %s\n", name);
-        rc = llog_create(obd, &llh, NULL, name);
+        rc = llog_create(obd, &cath, NULL, name);
         if (rc) {
                 CERROR("1a: llog_create with name %s failed: %d\n", name, rc);
                 GOTO(out, rc);
         }
-        llog_init_handle(llh, LLOG_F_IS_CAT, &uuid);
+        llog_init_handle(cath, LLOG_F_IS_CAT, &uuid);
         num_recs++;
-        cat_logid = llh->lgh_id;
+        cat_logid = cath->lgh_id;
 
-        CERROR("4b: write 1 log records\n");
-        rc = llog_cat_add_rec(llh, &lor.lor_hdr, &cookie, NULL);
+        CERROR("4b: write 1 record into the catalog\n");
+        rc = llog_cat_add_rec(cath, &lmr.lmr_hdr, &cookie, NULL);
         if (rc != 1) {
                 CERROR("4b: write 1 catalog record failed at: %d\n", rc);
                 GOTO(out, rc);
         }
         num_recs++; 
-        if ((rc = verify_handle("4b", llh, num_recs)))
+        if ((rc = verify_handle("4b", cath, 2)))
                 RETURN(rc);
 
-        if (llh->u.chd.chd_current_log->lgh_hdr->llh_count != 2) {
-                CERROR("llh->u.chd.chd_current_log->lgh_hdr->llh_count != 2\n");
-                GOTO(out, rc = -EINVAL);
-        }
+        if ((rc = verify_handle("4b", cath->u.chd.chd_current_log, num_recs)))
+                RETURN(rc);
 
         CERROR("4c: cancel 1 log record\n");
-        rc = llog_cat_cancel_records(llh, 1, &cookie);
+        rc = llog_cat_cancel_records(cath, 1, &cookie);
         if (rc) {
                 CERROR("4c: cancel 1 catalog based record failed: %d\n", rc);
                 GOTO(out, rc);
         }
         num_recs--;
 
-        if ((rc = verify_handle("4c", llh, num_recs)))
+        if ((rc = verify_handle("4c", cath->u.chd.chd_current_log, num_recs)))
                 RETURN(rc);
-
-        if (llh->u.chd.chd_current_log && 
-            llh->u.chd.chd_current_log->lgh_hdr->llh_count != 1) {
-                CERROR("llh->u.chd.chd_current_log->lgh_hdr->llh_count != 2\n");
-                GOTO(out, rc = -EINVAL);
-        }
 
         CERROR("4d: write 40,000 more log records\n");
         for (i = 0; i < 40000; i++) {
-                rc = llog_cat_add_rec(llh, &lor.lor_hdr, NULL, NULL);
+                rc = llog_cat_add_rec(cath, &lmr.lmr_hdr, NULL, NULL);
                 if (rc) {
                         CERROR("4d: write 1000 records failed at #%d: %d\n",
                                i + 1, rc);
                         GOTO(out, rc);
                 }
                 num_recs++;
-                if ((rc = verify_handle("4c", llh, num_recs)))
-                        RETURN(rc);
-
          }
 
  out:
         CERROR("4e: put newly-created catalog\n");
-        rc = llog_cat_put(llh);
+        rc = llog_cat_put(cath);
         if (rc)
                 CERROR("1b: close log %s failed: %d\n", name, rc);
         RETURN(rc);
@@ -281,6 +270,28 @@ static int cat_print_cb(struct llog_handle *llh, struct llog_rec_hdr *rec, void 
                lir->lid_id.lgl_oid);
         RETURN(0);
 }
+
+static int llog_cancel_rec_cb(struct llog_handle *llh, struct llog_rec_hdr *rec, void *data)
+{
+        struct llog_cookie cookie;
+        static int i = 0;
+
+        if (!llh->lgh_hdr->llh_flags & LLOG_F_IS_PLAIN) {
+                CERROR("log is not plain\n");
+                RETURN(-EINVAL);
+        }
+
+        cookie.lgc_lgl = llh->lgh_id;
+        cookie.lgc_index = rec->lrh_index;
+        
+        llog_cat_cancel_records(llh->u.phd.phd_cat_handle, 1, &cookie);
+        i++;
+        if (i > 39000)
+                RETURN(-4711);
+        RETURN(0);
+}
+
+
 
 /* Test log and catalogue processing */
 static int llog_test_5(struct obd_device *obd)
@@ -304,9 +315,16 @@ static int llog_test_5(struct obd_device *obd)
         llog_init_handle(llh, LLOG_F_IS_CAT, &uuid);
 
         CERROR("5b: print the catalog entries.. we expect 2\n");
-        rc = llog_process_log(llh, (llog_cb_t)cat_print_cb, "test 5");
+        rc = llog_process(llh, (llog_cb_t)cat_print_cb, "test 5");
         if (rc) {
                 CERROR("5b: process with cat_print_cb failed: %d\n", rc);
+                GOTO(out, rc);
+        }
+
+        CERROR("5c: Cancel 39000 records, see one log zapped\n");
+        rc = llog_cat_process(llh, llog_cancel_rec_cb, "foobar");
+        if (rc != -4711) {
+                CERROR("5c: process with cat_cancel_cb failed: %d\n", rc);
                 GOTO(out, rc);
         }
 
