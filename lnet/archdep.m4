@@ -134,7 +134,7 @@ case ${host_cpu} in
 	powerpc )
 	AC_MSG_RESULT($host_cpu)
         KCFLAGS='-O2 -Wall -Wstrict-prototypes -Wno-trigraphs -fomit-frame-pointer -fno-strict-aliasing -fno-common -D__powerpc__ -fsigned-char -msoft-float -pipe -ffixed-r2 -Wno-uninitialized -mmultiple -mstring'
-        KCPPFLAGS='-D__KERNEL__'
+        KCPPFLAGS='-D__KERNEL__ -DMODULE'
         MOD_LINK=elf32ppclinux
 ;;
 
