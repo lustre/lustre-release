@@ -234,10 +234,9 @@ int llog_cat_cancel_records(struct llog_handle *cathandle, int count,
                 struct llog_handle *loghandle;
                 struct llog_log_hdr *llh;
                 struct llog_logid *lgl = &cookies->lgc_lgl;
-                int res;
 
                 rc = llog_cat_id2handle(cathandle, &loghandle, lgl);
-                if (res) {
+                if (rc) {
                         CERROR("Cannot find log "LPX64"\n", lgl->lgl_oid);
                         break;
                 }
