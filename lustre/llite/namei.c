@@ -137,7 +137,7 @@ static struct dentry *ll_lookup2(struct inode * dir, struct dentry *dentry,
         struct ll_sb_info *sbi = ll_i2sbi(dir);
         struct ll_inode_md md;
         struct lustre_handle lockh;
-        int err, type, offset;
+        int err, offset;
         struct lookup_intent lookup_it = { IT_LOOKUP };
         obd_id ino = 0;
 
@@ -173,13 +173,13 @@ static struct dentry *ll_lookup2(struct inode * dir, struct dentry *dentry,
                         /* For remove/check, we want the lookup to succeed */
                         request = (struct ptlrpc_request *)it->it_data;
                         if (it->it_status)
-                                GOTO(negative, NULL);
+                                GOTO(neg_req, NULL);
                         //else
                         //        GOTO(err, it->it_status);
                 } else if (it->it_op == IT_OPEN) {
                         request = (struct ptlrpc_request *)it->it_data;
                         if (it->it_status && it->it_status != -EEXIST)
-                                GOTO(negative, NULL);
+                                GOTO(neg_req, NULL);
                 } else if (it->it_op == IT_RENAME2) {
                         /* Set below to be a dentry from the IT_RENAME op */
                         inode = ((struct dentry *)(it->it_data))->d_inode;
@@ -187,6 +187,8 @@ static struct dentry *ll_lookup2(struct inode * dir, struct dentry *dentry,
                 }
         } else {
                 struct ll_inode_info *lli = ll_i2info(dir);
+                int type;
+
                 request = (struct ptlrpc_request *)it->it_data;
                 memcpy(&lli->lli_intent_lock_handle, &lockh, sizeof(lockh));
                 offset = 0;
@@ -217,20 +219,21 @@ static struct dentry *ll_lookup2(struct inode * dir, struct dentry *dentry,
                 it->it_data = dentry;
 
  out_req:
-        ptlrpc_free_req(request);
-        request = NULL;
         if (!inode || IS_ERR(inode)) {
+                ptlrpc_free_req(request);
+                request = it->it_data = NULL;
                 ll_intent_release(dentry);
                 RETURN(inode ? (struct dentry *)inode : ERR_PTR(-ENOMEM));
         }
         EXIT;
+ neg_req:
+        ptlrpc_free_req(request);
+        request = it->it_data = NULL;
  negative:
         dentry->d_op = &ll_d_ops;
         d_add(dentry, inode);
-        if (it->it_op == IT_LOOKUP) {
+        if (it->it_op == IT_LOOKUP)
                 ll_intent_release(dentry);
-                ptlrpc_free_req(request);
-        }
 
         return NULL;
 }
@@ -402,13 +405,12 @@ static int ll_create(struct inode * dir, struct dentry * dentry, int mode)
                 memcpy(&ii->lli_intent_lock_handle,
                        dentry->d_it->it_lock_handle,
                        sizeof(struct lustre_handle));
+                d_instantiate(dentry, inode);
+        } else {
+                /* no directory data updates when intents rule */
+                rc = ext2_add_nondir(dentry, inode);
         }
 
-        /* no directory data updates when intents rule */
-        if (dentry->d_it->it_disposition == 0)
-                rc = ext2_add_nondir(dentry, inode);
-        else
-                d_instantiate(dentry, inode);
         RETURN(rc);
 
 out_destroy:
@@ -458,6 +460,7 @@ static int ll_symlink(struct inode *dir, struct dentry *dentry,
         oinfo = ll_i2info(inode);
 
         if (dentry->d_it->it_disposition) {
+#warning FIXME: still needs intent support
                 d_instantiate(dentry, inode);
                 return 0;
         }
@@ -478,6 +481,7 @@ static int ll_link(struct dentry *old_dentry, struct inode * dir,
         int err;
         struct inode *inode = old_dentry->d_inode;
 
+#warning FIXME: still needs intent support
         if (S_ISDIR(inode->i_mode))
                 return -EPERM;
 
@@ -552,6 +556,7 @@ static int ll_unlink(struct inode * dir, struct dentry *dentry)
         if (dentry->d_it && dentry->d_it->it_disposition) {
                 inode->i_nlink = 0;
                 GOTO(out, err = dentry->d_it->it_status);
+
         }
 
         de = ext2_find_entry (dir, dentry, &page);
@@ -577,11 +582,10 @@ static int ll_rmdir(struct inode * dir, struct dentry *dentry)
 {
         struct inode * inode = dentry->d_inode;
         int err = 0;
-        int intent_did = dentry->d_it && dentry->d_it->it_disposition;
 
-        if (!intent_did) {
+        if (!dentry->d_it || dentry->d_it->it_disposition == 0) {
                 if (!ext2_empty_dir(inode))
-                LBUG();
+                        LBUG();
 
                 err = ll_unlink(dir, dentry);
                 if (err)
