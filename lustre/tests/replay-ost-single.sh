@@ -56,7 +56,7 @@ setup() {
     start ost --reformat $OSTLCONFARGS
     [ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
     start mds --reformat $MDSLCONFARGS
-    zconf_mount `hostname` $MOUNT
+    grep " $MOUNT " /proc/mounts || zconf_mount `hostname` $MOUNT
 }
 
 mkdir -p $DIR

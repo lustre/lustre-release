@@ -1,7 +1,23 @@
+ fs/dcache.c               |   19 ++
+ fs/exec.c                 |   17 +-
+ fs/namei.c                |  316 +++++++++++++++++++++++++++++++++++++++-------
+ fs/namespace.c            |   37 ++++-
+ fs/open.c                 |  172 +++++++++++++++++--------
+ fs/stat.c                 |   50 ++++---
+ include/linux/dcache.h    |   64 +++++++++
+ include/linux/fs.h        |   36 ++++-
+ include/linux/fs_struct.h |    4 
+ include/linux/mount.h     |    3 
+ kernel/exit.c             |    3 
+ kernel/fork.c             |    3 
+ kernel/ksyms.c            |    2 
+ net/unix/af_unix.c        |    2 
+ 14 files changed, 597 insertions(+), 131 deletions(-)
+
 Index: linux-2.4.24/fs/exec.c
 ===================================================================
---- linux-2.4.24.orig/fs/exec.c	2004-04-24 22:55:48.000000000 +0300
-+++ linux-2.4.24/fs/exec.c	2004-04-24 23:02:08.000000000 +0300
+--- linux-2.4.24.orig/fs/exec.c	2004-05-03 19:56:38.632323616 +0300
++++ linux-2.4.24/fs/exec.c	2004-05-03 20:00:01.712450744 +0300
 @@ -112,8 +112,10 @@
  	struct file * file;
  	struct nameidata nd;
@@ -65,8 +81,8 @@ Index: linux-2.4.24/fs/exec.c
  	retval = binfmt->core_dump(signr, regs, file);
 Index: linux-2.4.24/fs/dcache.c
 ===================================================================
---- linux-2.4.24.orig/fs/dcache.c	2004-04-24 22:55:48.000000000 +0300
-+++ linux-2.4.24/fs/dcache.c	2004-04-24 23:02:09.000000000 +0300
+--- linux-2.4.24.orig/fs/dcache.c	2004-05-03 19:56:38.625324680 +0300
++++ linux-2.4.24/fs/dcache.c	2004-05-03 20:00:01.740446488 +0300
 @@ -181,6 +181,13 @@
  		spin_unlock(&dcache_lock);
  		return 0;
@@ -106,8 +122,8 @@ Index: linux-2.4.24/fs/dcache.c
  #define do_switch(x,y) do { \
 Index: linux-2.4.24/fs/namespace.c
 ===================================================================
---- linux-2.4.24.orig/fs/namespace.c	2004-04-24 22:55:48.000000000 +0300
-+++ linux-2.4.24/fs/namespace.c	2004-04-26 12:33:36.000000000 +0300
+--- linux-2.4.24.orig/fs/namespace.c	2004-05-03 19:56:38.647321336 +0300
++++ linux-2.4.24/fs/namespace.c	2004-05-03 20:00:02.280364408 +0300
 @@ -15,6 +15,7 @@
  #include <linux/quotaops.h>
  #include <linux/acct.h>
@@ -267,8 +283,8 @@ Index: linux-2.4.24/fs/namespace.c
  	unlock_kernel();
 Index: linux-2.4.24/fs/namei.c
 ===================================================================
---- linux-2.4.24.orig/fs/namei.c	2004-04-24 22:55:48.000000000 +0300
-+++ linux-2.4.24/fs/namei.c	2004-04-25 07:56:36.000000000 +0300
+--- linux-2.4.24.orig/fs/namei.c	2004-05-03 19:56:38.644321792 +0300
++++ linux-2.4.24/fs/namei.c	2004-05-03 20:07:41.682524664 +0300
 @@ -94,6 +94,13 @@
   * XEmacs seems to be relying on it...
   */
@@ -456,7 +472,7 @@ Index: linux-2.4.24/fs/namei.c
 +				if (err)
 +					break;
 +				new = real_lookup(dentry->d_parent,
-+						  &dentry->d_name, 0, nd, NULL);
++						  &dentry->d_name, 0, nd, it);
 +				d_invalidate(dentry);
 +				dput(dentry);
 +				if (IS_ERR(new)) {
@@ -1020,8 +1036,8 @@ Index: linux-2.4.24/fs/namei.c
  		page_cache_release(page);
 Index: linux-2.4.24/fs/open.c
 ===================================================================
---- linux-2.4.24.orig/fs/open.c	2004-04-24 22:55:48.000000000 +0300
-+++ linux-2.4.24/fs/open.c	2004-04-24 23:20:56.000000000 +0300
+--- linux-2.4.24.orig/fs/open.c	2004-05-03 19:56:38.648321184 +0300
++++ linux-2.4.24/fs/open.c	2004-05-03 20:15:55.414466000 +0300
 @@ -19,6 +19,8 @@
  #include <asm/uaccess.h>
  
@@ -1229,7 +1245,7 @@ Index: linux-2.4.24/fs/open.c
 -	error = __user_walk(filename, LOOKUP_POSITIVE | LOOKUP_FOLLOW |
 -		      LOOKUP_DIRECTORY | LOOKUP_NOALT, &nd);
 +	error = __user_walk_it(filename, LOOKUP_POSITIVE | LOOKUP_FOLLOW |
-+		      LOOKUP_DIRECTORY | LOOKUP_NOALT, &nd, &it);
++			       LOOKUP_DIRECTORY | LOOKUP_NOALT, &nd, &it);
  	if (error)
  		goto out;
  
@@ -1422,8 +1438,8 @@ Index: linux-2.4.24/fs/open.c
   */
 Index: linux-2.4.24/fs/stat.c
 ===================================================================
---- linux-2.4.24.orig/fs/stat.c	2004-04-24 22:55:48.000000000 +0300
-+++ linux-2.4.24/fs/stat.c	2004-04-24 23:02:11.000000000 +0300
+--- linux-2.4.24.orig/fs/stat.c	2004-05-03 19:56:38.654320272 +0300
++++ linux-2.4.24/fs/stat.c	2004-05-03 20:00:02.626311816 +0300
 @@ -17,10 +17,12 @@
   * Revalidate the inode. This is required for proper NFS attribute caching.
   */
@@ -1583,8 +1599,8 @@ Index: linux-2.4.24/fs/stat.c
  		fput(f);
 Index: linux-2.4.24/include/linux/dcache.h
 ===================================================================
---- linux-2.4.24.orig/include/linux/dcache.h	2004-04-24 22:55:55.000000000 +0300
-+++ linux-2.4.24/include/linux/dcache.h	2004-04-24 23:33:14.000000000 +0300
+--- linux-2.4.24.orig/include/linux/dcache.h	2004-05-03 19:56:48.049891928 +0300
++++ linux-2.4.24/include/linux/dcache.h	2004-05-03 20:00:02.668305432 +0300
 @@ -6,6 +6,52 @@
  #include <asm/atomic.h>
  #include <linux/mount.h>
@@ -1681,8 +1697,8 @@ Index: linux-2.4.24/include/linux/dcache.h
  
 Index: linux-2.4.24/include/linux/fs.h
 ===================================================================
---- linux-2.4.24.orig/include/linux/fs.h	2004-04-24 23:02:03.000000000 +0300
-+++ linux-2.4.24/include/linux/fs.h	2004-04-26 13:07:14.066414664 +0300
+--- linux-2.4.24.orig/include/linux/fs.h	2004-05-03 20:00:01.384500600 +0300
++++ linux-2.4.24/include/linux/fs.h	2004-05-03 20:16:58.813827832 +0300
 @@ -73,6 +73,7 @@
  
  #define FMODE_READ 1
@@ -1697,7 +1713,7 @@ Index: linux-2.4.24/include/linux/fs.h
  #define ATTR_ATTR_FLAG	1024
 +#define ATTR_RAW	0x0800	/* file system, not vfs will massage attrs */
 +#define ATTR_FROM_OPEN	0x1000	/* called from open path, ie O_TRUNC */
-+#define ATTR_CTIME_SET 0x2000
++#define ATTR_CTIME_SET	0x2000
  
  /*
   * This is the Inode Attributes structure, used for notify_change().  It
@@ -1825,8 +1841,8 @@ Index: linux-2.4.24/include/linux/fs.h
  extern struct inode_operations page_symlink_inode_operations;
 Index: linux-2.4.24/include/linux/fs_struct.h
 ===================================================================
---- linux-2.4.24.orig/include/linux/fs_struct.h	2004-04-24 22:55:55.000000000 +0300
-+++ linux-2.4.24/include/linux/fs_struct.h	2004-04-24 23:02:13.000000000 +0300
+--- linux-2.4.24.orig/include/linux/fs_struct.h	2004-05-03 19:56:48.078887520 +0300
++++ linux-2.4.24/include/linux/fs_struct.h	2004-05-03 20:00:02.709299200 +0300
 @@ -34,10 +34,12 @@
  	write_lock(&fs->lock);
  	old_root = fs->root;
@@ -1855,8 +1871,8 @@ Index: linux-2.4.24/include/linux/fs_struct.h
  	}
 Index: linux-2.4.24/kernel/ksyms.c
 ===================================================================
---- linux-2.4.24.orig/kernel/ksyms.c	2004-04-24 23:02:04.000000000 +0300
-+++ linux-2.4.24/kernel/ksyms.c	2004-04-24 23:31:42.000000000 +0300
+--- linux-2.4.24.orig/kernel/ksyms.c	2004-05-03 20:00:01.408496952 +0300
++++ linux-2.4.24/kernel/ksyms.c	2004-05-03 20:00:02.710299048 +0300
 @@ -275,6 +275,7 @@
  EXPORT_SYMBOL(mark_page_accessed);
  EXPORT_SYMBOL(vfs_readlink);
@@ -1875,8 +1891,8 @@ Index: linux-2.4.24/kernel/ksyms.c
  EXPORT_SYMBOL(pagecache_lock_cacheline);
 Index: linux-2.4.24/kernel/fork.c
 ===================================================================
---- linux-2.4.24.orig/kernel/fork.c	2004-04-24 22:55:55.000000000 +0300
-+++ linux-2.4.24/kernel/fork.c	2004-04-24 23:02:13.000000000 +0300
+--- linux-2.4.24.orig/kernel/fork.c	2004-05-03 19:56:48.515821096 +0300
++++ linux-2.4.24/kernel/fork.c	2004-05-03 20:00:02.755292208 +0300
 @@ -386,10 +386,13 @@
  		fs->umask = old->umask;
  		read_lock(&old->lock);
@@ -1893,8 +1909,8 @@ Index: linux-2.4.24/kernel/fork.c
  		} else {
 Index: linux-2.4.24/kernel/exit.c
 ===================================================================
---- linux-2.4.24.orig/kernel/exit.c	2004-04-24 22:55:55.000000000 +0300
-+++ linux-2.4.24/kernel/exit.c	2004-04-24 23:02:14.000000000 +0300
+--- linux-2.4.24.orig/kernel/exit.c	2004-05-03 19:56:48.513821400 +0300
++++ linux-2.4.24/kernel/exit.c	2004-05-03 20:00:02.792286584 +0300
 @@ -238,11 +238,14 @@
  {
  	/* No need to hold fs->lock if we are killing it */
@@ -1910,9 +1926,10 @@ Index: linux-2.4.24/kernel/exit.c
  			dput(fs->altroot);
  			mntput(fs->altrootmnt);
  		}
-===== include/linux/mount.h 1.7 vs edited =====
---- 1.7/include/linux/mount.h	Tue Feb  5 09:49:35 2002
-+++ edited/include/linux/mount.h	Sat Apr 24 23:30:07 2004
+Index: linux-2.4.24/include/linux/mount.h
+===================================================================
+--- linux-2.4.24.orig/include/linux/mount.h	2004-05-03 19:56:48.182871712 +0300
++++ linux-2.4.24/include/linux/mount.h	2004-05-03 20:00:02.831280656 +0300
 @@ -29,6 +29,8 @@
  	int mnt_flags;
  	char *mnt_devname;		/* Name of device e.g. /dev/dsk/hda1 */
@@ -1930,9 +1947,10 @@ Index: linux-2.4.24/kernel/exit.c
  
  static inline void mntput(struct vfsmount *mnt)
  {
-===== net/unix/af_unix.c 1.24 vs edited =====
---- 1.24/net/unix/af_unix.c	Tue Jul  8 22:31:54 2003
-+++ edited/net/unix/af_unix.c	Sat Apr 24 23:32:16 2004
+Index: linux-2.4.24/net/unix/af_unix.c
+===================================================================
+--- linux-2.4.24.orig/net/unix/af_unix.c	2004-05-03 19:56:49.976599024 +0300
++++ linux-2.4.24/net/unix/af_unix.c	2004-05-03 20:00:02.878273512 +0300
 @@ -703,7 +703,7 @@
  		/*
  		 * Do the final lookup.
