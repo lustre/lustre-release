@@ -5,5 +5,5 @@ OBDDIR="`dirname $0`/.."
 . $OBDDIR/demos/config.sh
 
 [ "$LOOPDEV" ] && losetup -d $LOOPDEV
-[ "$TMPFILE" ] && rm $TMPFILE
+#[ "$TMPFILE" ] && rm $TMPFILE
 

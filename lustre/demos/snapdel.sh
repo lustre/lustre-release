@@ -6,6 +6,8 @@ OBDDIR="`dirname $0`/.."
 . $OBDDIR/demos/config.sh
 
 [ ! -d $MNTSNAP/lost+found ] && echo "need to run obdsetup.sh first" && exit 1
+[ ! -f $MNTOBD/hosts ] && $OBDDIR/demos/snaptest.sh
+
 plog umount $MNTSNAP
 plog umount $MNTOBD
 

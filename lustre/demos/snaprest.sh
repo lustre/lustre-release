@@ -12,24 +12,29 @@ plog umount $MNTOBD
 
 sync
 sleep 1
-rm $SNAPTABLE
 plog log "STARTING snaprestore"
+# To do a snapshot restore at this time, we need to do several steps.  In
+# the future, this should all be wrapped into the snaprestore function.
+# - we reverse the current and restored entries in the snapshot table
+# - we proceed to delete the previous current snapshot
+# - we unconfigure the previous current snapshot
+# - we delete the previous current snapshot from the table and load it
 $OBDDIR/class/obdcontrol -f << EOF
-snaptable
-$SNAPTABLE
-a
-1
-now
-a
-2
-current
-q
-y
+XXX need to reverse current/restored entries here!!!
 snapset 0 $SNAPTABLE
 device /dev/obd2
 connect
 snaprestore 1
-disconnect
+device /dev/obd1
+cleanup
+detach
+snaptable
+$SNAPTABLE
+d
+1
+q
+y
+snapset 0 $SNAPTABLE
 EOF
 plog log "COMPLETE snaprestore"
 
