@@ -56,7 +56,7 @@ int llog_origin_connect(struct llog_ctxt *ctxt, int count,
         ENTRY;
 
         if (list_empty(&ctxt->loc_handle->u.chd.chd_head)) {
-                CDEBUG(D_HA, "there is no record related to ctxt %p", ctxt);
+                CDEBUG(D_HA, "there is no record related to ctxt %p\n", ctxt);
                 RETURN(0);
         }
 

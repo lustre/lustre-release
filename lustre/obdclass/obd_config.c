@@ -122,6 +122,8 @@ int class_attach(struct lustre_cfg *lcfg)
         INIT_LIST_HEAD(&obd->obd_exports);
         obd->obd_num_exports = 0;
         spin_lock_init(&obd->obd_dev_lock);
+        spin_lock_init(&obd->obd_osfs_lock);
+        obd->obd_osfs_age = jiffies - 1000 * HZ;
         init_waitqueue_head(&obd->obd_refcount_waitq);
 
         /* XXX belongs in setup not attach  */
