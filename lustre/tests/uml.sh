@@ -44,20 +44,20 @@ rm -f $config
 # create nodes
 for NODE in $MDSNODE $OSTNODE $CLIENTS; do
 	eval [ \$$NODE ] && continue
-	${LMC} -m $config --node $NODE --net $NODE tcp || exit 1
+	${LMC} -m $config --add net --node $NODE --nid $NODE --nettype tcp || exit 1
 	eval "$NODE=done"
 done
 
 # configure mds server
-${LMC} -m $config --format --node $MDSNODE --mds mds1 $MDSDEV $MDSSIZE ||exit 10
+${LMC} -m $config --add mds --format --node $MDSNODE --mds mds1 --dev $MDSDEV --size $MDSSIZE ||exit 10
 
 # configure ost
-${LMC} -m $config  --lov lov1 mds1 65536 0 0 || exit 20
-${LMC} -m $config --node $OSTNODE --lov lov1 --ost $OSTDEV1 $OSTSIZE || exit 21
-${LMC} -m $config --node $OSTNODE --lov lov1 --ost $OSTDEV2 $OSTSIZE || exit 22
+${LMC} -m $config --add lov --lov lov1 --mds mds1 --stripe_sz 65536 --stripe_cnt 0 --stripe_pattern 0 || exit 20
+${LMC} -m $config --add ost --node $OSTNODE --lov lov1 --dev $OSTDEV1 --size $OSTSIZE || exit 21
+${LMC} -m $config --add ost --node $OSTNODE --lov lov1 --dev $OSTDEV2 --size $OSTSIZE || exit 22
 
 # create client config(s)
 for NODE in $CLIENTS; do
-	${LMC} -m $config  --node $NODE --mtpt /mnt/lustre mds1 lov1 || exit 30
+	${LMC} -m $config --add mtpt --node $NODE --path /mnt/lustre --mds mds1 --lov lov1 || exit 30
 done
 

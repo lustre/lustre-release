@@ -22,14 +22,14 @@ case $kver in
 esac
 
 # create nodes
-${LMC} -o $config --node localhost --net localhost tcp || exit 1
+${LMC} -o $config --add net --node localhost --nid localhost --nettype tcp || exit 1
 
 # configure mds server
-${LMC} -m $config --format --node localhost $FSTYPE --mds mds1 $MDSDEV $MDSSIZE || exit 2
+${LMC} -m $config --add mds --format --node localhost $FSTYPE --mds mds1 --dev $MDSDEV --size $MDSSIZE || exit 2
 
 # configure ost
-${LMC} -m $config --format --node localhost $FSTYPE --ost $OSTDEV $OSTSIZE || exit 3
+${LMC} -m $config --add ost --format --obd obd1 --node localhost $FSTYPE --dev $OSTDEV --size $OSTSIZE || exit 3
 
 # create client config
-${LMC} -m $config --node localhost --mtpt /mnt/lustre1 mds1 OSC_localhost || exit 4
-${LMC} -m $config --node localhost --mtpt /mnt/lustre2 mds1 OSC_localhost || exit 4
+${LMC} -m $config --add mtpt --node localhost --path /mnt/lustre1 --mds mds1 --obd obd1 || exit 4
+${LMC} -m $config --add mtpt --node localhost --path /mnt/lustre2 --mds mds1 --obd obd1 || exit 4
