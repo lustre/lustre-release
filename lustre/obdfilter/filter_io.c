@@ -422,7 +422,7 @@ static int filter_grant_check(struct obd_export *exp, int objcount,
                                                exp->exp_obd->obd_name,
                                                exp->exp_client_uuid.uuid, exp,
                                                used, bytes, fed->fed_grant, n);
-                                        mask = D_ERROR;
+                                        mask = D_RPCTRACE;
                                 } else {
                                         used += bytes;
                                         rnb[n].flags |= OBD_BRW_GRANTED;
