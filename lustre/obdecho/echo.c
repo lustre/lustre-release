@@ -12,8 +12,8 @@
  * and Andreas Dilger <adilger@clusterfs.com>
  */
 
-static char rcsid[] __attribute ((unused)) = "$Id: echo.c,v 1.32 2002/09/04 16:30:40 adilger Exp $";
-#define OBDECHO_VERSION "$Revision: 1.32 $"
+static char rcsid[] __attribute ((unused)) = "$Id: echo.c,v 1.33 2002/09/06 22:23:49 adilger Exp $";
+#define OBDECHO_VERSION "$Revision: 1.33 $"
 
 #define EXPORT_SYMTAB
 
@@ -42,6 +42,7 @@ static atomic_t echo_page_rws;
 static atomic_t echo_getattrs;
 
 #define ECHO_PROC_STAT "sys/obdecho"
+#define ECHO_INIT_OBJID 0x1000000000000000ULL
 
 int echo_proc_read(char *page, char **start, off_t off, int count, int *eof,
                    void *data)
@@ -92,7 +93,7 @@ void echo_proc_fini(void)
 }
 
 static int echo_connect(struct lustre_handle *conn, struct obd_device *obd,
-                        char *cluuid)
+                        uuid_t cluuid)
 {
         int rc;
 
@@ -169,8 +170,8 @@ int echo_destroy(struct lustre_handle *conn, struct obdo *oa,
                 RETURN(-EINVAL);
         }
 
-        if (oa->o_id > obd->u.echo.eo_lastino) {
-                CERROR("bad destroy objid: %Ld\n", (long long)oa->o_id);
+        if (oa->o_id > obd->u.echo.eo_lastino || oa->o_id < ECHO_INIT_OBJID) {
+                CERROR("bad destroy objid: 0x"LPX64"\n", oa->o_id);
                 RETURN(-EINVAL);
         }
 
@@ -393,6 +394,7 @@ static int echo_setup(struct obd_device *obddev, obd_count len, void *buf)
                 LBUG();
                 RETURN(-ENOMEM);
         }
+        obddev->u.echo.eo_lastino = ECHO_INIT_OBJID;
 
         RETURN(0);
 }
