@@ -136,11 +136,6 @@ int llog_init_handle(struct llog_handle *handle, int flags,
         }
         rc = 0;
 
-        if (uuid == NULL) {
-                CERROR("uuid is required for creating a new log.");
-                GOTO(out, rc = -EINVAL);
-        }
-
         handle->lgh_last_idx = 0; /* header is record with index 0 */
         llh->llh_count = 1;         /* for the header record */
         llh->llh_hdr.lrh_type = LLOG_HDR_MAGIC;
@@ -164,7 +159,7 @@ int llog_init_handle(struct llog_handle *handle, int flags,
                 LBUG();
         if (rc)
                 OBD_FREE(llh, sizeof(*llh));
-        return(rc);
+        RETURN(rc);
 }
 EXPORT_SYMBOL(llog_init_handle);
 

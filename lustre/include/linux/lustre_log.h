@@ -101,13 +101,14 @@ int obd_llog_origin_add(struct obd_export *exp,
 int obd_llog_repl_cancel(struct obd_device *, struct lov_stripe_md *lsm,
                          int count, struct llog_cookie *cookies, int flags);
 
-int llog_obd_setup_logid(struct obd_device *obd, struct obd_device *disk_obd,
-                         int index, int count, struct llog_logid *logid);
+int llog_obd_setup(struct obd_device *obd, struct obd_device *disk_obd,
+                   int index, int count, struct llog_logid *logid);
 int llog_obd_cleanup(struct obd_device *obd);
 int llog_obd_origin_add(struct obd_export *exp,
                         int index,
                         struct llog_rec_hdr *rec, struct lov_stripe_md *lsm,
                         struct llog_cookie *logcookies, int numcookies);
+int llog_initialize(struct obd_device *obd);
 int llog_cat_initialize(struct obd_device *obd, int count);
 
 
