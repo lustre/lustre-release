@@ -91,29 +91,36 @@ int llog_cat_cancel_records(struct llog_handle *cathandle, int count,
 int llog_cat_process(struct llog_handle *cat_llh, llog_cb_t cb, void *data);
 
 /* llog_obd.c */
-int obd_llog_open(struct obd_device *obd, struct obd_device *disk_obd,
-                  int index, int named, int flags, struct obd_uuid *log_uuid);
-int obd_log_add(struct obd_export *exp, struct llog_handle *cathandle,
-                struct llog_rec_hdr *rec, void *buf, 
-                struct llog_cookie *logcookies, int numcookies);
-int obd_log_cancel(struct obd_export *exp, struct llog_handle *cathandle,
-                   void *buf, int count, struct llog_cookie *logcookies, int flags);
+int obd_llog_setup(struct obd_device *obd, struct obd_device *disk_obd,
+                   int index, int count, struct llog_logid *logid);
+int obd_llog_cleanup(struct obd_device *obd);
+int obd_llog_origin_add(struct obd_export *exp,
+                        int index,
+                        struct llog_rec_hdr *rec, struct lov_stripe_md *lsm,
+                        struct llog_cookie *logcookies, int numcookies);
+int obd_llog_repl_cancel(struct obd_device *, struct lov_stripe_md *lsm,
+                         int count, struct llog_cookie *cookies, int flags);
+
+int llog_obd_setup_logid(struct obd_device *obd, struct obd_device *disk_obd,
+                         int index, int count, struct llog_logid *logid);
+int llog_obd_cleanup(struct obd_device *obd);
+int llog_obd_origin_add(struct obd_export *exp,
+                        int index,
+                        struct llog_rec_hdr *rec, struct lov_stripe_md *lsm,
+                        struct llog_cookie *logcookies, int numcookies);
+int llog_cat_initialize(struct obd_device *obd, int count);
 
 
-/* lov_log.c */
-int lov_log_add(struct obd_export *exp,
-                struct llog_handle *cathandle,
-                struct llog_rec_hdr *rec, struct lov_stripe_md *lsm,
-                struct llog_cookie *logcookies, int numcookies);
-int lov_log_cancel(struct obd_export *exp, struct lov_stripe_md *lsm,
-                   int count, struct llog_cookie *cookies, int flags);
+/* llog_net.c */
+int llog_initiator_connect(struct obd_device *obd);
+int llog_receptor_accept(struct obd_device *obd, struct obd_import *imp);
+int llog_origin_handle_cancel(struct obd_device *obd, struct ptlrpc_request *req);
 
-extern int llog_init_catalog(struct llog_handle *cathandle,
-                             struct obd_uuid *tgtuuid);
-extern int llog_delete_log(struct llog_handle *cathandle,
-                           struct llog_handle *loghandle);
-extern struct llog_handle *llog_new_log(struct llog_handle *cathandle,
-                                        struct obd_uuid *tgtuuid);
+/* recov_thread.c */
+int llog_obd_repl_cancel(struct obd_device *obd,
+                         struct lov_stripe_md *lsm, int count,
+                         struct llog_cookie *cookies, int flags);
+
 struct llog_operations {
         int (*lop_write_rec)(struct llog_handle *loghandle,
                              struct llog_rec_hdr *rec, 
@@ -280,20 +287,27 @@ static inline int llog_create(struct obd_device *obd, struct llog_handle **res,
 
 
 /* llog obd interfaces */
-
 #define LLOG_OBD_MAX_HANDLES 3
-
 
 /* MDS stored handles in OSC */
 #define LLOG_OBD_DEL_LOG_HANDLE 0
 
-/* OBDFILTER stored handles in OST */
+/* OBDFILTER stored handles in OBDFILTER */
 #define LLOG_OBD_SZ_LOG_HANDLE  0
 #define LLOG_OBD_RD1_LOG_HANDLE 1
 
 struct llog_obd_ctxt {
+        struct obd_device *loc_obd;
         struct llog_handle *loc_handles[LLOG_OBD_MAX_HANDLES];
+        struct llog_commit_data *loc_llcd;
+        struct semaphore loc_sem; /* protects loc_llcd */
+        struct obd_import *loc_imp;
 };
+
+void llog_obd_cleanup_ctxt(struct obd_device *obd);
+int obd_log_cancel(struct obd_export *exp, struct llog_handle *cathandle,
+                   void *buf, int count, struct llog_cookie *cookies, int flags);
+
 
 int llog_originator_setup(struct obd_device *, int);
 int llog_originator_cleanup(struct obd_device *);

@@ -148,7 +148,8 @@ int llog_init_handle(struct llog_handle *handle, int flags,
         llh->llh_hdr.lrh_index = llh->llh_tail.lrt_index = 0;
         llh->llh_timestamp = LTIME_S(CURRENT_TIME);
         llh->llh_flags = flags;
-        memcpy(&llh->llh_tgtuuid, uuid, sizeof(llh->llh_tgtuuid));
+        if (uuid)
+                memcpy(&llh->llh_tgtuuid, uuid, sizeof(llh->llh_tgtuuid));
         llh->llh_bitmap_offset = offsetof(typeof(*llh), llh_bitmap);
         ext2_set_bit(0, llh->llh_bitmap);
 

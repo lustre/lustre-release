@@ -33,11 +33,14 @@
 #endif
 
 #include <linux/fs.h>
+#include <linux/obd.h>
 #include <linux/obd_class.h>
 #include <linux/lustre_log.h>
+#include <linux/obd_ost.h>
 #include <portals/list.h>
 #include <linux/lvfs.h>
-#include <linux/obd_ost.h>
+#include <linux/lustre_fsfilt.h>
+#include "llog_internal.h"
 
 static int llog_lvfs_pad(struct l_file *file, int len, int index)
 {
@@ -255,7 +258,14 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
         if (rc == 0 && reccookie) {
                 reccookie->lgc_lgl = loghandle->lgh_id;
                 reccookie->lgc_index = index;
-                rc = 1;
+                if (rec->lrh_type == MDS_UNLINK_REC)
+                        reccookie->lgc_subsys = LLOG_OBD_DEL_LOG_HANDLE;
+                else if (rec->lrh_type == OST_SZ_REC)
+                        reccookie->lgc_subsys = LLOG_OBD_SZ_LOG_HANDLE;
+                else if (rec->lrh_type == OST_RAID1_REC)
+                        reccookie->lgc_subsys = LLOG_OBD_RD1_LOG_HANDLE;
+                else 
+                        reccookie->lgc_subsys = -1;
         }
         RETURN(rc);
 }
@@ -465,6 +475,100 @@ static int llog_lvfs_destroy(struct llog_handle *handle)
         rc = obd_destroy(handle->lgh_obd->obd_log_exp, oa, NULL, NULL);
  out:
         obdo_free(oa);
+        RETURN(rc);
+}
+
+/* reads the catalog list */
+int llog_get_cat_list(struct obd_device *obd, struct obd_device *disk_obd, 
+                      char *name, int count, struct llog_logid *idarray)
+{
+        struct obd_run_ctxt saved;
+        struct l_file *file;
+        int rc;
+        int size = sizeof(*idarray) * count;
+        loff_t off = 0;
+
+        LASSERT(count);
+        
+        push_ctxt(&saved, &obd->obd_ctxt, NULL);
+        file = filp_open(name, O_RDWR | O_CREAT | O_LARGEFILE, 0700);
+        if (!file || IS_ERR(file)) {
+                rc = PTR_ERR(file);
+                CERROR("OBD filter: cannot open/create %s: rc = %d\n",
+                       name, rc);
+                GOTO(out, rc);
+        }
+
+        if (!S_ISREG(file->f_dentry->d_inode->i_mode)) {
+                CERROR("%s is not a regular file!: mode = %o\n", name,
+                       file->f_dentry->d_inode->i_mode);
+                GOTO(out, rc = -ENOENT);
+        }
+
+        rc = fsfilt_journal_data(disk_obd, file);
+        if (rc) {
+                CERROR("cannot journal data on %s: rc = %d\n", name, rc);
+                GOTO(out, rc);
+        }
+
+        rc = fsfilt_read_record(disk_obd, file, idarray, size, &off);
+        if (rc) {
+                CDEBUG(D_INODE,"OBD filter: error reading %s: rc %d\n",
+                       name, rc);
+                GOTO(out, rc);
+        }
+        
+ out:
+        pop_ctxt(&saved, &obd->obd_ctxt, NULL);
+        if (file && !IS_ERR(file))
+                rc = filp_close(file, 0);
+        RETURN(rc);
+}
+
+/* writes the cat list */
+int llog_put_cat_list(struct obd_device *obd, struct obd_device *disk_obd, 
+                      char *name, int count, struct llog_logid *idarray)
+{
+        struct obd_run_ctxt saved;
+        struct l_file *file;
+        int rc;
+        int size = sizeof(*idarray) * count;
+        loff_t off = 0;
+
+        LASSERT(count);
+        
+        push_ctxt(&saved, &obd->obd_ctxt, NULL);
+        file = filp_open(name, O_RDWR | O_CREAT | O_LARGEFILE, 0700);
+        if (!file || IS_ERR(file)) {
+                rc = PTR_ERR(file);
+                CERROR("OBD filter: cannot open/create %s: rc = %d\n",
+                       name, rc);
+                GOTO(out, rc);
+        }
+
+        if (!S_ISREG(file->f_dentry->d_inode->i_mode)) {
+                CERROR("%s is not a regular file!: mode = %o\n", name,
+                       file->f_dentry->d_inode->i_mode);
+                GOTO(out, rc = -ENOENT);
+        }
+
+        rc = fsfilt_journal_data(disk_obd, file);
+        if (rc) {
+                CERROR("cannot journal data on %s: rc = %d\n", name, rc);
+                GOTO(out, rc);
+        }
+
+        rc = fsfilt_write_record(disk_obd, file, idarray, size, &off, 1);
+        if (rc) {
+                CDEBUG(D_INODE,"OBD filter: error reading %s: rc %d\n",
+                       name, rc);
+                GOTO(out, rc);
+        }
+        
+ out:
+        pop_ctxt(&saved, &obd->obd_ctxt, NULL);
+        if (file && !IS_ERR(file))
+                rc = filp_close(file, 0);
         RETURN(rc);
 }
 
