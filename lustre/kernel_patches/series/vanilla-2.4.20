@@ -1,10 +1,10 @@
-dev_read_only_2.4.20.patch
-exports_2.4.20.patch
+dev_read_only_hp.patch
+exports_hp.patch
 kmem_cache_validate_hp.patch
 lustre_version.patch
-vfs_intent-2.4.20.patch
+vfs_intent-2.4.20-vanilla.patch
 invalidate_show.patch
-iod-rmap-exports-2.4.20.patch
 export-truncate.patch
+iod-stock-24-exports.patch
 uml_check_get_page.patch
 uml_no_panic.patch
