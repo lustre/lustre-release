@@ -1,4 +1,3 @@
-
 export PATH=$PATH:/sbin:/usr/sbin
 
 if [ -d /r ]; then
@@ -58,7 +57,7 @@ setup() {
     insmod $SRCDIR/../../portals/linux/qswnal/kqswnal.o
     insmod $SRCDIR/../../portals/linux/socknal/ksocknal.o || exit -1
 
-    $ACCEPTOR 1234 &
+    [ "$NETWORK" = "tcp" ] && $ACCEPTOR $PORT &
 
     [ -c /dev/obd ] || mknod /dev/obd c 10 241
 
@@ -75,6 +74,38 @@ setup() {
     list_mods
 
     [ -d /mnt/obd ] || mkdir /mnt/obd
+}
+
+setup_portals() {
+	if [ "$NETWORK" -a "$LOCALHOST" -a "$SERVER" ]; then
+		echo "$0: NETWORK or LOCALHOST or SERVER is not set"
+		exit -1
+	fi
+
+	case $NETWORK in
+	elan)	if [ "$PORT" ]; then
+			echo "$0: NETWORK is elan but PORT is set"
+			exit -1
+		fi
+		;;
+	tcp)	if [ -z "$PORT" ]; then
+			echo "$0: NETWORK is tcp but PORT is not set"
+			exit -1
+		fi
+		;;
+	*) 	echo "$0: unknown NETWORK \'$NETWORK\'"
+		exit -1
+		;;
+	esac
+
+	$PTLCTL <<- EOF
+	setup $NETWORK
+	mynid $LOCALHOST
+	connect $SERVER $PORT
+	add_uuid self
+	add_uuid mds
+	add_uuid ost
+	EOF
 }
 
 setup_ldlm() {

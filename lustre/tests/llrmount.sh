@@ -3,17 +3,13 @@
 SRCDIR="`dirname $0`"
 . $SRCDIR/common.sh
 
-setup
+NETWORK=tcp
+LOCALHOST=localhost
+SERVER=localhost
+PORT=1234
 
-$PTLCTL <<EOF
-mynid localhost
-setup tcp
-connect localhost 1234
-add_uuid self
-add_uuid mds
-add_uuid ost
-quit
-EOF
+setup
+setup_portals
 
 old_fs ext2 /tmp/ost 80000
 OST=$LOOPDEV

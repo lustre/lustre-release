@@ -3,21 +3,16 @@
 SRCDIR="`dirname $0`"
 . $SRCDIR/common.sh
 
-setup
+NETWORK=tcp
+LOCALHOST=localhost
+SERVER=localhost
+PORT=1234
 
-$PTLCTL <<EOF
-mynid localhost
-setup tcp
-connect localhost 1234
-add_uuid self
-add_uuid mds
-add_uuid ost
-quit
-EOF
+setup
+setup_portals
 
 new_fs ext2 /tmp/ost 10000
 OST=$LOOPDEV
-
 MDSFS=ext3
 new_fs ${MDSFS} /tmp/mds 10000
 MDS=$LOOPDEV
