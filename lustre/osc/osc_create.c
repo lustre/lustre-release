@@ -266,10 +266,6 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                         oscc->oscc_flags &= ~OSCC_FLAG_RECOVERING;
                         oscc->oscc_last_id = oa->o_id;
 
-                        /* recover happen in mds_setup, before cobd_setup, so
-                         * reset oscc_gr = 0 here, it sould be no harm to CMD */
-                        oscc->oscc_gr = 0;
-
                         CDEBUG(D_HA, "%s: oscc recovery finished: %d\n", 
                                exp->exp_obd->obd_name, rc);
                         wake_up(&oscc->oscc_waitq);
