@@ -807,6 +807,7 @@ void ldlm_lock_cancel(struct ldlm_lock *lock)
 
         ldlm_cancel_callback(lock);
 
+        ldlm_del_waiting_lock(lock);
         ldlm_resource_unlink_lock(lock);
         ldlm_lock_destroy(lock);
         l_unlock(&ns->ns_lock);

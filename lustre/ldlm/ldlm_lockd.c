@@ -94,7 +94,7 @@ static int ldlm_add_waiting_lock(struct ldlm_lock *lock)
  * callback arrive without incident.  This adjusts the lock-timeout timer if
  * needed.  Returns 0 if the lock wasn't pending after all, 1 if it was.
  */
-static int ldlm_del_waiting_lock(struct ldlm_lock *lock)
+int ldlm_del_waiting_lock(struct ldlm_lock *lock)
 {
         struct list_head *list_next;
 

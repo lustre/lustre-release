@@ -255,6 +255,7 @@ int ldlm_extent_policy(struct ldlm_lock *, void *, ldlm_mode_t, void *);
 int ldlm_handle_enqueue(struct ptlrpc_request *req);
 int ldlm_handle_convert(struct ptlrpc_request *req);
 int ldlm_handle_cancel(struct ptlrpc_request *req);
+int ldlm_del_waiting_lock(struct ldlm_lock *lock);
 
 /* ldlm_lock.c */
 void ldlm_register_intent(int (*arg)(struct ldlm_lock *lock, void *req_cookie,
