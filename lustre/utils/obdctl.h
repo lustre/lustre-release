@@ -69,5 +69,8 @@ int jt_get_version(int argc, char **argv);
 int jt_obd_add_uuid(int argc, char **argv);
 int jt_obd_close_uuid(int argc, char **argv);
 int jt_obd_del_uuid(int argc, char **argv);
+int jt_cfg_record(int argc, char **argv);
+int jt_cfg_endrecord(int argc, char **argv);
+int jt_cfg_parse(int argc, char **argv);
 
 #endif
