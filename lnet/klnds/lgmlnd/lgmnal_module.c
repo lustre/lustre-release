@@ -29,6 +29,7 @@ int lgmnal_small_msg_size = 525312;
  *      See start_kernel_threads
  */
 int num_rx_threads = -1;
+int num_stxds = 5;
 
 ptl_handle_ni_t	lgmnal_ni;
 
@@ -137,6 +138,7 @@ EXPORT_SYMBOL(lgmnal_ni);
 
 MODULE_PARM(lgmnal_small_msg_size, "i");
 MODULE_PARM(num_rx_threads, "i");
+MODULE_PARM(num_stxds, "i");
 
 MODULE_AUTHOR("Morgan Doyle");
 

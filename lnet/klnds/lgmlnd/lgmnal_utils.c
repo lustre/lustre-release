@@ -62,7 +62,10 @@ lgmnal_alloc_stxd(lgmnal_data_t *nal_data)
 	CDEBUG(D_INFO, "total number of send tokens available is [%d]\n", ntx);
 	
 	nstx = ntx/2;
-	nstx = 5;
+	/*
+	 * num_stxds from lgmnal_module.c
+	 */
+	nstx = num_stxds;
         nrxt_stx = nstx + 1;
 
 	CDEBUG(D_INFO, "Allocated [%d] send tokens to small messages\n", nstx);
@@ -287,6 +290,11 @@ lgmnal_alloc_srxd(lgmnal_data_t *nal_data)
 	
 	nsrx = nrx/2;
 	nsrx = 12;
+	/*
+	 *	make the number of rxds twice our total
+	 *	number of stxds plus 1
+	 */
+	nsrx = num_stxds*2 + 2;
 
 	CDEBUG(D_INFO, "Allocated [%d] receive tokens to small messages\n", 
 	       nsrx);

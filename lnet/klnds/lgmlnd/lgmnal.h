@@ -77,6 +77,7 @@
 
 extern  int lgmnal_small_msg_size;
 extern  int num_rx_threads;
+extern  int num_stxds;
 #define LGMNAL_SMALL_MSG_SIZE(a)		a->small_msg_size
 #define LGMNAL_IS_SMALL_MESSAGE(n,a,b,c)	lgmnal_is_small_msg(n, a, b, c)
 #define LGMNAL_MAGIC				0x1234abcd

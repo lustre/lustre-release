@@ -98,7 +98,7 @@ lgmnal_ct_thread(void *arg)
 	}
 	LGMNAL_GM_UNLOCK(nal_data);
 	nal_data->ctthread_flag = LGMNAL_THREAD_RESET;
-	CDEBUG(D_ERROR, "thread nal_data [%p] is exiting\n", nal_data);
+	CDEBUG(D_INFO, "thread nal_data [%p] is exiting\n", nal_data);
 	return(LGMNAL_STATUS_OK);
 }
 
@@ -171,7 +171,7 @@ int lgmnal_rx_thread(void *arg)
 	nal_data->rxthread_flag/=2;
 	CDEBUG(D_INFO, "rxthread flag is [%ld]\n", nal_data->rxthread_flag);
 	spin_unlock(&nal_data->rxthread_flag_lock);
-	CDEBUG(D_ERROR, "thread nal_data [%p] is exiting\n", nal_data);
+	CDEBUG(D_INFO, "thread nal_data [%p] is exiting\n", nal_data);
 	return(LGMNAL_STATUS_OK);
 }
 
