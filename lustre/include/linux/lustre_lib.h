@@ -85,21 +85,21 @@ void l_unlock(struct lustre_lock *);
  * io_cb_data: io callback data merged into one struct to simplify
  *   memory managment. This may be turn out to be too simple.
  */
-struct io_cb_data;
-typedef int (*brw_callback_t)(struct io_cb_data *, int err, int phase);
+struct brw_cb_data;
+typedef int (*brw_cb_t)(struct brw_cb_data *, int err, int phase);
 
-struct io_cb_data {
-        wait_queue_head_t waitq;
-        atomic_t refcount;
-        int complete;
-        int err;
-        struct ptlrpc_bulk_desc *desc;
-        brw_callback_t cb;
-        void *data;
+struct brw_cb_data {
+        wait_queue_head_t brw_waitq;
+        atomic_t brw_refcount;
+        int brw_complete;
+        int brw_err;
+        struct ptlrpc_bulk_desc *brw_desc;
+        brw_cb_t brw_cb;
+        void *brw_data;
 };
 
-int ll_sync_io_cb(struct io_cb_data *data, int err, int phase);
-struct  io_cb_data *ll_init_cb(void);
+int ll_sync_brw_cb(struct brw_cb_data *brw_cbd, int err, int phase);
+struct  brw_cb_data *ll_init_brw_cb_data(void);
 
 /* simple.c */
 struct obd_run_ctxt;
@@ -334,9 +334,15 @@ static inline int obd_ioctl_unpack(struct obd_ioctl_data *data, char *pbuf,
         char *ptr;
         struct obd_ioctl_data *overlay;
 
-        if (!*pbuf)
+        if (!pbuf)
                 return 1;
         overlay = (struct obd_ioctl_data *)pbuf;
+
+        /* Preserve the caller's buffer pointers */
+        overlay->ioc_inlbuf1 = data->ioc_inlbuf1;
+        overlay->ioc_inlbuf2 = data->ioc_inlbuf2;
+        overlay->ioc_inlbuf3 = data->ioc_inlbuf3;
+
         memcpy(data, pbuf, sizeof(*data));
 
         ptr = overlay->ioc_bulk;
