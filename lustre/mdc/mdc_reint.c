@@ -23,15 +23,16 @@
 #define DEBUG_SUBSYSTEM S_MDC
 
 #ifdef __KERNEL__
-#include <linux/config.h>
-#include <linux/module.h>
-#include <linux/kernel.h>
+# include <linux/config.h>
+# include <linux/module.h>
+# include <linux/kernel.h>
 #else
-#include <liblustre.h>
+# include <liblustre.h>
 #endif
 
 #include <linux/obd_class.h>
 #include <linux/lustre_mds.h>
+#include "mdc_internal.h"
 
 /* mdc_setattr does its own semaphore handling */
 static int mdc_reint(struct ptlrpc_request *request, int level)
