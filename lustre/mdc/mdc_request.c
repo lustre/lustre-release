@@ -186,7 +186,7 @@ static int mdc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                 if (S_ISDIR(inode->i_mode)) {
                         CDEBUG(D_INODE, "invalidating inode %ld\n",
                                inode->i_ino);
-                        invalidate_inode_pages(inode);
+                        ll_invalidate_inode_pages(inode);
                 }
                 break;
         default:

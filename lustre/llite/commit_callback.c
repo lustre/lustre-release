@@ -58,10 +58,15 @@ static int ll_commitcbd_main(void *arg)
 
         lock_kernel();
         daemonize();
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         spin_lock_irq(&current->sigmask_lock);
         sigfillset(&current->blocked);
         our_recalc_sigpending(current);
         spin_unlock_irq(&current->sigmask_lock);
+#else
+        sigfillset(&current->blocked);
+        our_recalc_sigpending(current);
+#endif
 
         sprintf(current->comm, "lustre_commitcbd");
         unlock_kernel();

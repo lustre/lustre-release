@@ -127,7 +127,7 @@ static int ll_fill_super(struct super_block *sb, void *data, int silent)
         generate_random_uuid(uuid);
         class_uuid_unparse(uuid, sbi->ll_sb_uuid);
 
-        sb->u.generic_sbp = sbi;
+        sb->s_fs_info = sbi;
 
         ll_options(data, &osc, &mdc, &sbi->ll_flags);
 

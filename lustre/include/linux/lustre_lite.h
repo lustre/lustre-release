@@ -99,7 +99,11 @@ do {                                                                          \
 
 static inline struct ll_sb_info *ll_s2sbi(struct super_block *sb)
 {
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
+        return (struct ll_sb_info *)(sb->s_fs_info);
+#else
         return (struct ll_sb_info *)(sb->u.generic_sbp);
+#endif
 }
 
 static inline struct lustre_handle *ll_s2obdconn(struct super_block *sb)

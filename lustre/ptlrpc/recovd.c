@@ -274,15 +274,16 @@ static int recovd_main(void *arg)
 
         lock_kernel();
         daemonize();
-        spin_lock_irq(&current->sigmask_lock);
-        sigfillset(&current->blocked);
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
+        sigfillset(&current->blocked);
         recalc_sigpending();
 #else
+        spin_lock_irq(&current->sigmask_lock);
+        sigfillset(&current->blocked);
         recalc_sigpending(current);
-#endif
         spin_unlock_irq(&current->sigmask_lock);
+#endif
 
         sprintf(current->comm, "lustre_recovd");
         unlock_kernel();

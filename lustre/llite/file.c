@@ -402,7 +402,7 @@ int ll_lock_callback(struct ldlm_lock *lock, struct ldlm_lock_desc *new,
                 CDEBUG(D_INODE, "invalidating obdo/inode %ld\n", inode->i_ino);
                 /* FIXME: do something better than throwing away everything */
                 //down(&inode->i_sem);
-                invalidate_inode_pages(inode);
+                ll_invalidate_inode_pages(inode);
                 //up(&inode->i_sem);
                 break;
         default:

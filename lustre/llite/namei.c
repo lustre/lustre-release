@@ -375,7 +375,7 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
                                namelen, name, rc);
                         RETURN(ERR_PTR(rc));
                 }
-                invalidate_inode_pages(dir);
+                ll_invalidate_inode_pages(dir);
                 request = it->it_data;
                 body = lustre_msg_buf(request->rq_repmsg, 1);
                 lic.lic_lmm = NULL;
@@ -607,7 +607,7 @@ static int ll_link(struct dentry *old_dentry, struct inode * dir,
                 ext2_inc_count(inode);
                 atomic_inc(&inode->i_count);
                 d_instantiate(dentry, inode);
-                invalidate_inode_pages(dir);
+                ll_invalidate_inode_pages(dir);
                 RETURN(0);
         }
 
@@ -687,7 +687,7 @@ static int ll_common_unlink(struct inode *dir, struct dentry *dentry,
 
         if (it && it->it_disposition) {
                 rc = it->it_status;
-                invalidate_inode_pages(dir);
+                ll_invalidate_inode_pages(dir);
                 if (rc)
                         GOTO(out, rc);
                 GOTO(out_dec, 0);
@@ -708,7 +708,7 @@ static int ll_common_unlink(struct inode *dir, struct dentry *dentry,
         /* AED: not sure if needed - directory lock revocation should do it
          * in the case where the client has cached it for non-intent ops.
          */
-        invalidate_inode_pages(dir);
+        ll_invalidate_inode_pages(dir);
 
         inode->i_ctime = dir->i_ctime;
 out_dec:
@@ -768,8 +768,8 @@ static int ll_rename(struct inode * old_dir, struct dentry * old_dentry,
                         tgt_inode->i_ctime = CURRENT_TIME;
                         tgt_inode->i_nlink--;
                 }
-                invalidate_inode_pages(old_dir);
-                invalidate_inode_pages(new_dir);
+                ll_invalidate_inode_pages(old_dir);
+                ll_invalidate_inode_pages(new_dir);
                 GOTO(out, err = it->it_status);
         }
 

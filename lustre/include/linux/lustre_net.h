@@ -174,6 +174,7 @@ struct ptlrpc_bulk_page {
         int (*bp_cb)(struct ptlrpc_bulk_page *);
 };
 
+
 struct ptlrpc_bulk_desc {
         int bd_flags;
         struct ptlrpc_connection *bd_connection;
@@ -188,7 +189,12 @@ struct ptlrpc_bulk_desc {
         __u32 bd_page_count;
         atomic_t bd_refcount;
         void *bd_desc_private;
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
+        struct work_struct bd_queue;
+#else
         struct tq_struct bd_queue;
+#endif
 
         ptl_md_t bd_md;
         ptl_handle_md_t bd_md_h;

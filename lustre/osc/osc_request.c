@@ -23,6 +23,7 @@
 #include <linux/mm.h>
 #include <linux/highmem.h>
 #include <linux/lustre_dlm.h>
+#include <linux/workqueue.h>
 #include <linux/lustre_mds.h> /* for mds_objid */
 #include <linux/obd_ost.h>
 #include <linux/obd_lov.h>
@@ -343,9 +344,8 @@ static void brw_finish(struct ptlrpc_bulk_desc *desc, void *data)
 
         /* We can't kunmap the desc from interrupt context, so we do it from
          * the bottom half above. */
-        INIT_TQUEUE(&desc->bd_queue, 0, 0);
-        PREPARE_TQUEUE(&desc->bd_queue, unmap_and_decref_bulk_desc, desc);
-        schedule_task(&desc->bd_queue);
+        prepare_work(&desc->bd_queue, unmap_and_decref_bulk_desc, desc);
+        schedule_work(&desc->bd_queue);
 
         EXIT;
 }
