@@ -13,8 +13,8 @@ config=${config:-$(basename $0 .sh).xml}
 LMC=${LMC:-../utils/lmc -m $config}
 TMP=${TMP:-/tmp}
 
-SERVER=${SERVER:-localhost}
-CLIENT=${CLIENT:-localhost}
+SERVER=${SERVER:-client2}
+CLIENT=${CLIENT:-client4}
 NET=${NET:-tcp}
 
 h2tcp () {

@@ -50,6 +50,7 @@
 #include <syscall.h>
 #endif
 
+#define PRIVILEGED_PORT_ONLY
 /* global variable: acceptor port */
 unsigned short tcpnal_acceptor_port = 988;
 
@@ -318,6 +319,41 @@ tcpnal_hello (int sockfd, ptl_nid_t *nid, int type, __u64 incarnation)
         return (0);
 }
 
+static int tcpnal_bindresvport(manager m, int sock) 
+{ 
+        struct sockaddr_in locaddr; 
+        int rc; 
+        int option = 1; 
+        
+        memset(&locaddr, 0, sizeof(locaddr)); 
+        locaddr.sin_family = AF_INET; 
+        locaddr.sin_addr.s_addr = INADDR_ANY;
+
+        if ((rc = setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option))) != 0) { 
+                perror ("Can't set SO_REUSEADDR for socket.\n"); 
+                return rc; 
+        } 
+
+        if (m->privileged_port != 0){
+                locaddr.sin_port = htons(m->privileged_port); 
+                rc = bind(sock, (struct sockaddr *)&locaddr, sizeof(locaddr));
+        } else {
+                int port = 1023;
+
+                do { 
+                        locaddr.sin_port = htons(port); 
+                        rc = bind(sock, (struct sockaddr *)&locaddr, sizeof(locaddr));
+                } while (errno == -EADDRINUSE && --port > 0);
+
+                if (rc == 0 && port > 0) 
+                        m->privileged_port = port;
+                else
+                        printf ("Can't assign privileged port for socket.%d, %d\n", port, rc);
+        }
+
+        return rc;
+}
+
 /* Function:  force_tcp_connection
  * Arguments: t: tcpnal
  *            dest: portals endpoint for the connection
@@ -346,6 +382,7 @@ connection force_tcp_connection(manager m,
     if (!conn) {
         int fd;
         int option;
+        int rc;
         ptl_nid_t peernid = PTL_NID_ANY;
 
         bzero((char *) &addr, sizeof(addr));
@@ -356,7 +393,15 @@ connection force_tcp_connection(manager m,
         if ((fd = socket(AF_INET, SOCK_STREAM, 0)) < 0) { 
             perror("tcpnal socket failed");
             exit(-1);
+        } 
+#ifdef PRIVILEGED_PORT_ONLY
+        rc = tcpnal_bindresvport(m, fd);
+        if (rc < 0) {
+                perror("Can't bind to privileged port.\n");
+                exit(-1);
         }
+#endif
+
         if (connect(fd, (struct sockaddr *)&addr,
                     sizeof(struct sockaddr_in))) {
             perror("tcpnal connect");
@@ -459,6 +504,7 @@ manager init_connections(unsigned short pid,
     m->connections = hash_create_table(compare_connection,connection_key);
     m->handler = input;
     m->handler_arg = a;
+    m->privileged_port = 0;
     pthread_mutex_init(&m->conn_lock, 0);
 
     if (bind_socket(m,pid))

@@ -323,6 +323,7 @@ test_14() {
     facet_failover mds
     # expect failover to fail
     df $MOUNT && return 1
+    sleep 1
 
     # first 25 files shouuld have been 
     # replayed 
@@ -341,6 +342,7 @@ test_15() {
 
     facet_failover mds
     df $MOUNT || return 1
+    sleep 1
 
     unlinkmany $MOUNT1/$tfile- 25 || return 2
 
@@ -359,6 +361,7 @@ test_16() {
     sleep $TIMEOUT
     facet_failover mds
     df $MOUNT || return 1
+    sleep 1
 
     unlinkmany $MOUNT1/$tfile- 25 || return 2
 
@@ -380,6 +383,7 @@ test_17() {
     sleep $TIMEOUT
     facet_failover ost
     df $MOUNT || return 1
+    sleep 1
 
     unlinkmany $MOUNT1/$tfile- 25 || return 2
 
@@ -415,7 +419,9 @@ run_test 18 "ldlm_handle_enqueue succeeds on evicted export (3822)"
 
 if [ "$ONLY" != "setup" ]; then
 	equals_msg test complete, cleaning up
-	SLEEP=$((`date +%s` - $NOW))
-	[ $SLEEP -lt $TIMEOUT ] && sleep $SLEEP
+	if [ $NOW ]; then
+   	    SLEEP=$((`date +%s` - $NOW))
+	    [ $SLEEP -lt $TIMEOUT ] && sleep $SLEEP
+	fi
 	$CLEANUP
 fi
