@@ -170,6 +170,7 @@ static int mds_reint_create(struct mds_update_record *rec,
                 dchild->d_inode->i_uid = rec->ur_uid;
                 dchild->d_inode->i_gid = rec->ur_gid;
                 rep->ino = dchild->d_inode->i_ino;
+                rep->generation = dchild->d_inode->i_generation;
         }
 
 out_reint_create:

@@ -80,6 +80,16 @@ static inline int ext2_add_nondir(struct dentry *dentry, struct inode *inode)
 }
 
 /* methods */
+static int ll_find_inode(struct inode *inode, unsigned long ino, void *opaque)
+{
+        struct mds_rep *rep = (struct mds_rep *)opaque;
+
+        if (inode->i_generation != rep->generation)
+                return 0;
+
+        return 1;
+}
+
 static struct dentry *ll_lookup(struct inode * dir, struct dentry *dentry)
 {
         struct ptlrpc_request *request;
@@ -106,7 +116,7 @@ static struct dentry *ll_lookup(struct inode * dir, struct dentry *dentry)
                 return ERR_PTR(-abs(err)); 
         }
 
-        inode = iget4(dir->i_sb, ino, NULL, request->rq_rep.mds);
+        inode = iget4(dir->i_sb, ino, ll_find_inode, request->rq_rep.mds);
 
         ptlrpc_free_req(request);
         if (!inode) 
@@ -115,23 +125,6 @@ static struct dentry *ll_lookup(struct inode * dir, struct dentry *dentry)
  negative:
         d_add(dentry, inode);
         return NULL;
-}
-
-
-/*
- * NOTE! unlike strncmp, ext2_match returns 1 for success, 0 for failure.
- *
- * `len <= EXT2_NAME_LEN' is guaranteed by caller.
- * `de != NULL' is guaranteed by caller.
- */
-static inline int ext2_match (int len, const char * const name,
-                       struct ext2_dir_entry_2 * de)
-{
-        if (len != de->name_len)
-                return 0;
-        if (!de->inode)
-                return 0;
-        return !memcmp(name, de->name, len);
 }
 
 static struct inode *ll_create_node(struct inode *dir, const char *name, 
@@ -164,7 +157,7 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
         CDEBUG(D_INODE, "-- new_inode: objid %lld, ino %d, mode %o\n",
                rep->objid, rep->ino, rep->mode); 
 
-        inode = iget4(dir->i_sb, rep->ino, NULL, rep);
+        inode = iget4(dir->i_sb, rep->ino, ll_find_inode, rep);
         if (IS_ERR(inode)) {
                 CERROR("new_inode -fatal:  %ld\n", PTR_ERR(inode));
                 inode = ERR_PTR(-EIO);
@@ -174,7 +167,7 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
         }
 
         if (!list_empty(&inode->i_dentry)) {
-                CERROR("new_inode -fatal: aliases %d, ct %d lnk %d\n", 
+                CERROR("new_inode -fatal: inode %d, ct %d lnk %d\n", 
                        rep->ino, atomic_read(&inode->i_count), 
                        inode->i_nlink);
                 iput(inode);
@@ -417,7 +410,6 @@ static int ll_unlink(struct inode * dir, struct dentry *dentry)
         if (err) 
                 goto out;
 
-
         err = ext2_delete_entry (de, page);
         if (err)
                 goto out;
@@ -429,8 +421,7 @@ out:
         return err;
 }
 
-
-static int ll_rmdir (struct inode * dir, struct dentry *dentry)
+static int ll_rmdir(struct inode * dir, struct dentry *dentry)
 {
         struct inode * inode = dentry->d_inode;
         int err = -ENOTEMPTY;
