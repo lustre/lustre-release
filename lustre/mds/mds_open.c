@@ -54,7 +54,7 @@
  * mds_mfd_close - for force closing files when a client dies
  */
 
-/* 
+/*
  * MDS file data handling: file data holds a handle for a file opened
  * by a client.
  */
@@ -132,7 +132,7 @@ static void mds_free_filterdata(struct inode *inode)
         iput(inode);
 }
 
-/* Write access to a file: executors cause a negative count, 
+/* Write access to a file: executors cause a negative count,
  * writers a positive count.  The semaphore is needed to perform
  * a check for the sign and then increment or decrement atomically.
  *
@@ -243,7 +243,7 @@ static struct mds_file_data *mds_dentry_open(struct dentry *dentry,
         struct mds_body *body;
         int error;
         ENTRY;
-        
+
         mfd = mds_mfd_new();
         if (mfd == NULL) {
                 CERROR("mds: out of memory\n");
@@ -1012,7 +1012,7 @@ int mds_mfd_close(struct ptlrpc_request *req, struct obd_device *obd,
         if (last_orphan && unlink_orphan) {
                 LASSERT(rc == 0); /* mds_put_write_access must have succeeded */
 
-                CWARN("destroying orphan object %s\n", fidname);
+                CDEBUG(D_HA, "destroying orphan object %s\n", fidname);
 
                 /* Sadly, there is no easy way to save pending_child from
                  * mds_reint_unlink() into mfd, so we need to re-lookup,
