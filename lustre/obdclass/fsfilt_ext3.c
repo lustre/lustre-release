@@ -648,6 +648,10 @@ static struct fsfilt_operations fsfilt_ext3_ops = {
         fs_read_record:         fsfilt_ext3_read_record,
 };
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+
+#warning "fsfilt_ext3_init() and fsfilt_ext3_exit() aren't called on 2.6. MUST be fixed"
+
 static int __init fsfilt_ext3_init(void)
 {
         int rc;
@@ -690,3 +694,6 @@ MODULE_LICENSE("GPL");
 
 module_init(fsfilt_ext3_init);
 module_exit(fsfilt_ext3_exit);
+
+#endif
+
