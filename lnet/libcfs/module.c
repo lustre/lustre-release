@@ -62,10 +62,10 @@ static struct nal_cmd_handler nal_cmd[NAL_MAX_NR + 1];
 struct semaphore nal_cmd_sem;
 
 #ifdef PORTAL_DEBUG
-void
-kportal_assertion_failed (char *expr, char *file, char *func, int line)
+void kportal_assertion_failed(char *expr, char *file, const char *func,
+                              const int line)
 {
-        portals_debug_msg(0, D_EMERG, file, func, line, CDEBUG_STACK(),
+        portals_debug_msg(0, D_EMERG, file, func, line, CDEBUG_STACK,
                           "ASSERTION(%s) failed\n", expr);
         LBUG_WITH_LOC(file, func, line);
 }
@@ -429,6 +429,7 @@ static int kportal_ioctl(struct inode *inode, struct file *file,
                         return (-EINVAL);
 
                 err = PtlFailNid (*nip, data->ioc_nid, data->ioc_count);
+                kportal_put_ni (data->ioc_nal);
                 break;
         }
 

@@ -106,7 +106,7 @@ typedef unsigned long kqsw_csum_t;
 #define KQSW_TX_MAXCONTIG           	(1<<10)	/* largest payload that gets made contiguous on transmit */
 
 #define KQSW_NTXMSGS		     	8       /* # normal transmit messages */
-#define KQSW_NNBLK_TXMSGS		128     /* # reserved transmit messages if can't block */
+#define KQSW_NNBLK_TXMSGS		256     /* # reserved transmit messages if can't block */
 
 #define KQSW_NRXMSGS_LARGE           	64      /* # large receive buffers */
 #define KQSW_EP_ENVELOPES_LARGE       	128	/* # large ep envelopes */

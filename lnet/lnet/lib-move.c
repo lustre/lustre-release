@@ -544,7 +544,7 @@ get_new_msg (nal_cb_t *nal, lib_md_t *md)
         msg->send_ack = 0;
 
         msg->md = md;
-        msg->ev.arrival_time = get_cycles();
+        do_gettimeofday(&msg->ev.arrival_time);
         md->pending++;
         if (md->threshold != PTL_MD_THRESH_INF) {
                 LASSERT (md->threshold > 0);

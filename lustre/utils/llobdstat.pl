@@ -143,6 +143,7 @@ sub process_stats()
 			}
 		}
 		print "\n";
+		$| = 1;
 	}
 }
 

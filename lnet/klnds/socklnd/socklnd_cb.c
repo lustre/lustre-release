@@ -1372,21 +1372,17 @@ int ksocknal_scheduler (void *arg)
         int                nloops = 0;
         int                id = sched - ksocknal_data.ksnd_schedulers;
         char               name[16];
-#if (CONFIG_SMP && CPU_AFFINITY)
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-        int                cpu = cpu_logical_map(id % num_online_cpus());
-#else
-#warning "Take care of architecure specific logical APIC map"
-        int cpu = 1;    /* Have to change later. */
-#endif /* LINUX_VERSION_CODE */
-        
-        set_cpus_allowed (current, 1 << cpu);
-        id = cpu;
-#endif /* CONFIG_SMP && CPU_AFFINITY */
 
         snprintf (name, sizeof (name),"ksocknald[%d]", id);
         kportal_daemonize (name);
         kportal_blockallsigs ();
+
+#if (CONFIG_SMP && CPU_AFFINITY)
+        if ((cpu_online_map & (1 << id)) != 0)
+                current->cpus_allowed = (1 << id);
+        else
+                CERROR ("Can't set CPU affinity for %s\n", name);
+#endif /* CONFIG_SMP && CPU_AFFINITY */
         
         spin_lock_irqsave (&sched->kss_lock, flags);
 

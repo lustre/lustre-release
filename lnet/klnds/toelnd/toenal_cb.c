@@ -893,9 +893,10 @@ ktoenal_process_receive (ksock_conn_t *conn, long *irq_flags)
                                 spin_lock_irqsave (&ktoenal_data.ksnd_sched_lock, *irq_flags);
                                 goto get_fmb;   /* => go get a fwd msg buffer */
                         default:
-                                LBUG ();
+                                break;
                         }
                         /* Not Reached */
+                        LBUG ();
                 }
 
                 PROF_START(lib_parse);
@@ -934,10 +935,11 @@ ktoenal_process_receive (ksock_conn_t *conn, long *irq_flags)
                 goto out;                       /* (later) */
 
         default:
-                LBUG ();
+                break;
         }
 
         /* Not Reached */
+        LBUG ();
 
  out:
         spin_lock_irqsave (&ktoenal_data.ksnd_sched_lock, *irq_flags);

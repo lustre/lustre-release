@@ -124,7 +124,7 @@ static nal_t *kgmnal_init(int interface, ptl_pt_index_t ptl_size,
         return &kgmnal_api;
 }
 
-static void __exit
+static void /*__exit*/
 kgmnal_finalize(void)
 {
         struct list_head *tmp;

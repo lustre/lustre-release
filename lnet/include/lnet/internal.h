@@ -1,5 +1,3 @@
-/*
-*/
 #ifndef _P30_INTERNAL_H_
 #define _P30_INTERNAL_H_
 

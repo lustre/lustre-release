@@ -1,11 +1,14 @@
-/* ../include/config.h.in.  Generated automatically from configure.in by autoheader.  */
+/* portals/include/config.h.in.  Generated automatically from configure.in by autoheader.  */
 
-/* Define if you have the readline library (-lreadline).  */
-#undef HAVE_LIBREADLINE
+/* The number of bytes in a unsigned long long.  */
+#undef SIZEOF_UNSIGNED_LONG_LONG
 
 /* Name of package */
 #undef PACKAGE
 
 /* Version number of package */
 #undef VERSION
+
+/* IOCTL Buffer Size */
+#undef OBD_MAX_IOCTL_BUFFER
 

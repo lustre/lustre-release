@@ -573,8 +573,8 @@ int portals_debug_init(unsigned long bufsize)
         memset(debug_buf, 0, debug_size);
         debug_wrapped = 0;
 
-        printk(KERN_INFO "Portals: allocated %lu byte debug buffer at %p.\n",
-               bufsize, debug_buf);
+        //printk(KERN_INFO "Portals: allocated %lu byte debug buffer at %p.\n",
+               //bufsize, debug_buf);
         atomic_set(&debug_off_a, debug_off);
         notifier_chain_register(&panic_notifier_list, &lustre_panic_notifier);
         debug_size = bufsize;
@@ -634,9 +634,9 @@ int portals_debug_mark_buffer(char *text)
         if (debug_buf == NULL)
                 return -EINVAL;
 
-        CDEBUG(0, "*******************************************************************************\n");
+        CDEBUG(0, "********************************************************\n");
         CDEBUG(0, "DEBUG MARKER: %s\n", text);
-        CDEBUG(0, "*******************************************************************************\n");
+        CDEBUG(0, "********************************************************\n");
 
         return 0;
 }
@@ -674,8 +674,8 @@ __s32 portals_debug_copy_to_user(char *buf, unsigned long len)
 
 /* FIXME: I'm not very smart; someone smarter should make this better. */
 void
-portals_debug_msg (int subsys, int mask, char *file, char *fn, int line,
-                   unsigned long stack, const char *format, ...)
+portals_debug_msg(int subsys, int mask, char *file, const char *fn,
+                  const int line, unsigned long stack, const char *format, ...)
 {
         va_list       ap;
         unsigned long flags;
@@ -792,7 +792,7 @@ void portals_debug_set_level(unsigned int debug_level)
         portal_debug = debug_level;
 }
 
-void portals_run_lbug_upcall(char * file, char *fn, int line)
+void portals_run_lbug_upcall(char *file, const char *fn, const int line)
 {
         char *argv[6];
         char *envp[3];
@@ -805,7 +805,7 @@ void portals_run_lbug_upcall(char * file, char *fn, int line)
         argv[0] = portals_upcall;
         argv[1] = "LBUG";
         argv[2] = file;
-        argv[3] = fn;
+        argv[3] = (char *)fn;
         argv[4] = buf;
         argv[5] = NULL;
 
