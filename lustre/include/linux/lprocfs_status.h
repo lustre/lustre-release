@@ -49,6 +49,19 @@ struct lprocfs_static_vars {
 extern struct proc_dir_entry *proc_lustre_root;
 
 extern void lprocfs_init_vars(struct lprocfs_static_vars *var);
+extern void lprocfs_init_multi_vars(unsigned int idx, 
+                                    struct lprocfs_static_vars *var);
+
+#define LPROCFS_INIT_MULTI_VARS(array, size)                              \
+void lprocfs_init_multi_vars(unsigned int idx,                            \
+                             struct lprocfs_static_vars *x)               \
+{                                                                         \
+   struct lprocfs_static_vars *glob = (struct lprocfs_static_vars*)array; \
+   LASSERT(glob != 0);                                                    \
+   LASSERT(idx < (unsigned int)(size));                                   \
+   x->module_vars = glob[idx].module_vars;                                \
+   x->obd_vars = glob[idx].obd_vars;                                      \
+}                                                                         \
 
 #define LPROCFS_INIT_VARS(vclass, vinstance)           \
 void lprocfs_init_vars(struct lprocfs_static_vars *x)  \
