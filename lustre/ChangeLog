@@ -9,10 +9,17 @@ tbd
 	- avoid pinning large req buffer by copying for queued messages (989)
 	- add "uuid" to "lctl device" command to help upcalls (991)
 	- "open" RPCs with transnos would confuse recovery counters (1037)
+	- do proper endian conversion of all wire messages (288, 340, 891)
+	- remove OST bulk get LBUGs, fix ost_brw_write cleanup (1126)
+	- call waiting locks callback from LDLM recovery thread (1127, 1151)
+	- fix ptlrpc_connection leak in target_handle_connect (1174)
        * major user-visible changes
 	- fail out/fail over policy now controlled by the upcall (993)
        * protocol changes
 	- add OBD_PING to check server availability and failure (954)
+	- lustre messages are now sent in sending host order (288, 340, 891)
+	- add eadatalen to MDS getattr reply (340)
+	- OST read replies may contain second buffer, with per-page status (593)
 
 2003-03-11  Phil Schwan  <phil@clusterfs.com>
        * version v0_6
