@@ -749,6 +749,16 @@ static void __exit cleanup_obdclass(void)
         EXIT;
 }
 
+/* Check that we're building against the appropriate version of the Lustre
+ * kernel patch */
+#ifndef LUSTRE_KERNEL_VERSION
+# define LUSTRE_KERNEL_VERSION 1
+#endif
+
+#if (LUSTRE_KERNEL_VERSION != 1)
+# error Cannot continue: Your Lustre kernel patch is out of date
+#endif
+
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre Class Driver v1.0");
 MODULE_LICENSE("GPL");
