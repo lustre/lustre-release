@@ -107,20 +107,17 @@ static struct dentry *ll_iget_for_nfs(struct super_block *sb, unsigned long ino,
         if (IS_ERR(inode)) {
                 return ERR_PTR(PTR_ERR(inode));
         }
-        if (is_bad_inode(inode) 
-            || (generation && inode->i_generation != generation)
-            ){
+        if (is_bad_inode(inode) ||
+            (generation && inode->i_generation != generation)){
                 /* we didn't find the right inode.. */
-              CERROR(" Inode %lu, Bad count: %lu %d or version  %u %u\n",
-                        inode->i_ino, 
-                        (unsigned long)inode->i_nlink, 
-                        atomic_read(&inode->i_count), 
-                        inode->i_generation, 
-                        generation);
+                CERROR(" Inode %lu, Bad count: %lu %d or version  %u %u\n",
+                       inode->i_ino, (unsigned long)inode->i_nlink,
+                       atomic_read(&inode->i_count), inode->i_generation,
+                       generation);
                 iput(inode);
                 return ERR_PTR(-ESTALE);
         }
-        
+
         /* now to find a dentry.
          * If possible, get a well-connected one
          */
