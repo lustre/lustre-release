@@ -27,6 +27,7 @@
 #include <fcntl.h>
 #include <sys/socket.h>
 #include <sys/types.h>
+#include <sys/wait.h>
 #include <sys/stat.h>
 #include <stdio.h>
 #include <signal.h>
@@ -56,6 +57,7 @@ int connid = -1;
 char rawbuf[8192];
 char *buf = rawbuf;
 int max = 8192;
+int thread;
 
 #define IOCINIT(data)                                                   \
 do {                                                                    \
@@ -120,7 +122,19 @@ char * obdo_print(struct obdo *obd)
         return strdup(buf);
 }
 
-static int do_disconnect(const char *func)
+static char *cmdname(char *func)
+{
+        static char buf[512];
+
+        if (thread) {
+                sprintf(buf, "%s-%d", func, thread);
+                return buf;
+        }
+
+        return func;
+}
+
+static int do_disconnect(char *func)
 {
         struct obd_ioctl_data data;
         int rc;
@@ -132,10 +146,10 @@ static int do_disconnect(const char *func)
 
         rc = ioctl(fd, OBD_IOC_DISCONNECT , &data);
         if (rc < 0) {
-                fprintf(stderr, "error: %s: %x %s\n", func,
+                fprintf(stderr, "error: %s: %x %s\n", cmdname(func),
                         OBD_IOC_DISCONNECT, strerror(errno));
         } else {
-                printf("Disconnected connid %d\n", connid);
+                printf("%s: disconnected connid %d\n", cmdname(func), connid);
                 connid = -1;
         }
 
@@ -153,28 +167,28 @@ static int jt_device(int argc, char **argv)
 
         memset(&data, 0, sizeof(data));
         if ( argc != 2 ) {
-                fprintf(stderr, "usage: %s devno\n", argv[0]);
+                fprintf(stderr, "usage: %s devno\n", cmdname(argv[0]));
                 return -1;
         }
 
         data.ioc_dev = atoi(argv[1]);
 
         if (obd_ioctl_pack(&data, &buf, max)) {
-                fprintf(stderr, "error: %s: invalid ioctl\n", argv[0]);
+                fprintf(stderr, "error: %s: invalid ioctl\n", cmdname(argv[0]));
                 return -2;
         }
 
         if (fd == -1)
                 fd = open("/dev/obd", O_RDWR);
         if (fd == -1) {
-                fprintf(stderr, "error: %s: opening /dev/obd: %s\n", argv[0],
-                        strerror(errno));
+                fprintf(stderr, "error: %s: opening /dev/obd: %s\n",
+                        cmdname(argv[0]), strerror(errno));
                 return errno;
         }
 
         rc = ioctl(fd, OBD_IOC_DEVICE , buf);
         if (rc < 0)
-                fprintf(stderr, "error: %s: %x %s\n", argv[0],
+                fprintf(stderr, "error: %s: %x %s\n", cmdname(argv[0]),
                         OBD_IOC_DEVICE, strerror(rc = errno));
 
         return rc;
@@ -190,13 +204,13 @@ static int jt_connect(int argc, char **argv)
         do_disconnect(argv[0]);
 
         if (argc != 1) {
-                fprintf(stderr, "usage: %s\n", argv[0]);
+                fprintf(stderr, "usage: %s\n", cmdname(argv[0]));
                 return -1;
         }
 
         rc = ioctl(fd, OBD_IOC_CONNECT , &data);
         if (rc < 0)
-                fprintf(stderr, "error: %s: %x %s\n", argv[0],
+                fprintf(stderr, "error: %s: %x %s\n", cmdname(argv[0]),
                         OBD_IOC_CONNECT, strerror(rc = errno));
         else
                 connid = data.ioc_conn1;
@@ -212,13 +226,13 @@ static int jt_disconnect(int argc, char **argv)
         IOCINIT(data);
 
         if (argc != 1) {
-                fprintf(stderr, "usage: %s\n", argv[0]);
+                fprintf(stderr, "usage: %s\n", cmdname(argv[0]));
                 return -1;
         }
 
         rc = ioctl(fd, OBD_IOC_DISCONNECT , &data);
         if (rc < 0)
-                fprintf(stderr, "error: %s: %x %s\n", argv[0],
+                fprintf(stderr, "error: %s: %x %s\n", cmdname(argv[0]),
                         OBD_IOC_DISCONNECT, strerror(rc = errno));
         else
                 connid = -1;
@@ -228,12 +242,12 @@ static int jt_disconnect(int argc, char **argv)
 
 static int jt__device(int argc, char **argv)
 {
-        char *arg2[20];
+        char *arg2[3];
         int rc;
 
         if (argc < 3) {
                 fprintf(stderr, "usage: %s devno <command [args ...]>\n",
-                        argv[0]);
+                        cmdname(argv[0]));
                 return -1;
         }
 
@@ -249,12 +263,69 @@ static int jt__device(int argc, char **argv)
         }
 
         if (!rc)
-                rc = Parser_execarg(argc - 2, &argv[2], cmdlist);
+                rc = Parser_execarg(argc - 2, argv + 2, cmdlist);
 
         if (!rc) {
                 arg2[0] = "disconnect";
                 arg2[1] = NULL;
                 rc = jt_disconnect(1, arg2);
+        }
+
+        return rc;
+}
+
+static int jt__threads(int argc, char **argv)
+{
+        int threads;
+        int i, j;
+        int rc;
+
+        if (argc < 4) {
+                fprintf(stderr,
+                        "usage: %s numthreads devno <command [args ...]>\n",
+                        argv[0]);
+                return -1;
+        }
+
+        threads = atoi(argv[1]);
+        printf("%s: starting %d threads on device %s running %s\n",
+               argv[0], threads, argv[2], argv[3]);
+
+        for (i = 1; i <= threads; i++) {
+                rc = fork();
+                if (rc < 0) {
+                        fprintf(stderr, "error: %s: #%d - %s\n", argv[0], i,
+                                strerror(rc = errno));
+                        break;
+                } else if (rc == 0) {
+                        thread = i;
+                        argv[1] = "--device";
+                        return jt__device(argc - 1, argv + 1);
+                } else {
+                        printf("%s: thread %d (PID %d) started\n",
+                               argv[0], i, rc);
+                        rc = 0;
+                }
+        }
+
+        if (!thread) {
+                printf("\n");
+                for (j = 1; j < i; j++) {
+                        int status;
+                        int ret = wait(&status);
+
+                        if (ret < 0) {
+                                fprintf(stderr, "error: %s: wait - %s\n",
+                                        argv[0], strerror(errno));
+                                if (rc == 0)
+                                        rc = errno;
+                        } else if (WIFEXITED(status) == 0) {
+                                fprintf(stderr, "%s: PID %d had rc=%d\n",
+                                        argv[0], ret, WEXITSTATUS(status));
+                                if (rc == 0)
+                                        rc = WEXITSTATUS(status);
+                        }
+                }
         }
 
         return rc;
@@ -268,18 +339,19 @@ static int jt_detach(int argc, char **argv)
         IOCINIT(data);
 
         if (argc != 1) {
-                fprintf(stderr, "usage: %s\n", argv[0]);
+                fprintf(stderr, "usage: %s\n", cmdname(argv[0]));
                 return -1;
         }
 
         if (obd_ioctl_pack(&data, &buf, max)) {
-                fprintf(stderr, "error: %s: invalid ioctl\n", argv[0]);
+                fprintf(stderr, "error: %s: invalid ioctl\n", cmdname(argv[0]));
                 return -2;
         }
 
         rc = ioctl(fd, OBD_IOC_DETACH , buf);
         if (rc < 0)
-                fprintf(stderr, "error: %s: %s\n", argv[0], strerror(rc=errno));
+                fprintf(stderr, "error: %s: %s\n", cmdname(argv[0]),
+                        strerror(rc=errno));
 
         return rc;
 }
@@ -292,13 +364,14 @@ static int jt_cleanup(int argc, char **argv)
         IOCINIT(data);
 
         if (argc != 1) {
-                fprintf(stderr, "usage: %s\n", argv[0]);
+                fprintf(stderr, "usage: %s\n", cmdname(argv[0]));
                 return -1;
         }
 
         rc = ioctl(fd, OBD_IOC_CLEANUP , &data);
         if (rc < 0)
-                fprintf(stderr, "error: %s: %s\n", argv[0], strerror(rc=errno));
+                fprintf(stderr, "error: %s: %s\n", cmdname(argv[0]),
+                        strerror(rc=errno));
 
         return rc;
 }
@@ -311,7 +384,7 @@ static int jt_attach(int argc, char **argv)
         IOCINIT(data);
 
         if (argc != 2 && argc != 3) {
-                fprintf(stderr, "usage: %s type [data]\n", argv[0]);
+                fprintf(stderr, "usage: %s type [data]\n", cmdname(argv[0]));
                 return -1;
         }
 
@@ -322,20 +395,21 @@ static int jt_attach(int argc, char **argv)
                 data.ioc_inlbuf2 = argv[2];
         }
 
-        printf("attach len %d addr %p type %s data %s\n", data.ioc_len, buf,
+        printf("%s: len %d addr %p type %s data %s\n",
+               cmdname(argv[0]), data.ioc_len, buf,
                MKSTR(data.ioc_inlbuf1), MKSTR(data.ioc_inlbuf2));
 
         if (obd_ioctl_pack(&data, &buf, max)) {
-                fprintf(stderr, "error: %s: invalid ioctl\n", argv[0]);
+                fprintf(stderr, "error: %s: invalid ioctl\n", cmdname(argv[0]));
                 return -2;
         }
-        printf("attach len %d addr %p raw %p type %s data %s and %s\n",
-               data.ioc_len, buf, rawbuf,
+        printf("%s: len %d addr %p raw %p type %s data %s and %s\n",
+               cmdname(argv[0]), data.ioc_len, buf, rawbuf,
                MKSTR(data.ioc_inlbuf1), MKSTR(data.ioc_inlbuf2), &buf[516]);
 
         rc = ioctl(fd, OBD_IOC_ATTACH , buf);
         if (rc < 0)
-                fprintf(stderr, "error: %s: %x %s\n", argv[0],
+                fprintf(stderr, "error: %s: %x %s\n", cmdname(argv[0]),
                         OBD_IOC_ATTACH, strerror(rc = errno));
 
         return rc;
@@ -349,7 +423,8 @@ static int jt_setup(int argc, char **argv)
         IOCINIT(data);
 
         if ( argc > 3) {
-                fprintf(stderr, "usage: %s [device] [fstype]\n", argv[0]);
+                fprintf(stderr, "usage: %s [device] [fstype]\n",
+                        cmdname(argv[0]));
                 return -1;
         }
 
@@ -365,21 +440,22 @@ static int jt_setup(int argc, char **argv)
                 data.ioc_inlbuf2 = argv[2];
         }
 
-        printf("setup len %d addr %p device %s type %s\n", data.ioc_len, buf,
+        printf("%s: len %d addr %p device %s type %s\n",
+               cmdname(argv[0]), data.ioc_len, buf,
                MKSTR(data.ioc_inlbuf1), MKSTR(data.ioc_inlbuf2));
 
         if (obd_ioctl_pack(&data, &buf, max)) {
-                fprintf(stderr, "error: %s: invalid ioctl\n", argv[0]);
+                fprintf(stderr, "error: %s: invalid ioctl\n", cmdname(argv[0]));
                 return -2;
         }
-        printf("setup len %d addr %p raw %p device %s type %s\n", 
-               data.ioc_len, buf, rawbuf,
+        printf("%s: len %d addr %p raw %p device %s type %s\n",
+               cmdname(argv[0]), data.ioc_len, buf, rawbuf,
                MKSTR(data.ioc_inlbuf1), MKSTR(data.ioc_inlbuf2));
 
         rc = ioctl(fd, OBD_IOC_SETUP , buf);
         if (rc < 0)
-                fprintf(stderr, "error: %s: %x %s\n", argv[0],
-                        OBD_IOC_SETUP, strerror(rc = errno));
+                fprintf(stderr, "error: %s: %s\n", cmdname(argv[0]),
+                        strerror(rc = errno));
 
         return rc;
 }
@@ -395,7 +471,8 @@ static int jt_create(int argc, char **argv)
 
         IOCINIT(data);
         if (argc < 2 || argc > 4) {
-                fprintf(stderr, "usage: %s num [mode] [silent]\n", argv[0]);
+                fprintf(stderr, "usage: %s num [mode] [silent]\n",
+                        cmdname(argv[0]));
                 return -1;
         }
         num = strtoul(argv[1], NULL, 0);
@@ -409,17 +486,18 @@ static int jt_create(int argc, char **argv)
         if (argc > 3)
                 silent = strtoul(argv[3], NULL, 0);
 
-        printf("Creating %d obdos\n", num);
+        printf("%s: %d obdos\n", cmdname(argv[0]), num);
 
         for (i = 0 ; i < num ; i++) {
                 rc = ioctl(fd, OBD_IOC_CREATE , &data);
                 if (rc < 0) {
-                        fprintf(stderr, "error: %s: #%d - %x %s\n", argv[0],
-                                i, OBD_IOC_CREATE, strerror(rc = errno));
+                        fprintf(stderr, "error: %s: #%d - %s\n",
+                                cmdname(argv[0]), i, strerror(rc = errno));
                         break;
                 }
                 if (!silent)
-                        printf("created obdo %Ld\n", data.ioc_obdo1.o_id);
+                        printf("%s: #%Ld succeeded\n", cmdname(argv[0]),
+                               data.ioc_obdo1.o_id);
         }
         return rc;
 }
@@ -431,7 +509,7 @@ static int jt_setattr(int argc, char **argv)
 
         IOCINIT(data);
         if (argc != 2) {
-                fprintf(stderr, "usage: %s id mode\n", argv[0]);
+                fprintf(stderr, "usage: %s id mode\n", cmdname(argv[0]));
                 return -1;
         }
 
@@ -441,8 +519,8 @@ static int jt_setattr(int argc, char **argv)
 
         rc = ioctl(fd, OBD_IOC_SETATTR , &data);
         if (rc < 0)
-                fprintf(stderr, "error: %s: %x %s\n", argv[0],
-                        OBD_IOC_SETATTR, strerror(rc = errno));
+                fprintf(stderr, "error: %s: %s\n", cmdname(argv[0]),
+                        strerror(rc = errno));
 
         return rc;
 }
@@ -454,7 +532,7 @@ static int jt_destroy(int argc, char **argv)
 
         IOCINIT(data);
         if (argc != 2) {
-                fprintf(stderr, "usage: %s id\n", argv[0]);
+                fprintf(stderr, "usage: %s id\n", cmdname(argv[0]));
                 return -1;
         }
 
@@ -463,8 +541,8 @@ static int jt_destroy(int argc, char **argv)
 
         rc = ioctl(fd, OBD_IOC_DESTROY , &data);
         if (rc < 0)
-                fprintf(stderr, "error: %s: %x %s\n", argv[0],
-                        OBD_IOC_DESTROY, strerror(rc = errno));
+                fprintf(stderr, "error: %s: %s\n", cmdname(argv[0]),
+                        strerror(rc = errno));
 
         return rc;
 }
@@ -475,7 +553,7 @@ static int jt_getattr(int argc, char **argv)
         int rc;
 
         if (argc != 2) {
-                fprintf(stderr, "usage: %s id\n", argv[0]);
+                fprintf(stderr, "usage: %s id\n", cmdname(argv[0]));
                 return -1;
         }
 
@@ -484,14 +562,15 @@ static int jt_getattr(int argc, char **argv)
         /* to help obd filter */ 
         data.ioc_obdo1.o_mode = 0100644;
         data.ioc_obdo1.o_valid = 0xffffffff;
-        printf("getting attr for %Ld\n", data.ioc_obdo1.o_id);
+        printf("%s: object id %Ld\n", cmdname(argv[0]), data.ioc_obdo1.o_id);
 
         rc = ioctl(fd, OBD_IOC_GETATTR , &data);
         if (rc) {
-                fprintf(stderr, "error: %s: %s\n", argv[0], strerror(rc=errno));
+                fprintf(stderr, "error: %s: %s\n", cmdname(argv[0]),
+                        strerror(rc=errno));
         } else {
-                printf("attr obdo %Ld, mode %o\n", data.ioc_obdo1.o_id,
-                       data.ioc_obdo1.o_mode);
+                printf("%s: object id %Ld, mode %o\n", cmdname(argv[0]),
+                       data.ioc_obdo1.o_id, data.ioc_obdo1.o_mode);
         }
         return rc;
 }
@@ -505,7 +584,7 @@ static int jt_test_getattr(int argc, char **argv)
         int rc;
 
         if (argc != 2 && argc != 3) {
-                fprintf(stderr, "usage: %s count [silent]\n", argv[0]);
+                fprintf(stderr, "usage: %s count [silent]\n", cmdname(argv[0]));
                 return -1;
         }
 
@@ -521,17 +600,17 @@ static int jt_test_getattr(int argc, char **argv)
         data.ioc_obdo1.o_valid = 0xffffffff;
         data.ioc_obdo1.o_id = 2;
         gettimeofday(&start, NULL);
-        printf("getting %d attrs (testing only): %s", count,
+        printf("%s: %d attrs (testing only): %s", cmdname(argv[0]), count,
                ctime(&start.tv_sec));
 
         for (i = 0 ; i < count; i++) {
                 rc = ioctl(fd, OBD_IOC_GETATTR , &data);
                 if (rc) {
-                        fprintf(stderr, "error: %s: #%d - %s\n", argv[0], i,
-                                strerror(rc = errno));
+                        fprintf(stderr, "error: %s: #%d - %s\n",
+                                cmdname(argv[0]), i, strerror(rc = errno));
                         break;
                 } else if (!silent) {
-                        printf("attr number %d\n", i);
+                        printf("%s: got attr #%d\n", cmdname(argv[0]), i);
                 }
         }
         if (!rc) {
@@ -543,8 +622,9 @@ static int jt_test_getattr(int argc, char **argv)
                 diff = ((double)(end.tv_sec - start.tv_sec) +
                         (double)(end.tv_usec - start.tv_usec) / 1000000);
 
-                printf("got %d attrs in %gs (%g attr/s): %s", i,
-                       diff, (double)i / diff, ctime(&end.tv_sec));
+                printf("%s: %d attrs in %.4gs (%.4g attr/s): %s",
+                       cmdname(argv[0]), i, diff, (double)i / diff,
+                       ctime(&end.tv_sec));
         }
         return rc;
 }
@@ -561,8 +641,9 @@ static int jt_test_brw(int argc, char **argv)
         int rc;
 
         if (argc < 2 || argc > 6) {
-                fprintf(stderr, "usage: \n"
-                        "%s count [write [silent [pages [obdos]]]]\n", argv[0]);
+                fprintf(stderr,
+                        "usage: %s count [write [silent [pages [obdos]]]]\n",
+                        cmdname(argv[0]));
                 return -1;
         }
 
@@ -589,7 +670,7 @@ static int jt_test_brw(int argc, char **argv)
 
         if (obdos != 1 && obdos != 2) {
                 fprintf(stderr, "error: %s: only 1 or 2 obdos supported\n",
-                        argv[0]);
+                        cmdname(argv[0]));
                 return -2;
         }
 
@@ -598,7 +679,7 @@ static int jt_test_brw(int argc, char **argv)
         bulk = calloc(obdos, len);
         if (!bulk) {
                 fprintf(stderr, "error: %s: no memory allocating %dx%d pages\n",
-                        argv[0], obdos, pages);
+                        cmdname(argv[0]), obdos, pages);
                 return -2;
         }
         IOCINIT(data);
@@ -615,9 +696,9 @@ static int jt_test_brw(int argc, char **argv)
         }
 
         gettimeofday(&start, NULL);
-        printf("%s %d (%dx%d pages) (testing only): %s",
-               write ? "writing" : "reading", count, obdos, pages,
-               ctime(&start.tv_sec));
+        printf("%s: %s %d (%dx%d pages) (testing only): %s",
+               cmdname(argv[0]), write ? "writing" : "reading",
+               count, obdos, pages, ctime(&start.tv_sec));
 
         /*
          * We will put in the start time (and loop count inside the loop)
@@ -639,12 +720,13 @@ static int jt_test_brw(int argc, char **argv)
 
                 rc = ioctl(fd, rw, &data);
                 if (rc) {
-                        fprintf(stderr, "error: %s: #%d - %s on %s\n", argv[0],
-                                i, strerror(rc = errno),
+                        fprintf(stderr, "error: %s: #%d - %s on %s\n",
+                                cmdname(argv[0]), i, strerror(rc = errno),
                                 write ? "write" : "read");
                         break;
                 } else if (!silent)
-                        printf("%s number %d\n", write ? "write" : "read", i);
+                        printf("%s: %s number %d\n", cmdname(argv[0]),
+                               write ? "write" : "read", i);
         }
 
         free(bulk);
@@ -658,9 +740,10 @@ static int jt_test_brw(int argc, char **argv)
                 diff = ((double)(end.tv_sec - start.tv_sec) +
                         (double)(end.tv_usec - start.tv_usec) / 1000000);
 
-                printf("%s %dx%dx%d pages in %gs (%g pg/s): %s",
-                       write ? "wrote" : "read", obdos, pages, i, diff,
-                       (double)obdos * i * pages / diff, ctime(&end.tv_sec));
+                printf("%s: %s %dx%dx%d pages in %.4gs (%.4g pg/s): %s",
+                       cmdname(argv[0]), write ? "wrote" : "read", obdos,
+                       pages, i, diff, (double)obdos * i * pages / diff,
+                       ctime(&end.tv_sec));
         }
         return rc;
 }
@@ -672,19 +755,21 @@ static int jt_test_ldlm(int argc, char **argv)
 
         IOCINIT(data);
         if (argc != 1) {
-                fprintf(stderr, "usage: %s\n", argv[0]);
+                fprintf(stderr, "usage: %s\n", cmdname(argv[0]));
                 return 1;
         }
 
         rc = ioctl(fd, IOC_LDLM_TEST, &data);
         if (rc)
-                fprintf(stderr, "error: %s: test failed: %s\n", argv[0],
-                        strerror(rc = errno));
+                fprintf(stderr, "error: %s: test failed: %s\n",
+                        cmdname(argv[0]), strerror(rc = errno));
         return rc;
 }
 
 command_t cmdlist[] = {
-        {"--device", jt__device, 0, "device <devno> <command [args ...]>"},
+        {"--device", jt__device, 0, "--device <devno> <command [args ...]>"},
+        {"--threads", jt__threads, 0,
+                "--threads <threads> <devno> <command [args ...]>"},
         {"device", jt_device, 0, "set current device (args device no)"},
         {"attach", jt_attach, 0, "name the type of device (args: type data"},
         {"setup", jt_setup, 0, "setup device (args: <blkdev> [data]"},
@@ -710,7 +795,6 @@ command_t cmdlist[] = {
 static void signal_server(int sig)
 {
         if (sig == SIGINT) { 
-                fprintf(stderr,"\nDisconnecting any existing connections...\n");
                 do_disconnect("sigint");
                 exit(1);
         }
@@ -728,7 +812,7 @@ int main(int argc, char **argv)
 
 
         if (argc > 1) {
-                rc = Parser_execarg(argc - 1, &argv[1], cmdlist);
+                rc = Parser_execarg(argc - 1, argv + 1, cmdlist);
         } else {
                 Parser_init("obdctl > ", cmdlist);
                 Parser_commands();
