@@ -83,6 +83,7 @@ static int filter_direct_io(int rw, struct dentry *dchild, struct kiobuf *iobuf,
                 GOTO(cleanup, rc);
         cleanup_phase = 2;
 
+        down(&exp->exp_obd->u.filter.fo_alloc_lock);
         for (i = 0, cr = created, b = iobuf->blocks; i < iobuf->nr_pages; i++){
                 page = iobuf->maplist[i];
 
@@ -90,12 +91,14 @@ static int filter_direct_io(int rw, struct dentry *dchild, struct kiobuf *iobuf,
                 if (rc) {
                         CERROR("ino %lu, blk %lu cr %u create %d: rc %d\n",
                                inode->i_ino, *b, *cr, create, rc);
+                        up(&exp->exp_obd->u.filter.fo_alloc_lock);
                         GOTO(cleanup, rc);
                 }
 
                 b += blocks_per_page;
                 cr += blocks_per_page;
         }
+        up(&exp->exp_obd->u.filter.fo_alloc_lock);
 
         if (attr->ia_size > inode->i_size)
                 attr->ia_valid |= ATTR_SIZE;
@@ -146,7 +149,7 @@ cleanup:
         case 2:
                 unlock_kiovec(1, &iobuf);
         case 1:
-                OBD_FREE(created, sizeof(*created) * 
+                OBD_FREE(created, sizeof(*created) *
                          iobuf->nr_pages*blocks_per_page);
         case 0:
                 if (cleanup_phase == 3)
@@ -213,7 +216,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
         }
 
         push_ctxt(&saved, &obd->obd_ctxt, NULL);
-        cleanup_phase = 2; 
+        cleanup_phase = 2;
 
         down(&inode->i_sem);
         oti->oti_handle = fsfilt_brw_start(obd, objcount, &fso, niocount, oti);
