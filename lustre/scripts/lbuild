@@ -302,7 +302,7 @@ prep_build()
 	-e "s/@KERNEL_SOURCE@/$KERNEL/g" \
 	-e "s/@LUSTRE_SOURCE@/${LUSTRE##*/}/g" \
 	-e "s/@LUSTRE_TARGET@/$TARGET/g" \
-	-e "s/@CONFIGURE_FLAGS@/$CONFIGURE_FLAGS/g" \
+	-e "s#@CONFIGURE_FLAGS@#$CONFIGURE_FLAGS#g" \
 	-e "s/@BASE_ARCHS@/$BASE_ARCHS/g" \
 	-e "s/@BIGMEM_ARCHS@/$BIGMEM_ARCHS/g" \
 	-e "s/@BOOT_ARCHS@/$BOOT_ARCHS/g" \
