@@ -356,61 +356,46 @@ static int ldlm_iocontrol(long cmd, struct obd_conn *conn, int len, void *karg,
         return err;
 }
 
+#define LDLM_NUM_THREADS        8
+
 static int ldlm_setup(struct obd_device *obddev, obd_count len, void *buf)
 {
         struct ldlm_obd *ldlm = &obddev->u.ldlm;
-        int err;
+        int rc;
+        int i;
         ENTRY;
 
+        MOD_INC_USE_COUNT;
         ldlm->ldlm_service =
                 ptlrpc_init_svc(64 * 1024, LDLM_REQUEST_PORTAL,
                                 LDLM_REPLY_PORTAL, "self", lustre_handle);
-        if (!ldlm->ldlm_service)
+        if (!ldlm->ldlm_service) {
                 LBUG();
-
-        err = ptlrpc_start_thread(obddev, ldlm->ldlm_service, "lustre_dlm");
-        if (err) {
-                CERROR("cannot start thread\n");
-                LBUG();
-        }
-        err = ptlrpc_start_thread(obddev, ldlm->ldlm_service, "lustre_dlm");
-        if (err) {
-                CERROR("cannot start thread\n");
-                LBUG();
-        }
-        err = ptlrpc_start_thread(obddev, ldlm->ldlm_service, "lustre_dlm");
-        if (err) {
-                CERROR("cannot start thread\n");
-                LBUG();
-        }
-        err = ptlrpc_start_thread(obddev, ldlm->ldlm_service, "lustre_dlm");
-        if (err) {
-                CERROR("cannot start thread\n");
-                LBUG();
-        }
-        err = ptlrpc_start_thread(obddev, ldlm->ldlm_service, "lustre_dlm");
-        if (err) {
-                CERROR("cannot start thread\n");
-                LBUG();
-        }
-        err = ptlrpc_start_thread(obddev, ldlm->ldlm_service, "lustre_dlm");
-        if (err) {
-                CERROR("cannot start thread\n");
-                LBUG();
-        }
-        err = ptlrpc_start_thread(obddev, ldlm->ldlm_service, "lustre_dlm");
-        if (err) {
-                CERROR("cannot start thread\n");
-                LBUG();
-        }
-        err = ptlrpc_start_thread(obddev, ldlm->ldlm_service, "lustre_dlm");
-        if (err) {
-                CERROR("cannot start thread\n");
-                LBUG();
+                GOTO(out_dec, rc = -ENOMEM);
         }
 
-        MOD_INC_USE_COUNT;
+        for (i = 0; i < LDLM_NUM_THREADS; i++) {
+                rc = ptlrpc_start_thread(obddev, ldlm->ldlm_service,
+                                         "lustre_dlm");
+                /* XXX We could just continue if we had started at least
+                 *     a few threads here.
+                 */
+                if (rc) {
+                        CERROR("cannot start LDLM thread #%d: rc %d\n", i, rc);
+                        LBUG();
+                        GOTO(out_thread, rc);
+                }
+        }
+
         RETURN(0);
+
+out_thread:
+        ptlrpc_stop_all_threads(ldlm->ldlm_service);
+        rpc_unregister_service(ldlm->ldlm_service);
+        OBD_FREE(ldlm->ldlm_service, sizeof(*ldlm->ldlm_service));
+out_dec:
+        MOD_DEC_USE_COUNT;
+        return rc;
 }
 
 static int ldlm_cleanup(struct obd_device *obddev)

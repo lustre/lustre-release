@@ -347,7 +347,7 @@ static inline void ext2_set_de_type(ext2_dirent *de, struct inode *inode)
 }
 
 int
-new_ll_readdir (struct file * filp, void * dirent, filldir_t filldir)
+ll_readdir (struct file * filp, void * dirent, filldir_t filldir)
 {
         loff_t pos = filp->f_pos;
         struct inode *inode = filp->f_dentry->d_inode;
@@ -710,5 +710,5 @@ not_empty:
 
 struct file_operations ll_dir_operations = {
         read: generic_read_dir,
-        readdir: new_ll_readdir
+        readdir: ll_readdir
 };
