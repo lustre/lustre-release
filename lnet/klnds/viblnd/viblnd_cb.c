@@ -2755,7 +2755,8 @@ kibnal_arp_callback (ibat_stat_t arprc, ibat_arp_data_t *arp_data, void *arg)
         kib_peer_t      *peer = conn->ibc_peer;
         unsigned long    flags;
 
-        CDEBUG(D_NET, "Arp "LPX64"@%u.%u.%u.%u rc %d LID %s PATH %s\n",
+        CDEBUG(arprc == ibat_stat_ok ? D_NET : D_ERROR,
+               "Arp "LPX64"@%u.%u.%u.%u rc %d LID %s PATH %s\n",
                peer->ibp_nid, HIPQUAD(peer->ibp_ip), arprc,
                (arp_data->mask & IBAT_LID_VALID) == 0 ? "invalid" : "valid",
                (arp_data->mask & IBAT_PRI_PATH_VALID) == 0 ? "invalid" : "valid");
@@ -2822,6 +2823,7 @@ kibnal_arp_peer (kib_peer_t *peer)
                 
         case ibat_stat_ok:
                 /* Immediate return (ARP cache hit) == no callback. */
+                conn->ibc_connvars->cv_arprc = ibat_stat_ok;
                 kibnal_send_connreq(conn);
                 kibnal_conn_decref(conn);
                 break;
