@@ -1,0 +1,25 @@
+BUILDING LUSTRE
+---------------
+
+To build the lustre obd module, you must first build portals.  
+
+Portals is available from the same CVS repository of the lustre
+project module portals, see http://www.lustre.org
+
+To build:
+  sh autogen.sh
+  ./configure --enable-linuxdir=/usr/src/linux --enable-portalsdir=/usr/src/portals
+  make
+
+To play with Lustre Lite:
+  cd obd/tests
+  sh llmount.sh
+
+To clean up:
+  sh llmountcleanup.sh
+
+Feedback: 
+  lustre-devel@lists.sf.net
+  lustre-discuss@lists.sf.net
+
+- Peter -
