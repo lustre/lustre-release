@@ -179,6 +179,7 @@ command_t cmdlist[] = {
          "usage: lov_set_osc_active <OSC UUID> <1|0 (active|inactive)>"},
         {"newconn", jt_obd_newconn, 0, "newconn <olduuid> [newuuid]"},
         {"failconn", jt_obd_failconn, 0, "failconn <uuid>"},
+        {"lookup", jt_obd_mdc_lookup, 0, "usage: lookup <directory> <file>"},
 
         /* Debug commands */
         {"======== debug =========", jt_noop, 0, "debug"},
