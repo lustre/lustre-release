@@ -275,8 +275,10 @@ int ptlrpc_pinger_add_import(struct obd_import *imp)
         list_add_tail(&imp->imp_pinger_chain, &pinger_imports);
         class_import_get(imp);
 
+#ifdef ENABLE_PINGER
         pinger_thread->t_flags |= SVC_EVENT;
         wake_up(&pinger_thread->t_ctl_waitq);
+#endif
         up(&pinger_sem);
 
         RETURN(0);
