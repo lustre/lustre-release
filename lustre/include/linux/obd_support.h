@@ -6,6 +6,14 @@
 #define MIN(a,b) (((a)<(b)) ? (a): (b))
 #define MAX(a,b) (((a)>(b)) ? (a): (b))
 
+#define obd_unlock_page(page)   do {    if (PageLocked(page)) { \
+                        UnlockPage(page);\
+                } else {\
+                        printk("file %s, line %d: expecting locked page\n",\
+                               __FILE__, __LINE__); \
+                }                       \
+} while(0)
+
 /*
  * Debug code
  */

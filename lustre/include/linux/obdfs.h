@@ -15,13 +15,6 @@
 #include <linux/list.h>
 
 
-#define obd_unlock_page(page)   do {    if (PageLocked(page)) { \
-                        UnlockPage(page);\
-                } else {\
-                        printk("file %s, line %d: expecting locked page\n",\
-                               __FILE__, __LINE__); \
-                }                       \
-} while(0)
 
 struct obdfs_pgrq {
         struct list_head         rq_plist;      /* linked list of req's */
