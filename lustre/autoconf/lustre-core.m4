@@ -354,7 +354,6 @@ AC_MSG_RESULT([$enable_smfs])
 AC_DEFUN([LC_PROG_LINUX],
 [LC_CONFIG_BACKINGFS
 LC_CONFIG_PINGER
-LC_CONFIG_OBD_BUFFER_SIZE
 LC_CONFIG_SNAPFS
 LC_CONFIG_SMFS
 
@@ -377,8 +376,10 @@ AC_DEFUN([LC_CONFIG_LIBLUSTRE],
 AC_ARG_ENABLE([liblustre],
 	AC_HELP_STRING([--disable-liblustre],
 			[disable building of Lustre library]),
-	[],[enable_liblustre=$enable_libsysio])
+	[],[enable_liblustre=$with_sysio])
 AC_MSG_RESULT([$enable_liblustre])
+# only build sysio if liblustre is built
+with_sysio="$enable_liblustre"
 
 AC_MSG_CHECKING([whether to build mpitests])
 AC_ARG_ENABLE([mpitests],
@@ -394,7 +395,9 @@ AC_MSG_RESULT([$enable_mpitests])
 # other configure checks
 #
 AC_DEFUN([LC_CONFIGURE],
-[# include/liblustre.h
+[LC_CONFIG_OBD_BUFFER_SIZE
+
+# include/liblustre.h
 AC_CHECK_HEADERS([asm/page.h sys/user.h stdint.h])
 
 # liblustre/llite_lib.h
