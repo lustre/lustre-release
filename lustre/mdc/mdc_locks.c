@@ -464,7 +464,11 @@ int mdc_intent_lock(struct obd_export *exp, struct ll_uctxt *uctxt,
                                sizeof(lockh));
                         it->d.lustre.it_lock_mode = mode;
                 }
-                RETURN(rc);
+
+                /* Only return failure if it was not GETATTR by cfid
+                   (from inode_revalidate) */
+                if (rc || name)
+                        RETURN(rc);
         }
 
         /* lookup_it may be called only after revalidate_it has run, because
