@@ -710,9 +710,10 @@ def is_block(path):
 
 # build fs according to type
 # fixme: dangerous
-def mkfs(dev, devsize, fstype, jsize, mkfsoptions, isblock=1):
+def mkfs(dev, devsize, fstype, jsize, isize, mkfsoptions, isblock=1):
     block_cnt = ''
     jopt = ''
+    iopt = ''
     if devsize:
         if devsize < 8000:
             panic("size of filesystem on '%s' must be larger than 8MB, but is set to %s"%
@@ -723,6 +724,7 @@ def mkfs(dev, devsize, fstype, jsize, mkfsoptions, isblock=1):
     if fstype in ('ext3', 'extN'):
         # ext3 journal size is in megabytes
         if jsize:  jopt = "-J size=%d" %(jsize,)
+        if isize:  iopt = "-I %d" %(isize,)
         mkfs = 'mkfs.ext2 -j -b 4096 '
         if not isblock or config.force:
             mkfs = mkfs + ' -F '
@@ -737,7 +739,7 @@ def mkfs(dev, devsize, fstype, jsize, mkfsoptions, isblock=1):
         mkfs = mkfs + ' ' + config.mkfsoptions
     if mkfsoptions != None:
         mkfs = mkfs + ' ' + mkfsoptions
-    (ret, out) = run (mkfs, jopt, dev, block_cnt)
+    (ret, out) = run (mkfs, jopt, iopt, dev, block_cnt)
     if ret:
         panic("Unable to build fs:", dev, string.join(out))
     # enable hash tree indexing on fsswe
@@ -773,7 +775,7 @@ def find_loop(file):
     return ''
 
 # create file if necessary and assign the first free loop device
-def init_loop(file, size, fstype, journal_size, mkfsoptions, reformat):
+def init_loop(file, size, fstype, journal_size, inode_size, mkfsoptions, reformat):
     dev = find_loop(file)
     if dev:
         print 'WARNING file:', file, 'already mapped to', dev
@@ -785,7 +787,7 @@ def init_loop(file, size, fstype, journal_size, mkfsoptions, reformat):
                                                                          file))
         if ret:
             panic("Unable to create backing store:", file)
-        mkfs(file, size, fstype, journal_size, mkfsoptions, isblock=0)
+        mkfs(file, size, fstype, journal_size, inode_size, mkfsoptions, isblock=0)
 
     loop = loop_base()
     # find next free loop
@@ -818,13 +820,14 @@ def need_format(fstype, dev):
 
 # initialize a block device if needed
 def block_dev(dev, size, fstype, reformat, autoformat, journal_size,
-              mkfsoptions):
+              inode_size, mkfsoptions):
     if config.noexec: return dev
     if not is_block(dev):
-        dev = init_loop(dev, size, fstype, journal_size, mkfsoptions, reformat)
+        dev = init_loop(dev, size, fstype, journal_size, inode_size,
+                        mkfsoptions, reformat)
     elif reformat or (need_format(fstype, dev) and autoformat == 'yes'):
-        mkfs(dev, size, fstype, journal_size, mkfsoptions, isblock=0)
-
+        mkfs(dev, size, fstype, journal_size, inode_size, mkfsoptions,
+             isblock=0)
 #    else:
 #        panic("device:", dev,
 #              "not prepared, and autoformat is not set.\n",
@@ -1255,14 +1258,12 @@ class LDLM(Module):
         return
 
 class LOV(Module):
-    def __init__(self, db, uuid, fs_name, name_override = None):
+    def __init__(self, db, uuid, fs_name, name_override = None, config_only = None):
         Module.__init__(self, 'LOV', db)
         if name_override != None:
             self.name = "lov_%s" % name_override
         self.add_lustre_module('lov', 'lov')
         self.mds_uuid = self.db.get_first_ref('mds')
-        mds= self.db.lookup(self.mds_uuid)
-        self.mds_name = mds.getName()
         self.stripe_sz = self.db.get_val_int('stripesize', 65536)
         self.stripe_off = self.db.get_val_int('stripeoffset', 0)
         self.pattern = self.db.get_val_int('stripepattern', 0)
@@ -1272,6 +1273,12 @@ class LOV(Module):
         self.desc_uuid = self.uuid
         self.uuid = generate_client_uuid(self.name)
         self.fs_name = fs_name
+        if config_only:
+            self.config_only = 1
+            return
+        self.config_only = None
+        mds= self.db.lookup(self.mds_uuid)
+        self.mds_name = mds.getName()
         for obd_uuid in self.devlist:
             obd = self.db.lookup(obd_uuid)
             osc = get_osc(obd, self.uuid, fs_name)
@@ -1283,6 +1290,9 @@ class LOV(Module):
     def prepare(self):
         if is_prepared(self.name):
             return
+        if self.config_only:
+            panic("Can't prepare config_only LOV ", self.name)
+            
         for osc in self.osclist:
             try:
                 # Only ignore connect failures with --force, which
@@ -1301,16 +1311,22 @@ class LOV(Module):
     def cleanup(self):
         if is_prepared(self.name):
             Module.cleanup(self)
+        if self.config_only:
+            panic("Can't clean up config_only LOV ", self.name)
         for osc in self.osclist:
             osc.cleanup()
 
     def load_module(self):
+        if self.config_only:
+            panic("Can't load modules for config_only LOV ", self.name)
         for osc in self.osclist:
             osc.load_module()
             break
         Module.load_module(self)
 
     def cleanup_module(self):
+        if self.config_only:
+            panic("Can't cleanup modules for config_only LOV ", self.name)
         Module.cleanup_module(self)
         for osc in self.osclist:
             osc.cleanup_module()
@@ -1346,6 +1362,31 @@ class MDSDEV(Module):
         if self.active and config.group and config.group != ost.get_val('group'):
             self.active = 0
 
+        self.inode_size = self.db.get_val_int('inodesize', 0)
+        if self.inode_size == 0:
+            # find the LOV for this MDS
+            lovconfig_uuid = mds.get_first_ref('lovconfig')
+            if not lovconfig_uuid:
+                panic("No LOV config found for MDS ", mds.name)
+            lovconfig = mds.lookup(lovconfig_uuid)
+            lov_uuid = lovconfig.get_first_ref('lov')
+            if not lov_uuid:
+                panic("No LOV found for lovconfig ", lovconfig.name)
+            lov = LOV(self.db.lookup(lov_uuid), lov_uuid, 'FS_name', config_only = 1)
+
+            # default stripe count controls default inode_size
+            stripe_count = lov.stripe_cnt
+            if stripe_count > 77:
+                self.inode_size = 4096
+            elif stripe_count > 35:
+                self.inode_size = 2048
+            elif stripe_count > 13:
+                self.inode_size = 1024
+            elif stripe_count > 3:
+                self.inode_size = 512
+            else:
+                self.inode_size = 256
+
         self.target_dev_uuid = self.uuid
         self.uuid = target_uuid
         # modules
@@ -1355,7 +1396,6 @@ class MDSDEV(Module):
         self.add_lustre_module('mds', 'mds')
         if self.fstype:
             self.add_lustre_module('lvfs', 'fsfilt_%s' % (self.fstype))
-            
 
     def load_module(self):
         if self.active:
@@ -1374,7 +1414,8 @@ class MDSDEV(Module):
         run_acceptors()
         # never reformat here
         blkdev = block_dev(self.devpath, self.size, self.fstype, 0,
-                           self.format, self.journal_size, self.mkfsoptions)
+                           self.format, self.journal_size, self.inode_size,
+                           self.mkfsoptions)
         if not is_prepared('MDT'):
             lctl.newdev("mdt", 'MDT', 'MDT_UUID', setup ="")
         try: 
@@ -1393,7 +1434,7 @@ class MDSDEV(Module):
         self.info(self.devpath, self.fstype, self.format)
         blkdev = block_dev(self.devpath, self.size, self.fstype,
                            config.reformat, self.format, self.journal_size,
-                           self.mkfsoptions)
+                           self.inode_size, self.mkfsoptions)
         lctl.newdev("mds", self.name, self.uuid,
                     setup ="%s %s" %(blkdev, self.fstype))
                 
@@ -1508,6 +1549,7 @@ class OSD(Module):
         self.devpath = self.db.get_val('devpath', '')
         self.size = self.db.get_val_int('devsize', 0)
         self.journal_size = self.db.get_val_int('journalsize', 0)
+        self.inode_size = self.db.get_val_int('inodesize', 0)
         self.mkfsoptions = self.db.get_val_int('mkfsoptions', '')
         self.fstype = self.db.get_val('fstype', '')
         self.nspath = self.db.get_val('nspath', '')
@@ -1553,14 +1595,14 @@ class OSD(Module):
             debug(self.uuid, "not active")
             return
         self.info(self.osdtype, self.devpath, self.size, self.fstype,
-                  self.format, self.journal_size)
+                  self.format, self.journal_size, self.inode_size)
         run_acceptors()
         if self.osdtype == 'obdecho':
             blkdev = ''
         else:
             blkdev = block_dev(self.devpath, self.size, self.fstype,
                                config.reformat, self.format, self.journal_size,
-                               self.mkfsoptions)
+                               self.inode_size, self.mkfsoptions)
         lctl.newdev(self.osdtype, self.name, self.uuid,
                     setup ="%s %s %s" %(blkdev, self.fstype,
                                            self.failover_ost))
