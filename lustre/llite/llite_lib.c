@@ -661,28 +661,23 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                 inode_setattr(inode, attr);
         }
 
+        /* We really need to get our PW lock before we change inode->i_size.
+         * If we don't we can race with other i_size updaters on our node, like
+         * ll_file_read.  We can also race with i_size propogation to other
+         * nodes through dirtying and writeback of final cached pages.  This
+         * last one is especially bad for racing o_append users on other 
+         * nodes. */
         if (ia_valid & ATTR_SIZE) {
-                struct ldlm_extent extent = { .start = 0,
+                struct ldlm_extent extent = { .start = attr->ia_size,
                                               .end = OBD_OBJECT_EOF };
                 struct lustre_handle lockh = { 0 };
                 int err, ast_flags = 0;
                 /* XXX when we fix the AST intents to pass the discard-range
                  * XXX extent, make ast_flags always LDLM_AST_DISCARD_DATA
                  * XXX here. */
-
-                /* Writeback uses inode->i_size to determine how far out
-                 * its cached pages go.  ll_truncate gets a PW lock, canceling
-                 * our lock, _after_ it has updated i_size.  this can confuse
-                 *
-                 * We really need to get our PW lock before we change
-                 * inode->i_size.  If we don't we can race with other
-                 * i_size updaters on our node, like ll_file_read.  We
-                 * can also race with i_size propogation to other
-                 * nodes through dirtying and writeback of final cached
-                 * pages.  This last one is especially bad for racing
-                 * o_append users on other nodes. */
                 if (extent.start == 0)
                         ast_flags = LDLM_AST_DISCARD_DATA;
+
                 /* bug 1639: avoid write/truncate i_sem/DLM deadlock */
                 LASSERT(atomic_read(&inode->i_sem.count) <= 0);
                 up(&inode->i_sem);
