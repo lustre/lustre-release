@@ -43,6 +43,7 @@
 
 #ifdef _LARGEFILE64_SOURCE
 
+#include <string.h>
 #include <errno.h>
 #include <assert.h>
 #include <sys/types.h>
@@ -85,6 +86,10 @@ PREPEND(__, SYSIO_INTERFACE_NAME(fxstat64))(int __ver,
 		err = -EBADF;
 		goto out;
 	}
+	/*
+	 * Never use the attributes cached in the inode record. Give
+	 * the driver a chance to refresh them.
+	 */
 	err = fil->f_ino->i_ops.inop_getattr(NULL, fil->f_ino, __stat_buf);
 out:
 	SYSIO_INTERFACE_RETURN(err ? -1 : 0, err);
@@ -107,6 +112,7 @@ PREPEND(__, SYSIO_INTERFACE_NAME(xstat64))(int __ver,
 	struct intent intent;
 	int     err;
 	struct pnode *pno;
+	struct inode *ino;
 	SYSIO_INTERFACE_DISPLAY_BLOCK;
 
 	SYSIO_INTERFACE_ENTER;
@@ -119,10 +125,13 @@ PREPEND(__, SYSIO_INTERFACE_NAME(xstat64))(int __ver,
 	err = _sysio_namei(_sysio_cwd, __filename, 0, &intent, &pno);
 	if (err)
 		goto out;
-	err =
-	    pno->p_base->pb_ino->i_ops.inop_getattr(pno,
-						    pno->p_base->pb_ino,
-						    __stat_buf);
+	/*
+	 * Leverage the INT_GETATTR intent above. We are counting
+	 * on the FS driver to either make sure the attributes cached in
+	 * the inode are always correct or refresh them in the lookup, above.
+	 */
+	ino = pno->p_base->pb_ino;
+	(void )memcpy(__stat_buf, &ino->i_stbuf, sizeof(struct intnl_stat));
 	P_RELE(pno);
 out:
 	SYSIO_INTERFACE_RETURN(err ? -1 : 0, err);
@@ -147,6 +156,7 @@ PREPEND(__, SYSIO_INTERFACE_NAME(lxstat64))(int __ver,
 	struct intent intent;
 	int     err;
 	struct pnode *pno;
+	struct inode *ino;
 	SYSIO_INTERFACE_DISPLAY_BLOCK;
 
 	SYSIO_INTERFACE_ENTER;
@@ -159,10 +169,13 @@ PREPEND(__, SYSIO_INTERFACE_NAME(lxstat64))(int __ver,
 	err = _sysio_namei(_sysio_cwd, __filename, ND_NOFOLLOW, &intent, &pno);
 	if (err)
 		goto out;
-	err =
-	    pno->p_base->pb_ino->i_ops.inop_getattr(pno,
-						    pno->p_base->pb_ino,
-						    __stat_buf);
+	/*
+	 * Leverage the INT_GETATTR intent above. We are counting
+	 * on the FS driver to either make sure the attributes cached in
+	 * the inode are always correct or refresh them in the lookup, above.
+	 */
+	ino = pno->p_base->pb_ino;
+	(void )memcpy(__stat_buf, &ino->i_stbuf, sizeof(struct intnl_stat));
 	P_RELE(pno);
 out:
 	SYSIO_INTERFACE_RETURN(err ? -1 : 0, err);

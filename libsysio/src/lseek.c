@@ -78,6 +78,11 @@ _sysio_lseek(int fd, _SYSIO_OFF_T offset, int whence)
 		{
 			int	err;
 
+			/*
+			 * Don't blindly trust the attributes
+			 * in the inode record for this. Give the
+			 * driver a chance to refresh them.
+			 */
 			err =
 			    (*fil->f_ino->i_ops.inop_getattr)(NULL,
 							      fil->f_ino,
@@ -163,7 +168,6 @@ sysio_sym_weak_alias(SYSIO_INTERFACE_NAME(lseek),
 		     PREPEND(__, SYSIO_INTERFACE_NAME(lseek)))
 #endif
 
-#if 0
 #ifdef __linux__
 #undef llseek
 int
@@ -173,17 +177,34 @@ SYSIO_INTERFACE_NAME(llseek)(unsigned int fd __IS_UNUSED,
        loff_t *result __IS_UNUSED,
        unsigned int whence __IS_UNUSED)
 {
+	loff_t	off;
 	SYSIO_INTERFACE_DISPLAY_BLOCK;
 
 	/*
-	 * Something is very wrong if this was called.
+	 * This is just plain goofy.
 	 */
 	SYSIO_INTERFACE_ENTER;
-	SYSIO_INTERFACE_RETURN(-1, -ENOTSUP);
+#if !_LARGEFILE64_SOURCE
+	if (offset_high) {
+		/*
+		 * We are using 32-bit internals. This just isn't
+		 * going to work.
+		 */
+		SYSIO_INTERFACE_RETURN(-1, -EOVERFLOW);
+	}
+#else
+	off = offset_high;
+	off <<= 32;
+	off |= offset_low;
+#endif
+	off = _sysio_lseek(fd, off, whence);
+	if (off < 0)
+		SYSIO_INTERFACE_RETURN((off_t )-1, (int )off);
+	*result = off;
+	SYSIO_INTERFACE_RETURN(0, 0);
 }
 
 #undef __llseek
 sysio_sym_weak_alias(SYSIO_INTERFACE_NAME(llseek), 
 		     PREPEND(__, SYSIO_INTERFACE_NAME(llseek)))
-#endif
 #endif

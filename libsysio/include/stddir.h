@@ -9,7 +9,7 @@
  *    terms of the GNU Lesser General Public License
  *    (see cit/LGPL or http://www.gnu.org/licenses/lgpl.html)
  *
- *    Cplant(TM) Copyright 1998-2003 Sandia Corporation. 
+ *    Cplant(TM) Copyright 1998-2004 Sandia Corporation. 
  *    Under the terms of Contract DE-AC04-94AL85000, there is a non-exclusive
  *    license for use of this work by or on behalf of the US Government.
  *    Export of this program may require a license from the United States
@@ -41,51 +41,27 @@
  * lee@sandia.gov
  */
 
-#include <unistd.h>
-#include <errno.h>
-#include <assert.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <sys/queue.h>
+/*
+ * Support for directory functions
+ */
 
-#include "sysio.h"
-#include "inode.h"
-#include "fs.h"
-#include "mount.h"
-#include "sysio-symbols.h"
+#ifndef _STDDIR_H_
+#define _STDDIR_H_
 
-int
-SYSIO_INTERFACE_NAME(symlink)(const char *oldpath, const char *newpath)
-{
-	int	err;
-	struct intent intent;
-	struct pnode *pno;
-	SYSIO_INTERFACE_DISPLAY_BLOCK;
+#undef  BUFSIZE
+#define BUFSIZE	4096
 
-	SYSIO_INTERFACE_ENTER;
-	INTENT_INIT(&intent, INT_CREAT, NULL, NULL);
-	err = _sysio_namei(_sysio_cwd, newpath, ND_NEGOK, &intent, &pno);
-	if (err)
-		goto out;
-	if (pno->p_base->pb_ino) {
-		err = -EEXIST;
-		goto error;
-	}
+struct __dirstream {
+	int		fd;
+	_SYSIO_OFF_T	base;		/* start pos for next system call */
+	_SYSIO_OFF_T	filepos;	/* current pos in dir file stream */
+	size_t		cur;		/* current byte pos in data buffer */
+	size_t		effective;	/* effective data size in buffer */
+	char		buf[BUFSIZE];
+};
 
-	if (IS_RDONLY(pno, pno->p_base->pb_ino)) {
-		err = -EROFS;
-		goto error;
-	}
-	err =
-	    (*pno->p_parent->p_base->pb_ino->i_ops.inop_symlink)(pno, oldpath);
-error:
-	P_RELE(pno);
-out:
-	SYSIO_INTERFACE_RETURN(err ? -1 : 0, err);
-}
-
-#ifdef REDSTORM
-#undef __symlink
-sysio_sym_weak_alias(SYSIO_INTERFACE_NAME(symlink),
-		     PREPEND(__, SYSIO_INTERFACE_NAME(symlink)))
+#ifndef MAX
+#define MAX(a,b) (a) > (b) ? (a) : (b)
 #endif
+
+#endif /* ! _STDDIR_H_ */

@@ -9,7 +9,7 @@
  *    terms of the GNU Lesser General Public License
  *    (see cit/LGPL or http://www.gnu.org/licenses/lgpl.html)
  *
- *    Cplant(TM) Copyright 1998-2003 Sandia Corporation. 
+ *    Cplant(TM) Copyright 1998-2004 Sandia Corporation. 
  *    Under the terms of Contract DE-AC04-94AL85000, there is a non-exclusive
  *    license for use of this work by or on behalf of the US Government.
  *    Export of this program may require a license from the United States
@@ -76,17 +76,35 @@ struct qstr _sysio_mount_file_name = { "", 0, 0 };
  */
 static LIST_HEAD(, mount) mounts;
 
+static int _sysio_sub_fsswop_mount(const char *source,
+				   unsigned flags,
+				   const void *data,
+				   struct pnode *tocover,
+				   struct mount **mntp);
+
+static struct fssw_ops _sysio_sub_fssw_ops = {
+	_sysio_sub_fsswop_mount
+};
+
 /*
  * Initialization. Must be called before any other routine in this module.
  */
 int
 _sysio_mount_init()
 {
+	int	err;
 
 	LIST_INIT(&mounts);
 #ifdef AUTOMOUNT_FILE_NAME
 	_sysio_next_component(AUTOMOUNT_FILE_NAME, &_sysio_mount_file_name);
 #endif
+
+	/*
+	 * Register the sub-trees "file system" driver.
+	 */
+	err = _sysio_fssw_register("sub", &_sysio_sub_fssw_ops);
+	if (err)
+		return err;
 
 	return 0;
 }
@@ -155,7 +173,7 @@ _sysio_do_mount(struct filesys *fs,
 	if (err)
 		goto error;
 
-	if (!S_ISDIR(mnt->mnt_root->p_base->pb_ino->i_mode)) {
+	if (!S_ISDIR(mnt->mnt_root->p_base->pb_ino->i_stbuf.st_mode)) {
 		err = -ENOTDIR;
 		goto error;
 	}
@@ -169,6 +187,7 @@ _sysio_do_mount(struct filesys *fs,
 		 */
 		mnt->mnt_covers = tocover = mnt->mnt_root;
 	}
+	assert(!tocover->p_cover);
 	tocover->p_cover = mnt->mnt_root;
 
 	LIST_INSERT_HEAD(&mounts, mnt, mnt_link);
@@ -258,6 +277,7 @@ _sysio_mount_root(const char *source,
 		return err;
 
 	_sysio_root = mnt->mnt_root;
+#if !DEFER_INIT_CWD
 	/*
 	 * It is very annoying to have to set the current working directory.
 	 * So... If it isn't set, make it the root now.
@@ -266,6 +286,7 @@ _sysio_mount_root(const char *source,
 		_sysio_cwd = _sysio_root;
 		P_REF(_sysio_cwd);
 	}
+#endif
 
 	return 0;
 }
@@ -416,6 +437,52 @@ _sysio_unmount_all()
 			_sysio_root = NULL;
 	}
 
+	return err;
+}
+
+static int
+_sysio_sub_fsswop_mount(const char *source,
+			unsigned flags,
+			const void *data __IS_UNUSED,
+			struct pnode *tocover,
+			struct mount **mntp)
+{
+	int	err;
+	struct nameidata nameidata;
+	struct mount *mnt;
+
+	/*
+	 * How can we make a sub-mount from nothing?
+	 */
+	if (!_sysio_root)
+		return -EBUSY;
+
+	/*
+	 * Lookup the source.
+	 */
+	ND_INIT(&nameidata, 0, source, _sysio_root, NULL);
+	err = _sysio_path_walk(_sysio_root, &nameidata);
+	if (err)
+		return err;
+
+	/*
+	 * Mount the rooted sub-tree at the given position.
+	 */
+	err =
+	    _sysio_do_mount(nameidata.nd_pno->p_mount->mnt_fs,
+			    nameidata.nd_pno->p_base,
+			    nameidata.nd_pno->p_mount->mnt_flags & flags,
+			    tocover,
+			    &mnt);
+
+	/*
+	 * Clean up and return.
+	 */
+	if (!err) {
+		FS_REF(nameidata.nd_pno->p_mount->mnt_fs);
+		*mntp = mnt;
+	}
+	P_RELE(nameidata.nd_pno);
 	return err;
 }
 
@@ -575,7 +642,6 @@ _sysio_automount(struct pnode *mntpno)
 {
 	int	err;
 	struct inode *ino;
-	struct intnl_stat stbuf;
 	struct iovec iovec;
 	struct ioctx iocontext;
 	struct intnl_xtvec xtvec;
@@ -596,24 +662,21 @@ _sysio_automount(struct pnode *mntpno)
 	 * Read file content.
 	 */
 	ino = mntpno->p_base->pb_ino;
-	err = (*ino->i_ops.inop_getattr)(mntpno, ino, &stbuf);
-	if (err)
-		return err;
-	if (stbuf.st_size > 64 * 1024) {
+	if (ino->i_stbuf.st_size > 64 * 1024) {
 		/*
 		 * Let's be reasonable.
 		 */
 		return -EINVAL;
 	}
-	iovec.iov_base = malloc(stbuf.st_size + 1);
+	iovec.iov_base = malloc(ino->i_stbuf.st_size + 1);
 	if (!iovec.iov_base)
 		return -ENOMEM;
-	iovec.iov_len = stbuf.st_size;
+	iovec.iov_len = ino->i_stbuf.st_size;
 	err = _sysio_open(mntpno, O_RDONLY, 0);
 	if (err)
 		goto out;
 	xtvec.xtv_off = 0;
-	xtvec.xtv_len = stbuf.st_size;
+	xtvec.xtv_len = ino->i_stbuf.st_size;
 	IOCTX_INIT(&iocontext,
 		   1,
 		   0,

@@ -67,7 +67,7 @@ SYSIO_INTERFACE_NAME(link)(const char *oldpath, const char *newpath)
 	err = _sysio_namei(_sysio_cwd, oldpath, 0, &intent, &old);
 	if (err)
 		goto out;
-	if (S_ISDIR(old->p_base->pb_ino->i_mode)) {
+	if (S_ISDIR(old->p_base->pb_ino->i_stbuf.st_mode)) {
 		err = -EPERM;
 		goto error1;
 	}

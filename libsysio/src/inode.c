@@ -218,8 +218,7 @@ hash(struct file_identifier *fid)
 struct inode *
 _sysio_i_new(struct filesys *fs,
 	     struct file_identifier *fid,
-	     mode_t type,
-	     dev_t rdev,
+	     struct intnl_stat *stat,
 	     unsigned immunity,
 	     struct inode_ops *ops,
 	     void *private)
@@ -240,24 +239,27 @@ _sysio_i_new(struct filesys *fs,
 		return NULL;
 	ino->i_ops = *ops;
 	operations = *ops;
-	if (S_ISBLK(type) || S_ISCHR(type) || S_ISFIFO(type)) {
+	if (S_ISBLK(stat->st_mode) ||
+	    S_ISCHR(stat->st_mode) ||
+	    S_ISFIFO(stat->st_mode)) {
 		struct inode_ops *o;
 
 		/*
 		 * Replace some operations sent with
 		 * those from the device table.
 		 */
-		o = _sysio_dev_lookup(type, rdev);
+		o = _sysio_dev_lookup(stat->st_mode, stat->st_rdev);
 		operations.inop_open = o->inop_open;
 		operations.inop_close = o->inop_close;
 		operations.inop_read = o->inop_read;
 		operations.inop_write = o->inop_write;
 		operations.inop_pos = o->inop_pos;
 		operations.inop_iodone = o->inop_iodone;
+		operations.inop_fcntl = o->inop_fcntl;
 		operations.inop_datasync = o->inop_datasync;
 		operations.inop_ioctl = o->inop_ioctl;
 	}
-	I_INIT(ino, fs, type, rdev, &operations, fid, immunity, private);
+	I_INIT(ino, fs, stat, &operations, fid, immunity, private);
 	ino->i_ref = 1;
 	TAILQ_INSERT_TAIL(&_sysio_inodes, ino, i_nodes);
 	head = &fs->fs_itbl[hash(fid) % FS_ITBLSIZ];
@@ -321,6 +323,8 @@ void
 _sysio_i_undead(struct inode *ino)
 {
 	
+	if (ino->i_zombie)
+		return;
 	LIST_REMOVE(ino, i_link);
 	ino->i_zombie = 1;
 }

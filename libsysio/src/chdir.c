@@ -79,6 +79,10 @@
 #include "file.h"
 #include "sysio-symbols.h"
 
+#if DEFER_INIT_CWD
+const char *_sysio_init_cwd = NULL;
+#endif
+
 struct pnode *_sysio_cwd = NULL;
 
 /*
@@ -90,15 +94,19 @@ _sysio_p_chdir(struct pnode *pno)
 	int	err;
 
 	/*
-	 * Revalidate the pnode, and ensure it's a directory
+	 * Revalidate the pnode, and ensure it's an accessable directory
 	 */
 	err = _sysio_p_validate(pno, NULL, NULL);
 	if (err)
 		return err;
-
 	if (!(pno->p_base->pb_ino &&
-	      S_ISDIR(pno->p_base->pb_ino->i_mode)))
-		return -ENOTDIR;
+	      S_ISDIR(pno->p_base->pb_ino->i_stbuf.st_mode)))
+		err = -ENOTDIR;
+	else
+		err = _sysio_permitted(pno->p_base->pb_ino, X_OK);
+	if (err)
+		return err;
+
 	/*
 	 * Release old if set.
 	 */
@@ -153,6 +161,9 @@ _sysio_p_path(struct pnode *pno, char **buf, size_t size)
 	char	*cp;
 
 	cur = pno;
+
+	if (!size && buf && *buf)
+		return -EINVAL;
 
 	/*
 	 * Walk up the tree to the root, summing the component name
@@ -231,6 +242,19 @@ SYSIO_INTERFACE_NAME(getcwd)(char *buf, size_t size)
 	SYSIO_INTERFACE_DISPLAY_BLOCK;
 
 	SYSIO_INTERFACE_ENTER;
+#if DEFER_INIT_CWD
+	if (!_sysio_cwd) {
+		struct pnode *pno;
+
+		/*
+		 * Can no longer defer initialization of the current working
+		 * directory. Force namei to make it happen now.
+		 */
+	        if (_sysio_namei(NULL, ".", 0, NULL, &pno) != 0)
+			abort();
+		P_RELE(pno);
+	}
+#endif
 	err = _sysio_p_path(_sysio_cwd, &buf, buf ? size : 0);
 	SYSIO_INTERFACE_RETURN(err ? NULL : buf, err);
 }

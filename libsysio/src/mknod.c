@@ -62,10 +62,6 @@
 #undef mknod
 #undef __xmknod
 
-#if defined(BSD) || defined(REDSTORM)
-#define _MKNOD_VER	0
-#endif
-
 int
 PREPEND(__, SYSIO_INTERFACE_NAME(xmknod))(int __ver, 
 					  const char *path, 

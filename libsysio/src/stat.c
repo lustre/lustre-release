@@ -119,6 +119,10 @@ PREPEND(__, SYSIO_INTERFACE_NAME(fxstat))(int __ver,
 #else
 	buf = __stat_buf;
 #endif
+	/*
+	 * Never use the attributes cached in the inode record. Give the
+	 * driver a chance to refresh them.
+	 */
 	err =
 	    fil->f_ino->i_ops.inop_getattr(NULL, fil->f_ino, buf);
 #if _LARGEFILE64_SOURCE
@@ -164,10 +168,6 @@ PREPEND(__, SYSIO_INTERFACE_NAME(xstat))(int __ver,
 	int     err;
 	struct pnode *pno;
 	struct inode *ino;
-	struct intnl_stat *buf;
-#if _LARGEFILE64_SOURCE
-	struct stat64 st64;
-#endif
 	SYSIO_INTERFACE_DISPLAY_BLOCK;
 
 	SYSIO_INTERFACE_ENTER;
@@ -180,22 +180,18 @@ PREPEND(__, SYSIO_INTERFACE_NAME(xstat))(int __ver,
 	err = _sysio_namei(_sysio_cwd, __filename, 0, &intent, &pno);
 	if (err)
 		goto out;
+	/*
+	 * Leverage the INT_GETATTR intent above. We are counting
+	 * on the FS driver to either make sure the attributes cached in
+	 * the inode are always correct or refresh them in the lookup, above.
+	 */
 	ino = pno->p_base->pb_ino;
 #if _LARGEFILE64_SOURCE
-	buf = &st64;
+	convstat(&ino->i_stbuf, __stat_buf);
 #else
-	buf = __stat_buf;
+	(void )memcpy(__stat_buf, &ino->i_stbuf, sizeof(struct intnl_stat));
 #endif
-	err =
-	    ino->i_ops.inop_getattr(pno,
-				    pno->p_base->pb_ino,
-				    buf);
-
 	P_RELE(pno);
-#if _LARGEFILE64_SOURCE
-	if (!err)
-		convstat(buf, __stat_buf);
-#endif
 out:
 	SYSIO_INTERFACE_RETURN(err ? -1 : 0, err);
 }
@@ -236,10 +232,6 @@ PREPEND(__, SYSIO_INTERFACE_NAME(lxstat))(int __ver,
 	int     err;
 	struct pnode *pno;
 	struct inode *ino;
-	struct intnl_stat *buf;
-#if _LARGEFILE64_SOURCE
-	struct stat64 st64;
-#endif
 	SYSIO_INTERFACE_DISPLAY_BLOCK;
 
 	SYSIO_INTERFACE_ENTER;
@@ -252,22 +244,18 @@ PREPEND(__, SYSIO_INTERFACE_NAME(lxstat))(int __ver,
 	err = _sysio_namei(_sysio_cwd, __filename, ND_NOFOLLOW, &intent, &pno);
 	if (err)
 		goto out;
-#if _LARGEFILE64_SOURCE
-	buf = &st64;
-#else
-	buf = __stat_buf;
-#endif
+	/*
+	 * Leverage the INT_GETATTR intent above. We are counting
+	 * on the FS driver to either make sure the attributes cached in
+	 * the inode are always correct or refresh them in the lookup, above.
+	 */
 	ino = pno->p_base->pb_ino;
-	err =
-	    ino->i_ops.inop_getattr(pno,
-				    pno->p_base->pb_ino,
-				    buf);
-
-	P_RELE(pno);
 #if _LARGEFILE64_SOURCE
-	if (!err)
-		convstat(buf, __stat_buf);
+	convstat(&ino->i_stbuf, __stat_buf);
+#else
+	(void )memcpy(__stat_buf, &ino->i_stbuf, sizeof(struct intnl_stat));
 #endif
+	P_RELE(pno);
 out:
 	SYSIO_INTERFACE_RETURN(err ? -1 : 0, err);
 }

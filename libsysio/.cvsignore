@@ -1,9 +1,10 @@
-.deps
-aclocal.m4
 autom4te.cache
-config.log
-config.status
-configure
-lib
+cnos64
+snos64
+cnos32
+snos32
+.deps
 Makefile
-Makefile.in
+config.log
+lib
+libsysio.test.make.log

@@ -101,7 +101,7 @@ PREPEND(_, SYSIO_INTERFACE_NAME(getdirentries64))(int fd,
 	if (!(fil && fil->f_ino))
 		SYSIO_INTERFACE_RETURN(-1, -EBADF);
 
-	if (!S_ISDIR(fil->f_ino->i_mode))
+	if (!S_ISDIR(fil->f_ino->i_stbuf.st_mode))
 		SYSIO_INTERFACE_RETURN(-1, -ENOTDIR);
 
 	cc =

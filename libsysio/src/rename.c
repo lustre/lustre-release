@@ -61,35 +61,49 @@ SYSIO_INTERFACE_NAME(rename)(const char *oldpath, const char *newpath)
 	int	err;
 	struct pnode *old, *new;
 	struct pnode_base *nxtpb, *pb;
-	struct intnl_stat ostbuf, nstbuf;
 	SYSIO_INTERFACE_DISPLAY_BLOCK;
 
 	SYSIO_INTERFACE_ENTER;
+
+	/*
+	 * Neither old nor new may be the empty string.
+	 */
+	if (*oldpath == '\0' || *newpath == '\0')
+		SYSIO_INTERFACE_RETURN(-1, -ENOENT);
+
 	/*
 	 * Resolve oldpath to a path node.
 	 */
 	INTENT_INIT(&intent, INT_UPDPARENT, NULL, NULL);
-	err = _sysio_namei(_sysio_cwd, oldpath, 0, &intent, &old);
+	err = _sysio_namei(_sysio_cwd, oldpath, ND_NOFOLLOW, &intent, &old);
 	if (err)
 		goto error3;
 	/*
 	 * Resolve newpath to a path node.
 	 */
 	INTENT_INIT(&intent, INT_UPDPARENT, NULL, NULL);
-	err = _sysio_namei(_sysio_cwd, newpath, ND_NEGOK, &intent, &new);
+	err =
+	    _sysio_namei(_sysio_cwd,
+			 newpath,
+			 ND_NOFOLLOW | ND_NEGOK,
+			 &intent,
+			 &new);
 	if (err)
 		goto error2;
 
+	/*
+	 * Don't allow mount points to move.
+	 */
 	if (old->p_mount->mnt_root == old || old->p_cover ||
 	    new->p_mount->mnt_root == new) {
 		err = -EBUSY;
 		goto error1;
 	}
 
+	/*
+	 * No xdev renames either.
+	 */
 	if (old->p_mount->mnt_fs != new->p_mount->mnt_fs) {
-		/*
-		 * Oops. They're trying to move it across file systems.
-		 */
 		err = -EXDEV;
 		goto error1;
 	}
@@ -109,40 +123,30 @@ SYSIO_INTERFACE_NAME(rename)(const char *oldpath, const char *newpath)
 		}
 	} while (nxtpb);
 
-	while (new->p_base->pb_ino) {
+	/*
+	 * If old == new, we're done.
+	 */
+	if (old->p_base->pb_ino == new->p_base->pb_ino)
+		goto out;
+
+	if (new->p_base->pb_ino) {
 		/*
 		 * Existing entry. We're replacing the new. Make sure that's
 		 * ok.
 		 */
-		err =
-		    old->p_base->pb_ino->i_ops.inop_getattr(old, NULL, &ostbuf);
-		if (err)
-			goto error1;
-		err =
-		    new->p_base->pb_ino->i_ops.inop_getattr(new, NULL, &nstbuf);
-		if (err) {
-			if (err != ENOENT)
-				goto error1;
-			/*
-			 * Rats! It disappeared beneath us.
-			 */
-			(void )_sysio_p_validate(new, NULL, NULL);
-			continue;
-		}
-		if (S_ISDIR(ostbuf.st_mode)) {
-			if (!S_ISDIR(nstbuf.st_mode)) {
-				err = -ENOTDIR;
+		if (S_ISDIR(new->p_base->pb_ino->i_stbuf.st_mode)) {
+			if (!S_ISDIR(old->p_base->pb_ino->i_stbuf.st_mode)) {
+				err = -EISDIR;
 				goto error1;
 			}
-			if (nstbuf.st_nlink > 2) {
+			if (new->p_base->pb_ino->i_stbuf.st_nlink > 2) {
 				err = -ENOTEMPTY;
 				goto error1;
 			}
-		} else if (S_ISDIR(nstbuf.st_mode)) {
-			err = -EEXIST;
+		} else if (S_ISDIR(old->p_base->pb_ino->i_stbuf.st_mode)) {
+			err = -ENOTDIR;
 			goto error1;
 		}
-		break;
 	}
 
 	/*
@@ -151,7 +155,7 @@ SYSIO_INTERFACE_NAME(rename)(const char *oldpath, const char *newpath)
 	 * now. If it becomes an issue, we can do it later. For now, I've
 	 * elected to use the semantic that says, basically, the entire
 	 * sub-tree must be unreferenced. That's per POSIX, but it's a nasty
-	 * this to do to the caller.
+	 * thing to do to the caller.
 	 */
 	if (_sysio_p_prune(new) != 1) {
 		err = -EBUSY;

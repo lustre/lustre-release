@@ -293,6 +293,7 @@ yod_i_new(struct filesys *fs, struct intnl_stat *buf)
 	if (!nino)
 		return NULL;
 	bzero(&nino->ni_ident, sizeof(nino->ni_ident));
+	nino->ni_seekok = 0;
 	nino->ni_ident.dev = buf->st_dev;
 	nino->ni_ident.ino = buf->st_ino;
 #ifdef HAVE_GENERATION
@@ -307,12 +308,7 @@ yod_i_new(struct filesys *fs, struct intnl_stat *buf)
 	ino =
 	    _sysio_i_new(fs,
 			 &nino->ni_fileid,
-#ifndef AUTOMOUNT_FILE_NAME
-			 buf->st_mode & S_IFMT,
-#else
-			 buf->st_mode,			/* all of the bits! */
-#endif
-			 0,
+			 buf,
 			 0,
 			 &yod_i_ops,
 			 nino);
@@ -480,21 +476,22 @@ yod_fsswop_mount(const char *source,
 }
 
 static int
-yod_i_invalid(struct inode *inop, struct intnl_stat stbuf)
+yod_i_invalid(struct inode *inop, struct intnl_stat *stat)
 {
 	/*
 	 * Validate passed in inode against stat struct info
 	 */
 	struct yod_inode *nino = I2NI(inop);
 	
-	if ((nino->ni_ident.dev != stbuf.st_dev ||
-	     nino->ni_ident.ino != stbuf.st_ino ||
+	if ((nino->ni_ident.dev != stat->st_dev ||
+	     nino->ni_ident.ino != stat->st_ino ||
 #ifdef HAVE_GENERATION
-	     nino->ni_ident.gen != stbuf.st_gen ||
+	     nino->ni_ident.gen != stat->st_gen ||
 #endif
-	     ((inop)->i_mode & S_IFMT) != (stbuf.st_mode & S_IFMT)) ||
-	    (((inop)->i_rdev != stbuf.st_rdev) &&
-	       (S_ISCHR((inop)->i_mode) || S_ISBLK((inop)->i_mode))))
+	     ((inop)->i_stbuf.st_mode & S_IFMT) != (stat->st_mode & S_IFMT)) ||
+	    (((inop)->i_stbuf.st_rdev != stat->st_rdev) &&
+	       (S_ISCHR((inop)->i_stbuf.st_mode) ||
+		S_ISBLK((inop)->i_stbuf.st_mode))))
 		return 1;
 	
 	return 0;
@@ -529,7 +526,7 @@ yod_iget(struct filesys *fs,
 	 * Validate?
 	 */
 	if (*inop) {
-		if (!yod_i_invalid(*inop, stbuf))
+		if (!yod_i_invalid(*inop, &stbuf))
 			return 0;
 		/*
 		 * Invalidate.
@@ -553,7 +550,7 @@ yod_iget(struct filesys *fs,
 		/*
 		 * Insertion was forced but it's already present!
 		 */
-		if (yod_i_invalid(ino, stbuf)) {
+		if (yod_i_invalid(ino, &stbuf)) {
 			/* 
 			 * Cached inode has stale attrs
 			 * make way for the new one
@@ -747,10 +744,10 @@ static ssize_t
 yod_getdirentries(struct inode *ino,
 		     char *buf,
 		     size_t nbytes,
-		     off64_t *basep)
+		     _SYSIO_OFF_T *basep)
 {
 	struct yod_inode *nino = I2NI(ino);
-	loff_t	result;
+	_SYSIO_OFF_T result;
 	ssize_t	cc;
 
 	assert(nino->ni_fd >= 0);
@@ -762,10 +759,11 @@ yod_getdirentries(struct inode *ino,
 				SEEK_SET) == -1))
 		return -errno;
 	nino->ni_fpos = result;
+	memset(buf, 0, nbytes);
 	cc = getdirentries_yod(nino->ni_fd, buf, nbytes, &result);
 	if (cc < 0)
 		return -errno;
-	nino->ni_fpos += cc;
+	nino->ni_fpos = *basep = result;
 	return cc;
 }
 

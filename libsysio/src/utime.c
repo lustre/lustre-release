@@ -41,6 +41,7 @@
  * lee@sandia.gov
  */
 
+#include <stdlib.h>
 #include <string.h>
 #include <errno.h>
 #include <time.h>
@@ -50,10 +51,21 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <sys/queue.h>
+#include <sys/time.h>
 
 #include "sysio.h"
 #include "inode.h"
 #include "file.h"
+
+time_t
+_sysio_local_time()
+{
+	struct timeval tv;
+
+	if (gettimeofday(&tv, NULL) != 0)
+		abort();
+	return tv.tv_sec;
+}
 
 int
 SYSIO_INTERFACE_NAME(utime)(const char *path, const struct utimbuf *buf)
@@ -69,7 +81,7 @@ SYSIO_INTERFACE_NAME(utime)(const char *path, const struct utimbuf *buf)
 	if (err)
 		goto out;
 	if (!buf) {
-		_utbuffer.actime = _utbuffer.modtime = time(NULL);
+		_utbuffer.actime = _utbuffer.modtime = _SYSIO_LOCAL_TIME();
 		buf = &_utbuffer;
 	}
 	(void )memset(&stbuf, 0, sizeof(struct intnl_stat));

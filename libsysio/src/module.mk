@@ -22,8 +22,9 @@ SRCDIR_SRCS = src/access.c src/chdir.c src/chmod.c \
 	src/ioctl.c src/ioctx.c src/iowait.c \
 	src/link.c src/lseek.c src/mkdir.c \
 	src/mknod.c src/mount.c src/namei.c \
-	src/open.c src/rw.c src/rename.c \
+	src/open.c src/rw.c src/reconcile.c src/rename.c \
 	src/rmdir.c src/stat64.c src/stat.c \
+	src/stddir.c src/readdir.c src/readdir64.c \
 	src/symlink.c src/readlink.c \
 	src/truncate.c src/unlink.c src/utime.c \
 	$(FILE_SUPPORT) $(LUSTRE_SRCDIR_SRCS)
