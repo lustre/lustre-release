@@ -1292,10 +1292,10 @@
  	struct list_head *prev;
 +	struct ext3_inode_info *ei = EXT3_I(inode);
  	struct ext3_sb_info *sbi;
- 	ino_t ino_next; 
+ 	unsigned long ino_next;
  	struct ext3_iloc iloc;
  	int err = 0;
- 	
+ 
  	lock_super(inode->i_sb);
 -	if (list_empty(&inode->u.ext3_i.i_orphan)) {
 +	if (list_empty(&ei->i_orphan)) {
@@ -1308,7 +1308,7 @@
 +	prev = ei->i_orphan.prev;
  	sbi = EXT3_SB(inode->i_sb);
  
- 	jbd_debug(4, "remove inode %ld from orphan list\n", inode->i_ino);
+ 	jbd_debug(4, "remove inode %lu from orphan list\n", inode->i_ino);
  
 -	list_del(&inode->u.ext3_i.i_orphan);
 -	INIT_LIST_HEAD(&inode->u.ext3_i.i_orphan);
@@ -1316,18 +1316,16 @@
  
  	/* If we're on an error path, we may not have a valid
  	 * transaction handle with which to update the orphan list on
-@@ -1520,9 +1520,8 @@ int ext3_orphan_del(handle_t *handle, st
+@@ -1520,8 +1520,7 @@ int ext3_orphan_del(handle_t *handle, st
  		err = ext3_journal_dirty_metadata(handle, sbi->s_sbh);
  	} else {
  		struct ext3_iloc iloc2;
 -		struct inode *i_prev =
 -			list_entry(prev, struct inode, u.ext3_i.i_orphan);
--		
 +		struct inode *i_prev = orphan_list_entry(prev);
-+
- 		jbd_debug(4, "orphan inode %ld will point to %ld\n",
+ 
+ 		jbd_debug(4, "orphan inode %lu will point to %lu\n",
  			  i_prev->i_ino, ino_next);
- 		err = ext3_reserve_inode_write(handle, i_prev, &iloc2);
 @@ -1695,10 +1695,10 @@ static int ext3_symlink (struct inode * 
  			goto out_no_entry;
  	} else {
