@@ -150,15 +150,10 @@ static inline void OBD_FAIL_WRITE(int id, kdev_t dev)
         }
 }
 
-#define OBD_VMALLOC_SIZE        16384
-
 #define OBD_ALLOC(ptr, size)                                            \
 do {                                                                    \
         long s = (size);                                                \
-        if (s > OBD_VMALLOC_SIZE)                                       \
-                (ptr) = vmalloc(s);                                     \
-        else                                                            \
-                (ptr) = kmalloc(s, GFP_KERNEL);                         \
+        (ptr) = kmalloc(s, GFP_KERNEL);                                 \
         if ((ptr) == NULL) {                                            \
                 CERROR("kmalloc of '" #ptr "' (%ld bytes) failed "      \
                        "at %s:%d\n", s, __FILE__, __LINE__);            \
@@ -174,10 +169,7 @@ do {                                                                    \
 do {                                                                    \
         int s = (size);                                                 \
         LASSERT(ptr);                                                   \
-        if (s > OBD_VMALLOC_SIZE)                                       \
-                vfree(ptr);                                             \
-        else                                                            \
-                kfree(ptr);                                             \
+        kfree((ptr));                                                   \
         obd_memory -= s;                                                \
         CDEBUG(D_MALLOC, "kfreed '" #ptr "': %d at %p (tot %ld).\n",    \
                s, (ptr), obd_memory);                                   \
