@@ -1602,6 +1602,12 @@ class MDSDEV(Module):
         if self.fstype == 'smfs':
             self.add_lustre_module('lvfs', 'fsfilt_%s' % (self.backfstype))
 
+	for options in string.split(self.mountfsoptions, ','):
+	    if options == 'snap':
+		if not self.fstype == 'smfs':
+		    panic("mountoptions with snap, but fstype is not smfs\n")
+		self.add_lustre_module('lvfs', 'fsfilt_snap_%s' % (self.fstype))
+		self.add_lustre_module('lvfs', 'fsfilt_snap_%s' % (self.backfstype))
     def load_module(self):
         if self.active:
             Module.load_module(self)
@@ -1913,6 +1919,13 @@ class OSD(Module):
             self.add_lustre_module('lvfs' , 'fsfilt_%s' % (self.fstype))
         if self.fstype == 'smfs':
             self.add_lustre_module('lvfs' , 'fsfilt_%s' % (self.backfstype))
+
+	for options in self.mountfsoptions:
+	    if options == 'snap':
+		if not self.fstype == 'smfs':
+		    panic("mountoptions with snap, but fstype is not smfs\n")
+		self.add_lustre_module('lvfs', 'fsfilt_snap_%s' % (self.fstype))
+		self.add_lustre_module('lvfs', 'fsfilt_snap_%s' % (self.backfstype))
 
         self.add_lustre_module(self.osdtype, self.osdtype)
 
