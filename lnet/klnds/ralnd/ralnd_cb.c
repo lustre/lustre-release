@@ -94,7 +94,7 @@ kranal_get_idle_tx (int may_block)
                 /* "normal" descriptor is free */
                 if (!list_empty(&kranal_data.kra_idle_txs)) {
                         tx = list_entry(kranal_data.kra_idle_txs.next,
-					kra_tx_t, tx_list);
+                                        kra_tx_t, tx_list);
                         break;
                 }
 
@@ -106,7 +106,7 @@ kranal_get_idle_tx (int may_block)
                         }
 
                         tx = list_entry(kranal_data.kra_idle_nblk_txs.next,
-					kra_tx_t, tx_list);
+                                        kra_tx_t, tx_list);
                         break;
                 }
 
@@ -114,7 +114,7 @@ kranal_get_idle_tx (int may_block)
                 spin_unlock_irqrestore(&kranal_data.kra_tx_lock, flags);
 
                 wait_event(kranal_data.kra_idle_tx_waitq,
-			   !list_empty(&kranal_data.kra_idle_txs));
+                           !list_empty(&kranal_data.kra_idle_txs));
         }
 
         if (tx != NULL) {
@@ -496,7 +496,7 @@ kranal_launch_tx (kra_tx_t *tx, ptl_nid_t nid)
                 spin_lock(&kranal_data.kra_connd_lock);
         
                 list_add_tail(&peer->rap_connd_list,
-			      &kranal_data.kra_connd_peers);
+                              &kranal_data.kra_connd_peers);
                 wake_up(&kranal_data.kra_connd_waitq);
         
                 spin_unlock(&kranal_data.kra_connd_lock);
@@ -625,7 +625,7 @@ kranal_do_send (lib_nal_t    *nal,
                 /* Incoming message consistent with immediate reply? */
                 if (conn->rac_rxmsg->ram_type != RANAL_MSG_GET_REQ) {
                         CERROR("REPLY to "LPX64" bad msg type %x!!!\n",
-			       nid, conn->rac_rxmsg->ram_type);
+                               nid, conn->rac_rxmsg->ram_type);
                         return PTL_FAIL;
                 }
 
@@ -744,32 +744,32 @@ kranal_do_send (lib_nal_t    *nal,
 
 ptl_err_t
 kranal_send (lib_nal_t *nal, void *private, lib_msg_t *cookie,
-	     ptl_hdr_t *hdr, int type, ptl_nid_t nid, ptl_pid_t pid,
-	     unsigned int niov, struct iovec *iov,
-	     size_t offset, size_t len)
+             ptl_hdr_t *hdr, int type, ptl_nid_t nid, ptl_pid_t pid,
+             unsigned int niov, struct iovec *iov,
+             size_t offset, size_t len)
 {
         return kranal_do_send(nal, private, cookie,
-			      hdr, type, nid, pid,
-			      niov, iov, NULL,
-			      offset, len);
+                              hdr, type, nid, pid,
+                              niov, iov, NULL,
+                              offset, len);
 }
 
 ptl_err_t
 kranal_send_pages (lib_nal_t *nal, void *private, lib_msg_t *cookie, 
-		   ptl_hdr_t *hdr, int type, ptl_nid_t nid, ptl_pid_t pid,
-		   unsigned int niov, ptl_kiov_t *kiov, 
-		   size_t offset, size_t len)
+                   ptl_hdr_t *hdr, int type, ptl_nid_t nid, ptl_pid_t pid,
+                   unsigned int niov, ptl_kiov_t *kiov, 
+                   size_t offset, size_t len)
 {
         return kranal_do_send(nal, private, cookie,
-			      hdr, type, nid, pid,
-			      niov, NULL, kiov,
-			      offset, len);
+                              hdr, type, nid, pid,
+                              niov, NULL, kiov,
+                              offset, len);
 }
 
 ptl_err_t
 kranal_recvmsg (lib_nal_t *nal, void *private, lib_msg_t *libmsg,
-		unsigned int niov, struct iovec *iov, ptl_kiov_t *kiov,
-		size_t offset, size_t mlen, size_t rlen)
+                unsigned int niov, struct iovec *iov, ptl_kiov_t *kiov,
+                size_t offset, size_t mlen, size_t rlen)
 {
         kra_conn_t  *conn = private;
         kra_msg_t   *rxmsg = conn->rac_rxmsg;
@@ -859,20 +859,20 @@ kranal_recvmsg (lib_nal_t *nal, void *private, lib_msg_t *libmsg,
 
 ptl_err_t
 kranal_recv (lib_nal_t *nal, void *private, lib_msg_t *msg,
-	     unsigned int niov, struct iovec *iov, 
-	     size_t offset, size_t mlen, size_t rlen)
+             unsigned int niov, struct iovec *iov, 
+             size_t offset, size_t mlen, size_t rlen)
 {
         return kranal_recvmsg(nal, private, msg, niov, iov, NULL,
-			      offset, mlen, rlen);
+                              offset, mlen, rlen);
 }
 
 ptl_err_t
 kranal_recv_pages (lib_nal_t *nal, void *private, lib_msg_t *msg,
-		   unsigned int niov, ptl_kiov_t *kiov, 
-		   size_t offset, size_t mlen, size_t rlen)
+                   unsigned int niov, ptl_kiov_t *kiov, 
+                   size_t offset, size_t mlen, size_t rlen)
 {
         return kranal_recvmsg(nal, private, msg, niov, NULL, kiov,
-			      offset, mlen, rlen);
+                              offset, mlen, rlen);
 }
 
 int
@@ -1027,12 +1027,12 @@ kranal_reaper_check (int idx, unsigned long *min_timeoutp)
 int
 kranal_connd (void *arg)
 {
-	char               name[16];
+        char               name[16];
         wait_queue_t       wait;
         unsigned long      flags;
         kra_peer_t        *peer;
 
-	snprintf(name, sizeof(name), "kranal_connd_%02ld", (long)arg);
+        snprintf(name, sizeof(name), "kranal_connd_%02ld", (long)arg);
         kportal_daemonize(name);
         kportal_blockallsigs();
 
@@ -1045,7 +1045,7 @@ kranal_connd (void *arg)
 
                 if (!list_empty(&kranal_data.kra_connd_peers)) {
                         peer = list_entry(kranal_data.kra_connd_peers.next,
-					  kra_peer_t, rap_connd_list);
+                                          kra_peer_t, rap_connd_list);
                         
                         list_del_init(&peer->rap_connd_list);
                         spin_unlock_irqrestore(&kranal_data.kra_connd_lock, flags);
@@ -1054,7 +1054,7 @@ kranal_connd (void *arg)
                         kranal_peer_decref(peer);
 
                         spin_lock_irqsave(&kranal_data.kra_connd_lock, flags);
-			continue;
+                        continue;
                 }
 
                 set_current_state(TASK_INTERRUPTIBLE);
@@ -1155,7 +1155,7 @@ kranal_reaper (void *arg)
                         /* Compute how many table entries to check now so I
                          * get round the whole table fast enough (NB I do
                          * this at fixed intervals of 'p' seconds) */
-			chunk = conn_entries;
+                        chunk = conn_entries;
                         if (min_timeout > n * p)
                                 chunk = (chunk * n * p) / min_timeout;
                         if (chunk == 0)
@@ -1780,14 +1780,14 @@ kranal_scheduler (void *arg)
         while (!kranal_data.kra_shutdown) {
                 /* Safe: kra_shutdown only set when quiescent */
                 
-		if (busy_loops++ >= RANAL_RESCHED) {
+                if (busy_loops++ >= RANAL_RESCHED) {
                         spin_unlock_irqrestore(&dev->rad_lock, flags);
 
                         our_cond_resched();
-			busy_loops = 0;
+                        busy_loops = 0;
 
                         spin_lock_irqsave(&dev->rad_lock, flags);
-		}
+                }
 
                 if (dev->rad_ready) {
                         /* Device callback fired since I last checked it */
@@ -1799,7 +1799,7 @@ kranal_scheduler (void *arg)
 
                         spin_lock_irqsave(&dev->rad_lock, flags);
                 }
-		
+                
                 if (!list_empty(&dev->rad_connq)) {
                         /* Connection needs attention */
                         conn = list_entry(dev->rad_connq.next,

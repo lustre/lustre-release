@@ -92,8 +92,8 @@ typedef struct
 {
         int               kra_timeout;          /* comms timeout (seconds) */
         int               kra_listener_timeout; /* max time the listener can block */
-	int               kra_backlog;          /* listener's backlog */
-	int               kra_port;		/* listener's TCP/IP port */
+        int               kra_backlog;          /* listener's backlog */
+        int               kra_port;             /* listener's TCP/IP port */
         int               kra_max_immediate;    /* immediate payload breakpoint */
 
         struct ctl_table_header *kra_sysctl;    /* sysctl interface */
@@ -122,9 +122,9 @@ typedef struct
         atomic_t          kra_nthreads;         /* # live threads */
 
         struct semaphore  kra_nid_mutex;        /* serialise NID/listener ops */
-	struct semaphore  kra_listener_signal;	/* block for listener startup/shutdown */
-	struct socket    *kra_listener_sock;	/* listener's socket */
-	int               kra_listener_shutdown; /* ask listener to close */
+        struct semaphore  kra_listener_signal;  /* block for listener startup/shutdown */
+        struct socket    *kra_listener_sock;    /* listener's socket */
+        int               kra_listener_shutdown; /* ask listener to close */
 
         kra_device_t      kra_devices[RANAL_MAXDEVS]; /* device/ptag/cq etc */
         int               kra_ndevs;            /* # devices */
@@ -167,16 +167,16 @@ typedef struct
  * (i.e. receiver checks magic and flips if required).
  */
 
-typedef struct kra_connreq			/* connection request/response */
-{						/* (sent via socket) */
-        __u32             racr_magic;		/* I'm an ranal connreq */
-        __u16             racr_version;		/* this is my version number */
+typedef struct kra_connreq                      /* connection request/response */
+{                                               /* (sent via socket) */
+        __u32             racr_magic;           /* I'm an ranal connreq */
+        __u16             racr_version;         /* this is my version number */
         __u16             racr_devid;           /* sender's device ID */
-        __u64             racr_nid;		/* sender's NID */
+        __u64             racr_nid;             /* sender's NID */
         __u64             racr_peerstamp;       /* sender's instance stamp */
         __u64             racr_connstamp;       /* sender's connection stamp */
         __u32             racr_timeout;         /* sender's timeout */
-	RAP_RI_PARAMETERS racr_riparams;	/* sender's endpoint info */
+        RAP_RI_PARAMETERS racr_riparams;        /* sender's endpoint info */
 } kra_connreq_t;
 
 typedef struct
@@ -194,15 +194,15 @@ typedef struct
 
 typedef struct
 {
-        ptl_hdr_t         raprm_hdr;		/* portals header */
-        __u64             raprm_cookie;		/* opaque completion cookie */
+        ptl_hdr_t         raprm_hdr;            /* portals header */
+        __u64             raprm_cookie;         /* opaque completion cookie */
 } kra_putreq_msg_t;
 
 typedef struct
 {
-	__u64             rapam_src_cookie;	/* reflected completion cookie */
-	__u64             rapam_dst_cookie;	/* opaque completion cookie */
-	kra_rdma_desc_t   rapam_desc;		/* sender's sink buffer */
+        __u64             rapam_src_cookie;     /* reflected completion cookie */
+        __u64             rapam_dst_cookie;     /* opaque completion cookie */
+        kra_rdma_desc_t   rapam_desc;           /* sender's sink buffer */
 } kra_putack_msg_t;
 
 typedef struct
@@ -219,16 +219,16 @@ typedef struct
 
 typedef struct                                  /* NB must fit in FMA "Prefix" */
 {
-        __u32             ram_magic;		/* I'm an ranal message */
-        __u16             ram_version;		/* this is my version number */
-        __u16             ram_type;		/* msg type */
+        __u32             ram_magic;            /* I'm an ranal message */
+        __u16             ram_version;          /* this is my version number */
+        __u16             ram_type;             /* msg type */
         __u64             ram_srcnid;           /* sender's NID */
         __u64             ram_connstamp;        /* sender's connection stamp */
         union {
                 kra_immediate_msg_t   immediate;
-		kra_putreq_msg_t      putreq;
-		kra_putack_msg_t      putack;
-		kra_get_msg_t         get;
+                kra_putreq_msg_t      putreq;
+                kra_putack_msg_t      putack;
+                kra_get_msg_t         get;
                 kra_completion_msg_t  completion;
         }                    ram_u;
         __u32             ram_seq;              /* incrementing sequence number */
@@ -242,13 +242,13 @@ typedef struct                                  /* NB must fit in FMA "Prefix" *
 #define RANAL_MSG_NONE              0x00        /* illegal message */
 #define RANAL_MSG_NOOP              0x01        /* empty ram_u (keepalive) */
 #define RANAL_MSG_IMMEDIATE         0x02        /* ram_u.immediate */
-#define RANAL_MSG_PUT_REQ           0x03	/* ram_u.putreq (src->sink) */
-#define RANAL_MSG_PUT_NAK           0x04	/* ram_u.completion (no PUT match: sink->src) */
-#define RANAL_MSG_PUT_ACK           0x05	/* ram_u.putack (PUT matched: sink->src) */
-#define RANAL_MSG_PUT_DONE          0x86	/* ram_u.completion (src->sink) */
-#define RANAL_MSG_GET_REQ           0x07       	/* ram_u.get (sink->src) */
+#define RANAL_MSG_PUT_REQ           0x03        /* ram_u.putreq (src->sink) */
+#define RANAL_MSG_PUT_NAK           0x04        /* ram_u.completion (no PUT match: sink->src) */
+#define RANAL_MSG_PUT_ACK           0x05        /* ram_u.putack (PUT matched: sink->src) */
+#define RANAL_MSG_PUT_DONE          0x86        /* ram_u.completion (src->sink) */
+#define RANAL_MSG_GET_REQ           0x07        /* ram_u.get (sink->src) */
 #define RANAL_MSG_GET_NAK           0x08        /* ram_u.completion (no GET match: src->sink) */
-#define RANAL_MSG_GET_DONE          0x89	/* ram_u.completion (src->sink) */
+#define RANAL_MSG_GET_DONE          0x89        /* ram_u.completion (src->sink) */
 #define RANAL_MSG_CLOSE             0x8a        /* empty ram_u */
 
 /***********************************************************************/
@@ -320,7 +320,7 @@ typedef struct kra_conn
         unsigned int        rac_scheduled;      /* being attented to */
         spinlock_t          rac_lock;           /* serialise */
         kra_device_t       *rac_device;         /* which device */
-	RAP_PVOID           rac_rihandle;	/* RA endpoint */
+        RAP_PVOID           rac_rihandle;       /* RA endpoint */
         kra_msg_t          *rac_rxmsg;          /* incoming message (FMA prefix) */
         kra_msg_t           rac_msg;            /* keepalive/CLOSE message buffer */
 } kra_conn_t;
@@ -347,7 +347,7 @@ typedef struct kra_peer
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,0))
 # define sk_allocation  allocation
-# define sk_data_ready	data_ready
+# define sk_data_ready  data_ready
 # define sk_write_space write_space
 # define sk_user_data   user_data
 # define sk_prot        prot
@@ -369,17 +369,17 @@ static inline void
 kranal_peer_addref(kra_peer_t *peer)
 {
         CDEBUG(D_NET, "%p->"LPX64"\n", peer, peer->rap_nid);
-	LASSERT(atomic_read(&peer->rap_refcount) > 0);
-	atomic_inc(&peer->rap_refcount);
+        LASSERT(atomic_read(&peer->rap_refcount) > 0);
+        atomic_inc(&peer->rap_refcount);
 }
 
 static inline void
 kranal_peer_decref(kra_peer_t *peer)
 {
         CDEBUG(D_NET, "%p->"LPX64"\n", peer, peer->rap_nid);
-	LASSERT(atomic_read(&peer->rap_refcount) > 0);
-	if (atomic_dec_and_test(&peer->rap_refcount))
-		kranal_destroy_peer(peer);
+        LASSERT(atomic_read(&peer->rap_refcount) > 0);
+        if (atomic_dec_and_test(&peer->rap_refcount))
+                kranal_destroy_peer(peer);
 }
 
 static inline struct list_head *
@@ -401,16 +401,16 @@ static inline void
 kranal_conn_addref(kra_conn_t *conn)
 {
         CDEBUG(D_NET, "%p->"LPX64"\n", conn, conn->rac_peer->rap_nid);
-	LASSERT(atomic_read(&conn->rac_refcount) > 0);
-	atomic_inc(&conn->rac_refcount);
+        LASSERT(atomic_read(&conn->rac_refcount) > 0);
+        atomic_inc(&conn->rac_refcount);
 }
 
 static inline void
 kranal_conn_decref(kra_conn_t *conn)
 {
         CDEBUG(D_NET, "%p->"LPX64"\n", conn, conn->rac_peer->rap_nid);
-	LASSERT(atomic_read(&conn->rac_refcount) > 0);
-	if (atomic_dec_and_test(&conn->rac_refcount))
+        LASSERT(atomic_read(&conn->rac_refcount) > 0);
+        if (atomic_dec_and_test(&conn->rac_refcount))
                 kranal_destroy_conn(conn);
 }
 
