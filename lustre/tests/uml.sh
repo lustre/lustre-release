@@ -1,14 +1,18 @@
 #!/bin/bash
 
-config=${1-uml.xml}
-LMC=${LMC-../utils/lmc}
+export PATH=`dirname $0`/../utils:$PATH
+
+config=${1:-uml.xml}
+LMC=${LMC:-lmc}
 TMP=${TMP:-/tmp}
 
 MDSDEV=${MDSDEV:-$TMP/mds1}
 MDSSIZE=${MDSSIZE:-50000}
 
-OSTDEV1=${OSTDEV1:-$TMP/ost1}
-OSTDEV2=${OSTDEV2:-$TMP/ost2}
+OSTDEVBASE=$TMP/ost
+#OSTDEV1=${OSTDEV1:-${OSTDEVBASE}1}
+#OSTDEV2=${OSTDEV2:-${OSTDEVBASE}2}
+#etc
 OSTSIZE=${OSTSIZE:-100000}
 STRIPECNT=${STRIPECNT:-1}
 
@@ -78,7 +82,7 @@ echo -n "adding OST on:"
 for NODE in $OSTNODES; do
 	eval OSTDEV=\$OSTDEV$COUNT
 	echo -n " $NODE"
-	OSTDEV=${OSTDEV:-$OSTDEV1}
+	OSTDEV=${OSTDEV:-$OSTDEVBASE$COUNT}
         ${LMC} -m $config --add ost --node $NODE --lov lov1 --fstype $FSTYPE --dev $OSTDEV --size $OSTSIZE || exit 21
 	COUNT=`expr $COUNT + 1`
 done
