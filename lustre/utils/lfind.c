@@ -199,7 +199,7 @@ processFile(const char *path, const struct stat *sp, int flag, struct FTW *ftwp)
 		return(1);
 	}
 
-	if ((fd = open(path, O_RDONLY)) < 0) {
+	if ((fd = open(path, O_RDONLY | O_LOV_DELAY_CREATE)) < 0) {
 		errMsg("open \"%.20s\" failed.", path);
 		perror("open");
 		exit(1);
@@ -212,7 +212,7 @@ processFile(const char *path, const struct stat *sp, int flag, struct FTW *ftwp)
 	if ((rc = ioctl(fd, LL_IOC_LOV_GETSTRIPE, (void *)lmm)) < 0) {
 		errMsg("LL_IOC_LOV_GETSTRIPE ioctl failed.");
 		perror("ioctl");
-		exit(1);
+		return 0;
 	}
 
 	close(fd);
@@ -225,11 +225,11 @@ processFile(const char *path, const struct stat *sp, int flag, struct FTW *ftwp)
 	if (verbose) {
 		printf("lmm_magic:          0x%x\n", lmm->lmm_magic);
 		printf("lmm_object_id:      "LPX64"\n", lmm->lmm_object_id);
-		printf("lmm_stripe_offset:  %d\n", lmm->lmm_stripe_offset);
-		printf("lmm_stripe_count:   %d\n", lmm->lmm_stripe_count);
-		printf("lmm_stripe_size:    "LPU64"\n", lmm->lmm_stripe_size);
-		printf("lmm_ost_count:      %d\n", lmm->lmm_ost_count);
-		printf("lmm_stripe_pattern: %d\n", lmm->lmm_stripe_pattern);
+		printf("lmm_stripe_offset:  %u\n", (int)lmm->lmm_stripe_offset);
+		printf("lmm_stripe_count:   %u\n", (int)lmm->lmm_stripe_count);
+		printf("lmm_stripe_size:    %u\n", (int)lmm->lmm_stripe_size);
+		printf("lmm_ost_count:      %u\n", lmm->lmm_ost_count);
+		printf("lmm_stripe_pattern: %d\n", lmm->lmm_magic & 0xf);
 	}
 
 	count = lmm->lmm_ost_count;
