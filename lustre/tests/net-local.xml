@@ -1,5 +1,5 @@
 <?xml version="1.0"?>
-<!DOCTYPE lustre SYSTEM "lustre.dtd">
+<!DOCTYPE lustre SYSTEM "../utils/lustre.dtd">
 
 <lustre>
   <node name="local" uuid="local-UUID">

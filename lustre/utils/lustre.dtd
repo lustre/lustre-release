@@ -1,21 +1,26 @@
 <!-- Lustre Management DTD -->
 
 <!-- basic entities -->
-<!ENTITY % tag.content '(#PCDATA)'>
-<!ENTITY % tag.id '(num) #CDATA #IMPLIED (name, uuid) #CDATA #REQUIRED'>
-<!ENTITY % tag.attr '(name, uuid) #CDATA #REQUIRED'>
+<!ENTITY % tag.content "(#PCDATA)">
+<!ENTITY % tag.id "
+  num CDATA #IMPLIED
+  name CDATA #REQUIRED
+  uuid CDATA #REQUIRED">
+<!ENTITY % tag.attr "
+  name CDATA #REQUIRED
+  uuid CDATA #REQUIRED">
 
 <!-- main elements -->
-<!ELEMENT lustre (node | profile | mountpoint |
-                  mds | obd | ost | osc | lov | router)*>
+<!ELEMENT lustre (node | profile | mountpoint | ldlm |
+                  mds | mdc | obd | ost | osc | lov | router)*>
 
-<!ELEMENT profile (mountpoint_id, service_id)>
+<!ELEMENT profile (service_id | mountpoint_id)*>
 <!ATTLIST profile %tag.attr;>
-<!ELEMENT mountpoint (path, fileset, mds_id, lov_id)>
+<!ELEMENT mountpoint (path | fileset | mds_id | lov_id)*>
 <!ATTLIST mountpoint %tag.attr;>
 <!ELEMENT node (profile_id)>
 <!ATTLIST node %tag.attr;>
-<!ELEMENT ldlm>
+<!ELEMENT ldlm EMPTY>
 <!ATTLIST ldlm %tag.attr;>
 
 <!ELEMENT obd (fstype | device | autoformat)*>
@@ -35,12 +40,13 @@
 <!ATTLIST router %tag.attr;>
 
 <!-- basic elements -->
-<!ELEMENT network %tag.content;>
+<!ELEMENT network (server | port)*>
 <!ATTLIST network type (tcp | elan | myrinet) 'tcp'>
 
 <!ELEMENT fstype        %tag.content;>
 <!ELEMENT device        %tag.content;>
 <!ELEMENT server        %tag.content;>
+<!ELEMENT port          %tag.content;>
 <!ELEMENT autoformat    %tag.content;>
 <!ELEMENT path          %tag.content;>
 <!ELEMENT fileset       %tag.content;>
