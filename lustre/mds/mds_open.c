@@ -1116,7 +1116,13 @@ int mds_close(struct ptlrpc_request *req)
                               obd->u.mds.mds_max_cookiesize};
         ENTRY;
 
-        MDS_CHECK_RESENT(req, mds_reconstruct_generic(req));
+        rc = lustre_pack_reply(req, 3, repsize, NULL);
+        if (rc) {
+                CERROR("lustre_pack_reply: rc = %d\n", rc);
+                req->rq_status = rc;
+        } else {
+                MDS_CHECK_RESENT(req, mds_reconstruct_generic(req));
+        }
 
         body = lustre_swab_reqbuf(req, 0, sizeof(*body), lustre_swab_mds_body);
         if (body == NULL) {
@@ -1134,12 +1140,6 @@ int mds_close(struct ptlrpc_request *req)
                           ": cookie "LPX64, body->fid1.id, body->handle.cookie);
                 req->rq_status = -ESTALE;
                 RETURN(-ESTALE);
-        }
-
-        rc = lustre_pack_reply(req, 3, repsize, NULL);
-        if (rc) {
-                CERROR("lustre_pack_reply: rc = %d\n", rc);
-                req->rq_status = rc;
         }
 
         inode = mfd->mfd_dentry->d_inode;
