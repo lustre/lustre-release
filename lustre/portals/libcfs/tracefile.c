@@ -789,7 +789,7 @@ int trace_write_debug_mb(struct file *file, const char *buffer,
                        "%d MB, which is more than 80%% of physical RAM "
                        "(%lu).\n", max * smp_num_cpus,
                        (num_physpages >> (20 - 2 - PAGE_SHIFT)) / 5);
-                return count;
+                return -EINVAL;
         }
 
         for (i = 0; i < NR_CPUS; i++) {
@@ -809,7 +809,7 @@ int trace_read_debug_mb(char *page, char **start, off_t off, int count,
 
         tcd = trace_get_tcd(flags);
         rc = snprintf(page, count, "%lu\n",
-                      tcd->tcd_max_pages * smp_num_cpus << (20 - PAGE_SHIFT));
+                      (tcd->tcd_max_pages >> (20 - PAGE_SHIFT)) * smp_num_cpus);
         trace_put_tcd(tcd, flags);
 
         return rc;

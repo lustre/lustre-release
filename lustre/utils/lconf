@@ -88,6 +88,8 @@ ptldebug_names = {
     "rpctrace" :  (1 << 20),
     "vfstrace" :  (1 << 21),
     "reada" :     (1 << 22),
+    "mmap" :      (1 << 23),
+    "config" :    (1 << 24),
     }
 
 subsystem_names = {
@@ -117,7 +119,9 @@ subsystem_names = {
     "sm" :           (1 << 23),
     "asobd" :        (1 << 24),
     "confobd" :      (1 << 25),
-    "lonal" :        (1 << 26),
+    "lmv" :          (1 << 26),
+    "cmobd" :        (1 << 27),
+    "lonal" :        (1 << 28),
     }
 
 
@@ -131,7 +135,7 @@ def cleanup_error(rc):
 # debugging and error funcs
 
 def fixme(msg = "this feature"):
-    raise Lustre.LconfError, msg + ' not implmemented yet.'
+    raise Lustre.LconfError, msg + ' not implemented yet.'
 
 def panic(*args):
     msg = string.join(map(str,args))

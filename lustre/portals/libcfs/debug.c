@@ -291,7 +291,7 @@ char *portals_id2str(int nal, ptl_process_id_t id, char *str)
         
         portals_nid2str(nal, id.nid, str);
         len = strlen(str);
-        snprintf(str + len, PTL_NALFMT_SIZE, "-%u", id.pid);
+        snprintf(str + len, PTL_NALFMT_SIZE - len, "-%u", id.pid);
         return str;
 }
 

@@ -39,6 +39,12 @@
 #include <time.h>
 #include <stdarg.h>
 #include <endian.h>
+#if CRAY_PORTALS
+#ifdef REDSTORM
+#define __QK__
+#endif
+#include <portals/ipmap.h>
+#endif
 
 #ifdef __CYGWIN__
 
@@ -66,12 +72,18 @@ typedef struct
 
 static name2num_t nalnames[] = {
         {"any",         0},
+#if !CRAY_PORTALS
         {"tcp",		SOCKNAL},
         {"elan",	QSWNAL},
         {"gm",	        GMNAL},
         {"openib",      OPENIBNAL},
         {"iib",         IIBNAL},
         {"lo",          LONAL},
+#else
+        {"cray_kern_nal", CRAY_KERN_NAL},
+        {"cray_user_nal", CRAY_USER_NAL},
+        {"cray_qk_nal",   CRAY_QK_NAL},
+#endif
         {NULL,		-1}
 };
 
@@ -363,7 +375,11 @@ ptl_parse_nid (ptl_nid_t *nidp, char *str)
         }
 
         if (ptl_parse_ipaddr (&ipaddr, str) == 0) {
+#if !CRAY_PORTALS
                 *nidp = (ptl_nid_t)ipaddr;
+#else
+                *nidp = (((ptl_nid_t)ipaddr & PNAL_HOSTID_MASK) << PNAL_VNODE_SHIFT);
+#endif
                 return (0);
         }
 

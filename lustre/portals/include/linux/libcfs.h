@@ -109,10 +109,13 @@ struct ptldebug_header {
 #define S_SM          0x00800000
 #define S_ASOBD       0x01000000
 #define S_CONFOBD     0x02000000
-#define S_LONAL       0x04000000
-
-/* If you change these values, please keep portals/utils/debug.c
- * up to date! */
+#define S_LMV         0x04000000
+#define S_CMOBD       0x08000000
+#define S_LONAL       0x10000000
+/* If you change these values, please keep these files up to date...
+ *    portals/utils/debug.c
+ *    utils/lconf
+ */
 
 /* Debugging masks (32 bits, non-overlapping) */
 #define D_TRACE       0x00000001 /* ENTRY/EXIT markers */
@@ -138,6 +141,12 @@ struct ptldebug_header {
 #define D_RPCTRACE    0x00100000 /* for distributed debugging */
 #define D_VFSTRACE    0x00200000
 #define D_READA       0x00400000 /* read-ahead */
+#define D_MMAP        0x00800000
+#define D_CONFIG      0x01000000
+/* If you change these values, please keep these files up to date...
+ *    portals/utils/debug.c
+ *    utils/lconf
+ */
 
 #ifdef __KERNEL__
 # include <linux/sched.h> /* THREAD_SIZE */

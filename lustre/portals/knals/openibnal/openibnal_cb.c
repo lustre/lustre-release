@@ -2191,7 +2191,7 @@ kibnal_pathreq_callback (tTS_IB_CLIENT_QUERY_TID tid, int status,
 
 void
 kibnal_service_get_callback (tTS_IB_CLIENT_QUERY_TID tid, int status,
-                             tTS_IB_COMMON_ATTRIB_SERVICE resp, void *arg)
+                             struct ib_common_attrib_service *resp, void *arg)
 {
         kib_conn_t *conn = arg;
         

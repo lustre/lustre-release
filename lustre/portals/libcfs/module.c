@@ -316,6 +316,10 @@ EXPORT_SYMBOL(libcfs_nal_cmd_unregister);
 int
 libcfs_nal_cmd(struct portals_cfg *pcfg)
 {
+#if CRAY_PORTALS
+        /* pretend success */
+        RETURN(0);
+#else
         struct nal_cmd_handler *cmd;
         __u32 nal = pcfg->pcfg_nal;
         int   rc = -EINVAL;
@@ -333,6 +337,7 @@ libcfs_nal_cmd(struct portals_cfg *pcfg)
         up(&nal_cmd_sem);
 
         RETURN(rc);
+#endif
 }
 EXPORT_SYMBOL(libcfs_nal_cmd);
 

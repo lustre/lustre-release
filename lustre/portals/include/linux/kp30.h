@@ -735,4 +735,13 @@ typedef int (*cfg_record_cb_t)(enum cfg_record_type, int len, void *data);
 # error "No word size defined"
 #endif
 
+/* lustre_id output helper macros */
+#define DLID4   "%lu/%lu/%lu/%lu"
+
+#define OLID4(id)                              \
+    (unsigned long)(id)->li_fid.lf_id,         \
+    (unsigned long)(id)->li_fid.lf_group,      \
+    (unsigned long)(id)->li_stc.u.e3s.l3s_ino, \
+    (unsigned long)(id)->li_stc.u.e3s.l3s_gen
+                
 #endif

@@ -44,6 +44,8 @@ struct name2num {
         { "tcp",         SOCKNAL},
         { "gm",          GMNAL},
         { "ib",          OPENIBNAL},
+        { "iib",         IIBNAL},
+        { "lo",          LONAL},
         { NULL,          -1}
 };
 
