@@ -3,7 +3,7 @@
  *
  * Lustre Light directory handling
  *
- *  Copyright (c) 2002, 2003 Cluster File Systems, Inc.
+ *  Copyright (c) 2002-2004 Cluster File Systems, Inc.
  *
  *   This file is part of Lustre, http://www.lustre.org.
  *
@@ -33,16 +33,31 @@
 #include <sys/fcntl.h>
 #include <sys/queue.h>
 
+#ifdef HAVE_XTIO_H
+#include <xtio.h>
+#endif
 #include <sysio.h>
 #include <fs.h>
 #include <mount.h>
 #include <inode.h>
+#ifdef HAVE_FILE_H
 #include <file.h>
+#endif
 
 #undef LIST_HEAD
 
+#ifdef HAVE_LINUX_TYPES_H
 #include <linux/types.h>
+#elif defined(HAVE_SYS_TYPES_H)
+#include <sys/types.h>
+#endif
+
+#ifdef HAVE_LINUX_UNISTD_H
 #include <linux/unistd.h>
+#elif defined(HAVE_UNISTD_H)
+#include <unistd.h>
+#endif
+
 #include <dirent.h>
 
 #include "llite_lib.h"
