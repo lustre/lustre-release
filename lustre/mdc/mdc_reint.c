@@ -62,19 +62,22 @@ static int mdc_reint(struct ptlrpc_request *request, int level)
  * go to the setattr portal. */
 int mdc_setattr(struct lustre_handle *conn,
                 struct mdc_op_data *data,
-                struct iattr *iattr, void *ea, int ealen,
+                struct iattr *iattr, void *ea, int ealen, void *ea2, int ea2len,
                 struct ptlrpc_request **request)
 {
         struct ptlrpc_request *req;
         struct mds_rec_setattr *rec;
         struct mdc_rpc_lock *rpc_lock;
-        int rc, bufcount = 1, size[2] = {sizeof(*rec), ealen};
+        int rc, bufcount = 1, size[3] = {sizeof(*rec), ealen, ea2len};
         ENTRY;
 
         LASSERT(iattr != NULL);
 
-        if (ealen > 0)
+        if (ealen > 0) {
                 bufcount = 2;
+                if (ea2len > 0)
+                        bufcount = 3;
+        }
 
         req = ptlrpc_prep_req(class_conn2cliimp(conn), MDS_REINT, bufcount,
                               size, NULL);
@@ -87,7 +90,7 @@ int mdc_setattr(struct lustre_handle *conn,
         } else
                 rpc_lock = &mdc_rpc_lock;
 
-        mds_setattr_pack(req, data, iattr, ea, ealen);
+        mdc_setattr_pack(req, data, iattr, ea, ealen, ea2, ea2len);
 
         size[0] = sizeof(struct mds_body);
         req->rq_replen = lustre_msg_size(1, size);
@@ -126,9 +129,9 @@ int mdc_create(struct lustre_handle *conn,
                 return -ENOMEM;
 //                RETURN(-ENOMEM);
 
-        /* mds_create_pack fills msg->bufs[1] with name
+        /* mdc_create_pack fills msg->bufs[1] with name
          * and msg->bufs[2] with tgt, for symlinks or lov MD data */
-        mds_create_pack(req, 0, op_data,
+        mdc_create_pack(req, 0, op_data,
                         mode, rdev, uid, gid, time,
                         data, datalen);
 
@@ -171,9 +174,10 @@ int mdc_unlink(struct lustre_handle *conn,
 
         size[0] = sizeof(struct mds_body);
         size[1] = obddev->u.cli.cl_max_mds_easize;
-        req->rq_replen = lustre_msg_size(2, size);
+        size[2] = obddev->u.cli.cl_max_mds_cookiesize;
+        req->rq_replen = lustre_msg_size(3, size);
 
-        mds_unlink_pack(req, 0, data);
+        mdc_unlink_pack(req, 0, data);
 
         rc = mdc_reint(req, LUSTRE_CONN_FULL);
         if (rc == -ERESTARTSYS)
@@ -194,7 +198,7 @@ int mdc_link(struct lustre_handle *conn,
         if (!req)
                 RETURN(-ENOMEM);
 
-        mds_link_pack(req, 0, data);
+        mdc_link_pack(req, 0, data);
 
         size[0] = sizeof(struct mds_body);
         req->rq_replen = lustre_msg_size(1, size);
@@ -223,7 +227,7 @@ int mdc_rename(struct lustre_handle *conn,
         if (!req)
                 RETURN(-ENOMEM);
 
-        mds_rename_pack(req, 0, data, old, oldlen, new, newlen);
+        mdc_rename_pack(req, 0, data, old, oldlen, new, newlen);
 
         size[0] = sizeof(struct mds_body);
         req->rq_replen = lustre_msg_size(1, size);
