@@ -1,5 +1,9 @@
-tbd
-       * version v0_8
+2003-12-03  Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 1.0.0
+       * fix negative export reference count in fsfilt_sync (2312)
+
+2003-12-01  Cluster File Systems, Inc. <info@clusterfs.com>
+       * release candidate 0.9.1
        * bug fixes
 	- orphans are moved into the PENDING directory for possible recovery
 	- replayed opens now open by fid for orphan/rename safety (1042)
