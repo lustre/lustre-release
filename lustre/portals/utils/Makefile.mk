@@ -2,6 +2,8 @@ include $(src)/../Kernelenv
 
 host-progs := acceptor ptlctl
 
-ptlctl-objs := debug.o l_ioctl.o parser.o portals.o ptlctl.o
+ptlctl-objs := libptlctl.so ptlctl.o
+
+libptlctl-objs := debug.o l_ioctl.o parser.o portals.o
 
 always := $(host-progs)
