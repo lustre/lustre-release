@@ -61,6 +61,7 @@ struct ptlrpcd_ctl {
         struct list_head          pc_req_list;
         wait_queue_head_t         pc_waitq;
         struct ptlrpc_request_set *pc_set;
+        char                      pc_name[16];
 #ifndef __KERNEL__
         int                       pc_recurred;
         void                     *pc_callback;
@@ -147,7 +148,7 @@ static int ptlrpcd(void *arg)
         unsigned long flags;
         ENTRY;
 
-        kportal_daemonize("ptlrpcd");
+        kportal_daemonize(pc->pc_name);
 
         SIGNAL_MASK_LOCK(current, flags);
         sigfillset(&current->blocked);
@@ -202,7 +203,7 @@ int ptlrpcd_check_async_rpcs(void *arg)
 }
 #endif
 
-static int ptlrpcd_start(struct ptlrpcd_ctl *pc)
+static int ptlrpcd_start(char *name, struct ptlrpcd_ctl *pc)
 {
         int rc = 0;
 
@@ -213,6 +214,7 @@ static int ptlrpcd_start(struct ptlrpcd_ctl *pc)
         pc->pc_flags = 0;
         spin_lock_init(&pc->pc_lock);
         INIT_LIST_HEAD(&pc->pc_req_list);
+        snprintf (pc->pc_name, sizeof (pc->pc_name), name);
 
         pc->pc_set = ptlrpc_prep_set();
         if (pc->pc_set == NULL)
@@ -254,13 +256,13 @@ int ptlrpcd_addref(void)
         if (++ptlrpcd_users != 1)
                 GOTO(out, rc);
 
-        rc = ptlrpcd_start(&ptlrpcd_pc);
+        rc = ptlrpcd_start("ptlrpcd", &ptlrpcd_pc);
         if (rc) {
                 --ptlrpcd_users;
                 GOTO(out, rc);
         }
 
-        rc = ptlrpcd_start(&ptlrpcd_recovery_pc);
+        rc = ptlrpcd_start("ptlrpcd-recov", &ptlrpcd_recovery_pc);
         if (rc) {
                 ptlrpcd_stop(&ptlrpcd_pc);
                 --ptlrpcd_users;
