@@ -75,7 +75,7 @@ find . -print | cpio -ap  $RPM_BUILD_ROOT/usr/src/lustre-%{version}
 %attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/obdclass.o
 %attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/obdecho.o
 %attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/obdfilter.o
-%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/obdfs.o
+#%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/obdfs.o
 %attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/osc.o
 %attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/ost.o
 %attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/ptlrpc.o
