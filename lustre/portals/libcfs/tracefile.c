@@ -108,7 +108,8 @@ static struct page *trace_get_page(struct trace_cpu_data *tcd,
         }
 
         if (!list_empty(&tcd->tcd_pages)) {
-                page = list_entry(tcd->tcd_pages.prev, struct page, list);
+                page = list_entry(tcd->tcd_pages.prev, struct page,
+                                  PAGE_LIST_ENTRY);
                 if (page->index + len <= PAGE_SIZE)
                         return page;
         }
@@ -123,7 +124,7 @@ static struct page *trace_get_page(struct trace_cpu_data *tcd,
                 }
                 page->index = 0;
                 page->mapping = (void *)smp_processor_id();
-                list_add_tail(&page->list, &tcd->tcd_pages);
+                list_add_tail(&PAGE_LIST(page), &tcd->tcd_pages);
                 tcd->tcd_cur_pages++;
 
                 if (tcd->tcd_cur_pages > 8 && thread_running) {
@@ -145,24 +146,25 @@ static struct page *trace_get_page(struct trace_cpu_data *tcd,
                 spin_lock_init(&pc.pc_lock);
 
                 list_for_each_safe(pos, tmp, &tcd->tcd_pages) {
-                        struct page *page = list_entry(pos, struct page, list);
+                        struct page *page;
 
                         if (pgcount-- == 0)
                                 break;
 
-                        list_del(&page->list);
-                        list_add_tail(&page->list, &pc.pc_pages);
+                        page = list_entry(pos, struct page, PAGE_LIST_ENTRY);
+                        list_del(&PAGE_LIST(page));
+                        list_add_tail(&PAGE_LIST(page), &pc.pc_pages);
                         tcd->tcd_cur_pages--;
                 }
                 put_pages_on_daemon_list_on_cpu(&pc);
         }
         LASSERT(!list_empty(&tcd->tcd_pages));
 
-        page = list_entry(tcd->tcd_pages.next, struct page, list);
+        page = list_entry(tcd->tcd_pages.next, struct page, PAGE_LIST_ENTRY);
         page->index = 0;
 
-        list_del(&page->list);
-        list_add_tail(&page->list, &tcd->tcd_pages);
+        list_del(&PAGE_LIST(page));
+        list_add_tail(&PAGE_LIST(page), &tcd->tcd_pages);
         return page;
 }
 
@@ -320,15 +322,17 @@ static void put_pages_back_on_cpu(void *info)
 
         spin_lock(&pc->pc_lock);
         list_for_each_safe(pos, tmp, &pc->pc_pages) {
-                struct page *page = list_entry(pos, struct page, list);
+                struct page *page;
+
+                page = list_entry(pos, struct page, PAGE_LIST_ENTRY);
                 LASSERT(page->index <= PAGE_SIZE);
                 LASSERT(atomic_read(&page->count) > 0);
 
                 if ((unsigned long)page->mapping != smp_processor_id())
                         continue;
 
-                list_del(&page->list);
-                list_add_tail(&page->list, cur_head);
+                list_del(&PAGE_LIST(page));
+                list_add_tail(&PAGE_LIST(page), cur_head);
                 tcd->tcd_cur_pages++;
         }
         spin_unlock(&pc->pc_lock);
@@ -358,26 +362,28 @@ static void put_pages_on_daemon_list_on_cpu(void *info)
 
         spin_lock(&pc->pc_lock);
         list_for_each_safe(pos, tmp, &pc->pc_pages) {
-                struct page *page = list_entry(pos, struct page, list);
+                struct page *page;
+
+                page = list_entry(pos, struct page, PAGE_LIST_ENTRY);
                 LASSERT(page->index <= PAGE_SIZE);
                 LASSERT(atomic_read(&page->count) > 0);
                 if ((unsigned long)page->mapping != smp_processor_id())
                         continue;
 
-                list_del(&page->list);
-                list_add_tail(&page->list, &tcd->tcd_daemon_pages);
+                list_del(&PAGE_LIST(page));
+                list_add_tail(&PAGE_LIST(page), &tcd->tcd_daemon_pages);
                 tcd->tcd_cur_daemon_pages++;
 
                 if (tcd->tcd_cur_daemon_pages > tcd->tcd_max_pages) {
                         LASSERT(!list_empty(&tcd->tcd_daemon_pages));
                         page = list_entry(tcd->tcd_daemon_pages.next,
-                                          struct page, list);
+                                          struct page, PAGE_LIST_ENTRY);
 
                         LASSERT(page->index <= PAGE_SIZE);
                         LASSERT(atomic_read(&page->count) > 0);
 
                         page->index = 0;
-                        list_del(&page->list);
+                        list_del(&PAGE_LIST(page));
                         page->mapping = NULL;
                         __free_page(page);
                         tcd->tcd_cur_daemon_pages--;
@@ -403,9 +409,10 @@ void trace_debug_print(void)
 
         collect_pages(&pc);
         list_for_each_safe(pos, tmp, &pc.pc_pages) {
-                struct page *page = list_entry(pos, struct page, list);
+                struct page *page;
                 char *p, *file, *fn;
 
+                page = list_entry(pos, struct page, PAGE_LIST_ENTRY);
                 LASSERT(page->index <= PAGE_SIZE);
                 LASSERT(atomic_read(&page->count) > 0);
 
@@ -424,7 +431,7 @@ void trace_debug_print(void)
                         print_to_console(hdr, D_EMERG, p, len, file, fn);
                 }
 
-                list_del(&page->list);
+                list_del(&PAGE_LIST(page));
                 page->mapping = NULL;
                 __free_page(page);
         }
@@ -460,8 +467,9 @@ int tracefile_dump_all_pages(char *filename)
         oldfs = get_fs();
         set_fs(get_ds());
         list_for_each_safe(pos, tmp, &pc.pc_pages) {
-                struct page *page = list_entry(pos, struct page, list);
+                struct page *page;
 
+                page = list_entry(pos, struct page, PAGE_LIST_ENTRY);
                 LASSERT(page->index <= PAGE_SIZE);
                 LASSERT(atomic_read(&page->count) > 0);
 
@@ -473,7 +481,7 @@ int tracefile_dump_all_pages(char *filename)
                         put_pages_back(&pc);
                         break;
                 }
-                list_del(&page->list);
+                list_del(&PAGE_LIST(page));
                 page->mapping = NULL;
                 __free_page(page);
         }
@@ -497,11 +505,13 @@ void trace_flush_pages(void)
 
         collect_pages(&pc);
         list_for_each_safe(pos, tmp, &pc.pc_pages) {
-                struct page *page = list_entry(pos, struct page, list);
+                struct page *page;
+
+                page = list_entry(pos, struct page, PAGE_LIST_ENTRY);
                 LASSERT(page->index <= PAGE_SIZE);
                 LASSERT(atomic_read(&page->count) > 0);
 
-                list_del(&page->list);
+                list_del(&PAGE_LIST(page));
                 page->mapping = NULL;
                 __free_page(page);
         }
@@ -554,9 +564,8 @@ static int tracefiled(void *arg)
 
         /* we're started late enough that we pick up init's fs context */
         /* this is so broken in uml?  what on earth is going on? */
-        daemonize();
+        kportal_daemonize("ktracefiled");
         reparent_to_init();
-        strncpy(current->comm, "ktracefiled", sizeof(current->comm));
 
         spin_lock_init(&pc.pc_lock);
         complete(&tctl->tctl_start);
@@ -599,7 +608,8 @@ static int tracefiled(void *arg)
                 set_fs(get_ds());
 
                 /* mark the first header, so we can sort in chunks */
-                page = list_entry(pc.pc_pages.next, struct page, list);
+                page = list_entry(pc.pc_pages.next, struct page,
+                                  PAGE_LIST_ENTRY);
                 LASSERT(page->index <= PAGE_SIZE);
                 LASSERT(atomic_read(&page->count) > 0);
 
@@ -607,7 +617,7 @@ static int tracefiled(void *arg)
                 hdr->ph_flags |= PH_FLAG_FIRST_RECORD;
 
                 list_for_each_safe(pos, tmp, &pc.pc_pages) {
-                        page = list_entry(pos, struct page, list);
+                        page = list_entry(pos, struct page, PAGE_LIST_ENTRY);
                         LASSERT(page->index <= PAGE_SIZE);
                         LASSERT(atomic_read(&page->count) > 0);
 
@@ -799,11 +809,13 @@ static void trace_cleanup_on_cpu(void *info)
         tcd->tcd_shutting_down = 1;
 
         list_for_each_safe(pos, tmp, &tcd->tcd_pages) {
-                struct page *page = list_entry(pos, struct page, list);
+                struct page *page;
+
+                page = list_entry(pos, struct page, PAGE_LIST_ENTRY);
                 LASSERT(page->index <= PAGE_SIZE);
                 LASSERT(atomic_read(&page->count) > 0);
 
-                list_del(&page->list);
+                list_del(&PAGE_LIST(page));
                 page->mapping = NULL;
                 __free_page(page);
         }
