@@ -24,6 +24,7 @@ int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
 void lprocfs_unregister_mountpoint(struct ll_sb_info *sbi);
 
 /* llite/namei.c */
+struct dentry *ll_find_alias(struct inode *, struct dentry *);
 int ll_it_open_error(int phase, struct lookup_intent *it);
 int ll_mdc_cancel_unused(struct lustre_handle *conn, struct inode *inode,
                          int flags, void *opaque);
