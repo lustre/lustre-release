@@ -123,7 +123,7 @@ static int ll_intent_file_open(struct file *file, void *lmm,
 
         ll_prepare_mdc_op_data(&data, parent->d_inode, NULL, name, len, O_RDWR);
 
-        rc = mdc_enqueue(sbi->ll_mdc_exp, LDLM_PLAIN, itp, LCK_PR, &data,
+        rc = mdc_enqueue(sbi->ll_mdc_exp, LDLM_PLAIN, itp, LCK_PW, &data,
                          &lockh, lmm, lmmsize, ldlm_completion_ast,
                          ll_mdc_blocking_ast, parent->d_inode);
         if (rc < 0)
@@ -613,7 +613,7 @@ int ll_glimpse_size(struct inode *inode, struct ost_lvb *lvb)
         struct ll_inode_info *lli = ll_i2info(inode);
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         ldlm_policy_data_t policy = { .l_extent = { 0, OBD_OBJECT_EOF } };
-        struct lustre_handle lockh;
+        struct lustre_handle lockh = { 0 };
         int rc, flags = LDLM_FL_HAS_INTENT;
         ENTRY;
 

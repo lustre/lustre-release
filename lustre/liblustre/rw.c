@@ -75,13 +75,12 @@ static int llu_extent_lock_callback(struct ldlm_lock *lock,
         struct lustre_handle lockh = { 0 };
         int rc;
         ENTRY;
-        
 
         if ((unsigned long)data > 0 && (unsigned long)data < 0x1000) {
                 LDLM_ERROR(lock, "cancelling lock with bad data %p", data);
                 LBUG();
         }
-        
+
         switch (flag) {
         case LDLM_CB_BLOCKING:
                 ldlm_lock2handle(lock, &lockh);
@@ -182,7 +181,7 @@ int llu_glimpse_size(struct inode *inode, struct ost_lvb *lvb)
         struct llu_inode_info *lli = llu_i2info(inode);
         struct llu_sb_info *sbi = llu_i2sbi(inode);
         ldlm_policy_data_t policy = { .l_extent = { 0, OBD_OBJECT_EOF } };
-        struct lustre_handle lockh;
+        struct lustre_handle lockh = { 0 };
         int rc, flags = LDLM_FL_HAS_INTENT;
         ENTRY;
 

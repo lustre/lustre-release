@@ -8,6 +8,7 @@ tbd  Cluster File Systems, Inc. <info@clusterfs.com>
 	- update client's i_blocks count via lvb messages (2543)
 	- handle intent open/close of special files properly (1557)
 	- mount MDS with errors=remount-ro, like obdfilter (2009)
+	- initialize lock handle to avoid ASSERT on error cleanup (3057)
        * miscellania
 	- allow default OST striping configuration per directory (1414)
 
