@@ -35,19 +35,16 @@
 #include "mdc_internal.h"
 
 /* mdc_setattr does its own semaphore handling */
-static int mdc_reint(struct ptlrpc_request *request, int level)
+static int mdc_reint(struct ptlrpc_request *request,
+                     struct mdc_rpc_lock *rpc_lock, int level)
 {
         int rc;
-        __u32 *opcodeptr;
 
-        opcodeptr = lustre_msg_buf(request->rq_reqmsg, 0, sizeof (*opcodeptr));
         request->rq_level = level;
 
-        if (!(*opcodeptr == REINT_SETATTR))
-                mdc_get_rpc_lock(&mdc_rpc_lock, NULL);
+        mdc_get_rpc_lock(rpc_lock, NULL);
         rc = ptlrpc_queue_wait(request);
-        if (!(*opcodeptr == REINT_SETATTR))
-                mdc_put_rpc_lock(&mdc_rpc_lock, NULL);
+        mdc_put_rpc_lock(rpc_lock, NULL);
 
         if (rc)
                 CDEBUG(D_INFO, "error in handling %d\n", rc);
@@ -90,14 +87,15 @@ int mdc_setattr(struct lustre_handle *conn, struct mdc_op_data *data,
                 rpc_lock = &mdc_rpc_lock;
         }
 
+        if (iattr->ia_valid & (ATTR_MTIME | ATTR_CTIME))
+                CDEBUG(D_INODE, "setting mtime %lu, ctime %lu\n",
+                       iattr->ia_mtime, iattr->ia_ctime);
         mdc_setattr_pack(req, data, iattr, ea, ealen, ea2, ea2len);
 
         size[0] = sizeof(struct mds_body);
         req->rq_replen = lustre_msg_size(1, size);
 
-        mdc_get_rpc_lock(rpc_lock, NULL);
-        rc = mdc_reint(req, LUSTRE_CONN_FULL);
-        mdc_put_rpc_lock(rpc_lock, NULL);
+        rc = mdc_reint(req, rpc_lock, LUSTRE_CONN_FULL);
 
         *request = req;
         if (rc == -ERESTARTSYS)
@@ -127,8 +125,7 @@ int mdc_create(struct lustre_handle *conn, struct mdc_op_data *op_data,
 
         /* mdc_create_pack fills msg->bufs[1] with name
          * and msg->bufs[2] with tgt, for symlinks or lov MD data */
-        mdc_create_pack(req, 0, op_data,
-                        mode, rdev, uid, gid, time,
+        mdc_create_pack(req, 0, op_data, mode, rdev, uid, gid, time,
                         data, datalen);
 
         size[0] = sizeof(struct mds_body);
@@ -136,7 +133,7 @@ int mdc_create(struct lustre_handle *conn, struct mdc_op_data *op_data,
 
         level = LUSTRE_CONN_FULL;
  resend:
-        rc = mdc_reint(req, level);
+        rc = mdc_reint(req, &mdc_rpc_lock, level);
         /* Resend if we were told to. */
         if (rc == -ERESTARTSYS) {
                 level = LUSTRE_CONN_RECOVER;
@@ -172,7 +169,7 @@ int mdc_unlink(struct lustre_handle *conn, struct mdc_op_data *data,
 
         mdc_unlink_pack(req, 0, data);
 
-        rc = mdc_reint(req, LUSTRE_CONN_FULL);
+        rc = mdc_reint(req, &mdc_rpc_lock, LUSTRE_CONN_FULL);
         if (rc == -ERESTARTSYS)
                 rc = 0;
         RETURN(rc);
@@ -195,7 +192,7 @@ int mdc_link(struct lustre_handle *conn, struct mdc_op_data *data,
         size[0] = sizeof(struct mds_body);
         req->rq_replen = lustre_msg_size(1, size);
 
-        rc = mdc_reint(req, LUSTRE_CONN_FULL);
+        rc = mdc_reint(req, &mdc_rpc_lock, LUSTRE_CONN_FULL);
         *request = req;
         if (rc == -ERESTARTSYS)
                 rc = 0;
@@ -222,7 +219,7 @@ int mdc_rename(struct lustre_handle *conn, struct mdc_op_data *data,
         size[0] = sizeof(struct mds_body);
         req->rq_replen = lustre_msg_size(1, size);
 
-        rc = mdc_reint(req, LUSTRE_CONN_FULL);
+        rc = mdc_reint(req, &mdc_rpc_lock, LUSTRE_CONN_FULL);
         *request = req;
         if (rc == -ERESTARTSYS)
                 rc = 0;
