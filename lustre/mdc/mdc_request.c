@@ -157,7 +157,7 @@ int mdc_getattr(struct lustre_handle *conn,
 
 static void d_delete_aliases(struct inode *inode)
 {
-        struct dentry *dentry;
+        struct dentry *dentry = NULL;
 	struct list_head *tmp;
         int dentry_count = 0;
         ENTRY;
@@ -347,11 +347,13 @@ static void mdc_replay_create(struct ptlrpc_request *req)
         /* XXX cargo-culted right out of ll_iget */
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         inode = iget4(saved->sb, body->fid1.id, create_replay_find_inode, req);
-#else
+#endif
+#if 0
         {
                 extern int ll_read_inode2(struct inode *inode, void *opaque);
                 inode = iget5_locked(saved->sb, body->fid1.id,
-                                     create_replay_find_inode, req);
+                                     create_replay_find_inode, 
+                                     ll_read_inode2, req);
 
                 if (!inode)
                         LBUG(); /* XXX ick */

@@ -32,6 +32,13 @@ struct ll_file_data {
         __u32 fd_flags;
 };
 
+struct lustre_intent_data { 
+	__u64 it_lock_handle[2];
+	__u32 it_disposition;
+	__u32 it_status;
+	__u32 it_lock_mode;
+};
+
 struct ll_dentry_data {
         struct semaphore      lld_it_sem;
 };
@@ -54,12 +61,6 @@ struct ll_inode_info {
 #endif
 };
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
-static inline struct ll_inode_info *LL_I(struct inode *inode)
-{
-        return container_of(inode, struct ll_inode_info, lli_vfs_inode);
-}
-#endif
 
 
 #define LL_SUPER_MAGIC 0x0BD00BD0
@@ -89,7 +90,7 @@ struct ll_sb_info {
 
 static inline struct ll_sb_info *ll_s2sbi(struct super_block *sb)
 {
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
+#if  (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
         return (struct ll_sb_info *)(sb->s_fs_info);
 #else
         return (struct ll_sb_info *)(sb->u.generic_sbp);
@@ -109,14 +110,22 @@ static inline struct client_obd *sbi2mdc(struct ll_sb_info *sbi)
         return &obd->u.cli;
 }
 
+// FIXME: replace the name of this with LL_SB to conform to kernel stuff
 static inline struct ll_sb_info *ll_i2sbi(struct inode *inode)
 {
         return ll_s2sbi(inode->i_sb);
 }
 
+
+// FIXME: replace the name of this with LL_I to conform to kernel stuff
+// static inline struct ll_inode_info *LL_I(struct inode *inode)
 static inline struct ll_inode_info *ll_i2info(struct inode *inode)
 {
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
+       	return container_of(inode, struct ll_inode_info, lli_vfs_inode);
+#else
         return (struct ll_inode_info *)&(inode->u.generic_ip);
+#endif
 }
 
 static inline struct lustre_handle *ll_i2obdconn(struct inode *inode)

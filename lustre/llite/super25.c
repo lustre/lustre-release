@@ -123,7 +123,6 @@ static int ll_fill_super(struct super_block *sb, void *data, int silent)
         }
 
         INIT_LIST_HEAD(&sbi->ll_conn_chain);
-        sbi->ll_mount_epoch = 0;
         generate_random_uuid(uuid);
         class_uuid_unparse(uuid, sbi->ll_sb_uuid);
 
@@ -478,7 +477,6 @@ int ll_read_inode2(struct inode *inode, void *opaque)
         ENTRY;
         
         sema_init(&lli->lli_open_sem, 1);
-        lli->lli_mount_epoch = ll_i2sbi(inode)->ll_mount_epoch;
         
         /* core attributes first */
         ll_update_inode(inode, body);
@@ -585,16 +583,15 @@ static struct inode *ll_alloc_inode(struct super_block *sb)
 	if (!lli)
 		return NULL;
 
-	memset(lli, 0, sizeof(*lli));
+	memset(lli, 0, (char *)&lli->lli_vfs_inode - (char *)lli);
         sema_init(&lli->lli_open_sem, 1);
-        lli->lli_mount_epoch = ll_i2sbi(&lli->lli_vfs_inode)->ll_mount_epoch;
 
 	return &lli->lli_vfs_inode;
 }
 
 static void ll_destroy_inode(struct inode *inode)
 {
-	kmem_cache_free(ll_inode_cachep, LL_I(inode));
+	kmem_cache_free(ll_inode_cachep, ll_i2info(inode));
 }
 
 static void init_once(void * foo, kmem_cache_t * cachep, unsigned long flags)
