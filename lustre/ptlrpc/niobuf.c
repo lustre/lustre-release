@@ -235,7 +235,6 @@ void ptlrpc_resend_req(struct ptlrpc_request *req)
         req->rq_flags &= ~PTL_RPC_FL_TIMEOUT;
         wake_up_interruptible(&req->rq_wait_for_rep);
         EXIT;
-        return; 
 }
 
 int ptl_send_rpc(struct ptlrpc_request *request)
