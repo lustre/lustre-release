@@ -354,8 +354,8 @@ main(int argc, char * const argv[])
 
         if (argc < i) {
                 printf("Too few args!\n");
-                printf("Usage: %s <source> <target> [-v] [-n] [-o ...]\n");
-                exit(-1);
+                printf("Usage: %s <source> <target> [-v] [-n] [-o ...]\n", argv[0]);
+                exit(1);
         }
 
         if (verbose)
