@@ -34,6 +34,10 @@ case "$lustretag" in
 	libsysiotag="LIBSYSIO_HEAD_20041101"
 	;;
 
+    b_hd_acl)
+	portalstag="b_hd_sec"
+	;;
+
     b_hd_remote_uid)
 	portalstag="b_hd_sec"
 	;;
