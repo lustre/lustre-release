@@ -75,7 +75,7 @@ static int llu_dir_do_readpage(struct inode *inode, struct page *page)
         }
 
         rc = ldlm_lock_match(obddev->obd_namespace, LDLM_FL_BLOCK_GRANTED,
-                             &res_id, LDLM_PLAIN, NULL, 0, LCK_PR, &lockh);
+                             &res_id, LDLM_PLAIN, NULL, LCK_PR, &lockh);
         if (!rc) {
                 llu_prepare_mdc_op_data(&data, inode, NULL, NULL, 0, 0);
 
