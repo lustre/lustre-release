@@ -782,6 +782,7 @@ static int filter_preprw(int cmd, struct obd_conn *conn,
         for (i = 0; i < objcount; i++, o++) {
                 int j;
                 for (j = 0; j < o->ioo_bufcnt; j++, b++, r++) {
+                        unsigned long index = b->offset >> PAGE_SHIFT;
                         struct inode *inode = ioobj_to_inode(conn, o);
                         struct page *page;
 
@@ -789,15 +790,12 @@ static int filter_preprw(int cmd, struct obd_conn *conn,
                         if (!inode)
                                 RETURN(-EINVAL);
 
-                        page = lustre_get_page(inode, b->offset >> PAGE_SHIFT);
+                        if (cmd == OBD_BRW_WRITE)
+                                page = lustre_get_page_write(inode, index);
+                        else
+                                page = lustre_get_page_read(inode, index);
                         if (IS_ERR(page))
                                 RETURN(PTR_ERR(page));
-
-                        if (cmd == OBD_BRW_WRITE) {
-                                int rc = lustre_prepare_page(0, PAGE_SIZE,page);
-                                if (rc)
-                                        CERROR("i %d j %d objcount %d bufcnt %d , rc %d, offset %Ld\n", i, j, objcount, o->ioo_bufcnt, rc, b->offset);
-                        }
 
                         r->addr = (__u64)(unsigned long)page_address(page);
                         r->offset = b->offset;

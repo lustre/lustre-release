@@ -34,8 +34,8 @@
 #ifdef __KERNEL__
 /* page.c */
 inline void lustre_put_page(struct page *page);
-struct page * lustre_get_page(struct inode *dir, unsigned long n);
-int lustre_prepare_page(unsigned from, unsigned to, struct page *page);
+struct page *lustre_get_page_read(struct inode *dir, unsigned long index);
+struct page *lustre_get_page_write(struct inode *dir, unsigned long index);
 int lustre_commit_page(struct page *page, unsigned from, unsigned to);
 
 /* simple.c */

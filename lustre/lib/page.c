@@ -91,18 +91,19 @@ inline void lustre_put_page(struct page *page)
         page_cache_release(page);
 }
 
-struct page * lustre_get_page(struct inode *inode, unsigned long n)
+struct page *lustre_get_page_read(struct inode *inode, unsigned long index)
 {
         struct address_space *mapping = inode->i_mapping;
-        struct page *page = read_cache_page(mapping, n,
+        struct page *page = read_cache_page(mapping, index,
                                 (filler_t*)mapping->a_ops->readpage, NULL);
+
         if (!IS_ERR(page)) {
                 wait_on_page(page);
                 kmap(page);
                 if (!Page_Uptodate(page))
-                        goto fail;
+                        GOTO(fail, -EIO);
                 if (PageError(page))
-                        goto fail;
+                        GOTO(fail, -EIO);
         }
         return page;
 
@@ -111,19 +112,35 @@ fail:
         return ERR_PTR(-EIO);
 }
 
-int lustre_prepare_page(unsigned from, unsigned to, struct page *page)
+struct page *lustre_get_page_write(struct inode *inode, unsigned long index)
 {
+        struct address_space *mapping = inode->i_mapping;
+        struct page *page = grab_cache_page(mapping, index); /* locked page */
         int err;
 
-        lock_page(page);
-        err = page->mapping->a_ops->prepare_write(NULL, page, from, to);
-        if (err) {
-                UnlockPage(page);
-                CERROR("page index %ld from %d to %d err %d\n",
-                                page->index, from, to, err);
-                LBUG();
+        if (!IS_ERR(page)) {
+                kmap(page);
+
+                /* Note: Called with "O" and "PAGE_SIZE" this is essentially
+                 * a no-op for most filesystems, because we write the whole
+                 * page.  For partial-page I/O this will read in the page.
+                 */
+                err = mapping->a_ops->prepare_write(NULL, page, 0, PAGE_SIZE);
+                if (err) {
+                        CERROR("page index %ld, err %d\n", index, err);
+                        LBUG();
+                        GOTO(fail, err);
+                }
+                /* XXX not sure if we need this if we are overwriting page */
+                if (PageError(page))
+                        GOTO(fail, err = -EIO);
         }
-        return err;
+        return page;
+
+fail:
+        UnlockPage(page);
+        lustre_put_page(page);
+        return ERR_PTR(-EIO);
 }
 
 int lustre_commit_page(struct page *page, unsigned from, unsigned to)
