@@ -91,6 +91,8 @@ ptldebug_names = {
     "mmap" :      (1 << 23),
     "config" :    (1 << 24),
     "console" :   (1 << 25),
+    "quota" :     (1 << 26),
+    "sec" :       (1 << 27),
     }
 
 subsystem_names = {
@@ -119,6 +121,7 @@ subsystem_names = {
     "confobd" :      (1 << 22),
     "lmv" :          (1 << 23),
     "cmobd" :        (1 << 24),
+    "sec" :          (1 << 25),
     }
 
 
