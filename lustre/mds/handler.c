@@ -1461,14 +1461,14 @@ repeat:
         }
 
 cleanup:
-        if (cleanup_phase == 1) /* transaction */
-                rc = mds_finish_transno(mds, parent_inode, handle, req, rc, 0);
-
-        if (cleanup_phase == 2) { /* valid lockh */
+        switch (cleanup_phase) {
+        case 2: /* valid lockh */
                 if (rc == 0)
                         ptlrpc_save_lock(req, &lockh, LCK_EX);
                 else
                         ldlm_lock_decref(&lockh, LCK_EX);
+        case 1: /* transaction */
+                rc = mds_finish_transno(mds, parent_inode, handle, req, rc, 0);
         }
 
         l_dput(new);
