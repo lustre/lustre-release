@@ -20,4 +20,7 @@ extern atomic_t osc_max_pages_per_rpc;
 extern atomic_t osc_max_rpcs_in_flight;
 int lproc_osc_attach_seqstat(struct obd_device *dev);
 
+void lproc_osc_hist(struct osc_histogram *oh, unsigned int value);
+void lproc_osc_hist_pow2(struct osc_histogram *oh, unsigned int value);
+
 #endif /* OSC_INTERNAL_H */
