@@ -37,9 +37,17 @@ lib_enq_event_locked (lib_nal_t *nal, void *private,
                       lib_eq_t *eq, ptl_event_t *ev)
 {
         ptl_event_t  *eq_slot;
-        
-        ev->sequence = eq->eq_enq_seq++; /* Allocate the next queue slot */
 
+        /* Allocate the next queue slot */
+        ev->link = ev->sequence = eq->eq_enq_seq++;
+        /* NB we don't support START events yet and we don't create a separate
+         * UNLINK event unless an explicit unlink succeeds, so the link
+         * sequence is pretty useless */
+
+        /* We don't support different uid/jids yet */
+        ev->uid = 0;
+        ev->jid = 0;
+        
         /* size must be a power of 2 to handle sequence # overflow */
         LASSERT (eq->eq_size != 0 &&
                  eq->eq_size == LOWEST_BIT_SET (eq->eq_size));
