@@ -244,7 +244,7 @@ static int mds_rename_unpack(struct ptlrpc_request *req, int offset,
         ENTRY;
 
         rec = lustre_swab_reqbuf (req, offset, sizeof (*rec),
-                                  lustre_swab_mds_rec_unlink);
+                                  lustre_swab_mds_rec_rename);
         if (rec == NULL)
                 RETURN(-EFAULT);
 
