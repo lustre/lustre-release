@@ -98,10 +98,18 @@ static int fsfilt_reiserfs_setattr(struct dentry *dentry, void *handle,
                         iattr->ia_mode = inode->i_mode;
                 }
         }
-        if (inode->i_op->setattr)
+
+        /* We set these flags on the client, but have already checked perms
+         * so don't confuse inode_change_ok. */
+        iattr->ia_valid &= ~(ATTR_MTIME_SET | ATTR_ATIME_SET);
+
+        if (inode->i_op->setattr) {
                 rc = inode->i_op->setattr(dentry, iattr);
-        else
-                rc = inode_setattr(inode, iattr);
+        } else {
+                rc = inode_change_ok(inode, iattr);
+                if (!rc)
+                        rc = inode_setattr(inode, iattr);
+        }
 
         unlock_kernel();
 

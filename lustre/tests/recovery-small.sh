@@ -46,14 +46,14 @@ do_ost() {
 
 drop_request() {
 # OBD_FAIL_MDS_ALL_REQUEST_NET
-    do_mds "echo 0x121 > /proc/sys/lustre/fail_loc"
+    do_mds "echo 0x123 > /proc/sys/lustre/fail_loc"
     do_client "$1"
     do_mds "echo 0 > /proc/sys/lustre/fail_loc"
 }
 
 drop_reply() {
 # OBD_FAIL_MDS_ALL_REPLY_NET
-    do_mds "echo 0x120 > /proc/sys/lustre/fail_loc"
+    do_mds "echo 0x122 > /proc/sys/lustre/fail_loc"
     do_client "$@"
     do_mds "echo 0 > /proc/sys/lustre/fail_loc"
 }
