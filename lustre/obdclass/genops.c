@@ -382,7 +382,6 @@ int class_disconnect(struct lustre_handle *conn)
 
 void class_disconnect_all(struct obd_device *obddev)
 {
-        struct list_head *tmp;
         int again = 1;
 
         while (again) {
@@ -392,7 +391,8 @@ void class_disconnect_all(struct obd_device *obddev)
                         struct lustre_handle conn;
                         int rc;
 
-                        export = list_entry(tmp, struct obd_export, 
+                        export = list_entry(obddev->obd_exports.next,
+                                            struct obd_export,
                                             exp_obd_chain);
                         conn.addr = (__u64)(unsigned long)export;
                         conn.cookie = export->exp_cookie;
