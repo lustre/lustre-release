@@ -116,8 +116,9 @@ int obdfs_init_pgrqcache(void)
 
 inline void obdfs_pgrq_del(struct obdfs_pgrq *pgrq)
 {
-		list_del(&pgrq->rq_plist);
-		kmem_cache_free(obdfs_pgrq_cachep, pgrq);
+	CDEBUG(D_INODE, "deleting page %p from list\n", pgrq->rq_page);
+	list_del(&pgrq->rq_plist);
+	kmem_cache_free(obdfs_pgrq_cachep, pgrq);
 }
 
 void obdfs_cleanup_pgrqcache(void)
@@ -146,9 +147,11 @@ obdfs_find_in_page_list(struct inode *inode, struct page *page)
 	struct list_head *tmp;
 
 	ENTRY;
+
 	CDEBUG(D_INODE, "looking for inode %ld page %p\n", inode->i_ino, page);
+	OIDEBUG(inode);
+
 	if (list_empty(page_list)) {
-		CDEBUG(D_INODE, "empty list\n");
 		EXIT;
 		return NULL;
 	}
@@ -157,7 +160,6 @@ obdfs_find_in_page_list(struct inode *inode, struct page *page)
 		struct obdfs_pgrq *pgrq;
 
 		pgrq = list_entry(tmp, struct obdfs_pgrq, rq_plist);
-		CDEBUG(D_INODE, "checking page %p\n", pgrq->rq_page);
 		if (pgrq->rq_page == page) {
 			CDEBUG(D_INODE, "found page %p in list\n", page);
 			EXIT;
@@ -171,16 +173,17 @@ obdfs_find_in_page_list(struct inode *inode, struct page *page)
 
 
 /* call and free pages from Linux page cache */
-int obdfs_do_vec_wr(struct super_block *sb, obd_count num_io,
+int obdfs_do_vec_wr(struct inode **inodes, obd_count num_io,
 		    obd_count num_obdos, struct obdo **obdos,
 		    obd_count *oa_bufs, struct page **pages, char **bufs,
 		    obd_size *counts, obd_off *offsets, obd_flag *flags)
 {
+	struct super_block *sb = inodes[0]->i_sb;
 	struct obdfs_sb_info *sbi = (struct obdfs_sb_info *)&sb->u.generic_sbp;
 	int err;
 
 	ENTRY;
-	CDEBUG(D_INODE, "writing %d pages, %d obdos in vector\n",
+	CDEBUG(D_INODE, "writing %d page(s), %d obdo(s) in vector\n",
 	       num_io, num_obdos);
 	err = OPS(sb, brw)(WRITE, &sbi->osi_conn, num_obdos, obdos, oa_bufs,
 				bufs, counts, offsets, flags);
@@ -188,9 +191,17 @@ int obdfs_do_vec_wr(struct super_block *sb, obd_count num_io,
 	/* release the pages from the page cache */
 	while ( num_io > 0 ) {
 		num_io--;
+		CDEBUG(D_INODE, "calling put_page for %p\n", pages[num_io]);
 		put_page(pages[num_io]);
-	} 
+	}
 
+	while ( num_obdos > 0) {
+		num_obdos--;
+		CDEBUG(D_INODE, "copy/free obdo %ld\n",
+		       (long)obdos[num_obdos]->o_id);
+		obdfs_to_inode(inodes[num_obdos], obdos[num_obdos]);
+		obdo_free(obdos[num_obdos]);
+	}
 	EXIT;
 	return err;
 }
@@ -228,7 +239,7 @@ static int obdfs_add_page_to_cache(struct inode *inode, struct page *page)
 	/* If inode isn't already on the superblock inodes list, add it */
 	if ( list_empty(obdfs_islist(inode)) ) {
 		CDEBUG(D_INODE, "adding inode %p to superblock list %p\n",
-		       obdfs_islist(inode), obdfs_islist(inode));
+		       obdfs_islist(inode), obdfs_slist(inode));
 		list_add(obdfs_islist(inode), obdfs_slist(inode));
 	}
 
@@ -236,9 +247,9 @@ static int obdfs_add_page_to_cache(struct inode *inode, struct page *page)
 	EXIT;
 	/* XXX For testing purposes, we write out the page here.
 	 *     In the future, a flush daemon will write out the page.
-	return 0;
-	 */
 	return obdfs_flush_reqs(obdfs_slist(inode), 0, 0);
+	 */
+	return 0;
 } /* obdfs_add_page_to_cache */
 
 

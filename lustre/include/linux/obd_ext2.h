@@ -79,4 +79,20 @@ extern struct inode_operations ext2_file_inode_operations;
 /* super.c */
 extern struct super_operations ext2_sops;
 
+static inline struct page *addr_to_page(char *buf)
+{
+	unsigned long addr = (unsigned long)buf;
+        unsigned long map_nr;
+
+#ifdef CONFIG_DISCONTIGMEM
+        if (addr == 0) return;
+#endif
+        map_nr = MAP_NR(addr);
+        if (map_nr < max_mapnr)
+		return mem_map + map_nr;
+	else 
+		return 0;
+}
+
+
 #endif

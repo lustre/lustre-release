@@ -42,9 +42,8 @@ int obdfs_link(struct dentry *old_dentry, struct inode *dir, struct dentry *dent
 int obdfs_rename(struct inode *old_dir, struct dentry *old_dentry, struct inode *new_dir, struct dentry *new_dentry);
 /* dir.c */
 int obdfs_check_dir_entry (const char * function, struct inode * dir,
-			  struct ext2_dir_entry_2 * de,
-			  struct page * page,
-			   unsigned long offset);
+			  struct ext2_dir_entry_2 * de, struct page * page,
+			  unsigned long offset);
 /* symlink.c */
 int obdfs_readlink (struct dentry *, char *, int);
 struct dentry *obdfs_follow_link(struct dentry *, struct dentry *, unsigned int); 
@@ -59,34 +58,23 @@ struct obdfs_pgrq {
 	struct page 		*rq_page;	/* page to be written */
 };
 
-#if 0
-void obdfs_print_list(struct list_head *page_list) {
-	struct list_head *tmp = page_list;
 
-	while ( (tmp = tmp->next) != page_list) {
-		struct obdfs_pgrq *pgrq;
-		pgrq = list_entry(tmp, struct obdfs_pgrq, rq_plist);
-		CDEBUG(D_INODE, "page %p\n", pgrq->rq_page);
-	}
-}
-
-#endif
 inline void obdfs_pgrq_del(struct obdfs_pgrq *pgrq);
-int obdfs_do_vec_wr(struct super_block *sb, obd_count num_io, obd_count num_oa,
-			   struct obdo **obdos, obd_count *oa_bufs,
-			   struct page **pages, char **bufs, obd_size *counts,
-			   obd_off *offsets, obd_flag *flags);
+int obdfs_do_vec_wr(struct inode **inodes, obd_count num_io, obd_count num_oa,
+		    struct obdo **obdos, obd_count *oa_bufs,
+		    struct page **pages, char **bufs, obd_size *counts,
+		    obd_off *offsets, obd_flag *flags);
 
 
 struct obdfs_sb_info {
-	struct list_head         osi_list; /* list of supers */
+	struct list_head	 osi_list;	/* list of supers */
 	struct obd_conn		 osi_conn;
 	struct super_block	*osi_super;
 	struct obd_device	*osi_obd;
-	struct obd_ops		*osi_ops;     
-	ino_t			 osi_rootino; /* which root inode */
-	int			 osi_minor;   /* minor of /dev/obdX */
-	struct list_head	 osi_inodes;  /* linked list of dirty inodes */
+	struct obd_ops		*osi_ops;
+	ino_t			 osi_rootino;	/* number of root inode */
+	int			 osi_minor;	/* minor of /dev/obdX */
+	struct list_head	 osi_inodes;	/* list of dirty inodes */
 };
 
 struct obdfs_inode_info {
@@ -95,6 +83,8 @@ struct obdfs_inode_info {
 	struct list_head oi_pages;
 	char 		 oi_inline[OBD_INLINESZ];
 };
+
+#define OBDFS_INFO(inode) ((struct obdfs_inode_info *)(&(inode)->u.generic_ip))
 
 static inline struct list_head *obdfs_iplist(struct inode *inode) 
 {
@@ -115,7 +105,24 @@ static inline struct list_head *obdfs_slist(struct inode *inode) {
 	return &sbi->osi_inodes;
 }
 
-#define OBDFS_INFO(inode) ((struct obdfs_inode_info *)(&(inode)->u.generic_ip))
+static inline void obdfs_print_plist(struct inode *inode) {
+	struct list_head *page_list = obdfs_iplist(inode);
+	struct list_head *tmp;
+
+	CDEBUG(D_INODE, "inode %ld: page", inode->i_ino);
+	if (list_empty(page_list)) {
+		printk(" list empty\n");
+		return;
+	}
+
+	tmp = page_list;
+	while ( (tmp = tmp->next) != page_list) {
+		struct obdfs_pgrq *pgrq;
+		pgrq = list_entry(tmp, struct obdfs_pgrq, rq_plist);
+		printk(" %p", pgrq->rq_page);
+	}
+	printk("\n");
+}
 
 void obdfs_sysctl_init(void);
 void obdfs_sysctl_clean(void);
@@ -134,10 +141,11 @@ static void inline obdfs_from_inode(struct obdo *oa, struct inode *inode)
 {
 	struct obdfs_inode_info *oinfo = OBDFS_INFO(inode);
 
-	CDEBUG(D_INODE, "inode %ld (%p)\n", inode->i_ino, inode);
+	CDEBUG(D_INODE, "src inode %ld, dst obdo %ld valid 0x%08x\n",
+	       inode->i_ino, (long)oa->o_id, oa->o_valid);
 	obdo_from_inode(oa, inode);
 	if (obdfs_has_inline(inode)) {
-		CDEBUG(D_INODE, "inode has inline data\n");
+		CDEBUG(D_INODE, "copying inline data from inode to obdo\n");
 		memcpy(oa->o_inline, oinfo->oi_inline, OBD_INLINESZ);
 		oa->o_obdflags |= OBD_FL_INLINEDATA;
 		oa->o_valid |= OBD_MD_FLINLINE;
@@ -148,11 +156,12 @@ static void inline obdfs_to_inode(struct inode *inode, struct obdo *oa)
 {
 	struct obdfs_inode_info *oinfo = OBDFS_INFO(inode);
 
-	CDEBUG(D_INODE, "inode %ld (%p)\n", inode->i_ino, inode);
+	CDEBUG(D_INODE, "src obdo %ld valid 0x%08x, dst inode %ld\n",
+	       (long)oa->o_id, oa->o_valid, inode->i_ino);
 	obdo_to_inode(inode, oa);
 
 	if (obdo_has_inline(oa)) {
-		CDEBUG(D_INODE, "obdo has inline data\n");
+		CDEBUG(D_INODE, "copying inline data from obdo to inode\n");
 		memcpy(oinfo->oi_inline, oa->o_inline, OBD_INLINESZ);
 		oinfo->oi_flags |= OBD_FL_INLINEDATA;
 	}

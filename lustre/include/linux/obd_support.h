@@ -59,56 +59,60 @@ extern int obd_print_entry;
 
 #define CMD(cmd) (( cmd == READ ) ? "read" : "write")
 
-/* Inode common information printed out */
+/* Inode common information printed out (used by obdfs and ext2obd inodes) */
 #define ICDEBUG(inode) { \
-		printk("]]%s line %d[[  ino %ld, blocks %ld, size %Ld, atm %ld, ctm %ld, mtm %ld, mode %o, uid %d, gid %d\n", \
-		       __FUNCTION__ , __LINE__, \
-		       inode->i_ino, inode->i_blocks, inode->i_size,\
-		       inode->i_atime, inode->i_ctime, inode->i_mtime,\
-		       inode->i_mode, inode->i_uid, inode->i_gid);\
-	}
+	printk("]]%s line %d[[ ino %ld, atm %ld, mtm %ld, ctm %ld, "\
+	       "size %Ld, blocks %ld\n", __FUNCTION__ , __LINE__,\
+	       inode->i_ino, inode->i_atime, inode->i_mtime, inode->i_ctime,\
+	       inode->i_size, inode->i_blocks);\
+	printk("]]%s line %d[[ mode %o, uid %d, gid %d, nlnk %d\n",\
+	       __FUNCTION__, __LINE__, inode->i_mode, inode->i_uid,\
+	       inode->i_gid, inode->i_nlink);\
+}
 
 /* Ext2 inode information */
 #define EXDEBUG(inode) { \
-		ICDEBUG(inode);\
-		printk("data: 0x%08x 0x%08x 0x%08x 0x%08x\n",\
-		       inode->u.ext2_i.i_data[0], inode->u.ext2_i.i_data[1],\
-		       inode->u.ext2_i.i_data[2], inode->u.ext2_i.i_data[3]);\
-	}
+	ICDEBUG(inode);\
+	printk("ext2 blocks: %d %d %d %d %d %d %d %d\n",\
+	       inode->u.ext2_i.i_data[0], inode->u.ext2_i.i_data[1],\
+	       inode->u.ext2_i.i_data[2], inode->u.ext2_i.i_data[3],\
+	       inode->u.ext2_i.i_data[4], inode->u.ext2_i.i_data[5],\
+	       inode->u.ext2_i.i_data[6], inode->u.ext2_i.i_data[7]);\
+}
 
 /* OBDFS inode information */
-/* Should print these with oi_flags and oi_list.prev, next instead of i_data */
 #define OIDEBUG(inode) { \
-		ICDEBUG(inode);\
-		printk("oinfo: flags 0x%08x next 0x%08x prev 0x%08x\n",\
-		       inode->u.ext2_i.i_data[0], inode->u.ext2_i.i_data[1],\
-		       inode->u.ext2_i.i_data[2]);\
-	}
+	ICDEBUG(inode);\
+	printk("oinfo: flags 0x%08x\n", OBDFS_INFO(inode)->oi_flags);\
+	obdfs_print_plist(inode);\
+}
 
 #define ODEBUG(obdo) { \
-		printk("]]%s line %d[[  id %ld, atm %ld, mtm %ld, ctm %ld, size %ld, blocks %ld\n",\
-		       __FUNCTION__ , __LINE__, \
-		       (long)(obdo)->o_id,    (long)(obdo)->o_atime,\
-		       (long)(obdo)->o_mtime, (long)(obdo)->o_ctime,\
-		       (long)(obdo)->o_size,  (long)(obdo)->o_blocks);\
-		printk("]]%s line %d[[  mode %o, uid %d, gid %d, flg 0x%0x, obdflg 0x%0x, nlnk %d, valid 0x%0x\n", \
-		       __FUNCTION__ , __LINE__, \
-		       (obdo)->o_mode,  (obdo)->o_uid,      (obdo)->o_gid,\
-		       (obdo)->o_flags, (obdo)->o_obdflags, (obdo)->o_nlink,\
-		       (obdo)->o_valid);\
-	}
+	printk("]]%s line %d[[  id %ld, atm %ld, mtm %ld, ctm %ld, "\
+	       "size %ld, blocks %ld\n", __FUNCTION__ , __LINE__,\
+	       (long)(obdo)->o_id, (long)(obdo)->o_atime,\
+	       (long)(obdo)->o_mtime, (long)(obdo)->o_ctime,\
+	       (long)(obdo)->o_size, (long)(obdo)->o_blocks);\
+	printk("]]%s line %d[[  mode %o, uid %d, gid %d, flg 0x%0x, "\
+	       "obdflg 0x%0x, nlnk %d, valid 0x%0x\n", __FUNCTION__ , __LINE__,\
+	       (obdo)->o_mode, (obdo)->o_uid, (obdo)->o_gid, (obdo)->o_flags,\
+	       (obdo)->o_obdflags, (obdo)->o_nlink, (obdo)->o_valid);\
+}
 
 
-#define PDEBUG(page,cmd)	{if (page){\
+#define PDEBUG(page,cmd) { \
+	if (page){\
 		char *uptodate = (Page_Uptodate(page)) ? "yes" : "no";\
 		char *locked = (PageLocked(page)) ? "yes" : "no";\
 		int count = page->count.counter;\
-                long index = page->index;\
-		\
+		long index = page->index;\
 		CDEBUG(D_IOCTL, " ** %s, cmd: %s, off %ld, uptodate: %s, "\
-		       "locked: %s, cnt %d page %p pages %ld** \n", __FUNCTION__,\
-		       cmd, index, uptodate, locked, count, page, (!page->mapping) ? -1 : page->mapping->nrpages);\
-	} else { CDEBUG(D_IOCTL, "** %s, no page\n", __FUNCTION__); }}
+		       "locked: %s, cnt %d page %p pages %ld** \n",\
+		       __FUNCTION__, cmd, index, uptodate, locked, count, \
+		       page, (!page->mapping) ? -1 : page->mapping->nrpages);\
+	} else \
+		CDEBUG(D_IOCTL, "** %s, no page\n", __FUNCTION__);\
+}
 
 
 #define OBD_ALLOC(ptr, cast, size)					\
@@ -141,22 +145,6 @@ do {							\
 		       (int) size, (int) ptr);		\
 	}						\
 } while (0)
-
-
-static inline struct page *addr_to_page(char *buf)
-{
-	unsigned long addr = (unsigned long)buf;
-        unsigned long map_nr;
-
-#ifdef CONFIG_DISCONTIGMEM
-        if (addr == 0) return;
-#endif
-        map_nr = MAP_NR(addr);
-        if (map_nr < max_mapnr)
-		return mem_map + map_nr;
-	else 
-		return 0;
-}
 
 
 
