@@ -3,8 +3,8 @@
  drivers/ide/ide-disk.c |    4 ++++
  3 files changed, 46 insertions(+)
 
---- linux-2.4.20-hp4_pnnl1/drivers/block/blkpg.c~dev_read_only_hp	Tue Apr  1 20:32:00 2003
-+++ linux-2.4.20-hp4_pnnl1-braam/drivers/block/blkpg.c	Tue Apr  1 20:34:12 2003
+--- linux-2.4.20/drivers/block/blkpg.c~dev_read_only_hp	2003-04-09 15:14:54.000000000 -0600
++++ linux-2.4.20-braam/drivers/block/blkpg.c	2003-04-09 15:37:02.000000000 -0600
 @@ -296,3 +296,42 @@ int blk_ioctl(kdev_t dev, unsigned int c
  }
  
@@ -48,8 +48,8 @@
 +EXPORT_SYMBOL(dev_clear_rdonly);
 +
 +
---- linux-2.4.20-hp4_pnnl1/drivers/block/loop.c~dev_read_only_hp	Tue Apr  1 20:32:00 2003
-+++ linux-2.4.20-hp4_pnnl1-braam/drivers/block/loop.c	Tue Apr  1 20:32:00 2003
+--- linux-2.4.20/drivers/block/loop.c~dev_read_only_hp	2003-04-09 15:14:54.000000000 -0600
++++ linux-2.4.20-braam/drivers/block/loop.c	2003-04-09 15:37:02.000000000 -0600
 @@ -474,6 +474,9 @@ static int loop_make_request(request_que
  	spin_unlock_irq(&lo->lo_lock);
  
@@ -60,8 +60,8 @@
  		if (lo->lo_flags & LO_FLAGS_READ_ONLY)
  			goto err;
  	} else if (rw == READA) {
---- linux-2.4.20-hp4_pnnl1/drivers/ide/ide-disk.c~dev_read_only_hp	Tue Apr  1 20:32:00 2003
-+++ linux-2.4.20-hp4_pnnl1-braam/drivers/ide/ide-disk.c	Tue Apr  1 20:32:00 2003
+--- linux-2.4.20/drivers/ide/ide-disk.c~dev_read_only_hp	2003-04-09 15:14:54.000000000 -0600
++++ linux-2.4.20-braam/drivers/ide/ide-disk.c	2003-04-09 15:37:02.000000000 -0600
 @@ -558,6 +558,10 @@ static ide_startstop_t lba_48_rw_disk (i
   */
  static ide_startstop_t do_rw_disk (ide_drive_t *drive, struct request *rq, unsigned long block)

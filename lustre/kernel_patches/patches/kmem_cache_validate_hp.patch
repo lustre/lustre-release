@@ -4,11 +4,11 @@
  mm/slab.c            |   53 +++++++++++++++++++++++++++++++++++++++++++++++++++
  4 files changed, 61 insertions(+)
 
---- linux-2.4.19-hp2_pnnl2/arch/ia64/mm/init.c~kmem_cache_validate_hp	Sun Jan 19 18:59:23 2003
-+++ linux-2.4.19-hp2_pnnl2-root/arch/ia64/mm/init.c	Sun Jan 19 18:59:24 2003
-@@ -44,6 +44,12 @@ unsigned long vmalloc_end = VMALLOC_END_
- static struct page *vmem_map;
+--- linux-2.4.20/arch/ia64/mm/init.c~kmem_cache_validate_hp	2003-04-08 23:34:12.000000000 -0600
++++ linux-2.4.20-braam/arch/ia64/mm/init.c	2003-04-08 23:34:12.000000000 -0600
+@@ -45,6 +45,12 @@ static struct page *vmem_map;
  static unsigned long num_dma_physpages;
+ #endif
  
 +struct page *check_get_page(unsigned long kaddr)
 +{
@@ -19,8 +19,8 @@
  int
  do_check_pgt_cache (int low, int high)
  {
---- linux-2.4.19-hp2_pnnl2/include/linux/slab.h~kmem_cache_validate_hp	Sun Jan 19 18:59:23 2003
-+++ linux-2.4.19-hp2_pnnl2-root/include/linux/slab.h	Sun Jan 19 19:01:07 2003
+--- linux-2.4.20/include/linux/slab.h~kmem_cache_validate_hp	2003-04-08 23:34:12.000000000 -0600
++++ linux-2.4.20-braam/include/linux/slab.h	2003-04-08 23:34:12.000000000 -0600
 @@ -56,6 +56,7 @@ extern kmem_cache_t *kmem_cache_create(c
  extern int kmem_cache_destroy(kmem_cache_t *);
  extern int kmem_cache_shrink(kmem_cache_t *);
@@ -29,9 +29,9 @@
  extern void kmem_cache_free(kmem_cache_t *, void *);
  extern unsigned int kmem_cache_size(kmem_cache_t *);
  
---- linux-2.4.19-hp2_pnnl2/kernel/ksyms.c~kmem_cache_validate_hp	Sun Jan 19 18:59:23 2003
-+++ linux-2.4.19-hp2_pnnl2-root/kernel/ksyms.c	Sun Jan 19 19:00:32 2003
-@@ -118,6 +118,7 @@ EXPORT_SYMBOL(kmem_find_general_cachep);
+--- linux-2.4.20/kernel/ksyms.c~kmem_cache_validate_hp	2003-04-08 23:34:12.000000000 -0600
++++ linux-2.4.20-braam/kernel/ksyms.c	2003-04-08 23:34:12.000000000 -0600
+@@ -103,6 +103,7 @@ EXPORT_SYMBOL(kmem_find_general_cachep);
  EXPORT_SYMBOL(kmem_cache_create);
  EXPORT_SYMBOL(kmem_cache_destroy);
  EXPORT_SYMBOL(kmem_cache_shrink);
@@ -39,9 +39,9 @@
  EXPORT_SYMBOL(kmem_cache_alloc);
  EXPORT_SYMBOL(kmem_cache_free);
  EXPORT_SYMBOL(kmem_cache_size);
---- linux-2.4.19-hp2_pnnl2/mm/slab.c~kmem_cache_validate_hp	Sun Jan 19 18:59:23 2003
-+++ linux-2.4.19-hp2_pnnl2-root/mm/slab.c	Sun Jan 19 18:59:24 2003
-@@ -1207,6 +1207,59 @@ failed:
+--- linux-2.4.20/mm/slab.c~kmem_cache_validate_hp	2003-04-08 23:34:12.000000000 -0600
++++ linux-2.4.20-braam/mm/slab.c	2003-04-08 23:34:12.000000000 -0600
+@@ -1205,6 +1205,59 @@ failed:
   * Called with the cache-lock held.
   */
  
