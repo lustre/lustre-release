@@ -131,8 +131,7 @@ int mdc_create(struct lustre_handle *conn, struct mdc_op_data *op_data,
 
         /* mdc_create_pack fills msg->bufs[1] with name
          * and msg->bufs[2] with tgt, for symlinks or lov MD data */
-        mdc_create_pack(req, 0, op_data, mode, rdev, uid, gid, time,
-                        data, datalen);
+        mdc_create_pack(req, 0, op_data, mode, rdev, time, data, datalen);
 
         size[0] = sizeof(struct mds_body);
         req->rq_replen = lustre_msg_size(1, size);
