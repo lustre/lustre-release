@@ -57,12 +57,18 @@ int mds_lmv_connect(struct obd_device *obd, char * lmv_name)
         if (mds->mds_lmv_obd)
                 RETURN(0);
 
+        down(&mds->mds_lmv_sem);
+        if (mds->mds_lmv_obd) {
+                up(&mds->mds_lmv_sem);
+                RETURN(0);
+        }
+
         mds->mds_lmv_obd = class_name2obd(lmv_name);
         if (!mds->mds_lmv_obd) {
                 CERROR("MDS cannot locate LMV %s\n",
                        lmv_name);
                 mds->mds_lmv_obd = ERR_PTR(-ENOTCONN);
-                RETURN(-ENOTCONN);
+                GOTO(err_last, rc = -ENOTCONN);
         }
 
         rc = obd_connect(&conn, mds->mds_lmv_obd, &obd->obd_uuid, OBD_OPT_MDS_CONNECTION);
@@ -70,7 +76,7 @@ int mds_lmv_connect(struct obd_device *obd, char * lmv_name)
                 CERROR("MDS cannot connect to LMV %s (%d)\n",
                        lmv_name, rc);
                 mds->mds_lmv_obd = ERR_PTR(rc);
-                RETURN(rc);
+                GOTO(err_last, rc);
         }
         mds->mds_lmv_exp = class_conn2export(&conn);
         if (mds->mds_lmv_exp == NULL)
@@ -105,6 +111,7 @@ int mds_lmv_connect(struct obd_device *obd, char * lmv_name)
         if (rc)
                 GOTO(err_reg, rc);
 
+        up(&mds->mds_lmv_sem);
 	RETURN(0);
 
 err_reg:
@@ -113,6 +120,8 @@ err_discon:
         obd_disconnect(mds->mds_lmv_exp, 0);
         mds->mds_lmv_exp = NULL;
         mds->mds_lmv_obd = ERR_PTR(rc);
+err_last:
+        up(&mds->mds_lmv_sem);
         RETURN(rc);
 }
 
@@ -135,6 +144,7 @@ int mds_lmv_disconnect(struct obd_device *obd, int flags)
         int rc = 0;
         ENTRY;
 
+        down(&mds->mds_lmv_sem);
         if (!IS_ERR(mds->mds_lmv_obd) && mds->mds_lmv_exp != NULL) {
                 obd_register_observer(mds->mds_lmv_obd, NULL);
 
@@ -148,6 +158,7 @@ int mds_lmv_disconnect(struct obd_device *obd, int flags)
                 mds->mds_lmv_exp = NULL;
                 mds->mds_lmv_obd = NULL;
         }
+        up(&mds->mds_lmv_sem);
 
         RETURN(rc);
 }

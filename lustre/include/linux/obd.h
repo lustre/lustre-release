@@ -342,6 +342,7 @@ struct mds_obd {
         struct obd_device               *mds_lmv_obd; /* XXX lmv_obd */
         struct obd_export               *mds_lmv_exp; /* XXX lov_exp */
         struct ptlrpc_service           *mds_create_service;
+        struct semaphore                 mds_lmv_sem;
         atomic_t                         mds_real_clients;
         struct obd_uuid                  mds_lmv_uuid;
         struct dentry                   *mds_fids_dir;
