@@ -11,45 +11,44 @@ LD=/usr/bin/ld
 
 CWD=`pwd`
 
-LUS=$CWD/../
-PTL=$LUS/portals
-SYSIO=$LUS/../libsysio
+SYSIO=$1
 
-TMP=/tmp/llib_tmp
+ALL_OBJS=
 
-LLLIBS="$LUS/liblustre/libllite.a \
-	$SYSIO/src/libsysio.a \
-	$SYSIO/dev/stdfd/libsysio_stdfd.a \
-	$SYSIO/drivers/native/libsysio_native.a \
-	$SYSIO/drivers/sockets/libsysio_sockets.a \
-	$LUS/lov/liblov.a \
-	$LUS/osc/libosc.a \
-	$LUS/ldlm/libldlm.a \
-	$LUS/ptlrpc/libptlrpc.a \
-	$LUS/obdclass/liblustreclass.a \
-	$LUS/mdc/libmdc.a \
-        $PTL/unals/libtcpnal.a  \
-        $PTL/portals/libportals.a \
-	$PTL/utils/libptlctl.a"
+build_obj_list() {
+  _objs=`$AR -t $1/$2`
+  for _lib in $_objs; do
+  ALL_OBJS=$ALL_OBJS"$1/$_lib ";
+  done;
+}
 
-rm -rf $TMP
-mkdir -p $TMP
+# lustre components libs
+build_obj_list . libllite.a
+build_obj_list ../lov liblov.a
+build_obj_list ../obdecho libobdecho.a
+build_obj_list ../osc libosc.a
+build_obj_list ../mdc libmdc.a
+build_obj_list ../ldlm libldlm.a
+build_obj_list ../ptlrpc libptlrpc.a
+build_obj_list ../obdclass liblustreclass.a
 
-i=0
-for lib in $LLLIBS; do
-	mkdir $TMP/$i
-	cd $TMP/$i
-	$AR x $lib
-	i=$(($i+1))
-done
+# portals components libs
+build_obj_list ../portals/utils libptlctl.a
+build_obj_list ../portals/unals libtcpnal.a
+build_obj_list ../portals/portals libportals.a
 
-cd $TMP
+# libsysio components libs
+build_obj_list $SYSIO/drivers/native libsysio_native.a
+build_obj_list $SYSIO/drivers/sockets libsysio_sockets.a
+build_obj_list $SYSIO/src libsysio.a
+build_obj_list $SYSIO/dev/stdfd libsysio_stdfd.a
 
-# static lib
-ar -r $CWD/liblustre.a `find . -type f`
 
-# shared lib
+# create static lib
+rm -f $CWD/liblustre.a
+$AR -r $CWD/liblustre.a $ALL_OBJS
+
+# create shared lib
+rm -f $CWD/liblustre.so
 $LD -shared -o $CWD/liblustre.so -init __liblustre_setup_ -fini __liblustre_cleanup_ \
-	`find . -type f` -lpthread -lreadline -lncurses 
-
-cd $CWD
+	$ALL_OBJS
