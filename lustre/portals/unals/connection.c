@@ -266,8 +266,12 @@ static int bind_socket(manager m,unsigned short port)
     bzero((char *) &addr, sizeof(addr));
     addr.sin_family      = AF_INET;
     addr.sin_addr.s_addr = 0;
-    addr.sin_port        = port; 
-    
+#if 0
+    addr.sin_port        = port;
+#else
+    addr.sin_port        = htons(tcpnal_acceptor_port); /* force be 988 */
+#endif
+
     if (bind(m->bound,(struct sockaddr *)&addr,alen)<0){
         perror ("tcpnal bind"); 
         return(0);
