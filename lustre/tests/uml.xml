@@ -10,7 +10,7 @@
     </profile>
     <network name='NET_uml1_tcp' uuid='NET_uml1_tcp_UUID' type='tcp'>
       <server>uml1</server>
-      <port>888</port>
+      <port>988</port>
     </network>
   </node>
   <node name='uml2' uuid='uml2_UUID'>
@@ -24,7 +24,7 @@
     </profile>
     <network uuid='NET_uml2_tcp_UUID' name='NET_uml2_tcp' type='tcp'>
       <server>uml2</server>
-      <port>888</port>
+      <port>988</port>
     </network>
   </node>
   <node name='uml3' uuid='uml3_UUID'>
@@ -36,7 +36,7 @@
     </profile>
     <network name='NET_uml3_tcp' uuid='NET_uml3_tcp_UUID' type='tcp'>
       <server>uml3</server>
-      <port>888</port>
+      <port>988</port>
     </network>
   </node>
   <mds name='mds1' uuid='mds1_UUID'>
