@@ -14,6 +14,7 @@ tbd  Cluster File Systems, Inc. <info@clusterfs.com>
 	- don't dereference ERR_PTR() dentry in error handling path (3107)
 	- fix thread race in portals_debug_dumplog() (3122)
 	- create lprocfs device entries at setup instead of at attach (1519)
+	- common AST error handler, don't evict client on completion race (3145)
        * miscellania
 	- allow default OST striping configuration per directory (1414)
 
