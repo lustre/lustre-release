@@ -96,11 +96,12 @@ int lmv_handle_remote_inode(struct obd_export *exp, void *lmm,
                         it->d.lustre.it_lock_mode = 0;
                 }
 
+                LASSERT((body->valid & OBD_MD_FID) != 0);
+                
                 nid = body->id1;
                 it->d.lustre.it_disposition &= ~DISP_ENQ_COMPLETE;
-                rc = md_intent_lock(lmv->tgts[id_group(&nid)].ltd_exp, &nid,
-                                    NULL, 0, lmm, lmmsize, NULL, it, flags,
-                                    &req, cb_blocking);
+                rc = md_intent_lock(lmv->tgts[id_group(&nid)].ltd_exp, &nid, NULL,
+                                    0, lmm, lmmsize, NULL, it, flags, &req, cb_blocking);
 
                 /*
                  * llite needs LOOKUP lock to track dentry revocation in order
@@ -112,7 +113,6 @@ int lmv_handle_remote_inode(struct obd_export *exp, void *lmm,
                         memcpy(&it->d.lustre.it_lock_handle, &plock,
                                sizeof(plock));
                         it->d.lustre.it_lock_mode = pmode;
-                        
                 } else if (pmode)
                         ldlm_lock_decref(&plock, pmode);
 
@@ -190,11 +190,19 @@ repeat:
                 RETURN(rc);
         }
 
+        /*
+         * nothing is found, do not access body->id1 as it is zero and thus
+         * pointless.
+         */
+        if (it->d.lustre.it_disposition & DISP_LOOKUP_NEG)
+                RETURN(0);
+
         /* caller may use attrs MDS returns on IT_OPEN lock request so, we have
          * to update them for splitted dir */
         body = lustre_msg_buf((*reqp)->rq_repmsg, 1, sizeof(*body));
         LASSERT(body != NULL);
-
+        LASSERT((body->valid & OBD_MD_FID) != 0);
+        
         cid = &body->id1;
         obj = lmv_grab_obj(obd, cid);
         if (!obj && (mea = lmv_splitted_dir_body(*reqp, 1))) {
@@ -273,9 +281,8 @@ int lmv_intent_getattr(struct obd_export *exp, struct lustre_id *pid,
         }
 
         /* the same about fid returning. */
-        rc = md_intent_lock(lmv->tgts[mds].ltd_exp, &rpid, name,
-                            len, lmm, lmmsize, cid, it, flags,
-                            reqp, cb_blocking);
+        rc = md_intent_lock(lmv->tgts[mds].ltd_exp, &rpid, name, len, lmm,
+                            lmmsize, cid, it, flags, reqp, cb_blocking);
         if (rc < 0)
                 RETURN(rc);
        
@@ -306,9 +313,17 @@ int lmv_intent_getattr(struct obd_export *exp, struct lustre_id *pid,
         if (rc < 0)
                 RETURN(rc);
 
+        /*
+         * nothing is found, do not access body->id1 as it is zero and thus
+         * pointless.
+         */
+        if (it->d.lustre.it_disposition & DISP_LOOKUP_NEG)
+                RETURN(0);
+                
         body = lustre_msg_buf((*reqp)->rq_repmsg, 1, sizeof(*body));
         LASSERT(body != NULL);
-        
+        LASSERT((body->valid & OBD_MD_FID) != 0);
+
         cid = &body->id1;
         obj2 = lmv_grab_obj(obd, cid);
 
@@ -367,6 +382,7 @@ int lmv_lookup_slaves(struct obd_export *exp, struct ptlrpc_request **reqp)
 
         body = lustre_msg_buf((*reqp)->rq_repmsg, 1, sizeof(*body));
         LASSERT(body != NULL);
+        LASSERT((body->valid & OBD_MD_FID) != 0);
 
         obj = lmv_grab_obj(obd, &body->id1);
         LASSERT(obj != NULL);
@@ -546,6 +562,7 @@ repeat:
                 /* wow! this is splitted dir, we'd like to handle it */
                 body = lustre_msg_buf((*reqp)->rq_repmsg, 1, sizeof(*body));
                 LASSERT(body != NULL);
+                LASSERT((body->valid & OBD_MD_FID) != 0);
                 
                 obj = lmv_grab_obj(obd, &body->id1);
                 if (!obj) {

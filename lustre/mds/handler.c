@@ -583,6 +583,8 @@ static int mds_getstatus(struct ptlrpc_request *req)
         }
 
         body = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*body));
+        body->valid |= OBD_MD_FID;
+        
         memcpy(&body->id1, &mds->mds_rootid, sizeof(body->id1));
 
         /*
@@ -756,13 +758,15 @@ static int mds_getattr_internal(struct obd_device *obd, struct dentry *dentry,
         LASSERT(body != NULL);                 /* caller prepped reply */
 
         if (dentry->d_flags & DCACHE_CROSS_REF) {
-                mds_pack_dentry2body(obd, body, dentry);
+                mds_pack_dentry2body(obd, body, dentry,
+                                     (reqbody->valid & OBD_MD_FID) ? 1 : 0);
                 CDEBUG(D_OTHER, "cross reference: "DLID4"\n",
                        OLID4(&body->id1));
                 RETURN(0);
         }
         
-        mds_pack_inode2body(obd, body, inode);
+        mds_pack_inode2body(obd, body, inode,
+                            (reqbody->valid & OBD_MD_FID) ? 1 : 0);
 
         if ((S_ISREG(inode->i_mode) && (reqbody->valid & OBD_MD_FLEASIZE)) ||
             (S_ISDIR(inode->i_mode) && (reqbody->valid & OBD_MD_FLDIREA))) {
@@ -1262,6 +1266,7 @@ static int mds_sync(struct ptlrpc_request *req, int offset)
         } else {
                 /* just any file to grab fsync method - "file" arg unused */
                 struct file *file = mds->mds_rcvd_filp;
+                struct mds_body *rep_body;
                 struct dentry *de;
 
                 de = mds_id2dentry(obd, &body->id1, NULL);
@@ -1272,8 +1277,9 @@ static int mds_sync(struct ptlrpc_request *req, int offset)
                 if (rc)
                         GOTO(out, rc);
 
-                body = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*body));
-                mds_pack_inode2body(obd, body, de->d_inode);
+                rep_body = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*rep_body));
+                mds_pack_inode2body(obd, rep_body, de->d_inode,
+                                    (body->valid & OBD_MD_FID) ? 1 : 0);
                 l_dput(de);
         }
 
@@ -1766,7 +1772,7 @@ repeat:
                 obdo_from_inode(&repbody->oa, new->d_inode, FILTER_VALID_FLAGS);
                 repbody->oa.o_id = new->d_inode->i_ino;
                 repbody->oa.o_generation = new->d_inode->i_generation;
-                repbody->oa.o_valid |= OBD_MD_FLID | OBD_MD_FLGENER;
+                repbody->oa.o_valid |= OBD_MD_FLID | OBD_MD_FLGENER | OBD_MD_FID;
 
                 if ((body->oa.o_flags & OBD_FL_RECREATE_OBJS) ||
                     lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {

@@ -348,37 +348,38 @@ struct lov_mds_md_v0 {            /* LOV EA mds/wire data (little-endian) */
         struct lov_ost_data_v0 lmm_objects[0];
 } __attribute__((packed));
 
-#define OBD_MD_FLALL    (0xffffffffffffffff)
-#define OBD_MD_FLID     (0x0000000000000001)    /* object ID */
-#define OBD_MD_FLATIME  (0x0000000000000002)    /* access time */
-#define OBD_MD_FLMTIME  (0x0000000000000004)    /* data modification time */
-#define OBD_MD_FLCTIME  (0x0000000000000008)    /* change time */
-#define OBD_MD_FLSIZE   (0x0000000000000010)    /* size */
-#define OBD_MD_FLBLOCKS (0x0000000000000020)    /* allocated blocks count */
-#define OBD_MD_FLBLKSZ  (0x0000000000000040)    /* block size */
-#define OBD_MD_FLMODE   (0x0000000000000080)    /* access bits (mode & ~S_IFMT) */
-#define OBD_MD_FLTYPE   (0x0000000000000100)    /* object type (mode & S_IFMT) */
-#define OBD_MD_FLUID    (0x0000000000000200)    /* user ID */
-#define OBD_MD_FLGID    (0x0000000000000400)    /* group ID */
-#define OBD_MD_FLFLAGS  (0x0000000000000800)    /* flags word */
-#define OBD_MD_FLNLINK  (0x0000000000002000)    /* link count */
-#define OBD_MD_FLGENER  (0x0000000000004000)    /* generation number */
-#define OBD_MD_FLINLINE (0x0000000000008000)    /* inline data */
-#define OBD_MD_FLRDEV   (0x0000000000010000)    /* device number */
-#define OBD_MD_FLEASIZE (0x0000000000020000)    /* extended attribute data */
-#define OBD_MD_LINKNAME (0x0000000000040000)    /* symbolic link target */
-#define OBD_MD_FLHANDLE (0x0000000000080000)    /* file handle */
-#define OBD_MD_FLCKSUM  (0x0000000000100000)    /* bulk data checksum */
-#define OBD_MD_FLQOS    (0x0000000000200000)    /* quality of service stats */
-#define OBD_MD_FLOSCOPQ (0x0000000000400000)    /* osc opaque data */
-#define OBD_MD_FLCOOKIE (0x0000000000800000)    /* log cancellation cookie */
-#define OBD_MD_FLGROUP  (0x0000000001000000)    /* group */
-#define OBD_MD_FLIFID   (0x0000000002000000)    /* ->ost write inline fid */
-#define OBD_MD_FLEPOCH  (0x0000000004000000)    /* ->ost write easize is epoch */
-#define OBD_MD_FLGRANT  (0x0000000008000000)    /* ost preallocation space grant */
-#define OBD_MD_MDS      (0x0000000010000000)    /* where an inode lives on */
-#define OBD_MD_FLDIREA  (0x0000000020000000)    /* dir's extended attribute data */
-#define OBD_MD_REINT    (0x0000000040000000)    /* reintegrate oa */
+#define OBD_MD_FLALL    (0xffffffffffffffffLL)
+#define OBD_MD_FLID     (0x0000000000000001LL)    /* object ID */
+#define OBD_MD_FLATIME  (0x0000000000000002LL)    /* access time */
+#define OBD_MD_FLMTIME  (0x0000000000000004LL)    /* data modification time */
+#define OBD_MD_FLCTIME  (0x0000000000000008LL)    /* change time */
+#define OBD_MD_FLSIZE   (0x0000000000000010LL)    /* size */
+#define OBD_MD_FLBLOCKS (0x0000000000000020LL)    /* allocated blocks count */
+#define OBD_MD_FLBLKSZ  (0x0000000000000040LL)    /* block size */
+#define OBD_MD_FLMODE   (0x0000000000000080LL)    /* access bits (mode & ~S_IFMT) */
+#define OBD_MD_FLTYPE   (0x0000000000000100LL)    /* object type (mode & S_IFMT) */
+#define OBD_MD_FLUID    (0x0000000000000200LL)    /* user ID */
+#define OBD_MD_FLGID    (0x0000000000000400LL)    /* group ID */
+#define OBD_MD_FLFLAGS  (0x0000000000000800LL)    /* flags word */
+#define OBD_MD_FLNLINK  (0x0000000000002000LL)    /* link count */
+#define OBD_MD_FLGENER  (0x0000000000004000LL)    /* generation number */
+#define OBD_MD_FLINLINE (0x0000000000008000LL)    /* inline data */
+#define OBD_MD_FLRDEV   (0x0000000000010000LL)    /* device number */
+#define OBD_MD_FLEASIZE (0x0000000000020000LL)    /* extended attribute data */
+#define OBD_MD_LINKNAME (0x0000000000040000LL)    /* symbolic link target */
+#define OBD_MD_FLHANDLE (0x0000000000080000LL)    /* file handle */
+#define OBD_MD_FLCKSUM  (0x0000000000100000LL)    /* bulk data checksum */
+#define OBD_MD_FLQOS    (0x0000000000200000LL)    /* quality of service stats */
+#define OBD_MD_FLOSCOPQ (0x0000000000400000LL)    /* osc opaque data */
+#define OBD_MD_FLCOOKIE (0x0000000000800000LL)    /* log cancellation cookie */
+#define OBD_MD_FLGROUP  (0x0000000001000000LL)    /* group */
+#define OBD_MD_FLIFID   (0x0000000002000000LL)    /* ->ost write inline fid */
+#define OBD_MD_FLEPOCH  (0x0000000004000000LL)    /* ->ost write easize is epoch */
+#define OBD_MD_FLGRANT  (0x0000000008000000LL)    /* ost preallocation space grant */
+#define OBD_MD_MDS      (0x0000000010000000LL)    /* where an inode lives on */
+#define OBD_MD_FLDIREA  (0x0000000020000000LL)    /* dir's extended attribute data */
+#define OBD_MD_REINT    (0x0000000040000000LL)    /* reintegrate oa */
+#define OBD_MD_FID      (0x0000000080000000LL)    /* reintegrate oa */
 
 #define OBD_MD_FLNOTOBD (~(OBD_MD_FLBLOCKS | OBD_MD_LINKNAME |          \
                            OBD_MD_FLEASIZE | OBD_MD_FLHANDLE |          \

@@ -1227,9 +1227,8 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
                                        (struct lov_stripe_md **) &mea);
         }
 
-	/* MDS is supposed to return correct fid always. */
-        LASSERT(id_fid(&body->id1) != 0);
-        id_assign_fid(&lli->lli_id, &body->id1);
+        if (body->valid & OBD_MD_FID)
+                id_assign_fid(&lli->lli_id, &body->id1);
         
 	if (body->valid & OBD_MD_FLID)
 		id_ino(&lli->lli_id) = id_ino(&body->id1);
@@ -1285,6 +1284,7 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         inode->i_dev = (kdev_t)id_group(&lli->lli_id);
 #endif
+        LASSERT(id_fid(&lli->lli_id) != 0);
 }
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
@@ -1574,7 +1574,7 @@ int ll_get_fid(struct obd_export *exp, struct lustre_id *idp,
         int rc;
 
         rc = md_getattr_lock(exp, idp, filename, strlen(filename) + 1,
-                             0, 0, &request);
+                             OBD_MD_FID, 0, &request);
         if (rc < 0) {
                 CDEBUG(D_INFO, "md_getattr_lock failed on %s: rc %d\n",
                        filename, rc);

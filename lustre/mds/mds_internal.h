@@ -207,16 +207,16 @@ int mds_pack_md(struct obd_device *, struct lustre_msg *, int offset,
                 struct mds_body *, struct inode *, int lock);
 
 int mds_pack_inode2id(struct obd_device *, struct lustre_id *,
-                      struct inode *);
+                      struct inode *, int);
 
 void mds_pack_inode2body(struct obd_device *, struct mds_body *,
-                         struct inode *);
+                         struct inode *, int);
 
 void mds_pack_dentry2id(struct obd_device *, struct lustre_id *,
-                        struct dentry *);
+                        struct dentry *, int);
 
 void mds_pack_dentry2body(struct obd_device *, struct mds_body *b,
-                          struct dentry *);
+                          struct dentry *, int);
 #endif
 
 /* mds/mds_lmv.c */

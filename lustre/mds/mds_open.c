@@ -527,7 +527,7 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
                 GOTO(out_dput, 0);
 
         /* get lock (write for O_CREAT, read otherwise) */
-        mds_pack_inode2body(obd, body, dchild->d_inode);
+        mds_pack_inode2body(obd, body, dchild->d_inode, 1);
         if (S_ISREG(dchild->d_inode->i_mode)) {
                 rc = mds_pack_md(obd, req->rq_repmsg, 2, body,
                                  dchild->d_inode, 1);
@@ -721,7 +721,9 @@ static int mds_open_by_id(struct ptlrpc_request *req,
         if (dchild->d_inode != NULL) {
                 up(&pending_dir->i_sem);
                 mds_inode_set_orphan(dchild->d_inode);
-                mds_pack_inode2body(req2obd(req), body, dchild->d_inode);
+                mds_pack_inode2body(req2obd(req), body,
+                                    dchild->d_inode, 1);
+                
                 intent_set_disposition(rep, DISP_LOOKUP_EXECD);
                 intent_set_disposition(rep, DISP_LOOKUP_POS);
                 CWARN("Orphan %s found and opened in PENDING directory\n",
@@ -739,7 +741,9 @@ static int mds_open_by_id(struct ptlrpc_request *req,
         if (IS_ERR(dchild))
                 RETURN(PTR_ERR(dchild));
 
-        mds_pack_inode2body(req2obd(req), body, dchild->d_inode);
+        mds_pack_inode2body(req2obd(req), body,
+                            dchild->d_inode, 1);
+        
         intent_set_disposition(rep, DISP_LOOKUP_EXECD);
         intent_set_disposition(rep, DISP_LOOKUP_POS);
 
@@ -977,7 +981,7 @@ got_child:
                 ldlm_policy_data_t policy;
                 int flags = 0;
 
-                mds_pack_dentry2body(obd, body, dchild);
+                mds_pack_dentry2body(obd, body, dchild, 1);
                 intent_set_disposition(rep, DISP_LOOKUP_POS);
 
                 CDEBUG(D_OTHER, "cross reference: "DLID4"\n",
@@ -1129,7 +1133,7 @@ got_child:
 
                 acc_mode = 0;           /* Don't check for permissions */
         }
-        mds_pack_inode2body(obd, body, dchild->d_inode);
+        mds_pack_inode2body(obd, body, dchild->d_inode, 1);
 	
         LASSERTF(!mds_inode_is_orphan(dchild->d_inode),
                  "dchild %*s (%p) inode %p\n", dchild->d_name.len,
@@ -1480,11 +1484,16 @@ int mds_close(struct ptlrpc_request *req, int offset)
         /* child i_alloc_sem protects orphan_dec_test && is_orphan race */
         DOWN_WRITE_I_ALLOC_SEM(inode); /* mds_mfd_close drops this */
         if (mds_inode_is_orphan(inode) && mds_orphan_open_count(inode) == 1) {
-                body = lustre_msg_buf(req->rq_repmsg, 0, sizeof (*body));
-                LASSERT(body != NULL);
+                struct mds_body *rep_body;
 
-                mds_pack_inode2body(obd, body, inode);
-                mds_pack_md(obd, req->rq_repmsg, 1, body, 
+                rep_body = lustre_msg_buf(req->rq_repmsg, 0,
+                                          sizeof (*rep_body));
+                LASSERT(rep_body != NULL);
+
+                mds_pack_inode2body(obd, rep_body, inode,
+                                    (body->valid & OBD_MD_FID) ? 1 : 0);
+                
+                mds_pack_md(obd, req->rq_repmsg, 1, rep_body, 
 			    inode, MDS_PACK_MD_LOCK);
         }
         spin_lock(&med->med_open_lock);

@@ -1093,8 +1093,8 @@ repeat:
         CDEBUG(D_OTHER, "getattr_lock for %*s on "DLID4" -> "DLID4"\n",
                namelen, filename, OLID4(id), OLID4(&rid));
 
-        rc = md_getattr_lock(lmv->tgts[id_group(&rid)].ltd_exp, 
-                             &rid, filename, namelen, valid,
+        rc = md_getattr_lock(lmv->tgts[id_group(&rid)].ltd_exp, &rid,
+                             filename, namelen, (valid | OBD_MD_FID),
                              ea_size, request);
         if (rc == 0) {
                 /*
@@ -1104,6 +1104,8 @@ repeat:
                  */
                 body = lustre_msg_buf((*request)->rq_repmsg, 0, sizeof(*body));
                 LASSERT(body != NULL);
+                LASSERT((body->valid & OBD_MD_FID) != 0);
+
                 if (body->valid & OBD_MD_MDS) {
                         struct ptlrpc_request *req = NULL;
                         
@@ -1307,6 +1309,7 @@ int lmv_setattr(struct obd_export *exp, struct mdc_op_data *data,
                         body = lustre_msg_buf((*request)->rq_repmsg, 0,
                                               sizeof(*body));
                         LASSERT(body != NULL);
+                        LASSERT((body->valid & OBD_MD_FID) != 0);
                         LASSERT(id_group(&body->id1) == id_group(&data->id1));
                 }
         }
