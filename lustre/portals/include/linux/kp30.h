@@ -81,10 +81,9 @@ extern unsigned int portal_printk;
 # include <linux/sched.h> /* THREAD_SIZE */
 #else
 # define THREAD_SIZE 8192
-#endif 
+#endif
 
 #ifdef __KERNEL__
-
 # ifdef  __ia64__
 #  define CDEBUG_STACK (THREAD_SIZE -                                      \
                         ((unsigned long)__builtin_dwarf_cfa() &            \
@@ -114,13 +113,13 @@ extern unsigned int portal_printk;
 #if 1
 #define CDEBUG(mask, format, a...)                                            \
 do {                                                                          \
-        CHECK_STACK(CDEBUG_STACK);                                          \
+        CHECK_STACK(CDEBUG_STACK);                                            \
         if (!(mask) || ((mask) & (D_ERROR | D_EMERG)) ||                      \
             (portal_debug & (mask) &&                                         \
              portal_subsystem_debug & (1 << (DEBUG_SUBSYSTEM >> 24))))        \
                 portals_debug_msg(DEBUG_SUBSYSTEM, mask,                      \
                                   __FILE__, __FUNCTION__, __LINE__,           \
-                                  CDEBUG_STACK, format, ## a);              \
+                                  CDEBUG_STACK, format, ## a);                \
 } while (0)
 
 #define CWARN(format, a...) CDEBUG(D_WARNING, format, ## a)
@@ -212,7 +211,8 @@ static inline void our_cond_resched(void)
 #endif /* LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0) */
 
 #ifdef PORTAL_DEBUG
-extern void kportal_assertion_failed(char *expr,char *file,const char *func,const int line);
+extern void kportal_assertion_failed(char *expr, char *file, const char *func,
+                                     const int line);
 #define LASSERT(e) ((e) ? 0 : kportal_assertion_failed( #e , __FILE__,  \
                                                         __FUNCTION__, __LINE__))
 #else
@@ -580,8 +580,9 @@ __s32 portals_debug_copy_to_user(char *buf, unsigned long len);
 # warning printf has been defined as a macro...
 # undef printf
 #endif
-void portals_debug_msg (int subsys, int mask, char *file, const char *fn, const int line,
-                        unsigned long stack, const char *format, ...)
+void portals_debug_msg(int subsys, int mask, char *file, const char *fn,
+                       const int line, unsigned long stack,
+                       const char *format, ...)
         __attribute__ ((format (printf, 7, 8)));
 #else
 void portals_debug_msg (int subsys, int mask, char *file, const char *fn,

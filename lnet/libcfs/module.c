@@ -47,7 +47,7 @@
 #include <portals/lib-p30.h>
 #include <portals/p30.h>
 #include <linux/kp30.h>
-#include <linux/kernel_compat.h>
+#include <linux/portals_compat25.h>
 
 #define PORTAL_MINOR 240
 
@@ -62,7 +62,7 @@ static struct nal_cmd_handler nal_cmd[NAL_MAX_NR + 1];
 struct semaphore nal_cmd_sem;
 
 #ifdef PORTAL_DEBUG
-void kportal_assertion_failed(char *expr, char *file,  const char *func, 
+void kportal_assertion_failed(char *expr, char *file, const char *func,
                               const int line)
 {
         portals_debug_msg(0, D_EMERG, file, func, line, CDEBUG_STACK,

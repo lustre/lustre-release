@@ -48,7 +48,7 @@
 # define DEBUG_SUBSYSTEM S_PORTALS
 
 #include <linux/kp30.h>
-#include <linux/kernel_compat.h>
+#include <linux/portals_compat25.h>
 
 #define DEBUG_OVERFLOW 1024
 static char *debug_buf = NULL;
@@ -633,9 +633,9 @@ int portals_debug_mark_buffer(char *text)
         if (debug_buf == NULL)
                 return -EINVAL;
 
-        CDEBUG(0, "*******************************************************************************\n");
+        CDEBUG(0, "********************************************************\n");
         CDEBUG(0, "DEBUG MARKER: %s\n", text);
-        CDEBUG(0, "*******************************************************************************\n");
+        CDEBUG(0, "********************************************************\n");
 
         return 0;
 }
@@ -673,8 +673,8 @@ __s32 portals_debug_copy_to_user(char *buf, unsigned long len)
 
 /* FIXME: I'm not very smart; someone smarter should make this better. */
 void
-portals_debug_msg (int subsys, int mask, char *file, const char *fn, const int line,
-                   unsigned long stack, const char *format, ...)
+portals_debug_msg(int subsys, int mask, char *file, const char *fn,
+                  const int line, unsigned long stack, const char *format, ...)
 {
         va_list       ap;
         unsigned long flags;
