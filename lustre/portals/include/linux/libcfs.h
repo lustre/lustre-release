@@ -187,8 +187,33 @@ do {                                                                          \
                                   CDEBUG_STACK, format, ## a);                \
 } while (0)
 
-#define CWARN(format, a...) CDEBUG(D_WARNING, format, ## a)
-#define CERROR(format, a...) CDEBUG(D_ERROR, format, ## a)
+#define CDEBUG_MAX_LIMIT 600
+#define CDEBUG_LIMIT(mask, format, a...)                                      \
+do {                                                                          \
+        static unsigned long next;                                            \
+        static int count, delay = 1;                                          \
+                                                                              \
+        if (time_after(jiffies, next)) {                                      \
+                if (count) {                                                  \
+                        CDEBUG(mask, "skipped %d similar messages\n", count); \
+                        count = 0;                                            \
+                }                                                             \
+                CDEBUG(mask, format, ## a);                                   \
+                if (time_after(jiffies, next + (CDEBUG_MAX_LIMIT + 10) * HZ)) \
+                        delay = delay > 8 ? delay / 8 : 1;                    \
+                else                                                          \
+                        delay = delay * 2 >= CDEBUG_MAX_LIMIT * HZ ?          \
+                                        CDEBUG_MAX_LIMIT * HZ : delay * 2;    \
+                next = jiffies + delay;                                       \
+        } else {                                                              \
+                CDEBUG(portal_debug & ~(D_EMERG|D_ERROR|D_WARNING),           \
+                       format, ## a);                                         \
+                count++;                                                      \
+        }                                                                     \
+} while (0)
+
+#define CWARN(format, a...) CDEBUG_LIMIT(D_WARNING, format, ## a)
+#define CERROR(format, a...) CDEBUG_LIMIT(D_ERROR, format, ## a)
 #define CEMERG(format, a...) CDEBUG(D_EMERG, format, ## a)
 
 #define GOTO(label, rc)                                                 \
