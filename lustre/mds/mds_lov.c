@@ -576,10 +576,17 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 RETURN(rc);
         }
         case OBD_IOC_SET_READONLY: {
+                void *handle;
+                struct inode *inode = obd->u.mds.mds_sb->s_root->d_inode;
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
                 BDEVNAME_DECLARE_STORAGE(tmp);
                 CERROR("setting device %s read-only\n",
                        ll_bdevname(obd->u.mds.mds_sb->s_dev, tmp));
+                
+                handle = fsfilt_start(obd, inode, FSFILT_OP_MKNOD, NULL);
+                LASSERT(handle);
+                rc = fsfilt_commit(obd, inode, handle, 1);
+
                 dev_set_rdonly(obd->u.mds.mds_sb->s_dev, 2);
                 RETURN(0);
 #else
