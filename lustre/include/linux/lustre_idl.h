@@ -128,26 +128,26 @@ struct lustre_msg {
 /* Flags that apply to all requests are in the bottom 16 bits */
 #define MSG_GEN_FLAG_MASK  0x0000ffff
 
-static inline u16 lustre_msg_get_flags(struct lustre_msg *msg)
+static inline int lustre_msg_get_flags(struct lustre_msg *msg)
 {
-        return (u16)(msg->flags & MSG_GEN_FLAG_MASK);
+        return (msg->flags & MSG_GEN_FLAG_MASK);
 }
 
-static inline void lustre_msg_set_flags(struct lustre_msg *msg, u16 flags)
+static inline void lustre_msg_set_flags(struct lustre_msg *msg, int flags)
 {
         msg->flags &= ~MSG_GEN_FLAG_MASK;
-        msg->flags |= flags;
+        msg->flags |= MSG_GEN_FLAG_MASK & flags;
 }
 
-static inline u16 lustre_msg_get_op_flags(struct lustre_msg *msg)
+static inline int lustre_msg_get_op_flags(struct lustre_msg *msg)
 {
-        return (u16)(msg->flags >> MSG_OP_FLAG_SHIFT);
+        return (msg->flags >> MSG_OP_FLAG_SHIFT);
 }
 
-static inline void lustre_msg_set_op_flags(struct lustre_msg *msg, u16 flags)
+static inline void lustre_msg_set_op_flags(struct lustre_msg *msg, int flags)
 {
         msg->flags &= ~MSG_OP_FLAG_MASK;
-        msg->flags |= (flags << MSG_OP_FLAG_SHIFT);
+        msg->flags |= ((flags & MSG_GEN_FLAG_MASK) << MSG_OP_FLAG_SHIFT);
 }
 
 #define CONNMGR_REPLY	0

@@ -264,7 +264,6 @@ int ll_intent_lock(struct inode *parent, struct dentry **de,
                                 it->it_data = NULL;
                                 GOTO(drop_req, rc = it->it_status);
                         }
-                        it->it_data = dentry;
                         /* Fall through to update attibutes. */
                 } else if (it->it_op & (IT_UNLINK | IT_RMDIR)) {
                         /* For remove ops, we want the lookup to succeed unless
@@ -340,6 +339,9 @@ int ll_intent_lock(struct inode *parent, struct dentry **de,
         } else {
                 ptlrpc_req_finished(request);
         }
+
+        if (it->it_disposition && it->it_op & (IT_RENAME | IT_LINK))
+                it->it_data = dentry;
 
         /* this places the intent in the dentry so that the vfs_xxx
          *  operation can lay its hands on it; but that is not 
