@@ -38,7 +38,7 @@ static int ll_file_open(struct inode *inode, struct file *file)
         int rc;
         struct ptlrpc_request *req = NULL;
         struct ll_file_data *fd;
-        struct obdo *oa;
+        struct obdo *oa = NULL;
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         ENTRY;
 
@@ -69,9 +69,8 @@ static int ll_file_open(struct inode *inode, struct file *file)
         }
         rc = obd_open(ll_i2obdconn(inode), oa);
         obdo_free(oa);
-        if (rc) {
+        if (rc)
                 GOTO(out_mdc, rc = -abs(rc));
-        }
 
         file->private_data = fd;
 
@@ -113,9 +112,8 @@ static int ll_file_release(struct inode *inode, struct file *file)
         }
         rc = obd_close(ll_i2obdconn(inode), oa);
         obdo_free(oa);
-        if (rc) {
+        if (rc)
                 GOTO(out_fd, abs(rc));
-        }
 
         if (file->f_mode & FMODE_WRITE) {
                 struct iattr attr;
