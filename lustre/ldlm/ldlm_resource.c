@@ -80,7 +80,7 @@ static void cleanup_resource(struct ldlm_resource *res, struct list_head *q)
                         ldlm_lock2handle(lock, &lockh);
                         /* can we get away without a connh here? */
                         rc = ldlm_cli_cancel(&lockh);
-                        if (rc < 0) {
+                        if (rc != ELDLM_OK) {
                                 /* It failed remotely, but we'll force it to
                                  * cleanup locally. */
                                 CERROR("ldlm_cli_cancel: %d\n", rc);
