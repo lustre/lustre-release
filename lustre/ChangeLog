@@ -3,6 +3,7 @@ tbd  Cluster File Systems, Inc. <info@clusterfs.com>
 	* Bug fixes
  	- clear page cache after eviction  (2766)
 	- don't copy lvb into (possibly NULL) reply on error (2983)
+	- don't deref dentry after dput, don't free lvb on error (2922)
 
 2004-03-22  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.1
