@@ -272,7 +272,6 @@ my $term, $attribs;
 
 # Get going....
 
-# $::device = "/dev/obd0" unless defined $::device;
 Device($::device);
 
 sub readl {
@@ -1116,7 +1115,7 @@ sub Setup {
     printf "setting up %s, device %x\n", $arg, $::st->rdev();
     if ( $arg ) {
         $data = $arg;
-        $datalen = 4 + length($arg)+1; # need null character also
+        $datalen = length($arg)+1; # need null character also
     }
 
     my $packed = pack("iip", $datalen, $::st->rdev(), $data);

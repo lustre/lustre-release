@@ -221,6 +221,7 @@ static void inline obdfs_set_size (struct inode *inode, obd_size size)
 } /* obdfs_set_size */
 
 
+
 #define obd_down(mutex) {                                               \
         /* CDEBUG(D_INFO, "get lock\n"); */                             \
         obdfs_mutex_start = jiffies;                                    \

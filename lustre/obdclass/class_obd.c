@@ -336,7 +336,6 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 			int setup_rdev;
                         void *setup_data;
                 } *setup;
-		char *user_path;
 
                 setup = tmp_buf;
 
@@ -363,7 +362,6 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 		  EXIT;
 		  return err;
 		}
-		user_path = setup->setup_data;
 
                 /* get the attach data */
                 err = getdata(setup->setup_datalen, &setup->setup_data);
@@ -372,11 +370,9 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                         return err;
                 }
 		obddev->obd_rdev = setup->setup_rdev;
-		obddev->obd_user_name = user_path;
+		obddev->obd_user_name = (char *)setup->setup_data;
 
                 /* do the setup */
-                CDEBUG(D_PSDEV, "Setup %d, type %s device %x\n", dev, 
-                       obddev->obd_type->typ_name, setup->setup_rdev);
                 if ( !OBT(obddev) || !OBP(obddev, setup) ) {
                         obddev->obd_type->typ_refcnt++;
                         CDEBUG(D_PSDEV, "Dev %d refcount now %d\n",
@@ -388,6 +384,10 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                         EXIT;
                         return 0;
                 }
+
+                CDEBUG(D_PSDEV, "Setup %d, type %s device %x, %s, len %d\n", dev, 
+                       obddev->obd_type->typ_name, setup->setup_rdev,
+		       obddev->obd_user_name, setup->setup_datalen);
 
                 err = OBP(obddev, setup)(obddev, 0, NULL);
                           
@@ -401,7 +401,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                         obddev->obd_flags |= OBD_SET_UP;
                         EXIT;
                 }
-		OBD_FREE(setup->setup_data, setup->setup_datalen);
+		// OBD_FREE(setup->setup_data, setup->setup_datalen);
                 return err;
         }
         case OBD_IOC_CLEANUP: {
