@@ -236,6 +236,35 @@ int mdc_readpage(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
         return rc;
 }
 
+#if 0
+int mdc_statfs(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
+               struct statfs *statfs,
+               struct ptlrpc_request **request)
+{
+        struct mds_rec_setattr *rec;
+        struct ptlrpc_request *req;
+        int rc, size = sizeof(*rec);
+        ENTRY;
+
+        req = ptlrpc_prep_req(cl, conn, MDS_STATFS, 1, &size, NULL);
+        if (!req)
+                RETURN(-ENOMEM);
+
+        rec = lustre_msg_buf(req->rq_reqmsg, 0);
+        mds_setattr_pack(rec, inode, iattr);
+
+        size = sizeof(struct mds_body);
+        req->rq_replen = lustre_msg_size(1, &size);
+
+        rc = mdc_reint(cl, req, LUSTRE_CONN_FULL);
+        *request = req;
+        if (rc == -ERESTARTSYS )
+                rc = 0;
+
+        RETURN(rc);
+}
+#endif
+
 static int request_ioctl(struct inode *inode, struct file *file,
                          unsigned int cmd, unsigned long arg)
 {
