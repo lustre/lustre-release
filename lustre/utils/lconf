@@ -723,6 +723,18 @@ def mkfs(dev, devsize, fstype, jsize, isize, mkfsoptions, isblock=1):
 
     if fstype in ('ext3', 'extN'):
         # ext3 journal size is in megabytes
+        if jsize == 0:
+            if devsize == 0:
+                if not is_block(dev):
+                    ret, out = runcmd("ls -l %s" %dev)
+                    devsize = int(string.split(out[0])[4]) / 1024
+                else:
+                    ret, out = runcmd("sfdisk -s %s" %dev)
+                    devsize = int(out[0])
+            if devsize > 1024 * 1024:
+                jsize = ((devsize / 102400) * 4)
+            if jsize > 400:
+                jsize = 400        
         if jsize:  jopt = "-J size=%d" %(jsize,)
         if isize:  iopt = "-I %d" %(isize,)
         mkfs = 'mkfs.ext2 -j -b 4096 '
