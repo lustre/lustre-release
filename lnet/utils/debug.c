@@ -446,8 +446,12 @@ int jt_dbg_debug_kernel(int argc, char **argv)
 
 int jt_dbg_debug_file(int argc, char **argv)
 {
-        int fdin,fdout;
-        FILE *in, *out = stdout;
+        int    fdin;
+        int    fdout;
+        FILE  *in;
+        FILE  *out = stdout;
+        int    rc;
+
         if (argc > 3 || argc < 2) {
                 fprintf(stderr, "usage: %s <input> [output]\n", argv[0]);
                 return 0;
@@ -467,7 +471,9 @@ int jt_dbg_debug_file(int argc, char **argv)
                 return 1;
         }
         if (argc > 2) {
-                fdout = open(argv[2], O_CREAT | O_WRONLY | O_LARGEFILE, 0600);
+                fdout = open(argv[2], 
+                             O_CREAT | O_TRUNC | O_WRONLY | O_LARGEFILE, 
+                             0600);
                 if (fdout == -1) {
                         fprintf(stderr, "open(%s) failed: %s\n", argv[2],
                                 strerror(errno));
@@ -484,7 +490,13 @@ int jt_dbg_debug_file(int argc, char **argv)
                 }
         }
 
-        return parse_buffer(in, out);
+        rc = parse_buffer(in, out);
+
+        fclose(in);
+        if (out != stdout)
+                fclose(out);
+
+        return rc;
 }
 
 static int
