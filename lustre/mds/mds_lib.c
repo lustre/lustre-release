@@ -313,7 +313,7 @@ static int mds_open_unpack(struct ptlrpc_request *req, int offset,
 typedef int (*update_unpacker)(struct ptlrpc_request *req, int offset,
                                struct mds_update_record *r);
 
-static update_unpacker mds_unpackers[REINT_MAX + 1] = {
+static update_unpacker mds_unpackers[REINT_MAX] = {
         [REINT_SETATTR] mds_setattr_unpack,
         [REINT_CREATE] mds_create_unpack,
         [REINT_LINK] mds_link_unpack,
@@ -341,9 +341,8 @@ int mds_update_unpack(struct ptlrpc_request *req, int offset,
         if (lustre_msg_swabbed (req->rq_reqmsg))
                 __swab32s (&opcode);
 
-        if (opcode > REINT_MAX ||
-            mds_unpackers[opcode] == NULL) {
-                CERROR ("Unexpected opcode %d\n", opcode);
+        if (opcode >= REINT_MAX || mds_unpackers[opcode] == NULL) {
+                CERROR("Unexpected opcode %d\n", opcode);
                 RETURN(-EFAULT);
         }
 

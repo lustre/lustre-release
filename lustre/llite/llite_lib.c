@@ -1258,7 +1258,7 @@ void ll_update_inode(struct inode *inode, struct mds_body *body,
                 LTIME_S(inode->i_atime) = body->atime;
         if (body->valid & OBD_MD_FLMTIME &&
             body->mtime > LTIME_S(inode->i_mtime)) {
-                CDEBUG(D_INODE, "setting ino %lu mtime from %lu to %u\n",
+                CDEBUG(D_INODE, "setting ino %lu mtime from %lu to "LPU64"\n",
                        inode->i_ino, LTIME_S(inode->i_mtime), body->mtime);
                 LTIME_S(inode->i_mtime) = body->mtime;
         }
@@ -1518,6 +1518,11 @@ int lustre_remount_fs(struct super_block *sb, int *flags, char *data)
                                "remount: %d\n", err);
                         return err;
                 }
+
+                if (read_only)
+                        sb->s_flags |= MS_RDONLY;
+                else
+                        sb->s_flags &= ~MS_RDONLY;
         }
         return 0;
 }

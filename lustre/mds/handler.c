@@ -283,6 +283,7 @@ static int mds_connect(struct lustre_handle *conn, struct obd_device *obd,
         LASSERT(exp);
         med = &exp->exp_mds_data;
 
+        data->ocd_connect_flags &= MDS_CONNECT_SUPPORTED;
         exp->exp_connect_flags = data->ocd_connect_flags;
 
         OBD_ALLOC(mcd, sizeof(*mcd));

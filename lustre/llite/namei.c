@@ -62,7 +62,7 @@ static int ll_test_inode(struct inode *inode, void *opaque)
                 last_ino = md->body->ino;
                 last_gen = md->body->generation;
                 CDEBUG(D_VFSTRACE,
-                       "comparing inode %p ino %lu/%u to body %u/%u\n",
+                       "comparing inode %p ino %lu/%u to body "LPU64"/%u\n",
                        inode, inode->i_ino, inode->i_generation,
                        md->body->ino, md->body->generation);
         }
@@ -502,7 +502,7 @@ static void ll_update_times(struct ptlrpc_request *request, int offset,
 
         if (body->valid & OBD_MD_FLMTIME &&
             body->mtime > LTIME_S(inode->i_mtime)) {
-                CDEBUG(D_INODE, "setting ino %lu mtime from %lu to %u\n",
+                CDEBUG(D_INODE, "setting ino %lu mtime from %lu to "LPU64"\n",
                        inode->i_ino, LTIME_S(inode->i_mtime), body->mtime);
                 LTIME_S(inode->i_mtime) = body->mtime;
         }

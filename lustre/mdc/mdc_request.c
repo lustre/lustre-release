@@ -143,7 +143,7 @@ int mdc_getattr_common(struct obd_export *exp, unsigned int ea_size,
 }
 
 int mdc_getattr(struct obd_export *exp, struct ll_fid *fid,
-                unsigned long valid, unsigned int ea_size,
+                obd_valid valid, unsigned int ea_size,
                 struct ptlrpc_request **request)
 {
         struct ptlrpc_request *req;

@@ -1446,6 +1446,7 @@ static int filter_connect(struct lustre_handle *conn, struct obd_device *obd,
         LASSERT(exp != NULL);
 
         fed = &exp->exp_filter_data;
+        data->ocd_connect_flags &= OST_CONNECT_SUPPORTED;
         exp->exp_connect_flags = data->ocd_connect_flags;
 
         spin_lock_init(&fed->fed_lock);
@@ -2336,8 +2337,8 @@ static int filter_truncate(struct obd_export *exp, struct obdo *oa,
                 CERROR("PUNCH not supported, only truncate: end = "LPX64"\n",
                        end);
 
-        CDEBUG(D_INODE, "calling truncate for object "LPU64", valid = %x, "
-               "o_size = "LPD64"\n", oa->o_id, oa->o_valid, start);
+        CDEBUG(D_INODE, "calling truncate for object "LPU64", valid = "LPX64
+               ", o_size = "LPD64"\n", oa->o_id, oa->o_valid, start);
         oa->o_size = start;
         error = filter_setattr(exp, oa, NULL, oti);
         RETURN(error);

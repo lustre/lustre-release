@@ -70,8 +70,8 @@ struct mds_update_record {
         struct iattr ur_iattr;
         struct obd_ucred ur_uc;
         __u64 ur_rdev;
-        __u32 ur_mode;
         __u64 ur_time;
+        __u32 ur_mode;
         __u32 ur_flags;
 };
 
@@ -190,7 +190,7 @@ int mdc_req2lustre_md(struct ptlrpc_request *req, int offset,
                       struct obd_export *exp, struct lustre_md *md);
 int mdc_getstatus(struct obd_export *exp, struct ll_fid *rootfid);
 int mdc_getattr(struct obd_export *exp, struct ll_fid *fid,
-                unsigned long valid, unsigned int ea_size,
+                obd_valid valid, unsigned int ea_size,
                 struct ptlrpc_request **request);
 int mdc_getattr_name(struct obd_export *exp, struct ll_fid *fid,
                      char *filename, int namelen, unsigned long valid,

@@ -81,8 +81,8 @@ void iattr_from_obdo(struct iattr *attr, struct obdo *oa, obd_flag valid)
         valid &= oa->o_valid;
 
         if (valid & (OBD_MD_FLCTIME | OBD_MD_FLMTIME))
-                CDEBUG(D_INODE, "valid %x, new time %lu/%lu\n",
-                       oa->o_valid, (long)oa->o_mtime, (long)oa->o_ctime);
+                CDEBUG(D_INODE, "valid "LPX64", new time "LPU64"/"LPU64"\n",
+                       oa->o_valid, oa->o_mtime, oa->o_ctime);
 
         attr->ia_valid = 0;
         if (valid & OBD_MD_FLATIME) {
@@ -197,10 +197,10 @@ void obdo_refresh_inode(struct inode *dst, struct obdo *src, obd_flag valid)
         valid &= src->o_valid;
 
         if (valid & (OBD_MD_FLCTIME | OBD_MD_FLMTIME))
-                CDEBUG(D_INODE, "valid %x, cur time %lu/%lu, new %lu/%lu\n",
-                       src->o_valid, LTIME_S(dst->i_mtime), 
-                       LTIME_S(dst->i_ctime),
-                       (long)src->o_mtime, (long)src->o_ctime);
+                CDEBUG(D_INODE,
+                       "valid "LPX64", cur time %lu/%lu, new "LPU64"/"LPU64"\n",
+                       src->o_valid, LTIME_S(dst->i_mtime),
+                       LTIME_S(dst->i_ctime), src->o_mtime, src->o_ctime);
 
         if (valid & OBD_MD_FLATIME && src->o_atime > LTIME_S(dst->i_atime))
                 LTIME_S(dst->i_atime) = src->o_atime;
@@ -226,10 +226,10 @@ void obdo_to_inode(struct inode *dst, struct obdo *src, obd_flag valid)
         valid &= src->o_valid;
 
         if (valid & (OBD_MD_FLCTIME | OBD_MD_FLMTIME))
-                CDEBUG(D_INODE, "valid %x, cur time %lu/%lu, new %lu/%lu\n",
-                       src->o_valid, 
-                       LTIME_S(dst->i_mtime), LTIME_S(dst->i_ctime),
-                       (long)src->o_mtime, (long)src->o_ctime);
+                CDEBUG(D_INODE,
+                       "valid "LPX64", cur time %lu/%lu, new "LPU64"/"LPU64"\n",
+                       src->o_valid, LTIME_S(dst->i_mtime),
+                       LTIME_S(dst->i_ctime), src->o_mtime, src->o_ctime);
 
         if (valid & OBD_MD_FLATIME)
                 LTIME_S(dst->i_atime) = src->o_atime;
@@ -262,7 +262,7 @@ EXPORT_SYMBOL(obdo_to_inode);
 void obdo_cpy_md(struct obdo *dst, struct obdo *src, obd_flag valid)
 {
 #ifdef __KERNEL__
-        CDEBUG(D_INODE, "src obdo "LPX64" valid 0x%x, dst obdo "LPX64"\n",
+        CDEBUG(D_INODE, "src obdo "LPX64" valid "LPX64", dst obdo "LPX64"\n",
                src->o_id, src->o_valid, dst->o_id);
 #endif
         if (valid & OBD_MD_FLATIME)

@@ -226,7 +226,7 @@ int mds_llog_finish(struct obd_device *obd, int count)
         ENTRY;
 
         ctxt = llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT);
-        if (ctxt) 
+        if (ctxt)
                 rc = llog_cleanup(ctxt);
 
         ctxt = llog_get_context(obd, LLOG_SIZE_REPL_CTXT);

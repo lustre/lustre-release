@@ -28,6 +28,7 @@
 	  startup (6017)
 	- add support for an arbitrary number of OSTs (3026)  
 	- Quota support protocol changes.
+	- forward compatibility changes to wire structs (6007)
 	
 2005-03-22  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.1

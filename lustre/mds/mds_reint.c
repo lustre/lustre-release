@@ -2070,7 +2070,7 @@ cleanup:
 typedef int (*mds_reinter)(struct mds_update_record *, int offset,
                            struct ptlrpc_request *, struct lustre_handle *);
 
-static mds_reinter reinters[REINT_MAX + 1] = {
+static mds_reinter reinters[REINT_MAX] = {
         [REINT_SETATTR] mds_reint_setattr,
         [REINT_CREATE] mds_reint_create,
         [REINT_LINK] mds_reint_link,
@@ -2088,8 +2088,7 @@ int mds_reint_rec(struct mds_update_record *rec, int offset,
         ENTRY;
 
         /* checked by unpacker */
-        LASSERT(rec->ur_opcode <= REINT_MAX &&
-                reinters[rec->ur_opcode] != NULL);
+        LASSERT(rec->ur_opcode < REINT_MAX && reinters[rec->ur_opcode] != NULL);
 
         push_ctxt(&saved, &obd->obd_ctxt, &rec->ur_uc);
         rc = reinters[rec->ur_opcode] (rec, offset, req, lockh);

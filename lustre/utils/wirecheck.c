@@ -30,8 +30,15 @@ do {                                                            \
 #define CHECK_VALUE(a)                                          \
 do {                                                            \
         printf("        LASSERTF("#a                            \
-               " == %d, \" found %%lld\\n\",\n                 "\
-               "(long long)"#a");\n",a);\
+               " == %lld, \" found %%lld\\n\",\n                 "\
+               "(long long)"#a");\n", (long long)a);            \
+} while(0)
+
+#define CHECK_VALUE_64(a)                                       \
+do {                                                            \
+        printf("        LASSERTF("#a                            \
+               " == %lldULL, \" found %%lld\\n\",\n                 "\
+               "(long long)"#a");\n", (long long)a);            \
 } while(0)
 
 #define CHECK_MEMBER_OFFSET(s,m)                                \
@@ -98,8 +105,10 @@ check_obdo(void)
 {
         BLANK_LINE();
         CHECK_STRUCT(obdo);
+        CHECK_MEMBER(obdo, o_valid);
         CHECK_MEMBER(obdo, o_id);
         CHECK_MEMBER(obdo, o_gr);
+        CHECK_MEMBER(obdo, o_fid);
         CHECK_MEMBER(obdo, o_size);
         CHECK_MEMBER(obdo, o_mtime);
         CHECK_MEMBER(obdo, o_atime);
@@ -113,10 +122,12 @@ check_obdo(void)
         CHECK_MEMBER(obdo, o_flags);
         CHECK_MEMBER(obdo, o_nlink);
         CHECK_MEMBER(obdo, o_generation);
-        CHECK_MEMBER(obdo, o_valid);
         CHECK_MEMBER(obdo, o_misc);
         CHECK_MEMBER(obdo, o_easize);
+        CHECK_MEMBER(obdo, o_mds);
         CHECK_MEMBER(obdo, o_inline);
+
+        CHECK_VALUE(OBD_INLINESZ);
 
         CHECK_VALUE(OBD_MD_FLID);
         CHECK_VALUE(OBD_MD_FLATIME);
@@ -139,12 +150,26 @@ check_obdo(void)
         CHECK_VALUE(OBD_MD_FLHANDLE);
         CHECK_VALUE(OBD_MD_FLCKSUM);
         CHECK_VALUE(OBD_MD_FLQOS);
-        CHECK_VALUE(OBD_MD_FLOSCOPQ);
         CHECK_VALUE(OBD_MD_FLCOOKIE);
         CHECK_VALUE(OBD_MD_FLGROUP);
+        CHECK_VALUE(OBD_MD_FLIFID);
+        CHECK_VALUE(OBD_MD_FLEPOCH);
+        CHECK_VALUE(OBD_MD_FLGRANT);
+        CHECK_VALUE(OBD_MD_FLDIREA);
+        CHECK_VALUE(OBD_MD_FLUSRQUOTA);
+        CHECK_VALUE(OBD_MD_FLGRPQUOTA);
+        CHECK_VALUE_64(OBD_MD_MDS);
+        CHECK_VALUE_64(OBD_MD_REINT);
 
+        CHECK_VALUE(OBD_FL_INLINEDATA);
+        CHECK_VALUE(OBD_FL_OBDMDEXISTS);
         CHECK_VALUE(OBD_FL_DELORPHAN);
+        CHECK_VALUE(OBD_FL_NORPC);
+        CHECK_VALUE(OBD_FL_IDONLY);
         CHECK_VALUE(OBD_FL_RECREATE_OBJS);
+        CHECK_VALUE(OBD_FL_DEBUG_CHECK);
+        CHECK_VALUE(OBD_FL_NO_USRQUOTA);
+        CHECK_VALUE(OBD_FL_NO_GRPQUOTA);
 }
 
 void
@@ -326,16 +351,16 @@ check_mds_rec_setattr(void)
         CHECK_MEMBER(mds_rec_setattr, sa_fsgid);
         CHECK_MEMBER(mds_rec_setattr, sa_cap);
         CHECK_MEMBER(mds_rec_setattr, sa_suppgid);
-        CHECK_MEMBER(mds_rec_setattr, sa_valid);
-        CHECK_MEMBER(mds_rec_setattr, sa_fid);
         CHECK_MEMBER(mds_rec_setattr, sa_mode);
+        CHECK_MEMBER(mds_rec_setattr, sa_fid);
+        CHECK_MEMBER(mds_rec_setattr, sa_valid);
+        CHECK_MEMBER(mds_rec_setattr, sa_size);
+        CHECK_MEMBER(mds_rec_setattr, sa_mtime);
+        CHECK_MEMBER(mds_rec_setattr, sa_atime);
+        CHECK_MEMBER(mds_rec_setattr, sa_ctime);
         CHECK_MEMBER(mds_rec_setattr, sa_uid);
         CHECK_MEMBER(mds_rec_setattr, sa_gid);
         CHECK_MEMBER(mds_rec_setattr, sa_attr_flags);
-        CHECK_MEMBER(mds_rec_setattr, sa_size);
-        CHECK_MEMBER(mds_rec_setattr, sa_atime);
-        CHECK_MEMBER(mds_rec_setattr, sa_mtime);
-        CHECK_MEMBER(mds_rec_setattr, sa_ctime);
 }
 
 void

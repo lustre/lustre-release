@@ -655,7 +655,6 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
 
         /* Return only the parts of obd_connect_data that we understand, so the
          * client knows that we don't understand the rest. */
-        data->ocd_connect_flags &= OBD_CONNECT_SUPPORTED;
         memcpy(lustre_msg_buf(req->rq_repmsg, 0, sizeof(*data)), data,
                sizeof(*data));
 

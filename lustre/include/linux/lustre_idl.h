@@ -109,9 +109,13 @@
 
 
 #define PTLRPC_MSG_VERSION  0x00000003
-#define LUSTRE_MDS_VERSION  (0x00040000|PTLRPC_MSG_VERSION)
-#define LUSTRE_OST_VERSION  (0x00040000|PTLRPC_MSG_VERSION)
-#define LUSTRE_DLM_VERSION  (0x00040000|PTLRPC_MSG_VERSION)
+#define LUSTRE_VERSION_MASK 0xffff0000
+#define LUSTRE_OBD_VERSION  0x00010000
+#define LUSTRE_MDS_VERSION  0x00020000
+#define LUSTRE_OST_VERSION  0x00030000
+#define LUSTRE_DLM_VERSION  0x00040000
+#define LUSTRE_LOG_VERSION  0x00050000
+#define LUSTRE_PBD_VERSION  0x00060000
 
 struct lustre_handle {
         __u64 cookie;
@@ -192,12 +196,15 @@ static inline void lustre_msg_set_op_flags(struct lustre_msg *msg, int flags)
 #define MSG_CONNECT_REPLAYABLE  0x4
 //#define MSG_CONNECT_PEER        0x8
 #define MSG_CONNECT_LIBCLIENT   0x10
+#define MSG_CONNECT_INITIAL     0x20
 
 /* Connect flags */
 
 #define OBD_CONNECT_RDONLY 0x1
 
-#define OBD_CONNECT_SUPPORTED (OBD_CONNECT_RDONLY)
+#define MDS_CONNECT_SUPPORTED  (OBD_CONNECT_RDONLY)
+#define OST_CONNECT_SUPPORTED  (0)
+#define ECHO_CONNECT_SUPPORTED (0)
 
 /* This structure is used for both request and reply.
  *  
@@ -251,26 +258,34 @@ typedef uint32_t        obd_mode;
 typedef uint32_t        obd_uid;
 typedef uint32_t        obd_gid;
 typedef uint32_t        obd_flag;
+typedef uint64_t        obd_valid;
 typedef uint32_t        obd_count;
 
+#define OBD_FL_INLINEDATA    (0x00000001)
+#define OBD_FL_OBDMDEXISTS   (0x00000002)
 #define OBD_FL_DELORPHAN     (0x00000004) /* if set in o_flags delete orphans */
+#define OBD_FL_NORPC         (0x00000008) /* set in o_flags do in OSC not OST */
+#define OBD_FL_IDONLY        (0x00000010) /* set in o_flags only adjust obj id*/
 #define OBD_FL_RECREATE_OBJS (0x00000020) /* recreate missing obj */
 #define OBD_FL_DEBUG_CHECK   (0x00000040) /* echo client/server debug check */
 #define OBD_FL_NO_USRQUOTA   (0x00000100) /* the object's owner is over quota */
 #define OBD_FL_NO_GRPQUOTA   (0x00000200) /* the object's group is over quota */
 
-#define OBD_INLINESZ    64
+#define OBD_INLINESZ    80
 
 /* Note: 64-bit types are 64-bit aligned in structure */
 struct obdo {
+        obd_valid               o_valid;        /* hot fields in this obdo */
         obd_id                  o_id;
         obd_gr                  o_gr;
-        obd_size                o_size;
+        obd_id                  o_fid;
+        obd_size                o_size;         /* o_size-o_blocks == ost_lvb */
         obd_time                o_mtime;
         obd_time                o_atime;
         obd_time                o_ctime;
         obd_blocks              o_blocks;       /* brw: cli sent cached bytes */
         obd_size                o_grant;
+        /* 32-bit fields start here: keep an even number of them via padding */
         obd_blksize             o_blksize;      /* optimal IO blocksize */
         obd_mode                o_mode;         /* brw: cli sent cache remain */
         obd_uid                 o_uid;
@@ -278,9 +293,11 @@ struct obdo {
         obd_flag                o_flags;
         obd_count               o_nlink;        /* brw: checksum */
         obd_count               o_generation;
-        obd_flag                o_valid;        /* hot fields in this obdo */
         obd_count               o_misc;         /* brw: o_dropped */
         __u32                   o_easize;       /* epoch in ost writes */
+        __u32                   o_mds;
+        __u32                   o_padding_1;
+        __u32                   o_padding_2;
         char                    o_inline[OBD_INLINESZ]; /* fid in ost writes */
 };
 
@@ -297,6 +314,7 @@ extern void lustre_swab_obdo (struct obdo *o);
 #define LOV_PATTERN_RAID0 0x001   /* stripes are used round-robin */
 #define LOV_PATTERN_RAID1 0x002   /* stripes are mirrors of each other */
 #define LOV_PATTERN_FIRST 0x100   /* first stripe is not in round-robin */
+#define LOV_PATTERN_CMOBD 0x200
 
 #define lov_ost_data lov_ost_data_v1
 struct lov_ost_data_v1 {          /* per-stripe data structure (little-endian)*/
@@ -317,37 +335,40 @@ struct lov_mds_md_v1 {            /* LOV EA mds/wire data (little-endian) */
         struct lov_ost_data_v1 lmm_objects[0]; /* per-stripe data */
 };
 
-#define OBD_MD_FLALL    (0xffffffff)
-#define OBD_MD_FLID     (0x00000001)    /* object ID */
-#define OBD_MD_FLATIME  (0x00000002)    /* access time */
-#define OBD_MD_FLMTIME  (0x00000004)    /* data modification time */
-#define OBD_MD_FLCTIME  (0x00000008)    /* change time */
-#define OBD_MD_FLSIZE   (0x00000010)    /* size */
-#define OBD_MD_FLBLOCKS (0x00000020)    /* allocated blocks count */
-#define OBD_MD_FLBLKSZ  (0x00000040)    /* block size */
-#define OBD_MD_FLMODE   (0x00000080)    /* access bits (mode & ~S_IFMT) */
-#define OBD_MD_FLTYPE   (0x00000100)    /* object type (mode & S_IFMT) */
-#define OBD_MD_FLUID    (0x00000200)    /* user ID */
-#define OBD_MD_FLGID    (0x00000400)    /* group ID */
-#define OBD_MD_FLFLAGS  (0x00000800)    /* flags word */
-#define OBD_MD_FLNLINK  (0x00002000)    /* link count */
-#define OBD_MD_FLGENER  (0x00004000)    /* generation number */
-#define OBD_MD_FLINLINE (0x00008000)    /* inline data */
-#define OBD_MD_FLRDEV   (0x00010000)    /* device number */
-#define OBD_MD_FLEASIZE (0x00020000)    /* extended attribute data */
-#define OBD_MD_LINKNAME (0x00040000)    /* symbolic link target */
-#define OBD_MD_FLHANDLE (0x00080000)    /* file handle */
-#define OBD_MD_FLCKSUM  (0x00100000)    /* bulk data checksum */
-#define OBD_MD_FLQOS    (0x00200000)    /* quality of service stats */
-#define OBD_MD_FLOSCOPQ (0x00400000)    /* osc opaque data */
-#define OBD_MD_FLCOOKIE (0x00800000)    /* log cancellation cookie */
-#define OBD_MD_FLGROUP  (0x01000000)    /* group */
-#define OBD_MD_FLIFID   (0x02000000)    /* ->ost write inline fid */
-#define OBD_MD_FLEPOCH  (0x04000000)    /* ->ost write easize is epoch */
-#define OBD_MD_FLGRANT  (0x08000000)    /* ost preallocation space grant */
-#define OBD_MD_FLDIREA  (0x10000000)    /* dir's extended attribute data */
-#define OBD_MD_FLUSRQUOTA  (0x20000000)  
-#define OBD_MD_FLGRPQUOTA  (0x40000000) /* over quota flags sent back by ost */
+#define OBD_MD_FLID        (0x00000001ULL) /* object ID */
+#define OBD_MD_FLATIME     (0x00000002ULL) /* access time */
+#define OBD_MD_FLMTIME     (0x00000004ULL) /* data modification time */
+#define OBD_MD_FLCTIME     (0x00000008ULL) /* change time */
+#define OBD_MD_FLSIZE      (0x00000010ULL) /* size */
+#define OBD_MD_FLBLOCKS    (0x00000020ULL) /* allocated blocks count */
+#define OBD_MD_FLBLKSZ     (0x00000040ULL) /* block size */
+#define OBD_MD_FLMODE      (0x00000080ULL) /* access bits (mode & ~S_IFMT) */
+#define OBD_MD_FLTYPE      (0x00000100ULL) /* object type (mode & S_IFMT) */
+#define OBD_MD_FLUID       (0x00000200ULL) /* user ID */
+#define OBD_MD_FLGID       (0x00000400ULL) /* group ID */
+#define OBD_MD_FLFLAGS     (0x00000800ULL) /* flags word */
+#define OBD_MD_FLNLINK     (0x00002000ULL) /* link count */
+#define OBD_MD_FLGENER     (0x00004000ULL) /* generation number */
+#define OBD_MD_FLINLINE    (0x00008000ULL) /* inline data */
+#define OBD_MD_FLRDEV      (0x00010000ULL) /* device number */
+#define OBD_MD_FLEASIZE    (0x00020000ULL) /* extended attribute data */
+#define OBD_MD_LINKNAME    (0x00040000ULL) /* symbolic link target */
+#define OBD_MD_FLHANDLE    (0x00080000ULL) /* file handle */
+#define OBD_MD_FLCKSUM     (0x00100000ULL) /* bulk data checksum */
+#define OBD_MD_FLQOS       (0x00200000ULL) /* quality of service stats */
+#define OBD_MD_FLOSCOPQ    (0x00400000ULL) /* osc opaque data */
+#define OBD_MD_FLCOOKIE    (0x00800000ULL) /* log cancellation cookie */
+#define OBD_MD_FLGROUP     (0x01000000ULL) /* group */
+#define OBD_MD_FLIFID      (0x02000000ULL) /* ->ost write inline fid */
+#define OBD_MD_FLEPOCH     (0x04000000ULL) /* ->ost write easize is epoch */
+#define OBD_MD_FLGRANT     (0x08000000ULL) /* ost preallocation space grant */
+#define OBD_MD_FLDIREA     (0x10000000ULL) /* dir's extended attribute data */
+#define OBD_MD_FLUSRQUOTA  (0x20000000ULL) /* over quota flags sent from ost */
+#define OBD_MD_FLGRPQUOTA  (0x40000000ULL) /* over quota flags sent from ost */
+
+#define OBD_MD_MDS        (0x100000000ULL) /* where an inode lives on */
+#define OBD_MD_REINT      (0x200000000ULL) /* reintegrate oa */
+
 #define OBD_MD_FLNOTOBD (~(OBD_MD_FLBLOCKS | OBD_MD_LINKNAME|\
                            OBD_MD_FLEASIZE | OBD_MD_FLHANDLE | OBD_MD_FLCKSUM|\
                            OBD_MD_FLQOS | OBD_MD_FLOSCOPQ | OBD_MD_FLCOOKIE|\
@@ -471,13 +492,15 @@ typedef enum {
  * Do not exceed 63
  */
 
-#define REINT_SETATTR    1
-#define REINT_CREATE     2
-#define REINT_LINK       3
-#define REINT_UNLINK     4
-#define REINT_RENAME     5
-#define REINT_OPEN       6
-#define REINT_MAX        6
+typedef enum {
+        REINT_SETATTR  = 1,
+        REINT_CREATE   = 2,
+        REINT_LINK     = 3,
+        REINT_UNLINK   = 4,
+        REINT_RENAME   = 5,
+        REINT_OPEN     = 6,
+        REINT_MAX
+} mds_reint_t;
 
 /* the disposition of the intent outlines what was executed */
 #define DISP_IT_EXECD     0x01
@@ -512,27 +535,30 @@ struct mds_body {
         struct ll_fid  fid1;
         struct ll_fid  fid2;
         struct lustre_handle handle;
+        __u64          valid;
         __u64          size;   /* Offset, in the case of MDS_READPAGE */
+        __u64          mtime;
+        __u64          atime;
+        __u64          ctime;
         __u64          blocks; /* XID, in the case of MDS_READPAGE */
         __u64          io_epoch;
-        __u32          ino;   /* make this a __u64 */
-        __u32          valid;
+        __u64          ino;
         __u32          fsuid;
         __u32          fsgid;
         __u32          capability;
         __u32          mode;
         __u32          uid;
         __u32          gid;
-        __u32          mtime;
-        __u32          ctime;
-        __u32          atime;
         __u32          flags; /* from vfs for pin/unpin, MDS_BFLAG for close */
         __u32          rdev;
         __u32          nlink; /* #bytes to read in the case of MDS_READPAGE */
         __u32          generation;
         __u32          suppgid;
         __u32          eadatasize;
-        __u32          packing;
+        __u32          padding_1; /* also fix lustre_swab_mds_body */
+        __u32          padding_2; /* also fix lustre_swab_mds_body */
+        __u32          padding_3; /* also fix lustre_swab_mds_body */
+        __u32          padding_4; /* also fix lustre_swab_mds_body */
 };
 
 extern void lustre_swab_mds_body (struct mds_body *b);
@@ -587,16 +613,17 @@ struct mds_rec_setattr {
         __u32           sa_fsgid;
         __u32           sa_cap;
         __u32           sa_suppgid;
-        __u32           sa_valid;
-        struct ll_fid   sa_fid;
         __u32           sa_mode;
+        struct ll_fid   sa_fid;
+        __u64           sa_valid;
+        __u64           sa_size;
+        __u64           sa_mtime;
+        __u64           sa_atime;
+        __u64           sa_ctime;
         __u32           sa_uid;
         __u32           sa_gid;
         __u32           sa_attr_flags;
-        __u64           sa_size;
-        __u64           sa_atime;
-        __u64           sa_mtime;
-        __u64           sa_ctime;
+        __u32           sa_padding; /* also fix lustre_swab_mds_rec_setattr */
 };
 
 /* Remove this once we declare it in include/linux/fs.h (v21 kernel patch?) */
@@ -637,7 +664,11 @@ struct mds_rec_create {
         __u64           cr_time;
         __u64           cr_rdev;
         __u32           cr_suppgid;
-        __u32           cr_packing;
+        __u32           cr_padding_1; /* also fix lustre_swab_mds_rec_create */
+        __u32           cr_padding_2; /* also fix lustre_swab_mds_rec_create */
+        __u32           cr_padding_3; /* also fix lustre_swab_mds_rec_create */
+        __u32           cr_padding_4; /* also fix lustre_swab_mds_rec_create */
+        __u32           cr_padding_5; /* also fix lustre_swab_mds_rec_create */
 };
 
 extern void lustre_swab_mds_rec_create (struct mds_rec_create *cr);
@@ -652,6 +683,10 @@ struct mds_rec_link {
         struct ll_fid   lk_fid1;
         struct ll_fid   lk_fid2;
         __u64           lk_time;
+        __u32           lk_padding_1;  /* also fix lustre_swab_mds_rec_link */
+        __u32           lk_padding_2;  /* also fix lustre_swab_mds_rec_link */
+        __u32           lk_padding_3;  /* also fix lustre_swab_mds_rec_link */
+        __u32           lk_padding_4;  /* also fix lustre_swab_mds_rec_link */
 };
 
 extern void lustre_swab_mds_rec_link (struct mds_rec_link *lk);
@@ -666,6 +701,10 @@ struct mds_rec_unlink {
         struct ll_fid   ul_fid1;
         struct ll_fid   ul_fid2;
         __u64           ul_time;
+        __u32           ul_padding_1; /* also fix lustre_swab_mds_rec_unlink */
+        __u32           ul_padding_2; /* also fix lustre_swab_mds_rec_unlink */
+        __u32           ul_padding_3; /* also fix lustre_swab_mds_rec_unlink */
+        __u32           ul_padding_4; /* also fix lustre_swab_mds_rec_unlink */
 };
 
 extern void lustre_swab_mds_rec_unlink (struct mds_rec_unlink *ul);
@@ -680,6 +719,10 @@ struct mds_rec_rename {
         struct ll_fid   rn_fid1;
         struct ll_fid   rn_fid2;
         __u64           rn_time;
+        __u32           rn_padding_1; /* also fix lustre_swab_mds_rec_rename */
+        __u32           rn_padding_2; /* also fix lustre_swab_mds_rec_rename */
+        __u32           rn_padding_3; /* also fix lustre_swab_mds_rec_rename */
+        __u32           rn_padding_4; /* also fix lustre_swab_mds_rec_rename */
 };
 
 extern void lustre_swab_mds_rec_rename (struct mds_rec_rename *rn);
@@ -687,6 +730,8 @@ extern void lustre_swab_mds_rec_rename (struct mds_rec_rename *rn);
 /*
  *  LOV data structures
  */
+
+#define LOV_MIN_STRIPE_SIZE 65536UL /* maximum PAGE_SIZE (ia64), power of 2 */
 
 #define LOV_MAX_UUID_BUFFER_SIZE  8192
 /* The size of the buffer the lov/mdc reserves for the
@@ -702,6 +747,10 @@ struct lov_desc {
         __u32 ld_pattern;                  /* PATTERN_RAID0, PATTERN_RAID1 */
         __u64 ld_default_stripe_size;      /* in bytes */
         __u64 ld_default_stripe_offset;    /* in bytes */
+        __u32 ld_padding_1;                /* also fix lustre_swab_lov_desc */
+        __u32 ld_padding_2;                /* also fix lustre_swab_lov_desc */
+        __u32 ld_padding_3;                /* also fix lustre_swab_lov_desc */
+        __u32 ld_padding_4;                /* also fix lustre_swab_lov_desc */
         struct obd_uuid ld_uuid;
 };
 

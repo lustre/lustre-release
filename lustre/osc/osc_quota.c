@@ -23,7 +23,7 @@
 # define EXPORT_SYMTAB
 #endif
 #define DEBUG_SUBSYSTEM S_OSC
-                                                                                                                             
+
 #ifdef __KERNEL__
 # include <linux/module.h>
 # include <linux/obd.h>
@@ -83,7 +83,7 @@ static inline struct osc_quota_info *find_qinfo(struct client_obd *cli,
         unsigned int hashent = hashfn(cli, id, type);
         struct list_head *head;
         struct osc_quota_info *oqi;
-                                                                                                                             
+
         for (head = qinfo_hash[hashent].next;
              head != qinfo_hash+hashent; head = head->next) {
                 oqi = list_entry(head, struct osc_quota_info, oqi_hash);

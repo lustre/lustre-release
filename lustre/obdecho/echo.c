@@ -61,6 +61,7 @@ enum {
 static int echo_connect(struct lustre_handle *conn, struct obd_device *obd,
                         struct obd_uuid *cluuid, struct obd_connect_data *data)
 {
+        data->ocd_connect_flags &= ECHO_CONNECT_SUPPORTED;
         return class_connect(conn, obd, cluuid);
 }
 
@@ -127,7 +128,7 @@ int echo_create(struct obd_export *exp, struct obdo *oa,
         }
 
         if (!(oa->o_valid & OBD_MD_FLTYPE)) {
-                CERROR("invalid o_valid %08x\n", oa->o_valid);
+                CERROR("invalid o_valid "LPX64"\n", oa->o_valid);
                 return -EINVAL;
         }
 
@@ -143,13 +144,13 @@ int echo_destroy(struct obd_export *exp, struct obdo *oa,
         struct obd_device *obd = class_exp2obd(exp);
 
         if (!obd) {
-                CERROR("invalid client cookie "LPX64"\n", 
+                CERROR("invalid client cookie "LPX64"\n",
                        exp->exp_handle.h_cookie);
                 RETURN(-EINVAL);
         }
 
         if (!(oa->o_valid & OBD_MD_FLID)) {
-                CERROR("obdo missing FLID valid flag: %08x\n", oa->o_valid);
+                CERROR("obdo missing FLID valid flag: "LPX64"\n", oa->o_valid);
                 RETURN(-EINVAL);
         }
 
@@ -174,7 +175,7 @@ static int echo_getattr(struct obd_export *exp, struct obdo *oa,
         }
 
         if (!(oa->o_valid & OBD_MD_FLID)) {
-                CERROR("obdo missing FLID valid flag: %08x\n", oa->o_valid);
+                CERROR("obdo missing FLID valid flag: "LPX64"\n", oa->o_valid);
                 RETURN(-EINVAL);
         }
 
@@ -196,7 +197,7 @@ static int echo_setattr(struct obd_export *exp, struct obdo *oa,
         }
 
         if (!(oa->o_valid & OBD_MD_FLID)) {
-                CERROR("obdo missing FLID valid flag: %08x\n", oa->o_valid);
+                CERROR("obdo missing FLID valid flag: "LPX64"\n", oa->o_valid);
                 RETURN(-EINVAL);
         }
 
