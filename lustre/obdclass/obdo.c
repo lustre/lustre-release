@@ -24,9 +24,7 @@
  * infrastructure for managing object devices
  */
 
-
-#warning should be S_CLASS
-#define DEBUG_SUBSYSTEM S_UNDEFINED
+#define DEBUG_SUBSYSTEM S_CLASS
 #define EXPORT_SYMTAB
 
 #include <linux/module.h>
