@@ -102,7 +102,7 @@
  * - OST_MAXREQSIZE must be at least 1 page of cookies plus some spillover
  */
 #define OST_MAXREQSIZE  (5 * 1024)
-#define OST_MAXMEM      (num_physpages*(PAGE_SIZE/512))
+#define OST_MAXMEM      (num_physpages*(PAGE_SIZE/128))
 #define OST_NBUFS       min(OST_MAXMEM/OST_BUFSIZE, OST_NBUF_MAX)
 
 #define PTLBD_NUM_THREADS        4
