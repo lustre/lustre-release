@@ -24,10 +24,21 @@
 #include <linux/lustre_lib.h>
 #include <linux/lustre_net.h>
 
+#if 1
+/* Debugging check only needed during development */
+#define ASSERT_NOT_KERNEL_CTXT(msg) do { if (segment_eq(get_fs(), get_ds())) { \
+                                        CERROR(msg); LBUG(); } } while(0)
+#define ASSERT_KERNEL_CTXT(msg) do { if (!segment_eq(get_fs(), get_ds())) { \
+                                        CERROR(msg); LBUG(); } } while(0)
+#else
+#define ASSERT_NOT_KERNEL_CTXT(msg) do {} while(0)
+#define ASSERT_KERNEL_CTXT(msg) do {} while(0)
+#endif
 
 /* push / pop to root of obd store */
 void push_ctxt(struct obd_run_ctxt *save, struct obd_run_ctxt *new)
 {
+        //ASSERT_NOT_KERNEL_CTXT("already in kernel context!\n");
         save->fs = get_fs();
         save->pwd = dget(current->fs->pwd);
         save->pwdmnt = mntget(current->fs->pwdmnt);
@@ -38,6 +49,7 @@ void push_ctxt(struct obd_run_ctxt *save, struct obd_run_ctxt *new)
 
 void pop_ctxt(struct obd_run_ctxt *saved)
 {
+        ASSERT_KERNEL_CTXT( "popping non-kernel context!\n");
         set_fs(saved->fs);
         set_fs_pwd(current->fs, saved->pwdmnt, saved->pwd);
 
@@ -52,7 +64,8 @@ struct dentry *simple_mkdir(struct dentry *dir, char *name, int mode)
         int err;
         ENTRY;
 
-	CDEBUG(D_INODE, "creating directory %*s\n", strlen(name), name);
+        ASSERT_KERNEL_CTXT("kernel doing I/O outside kernel context\n");
+        CDEBUG(D_INODE, "creating directory %*s\n", strlen(name), name);
         dchild = lookup_one_len(name, dir, strlen(name));
         if (IS_ERR(dchild))
                 RETURN(dchild);
@@ -75,27 +88,42 @@ out:
         RETURN(dchild);
 }
 
+/*
+ * Read a file from within kernel context.  Prior to calling this
+ * function we should already have done a push_ctxt().
+ */
 int lustre_fread(struct file *file, char *str, int len, loff_t *off)
 {
-	if (!file || !file->f_op || !file->f_op->read || !off)
-		RETURN(-ENOSYS);
+        ASSERT_KERNEL_CTXT("kernel doing I/O outside kernel context\n");
+        if (!file || !file->f_op || !file->f_op->read || !off)
+                RETURN(-ENOSYS);
 
-	return file->f_op->read(file, str, len, off);
+        return file->f_op->read(file, str, len, off);
 }
 
+/*
+ * Write a file from within kernel context.  Prior to calling this
+ * function we should already have done a push_ctxt().
+ */
 int lustre_fwrite(struct file *file, const char *str, int len, loff_t *off)
 {
-	if (!file || !file->f_op || !off)
-		RETURN(-ENOSYS);
+        ASSERT_KERNEL_CTXT("kernel doing I/O outside kernel context\n");
+        if (!file || !file->f_op || !off)
+                RETURN(-ENOSYS);
 
-	if (!file->f_op->write)
-		RETURN(-EROFS);
+        if (!file->f_op->write)
+                RETURN(-EROFS);
 
-	return file->f_op->write(file, str, len, off);
+        return file->f_op->write(file, str, len, off);
 }
 
+/*
+ * Sync a file from within kernel context.  Prior to calling this
+ * function we should already have done a push_ctxt().
+ */
 int lustre_fsync(struct file *file)
 {
+        ASSERT_KERNEL_CTXT("kernel doing I/O outside kernel context\n");
 	if (!file || !file->f_op || !file->f_op->fsync)
 		RETURN(-ENOSYS);
 
