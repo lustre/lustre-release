@@ -394,7 +394,7 @@ static int lov_open(struct lustre_handle *conn, struct obdo *oa,
                 rc = obd_open(&lov->tgts[i].conn, &tmp, NULL);
                 if (rc) { 
                         rc2 = rc;
-                        CERROR("Error getattr object %Ld on %d\n",
+                        CERROR("Error open object %Ld on %d\n",
                                oa->o_id, i); 
                 }
         }
@@ -426,8 +426,8 @@ static int lov_close(struct lustre_handle *conn, struct obdo *oa,
                 tmp.o_id = md->lmd_oinfo[i].loi_id; 
 
                 rc = obd_close(&lov->tgts[i].conn, &tmp, NULL);
-                if (!rc) { 
-                        CERROR("Error getattr object %Ld on %d\n",
+                if (rc) { 
+                        CERROR("Error close object %Ld on %d\n",
                                oa->o_id, i); 
                 }
         }
@@ -438,7 +438,7 @@ static int lov_close(struct lustre_handle *conn, struct obdo *oa,
 #define log2(n) ffz(~(n))
 #endif
 
-/* compute offset in stripe i corresponds to offset "in" */
+/* compute offset in stripe i corresponding to offset "in" */
 __u64 lov_offset(struct lov_stripe_md *md, __u64 in, int i)
 {
         __u32 ssz = md->lmd_stripe_size;
@@ -460,7 +460,7 @@ __u64 lov_offset(struct lov_stripe_md *md, __u64 in, int i)
         return (__u64) out;
 }
 
-/* compute offset in stripe i corresponds to offset "in" */
+/* compute offset in stripe i corresponding to offset "in" */
 __u64 lov_stripe(struct lov_stripe_md *md, __u64 in, int *j)
 {
         __u32 ssz = md->lmd_stripe_size;
@@ -597,7 +597,8 @@ static inline int lov_brw(int cmd, struct lustre_handle *conn,
 
                 shift = stripeinfo[which].index;
                 ioarr[shift + stripeinfo[which].subcount] = pga[i];
-                ioarr[shift + stripeinfo[which].subcount].off = lov_offset(md, pga[i].pg->index * PAGE_SIZE, which);
+                ioarr[shift + stripeinfo[which].subcount].off = 
+                        lov_offset(md, pga[i].pg->index * PAGE_SIZE, which);
                 stripeinfo[which].subcount++;
         }
         
@@ -647,15 +648,16 @@ static int lov_enqueue(struct lustre_handle *conn, struct lov_stripe_md *md,
                         continue;
 
                 submd.lmd_object_id = md->lmd_oinfo[i].loi_id;
-                submd.lmd_easize = sizeof(submd);
+                submd.lmd_easize = sizeof(struct lov_mds_md);
                 submd.lmd_stripe_count = md->lmd_stripe_count;
                 /* XXX submd is not fully initialized here */
-                rc = obd_enqueue(&(lov->tgts[i].conn), &submd, parent_lock,  type, 
-                                 &sub_ext, sizeof(sub_ext), mode, flags, cb, data, datalen, &(lockhs[i]));
+                rc = obd_enqueue(&(lov->tgts[i].conn), &submd, parent_lock,  
+                                 type, &sub_ext, sizeof(sub_ext), mode, 
+                                 flags, cb, data, datalen, &(lockhs[i]));
                 // XXX add a lock debug statement here
                 if (rc) { 
-                        CERROR("Error obd_enqueu object %Ld subobj %Ld\n", md->lmd_object_id,
-                               md->lmd_oinfo[i].loi_id); 
+                        CERROR("Error obd_enqueue object %Ld subobj %Ld\n", 
+                               md->lmd_object_id, md->lmd_oinfo[i].loi_id); 
                 }
         }
         RETURN(rc);
@@ -687,9 +689,9 @@ static int lov_cancel(struct lustre_handle *conn, struct lov_stripe_md *md, __u3
                 submd.lmd_object_id = md->lmd_oinfo[i].loi_id;
                 submd.lmd_easize = sizeof(submd);
                 rc = obd_cancel(&lov->tgts[i].conn, &submd, mode, &lockhs[i]);
-                if (!rc) { 
-                        CERROR("Error punch object %Ld subobj %Ld\n", md->lmd_object_id,
-                               md->lmd_oinfo[i].loi_id); 
+                if (rc) { 
+                        CERROR("Error cancel object %Ld subobj %Ld\n", 
+                               md->lmd_object_id, md->lmd_oinfo[i].loi_id); 
                 }
         }
         RETURN(rc);
