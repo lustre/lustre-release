@@ -1612,11 +1612,20 @@ Index: linux-2.4.19-pre1/include/linux/dcache.h
  
  /*
   * linux/include/linux/dcache.h
+@@ -84,6 +130,8 @@
+ 	unsigned char d_iname[DNAME_INLINE_LEN]; /* small names */
+ };
+ 
++struct nameidata;
++
+ struct dentry_operations {
+ 	int (*d_revalidate)(struct dentry *, int);
+ 	int (*d_hash) (struct dentry *, struct qstr *);
 @@ -90,8 +135,22 @@
  	int (*d_delete)(struct dentry *);
  	void (*d_release)(struct dentry *);
  	void (*d_iput)(struct dentry *, struct inode *);
-+	int (*d_revalidate_it)(struct dentry *, int, struct lookup_intent *);
++	int (*d_revalidate_it)(struct dentry *, int, struct nameidata *, struct lookup_intent *);
 +	void (*d_pin)(struct dentry *, struct vfsmount * , int);
 +	void (*d_unpin)(struct dentry *, struct vfsmount *, int);
  };
@@ -1705,7 +1714,7 @@ Index: linux-2.4.19-pre1/include/linux/fs.h
  	int (*create) (struct inode *,struct dentry *,int);
 +	int (*create_it) (struct inode *,struct dentry *,int, struct lookup_intent *);
  	struct dentry * (*lookup) (struct inode *,struct dentry *);
-+	struct dentry * (*lookup_it) (struct inode *,struct dentry *, struct lookup_intent *, int flags);
++	struct dentry * (*lookup_it) (struct inode *,struct dentry *, struct nameidata *, struct lookup_intent *, int flags);
  	int (*link) (struct dentry *,struct inode *,struct dentry *);
 +	int (*link_raw) (struct nameidata *,struct nameidata *);
  	int (*unlink) (struct inode *,struct dentry *);
