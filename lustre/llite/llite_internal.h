@@ -15,6 +15,8 @@ struct ll_sb_info;
 struct lustre_handle;
 struct lov_stripe_md;
 
+extern spinlock_t inode_lock;
+
 extern void lprocfs_unregister_mountpoint(struct ll_sb_info *sbi);
 extern struct proc_dir_entry *proc_lustre_fs_root;
 
@@ -119,6 +121,7 @@ int ll_getattr(struct vfsmount *mnt, struct dentry *de,
 /* llite/dcache.c */
 void ll_intent_release(struct lookup_intent *);
 extern void ll_set_dd(struct dentry *de);
+void ll_unhash_aliases(struct inode *);
 
 /* llite/rw.c */
 void ll_truncate(struct inode *inode);
@@ -140,6 +143,7 @@ void ll_options(char *options, char **ost, char **mds, int *flags);
 void ll_lli_init(struct ll_inode_info *lli);
 int ll_fill_super(struct super_block *sb, void *data, int silent);
 void ll_put_super(struct super_block *sb);
+struct inode *ll_inode_from_lock(struct ldlm_lock *lock);
 void ll_clear_inode(struct inode *inode);
 int ll_attr2inode(struct inode *inode, struct iattr *attr, int trunc);
 int ll_inode_setattr(struct inode *inode, struct iattr *attr, int do_trunc);
@@ -152,7 +156,5 @@ int it_disposition(struct lookup_intent *it, int flag);
 void it_set_disposition(struct lookup_intent *it, int flag);
 void ll_read_inode2(struct inode *inode, void *opaque);
 void ll_umount_begin(struct super_block *sb);
-
-
 
 #endif /* LLITE_INTERNAL_H */
