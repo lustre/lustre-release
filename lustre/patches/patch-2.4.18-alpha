@@ -1,0 +1,16 @@
+diff -ruN linux/arch/alpha/mm/init.c linux-2.4.18-lustre/arch/alpha/mm/init.c
+--- linux/arch/alpha/mm/init.c	Thu Sep 20 21:02:03 2001
++++ linux-2.4.18-lustre/arch/alpha/mm/init.c	Tue Aug  6 12:37:55 2002
+@@ -46,6 +46,12 @@
+ struct pgtable_cache_struct quicklists;
+ #endif
+ 
++struct page *check_get_page(unsigned long kaddr)
++{
++#warning FIXME: Lustre team, is this solid?
++	        return virt_to_page(kaddr);
++}
++
+ pgd_t *
+ get_pgd_slow(void)
+ {
