@@ -33,7 +33,7 @@ h2elan () {
     echo $1 | sed 's/[^0-9]*//g'
 }
 
-h2ip () {
+h2tcp () {
     echo "${1}"
 }
 
@@ -65,7 +65,7 @@ while (( $gw < $GW_CNT + GW_START ));
 do 
    gwnode=$BASE`gw2node $gw`
    echo "Router: $gwnode"
-   ${LMC} --add net --router --node $gwnode --tcpbuf $TCPBUF --nid `h2ip $gwnode`  --nettype tcp || exit 1
+   ${LMC} --add net --router --node $gwnode --tcpbuf $TCPBUF --nid `h2tcp $gwnode`  --nettype tcp || exit 1
    ${LMC} --add net --node $gwnode --nid `h2elan $gwnode` --nettype elan || exit 1
    ${LMC} --add route --node $gwnode --nettype elan --gw `h2elan $gwnode` --lo `h2elan $CLIENT_LO` --hi `h2elan $CLIENT_HI` || exit 2
 
@@ -74,14 +74,14 @@ do
    do
       OST=${OSTBASE}$server
       echo "server: $OST"
-      OBD_UUID=`awk "/$OST / { print \\$3 }" $UUIDLIST`
-      [ "$OBD_UUID" ] && OBD_UUID="--obduuid $OBD_UUID" || echo "$OST: no UUID"
+      OST_UUID=`awk "/$OST / { print \\$3 }" $UUIDLIST`
+      [ "$OST_UUID" ] && OST_UUID="--ostuuid $OST_UUID" || echo "$OST: no UUID"
       # server node
       ${LMC} --add net --node $OST --tcpbuf $TCPBUF --nid $OST --nettype tcp || exit 1
       # the device on the server
       ${LMC} --add ost --lov lov1 --node $OST $OBD_UUID --dev bluearc || exit 3
       # route to server
-      ${LMC} --add route --node $gwnode --nettype tcp --gw `h2ip $gwnode` --lo $OST || exit 2
+      ${LMC} --add route --node $gwnode --nettype tcp --gw `h2tcp $gwnode` --lo $OST || exit 2
       let server=$server+1 
       let i=$i+1
    done
