@@ -7,54 +7,54 @@
       <server>localhost</server>
       <port>2432</port>
     </network>
-    <profile_id num="1" name="local-profile" uuid="local-profile-UUID"/>
+    <profile_ref num="1" name="local-profile" uuidref="local-profile-UUID"/>
   </node>
 
   <profile name="local-profile" uuid="local-profile-UUID">
-    <service_id num="0" name="net-local" uuid="net-local-UUID"/> 
-    <service_id num="0" name="ldlm-srv" uuid="ldlm-srv-UUID"/> 
-    <service_id num="0" name="obd-srv" uuid="obd-srv-UUID"/>
-    <service_id num="1" name="ost-srv" uuid="ost-srv-UUID"/>
-    <service_id num="4" name="lustre-mnt" uuid="lustre-mnt-UUID"/>
-    <service_id num="2" name="osc-srv" uuid="osc-srv-UUID"/>
-    <service_id num="3" name="mdc-srv" uuid="mdc-srv-UUID"/>
-    <service_id num="0" name="mds-srv" uuid="mds-srv-UUID"/>
+    <service_ref num="0" name="net-local" uuidref="net-local-UUID"/> 
+    <service_ref num="0" name="ldlm-srv" uuidref="ldlm-srv-UUID"/> 
+    <service_ref num="0" name="obd-srv" uuidref="obd-srv-UUID"/>
+    <service_ref num="1" name="ost-srv" uuidref="ost-srv-UUID"/>
+    <service_ref num="4" name="lustre-mnt" uuidref="lustre-mnt-UUID"/>
+    <service_ref num="2" name="osc-srv" uuidref="osc-srv-UUID"/>
+    <service_ref num="3" name="mdc-srv" uuidref="mdc-srv-UUID"/>
+    <service_ref num="0" name="mds-srv" uuidref="mds-srv-UUID"/>
   </profile>
 
   <ldlm name="ldlm-srv" uuid="ldlm-srv-UUID"></ldlm>
 
   <obd name="obd-srv" uuid="obd-srv-UUID" type="obdfilter">
     <fstype>extN</fstype>
-    <device>/tmp/obd-srv</device>
+    <device size="100">/tmp/obd-srv</device>
     <autoformat>no</autoformat>
   </obd>
 
   <mds name="mds-srv" uuid="mds-srv-UUID">
-    <network_id name='net-local' uuid="net-local-UUID"/>
+    <network_ref name='net-local' uuidref="net-local-UUID"/>
     <fstype>extN</fstype>
-    <device>/tmp/mds-srv</device>
-    <server_id num="1" name="mds-srv" uuid="mds-srv-UUID"/>
-    <failover_id num="1" name="mds-srv" uuid="mds-srv-UUID"/>
+    <device size="100">/tmp/mds-srv</device>
+    <server_ref num="1" name="mds-srv" uuidref="mds-srv-UUID"/>
+    <failover_ref num="1" name="mds-srv" uuidref="mds-srv-UUID"/>
   </mds>
 
   <ost name="ost-srv" uuid="ost-srv-UUID">
-    <network_id name='net-local' uuid="net-local-UUID"/>
-    <server_id num="1" name="$obd-srv" uuid="obd-srv-UUID"/>
-    <failover_id num="1" name="$obd-srv" uuid="obd-srv-UUID"/>
+    <network_ref name='net-local' uuidref="net-local-UUID"/>
+    <obd_ref num="1" name="$obd-srv" uuidref="obd-srv-UUID"/>
+    <failover_ref num="1" name="$obd-srv" uuidref="obd-srv-UUID"/>
   </ost>
 
   <osc name="osc-srv" uuid="osc-srv-UUID">
-    <!-- Temporarily this points to the OBD and not the OST -->
-    <service_id num="1" name="obd-srv" uuid="obd-srv-UUID"/>
+    <network_ref name='net-local' uuidref="net-local-UUID"/>
+    <obd_ref num="1" name="obd-srv" uuidref="obd-srv-UUID"/>
   </osc>
 
   <mdc name="mdc-srv" uuid="mdc-srv-UUID">
-    <service_id num="1" name="mds-srv" uuid="mds-srv-UUID"/>
+    <service_ref num="1" name="mds-srv" uuidref="mds-srv-UUID"/>
   </mdc>
 
   <mountpoint name="lustre-mnt" uuid="lustre-mnt-UUID">
     <path>/mnt/lustre</path>
     <fileset>dev</fileset>
-    <mds_id num="1" name="mds-srv" uuid="mds-srv-UUID"/>
+    <mds_ref num="1" name="mds-srv" uuidref="mds-srv-UUID"/>
   </mountpoint>
 </lustre>
