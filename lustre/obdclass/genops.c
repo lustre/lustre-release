@@ -68,7 +68,7 @@ int class_register_type(struct obd_ops *ops, char *nm)
 
         ENTRY;
 
-        if (class_nm_to_type(nm)) {
+        if (class_search_type(nm)) {
                 CDEBUG(D_IOCTL, "Type %s already registered\n", nm);
                 RETURN(-EEXIST);
         }
