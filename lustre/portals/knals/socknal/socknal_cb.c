@@ -1187,7 +1187,7 @@ ksocknal_fmb_callback (void *arg, int error)
 {
         ksock_fmb_t       *fmb = (ksock_fmb_t *)arg;
         ksock_fmb_pool_t  *fmp = fmb->fmb_pool;
-        ptl_hdr_t         *hdr = (ptl_hdr_t *)page_address(fmb->fmb_kiov[0].kiov_page);
+        ptl_hdr_t         *hdr = &fmb->fmb_hdr;
         ksock_conn_t      *conn = NULL;
         ksock_sched_t     *sched;
         unsigned long      flags;

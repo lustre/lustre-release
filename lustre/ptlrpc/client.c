@@ -1274,12 +1274,15 @@ void ptlrpc_retain_replayable_request(struct ptlrpc_request *req,
 
         LASSERT_SPIN_LOCKED(&imp->imp_lock);
 
+        /* clear this for new requests that were resent as well
+           as resent replayed requests. */
+        lustre_msg_clear_flags(req->rq_reqmsg, MSG_RESENT);
+
         /* don't re-add requests that have been replayed */
         if (!list_empty(&req->rq_replay_list))
                 return;
 
-        lustre_msg_add_flags(req->rq_reqmsg,
-                             MSG_REPLAY);
+        lustre_msg_add_flags(req->rq_reqmsg, MSG_REPLAY);
 
         LASSERT(imp->imp_replayable);
         /* Balanced in ptlrpc_free_committed, usually. */
@@ -1591,16 +1594,8 @@ int ptlrpc_replay_req(struct ptlrpc_request *req)
         aa->praa_old_state = req->rq_send_state;
         req->rq_send_state = LUSTRE_IMP_REPLAY;
         req->rq_phase = RQ_PHASE_NEW;
-        /*
-         * Q: "How can a req get on the replay list if it wasn't replied?"
-         * A: "If we failed during the replay of this request, it will still
-         *     be on the list, but rq_replied will have been reset to 0."
-         */
-        if (req->rq_replied) {
-                aa->praa_old_status = req->rq_repmsg->status;
-                req->rq_status = 0;
-                req->rq_replied = 0;
-        }
+        aa->praa_old_status = req->rq_repmsg->status;
+        req->rq_status = 0;
 
         req->rq_interpret_reply = ptlrpc_replay_interpret;
         atomic_inc(&req->rq_import->imp_replay_inflight);

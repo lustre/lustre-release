@@ -274,7 +274,6 @@ static int lov_disconnect(struct obd_export *exp, int flags)
 static int lov_set_osc_active(struct lov_obd *lov, struct obd_uuid *uuid,
                               int activate)
 {
-        struct obd_device *obd;
         struct lov_tgt_desc *tgt;
         int i, rc = 0;
         ENTRY;
@@ -293,24 +292,14 @@ static int lov_set_osc_active(struct lov_obd *lov, struct obd_uuid *uuid,
         if (i == lov->desc.ld_tgt_count)
                 GOTO(out, rc = -EINVAL);
 
-        obd = class_exp2obd(tgt->ltd_exp);
-        if (obd == NULL) {
-                /* This can happen if OST failure races with node shutdown */
-                GOTO(out, rc = -ENOTCONN);
-        }
-
-        CDEBUG(D_INFO, "Found OBD %s=%s device %d (%p) type %s at LOV idx %d\n",
-               obd->obd_name, obd->obd_uuid.uuid, obd->obd_minor, obd,
-               obd->obd_type->typ_name, i);
-        LASSERT(strcmp(obd->obd_type->typ_name, "osc") == 0);
-
         if (tgt->active == activate) {
-                CDEBUG(D_INFO, "OBD %p already %sactive!\n", obd,
+                CDEBUG(D_INFO, "OSC %s already %sactive!\n", uuid->uuid,
                        activate ? "" : "in");
                 GOTO(out, rc);
         }
 
-        CDEBUG(D_INFO, "Marking OBD %p %sactive\n", obd, activate ? "" : "in");
+        CDEBUG(D_INFO, "Marking OSC %s %sactive\n", uuid->uuid, 
+               activate ? "" : "in");
 
         tgt->active = activate;
         if (activate)
@@ -2071,13 +2060,13 @@ static int lov_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
                         if (tmp > lock->l_policy_data.l_extent.end)
                                 tmp = lock->l_policy_data.l_extent.end + 1;
                         if (tmp >= loi->loi_kms) {
-                                CDEBUG(D_INODE, "lock acquired, setting rss="
+                                CDEBUG(D_DLMTRACE, "lock acquired, setting rss="
                                        LPU64", kms="LPU64"\n", loi->loi_rss,
                                        tmp);
                                 loi->loi_kms = tmp;
                                 loi->loi_kms_valid = 1;
                         } else {
-                                CDEBUG(D_INODE, "lock acquired, setting rss="
+                                CDEBUG(D_DLMTRACE, "lock acquired, setting rss="
                                        LPU64"; leaving kms="LPU64", end="LPU64
                                        "\n", loi->loi_rss, loi->loi_kms,
                                        lock->l_policy_data.l_extent.end);
@@ -2089,8 +2078,9 @@ static int lov_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
                         memset(lov_lockhp, 0, sizeof(*lov_lockhp));
                         loi->loi_rss = submd->lsm_oinfo->loi_rss;
                         loi->loi_blocks = submd->lsm_oinfo->loi_blocks;
-                        CDEBUG(D_INODE, "glimpsed, setting rss="LPU64"; leaving"
-                               " kms="LPU64"\n", loi->loi_rss, loi->loi_kms);
+                        CDEBUG(D_DLMTRACE, "glimpsed, setting rss="LPU64
+                               "; leaving kms="LPU64"\n", loi->loi_rss,
+                               loi->loi_kms);
                 } else {
                         memset(lov_lockhp, 0, sizeof(*lov_lockhp));
                         if (lov->tgts[loi->loi_ost_idx].active) {

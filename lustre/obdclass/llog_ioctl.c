@@ -377,7 +377,7 @@ out:
 }
 EXPORT_SYMBOL(llog_ioctl);
 
-int llog_catlog_list(struct obd_device *obd, int count,
+int llog_catalog_list(struct obd_device *obd, int count,
                      struct obd_ioctl_data *data)
 {
         int size, i;
@@ -418,4 +418,4 @@ int llog_catlog_list(struct obd_device *obd, int count,
         RETURN(0);
 
 }
-EXPORT_SYMBOL(llog_catlog_list);
+EXPORT_SYMBOL(llog_catalog_list);

@@ -7,7 +7,7 @@ ALWAYS_EXCEPT="20b"
 
 
 LUSTRE=${LUSTRE:-`dirname $0`/..}
-UPCALL=${UPCALL:-$PWD/recovery-small-upcall.sh}
+
 . $LUSTRE/tests/test-framework.sh
 
 init_test_env $@
@@ -342,7 +342,7 @@ test_20a() {	# bug 2983 - ldlm_handle_enqueue cleanup
 	mkdir -p $DIR/$tdir
 	multiop $DIR/$tdir/${tfile} O_wc &
 	MULTI_PID=$!
-	usleep 500
+	sleep 1
 	cancel_lru_locks OSC
 #define OBD_FAIL_LDLM_ENQUEUE_EXTENT_ERR 0x308
 	do_facet ost sysctl -w lustre.fail_loc=0x80000308

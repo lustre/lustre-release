@@ -73,8 +73,9 @@ struct obd_export {
         spinlock_t                exp_lock; /* protects flags int below */
         /* ^ protects exp_outstanding_replies too */
         int                       exp_flags;
-        int                       exp_failed:1;
-        int                       exp_libclient:1; /* liblustre client? */
+        int                       exp_failed:1,
+                                  exp_replay_needed:1,
+                                  exp_libclient:1; /* liblustre client? */
         union {
                 struct mds_export_data    eu_mds_data;
                 struct filter_export_data eu_filter_data;

@@ -130,16 +130,16 @@ void ptlrpc_initiate_recovery(struct obd_import *imp)
         LASSERT (obd_lustre_upcall != NULL);
         
         if (strcmp(obd_lustre_upcall, "DEFAULT") == 0) {
-                CDEBUG(D_ERROR, "%s: starting recovery without upcall\n",
+                CDEBUG(D_HA, "%s: starting recovery without upcall\n",
                         imp->imp_target_uuid.uuid);
                 ptlrpc_connect_import(imp, NULL);
         } 
         else if (strcmp(obd_lustre_upcall, "NONE") == 0) {
-                CDEBUG(D_ERROR, "%s: recovery diabled\n",
+                CDEBUG(D_HA, "%s: recovery disabled\n",
                         imp->imp_target_uuid.uuid);
         } 
         else {
-                CDEBUG(D_ERROR, "%s: calling upcall to start recovery\n",
+                CDEBUG(D_HA, "%s: calling upcall to start recovery\n",
                         imp->imp_target_uuid.uuid);
                 ptlrpc_run_failed_import_upcall(imp);
         }
@@ -151,7 +151,7 @@ int ptlrpc_replay_next(struct obd_import *imp, int *inflight)
 {
         int rc = 0;
         struct list_head *tmp, *pos;
-        struct ptlrpc_request *req;
+        struct ptlrpc_request *req = NULL;
         unsigned long flags;
         __u64 last_transno;
         ENTRY;
@@ -187,16 +187,36 @@ int ptlrpc_replay_next(struct obd_import *imp, int *inflight)
          */
         list_for_each_safe(tmp, pos, &imp->imp_replay_list) {
                 req = list_entry(tmp, struct ptlrpc_request, rq_replay_list);
-                if (req->rq_transno > last_transno) {
-                        rc = ptlrpc_replay_req(req);
-                        if (rc) {
-                                CERROR("recovery replay error %d for req "
-                                       LPD64"\n", rc, req->rq_xid);
-                                RETURN(rc);
-                        }
-                        *inflight = 1;
+
+                /* If need to resend the last sent transno (because a
+                   reconnect has occurred), then stop on the matching
+                   req and send it again. If, however, the last sent
+                   transno has been committed then we continue replay
+                   from the next request. */
+                if (imp->imp_resend_replay && 
+                    req->rq_transno == last_transno) {
+                        lustre_msg_add_flags(req->rq_reqmsg, MSG_RESENT);
                         break;
                 }
+
+                if (req->rq_transno > last_transno) {
+                        imp->imp_last_replay_transno = req->rq_transno;
+                        break;
+                }
+
+                req = NULL;
+        }
+
+        imp->imp_resend_replay = 0;
+
+        if (req != NULL) {
+                rc = ptlrpc_replay_req(req);
+                if (rc) {
+                        CERROR("recovery replay error %d for req "
+                               LPD64"\n", rc, req->rq_xid);
+                        RETURN(rc);
+                }
+                *inflight = 1;
         }
         RETURN(rc);
 }
@@ -357,13 +377,13 @@ static int ptlrpc_recover_import_no_retry(struct obd_import *imp,
         if (rc)
                 RETURN(rc);
 
-        CDEBUG(D_ERROR, "%s: recovery started, waiting\n",
+        CDEBUG(D_HA, "%s: recovery started, waiting\n",
                imp->imp_target_uuid.uuid);
 
         lwi = LWI_TIMEOUT(MAX(obd_timeout * HZ, 1), NULL, NULL);
         rc = l_wait_event(imp->imp_recovery_waitq,
                           !ptlrpc_import_in_recovery(imp), &lwi);
-        CDEBUG(D_ERROR, "%s: recovery finished\n",
+        CDEBUG(D_HA, "%s: recovery finished\n",
                imp->imp_target_uuid.uuid);
 
         RETURN(rc);

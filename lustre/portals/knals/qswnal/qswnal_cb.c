@@ -585,7 +585,7 @@ kqswnal_launch (kqswnal_tx_t *ktx)
         /* Don't block for transmit descriptor if we're in interrupt context */
         int   attr = in_interrupt() ? (EP_NO_SLEEP | EP_NO_ALLOC) : 0;
         int   dest = kqswnal_nid2elanid (ktx->ktx_nid);
-        long  flags;
+        unsigned long flags;
         int   rc;
 
         ktx->ktx_launchtime = jiffies;
@@ -1429,7 +1429,7 @@ kqswnal_rx (kqswnal_rx_t *krx)
 void 
 kqswnal_rxhandler(EP_RXD *rxd)
 {
-        long          flags;
+        unsigned long flags;
         int           nob    = ep_rxd_len (rxd);
         int           status = ep_rxd_status (rxd);
         kqswnal_rx_t *krx    = (kqswnal_rx_t *)ep_rxd_arg (rxd);
@@ -1732,7 +1732,7 @@ kqswnal_scheduler (void *arg)
         kqswnal_rx_t    *krx;
         kqswnal_tx_t    *ktx;
         kpr_fwd_desc_t  *fwd;
-        long             flags;
+        unsigned long    flags;
         int              rc;
         int              counter = 0;
         int              shuttingdown = 0;

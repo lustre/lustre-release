@@ -193,7 +193,7 @@ int llu_glimpse_size(struct inode *inode)
         rc = obd_enqueue(sbi->ll_osc_exp, lli->lli_smd, LDLM_EXTENT, &policy,
                          LCK_PR, &flags, llu_extent_lock_callback,
                          ldlm_completion_ast, llu_glimpse_callback, inode,
-                         sizeof(*lvb), lustre_swab_ost_lvb, &lockh);
+                         sizeof(struct ost_lvb), lustre_swab_ost_lvb, &lockh);
         if (rc > 0)
                 RETURN(-EIO);
 

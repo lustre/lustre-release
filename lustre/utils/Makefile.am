@@ -6,17 +6,17 @@ AM_CFLAGS=$(LLCFLAGS)
 AM_CPPFLAGS=$(LLCPPFLAGS)
 AM_LDFLAGS := -L$(top_builddir)/portals/utils
 
+sbin_scripts = lconf lmc llanalyze llstat.pl llobdstat.pl lactive	\
+	load_ldap.sh lrun lwizard
+bin_scripts = lfind lstripe
+
 if UTILS
 rootsbin_SCRIPTS = mount.lustre
 sbin_PROGRAMS = lctl obdio obdbarrier lload wirecheck wiretest llmount
-sbin_SCRIPTS = lconf lmc llanalyze llstat.pl llobdstat.pl lactive load_ldap.sh lrun
-sbin_SCRIPTS += lwizard
-bin_SCRIPTS = lfind lstripe
 bin_PROGRAMS = lfs
 lib_LIBRARIES = liblustreapi.a
-if LIBLUSTRE
-sbin_SCRIPTS += lrun
-endif # LIBLUSTRE
+sbin_SCRIPTS = $(sbin_scripts)
+bin_SCRIPTS = $(bin_scripts)
 endif # UTILS
 
 lctl_LDADD := $(LIBREADLINE) -lptlctl
@@ -33,7 +33,7 @@ lfs_SOURCES = lfs.c
 llmount_SOURCES = llmount.c 
 llmount_LDADD = $(LIBREADLINE) -lptlctl
 
-EXTRA_DIST = $(bin_SCRIPTS) $(sbin_SCRIPTS)
+EXTRA_DIST = $(bin_scripts) $(sbin_scripts)
 
 # NOTE: this should only be run on i386.
 newwiretest: wirehdr.c wirecheck

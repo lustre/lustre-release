@@ -384,7 +384,7 @@ void ll_pgcache_remove_extent(struct inode *inode, struct lov_stripe_md *lsm,
                         break;
                 }
 
-                conditional_schedule();
+                cond_resched();
 
                 page = find_get_page(inode->i_mapping, i);
                 if (page == NULL)
@@ -658,8 +658,19 @@ int ll_extent_lock(struct ll_file_data *fd, struct inode *inode,
                 rc = -EIO;
 
         if (policy->l_extent.start == 0 &&
-            policy->l_extent.end == OBD_OBJECT_EOF)
+            policy->l_extent.end == OBD_OBJECT_EOF) {
+                /* vmtruncate()->ll_truncate() first sets the i_size and then
+                 * the kms under both a DLM lock and the i_sem.  If we don't
+                 * get the i_sem here we can match the DLM lock and reset
+                 * i_size from the kms before the truncating path has updated
+                 * the kms.  generic_file_write can then trust the stale i_size
+                 * when doing appending writes and effectively cancel the
+                 * result of the truncate.  Getting the i_sem after the enqueue
+                 * maintains the DLM -> i_sem acquiry order. */
+                down(&inode->i_sem);
                 inode->i_size = lov_merge_size(lsm, 1);
+                up(&inode->i_sem);
+        }
 
         //inode->i_mtime = lov_merge_mtime(lsm, inode->i_mtime);
 

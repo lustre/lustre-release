@@ -92,6 +92,7 @@ AC_CHECK_FILE([$LINUX/include/linux/namei.h],
 	[
 	        linux25="yes"
 		KMODEXT=".ko"
+		enable_ldiskfs="yes"
 	],[
 		KMODEXT=".o"
         	linux25="no"
@@ -100,6 +101,16 @@ AC_MSG_CHECKING([if you are using Linux 2.6])
 AC_MSG_RESULT([$linux25])
 AM_CONDITIONAL(LINUX25, test x$linux25 = xyes)
 AC_SUBST(KMODEXT)
+
+AC_PATH_PROG(PATCH, patch, [no])
+AC_PATH_PROG(QUILT, quilt, [no])
+AM_CONDITIONAL(USE_QUILT, test x$QUILT = xno)
+
+if test x$enable_ldiskfs$enable_modules = xyesyes ; then
+	if test x$PATCH$QUILT = xnono ; then
+		AC_MSG_ERROR([Quilt or patch are needed to build the ldiskfs module (for Linux 2.6)])
+	fi
+fi
 
 # -------  Makeflags ------------------
 
@@ -135,7 +146,7 @@ _ACEOF
 AC_DEFUN([LUSTRE_MODULE_COMPILE_IFELSE],
 [m4_ifvaln([$1], [LUSTRE_MODULE_CONFTEST([$1])])dnl
 rm -f kernel-tests/conftest.o kernel-tests/conftest.mod.c kernel-tests/conftest.ko
-AS_IF([AC_TRY_COMMAND(cp conftest.c kernel-tests && make [$2] -f $PWD/kernel-tests/Makefile LUSTRE_LINUX_CONFIG=$LINUX_CONFIG -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX EXTRA_CFLAGS="$EXTRA_KCFLAGS" $ARCH_UM SUBDIRS=$PWD/kernel-tests) >/dev/null && AC_TRY_COMMAND([$3])],
+AS_IF([AC_TRY_COMMAND(cp conftest.c kernel-tests && make [$2] -f $PWD/kernel-tests/Makefile LUSTRE_LINUX_CONFIG=$LINUX_CONFIG -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX EXTRA_CFLAGS="-Werror-implicit-function-declaration $EXTRA_KCFLAGS" $ARCH_UM SUBDIRS=$PWD/kernel-tests) >/dev/null && AC_TRY_COMMAND([$3])],
 	[$4],
 	[_AC_MSG_LOG_CONFTEST
 m4_ifvaln([$5],[$5])dnl])dnl
@@ -446,7 +457,7 @@ LUSTRE_MODULE_TRY_COMPILE(
 # ---------- Red Hat 2.4.20 backports some 2.5 bits --------
 # This needs to run after we've defined the KCPPFLAGS
 
-AC_MSG_CHECKING([for kernel version])
+AC_MSG_CHECKING([if task_struct has a sighand field])
 LUSTRE_MODULE_TRY_COMPILE(
 	[
 		#include <linux/sched.h>
@@ -455,9 +466,24 @@ LUSTRE_MODULE_TRY_COMPILE(
 		p.sighand = NULL;
 	],[
 		AC_DEFINE(CONFIG_RH_2_4_20, 1, [this kernel contains Red Hat 2.4.20 patches])
-		AC_MSG_RESULT([redhat-2.4.20])
+		AC_MSG_RESULT([yes])
 	],[
-		AC_MSG_RESULT([$LINUXRELEASE])
+		AC_MSG_RESULT([no])
+	])
+
+# ---------- 2.4.20 introduced cond_resched --------------
+
+AC_MSG_CHECKING([if kernel offers cond_resched])
+LUSTRE_MODULE_TRY_COMPILE(
+	[
+		#include <linux/sched.h>
+	],[
+		cond_resched();
+	],[
+		AC_MSG_RESULT([yes])
+		AC_DEFINE(HAVE_COND_RESCHED, 1, [cond_resched found])
+	],[
+		AC_MSG_RESULT([no])
 	])
 
 # ---------- Red Hat 2.4.21 backports some more 2.5 bits --------

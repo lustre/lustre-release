@@ -477,6 +477,7 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
                 spin_lock_init(&fed->fed_lock);
 
                 fcd = NULL;
+                exp->exp_replay_needed = 1;
                 obd->obd_recoverable_clients++;
                 class_export_put(exp);
 
@@ -488,6 +489,9 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
 
         }
 
+        if (fcd)
+                OBD_FREE(fcd, sizeof(*fcd));
+
         obd->obd_last_committed = le64_to_cpu(fsd->fsd_last_transno);
 
         if (obd->obd_recoverable_clients) {
@@ -498,17 +502,16 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
                 obd->obd_recovering = 1;
         }
 
-        if (fcd)
-                OBD_FREE(fcd, sizeof(*fcd));
-
 out:
         filter->fo_mount_count = mount_count + 1;
         fsd->fsd_mount_count = cpu_to_le64(filter->fo_mount_count);
 
         /* save it, so mount count and last_transno is current */
         rc = filter_update_server_data(obd, filp, filter->fo_fsd, 1);
+        if (rc)
+                GOTO(err_client, rc);
 
-        RETURN(rc);
+        RETURN(0);
 
 err_client:
         class_disconnect_exports(obd, 0);
@@ -2336,7 +2339,7 @@ int filter_iocontrol(unsigned int cmd, struct obd_export *exp,
         }
 
         case OBD_IOC_CATLOGLIST: {
-                rc = llog_catlog_list(obd, 1, data);
+                rc = llog_catalog_list(obd, 1, data);
                 RETURN(rc);
         }
 

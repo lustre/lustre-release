@@ -137,6 +137,7 @@ int class_connect(struct lustre_handle *conn, struct obd_device *obd,
                   struct obd_uuid *cluuid);
 int class_disconnect(struct obd_export *exp, int failover);
 void class_disconnect_exports(struct obd_device *obddev, int failover);
+void class_disconnect_stale_exports(struct obd_device *obddev, int failover);
 /* generic operations shared by various OBD types */
 int class_multi_setup(struct obd_device *obddev, uint32_t len, void *data);
 int class_multi_cleanup(struct obd_device *obddev);

@@ -2,7 +2,7 @@
  * vim:expandtab:shiftwidth=8:tabstop=8:
  */
 #ifndef _LIBCFS_H
-
+#define _LIBCFS_H
 
 #define PORTAL_DEBUG
 

@@ -418,6 +418,7 @@ EXPORT_SYMBOL(class_exp2cliimp);
 EXPORT_SYMBOL(class_conn2cliimp);
 EXPORT_SYMBOL(class_disconnect);
 EXPORT_SYMBOL(class_disconnect_exports);
+EXPORT_SYMBOL(class_disconnect_stale_exports);
 
 EXPORT_SYMBOL(oig_init);
 EXPORT_SYMBOL(oig_release);

@@ -182,7 +182,7 @@ static int mds_server_free_data(struct mds_obd *mds)
         return 0;
 }
 
-static int mds_read_last_rcvd(struct obd_device *obd, struct file *file)
+static int mds_init_server_data(struct obd_device *obd, struct file *file)
 {
         struct mds_obd *mds = &obd->u.mds;
         struct mds_server_data *msd;
@@ -326,6 +326,7 @@ static int mds_read_last_rcvd(struct obd_device *obd, struct file *file)
                 spin_lock_init(&med->med_open_lock);
 
                 mcd = NULL;
+                exp->exp_replay_needed = 1;
                 obd->obd_recoverable_clients++;
                 obd->obd_max_recoverable_clients++;
                 class_export_put(exp);
@@ -337,7 +338,11 @@ static int mds_read_last_rcvd(struct obd_device *obd, struct file *file)
                        mds->mds_last_transno = last_transno;
         }
 
+        if (mcd)
+                OBD_FREE(mcd, sizeof(*mcd));
+
         obd->obd_last_committed = mds->mds_last_transno;
+
         if (obd->obd_recoverable_clients) {
                 CWARN("RECOVERY: service %s, %d recoverable clients, "
                       "last_transno "LPU64"\n", obd->obd_name,
@@ -346,16 +351,15 @@ static int mds_read_last_rcvd(struct obd_device *obd, struct file *file)
                 obd->obd_recovering = 1;
         }
 
-        if (mcd)
-                OBD_FREE(mcd, sizeof(*mcd));
-        
         mds->mds_mount_count = mount_count + 1;
         msd->msd_mount_count = cpu_to_le64(mds->mds_mount_count);
 
         /* save it, so mount count and last_transno is current */
         rc = mds_update_server_data(obd, 1);
+        if (rc)
+                GOTO(err_client, rc);
 
-        RETURN(rc);
+        RETURN(0);
 
 err_client:
         class_disconnect_exports(obd, 0);
@@ -455,7 +459,7 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
                 GOTO(err_last_rcvd, rc = -ENOENT);
         }
 
-        rc = mds_read_last_rcvd(obd, file);
+        rc = mds_init_server_data(obd, file);
         if (rc) {
                 CERROR("cannot read %s: rc = %d\n", LAST_RCVD, rc);
                 GOTO(err_last_rcvd, rc);
@@ -562,8 +566,8 @@ int mds_obd_create(struct obd_export *exp, struct obdo *oa,
         ENTRY;
 
         push_ctxt(&saved, &exp->exp_obd->obd_ctxt, NULL);
-        
-        sprintf(fidname, "OBJECTS/%u", tmpname);
+
+        sprintf(fidname, "OBJECTS/%u.%u", tmpname, current->pid);
         filp = filp_open(fidname, O_CREAT | O_EXCL, 0644);
         if (IS_ERR(filp)) {
                 rc = PTR_ERR(filp);

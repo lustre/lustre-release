@@ -232,6 +232,11 @@ facet_nid() {
 facet_active() {
     local facet=$1
     local activevar=${facet}active
+
+    if [ -f ./${facet}active ] ; then
+        source ./${facet}active
+    fi
+
     active=${!activevar}
     if [ -z "$active" ] ; then 
 	echo -n ${facet}

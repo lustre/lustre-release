@@ -102,10 +102,6 @@ static inline int cleanup_group_info(void)
 
 #define smp_num_cpus    NR_CPUS
 
-#ifndef conditional_schedule
-#define conditional_schedule() cond_resched()
-#endif
-
 #include <linux/proc_fs.h>
 
 #else /* 2.4.. */
@@ -183,8 +179,14 @@ static inline int cleanup_group_info(void)
         return 0;
 }
 
-#ifndef conditional_schedule
-#define conditional_schedule() if (unlikely(need_resched())) schedule()
+#ifndef HAVE_COND_RESCHED
+static inline void cond_resched(void)
+{
+        if (unlikely(need_resched())) {
+                set_current_state(TASK_RUNNING);
+                schedule();
+        }
+}
 #endif
 
 /* to find proc_dir_entry from inode. 2.6 has native one -bzzz */

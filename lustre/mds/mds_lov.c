@@ -435,7 +435,7 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 
         case OBD_IOC_CATLOGLIST: {
                 int count = mds->mds_lov_desc.ld_tgt_count;
-                rc = llog_catlog_list(obd, count, data);
+                rc = llog_catalog_list(obd, count, data);
                 RETURN(rc);
 
         }

@@ -493,13 +493,9 @@ static inline void ost_checksum(obd_count *cksum, void *addr, int len)
 
 static inline int ll_insecure_random_int(void)
 {
-#ifdef __arch_um__
         struct timeval t;
         do_gettimeofday(&t);
         return (int)(t.tv_usec);
-#else
-        return (int)(get_cycles() >> 2);
-#endif
 }
 
 /*

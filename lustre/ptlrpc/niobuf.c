@@ -31,13 +31,12 @@
 #include <linux/obd.h>
 #include "ptlrpc_internal.h"
 
-static int ptl_send_buf (ptl_handle_md_t *mdh, void *base, int len, 
+static int ptl_send_buf (ptl_handle_md_t *mdh, void *base, int len,
                          ptl_ack_req_t ack, struct ptlrpc_cb_id *cbid,
                          struct ptlrpc_connection *conn, int portal, __u64 xid)
 {
         ptl_process_id_t remote_id;
         int              rc;
-        int              rc2;
         ptl_md_t         md;
         char str[PTL_NALFMT_SIZE];
         ENTRY;
@@ -78,15 +77,16 @@ static int ptl_send_buf (ptl_handle_md_t *mdh, void *base, int len,
         CDEBUG(D_NET, "Sending %d bytes to portal %d, xid "LPD64"\n",
                len, portal, xid);
 
-        rc2 = PtlPut (*mdh, ack, remote_id, portal, 0, xid, 0, 0);
+        rc = PtlPut (*mdh, ack, remote_id, portal, 0, xid, 0, 0);
         if (rc != PTL_OK) {
+                int rc2;
                 /* We're going to get an UNLINK event when I unlink below,
                  * which will complete just like any other failed send, so
                  * I fall through and return success here! */
                 CERROR("PtlPut("LPU64", %d, "LPD64") failed: %d\n",
                        remote_id.nid, portal, xid, rc);
                 rc2 = PtlMDUnlink(*mdh);
-                LASSERT (rc2 == PTL_OK);
+                LASSERTF(rc2 == PTL_OK, "rc2 = %d\n", rc2);
         }
 
         RETURN (0);

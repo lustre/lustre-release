@@ -5,13 +5,22 @@ tbd  Cluster File Systems, Inc. <info@clusterfs.com>
 	- strip trailing '/'s before comparing paths with /proc/mounts (3486)
 	- remove assertions to work around "in-flight rpcs" recovery bug (3063)
 	- change init script to fail more clearly if not run as root (1528)
+	- allow clients to reconnect during replay (1742)
 	- fix ns_lock/i_sem lock ordering deadlock for kms update (3477)
 	- don't do DNS lookups on NIDs too small for IP addresses (3442)
+	- re-awaken ptlrpcd if new requests arrive during check_set  (3554)
+	- fix cond_resched  (3554)
+	- only evict unfinished clients after recovery   (3515)
+	- allow bulk resend, prevent data loss (3570)
 	- dynamic ptlrpc request buffer allocation (2102)
 	- don't allow unlinking open directory if it isn't empty (2904)
 	- set MDS/OST threads to umask 0 to not clobber client modes (3359)
+	- remove extraneous obd dereference causing LASSERT failure (3334)
+	- don't use get_cycles() when creating temp. files on the mds (3156)
+	- hold i_sem when setting i_size in ll_extent_lock() (3564)
        * miscellania
 	- servers can dump a log evicting a client - lustre.dump_on_timeout=1
+	- fix ksocknal_fmb_callback() error messages (2918)
 
 2004-05-27  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.2

@@ -481,11 +481,6 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         if (rc && rc != EALREADY)
                 GOTO(out, rc);
 
-        /* XXX track this all the time? */
-        if (target->obd_recovering) {
-                target->obd_connected_clients++;
-        }
-
         req->rq_repmsg->handle = conn;
 
         /* If the client and the server are the same node, we will already
@@ -527,6 +522,9 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
                 lustre_msg_add_op_flags(req->rq_repmsg, MSG_CONNECT_RECONNECT);
                 GOTO(out, rc = 0);
         }
+
+        if (target->obd_recovering)
+                target->obd_connected_clients++;
 
         memcpy(&conn, lustre_msg_buf(req->rq_reqmsg, 2, sizeof conn),
                sizeof conn);
@@ -580,21 +578,37 @@ void target_destroy_export(struct obd_export *exp)
  * Recovery functions
  */
 
-static void abort_delayed_replies(struct obd_device *obd)
+static void target_finish_recovery(struct obd_device *obd)
 {
-        struct ptlrpc_request *req;
         struct list_head *tmp, *n;
+        int rc;
+
+        CWARN("%s: sending delayed replies to recovered clients\n",
+              obd->obd_name);
+
+        ldlm_reprocess_all_ns(obd->obd_namespace);
+
+        /* when recovery finished, cleanup orphans on mds and ost */
+        if (OBT(obd) && OBP(obd, postrecov)) {
+                rc = OBP(obd, postrecov)(obd);
+                if (rc >= 0)
+                        CWARN("%s: all clients recovered, %d MDS "
+                              "orphans deleted\n", obd->obd_name, rc);
+                else
+                        CERROR("postrecov failed %d\n", rc);
+        }
+
         list_for_each_safe(tmp, n, &obd->obd_delayed_reply_queue) {
+                struct ptlrpc_request *req;
                 req = list_entry(tmp, struct ptlrpc_request, rq_list);
-                DEBUG_REQ(D_ERROR, req, "aborted:");
-                req->rq_status = -ENOTCONN;
-                req->rq_type = PTL_RPC_MSG_ERR;
+                DEBUG_REQ(D_ERROR, req, "delayed:");
                 ptlrpc_reply(req);
                 class_export_put(req->rq_export);
                 list_del(&req->rq_list);
                 OBD_FREE(req->rq_reqmsg, req->rq_reqlen);
                 OBD_FREE(req, sizeof *req);
         }
+        return;
 }
 
 static void abort_recovery_queue(struct obd_device *obd)
@@ -625,35 +639,24 @@ static void abort_recovery_queue(struct obd_device *obd)
 void target_abort_recovery(void *data)
 {
         struct obd_device *obd = data;
-        int rc;
 
-        CERROR("disconnecting clients and aborting recovery\n");
         spin_lock_bh(&obd->obd_processing_task_lock);
         if (!obd->obd_recovering) {
                 spin_unlock_bh(&obd->obd_processing_task_lock);
                 EXIT;
                 return;
         }
-
         obd->obd_recovering = obd->obd_abort_recovery = 0;
-
-        wake_up(&obd->obd_next_transno_waitq);
         target_cancel_recovery_timer(obd);
         spin_unlock_bh(&obd->obd_processing_task_lock);
 
-        class_disconnect_exports(obd, 0);
-
-        /* when recovery was aborted, cleanup orphans on mds and ost */
-        if (OBT(obd) && OBP(obd, postrecov)) {
-                rc = OBP(obd, postrecov)(obd);
-                if (rc >= 0)
-                        CWARN("Cleanup %d orphans after recovery was aborted\n", rc);
-                else
-                        CERROR("postrecov failed %d\n", rc);
-        }
-
-        abort_delayed_replies(obd);
+        CERROR("%s: recovery period over; disconnecting unfinished clients.\n",
+               obd->obd_name);
+        class_disconnect_stale_exports(obd, 0);
         abort_recovery_queue(obd);
+
+        target_finish_recovery(obd);
+
         ptlrpc_run_recovery_over_upcall(obd);
 }
 
@@ -662,7 +665,8 @@ static void target_recovery_expired(unsigned long castmeharder)
         struct obd_device *obd = (struct obd_device *)castmeharder;
         CERROR("recovery timed out, aborting\n");
         spin_lock_bh(&obd->obd_processing_task_lock);
-        obd->obd_abort_recovery = 1;
+        if (obd->obd_recovering)
+                obd->obd_abort_recovery = 1;
         wake_up(&obd->obd_next_transno_waitq);
         spin_unlock_bh(&obd->obd_processing_task_lock);
 }
@@ -723,6 +727,9 @@ static int check_for_next_transno(struct obd_device *obd)
         queue_len = obd->obd_requests_queued_for_recovery;
         next_transno = obd->obd_next_recovery_transno;
 
+        CDEBUG(D_HA,"max: %d, connected: %d, completed: %d, queue_len: %d, "
+               "req_transno: "LPU64", next_transno: "LPU64"\n",
+               max, connected, completed, queue_len, req_transno, next_transno);
         if (obd->obd_abort_recovery) {
                 CDEBUG(D_HA, "waking for aborted recovery\n");
                 wake_up = 1;
@@ -836,6 +843,9 @@ int target_queue_recovery_request(struct ptlrpc_request *req,
          * Also, if this request has a transno less than the one we're waiting
          * for, we should process it now.  It could (and currently always will)
          * be an open request for a descriptor that was opened some time ago.
+         *
+         * Also, a resent, replayed request that has already been
+         * handled will pass through here and be processed immediately.
          */
         if (obd->obd_processing_task == current->pid ||
             transno < obd->obd_next_recovery_transno) {
@@ -845,6 +855,17 @@ int target_queue_recovery_request(struct ptlrpc_request *req,
                 OBD_FREE(reqmsg, req->rq_reqlen);
                 OBD_FREE(saved_req, sizeof *saved_req);
                 return 1;
+        }
+
+        /* A resent, replayed request that is still on the queue; just drop it.
+           The queued request will handle this. */
+        if ((lustre_msg_get_flags(req->rq_reqmsg) & (MSG_RESENT | MSG_REPLAY)) ==
+            (MSG_RESENT | MSG_REPLAY)) {
+                DEBUG_REQ(D_ERROR, req, "dropping resent queued req");
+                spin_unlock_bh(&obd->obd_processing_task_lock);
+                OBD_FREE(reqmsg, req->rq_reqlen);
+                OBD_FREE(saved_req, sizeof *saved_req);
+                return 0;
         }
 
         memcpy(saved_req, req, sizeof *req);
@@ -902,7 +923,6 @@ int target_queue_final_reply(struct ptlrpc_request *req, int rc)
         struct ptlrpc_request *saved_req;
         struct lustre_msg *reqmsg;
         int recovery_done = 0;
-        int rc2;
 
         LASSERT ((rc == 0) == (req->rq_reply_state != NULL));
 
@@ -932,39 +952,22 @@ int target_queue_final_reply(struct ptlrpc_request *req, int rc)
         list_add(&req->rq_list, &obd->obd_delayed_reply_queue);
 
         spin_lock_bh(&obd->obd_processing_task_lock);
-        --obd->obd_recoverable_clients;
+        /* only count the first "replay over" request from each
+           export */
+        if (req->rq_export->exp_replay_needed) {
+                --obd->obd_recoverable_clients;
+                req->rq_export->exp_replay_needed = 0;
+        }
         recovery_done = (obd->obd_recoverable_clients == 0);
         spin_unlock_bh(&obd->obd_processing_task_lock);
 
         if (recovery_done) {
-                struct list_head *tmp, *n;
-                ldlm_reprocess_all_ns(req->rq_export->exp_obd->obd_namespace);
-                CWARN("%s: all clients recovered, sending delayed replies\n",
-                       obd->obd_name);
                 spin_lock_bh(&obd->obd_processing_task_lock);
-                obd->obd_recovering = 0;
+                obd->obd_recovering = obd->obd_abort_recovery = 0;
                 target_cancel_recovery_timer(obd);
                 spin_unlock_bh(&obd->obd_processing_task_lock);
 
-                /* when recovery finished, cleanup orphans on mds and ost */
-                if (OBT(obd) && OBP(obd, postrecov)) {
-                        rc2 = OBP(obd, postrecov)(obd);
-                        if (rc2 >= 0)
-                                CWARN("%s: all clients recovered, %d MDS "
-                                      "orphans deleted\n", obd->obd_name, rc2);
-                        else
-                                CERROR("postrecov failed %d\n", rc2);
-                }
-
-                list_for_each_safe(tmp, n, &obd->obd_delayed_reply_queue) {
-                        req = list_entry(tmp, struct ptlrpc_request, rq_list);
-                        DEBUG_REQ(D_ERROR, req, "delayed:");
-                        ptlrpc_reply(req);
-                        class_export_put(req->rq_export);
-                        list_del(&req->rq_list);
-                        OBD_FREE(req->rq_reqmsg, req->rq_reqlen);
-                        OBD_FREE(req, sizeof *req);
-                }
+                target_finish_recovery(obd);
                 ptlrpc_run_recovery_over_upcall(obd);
         } else {
                 CWARN("%s: %d recoverable clients remain\n",

@@ -68,12 +68,23 @@ Configures openldap server for LDAP Lustre config database
 %endif
 
 %build
+# if RPM_BUILD_NCPUS unset, set it
+if [ -z "$RPM_BUILD_NCPUS" ] ; then
+    RPM_BUILD_NCPUS=$(egrep -c "^cpu[0-9]+" /proc/stat || :)
+    if [ $RPM_BUILD_NCPUS -eq 0 ] ; then
+        RPM_BUILD_NCPUS=1
+    fi
+    if [ $RPM_BUILD_NCPUS -gt 8 ] ; then
+        RPM_BUILD_NCPUS=8
+    fi
+fi
+
 rm -rf $RPM_BUILD_ROOT
 
 # Set an explicit path to our Linux tree, if we can.
 cd $RPM_BUILD_DIR/lustre-%{version}
 ./configure --with-linux='%{linuxdir}' %{disable_doc} --disable-liblustre
-make
+make -j $RPM_BUILD_NCPUS -s
 
 %install
 cd $RPM_BUILD_DIR/lustre-%{version}

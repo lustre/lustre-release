@@ -74,10 +74,17 @@ Index: linux-ia64/fs/ext3/iopen.c
 ===================================================================
 --- linux-ia64.orig/fs/ext3/iopen.c	2004-03-17 18:02:08.000000000 -0800
 +++ linux-ia64/fs/ext3/iopen.c	2004-03-17 18:10:58.000000000 -0800
-@@ -8,3 +8,275 @@
-  * This file may be redistributed under the terms of the GNU General
-  * Public License.
-  *
+@@ -0,0 +1,282 @@
++/*
++ * linux/fs/ext3/iopen.c
++ *
++ * Special support for open by inode number
++ *
++ * Copyright (C) 2001 by Theodore Ts'o (tytso@alum.mit.edu).
++ *
++ * This file may be redistributed under the terms of the GNU General
++ * Public License.
++ *
 + *
 + * Invariants:
 + *   - there is only ever a single DCACHE_NFSD_DISCONNECTED dentry alias
@@ -427,7 +434,7 @@ Index: linux-ia64/fs/ext3/namei.c
 +	if (!err) {
 +		err = ext3_mark_inode_dirty(handle, inode);
 +		if (err == 0) {
-+			(void)iopen_connect_dentry(dentry, inode, 0);
++			dput(iopen_connect_dentry(dentry, inode, 0));
 +			return 0;
 +		}
 +	}

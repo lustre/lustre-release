@@ -218,7 +218,7 @@ test_5b() {
 	stop_mds || return 2
 	stop_ost || return 3
 
-	lsmod | grep -q portals && return 3
+	lsmod | grep -q portals && return 4
 	return 0
 
 }
@@ -230,7 +230,7 @@ test_5c() {
 
 	[ -d $MOUNT ] || mkdir -p $MOUNT
 	$LCONF --nosetup --node client_facet $XMLCONFIG > /dev/null
-	llmount $mds_HOST://wrong_mds_svc/client_facet $MOUNT  && exit 1
+	llmount $mds_HOST://wrong_mds_svc/client_facet $MOUNT  && return 1
 
 	# cleanup client modules
 	$LCONF --cleanup --nosetup --node client_facet $XMLCONFIG > /dev/null
@@ -238,11 +238,32 @@ test_5c() {
 	stop_mds || return 2
 	stop_ost || return 3
 
-	lsmod | grep -q portals && return 3
+	lsmod | grep -q portals && return 4
 	return 0
 
 }
 run_test 5c "cleanup after failed mount (bug 2712)"
+
+test_5d() {
+	start_ost
+	start_mds
+	stop_ost --force
+
+	[ -d $MOUNT ] || mkdir -p $MOUNT
+	$LCONF --nosetup --node client_facet $XMLCONFIG > /dev/null
+	llmount $mds_HOST://mds_svc/client_facet $MOUNT  || return 1 
+
+	umount $MOUNT || return 2
+	# cleanup client modules
+	$LCONF --cleanup --nosetup --node client_facet $XMLCONFIG > /dev/null
+	
+	stop_mds || return 3
+
+	lsmod | grep -q portals && return 4
+	return 0
+
+}
+run_test 5d "ost down, don't crash during mount attempt"
 
 test_6() {
 	setup

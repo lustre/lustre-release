@@ -1,26 +1,15 @@
 #ifndef _P30_TYPES_H_
 #define _P30_TYPES_H_
 
-#ifdef __linux__
-# include <asm/types.h>
-# if defined(__powerpc__) && !defined(__KERNEL__)
-#  define __KERNEL__
-#  include <asm/timex.h>
-#  undef __KERNEL__
-# else
-#  include <asm/timex.h>
-# endif
-#else
-# include <sys/types.h>
-typedef u_int32_t __u32;
-typedef u_int64_t __u64;
-#endif
+#include <asm/types.h>
 
 #ifdef __KERNEL__
 # include <linux/time.h>
+# include <asm/timex.h>
 #else
 # include <sys/time.h>
 # define do_gettimeofday(tv) gettimeofday(tv, NULL);
+typedef unsigned long long cycles_t;
 #endif
 
 #include <portals/errno.h>

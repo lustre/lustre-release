@@ -42,7 +42,7 @@
 #include <linux/kp30.h>
 #include <linux/lustre_net.h>
 
-#ifndef  __CYGWIN__
+#ifdef __KERNEL__
 # include <linux/ctype.h>
 # include <linux/init.h>
 #else
@@ -133,6 +133,13 @@ static int ptlrpcd_check(struct ptlrpcd_ctl *pc)
                         req->rq_set = NULL;
                         ptlrpc_req_finished (req);
                 }
+        }
+
+        if (rc == 0) {
+                /* If new requests have been added, make sure to wake up */
+                spin_lock_irqsave(&pc->pc_set->set_new_req_lock, flags);
+                rc = !list_empty(&pc->pc_set->set_new_requests);
+                spin_unlock_irqrestore(&pc->pc_set->set_new_req_lock, flags);
         }
 
         RETURN(rc);

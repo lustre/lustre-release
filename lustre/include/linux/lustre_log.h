@@ -127,8 +127,8 @@ int obd_llog_finish(struct obd_device *obd, int count);
 
 /* llog_ioctl.c */
 int llog_ioctl(struct llog_ctxt *ctxt, int cmd, struct obd_ioctl_data *data);
-int llog_catlog_list(struct obd_device *obd, int count,
-                     struct obd_ioctl_data *data);
+int llog_catalog_list(struct obd_device *obd, int count,
+                      struct obd_ioctl_data *data);
 
 /* llog_net.c */
 int llog_initiator_connect(struct llog_ctxt *ctxt);

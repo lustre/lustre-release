@@ -14,8 +14,10 @@ libuptlctl_a_CPPFLAGS = $(LLCPPFLAGS)
 libuptlctl_a_CFLAGS = $(LLCFLAGS)
 endif
 
+if UTILS
 sbin_PROGRAMS = acceptor ptlctl debugctl routerstat wirecheck gmnalnid
 lib_LIBRARIES = libptlctl.a
+endif
 
 acceptor_SOURCES = acceptor.c
 
