@@ -46,6 +46,7 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         int rq_portal, rp_portal;
         char *name;
         struct client_obd *cli = &obddev->u.cli;
+        struct obd_import *imp = &cli->cl_import;
         obd_uuid_t server_uuid;
         ENTRY;
 
@@ -85,14 +86,19 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         memcpy(server_uuid, data->ioc_inlbuf2, MIN(data->ioc_inllen2,
                                                    sizeof(server_uuid)));
 
-        cli->cl_import.imp_connection = ptlrpc_uuid_to_connection(server_uuid);
-        if (!cli->cl_import.imp_connection)
+        imp->imp_connection = ptlrpc_uuid_to_connection(server_uuid);
+        if (!imp->imp_connection)
                 RETURN(-ENOENT);
+        
+        INIT_LIST_HEAD(&imp->imp_replay_list);
+        INIT_LIST_HEAD(&imp->imp_sending_list);
+        INIT_LIST_HEAD(&imp->imp_delayed_list);
+        spin_lock_init(&imp->imp_lock);
 
         ptlrpc_init_client(rq_portal, rp_portal, name,
                            &obddev->obd_ldlm_client);
-        cli->cl_import.imp_client = &obddev->obd_ldlm_client;
-        cli->cl_import.imp_obd = obddev;
+        imp->imp_client = &obddev->obd_ldlm_client;
+        imp->imp_obd = obddev;
 
         cli->cl_max_mds_easize = sizeof(struct lov_mds_md);
 
@@ -122,6 +128,7 @@ int client_obd_connect(struct lustre_handle *conn, struct obd_device *obd,
         char *tmp[] = {cli->cl_target_uuid, obd->obd_uuid};
         int rq_opc = (obd->obd_type->typ_ops->o_brw) ? OST_CONNECT :MDS_CONNECT;
         struct ptlrpc_connection *c;
+        struct obd_import *imp = &cli->cl_import;
 
         ENTRY;
         down(&cli->cl_sem);
@@ -135,10 +142,18 @@ int client_obd_connect(struct lustre_handle *conn, struct obd_device *obd,
         if (cli->cl_conn_count > 1)
                 GOTO(out_sem, rc);
 
+        if (obd->obd_namespace != NULL)
+                CERROR("already have namespace!\n");
         obd->obd_namespace = ldlm_namespace_new(obd->obd_name,
                                                 LDLM_NAMESPACE_CLIENT);
         if (obd->obd_namespace == NULL)
                 GOTO(out_disco, rc = -ENOMEM);
+
+        INIT_LIST_HEAD(&imp->imp_chain);
+        imp->imp_last_xid = 0;
+        imp->imp_max_transno = 0;
+        imp->imp_peer_last_xid = 0;
+        imp->imp_peer_committed_transno = 0;
 
         request = ptlrpc_prep_req(&cli->cl_import, rq_opc, 2, size, tmp);
         if (!request)
@@ -150,19 +165,19 @@ int client_obd_connect(struct lustre_handle *conn, struct obd_device *obd,
         request->rq_reqmsg->cookie = conn->cookie;
         c = class_conn2export(conn)->exp_connection =
                 ptlrpc_connection_addref(request->rq_connection);
+        list_add(&imp->imp_chain, &c->c_imports);
         recovd_conn_manage(c, recovd, recover);
 
+        imp->imp_level = LUSTRE_CONN_CON;
         rc = ptlrpc_queue_wait(request);
-        rc = ptlrpc_check_status(request, rc);
         if (rc)
                 GOTO(out_req, rc);
 
         if (rq_opc == MDS_CONNECT)
-                cli->cl_import.imp_flags |= IMP_REPLAYABLE;
-        list_add(&cli->cl_import.imp_chain, &c->c_imports);
-        c->c_level = LUSTRE_CONN_FULL;
-        cli->cl_import.imp_handle.addr = request->rq_repmsg->addr;
-        cli->cl_import.imp_handle.cookie = request->rq_repmsg->cookie;
+                imp->imp_flags |= IMP_REPLAYABLE;
+        imp->imp_level = LUSTRE_CONN_FULL;
+        imp->imp_handle.addr = request->rq_repmsg->addr;
+        imp->imp_handle.cookie = request->rq_repmsg->cookie;
 
         EXIT;
 out_req:
@@ -171,9 +186,21 @@ out_req:
 out_ldlm:
                 ldlm_namespace_free(obd->obd_namespace);
                 obd->obd_namespace = NULL;
+                if (rq_opc == MDS_CONNECT) {
+                        /* Don't class_disconnect OSCs, because the LOV
+                         * cares about them even if they can't connect to the
+                         * OST.
+                         *
+                         * This is leak-bait, but without either a way to
+                         * operate on the osc without an export or separate
+                         * methods for connect-to-osc and connect-osc-to-ost
+                         * it's not clear what else to do.
+                         */
 out_disco:
-                class_disconnect(conn);
-                MOD_DEC_USE_COUNT;
+                        cli->cl_conn_count--;
+                        class_disconnect(conn);
+                        MOD_DEC_USE_COUNT;
+                }
         }
 out_sem:
         up(&cli->cl_sem);
@@ -210,12 +237,16 @@ int client_obd_disconnect(struct lustre_handle *conn)
 
         ldlm_namespace_free(obd->obd_namespace);
         obd->obd_namespace = NULL;
-        request = ptlrpc_prep_req(&cli->cl_import, rq_opc, 0, NULL, NULL);
+        request = ptlrpc_prep_req(&cli->cl_import, rq_opc, 0, NULL,
+                                  NULL);
         if (!request)
                 GOTO(out_disco, rc = -ENOMEM);
-
+        
         request->rq_replen = lustre_msg_size(0, NULL);
 
+        /* Process disconnects even if we're waiting for recovery. */
+        request->rq_level = LUSTRE_CONN_RECOVD;
+        
         rc = ptlrpc_queue_wait(request);
         if (rc)
                 GOTO(out_req, rc);
