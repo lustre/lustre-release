@@ -567,6 +567,11 @@ static int filter_open(struct lustre_handle *conn, struct obdo *oa,
         if (IS_ERR(dentry))
                 RETURN(PTR_ERR(dentry));
 
+        if (!dentry->d_inode) {
+                CERROR("opening non-existent objid "LPX64"\n", oa->o_id);
+                RETURN(-ENOENT);
+        }
+
         filter_from_inode(oa, dentry->d_inode, OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
                           OBD_MD_FLMTIME | OBD_MD_FLCTIME);
 
