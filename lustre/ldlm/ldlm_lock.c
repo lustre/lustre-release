@@ -19,7 +19,7 @@
 #include <linux/lustre_dlm.h>
 #include <linux/lustre_mds.h>
 
-kmem_cache_t *ldlm_lock_slab;
+extern kmem_cache_t *ldlm_lock_slab;
 int (*mds_reint_p)(int offset, struct ptlrpc_request *req) = NULL;
 int (*mds_getattr_name_p)(int offset, struct ptlrpc_request *req) = NULL;
 
