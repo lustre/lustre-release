@@ -581,10 +581,9 @@ sub HTML_leftpane
 	my $element = $pidlist[0];
 	$element =~ /(\d+):(.*)/;
 	my $numericpid = $1;
+	print LEFTHTML "<b>$2</b>";
 	if (!$nograph) {
-	    print LEFTHTML "<H3><A HREF = \"${htmfile}_${graphhtmfile}.html\" target=\"right\">$2</A></H3>\n";
-	} else {
-	    print LEFTHTML "<H3>$2</H3>\n";
+	    print LEFTHTML "   [  <A HREF = \"${htmfile}_${graphhtmfile}.html\" target=\"right\">graph</A>  ]<BR>";
 	}
 	for($idx = 1; $idx <= $#pidlist; $idx++) {
 	    if ($numericpid) {
@@ -1116,14 +1115,13 @@ sub HTML_rightpane
 	print $HTMHANDLE $summary_indent_string x $summary_indent;
 	print $HTMHANDLE "$text\n</A>";
     } elsif ($text =~ /rpcxid #(\d+)(.*)/) {
-	    my $allexist = ($tmprpc->[$e_srvRPCent] &&
-			    $tmprpc->[$e_srvRPCexit] &&
-			    $tmprpc->[$e_cliRPCent] &&
-			    $tmprpc->[$e_cliRPCexit]);
-	 if ($text =~ /link=/) {
-	     $tmprpc = shift;
-	     $pidhashref = shift;
-	     
+	$tmprpc = shift;
+	my $allexist = ($tmprpc->[$e_srvRPCent] &&
+			$tmprpc->[$e_srvRPCexit] &&
+			$tmprpc->[$e_cliRPCent] &&
+			$tmprpc->[$e_cliRPCexit]);
+	if ($text =~ /link=/) {
+	    $pidhashref = shift;
 	    if ($tmprpc->[$e_rpcopc] < 104) {
 		$anchortag = sprintf "%s_%s_%s_%s", 
 		$tmprpc->[$e_rpcopc], $tmprpc->[$e_rpcxid],
@@ -1132,7 +1130,7 @@ sub HTML_rightpane
 		$anchortag = sprintf "%s_%s_%s",
 		$tmprpc->[$e_rpcopc], $tmprpc->[$e_rpcxid],
 		$tmprpc->[$e_rpcpid];
- 	    }
+	    }
 	    my $rpcpidname = ($tmprpc->[$e_cliRPCent])->[$e_pid];
 	    my $clipidcmdname = ($pidhashref->{$rpcpidname})->[$e_pidcmd];
 	    if ($allexist) {
@@ -1159,7 +1157,6 @@ sub HTML_rightpane
 		print $HTMHANDLE "$rpctext\n";
 	    }
 	} else {
-	    $tmprpc = shift;
 	    if ($tmprpc->[$e_rpcopc] < 104) {
 		$anchorref = sprintf "%s_%s_%s_%s", 
 		$tmprpc->[$e_rpcopc], $tmprpc->[$e_rpcxid], $tmprpc->[$e_rpcpid], $tmprpc->[$e_rpcuuid];
@@ -1422,9 +1419,9 @@ sub print_summary_terse
 			my $cl_time2 = $1;
 			$srv_time =~ /\s*([0-9]+)/;
 			my $srv_time2 = $1;
-			$line .= "\t\t[$cl_time2 usecs";
+			$line .= "\t\t[$cl_time2 usecs/rpc";
 			if ($clientside) {
-			    $line .= " (s=$srv_time2, n=$net_time)";
+			    $line .= " (server=$srv_time2, network=$net_time)";
 			}
 			$line .= "] @ $pidoffset_time";
 		    }
