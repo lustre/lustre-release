@@ -1,8 +1,16 @@
 Index: linux-2.4.24/fs/ext3/balloc.c
 ===================================================================
 --- linux-2.4.24.orig/fs/ext3/balloc.c	2004-01-10 17:04:42.000000000 +0300
-+++ linux-2.4.24/fs/ext3/balloc.c	2004-01-29 17:27:54.000000000 +0300
-@@ -1007,3 +1007,294 @@
++++ linux-2.4.24/fs/ext3/balloc.c	2004-02-06 11:05:42.000000000 +0300
+@@ -11,6 +11,7 @@
+  *        David S. Miller (davem@caip.rutgers.edu), 1995
+  */
+ 
++#include <linux/module.h>
+ #include <linux/config.h>
+ #include <linux/sched.h>
+ #include <linux/fs.h>
+@@ -1007,3 +1008,303 @@
  			bitmap_count);
  }
  #endif
@@ -19,6 +27,7 @@ Index: linux-2.4.24/fs/ext3/balloc.c
 + * extents we've skipped, etc
 + */
 +struct alloc_status {
++	struct inode *inode;
 +	struct super_block *sb;
 +	int goal;		/* goal for allocation */
 +	int target_len;		/* goal for len */
@@ -185,8 +194,6 @@ Index: linux-2.4.24/fs/ext3/balloc.c
 +	struct alloc_status as;
 +	int err, bit, i;
 +
-+	int scaned = 0;
-+
 +	J_ASSERT(num && *num > 0);
 +
 +	if (DQUOT_ALLOC_BLOCK(inode, *num)) {
@@ -199,10 +206,15 @@ Index: linux-2.4.24/fs/ext3/balloc.c
 +	*errp = 0;
 +	as.target_len = *num;
 +	as.sb = sb;
++	as.inode = inode;
 +	as.goal = goal;
 +	as.start = -1;
 +	as.len = 0;
 +	as.num = 0;
++
++	if (goal < le32_to_cpu(es->s_first_data_block) ||
++	    goal >= le32_to_cpu(es->s_blocks_count))
++		goal = le32_to_cpu(es->s_first_data_block);
 +
 +	lock_super(sb);
 +	first_group = (goal - le32_to_cpu(es->s_first_data_block)) /
@@ -211,7 +223,6 @@ Index: linux-2.4.24/fs/ext3/balloc.c
 +		      	EXT3_BLOCKS_PER_GROUP(sb);
 +	group = first_group;
 +	do {
-+		scaned++;
 +		err = ext3_find_extent_in_group(&as, group, goal, *num);
 +		if (err < 0) 
 +			goto error_out;
@@ -251,10 +262,14 @@ Index: linux-2.4.24/fs/ext3/balloc.c
 +		goto error_out;
 +	}
 +	bmbh = EXT3_SB(sb)->s_block_bitmap[bitmap_nr];
-+	err = ext3_journal_get_write_access(handle, EXT3_SB(sb)->s_sbh);
++	/* Make sure we use undo access for the bitmap, because it is
++           critical that we do the frozen_data COW on bitmap buffers in
++           all cases even if the buffer is in BJ_Forget state in the
++           committing transaction.  */
++	err = ext3_journal_get_undo_access(handle, bmbh);
 +	if (err)
 +		goto error_out;
-+	err = ext3_journal_get_write_access(handle, bmbh);
++	err = ext3_journal_get_write_access(handle, EXT3_SB(sb)->s_sbh);
 +	if (err)
 +		goto error_out;
 +	err = ext3_journal_get_write_access(handle, bh);
@@ -297,10 +312,12 @@ Index: linux-2.4.24/fs/ext3/balloc.c
 +	goto out;
 +}
 +
++EXPORT_SYMBOL(ext3_new_blocks);
++
 Index: linux-2.4.24/fs/ext3/file.c
 ===================================================================
---- linux-2.4.24.orig/fs/ext3/file.c	2004-01-12 20:36:32.000000000 +0300
-+++ linux-2.4.24/fs/ext3/file.c	2004-01-29 18:26:23.000000000 +0300
+--- linux-2.4.24.orig/fs/ext3/file.c	2004-01-31 02:06:18.000000000 +0300
++++ linux-2.4.24/fs/ext3/file.c	2004-02-06 10:20:46.000000000 +0300
 @@ -69,6 +69,18 @@
  	int err;
  	struct inode *inode = file->f_dentry->d_inode;
@@ -320,10 +337,23 @@ Index: linux-2.4.24/fs/ext3/file.c
  	ret = generic_file_write(file, buf, count, ppos);
  
  	/* Skip file flushing code if there was an error, or if nothing
+Index: linux-2.4.24/fs/ext3/Makefile
+===================================================================
+--- linux-2.4.24.orig/fs/ext3/Makefile	2004-02-05 18:44:25.000000000 +0300
++++ linux-2.4.24/fs/ext3/Makefile	2004-02-06 10:20:46.000000000 +0300
+@@ -14,7 +14,7 @@
+ obj-y    := balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o iopen.o \
+ 		ioctl.o namei.o super.o symlink.o hash.o ext3-exports.o \
+ 		xattr_trusted.o extents.o
+-export-objs += extents.o
++export-objs += extents.o balloc.o
+ 
+ obj-m    := $(O_TARGET)
+ 
 Index: linux-2.4.24/include/linux/ext3_fs.h
 ===================================================================
---- linux-2.4.24.orig/include/linux/ext3_fs.h	2004-01-26 23:17:19.000000000 +0300
-+++ linux-2.4.24/include/linux/ext3_fs.h	2004-01-29 16:29:36.000000000 +0300
+--- linux-2.4.24.orig/include/linux/ext3_fs.h	2004-01-30 00:09:37.000000000 +0300
++++ linux-2.4.24/include/linux/ext3_fs.h	2004-02-06 10:20:46.000000000 +0300
 @@ -58,6 +58,8 @@
  #define ext3_debug(f, a...)	do {} while (0)
  #endif
