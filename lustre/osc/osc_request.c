@@ -390,7 +390,7 @@ int osc_brw_read(struct obd_conn *conn, obd_count num_oa, struct obdo **oa,
                 for (j = 0; j < oa_bufs[i]; j++) {
                         if (bulk[n] == NULL)
                                 continue;
-                        kunmap(bulk[n]->b_buf);
+                        kunmap(buf[n]);
                         OBD_FREE(bulk[n], sizeof(struct ptlrpc_bulk_desc));
                         n++;
                 }
