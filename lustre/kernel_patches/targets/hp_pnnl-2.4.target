@@ -2,6 +2,7 @@ KERNEL=linux-2.4.20-hp_pnnl.tar.gz
 SERIES=hp-pnnl-2.4.20
 VERSION=2.4.20
 EXTRA_VERSION=hp_pnnl_lustre
+RHBUILD=0
 
 BASE_ARCHS="ia64"
 BIGMEM_ARCHS=""
