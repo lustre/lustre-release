@@ -13,7 +13,7 @@
 #include <linux/errno.h>
 #include <linux/locks.h>
 #include <linux/unistd.h>
-
+#include <linux/version.h>
 #include <asm/system.h>
 #include <asm/uaccess.h>
 
@@ -32,6 +32,7 @@
 #include <linux/lustre_mds.h>
 #include <linux/lustre_light.h>
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,4,10))
 /*
  * Add a page to the dirty page list.
  */
@@ -55,6 +56,27 @@ void __set_page_dirty(struct page *page)
         if (mapping->host)
                 mark_inode_dirty_pages(mapping->host);
 }
+#else
+/*
+ * Add a page to the dirty page list.
+ */
+void set_page_dirty(struct page *page)
+{
+	if (!test_and_set_bit(PG_dirty, &page->flags)) {
+		struct address_space *mapping = page->mapping;
+
+		if (mapping) {
+			spin_lock(&pagecache_lock);
+			list_del(&page->list);
+			list_add(&page->list, &mapping->dirty_pages);
+			spin_unlock(&pagecache_lock);
+
+			if (mapping->host)
+				mark_inode_dirty_pages(mapping->host);
+		}
+	}
+}
+#endif
 
 static void inline ll_oa_from_inode(struct obdo *oa, struct inode *inode)
 {
@@ -102,25 +124,6 @@ static void inline ll_oa_from_inode(struct obdo *oa, struct inode *inode)
         }
 } /* ll_oa_from_inode */
 
-/*
- * Add a page to the dirty page list.
- */
-#if 0
-void set_page_dirty(struct page *page)
-{
-	if (!test_and_set_bit(PG_dirty, &page->flags)) {
-		struct address_space *mapping = page->mapping;
-
-		if (mapping) {
-			list_del(&page->list);
-			list_add(&page->list, &mapping->dirty_pages);
-
-			if (mapping->host)
-				mark_inode_dirty_pages(mapping->host);
-		}
-	}
-}
-#endif
 
 
 

@@ -19,6 +19,7 @@
 #include <linux/errno.h>
 #include <linux/locks.h>
 #include <linux/unistd.h>
+#include <linux/version.h>
 
 #include <asm/system.h>
 #include <asm/uaccess.h>
@@ -43,7 +44,53 @@ static int cache_writes = 0;
 
 /* page cache support stuff */ 
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,4,10)
+/*
+ * Add a page to the dirty page list.
+ */
+void __set_page_dirty(struct page *page)
+{
+        struct address_space *mapping;
+        spinlock_t *pg_lock;
 
+        pg_lock = PAGECACHE_LOCK(page);
+        spin_lock(pg_lock);
+
+        mapping = page->mapping;
+        spin_lock(&mapping->page_lock);
+
+        list_del(&page->list);
+        list_add(&page->list, &mapping->dirty_pages);
+
+        spin_unlock(&mapping->page_lock);
+        spin_unlock(pg_lock);
+
+        if (mapping->host)
+                mark_inode_dirty_pages(mapping->host);
+}
+/*
+ * Remove page from dirty list
+ */
+void __set_page_clean(struct page *page)
+{
+	struct address_space *mapping = page->mapping;
+	struct inode *inode;
+	
+	if (!mapping)
+		return;
+
+	list_del(&page->list);
+	list_add(&page->list, &mapping->clean_pages);
+
+	inode = mapping->host;
+	if (list_empty(&mapping->dirty_pages)) { 
+		CDEBUG(D_INODE, "inode clean\n");
+		inode->i_state &= ~I_DIRTY_PAGES;
+	}
+	EXIT;
+}
+
+#else
 /*
  * Add a page to the dirty page list.
  */
@@ -63,7 +110,6 @@ void set_page_dirty(struct page *page)
 		}
 	}
 }
-
 /*
  * Remove page from dirty list
  */
@@ -87,6 +133,9 @@ void __set_page_clean(struct page *page)
 	spin_unlock(&pagecache_lock);
 	EXIT;
 }
+
+#endif
+
 
 inline void set_page_clean(struct page *page)
 {
