@@ -94,6 +94,7 @@ void obdfs_truncate(struct inode *inode);
 
 /* super.c */
 extern long obdfs_cache_count;
+extern long obdfs_mutex_start;
 
 /* symlink.c */
 extern struct inode_operations obdfs_fast_symlink_inode_operations;
@@ -135,14 +136,21 @@ static inline struct list_head *obdfs_slist(struct inode *inode)
 	return &sbi->osi_inodes;
 }
 
-#define obd_down(mutex) {\
-	/* CDEBUG(D_INFO, "get lock\n"); */ \
-	down(mutex);\
+#define obd_down(mutex) {						\
+	/* CDEBUG(D_INFO, "get lock\n"); */				\
+	obdfs_mutex_start = jiffies;					\
+	down(mutex);							\
+	if (jiffies - obdfs_mutex_start)				\
+		CDEBUG(D_CACHE, "waited on mutex %ld jiffies\n",	\
+		       jiffies - obdfs_mutex_start);			\
 }
 
-#define obd_up(mutex) {\
-	up(mutex);\
-	/* CDEBUG(D_INFO, "free lock\n"); */ \
+#define obd_up(mutex) {							\
+	up(mutex);							\
+	if (jiffies - obdfs_mutex_start > 1)				\
+		CDEBUG(D_CACHE, "held mutex for %ld jiffies\n",		\
+		       jiffies - obdfs_mutex_start);			\
+	/* CDEBUG(D_INFO, "free lock\n"); */				\
 }
 
 /* We track if a page has been added to the OBD page cache by stting a
@@ -189,7 +197,7 @@ static void inline obdfs_from_inode(struct obdo *oa, struct inode *inode)
 	       inode->i_ino, (long)oa->o_id, oa->o_valid);
 	obdo_from_inode(oa, inode);
 	if (obdfs_has_inline(inode)) {
-		CDEBUG(D_INFO, "copying inline data from inode to obdo\n");
+		CDEBUG(D_INODE, "copying inline data from inode to obdo\n");
 		memcpy(oa->o_inline, oinfo->oi_inline, OBD_INLINESZ);
 		oa->o_obdflags |= OBD_FL_INLINEDATA;
 		oa->o_valid |= OBD_MD_FLINLINE;
@@ -202,20 +210,11 @@ static void inline obdfs_to_inode(struct inode *inode, struct obdo *oa)
 
 	CDEBUG(D_INFO, "src obdo %ld valid 0x%08x, dst inode %ld\n",
 	       (long)oa->o_id, oa->o_valid, inode->i_ino);
-	/* If the inode is dirty, we won't overwrite the data there, as it
-	 * is newer than the data on the disk.  The ext2obd side only will
-	 * change the block count, so we are guaranteed that is safe.
-	 */
-	if (inode->i_state & I_DIRTY) {
-		CDEBUG(D_INODE, "dirty inode %ld, only copying blocks\n",
-		       inode->i_ino);
-		oa->o_valid = OBD_MD_FLBLOCKS;
-	}
 
 	obdo_to_inode(inode, oa);
 
 	if (obdo_has_inline(oa)) {
-		CDEBUG(D_INFO, "copying inline data from obdo to inode\n");
+		CDEBUG(D_INODE, "copying inline data from obdo to inode\n");
 		memcpy(oinfo->oi_inline, oa->o_inline, OBD_INLINESZ);
 		oinfo->oi_flags |= OBD_FL_INLINEDATA;
 	}

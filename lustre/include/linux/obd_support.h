@@ -44,69 +44,68 @@ extern long obd_memory;
 		printk(format, ## a); }                                 \
 	} while (0)
 
-#define ENTRY if (obd_print_entry) \
+#define ENTRY if (obd_print_entry)					\
 	printk(KERN_INFO "Process %d entered %s\n", current->pid, __FUNCTION__)
 
-#define EXIT if (obd_print_entry) \
-	printk(KERN_INFO "Process %d leaving %s [%d]\n", current->pid,\
+#define EXIT if (obd_print_entry)					\
+	printk(KERN_INFO "Process %d leaving %s [%d]\n", current->pid,	\
 	       __FUNCTION__, __LINE__)
 
 /* Inode common information printed out (used by obdfs and ext2obd inodes) */
-#define ICDEBUG(inode) { \
-	CDEBUG(D_INFO, "]]%s line %d[[ ino %ld, atm %ld, mtm %ld, ctm %ld, "\
-	       "size %Ld, blocks %ld\n", __FUNCTION__ , __LINE__,\
+#define ICDEBUG(inode) {						\
+	CDEBUG(D_INFO,							\
+	       "ino %ld, atm %ld, mtm %ld, ctm %ld, size %Ld, blocks %ld\n",\
 	       inode->i_ino, inode->i_atime, inode->i_mtime, inode->i_ctime,\
-	       inode->i_size, inode->i_blocks);\
-	CDEBUG(D_INFO,\
-	       "]]%s line %d[[ mode %o, uid %d, gid %d, nlnk %d, count %d\n",\
-	       __FUNCTION__, __LINE__, inode->i_mode, inode->i_uid,\
-	       inode->i_gid, inode->i_nlink, inode->i_count);\
+	       inode->i_size, inode->i_blocks);				\
+	CDEBUG(D_INFO, "mode %o, uid %d, gid %d, nlnk %d, count %d\n",	\
+	       inode->i_mode, inode->i_uid, inode->i_gid, inode->i_nlink,\
+	       inode->i_count);						\
 }
 
 /* Ext2 inode information */
-#define EXDEBUG(inode) { \
-	ICDEBUG(inode);\
-	CDEBUG(D_INFO, "ext2 blocks: %d %d %d %d %d %d %d %d\n",\
-	       inode->u.ext2_i.i_data[0], inode->u.ext2_i.i_data[1],\
-	       inode->u.ext2_i.i_data[2], inode->u.ext2_i.i_data[3],\
-	       inode->u.ext2_i.i_data[4], inode->u.ext2_i.i_data[5],\
-	       inode->u.ext2_i.i_data[6], inode->u.ext2_i.i_data[7]);\
+#define EXDEBUG(inode) {						\
+	ICDEBUG(inode);							\
+	CDEBUG(D_INFO, "ext2 blocks: %d %d %d %d %d %d %d %d\n",	\
+	       inode->u.ext2_i.i_data[0], inode->u.ext2_i.i_data[1],	\
+	       inode->u.ext2_i.i_data[2], inode->u.ext2_i.i_data[3],	\
+	       inode->u.ext2_i.i_data[4], inode->u.ext2_i.i_data[5],	\
+	       inode->u.ext2_i.i_data[6], inode->u.ext2_i.i_data[7]);	\
 }
 
 /* OBDFS inode information */
-#define OIDEBUG(inode) { \
-	ICDEBUG(inode);\
+#define OIDEBUG(inode) {						\
+	ICDEBUG(inode);							\
 	CDEBUG(D_INFO,"oinfo: flags 0x%08x\n", obdfs_i2info(inode)->oi_flags);\
-	/* obdfs_print_plist(inode); */\
+	/* obdfs_print_plist(inode); */					\
 }
 
-#define ODEBUG(obdo) { \
-	CDEBUG(D_INFO, "]]%s line %d[[  id %ld, atm %ld, mtm %ld, ctm %ld, "\
-	       "size %ld, blocks %ld\n", __FUNCTION__ , __LINE__,\
-	       (long)(obdo)->o_id, (long)(obdo)->o_atime,\
-	       (long)(obdo)->o_mtime, (long)(obdo)->o_ctime,\
-	       (long)(obdo)->o_size, (long)(obdo)->o_blocks);\
-	CDEBUG(D_INFO, "]]%s line %d[[  mode %o, uid %d, gid %d, flg 0x%0x, "\
-	       "obdflg 0x%0x, nlnk %d, valid 0x%0x\n", __FUNCTION__ , __LINE__,\
+#define ODEBUG(obdo) {							\
+	CDEBUG(D_INFO, "id %ld, atm %ld, mtm %ld, ctm %ld, "		\
+	       "size %ld, blocks %ld\n",				\
+	       (long)(obdo)->o_id, (long)(obdo)->o_atime,		\
+	       (long)(obdo)->o_mtime, (long)(obdo)->o_ctime,		\
+	       (long)(obdo)->o_size, (long)(obdo)->o_blocks);		\
+	CDEBUG(D_INFO, " mode %o, uid %d, gid %d, flg 0x%0x, "		\
+	       "obdflg 0x%0x, nlnk %d, valid 0x%0x\n",			\
 	       (obdo)->o_mode, (obdo)->o_uid, (obdo)->o_gid, (obdo)->o_flags,\
-	       (obdo)->o_obdflags, (obdo)->o_nlink, (obdo)->o_valid);\
+	       (obdo)->o_obdflags, (obdo)->o_nlink, (obdo)->o_valid);	\
 }
 
 
-#define PDEBUG(page,msg) { \
-	if (page){\
+#define PDEBUG(page,msg) {						\
+	if (page){							\
 		char *uptodate = (Page_Uptodate(page)) ? "upto" : "outof";\
-		char *locked = (PageLocked(page)) ? "" : "un";\
-		char *buffer = page->buffers ? "buffer" : "";\
-		int count = page_count(page);\
-		long index = page->index;\
+		char *locked = (PageLocked(page)) ? "" : "un";		\
+		char *buffer = page->buffers ? "buffer" : "";		\
+		int count = page_count(page);				\
+		long index = page->index;				\
 		CDEBUG(D_CACHE, "%s: ** off %ld, %sdate, %slocked, flag %ld,"\
-		       " cnt %d page 0x%p pages %ld virt %lx %s**\n",\
+		       " cnt %d page 0x%p pages %ld virt %lx %s**\n",	\
 		       msg, index, uptodate, locked, page->flags, count,\
 		       page, page->mapping ? page->mapping->nrpages : -1,\
-		       page->virtual, buffer);\
-	} else \
-		CDEBUG(D_CACHE, "** %s: no page\n", msg);\
+		       page->virtual, buffer);				\
+	} else								\
+		CDEBUG(D_CACHE, "** %s: no page\n", msg);		\
 }
 
 #if 0
