@@ -48,15 +48,22 @@ void push_ctxt(struct obd_run_ctxt *save, struct obd_run_ctxt *new)
         save->pwd = dget(current->fs->pwd);
         save->pwdmnt = mntget(current->fs->pwdmnt);
 
+        LASSERT(save->pwd);
+        LASSERT(save->pwdmnt);
+        LASSERT(new->pwd);
+        LASSERT(new->pwdmnt);
+
         set_fs(new->fs);
         set_fs_pwd(current->fs, new->pwdmnt, new->pwd);
 }
 
 void pop_ctxt(struct obd_run_ctxt *saved)
 {
-        ASSERT_KERNEL_CTXT("popping non-kernel context!\n");
         ASSERT_CTXT_MAGIC(saved->magic);
+        ASSERT_KERNEL_CTXT("popping non-kernel context!\n");
         set_fs(saved->fs);
+        LASSERT(saved->pwd);
+        LASSERT(saved->pwdmnt);
         set_fs_pwd(current->fs, saved->pwdmnt, saved->pwd);
 
         dput(saved->pwd);
