@@ -44,7 +44,18 @@ struct ll_sb_info {
 
         /* list of GNS mounts; protected by the dcache_lock */
         struct list_head          ll_mnt_list;
+
+        struct semaphore          ll_gns_sem;
+        wait_queue_head_t         ll_gns_waitq;
+        struct completion         ll_gns_completion;
+        int                       ll_gns_state;
+        struct timer_list         ll_gns_timer;
+        struct list_head          ll_gns_sbi_head;
 };
+
+#define LL_GNS_STATE_IDLE     1100
+#define LL_GNS_STATE_MOUNTING 1101
+#define LL_GNS_STATE_FINISHED 1102
 
 struct ll_readahead_state {
         spinlock_t      ras_lock;
@@ -130,7 +141,6 @@ void lprocfs_unregister_mountpoint(struct ll_sb_info *sbi);
 /* llite/dir.c */
 extern struct file_operations ll_dir_operations;
 extern struct inode_operations ll_dir_inode_operations;
-int fill_page_with_path(struct dentry *, struct vfsmount *, char **pagep);
 
 /* llite/namei.c */
 int ll_objects_destroy(struct ptlrpc_request *request, struct inode *dir);
@@ -192,8 +202,18 @@ void ll_unhash_aliases(struct inode *);
 void ll_frob_intent(struct lookup_intent **itp, struct lookup_intent *deft);
 void ll_lookup_finish_locks(struct lookup_intent *it, struct dentry *dentry);
 
-/* llite/llite_lib.c */
+/* llite/llite_gns.c */
+int ll_finish_gns(struct ll_sb_info *sbi);
+int fill_page_with_path(struct dentry *, struct vfsmount *, char **pagep);
+int ll_dir_process_mount_object(struct dentry *, struct vfsmount *);
+int ll_gns_umount_all(struct ll_sb_info *sbi, int timeout);
+void ll_gns_timer_callback(unsigned long data);
+void ll_gns_add_timer(struct ll_sb_info *sbi);
+void ll_gns_del_timer(struct ll_sb_info *sbi);
+int ll_gns_start_thread(void);
+void ll_gns_stop_thread(void);
 
+/* llite/llite_lib.c */
 extern struct super_operations ll_super_operations;
 extern struct super_operations lustre_super_operations;
 
@@ -246,7 +266,6 @@ void ll_try_done_writing(struct inode *inode);
 void ll_queue_done_writing(struct inode *inode);
 void ll_close_thread_shutdown(struct ll_close_queue *lcq);
 int ll_close_thread_start(struct ll_close_queue **lcq_ret);
-int ll_dir_process_mount_object(struct dentry *, struct vfsmount *);
 
 /* generic */
 #define LL_SUPER_MAGIC 0x0BD00BD0
