@@ -16,6 +16,7 @@
 
 #include <linux/lustre_net.h>
 #include <linux/lustre_mds.h>
+#include <linux/lustre_ha.h>
 #include <linux/obdo.h>
 
 #define LUSTRE_LITE_NAME "llite"
@@ -45,6 +46,7 @@ struct ll_sb_info {
         struct ptlrpc_client     ll_mds_client;
         struct lustre_peer       ll_mds_peer;
         struct ptlrpc_client     ll_ost_client;
+        struct lustre_ha_mgr    *ll_ha_mgr;
         struct lustre_peer       ll_ost_peer;
 };
 

@@ -3,7 +3,7 @@
  *
  *  linux/mds/handler.c
  *
- *  Lustre Metadata Server (mds) request handler
+ *  Lustre High Availability Daemon
  *
  *  Copyright (C) 2001, 2002 Cluster File Systems, Inc.
  *
@@ -11,8 +11,6 @@
  *  See the file COPYING in this distribution
  *
  *  by Peter Braam <braam@clusterfs.com>
- *
- *  This server is single threaded at present (but can easily be multi threaded)
  *
  */
 
@@ -23,6 +21,7 @@
 #include <linux/fs.h>
 #include <linux/stat.h>
 #include <linux/locks.h>
+#include <linux/kmod.h>
 #include <linux/quotaops.h>
 #include <asm/unistd.h>
 #include <asm/uaccess.h>
@@ -36,11 +35,51 @@
 
 static int lustre_ha_check_event(struct lustre_ha_mgr *mgr)
 {
+        int rc = 0; 
+        ENTRY;
 
-        
-        return 1;
+        spin_lock(&mgr->mgr_lock); 
+        if (!(mgr->mgr_flags & MGR_WORKING) && 
+            !list_empty(&mgr->mgr_troubled_lh) ) {
+                mgr->mgr_flags |= MGR_WORKING;
+                mgr->mgr_waketime = CURRENT_TIME; 
+                schedule_timeout(4*HZ); 
+                CERROR("connection in trouble\n"); 
+                rc = 1;
+        }
+
+        if (!mgr->mgr_flags & MGR_WORKING &&
+            CURRENT_TIME >= mgr->mgr_waketime ) { 
+                CERROR("woken up once more\n");
+                mgr->mgr_waketime = CURRENT_TIME; 
+                schedule_timeout(4*HZ); 
+                rc = 1;
+        }
+
+        if (mgr->mgr_flags & MGR_STOPPING) { 
+                CERROR("ha mgr stopping\n");
+                rc = 1;
+        }
+
+        spin_unlock(&mgr->mgr_lock); 
+        RETURN(rc);
 }
 
+
+static int llite_ha_upcall(void)
+{
+        char *argv[2];
+        char *envp[3];
+
+        argv[0] = "/usr/src/obd/utils/ha_assist.sh";
+        argv[1] = NULL;
+
+        envp [0] = "HOME=/";
+        envp [1] = "PATH=/sbin:/bin:/usr/sbin:/usr/bin";
+        envp [2] = NULL;
+
+        return call_usermodehelper(argv[0], argv, envp);
+}
 
 static int llite_ha_main(void *arg)
 {
@@ -68,67 +107,59 @@ static int llite_ha_main(void *arg)
                 wait_event_interruptible(mgr->mgr_waitq, 
                                          lustre_ha_check_event(mgr));
 
-                spin_lock(&mgr->mgr_lock);
-                schedule_timeout(5 * HZ); 
-                if (mgr->mgr_flags & MGR_SIGNAL) {
-                        spin_unlock(&mgr->mgr_lock);
-                        EXIT;
-                        break;
-                }
-
                 if (mgr->mgr_flags & MGR_STOPPING) {
                         spin_unlock(&mgr->mgr_lock);
+                        CERROR("lustre_hamgr quitting\n"); 
                         EXIT;
                         break;
                 }
 
-                if (mgr->mgr_flags & MGR_EVENT) {
-                        mgr->mgr_flags = MGR_RUNNING;
-
-                        /* FIXME: If we move to an event-driven model,
-                         * we should put the request on the stack of
-                         * mds_handle instead. */
-                        CERROR("MGR event\n"); 
-                        continue;
-                }
-
-                CERROR("unknown break in service");
+                spin_lock(&mgr->mgr_lock);
+                CERROR("lustre_hamgr woken up\n"); 
+                llite_ha_upcall();
+                schedule_timeout(5 * HZ);
                 spin_unlock(&mgr->mgr_lock);
-                EXIT;
-                break;
         }
 
         mgr->mgr_thread = NULL;
         mgr->mgr_flags = MGR_STOPPED;
         wake_up(&mgr->mgr_ctl_waitq);
         CDEBUG(D_NET, "mgr exiting process %d\n", current->pid);
-        return 0;
+        RETURN(0);
 }
 
-
-int llite_ha_setup(struct obd_device *dev, struct lustre_ha_mgr *mgr,
-                   char *name)
+struct lustre_ha_mgr *llite_ha_setup(void)
 {
         struct lustre_ha_thread d;
+        struct lustre_ha_mgr *mgr;
         int rc;
         ENTRY;
 
-        d.dev = dev;
+        PORTAL_ALLOC(mgr, sizeof(*mgr));
+        if (!mgr) { 
+                CERROR("out of memory\n");
+                LBUG();
+                RETURN(NULL); 
+        }
+        INIT_LIST_HEAD(&mgr->mgr_connections_lh);
+        INIT_LIST_HEAD(&mgr->mgr_troubled_lh);
+        spin_lock_init(&mgr->mgr_lock); 
+
         d.mgr = mgr;
-        d.name = name;
+        d.name = "lustre_hamgr";
 
         init_waitqueue_head(&mgr->mgr_waitq);
-
         init_waitqueue_head(&mgr->mgr_ctl_waitq);
+
         rc = kernel_thread(llite_ha_main, (void *) &d,
                            CLONE_VM | CLONE_FS | CLONE_FILES);
         if (rc < 0) {
                 CERROR("cannot start thread\n");
-                RETURN(-EINVAL);
+                RETURN(NULL);
         }
         wait_event(mgr->mgr_ctl_waitq, mgr->mgr_flags & MGR_RUNNING);
 
-        RETURN(0);
+        RETURN(mgr);
 }
 
 
@@ -139,5 +170,6 @@ int llite_ha_cleanup(struct lustre_ha_mgr *mgr)
         wake_up(&mgr->mgr_waitq);
         wait_event_interruptible(mgr->mgr_ctl_waitq,
                                  (mgr->mgr_flags & MGR_STOPPED));
-        return 0;
+        PORTAL_FREE(mgr, sizeof(*mgr));
+        RETURN(0);
 }

@@ -41,6 +41,8 @@ extern struct address_space_operations ll_aops;
 extern struct address_space_operations ll_dir_aops;
 struct super_operations ll_super_operations;
 
+static struct lustre_ha_mgr *llite_ha_mgr;
+
 static char *ll_read_opt(const char *opt, char *data)
 {
         char *value;
@@ -134,7 +136,7 @@ static struct super_block * ll_read_super(struct super_block *sb,
         }
 
         /* the first parameter should become an mds device no */
-        ptlrpc_init_client(-1, MDS_REQUEST_PORTAL, MDC_REPLY_PORTAL,
+        ptlrpc_init_client(llite_ha_mgr, MDS_REQUEST_PORTAL, MDC_REPLY_PORTAL,
                            &sbi->ll_mds_client);
         err = ptlrpc_connect_client("mds", &sbi->ll_mds_client,
                                     &sbi->ll_mds_peer);
@@ -145,6 +147,7 @@ static struct super_block * ll_read_super(struct super_block *sb,
 
         sbi->ll_super = sb;
         sbi->ll_rootino = 2;
+        sbi->ll_ha_mgr = llite_ha_mgr;
 
         sb->s_maxbytes = 1LL << 36;
         sb->s_blocksize = PAGE_SIZE;
@@ -419,13 +422,15 @@ static int __init init_lustre_lite(void)
         if (ll_file_data_slab == NULL)
                 return -ENOMEM;
 
+        llite_ha_mgr = llite_ha_setup();
         return register_filesystem(&lustre_lite_fs_type);
 }
 
 static void __exit exit_lustre_lite(void)
 {
-        kmem_cache_destroy(ll_file_data_slab);
         unregister_filesystem(&lustre_lite_fs_type);
+        llite_ha_cleanup(llite_ha_mgr);
+        kmem_cache_destroy(ll_file_data_slab);
         obd_unregister_type(LUSTRE_LITE_NAME);
 }
 

@@ -583,15 +583,15 @@ static int osc_setup(struct obd_device *obddev, obd_count len,
         struct osc_obd *osc = &obddev->u.osc;
         struct obd_ioctl_data *data = (struct obd_ioctl_data *)buf;
         int rc;
-        int dev = data->ioc_dev;
         ENTRY;
 
         OBD_ALLOC(osc->osc_client, sizeof(*osc->osc_client));
         if (osc->osc_client == NULL)
                 RETURN(-ENOMEM);
 
-        ptlrpc_init_client(dev, OST_REQUEST_PORTAL, OSC_REPLY_PORTAL,
+        ptlrpc_init_client(NULL, OST_REQUEST_PORTAL, OSC_REPLY_PORTAL,
                                    osc->osc_client);
+
         rc = ptlrpc_connect_client("ost", osc->osc_client, &osc->osc_peer);
 
         if (rc == 0)

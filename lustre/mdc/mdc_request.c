@@ -240,7 +240,7 @@ static int request_ioctl(struct inode *inode, struct file *file,
                 RETURN(-EINVAL);
         }
 
-        ptlrpc_init_client(-1, MDS_REQUEST_PORTAL, MDC_REPLY_PORTAL, &cl);
+        ptlrpc_init_client(NULL, MDS_REQUEST_PORTAL, MDC_REPLY_PORTAL, &cl);
         err = ptlrpc_connect_client("mds", &cl, &peer);
         if (err) {
                 CERROR("cannot create client\n");

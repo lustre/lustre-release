@@ -33,11 +33,35 @@
 #include <linux/obd_class.h>
 #include <linux/lustre_net.h>
 
-void ptlrpc_init_client(int dev, int req_portal, int rep_portal,
-                        struct ptlrpc_client *cl)
+void llite_ha_conn_manage(struct lustre_ha_mgr *mgr, struct ptlrpc_client *cli)
+{
+        ENTRY;
+        cli->cli_ha_mgr = mgr;
+        spin_lock(&mgr->mgr_lock);
+        list_add(&cli->cli_ha_item, &mgr->mgr_connections_lh); 
+        spin_unlock(&mgr->mgr_lock); 
+        EXIT;
+}
+
+void llite_ha_conn_fail(struct ptlrpc_client *cli)
+{
+        ENTRY;
+        spin_lock(&cli->cli_ha_mgr->mgr_lock);
+        list_del(&cli->cli_ha_item);
+        list_add(&cli->cli_ha_item, &cli->cli_ha_mgr->mgr_troubled_lh); 
+        spin_unlock(&cli->cli_ha_mgr->mgr_lock); 
+        wake_up(&cli->cli_ha_mgr->mgr_waitq);
+        EXIT;
+}
+
+void ptlrpc_init_client(struct lustre_ha_mgr *mgr, int req_portal, int rep_portal,
+                          struct ptlrpc_client *cl)
 {
         memset(cl, 0, sizeof(*cl));
         spin_lock_init(&cl->cli_lock);
+        cl->cli_ha_mgr = mgr;
+        if (mgr)
+                llite_ha_conn_manage(mgr, cl);
         cl->cli_xid = 1;
         cl->cli_generation = 1;
         cl->cli_epoch = 1;
@@ -100,12 +124,16 @@ struct ptlrpc_request *ptlrpc_prep_req(struct ptlrpc_client *cl,
                 CERROR("cannot pack request %d\n", rc);
                 RETURN(NULL);
         }
+        request->rq_time = CURRENT_TIME;
         request->rq_type = PTL_RPC_REQUEST;
         memcpy(&request->rq_peer, peer, sizeof(*peer));
         request->rq_reqmsg = (struct lustre_msg *)request->rq_reqbuf;
         request->rq_reqmsg->opc = HTON__u32(opcode);
         request->rq_reqmsg->xid = HTON__u32(request->rq_xid);
         request->rq_reqmsg->type = HTON__u32(request->rq_type);
+        request->rq_client = cl;
+        request->rq_req_portal = cl->cli_request_portal;
+        request->rq_reply_portal = cl->cli_reply_portal;
 
         RETURN(request);
 }
@@ -124,9 +152,17 @@ static int ptlrpc_check_reply(struct ptlrpc_request *req)
 {
         int rc = 0;
 
+        schedule_timeout(3 * HZ);  /* 3 second timeout */
         if (req->rq_repbuf != NULL) {
                 req->rq_flags = PTL_RPC_REPLY;
                 GOTO(out, rc = 1);
+        }
+
+        if (CURRENT_TIME - req->rq_time >= 3) { 
+                CERROR("-- REQ TIMEOUT --\n"); 
+                if (req->rq_client && req->rq_client->cli_ha_mgr)
+                        llite_ha_conn_fail(req->rq_client); 
+                return 0;
         }
 
         if (sigismember(&(current->pending.signal), SIGKILL) ||
@@ -195,9 +231,6 @@ int ptlrpc_queue_wait(struct ptlrpc_client *cl, struct ptlrpc_request *req)
 
         init_waitqueue_head(&req->rq_wait_for_rep);
 
-        req->rq_client = cl;
-        req->rq_req_portal = cl->cli_request_portal;
-        req->rq_reply_portal = cl->cli_reply_portal;
         rc = ptl_send_rpc(req, cl);
         if (rc) {
                 CERROR("error %d, opcode %d\n", rc, req->rq_reqmsg->opc);

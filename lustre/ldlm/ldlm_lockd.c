@@ -237,7 +237,19 @@ static int ldlm_iocontrol(int cmd, struct obd_conn *conn, int len, void *karg,
         if (_IOC_TYPE(cmd) != IOC_LDLM_TYPE || _IOC_NR(cmd) < IOC_LDLM_MIN_NR ||
             _IOC_NR(cmd) > IOC_LDLM_MAX_NR) {
                 CDEBUG(D_IOCTL, "invalid ioctl ( type %d, nr %d, size %d )\n",
-                       _IOC_TYPE(cmd), _IOC_NR(cmd), _IOC_SIZE(cmd));
+                                _IOC_TYPE(cmd), _IOC_NR(cmd), _IOC_SIZE(cmd));
+                EXIT;
+                return -EINVAL;
+        }
+
+#if 0
+        /* XX phil -- put the peer back in */
+
+        ptlrpc_init_client(NULL, LDLM_REQUEST_PORTAL, LDLM_REPLY_PORTAL, &cl);
+        err = ptlrpc_connect_client("ldlm", &cl, NULL);
+#endif
+        if (err) {
+                CERROR("cannot create client\n");
                 RETURN(-EINVAL);
         }
 

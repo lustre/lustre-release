@@ -28,6 +28,7 @@
 #include <linux/obd_class.h>
 #include <portals/p30.h>
 #include <linux/lustre_idl.h>
+#include <linux/lustre_ha.h>
 
 /* FOO_REQUEST_PORTAL is for incoming requests on the FOO
  * FOO_REPLY_PORTAL   is for incoming replies on the FOO
@@ -79,6 +80,8 @@ struct ptlrpc_client {
         __u32 cli_epoch;       /* changes when peer changes */
         __u32 cli_bootcount;   /* peer's boot count */ 
         struct semaphore cli_rpc_sem;
+        struct list_head cli_ha_item; 
+        struct lustre_ha_mgr *cli_ha_mgr;
 };
 
 /* These do double-duty in rq_type and rq_flags */
@@ -112,6 +115,7 @@ struct ptlrpc_request {
         char *rq_bulkbuf;
         int rq_bulklen;
 
+        time_t rq_time;
         void * rq_reply_handle;
         wait_queue_head_t rq_wait_for_rep;
 
@@ -199,8 +203,8 @@ int ptl_send_rpc(struct ptlrpc_request *request, struct ptlrpc_client *cl);
 void ptlrpc_link_svc_me(struct ptlrpc_service *service, int i);
 
 /* rpc/client.c */
-void ptlrpc_init_client(int dev, int req_portal, int rep_portal,
-                        struct ptlrpc_client *cl);
+void ptlrpc_init_client(struct lustre_ha_mgr *mgr, int req_portal, int rep_portal,
+                       struct ptlrpc_client *cl);
 int ptlrpc_connect_client(char *uuid, struct ptlrpc_client *cl,
                           struct lustre_peer *peer);
 int ptlrpc_queue_wait(struct ptlrpc_client *cl, struct ptlrpc_request *req);
