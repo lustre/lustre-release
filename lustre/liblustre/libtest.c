@@ -47,7 +47,7 @@ void init_current(int argc, char **argv)
 
 }
 
-extern ptl_nid_t tcpnal_mynid;
+ptl_nid_t tcpnal_mynid;
 
 int init_lib_portals(struct pingcli_args *args)
 {
