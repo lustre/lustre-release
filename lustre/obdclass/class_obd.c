@@ -451,7 +451,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
         }
 
         case OBD_IOC_CREATE: {
-                struct lov_stripe_md *ea;
+                struct lov_stripe_md *ea = NULL;
                 obd_data2conn(&conn, data);
 
 
