@@ -156,18 +156,18 @@ static struct llog_operations lov_size_repl_logops = {
 
 
 int lov_llog_init(struct obd_device *obd, struct obd_device *tgt,
-                  int count, struct llog_logid *logid)
+                  int count, struct llog_catid *logid)
 {
         struct lov_obd *lov = &obd->u.lov;
         int i, rc = 0;
         ENTRY;
-        
+
         rc = llog_setup(obd, LLOG_UNLINK_ORIG_CTXT, tgt, 0, NULL,
                         &lov_unlink_orig_logops);
         if (rc)
                 RETURN(rc);
 
-        rc = llog_setup(obd, LLOG_SIZE_REPL_CTXT, tgt, 0, NULL, 
+        rc = llog_setup(obd, LLOG_SIZE_REPL_CTXT, tgt, 0, NULL,
                         &lov_size_repl_logops);
         if (rc)
                 RETURN(rc);
