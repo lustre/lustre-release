@@ -35,8 +35,8 @@
 #include <linux/pagemap.h>
 #include <linux/mm.h>
 
-/* PG_lru is shorthand for rmap, we want free_high/low here.. */
-#ifdef PG_lru
+/* PG_inactive_clean is shorthand for rmap, we want free_high/low here.. */
+#ifdef PG_inactive_clean
 #include <linux/mm_inline.h>
 #endif
 
@@ -232,7 +232,7 @@ static void ll_brw_pages_unlock( struct inode *inode,
         EXIT;
 }
 
-#ifndef ALL_ZONES
+#ifndef PG_inactive_clean
 #ifdef CONFIG_DISCONTIGMEM
 #error "sorry, we don't support DISCONTIGMEM yet"
 #endif
@@ -268,12 +268,12 @@ static int zones_need_balancing(void)
  *
  * 2.5 gets this right, see the {inc,dec}_page_state(nr_dirty, )
  */
-static int should_writeback(void) 
+static int should_writeback(void)
 {
-#ifdef ALL_ZONES
+#ifdef PG_inactive_clean
         if (free_high(ALL_ZONES) > 0 || free_low(ANY_ZONE) > 0)
 #else
-        if ( zones_need_balancing() )
+        if (zones_need_balancing())
 #endif
                 return 1;
         return 0;
