@@ -127,7 +127,7 @@ cobd_disconnect (struct lustre_handle *conn)
 
 static int
 cobd_get_info(struct lustre_handle *conn, obd_count keylen,
-              void *key, obd_count *vallen, void **val)
+              void *key, __u32 *vallen, void *val)
 {
         struct obd_device *obd = class_conn2obd(conn);
         struct cache_obd  *cobd;
@@ -141,8 +141,7 @@ cobd_get_info(struct lustre_handle *conn, obd_count keylen,
 
         /* intercept cache utilisation info? */
 
-        return (obd_get_info (&cobd->cobd_target,
-                              keylen, key, vallen, val));
+        return obd_get_info(&cobd->cobd_target, keylen, key, vallen, val);
 }
 
 static int
