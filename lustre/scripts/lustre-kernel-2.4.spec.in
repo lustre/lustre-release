@@ -47,6 +47,7 @@ Summary: The Linux kernel (the core of the Linux operating system)
 %define buildjensen 0
 %define buildsmp 0
 %define buildup 0
+%define buildsrc 0
 
 %ifarch @BASE_ARCHS@
 %define buildbase 1
@@ -338,6 +339,22 @@ BuildKernel()
 	-- @CONFIGURE_FLAGS@
 }
 
+BuildLustre()
+{
+  target_config=${1:+--target-config $1}
+  sh -x ./scripts/lmake \
+	--build-lustre \
+	--install-lustre \
+	--target @LUSTRE_TARGET@ \
+	--target-arch %{_target_cpu} \
+	${target_config} \
+	--extraversion %{kextraver} \
+	--kerneldir $RPM_SOURCE_DIR \
+	-j $RPM_BUILD_NCPUS \
+	--destdir $RPM_BUILD_ROOT \
+	-- @CONFIGURE_FLAGS@
+}
+
 SaveHeaders()
 {
   sh -x ./scripts/lmake \
@@ -366,8 +383,10 @@ BuildKernel smp
 %endif
 
 # we want this one last, so that it is the one populating /usr/bin
-%if %{buildup} || %{buildbase}
+%if %{buildup} && %{buildbase}
 BuildKernel
+%elseif %{buildbase}
+BuildLustre
 %endif
 
 %if %{buildbase}

@@ -1621,9 +1621,9 @@ Index: linux-2.4.19-pre1/include/linux/dcache.h
 +	void (*d_unpin)(struct dentry *, struct vfsmount *, int);
  };
  
-+#define PIN(de,mnt,flag)  if (de->d_op && de->d_op->d_pin) \
++#define PIN(de,mnt,flag)  if (de && de->d_op && de->d_op->d_pin) \
 +				de->d_op->d_pin(de, mnt, flag);
-+#define UNPIN(de,mnt,flag)  if (de->d_op && de->d_op->d_unpin) \
++#define UNPIN(de,mnt,flag)  if (de && de->d_op && de->d_op->d_unpin) \
 +				de->d_op->d_unpin(de, mnt, flag);
 +
 +
