@@ -352,37 +352,11 @@ out_bulk:
 out_local:
         OBD_FREE(local_nb, sizeof(*local_nb) * niocount);
 out:
-        RETURN(rc);
-}
-
-static int ost_brw_write_cb(struct ptlrpc_bulk_page *bulk)
-{
-        struct obd_ioobj obj;
-        struct niobuf_local lnb;
-        int rc;
-        ENTRY;
-
-        memset(&lnb, 0, sizeof(lnb));
-        memset(&obj, 0, sizeof(obj));
-
-        lnb.page = bulk->b_page;
-        lnb.dentry = bulk->b_dentry;
-        lnb.flags = bulk->b_flags;
-        obj.ioo_bufcnt = 1;
-
-        rc = obd_commitrw(OBD_BRW_WRITE, &bulk->b_desc->b_conn, 1, &obj, 1,
-                          &lnb, bulk->b_desc->b_desc_private);
         if (rc)
-                CERROR("ost_commit_page failed: %d\n", rc);
-
+                ptlrpc_error(obddev->ost_service, req);
+        else
+                ptlrpc_reply(obddev->ost_service, req);
         RETURN(rc);
-}
-
-static void ost_brw_write_finished_cb(struct ptlrpc_bulk_desc *desc, void *data)
-{
-        ENTRY;
-        ptlrpc_free_bulk(desc);
-        EXIT;
 }
 
 static int ost_brw_write(struct ost_obd *obddev, struct ptlrpc_request *req)
@@ -396,6 +370,7 @@ static int ost_brw_write(struct ost_obd *obddev, struct ptlrpc_request *req)
         int cmd, rc, i, j, objcount, niocount, size[2] = {sizeof(*body)};
         void *tmp1, *tmp2, *end2;
         void *desc_priv = NULL;
+        int reply_sent = 0;
         ENTRY;
 
         body = lustre_msg_buf(req->rq_reqmsg, 0);
@@ -440,7 +415,7 @@ static int ost_brw_write(struct ost_obd *obddev, struct ptlrpc_request *req)
         desc = ptlrpc_prep_bulk(req->rq_connection);
         if (desc == NULL)
                 GOTO(fail_preprw, rc = -ENOMEM);
-        desc->b_cb = ost_brw_write_finished_cb;
+        desc->b_cb = NULL;
         desc->b_portal = OSC_BULK_PORTAL;
         desc->b_desc_private = desc_priv;
         memcpy(&(desc->b_conn), &conn, sizeof(conn));
@@ -462,7 +437,7 @@ static int ost_brw_write(struct ost_obd *obddev, struct ptlrpc_request *req)
                 bulk->b_flags = lnb->flags;
                 bulk->b_dentry = lnb->dentry;
                 bulk->b_buflen = PAGE_SIZE;
-                bulk->b_cb = ost_brw_write_cb;
+                bulk->b_cb = NULL;
 
                 /* this advances remote_nb */
                 ost_pack_niobuf((void **)&remote_nb, lnb->offset, lnb->len, 0,
@@ -473,10 +448,25 @@ static int ost_brw_write(struct ost_obd *obddev, struct ptlrpc_request *req)
         if (rc)
                 GOTO(fail_bulk, rc);
 
+        reply_sent = 1;
+        ptlrpc_reply(obddev->ost_service, req);
+
+        wait_event_interruptible(desc->b_waitq,
+                                 desc->b_flags & PTL_BULK_FL_RCVD);
+
+        rc = obd_commitrw(cmd, &conn, objcount, tmp1, niocount, local_nb,
+                          desc->b_desc_private);
+        ptlrpc_free_bulk(desc);
         EXIT;
 out_free:
         OBD_FREE(local_nb, niocount * sizeof(*local_nb));
 out:
+        if (!reply_sent) {
+                if (rc)
+                        ptlrpc_error(obddev->ost_service, req);
+                else
+                        ptlrpc_reply(obddev->ost_service, req);
+        }
         return rc;
 
 fail_bulk:
@@ -577,7 +567,8 @@ static int ost_handle(struct obd_device *obddev, struct ptlrpc_service *svc,
                 CDEBUG(D_INODE, "brw\n");
                 OBD_FAIL_RETURN(OBD_FAIL_OST_BRW_NET, 0);
                 rc = ost_brw(ost, req);
-                break;
+                /* ost_brw sends its own replies */
+                RETURN(rc);
         case OST_PUNCH:
                 CDEBUG(D_INODE, "punch\n");
                 OBD_FAIL_RETURN(OBD_FAIL_OST_PUNCH_NET, 0);
