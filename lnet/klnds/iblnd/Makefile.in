@@ -1,0 +1,6 @@
+MODULES := kibnal
+kibnal-objs := ibnal.o ibnal_cb.o
+
+EXTRA_PRE_CFLAGS := @IBCPPFLAGS@
+
+@INCLUDE_RULES@
