@@ -58,10 +58,8 @@ static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
 
         MOD_INC_USE_COUNT;
         rc = class_connect(conn, obd, cluuid);
-        if (rc) {
-                MOD_DEC_USE_COUNT;
-                RETURN(rc);
-        }
+        if (rc)
+                GOTO(out_dec, rc);
 
         /* We don't want to actually do the underlying connections more than
          * once, so keep track. */
@@ -193,6 +191,8 @@ static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
         OBD_FREE(lov->tgts, lov->bufsize);
  out_conn:
         class_disconnect(conn);
+ out_dec:
+        MOD_DEC_USE_COUNT;
         goto out;
 }
 
