@@ -6,4 +6,4 @@
 include $(src)/../portals/Kernelenv
 
 obj-y += lov.o
-lov-objs := lov_obd.o lov_pack.o lproc_lov.o lov_log.o lov_offset.o lov_merge.o lov_request.o lov_qos.o
+lov-objs := lov_obd.o lov_pack.o lproc_lov.o lov_log.o
