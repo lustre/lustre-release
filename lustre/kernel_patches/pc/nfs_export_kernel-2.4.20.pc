@@ -1,0 +1,8 @@
+fs/file_table.c
+fs/inode.c
+fs/namei.c
+fs/nfsd/nfsfh.c
+fs/nfsd/vfs.c
+fs/super.c
+include/linux/fs.h
+kernel/ksyms.c
