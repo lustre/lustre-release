@@ -1,29 +1,7 @@
- MAINTAINERS                        |   11 
- arch/i386/Kconfig                  |   17 +
- arch/i386/defconfig                |    1 
- arch/i386/kernel/Makefile          |    1 
- arch/i386/kernel/apic.c            |   54 +++
- arch/i386/kernel/dmi_scan.c        |   27 -
- arch/i386/kernel/entry.S           |    1 
- arch/i386/kernel/i8259.c           |   12 
- arch/i386/kernel/io_apic.c         |    2 
- arch/i386/kernel/machine_kexec.c   |  116 ++++++
- arch/i386/kernel/reboot.c          |   44 --
- arch/i386/kernel/relocate_kernel.S |  107 ++++++
- arch/i386/kernel/smp.c             |   24 +
- include/asm-i386/apic.h            |    3 
- include/asm-i386/apicdef.h         |    1 
- include/asm-i386/kexec.h           |   23 +
- include/asm-i386/unistd.h          |    5 
- include/linux/kexec.h              |   54 +++
- include/linux/reboot.h             |    2 
- kernel/Makefile                    |    1 
- kernel/kexec.c                     |  629 +++++++++++++++++++++++++++++++++++++
- kernel/sys.c                       |   23 +
- 22 files changed, 1089 insertions(+), 69 deletions(-)
+ 0 files changed
 
---- linux-2.6.0-test1/MAINTAINERS~kexec-2.6.0-full	2003-07-22 00:46:07.000000000 -0600
-+++ linux-2.6.0-test1-braam/MAINTAINERS	2003-07-22 00:54:04.000000000 -0600
+--- linux-2.6.0-test1/MAINTAINERS~kexec-2.6.0-full	2003-07-23 12:08:43.000000000 +0800
++++ linux-2.6.0-test1-root/MAINTAINERS	2003-07-23 12:08:54.000000000 +0800
 @@ -1095,6 +1095,17 @@ W:	http://nfs.sourceforge.net/
  W:	http://www.cse.unsw.edu.au/~neilb/patches/linux-devel/
  S:	Maintained
@@ -42,8 +20,8 @@
  LANMEDIA WAN CARD DRIVER
  P:	Andrew Stanley-Jones
  M:	asj@lanmedia.com
---- linux-2.6.0-test1/arch/i386/Kconfig~kexec-2.6.0-full	2003-07-22 00:52:14.000000000 -0600
-+++ linux-2.6.0-test1-braam/arch/i386/Kconfig	2003-07-22 00:54:04.000000000 -0600
+--- linux-2.6.0-test1/arch/i386/Kconfig~kexec-2.6.0-full	2003-07-23 12:08:52.000000000 +0800
++++ linux-2.6.0-test1-root/arch/i386/Kconfig	2003-07-23 12:08:54.000000000 +0800
 @@ -804,6 +804,23 @@ config BOOT_IOREMAP
  	depends on ((X86_SUMMIT || X86_GENERICARCH) && NUMA)
  	default y
@@ -68,8 +46,8 @@
  endmenu
  
  
---- linux-2.6.0-test1/arch/i386/defconfig~kexec-2.6.0-full	2003-07-13 21:35:57.000000000 -0600
-+++ linux-2.6.0-test1-braam/arch/i386/defconfig	2003-07-22 00:54:04.000000000 -0600
+--- linux-2.6.0-test1/arch/i386/defconfig~kexec-2.6.0-full	2003-07-14 11:35:57.000000000 +0800
++++ linux-2.6.0-test1-root/arch/i386/defconfig	2003-07-23 12:08:54.000000000 +0800
 @@ -72,6 +72,7 @@ CONFIG_SMP=y
  CONFIG_X86_LOCAL_APIC=y
  CONFIG_X86_IO_APIC=y
@@ -78,8 +56,8 @@
  CONFIG_X86_MCE=y
  # CONFIG_X86_MCE_NONFATAL is not set
  CONFIG_X86_MCE_P4THERMAL=y
---- linux-2.6.0-test1/arch/i386/kernel/Makefile~kexec-2.6.0-full	2003-07-22 00:46:03.000000000 -0600
-+++ linux-2.6.0-test1-braam/arch/i386/kernel/Makefile	2003-07-22 00:54:04.000000000 -0600
+--- linux-2.6.0-test1/arch/i386/kernel/Makefile~kexec-2.6.0-full	2003-07-23 12:08:31.000000000 +0800
++++ linux-2.6.0-test1-root/arch/i386/kernel/Makefile	2003-07-23 12:08:54.000000000 +0800
 @@ -25,6 +25,7 @@ obj-$(CONFIG_X86_TRAMPOLINE)	+= trampoli
  obj-$(CONFIG_X86_MPPARSE)	+= mpparse.o
  obj-$(CONFIG_X86_LOCAL_APIC)	+= apic.o nmi.o
@@ -88,8 +66,8 @@
  obj-$(CONFIG_SOFTWARE_SUSPEND)	+= suspend.o suspend_asm.o
  obj-$(CONFIG_X86_NUMAQ)		+= numaq.o
  obj-$(CONFIG_X86_SUMMIT)	+= summit.o
---- linux-2.6.0-test1/arch/i386/kernel/apic.c~kexec-2.6.0-full	2003-07-22 00:46:03.000000000 -0600
-+++ linux-2.6.0-test1-braam/arch/i386/kernel/apic.c	2003-07-22 00:54:04.000000000 -0600
+--- linux-2.6.0-test1/arch/i386/kernel/apic.c~kexec-2.6.0-full	2003-07-23 12:08:30.000000000 +0800
++++ linux-2.6.0-test1-root/arch/i386/kernel/apic.c	2003-07-23 12:08:54.000000000 +0800
 @@ -26,6 +26,7 @@
  #include <linux/mc146818rtc.h>
  #include <linux/kernel_stat.h>
@@ -165,8 +143,8 @@
  /*
   * This initializes the IO-APIC and APIC hardware if this is
   * a UP kernel.
---- linux-2.6.0-test1/arch/i386/kernel/dmi_scan.c~kexec-2.6.0-full	2003-07-13 21:32:44.000000000 -0600
-+++ linux-2.6.0-test1-braam/arch/i386/kernel/dmi_scan.c	2003-07-22 00:54:04.000000000 -0600
+--- linux-2.6.0-test1/arch/i386/kernel/dmi_scan.c~kexec-2.6.0-full	2003-07-14 11:32:44.000000000 +0800
++++ linux-2.6.0-test1-root/arch/i386/kernel/dmi_scan.c	2003-07-23 12:08:54.000000000 +0800
 @@ -222,31 +222,6 @@ static __init int set_bios_reboot(struct
  	return 0;
  }
@@ -208,8 +186,8 @@
  			MATCH(DMI_SYS_VENDOR, "Dell Computer Corporation"),
  			MATCH(DMI_PRODUCT_NAME, "PowerEdge 1300/"),
  			NO_MATCH, NO_MATCH
---- linux-2.6.0-test1/arch/i386/kernel/entry.S~kexec-2.6.0-full	2003-07-22 00:46:03.000000000 -0600
-+++ linux-2.6.0-test1-braam/arch/i386/kernel/entry.S	2003-07-22 00:54:27.000000000 -0600
+--- linux-2.6.0-test1/arch/i386/kernel/entry.S~kexec-2.6.0-full	2003-07-23 12:08:30.000000000 +0800
++++ linux-2.6.0-test1-root/arch/i386/kernel/entry.S	2003-07-23 12:08:54.000000000 +0800
 @@ -905,5 +905,6 @@ ENTRY(sys_call_table)
  	.long sys_tgkill	/* 270 */
  	.long sys_utimes
@@ -217,8 +195,8 @@
 +        .long sys_kexec_load
  
  nr_syscalls=(.-sys_call_table)/4
---- linux-2.6.0-test1/arch/i386/kernel/i8259.c~kexec-2.6.0-full	2003-07-13 21:38:03.000000000 -0600
-+++ linux-2.6.0-test1-braam/arch/i386/kernel/i8259.c	2003-07-22 00:54:04.000000000 -0600
+--- linux-2.6.0-test1/arch/i386/kernel/i8259.c~kexec-2.6.0-full	2003-07-14 11:38:03.000000000 +0800
++++ linux-2.6.0-test1-root/arch/i386/kernel/i8259.c	2003-07-23 12:08:54.000000000 +0800
 @@ -244,9 +244,21 @@ static int i8259A_resume(struct sys_devi
  	return 0;
  }
@@ -241,8 +219,8 @@
  };
  
  static struct sys_device device_i8259A = {
---- linux-2.6.0-test1/arch/i386/kernel/io_apic.c~kexec-2.6.0-full	2003-07-22 00:46:03.000000000 -0600
-+++ linux-2.6.0-test1-braam/arch/i386/kernel/io_apic.c	2003-07-22 00:54:04.000000000 -0600
+--- linux-2.6.0-test1/arch/i386/kernel/io_apic.c~kexec-2.6.0-full	2003-07-23 12:08:30.000000000 +0800
++++ linux-2.6.0-test1-root/arch/i386/kernel/io_apic.c	2003-07-23 12:08:54.000000000 +0800
 @@ -1601,8 +1601,6 @@ void disable_IO_APIC(void)
  	 * Clear the IO-APIC before rebooting:
  	 */
@@ -252,8 +230,8 @@
  }
  
  /*
---- /dev/null	2003-01-30 03:24:37.000000000 -0700
-+++ linux-2.6.0-test1-braam/arch/i386/kernel/machine_kexec.c	2003-07-22 00:54:04.000000000 -0600
+--- /dev/null	2002-08-31 07:31:37.000000000 +0800
++++ linux-2.6.0-test1-root/arch/i386/kernel/machine_kexec.c	2003-07-23 12:08:54.000000000 +0800
 @@ -0,0 +1,116 @@
 +#include <linux/config.h>
 +#include <linux/mm.h>
@@ -371,8 +349,8 @@
 +	rnk = (relocate_new_kernel_t) reboot_code_buffer;
 +	(*rnk)(indirection_page, reboot_code_buffer, image->start);
 +}
---- linux-2.6.0-test1/arch/i386/kernel/reboot.c~kexec-2.6.0-full	2003-07-22 00:46:03.000000000 -0600
-+++ linux-2.6.0-test1-braam/arch/i386/kernel/reboot.c	2003-07-22 00:55:22.000000000 -0600
+--- linux-2.6.0-test1/arch/i386/kernel/reboot.c~kexec-2.6.0-full	2003-07-23 12:08:31.000000000 +0800
++++ linux-2.6.0-test1-root/arch/i386/kernel/reboot.c	2003-07-23 12:08:54.000000000 +0800
 @@ -8,6 +8,7 @@
  #include <linux/interrupt.h>
  #include <linux/mc146818rtc.h>
@@ -456,8 +434,8 @@
  	if (pm_power_off)
  		pm_power_off();
  }
---- /dev/null	2003-01-30 03:24:37.000000000 -0700
-+++ linux-2.6.0-test1-braam/arch/i386/kernel/relocate_kernel.S	2003-07-22 00:54:04.000000000 -0600
+--- /dev/null	2002-08-31 07:31:37.000000000 +0800
++++ linux-2.6.0-test1-root/arch/i386/kernel/relocate_kernel.S	2003-07-23 12:08:54.000000000 +0800
 @@ -0,0 +1,107 @@
 +#include <linux/config.h>
 +#include <linux/linkage.h>
@@ -566,15 +544,15 @@
 +	.globl relocate_new_kernel_size
 +relocate_new_kernel_size:	
 +	.long relocate_new_kernel_end - relocate_new_kernel
---- linux-2.6.0-test1/arch/i386/kernel/smp.c~kexec-2.6.0-full	2003-07-22 00:52:14.000000000 -0600
-+++ linux-2.6.0-test1-braam/arch/i386/kernel/smp.c	2003-07-22 00:54:04.000000000 -0600
+--- linux-2.6.0-test1/arch/i386/kernel/smp.c~kexec-2.6.0-full	2003-07-23 12:08:52.000000000 +0800
++++ linux-2.6.0-test1-root/arch/i386/kernel/smp.c	2003-07-23 12:53:45.000000000 +0800
 @@ -587,6 +587,30 @@ void stop_this_cpu (void * dummy)
  
  void smp_send_stop(void)
  {
 + 	extern int reboot_cpu;
 +	int reboot_cpu_id;
-+
++	
 + 	/* The boot cpu is always logical cpu 0 */
 +	reboot_cpu_id = 0;
 +
@@ -591,7 +569,7 @@
 +	}
 +
 +	/* Make certain I only run on the appropriate processor */
-+	set_cpus_allowed(current, 1 << reboot_cpu_id);
++	set_cpus_allowed(current, cpumask_of_cpu(reboot_cpu_id));
 +
 +	/* O.k. Now that I'm on the appropriate processor stop
 +	 * all of the others.
@@ -599,8 +577,8 @@
  	smp_call_function(stop_this_cpu, NULL, 1, 0);
  
  	local_irq_disable();
---- linux-2.6.0-test1/include/asm-i386/apic.h~kexec-2.6.0-full	2003-07-13 21:38:53.000000000 -0600
-+++ linux-2.6.0-test1-braam/include/asm-i386/apic.h	2003-07-22 00:54:04.000000000 -0600
+--- linux-2.6.0-test1/include/asm-i386/apic.h~kexec-2.6.0-full	2003-07-14 11:38:53.000000000 +0800
++++ linux-2.6.0-test1-root/include/asm-i386/apic.h	2003-07-23 12:08:54.000000000 +0800
 @@ -97,6 +97,9 @@ extern unsigned int nmi_watchdog;
  #define NMI_LOCAL_APIC	2
  #define NMI_INVALID	3
@@ -611,8 +589,8 @@
  #endif /* CONFIG_X86_LOCAL_APIC */
  
  #endif /* __ASM_APIC_H */
---- linux-2.6.0-test1/include/asm-i386/apicdef.h~kexec-2.6.0-full	2003-07-13 21:34:40.000000000 -0600
-+++ linux-2.6.0-test1-braam/include/asm-i386/apicdef.h	2003-07-22 00:54:04.000000000 -0600
+--- linux-2.6.0-test1/include/asm-i386/apicdef.h~kexec-2.6.0-full	2003-07-14 11:34:40.000000000 +0800
++++ linux-2.6.0-test1-root/include/asm-i386/apicdef.h	2003-07-23 12:08:54.000000000 +0800
 @@ -86,6 +86,7 @@
  #define			APIC_LVT_REMOTE_IRR		(1<<14)
  #define			APIC_INPUT_POLARITY		(1<<13)
@@ -621,8 +599,8 @@
  #define			GET_APIC_DELIVERY_MODE(x)	(((x)>>8)&0x7)
  #define			SET_APIC_DELIVERY_MODE(x,y)	(((x)&~0x700)|((y)<<8))
  #define				APIC_MODE_FIXED		0x0
---- /dev/null	2003-01-30 03:24:37.000000000 -0700
-+++ linux-2.6.0-test1-braam/include/asm-i386/kexec.h	2003-07-22 00:54:04.000000000 -0600
+--- /dev/null	2002-08-31 07:31:37.000000000 +0800
++++ linux-2.6.0-test1-root/include/asm-i386/kexec.h	2003-07-23 12:08:54.000000000 +0800
 @@ -0,0 +1,23 @@
 +#ifndef _I386_KEXEC_H
 +#define _I386_KEXEC_H
@@ -647,8 +625,8 @@
 +#define KEXEC_REBOOT_CODE_SIZE	4096
 +
 +#endif /* _I386_KEXEC_H */
---- linux-2.6.0-test1/include/asm-i386/unistd.h~kexec-2.6.0-full	2003-07-22 00:46:07.000000000 -0600
-+++ linux-2.6.0-test1-braam/include/asm-i386/unistd.h	2003-07-22 00:55:57.000000000 -0600
+--- linux-2.6.0-test1/include/asm-i386/unistd.h~kexec-2.6.0-full	2003-07-23 12:08:42.000000000 +0800
++++ linux-2.6.0-test1-root/include/asm-i386/unistd.h	2003-07-23 12:08:54.000000000 +0800
 @@ -278,8 +278,9 @@
  #define __NR_tgkill		270
  #define __NR_utimes		271
@@ -661,8 +639,8 @@
  
  /* user-visible error numbers are in the range -1 - -124: see <asm-i386/errno.h> */
  
---- /dev/null	2003-01-30 03:24:37.000000000 -0700
-+++ linux-2.6.0-test1-braam/include/linux/kexec.h	2003-07-22 00:54:04.000000000 -0600
+--- /dev/null	2002-08-31 07:31:37.000000000 +0800
++++ linux-2.6.0-test1-root/include/linux/kexec.h	2003-07-23 12:08:54.000000000 +0800
 @@ -0,0 +1,54 @@
 +#ifndef LINUX_KEXEC_H
 +#define LINUX_KEXEC_H
@@ -718,8 +696,8 @@
 +#endif
 +#endif /* LINUX_KEXEC_H */
 +
---- linux-2.6.0-test1/include/linux/reboot.h~kexec-2.6.0-full	2003-07-13 21:39:35.000000000 -0600
-+++ linux-2.6.0-test1-braam/include/linux/reboot.h	2003-07-22 00:54:04.000000000 -0600
+--- linux-2.6.0-test1/include/linux/reboot.h~kexec-2.6.0-full	2003-07-14 11:39:35.000000000 +0800
++++ linux-2.6.0-test1-root/include/linux/reboot.h	2003-07-23 12:08:54.000000000 +0800
 @@ -22,6 +22,7 @@
   * POWER_OFF   Stop OS and remove all power from system, if possible.
   * RESTART2    Restart system using given command string.
@@ -736,8 +714,8 @@
  
  
  #ifdef __KERNEL__
---- linux-2.6.0-test1/kernel/Makefile~kexec-2.6.0-full	2003-07-22 00:46:07.000000000 -0600
-+++ linux-2.6.0-test1-braam/kernel/Makefile	2003-07-22 00:54:04.000000000 -0600
+--- linux-2.6.0-test1/kernel/Makefile~kexec-2.6.0-full	2003-07-23 12:08:43.000000000 +0800
++++ linux-2.6.0-test1-root/kernel/Makefile	2003-07-23 12:08:54.000000000 +0800
 @@ -19,6 +19,7 @@ obj-$(CONFIG_PM) += pm.o
  obj-$(CONFIG_CPU_FREQ) += cpufreq.o
  obj-$(CONFIG_BSD_PROCESS_ACCT) += acct.o
@@ -746,8 +724,8 @@
  obj-$(CONFIG_COMPAT) += compat.o
  
  ifneq ($(CONFIG_IA64),y)
---- /dev/null	2003-01-30 03:24:37.000000000 -0700
-+++ linux-2.6.0-test1-braam/kernel/kexec.c	2003-07-22 00:54:04.000000000 -0600
+--- /dev/null	2002-08-31 07:31:37.000000000 +0800
++++ linux-2.6.0-test1-root/kernel/kexec.c	2003-07-23 12:08:54.000000000 +0800
 @@ -0,0 +1,629 @@
 +#include <linux/mm.h>
 +#include <linux/file.h>
@@ -1378,8 +1356,8 @@
 +	kimage_free(image);
 +	return result;
 +}
---- linux-2.6.0-test1/kernel/sys.c~kexec-2.6.0-full	2003-07-22 00:46:07.000000000 -0600
-+++ linux-2.6.0-test1-braam/kernel/sys.c	2003-07-22 00:54:04.000000000 -0600
+--- linux-2.6.0-test1/kernel/sys.c~kexec-2.6.0-full	2003-07-23 12:08:43.000000000 +0800
++++ linux-2.6.0-test1-root/kernel/sys.c	2003-07-23 12:08:54.000000000 +0800
 @@ -17,6 +17,7 @@
  #include <linux/init.h>
  #include <linux/highuid.h>
