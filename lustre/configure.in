@@ -62,7 +62,15 @@ portalsdir_def='$(top_srcdir)/../portals'
 AC_ARG_WITH(portals, [  --with-portals=[path] set path to Portals source (default=../portals)], enable_portalsdir=$withval)
 AC_ARG_ENABLE(portalsdir, [  --enable-portalsdir=[path] (deprecated) set path to Portals source (default=$(top_srcdir)/../portals)],, enable_portalsdir=$portalsdir_def)
 PORTALS=$enable_portalsdir
+
+if test $PORTALS = $portalsdir_def; then
+	PORTALSLOC='../portals'
+else
+	PORTALSLOC=$PORTALS
+fi
+
 AC_SUBST(PORTALS)
+AC_SUBST(PORTALSLOC)
 
 portalslib_def=$enable_portalsdir/linux/utils
 AC_ARG_WITH(portalslib, [  --with-portalslib=[path] set path to Portals library (default=../portals/linux/utils)], enable_portalslib=$withval)
@@ -120,6 +128,8 @@ AC_SUBST(demodir)
 
 AC_OUTPUT(Makefile lib/Makefile ldlm/Makefile obdecho/Makefile ptlrpc/Makefile \
 	lov/Makefile osc/Makefile mdc/Makefile mds/Makefile ost/Makefile \
-	utils/Makefile tests/Makefile obdfilter/Makefile obdclass/Makefile \
+	utils/Makefile utils/lconf tests/Makefile obdfilter/Makefile obdclass/Makefile \
 	llite/Makefile doc/Makefile scripts/Makefile \
 	scripts/lustre.spec extN/Makefile)
+
+chmod +x utils/lconf
