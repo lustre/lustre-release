@@ -14,6 +14,13 @@ assert_env() {
     [ $failed ] && exit 1 || true
 }
 
+usage() {
+    echo "usage: $0 [-r] [-f cfgfile]"
+    echo "       -r: reformat"
+
+    exit
+}
+
 init_test_env() {
     export LUSTRE=`absolute_path $LUSTRE`
     export TESTSUITE=`basename $0 .sh`
@@ -33,14 +40,13 @@ init_test_env() {
     export RPWD=${RPWD:-$PWD}
 
     # command line
-    set - - `getopt -o r -l config,reformat -- $*`
     
-    for i in $*; do
-	case $i in
-		--config) CONFIG=$2; shift;;
-	    -r|--reformat) REFORMAT=--reformat;;
+    while getopts "rf:" opt $*; do 
+	case $opt in
+	    f) CONFIG=$OPTARG;;
+	    r) REFORMAT=--reformat;;
+	    \?) usage;;
 	esac
-	shift
     done
     
     # save the name of the config file for the upcall
@@ -202,11 +208,16 @@ change_active() {
     echo "$activevar=${!activevar}" > ./$activevar
 }
 
+do_node() {
+    HOST=$1
+    shift
+    $PDSH $HOST "(PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests; cd $RPWD; sh -c \"$@\")"
+}
 do_facet() {
     facet=$1
     shift
     HOST=`facet_active_host $facet`
-    $PDSH $HOST "(PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests; cd $RPWD; sh -c \"$@\")"
+    do_node $HOST $@
 }
 
 add_facet() {
