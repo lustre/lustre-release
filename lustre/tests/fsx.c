@@ -127,7 +127,6 @@ int 	mapped_reads = 1;		/* -R flag disables it */
 int	fsxgoodfd = 0;
 FILE *	fsxlogf = NULL;
 int badoff = -1;
-int closeopen = 0;
 
 
 void
@@ -182,8 +181,6 @@ log4(int operation, int arg0, int arg1, int arg2, struct timeval *tv)
 	le = &oplog[logptr];
 	le->tv = *tv;
 	le->operation = operation;
-	if (closeopen)
-		le->operation = ~ le->operation;
 	le->args[0] = arg0;
 	le->args[1] = arg1;
 	le->args[2] = arg2;
@@ -213,14 +210,12 @@ logdump(void)
 
 		opnum = i+1 + (logcount/LOGSIZE)*LOGSIZE;
 		lp = &oplog[i];
-		prt("%d(%d mod 256): %lu.%06lu ", opnum, opnum%256,
+		prt("%d: %lu.%06lu ", opnum,
 		    lp->tv.tv_sec, lp->tv.tv_usec);
-		if ((closeopen = lp->operation < 0))
-			lp->operation = ~ lp->operation;
 
 		switch (lp->operation) {
 		case OP_MAPREAD:
-			prt("MAPREAD\t0x%x thru 0x%x (0x%x bytes)",
+			prt("MAPREAD  0x%x thru 0x%x (0x%x bytes)",
 			    lp->args[0], lp->args[0] + lp->args[1] - 1,
 			    lp->args[1]);
 			if (badoff >= lp->args[0] && badoff <
@@ -236,7 +231,7 @@ logdump(void)
 				prt("\t******WWWW");
 			break;
 		case OP_READ:
-			prt("READ\t0x%x thru 0x%x (0x%x bytes)",
+			prt("READ     0x%x thru 0x%x (0x%x bytes)",
 			    lp->args[0], lp->args[0] + lp->args[1] - 1,
 			    lp->args[1]);
 			if (badoff >= lp->args[0] &&
@@ -244,7 +239,7 @@ logdump(void)
 				prt("\t***RRRR***");
 			break;
 		case OP_WRITE:
-			prt("WRITE\t0x%x thru 0x%x (0x%x bytes)",
+			prt("WRITE    0x%x thru 0x%x (0x%x bytes)",
 			    lp->args[0], lp->args[0] + lp->args[1] - 1,
 			    lp->args[1]);
 			if (lp->args[0] > lp->args[2])
@@ -263,6 +258,9 @@ logdump(void)
 			    badoff < lp->args[!!down])
 				prt("\t******WWWW");
 			break;
+		case OP_CLOSEOPEN:
+			prt("CLOSE/OPEN");
+			break;
 		case OP_SKIPPED:
 			prt("SKIPPED (no operation)");
 			break;
@@ -270,8 +268,6 @@ logdump(void)
 			prt("BOGUS LOG ENTRY (operation code = %d)!",
 			    lp->operation);
 		}
-		if (closeopen)
-			prt("\n\t\tCLOSE/OPEN");
 		prt("\n");
 		i++;
 		if (i == LOGSIZE)
@@ -821,9 +817,9 @@ docloseopen(void)
 	if (testcalls <= simulatedopcount)
 		return;
 
+	gettimeofday(&t, NULL);
 	log4(OP_CLOSEOPEN, file_size, (unsigned)file_size, 0, &t);
 
-	gettimeofday(&t, NULL);
 	if (debug)
 		prt("%06lu %lu.%06lu close/open\n", testcalls, t.tv_sec,
 		    t.tv_usec);
@@ -864,9 +860,6 @@ test(void)
 		writefileimage();
 
 	testcalls++;
-
-	if (closeprob)
-		closeopen = (rv >> 3) < (1 << 28) / closeprob;
 
 	if (debugstart > 0 && testcalls >= debugstart)
 		debug = 1;
@@ -914,7 +907,7 @@ test(void)
 	}
 	if (sizechecks && testcalls > simulatedopcount)
 		check_size();
-	if (closeopen)
+	if (closeprob && (rv >> 3) < (1 << 28) / closeprob)
 		docloseopen();
 }
 
