@@ -443,6 +443,7 @@ AM_CONDITIONAL(SNAPFS, test x$enable_snapfs = xyes)
 AM_CONDITIONAL(SMFS, test x$enable_smfs = xyes)
 AM_CONDITIONAL(GSS, test x$enable_gss = xyes)
 AM_CONDITIONAL(LIBLUSTRE, test x$enable_liblustre = xyes)
+AM_CONDITIONAL(LIBLUSTRE_TESTS, test x$enable_liblustre_tests = xyes)
 AM_CONDITIONAL(MPITESTS, test x$enable_mpitests = xyes, Build MPI Tests)
 ])
 

@@ -68,8 +68,8 @@ void ptlrpc_run_recovery_over_upcall(struct obd_device *obd)
                        argv[0], argv[1], argv[2], rc);
 
         } else {
-                CERROR("Invoked upcall %s %s %s\n",
-                       argv[0], argv[1], argv[2]);
+                CWARN("Invoked upcall %s %s %s\n",
+                      argv[0], argv[1], argv[2]);
         }
 }
 
@@ -109,8 +109,8 @@ void ptlrpc_run_failed_import_upcall(struct obd_import* imp)
                        argv[0], argv[1], argv[2], argv[3], argv[4],rc);
 
         } else {
-                CERROR("Invoked upcall %s %s %s %s %s\n",
-                       argv[0], argv[1], argv[2], argv[3], argv[4]);
+                CWARN("Invoked upcall %s %s %s %s %s\n",
+                      argv[0], argv[1], argv[2], argv[3], argv[4]);
         }
 #else
         if (imp->imp_state == LUSTRE_IMP_CLOSED) {
@@ -289,13 +289,12 @@ void ptlrpc_request_handle_notconn(struct ptlrpc_request *failed_req)
                 rc = ptlrpc_connect_import(imp, NULL);
         }
 
-        
         /* Wait for recovery to complete and resend. If evicted, then
            this request will be errored out later.*/
         spin_lock_irqsave(&failed_req->rq_lock, flags);
         failed_req->rq_resend = 1;
         spin_unlock_irqrestore(&failed_req->rq_lock, flags);
-        
+
         EXIT;
 }
 
@@ -314,10 +313,12 @@ int ptlrpc_set_import_active(struct obd_import *imp, int active)
          * requests. */
         if (!active) {
                 ptlrpc_invalidate_import(imp, 0);
-        } 
+                imp->imp_deactive = 1;
+        }
 
         /* When activating, mark import valid, and attempt recovery */
         if (active) {
+                imp->imp_deactive = 0;
                 CDEBUG(D_HA, "setting import %s VALID\n",
                        imp->imp_target_uuid.uuid);
                 rc = ptlrpc_recover_import(imp, NULL);
@@ -330,10 +331,10 @@ int ptlrpc_recover_import(struct obd_import *imp, char *new_uuid)
 {
         int rc;
         ENTRY;
-        
+
         /* force import to be disconnected. */
         ptlrpc_set_import_discon(imp);
-        
+
         rc = ptlrpc_recover_import_no_retry(imp, new_uuid);
 
         RETURN(rc);

@@ -25,13 +25,18 @@
 #define LIBLUSTRE_H__
 
 #include <sys/mman.h>
-#ifndef  __CYGWIN__
-#include <stdint.h>
-#include <asm/page.h>
-#else
-#include <sys/types.h>
-#include "ioctl.h"
+#ifdef HAVE_STDINT_H
+# include <stdint.h>
 #endif
+#ifdef HAVE_ASM_PAGE_H
+# include <asm/page.h>
+#endif
+#ifdef HAVE_SYS_USER_H
+# include <sys/user.h>
+#endif
+
+#include "ioctl.h"
+
 #include <stdio.h>
 #include <sys/ioctl.h>
 #include <stdlib.h>
@@ -625,6 +630,7 @@ static inline int schedule_timeout(signed long t)
 }
 
 #define lock_kernel() do {} while (0)
+#define unlock_kernel() do {} while (0)
 #define daemonize(l) do {} while (0)
 #define sigfillset(l) do {} while (0)
 #define recalc_sigpending(l) do {} while (0)
@@ -785,6 +791,5 @@ int liblustre_wait_event(int timeout);
 #include <linux/lustre_import.h>
 #include <linux/lustre_export.h>
 #include <linux/lustre_net.h>
-
 
 #endif

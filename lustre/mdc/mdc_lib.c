@@ -150,3 +150,28 @@ void mdc_close_pack(struct ptlrpc_request *req, int offset, struct obdo *oa,
                 body->valid |= OBD_MD_FLFLAGS;
         }
 }
+
+/* 
+ * these methods needed for saying higher levels that MDC does not pack/unpack
+ * any EAs. This is needed to have real abstraction and do not try to recognize
+ * what OBD type is to avoid calling these methods on it, as they may not be
+ * implemented.
+ *
+ * Sometimes pack/unpack calls happen to MDC too. This is for instance default
+ * striping info for directories and our goal here is to skip them with no
+ * errors or any complains.
+ */
+int mdc_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
+               struct lov_stripe_md *lsm)
+{
+        ENTRY;
+        RETURN(0);
+}
+
+int mdc_unpackmd(struct obd_export *exp, struct lov_stripe_md **lsmp,
+                 struct lov_mds_md *lmm, int lmm_size)
+{
+        ENTRY;
+        RETURN(0);
+}
+

@@ -1037,7 +1037,7 @@ static obd_count check_elan_limit(struct brw_page *pg, obd_count pages)
 }
 
 static int osc_brw(int cmd, struct obd_export *exp, struct obdo *oa,
-                   struct lov_stripe_md *md, obd_count page_count,
+                   struct lov_stripe_md *lsm, obd_count page_count,
                    struct brw_page *pga, struct obd_trans_info *oti)
 {
         ENTRY;
@@ -1064,7 +1064,7 @@ static int osc_brw(int cmd, struct obd_export *exp, struct obdo *oa,
                 sort_brw_pages(pga, pages_per_brw);
                 pages_per_brw = check_elan_limit(pga, pages_per_brw);
 
-                rc = osc_brw_internal(cmd, exp, oa, md, pages_per_brw, pga);
+                rc = osc_brw_internal(cmd, exp, oa, lsm, pages_per_brw, pga);
 
                 if (rc != 0)
                         RETURN(rc);
@@ -1076,7 +1076,7 @@ static int osc_brw(int cmd, struct obd_export *exp, struct obdo *oa,
 }
 
 static int osc_brw_async(int cmd, struct obd_export *exp, struct obdo *oa,
-                         struct lov_stripe_md *md, obd_count page_count,
+                         struct lov_stripe_md *lsm, obd_count page_count,
                          struct brw_page *pga, struct ptlrpc_request_set *set,
                          struct obd_trans_info *oti)
 {
@@ -1104,7 +1104,7 @@ static int osc_brw_async(int cmd, struct obd_export *exp, struct obdo *oa,
                 sort_brw_pages(pga, pages_per_brw);
                 pages_per_brw = check_elan_limit(pga, pages_per_brw);
 
-                rc = async_internal(cmd, exp, oa, md, pages_per_brw, pga, set);
+                rc = async_internal(cmd, exp, oa, lsm, pages_per_brw, pga, set);
 
                 if (rc != 0)
                         RETURN(rc);
@@ -1819,14 +1819,6 @@ int osc_prep_async_page(struct obd_export *exp, struct lov_stripe_md *lsm,
         RETURN(0);
 }
 
-struct osc_async_page *oap_from_cookie(void *cookie)
-{
-        struct osc_async_page *oap = cookie;
-        if (oap->oap_magic != OAP_MAGIC)
-                return ERR_PTR(-EINVAL);
-        return oap;
-};
-
 static int osc_queue_async_io(struct obd_export *exp, struct lov_stripe_md *lsm,
                               struct lov_oinfo *loi, void *cookie,
                               int cmd, obd_off off, int count,
@@ -1838,9 +1830,7 @@ static int osc_queue_async_io(struct obd_export *exp, struct lov_stripe_md *lsm,
         int rc;
         ENTRY;
 
-        oap = oap_from_cookie(cookie);
-        if (IS_ERR(oap))
-                RETURN(PTR_ERR(oap));
+        oap = OAP_FROM_COOKIE(cookie);
 
         if (cli->cl_import == NULL || cli->cl_import->imp_invalid)
                 RETURN(-EIO);
@@ -1902,9 +1892,7 @@ static int osc_set_async_flags(struct obd_export *exp,
         int rc = 0;
         ENTRY;
 
-        oap = oap_from_cookie(cookie);
-        if (IS_ERR(oap))
-                RETURN(PTR_ERR(oap));
+        oap = OAP_FROM_COOKIE(cookie);
 
         if (cli->cl_import == NULL || cli->cl_import->imp_invalid)
                 RETURN(-EIO);
@@ -1956,9 +1944,7 @@ static int osc_queue_group_io(struct obd_export *exp, struct lov_stripe_md *lsm,
         struct loi_oap_pages *lop;
         ENTRY;
 
-        oap = oap_from_cookie(cookie);
-        if (IS_ERR(oap))
-                RETURN(PTR_ERR(oap));
+        oap = OAP_FROM_COOKIE(cookie);
 
         if (cli->cl_import == NULL || cli->cl_import->imp_invalid)
                 RETURN(-EIO);
@@ -2045,9 +2031,7 @@ static int osc_teardown_async_page(struct obd_export *exp,
         int rc = 0;
         ENTRY;
 
-        oap = oap_from_cookie(cookie);
-        if (IS_ERR(oap))
-                RETURN(PTR_ERR(oap));
+        oap = OAP_FROM_COOKIE(cookie);
 
         if (loi == NULL)
                 loi = &lsm->lsm_oinfo[0];
@@ -2377,6 +2361,8 @@ static void osc_set_data_with_check(struct lustre_handle *lockh, void *data)
         if (lock->l_ast_data && lock->l_ast_data != data) {
                 struct inode *new_inode = data;
                 struct inode *old_inode = lock->l_ast_data;
+                if (!(old_inode->i_state & I_FREEING))
+                        LDLM_ERROR(lock, "inconsistent l_ast_data found");
                 LASSERTF(old_inode->i_state & I_FREEING,
                          "Found existing inode %p/%lu/%u state %lu in lock: "
                          "setting data to %p/%lu/%u\n", old_inode,
@@ -2466,6 +2452,30 @@ static int osc_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
                         RETURN(ELDLM_OK);
                 }
         }
+        if (mode == LCK_PW) {
+                rc = ldlm_lock_match(obd->obd_namespace, 0, &res_id, type,
+                                     policy, LCK_PR, lockh);
+                if (rc == 1) {
+                        rc = ldlm_cli_convert(lockh, mode, flags);
+                        if (!rc) {
+                                /* Update readers/writers accounting */
+                                ldlm_lock_addref(lockh, LCK_PW);
+                                ldlm_lock_decref(lockh, LCK_PR);
+                                osc_set_data_with_check(lockh, data);
+                                RETURN(ELDLM_OK);
+                        }
+                        /* If the conversion failed, we need to drop refcount
+                           on matched lock before we get new one */
+                        /* XXX Won't it save us some efforts if we cancel PR
+                           lock here? We are going to take PW lock anyway and it
+                           will invalidate PR lock */
+                        ldlm_lock_decref(lockh, LCK_PR);
+                        if (rc != EDEADLOCK) {
+                                RETURN(rc);
+                        }
+                }
+        }
+
         if (mode == LCK_PW) {
                 rc = ldlm_lock_match(obd->obd_namespace, 0, &res_id, type,
                                      policy, LCK_PR, lockh);
@@ -2881,6 +2891,16 @@ static int osc_set_info(struct obd_export *exp, obd_count keylen,
                 RETURN(0);
         }
 
+        if (keylen == strlen("async") && memcmp(key, "async", keylen) == 0) {
+                struct client_obd *cl = &obd->u.cli;
+                if (vallen != sizeof(int))
+                        RETURN(-EINVAL);
+                cl->cl_async = *(int *)val;
+                CDEBUG(D_HA, "%s: set async = %d\n",
+                       obd->obd_name, cl->cl_async);
+                RETURN(0);
+        }
+
         if (keylen == strlen("sec") && memcmp(key, "sec", keylen) == 0) {
                 struct client_obd *cli = &exp->exp_obd->u.cli;
 
@@ -2906,8 +2926,7 @@ static int osc_set_info(struct obd_export *exp, obd_count keylen,
                 RETURN(-EINVAL);
         }
 
-        if (keylen < strlen("mds_conn") ||
-            memcmp(key, "mds_conn", strlen("mds_conn")) != 0)
+        if (keylen < strlen("mds_conn") || memcmp(key, "mds_conn", keylen) != 0)
                 RETURN(-EINVAL);
 
         ctxt = llog_get_context(&exp->exp_obd->obd_llogs, LLOG_UNLINK_ORIG_CTXT);
@@ -3105,12 +3124,18 @@ static int osc_setup(struct obd_device *obd, obd_count len, void *buf)
 
 static int osc_cleanup(struct obd_device *obd, int flags)
 {
+        struct osc_creator *oscc = &obd->u.cli.cl_oscc;
         int rc;
 
         rc = ldlm_cli_cancel_unused(obd->obd_namespace, NULL,
                                     LDLM_FL_CONFIG_CHANGE, NULL);
         if (rc)
                 RETURN(rc);
+
+        spin_lock(&oscc->oscc_lock);
+        oscc->oscc_flags &= ~OSCC_FLAG_RECOVERING;
+        oscc->oscc_flags |= OSCC_FLAG_EXITING;
+        spin_unlock(&oscc->oscc_lock);
 
         rc = client_obd_cleanup(obd, flags);
         ptlrpcd_decref();

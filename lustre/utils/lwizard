@@ -331,7 +331,8 @@ create_config()
 		    --node "$DEVICE_NAME" \
 		    --mds "$DEVICE_MDS" \
 		    --lov "$DEVICE_LOV" \
-		    --path "$DEVICE"
+		    --path "$DEVICE" \
+                    --clientoptions "async"
 		;;
 	esac
     done

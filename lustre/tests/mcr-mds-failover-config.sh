@@ -47,4 +47,4 @@ $LMC -m $CONFIG --add ost --node $OST --ost ost_$OST $OST_UUID --dev bluearc
 $LMC -m $CONFIG --add route --node $GW_NODE --nettype tcp --gw `h2tcp $GW_NODE` --lo $OST
 
 # mount
-$LMC -m $CONFIG --add mtpt --node client --path /mnt/lustre --mds mds_$ACTIVEMDS --lov ost_$OST
+$LMC -m $CONFIG --add mtpt --node client --path /mnt/lustre --clientoptions async --mds mds_$ACTIVEMDS --lov ost_$OST

@@ -77,6 +77,13 @@ h2gm () {
 	echo `gmnalnid -n$1`
 }
 
+h2iib () {
+	case $1 in
+	client) echo '\*' ;;
+	*) echo $1 | sed "s/[^0-9]*//" ;;
+	esac
+}
+
 # create nodes
 echo -n "adding NET for:"
 for NODE in `echo $MDSNODE $OSTNODES $CLIENTS | tr -s " " "\n" | sort -u`; do
@@ -112,6 +119,6 @@ done
 echo; echo -n "adding CLIENT on:"
 for NODE in $CLIENTS; do
 	echo -n " $NODE"
-	${LMC} -m $config --add mtpt --node $NODE --path $MOUNT --mds mds1 --lov lov1 || exit 30
+	${LMC} -m $config --add mtpt --node $NODE --path $MOUNT --clientoptions async --mds mds1 --lov lov1 || exit 30
 done
 echo

@@ -46,7 +46,6 @@
 
 /* This limit is arbitrary, but for now we fit it in 1 page (32k clients) */
 #define MDS_MAX_CLIENTS (PAGE_SIZE * 8)
-#define MDS_MAX_CLIENT_WORDS (MDS_MAX_CLIENTS / sizeof(unsigned long))
 
 #define LAST_RCVD "last_rcvd"
 #define LOV_OBJID "lov_objid"
@@ -179,13 +178,13 @@ int mds_client_free(struct obd_export *exp, int clear_client)
 
 free_and_out:
         OBD_FREE(med->med_mcd, sizeof(*med->med_mcd));
+        med->med_mcd = NULL;
         return 0;
 }
 
 static int mds_server_free_data(struct mds_obd *mds)
 {
-        OBD_FREE(mds->mds_client_bitmap,
-                 MDS_MAX_CLIENT_WORDS * sizeof(unsigned long));
+        OBD_FREE(mds->mds_client_bitmap, MDS_MAX_CLIENTS / 8);
         OBD_FREE(mds->mds_server_data, sizeof(*mds->mds_server_data));
         mds->mds_server_data = NULL;
 
@@ -255,8 +254,7 @@ static int mds_read_last_rcvd(struct obd_device *obd, struct file *file)
         if (!msd)
                 RETURN(-ENOMEM);
 
-        OBD_ALLOC_WAIT(mds->mds_client_bitmap,
-                  MDS_MAX_CLIENT_WORDS * sizeof(unsigned long));
+        OBD_ALLOC_WAIT(mds->mds_client_bitmap, MDS_MAX_CLIENTS / 8);
         if (!mds->mds_client_bitmap) {
                 OBD_FREE(msd, sizeof(*msd));
                 RETURN(-ENOMEM);
@@ -357,7 +355,10 @@ static int mds_read_last_rcvd(struct obd_device *obd, struct file *file)
                         continue;
                 }
 
-                last_transno = le64_to_cpu(mcd->mcd_last_transno);
+                last_transno = le64_to_cpu(mcd->mcd_last_transno) >
+                               le64_to_cpu(mcd->mcd_last_close_transno) ?
+                               le64_to_cpu(mcd->mcd_last_transno) :
+                               le64_to_cpu(mcd->mcd_last_close_transno);
 
                 /* These exports are cleaned up by mds_disconnect(), so they
                  * need to be set up like real exports as mds_connect() does.
@@ -673,8 +674,7 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
                 GOTO(err_pop, rc);
         }
         mds->mds_id_de = dentry;
-
-        if (!dentry->d_inode) {
+        if (!dentry->d_inode || is_bad_inode(dentry->d_inode)) {
                 rc = -ENOENT;
                 CERROR("__iopen__ directory has no inode? rc = %d\n", rc);
                 GOTO(err_id_de, rc);
@@ -1070,7 +1070,7 @@ int mds_obd_destroy(struct obd_export *exp, struct obdo *oa,
                        oa->o_id, oa->o_generation, rc);
         
         err = fsfilt_commit(obd, mds->mds_sb, mds->mds_objects_dir->d_inode, 
-                            handle, 0);
+                            handle, exp->exp_sync);
         if (err && !rc)
                 rc = err;
 out_dput:

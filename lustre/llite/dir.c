@@ -228,7 +228,7 @@ static struct page *ll_get_dir_page(struct inode *dir, unsigned long n)
 
                 OBD_ALLOC(op_data, sizeof(*op_data));
                 if (op_data == NULL)
-                        RETURN(ERR_PTR(-ENOMEM));
+                        return ERR_PTR(-ENOMEM);
 
                 ll_prepare_mdc_data(op_data, dir, NULL, NULL, 0, 0);
 

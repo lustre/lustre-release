@@ -186,26 +186,26 @@ extern int lprocfs_register_stats(struct proc_dir_entry *root,
 				  const char *name,
                                   struct lprocfs_stats *stats);
 
-#define LPROCFS_INIT_MULTI_VARS(array, size)                              \
-void lprocfs_init_multi_vars(unsigned int idx,                            \
-                             struct lprocfs_static_vars *x)               \
-{                                                                         \
-   struct lprocfs_static_vars *glob = (struct lprocfs_static_vars*)array; \
-   LASSERT(glob != 0);                                                    \
-   LASSERT(idx < (unsigned int)(size));                                   \
-   x->module_vars = glob[idx].module_vars;                                \
-   x->obd_vars = glob[idx].obd_vars;                                      \
-}                                                                         \
+#define LPROCFS_INIT_MULTI_VARS(array, size)                                   \
+void lprocfs_init_multi_vars(unsigned int idx,                                 \
+                             struct lprocfs_static_vars *x)                    \
+{                                                                              \
+	struct lprocfs_static_vars *glob = (struct lprocfs_static_vars*)array; \
+	LASSERT(glob != 0);                                                    \
+	LASSERT(idx < (unsigned int)(size));                                   \
+	x->module_vars = glob[idx].module_vars;                                \
+	x->obd_vars = glob[idx].obd_vars;                                      \
+}                                                                              \
 
-#define LPROCFS_INIT_VARS(name, vclass, vinstance)           \
-void lprocfs_##name##_init_vars(struct lprocfs_static_vars *x)  \
-{                                                      \
-        x->module_vars = vclass;                       \
-        x->obd_vars = vinstance;                       \
-}                                                      \
+#define LPROCFS_INIT_VARS(name, vclass, vinstance)           		       \
+void lprocfs_##name##_init_vars(struct lprocfs_static_vars *x)  	       \
+{                                                      			       \
+        x->module_vars = vclass;                       			       \
+        x->obd_vars = vinstance;                       			       \
+}                                                      			       \
 
-#define lprocfs_init_vars(NAME, VAR)     \
-do {      \
+#define lprocfs_init_vars(NAME, VAR)     				       \
+do {      								       \
         extern void lprocfs_##NAME##_init_vars(struct lprocfs_static_vars *);  \
         lprocfs_##NAME##_init_vars(VAR);                                       \
 } while (0)

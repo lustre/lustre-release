@@ -162,6 +162,7 @@ void ldlm_lock_remove_from_lru(struct ldlm_lock *lock)
         ENTRY;
         l_lock(&lock->l_resource->lr_namespace->ns_lock);
         if (!list_empty(&lock->l_lru)) {
+                LASSERT(lock->l_resource->lr_type != LDLM_FLOCK);
                 list_del_init(&lock->l_lru);
                 lock->l_resource->lr_namespace->ns_nr_unused--;
                 LASSERT(lock->l_resource->lr_namespace->ns_nr_unused >= 0);
@@ -443,9 +444,9 @@ void ldlm_lock_addref_internal(struct ldlm_lock *lock, __u32 mode)
         if (mode & (LCK_EX | LCK_CW | LCK_PW | LCK_GROUP))
                 lock->l_writers++;
         lock->l_last_used = jiffies;
-        l_unlock(&lock->l_resource->lr_namespace->ns_lock);
         LDLM_LOCK_GET(lock);
         LDLM_DEBUG(lock, "ldlm_lock_addref(%s)", ldlm_lockname[mode]);
+        l_unlock(&lock->l_resource->lr_namespace->ns_lock);
 }
 
 void ldlm_lock_decref_internal(struct ldlm_lock *lock, __u32 mode)
@@ -453,9 +454,10 @@ void ldlm_lock_decref_internal(struct ldlm_lock *lock, __u32 mode)
         struct ldlm_namespace *ns;
         ENTRY;
 
-        LDLM_DEBUG(lock, "ldlm_lock_decref(%s)", ldlm_lockname[mode]);
         ns = lock->l_resource->lr_namespace;
+
         l_lock(&ns->ns_lock);
+        LDLM_DEBUG(lock, "ldlm_lock_decref(%s)", ldlm_lockname[mode]);
         if (mode & (LCK_NL | LCK_CR | LCK_PR)) {
                 LASSERT(lock->l_readers > 0);
                 lock->l_readers--;
@@ -607,7 +609,7 @@ static struct ldlm_lock *search_queue(struct list_head *queue, ldlm_mode_t mode,
                       policy->l_inodebits.bits))
                         continue;
 
-                if (lock->l_destroyed)
+                if (lock->l_destroyed || (lock->l_flags & LDLM_FL_FAILED))
                         continue;
 
                 if ((flags & LDLM_FL_LOCAL_ONLY) &&
@@ -701,10 +703,15 @@ int ldlm_lock_match(struct ldlm_namespace *ns, int flags,
                 ldlm_lock2handle(lock, lockh);
                 if (!(lock->l_flags & LDLM_FL_CAN_MATCH)) {
                         struct l_wait_info lwi;
-                        if (lock->l_completion_ast)
-                                lock->l_completion_ast(lock,
-                                                       LDLM_FL_WAIT_NOREPROC,
-                                                       NULL);
+                        if (lock->l_completion_ast) {
+                                int err = lock->l_completion_ast(lock,
+                                                                 LDLM_FL_WAIT_NOREPROC,
+                                                                 NULL);
+                                if (err) {
+                                        rc = 0;
+                                        goto out2;
+                                }
+                        }
 
                         lwi = LWI_TIMEOUT_INTR(obd_timeout*HZ, NULL,NULL,NULL);
 
@@ -713,20 +720,25 @@ int ldlm_lock_match(struct ldlm_namespace *ns, int flags,
                                      (lock->l_flags & LDLM_FL_CAN_MATCH), &lwi);
                 }
         }
-        if (rc)
+
+out2:
+        if (rc) {
+                l_lock(&ns->ns_lock);
                 LDLM_DEBUG(lock, "matched ("LPU64" "LPU64")",
                            type == LDLM_PLAIN ? res_id->name[2] :
                                 policy->l_extent.start,
                            type == LDLM_PLAIN ? res_id->name[3] :
-                                policy->l_extent.end);
-        else if (!(flags & LDLM_FL_TEST_LOCK)) /* less verbose for test-only */
+                           policy->l_extent.end);
+                l_unlock(&ns->ns_lock);
+        } else if (!(flags & LDLM_FL_TEST_LOCK)) {/* less verbose for test-only */
                 LDLM_DEBUG_NOLOCK("not matched ns %p type %u mode %u res "
                                   LPU64"/"LPU64" ("LPU64" "LPU64")", ns,
                                   type, mode, res_id->name[0], res_id->name[1],
                                   type == LDLM_PLAIN ? res_id->name[2] :
-                                        policy->l_extent.start,
+                                  policy->l_extent.start,
                                   type == LDLM_PLAIN ? res_id->name[3] :
-                                        policy->l_extent.end);
+                                  policy->l_extent.end);
+        }
 
         if (old_lock)
                 LDLM_LOCK_PUT(old_lock);
@@ -773,6 +785,7 @@ struct ldlm_lock *ldlm_lock_create(struct ldlm_namespace *ns,
         lock->l_blocking_ast = blocking;
         lock->l_completion_ast = completion;
         lock->l_glimpse_ast = glimpse;
+        lock->l_pid = current->pid;
 
         if (lvb_len) {
                 lock->l_lvb_len = lvb_len;
@@ -1039,15 +1052,12 @@ void ldlm_lock_cancel(struct ldlm_lock *lock)
         struct ldlm_namespace *ns;
         ENTRY;
 
-        /* There's no race between calling this and taking the ns lock below;
-         * a lock can only be put on the waiting list once, because it can only
-         * issue a blocking AST once. */
-        ldlm_del_waiting_lock(lock);
-
         res = lock->l_resource;
         ns = res->lr_namespace;
 
         l_lock(&ns->ns_lock);
+        ldlm_del_waiting_lock(lock);
+
         /* Please do not, no matter how tempting, remove this LBUG without
          * talking to me first. -phik */
         if (lock->l_readers || lock->l_writers) {
@@ -1112,7 +1122,7 @@ struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
                 *flags |= LDLM_FL_BLOCK_GRANTED;
                 RETURN(lock->l_resource);
         }
-                                                                                                                                                                                                     
+
         LASSERTF(new_mode == LCK_PW && lock->l_granted_mode == LCK_PR,
                  "new_mode %u, granted %u\n", new_mode, lock->l_granted_mode);
 
@@ -1181,9 +1191,9 @@ void ldlm_lock_dump(int level, struct ldlm_lock *lock, int pos)
                 return;
         }
 
-        CDEBUG(level, "  -- Lock dump: %p/"LPX64" (rc: %d) (pos: %d)\n",
+        CDEBUG(level, "  -- Lock dump: %p/"LPX64" (rc: %d) (pos: %d) (pid: %d)\n",
                lock, lock->l_handle.h_cookie, atomic_read(&lock->l_refc),
-               pos);
+               pos, lock->l_pid);
         if (lock->l_conn_export != NULL)
                 obd = lock->l_conn_export->exp_obd;
         if (lock->l_export && lock->l_export->exp_connection) {

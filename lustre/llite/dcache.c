@@ -53,6 +53,34 @@ static void ll_release(struct dentry *de)
         EXIT;
 }
 
+/* Compare if two dentries are the same.  Don't match if the existing dentry
+ * is marked DCACHE_LUSTRE_INVALID.  Returns 1 if different, 0 if the same.
+ *
+ * This avoids a race where ll_lookup_it() instantiates a dentry, but we get
+ * an AST before calling d_revalidate_it().  The dentry still exists (marked
+ * INVALID) so d_lookup() matches it, but we have no lock on it (so
+ * lock_match() fails) and we spin around real_lookup(). */
+static int ll_dcompare(struct dentry *parent, struct qstr *d_name,
+                       struct qstr *name){
+        struct dentry *dchild;
+        ENTRY;
+
+        if (d_name->len != name->len)
+                RETURN(1);
+
+        if (memcmp(d_name->name, name->name, name->len))
+                RETURN(1);
+
+        dchild = container_of(d_name, struct dentry, d_name); /* ugh */
+        if (dchild->d_flags & DCACHE_LUSTRE_INVALID) {
+                CDEBUG(D_DENTRY,"INVALID dentry %p not matched, was bug 3784\n",
+                       dchild);
+                RETURN(1);
+        }
+
+        RETURN(0);
+}
+
 /* should NOT be called with the dcache lock, see fs/dcache.c */
 static int ll_ddelete(struct dentry *de)
 {
@@ -71,7 +99,7 @@ void ll_set_dd(struct dentry *de)
         ENTRY;
         LASSERT(de != NULL);
 
-        CDEBUG(D_DENTRY, "ldd on dentry %*s (%p) parent %p inode %p refc %d\n",
+        CDEBUG(D_DENTRY, "ldd on dentry %.*s (%p) parent %p inode %p refc %d\n",
                de->d_name.len, de->d_name.name, de, de->d_parent, de->d_inode,
                atomic_read(&de->d_count));
         lock_kernel();
@@ -128,6 +156,7 @@ void ll_unhash_aliases(struct inode *inode)
 
         if (inode == NULL) {
                 CERROR("unexpected NULL inode, tell phil\n");
+                EXIT;
                 return;
         }
 
@@ -142,7 +171,7 @@ restart:
         while ((tmp = tmp->next) != head) {
                 struct dentry *dentry = list_entry(tmp, struct dentry, d_alias);
                 if (atomic_read(&dentry->d_count) == 0) {
-                        CDEBUG(D_DENTRY, "deleting dentry %*s (%p) parent %p "
+                        CDEBUG(D_DENTRY, "deleting dentry %.*s (%p) parent %p "
                                "inode %p\n", dentry->d_name.len,
                                dentry->d_name.name, dentry, dentry->d_parent,
                                dentry->d_inode);
@@ -152,7 +181,7 @@ restart:
                         dput(dentry);
                         goto restart;
                 } else if (!(dentry->d_flags & DCACHE_LUSTRE_INVALID)) {
-                        CDEBUG(D_DENTRY, "unhashing dentry %*s (%p) parent %p "
+                        CDEBUG(D_DENTRY, "unhashing dentry %.*s (%p) parent %p "
                                "inode %p refc %d\n", dentry->d_name.len,
                                dentry->d_name.name, dentry, dentry->d_parent,
                                dentry->d_inode, atomic_read(&dentry->d_count));
@@ -265,8 +294,8 @@ int ll_revalidate_it(struct dentry *de, int flags, struct nameidata *nd,
 {
         struct lookup_intent lookup_it = { .it_op = IT_LOOKUP };
         struct ptlrpc_request *req = NULL;
-        struct it_cb_data icbd;
         struct obd_export *exp;
+        struct it_cb_data icbd;
         struct lustre_id pid;
         struct lustre_id cid;
         int orig_it, rc = 0;
@@ -324,6 +353,7 @@ int ll_revalidate_it(struct dentry *de, int flags, struct nameidata *nd,
         if (nd != NULL)
                 nd->mnt->mnt_last_used = jiffies;
 
+        OBD_FAIL_TIMEOUT(OBD_FAIL_MDC_REVALIDATE_PAUSE, 5);
         orig_it = it ? it->it_op : IT_OPEN;
         ll_frob_intent(&it, &lookup_it);
         LASSERT(it != NULL);
@@ -362,11 +392,68 @@ int ll_revalidate_it(struct dentry *de, int flags, struct nameidata *nd,
                 ll_intent_release(&lookup_it);
         }
 
+#if 1
+        if ((it->it_op == IT_OPEN) && de->d_inode) {
+                struct inode *inode = de->d_inode;
+                struct ll_inode_info *lli = ll_i2info(inode);
+                struct obd_client_handle **och_p;
+                __u64 *och_usecount;
+                struct obd_device *obddev;
+                struct lustre_handle lockh;
+                int flags = LDLM_FL_BLOCK_GRANTED;
+                ldlm_policy_data_t policy = {.l_inodebits = {MDS_INODELOCK_OPEN}};
+                struct ldlm_res_id file_res_id = {.name = {id_fid(&lli->lli_id), 
+							   id_group(&lli->lli_id)}};
+                int lockmode;
+
+                if (it->it_flags & FMODE_WRITE) {
+                        och_p = &lli->lli_mds_write_och;
+                        och_usecount = &lli->lli_open_fd_write_count;
+                        lockmode = LCK_CW;
+                } else if (it->it_flags & FMODE_EXEC) {
+                        och_p = &lli->lli_mds_exec_och;
+                        och_usecount = &lli->lli_open_fd_exec_count;
+                        lockmode = LCK_PR;
+                } else {
+                        och_p = &lli->lli_mds_read_och;
+                        och_usecount = &lli->lli_open_fd_read_count;
+                        lockmode = LCK_CR;
+                }
+
+                /* Check for the proper lock */
+                obddev = md_get_real_obd(exp, &lli->lli_id);
+                if (!ldlm_lock_match(obddev->obd_namespace, flags, &file_res_id,
+                                     LDLM_IBITS, &policy, lockmode, &lockh))
+                        goto do_lock;
+                down(&lli->lli_och_sem);
+                if (*och_p) { /* Everything is open already, do nothing */
+                        /*(*och_usecount)++;  Do not let them steal our open
+                                              handle from under us */
+                        /* XXX The code above was my original idea, but in case
+                           we have the handle, but we cannot use it due to later
+                           checks (e.g. O_CREAT|O_EXCL flags set), nobody
+                           would decrement counter increased here. So we just
+                           hope the lock won't be invalidated in between. But
+                           if it would be, we'll reopen the open request to
+                           MDS later during file open path */
+                        up(&lli->lli_och_sem);
+                        memcpy(&LUSTRE_IT(it)->it_lock_handle, &lockh,
+                               sizeof(lockh));
+                        LUSTRE_IT(it)->it_lock_mode = lockmode;
+                        RETURN(1);
+                } else {
+                        /* Hm, interesting. Lock is present, but no open
+                           handle? */
+                        up(&lli->lli_och_sem);
+                        ldlm_lock_decref(&lockh, lockmode);
+                }
+        }
+#endif
+
+do_lock:
         rc = md_intent_lock(exp, &pid, de->d_name.name, de->d_name.len,
-                            NULL, 0, &cid, it, flags, &req,
-                            ll_mdc_blocking_ast);
-        
-        /* If req is NULL, then mdc_intent_lock only tried to do a lock match;
+                            NULL, 0, &cid, it, flags, &req, ll_mdc_blocking_ast);
+        /* If req is NULL, then md_intent_lock() only tried to do a lock match;
          * if all was well, it will return 1 if it found locks, 0 otherwise. */
         if (req == NULL && rc >= 0) {
                 if (!rc)
@@ -409,13 +496,14 @@ out:
                                 ptlrpc_req_finished(req);
                 }
                 ll_unhash_aliases(de->d_inode);
-                return rc;
+                return 0;
         }
 
         CDEBUG(D_DENTRY, "revalidated dentry %*s (%p) parent %p "
                "inode %p refc %d\n", de->d_name.len,
                de->d_name.name, de, de->d_parent, de->d_inode,
                atomic_read(&de->d_count));
+
         ll_lookup_finish_locks(it, de);
         de->d_flags &= ~DCACHE_LUSTRE_INVALID;
         if (it == &lookup_it)
@@ -594,6 +682,7 @@ struct dentry_operations ll_d_ops = {
         .d_release = ll_release,
         .d_iput = ll_dentry_iput,
         .d_delete = ll_ddelete,
+        .d_compare = ll_dcompare,
 #if 0
         .d_pin = ll_pin,
         .d_unpin = ll_unpin,

@@ -37,6 +37,8 @@
 #include <linux/lustre_snap.h>
 #include "filter_internal.h"
 
+int *obdfilter_created_scratchpad;
+
 static int filter_alloc_dio_page(struct obd_device *obd, struct inode *inode,
                                  struct niobuf_local *lnb)
 
@@ -258,7 +260,6 @@ long filter_grant(struct obd_export *exp, obd_size current_grant,
         return grant;
 }
 
-
 static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
                               int objcount, struct obd_ioobj *obj,
                               int niocount, struct niobuf_remote *nb,
@@ -271,7 +272,7 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
         struct niobuf_local *lnb;
         struct dentry *dentry = NULL;
         struct inode *inode;
-        void *iobuf = NULL; 
+        void *iobuf = NULL;
         int rc = 0, i, tot_bytes = 0;
         unsigned long now = jiffies;
         ENTRY;
@@ -286,7 +287,6 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
                 filter_grant_incoming(exp, oa);
 
                 oa->o_grant = 0;
-                
                 spin_unlock(&obd->obd_osfs_lock);
         }
 
@@ -309,11 +309,7 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
 
         inode = dentry->d_inode; 
 
-        if (time_after(jiffies, now + 15 * HZ))
-                CERROR("slow preprw_read setup %lus\n", (jiffies - now) / HZ);
-        else
-                CDEBUG(D_INFO, "preprw_read setup: %lu jiffies\n",
-                       (jiffies - now));
+        fsfilt_check_slow(now, obd_timeout, "preprw_read setup");
 
         for (i = 0, lnb = res, rnb = nb; i < obj->ioo_bufcnt;
              i++, rnb++, lnb++) {
@@ -347,11 +343,7 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
                 filter_iobuf_add_page(obd, iobuf, inode, lnb->page);
         }
 
-        if (time_after(jiffies, now + 15 * HZ))
-                CERROR("slow start_page_read %lus\n", (jiffies - now) / HZ);
-        else
-                CDEBUG(D_INFO, "start_page_read: %lu jiffies\n",
-                       (jiffies - now));
+        fsfilt_check_slow(now, obd_timeout, "start_page_read");
 
         rc = filter_direct_io(OBD_BRW_READ, dentry, iobuf, exp,
                               NULL, NULL, NULL);
@@ -543,11 +535,7 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
         fso.fso_dentry = dentry;
         fso.fso_bufcnt = obj->ioo_bufcnt;
 
-        if (time_after(jiffies, now + 15 * HZ))
-                CERROR("slow preprw_write setup %lus\n", (jiffies - now) / HZ);
-        else
-                CDEBUG(D_INFO, "preprw_write setup: %lu jiffies\n",
-                       (jiffies - now));
+        fsfilt_check_slow(now, obd_timeout, "preprw_write setup");
 
         spin_lock(&exp->exp_obd->obd_osfs_lock);
         if (oa)
@@ -561,6 +549,10 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
                                 &left, dentry->d_inode);
         if (oa && oa->o_valid & OBD_MD_FLGRANT)
                 oa->o_grant = filter_grant(exp,oa->o_grant,oa->o_undirty,left);
+
+        /* We're finishing using body->oa as an input variable, so reset
+         * o_valid here. */
+        oa->o_valid = 0;
 
         spin_unlock(&exp->exp_obd->obd_osfs_lock);
 
@@ -610,11 +602,7 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
         rc = filter_direct_io(OBD_BRW_READ, dentry, iobuf, exp,
                               NULL, NULL, NULL);
         
-        if (time_after(jiffies, now + 15 * HZ))
-                CERROR("slow start_page_write %lus\n", (jiffies - now) / HZ);
-        else
-                CDEBUG(D_INFO, "start_page_write: %lu jiffies\n",
-                       (jiffies - now));
+        fsfilt_check_slow(now, obd_timeout, "start_page_write");
 
         lprocfs_counter_add(exp->exp_obd->obd_stats, LPROC_FILTER_WRITE_BYTES,
                             tot_bytes);

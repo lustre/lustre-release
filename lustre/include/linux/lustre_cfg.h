@@ -280,6 +280,7 @@ struct lustre_mount_data {
         uint32_t lmd_nal;
         uint32_t lmd_server_ipaddr;
         uint32_t lmd_port;
+        uint32_t lmd_async;
         uint32_t lmd_nllu;
         uint32_t lmd_nllg;
         char     lmd_security[16];

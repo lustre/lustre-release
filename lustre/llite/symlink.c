@@ -55,7 +55,7 @@ static int ll_readlink_internal(struct inode *inode,
         if (rc) {
                 if (rc != -ENOENT)
                         CERROR("inode %lu: rc = %d\n", inode->i_ino, rc);
-                RETURN(rc);
+                GOTO(failed, rc);
         }
 
         body = lustre_msg_buf ((*request)->rq_repmsg, 0, sizeof (*body));
@@ -92,7 +92,7 @@ static int ll_readlink_internal(struct inode *inode,
 
  failed:
         ptlrpc_req_finished (*request);
-        RETURN (-EPROTO);
+        RETURN(rc);
 }
 
 static int ll_readlink(struct dentry *dentry, char *buffer, int buflen)
@@ -141,8 +141,11 @@ static int ll_follow_link(struct dentry *dentry, struct nameidata *nd)
         down(&lli->lli_open_sem);
         rc = ll_readlink_internal(inode, &request, &symname);
         up(&lli->lli_open_sem);
-        if (rc)
+        if (rc) {
+                path_release(nd); /* Kernel assumes that ->follow_link()
+                                     releases nameidata on error */
                 GOTO(out, rc);
+        }
 
         rc = vfs_follow_link(nd, symname);
         ptlrpc_req_finished(request);

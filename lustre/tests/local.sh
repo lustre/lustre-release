@@ -62,5 +62,5 @@ ${LMC} --add ost --ost ost1 --nspath /mnt/ost_ns --node localhost --lov lov1 \
 --backdev $OST_BACKDEV $OST_MOUNT_OPTS --size $OSTSIZE $JARG || exit 30
 
 # create client config
-${LMC} --add mtpt --node localhost --path $MOUNT --mds mds1 --lov lov1 || exit 40
-${LMC} --add mtpt --node client --path $MOUNT2 --mds mds1 --lov lov1 || exit 41
+${LMC} --add mtpt --node localhost --path $MOUNT --clientoptions async --mds mds1 --lov lov1 || exit 40
+${LMC} --add mtpt --node client --path $MOUNT2 --mds mds1 --clientoptions async --lov lov1 || exit 41

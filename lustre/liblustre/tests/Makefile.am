@@ -2,19 +2,25 @@
 
 AM_CPPFLAGS = -I$(SYSIO)/include -I/opt/lam/include $(LLCPPFLAGS) -I$(top_srcdir)/portals/unals
 AM_CFLAGS = $(LLCFLAGS)
-LIBS = $(LIBEFENCE) $(LIBREADLINE)
+AM_LIBS = $(LIBEFENCE) $(LIBREADLINE)
 
 LLIB_EXEC= $(top_builddir)/lustre/liblustre/liblustre.a -lcap -lpthread
 
 if LIBLUSTRE
 noinst_LIBRARIES = libtestcommon.a
-def_tests = echo_test sanity recovery_small replay_single replay_ost_single
+
+if LIBLUSTRE_TESTS
+noinst_PROGRAMS = sanity recovery_small replay_single replay_ost_single
+
+if TESTS
+noinst_PROGRAMS += echo_test
+endif # TESTS
 
 if MPITESTS
-noinst_PROGRAMS = $(def_tests) test_lock_cancel
-else
-noinst_PROGRAMS = $(def_tests)
-endif
+noinst_PROGRAMS += test_lock_cancel
+endif # MPITESTS
+
+endif # LIBLUSTRE_TESTS
 endif # LIBLUSTRE
 
 libtestcommon_a_SOURCES = test_common.c test_common.h

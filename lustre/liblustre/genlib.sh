@@ -17,7 +17,8 @@ RANLIB=/usr/bin/ranlib
 CWD=`pwd`
 
 SYSIO=$1
-CRAY_PORTALS_PATH=$2
+CRAY_PORTALS_LIBS=$2
+LIBS=$3
 
 if [ ! -f $SYSIO/lib/libsysio.a ]; then
   echo "ERROR: $SYSIO/lib/libsysio.a dosen't exist"
@@ -52,7 +53,7 @@ build_sysio_obj_list() {
   _objs=`$AR -t $1`
   mkdir -p $sysio_tmp
   cd $sysio_tmp
-  $AR -x $1
+  $AR -x ../$1
   cd ..
   for _lib in $_objs; do
     ALL_OBJS=$ALL_OBJS"$sysio_tmp/$_lib ";
@@ -76,7 +77,7 @@ build_cray_portals_obj_list() {
 }
 
 # lustre components libs
-build_obj_list . liblutils.a
+build_obj_list . libllite.a
 build_obj_list ../lov liblov.a
 build_obj_list ../obdecho libobdecho.a
 build_obj_list ../osc libosc.a
@@ -101,11 +102,10 @@ rm -f $CWD/liblsupport.a
 $AR -cru $CWD/liblsupport.a $ALL_OBJS
 $RANLIB $CWD/liblsupport.a
 
-# libllite should be at the beginning of obj list
-prepend_obj_list . libllite.a
-
-# libsysio
-build_sysio_obj_list $SYSIO/lib/libsysio.a
+# if libsysio is already in our LIBS we don't need to link against it here
+if $(echo "$LIBS" | grep -v -- "-lsysio" >/dev/null) ; then
+  build_sysio_obj_list $SYSIO/lib/libsysio.a
+fi
 
 # create static lib lustre
 rm -f $CWD/liblustre.a

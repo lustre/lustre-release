@@ -486,6 +486,7 @@ int llog_cleanup_commit_master(int force)
                                  atomic_read(&lcm->lcm_thread_total) == 0);
         return 0;
 }
+EXPORT_SYMBOL(llog_cleanup_commit_master);
 
 static int log_process_thread(void *args)
 {

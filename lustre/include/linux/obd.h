@@ -205,6 +205,7 @@ struct filter_obd {
         const char          *fo_fstype;
         struct super_block  *fo_sb;
         struct vfsmount     *fo_vfsmnt;
+        struct lvfs_obd_ctxt *fo_lvfs_ctxt;
 
         int                    fo_group_count;
         struct dentry         *fo_dentry_O;     /* the "O"bject directory dentry */
@@ -315,8 +316,10 @@ struct client_obd {
         struct obd_service_time  cl_enter_stime;
 
         struct mdc_rpc_lock     *cl_rpc_lock;
-        struct mdc_rpc_lock     *cl_setattr_lock;
+        struct mdc_rpc_lock     *cl_setattr_lock; 
+        struct mdc_rpc_lock     *cl_close_lock;
         struct osc_creator       cl_oscc;
+        int                      cl_async:1;
 };
 
 /* Like a client, with some hangers-on.  Keep mc_client_obd first so that we
@@ -338,6 +341,7 @@ struct mds_obd {
         struct super_block              *mds_sb;
         struct vfsmount                 *mds_vfsmnt;
         struct dentry                   *mds_id_de;
+        struct lvfs_obd_ctxt            *mds_lvfs_ctxt;
         int                              mds_max_mdsize;
         int                              mds_max_cookiesize;
         struct file                     *mds_rcvd_filp;
@@ -388,6 +392,7 @@ struct mds_obd {
         gid_t                            mds_squash_gid;
         ptl_nid_t                        mds_nosquash_nid;
         atomic_t                         mds_real_clients;
+        atomic_t                         mds_open_count;
         struct dentry                   *mds_id_dir;
         int                              mds_obd_type;
         struct dentry                   *mds_unnamed_dir; /* for mdt_obd_create only */
@@ -468,7 +473,17 @@ struct cm_obd {
         int                     master_group;
         struct cmobd_write_service *write_srv;
 };
-        
+
+struct conf_obd {
+        struct super_block      *cfobd_sb;
+        struct vfsmount         *cfobd_vfsmnt;
+        struct dentry           *cfobd_logs_dir;
+        struct dentry           *cfobd_objects_dir;
+        struct dentry           *cfobd_pending_dir;
+        struct llog_handle      *cfobd_cfg_llh;
+        struct lvfs_obd_ctxt    *cfobd_lvfs_ctxt;
+};
+
 struct lov_tgt_desc {
         struct obd_uuid         uuid;
         __u32                   ltd_gen;
@@ -481,7 +496,7 @@ struct lov_obd {
         struct lov_desc         desc;
         int                     bufsize;
         int                     refcount;
-        int                     lo_catalog_loaded:1;
+        int                     lo_catalog_loaded:1, async:1;
         struct semaphore        lov_llog_sem;
         unsigned long           lov_connect_flags;
         struct lov_tgt_desc    *tgts;
@@ -649,7 +664,7 @@ struct obd_device {
                 struct mds_obd           mds;
                 struct client_obd        cli;
                 struct ost_obd           ost;
-                struct echo_client_obd   echo_client;
+                struct echo_client_obd   echocli;
                 struct echo_obd          echo;
                 struct recovd_obd        recovd;
                 struct lov_obd           lov;
@@ -658,6 +673,7 @@ struct obd_device {
                 struct mgmtcli_obd       mgmtcli;
                 struct lmv_obd           lmv;
                 struct cm_obd            cm;
+                struct conf_obd          conf;
         } u;
         
         /* fields used by LProcFS */
@@ -761,6 +777,8 @@ struct obd_ops {
         int (*o_teardown_async_page)(struct obd_export *exp,
                                      struct lov_stripe_md *lsm,
                                      struct lov_oinfo *loi, void *cookie);
+        int (*o_adjust_kms)(struct obd_export *exp, struct lov_stripe_md *lsm,
+                            obd_off size, int shrink);
         int (*o_punch)(struct obd_export *exp, struct obdo *oa,
                        struct lov_stripe_md *ea, obd_size start,
                        obd_size end, struct obd_trans_info *oti);

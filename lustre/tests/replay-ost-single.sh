@@ -138,11 +138,15 @@ test_4() {
 run_test 4 "Fail OST during read, with verification"
 
 test_5() {
-    IOZONE_OPTS="-i 0 -i 1 -i 2 -+d -r 64 -s 1g"
+    FREE=`df -P -h $DIR | tail -n 1 | awk '{ print $3 }'`
+    case $FREE in
+    *T|*G) FREE=1G;;
+    esac
+    IOZONE_OPTS="-i 0 -i 1 -i 2 -+d -r 4 -s $FREE"
     iozone $IOZONE_OPTS -f $DIR/$tfile &
     PID=$!
     
-    sleep 10
+    sleep 8
     fail ost
     wait $PID || return 1
     rm -f $DIR/$tfile

@@ -55,8 +55,8 @@ done
 
 if [ -z "$ECHO_CLIENT" ]; then
 	# create client config
-	${LMC} --add mtpt --node localhost --path $MOUNT --mds mds1 --lov lov1 || exit 40
-	${LMC} --add mtpt --node client --path $MOUNT2 --mds mds1 --lov lov1 || exit 41
+	${LMC} --add mtpt --node localhost --path $MOUNT --clientoptions async --mds mds1 --lov lov1 || exit 40
+	${LMC} --add mtpt --node client --path $MOUNT2 --clientoptions async --mds mds1 --lov lov1 || exit 41
 else
 	${LMC} --add echo_client --node localhost --ost lov1 || exit 42
 fi

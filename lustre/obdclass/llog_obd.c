@@ -25,13 +25,12 @@
 #include <libcfs/list.h>
 
 /* helper functions for calling the llog obd methods */
-
 int obd_llog_setup(struct obd_device *obd, struct obd_llogs *llogs, 
                    int index, struct obd_device *disk_obd, int count, 
                    struct llog_logid *logid, struct llog_operations *op)
 {
-        int rc = 0;
         struct llog_ctxt *ctxt;
+        int rc = 0;
         ENTRY;
 
         LASSERT(llogs);
@@ -60,6 +59,10 @@ int obd_llog_setup(struct obd_device *obd, struct obd_llogs *llogs,
                         struct mds_obd *mds = &disk_obd->u.mds;
                         ctxt->loc_objects_dir = mds->mds_objects_dir;
                         ctxt->loc_logs_dir = mds->mds_logs_dir;
+                } else if (!strcmp(disk_obd->obd_type->typ_name, "confobd")) {
+                        struct conf_obd *confobd = &disk_obd->u.conf;
+                        ctxt->loc_objects_dir = confobd->cfobd_objects_dir;
+                        ctxt->loc_logs_dir = confobd->cfobd_logs_dir;
                 }
         }
 

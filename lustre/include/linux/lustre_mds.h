@@ -130,7 +130,12 @@ struct mds_client_data {
         __u64 mcd_last_xid;     /* xid for the last transaction */
         __u32 mcd_last_result;  /* result from last RPC */
         __u32 mcd_last_data;    /* per-op data (disposition for open &c.) */
-        __u8 mcd_padding[MDS_LR_CLIENT_SIZE - 64];
+        /* for MDS_CLOSE requests */
+        __u64 mcd_last_close_transno; /* last completed transaction ID */
+        __u64 mcd_last_close_xid;     /* xid for the last transaction */
+        __u32 mcd_last_close_result;  /* result from last RPC */
+        __u32 mcd_last_close_data;  /* per-op data (disposition for open &c.) */
+        __u8 mcd_padding[MDS_LR_CLIENT_SIZE - 88];
 };
 
 /* simple uid/gid mapping hash table */
@@ -325,18 +330,24 @@ int mdc_done_writing(struct obd_export *, struct obdo *);
 #define IOC_REQUEST_CLOSE               _IOWR('f', 35, long)
 #define IOC_REQUEST_MAX_NR               35
 
-#define MDS_CHECK_RESENT(req, reconstruct)                                     \
-{                                                                              \
-        if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT) {               \
-                struct mds_client_data *mcd =                                  \
-                        req->rq_export->exp_mds_data.med_mcd;                  \
-                if (mcd->mcd_last_xid == req->rq_xid) {                        \
-                        reconstruct;                                           \
-                        RETURN(req->rq_repmsg->status);                        \
-                }                                                              \
-                DEBUG_REQ(D_HA, req, "no reply for RESENT req (have "LPD64")", \
-                          mcd->mcd_last_xid);                                  \
-        }                                                                      \
+#define MDS_CHECK_RESENT(req, reconstruct)                              \
+{                                                                       \
+        if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT) {        \
+                struct mds_client_data *mcd =                           \
+                        req->rq_export->exp_mds_data.med_mcd;           \
+                                                                        \
+                if (le64_to_cpu(mcd->mcd_last_xid) == req->rq_xid) {    \
+                        reconstruct;                                    \
+                        RETURN(le32_to_cpu(mcd->mcd_last_result));      \
+                }                                                       \
+                if (le64_to_cpu(mcd->mcd_last_close_xid) == req->rq_xid) { \
+                        reconstruct;                                    \
+                        RETURN(le32_to_cpu(mcd->mcd_last_close_result));\
+                }                                                       \
+                DEBUG_REQ(D_HA, req, "no reply for RESENT req"          \
+                          "(have "LPD64", and "LPD64")",                \
+                          mcd->mcd_last_xid, mcd->mcd_last_close_xid);  \
+        }                                                               \
 }
 
 #endif

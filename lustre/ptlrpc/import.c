@@ -21,11 +21,7 @@
  */
 
 #define DEBUG_SUBSYSTEM S_RPC
-#ifdef __KERNEL__
-# include <linux/config.h>
-# include <linux/module.h>
-# include <linux/kmod.h>
-#else
+#ifndef __KERNEL__
 # include <liblustre.h>
 #endif
 
@@ -101,10 +97,10 @@ int ptlrpc_set_import_discon(struct obd_import *imp)
         spin_lock_irqsave(&imp->imp_lock, flags);
 
         if (imp->imp_state == LUSTRE_IMP_FULL) {
-                CERROR("%s: connection lost to %s@%s\n",
-                       imp->imp_obd->obd_name,
-                       imp->imp_target_uuid.uuid,
-                       imp->imp_connection->c_remote_uuid.uuid);
+                CWARN("%s: connection lost to %s@%s\n",
+                      imp->imp_obd->obd_name, 
+                      imp->imp_target_uuid.uuid,
+                      imp->imp_connection->c_remote_uuid.uuid);
                 IMPORT_SET_STATE_NOLOCK(imp, LUSTRE_IMP_DISCON);
                 spin_unlock_irqrestore(&imp->imp_lock, flags);
                 obd_import_event(imp->imp_obd, imp, IMP_EVENT_DISCON);
@@ -180,7 +176,7 @@ void ptlrpc_invalidate_import(struct obd_import *imp, int in_rpc)
         if (rc)
                 CERROR("%s: rc = %d waiting for callback (%d != %d)\n",
                        imp->imp_target_uuid.uuid, rc,
-                       atomic_read(&imp->imp_inflight), inflight);
+                       atomic_read(&imp->imp_inflight), !!in_rpc);
 
         obd_import_event(imp->imp_obd, imp, IMP_EVENT_INVALIDATE);
 }
@@ -374,6 +370,9 @@ int ptlrpc_connect_import(struct obd_import *imp, char * new_uuid)
 #ifndef __KERNEL__
         lustre_msg_add_op_flags(request->rq_reqmsg, MSG_CONNECT_LIBCLIENT);
 #endif
+        if (obd->u.cli.cl_async) {
+                lustre_msg_add_op_flags(request->rq_reqmsg, MSG_CONNECT_ASYNC);
+        }
 
         request->rq_send_state = LUSTRE_IMP_CONNECTING;
         request->rq_replen = lustre_msg_size(0, NULL);
@@ -559,8 +558,10 @@ static int signal_completed_replay(struct obd_import *imp)
         atomic_inc(&imp->imp_replay_inflight);
 
         req = ptlrpc_prep_req(imp, LUSTRE_OBD_VERSION, OBD_PING, 0, NULL, NULL);
-        if (!req)
+        if (!req) {
+                atomic_dec(&imp->imp_replay_inflight);
                 RETURN(-ENOMEM);
+        }
 
         req->rq_replen = lustre_msg_size(0, NULL);
         req->rq_send_state = LUSTRE_IMP_REPLAY_WAIT;
@@ -572,6 +573,37 @@ static int signal_completed_replay(struct obd_import *imp)
         RETURN(0);
 }
 
+#ifdef __KERNEL__
+static int ptlrpc_invalidate_import_thread(void *data)
+{
+        struct obd_import *imp = data;
+        unsigned long flags;
+
+        ENTRY;
+
+        lock_kernel();
+        ptlrpc_daemonize();
+
+        SIGNAL_MASK_LOCK(current, flags);
+        sigfillset(&current->blocked);
+        RECALC_SIGPENDING;
+        SIGNAL_MASK_UNLOCK(current, flags);
+        THREAD_NAME(current->comm, sizeof(current->comm), "ll_imp_inval");
+        unlock_kernel();
+
+        CDEBUG(D_HA, "thread invalidate import %s to %s@%s\n",
+               imp->imp_obd->obd_name, imp->imp_target_uuid.uuid,
+               imp->imp_connection->c_remote_uuid.uuid);
+
+        ptlrpc_invalidate_import(imp, 0);
+        IMPORT_SET_STATE(imp, LUSTRE_IMP_RECOVER);
+
+        ptlrpc_import_recovery_state_machine(imp);
+
+        RETURN(0);
+}
+#endif
+
 int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
 {
         int rc = 0;
@@ -582,9 +614,17 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
                        imp->imp_target_uuid.uuid,
                        imp->imp_connection->c_remote_uuid.uuid);
 
+#ifdef __KERNEL__
+                rc = kernel_thread(ptlrpc_invalidate_import_thread, imp,
+                                   CLONE_VM | CLONE_FILES);
+                if (rc < 0)
+                        CERROR("error starting invalidate thread: %d\n", rc);
+                RETURN(rc);
+#else
                 ptlrpc_invalidate_import(imp, 1);
 
                 IMPORT_SET_STATE(imp, LUSTRE_IMP_RECOVER);
+#endif
         }
 
         if (imp->imp_state == LUSTRE_IMP_REPLAY) {
@@ -627,10 +667,10 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
                         GOTO(out, rc);
                 IMPORT_SET_STATE(imp, LUSTRE_IMP_FULL);
                 ptlrpc_activate_import(imp);
-                CERROR("%s: connection restored to %s@%s\n",
-                       imp->imp_obd->obd_name, 
-                       imp->imp_target_uuid.uuid,
-                       imp->imp_connection->c_remote_uuid.uuid);
+                CWARN("%s: connection restored to %s@%s\n",
+                      imp->imp_obd->obd_name, 
+                      imp->imp_target_uuid.uuid,
+                      imp->imp_connection->c_remote_uuid.uuid);
         }
 
         if (imp->imp_state == LUSTRE_IMP_FULL) {

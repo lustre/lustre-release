@@ -587,6 +587,13 @@ class LCTLInterface:
   quit""" % (type, name, uuid)
         self.run(cmds)
         
+    def detach(self, name):
+        cmds = """
+  cfg_device %s
+  detach
+  quit""" % (name)
+        self.run(cmds)
+        
     def set_security(self, name, key, value):
         cmds = """
   cfg_device %s
@@ -608,6 +615,12 @@ class LCTLInterface:
   quit""" % (name, conn_uuid)
         self.run(cmds)
 
+    def start(self, name, conf_name):
+        cmds = """
+  device $%s
+  start %s
+  quit""" % (name, conf_name)
+        self.run(cmds)
 
     # create a new device with lctl
     def newdev(self, type, name, uuid, setup = ""):
@@ -618,7 +631,6 @@ class LCTLInterface:
             self.cleanup(name, uuid, 0)
             raise e
         
-
     # cleanup a device
     def cleanup(self, name, uuid, force, failover = 0):
         if failover: force = 1
@@ -1375,7 +1387,8 @@ class Network(Module):
     def add_module(self, manager):
         manager.add_portals_module("libcfs", 'libcfs')
         manager.add_portals_module("portals", 'portals')
-        if node_needs_router():
+        
+	if node_needs_router():
             manager.add_portals_module("router", 'kptlrouter')
         if self.net_type == 'tcp':
             manager.add_portals_module("knals/socknal", 'ksocknal')
@@ -1706,6 +1719,295 @@ class LMV(Module):
     def correct_level(self, level, op=None):
         return level
 
+class CONFDEV(Module):
+    def __init__(self, db, name, target_uuid, uuid):
+        Module.__init__(self, 'CONFDEV', db)
+        self.devpath = self.db.get_val('devpath','')
+        self.backdevpath = self.db.get_val('backdevpath','')
+        self.size = self.db.get_val_int('devsize', 0)
+        self.journal_size = self.db.get_val_int('journalsize', 0)
+        self.fstype = self.db.get_val('fstype', '')
+        self.backfstype = self.db.get_val('backfstype', '')
+        self.mkfsoptions = self.db.get_val('mkfsoptions', '')
+        self.mountfsoptions = self.db.get_val('mountfsoptions', '')
+	self.target = self.db.lookup(target_uuid)
+        self.name = "conf_%s" % self.target.getName()
+        self.client_uuids = self.target.get_refs('client')
+        self.obdtype = self.db.get_val('obdtype', '')
+	
+        if self.obdtype == None:
+            self.obdtype = 'dumb'
+	
+        self.conf_name = name
+        self.conf_uuid = uuid
+        self.realdev = self.devpath
+	
+	self.lmv = None
+        self.master = None
+	
+        lmv_uuid = self.db.get_first_ref('lmv')
+	if lmv_uuid != None:
+	    self.lmv = self.db.lookup(lmv_uuid)
+	    if self.lmv != None:
+                self.client_uuids = self.lmv.get_refs('client')
+
+        if self.target.get_class() == 'mds':
+    	    if self.target.get_val('failover', 0):
+        	self.failover_mds = 'f'
+    	    else:
+    		self.failover_mds = 'n'
+            self.format = self.db.get_val('autoformat', "no")
+        else:
+            self.format = self.db.get_val('autoformat', "yes")
+            self.osdtype = self.db.get_val('osdtype')
+            ost = self.db.lookup(target_uuid)
+            if ost.get_val('failover', 0):
+                self.failover_ost = 'f'
+            else:
+                self.failover_ost = 'n'
+
+	self.inode_size = self.get_inode_size()
+
+ 	if self.lmv != None:
+	    client_uuid = self.name + "_lmv_UUID"
+ 	    self.master = LMV(self.lmv, client_uuid, 
+			      self.conf_name, self.conf_name)
+
+    def get_inode_size(self):
+        inode_size = self.db.get_val_int('inodesize', 0)
+        if inode_size == 0 and self.target.get_class() == 'mds':
+	
+    	    # default inode size for case when neither LOV either 
+    	    # LMV is accessible.
+    	    self.inode_size = 256
+	    
+            # find the LOV for this MDS
+            lovconfig_uuid = self.target.get_first_ref('lovconfig')
+            if lovconfig_uuid or self.lmv != None:
+                if self.lmv != None:
+                    lovconfig_uuid = self.lmv.get_first_ref('lovconfig')
+                    lovconfig = self.lmv.lookup(lovconfig_uuid)
+                    lov_uuid = lovconfig.get_first_ref('lov')
+                    if lov_uuid == None:
+                        panic(self.target.getName() + ": No LOV found for lovconfig ", 
+                              lovconfig.name)
+	        else:
+                    lovconfig = self.target.lookup(lovconfig_uuid)
+                    lov_uuid = lovconfig.get_first_ref('lov')
+                    if lov_uuid == None:
+                       panic(self.target.getName() + ": No LOV found for lovconfig ", 
+                             lovconfig.name)
+		    if self.lmv != None:
+		        lovconfig_uuid = self.lmv.get_first_ref('lovconfig')
+		        lovconfig = self.lmv.lookup(lovconfig_uuid)
+		        lov_uuid = lovconfig.get_first_ref('lov')
+
+                lov = LOV(self.db.lookup(lov_uuid), lov_uuid, self.name, 
+                          config_only = 1)
+
+                # default stripe count controls default inode_size
+        	if lov.stripe_cnt > 0:
+            	    stripe_count = lov.stripe_cnt
+        	else:
+            	    stripe_count = len(lov.devlist)
+                if stripe_count > 77:
+                    inode_size = 4096
+                elif stripe_count > 35:
+                    inode_size = 2048
+                elif stripe_count > 13:
+                    inode_size = 1024
+                elif stripe_count > 3:
+                    inode_size = 512
+                else:
+                    inode_size = 256
+		    
+	return inode_size
+	    
+    def get_mount_options(self, blkdev):
+        options = def_mount_options(self.fstype, 
+				    self.target.get_class())
+            
+        if config.mountfsoptions:
+            if options:
+                options = "%s,%s" %(options, config.mountfsoptions)
+            else:
+                options = config.mountfsoptions
+            if self.mountfsoptions:
+                options = "%s,%s" %(options, self.mountfsoptions)
+        else:
+            if self.mountfsoptions:
+                if options:
+                    options = "%s,%s" %(options, self.mountfsoptions)
+                else:
+                    options = self.mountfsoptions
+            
+        if self.fstype == 'smfs':
+            if options:
+                options = "%s,type=%s,dev=%s" %(options, self.backfstype, 
+						blkdev)
+            else:
+                options = "type=%s,dev=%s" %(self.backfstype, 
+					     blkdev)
+        
+	if self.target.get_class() == 'mds':
+	    if options:
+        	options = "%s,iopen_nopriv" %(options)
+	    else:
+        	options = "iopen_nopriv"
+	    
+	return options
+
+    def prepare(self):
+        if is_prepared(self.name):
+            return
+        
+        blkdev = block_dev(self.devpath, self.size, self.fstype,
+                           config.reformat, self.format, self.journal_size,
+                           self.inode_size, self.mkfsoptions, self.backfstype,
+                           self.backdevpath)
+
+        if self.fstype == 'smfs':
+            realdev = self.fstype
+        else:
+            realdev = blkdev
+		
+	mountfsoptions = self.get_mount_options(blkdev)
+
+    	self.info(self.target.get_class(), realdev, mountfsoptions, 
+		  self.fstype, self.size, self.format)
+
+        lctl.newdev("confobd", self.name, self.uuid, 
+		    setup ="%s %s %s" %(realdev, self.fstype, 
+				        mountfsoptions))
+
+        self.mountfsoptions = mountfsoptions
+        self.realdev = realdev
+
+    def add_module(self, manager):
+	manager.add_lustre_module('obdclass', 'confobd')
+
+    def write_conf(self):
+        if self.target.get_class() == 'ost':
+            config.record = 1
+            lctl.clear_log(self.name, self.target.getName() + '-conf')
+            lctl.record(self.name, self.target.getName() + '-conf')
+            lctl.newdev(self.osdtype, self.conf_name, self.conf_uuid,
+                        setup ="%s %s %s %s" %(self.realdev, self.fstype,
+                                               self.failover_ost,
+                                               self.mountfsoptions))
+            lctl.end_record()
+            lctl.clear_log(self.name, 'OSS-conf')
+            lctl.record(self.name, 'OSS-conf')
+            lctl.newdev("ost", 'OSS', 'OSS_UUID', setup ="")
+            lctl.end_record()
+            config.record = 0
+            return
+
+        if self.target.get_class() == 'mds':
+	    if self.master != None:
+		master_name = self.master.name
+	    else:
+		master_name = 'dumb'
+
+	    config.record = 1
+            lctl.clear_log(self.name, self.target.getName() + '-conf')
+            lctl.record(self.name, self.target.getName() + '-conf')
+            lctl.newdev("mds", self.conf_name, self.conf_uuid,
+                        setup ="%s %s %s %s %s %s" %(self.realdev, self.fstype,
+                                            	     self.conf_name, self.mountfsoptions,
+					    	     master_name, self.obdtype))
+            lctl.end_record()
+            config.record = 0
+
+        if not self.client_uuids:
+            return 0
+
+        for uuid in self.client_uuids:
+            log("recording client:", uuid)
+            client_uuid = generate_client_uuid(self.name)
+            client = VOSC(self.db.lookup(uuid), client_uuid, 
+			  self.target.getName(), self.name)
+            config.record = 1
+            lctl.clear_log(self.name, self.target.getName())
+            lctl.record(self.name, self.target.getName())
+            client.prepare()
+            lctl.mount_option(self.target.getName(), client.get_name(), "")
+            lctl.end_record()
+
+            config.cleanup = 1
+            lctl.clear_log(self.name, self.target.getName() + '-clean')
+            lctl.record(self.name, self.target.getName() + '-clean')
+            client.cleanup()
+            lctl.del_mount_option(self.target.getName())
+            lctl.end_record()
+            config.cleanup = 0
+            config.record = 0
+
+        if config.record:
+            return
+
+        # record logs for each client
+        if config.ldapurl:
+            config_options = "--ldapurl " + config.ldapurl + " --config " + config.config
+        else:
+            config_options = CONFIG_FILE
+
+        for node_db in self.db.lookup_class('node'):
+            client_name = node_db.getName()
+            for prof_uuid in node_db.get_refs('profile'):
+                prof_db = node_db.lookup(prof_uuid)
+                # refactor this into a funtion to test "clientness"
+                # of a node.
+                for ref_class, ref_uuid in prof_db.get_all_refs():
+                    if ref_class in ('mountpoint','echoclient'):
+                        debug("recording", client_name)
+                        old_noexec = config.noexec
+                        config.noexec = 0
+                        noexec_opt = ('', '-n')
+                        ret, out = run (sys.argv[0],
+                                        noexec_opt[old_noexec == 1],
+                                        " -v --record --nomod",
+                                        "--record_log", client_name,
+                                        "--record_device", self.name,
+                                        "--node", client_name,
+                                        config_options)
+                        if config.verbose:
+                            for s in out: log("record> ", string.strip(s))
+                        ret, out = run (sys.argv[0],
+                                        noexec_opt[old_noexec == 1],
+                                        "--cleanup -v --record --nomod",
+                                        "--record_log", client_name + "-clean",
+                                        "--record_device", self.name,
+                                        "--node", client_name,
+                                        config_options)
+                        if config.verbose:
+                            for s in out: log("record> ", string.strip(s))
+                        config.noexec = old_noexec
+
+    def start(self):
+         try:
+            lctl.start(self.name, self.conf_name)
+         except CommandError, e:
+            raise e
+         if self.target.get_class() == 'ost':
+             if not is_prepared('OSS'):
+                 try:
+                     lctl.start(self.name, 'OSS')
+                 except CommandError, e:
+                     raise e
+
+    def cleanup(self):
+        if is_prepared(self.name):
+            try:
+                lctl.cleanup(self.name, self.uuid, 0, 0)
+    		clean_dev(self.devpath, self.fstype, 
+			  self.backfstype, self.backdevpath)
+            except CommandError, e:
+                log(self.module_name, "cleanup failed: ", self.name)
+                e.dump()
+                cleanup_error(e.rc)
+                Module.cleanup(self)
+
 class MDSDEV(Module):
     def __init__(self,db):
         Module.__init__(self, 'MDSDEV', db)
@@ -1721,84 +2023,28 @@ class MDSDEV(Module):
         self.obdtype = self.db.get_val('obdtype', '')
         self.root_squash = self.db.get_val('root_squash', '')
         self.no_root_squash = self.db.get_val('no_root_squash', '')
-	# overwrite the orignal MDSDEV name and uuid with the MDS name and uuid
+
         target_uuid = self.db.get_first_ref('target')
-        self.mds = self.db.lookup(target_uuid)
-        self.name = self.mds.getName()
-        self.client_uuids = self.mds.get_refs('client')
-        
-	self.lmv = None
+        self.target = self.db.lookup(target_uuid)
+        self.name = self.target.getName()
         self.master = None
+	self.lmv = None
 	
         lmv_uuid = self.db.get_first_ref('lmv')
 	if lmv_uuid != None:
 	    self.lmv = self.db.lookup(lmv_uuid)
-	    if self.lmv != None:
-                self.client_uuids = self.lmv.get_refs('client')
 
-        # FIXME: if fstype not set, then determine based on kernel version
-        self.format = self.db.get_val('autoformat', "no")
-        if self.mds.get_val('failover', 0):
-            self.failover_mds = 'f'
-        else:
-            self.failover_mds = 'n'
-        active_uuid = get_active_target(self.mds)
+        active_uuid = get_active_target(self.target)
         if not active_uuid:
             panic("No target device found:", target_uuid)
         if active_uuid == self.uuid:
             self.active = 1
+	    group = self.target.get_val('group')
+    	    if config.group and config.group != group:
+        	self.active = 0
         else:
             self.active = 0
-        if self.active and config.group and config.group != self.mds.get_val('group'):
-            self.active = 0
 
-        # default inode inode for case when neither LOV either 
-        # LMV is accessible.
-        self.inode_size = 256
-        
-        inode_size = self.db.get_val_int('inodesize', 0)
-        if not inode_size == 0:
-            self.inode_size = inode_size
-        else:
-            # find the LOV for this MDS
-            lovconfig_uuid = self.mds.get_first_ref('lovconfig')
-            if lovconfig_uuid or self.lmv != None:
-                if self.lmv != None:
-                    lovconfig_uuid = self.lmv.get_first_ref('lovconfig')
-                    lovconfig = self.lmv.lookup(lovconfig_uuid)
-                    lov_uuid = lovconfig.get_first_ref('lov')
-                    if lov_uuid == None:
-                        panic(self.mds.getName() + ": No LOV found for lovconfig ", 
-                              lovconfig.name)
-	        else:
-                    lovconfig = self.mds.lookup(lovconfig_uuid)
-                    lov_uuid = lovconfig.get_first_ref('lov')
-                    if lov_uuid == None:
-                       panic(self.mds.getName() + ": No LOV found for lovconfig ", 
-                             lovconfig.name)
-
-		    if self.lmv != None:
-		        lovconfig_uuid = self.lmv.get_first_ref('lovconfig')
-		        lovconfig = self.lmv.lookup(lovconfig_uuid)
-		        lov_uuid = lovconfig.get_first_ref('lov')
-
-                lov = LOV(self.db.lookup(lov_uuid), lov_uuid, self.name, 
-                          config_only = 1)
-
-                # default stripe count controls default inode_size
-                stripe_count = lov.stripe_cnt
-                if stripe_count > 77:
-                    self.inode_size = 4096
-                elif stripe_count > 35:
-                    self.inode_size = 2048
-                elif stripe_count > 13:
-                    self.inode_size = 1024
-                elif stripe_count > 3:
-                    self.inode_size = 512
-                else:
-                    self.inode_size = 256
-
-        self.target_dev_uuid = self.uuid
         self.uuid = target_uuid
 
  	# setup LMV
@@ -1806,6 +2052,9 @@ class MDSDEV(Module):
 	    client_uuid = self.name + "_lmv_UUID"
  	    self.master = LMV(self.lmv, client_uuid, 
 			      self.name, self.name)
+			      
+        self.confobd = CONFDEV(self.db, self.name, 
+			       target_uuid, self.uuid)
 
     def add_module(self, manager):
         if self.active:
@@ -1837,103 +2086,59 @@ class MDSDEV(Module):
  	# add LMV modules
  	if self.master != None:
             self.master.add_module(manager)
+ 
+ 	# add CONFOBD modules
+ 	if self.confobd != None:
+            self.confobd.add_module(manager)
 	    
-    def get_mount_options(self, blkdev):
-        options = def_mount_options(self.fstype, 'mds')
-            
-        if config.mountfsoptions:
-            if options:
-                options = "%s,%s" %(options, config.mountfsoptions)
-            else:
-                options = config.mountfsoptions
-            if self.mountfsoptions:
-                options = "%s,%s" %(options, self.mountfsoptions)
-        else:
-            if self.mountfsoptions:
-                if options:
-                    options = "%s,%s" %(options, self.mountfsoptions)
-                else:
-                    options = self.mountfsoptions
-            
-        if self.fstype == 'smfs':
-            if options:
-                options = "%s,type=%s,dev=%s" %(options, 
-			   self.backfstype, blkdev)
-            else:
-                options = "type=%s,dev=%s" %(self.backfstype, blkdev)
-	return options
-	
-    def prepare(self):
-        if not config.record and is_prepared(self.name):
+    def write_conf(self):
+        if is_prepared(self.name):
             return
         if not self.active:
             debug(self.uuid, "not active")
             return
-        if config.reformat:
-            # run write_conf automatically, if --reformat used
-            self.write_conf()
         run_acceptors()
-        
+        self.confobd.prepare()
+        self.confobd.write_conf()
+        self.confobd.cleanup()
+
+    def prepare(self):
+        if is_prepared(self.name):
+            return
+        if not self.active:
+            debug(self.uuid, "not active")
+            return
+        run_acceptors()
+
+        self.confobd.prepare()
+        if config.reformat:
+            self.confobd.write_conf()
+
  	# prepare LMV
  	if self.master != None:
              self.master.prepare()
-	     
-        # never reformat here
-        blkdev = block_dev(self.devpath, self.size, self.fstype, 0,
-                           self.format, self.journal_size, self.inode_size,
-                           self.mkfsoptions, self.backfstype, self.backdevpath)
-        
-        if not is_prepared('MDT'):
-            lctl.newdev("mdt", 'MDT', 'MDT_UUID', setup ="")
-        try: 
-            if self.fstype == 'smfs':
-                realdev = self.fstype
+
+        lctl.attach("mds", self.name, self.uuid)
+        if config.mds_mds_sec:
+	    lctl.set_security(self.name, "mds_mds_sec", config.mds_mds_sec)
+        if config.mds_ost_sec:
+            lctl.set_security(self.name, "mds_ost_sec", config.mds_ost_sec)
+        lctl.detach(self.name)
+
+	if not config.record:
+            self.confobd.start()
+    	
+	if not is_prepared('MDT'):
+    	    lctl.newdev("mdt", 'MDT', 'MDT_UUID', setup ="")
+
+        if development_mode():
+            procentry = "/proc/fs/lustre/mds/lsd_upcall"
+            upcall = os.path.abspath(os.path.dirname(sys.argv[0]) + "/lsd_upcall")
+            if not (os.access(procentry, os.R_OK) and os.access(upcall, os.R_OK)):
+                print "MDS Warning: failed to set lsd cache upcall"
             else:
-                realdev = blkdev
-		
-            if self.obdtype == None:
-                self.obdtype = 'dumb'
-		
-	    if self.master == None:
-		master_name = 'dumb'
-	    else:
-		master_name = self.master.name
-                
-            if self.client_uuids == None:
-		profile_name = 'dumb'
-	    else:
-		profile_name = self.name
-            
-	    mountfsoptions = self.get_mount_options(blkdev)
+                run("echo ", upcall, " > ", procentry)
 
-    	    self.info("mds", realdev, mountfsoptions, self.fstype, self.size, 
-		      self.format, master_name, profile_name, self.obdtype)
-	    
-            lctl.attach("mds", self.name, self.uuid)
-            if config.mds_mds_sec:
-                lctl.set_security(self.name, "mds_mds_sec", config.mds_mds_sec)
-            if config.mds_ost_sec:
-                lctl.set_security(self.name, "mds_ost_sec", config.mds_ost_sec)
-
-            lctl.setup(self.name, setup = "%s %s %s %s %s %s" %(realdev, 
-			    self.fstype, profile_name, mountfsoptions,
-                            master_name, self.obdtype))
-
-            if development_mode():
-                procentry = "/proc/fs/lustre/mds/lsd_upcall"
-                upcall = os.path.abspath(os.path.dirname(sys.argv[0]) + "/lsd_upcall")
-                if not (os.access(procentry, os.R_OK) and os.access(upcall, os.R_OK)):
-                    print "MDS Warning: failed to set lsd cache upcall"
-                else:
-                    run("echo ", upcall, " > ", procentry)
-
-        except CommandError, e:
-            if e.rc == 2:
-                panic("MDS is missing the config log. Need to run " +
-                       "lconf --write_conf.")
-            else:
-                raise e
-        
 	if config.root_squash == None:
             config.root_squash = self.root_squash
         if config.no_root_squash == None:
@@ -1944,113 +2149,6 @@ class MDSDEV(Module):
             else:
                 nsnid = "0"
             lctl.root_squash(self.name, config.root_squash, nsnid)
-
-    def write_conf(self):
-        if not self.client_uuids:
-            return 0
-            
-        do_cleanup = 0
-        if not is_prepared(self.name):
-            blkdev = block_dev(self.devpath, self.size, self.fstype,
-                               config.reformat, self.format, self.journal_size,
-                               self.inode_size, self.mkfsoptions,
-                               self.backfstype, self.backdevpath)
-
-            if self.fstype == 'smfs':
-                realdev = self.fstype
-            else:
-                realdev = blkdev
-            
-            # Even for writing logs we mount mds with supplied mount options
-            # because it will not mount smfs (if used) otherwise.
-	    mountfsoptions = self.get_mount_options(blkdev)
-
-            if self.obdtype == None:
-                self.obdtype = 'dumb'
-                
-    	    self.info("mds", realdev, mountfsoptions, self.fstype, self.size, 
-		      self.format, "dumb", "dumb", self.obdtype)
-	    
-            lctl.newdev("mds", self.name, self.uuid,
-                        setup ="%s %s %s %s %s %s" %(realdev, self.fstype, 
-                                                     'dumb', mountfsoptions,
-                                                     'dumb', self.obdtype))
-            do_cleanup = 1
-
-        # record logs for all MDS clients
-        for obd_uuid in self.client_uuids:
-            log("recording client:", obd_uuid)
-
-            client_uuid = generate_client_uuid(self.name)
-            client = VOSC(self.db.lookup(obd_uuid), client_uuid, 
-                          self.name, self.name)
-            config.record = 1
-            lctl.clear_log(self.name, self.name)
-            lctl.record(self.name, self.name)
-            client.prepare()
-            lctl.mount_option(self.name, client.get_name(), "")
-            lctl.end_record()
-            process_updates(self.db, self.name, self.name, client)
-
-            config.cleanup = 1
-            lctl.clear_log(self.name, self.name + '-clean')
-            lctl.record(self.name, self.name + '-clean')
-            client.cleanup()
-            lctl.del_mount_option(self.name)
-            lctl.end_record()
-            process_updates(self.db, self.name, self.name + '-clean', client)
-            config.cleanup = 0
-            config.record = 0
-
-        # record logs for each client
-        if config.noexec:
-            noexec_opt = '-n'
-        else:
-            noexec_opt = ''
-        if config.ldapurl:
-            config_options = "--ldapurl " + config.ldapurl + " --config " + config.config
-        else:
-            config_options = CONFIG_FILE
-
-        for node_db in self.db.lookup_class('node'):
-            client_name = node_db.getName()
-            for prof_uuid in node_db.get_refs('profile'):
-                prof_db = node_db.lookup(prof_uuid)
-                # refactor this into a funtion to test "clientness"
-                # of a node.
-                for ref_class, ref_uuid in prof_db.get_all_refs():
-                    if ref_class in ('mountpoint','echoclient'):
-                        debug("recording", client_name)
-                        old_noexec = config.noexec
-                        config.noexec = 0
-                        ret, out = run (sys.argv[0], noexec_opt,
-                                        " -v --record --nomod",
-                                        "--record_log", client_name,
-                                        "--record_device", self.name,
-                                        "--node", client_name,
-                                        config_options)
-                        if config.verbose:
-                            for s in out: log("record> ", string.strip(s))
-                        ret, out = run (sys.argv[0], noexec_opt,
-                                        "--cleanup -v --record --nomod",
-                                        "--record_log", client_name + "-clean",
-                                        "--record_device", self.name,
-                                        "--node", client_name,
-                                        config_options)
-                        if config.verbose:
-                            for s in out: log("record> ", string.strip(s))
-                        config.noexec = old_noexec
-        if do_cleanup:
-            try:
-                lctl.cleanup(self.name, self.uuid, 0, 0)
-            except CommandError, e:
-                log(self.module_name, "cleanup failed: ", self.name)
-                e.dump()
-                cleanup_error(e.rc)
-                Module.cleanup(self)
-
-            clean_dev(self.devpath, self.fstype, self.backfstype, 
-		      self.backdevpath)
 
     def msd_remaining(self):
         out = lctl.device_list()
@@ -2090,14 +2188,14 @@ class MDSDEV(Module):
                 e.dump()
                 cleanup_error(e.rc)
         
-        clean_dev(self.devpath, self.fstype, self.backfstype, 
-	          self.backdevpath)
+        if self.confobd:
+            self.confobd.cleanup()
 
     def correct_level(self, level, op=None):
 	#if self.master != None:
 	#   level = level + 2
         return level
-
+	
 class OSD(Module):
     def __init__(self, db):
         Module.__init__(self, 'OSD', db)
@@ -2126,97 +2224,78 @@ class OSD(Module):
             panic("No target device found:", target_uuid)
         if active_uuid == self.uuid:
             self.active = 1
+	    group = ost.get_val('group')
+    	    if config.group and config.group != group:
+        	self.active = 0
         else:
             self.active = 0
-        if self.active and config.group and config.group != ost.get_val('group'):
-            self.active = 0
 
-        self.target_dev_uuid = self.uuid
         self.uuid = target_uuid
+        self.confobd = CONFDEV(self.db, self.name, 
+			       target_uuid, self.uuid)
     
     def add_module(self, manager):
-        if self.active:
-            manager.add_lustre_module('ost', 'ost')
+        if not self.active:
+	    return
+        manager.add_lustre_module('ost', 'ost')
             
-            if self.fstype == 'smfs' or self.fstype == 'ldiskfs':
-                manager.add_lustre_module(self.fstype, self.fstype)
+        if self.fstype == 'smfs' or self.fstype == 'ldiskfs':
+            manager.add_lustre_module(self.fstype, self.fstype)
 		
-            if self.fstype:
-                manager.add_lustre_module('lvfs' , 'fsfilt_%s' % (self.fstype))
+        if self.fstype:
+            manager.add_lustre_module('lvfs' , 'fsfilt_%s' % (self.fstype))
 
-            if self.fstype == 'smfs':
-                manager.add_lustre_module(self.backfstype, self.backfstype)
-                manager.add_lustre_module('lvfs' , 'fsfilt_%s' % (self.backfstype))
-
-	    for option in self.mountfsoptions:
-	        if option == 'snap':
-		    if not self.fstype == 'smfs':
-		        panic("mountoptions with snap, but fstype is not smfs\n")
-		    manager.add_lustre_module('lvfs', 'fsfilt_snap_%s' % (self.fstype))
-		    manager.add_lustre_module('lvfs', 'fsfilt_snap_%s' % (self.backfstype))
-
-            manager.add_lustre_module(self.osdtype, self.osdtype)
-
-    def get_mount_options(self, blkdev):
-        options = def_mount_options(self.fstype, 'ost')
-            
-        if config.mountfsoptions:
-            if options:
-                options = "%s,%s" %(options, config.mountfsoptions)
-            else:
-                options = config.mountfsoptions
-            if self.mountfsoptions:
-                options = "%s,%s" %(options, self.mountfsoptions)
-        else:
-            if self.mountfsoptions:
-                if options:
-                    options = "%s,%s" %(options, self.mountfsoptions)
-                else:
-                    options = self.mountfsoptions
-            
         if self.fstype == 'smfs':
-            if options:
-                options = "%s,type=%s,dev=%s" %(options, 
-		    self.backfstype, blkdev)
-            else:
-                options = "type=%s,dev=%s" %(self.backfstype, 
-		    blkdev)
-	return options
+            manager.add_lustre_module(self.backfstype, self.backfstype)
+            manager.add_lustre_module('lvfs' , 'fsfilt_%s' % (self.backfstype))
+
+	for option in self.mountfsoptions:
+	    if option == 'snap':
+		if not self.fstype == 'smfs':
+		    panic("mountoptions with snap, but fstype is not smfs\n")
+		manager.add_lustre_module('lvfs', 'fsfilt_snap_%s' % (self.fstype))
+		manager.add_lustre_module('lvfs', 'fsfilt_snap_%s' % (self.backfstype))
+
+        manager.add_lustre_module(self.osdtype, self.osdtype)
 	
-    # need to check /proc/mounts and /etc/mtab before
-    # formatting anything.
-    # FIXME: check if device is already formatted.
+ 	# add CONFOBD modules
+ 	if self.confobd != None:
+            self.confobd.add_module(manager)
+
     def prepare(self):
         if is_prepared(self.name):
             return
         if not self.active:
             debug(self.uuid, "not active")
             return
+
         run_acceptors()
         if self.osdtype == 'obdecho':
-            blkdev = ''
-        else:
-            blkdev = block_dev(self.devpath, self.size, self.fstype,
-                               config.reformat, self.format, self.journal_size,
-                               self.inode_size, self.mkfsoptions, self.backfstype,
-                               self.backdevpath)
+            self.info(self.osdtype)
+            lctl.newdev("obdecho", self.name, self.uuid)
+            if not is_prepared('OSS'):
+                lctl.newdev("ost", 'OSS', 'OSS_UUID', setup="")
+	else:
+    	    self.confobd.prepare()
+    	    if config.reformat:
+        	self.confobd.write_conf()
+    	    if not config.record:
+        	self.confobd.start()        
 
-        if self.fstype == 'smfs':
-            realdev = self.fstype
-        else:
-            realdev = blkdev
-
-	mountfsoptions = self.get_mount_options(blkdev)
-	
-        self.info(self.osdtype, realdev, mountfsoptions, self.fstype, 
-		  self.size, self.format, self.journal_size, self.inode_size)
-		  
-        lctl.newdev(self.osdtype, self.name, self.uuid,
-                    setup ="%s %s %s %s" %(realdev, self.fstype,
-                                           self.failover_ost, 
-                                           mountfsoptions))
-        if not is_prepared('OSS'):
-            lctl.newdev("ost", 'OSS', 'OSS_UUID', setup ="")
+    def write_conf(self):
+        if is_prepared(self.name):
+            return
+        if not self.active:
+            debug(self.uuid, "not active")
+            return
+                                                                                                               
+        run_acceptors()
+        if self.osdtype != 'obdecho':
+    	    self.confobd.prepare()
+    	    self.confobd.write_conf()
+    	    if not config.write_conf:
+        	self.confobd.start()
+    	    self.confobd.cleanup()
 
     def osd_remaining(self):
         out = lctl.device_list()
@@ -2234,6 +2313,7 @@ class OSD(Module):
         if not self.active:
             debug(self.uuid, "not active")
             return
+	    
         if is_prepared(self.name):
             self.info()
             try:
@@ -2251,33 +2331,24 @@ class OSD(Module):
                 print "cleanup failed: ", self.name
                 e.dump()
                 cleanup_error(e.rc)
-        if not self.osdtype == 'obdecho':
-    	    clean_dev(self.devpath, self.fstype, self.backfstype, 
-	              self.backdevpath)
+
+        if self.osdtype != 'obdecho':
+            if self.confobd:
+                self.confobd.cleanup()
 
     def correct_level(self, level, op=None):
         return level
 
-def mgmt_uuid_for_fs(mtpt_name):
-    if not mtpt_name:
-        return ''
-    mtpt_db = toplustreDB.lookup_name(mtpt_name)
-    fs_uuid = mtpt_db.get_first_ref('filesystem')
-    fs = toplustreDB.lookup(fs_uuid)
-    if not fs:
-        return ''
-    return fs.get_first_ref('mgmt')
-
 # Generic client module, used by OSC and MDC
 class Client(Module):
-    def __init__(self, tgtdb, uuid, module, fs_name, self_name=None,
-                 module_dir=None):
+    def __init__(self, tgtdb, uuid, module, fs_name, 
+		 self_name=None, module_dir=None):
         self.target_name = tgtdb.getName()
         self.target_uuid = tgtdb.getUUID()
         self.module_dir = module_dir
+        self.backup_targets = []
 	self.module = module
         self.db = tgtdb
-        self.active = 1
 
         self.tgt_dev_uuid = get_active_target(tgtdb)
         if not self.tgt_dev_uuid:
@@ -2295,11 +2366,7 @@ class Client(Module):
             self.name = self_name
         self.uuid = uuid
         self.lookup_server(self.tgt_dev_uuid)
-        mgmt_uuid = mgmt_uuid_for_fs(fs_name)
-        if mgmt_uuid:
-            self.mgmt_name = mgmtcli_name_for_uuid(mgmt_uuid)
-        else:
-            self.mgmt_name = ''
+        self.lookup_backup_targets()
         self.fs_name = fs_name
         if not self.module_dir:
             self.module_dir = module
@@ -2319,6 +2386,20 @@ class Client(Module):
     def get_servers(self):
         return self._server_nets
 
+    def lookup_backup_targets(self):
+        """ Lookup alternative network information """
+        prof_list = toplustreDB.get_refs('profile')
+        for prof_uuid in prof_list:
+            prof_db = toplustreDB.lookup(prof_uuid)
+            if not prof_db:
+                panic("profile:", prof_uuid, "not found.")
+            for ref_class, ref_uuid in prof_db.get_all_refs():
+                if ref_class in ('osd', 'mdsdev'):
+                    devdb = toplustreDB.lookup(ref_uuid)
+                    uuid = devdb.get_first_ref('target')
+                    if self.target_uuid == uuid and self.tgt_dev_uuid != ref_uuid:
+                        self.backup_targets.append(ref_uuid)
+
     def prepare(self, ignore_connect_failure = 0):
         self.info(self.target_uuid)
         if not config.record and is_prepared(self.name):
@@ -2336,16 +2417,32 @@ class Client(Module):
         except CommandError, e:
             if not ignore_connect_failure:
                 raise e
+
         if srv:
-            if self.permits_inactive() and (self.target_uuid in config.inactive or self.active == 0):
+            if self.target_uuid in config.inactive and self.permits_inactive():
                 debug("%s inactive" % self.target_uuid)
                 inactive_p = "inactive"
             else:
                 debug("%s active" % self.target_uuid)
                 inactive_p = ""
             lctl.newdev(self.module, self.name, self.uuid,
-                        setup ="%s %s %s %s" % (self.target_uuid, srv.nid_uuid,
-                                                inactive_p, self.mgmt_name))
+                        setup ="%s %s %s" % (self.target_uuid, srv.nid_uuid,
+                                                inactive_p))
+        for tgt_dev_uuid in self.backup_targets:
+            this_nets = get_ost_net(toplustreDB, tgt_dev_uuid)
+            if len(this_nets) == 0:
+                panic ("Unable to find a server for:", tgt_dev_uuid)
+            srv = choose_local_server(this_nets)
+            if srv:
+                lctl.connect(srv)
+            else:
+                routes = find_route(this_nets);
+                if len(routes) == 0:
+                    panic("no route to", tgt_dev_uuid)
+                for (srv, r) in routes:
+                    lctl.add_route_host(r[0]. srv.nid_uuid, r[1], r[3])
+            if srv:
+                lctl.add_conn(self.name, srv.nid_uuid);
 
     def cleanup(self):
         if is_prepared(self.name):
@@ -2361,6 +2458,15 @@ class Client(Module):
                 log(self.module_name, "cleanup failed: ", self.name)
                 e.dump()
                 cleanup_error(e.rc)
+
+            for tgt_dev_uuid in self.backup_targets:
+                this_net = get_ost_net(toplustreDB, tgt_dev_uuid)
+                srv = choose_local_server(this_net)
+                if srv:
+                    lctl.disconnect(srv)
+                else:
+                    for (srv, r) in find_route(this_net):
+                        lctl.del_route_host(r[0]. srv.nid_uuid, r[1], r[3])
 
     def correct_level(self, level, op=None):
         return level
@@ -2386,15 +2492,6 @@ class OSC(Client):
 
     def permits_inactive(self):
         return 1
-
-def mgmtcli_name_for_uuid(uuid):
-    return 'MGMTCLI_%s' % uuid
-
-class ManagementClient(Client):
-    def __init__(self, db, uuid):
-        Client.__init__(self, db, uuid, 'mgmt_cli', '',
-                        self_name = mgmtcli_name_for_uuid(db.getUUID()),
-                        module_dir = 'mgmt')
 
 class CMOBD(Module):
     def __init__(self, db):
@@ -2652,14 +2749,13 @@ class Mountpoint(Module):
     def __init__(self,db):
         Module.__init__(self, 'MTPT', db)
         self.path = self.db.get_val('path')
-	self.clientoptions = self.db.get_val('clientoptions', '')
+        self.clientoptions = self.db.get_val('clientoptions', '')
         self.fs_uuid = self.db.get_first_ref('filesystem')
         fs = self.db.lookup(self.fs_uuid)
         self.mds_uuid = fs.get_first_ref('lmv')
 	if not self.mds_uuid:
 	    self.mds_uuid = fs.get_first_ref('mds')
         self.obd_uuid = fs.get_first_ref('obd')
-        self.mgmt_uuid = fs.get_first_ref('mgmt')
         client_uuid = generate_client_uuid(self.name)
 
         ost = self.db.lookup(self.obd_uuid)
@@ -2673,46 +2769,37 @@ class Mountpoint(Module):
         self.vosc = VOSC(ost, client_uuid, self.name, self.name)
 	self.vmdc = VMDC(mds, client_uuid, self.name, self.name)
         
-        if self.mgmt_uuid:
-            self.mgmtcli = ManagementClient(db.lookup(self.mgmt_uuid),
-                                            client_uuid)
-        else:
-            self.mgmtcli = None
-
     def prepare(self):
         if not config.record and fs_is_mounted(self.path):
             log(self.path, "already mounted.")
             return
         run_acceptors()
-        if self.mgmtcli:
-            self.mgmtcli.prepare()
-        self.vosc.prepare()
+
+	self.vosc.prepare()
         self.vmdc.prepare()
-        vmdc_name = self.vmdc.get_name()
 
         self.info(self.path, self.mds_uuid, self.obd_uuid)
         if config.record or config.lctl_dump:
-            lctl.mount_option(local_node_name, self.vosc.get_name(), vmdc_name)
+            lctl.mount_option(local_node_name, self.vosc.get_name(), 
+			      self.vmdc.get_name())
             return
 
         if config.clientoptions:
             if self.clientoptions:
-                self.clientoptions = self.clientoptions + ',' + \
-			             config.clientoptions
+                self.clientoptions = self.clientoptions + ',' + config.clientoptions
             else:
                 self.clientoptions = config.clientoptions
         if self.clientoptions:
             self.clientoptions = ',' + self.clientoptions
             # Linux kernel will deal with async and not pass it to ll_fill_super,
             # so replace it with Lustre async
-            self.clientoptions = string.replace(self.clientoptions, "async", 
-						"lasync")
+            self.clientoptions = string.replace(self.clientoptions, "async", "lasync")
 
         if not config.sec:
             config.sec = "null"
         cmd = "mount -t lustre_lite -o osc=%s,mdc=%s,sec=%s%s %s %s" % \
-              (self.vosc.get_name(), vmdc_name, config.sec, self.clientoptions,
-	       config.config, self.path)
+              (self.vosc.get_name(), self.vmdc.get_name(), config.sec, 
+	       self.clientoptions, config.config, self.path)
         run("mkdir", self.path)
         ret, val = run(cmd)
         if ret:
@@ -2739,18 +2826,10 @@ class Mountpoint(Module):
 
         self.vmdc.cleanup()
         self.vosc.cleanup()
-        if self.mgmtcli:
-            self.mgmtcli.cleanup()
 
     def add_module(self, manager):
-        manager.add_lustre_module('mdc', 'mdc')
-        
-        if self.mgmtcli:
-            self.mgmtcli.add_module(manager)
-        
         self.vosc.add_module(manager)
         self.vmdc.add_module(manager)
-
         manager.add_lustre_module('llite', 'llite')
 
     def correct_level(self, level, op=None):
@@ -2773,7 +2852,6 @@ def get_ost_net(self, osd_uuid):
         db = node.lookup(net_uuid)
         srv_list.append(Network(db))
     return srv_list
-
 
 # the order of iniitailization is based on level. 
 def getServiceLevel(self):
@@ -2851,9 +2929,8 @@ def find_local_clusters(node_db):
         debug("add_local", netuuid)
         local_clusters.append((srv.net_type, srv.cluster_id, srv.nid))
         if srv.port > 0:
-            if acceptors.has_key(srv.port):
-                panic("duplicate port:", srv.port)
-            acceptors[srv.port] = AcceptorHandler(srv.port, srv.net_type)
+            if not acceptors.has_key(srv.port):
+                acceptors[srv.port] = AcceptorHandler(srv.port, srv.net_type)
 
 # This node is a gateway.
 is_router = 0
@@ -3134,9 +3211,10 @@ def doWriteconf(services):
     #if config.nosetup:
     #    return
     for s in services:
-        if s[1].get_class() == 'mdsdev':
+        if s[1].get_class() == 'mdsdev' or s[1].get_class() == 'osd':
             n = newService(s[1])
             n.write_conf()
+            n.cleanup()
 
 def doSetup(services):
     if config.nosetup:
@@ -3157,7 +3235,7 @@ def doSetup(services):
 def doLoadModules(services):
     if config.nomod:
         return
-    
+	
     # adding all needed modules from all services
     for s in services:
         n = newService(s[1])
@@ -3444,13 +3522,11 @@ def sys_set_netmem_max(path, max):
         fp.write('%d\n' %(max))
         fp.close()
     
-    
 def sys_make_devices():
     if not os.access('/dev/portals', os.R_OK):
         run('mknod /dev/portals c 10 240')
     if not os.access('/dev/obd', os.R_OK):
         run('mknod /dev/obd c 10 241')
-
 
 # Add dir to the global PATH, if not already there.
 def add_to_path(new_dir):
@@ -3472,7 +3548,6 @@ def default_gdb_script():
         return '/r' + script
     else:
         return script
-
 
 DEFAULT_PATH = ('/sbin', '/usr/sbin', '/bin', '/usr/bin')
 # ensure basic elements are in the system path

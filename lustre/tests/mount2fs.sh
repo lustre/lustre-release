@@ -40,5 +40,5 @@ ${LMC} -m $config --add ost --node $OSTNODE --lov lov1 --fstype $FSTYPE --dev $O
 ${LMC} -m $config --add ost --node $OSTNODE --lov lov2 --fstype $FSTYPE --dev $OSTDEV2 --size $OSTSIZE || exit 22
 
 # create client config
-${LMC} -m $config --add mtpt --node $CLIENT --path ${MOUNT1} --mds mds1 --lov lov1 || exit 30
-${LMC} -m $config --add mtpt --node $CLIENT --path ${MOUNT2} --mds mds2 --lov lov2 || exit 30
+${LMC} -m $config --add mtpt --node $CLIENT --path ${MOUNT1} --clientoptions async --mds mds1 --lov lov1 || exit 30
+${LMC} -m $config --add mtpt --node $CLIENT --path ${MOUNT2} --clientoptions async --mds mds2 --lov lov2 || exit 30

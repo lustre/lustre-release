@@ -8,8 +8,8 @@ NAME=${NAME:-local}
 LLMOUNT=${LLMOUNT:-llmount}
 SECURITY=${SECURITY:-"null"}
 
-config=$NAME.xml
-mkconfig=$NAME.sh
+config=$(dirname $0)/$NAME.xml
+mkconfig=$(dirname $0)/$NAME.sh
 
 . krb5_env.sh
 start_krb5_kdc || exit 1
@@ -30,6 +30,7 @@ else
 fi    
 
 [ "$NODE" ] && node_opt="--node $NODE"
+[ "$DEBUG" ] && debug_opt="--ptldebug=$DEBUG"
 
 # We'd better start lsvcgssd after gss modules loaded.
 # remove this if we don't depend on lsvcgssd in the future

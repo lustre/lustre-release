@@ -177,6 +177,7 @@ struct ldlm_namespace {
         struct list_head       ns_unused_list; /* all root resources in ns */
         int                    ns_nr_unused;
         unsigned int           ns_max_unused;
+        unsigned long          ns_next_dump;   /* next dump time */
 
         spinlock_t             ns_counter_lock;
         __u64                  ns_locks;
@@ -252,6 +253,8 @@ struct ldlm_lock {
         /* Server-side-only members */
         struct list_head      l_pending_chain;  /* callbacks pending */
         unsigned long         l_callback_timeout;
+
+        __u32                 l_pid;            /* pid which created this lock */
 };
 
 #define LDLM_PLAIN       10
@@ -311,22 +314,23 @@ do {                                                                          \
                 CDEBUG(level, "### " format                                   \
                        " ns: \?\? lock: %p/"LPX64" lrc: %d/%d,%d mode: %s/%s "\
                        "res: \?\? rrc=\?\? type: \?\?\? flags: %x remote: "   \
-                       LPX64" expref: %d\n" , ## a, lock,                     \
+                       LPX64" expref: %d pid: %u\n" , ## a, lock,             \
                        lock->l_handle.h_cookie, atomic_read(&lock->l_refc),   \
                        lock->l_readers, lock->l_writers,                      \
                        ldlm_lockname[lock->l_granted_mode],                   \
                        ldlm_lockname[lock->l_req_mode],                       \
                        lock->l_flags, lock->l_remote_handle.cookie,           \
                        lock->l_export ?                                       \
-                       atomic_read(&lock->l_export->exp_refcount) : -99);     \
+                       atomic_read(&lock->l_export->exp_refcount) : -99,      \
+                       lock->l_pid);                                          \
                 break;                                                        \
         }                                                                     \
         if (lock->l_resource->lr_type == LDLM_EXTENT) {                       \
                 CDEBUG(level, "### " format                                   \
                        " ns: %s lock: %p/"LPX64" lrc: %d/%d,%d mode: %s/%s "  \
                        "res: "LPU64"/"LPU64"/"LPU64" rrc: %d type: %s ["LPU64 \
-                       "->"LPU64"] (req "LPU64"->"LPU64") flags: %x remote: " \
-                       LPX64" expref: %d\n" , ## a,                           \
+		       "->"LPU64"] (req "LPU64"->"LPU64") flags: %x remote: " \
+		       LPX64" expref: %d pid: %u\n" , ## a,                   \
                        lock->l_resource->lr_namespace->ns_name, lock,         \
                        lock->l_handle.h_cookie, atomic_read(&lock->l_refc),   \
                        lock->l_readers, lock->l_writers,                      \
@@ -342,15 +346,16 @@ do {                                                                          \
                        lock->l_req_extent.start, lock->l_req_extent.end,      \
                        lock->l_flags, lock->l_remote_handle.cookie,           \
                        lock->l_export ?                                       \
-                       atomic_read(&lock->l_export->exp_refcount) : -99);     \
+                       atomic_read(&lock->l_export->exp_refcount) : -99,      \
+                       lock->l_pid);                                          \
                 break;                                                        \
         }                                                                     \
         if (lock->l_resource->lr_type == LDLM_FLOCK) {                        \
                 CDEBUG(level, "### " format                                   \
                        " ns: %s lock: %p/"LPX64" lrc: %d/%d,%d mode: %s/%s "  \
                        "res: "LPU64"/"LPU64"/"LPU64" rrc: %d type: %s pid: "  \
-                       LPU64" ["LPU64"->"LPU64"] flags: %x remote: "LPX64     \
-                       " expref: %d\n" , ## a,                                \
+		       LPU64" " "["LPU64"->"LPU64"] flags: %x remote: "LPX64  \
+                       " expref: %d pid: %u\n" , ## a,                        \
                        lock->l_resource->lr_namespace->ns_name, lock,         \
                        lock->l_handle.h_cookie, atomic_read(&lock->l_refc),   \
                        lock->l_readers, lock->l_writers,                      \
@@ -366,14 +371,16 @@ do {                                                                          \
                        lock->l_policy_data.l_flock.end,                       \
                        lock->l_flags, lock->l_remote_handle.cookie,           \
                        lock->l_export ?                                       \
-                       atomic_read(&lock->l_export->exp_refcount) : -99);     \
+                       atomic_read(&lock->l_export->exp_refcount) : -99,      \
+		       lock->l_pid);                                          \
                 break;                                                        \
         }                                                                     \
         if (lock->l_resource->lr_type == LDLM_IBITS) {                        \
                 CDEBUG(level, "### " format                                   \
                        " ns: %s lock: %p/"LPX64" lrc: %d/%d,%d mode: %s/%s "  \
                        "res: "LPU64"/"LPU64"/"LPU64" bits "LPX64" rrc: %d "   \
-                       "type: %s flags: %x remote: "LPX64" expref: %d\n" , ## a,\
+		       "type: %s flags: %x remote: "LPX64" expref: %d "       \
+		       "pid %u\n" , ## a,                                     \
                        lock->l_resource->lr_namespace->ns_name,               \
                        lock, lock->l_handle.h_cookie,                         \
                        atomic_read (&lock->l_refc),                           \
@@ -388,14 +395,16 @@ do {                                                                          \
                        ldlm_typename[lock->l_resource->lr_type],              \
                        lock->l_flags, lock->l_remote_handle.cookie,           \
                        lock->l_export ?                                       \
-                       atomic_read(&lock->l_export->exp_refcount) : -99);     \
+                       atomic_read(&lock->l_export->exp_refcount) : -99,      \
+		       lock->l_pid);					      \
                 break;                                                        \
         }                                                                     \
         {                                                                     \
                 CDEBUG(level, "### " format                                   \
                        " ns: %s lock: %p/"LPX64" lrc: %d/%d,%d mode: %s/%s "  \
-                       "res: "LPU64"/"LPU64"/"LPU64"/"LPU64" rrc: %d type: %s "\
-                       "flags: %x remote: "LPX64" expref: %d\n" , ## a,       \
+                       "res: "LPU64"/"LPU64"/"LPU64"/"LPU64" rrc: %d type: %s " \
+                       "flags: %x remote: "LPX64" expref: %d "                \
+		       "pid: %u\n" , ## a,                                    \
                        lock->l_resource->lr_namespace->ns_name,               \
                        lock, lock->l_handle.h_cookie,                         \
                        atomic_read (&lock->l_refc),                           \
@@ -410,7 +419,8 @@ do {                                                                          \
                        ldlm_typename[lock->l_resource->lr_type],              \
                        lock->l_flags, lock->l_remote_handle.cookie,           \
                        lock->l_export ?                                       \
-                       atomic_read(&lock->l_export->exp_refcount) : -99);     \
+                       atomic_read(&lock->l_export->exp_refcount) : -99,      \
+                       lock->l_pid);                                          \
         }                                                                     \
 } while (0)
 
@@ -542,9 +552,9 @@ void ldlm_resource_add_lock(struct ldlm_resource *res, struct list_head *head,
                             struct ldlm_lock *lock);
 void ldlm_resource_unlink_lock(struct ldlm_lock *lock);
 void ldlm_res2desc(struct ldlm_resource *res, struct ldlm_resource_desc *desc);
-void ldlm_dump_all_namespaces(void);
-void ldlm_namespace_dump(struct ldlm_namespace *);
-void ldlm_resource_dump(struct ldlm_resource *);
+void ldlm_dump_all_namespaces(int level);
+void ldlm_namespace_dump(int level, struct ldlm_namespace *);
+void ldlm_resource_dump(int level, struct ldlm_resource *);
 int ldlm_lock_change_resource(struct ldlm_namespace *, struct ldlm_lock *,
                               struct ldlm_res_id);
 

@@ -42,8 +42,7 @@ struct ll_file_data {
         unsigned long fd_gid;
 };
 
-struct llu_sb_info
-{
+struct llu_sb_info {
         struct obd_uuid         ll_sb_uuid;
         struct obd_export      *ll_md_exp;
         struct obd_export      *ll_dt_exp;
@@ -108,14 +107,11 @@ struct llu_inode_info {
         unsigned long           lli_st_generation;
 };
 
-static inline struct llu_sb_info *llu_fs2sbi(struct filesys *fs)
-{
-        return (struct llu_sb_info*)(fs->fs_private);
-}
+#define llu_fs2sbi(fs) (struct llu_sb_info *)(fs)->fs_private
 
 static inline struct llu_inode_info *llu_i2info(struct inode *inode)
 {
-        return (struct llu_inode_info*)(inode->i_private);
+        return (struct llu_inode_info *)inode->i_private;
 }
 
 static inline struct llu_sb_info *llu_i2sbi(struct inode *inode)
@@ -135,7 +131,7 @@ static inline struct obd_export *llu_i2mdexp(struct inode *inode)
 
 static inline int llu_is_root_inode(struct inode *inode)
 {
-        return (llu_i2info(inode)->lli_id.li_stc.u.e3s.l3s_ino ==
+        return (id_ino(&llu_i2info(inode)->lli_id) ==
                 llu_i2info(inode)->lli_sbi->ll_rootino);
 }
 
@@ -178,10 +174,14 @@ static inline void ll_inode2id(struct lustre_id *id,
 }
 
 typedef int (*intent_finish_cb)(struct ptlrpc_request *,
-                                struct inode *parent, struct pnode *pnode, 
-                                struct lookup_intent *, int offset, obd_id ino);
+                                struct inode *parent, 
+				struct pnode *pnode, 
+                                struct lookup_intent *, 
+				int offset, obd_id ino);
+				
 int llu_intent_lock(struct inode *parent, struct pnode *pnode,
-                    struct lookup_intent *, int flags, intent_finish_cb);
+                    struct lookup_intent *, int flags, 
+		    intent_finish_cb);
 
 static inline __u64 ll_file_maxbytes(struct inode *inode)
 {
@@ -194,18 +194,21 @@ struct mount_option_s
         char *osc_uuid;
 };
 
-#define IS_BAD_PTR(ptr)         \
+#define IS_BAD_PTR(ptr) \
         ((unsigned long)(ptr) == 0 || (unsigned long)(ptr) > -1000UL)
 
 /* llite_lib.c */
 void generate_random_uuid(unsigned char uuid_out[16]);
-int liblustre_process_log(struct config_llog_instance *cfg, int allow_recov);
+
+int liblustre_process_log(struct config_llog_instance *cfg, 
+			  int allow_recov);
+			  
 int ll_parse_mount_target(const char *target, char **mdsnid,
                           char **mdsname, char **profile);
 
-extern char   *g_zconf_mdsnid;
-extern char   *g_zconf_mdsname;
-extern char   *g_zconf_profile;
+extern char *g_zconf_mdsnid;
+extern char *g_zconf_mdsname;
+extern char *g_zconf_profile;
 extern struct mount_option_s mount_option;
 
 /* super.c */

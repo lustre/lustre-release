@@ -3,8 +3,8 @@ MODULES := lvfs fsfilt_@BACKINGFS@ fsfilt_smfs
 @SNAPFS_TRUE@MODULES += fsfilt_snap_@BACKINGFS@ fsfilt_snap_smfs 
 
 lvfs-objs := fsfilt.o lvfs_common.o llog_lvfs.o lvfs_linux.o 
-lvfs-objs += llog.o llog_cat.o 
-
+lvfs-objs += llog.o llog_cat.o
+ 
 ifeq ($(PATCHLEVEL),6)
 fsfilt_@BACKINGFS@-objs := fsfilt-@BACKINGFS@.o
 

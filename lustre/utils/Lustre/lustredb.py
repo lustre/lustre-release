@@ -307,6 +307,13 @@ class LustreDB_XML(LustreDB):
             ret.append((net_type, gw, gw_cluster_id, tgt_cluster_id, lo, hi))
         return ret
 
+    def get_hostaddr(self):
+        ret = []
+        list = self.dom_node.getElementsByTagName('hostaddr')
+        for node in list:
+            ret.append(node.firstChild.data)
+        return ret
+
     def _update_active(self, tgt, new):
         raise Lustre.LconfError("updates not implemented for XML")
 

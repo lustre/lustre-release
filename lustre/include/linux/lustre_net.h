@@ -110,7 +110,7 @@
 #define MDT_MAX_THREADS 32UL
 #define MDT_NUM_THREADS max(min_t(unsigned long, num_physpages / 8192, \
                                   MDT_MAX_THREADS), 2UL)
-#define MDS_NBUFS       (64 * smp_num_cpus) 
+#define MDS_NBUFS       (64 * smp_num_cpus)
 #define MDS_BUFSIZE     (8 * 1024)
 /* Assume file name length = FNAME_MAX = 256 (true for extN).
  *        path name length = PATH_MAX = 4096
@@ -131,7 +131,7 @@
 #define OST_MAX_THREADS 36UL
 #define OST_NUM_THREADS max(min_t(unsigned long, num_physpages / 8192, \
                                   OST_MAX_THREADS), 2UL)
-#define OST_NBUFS       (64 * smp_num_cpus) 
+#define OST_NBUFS       (64 * smp_num_cpus)
 #define OST_BUFSIZE     (8 * 1024)
 /* OST_MAXREQSIZE ~= 1640 bytes =
  * lustre_msg + obdo + 16 * obd_ioobj + 64 * niobuf_remote
@@ -147,9 +147,7 @@
 #define PTLBD_MAXREQSIZE 1024
 
 struct ptlrpc_peer {
-/*      bugfix #4615 
- */
-        ptl_process_id_t  peer_id;      
+        ptl_process_id_t  peer_id;
         struct ptlrpc_ni *peer_ni;
 };
 
@@ -224,7 +222,7 @@ struct ptlrpc_request_set {
         wait_queue_head_t *set_wakeup_ptr;
         struct list_head  set_requests;
         set_interpreter_func    set_interpret; /* completion callback */
-        union ptlrpc_async_args set_args; /* completion context */
+        void              *set_arg; /* completion context */
         /* locked so that any old caller can communicate requests to
          * the set holder who can then fold them into the lock-free set */
         spinlock_t        set_new_req_lock;
@@ -348,6 +346,9 @@ struct ptlrpc_request {
         struct timeval                     rq_arrival_time; /* request arrival time */
         struct ptlrpc_reply_state         *rq_reply_state; /* separated reply state */
         struct ptlrpc_request_buffer_desc *rq_rqbd; /* incoming request buffer */
+#if CRAY_PORTALS
+        ptl_uid_t                          rq_uid; /* peer uid, used in MDS only */
+#endif
         
         /* client-only incoming reply */
         ptl_handle_md_t      rq_reply_md_h;
@@ -355,6 +356,7 @@ struct ptlrpc_request {
         struct ptlrpc_cb_id  rq_reply_cbid;
         
         struct ptlrpc_peer rq_peer; /* XXX see service.c can this be factored away? */
+        char               rq_peerstr[PTL_NALFMT_SIZE];
         struct obd_export *rq_export;
         struct obd_import *rq_import;
         
@@ -509,7 +511,8 @@ struct ptlrpc_service {
         int              srv_n_difficult_replies; /* # 'difficult' replies */
         int              srv_n_active_reqs;     /* # reqs being served */
         int              srv_rqbd_timeout;      /* timeout before re-posting reqs */
-        
+        int              srv_watchdog_timeout; /* soft watchdog timeout, in ms */
+
         __u32 srv_req_portal;
         __u32 srv_rep_portal;
 
@@ -533,7 +536,7 @@ struct ptlrpc_service {
 
         struct proc_dir_entry   *srv_procroot;
         struct lprocfs_stats    *srv_stats;
-        
+
         struct ptlrpc_srv_ni srv_interfaces[0];
 };
 
@@ -543,7 +546,6 @@ static inline char *ptlrpc_peernid2str(struct ptlrpc_peer *p, char *str)
         return (portals_nid2str(p->peer_ni->pni_number, p->peer_id.nid, str));
 }
 
-/*      For bug #4615   */
 static inline char *ptlrpc_id2str(struct ptlrpc_peer *p, char *str)
 {
         LASSERT(p->peer_ni != NULL);
@@ -684,7 +686,8 @@ void ptlrpc_save_llog_lock (struct ptlrpc_request *req,
 void ptlrpc_commit_replies (struct obd_device *obd);
 void ptlrpc_schedule_difficult_reply (struct ptlrpc_reply_state *rs);
 struct ptlrpc_service *ptlrpc_init_svc(int nbufs, int bufsize, int max_req_size,
-                                       int req_portal, int rep_portal, 
+                                       int req_portal, int rep_portal,
+                                       int watchdog_timeout, /* in ms */
                                        svc_handler_t, char *name,
                                        struct proc_dir_entry *proc_entry);
 void ptlrpc_stop_all_threads(struct ptlrpc_service *svc);

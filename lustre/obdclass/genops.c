@@ -212,7 +212,8 @@ void class_release_dev(struct obd_device *obd)
         int minor = obd->obd_minor;
 
         spin_lock(&obd_dev_lock);
-        memset(obd, 0, sizeof(*obd));
+        obd->obd_type = NULL;
+        //memset(obd, 0, sizeof(*obd));
         obd->obd_minor = minor;
         spin_unlock(&obd_dev_lock);
 }
@@ -788,6 +789,7 @@ static inline void oig_grab(struct obd_io_group *oig)
 {
         atomic_inc(&oig->oig_refcount);
 }
+
 void oig_release(struct obd_io_group *oig)
 {
         if (atomic_dec_and_test(&oig->oig_refcount))

@@ -635,7 +635,6 @@ int init_obdclass(void)
 static void cleanup_obdclass(void)
 {
         int i;
-        int leaked;
         ENTRY;
 
         misc_deregister(&obd_psdev);
@@ -659,11 +658,6 @@ static void cleanup_obdclass(void)
 
         class_handle_cleanup();
         class_exit_uuidlist();
-
-        leaked = atomic_read(&obd_memory);
-        CDEBUG(leaked ? D_ERROR : D_INFO,
-               "obd mem max: %d leaked: %d\n", obd_memmax, leaked);
-
         EXIT;
 }
 

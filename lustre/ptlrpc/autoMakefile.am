@@ -3,13 +3,13 @@
 # This code is issued under the GNU General Public License.
 # See the file COPYING in this distribution
 
-LDLM_COMM_SOURCES= $(top_srcdir)/lustre/ldlm/l_lock.c		\
+LDLM_COMM_SOURCES= $(top_srcdir)/lustre/ldlm/l_lock.c	\
 	$(top_srcdir)/lustre/ldlm/ldlm_lock.c		\
 	$(top_srcdir)/lustre/ldlm/ldlm_resource.c	\
 	$(top_srcdir)/lustre/ldlm/ldlm_lib.c		\
 	$(top_srcdir)/lustre/ldlm/ldlm_plain.c		\
 	$(top_srcdir)/lustre/ldlm/ldlm_extent.c		\
-	$(top_srcdir)/lustre/ldlm/ldlm_request.c		\
+	$(top_srcdir)/lustre/ldlm/ldlm_request.c	\
 	$(top_srcdir)/lustre/ldlm/ldlm_lockd.c		\
 	$(top_srcdir)/lustre/ldlm/ldlm_internal.h	\
 	$(top_srcdir)/lustre/ldlm/ldlm_inodebits.c
@@ -33,5 +33,4 @@ modulefs_DATA = ptlrpc$(KMODEXT)
 endif # MODULES
 
 MOSTLYCLEANFILES = *.o *.ko *.mod.c ldlm_*.c l_lock.c
-
 DIST_SOURCES = $(ptlrpc_objs:.o=.c) ptlrpc_internal.h

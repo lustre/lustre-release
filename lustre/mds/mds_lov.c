@@ -363,6 +363,7 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         int rc = 0;
         ENTRY;
 
+        CDEBUG(D_INFO, "ioctl cmd %x\n", cmd);
         switch (cmd) {
         case OBD_IOC_RECORD: {
                 char *name = data->ioc_inlbuf1;
@@ -559,6 +560,7 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 RETURN(0);
         }
         default:
+                CDEBUG(D_INFO, "unknown command %x\n", cmd);
                 RETURN(-EINVAL);
         }
         RETURN(0);
@@ -665,9 +667,10 @@ int mds_dt_synchronize(void *data)
         }
         rc = 0;
 
+        EXIT;
 cleanup:
         up(&mds->mds_orphan_recovery_sem);
-        RETURN(rc);
+        return rc;
 }
 
 int mds_dt_start_synchronize(struct obd_device *obd,
@@ -847,8 +850,7 @@ int mds_convert_lov_ea(struct obd_device *obd, struct inode *inode,
                 GOTO(conv_free, rc);
         }
 
-        rc = fsfilt_set_md(obd, inode, handle, lmm, lmm_size);
-
+        rc = fsfilt_set_md(obd, inode, handle, lmm, lmm_size, EA_LOV);
         err = fsfilt_commit(obd, obd->u.mds.mds_sb, inode, handle, 0);
         if (!rc)
                 rc = err ? err : lmm_size;
@@ -933,7 +935,7 @@ int mds_revalidate_lov_ea(struct obd_device *obd, struct inode *inode,
                 GOTO(out_oa, rc);
         }
 
-        rc = fsfilt_set_md(obd, inode, handle, lmm, lmm_size);
+        rc = fsfilt_set_md(obd, inode, handle, lmm, lmm_size, EA_LOV);
         err = fsfilt_commit(obd, inode->i_sb, inode, handle, 0);
         if (!rc)
                 rc = err;

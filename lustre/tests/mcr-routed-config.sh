@@ -51,7 +51,7 @@ ${LMC} --add lov --lov lov1 --mds mds1 --stripe_sz 1048576 --stripe_cnt 1 --stri
 # Client node
 #${LMC} --add net --node client --tcpbuf $TCPBUF --nid '*' --nettype tcp || exit 1
 ${LMC} --add net --node client --nid '*' --nettype elan || exit 1
-${LMC} --add mtpt --node client --path /mnt/lustre --mds mds1 --lov lov1
+${LMC} --add mtpt --node client --path /mnt/lustre --clientoptions async --mds mds1 --lov lov1
 
 # this is crude, but effective
 let server_per_gw=($SERVER_CNT / $GW_CNT )

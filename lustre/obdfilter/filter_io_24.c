@@ -134,7 +134,7 @@ int filter_direct_io(int rw, struct dentry *dchild, void *buf,
 {
         struct obd_device *obd = exp->exp_obd;
         struct inode *inode = dchild->d_inode;
-         struct kiobuf *iobuf = buf;
+        struct kiobuf *iobuf = buf;
         int rc, create = (rw == OBD_BRW_WRITE), *created = NULL, committed = 0;
         int blocks_per_page = PAGE_SIZE >> inode->i_blkbits, cleanup_phase = 0;
         struct semaphore *sem = NULL;
@@ -148,9 +148,10 @@ int filter_direct_io(int rw, struct dentry *dchild, void *buf,
         if (iobuf->nr_pages * blocks_per_page > KIO_MAX_SECTORS)
                 GOTO(cleanup, rc = -EINVAL);
 
-        OBD_ALLOC(created, sizeof(*created) * iobuf->nr_pages*blocks_per_page);
-        if (created == NULL)
-                GOTO(cleanup, rc = -ENOMEM);
+        if (iobuf->nr_pages * blocks_per_page > 
+            OBDFILTER_CREATED_SCRATCHPAD_ENTRIES)
+                GOTO(cleanup, rc = -EINVAL);
+
         cleanup_phase = 1;
 
         rc = lock_kiovec(1, &iobuf, 1);
@@ -164,8 +165,8 @@ int filter_direct_io(int rw, struct dentry *dchild, void *buf,
         }
         
         rc = fsfilt_map_inode_pages(obd, inode, iobuf->maplist,
-                                    iobuf->nr_pages, iobuf->blocks, created,
-                                    create, sem);
+                                    iobuf->nr_pages, iobuf->blocks, 
+                                    obdfilter_created_scratchpad, create, sem);
         if (rc)
                 GOTO(cleanup, rc);
 
@@ -244,8 +245,6 @@ cleanup:
         case 2:
                 unlock_kiovec(1, &iobuf);
         case 1:
-                OBD_FREE(created, sizeof(*created) *
-                         iobuf->nr_pages*blocks_per_page);
         case 0:
                 if (cleanup_phase != 3 && rw == OBD_BRW_WRITE)            
                         up(&inode->i_sem);
@@ -278,7 +277,6 @@ int filter_range_is_mapped(struct inode *inode, obd_size offset, int len)
 
         return 1;
 }
-
 
 /* some kernels require alloc_kiovec callers to zero members through the use of
  * map_user_kiobuf and unmap_.. we don't use those, so we have a little helper
@@ -377,13 +375,14 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
 
                 /* If overwriting an existing block, we don't need a grant */
                 if (!(lnb->flags & OBD_BRW_GRANTED) && lnb->rc == -ENOSPC &&
-                     filter_range_is_mapped(inode, lnb->offset, lnb->len))    
+                    filter_range_is_mapped(inode, lnb->offset, lnb->len))
                         lnb->rc = 0;
 
                 if (lnb->rc) /* ENOSPC, network RPC error */
                         continue;
 
                 filter_iobuf_add_page(obd, iobuf, inode, lnb->page);
+                
                 /* We expect these pages to be in offset order, but we'll
                  * be forgiving */
                 this_size = lnb->offset + lnb->len;
@@ -406,8 +405,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
                 GOTO(cleanup, rc);
         }
 
-        if (time_after(jiffies, now + 15 * HZ))
-                CERROR("slow brw_start %lus\n", (jiffies - now) / HZ);
+        fsfilt_check_slow(now, obd_timeout, "brw_start");
 
         iattr_from_obdo(&iattr,oa,OBD_MD_FLATIME|OBD_MD_FLMTIME|OBD_MD_FLCTIME);
         /* filter_direct_io drops i_sem */
@@ -416,16 +414,14 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
         if (rc == 0)
                 obdo_from_inode(oa, inode, FILTER_VALID_FLAGS);
 
-        if (time_after(jiffies, now + 15 * HZ))
-                CERROR("slow direct_io %lus\n", (jiffies - now) / HZ);
+        fsfilt_check_slow(now, obd_timeout, "direct_io");
 
         err = fsfilt_commit_wait(obd, inode, wait_handle);
         if (err)
                 rc = err;
-        if (obd_sync_filter)
+        if (obd_sync_filter && !err)
                 LASSERT(oti->oti_transno <= obd->obd_last_committed);
-        if (time_after(jiffies, now + 15 * HZ))
-                CERROR("slow commitrw commit %lus\n", (jiffies - now) / HZ);
+        fsfilt_check_slow(now, obd_timeout, "commitrw commit");
 cleanup:
         filter_grant_commit(exp, niocount, res);
 

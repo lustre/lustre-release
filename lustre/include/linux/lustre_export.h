@@ -63,9 +63,9 @@ struct filter_export_data {
         struct filter_client_data *fed_fcd;
         loff_t                     fed_lr_off;
         int                        fed_lr_idx;
-        unsigned long              fed_dirty;    /* in bytes */
-        unsigned long              fed_grant;    /* in bytes */
-        unsigned long              fed_pending;  /* bytes just being written */
+        long                       fed_dirty;    /* in bytes */
+        long                       fed_grant;    /* in bytes */
+        long                       fed_pending;  /* bytes just being written */
 };
 
 struct obd_export {
@@ -86,7 +86,8 @@ struct obd_export {
         unsigned long             exp_flags;
         int                       exp_failed:1,
                                   exp_replay_needed:1,
-                                  exp_libclient:1; /* liblustre client? */
+                                  exp_libclient:1, /* liblustre client? */
+                                  exp_sync:1;
         union {
                 struct mds_export_data    eu_mds_data;
                 struct filter_export_data eu_filter_data;

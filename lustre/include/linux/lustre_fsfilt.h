@@ -39,10 +39,19 @@ struct fsfilt_objinfo {
         int fso_bufcnt;
 };
 
+/* lustre EA type (MEA, LOV, etc.) */
+enum ea_type {
+        EA_LOV   = (1 << 0),
+        EA_MEA   = (1 << 1),
+        EA_SID   = (1 << 2),
+        EA_MID   = (1 << 3)
+};
+
 struct fsfilt_operations {
         struct list_head fs_list;
         struct module *fs_owner;
         char   *fs_type;
+        
         void   *(* fs_start)(struct inode *inode, int op, void *desc_private,
                              int logs);
         void   *(* fs_brw_start)(int objcount, struct fsfilt_objinfo *fso,
@@ -57,23 +66,12 @@ struct fsfilt_operations {
                                struct iattr *iattr, int do_trunc);
         int     (* fs_iocontrol)(struct inode *inode, struct file *file,
                                  unsigned int cmd, unsigned long arg);
-        
-        /* two methods for getting lov EA and setting it back to inode xattr. */
+
+        /* two methods for setting getting diff. kind of EAs from inode. */
         int     (* fs_set_md)(struct inode *inode, void *handle, void *md,
-                              int size);
-        int     (* fs_get_md)(struct inode *inode, void *md, int size);
-
-        /* two methods for getting MID (master id) EA and setting it back to
-         * inode xattr. */
-        int     (* fs_set_mid)(struct inode *inode, void *handle, void *fid,
-                               int size);
-        int     (* fs_get_mid)(struct inode *inode, void *fid, int size);
-
-        /* two methods for getting self id EA and setting it back to inode
-         * xattr. */
-        int     (* fs_set_sid)(struct inode *inode, void *handle, void *sid,
-                               int size);
-        int     (* fs_get_sid)(struct inode *inode, void *sid, int size);
+                              int size, enum ea_type type);
+        int     (* fs_get_md)(struct inode *inode, void *md, int size,
+                              enum ea_type type);
 
         int     (* fs_send_bio)(int rw, struct inode *inode, void *bio);
 
@@ -84,11 +82,10 @@ struct fsfilt_operations {
 
         ssize_t (* fs_readpage)(struct file *file, char *buf, size_t count,
                                 loff_t *offset);
-        int     (* fs_add_journal_cb)(struct obd_device *obd, 
+        int     (* fs_add_journal_cb)(struct obd_device *obd,
                                       struct super_block *sb,
-                                      __u64 last_rcvd, void *handle, 
-                                      fsfilt_cb_t cb_func,
-                                      void *cb_data);
+                                      __u64 last_rcvd, void *handle,
+                                      fsfilt_cb_t cb_func, void *cb_data);
         int     (* fs_statfs)(struct super_block *sb, struct obd_statfs *osfs);
         int     (* fs_sync)(struct super_block *sb);
         int     (* fs_map_inode_pages)(struct inode *inode, struct page **page,
@@ -228,6 +225,16 @@ extern void fsfilt_put_ops(struct fsfilt_operations *fs_ops);
 #define LMV_EA  1
 #define LOV_EA  0
 
+#define fsfilt_check_slow(start, timeout, msg)                          \
+do {                                                                    \
+        if (time_before(jiffies, start + 15 * HZ))                      \
+                break;                                                  \
+        else if (time_before(jiffies, start + timeout / 2 * HZ))        \
+                CWARN("slow %s %lus\n", msg, (jiffies - start) / HZ);   \
+        else                                                            \
+                CERROR("slow %s %lus\n", msg, (jiffies - start) / HZ);  \
+} while (0)
+
 static inline void *
 fsfilt_start_ops(struct fsfilt_operations *ops, struct inode *inode,
                  int op, struct obd_trans_info *oti, int logs)
@@ -246,8 +253,7 @@ fsfilt_start_ops(struct fsfilt_operations *ops, struct inode *inode,
                         LBUG();
                 }
         }
-        if (time_after(jiffies, now + 15 * HZ))
-                CERROR("long journal start time %lus\n", (jiffies - now) / HZ);
+        fsfilt_check_slow(now, 60, "journal start");
         return handle;
 }
 
@@ -280,8 +286,7 @@ fsfilt_commit_ops(struct fsfilt_operations *ops, struct super_block *sb,
         int rc = ops->fs_commit(sb, inode, handle, force_sync);
         CDEBUG(D_INFO, "committing handle %p\n", handle);
 
-        if (time_after(jiffies, now + 15 * HZ))
-                CERROR("long journal start time %lus\n", (jiffies - now) / HZ);
+        fsfilt_check_slow(now, 60, "journal start");
 
         return rc;
 }
@@ -322,8 +327,7 @@ fsfilt_brw_start_log(struct obd_device *obd, int objcount,
                         LBUG();
                 }
         }
-        if (time_after(jiffies, now + 15 * HZ))
-                CERROR("long journal start time %lus\n", (jiffies - now) / HZ);
+        fsfilt_check_slow(now, obd_timeout, "journal start");
 
         return handle;
 }
@@ -344,8 +348,7 @@ fsfilt_commit_async(struct obd_device *obd, struct inode *inode,
         int rc = obd->obd_fsops->fs_commit_async(inode, handle, wait_handle);
 
         CDEBUG(D_INFO, "committing handle %p (async)\n", *wait_handle);
-        if (time_after(jiffies, now + 15 * HZ))
-                CERROR("long journal start time %lus\n", (jiffies - now) / HZ);
+        fsfilt_check_slow(now, obd_timeout, "journal start");
 
         return rc;
 }
@@ -356,8 +359,7 @@ fsfilt_commit_wait(struct obd_device *obd, struct inode *inode, void *handle)
         unsigned long now = jiffies;
         int rc = obd->obd_fsops->fs_commit_wait(inode, handle);
         CDEBUG(D_INFO, "waiting for completion %p\n", handle);
-        if (time_after(jiffies, now + 15 * HZ))
-                CERROR("long journal start time %lus\n", (jiffies - now) / HZ);
+        fsfilt_check_slow(now, obd_timeout, "journal start");
         return rc;
 }
 
@@ -368,8 +370,7 @@ fsfilt_setattr(struct obd_device *obd, struct dentry *dentry,
         unsigned long now = jiffies;
         int rc;
         rc = obd->obd_fsops->fs_setattr(dentry, handle, iattr, do_trunc);
-        if (time_after(jiffies, now + 15 * HZ))
-                CERROR("long setattr time %lus\n", (jiffies - now) / HZ);
+        fsfilt_check_slow(now, obd_timeout, "setattr");
         return rc;
 }
 
@@ -391,44 +392,24 @@ static inline int fsfilt_setup(struct obd_device *obd,
 
 static inline int
 fsfilt_set_md(struct obd_device *obd, struct inode *inode,
-              void *handle, void *md, int size)
+              void *handle, void *md, int size, enum ea_type type)
 {
-        return obd->obd_fsops->fs_set_md(inode, handle, md, size);
+        if (!obd->obd_fsops->fs_set_md)
+                return -ENOSYS;
+        
+        return obd->obd_fsops->fs_set_md(inode, handle, md,
+                                         size, type);
 }
 
 static inline int
 fsfilt_get_md(struct obd_device *obd, struct inode *inode,
-              void *md, int size)
+              void *md, int size, enum ea_type type)
 {
-        return obd->obd_fsops->fs_get_md(inode, md, size);
-}
-
-static inline int
-fsfilt_set_mid(struct obd_device *obd, struct inode *inode,
-               void *handle, void *mid, int size)
-{
-        return obd->obd_fsops->fs_set_mid(inode, handle, mid, size);
-}
-
-static inline int
-fsfilt_get_mid(struct obd_device *obd, struct inode *inode,
-               void *mid, int size)
-{
-        return obd->obd_fsops->fs_get_mid(inode, mid, size);
-}
-
-static inline int
-fsfilt_set_sid(struct obd_device *obd, struct inode *inode,
-               void *handle, void *sid, int size)
-{
-        return obd->obd_fsops->fs_set_sid(inode, handle, sid, size);
-}
-
-static inline int
-fsfilt_get_sid(struct obd_device *obd, struct inode *inode,
-               void *sid, int size)
-{
-        return obd->obd_fsops->fs_get_sid(inode, sid, size);
+        if (!obd->obd_fsops->fs_get_md)
+                return -ENOSYS;
+        
+        return obd->obd_fsops->fs_get_md(inode, md, size,
+                                         type);
 }
 
 static inline int fsfilt_send_bio(int rw, struct obd_device *obd,
@@ -463,8 +444,7 @@ fsfilt_putpage(struct obd_device *obd, struct inode *inode,
 
         rc = obd->obd_fsops->fs_putpage(inode, page);
 
-        if (time_after(jiffies, now + 15 * HZ))
-                CERROR("long putpage time %lus\n", (jiffies - now) / HZ);
+        fsfilt_check_slow(now, obd_timeout, "putpage");
 
         return rc;
 }
@@ -486,8 +466,7 @@ fsfilt_getpage(struct obd_device *obd, struct inode *inode,
 
         page = obd->obd_fsops->fs_getpage(inode, index);
 
-        if (time_after(jiffies, now + 15 * HZ))
-                CERROR("long getpage time %lus\n", (jiffies - now) / HZ);
+        fsfilt_check_slow(now, obd_timeout, "getpage");
 
         return page;
 }

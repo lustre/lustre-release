@@ -53,8 +53,11 @@ static int lfs_catinfo(int argc, char **argv);
 command_t cmdlist[] = {
         {"setstripe", lfs_setstripe, 0,
          "Create a new file with a specific striping pattern or\n"
-         "Set the default striping pattern on an existing directory\n"
+         "set the default striping pattern on an existing directory or\n"
+         "delete the default striping pattern from an existing directory\n"
          "usage: setstripe <filename|dirname> <stripe size> <stripe start> <stripe count>\n"
+         "       or \n"
+         "       setstripe -d <dirname>\n"
          "\tstripe size:  Number of bytes in each stripe (0 default)\n"
          "\tstripe start: OST index of first stripe (-1 default)\n"
          "\tstripe count: Number of OSTs to stripe over (0 default)"},
@@ -92,37 +95,48 @@ command_t cmdlist[] = {
 /* functions */
 static int lfs_setstripe(int argc, char **argv)
 {
+        char *fname;
         int result;
-        long st_size;
-        int  st_offset, st_count;
+        long st_size = 0;
+        int  st_offset = -1, st_count = 0;
         char *end;
 
-        if (argc != 5)
+        if (argc != 5 && argc != 3)
                 return CMD_HELP;
 
-        // get the stripe size
-        st_size = strtoul(argv[2], &end, 0);
-        if (*end != '\0') {
-                fprintf(stderr, "error: %s: bad stripe size '%s'\n",
-                                argv[0], argv[2]);
-                return CMD_HELP;
-        }
-        // get the stripe offset
-        st_offset = strtoul(argv[3], &end, 0);
-        if (*end != '\0') {
-                fprintf(stderr, "error: %s: bad stripe offset '%s'\n",
-                                argv[0], argv[3]);
-                return CMD_HELP;
-        }
-        // get the stripe count
-        st_count = strtoul(argv[4], &end, 0);
-        if (*end != '\0') {
-                fprintf(stderr, "error: %s: bad stripe count '%s'\n",
-                                argv[0], argv[4]);
-                return CMD_HELP;
+        if (argc == 3) {
+                if (strcmp(argv[1], "-d") != 0)
+                        return CMD_HELP;
+
+                fname = argv[2];
+                st_size = -1;
+        } else {
+                fname = argv[1];
+
+                // get the stripe size
+                st_size = strtoul(argv[2], &end, 0);
+                if (*end != '\0') {
+                        fprintf(stderr, "error: %s: bad stripe size '%s'\n",
+                                        argv[0], argv[2]);
+                        return CMD_HELP;
+                }
+                // get the stripe offset
+                st_offset = strtoul(argv[3], &end, 0);
+                if (*end != '\0') {
+                        fprintf(stderr, "error: %s: bad stripe offset '%s'\n",
+                                        argv[0], argv[3]);
+                        return CMD_HELP;
+                }
+                // get the stripe count
+                st_count = strtoul(argv[4], &end, 0);
+                if (*end != '\0') {
+                        fprintf(stderr, "error: %s: bad stripe count '%s'\n",
+                                        argv[0], argv[4]);
+                        return CMD_HELP;
+                }
         }
 
-        result = llapi_file_create(argv[1], st_size, st_offset, st_count, 0);
+        result = llapi_file_create(fname, st_size, st_offset, st_count, 0);
         if (result)
                 fprintf(stderr, "error: %s: create stripe file failed\n",
                                 argv[0]);
@@ -218,16 +232,53 @@ static int lfs_find(int argc, char **argv)
 
 static int lfs_getstripe(int argc, char **argv)
 {
+        struct option long_opts[] = {
+                {"quiet", 0, 0, 'q'},
+                {"verbose", 0, 0, 'v'},
+                {0, 0, 0, 0}
+        };
+        char short_opts[] = "qv";
+        int quiet, verbose, recursive, c, rc;
         struct obd_uuid *obduuid = NULL;
-        int rc;
 
-        if (argc != 2)
+        optind = 0;
+        quiet = verbose = recursive = 0;
+        while ((c = getopt_long(argc, argv, short_opts,
+                                        long_opts, NULL)) != -1) {
+                switch (c) {
+                case 'o':
+                        if (obduuid) {
+                                fprintf(stderr,
+                                        "error: %s: only one obduuid allowed",
+                                        argv[0]);
+                                return CMD_HELP;
+                        }
+                        obduuid = (struct obd_uuid *)optarg;
+                        break;
+                case 'q':
+                        quiet++;
+                        verbose = 0;
+                        break;
+                case 'v':
+                        verbose++;
+                        quiet = 0;
+                        break;
+                case '?':
+                        return CMD_HELP;
+                        break;
+                default:
+                        fprintf(stderr, "error: %s: option '%s' unrecognized\n",
+                                argv[0], argv[optind - 1]);
+                        return CMD_HELP;
+                        break;
+                }
+        }
+
+        if (optind >= argc)
                 return CMD_HELP;
 
-        optind = 1;
-
         do {
-                rc = llapi_find(argv[optind], obduuid, 0, 0, 0, 0);
+                rc = llapi_find(argv[optind], obduuid, recursive, verbose, quiet, 0);
         } while (++optind < argc && !rc);
 
         if (rc)
@@ -333,8 +384,8 @@ static int lfs_check(int argc, char **argv)
         if (argc != 2)
                 return CMD_HELP;
 
-        obd_types[1] = obd_type1;
-        obd_types[2] = obd_type2;
+        obd_types[0] = obd_type1;
+        obd_types[1] = obd_type2;
 
         if (strcmp(argv[1], "osts") == 0) {
                 strcpy(obd_types[0], "osc");

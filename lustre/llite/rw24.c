@@ -125,17 +125,10 @@ static int ll_direct_IO_24(int rw, struct inode *inode, struct kiobuf *iobuf,
                         CERROR("error from callback: rc = %d\n", rc);
         }
         ptlrpc_set_destroy(set);
-        if (rc == 0 && rw == WRITE) {
-                void lov_increase_kms(struct obd_export *,
-                                      struct lov_stripe_md *, obd_off size);
-                obd_off size = offset + length;
-                lov_increase_kms(ll_i2dtexp(inode), lsm, size);
-                if (size > inode->i_size)
-                        inode->i_size = size;
-        }
         if (rc == 0) {
                 rc = iobuf->length;
-                obdo_to_inode(inode, oa, OBD_MD_FLBLOCKS);
+                if (rw == WRITE)
+                        obd_adjust_kms(ll_i2dtexp(inode), lsm, offset, 0);
         }
         obdo_free(oa);
         EXIT;
@@ -143,6 +136,13 @@ out_free_pga:
         OBD_FREE(pga, sizeof(*pga) * iobuf->nr_pages);
         return rc;
 }
+
+#ifdef KERNEL_HAS_AS_MAX_READAHEAD
+static int ll_max_readahead(struct inode *inode)
+{
+        return 0;
+}
+#endif
 
 struct address_space_operations ll_aops = {
         .readpage       = ll_readpage,
@@ -152,5 +152,8 @@ struct address_space_operations ll_aops = {
         .commit_write   = ll_commit_write,
         .removepage     = ll_removepage,
         .sync_page      = NULL,
-        .bmap           = NULL
+        .bmap           = NULL,
+#ifdef KERNEL_HAS_AS_MAX_READAHEAD
+        .max_readahead  = ll_max_readahead,
+#endif
 };

@@ -9,7 +9,7 @@
 # Authors:	Bill Nottingham <notting@redhat.com>
 # 		Miquel van Smoorenburg, <miquels@drinkel.nl.mugnet.org>
 #
-# chkconfig: 345 25 75
+# chkconfig: 345 26 74
 # description: Mounts and unmounts all Lustre mount points.
 #
 ### BEGIN INIT INFO

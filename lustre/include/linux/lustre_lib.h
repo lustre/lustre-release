@@ -463,6 +463,7 @@ static inline void obd_ioctl_freedata(char *buf, int len)
 #define OBD_IOC_PROCESS_CFG            _IOWR('f', 184, long)
 #define OBD_IOC_DUMP_LOG               _IOWR('f', 185, long)
 #define OBD_IOC_CLEAR_LOG              _IOWR('f', 186, long)
+#define OBD_IOC_START                  _IOWR('f', 187, long)
 
 #define OBD_IOC_CATLOGLIST             _IOWR('f', 190, long)
 #define OBD_IOC_LLOG_INFO              _IOWR('f', 191, long)
@@ -609,6 +610,7 @@ do {                                                                           \
         int __timed_out = 0;                                                   \
         unsigned long irqflags;                                                \
         sigset_t blocked;                                                      \
+        signed long timeout_remaining;                                         \
                                                                                \
         init_waitqueue_entry(&__wait, current);                                \
         if (excl)                                                              \
@@ -622,18 +624,15 @@ do {                                                                           \
         else                                                                   \
             blocked = l_w_e_set_sigs(0);                                       \
                                                                                \
+        timeout_remaining = info->lwi_timeout;                                 \
+                                                                               \
         for (;;) {                                                             \
             set_current_state(TASK_INTERRUPTIBLE);                             \
             if (condition)                                                     \
                     break;                                                     \
-            if (signal_pending(current)) {                                     \
-                if (info->lwi_on_signal)                                       \
-                        info->lwi_on_signal(info->lwi_cb_data);                \
-                ret = -EINTR;                                                  \
-                break;                                                         \
-            }                                                                  \
             if (info->lwi_timeout && !__timed_out) {                           \
-                if (schedule_timeout(info->lwi_timeout) == 0) {                \
+                timeout_remaining = schedule_timeout(timeout_remaining);       \
+                if (timeout_remaining == 0) {                                  \
                     __timed_out = 1;                                           \
                     if (!info->lwi_on_timeout ||                               \
                         info->lwi_on_timeout(info->lwi_cb_data)) {             \
@@ -647,12 +646,36 @@ do {                                                                           \
             } else {                                                           \
                 schedule();                                                    \
             }                                                                  \
+            if (condition)                                                     \
+                    break;                                                     \
+            if (signal_pending(current)) {                                     \
+                    if (__timed_out) {                                         \
+                            break;                                             \
+                    } else {                                                   \
+                            /* We have to do this here because some signals */ \
+                            /* are not blockable - ie from strace(1).       */ \
+                            /* In these cases we want to schedule_timeout() */ \
+                            /* again, because we don't want that to return  */ \
+                            /* -EINTR when the RPC actually succeeded.      */ \
+                            /* the RECALC_SIGPENDING below will deliver the */ \
+                            /* signal properly.                             */ \
+                            SIGNAL_MASK_LOCK(current, irqflags);               \
+                            CLEAR_SIGPENDING;                                  \
+                            SIGNAL_MASK_UNLOCK(current, irqflags);             \
+                    }                                                          \
+            }                                                                  \
         }                                                                      \
                                                                                \
         SIGNAL_MASK_LOCK(current, irqflags);                                   \
         current->blocked = blocked;                                            \
         RECALC_SIGPENDING;                                                     \
         SIGNAL_MASK_UNLOCK(current, irqflags);                                 \
+                                                                               \
+        if (__timed_out && signal_pending(current)) {                          \
+                if (info->lwi_on_signal)                                       \
+                        info->lwi_on_signal(info->lwi_cb_data);                \
+                ret = -EINTR;                                                  \
+        }                                                                      \
                                                                                \
         current->state = TASK_RUNNING;                                         \
         remove_wait_queue(&wq, &__wait);                                       \
@@ -661,18 +684,21 @@ do {                                                                           \
 #else /* !__KERNEL__ */
 #define __l_wait_event(wq, condition, info, ret, excl)                         \
 do {                                                                           \
-        int timeout = info->lwi_timeout, elapse;                               \
+        long timeout = info->lwi_timeout, elapse, last = 0;                    \
         int __timed_out = 0;                                                   \
-        long last;                                                             \
                                                                                \
-        last = time(NULL);                                                     \
+        if (info->lwi_timeout == 0)                                            \
+            timeout = 1000000000;                                              \
+        else                                                                   \
+            last = time(NULL);                                                 \
+                                                                               \
         for (;;) {                                                             \
             if (condition)                                                     \
                 break;                                                         \
             if (liblustre_wait_event(timeout)) {                               \
-                if (timeout == 0)                                              \
+                if (timeout == 0 || info->lwi_timeout == 0)                    \
                         continue;                                              \
-                elapse = (int) (time(NULL) - last);                            \
+                elapse = time(NULL) - last;                                    \
                 if (elapse) {                                                  \
                         last += elapse;                                        \
                         timeout -= elapse;                                     \

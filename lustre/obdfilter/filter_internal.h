@@ -34,7 +34,6 @@
 
 /* This limit is arbitrary, but for now we fit it in 1 page (32k clients) */
 #define FILTER_LR_MAX_CLIENTS (PAGE_SIZE * 8)
-#define FILTER_LR_MAX_CLIENT_WORDS (FILTER_LR_MAX_CLIENTS/sizeof(unsigned long))
 
 #define FILTER_RECOVERY_TIMEOUT (obd_timeout * 5 * HZ / 2) /* *waves hands* */
 
@@ -89,6 +88,11 @@ enum {
 };
 
 #define FILTER_MAX_CACHE_SIZE (32 * 1024 * 1024) /* was OBD_OBJECT_EOF */
+
+/* We have to pass a 'created' array to fsfilt_map_inode_pages() which we
+ * then ignore.  So we pre-allocate one that everyone can use... */
+#define OBDFILTER_CREATED_SCRATCHPAD_ENTRIES 1024
+extern int *obdfilter_created_scratchpad;
 
 /* filter.c */
 void f_dput(struct dentry *);

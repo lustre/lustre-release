@@ -40,7 +40,7 @@ int compare(struct lov_user_md *lum_dir, struct lov_user_md *lum_file1,
 
         stripe_count = (int)lum_dir->lmm_stripe_count;
         if (stripe_count == 0) {
-                fd = open("/proc/fs/lustre/lov/lov1/stripecount", O_RDONLY);
+                fd = open("/proc/fs/lustre/llite/fs0/lov/stripecount", O_RDONLY);
                 if (fd == -1) {
                         fprintf(stderr, "open proc file error: %s\n", 
                                 strerror(errno));
@@ -60,7 +60,7 @@ int compare(struct lov_user_md *lum_dir, struct lov_user_md *lum_file1,
 
         stripe_size = (int)lum_dir->lmm_stripe_size;
         if (stripe_size == 0) {
-                fd = open("/proc/fs/lustre/lov/lov1/stripesize", O_RDONLY);
+                fd = open("/proc/fs/lustre/llite/fs0/lov/stripesize", O_RDONLY);
                 if (fd == -1) {
                         fprintf(stderr, "open proc file error: %s\n", 
                                 strerror(errno)); 
@@ -77,7 +77,7 @@ int compare(struct lov_user_md *lum_dir, struct lov_user_md *lum_file1,
                 close(fd);
         }
 
-        fd = open("/proc/fs/lustre/lov/lov1/numobd", O_RDONLY);
+        fd = open("/proc/fs/lustre/llite/fs0/lov/numobd", O_RDONLY);
         if(fd  == -1) {
                 fprintf(stderr, "open proc file error: %s\n", 
                         strerror(errno));
@@ -95,7 +95,9 @@ int compare(struct lov_user_md *lum_dir, struct lov_user_md *lum_file1,
 
         if ((lum_file1->lmm_stripe_count != stripe_count) ||
             (lum_file1->lmm_stripe_size != stripe_size))
+        {
                 return -1;
+        }
         
         stripe_offset = (short int)lum_dir->lmm_stripe_offset;
         if (stripe_offset != -1) {

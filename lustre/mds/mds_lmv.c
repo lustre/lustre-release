@@ -226,7 +226,7 @@ int mds_md_get_attr(struct obd_device *obd, struct inode *inode,
         if (*mea_size < 0 || *mea == NULL)
                 return *mea_size < 0 ? *mea_size : -EINVAL;
 
-        rc = mds_get_md(obd, inode, *mea, mea_size, 1);
+        rc = mds_get_md(obd, inode, *mea, mea_size, 1, 1);
 
 	if (rc <= 0) {
 		OBD_FREE(*mea, *mea_size);
@@ -710,7 +710,7 @@ int mds_try_to_split_dir(struct obd_device *obd, struct dentry *dentry,
                 GOTO(err_oa, rc = PTR_ERR(handle));
         }
 
-	rc = fsfilt_set_md(obd, dir, handle, *mea, mea_size);
+	rc = fsfilt_set_md(obd, dir, handle, *mea, mea_size, EA_MEA);
         if (rc) {
                 up(&dir->i_sem);
                 CERROR("fsfilt_set_md() failed, error %d.\n", rc);
@@ -1168,12 +1168,12 @@ int mds_lock_and_check_slave(int offset, struct ptlrpc_request *req,
         }
         cleanup_phase = 1;
 
-        /* 
-         * handling the case when remote MDS checks if dir is empty before
-         * rename. But it also does it for all entries, because inode is stored
-         * here and remote MDS does not know if rename point to dir or to reg
-         * file. So we check it here.
-         */
+	/* 
+	 * handling the case when remote MDS checks if dir is empty 
+	 * before rename. But it also does it for all entries, because
+	 * inode is stored here and remote MDS does not know if rename
+	 * point to dir or to reg file. So we check it here. 
+	 */
 	if (!S_ISDIR(dentry->d_inode->i_mode))
 		GOTO(cleanup, rc = 0);
 
@@ -1202,49 +1202,41 @@ cleanup:
 }
 
 int mds_convert_mea_ea(struct obd_device *obd, struct inode *inode,
-                       struct lov_mds_md *lmm, int lmmsize)
+                       struct lov_mds_md *lmm, int lmm_size)
 {
-        int i, rc, err, size;
+        struct lov_stripe_md *lsm = NULL;
         struct mea_old *old;
         struct mea *mea;
-        struct mea *new;
         void *handle;
+        int rc, err;
         ENTRY;
 
-        mea = (struct mea *) lmm;
+        mea = (struct mea *)lmm;
+        old = (struct mea_old *)lmm;
+
         if (mea->mea_magic == MEA_MAGIC_LAST_CHAR ||
-                mea->mea_magic == MEA_MAGIC_ALL_CHARS)
+            mea->mea_magic == MEA_MAGIC_ALL_CHARS)
                 RETURN(0);
 
-        old = (struct mea_old *) lmm;
-        
-        rc = sizeof(struct lustre_id) * old->mea_count + 
-                sizeof(struct mea_old);
-        
-        if (old->mea_count > 256 || old->mea_master > 256 || lmmsize < rc
-                        || old->mea_master > old->mea_count) {
-                CWARN("unknown MEA format, dont convert it\n");
-                CWARN("  count %u, master %u, size %u\n",
-                      old->mea_count, old->mea_master, rc);
-                RETURN(0);
-        }
-                
-        CWARN("converting MEA EA on %lu/%u from V0 to V1 (%u/%u)\n",
-              inode->i_ino, inode->i_generation, old->mea_count, 
-              old->mea_master);
+        /*
+         * making MDS try LOV EA converting in the non-LMV configuration
+         * cases.
+         */
+        if (!obd->u.mds.mds_md_exp)
+                RETURN(-EINVAL);
 
-        size = sizeof(struct lustre_id) * old->mea_count + 
-                sizeof(struct mea);
-        
-        OBD_ALLOC(new, size);
-        if (new == NULL)
-                RETURN(-ENOMEM);
+        CDEBUG(D_INODE, "converting MEA EA on %lu/%u from V0 to V1 (%u/%u)\n",
+               inode->i_ino, inode->i_generation, old->mea_count, 
+               old->mea_master);
 
-        new->mea_magic = MEA_MAGIC_LAST_CHAR;
-        new->mea_count = old->mea_count;
-        new->mea_master = old->mea_master;
-        for (i = 0; i < new->mea_count; i++)
-                new->mea_ids[i] = old->mea_ids[i];
+        rc = obd_unpackmd(obd->u.mds.mds_md_exp, &lsm, lmm, lmm_size);
+        if (rc < 0)
+                GOTO(conv_end, rc);
+
+        rc = obd_packmd(obd->u.mds.mds_md_exp, &lmm, lsm);
+        if (rc < 0)
+                GOTO(conv_free, rc);
+        lmm_size = rc;
 
         handle = fsfilt_start(obd, inode, FSFILT_OP_SETATTR, NULL);
         if (IS_ERR(handle)) {
@@ -1252,17 +1244,14 @@ int mds_convert_mea_ea(struct obd_device *obd, struct inode *inode,
                 GOTO(conv_free, rc);
         }
 
-        rc = fsfilt_set_md(obd, inode, handle, (struct lov_mds_md *) new, size);
-        if (rc > lmmsize)
-                size = lmmsize;
-        memcpy(lmm, new, size);
-
+        rc = fsfilt_set_md(obd, inode, handle, lmm, lmm_size, EA_MEA);
         err = fsfilt_commit(obd, obd->u.mds.mds_sb, inode, handle, 0);
         if (!rc)
-                rc = err ? err : size;
-        EXIT;
+                rc = err ? err : lmm_size;
+        GOTO(conv_free, rc);
 conv_free:
-        OBD_FREE(new, size);
+        obd_free_memmd(obd->u.mds.mds_md_exp, &lsm);
+conv_end:
         return rc;
 }
 

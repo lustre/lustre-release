@@ -31,7 +31,7 @@
 #include <linux/lustre_net.h>
 #include "ptlrpc_internal.h"
 
-#if !defined(__KERNEL__) && defined(CRAY_PORTALS)
+#if !defined(__KERNEL__) && CRAY_PORTALS
 /* forward ref in events.c */
 static void cray_portals_callback(ptl_event_t *ev);
 #endif
@@ -198,7 +198,7 @@ void request_in_callback(ptl_event_t *ev)
                                "Dropping %s RPC from %s\n",
                                service->srv_name, 
                                portals_id2str(srv_ni->sni_ni->pni_number,
-                                               ev->initiator, str));
+                                              ev->initiator, str));
                         return;
                 }
         }
@@ -214,8 +214,12 @@ void request_in_callback(ptl_event_t *ev)
         do_gettimeofday(&req->rq_arrival_time);
         req->rq_peer.peer_id = ev->initiator;
         req->rq_peer.peer_ni = rqbd->rqbd_srv_ni->sni_ni;
+        ptlrpc_id2str(&req->rq_peer, req->rq_peerstr);
         req->rq_rqbd = rqbd;
-
+#if CRAY_PORTALS
+        req->rq_uid = ev->uid;
+#endif
+        
         spin_lock_irqsave (&service->srv_lock, flags);
 
         if (ev->unlinked) {
@@ -360,15 +364,21 @@ int ptlrpc_uuid_to_peer (struct obd_uuid *uuid, struct ptlrpc_peer *peer)
         for (i = 0; i < ptlrpc_ninterfaces; i++) {
                 pni = &ptlrpc_interfaces[i];
 
+#ifndef CRAY_PORTALS
                 if (pni->pni_number == peer_nal) {
+#else
+		/* compatible nals but may be from different bridges */
+		if (NALID_FROM_IFACE(pni->pni_number) == 
+		    NALID_FROM_IFACE(peer_nal)) {
+#endif
                         peer->peer_id.nid = peer_nid;
-                        peer->peer_id.pid = LUSTRE_SRV_PTL_PID; //#4165:only client will call this func.
+                        peer->peer_id.pid = LUSTRE_SRV_PTL_PID;
                         peer->peer_ni = pni;
                         return (0);
                 }
         }
 
-        CERROR("Can't find ptlrpc interface for NAL %d, NID %s\n",
+        CERROR("Can't find ptlrpc interface for NAL %x, NID %s\n",
                peer_nal, portals_nid2str(peer_nal, peer_nid, str));
         return (-ENOENT);
 }
@@ -416,6 +426,12 @@ ptl_pid_t ptl_get_pid(void)
 
 #ifndef  __KERNEL__
         pid = getpid();
+#ifdef CRAY_PORTALS
+	/* hack to keep pid in range accepted by ernal */
+	pid &= 0xFF;
+	if (pid == LUSTRE_SRV_PTL_PID)
+		pid++;
+#endif
 #else
         pid = LUSTRE_SRV_PTL_PID;
 #endif
@@ -442,7 +458,7 @@ int ptlrpc_ni_init(int number, char *name, struct ptlrpc_ni *pni)
         CDEBUG(D_NET, "My pid is: %x\n", ptl_get_pid());
         
         PtlSnprintHandle(str, sizeof(str), nih);
-        CDEBUG (D_NET, "init %d %s: %s\n", number, name, str);
+        CDEBUG (D_NET, "init %x %s: %s\n", number, name, str);
 
         pni->pni_name = name;
         pni->pni_number = number;
@@ -580,7 +596,7 @@ liblustre_wait_event (int timeout)
         return found_something;
 }
 
-#ifdef CRAY_PORTALS
+#if CRAY_PORTALS
 static void cray_portals_callback(ptl_event_t *ev)
 {
         /* We get a callback from the client Cray portals implementation
@@ -626,7 +642,9 @@ int ptlrpc_init_portals(void)
                 {LONAL,     "lonal"},
                 {RANAL,     "ranal"},
 #else
-                {CRAY_KB_ERNAL, "cray_kb_ernal"},
+                {CRAY_KERN_NAL, "cray_kern_nal"},
+                {CRAY_QK_NAL, "cray_qk_nal"},
+                {CRAY_USER_NAL, "cray_user_nal"},
 #endif
         };
         int   rc;

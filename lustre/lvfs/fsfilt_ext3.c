@@ -52,6 +52,14 @@
 #endif
 
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,7))
+# define lock_24kernel() lock_kernel()
+# define unlock_24kernel() unlock_kernel()
+#else
+# define lock_24kernel() do {} while (0)
+# define unlock_24kernel() do {} while (0)
+#endif
+
 static kmem_cache_t *fcb_cache;
 static atomic_t fcb_cache_count = ATOMIC_INIT(0);
 
@@ -68,6 +76,7 @@ struct fsfilt_cb_data {
 #endif
 
 #define XATTR_LUSTRE_MDS_LOV_EA         "lov"
+#define XATTR_LUSTRE_MDS_MEA_EA         "mea"
 #define XATTR_LUSTRE_MDS_MID_EA         "mid"
 #define XATTR_LUSTRE_MDS_SID_EA         "sid"
 
@@ -161,9 +170,10 @@ static void *fsfilt_ext3_start(struct inode *inode, int op, void *desc_private,
         }
 
  journal_start:
-        lock_kernel();
+        LASSERTF(nblocks > 0, "can't start %d credit transaction\n", nblocks);
+        lock_24kernel();
         handle = journal_start(EXT3_JOURNAL(inode), nblocks);
-        unlock_kernel();
+        unlock_24kernel();
 
         if (!IS_ERR(handle))
                 LASSERT(current->journal_info == handle);
@@ -299,9 +309,10 @@ static void *fsfilt_ext3_brw_start(int objcount, struct fsfilt_objinfo *fso,
                 needed = journal->j_max_transaction_buffers;
         }
 
-        lock_kernel();
+        LASSERTF(needed > 0, "can't start %d credit transaction\n", needed);
+        lock_24kernel();
         handle = journal_start(journal, needed);
-        unlock_kernel();
+        unlock_24kernel();
         if (IS_ERR(handle)) {
                 CERROR("can't get handle for %d credits: rc = %ld\n", needed,
                        PTR_ERR(handle));
@@ -323,9 +334,9 @@ static int fsfilt_ext3_commit(struct super_block *sb, struct inode *inode,
         if (force_sync)
                 handle->h_sync = 1; /* recovery likes this */
 
-        lock_kernel();
+        lock_24kernel();
         rc = journal_stop(handle);
-        unlock_kernel();
+        unlock_24kernel();
 
         return rc;
 }
@@ -484,69 +495,69 @@ static int fsfilt_ext3_get_xattr(struct inode *inode, char *name,
 }
 
 static int fsfilt_ext3_set_md(struct inode *inode, void *handle,
-                              void *lmm, int lmm_size)
+                              void *lmm, int lmm_size,
+                              enum ea_type type)
 {
         int rc;
+        
+        switch(type) {
+        case EA_LOV:
+                rc = fsfilt_ext3_set_xattr(inode, handle,
+                                           XATTR_LUSTRE_MDS_LOV_EA,
+                                           lmm, lmm_size);
+                break;
+        case EA_MEA:
+                rc = fsfilt_ext3_set_xattr(inode, handle,
+                                           XATTR_LUSTRE_MDS_MEA_EA,
+                                           lmm, lmm_size);
+                break;
+        case EA_SID:
+                rc = fsfilt_ext3_set_xattr(inode, handle,
+                                           XATTR_LUSTRE_MDS_SID_EA,
+                                           lmm, lmm_size);
+                break;
+        case EA_MID:
+                rc = fsfilt_ext3_set_xattr(inode, handle,
+                                           XATTR_LUSTRE_MDS_MID_EA,
+                                           lmm, lmm_size);
+                break;
+        default:
+                return -EINVAL;
+        }
 
-        LASSERT(down_trylock(&inode->i_sem) != 0);
-
-        /* keep this when we get rid of OLD_EA (too noisy during conversion) */
-        if (EXT3_I(inode)->i_file_acl /* || large inode EA flag */)
-                CWARN("setting EA on %lu/%u again... interesting\n",
-                      inode->i_ino, inode->i_generation);
-
-        rc = fsfilt_ext3_set_xattr(inode, handle, XATTR_LUSTRE_MDS_LOV_EA,
-                                   lmm, lmm_size);
         return rc;
 }
 
-/* Must be called with i_sem held */
-static int fsfilt_ext3_get_md(struct inode *inode, void *lmm, int lmm_size)
+static int fsfilt_ext3_get_md(struct inode *inode, void *lmm,
+                              int lmm_size, enum ea_type type)
 {
         int rc;
-
-        rc = fsfilt_ext3_get_xattr(inode, XATTR_LUSTRE_MDS_LOV_EA,
-                                   lmm, lmm_size);
-        return rc;
-}
-
-static int fsfilt_ext3_set_mid(struct inode *inode, void *handle,
-                               void *mid, int mid_size)
-{
-        int rc;
-
-        rc = fsfilt_ext3_set_xattr(inode, handle, XATTR_LUSTRE_MDS_MID_EA,
-                                   mid, mid_size);
-        return rc;
-}
-
-/* Must be called with i_sem held */
-static int fsfilt_ext3_get_mid(struct inode *inode, void *mid, int mid_size)
-{
-        int rc;
-
-        rc = fsfilt_ext3_get_xattr(inode, XATTR_LUSTRE_MDS_MID_EA,
-                                   mid, mid_size);
-        return rc;
-}
-
-static int fsfilt_ext3_set_sid(struct inode *inode, void *handle,
-                               void *sid, int sid_size)
-{
-        int rc;
-
-        rc = fsfilt_ext3_set_xattr(inode, handle, XATTR_LUSTRE_MDS_SID_EA,
-                                   sid, sid_size);
-        return rc;
-}
-
-/* Must be called with i_sem held */
-static int fsfilt_ext3_get_sid(struct inode *inode, void *sid, int sid_size)
-{
-        int rc;
-
-        rc = fsfilt_ext3_get_xattr(inode, XATTR_LUSTRE_MDS_SID_EA,
-                                   sid, sid_size);
+        
+        switch (type) {
+        case EA_LOV:
+                rc = fsfilt_ext3_get_xattr(inode,
+                                           XATTR_LUSTRE_MDS_LOV_EA,
+                                           lmm, lmm_size);
+                break;
+        case EA_MEA:
+                rc = fsfilt_ext3_get_xattr(inode,
+                                           XATTR_LUSTRE_MDS_MEA_EA,
+                                           lmm, lmm_size);
+                break;
+        case EA_SID:
+                rc = fsfilt_ext3_get_xattr(inode,
+                                           XATTR_LUSTRE_MDS_SID_EA,
+                                           lmm, lmm_size);
+                break;
+        case EA_MID:
+                rc = fsfilt_ext3_get_xattr(inode,
+                                           XATTR_LUSTRE_MDS_MID_EA,
+                                           lmm, lmm_size);
+                break;
+        default:
+                return -EINVAL;
+        }
+        
         return rc;
 }
 
@@ -681,12 +692,10 @@ static int fsfilt_ext3_add_journal_cb(struct obd_device *obd,
         fcb->cb_data = cb_data;
 
         CDEBUG(D_EXT2, "set callback for last_num: "LPD64"\n", last_num);
-        
         lock_kernel();
         journal_callback_set(handle, fsfilt_ext3_cb_func,
                              (struct journal_callback *)fcb);
         unlock_kernel();
-
         return 0;
 }
 
@@ -728,7 +737,7 @@ static int fsfilt_ext3_sync(struct super_block *sb)
 #define ext3_up_truncate_sem(inode)  up(&EXT3_I(inode)->truncate_sem);
 #define ext3_down_truncate_sem(inode)  down(&EXT3_I(inode)->truncate_sem);
 #endif
-                                                                                                                                                                                                     
+
 #include <linux/lustre_version.h>
 #if EXT3_EXT_MAGIC == 0xf301
 #define ee_start e_start
@@ -793,16 +802,16 @@ static int ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
         loff_t new_i_size;
         handle_t *handle;
         int i, aflags = 0;
-                                                                                                                                                                                                     
+        
         i = EXT_DEPTH(tree);
         EXT_ASSERT(i == path->p_depth);
         EXT_ASSERT(path[i].p_hdr);
-                                                                                                                                                                                                     
+        
         if (exist) {
                 err = EXT_CONTINUE;
                 goto map;
         }
-                                                                                                                                                                                                     
+        
         if (bp->create == 0) {
                 i = 0;
                 if (newex->ee_block < bp->start)
@@ -824,7 +833,6 @@ static int ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
         tgen = EXT_GENERATION(tree);
         count = ext3_ext_calc_credits_for_insert(tree, path);
         ext3_up_truncate_sem(inode);
-                                                                                                                                                                                                     
         lock_kernel();
         handle = journal_start(EXT3_JOURNAL(inode), count + EXT3_ALLOC_NEEDED + 1);
         unlock_kernel();
@@ -832,7 +840,7 @@ static int ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
                 ext3_down_truncate_sem(inode);
                 return PTR_ERR(handle);
         }
-                                                                                                                                                                                                     
+        
         if (tgen != EXT_GENERATION(tree)) {
                 /* the tree has changed. so path can be invalid at moment */
                 lock_kernel();
@@ -841,7 +849,6 @@ static int ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
                 ext3_down_truncate_sem(inode);
                 return EXT_REPEAT;
         }
-                                                                                                                                                                                                     
         ext3_down_truncate_sem(inode);
         count = newex->ee_len;
         goal = ext3_ext_find_goal(inode, path, newex->ee_block, &aflags);
@@ -868,9 +875,9 @@ static int ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
                 }
         }
 out:
-        lock_kernel();
+        lock_24kernel();
         journal_stop(handle);
-        unlock_kernel();
+        unlock_24kernel();
 map:
         if (err >= 0) {
                 /* map blocks */
@@ -918,12 +925,11 @@ int fsfilt_map_nblocks(struct inode *inode, unsigned long block,
         bp.start = block;
         bp.init_num = bp.num = num;
         bp.create = create;
-                                                                                                                                                                                                     
+        
         ext3_down_truncate_sem(inode);
         err = ext3_ext_walk_space(&tree, block, num, ext3_ext_new_extent_cb);
         ext3_ext_invalidate_cache(&tree);
         ext3_up_truncate_sem(inode);
-                                                                                                                                                                                                     
         return err;
 }
 
@@ -1097,10 +1103,10 @@ static int fsfilt_ext3_write_record(struct file *file, void *buf, int bufsize,
         block_count = (block_count + blocksize - 1) >> inode->i_blkbits;
 
         journal = EXT3_SB(inode->i_sb)->s_journal;
-        lock_kernel();
+        lock_24kernel();
         handle = journal_start(journal,
                                block_count * EXT3_DATA_TRANS_BLOCKS + 2);
-        unlock_kernel();
+        unlock_24kernel();
         if (IS_ERR(handle)) {
                 CERROR("can't start transaction\n");
                 return PTR_ERR(handle);
@@ -1158,9 +1164,9 @@ out:
                 unlock_kernel();
         }
 
-        lock_kernel();
+        lock_24kernel();
         journal_stop(handle);
-        unlock_kernel();
+        unlock_24kernel();
 
         if (err == 0)
                 *offs = offset;
@@ -1392,10 +1398,6 @@ static struct fsfilt_operations fsfilt_ext3_ops = {
         .fs_iocontrol               = fsfilt_ext3_iocontrol,
         .fs_set_md                  = fsfilt_ext3_set_md,
         .fs_get_md                  = fsfilt_ext3_get_md,
-        .fs_set_mid                 = fsfilt_ext3_set_mid,
-        .fs_get_mid                 = fsfilt_ext3_get_mid,
-        .fs_set_sid                 = fsfilt_ext3_set_sid,
-        .fs_get_sid                 = fsfilt_ext3_get_sid,
         .fs_readpage                = fsfilt_ext3_readpage,
         .fs_add_journal_cb          = fsfilt_ext3_add_journal_cb,
         .fs_statfs                  = fsfilt_ext3_statfs,

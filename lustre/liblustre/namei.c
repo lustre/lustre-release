@@ -32,11 +32,16 @@
 #include <sys/fcntl.h>
 #include <sys/queue.h>
 
+#ifdef HAVE_XTIO_H
+#include <xtio.h>
+#endif
 #include <sysio.h>
 #include <fs.h>
 #include <mount.h>
 #include <inode.h>
+#ifdef HAVE_FILE_H
 #include <file.h>
+#endif
 
 #undef LIST_HEAD
 
@@ -215,8 +220,8 @@ int llu_pb_revalidate(struct pnode *pnode, int flags, struct lookup_intent *it)
         int rc;
         ENTRY;
 
-        CDEBUG(D_VFSTRACE, "VFS Op:name=%s,intent=%x\n",
-               pb->pb_name.name, it ? it->it_op : 0);
+        CDEBUG(D_VFSTRACE, "VFS Op:name=%.*s,intent=%x\n",
+               (int)pb->pb_name.len, pb->pb_name.name, it ? it->it_op : 0);
 
         /* We don't want to cache negative dentries, so return 0 immediately.
          * We believe that this is safe, that negative dentries cannot be

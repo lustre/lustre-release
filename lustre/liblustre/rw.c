@@ -32,11 +32,15 @@
 #include <fcntl.h>
 #include <sys/uio.h>
 
-#include <fs.h>
+#ifdef HAVE_XTIO_H
+#include <xtio.h>
+#endif
 #include <sysio.h>
 #include <mount.h>
 #include <inode.h>
+#ifdef HAVE_FILE_H
 #include <file.h>
+#endif
 
 #undef LIST_HEAD
 
@@ -308,14 +312,6 @@ struct ll_async_page {
         struct inode   *llap_inode;
 };
 
-static struct ll_async_page *llap_from_cookie(void *cookie)
-{
-        struct ll_async_page *llap = cookie;
-        if (llap->llap_magic != LLAP_MAGIC)
-                return ERR_PTR(-EINVAL);
-        return llap;
-};
-
 static void llu_ap_fill_obdo(void *data, int cmd, struct obdo *oa)
 {
         struct ll_async_page *llap;
@@ -324,12 +320,7 @@ static void llu_ap_fill_obdo(void *data, int cmd, struct obdo *oa)
         obd_valid valid_flags;
         ENTRY;
 
-        llap = llap_from_cookie(data);
-        if (IS_ERR(llap)) {
-                EXIT;
-                return;
-        }
-
+        llap = LLAP_FROM_COOKIE(data);
         inode = llap->llap_inode;
         lsm = llu_i2info(inode)->lli_smd;
 
@@ -349,12 +340,7 @@ static void llu_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
         struct ll_async_page *llap;
         struct page *page;
 
-        llap = llap_from_cookie(data);
-        if (IS_ERR(llap)) {
-                EXIT;
-                return;
-        }
-
+        llap = LLAP_FROM_COOKIE(data);
         llap->llap_queued = 0;
         page = llap->llap_page;
 
@@ -507,9 +493,6 @@ void put_io_group(struct llu_io_group *group)
         OBD_FREE(group, LLU_IO_GROUP_SIZE(group->lig_maxpages));
 }
 
-void lov_increase_kms(struct obd_export *exp, struct lov_stripe_md *lsm,
-                      obd_off size);
-
 static
 ssize_t llu_file_prwv(const struct iovec *iovec, int iovlen,
                         _SYSIO_OFF_T pos, ssize_t len,
@@ -618,7 +601,7 @@ ssize_t llu_file_prwv(const struct iovec *iovec, int iovlen,
                         pos += ret;
                         if (!is_read) {
                                 LASSERT(ret == count);
-                                lov_increase_kms(exp, lsm, pos);
+                                obd_adjust_kms(exp, lsm, pos, 0);
                                 /* file size grow immediately */
                                 if (pos > lli->lli_st_size)
                                         lli->lli_st_size = pos;

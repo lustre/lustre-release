@@ -166,41 +166,6 @@ int osc_rd_cur_grant_bytes(char *page, char **start, off_t off, int count,
         return rc;
 }
 
-int osc_rd_create_low_wm(char *page, char **start, off_t off, int count,
-                         int *eof, void *data)
-{
-        struct obd_device *obd = data;
-
-        if (obd == NULL)
-                return 0;
-
-        return snprintf(page, count, "%d\n",
-                        obd->u.cli.cl_oscc.oscc_kick_barrier);
-}
-
-int osc_wr_create_low_wm(struct file *file, const char *buffer,
-                         unsigned long count, void *data)
-{
-        struct obd_device *obd = data;
-        int val, rc;
-
-        if (obd == NULL)
-                return 0;
-
-        rc = lprocfs_write_helper(buffer, count, &val);
-        if (rc)
-                return rc;
-
-        if (val < 0)
-                return -ERANGE;
-
-        spin_lock(&obd->obd_dev_lock);
-        obd->u.cli.cl_oscc.oscc_kick_barrier = val;
-        spin_unlock(&obd->obd_dev_lock);
-
-        return count;
-}
-
 int osc_rd_create_count(char *page, char **start, off_t off, int count,
                         int *eof, void *data)
 {
@@ -276,7 +241,6 @@ static struct lprocfs_vars lprocfs_obd_vars[] = {
         { "max_dirty_mb", osc_rd_max_dirty_mb, osc_wr_max_dirty_mb, 0 },
         { "cur_dirty_bytes", osc_rd_cur_dirty_bytes, 0, 0 },
         { "cur_grant_bytes", osc_rd_cur_grant_bytes, 0, 0 },
-        {"create_low_watermark", osc_rd_create_low_wm, osc_wr_create_low_wm, 0},
         { "create_count", osc_rd_create_count, osc_wr_create_count, 0 },
         { "prealloc_next_id", osc_rd_prealloc_next_id, 0, 0 },
         { "prealloc_last_id", osc_rd_prealloc_last_id, 0, 0 },
@@ -307,7 +271,7 @@ static int osc_rpc_stats_seq_show(struct seq_file *seq, void *v)
 
         spin_lock_irqsave(&cli->cl_loi_list_lock, flags);
 
-        seq_printf(seq, "snapshot_time:         %lu:%lu (secs:usecs)\n",
+        seq_printf(seq, "snapshot_time:         %lu.%lu (secs.usecs)\n",
                    now.tv_sec, now.tv_usec);
 
         seq_printf(seq, "read RPCs in flight:  %d\n",

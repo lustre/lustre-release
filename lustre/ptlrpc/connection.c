@@ -67,7 +67,7 @@ struct ptlrpc_connection *ptlrpc_get_connection(struct ptlrpc_peer *peer,
         spin_lock(&conn_lock);
         list_for_each(tmp, &conn_list) {
                 c = list_entry(tmp, struct ptlrpc_connection, c_link);
-                if (!memcmp(peer, &c->c_peer, sizeof(struct ptlrpc_peer)) &&
+                if (memcmp(peer, &c->c_peer, sizeof(*peer)) == 0 &&
                     peer->peer_ni == c->c_peer.peer_ni) {
                         ptlrpc_connection_addref(c);
                         GOTO(out, c);
@@ -76,7 +76,7 @@ struct ptlrpc_connection *ptlrpc_get_connection(struct ptlrpc_peer *peer,
 
         list_for_each_safe(tmp, pos, &conn_unused_list) {
                 c = list_entry(tmp, struct ptlrpc_connection, c_link);
-                if (!memcmp(peer, &c->c_peer, sizeof(struct ptlrpc_peer)) &&
+                if (memcmp(peer, &c->c_peer, sizeof(*peer)) == 0 &&
                     peer->peer_ni == c->c_peer.peer_ni) {
                         ptlrpc_connection_addref(c);
                         list_del(&c->c_link);

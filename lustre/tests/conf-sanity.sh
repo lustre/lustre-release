@@ -47,9 +47,10 @@ start_mds() {
 	start mds1 --reformat $MDSLCONFARGS  || return 94
 	start_lsvcgssd || return 501
 }
+
 stop_mds() {
 	echo "stop mds1 service on `facet_active_host mds1`"
-	stop mds1 $@  || return 97
+	stop mds1 $@ || return 97
 	stop_lsvcgssd
 }
 
@@ -60,7 +61,7 @@ start_ost() {
 
 stop_ost() {
 	echo "stop ost service on `facet_active_host ost`"
-	stop ost $@  || return 98
+	stop ost $@ || return 98
 }
 
 mount_client() {
@@ -188,7 +189,17 @@ test_5() {
 	# cleanup may return an error from the failed
 	# disconnects; for now I'll consider this successful
 	# if all the modules have unloaded.
- 	umount $MOUNT &
+
+	# as MDS is down, umount without -f may cause blocking
+	# and this test will never finish. Blocking is possible
+	# as umount may want to cancel locks with RPC's and these
+	# RPC's will wait forever, as pinger thread will try to
+	# recover failed import endlessly.
+	#
+	# Thus, main point is: nobody should expect umount finish
+	# quickly and cleanly without -f flag when MDS or OST is 
+	# down for sure. --umka
+ 	umount -f $MOUNT &
 	UMOUNT_PID=$!
 	sleep 2
 	echo "killing umount"
@@ -198,16 +209,21 @@ test_5() {
 	stop_lgssd
 
 	# cleanup client modules
-	$LCONF --cleanup --nosetup --node client_facet $XMLCONFIG > /dev/null
+	$LCONF --force --cleanup --nosetup --node client_facet $XMLCONFIG > /dev/null
 	
 	# stop_mds is a no-op here, and should not fail
-	stop_mds  || return 4
-	stop_ost || return 5
+	stop_mds || return 4
+	
+	# this should have --force flag specified, as umount -f
+	# will skip disconnect phase and thus OST will have one
+	# extra refcount what will cause class_cleanup() failure
+	# if --force is not specified. --umka
+	stop_ost --force || return 5
 
 	lsmod | grep -q portals && return 6
 	return 0
 }
-run_test 5 "force cleanup mds, then cleanup"
+run_test 5 "force cleanup mds, then cleanup --force"
 
 test_5b() {
 	start_ost
@@ -217,17 +233,17 @@ test_5b() {
 	[ -d $MOUNT ] || mkdir -p $MOUNT
 	$LCONF --nosetup --node client_facet $XMLCONFIG > /dev/null
 	start_lgssd || return 1
-	llmount $mds_HOST://mds1_svc/client_facet $MOUNT  && exit 1
+	llmount -o nettype=$NETTYPE $mds_HOST://mds_svc/client_facet $MOUNT  && exit 2
 
 	# cleanup client modules
 	$LCONF --cleanup --nosetup --node client_facet $XMLCONFIG > /dev/null
 	stop_lgssd
 	
 	# stop_mds is a no-op here, and should not fail
-	stop_mds || return 2
-	stop_ost || return 3
+	stop_mds || return 3
+	stop_ost || return 4
 
-	lsmod | grep -q portals && return 4 
+	lsmod | grep -q portals && return 5
 	return 0
 
 }
@@ -240,7 +256,7 @@ test_5c() {
 	[ -d $MOUNT ] || mkdir -p $MOUNT
 	$LCONF --nosetup --node client_facet $XMLCONFIG > /dev/null
 	start_lgssd || return 1
-        llmount $mds_HOST://wrong_mds1_svc/client_facet $MOUNT  && return 2
+	llmount -o nettype=$NETTYPE $mds_HOST://wrong_mds_svc/client_facet $MOUNT  && return 2
 
 	# cleanup client modules
 	$LCONF --cleanup --nosetup --node client_facet $XMLCONFIG > /dev/null
@@ -642,7 +658,7 @@ test_16() {
             mount_client $MOUNT
             check_mount || return 41
             cleanup || return $?
-         fi
+        fi
                                                                                                                              
         echo "change the mode of $MDSDEV/OBJECTS,LOGS,PENDING to 555"
         [ -d $TMPMTPT ] || mkdir -p $TMPMTPT

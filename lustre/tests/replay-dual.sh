@@ -51,7 +51,16 @@ cleanup() {
     umount $MOUNT2 || true
     umount $MOUNT || true
     rmmod llite
+    
+    # b=3941
+    # In mds recovery, the mds will clear orphans in ost by 
+    # mds_lov_clear_orphan, which will sent the request to ost and waiting for
+    # the reply, if we stop mds at this time, we will got the obd_refcount > 1 
+    # errors, because mds_lov_clear_orphan grab a export of mds, 
+    # so the obd_refcount of mds will not be zero. So, wait a while before
+    # stop mds. This bug needs further work.
     for mds in `mds_list`; do
+	sleep 5
 	stop $mds ${FORCE} $MDSLCONFARGS
     done
     stop_lgssd
@@ -345,6 +354,7 @@ test_14() {
     facet_failover mds1
     # expect failover to fail
     df $MOUNT && return 1
+    sleep 1
 
     # first 25 files shouuld have been
     # replayed
@@ -364,6 +374,7 @@ test_15() {
 
     facet_failover mds1
     df $MOUNT || return 1
+    sleep 1
 
     unlinkmany $MOUNT1/$tfile- 25 || return 2
 
@@ -381,6 +392,7 @@ test_16() {
     sleep $TIMEOUT
     facet_failover mds1
     df $MOUNT || return 1
+    sleep 1
 
     unlinkmany $MOUNT1/$tfile- 25 || return 2
 
@@ -403,6 +415,7 @@ test_17() {
     sleep $TIMEOUT
     facet_failover ost
     df $MOUNT || return 1
+    sleep 1
 
     unlinkmany $MOUNT1/$tfile- 25 || return 2
 
@@ -430,7 +443,6 @@ test_18 () {
     zconf_mount `hostname` $MOUNT2
 }
 run_test 18 "replay open, Abort recovery, don't assert (3892)"
-
 
 # cleanup with blocked enqueue fails until timer elapses (MDS busy), wait for
 # itexport NOW=0

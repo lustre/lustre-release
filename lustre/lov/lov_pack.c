@@ -108,7 +108,7 @@ int lov_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
 
         if (lsm) {
                 if (lsm->lsm_magic != LOV_MAGIC) {
-                        CERROR("bad mem LOV MAGIC: 0x%08X != 0x%08X\n",
+                        CWARN("bad LOV MAGIC: 0x%08X != 0x%08X\n",
                                lsm->lsm_magic, LOV_MAGIC);
                         RETURN(-EINVAL);
                 }
@@ -307,12 +307,14 @@ int lov_alloc_memmd(struct lov_stripe_md **lsmp, int stripe_count, int pattern)
         return lsm_size;
 }
 EXPORT_SYMBOL(lov_alloc_memmd);
+
 void lov_free_memmd(struct lov_stripe_md **lsmp)
 {
         OBD_FREE(*lsmp, lov_stripe_md_size((*lsmp)->lsm_stripe_count));
         *lsmp = NULL;
 }
 EXPORT_SYMBOL(lov_free_memmd);
+
 int lov_unpackmd_v0(struct lov_obd *lov, struct lov_stripe_md *lsm,
                     struct lov_mds_md_v0 *lmm)
 {

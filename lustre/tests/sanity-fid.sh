@@ -10,6 +10,7 @@ ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-""}
 
 SRCDIR=`dirname $0`
 export PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$PATH
+export SECURITY=${SECURITY:-"null"}
 
 TMP=${TMP:-/tmp}
 FSTYPE=${FSTYPE:-ext3}
@@ -34,12 +35,21 @@ IOPENTEST2=${IOPENTEST2:-iopentest2}
 PTLDEBUG=${PTLDEBUG:-0}
 MODE=${MODE:mds}
 
+. krb5_env.sh
+
 if [ $UID -ne 0 ]; then
 	RUNAS_ID="$UID"
 	RUNAS=""
 else
 	RUNAS_ID=${RUNAS_ID:-500}
 	RUNAS=${RUNAS:-"runas -u $RUNAS_ID"}
+fi
+
+if [ `using_krb5_sec $SECURITY` == 'y' ] ; then
+    start_krb5_kdc || exit 1
+    if [ $RUNAS_ID -ne $UID ]; then
+        $RUNAS ./krb5_refresh_cache.sh || exit 2
+    fi
 fi
 
 export NAME=${NAME:-local}

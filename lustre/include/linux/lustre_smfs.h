@@ -26,7 +26,9 @@
 #ifndef __LUSTRE_SMFS_H
 #define __LUSTRE_SMFS_H
 
+#include <linux/lustre_fsfilt.h>
 #include <linux/namei.h>
+
 struct snap_inode_info {
 	int sn_flags;		/*the flags indicated inode type */
 	int sn_gen; 	        /*the inode generation*/
@@ -509,8 +511,10 @@ extern int smfs_write_extents(struct inode *dir, struct dentry *dentry,
                               unsigned long from, unsigned long num);
 extern int smfs_rec_setattr(struct inode *dir, struct dentry *dentry,
                             struct iattr *attr);
-extern int smfs_rec_precreate(struct dentry *dentry, int *num, struct obdo *oa);
-extern int smfs_rec_md(struct inode *inode, void * lmm, int lmm_size);
+extern int smfs_rec_precreate(struct dentry *dentry, int *num,
+                              struct obdo *oa);
+extern int smfs_rec_md(struct inode *inode, void * lmm, int lmm_size, 
+		       enum ea_type type);
 extern int smfs_rec_unpack(struct smfs_proc_args *args, char *record,
                            char **pbuf, int *opcode);
 	

@@ -379,9 +379,6 @@ static void ost_stime_record(struct ptlrpc_request *req, struct timeval *start,
        } 
 }
 
-static char str[PTL_NALFMT_SIZE];
-
-
 static int ost_brw_read(struct ptlrpc_request *req)
 {
         struct ptlrpc_bulk_desc *desc;
@@ -457,6 +454,9 @@ static int ost_brw_read(struct ptlrpc_request *req)
         ost_stime_record(req, &start, 0, 0);
         if (rc != 0)
                 GOTO(out_bulk, rc);
+
+        /* We're finishing using body->oa as an input variable */
+        body->oa.o_valid = 0;
 
         nob = 0;
         for (i = 0; i < npages; i++) {
@@ -549,17 +549,17 @@ static int ost_brw_read(struct ptlrpc_request *req)
                 }
                 if (req->rq_reqmsg->conn_cnt == req->rq_export->exp_conn_cnt) {
                         CERROR("bulk IO comms error: "
-                               "evicting %s@%s nid %s\n",
+                               "evicting %s@%s id %s\n",
                                req->rq_export->exp_client_uuid.uuid,
                                req->rq_export->exp_connection->c_remote_uuid.uuid,
-                               ptlrpc_peernid2str(&req->rq_peer, str));
+                               req->rq_peerstr);
                         ptlrpc_fail_export(req->rq_export);
                 } else {
                         CERROR("ignoring bulk IO comms error: "
-                               "client reconnected %s@%s nid %s\n",  
+                               "client reconnected %s@%s id %s\n",  
                                req->rq_export->exp_client_uuid.uuid,
                                req->rq_export->exp_connection->c_remote_uuid.uuid,
-                               ptlrpc_peernid2str(&req->rq_peer, str));
+                               req->rq_peerstr);
                 }
         }
 
@@ -702,18 +702,16 @@ int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 obd_count cksum = ost_checksum_bulk(desc);
 
                 if (client_cksum != cksum) {
-                        CERROR("Bad checksum: client %x, server %x NID %s\n",
+                        CERROR("Bad checksum: client %x, server %x id %s\n",
                                client_cksum, cksum,
-                               ptlrpc_peernid2str(&req->rq_peer, str));
+                               req->rq_peerstr);
                         cksum_counter = 1;
                         repbody->oa.o_cksum = cksum;
                 } else {
                         cksum_counter++;
                         if ((cksum_counter & (-cksum_counter)) == cksum_counter)
                                 CWARN("Checksum %u from NID %s: %x OK\n",         
-                                      cksum_counter,
-                                      ptlrpc_peernid2str(&req->rq_peer, str),
-                                      cksum);
+                                      cksum_counter, req->rq_peerstr, cksum);
                 }
         }
 #endif
@@ -770,19 +768,19 @@ int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                         lustre_free_reply_state (req->rq_reply_state);
                 }
                 if (req->rq_reqmsg->conn_cnt == req->rq_export->exp_conn_cnt) {
-                        CERROR("%s: bulk IO comm error evicting %s@%s NID %s\n",
+                        CERROR("%s: bulk IO comm error evicting %s@%s id %s\n",
                                req->rq_export->exp_obd->obd_name,
                                req->rq_export->exp_client_uuid.uuid,
                                req->rq_export->exp_connection->c_remote_uuid.uuid,
-                               ptlrpc_peernid2str(&req->rq_peer, str));
+                               req->rq_peerstr);
                         ptlrpc_fail_export(req->rq_export);
                 } else {
                         CERROR("ignoring bulk IO comms error: "
-                               "client reconnected %s@%s nid %s\n",
+                               "client reconnected %s@%s id %s\n",
                                req->rq_export->exp_client_uuid.uuid,
                                req->rq_export->exp_connection->c_remote_uuid.uuid,
-                               ptlrpc_peernid2str(&req->rq_peer, str));
-                }        
+                               req->rq_peerstr);
+                }
         }
         RETURN(rc);
 }
@@ -916,7 +914,7 @@ static int ost_get_info(struct obd_export *exp, struct ptlrpc_request *req)
 }
 
 static int ost_llog_handle_connect(struct obd_export *exp,
-                struct ptlrpc_request *req)
+            			   struct ptlrpc_request *req)
 {
         struct llogd_conn_body *body;
         int rc;
@@ -1020,10 +1018,9 @@ int ost_msg_check_version(struct lustre_msg *msg)
 
 int ost_handle(struct ptlrpc_request *req)
 {
-        struct obd_trans_info trans_info = { 0, };
-        struct obd_trans_info *oti = &trans_info;
         int should_process, fail = OBD_FAIL_OST_ALL_REPLY_NET, rc = 0;
-        struct obd_export *exp = NULL;
+        struct obd_trans_info *oti = NULL;
+        struct obd_device *obd = NULL;
         ENTRY;
 
         LASSERT(current->journal_info == NULL);
@@ -1038,31 +1035,28 @@ int ost_handle(struct ptlrpc_request *req)
         if (req->rq_reqmsg->opc == SEC_INIT ||
             req->rq_reqmsg->opc == SEC_INIT_CONTINUE ||
             req->rq_reqmsg->opc == SEC_FINI) {
-                GOTO(out, rc = 0);
+                RETURN(0);
         }
 
         /* XXX identical to MDS */
         if (req->rq_reqmsg->opc != OST_CONNECT) {
-                struct obd_device *obd;
                 int recovering;
 
-                exp = req->rq_export;
-
-                if (exp == NULL) {
+                if (req->rq_export == NULL) {
                         CDEBUG(D_HA,"operation %d on unconnected OST from %s\n",
                                req->rq_reqmsg->opc,
-                               ptlrpc_peernid2str(&req->rq_peer, str));
+                               req->rq_peerstr);
                         req->rq_status = -ENOTCONN;
-                        GOTO(out, rc = -ENOTCONN);
+                        GOTO(out_check_req, rc = -ENOTCONN);
                 }
 
-                obd = exp->exp_obd;
+                obd = req->rq_export->exp_obd;
 
                 /* Check for aborted recovery. */
                 spin_lock_bh(&obd->obd_processing_task_lock);
                 recovering = obd->obd_recovering;
                 spin_unlock_bh(&obd->obd_processing_task_lock);
-                if (recovering) {
+		if (recovering) {
                         rc = ost_filter_recovery_request(req, obd,
                                                          &should_process);
                         if (rc || !should_process)
@@ -1075,100 +1069,100 @@ int ost_handle(struct ptlrpc_request *req)
                 }
         }
 
+	OBD_ALLOC(oti, sizeof(*oti));
+	if (oti == NULL)
+		RETURN(-ENOMEM);
+		
         oti_init(oti, req);
 
         switch (req->rq_reqmsg->opc) {
         case OST_CONNECT: {
                 CDEBUG(D_INODE, "connect\n");
-                OBD_FAIL_RETURN(OBD_FAIL_OST_CONNECT_NET, 0);
+                OBD_FAIL_GOTO(OBD_FAIL_OST_CONNECT_NET, out_free_oti, rc = 0);
                 rc = target_handle_connect(req);
+                if (!rc)
+                        obd = req->rq_export->exp_obd;
                 break;
         }
         case OST_DISCONNECT:
                 CDEBUG(D_INODE, "disconnect\n");
-                OBD_FAIL_RETURN(OBD_FAIL_OST_DISCONNECT_NET, 0);
+                OBD_FAIL_GOTO(OBD_FAIL_OST_DISCONNECT_NET, out_free_oti, rc = 0);
                 rc = target_handle_disconnect(req);
                 break;
         case OST_CREATE:
                 CDEBUG(D_INODE, "create\n");
-                if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_OST_ENOSPC))
-                        GOTO(out, rc = -ENOSPC);
-                if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_OST_EROFS))
-                        GOTO(out, rc = -EROFS);
-                OBD_FAIL_RETURN(OBD_FAIL_OST_CREATE_NET, 0);
-                rc = ost_create(exp, req, oti);
+                OBD_FAIL_GOTO(OBD_FAIL_OST_ENOSPC, out_check_req, rc = -ENOSPC);
+                OBD_FAIL_GOTO(OBD_FAIL_OST_EROFS, out_check_req, rc = -EROFS);
+                OBD_FAIL_GOTO(OBD_FAIL_OST_CREATE_NET, out_free_oti, rc = 0);
+                rc = ost_create(req->rq_export, req, oti);
                 break;
         case OST_DESTROY:
                 CDEBUG(D_INODE, "destroy\n");
-                OBD_FAIL_RETURN(OBD_FAIL_OST_DESTROY_NET, 0);
-                if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_OST_EROFS))
-                        GOTO(out, rc = -EROFS);
-                rc = ost_destroy(exp, req, oti);
+                OBD_FAIL_GOTO(OBD_FAIL_OST_DESTROY_NET, out_free_oti, rc = 0);
+                OBD_FAIL_GOTO(OBD_FAIL_OST_EROFS, out_check_req, rc = -EROFS);
+                rc = ost_destroy(req->rq_export, req, oti);
                 break;
         case OST_GETATTR:
                 CDEBUG(D_INODE, "getattr\n");
-                OBD_FAIL_RETURN(OBD_FAIL_OST_GETATTR_NET, 0);
-                rc = ost_getattr(exp, req);
+                OBD_FAIL_GOTO(OBD_FAIL_OST_GETATTR_NET, out_free_oti, rc = 0);
+                rc = ost_getattr(req->rq_export, req);
                 break;
         case OST_SETATTR:
                 CDEBUG(D_INODE, "setattr\n");
-                OBD_FAIL_RETURN(OBD_FAIL_OST_SETATTR_NET, 0);
-                rc = ost_setattr(exp, req, oti);
+                OBD_FAIL_GOTO(OBD_FAIL_OST_SETATTR_NET, out_free_oti, rc = 0);
+                rc = ost_setattr(req->rq_export, req, oti);
                 break;
         case OST_WRITE:
                 CDEBUG(D_INODE, "write\n");
-                OBD_FAIL_RETURN(OBD_FAIL_OST_BRW_NET, 0);
-                if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_OST_ENOSPC))
-                        GOTO(out, rc = -ENOSPC);
-                if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_OST_EROFS))
-                        GOTO(out, rc = -EROFS);
+                OBD_FAIL_GOTO(OBD_FAIL_OST_BRW_NET, out_free_oti, rc = 0);
+                OBD_FAIL_GOTO(OBD_FAIL_OST_ENOSPC, out_check_req, rc = -ENOSPC);
+                OBD_FAIL_GOTO(OBD_FAIL_OST_EROFS, out_check_req, rc = -EROFS);
                 rc = ost_brw_write(req, oti);
                 LASSERT(current->journal_info == NULL);
                 /* ost_brw sends its own replies */
-                RETURN(rc);
+                GOTO(out_free_oti, rc);
         case OST_READ:
                 CDEBUG(D_INODE, "read\n");
-                OBD_FAIL_RETURN(OBD_FAIL_OST_BRW_NET, 0);
+                OBD_FAIL_GOTO(OBD_FAIL_OST_BRW_NET, out_free_oti, rc = 0);
                 rc = ost_brw_read(req);
                 LASSERT(current->journal_info == NULL);
                 /* ost_brw sends its own replies */
-                RETURN(rc);
+                GOTO(out_free_oti, rc);
         case OST_SAN_READ:
                 CDEBUG(D_INODE, "san read\n");
-                OBD_FAIL_RETURN(OBD_FAIL_OST_BRW_NET, 0);
+                OBD_FAIL_GOTO(OBD_FAIL_OST_BRW_NET, out_free_oti, rc = 0);
                 rc = ost_san_brw(req, OBD_BRW_READ);
                 /* ost_san_brw sends its own replies */
-                RETURN(rc);
+                GOTO(out_free_oti, rc);
         case OST_SAN_WRITE:
                 CDEBUG(D_INODE, "san write\n");
-                OBD_FAIL_RETURN(OBD_FAIL_OST_BRW_NET, 0);
+                OBD_FAIL_GOTO(OBD_FAIL_OST_BRW_NET, out_free_oti, rc = 0);
                 rc = ost_san_brw(req, OBD_BRW_WRITE);
                 /* ost_san_brw sends its own replies */
-                RETURN(rc);
+                GOTO(out_free_oti, rc);
         case OST_PUNCH:
                 CDEBUG(D_INODE, "punch\n");
-                OBD_FAIL_RETURN(OBD_FAIL_OST_PUNCH_NET, 0);
-                if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_OST_EROFS))
-                        GOTO(out, rc = -EROFS);
-                rc = ost_punch(exp, req, oti);
+                OBD_FAIL_GOTO(OBD_FAIL_OST_PUNCH_NET, out_free_oti, rc = 0);
+                OBD_FAIL_GOTO(OBD_FAIL_OST_EROFS, out_check_req, rc = -EROFS);
+                rc = ost_punch(req->rq_export, req, oti);
                 break;
         case OST_STATFS:
                 CDEBUG(D_INODE, "statfs\n");
-                OBD_FAIL_RETURN(OBD_FAIL_OST_STATFS_NET, 0);
+                OBD_FAIL_GOTO(OBD_FAIL_OST_STATFS_NET, out_free_oti, rc = 0);
                 rc = ost_statfs(req);
                 break;
         case OST_SYNC:
                 CDEBUG(D_INODE, "sync\n");
-                OBD_FAIL_RETURN(OBD_FAIL_OST_SYNC_NET, 0);
-                rc = ost_sync(exp, req);
+                OBD_FAIL_GOTO(OBD_FAIL_OST_SYNC_NET, out_free_oti, rc = 0);
+                rc = ost_sync(req->rq_export, req);
                 break;
         case OST_SET_INFO:
                 DEBUG_REQ(D_INODE, req, "set_info");
-                rc = ost_set_info(exp, req);
+                rc = ost_set_info(req->rq_export, req);
                 break;
         case OST_GET_INFO:
                 DEBUG_REQ(D_INODE, req, "get_info");
-                rc = ost_get_info(exp, req);
+                rc = ost_get_info(req->rq_export, req);
                 break;
         case OBD_PING:
                 DEBUG_REQ(D_INODE, req, "ping");
@@ -1177,24 +1171,24 @@ int ost_handle(struct ptlrpc_request *req)
         /* FIXME - just reply status */
         case LLOG_ORIGIN_CONNECT:
                 DEBUG_REQ(D_INODE, req, "log connect\n");
-                rc = ost_llog_handle_connect(exp, req); 
+                rc = ost_llog_handle_connect(req->rq_export, req); 
                 req->rq_status = rc;
                 rc = lustre_pack_reply(req, 0, NULL, NULL);
                 if (rc)
-                        RETURN(rc);
-                RETURN(ptlrpc_reply(req));
+                        GOTO(out_free_oti, rc);
+                GOTO(out_free_oti, rc = ptlrpc_reply(req));
         case OBD_LOG_CANCEL:
                 CDEBUG(D_INODE, "log cancel\n");
-                OBD_FAIL_RETURN(OBD_FAIL_OBD_LOG_CANCEL_NET, 0);
+                OBD_FAIL_GOTO(OBD_FAIL_OBD_LOG_CANCEL_NET, out_free_oti, rc = 0);
                 rc = llog_origin_handle_cancel(req);
                 req->rq_status = rc;
                 rc = lustre_pack_reply(req, 0, NULL, NULL);
                 if (rc)
-                        RETURN(rc);
-                RETURN(ptlrpc_reply(req));
+                        GOTO(out_free_oti, rc);
+                GOTO(out_free_oti, rc = ptlrpc_reply(req));
         case LDLM_ENQUEUE:
                 CDEBUG(D_INODE, "enqueue\n");
-                OBD_FAIL_RETURN(OBD_FAIL_LDLM_ENQUEUE, 0);
+                OBD_FAIL_GOTO(OBD_FAIL_LDLM_ENQUEUE, out_free_oti, rc = 0);
                 rc = ldlm_handle_enqueue(req, ldlm_server_completion_ast,
                                          ldlm_server_blocking_ast,
                                          ldlm_server_glimpse_ast);
@@ -1202,12 +1196,12 @@ int ost_handle(struct ptlrpc_request *req)
                 break;
         case LDLM_CONVERT:
                 CDEBUG(D_INODE, "convert\n");
-                OBD_FAIL_RETURN(OBD_FAIL_LDLM_CONVERT, 0);
+                OBD_FAIL_GOTO(OBD_FAIL_LDLM_CONVERT, out_free_oti, rc = 0);
                 rc = ldlm_handle_convert(req);
                 break;
         case LDLM_CANCEL:
                 CDEBUG(D_INODE, "cancel\n");
-                OBD_FAIL_RETURN(OBD_FAIL_LDLM_CANCEL, 0);
+                OBD_FAIL_GOTO(OBD_FAIL_LDLM_CANCEL, out_free_oti, rc = 0);
                 rc = ldlm_handle_cancel(req);
                 break;
         case LDLM_BL_CALLBACK:
@@ -1219,7 +1213,7 @@ int ost_handle(struct ptlrpc_request *req)
                 CERROR("Unexpected opcode %d\n", req->rq_reqmsg->opc);
                 req->rq_status = -ENOTSUPP;
                 rc = ptlrpc_error(req);
-                RETURN(rc);
+                GOTO(out_free_oti, rc);
         }
 
         LASSERT(current->journal_info == NULL);
@@ -1227,7 +1221,6 @@ int ost_handle(struct ptlrpc_request *req)
         EXIT;
         /* If we're DISCONNECTing, the export_data is already freed */
         if (!rc && req->rq_reqmsg->opc != OST_DISCONNECT) {
-                struct obd_device *obd  = req->rq_export->exp_obd;
                 if (!obd->obd_no_transno) {
                         req->rq_repmsg->last_committed =
                                 obd->obd_last_committed;
@@ -1239,13 +1232,12 @@ int ost_handle(struct ptlrpc_request *req)
                        obd->obd_last_committed, req->rq_xid);
         }
 
-out:
+out_check_req:
         if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_LAST_REPLAY) {
-                struct obd_device *obd = req->rq_export->exp_obd;
-
                 if (obd && obd->obd_recovering) {
                         DEBUG_REQ(D_HA, req, "LAST_REPLAY, queuing reply");
-                        return target_queue_final_reply(req, rc);
+                        rc = target_queue_final_reply(req, rc);
+                        GOTO(out_free_oti, rc);
                 }
                 /* Lost a race with recovery; let the error path DTRT. */
                 rc = req->rq_status = -ENOTCONN;
@@ -1253,9 +1245,13 @@ out:
 
         if (!rc)
                 oti_to_request(oti, req);
-
         target_send_reply(req, rc, fail);
-        return 0;
+        rc = 0;
+        
+out_free_oti:
+        if (oti)
+                OBD_FREE(oti, sizeof(*oti));
+        return rc;
 }
 EXPORT_SYMBOL(ost_handle);
 
@@ -1293,7 +1289,7 @@ static int ost_setup(struct obd_device *obd, obd_count len, void *buf)
 
         ost->ost_service =
                 ptlrpc_init_svc(OST_NBUFS, OST_BUFSIZE, OST_MAXREQSIZE,
-                                OST_REQUEST_PORTAL, OSC_REPLY_PORTAL,
+                                OST_REQUEST_PORTAL, OSC_REPLY_PORTAL, 30000,
                                 ost_handle, "ost",
                                 obd->obd_proc_entry);
         if (ost->ost_service == NULL) {
@@ -1308,7 +1304,7 @@ static int ost_setup(struct obd_device *obd, obd_count len, void *buf)
 
         ost->ost_create_service =
                 ptlrpc_init_svc(OST_NBUFS, OST_BUFSIZE, OST_MAXREQSIZE,
-                                OST_CREATE_PORTAL, OSC_REPLY_PORTAL,
+                                OST_CREATE_PORTAL, OSC_REPLY_PORTAL, 30000,
                                 ost_handle, "ost_create",
                                 obd->obd_proc_entry);
         if (ost->ost_create_service == NULL) {

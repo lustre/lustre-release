@@ -63,7 +63,6 @@ int groups_search(struct group_info *ginfo, gid_t grp);
         } while (0)
 
 #define groups_sort(gi) do {} while (0)
-
 #define GROUP_AT(gi, i) ((gi)->small_block[(i)])
 
 static inline int cleanup_group_info(void)
@@ -174,6 +173,10 @@ static inline void lustre_daemonize_helper(void)
                 page->private = 0; \
         } while(0)
 
+#ifndef smp_num_cpus
+#define smp_num_cpus    num_online_cpus()
+#endif
+
 #define kiobuf bio
 
 #include <linux/proc_fs.h>
@@ -257,7 +260,11 @@ static inline void cond_resched(void)
 
 static inline int mapping_mapped(struct address_space *mapping)
 {
-        return mapping->i_mmap_shared ? 1 : 0;
+        if (mapping->i_mmap_shared)
+                return 1;
+        if (mapping->i_mmap)
+                return 1;
+        return 0;
 }
 
 /* to find proc_dir_entry from inode. 2.6 has native one -bzzz */
@@ -325,6 +332,12 @@ static inline int mapping_has_pages(struct address_space *mapping)
                 spin_unlock(&dentry->d_lock); \
         } while(0)
 #define ll_vfs_symlink(dir, dentry, path, mode) vfs_symlink(dir, dentry, path, mode)
+#endif
+
+#ifndef container_of
+#define container_of(ptr, type, member) ({                      \
+                const typeof( ((type *)0)->member ) *__mptr = (ptr); \
+                (type *)( (char *)__mptr - offsetof(type,member) );})
 #endif
 
 #ifdef HAVE_I_ALLOC_SEM

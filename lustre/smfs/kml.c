@@ -276,29 +276,35 @@ int smfs_rec_setattr(struct inode *dir, struct dentry *dentry,
 }
 EXPORT_SYMBOL(smfs_rec_setattr);
 
-int smfs_rec_md(struct inode *inode, void *lmm, int lmm_size)
+int smfs_rec_md(struct inode *inode, void *lmm, int lmm_size,
+                enum ea_type type)
 {
         char *set_lmm = NULL;
-        int  rc = 0;
+        int rc = 0;
         ENTRY;
 
         if (!SMFS_DO_REC(S2SMI(inode->i_sb)))
                 RETURN(0);
 
         if (lmm) {
-                OBD_ALLOC(set_lmm, lmm_size + sizeof(lmm_size));
+                int size = lmm_size + sizeof(lmm_size) +
+                        sizeof(type);
+
+                OBD_ALLOC(set_lmm, size);
                 if (!set_lmm)
                         RETURN(-ENOMEM);
+
                 memcpy(set_lmm, &lmm_size, sizeof(lmm_size));
-                memcpy(set_lmm + sizeof(lmm_size), lmm, lmm_size);
+                memcpy(set_lmm + sizeof(lmm_size), &type, sizeof(type));
+                memcpy(set_lmm + sizeof(lmm_size) + sizeof(type), lmm, lmm_size);
+
                 rc = smfs_post_rec_setattr(inode, NULL, NULL, set_lmm);
                 if (rc) {
-                        CERROR("Error: Record md for inode %lu rc=%d\n",
+                        CERROR("Error: Record md for inode %lu rc = %d\n",
                                 inode->i_ino, rc);
                 }
+                OBD_FREE(set_lmm, size);
         }
-        if (set_lmm)
-                OBD_FREE(set_lmm, lmm_size + sizeof(lmm_size));
         RETURN(rc);
 }
 EXPORT_SYMBOL(smfs_rec_md);
@@ -690,12 +696,12 @@ out:
 }
 
 int smfs_post_rec_setattr(struct inode *inode, struct dentry *dentry, 
-                          void  *data1, void  *data2)
+                          void *data1, void *data2)
 {        
-        struct smfs_super_info *sinfo;
         struct iattr *attr = (struct iattr *)data1;
-        char   *buffer = NULL, *pbuf;
         int rc = 0, length = 0, buf_len = 0;
+        struct smfs_super_info *sinfo;
+        char *buffer = NULL, *pbuf;
         ENTRY;
 
         sinfo = S2SMI(inode->i_sb);

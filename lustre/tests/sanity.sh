@@ -7,11 +7,14 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test: 2739
-# 51b and 51c depend on kernel
-# 65* fixes in b_hd_cray_merge3
-# the new kernel api make 48 not valid anymore
-ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"48 51b 51c 65a 65b 65c 65d 65e 65f"}
+# bug number for skipped tests:
+# skipped test: 
+# - 51b 51c depend on used kernel
+#   more than only LOV EAs
+# - 65h (default stripe inheritance) is not implemented for LMV 
+#   configurations. Will be done in second phase of collibri.
+
+ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"51b 51c 65h"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 [ "$ALWAYS_EXCEPT$EXCEPT" ] && echo "Skipping tests: $ALWAYS_EXCEPT $EXCEPT"
@@ -106,12 +109,12 @@ run_one() {
 	if ! mount | grep -q $DIR; then
 		$START
 	fi
-	echo -1 >/proc/sys/portals/debug	
-	log "== test $1: $2= `date +%H:%M:%S`"
+	BEFORE=`date +%s`
+	log "== test $1: $2= `date +%H:%M:%S` ($BEFORE)"
 	export TESTNAME=test_$1
 	test_$1 || error "test_$1: exit with rc=$?"
 	unset TESTNAME
-	pass
+	pass "($((`date +%s` - $BEFORE))s)"
 	cd $SAVE_PWD
 	$CLEAN
 }
@@ -126,11 +129,11 @@ build_test_filter() {
 }
 
 _basetest() {
-    echo $*
+	echo $*
 }
 
 basetest() {
-    IFS=abcdefghijklmnopqrstuvwxyz _basetest $1
+	IFS=abcdefghijklmnopqrstuvwxyz _basetest $1
 }
 
 run_test() {
@@ -175,7 +178,7 @@ error() {
 }
 
 pass() { 
-	echo PASS
+	echo PASS $@
 }
 
 MOUNT="`mount | awk '/^'$NAME' .* lustre_lite / { print $3 }'`"
@@ -194,6 +197,8 @@ DIR=${DIR:-$MOUNT}
 OSTCOUNT=`cat /proc/fs/lustre/llite/fs0/lov/numobd`
 STRIPECOUNT=`cat /proc/fs/lustre/llite/fs0/lov/stripecount`
 STRIPESIZE=`cat /proc/fs/lustre/llite/fs0/lov/stripesize`
+ORIGFREE=`cat /proc/fs/lustre/llite/fs0/lov/kbytesavail`
+MAXFREE=${MAXFREE:-$((200000 * $OSTCOUNT))}
 
 [ -f $DIR/d52a/foo ] && chattr -a $DIR/d52a/foo
 [ -f $DIR/d52b/foo ] && chattr -i $DIR/d52b/foo
@@ -455,7 +460,7 @@ test_16() {
 run_test 16 "touch .../d16/f; rm -rf .../d16/f ================="
 
 test_17a() {
-	mkdir $DIR/d17
+	mkdir -p $DIR/d17
 	touch $DIR/d17/f
 	ln -s $DIR/d17/f $DIR/d17/l-exist
 	ls -l $DIR/d17
@@ -467,9 +472,7 @@ test_17a() {
 run_test 17a "symlinks: create, remove (real) =================="
 
 test_17b() {
-	if [ ! -d $DIR/d17 ]; then
-		mkdir $DIR/d17
-	fi
+	mkdir -p $DIR/d17
 	ln -s no-such-file $DIR/d17/l-dangle
 	ls -l $DIR/d17
 	$CHECKSTAT -l no-such-file $DIR/d17/l-dangle || error
@@ -478,6 +481,20 @@ test_17b() {
 	$CHECKSTAT -a $DIR/l-dangle || error
 }
 run_test 17b "symlinks: create, remove (dangling) =============="
+
+test_17c() { # bug 3440 - don't save failed open RPC for replay
+	mkdir -p $DIR/d17
+	ln -s foo $DIR/d17/f17c
+	cat $DIR/d17/f17c && error "opened non-existent symlink" || true
+}
+run_test 17c "symlinks: open dangling (should return error) ===="
+
+test_17d() {
+	mkdir -p $DIR/d17
+	ln -s foo $DIR/d17/f17d
+	touch $DIR/d17/f17d || error "creating to new symlink"
+}
+run_test 17d "symlinks: create dangling ========================"
 
 test_18() {
 	touch $DIR/f
@@ -889,6 +906,33 @@ test_27l() {
 }
 run_test 27l "check setstripe permissions (should return error)"
 
+test_27m() {
+        [ "$OSTCOUNT" -lt "2" ] && echo "skipping out-of-space test on OST0" && return
+        if [ $ORIGFREE -gt $MAXFREE ]; then
+                echo "skipping out-of-space test on OST0"
+                return
+        fi
+        mkdir -p $DIR/d27
+        $LSTRIPE $DIR/d27/f27m_1 0 0 1
+        dd if=/dev/zero of=$DIR/d27/f27m_1 bs=1024 count=$MAXFREE && \
+                error "dd should fill OST0"
+        i=2
+        while $LSTRIPE $DIR/d27/f27m_$i 0 0 1 ; do
+                i=`expr $i + 1`
+                [ $i -gt 256 ] && break
+        done
+        i=`expr $i + 1`
+        touch $DIR/d27/f27m_$i
+        [ `$LFIND $DIR/d27/f27m_$i | grep -A 10 obdidx | awk '{print $1}'| grep -w "0"` ] && \
+                error "OST0 was full but new created file still use it"
+        i=`expr $i + 1`
+        touch $DIR/d27/f27m_$i
+        [ `$LFIND $DIR/d27/f27m_$i | grep -A 10 obdidx | awk '{print $1}'| grep -w "0"` ] && \
+                error "OST0 was full but new created file still use it"
+        rm $DIR/d27/f27m_1
+}
+run_test 27m "create file while OST0 was full =================="
+
 test_28() {
 	mkdir $DIR/d28
 	$CREATETEST $DIR/d28/ct || error
@@ -971,6 +1015,40 @@ test_31e() { # bug 2904
 	openfilleddirunlink $DIR/d31e || error
 }
 run_test 31e "remove of open non-empty directory ==============="
+
+test_31f() { # bug 4554
+	set -vx
+	mkdir $DIR/d31f
+	lfs setstripe $DIR/d31f 1048576 -1 1
+	cp /etc/hosts $DIR/d31f
+	ls -l $DIR/d31f
+	lfs getstripe $DIR/d31f/hosts
+	multiop $DIR/d31f D_c &
+	MULTIPID=$!
+
+	sleep 1
+
+	rm -rv $DIR/d31f || error "first of $DIR/d31f"
+	mkdir $DIR/d31f
+	lfs setstripe $DIR/d31f 1048576 -1 1
+	cp /etc/hosts $DIR/d31f
+	ls -l $DIR/d31f
+	lfs getstripe $DIR/d31f/hosts
+	multiop $DIR/d31f D_c &
+	MULTIPID2=$!
+
+	sleep 6
+
+	kill -USR1 $MULTIPID || error "first opendir $MULTIPID not running"
+	wait $MULTIPID || error "first opendir $MULTIPID failed"
+
+	sleep 6
+
+	kill -USR1 $MULTIPID2 || error "second opendir $MULTIPID not running"
+	wait $MULTIPID2 || error "second opendir $MULTIPID2 failed"
+	set +vx
+}
+run_test 31f "remove of open directory with open-unlink file ==="
 
 test_32a() {
 	echo "== more mountpoints and symlinks ================="
@@ -1687,6 +1765,26 @@ test_48d() { # bug 2350
 }
 run_test 48d "Access removed parent subdir (should return errors)"
 
+test_48e() { # bug 4134
+	check_kernel_version 41 || return 0
+	#sysctl -w portals.debug=-1
+	#set -vx
+	mkdir -p $DIR/d48e/dir
+	# On a buggy kernel addition of "; touch file" after cd .. will
+	# produce kernel oops in lookup_hash_it
+
+	cd $DIR/d48e/dir
+	( sleep 2 && cd -P .. ) &
+	cdpid=$!
+	$TRACE rmdir $DIR/d48e/dir || error "remove cwd $DIR/d48e/dir failed"
+	$TRACE rmdir $DIR/d48e || error "remove parent $DIR/d48e failed"
+	$TRACE touch $DIR/d48e || error "'touch $DIR/d48e' failed"
+	$TRACE chmod +x $DIR/d48e || error "'chmod +x $DIR/d48e' failed"
+	$TRACE wait $cdpid && error "'cd ..' worked after recreate parent"
+	$TRACE rm $DIR/d48e || error "'$DIR/d48e' failed"
+}
+run_test 48e "Access to recreated parent (should return errors) "
+
 test_50() {
 	# bug 1485
 	mkdir $DIR/d50
@@ -1712,15 +1810,18 @@ test_51() {
 }
 run_test 51 "special situations: split htree with empty entry =="
 
+export NUMTEST=70000
 test_51b() {
-       NUMTEST=70000
-       check_kernel_version 40 || NUMTEST=31000
-       NUMFREE=`df -i -P $DIR | tail -n 1 | awk '{ print $4 }'`
-       [ $NUMFREE -lt $NUMTEST ] && \
-               echo "skipping test 51b, not enough free inodes($NUMFREE)" && \
-               return
-       mkdir -p $DIR/d51b
-       (cd $DIR/d51b; mkdirmany t $NUMTEST)
+	NUMFREE=`df -i -P $DIR | tail -n 1 | awk '{ print $4 }'`
+	[ $NUMFREE -lt 21000 ] && \
+		echo "skipping test 51b, not enough free inodes($NUMFREE)" && \
+		return
+
+	check_kernel_version 40 || NUMTEST=31000
+	[ $NUMFREE -lt $NUMTEST ] && NUMTEST=$(($NUMFREE - 50))
+
+	mkdir -p $DIR/d51b
+	(cd $DIR/d51b; mkdirmany t $NUMTEST)
 }
 run_test 51b "mkdir .../t-0 --- .../t-$NUMTEST ===================="
 
@@ -2055,27 +2156,27 @@ run_test 64b "check out-of-space detection on client ==========="
 
 # bug 1414 - set/get directories' stripe info
 test_65a() {
-	mkdir -p $DIR/d65
-	touch $DIR/d65/f1
-	$LVERIFY $DIR/d65 $DIR/d65/f1 || error "lverify failed"
+	mkdir -p $DIR/d65a
+	touch $DIR/d65a/f1
+	$LVERIFY $DIR/d65a $DIR/d65a/f1 || error "lverify failed"
 }
 run_test 65a "directory with no stripe info ===================="
 
 test_65b() {
-	mkdir -p $DIR/d65
-       	$LSTRIPE $DIR/d65 $(($STRIPESIZE * 2)) 0 1 || error "setstripe"
-	touch $DIR/d65/f2
-	$LVERIFY $DIR/d65 $DIR/d65/f2 || error "lverify failed"
+	mkdir -p $DIR/d65b
+       	$LSTRIPE $DIR/d65b $(($STRIPESIZE * 2)) 0 1 || error "setstripe"
+	touch $DIR/d65b/f2
+	$LVERIFY $DIR/d65b $DIR/d65b/f2 || error "lverify failed"
 }
 run_test 65b "directory setstripe $(($STRIPESIZE * 2)) 0 1 ==============="
 
 test_65c() {
 	if [ $OSTCOUNT -gt 1 ]; then
-		mkdir -p $DIR/d65
-    		$LSTRIPE $DIR/d65 $(($STRIPESIZE * 4)) 1 \
+		mkdir -p $DIR/d65c
+    		$LSTRIPE $DIR/d65c $(($STRIPESIZE * 4)) 1 \
 			$(($OSTCOUNT - 1)) || error "setstripe"
-	        touch $DIR/d65/f3
-	        $LVERIFY $DIR/d65 $DIR/d65/f3 || error "lverify failed"
+	        touch $DIR/d65c/f3
+	        $LVERIFY $DIR/d65c $DIR/d65c/f3 || error "lverify failed"
 	fi
 }
 run_test 65c "directory setstripe $(($STRIPESIZE * 4)) 1 $(($OSTCOUNT - 1))"
@@ -2083,19 +2184,20 @@ run_test 65c "directory setstripe $(($STRIPESIZE * 4)) 1 $(($OSTCOUNT - 1))"
 [ $STRIPECOUNT -eq 0 ] && sc=1 || sc=$(($STRIPECOUNT - 1))
 
 test_65d() {
-	mkdir -p $DIR/d65
-	$LSTRIPE $DIR/d65 $STRIPESIZE -1 $sc || error "setstripe"
-	touch $DIR/d65/f4 $DIR/d65/f5
-	$LVERIFY $DIR/d65 $DIR/d65/f4 $DIR/d65/f5 || error "lverify failed"
+	mkdir -p $DIR/d65d
+	$LSTRIPE $DIR/d65d $STRIPESIZE -1 $sc || error "setstripe"
+	touch $DIR/d65d/f4 $DIR/d65d/f5
+	$LVERIFY $DIR/d65d $DIR/d65d/f4 $DIR/d65d/f5 || error "lverify failed"
 }
 run_test 65d "directory setstripe $STRIPESIZE -1 $sc ======================"
 
 test_65e() {
-	mkdir -p $DIR/d65
+	mkdir -p $DIR/d65e
 
-	$LSTRIPE $DIR/d65 0 -1 0 || error "setstripe"
-	touch $DIR/d65/f6
-	$LVERIFY $DIR/d65 $DIR/d65/f6 || error "lverify failed"
+	$LSTRIPE $DIR/d65e 0 -1 0 || error "setstripe"
+        $LFS find -v $DIR/d65e | grep "$DIR/d65e/ has no stripe info" || error "no stripe info failed"
+	touch $DIR/d65e/f6
+	$LVERIFY $DIR/d65e $DIR/d65e/f6 || error "lverify failed"
 }
 run_test 65e "directory setstripe 0 -1 0 (default) ============="
 
@@ -2104,6 +2206,23 @@ test_65f() {
 	$RUNAS $LSTRIPE $DIR/d65f 0 -1 0 && error "setstripe succeeded" || true
 }
 run_test 65f "dir setstripe permission (should return error) ==="
+
+test_65g() {
+        mkdir -p $DIR/d65g
+        $LSTRIPE $DIR/d65g $(($STRIPESIZE * 2)) 0 1 || error "setstripe"
+        $LSTRIPE -d $DIR/d65g || error "deleting stripe info failed"
+        $LFS find -v $DIR/d65g | grep "$DIR/d65g/ has no stripe info" || error "no stripe info failed"
+}
+run_test 65g "directory setstripe -d ========"
+                                                                                                               
+test_65h() {
+        mkdir -p $DIR/d65h
+        $LSTRIPE $DIR/d65h $(($STRIPESIZE * 2)) 0 1 || error "setstripe"
+        mkdir -p $DIR/d65h/dd1
+        [ "`$LFS find -v $DIR/d65h | grep "^count"`" == \
+          "`$LFS find -v $DIR/d65h/dd1 | grep "^count"`" ] || error "stripe info inherit failed"
+}
+run_test 65h "directory stripe info inherit ======"
 
 # bug 2543 - update blocks count on client
 test_66() {
@@ -2170,6 +2289,88 @@ test_68() {
 }
 run_test 68 "support swapping to Lustre ========================"
 
+# bug 3462 - multiple simultaneous MDC requests
+test_69() {
+       mkdir $DIR/D68-1 
+       mkdir $DIR/D68-2
+       multiop $DIR/D68-1/f68-1 O_c &
+       pid1=$!
+       #give multiop a chance to open
+       usleep 500
+
+       echo 0x80000129 > /proc/sys/lustre/fail_loc
+       multiop $DIR/D68-1/f68-2 Oc &
+       sleep 1
+       echo 0 > /proc/sys/lustre/fail_loc
+
+       multiop $DIR/D68-2/f68-3 Oc &
+       pid3=$!
+
+       kill -USR1 $pid1
+       wait $pid1 || return 1
+
+       sleep 25
+
+       $CHECKSTAT -t file $DIR/D68-1/f68-1 || return 4
+       $CHECKSTAT -t file $DIR/D68-1/f68-2 || return 5 
+       $CHECKSTAT -t file $DIR/D68-2/f68-3 || return 6 
+
+       rm -rf $DIR/D68-*
+}
+run_test 69 "multiple MDC requests (should not deadlock)"
+
+
+test_70() {
+	STAT="/proc/fs/lustre/osc/OSC*MNT*/stats"
+	mkdir $DIR/d70
+	dd if=/dev/zero of=$DIR/d70/file bs=512 count=5
+	cancel_lru_locks OSC
+	cat $DIR/d70/file >/dev/null
+	# Hopefully there is only one.
+	ENQ=`cat $STAT|awk -vnum=0 '/ldlm_enq/ {num += $2} END {print num;}'`
+	CONV=`cat $STAT|awk -vnum=0 '/ldlm_conv/ {num += $2} END {print num;}'`
+	CNCL=`cat $STAT|awk -vnum=0 '/ldlm_canc/ {num += $2} END {print num;}'`
+	dd if=/dev/zero of=$DIR/d70/file bs=512 count=5
+	ENQ1=`cat $STAT|awk -vnum=0 '/ldlm_enq/ {num += $2} END {print num;}'`
+	CONV1=`cat $STAT|awk -vnum=0 '/ldlm_conv/ {num += $2} END {print num;}'`
+	CNCL1=`cat $STAT|awk -vnum=0 '/ldlm_canc/ {num += $2} END {print num;}'`
+
+	if [ $CONV1 -le $CONV ] ; then
+		error "No conversion happened. Before: enq $ENQ, conv $CONV, cancel $CNCL ; After: enq $ENQ1, conv $CONV1, cancel $CNCL1"
+	else
+		echo "OK"
+		true
+	fi
+
+}
+run_test 70 "Test that PR->PW conversion takes place ==========="
+
+test_71() {
+	cp `which dbench` $DIR
+	
+	[ ! -f $DIR/dbench ] && echo "dbench not installed, skip this test" && return 0
+
+	TGT=$DIR/client.txt
+	SRC=${SRC:-/usr/lib/dbench/client.txt}
+	[ ! -e $TGT -a -e $SRC ] && echo "copying $SRC to $TGT" && cp $SRC $TGT
+	SRC=/usr/lib/dbench/client_plain.txt
+	[ ! -e $TGT -a -e $SRC ] && echo "copying $SRC to $TGT" && cp $SRC $TGT
+
+	echo "copying /lib to $DIR"
+	cp -r /lib $DIR/lib
+	
+	echo "chroot $DIR /dbench -c client.txt 2"
+	chroot $DIR /dbench -c client.txt 2
+	RC=$?
+
+	rm -f $DIR/dbench
+	rm -f $TGT
+	rm -fr $DIR/lib
+
+	return $RC
+}
+run_test 71 "Running dbench on lustre (don't segment fault) ===="
+
 # on the LLNL clusters, runas will still pick up root's $TMP settings,
 # which will not be writable for the runas user, and then you get a CVS
 # error message with a corrupt path string (CVS bug) and panic.
@@ -2230,6 +2431,19 @@ test_99f() {
 	$RUNAS cvs commit -m 'nomsg' foo99
 }
 run_test 99f "cvs commit ======================================="
+
+test_100() {
+        netstat -ta | while read PROT SND RCV LOCAL REMOTE STAT; do
+                LPORT=`echo $LOCAL | cut -d: -f2`
+                RPORT=`echo $REMOTE | cut -d: -f2`
+                if [ "$PROT" = "tcp" ] && [ "$LPORT" != "*" ] && [ "$RPORT" != "*" ] && [ $RPORT -eq 988 ] && [ $LPORT -gt 1024 ]; then
+                        echo "local port: $LPORT > 1024"
+                        error
+                fi
+        done
+}
+run_test 100 "check local port using privileged port ==========="
+
 
 TMPDIR=$OLDTMPDIR
 TMP=$OLDTMP

@@ -3,8 +3,8 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test: 1768 3192
-ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"4   14b 14c"}
+# bug number for skipped test: 1768 3192 3192
+ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"4   14b  14c"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 [ "$ALWAYS_EXCEPT$EXCEPT" ] && echo "Skipping tests: $ALWAYS_EXCEPT $EXCEPT"
@@ -22,6 +22,7 @@ OPENFILE=${OPENFILE:-openfile}
 OPENUNLINK=${OPENUNLINK:-openunlink}
 TOEXCL=${TOEXCL:-toexcl}
 TRUNCATE=${TRUNCATE:-truncate}
+export TMP=${TMP:-/tmp}
 
 if [ $UID -ne 0 ]; then
 	RUNAS_ID="$UID"
@@ -53,15 +54,25 @@ log() {
 	lctl mark "$*" 2> /dev/null || true
 }
 
+trace() {
+	log "STARTING: $*"
+	strace -o $TMP/$1.strace -ttt $*
+	RC=$?
+	log "FINISHED: $*: rc $RC"
+	return 1
+}
+TRACE=${TRACE:-""}
+
 run_one() {
 	if ! mount | grep -q $DIR1; then
 		$START
 	fi
-	log "== test $1: $2"
+	BEFORE=`date +%s`
+	log "== test $1: $2= `date +%H:%M:%S` ($BEFORE)"
 	export TESTNAME=test_$1
 	test_$1 || error "test_$1: exit with rc=$?"
 	unset TESTNAME
-	pass
+	pass "($((`date +%s` - $BEFORE))s)"
 	cd $SAVE_PWD
 	$CLEAN
 }
@@ -100,7 +111,7 @@ error () {
 }
 
 pass() {
-	echo PASS
+	echo PASS $@
 }
 
 export MOUNT1=`mount| awk '/ lustre/ { print $3 }'| head -n 1`
@@ -362,7 +373,8 @@ test_17() { # bug 3513, 3667
 run_test 17 "resource creation/LVB creation race ==============="
 
 test_18() {
-       ./mmap_sanity -d $MOUNT1 -m $MOUNT2
+	./mmap_sanity -d $MOUNT1 -m $MOUNT2
+	sync; sleep 1; sync
 }
 run_test 18 "mmap sanity check ================================="
 

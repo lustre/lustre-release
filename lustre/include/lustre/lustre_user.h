@@ -22,7 +22,13 @@
  */
 #ifndef _LUSTRE_USER_H
 #define _LUSTRE_USER_H
+
+#ifdef HAVE_ASM_TYPES_H
 #include <asm/types.h>
+#else
+#include "types.h"
+#endif
+
 #ifdef __KERNEL__
 #include <linux/string.h>
 #else
@@ -32,18 +38,17 @@
 /* for statfs() */
 #define LL_SUPER_MAGIC 0x0BD00BD0
 
-
 #define IOC_MDC_TYPE         'i'
 #define IOC_MDC_GETSTRIPE    _IOWR(IOC_MDC_TYPE, 21, struct lov_mds_md *)
 #define IOC_MDC_SHOWFID      _IOWR(IOC_MDC_TYPE, 23, struct lustre_id *)
 
 #ifndef EXT3_IOC_GETFLAGS
-#define        EXT3_IOC_GETFLAGS               _IOR('f', 1, long)
-#define        EXT3_IOC_SETFLAGS               _IOW('f', 2, long)
-#define        EXT3_IOC_GETVERSION             _IOR('f', 3, long)
-#define        EXT3_IOC_SETVERSION             _IOW('f', 4, long)
-#define        EXT3_IOC_GETVERSION_OLD         _IOR('v', 1, long)
-#define        EXT3_IOC_SETVERSION_OLD         _IOW('v', 2, long)
+#define	EXT3_IOC_GETFLAGS		_IOR('f', 1, long)
+#define	EXT3_IOC_SETFLAGS		_IOW('f', 2, long)
+#define	EXT3_IOC_GETVERSION		_IOR('f', 3, long)
+#define	EXT3_IOC_SETVERSION		_IOW('f', 4, long)
+#define	EXT3_IOC_GETVERSION_OLD		_IOR('v', 1, long)
+#define	EXT3_IOC_SETVERSION_OLD		_IOW('v', 2, long)
 #endif
 
 #define LL_IOC_GETFLAGS                 _IOR ('f', 151, long)

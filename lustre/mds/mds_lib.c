@@ -432,7 +432,7 @@ static int mds_open_unpack(struct ptlrpc_request *req, int offset,
         rec = lustre_swab_reqbuf (req, offset, sizeof (*rec),
                                   lustre_swab_mds_rec_create);
         if (rec == NULL)
-                RETURN (-EFAULT);
+                RETURN(-EFAULT);
 
         r->ur_id1 = &rec->cr_id;
         r->ur_id2 = &rec->cr_replayid;
@@ -451,7 +451,7 @@ static int mds_open_unpack(struct ptlrpc_request *req, int offset,
         if (req->rq_reqmsg->bufcount > offset + 2) {
                 r->ur_eadata = lustre_msg_buf(req->rq_reqmsg, offset + 2, 0);
                 if (r->ur_eadata == NULL)
-                        RETURN (-EFAULT);
+                        RETURN(-EFAULT);
                 r->ur_eadatalen = req->rq_reqmsg->buflens[offset + 2];
         }
         RETURN(0);
@@ -501,6 +501,10 @@ int mds_update_unpack(struct ptlrpc_request *req, int offset,
         rec->ur_opcode = opcode;
 
         rc = mds_unpackers[opcode](req, offset, rec);
+	
+#if CRAY_PORTALS
+        rec->ur_fsuid = req->rq_uid;
+#endif
         RETURN(rc);
 }
 
@@ -786,6 +790,11 @@ int mds_init_ucred(struct lvfs_ucred *ucred,
         ucred->luc_ginfo = NULL;
         ucred->luc_lsd = lsd = mds_get_lsd(rsd->rsd_uid);
 
+#if CRAY_PORTALS
+        ucred->luc_fsuid = req->rq_uid;
+#else
+        ucred->luc_fsuid = rsd->rsd_fsuid;
+#endif
         if (lsd) {
                 if (req->rq_remote) {
                         /* record the gid mapping here */
@@ -850,7 +859,6 @@ int mds_init_ucred(struct lvfs_ucred *ucred,
                 rsd->rsd_cap &= ~CAP_FS_MASK;
 
         /* by now every fields in rsd have been granted */
-        ucred->luc_fsuid = rsd->rsd_fsuid;
         ucred->luc_fsgid = rsd->rsd_fsgid;
         ucred->luc_cap = rsd->rsd_cap;
         ucred->luc_uid = rsd->rsd_uid;

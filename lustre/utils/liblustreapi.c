@@ -39,9 +39,16 @@
 #include <stdarg.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#ifdef HAVE_LINUX_TYPES_H
 #include <linux/types.h>
+#else
+#include "types.h"
+#endif
+#ifdef HAVE_LINUX_UNISTD_H
 #include <linux/unistd.h>
-
+#else
+#include <unistd.h>
+#endif
 #include <liblustre.h>
 #include <linux/obd.h>
 #include <linux/lustre_lib.h>
@@ -66,6 +73,7 @@ int llapi_file_create(char *name, long stripe_size, int stripe_offset,
 {
         struct lov_user_md lum = { 0 };
         int fd, rc = 0;
+        int isdir = 0;
 
         /*  Initialize IOCTL striping pattern structure  */
         lum.lmm_magic = LOV_USER_MAGIC;
@@ -75,13 +83,28 @@ int llapi_file_create(char *name, long stripe_size, int stripe_offset,
         lum.lmm_stripe_offset = stripe_offset;
 
         fd = open(name, O_CREAT | O_RDWR | O_LOV_DELAY_CREATE, 0644);
-        if (errno == EISDIR)
+        if (errno == EISDIR) {
                 fd = open(name, O_DIRECTORY | O_RDONLY);
+                isdir++;
+        }
 
         if (fd < 0) {
                 err_msg("unable to open '%s'",name);
                 rc = -errno;
                 return rc;
+        }
+
+        /* setting stripe pattern 0 -1 0 to a dir means to delete it */
+        if (isdir) {
+                if (stripe_size == 0 && stripe_count == 0 &&
+                    stripe_offset == -1)
+                        lum.lmm_stripe_size = -1;
+        } else {
+                if (stripe_size == -1) {
+                        err_msg("deleting file stripe info is not allowed\n");
+                        rc = -EPERM;
+                        goto out;
+                }
         }
 
         if (ioctl(fd, LL_IOC_LOV_SETSTRIPE, &lum)) {
@@ -93,6 +116,7 @@ int llapi_file_create(char *name, long stripe_size, int stripe_offset,
                         name, fd, errmsg);
                 rc = -errno;
         }
+out:
         if (close(fd) < 0) {
                 err_msg("error on close for '%s' (%d)", name, fd);
                 if (rc == 0)
@@ -247,7 +271,7 @@ int llapi_lov_get_uuids(int fd, struct obd_uuid *uuidp,
 out:
         free(buf);
 
-        return 0;
+        return rc;
 }
 
 static int setup_obd_uuids(DIR *dir, char *dname, struct find_param *param)
@@ -721,8 +745,7 @@ int llapi_target_check(int type_num, char **obd_type, char *dir)
                 char rawbuf[OBD_MAX_IOCTL_BUFFER];
                 char *bufl = rawbuf;
                 char *bufp = buf;
-                int max = sizeof(rawbuf);
-                struct obd_ioctl_data datal;
+                struct obd_ioctl_data datal = { 0, };
                 struct obd_statfs osfs_buffer;
 
                 while(bufp[0] == ' ')
@@ -744,7 +767,11 @@ int llapi_target_check(int type_num, char **obd_type, char *dir)
                                 datal.ioc_inlbuf1 = obd_name;
                                 datal.ioc_inllen1 = strlen(obd_name) + 1;
 
-                                obd_ioctl_pack(&datal,&bufl,max);
+                                rc = obd_ioctl_pack(&datal, &bufl, OBD_MAX_IOCTL_BUFFER);
+                                if (rc) {
+                                        fprintf(stderr, "internal buffer error packing\n");
+                                        break;
+                                }
 
                                 rc = ioctl(dirfd(opendir(dir)), OBD_IOC_PING,
                                            bufl);

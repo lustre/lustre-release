@@ -304,9 +304,11 @@ int llog_ioctl(struct llog_ctxt *ctxt, int cmd, struct obd_ioctl_data *data)
 
         case OBD_IOC_LLOG_PRINT: {
                 LASSERT(data->ioc_inllen1);
-                err = llog_process(handle, llog_print_cb, data, NULL);
+                err = llog_process(handle, class_config_dump_handler,data,NULL);
                 if (err == -LLOG_EEMPTY)
                         err = 0;
+                else
+                        err = llog_process(handle, llog_print_cb, data, NULL);
 
                 GOTO(out_close, err);
         }

@@ -33,14 +33,15 @@
 #include <linux/lustre_compat25.h>
 
 /* global variables */
-extern atomic_t obd_memory;
 extern int obd_memmax;
+extern atomic_t obd_memory;
+
 extern unsigned int obd_fail_loc;
-extern unsigned int obd_dump_on_timeout;
 extern unsigned int obd_timeout;
 extern unsigned int ldlm_timeout;
 extern char obd_lustre_upcall[128];
 extern unsigned int obd_sync_filter;
+extern unsigned int obd_dump_on_timeout;
 extern wait_queue_head_t obd_race_waitq;
 
 #define OBD_FAIL_MDS                     0x100
@@ -84,6 +85,9 @@ extern wait_queue_head_t obd_race_waitq;
 #define OBD_FAIL_MDS_DONE_WRITING_NET    0x126
 #define OBD_FAIL_MDS_DONE_WRITING_PACK   0x127
 #define OBD_FAIL_MDS_ALLOC_OBDO          0x128
+#define OBD_FAIL_MDS_PAUSE_OPEN          0x129
+#define OBD_FAIL_MDS_STATFS_LCW_SLEEP    0x12a
+#define OBD_FAIL_MDS_OPEN_CREATE         0x12b
 
 #define OBD_FAIL_OST                     0x200
 #define OBD_FAIL_OST_CONNECT_NET         0x201
@@ -153,6 +157,8 @@ extern wait_queue_head_t obd_race_waitq;
 #define OBD_FAIL_SVCGSS_INIT_REQ         0x780
 #define OBD_FAIL_SVCGSS_INIT_REP         0x781
 
+#define OBD_FAIL_MDC_REVALIDATE_PAUSE    0x800
+
 /* preparation for a more advanced failure testbed (not functional yet) */
 #define OBD_FAIL_MASK_SYS    0x0000FF00
 #define OBD_FAIL_MASK_LOC    (0x000000FF | OBD_FAIL_MASK_SYS)
@@ -182,6 +188,13 @@ extern wait_queue_head_t obd_race_waitq;
 do {                                                                         \
         if (OBD_FAIL_CHECK_ONCE(id)) {                                       \
                 RETURN(ret);                                                 \
+        }                                                                    \
+} while(0)
+
+#define OBD_FAIL_GOTO(id, label, ret)                                        \
+do {                                                                         \
+        if (OBD_FAIL_CHECK_ONCE(id)) {                                       \
+                GOTO(label, (ret));                                          \
         }                                                                    \
 } while(0)
 
@@ -262,22 +275,119 @@ static inline void OBD_FAIL_WRITE(int id, struct super_block *sb)
 
 extern atomic_t portal_kmemory;
 
-#define OBD_ALLOC_GFP(ptr, size, gfp_mask)                                    \
-do {                                                                          \
-        (ptr) = kmalloc(size, (gfp_mask));                                    \
-        if ((ptr) == NULL) {                                                  \
-                CERROR("kmalloc of '" #ptr "' (%d bytes) failed at %s:%d\n",  \
-                       (int)(size), __FILE__, __LINE__);                      \
-                CERROR("%d total bytes allocated by Lustre, %d by Portals\n", \
-                       atomic_read(&obd_memory), atomic_read(&portal_kmemory));\
-        } else {                                                              \
-                memset(ptr, 0, size);                                         \
-                atomic_add(size, &obd_memory);                                \
-                if (atomic_read(&obd_memory) > obd_memmax)                    \
-                        obd_memmax = atomic_read(&obd_memory);                \
-                CDEBUG(D_MALLOC, "kmalloced '" #ptr "': %d at %p (tot %d)\n", \
-                       (int)(size), ptr, atomic_read(&obd_memory));           \
-        }                                                                     \
+#if defined (CONFIG_DEBUG_MEMORY) && defined(__KERNEL__)
+#define MEM_LOC_LEN 128
+
+struct mtrack {
+        struct hlist_node m_hash;
+        char m_loc[MEM_LOC_LEN];
+        void *m_ptr;
+        int m_size;
+};
+
+void lvfs_memdbg_insert(struct mtrack *mt);
+void lvfs_memdbg_remove(struct mtrack *mt);
+struct mtrack *lvfs_memdbg_find(void *ptr);
+
+int lvfs_memdbg_check_insert(struct mtrack *mt);
+struct mtrack *lvfs_memdbg_check_remove(void *ptr);
+
+static inline struct mtrack *
+__new_mtrack(void *ptr, int size,
+             char *file, int line)
+{
+        struct mtrack *mt;
+
+        mt = kmalloc(sizeof(*mt), GFP_KERNEL);
+        if (!mt)
+                return NULL;
+
+        snprintf(mt->m_loc, sizeof(mt->m_loc) - 1,
+                 "%s:%d", file, line);
+
+        mt->m_size = size;
+        mt->m_ptr = ptr;
+        return mt;
+}
+
+static inline void
+__free_mtrack(struct mtrack *mt)
+{
+        kfree(mt);
+}
+
+static inline int
+__get_mtrack(void *ptr, int size,
+             char *file, int line)
+{
+        struct mtrack *mt;
+
+        mt = __new_mtrack(ptr, size, file, line);
+        if (!mt) {
+                CWARN("can't allocate new memory track\n");
+                return 0;
+        }
+        
+        if (!lvfs_memdbg_check_insert(mt))
+                __free_mtrack(mt);
+        
+        return 1;
+}
+
+static inline int
+__put_mtrack(void *ptr, int size,
+             char *file, int line)
+{
+        struct mtrack *mt;
+
+        if (!(mt = lvfs_memdbg_check_remove(ptr))) {
+                CWARN("ptr 0x%p is not allocated. Attempt to free "
+                      "not allocated memory at %s:%d\n", ptr,
+                      file, line);
+                return 0;
+        } else {
+                if (mt->m_size != size) {
+                        CWARN("freeing memory chunk of different size "
+                              "than allocated (%d != %d) at %s:%d\n",
+                              mt->m_size, size, file, line);
+                }
+                __free_mtrack(mt);
+                return 1;
+        }
+}
+
+#define get_mtrack(ptr, size, file, line)                                            \
+        __get_mtrack((ptr), (size), (file), (line))
+
+#define put_mtrack(ptr, size, file, line)                                            \
+        __put_mtrack((ptr), (size), (file), (line))
+
+#else /* !CONFIG_DEBUG_MEMORY */
+
+#define get_mtrack(ptr, size, file, line)                                            \
+        do {} while (0)
+
+#define put_mtrack(ptr, size, file, line)                                            \
+        do {} while (0)
+#endif /* !CONFIG_DEBUG_MEMORY */
+
+#define OBD_ALLOC_GFP(ptr, size, gfp_mask)                                           \
+do {                                                                                 \
+        (ptr) = kmalloc(size, (gfp_mask));                                           \
+        if ((ptr) == NULL) {                                                         \
+                CERROR("kmalloc of '" #ptr "' (%d bytes) failed at %s:%d\n",         \
+                       (int)(size), __FILE__, __LINE__);                             \
+                CERROR("%d total bytes allocated by Lustre, %d by Portals\n",        \
+                       atomic_read(&obd_memory), atomic_read(&portal_kmemory));      \
+        } else {                                                                     \
+                memset(ptr, 0, size);                                                \
+                atomic_add(size, &obd_memory);                                       \
+                if (atomic_read(&obd_memory) > obd_memmax)                           \
+                        obd_memmax = atomic_read(&obd_memory);                       \
+                get_mtrack((ptr), (size), __FILE__, __LINE__);                       \
+                CDEBUG(D_MALLOC, "kmalloced '" #ptr "': %d at %p (tot %d)\n",        \
+                       (int)(size), (ptr), atomic_read(&obd_memory));                \
+        }                                                                            \
 } while (0)
 
 #ifndef OBD_GFP_MASK
@@ -290,22 +400,23 @@ do {                                                                          \
 #ifdef __arch_um__
 # define OBD_VMALLOC(ptr, size) OBD_ALLOC(ptr, size)
 #else
-# define OBD_VMALLOC(ptr, size)                                               \
-do {                                                                          \
-        (ptr) = vmalloc(size);                                                \
-        if ((ptr) == NULL) {                                                  \
-                CERROR("vmalloc of '" #ptr "' (%d bytes) failed at %s:%d\n",  \
-                       (int)(size), __FILE__, __LINE__);                      \
-                CERROR("%d total bytes allocated by Lustre, %d by Portals\n", \
-                       atomic_read(&obd_memory), atomic_read(&portal_kmemory));\
-        } else {                                                              \
-                memset(ptr, 0, size);                                         \
-                atomic_add(size, &obd_memory);                                \
-                if (atomic_read(&obd_memory) > obd_memmax)                    \
-                        obd_memmax = atomic_read(&obd_memory);                \
-                CDEBUG(D_MALLOC, "vmalloced '" #ptr "': %d at %p (tot %d)\n", \
-                       (int)(size), ptr, atomic_read(&obd_memory));           \
-        }                                                                     \
+# define OBD_VMALLOC(ptr, size)                                                      \
+do {                                                                                 \
+        (ptr) = vmalloc(size);                                                       \
+        if ((ptr) == NULL) {                                                         \
+                CERROR("vmalloc of '" #ptr "' (%d bytes) failed at %s:%d\n",         \
+                       (int)(size), __FILE__, __LINE__);                             \
+                CERROR("%d total bytes allocated by Lustre, %d by Portals\n",        \
+                       atomic_read(&obd_memory), atomic_read(&portal_kmemory));      \
+        } else {                                                                     \
+                memset(ptr, 0, size);                                                \
+                atomic_add(size, &obd_memory);                                       \
+                if (atomic_read(&obd_memory) > obd_memmax)                           \
+                        obd_memmax = atomic_read(&obd_memory);                       \
+                get_mtrack((ptr), (size), __FILE__, __LINE__);                       \
+                CDEBUG(D_MALLOC, "vmalloced '" #ptr "': %d at %p (tot %d)\n",        \
+                       (int)(size), ptr, atomic_read(&obd_memory));                  \
+        }                                                                            \
 } while (0)
 #endif
 
@@ -316,69 +427,75 @@ do {                                                                          \
 #endif
 
 #if POISON_BULK
-#define POISON_PAGE(page, val) do { memset(kmap(page), val, PAGE_SIZE);       \
+#define POISON_PAGE(page, val) do { memset(kmap(page), val, PAGE_SIZE);              \
                                     kunmap(page); } while (0)
 #else
 #define POISON_PAGE(page, val) do { } while (0)
 #endif
 
-#define OBD_FREE(ptr, size)                                                   \
-do {                                                                          \
-        LASSERT(ptr);                                                         \
-        atomic_sub(size, &obd_memory);                                        \
-        CDEBUG(D_MALLOC, "kfreed '" #ptr "': %d at %p (tot %d).\n",           \
-               (int)(size), ptr, atomic_read(&obd_memory));                   \
-        POISON(ptr, 0x5a, size);                                              \
-        kfree(ptr);                                                           \
-        (ptr) = (void *)0xdeadbeef;                                           \
+#define OBD_FREE(ptr, size)                                                          \
+do {                                                                                 \
+        LASSERT(ptr);                                                                \
+        put_mtrack((ptr), (size), __FILE__, __LINE__);                               \
+        atomic_sub(size, &obd_memory);                                               \
+        CDEBUG(D_MALLOC, "kfreed '" #ptr "': %d at %p (tot %d).\n",                  \
+               (int)(size), ptr, atomic_read(&obd_memory));                          \
+        POISON(ptr, 0x5a, size);                                                     \
+        kfree(ptr);                                                                  \
+        (ptr) = (void *)0xdeadbeef;                                                  \
 } while (0)
 
 #ifdef __arch_um__
 # define OBD_VFREE(ptr, size) OBD_FREE(ptr, size)
 #else
-# define OBD_VFREE(ptr, size)                                                 \
-do {                                                                          \
-        LASSERT(ptr);                                                         \
-        atomic_sub(size, &obd_memory);                                        \
-        CDEBUG(D_MALLOC, "vfreed '" #ptr "': %d at %p (tot %d).\n",           \
-               (int)(size), ptr, atomic_read(&obd_memory));                   \
-        POISON(ptr, 0x5a, size);                                              \
-        vfree(ptr);                                                           \
-        (ptr) = (void *)0xdeadbeef;                                           \
+# define OBD_VFREE(ptr, size)                                                        \
+do {                                                                                 \
+        LASSERT(ptr);                                                                \
+        put_mtrack((ptr), (size), __FILE__, __LINE__);                               \
+        atomic_sub(size, &obd_memory);                                               \
+        CDEBUG(D_MALLOC, "vfreed '" #ptr "': %d at %p (tot %d).\n",                  \
+               (int)(size), ptr, atomic_read(&obd_memory));                          \
+        POISON(ptr, 0x5a, size);                                                     \
+        vfree(ptr);                                                                  \
+        (ptr) = (void *)0xdeadbeef;                                                  \
 } while (0)
 #endif
 
-/* we memset() the slab object to 0 when allocation succeeds, so DO NOT
- * HAVE A CTOR THAT DOES ANYTHING.  its work will be cleared here.  we'd
- * love to assert on that, but slab.c keeps kmem_cache_s all to itself. */
-#define OBD_SLAB_ALLOC(ptr, slab, type, size)                                 \
-do {                                                                          \
-        LASSERT(!in_interrupt());                                             \
-        (ptr) = kmem_cache_alloc(slab, (type));                               \
-        if ((ptr) == NULL) {                                                  \
-                CERROR("slab-alloc of '"#ptr"' (%d bytes) failed at %s:%d\n", \
-                       (int)(size), __FILE__, __LINE__);                      \
-                CERROR("%d total bytes allocated by Lustre, %d by Portals\n", \
-                       atomic_read(&obd_memory), atomic_read(&portal_kmemory));\
-        } else {                                                              \
-                memset(ptr, 0, size);                                         \
-                atomic_add(size, &obd_memory);                                \
-                if (atomic_read(&obd_memory) > obd_memmax)                    \
-                        obd_memmax = atomic_read(&obd_memory);                \
-                CDEBUG(D_MALLOC, "slab-alloced '"#ptr"': %d at %p (tot %d)\n",\
-                       (int)(size), ptr, atomic_read(&obd_memory));           \
-        }                                                                     \
+/*
+ * we memset() the slab object to 0 when allocation succeeds, so DO NOT HAVE A
+ * CTOR THAT DOES ANYTHING. Its work will be cleared here. We'd love to assert
+ * on that, but slab.c keeps kmem_cache_s all to itself.
+ */
+#define OBD_SLAB_ALLOC(ptr, slab, type, size)                                         \
+do {                                                                                  \
+        LASSERT(!in_interrupt());                                                     \
+        (ptr) = kmem_cache_alloc(slab, (type));                                       \
+        if ((ptr) == NULL) {                                                          \
+                CERROR("slab-alloc of '"#ptr"' (%d bytes) failed at %s:%d\n",         \
+                       (int)(size), __FILE__, __LINE__);                              \
+                CERROR("%d total bytes allocated by Lustre, %d by Portals\n",         \
+                       atomic_read(&obd_memory), atomic_read(&portal_kmemory));       \
+        } else {                                                                      \
+                memset(ptr, 0, size);                                                 \
+                atomic_add(size, &obd_memory);                                        \
+                if (atomic_read(&obd_memory) > obd_memmax)                            \
+                        obd_memmax = atomic_read(&obd_memory);                        \
+                get_mtrack((ptr), (size), __FILE__, __LINE__);                        \
+                CDEBUG(D_MALLOC, "slab-alloced '"#ptr"': %d at %p (tot %d)\n",        \
+                       (int)(size), ptr, atomic_read(&obd_memory));                   \
+        }                                                                             \
 } while (0)
 
-#define OBD_SLAB_FREE(ptr, slab, size)                                        \
-do {                                                                          \
-        LASSERT(ptr);                                                         \
-        CDEBUG(D_MALLOC, "slab-freed '" #ptr "': %d at %p (tot %d).\n",       \
-               (int)(size), ptr, atomic_read(&obd_memory));                   \
-        atomic_sub(size, &obd_memory);                                        \
-        POISON(ptr, 0x5a, size);                                              \
-        kmem_cache_free(slab, ptr);                                           \
-        (ptr) = (void *)0xdeadbeef;                                           \
+#define OBD_SLAB_FREE(ptr, slab, size)                                                \
+do {                                                                                  \
+        LASSERT(ptr);                                                                 \
+        CDEBUG(D_MALLOC, "slab-freed '" #ptr "': %d at %p (tot %d).\n",               \
+               (int)(size), ptr, atomic_read(&obd_memory));                           \
+        put_mtrack((ptr), (size), __FILE__, __LINE__);                                \
+        atomic_sub(size, &obd_memory);                                                \
+        POISON(ptr, 0x5a, size);                                                      \
+        kmem_cache_free(slab, ptr);                                                   \
+        (ptr) = (void *)0xdeadbeef;                                                   \
 } while (0)
 
 #endif

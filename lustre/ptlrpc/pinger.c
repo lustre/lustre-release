@@ -122,8 +122,9 @@ static int ptlrpc_pinger_main(void *arg)
                         spin_unlock_irqrestore(&imp->imp_lock, flags);
 
                         if (imp->imp_next_ping <= this_ping || force) {
-                                if (level == LUSTRE_IMP_DISCON) {
-                                        /* wait at least a timeout before 
+                                if (level == LUSTRE_IMP_DISCON &&
+                                    !imp->imp_deactive) {
+                                        /* wait at least a timeout before
                                            trying recovery again. */
                                         imp->imp_next_ping =
                                                 ptlrpc_next_ping(imp);
@@ -132,7 +133,7 @@ static int ptlrpc_pinger_main(void *arg)
                                            imp->imp_obd->obd_no_recov) {
                                         CDEBUG(D_HA, 
                                                "not pinging %s (in recovery "
-                                               " or recovery disabled: %s)\n",
+                                               "or recovery disabled: %s)\n",
                                                imp->imp_target_uuid.uuid,
                                                ptlrpc_import_state_name(level));
                                 } else if (imp->imp_pingable || force) {

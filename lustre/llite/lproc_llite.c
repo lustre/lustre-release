@@ -26,6 +26,9 @@
 #include <linux/lprocfs_status.h>
 #include <linux/seq_file.h>
 #include <linux/obd_support.h>
+#ifdef HAVE_MM_INLINE
+#include <linux/mm_inline.h>
+#endif
 
 #include "llite_internal.h"
 
@@ -642,8 +645,8 @@ static int llite_dump_pgcache_seq_show(struct seq_file *seq, void *v)
         /* 2.4 doesn't seem to have SEQ_START_TOKEN, so we implement
          * it in our own state */
         if (dummy_llap->llap_magic == 0) {
-                seq_printf(seq, "generation | llap .cookie | page ");
-                seq_printf(seq, "inode .index [ page flags ]\n");
+                seq_printf(seq, "generation | llap cookie origin | page ");
+                seq_printf(seq, "inode index count [ page flags ]\n");
                 return 0;
         }
 
@@ -653,11 +656,23 @@ static int llite_dump_pgcache_seq_show(struct seq_file *seq, void *v)
         if (llap != NULL)  {
                 int has_flags = 0;
                 struct page *page = llap->llap_page;
+                static char *origins[] = {
+                        [LLAP_ORIGIN_UNKNOWN] = "--",
+                        [LLAP_ORIGIN_READPAGE] = "rp",
+                        [LLAP_ORIGIN_READAHEAD] = "ra",
+                        [LLAP_ORIGIN_COMMIT_WRITE] = "cw",
+                        [LLAP_ORIGIN_WRITEPAGE] = "wp",
+                };
 
-                seq_printf(seq, "%lu | %p %p | %p %p %lu [",
+                LASSERTF(llap->llap_origin < LLAP__ORIGIN_MAX, "%u\n",
+                         llap->llap_origin);
+
+                seq_printf(seq, "%lu | %p %p %s | %p %p %lu %u [",
                                 sbi->ll_pglist_gen,
                                 llap, llap->llap_cookie,
-                                page, page->mapping->host, page->index);
+                                origins[llap->llap_origin],
+                                page, page->mapping->host, page->index,
+                                page_count(page));
                 seq_page_flag(seq, page, locked, has_flags);
                 seq_page_flag(seq, page, error, has_flags);
                 seq_page_flag(seq, page, referenced, has_flags);
@@ -814,7 +829,7 @@ static int ll_ra_stats_seq_show(struct seq_file *seq, void *v)
 
         spin_lock(&sbi->ll_lock);
 
-        seq_printf(seq, "snapshot_time:         %lu:%lu (secs:usecs)\n",
+        seq_printf(seq, "snapshot_time:         %lu.%lu (secs.usecs)\n",
                    now.tv_sec, now.tv_usec);
         seq_printf(seq, "pending issued pages:           %lu\n",
                    ra->ra_cur_pages);
@@ -898,7 +913,7 @@ static int llite_wait_times_seq_show(struct seq_file *seq, void *v)
 
         spin_lock(&sbi->ll_lock);
 
-        seq_printf(seq, "snapshot_time:         %lu:%lu (secs:usecs)\n\n",
+        seq_printf(seq, "snapshot_time:         %lu.%lu (secs.usecs)\n\n",
                    now.tv_sec, now.tv_usec);
 
         seq_printf(seq, "lock wait times: (num, average ms)\n");

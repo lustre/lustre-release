@@ -43,5 +43,5 @@ i=`expr $i + 1`
 done
 
 # create client config
-${LMC} --add mtpt --node localhost --path $MOUNT --mds mds1 --lov lov1 || exit 40
+${LMC} --add mtpt --node localhost --path $MOUNT --clientoptions async --mds mds1 --lov lov1 || exit 40
 #${LMC} --add mtpt --node localhost --path $MOUNT2 --mds mds1 --lov lov1 || exit 40

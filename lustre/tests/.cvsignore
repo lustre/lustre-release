@@ -67,4 +67,4 @@ copy_attr
 rename_many
 mmap_sanity
 memhog
-
+rmdirmany

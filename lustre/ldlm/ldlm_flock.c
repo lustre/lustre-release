@@ -79,7 +79,6 @@ ldlm_flock_destroy(struct ldlm_lock *lock, ldlm_mode_t mode, int flags)
                    mode, flags);
 
         LASSERT(list_empty(&lock->l_flock_waitq));
-
         list_del_init(&lock->l_res_link);
         if (flags == LDLM_FL_WAIT_NOREPROC) {
                 /* client side - set a flag to prevent sending a CANCEL */
@@ -135,9 +134,9 @@ ldlm_process_flock_lock(struct ldlm_lock *req, int *flags, int first_enq,
         int overlaps = 0;
         ENTRY;
 
-        CDEBUG(D_DLMTRACE, "flags %#x pid "LPU64" mode %u start "LPU64" end "
-               LPU64"\n", *flags, new->l_policy_data.l_flock.pid, mode,
-               req->l_policy_data.l_flock.start,
+        CDEBUG(D_DLMTRACE, "flags %#x pid %u mode %u start "LPU64" end "
+               LPU64"\n", *flags, (unsigned int)new->l_policy_data.l_flock.pid, 
+	       mode, req->l_policy_data.l_flock.start,
                req->l_policy_data.l_flock.end);
 
         *err = ELDLM_OK;
@@ -412,7 +411,7 @@ restart:
         if (added)
                 ldlm_flock_destroy(req, mode, *flags);
 
-        ldlm_resource_dump(res);
+        ldlm_resource_dump(D_OTHER, res);
         RETURN(LDLM_ITER_CONTINUE);
 }
 
@@ -426,7 +425,6 @@ ldlm_flock_interrupted_wait(void *data)
 {
         struct ldlm_lock *lock;
         struct lustre_handle lockh;
-        int rc;
         ENTRY;
 
         lock = ((struct ldlm_flock_wait_data *)data)->fwd_lock;
@@ -434,9 +432,12 @@ ldlm_flock_interrupted_wait(void *data)
         /* take lock off the deadlock detection waitq. */
         list_del_init(&lock->l_flock_waitq);
 
+        /* client side - set flag to prevent lock from being put on lru list */
+        lock->l_flags |= LDLM_FL_CBPENDING;
+
         ldlm_lock_decref_internal(lock, lock->l_req_mode);
         ldlm_lock2handle(lock, &lockh);
-        rc = ldlm_cli_cancel(&lockh);
+        ldlm_cli_cancel(&lockh);
         EXIT;
 }
 
@@ -459,11 +460,6 @@ ldlm_flock_completion_ast(struct ldlm_lock *lock, int flags, void *data)
 
         LASSERT(flags != LDLM_FL_WAIT_NOREPROC);
 
-        if (flags == 0) {
-                wake_up(&lock->l_waitq);
-                RETURN(0);
-        }
-
         if (!(flags & (LDLM_FL_BLOCK_WAIT | LDLM_FL_BLOCK_GRANTED |
                        LDLM_FL_BLOCK_CONV)))
                 goto  granted;
@@ -472,7 +468,6 @@ ldlm_flock_completion_ast(struct ldlm_lock *lock, int flags, void *data)
                    "sleeping");
 
         ldlm_lock_dump(D_DLMTRACE, lock, 0);
-
         fwd.fwd_lock = lock;
         obd = class_exp2obd(lock->l_conn_export);
 
@@ -493,17 +488,12 @@ ldlm_flock_completion_ast(struct ldlm_lock *lock, int flags, void *data)
                           ((lock->l_req_mode == lock->l_granted_mode) ||
                            lock->l_destroyed), &lwi);
 
-        if (rc) {
-                LDLM_DEBUG(lock, "client-side enqueue waking up: failed (%d)",
-                           rc);
-                RETURN(rc);
-        }
-
-        LASSERT(!(lock->l_destroyed));
-
+        LDLM_DEBUG(lock, "client-side enqueue waking up: rc = %d", rc);
+        RETURN(rc);
+ 
 granted:
 
-        LDLM_DEBUG(lock, "client-side enqueue waking up");
+        LDLM_DEBUG(lock, "client-side enqueue granted");
         ns = lock->l_resource->lr_namespace;
         l_lock(&ns->ns_lock);
 
@@ -532,10 +522,13 @@ granted:
                 getlk->fl_start = lock->l_policy_data.l_flock.start;
                 getlk->fl_end = lock->l_policy_data.l_flock.end;
         } else {
+                int noreproc = LDLM_FL_WAIT_NOREPROC;
+
                 /* We need to reprocess the lock to do merges or splits
                  * with existing locks owned by this process. */
-                flags = LDLM_FL_WAIT_NOREPROC;
-                ldlm_process_flock_lock(lock, &flags, 1, &err);
+                ldlm_process_flock_lock(lock, &noreproc, 1, &err);
+                if (flags == 0)
+                        wake_up(&lock->l_waitq);
         }
         l_unlock(&ns->ns_lock);
         RETURN(0);
@@ -546,12 +539,12 @@ int ldlm_flock_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 {
         struct ldlm_namespace *ns;
         ENTRY;
-
+                                                                                                                             
         LASSERT(lock);
         LASSERT(flag == LDLM_CB_CANCELING);
-
+                                                                                                                             
         ns = lock->l_resource->lr_namespace;
-        
+                                                                                                                             
         /* take lock off the deadlock detection waitq. */
         l_lock(&ns->ns_lock);
         list_del_init(&lock->l_flock_waitq);

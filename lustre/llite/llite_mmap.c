@@ -91,6 +91,10 @@ struct ll_lock_tree_node * ll_node_from_inode(struct inode *inode, __u64 start,
 
 int lt_compare(struct ll_lock_tree_node *one, struct ll_lock_tree_node *two)
 {
+        /* XXX remove this assert when we really want to use this function
+         * to compare different file's region */
+        LASSERT(one->lt_oid == two->lt_oid);
+
         if ( one->lt_oid < two->lt_oid)
                 return -1;
         if ( one->lt_oid > two->lt_oid)
@@ -212,6 +216,8 @@ int ll_tree_lock(struct ll_lock_tree *tree,
         if (first_node != NULL)
                 lt_insert(tree, first_node);
 
+        /* order locking. what we have to concern about is ONLY double lock:
+         * the buffer is mapped to exactly this file. */
         if (mapping_mapped(inode->i_mapping)) {
                 rc = lt_get_mmap_locks(tree, inode, (unsigned long)buf, count);
                 if (rc)
@@ -259,7 +265,9 @@ static void policy_from_vma(ldlm_policy_data_t *policy,
         policy->l_extent.end = (policy->l_extent.start + count - 1) |
                                (PAGE_CACHE_SIZE - 1);
 }
-static struct vm_area_struct * our_vma(unsigned long addr, size_t count)
+
+static struct vm_area_struct *our_vma(unsigned long addr, size_t count,
+                                       struct inode *inode)
 {
         struct mm_struct *mm = current->mm;
         struct vm_area_struct *vma, *ret = NULL;
@@ -268,7 +276,8 @@ static struct vm_area_struct * our_vma(unsigned long addr, size_t count)
         spin_lock(&mm->page_table_lock);
         for(vma = find_vma(mm, addr);
             vma != NULL && vma->vm_start < (addr + count); vma = vma->vm_next) {
-                if (vma->vm_ops && vma->vm_ops->nopage == ll_nopage) {
+                if (vma->vm_ops && vma->vm_ops->nopage == ll_nopage &&
+                    vma->vm_file && vma->vm_file->f_dentry->d_inode == inode) {
                         ret = vma;
                         break;
                 }
@@ -292,7 +301,7 @@ int lt_get_mmap_locks(struct ll_lock_tree *tree, struct inode *inode,
         count += addr & (PAGE_SIZE - 1);
         addr -= addr & (PAGE_SIZE - 1);
 
-        while ((vma = our_vma(addr, count)) != NULL) {
+        while ((vma = our_vma(addr, count, inode)) != NULL) {
 
                 policy_from_vma(&policy, vma, addr, count);
                 node = ll_node_from_inode(inode, policy.l_extent.start,
@@ -360,7 +369,7 @@ struct page *ll_nopage(struct vm_area_struct *vma, unsigned long address,
         mode = mode_from_vma(vma);
         stime = (mode & LCK_PW) ? &ll_i2sbi(inode)->ll_write_stime :
                                   &ll_i2sbi(inode)->ll_read_stime;
-
+        
         rc = ll_extent_lock(fd, inode, ll_i2info(inode)->lli_smd, mode, &policy,
                             &lockh, LDLM_FL_CBPENDING, stime);
         if (rc != 0)
@@ -404,13 +413,14 @@ static inline unsigned long file_to_user(struct vm_area_struct *vma,
 {
         return vma->vm_start +
                (byte - ((__u64)vma->vm_pgoff << PAGE_CACHE_SHIFT));
-
 }
 
 #define VMA_DEBUG(vma, fmt, arg...)                                          \
-        CDEBUG(D_MMAP, "vma(%p) start(%ld) end(%ld) pgoff(%ld) inode(%p): "  \
-               fmt, vma, vma->vm_start, vma->vm_end, vma->vm_pgoff,          \
-               vma->vm_file->f_dentry->d_inode, ## arg);
+        CDEBUG(D_MMAP, "vma(%p) start(%ld) end(%ld) pgoff(%ld) inode(%p) "   \
+               "ino(%lu) iname(%s): " fmt, vma, vma->vm_start, vma->vm_end,  \
+               vma->vm_pgoff, vma->vm_file->f_dentry->d_inode,               \
+               vma->vm_file->f_dentry->d_inode->i_ino,                       \
+               vma->vm_file->f_dentry->d_iname, ## arg);                     \
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 /* [first, last] are the byte offsets affected.
@@ -422,20 +432,32 @@ static void teardown_vmas(struct vm_area_struct *vma, __u64 first,
 {
         unsigned long address, len;
         for (; vma ; vma = vma->vm_next_share) {
-                if (last >> PAGE_CACHE_SHIFT < vma->vm_pgoff)
+                if (last >> PAGE_SHIFT < vma->vm_pgoff)
                         continue;
                 if (first >> PAGE_CACHE_SHIFT > (vma->vm_pgoff +
                     ((vma->vm_end - vma->vm_start) >> PAGE_CACHE_SHIFT)))
                         continue;
 
-                address = max((unsigned long)vma->vm_start,
+                /* XXX in case of unmap the cow pages of a running file,
+                 * don't unmap these private writeable mapping here!
+                 * though that will break private mappping a little.
+                 *
+                 * the clean way is to check the mapping of every page
+                 * and just unmap the non-cow pages, just like
+                 * unmap_mapping_range() with even_cow=0 in kernel 2.6.
+                 */
+                if (!(vma->vm_flags & VM_SHARED) &&
+                    (vma->vm_flags & VM_WRITE))
+                        continue;
+
+                address = max((unsigned long)vma->vm_start, 
                               file_to_user(vma, first));
                 len = min((unsigned long)vma->vm_end,
                           file_to_user(vma, last) + 1) - address;
 
-                VMA_DEBUG(vma, "zapping vma [address=%ld len=%ld]\n",
-                          address, len);
-                LASSERT(vma->vm_mm);
+                VMA_DEBUG(vma, "zapping vma [first="LPU64" last="LPU64" "
+                          "address=%ld len=%ld]\n", first, last, address, len);
+                LASSERT(len > 0);
                 ll_zap_page_range(vma, address, len);
         }
 }
@@ -449,11 +471,12 @@ int ll_teardown_mmaps(struct address_space *mapping, __u64 first,
         int rc = -ENOENT;
         ENTRY;
 
+        LASSERT(last > first);
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
         if (mapping_mapped(mapping)) {
                 rc = 0;
                 unmap_mapping_range(mapping, first + PAGE_SIZE - 1,
-                                    last - first + 1, 1);
+                                    last - first + 1, 0);
         }
 #else
         spin_lock(&mapping->i_shared_lock);

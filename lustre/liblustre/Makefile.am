@@ -7,9 +7,9 @@ AM_CPPFLAGS = $(HAVE_EFENCE) -I$(SYSIO)/include -D_LARGEFILE64_SOURCE=1 \
               $(LLCPPFLAGS) -I$(top_srcdir)/portals/unals
 AM_CFLAGS = $(LLCFLAGS)
 
-LIBS = $(LIBEFENCE)
+AM_LIBS = $(LIBEFENCE)
 
-LUSTRE_LIBS = liblutils.a libllite.a \
+LUSTRE_LIBS = libllite.a \
               $(top_builddir)/lustre/lov/liblov.a \
               $(top_builddir)/lustre/obdecho/libobdecho.a \
               $(top_builddir)/lustre/osc/libosc.a \
@@ -25,14 +25,14 @@ PTL_LIBS =    $(top_builddir)/portals/utils/libuptlctl.a \
               $(top_builddir)/portals/portals/libportals.a
 else
 PTL_LIBS =    $(top_builddir)/portals/utils/libuptlctl.a \
-              $(CRAY_PORTALS_PATH)/lib_TV/snos64/libportals.a
+              $(CRAY_PORTALS_LIBS)/libportals.a
 endif
 
 SYSIO_LIBS =  $(SYSIO)/lib/libsysio.a
 
 if LIBLUSTRE
 lib_LIBRARIES = liblustre.a
-noinst_LIBRARIES = liblutils.a libllite.a
+noinst_LIBRARIES = libllite.a
 
 install-exec-hook: liblustre.so
 	@$(NORMAL_INSTALL)
@@ -48,16 +48,14 @@ else
 install-exec-hook:
 endif
 
-liblutils_a_SOURCES = lutil.c lutil.h
-
 libllite_a_SOURCES = llite_lib.c super.c namei.c rw.c file.c dir.c \
-		     llite_lib.h
+		     lutil.c lutil.h llite_lib.h
 
 # for make rpms -- need cleanup
 liblustre_a_SOURCES = llite_lib.c super.c namei.c rw.c file.c dir.c
 
 liblustre.a : $(LUSTRE_LIBS) $(PTL_LIBS) $(SYSIO_LIBS)
-	sh $(srcdir)/genlib.sh $(SYSIO) $(CRAY_PORTALS_PATH)
+	sh $(srcdir)/genlib.sh "$(SYSIO)" "$(CRAY_PORTALS_LIBS)" "$(LIBS)"
 
 EXTRA_DIST = genlib.sh
 

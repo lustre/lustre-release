@@ -1,5 +1,5 @@
 # Lustre test Makefile
-AM_CPPFLAGS = $(LLCPPFLAGS) -D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64
+AM_CPPFLAGS = $(LLCPPFLAGS) -I/opt/lam/include -D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64
 AM_CFLAGS = $(LLCFLAGS)
 # LDADD = -lldap
 # LDADD := -lreadline -ltermcap # -lefence
@@ -28,6 +28,9 @@ noinst_PROGRAMS += small_write multiop sleeptest ll_sparseness_verify cmknod
 noinst_PROGRAMS += ll_sparseness_write mrename ll_dirstripe_verify mkdirmany rmdirmany
 noinst_PROGRAMS += openfilleddirunlink rename_many memhog iopentest1 iopentest2
 noinst_PROGRAMS += mmap_sanity
+if MPITESTS
+noinst_PROGRAMS += parallel_grouplock write_append_truncate createmany_mpi
+endif
 # noinst_PROGRAMS += ldaptest copy_attr
 bin_PROGRAMS = mcreate munlink
 endif # TESTS
@@ -36,11 +39,14 @@ endif # TESTS
 
 stat_SOURCES = stat.c stat_fs.h
 mkdirdeep_LDADD=-L$(top_builddir)/portals/utils -lptlctl $(LIBREADLINE)
-#write_append_truncate_CC=mpicc
-#createmany_mpi_CC=mpicc
-#parallel_grouplock_SOURCES=parallel_grouplock.c lp_utils.c
-#parallel_grouplock_CC=mpicc
-
-#copy_attr_LDADD= -lattr
 mmap_sanity_SOURCES= mmap_sanity.c
 
+if MPITESTS
+LAM_LD_FLAGS=-L/opt/lam/lib -lmpi -llam -lpthread
+write_append_truncate_SOURCES=write_append_truncate.c
+write_append_truncate_LDADD=$(LAM_LD_FLAGS)
+createmany_mpi_SOURCES=createmany-mpi.c
+createmany_mpi_LDADD=$(LAM_LD_FLAGS)
+parallel_grouplock_SOURCES=parallel_grouplock.c lp_utils.c
+parallel_grouplock_LDADD=$(LAM_LD_FLAGS)
+endif

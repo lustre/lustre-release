@@ -140,10 +140,17 @@ int mds_finish_transno(struct mds_obd *mds, struct inode *inode, void *handle,
                 spin_unlock(&mds->mds_transno_lock);
         }
         req->rq_repmsg->transno = req->rq_transno = transno;
-        mcd->mcd_last_transno = cpu_to_le64(transno);
-        mcd->mcd_last_xid = cpu_to_le64(req->rq_xid);
-        mcd->mcd_last_result = cpu_to_le32(rc);
-        mcd->mcd_last_data = cpu_to_le32(op_data);
+        if (req->rq_reqmsg->opc == MDS_CLOSE) {
+                mcd->mcd_last_close_transno = cpu_to_le64(transno);
+                mcd->mcd_last_close_xid = cpu_to_le64(req->rq_xid);
+                mcd->mcd_last_close_result = cpu_to_le32(rc);
+                mcd->mcd_last_close_data = cpu_to_le32(op_data);
+        } else {
+                mcd->mcd_last_transno = cpu_to_le64(transno);
+                mcd->mcd_last_xid = cpu_to_le64(req->rq_xid);
+                mcd->mcd_last_result = cpu_to_le32(rc);
+                mcd->mcd_last_data = cpu_to_le32(op_data);
+        }
 
         fsfilt_add_journal_cb(obd, mds->mds_sb, transno, handle,
                               mds_commit_last_transno_cb, NULL);
@@ -178,7 +185,8 @@ int mds_finish_transno(struct mds_obd *mds, struct inode *inode, void *handle,
 
         EXIT;
 out_commit:
-        err = fsfilt_commit(obd, mds->mds_sb, inode, handle, 0);
+        err = fsfilt_commit(obd, mds->mds_sb, inode, handle, 
+                            req->rq_export->exp_sync);
         if (err) {
                 CERROR("error committing transaction: %d\n", err);
                 if (!rc)
@@ -341,10 +349,17 @@ void mds_steal_ack_locks(struct ptlrpc_request *req)
 
 void mds_req_from_mcd(struct ptlrpc_request *req, struct mds_client_data *mcd)
 {
-        DEBUG_REQ(D_HA, req, "restoring transno "LPD64"/status %d",
-                  mcd->mcd_last_transno, mcd->mcd_last_result);
-        req->rq_repmsg->transno = req->rq_transno = mcd->mcd_last_transno;
-        req->rq_repmsg->status = req->rq_status = mcd->mcd_last_result;
+        if (req->rq_reqmsg->opc == MDS_CLOSE) {
+                DEBUG_REQ(D_HA, req, "restoring transno "LPD64"/status %d",
+                          mcd->mcd_last_close_transno, mcd->mcd_last_close_result);
+                req->rq_repmsg->transno = req->rq_transno = mcd->mcd_last_close_transno;
+                req->rq_repmsg->status = req->rq_status = mcd->mcd_last_close_result;
+        } else {
+                DEBUG_REQ(D_HA, req, "restoring transno "LPD64"/status %d",
+                          mcd->mcd_last_transno, mcd->mcd_last_result);
+                req->rq_repmsg->transno = req->rq_transno = mcd->mcd_last_transno;
+                req->rq_repmsg->status = req->rq_status = mcd->mcd_last_result;
+        }
 
         mds_steal_ack_locks(req);
 }
@@ -466,24 +481,33 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                                 rc = inode->i_op->removexattr(de,
                                                     rec->ur_eadata);
                 } else if ((S_ISREG(inode->i_mode) ||
-                           S_ISDIR(inode->i_mode)) && rec->ur_eadata != NULL) {
-                         struct lov_stripe_md *lsm = NULL;
-
+                            S_ISDIR(inode->i_mode)) && rec->ur_eadata != NULL) {
+                        struct lov_stripe_md *lsm = NULL;
+                        struct lov_user_md *lum = NULL;
+                        
                         rc = ll_permission(inode, MAY_WRITE, NULL);
                         if (rc < 0)
                                 GOTO(cleanup, rc);
 
-                        rc = obd_iocontrol(OBD_IOC_LOV_SETSTRIPE, mds->mds_dt_exp,
-                                           0, &lsm, rec->ur_eadata);
-                        if (rc)
-                                GOTO(cleanup, rc);
-
-                        obd_free_memmd(mds->mds_dt_exp, &lsm);
-
-                        rc = fsfilt_set_md(obd, inode, handle, rec->ur_eadata,
-                                           rec->ur_eadatalen);
-                        if (rc)
-                                GOTO(cleanup, rc);
+                        lum = rec->ur_eadata;
+                        /* if lmm_stripe_size is -1 delete default stripe from dir */
+                        if (S_ISDIR(inode->i_mode) &&
+                            lum->lmm_stripe_size == (typeof(lum->lmm_stripe_size))(-1)){
+                                rc = fsfilt_set_md(obd, inode, handle, NULL, 0, EA_LOV);
+                                if (rc)
+                                        GOTO(cleanup, rc);
+                        } else {
+                                rc = obd_iocontrol(OBD_IOC_LOV_SETSTRIPE, mds->mds_dt_exp,
+                                                   0, &lsm, rec->ur_eadata);
+                                if (rc)
+                                        GOTO(cleanup, rc);
+                                
+                                obd_free_memmd(mds->mds_dt_exp, &lsm);
+                                rc = fsfilt_set_md(obd, inode, handle, rec->ur_eadata,
+                                                   rec->ur_eadatalen, EA_LOV);
+                                if (rc)
+                                        GOTO(cleanup, rc);
+                        }
                 }    
         }
 
@@ -702,7 +726,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
         dp.p_ptr = req;
 
         switch (type) {
-        case S_IFREG:{
+        case S_IFREG: {
                 handle = fsfilt_start(obd, dir, FSFILT_OP_CREATE, NULL);
                 if (IS_ERR(handle))
                         GOTO(cleanup, rc = PTR_ERR(handle));
@@ -710,7 +734,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 EXIT;
                 break;
         }
-        case S_IFDIR:{
+        case S_IFDIR: {
                 int i, nstripes = 0;
                 
                 /*
@@ -824,11 +848,6 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                                 oa->o_fid = id_fid(rec->ur_id2);
                                 oa->o_generation = id_gen(rec->ur_id2);
                                 oa->o_flags |= OBD_FL_RECREATE_OBJS;
-
-                                /* 
-                                 * fid should be defined here. It should be
-                                 * passedfrom client.
-                                 */
                                 LASSERT(oa->o_fid != 0);
                         }
 
@@ -941,11 +960,6 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                         inode->i_generation = id_gen(rec->ur_id2);
 
                         if (type != S_IFDIR) {
-                                /* 
-                                 * updating inode self id, as inode already
-                                 * exists and we should make sure, its sid will
-                                 * be the same as we reveived.
-                                 */
                                 down(&inode->i_sem);
                                 rc = mds_update_inode_sid(obd, inode,
                                                           handle, rec->ur_id2);
@@ -1017,6 +1031,25 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 else
                         MD_COUNTER_INCREMENT(obd, create);
 
+                /* take care of default stripe inheritance */
+                if (type == S_IFDIR) {
+                        struct lov_mds_md lmm;
+                        int lmm_size = sizeof(lmm);
+
+                        rc = mds_get_md(obd, dir, &lmm, &lmm_size, 1, 0);
+                        if (rc > 0) {
+                                down(&inode->i_sem);
+                                rc = fsfilt_set_md(obd, inode, handle, 
+                                                   &lmm, lmm_size, EA_LOV);
+                                up(&inode->i_sem);
+                        }
+                        if (rc) {
+                                CERROR("error on copy stripe info: rc = %d\n", 
+                                       rc);
+                                rc = 0;
+                        }
+                }
+                
                 body = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*body));
                 mds_pack_inode2body(obd, body, inode, 1);
         }
@@ -2058,7 +2091,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                 } else if (S_ISREG(child_inode->i_mode)) {
                         mds_pack_inode2body(obd, body, child_inode, 0);
                         mds_pack_md(obd, req->rq_repmsg, offset + 1,
-                                    body, child_inode, MDS_PACK_MD_LOCK);
+                                    body, child_inode, MDS_PACK_MD_LOCK, 0);
                 }
         }
 
@@ -2247,7 +2280,7 @@ static int mds_reint_link_acquire(struct mds_update_record *rec,
         EXIT;
 cleanup:
         rc = mds_finish_transno(mds, de_src ? de_src->d_inode : NULL,
-                                        handle, req, rc, 0);
+                                handle, req, rc, 0);
         switch (cleanup_phase) {
                 case 2:
                         if (rc)
@@ -2306,12 +2339,13 @@ static int mds_reint_link_to_remote(struct mds_update_record *rec,
         op_data->id1 = *(rec->ur_id1);
         rc = md_link(mds->mds_md_exp, op_data, &request);
         OBD_FREE(op_data, sizeof(*op_data));
+
+        if (request)
+                ptlrpc_req_finished(request);
         if (rc)
                 GOTO(cleanup, rc);
 
         cleanup_phase = 2;
-        if (request)
-                ptlrpc_req_finished(request);
 
         OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_LINK_WRITE, de_tgt_dir->d_inode->i_sb);
 
@@ -2588,13 +2622,12 @@ static int mds_get_parents_children_locked(struct obd_device *obd,
         struct ldlm_res_id c1_res_id = { .name = {0} };
         struct ldlm_res_id c2_res_id = { .name = {0} };
         ldlm_policy_data_t p_policy = {.l_inodebits = {MDS_INODELOCK_UPDATE}};
-        /* Only dentry should change, but the inode itself would be
-           intact otherwise */
+        /* Only dentry should disappear, but the inode itself would be
+           intact otherwise. */
         ldlm_policy_data_t c1_policy = {.l_inodebits = {MDS_INODELOCK_LOOKUP}};
         /* If something is going to be replaced, both dentry and inode locks are
            needed */
-        ldlm_policy_data_t c2_policy = {.l_inodebits = {MDS_INODELOCK_LOOKUP|
-                                                        MDS_INODELOCK_UPDATE}};
+        ldlm_policy_data_t c2_policy = {.l_inodebits = {MDS_INODELOCK_FULL}};
         struct ldlm_res_id *maxres_src, *maxres_tgt;
         struct inode *inode;
         int rc = 0, cleanup_phase = 0;
@@ -2662,7 +2695,7 @@ static int mds_get_parents_children_locked(struct obd_device *obd,
                                      old_len - 1);
         if (IS_ERR(*de_oldp)) {
                 rc = PTR_ERR(*de_oldp);
-                CERROR("old child lookup error (%*s): %d\n",
+                CERROR("old child lookup error (%.*s): %d\n",
                        old_len - 1, old_name, rc);
                 GOTO(cleanup, rc);
         }
@@ -2706,7 +2739,7 @@ static int mds_get_parents_children_locked(struct obd_device *obd,
                                      new_len - 1);
         if (IS_ERR(*de_newp)) {
                 rc = PTR_ERR(*de_newp);
-                CERROR("new child lookup error (%*s): %d\n",
+                CERROR("new child lookup error (%.*s): %d\n",
                        old_len - 1, old_name, rc);
                 GOTO(cleanup, rc);
         }
@@ -3094,7 +3127,11 @@ static int mds_reint_rename_to_remote(struct mds_update_record *rec, int offset,
                                          &update_mode, rec->ur_name, 
                                          rec->ur_namelen, &child_lockh, &de_old,
                                          LCK_EX, MDS_INODELOCK_LOOKUP);
-        LASSERT(rc == 0);
+        if (rc) {
+                OBD_FREE(op_data, sizeof(*op_data));
+                RETURN(rc);
+        }
+
         LASSERT(de_srcdir);
         LASSERT(de_srcdir->d_inode);
         LASSERT(de_old);
@@ -3274,7 +3311,11 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
 
         }
         
-        /* check if inodes point to each other. */
+        /*
+         * check if inodes point to each other. This should be checked before
+         * is_subdir() check, as for the same entries it will think that they
+         * are subdirs.
+         */
         if (!(de_old->d_flags & DCACHE_CROSS_REF) &&
             !(de_new->d_flags & DCACHE_CROSS_REF) &&
             old_inode == new_inode)
@@ -3312,7 +3353,7 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
                 } else if (S_ISREG(new_inode->i_mode)) {
                         mds_pack_inode2body(obd, body, new_inode, 0);
                         mds_pack_md(obd, req->rq_repmsg, 1, body, 
-                                    new_inode, MDS_PACK_MD_LOCK);
+                                    new_inode, MDS_PACK_MD_LOCK, 0);
                  }
         }
 

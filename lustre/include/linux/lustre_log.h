@@ -97,6 +97,8 @@ struct llog_process_cat_data {
 
 int llog_cat_id2handle(struct llog_handle *cathandle, struct llog_handle **res,
                        struct llog_logid *logid);
+int class_config_dump_handler(struct llog_handle * handle,
+                              struct llog_rec_hdr *rec, void *data);
 int llog_cat_put(struct llog_handle *cathandle);
 int llog_cat_add_rec(struct llog_handle *cathandle, struct llog_rec_hdr *rec,
                      struct llog_cookie *reccookie, void *buf,
@@ -514,5 +516,4 @@ static inline void llog_create_lock_free(struct llog_create_locks *lcl)
         size = offset + sizeof(struct rw_semaphore *) * lcl->lcl_count;
         OBD_FREE(lcl, size);
 }
-
 #endif

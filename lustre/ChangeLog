@@ -1,5 +1,40 @@
-tbd  Cluster File Systems, Inc. <info@clusterfs.com>
-       * version 1.2.x
+tbd         Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 1.3.4
+       * bug fixes
+	- fixes from lustre 1.2.8
+	- print NAL number in %x format (4645)
+	- the watchdog thread now runs as interruptible (5246)
+	- drop import inflight refcount on signal_completed_replay error (5255)
+       * miscellania
+	- add pid to ldlm debugging output (4922)
+
+2004-10-08  Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 1.3.3
+       * bug fixes
+	- properly handle portals process identifiers in messages (4165)
+	- finish default directory EA handling (3048)
+	- fixes from lustre 1.2.7
+	- removed PTL_MD_KIOV usage under CRAY_PORTALS (4420)
+	- allow EADDRNOTAVAIL as retry for connect in liblustre tcpnal (4822)
+
+2004-09-16  Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 1.3.2
+       * bug fixes
+	- many liblustre fixes
+	- fixes from lustre 1.2.6
+       * miscellania
+	- update to new libsysio-head-0806
+	- reorganization of lov code
+
+2004-08-30  Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 1.3.1
+       * bug fixes
+	- add locking for mmapped files (2828)
+	- lmc/lconf changes to support multiple interfaces (3376)
+	- fixes from lustre 1.2.5
+
+2004-08-14  Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 1.3.0
        * bug fixes
 	- don't dereference NULL peer_ni in ldlm_handle_ast_error (3258)
 	- don't allow unlinking open directory if it isn't empty (2904)
@@ -9,6 +44,137 @@ tbd  Cluster File Systems, Inc. <info@clusterfs.com>
 	- chose better nal ids in liblustre (3292)
 	- initialize liblustre with uid/group membership (2862)
         - let lconf resolve symlinked-to devices (4629)
+	- balance journal closure when 2.6 filter write fails (3401)
+	- add second rpc_lock and last_rcvd info for close reqs (3462)
+	- don't hold llog sem during network request (3652)
+	- update server last transno after client disconnects (2525)
+	- replace config semaphore with spinlock (3306)
+	- ext3 exents and multi-block allocation (3024)
+	- service time statistics in /proc
+	- minor fixes to liblustre build (3317)
+	- client recovery without upcall (3262)
+	- use transno after validating reply (3892)
+	- use different name for 2nd ptlrpcd thread (3887)
+	- get a client lock in ll_inode_revalidate_it (3597)
+	- direct IO reads on OST (4048)
+	- process timed out requests if import state changes (3754)
+	- ignore -ENOENT errors in osc_destroy (3639)
+	- fixes from lustre 1.2.0-1.2.4
+	* miscellania
+	- use "CATALOGS" for the llog catalogs, not "CATLIST" (old) (b=2841)
+	- added kernel patch for /dev/sd I/O stats (4385)
+
+2004-11-16  Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 1.2.8
+       * bug fixes
+	- fix TCP_NODELAY bug, which caused extreme perf regression (5134)
+	- allocate qswnal tx descriptors singly to avoid fragmentation (4504)
+	- don't LBUG on obdo_alloc() failure, use OBD_SLAB_ALLOC() (4800)
+	- fix NULL dereference in /proc/sys/portals/routes (4827)
+	- allow failed mdc_close() operations to be interrupted (4561)
+	- stop precreate on OST before MDS would time out on it (4778)
+	- don't free dentries not owned by NFS code, check generation (4806)
+	- fix lsm leak if mds_create_objects() fails (4801)
+	- limit debug_daemon file size, always print CERROR messages (4789)
+	- use transno after validating reply (3892)
+	- process timed out requests if import state changes (3754)
+	- update mtime on OST during writes, return in glimpse (4829)
+	- add mkfsoptions to LDAP (4679)
+	- use ->max_readahead method instead of zapping global ra (5039)
+	- don't interrupt __l_wait_event() during strace
+       * miscellania
+	- add software watchdogs to catch hung threads quickly (4941)
+	- make lustrefs init script start after nfs is mounted
+	- fix CWARN/ERROR duplication (4930)
+	- return async write errors to application if possible (2248)
+	- update barely-supported suse-2.4.21-171 series (4842)
+	- support for sles 9 %post scripts
+	- support for building 2.6 kernel-source packages
+	- support for sles km_* packages
+
+2004-10-07  Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 1.2.7
+       * bug fixes
+	- ignore -ENOENT errors in osc_destroy (3639)
+	- notify osc create thread that OSC is being cleaned up (4600)
+	- add nettype argument for llmount in #5d in conf-sanity.sh (3936)
+	- reconstruct ost_handle() like mds_handle() (4657)
+	- create a new thread to do import eviction to avoid deadlock (3969)
+	- let lconf resolve symlinked-to devices (4629)
+	- don't unlink "objects" from directory with default EA (4554)
+	- hold socknal file ref over connect in case target is down (4394)
+	- allow more than 32000 subdirectories in a single directory (3244) 
+	- OST returns ENOSPC from object create when no space left (4539)
+	- don't send truncate RPC if file size isn't changing (4410)
+	- limit OSC precreate to 1/2 of value OST considers bogus (4778)
+	- bind to privileged port in socknal and tcpnal (3689)
+       * miscellania
+	- rate limit CERROR/CWARN console message to avoid overload (4519)
+	- basic mmap support (3918)
+	- kernel patch series update from b1_4 (4711)
+
+2004-09-16  Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 1.2.6
+       * bug fixes
+	- avoid crash during MDS cleanup with OST shut down (2775)
+	- fix loi_list_lock/oig_lock inversion on interrupted IO (4136)
+	- don't use bad inodes on the MDS (3744)
+	- dynamic object preallocation to improve recovery speed (4236)
+	- don't hold spinlock over lock dumping or change debug flags (4401)
+	- don't zero obd_dev when it is force cleaned (3651)
+	- "lctl deactivate" will stop automatic recovery attempts (3406)
+	- look for existing replayed locks to avoid duplicates (3764)
+	- don't resolve lock handle twice in recovery avoiding race (4401)
+	- revalidate should check working dir is a directory (4134)
+       * miscellania
+	- don't always mark "slow" obdfilter messages as errors (4418)
+
+2004-08-24  Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 1.2.5
+       * bug fixes
+	- don't close LustreDB during write_conf until it is done (3860)
+	- fix typo in lconf for_each_profile (3821)
+	- allow dumping logs from multiple threads at one time (3820)
+	- don't allow multiple threads in OSC recovery (3812)
+	- fix debug_size parameters (3864)
+	- fix mds_postrecov to initialize import for llog ctxt (3121)
+	- replace config semaphore with spinlock (3306)
+	- be sure to send a reply for a CANCEL rpc with bad export (3863)
+	- don't allow enqueue to complete on a destroyed export (3822)
+	- down write_lock before checking llog header bitmap (3825)
+	- recover from lock replay timeout (3764)
+	- up llog sem before sending rpc (3652)
+	- reduce ns lock hold times when setting kms (3267)
+	- change a dlm LBUG to LASSERTF, to maybe learn something (4228)
+	- fix NULL deref and obd_dev leak on setup error (3312)
+	- replace some LBUG about llog ops with error handling (3841)
+	- don't match INVALID dentries from d_lookup and spin (3784)
+	- hold dcache_lock while marking dentries INVALID and hashing (4255)
+	- fix invalid assertion in ptlrpc_set_wait (3880)
+       * miscellania
+	- add libwrap support for the TCP acceptor (3996)
+	- add /proc/sys/portals/routes for non-root route listing (3994)
+	- allow setting MDS UUID in .xml (2580)
+	- print the stack of a process that LBUGs (4228)
+
+2004-07-14  Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 1.2.4
+       * bug fixes
+	- don't cleanup request in ll_file_open() on failed MDS open (3430)
+	- make sure to unset replay flag from failed open requests (3440)
+	- if default stripe count is 0, use OST count for inode size (3636)
+	- update parent mtime/ctime on client for create/unlink (2611)
+	- drop dentry ref in ext3_add_link from open_connect_dentry (3266)
+	- free recovery state on server during a forced cleanup (3571)
+	- unregister_reply for resent reqs (3063)
+	- loop back devices mounting and status check on 2.6 (3563)
+	- fix resource-creation race that can provoke i_size == 0 (3513)
+	- don't try to use bad inodes returned from MDS/OST fs lookup (3688)
+	- more debugging for page-accounting assertion (3746)
+	- return -ENOENT instead of asserting if ost getattr+unlink race (3558)
+	- avoid deadlock after precreation failure (3758)
+	- fix race and lock order deadlock in orphan handling (3450, 3750)
+	- add validity checks when grabbing inodes from l_ast_data (3599)
        * miscellania
 	- drop scimac NAL (unmaintained)
 

@@ -30,8 +30,8 @@ do {                                                            \
 #define CHECK_VALUE(a)                                          \
 do {                                                            \
         printf("        LASSERTF("#a                            \
-               " == %d, \" found %%lld\\n\",\n                 "\
-               "(long long)"#a");\n",a);\
+               " == %llu, \" found %%llu\\n\",\n                 "\
+               "(unsigned long long)"#a");\n",(unsigned long long)a);\
 } while(0)
 
 #define CHECK_MEMBER_OFFSET(s,m)                                \

@@ -28,11 +28,25 @@
 #include <sys/types.h>
 #include <sys/queue.h>
 
+#ifdef HAVE_XTIO_H
+#include <xtio.h>
+#endif
 #include <sysio.h>
 #include <fs.h>
 #include <mount.h>
 #include <inode.h>
+#ifdef HAVE_FILE_H
 #include <file.h>
+#endif
+
+/* env variables */
+#define ENV_LUSTRE_MNTPNT               "LIBLUSTRE_MOUNT_POINT"
+#define ENV_LUSTRE_MNTTGT               "LIBLUSTRE_MOUNT_TARGET"
+#define ENV_LUSTRE_TIMEOUT              "LIBLUSTRE_TIMEOUT"
+#define ENV_LUSTRE_DUMPFILE             "LIBLUSTRE_DUMPFILE"
+#define ENV_LUSTRE_DEBUG_MASK           "LIBLUSTRE_DEBUG_MASK"
+#define ENV_LUSTRE_DEBUG_SUBSYS         "LIBLUSTRE_DEBUG_SUBSYS"
+#define ENV_LUSTRE_NAL_NAME             "LIBLUSTRE_NAL_NAME"
 
 #ifdef REDSTORM
 #define CSTART_INIT
@@ -84,6 +98,7 @@ int liblustre_process_log(struct config_llog_instance *cfg, int allow_recov)
         struct llog_ctxt *ctxt;
         ptl_nid_t nid = 0;
         int nal, err, rc = 0;
+        char *nal_name;
         ENTRY;
 
         generate_random_uuid(uuid);
@@ -94,9 +109,12 @@ int liblustre_process_log(struct config_llog_instance *cfg, int allow_recov)
                 RETURN(-EINVAL);
         }
 
-        nal = ptl_name2nal(LIBLUSTRE_NAL_NAME);
+        nal_name = getenv(ENV_LUSTRE_NAL_NAME);
+        if (!nal_name)
+                nal_name = "tcp";
+        nal = ptl_name2nal(nal_name);
         if (nal <= 0) {
-                CERROR("Can't parse NAL %s\n", LIBLUSTRE_NAL_NAME);
+                CERROR("Can't parse NAL %s\n", nal_name);
                 RETURN(-EINVAL);
         }
         LCFG_INIT(lcfg, LCFG_ADD_UUID, name);
@@ -125,7 +143,7 @@ int liblustre_process_log(struct config_llog_instance *cfg, int allow_recov)
         err = class_process_config(&lcfg);
         if (err < 0)
                 GOTO(out_detach, err);
-        
+
         obd = class_name2obd(name);
         if (obd == NULL)
                 GOTO(out_cleanup, err = -EINVAL);
@@ -141,9 +159,9 @@ int liblustre_process_log(struct config_llog_instance *cfg, int allow_recov)
                         g_zconf_mdsname, err);
                 GOTO(out_cleanup, err);
         }
-        
+
         exp = class_conn2export(&mdc_conn);
-        
+
         ctxt = exp->exp_obd->obd_llog_ctxt[LLOG_CONFIG_REPL_CTXT];
         rc = class_config_process_llog(ctxt, g_zconf_profile, cfg);
         if (rc)
@@ -172,7 +190,7 @@ out_del_uuid:
 out:
         if (rc == 0)
                 rc = err;
-        
+
         RETURN(rc);
 }
 
@@ -189,7 +207,7 @@ int ll_parse_mount_target(const char *target, char **mdsnid,
         if ((s = strchr(buf, ':'))) {
                 *mdsnid = buf;
                 *s = '\0';
-                                                                                                                        
+
                 while (*++s == '/')
                         ;
                 *mdsname = s;
@@ -213,7 +231,7 @@ int ll_parse_mount_target(const char *target, char **mdsnid,
  * or in the apps themselves.  The NAMESPACE_STRING specifying
  * the initial set of fs ops (creates, mounts, etc.) is passed
  * as an environment variable.
- * 
+ *
  *      _sysio_init();
  *      _sysio_incore_init();
  *      _sysio_native_init();
@@ -242,22 +260,14 @@ int _sysio_lustre_init(void)
         err = lllib_init();
         if (err) {
                 perror("init llite driver");
-        }       
+        }
         return err;
 }
-
-/* env variables */
-#define ENV_LUSTRE_MNTPNT               "LIBLUSTRE_MOUNT_POINT"
-#define ENV_LUSTRE_MNTTGT               "LIBLUSTRE_MOUNT_TARGET"
-#define ENV_LUSTRE_TIMEOUT              "LIBLUSTRE_TIMEOUT"
-#define ENV_LUSTRE_DUMPFILE             "LIBLUSTRE_DUMPFILE"
-#define ENV_LUSTRE_DEBUG_MASK           "LIBLUSTRE_DEBUG_MASK"
-#define ENV_LUSTRE_DEBUG_SUBSYS         "LIBLUSTRE_DEBUG_SUBSYS"
 
 extern int _sysio_native_init();
 extern unsigned int obd_timeout;
 
-static char *lustre_path = NULL;
+char *lustre_path = NULL;
 
 /* global variables */
 char   *g_zconf_mdsname = NULL; /* mdsname, for zeroconf */
@@ -319,30 +329,31 @@ void __liblustre_setup_(void)
                 portal_subsystem_debug =
                                 (unsigned int) strtol(debug_subsys, NULL, 0);
 
-#ifndef CSTART_INIT
+
+#ifdef INIT_SYSIO
         /* initialize libsysio & mount rootfs */
-	if (_sysio_init()) {
-		perror("init sysio");
-		exit(1);
-	}
+        if (_sysio_init()) {
+                perror("init sysio");
+                exit(1);
+        }
         _sysio_native_init();
 
-	err = _sysio_mount_root(root_path, root_driver, mntflgs, NULL);
-	if (err) {
-		perror(root_driver);
-		exit(1);
-	}
+        err = _sysio_mount_root(root_path, root_driver, mntflgs, NULL);
+        if (err) {
+                perror(root_driver);
+                exit(1);
+        }
 
         if (_sysio_lustre_init())
-		exit(1);
-#endif
+                exit(1);
+#endif /* INIT_SYSIO */
 
         err = mount("/", lustre_path, lustre_driver, mntflgs, NULL);
-	if (err) {
-		errno = -err;
-		perror(lustre_driver);
-		exit(1);
-	}
+        if (err) {
+                errno = -err;
+                perror(lustre_driver);
+                exit(1);
+        }
 }
 
 void __liblustre_cleanup_(void)
@@ -362,7 +373,15 @@ void __liblustre_cleanup_(void)
          * liblutre. this delima lead to another hack in
          * libsysio/src/file_hack.c FIXME
          */
+#ifdef INIT_SYSIO
         _sysio_shutdown();
         cleanup_lib_portals();
         PtlFini();
+#else
+	/*
+	 * don't do any libsysio or low level portals cleanups
+	 * platform framework does it
+	 */
+	cleanup_lib_portals();
+#endif
 }

@@ -6423,7 +6423,7 @@ Index: uml-2.6.7/fs/hostfs/hostfs_kern.c
 ===================================================================
 --- uml-2.6.7.orig/fs/hostfs/hostfs_kern.c	2004-07-16 19:47:23.631218720 +0300
 +++ uml-2.6.7/fs/hostfs/hostfs_kern.c	2004-07-16 19:47:24.263122656 +0300
-@@ -0,0 +1,1024 @@
+@@ -0,0 +1,1022 @@
 +/* 
 + * Copyright (C) 2000, 2001, 2002 Jeff Dike (jdike@karaya.com)
 + * Licensed under the GPL

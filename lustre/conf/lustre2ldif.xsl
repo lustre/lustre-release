@@ -122,6 +122,9 @@ devsize: <value-of select="devsize"/>
 <if test="journalsize">
 journalsize: <value-of select="journalsize"/>
 </if>
+<if test="mkfsoptions">
+mkfsoptions: <value-of select="mkfsoptions"/>
+</if>
 nodeRef: <value-of select="node_ref/@uuidref"/>
 targetRef: <value-of select="target_ref/@uuidref"/>
 <text>
@@ -172,6 +175,9 @@ devsize: <value-of select="devsize"/>
 </if>
 <if test="journalsize">
 journalsize: <value-of select="journalsize"/>
+</if>
+<if test="mkfsoptions">
+mkfsoptions: <value-of select="mkfsoptions"/>
 </if>
 <text>
 </text>

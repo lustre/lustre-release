@@ -119,6 +119,7 @@ init_options(struct lustre_mount_data *lmd)
         lmd->lmd_local_nid = PTL_NID_ANY;
         lmd->lmd_port = 988;    /* XXX define LUSTRE_DEFAULT_PORT */
         lmd->lmd_nal = SOCKNAL;
+        lmd->lmd_async = 0;
         lmd->lmd_nllu = 99;
         lmd->lmd_nllg = 99;
         strncpy(lmd->lmd_security, "null", sizeof(lmd->lmd_security));
@@ -134,10 +135,22 @@ print_options(struct lustre_mount_data *lmd)
         printf("profile:         %s\n", lmd->lmd_profile);
         printf("sec_flavor:      %s\n", lmd->lmd_security);
         printf("server_nid:      "LPX64"\n", lmd->lmd_server_nid);
-        printf("local_nid:       "LPX64"\n", lmd->lmd_local_nid);
-        printf("nal:             %d\n", lmd->lmd_nal);
-        printf("server_ipaddr:   0x%x\n", lmd->lmd_server_ipaddr);
-        printf("port:            %d\n", lmd->lmd_port);
+#ifdef CRAY_PORTALS
+        if (lmd->lmd_nal != CRAY_KB_SSNAL) {
+#endif
+                printf("local_nid:       "LPX64"\n", lmd->lmd_local_nid);
+#ifdef CRAY_PORTALS
+        }
+#endif
+        printf("nal:             %x\n", lmd->lmd_nal);
+#ifdef CRAY_PORTALS
+        if (lmd->lmd_nal != CRAY_KB_SSNAL) {
+#endif
+                printf("server_ipaddr:   0x%x\n", lmd->lmd_server_ipaddr);
+                printf("port:            %d\n", lmd->lmd_port);
+#ifdef CRAY_PORTALS
+        }
+#endif
 
         for (i = 0; i < route_index; i++)
                 printf("route:           "LPX64" : "LPX64" - "LPX64"\n",
@@ -333,6 +346,8 @@ int parse_options(char * options, struct lustre_mount_data *lmd)
                         }
                         if (!strcmp(opt, "debug")) {
                                 debug = val;
+                        } else if (!strcmp(opt, "async")) {
+                                lmd->lmd_async = 1;
                         }
                 }
         }
@@ -370,8 +385,12 @@ set_local(struct lustre_mount_data *lmd)
 
         memset(buf, 0, sizeof(buf));
 
+#ifdef CRAY_PORTALS
+        if (lmd->lmd_nal == CRAY_KB_ERNAL) {
+#else
         if (lmd->lmd_nal == SOCKNAL || lmd->lmd_nal == TCPNAL ||
-            lmd->lmd_nal == OPENIBNAL) {
+            lmd->lmd_nal == OPENIBNAL || lmd->lmd_nal == IIBNAL) {
+#endif
                 struct utsname uts;
 
                 rc = gethostname(buf, sizeof(buf) - 1);
@@ -380,6 +399,7 @@ set_local(struct lustre_mount_data *lmd)
                                 progname, strerror(rc));
                         return rc;
                 }
+
                 rc = uname(&uts);
                 /* for 2.6 kernels, reserve at least 8MB free, or we will
                  * go OOM during heavy read load */
@@ -406,7 +426,8 @@ set_local(struct lustre_mount_data *lmd)
                                 write(f, val, strlen(val));
                                 close(f);
                         }
-                 }
+                }
+#ifndef CRAY_PORTALS
         } else if (lmd->lmd_nal == QSWNAL) {
                 char *pfiles[] = {"/proc/qsnet/elan3/device0/position",
                                   "/proc/qsnet/elan4/device0/position",
@@ -424,6 +445,10 @@ set_local(struct lustre_mount_data *lmd)
 
                         return -1;
                 }
+#else
+	} else if (lmd->lmd_nal == CRAY_KB_SSNAL) {
+		return 0;
+#endif
         }
 
         if (ptl_parse_nid (&nid, buf) != 0) {
@@ -440,9 +465,13 @@ set_peer(char *hostname, struct lustre_mount_data *lmd)
 {
         ptl_nid_t nid = 0;
         int rc;
-        
+
+#ifdef CRAY_PORTALS
+        if (lmd->lmd_nal == CRAY_KB_ERNAL) {
+#else
         if (lmd->lmd_nal == SOCKNAL || lmd->lmd_nal == TCPNAL ||
-            lmd->lmd_nal == OPENIBNAL) {
+            lmd->lmd_nal == OPENIBNAL || lmd->lmd_nal == IIBNAL) {
+#endif
                 if (lmd->lmd_server_nid == PTL_NID_ANY) {
                         if (ptl_parse_nid (&nid, hostname) != 0) {
                                 fprintf (stderr, "%s: can't parse NID %s\n",
@@ -457,7 +486,8 @@ set_peer(char *hostname, struct lustre_mount_data *lmd)
                                  progname, hostname);
                         return (-1);
                 }
-        } else if (lmd->lmd_nal == QSWNAL) {
+#ifndef CRAY_PORTALS
+        } else if (lmd->lmd_nal == QSWNAL &&lmd->lmd_server_nid == PTL_NID_ANY){
                 char buf[64];
                 rc = sscanf(hostname, "%*[^0-9]%63[0-9]", buf);
                 if (rc != 1) {
@@ -471,6 +501,10 @@ set_peer(char *hostname, struct lustre_mount_data *lmd)
                         return (-1);
                 }
                 lmd->lmd_server_nid = nid;
+#else
+	} else if (lmd->lmd_nal == CRAY_KB_SSNAL) {
+		lmd->lmd_server_nid = strtoll(hostname,0,0);
+#endif
         }
 
 
@@ -698,10 +732,20 @@ int main(int argc, char *const argv[])
                 exit(0);
         }
 
+        rc = access(target, F_OK);
+        if (rc) {
+                rc = errno;
+                fprintf(stderr, "%s: %s inaccessible: %s\n", progname, target,
+                        strerror(errno));
+                return rc;
+        }
+
         rc = mount(source, target, "lustre", 0, (void *)&lmd);
         if (rc) {
                 rc = errno;
                 perror(argv[0]);
+                fprintf(stderr, "%s: mount(%s, %s) failed: %s\n", source,
+                        target, progname, strerror(errno));
                 if (rc == ENODEV)
                         fprintf(stderr, "Are the lustre modules loaded?\n"
                              "Check /etc/modules.conf and /proc/filesystems\n");

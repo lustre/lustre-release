@@ -67,7 +67,6 @@ command_t cmdlist[] = {
          "usage: --net <tcp/elan/myrinet> <command>"},
         {"network", jt_ptl_network, 0, "commands that follow apply to net\n"
          "usage: network <tcp/elan/myrinet>"},
-        
         {"interface_list", jt_ptl_print_interfaces, 0, "print interface entries\n"
          "usage: interface_list"},
         {"add_interface", jt_ptl_add_interface, 0, "add interface entry\n"
@@ -86,7 +85,7 @@ command_t cmdlist[] = {
          "usage: connect <host> <port> [iIOC]"},
         {"disconnect", jt_ptl_disconnect, 0, "disconnect from a remote nid\n"
          "usage: disconnect [<nid>]"},
-        {"active_tx", jt_ptl_print_active_txs, 0, "print active transmits (no args)\n"
+        {"active_tx", jt_ptl_print_active_txs, 0, "print active transmits\n"
          "usage: active_tx"},
         {"mynid", jt_ptl_mynid, 0, "inform the socknal of the local nid. "
          "The nid defaults to hostname for tcp networks and is automatically "
@@ -104,13 +103,17 @@ command_t cmdlist[] = {
          "add an entry to the portals routing table\n"
          "usage: add_route <gateway> <target> [<target>]"},
         {"del_route", jt_ptl_del_route, 0,
-         "delete the route via the given gateway to the given targets from the portals routing table\n"
+         "delete route via gateway to targets from the portals routing table\n"
          "usage: del_route <gateway> [<target>] [<target>]"},
         {"set_route", jt_ptl_notify_router, 0,
-         "enable/disable routes via the given gateway in the portals routing table\n"
+         "enable/disable routes via gateway in the portals routing table\n"
          "usage: set_route <gateway> <up/down> [<time>]"},
-        {"route_list", jt_ptl_print_routes, 0, "print the portals routing table\n"
+        {"route_list", jt_ptl_print_routes, 0,
+         "print the portals routing table, same as show_route\n"
          "usage: route_list"},
+        {"show_route", jt_ptl_print_routes, 0,
+         "print the portals routing table, same as route_list\n"
+         "usage: show_route"},
         {"fail", jt_ptl_fail_nid, 0, "fail/restore communications.\n"
          "Omitting the count means indefinitely, 0 means restore, "
          "otherwise fail 'count' messages.\n"
@@ -233,6 +236,9 @@ command_t cmdlist[] = {
         {"root_squash", jt_obd_root_squash, 0,
          "squash root to 'uid:gid' except client 'nid'\n"
          "usage: root_squash [uid:gid [nid]]\n"},
+        {"start", jt_obd_start, 0,
+         "setup mds/ost from the llog file\n"
+         "usage: start <profilename>"},
         {"mount_option", jt_lcfg_mount_option, 0, 
          "usage: mount_option profile osc_name [mdc_name] \n"},
         {"del_mount_option", jt_lcfg_del_mount_option, 0,
@@ -285,16 +291,19 @@ command_t cmdlist[] = {
         {"======== debug =========", jt_noop, 0, "debug"},
         {"debug_daemon", jt_dbg_debug_daemon, 0,
          "debug daemon control and dump to a file\n"
-         "usage: debug_daemon [start file <#MB>|stop|pause|continue]"},
+         "usage: debug_daemon {start file [#MB]|stop}"},
         {"debug_kernel", jt_dbg_debug_kernel, 0,
-         "get debug buffer and dump to a file\n"
+         "get debug buffer and dump to a file, same as dk\n"
          "usage: debug_kernel [file] [raw]"},
         {"dk", jt_dbg_debug_kernel, 0,
-         "get debug buffer and dump to a file\n"
+         "get debug buffer and dump to a file, same as debug_kernel\n"
          "usage: dk [file] [raw]"},
         {"debug_file", jt_dbg_debug_file, 0,
-         "read debug buffer from input and dump to output\n"
+         "read debug buffer from input and dump to output, same as df\n"
          "usage: debug_file <input> [output] [raw]"},
+        {"df", jt_dbg_debug_file, 0,
+         "read debug buffer from input and dump to output, same as debug_file\n"
+         "usage: df <input> [output] [raw]"},
         {"clear", jt_dbg_clear_debug_buf, 0, "clear kernel debug buffer\n"
          "usage: clear"},
         {"mark", jt_dbg_mark_debug_buf, 0,"insert marker text in kernel debug buffer\n"

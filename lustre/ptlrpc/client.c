@@ -542,12 +542,12 @@ static int after_reply(struct ptlrpc_request *req)
 
         if (req->rq_import->imp_replayable) {
                 spin_lock_irqsave(&imp->imp_lock, flags);
-                if (req->rq_replay || req->rq_transno != 0)
+                if (req->rq_transno != 0)
                         ptlrpc_retain_replayable_request(req, imp);
                 else if (req->rq_commit_cb != NULL) {
-            		spin_unlock_irqrestore(&imp->imp_lock, flags);
+                        spin_unlock_irqrestore(&imp->imp_lock, flags);
                         req->rq_commit_cb(req);
-            		spin_lock_irqsave(&imp->imp_lock, flags);
+                        spin_lock_irqsave(&imp->imp_lock, flags);
 		}
 
                 if (req->rq_transno > imp->imp_max_transno)
@@ -698,7 +698,7 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
                 }
 
                 if (req->rq_phase == RQ_PHASE_RPC) {
-                        if (req->rq_waiting || req->rq_resend) {
+                        if (req->rq_timedout||req->rq_waiting||req->rq_resend) {
                                 int status;
 
                                 ptlrpc_unregister_reply(req);
@@ -709,7 +709,7 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
                                         spin_unlock_irqrestore(&imp->imp_lock,
                                                                flags);
                                         continue;
-                                } 
+                                }
 
                                 list_del_init(&req->rq_list);
                                 if (status != 0)  {
@@ -856,6 +856,9 @@ int ptlrpc_expire_one_request(struct ptlrpc_request *req)
         int replied = 0;
         ENTRY;
 
+        DEBUG_REQ(D_ERROR, req, "timeout (sent at %lu, %lus ago)",
+                  (long)req->rq_sent, LTIME_S(CURRENT_TIME) - req->rq_sent);
+
         spin_lock_irqsave (&req->rq_lock, flags);
         replied = req->rq_replied;
         if (!replied)
@@ -868,6 +871,9 @@ int ptlrpc_expire_one_request(struct ptlrpc_request *req)
         DEBUG_REQ(D_ERROR, req, "timeout (sent at %lu)", (long)req->rq_sent); 
 
         ptlrpc_unregister_reply (req);
+
+        if (obd_dump_on_timeout)
+                portals_debug_dumplog();
 
         if (req->rq_bulk != NULL)
                 ptlrpc_unregister_bulk (req);
@@ -883,7 +889,7 @@ int ptlrpc_expire_one_request(struct ptlrpc_request *req)
 
         /* If this request is for recovery or other primordial tasks,
          * then error it out here. */
-        if (req->rq_send_state != LUSTRE_IMP_FULL || 
+        if (req->rq_send_state != LUSTRE_IMP_FULL ||
             imp->imp_obd->obd_no_recov) {
                 spin_lock_irqsave (&req->rq_lock, flags);
                 req->rq_status = -ETIMEDOUT;
@@ -901,7 +907,7 @@ int ptlrpc_expired_set(void *data)
 {
         struct ptlrpc_request_set *set = data;
         struct list_head          *tmp;
-        time_t                     now = LTIME_S (CURRENT_TIME);
+        time_t                     now = LTIME_S(CURRENT_TIME);
         ENTRY;
 
         LASSERT(set != NULL);
@@ -1014,7 +1020,7 @@ int ptlrpc_set_wait(struct ptlrpc_request_set *set)
                 CDEBUG(D_HA, "set %p going to sleep for %d seconds\n",
                        set, timeout);
                 lwi = LWI_TIMEOUT_INTR((timeout ? timeout : 1) * HZ,
-                                       ptlrpc_expired_set, 
+                                       ptlrpc_expired_set,
                                        ptlrpc_interrupted_set, set);
                 rc = l_wait_event(set->set_waitq, ptlrpc_check_set(set), &lwi);
 
@@ -1043,7 +1049,7 @@ int ptlrpc_set_wait(struct ptlrpc_request_set *set)
         if (set->set_interpret != NULL) {
                 int (*interpreter)(struct ptlrpc_request_set *set,void *,int) =
                         set->set_interpret;
-                rc = interpreter (set, &set->set_args, rc);
+                rc = interpreter (set, set->set_arg, rc);
         }
 
         RETURN(rc);

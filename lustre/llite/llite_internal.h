@@ -10,6 +10,8 @@
 #ifndef LLITE_INTERNAL_H
 #define LLITE_INTERNAL_H
 
+#include <linux/lustre_debug.h>
+
 /* default to about 40meg of readahead on a given system.  That much tied
  * up in 512k readahead requests serviced at 40ms each is about 1GB/s. */
 #define SBI_DEFAULT_RA_MAX ((40 << 20) >> PAGE_CACHE_SHIFT)
@@ -130,9 +132,9 @@ extern kmem_cache_t *ll_file_data_slab;
 extern kmem_cache_t *ll_intent_slab;
 struct lustre_handle;
 struct ll_file_data {
-        struct obd_client_handle fd_mds_och;
         struct ll_readahead_state fd_ras;
         __u32 fd_flags;
+        int fd_omode;
         struct lustre_handle fd_cwlockh;
         unsigned long fd_gid;
 };
@@ -174,14 +176,20 @@ struct ll_async_page {
          /* only trust these if the page lock is providing exclusion */
         unsigned         llap_write_queued:1,
                          llap_defer_uptodate:1,
+                         llap_origin:3,
                          llap_ra_used:1;
 
         struct list_head llap_proc_item;
 };
 
-#define LL_CDEBUG_PAGE(mask, page, fmt, arg...)                         \
-        CDEBUG(mask, "page %p map %p ind %lu priv %0lx: " fmt,          \
-               page, page->mapping, page->index, page->private, ## arg)
+enum {
+        LLAP_ORIGIN_UNKNOWN = 0,
+        LLAP_ORIGIN_READPAGE,
+        LLAP_ORIGIN_READAHEAD,
+        LLAP_ORIGIN_COMMIT_WRITE,
+        LLAP_ORIGIN_WRITEPAGE,
+        LLAP__ORIGIN_MAX,
+};
 
 /* llite/lproc_llite.c */
 int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
@@ -212,7 +220,7 @@ void ll_ap_completion(void *data, int cmd, struct obdo *oa, int rc);
 void ll_removepage(struct page *page);
 int ll_readpage(struct file *file, struct page *page);
 struct ll_async_page *llap_from_cookie(void *cookie);
-struct ll_async_page *llap_from_page(struct page *page);
+struct ll_async_page *llap_from_page(struct page *page, unsigned origin);
 struct ll_async_page *llap_cast_private(struct page *page);
 void ll_readahead_init(struct inode *inode, struct ll_readahead_state *ras);
 
@@ -222,6 +230,8 @@ void ll_truncate(struct inode *inode);
 /* llite/file.c */
 extern struct file_operations ll_file_operations;
 extern struct inode_operations ll_file_inode_operations;
+int ll_md_real_close(struct obd_export *md_exp,
+                     struct inode *inode, int flags);
 extern int ll_inode_revalidate_it(struct dentry *);
 extern int ll_setxattr(struct dentry *, const char *, const void *,
                        size_t, int);
@@ -240,9 +250,15 @@ int ll_file_open(struct inode *inode, struct file *file);
 int ll_file_release(struct inode *inode, struct file *file);
 int ll_lsm_getattr(struct obd_export *, struct lov_stripe_md *, struct obdo *);
 int ll_glimpse_size(struct inode *inode);
-int ll_local_open(struct file *file, struct lookup_intent *it);
+int ll_local_open(struct file *file, struct lookup_intent *it,
+                  struct obd_client_handle *och);
 int ll_md_close(struct obd_export *md_exp, struct inode *inode,
-                 struct file *file);
+                struct file *file);
+int ll_md_och_close(struct obd_export *md_exp, struct inode *inode,
+                    struct obd_client_handle *och);
+void ll_och_fill(struct inode *inode, struct lookup_intent *it,
+                 struct obd_client_handle *och);
+
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
 int ll_getattr(struct vfsmount *mnt, struct dentry *de, struct kstat *stat);
 #endif
@@ -282,7 +298,8 @@ extern struct super_operations lustre_super_operations;
 
 char *ll_read_opt(const char *opt, char *data);
 int ll_set_opt(const char *opt, char *data, int fl);
-void ll_options(char *options, char **ost, char **mds, char **sec, int *flags);
+void ll_options(char *options, char **ost, char **mds, char **sec, 
+                int *async, int *flags);
 void ll_lli_init(struct ll_inode_info *lli);
 int ll_fill_super(struct super_block *sb, void *data, int silent);
 int lustre_fill_super(struct super_block *sb, void *data, int silent);

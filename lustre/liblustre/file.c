@@ -31,12 +31,16 @@
 #include <sys/queue.h>
 #include <fcntl.h>
 
+#ifdef HAVE_XTIO_H
 #include <xtio.h>
+#endif
 #include <sysio.h>
 #include <fs.h>
 #include <mount.h>
 #include <inode.h>
+#ifdef HAVE_FILE_H
 #include <file.h>
+#endif
 
 #undef LIST_HEAD
 

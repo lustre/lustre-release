@@ -51,6 +51,11 @@
 #include <linux/lustre_lite.h>
 #include "lmv_internal.h"
 
+/* not defined for liblustre building */
+#if !defined(ATOMIC_INIT)
+#define ATOMIC_INIT(val) { (val) }
+#endif
+
 /* object cache. */
 kmem_cache_t *obj_cache;
 atomic_t obj_cache_count = ATOMIC_INIT(0);
@@ -859,7 +864,7 @@ int lmv_get_mea_and_update_object(struct obd_export *exp,
         md.mea = NULL;
         mealen = MEA_SIZE_LMV(lmv);
         
-        valid = OBD_MD_FLEASIZE | OBD_MD_FLDIREA;
+        valid = OBD_MD_FLEASIZE | OBD_MD_FLDIREA | OBD_MD_MEA;
 
         /* time to update mea of parent id */
         rc = md_getattr(lmv->tgts[id_group(id)].ltd_exp,
@@ -1905,6 +1910,10 @@ int lmv_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
         lsmp = (struct mea *)lsm;
         meap = (struct mea *)*lmmp;
 
+        if (lsmp->mea_magic != MEA_MAGIC_LAST_CHAR &&
+            lsmp->mea_magic != MEA_MAGIC_ALL_CHARS)
+                RETURN(-EINVAL);
+
         meap->mea_magic = cpu_to_le32(lsmp->mea_magic);
         meap->mea_count = cpu_to_le32(lsmp->mea_count);
         meap->mea_master = cpu_to_le32(lsmp->mea_master);
@@ -1917,45 +1926,69 @@ int lmv_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
         RETURN(mea_size);
 }
 
-int lmv_unpackmd(struct obd_export *exp, struct lov_stripe_md **mem_tgt,
-                 struct lov_mds_md *disk_src, int mdsize)
+int lmv_unpackmd(struct obd_export *exp, struct lov_stripe_md **lsmp,
+                 struct lov_mds_md *lmm, int lmm_size)
 {
         struct obd_device *obd = class_exp2obd(exp);
-        struct mea **tmea = (struct mea **)mem_tgt;
-        struct mea *mea = (struct mea *)disk_src;
+        struct mea **tmea = (struct mea **)lsmp;
+        struct mea *mea = (struct mea *)lmm;
         struct lmv_obd *lmv = &obd->u.lmv;
-        int mea_size, i;
+        int mea_size, i, rc = 0;
+        __u32 magic;
         ENTRY;
 
-	mea_size = sizeof(struct lustre_id) * 
+        mea_size = sizeof(struct lustre_id) * 
                 lmv->desc.ld_tgt_count + sizeof(struct mea);
-        if (mem_tgt == NULL)
+
+        if (lsmp == NULL)
                 return mea_size;
 
-        if (*mem_tgt != NULL && disk_src == NULL) {
+        if (*lsmp != NULL && lmm == NULL) {
                 OBD_FREE(*tmea, mea_size);
                 RETURN(0);
         }
 
-        LASSERT(mea_size == mdsize);
+        LASSERT(mea_size == lmm_size);
 
         OBD_ALLOC(*tmea, mea_size);
         if (*tmea == NULL)
                 RETURN(-ENOMEM);
 
-        if (!disk_src)
+        if (!lmm)
                 RETURN(mea_size);
 
-        (*tmea)->mea_magic = le32_to_cpu(mea->mea_magic);
+        if (mea->mea_magic == MEA_MAGIC_LAST_CHAR ||
+            mea->mea_magic == MEA_MAGIC_ALL_CHARS)
+        {
+                magic = le32_to_cpu(mea->mea_magic);
+        } else {
+                struct mea_old *old = (struct mea_old *)lmm;
+        
+                mea_size = sizeof(struct lustre_id) * old->mea_count + 
+                        sizeof(struct mea_old);
+        
+                if (old->mea_count > 256 || old->mea_master > 256 ||
+                    lmm_size < mea_size || old->mea_master > old->mea_count) {
+                        CWARN("bad MEA: count %u, master %u, size %u\n",
+                              old->mea_count, old->mea_master, mea_size);
+                        GOTO(out_free_mea, rc = -EINVAL);
+                }
+                magic = MEA_MAGIC_LAST_CHAR;
+        }
+
+        (*tmea)->mea_magic = magic;
         (*tmea)->mea_count = le32_to_cpu(mea->mea_count);
         (*tmea)->mea_master = le32_to_cpu(mea->mea_master);
 
-        for (i = 0; i < lmv->desc.ld_tgt_count; i++) {
+        for (i = 0; i < (*tmea)->mea_count; i++) {
                 (*tmea)->mea_ids[i] = mea->mea_ids[i];
                 id_le_to_cpu(&(*tmea)->mea_ids[i]);
         }
-
         RETURN(mea_size);
+
+out_free_mea:
+        OBD_FREE(*tmea, mea_size);
+        return rc;
 }
 
 int lmv_brw(int rw, struct obd_export *exp, struct obdo *oa,

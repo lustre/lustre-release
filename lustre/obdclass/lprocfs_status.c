@@ -638,6 +638,7 @@ int lprocfs_alloc_obd_stats(struct obd_device *obd,
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, queue_group_io);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, trigger_group_io);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, teardown_async_page);
+        LPROCFS_OBD_OP_INIT(num_private_stats, stats, adjust_kms);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, punch);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, sync);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, migrate);
@@ -807,7 +808,10 @@ int lprocfs_write_u64_helper(const char *buffer, unsigned long count,
 
         kernbuf[count] = '\0';
 
-        *val = simple_strtoull(kernbuf, &end, 0);
+        if (kernbuf[0] == '-')
+                *val = -simple_strtoull(kernbuf + 1, &end, 0);
+        else
+                *val = simple_strtoull(kernbuf, &end, 0);
         if (kernbuf == end)
                 return -EINVAL;
 

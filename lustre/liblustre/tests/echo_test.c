@@ -39,6 +39,7 @@ struct pingcli_args {
         int count;
         int size;
 };
+
 /*      bug #4615       */
 #if 0
 char *portals_id2str(int nal, ptl_process_id_t id, char *str)

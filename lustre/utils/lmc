@@ -897,7 +897,7 @@ def add_net(gen, lustre, options):
 
     if net_type in ('tcp','openib','ra'):
         port = get_option_int(options, 'port')
-    elif net_type in ('elan','gm','iib','vib','lo'):
+    elif net_type in ('elan', 'gm', 'iib', 'vib', 'lo', 'cray_kern_nal'):
         port = 0
     else:
         print "Unknown net_type: ", net_type
@@ -1410,13 +1410,18 @@ def get_fs_uuid(gen, lustre, mds_name, obd_name, mgmt_name):
     if not mds_uuid:
         mds_uuid = name2uuid(lustre, mds_name, tag='lmv', fatal=0)
     if not mds_uuid:
-        mds_uuid = name2uuid(lustre, mds_name, tag='cobd', fatal=1)
+        mds_uuid = name2uuid(lustre, mds_name, tag='cobd', fatal=0)
+    if not mds_uuid:
+	error("mds '" + mds_name + "' is not found")
 
     obd_uuid = name2uuid(lustre, obd_name, tag='ost', fatal=0)
     if not obd_uuid:
         obd_uuid = name2uuid(lustre, obd_name, tag='lov', fatal=0)
     if not obd_uuid:
-	obd_uuid = name2uuid(lustre, obd_name, tag='cobd', fatal=1)
+	obd_uuid = name2uuid(lustre, obd_name, tag='cobd', fatal=0)
+    if not obd_uuid:
+	error("ost '" + obd_name + "' is not found")
+	
     if mgmt_name:
         mgmt_uuid = name2uuid(lustre, mgmt_name, tag='mgmt', fatal=1)
     else:

@@ -59,7 +59,7 @@ make_config() {
         --stripe_cnt 0 --stripe_pattern 0 || exit 6
     lmc -m $CONFIG --add ost --nspath /mnt/ost_ns --node $OSTNODE \
         --lov lov1 --dev $OSTDEV --size $OSTSIZE --fstype $FSTYPE || exit 7
-    lmc -m $CONFIG --add mtpt --node $CLIENT --path $MOUNTPT --mds mds1 \
+    lmc -m $CONFIG --add mtpt --node $CLIENT --path $MOUNTPT --clientoptions async --mds mds1 \
         --lov lov1 || exit 8
 }
 

@@ -50,7 +50,9 @@
 #include <errno.h>
 #include <string.h>
 
+#ifdef HAVE_ASM_PAGE_H
 #include <asm/page.h>           /* needed for PAGE_SIZE - rread */
+#endif
 
 #include <linux/obd_class.h>
 #include <portals/ptlctl.h>
@@ -1246,7 +1248,7 @@ int jt_obd_test_setattr(int argc, char **argv)
         char *end;
         int rc = 0;
 
-        if (argc < 2 && argc > 4)
+        if (argc < 2 || argc > 4)
                 return CMD_HELP;
 
         IOC_INIT(data);
@@ -2037,6 +2039,29 @@ int jt_obd_close_uuid(int argc, char **argv)
         return 0;
 }
 
+int jt_obd_start(int argc, char **argv)
+{
+        int rc;
+        struct obd_ioctl_data data;
+                                                                                                                             
+        if (argc != 2) {
+                fprintf(stderr, "usage: %s <logfile>\n", argv[0]);
+                return 0;
+        }
+                                                                                                                             
+        IOC_INIT(data);
+        data.ioc_inllen1 = strlen(argv[1]) + 1;
+        data.ioc_inlbuf1 = argv[1];
+                                                                                                                             
+        IOC_PACK(argv[0], data);
+        rc = l2_ioctl(OBD_DEV_ID, OBD_IOC_START, buf);
+        if (rc) {
+                fprintf(stderr, "error: %s: ioctl error: %s\n",
+                        jt_cmdname(argv[0]), strerror(errno));
+                return -1;
+        }
+        return 0;
+}
 
 int jt_cfg_record(int argc, char **argv)
 {

@@ -144,7 +144,7 @@ int ptlrpc_start_bulk_transfer (struct ptlrpc_bulk_desc *desc)
         else
                 rc = PtlGet (desc->bd_md_h, peer->peer_id,
                              desc->bd_portal, 0, xid, 0);
-        
+
         if (rc != PTL_OK) {
                 /* Can't send, so we unlink the MD bound above.  The UNLINK
                  * event this creates will signal completion with failure,
@@ -234,9 +234,9 @@ int ptlrpc_register_bulk (struct ptlrpc_request *req)
         LASSERT (!desc->bd_registered || req->rq_xid != desc->bd_last_xid);
         desc->bd_registered = 1;
         desc->bd_last_xid = req->rq_xid;
-        
-        rc = PtlMEAttach(peer->peer_ni->pni_ni_h,
-                         desc->bd_portal, desc->bd_import->imp_connection->c_peer.peer_id, 
+
+        rc = PtlMEAttach(peer->peer_ni->pni_ni_h, desc->bd_portal,
+                         desc->bd_import->imp_connection->c_peer.peer_id, 
                          req->rq_xid, 0, PTL_UNLINK, PTL_INS_AFTER, &me_h);
         if (rc != PTL_OK) {
                 CERROR("PtlMEAttach failed: %d\n", rc);
@@ -433,8 +433,8 @@ int ptl_send_rpc(struct ptlrpc_request *request)
 
         rc = PtlMEAttach(connection->c_peer.peer_ni->pni_ni_h,
                          request->rq_reply_portal, /* XXX FIXME bug 249 */
-                         connection->c_peer.peer_id, request->rq_xid, 0, PTL_UNLINK,
-                         PTL_INS_AFTER, &reply_me_h);
+                         connection->c_peer.peer_id, request->rq_xid, 0,
+                         PTL_UNLINK, PTL_INS_AFTER, &reply_me_h);
         if (rc != PTL_OK) {
                 CERROR("PtlMEAttach failed: %d\n", rc);
                 LASSERT (rc == PTL_NO_SPACE);

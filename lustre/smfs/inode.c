@@ -123,7 +123,6 @@ static int smfs_test_inode(struct inode *inode, void *opaque)
             !smfs_snap_test_inode(inode, opaque))
                 return 0;  
 #endif
-        
         return 1;
 }
 
@@ -183,9 +182,7 @@ struct inode *smfs_get_inode(struct super_block *sb, ino_t hash,
         sargs.s_inode = dir; 
         sargs.s_index = index;
         CDEBUG(D_VFSTRACE, "get_inode: %lu\n", hash);
-
         inode = smfs_iget(sb, hash, &sargs);
-
         RETURN(inode);
 }
  

@@ -123,6 +123,7 @@ void l_check_no_ns_lock(struct ldlm_namespace *ns)
         if (l_has_lock(&ns->ns_lock) && time_after(jiffies, next_msg)) {
                 CERROR("namespace %s lock held illegally; tell phil\n",
                        ns->ns_name);
+                portals_debug_dumpstack(NULL);
                 next_msg = jiffies + 60 * HZ;
         }
 }

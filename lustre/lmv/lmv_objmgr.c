@@ -307,7 +307,7 @@ lmv_create_obj(struct obd_export *exp, struct lustre_id *id, struct mea *mea)
                 
                 /* time to update mea of parent id */
                 md.mea = NULL;
-                valid = OBD_MD_FLEASIZE | OBD_MD_FLDIREA;
+                valid = OBD_MD_FLEASIZE | OBD_MD_FLDIREA | OBD_MD_MEA;
 
                 rc = md_getattr(lmv->tgts[id_group(id)].ltd_exp,
                                 id, valid, NULL, 0, mealen, &req);

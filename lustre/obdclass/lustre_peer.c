@@ -103,7 +103,7 @@ int class_add_uuid(char *uuid, __u64 nid, __u32 nal)
                 return -ENOMEM;
         }
 
-        CDEBUG(D_INFO, "add uuid %s "LPX64" %u\n", uuid, nid, nal);
+        CDEBUG(D_INFO, "add uuid %s "LPX64" %x\n", uuid, nid, nal);
         memcpy(data->uuid, uuid, nob);
         data->nid = nid;
         data->nal = nal;
@@ -142,8 +142,11 @@ int class_del_uuid (char *uuid)
 
         spin_unlock (&g_uuid_lock);
 
-        if (list_empty (&deathrow))
+        if (list_empty (&deathrow)) {
+                if (uuid)
+                        CERROR("del non-existed uuid %s\n", uuid);
                 return -EINVAL;
+        }
 
         do {
                 data = list_entry(deathrow.next, struct uuid_nid_data, head);

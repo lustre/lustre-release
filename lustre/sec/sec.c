@@ -611,7 +611,7 @@ struct ptlrpc_sec * ptlrpcs_sec_create(ptlrpcs_flavor_t *flavor,
 static void ptlrpcs_sec_destroy(struct ptlrpc_sec *sec)
 {
         struct ptlrpc_sec_type *type = sec->ps_type;
-        struct ptlrpc_import *imp = sec->ps_import;
+        struct obd_import *imp = sec->ps_import;
 
         LASSERT(type && type->pst_ops);
         LASSERT(type->pst_ops->destroy_sec);

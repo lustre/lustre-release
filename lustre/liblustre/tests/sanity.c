@@ -35,8 +35,12 @@
 #include <signal.h>
 #include <errno.h>
 #include <dirent.h>
+#include <sys/uio.h>
+#include <sys/time.h>
 
 #include "test_common.h"
+
+extern char *lustre_path;
 
 #define ENTRY(str)                                                      \
         do {                                                            \
@@ -63,8 +67,10 @@
 
 void t1()
 {
-        char *path="/mnt/lustre/test_t1";
+        char path[MAX_PATH_LENGTH] = "";
+
         ENTRY("create/delete");
+        snprintf(path, MAX_PATH_LENGTH, "%s/test_t1", lustre_path);
 
         t_touch(path);
         t_unlink(path);
@@ -73,8 +79,10 @@ void t1()
 
 void t2()
 {
-        char *path="/mnt/lustre/test_t2";
+        char path[MAX_PATH_LENGTH] = "";
+
         ENTRY("mkdir/rmdir");
+        snprintf(path, MAX_PATH_LENGTH, "%s/test_t2", lustre_path);
 
         t_mkdir(path);
         t_rmdir(path);
@@ -83,8 +91,10 @@ void t2()
 
 void t3()
 {
-        char *path="/mnt/lustre/test_t3";
+        char path[MAX_PATH_LENGTH] = "";
+
         ENTRY("regular stat");
+        snprintf(path, MAX_PATH_LENGTH, "%s/test_t3", lustre_path);
 
         t_touch(path);
         t_check_stat(path, NULL);
@@ -94,8 +104,10 @@ void t3()
 
 void t4()
 {
-        char *path="/mnt/lustre/test_t4";
+        char path[MAX_PATH_LENGTH] = "";
+
         ENTRY("dir stat");
+        snprintf(path, MAX_PATH_LENGTH, "%s/test_t4", lustre_path);
 
         t_mkdir(path);
         t_check_stat(path, NULL);
@@ -105,9 +117,12 @@ void t4()
 
 void t6()
 {
-        char *path="/mnt/lustre/test_t6";
-        char *path2="/mnt/lustre/test_t6_link";
+        char path[MAX_PATH_LENGTH] = "";
+        char path2[MAX_PATH_LENGTH] = "";
+
         ENTRY("symlink");
+        snprintf(path, MAX_PATH_LENGTH, "%s/test_t6", lustre_path);
+        snprintf(path2, MAX_PATH_LENGTH, "%s/test_t6_link", lustre_path);
 
         t_touch(path);
         t_symlink(path, path2);
@@ -119,9 +134,11 @@ void t6()
 
 void t7()
 {
-        char *path="/mnt/lustre/test_t7";
+        char path[MAX_PATH_LENGTH] = "";
         int rc;
+
         ENTRY("mknod");
+        snprintf(path, MAX_PATH_LENGTH, "%s/test_t7", lustre_path);
 
         if (geteuid() != 0) {
                 rc = mknod(path, S_IFCHR | 0644, (5<<8 | 4));
@@ -139,8 +156,10 @@ void t7()
 
 void t8()
 {
-        char *path="/mnt/lustre/test_t8";
+        char path[MAX_PATH_LENGTH] = "";
+
         ENTRY("chmod");
+        snprintf(path, MAX_PATH_LENGTH, "%s/test_t8", lustre_path);
 
         t_touch(path);
         t_chmod_raw(path, 0700);
@@ -151,9 +170,12 @@ void t8()
 
 void t9()
 {
-        char *path="/mnt/lustre/test_t9";
-        char *path2="/mnt/lustre/test_t9_link";
+        char path[MAX_PATH_LENGTH] = "";
+        char path2[MAX_PATH_LENGTH] = "";
+
         ENTRY("hard link");
+        snprintf(path, MAX_PATH_LENGTH, "%s/test_t9", lustre_path);
+        snprintf(path2, MAX_PATH_LENGTH, "%s/test_t9_link", lustre_path);
 
         t_touch(path);
         t_link(path, path2);
@@ -166,14 +188,22 @@ void t9()
 
 void t10()
 {
-        char *dir1="/mnt/lustre/test_t10_dir1";
-        char *dir2="/mnt/lustre/test_t10_dir2";
-        char *path1="/mnt/lustre/test_t10_reg1";
-        char *path2="/mnt/lustre/test_t10_reg2";
-        char *rename1="/mnt/lustre/test_t10_dir1/rename1";
-        char *rename2="/mnt/lustre/test_t10_dir2/rename2";
-        char *rename3="/mnt/lustre/test_t10_dir2/rename3";
+        char dir1[MAX_PATH_LENGTH] = "";
+        char dir2[MAX_PATH_LENGTH] = "";
+        char path1[MAX_PATH_LENGTH] = "";
+        char path2[MAX_PATH_LENGTH] = "";
+        char rename1[MAX_PATH_LENGTH] = "";
+        char rename2[MAX_PATH_LENGTH] = "";
+        char rename3[MAX_PATH_LENGTH] = "";
+
         ENTRY("rename");
+        snprintf(dir1, MAX_PATH_LENGTH, "%s/test_t10_dir1", lustre_path);
+        snprintf(dir2, MAX_PATH_LENGTH, "%s/test_t10_dir2", lustre_path);
+        snprintf(path1, MAX_PATH_LENGTH, "%s/test_t10_reg1", lustre_path);
+        snprintf(path2, MAX_PATH_LENGTH, "%s/test_t10_reg2", lustre_path);
+        snprintf(rename1, MAX_PATH_LENGTH, "%s/test_t10_dir1/rename1", lustre_path);
+        snprintf(rename2, MAX_PATH_LENGTH, "%s/test_t10_dir2/rename2", lustre_path);
+        snprintf(rename3, MAX_PATH_LENGTH, "%s/test_t10_dir2/rename3", lustre_path);
 
         t_mkdir(dir1);
         t_mkdir(dir2);
@@ -191,7 +221,7 @@ void t10()
 
 void t11()
 {
-        char *base="/mnt/lustre";
+        char *base=lustre_path;
         char path[MAX_PATH_LENGTH], path2[MAX_PATH_LENGTH];
         int i, j, level = 5, nreg = 5;
         ENTRY("deep tree");
@@ -227,10 +257,11 @@ void t11()
 
 void t12()
 {
-        char *dir="/mnt/lustre/test_t12_dir";
+        char dir[MAX_PATH_LENGTH] = "";
         char buf[1024*128];
         int fd;
         ENTRY("empty directory readdir");
+        snprintf(dir, MAX_PATH_LENGTH, "%s/test_t12_dir", lustre_path);
 
         t_mkdir(dir);
         fd = t_opendir(dir);
@@ -242,13 +273,14 @@ void t12()
 
 void t13()
 {
-        char *dir="/mnt/lustre/test_t13_dir/";
+        char dir[MAX_PATH_LENGTH] = "";
         char name[1024];
         char buf[1024];
         const int nfiles = 20;
         char *prefix = "test13_filename_prefix_";
         int fd, i;
         ENTRY("multiple entries directory readdir");
+        snprintf(dir, MAX_PATH_LENGTH, "%s/test_t13_dir/", lustre_path);
 
         t_mkdir(dir);
         printf("Creating %d files...\n", nfiles);
@@ -270,7 +302,7 @@ void t13()
 
 void t14()
 {
-        char *dir="/mnt/lustre/test_t14_dir/";
+        char dir[MAX_PATH_LENGTH] = "";
         char name[1024];
         char buf[1024];
         const int nfiles = 256;
@@ -279,6 +311,7 @@ void t14()
         int fd, i, rc, pos, index;
 	loff_t base = 0;
         ENTRY(">1 block(4k) directory readdir");
+        snprintf(dir, MAX_PATH_LENGTH, "%s/test_t14_dir/", lustre_path);
 
         t_mkdir(dir);
         printf("Creating %d files...\n", nfiles);
@@ -328,9 +361,10 @@ iter:
 
 void t15()
 {
-        char *file = "/mnt/lustre/test_t15_file";
+        char file[MAX_PATH_LENGTH] = "";
         int fd;
         ENTRY("open-stat-close");
+        snprintf(file, MAX_PATH_LENGTH, "%s/test_t15_file", lustre_path);
 
         t_touch(file);
         fd = t_open(file);
@@ -342,9 +376,9 @@ void t15()
 
 void t16()
 {
-        char *file = "/mnt/lustre/test_t16_file";
-        int fd;
+        char file[MAX_PATH_LENGTH] = "";
         ENTRY("small-write-read");
+        snprintf(file, MAX_PATH_LENGTH, "%s/test_t16_file", lustre_path);
 
         t_echo_create(file, "aaaaaaaaaaaaaaaaaaaaaa");
         t_grep(file, "aaaaaaaaaaaaaaaaaaaaaa");
@@ -354,9 +388,10 @@ void t16()
 
 void t17()
 {
-        char *file = "/mnt/lustre/test_t17_file";
+        char file[MAX_PATH_LENGTH] = "";
         int fd;
         ENTRY("open-unlink without close");
+        snprintf(file, MAX_PATH_LENGTH, "%s/test_t17_file", lustre_path);
 
         fd = open(file, O_WRONLY | O_CREAT, 0666);
         if (fd < 0) {
@@ -369,11 +404,12 @@ void t17()
 
 void t18()
 {
-        char *file = "/mnt/lustre/test_t18_file";
+        char file[MAX_PATH_LENGTH] = "";
         char buf[128];
         int fd, i;
         struct stat statbuf[3];
         ENTRY("write should change mtime/atime");
+        snprintf(file, MAX_PATH_LENGTH, "%s/test_t18_file", lustre_path);
 
         for (i = 0; i < 3; i++) {
                 fd = open(file, O_RDWR|O_CREAT|O_APPEND, (mode_t)0666);
@@ -390,7 +426,7 @@ void t18()
                         printf("Error stat\n");
                         exit(1);
                 }
-                printf("mtime %ld, ctime %d\n",
+                printf("mtime %lu, ctime %lu\n",
                         statbuf[i].st_atime, statbuf[i].st_mtime);
                 sleep(2);
         }
@@ -403,7 +439,207 @@ void t18()
                 }
         }
         t_unlink(file);
+        LEAVE();
 }
+
+void t19()
+{
+        char file[MAX_PATH_LENGTH] = "";
+        int fd;
+        struct stat statbuf;
+        ENTRY("open(O_TRUNC) should trancate file to 0-length");
+        snprintf(file, MAX_PATH_LENGTH, "%s/test_t19_file", lustre_path);
+
+        t_echo_create(file, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+
+        fd = open(file, O_RDWR|O_CREAT|O_TRUNC, (mode_t)0666);
+        if (fd < 0) {
+                printf("error open file: %s\n", strerror(errno));
+                exit(-1);
+        }
+        close(fd);
+        if(stat(file, &statbuf) != 0) {
+                printf("Error stat\n");
+                exit(1);
+        }
+        if (statbuf.st_size != 0) {
+                printf("size %ld is not zero\n", statbuf.st_size);
+                exit(-1);
+        }
+        t_unlink(file);
+        LEAVE();
+}
+
+void t20()
+{
+        char file[MAX_PATH_LENGTH] = "";
+        int fd;
+        struct iovec iov[2];
+        char buf[100];
+        ssize_t ret;
+        ENTRY("trap app's general bad pointer for file i/o");
+        snprintf(file, MAX_PATH_LENGTH, "%s/test_t20_file", lustre_path);
+
+        fd = open(file, O_RDWR|O_CREAT, (mode_t)0666);
+        if (fd < 0) {
+                printf("error open file: %s\n", strerror(errno));
+                exit(-1);
+        }
+
+        ret = write(fd, NULL, 20);
+        if (ret != -1 || errno != EFAULT) {
+                printf("write 1: ret %ld, errno %d\n", ret, errno);
+                exit(1);
+        }
+        ret = write(fd, (void *)-1, 20);
+        if (ret != -1 || errno != EFAULT) {
+                printf("write 2: ret %ld, errno %d\n", ret, errno);
+                exit(1);
+        }
+        iov[0].iov_base = NULL;
+        iov[0].iov_len = 10;
+        iov[1].iov_base = (void *)-1;
+        iov[1].iov_len = 10;
+        ret = writev(fd, iov, 2);
+        if (ret != -1 || errno != EFAULT) {
+                printf("writev 1: ret %ld, errno %d\n", ret, errno);
+                exit(1);
+        }
+        iov[0].iov_base = NULL;
+        iov[0].iov_len = 0;
+        iov[1].iov_base = buf;
+        iov[1].iov_len = sizeof(buf);
+        ret = writev(fd, iov, 2);
+        if (ret != sizeof(buf)) {
+                printf("write 3 ret %ld, error %d\n", ret, errno);
+                exit(1);
+        }
+        lseek(fd, 0, SEEK_SET);
+
+        ret = read(fd, NULL, 20);
+        if (ret != -1 || errno != EFAULT) {
+                printf("read 1: ret %ld, errno %d\n", ret, errno);
+                exit(1);
+        }
+        ret = read(fd, (void *)-1, 20);
+        if (ret != -1 || errno != EFAULT) {
+                printf("read 2: ret %ld, errno %d\n", ret, errno);
+                exit(1);
+        }
+        iov[0].iov_base = NULL;
+        iov[0].iov_len = 10;
+        iov[1].iov_base = (void *)-1;
+        iov[1].iov_len = 10;
+        ret = readv(fd, iov, 2);
+        if (ret != -1 || errno != EFAULT) {
+                printf("readv 1: ret %ld, errno %d\n", ret, errno);
+                exit(1);
+        }
+        iov[0].iov_base = NULL;
+        iov[0].iov_len = 0;
+        iov[1].iov_base = buf;
+        iov[1].iov_len = sizeof(buf);
+        ret = readv(fd, iov, 2);
+        if (ret != sizeof(buf)) {
+                printf("read 3 ret %ld, error %d\n", ret, errno);
+                exit(1);
+        }
+
+        close(fd);
+        t_unlink(file);
+        LEAVE();
+}
+
+void t21()
+{
+        char file[MAX_PATH_LENGTH] = "";
+        int fd, ret;
+        ENTRY("basic fcntl support");
+        snprintf(file, MAX_PATH_LENGTH, "%s/test_t21_file", lustre_path);
+
+        fd = open(file, O_RDWR|O_CREAT, (mode_t)0666);
+        if (fd < 0) {
+                printf("error open file: %s\n", strerror(errno));
+                exit(-1);
+        }
+        if (fcntl(fd, F_SETFL, O_APPEND)) {
+                printf("error set flag: %s\n", strerror(errno));
+                exit(-1);
+        }
+        if ((ret = fcntl(fd, F_GETFL)) != O_APPEND) {
+                printf("error get flag: ret %x\n", ret);
+                exit(-1);
+        }
+
+        close(fd);
+        t_unlink(file);
+        LEAVE();
+}
+
+void t22()
+{
+        char file[MAX_PATH_LENGTH] = "";
+        int fd;
+        char *str = "1234567890";
+        char buf[100];
+        ssize_t ret;
+        ENTRY("make sure O_APPEND take effect");
+        snprintf(file, MAX_PATH_LENGTH, "%s/test_t22_file", lustre_path);
+
+        fd = open(file, O_RDWR|O_CREAT|O_APPEND, (mode_t)0666);
+        if (fd < 0) {
+                printf("error open file: %s\n", strerror(errno));
+                exit(-1);
+        }
+
+        lseek(fd, 100, SEEK_SET);
+        ret = write(fd, str, strlen(str));
+        if (ret != strlen(str)) {
+                printf("write 1: ret %ld, errno %d\n", ret, errno);
+                exit(1);
+        }
+
+        lseek(fd, 0, SEEK_SET);
+        ret = read(fd, buf, sizeof(buf));
+        if (ret != strlen(str)) {
+                printf("read 1 got %ld\n", ret);
+                exit(1);
+        }
+
+        if (memcmp(buf, str, strlen(str))) {
+                printf("read 1 data err\n");
+                exit(1);
+        }
+
+        if (fcntl(fd, F_SETFL, 0)) {
+                printf("fcntl err: %s\n", strerror(errno));
+                exit(1);
+        }
+
+        lseek(fd, 100, SEEK_SET);
+        ret = write(fd, str, strlen(str));
+        if (ret != strlen(str)) {
+                printf("write 2: ret %ld, errno %d\n", ret, errno);
+                exit(1);
+        }
+
+        lseek(fd, 100, SEEK_SET);
+        ret = read(fd, buf, sizeof(buf));
+        if (ret != strlen(str)) {
+                printf("read 2 got %ld\n", ret);
+                exit(1);
+        }
+
+        if (memcmp(buf, str, strlen(str))) {
+                printf("read 2 data err\n");
+                exit(1);
+        }
+
+        close(fd);
+        t_unlink(file);
+        LEAVE();
+}
+
 
 #define PAGE_SIZE (4096)
 #define _npages (2048)
@@ -415,12 +651,14 @@ static int _buffer[_npages][PAGE_SIZE/sizeof(int)];
  */
 static void pages_io(int xfer, loff_t pos)
 {
-        char *path="/mnt/lustre/test_t50";
+        char path[MAX_PATH_LENGTH] = "";
+
         int check_sum[_npages] = {0,};
-        int fd, rc, i, j;
+        int fd, rc, i, j, data_error = 0;
         struct timeval tw1, tw2, tr1, tr2;
         double tw, tr;
 
+        snprintf(path, MAX_PATH_LENGTH, "%s/test_t50", lustre_path);
         memset(_buffer, 0, sizeof(_buffer));
 
         /* create sample data */
@@ -474,6 +712,7 @@ static void pages_io(int xfer, loff_t pos)
                         sum += _buffer[i][j];
                 }
                 if (sum != check_sum[i]) {
+                        data_error = 1;
                         printf("chunk %d checksum error: expected 0x%x, get 0x%x\n",
                                 i, check_sum[i], sum);
                 }
@@ -486,12 +725,15 @@ static void pages_io(int xfer, loff_t pos)
         printf(" (R:%.3fM/s, W:%.3fM/s)\n",
                 (_npages * PAGE_SIZE) / (tw / 1000000.0) / (1024 * 1024),
                 (_npages * PAGE_SIZE) / (tr / 1000000.0) / (1024 * 1024));
+
+        if (data_error)
+                exit(1);
 }
 
 void t50()
 {
-        char text[256];
-        loff_t off_array[] = {1, 17, 255, 258, 4095, 4097, 8191, 1024*1024*1024*1024ULL};
+        loff_t off_array[] = {1, 17, 255, 258, 4095, 4097, 8191,
+                              1024*1024*1024*1024ULL};
         int np = 1, i;
         loff_t offset = 0;
 
@@ -576,6 +818,10 @@ int main(int argc, char * const argv[])
         t16();
         t17();
         t18();
+        t19();
+        t20();
+        t21();
+        t22();
         t50();
 
 	printf("liblustre is about shutdown\n");

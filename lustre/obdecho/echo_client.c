@@ -29,6 +29,7 @@
 #include <linux/iobuf.h>
 #endif
 #include <asm/div64.h>
+#include <linux/smp_lock.h>
 #else
 #include <liblustre.h>
 #endif
@@ -65,7 +66,7 @@ echo_printk_object (char *msg, struct ec_object *eco)
 static struct ec_object *
 echo_find_object_locked (struct obd_device *obd, obd_id id)
 {
-        struct echo_client_obd *ec = &obd->u.echo_client;
+        struct echo_client_obd *ec = &obd->u.echocli;
         struct ec_object       *eco = NULL;
         struct list_head       *el;
 
@@ -97,7 +98,7 @@ static int
 echo_copyin_lsm (struct obd_device *obd, struct lov_stripe_md *lsm,
                  void *ulsm, int ulsm_nob)
 {
-        struct echo_client_obd *ec = &obd->u.echo_client;
+        struct echo_client_obd *ec = &obd->u.echocli;
         int                     nob;
 
         if (ulsm_nob < sizeof (*lsm))
@@ -125,7 +126,7 @@ echo_copyin_lsm (struct obd_device *obd, struct lov_stripe_md *lsm,
 static struct ec_object *
 echo_allocate_object (struct obd_device *obd)
 {
-        struct echo_client_obd *ec = &obd->u.echo_client;
+        struct echo_client_obd *ec = &obd->u.echocli;
         struct ec_object       *eco;
         int rc;
 
@@ -152,7 +153,7 @@ static void
 echo_free_object (struct ec_object *eco)
 {
         struct obd_device      *obd = eco->eco_device;
-        struct echo_client_obd *ec = &obd->u.echo_client;
+        struct echo_client_obd *ec = &obd->u.echocli;
 
         LASSERT (eco->eco_refcount == 0);
         obd_free_memmd(ec->ec_exp, &eco->eco_lsm);
@@ -163,7 +164,7 @@ static int echo_create_object(struct obd_device *obd, int on_target,
                               struct obdo *oa, void *ulsm, int ulsm_nob,
                               struct obd_trans_info *oti)
 {
-        struct echo_client_obd *ec = &obd->u.echo_client;
+        struct echo_client_obd *ec = &obd->u.echocli;
         struct ec_object       *eco2;
         struct ec_object       *eco;
         struct lov_stripe_md   *lsm;
@@ -268,7 +269,7 @@ static int
 echo_get_object (struct ec_object **ecop, struct obd_device *obd,
                  struct obdo *oa)
 {
-        struct echo_client_obd *ec = &obd->u.echo_client;
+        struct echo_client_obd *ec = &obd->u.echocli;
         struct ec_object       *eco;
         struct ec_object       *eco2;
         int                     rc;
@@ -353,7 +354,7 @@ static void
 echo_put_object (struct ec_object *eco)
 {
         struct obd_device      *obd = eco->eco_device;
-        struct echo_client_obd *ec = &obd->u.echo_client;
+        struct echo_client_obd *ec = &obd->u.echocli;
 
         /* Release caller's ref on the object.
          * delete => mark for deletion when last ref goes
@@ -493,7 +494,7 @@ static int echo_client_kbrw(struct obd_device *obd, int rw, struct obdo *oa,
                             struct lov_stripe_md *lsm, obd_off offset,
                             obd_size count, struct obd_trans_info *oti)
 {
-        struct echo_client_obd *ec = &obd->u.echo_client;
+        struct echo_client_obd *ec = &obd->u.echocli;
         obd_count               npages;
         struct brw_page        *pga;
         struct brw_page        *pgp;
@@ -575,7 +576,7 @@ static int echo_client_ubrw(struct obd_device *obd, int rw,
                             obd_off offset, obd_size count, char *buffer,
                             struct obd_trans_info *oti)
 {
-        struct echo_client_obd *ec = &obd->u.echo_client;
+        struct echo_client_obd *ec = &obd->u.echocli;
         obd_count               npages;
         struct brw_page        *pga;
         struct brw_page        *pgp;
@@ -660,6 +661,10 @@ struct echo_async_page {
         struct list_head        eap_item;
 };
 
+#define EAP_FROM_COOKIE(c)                                                      \
+        (LASSERT(((struct echo_async_page *)(c))->eap_magic == EAP_MAGIC),      \
+         (struct echo_async_page *)(c))
+
 struct echo_async_state {
         spinlock_t              eas_lock;
         obd_off                 eas_next_offset;
@@ -683,14 +688,6 @@ static int eas_should_wake(struct echo_async_state *eas)
         return rc;
 };
 
-struct echo_async_page *eap_from_cookie(void *cookie)
-{
-        struct echo_async_page *eap = cookie;
-        if (eap->eap_magic != EAP_MAGIC)
-                return ERR_PTR(-EINVAL);
-        return eap;
-};
-
 static int ec_ap_make_ready(void *data, int cmd)
 {
         /* our pages are issued ready */
@@ -705,22 +702,17 @@ static int ec_ap_refresh_count(void *data, int cmd)
 }
 static void ec_ap_fill_obdo(void *data, int cmd, struct obdo *oa)
 {
-        struct echo_async_page *eap;
-        eap = eap_from_cookie(data);
-        if (IS_ERR(eap))
-                return;
+        struct echo_async_page *eap = EAP_FROM_COOKIE(data);
 
         memcpy(oa, &eap->eap_eas->eas_oa, sizeof(*oa));
 }
 
 static void ec_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
 {
-        struct echo_async_page *eap = eap_from_cookie(data);
+        struct echo_async_page *eap = EAP_FROM_COOKIE(data);
         struct echo_async_state *eas;
         unsigned long flags;
 
-        if (IS_ERR(eap))
-                return;
         eas = eap->eap_eas;
 
         if (cmd == OBD_BRW_READ &&
@@ -992,7 +984,7 @@ int echo_client_brw_ioctl(int rw, struct obd_export *exp,
                           struct obd_ioctl_data *data)
 {
         struct obd_device *obd = class_exp2obd(exp);
-        struct echo_client_obd *ec = &obd->u.echo_client;
+        struct echo_client_obd *ec = &obd->u.echocli;
         struct obd_trans_info dummy_oti;
         struct ec_object *eco;
         int rc;
@@ -1046,7 +1038,7 @@ echo_ldlm_callback (struct ldlm_lock *lock, struct ldlm_lock_desc *new,
                     void *data, int flag)
 {
         struct ec_object       *eco = (struct ec_object *)data;
-        struct echo_client_obd *ec = &(eco->eco_device->u.echo_client);
+        struct echo_client_obd *ec = &(eco->eco_device->u.echocli);
         struct lustre_handle    lockh;
         struct list_head       *el;
         int                     found = 0;
@@ -1091,7 +1083,7 @@ echo_client_enqueue(struct obd_export *exp, struct obdo *oa,
                     int mode, obd_off offset, obd_size nob)
 {
         struct obd_device      *obd = exp->exp_obd;
-        struct echo_client_obd *ec = &obd->u.echo_client;
+        struct echo_client_obd *ec = &obd->u.echocli;
         struct lustre_handle   *ulh = obdo_handle (oa);
         struct ec_object       *eco;
         struct ec_lock         *ecl;
@@ -1152,7 +1144,7 @@ static int
 echo_client_cancel(struct obd_export *exp, struct obdo *oa)
 {
         struct obd_device      *obd = exp->exp_obd;
-        struct echo_client_obd *ec = &obd->u.echo_client;
+        struct echo_client_obd *ec = &obd->u.echocli;
         struct lustre_handle   *ulh = obdo_handle (oa);
         struct ec_lock         *ecl = NULL;
         int                     found = 0;
@@ -1203,10 +1195,12 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp,
         int                     i;
         ENTRY;
 
+        unlock_kernel();
+
         memset(&dummy_oti, 0, sizeof(dummy_oti));
 
         obd = exp->exp_obd;
-        ec = &obd->u.echo_client;
+        ec = &obd->u.echocli;
 
         switch (cmd) {
         case OBD_IOC_CREATE:                    /* may create echo object */
@@ -1321,6 +1315,8 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp,
                 ldlm_lock_decref(&ack_lock->lock, ack_lock->mode);
         }
 
+        lock_kernel();
+
         return rc;
 }
 
@@ -1328,7 +1324,7 @@ static int
 echo_client_setup(struct obd_device *obddev, obd_count len, void *buf)
 {
         struct lustre_cfg* lcfg = buf;
-        struct echo_client_obd *ec = &obddev->u.echo_client;
+        struct echo_client_obd *ec = &obddev->u.echocli;
         struct obd_device *tgt;
         struct lustre_handle conn = {0, };
         struct obd_uuid echo_uuid = { "ECHO_UUID" };
@@ -1351,7 +1347,7 @@ echo_client_setup(struct obd_device *obddev, obd_count len, void *buf)
         INIT_LIST_HEAD (&ec->ec_objects);
         ec->ec_unique = 0;
 
-        rc = obd_connect(&conn, tgt, &echo_uuid, 0);
+        rc = obd_connect(&conn, tgt, &echo_uuid, FILTER_GROUP_ECHO);
         if (rc) {
                 CERROR("fail to connect to device %s\n", lcfg->lcfg_inlbuf1);
                 return (rc);
@@ -1365,7 +1361,7 @@ static int echo_client_cleanup(struct obd_device *obddev, int flags)
 {
         struct list_head       *el;
         struct ec_object       *eco;
-        struct echo_client_obd *ec = &obddev->u.echo_client;
+        struct echo_client_obd *ec = &obddev->u.echocli;
         int rc;
         ENTRY;
 
@@ -1423,7 +1419,7 @@ static int echo_client_disconnect(struct obd_export *exp,
                 GOTO(out, rc = -EINVAL);
 
         obd = exp->exp_obd;
-        ec = &obd->u.echo_client;
+        ec = &obd->u.echocli;
 
         /* no more contention on export's lock list */
         while (!list_empty (&exp->exp_ec_data.eced_locks)) {

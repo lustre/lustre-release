@@ -174,6 +174,15 @@ replay_barrier() {
     $LCTL mark "REPLAY BARRIER"
 }
 
+replay_barrier_nodf() {
+    local facet=$1
+    do_facet $facet sync
+    do_facet $facet $LCTL --device %${facet}_svc readonly
+    do_facet $facet $LCTL --device %${facet}_svc notransno
+    do_facet $facet $LCTL mark "REPLAY BARRIER"
+    $LCTL mark "REPLAY BARRIER"
+}
+
 mds_evict_client() {
     UUID=`cat /proc/fs/lustre/mdc/*_MNT_*/uuid`
     do_facet mds "echo $UUID > /proc/fs/lustre/mds/mds1_svc/evict_client"
@@ -403,7 +412,7 @@ add_client() {
     mds=$2
     shift; shift
     add_facet $facet --lustre_upcall $UPCALL
-    do_lmc --add mtpt --node ${facet}_facet --mds ${mds}_svc $*
+    do_lmc --add mtpt --node ${facet}_facet --clientoptions async --mds ${mds}_svc $*
 }
 
 config_commit() {
@@ -550,9 +559,11 @@ error() {
 }
 
 build_test_filter() {
+        [ "$ONLY" ] && log "only running $ONLY"
         for O in $ONLY; do
             eval ONLY_${O}=true
         done
+        [ "$EXCEPT$ALWAYS_EXCEPT" ] && log "skipping $EXCEPT $ALWAYS_EXCEPT"
         for E in $EXCEPT $ALWAYS_EXCEPT; do
             eval EXCEPT_${E}=true
         done
@@ -611,6 +622,10 @@ log() {
 	lctl mark "$*" 2> /dev/null || true
 }
 
+pass() {
+	echo PASS $@
+}
+
 run_one() {
     testnum=$1
     message=$2
@@ -620,8 +635,10 @@ run_one() {
     # Pretty tests run faster.
     equals_msg $testnum: $message
 
-    log "== test $1: $2"
+    BEFORE=`date +%s`
+    log "== test $testnum: $message ============ `date +%H:%M:%S` ($BEFORE)"
     test_${testnum} || error "test_$testnum failed with $?"
+    pass "($((`date +%s` - $BEFORE))s)"
 }
 
 canonical_path() {

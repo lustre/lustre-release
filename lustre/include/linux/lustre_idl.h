@@ -48,9 +48,15 @@
 #ifndef _LUSTRE_IDL_H_
 #define _LUSTRE_IDL_H_
 
+#ifdef HAVE_ASM_TYPES_H
+#include <asm/types.h>
+#else
+#include "types.h"
+#endif
+
+
 #ifdef __KERNEL__
 # include <linux/ioctl.h>
-# include <asm/types.h>
 # include <linux/types.h>
 # include <linux/list.h>
 # include <linux/string.h> /* for strncpy, below */
@@ -59,7 +65,6 @@
 #ifdef __CYGWIN__
 # include <sys/types.h>
 #else
-# include <asm/types.h>
 # include <stdint.h>
 #endif
 # include <libcfs/list.h>
@@ -214,9 +219,10 @@ static inline void lustre_msg_set_op_flags(struct lustre_msg *msg, int flags)
 #define MSG_CONNECT_RECOVERING  0x1
 #define MSG_CONNECT_RECONNECT   0x2
 #define MSG_CONNECT_REPLAYABLE  0x4
-//#define MSG_CONNECT_PEER        0x8
+#define MSG_CONNECT_PEER        0x8
 #define MSG_CONNECT_LIBCLIENT   0x10
 #define MSG_CONNECT_INITIAL     0x20
+#define MSG_CONNECT_ASYNC       0x40
 
 /*
  *   OST requests: OBDO & OBD request records
@@ -381,8 +387,9 @@ struct lov_mds_md_v0 {            /* LOV EA mds/wire data (little-endian) */
 #define OBD_MD_FLDIREA  (0x0000000020000000LL)    /* dir's extended attribute data */
 #define OBD_MD_REINT    (0x0000000040000000LL)    /* reintegrate oa */
 #define OBD_MD_FID      (0x0000000080000000LL)    /* lustre_id data */
-#define OBD_MD_FLEALIST (0x0000000100000000LL)    /* list extended attributes */
-#define OBD_MD_FLACL_ACCESS (0x0000000200000000LL) /*access acl*/
+#define OBD_MD_MEA      (0x0000000100000000LL)    /* shows we are interested in MEA */
+#define OBD_MD_FLEALIST (0x0000000200000000LL)    /* list extended attributes */
+#define OBD_MD_FLACL_ACCESS (0x0000000400000000LL) /*access acl*/
 
 #define OBD_MD_FLNOTOBD (~(OBD_MD_FLBLOCKS | OBD_MD_LINKNAME |          \
                            OBD_MD_FLEASIZE | OBD_MD_FLHANDLE |          \
@@ -431,6 +438,9 @@ extern void lustre_swab_obd_statfs (struct obd_statfs *os);
 #define OBD_BRW_GRANTED    0x40 /* the ost manages this */
 
 #define OBD_OBJECT_EOF 0xffffffffffffffffULL
+
+#define OST_MIN_PRECREATE 32
+#define OST_MAX_PRECREATE 20000
 
 struct obd_ioobj {
         obd_id               ioo_id;
@@ -552,6 +562,13 @@ typedef enum {
 /* INODE LOCK PARTS */
 #define MDS_INODELOCK_LOOKUP 0x000001  /* dentry, mode, owner, group */
 #define MDS_INODELOCK_UPDATE 0x000002  /* size, links, timestamps */
+#define MDS_INODELOCK_OPEN   0x000004  /* for opened files */
+
+/* do not forget to increase MDS_INODELOCK_MAXSHIFT when adding new bits */
+#define MDS_INODELOCK_MAXSHIFT 2
+
+/* this FULL lock is useful to take on unlink sort of operations */
+#define MDS_INODELOCK_FULL ((1 << (MDS_INODELOCK_MAXSHIFT + 1)) - 1)
 
 /* lustre store cookie */
 struct lustre_stc {

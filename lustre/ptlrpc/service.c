@@ -57,17 +57,17 @@ ptlrpc_free_server_req (struct ptlrpc_request *req)
 
         OBD_FREE(req, sizeof(*req));
 }
-        
+
 static char *
 ptlrpc_alloc_request_buffer (int size)
 {
         char *ptr;
-        
+
         if (size > SVC_BUF_VMALLOC_THRESHOLD)
                 OBD_VMALLOC(ptr, size);
         else
                 OBD_ALLOC(ptr, size);
-        
+
         return (ptr);
 }
 
@@ -135,6 +135,9 @@ ptlrpc_grow_req_bufs(struct ptlrpc_srv_ni *srv_ni)
         struct ptlrpc_request_buffer_desc *rqbd;
         int                                i;
 
+        CDEBUG(D_RPCTRACE, "%s: allocate %d new %d-byte reqbufs (%d/%d left)\n",
+               svc->srv_name, svc->srv_nbuf_per_group, svc->srv_buf_size,
+               srv_ni->sni_nrqbd_receiving, svc->srv_nbufs);
         for (i = 0; i < svc->srv_nbuf_per_group; i++) {
                 rqbd = ptlrpc_alloc_rqbd(srv_ni);
 
@@ -308,7 +311,7 @@ ptlrpc_server_post_idle_rqbds (struct ptlrpc_service *svc)
 
 struct ptlrpc_service *
 ptlrpc_init_svc(int nbufs, int bufsize, int max_req_size,
-                int req_portal, int rep_portal, 
+                int req_portal, int rep_portal, int watchdog_timeout,
                 svc_handler_t handler, char *name,
                 struct proc_dir_entry *proc_entry)
 {
@@ -339,6 +342,7 @@ ptlrpc_init_svc(int nbufs, int bufsize, int max_req_size,
         service->srv_buf_size = bufsize;
         service->srv_rep_portal = rep_portal;
         service->srv_req_portal = req_portal;
+        service->srv_watchdog_timeout = watchdog_timeout;
         service->srv_handler = handler;
 
         INIT_LIST_HEAD(&service->srv_request_queue);
@@ -405,7 +409,6 @@ ptlrpc_server_free_request(struct ptlrpc_service *svc, struct ptlrpc_request *re
         ptlrpc_free_server_req(req);
 }
 
-static char str[PTL_NALFMT_SIZE];
 static int 
 ptlrpc_server_handle_request (struct ptlrpc_service *svc)
 {
@@ -477,16 +480,14 @@ ptlrpc_server_handle_request (struct ptlrpc_service *svc)
         if (rc != 0) {
                 CERROR ("error unpacking request: ptl %d from %s"
                         " xid "LPU64"\n", svc->srv_req_portal,
-                        ptlrpc_peernid2str(&request->rq_peer, str),
-                        request->rq_xid);
+                        request->rq_peerstr, request->rq_xid);
                 goto out;
         }
 
         rc = -EINVAL;
         if (request->rq_reqmsg->type != PTL_RPC_MSG_REQUEST) {
                 CERROR("wrong packet type received (type=%u) from %s\n",
-                       request->rq_reqmsg->type,
-                       ptlrpc_peernid2str(&request->rq_peer, str));
+                       request->rq_reqmsg->type, request->rq_peerstr);
                 goto out;
         }
 
@@ -498,7 +499,7 @@ ptlrpc_server_handle_request (struct ptlrpc_service *svc)
         if (timediff / 1000000 > (long)obd_timeout) {
                 CERROR("Dropping timed-out opc %d request from %s"
                        ": %ld seconds old\n", request->rq_reqmsg->opc,
-                       ptlrpc_peernid2str(&request->rq_peer, str),
+                       request->rq_peerstr,
                        timediff / 1000000);
                 goto out;
         }
@@ -528,11 +529,13 @@ ptlrpc_server_handle_request (struct ptlrpc_service *svc)
                 atomic_read(&request->rq_export->exp_refcount) : -99),
                request->rq_reqmsg->status, request->rq_xid,
                request->rq_peer.peer_ni->pni_name,
-               ptlrpc_peernid2str(&request->rq_peer, str),
+               request->rq_peerstr,
                request->rq_reqmsg->opc);
+
         request->rq_svc = svc;
         rc = svc->srv_handler(request);
         request->rq_svc = NULL;
+
         CDEBUG(D_RPCTRACE, "Handled RPC pname:cluuid+ref:pid:xid:ni:nid:opc "
                "%s:%s+%d:%d:"LPU64":%s:%s:%d\n", current->comm,
                (request->rq_export ?
@@ -541,7 +544,7 @@ ptlrpc_server_handle_request (struct ptlrpc_service *svc)
                 atomic_read(&request->rq_export->exp_refcount) : -99),
                request->rq_reqmsg->status, request->rq_xid,
                request->rq_peer.peer_ni->pni_name,
-               ptlrpc_peernid2str(&request->rq_peer, str),
+               request->rq_peerstr,
                request->rq_reqmsg->opc);
 
         if (export != NULL)
@@ -558,9 +561,9 @@ put_conn:
 
         CDEBUG((timediff / 1000000 > (long)obd_timeout) ? D_ERROR : D_HA,
                "request "LPU64" opc %u from NID %s processed in %ldus "
-               "(%ldus total)\n", request->rq_xid,
+               "(%ldus total)\n", request->rq_xid, 
                request->rq_reqmsg ? request->rq_reqmsg->opc : 0,
-               ptlrpc_peernid2str(&request->rq_peer, str),
+               request->rq_peerstr,
                timediff, timeval_sub(&work_end, &request->rq_arrival_time));
 
         if (svc->srv_stats != NULL && request->rq_reqmsg != NULL) {
@@ -769,7 +772,11 @@ static int ptlrpc_main(void *arg)
         struct ptlrpc_svc_data *data = (struct ptlrpc_svc_data *)arg;
         struct ptlrpc_service  *svc = data->svc;
         struct ptlrpc_thread   *thread = data->thread;
+        struct lc_watchdog     *watchdog;
         unsigned long           flags;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,4)
+        struct group_info *ginfo = NULL;
+#endif
         ENTRY;
 
         lock_kernel();
@@ -787,9 +794,23 @@ static int ptlrpc_main(void *arg)
         
         unlock_kernel();
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,4)
+        ginfo = groups_alloc(0);
+        if (!ginfo) {
+                thread->t_flags = SVC_RUNNING;
+                wake_up(&thread->t_ctl_waitq);
+                return (-ENOMEM);
+        }
+        set_current_groups(ginfo);
+        put_group_info(ginfo);
+#endif
+
         /* Record that the thread is running */
         thread->t_flags = SVC_RUNNING;
         wake_up(&thread->t_ctl_waitq);
+
+        watchdog = lc_watchdog_add(svc->srv_watchdog_timeout,
+                                   LC_WATCHDOG_DEFAULT_CB, NULL);
 
         spin_lock_irqsave(&svc->srv_lock, flags);
         svc->srv_nthreads++;
@@ -803,6 +824,8 @@ static int ptlrpc_main(void *arg)
                 struct l_wait_info lwi = LWI_TIMEOUT(svc->srv_rqbd_timeout,
                                                      ptlrpc_retry_rqbds, svc);
 
+                lc_watchdog_disable(watchdog);
+
                 l_wait_event_exclusive (svc->srv_waitq,
                               ((thread->t_flags & SVC_STOPPING) != 0 &&
                                svc->srv_n_difficult_replies == 0) ||
@@ -814,7 +837,8 @@ static int ptlrpc_main(void *arg)
                                 svc->srv_n_active_reqs <
                                 (svc->srv_nthreads - 1))),
                               &lwi);
-                
+
+                lc_watchdog_touch(watchdog);
                 ptlrpc_check_rqbd_pools(svc);
                 
                 if (!list_empty (&svc->srv_reply_queue))
@@ -844,6 +868,8 @@ static int ptlrpc_main(void *arg)
         wake_up(&thread->t_ctl_waitq);
 
         spin_unlock_irqrestore(&svc->srv_lock, flags);
+
+        lc_watchdog_delete(watchdog);
 
         CDEBUG(D_NET, "service thread exiting, process %d\n", current->pid);
         return 0;

@@ -240,7 +240,7 @@ static int filter_brw_stats_seq_show(struct seq_file *seq, void *v)
 
         /* this sampling races with updates */
 
-        seq_printf(seq, "snapshot_time:         %lu:%lu (secs:usecs)\n",
+        seq_printf(seq, "snapshot_time:         %lu.%lu (secs.usecs)\n",
                    now.tv_sec, now.tv_usec);
 
         seq_printf(seq, "\n\t\t\tread\t\t\twrite\n");

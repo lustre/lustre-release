@@ -283,10 +283,21 @@ static int ll_special_open(struct inode *inode, struct file *filp)
 {
         struct file_operations **pfop = get_save_fops(filp, INODE_OPS);
         struct file_operations *sfops = filp->f_op;
+        struct ll_inode_info *lli = ll_i2info(inode);
         struct ptlrpc_request *req;
         struct lookup_intent *it;
         int rc = -EINVAL, err;
+        struct obd_client_handle **och_p;
+        __u64 *och_usecount;
         ENTRY;
+
+        it = filp->f_it;
+
+        if (LUSTRE_IT(it)->it_disposition) {
+                err = it_open_error(DISP_OPEN_OPEN, it);
+                if (err)
+                        RETURN(err);
+        }
 
         if (pfop && *pfop) {
                 /* mostly we will have @def_blk_fops here and it is not in a
@@ -303,11 +314,54 @@ static int ll_special_open(struct inode *inode, struct file *filp)
                 }
         }
 
+        /* Let's see if we have file open on MDS already. */
+        if (it->it_flags & FMODE_WRITE) {
+                och_p = &lli->lli_mds_write_och;
+                och_usecount = &lli->lli_open_fd_write_count;
+        } else if (it->it_flags & FMODE_EXEC) {
+                och_p = &lli->lli_mds_exec_och;
+                och_usecount = &lli->lli_open_fd_exec_count;
+         } else {
+                och_p = &lli->lli_mds_read_och;
+                och_usecount = &lli->lli_open_fd_read_count;
+        }
+
         lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_OPEN);
 
-        it = filp->f_it;
+        down(&lli->lli_och_sem);
+        if (*och_p) { /* Open handle is present */
+                if (LUSTRE_IT(it)->it_disposition) {
+                        struct obd_client_handle *och;
+                        /* Well, there's extra open request that we do not need,
+                           let's close it somehow*/
+                        OBD_ALLOC(och, sizeof (struct obd_client_handle));
+                        if (!och) {
+                                /* XXX We leak open fd and open OPEN connectioni
+                                   to server here */
+                                up(&lli->lli_och_sem);
+                                RETURN(-ENOMEM);
+                        }
+                        ll_och_fill(inode, it, och);
+                        /* ll_md_och_close() will free och */
+                        ll_md_och_close(ll_i2mdexp(inode), inode, och);
+                }       
+                (*och_usecount)++;        
 
-        err = ll_local_open(filp, it);
+                err = ll_local_open(filp, it, NULL);
+        } else {
+                LASSERT(*och_usecount == 0);
+                OBD_ALLOC(*och_p, sizeof (struct obd_client_handle));
+                if (!*och_p) {
+                        // XXX Same as above
+                        up(&lli->lli_och_sem);
+                        RETURN(-ENOMEM);
+                }
+                (*och_usecount)++;
+
+                err = ll_local_open(filp, it, *och_p);
+        }
+        up(&lli->lli_och_sem);
+
         if (rc != 0) {
                 CERROR("error opening special file: rc %d\n", rc);
                 ll_md_close(ll_i2sbi(inode)->ll_md_exp, inode, filp);

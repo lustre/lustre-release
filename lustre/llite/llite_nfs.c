@@ -37,10 +37,25 @@ __u32 get_uuid2int(const char *name, int len)
         return (key0 << 1);
 }
 
-static struct inode *search_inode_for_lustre(struct super_block *sb,
-                                             unsigned long ino,
-                                             unsigned long generation,
-                                             int mode)
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+static int ll_nfs_test_inode(struct inode *inode, unsigned long ino, 
+			     void *opaque)
+#else
+static int ll_nfs_test_inode(struct inode *inode, void *opaque)
+#endif
+{
+        struct lustre_id *iid = opaque;
+
+        if (inode->i_ino == id_ino(iid) && 
+	    inode->i_generation == id_gen(iid))
+                return 1;
+
+        return 0;
+}
+static struct inode * search_inode_for_lustre(struct super_block *sb,
+                                              unsigned long ino,
+                                              unsigned long generation,
+                                              int mode)
 {
         struct ptlrpc_request *req = NULL;
         struct ll_sb_info *sbi = ll_s2sbi(sb);
@@ -48,8 +63,11 @@ static struct inode *search_inode_for_lustre(struct super_block *sb,
         __u64 valid = 0;
         int eadatalen = 0, rc;
         struct inode *inode = NULL;
-
-        inode = ILOOKUP(sb, ino, NULL, NULL);
+        struct lustre_id iid;
+	
+	id_ino(&iid) = (__u64)ino;
+	id_gen(&iid) = generation;
+        inode = ILOOKUP(sb, ino, ll_nfs_test_inode, &iid);
 
         if (inode)
                 return inode;
@@ -95,20 +113,17 @@ static struct dentry *ll_iget_for_nfs(struct super_block *sb, unsigned long ino,
         if (IS_ERR(inode)) {
                 return ERR_PTR(PTR_ERR(inode));
         }
-        if (is_bad_inode(inode) 
-            || (generation && inode->i_generation != generation)
-            ){
+        if (is_bad_inode(inode) ||
+            (generation && inode->i_generation != generation)){
                 /* we didn't find the right inode.. */
-              CERROR(" Inode %lu, Bad count: %lu %d or version  %u %u\n",
-                        inode->i_ino, 
-                        (unsigned long)inode->i_nlink, 
-                        atomic_read(&inode->i_count), 
-                        inode->i_generation, 
-                        generation);
+                CERROR(" Inode %lu, Bad count: %lu %d or version  %u %u\n",
+                       inode->i_ino, (unsigned long)inode->i_nlink,
+                       atomic_read(&inode->i_count), inode->i_generation,
+                       generation);
                 iput(inode);
                 return ERR_PTR(-ESTALE);
         }
-        
+
         /* now to find a dentry.
          * If possible, get a well-connected one
          */

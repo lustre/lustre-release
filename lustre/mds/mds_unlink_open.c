@@ -94,32 +94,31 @@ static int mds_unlink_orphan(struct obd_device *obd, struct dentry *dchild,
         struct mds_obd *mds = &obd->u.mds;
         struct lov_mds_md *lmm = NULL;
         struct llog_cookie *logcookies = NULL;
-        int lmm_size = 0, log_unlink = 0;
+        int lmm_size, log_unlink = 0;
         void *handle = NULL;
         int rc, err;
         ENTRY;
 
         LASSERT(mds->mds_dt_obd != NULL);
 
-        OBD_ALLOC(lmm, mds->mds_max_mdsize);
+        /* We don't need to do any of these other things for orhpan dirs,
+         * especially not mds_get_md (may get a default LOV EA, bug 4554) */
+        if (S_ISDIR(inode->i_mode)) {
+                rc = vfs_rmdir(pending_dir, dchild);
+                if (rc)
+                        CERROR("error %d unlinking dir %*s from PENDING\n",
+                               rc, dchild->d_name.len, dchild->d_name.name);
+                RETURN(rc);
+        }
+
+        lmm_size = mds->mds_max_mdsize;
+        OBD_ALLOC(lmm, lmm_size);
         if (lmm == NULL)
                 RETURN(-ENOMEM);
 
-        down(&inode->i_sem);
-        rc = fsfilt_get_md(obd, inode, lmm, mds->mds_max_mdsize);
-        up(&inode->i_sem);
-
-        if (rc < 0) {
-                CERROR("Error %d reading eadata for ino %lu\n",
-                       rc, inode->i_ino);
+        rc = mds_get_md(obd, inode, lmm, &lmm_size, 1, 0);
+        if (rc < 0)
                 GOTO(out_free_lmm, rc);
-        } else if (rc > 0) {
-                lmm_size = rc;
-                rc = mds_convert_lov_ea(obd, inode, lmm, lmm_size);
-                if (rc > 0)
-                        lmm_size = rc;
-                rc = 0;
-        }
 
         handle = fsfilt_start_log(obd, pending_dir, FSFILT_OP_UNLINK, NULL,
                                   le32_to_cpu(lmm->lmm_stripe_count));
@@ -130,16 +129,11 @@ static int mds_unlink_orphan(struct obd_device *obd, struct dentry *dchild,
                 GOTO(out_free_lmm, rc);
         }
 
-        if (S_ISDIR(inode->i_mode))
-                rc = vfs_rmdir(pending_dir, dchild);
-        else
-                rc = vfs_unlink(pending_dir, dchild);
-
-        if (rc)
-                CERROR("error %d unlinking orphan %*s from PENDING directory\n",
+        rc = vfs_unlink(pending_dir, dchild);
+        if (rc) {
+                CERROR("error %d unlinking orphan %.*s from PENDING\n",
                        rc, dchild->d_name.len, dchild->d_name.name);
-
-        if (!rc && lmm_size) {
+        } else if (lmm_size) {
                 OBD_ALLOC(logcookies, mds->mds_max_cookiesize);
                 if (logcookies == NULL)
                         rc = -ENOMEM;
@@ -152,8 +146,7 @@ static int mds_unlink_orphan(struct obd_device *obd, struct dentry *dchild,
                 CERROR("error committing orphan unlink: %d\n", err);
                 if (!rc)
                         rc = err;
-        }
-        if (!rc) {
+        } else if (!rc) {
                 rc = mds_osc_destroy_orphan(mds, inode, lmm, lmm_size,
                                             logcookies, log_unlink);
         }
@@ -176,6 +169,7 @@ int mds_cleanup_orphans(struct obd_device *obd)
         struct l_linux_dirent *dirent, *n;
         struct list_head dentry_list;
         char d_name[LL_ID_NAMELEN];
+	unsigned long inum;
         __u64 i = 0;
         int rc = 0, item = 0, namlen;
         ENTRY;
@@ -200,21 +194,21 @@ int mds_cleanup_orphans(struct obd_device *obd)
                 GOTO(err_out, rc);
 
         list_for_each_entry_safe(dirent, n, &dentry_list, lld_list) {
-                i ++;
+                i++;
                 list_del(&dirent->lld_list);
 
                 namlen = strlen(dirent->lld_name);
                 LASSERT(sizeof(d_name) >= namlen + 1);
                 strcpy(d_name, dirent->lld_name);
+                inum = dirent->lld_ino;
                 OBD_FREE(dirent, sizeof(*dirent));
 
                 CDEBUG(D_INODE, "entry "LPU64" of PENDING DIR: %s\n",
                        i, d_name);
 
                 if (((namlen == 1) && !strcmp(d_name, ".")) ||
-                    ((namlen == 2) && !strcmp(d_name, ".."))) {
+                    ((namlen == 2) && !strcmp(d_name, "..")) || inum == 0)
                         continue;
-                }
 
                 down(&pending_dir->i_sem);
                 dchild = lookup_one_len(d_name, mds->mds_pending_dir, namlen);
@@ -225,6 +219,13 @@ int mds_cleanup_orphans(struct obd_device *obd)
                 if (!dchild->d_inode) {
                         CERROR("orphan %s has been removed\n", d_name);
                         GOTO(next, rc = 0);
+                }
+
+                if (is_bad_inode(dchild->d_inode)) {
+                        CERROR("bad orphan inode found %lu/%u\n",
+                               dchild->d_inode->i_ino,
+                               dchild->d_inode->i_generation);
+                        GOTO(next, rc = -ENOENT);
                 }
 
                 child_inode = dchild->d_inode;

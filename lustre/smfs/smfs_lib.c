@@ -218,6 +218,7 @@ static int smfs_init_hooks(struct super_block *sb)
 }
 
 extern char* smfs_options(char*, char**, char**, char*, int *);
+extern void cleanup_option(void);
 
 int smfs_fill_super(struct super_block *sb, void *data, int silent)
 {

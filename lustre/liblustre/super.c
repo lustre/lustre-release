@@ -38,11 +38,16 @@
 # include <sys/statfs.h>
 #endif
 
-#include <fs.h>
+#ifdef HAVE_XTIO_H
+#include <xtio.h>
+#endif
 #include <sysio.h>
 #include <mount.h>
 #include <inode.h>
+#include <fs.h>
+#ifdef HAVE_FILE_H
 #include <file.h>
+#endif
 
 #undef LIST_HEAD
 #include "llite_lib.h"
@@ -84,7 +89,7 @@ static int ll_permission(struct inode *inode, int mask)
 
 static void llu_fsop_gone(struct filesys *fs)
 {
-        struct llu_sb_info *sbi = (struct llu_sb_info *) fs->fs_private;
+        struct llu_sb_info *sbi = (struct llu_sb_info *)fs->fs_private;
         struct obd_device *obd = class_exp2obd(sbi->ll_md_exp);
         struct lustre_cfg lcfg;
         int next = 0;
@@ -181,8 +186,8 @@ void obdo_to_inode(struct inode *dst, struct obdo *src, obd_valid valid)
         valid &= src->o_valid;
 
         if (valid & (OBD_MD_FLCTIME | OBD_MD_FLMTIME))
-                CDEBUG(D_INODE, "valid %llx, cur time %lu/%lu, new %lu/%lu\n",
-                       (unsigned long long)src->o_valid, 
+                CDEBUG(D_INODE, "valid "LPX64", cur time %lu/%lu, new %lu/%lu\n",
+                       src->o_valid, 
                        LTIME_S(lli->lli_st_mtime), LTIME_S(lli->lli_st_ctime),
                        (long)src->o_mtime, (long)src->o_ctime);
 
@@ -221,8 +226,8 @@ void obdo_from_inode(struct obdo *dst, struct inode *src, obd_valid valid)
         obd_valid newvalid = 0;
 
         if (valid & (OBD_MD_FLCTIME | OBD_MD_FLMTIME))
-                CDEBUG(D_INODE, "valid %llx, new time %lu/%lu\n",
-                       (unsigned long long)valid, LTIME_S(lli->lli_st_mtime), 
+                CDEBUG(D_INODE, "valid "LPX64", new time %lu/%lu\n",
+                       valid, LTIME_S(lli->lli_st_mtime), 
                        LTIME_S(lli->lli_st_ctime));
 
         if (valid & OBD_MD_FLATIME) {
@@ -944,8 +949,9 @@ static int llu_iop_mknod_raw(struct pnode *pno,
         int err = -EMLINK;
         ENTRY;
 
-        CDEBUG(D_VFSTRACE, "VFS Op:name=%s,dir=%lu\n",
-               pno->p_base->pb_name.name, llu_i2info(dir)->lli_st_ino);
+        CDEBUG(D_VFSTRACE, "VFS Op:name=%.*s,dir=%lu\n",
+               (int)pno->p_base->pb_name.len, pno->p_base->pb_name.name,
+               llu_i2info(dir)->lli_st_ino);
 
         if (llu_i2info(dir)->lli_st_nlink >= EXT2_LINK_MAX)
                 RETURN(err);
@@ -1179,8 +1185,8 @@ static int llu_iop_mkdir_raw(struct pnode *pno, mode_t mode)
         struct mdc_op_data op_data;
         int err = -EMLINK;
         ENTRY;
-        CDEBUG(D_VFSTRACE, "VFS Op:name=%s,dir=%lu/%lu(%p)\n",
-               name, lli->lli_st_ino, lli->lli_st_generation, dir);
+        CDEBUG(D_VFSTRACE, "VFS Op:name=%.*s,dir=%lu/%lu(%p)\n",
+               len, name, lli->lli_st_ino, lli->lli_st_generation, dir);
 
         if (lli->lli_st_nlink >= EXT2_LINK_MAX)
                 RETURN(err);
@@ -1204,8 +1210,8 @@ static int llu_iop_rmdir_raw(struct pnode *pno)
         struct llu_inode_info *lli = llu_i2info(dir);
         int rc;
         ENTRY;
-        CDEBUG(D_VFSTRACE, "VFS Op:name=%s,dir=%lu/%lu(%p)\n",
-               name, lli->lli_st_ino, lli->lli_st_generation, dir);
+        CDEBUG(D_VFSTRACE, "VFS Op:name=%.*s,dir=%lu/%lu(%p)\n",
+               len, name, lli->lli_st_ino, lli->lli_st_generation, dir);
 
         llu_prepare_mdc_data(&op_data, dir, NULL, name, len, S_IFDIR);
         rc = mdc_unlink(llu_i2sbi(dir)->ll_md_exp, &op_data, &request);
@@ -1234,7 +1240,7 @@ static int llu_iop_fcntl(struct inode *ino, int cmd, va_list ap, int *rtn)
                 flags = va_arg(ap, long);
                 flags &= FCNTL_FLMASK;
                 if (flags & FCNTL_FLMASK_INVALID) {
-                        CERROR("liblustre does not support O_NONBLOCK, O_ASYNC, "
+                        CERROR("liblustre don't support O_NONBLOCK, O_ASYNC, "
                                "and O_DIRECT on file descriptor\n");
                         *rtn = -1;
                         return EINVAL;
@@ -1356,8 +1362,8 @@ struct inode *llu_iget(struct filesys *fs, struct lustre_md *md)
         if ((md->body->valid &
              (OBD_MD_FLGENER | OBD_MD_FLID | OBD_MD_FLTYPE)) !=
             (OBD_MD_FLGENER | OBD_MD_FLID | OBD_MD_FLTYPE)) {
-                CERROR("bad md body valid mask 0x%llx\n", 
-		       (unsigned long long)md->body->valid);
+                CERROR("bad md body valid mask 0x"LPX64"\n", 
+		       md->body->valid);
                 LBUG();
                 return ERR_PTR(-EPERM);
         }
@@ -1477,9 +1483,8 @@ llu_fsswop_mount(const char *source,
         }
         obd_set_info(obd->obd_self_export, strlen("async"), "async",
                      sizeof(async), &async);
-#warning "FIXME ASAP!"
 #if 0
-        if (mdc_init_ea_size(obd, lov))
+        if (mdc_init_ea_size(obd, osc))
                 GOTO(out_free, err = -EINVAL);
 #endif
         /* setup mdc */

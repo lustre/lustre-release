@@ -21,6 +21,12 @@
 #ifndef MDC_INTERNAL_H
 #define MDC_INTERNAL_H
 
+int mdc_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
+               struct lov_stripe_md *lsm);
+
+int mdc_unpackmd(struct obd_export *exp, struct lov_stripe_md **lsmp,
+                 struct lov_mds_md *lmm, int lmm_size);
+
 void mdc_getattr_pack(struct lustre_msg *msg, int offset,
                       __u64 valid, int flags, struct mdc_op_data *data);
 void mdc_open_pack(struct lustre_msg *msg, int offset,

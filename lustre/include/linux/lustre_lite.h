@@ -77,6 +77,7 @@ struct ll_inode_info {
         struct lustre_id        lli_id;    /* full lustre_id */
         char                   *lli_symlink_name;
         struct semaphore        lli_open_sem;
+        struct semaphore        lli_size_sem;
         __u64                   lli_maxbytes;
         __u64                   lli_io_epoch;
         unsigned long           lli_flags;
@@ -98,6 +99,16 @@ struct ll_inode_info {
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
         struct inode            lli_vfs_inode;
 #endif
+        struct semaphore        lli_och_sem; /* Protects access to och pointers
+                                                and their usage counters */
+        /* We need all three because every inode may be opened in different
+           modes */
+        struct obd_client_handle *lli_mds_read_och;
+        __u64                   lli_open_fd_read_count;
+        struct obd_client_handle *lli_mds_write_och;
+        __u64                   lli_open_fd_write_count;
+        struct obd_client_handle *lli_mds_exec_och;
+        __u64                   lli_open_fd_exec_count;
         struct posix_acl       *lli_acl_access;
 };
 
@@ -194,6 +205,10 @@ ll_prepare_mdc_data(struct mdc_op_data *data, struct inode *i1,
 #else
 #include <linux/lustre_idl.h>
 #endif /* __KERNEL__ */
+
+#define LLAP_FROM_COOKIE(c)                                                    \
+        (LASSERT(((struct ll_async_page *)(c))->llap_magic == LLAP_MAGIC),     \
+         (struct ll_async_page *)(c))
 
 #include <lustre/lustre_user.h>
 

@@ -38,7 +38,7 @@ ${LMC} --add net --node $MDS --nid `h2elan $MDS` --nettype elan || exit 1
 ${LMC} --add mds --node $MDS --mds mds1 --dev $TMP/mds1 --size 100000 || exit 1
 ${LMC} --add lov --lov lov1 --mds mds1 --stripe_sz 1048576 --stripe_cnt 0 --stripe_pattern 0 || exit 1
 
-${LMC} --add mtpt --node client --path /mnt/lustre --mds mds1 --lov lov1
+${LMC} --add mtpt --node client --path /mnt/lustre --clientoptions async --mds mds1 --lov lov1
 
 for s in $SERVERS
  do

@@ -7,6 +7,8 @@
 
 #include <linux/lustre_mds.h>
 
+#define MDS_SERVICE_WATCHDOG_TIMEOUT 30000
+
 #define MAX_ATIME_DIFF 60
 
 struct mds_filter_data {
@@ -209,10 +211,10 @@ void mds_set_last_fid(struct obd_device *obd, __u64 fid);
 
 #ifdef __KERNEL__
 int mds_get_md(struct obd_device *, struct inode *, void *md,
-               int *size, int lock);
+               int *size, int lock, int mea);
 
 int mds_pack_md(struct obd_device *, struct lustre_msg *, int offset,
-                struct mds_body *, struct inode *, int lock);
+                struct mds_body *, struct inode *, int lock, int mea);
 int mds_pack_link(struct dentry *dentry, struct ptlrpc_request *req,
                   struct mds_body *repbody, int reply_off);
 int mds_pack_ea(struct dentry *dentry, struct ptlrpc_request *req,
