@@ -4,7 +4,7 @@
 # See the file COPYING in this distribution
 
 if LIBLUSTRE
-lib_LIBRARIES = liblmv.a
+noinst_LIBRARIES = liblmv.a
 liblmv_a_SOURCES = lmv_obd.c lmv_intent.c lmv_objmgr.c
 liblmv_a_CPPFLAGS = $(LLCPPFLAGS)
 liblmv_a_CFLAGS = $(LLCFLAGS)
