@@ -87,6 +87,7 @@ rm -rf $RPM_BUILD_ROOT
 # Set an explicit path to our Linux tree, if we can.
 cd $RPM_BUILD_DIR/lustre-%{version}
 ./configure \
+	--enable-smfs \
 	--with-linux='%{linuxdir}' \
 	--with-linux-obj='@LINUX_OBJ@' \
 	--with-linux-config=@LINUX_CONFIG@ \
@@ -149,6 +150,7 @@ mkdir -p $RPM_BUILD_ROOT/var/lib/ldap/lustre
 %attr(-, root, root) /usr/sbin/obdio
 %attr(-, root, root) /usr/sbin/routerstat
 %attr(-, root, root) /usr/sbin/wirecheck
+%attr(-, root, root) /usr/sbin/l_getgroups
 %attr(-, root, root) /usr/bin/lfs
 %attr(-, root, root) /usr/bin/lfind
 %attr(-, root, root) /usr/bin/lstripe
