@@ -389,6 +389,7 @@ void class_del_profile(char *prof)
 int class_process_config(struct lustre_cfg *lcfg)
 {
 	struct obd_device *obd;
+        char str[PTL_NALFMT_SIZE];
         int err;
 
         LASSERT(lcfg && !IS_ERR(lcfg));
@@ -403,7 +404,8 @@ int class_process_config(struct lustre_cfg *lcfg)
         }
         case LCFG_ADD_UUID: {
                 CDEBUG(D_IOCTL, "adding mapping from uuid %s to nid "LPX64
-                       ", nal %d\n", lcfg->lcfg_inlbuf1, lcfg->lcfg_nid,
+                       " (%s), nal %d\n", lcfg->lcfg_inlbuf1, lcfg->lcfg_nid,
+                       portals_nid2str(lcfg->lcfg_nal, lcfg->lcfg_nid, str),
                        lcfg->lcfg_nal);
 
                 err = class_add_uuid(lcfg->lcfg_inlbuf1, lcfg->lcfg_nid,
