@@ -341,7 +341,7 @@ static void obdfs_read_inode(struct inode *inode)
         return;
 }
 
-void obdfs_change_inode(struct inode *inode)
+void obdfs_do_change_inode(struct inode *inode, int mask)
 {
         struct obdo *oa;
         int err;
@@ -359,7 +359,7 @@ void obdfs_change_inode(struct inode *inode)
                 return;
         }
 
-        oa->o_valid = OBD_MD_FLNOTOBD;
+        oa->o_valid = OBD_MD_FLNOTOBD & (~mask);
         obdfs_from_inode(oa, inode);
         err = IOPS(inode, setattr)(IID(inode), oa);
 
@@ -369,6 +369,12 @@ void obdfs_change_inode(struct inode *inode)
         EXIT;
         obdo_free(oa);
 } /* obdfs_write_inode */
+
+void obdfs_change_inode(struct inode *inode, int mask)
+{
+	return obdfs_do_change_inode(inode, OBD_MD_FLNLINK); 
+}
+
 
 
 /* This routine is called from iput() (for each unlink on the inode).
@@ -390,6 +396,11 @@ static void obdfs_put_inode(struct inode *inode)
 
 
 static void obdfs_delete_inode(struct inode *inode)
+{
+	obdfs_do_change_inode(inode, 0);
+	clear_inode(inode); 
+}
+#if 0
 {
         struct obdo *oa;
         int err;
@@ -424,7 +435,7 @@ static void obdfs_delete_inode(struct inode *inode)
 
         EXIT;
 } /* obdfs_delete_inode */
-
+#endif
 
 
 int inode_copy_attr(struct inode * inode, struct iattr * attr)
@@ -487,6 +498,7 @@ int obdfs_setattr(struct dentry *de, struct iattr *attr)
         obdo_free(oa);
         return err;
 } /* obdfs_setattr */
+
 
 
 static int obdfs_statfs(struct super_block *sb, struct statfs *buf)

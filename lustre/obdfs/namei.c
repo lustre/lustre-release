@@ -59,10 +59,11 @@ static inline void ext2_inc_count(struct inode *inode)
 	obdfs_change_inode(inode);
 }
 
+/* postpone the disk update until the inode really goes away */ 
 static inline void ext2_dec_count(struct inode *inode)
 {
 	inode->i_nlink--;
-	obdfs_change_inode(inode);
+	// obdfs_change_inode(inode);
 }
 
 static inline int ext2_add_nondir(struct dentry *dentry, struct inode *inode)
