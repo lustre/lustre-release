@@ -322,7 +322,7 @@ int mds_open(struct ptlrpc_request *req)
         }
 
         flags = body->flags;
-        file = dentry_open(de, mnt, flags);
+        file = dentry_open(de, mnt, flags & ~O_DIRECT);
         if (!file || IS_ERR(file)) {
                 req->rq_status = -EINVAL;
                 OBD_FREE(mfd, sizeof(*mfd));
