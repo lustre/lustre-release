@@ -587,7 +587,7 @@ static int mds_finish_open(struct ptlrpc_request *req, struct dentry *dchild,
         struct obd_device *obd = req->rq_export->exp_obd;
         struct mds_file_data *mfd = NULL;
         obd_id *ids = NULL; /* object IDs created */
-        int rc;
+        int rc = 0;
         ENTRY;
 
         /* atomically create objects if necessary */
@@ -630,8 +630,8 @@ static int mds_finish_open(struct ptlrpc_request *req, struct dentry *dchild,
                 mds_lov_update_objids(obd, ids);
                 OBD_FREE(ids, sizeof(*ids) * mds->mds_lov_desc.ld_tgt_count);
         }
-        if (rc)
-                mds_mfd_destroy(mfd);
+        //if (rc)
+        //        mds_mfd_destroy(mfd);
         RETURN(rc);
 }
 
@@ -982,7 +982,7 @@ int mds_mfd_close(struct ptlrpc_request *req, struct obd_device *obd,
         struct mds_obd *mds = &obd->u.mds;
         struct inode *pending_dir = mds->mds_pending_dir->d_inode;
         void *handle = NULL;
-        struct mds_body *request_body, *reply_body;
+        struct mds_body *request_body = NULL, *reply_body;
         struct dentry_params dp;
         ENTRY;
 
