@@ -51,8 +51,8 @@
 #define ECHO_INIT_OBJID      0x1000000000000000ULL
 #define ECHO_HANDLE_MAGIC    0xabcd0123fedc9876ULL
 
-#define ECHO_OBJECT0_NPAGES  16
-static struct page *echo_object0_pages[ECHO_OBJECT0_NPAGES];
+#define ECHO_PERSISTENT_PAGES (ECHO_PERSISTENT_SIZE/PAGE_SIZE)
+static struct page *echo_persistent_pages[ECHO_PERSISTENT_PAGES];
 
 enum {
         LPROC_ECHO_READ_BYTES = 1,
@@ -201,6 +201,62 @@ static int echo_setattr(struct obd_export *exp, struct obdo *oa,
         return 0;
 }
 
+static void
+echo_page_debug_setup(struct page *page, int rw, obd_id id,
+                      __u64 offset, int len)
+{
+        int   page_offset = offset & (PAGE_SIZE - 1);
+        char *addr        = ((char *)kmap(page)) + page_offset;
+
+        if (len % OBD_ECHO_BLOCK_SIZE != 0)
+                CERROR("Unexpected block size %d\n", len);
+
+        while (len > 0) {
+                if (rw & OBD_BRW_READ)
+                        block_debug_setup(addr, OBD_ECHO_BLOCK_SIZE,
+                                          offset, id);
+                else
+                        block_debug_setup(addr, OBD_ECHO_BLOCK_SIZE,
+                                          0xecc0ecc0ecc0ecc0ULL,
+                                          0xecc0ecc0ecc0ecc0ULL);
+                
+                addr   += OBD_ECHO_BLOCK_SIZE;
+                offset += OBD_ECHO_BLOCK_SIZE;
+                len    -= OBD_ECHO_BLOCK_SIZE;
+        }
+
+        kunmap(page);
+}
+
+static int
+echo_page_debug_check(struct page *page, obd_id id,
+                      __u64 offset, int len)
+{
+        int   page_offset = offset & (PAGE_SIZE - 1);
+        char *addr        = ((char *)kmap(page)) + page_offset;
+        int   rc          = 0;
+        int   rc2;
+
+        if (len % OBD_ECHO_BLOCK_SIZE != 0)
+                CERROR("Unexpected block size %d\n", len);
+
+        while (len > 0) {
+                rc2 = block_debug_check("echo", addr, OBD_ECHO_BLOCK_SIZE,
+                                        offset, id);
+
+                if (rc2 != 0 && rc == 0)
+                        rc = rc2;
+                
+                addr   += OBD_ECHO_BLOCK_SIZE;
+                offset += OBD_ECHO_BLOCK_SIZE;
+                len    -= OBD_ECHO_BLOCK_SIZE;
+        }
+
+        kunmap(page);
+
+        return (rc);
+}
+
 /* This allows us to verify that desc_private is passed unmolested */
 #define DESC_PRIV 0x10293847
 
@@ -233,16 +289,15 @@ int echo_preprw(int cmd, struct obd_export *export, struct obdo *oa,
 
         for (i = 0; i < objcount; i++, obj++) {
                 int gfp_mask = (obj->ioo_id & 1) ? GFP_HIGHUSER : GFP_KERNEL;
-                int isobj0 = obj->ioo_id == 0;
-                int verify = !isobj0;
+                int ispersistent = obj->ioo_id == ECHO_PERSISTENT_OBJID;
                 int j;
 
                 for (j = 0 ; j < obj->ioo_bufcnt ; j++, nb++, r++) {
 
-                        if (isobj0 &&
-                            (nb->offset >> PAGE_SHIFT) < ECHO_OBJECT0_NPAGES) {
-                                r->page = echo_object0_pages[nb->offset >>
-                                                             PAGE_SHIFT];
+                        if (ispersistent &&
+                            (nb->offset >> PAGE_SHIFT) < ECHO_PERSISTENT_PAGES) {
+                                r->page = echo_persistent_pages[nb->offset >>
+                                                                PAGE_SHIFT];
                                 /* Take extra ref so __free_pages() can be called OK */
                                 get_page (r->page);
                         } else {
@@ -266,22 +321,12 @@ int echo_preprw(int cmd, struct obd_export *export, struct obdo *oa,
                         CDEBUG(D_PAGE, "$$$$ get page %p @ "LPU64" for %d\n",
                                r->page, r->offset, r->len);
 
-                        if (cmd & OBD_BRW_READ) {
+                        if (cmd & OBD_BRW_READ)
                                 r->rc = r->len;
-                                if (verify) {
-                                        page_debug_setup(kmap (r->page), r->len,
-                                                         r->offset,obj->ioo_id);
-                                        kunmap (r->page);
-                                }
-                                r->rc = r->len;
-                        } else {
-                                if (verify) {
-                                        page_debug_setup(kmap (r->page), r->len,
-                                                         0xecc0ecc0ecc0ecc0ULL,
-                                                         0xecc0ecc0ecc0ecc0ULL);
-                                        kunmap (r->page);
-                                }
-                        }
+
+                        if (!ispersistent)
+                                echo_page_debug_setup(r->page, cmd, obj->ioo_id,
+                                                      r->offset, r->len);
                 }
         }
         if (cmd & OBD_BRW_READ)
@@ -305,7 +350,7 @@ preprw_cleanup:
         CERROR("cleaning up %ld pages (%d obdos)\n", (long)(r - res), objcount);
         while (r-- > res) {
                 kunmap(r->page);
-                /* NB if this is an 'object0' page, __free_pages will just
+                /* NB if this is a persistent page, __free_pages will just
                  * lose the extra ref gained above */
                 __free_pages(r->page, 0);
                 atomic_dec(&obd->u.echo.eo_prep);
@@ -347,7 +392,7 @@ int echo_commitrw(int cmd, struct obd_export *export, struct obdo *oa,
         LASSERT(oti == NULL || oti->oti_handle == (void *)DESC_PRIV);
 
         for (i = 0; i < objcount; i++, obj++) {
-                int verify = obj->ioo_id != 0;
+                int verify = obj->ioo_id != ECHO_PERSISTENT_OBJID;
                 int j;
 
                 for (j = 0 ; j < obj->ioo_bufcnt ; j++, r++) {
@@ -366,15 +411,15 @@ int echo_commitrw(int cmd, struct obd_export *export, struct obdo *oa,
                                r->page, addr, r->offset);
 
                         if (verify) {
-                                vrc = page_debug_check("echo", addr, r->len,
-                                                       r->offset, obj->ioo_id);
+                                vrc = echo_page_debug_check(page, obj->ioo_id, 
+                                                            r->offset, r->len);
                                 /* check all the pages always */
                                 if (vrc != 0 && rc == 0)
                                         rc = vrc;
                         }
 
                         kunmap(page);
-                        /* NB see comment above regarding object0 pages */
+                        /* NB see comment above regarding persistent pages */
                         __free_pages(page, 0);
                         atomic_dec(&obd->u.echo.eo_prep);
                 }
@@ -389,7 +434,7 @@ commitrw_cleanup:
         while (++r < res + niocount) {
                 struct page *page = r->page;
 
-                /* NB see comment above regarding object0 pages */
+                /* NB see comment above regarding persistent pages */
                 __free_pages(page, 0);
                 atomic_dec(&obd->u.echo.eo_prep);
         }
@@ -476,37 +521,37 @@ extern int echo_client_init(void);
 extern void echo_client_exit(void);
 
 static void
-echo_object0_pages_fini (void)
+echo_persistent_pages_fini (void)
 {
         int     i;
 
-        for (i = 0; i < ECHO_OBJECT0_NPAGES; i++)
-                if (echo_object0_pages[i] != NULL) {
-                        __free_pages (echo_object0_pages[i], 0);
-                        echo_object0_pages[i] = NULL;
+        for (i = 0; i < ECHO_PERSISTENT_PAGES; i++)
+                if (echo_persistent_pages[i] != NULL) {
+                        __free_pages (echo_persistent_pages[i], 0);
+                        echo_persistent_pages[i] = NULL;
                 }
 }
 
 static int
-echo_object0_pages_init (void)
+echo_persistent_pages_init (void)
 {
         struct page *pg;
         int          i;
 
-        for (i = 0; i < ECHO_OBJECT0_NPAGES; i++) {
-                int gfp_mask = (i < ECHO_OBJECT0_NPAGES/2) ?
+        for (i = 0; i < ECHO_PERSISTENT_PAGES; i++) {
+                int gfp_mask = (i < ECHO_PERSISTENT_PAGES/2) ?
                         GFP_KERNEL : GFP_HIGHUSER;
 
                 pg = alloc_pages (gfp_mask, 0);
                 if (pg == NULL) {
-                        echo_object0_pages_fini ();
+                        echo_persistent_pages_fini ();
                         return (-ENOMEM);
                 }
 
                 memset (kmap (pg), 0, PAGE_SIZE);
                 kunmap (pg);
 
-                echo_object0_pages[i] = pg;
+                echo_persistent_pages[i] = pg;
         }
 
         return (0);
@@ -519,9 +564,11 @@ static int __init obdecho_init(void)
 
         printk(KERN_INFO "Lustre: Echo OBD driver; info@clusterfs.com\n");
 
+        LASSERT(PAGE_SIZE % OBD_ECHO_BLOCK_SIZE == 0);
+
         lprocfs_init_vars(echo, &lvars);
 
-        rc = echo_object0_pages_init ();
+        rc = echo_persistent_pages_init ();
         if (rc != 0)
                 goto failed_0;
 
@@ -536,7 +583,7 @@ static int __init obdecho_init(void)
 
         class_unregister_type(OBD_ECHO_DEVICENAME);
  failed_1:
-        echo_object0_pages_fini ();
+        echo_persistent_pages_fini ();
  failed_0:
         RETURN(rc);
 }
@@ -545,7 +592,7 @@ static void /*__exit*/ obdecho_exit(void)
 {
         echo_client_exit();
         class_unregister_type(OBD_ECHO_DEVICENAME);
-        echo_object0_pages_fini ();
+        echo_persistent_pages_fini ();
 }
 
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");

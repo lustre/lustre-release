@@ -18,7 +18,6 @@
 #define IOC_MDC_TYPE         'i'
 #define IOC_MDC_MIN_NR       20
 #define IOC_MDC_LOOKUP       _IOWR(IOC_MDC_TYPE, 20, struct obd_device *)
-#define IOC_MDC_GETSTRIPE    _IOWR(IOC_MDC_TYPE, 21, struct lov_mds_md *)
 #define IOC_MDC_MAX_NR       50
 
 #ifdef __KERNEL__

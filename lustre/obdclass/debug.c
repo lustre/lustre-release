@@ -114,7 +114,7 @@ int dump_req(struct ptlrpc_request *req)
 */
 
 #define LPDS sizeof(__u64)
-int page_debug_setup(void *addr, int len, __u64 off, __u64 id)
+int block_debug_setup(void *addr, int len, __u64 off, __u64 id)
 {
         LASSERT(addr);
 
@@ -130,7 +130,7 @@ int page_debug_setup(void *addr, int len, __u64 off, __u64 id)
         return 0;
 }
 
-int page_debug_check(char *who, void *addr, int end, __u64 off, __u64 id)
+int block_debug_check(char *who, void *addr, int end, __u64 off, __u64 id)
 {
         __u64 ne_off;
         int err = 0;
@@ -171,5 +171,5 @@ EXPORT_SYMBOL(dump_rniobuf);
 EXPORT_SYMBOL(dump_ioo);
 //EXPORT_SYMBOL(dump_req);
 EXPORT_SYMBOL(dump_obdo);
-EXPORT_SYMBOL(page_debug_setup);
-EXPORT_SYMBOL(page_debug_check);
+EXPORT_SYMBOL(block_debug_setup);
+EXPORT_SYMBOL(block_debug_check);

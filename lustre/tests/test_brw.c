@@ -31,7 +31,7 @@
 #define WRITE 2
 
 #define LPDS sizeof(__u64)
-int page_debug_setup(void *addr, int len, __u64 off, __u64 id)
+int block_debug_setup(void *addr, int len, __u64 off, __u64 id)
 {
         off = cpu_to_le64(off);
         id = cpu_to_le64(id);
@@ -45,7 +45,7 @@ int page_debug_setup(void *addr, int len, __u64 off, __u64 id)
         return 0;
 }
 
-int page_debug_check(char *who, void *addr, int size, __u64 off, __u64 id)
+int block_debug_check(char *who, void *addr, int size, __u64 off, __u64 id)
 {
         __u64 ne_off;
         int err = 0;
@@ -181,14 +181,14 @@ int main(int argc, char **argv)
                 int i;
 
                 for (i = 0; i < len; i += st.st_blksize)
-                        page_debug_setup(buf + i, st.st_blksize, offset + i,
-                                         objid);
+                        block_debug_setup(buf + i, st.st_blksize, 
+                                          offset + i, objid);
 
                 rc = write(fd, buf, len);
 
                 for (i = 0; i < len; i += st.st_blksize) {
-                        if (page_debug_check("write", buf + i, st.st_blksize,
-                                             offset + i, objid))
+                        if (block_debug_check("write", buf + i, st.st_blksize,
+                                              offset + i, objid))
                                 return 10;
                 }
 
@@ -216,8 +216,8 @@ int main(int argc, char **argv)
                 }
 
                 for (i = 0; i < len; i += st.st_blksize) {
-                        if (page_debug_check("read", buf + i, st.st_blksize,
-                                             offset + i, objid))
+                        if (block_debug_check("read", buf + i, st.st_blksize,
+                                              offset + i, objid))
                                 return 11;
                 }
         }

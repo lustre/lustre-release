@@ -305,7 +305,8 @@ int llu_file_release(struct inode *inode)
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%lu\n", lli->lli_st_ino,
                lli->lli_st_generation);
 
-        /* XXX don't do anything for '/'. but how to find the root pnode? */
+        if (llu_is_root_inode(inode))
+                RETURN(0);
 
         /* still opened by others? */
         if (--lli->lli_open_count)
@@ -327,8 +328,8 @@ int llu_iop_close(struct inode *inode)
         int rc;
 
         rc = llu_file_release(inode);
-        if (!llu_i2info(inode)->lli_open_count)
-                llu_i2info(inode)->lli_stale_flag = 1;
+        /* if open count == 0 && stale_flag is set, should we
+         * remove the inode immediately? */
         return rc;
 }
 

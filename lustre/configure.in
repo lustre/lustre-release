@@ -45,6 +45,10 @@ else
 fi
 AC_SUBST(SYSIO)
 
+#build mpi-tests 
+AC_ARG_ENABLE(mpitests, [  --enable-mpitests build liblustre mpi tests])
+AM_CONDITIONAL(MPITESTS, test x$enable_mpitests = xyes, Build MPI Tests)
+
 # snap compilation 
 AC_ARG_ENABLE(snapfs, [  --enable-snapfs build snapfs])
 AM_CONDITIONAL(SNAPFS, test x$enable_snapfs = xyes)

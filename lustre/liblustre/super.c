@@ -358,13 +358,13 @@ static int llu_have_md_lock(struct inode *inode)
         /* FIXME use LDLM_FL_TEST_LOCK instead */
         flags = LDLM_FL_BLOCK_GRANTED | LDLM_FL_CBPENDING;
         if (ldlm_lock_match(obddev->obd_namespace, flags, &res_id, LDLM_PLAIN,
-                            NULL, 0, LCK_PR, &lockh)) {
+                            NULL, LCK_PR, &lockh)) {
                 ldlm_lock_decref(&lockh, LCK_PR);
                 RETURN(1);
         }
 
         if (ldlm_lock_match(obddev->obd_namespace, flags, &res_id, LDLM_PLAIN,
-                            NULL, 0, LCK_PW, &lockh)) {
+                            NULL, LCK_PW, &lockh)) {
                 ldlm_lock_decref(&lockh, LCK_PW);
                 RETURN(1);
         }
@@ -433,22 +433,14 @@ static int llu_inode_revalidate(struct inode *inode)
         if (!lsm)       /* object not yet allocated, don't validate size */
                 RETURN(0);
 
-        /*
-         * unfortunately stat comes in through revalidate and we don't
-         * differentiate this use from initial instantiation.  we're
-         * also being wildly conservative and flushing write caches
-         * so that stat really returns the proper size.
-         */
+        /* ll_glimpse_size will prefer locally cached writes if they extend
+         * the file */
         {
-                struct ldlm_extent extent = {0, OBD_OBJECT_EOF};
-                struct lustre_handle lockh = {0};
+                struct ost_lvb lvb;
                 ldlm_error_t err;
 
-                err = llu_extent_lock(NULL, inode, lsm, LCK_PR, &extent, &lockh);
-                if (err != ELDLM_OK)
-                        RETURN(err);
-
-                llu_extent_unlock(NULL, inode, lsm, LCK_PR, &lockh);
+                err = llu_glimpse_size(inode, &lvb);
+                lli->lli_st_size = lvb.lvb_size;
         }
         RETURN(0);
 }
@@ -702,29 +694,18 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr)
         }
 
         if (ia_valid & ATTR_SIZE) {
-                struct ldlm_extent extent = { .start = attr->ia_size,
-                                              .end = OBD_OBJECT_EOF };
+                ldlm_policy_data_t policy = { .l_extent = {attr->ia_size,
+                                                           OBD_OBJECT_EOF} };
                 struct lustre_handle lockh = { 0 };
                 int err, ast_flags = 0;
                 /* XXX when we fix the AST intents to pass the discard-range
                  * XXX extent, make ast_flags always LDLM_AST_DISCARD_DATA
                  * XXX here. */
-
-                /* Writeback uses inode->i_size to determine how far out
-                 * its cached pages go.  ll_truncate gets a PW lock, canceling
-                 * our lock, _after_ it has updated i_size.  this can confuse
-                 *
-                 * We really need to get our PW lock before we change
-                 * inode->i_size.  If we don't we can race with other
-                 * i_size updaters on our node, like ll_file_read.  We
-                 * can also race with i_size propogation to other
-                 * nodes through dirtying and writeback of final cached
-                 * pages.  This last one is especially bad for racing
-                 * o_append users on other nodes. */
-                if (extent.start == 0)
+                if (attr->ia_size == 0)
                         ast_flags = LDLM_AST_DISCARD_DATA;
-                rc = llu_extent_lock_no_validate(NULL, inode, lsm, LCK_PW,
-                                                 &extent, &lockh, ast_flags);
+
+                rc = llu_extent_lock(NULL, inode, lsm, LCK_PW, &policy,
+                                     &lockh, ast_flags);
                 if (rc != ELDLM_OK) {
                         if (rc > 0)
                                 RETURN(-ENOLCK);
@@ -1256,12 +1237,15 @@ struct inode *llu_iget(struct filesys *fs, struct lustre_md *md)
 
         inode = _sysio_i_find(fs, &fileid);
         if (inode) {
-                if (llu_i2info(inode)->lli_st_generation ==
-                    md->body->generation) {
+                struct llu_inode_info *lli = llu_i2info(inode);
+
+                if (lli->lli_stale_flag ||
+                    lli->lli_st_generation != md->body->generation)
+                        I_RELE(inode);
+                else {
                         llu_update_inode(inode, md->body, md->lsm);
                         return inode;
-                } else
-                        I_RELE(inode);
+                }
         }
 
         inode = llu_new_inode(fs, &fid);
@@ -1514,3 +1498,4 @@ static struct inode_ops llu_inode_ops = {
         inop_gone:      llu_iop_gone,
 };
 
+#warning "time_after() defined in liblustre.h need to be rewrite in userspace"
