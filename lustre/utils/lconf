@@ -170,15 +170,15 @@ def prepare_network(node):
 # formatting anything.
 # FIXME: check if device is already formatted.
 def prepare_obd(obd):
-    obdname = obd.getAttribute('name')
-    (dev, size, fstype, format) = getDeviceInfo(obd)
-    print "OBD: ", dev, size, fstype, format
+    (name, dev, size, fstype, format) = getOBDInfo(obd)
+    print "OBD: ", name, dev, size, fstype, format
 ##     if not is_block(dev):
 ##         dev = init_loop(dev, size, fstype)
 ##     if (format == 'yes'):
 ##         mkfs(fstype, dev)
 
-def prepare_ost(node):
+def prepare_ost(ost):
+    name = getOSTInfo(ost)
     print 'prepare ost'
 
 def prepare_mds(node):
@@ -197,7 +197,8 @@ def prepare_mountpoint(node):
 # XML processing 
 
 # extract device attributes for an obd
-def getDeviceInfo(obd):
+def getOBDInfo(obd):
+    obdname = obd.getAttribute('name')
     dev = obd.getElementsByTagName('device')[0]
     dev.normalize();
     try:
@@ -207,7 +208,12 @@ def getDeviceInfo(obd):
 
     fstype = getText(obd, 'fstype')
     format = getText(obd, 'autoformat')
-    return (dev.firstChild.data, size, fstype, format)
+    return (obdname, dev.firstChild.data, size, fstype, format)
+    
+# extract device attributes for an obd
+def getOSTInfo(node):
+    name = node.getAttribute('name')
+    return (name)
     
 # Get the text content from the first matching child
 def getText(node, tag):
