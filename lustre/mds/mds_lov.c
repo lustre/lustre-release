@@ -111,7 +111,10 @@ int mds_lov_write_objids(struct obd_device *obd)
         int i, rc, size = mds->mds_lov_desc.ld_tgt_count * sizeof(obd_id);
         ENTRY;
 
-        if (unlikely(mds->mds_osc_obd == NULL))
+
+        /* I'm pretty sure we don't need this mds_lov_connect here,
+         * but we definitely don't want to do it during recovery. */
+        if (!obd->obd_recovering && unlikely(mds->mds_osc_obd == NULL))
                 mds_lov_connect(obd);
 
         for (i = 0; i < mds->mds_lov_desc.ld_tgt_count; i++)
@@ -318,6 +321,8 @@ int mds_lov_set_nextid(struct obd_device *obd)
         int rc;
         ENTRY;
 
+        LASSERT(!obd->obd_recovering);
+
         if (mds->mds_osc_obd == NULL)
                 mds_lov_connect(obd);
 
@@ -374,6 +379,8 @@ int mds_lov_connect(struct obd_device *obd)
         struct lustre_handle conn = {0,};
         int rc, i;
         ENTRY;
+
+        LASSERT(!obd->obd_recovering);
 
         if (IS_ERR(mds->mds_osc_obd))
                 RETURN(PTR_ERR(mds->mds_osc_obd));
