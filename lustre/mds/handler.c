@@ -148,7 +148,7 @@ struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
         return result;
 }
 
-static int mds_connect(struct ptlrpc_request *req)
+static int mds_connect(struct ptlrpc_request *req, struct mds_obd **mdsp)
 {
         struct mds_obd *mds;
         char *uuid;
@@ -168,7 +168,7 @@ static int mds_connect(struct ptlrpc_request *req)
                 RETURN(-ENODEV);
         }
 
-        mds = &(obd_dev[i].u.mds);
+        *mdsp = mds = &(obd_dev[i].u.mds);
         if (mds != &(req->rq_obd->u.mds)) {
                 CERROR("device %d (%s) is not an mds\n", i, uuid);
                 req->rq_status = -ENODEV;
@@ -694,7 +694,7 @@ int mds_handle(struct obd_device *dev, struct ptlrpc_service *svc,
         case MDS_CONNECT:
                 CDEBUG(D_INODE, "connect\n");
                 OBD_FAIL_RETURN(OBD_FAIL_MDS_CONNECT_NET, 0);
-                rc = mds_connect(req);
+                rc = mds_connect(req, &mds);
                 break;
 
         case MDS_DISCONNECT:
@@ -777,7 +777,6 @@ out:
                 CDEBUG(D_NET, "sending reply\n");
                 ptlrpc_reply(svc, req);
         }
-
         return 0;
 }
 

@@ -150,12 +150,12 @@ static int _ldlm_enqueue(struct obd_device *obddev, struct ptlrpc_service *svc,
         if (ptlrpc_reply(svc, req))
                 LBUG();
 
-        if (!err)
-                ldlm_reprocess_all(lock->l_resource);
         if (err)
                 LDLM_DEBUG_NOLOCK("server-side enqueue handler END");
-        else
+        else {
+                ldlm_reprocess_all(lock->l_resource);
                 LDLM_DEBUG(lock, "server-side enqueue handler END");
+        }
 
         return 0;
 }
