@@ -674,8 +674,6 @@ static struct fsfilt_operations fsfilt_ext3_ops = {
         fs_setup:               fsfilt_ext3_setup,
 };
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-
 static int __init fsfilt_ext3_init(void)
 {
         int rc;
@@ -714,10 +712,6 @@ static void __exit fsfilt_ext3_exit(void)
 
 module_init(fsfilt_ext3_init);
 module_exit(fsfilt_ext3_exit);
-
-#else
-#warning "FIXME: fsfilt_ext3_init() and fsfilt_ext3_exit() aren't called on 2.6"
-#endif
 
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre ext3 Filesystem Helper v0.1");
