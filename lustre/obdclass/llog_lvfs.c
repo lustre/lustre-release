@@ -37,6 +37,7 @@
 #include <linux/lustre_log.h>
 #include <portals/list.h>
 #include <linux/lvfs.h>
+#include <linux/obd_ost.h>
 
 static int llog_lvfs_pad(struct l_file *file, int len, int index)
 {
@@ -352,8 +353,21 @@ static int llog_lvfs_create(struct obd_device *obd, struct llog_handle **res,
         *res = handle;
 
         if (logid != NULL) {
-                dchild = obd_lvfs_fid2dentry(obd->obd_log_exp, logid->lgl_oid,
+                if (!strcmp(OBT(obd->obd_log_exp->exp_obd)->typ_name,
+                    LUSTRE_MDS_NAME))
+                        dchild = obd_lvfs_fid2dentry(obd->obd_log_exp, logid->lgl_oid,
                                              logid->lgl_ogen);
+                else {
+                        oa = obdo_alloc();
+                        if (oa == NULL) 
+                                GOTO(cleanup, rc = -ENOMEM);
+
+                        oa->o_gr = logid->lgl_ogr;
+                        oa->o_id = logid->lgl_oid;
+                        dchild = obd_lvfs_fid2dentry(obd->obd_log_exp, logid->lgl_oid,
+                                             logid->lgl_ogr);
+                } 
+
                 if (IS_ERR(dchild)) {
                         rc = PTR_ERR(dchild);
                         CERROR("error looking up log file "LPX64":0x%x: rc %d\n",
@@ -397,8 +411,16 @@ static int llog_lvfs_create(struct obd_device *obd, struct llog_handle **res,
                 rc = obd_create(obd->obd_log_exp, oa, NULL, NULL);
                 if (rc)
                         GOTO(cleanup, rc);
-                dchild = obd_lvfs_fid2dentry(obd->obd_log_exp, oa->o_id,
+
+                /* should differentiate mds and ost to choose gen or gr */
+                if (!strcmp(OBT(obd->obd_log_exp->exp_obd)->typ_name,
+                    LUSTRE_MDS_NAME))
+                        dchild = obd_lvfs_fid2dentry(obd->obd_log_exp, oa->o_id,
                                              oa->o_generation);
+                else 
+                        dchild = obd_lvfs_fid2dentry(obd->obd_log_exp, oa->o_id,
+                                             oa->o_gr);
+
                 if (IS_ERR(dchild))
                         GOTO(cleanup, rc = PTR_ERR(dchild));
                 cleanup_phase = 2;
@@ -408,12 +430,20 @@ static int llog_lvfs_create(struct obd_device *obd, struct llog_handle **res,
                         GOTO(cleanup, rc = PTR_ERR(handle->lgh_file));
         }
 
-        handle->lgh_obd = obd;
-        handle->lgh_id.lgl_ogr = 1;
-        handle->lgh_id.lgl_oid =
-                handle->lgh_file->f_dentry->d_inode->i_ino;
-        handle->lgh_id.lgl_ogen =
-                handle->lgh_file->f_dentry->d_inode->i_generation;
+        if (!strcmp(OBT(obd->obd_log_exp->exp_obd)->typ_name, 
+            LUSTRE_MDS_NAME)) {
+                handle->lgh_obd = obd;
+                handle->lgh_id.lgl_ogr = 1;
+                handle->lgh_id.lgl_oid =
+                        handle->lgh_file->f_dentry->d_inode->i_ino;
+                handle->lgh_id.lgl_ogen =
+                        handle->lgh_file->f_dentry->d_inode->i_generation;
+        } else {
+                handle->lgh_obd = obd;
+                handle->lgh_id.lgl_ogr = oa->o_gr;
+                handle->lgh_id.lgl_oid = oa->o_id;
+                handle->lgh_id.lgl_ogen = 0;
+        }
  finish:
         if (oa)
                 obdo_free(oa);
@@ -463,281 +493,6 @@ static int llog_lvfs_destroy(struct llog_handle *handle)
         obdo_free(oa);
         RETURN(rc);
 }
-
-#if 0
-/* This is a callback from the llog_* functions.
- * Assumes caller has already pushed us into the kernel context. */
-int mds_log_close(struct llog_handle *cathandle, struct llog_handle *loghandle)
-{
-        struct llog_log_hdr *llh = loghandle->lgh_hdr;
-        struct mds_obd *mds = &cathandle->lgh_obd->u.mds;
-        struct dentry *dchild = NULL;
-        int rc;
-        ENTRY;
-
-        /* If we are going to delete this log, grab a ref before we close
-         * it so we don't have to immediately do another lookup.
-         */
-        if (llh->llh_hdr.lrh_type != LLOG_CATALOG_MAGIC && llh->llh_count == 0){
-                CDEBUG(D_INODE, "deleting log file "LPX64":%x\n",
-                       loghandle->lgh_cookie.lgc_lgl.lgl_oid,
-                       loghandle->lgh_cookie.lgc_lgl.lgl_ogen);
-                down(&mds->mds_logs_dir->d_inode->i_sem);
-                dchild = dget(loghandle->lgh_file->f_dentry);
-                llog_delete_log(cathandle, loghandle);
-        } else {
-                CDEBUG(D_INODE, "closing log file "LPX64":%x\n",
-                       loghandle->lgh_cookie.lgc_lgl.lgl_oid,
-                       loghandle->lgh_cookie.lgc_lgl.lgl_ogen);
-        }
-
-        rc = filp_close(loghandle->lgh_file, 0);
-
-        llog_free_handle(loghandle); /* also removes loghandle from list */
-
-        if (dchild) {
-                int err = vfs_unlink(mds->mds_logs_dir->d_inode, dchild);
-                if (err) {
-                        CERROR("error unlinking empty log %*s: rc %d\n",
-                               dchild->d_name.len, dchild->d_name.name, err);
-                        if (!rc)
-                                rc = err;
-                }
-                l_dput(dchild);
-                up(&mds->mds_logs_dir->d_inode->i_sem);
-        }
-        RETURN(rc);
-}
-
-/* This is a callback from the llog_* functions.
- * Assumes caller has already pushed us into the kernel context. */
-struct llog_handle *mds_log_open(struct obd_device *obd,
-                                 struct llog_cookie *logcookie)
-{
-        struct ll_fid fid = { .id = logcookie->lgc_lgl.lgl_oid,
-                              .generation = logcookie->lgc_lgl.lgl_ogen,
-                              .f_type = S_IFREG };
-        struct llog_handle *loghandle;
-        struct dentry *dchild;
-        int rc;
-        ENTRY;
-
-        loghandle = llog_alloc_handle();
-        if (loghandle == NULL)
-                RETURN(ERR_PTR(-ENOMEM));
-
-        down(&obd->u.mds.mds_logs_dir->d_inode->i_sem);
-        dchild = mds_fid2dentry(&obd->u.mds, &fid, NULL);
-        up(&obd->u.mds.mds_logs_dir->d_inode->i_sem);
-        if (IS_ERR(dchild)) {
-                rc = PTR_ERR(dchild);
-                CERROR("error looking up log file "LPX64":%x: rc %d\n",
-                       fid.id, fid.generation, rc);
-                GOTO(out, rc);
-        }
-
-        if (dchild->d_inode == NULL) {
-                rc = -ENOENT;
-                CERROR("nonexistent log file "LPX64":%x: rc %d\n",
-                       fid.id, fid.generation, rc);
-                GOTO(out_put, rc);
-        }
-
-        /* dentry_open does a dput(de) and mntput(mds->mds_vfsmnt) on error */
-        mntget(obd->u.mds.mds_vfsmnt);
-        loghandle->lgh_file = dentry_open(dchild, obd->u.mds.mds_vfsmnt,
-                                          O_RDWR | O_LARGEFILE);
-        if (IS_ERR(loghandle->lgh_file)) {
-                rc = PTR_ERR(loghandle->lgh_file);
-                CERROR("error opening logfile "LPX64":%x: rc %d\n",
-                       fid.id, fid.generation, rc);
-                GOTO(out, rc);
-        }
-        memcpy(&loghandle->lgh_cookie, logcookie, sizeof(*logcookie));
-        loghandle->lgh_log_create = mds_log_create;
-        loghandle->lgh_log_open = mds_log_open;
-        loghandle->lgh_log_close = mds_log_close;
-        loghandle->lgh_obd = obd;
-
-        RETURN(loghandle);
-
-out_put:
-        l_dput(dchild);
-out:
-        llog_free_handle(loghandle);
-        return ERR_PTR(rc);
-}
-
-
-
-struct llog_handle *mds_get_catalog(struct obd_device *obd)
-{
-        struct mds_server_data *msd = obd->u.mds.mds_server_data;
-        struct obd_run_ctxt saved;
-        struct llog_handle *cathandle = NULL;
-        int rc = 0;
-        ENTRY;
-
-        push_ctxt(&saved, &obd->u.mds.mds_ctxt, NULL);
-
-        if (msd->msd_catalog_oid) {
-                struct llog_cookie catcookie;
-
-                catcookie.lgc_lgl.lgl_oid = le64_to_cpu(msd->msd_catalog_oid);
-                catcookie.lgc_lgl.lgl_ogen = le32_to_cpu(msd->msd_catalog_ogen);
-                cathandle = mds_log_open(obd, &catcookie);
-                if (IS_ERR(cathandle)) {
-                        CERROR("error opening catalog "LPX64":%x: rc %d\n",
-                               catcookie.lgc_lgl.lgl_oid,
-                               catcookie.lgc_lgl.lgl_ogen,
-                               (int)PTR_ERR(cathandle));
-                        msd->msd_catalog_oid = 0;
-                        msd->msd_catalog_ogen = 0;
-                }
-                /* ORPHANS FIXME: compare catalog UUID to msd_peeruuid */
-        }
-
-        if (!msd->msd_catalog_oid) {
-                struct llog_logid *lgl;
-
-                cathandle = mds_log_create(obd, "LOGS/catalog");
-                if (IS_ERR(cathandle)) {
-                        CERROR("error creating new catalog: rc %d\n",
-                               (int)PTR_ERR(cathandle));
-                        GOTO(out, cathandle);
-                }
-                lgl = &cathandle->lgh_cookie.lgc_lgl;
-                msd->msd_catalog_oid = cpu_to_le64(lgl->lgl_oid);
-                msd->msd_catalog_ogen = cpu_to_le32(lgl->lgl_ogen);
-                rc = mds_update_server_data(obd, 1);
-                if (rc) {
-                        CERROR("error writing new catalog to disk: rc %d\n",rc);
-                        GOTO(out_handle, rc);
-                }
-        }
-
-        rc = llog_init_catalog(cathandle, &obd->u.mds.mds_lov_name);
-
-out:
-        pop_ctxt(&saved, &obd->u.mds.mds_ctxt, NULL);
-        RETURN(cathandle);
-
-out_handle:
-        mds_log_close(cathandle, cathandle);
-        cathandle = ERR_PTR(rc);
-        goto out;
-
-}
-
-static struct llog_handle *filter_log_create(struct obd_device *obd);
-
-/* This is a callback from the llog_* functions.
- * Assumes caller has already pushed us into the kernel context. */
-static int filter_log_close(struct llog_handle *cathandle,
-                            struct llog_handle *loghandle)
-{
-        struct llog_object_hdr *llh = loghandle->lgh_hdr;
-        struct file *file = loghandle->lgh_file;
-        struct dentry *dparent = NULL, *dchild = NULL;
-        struct lustre_handle parent_lockh;
-        struct llog_logid *lgl = &loghandle->lgh_cookie.lgc_lgl;
-        int rc;
-        ENTRY;
-
-        /* If we are going to delete this log, grab a ref before we close
-         * it so we don't have to immediately do another lookup. */
-        if (llh->llh_hdr.lth_type != LLOG_CATALOG_MAGIC && llh->llh_count == 0){
-                CDEBUG(D_INODE, "deleting log file "LPX64":%x\n",
-                       lgl->lgl_oid, lgl->lgl_ogen);
-                dparent = filter_parent_lock(loghandle->lgh_obd, S_IFREG,
-                                             lgl->lgl_oid,LCK_PW,&parent_lockh);
-                if (IS_ERR(dparent)) {
-                        rc = PTR_ERR(dparent);
-                        CERROR("error locking parent, orphan log %*s: rc %d\n",
-                               file->f_dentry->d_name.len,
-                               file->f_dentry->d_name.name, rc);
-                        RETURN(rc);
-                } else {
-                        dchild = dget(file->f_dentry);
-                        llog_delete_log(cathandle, loghandle);
-                }
-        } else {
-                CDEBUG(D_INODE, "closing log file "LPX64":%x\n",
-                       lgl->lgl_oid, lgl->lgl_ogen);
-        }
-
-        rc = filp_close(file, 0);
-
-        llog_free_handle(loghandle); /* also removes loghandle from list */
-
-        if (dchild != NULL) {
-                int err = vfs_unlink(dparent->d_inode, dchild);
-                if (err) {
-                        CERROR("error unlinking empty log %*s: rc %d\n",
-                               dchild->d_name.len, dchild->d_name.name, err);
-                        if (!rc)
-                                rc = err;
-                }
-                f_dput(dchild);
-                ldlm_lock_decref(&parent_lockh, LCK_PW);
-        }
-        RETURN(rc);
-}
-
-/* This is a callback from the llog_* functions.
- * Assumes caller has already pushed us into the kernel context. */
-static struct llog_handle *filter_log_open(struct obd_device *obd,
-                                           struct llog_cookie *logcookie)
-{
-        struct llog_logid *lgl = &logcookie->lgc_lgl;
-        struct llog_handle *loghandle;
-        struct dentry *dchild;
-        int rc;
-        ENTRY;
-
-        loghandle = llog_alloc_handle();
-        if (!loghandle)
-                RETURN(ERR_PTR(-ENOMEM));
-
-        dchild = filter_fid2dentry(obd, NULL, S_IFREG, lgl->lgl_oid);
-        if (IS_ERR(dchild))
-                GOTO(out_handle, rc = PTR_ERR(dchild));
-
-        if (dchild->d_inode == NULL) {
-                CERROR("logcookie references non-existent object %*s\n",
-                       dchild->d_name.len, dchild->d_name.name);
-                GOTO(out_dentry, rc = -ENOENT);
-        }
-
-        if (dchild->d_inode->i_generation != lgl->lgl_ogen) {
-                CERROR("logcookie for %*s had different generation %x != %x\n",
-                       dchild->d_name.len, dchild->d_name.name,
-                       dchild->d_inode->i_generation, lgl->lgl_ogen);
-                GOTO(out_dentry, rc = -ESTALE);
-        }
-
-        /* dentry_open does a dput(dchild) and mntput(mnt) on error */
-        mntget(obd->u.filter.fo_vfsmnt);
-        loghandle->lgh_file = dentry_open(dchild, obd->u.filter.fo_vfsmnt,
-                                          O_RDWR);
-        if (IS_ERR(loghandle->lgh_file)) {
-                rc = PTR_ERR(loghandle->lgh_file);
-                CERROR("error opening logfile %*s: rc %d\n",
-                       dchild->d_name.len, dchild->d_name.name, rc);
-                GOTO(out_dentry, rc);
-        }
-        memcpy(&loghandle->lgh_cookie, logcookie, sizeof(*logcookie));
-        RETURN(loghandle);
-
-out_dentry:
-        f_dput(dchild);
-out_handle:
-        llog_free_handle(loghandle);
-        RETURN(ERR_PTR(rc));
-}
-
-#endif
-
 
 struct llog_operations llog_lvfs_ops = {
         lop_write_rec:   llog_lvfs_write_rec,

@@ -59,12 +59,15 @@ void llog_free_handle(struct llog_handle *loghandle)
         if (!loghandle)
                 return;
 
+        if (!loghandle->lgh_hdr)
+                goto out;
         if (loghandle->lgh_hdr->llh_flags & LLOG_F_IS_PLAIN)
                 list_del_init(&loghandle->u.phd.phd_entry);
         if (loghandle->lgh_hdr->llh_flags & LLOG_F_IS_CAT)
                 LASSERT(list_empty(&loghandle->u.chd.chd_head));
-
         OBD_FREE(loghandle->lgh_hdr, LLOG_CHUNK_SIZE);
+
+ out:
         OBD_FREE(loghandle, sizeof(*loghandle));
 }
 EXPORT_SYMBOL(llog_free_handle);
