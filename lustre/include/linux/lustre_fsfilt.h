@@ -206,13 +206,13 @@ static inline int fs_prep_san_write(struct obd_device *obd,
 }
 
 static inline int fsfilt_read_record(struct obd_device *obd, struct file *file,
-                                        char *buf, loff_t size, loff_t *offs)
+                                     char *buf, loff_t size, loff_t *offs)
 {
         return obd->obd_fsops->fs_read_record(file, buf, size, offs);
 }
 
 static inline int fsfilt_write_record(struct obd_device *obd, struct file *file,
-                                        char *buf, loff_t size, loff_t *offs)
+                                      char *buf, loff_t size, loff_t *offs)
 {
         return obd->obd_fsops->fs_write_record(file, buf, size, offs);
 }
