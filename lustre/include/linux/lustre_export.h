@@ -10,8 +10,6 @@
 #ifndef __EXPORT_H
 #define __EXPORT_H
 
-#ifdef __KERNEL__
-
 #include <linux/lustre_idl.h>
 #include <linux/lustre_dlm.h>
 #include <linux/lustre_mds.h>
@@ -50,6 +48,5 @@ struct obd_export {
 
 extern struct obd_export *class_conn2export(struct lustre_handle *conn);
 extern struct obd_device *class_conn2obd(struct lustre_handle *conn);
-#endif /* __KERNEL__ */
 
 #endif /* __EXPORT_H */
