@@ -68,7 +68,7 @@ struct ldlm_res_id;
 struct obd_import;
 
 extern int ldlm_cli_cancel_unused(struct ldlm_namespace *ns, struct ldlm_res_id *res_id, int flags);
-extern int ldlm_namespace_cleanup(struct ldlm_namespace *ns, int local_only);
+extern int ldlm_namespace_cleanup(struct ldlm_namespace *ns, int flags);
 extern int ldlm_replay_locks(struct obd_import *imp);
 
 void *inter_module_get(char *arg)
