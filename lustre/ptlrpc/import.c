@@ -404,6 +404,7 @@ static int signal_completed_replay(struct obd_import *imp)
 int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
 {
         int rc = 0;
+        int inflight;
 
         if (imp->imp_state == LUSTRE_IMP_EVICTED) {
                 CDEBUG(D_HA, "evicted from %s@%s; invalidating\n",
@@ -416,8 +417,9 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
         if (imp->imp_state == LUSTRE_IMP_REPLAY) {
                 CDEBUG(D_HA, "replay requested by %s\n",
                        imp->imp_target_uuid.uuid);
-                rc = ptlrpc_replay_next(imp);
-                if (rc == 0 && atomic_read(&imp->imp_replay_inflight) == 0) {
+                rc = ptlrpc_replay_next(imp, &inflight);
+                if (inflight == 0 && 
+                    atomic_read(&imp->imp_replay_inflight) == 0) {
                         IMPORT_SET_STATE(imp, LUSTRE_IMP_REPLAY_LOCKS);
                         rc = ldlm_replay_locks(imp);
                         if (rc)

@@ -331,6 +331,14 @@ int mdc_enqueue(struct obd_export *exp,
         it->d.lustre.it_lock_mode = lock_mode;
         it->d.lustre.it_data = req;
 
+        if (it->d.lustre.it_status < 0 && req->rq_replay) {
+                LASSERT(req->rq_transno == 0);
+                /* Don't hold error requests for replay. */
+                spin_lock(&req->rq_lock);
+                req->rq_replay = 0;
+                spin_unlock(&req->rq_lock);
+        }
+
         /* We know what to expect, so we do any byte flipping required here */
         LASSERT(reply_buffers == 4 || reply_buffers == 3 || reply_buffers == 1);
         if (reply_buffers >= 3) {
