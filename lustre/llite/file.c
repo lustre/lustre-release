@@ -708,11 +708,13 @@ static int ll_inode_revalidate(struct dentry *dentry)
         RETURN(ll_file_size(inode, lsm));
 }
 
-static int ll_getattr(struct vfsmount *mnt, struct dentry *de, 
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
+static int ll_getattr(struct vfsmount *mnt, struct dentry *de,
                       struct kstat *stat)
 {
         return ll_inode_revalidate(de);
 }
+#endif
 
 struct file_operations ll_file_operations = {
         read:           ll_file_read,
@@ -729,7 +731,7 @@ struct inode_operations ll_file_inode_operations = {
         truncate:   ll_truncate,
         setattr:    ll_setattr,
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-                getattr: ll_getattr,
+        getattr: ll_getattr,
 #else
         revalidate: ll_inode_revalidate,
 #endif

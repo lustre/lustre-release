@@ -88,7 +88,12 @@ static inline int ext2_add_nondir(struct dentry *dentry, struct inode *inode)
 }
 
 /* methods */
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+static int ll_find_inode(struct inode *inode, unsigned long ino, void *opaque)
+#else
 static int ll_test_inode(struct inode *inode, void *opaque)
+#endif
 {
         struct ll_read_inode2_cookie *lic = opaque;
         struct mds_body *body = lic->lic_body;
@@ -147,7 +152,7 @@ int ll_unlock(__u32 mode, struct lustre_handle *lockh)
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 extern int ll_read_inode2(struct inode *inode, void *opaque);
-struct inode *ll_iget(struct super_block *sb, ino_t hash, 
+struct inode *ll_iget(struct super_block *sb, ino_t hash,
                       struct ll_read_inode2_cookie *lic)
 {
         struct inode *inode;
@@ -158,7 +163,7 @@ struct inode *ll_iget(struct super_block *sb, ino_t hash,
 		return ERR_PTR(-ENOMEM);
 
 	if (inode->i_state & I_NEW) {
-                
+
 		unlock_new_inode(inode);
 	}
 
@@ -166,7 +171,7 @@ struct inode *ll_iget(struct super_block *sb, ino_t hash,
         return inode;
 }
 #else
-struct inode *ll_iget(struct super_block *sb, inot_t hash, 
+struct inode *ll_iget(struct super_block *sb, ino_t hash,
                       struct ll_read_inode2_cookie *lic)
 {
         struct inode *inode;
@@ -528,7 +533,7 @@ static int ll_mknod(struct inode *dir, struct dentry *dentry, int mode,
         struct lookup_intent *it;
         struct inode *inode;
         int rc = 0;
-        
+
         LL_GET_INTENT(dentry, it);
 
         inode = ll_create_node(dir, dentry->d_name.name, dentry->d_name.len,
@@ -592,7 +597,7 @@ static int ll_link(struct dentry *old_dentry, struct inode * dir,
         struct lookup_intent *it;
         struct inode *inode = old_dentry->d_inode;
         int rc;
-        
+
         LL_GET_INTENT(dentry, it);
 
         if (it && it->it_disposition) {
@@ -758,7 +763,7 @@ static int ll_rename(struct inode * old_dir, struct dentry * old_dentry,
 
         LL_GET_INTENT(new_dentry, it);
 
-        if (it && it->it_disposition) { 
+        if (it && it->it_disposition) {
                 if (tgt_inode) {
                         tgt_inode->i_ctime = CURRENT_TIME;
                         tgt_inode->i_nlink--;
