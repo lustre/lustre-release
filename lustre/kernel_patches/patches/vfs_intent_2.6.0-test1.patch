@@ -1,26 +1,26 @@
  fs/exec.c              |   18 +++++++---
- fs/namei.c             |   81 +++++++++++++++++++++++++++++++++++++++++++++----
+ fs/namei.c             |   86 +++++++++++++++++++++++++++++++++++++++++++++----
  fs/namespace.c         |    2 +
  fs/nfs/dir.c           |    4 +-
- fs/open.c              |   64 +++++++++++++++++++++++++-------------
- fs/stat.c              |   28 ++++++++++++----
+ fs/open.c              |   62 +++++++++++++++++++++++------------
+ fs/stat.c              |   24 ++++++++++---
  include/linux/dcache.h |    3 +
- include/linux/fs.h     |    7 ++++
- include/linux/namei.h  |   56 ++++++++++++++++++++++++++++-----
+ include/linux/fs.h     |    8 ++++
+ include/linux/namei.h  |   56 ++++++++++++++++++++++++++-----
  kernel/ksyms.c         |    8 ++++
- 10 files changed, 219 insertions(+), 52 deletions(-)
+ 10 files changed, 222 insertions(+), 49 deletions(-)
 
---- linux-2.6.0-test1/fs/exec.c~vfs_intent_2.6.0-test1	2003-07-22 11:04:35.000000000 -0600
-+++ linux-2.6.0-test1-braam/fs/exec.c	2003-07-22 13:48:04.000000000 -0600
+--- linux-2.6.0-test1/fs/exec.c~vfs_intent_2.6.0-test1	2003-09-13 16:01:21.000000000 +0400
++++ linux-2.6.0-test1-alexey/fs/exec.c	2003-09-13 16:21:05.000000000 +0400
 @@ -116,8 +116,11 @@ asmlinkage long sys_uselib(const char __
  	struct file * file;
  	struct nameidata nd;
  	int error;
-+        intent_init(&nd.intent, IT_OPEN);
-+  
-+ 	error = user_path_walk_it(library, &nd);
++	intent_init(&nd.intent, IT_OPEN);
  
 -	nd.intent.open.flags = O_RDONLY;
++	error = user_path_walk_it(library, &nd);
++
 +	nd.intent.it_flags = O_RDONLY;
  	error = __user_walk(library, LOOKUP_FOLLOW|LOOKUP_OPEN, &nd);
  	if (error)
@@ -40,13 +40,13 @@
  	struct nameidata nd;
 -	int err = path_lookup(name, LOOKUP_FOLLOW, &nd);
 -	struct file *file = ERR_PTR(err);
-+ 	int err;
-+ 	struct file *file;
-+         
-+        intent_init(&nd.intent, IT_OPEN);
-+        nd.intent.it_flags = O_RDONLY;
-+        err = path_lookup(name, LOOKUP_FOLLOW, &nd);
-+        file = ERR_PTR(err);
++	int err;
++	struct file *file;
++
++	intent_init(&nd.intent, IT_OPEN);
++	nd.intent.it_flags = O_RDONLY;
++	err = path_lookup(name, LOOKUP_FOLLOW, &nd);
++	file = ERR_PTR(err);
  
  	if (!err) {
  		struct inode *inode = nd.dentry->d_inode;
@@ -59,103 +59,116 @@
  				if (!IS_ERR(file)) {
  					err = deny_write_access(file);
  					if (err) {
---- linux-2.6.0-test1/fs/namei.c~vfs_intent_2.6.0-test1	2003-07-22 11:04:35.000000000 -0600
-+++ linux-2.6.0-test1-braam/fs/namei.c	2003-07-22 13:48:04.000000000 -0600
+--- linux-2.6.0-test1/fs/namei.c~vfs_intent_2.6.0-test1	2003-09-13 16:01:21.000000000 +0400
++++ linux-2.6.0-test1-alexey/fs/namei.c	2003-09-13 16:21:05.000000000 +0400
 @@ -263,8 +263,19 @@ int deny_write_access(struct file * file
  	return 0;
  }
  
 +void intent_release(struct lookup_intent *it)
 +{
-+        if (!it) 
-+                return;
-+        if (it->it_magic != INTENT_MAGIC)
-+                return;
-+        if (it->it_op_release)
-+                it->it_op_release(it);
++	if (!it)
++		return;
++	if (it->it_magic != INTENT_MAGIC)
++		return;
++	if (it->it_op_release)
++		it->it_op_release(it);
 +}
 +
  void path_release(struct nameidata *nd)
  {
-+        intent_release(&nd->intent);
++	intent_release(&nd->intent);
  	dput(nd->dentry);
  	mntput(nd->mnt);
  }
-@@ -554,6 +565,32 @@ fail:
+@@ -340,7 +351,10 @@ static struct dentry * real_lookup(struc
+ {
+ 	struct dentry * result;
+ 	struct inode *dir = parent->d_inode;
++        int counter = 0;
+ 
++again:
++        counter++;
+ 	down(&dir->i_sem);
+ 	/*
+ 	 * First re-do the cached lookup just in case it was created
+@@ -379,7 +393,10 @@ static struct dentry * real_lookup(struc
+ 	if (result->d_op && result->d_op->d_revalidate) {
+ 		if (!result->d_op->d_revalidate(result, nd) && !d_invalidate(result)) {
+ 			dput(result);
+-			result = ERR_PTR(-ENOENT);
++                        if (counter > 10)
++                                result = ERR_PTR(-ESTALE);
++                        if (!IS_ERR(result))
++                                goto again;
+ 		}
+ 	}
+ 	return result;
+@@ -554,6 +571,31 @@ fail:
  	return PTR_ERR(dentry);
  }
  
-+
 +static int revalidate_special(struct nameidata *nd)
 +{
-+        struct dentry *dentry = nd->dentry;
-+        int err, counter = 0;
++	struct dentry *dentry = nd->dentry;
++	int err, counter = 0;
 +
-+        if (!dentry->d_op || !dentry->d_op->d_revalidate)
-+                return 0;
++	if (!dentry->d_op || !dentry->d_op->d_revalidate)
++		return 0;
 + revalidate_again:
-+        if (!dentry->d_op->d_revalidate(dentry, nd)) {
-+                struct dentry *new;
-+                if ((err = permission(dentry->d_parent->d_inode, MAY_EXEC,nd)))
-+                        return err;
-+                new = real_lookup(dentry->d_parent, &dentry->d_name, nd);
-+                d_invalidate(dentry);
-+                dput(dentry);
-+                dentry = new;
-+                counter++;
-+                if (counter < 10)
-+                        goto revalidate_again;
-+                printk("excessive revalidate_it loops\n");
-+                return -ESTALE;
-+        }
-+        return 0;
++	if (!dentry->d_op->d_revalidate(dentry, nd)) {
++		struct dentry *new;
++		if ((err = permission(dentry->d_parent->d_inode, MAY_EXEC,nd)))
++			return err;
++		new = real_lookup(dentry->d_parent, &dentry->d_name, nd);
++		d_invalidate(dentry);
++		dput(dentry);
++		dentry = new;
++		counter++;
++		if (counter < 10)
++			goto revalidate_again;
++		printk("excessive revalidate_it loops\n");
++		return -ESTALE;
++	}
++	return 0;
 +}
 +
  /*
   * Name resolution.
   *
-@@ -654,7 +691,9 @@ int link_path_walk(const char * name, st
+@@ -654,7 +696,9 @@ int link_path_walk(const char * name, st
  
  		if (inode->i_op->follow_link) {
  			mntget(next.mnt);
-+                        nd->flags |= LOOKUP_LINK_NOTLAST;
++			nd->flags |= LOOKUP_LINK_NOTLAST;
  			err = do_follow_link(next.dentry, nd);
-+                        nd->flags &= ~LOOKUP_LINK_NOTLAST;
++			nd->flags &= ~LOOKUP_LINK_NOTLAST;
  			dput(next.dentry);
  			mntput(next.mnt);
  			if (err)
-@@ -693,6 +732,11 @@ last_component:
+@@ -693,6 +737,11 @@ last_component:
  				inode = nd->dentry->d_inode;
  				/* fallthrough */
  			case 1:
-+                                nd->flags |= LOOKUP_LAST;
-+                                err = revalidate_special(nd);
-+                                nd->flags &= ~LOOKUP_LAST;
-+                                if (err)
-+                                        break;
++				nd->flags |= LOOKUP_LAST;
++				err = revalidate_special(nd);
++				nd->flags &= ~LOOKUP_LAST;
++				if (err)
++					break;
  				goto return_base;
  		}
  		if (nd->dentry->d_op && nd->dentry->d_op->d_hash) {
-@@ -700,7 +744,9 @@ last_component:
+@@ -700,7 +749,9 @@ last_component:
  			if (err < 0)
  				break;
  		}
-+                nd->flags |= LOOKUP_LAST;
++		nd->flags |= LOOKUP_LAST;
  		err = do_lookup(nd, &this, &next);
-+                nd->flags &= ~LOOKUP_LAST;
++		nd->flags &= ~LOOKUP_LAST;
  		if (err)
  			break;
  		follow_mount(&next.mnt, &next.dentry);
-@@ -743,7 +789,7 @@ out_dput:
- 		dput(next.dentry);
- 		break;
- 	}
--	path_release(nd);
-+        path_release(nd);
- return_err:
- 	return err;
- }
-@@ -912,7 +958,7 @@ struct dentry * lookup_hash(struct qstr 
+@@ -912,7 +963,7 @@ struct dentry * lookup_hash(struct qstr 
  }
  
  /* SMP-safe */
@@ -164,7 +177,7 @@
  {
  	unsigned long hash;
  	struct qstr this;
-@@ -932,11 +978,16 @@ struct dentry * lookup_one_len(const cha
+@@ -932,11 +983,16 @@ struct dentry * lookup_one_len(const cha
  	}
  	this.hash = end_name_hash(hash);
  
@@ -176,13 +189,13 @@
  
 +struct dentry * lookup_one_len(const char * name, struct dentry * base, int len)
 +{
-+        return lookup_one_len_it(name, base, len, NULL);
++	return lookup_one_len_it(name, base, len, NULL);
 +}
 +
  /*
   *	namei()
   *
-@@ -948,10 +999,11 @@ access:
+@@ -948,11 +1004,12 @@ access:
   * that namei follows links, while lnamei does not.
   * SMP-safe
   */
@@ -191,24 +204,25 @@
  {
  	char *tmp = getname(name);
  	int err = PTR_ERR(tmp);
-+ 
  
++
  	if (!IS_ERR(tmp)) {
  		err = path_lookup(tmp, flags, nd);
-@@ -960,6 +1012,12 @@ int __user_walk(const char __user *name,
+ 		putname(tmp);
+@@ -960,6 +1017,12 @@ int __user_walk(const char __user *name,
  	return err;
  }
  
 +int __user_walk(const char __user *name, unsigned flags, struct nameidata *nd)
 +{
-+        intent_init(&nd->intent, IT_LOOKUP);
-+        return __user_walk_it(name, flags, nd);
++	intent_init(&nd->intent, IT_LOOKUP);
++	return __user_walk_it(name, flags, nd);
 +}
 +
  /*
   * It's inline, so penalty for filesystems that don't use sticky bit is
   * minimal.
-@@ -1232,8 +1290,8 @@ int open_namei(const char * pathname, in
+@@ -1232,8 +1295,8 @@ int open_namei(const char * pathname, in
  		acc_mode |= MAY_APPEND;
  
  	/* Fill in the open() intent data */
@@ -219,62 +233,62 @@
  
  	/*
  	 * The simplest case - just a plain lookup.
-@@ -1249,6 +1307,7 @@ int open_namei(const char * pathname, in
+@@ -1249,6 +1312,7 @@ int open_namei(const char * pathname, in
  	/*
  	 * Create - we need to know the parent.
  	 */
-+        nd->intent.it_op |= IT_CREAT;
++	nd->intent.it_op |= IT_CREAT;
  	error = path_lookup(pathname, LOOKUP_PARENT|LOOKUP_OPEN|LOOKUP_CREATE, nd);
  	if (error)
  		return error;
-@@ -1265,7 +1324,9 @@ int open_namei(const char * pathname, in
+@@ -1265,7 +1329,9 @@ int open_namei(const char * pathname, in
  	dir = nd->dentry;
  	nd->flags &= ~LOOKUP_PARENT;
  	down(&dir->d_inode->i_sem);
-+        nd->flags |= LOOKUP_LAST;
++	nd->flags |= LOOKUP_LAST;
  	dentry = __lookup_hash(&nd->last, nd->dentry, nd);
-+        nd->flags &= ~LOOKUP_LAST;
++	nd->flags &= ~LOOKUP_LAST;
  
  do_last:
  	error = PTR_ERR(dentry);
-@@ -1370,7 +1431,9 @@ do_link:
+@@ -1370,7 +1436,9 @@ do_link:
  	}
  	dir = nd->dentry;
  	down(&dir->d_inode->i_sem);
-+        nd->flags |= LOOKUP_LAST;
++	nd->flags |= LOOKUP_LAST;
  	dentry = __lookup_hash(&nd->last, nd->dentry, nd);
-+        nd->flags &= ~LOOKUP_LAST;
++	nd->flags &= ~LOOKUP_LAST;
  	putname(nd->last.name);
  	goto do_last;
  }
-@@ -2143,7 +2206,9 @@ static inline int
+@@ -2143,7 +2211,9 @@ static inline int
  __vfs_follow_link(struct nameidata *nd, const char *link)
  {
  	int res = 0;
-+        struct lookup_intent it = nd->intent;
++	struct lookup_intent it = nd->intent;
  	char *name;
 +
  	if (IS_ERR(link))
  		goto fail;
  
-@@ -2153,6 +2218,10 @@ __vfs_follow_link(struct nameidata *nd, 
+@@ -2153,6 +2223,10 @@ __vfs_follow_link(struct nameidata *nd, 
  			/* weird __emul_prefix() stuff did it */
  			goto out;
  	}
 +
-+        intent_init(&nd->intent, it.it_op);
-+        nd->intent.it_flags = it.it_flags;
-+        nd->intent.it_create_mode = it.it_create_mode;
++	intent_init(&nd->intent, it.it_op);
++	nd->intent.it_flags = it.it_flags;
++	nd->intent.it_create_mode = it.it_create_mode;
  	res = link_path_walk(link, nd);
  out:
  	if (current->link_count || res || nd->last_type!=LAST_NORM)
---- linux-2.6.0-test1/fs/namespace.c~vfs_intent_2.6.0-test1	2003-07-22 11:04:35.000000000 -0600
-+++ linux-2.6.0-test1-braam/fs/namespace.c	2003-07-22 13:48:04.000000000 -0600
+--- linux-2.6.0-test1/fs/namespace.c~vfs_intent_2.6.0-test1	2003-09-13 16:01:21.000000000 +0400
++++ linux-2.6.0-test1-alexey/fs/namespace.c	2003-09-13 16:21:05.000000000 +0400
 @@ -738,6 +738,7 @@ long do_mount(char * dev_name, char * di
  	int retval = 0;
  	int mnt_flags = 0;
  
-+        intent_init(&nd.intent, IT_LOOKUP);
++	intent_init(&nd.intent, IT_LOOKUP);
  	/* Discard magic */
  	if ((flags & MS_MGC_MSK) == MS_MGC_VAL)
  		flags &= ~MS_MGC_MSK;
@@ -286,8 +300,8 @@
  
  static void chroot_fs_refs(struct nameidata *old_nd, struct nameidata *new_nd)
  {
---- linux-2.6.0-test1/fs/open.c~vfs_intent_2.6.0-test1	2003-07-13 21:29:30.000000000 -0600
-+++ linux-2.6.0-test1-braam/fs/open.c	2003-07-22 13:48:04.000000000 -0600
+--- linux-2.6.0-test1/fs/open.c~vfs_intent_2.6.0-test1	2003-07-24 15:52:47.000000000 +0400
++++ linux-2.6.0-test1-alexey/fs/open.c	2003-09-13 16:21:05.000000000 +0400
 @@ -200,7 +200,7 @@ static inline long do_sys_truncate(const
  	struct nameidata nd;
  	struct inode * inode;
@@ -309,7 +323,7 @@
  		if(!res && (mode & S_IWOTH) && IS_RDONLY(nd.dentry->d_inode)
  		   && !special_file(nd.dentry->d_inode->i_mode))
  			res = -EROFS;
-+		                
++
  		path_release(&nd);
  	}
  
@@ -361,8 +375,8 @@
 -}
 -
 -struct file *dentry_open(struct dentry *dentry, struct vfsmount *mnt, int flags)
-+struct file *dentry_open_it(struct dentry *dentry, struct vfsmount *mnt, int flags, 
-+                            struct lookup_intent *it)
++struct file *dentry_open_it(struct dentry *dentry, struct vfsmount *mnt, int flags,
++			    struct lookup_intent *it)
  {
  	struct file * f;
  	struct inode *inode;
@@ -370,7 +384,7 @@
  		goto cleanup_dentry;
  	f->f_flags = flags;
  	f->f_mode = (flags+1) & O_ACCMODE;
-+        f->f_it = it;
++	f->f_it = it;
  	inode = dentry->d_inode;
  	if (f->f_mode & FMODE_WRITE) {
  		error = get_write_access(inode);
@@ -378,24 +392,15 @@
  		error = f->f_op->open(inode,f);
  		if (error)
  			goto cleanup_all;
-+                intent_release(it);
++		intent_release(it);
  	}
  	f->f_flags &= ~(O_CREAT | O_EXCL | O_NOCTTY | O_TRUNC);
  
-@@ -778,7 +767,7 @@ struct file *dentry_open(struct dentry *
- 				f = ERR_PTR(-EINVAL);
- 		}
- 	}
--
-+        
- 	return f;
- 
- cleanup_all:
 @@ -791,11 +780,42 @@ cleanup_all:
  cleanup_file:
  	put_filp(f);
  cleanup_dentry:
-+        intent_release(it);
++	intent_release(it);
  	dput(dentry);
  	mntput(mnt);
  	return ERR_PTR(error);
@@ -405,7 +410,7 @@
 +{
 +	int namei_flags, error;
 +	struct file * temp_filp;
-+        struct nameidata nd;
++	struct nameidata nd;
 +	intent_init(&nd.intent, IT_OPEN);
 +
 +	namei_flags = flags;
@@ -425,17 +430,17 @@
 +
 +struct file *dentry_open(struct dentry *dentry, struct vfsmount *mnt, int flags)
 +{
-+        struct lookup_intent it;
++	struct lookup_intent it;
 +	intent_init(&it, IT_LOOKUP);
 +
-+        return dentry_open_it(dentry, mnt, flags, &it);
++	return dentry_open_it(dentry, mnt, flags, &it);
 +}
 +
  /*
   * Find an empty file descriptor entry, and mark it busy.
   */
---- linux-2.6.0-test1/fs/stat.c~vfs_intent_2.6.0-test1	2003-07-22 11:04:35.000000000 -0600
-+++ linux-2.6.0-test1-braam/fs/stat.c	2003-07-22 13:48:04.000000000 -0600
+--- linux-2.6.0-test1/fs/stat.c~vfs_intent_2.6.0-test1	2003-09-13 16:01:21.000000000 +0400
++++ linux-2.6.0-test1-alexey/fs/stat.c	2003-09-13 16:21:05.000000000 +0400
 @@ -33,7 +33,7 @@ void generic_fillattr(struct inode *inod
  	stat->blksize = inode->i_blksize;
  }
@@ -454,13 +459,13 @@
  
  	generic_fillattr(inode, stat);
  	if (!stat->blksize) {
-@@ -56,15 +58,21 @@ int vfs_getattr(struct vfsmount *mnt, st
+@@ -56,14 +58,20 @@ int vfs_getattr(struct vfsmount *mnt, st
  	return 0;
  }
  
 +int vfs_getattr(struct vfsmount *mnt, struct dentry *dentry, struct kstat *stat)
 +{
-+        return vfs_getattr_it(mnt, dentry, NULL, stat);
++	return vfs_getattr_it(mnt, dentry, NULL, stat);
 +}
 +
  int vfs_stat(char __user *name, struct kstat *stat)
@@ -473,13 +478,11 @@
 +	error = user_path_walk_it(name, &nd);
  	if (!error) {
 -		error = vfs_getattr(nd.mnt, nd.dentry, stat);
--		path_release(&nd);
 +		error = vfs_getattr_it(nd.mnt, nd.dentry, &nd.intent, stat);
-+                path_release(&nd);
+ 		path_release(&nd);
  	}
  	return error;
- }
-@@ -73,11 +81,12 @@ int vfs_lstat(char __user *name, struct 
+@@ -73,10 +81,11 @@ int vfs_lstat(char __user *name, struct 
  {
  	struct nameidata nd;
  	int error;
@@ -489,28 +492,26 @@
 +	error = user_path_walk_link_it(name, &nd);
  	if (!error) {
 -		error = vfs_getattr(nd.mnt, nd.dentry, stat);
--		path_release(&nd);
 +		error = vfs_getattr_it(nd.mnt, nd.dentry, &nd.intent, stat);
-+                path_release(&nd);
+ 		path_release(&nd);
  	}
  	return error;
- }
 @@ -86,9 +95,12 @@ int vfs_fstat(unsigned int fd, struct ks
  {
  	struct file *f = fget(fd);
  	int error = -EBADF;
-+        struct nameidata nd;
++	struct nameidata nd;
 +	intent_init(&nd.intent, IT_GETATTR);
  
  	if (f) {
 -		error = vfs_getattr(f->f_vfsmnt, f->f_dentry, stat);
 +		error = vfs_getattr_it(f->f_vfsmnt, f->f_dentry, &nd.intent, stat);
-+                intent_release(&nd.intent);
++		intent_release(&nd.intent);
  		fput(f);
  	}
  	return error;
---- linux-2.6.0-test1/include/linux/dcache.h~vfs_intent_2.6.0-test1	2003-07-13 21:39:22.000000000 -0600
-+++ linux-2.6.0-test1-braam/include/linux/dcache.h	2003-07-22 13:48:04.000000000 -0600
+--- linux-2.6.0-test1/include/linux/dcache.h~vfs_intent_2.6.0-test1	2003-07-24 15:52:31.000000000 +0400
++++ linux-2.6.0-test1-alexey/include/linux/dcache.h	2003-09-13 16:21:05.000000000 +0400
 @@ -4,6 +4,7 @@
  #ifdef __KERNEL__
  
@@ -528,8 +529,8 @@
  struct dentry_stat_t {
  	int nr_dentry;
  	int nr_unused;
---- linux-2.6.0-test1/include/linux/fs.h~vfs_intent_2.6.0-test1	2003-07-22 11:04:35.000000000 -0600
-+++ linux-2.6.0-test1-braam/include/linux/fs.h	2003-07-22 13:48:04.000000000 -0600
+--- linux-2.6.0-test1/include/linux/fs.h~vfs_intent_2.6.0-test1	2003-09-13 16:01:21.000000000 +0400
++++ linux-2.6.0-test1-alexey/include/linux/fs.h	2003-09-13 16:21:05.000000000 +0400
 @@ -237,6 +237,8 @@ typedef int (get_blocks_t)(struct inode 
  #define ATTR_ATTR_FLAG	1024
  #define ATTR_KILL_SUID	2048
@@ -539,25 +540,33 @@
  
  /*
   * This is the Inode Attributes structure, used for notify_change().  It
-@@ -511,6 +513,7 @@ struct file {
+@@ -396,6 +398,7 @@ struct inode {
+ 	struct block_device	*i_bdev;
+ 	struct cdev		*i_cdev;
+ 	int			i_cindex;
++	void			*i_filterdata;
+ 
+ 	unsigned long		i_dnotify_mask; /* Directory notify events */
+ 	struct dnotify_struct	*i_dnotify; /* for directory notifications */
+@@ -511,6 +514,7 @@ struct file {
  	/* Used by fs/eventpoll.c to link all the hooks to this file */
  	struct list_head	f_ep_links;
  	spinlock_t		f_ep_lock;
-+        struct lookup_intent    *f_it;
++	struct lookup_intent    *f_it;
  };
  extern spinlock_t files_lock;
  #define file_list_lock() spin_lock(&files_lock);
-@@ -816,7 +819,9 @@ struct inode_operations {
+@@ -816,7 +820,9 @@ struct inode_operations {
  	void (*truncate) (struct inode *);
  	int (*permission) (struct inode *, int, struct nameidata *);
  	int (*setattr) (struct dentry *, struct iattr *);
-+ 	int (*setattr_raw) (struct inode *, struct iattr *);
++	int (*setattr_raw) (struct inode *, struct iattr *);
  	int (*getattr) (struct vfsmount *mnt, struct dentry *, struct kstat *);
-+ 	int (*getattr_it) (struct vfsmount *, struct dentry *, struct lookup_intent *, struct kstat *);
++	int (*getattr_it) (struct vfsmount *, struct dentry *, struct lookup_intent *, struct kstat *);
  	int (*setxattr) (struct dentry *, const char *,const void *,size_t,int);
  	ssize_t (*getxattr) (struct dentry *, const char *, void *, size_t);
  	ssize_t (*listxattr) (struct dentry *, char *, size_t);
-@@ -1029,6 +1034,7 @@ extern int register_filesystem(struct fi
+@@ -1029,6 +1035,7 @@ extern int register_filesystem(struct fi
  extern int unregister_filesystem(struct file_system_type *);
  extern struct vfsmount *kern_mount(struct file_system_type *);
  extern int may_umount(struct vfsmount *);
@@ -565,7 +574,7 @@
  extern long do_mount(char *, char *, char *, unsigned long, void *);
  
  extern int vfs_statfs(struct super_block *, struct kstatfs *);
-@@ -1096,6 +1102,7 @@ extern int do_truncate(struct dentry *, 
+@@ -1096,6 +1103,7 @@ extern int do_truncate(struct dentry *, 
  
  extern struct file *filp_open(const char *, int, int);
  extern struct file * dentry_open(struct dentry *, struct vfsmount *, int);
@@ -573,8 +582,8 @@
  extern int filp_close(struct file *, fl_owner_t id);
  extern char * getname(const char __user *);
  
---- linux-2.6.0-test1/include/linux/namei.h~vfs_intent_2.6.0-test1	2003-07-13 21:32:39.000000000 -0600
-+++ linux-2.6.0-test1-braam/include/linux/namei.h	2003-07-22 14:43:29.000000000 -0600
+--- linux-2.6.0-test1/include/linux/namei.h~vfs_intent_2.6.0-test1	2003-07-24 15:52:31.000000000 +0400
++++ linux-2.6.0-test1-alexey/include/linux/namei.h	2003-09-13 16:21:05.000000000 +0400
 @@ -2,25 +2,55 @@
  #define _LINUX_NAMEI_H
  
@@ -598,30 +607,30 @@
 +#define IT_GETXATTR (1<<7)
 +
 +struct lustre_intent_data {
-+        int       it_disposition;
-+        int       it_status;
-+        __u64     it_lock_handle;
-+        void     *it_data;
-+        int       it_lock_mode;
++	int       it_disposition;
++	int       it_status;
++	__u64     it_lock_handle;
++	void     *it_data;
++	int       it_lock_mode;
  };
  
 +#define INTENT_MAGIC 0x19620323
 +struct lookup_intent {
-+        int     it_magic;
-+        void    (*it_op_release)(struct lookup_intent *);
-+        int     it_op;
++	int     it_magic;
++	void    (*it_op_release)(struct lookup_intent *);
++	int     it_op;
 +	int	it_flags;
 +	int	it_create_mode;
-+        union {
-+                struct lustre_intent_data lustre;
-+        } d;
++	union {
++		struct lustre_intent_data lustre;
++	} d;
 +};
 +
 +static inline void intent_init(struct lookup_intent *it, int op)
 +{
-+        memset(it, 0, sizeof(*it));
-+        it->it_magic = INTENT_MAGIC;
-+        it->it_op = op;
++	memset(it, 0, sizeof(*it));
++	it->it_magic = INTENT_MAGIC;
++	it->it_op = op;
 +}
 +
  struct nameidata {
@@ -635,7 +644,7 @@
 -	union {
 -		struct open_intent open;
 -	} intent;
-+        struct lookup_intent intent;
++	struct lookup_intent intent;
  };
  
  /*
@@ -670,9 +679,9 @@
  extern int follow_down(struct vfsmount **, struct dentry **);
  extern int follow_up(struct vfsmount **, struct dentry **);
  
---- linux-2.6.0-test1/kernel/ksyms.c~vfs_intent_2.6.0-test1	2003-07-22 11:04:35.000000000 -0600
-+++ linux-2.6.0-test1-braam/kernel/ksyms.c	2003-07-22 13:48:04.000000000 -0600
-@@ -381,6 +381,7 @@ EXPORT_SYMBOL(unregister_filesystem);
+--- linux-2.6.0-test1/kernel/ksyms.c~vfs_intent_2.6.0-test1	2003-09-13 16:01:33.000000000 +0400
++++ linux-2.6.0-test1-alexey/kernel/ksyms.c	2003-09-13 16:21:05.000000000 +0400
+@@ -383,6 +383,7 @@ EXPORT_SYMBOL(unregister_filesystem);
  EXPORT_SYMBOL(kern_mount);
  EXPORT_SYMBOL(__mntput);
  EXPORT_SYMBOL(may_umount);
@@ -680,7 +689,7 @@
  
  /* executable format registration */
  EXPORT_SYMBOL(register_binfmt);
-@@ -410,6 +411,12 @@ EXPORT_SYMBOL(del_timer);
+@@ -412,6 +413,12 @@ EXPORT_SYMBOL(del_timer);
  EXPORT_SYMBOL(request_irq);
  EXPORT_SYMBOL(free_irq);
  
@@ -693,7 +702,7 @@
  /* waitqueue handling */
  EXPORT_SYMBOL(add_wait_queue);
  EXPORT_SYMBOL(add_wait_queue_exclusive);
-@@ -557,6 +564,7 @@ EXPORT_SYMBOL(sys_tz);
+@@ -559,6 +566,7 @@ EXPORT_SYMBOL(sys_tz);
  EXPORT_SYMBOL(file_fsync);
  EXPORT_SYMBOL(fsync_buffers_list);
  EXPORT_SYMBOL(clear_inode);
@@ -701,8 +710,8 @@
  EXPORT_SYMBOL(init_special_inode);
  EXPORT_SYMBOL(new_inode);
  EXPORT_SYMBOL(__insert_inode_hash);
---- linux-2.6.0-test1/fs/nfs/dir.c~vfs_intent_2.6.0-test1	2003-07-13 21:34:03.000000000 -0600
-+++ linux-2.6.0-test1-braam/fs/nfs/dir.c	2003-07-22 13:48:04.000000000 -0600
+--- linux-2.6.0-test1/fs/nfs/dir.c~vfs_intent_2.6.0-test1	2003-07-24 15:52:31.000000000 +0400
++++ linux-2.6.0-test1-alexey/fs/nfs/dir.c	2003-09-13 16:21:05.000000000 +0400
 @@ -650,7 +650,7 @@ int nfs_is_exclusive_create(struct inode
  		return 0;
  	if (!nd || (nd->flags & LOOKUP_CONTINUE) || !(nd->flags & LOOKUP_CREATE))
