@@ -1,6 +1,11 @@
 #!/bin/bash
 
-config=lov.xml
+if [ -z "$1" ]; then
+   config=lov.xml
+else
+   config=$1
+fi
+
 LMC=../utils/lmc
 
 echo "FIXME: autoformat is no by default, edit $config to change"

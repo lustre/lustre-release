@@ -1,5 +1,4 @@
 <?xml version='1.0' encoding='UTF-8'?>
-<!DOCTYPE lustre>
 <lustre>
   <ldlm name='ldlm' uuid='ldlm_UUID'/>
   <node name='localhost' uuid='localhost_UUID'>
@@ -32,7 +31,7 @@
   </mdc>
   <lov name='lov1' uuid='lov1_UUID'>
     <mds_ref uuidref='mds1_UUID'/>
-    <devices stripesize='4096' stripeoffset='0' pattern='0'>
+    <devices stripeoffset='0' stripesize='4096' pattern='0'>
       <osc_ref uuidref='OSC_localhost_UUID'/>
       <osc_ref uuidref='OSC_localhost_2_UUID'/>
     </devices>

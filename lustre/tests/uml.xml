@@ -13,6 +13,25 @@
       <port>988</port>
     </network>
   </node>
+  <node router name='gw1' uuid='r1uuid' >
+    <profile>
+      <network_ref/>
+      <network_ref/>
+      <route_tbl_ref/>
+    </profile>
+    <network type='tcp'/>
+    <network type='elan'/>
+  </node>
+
+  <route_tbl name='' uuid=''>
+    <route nettype='elan' gw='1' lo='2' hi='100'>
+    <route nettype='tcp' gw='gw1' lo='ba1'>
+    <route nettype='tcp' gw='gw1' lo='ba2'>
+    <route nettype='tcp' gw='gw1' lo='ba3'>
+    <route nettype='elan' gw='2' lo='2' hi='100'>
+    <route nettype='tcp' gw='gw2' lo='ba3'>
+  </route_tbl>
+
   <node name='uml2' uuid='uml2_UUID'>
     <profile>
       <ldlm_ref uuidref='ldlm_UUID'/>
