@@ -1005,6 +1005,7 @@ int ldlm_replay_locks(struct obd_import *imp)
         INIT_LIST_HEAD(&list);
 
         LASSERT(atomic_read(&imp->imp_replay_inflight) == 0);
+        LASSERT(ns != NULL);
 
         /* ensure this doesn't fall to 0 before all have been queued */
         atomic_inc(&imp->imp_replay_inflight);
