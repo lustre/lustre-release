@@ -133,7 +133,7 @@ reboot_facet() {
 
 wait_for_host() {
    HOST=$1
-   check_network  $HOST 900
+   check_network "$HOST" 900
    while ! do_node $HOST "ls -d $LUSTRE " > /dev/null; do sleep 5; done
 }
 
@@ -305,6 +305,7 @@ do_node() {
     fi
     $PDSH $HOST "(PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests; cd $RPWD; sh -c \"$@\")"
 }
+
 do_facet() {
     facet=$1
     shift
