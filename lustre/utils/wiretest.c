@@ -166,8 +166,8 @@ void lustre_assert_wire_constants(void)
         LASSERT((int)sizeof(((struct obdo *)0)->o_generation) == 4);
         LASSERT(offsetof(struct obdo, o_valid) == 92);
         LASSERT((int)sizeof(((struct obdo *)0)->o_valid) == 4);
-        LASSERT(offsetof(struct obdo, o_obdflags) == 96);
-        LASSERT((int)sizeof(((struct obdo *)0)->o_obdflags) == 4);
+        LASSERT(offsetof(struct obdo, o_misc) == 96);
+        LASSERT((int)sizeof(((struct obdo *)0)->o_misc) == 4);
         LASSERT(offsetof(struct obdo, o_easize) == 100);
         LASSERT((int)sizeof(((struct obdo *)0)->o_easize) == 4);
         LASSERT(offsetof(struct obdo, o_inline) == 104);
@@ -184,7 +184,6 @@ void lustre_assert_wire_constants(void)
         LASSERT(OBD_MD_FLUID == 512);
         LASSERT(OBD_MD_FLGID == 1024);
         LASSERT(OBD_MD_FLFLAGS == 2048);
-        LASSERT(OBD_MD_FLOBDFLG == 4096);
         LASSERT(OBD_MD_FLNLINK == 8192);
         LASSERT(OBD_MD_FLGENER == 16384);
         LASSERT(OBD_MD_FLINLINE == 32768);
@@ -272,8 +271,8 @@ void lustre_assert_wire_constants(void)
         LASSERT((int)sizeof(((struct niobuf_remote *)0)->flags) == 4);
         LASSERT(OBD_BRW_READ == 1);
         LASSERT(OBD_BRW_WRITE == 2);
-        LASSERT(OBD_BRW_CREATE == 4);
         LASSERT(OBD_BRW_SYNC == 8);
+        LASSERT(OBD_BRW_FROM_GRANT == 16);
 
         /* Checks for struct ost_body */
         LASSERT((int)sizeof(struct ost_body) == 168);
