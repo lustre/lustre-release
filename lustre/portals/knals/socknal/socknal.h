@@ -317,6 +317,7 @@ typedef struct ksock_conn
         struct list_head    ksnc_tx_list;       /* where I enq waiting for output space */
         struct list_head    ksnc_tx_queue;      /* packets waiting to be sent */
         unsigned long       ksnc_tx_deadline;   /* when (in jiffies) tx times out */
+        int                 ksnc_tx_bufnob;     /* send buffer marker */
         atomic_t            ksnc_tx_nob;        /* # bytes queued */
         int                 ksnc_tx_ready;      /* write space */
         int                 ksnc_tx_scheduled;  /* being progressed */
