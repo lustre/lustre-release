@@ -6,5 +6,5 @@
 include $(src)/../portals/Kernelenv
 
 obj-y += llite.o
-llite-objs := dcache.o commit_callback.o super.o rw.o iod.o super25.o \
-		file.o dir.o sysctl.o symlink.o namei.o lproc_llite.o
+llite-objs := llite_lib.o dcache.o commit_callback.o super.o rw.o iod.o \
+	super25.o file.o dir.o sysctl.o symlink.o namei.o lproc_llite.o
