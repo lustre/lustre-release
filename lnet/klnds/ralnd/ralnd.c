@@ -544,6 +544,13 @@ kranal_set_conn_params(kra_conn_t *conn, kra_connreq_t *connreq,
         conn->rac_last_tx = jiffies;
         conn->rac_keepalive = 0;
 
+        rrc = RapkSetRiParams(conn->rac_rihandle, &connreq->racr_riparams);
+        if (rrc != RAP_SUCCESS) {
+                CERROR("Error setting riparams from %u.%u.%u.%u/%d: %d\n",
+                       HIPQUAD(peer_ip), peer_port, rrc);
+                return -ECONNABORTED;
+        }
+
         /* Schedule conn on rad_new_conns */
         kranal_conn_addref(conn);
         spin_lock_irqsave(&dev->rad_lock, flags);
@@ -551,9 +558,9 @@ kranal_set_conn_params(kra_conn_t *conn, kra_connreq_t *connreq,
         wake_up(&dev->rad_waitq);
         spin_unlock_irqrestore(&dev->rad_lock, flags);
 
-        rrc = RapkSetRiParams(conn->rac_rihandle, &connreq->racr_riparams);
+        rrc = RapkWaitToConnect(conn->rac_rihandle);
         if (rrc != RAP_SUCCESS) {
-                CERROR("Error setting riparams from %u.%u.%u.%u/%d: %d\n",
+                CERROR("Error waiting to connect to %u.%u.%u.%u/%d: %d\n",
                        HIPQUAD(peer_ip), peer_port, rrc);
                 return -ECONNABORTED;
         }
