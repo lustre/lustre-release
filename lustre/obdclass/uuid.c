@@ -122,12 +122,12 @@ int class_uuid_parse(struct obd_uuid in, class_uuid_t uu)
 }
 #endif
 
-void class_uuid_unparse(class_uuid_t uu, struct obd_uuid out)
+void class_uuid_unparse(class_uuid_t uu, struct obd_uuid *out)
 {
 	struct uuid uuid;
 
 	uuid_unpack(uu, &uuid);
-	sprintf(out.uuid,
+	sprintf(out->uuid,
 		"%08x-%04x-%04x-%02x%02x-%02x%02x%02x%02x%02x%02x",
 		uuid.time_low, uuid.time_mid, uuid.time_hi_and_version,
 		uuid.clock_seq >> 8, uuid.clock_seq & 0xFF,
