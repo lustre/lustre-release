@@ -73,6 +73,9 @@ int target_handle_connect(struct ptlrpc_request *req)
         if (rc && rc != EALREADY)
                 GOTO(out, rc);
 
+        /* If all else goes well, this is our RPC return code. */
+        req->rq_status = rc;
+
         rc = lustre_pack_msg(0, NULL, NULL, &req->rq_replen, &req->rq_repmsg);
         if (rc)
                 GOTO(out, rc);
@@ -103,7 +106,8 @@ int target_handle_connect(struct ptlrpc_request *req)
         spin_lock_init(&dlmimp->imp_lock);
         dlmimp->imp_level = LUSTRE_CONN_FULL;
 out:
-        req->rq_status = rc;
+        if (rc)
+                req->rq_status = rc;
         RETURN(rc);
 }
 
