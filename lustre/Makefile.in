@@ -11,13 +11,5 @@ subdir-m += mds
 subdir-m += obdfilter
 subdir-m += ost
 subdir-m += llite
-subdir-m += cobd
-
-ifeq ($(PATCHLEVEL),4)
-subdir-m += ptlbd
-endif # PATCHLEVEL = 4
-
-@SNAPFS_TRUE@subdir-m += snapfs
-@SMFS_TRUE@subdir-m += smfs
 
 @INCLUDE_RULES@

@@ -6,7 +6,7 @@
 AUTOMAKE_OPTIONS = foreign
 
 SUBDIRS = include ldiskfs lvfs obdclass lov ldlm ptlrpc			\
-	obdecho osc mdc mds obdfilter ost llite cobd ptlbd snapfs smfs	\
+	obdecho osc mdc mds obdfilter ost llite \
 	liblustre doc utils tests conf scripts autoconf
 
 EXTRA_DIST = BUGS FDL kernel_patches

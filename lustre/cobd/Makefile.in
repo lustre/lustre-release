@@ -1,4 +1,0 @@
-MODULES := cobd
-cobd-objs := cache_obd.o lproc_cache.o
-
-@INCLUDE_RULES@

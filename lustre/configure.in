@@ -127,24 +127,6 @@ AC_ARG_ENABLE([mpitests],
 AC_MSG_RESULT([$enable_mpitests])
 AM_CONDITIONAL(MPITESTS, test x$enable_mpitests = xyes, Build MPI Tests)
 
-# snap compilation
-AC_MSG_CHECKING([whether to enable snapfs support])
-AC_ARG_ENABLE([snapfs],
-	AC_HELP_STRING([--enable-snapfs],
-			[build snapfs]),
-	[],[enable_snapfs='no'])
-AC_MSG_RESULT([$enable_snapfs])
-AM_CONDITIONAL(SNAPFS, test x$enable_snapfs = xyes)
-
-# smfs compilation
-AC_MSG_CHECKING([whether to enable smfs support])
-AC_ARG_ENABLE([smfs],
-	AC_HELP_STRING([--enable-smfs],
-			[build smfs]),
-	[],[enable_smfs='no'])
-AC_MSG_RESULT([$enable_smfs])
-AM_CONDITIONAL(SMFS, test x$enable_smfs = xyes)
-
 sinclude(portals/build.m4)
 sinclude(portals/archdep.m4)
 
@@ -173,8 +155,6 @@ AC_OUTPUT([
 Makefile
 Rules
 autoMakefile
-cobd/Makefile
-cobd/autoMakefile
 conf/Makefile
 doc/Makefile
 include/Makefile
@@ -244,18 +224,11 @@ portals/tests/Makefile
 portals/tests/autoMakefile
 portals/unals/Makefile
 portals/utils/Makefile
-ptlbd/Makefile
-ptlbd/autoMakefile
 ptlrpc/Makefile
 ptlrpc/autoMakefile
 scripts/Makefile
 scripts/lustre.spec
 scripts/version_tag.pl
-smfs/Makefile
-smfs/autoMakefile
-snapfs/Makefile
-snapfs/autoMakefile
-snapfs/utils/Makefile
 tests/Makefile
 utils/Lustre/Makefile
 utils/Makefile

@@ -319,35 +319,6 @@ AC_DEFINE_UNQUOTED(OBD_MAX_IOCTL_BUFFER, $OBD_BUFFER_SIZE, [IOCTL Buffer Size])
 ])
 
 #
-# LC_CONFIG_SNAPFS
-#
-# Whether snapfs is desired
-#
-AC_DEFUN([LC_CONFIG_SNAPFS],
-[# snap compilation
-AC_MSG_CHECKING([whether to enable snapfs support])
-AC_ARG_ENABLE([snapfs],
-	AC_HELP_STRING([--enable-snapfs],
-			[build snapfs]),
-	[],[enable_snapfs='no'])
-AC_MSG_RESULT([$enable_snapfs])
-])
-
-#
-# LC_CONFIG_SMFS
-#
-# whether smfs is desired
-#
-AC_DEFUN([LC_CONFIG_SMFS],
-[AC_MSG_CHECKING([whether to enable smfs support])
-AC_ARG_ENABLE([smfs],
-	AC_HELP_STRING([--enable-smfs],
-			[build smfs]),
-	[],[enable_smfs='no'])
-AC_MSG_RESULT([$enable_smfs])
-])
-
-#
 # LC_PROG_LINUX
 #
 # Lustre linux kernel checks
@@ -420,8 +391,6 @@ AM_CONDITIONAL(EXTN, test x$enable_extN = xyes)
 AM_CONDITIONAL(LDISKFS, test x$enable_ldiskfs = xyes)
 AM_CONDITIONAL(USE_QUILT, test x$QUILT != xno)
 AM_CONDITIONAL(MPITESTS, test x$enable_mpitests = xyes, Build MPI Tests)
-AM_CONDITIONAL(SNAPFS, test x$enable_snapfs = xyes)
-AM_CONDITIONAL(SMFS, test x$enable_smfs = xyes)
 AM_CONDITIONAL(LIBLUSTRE, test x$enable_liblustre = xyes)
 AM_CONDITIONAL(MPITESTS, test x$enable_mpitests = xyes, Build MPI Tests)
 ])
@@ -436,8 +405,6 @@ AC_DEFUN([LC_CONFIG_FILES],
 lustre/Makefile
 lustre/autoMakefile
 lustre/autoconf/Makefile
-lustre/cobd/Makefile
-lustre/cobd/autoMakefile
 lustre/conf/Makefile
 lustre/doc/Makefile
 lustre/include/Makefile
@@ -468,17 +435,10 @@ lustre/osc/Makefile
 lustre/osc/autoMakefile
 lustre/ost/Makefile
 lustre/ost/autoMakefile
-lustre/ptlbd/Makefile
-lustre/ptlbd/autoMakefile
 lustre/ptlrpc/Makefile
 lustre/ptlrpc/autoMakefile
 lustre/scripts/Makefile
 lustre/scripts/version_tag.pl
-lustre/smfs/Makefile
-lustre/smfs/autoMakefile
-lustre/snapfs/Makefile
-lustre/snapfs/autoMakefile
-lustre/snapfs/utils/Makefile
 lustre/tests/Makefile
 lustre/utils/Lustre/Makefile
 lustre/utils/Makefile
