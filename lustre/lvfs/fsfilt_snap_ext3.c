@@ -600,7 +600,7 @@ static struct inode* fsfilt_ext3_create_indirect(struct inode *pri, int index,
                                                  struct inode* parent,
 			                         int del)
 {
-	struct inode *ind;
+	struct inode *ind = NULL;
 	handle_t *handle = NULL;
 	int err = 0;
 	int has_orphan = 0;
@@ -608,7 +608,7 @@ static struct inode* fsfilt_ext3_create_indirect(struct inode *pri, int index,
         
 	if( pri == pri->i_sb->u.ext3_sb.s_journal_inode ){
 		CERROR("TRY TO COW JOUNRAL\n");
-		RETURN(NULL);
+		RETURN(ERR_PTR(-EINVAL));
 	}
 	CDEBUG(D_INODE, "creating indirect inode for %lu at index %d, %s pri\n",
 	       pri->i_ino, index, del ? "deleting" : "preserve");
@@ -616,8 +616,10 @@ static struct inode* fsfilt_ext3_create_indirect(struct inode *pri, int index,
 	ind = fsfilt_ext3_get_indirect(pri, NULL, index);
 
 	handle = ext3_journal_start(pri, SNAP_CREATEIND_TRANS_BLOCKS);
-	if( !handle )
-		RETURN(NULL);
+	if( !handle ) {
+                CERROR("handle not NULL\n");
+		RETURN(ERR_PTR(-EINVAL));
+        }
 	/* XXX ? We should pass an err argument to get_indirect and precisely
  	 * detect the errors, for some errors, we should exit right away.
  	 */
@@ -644,9 +646,11 @@ static struct inode* fsfilt_ext3_create_indirect(struct inode *pri, int index,
 	if (ind && !IS_ERR(ind)) {
 		CDEBUG(D_INODE, "existing indirect ino %lu for %lu: index %d\n",
 		       ind->i_ino, pri->i_ino, index);
+	
 		GOTO(exit, err=0);
-	}
-	/* XXX: check this, ext3_new_inode, the first arg should be "dir" */ 
+        }
+	
+        /* XXX: check this, ext3_new_inode, the first arg should be "dir" */ 
 	ind = ext3_new_inode(handle, pri, (int)pri->i_mode, 0);
 	if (IS_ERR(ind))
 		GOTO(exit, err);
@@ -780,9 +784,8 @@ exit:
 	}
 	iput(ind);
 	ext3_journal_stop(handle, pri);
-	if (err)
-		CERROR("exiting with error %d\n", err);
-	RETURN(NULL);
+        
+        RETURN(ERR_PTR(err));
 }
 
 static int fsfilt_ext3_snap_feature (struct super_block *sb, int feature, int op) {
@@ -1482,8 +1485,8 @@ static int fsfilt_ext3_iterate(struct super_block *sb,
 	}
 }
 
-static int fsfilt_ext3_get_snap_info(struct super_block *sb,struct inode *inode,
-                                     void *key, __u32 keylen, void *val, 
+static int fsfilt_ext3_get_snap_info(struct inode *inode, void *key, 
+                                     __u32 keylen, void *val, 
                                      __u32 *vallen) 
 {
         int rc = 0;
@@ -1501,7 +1504,7 @@ static int fsfilt_ext3_get_snap_info(struct super_block *sb,struct inode *inode,
                RETURN(rc);
         } else if (keylen >= strlen(SNAPTABLE_INFO) 
                    && strcmp(key, SNAPTABLE_INFO) == 0) {
-                rc = ext3_xattr_get(sb->s_root->d_inode, EXT3_SNAP_INDEX, 
+                rc = ext3_xattr_get(inode, EXT3_SNAP_INDEX, 
                                     EXT3_SNAPTABLE_EA, val, *vallen); 
                 RETURN(rc);
         } else if (keylen >= strlen(SNAP_GENERATION) 
@@ -1519,8 +1522,8 @@ static int fsfilt_ext3_get_snap_info(struct super_block *sb,struct inode *inode,
         RETURN(-EINVAL);
 } 
 
-static int fsfilt_ext3_set_snap_info(struct super_block *sb,struct inode *inode, 
-                                     void *key, __u32 keylen, void *val, 
+static int fsfilt_ext3_set_snap_info(struct inode *inode, void *key, 
+                                     __u32 keylen, void *val, 
                                      __u32 *vallen)
 {
         int rc = 0;
@@ -1533,15 +1536,14 @@ static int fsfilt_ext3_set_snap_info(struct super_block *sb,struct inode *inode,
 
         if (keylen >= strlen(SNAPTABLE_INFO) 
             && strcmp(key, SNAPTABLE_INFO) == 0) {
-                struct inode *root_inode = sb->s_root->d_inode;
                 handle_t *handle;
  
-                handle = ext3_journal_start(root_inode, EXT3_XATTR_TRANS_BLOCKS);
+                handle = ext3_journal_start(inode, EXT3_XATTR_TRANS_BLOCKS);
                 if( !handle )
                         RETURN(-EINVAL);
-                rc = ext3_xattr_set(handle, root_inode, EXT3_SNAP_INDEX, 
+                rc = ext3_xattr_set(handle, inode, EXT3_SNAP_INDEX, 
                                     EXT3_SNAPTABLE_EA, val, *vallen, 0); 
-	        ext3_journal_stop(handle,root_inode);
+	        ext3_journal_stop(handle, inode);
                 
                 RETURN(rc);
         } else if (keylen >= strlen(SNAP_GENERATION) 

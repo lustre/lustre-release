@@ -124,25 +124,29 @@ int lustre_set_clone_info(struct super_block *sb, int clone_index)
                 RETURN(0); 
         
         if (sbi->ll_mdc_exp) {
-                struct obd_import *climp = class_exp2cliimp(sbi->ll_mdc_exp);
-                struct client_obd *cl_obd = &climp->imp_obd->u.cli;
+                struct obd_device *obd = class_exp2obd(sbi->ll_mdc_exp);
+                struct client_obd *cl_obd = &obd->u.cli;
 
                 OBD_ALLOC(cl_obd->cl_clone_info, sizeof(struct clonefs_info));
                 if (!cl_obd->cl_clone_info) 
                         RETURN(-ENOMEM);
                 SET_CLONE_INDEX(cl_obd->cl_clone_info, clone_index);
                 SET_CLONE_FLAGS(cl_obd->cl_clone_info, SM_CLONE_FS);
+                cl_obd->cl_clone_info->cl_clone_info->clone_magic = 
+                                                  cpu_to_le32(CLONE_INFO_MAGI);
         }
         
         if (sbi->ll_osc_exp) {
-                struct obd_import *climp = class_exp2cliimp(sbi->ll_osc_exp);
-                struct client_obd *cl_obd = &climp->imp_obd->u.cli;
+                struct obd_device *obd = class_exp2obd(sbi->ll_osc_exp);
+                struct client_obd *cl_obd = &obd->u.cli;
 
                 OBD_ALLOC(cl_obd->cl_clone_info, sizeof(struct clonefs_info));
                 if (!cl_obd->cl_clone_info) 
                         RETURN(-ENOMEM);
                 SET_CLONE_INDEX(cl_obd->cl_clone_info, clone_index);
                 SET_CLONE_FLAGS(cl_obd->cl_clone_info, SM_CLONE_FS);
+                cl_obd->cl_clone_info->cl_clone_info->clone_magic = 
+                                                  cpu_to_le32(CLONE_INFO_MAGI);
         }
         RETURN(0); 
 }
@@ -154,8 +158,8 @@ int lustre_cleanup_clone_info(struct super_block *sb)
         ENTRY; 
 
         if (sbi->ll_mdc_exp) {
-                struct obd_import *climp = class_exp2cliimp(sbi->ll_mdc_exp);
-                struct client_obd *cl_obd = &climp->imp_obd->u.cli;
+                struct obd_device *obd = class_exp2obd(sbi->ll_mdc_exp);
+                struct client_obd *cl_obd = &obd->u.cli;
 
                 if (!cl_obd->cl_clone_info) 
                         RETURN(0); 
@@ -164,8 +168,8 @@ int lustre_cleanup_clone_info(struct super_block *sb)
         }
         
         if (sbi->ll_osc_exp) {
-                struct obd_import *climp = class_exp2cliimp(sbi->ll_osc_exp);
-                struct client_obd *cl_obd = &climp->imp_obd->u.cli;
+                struct obd_device *obd = class_exp2obd(sbi->ll_osc_exp);
+                struct client_obd *cl_obd = &obd->u.cli;
 
                 if (!cl_obd->cl_clone_info) 
                         RETURN(0); 

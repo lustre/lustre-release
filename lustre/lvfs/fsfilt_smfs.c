@@ -601,7 +601,8 @@ static int fsfilt_smfs_write_record(struct file *file, void *buf, int bufsize,
         RETURN(rc);
 }
 
-static int fsfilt_smfs_post_setup(struct obd_device *obd, struct vfsmount *mnt)
+static int fsfilt_smfs_post_setup(struct obd_device *obd, struct vfsmount *mnt,
+                                  struct dentry *root_dentry)
 {
         struct super_block *sb = NULL;
         int rc = 0;
@@ -613,8 +614,10 @@ static int fsfilt_smfs_post_setup(struct obd_device *obd, struct vfsmount *mnt)
                 if (SMFS_DO_REC(S2SMI(sb)))
                         rc = smfs_start_rec(sb, mnt);
 #if CONFIG_SNAPFS
-                if (SMFS_DO_COW(S2SMI(sb)))
-                        rc = smfs_start_cow(sb);
+                if (SMFS_DO_COW(S2SMI(sb))) {
+                       S2SNAPI(sb)->snap_root = root_dentry;  
+                       rc = smfs_start_cow(sb);
+                }
 #endif
                 if (rc)
                         GOTO(exit, rc);

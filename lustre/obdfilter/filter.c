@@ -1301,7 +1301,7 @@ static int filter_post_fs_setup(struct obd_device *obd)
         int rc = 0, j = 0;
         struct llog_ctxt *ctxt = NULL;
 
-        rc = fsfilt_post_setup(obd);
+        rc = fsfilt_post_setup(obd, filter->fo_dentry_O);
         if (rc)
                 RETURN(rc);
         

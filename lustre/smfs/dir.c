@@ -150,7 +150,7 @@ static struct dentry *smfs_lookup(struct inode *dir, struct dentry *dentry,
         if (!cache_dir && cache_dir->i_op->lookup)
                 GOTO(exit, rc = ERR_PTR(-ENOENT));
 
-        SMFS_PRE_COW(dir, dentry, NULL, NULL, SNAP_LOOKUP, "lookup", rc, exit);
+        SMFS_PRE_COW(dir, dentry, NULL, NULL, SNAP_LOOKUP, "lookup", rc2, exit);
 
         /* perform lookup in backing fs. */
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
@@ -161,7 +161,7 @@ static struct dentry *smfs_lookup(struct inode *dir, struct dentry *dentry,
 
         if (rc && IS_ERR(rc))
                 GOTO(exit, rc);
-
+        
         if ((cache_inode = rc ? rc->d_inode : cache_dentry->d_inode)) {
                 if (IS_ERR(cache_inode)) {
                         dentry->d_inode = cache_inode;

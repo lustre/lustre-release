@@ -880,7 +880,9 @@ struct ptlbd_rsp {
 
 extern void lustre_swab_ptlbd_rsp (struct ptlbd_rsp *r);
 
+#define CLONE_INFO_MAGIC 0x0218
 struct clonefs_info {
+        int clone_magic;
         int clone_index;
         int clone_flags;
 };

@@ -91,7 +91,8 @@ struct fsfilt_operations {
         int     (* fs_read_record)(struct file *, void *, int size, loff_t *);
         int     (* fs_setup)(struct obd_device *, struct super_block *);
         
-        int     (* fs_post_setup)(struct obd_device *obd, struct vfsmount *mnt);
+        int     (* fs_post_setup)(struct obd_device *obd, struct vfsmount *mnt,
+                                  struct dentry *dentry);
         int     (* fs_post_cleanup)(struct obd_device *obd, struct vfsmount *mnt);
         int     (* fs_get_reint_log_ctxt)(struct super_block *sb, 
                                           struct llog_ctxt **ctxt);
@@ -148,12 +149,10 @@ struct fsfilt_operations {
         int     (* fs_set_indirect)(struct inode *pri, int index,
                                     ino_t ind_ino, ino_t parent_ino);
         int     (* fs_snap_feature)(struct super_block *sb, int feature, int op);
-        int     (* fs_set_snap_info)(struct super_block *sb, struct inode *inode, 
-                                     void* key, __u32 keylen, void *val, 
-                                     __u32 *vallen); 
-        int     (* fs_get_snap_info)(struct super_block *sb, struct inode *inode,
-                                     void* key, __u32 keylen, void *val, 
-                                     __u32 *vallen); 
+        int     (* fs_set_snap_info)(struct inode *inode, void* key, __u32 keylen, 
+                                     void *val, __u32 *vallen); 
+        int     (* fs_get_snap_info)(struct inode *inode, void* key, __u32 keylen, 
+                                     void *val, __u32 *vallen); 
         int     (* fs_set_snap_item)(struct super_block *sb, char *name);
 };
 
@@ -585,11 +584,11 @@ fsfilt_precreate_rec(struct obd_device *obd, struct dentry *dentry,
 }
 
 static inline int 
-fsfilt_post_setup(struct obd_device *obd)
+fsfilt_post_setup(struct obd_device *obd, struct dentry *de)
 {
         if (obd->obd_fsops->fs_post_setup)
                 return obd->obd_fsops->fs_post_setup(obd, 
-                                obd->obd_lvfs_ctxt.pwdmnt);
+                                obd->obd_lvfs_ctxt.pwdmnt, de);
         return 0;
 }
 

@@ -167,7 +167,8 @@ struct snap_table {
 
 struct snap_info {
         struct fsfilt_operations *snap_fsfilt;  
-        struct fsfilt_operations *snap_cache_fsfilt;  
+        struct fsfilt_operations *snap_cache_fsfilt; 
+        struct dentry            *snap_root; 
 	struct semaphore         sntbl_sema;
 	spinlock_t               sntbl_lock;
         struct snap_table        *sntbl;

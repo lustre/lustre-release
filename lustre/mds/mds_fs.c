@@ -378,7 +378,7 @@ static int  mds_fs_post_setup(struct obd_device *obd)
         struct dentry *de = mds_fid2dentry(mds, &mds->mds_rootfid, NULL);
         int    rc = 0;
        
-        rc = fsfilt_post_setup(obd);
+        rc = fsfilt_post_setup(obd, de);
         if (rc)
                 GOTO(out, rc);
  

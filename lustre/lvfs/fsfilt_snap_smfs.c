@@ -322,57 +322,50 @@ static int fsfilt_smfs_copy_block(struct inode *dst, struct inode *src, int blk)
         RETURN(rc); 
 }
 
-static int fsfilt_smfs_set_snap_info(struct super_block *sb,struct inode *inode, 
+static int fsfilt_smfs_set_snap_info(struct inode *inode, 
                                      void* key, __u32 keylen, void *val, 
                                      __u32 *vallen)
 {
-        struct super_block     *csb = NULL;
-        struct inode           *cache_inode = NULL;  
-        struct fsfilt_operations *snap_fsfilt = NULL; 
-        int                      rc = -EIO;
-        
-        if (sb) {
-                csb = S2CSB(sb);
-                snap_fsfilt = S2SNAPI(sb)->snap_cache_fsfilt;
-        } else if (inode) {
-                cache_inode = I2CI(inode);
-                snap_fsfilt = I2SNAPCOPS(inode);
-        }
 
+        struct fsfilt_operations *snap_fsfilt = I2SNAPCOPS(inode);
+        struct inode *cache_inode = NULL;
+        int                      rc = -EIO;
+                
         if (snap_fsfilt == NULL)
                 RETURN(rc);
         
-        if (snap_fsfilt->fs_set_snap_info)
-                rc = snap_fsfilt->fs_set_snap_info(csb, cache_inode, key, 
-                                                   keylen, val, vallen);
+        cache_inode = I2CI(inode);
+        if (!cache_inode)
+                RETURN(rc);
 
+        pre_smfs_inode(inode, cache_inode);
+        
+        if (snap_fsfilt->fs_set_snap_info)
+                rc = snap_fsfilt->fs_set_snap_info(cache_inode, key, 
+                                                   keylen, val, vallen);
+        post_smfs_inode(inode, cache_inode);
+        
         RETURN(rc);
 }
 
-static int fsfilt_smfs_get_snap_info(struct super_block *sb, struct inode *inode,
-                                     void *key, __u32 keylen, void *val,
-                                     __u32 *vallen)
+static int fsfilt_smfs_get_snap_info(struct inode *inode, void *key, 
+                                     __u32 keylen, void *val, __u32 *vallen)
 {
-        struct super_block     *csb = NULL;
-        struct inode           *cache_inode = NULL;  
-        struct fsfilt_operations *snap_fsfilt = NULL; 
+        struct fsfilt_operations *snap_fsfilt = I2SNAPCOPS(inode);
+        struct inode *cache_inode = NULL;
         int                      rc = -EIO;
         
-        if (sb) {
-                csb = S2CSB(sb);
-                snap_fsfilt = S2SNAPI(sb)->snap_cache_fsfilt;
-        } else if (inode) {
-                cache_inode = I2CI(inode);
-                snap_fsfilt = I2SNAPCOPS(inode);
-        }
-      
         if (snap_fsfilt == NULL)
                 RETURN(rc);
-       
+        
+        cache_inode = I2CI(inode);
+        if (!cache_inode)
+                RETURN(rc);
+        
         if (snap_fsfilt->fs_get_snap_info)
-                rc = snap_fsfilt->fs_get_snap_info(csb, cache_inode, key, 
+                rc = snap_fsfilt->fs_get_snap_info(cache_inode, key, 
                                                    keylen, val, vallen);
-
+        
         RETURN(rc);
 }
 struct fsfilt_operations fsfilt_smfs_snap_ops = {
