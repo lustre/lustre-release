@@ -41,7 +41,7 @@ static int rd_target (char *page, char **start, off_t off, int count,
 	else {
 		exp = class_conn2export (conn);
 		LASSERT(exp != NULL);
-		rc = snprintf(page, count, "%s\n", exp->exp_obd->obd_uuid);
+		rc = snprintf(page, count, "%s\n", exp->exp_obd->obd_uuid.uuid);
 	}
 	return (rc);
 }
@@ -59,7 +59,7 @@ static int rd_cache(char *page, char **start, off_t off, int count,
 	else {
 		exp = class_conn2export (conn);
 		LASSERT (exp != NULL);
-		rc = snprintf(page, count, "%s\n", exp->exp_obd->obd_uuid);
+		rc = snprintf(page, count, "%s\n", exp->exp_obd->obd_uuid.uuid);
 	}
 	return (rc);
 }

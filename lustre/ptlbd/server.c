@@ -56,7 +56,7 @@ static int ptlbd_sv_setup(struct obd_device *obddev, obd_count len, void *buf)
 {
 #if 0
         struct obd_ioctl_data* data = buf;
-        obd_uuid_t server_uuid;
+        struct obd_uuid server_uuid;
 #endif
         struct ptlbd_obd *ptlbd = &obddev->u.ptlbd;
         int rc;
@@ -122,7 +122,7 @@ static int ptlbd_sv_cleanup(struct obd_device *obddev)
 
 #if 0
 static int ptlbd_sv_connect(struct lustre_handle *conn, struct obd_device *src,
-                        obd_uuid_t cluuid, struct recovd_obd *recovd,
+                        struct obd_uuid cluuid, struct recovd_obd *recovd,
                         ptlrpc_recovery_cb_t recover)
 {
         return class_connect(conn, src, cluuid);

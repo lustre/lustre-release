@@ -36,7 +36,7 @@ static int ptlbd_cl_setup(struct obd_device *obddev, obd_count len, void *buf)
         struct ptlbd_obd *ptlbd = &obddev->u.ptlbd;
         struct obd_import *imp = &ptlbd->bd_import;
         struct obd_ioctl_data* data = buf;
-        obd_uuid_t server_uuid;
+        struct obd_uuid server_uuid;
         ENTRY;
 
         if ( ptlbd->bd_import.imp_connection != NULL )
@@ -52,10 +52,9 @@ static int ptlbd_cl_setup(struct obd_device *obddev, obd_count len, void *buf)
                 RETURN(-EINVAL);
         }
 
-        memcpy(server_uuid, data->ioc_inlbuf1, MIN(data->ioc_inllen1,
-                                                   sizeof(server_uuid)));
+        obd_str2uuid(&server_uuid, data->ioc_inlbuf1);
 
-        imp->imp_connection = ptlrpc_uuid_to_connection(server_uuid);
+        imp->imp_connection = ptlrpc_uuid_to_connection(&server_uuid);
         if (!imp->imp_connection)
                 RETURN(-ENOENT);
 
@@ -95,7 +94,7 @@ static int ptlbd_cl_cleanup(struct obd_device *obddev)
 
 #if 0
 static int ptlbd_cl_connect(struct lustre_handle *conn, struct obd_device *obd,
-                        obd_uuid_t cluuid, struct recovd_obd *recovd,
+                        struct obd_uuid cluuid, struct recovd_obd *recovd,
                         ptlrpc_recovery_cb_t recover)
 {
         struct ptlbd_obd *ptlbd = &obd->u.ptlbd;

@@ -36,26 +36,30 @@ cobd_setup (struct obd_device *dev, obd_count len, void *buf)
         struct cache_obd  *cobd = &dev->u.cobd;
         struct obd_device *target;
         struct obd_device *cache;
+        struct obd_uuid target_uuid;
+        struct obd_uuid cache_uuid;
         int                rc;
 
         if (data->ioc_inlbuf1 == NULL ||
             data->ioc_inlbuf2 == NULL)
                 return (-EINVAL);
 
-        target = class_uuid2obd (data->ioc_inlbuf1);
-        cache  = class_uuid2obd (data->ioc_inlbuf2);
+        obd_str2uuid(&target_uuid, data->ioc_inlbuf1);
+        target = class_uuid2obd (&target_uuid);
+
+        obd_str2uuid(&cache_uuid, data->ioc_inlbuf2);
+        cache  = class_uuid2obd (&cache_uuid);
         if (target == NULL ||
             cache == NULL)
                 return (-EINVAL);
 
         /* don't bother checking attached/setup;
          * obd_connect() should, and it can change underneath us */
-
-        rc = obd_connect (&cobd->cobd_target, target, NULL, NULL, NULL);
+        rc = obd_connect (&cobd->cobd_target, target, &target_uuid, NULL, NULL);
         if (rc != 0)
                 return (rc);
 
-        rc = obd_connect (&cobd->cobd_cache, cache, NULL, NULL, NULL);
+        rc = obd_connect (&cobd->cobd_cache, cache, &cache_uuid, NULL, NULL);
         if (rc != 0)
                 goto fail_0;
 
@@ -88,7 +92,7 @@ cobd_cleanup (struct obd_device *dev)
 
 static int
 cobd_connect (struct lustre_handle *conn, struct obd_device *obd,
-              obd_uuid_t cluuid, struct recovd_obd *recovd,
+              struct obd_uuid *cluuid, struct recovd_obd *recovd,
               ptlrpc_recovery_cb_t recover)
 {
         int rc = class_connect (conn, obd, cluuid);
