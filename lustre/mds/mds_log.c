@@ -1,7 +1,7 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  linux/fs/obdfilter/filter_log.c
+ *  lustre/mds/mds_log.c
  *
  *  Copyright (c) 2001-2003 Cluster File Systems, Inc.
  *   Author: Peter Braam <braam@clusterfs.com>
@@ -24,7 +24,7 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#define DEBUG_SUBSYSTEM S_FILTER
+#define DEBUG_SUBSYSTEM S_MDS
 
 #include <linux/config.h>
 #include <linux/module.h>
@@ -35,13 +35,13 @@
 #include <linux/lustre_fsfilt.h>
 #include <linux/lustre_commit_confd.h>
 
-#include "filter_internal.h"
+#include "mds_internal.h"
 
-/* This is called from filter_setup() and should be single threaded */
-struct llog_handle *filter_get_catalog(struct obd_device *obd)
+
+struct llog_handle *mds_get_catalog(struct obd_device *obd)
 {
-        struct filter_obd *filter = &obd->u.filter;
-        struct filter_server_data *fsd = filter->fo_fsd;
+        struct mds_obd *mds = &obd->u.mds;
+        struct mds_server_data *msd = mds->mds_server_data;
         struct obd_run_ctxt saved;
         struct llog_handle *cathandle = NULL;
         struct llog_logid logid;
@@ -49,20 +49,20 @@ struct llog_handle *filter_get_catalog(struct obd_device *obd)
         ENTRY;
 
         push_ctxt(&saved, &obd->obd_ctxt, NULL);
-        if (fsd->fsd_catalog_oid) {
-                logid.lgl_oid = le64_to_cpu(fsd->fsd_catalog_oid);
-                logid.lgl_ogr = le64_to_cpu(fsd->fsd_catalog_ogr);
+        if (msd->msd_catalog_oid) {
+                logid.lgl_oid = le64_to_cpu(msd->msd_catalog_oid);
+                logid.lgl_ogen = le32_to_cpu(msd->msd_catalog_ogen);
                 rc = llog_create(obd, &cathandle, &logid, NULL);
                 if (rc) {
                         CERROR("error opening catalog "LPX64":%x: rc %d\n",
                                logid.lgl_oid, logid.lgl_ogen,
                                (int)PTR_ERR(cathandle));
-                        fsd->fsd_catalog_oid = 0;
-                        fsd->fsd_catalog_ogr = 0;
+                        msd->msd_catalog_oid = 0;
+                        msd->msd_catalog_ogen = 0;
                 }
         }
 
-        if (!fsd->fsd_catalog_oid) {
+        if (!msd->msd_catalog_oid) {
                 rc = llog_create(obd, &cathandle, NULL, NULL);
                 if (rc) {
                         CERROR("error creating new catalog: rc %d\n", rc);
@@ -70,9 +70,9 @@ struct llog_handle *filter_get_catalog(struct obd_device *obd)
                         GOTO(out, cathandle);
                 }
                 logid = cathandle->lgh_id;
-                fsd->fsd_catalog_oid = cpu_to_le64(logid.lgl_oid);
-                fsd->fsd_catalog_ogr = cpu_to_le64(logid.lgl_ogr);
-                rc = filter_update_server_data(obd, filter->fo_rcvd_filp,fsd,0);
+                msd->msd_catalog_oid = cpu_to_le64(logid.lgl_oid);
+                msd->msd_catalog_ogen = cpu_to_le32(logid.lgl_ogen);
+                rc = mds_update_server_data(obd, 0);
                 if (rc) {
                         CERROR("error writing new catalog to disk: rc %d\n",rc);
                         GOTO(out_handle, rc);
@@ -94,55 +94,47 @@ out_handle:
 }
 
 
-int filter_log_op_create(struct llog_handle *cathandle, struct ll_fid *mds_fid,
-                         obd_id oid, obd_count ogen,
-                         struct llog_cookie *logcookie)
+int mds_log_op_unlink(struct obd_device *obd, 
+                      struct inode *inode, struct lustre_msg *repmsg,
+                      int offset)
 {
-        struct llog_create_rec *lcr;
+        struct mds_obd *mds = &obd->u.mds;
+        struct lov_stripe_md *lsm = NULL;
+        struct llog_unlink_rec *lur;
         int rc;
         ENTRY;
 
-        OBD_ALLOC(lcr, sizeof(*lcr));
-        if (lcr == NULL)
+        if (IS_ERR(mds->mds_osc_obd))
+                RETURN(PTR_ERR(mds->mds_osc_obd));
+
+        rc = obd_unpackmd(mds->mds_osc_exp, &lsm,
+                          lustre_msg_buf(repmsg, offset, 0),
+                          repmsg->buflens[offset]);
+        if (rc < 0)
+                RETURN(rc);
+
+        OBD_ALLOC(lur, sizeof(*lur));
+        if (!lur)
                 RETURN(-ENOMEM);
-        lcr->lcr_hdr.lrh_len = lcr->lcr_tail.lrt_len = sizeof(*lcr);
-        lcr->lcr_hdr.lrh_type = OST_CREATE_REC;
-        lcr->lcr_fid.id = mds_fid->id;
-        lcr->lcr_fid.generation = mds_fid->generation;
-        lcr->lcr_fid.f_type = mds_fid->f_type;
-        lcr->lcr_oid = oid;
-        lcr->lcr_ogen = ogen;
+        lur->lur_hdr.lrh_len = lur->lur_tail.lrt_len = sizeof(*lur);
+        lur->lur_hdr.lrh_type = MDS_UNLINK_REC;
+        lur->lur_oid = inode->i_ino;
+        lur->lur_ogen = inode->i_generation;
 
-        rc = llog_cat_add_rec(cathandle, &lcr->lcr_hdr, logcookie, NULL);
-        OBD_FREE(lcr, sizeof(*lcr));
+#ifdef ENABLE_ORPHANS
+#if 0
+        rc = obd_log_add(mds->mds_osc_exp, mds->mds_catalog, &lur->lur_hdr,
+                         lsm, lustre_msg_buf(repmsg, offset + 1, 0),
+                         repmsg->buflens[offset+1]/sizeof(struct llog_cookie),
+                         NULL);
+#endif
+        rc = lov_log_add(mds->mds_osc_exp, mds->mds_catalog, &lur->lur_hdr,
+                         lsm, lustre_msg_buf(repmsg, offset + 1, 0),
+                         repmsg->buflens[offset+1]/sizeof(struct llog_cookie));
+#endif
 
-        if (rc > 0) {
-                LASSERT(rc == sizeof(*logcookie));
-                rc = 0;
-        }
-        RETURN(rc);
-}
+        obd_free_memmd(mds->mds_osc_exp, &lsm);
+        OBD_FREE(lur, sizeof(*lur));
 
-int filter_log_op_orphan(struct llog_handle *cathandle, obd_id oid,
-                         obd_count ogen, struct llog_cookie *logcookie)
-{
-        struct llog_orphan_rec *lor;
-        int rc;
-        ENTRY;
-
-        OBD_ALLOC(lor, sizeof(*lor));
-        if (lor == NULL)
-                RETURN(-ENOMEM);
-        lor->lor_hdr.lrh_len = lor->lor_tail.lrt_len = sizeof(*lor);
-        lor->lor_hdr.lrh_type = OST_ORPHAN_REC;
-        lor->lor_oid = oid;
-        lor->lor_ogen = ogen;
-
-        rc = llog_cat_add_rec(cathandle, &lor->lor_hdr, logcookie, NULL);
-
-        if (rc > 0) {
-                LASSERT(rc == sizeof(*logcookie));
-                rc = 0;
-        }
         RETURN(rc);
 }

@@ -365,5 +365,233 @@ test_19() {
 }
 run_test 19 "|X| mcreate, open, write, rename "
 
+test_20() {
+    replay_barrier mds
+    multiop $DIR/$tfile O_tSc &
+    pid=$!
+    # give multiop a chance to open
+    sleep 1 
+    rm -f $DIR/$tfile
+
+    fail mds
+    kill -USR1 $pid
+    wait $pid || return 2
+    [ -e $DIR/$tfile ] && return 3
+    return 0
+}
+run_test 20 "|X| open(O_CREAT), unlink, replay, close (test mds_cleanup_orphans)"
+
+test_21() {
+    replay_barrier mds
+    multiop $DIR/$tfile O_tSc &
+    pid=$!
+    # give multiop a chance to open
+    sleep 1 
+    rm -f $DIR/$tfile
+    touch $DIR/g11 || return 1
+
+    fail mds
+    kill -USR1 $pid
+    wait $pid || return 2
+    [ -e $DIR/$tfile ] && return 3
+    touch $DIR/h11 || return 4
+    return 0
+}
+run_test 21 "|X| open(O_CREAT), unlink touch new, replay, close (test mds_cleanup_orphans)"
+
+test_22() {
+    multiop $DIR/$tfile O_tSc &
+    pid=$!
+    # give multiop a chance to open
+    sleep 1 
+
+    replay_barrier mds
+    rm -f $DIR/$tfile
+
+    fail mds
+    kill -USR1 $pid
+    wait $pid || return 2
+    [ -e $DIR/$tfile ] && return 3
+    return 0
+}
+run_test 22 "open(O_CREAT), |X| unlink, replay, close (test mds_cleanup_orphans)"
+
+test_23() {
+    multiop $DIR/$tfile O_tSc &
+    pid=$!
+    # give multiop a chance to open
+    sleep 1 
+
+    replay_barrier mds
+    rm -f $DIR/$tfile
+    touch $DIR/g11 || return 1
+
+    fail mds
+    kill -USR1 $pid
+    wait $pid || return 2
+    [ -e $DIR/$tfile ] && return 3
+    touch $DIR/h11 || return 4
+    return 0
+}
+run_test 23 "open(O_CREAT), |X| unlink touch new, replay, close (test mds_cleanup_orphans)"
+
+test_24() {
+    multiop $DIR/$tfile O_tSc &
+    pid=$!
+    # give multiop a chance to open
+    sleep 1 
+
+    replay_barrier mds
+    fail mds
+    rm -f $DIR/$tfile
+    kill -USR1 $pid
+    wait $pid || return 2
+    [ -e $DIR/$tfile ] && return 3
+    return 0
+}
+run_test 24 "open(O_CREAT), replay, unlink, close (test mds_cleanup_orphans)"
+
+test_25() {
+    multiop $DIR/$tfile O_tSc &
+    pid=$!
+    # give multiop a chance to open
+    sleep 1 
+    rm -f $DIR/$tfile
+
+    replay_barrier mds
+    fail mds
+    kill -USR1 $pid
+    wait $pid || return 2
+    [ -e $DIR/$tfile ] && return 3
+    return 0
+}
+run_test 25 "open(O_CREAT), unlink, replay, close (test mds_cleanup_orphans)"
+
+test_26() {
+    replay_barrier mds
+    multiop $DIR/$tfile O_tSc &
+    pid=$!
+    multiop $DIR/$tfile-2 O_tSc &
+    pid2=$!
+    # give multiop a chance to open
+    sleep 1 
+    rm -f $DIR/$tfile
+    rm -f $DIR/$tfile-2
+    kill -USR1 $pid2
+    wait $pid2 || return 4
+
+    fail mds
+    kill -USR1 $pid
+    wait $pid || return 2
+    [ -e $DIR/$tfile ] && return 3
+    return 0
+}
+run_test 26 "|X| open(O_CREAT), unlink two, close one, replay, close one (test mds_cleanup_orphans)"
+
+test_27() {
+    replay_barrier mds
+    multiop $DIR/$tfile O_tSc &
+    pid=$!
+    multiop $DIR/$tfile-2 O_tSc &
+    pid2=$!
+    # give multiop a chance to open
+    sleep 1 
+    rm -f $DIR/$tfile
+    rm -f $DIR/$tfile-2
+
+    fail mds
+    kill -USR1 $pid
+    wait $pid || return 2
+    kill -USR1 $pid2
+    wait $pid2 || return 4
+    [ -e $DIR/$tfile ] && return 3
+    return 0
+}
+run_test 27 "|X| open(O_CREAT), unlink two, replay, close two (test mds_cleanup_orphans)"
+
+test_28() {
+    multiop $DIR/$tfile O_tSc &
+    pid=$!
+    multiop $DIR/$tfile-2 O_tSc &
+    pid2=$!
+    # give multiop a chance to open
+    sleep 1 
+    replay_barrier mds
+    rm -f $DIR/$tfile
+    rm -f $DIR/$tfile-2
+    kill -USR1 $pid2
+    wait $pid2 || return 4
+
+    fail mds
+    kill -USR1 $pid
+    wait $pid || return 2
+    [ -e $DIR/$tfile ] && return 3
+    return 0
+}
+run_test 28 "open(O_CREAT), |X| unlink two, close one, replay, close one (test mds_cleanup_orphans)"
+
+test_29() {
+    multiop $DIR/$tfile O_tSc &
+    pid=$!
+    multiop $DIR/$tfile-2 O_tSc &
+    pid2=$!
+    # give multiop a chance to open
+    sleep 1 
+    replay_barrier mds
+    rm -f $DIR/$tfile
+    rm -f $DIR/$tfile-2
+
+    fail mds
+    kill -USR1 $pid
+    wait $pid || return 2
+    kill -USR1 $pid2
+    wait $pid2 || return 4
+    [ -e $DIR/$tfile ] && return 3
+    return 0
+}
+run_test 29 "open(O_CREAT), |X| unlink two, replay, close two (test mds_cleanup_orphans)"
+
+test_30() {
+    multiop $DIR/$tfile O_tSc &
+    pid=$!
+    multiop $DIR/$tfile-2 O_tSc &
+    pid2=$!
+    # give multiop a chance to open
+    sleep 1 
+    rm -f $DIR/$tfile
+    rm -f $DIR/$tfile-2
+
+    replay_barrier mds
+    fail mds
+    kill -USR1 $pid
+    wait $pid || return 2
+    kill -USR1 $pid2
+    wait $pid2 || return 4
+    [ -e $DIR/$tfile ] && return 3
+    return 0
+}
+run_test 30 "open(O_CREAT) two, unlink two, replay, close two (test mds_cleanup_orphans)"
+
+test_31() {
+    multiop $DIR/$tfile O_tSc &
+    pid=$!
+    multiop $DIR/$tfile-2 O_tSc &
+    pid2=$!
+    # give multiop a chance to open
+    sleep 1 
+    rm -f $DIR/$tfile
+
+    replay_barrier mds
+    rm -f $DIR/$tfile-2
+    fail mds
+    kill -USR1 $pid
+    wait $pid || return 2
+    kill -USR1 $pid2
+    wait $pid2 || return 4
+    [ -e $DIR/$tfile ] && return 3
+    return 0
+}
+run_test 31 "open(O_CREAT) two, unlink one, |X| unlink one, close two (test mds_cleanup_orphans)"
+
 equals_msg test complete, cleaning up
 cleanup

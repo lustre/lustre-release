@@ -431,6 +431,7 @@ static void abort_recovery_queue(struct obd_device *obd)
 void target_abort_recovery(void *data)
 {
         struct obd_device *obd = data;
+        int rc;
 
         CERROR("disconnecting clients and aborting recovery\n");
         spin_lock_bh(&obd->obd_processing_task_lock);
@@ -450,6 +451,12 @@ void target_abort_recovery(void *data)
            should be protected, somehow. */
         if (OBT(obd) && OBP(obd, postsetup))
                 OBP(obd, postsetup)(obd);
+
+        /* when recovery was abort, cleanup orphans for mds */
+        if (OBT(obd) && OBP(obd, postcleanup)) {
+                rc = OBP(obd, postcleanup)(obd);
+                CERROR("Cleanup %d orphans after recovery was abort!\n", rc);
+        }
 
         class_disconnect_exports(obd, 0);
         abort_delayed_replies(obd);
@@ -694,6 +701,7 @@ int target_queue_final_reply(struct ptlrpc_request *req, int rc)
         struct ptlrpc_request *saved_req;
         struct lustre_msg *reqmsg;
         int recovery_done = 0;
+        int rc2;
 
         if (rc) {
                 /* Just like ptlrpc_error, but without the sending. */
@@ -727,6 +735,14 @@ int target_queue_final_reply(struct ptlrpc_request *req, int rc)
                 CERROR("%s: all clients recovered, sending delayed replies\n",
                        obd->obd_name);
                 obd->obd_recovering = 0;
+
+                /* when recovering finished, cleanup orphans for mds       */
+                /* there should be no orphan cleaned up for this condition */
+                if (OBT(obd) && OBP(obd, postcleanup)) {
+                        CERROR("cleanup orphans after all clients recovered\n");
+                        rc2 = OBP(obd, postcleanup)(obd);
+                        LASSERT(rc2 == 0);
+                }
 
                 if (OBT(obd) && OBP(obd, postsetup))
                         OBP(obd, postsetup)(obd);

@@ -15,7 +15,9 @@ struct llog_handle *mds_log_create(struct obd_device *obd, char *name);
 int mds_log_close(struct llog_handle *cathandle, struct llog_handle *loghandle);
 struct llog_handle *mds_log_open(struct obd_device *obd,
                                  struct llog_cookie *logcookie);
+#if 0
 struct llog_handle *mds_get_catalog(struct obd_device *obd);
+#endif
 void mds_put_catalog(struct obd_device *obd, struct llog_handle *cathandle);
 
 
@@ -25,11 +27,22 @@ int mds_finish_transno(struct mds_obd *mds, struct inode *inode, void *handle,
                        struct ptlrpc_request *req, int rc, __u32 op_data);
 void mds_reconstruct_generic(struct ptlrpc_request *req);
 void mds_req_from_mcd(struct ptlrpc_request *req, struct mds_client_data *mcd);
-int mds_cleanup_orphans(struct obd_device *);
 
 /* mds/mds_lib.c */
 int mds_update_unpack(struct ptlrpc_request *, int offset,
                       struct mds_update_record *);
+
+/* mds/mds_unlink_open.c */
+int mds_open_unlink_rename(struct mds_update_record *rec,
+                           struct obd_device *obd, struct dentry *dparent,
+                           struct dentry *dchild, void **handle);
+int mds_cleanup_orphans(struct obd_device *obd);
+
+
+/* mds/mds_log.c */
+struct llog_handle *mds_get_catalog(struct obd_device *obd);
+int mds_log_op_unlink(struct obd_device *obd, struct inode *inode, struct lustre_msg *repmsg,
+                      int offset);
 
 /* mds/mds_lov.c */
 int mds_lov_connect(struct obd_device *obd);

@@ -59,10 +59,12 @@ struct filter_server_data {
         __u16 fsd_client_size;     /* size of per-client data area */
         __u16 fsd_subdir_count;    /* number of subdirectories for objects */
         __u64 fsd_catalog_oid;     /* recovery catalog object id */
-        __u32 fsd_catalog_ogen;    /* recovery catalog inode generation */
+        //__u32 fsd_catalog_ogen;    /* recovery catalog inode generation */
+        __u64 fsd_catalog_ogr;    /* recovery catalog inode group */
         __u8  fsd_peeruuid[37];    /* UUID of MDS associated with this OST */
         __u8  peer_padding[3];     /* unused */
-        __u8  fsd_padding[FILTER_LR_SERVER_SIZE - 140];
+        //__u8  fsd_padding[FILTER_LR_SERVER_SIZE - 140];
+        __u8  fsd_padding[FILTER_LR_SERVER_SIZE - 144];
 };
 
 /* Data stored per client in the last_rcvd file.  In le32 order. */
