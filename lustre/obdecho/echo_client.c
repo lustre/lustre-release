@@ -1078,14 +1078,15 @@ echo_client_enqueue(struct obd_export *exp, struct obdo *oa,
 
         ecl->ecl_mode = mode;
         ecl->ecl_object = eco;
-        ecl->ecl_extent.start = offset;
-        ecl->ecl_extent.end = (nob == 0) ? ((obd_off) -1) : (offset + nob - 1);
+        ecl->ecl_policy.l_extent.start = offset;
+        ecl->ecl_policy.l_extent.end =
+                (nob == 0) ? ((obd_off) -1) : (offset + nob - 1);
 
         flags = 0;
-        rc = obd_enqueue(ec->ec_exp, eco->eco_lsm, NULL, LDLM_EXTENT,
-                         &ecl->ecl_extent,sizeof(ecl->ecl_extent), mode,
-                         &flags, echo_ldlm_callback, eco,
-                         &ecl->ecl_lock_handle);
+        rc = obd_enqueue(ec->ec_exp, eco->eco_lsm, LDLM_EXTENT,
+                         &ecl->ecl_policy, mode, &flags, echo_ldlm_callback,
+                         ldlm_completion_ast, NULL, eco, sizeof(struct ost_lvb),
+                         lustre_swab_ost_lvb, &ecl->ecl_lock_handle);
         if (rc != 0)
                 goto failed_1;
 
