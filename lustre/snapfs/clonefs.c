@@ -422,17 +422,19 @@ struct address_space_operations clonefs_file_address_ops = {
 
 static int clonefs_readlink(struct dentry *dentry, char *buf, int len)
 {
+	int res;
 	struct inode * cache_inode;
 	struct inode * old_inode;
-	int rc = -ENOENT;
 
 	ENTRY;
 
 	cache_inode = clonefs_get_inode(dentry->d_inode); 
 
-	if (!cache_inode) {
+	res = -ENOENT;
+
+	if ( ! cache_inode ) {
 		CDEBUG(D_INODE, "clonefs_get_inode failed, NULL\n");
-		RETURN(rc);	
+		RETURN(res);	
 	}
 	
 	/* XXX: shall we allocate a new dentry ? 
@@ -444,8 +446,8 @@ static int clonefs_readlink(struct dentry *dentry, char *buf, int len)
 	/* set dentry inode to cache inode */
 	dentry->d_inode = cache_inode;
 
-	if (cache_inode->i_op->readlink) {
-		rc = cache_inode->i_op->readlink(dentry, buf, len); 
+	if ( cache_inode->i_op->readlink ) {
+		res = cache_inode->i_op->readlink(dentry, buf, len); 
 	}else {
 		CDEBUG(D_INODE,"NO readlink for ino %lu\n", cache_inode->i_ino);
 	}
@@ -455,21 +457,21 @@ static int clonefs_readlink(struct dentry *dentry, char *buf, int len)
 
 	iput(cache_inode);
 
-	RETURN(rc);
+	RETURN(res);
 }
 
 static int clonefs_follow_link(struct dentry * dentry, struct nameidata *nd)
 {
 	struct inode * cache_inode;
 	struct inode * old_inode;
-	int    rc = -ENOENT;
+	int    res;
 
 	ENTRY;
 
 	cache_inode = clonefs_get_inode(dentry->d_inode); 
-	if (!cache_inode) {
+	if ( ! cache_inode ) {
 		CDEBUG(D_INODE, "clonefs_get_inode failed, NULL\n");
-		RETURN(rc);	
+		RETURN(-ENOENT);	
 	}
 
 	/* XXX: shall we allocate a new dentry ? 
@@ -481,8 +483,8 @@ static int clonefs_follow_link(struct dentry * dentry, struct nameidata *nd)
 	/* set dentry inode to cache inode */
 	dentry->d_inode = cache_inode;
 
-	if (cache_inode->i_op->follow_link) {
-		rc = cache_inode->i_op->follow_link(dentry, nd); 
+	if ( cache_inode->i_op->follow_link ) {
+		res = cache_inode->i_op->follow_link(dentry, nd); 
 	}
 
 	/* restore the old inode */
@@ -490,103 +492,16 @@ static int clonefs_follow_link(struct dentry * dentry, struct nameidata *nd)
 
 	iput(cache_inode);
 
-	RETURN(rc);
+	RETURN(res);
 }
-static ssize_t
-clonefs_getxattr(struct dentry *dentry, const char *name,
-                 void *buffer, size_t size)
-{
-	struct inode * cache_inode;
-	struct inode * old_inode;
-	int    rc = -ENOENT;
 
-	ENTRY;
-
-	cache_inode = clonefs_get_inode(dentry->d_inode); 
-	if (!cache_inode) {
-		CDEBUG(D_INODE, "clonefs_get_inode failed, NULL\n");
-		RETURN(rc);	
-	}
-
-	/* XXX: shall we allocate a new dentry ? 
-		The following is safe for ext2, etc. because ext2_follow_link 
-		only use the inode info */
-
-	/* save the old dentry inode */	
-	old_inode = dentry->d_inode;
-	/* set dentry inode to cache inode */
-	dentry->d_inode = cache_inode;
-
-	if (cache_inode->i_op->getxattr) {
-		rc = cache_inode->i_op->getxattr(dentry, name, buffer, size); 
-	}
-
-	/* restore the old inode */
-	dentry->d_inode = old_inode;
-
-	iput(cache_inode);
-
-	RETURN(rc);
-}
-static ssize_t
-clonefs_listxattr(struct dentry *dentry, char *buffer, size_t size)
-{
-	struct inode * cache_inode;
-	struct inode * old_inode;
-	int    rc = -ENOENT;
-
-	ENTRY;
-
-	cache_inode = clonefs_get_inode(dentry->d_inode); 
-	if (!cache_inode) {
-		CDEBUG(D_INODE, "clonefs_get_inode failed, NULL\n");
-		RETURN(rc);	
-	}
-
-	/* XXX: shall we allocate a new dentry ? 
-		The following is safe for ext2, etc. because ext2_follow_link 
-		only use the inode info */
-
-	/* save the old dentry inode */	
-	old_inode = dentry->d_inode;
-	/* set dentry inode to cache inode */
-	dentry->d_inode = cache_inode;
-
-	if (cache_inode->i_op->listxattr) {
-		rc = cache_inode->i_op->listxattr(dentry, buffer, size); 
-	}
-
-	/* restore the old inode */
-	dentry->d_inode = old_inode;
-
-	iput(cache_inode);
-
-	RETURN(rc);
-
-}
 struct inode_operations clonefs_symlink_inode_ops =
 {
 	/*FIXME later getxattr, listxattr, 
 	 * other method need to be replaced too 
 	 * */  
-	readlink:	clonefs_readlink,   	/* readlink */              
-	follow_link:	clonefs_follow_link,	/* follow_link */             
-   	getxattr:       clonefs_getxattr,       /* get xattr */
-        listxattr:      clonefs_listxattr,      /* list xattr */
+	readlink:	clonefs_readlink,   /* readlink */              
+	follow_link:	clonefs_follow_link,/* follow_link */             
 };
 
-
-int clonefs_mounted(struct snap_cache *cache, int index)
-{
-	struct snap_clone_info *clone_sb;
-	struct list_head *list, *end;
-
-	end = list = &cache->cache_clone_list;
-	
-	list_for_each_entry(clone_sb, list, clone_list_entry) {
-		if (clone_sb->clone_index == index)
-			return 1;	
-	} 	
-	return 0;	
-}
 
