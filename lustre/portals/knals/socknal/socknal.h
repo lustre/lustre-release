@@ -45,6 +45,7 @@
 #include <asm/system.h>
 #include <asm/uaccess.h>
 
+#include <linux/init.h>
 #include <linux/fs.h>
 #include <linux/file.h>
 #include <linux/stat.h>
