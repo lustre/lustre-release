@@ -1,6 +1,7 @@
 tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.0
        * bug fixes
+       - reduce journal credits needed for BRW writes (2370)
        - orphan handling to avoid losing space on client/server crashes
 
 2004-01-27  Cluster File Systems, Inc. <info@clusterfs.com>
