@@ -113,7 +113,7 @@ static inline void *fsfilt_start_log(struct obd_device *obd,
         unsigned long now = jiffies;
         void *parent_handle = oti ? oti->oti_handle : NULL;
         void *handle;
-        
+
         if (obd->obd_fail)
                 return ERR_PTR(-EROFS);
 

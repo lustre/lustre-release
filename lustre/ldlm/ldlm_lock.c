@@ -634,7 +634,7 @@ void ldlm_lock_allow_match(struct ldlm_lock *lock)
  * case, lockh is filled in with a addref()ed lock
  */
 int ldlm_lock_match(struct ldlm_namespace *ns, int flags,
-                    struct ldlm_res_id *res_id, __u32 type,
+                    struct ldlm_res_id *res_id, ldlm_type_t type,
                     ldlm_policy_data_t *policy, ldlm_mode_t mode,
                     struct lustre_handle *lockh)
 {
@@ -728,7 +728,7 @@ int ldlm_lock_match(struct ldlm_namespace *ns, int flags,
 /* Returns a referenced lock */
 struct ldlm_lock *ldlm_lock_create(struct ldlm_namespace *ns,
                                    struct lustre_handle *parent_lock_handle,
-                                   struct ldlm_res_id res_id, __u32 type,
+                                   struct ldlm_res_id res_id, ldlm_type_t type,
                                    ldlm_mode_t mode,
                                    ldlm_blocking_callback blocking,
                                    ldlm_completion_callback completion,
