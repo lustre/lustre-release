@@ -1289,7 +1289,8 @@ kibnal_api_startup (nal_t *nal, ptl_pid_t requested_pid,
         /*****************************************************/
 
         for (i = 0; i < IBNAL_N_SCHED; i++) {
-                rc = kibnal_thread_start (kibnal_scheduler, (void *)i);
+                rc = kibnal_thread_start (kibnal_scheduler,
+                                          (void *)((unsigned long)i));
                 if (rc != 0) {
                         CERROR("Can't spawn openibnal scheduler[%d]: %d\n",
                                i, rc);

@@ -60,6 +60,7 @@
 #include <ts_ib_sa_client.h>
 
 #define IBNAL_SERVICE_NAME   "openibnal"
+#define IBNAL_CHECK_ADVERT   1
 
 #if CONFIG_SMP
 # define IBNAL_N_SCHED      num_online_cpus()   /* # schedulers */
@@ -452,17 +453,11 @@ kibnal_show_rdma_attr (kib_conn_t *conn)
 }
 #endif
 
-#if CONFIG_X86
 static inline __u64
 kibnal_page2phys (struct page *p)
 {
-        __u64 page_number = p - mem_map;
-        
-        return (page_number << PAGE_SHIFT);
+        return page_to_phys(p);
 }
-#else
-# error "no page->phys"
-#endif
 
 /* CAVEAT EMPTOR:
  * We rely on tx/rx descriptor alignment to allow us to use the lowest bit
@@ -525,7 +520,7 @@ extern void kibnal_start_active_rdma (int type, int status,
                                       kib_rx_t *rx, lib_msg_t *libmsg, 
                                       unsigned int niov, 
                                       struct iovec *iov, ptl_kiov_t *kiov,
-                                      size_t offset, size_t nob);
+                                      int offset, int nob);
 
 
 

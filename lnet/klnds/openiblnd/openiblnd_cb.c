@@ -1173,7 +1173,7 @@ kibnal_start_active_rdma (int type, int status,
                            kib_rx_t *rx, lib_msg_t *libmsg, 
                            unsigned int niov,
                            struct iovec *iov, ptl_kiov_t *kiov,
-                           size_t offset, size_t nob)
+                           int offset, int nob)
 {
         kib_msg_t    *rxmsg = rx->rx_msg;
         kib_msg_t    *txmsg;
@@ -1309,8 +1309,8 @@ kibnal_sendmsg(lib_nal_t    *nal,
                 unsigned int  payload_niov, 
                 struct iovec *payload_iov, 
                 ptl_kiov_t   *payload_kiov,
-                size_t        payload_offset,
-                size_t        payload_nob)
+                int           payload_offset,
+                int           payload_nob)
 {
         kib_msg_t  *ibmsg;
         kib_tx_t   *tx;
@@ -1318,8 +1318,8 @@ kibnal_sendmsg(lib_nal_t    *nal,
 
         /* NB 'private' is different depending on what we're sending.... */
 
-        CDEBUG(D_NET, "sending "LPSZ" bytes in %d frags to nid:"LPX64
-               " pid %d\n", payload_nob, payload_niov, nid , pid);
+        CDEBUG(D_NET, "sending %d bytes in %d frags to nid:"LPX64" pid %d\n",
+               payload_nob, payload_niov, nid , pid);
 
         LASSERT (payload_nob == 0 || payload_niov > 0);
         LASSERT (payload_niov <= PTL_MD_MAX_IOV);
@@ -1447,7 +1447,7 @@ kibnal_send_pages (lib_nal_t *nal, void *private, lib_msg_t *cookie,
 ptl_err_t
 kibnal_recvmsg (lib_nal_t *nal, void *private, lib_msg_t *libmsg,
                  unsigned int niov, struct iovec *iov, ptl_kiov_t *kiov,
-                 size_t offset, size_t mlen, size_t rlen)
+                 int offset, int mlen, int rlen)
 {
         kib_rx_t    *rx = private;
         kib_msg_t   *rxmsg = rx->rx_msg;

@@ -457,7 +457,7 @@ static int libcfs_ioctl(struct inode *inode, struct file *file,
                 struct portals_cfg pcfg;
 
                 if (data->ioc_plen1 != sizeof(pcfg)) {
-                        CERROR("Bad ioc_plen1 %d (wanted %d)\n",
+                        CERROR("Bad ioc_plen1 %d (wanted "LPSZ")\n",
                                data->ioc_plen1, sizeof(pcfg));
                         err = -EINVAL;
                         break;
