@@ -543,9 +543,9 @@ int mds_try_to_split_dir(struct obd_device *obd, struct dentry *dentry,
         CDEBUG(D_OTHER, "%s: split directory %u/%lu/%lu\n",
                obd->obd_name, mds->mds_num, dir->i_ino,
                (unsigned long) dir->i_generation);
-        CDEBUG(D_ERROR, "%s: split directory %u/%lu/%lu\n",
+        CDEBUG(D_ERROR, "%s: split directory %u/%lu/%lu: %d/%d\n",
                obd->obd_name, mds->mds_num, dir->i_ino,
-               (unsigned long) dir->i_generation);
+               (unsigned long) dir->i_generation, rc, nstripes);
 
         if (mea == NULL)
                 mea = &tmea;
