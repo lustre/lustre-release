@@ -44,31 +44,26 @@ static unsigned long last_rcvd_slots[MDS_MAX_CLIENT_WORDS];
  */
 int mds_client_add(struct mds_export_data *med, int cl_off)
 {
+        /* the bitmap operations can handle cl_off > sizeof(long) * 8, so
+         * there's no need for extra complication here
+         */
         if (cl_off == -1) {
-                unsigned long *word;
-                int bit, bits_per_word = sizeof(*word) * 8;
-
+                cl_off = find_first_zero_bit(last_rcvd_slots, MDS_MAX_CLIENTS);
         repeat:
-                word = last_rcvd_slots;
-                while(*word == ~0UL)
-                        ++word;
-                if (word - last_rcvd_slots >= MDS_MAX_CLIENT_WORDS) {
+                if (cl_off >= MDS_MAX_CLIENTS) {
                         CERROR("no room for clients - fix MDS_MAX_CLIENTS\n");
                         return -ENOMEM;
                 }
-                bit = ffz(*word);
-                if (test_and_set_bit(bit, word)) {
-                        CERROR("found bit %d set for word %d - fix locking\n",
-                               bit, word - last_rcvd_slots);
-                        LBUG();
+                if (test_and_set_bit(cl_off, last_rcvd_slots)) {
+                        CERROR("MDS client %d: found bit is set in bitmap\n",
+                               cl_off);
+                        cl_off = find_next_zero_bit(last_rcvd_slots,
+                                                    MDS_MAX_CLIENTS, cl_off);
                         goto repeat;
                 }
-                cl_off = (word - last_rcvd_slots) * bits_per_word + bit;
         } else {
-                /* test_and_set_bit can handle cl_off > sizeof(long), so there's
-                 * no need to frob it */
                 if (test_and_set_bit(cl_off, last_rcvd_slots)) {
-                        CERROR("bit %d already set in bitmap - bad bad\n",
+                        CERROR("MDS client %d: bit already set in bitmap!!\n",
                                cl_off);
                         LBUG();
                 }
@@ -84,8 +79,6 @@ int mds_client_add(struct mds_export_data *med, int cl_off)
 int mds_client_free(struct obd_export *exp)
 {
         struct mds_export_data *med = &exp->exp_mds_data;
-        unsigned long *word;
-        int bit, bits_per_word = sizeof(*word) * 8;
 
         if (!med->med_mcd)
                 RETURN(0);
@@ -93,12 +86,9 @@ int mds_client_free(struct obd_export *exp)
         CDEBUG(D_INFO, "freeing client at offset %d with UUID '%s'\n",
                med->med_off, med->med_mcd->mcd_uuid);
 
-        word = last_rcvd_slots + med->med_off / bits_per_word;
-        bit = med->med_off % bits_per_word;
-
-        if (!test_and_clear_bit(bit, word)) {
-                CERROR("bit %d already clear in word %d - bad bad\n",
-                       bit, word - last_rcvd_slots);
+        if (!test_and_clear_bit(med->med_off, last_rcvd_slots)) {
+                CERROR("MDS client %d: bit already clear in bitmap!!\n",
+                       med->med_off);
                 LBUG();
         }
 
