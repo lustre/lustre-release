@@ -1386,7 +1386,7 @@ int mds_get_parent_child_locked(struct obd_device *obd, struct mds_obd *mds,
         ldlm_policy_data_t child_policy = {.l_inodebits = { child_lockpart }};
         struct ldlm_res_id parent_res_id = { .name = {0} };
         struct ldlm_res_id child_res_id = { .name = {0} };
-	unsigned long child_ino; __u32 child_gen;
+	unsigned long child_ino = 0; __u32 child_gen = 0;
         int rc = 0, cleanup_phase = 0;
         struct lustre_id sid;
         struct inode *inode;
@@ -2572,9 +2572,10 @@ static int mds_get_parents_children_locked(struct obd_device *obd,
         struct ldlm_res_id *maxres_src, *maxres_tgt;
         struct inode *inode;
         int rc = 0, cleanup_phase = 0;
-	__u32 child_gen1, child_gen2;
-	unsigned long child_ino1;
-	unsigned long child_ino2;
+	__u32 child_gen1 = 0;
+        __u32 child_gen2 = 0;
+	unsigned long child_ino1 = 0;
+	unsigned long child_ino2 = 0;
         ENTRY;
 
         /* Step 1: Lookup the source directory */
