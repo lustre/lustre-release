@@ -21,7 +21,6 @@ void t_chmod(const char *path, const char *format, ...);
 void t_rename(const char *oldpath, const char *newpath);
 int t_open_readonly(const char *path);
 int t_open(const char *path);
-int t_opendir(const char *path);
 void t_close(int fd);
 int t_check_stat(const char *name, struct stat *buf);
 int t_check_stat_fail(const char *name);
