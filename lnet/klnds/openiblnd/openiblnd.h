@@ -533,6 +533,9 @@ extern void kibnal_free_pages (kib_pages_t *p);
 extern void kibnal_check_sends (kib_conn_t *conn);
 
 extern tTS_IB_CM_CALLBACK_RETURN
+kibnal_bad_conn_callback (tTS_IB_CM_EVENT event, tTS_IB_CM_COMM_ID cid,
+                          void *param, void *arg);
+extern tTS_IB_CM_CALLBACK_RETURN
 kibnal_conn_callback (tTS_IB_CM_EVENT event, tTS_IB_CM_COMM_ID cid,
                        void *param, void *arg);
 extern tTS_IB_CM_CALLBACK_RETURN

@@ -1521,7 +1521,7 @@ kibnal_close_conn (kib_conn_t *conn, int why)
 }
 
 void
-kibnal_peer_connect_failed (kib_peer_t *peer, int active, int rc)
+kibnal_peer_connect_failed (kib_peer_t *peer, int rc)
 {
         LIST_HEAD        (zombies);
         kib_tx_t         *tx;
@@ -1585,7 +1585,7 @@ kibnal_peer_connect_failed (kib_peer_t *peer, int active, int rc)
 }
 
 void
-kibnal_connreq_done (kib_conn_t *conn, int active, int status)
+kibnal_connreq_done (kib_conn_t *conn, int status)
 {
         int               state = conn->ibc_state;
         kib_peer_t       *peer = conn->ibc_peer;
@@ -1594,40 +1594,44 @@ kibnal_connreq_done (kib_conn_t *conn, int active, int status)
         int               rc;
         int               i;
 
-        /* passive connection has no connreq & vice versa */
-        LASSERT (!active == !(conn->ibc_connreq != NULL));
-        if (active) {
+        if (conn->ibc_connreq != NULL) {
                 PORTAL_FREE (conn->ibc_connreq, sizeof (*conn->ibc_connreq));
                 conn->ibc_connreq = NULL;
         }
 
-        if (state == IBNAL_CONN_CONNECTING) {
-                /* Install common (active/passive) callback for
-                 * disconnect/idle notification if I got as far as getting
-                 * a CM comm_id */
-                rc = tsIbCmCallbackModify(conn->ibc_comm_id, 
-                                          kibnal_conn_callback, conn);
-                LASSERT (rc == 0);
+        switch (state) {
+        case IBNAL_CONN_CONNECTING:
+                /* conn has a CM comm_id */
+                if (status == 0) {
+                        /* Install common (active/passive) callback for
+                         * disconnect/idle notification */
+                        rc = tsIbCmCallbackModify(conn->ibc_comm_id, 
+                                                  kibnal_conn_callback,
+                                                  conn);
+                        LASSERT (rc == 0);
+                } else {
+                        /* LASSERT (no more CM callbacks) */
+                        rc = tsIbCmCallbackModify(conn->ibc_comm_id,
+                                                  kibnal_bad_conn_callback,
+                                                  conn);
+                        LASSERT (rc == 0);
+                }
+                break;
+                
+        case IBNAL_CONN_INIT_QP:
+                LASSERT (status != 0);
+                break;
+                
+        default:
+                LBUG();
         }
         
         write_lock_irqsave (&kibnal_data.kib_global_lock, flags);
 
         LASSERT (peer->ibp_connecting != 0);
         
-        if (status == 0) {                         
-                /* connection established... */
-                LASSERT (state == IBNAL_CONN_CONNECTING);
-                if (!kibnal_peer_active(peer)) {
-                        /* ...but peer deleted meantime */
-                        status = -ECONNABORTED;
-                }
-        } else {
-                LASSERT (state == IBNAL_CONN_INIT_QP ||
-                         state == IBNAL_CONN_CONNECTING);
-        }
-
-        if (status == 0) {
-                /* Everything worked! */
+        if (status == 0 &&                      /* connection established */
+            kibnal_peer_active(peer)) {         /* peer not deleted */
 
                 peer->ibp_connecting--;
                 conn->ibc_state = IBNAL_CONN_ESTABLISHED;
@@ -1687,24 +1691,19 @@ kibnal_connreq_done (kib_conn_t *conn, int active, int status)
                 return;
         }
 
-        /* connection failed */
-        if (state == IBNAL_CONN_CONNECTING) {
-                /* schedule for reaper to close */
+        if (status == 0) {
+                /* connection established, but peer was deleted.  Schedule for
+                 * reaper to cm_disconnect... */
+                status = -ECONNABORTED;
                 kibnal_close_conn_locked (conn, status);
         } else {
-                /* Don't have a CM comm_id; just wait for refs to drain */
+                /* just waiting for refs to drain */
                 conn->ibc_state = IBNAL_CONN_ZOMBIE;
         } 
 
         write_unlock_irqrestore (&kibnal_data.kib_global_lock, flags);
 
-        kibnal_peer_connect_failed (conn->ibc_peer, active, status);
-
-        if (state != IBNAL_CONN_CONNECTING) {
-                /* drop caller's ref if we're not waiting for the
-                 * IB_CM_IDLE callback */
-                kibnal_put_conn (conn);
-        }
+        kibnal_peer_connect_failed (conn->ibc_peer, status);
 }
 
 int
@@ -1798,12 +1797,11 @@ kibnal_accept (kib_conn_t **connp, tTS_IB_CM_COMM_ID cid,
 }
 
 tTS_IB_CM_CALLBACK_RETURN
-kibnal_idle_conn_callback (tTS_IB_CM_EVENT event,
-                            tTS_IB_CM_COMM_ID cid,
-                            void *param,
-                            void *arg)
+kibnal_bad_conn_callback (tTS_IB_CM_EVENT event,
+                          tTS_IB_CM_COMM_ID cid,
+                          void *param,
+                          void *arg)
 {
-        /* Shouldn't ever get a callback after TS_IB_CM_IDLE */
         CERROR ("Unexpected event %d: conn %p\n", event, arg);
         LBUG ();
         return TS_IB_CM_CALLBACK_PROCEED;
@@ -1842,11 +1840,9 @@ kibnal_conn_callback (tTS_IB_CM_EVENT event,
         case TS_IB_CM_IDLE:
                 CDEBUG(D_NET, "Connection %p -> "LPX64" IDLE.\n",
                        conn, conn->ibc_peer->ibp_nid);
-                kibnal_put_conn (conn);        /* Lose CM's ref */
 
                 /* LASSERT (no further callbacks) */
-                rc = tsIbCmCallbackModify(cid, 
-                                          kibnal_idle_conn_callback, conn);
+                rc = tsIbCmCallbackModify(cid, kibnal_bad_conn_callback, conn);
                 LASSERT (rc == 0);
 
                 /* NB we wait until the connection has closed before
@@ -1896,6 +1892,8 @@ kibnal_conn_callback (tTS_IB_CM_EVENT event,
                         list_del(&tx->tx_list);
                         kibnal_tx_done (tx);
                 }
+
+                kibnal_put_conn (conn);        /* Lose CM's ref */
                 break;
         }
 
@@ -1919,10 +1917,12 @@ kibnal_passive_conn_callback (tTS_IB_CM_EVENT event,
                         return TS_IB_CM_CALLBACK_ABORT;
                 }
                 
-                CERROR ("Unexpected event %p -> "LPX64": %d\n", 
+                CERROR ("%s event %p -> "LPX64": %d\n",
+                        (event == TS_IB_CM_IDLE) ? "IDLE" : "Unexpected",
                         conn, conn->ibc_peer->ibp_nid, event);
-                kibnal_connreq_done (conn, 0, -ECONNABORTED);
-                break;
+                kibnal_connreq_done(conn, -ECONNABORTED);
+                kibnal_put_conn(conn); /* drop CM's ref */
+                return TS_IB_CM_CALLBACK_ABORT;
                 
         case TS_IB_CM_REQ_RECEIVED: {
                 struct ib_cm_req_received_param *req = param;
@@ -1963,7 +1963,7 @@ kibnal_passive_conn_callback (tTS_IB_CM_EVENT event,
                 req->accept_param.flow_control           = IBNAL_FLOW_CONTROL;
 
                 CDEBUG(D_NET, "Proceeding\n");
-                break;
+                return TS_IB_CM_CALLBACK_PROCEED; /* CM takes my ref on conn */
         }
 
         case TS_IB_CM_ESTABLISHED:
@@ -1971,12 +1971,9 @@ kibnal_passive_conn_callback (tTS_IB_CM_EVENT event,
                 CDEBUG(D_WARNING, "Connection %p -> "LPX64" ESTABLISHED.\n",
                        conn, conn->ibc_peer->ibp_nid);
 
-                kibnal_connreq_done (conn, 0, 0);
-                break;
+                kibnal_connreq_done(conn, 0);
+                return TS_IB_CM_CALLBACK_PROCEED;
         }
-
-        /* NB if the connreq is done, we switch to kibnal_conn_callback */
-        return TS_IB_CM_CALLBACK_PROCEED;
 }
 
 tTS_IB_CM_CALLBACK_RETURN
@@ -1999,15 +1996,17 @@ kibnal_active_conn_callback (tTS_IB_CM_EVENT event,
                 if (rc != 0) {
                         CERROR ("Error %d unpacking conn ack from "LPX64"\n",
                                 rc, conn->ibc_peer->ibp_nid);
-                        kibnal_connreq_done (conn, 1, rc);
-                        break;
+                        kibnal_connreq_done(conn, rc);
+                        kibnal_put_conn(conn); /* drop CM's ref */
+                        return TS_IB_CM_CALLBACK_ABORT;
                 }
 
                 if (msg->ibm_type != IBNAL_MSG_CONNACK) {
                         CERROR ("Unexpected conn ack type %d from "LPX64"\n",
                                 msg->ibm_type, conn->ibc_peer->ibp_nid);
-                        kibnal_connreq_done (conn, 1, -EPROTO);
-                        break;
+                        kibnal_connreq_done(conn, -EPROTO);
+                        kibnal_put_conn(conn); /* drop CM's ref */
+                        return TS_IB_CM_CALLBACK_ABORT;
                 }
 
                 if (msg->ibm_srcnid != conn->ibc_peer->ibp_nid ||
@@ -2016,31 +2015,33 @@ kibnal_active_conn_callback (tTS_IB_CM_EVENT event,
                     msg->ibm_dststamp != kibnal_data.kib_incarnation) {
                         CERROR("Stale conn ack from "LPX64"\n",
                                conn->ibc_peer->ibp_nid);
-                        kibnal_connreq_done (conn, 1, -ESTALE);
-                        break;
+                        kibnal_connreq_done(conn, -ESTALE);
+                        kibnal_put_conn(conn); /* drop CM's ref */
+                        return TS_IB_CM_CALLBACK_ABORT;
                 }
 
                 if (msg->ibm_u.connparams.ibcp_queue_depth != IBNAL_MSG_QUEUE_SIZE) {
                         CERROR ("Bad queue depth %d from "LPX64"\n",
                                 msg->ibm_u.connparams.ibcp_queue_depth,
                                 conn->ibc_peer->ibp_nid);
-                        kibnal_connreq_done (conn, 1, -EPROTO);
-                        break;
+                        kibnal_connreq_done(conn, -EPROTO);
+                        kibnal_put_conn(conn); /* drop CM's ref */
+                        return TS_IB_CM_CALLBACK_ABORT;
                 }
                                 
                 CDEBUG(D_NET, "Connection %p -> "LPX64" REP_RECEIVED.\n",
                        conn, conn->ibc_peer->ibp_nid);
 
                 conn->ibc_credits = IBNAL_MSG_QUEUE_SIZE;
-                break;
+                return TS_IB_CM_CALLBACK_PROCEED;
         }
 
         case TS_IB_CM_ESTABLISHED:
                 CDEBUG(D_WARNING, "Connection %p -> "LPX64" ESTABLISHED\n",
                        conn, conn->ibc_peer->ibp_nid);
 
-                kibnal_connreq_done (conn, 1, 0);
-                break;
+                kibnal_connreq_done(conn, 0);
+                return TS_IB_CM_CALLBACK_PROCEED;
 
         case TS_IB_CM_IDLE:
                 CERROR("Connection %p -> "LPX64" IDLE\n",
@@ -2051,21 +2052,17 @@ kibnal_active_conn_callback (tTS_IB_CM_EVENT event,
                 kibnal_schedule_active_connect_locked(conn->ibc_peer);
                 write_unlock_irqrestore(&kibnal_data.kib_global_lock, flags);
 
-                /* Back out state change: this conn disengaged from CM */
-                conn->ibc_state = IBNAL_CONN_INIT_QP;
-                
-                kibnal_connreq_done (conn, 1, -ECONNABORTED);
-                break;
+                kibnal_connreq_done(conn, -ECONNABORTED);
+                kibnal_put_conn(conn); /* drop CM's ref */
+                return TS_IB_CM_CALLBACK_ABORT;
 
         default:
                 CERROR("Connection %p -> "LPX64" ERROR %d\n",
                        conn, conn->ibc_peer->ibp_nid, event);
-                kibnal_connreq_done (conn, 1, -ECONNABORTED);
-                break;
+                kibnal_connreq_done(conn, -ECONNABORTED);
+                kibnal_put_conn(conn); /* drop CM's ref */
+                return TS_IB_CM_CALLBACK_ABORT;
         }
-
-        /* NB if the connreq is done, we switch to kibnal_conn_callback */
-        return TS_IB_CM_CALLBACK_PROCEED;
 }
 
 int
@@ -2078,9 +2075,11 @@ kibnal_pathreq_callback (tTS_IB_CLIENT_QUERY_TID tid, int status,
         kib_msg_t  *msg = &conn->ibc_connreq->cr_msg;
 
         if (status != 0) {
-                CERROR ("status %d\n", status);
-                kibnal_connreq_done (conn, 1, status);
-                goto out;
+                CERROR ("Pathreq %p -> "LPX64" failed: %d\n",
+                        conn, conn->ibc_peer->ibp_nid, status);
+                kibnal_connreq_done(conn, status);
+                kibnal_put_conn(conn); /* drop callback's ref */
+                return 1;    /* non-zero prevents further callbacks */
         }
 
         conn->ibc_connreq->cr_path = *resp;
@@ -2118,15 +2117,15 @@ kibnal_pathreq_callback (tTS_IB_CLIENT_QUERY_TID tid, int status,
                                 kibnal_active_conn_callback, conn,
                                 &conn->ibc_comm_id);
         if (status != 0) {
-                CERROR ("Connect: %d\n", status);
+                CERROR ("Connect %p -> "LPX64" failed: %d\n",
+                        conn, conn->ibc_peer->ibp_nid, status);
                 /* Back out state change: I've not got a CM comm_id yet... */
                 conn->ibc_state = IBNAL_CONN_INIT_QP;
-                kibnal_connreq_done (conn, 1, status);
+                kibnal_connreq_done(conn, status);
+                kibnal_put_conn(conn); /* Drop callback's ref */
         }
         
- out:
-        /* return non-zero to prevent further callbacks */
-        return 1;
+        return 1;    /* non-zero to prevent further callbacks */
 }
 
 void
@@ -2138,7 +2137,7 @@ kibnal_connect_peer (kib_peer_t *peer)
         conn = kibnal_create_conn();
         if (conn == NULL) {
                 CERROR ("Can't allocate conn\n");
-                kibnal_peer_connect_failed (peer, 1, -ENOMEM);
+                kibnal_peer_connect_failed (peer, -ENOMEM);
                 return;
         }
 
@@ -2148,7 +2147,8 @@ kibnal_connect_peer (kib_peer_t *peer)
         PORTAL_ALLOC (conn->ibc_connreq, sizeof (*conn->ibc_connreq));
         if (conn->ibc_connreq == NULL) {
                 CERROR ("Can't allocate connreq\n");
-                kibnal_connreq_done (conn, 1, -ENOMEM);
+                kibnal_connreq_done(conn, -ENOMEM);
+                kibnal_put_conn(conn); /* drop my ref */
                 return;
         }
 
@@ -2156,7 +2156,8 @@ kibnal_connect_peer (kib_peer_t *peer)
 
         rc = kibnal_make_svcqry(conn);
         if (rc != 0) {
-                kibnal_connreq_done (conn, 1, rc);
+                kibnal_connreq_done (conn, rc);
+                kibnal_put_conn(conn); /* drop my ref */
                 return;
         }
 
@@ -2177,10 +2178,12 @@ kibnal_connect_peer (kib_peer_t *peer)
                                     kibnal_pathreq_callback, conn, 
                                     &conn->ibc_connreq->cr_tid);
         if (rc == 0)
-                return;
+                return; /* callback now has my ref on conn */
 
-        CERROR ("Path record request: %d\n", rc);
-        kibnal_connreq_done (conn, 1, rc);
+        CERROR ("Path record request %p -> "LPX64" failed: %d\n",
+                conn, conn->ibc_peer->ibp_nid, rc);
+        kibnal_connreq_done(conn, rc);
+        kibnal_put_conn(conn); /* drop my ref */
 }
 
 int
