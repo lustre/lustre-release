@@ -82,7 +82,7 @@ static struct llog_handle *llog_new_log(struct llog_handle *cathandle,
         if (!loh)
                 GOTO(out_handle, rc = -ENOMEM);
         loh->loh_magic = LLOG_OBJECT_MAGIC;
-        loh->loh_size = loh->loh_size_end = sizeof(*loh);
+        loh->loh_hdr_size = loh->loh_hdr_size_end = sizeof(*loh);
         loghandle->lgh_hdr = loh;
 
         lch = cathandle->lgh_hdr;
@@ -91,6 +91,7 @@ static struct llog_handle *llog_new_log(struct llog_handle *cathandle,
         for (i = 0, index = lch->lch_index; i < bitmap_size; i++, index++) {
                 index %= bitmap_size;
                 if (ext2_set_bit(index, lch->lch_bitmap))
+                        /* XXX This should trigger log clean up or similar */
                         CERROR("catalog index %d is still in use\n", index);
                 else {
                         lch->lch_index = (index + 1) % bitmap_size;
@@ -162,9 +163,8 @@ int llog_init_catalog(struct llog_handle *cathandle)
         cathandle->lgh_hdr = lch;
 
         if (file->f_dentry->d_inode->i_size == 0) {
-write_hdr:
-                lch->lch_magic = LLOG_CATALOG_MAGIC;
-                lch->lch_size = lch->lch_size_end = LLOG_CHUNK_SIZE;
+write_hdr:      lch->lch_magic = LLOG_CATALOG_MAGIC;
+                lch->lch_hdr_size = lch->lch_hdr_size_end = LLOG_CHUNK_SIZE;
                 rc = lustre_fwrite(file, lch, sizeof(*lch), &offset);
                 if (rc != sizeof(*lch)) {
                         CERROR("error writing catalog header: rc %d\n", rc);
@@ -179,7 +179,8 @@ write_hdr:
                         CERROR("error reading catalog header: rc %d\n", rc);
                         /* Can we do much else if the header is bad? */
                         goto write_hdr;
-                }
+                } else
+                        rc = 0;
         }
 
         RETURN(rc);
@@ -200,10 +201,12 @@ struct llog_handle *llog_current_log(struct llog_handle *cathandle, int reclen,
 
         if (!list_empty(loglist)) {
                 struct llog_handle *loghandle;
+                struct llog_object_hdr *loh;
 
                 loghandle = list_entry(loglist->prev, struct llog_handle,
                                        lgh_list);
-                if (LLOG_MAX_LOG_SIZE - loghandle->lgh_file->f_pos >= reclen)
+                loh = loghandle->lgh_hdr;
+                if (loh->loh_numrec < sizeof(loh->loh_bitmap) * sizeof(__u32))
                         RETURN(loghandle);
         }
 
@@ -243,9 +246,8 @@ int llog_add_record(struct llog_handle *cathandle, struct llog_trans_hdr *rec,
          * We know that llog_current_log() will return a loghandle that is
          * big enough to hold reclen, so all we care about is padding here.
          */
-        left = file->f_pos & (LLOG_CHUNK_SIZE - 1);
-        if (left != 0 && left != reclen && left < reclen + LLOG_MIN_REC_SIZE &&
-            file->f_pos + left < LLOG_MAX_LOG_SIZE) {
+        left = LLOG_CHUNK_SIZE - (file->f_pos & (LLOG_CHUNK_SIZE - 1));
+        if (left != 0 && left != reclen && left < reclen + LLOG_MIN_REC_SIZE) {
                 struct llog_null_trans {
                         struct llog_trans_hdr hdr;
                         __u32 padding;
