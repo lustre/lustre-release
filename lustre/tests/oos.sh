@@ -1,46 +1,77 @@
 #!/bin/bash
 
-export NAME=${NAME:-local}
-export OSTSIZE=10000
+set -e
+set -vx
 
+export PATH=`dirname $0`/../utils:$PATH
+LFS=${LFS:-lfs}
+MOUNT=${MOUNT:-$1}
 MOUNT=${MOUNT:-/mnt/lustre}
+OOS=$MOUNT/oosfile
 TMP=${TMP:-/tmp}
-
-echo "mnt.."
-sh llmount.sh
-echo "done"
+LOG=$TMP/ooslog
 
 SUCCESS=1
 
-FREESPACE=`df |grep $MOUNT|tr -s ' '|cut -d ' ' -f4`
+rm -f $OOS
 
-rm -f $TMP/oosfile
-dd if=/dev/zero of=$MOUNT/oosfile count=$[$FREESPACE + 1] bs=1k 2>$TMP/oosfile
+sleep 1	# to ensure we get up-to-date statfs info
 
-RECORDSOUT=`grep "records out" $TMP/oosfile|cut -d + -f1`
+#echo -1 > /proc/sys/portals/debug
+#echo 0x40a8 > /proc/sys/portals/subsystem_debug
+#lctl clear
+#lctl debug_daemon start /r/tmp/debug 1024
 
-[ -z "`grep "No space left on device" $TMP/oosfile`" ] && \
-        echo "failed:dd not return ENOSPC" && SUCCESS=0
+STRIPECOUNT=`cat /proc/fs/lustre/lov/*/activeobd | head -1`
+ORIGFREE=`cat /proc/fs/lustre/llite/*/kbytesavail | head -1`
+MAXFREE=${MAXFREE:-$((200000 * $STRIPECOUNT))}
+if [ $ORIGFREE -gt $MAXFREE ]; then
+	echo "skipping out-of-space test on $OSC"
+	echo "reports ${ORIGFREE}kB free, more tham MAXFREE ${MAXFREE}kB"
+	echo "increase $MAXFREE (or reduce test fs size) to proceed"
+	exit 0
+fi
 
-REMAINEDFREE=`df |grep $MOUNT|tr -s ' '|cut -d ' ' -f4`
-[ $[$FREESPACE - $REMAINEDFREE ] -lt $RECORDSOUT ] && \
-        echo "failed:the space written by dd not equal to available space" && \
-        SUCCESS=0 && echo "$FREESPACE - $REMAINEDFREE $RECORDSOUT"
+export LANG=C LC_LANG=C # for "No space left on device" message
 
-[ $REMAINEDFREE -gt 100 ] && \
-	echo "failed:too many space left $REMAINEDFREE and -ENOSPC returned" &&\
+# make sure we stripe over all OSTs to avoid OOS on only a subset of OSTs
+$LFS setstripe $OOS 65536 0 $STRIPECOUNT
+if dd if=/dev/zero of=$OOS count=$(($ORIGFREE + 100)) bs=1k 2> $LOG; then
+	echo "ERROR: dd did not fail"
 	SUCCESS=0
+fi
 
-FILESIZE=`ls -l $MOUNT/oosfile|tr -s ' '|cut -d ' ' -f5`
-[ $RECORDSOUT -ne $[$FILESIZE/1024] ] && \
-        echo "failed:the space written by dd not equal to the size of file" && \
+if [ "`grep -c 'No space left on device' $LOG`" -ne 1 ]; then
+        echo "ERROR: dd not return ENOSPC"
+	SUCCESS=0
+fi
+
+# flush cache to OST(s) so avail numbers are correct
+sync; sleep 1 ; sync
+
+for AVAIL in /proc/fs/lustre/osc/OSC*MNT*/kbytesavail; do
+	[ `cat $AVAIL` -lt 400 ] && OSCFULL=full
+done
+if [ -z "$OSCFULL" ]; then
+	echo "no OSTs are close to full"
+	grep "[0-9]" /proc/fs/lustre/osc/OSC*MNT*/{kbytesavail,cur*}
+	SUCCESS=0
+fi
+
+RECORDSOUT=`grep "records out" $LOG | cut -d + -f1`
+
+FILESIZE=`ls -l $OOS | awk '{ print $5 }'`
+if [ $RECORDSOUT -ne $(($FILESIZE / 1024)) ]; then
+        echo "ERROR: blocks written by dd not equal to the size of file"
         SUCCESS=0
+fi
 
-[ $SUCCESS -eq 1 ] && echo "Success!"
+#lctl debug_daemon stop
 
-rm -f $MOUNT/oosfile*
-rm -f $TMP/oosfile
+rm -f $OOS
 
-echo ""
-echo "cln.."
-sh llmountcleanup.sh
+if [ $SUCCESS -eq 1 ]; then
+	echo "Success!"
+else
+	exit 1
+fi
