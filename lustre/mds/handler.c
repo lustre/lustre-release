@@ -946,7 +946,7 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req,
                 rep = lustre_msg_buf(req->rq_repmsg, 0, sizeof (*rep));
                 offset = 1;
         }
-        mds_root_squash_body(&obd->u.mds, &req->rq_peer.peer_nid, body); 
+        mds_root_squash_body(&obd->u.mds, &req->rq_peer.peer_id.nid, body); 
         uc.luc_fsuid = body->fsuid;
         uc.luc_fsgid = body->fsgid;
         uc.luc_cap = body->capability;
@@ -1260,7 +1260,7 @@ static int mds_readpage(struct ptlrpc_request *req)
         if (body == NULL)
                 GOTO (out, rc = -EFAULT);
 
-        mds_root_squash_body(&obd->u.mds, &req->rq_peer.peer_nid, body); 
+        mds_root_squash_body(&obd->u.mds, &req->rq_peer.peer_id.nid, body); 
         uc.luc_fsuid = body->fsuid;
         uc.luc_fsgid = body->fsgid;
         uc.luc_cap = body->capability;
@@ -1326,7 +1326,7 @@ int mds_reint(struct ptlrpc_request *req, int offset,
                 GOTO(out, req->rq_status = -EINVAL);
         }
         mds_root_squash_rec(&req->rq_export->exp_obd->u.mds,
-                            &req->rq_peer.peer_nid, rec);
+                            &req->rq_peer.peer_id.nid, rec);
         /* rc will be used to interrupt a for loop over multiple records */
         rc = mds_reint_rec(rec, offset, req, lockh);
  out:
