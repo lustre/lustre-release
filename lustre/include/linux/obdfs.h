@@ -59,8 +59,9 @@ struct obdfs_pgrq {
 	struct page 		*rq_page;	/* page to be written */
 };
 
+#if 0
 void obdfs_print_list(struct list_head *page_list) {
-	struct list_head *tmp;
+	struct list_head *tmp = page_list;
 
 	while ( (tmp = tmp->next) != page_list) {
 		struct obdfs_pgrq *pgrq;
@@ -69,6 +70,7 @@ void obdfs_print_list(struct list_head *page_list) {
 	}
 }
 
+#endif
 inline void obdfs_pgrq_del(struct obdfs_pgrq *pgrq);
 int obdfs_do_vec_wr(struct super_block *sb, obd_count num_io, obd_count num_oa,
 			   struct obdo **obdos, obd_count *oa_bufs,

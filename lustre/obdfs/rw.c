@@ -186,7 +186,7 @@ int obdfs_do_vec_wr(struct super_block *sb, obd_count num_io,
 				bufs, counts, offsets, flags);
 
 	/* release the pages from the page cache */
-	while ( num_io >= 0 ) {
+	while ( num_io > 0 ) {
 		num_io--;
 		put_page(pages[num_io]);
 	} 
