@@ -50,6 +50,7 @@ static int llog_test_1(struct obd_device *obd)
                 CERROR("1a: llog_create with name %s failed: %d\n", name, rc);
                 RETURN(rc);
         }
+        llog_init_handle(llh, LLOG_F_IS_PLAIN, "test");
 
         if (llh->lgh_last_idx != 0) {
                 CERROR("1a: handle->last_idx is %d, expected 0 after create\n",
