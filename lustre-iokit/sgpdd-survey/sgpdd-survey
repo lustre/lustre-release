@@ -80,7 +80,7 @@ for ((rsz=$rszlo;rsz<=$rszhi;rsz*=2)); do
 	    # show computed parameters
 	    actual_rsz=$((bpt*bs/1024))
 	    actual_size=$((bs*count*crg/1024))
-	    str=`printf 'total_size %8dK rsz %4d crg %5d thr %3d ' \
+	    str=`printf 'total_size %8dK rsz %4d crg %5d thr %5d ' \
 		         $((actual_size*ndevs)) $actual_rsz $((crg*ndevs)) $((thr*ndevs))`
 	    echo "==============> $str" >> $workf
 	    print_summary -n "$str"
@@ -135,7 +135,7 @@ for ((rsz=$rszlo;rsz<=$rszhi;rsz*=2)); do
 	            # compute MB/sec from nregions*slowest
 		    check=`awk < $tmpf \
 			'/time to transfer data/ {mb=$8/1.048576; if (n == 0 || mb < min) min = mb; n++}\
-			END {printf "%3d x %6.2f = %7.2f MB/s", n, min, min * n}'`
+			END {printf "%5d x %6.2f = %7.2f MB/s", n, min, min * n}'`
 		    print_summary -n "$bw $check "
 		fi
 		rm $tmpf
