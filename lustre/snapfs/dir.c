@@ -150,7 +150,6 @@ static int currentfs_create(struct inode *dir, struct dentry *dentry, int mode)
 {
 	struct snap_cache 	*cache;
 	struct inode_operations *iops;
-	struct snapshot_operations *snapops;	
 	void 			*handle = NULL;
 	int 			rc;
 
@@ -165,16 +164,12 @@ static int currentfs_create(struct inode *dir, struct dentry *dentry, int mode)
 		RETURN(-EINVAL);
 	}
 
-	snapops = filter_c2csnapops(cache->cache_filter);
-	if (!snapops || !snapops->get_generation) 
-		RETURN(-EINVAL);
-
 	handle = snap_trans_start(cache, dir, SNAP_OP_CREATE);
 
 	if ( snap_needs_cow(dir) != -1 ) {
 		CDEBUG(D_INODE, "snap_needs_cow for ino %lu \n",dir->i_ino);
 		snap_debug_device_fail(dir->i_dev, SNAP_OP_CREATE, 1);
-		if (!(snap_do_cow(dir, get_parent_ino(dir), 0))) {
+		if ((snap_do_cow(dir, get_parent_ino(dir), 0))) {
 			CERROR("Do cow error\n");
 			RETURN(-EINVAL);
 		}
@@ -192,20 +187,11 @@ static int currentfs_create(struct inode *dir, struct dentry *dentry, int mode)
                 CERROR("Error in currentfs_create, dentry->d_inode is NULL\n");
                 GOTO(exit, 0);
         }
-
-	if (S_ISDIR(dentry->d_inode->i_mode))
-                dentry->d_inode->i_op = filter_c2udiops(cache->cache_filter);
-        else if (S_ISREG(dentry->d_inode->i_mode)) {
-                if (!filter_c2cfiops(cache->cache_filter)) {
-                        filter_setup_file_ops(cache->cache_filter, dentry->d_inode,
-                                	      &currentfs_file_iops, &currentfs_file_fops,
-					      &currentfs_file_aops);
-                }
-                dentry->d_inode->i_op = filter_c2ufiops(cache->cache_filter);
-        }
+	set_filter_ops(cache, dentry->d_inode);
 	CDEBUG(D_INODE, "inode %lu, i_op %p\n", dentry->d_inode->i_ino, dentry->d_inode->i_op);
 	snap_debug_device_fail(dir->i_dev, SNAP_OP_CREATE, 3);
-	init_filter_data(dentry->d_inode, snapops, 0); exit:
+	init_filter_data(dentry->d_inode, 0); 
+exit:
 	snap_trans_commit(cache, handle);
 	RETURN(rc);
 }

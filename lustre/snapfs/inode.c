@@ -49,25 +49,66 @@ int init_filter_info_cache()
 
 
 void init_filter_data(struct inode *inode, 
-			     struct snapshot_operations *snapops, 
 			     int flag)
 {
 	struct filter_inode_info *i;
+        struct snap_cache *cache;
+	struct snapshot_operations *snapops; 
 
-	if (inode->i_filterdata){
+	if (inode->i_filterdata || inode->i_ino & 0xF0000000)
                 return;
-        }
+	cache = snap_find_cache(inode->i_dev);
+	if (!cache) {
+		CERROR("currentfs_read_inode: cannot find cache\n");
+		make_bad_inode(inode);
+		return;
+	}
+	snapops = filter_c2csnapops(cache->cache_filter);
+	
 	inode->i_filterdata = (struct filter_inode_info *) \
 			      kmem_cache_alloc(filter_info_cache, SLAB_KERNEL);
 	i = inode->i_filterdata;
 	i -> generation = snapops->get_generation(inode);
 	i -> flags      = flag;
 }
+
+void set_filter_ops(struct snap_cache *cache, struct inode *inode)
+{
+	/* XXX now set the correct snap_{file,dir,sym}_iops */
+	if (S_ISDIR(inode->i_mode)) { 
+		inode->i_op = filter_c2udiops(cache->cache_filter);
+		inode->i_fop = filter_c2udfops(cache->cache_filter);
+	} else if (S_ISREG(inode->i_mode)) {
+		if ( !filter_c2cfiops(cache->cache_filter) ) {
+			filter_setup_file_ops(cache->cache_filter, inode, 
+					      &currentfs_file_iops, 
+					      &currentfs_file_fops, 
+					      &currentfs_file_aops);
+		}
+		CDEBUG(D_INODE, "inode %lu, i_op at %p\n", 
+		       inode->i_ino, inode->i_op);
+		inode->i_fop = filter_c2uffops(cache->cache_filter);
+		inode->i_op = filter_c2ufiops(cache->cache_filter);
+		if (inode->i_mapping)
+			inode->i_mapping->a_ops = filter_c2ufaops(cache->cache_filter);
+
+	}
+	else if (S_ISLNK(inode->i_mode)) {
+		if ( !filter_c2csiops(cache->cache_filter) ) {
+			filter_setup_symlink_ops(cache->cache_filter, inode,
+				&currentfs_sym_iops, &currentfs_sym_fops);
+		}
+		inode->i_op = filter_c2usiops(cache->cache_filter);
+		inode->i_fop = filter_c2usfops(cache->cache_filter);
+		CDEBUG(D_INODE, "inode %lu, i_op at %p\n", 
+		       inode->i_ino, inode->i_op);
+	}
+}
+
 /* Superblock operations. */
 static void currentfs_read_inode(struct inode *inode)
 {
         struct snap_cache *cache;
-	struct snapshot_operations *snapops;	
 	ENTRY;
 
 	if( !inode ) 
@@ -86,39 +127,14 @@ static void currentfs_read_inode(struct inode *inode)
 		currentfs_dotsnap_read_inode(cache, inode);
 		return;
 	}
-	snapops = filter_c2csnapops(cache->cache_filter);
-	
-	if (!snapops || !snapops->get_indirect) 
-		return;
 
 	if(filter_c2csops(cache->cache_filter))
 		filter_c2csops(cache->cache_filter)->read_inode(inode);
 
-	/* XXX now set the correct snap_{file,dir,sym}_iops */
-	if (S_ISDIR(inode->i_mode)) 
-		inode->i_op = filter_c2udiops(cache->cache_filter);
-	else if (S_ISREG(inode->i_mode)) {
-		if ( !filter_c2cfiops(cache->cache_filter) ) {
-			filter_setup_file_ops(cache->cache_filter, inode, 
-					      &currentfs_file_iops, 
-					      &currentfs_file_fops, 
-					      &currentfs_file_aops);
-		}
-		CDEBUG(D_INODE, "inode %lu, i_op at %p\n", 
-		       inode->i_ino, inode->i_op);
-	}
-	else if (S_ISLNK(inode->i_mode)) {
-		if ( !filter_c2csiops(cache->cache_filter) ) {
-			filter_setup_symlink_ops(cache->cache_filter, inode,
-				&currentfs_sym_iops, &currentfs_sym_fops);
-		}
-		inode->i_op = filter_c2usiops(cache->cache_filter);
-		CDEBUG(D_INODE, "inode %lu, i_op at %p\n", 
-		       inode->i_ino, inode->i_op);
-	}
+	set_filter_ops(cache, inode);
 	/*init filter_data struct 
 	 * FIXME flag should be set future*/
-	init_filter_data(inode, snapops, 0); 
+	init_filter_data(inode, 0); 
 	return; 
 }
 
