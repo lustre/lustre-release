@@ -1995,7 +1995,7 @@ ksocknal_sock_read (struct socket *sock, void *buffer, int nob)
 }
 
 int
-ksocknal_exchange_nids (struct socket *sock, ptl_nid_t nid, int type)
+ksocknal_hello (struct socket *sock, ptl_nid_t *nid, int *type, __u64 *incarnation)
 {
         int                 rc;
         ptl_hdr_t           hdr;
@@ -2011,25 +2011,27 @@ ksocknal_exchange_nids (struct socket *sock, ptl_nid_t nid, int type)
         hdr.src_nid = __cpu_to_le64 (ksocknal_lib.ni.nid);
         hdr.type    = __cpu_to_le32 (PTL_MSG_HELLO);
 
-        *(__u32 *)&hdr.msg = __cpu_to_le32 (type);
-        
+        hdr.msg.hello.type = __cpu_to_le32 (*type);
+        hdr.msg.hello.incarnation = 
+                __cpu_to_le64 (ksocknal_data.ksnd_incarnation);
+
         /* Assume sufficient socket buffering for this message */
         rc = ksocknal_sock_write (sock, &hdr, sizeof (hdr));
         if (rc != 0) {
-                CERROR ("Error %d sending HELLO to "LPX64"\n", rc, nid);
+                CERROR ("Error %d sending HELLO to "LPX64"\n", rc, *nid);
                 return (rc);
         }
 
         rc = ksocknal_sock_read (sock, hmv, sizeof (*hmv));
         if (rc != 0) {
-                CERROR ("Error %d reading HELLO from "LPX64"\n", rc, nid);
+                CERROR ("Error %d reading HELLO from "LPX64"\n", rc, *nid);
                 return (rc);
         }
         
         if (hmv->magic != __le32_to_cpu (PORTALS_PROTO_MAGIC)) {
                 CERROR ("Bad magic %#08x (%#08x expected) from "LPX64"\n",
-                        __cpu_to_le32 (hmv->magic), PORTALS_PROTO_MAGIC, nid);
-                return (-EINVAL);
+                        __cpu_to_le32 (hmv->magic), PORTALS_PROTO_MAGIC, *nid);
+                return (-EPROTO);
         }
 
         if (hmv->version_major != __cpu_to_le16 (PORTALS_PROTO_VERSION_MAJOR) ||
@@ -2040,8 +2042,8 @@ ksocknal_exchange_nids (struct socket *sock, ptl_nid_t nid, int type)
                         __le16_to_cpu (hmv->version_minor),
                         PORTALS_PROTO_VERSION_MAJOR,
                         PORTALS_PROTO_VERSION_MINOR,
-                        nid);
-                return (-EINVAL);
+                        *nid);
+                return (-EPROTO);
         }
 
 #if (PORTALS_PROTO_VERSION_MAJOR != 0)
@@ -2053,7 +2055,7 @@ ksocknal_exchange_nids (struct socket *sock, ptl_nid_t nid, int type)
         rc = ksocknal_sock_read (sock, hmv + 1, sizeof (hdr) - sizeof (*hmv));
         if (rc != 0) {
                 CERROR ("Error %d reading rest of HELLO hdr from "LPX64"\n",
-                        rc, nid);
+                        rc, *nid);
                 return (rc);
         }
 
@@ -2063,15 +2065,47 @@ ksocknal_exchange_nids (struct socket *sock, ptl_nid_t nid, int type)
                 CERROR ("Expecting a HELLO hdr with 0 payload,"
                         " but got type %d with %d payload from "LPX64"\n",
                         __le32_to_cpu (hdr.type),
-                        __le32_to_cpu (hdr.payload_length), nid);
-                return (-EINVAL);
+                        __le32_to_cpu (hdr.payload_length), *nid);
+                return (-EPROTO);
         }
-        
-        if (__le64_to_cpu (hdr.src_nid) != nid) {
+
+        if (__le64_to_cpu(hdr.src_nid) == PTL_NID_ANY) {
+                CERROR("Expecting a HELLO hdr with a NID, but got PTL_NID_ANY\n");
+                return (-EPROTO);
+        }
+
+        if (*nid == PTL_NID_ANY) {              /* don't know peer's nid yet */
+                *nid = __le64_to_cpu(hdr.src_nid);
+        } else if (*nid != __le64_to_cpu (hdr.src_nid)) {
                 CERROR ("Connected to nid "LPX64", but expecting "LPX64"\n",
-                        __le64_to_cpu (hdr.src_nid), nid);
-                return (-EINVAL);
+                        __le64_to_cpu (hdr.src_nid), *nid);
+                return (-EPROTO);
         }
+
+        if (*type == SOCKNAL_CONN_NONE) {
+                /* I've accepted this connection; peer determines type */
+                *type = __le32_to_cpu(hdr.msg.hello.type);
+                switch (*type) {
+                case SOCKNAL_CONN_ANY:
+                case SOCKNAL_CONN_CONTROL:
+                        break;
+                case SOCKNAL_CONN_BULK_IN:
+                        *type = SOCKNAL_CONN_BULK_OUT;
+                        break;
+                case SOCKNAL_CONN_BULK_OUT:
+                        *type = SOCKNAL_CONN_BULK_IN;
+                        break;
+                default:
+                        CERROR ("Unexpected type %d from "LPX64"\n", *type, *nid);
+                        return (-EPROTO);
+                }
+        } else if (__le32_to_cpu(hdr.msg.hello.type) != SOCKNAL_CONN_NONE) {
+                CERROR ("Mismatched types: me %d "LPX64" %d\n",
+                        *type, *nid, __le32_to_cpu(hdr.msg.hello.type));
+                return (-EPROTO);
+        }
+
+        *incarnation = __le64_to_cpu(hdr.msg.hello.incarnation);
 
         return (0);
 }
@@ -2262,12 +2296,7 @@ ksocknal_connect_peer (ksock_route_t *route, int type)
                 goto out;
         }
         
-        rc = ksocknal_exchange_nids (sock, route->ksnr_peer->ksnp_nid, type);
-        if (rc != 0)
-                goto out;
-
-        rc = ksocknal_create_conn (route->ksnr_peer->ksnp_nid, route, sock, 
-                                   route->ksnr_irq_affinity, type);
+        rc = ksocknal_create_conn (route, sock, route->ksnr_irq_affinity, type);
         if (rc == 0) {
                 /* Take an extra ref on sock->file to compensate for the
                  * upcoming close which will lose fd's ref on it. */

@@ -680,9 +680,11 @@ ksocknal_choose_scheduler_locked (unsigned int irq)
 }
 
 int
-ksocknal_create_conn (ptl_nid_t nid, ksock_route_t *route,
-                      struct socket *sock, int bind_irq, int type)
+ksocknal_create_conn (ksock_route_t *route, struct socket *sock,
+                      int bind_irq, int type)
 {
+        ptl_nid_t          nid;
+        __u64              incarnation;
         unsigned long      flags;
         ksock_conn_t      *conn;
         ksock_peer_t      *peer;
@@ -703,6 +705,19 @@ ksocknal_create_conn (ptl_nid_t nid, ksock_route_t *route,
         if (rc != 0)
                 return (rc);
 
+        if (route == NULL) {
+                /* acceptor or explicit connect */
+                nid = PTL_NID_ANY;
+        } else {
+                LASSERT (type != SOCKNAL_CONN_NONE);
+                /* autoconnect: expect this nid on exchange */
+                nid = route->ksnr_peer->ksnp_nid;
+        }
+
+        rc = ksocknal_hello (sock, &nid, &type, &incarnation);
+        if (rc != 0)
+                return (rc);
+        
         peer = NULL;
         if (route == NULL) {                    /* not autoconnect */
                 /* Assume this socket connects to a brand new peer */
@@ -723,6 +738,7 @@ ksocknal_create_conn (ptl_nid_t nid, ksock_route_t *route,
         conn->ksnc_route = NULL;
         conn->ksnc_sock = sock;
         conn->ksnc_type = type;
+        conn->ksnc_incarnation = incarnation;
         conn->ksnc_saved_data_ready = sock->sk->sk_data_ready;
         conn->ksnc_saved_write_space = sock->sk->sk_write_space;
         atomic_set (&conn->ksnc_refcount, 1);    /* 1 ref for me */
@@ -815,7 +831,12 @@ ksocknal_create_conn (ptl_nid_t nid, ksock_route_t *route,
                 ksocknal_queue_tx_locked (tx, conn);
         }
 
+        rc = ksocknal_close_stale_conns_locked (peer, incarnation);
+
         write_unlock_irqrestore (&ksocknal_data.ksnd_global_lock, flags);
+
+        if (rc != 0)
+                CERROR ("Closed %d stale conns to "LPX64"\n", rc, nid);
 
         if (bind_irq)                           /* irq binding required */
                 ksocknal_bind_irq (irq);
@@ -1025,6 +1046,27 @@ ksocknal_close_peer_conns_locked (ksock_peer_t *peer, __u32 ipaddr, int why)
                         count++;
                         ksocknal_close_conn_locked (conn, why);
                 }
+        }
+
+        return (count);
+}
+
+int
+ksocknal_close_stale_conns_locked (ksock_peer_t *peer, __u64 incarnation)
+{
+        ksock_conn_t       *conn;
+        struct list_head   *ctmp;
+        struct list_head   *cnxt;
+        int                 count = 0;
+
+        list_for_each_safe (ctmp, cnxt, &peer->ksnp_conns) {
+                conn = list_entry (ctmp, ksock_conn_t, ksnc_list);
+
+                if (conn->ksnc_incarnation == incarnation)
+                        continue;
+                
+                count++;
+                ksocknal_close_conn_locked (conn, -ESTALE);
         }
 
         return (count);
@@ -1307,12 +1349,12 @@ ksocknal_cmd(struct portals_cfg *pcfg, void * private)
                         break;
 
                 switch (type) {
+                case SOCKNAL_CONN_NONE:
                 case SOCKNAL_CONN_ANY:
                 case SOCKNAL_CONN_CONTROL:
                 case SOCKNAL_CONN_BULK_IN:
                 case SOCKNAL_CONN_BULK_OUT:
-                        rc = ksocknal_create_conn(pcfg->pcfg_nid, NULL, sock,
-                                                  pcfg->pcfg_flags, type);
+                        rc = ksocknal_create_conn(NULL, sock, pcfg->pcfg_flags, type);
                 default:
                         break;
                 }
@@ -1373,7 +1415,7 @@ ksocknal_free_buffers (void)
                      ksocknal_data.ksnd_peer_hash_size);
 }
 
-void /*__exit*/
+void
 ksocknal_module_fini (void)
 {
         int   i;
@@ -1457,6 +1499,22 @@ ksocknal_module_fini (void)
 }
 
 
+void __init
+ksocknal_init_incarnation (void)
+{
+        struct timeval tv;
+
+        /* The incarnation number is the time this module loaded and it
+         * identifies this particular instance of the socknal.  Hopefully
+         * we won't be able to reboot more frequently than 1MHz for the
+         * forseeable future :) */
+        
+        do_gettimeofday(&tv);
+        
+        ksocknal_data.ksnd_incarnation = 
+                (((__u64)tv.tv_sec) * 1000000) + tv.tv_usec;
+}
+
 int __init
 ksocknal_module_init (void)
 {
@@ -1494,7 +1552,8 @@ ksocknal_module_init (void)
 #if SOCKNAL_ZC
         ksocknal_data.ksnd_zc_min_frag = SOCKNAL_ZC_MIN_FRAG;
 #endif
-
+        ksocknal_init_incarnation();
+        
         ksocknal_data.ksnd_peer_hash_size = SOCKNAL_PEER_HASH_SIZE;
         PORTAL_ALLOC (ksocknal_data.ksnd_peers,
                       sizeof (struct list_head) * ksocknal_data.ksnd_peer_hash_size);

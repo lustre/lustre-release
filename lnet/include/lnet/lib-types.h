@@ -84,6 +84,11 @@ typedef struct ptl_reply {
         ptl_handle_wire_t  dst_wmd;
 } WIRE_ATTR ptl_reply_t;
 
+typedef struct ptl_hello {
+        __u64              incarnation;
+        __u32              type;
+} WIRE_ATTR ptl_hello_t;
+
 typedef struct {
         ptl_nid_t           dest_nid;
         ptl_nid_t           src_nid;
@@ -97,6 +102,7 @@ typedef struct {
                 ptl_put_t   put;
                 ptl_get_t   get;
                 ptl_reply_t reply;
+                ptl_hello_t hello;
         } msg;
 } WIRE_ATTR ptl_hdr_t;
 
@@ -119,7 +125,7 @@ typedef struct {
 #define PORTALS_PROTO_MAGIC                0xeebc0ded
 
 #define PORTALS_PROTO_VERSION_MAJOR        0
-#define PORTALS_PROTO_VERSION_MINOR        2
+#define PORTALS_PROTO_VERSION_MINOR        3
 
 typedef struct {
         long recv_count, recv_length, send_count, send_length, drop_count,

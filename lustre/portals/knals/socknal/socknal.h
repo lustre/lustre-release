@@ -152,6 +152,7 @@ typedef struct {
         unsigned int      ksnd_zc_min_frag;     /* minimum zero copy frag size */
 #endif
         struct ctl_table_header *ksnd_sysctl;   /* sysctl interface */
+        __u64             ksnd_incarnation;     /* my epoch */
         
         rwlock_t          ksnd_global_lock;     /* stabilize peer/conn ops */
         struct list_head *ksnd_peers;           /* hash table of all my known peers */
@@ -307,8 +308,9 @@ typedef struct ksock_conn
         int                 ksnc_port;          /* peer's port */
         int                 ksnc_closing;       /* being shut down */
         int                 ksnc_type;          /* type of connection */
+        __u64               ksnc_incarnation;   /* peer's incarnation */
         
-        /* READER */
+        /* reader */
         struct list_head    ksnc_rx_list;       /* where I enq waiting input or a forwarding descriptor */
         unsigned long       ksnc_rx_deadline;   /* when (in jiffies) receive times out */
         int                 ksnc_rx_started;    /* started receiving a message */
@@ -411,12 +413,13 @@ extern ksock_peer_t *ksocknal_find_peer_locked (ptl_nid_t nid);
 extern ksock_peer_t *ksocknal_get_peer (ptl_nid_t nid);
 extern int ksocknal_del_route (ptl_nid_t nid, __u32 ipaddr,
                                int single, int keep_conn);
-extern int ksocknal_create_conn (ptl_nid_t nid, ksock_route_t *route,
+extern int ksocknal_create_conn (ksock_route_t *route,
                                  struct socket *sock, int bind_irq, int type);
 extern void ksocknal_close_conn_locked (ksock_conn_t *conn, int why);
 extern void ksocknal_terminate_conn (ksock_conn_t *conn);
 extern void ksocknal_destroy_conn (ksock_conn_t *conn);
 extern void ksocknal_put_conn (ksock_conn_t *conn);
+extern int ksocknal_close_stale_conns_locked (ksock_peer_t *peer, __u64 incarnation);
 extern int ksocknal_close_conn_and_siblings (ksock_conn_t *conn, int why);
 extern int ksocknal_close_matching_conns (ptl_nid_t nid, __u32 ipaddr);
 
@@ -433,3 +436,5 @@ extern void ksocknal_write_space(struct sock *sk);
 extern int ksocknal_autoconnectd (void *arg);
 extern int ksocknal_reaper (void *arg);
 extern int ksocknal_setup_sock (struct socket *sock);
+extern int ksocknal_hello (struct socket *sock, 
+                           ptl_nid_t *nid, int *type, __u64 *incarnation);

@@ -109,6 +109,11 @@ check_ptl_hdr (void)
         BLANK_LINE ();
         COMMENT ("Reply");
 	CHECK_MEMBER (ptl_hdr_t, msg.reply.dst_wmd);
+
+        BLANK_LINE ();
+        COMMENT ("Hello");
+	CHECK_MEMBER (ptl_hdr_t, msg.hello.incarnation);
+	CHECK_MEMBER (ptl_hdr_t, msg.hello.type);
 }
 
 void

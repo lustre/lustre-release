@@ -6,6 +6,7 @@
  * #defines shared between socknal implementation and utilities
  */
 
+#define SOCKNAL_CONN_NONE     (-1)
 #define SOCKNAL_CONN_ANY        0
 #define SOCKNAL_CONN_CONTROL    1
 #define SOCKNAL_CONN_BULK_IN    2

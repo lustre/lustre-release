@@ -628,84 +628,8 @@ jt_ptl_print_connections (int argc, char **argv)
         return 0;
 }
 
-int
-exchange_nids (int cfd, ptl_nid_t my_nid, int type, ptl_nid_t *peer_nid)
-{
-        int                      rc;
-        ptl_hdr_t                hdr;
-        ptl_magicversion_t      *hmv = (ptl_magicversion_t *)&hdr.dest_nid;
-
-        LASSERT (sizeof (*hmv) == sizeof (hdr.dest_nid));
-
-        memset (&hdr, 0, sizeof (hdr));
-        
-        hmv->magic          = __cpu_to_le32 (PORTALS_PROTO_MAGIC);
-        hmv->version_major  = __cpu_to_le16 (PORTALS_PROTO_VERSION_MAJOR);
-        hmv->version_minor  = __cpu_to_le16 (PORTALS_PROTO_VERSION_MINOR);
-
-        hdr.src_nid = __cpu_to_le64 (my_nid);
-        hdr.type = __cpu_to_le32 (PTL_MSG_HELLO);
-
-        *(__u32 *)&hdr.msg = __cpu_to_le32(type);
-        
-        /* Assume there's sufficient socket buffering for a portals HELLO header */
-        rc = sock_write (cfd, &hdr, sizeof (hdr));
-        if (rc != 0) {
-                perror ("Can't send initial HELLO");
-                return (-1);
-        }
-
-        /* First few bytes down the wire are the portals protocol magic and
-         * version, no matter what protocol version we're running. */
-
-        rc = sock_read (cfd, hmv, sizeof (*hmv));
-        if (rc != 0) {
-                perror ("Can't read from peer");
-                return (-1);
-        }
-
-        if (hmv->magic != __cpu_to_le32 (PORTALS_PROTO_MAGIC)) {
-                fprintf (stderr, "Bad magic %#08x (%#08x expected)\n", 
-                         __le32_to_cpu (hmv->magic), PORTALS_PROTO_MAGIC);
-                return (-1);
-        }
-
-        if (hmv->version_major != __cpu_to_le16 (PORTALS_PROTO_VERSION_MAJOR) ||
-            hmv->version_minor != __cpu_to_le16 (PORTALS_PROTO_VERSION_MINOR)) {
-                fprintf (stderr, "Incompatible protocol version %d.%d (%d.%d expected)\n",
-                         __le16_to_cpu (hmv->version_major),
-                         __le16_to_cpu (hmv->version_minor),
-                         PORTALS_PROTO_VERSION_MAJOR,
-                         PORTALS_PROTO_VERSION_MINOR);
-        }
-
-        /* version 0 sends magic/version as the dest_nid of a 'hello' header,
-         * so read the rest of it in now... */
-        LASSERT (PORTALS_PROTO_VERSION_MAJOR == 0);
-        rc = sock_read (cfd, hmv + 1, sizeof (hdr) - sizeof (*hmv));
-        if (rc != 0) {
-                perror ("Can't read rest of HELLO hdr");
-                return (-1);
-        }
-
-        /* ...and check we got what we expected */
-        if (hdr.type != __cpu_to_le32 (PTL_MSG_HELLO) ||
-            hdr.payload_length != __cpu_to_le32 (0)) {
-                fprintf (stderr, "Expecting a HELLO hdr with 0 payload,"
-                         " but got type %d with %d payload\n",
-                         __le32_to_cpu (hdr.type),
-                         __le32_to_cpu (hdr.payload_length));
-                return (-1);
-        }
-        
-        *peer_nid = __le64_to_cpu (hdr.src_nid);
-        return (0);
-}
-
 int jt_ptl_connect(int argc, char **argv)
 {
-        ptl_nid_t peer_nid;
-        struct portal_ioctl_data data;
         struct portals_cfg pcfg;
         struct sockaddr_in srvaddr;
         __u32 ipaddr;
@@ -829,32 +753,16 @@ int jt_ptl_connect(int argc, char **argv)
         if (getsockopt (fd, IPPROTO_TCP, TCP_NODELAY, &nonagle, &olen) != 0)
                 fprintf (stderr, "Can't get nagle: %s\n", strerror (errno));
 
-        PORTAL_IOC_INIT (data);
-        data.ioc_nal = g_nal;
-        rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_GET_NID, &data);
-        if (rc != 0) {
-                fprintf (stderr, "failed to get my nid: %s\n",
-                         strerror (errno));
-                close (fd);
-                return (-1);
-        }
-
-        rc = exchange_nids (fd, data.ioc_nid, type, &peer_nid);
-        if (rc != 0) {
-                close (fd);
-                return (-1);
-        }
-
-        printf("Connected host: %s NID "LPX64" snd: %d rcv: %d nagle: %s type: %s\n", 
-               argv[1], peer_nid, txmem, rxmem, nonagle ? "Disabled" : "Enabled",
+        printf("Connected host: %s snd: %d rcv: %d nagle: %s type: %s\n", 
+               argv[1], txmem, rxmem, nonagle ? "Disabled" : "Enabled",
                (type == SOCKNAL_CONN_ANY) ? "A" :
                (type == SOCKNAL_CONN_CONTROL) ? "C" :
                (type == SOCKNAL_CONN_BULK_IN) ? "I" :
                (type == SOCKNAL_CONN_BULK_OUT) ? "O" : "?");
 
         PCFG_INIT(pcfg, NAL_CMD_REGISTER_PEER_FD);
+        pcfg.pcfg_nal = g_nal;
         pcfg.pcfg_fd = fd;
-        pcfg.pcfg_nid = peer_nid;
         pcfg.pcfg_flags = bind_irq;
         pcfg.pcfg_misc = type;
         
@@ -866,7 +774,7 @@ int jt_ptl_connect(int argc, char **argv)
                 return -1;
         }
 
-        printf("Connection to "LPX64" registered with socknal\n", peer_nid);
+        printf("Connection to %s registered with socknal\n", argv[1]);
 
         rc = close(fd);
         if (rc)
