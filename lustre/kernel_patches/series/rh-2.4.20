@@ -4,8 +4,7 @@ kmem_cache_validate_hp.patch
 lustre_version.patch
 vfs_intent-2.4.20.patch
 invalidate_show.patch
-iod-rmap-exports.patch
+iod-rmap-exports-2.4.20.patch
 export-truncate.patch
 uml_check_get_page.patch
 uml_no_panic.patch
-uml_compile_fixes.patch
