@@ -26,11 +26,17 @@ if test $linux25 = "yes" ; then
 		[
 			AC_MSG_RESULT([no])
 		],[
-			AC_MSG_RESULT([yes])
 			makerule="_module_$makerule"
 			MODULE_TARGET="M"
+			LB_LINUX_TRY_MAKE([],[],
+				[$makerule LUSTRE_KERNEL_TEST=conftest.i],
+				[test -s build/conftest.i],
+				[
+					AC_MSG_RESULT([yes])
+				],[
+					AC_MSG_ERROR([unknown; check config.log for details])
+				])
 		])
-
 else
 	makerule="_dir_$PWD/build"
 fi
@@ -164,6 +170,7 @@ if grep rhconfig $LINUX_OBJ/include/linux/version.h >/dev/null ; then
 fi
 
 # this is needed before we can build modules
+LB_LINUX_UML
 LB_LINUX_VERSION
 
 # --- check that we can build modules at all
@@ -174,6 +181,7 @@ LB_LINUX_TRY_COMPILE([],[],[
 	AC_MSG_RESULT([no])
 	AC_MSG_WARN([Consult config.log for details.])
 	AC_MSG_WARN([If you are trying to build with a kernel-source rpm, consult build/README.kernel-source])
+	AC_MSG_ERROR([Kernel modules cannot be build.])
 ])
 
 LB_LINUX_RELEASE
@@ -281,7 +289,6 @@ AC_DEFUN([LB_LINUX_TRY_MAKE],
 #
 AC_DEFUN([LB_PROG_LINUX],
 [LB_LINUX_PATH
-LB_LINUX_UML
 
 LB_LINUX_CONFIG([MODULES],[],[
 	AC_MSG_ERROR([module support is required to build Lustre kernel modules.])
