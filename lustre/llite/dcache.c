@@ -330,7 +330,7 @@ int ll_revalidate_it(struct dentry *de, int flags, struct nameidata *nd,
                atomic_read(&de->d_count));
         ll_lookup_finish_locks(it, de);
         de->d_flags &= ~DCACHE_LUSTRE_INVALID;
-        if (!(de->d_inode->i_mode & S_ISUID) ||
+        if (!((de->d_inode->i_mode & S_ISUID) &&S_ISDIR(de->d_inode->i_mode)) ||
             !(flags & LOOKUP_CONTINUE || (it->it_op & (IT_CHDIR | IT_OPEN))))
                 return rc;
 

@@ -378,6 +378,7 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
 
         if (nd &&
             dentry->d_inode != NULL && dentry->d_inode->i_mode & S_ISUID &&
+            S_ISDIR(dentry->d_inode->i_mode) &&
             (flags & LOOKUP_CONTINUE || (it->it_op & (IT_CHDIR | IT_OPEN))))
                 ll_dir_process_mount_object(dentry, nd->mnt);
 

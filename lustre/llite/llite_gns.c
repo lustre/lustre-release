@@ -109,6 +109,7 @@ int ll_dir_process_mount_object(struct dentry *dentry, struct vfsmount *mnt)
         }
 
         LASSERT(dentry->d_inode != NULL);
+        LASSERT(S_ISDIR(dentry->d_inode->i_mode));
         LASSERT(lld != NULL);
         sbi = ll_i2sbi(dentry->d_inode);
         LASSERT(sbi != NULL);
