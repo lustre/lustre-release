@@ -194,6 +194,8 @@ static int recovd_main(void *arg)
 int recovd_setup(struct recovd_obd *recovd)
 {
         int rc;
+        extern void (*class_signal_client_failure)(struct ptlrpc_client *);
+
         ENTRY;
 
         INIT_LIST_HEAD(&recovd->recovd_clients_lh);
@@ -211,6 +213,9 @@ int recovd_setup(struct recovd_obd *recovd)
                 RETURN(-EINVAL);
         }
         wait_event(recovd->recovd_ctl_waitq, recovd->recovd_flags & RECOVD_IDLE);
+
+        /* exported and called by obdclass timeout handlers */
+        class_signal_client_failure = recovd_cli_fail;
 
         RETURN(0);
 }

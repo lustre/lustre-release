@@ -566,6 +566,7 @@ static struct miscdevice obd_psdev = {
         &obd_psdev_fops
 };
 
+void (*class_signal_client_failure)(struct ptlrpc_client *);
 
 EXPORT_SYMBOL(obd_dev);
 EXPORT_SYMBOL(obdo_cachep);
@@ -586,6 +587,8 @@ EXPORT_SYMBOL(class_disconnect);
 EXPORT_SYMBOL(class_disconnect_all);
 //EXPORT_SYMBOL(class_multi_setup);
 //EXPORT_SYMBOL(class_multi_cleanup);
+
+EXPORT_SYMBOL(class_signal_client_failure);
 
 static int __init init_obdclass(void)
 {

@@ -269,47 +269,9 @@ static int ptlrpc_check_reply(struct ptlrpc_request *req)
                 GOTO(out, rc = 1);
         }
 
-#if 0
-        if (req->rq_flags & PTL_RPC_FL_RESEND) { 
-                if (l_killable_pending(current)) {
-                        CERROR("-- INTR --\n");
-                        req->rq_flags |= PTL_RPC_FL_INTR;
-                        GOTO(out, rc = 1);
-                }
-                CERROR("-- RESEND --\n");
-                GOTO(out, rc = 1);
-        }
-#endif
-
         if (req->rq_flags & PTL_RPC_FL_RECOVERY) { 
                 CERROR("-- RESTART --\n");
                 GOTO(out, rc = 1);
-        }
-
-        if (req->rq_flags & PTL_RPC_FL_TIMEOUT && l_killable_pending(current)) {
-                req->rq_flags |= PTL_RPC_FL_INTR;
-                GOTO(out, rc = 1);
-        }
-
-        if (req->rq_timeout &&
-            (CURRENT_TIME - req->rq_time >= req->rq_timeout)) {
-                CERROR("-- REQ TIMEOUT ON CONNID %d XID %Ld --\n",
-                       req->rq_connid, (unsigned long long)req->rq_xid);
-                /* clear the timeout */
-                req->rq_timeout = 0;
-                req->rq_connection->c_level = LUSTRE_CONN_RECOVD;
-                req->rq_flags |= PTL_RPC_FL_TIMEOUT;
-                if (req->rq_client && req->rq_client->cli_recovd)
-                        recovd_cli_fail(req->rq_client);
-                if (req->rq_level < LUSTRE_CONN_FULL) {
-                        rc = 1;
-                } else if (l_killable_pending(current)) {
-                        req->rq_flags |= PTL_RPC_FL_INTR;
-                        rc = 1;
-                } else {
-                        rc = 0;
-                }
-                GOTO(out, rc);
         }
 
  out:
@@ -477,6 +439,8 @@ static int expired_request(void *data)
         struct ptlrpc_request *req = data;
         
         ENTRY;
+        CERROR("req timeout on connid %d xid %Ld\n", req->rq_connid,
+               (unsigned long long)req->rq_xid);
         req->rq_timeout = 0;
         req->rq_connection->c_level = LUSTRE_CONN_RECOVD;
         req->rq_flags |= PTL_RPC_FL_TIMEOUT;

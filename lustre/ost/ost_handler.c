@@ -337,6 +337,9 @@ static int ost_brw_write(struct ptlrpc_request *req)
         if (req->rq_status)
                 GOTO(out_free, rc = 0); /* XXX is this correct? */
 
+        if (OBD_FAIL_CHECK(OBD_FAIL_OST_BRW_WRITE_BULK))
+                GOTO(fail_preprw, rc = 0);
+
         desc = ptlrpc_prep_bulk(req->rq_connection);
         if (desc == NULL)
                 GOTO(fail_preprw, rc = -ENOMEM);

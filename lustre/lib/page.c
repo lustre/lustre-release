@@ -62,9 +62,8 @@ static int sync_io_timeout(void *data)
                 /* XXXshaver Do we need a resend strategy, or do we just
                  * XXXshaver return -ERESTARTSYS and punt it?
                  */
-#if 0
-                recovd_cli_fail(desc->b_client);
-#endif
+                CERROR("signalling failure of client %p\n", desc->b_client);
+                class_signal_client_failure(desc->b_client);
         }
 
         /* We go back to sleep, until we're resumed or interrupted. */
@@ -87,9 +86,9 @@ int ll_sync_io_cb(struct io_cb_data *data, int err, int phase)
         ENTRY; 
 
         if (phase == CB_PHASE_START) { 
-#warning shaver hardcoded timeout
+#warning shaver hardcoded timeout (/proc/sys/lustre/timeout)
                 struct l_wait_info lwi;
-                lwi = LWI_TIMEOUT_INTR(100, sync_io_timeout,
+                lwi = LWI_TIMEOUT_INTR(100 * HZ, sync_io_timeout,
                                        SIGTERM | SIGKILL | SIGINT, sync_io_intr,
                                        data);
                 ret = l_wait_event(data->waitq, data->complete, &lwi);

@@ -454,36 +454,49 @@ do {                                                                            
         add_wait_queue(&wq, &__wait);                                           \
         __state = TASK_UNINTERRUPTIBLE;                                         \
         for (;;) {                                                              \
-                set_current_state(__state);                                     \
-                if (condition)                                                  \
+            set_current_state(__state);                                         \
+            if (condition)                                                      \
+                    break;                                                      \
+            /* We only become INTERRUPTIBLE if a timeout has fired, and         \
+             * the caller has given us some signals to care about.              \
+             *                                                                  \
+             * XXXshaver we should check against info->wli_signals here,        \
+             * XXXshaver instead of just using l_killable_pending, perhaps.     \
+             */                                                                 \
+            if (__state == TASK_INTERRUPTIBLE &&                                \
+                l_killable_pending(current)) {                                  \
+                    CERROR("lwe: interrupt for %d\n", current->pid);            \
+                    if (info->lwi_on_signal)                                    \
+                            info->lwi_on_signal(info->lwi_cb_data);             \
+                    ret = -EINTR;                                               \
+                    break;                                                      \
+            }                                                                   \
+            if (info->lwi_timeout) {                                            \
+                if (schedule_timeout(info->lwi_timeout) == 0) {                 \
+                    CERROR("lwe: timeout for %d\n", current->pid);              \
+                    if (!info->lwi_on_timeout ||                                \
+                        info->lwi_on_timeout(info->lwi_cb_data)) {              \
+                        ret = -ETIMEDOUT;                                       \
                         break;                                                  \
-                /* We only become INTERRUPTIBLE if a timeout has fired, and     \
-                 * the caller has given us some signals to care about.          \
-                 *                                                              \
-                 * XXXshaver we should check against info->wli_signals here,    \
-                 * XXXshaver instead of just using l_killable_pending, perhaps. \
-                 */                                                             \
-                if (__state == TASK_INTERRUPTIBLE &&                            \
-                    l_killable_pending(current)) {                              \
-                        if (info->lwi_on_signal)                                \
-                                info->lwi_on_signal(info->lwi_cb_data);         \
-                        ret = -EINTR;                                           \
-                        break;                                                  \
-                }                                                               \
-                if (info->lwi_timeout) {                                        \
-                        if (schedule_timeout(info->lwi_timeout) == 0) {         \
-                                /* We'll take signals only after a timeout. */  \
-                                if (info->lwi_signals)                          \
-                                        __state = TASK_INTERRUPTIBLE;           \
-                                if (info->lwi_on_timeout &&                     \
-                                    info->lwi_on_timeout(info->lwi_cb_data)) {  \
-                                        ret = -ETIMEDOUT;                       \
-                                        break;                                  \
-                                }                                               \
+                    }                                                           \
+                    /* We'll take signals only after a timeout. */              \
+                    if (info->lwi_signals) {                                    \
+                        __state = TASK_INTERRUPTIBLE;                           \
+                        /* Check for a pending interrupt. */                    \
+                        if (info->lwi_signals &&                                \
+                            l_killable_pending(current)) {                      \
+                             CERROR("lwe: pending interrupt for %d\n",          \
+                                    current->pid);                              \
+                             if (info->lwi_on_signal)                           \
+                                 info->lwi_on_signal(info->lwi_cb_data);        \
+                             ret = -EINTR;                                      \
+                             break;                                             \
                         }                                                       \
-                } else {                                                        \
-                        schedule();                                             \
+                    }                                                           \
                 }                                                               \
+            } else {                                                            \
+                schedule();                                                     \
+            }                                                                   \
         }                                                                       \
         current->state = TASK_RUNNING;                                          \
         remove_wait_queue(&wq, &__wait);                                        \

@@ -717,6 +717,7 @@ struct obd_export *class_conn2export(struct lustre_handle *);
 int class_multi_setup(struct obd_device *obddev, uint32_t len, void *data);
 int class_multi_cleanup(struct obd_device *obddev);
 
+extern void (*class_signal_client_failure)(struct ptlrpc_client *);
 
 #endif
 

@@ -77,6 +77,8 @@ extern unsigned long obd_fail_loc;
 #define OBD_FAIL_OST_PUNCH_NET           0x20b
 #define OBD_FAIL_OST_STATFS_NET          0x20c
 #define OBD_FAIL_OST_HANDLE_UNPACK       0x20d
+#define OBD_FAIL_OST_BRW_WRITE_BULK      0x20e
+#define OBD_FAIL_OST_BRW_READ_BULK       0x20f
 
 #define OBB_FAIL_LDLM                    0x300
 #define OBD_FAIL_LDLM_NAMESPACE_NEW      0x301
