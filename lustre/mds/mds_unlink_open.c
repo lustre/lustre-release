@@ -93,12 +93,22 @@ static int mds_unlink_orphan(struct obd_device *obd, struct dentry *dchild,
         struct mds_obd *mds = &obd->u.mds;
         struct lov_mds_md *lmm = NULL;
         struct llog_cookie *logcookies = NULL;
-        int lmm_size = 0, log_unlink = 0;
+        int lmm_size, log_unlink = 0;
         void *handle = NULL;
         int rc, err;
         ENTRY;
 
         LASSERT(mds->mds_osc_obd != NULL);
+
+        /* We don't need to do any of these other things for orhpan dirs,
+         * especially not mds_get_md (may get a default LOV EA, bug 4554) */
+        if (S_ISDIR(inode->i_mode)) {
+                rc = vfs_rmdir(pending_dir, dchild);
+                if (rc)
+                        CERROR("error %d unlinking dir %*s from PENDING\n",
+                               rc, dchild->d_name.len, dchild->d_name.name);
+                RETURN(rc);
+        }
 
         lmm_size = mds->mds_max_mdsize;
         OBD_ALLOC(lmm, lmm_size);
@@ -118,16 +128,11 @@ static int mds_unlink_orphan(struct obd_device *obd, struct dentry *dchild,
                 GOTO(out_free_lmm, rc);
         }
 
-        if (S_ISDIR(inode->i_mode))
-                rc = vfs_rmdir(pending_dir, dchild);
-        else
-                rc = vfs_unlink(pending_dir, dchild);
-
-        if (rc)
-                CERROR("error %d unlinking orphan %*s from PENDING directory\n",
+        rc = vfs_unlink(pending_dir, dchild);
+        if (rc) {
+                CERROR("error %d unlinking orphan %.*s from PENDING\n",
                        rc, dchild->d_name.len, dchild->d_name.name);
-
-        if (!rc && lmm_size) {
+        } else if (lmm_size) {
                 OBD_ALLOC(logcookies, mds->mds_max_cookiesize);
                 if (logcookies == NULL)
                         rc = -ENOMEM;
@@ -135,13 +140,13 @@ static int mds_unlink_orphan(struct obd_device *obd, struct dentry *dchild,
                                            mds->mds_max_cookiesize) > 0)
                         log_unlink = 1;
         }
+
         err = fsfilt_commit(obd, pending_dir, handle, 0);
         if (err) {
                 CERROR("error committing orphan unlink: %d\n", err);
                 if (!rc)
                         rc = err;
-        }
-        if (!rc) {
+        } else if (!rc) {
                 rc = mds_osc_destroy_orphan(mds, inode, lmm, lmm_size,
                                             logcookies, log_unlink);
         }
