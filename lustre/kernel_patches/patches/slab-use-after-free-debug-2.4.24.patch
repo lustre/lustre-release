@@ -751,6 +751,19 @@ Index: linux-2.4.24/arch/i386/config.in
     bool '  Memory mapped I/O debugging' CONFIG_DEBUG_IOVIRT
     bool '  Magic SysRq key' CONFIG_MAGIC_SYSRQ
     bool '  Spinlock debugging' CONFIG_DEBUG_SPINLOCK
+Index: linux-2.4.24/kernel/ksyms.c
+===================================================================
+--- linux-2.4.24.orig/kernel/ksyms.c	2004-07-13 11:07:55.000000000 +0400
++++ linux-2.4.24/kernel/ksyms.c	2004-07-16 20:59:09.000000000 +0400
+@@ -117,6 +117,8 @@
+ EXPORT_SYMBOL(kfree);
+ EXPORT_SYMBOL(vfree);
+ EXPORT_SYMBOL(__vmalloc);
++extern struct vm_struct * vmlist;
++EXPORT_SYMBOL(vmlist);
+ EXPORT_SYMBOL(vmap);
+ EXPORT_SYMBOL(vmalloc_to_page);
+ EXPORT_SYMBOL(mem_map);
 
 %diffstat
  arch/i386/config.in     |    3 
@@ -759,8 +772,9 @@ Index: linux-2.4.24/arch/i386/config.in
  include/asm-i386/page.h |   40 +++
  include/linux/slab.h    |    1 
  init/main.c             |    3 
+ kernel/ksyms.c          |    2 
  mm/page_alloc.c         |    6 
  mm/slab.c               |  506 +++++++++++++++++++++++++++++++++++++++++++++++-
  mm/vmalloc.c            |    4 
- 9 files changed, 588 insertions(+), 4 deletions(-)
+ 10 files changed, 590 insertions(+), 4 deletions(-)
 
