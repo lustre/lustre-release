@@ -1,12 +1,15 @@
-#ifndef __OBD_H
-#define __OBD_H
-/*
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
+ *
+ *
  * Copyright (C) 2001  Cluster File Systems, Inc.
  *
  * This code is issued under the GNU General Public License.
  * See the file COPYING in this distribution
  */
 
+#ifndef __OBD_H
+#define __OBD_H
 #include <linux/fs.h>
 #include <linux/list.h>
 #include <linux/smp_lock.h>
@@ -72,6 +75,7 @@ struct mds_obd {
 	struct file_operations *mds_fop; 
 	struct inode_operations *mds_iop;
 	struct address_space_operations *mds_aops;
+        struct mds_fs_operations *mds_fsops;
 };
 
 struct ldlm_obd {

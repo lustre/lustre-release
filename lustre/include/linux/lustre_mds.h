@@ -106,6 +106,61 @@ int mdc_rename(struct ptlrpc_client *peer, struct inode *src,
                struct ptlrpc_request **);
 int mdc_create_client(char *uuid, struct ptlrpc_client *cl);
 
+struct mds_fs_operations {
+        void   *(* fs_start)(struct inode *inode, int op);
+        int     (* fs_commit)(struct inode *inode, void *handle);
+        int     (* fs_setattr)(struct inode *inode, void *handle,
+                               struct iattr *iattr);
+        int     (* fs_set_objid)(struct inode *inode, void *handle, obd_id id);
+        void    (* fs_get_objid)(struct inode *inode, obd_id *id);
+        ssize_t (* fs_readpage)(struct file *file, char *buf, size_t count,
+                                loff_t *offset);
+        void    (* fs_delete_inode)(struct inode *inode);
+        void    (* cl_delete_inode)(struct inode *inode);
+};
+
+#define MDS_FSOP_UNLINK           1
+#define MDS_FSOP_RMDIR            2
+
+static inline void *mds_fs_start(struct mds_obd *mds, struct inode *inode,
+                                 int op)
+{
+        return mds->mds_fsops->fs_start(inode, op);
+}
+
+static inline int mds_fs_commit(struct mds_obd *mds, struct inode *inode,
+                                void *handle)
+{
+        return mds->mds_fsops->fs_commit(inode, handle);
+}
+
+static inline int mds_fs_setattr(struct mds_obd *mds, struct inode *inode,
+                                 void *handle, struct iattr *iattr)
+{
+        return mds->mds_fsops->fs_setattr(inode, handle, iattr);
+}
+
+static inline int mds_fs_set_objid(struct mds_obd *mds, struct inode *inode,
+                                   void *handle,  __u64 id)
+{
+        return mds->mds_fsops->fs_set_objid(inode, handle, id);
+}
+
+static inline void mds_fs_get_objid(struct mds_obd *mds, struct inode *inode,
+                                    __u64 *id)
+{
+        mds->mds_fsops->fs_get_objid(inode, id);
+}
+
+static inline ssize_t mds_fs_readpage(struct mds_obd *mds, struct file *file,
+                                      char *buf, size_t count, loff_t *offset)
+{
+        return mds->mds_fsops->fs_readpage(file, buf, count, offset);
+}
+
+extern struct mds_fs_operations mds_ext2_fs_ops;
+extern struct mds_fs_operations mds_ext3_fs_ops;
+
 /* ioctls for trying requests */
 #define IOC_REQUEST_TYPE                   'f'
 #define IOC_REQUEST_MIN_NR                 30

@@ -15,7 +15,7 @@ mds_pack.c:
 mds_updates.c: 
 	ln -s ../lib/mds_updates.c .
 
-mds_SOURCES = handler.c mds_reint.c $(LINX)
+mds_SOURCES = handler.c mds_reint.c mds_ext2.c mds_ext3.c $(LINX)
 
 dist-hook:
 	list='$(LINX)'; for f in $$list; do rm -f $(distdir)/$$f; done
