@@ -38,6 +38,8 @@ int ldlm_cli_enqueue(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
                                 data, data_len);
         if (lock == NULL)
                 GOTO(out, rc = -ENOMEM);
+        /* for the local lock, add the reference */
+        ldlm_lock_addref(lock, mode);
         ldlm_lock2handle(lock, lockh);
 
         LDLM_DEBUG(lock, "client-side enqueue START");

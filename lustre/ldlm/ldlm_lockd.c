@@ -457,6 +457,8 @@ static void __exit ldlm_exit(void)
                 CERROR("couldn't free ldlm lock slab\n");
 }
 
+EXPORT_SYMBOL(ldlm_lockname);
+EXPORT_SYMBOL(ldlm_typename);
 EXPORT_SYMBOL(ldlm_lock_match);
 EXPORT_SYMBOL(ldlm_lock_addref);
 EXPORT_SYMBOL(ldlm_lock_decref);

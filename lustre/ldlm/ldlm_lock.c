@@ -19,6 +19,22 @@
 #include <linux/lustre_dlm.h>
 #include <linux/lustre_mds.h>
 
+/* lock types */
+char *ldlm_lockname[] = {
+        [LCK_EX] "EX", 
+        [LCK_PW] "PW",
+        [LCK_PR] "PR",
+        [LCK_CW] "CW",
+        [LCK_CR] "CR",
+        [LCK_NL] "NL"
+};
+
+char *ldlm_typename[] = {
+        [LDLM_PLAIN]     "PLN",
+        [LDLM_EXTENT]    "EXT",
+        [LDLM_MDSINTENT] "INT"
+};        
+
 extern kmem_cache_t *ldlm_lock_slab;
 int (*mds_reint_p)(int offset, struct ptlrpc_request *req) = NULL;
 int (*mds_getattr_name_p)(int offset, struct ptlrpc_request *req) = NULL;
@@ -44,6 +60,10 @@ void ldlm_lock2handle(struct ldlm_lock *lock, struct lustre_handle *lockh)
         lockh->addr = (__u64)(unsigned long)lock;
         lockh->cookie = lock->l_random;
 }
+
+/* 
+ *  HANDLES
+ */ 
 
 struct ldlm_lock *ldlm_handle2lock(struct lustre_handle *handle)
 {
@@ -71,6 +91,17 @@ struct ldlm_lock *ldlm_handle2lock(struct lustre_handle *handle)
         return  lock;
 }
 
+/*
+ * REFCOUNTED LOCK OBJECTS
+ */ 
+
+
+/*  
+ * Lock refcounts, during creation: 
+ *   - one special one for allocation, dec'd only once in destroy
+ *   - one for being a lock that's in-use
+ *   - one for the addref associated with a new lock
+ */
 struct ldlm_lock *ldlm_lock_get(struct ldlm_lock *lock)
 {
         l_lock(&lock->l_resource->lr_namespace->ns_lock);
@@ -126,11 +157,13 @@ void ldlm_lock_destroy(struct ldlm_lock *lock)
 
         if (lock->l_flags & LDLM_FL_DESTROYED) {
                 EXIT;
+                ldlm_lock_put(lock);
                 return;
         }
 
         lock->l_flags = LDLM_FL_DESTROYED;
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
+        ldlm_lock_put(lock);
         ldlm_lock_put(lock);
         EXIT;
         return;
@@ -158,6 +191,8 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_lock *parent,
         get_random_bytes(&lock->l_random, sizeof(__u64));
 
         lock->l_resource = resource;
+        /* this refcount matches the one of the resource passed
+           in which is not being put away */
         lock->l_refc = 1;
         INIT_LIST_HEAD(&lock->l_children);
         INIT_LIST_HEAD(&lock->l_res_link);
@@ -169,12 +204,16 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_lock *parent,
                 list_add(&lock->l_childof, &parent->l_children);
                 l_unlock(&parent->l_resource->lr_namespace->ns_lock);
         }
+        /* this is the extra refcount, to prevent the lock
+           evaporating */ 
+        ldlm_lock_get(lock);
         RETURN(lock);
 }
 
 int ldlm_lock_change_resource(struct ldlm_lock *lock, __u64 new_resid[3])
 {
         struct ldlm_namespace *ns = lock->l_resource->lr_namespace;
+        struct ldlm_resource *oldres = lock->l_resource;
         int type, i;
         ENTRY;
 
@@ -191,10 +230,12 @@ int ldlm_lock_change_resource(struct ldlm_lock *lock, __u64 new_resid[3])
         for (i = 0; i < lock->l_refc; i++) {
                 int rc;
                 ldlm_resource_getref(lock->l_resource);
-                rc = ldlm_resource_put(lock->l_resource);
+                rc = ldlm_resource_put(oldres);
                 if (rc == 1 && i != lock->l_refc - 1)
                         LBUG();
         }
+        /* compensate for the initial get above.. */
+        ldlm_resource_put(lock->l_resource);
 
         l_unlock(&ns->ns_lock);
         RETURN(0);
@@ -632,7 +673,6 @@ struct ldlm_lock *ldlm_lock_create(struct ldlm_namespace *ns,
         lock->l_req_mode = mode;
         lock->l_data = data;
         lock->l_data_len = data_len;
-        ldlm_lock_addref(lock, mode);
 
         return lock;
 }
@@ -650,19 +690,15 @@ ldlm_error_t ldlm_lock_enqueue(struct ldlm_lock *lock,
         ENTRY;
 
         res = lock->l_resource;
-        local = res->lr_namespace->ns_client;
-
         lock->l_blocking_ast = blocking;
 
         if (res->lr_type == LDLM_EXTENT)
                 memcpy(&lock->l_extent, cookie, sizeof(lock->l_extent));
 
         /* policies are not executed on the client */
+        local = res->lr_namespace->ns_client;
         if (!local && (policy = ldlm_res_policy_table[res->lr_type])) {
                 int rc;
-
-                ldlm_resource_getref(res);
-
                 rc = policy(lock, cookie, lock->l_req_mode, NULL);
 
                 if (rc == ELDLM_LOCK_CHANGED) {

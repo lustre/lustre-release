@@ -326,12 +326,6 @@ void ldlm_resource_unlink_lock(struct ldlm_lock *lock)
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
 }
 
-int ldlm_get_resource_handle(struct ldlm_resource *res, struct lustre_handle *h)
-{
-        LBUG();
-        return 0;
-}
-
 void ldlm_res2desc(struct ldlm_resource *res, struct ldlm_resource_desc *desc)
 {
         desc->lr_type = res->lr_type;

@@ -181,16 +181,21 @@ static inline struct ldlm_extent *ldlm_res2extent(struct ldlm_resource *res)
 
 extern struct obd_ops ldlm_obd_ops;
 
+
+extern char *ldlm_lockname[];
+extern char *ldlm_typename[];
+
 #define LDLM_DEBUG(lock, format, a...)                          \
 do {                                                            \
         CDEBUG(D_DLMTRACE, "### " format                        \
-               " (%s: lock %p mode %d/%d on res %Lu (rc %d) "   \
-               " type %d remote %Lx)\n" , ## a,                 \
+               " (%s: lock %p mode %s/%s on res %Lu (rc %d) "   \
+               " type %s remote %Lx)\n" , ## a,                 \
                lock->l_resource->lr_namespace->ns_name, lock,   \
-               lock->l_granted_mode, lock->l_req_mode,          \
+               ldlm_lockname[lock->l_granted_mode],             \
+               ldlm_lockname[lock->l_req_mode],                 \
                lock->l_resource->lr_name[0],                    \
                atomic_read(&lock->l_resource->lr_refcount),     \
-               lock->l_resource->lr_type,                       \
+               ldlm_typename[lock->l_resource->lr_type],        \
                lock->l_remote_handle.addr);                     \
 } while (0)
 
