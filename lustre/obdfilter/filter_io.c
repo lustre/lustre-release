@@ -685,13 +685,8 @@ static int filter_commitrw_read(struct obd_export *exp, struct obdo *oa,
                                 continue;
                         /* drop from cache like truncate_list_pages() */
                         if (drop && !TryLockPage(lnb->page)) {
-                                if (lnb->page->mapping) {
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-                                        truncate_complete_page(lnb->page);
-#else
-                                        truncate_complete_page(lnb->page->mapping, lnb->page);
-#endif
-                                }
+                                if (lnb->page->mapping)
+                                        ll_truncate_complete_page(lnb->page);
                                 unlock_page(lnb->page);
                         }
                         page_cache_release(lnb->page);
@@ -716,11 +711,7 @@ void flip_into_page_cache(struct inode *inode, struct page *new_page)
                  * as well. */
                 old_page = find_lock_page(inode->i_mapping, new_page->index);
                 if (old_page) {
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-                        truncate_complete_page(old_page);
-#else
-                        truncate_complete_page(old_page->mapping, old_page);
-#endif
+                        ll_truncate_complete_page(old_page);
                         unlock_page(old_page);
                         page_cache_release(old_page);
                 }

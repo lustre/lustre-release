@@ -366,11 +366,7 @@ void ll_pgcache_remove_extent(struct inode *inode, struct lov_stripe_md *lsm,
                 /* checking again to account for writeback's lock_page() */
                 if (page->mapping != NULL) {
                         LL_CDEBUG_PAGE(page, "truncating\n");
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-                        truncate_complete_page(page);
-#else
-                        truncate_complete_page(page->mapping, page);
-#endif
+                        ll_truncate_complete_page(page);
                 }
                 unlock_page(page);
                 page_cache_release(page);

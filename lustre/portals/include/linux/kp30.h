@@ -7,10 +7,10 @@
 #define PORTAL_DEBUG
 
 #ifndef offsetof
-# define offsetof(typ,memb)	((int)((char *)&(((typ *)0)->memb)))
+# define offsetof(typ,memb)     ((int)((char *)&(((typ *)0)->memb)))
 #endif
 
-#define LOWEST_BIT_SET(x)	((x) & ~((x) - 1))
+#define LOWEST_BIT_SET(x)       ((x) & ~((x) - 1))
 
 /*
  *  Debugging
@@ -75,7 +75,7 @@ extern unsigned int portal_cerror;
 
 #ifdef __KERNEL__
 # include <linux/sched.h> /* THREAD_SIZE */
-#else 
+#else
 # ifndef THREAD_SIZE /* x86_64 has THREAD_SIZE in userspace */
 #  define THREAD_SIZE 8192
 # endif
@@ -185,6 +185,7 @@ do {                                                                          \
 } while (0)
 
 #define ll_invalidate_inode_pages(inode) invalidate_inode_pages(inode)
+#define ll_truncate_complete_page(page) truncate_complete_page(page)
 #define PageUptodate Page_Uptodate
 #define our_recalc_sigpending(current) recalc_sigpending(current)
 #define num_online_cpus() smp_num_cpus
@@ -193,7 +194,7 @@ static inline void our_cond_resched(void)
         if (current->need_resched)
                schedule ();
 }
-#define work_struct_t       struct tq_struct 
+#define work_struct_t       struct tq_struct
 
 #else
 
@@ -201,7 +202,10 @@ static inline void our_cond_resched(void)
 do {                                                                          \
         INIT_WORK((wq), (void *)(cb), (void *)(cbdata));                      \
 } while (0)
-#define ll_invalidate_inode_pages(inode) invalidate_inode_pages((inode)->i_mapping)
+#define ll_invalidate_inode_pages(inode) \
+        invalidate_inode_pages((inode)->i_mapping)
+#define ll_truncate_complete_page(page) \
+        truncate_complete_page((page)->mapping, page)
 #define wait_on_page wait_on_page_locked
 #define our_recalc_sigpending(current) recalc_sigpending()
 #define strtok(a,b) strpbrk(a, b)
@@ -220,7 +224,7 @@ extern void kportal_assertion_failed(char *expr, char *file, const char *func,
                                                         __FUNCTION__, __LINE__))
 /* it would be great to dump_stack() here, but some kernels
  * export it as show_stack() and I can't be bothered to
- * proprely engage in that dance right now */ 
+ * proprely engage in that dance right now */
 #define LASSERTF(cond, fmt...)                                                \
         do {                                                                  \
                 if (unlikely(!(cond))) {                                      \
@@ -230,7 +234,7 @@ extern void kportal_assertion_failed(char *expr, char *file, const char *func,
                         LBUG();                                               \
                 }                                                             \
         } while (0)
-                                
+
 #else
 #define LASSERT(e)
 #define LASSERTF(cond, fmt...) do { } while (0)
@@ -432,7 +436,7 @@ typedef const struct {
                                    ptl_nid_t *gateway,
                                    ptl_nid_t *lo_nid, ptl_nid_t *hi_nid,
                                    int *alive);
-        int     (*kprci_notify)(int gateway_nal, ptl_nid_t gateway_nid, 
+        int     (*kprci_notify)(int gateway_nal, ptl_nid_t gateway_nid,
                                 int alive, time_t when);
 } kpr_control_interface_t;
 
@@ -503,12 +507,12 @@ kpr_fwd_done (kpr_router_t *router, kpr_fwd_desc_t *fwd, int error)
 }
 
 static inline void
-kpr_notify (kpr_router_t *router, 
+kpr_notify (kpr_router_t *router,
             ptl_nid_t peer, int alive, time_t when)
 {
         if (!kpr_routing (router))
                 return;
-        
+
         router->kpr_interface->kprri_notify(router->kpr_arg, peer, alive, when);
 }
 
@@ -658,7 +662,7 @@ char *portals_nid2str(int nal, ptl_nid_t nid, char *str);
 #endif
 
 /******************************************************************************/
-/* Light-weight trace 
+/* Light-weight trace
  * Support for temporary event tracing with minimal Heisenberg effect. */
 #define LWT_SUPPORT  0
 
@@ -708,7 +712,7 @@ extern int  lwt_snapshot (cycles_t *now, int *ncpu, int *total_size,
  * This stuff is meant for finding specific problems; it never stays in
  * production code... */
 
-#define LWTSTR(n)	#n
+#define LWTSTR(n)       #n
 #define LWTWHERE(f,l)   f ":" LWTSTR(l)
 
 #define LWT_EVENT(p1, p2, p3, p4)                                       \
@@ -1015,7 +1019,7 @@ static inline int portal_ioctl_getdata(char *buf, char *end, void *arg)
 #define IOC_PORTAL_CLEAR_DEBUG             _IOWR('e', 32, long)
 #define IOC_PORTAL_MARK_DEBUG              _IOWR('e', 33, long)
 #define IOC_PORTAL_PANIC                   _IOWR('e', 34, long)
-#define IOC_PORTAL_NAL_CMD	           _IOWR('e', 35, long)
+#define IOC_PORTAL_NAL_CMD                 _IOWR('e', 35, long)
 #define IOC_PORTAL_GET_NID                 _IOWR('e', 36, long)
 #define IOC_PORTAL_FAIL_NID                _IOWR('e', 37, long)
 #define IOC_PORTAL_SET_DAEMON              _IOWR('e', 38, long)
