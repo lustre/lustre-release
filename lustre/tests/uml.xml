@@ -1,115 +1,89 @@
-<?xml version="1.0"?>
-<!DOCTYPE lustre SYSTEM "../utils/lustre.dtd">
-
+<?xml version='1.0' encoding='UTF-8'?>
 <lustre>
-  <node name="uml1" uuid="uml1-UUID">
-    <network type='tcp' name='net' uuid="uml1-net-UUID" >
+  <ldlm name='ldlm' uuid='ldlm_UUID'/>
+  <node name='uml1' uuid='uml1_UUID'>
+    <profile>
+      <ldlm_ref uuidref='ldlm_UUID'/>
+      <network_ref uuidref='NET_uml1_tcp_UUID'/>
+      <mds_ref uuidref='mds1_UUID'/>
+      <lov_ref uuidref='lov1_UUID'/>
+    </profile>
+    <network name='NET_uml1_tcp' uuid='NET_uml1_tcp_UUID' type='tcp'>
       <server>uml1</server>
-      <port>666</port>
+      <port>888</port>
     </network>
-    <profile_ref uuidref="uml1-prof-UUID"/>
   </node>
-
-  <profile name="uml1-prof" uuid="uml1-prof-UUID">
-    <service_ref uuidref="uml1-net-UUID"/>
-    <service_ref uuidref="ldlm-srv-UUID"/>
-    <service_ref uuidref="mds-UUID"/>
-  </profile>
-
-  <node name="uml2" uuid="uml2-UUID">
-    <network type='tcp' name='net' uuid="uml2-net-UUID" >
+  <node name='uml2' uuid='uml2_UUID'>
+    <profile>
+      <ldlm_ref uuidref='ldlm_UUID'/>
+      <network_ref uuidref='NET_uml2_tcp_UUID'/>
+      <obd_ref uuidref='OBD_uml2_UUID'/>
+      <ost_ref uuidref='OST_uml2_UUID'/>
+      <obd_ref uuidref='OBD_uml2_2_UUID'/>
+      <ost_ref uuidref='OST_uml2_2_UUID'/>
+    </profile>
+    <network uuid='NET_uml2_tcp_UUID' name='NET_uml2_tcp' type='tcp'>
       <server>uml2</server>
-      <port>666</port>
+      <port>888</port>
     </network>
-    <profile_ref uuidref="uml2-prof-UUID"/>
   </node>
-
-  <profile name="uml2-prof" uuid="uml2-prof-UUID">
-    <service_ref uuidref="uml2-net-UUID"/>
-    <service_ref uuidref="ldlm-srv-UUID"/>
-    <service_ref uuidref="mdc1-UUID"/>
-    <service_ref uuidref="obd1-UUID"/>
-    <service_ref uuidref="obd2-UUID"/>
-    <service_ref uuidref="ost1-UUID"/>
-    <service_ref uuidref="ost2-UUID"/>
-  </profile>
-
-  <node name="uml3" uuid="uml3-UUID">
-    <network type='tcp' name='net' uuid="uml3-net-UUID" >
+  <node name='uml3' uuid='uml3_UUID'>
+    <profile>
+      <ldlm_ref uuidref='ldlm_UUID'/>
+      <network_ref uuidref='NET_uml3_tcp_UUID'/>
+      <mountpoint_ref uuidref='MNT_uml3_UUID'/>
+      <mdc_ref uuidref='MDC_mds1_UUID'/>
+    </profile>
+    <network name='NET_uml3_tcp' uuid='NET_uml3_tcp_UUID' type='tcp'>
       <server>uml3</server>
-      <port>666</port>
+      <port>888</port>
     </network>
-    <profile_ref uuidref="uml3-prof-UUID"/>
   </node>
-
-  <profile name="uml3-prof" uuid="uml3-prof-UUID">
-    <service_ref uuidref="uml3-net-UUID"/>
-    <service_ref uuidref="ldlm-srv-UUID"/>
-    <service_ref uuidref="mdc1-UUID"/>
-    <service_ref uuidref="osc1-UUID"/>
-    <service_ref uuidref="osc2-UUID"/>
-    <service_ref uuidref="mtpt1-UUID"/>
-  </profile>
-
-  <ldlm name="ldlm-srv" uuid="ldlm-srv-UUID"/>
-
-  <lov name="lov1" uuid="lov1-UUID">
-    <mdc_ref uuidref="mdc1-UUID"/>
-    <devices stripesize="65536" pattern="0">
-      <osc_ref uuidref="osc1-UUID"/>
-      <osc_ref uuidref="osc2-UUID"/>
+  <mds name='mds1' uuid='mds1_UUID'>
+    <fstype>extN</fstype>
+    <device size='50000'>/tmp/mds1</device>
+    <autoformat>yes</autoformat>
+    <network_ref uuidref='NET_uml1_tcp_UUID'/>
+  </mds>
+  <mdc name='MDC_mds1' uuid='MDC_mds1_UUID'>
+    <mds_ref uuidref='mds1_UUID'/>
+  </mdc>
+  <lov name='lov1' uuid='lov1_UUID'>
+    <mds_ref uuidref='mds1_UUID'/>
+    <devices stripeoffset='0' stripesize='65536' pattern='0'>
+      <osc_ref uuidref='OSC_uml2_UUID'/>
+      <osc_ref uuidref='OSC_uml2_2_UUID'/>
     </devices>
   </lov>
-
-  <mdc name="mdc1" uuid="mdc1-UUID">
-    <network_ref uuidref='uml1-net-UUID'/> <!-- is this extra net needed ?? -->
-    <mds_ref uuidref="mds-UUID"/>
-  </mdc>
-
-  <mds name="mds" uuid="mds-UUID">
-    <network_ref uuidref="uml1-UUID"/>
+  <obd uuid='OBD_uml2_UUID' name='OBD_uml2' type='obdfilter'>
     <fstype>extN</fstype>
-    <device size="50000">/tmp/mds</device>
-    <autoformat>yes</autoformat>
-  </mds>
-
-  <osc name="osc1" uuid="osc1-UUID">
-    <network_ref uuidref='uml2-net-UUID'/>
-    <obd_ref uuidref="obd1-UUID"/>
-  </osc>
-
-  <osc name="osc2" uuid="osc2-UUID">
-    <network_ref uuidref='uml2-net-UUID'/>
-    <obd_ref uuidref="obd2-UUID"/>
-  </osc>
-
-  <ost name="ost1" uuid="ost1-UUID">
-    <network_ref uuidref='uml2-net-UUID'/>
-    <obd_ref uuidref='obd1-UUID'/>
-  </ost>
-
-  <ost name="ost2" uuid="ost2-UUID">
-    <network_ref uuidref='uml2-net-UUID'/>
-    <obd_ref uuidref='obd2-UUID'/>
-  </ost>
-
-  <obd name="obd1" uuid="obd1-UUID" type="obdfilter">
-    <fstype>extN</fstype>
-    <device size="100000">/tmp/obd1</device>
+    <device size='100000'>/tmp/ost1</device>
     <autoformat>yes</autoformat>
   </obd>
-
-  <obd name="obd2" uuid="obd2-UUID" type="obdfilter">
+  <osc name='OSC_uml2' uuid='OSC_uml2_UUID'>
+    <ost_ref uuidref='OST_uml2_UUID'/>
+    <obd_ref uuidref='OBD_uml2_UUID'/>
+  </osc>
+  <ost name='OST_uml2' uuid='OST_uml2_UUID'>
+    <network_ref uuidref='NET_uml2_tcp_UUID'/>
+    <obd_ref uuidref='OBD_uml2_UUID'/>
+  </ost>
+  <obd name='OBD_uml2_2' uuid='OBD_uml2_2_UUID' type='obdfilter'>
     <fstype>extN</fstype>
-    <device size="100000">/tmp/obd2</device>
+    <device size='100000'>/tmp/ost2</device>
     <autoformat>yes</autoformat>
   </obd>
-
-  <mountpoint name="mtpt1" uuid="mtpt1-UUID">
+  <osc name='OSC_uml2_2' uuid='OSC_uml2_2_UUID'>
+    <ost_ref uuidref='OST_uml2_2_UUID'/>
+    <obd_ref uuidref='OBD_uml2_2_UUID'/>
+  </osc>
+  <ost name='OST_uml2_2' uuid='OST_uml2_2_UUID'>
+    <network_ref uuidref='NET_uml2_tcp_UUID'/>
+    <obd_ref uuidref='OBD_uml2_2_UUID'/>
+  </ost>
+  <mountpoint name='MNT_uml3' uuid='MNT_uml3_UUID'>
+    <mdc_ref uuidref='MDC_mds1_UUID'/>
+    <osc_ref uuidref='lov1_UUID'/>
     <path>/mnt/lustre</path>
-    <mdc_ref uuidref="mdc1-UUID"/>
-    <osc_ref uuidref="osc1-UUID"/>
   </mountpoint>
-
 </lustre>
-
