@@ -1,0 +1,6 @@
+MODULES := kranal
+kranal-objs := ranal.o ranal_cb.o
+
+EXTRA_POST_CFLAGS := @RACPPFLAGS@
+
+@INCLUDE_RULES@
