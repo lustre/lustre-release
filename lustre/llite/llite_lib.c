@@ -1381,14 +1381,17 @@ void ll_put_inode(struct inode *inode)
         int rc;
         ENTRY;
 
-        /* notifying metadata target of putting inode. */
+        /* 
+         * notifying metadata target that any in memory data assosiated 
+         * with object @id should be removed. 
+         */
         if (atomic_read(&inode->i_count) == 1) {
                 ll_inode2id(&id, inode);
 
                 rc = md_put_inode(sbi->ll_lmv_exp, &id);
                 if (rc) {
-                        CERROR("md_put_inode() failed, "
-                               "error %d.\n", rc);
+                        CDEBUG("md_put_inode() failed, error %d\n", 
+                               rc);
                 }
         }
 

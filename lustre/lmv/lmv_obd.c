@@ -1467,12 +1467,7 @@ int lmv_unlink_slaves(struct obd_export *exp, struct mdc_op_data *data,
 int lmv_put_inode(struct obd_export *exp, struct lustre_id *id)
 {
         ENTRY;
-
-        if (!lmv_delete_obj(exp, id)) {
-                CDEBUG(D_OTHER, "object "DLID4" is not found.\n",
-                       OLID4(id));
-        }
-        
+        lmv_delete_obj(exp, id);
         RETURN(0);
 }
 
