@@ -683,7 +683,7 @@ void obdfs_truncate(struct inode *inode)
                 err = -ENOMEM;
                 CERROR("obdo_alloc failed!\n");
         } else {
-                oa->o_valid = (__u32)OBD_MD_FLNOTOBD;
+                oa->o_valid = OBD_MD_FLNOTOBD;
                 obdfs_from_inode(oa, inode);
 
                 CDEBUG(D_INFO, "calling punch for %ld (%Lu bytes at 0)\n",
