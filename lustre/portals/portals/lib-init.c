@@ -278,7 +278,7 @@ lib_setup_handle_hash (nal_cb_t *nal)
         for (i = 0; i < ni->ni_lh_hash_size; i++)
                 INIT_LIST_HEAD (&ni->ni_lh_hash_table[i]);
 
-        ni->ni_next_object_cookie = 0;
+        ni->ni_next_object_cookie = PTL_COOKIE_TYPES;
         
         return (PTL_OK);
 }
@@ -296,7 +296,7 @@ lib_cleanup_handle_hash (nal_cb_t *nal)
 }
 
 lib_handle_t *
-lib_lookup_cookie (nal_cb_t *nal, __u64 cookie) 
+lib_lookup_cookie (nal_cb_t *nal, __u64 cookie, int type) 
 {
         /* ALWAYS called with statelock held */
         lib_ni_t            *ni = &nal->ni;
@@ -304,6 +304,9 @@ lib_lookup_cookie (nal_cb_t *nal, __u64 cookie)
         struct list_head    *el;
         unsigned int         hash;
 
+        if ((cookie & (PTL_COOKIE_TYPES - 1)) != type)
+                return (NULL);
+        
         hash = ((unsigned int)cookie) % ni->ni_lh_hash_size;
         list = &ni->ni_lh_hash_table[hash];
         
@@ -318,13 +321,16 @@ lib_lookup_cookie (nal_cb_t *nal, __u64 cookie)
 }
 
 void
-lib_initialise_handle (nal_cb_t *nal, lib_handle_t *lh) 
+lib_initialise_handle (nal_cb_t *nal, lib_handle_t *lh, int type) 
 {
         /* ALWAYS called with statelock held */
         lib_ni_t       *ni = &nal->ni;
         unsigned int    hash;
+
+        LASSERT (type >= 0 && type < PTL_COOKIE_TYPES);
+        lh->lh_cookie = ni->ni_next_object_cookie | type;
+        ni->ni_next_object_cookie += PTL_COOKIE_TYPES;
         
-        lh->lh_cookie = ni->ni_next_object_cookie++;
         hash = ((unsigned int)lh->lh_cookie) % ni->ni_lh_hash_size;
         list_add (&lh->lh_hash_chain, &ni->ni_lh_hash_table[hash]);
 }

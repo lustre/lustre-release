@@ -241,6 +241,13 @@ typedef struct {
         unsigned int      tp_threshold;        /* # failures to simulate */
 } lib_test_peer_t;
 
+#define PTL_COOKIE_TYPE_MD    1
+#define PTL_COOKIE_TYPE_ME    2
+#define PTL_COOKIE_TYPE_EQ    3
+#define PTL_COOKIE_TYPES      4
+/* PTL_COOKIE_TYPES must be a power of 2, so the cookie type can be
+ * extracted by masking with (PTL_COOKIE_TYPES - 1) */
+
 typedef struct {
         int up;
         int refcnt;

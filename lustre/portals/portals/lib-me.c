@@ -63,7 +63,7 @@ int do_PtlMEAttach(nal_cb_t * nal, void *private, void *v_args, void *v_ret)
         me->unlink = args->unlink_in;
         me->md = NULL;
 
-        lib_initialise_handle (nal, &me->me_lh);
+        lib_initialise_handle (nal, &me->me_lh, PTL_COOKIE_TYPE_ME);
 
         if (args->position_in == PTL_INS_AFTER)
                 list_add_tail(&me->me_list, &(tbl->tbl[args->index_in]));
@@ -107,7 +107,7 @@ int do_PtlMEInsert(nal_cb_t * nal, void *private, void *v_args, void *v_ret)
         new->unlink = args->unlink_in;
         new->md = NULL;
 
-        lib_initialise_handle (nal, &new->me_lh);
+        lib_initialise_handle (nal, &new->me_lh, PTL_COOKIE_TYPE_ME);
 
         if (args->position_in == PTL_INS_AFTER)
                 list_add_tail(&new->me_list, &me->me_list);

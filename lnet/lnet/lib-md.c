@@ -197,7 +197,7 @@ static int lib_md_build(nal_cb_t *nal, lib_md_t *new, void *private,
                 eq->eq_refcount++;
 
         /* It's good; let handle2md succeed and add to active mds */
-        lib_initialise_handle (nal, &new->md_lh);
+        lib_initialise_handle (nal, &new->md_lh, PTL_COOKIE_TYPE_MD);
         list_add (&new->md_list, &nal->ni.ni_active_mds);
 
         return PTL_OK;

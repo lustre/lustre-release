@@ -76,7 +76,7 @@ int do_PtlEQAlloc_internal(nal_cb_t * nal, void *private, void *v_args,
         eq->eq_refcount = 0;
         eq->event_callback = args->callback_in;
 
-        lib_initialise_handle (nal, &eq->eq_lh);
+        lib_initialise_handle (nal, &eq->eq_lh, PTL_COOKIE_TYPE_EQ);
         list_add (&eq->eq_list, &nal->ni.ni_active_eqs);
 
         state_unlock(nal, &flags);

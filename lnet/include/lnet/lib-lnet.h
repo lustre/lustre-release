@@ -264,8 +264,8 @@ lib_msg_free(nal_cb_t *nal, lib_msg_t *msg)
 }
 #endif
 
-extern lib_handle_t *lib_lookup_cookie (nal_cb_t *nal, __u64 cookie);
-extern void lib_initialise_handle (nal_cb_t *nal, lib_handle_t *lh);
+extern lib_handle_t *lib_lookup_cookie (nal_cb_t *nal, __u64 cookie, int type);
+extern void lib_initialise_handle (nal_cb_t *nal, lib_handle_t *lh, int type);
 extern void lib_invalidate_handle (nal_cb_t *nal, lib_handle_t *lh);
 
 static inline void
@@ -278,8 +278,8 @@ static inline lib_eq_t *
 ptl_handle2eq (ptl_handle_eq_t *handle, nal_cb_t *nal)
 {
         /* ALWAYS called with statelock held */
-        lib_handle_t *lh = lib_lookup_cookie (nal, handle->cookie);
-        
+        lib_handle_t *lh = lib_lookup_cookie (nal, handle->cookie, 
+                                              PTL_COOKIE_TYPE_EQ);
         if (lh == NULL)
                 return (NULL);
 
@@ -296,8 +296,8 @@ static inline lib_md_t *
 ptl_handle2md (ptl_handle_md_t *handle, nal_cb_t *nal)
 {
         /* ALWAYS called with statelock held */
-        lib_handle_t *lh = lib_lookup_cookie (nal, handle->cookie);
-        
+        lib_handle_t *lh = lib_lookup_cookie (nal, handle->cookie,
+                                              PTL_COOKIE_TYPE_MD);
         if (lh == NULL)
                 return (NULL);
 
@@ -313,7 +313,8 @@ ptl_wire_handle2md (ptl_handle_wire_t *wh, nal_cb_t *nal)
         if (wh->wh_interface_cookie != nal->ni.ni_interface_cookie)
                 return (NULL);
         
-        lh = lib_lookup_cookie (nal, wh->wh_object_cookie);
+        lh = lib_lookup_cookie (nal, wh->wh_object_cookie,
+                                PTL_COOKIE_TYPE_MD);
         if (lh == NULL)
                 return (NULL);
 
@@ -330,8 +331,8 @@ static inline lib_me_t *
 ptl_handle2me (ptl_handle_me_t *handle, nal_cb_t *nal)
 {
         /* ALWAYS called with statelock held */
-        lib_handle_t *lh = lib_lookup_cookie (nal, handle->cookie);
-        
+        lib_handle_t *lh = lib_lookup_cookie (nal, handle->cookie,
+                                              PTL_COOKIE_TYPE_ME);
         if (lh == NULL)
                 return (NULL);
 
