@@ -40,7 +40,7 @@
 #include <linux/lustre_lib.h>
 #include <linux/lustre_idl.h>
 #include <linux/lustre_dlm.h>
-#include <linux/obd_lov.h>
+#include <linux/obd_lov.h>      /* for IOC_LOV_SET_OSC_ACTIVE */
 
 #include <unistd.h>
 #include <sys/un.h>
