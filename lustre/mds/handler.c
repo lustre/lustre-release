@@ -1406,7 +1406,10 @@ static int mdt_obj_create(struct ptlrpc_request *req)
         
         down(&parent_inode->i_sem);
         handle = fsfilt_start(obd, parent_inode, FSFILT_OP_MKDIR, NULL);
-        LASSERT(!IS_ERR(handle));
+        if (IS_ERR(handle)) {
+                up(&parent_inode->i_sem);
+                GOTO(cleanup, rc = PTR_ERR(handle));
+        }
         cleanup_phase = 1; /* transaction */
 
 repeat:
