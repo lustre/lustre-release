@@ -15,11 +15,11 @@ LLIB_EXEC= ../liblustre.a -lpthread
 noinst_LIBRARIES = libtestcommon.a
 libtestcommon_a_SOURCES = test_common.c
 
-bin_PROGRAMS = echo_test sanity recovery_small replay_single #test_lock_cancel
+bin_PROGRAMS = echo_test sanity recovery_small replay_single test_lock_cancel
 
 echo_test_SOURCES = echo_test.c  ../../utils/parser.c ../../utils/obd.c ../../utils/lustre_cfg.c
 echo_test_LDADD = ../liblsupport.a $(LIBREADLINE) -lpthread 
-echo_test_DEPENDENCIES=$(top_srcdir)/lov/liblov.a #$(top_srcdir)/liblustre/liblustre.a
+echo_test_DEPENDENCIES=$(top_srcdir)/liblustre/liblsupport.a
 
 sanity_SOURCES = sanity.c
 sanity_LDADD := ./libtestcommon.a $(LLIB_EXEC)
@@ -33,8 +33,8 @@ replay_single_SOURCES = replay_single.c
 replay_single_LDADD := ./libtestcommon.a $(LLIB_EXEC)
 replay_single_DEPENDENCIES = $(top_srcdir)/liblustre/liblustre.a
 
-#test_lock_cancel_SOURCES = test_lock_cancel.c
-#test_lock_cancel_LDADD :=  $(LLIB_EXEC) -lmpi -llam
+test_lock_cancel_SOURCES = test_lock_cancel.c
+test_lock_cancel_LDADD :=  $(LLIB_EXEC) -lmpi -llam
 
 include $(top_srcdir)/Rules
 
