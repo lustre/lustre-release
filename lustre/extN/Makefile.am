@@ -39,7 +39,8 @@ include $(top_srcdir)/Rules
 # set works for nearly everybody.  This is mainly for damage control.
 diff:
 	$(RM) extN.patchT
-	for f in $(EXTNC); do diff -u extN.orig/$$f $$f >> extN.patchT ; done
+	-for f in $(EXTNC); do (cd $(top_srcdir) && diff -u extN/extN.orig/$$f extN/$$f) >> extN.patchT; done
+	-for f in $(EXTNI); do (cd $(top_srcdir) && diff -u extN/extN.orig-include/$$f include/linux/$$f) >> extN.patchT; done
 	mv -f extN.patchT $(srcdir)/extN.patch-$(RELEASE)
 	f=extN.patch-$(RELEASE); if cvs update $$f 2>&1 | grep 'cvs add' >/dev/null; then \
 	  cvs add $$f; \
@@ -75,7 +76,7 @@ patch-stamp: sed-stamp $(EXTNP)
 	test -e $(top_srcdir)/fs || ln -s . $(top_srcdir)/fs
 	set -vx;                                                              \
 	if [ -f $(srcdir)/extN.patch-$(RELEASE) ]; then                       \
-		(cd $(srcdir) && patch -p0) < $(srcdir)/extN.patch-$(RELEASE);                  \
+		(cd $(top_srcdir) && patch -p0) < $(srcdir)/extN.patch-$(RELEASE);                  \
 	else                                                                  \
 		echo "If first patch fails, read NOTE in extN/Makefile.am";   \
 		list='$(EXTNP)'; for p in $$list; do                          \
