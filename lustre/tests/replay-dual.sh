@@ -379,7 +379,33 @@ test_17() {
 }
 run_test 17 "fail OST during recovery (3571)"
 
+# cleanup with blocked enqueue fails until timer elapses (MDS busy), wait for
+# itexport NOW=0
+                                                                                
+test_18() {     # bug 3822 - evicting client with enqueued lock
+	set -vx
+	mkdir -p $MOUNT1/$tdir
+	touch $MOUNT1/$tdir/f0
+#define OBD_FAIL_LDLM_ENQUEUE_BLOCKED    0x30b
+	statmany -s $MOUNT1/$tdir/f 500 &
+	OPENPID=$!
+	NOW=`date +%s`
+	do_facet mds sysctl -w lustre.fail_loc=0x8000030b  # hold enqueue
+	sleep 1
+#define OBD_FAIL_LDLM_BL_CALLBACK        0x305
+	do_facet client sysctl -w lustre.fail_loc=0x80000305  # drop cb, evict
+	cancel_lru_locks MDC
+	usleep 500 # wait to ensure first client is one that will be evicted
+	openfile -f O_RDONLY $MOUNT2/$tdir/f0
+	wait $OPENPID
+	dmesg | grep "entering recovery in server" && \
+		error "client not evicted" || true
+}
+run_test 18 "ldlm_handle_enqueue succeeds on evicted export (3822)"
+
 if [ "$ONLY" != "setup" ]; then
 	equals_msg test complete, cleaning up
+	SLEEP=$((`date +%s` - $NOW))
+	[ $SLEEP -lt $TIMEOUT ] && sleep $SLEEP
 	$CLEANUP
 fi
