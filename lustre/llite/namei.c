@@ -452,12 +452,14 @@ int ll_mdc_rename(struct inode *src, struct inode *tgt,
  */
 static int ll_create(struct inode *dir, struct dentry *dentry, int mode)
 {
-        struct lookup_intent *it = dentry->d_it;
+        struct lookup_intent *it;
         struct inode *inode;
         int rc = 0;
         ENTRY;
 
         CHECK_MOUNT_EPOCH(dir);
+
+        it = dentry->d_it;
 
         inode = ll_create_node(dir, dentry->d_name.name, dentry->d_name.len,
                                NULL, 0, mode, 0, it, NULL);
@@ -468,7 +470,7 @@ static int ll_create(struct inode *dir, struct dentry *dentry, int mode)
         if (it->it_disposition) {
                 struct ll_inode_info *lli = ll_i2info(inode);
                 memcpy(&lli->lli_intent_lock_handle, it->it_lock_handle,
-                       sizeof(struct lustre_handle));
+                       sizeof(lli->lli_intent_lock_handle));
                 d_instantiate(dentry, inode);
         } else {
                 /* no directory data updates when intents rule */
@@ -517,8 +519,7 @@ static int ll_symlink(struct inode *dir, struct dentry *dentry,
         it = dentry->d_it;
 
         inode = ll_create_node(dir, dentry->d_name.name, dentry->d_name.len,
-                               symname, l, S_IFLNK | S_IRWXUGO, 0,
-                               it, NULL);
+                               symname, l, S_IFLNK | S_IRWXUGO, 0, it, NULL);
         if (IS_ERR(inode))
                 RETURN(PTR_ERR(inode));
 

@@ -124,7 +124,7 @@ int ll_revalidate2(struct dentry *de, int flags, struct lookup_intent *it)
                 ll_set_dd(de);
         }
         //down(&ll_d2d(de)->lld_it_sem);
-        //  de->d_it = it;
+        // de->d_it = it;
 
         RETURN(rc);
 }
