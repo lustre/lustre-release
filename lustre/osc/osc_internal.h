@@ -18,5 +18,6 @@ void osc_rpcd_add_req(struct ptlrpc_request *req);
 /* osc/lproc_osc.c */
 extern atomic_t osc_max_pages_per_rpc;
 extern atomic_t osc_max_rpcs_in_flight;
+int lproc_osc_attach_seqstat(struct obd_device *dev);
 
 #endif /* OSC_INTERNAL_H */
