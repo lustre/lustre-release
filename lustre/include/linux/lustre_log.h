@@ -35,14 +35,17 @@
 #ifndef _LUSTRE_LOG_H
 #define _LUSTRE_LOG_H
 
-#include <linux/lustre_lite.h>
 #include <linux/lustre_idl.h>
-#include <linux/obd.h>
+
+struct obd_trans_info;
+struct obd_device;
+struct lov_stripe_md;
 
 /* In-memory descriptor for a log object or log catalog */
 struct llog_handle {
         struct list_head        lgh_list;
         struct llog_cookie      lgh_cookie;
+        struct semaphore        lgh_lock;
         struct obd_device      *lgh_obd;
         void                   *lgh_hdr;
         struct file            *lgh_file;
@@ -50,14 +53,15 @@ struct llog_handle {
                                                   struct obd_trans_info *oti);
         struct llog_handle     *(*lgh_log_open)(struct obd_device *obd,
                                                 struct llog_cookie *logcookie);
-        int                     (*lgh_log_close)(struct llog_handle *loghandle);
+        int                     (*lgh_log_close)(struct llog_handle *cathandle,
+                                                 struct llog_handle *loghandle);
         int                     lgh_index;
 };
 
 /* exported api prototypes */
 extern int llog_add_record(struct llog_handle *cathandle,
                            struct llog_trans_hdr *rec,
-                           struct lov_mds_md *lmm,
+                           struct lov_stripe_md *lsm,
                            struct obd_trans_info *oti,
                            struct llog_cookie *logcookies);
 
@@ -70,6 +74,8 @@ extern void llog_free_handle(struct llog_handle *handle);
 extern int llog_init_catalog(struct llog_handle *cathandle);
 extern struct llog_handle *llog_id2handle(struct llog_handle *cathandle,
                                           struct llog_cookie *cookie);
+extern int llog_delete_log(struct llog_handle *cathandle,
+                           struct llog_handle *loghandle);
 
 #endif
 
