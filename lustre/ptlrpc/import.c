@@ -89,6 +89,22 @@ int ptlrpc_init_import(struct obd_import *imp)
         return 0;
 }
 
+#define UUID_STR "_UUID"
+static void deuuidify(char *uuid, const char *prefix, char **uuid_start, int *uuid_len)
+{
+        *uuid_start = !prefix || strncmp(uuid, prefix, strlen(prefix))
+                ? uuid : uuid + strlen(prefix);
+
+        *uuid_len = strlen(*uuid_start);
+
+        if (*uuid_len < strlen(UUID_STR))
+                return;
+        
+        if (!strncmp(*uuid_start + *uuid_len - strlen(UUID_STR),
+                    UUID_STR, strlen(UUID_STR)))
+                *uuid_len -= strlen(UUID_STR);
+}
+
 /* Returns true if import was FULL, false if import was already not
  * connected.
  */
@@ -100,6 +116,23 @@ int ptlrpc_set_import_discon(struct obd_import *imp)
         spin_lock_irqsave(&imp->imp_lock, flags);
 
         if (imp->imp_state == LUSTRE_IMP_FULL) {
+                char nidbuf[PTL_NALFMT_SIZE];
+                char *target_start;
+                int   target_len;
+
+                deuuidify(imp->imp_target_uuid.uuid, NULL,
+                          &target_start, &target_len);
+
+                LCONSOLE_ERROR("Connection to service %.*s via nid %s was "
+                               "lost; in progress operations using this "
+                               "service will %s.\n",
+                               target_len, target_start,
+                               ptlrpc_peernid2str(&imp->imp_connection->c_peer,
+                                                  nidbuf),
+                               imp->imp_replayable 
+                               ? "wait for recovery to complete"
+                               : "fail");
+
                 CWARN("%s: connection lost to %s@%s\n",
                       imp->imp_obd->obd_name,
                       imp->imp_target_uuid.uuid,
@@ -519,8 +552,18 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
 {
         int rc = 0;
         int inflight;
+        char *target_start;
+        int target_len;
 
         if (imp->imp_state == LUSTRE_IMP_EVICTED) {
+                deuuidify(imp->imp_target_uuid.uuid, NULL,
+                          &target_start, &target_len);
+                LCONSOLE_ERROR("This client was evicted by %.*s; in progress "
+                               "operations using this service will %s.\n",
+                               target_len, target_start,
+                               imp->imp_replayable
+                               ? "be reattempted"
+                               : "fail");
                 CDEBUG(D_HA, "evicted from %s@%s; invalidating\n",
                        imp->imp_target_uuid.uuid,
                        imp->imp_connection->c_remote_uuid.uuid);
@@ -563,6 +606,8 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
         }
 
         if (imp->imp_state == LUSTRE_IMP_RECOVER) {
+                char nidbuf[PTL_NALFMT_SIZE];
+
                 CDEBUG(D_HA, "reconnected to %s@%s\n",
                        imp->imp_target_uuid.uuid,
                        imp->imp_connection->c_remote_uuid.uuid);
@@ -572,6 +617,16 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
                         GOTO(out, rc);
                 IMPORT_SET_STATE(imp, LUSTRE_IMP_FULL);
                 ptlrpc_activate_import(imp);
+
+                deuuidify(imp->imp_target_uuid.uuid, NULL,
+                          &target_start, &target_len);
+                ptlrpc_peernid2str(&imp->imp_connection->c_peer,
+                                   nidbuf);
+
+                LCONSOLE_INFO("Connection restored to service %.*s using nid "
+                              "%s.\n",
+                              target_len, target_start, nidbuf);
+
                 CWARN("%s: connection restored to %s@%s\n",
                       imp->imp_obd->obd_name,
                       imp->imp_target_uuid.uuid,

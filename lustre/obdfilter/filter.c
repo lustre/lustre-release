@@ -1273,6 +1273,27 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
                 GOTO(err_post, rc);
         }
 
+        if (obd->obd_recovering) {
+                LCONSOLE_WARN("OST %s now serving %s, but will be in recovery "
+                              "until %d %s reconnect, or if no clients "
+                              "reconnect for %d:%.02d; during that time new "
+                              "clients will not be allowed to connect. "
+                              "Recovery progress can be monitored by watching "
+                              "/proc/fs/lustre/obdfilter/%s/recovery_status.\n",
+                              obd->obd_name,
+                              lcfg->lcfg_inlbuf1,
+                              obd->obd_recoverable_clients,
+                              (obd->obd_recoverable_clients == 1) 
+                              ? "client" : "clients",
+                              (int)(OBD_RECOVERY_TIMEOUT / HZ) / 60,
+                              (int)(OBD_RECOVERY_TIMEOUT / HZ) % 60,
+                              obd->obd_name);
+        } else {
+                LCONSOLE_INFO("OST %s now serving %s with recovery %s.\n",
+                              obd->obd_name, lcfg->lcfg_inlbuf1,
+                              obd->obd_replayable ? "enabled" : "disabled");
+        }
+
         RETURN(0);
 
 err_post:
@@ -1360,6 +1381,8 @@ static int filter_cleanup(struct obd_device *obd, int flags)
         lock_kernel();
 
         dev_clear_rdonly(2);
+
+        LCONSOLE_INFO("OST %s has stopped.\n", obd->obd_name);
 
         RETURN(0);
 }

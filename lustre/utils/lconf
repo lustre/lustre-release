@@ -88,6 +88,7 @@ ptldebug_names = {
     "reada" :     (1 << 22),
     "mmap" :      (1 << 23),
     "config" :    (1 << 24),
+    "console" :   (1 << 25),
     }
 
 subsystem_names = {
@@ -799,7 +800,7 @@ def mkfs(dev, devsize, fstype, jsize, isize, mkfsoptions, isblock=1):
                                 else:
                                     real_dev = os.path.join(os.path.dirname(real_dev), dev_link)
                                 if link_count > 19:
-                                    panic("Entountered too many symbolic links resolving block device:", dev)
+                                    panic("Encountered too many symbolic links resolving block device:", dev)
 
                         # get the major and minor number of the realpath via ls
                         # it seems python(os.stat) does not return

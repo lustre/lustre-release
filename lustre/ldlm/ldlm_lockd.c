@@ -315,15 +315,20 @@ int ldlm_del_waiting_lock(struct ldlm_lock *lock)
 
 #endif /* __KERNEL__ */
 
-static void ldlm_failed_ast(struct ldlm_lock *lock, int rc,const char *ast_type)
+static void ldlm_failed_ast(struct ldlm_lock *lock, int rc,
+                            const char *ast_type)
 {
         struct ptlrpc_connection *conn = lock->l_export->exp_connection;
         char str[PTL_NALFMT_SIZE];
 
+        ptlrpc_peernid2str(&conn->c_peer, str);
+
+        LCONSOLE_ERROR("A client on nid %s was evicted from service %s.\n",
+                       str, lock->l_export->exp_obd->obd_name);
+
         LDLM_ERROR(lock, "%s AST failed (%d): evicting client %s@%s NID "LPX64
                    " (%s)", ast_type, rc, lock->l_export->exp_client_uuid.uuid,
-                   conn->c_remote_uuid.uuid, conn->c_peer.peer_id.nid,
-                   ptlrpc_peernid2str(&conn->c_peer, str));
+                   conn->c_remote_uuid.uuid, conn->c_peer.peer_id.nid, str);
 
         ptlrpc_fail_export(lock->l_export);
 }

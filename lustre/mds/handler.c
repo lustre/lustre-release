@@ -1477,6 +1477,27 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         lprocfs_init_vars(mds, &lvars);
         lprocfs_obd_setup(obd, lvars.obd_vars);
 
+        if (obd->obd_recovering) {
+                LCONSOLE_WARN("MDT %s now serving %s, but will be in recovery "
+                              "until %d %s reconnect, or if no clients "
+                              "reconnect for %d:%.02d; during that time new "
+                              "clients will not be allowed to connect. "
+                              "Recovery progress can be monitored by watching "
+                              "/proc/fs/lustre/mds/%s/recovery_status.\n",
+                              obd->obd_name,
+                              lcfg->lcfg_inlbuf1,
+                              obd->obd_recoverable_clients,
+                              (obd->obd_recoverable_clients == 1) 
+                              ? "client" : "clients",
+                              (int)(OBD_RECOVERY_TIMEOUT / HZ) / 60,
+                              (int)(OBD_RECOVERY_TIMEOUT / HZ) % 60,
+                              obd->obd_name);
+        } else {
+                LCONSOLE_INFO("MDT %s now serving %s with recovery %s.\n",
+                              obd->obd_name, lcfg->lcfg_inlbuf1,
+                              obd->obd_replayable ? "enabled" : "disabled");
+        }
+
         RETURN(0);
 
 err_fs:
@@ -1675,6 +1696,8 @@ static int mds_cleanup(struct obd_device *obd, int flags)
         lock_kernel();
         dev_clear_rdonly(2);
         fsfilt_put_ops(obd->obd_fsops);
+
+        LCONSOLE_INFO("MDT %s has stopped.\n", obd->obd_name);
 
         RETURN(0);
 }
