@@ -1328,8 +1328,6 @@ int
 jt_ptl_loopback (int argc, char **argv)
 {
         int                      rc;
-        ptl_nid_t                nid;
-        unsigned int             threshold;
         int                      set;
         int                      enable;
         struct portal_ioctl_data data;

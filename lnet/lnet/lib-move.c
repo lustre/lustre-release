@@ -435,7 +435,24 @@ lib_extract_kiov (int dst_niov, ptl_kiov_t *dst,
         LASSERT (0);
 }
 
-#else
+ptl_err_t
+lib_lo_rxkiov(lib_nal_t *nal, void *private, lib_msg_t *libmsg,
+              unsigned int niov, ptl_kiov_t *kiov,
+              size_t offset, size_t mlen, size_t rlen)
+{
+        LASSERT (0);
+}
+
+ptl_err_t
+lib_lo_txkiov (lib_nal_t *nal, void *private, lib_msg_t *libmsg,
+               ptl_hdr_t *hdr, int type, ptl_nid_t nid, ptl_pid_t pid,
+               unsigned int payload_niov, ptl_kiov_t *payload_kiov,
+               size_t payload_offset, size_t payload_nob)
+{
+        LASSERT (0);
+}
+
+#else /* __KERNEL__ */
 
 ptl_size_t
 lib_kiov_nob (int niov, ptl_kiov_t *kiov)
@@ -468,11 +485,12 @@ lib_copy_kiov2buf (char *dest, int niov, ptl_kiov_t *kiov,
                 LASSERT (niov > 0);
         }
 
-        do{
+        do {
                 LASSERT (niov > 0);
                 nob = MIN (kiov->kiov_len - offset, len);
 
-                addr = ((char *)cfs_kmap (kiov->kiov_page)) + kiov->kiov_offset + offset;
+                addr = ((char *)cfs_kmap(kiov->kiov_page)) + kiov->kiov_offset +
+                        offset;
                 memcpy (dest, addr, nob);
                 cfs_kunmap (kiov->kiov_page);
 
@@ -508,7 +526,8 @@ lib_copy_buf2kiov (int niov, ptl_kiov_t *kiov, ptl_size_t offset,
                 LASSERT (niov > 0);
                 nob = MIN (kiov->kiov_len - offset, len);
 
-                addr = ((char *)cfs_kmap (kiov->kiov_page)) + kiov->kiov_offset + offset;
+                addr = ((char *)cfs_kmap(kiov->kiov_page)) + kiov->kiov_offset +
+                        offset;
                 memcpy (addr, src, nob);
                 cfs_kunmap (kiov->kiov_page);
 
@@ -568,75 +587,6 @@ lib_extract_kiov (int dst_niov, ptl_kiov_t *dst,
                 offset = 0;
         }
 }
-#endif
-
-ptl_err_t
-lib_lo_rxiov(lib_nal_t    *nal,
-             void         *private,
-             lib_msg_t    *libmsg,
-             unsigned int  niov,
-             struct iovec *iov,
-             size_t        offset,
-             size_t        mlen,
-             size_t        rlen)
-{
-        lo_desc_t *lod = (lo_desc_t *)private;
-
-        /* I only handle mapped->mapped matches */
-        LASSERT(lod->lod_type == LOD_IOV);
-        LASSERT(mlen > 0);
-
-        while (offset >= iov->iov_len) {
-                offset -= iov->iov_len;
-                iov++;
-                niov--;
-                LASSERT(niov > 0);
-        }
-        
-        while (lod->lod_offset >= lod->lod_iov.iov->iov_len) {
-                lod->lod_offset -= lod->lod_iov.iov->iov_len;
-                lod->lod_iov.iov++;
-                lod->lod_niov--;
-                LASSERT(lod->lod_niov > 0);
-        }
-        
-        do {
-                int fraglen = MIN(iov->iov_len - offset,
-                                  lod->lod_iov.iov->iov_len - lod->lod_offset);
-
-                LASSERT(niov > 0);
-                LASSERT(lod->lod_niov > 0);
-
-                if (fraglen > mlen)
-                        fraglen = mlen;
-                
-                memcpy((void *)((unsigned long)iov->iov_base + offset),
-                       (void *)((unsigned long)lod->lod_iov.iov->iov_base +
-                                lod->lod_offset),
-                       fraglen);
-
-                if (offset + fraglen < iov->iov_len) {
-                        offset += fraglen;
-                } else {
-                        offset = 0;
-                        iov++;
-                        niov--;
-                }
-
-                if (lod->lod_offset + fraglen < lod->lod_iov.iov->iov_len ) {
-                        lod->lod_offset += fraglen;
-                } else {
-                        lod->lod_offset = 0;
-                        lod->lod_iov.iov++;
-                        lod->lod_niov--;
-                }
-
-                mlen -= fraglen;
-        } while (mlen > 0);
-        
-        lib_finalize(nal, private, libmsg, PTL_OK);
-        return PTL_OK;
-}
 
 ptl_err_t
 lib_lo_rxkiov(lib_nal_t    *nal,
@@ -676,32 +626,35 @@ lib_lo_rxkiov(lib_nal_t    *nal,
         }
 
         do {
-                /* CAVEAT EMPTOR: I kmap 2 pages at once == slight risk of deadlock */
+                /* CAVEAT EMPTOR:
+                 * I kmap 2 pages at once == slight risk of deadlock */
                 LASSERT(niov > 0);
                 if (dstaddr == NULL) {
-                        dstaddr = (void *)((unsigned long)kmap(kiov->kiov_page) +
-                                           kiov->kiov_offset + offset);
+                        dstaddr = (void *)
+                                ((unsigned long)cfs_kmap(kiov->kiov_page) +
+                                 kiov->kiov_offset + offset);
                         dstfrag = kiov->kiov_len -  offset;
                 }
 
                 LASSERT(lod->lod_niov > 0);
                 if (srcaddr == NULL) {
-                        srcaddr = (void *)((unsigned long)kmap(lod->lod_iov.kiov->kiov_page) +
-                                           lod->lod_iov.kiov->kiov_offset + lod->lod_offset);
+                        srcaddr = (void *)
+                         ((unsigned long)cfs_kmap(lod->lod_iov.kiov->kiov_page)+
+                          lod->lod_iov.kiov->kiov_offset + lod->lod_offset);
                         srcfrag = lod->lod_iov.kiov->kiov_len - lod->lod_offset;
                 }
-                
+
                 fraglen = MIN(srcfrag, dstfrag);
                 if (fraglen > mlen)
                         fraglen = mlen;
-                
+
                 memcpy(dstaddr, srcaddr, fraglen);
-                
+
                 if (fraglen < dstfrag) {
                         dstfrag -= fraglen;
                         dstaddr = (void *)((unsigned long)dstaddr + fraglen);
                 } else {
-                        kunmap(kiov->kiov_page);
+                        cfs_kunmap(kiov->kiov_page);
                         dstaddr = NULL;
                         offset = 0;
                         kiov++;
@@ -712,7 +665,7 @@ lib_lo_rxkiov(lib_nal_t    *nal,
                         srcfrag -= fraglen;
                         srcaddr = (void *)((unsigned long)srcaddr + fraglen);
                 } else {
-                        kunmap(lod->lod_iov.kiov->kiov_page);
+                        cfs_kunmap(lod->lod_iov.kiov->kiov_page);
                         srcaddr = NULL;
                         lod->lod_offset = 0;
                         lod->lod_iov.kiov++;
@@ -723,10 +676,107 @@ lib_lo_rxkiov(lib_nal_t    *nal,
         } while (mlen > 0);
 
         if (dstaddr != NULL)
-                kunmap(kiov->kiov_page);
+                cfs_kunmap(kiov->kiov_page);
 
         if (srcaddr != NULL)
-                kunmap(lod->lod_iov.kiov->kiov_page);
+                cfs_kunmap(lod->lod_iov.kiov->kiov_page);
+
+        lib_finalize(nal, private, libmsg, PTL_OK);
+        return PTL_OK;
+}
+
+ptl_err_t
+lib_lo_txkiov (lib_nal_t    *nal,
+               void         *private,
+               lib_msg_t    *libmsg,
+               ptl_hdr_t    *hdr,
+               int           type,
+               ptl_nid_t     nid,
+               ptl_pid_t     pid,
+               unsigned int  payload_niov,
+               ptl_kiov_t   *payload_kiov,
+               size_t        payload_offset,
+               size_t        payload_nob)
+{
+        lo_desc_t lod = {
+                .lod_type     = LOD_KIOV,
+                .lod_niov     = payload_niov,
+                .lod_offset   = payload_offset,
+                .lod_nob      = payload_nob,
+                .lod_iov      = { .kiov = payload_kiov } };
+        ptl_err_t   rc;
+
+        rc = do_lib_parse(nal, hdr, &lod, 1);
+        if (rc == PTL_OK)
+                lib_finalize(nal, private, libmsg, PTL_OK);
+
+        return rc;
+}
+#endif
+
+ptl_err_t
+lib_lo_rxiov(lib_nal_t    *nal,
+             void         *private,
+             lib_msg_t    *libmsg,
+             unsigned int  niov,
+             struct iovec *iov,
+             size_t        offset,
+             size_t        mlen,
+             size_t        rlen)
+{
+        lo_desc_t *lod = (lo_desc_t *)private;
+
+        /* I only handle mapped->mapped matches */
+        LASSERT(lod->lod_type == LOD_IOV);
+        LASSERT(mlen > 0);
+
+        while (offset >= iov->iov_len) {
+                offset -= iov->iov_len;
+                iov++;
+                niov--;
+                LASSERT(niov > 0);
+        }
+
+        while (lod->lod_offset >= lod->lod_iov.iov->iov_len) {
+                lod->lod_offset -= lod->lod_iov.iov->iov_len;
+                lod->lod_iov.iov++;
+                lod->lod_niov--;
+                LASSERT(lod->lod_niov > 0);
+        }
+
+        do {
+                int fraglen = MIN(iov->iov_len - offset,
+                                  lod->lod_iov.iov->iov_len - lod->lod_offset);
+
+                LASSERT(niov > 0);
+                LASSERT(lod->lod_niov > 0);
+
+                if (fraglen > mlen)
+                        fraglen = mlen;
+
+                memcpy((void *)((unsigned long)iov->iov_base + offset),
+                       (void *)((unsigned long)lod->lod_iov.iov->iov_base +
+                                lod->lod_offset),
+                       fraglen);
+
+                if (offset + fraglen < iov->iov_len) {
+                        offset += fraglen;
+                } else {
+                        offset = 0;
+                        iov++;
+                        niov--;
+                }
+
+                if (lod->lod_offset + fraglen < lod->lod_iov.iov->iov_len ) {
+                        lod->lod_offset += fraglen;
+                } else {
+                        lod->lod_offset = 0;
+                        lod->lod_iov.iov++;
+                        lod->lod_niov--;
+                }
+
+                mlen -= fraglen;
+        } while (mlen > 0);
 
         lib_finalize(nal, private, libmsg, PTL_OK);
         return PTL_OK;
@@ -756,35 +806,7 @@ lib_lo_txiov (lib_nal_t    *nal,
         rc = do_lib_parse(nal, hdr, &lod, 1);
         if (rc == PTL_OK)
                 lib_finalize(nal, private, libmsg, PTL_OK);
-        
-        return rc;
-}
 
-ptl_err_t
-lib_lo_txkiov (lib_nal_t    *nal,
-               void         *private,
-               lib_msg_t    *libmsg,
-               ptl_hdr_t    *hdr,
-               int           type,
-               ptl_nid_t     nid,
-               ptl_pid_t     pid,
-               unsigned int  payload_niov,
-               ptl_kiov_t   *payload_kiov,
-               size_t        payload_offset,
-               size_t        payload_nob)
-{
-        lo_desc_t lod = {
-                .lod_type     = LOD_KIOV,
-                .lod_niov     = payload_niov,
-                .lod_offset   = payload_offset,
-                .lod_nob      = payload_nob,
-                .lod_iov      = { .kiov = payload_kiov } };
-        ptl_err_t   rc;
-
-        rc = do_lib_parse(nal, hdr, &lod, 1);
-        if (rc == PTL_OK)
-                lib_finalize(nal, private, libmsg, PTL_OK);
-        
         return rc;
 }
 
@@ -796,12 +818,12 @@ lib_lo_recv (lib_nal_t *nal, void *private, lib_msg_t *msg, lib_md_t *md,
                 lib_finalize(nal, private, msg, PTL_OK);
                 return PTL_OK;
         }
-        
+
         if ((md->options & PTL_MD_KIOV) == 0)
                 return lib_lo_rxiov(nal, private, msg,
                                     md->md_niov, md->md_iov.iov,
                                     offset, mlen, rlen);
-        
+
         return lib_lo_rxkiov(nal, private, msg,
                              md->md_niov, md->md_iov.kiov,
                              offset, mlen, rlen);
@@ -846,7 +868,7 @@ lib_send (lib_nal_t *nal, void *private, lib_msg_t *msg,
                                                 0, NULL,
                                                 offset, len);
         }
-        
+
         if ((md->options & PTL_MD_KIOV) == 0) {
                 if (loopback)
                         return lib_lo_txiov(nal, private, msg,
@@ -859,7 +881,7 @@ lib_send (lib_nal_t *nal, void *private, lib_msg_t *msg,
                                                 md->md_niov, md->md_iov.iov,
                                                 offset, len);
         }
-        
+
         if (loopback)
                 return lib_lo_txkiov(nal, private, msg,
                                      hdr, type, nid, pid,
@@ -924,7 +946,7 @@ lib_drop_message (lib_nal_t *nal, void *private, ptl_hdr_t *hdr, int loopback)
  *
  */
 static ptl_err_t
-parse_put(lib_nal_t *nal, ptl_hdr_t *hdr, void *private, 
+parse_put(lib_nal_t *nal, ptl_hdr_t *hdr, void *private,
           lib_msg_t *msg, int loopback)
 {
         lib_ni_t        *ni = &nal->libnal_ni;
