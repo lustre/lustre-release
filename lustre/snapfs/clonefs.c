@@ -106,6 +106,7 @@ static void clonefs_read_inode(struct inode *inode)
 		inode->i_op = &clonefs_file_inode_ops;
 		if (inode->i_mapping)
 			inode->i_mapping->a_ops = &clonefs_file_address_ops;
+		inode->i_fop = &clonefs_file_file_ops;
 	} else if (S_ISDIR(inode->i_mode)) {
 		inode->i_op = &clonefs_dir_inode_ops;
 		inode->i_fop = &clonefs_dir_file_ops;
@@ -189,8 +190,8 @@ static void d_unalloc(struct dentry *dentry)
  */
 struct dentry *clonefs_lookup(struct inode *dir,  struct dentry *dentry)
 {
-	struct inode            *cache_dir;
-	struct dentry           *cache_dentry;
+	struct inode            *cache_dir = NULL;
+	struct dentry           *cache_dentry = NULL, *tmp = NULL;
 	struct inode            *cache_inode;
 	struct dentry           *result;
 	struct inode            *inode;
@@ -199,15 +200,22 @@ struct dentry *clonefs_lookup(struct inode *dir,  struct dentry *dentry)
 	ENTRY;
 
 	cache_dir = clonefs_get_inode(dir); 
+  	if (!cache_dir) 
+		RETURN(ERR_PTR(-ENOENT));
+		
+	tmp = dget(list_entry(cache_dir->i_dentry.next, struct dentry, d_alias));
 
-	cache_dentry = d_alloc(dentry->d_parent, &dentry->d_name);
+	cache_dentry = d_alloc(tmp->d_parent, &dentry->d_name);
+	
 	if (!cache_dentry) {
                 iput(cache_dir);
+		dput(tmp);
 		RETURN(ERR_PTR(-ENOENT));
 	}
 
         /* Lock cache directory inode. */
 	down(&cache_dir->i_sem);
+	dput(tmp);
         /*
          * Call underlying fs lookup function to set the 'd_inode' pointer
          * to the corresponding directory inode.
@@ -307,7 +315,7 @@ static int clonefs_readdir(struct file *file, void *dirent,
 	struct inode *cache_inode;
         struct file open_file;
 	struct dentry open_dentry;
-	struct inode *inode=file->f_dentry->d_inode;
+	struct inode *inode = file->f_dentry->d_inode;
 
 	ENTRY;
 

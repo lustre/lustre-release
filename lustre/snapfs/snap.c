@@ -116,6 +116,8 @@ int snap_do_cow(struct inode *inode, ino_t parent_ino, int del)
 	ind = snapops->create_indirect(inode, snap.index, snap.gen, parent_ino, del);
 	if(!ind)
 		RETURN(-EINVAL);		
+	init_filter_data(ind, 0);
+	set_filter_ops(cache, ind);		
 	iput(ind);
 	RETURN(0);
 }
