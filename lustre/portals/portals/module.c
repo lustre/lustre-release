@@ -50,7 +50,6 @@
 #include <linux/kp30.h>
 #include <linux/kpr.h>
 #include <linux/portals_compat25.h>
-#include <linux/lustre_idl.h>
 
 extern void (kping_client)(struct portal_ioctl_data *);
 

@@ -221,6 +221,25 @@ do {                                                                    \
 #define EXIT                            do { } while (0)
 #endif
 
+/* initial pid  */
+# if CRAY_PORTALS
+/* 
+ *
+ * 1) ptl_pid_t in cray portals is only 16 bits, not 32 bits, therefore this is too
+ * big.
+ *
+ * 2) the implementation of ernal in cray portals further restricts the pid space
+ * that may be used to 0 <= pid <= 255 (an 8 bit value).  Returns an error at nal
+ * init time for any pid outside this range.  Other nals in cray portals don't have
+ * this restriction.
+ * */
+#define LUSTRE_PTL_PID          9
+# else
+#define LUSTRE_PTL_PID          12345
+# endif
+
+#define LUSTRE_SRV_PTL_PID      LUSTRE_PTL_PID    
+
 #define PORTALS_CFG_VERSION 0x00010001;
 
 struct portals_cfg {

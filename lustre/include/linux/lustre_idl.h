@@ -137,10 +137,6 @@
 #define LUSTRE_LOG_VERSION  0x00050000
 #define LUSTRE_PBD_VERSION  0x00060000
 
-/* initial pid  */
-#define LUSTRE_PTL_PID          999999
-#define LUSTRE_SRV_PTL_PID      LUSTRE_PTL_PID    
-
 struct lustre_handle {
         __u64 cookie;
 };
