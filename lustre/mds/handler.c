@@ -434,6 +434,8 @@ static int mds_setup(struct obd_device *obddev, obd_count len, void *buf)
 {
         struct obd_ioctl_data* data = buf;
         struct mds_obd *mds = &obddev->u.mds;
+        struct super_operations *s_ops;
+        struct super_block *sb;
         struct vfsmount *mnt;
         int err;
         ENTRY;
@@ -443,15 +445,12 @@ static int mds_setup(struct obd_device *obddev, obd_count len, void *buf)
         err = PTR_ERR(mnt);
         if (IS_ERR(mnt)) {
                 CERROR("do_kern_mount failed: %d\n", err);
-                MOD_DEC_USE_COUNT;
-                RETURN(err);
+                GOTO(err_dec, err);
         }
 
-        mds->mds_sb = mnt->mnt_root->d_inode->i_sb;
-        if (!mds->mds_sb) {
-                MOD_DEC_USE_COUNT;
-                RETURN(-ENODEV);
-        }
+        sb = mds->mds_sb = mnt->mnt_root->d_inode->i_sb;
+        if (!sb)
+                GOTO(err_put, (err = -ENODEV));
 
         mds->mds_vfsmnt = mnt;
         mds->mds_fstype = strdup(data->ioc_inlbuf2);
@@ -462,18 +461,8 @@ static int mds_setup(struct obd_device *obddev, obd_count len, void *buf)
                 mds->mds_fsops = &mds_ext2_fs_ops;
         else {
                 CERROR("unsupported MDS filesystem type %s\n", mds->mds_fstype);
-                kfree(mds->mds_fstype);
-                MOD_DEC_USE_COUNT;
-                RETURN(-EPERM);
+                GOTO(err_kfree, (err = -EPERM));
         }
-
-        /*
-         * Replace the client filesystem delete_inode method with our own,
-         * so that we can clear the object ID before the inode is deleted.
-         * The fs_delete_inode method will call cl_delete_inode for us.
-        mds->mds_fsops->cl_delete_inode = mds->mds_sb->s_op->delete_inode;
-        mds->mds_sb->s_op->delete_inode = mds->mds_fsops->fs_delete_inode;
-         */
 
         mds->mds_ctxt.pwdmnt = mnt;
         mds->mds_ctxt.pwd = mnt->mnt_root;
@@ -484,19 +473,52 @@ static int mds_setup(struct obd_device *obddev, obd_count len, void *buf)
                                            "self", mds_handle);
         if (!mds->mds_service) {
                 CERROR("failed to start service\n");
-                RETURN(-EINVAL);
+                GOTO(err_kfree, (err = -EINVAL));
         }
 
         err = ptlrpc_start_thread(obddev, mds->mds_service, "lustre_mds");
-        if (err)
+        if (err) {
                 CERROR("cannot start thread\n");
-                /* FIXME: do we need to MOD_DEC_USE_COUNT here? */
+                GOTO(err_svc, err);
+        }
+
+        /*
+         * Replace the client filesystem delete_inode method with our own,
+         * so that we can clear the object ID before the inode is deleted.
+         * The fs_delete_inode method will call cl_delete_inode for us.
+         *
+         * We need to do this for the MDS superblock only, hence we install
+         * a modified copy of the original superblock method table.
+         *
+         * We still assume that there is only a single MDS client filesystem
+         * type, as we don't have access to the mds struct in * delete_inode.
+         */
+        OBD_ALLOC(s_ops, sizeof(*s_ops));
+        memcpy(s_ops, sb->s_op, sizeof(*s_ops));
+        mds->mds_fsops->cl_delete_inode = s_ops->delete_inode;
+        s_ops->delete_inode = mds->mds_fsops->fs_delete_inode;
+        sb->s_op = s_ops;
 
         RETURN(0);
+
+err_svc:
+        rpc_unregister_service(mds->mds_service);
+        OBD_FREE(mds->mds_service, sizeof(*mds->mds_service));
+err_kfree:
+        kfree(mds->mds_fstype);
+err_put:
+        unlock_kernel(); // XXX do we want/need this?
+        mntput(mds->mds_vfsmnt);
+        mds->mds_sb = 0;
+        lock_kernel();   // XXX do we want/need this?
+err_dec:
+        MOD_DEC_USE_COUNT;
+        return err;
 }
 
 static int mds_cleanup(struct obd_device * obddev)
 {
+        struct super_operations *s_ops = NULL;
         struct super_block *sb;
         struct mds_obd *mds = &obddev->u.mds;
 
@@ -508,7 +530,6 @@ static int mds_cleanup(struct obd_device * obddev)
         }
 
         ptlrpc_stop_thread(mds->mds_service);
-        rpc_unregister_service(mds->mds_service);
 
         if (!list_empty(&mds->mds_service->srv_reqs)) {
                 // XXX reply with errors and clean up
@@ -522,11 +543,15 @@ static int mds_cleanup(struct obd_device * obddev)
         if (!mds->mds_sb)
                 RETURN(0);
 
+        s_ops = sb->s_op;
+
         unlock_kernel();
         mntput(mds->mds_vfsmnt);
         mds->mds_sb = 0;
         kfree(mds->mds_fstype);
         lock_kernel();
+
+        OBD_FREE(s_ops, sizeof(*s_ops));
 
         MOD_DEC_USE_COUNT;
         RETURN(0);

@@ -147,8 +147,8 @@ static int mds_reint_create(struct mds_update_record *rec,
 
 out_reint_create:
         req->rq_rephdr->status = rc;
-        l_dput(de);
         l_dput(dchild);
+        l_dput(de);
         RETURN(0);
 }
 
@@ -204,8 +204,8 @@ static int mds_reint_unlink(struct mds_update_record *rec,
 
 out_unlink:
         req->rq_rephdr->status = rc;
-        l_dput(de);
         l_dput(dchild);
+        l_dput(de);
         RETURN(0);
 }
 
@@ -248,9 +248,9 @@ static int mds_reint_link(struct mds_update_record *rec,
 
  out_link:
         req->rq_rephdr->status = rc;
-        l_dput(de_src);
-        l_dput(de_tgt_dir);
         l_dput(dchild);
+        l_dput(de_tgt_dir);
+        l_dput(de_src);
         return 0;
 }
 
