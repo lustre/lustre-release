@@ -244,7 +244,7 @@ static int request_ioctl(struct inode *inode, struct file *file,
 
         ptlrpc_init_client(NULL, MDS_REQUEST_PORTAL, MDC_REPLY_PORTAL, &cl);
         conn = ptlrpc_uuid_to_connection("mds");
-        if (err) {
+        if (!conn) {
                 CERROR("cannot create client\n");
                 RETURN(-EINVAL);
         }
@@ -329,7 +329,7 @@ static int request_ioctl(struct inode *inode, struct file *file,
         }
 
         default:
-                RETURN(-EINVAL);
+                GOTO(out, err = -EINVAL);
         }
 
  out:
