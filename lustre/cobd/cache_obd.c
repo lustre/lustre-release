@@ -21,6 +21,10 @@
 
 #define DEBUG_SUBSYSTEM S_COBD
 
+#include <linux/version.h>
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
+#include <linux/init.h>
+#endif
 #include <linux/obd_support.h>
 #include <linux/lustre_lib.h>
 #include <linux/lustre_net.h>

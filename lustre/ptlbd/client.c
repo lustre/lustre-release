@@ -67,7 +67,6 @@ static int ptlbd_cl_setup(struct obd_device *obddev, obd_count len, void *buf)
          * from client_obd_connect.. *shrug*
          */
         INIT_LIST_HEAD(&imp->imp_chain);
-        imp->imp_last_xid = 0;
         imp->imp_max_transno = 0;
         imp->imp_peer_committed_transno = 0;
         imp->imp_level = LUSTRE_CONN_FULL;
@@ -107,9 +106,7 @@ static int ptlbd_cl_connect(struct lustre_handle *conn, struct obd_device *obd,
                 RETURN(rc);
 
         INIT_LIST_HEAD(&imp->imp_chain);
-        imp->imp_last_xid = 0;
         imp->imp_max_transno = 0;
-        imp->imp_peer_last_xid = 0;
         imp->imp_peer_committed_transno = 0;
         imp->imp_level = LUSTRE_CONN_FULL;
 
