@@ -216,8 +216,10 @@ setup_portals() {
 
 	case $NETWORK in
 	elan)  do_insmod $PORTALS/linux/rqswnal/kqswnal.o || exit -1
+                MYNID=
 		    ;;
 	tcp)   do_insmod $PORTALS/linux/socknal/ksocknal.o || exit -1
+                MYNID="mynid $LOCALHOST"
 		   ;;
 	*) 	fail "$0: unknown NETWORK '$NETWORK'" ;;
 	esac
@@ -226,7 +228,7 @@ setup_portals() {
 
 	$PTLCTL <<- EOF
 	network $NETWORK
-	mynid $LOCALHOST
+	$MYNID
 	connect $MDSNODE $PORT
 	add_uuid $MDSNODE $MDSNODE
 	connect $OSTNODE $PORT
@@ -539,7 +541,7 @@ cleanup_portals() {
 	do_rmmod ptlrpc
 	do_rmmod obdclass
 
-	#do_rmmod kqswnal
+	do_rmmod kqswnal
 	do_rmmod ksocknal
 	do_rmmod kptlrouter
 
