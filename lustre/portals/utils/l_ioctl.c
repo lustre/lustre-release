@@ -238,6 +238,11 @@ parse_dump(char * dump_file, int (*ioc_func)(int dev_id, int opc, void *))
 	
 #ifndef __CYGWIN__
 	fd = syscall(SYS_open, dump_file, O_RDONLY);
+        if (fd < 0) {
+                fprintf(stderr, "couldn't open %s: %s\n", dump_file, 
+                        strerror(errno));
+                exit(1);
+        }
 
 #ifndef SYS_fstat64
 # define __SYS_fstat__ SYS_fstat
