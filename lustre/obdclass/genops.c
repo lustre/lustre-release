@@ -64,10 +64,14 @@ void obd_cleanup_obdo_cache(void)
 /* map connection to client */
 struct obd_client *gen_client(const struct obd_conn *conn)
 {
-        struct obd_device * obddev = conn->oc_dev;
+        struct obd_device * obddev;
         struct list_head * lh, * next;
         struct obd_client * cli;
 
+        if (!conn)
+                return NULL;
+
+        obddev = conn->oc_dev;
         lh = next = &obddev->obd_gen_clients;
         while ((lh = lh->next) != &obddev->obd_gen_clients) {
                 cli = list_entry(lh, struct obd_client, cli_chain);
