@@ -26,3 +26,4 @@ ext3-o_direct-1-2.4.18-chaos.patch
 ext3-no-write-super-chaos.patch
 ext3-extents-2.4.18-chaos.patch
 ext3-extents-oflag-2.4.18-chaos.patch
+ext3-raw-lookup.patch
