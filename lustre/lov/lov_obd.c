@@ -832,7 +832,7 @@ static int lov_create(struct obd_export *exp, struct obdo *src_oa,
                 if (lsm_new != NULL) {
                         memcpy(lsm_new, lsm, newsize);
                         lsm_new->lsm_stripe_count = obj_alloc;
-                        OBD_FREE(lsm, newsize);
+                        OBD_FREE(lsm, oldsize);
                         lsm = lsm_new;
                 } else {
                         CWARN("'leaking' %d bytes\n", oldsize - newsize);
@@ -924,6 +924,8 @@ static int lov_destroy(struct obd_export *exp, struct obdo *oa,
                 if (lov->tgts[loi->loi_ost_idx].active == 0) {
                         CDEBUG(D_HA, "lov idx %d inactive\n", loi->loi_ost_idx);
                         /* Orphan clean up will (someday) fix this up. */
+                        if (oti != NULL && oa->o_valid & OBD_MD_FLCOOKIE)
+                                oti->oti_logcookies++;
                         continue;
                 }
 
