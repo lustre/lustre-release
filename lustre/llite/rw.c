@@ -303,7 +303,7 @@ static int ll_ap_refresh_count(void *data, int cmd)
         struct ll_async_page *llap;
         struct lov_stripe_md *lsm;
         struct page *page;
-        __u64 kms, retval;
+        __u64 kms;
         ENTRY;
 
         /* readpage queues with _COUNT_STABLE, shouldn't get here. */
@@ -1113,18 +1113,18 @@ int ll_writepage(struct page *page)
         struct ll_async_page *llap;
         int rc = 0;
         ENTRY;
-        
+
         LASSERT(!PageDirty(page));
         LASSERT(PageLocked(page));
-        
+
         exp = ll_i2obdexp(inode);
         if (exp == NULL)
                 GOTO(out, rc = -EINVAL);
-        
+
         llap = llap_from_page(page, LLAP_ORIGIN_WRITEPAGE);
         if (IS_ERR(llap))
                 GOTO(out, rc = PTR_ERR(llap));
-        
+
         page_cache_get(page);
         if (llap->llap_write_queued) {
                 LL_CDEBUG_PAGE(D_PAGE, page, "marking urgent\n");
