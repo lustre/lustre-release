@@ -77,13 +77,10 @@ int mdc_getstatus(struct lustre_handle *conn, struct ll_fid *rootfid,
 }
 
 int mdc_getlovinfo(struct obd_device *obd, struct lustre_handle *mdc_connh,
-                   uuid_t **uuids, struct ptlrpc_request **request)
+                   struct ptlrpc_request **request)
 {
         struct ptlrpc_request *req;
         struct mds_status_req *streq;
-        struct lov_obd *lov = &obd->u.lov;
-        struct client_obd *mdc = &lov->mdcobd->u.cli;
-        struct lov_desc *desc = &lov->desc;
         int rc, size[2] = {sizeof(*streq)};
         ENTRY;
 
@@ -95,28 +92,19 @@ int mdc_getlovinfo(struct obd_device *obd, struct lustre_handle *mdc_connh,
         *request = req;
         streq = lustre_msg_buf(req->rq_reqmsg, 0);
         streq->flags = HTON__u32(MDS_STATUS_LOV);
-        streq->repbuf = HTON__u32(8000);
+        streq->repbuf = HTON__u32(8192);
 
         /* prepare for reply */
         req->rq_level = LUSTRE_CONN_CON;
-        size[0] = sizeof(*desc);
-        size[1] = 8000;
+        size[0] = 512;
+        size[1] = 8192;
         req->rq_replen = lustre_msg_size(2, size);
 
         rc = ptlrpc_queue_wait(req);
         rc = ptlrpc_check_status(req, rc);
 
-        if (!rc) {
-                memcpy(desc, lustre_msg_buf(req->rq_repmsg, 0), sizeof(*desc));
-                *uuids = lustre_msg_buf(req->rq_repmsg, 1);
-                lov_unpackdesc(desc);
-                mdc->cl_max_mdsize = sizeof(struct lov_mds_md) +
-                        desc->ld_tgt_count * sizeof(struct lov_object_id);
-        }
-
-        EXIT;
  out:
-        return rc;
+        RETURN(rc);
 }
 
 

@@ -151,7 +151,7 @@ int mdc_enqueue(struct lustre_handle *conn, int lock_type,
                 struct dentry *de, struct lustre_handle *lockh, char *tgt,
                 int tgtlen, void *data, int datalen);
 int mdc_getlovinfo(struct obd_device *obd, struct lustre_handle *mdc_connh,
-                   uuid_t **uuids, struct ptlrpc_request **request);
+                   struct ptlrpc_request **request);
 int mdc_getstatus(struct lustre_handle *conn,
                   struct ll_fid *rootfid, __u64 *last_committed,
                   __u64 *last_xid, struct ptlrpc_request **);

@@ -33,6 +33,8 @@ static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
 {
         struct ptlrpc_request *req;
         struct lov_obd *lov = &obd->u.lov;
+        struct client_obd *mdc = &lov->mdcobd->u.cli;
+        struct lov_desc *desc = &lov->desc;
         struct lustre_handle mdc_conn;
         uuid_t *uuidarray;
         int rc, rc2;
@@ -52,7 +54,7 @@ static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
                 GOTO(out, rc = -EINVAL);
         }
 
-        rc = mdc_getlovinfo(obd, &mdc_conn, &uuidarray, &req);
+        rc = mdc_getlovinfo(obd, &mdc_conn, &req);
         rc2 = obd_disconnect(&mdc_conn);
         if (rc || rc2) {
                 CERROR("cannot get lov info or disconnect %d/%d\n", rc, rc2);
@@ -60,23 +62,36 @@ static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
         }
 
         /* sanity... */
-        if (strcmp(obd->obd_uuid, lov->desc.ld_uuid)) {
-                CERROR("lov uuid %s not on mds device (%s)\n",
-                       obd->obd_uuid, lov->desc.ld_uuid);
+        if (req->rq_repmsg->bufcount < 2 ||
+            req->rq_repmsg->buflens[0] < sizeof(*desc)) {
+                CERROR("invalid descriptor returned\n");
                 GOTO(out, rc = -EINVAL);
         }
-        if (lov->desc.ld_tgt_count > 1000) {
-                CERROR("configuration error: target count > 1000 (%d)\n",
-                       lov->desc.ld_tgt_count);
-                GOTO(out, rc = -EINVAL);
-        }
-        if (req->rq_repmsg->bufcount < 2 || req->rq_repmsg->buflens[1] <
-            sizeof(uuid_t) * lov->desc.ld_tgt_count) {
+
+        memcpy(desc, lustre_msg_buf(req->rq_repmsg, 0), sizeof(*desc));
+        lov_unpackdesc(desc);
+
+        if (req->rq_repmsg->buflens[1] < sizeof(*uuidarray)*desc->ld_tgt_count){
                 CERROR("invalid uuid array returned\n");
                 GOTO(out, rc = -EINVAL);
         }
 
-        lov->bufsize = sizeof(struct lov_tgt_desc) *  lov->desc.ld_tgt_count;
+        mdc->cl_max_mdsize = sizeof(struct lov_mds_md) +
+                desc->ld_tgt_count * sizeof(struct lov_object_id);
+
+        if (memcmp(obd->obd_uuid, desc->ld_uuid, sizeof(desc->ld_uuid))) {
+                CERROR("lov uuid %s not on mds device (%s)\n",
+                       obd->obd_uuid, desc->ld_uuid);
+                GOTO(out, rc = -EINVAL);
+        }
+
+        if (desc->ld_tgt_count > 1000) {
+                CERROR("configuration error: target count > 1000 (%d)\n",
+                       desc->ld_tgt_count);
+                GOTO(out, rc = -EINVAL);
+        }
+
+        lov->bufsize = sizeof(struct lov_tgt_desc) * desc->ld_tgt_count;
         OBD_ALLOC(lov->tgts, lov->bufsize);
         if (!lov->tgts) {
                 CERROR("Out of memory\n");
@@ -84,10 +99,10 @@ static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
         }
 
         uuidarray = lustre_msg_buf(req->rq_repmsg, 1);
-        for (i = 0 ; i < lov->desc.ld_tgt_count; i++)
-                memcpy(lov->tgts[i].uuid, uuidarray[i], sizeof(uuid_t));
+        for (i = 0 ; i < desc->ld_tgt_count; i++)
+                memcpy(lov->tgts[i].uuid, uuidarray[i], sizeof(*uuidarray));
 
-        for (i = 0 ; i < lov->desc.ld_tgt_count; i++) {
+        for (i = 0 ; i < desc->ld_tgt_count; i++) {
                 struct obd_device *tgt = class_uuid2obd(uuidarray[i]);
                 if (!tgt) {
                         CERROR("Target %s not attached\n", uuidarray[i]);
@@ -107,7 +122,7 @@ static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
 
  out_mem:
         if (rc) {
-                for (i = 0 ; i < lov->desc.ld_tgt_count; i++) {
+                for (i = 0 ; i < desc->ld_tgt_count; i++) {
                         rc2 = obd_disconnect(&lov->tgts[i].conn);
                         if (rc2)
                                 CERROR("BAD: Target %s disconnect error %d\n",
