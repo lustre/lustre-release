@@ -352,7 +352,7 @@ struct obd_export *class_new_export(struct obd_device *obddev)
         struct obd_export * export;
 
         export = kmem_cache_alloc(export_cachep, GFP_KERNEL);
-        if ( !export ) {
+        if (!export) {
                 CERROR("no memory! (minor %d)\n", obddev->obd_minor);
                 return NULL;
         }
@@ -384,7 +384,7 @@ void class_destroy_export(struct obd_export *exp)
         list_del(&exp->exp_conn_chain);
         if (exp->exp_connection) {
                 spin_unlock(&exp->exp_connection->c_lock);
-                ptlrpc_put_connection(exp->exp_connection);
+                //ptlrpc_put_connection(exp->exp_connection);
         }
 
         kmem_cache_free(export_cachep, exp);
@@ -415,7 +415,7 @@ int class_connect(struct lustre_handle *conn, struct obd_device *obd,
 
         conn->addr = (__u64) (unsigned long)export;
         conn->cookie = export->exp_cookie;
-        
+
         CDEBUG(D_IOCTL, "connect: addr %Lx cookie %Lx\n",
                (long long)conn->addr, (long long)conn->cookie);
         return 0;
@@ -535,7 +535,8 @@ int class_multi_cleanup(struct obd_device *obddev)
 
         for (i = 0; i < obddev->obd_multi_count; i++) {
                 int rc;
-                struct obd_device *obd = class_conn2obd(&obddev->obd_multi_conn[i]);
+                struct obd_device *obd =
+                        class_conn2obd(&obddev->obd_multi_conn[i]);
 
                 if (!obd) {
                         CERROR("no such device [i %d]\n", i);

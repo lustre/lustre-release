@@ -109,6 +109,11 @@ int ptlrpc_put_connection(struct ptlrpc_connection *c)
         int rc = 0;
         ENTRY;
 
+        if (c == NULL) {
+                CERROR("NULL connection\n");
+                RETURN(0);
+        }
+
         CDEBUG(D_INFO, "connection=%p refcount %d\n",
                c, atomic_read(&c->c_refcount) - 1);
         if (atomic_dec_and_test(&c->c_refcount)) {
