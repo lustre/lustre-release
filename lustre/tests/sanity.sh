@@ -628,6 +628,17 @@ test_24m() {
 }
 run_test 24m "Renaming a file to a hard link to itself ========="
 
+test_24n() {
+    f="$DIR/f24n"
+    # this stats the old file after it was renamed, so it should fail
+    touch ${f}
+    $CHECKSTAT ${f}
+    mv ${f} ${f}.rename
+    $CHECKSTAT ${f}.rename
+    $CHECKSTAT -a ${f}
+}
+run_test 24n "Statting the old file after renameing (Posix rename 2)"
+
 test_25a() {
 	echo '== symlink sanity ============================================='
 	mkdir $DIR/d25
@@ -1634,7 +1645,7 @@ test_61() {
 	multiop $f OSMWUc || error
 	sync
 }
-run_test 61 "mmap() writes don't make sync hang =========="
+run_test 61 "mmap() writes don't make sync hang ================"
 
 # bug 2330 - insufficient obd_match error checking causes LBUG
 test_62() {

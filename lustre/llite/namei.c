@@ -279,6 +279,10 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
                 if (rc)
                         RETURN(rc);
 
+                CDEBUG(D_DLMTRACE, "setting l_data to inode %p (%lu/%u)\n",
+                       inode, inode->i_ino, inode->i_generation);
+                mdc_set_lock_data(&it->d.lustre.it_lock_handle, inode);
+
                 /* If this is a stat, get the authoritative file size */
                 if (it->it_op == IT_GETATTR && S_ISREG(inode->i_mode) &&
                     ll_i2info(inode)->lli_smd != NULL) {
