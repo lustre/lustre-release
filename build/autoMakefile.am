@@ -5,4 +5,9 @@ EXTRA_DIST := Makefile Makefile.in.toplevel autoMakefile.am.toplevel	\
 	suse-functions.sh suse-post.sh suse-postun.sh			\
 	suse-trigger-script.sh.in README.kernel-source
 
+CONFIG_CLEAN_FILES := lustre.spec
+
+distclean: distclean-recursive
+	@true
+
 SUBDIRS := autoconf
