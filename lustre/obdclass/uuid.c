@@ -15,6 +15,7 @@
 #ifdef __KERNEL__
 #include <linux/ctype.h>
 #include <linux/kernel.h>
+#include <linux/sched.h>
 #include <linux/smp_lock.h>
 #else 
 #include <liblustre.h>
