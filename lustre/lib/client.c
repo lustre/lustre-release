@@ -141,6 +141,7 @@ int client_obd_cleanup(struct obd_device *obddev, int force, int failover)
         struct client_obd *client = &obddev->u.cli;
 
         class_destroy_import(client->cl_import);
+        client->cl_import = NULL;
         return 0;
 }
 
@@ -233,8 +234,11 @@ int ptlrpc_import_connect(struct lustre_handle *conn, struct obd_device *obd,
 
         imp->imp_level = LUSTRE_CONN_CON;
         rc = ptlrpc_queue_wait(request);
-        if (rc)
+        if (rc) {
+                class_export_put(imp->imp_export);
+                imp->imp_export = exp = NULL;
                 GOTO(out_req, rc);
+        }
 
         msg_flags = lustre_msg_get_op_flags(request->rq_repmsg);
         if (rq_opc == MDS_CONNECT || msg_flags & MSG_CONNECT_REPLAYABLE) {
