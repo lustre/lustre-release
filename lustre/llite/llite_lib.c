@@ -386,7 +386,8 @@ void ll_clear_inode(struct inode *inode)
         mdc_change_cbdata(&sbi->ll_mdc_conn, &fid, null_if_equal, inode);
 
         if (lli->lli_smd)
-                obd_change_cbdata(&sbi->ll_osc_conn, lli->lli_smd, null_if_equal, inode);
+                obd_change_cbdata(&sbi->ll_osc_conn, lli->lli_smd,
+                                  null_if_equal, inode);
 
         if (lli->lli_smd) {
                 obd_free_memmd(&sbi->ll_osc_conn, &lli->lli_smd);
@@ -547,7 +548,8 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
 
         if (attr->ia_valid & (ATTR_MTIME | ATTR_CTIME))
                 CDEBUG(D_INODE, "setting mtime %lu, ctime %lu, now = %lu\n",
-                       LTIME_S(attr->ia_mtime), LTIME_S(attr->ia_ctime), LTIME_S(CURRENT_TIME));
+                       LTIME_S(attr->ia_mtime), LTIME_S(attr->ia_ctime),
+                       LTIME_S(CURRENT_TIME));
         if (lsm)
                 attr->ia_valid &= ~ATTR_SIZE;
 
