@@ -537,12 +537,7 @@ static void osc_announce_cached(struct client_obd *cli, struct obdo *oa,
 {
         obd_flag bits = OBD_MD_FLBLOCKS|OBD_MD_FLGRANT;
 
-        /* XXX obd_brw_internal() might reuse obdo in it's loop thus
-         * hit the following assert. any actual meaning of this? temporarily
-         * disable it.
-         * in kernel mode, probably VFS will prevent it happen.
-         */
-        //LASSERT(!(oa->o_valid & bits));
+        LASSERT(!(oa->o_valid & bits));
 
         oa->o_valid |= bits;
         spin_lock(&cli->cl_loi_list_lock);
