@@ -46,16 +46,19 @@
  * is left in them.
  */
 
+#define LDLM_NUM_THREADS        4
 #define LDLM_NEVENTS	1024
 #define LDLM_NBUFS	10
 #define LDLM_BUFSIZE	(64 * 1024)
 #define LDLM_MAXREQSIZE	1024
 
+#define MDT_NUM_THREADS 8
 #define MDS_NEVENTS	1024
 #define MDS_NBUFS	10
 #define MDS_BUFSIZE	(64 * 1024)
 #define MDS_MAXREQSIZE	1024
 
+#define OST_NUM_THREADS 6
 #define OST_NEVENTS	min(num_physpages / 16, 32768UL)
 #define OST_NBUFS	min(OST_NEVENTS / 128, 256UL)
 #define OST_BUFSIZE	((OST_NEVENTS > 4096UL ? 128 : 64) * 1024)

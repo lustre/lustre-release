@@ -30,6 +30,7 @@
 #include <linux/poll.h>
 #include <linux/init.h>
 #include <linux/list.h>
+#include <linux/highmem.h>
 #include <asm/io.h>
 #include <asm/ioctls.h>
 #include <asm/system.h>
@@ -85,14 +86,16 @@ static int obd_class_release(struct inode * inode, struct file * file)
 }
 
 
-inline void obd_data2conn(struct lustre_handle *conn, struct obd_ioctl_data *data)
+static inline void obd_data2conn(struct lustre_handle *conn,
+                                 struct obd_ioctl_data *data)
 {
         conn->addr = data->ioc_addr;
         conn->cookie = data->ioc_cookie;
 }
 
 
-inline void obd_conn2data(struct obd_ioctl_data *data, struct lustre_handle *conn)
+static inline void obd_conn2data(struct obd_ioctl_data *data,
+                                 struct lustre_handle *conn)
 {
         data->ioc_addr = conn->addr;
         data->ioc_cookie = conn->cookie;
@@ -364,7 +367,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 if (OBP(obd, attach))
                         err = OBP(obd,attach)(obd, sizeof(*data), data);
                 if (err) {
-                        if(data->ioc_inlbuf2)                                                
+                        if(data->ioc_inlbuf2)
                                 OBD_FREE(obd->obd_name, strlen(obd->obd_name)+1);
                         obd->obd_type = NULL;
 
@@ -500,7 +503,6 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
         }
 
         case OBD_IOC_GETATTR: {
-
                 obd_data2conn(&conn, data);
                 err = obd_getattr(&conn, &data->ioc_obdo1, NULL);
                 if (!err)
@@ -662,6 +664,62 @@ static struct miscdevice obd_psdev = {
 
 void (*class_signal_connection_failure)(struct ptlrpc_connection *);
 
+#ifdef CONFIG_HIGHMEM
+#warning "using highmem accounting for deadlock avoidance"
+/* Allow at most 3/4 of the highmem mappings to be consumed by vector I/O
+ * requests.  This avoids deadlocks on servers which have a lot of clients
+ * doing vector I/O.  We don't need to do this for non-vector I/O requests
+ * because singleton requests will just block on the kmap itself and never
+ * deadlock waiting for additional kmaps to complete.
+ */
+#define OBD_HIGHMEM_MAX (LAST_PKMAP * 3 / 4)
+static atomic_t obd_highmem_count = ATOMIC_INIT(OBD_HIGHMEM_MAX);
+static DECLARE_WAIT_QUEUE_HEAD(obd_highmem_waitq);
+
+void obd_highmem_get(int count)
+{
+        //CERROR("getting %d kmap counts (%d/%d)\n", count,
+        //       atomic_read(&obd_highmem_count), OBD_HIGHMEM_MAX);
+        if (count == 1)
+                atomic_dec(&obd_highmem_count);
+        else while (atomic_add_negative(-count, &obd_highmem_count)) {
+                static long next_show = 0;
+                static int skipped = 0;
+
+                CDEBUG(D_OTHER, "negative kmap reserved count: %d\n",
+                       atomic_read(&obd_highmem_count));
+                atomic_add(count, &obd_highmem_count);
+
+                if (time_after(jiffies, next_show)) {
+                        CERROR("blocking %s (and %d others) for kmaps\n",
+                               current->comm, skipped);
+                        next_show = jiffies + 5*HZ;
+                        skipped = 0;
+                } else
+                        skipped++;
+                wait_event(obd_highmem_waitq,
+                           atomic_read(&obd_highmem_count) >= count);
+        }
+}
+
+void obd_highmem_put(int count)
+{
+        atomic_add(count, &obd_highmem_count);
+        /* Wake up sleepers.  Sadly, this wakes up all of the tasks at once.
+         * We should have something smarter here like:
+        while (atomic_read(&obd_highmem_count) > 0)
+                wake_up_nr(obd_highmem_waitq, 1);
+        although we would need to set somewhere (probably obd_class_init):
+        obd_highmem_waitq.flags |= WQ_EXCLUSIVE;
+        for now the wait_event() condition will handle this OK I believe.
+         */
+        wake_up(&obd_highmem_waitq);
+}
+
+EXPORT_SYMBOL(obd_highmem_get);
+EXPORT_SYMBOL(obd_highmem_put);
+#endif
+
 EXPORT_SYMBOL(obd_dev);
 EXPORT_SYMBOL(obdo_cachep);
 EXPORT_SYMBOL(obd_memory);
@@ -715,13 +773,13 @@ static int __init init_obdclass(void)
                 obd->obd_minor = i;
 
         err = obd_init_caches();
-        
+
         if (err)
                 return err;
         obd_sysctl_init();
-        
+
         err=lprocfs_reg_main();
-        
+
         return 0;
 }
 
@@ -742,7 +800,7 @@ static void __exit cleanup_obdclass(void)
 
         obd_cleanup_caches();
         obd_sysctl_clean();
-        
+
         err = lprocfs_dereg_main();
 
         CERROR("obd memory leaked: %ld bytes\n", obd_memory);

@@ -575,8 +575,6 @@ out:
         return 0;
 }
 
-#define OST_NUM_THREADS 6
-
 /* mount the file system (secretly) */
 static int ost_setup(struct obd_device *obddev, obd_count len, void *buf)
 {
@@ -613,7 +611,7 @@ static int ost_setup(struct obd_device *obddev, obd_count len, void *buf)
 
         ost->ost_service = ptlrpc_init_svc(OST_NEVENTS, OST_NBUFS,
                                            OST_BUFSIZE, OST_MAXREQSIZE,
-                                           OST_REQUEST_PORTAL, OSC_REPLY_PORTAL, 
+                                           OST_REQUEST_PORTAL, OSC_REPLY_PORTAL,
                                            "self", ost_handle, "ost");
         if (!ost->ost_service) {
                 CERROR("failed to start service\n");

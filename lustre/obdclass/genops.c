@@ -92,7 +92,7 @@ int ll_sync_brw_cb(struct brw_cb_data *brw_cbd, int err, int phase)
                 if (atomic_dec_and_test(&brw_cbd->brw_refcount))
                         OBD_FREE(brw_cbd, sizeof(*brw_cbd));
                 RETURN(err);
-        } else                
+        } else
                 LBUG();
         EXIT;
         return 0;

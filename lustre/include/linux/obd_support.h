@@ -23,8 +23,10 @@
 #ifndef _OBD_SUPPORT
 #define _OBD_SUPPORT
 
+#include <linux/config.h>
 #include <linux/autoconf.h>
 #include <linux/slab.h>
+#include <linux/highmem.h>
 #include <linux/kp30.h>
 
 /* global variables */
@@ -127,8 +129,8 @@ do {                                                                         \
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 #define ll_bdevname(a) __bdevname((a))
 #define ll_lock_kernel lock_kernel()
-#else 
-#define ll_lock_kernel 
+#else
+#define ll_lock_kernel
 #define ll_bdevname(a) bdevname((a))
 #endif
 
@@ -174,4 +176,11 @@ do {                                                                    \
         (ptr) = (void *)0xdeadbeef;                                     \
 } while (0)
 
+#ifdef CONFIG_HIGHMEM
+extern void obd_highmem_get(int count);
+extern void obd_highmem_put(int count);
+#else
+#define obd_highmem_get(count) do {} while (0)
+#define obd_highmem_put(count) do {} while (0)
+#endif
 #endif

@@ -1468,7 +1468,6 @@ int mds_detach(struct obd_device *dev)
 
 }
 
-#define MDT_NUM_THREADS 8
 static int mdt_setup(struct obd_device *obddev, obd_count len, void *buf)
 {
         int i;
