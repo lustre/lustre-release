@@ -1,3 +1,4 @@
+# Lustre test Makefile
 DEFS=
 CPPFLAGS = -I. -I$(PORTALS)/include -I$(top_srcdir)/include -D_LARGEFILE64_SOURCE
 CFLAGS := -g -Wall

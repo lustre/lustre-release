@@ -1,3 +1,4 @@
+# Administration utilities Makefile
 DEFS=
 
 CFLAGS:=-g -O2 -I. -I/usr/include/libxml2 -I/usr/include/glib-1.2 -I$(PORTALS)/include \
