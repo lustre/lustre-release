@@ -295,46 +295,59 @@ static int lov_destroy(struct lustre_handle *conn, struct obdo *oa,
         RETURN(rc);
 }
 
-static int lov_getattr(struct lustre_handle *conn, struct obdo *oa, 
+static int lov_getattr(struct lustre_handle *conn, struct obdo *oa,
                        struct lov_stripe_md *md)
 {
         int rc = 0, i;
         struct obdo tmp;
         struct obd_export *export = class_conn2export(conn);
         struct lov_obd *lov;
+        int set = 0;
         ENTRY;
 
-        if (!md) { 
-                CERROR("LOV requires striping ea for desctruction\n"); 
-                RETURN(-EINVAL); 
+        if (!md) {
+                CERROR("LOV requires striping ea for desctruction\n");
+                RETURN(-EINVAL);
         }
 
-        if (!export || !export->exp_obd) 
-                RETURN(-ENODEV); 
+        if (!export || !export->exp_obd)
+                RETURN(-ENODEV);
 
         lov = &export->exp_obd->u.lov;
         oa->o_size = 0;
+        oa->o_blocks = 0;
         for (i = 0; i < md->lmd_stripe_count; i++) {
+                int err;
+
                 if (md->lmd_oinfo[i].loi_id == 0)
                         continue;
-                /* create data objects with "parent" OA */ 
-                memcpy(&tmp, oa, sizeof(tmp));
-                tmp.o_id = md->lmd_oinfo[i].loi_id; 
 
-                rc = obd_getattr(&lov->tgts[i].conn, &tmp, NULL);
-                if (rc) { 
-                        CERROR("Error getattr object %Ld on %d\n",
-                               tmp.o_id, i); 
+                /* create data objects with "parent" OA */
+                memcpy(&tmp, oa, sizeof(tmp));
+                tmp.o_id = md->lmd_oinfo[i].loi_id;
+
+                err = obd_getattr(&lov->tgts[i].conn, &tmp, NULL);
+                if (err) {
+                        CERROR("Error getattr object %Ld on %d: err = %d\n",
+                               tmp.o_id, i, err);
+                        if (!rc)
+                                rc = err;
+                        continue; /* XXX or break? */
                 }
-                /* XXX can do something more sophisticated here... */
-                /* This some completely wrong. We only need the size from 
-                   the individual slices. */
-                if (i == 0 ) {
-                        obd_id id = oa->o_id;
-                        memcpy(oa, &tmp, sizeof(tmp));
-                        oa->o_id = id;
+                if (!set) {
+                        obdo_cpy_md(oa, &tmp, tmp.o_valid);
+                        set = 1;
                 } else {
-                        oa->o_size += tmp.o_size;
+                        if (tmp.o_valid & OBD_MD_FLSIZE)
+                                oa->o_size += tmp.o_size;
+                        if (tmp.o_valid & OBD_MD_FLBLOCKS)
+                                oa->o_blocks += tmp.o_blocks;
+                        if (tmp.o_valid & OBD_MD_FLCTIME &&
+                            oa->o_ctime < tmp.o_ctime)
+                                oa->o_ctime = tmp.o_ctime;
+                        if (tmp.o_valid & OBD_MD_FLMTIME &&
+                            oa->o_mtime < tmp.o_mtime)
+                                oa->o_mtime = tmp.o_mtime;
                 }
         }
         RETURN(rc);
@@ -667,8 +680,8 @@ static int lov_enqueue(struct lustre_handle *conn, struct lov_stripe_md *md,
         RETURN(rc);
 }
 
-static int lov_cancel(struct lustre_handle *conn, struct lov_stripe_md *md, __u32 mode,
-                      struct lustre_handle *lockhs)
+static int lov_cancel(struct lustre_handle *conn, struct lov_stripe_md *md,
+                      __u32 mode, struct lustre_handle *lockhs)
 {
         int rc = 0, i;
         struct obd_export *export = class_conn2export(conn);
@@ -701,7 +714,53 @@ static int lov_cancel(struct lustre_handle *conn, struct lov_stripe_md *md, __u3
         RETURN(rc);
 }
 
+static int lov_statfs(struct lustre_handle *conn, struct statfs *sfs)
+{
+        struct obd_export *export = class_conn2export(conn);
+        struct lov_obd *lov;
+        struct statfs lov_sfs;
+        int set = 0;
+        int rc = 0;
+        int i;
+        ENTRY;
 
+        if (!export || !export->exp_obd)
+                RETURN(-ENODEV);
+
+        lov = &export->exp_obd->u.lov;
+
+        /* We only get block data from the OBD */
+        for (i = 0 ; i < lov->desc.ld_tgt_count; i++) {
+                int err;
+
+                err = obd_statfs(&lov->tgts[i].conn, &lov_sfs);
+                if (err) {
+                        CERROR("Error statfs OSC %s on %d: err = %d\n",
+                               lov->tgts[i].uuid, i, err);
+                        if (!rc)
+                                rc = err;
+                        continue; /* XXX or break? - probably OK to continue */
+                }
+                if (!set) {
+                        memcpy(sfs, &lov_sfs, sizeof(lov_sfs));
+                        set = 1;
+                } else {
+                        sfs->f_bfree += lov_sfs.f_bfree;
+                        sfs->f_bavail += lov_sfs.f_bavail;
+                        sfs->f_blocks += lov_sfs.f_blocks;
+                        /* XXX not sure about this one - depends on policy.
+                         *   - could be minimum if we always stripe on all OBDs
+                         *     (but that would be wrong for any other policy,
+                         *     if one of the OBDs has no more objects left)
+                         *   - could be sum if we stripe whole objects
+                         *   - could be average, just to give a nice number
+                         *   - we just pick first OST and hope it is enough
+                        sfs->f_ffree += lov_sfs.f_ffree;
+                         */
+                }
+        }
+        RETURN(rc);
+}
 
 
 struct obd_ops lov_obd_ops = {
@@ -712,6 +771,7 @@ struct obd_ops lov_obd_ops = {
         o_destroy:     lov_destroy,
         o_getattr:     lov_getattr,
         o_setattr:     lov_setattr,
+        o_statfs:      lov_statfs,
         o_open:        lov_open,
         o_close:       lov_close,
         o_brw:         lov_brw,
