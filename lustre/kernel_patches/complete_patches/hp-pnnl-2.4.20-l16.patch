@@ -67,17 +67,71 @@ diff -u -r kernel-2.4.20/drivers/ide/ide-disk.c kernel-2.4.20-l15/drivers/ide/id
  	if (IDE_CONTROL_REG)
  		OUT_BYTE(drive->ctl,IDE_CONTROL_REG);
  
+ fs/ext3/Makefile   |    2 ++
+ fs/ext3/super.c    |    2 +-
+ include/linux/fs.h |    1 +
+ kernel/ksyms.c     |    5 +++++
+ 4 files changed, 9 insertions(+), 1 deletion(-)
+
+--- linux/fs/ext3/Makefile~exports_2.4.20	Wed Apr  9 10:07:14 2003
++++ linux-mmonroe/fs/ext3/Makefile	Wed Apr  9 10:19:53 2003
+@@ -9,6 +9,8 @@
+ 
+ O_TARGET := ext3.o
+ 
++export-objs :=	super.o
++
+ obj-y    := balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o \
+ 		ioctl.o namei.o super.o symlink.o
+ obj-m    := $(O_TARGET)
+--- linux/fs/ext3/super.c~exports_2.4.20	Wed Apr  9 10:07:14 2003
++++ linux-mmonroe/fs/ext3/super.c	Wed Apr  9 10:19:53 2003
+@@ -1769,7 +1769,7 @@ static void __exit exit_ext3_fs(void)
+ 	unregister_filesystem(&ext3_fs_type);
+ }
+ 
+-EXPORT_NO_SYMBOLS;
++EXPORT_SYMBOL(ext3_bread);
+ 
+ MODULE_AUTHOR("Remy Card, Stephen Tweedie, Andrew Morton, Andreas Dilger, Theodore Ts'o and others");
+ MODULE_DESCRIPTION("Second Extended Filesystem with journaling extensions");
+--- linux/include/linux/fs.h~exports_2.4.20	Wed Apr  9 10:07:14 2003
++++ linux-mmonroe/include/linux/fs.h	Wed Apr  9 10:19:53 2003
+@@ -1020,6 +1020,7 @@ extern int unregister_filesystem(struct 
+ extern struct vfsmount *kern_mount(struct file_system_type *);
+ extern int may_umount(struct vfsmount *);
+ extern long do_mount(char *, char *, char *, unsigned long, void *);
++struct vfsmount *do_kern_mount(const char *type, int flags, char *name, void *data);
+ 
+ #define kern_umount mntput
+ 
+--- linux/kernel/ksyms.c~exports_2.4.20	Wed Apr  9 10:07:14 2003
++++ linux-mmonroe/kernel/ksyms.c	Wed Apr  9 10:19:53 2003
+@@ -308,6 +308,11 @@ EXPORT_SYMBOL(dcache_dir_fsync);
+ EXPORT_SYMBOL(dcache_readdir);
+ EXPORT_SYMBOL(dcache_dir_ops);
+ 
++/* lustre */
++EXPORT_SYMBOL(pagecache_lock_cacheline);
++EXPORT_SYMBOL(panic_notifier_list);
++EXPORT_SYMBOL(do_kern_mount);
++
+ /* for stackable file systems (lofs, wrapfs, cryptfs, etc.) */
+ EXPORT_SYMBOL(default_llseek);
+ EXPORT_SYMBOL(dentry_open);
+
+_
  arch/ia64/mm/init.c  |    6 +++++
  include/linux/slab.h |    1 
  kernel/ksyms.c       |    1 
  mm/slab.c            |   53 +++++++++++++++++++++++++++++++++++++++++++++++++++
  4 files changed, 61 insertions(+)
 
---- linux-2.4.20/arch/ia64/mm/init.c~kmem_cache_validate_hp	2003-04-08 23:34:12.000000000 -0600
-+++ linux-2.4.20-braam/arch/ia64/mm/init.c	2003-04-08 23:34:12.000000000 -0600
-@@ -45,6 +45,12 @@ static struct page *vmem_map;
+--- linux/arch/ia64/mm/init.c~kmem_cache_validate_hp	Wed Apr  9 11:09:46 2003
++++ linux-mmonroe/arch/ia64/mm/init.c	Wed Apr  9 11:12:23 2003
+@@ -45,6 +45,12 @@ unsigned long vmalloc_end = VMALLOC_END_
+ static struct page *vmem_map;
  static unsigned long num_dma_physpages;
- #endif
  
 +struct page *check_get_page(unsigned long kaddr)
 +{
@@ -88,8 +142,8 @@ diff -u -r kernel-2.4.20/drivers/ide/ide-disk.c kernel-2.4.20-l15/drivers/ide/id
  int
  do_check_pgt_cache (int low, int high)
  {
---- linux-2.4.20/include/linux/slab.h~kmem_cache_validate_hp	2003-04-08 23:34:12.000000000 -0600
-+++ linux-2.4.20-braam/include/linux/slab.h	2003-04-08 23:34:12.000000000 -0600
+--- linux/include/linux/slab.h~kmem_cache_validate_hp	Wed Apr  9 11:08:48 2003
++++ linux-mmonroe/include/linux/slab.h	Wed Apr  9 11:12:23 2003
 @@ -56,6 +56,7 @@ extern kmem_cache_t *kmem_cache_create(c
  extern int kmem_cache_destroy(kmem_cache_t *);
  extern int kmem_cache_shrink(kmem_cache_t *);
@@ -98,9 +152,9 @@ diff -u -r kernel-2.4.20/drivers/ide/ide-disk.c kernel-2.4.20-l15/drivers/ide/id
  extern void kmem_cache_free(kmem_cache_t *, void *);
  extern unsigned int kmem_cache_size(kmem_cache_t *);
  
---- linux-2.4.20/kernel/ksyms.c~kmem_cache_validate_hp	2003-04-08 23:34:12.000000000 -0600
-+++ linux-2.4.20-braam/kernel/ksyms.c	2003-04-08 23:34:12.000000000 -0600
-@@ -103,6 +103,7 @@ EXPORT_SYMBOL(kmem_find_general_cachep);
+--- linux/kernel/ksyms.c~kmem_cache_validate_hp	Wed Apr  9 11:12:20 2003
++++ linux-mmonroe/kernel/ksyms.c	Wed Apr  9 11:12:23 2003
+@@ -119,6 +119,7 @@ EXPORT_SYMBOL(kmem_find_general_cachep);
  EXPORT_SYMBOL(kmem_cache_create);
  EXPORT_SYMBOL(kmem_cache_destroy);
  EXPORT_SYMBOL(kmem_cache_shrink);
@@ -108,8 +162,8 @@ diff -u -r kernel-2.4.20/drivers/ide/ide-disk.c kernel-2.4.20-l15/drivers/ide/id
  EXPORT_SYMBOL(kmem_cache_alloc);
  EXPORT_SYMBOL(kmem_cache_free);
  EXPORT_SYMBOL(kmem_cache_size);
---- linux-2.4.20/mm/slab.c~kmem_cache_validate_hp	2003-04-08 23:34:12.000000000 -0600
-+++ linux-2.4.20-braam/mm/slab.c	2003-04-08 23:34:12.000000000 -0600
+--- linux/mm/slab.c~kmem_cache_validate_hp	Wed Apr  9 11:08:47 2003
++++ linux-mmonroe/mm/slab.c	Wed Apr  9 11:12:23 2003
 @@ -1205,6 +1205,59 @@ failed:
   * Called with the cache-lock held.
   */
