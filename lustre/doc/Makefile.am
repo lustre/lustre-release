@@ -2,7 +2,8 @@
 #
 # This code is issued under the GNU General Public License.
 # See the file COPYING in this distribution
-LYX2PDF = tex2pdf -overwrite
+LYX2PDF = $(srcdir)/tex2pdf -overwrite
+TEX2PDF = $(srcdir)/tex2pdf -overwrite
 LYX2PS = lyx --export ps
 LYX2TEX = lyx --export latex
 LYX2TXT = lyx --export text
@@ -24,7 +25,7 @@ CLEANFILES = *.aux *.tex doc.old/*.aux doc.old/*.tex *.eps
 VERSIONED = lustre-HOWTO.lyx lustre.lyx doc.old/lustre-HOWTO.lyx doc.old/lustre.lyx
 GENERATED = $(VERSIONED) lustre-full.tex lustre-chbar.tex
 
-EXTRA_DIST = chbar.sh postbar $(DOCS) $(IMAGES) $(LYXFILES) lustre.bib
+EXTRA_DIST = chbar.sh postbar tex2pdf $(DOCS) $(IMAGES) $(LYXFILES) lustre.bib
 
 all: $(DOCS)
 
@@ -57,6 +58,9 @@ $(VERSIONED) : %.lyx: %.lin Makefile
 
 .lyx.html:
 	@echo $(LYX2HTML) $< && $(LYX2HTML) $< || printf "\n*** Warning: not creating HTML docs; install lyx to rectify this\n"
+
+.tex.pdf:
+	$(TEX2PDF) $<
 
 .tex.dvi:
 	$(LATEX) $<
