@@ -211,6 +211,42 @@ static __inline__ struct obdo *obdo_fromid(struct obd_conn *conn, obd_id id)
 	return res;
 }
 
+static inline void obdo_from_iattr(struct obdo *oa, struct iattr *attr)
+{
+	unsigned int ia_valid = attr->ia_valid;
+
+	if (ia_valid & ATTR_ATIME) {
+		oa->o_atime = attr->ia_atime;
+		oa->o_valid |= OBD_MD_FLATIME;
+	}
+	if (ia_valid & ATTR_MTIME) {
+		oa->o_mtime = attr->ia_mtime;
+		oa->o_valid |= OBD_MD_FLMTIME;
+	}
+	if (ia_valid & ATTR_CTIME) {
+		oa->o_ctime = attr->ia_ctime;
+		oa->o_valid |= OBD_MD_FLCTIME;
+	}
+	if (ia_valid & ATTR_SIZE) {
+		oa->o_size = attr->ia_size;
+		oa->o_valid |= OBD_MD_FLSIZE;
+	}
+	if (ia_valid & ATTR_MODE) {
+		oa->o_mode = attr->ia_mode;
+		oa->o_valid |= OBD_MD_FLMODE;
+		if (!in_group_p(oa->o_gid) && !capable(CAP_FSETID))
+			oa->o_mode &= ~S_ISGID;
+	}
+	if (ia_valid & ATTR_UID)
+	{
+		oa->o_uid = attr->ia_uid;
+		oa->o_valid |= OBD_MD_FLUID;
+	}
+	if (ia_valid & ATTR_GID) {
+		oa->o_gid = attr->ia_gid;
+		oa->o_valid |= OBD_MD_FLGID;
+	}
+}
 
 
 static __inline__ void obdo_cpy_md(struct obdo *dst, struct obdo *src)

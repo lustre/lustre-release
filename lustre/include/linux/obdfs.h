@@ -22,6 +22,7 @@ int flushd_init(void);
 
 
 /* rw.c */
+int obdfs_do_writepage(struct inode *, struct page *, int sync);
 int obdfs_init_wreqcache(void);
 int obdfs_readpage(struct dentry *dentry, struct page *page);
 int obdfs_writepage(struct dentry *dentry, struct page *page);

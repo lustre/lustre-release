@@ -1,6 +1,7 @@
 /*
  * OBDFS Super operations
  *
+ * Copyright (C) 1996, 1997, Olaf Kirch <okir@monad.swb.de>
  * Copryright (C) 1999 Stelias Computing Inc, 
  *                (author Peter J. Braam <braam@stelias.com>)
  * Copryright (C) 1999 Seagate Technology Inc.
@@ -34,46 +35,50 @@
 
 int console_loglevel;
 
-/* VFS super_block ops */
-
-#if 0
-int obdfs_brw(struct inode *dir, int rw, struct page *page, int create)
+/* SYNCHRONOUS I/O for an inode */
+int obdfs_brw(int rw, struct inode *inode, struct page *page, int create)
 {
-	return IOPS(dir, brw)(rw, IID(dir), dir, page, create);
+	struct obdo *obdo;
+	int res;
+
+	obdo = obdo_alloc();
+	if ( ! obdo ) {
+		EXIT;
+		return -ENOMEM;
+	}
+
+	obdo->o_id = inode->i_ino;
+
+	res = IOPS(inode, brw)(rw, IID(inode), obdo, 
+			       (char *)page_address(page), 
+			       PAGE_SIZE,
+			       (page->index) >> PAGE_SHIFT,
+			       create);
+
+	obdo_to_inode(inode, obdo); /* copy o_blocks to i_blocks */
+	obdo_free(obdo);
+	
+	if ( res == PAGE_SIZE )
+		res = 0;
+	return res;
 }
-#endif
 
 /* returns the page unlocked, but with a reference */
 int obdfs_readpage(struct dentry *dentry, struct page *page)
 {
 	struct inode *inode = dentry->d_inode;
-	struct obdo *oa;
-	int err;
+	int rc;
 
         ENTRY;
 	PDEBUG(page, "READ");
-	oa = obdo_alloc();
-	if (!oa) {
-		printk("obdfs_readpage: obdo_alloc failure\n");
-		EXIT;
-		return -ENOMEM;
-	}
-
-	oa->o_id = inode->i_ino;
-	err = IOPS(inode, brw)(READ, IID(inode), oa, (char *)page_address(page),
-			       PAGE_SIZE, (page->index) << PAGE_SHIFT, 0);
-	obdo_to_inode(inode, oa); /* copy o_blocks to i_blocks */
-	obdo_free(oa);
-
-	if (err == PAGE_SIZE ) {
+	rc =  obdfs_brw(READ, inode, page, 0);
+	if (!rc) {
 		SetPageUptodate(page);
 		UnlockPage(page);
 	} 
 	PDEBUG(page, "READ");
-	if ( err == PAGE_SIZE ) 
-		err = 0;
 	EXIT;
-	return err;
+	return rc;
 }
 
 static kmem_cache_t *obdfs_wreq_cachep;
@@ -134,22 +139,12 @@ obdfs_remove_from_page_cache(struct obdfs_wreq *wreq)
 {
 	struct inode *inode = wreq->wb_inode;
 	struct page *page = wreq->wb_page;
-	struct obdo *oa;
-	int err;
+	int rc;
 
 	ENTRY;
 	CDEBUG(D_INODE, "removing inode %ld page %p, wreq: %p\n",
 	       inode->i_ino, page, wreq);
-	oa = obdo_alloc();
-	if (!oa) {
-		printk("obdfs_remove_from_page_cache: obdo_alloc failure\n");
-		EXIT;
-		return -ENOMEM;
-	}
-	oa->o_id = inode->i_ino;
-	err = IOPS(inode, brw)(WRITE, IID(inode), oa,(char *)page_address(page),
-			       PAGE_SIZE, (page->index) << PAGE_SHIFT, 1);
-	obdo_to_inode(inode, oa); /* copy o_blocks to i_blocks */
+	rc = obdfs_brw(WRITE, inode, page, 1);
 	/* XXX probably should handle error here somehow.  I think that
 	 *     ext2 also does the same thing - discard write even if error?
 	 */
@@ -158,7 +153,7 @@ obdfs_remove_from_page_cache(struct obdfs_wreq *wreq)
 	kmem_cache_free(obdfs_wreq_cachep, wreq);
 
 	EXIT;
-	return err;
+	return rc;
 }
 
 /*
@@ -199,21 +194,29 @@ obdfs_add_to_page_cache(struct inode *inode, struct page *page)
 }
 
 
-/* returns the page unlocked, but with a reference */
-int obdfs_writepage(struct dentry *dentry, struct page *page)
+int obdfs_do_writepage(struct inode *inode, struct page *page, int sync)
 {
-        struct inode *inode = dentry->d_inode;
-	int err;
+	int rc;
 
         ENTRY;
 	PDEBUG(page, "WRITEPAGE");
-	/* XXX flush stuff */
-	err = obdfs_add_to_page_cache(inode, page);
-
-	if (!err)
+	if ( sync ) {
+		rc = obdfs_brw(WRITE, inode, page, 1);
+	} else {
+		/* XXX flush stuff */
+		rc = obdfs_add_to_page_cache(inode, page);
+	}
+		
+	if (!rc)
 		SetPageUptodate(page);
 	PDEBUG(page,"WRITEPAGE");
-	return err;
+	return rc;
+}
+
+/* returns the page unlocked, but with a reference */
+int obdfs_writepage(struct dentry *dentry, struct page *page)
+{
+	return obdfs_do_writepage(dentry->d_inode, page, 0);
 }
 
 /*
@@ -225,29 +228,15 @@ int obdfs_writepage(struct dentry *dentry, struct page *page)
  * If the writer ends up delaying the write, the writer needs to
  * increment the page use counts until he is done with the page.
  */
-int obdfs_write_one_page(struct file *file, struct page *page,
-			 unsigned long offset, unsigned long bytes,
-			 const char * buf)
+int obdfs_write_one_page(struct file *file, struct page *page, unsigned long offset, unsigned long bytes, const char * buf)
 {
 	long status;
         struct inode *inode = file->f_dentry->d_inode;
 
 	ENTRY;
 	if ( !Page_Uptodate(page) ) {
-		struct obdo *oa;
-		oa = obdo_alloc();
-		if (!oa) {
-			printk("obdfs_write_one_page: obdo_alloc failure\n");
-			EXIT;
-			return -ENOMEM;
-		}
-		oa->o_id = inode->i_ino;
-		status = IOPS(inode, brw)(READ, IID(inode), oa,
-					  (char *)page_address(page), PAGE_SIZE,					  (page->index) << PAGE_SHIFT, 1);
-		obdo_to_inode(inode, oa); /* copy o_blocks to i_blocks */
-		obdo_free(oa);
-
-		if (status == PAGE_SIZE ) {
+		status =  obdfs_brw(READ, inode, page, 1);
+		if (!status) {
 			SetPageUptodate(page);
 		} else { 
 			return status;
@@ -268,18 +257,6 @@ int obdfs_write_one_page(struct file *file, struct page *page,
 		return bytes;
 }
 
-
-
-
-
-void report_inode(struct page * page) {
-	struct inode *inode = (struct inode *)0;
-	int offset = (int)&inode->i_data;
-	inode = (struct inode *)( (char *)page->mapping - offset);
-	if ( inode->i_sb->s_magic == 0x4711 )
-		printk("----> ino %ld , dev %d\n", inode->i_ino, inode->i_dev);
-}
-
 /* 
    return an up to date page:
     - if locked is true then is returned locked
@@ -288,14 +265,12 @@ void report_inode(struct page * page) {
 
    modeled on NFS code.
 */
-struct page *obdfs_getpage(struct inode *inode, unsigned long offset,
-			   int create, int locked)
+struct page *obdfs_getpage(struct inode *inode, unsigned long offset, int create, int locked)
 {
 	struct page *page_cache;
 	struct page ** hash;
 	struct page * page;
-	struct obdo *oa;
-	int err;
+	int rc;
 
         ENTRY;
 
@@ -311,7 +286,13 @@ struct page *obdfs_getpage(struct inode *inode, unsigned long offset,
 	hash = page_hash(&inode->i_data, offset);
 	page = grab_cache_page(&inode->i_data, offset);
 
-	PDEBUG(page, "obdfs_getpage: got page - before reading\n");
+	/* Yuck, no page */
+	if (! page) {
+	    printk("grab_cache_page says no dice ...\n");
+	    return 0;
+	}
+
+	PDEBUG(page, "GETPAGE: got page - before reading\n");
 	/* now check if the data in the page is up to date */
 	if ( Page_Uptodate(page)) { 
 		if (!locked)
@@ -320,26 +301,9 @@ struct page *obdfs_getpage(struct inode *inode, unsigned long offset,
 		return page;
 	} 
 
-	/* it's not: read it */
-	if (! page) {
-		printk("obdfs_getpage: says no dice ...\n");
-		return NULL;
-	}
+	rc = obdfs_brw(READ, inode, page, create);
 
-	oa = obdo_alloc();
-	if (!oa) {
-		printk("obdfs_getpage: obdo_alloc failure\n");
-		EXIT;
-		return NULL;
-	}
-	oa->o_id = inode->i_ino;
-	err = IOPS(inode, brw)(READ, IID(inode), oa, (char *)page_address(page),
-			       PAGE_SIZE, (page->index) << PAGE_SHIFT, create);
-
-	obdo_to_inode(inode, oa); /* XXX to copy o_blocks */
-	obdo_free(oa);
-
-	if ( err != PAGE_SIZE ) {
+	if ( rc != PAGE_SIZE ) {
 		SetPageError(page);
 		UnlockPage(page);
 		return page;
