@@ -393,7 +393,7 @@ struct super_operations ll_super_operations =
         read_inode2: ll_read_inode2,
         delete_inode: ll_delete_inode,
         put_super: ll_put_super,
-        // statfs: ll_statfs
+        statfs: ll_statfs
 };
 
 struct file_system_type lustre_lite_fs_type = {

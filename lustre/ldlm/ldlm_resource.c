@@ -40,45 +40,55 @@ struct ldlm_namespace *ldlm_namespace_find(__u32 id)
 }
 
 /* this must be called with ldlm_lock() held */
-static void res_hash_init(struct ldlm_namespace *ns)
+static int res_hash_init(struct ldlm_namespace *ns)
 {
         struct list_head *res_hash;
         struct list_head *bucket;
 
         if (ns->ns_hash != NULL)
-                return;
+                RETURN(0);
 
         /* FIXME: this memory appears to be leaked */
         OBD_ALLOC(res_hash, sizeof(*res_hash) * RES_HASH_SIZE);
-        if (!res_hash)
+        if (!res_hash) {
                 LBUG();
+                RETURN(-ENOMEM);
+        }
 
         for (bucket = res_hash + RES_HASH_SIZE - 1; bucket >= res_hash;
              bucket--)
                 INIT_LIST_HEAD(bucket);
 
         ns->ns_hash = res_hash;
+
+        return 0;
 }
 
 ldlm_error_t ldlm_namespace_new(struct obd_device *obddev, __u32 id,
                                 struct ldlm_namespace **ns_out)
 {
         struct ldlm_namespace *ns;
+        int rc;
 
         if (ldlm_namespace_find(id))
-                return -ELDLM_NAMESPACE_EXISTS;
+                RETURN(-ELDLM_NAMESPACE_EXISTS);
 
         OBD_ALLOC(ns, sizeof(*ns));
-        if (!ns)
+        if (!ns) {
                 LBUG();
+                RETURN(-ENOMEM);
+        }
 
         ns->ns_id = id;
         ns->ns_obddev = obddev;
         INIT_LIST_HEAD(&ns->ns_root_list);
 
+        rc = res_hash_init(ns);
+        if (rc) {
+                OBD_FREE(ns, sizeof(*ns));
+                RETURN(rc);
+        }
         list_add(&ns->ns_link, &ldlm_namespaces);
-
-        res_hash_init(ns); 
         atomic_set(&ns->ns_refcount, 0);
 
         *ns_out = ns;

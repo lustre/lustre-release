@@ -543,7 +543,7 @@ static int mds_prep(struct obd_device *obddev)
 
         rc = ptlrpc_start_thread(obddev, mds->mds_service, "lustre_mds");
         if (rc) {
-                CERROR("cannot start thread\n");
+                CERROR("cannot start thread: rc = %d\n", rc);
                 GOTO(err_svc, rc);
         }
 

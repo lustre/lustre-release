@@ -520,7 +520,7 @@ int osc_brw_write(struct obd_conn *conn, obd_count num_oa, struct obdo **oa,
                 GOTO(out, rc = -EINVAL);
 
         if (request->rq_repmsg->buflens[1] != pages * sizeof(struct niobuf)) {
-                CERROR("buffer length wrong (%d vs. %ld)\n",
+                CERROR("buffer length wrong (%d vs. %d)\n",
                        request->rq_repmsg->buflens[1],
                        pages * sizeof(struct niobuf));
                 GOTO(out, rc = -EINVAL);
