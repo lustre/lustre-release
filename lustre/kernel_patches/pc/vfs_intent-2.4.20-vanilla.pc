@@ -1,3 +1,4 @@
+fs/exec.c
 fs/dcache.c
 fs/namei.c
 fs/nfsd/vfs.c
