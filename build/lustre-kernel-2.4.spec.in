@@ -545,9 +545,12 @@ BuildObj ()
 	flavor=$1
 	if [ $flavor = "up" ] ; then
 		flavext=""
+		flavtgt=""
 	else
 		flavext="-$flavor"
+		flavtgt="$flavor"
 	fi
+        perl -p -i -e "s/^EXTRAVERSION.*/EXTRAVERSION = -%{kextraver}${flavtgt}/" $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}/Makefile
 	c="$RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}"
 	o="${c}-obj/%{_target_cpu}/$flavor"
 	mkdir -p $o
@@ -587,7 +590,6 @@ EOF
     mkdir -p $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}
     rm -f drivers/net/hamradio/soundmodem/gentbl scripts/mkdep
     tar cf - . | tar xf - -C $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}
-    perl -p -i -e "s/^EXTRAVERSION.*/EXTRAVERSION = -%{kextraver}custom/" $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}/Makefile
     ln -sf linux-%{KVERREL} $RPM_BUILD_ROOT/usr/src/linux
     # install -m 644 %{SOURCE10}  $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}
 
@@ -618,6 +620,7 @@ EOF
         %if %{buildup}
 	BuildObj up
         %endif
+        perl -p -i -e "s/^EXTRAVERSION.*/EXTRAVERSION = -%{kextraver}custom/" $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}/Makefile
 	# Remove $RPM_BUILD_ROOT prefix from symlinks.
 	for link in $(find $objdir -type l); do
 	    target=$(readlink $link)
@@ -625,6 +628,7 @@ EOF
 	    ln -s ${target/$RPM_BUILD_ROOT/} $link
 	done
     %else # 2.4 rh-style
+        perl -p -i -e "s/^EXTRAVERSION.*/EXTRAVERSION = -%{kextraver}custom/" $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}/Makefile
         cp ../lustre/kernel_patches/kernel_configs/kernel-%{kversion}-@LUSTRE_TARGET@-%{_target_cpu}%{dashtargetboard}.config $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}/.config
         for oc in oldconfig_nonint silentoldconfig oldconfig ; do
 	    if grep -q "$oc" $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}/Makefile ; then
