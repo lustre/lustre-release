@@ -463,7 +463,7 @@ int gen_copy_data(struct obd_conn *dst_conn, struct obdo *dst,
  *  ======== OBD IOCL Declarations ===========
  */
 struct oic_generic {
-	long	 att_connid;
+	uint32_t att_connid;
 	int	 att_typelen;
 	void	*att_type;
 	int	 att_datalen;
@@ -473,43 +473,43 @@ struct oic_generic {
 
 /* for preallocation */
 struct oic_prealloc_s {
-	uint32_t cli_id;
-	uint32_t alloc; /* user sets it to the number of inodes
-			 * requesting to be preallocated.  kernel
-			 * sets it to the actual number of
-			 * succesfully preallocated inodes */
-	obd_id  ids[32]; /* actual inode numbers */
+	uint32_t	 conn_id;
+	uint32_t	 alloc; /* user sets it to the number of inodes
+				 * requesting to be preallocated.  kernel
+				 * sets it to the actual number of
+				 * succesfully preallocated inodes */
+	obd_id		 ids[32]; /* actual inode numbers */
 };
 
 /* for getattr, setattr, create, destroy */
 struct oic_attr_s {
-	uint32_t conn_id;
-	struct obdo  obdo;
+	uint32_t	 conn_id;
+	struct obdo	 obdo;
 };
 
 /* for copy, migrate */
 struct ioc_mv_s {
-	uint32_t src_conn_id;
-	struct obdo  src;
-	uint32_t dst_conn_id;
-	struct obdo  dst;
+	uint32_t	 src_conn_id;
+	struct obdo	 src;
+	uint32_t	 dst_conn_id;
+	struct obdo	 dst;
 };
 
 /* for read/write */
 struct oic_rw_s {
-	uint32_t conn_id;
-	struct obdo obdo;
-	char * buf;
-	obd_size count;
-	obd_off offset;
+	uint32_t	 conn_id;
+	struct obdo	 obdo;
+	char		*buf;
+	obd_size	 count;
+	obd_off		 offset;
 };
 
 /* for punch, sync */
 struct oic_range_s {
-	uint32_t conn_id;
-	struct obdo obdo;
-	obd_size count;
-	obd_off offset;
+	uint32_t	 conn_id;
+	struct obdo	 obdo;
+	obd_size	 count;
+	obd_off		 offset;
 };
 
 

@@ -209,9 +209,9 @@ my $arg;
 
 my %commands =
     ('device' => {func => "Device", doc => "device <dev>: open another OBD device"},
-     'create' => {func => "Create", doc => "create: creates a new inode"},
-     'attach' => {func => "Attach", doc => "attach { ext2_obd | snap_obd snapdev snapidx tableno | scsi_obd adapter bus tid lun }" },
-     'detach' => {func => "Detach", doc => "detach this device"},
+     'create' => {func => "Create", doc => "create [<num> [<mode> [quiet]]]: create new object(s) (files, unless mode is given)"},
+     'attach' => {func => "Attach", doc => "attach { ext2_obd | snap_obd snapdev snapidx tableno | scsi_obd adapter bus tid lun }: attach this minor device to the specified driver" },
+     'detach' => {func => "Detach", doc => "detach this minor device"},
      'testext2iterator' => {func => "TestExt2Iterator", doc => "test ext2 iterator function"},
      'snapset' => {func => "SnapSetTable", doc => "snapset <tableno> <file>: set the table (created with snaptable) as table #tableno" },
      'snapprint' => {func => "SnapPrint", doc => "snapprint <tableno>: output the contents of table #tableno to the syslog"},
@@ -220,21 +220,21 @@ my %commands =
      'snaptable' => {func => "SnapShotTable", doc => "snaptable: build a snapshot table (interactive)"},
      'copy' => {func => "Copy", doc => "copy <srcid> <tgtid>: copy objects"},
      'migrate' => {func => "Migrate", doc => "migrate <srcid> <tgtid>: migrate data from one object to another"},
-     'format' => {func => "Format", doc => "format type adapter bus tid lun size"},
-     'partition' => {func => "Partition", doc => "partition type adapter bus tid lun partition size"},
+     'partition' => {func => "Partition", doc => "partition <type> <adapter> <bus> <tid> <lun> <partition> <size>: create a partition"},
+     'format' => {func => "Format", doc => "format <type> <adapter> <bus> <tid> <lun> <size>: format a partition"},
      'setup' => {func => "Setup", doc => "setup [type]: link this OBD device to the underlying device (default type ext2_obd)"},
      'connect' => {func => "Connect", doc => "connect: allocates client ID for this session"},
      'disconnect' => {func => "Disconnect", doc => "disconnect [id]: frees client resources"},
      'sync' => {func => "Sync", doc => "sync: flushes buffers to disk"},
-     'destroy' => {func => "Destroy", doc => "destroy <inode>: destroys an inode"},
+     'destroy' => {func => "Destroy", doc => "destroy <id>: destroys an object"},
      'cleanup' => {func => "Cleanup", doc => "cleanup the minor obd device"},
      'dec_use_count' => {func => "Decusecount", doc => "decreases the module use count so that the module can be removed following an oops"},
-     'read' => {func => "Read", doc => "read <inode> <count> [offset]"},
-     'fsread' => {func => "Read2", doc => "read <inode> <count> [offset]"},
-     'write' => {func => "Write", doc => "write <inode> <offset> <text>"},
-     'setattr' => {func => "Setattr", doc => "setattr <inode> [mode [uid [gid [size [atime [mtime [ctime]]]]]]]"},
-     'getattr' => {func => "Getattr", doc => "getattr <inode>: displays inode object attributes"},
-     'preallocate' => {func => "Preallocate", doc => "preallocate [num]: requests preallocation of num inodes."},
+     'read' => {func => "Read", doc => "read <id> <count> [offset]: read data from object"},
+     'fsread' => {func => "Read2", doc => "read <id> <count> [offset]: read data from object"},
+     'write' => {func => "Write", doc => "write <id> <offset> <text>: write data to object"},
+     'setattr' => {func => "Setattr", doc => "setattr <id> [mode [uid [gid [size [atime [mtime [ctime]]]]]]]: sets object attributes"},
+     'getattr' => {func => "Getattr", doc => "getattr <id>: displays object attributes"},
+     'preallocate' => {func => "Preallocate", doc => "preallocate [num]: requests preallocation of num objects."},
      'statfs' => {func => "Statfs", doc => "statfs: filesystem status information"},
      'help' => {func => \&Help,  doc => "help: this message"},
      'quit' => {func => \&Quit,  doc => "see \"exit\""},
@@ -317,8 +317,8 @@ sub process_line {
 sub execute_line {
     my $line = shift;
 
-    my @arg = split(' ', $line);
-    my $word = shift @arg;
+    my @cmdline = split(' ', $line);
+    my $word = shift @cmdline;
 
     my $cmd;
     if ( $file ) {
@@ -332,11 +332,11 @@ sub execute_line {
     }
 
     if ($cmd eq "help" || $cmd eq "exit" || $cmd eq "quit") {
-	return (&{$commands{$cmd}->{func}}(@arg));
+	return (&{$commands{$cmd}->{func}}(@cmdline));
     }
 
     # Call the function.
-    return (&{$commands{$cmd}->{func}}(@arg));
+    return (&{$commands{$cmd}->{func}}(@cmdline));
 }
 
 
@@ -846,7 +846,7 @@ sub Setup {
     # by type here
 
     if ($arg && !defined($::st = stat($arg))) {
-	    print "$arg is not a valid device\n";
+	    print "$dev is not a valid device\n";
 	    return;
     }
     
@@ -929,38 +929,52 @@ sub Disconnect {
 }
 
 sub Create {
-    my $arg = shift;
+    if (!defined($::client_id)) {
+	print "You must first ``connect''.\n";
+	return;
+    }
+
+    my $num = shift;
+    my $mode = shift;
     my $quiet = shift;
     my $rc;
     my $prealloc = 0;
 
-    if (defined($quiet) && $quiet ne "quiet") {
-	print "syntax: create [number of objects [quiet]]\n";
+    if (!defined($num)) {
+        $num = 1;
+    }
+
+    if (!defined($mode)) {
+        $mode = 0100644;	 # create a file (rw-r--r--) if not specified
+    }
+
+    if (scalar($num) < 1 || defined($quiet) && $quiet ne "quiet") {
+	print "usage: create [<number of objects> [<mode> [quiet]]]\n";
 	return;
     }
 
-    my $packed = pack("IL", $::client_id, $prealloc);
-    if (!defined($arg) || scalar($arg) < 2) {
-	print "Creating 1 object...\n";
-	$rc = ioctl(DEV_OBD, &OBD_IOC_CREATE, $packed);
-	if (!defined($quiet)) {
-	    my $obdo = obdo_unpack($packed, 4);
-	    print "Created object #$obdo->{id}.\n";
-	}
-    } else {
-	my $i;
+    my $i;
+    my $id = 0;			# can't currently request IDs
 
-	print "Creating " . scalar($arg) . " objects...\n";
-	for ($i = 0; $i < scalar($arg); $i++) {
-	    $rc = ioctl(DEV_OBD, &OBD_IOC_CREATE, $packed);
-	    my $ino = unpack("L", $packed);
-	    if ($rc ne "0 but true") {
-		last;
-		$packed = pack("IL", $::client_id, $prealloc);
-	    } elsif (!defined($quiet)) {
-		$packed = pack("IL", $::client_id, $prealloc);
-		print "Created object #$ino.\n";
-	    }
+    print "Creating " . scalar($num) . " object";
+    if (scalar($num) > 1) {
+	print "s";
+    }
+    print "\n";
+
+    for ($i = 0; $i < scalar($num); $i++) {
+	my $obdo;
+	$obdo->{id} = $id;
+	$obdo->{mode} = scalar($mode);
+	$obdo->{valid} = &OBD_MD_FLMODE;
+
+	my $packed = pack("I", $::client_id) . obdo_pack($obdo);
+	$rc = ioctl(DEV_OBD, &OBD_IOC_CREATE, $packed);
+	if ($rc ne "0 but true") {
+	    last;
+	} elsif (!defined($quiet)) {
+	    $obdo = obdo_unpack($packed, 4);
+	    print "Created object #$obdo->{id}.\n";
 	}
     }
 
@@ -992,15 +1006,15 @@ sub Destroy {
 	return;
     }
 
-    my $arg = shift;
+    my $id = shift;
 
-    if (!defined($arg) || scalar($arg) < 1) {
+    if (!defined($id) || scalar($id) < 1) {
 	print "usage: destroy <object number>\n";
 	return;
     }
 
-    print "Destroying object $arg...\n";
-    my $packed = pack("IL", $::client_id, $arg);
+    print "Destroying object $id...\n";
+    my $packed = pack("IL", $::client_id, $id);
     my $rc = ioctl(DEV_OBD, &OBD_IOC_DESTROY, $packed);
 
     if (!defined $rc) {
@@ -1108,11 +1122,11 @@ sub Read {
 	return;
     }
 
-    my $inode = shift;
+    my $id = shift;
     my $count = shift;
     my $offset = shift;
   
-    if (!defined($inode) || scalar($inode) < 1 || !defined($count) ||
+    if (!defined($id) || scalar($id) < 1 || !defined($count) ||
 	$count < 1 || (defined($offset) && $offset < 0)) {
 	print "invalid arguments; type \"help read\" for a synopsis\n";
 	return;
@@ -1123,14 +1137,18 @@ sub Read {
     }
 
     print("Reading $count bytes starting at byte $offset from object " .
-	  "$inode...\n");
+	  "$id...\n");
 
     # "allocate" a large enough buffer
     my $buf = sprintf("%${count}s", " ");
     die "suck" if (length($buf) != $count);
 
+    my $obdo;
+    $obdo->{id} = $id;
+
     # the perl we're using doesn't support pack type Q, and offset is 64 bits
-    my $packed = pack("ILpLLL", $::client_id, $inode, $buf, $count, $offset, 0);
+    my $packed = pack("L", $::client_id) . obdo_pack($obdo) .
+    		 pack("p LL LL", $buf, $count, $offset);
 
     my $rc = ioctl(DEV_OBD, &OBD_IOC_READ, $packed);
 
@@ -1157,11 +1175,11 @@ sub Read2 {
 	return;
     }
 
-    my $inode = shift;
+    my $id = shift;
     my $count = shift;
     my $offset = shift;
   
-    if (!defined($inode) || scalar($inode) < 1 || !defined($count) ||
+    if (!defined($id) || scalar($id) < 1 || !defined($count) ||
 	$count < 1 || (defined($offset) && $offset < 0)) {
 	print "invalid arguments; type \"help read\" for a synopsis\n";
 	return;
@@ -1172,14 +1190,18 @@ sub Read2 {
     }
 
     print("Reading $count bytes starting at byte $offset from object " .
-	  "$inode...\n");
+	  "$id...\n");
 
     # "allocate" a large enough buffer
     my $buf = sprintf("%${count}s", " ");
     die "suck" if (length($buf) != $count);
 
+    my $obdo;
+    $obdo->{id} = $id;
+
     # the perl we're using doesn't support pack type Q, and offset is 64 bits
-    my $packed = pack("ILpLLL", $::client_id, $inode, $buf, $count, $offset, 0);
+    my $packed = pack("L", $::client_id) . obdo_pack($obdo) .
+    		 pack("p LL LL", $buf, $count, $offset);
 
     my $rc = ioctl(DEV_OBD, &OBD_IOC_READ2, $packed);
 
@@ -1206,12 +1228,12 @@ sub Write {
 	return;
     }
 
-    my $inode = shift;
+    my $id = shift;
     my $offset = shift;
     my $text = join(' ', @_);
     my $count = length($text);
 
-    if (!defined($inode) || scalar($inode) < 1 || !defined($offset) ||
+    if (!defined($id) || scalar($id) < 1 || !defined($offset) ||
 	scalar($offset) < 0) {
 	print "invalid arguments; type \"help write\" for a synopsis\n";
 	return;
@@ -1223,10 +1245,15 @@ sub Write {
     }
 
     print("Writing $count bytes starting at byte $offset to object " .
-	  "$inode...\n");
+	  "$id...\n");
+
+    my $obdo;
+    $obdo->{id} = $id;
 
     # the perl we're using doesn't support pack type Q
-    my $packed = pack("ILpLLL", $::client_id, $inode, $text, $count, $offset, 0);
+    my $packed = pack("L", $::client_id) . obdo_pack($obdo) .
+    		 pack("p LL LL", $buf, $count, $offset);
+
     my $rc = ioctl(DEV_OBD, &OBD_IOC_WRITE, $packed);
 
     $retval = unpack("l", $packed);
@@ -1246,20 +1273,20 @@ sub Write {
 }
 
 sub Preallocate {
-    my $arg = shift;
+    my $num = shift;
 
     if (!defined($::client_id)) {
 	print "You must first ``connect''.\n";
 	return;
     }
 
-    if (!defined($arg) || scalar($arg) < 1 || scalar($arg) > 32) {
-	$arg = 32;
+    if (!defined($num) || scalar($num) < 1 || scalar($num) > 32) {
+	$num = 32;
     }
 
-    print "Preallocating $arg inodes...\n";
-    my $packed = pack("LLx128", $::client_id, $arg);
-    # client id, alloc, inodes[32]
+    print "Preallocating $num objects...\n";
+    # client id, alloc, id[32]
+    my $packed = pack("LLx128", $::client_id, $num);
 
     my $rc = ioctl(DEV_OBD, &OBD_IOC_PREALLOCATE, $packed);
 
@@ -1267,11 +1294,11 @@ sub Preallocate {
 	print STDERR "ioctl failed: $!\n";
     } elsif ($rc eq "0 but true") {
 	my $alloc = unpack("x4L", $packed);
-	my @inodes = unpack("x8L32", $packed);
+	my @ids = unpack("x8L32", $packed);
 	my $i;
 
-	print "Got $alloc inodes: ";
-	foreach $i (@inodes) {
+	print "Got $alloc objects: ";
+	foreach $i (@ids) {
 	    print $i . " ";
 	}
 	print "\nFinished (success)\n";
@@ -1332,12 +1359,12 @@ sub Statfs {
 }
 
 sub Help {
-    my $arg = shift;
+    my $cmd = shift;
 
-    if ( !$arg || !$commands{$arg} ) {
+    if ( !$cmd || !$commands{$cmd} ) {
 	print "Comands: ", join( ' ', @jcm_cmd_list), "\n";
     } else {
-	print "Usage: " .  $commands{$arg}->{doc} . "\n";
+	print "Usage: " .  $commands{$cmd}->{doc} . "\n";
     }
 }
 

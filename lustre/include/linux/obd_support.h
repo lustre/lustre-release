@@ -88,14 +88,14 @@ extern int obd_print_entry;
 #define ODEBUG(obdo) { \
 		printk("]]%s line %d[[  id %ld, atm %ld, mtm %ld, ctm %ld, size %ld, blocks %ld\n",\
 		       __FUNCTION__ , __LINE__, \
-		       (long)obdo->o_id, (long)obdo->o_atime,\
-		       (long)obdo->o_mtime, (long)obdo->o_ctime,\
-		       (long)obdo->o_size, (long)obdo->o_blocks);\
+		       (long)(obdo)->o_id,    (long)(obdo)->o_atime,\
+		       (long)(obdo)->o_mtime, (long)(obdo)->o_ctime,\
+		       (long)(obdo)->o_size,  (long)(obdo)->o_blocks);\
 		printk("]]%s line %d[[  mode %o, uid %d, gid %d, flg 0x%0x, obdflg 0x%0x, nlnk %d, valid 0x%0x\n", \
 		       __FUNCTION__ , __LINE__, \
-		       obdo->o_mode, obdo->o_uid, obdo->o_gid,\
-		       obdo->o_flags, obdo->o_obdflags, obdo->o_nlink,\
-		       obdo->o_valid);\
+		       (obdo)->o_mode,  (obdo)->o_uid,      (obdo)->o_gid,\
+		       (obdo)->o_flags, (obdo)->o_obdflags, (obdo)->o_nlink,\
+		       (obdo)->o_valid);\
 	}
 
 

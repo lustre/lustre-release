@@ -533,6 +533,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 			return err;
 
 		conn.oc_id = attr->conn_id;
+		ODEBUG(&attr->obdo);
 		err = OBP(obddev, getattr)(&conn, &attr->obdo);
 		if ( err ) {
 			EXIT;
@@ -562,8 +563,13 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 			return err;
 		}
 
+
 		err = OBP(obddev, read)(&conn, &rw_s->obdo, rw_s->buf, 
 					&rw_s->count, rw_s->offset);
+		
+		ODEBUG(&rw_s->obdo);
+		CDEBUG(D_INODE, "READ: conn %d, count %Ld, offset %Ld, '%s'\n",
+		       rw_s->conn_id, rw_s->count, rw_s->offset, rw_s->buf);
 		if ( err ) {
 			EXIT;
 			return err;
@@ -590,14 +596,18 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 			return err;
 		}
 
+		CDEBUG(D_INODE, "WRITE: conn %d, count %Ld, offset %Ld, '%s'\n",
+		       rw_s->conn_id, rw_s->count, rw_s->offset, rw_s->buf);
 		err = OBP(obddev, write)(&conn, &rw_s->obdo, rw_s->buf, 
 					 &rw_s->count, rw_s->offset);
+		ODEBUG(&rw_s->obdo);
 		if ( err ) {
 			EXIT;
 			return err;
 		}
 
-		err = copy_to_user((int*)arg, &rw_s->count, sizeof(rw_s->count));
+		err = copy_to_user((int *)arg, &rw_s->count,
+				   sizeof(rw_s->count));
 		EXIT;
 		return err;
 	}
@@ -621,7 +631,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 		if ( !OBT(obddev) || !OBP(obddev, preallocate) )
 			return -EOPNOTSUPP;
 
-		conn.oc_id = prealloc->cli_id;
+		conn.oc_id = prealloc->conn_id;
 		err = OBP(obddev, preallocate)(&conn, &prealloc->alloc,
 					       prealloc->ids);
 		if ( err ) {
