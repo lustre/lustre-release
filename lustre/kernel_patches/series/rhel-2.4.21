@@ -6,7 +6,7 @@ vfs_intent-2.4.21-rhel.patch
 invalidate_show-2.4.20-rh.patch
 iod-rmap-exports-2.4.21-chaos.patch 
 export-truncate.patch
-ext3-htree-2.4.21-chaos.patch 
+ext3-htree-2.4.21-rhel.patch 
 linux-2.4.21-xattr-0.8.54-chaos.patch 
 ext3-ino_sb_macro-2.4.21-chaos.patch
 ext3-orphan_lock-2.4.22-rh.patch

@@ -530,8 +530,8 @@ static int ll_mknod_raw(struct nameidata *nd, int mode, dev_t rdev)
         int err = -EMLINK;
         ENTRY;
 
-        CDEBUG(D_VFSTRACE, "VFS Op:name=%s,dir=%lu/%u(%p)\n",
-               nd->last.name, dir->i_ino, dir->i_generation, dir);
+        CDEBUG(D_VFSTRACE, "VFS Op:name=%*s,dir=%lu/%u(%p)\n",
+               nd->last.len, nd->last.name, dir->i_ino, dir->i_generation, dir);
 
         if (dir->i_nlink >= EXT3_LINK_MAX)
                 RETURN(err);
@@ -628,8 +628,9 @@ static int ll_symlink_raw(struct nameidata *nd, const char *tgt)
         int err = -EMLINK;
         ENTRY;
 
-        CDEBUG(D_VFSTRACE, "VFS Op:name=%s,dir=%lu/%u(%p),target=%s\n",
-               nd->last.name, dir->i_ino, dir->i_generation, dir, tgt);
+        CDEBUG(D_VFSTRACE, "VFS Op:name=%*s,dir=%lu/%u(%p),target=%s\n",
+               nd->last.len, nd->last.name, dir->i_ino, dir->i_generation,
+               dir, tgt);
 
         if (dir->i_nlink >= EXT3_LINK_MAX)
                 RETURN(err);
@@ -656,9 +657,11 @@ static int ll_link_raw(struct nameidata *srcnd, struct nameidata *tgtnd)
         struct ll_sb_info *sbi = ll_i2sbi(dir);
 
         ENTRY;
-        CDEBUG(D_VFSTRACE, "VFS Op:name=%s inode=%lu/%u(%p), dir=%lu/%u(%p), "
-               "target=%s\n", srcnd->last.name, src->i_ino, src->i_generation,
-               src, dir->i_ino, dir->i_generation, dir, tgtnd->last.name);
+        CDEBUG(D_VFSTRACE,
+               "VFS Op:name=%*s inode=%lu/%u(%p), dir=%lu/%u(%p), target=%*s\n",
+               srcnd->last.len, srcnd->last.name, src->i_ino, src->i_generation,
+               src, dir->i_ino, dir->i_generation, dir,
+               tgtnd->last.len, tgtnd->last.name);
 
         ll_prepare_mdc_op_data(&op_data, src, dir, tgtnd->last.name,
                                tgtnd->last.len, 0);
@@ -680,8 +683,8 @@ static int ll_mkdir_raw(struct nameidata *nd, int mode)
         struct mdc_op_data op_data;
         int err = -EMLINK;
         ENTRY;
-        CDEBUG(D_VFSTRACE, "VFS Op:name=%s,dir=%lu/%u(%p)\n",
-               nd->last.name, dir->i_ino, dir->i_generation, dir);
+        CDEBUG(D_VFSTRACE, "VFS Op:name=%*s,dir=%lu/%u(%p)\n",
+               nd->last.len, nd->last.name, dir->i_ino, dir->i_generation, dir);
 
         if (dir->i_nlink >= EXT3_LINK_MAX)
                 RETURN(err);
@@ -705,8 +708,8 @@ static int ll_rmdir_raw(struct nameidata *nd)
         struct mdc_op_data op_data;
         int rc;
         ENTRY;
-        CDEBUG(D_VFSTRACE, "VFS Op:name=%s,dir=%lu/%u(%p)\n",
-               nd->last.name, dir->i_ino, dir->i_generation, dir);
+        CDEBUG(D_VFSTRACE, "VFS Op:name=%*s,dir=%lu/%u(%p)\n",
+               nd->last.len, nd->last.name, dir->i_ino, dir->i_generation, dir);
 
         ll_prepare_mdc_op_data(&op_data, dir, NULL, nd->last.name,
                                nd->last.len, S_IFDIR);
@@ -794,8 +797,8 @@ static int ll_unlink_raw(struct nameidata *nd)
         struct mdc_op_data op_data;
         int rc;
         ENTRY;
-        CDEBUG(D_VFSTRACE, "VFS Op:name=%s,dir=%lu/%u(%p)\n",
-               nd->last.name, dir->i_ino, dir->i_generation, dir);
+        CDEBUG(D_VFSTRACE, "VFS Op:name=%*s,dir=%lu/%u(%p)\n",
+               nd->last.len, nd->last.name, dir->i_ino, dir->i_generation, dir);
 
         ll_prepare_mdc_op_data(&op_data, dir, NULL, nd->last.name,
                                nd->last.len, 0);
@@ -820,9 +823,9 @@ static int ll_rename_raw(struct nameidata *srcnd, struct nameidata *tgtnd)
         struct mdc_op_data op_data;
         int err;
         ENTRY;
-        CDEBUG(D_VFSTRACE, "VFS Op:oldname=%s,src_dir=%lu/%u(%p),newname=%s,"
-               "tgt_dir=%lu/%u(%p)\n",
-               srcnd->last.name, src->i_ino, src->i_generation, src,
+        CDEBUG(D_VFSTRACE, "VFS Op:oldname=%*s,src_dir=%lu/%u(%p),newname=%*s,"
+               "tgt_dir=%lu/%u(%p)\n", srcnd->last.len, srcnd->last.name,
+               src->i_ino, src->i_generation, src, tgtnd->last.len,
                tgtnd->last.name, tgt->i_ino, tgt->i_generation, tgt);
 
         ll_prepare_mdc_op_data(&op_data, src, tgt, NULL, 0, 0);
