@@ -80,7 +80,7 @@ static int line2args(char *line, char **argv, int maxargs)
 
     arg = strtok(line, " \t");
     if ( arg ) {
-	argv[i] = arg;
+            argv[i] = arg;
 	i++;
     } else
 	return 0;
@@ -110,7 +110,10 @@ int Parser_execarg(int argc, char **argv, command_t cmds[])
 
         cmd = Parser_findargcmd(argv[0], cmds);
 	if ( cmd ) {
-		return (cmd->pc_func)(argc, argv);
+                int rc = (cmd->pc_func)(argc, argv);
+                if (rc == CMD_HELP)
+                        fprintf(stderr, cmd->pc_help);
+                return rc;
 	} else {
 		printf("Try interactive use without arguments or use one of:\n");
 		for (cmd = cmds; cmd->pc_name; cmd++)
