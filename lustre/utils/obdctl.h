@@ -79,6 +79,11 @@ int jt_cfg_endrecord(int argc, char **argv);
 int jt_cfg_parse(int argc, char **argv);
 int jt_cfg_dump_log(int argc, char **argv);
 
+int jt_llog_catlist(int argc, char **argv);
+int jt_llog_info(int argc, char **argv);
+int jt_llog_print(int argc, char **argv);
+int jt_llog_cancel(int argc, char **argv);
+int jt_llog_remove(int argc, char **argv);
 
 int lcfg_ioctl(char * func, int dev_id, struct lustre_cfg *lcfg);
 int parse_devname(char *func, char *name);
