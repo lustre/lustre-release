@@ -226,7 +226,7 @@ do {                                                                    \
 
 #define LUSTRE_SRV_PTL_PID      LUSTRE_PTL_PID
 
-#define PORTALS_CFG_VERSION 0x00010001;
+#define PORTALS_CFG_VERSION 0x00010001
 
 struct portals_cfg {
         __u32 pcfg_version;
