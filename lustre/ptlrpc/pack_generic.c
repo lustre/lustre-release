@@ -33,7 +33,6 @@
 #include <linux/obd_support.h>
 #include <linux/obd_class.h>
 #include <linux/lustre_net.h>
-#include <linux/lustre_snap.h>
 #include <linux/fcntl.h>
 
 
