@@ -10,7 +10,7 @@ Index: linux-2.6.6-vanilla/fs/exec.c
  
 -	nd.intent.open.flags = FMODE_READ;
 -	error = __user_walk(library, LOOKUP_FOLLOW|LOOKUP_OPEN, &nd);
-+	nd.intent.it_flags = FMODE_READ;
++	nd.intent.it_flags = FMODE_READ|FMODE_EXEC;
 +	error = __user_walk_it(library, LOOKUP_FOLLOW|LOOKUP_OPEN, &nd);
  	if (error)
  		goto out;
@@ -31,7 +31,7 @@ Index: linux-2.6.6-vanilla/fs/exec.c
 -	nd.intent.open.flags = FMODE_READ;
 -	err = path_lookup(name, LOOKUP_FOLLOW|LOOKUP_OPEN, &nd);
 +	intent_init(&nd.intent, IT_OPEN);
-+	nd.intent.it_flags = FMODE_READ;
++	nd.intent.it_flags = FMODE_READ|FMODE_EXEC;
 +	err = path_lookup(name, LOOKUP_FOLLOW, &nd);
  	file = ERR_PTR(err);
  
@@ -609,6 +609,14 @@ Index: linux-2.6.6-vanilla/include/linux/fs.h
 ===================================================================
 --- linux-2.6.6-vanilla.orig/include/linux/fs.h	2004-05-26 20:26:11.000000000 +0300
 +++ linux-2.6.6-vanilla/include/linux/fs.h	2004-06-29 12:23:41.850419112 +0300
+@@ -76,6 +76,7 @@
+ 
+ #define FMODE_READ 1
+ #define FMODE_WRITE 2
++#define FMODE_EXEC 4
+ 
+ #define RW_MASK		1
+ #define RWA_MASK	2
 @@ -249,6 +249,8 @@
  #define ATTR_ATTR_FLAG	1024
  #define ATTR_KILL_SUID	2048
