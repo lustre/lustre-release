@@ -77,8 +77,8 @@ static int ll_dir_readpage(struct file *file, struct page *page)
 
 	offset = page->index << PAGE_SHIFT; 
 	buf = kmap(page);
-        rc = mdc_readpage(sbi->ll_peer_ptr, inode->i_ino, S_IFDIR, offset, buf,
-			  NULL, &hdr);
+        rc = mdc_readpage(&sbi->ll_mds_client, inode->i_ino, S_IFDIR, offset, 
+			  buf, NULL, &hdr);
 	kunmap(page); 
         if ( rc ) {
 		EXIT; 
@@ -170,8 +170,11 @@ static void ext2_check_page(struct page *page)
 
 	if ((dir->i_size >> PAGE_CACHE_SHIFT) == page->index) {
 		limit = dir->i_size & ~PAGE_CACHE_MASK;
-		if (limit & (chunk_size - 1))
+		if (limit & (chunk_size - 1)) {
+			CERROR("limit %d dir size %lld index %ld\n", 
+					limit, dir->i_size, page->index); 
 			goto Ebadsize;
+		}
 		for (offs = limit; offs<PAGE_CACHE_SIZE; offs += chunk_size) {
 			ext2_dirent *p = (ext2_dirent*)(kaddr + offs);
 			p->rec_len = cpu_to_le16(chunk_size);
@@ -204,7 +207,7 @@ out:
 
 Ebadsize:
 	CERROR("ext2_check_page"
-		"size of directory #%lu is not a multiple of chunk size",
+		"size of directory #%lu is not a multiple of chunk size\n",
 		dir->i_ino
 	);
 	goto fail;

@@ -52,13 +52,14 @@
 #include <linux/lustre_mds.h>
 
 int mds_pack_req(char *name, int namelen, char *tgt, int tgtlen, 
-		 struct ptlreq_hdr **hdr, struct mds_req **req, 
+		 struct ptlreq_hdr **hdr, union ptl_req *r,
 		 int *len, char **buf)
 {
+        struct mds_req *req;
 	char *ptr;
 
 	*len = sizeof(**hdr) + size_round(namelen) + size_round(tgtlen) + 
-		sizeof(**req); 
+		sizeof(*req); 
 
 	OBD_ALLOC(*buf, *len);
 	if (!*buf) {
@@ -68,17 +69,19 @@ int mds_pack_req(char *name, int namelen, char *tgt, int tgtlen,
 
 	memset(*buf, 0, *len); 
 	*hdr = (struct ptlreq_hdr *)(*buf);
-	*req = (struct mds_req *)(*buf + sizeof(**hdr));
-	ptr = *buf + sizeof(**hdr) + sizeof(**req);
+	req = (struct mds_req *)(*buf + sizeof(**hdr));
+        r->mds = req;
+
+	ptr = *buf + sizeof(**hdr) + sizeof(*req);
 
 	(*hdr)->type =  MDS_TYPE_REQ;
 
-	(*req)->namelen = NTOH__u32(namelen);
+	req->namelen = NTOH__u32(namelen);
 	if (name) { 
 		LOGL(name, namelen, ptr); 
 	} 
 
-	(*req)->tgtlen = NTOH__u32(tgtlen);
+	req->tgtlen = NTOH__u32(tgtlen);
 	if (tgt) {
 		LOGL(tgt, tgtlen, ptr);
 	}
@@ -87,36 +90,38 @@ int mds_pack_req(char *name, int namelen, char *tgt, int tgtlen,
 
 
 int mds_unpack_req(char *buf, int len, 
-		   struct ptlreq_hdr **hdr, struct mds_req **req)
+		   struct ptlreq_hdr **hdr, union ptl_req *r)
 {
+        struct mds_req *req;
         char *name, *tgt;
 
-	if (len < sizeof(**hdr) + sizeof(**req)) { 
+	if (len < sizeof(**hdr) + sizeof(*req)) { 
 		EXIT;
 		return -EINVAL;
 	}
 
 	*hdr = (struct ptlreq_hdr *) (buf);
-        *req = (struct mds_req *) (buf + sizeof(**hdr));
+        req = (struct mds_req *) (buf + sizeof(**hdr));
+        r->mds = req;
 
-	(*req)->namelen = NTOH__u32((*req)->namelen); 
-	(*req)->tgtlen = NTOH__u32((*req)->tgtlen); 
+	req->namelen = NTOH__u32(req->namelen); 
+	req->tgtlen = NTOH__u32(req->tgtlen); 
 
-	if (len < sizeof(**hdr) + sizeof(**req) +
-            size_round((*req)->namelen) + size_round((*req)->tgtlen) ) { 
+	if (len < sizeof(**hdr) + sizeof(*req) +
+            size_round(req->namelen) + size_round(req->tgtlen) ) { 
 		EXIT;
 		return -EINVAL;
 	}
 
-	if ((*req)->namelen) { 
-		name = buf + sizeof(**hdr) + sizeof(**req);
+	if (req->namelen) { 
+		name = buf + sizeof(**hdr) + sizeof(*req);
 	} else { 
 		name = NULL;
 	}
 
-	if ((*req)->tgtlen) { 
-		tgt = buf + sizeof(**hdr) + sizeof(**req) + 
-                        size_round((*req)->namelen);
+	if (req->tgtlen) { 
+		tgt = buf + sizeof(**hdr) + sizeof(*req) + 
+                        size_round(req->namelen);
 	} else { 
 		tgt = NULL;
 	}
@@ -141,13 +146,14 @@ void *mds_req_name(struct mds_req *req)
 }
 
 int mds_pack_rep(char *name, int namelen, char *tgt, int tgtlen, 
-		 struct ptlrep_hdr **hdr, struct mds_rep **rep, 
+		 struct ptlrep_hdr **hdr, union ptl_rep *r,
 		 int *len, char **buf)
 {
+        struct mds_rep *rep;
 	char *ptr;
 
 	*len = sizeof(**hdr) + size_round(namelen) + size_round(tgtlen) + 
-		sizeof(**rep); 
+		sizeof(*rep); 
 
 	OBD_ALLOC(*buf, *len);
 	if (!*buf) {
@@ -157,18 +163,19 @@ int mds_pack_rep(char *name, int namelen, char *tgt, int tgtlen,
 
 	memset(*buf, 0, *len); 
 	*hdr = (struct ptlrep_hdr *)(*buf);
-        *rep = (struct mds_rep *)(*buf + sizeof(**hdr));
+        rep = (struct mds_rep *)(*buf + sizeof(**hdr));
+        r->mds = rep;
 
-	ptr = *buf + sizeof(**hdr) + sizeof(**rep);
+	ptr = *buf + sizeof(**hdr) + sizeof(*rep);
 
 	(*hdr)->type =  MDS_TYPE_REP;
 
-	(*rep)->namelen = NTOH__u32(namelen);
+	rep->namelen = NTOH__u32(namelen);
 	if (name) { 
 		LOGL(name, namelen, ptr); 
 	} 
 
-        (*rep)->tgtlen = NTOH__u32(tgtlen);
+        rep->tgtlen = NTOH__u32(tgtlen);
 	if (tgt) { 
 		LOGL(tgt, tgtlen, ptr);
 	}
@@ -176,26 +183,27 @@ int mds_pack_rep(char *name, int namelen, char *tgt, int tgtlen,
 }
 
 int mds_unpack_rep(char *buf, int len, 
-		   struct ptlrep_hdr **hdr, struct mds_rep **rep)
+		   struct ptlrep_hdr **hdr, union ptl_rep *r)
 {
-
+        struct mds_rep *rep;
 	if (len < sizeof(**hdr)) { 
 		EXIT;
 		return -EINVAL;
 	}
 	*hdr = (struct ptlrep_hdr *) (buf);
 
-	if (len < sizeof(**hdr) + sizeof(**rep)) { 
+	if (len < sizeof(**hdr) + sizeof(*rep)) { 
 		EXIT;
 		return -EINVAL;
 	}
 
-        *rep = (struct mds_rep *) (buf + sizeof(**hdr));
-	(*rep)->namelen = NTOH__u32((*rep)->namelen); 
-	(*rep)->tgtlen = NTOH__u32((*rep)->namelen); 
+        rep = (struct mds_rep *) (buf + sizeof(**hdr));
+        r->mds = rep;
+	rep->namelen = NTOH__u32(rep->namelen); 
+	rep->tgtlen = NTOH__u32(rep->namelen); 
 
-	if (len < sizeof(**hdr) + sizeof(**rep) 
-            + size_round((*rep)->namelen) + size_round((*rep)->tgtlen) ) { 
+	if (len < sizeof(**hdr) + sizeof(*rep) 
+            + size_round(rep->namelen) + size_round(rep->tgtlen) ) { 
 		EXIT;
 		return -EINVAL;
 	}

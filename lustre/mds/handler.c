@@ -251,7 +251,7 @@ int mds_getattr(struct ptlrpc_request *req)
 	struct mds_rep *rep;
 	int rc;
 	
-	rc = mds_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep.mds, 
+	rc = mds_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep, 
 			  &req->rq_replen, &req->rq_repbuf);
 	if (rc) { 
 		EXIT;
@@ -295,7 +295,7 @@ int mds_readpage(struct ptlrpc_request *req)
 	struct mds_rep *rep;
 	int rc;
 	
-	rc = mds_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep.mds, 
+	rc = mds_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep, 
 			  &req->rq_replen, &req->rq_repbuf);
 	if (rc) { 
 		EXIT;
@@ -373,7 +373,7 @@ int mds_handle(struct ptlrpc_request *req)
 	}
 
 	rc = mds_unpack_req(req->rq_reqbuf, req->rq_reqlen, 
-			    &req->rq_reqhdr, &req->rq_req.mds);
+			    &req->rq_reqhdr, &req->rq_req);
 	if (rc) { 
 		CERROR("lustre_mds: Invalid request\n");
 		EXIT; 
@@ -453,13 +453,11 @@ int mds_main(void *arg)
 
 	/* And now, wait forever for commit wakeup events. */
 	while (1) {
+                int signal;
 		int rc;
 
-		if (mds->mds_flags & MDS_UNMOUNT)
-			break;
 
 		wake_up(&mds->mds_done_waitq);
-		interruptible_sleep_on(&mds->mds_waitq);
 		CDEBUG(D_INODE, "mds_wakes pick up req here and continue\n"); 
 
 		if (mds->mds_service != NULL) {
@@ -469,21 +467,26 @@ int mds_main(void *arg)
 
 
                         CDEBUG(D_IOCTL, "-- sleeping\n");
+                        signal = 0;
                         add_wait_queue(&mds->mds_waitq, &wait);
                         while (1) {
+                                set_current_state(TASK_INTERRUPTIBLE);
 				rc = PtlEQGet(mds->mds_service->srv_eq_h, &ev);
                                 if (rc == PTL_OK || rc == PTL_EQ_DROPPED)
                                         break;
+                                if (mds->mds_flags & MDS_UNMOUNT)
+                                        break;
 
-                                set_current_state(TASK_INTERRUPTIBLE);
 
                                 /* if this process really wants to die,
                                  * let it go */
                                 if (sigismember(&(current->pending.signal),
                                                 SIGKILL) ||
                                     sigismember(&(current->pending.signal),
-                                                SIGINT))
+                                                SIGINT)) {
+                                        signal = 1;
                                         break;
+                                }
 
                                 schedule();
                         }
@@ -491,10 +494,13 @@ int mds_main(void *arg)
                         set_current_state(TASK_RUNNING);
                         CDEBUG(D_IOCTL, "-- done\n");
 
-                        if (rc == PTL_EQ_EMPTY) {
+                        if (signal == 1) {
                                 /* We broke out because of a signal */
                                 EXIT;
-                                return -EINTR;
+                                break;
+                        }
+                        if (mds->mds_flags & MDS_UNMOUNT) { 
+                                break;
                         }
 
                         service = (struct ptlrpc_service *)ev.mem_desc.user_ptr;	

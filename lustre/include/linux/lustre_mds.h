@@ -89,10 +89,10 @@ struct mds_update_record {
 
 /* mds/mds_pack.c */
 void *mds_req_tgt(struct mds_req *req);
-int mds_pack_req(char *name, int namelen, char *tgt, int tgtlen, struct ptlreq_hdr **hdr, struct mds_req **req, int *len, char **buf);
-int mds_unpack_req(char *buf, int len, struct ptlreq_hdr **hdr, struct mds_req **req);
-int mds_pack_rep(char *name, int namelen, char *tgt, int tgtlen, struct ptlrep_hdr **hdr, struct mds_rep **rep, int *len, char **buf);
-int mds_unpack_rep(char *buf, int len, struct ptlrep_hdr **hdr, struct mds_rep **rep);
+int mds_pack_req(char *name, int namelen, char *tgt, int tgtlen, struct ptlreq_hdr **hdr, union ptl_req *req, int *len, char **buf);
+int mds_unpack_req(char *buf, int len, struct ptlreq_hdr **hdr, union ptl_req *);
+int mds_pack_rep(char *name, int namelen, char *tgt, int tgtlen, struct ptlrep_hdr **hdr, union ptl_rep *rep, int *len, char **buf);
+int mds_unpack_rep(char *buf, int len, struct ptlrep_hdr **hdr, union ptl_rep *rep);
 
 /* mds/mds_reint.c  */
 int mds_reint_rec(struct mds_update_record *r, struct ptlrpc_request *req); 
@@ -110,28 +110,29 @@ void mds_rename_pack(struct mds_rec_rename *rec, struct inode *srcdir, struct in
 struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid, struct vfsmount **mnt);
 
 /* llight/request.c */
-int mdc_getattr(struct lustre_peer *peer, ino_t ino, int type, int valid, 
+int mdc_getattr(struct ptlrpc_client *peer, ino_t ino, int type, int valid, 
 		struct mds_rep  **mds_reply, struct ptlrep_hdr **hdr);
-int mdc_setattr(struct lustre_peer *peer, struct inode *inode,
+int mdc_setattr(struct ptlrpc_client *peer, struct inode *inode,
                 struct iattr *iattr, struct mds_rep  **mds_reply,
                 struct ptlrep_hdr **hdr);
-int mdc_readpage(struct lustre_peer *peer, ino_t ino, int type, __u64 offset,
+int mdc_readpage(struct ptlrpc_client *peer, ino_t ino, int type, __u64 offset,
                  char *addr, struct mds_rep  **rep, struct ptlrep_hdr **hdr);
-int mdc_create(struct lustre_peer *peer, 
+int mdc_create(struct ptlrpc_client *peer, 
 	       struct inode *dir, const char *name, int namelen, 
 	       const char *tgt, int tgtlen, 
 	       int mode, __u64 id, __u32 uid, __u32 gid, __u64 time, 
                struct mds_rep **rep, struct ptlrep_hdr **hdr);
-int mdc_unlink(struct lustre_peer *peer, 
+int mdc_unlink(struct ptlrpc_client *peer, 
 	       struct inode *dir, const char *name, int namelen, 
                struct mds_rep **rep, struct ptlrep_hdr **hdr);
-int mdc_link(struct lustre_peer *peer, struct dentry *src, 
+int mdc_link(struct ptlrpc_client *peer, struct dentry *src, 
 	       struct inode *dir, const char *name, int namelen, 
                struct mds_rep **rep, struct ptlrep_hdr **hdr);
-int mdc_rename(struct lustre_peer *peer, struct inode *src, 
+int mdc_rename(struct ptlrpc_client *peer, struct inode *src, 
 	       struct inode *tgt, const char *old, int oldlen, 
 	       const char *new, int newlen, 
 	       struct mds_rep **rep, struct ptlrep_hdr **hdr);
+int mdc_create_client(char *uuid, struct ptlrpc_client *cl);
 
 /* ioctls for trying requests */
 #define IOC_REQUEST_TYPE                   'f'

@@ -53,115 +53,14 @@
 
 extern int mds_queue_req(struct ptlrpc_request *);
 
-/* FIXME: this belongs in some sort of service struct */
-static int mdc_xid = 0;
 
-struct ptlrpc_request *mds_prep_req(int opcode, int namelen, char *name,
-                                    int tgtlen, char *tgt)
-{
-	struct ptlrpc_request *request;
-	int rc;
-	ENTRY; 
-
-	OBD_ALLOC(request, sizeof(*request));
-	if (!request) { 
-		CERROR("request allocation out of memory\n");
-		return NULL;
-	}
-
-	memset(request, 0, sizeof(*request));
-	request->rq_xid = mdc_xid++;
-
-	rc = mds_pack_req(name, namelen, tgt, tgtlen,
-			  &request->rq_reqhdr, &(request->rq_req.mds),
-			  &request->rq_reqlen, &request->rq_reqbuf);
-	if (rc) { 
-		CERROR("llight request: cannot pack request %d\n", rc); 
-		return NULL;
-	}
-        CDEBUG(0, "--> len %d, req %p, tgtlen %d\n", 
-	       request->rq_reqlen, request->rq_req.mds, 
-	       request->rq_req.mds->tgtlen);
-	request->rq_reqhdr->opc = opcode;
-
-	EXIT;
-	return request;
-}
-
-static int mds_queue_wait(struct ptlrpc_request *req, struct lustre_peer *peer)
-{
-	int rc;
-        DECLARE_WAITQUEUE(wait, current);
-
-	init_waitqueue_head(&req->rq_wait_for_rep);
-
-	/* XXX fix the race here (wait_for_event?)*/
-	if (peer == NULL) {
-		/* Local delivery */
-                ENTRY;
-		rc = mds_queue_req(req); 
-	} else {
-		/* Remote delivery via portals. */
-		req->rq_req_portal = MDS_REQUEST_PORTAL;
-		req->rq_reply_portal = MDS_REPLY_PORTAL;
-		rc = ptl_send_rpc(req, peer);
-	}
-	if (rc) { 
-		CERROR("error %d, opcode %d\n", rc, 
-		       req->rq_reqhdr->opc); 
-		return -rc;
-	}
-
-        CDEBUG(0, "-- sleeping\n");
-        add_wait_queue(&req->rq_wait_for_rep, &wait);
-        while (req->rq_repbuf == NULL) {
-                set_current_state(TASK_INTERRUPTIBLE);
-
-                /* if this process really wants to die, let it go */
-                if (sigismember(&(current->pending.signal), SIGKILL) ||
-                    sigismember(&(current->pending.signal), SIGINT))
-                        break;
-
-                schedule();
-        }
-        remove_wait_queue(&req->rq_wait_for_rep, &wait);
-        set_current_state(TASK_RUNNING);
-        CDEBUG(0, "-- done\n");
-
-        if (req->rq_repbuf == NULL) {
-                /* We broke out because of a signal */
-                EXIT;
-                return -EINTR;
-        }
-
-	rc = mds_unpack_rep(req->rq_repbuf, req->rq_replen, &req->rq_rephdr, 
-			    &req->rq_rep.mds);
-	if (rc) {
-		CERROR("mds_unpack_rep failed: %d\n", rc);
-		return rc;
-	}
-
-	if ( req->rq_rephdr->status == 0 )
-                CDEBUG(0, "--> buf %p len %d status %d\n",
-		       req->rq_repbuf, req->rq_replen, 
-		       req->rq_rephdr->status); 
-
-	EXIT;
-	return 0;
-}
-
-void mdc_free_req(struct ptlrpc_request *request)
-{
-	OBD_FREE(request, sizeof(*request));
-}
-
-int mdc_getattr(struct lustre_peer *peer, ino_t ino, int type, int valid, 
+int mdc_getattr(struct ptlrpc_client *peer, ino_t ino, int type, int valid, 
 		struct mds_rep  **rep, struct ptlrep_hdr **hdr)
 {
 	struct ptlrpc_request *request;
 	int rc; 
 
-	request = mds_prep_req(MDS_GETATTR, 0, NULL, 0, NULL); 
+	request = ptlrpc_prep_req(peer, MDS_GETATTR, 0, NULL, 0, NULL); 
 	if (!request) { 
 		CERROR("llight request: cannot pack\n");
 		return -ENOMEM;
@@ -173,7 +72,7 @@ int mdc_getattr(struct lustre_peer *peer, ino_t ino, int type, int valid,
 	request->rq_replen = 
 		sizeof(struct ptlrep_hdr) + sizeof(struct mds_rep);
 
-	rc = mds_queue_wait(request, peer);
+	rc = ptlrpc_queue_wait(request, peer);
 	if (rc) { 
 		CERROR("llight request: error in handling %d\n", rc); 
 		goto out;
@@ -189,11 +88,11 @@ int mdc_getattr(struct lustre_peer *peer, ino_t ino, int type, int valid,
 	}
 
  out: 
-	mdc_free_req(request);
+	ptlrpc_free_req(request);
 	return rc;
 }
 
-int mdc_readpage(struct lustre_peer *peer, ino_t ino, int type, __u64 offset,
+int mdc_readpage(struct ptlrpc_client *peer, ino_t ino, int type, __u64 offset,
 		 char *addr, struct mds_rep  **rep, struct ptlrep_hdr **hdr)
 {
 	struct ptlrpc_request *request;
@@ -204,7 +103,7 @@ int mdc_readpage(struct lustre_peer *peer, ino_t ino, int type, __u64 offset,
 
         CDEBUG(D_INODE, "inode: %ld\n", ino);
 
-	request = mds_prep_req(MDS_READPAGE, 0, NULL,
+	request = ptlrpc_prep_req(peer, MDS_READPAGE, 0, NULL,
 			       sizeof(struct niobuf), (char *)&niobuf);
 	if (!request) { 
 		CERROR("mdc request: cannot pack\n");
@@ -222,7 +121,7 @@ int mdc_readpage(struct lustre_peer *peer, ino_t ino, int type, __u64 offset,
 	request->rq_replen = 
 		sizeof(struct ptlrep_hdr) + sizeof(struct mds_rep);
 
-	rc = mds_queue_wait(request, peer);
+	rc = ptlrpc_queue_wait(request, peer);
 	if (rc) { 
 		CERROR("mdc request: error in handling %d\n", rc); 
 		goto out;
@@ -238,15 +137,15 @@ int mdc_readpage(struct lustre_peer *peer, ino_t ino, int type, __u64 offset,
 	}
 
  out: 
-	mdc_free_req(request);
+	ptlrpc_free_req(request);
 	return rc;
 }
 
-int mdc_reint(struct lustre_peer *peer, struct ptlrpc_request *request)
+int mdc_reint(struct ptlrpc_client *peer, struct ptlrpc_request *request)
 {
 	int rc; 
 
-	rc = mds_queue_wait(request, peer);
+	rc = ptlrpc_queue_wait(request, peer);
 	if (rc) { 
 		CERROR("mdc request: error in handling %d\n", rc); 
 	}
@@ -254,12 +153,30 @@ int mdc_reint(struct lustre_peer *peer, struct ptlrpc_request *request)
 	return rc;
 }
 
+int mdc_create_client(char *uuid, struct ptlrpc_client *cl)
+{
+        int err; 
+
+        memset(cl, 0, sizeof(*cl));
+	cl->cli_xid = 0;
+	cl->cli_rep_unpack = mds_unpack_rep;
+	cl->cli_req_pack = mds_pack_req;
+	err = kportal_uuid_to_peer("mds", &cl->cli_server);
+	if (err == 0) { 
+		cl->cli_request_portal = MDS_REQUEST_PORTAL;
+		cl->cli_reply_portal = MDS_REPLY_PORTAL;
+		
+	} else { 
+		cl->cli_enqueue = mds_queue_req;
+	}
+        return 0;
+}
 
 static int request_ioctl(struct inode *inode, struct file *file, 
                          unsigned int cmd, unsigned long arg)
 {
 	int err;
-	struct lustre_peer peer, *peer_ptr = NULL;
+	struct ptlrpc_client peer;
 
 	ENTRY;
 
@@ -277,15 +194,17 @@ static int request_ioctl(struct inode *inode, struct file *file,
                 return -EINVAL;
         }
 
-	err = kportal_uuid_to_peer("mds", &peer);
-	if (err == 0)
-		peer_ptr = &peer;
+        err = mdc_create_client("mds", &peer);
+	if (err) {
+                CERROR("cannot create client"); 
+                return -EINVAL;
+        }
 	
 	switch (cmd) {
 	case IOC_REQUEST_GETATTR: { 
 		struct ptlrep_hdr *hdr = NULL;
 		CERROR("-- getting attr for ino 2\n"); 
-		err = mdc_getattr(peer_ptr, 2, S_IFDIR, ~0, NULL, &hdr);
+		err = mdc_getattr(&peer, 2, S_IFDIR, ~0, NULL, &hdr);
 		if (hdr) {
                         /* FIXME: there must be a better way to get the size */
 			OBD_FREE(hdr, sizeof(struct ptlrep_hdr) +
@@ -304,7 +223,7 @@ static int request_ioctl(struct inode *inode, struct file *file,
 			break;
 		}
 		CERROR("-- readpage 0 for ino 2\n"); 
-		err = mdc_readpage(peer_ptr, 2, S_IFDIR, 0, buf, NULL, &hdr);
+		err = mdc_readpage(&peer, 2, S_IFDIR, 0, buf, NULL, &hdr);
 		CERROR("-- done err %d\n", err);
 		if (!err) { 
 			CERROR("-- status: %d\n", hdr->status); 
@@ -327,7 +246,7 @@ static int request_ioctl(struct inode *inode, struct file *file,
 		iattr.ia_atime = 0;
 		iattr.ia_valid = ATTR_MODE | ATTR_ATIME;
 
-		err = mdc_setattr(peer_ptr, &inode, &iattr, NULL, &hdr);
+		err = mdc_setattr(&peer, &inode, &iattr, NULL, &hdr);
 		CERROR("-- done err %d\n", err);
 		if (!err) { 
 			CERROR("-- status: %d\n", hdr->status); 
@@ -349,7 +268,7 @@ static int request_ioctl(struct inode *inode, struct file *file,
 		iattr.ia_atime = 0;
 		iattr.ia_valid = ATTR_MODE | ATTR_ATIME;
 
-		err = mdc_create(peer_ptr, &inode, 
+		err = mdc_create(&peer, &inode, 
 				 "foofile", strlen("foofile"), 
 				 NULL, 0, 0100707, 47114711, 
 				 11, 47, 0, NULL, &hdr);
@@ -401,6 +320,7 @@ MODULE_AUTHOR("Peter J. Braam <braam@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre MDS Request Tester v1.0");
 MODULE_LICENSE("GPL");
 
+EXPORT_SYMBOL(mdc_create_client); 
 EXPORT_SYMBOL(mdc_create); 
 EXPORT_SYMBOL(mdc_unlink); 
 EXPORT_SYMBOL(mdc_rename); 

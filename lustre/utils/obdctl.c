@@ -424,14 +424,19 @@ static int jt_modules(int argc, char **argv)
                          "obd/class", "obd/rpc", "obd/ext2obd", "obd/ost",
                          "obd/osc", "obd/mds", "obd/mdc", "obd/llight", NULL};
         char *path = "..";
+        char *kernel = "linux";
         int i;
 
-        if (argc == 2)
+        if (argc >= 2)
                 path = argv[1];
-        if (argc > 2) {
-                printf("%s [path]\n", argv[0]);
+        if (argc == 3) 
+                kernel = argv[2];
+        if (argc > 3) {
+                printf("%s [path] [kernel]\n", argv[0]);
                 return 0;
         }
+
+        printf("symbol-file\nsymbol-file %s\nb panic\nb stop\n", kernel); 
 
         for (i = 0; modules[i] != NULL; i++) {
                 struct module_info info;

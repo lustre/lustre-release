@@ -525,6 +525,7 @@ out:
 /* FIXME: Serious refactoring needed */
 int ost_main(void *arg)
 {
+        int signal; 
 	struct obd_device *obddev = (struct obd_device *) arg;
 	struct ost_obd *ost = &obddev->u.ost;
         DECLARE_WAITQUEUE(wait, current);
@@ -550,30 +551,32 @@ int ost_main(void *arg)
 	while (1) {
 		int rc; 
 
-		if (ost->ost_flags & OST_EXIT)
-			break;
-
 		if (ost->ost_service != NULL) {
 			ptl_event_t ev;
                         struct ptlrpc_request request;
                         struct ptlrpc_service *service;
 
                         CDEBUG(D_IOCTL, "-- sleeping\n");
+                        signal = 0;
                         add_wait_queue(&ost->ost_waitq, &wait);
                         while (1) {
+                                set_current_state(TASK_INTERRUPTIBLE);
                                 rc = PtlEQGet(ost->ost_service->srv_eq_h, &ev);
                                 if (rc == PTL_OK || rc == PTL_EQ_DROPPED)
                                         break;
+                                if (ost->ost_flags & OST_EXIT)
+                                        break;
 
-                                set_current_state(TASK_INTERRUPTIBLE);
 
                                 /* if this process really wants to die,
                                  * let it go */
                                 if (sigismember(&(current->pending.signal),
                                                 SIGKILL) ||
                                     sigismember(&(current->pending.signal),
-                                                SIGINT))
+                                                SIGINT)) {
+                                        signal = 1;
                                         break;
+                                }
 
                                 schedule();
                         }
@@ -581,10 +584,14 @@ int ost_main(void *arg)
                         set_current_state(TASK_RUNNING);
                         CDEBUG(D_IOCTL, "-- done\n");
 
-                        if (rc == PTL_EQ_EMPTY) {
+                        if (signal == 1) {
                                 /* We broke out because of a signal */
                                 EXIT;
-                                return -EINTR;
+                                break;
+                        }
+                        if (ost->ost_flags & OST_EXIT) {
+                                EXIT;
+                                break;
                         }
 
                         service = (struct ptlrpc_service *)ev.mem_desc.user_ptr;
@@ -637,13 +644,13 @@ int ost_main(void *arg)
 
 			if (list_empty(&ost->ost_reqs)) { 
 				CDEBUG(D_INODE, "woke because of signal\n");
-                                spin_unlock(&ost->ost_req_lock);
+                                spin_unlock(&ost->ost_lock);
 			} else {
 				request = list_entry(ost->ost_reqs.next,
 						     struct ptlrpc_request,
 						     rq_list);
 				list_del(&request->rq_list);
-                                spin_unlock(&ost->ost_req_lock);
+                                spin_unlock(&ost->ost_lock);
 				rc = ost_handle(obddev, request); 
 			}
 		}

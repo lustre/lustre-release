@@ -341,7 +341,7 @@ int mds_reint_rec(struct mds_update_record *rec, struct ptlrpc_request *req)
 		return rc;
 	}
 
-	rc = mds_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep.mds, 
+	rc = mds_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep, 
 			  &req->rq_replen, &req->rq_repbuf);
 	if (rc) { 
 		EXIT;

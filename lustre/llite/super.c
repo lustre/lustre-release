@@ -96,7 +96,7 @@ static struct super_block * ll_read_super(struct super_block *sb,
                                             void *data, int silent)
 {
         struct inode *root = 0; 
-        struct ll_sb_info *sbi = (struct ll_sb_info *)(&sb->u.generic_sbp);
+        struct ll_sb_info *sbi;
 	char *device = NULL;
         char *version = NULL;
 	int connected = 0;
@@ -108,7 +108,13 @@ static struct super_block * ll_read_super(struct super_block *sb,
         ENTRY;
         MOD_INC_USE_COUNT; 
 
+	OBD_ALLOC(sbi, sizeof(*sbi));
+	if (!sbi) { 
+		EXIT;
+		return NULL;
+	}
         memset(sbi, 0, sizeof(*sbi));
+	sb->u.generic_sbp = (struct ll_sb_info *) sbi;
 
         ll_options(data, &device, &version);
 
@@ -134,10 +140,12 @@ static struct super_block * ll_read_super(struct super_block *sb,
         }
 	connected = 1;
 
-	err = kportal_uuid_to_peer("mds", &sbi->ll_peer);
-	if (err == 0)
-		sbi->ll_peer_ptr = &sbi->ll_peer;
-
+	err = mdc_create_client("mds", &sbi->ll_mds_client); 
+	if (err) { 
+		CERROR("cannot find MDS\n"); 
+		sb = NULL;
+		goto ERR;
+	}
         sbi->ll_super = sb;
 	sbi->ll_rootino = 2;
 
@@ -148,7 +156,7 @@ static struct super_block * ll_read_super(struct super_block *sb,
         sb->s_op = &ll_super_operations;
 
         /* make root inode */
-	err = mdc_getattr(sbi->ll_peer_ptr, sbi->ll_rootino, S_IFDIR, 
+	err = mdc_getattr(&sbi->ll_mds_client, sbi->ll_rootino, S_IFDIR, 
 			  OBD_MD_FLNOTOBD|OBD_MD_FLBLOCKS, 
 			  &rep, &hdr);
         if (err) {
@@ -193,7 +201,7 @@ static void ll_put_super(struct super_block *sb)
         ENTRY;
 
         obd_disconnect(ID(sb));
-
+	OBD_FREE(sb->u.generic_sbp, sizeof(struct ll_sb_info));
         MOD_DEC_USE_COUNT;
         EXIT;
 } /* ll_put_super */
@@ -263,7 +271,7 @@ int ll_inode_setattr(struct inode *inode, struct iattr *attr, int do_trunc)
 	/* change incore inode */
 	ll_attr2inode(inode, attr, do_trunc);
 
-	err = mdc_setattr(sbi->ll_peer_ptr, inode, attr, NULL, &hdr); 
+	err = mdc_setattr(&sbi->ll_mds_client, inode, attr, NULL, &hdr); 
         if ( err )
                 CERROR("ll_setattr fails (%d)\n", err);
 

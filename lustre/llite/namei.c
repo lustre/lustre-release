@@ -98,7 +98,7 @@ static struct dentry *ll_lookup(struct inode * dir, struct dentry *dentry)
 	if (!ino)
 		goto negative;
 
-	err = mdc_getattr(sbi->ll_peer_ptr, ino, type,
+	err = mdc_getattr(&sbi->ll_mds_client, ino, type,
 			  OBD_MD_FLNOTOBD|OBD_MD_FLBLOCKS, &rep, &hdr);
         if ( err ) {
                 CERROR("obdo_fromid failed\n");
@@ -149,7 +149,7 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
 
         ENTRY;
 
-     	err = mdc_create(sbi->ll_peer_ptr, dir, name, namelen, tgt, tgtlen,
+     	err = mdc_create(&sbi->ll_mds_client, dir, name, namelen, tgt, tgtlen,
 			 mode, id, 
 			 current->uid, current->gid, time, &rep, &hdr); 
 	if (err) { 
@@ -198,7 +198,7 @@ int ll_mdc_unlink(struct inode *dir, const char *name, int len)
 
         ENTRY;
 
-     	err = mdc_unlink(sbi->ll_peer_ptr, dir, name, len, &rep, &hdr); 
+     	err = mdc_unlink(&sbi->ll_mds_client, dir, name, len, &rep, &hdr); 
 
 	if (err) { 
                 EXIT;
@@ -223,7 +223,7 @@ int ll_mdc_link(struct dentry *src, struct inode *dir,
 
         ENTRY;
 
-     	err = mdc_link(sbi->ll_peer_ptr, src, dir, name, len, &rep, &hdr); 
+     	err = mdc_link(&sbi->ll_mds_client, src, dir, name, len, &rep, &hdr); 
 
 	if (err) { 
                 EXIT;
@@ -248,7 +248,7 @@ int ll_mdc_rename(struct inode *src, struct inode *tgt,
 
         ENTRY;
 
-     	err = mdc_rename(sbi->ll_peer_ptr, src, tgt, 
+     	err = mdc_rename(&sbi->ll_mds_client, src, tgt, 
 			 old->d_name.name, old->d_name.len, 
 			 new->d_name.name, new->d_name.len, 
 			 &rep, &hdr); 
@@ -283,7 +283,7 @@ static int ll_create (struct inode * dir, struct dentry * dentry, int mode)
 	memset(&oa, 0, sizeof(oa)); 
 	oa.o_valid = OBD_MD_FLMODE; 
 	oa.o_mode = S_IFREG | 0600;
-	err = obd_create(IID(dir), &oa);  
+	err = obd_create(ll_i2obdconn(dir), &oa);  
 	if (err) { 
 		EXIT; 
 		return err;

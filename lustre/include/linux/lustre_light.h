@@ -29,17 +29,20 @@ struct ll_sb_info {
         struct list_head         ll_list;      /* list of supers */
         struct obd_conn          ll_conn;
         struct super_block      *ll_super;
-	//        struct obd_device       *ll_obd;
-        //struct obd_ops          *ll_ops;
-        ino_t                    ll_rootino;   /* number of root inode */
-        int                      ll_minor;     /* minor of /dev/obdX */
+        ino_t                       ll_rootino;   /* number of root inode */
+        int                        ll_minor;     /* minor of /dev/obdX */
         struct list_head         ll_inodes;    /* list of dirty inodes */
-        unsigned long            ll_cache_count;
+        unsigned long          ll_cache_count;
         struct semaphore         ll_list_mutex;
-	struct lustre_peer       ll_peer;
-	struct lustre_peer      *ll_peer_ptr;
+	struct ptlrpc_client     ll_mds_client;
+	struct ptlrpc_client     ll_ost_client;
 };
 
+
+static inline struct ll_sb_info *ll_i2sbi(struct inode *inode)
+{
+        return (struct ll_sb_info *) (inode->i_sb->u.generic_sbp);
+}
 
 static inline struct ll_inode_info *ll_i2info(struct inode *inode)
 {
@@ -52,6 +55,10 @@ static inline int ll_has_inline(struct inode *inode)
 }
 
 
+static inline struct obd_conn *ll_i2obdconn(struct inode *inode)
+{
+	return &(ll_i2sbi(inode))->ll_conn;
+}
 
 
 
@@ -158,10 +165,6 @@ extern struct inode_operations ll_symlink_inode_operations;
 void ll_sysctl_init(void);
 void ll_sysctl_clean(void);
 
-static inline struct ll_sb_info *ll_i2sbi(struct inode *inode)
-{
-        return (struct ll_sb_info *) &(inode->i_sb->u.generic_sbp);
-}
 
 
 static inline struct list_head *ll_slist(struct inode *inode) 

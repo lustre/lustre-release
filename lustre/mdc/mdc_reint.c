@@ -49,11 +49,9 @@
 #include <linux/lustre_idl.h>
 #include <linux/lustre_mds.h>
 
-extern int mdc_reint(struct lustre_peer *peer, struct ptlrpc_request *request);
-extern struct ptlrpc_request *mds_prep_req(int opcode, int namelen, char *name,
-                                           int tgtlen, char *tgt);
+extern int mdc_reint(struct ptlrpc_client *peer, struct ptlrpc_request *request);
 
-int mdc_setattr(struct lustre_peer *peer, 
+int mdc_setattr(struct ptlrpc_client *peer, 
 		struct inode *inode, struct iattr *iattr,
 		struct mds_rep **rep, struct ptlrep_hdr **hdr)
 {
@@ -61,7 +59,7 @@ int mdc_setattr(struct lustre_peer *peer,
 	struct ptlrpc_request *request;
 	struct mds_rec_setattr *rec;
 
-	request = mds_prep_req(MDS_REINT, 0, NULL, sizeof(*rec), NULL);
+	request = ptlrpc_prep_req(peer, MDS_REINT, 0, NULL, sizeof(*rec), NULL);
 	if (!request) { 
 		CERROR("mdc request: cannot pack\n");
 		return -ENOMEM;
@@ -87,7 +85,7 @@ int mdc_setattr(struct lustre_peer *peer,
 	return 0;
 }
 
-int mdc_create(struct lustre_peer *peer, 
+int mdc_create(struct ptlrpc_client *peer, 
 	       struct inode *dir, const char *name, int namelen, 
 	       const char *tgt, int tgtlen, 
 	       int mode, __u64 id, __u32 uid, __u32 gid, __u64 time, 
@@ -97,7 +95,7 @@ int mdc_create(struct lustre_peer *peer,
 	struct ptlrpc_request *request;
 	struct mds_rec_create *rec;
 
-	request = mds_prep_req(MDS_REINT, 0, NULL, 
+	request = ptlrpc_prep_req(peer, MDS_REINT, 0, NULL, 
 			       sizeof(*rec) + size_round0(namelen) + 
 			       size_round0(tgtlen), NULL);
 	if (!request) { 
@@ -125,7 +123,7 @@ int mdc_create(struct lustre_peer *peer,
 	return rc;
 }
 
-int mdc_unlink(struct lustre_peer *peer, 
+int mdc_unlink(struct ptlrpc_client *peer, 
 	       struct inode *dir, const char *name, int namelen, 
 		struct mds_rep **rep, struct ptlrep_hdr **hdr)
 {
@@ -133,7 +131,7 @@ int mdc_unlink(struct lustre_peer *peer,
 	struct ptlrpc_request *request;
 	struct mds_rec_unlink *rec;
 
-	request = mds_prep_req(MDS_REINT, 0, NULL, 
+	request = ptlrpc_prep_req(peer, MDS_REINT, 0, NULL, 
 			       sizeof(*rec) + size_round0(namelen), NULL);
 	if (!request) { 
 		CERROR("mdc_unlink: cannot pack\n");
@@ -159,7 +157,7 @@ int mdc_unlink(struct lustre_peer *peer,
 	return rc;
 }
 
-int mdc_link(struct lustre_peer *peer, struct dentry *src, 
+int mdc_link(struct ptlrpc_client *peer, struct dentry *src, 
 	     struct inode *dir, const char *name, int namelen, 
 		struct mds_rep **rep, struct ptlrep_hdr **hdr)
 {
@@ -167,7 +165,7 @@ int mdc_link(struct lustre_peer *peer, struct dentry *src,
 	struct ptlrpc_request *request;
 	struct mds_rec_link *rec;
 
-	request = mds_prep_req(MDS_REINT, 0, NULL, 
+	request = ptlrpc_prep_req(peer, MDS_REINT, 0, NULL, 
 			       sizeof(*rec) + size_round0(namelen), NULL);
 	if (!request) { 
 		CERROR("mdc_link: cannot pack\n");
@@ -193,7 +191,7 @@ int mdc_link(struct lustre_peer *peer, struct dentry *src,
 	return rc;
 }
 
-int mdc_rename(struct lustre_peer *peer, struct inode *src, 
+int mdc_rename(struct ptlrpc_client *peer, struct inode *src, 
 	       struct inode *tgt, const char *old, int oldlen, 
 	       const char *new, int newlen, 
 	       struct mds_rep **rep, struct ptlrep_hdr **hdr)
@@ -202,7 +200,7 @@ int mdc_rename(struct lustre_peer *peer, struct inode *src,
 	struct ptlrpc_request *request;
 	struct mds_rec_rename *rec;
 
-	request = mds_prep_req(MDS_REINT, 0, NULL, 
+	request = ptlrpc_prep_req(peer, MDS_REINT, 0, NULL, 
 			       sizeof(*rec) + size_round0(oldlen)
 			       + size_round0(newlen), NULL);
 	if (!request) { 

@@ -174,7 +174,7 @@ static int ll_brw(int rw, struct inode *inode, struct page *page, int create)
 	if (!oa) { 
 		return -ENOMEM;
 	}
-        err = obd_brw(rw, IID(inode), num_obdo, &oa, &bufs_per_obdo,
+        err = obd_brw(rw, ll_i2obdconn(inode), num_obdo, &oa, &bufs_per_obdo,
                                &page, &count, &offset, &flags);
 
         obdo_free(oa);
@@ -291,7 +291,7 @@ int ll_commit_write(struct file *file, struct page *page,
 	CDEBUG(D_INODE, "commit_page writing (at %d) to %d, count %Ld\n", 
 	       from, to, count);
 
-        err = obd_brw(OBD_BRW_WRITE, IID(inode), num_obdo, &oa, &bufs_per_obdo,
+        err = obd_brw(OBD_BRW_WRITE, ll_i2obdconn(inode), num_obdo, &oa, &bufs_per_obdo,
 		      &page, &count, &offset, &flags);
         if ( !err ) {
                 SetPageUptodate(page);
@@ -331,7 +331,7 @@ void ll_truncate(struct inode *inode)
 	
 	CDEBUG(D_INFO, "calling punch for %ld (%Lu bytes at 0)\n",
 	       (long)oa->o_id, oa->o_size);
-	err = obd_punch(IID(inode), oa, oa->o_size, 0);
+	err = obd_punch(ll_i2obdconn(inode), oa, oa->o_size, 0);
 	obdo_free(oa);
 
         if (err) {

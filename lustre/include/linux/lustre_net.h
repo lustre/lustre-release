@@ -67,7 +67,13 @@ struct ptlrpc_service {
         ptl_md_t srv_md[RPC_RING_LENGTH];
         ptl_handle_md_t srv_md_h[RPC_RING_LENGTH];
         wait_queue_head_t *srv_wait_queue;
+        int (*srv_req_unpack)(char *buf, int len, struct ptlreq_hdr **, 
+                          union ptl_req *);
+        int (*srv_rep_pack)(char *buf1, int len1, char *buf2, int len2,
+                        struct ptlrep_hdr **, union ptl_rep*, 
+                        int *replen, char **repbuf); 
 };
+
 
 struct ptlrpc_request { 
 	struct list_head rq_list;
@@ -106,6 +112,21 @@ struct ptlrpc_request {
         struct lustre_peer rq_peer;
 };
 
+struct ptlrpc_client {
+        struct lustre_peer cli_server;
+        __u32 cli_request_portal;
+        __u32 cli_reply_portal;
+        __u32 cli_xid;
+        int (*cli_rep_unpack)(char *buf, int len, struct ptlrep_hdr **, 
+                          union ptl_rep *);
+        int (*cli_req_pack)(char *buf1, int len1, char *buf2, int len2,
+                        struct ptlreq_hdr **, union ptl_req*, 
+                        int *reqlen, char **reqbuf); 
+        int (*cli_enqueue)(struct ptlrpc_request *req);
+};
+
+
+
 /* rpc/rpc.c */
 int ptl_send_buf(struct ptlrpc_request *request, struct lustre_peer *peer,
                  int portal, int is_request);
@@ -113,6 +134,13 @@ int ptl_send_rpc(struct ptlrpc_request *request, struct lustre_peer *peer);
 int ptl_received_rpc(struct ptlrpc_service *service);
 int rpc_register_service(struct ptlrpc_service *service, char *uuid);
 int rpc_unregister_service(struct ptlrpc_service *service);
+int ptlrpc_queue_wait(struct ptlrpc_request *req, 
+                      struct ptlrpc_client *cl);
+struct ptlrpc_request *ptlrpc_prep_req(struct ptlrpc_client *cl, 
+                                       int opcode, int namelen, char *name,
+                                       int tgtlen, char *tgt);
+void ptlrpc_free_req(struct ptlrpc_request *request);
+
 
 /* FIXME */
 #if 1
