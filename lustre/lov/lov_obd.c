@@ -583,7 +583,6 @@ static inline int lov_brw(int cmd, struct lustre_handle *conn,
 
         lov = &export->exp_obd->u.lov;
 
-
         OBD_ALLOC(stripeinfo,  stripe_count * sizeof(*stripeinfo));
         if (!stripeinfo)
                 RETURN(-ENOMEM);
@@ -620,7 +619,7 @@ static inline int lov_brw(int cmd, struct lustre_handle *conn,
         }
 
         cbd->cb = callback;
-        atomic_set(&cbd->refcount, oa_bufs);
+        atomic_set(&cbd->refcount, stripe_count);
         for (i = 0; i < stripe_count; i++) {
                 int shift = stripeinfo[i].index;
                 if (stripeinfo[i].bufct)
@@ -631,6 +630,8 @@ static inline int lov_brw(int cmd, struct lustre_handle *conn,
 
         rc = callback(cbd, 0, CB_PHASE_START);
 
+        OBD_FREE(stripeinfo, stripe_count * sizeof(*stripeinfo));
+        OBD_FREE(ioarr, sizeof(*ioarr) * oa_bufs);
         RETURN(rc);
 }
 
