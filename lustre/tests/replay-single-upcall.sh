@@ -4,6 +4,8 @@
 TESTDIR=`dirname $0`
 LUSTRE=$TESTDIR/..
 
+mkdir -p $TESTDIR/logs
+
 exec >> $TESTDIR/logs/recovery-`hostname`.log
 exec 2>&1
 
