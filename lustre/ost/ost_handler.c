@@ -170,7 +170,7 @@ static int ost_punch(struct ptlrpc_request *req)
 
         body = lustre_msg_buf(req->rq_reqmsg, 0);
 
-        if (NTOH__u32(body->oa.o_valid) & (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS) !=
+        if ((NTOH__u32(body->oa.o_valid) & (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS))!=
             (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS))
                 RETURN(-EINVAL);
 
