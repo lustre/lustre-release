@@ -147,9 +147,6 @@ typedef struct	_lgmnal_msghdr {
 typedef struct _lgmnal_data_t {
 	int	refcnt;
 	spinlock_t	cb_lock;	/* lock provided for cb_cli function */
-	char		_cb_file[128];
-	char		_cb_function[128];
-	int		_cb_line;
 	spinlock_t 	stxd_lock;	/* lock to add or remove stxd to/from free list */
 	struct semaphore stxd_token;	/* Don't try to access the list until get a token */
 	lgmnal_stxd_t	*stxd;		/* list of free stxd's */

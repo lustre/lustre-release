@@ -216,26 +216,16 @@ void lgmnal_cb_printf(nal_cb_t *nal_cb, const char *fmt, ...)
 void lgmnal_cb_cli(nal_cb_t *nal_cb, unsigned long *flags)
 {
 	lgmnal_data_t	*nal_data = (lgmnal_data_t*)nal_cb->nal_data;
-	spinlock_t	cb_lock = nal_data->cb_lock;
-	CDEBUG(D_TRACE, "lgmnal_cb_cli\n");
 
-	spin_lock_irqsave(&cb_lock, *flags);
-/*
-	spin_lock(&cb_lock);
-*/
+	spin_lock_irqsave(&nal_data->cb_lock, *flags);
 	return;
 }
 
 void lgmnal_cb_sti(nal_cb_t *nal_cb, unsigned long *flags)
 {
 	lgmnal_data_t	*nal_data = (lgmnal_data_t*)nal_cb->nal_data;
-	spinlock_t	cb_lock = nal_data->cb_lock;
 
-	spin_unlock_irqrestore(&cb_lock, *flags);
-/*
-	spin_unlock(&cb_lock);
-	CDEBUG(D_TRACE, "lgmnal_cb_sti\n");
-*/
+	spin_unlock_irqrestore(&nal_data->cb_lock, *flags);
 	return;
 }
 
