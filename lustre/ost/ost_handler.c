@@ -486,12 +486,12 @@ static int ost_handle(struct ptlrpc_request *req)
                 rc = ost_setattr(req);
                 break;
         case OST_OPEN:
-                CDEBUG(D_INODE, "setattr\n");
+                CDEBUG(D_INODE, "open\n");
                 OBD_FAIL_RETURN(OBD_FAIL_OST_OPEN_NET, 0);
                 rc = ost_open(req);
                 break;
         case OST_CLOSE:
-                CDEBUG(D_INODE, "setattr\n");
+                CDEBUG(D_INODE, "close\n");
                 OBD_FAIL_RETURN(OBD_FAIL_OST_CLOSE_NET, 0);
                 rc = ost_close(req);
                 break;
