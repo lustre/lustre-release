@@ -64,7 +64,7 @@ static int ptlrpc_check_event(struct ptlrpc_service *svc,
 
 struct ptlrpc_service *
 ptlrpc_init_svc(__u32 bufsize, int req_portal, int rep_portal, char *uuid,
-                svc_handler_t handler)
+                svc_handler_t handler, char *name)
 {
         int err;
         int rc, i;
@@ -77,6 +77,7 @@ ptlrpc_init_svc(__u32 bufsize, int req_portal, int rep_portal, char *uuid,
                 RETURN(NULL);
         }
 
+        service->srv_name = name;
         spin_lock_init(&service->srv_lock);
         INIT_LIST_HEAD(&service->srv_reqs);
         INIT_LIST_HEAD(&service->srv_threads);
@@ -346,6 +347,7 @@ int ptlrpc_start_thread(struct obd_device *dev, struct ptlrpc_service *svc,
                            CLONE_VM | CLONE_FS | CLONE_FILES);
         if (rc < 0) {
                 CERROR("cannot start thread\n");
+                OBD_FREE(thread, sizeof(*thread));
                 RETURN(-EINVAL);
         }
         wait_event(thread->t_ctl_waitq, thread->t_flags & SVC_RUNNING);
@@ -377,8 +379,11 @@ int ptlrpc_unregister_service(struct ptlrpc_service *service)
         if (!list_empty(&service->srv_reqs)) {
                 // XXX reply with errors and clean up
                 CERROR("Request list not empty!\n");
+                rc = -EBUSY;
         }
 
         OBD_FREE(service, sizeof(*service));
-        return 0;
+        if (rc) 
+                LBUG();
+        return rc;
 }

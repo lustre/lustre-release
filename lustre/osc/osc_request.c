@@ -657,7 +657,7 @@ static int osc_enqueue(struct lustre_handle *connh, struct lov_stripe_md *md,
         /* This code must change if we ever stop passing an inode in as data */
         /* This is ldlm and llite code.  It makes me sad that it's in
          * osc_request.c --phil */
-        lock = ldlm_handle2lock(&lockh);
+        lock = ldlm_handle2lock(lockh);
         if (lock) {
                 /* Lock already has an extra ref from handle2lock */
                 l_lock(&obddev->obd_namespace->ns_lock);

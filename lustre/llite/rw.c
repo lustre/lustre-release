@@ -112,8 +112,6 @@ static int ll_prepare_write(struct file *file, struct page *page, unsigned from,
         
         /* prepare write should not read what lies beyond the end of
            the file */
-
-
         rc = ll_brw(OBD_BRW_READ, inode, page, 0);
 
         EXIT;

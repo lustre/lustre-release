@@ -53,7 +53,8 @@ int connmgr_setup(struct obd_device *obddev, obd_count len, void *buf)
         recovd->recovd_service = ptlrpc_init_svc(16* 1024,
                                                  CONNMGR_REQUEST_PORTAL,
                                                  CONNMGR_REPLY_PORTAL,
-                                                 "self", connmgr_handle);
+                                                 "self", connmgr_handle, 
+                                                 "connmgr");
         if (!recovd->recovd_service) {
                 CERROR("failed to start service\n");
                 GOTO(err_recovd, err = -ENOMEM);

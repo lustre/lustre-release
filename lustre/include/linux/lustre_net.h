@@ -166,7 +166,7 @@ struct ptlrpc_bulk_desc {
         ptl_handle_md_t b_md_h;
         ptl_handle_me_t b_me_h;
 
-        struct iovec b_iov[16];                 /* self-sized pre-allocated iov */
+        struct iovec b_iov[16];    /* self-sized pre-allocated iov */
 };
 
 struct ptlrpc_thread {
@@ -203,6 +203,7 @@ struct ptlrpc_service {
         struct list_head srv_reqs;
         struct list_head srv_threads;
         int (*srv_handler)(struct ptlrpc_request *req);
+        char *srv_name;  /* only statically allocated strings here; we don't clean them */
 };
 
 static inline void ptlrpc_hdl2req(struct ptlrpc_request *req, struct lustre_handle *h)
@@ -266,7 +267,7 @@ int ptlrpc_check_status(struct ptlrpc_request *req, int err);
 /* rpc/service.c */
 struct ptlrpc_service *
 ptlrpc_init_svc(__u32 bufsize, int req_portal, int rep_portal, char *uuid,
-                svc_handler_t);
+                svc_handler_t, char *name);
 void ptlrpc_stop_all_threads(struct ptlrpc_service *svc);
 int ptlrpc_start_thread(struct obd_device *dev, struct ptlrpc_service *svc,
                         char *name);
