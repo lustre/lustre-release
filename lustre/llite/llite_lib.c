@@ -33,15 +33,10 @@
 #include <linux/statfs.h>
 #include <linux/fs.h>
 #include <linux/lprocfs_status.h>
+#include "llite_internal.h"
 
-
-
-/* whole file is conditional, but we need KERNEL_VERSION and friends */
 kmem_cache_t *ll_file_data_slab;
-extern struct super_operations ll_super_operations;
 
-/* /proc/lustre/llite root that tracks llite mount points */
-struct proc_dir_entry *proc_lustre_fs_root;
 
 
 char *ll_read_opt(const char *opt, char *data)
@@ -117,6 +112,7 @@ void ll_lli_init(struct ll_inode_info *lli)
         INIT_LIST_HEAD(&lli->lli_read_extents);
         ll_lldo_init(&lli->lli_dirty);
         lli->lli_flags = 0;
+        lli->lli_maxbytes = LUSTRE_STRIPE_MAXBYTES;
         spin_lock_init(&lli->lli_pg_lock);
         INIT_LIST_HEAD(&lli->lli_lc_item);
         plist_init(&lli->lli_pl_read);
@@ -129,6 +125,7 @@ int ll_fill_super(struct super_block *sb, void *data, int silent)
         struct inode *root = 0;
         struct obd_device *obd;
         struct ll_sb_info *sbi;
+        struct obd_export *mdc_export;
         char *osc = NULL;
         char *mdc = NULL;
         int err;
@@ -138,7 +135,6 @@ int ll_fill_super(struct super_block *sb, void *data, int silent)
         struct ptlrpc_connection *mdc_conn;
         struct ll_read_inode2_cookie lic;
         class_uuid_t uuid;
-        struct obd_uuid param_uuid;
 
         ENTRY;
 
@@ -167,8 +163,7 @@ int ll_fill_super(struct super_block *sb, void *data, int silent)
                 GOTO(out_free, err = -EINVAL);
         }
 
-        strncpy(param_uuid.uuid, mdc, sizeof(param_uuid.uuid));
-        obd = class_uuid2obd(&param_uuid);
+        obd = class_name2obd(mdc);
         if (!obd) {
                 CERROR("MDC %s: not setup or attached\n", mdc);
                 GOTO(out_free, err = -EINVAL);
@@ -182,8 +177,7 @@ int ll_fill_super(struct super_block *sb, void *data, int silent)
 
         mdc_conn = sbi2mdc(sbi)->cl_import->imp_connection;
 
-        strncpy(param_uuid.uuid, osc, sizeof(param_uuid.uuid));
-        obd = class_uuid2obd(&param_uuid);
+        obd = class_name2obd(osc);
         if (!obd) {
                 CERROR("OSC %s: not setup or attached\n", osc);
                 GOTO(out_mdc, err);
@@ -204,11 +198,17 @@ int ll_fill_super(struct super_block *sb, void *data, int silent)
         sbi->ll_rootino = rootfid.id;
 
         memset(&osfs, 0, sizeof(osfs));
-        err = obd_statfs(&sbi->ll_mdc_conn, &osfs);
+        mdc_export = class_conn2export(&sbi->ll_mdc_conn);
+        if (mdc_export == NULL) {
+                CERROR("null mdc_export\n");
+                GOTO(out_osc, sb = NULL);
+        }
+        err = obd_statfs(mdc_export, &osfs);
+        class_export_put(mdc_export);
         sb->s_blocksize = osfs.os_bsize;
         sb->s_blocksize_bits = log2(osfs.os_bsize);
         sb->s_magic = LL_SUPER_MAGIC;
-        sb->s_maxbytes = (1ULL << (32 + 9)) - osfs.os_bsize;
+        sb->s_maxbytes = PAGE_CACHE_MAXBYTES;
 
         sb->s_op = &ll_super_operations;
 
@@ -286,7 +286,7 @@ out_osc:
 out_mdc:
         obd_disconnect(&sbi->ll_mdc_conn, 0);
 out_free:
-        //        lprocfs_unregister_mountpoint(sbi);
+        lprocfs_unregister_mountpoint(sbi);
         OBD_FREE(sbi, sizeof(*sbi));
 
         goto out_dev;
@@ -295,13 +295,19 @@ out_free:
 int ll_statfs(struct super_block *sb, struct kstatfs *sfs)
 {
         struct ll_sb_info *sbi = ll_s2sbi(sb);
+        struct obd_export *mdc_exp = class_conn2export(&sbi->ll_mdc_conn);
+        struct obd_export *osc_exp;
         struct obd_statfs osfs;
         int rc;
         ENTRY;
 
+        if (mdc_exp == NULL)
+                RETURN(-EINVAL);
+
         CDEBUG(D_VFSTRACE, "VFS Op:\n");
+        lprocfs_counter_incr(sbi->ll_stats, LPROC_LL_STAFS);
         memset(sfs, 0, sizeof(*sfs));
-        rc = obd_statfs(&sbi->ll_mdc_conn, &osfs);
+        rc = obd_statfs(mdc_exp, &osfs);
         statfs_unpack(sfs, &osfs);
         if (rc)
                 CERROR("mdc_statfs fails: rc = %d\n", rc);
@@ -313,7 +319,11 @@ int ll_statfs(struct super_block *sb, struct kstatfs *sfs)
 
         /* temporary until mds_statfs returns statfs info for all OSTs */
         if (!rc) {
-                rc = obd_statfs(&sbi->ll_osc_conn, &osfs);
+                osc_exp = class_conn2export(&sbi->ll_osc_conn);
+                if (osc_exp == NULL)
+                        GOTO(out, rc = -EINVAL);
+                rc = obd_statfs(osc_exp, &osfs);
+                class_export_put(osc_exp);
                 if (rc) {
                         CERROR("obd_statfs fails: rc = %d\n", rc);
                         GOTO(out, rc);
@@ -330,14 +340,24 @@ int ll_statfs(struct super_block *sb, struct kstatfs *sfs)
                         osfs.os_bfree >>= 1;
                         osfs.os_bavail >>= 1;
                 }
+
                 sfs->f_blocks = osfs.os_blocks;
                 sfs->f_bfree = osfs.os_bfree;
                 sfs->f_bavail = osfs.os_bavail;
-                if (osfs.os_ffree < (__u64)sfs->f_ffree)
+
+                /* If we don't have as many objects free on the OST as inodes
+                 * on the MDS, we reduce the total number of inodes to
+                 * compensate, so that the "inodes in use" number is correct.
+                 */
+                if (osfs.os_ffree < (__u64)sfs->f_ffree) {
+                        sfs->f_files = (sfs->f_files - sfs->f_ffree) +
+                                       osfs.os_ffree;
                         sfs->f_ffree = osfs.os_ffree;
+                }
         }
 
 out:
+        class_export_put(mdc_exp);
         RETURN(rc);
 }
 
@@ -348,9 +368,10 @@ void ll_clear_inode(struct inode *inode)
         int rc;
         ENTRY;
 
-        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu\n", inode->i_ino);
+        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p)\n", inode->i_ino,
+               inode->i_generation, inode);
         rc = ll_mdc_cancel_unused(&sbi->ll_mdc_conn, inode,
-                                  LDLM_FL_NO_CALLBACK);
+                                  LDLM_FL_NO_CALLBACK, inode);
         if (rc < 0) {
                 CERROR("ll_mdc_cancel_unused: %d\n", rc);
                 /* XXX FIXME do something dramatic */
@@ -361,7 +382,8 @@ void ll_clear_inode(struct inode *inode)
                        inode->i_ino, atomic_read(&inode->i_count));
 
         if (lli->lli_smd) {
-                rc = obd_cancel_unused(&sbi->ll_osc_conn, lli->lli_smd, 0);
+                rc = obd_cancel_unused(&sbi->ll_osc_conn, lli->lli_smd,
+                                       LDLM_FL_WARN, inode);
                 if (rc < 0) {
                         CERROR("obd_cancel_unused: %d\n", rc);
                         /* XXX FIXME do something dramatic */
@@ -387,7 +409,11 @@ static int ll_attr2inode(struct inode *inode, struct iattr *attr, int trunc)
         int error = 0;
 
         if ((ia_valid & ATTR_SIZE) && trunc) {
-                error = vmtruncate(inode, attr->ia_size);
+                if (attr->ia_size > ll_file_maxbytes(inode)) {
+                        error = -EFBIG;
+                        goto out;
+                }
+                 error = vmtruncate(inode, attr->ia_size);
                 if (error)
                         goto out;
         } else if (ia_valid & ATTR_SIZE)
@@ -420,7 +446,9 @@ int ll_inode_setattr(struct inode *inode, struct iattr *attr, int do_trunc)
         ENTRY;
 
         /* change incore inode */
-        ll_attr2inode(inode, attr, do_trunc);
+        err = ll_attr2inode(inode, attr, do_trunc);
+        if (err)
+                RETURN(err);
 
         /* Don't send size changes to MDS to avoid "fast EA" problems, and
          * also avoid a pointless RPC (we get file size from OST anyways).
@@ -431,7 +459,7 @@ int ll_inode_setattr(struct inode *inode, struct iattr *attr, int do_trunc)
 
                 ll_prepare_mdc_op_data(&op_data, inode, NULL, NULL, 0, 0);
                 err = mdc_setattr(&sbi->ll_mdc_conn, &op_data,
-                                  attr, NULL, 0, &request);
+                                  attr, NULL, 0, NULL, 0, &request);
                 if (err)
                         CERROR("mdc_setattr fails: err = %d\n", err);
 
@@ -469,6 +497,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
         int rc = 0, err;
         ENTRY;
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu\n", inode->i_ino);
+        lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_SETATTR);
 
         if ((attr->ia_valid & ATTR_SIZE)) {
                 struct ldlm_extent extent = {attr->ia_size, OBD_OBJECT_EOF};
@@ -521,7 +550,7 @@ skip_extent_lock:
         ll_prepare_mdc_op_data(&op_data, inode, NULL, NULL, 0, 0);
 
         err = mdc_setattr(&sbi->ll_mdc_conn, &op_data,
-                          attr, NULL, 0, &request);
+                          attr, NULL, 0, NULL, 0, &request);
         if (err)
                 CERROR("mdc_setattr fails: err = %d\n", err);
 
@@ -555,6 +584,7 @@ int ll_setattr(struct dentry *de, struct iattr *attr)
         if (rc)
                 return rc;
 
+        lprocfs_counter_incr(ll_i2sbi(de->d_inode)->ll_stats, LPROC_LL_SETATTR);
         return ll_inode_setattr(de->d_inode, attr, 1);
 }
 
@@ -566,12 +596,15 @@ void ll_update_inode(struct inode *inode, struct mds_body *body,
 
         LASSERT ((lsm != NULL) == ((body->valid & OBD_MD_FLEASIZE) != 0));
         if (lsm != NULL) {
-                if (lli->lli_smd == NULL)
+                if (lli->lli_smd == NULL) {
                         lli->lli_smd = lsm;
-                else
-                        LASSERT(!memcmp(lli->lli_smd, lsm, sizeof(*lsm)));
+                        lli->lli_maxbytes = lsm->lsm_maxbytes;
+                        if (lli->lli_maxbytes > PAGE_CACHE_MAXBYTES)
+                                lli->lli_maxbytes = PAGE_CACHE_MAXBYTES;
+                } else {
+                        LASSERT (!memcmp (lli->lli_smd, lsm, sizeof (*lsm)));
+                }
         }
-
         if (body->valid & OBD_MD_FLID)
                 inode->i_ino = body->ino;
         if (body->valid & OBD_MD_FLATIME)

@@ -7,4 +7,5 @@ include $(src)/../portals/Kernelenv
 
 obj-y += ptlrpc.o
 ptlrpc-objs := recover.o connection.o ptlrpc_module.o events.o service.o \
-		client.o niobuf.o pack_generic.o lproc_ptlrpc.o pinger.o
+		client.o niobuf.o pack_generic.o lproc_ptlrpc.o pinger.o \
+		recov_thread.o

@@ -4,7 +4,7 @@ OURPTLCTL := $(addprefix $(src)/../portals/utils/, $(PTLCTLOBJS))
 OURPTLCTLNOPARSER := $(addprefix $(src)/../portals/utils/, \
 			$(filter-out parser.o,$(PTLCTLOBJS)))
 
-host-progs := lctl lfind lstripe obdio obdbarrier obdstat lload
+host-progs := lctl lfind lstripe obdio obdbarrier lload # obdstat
 always := $(host-progs) 
 
 lctl-objs := parser.o obd.o lctl.o
