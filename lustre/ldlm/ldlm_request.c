@@ -338,10 +338,10 @@ int ldlm_cli_enqueue(struct obd_export *exp,
                 GOTO(cleanup, rc = -EPROTO);
         }
 
-        /* XXX - Phil, wasn't sure if this shoiuld go before or after the
-        /* lustre_swab_repbuf() ? If we can't unpack the reply then we
-        /* don't know what occurred on the server so I think the safest
-        /* bet is to cleanup the lock as if it didn't make it ? */
+        /* XXX - Phil, wasn't sure if this should go before or after the
+         * lustre_swab_repbuf() ? If we can't unpack the reply then we
+         * don't know what occurred on the server so I think the safest
+         * bet is to cleanup the lock as if it didn't make it ? */
 
         /* lock enqueued on the server */
         cleanup_phase = 1;

@@ -806,7 +806,7 @@ static void target_finish_recovery(struct obd_device *obd)
 
 static int check_for_next_transno(struct obd_device *obd)
 {
-        struct ptlrpc_request *req;
+        struct ptlrpc_request *req = NULL;
         int wake_up = 0, connected, completed, queue_len, max;
         __u64 next_transno, req_transno;
 
