@@ -15,13 +15,14 @@
 #ifdef __KERNEL__
 #include <linux/ctype.h>
 #include <linux/kernel.h>
+#include <linux/sched.h>
+#include <linux/smp_lock.h>
 #else 
 #include <liblustre.h>
 #endif
 
 #include <linux/obd_support.h>
 #include <linux/obd_class.h>
-#include <linux/smp_lock.h>
 
 struct uuid {
 	__u32	time_low;
