@@ -192,6 +192,12 @@ int ptlrpc_disconnect_import(struct obd_import *imp)
 
         request = ptlrpc_prep_req(imp, rq_opc, 0, NULL, NULL);
         if (request) {
+                /* For non-replayable connections, don't attempt
+                   reconnect if this fails */
+                if (!imp->imp_obd->obd_replayable) {
+                        imp->imp_state = LUSTRE_IMP_DISCON;
+                        request->rq_send_state =  LUSTRE_IMP_DISCON;
+                }
                 request->rq_replen = lustre_msg_size(0, NULL);
                 rc = ptlrpc_queue_wait(request);
                 ptlrpc_req_finished(request);
