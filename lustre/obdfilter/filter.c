@@ -256,7 +256,7 @@ static __u64 filter_next_id(struct obd_device *obd)
 
         spin_lock(&obd->u.filter.fo_objidlock);
         id = ++obd->u.filter.fo_lastobjid;
-        spin_unlock(&obd->u.filter.fo_objidock);
+        spin_unlock(&obd->u.filter.fo_objidlock);
 
         /* FIXME: write the lastobjid to disk here */
         return id;
@@ -384,7 +384,7 @@ static struct file *filter_obj_open(struct obd_export *export,
                 atomic_inc(&fdd->fdd_open_count);
         } else {
                 atomic_set(&fdd->fdd_open_count, 1);
-                spin_lock_init(&fdd->fdd_lock);
+                spin_lock_init(&fdd->fo_fddlock);
                 fdd->fdd_flags = 0;
                 /* If this is racy, then we can use {cmp}xchg and atomic_add */
                 file->f_dentry->d_fsdata = fdd;
@@ -507,23 +507,23 @@ static int filter_disconnect(struct lustre_handle *conn)
 
         LASSERT(exp);
         fed = &exp->exp_filter_data;
-        spin_lock(&exp->exp_filter_data);
-        while(!list_empty(&fed->fed_open_head)) {
+        spin_lock(&fed->fed_lock);
+        while (!list_empty(&fed->fed_open_head)) {
                 struct filter_file_data *ffd;
 
                 ffd = list_entry(fed->fed_open_head.next, typeof(*ffd),
                                  ffd_export_list);
                 list_del(&ffd->ffd_export_list);
-                spin_unlock(&exp->exp_filter_data);
+                spin_unlock(&fed->fed_lock);
 
                 CERROR("force closing file %*s on disconnect\n",
                        ffd->ffd_file->f_dentry->d_name.len,
                        ffd->ffd_file->f_dentry->d_name.name);
 
                 filter_close_internal(exp->exp_obd, ffd);
-                spin_lock(&exp->exp_filter_data);
+                spin_lock(&fed->fed_lock);
         }
-        spin_unlock(&exp->exp_filter_data);
+        spin_unlock(&fed->fed_lock);
 
         ldlm_cancel_locks_for_export(exp);
         rc = class_disconnect(conn);
@@ -569,7 +569,8 @@ static int filter_setup(struct obd_device *obd, obd_count len, void *buf)
         err = filter_prep(obd);
         if (err)
                 GOTO(err_kfree, err);
-        spin_lock_init(&filter->fo_lock);
+        spin_lock_init(&filter->fo_fddlock);
+        spin_lock_init(&filter->fo_objidlock);
         INIT_LIST_HEAD(&filter->fo_export_list);
 
         obd->obd_namespace =
@@ -797,6 +798,7 @@ static int filter_close(struct lustre_handle *conn, struct obdo *oa,
 {
         struct obd_export *exp;
         struct filter_file_data *ffd;
+        struct filter_export_data *fed;
         int rc;
         ENTRY;
 
@@ -819,23 +821,23 @@ static int filter_close(struct lustre_handle *conn, struct obdo *oa,
                 RETURN(-ESTALE);
         }
 
-        spin_lock(&exp->exp_filter_data);
+        fed = &exp->exp_filter_data;
+        spin_lock(&fed->fed_lock);
         list_del(&ffd->ffd_export_list);
-        spin_unlock(&exp->exp_filter_data);
+        spin_unlock(&fed->fed_lock);
 
         rc = filter_close_internal(exp->exp_obd, ffd);
 
         RETURN(rc);
 } /* filter_close */
 
-static int filter_create(struct lustre_handle* conn, struct obdo *oa,
+static int filter_create(struct lustre_handle *conn, struct obdo *oa,
                          struct lov_stripe_md **ea)
 {
         struct obd_device *obd = class_conn2obd(conn);
         char name[64];
         struct obd_run_ctxt saved;
         struct dentry *new;
-        int mode;
         struct iattr;
         ENTRY;
 
@@ -844,7 +846,7 @@ static int filter_create(struct lustre_handle* conn, struct obdo *oa,
                 return -EINVAL;
         }
 
-        if (!(oa->o_mode && S_IFMT)) {
+        if (!(oa->o_mode & S_IFMT)) {
                 CERROR("OBD %s, object "LPU64" has bad type: %o\n",
                        __FUNCTION__, oa->o_id, oa->o_mode);
                 return -ENOENT;
@@ -855,7 +857,7 @@ static int filter_create(struct lustre_handle* conn, struct obdo *oa,
         //filter_id(name, oa->o_id, oa->o_mode);
         sprintf(name, LPU64, oa->o_id);
         push_ctxt(&saved, &obd->u.filter.fo_ctxt, NULL);
-        new = simple_mknod(filter_parent(obd, oa->o_mode), name, mode);
+        new = simple_mknod(filter_parent(obd, oa->o_mode), name, oa->o_mode);
         pop_ctxt(&saved);
         if (IS_ERR(new)) {
                 CERROR("Error mknod obj %s, err %ld\n", name, PTR_ERR(new));
@@ -1203,7 +1205,7 @@ static inline void lustre_put_page(struct page *page)
 #define PageUptodate(page) Page_Uptodate(page)
 #endif
 static struct page *
-lustre_get_page_read(struct inode *inode, 
+lustre_get_page_read(struct inode *inode,
                      struct niobuf_remote *rnb)
 {
         unsigned long index = rnb->offset >> PAGE_SHIFT;
@@ -1289,13 +1291,13 @@ static int lustre_commit_write(struct page *page, unsigned from, unsigned to)
         return err;
 }
 
-struct page *filter_get_page_write(struct inode *inode, 
+struct page *filter_get_page_write(struct inode *inode,
                                    struct niobuf_remote *rnb,
                                    struct niobuf_local *lnb, int *pglocked)
 {
         unsigned long index = rnb->offset >> PAGE_SHIFT;
         struct address_space *mapping = inode->i_mapping;
-        
+
         struct page *page;
         int rc;
 
@@ -1334,8 +1336,8 @@ struct page *filter_get_page_write(struct inode *inode,
                 (*pglocked)++;
                 kmap(page);
 
-                rc = mapping->a_ops->prepare_write(NULL, page, 
-                                                   rnb->offset % PAGE_SIZE, 
+                rc = mapping->a_ops->prepare_write(NULL, page,
+                                                   rnb->offset % PAGE_SIZE,
                                                    rnb->len);
                 if (rc) {
                         CERROR("page index %lu, rc = %d\n", index, rc);
