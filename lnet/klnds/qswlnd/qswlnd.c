@@ -74,7 +74,8 @@ kqswnal_get_tx_desc (struct portals_cfg *pcfg)
 		ktx = list_entry (tmp, kqswnal_tx_t, ktx_list);
 		hdr = (ptl_hdr_t *)ktx->ktx_buffer;
 
-		pcfg->pcfg_pbuf1 = (char *)ktx;
+		memcpy(pcfg->pcfg_pbuf, ktx,
+		       MIN(sizeof(*ktx), pcfg->pcfg_plen1));
 		pcfg->pcfg_count = le32_to_cpu(hdr->type);
 		pcfg->pcfg_size  = le32_to_cpu(hdr->payload_length);
 		pcfg->pcfg_nid   = le64_to_cpu(hdr->dest_nid);

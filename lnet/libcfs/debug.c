@@ -208,15 +208,18 @@ char *portals_nid2str(int nal, ptl_nid_t nid, char *str)
         case VIBNAL:
         case OPENIBNAL:
         case RANAL:
-        case SOCKNAL:
+        case SOCKNAL: {
+                /* HIPQUAD requires __u32, but we can't cast in it */
+                __u32 nid32 = (__u32)nid;
                 if ((__u32)(nid >> 32)) {
                         snprintf(str, PTL_NALFMT_SIZE, "%u:%u.%u.%u.%u",
-                                 (__u32)(nid >> 32), HIPQUAD(nid));
+                                 (__u32)(nid >> 32), HIPQUAD(nid32));
                 } else {
                         snprintf(str, PTL_NALFMT_SIZE, "%u.%u.%u.%u",
-                                 HIPQUAD(nid));
+                                 HIPQUAD(nid32));
                 }
                 break;
+        }
         case QSWNAL:
         case GMNAL:
         case LONAL:

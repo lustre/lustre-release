@@ -262,7 +262,7 @@ struct portals_device_userstate
  * USER LEVEL STUFF BELOW
  */
 
-#define PORTAL_IOCTL_VERSION 0x00010007
+#define PORTAL_IOCTL_VERSION 0x00010008
 #define PING_SYNC       0
 #define PING_ASYNC      1
 

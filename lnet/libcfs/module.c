@@ -274,6 +274,10 @@ libcfs_nal_cmd(struct portals_cfg *pcfg)
         int   rc = -EINVAL;
         ENTRY;
 
+        if (pcfg->pcfg_version != PORTALS_CFG_VERSION) {
+                RETURN(-EINVAL);
+        }
+
         mutex_down(&nal_cmd_mutex);
         cmd = libcfs_find_nal_cmd_handler(nal);
         if (cmd != NULL) {
@@ -408,12 +412,25 @@ static int libcfs_ioctl(struct cfs_psdev_file *pfile, unsigned long cmd, void *a
 
                 CDEBUG (D_IOCTL, "nal command nal %x cmd %d\n", pcfg.pcfg_nal,
                         pcfg.pcfg_command);
-                err = libcfs_nal_cmd(&pcfg);
+                if (pcfg.pcfg_version != PORTALS_CFG_VERSION) {
+                        /* set this so userspace can tell when they
+                         * have an incompatible version and print a
+                         * decent message to the user
+                         */
+                        pcfg.pcfg_version = PORTALS_CFG_VERSION;
+                        if (copy_to_user((char *)data->ioc_pbuf1, &pcfg,
+                                         sizeof (pcfg)))
+                                err = -EFAULT;
+                        else
+                                err = -EINVAL;
+                } else {
+                        err = libcfs_nal_cmd(&pcfg);
 
-                if (err == 0 &&
-                    copy_to_user((char *)data->ioc_pbuf1, &pcfg,
-                                 sizeof (pcfg)))
-                        err = -EFAULT;
+                        if (err == 0 &&
+                            copy_to_user((char *)data->ioc_pbuf1, &pcfg,
+                                         sizeof (pcfg)))
+                                err = -EFAULT;
+                }
                 break;
         }
 

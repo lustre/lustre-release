@@ -32,7 +32,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <fcntl.h>
+#ifdef HAVE_SYS_IOCTL_H
 #include <sys/ioctl.h>
+#else
+#include "ioctl.h"
+#endif
 #include <errno.h>
 #include <unistd.h>
 #include <time.h>
@@ -175,6 +179,9 @@ pcfg_ioctl(struct portals_cfg *pcfg)
                 data.ioc_nid = pcfg->pcfg_nid;
 
                 rc = l_ioctl (PORTALS_DEV_ID, IOC_PORTAL_NAL_CMD, &data);
+
+                if (rc == 0 && pcfg->pcfg_version != PORTALS_CFG_VERSION)
+                        return -EINVAL;
         }
 
         return (rc);
@@ -579,8 +586,16 @@ jt_ptl_print_interfaces (int argc, char **argv)
                         pcfg.pcfg_fd, pcfg.pcfg_count);
         }
 
-        if (index == 0)
-                printf ("<no interfaces>\n");
+        if (index == 0) {
+                if (errno == ENOENT) {
+                        printf ("<no interfaces>\n");
+                } else {
+                        fprintf(stderr, "Error getting interfaces: %s: "
+                                "check dmesg.\n",
+                                strerror(errno));
+                }
+        }
+
         return 0;
 }
 
@@ -704,8 +719,15 @@ jt_ptl_print_peers (int argc, char **argv)
                                 pcfg.pcfg_nid, pcfg.pcfg_wait);
         }
 
-        if (index == 0)
-                printf ("<no peers>\n");
+        if (index == 0) {
+                if (errno == ENOENT) {
+                        printf ("<no peers>\n");
+                } else {
+                        fprintf(stderr, "Error getting peer list: %s: "
+                                "check dmesg.\n",
+                                strerror(errno));
+                }
+        }
         return 0;
 }
 
@@ -850,7 +872,7 @@ jt_ptl_print_connections (int argc, char **argv)
                                   OPENIBNAL, IIBNAL, VIBNAL, 0))
                 return -1;
 
-        for (index = 0;;index++) {
+        for (index = 0; ; index++) {
                 PCFG_INIT (pcfg,  NAL_CMD_GET_CONN);
                 pcfg.pcfg_count   = index;
                 
@@ -881,8 +903,15 @@ jt_ptl_print_connections (int argc, char **argv)
                                 pcfg.pcfg_nid);
         }
 
-        if (index == 0)
-                printf ("<no connections>\n");
+        if (index == 0) {
+                if (errno == ENOENT) {
+                        printf ("<no connections>\n");
+                } else {
+                        fprintf(stderr, "Error getting connection list: %s: "
+                                "check dmesg.\n",
+                                strerror(errno));
+                }
+        }
         return 0;
 }
 
@@ -1131,12 +1160,11 @@ jt_ptl_print_active_txs (int argc, char **argv)
                 if (rc != 0)
                         break;
 
-                printf ("%p: %5s payload %6d bytes to "LPX64" via "LPX64" by pid %6d: %s, %s, state %d\n",
-                        pcfg.pcfg_pbuf1,
+                printf ("%5s payload %6d bytes to "LPX64" via "LPX64" by pid %6d: %s, %s, state %d\n",
                         pcfg.pcfg_count == PTL_MSG_ACK ? "ACK" :
                         pcfg.pcfg_count == PTL_MSG_PUT ? "PUT" :
                         pcfg.pcfg_count == PTL_MSG_GET ? "GET" :
-                        pcfg.pcfg_count == PTL_MSG_REPLY ? "REPLY" : "<wierd message>",
+                        pcfg.pcfg_count == PTL_MSG_REPLY ? "REPLY" : "<weird message>",
                         pcfg.pcfg_size,
                         pcfg.pcfg_nid,
                         pcfg.pcfg_nid2,
@@ -1146,8 +1174,15 @@ jt_ptl_print_active_txs (int argc, char **argv)
                         pcfg.pcfg_flags >> 2);
         }
 
-        if (index == 0)
-                printf ("<no active descs>\n");
+        if (index == 0) {
+                if (errno == ENOENT) {
+                        printf ("<no active descs>\n");
+                } else {
+                        fprintf(stderr, "Error getting active transmits list: "
+                                "%s: check dmesg.\n",
+                                strerror(errno));
+                }
+        }
         return 0;
 }
 
@@ -1579,6 +1614,11 @@ jt_ptl_print_routes (int argc, char **argv)
                         ptl_nid2str (buffer[1], nid1),
                         ptl_nid2str (buffer[2], nid2),
                         alive ? "up" : "down");
+        }
+
+        if (index == 0 && errno != ENOENT) {
+                fprintf(stderr, "Error getting routes: %s: check dmesg.\n",
+                        strerror(errno));
         }
         return (0);
 }

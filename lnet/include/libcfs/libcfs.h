@@ -110,6 +110,7 @@ extern unsigned int portal_printk;
 # define DEBUG_SUBSYSTEM S_UNDEFINED
 #endif
 
+#ifdef __KERNEL__
 #if 1
 #define CDEBUG(mask, format, a...)                                            \
 do {                                                                          \
@@ -207,7 +208,7 @@ do {                                                                    \
         CDEBUG(D_TRACE, "Process leaving\n");                           \
         EXIT_NESTING;                                                   \
 } while(0)
-#else
+#else /* !1 */
 
 #define RETURN(rc) return (rc)
 #define ENTRY
@@ -220,15 +221,50 @@ do {                                                                    \
 #define CWARN(format, a...)             printk(KERN_WARNING format, ## a)
 #define CERROR(format, a...)            printk(KERN_ERR format, ## a)
 #define CEMERG(format, a...)            printk(KERN_EMERG format, ## a)
+#define LCONSOLE(mask, format, a...)    do { } while (0)
+#define LCONSOLE_INFO(format, a...)     printk(KERN_INFO format, ## a)
+#define LCONSOLE_WARN(format, a...)     printk(KERN_WARNING format, ## a)
+#define LCONSOLE_ERROR(format, a...)    printk(KERN_ERROR format, ## a)
+#define LCONSOLE_EMERG(format, a...)    printk(KERN_EMERG format, ## a)
 #define GOTO(label, rc)                 do { (void)(rc); goto label; } while (0)
 #define RETURN(rc)                      return (rc)
 #define ENTRY                           do { } while (0)
 #define EXIT                            do { } while (0)
-#endif
+#endif /* !1 */
+#else /* !__KERNEL__ */
+#define CDEBUG(mask, format, a...)      do { } while (0)
+#define LCONSOLE(mask, format, a...)    do { } while (0)
+#ifdef stderr
+#define CWARN(format, a...)             fprintf(stderr, "<4>" format, ## a)
+#define CERROR(format, a...)            fprintf(stderr, "<3>" format, ## a)
+#define CEMERG(format, a...)            fprintf(stderr, "<0>" format, ## a)
+#define LCONSOLE_INFO(format, a...)     fprintf(stderr, format, ## a)
+#define LCONSOLE_WARN(format, a...)     fprintf(stderr, format, ## a)
+#define LCONSOLE_ERROR(format, a...)    fprintf(stderr, format, ## a)
+#define LCONSOLE_EMERG(format, a...)    fprintf(stderr, format, ## a)
+#else
+#define CWARN(format, a...)             do { } while (0)
+#define CERROR(format, a...)            do { } while (0)
+#define CEMERG(format, a...)            do { } while (0)
+#define LCONSOLE_INFO(format, a...)     do { } while (0)
+#define LCONSOLE_WARN(format, a...)     do { } while (0)
+#define LCONSOLE_ERROR(format, a...)    do { } while (0)
+#define LCONSOLE_EMERG(format, a...)    do { } while (0)
+#endif /* !stderr */
+#define GOTO(label, rc)                 do { (void)(rc); goto label; } while (0)
+#define RETURN(rc)                      return (rc)
+#define ENTRY                           do { } while (0)
+#define EXIT                            do { } while (0)
+#endif /* !__KERNEL__ */
 
 #define LUSTRE_SRV_PTL_PID      LUSTRE_PTL_PID
 
-#define PORTALS_CFG_VERSION 0x00010001
+/*
+ * eeb cfg
+ * ecf6
+ * ecfG
+ */
+#define PORTALS_CFG_VERSION 0xecf60001
 
 struct portals_cfg {
         __u32 pcfg_version;
@@ -238,6 +274,8 @@ struct portals_cfg {
         __u32 pcfg_flags;
 
         __u32 pcfg_gw_nal;
+        __u32 pcfg_padding1;
+
         __u64 pcfg_nid;
         __u64 pcfg_nid2;
         __u64 pcfg_nid3;
@@ -249,18 +287,42 @@ struct portals_cfg {
         __u32 pcfg_wait;
 
         __u32 pcfg_plen1; /* buffers in userspace */
-        char *pcfg_pbuf1;
         __u32 pcfg_plen2; /* buffers in userspace */
-        char *pcfg_pbuf2;
+        __u32 pcfg_alloc_size;  /* size of this allocated portals_cfg */
+        char  pcfg_pbuf[0];
 };
 
 #define PCFG_INIT(pcfg, cmd)                            \
 do {                                                    \
-        memset(&pcfg, 0, sizeof(pcfg));                 \
-        pcfg.pcfg_version = PORTALS_CFG_VERSION;        \
-        pcfg.pcfg_command = (cmd);                      \
+        memset(&(pcfg), 0, sizeof((pcfg)));             \
+        (pcfg).pcfg_version = PORTALS_CFG_VERSION;      \
+        (pcfg).pcfg_command = (cmd);                    \
                                                         \
 } while (0)
+
+#define PCFG_INIT_PBUF(pcfg, cmd, plen1, plen2)                         \
+        do {                                                            \
+                int bufsize = size_round(sizeof(*(pcfg)));              \
+                bufsize += size_round(plen1) + size_round(plen2);       \
+                PORTAL_ALLOC((pcfg), bufsize);                          \
+                if ((pcfg)) {                                           \
+                        memset((pcfg), 0, bufsize);                     \
+                        (pcfg)->pcfg_version = PORTALS_CFG_VERSION;     \
+                        (pcfg)->pcfg_command = (cmd);                   \
+                        (pcfg)->pcfg_plen1 = (plen1);                   \
+                        (pcfg)->pcfg_plen2 = (plen2);                   \
+                        (pcfg)->pcfg_alloc_size = bufsize;              \
+                }                                                       \
+        } while (0)
+
+#define PCFG_FREE_PBUF(pcfg) PORTAL_FREE((pcfg), (pcfg)->pcfg_alloc_size)
+
+#define PCFG_PBUF(pcfg, idx)                                            \
+        (0 == (idx)                                                     \
+         ? ((char *)(pcfg) + size_round(sizeof(*(pcfg))))               \
+         : (1 == (idx)                                                  \
+            ? ((char *)(pcfg) + size_round(sizeof(*(pcfg))) + size_round(pcfg->pcfg_plen1)) \
+            : (NULL)))
 
 typedef int (nal_cmd_handler_fn)(struct portals_cfg *, void *);
 int libcfs_nal_cmd_register(int nal, nal_cmd_handler_fn *handler, void *arg);

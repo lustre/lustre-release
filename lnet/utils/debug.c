@@ -32,6 +32,11 @@
 #endif
 #include <stdlib.h>
 #include <string.h>
+#ifdef HAVE_SYS_IOCTL_H
+#include <sys/ioctl.h>
+#else
+#include "ioctl.h"
+#endif
 #include <fcntl.h>
 #include <errno.h>
 #include <unistd.h>
@@ -704,7 +709,7 @@ static int jt_dbg_modules_2_4(int argc, char **argv)
 #ifdef HAVE_LINUX_VERSION_H
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         struct mod_paths *mp;
-        char *path = "..";
+        char *path = "";
         char *kernel = "linux";
 
         if (argc >= 2)
@@ -730,8 +735,8 @@ static int jt_dbg_modules_2_4(int argc, char **argv)
                                 printf("query_module(%s) failed: %s\n",
                                        mp->name, strerror(errno));
                 } else {
-                        printf("add-symbol-file %s/%s/%s.o 0x%0lx\n", path,
-                               mp->path, mp->name,
+                        printf("add-symbol-file %s%s%s/%s.o 0x%0lx\n", path,
+                               path[0] ? "/" : "", mp->path, mp->name,
                                info.addr + sizeof(struct module));
                 }
         }
@@ -745,7 +750,7 @@ static int jt_dbg_modules_2_4(int argc, char **argv)
 static int jt_dbg_modules_2_5(int argc, char **argv)
 {
         struct mod_paths *mp;
-        char *path = "..";
+        char *path = "";
         char *kernel = "linux";
         const char *proc = "/proc/modules";
         char modname[128], others[128];
@@ -775,8 +780,8 @@ static int jt_dbg_modules_2_5(int argc, char **argv)
                                 break;
                 }
                 if (mp->name) {
-                        printf("add-symbol-file %s/%s/%s.o 0x%0lx\n", path,
-                               mp->path, mp->name, modaddr);
+                        printf("add-symbol-file %s%s%s/%s.o 0x%0lx\n", path,
+                               path[0] ? "/" : "", mp->path, mp->name, modaddr);
                 }
         }
 

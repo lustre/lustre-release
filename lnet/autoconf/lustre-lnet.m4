@@ -586,7 +586,7 @@ AC_DEFUN([LP_PATH_DEFAULTS],
 #
 AC_DEFUN([LP_CONFIGURE],
 [# portals/utils/portals.c
-AC_CHECK_HEADERS([netdb.h netinet/tcp.h asm/types.h endian.h])
+AC_CHECK_HEADERS([netdb.h netinet/tcp.h asm/types.h endian.h sys/ioctl.h])
 AC_CHECK_FUNCS([gethostbyname socket connect])
 
 # portals/utils/debug.c

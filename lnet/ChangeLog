@@ -1,3 +1,8 @@
+2005-02-04  Cluster File Systems, Inc. <info@clusterfs.com>
+       * miscellania
+	- update vibnal (Voltaire IB NAL)
+	- update gmnal (Myrinet NAL), gmnalid
+
 2005-02-04  Eric Barton  <eeb@bartonsoftware.com>
 
 	* Landed portals:b_port_step as follows...

@@ -250,10 +250,12 @@ static void collect_pages_on_cpu(void *info)
         tcd = trace_get_tcd(flags);
 
         spin_lock(&pc->pc_lock);
-        list_splice_init(&tcd->tcd_pages, &pc->pc_pages);
+        list_splice(&tcd->tcd_pages, &pc->pc_pages);
+        CFS_INIT_LIST_HEAD(&tcd->tcd_pages);
         tcd->tcd_cur_pages = 0;
         if (pc->pc_want_daemon_pages) {
-                list_splice_init(&tcd->tcd_daemon_pages, &pc->pc_pages);
+                list_splice(&tcd->tcd_daemon_pages, &pc->pc_pages);
+                CFS_INIT_LIST_HEAD(&tcd->tcd_pages);
                 tcd->tcd_cur_daemon_pages = 0;
         }
         spin_unlock(&pc->pc_lock);
@@ -576,8 +578,8 @@ static int tracefiled(void *arg)
                         }
                 }
                 CFS_MMSPACE_CLOSE;
-                cfs_filp_close(filp);
 
+                cfs_filp_close(filp);
                 put_pages_on_daemon_list(&pc);
         }
         complete(&tctl->tctl_stop);

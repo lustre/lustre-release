@@ -52,7 +52,7 @@ gmnal_cmd(struct portals_cfg *pcfg, void *private)
 	case(GMNAL_IOC_GET_GNID):
 
 		PORTAL_ALLOC(name, pcfg->pcfg_plen1);
-		copy_from_user(name, pcfg->pcfg_pbuf1, pcfg->pcfg_plen1);
+		copy_from_user(name, PCFG_PBUF(pcfg, 1), pcfg->pcfg_plen1);
 	
 		GMNAL_GM_LOCK(nal_data);
 		//nid = gm_host_name_to_node_id(nal_data->gm_port, name);
@@ -74,7 +74,7 @@ gmnal_cmd(struct portals_cfg *pcfg, void *private)
 			return(-1);
 		}
 		CDEBUG(D_INFO, "Global node is is [%u][%x]\n", gnid, gnid);
-		copy_to_user(pcfg->pcfg_pbuf2, &gnid, pcfg->pcfg_plen2);
+		copy_to_user(PCFG_PBUF(pcfg, 2), &gnid, pcfg->pcfg_plen2);
 	break;
 	default:
 		CDEBUG(D_INFO, "gmnal_cmd UNKNOWN[%d]\n", pcfg->pcfg_command);

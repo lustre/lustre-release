@@ -9,7 +9,7 @@
 #define CFS_LIST_HEAD(n)		LIST_HEAD(n)
 #define CFS_INIT_LIST_HEAD(p)		INIT_LIST_HEAD(p)
 
-#else /* !defined (__linux__) && defined(__KERNEL__) */
+#else /* !defined (__linux__) || !defined(__KERNEL__) */
 
 /*
  * Simple doubly linked list implementation.
