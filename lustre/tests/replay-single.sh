@@ -215,12 +215,11 @@ test_6() {
     mv $MOUNTPT/f6 $MOUNTPT/F6
     rm -f $MOUNTPT/F6
     fail mds
-    ls $MOUNTPT/f6 
-    ls $MOUNTPT/F6
-    rm -f  $MOUNTPT/f6
-    rm -f  $MOUNTPT/F6
-
+    checkstat $MOUNTPT/f6 && return 1
+    checkstat $MOUNTPT/F6 && return 2
+    return 0
 }
+
 run_test 6 "create |X| rename unlink"
 
 test_7() {
@@ -240,7 +239,7 @@ run_test 7 "create open write rename |X| create-old-name read"
 
 test_8() {
     mcreate $MOUNTPT/f8 
-    multiop $MOUNTPT/f8 o_Sc &
+    multiop $MOUNTPT/f8 o_tSc &
     pid=$!
     # give multiop a chance to open
     sleep 1 
