@@ -1,4 +1,10 @@
 2003-08-12  Brian Behlendorf  <behlendorf1@llnl.gov>
+       * tip of b_llnl_devel
+       * bug fixes:
+         - #1600 MDS server data isn't written at setup.  This causes a crash 
+           in mds_update_server_data when the MDS is mounted the first time.
+
+2003-08-12  Brian Behlendorf  <behlendorf1@llnl.gov>
        * version llnl_4devel tagged
        * bug fixes:
          - #1751 fixes an LBUG/bad LOV EA if lov_create fails because
