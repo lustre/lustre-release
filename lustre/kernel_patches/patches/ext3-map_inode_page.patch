@@ -82,3 +82,5 @@
  EXPORT_SYMBOL(ext3_xattr_set);
  EXPORT_SYMBOL(ext3_prep_san_write);
 +EXPORT_SYMBOL(ext3_map_inode_page);
+
+_
