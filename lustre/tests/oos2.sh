@@ -76,9 +76,10 @@ if [ $RECORDSOUT -ne $(($FILESIZE / 1024)) ]; then
         SUCCESS=0
 fi
 
+rm -f $OOS $LOG
+
 if [ $SUCCESS -eq 1 ]; then
 	echo "Success!"
-
-	rm -f $OOS
-	rm -f $LOG
+else
+	exit 1
 fi
