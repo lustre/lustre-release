@@ -16,7 +16,7 @@ runthreads() {
 	V=$4
 	PGS=$5
 
-	case $CMD in
+	case $DO in
 	test_getattr)
 		RW=
 		;;
@@ -31,13 +31,13 @@ runthreads() {
 		;;
 	esac
 
+	$OBDCTL --threads $THR v '$OSCDEV' $DO $CNT $RW $V $PGS $OID || exit 1
+
 	if [ -e endrun ]; then
 		rm endrun
 		echo "exiting because endrun file was found"
 		exit 0
 	fi
-
-	$OBDCTL --threads $THR v '$OSCDEV' $DO $CNT $RW $V $PGS $OID || exit 1
 }
 
 setup_server || exit -1
@@ -60,7 +60,10 @@ for CMD in test_getattr test_brw_write test_brw_read; do
 
 	test_brw_read)
 		PG=1
-		#PGV=16 # disabled until the BA OST code is updated
+		case $OSTNODE in
+		ba*) PGV= ;; # disabled until the BA OST code is updated
+		*) PGV=16 ;;
+		esac
 		;;
 	esac
 
