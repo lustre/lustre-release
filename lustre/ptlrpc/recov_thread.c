@@ -50,6 +50,8 @@
 #include <linux/lustre_log.h>
 #include "ptlrpc_internal.h"
 
+#define LLCD_SIZE 4096
+
 #ifdef __KERNEL__
 
 static struct llog_commit_master lustre_lcm;
@@ -61,7 +63,7 @@ static int llcd_alloc(void)
         struct llog_canceld_ctxt *llcd;
         int offset = offsetof(struct llog_canceld_ctxt, llcd_cookies);
 
-        OBD_ALLOC(llcd, PAGE_SIZE + offset);
+        OBD_ALLOC(llcd, LLCD_SIZE + offset);
         if (llcd == NULL)
                 return -ENOMEM;
 
@@ -107,7 +109,7 @@ static void llcd_put(struct llog_canceld_ctxt *llcd)
         int offset = offsetof(struct llog_canceld_ctxt, llcd_cookies);
 
         if (atomic_read(&lcm->lcm_llcd_numfree) >= lcm->lcm_llcd_maxfree) {
-                OBD_FREE(llcd, PAGE_SIZE + offset);
+                OBD_FREE(llcd, LLCD_SIZE + offset);
         } else {
                 spin_lock(&lcm->lcm_llcd_lock);
                 list_add(&llcd->llcd_list, &lcm->lcm_llcd_free);
@@ -128,8 +130,8 @@ void llcd_send(struct llog_canceld_ctxt *llcd)
 EXPORT_SYMBOL(llcd_send);
 
 /* deleted objects have a commit callback that cancels the MDS
- * log record for the deletion.  The commit callback calls this 
- * function 
+ * log record for the deletion.  The commit callback calls this
+ * function
  */
 int llog_obd_repl_cancel(struct llog_ctxt *ctxt,
                          struct lov_stripe_md *lsm, int count,
@@ -160,8 +162,7 @@ int llog_obd_repl_cancel(struct llog_ctxt *ctxt,
                                cookies->lgc_lgl.lgl_ogen, cookies->lgc_index);
                         GOTO(out, rc = -ENOMEM);
                 }
-                llcd->llcd_import = ctxt->loc_imp;
-                llcd->llcd_gen = ctxt->loc_gen;
+                llcd->llcd_ctxt = ctxt;
                 ctxt->loc_llcd = llcd;
         }
 
@@ -170,9 +171,9 @@ int llog_obd_repl_cancel(struct llog_ctxt *ctxt,
         llcd->llcd_cookiebytes += sizeof(*cookies);
 
 send_now:
-        if ((PAGE_SIZE - llcd->llcd_cookiebytes < sizeof(*cookies) ||
+        if ((LLCD_SIZE - llcd->llcd_cookiebytes < sizeof(*cookies) ||
              flags & OBD_LLOG_FL_SENDNOW)) {
-                CDEBUG(D_HA, "send llcd: %p\n", llcd);
+                CDEBUG(D_HA, "send llcd %p:%p\n", llcd, llcd->llcd_ctxt);
                 ctxt->loc_llcd = NULL;
                 llcd_send(llcd);
         }
@@ -187,16 +188,17 @@ int llog_obd_repl_sync(struct llog_ctxt *ctxt, struct obd_export *exp)
         int rc = 0;
         ENTRY;
 
-        LASSERT(ctxt->loc_llcd);
-
         if (exp && (ctxt->loc_imp == exp->exp_imp_reverse)) {
-                CWARN("import will be destroyed, put llcd %p\n", 
-                      ctxt->loc_llcd);
-                llcd_put(ctxt->loc_llcd);
-                ctxt->loc_llcd = NULL;
+                down(&ctxt->loc_sem);
+                if (ctxt->loc_llcd != NULL) {
+                        CWARN("import will be destroyed, put "
+                              "llcd %p:%p\n", ctxt->loc_llcd, ctxt);
+                        llcd_put(ctxt->loc_llcd);
+                        ctxt->loc_llcd = NULL;
+                        ctxt->loc_imp = NULL;
+                }
                 up(&ctxt->loc_sem);
         } else {
-                up(&ctxt->loc_sem);
                 rc = llog_cancel(ctxt, NULL, 0, NULL, OBD_LLOG_FL_SENDNOW);
         }
 
@@ -294,11 +296,11 @@ static int log_commit_thread(void *arg)
                         llcd = list_entry(lcd->lcd_llcd_list.next,
                                           typeof(*llcd), llcd_list);
                         LASSERT(llcd->llcd_lcm == lcm);
-                        import = llcd->llcd_import;
+                        import = llcd->llcd_ctxt->loc_imp;
                 }
                 list_for_each_entry_safe(llcd, n, sending_list, llcd_list) {
                         LASSERT(llcd->llcd_lcm == lcm);
-                        if (import == llcd->llcd_import)
+                        if (import == llcd->llcd_ctxt->loc_imp)
                                 list_move_tail(&llcd->llcd_list,
                                                &lcd->lcd_llcd_list);
                 }
@@ -306,7 +308,7 @@ static int log_commit_thread(void *arg)
                         list_for_each_entry_safe(llcd, n, &lcm->lcm_llcd_resend,
                                                  llcd_list) {
                                 LASSERT(llcd->llcd_lcm == lcm);
-                                if (import == llcd->llcd_import)
+                                if (import == llcd->llcd_ctxt->loc_imp)
                                         list_move_tail(&llcd->llcd_list,
                                                        &lcd->lcd_llcd_list);
                         }
@@ -316,31 +318,29 @@ static int log_commit_thread(void *arg)
                 /* We are the only one manipulating our local list - no lock */
                 list_for_each_entry_safe(llcd,n, &lcd->lcd_llcd_list,llcd_list){
                         char *bufs[1] = {(char *)llcd->llcd_cookies};
-                        struct obd_device *obd = import->imp_obd;
-                        struct llog_ctxt *ctxt;
 
                         list_del(&llcd->llcd_list);
                         if (llcd->llcd_cookiebytes == 0) {
-                                CDEBUG(D_HA, "just put empty llcd %p\n", llcd);
+                                CDEBUG(D_HA, "put empty llcd %p:%p\n",
+                                       llcd, llcd->llcd_ctxt);
                                 llcd_put(llcd);
                                 continue;
                         }
-                        /* check whether the cookies are new. if new then send, otherwise
-                         * just put llcd */
-                        ctxt = llog_get_context(obd, llcd->llcd_cookies[0].lgc_subsys + 1);
-                        LASSERT(ctxt != NULL);
-                        down(&ctxt->loc_sem);
-                        if (log_gen_lt(llcd->llcd_gen, ctxt->loc_gen)) {
-                                up(&ctxt->loc_sem); 
-                                CDEBUG(D_HA, "just put stale llcd %p\n", llcd);
+
+                        down(&llcd->llcd_ctxt->loc_sem);
+                        if (llcd->llcd_ctxt->loc_imp == NULL) {
+                                up(&llcd->llcd_ctxt->loc_sem);
+                                CWARN("import will be destroyed, put "
+                                      "llcd %p:%p\n", llcd, llcd->llcd_ctxt);
                                 llcd_put(llcd);
                                 continue;
                         }
-                        up(&ctxt->loc_sem); 
 
                         request = ptlrpc_prep_req(import, OBD_LOG_CANCEL, 1,
                                                   &llcd->llcd_cookiebytes,
                                                   bufs);
+                        up(&llcd->llcd_ctxt->loc_sem);
+
                         if (request == NULL) {
                                 rc = -ENOMEM;
                                 CERROR("error preparing commit: rc %d\n", rc);
@@ -354,8 +354,18 @@ static int log_commit_thread(void *arg)
                         }
 
                         request->rq_replen = lustre_msg_size(0, NULL);
+                        down(&llcd->llcd_ctxt->loc_sem);
+                        if (llcd->llcd_ctxt->loc_imp == NULL) {
+                                up(&llcd->llcd_ctxt->loc_sem);
+                                CWARN("import will be destroyed, put "
+                                      "llcd %p:%p\n", llcd, llcd->llcd_ctxt);
+                                llcd_put(llcd);
+                                ptlrpc_req_finished(request);
+                                continue;
+                        }
                         rc = ptlrpc_queue_wait(request);
                         ptlrpc_req_finished(request);
+                        up(&llcd->llcd_ctxt->loc_sem);
 
                         /* If the RPC failed, we put this and the remaining
                          * messages onto the resend list for another time. */
@@ -364,7 +374,7 @@ static int log_commit_thread(void *arg)
                                 continue;
                         }
 
-#if 0                   /* FIXME just put llcd, not send it again */
+#if 0                   /* FIXME just put llcd, not put it on resend list */
                         spin_lock(&lcm->lcm_llcd_lock);
                         list_splice(&lcd->lcd_llcd_list, &lcm->lcm_llcd_resend);
                         if (++llcd->llcd_tries < 5) {
@@ -377,13 +387,15 @@ static int log_commit_thread(void *arg)
                         } else {
                                 spin_unlock(&lcm->lcm_llcd_lock);
 #endif
-                                CERROR("commit %p dropped %d cookies: rc %d\n",
-                                       llcd, (int)(llcd->llcd_cookiebytes /
-                                                   sizeof(*llcd->llcd_cookies)),
-                                       rc);
+                                CERROR("commit %p:%p drop %d cookies: rc %d\n",
+                                       llcd, llcd->llcd_ctxt,
+                                       (int)(llcd->llcd_cookiebytes /
+                                             sizeof(*llcd->llcd_cookies)), rc);
                                 llcd_put(llcd);
-//                        }
+#if 0
+                        }
                         break;
+#endif
                 }
 
                 if (rc == 0) {
@@ -439,11 +451,12 @@ int llog_start_commit_thread(void)
 EXPORT_SYMBOL(llog_start_commit_thread);
 
 static struct llog_process_args {
-        struct semaphore         llpa_sem; 
+        struct semaphore         llpa_sem;
         struct llog_ctxt        *llpa_ctxt;
         void                    *llpa_cb;
         void                    *llpa_arg;
 } llpa;
+
 int llog_init_commit_master(void)
 {
         INIT_LIST_HEAD(&lcm->lcm_thread_busy);
@@ -475,7 +488,6 @@ int llog_cleanup_commit_master(int force)
         return 0;
 }
 
-
 static int log_process_thread(void *args)
 {
         struct llog_process_args *data = args;
@@ -486,17 +498,17 @@ static int log_process_thread(void *args)
         unsigned long flags;
         int rc;
         ENTRY;
-                                                                                                                             
+
         up(&data->llpa_sem);
         lock_kernel();
         ptlrpc_daemonize(); /* thread never needs to do IO */
-                                                                                                                             
+
         SIGNAL_MASK_LOCK(current, flags);
         sigfillset(&current->blocked);
         RECALC_SIGPENDING;
         SIGNAL_MASK_UNLOCK(current, flags);
         unlock_kernel();
-                                                                                                                             
+
         rc = llog_create(ctxt, &llh, &logid, NULL);
         if (rc) {
                 CERROR("llog_create failed %d\n", rc);
@@ -507,26 +519,27 @@ static int log_process_thread(void *args)
                 CERROR("llog_init_handle failed %d\n", rc);
                 GOTO(out, rc);
         }
-                                                                                                                             
+
         if (cb) {
                 rc = llog_cat_process(llh, (llog_cb_t)cb, NULL);
-                if (rc)
+                if (rc != LLOG_PROC_BREAK)
                         CERROR("llog_cat_process failed %d\n", rc);
-        } else
+        } else {
                 CWARN("no callback function for recovery\n");
+        }
 
-        CDEBUG(D_HA, "send to llcd :%p forcibly\n", ctxt->loc_llcd);
+        CDEBUG(D_HA, "send llcd %p:%p forcibly after recovery\n",
+               ctxt->loc_llcd, ctxt);
         llog_sync(ctxt, NULL);
 out:
         rc = llog_cat_put(llh);
         if (rc)
                 CERROR("llog_cat_put failed %d\n", rc);
-                                                                                                                             
+
         RETURN(rc);
 }
-static int llog_recovery_generic(struct llog_ctxt *ctxt,
-                                 void *handle,
-                                 void *arg)
+
+static int llog_recovery_generic(struct llog_ctxt *ctxt, void *handle,void *arg)
 {
         int rc;
         ENTRY;
@@ -546,31 +559,33 @@ static int llog_recovery_generic(struct llog_ctxt *ctxt,
 
         RETURN(rc);
 }
+
 int llog_repl_connect(struct llog_ctxt *ctxt, int count,
-                      struct llog_logid *logid, struct llog_ctxt_gen *gen)
+                      struct llog_logid *logid, struct llog_gen *gen)
 {
         struct llog_canceld_ctxt *llcd;
         int rc;
         ENTRY;
-                                                                                                                             
+
+        /* send back llcd before recovery from llog */
+        if (ctxt->loc_llcd != NULL) {
+                CWARN("llcd %p:%p not empty\n", ctxt->loc_llcd, ctxt);
+                llog_sync(ctxt, NULL);
+        }
+
         down(&ctxt->loc_sem);
         ctxt->loc_gen = *gen;
-        llcd = ctxt->loc_llcd;
-        if (llcd) {
-                CDEBUG(D_HA, "put current llcd when new connection arrives\n");
-                llcd_put(llcd);
-        }
         llcd = llcd_grab();
         if (llcd == NULL) {
                 CERROR("couldn't get an llcd\n");
+                up(&ctxt->loc_sem);
                 RETURN(-ENOMEM);
         }
-        llcd->llcd_import = ctxt->loc_imp;
-        llcd->llcd_gen = ctxt->loc_gen;
+        llcd->llcd_ctxt = ctxt;
         ctxt->loc_llcd = llcd;
         up(&ctxt->loc_sem);
 
-        rc = llog_recovery_generic(ctxt, ctxt->llog_proc_cb, logid); 
+        rc = llog_recovery_generic(ctxt, ctxt->llog_proc_cb, logid);
         if (rc != 0)
                 CERROR("error recovery process: %d\n", rc);
 

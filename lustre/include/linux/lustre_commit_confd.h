@@ -28,10 +28,9 @@
 
 struct llog_canceld_ctxt {
         struct list_head           llcd_list;  /* free or pending struct list */
-        struct obd_import         *llcd_import;
+        struct llog_ctxt          *llcd_ctxt;
         struct llog_commit_master *llcd_lcm;
         int                        llcd_tries; /* number of tries to send */
-        struct llog_ctxt_gen       llcd_gen; 
         int                        llcd_cookiebytes;
         struct llog_cookie         llcd_cookies[0];
 };

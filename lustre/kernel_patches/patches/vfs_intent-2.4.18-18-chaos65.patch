@@ -467,11 +467,11 @@
 +						  &dentry->d_name, 0, NULL);
 +				d_invalidate(dentry);
 +				dput(dentry);
-+                                if (IS_ERR(new)) { 
-+                                        err = PTR_ERR(new);
-+                                        break;
-+                                }
-+                                nd->dentry = new;
++				if (IS_ERR(new)) { 
++					err = PTR_ERR(new);
++					break;
++				}
++				nd->dentry = new;
 +			}
 +		}
 +		else if (dentry && dentry->d_op && dentry->d_op->d_revalidate){
