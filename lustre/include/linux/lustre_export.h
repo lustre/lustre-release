@@ -19,7 +19,8 @@ struct mds_export_data {
         struct list_head        med_open_head;
         spinlock_t              med_open_lock;
         struct mds_client_data *med_mcd;
-        int                     med_off;
+        loff_t                  med_off;
+        int                     med_idx;
 };
 
 struct ldlm_export_data {
