@@ -8,8 +8,7 @@ LUSTRE=${LUSTRE:-`dirname $0`/..}
 init_test_env
 
 # Skip these tests
-# 3 - bug 1852
-ALWAYS_EXCEPT="3"
+ALWAYS_EXCEPT=""
 
 # XXX I wish all this stuff was in some default-config.sh somewhere
 MOUNT=${MOUNT:-/mnt/lustre}
@@ -101,14 +100,13 @@ test_2b() {
 }
 run_test 2b "touch"
 
-# bug 1852
 test_3() {
     replay_barrier mds
     mcreate $DIR/$tfile
     o_directory $DIR/$tfile
-    rm -f $DIR/$tfile
     fail mds
-    $CHECKSTAT -t file $DIR/$tfile && return 2
+    $CHECKSTAT -t file $DIR/$tfile || return 2
+    rm $DIR/$tfile
 }
 run_test 3 "replay failed open"
 
