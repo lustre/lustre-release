@@ -284,6 +284,7 @@ void mdc_getattr_pack(struct ptlrpc_request *req, int valid, int offset,
         b->suppgid = data->ctxt.gid1;
 
         b->fid1 = data->fid1;
+        b->fid2 = data->fid2;
         if (data->name) {
                 char *tmp;
                 tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1,
