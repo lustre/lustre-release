@@ -6,7 +6,7 @@
 AUTOMAKE_OPTIONS = foreign
 
 SUBDIRS = . include portals ldiskfs lvfs obdclass lov ldlm ptlrpc      \
-	obdecho osc mdc mds obdfilter ost llite cobd ptlbd snapfs smfs cmobd \
+	obdecho osc mdc lmv  mds obdfilter ost llite cobd ptlbd snapfs smfs cmobd \
 	liblustre doc utils tests conf scripts
 
 EXTRA_DIST = BUGS FDL Rules.in kernel_patches kernel-tests/Makefile    \
