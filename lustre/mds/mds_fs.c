@@ -91,7 +91,7 @@ int mds_client_add(struct obd_device *obd, struct mds_obd *mds,
                 }
         }
 
-        CDEBUG(D_INFO, "client at index %d with UUID '%s' added\n",
+        CDEBUG(D_INFO, "client at idx %d with UUID '%s' added\n",
                cl_idx, med->med_mcd->mcd_uuid);
 
         med->med_idx = cl_idx;
@@ -135,10 +135,12 @@ int mds_client_free(struct obd_export *exp, int clear_client)
         if (!strcmp(med->med_mcd->mcd_uuid, obd->obd_uuid.uuid))
                 GOTO(free_and_out, 0);
 
-        CDEBUG(D_INFO, "freeing client at index %u (%lld)with UUID '%s'\n",
+        CDEBUG(D_INFO, "freeing client at idx %u (%lld)with UUID '%s'\n",
                med->med_idx, med->med_off, med->med_mcd->mcd_uuid);
 
-        if (!test_and_clear_bit(med->med_idx, bitmap)) {
+        /* Clear the bit _after_ zeroing out the client so we don't
+           race with mds_client_add and zero out new clients.*/
+        if (!test_bit(med->med_idx, bitmap)) {
                 CERROR("MDS client %u: bit already clear in bitmap!!\n",
                        med->med_idx);
                 LBUG();
@@ -152,8 +154,14 @@ int mds_client_free(struct obd_export *exp, int clear_client)
                 pop_ctxt(&saved, &obd->obd_ctxt, NULL);
 
                 CDEBUG(rc == 0 ? D_INFO : D_ERROR,
-                       "zeroing out client %s off %u in %s rc %d\n",
+                       "zeroing out client %s idx %u in %s rc %d\n",
                        med->med_mcd->mcd_uuid, med->med_idx, LAST_RCVD, rc);
+        }
+
+        if (!test_and_clear_bit(med->med_idx, bitmap)) {
+                CERROR("MDS client %u: bit already clear in bitmap!!\n",
+                       med->med_idx);
+                LBUG();
         }
 
  free_and_out:

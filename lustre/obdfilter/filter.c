@@ -249,7 +249,9 @@ static int filter_client_free(struct obd_export *exp, int flags)
         CDEBUG(D_INFO, "freeing client at idx %u (%lld) with UUID '%s'\n",
                fed->fed_lr_idx, fed->fed_lr_off, fed->fed_fcd->fcd_uuid);
 
-        if (!test_and_clear_bit(fed->fed_lr_idx, filter->fo_last_rcvd_slots)) {
+        /* Clear the bit _after_ zeroing out the client so we don't
+           race with filter_client_add and zero out new clients.*/
+        if (!test_bit(fed->fed_lr_idx, filter->fo_last_rcvd_slots)) {
                 CERROR("FILTER client %u: bit already clear in bitmap!!\n",
                        fed->fed_lr_idx);
                 LBUG();
@@ -265,6 +267,12 @@ static int filter_client_free(struct obd_export *exp, int flags)
                "zeroing disconnecting client %s at idx %u (%llu) in %s rc %d\n",
                fed->fed_fcd->fcd_uuid, fed->fed_lr_idx, fed->fed_lr_off,
                LAST_RCVD, rc);
+
+        if (!test_and_clear_bit(fed->fed_lr_idx, filter->fo_last_rcvd_slots)) {
+                CERROR("FILTER client %u: bit already clear in bitmap!!\n",
+                       fed->fed_lr_idx);
+                LBUG();
+        }
 
 free:
         OBD_FREE(fed->fed_fcd, sizeof(*fed->fed_fcd));
