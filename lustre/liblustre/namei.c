@@ -169,12 +169,98 @@ void unhook_stale_inode(struct pnode *pno)
         return;
 }
 
-#if 0
+void llu_lookup_finish_locks(struct lookup_intent *it, struct pnode *pnode)
+{
+        LASSERT(it);
+        LASSERT(pnode);
+
+        /* drop IT_LOOKUP locks */
+        if (it->it_op == IT_LOOKUP)
+                ll_intent_release(it);
+
+        if (it && pnode->p_base->pb_ino != NULL) {
+                struct inode *inode = pnode->p_base->pb_ino;
+                CDEBUG(D_DLMTRACE, "setting l_data to inode %p (%lu/%lu)\n",
+                       inode, llu_i2info(inode)->lli_st_ino,
+                       llu_i2info(inode)->lli_st_generation);
+                mdc_set_lock_data(&it->d.lustre.it_lock_handle, inode);
+        }
+}
+
+static inline void ll_invalidate_inode_pages(struct inode * inode)
+{
+        /* do nothing */
+}
+
+static int llu_mdc_blocking_ast(struct ldlm_lock *lock,
+                                struct ldlm_lock_desc *desc,
+                                void *data, int flag)
+{
+        int rc;
+        struct lustre_handle lockh;
+        ENTRY;
+
+
+        switch (flag) {
+        case LDLM_CB_BLOCKING:
+                ldlm_lock2handle(lock, &lockh);
+                rc = ldlm_cli_cancel(&lockh);
+                if (rc < 0) {
+                        CDEBUG(D_INODE, "ldlm_cli_cancel: %d\n", rc);
+                        RETURN(rc);
+                }
+                break;
+        case LDLM_CB_CANCELING: {
+                struct inode *inode = llu_inode_from_lock(lock);
+                struct llu_inode_info *lli;
+
+                /* Invalidate all dentries associated with this inode */
+                if (inode == NULL)
+                        break;
+
+                lli =  llu_i2info(inode);
+
+                clear_bit(LLI_F_HAVE_MDS_SIZE_LOCK, &lli->lli_flags);
+
+                if (lock->l_resource->lr_name.name[0] != lli->lli_st_ino ||
+                    lock->l_resource->lr_name.name[1] != lli->lli_st_generation) {
+                        LDLM_ERROR(lock, "data mismatch with ino %lu/%lu",
+                                   lli->lli_st_ino, lli->lli_st_generation);
+                }
+                if (S_ISDIR(lli->lli_st_mode)) {
+                        CDEBUG(D_INODE, "invalidating inode %lu\n",
+                               lli->lli_st_ino);
+
+                        ll_invalidate_inode_pages(inode);
+                }
+
+/*
+                if (inode->i_sb->s_root &&
+                    inode != inode->i_sb->s_root->d_inode)
+                        ll_unhash_aliases(inode);
+*/
+                I_RELE(inode);
+                break;
+        }
+        default:
+                LBUG();
+        }
+
+        RETURN(0);
+}
+
 int llu_pb_revalidate(struct pnode *pnode, int flags, struct lookup_intent *it)
 {
         struct pnode_base *pb = pnode->p_base;
+        struct ll_fid pfid, cfid;
+        struct it_cb_data icbd;
+        struct ll_uctxt ctxt;
+        struct ptlrpc_request *req = NULL;
+        struct lookup_intent lookup_it = { .it_op = IT_LOOKUP };
+        struct obd_export *exp;
         int rc;
         ENTRY;
+
         CDEBUG(D_VFSTRACE, "VFS Op:name=%s,intent=%x\n",
                pb->pb_name.name, it ? it->it_op : 0);
 
@@ -208,66 +294,31 @@ int llu_pb_revalidate(struct pnode *pnode, int flags, struct lookup_intent *it)
                                         lli->lli_st_ino, lli->lli_it,
                                         lli->lli_it->it_op);
                         ll_intent_release(lli->lli_it);
+                        OBD_FREE(lli->lli_it, sizeof(*lli->lli_it));
                         lli->lli_it = NULL;
                 }
         }
 
-        if (it == NULL || it->it_op == IT_GETATTR) {
-                /* We could just return 1 immediately, but since we should only
-                 * be called in revalidate2 if we already have a lock, let's
-                 * verify that. */
-                struct inode *inode = pb->pb_ino;
-                struct llu_inode_info *lli = llu_i2info(inode);
-                struct llu_sb_info *sbi = llu_i2sbi(inode);
-                struct obd_device *obddev = class_conn2obd(&sbi->ll_mdc_conn);
-                struct ldlm_res_id res_id =
-                        { .name = {lli->lli_fid.id, (__u64)lli->lli_fid.generation} };
-                struct lustre_handle lockh;
+        exp = llu_i2mdcexp(pb->pb_ino);
+        ll_inode2fid(&pfid, pnode->p_parent->p_base->pb_ino);
+        ll_inode2fid(&cfid, pb->pb_ino);
+        icbd.icbd_parent = pnode->p_parent->p_base->pb_ino;
+        icbd.icbd_child = pnode;
 
-                rc = ldlm_lock_match(obddev->obd_namespace,
-                                     LDLM_FL_BLOCK_GRANTED, &res_id,
-                                     LDLM_PLAIN, NULL, 0, LCK_PR, inode, &lockh);
-                if (rc) {
-                        /* de->d_flags &= ~DCACHE_LUSTRE_INVALID; */
-                        if (it && it->it_op == IT_GETATTR) {
-                                memcpy(&it->d.lustre.it_lock_handle, &lockh,
-                                       sizeof(lockh));
-                                it->d.lustre.it_lock_mode = LCK_PR;
-                                LL_SAVE_INTENT(inode, it);
-                        } else {
-                                ldlm_lock_decref(&lockh, LCK_PR);
-                        }
-                        RETURN(1);
-                }
-                rc = ldlm_lock_match(obddev->obd_namespace,
-                                     LDLM_FL_BLOCK_GRANTED, &res_id,
-                                     LDLM_PLAIN, NULL, 0, LCK_PW, inode, &lockh);
-                if (rc) {
-                        /* de->d_flags &= ~DCACHE_LUSTRE_INVALID; */
-                        if (it && it->it_op == IT_GETATTR) {
-                                memcpy(&it->d.lustre.it_lock_handle, &lockh,
-                                       sizeof(lockh));
-                                it->d.lustre.it_lock_mode = LCK_PW;
-                                LL_SAVE_INTENT(inode, it);
-                        } else {
-                                ldlm_lock_decref(&lockh, LCK_PW);
-                        }
-                        RETURN(1);
-                }
-
-                lli->lli_stale_flag = 1;
-                unhook_stale_inode(pnode);
-
-                RETURN(0);
+        if (!it) {
+                it = &lookup_it;
+                it->it_op_release = ll_intent_release;
         }
 
-        rc = llu_intent_lock(pb->pb_parent->pb_ino, pnode, it, flags,
-                             pnode_revalidate_finish);
-        if (rc < 0) {
-                CERROR("ll_intent_lock: rc %d : it->it_status %d\n", rc,
-                       it->d.lustre.it_status);
-                RETURN(0);
-        }
+        ll_i2uctxt(&ctxt, pnode->p_parent->p_base->pb_ino, pb->pb_ino);
+
+        rc = mdc_intent_lock(exp, &ctxt, &pfid, pb->pb_name.name, pb->pb_name.len,
+                             &cfid, it, flags, &req, llu_mdc_blocking_ast);
+        /* If req is NULL, then mdc_intent_lock only tried to do a lock match;
+         * if all was well, it will return 1 if it found locks, 0 otherwise. */
+        if (req == NULL && rc >= 0)
+                GOTO(out, rc);
+
         /* unfortunately ll_intent_lock may cause a callback and revoke our
            dentry */
         /*
@@ -277,9 +328,20 @@ int llu_pb_revalidate(struct pnode *pnode, int flags, struct lookup_intent *it)
         d_rehash(de);
         */
         RETURN(1);
+ out:
+        if (req)
+                ptlrpc_req_finished(req);
+        if (rc == 0) {
+                if (pb->pb_ino &&
+                    S_ISDIR(llu_i2info(pb->pb_ino)->lli_st_mode))
+                        ll_invalidate_inode_pages(pb->pb_ino);
+                llu_i2info(pb->pb_ino)->lli_stale_flag = 1;
+        } else {
+                llu_lookup_finish_locks(it, pnode);
+                llu_i2info(pb->pb_ino)->lli_stale_flag = 0;
+        }
+        RETURN(rc);
 }
-
-#endif
 
 static int lookup_it_finish(struct ptlrpc_request *request, int offset,
                             struct lookup_intent *it, void *data)
@@ -352,24 +414,6 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
         RETURN(0);
 }
 
-void llu_lookup_finish_locks(struct lookup_intent *it, struct pnode *pnode)
-{
-        LASSERT(it);
-        LASSERT(pnode);
-
-        /* drop IT_LOOKUP locks */
-        if (it->it_op == IT_LOOKUP)
-                ll_intent_release(it);
-
-        if (it && pnode->p_base->pb_ino != NULL) {
-                struct inode *inode = pnode->p_base->pb_ino;
-                CDEBUG(D_DLMTRACE, "setting l_data to inode %p (%lu/%lu)\n",
-                       inode, llu_i2info(inode)->lli_st_ino,
-                       llu_i2info(inode)->lli_st_generation);
-                mdc_set_lock_data(&it->d.lustre.it_lock_handle, inode);
-        }
-}
-
 struct inode *llu_inode_from_lock(struct ldlm_lock *lock)
 {
         struct inode *inode;
@@ -383,68 +427,6 @@ struct inode *llu_inode_from_lock(struct ldlm_lock *lock)
 
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
         return inode;
-}
-
-static inline void ll_invalidate_inode_pages(struct inode * inode)
-{
-        /* do nothing */
-}
-
-static int llu_mdc_blocking_ast(struct ldlm_lock *lock,
-                                struct ldlm_lock_desc *desc,
-                                void *data, int flag)
-{
-        int rc;
-        struct lustre_handle lockh;
-        ENTRY;
-
-
-        switch (flag) {
-        case LDLM_CB_BLOCKING:
-                ldlm_lock2handle(lock, &lockh);
-                rc = ldlm_cli_cancel(&lockh);
-                if (rc < 0) {
-                        CDEBUG(D_INODE, "ldlm_cli_cancel: %d\n", rc);
-                        RETURN(rc);
-                }
-                break;
-        case LDLM_CB_CANCELING: {
-                struct inode *inode = llu_inode_from_lock(lock);
-                struct llu_inode_info *lli;
-
-                /* Invalidate all dentries associated with this inode */
-                if (inode == NULL)
-                        break;
-
-                lli =  llu_i2info(inode);
-
-                clear_bit(LLI_F_HAVE_MDS_SIZE_LOCK, &lli->lli_flags);
-
-                if (lock->l_resource->lr_name.name[0] != lli->lli_st_ino ||
-                    lock->l_resource->lr_name.name[1] != lli->lli_st_generation) {
-                        LDLM_ERROR(lock, "data mismatch with ino %lu/%lu",
-                                   lli->lli_st_ino, lli->lli_st_generation);
-                }
-                if (S_ISDIR(lli->lli_st_mode)) {
-                        CDEBUG(D_INODE, "invalidating inode %lu\n",
-                               lli->lli_st_ino);
-
-                        ll_invalidate_inode_pages(inode);
-                }
-
-/*
-                if (inode->i_sb->s_root &&
-                    inode != inode->i_sb->s_root->d_inode)
-                        ll_unhash_aliases(inode);
-*/
-                I_RELE(inode);
-                break;
-        }
-        default:
-                LBUG();
-        }
-
-        RETURN(0);
 }
 
 /* XXX */
@@ -609,14 +591,14 @@ int llu_iop_lookup(struct pnode *pnode,
                 RETURN(-EINVAL);
 
         it = translate_lookup_intent(intnt, path);
-#if 0
+
         /* param flags is not used, let it be 0 */
         if (llu_pb_revalidate(pnode, 0, it)) {
                 LASSERT(pnode->p_base->pb_ino);
                 *inop = pnode->p_base->pb_ino;
                 RETURN(0);
         }
-#endif
+
         rc = llu_lookup_it(pnode->p_parent->p_base->pb_ino, pnode, it, 0);
         if (!rc) {
                 if (!pnode->p_base->pb_ino)
