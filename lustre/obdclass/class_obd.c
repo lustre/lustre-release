@@ -655,9 +655,11 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                         GOTO(out, err=-EBUSY);
                 }
 
+                /*
                 if (lprocfs_dereg_dev(obd) != LPROCFS_SUCCESS) {
                         CERROR("Could not remove /proc entry\n");
                 }
+                */
                 if (obd->obd_name) {
                         OBD_FREE(obd->obd_name, strlen(obd->obd_name)+1);
                         obd->obd_name = NULL;
