@@ -8,19 +8,17 @@ MODULE = extN
 modulefs_DATA = extN.o
 EXTRA_PROGRAMS = extN
 
-EXTNP = htree-ext3-2.4.18.diff ext3-ino_sb-macro.diff
+EXTNP = htree-ext3-2.4.18.diff ext3-2.4.18-ino_sb_macro.diff
+EXTNP+= extN-misc-fixup.diff
 EXTNC = balloc.c bitmap.c dir.c file.c fsync.c ialloc.c inode.c ioctl.c
 EXTNC+= namei.c super.c symlink.c
 EXTNI = extN_fs.h extN_fs_i.h extN_fs_sb.h extN_jbd.h
-extN_SOURCES = $(EXTNC) $(EXTNI) page.c # punch.c
+extN_SOURCES = $(EXTNC) $(EXTNI) # punch.c
 EXTRA_DIST = $(EXTNP)
 DISTCLEANFILES = $(EXTNC) $(EXTNI) patch-stamp *.orig *.rej
 SUB=-e "s/ext3/extN/g" -e "s/EXT3/EXTN/g"
 
 include $(top_srcdir)/Rules
-
-page.c:
-	test -e page.c || ln -sf $(top_srcdir)/lib/page.c
 
 # Patch the kernel files with our ext3 patches.  We need to go through some
 # extra hoops because the include files are in a different tree and because
@@ -44,7 +42,8 @@ patch-stamp:
 	list='$(EXTNP)'; for p in $$list; do                                  \
 	sed $(SUB) $(srcdir)/$$p | (cd $(top_srcdir); patch -p1);             \
 	done
-	(cd $(top_srcdir); patch -p1) < $(srcdir)/extN-ino_sb-fixup.diff
+	(cd $(top_srcdir); patch -p1) < $(srcdir)/extN-2.4.18-ino_sb_fixup.diff
+	-(cd $(top_srcdir); patch -p1) < $(srcdir)/extN-2.4.18-exports.diff
 	echo timestamp > patch-stamp
 
 # Don't distribute any patched files.

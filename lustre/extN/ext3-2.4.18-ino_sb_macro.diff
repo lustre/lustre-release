@@ -533,7 +533,7 @@
  		 * Try to place the inode in its parent directory
  		 */
 -		i = dir->u.ext3_i.i_block_group;
-+		i = EXT3_I(dir)->i_block_group + 1;
++		i = EXT3_I(dir)->i_block_group;
  		tmp = ext3_get_group_desc (sb, i, &bh2);
  		if (tmp && le16_to_cpu(tmp->bg_free_inodes_count))
  			gdp = tmp;
