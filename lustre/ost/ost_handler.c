@@ -215,6 +215,7 @@ static int ost_brw_read(struct ptlrpc_request *req)
         struct obd_ioobj *ioo;
         struct ost_body *body;
         struct l_wait_info lwi;
+        void *desc_priv = NULL;
         int rc, cmd, i, j, objcount, niocount, size = sizeof(*body);
         ENTRY;
 
@@ -246,8 +247,8 @@ static int ost_brw_read(struct ptlrpc_request *req)
         /* The unpackers move tmp1 and tmp2, so reset them before using */
         tmp1 = lustre_msg_buf(req->rq_reqmsg, 1);
         tmp2 = lustre_msg_buf(req->rq_reqmsg, 2);
-        req->rq_status = obd_preprw(cmd, conn, objcount,
-                                    tmp1, niocount, tmp2, local_nb, NULL);
+        req->rq_status = obd_preprw(cmd, conn, objcount, tmp1, niocount, tmp2,
+                                    local_nb, &desc_priv);
 
         if (req->rq_status)
                 GOTO(out, rc = 0);
@@ -282,8 +283,8 @@ static int ost_brw_read(struct ptlrpc_request *req)
         /* The unpackers move tmp1 and tmp2, so reset them before using */
         tmp1 = lustre_msg_buf(req->rq_reqmsg, 1);
         tmp2 = lustre_msg_buf(req->rq_reqmsg, 2);
-        req->rq_status = obd_commitrw(cmd, conn, objcount,
-                                      tmp1, niocount, local_nb, NULL);
+        req->rq_status = obd_commitrw(cmd, conn, objcount, tmp1, niocount,
+                                      local_nb, desc_priv);
 
         rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repmsg);
 
@@ -347,8 +348,8 @@ static int ost_brw_write(struct ptlrpc_request *req)
         /* The unpackers move tmp1 and tmp2, so reset them before using */
         tmp1 = lustre_msg_buf(req->rq_reqmsg, 1);
         tmp2 = lustre_msg_buf(req->rq_reqmsg, 2);
-        req->rq_status = obd_preprw(cmd, conn, objcount,
-                                    tmp1, niocount, tmp2, local_nb, &desc_priv);
+        req->rq_status = obd_preprw(cmd, conn, objcount, tmp1, niocount, tmp2,
+                                    local_nb, &desc_priv);
         if (req->rq_status)
                 GOTO(out_free, rc = 0); /* XXX is this correct? */
 
