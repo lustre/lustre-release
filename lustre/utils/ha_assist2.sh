@@ -2,7 +2,7 @@
 set -vx
 date
 echo "ha assist checking for problems"
-sleep 1
+sleep 3
 if [ ! -e /tmp/halog ]; then
    echo "no problems, exiting"
     exit 
@@ -19,7 +19,7 @@ echo "- please supply a new mds"
 setup tcp
 close_uuid mds
 del_uuid mds
-connect localhost 1234
+connect dev5 1234
 add_uuid mds
 quit
 EOF3
