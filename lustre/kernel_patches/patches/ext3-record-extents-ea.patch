@@ -1,0 +1,183 @@
+Index: linux-2.4.20-8/fs/ext3/super.c
+===================================================================
+--- linux-2.4.20-8.orig/fs/ext3/super.c	2004-01-27 19:34:11.000000000 +0800
++++ linux-2.4.20-8/fs/ext3/super.c	2004-01-28 05:57:51.000000000 +0800
+@@ -801,6 +801,8 @@
+ 			set_opt (*mount_options, EXTENTS);
+ 		else if (!strcmp (this_char, "extdebug"))
+ 			set_opt (*mount_options, EXTDEBUG);
++		else if (!strcmp (this_char, "extents-ea"))
++			set_opt (*mount_options, EXTENTS_EA); 
+ 		else if (!strcmp (this_char, "grpid") ||
+ 			 !strcmp (this_char, "bsdgroups"))
+ 			set_opt (*mount_options, GRPID);
+Index: linux-2.4.20-8/fs/ext3/ialloc.c
+===================================================================
+--- linux-2.4.20-8.orig/fs/ext3/ialloc.c	2004-01-28 01:02:17.000000000 +0800
++++ linux-2.4.20-8/fs/ext3/ialloc.c	2004-01-28 07:56:56.000000000 +0800
+@@ -18,6 +18,7 @@
+ #include <linux/ext3_fs.h>
+ #include <linux/ext3_jbd.h>
+ #include <linux/ext3_xattr.h>
++#include <linux/ext3_extents.h>
+ #include <linux/stat.h>
+ #include <linux/string.h>
+ #include <linux/locks.h>
+@@ -597,7 +598,7 @@
+ 		EXT3_I(inode)->i_flags |= EXT3_EXTENTS_FL;
+ 		ext3_extents_initialize_blockmap(handle, inode);
+ 	}
+- 
++
+ 	err = ext3_mark_iloc_dirty(handle, inode, &iloc);
+  	if (err) goto fail;
+  
+@@ -610,6 +611,12 @@
+ 		return ERR_PTR(-EDQUOT);
+ 	}
+ 	ext3_debug ("allocating inode %lu\n", inode->i_ino);
++	 
++	if (test_opt(sb, EXTENTS_EA)) {
++		EXT3_I(inode)->i_flags |= EXT3_EXTENTS_EA_FL;
++		ext3_init_extents_tree_in_ea(handle, inode);
++	}
++
+ 	return inode;
+ 
+ fail:
+Index: linux-2.4.20-8/fs/ext3/extents-in-ea.c
+===================================================================
+--- linux-2.4.20-8.orig/fs/ext3/extents-in-ea.c	2004-01-27 20:21:43.000000000 +0800
++++ linux-2.4.20-8/fs/ext3/extents-in-ea.c	2004-01-28 06:05:26.000000000 +0800
+@@ -30,6 +30,8 @@
+ #include <linux/slab.h>
+ #include <asm/uaccess.h>
+ 
++#define EXTENTS_EA "sparse_extents"
++#define EXTENTS_EA_SIZE 64
+ static int ext3_get_ea_write_access(handle_t *handle, void *buffer)
+ {
+ 	struct buffer_head *bh = (struct buffer_head *) buffer;
+@@ -81,6 +83,7 @@
+ 	brelse(bh);
+ }
+ 
++
+ int ext3_init_tree_in_ea(struct inode *inode, int name_index,
+ 				const char *eaname, int size)
+ {
+@@ -242,7 +245,23 @@
+ 		buf->leaf_num++;
+ 	return EXT_CONTINUE;
+ }
+-
++int ext3_init_extents_tree_in_ea(handle_t *handle, struct inode *inode)
++{
++	return ext3_init_tree_in_ea(inode, EXT3_XATTR_INDEX_EXTENTS,
++			            EXTENTS_EA,  EXTENTS_EA_SIZE);	
++}  
++int ext3_insert_extents_in_ea(handle_t *handle, struct inode *inode,
++			       unsigned long from, unsigned long num)
++{
++	return ext3_ext_in_ea_alloc_space(inode, EXT3_XATTR_INDEX_EXTENTS,
++			            	  EXTENTS_EA, from, num);	
++}
++int ext3_remove_extents_in_ea(handle_t *handle, struct inode *inode,
++			       unsigned long from, unsigned long num)
++{
++	return ext3_ext_in_ea_remove_space(inode, EXT3_XATTR_INDEX_EXTENTS,
++			            	   EXTENTS_EA, from, num);	
++}
+ struct ea_tree_desc {
+ 	int name_index;
+ 	char eaname[256];
+Index: linux-2.4.20-8/fs/ext3/inode.c
+===================================================================
+--- linux-2.4.20-8.orig/fs/ext3/inode.c	2004-01-27 19:34:11.000000000 +0800
++++ linux-2.4.20-8/fs/ext3/inode.c	2004-01-28 06:03:46.000000000 +0800
+@@ -32,7 +32,7 @@
+ #include <linux/quotaops.h>
+ #include <linux/module.h>
+ #include "iopen.h"
+-
++#include <linux/ext3_extents.h>
+ /*
+  * SEARCH_FROM_ZERO forces each block allocation to search from the start
+  * of the filesystem.  This is to force rapid reallocation of recently-freed
+@@ -852,9 +852,18 @@
+ ext3_get_block_wrap(handle_t *handle, struct inode *inode, long block,
+ 		struct buffer_head *bh, int create)
+ {
++	int rc1 = 0, rc2 = 0;
++
+ 	if (EXT3_I(inode)->i_flags & EXT3_EXTENTS_FL)
+-		return ext3_ext_get_block(handle, inode, block, bh, create);
+-	return ext3_get_block_handle(handle, inode, block, bh, create);
++		rc1 =  ext3_ext_get_block(handle, inode, block, bh, create);
++	rc1 = ext3_get_block_handle(handle, inode, block, bh, create);
++	if (EXT3_I(inode)->i_flags & EXT3_EXTENTS_EA_FL) {
++		if (create)
++			rc2 = ext3_insert_extents_in_ea(handle, inode, block, 1);  	
++	}
++	if (!rc1)
++		return rc2;
++	return rc1; 
+ }
+ 
+ /*
+@@ -1897,6 +1906,11 @@
+ 
+ 	ext3_discard_prealloc(inode);
+ 
++	if (EXT3_I(inode)->i_flags & EXT3_EXTENTS_EA_FL) {
++		last_block = (inode->i_size + inode->i_sb->s_blocksize - 1)
++				>> EXT3_BLOCK_SIZE_BITS(inode->i_sb);
++		ext3_remove_extents_in_ea(NULL, inode, last_block, 0xffffffff); 	
++	}
+ 	if (EXT3_I(inode)->i_flags & EXT3_EXTENTS_FL)
+ 		return ext3_ext_truncate(inode);
+ 
+Index: linux-2.4.20-8/include/linux/ext3_fs.h
+===================================================================
+--- linux-2.4.20-8.orig/include/linux/ext3_fs.h	2004-01-27 20:21:43.000000000 +0800
++++ linux-2.4.20-8/include/linux/ext3_fs.h	2004-01-28 05:57:51.000000000 +0800
+@@ -185,6 +185,7 @@
+ #define EXT3_JOURNAL_DATA_FL		0x00004000 /* file data should be journaled */
+ #define EXT3_RESERVED_FL		0x80000000 /* reserved for ext3 lib */
+ #define EXT3_EXTENTS_FL			0x00080000 /* Inode uses extents */
++#define EXT3_EXTENTS_EA_FL		0x00100000 /* Inode uses extents */
+ 
+ #define EXT3_FL_USER_VISIBLE		0x00005FFF /* User visible flags */
+ #define EXT3_FL_USER_MODIFIABLE		0x000000FF /* User modifiable flags */
+@@ -341,6 +342,7 @@
+ #define EXT3_MOUNT_ASYNCDEL		0x20000 /* Delayed deletion */
+ #define EXT3_MOUNT_EXTENTS		0x100000/* Extents support */
+ #define EXT3_MOUNT_EXTDEBUG		0x200000/* Extents debug */
++#define EXT3_MOUNT_EXTENTS_EA		0x400000/* record sparse Extents */
+ 
+ /* Compatibility, for having both ext2_fs.h and ext3_fs.h included at once */
+ #ifndef _LINUX_EXT2_FS_H
+Index: linux-2.4.20-8/include/linux/ext3_xattr.h
+===================================================================
+--- linux-2.4.20-8.orig/include/linux/ext3_xattr.h	2004-01-27 20:21:42.000000000 +0800
++++ linux-2.4.20-8/include/linux/ext3_xattr.h	2004-01-28 05:57:51.000000000 +0800
+@@ -24,6 +24,7 @@
+ #define EXT3_XATTR_INDEX_TRUSTED		4
+ #define EXT3_XATTR_INDEX_LUSTRE			5
+ #define EXT3_XATTR_INDEX_SECURITY		6
++#define EXT3_XATTR_INDEX_EXTENTS		7	
+ 
+ struct ext3_xattr_header {
+ 	__u32	h_magic;	/* magic number for identification */
+Index: linux-2.4.20-8/include/linux/ext3_extents.h
+===================================================================
+--- linux-2.4.20-8.orig/include/linux/ext3_extents.h	2004-01-28 05:56:02.000000000 +0800
++++ linux-2.4.20-8/include/linux/ext3_extents.h	2004-01-28 06:46:15.000000000 +0800
+@@ -209,5 +209,7 @@
+ extern struct ext3_ext_path * ext3_ext_find_extent(struct ext3_extents_tree *, int, struct ext3_ext_path *);
+ 
+ extern int ext3_insert_extents_in_ea(handle_t *handle, struct inode *inode, unsigned long from, unsigned long num);
++extern int ext3_remove_extents_in_ea(handle_t *handle, struct inode *inode, unsigned long from, unsigned long num);
++extern int ext3_init_extents_tree_in_ea(handle_t *handle, struct inode *inode);
+ #endif /* _LINUX_EXT3_EXTENTS */
+ 
