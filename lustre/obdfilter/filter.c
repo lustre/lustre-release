@@ -337,31 +337,6 @@ static struct dentry *filter_parent(struct obd_device *obddev, obd_mode mode)
 }
 
 
-static struct inode *filter_inode_from_obj(struct obd_device *obddev,
-                                           __u64 id, __u32 type)
-{
-        struct dentry *dentry;
-        struct inode *inode;
-
-        dentry = filter_fid2dentry(obddev, filter_parent(obddev, type),
-                                   id, type);
-        if (IS_ERR(dentry)) {
-                CERROR("%s: lookup failed: rc = %ld\n", __FUNCTION__,
-                       PTR_ERR(dentry));
-                RETURN(NULL);
-        }
-
-        lock_kernel();
-        inode = iget(dentry->d_inode->i_sb, dentry->d_inode->i_ino);
-        unlock_kernel();
-        CDEBUG(D_INODE, "put child %p, count = %d\n", dentry,
-               atomic_read(&dentry->d_count) - 1);
-        dput(dentry);
-        CDEBUG(D_INODE, "got inode %p (%ld), count = %d\n", inode, inode->i_ino,
-               atomic_read(&inode->i_count));
-        return inode;
-}
-
 /* obd methods */
 static int filter_connect(struct lustre_handle *conn, struct obd_device *obd,
                           char *cluuid)
@@ -547,7 +522,7 @@ static int filter_setattr(struct lustre_handle *conn, struct obdo *oa,
 
         inode = dentry->d_inode;
         lock_kernel();
-        if (iattr.ia_mode & ATTR_SIZE)
+        if (iattr.ia_valid & ATTR_SIZE)
                 down(&inode->i_sem);
         push_ctxt(&saved, &obd->u.filter.fo_ctxt);
         if (inode->i_op->setattr)
@@ -555,7 +530,7 @@ static int filter_setattr(struct lustre_handle *conn, struct obdo *oa,
         else
                 rc = inode_setattr(inode, &iattr);
         pop_ctxt(&saved);
-        if (iattr.ia_mode & ATTR_SIZE) {
+        if (iattr.ia_valid & ATTR_SIZE) {
                 up(&inode->i_sem);
                 oa->o_valid = OBD_MD_FLBLOCKS | OBD_MD_FLCTIME | OBD_MD_FLMTIME;
                 obdo_from_inode(oa, inode, oa->o_valid);
@@ -650,14 +625,14 @@ static int filter_create(struct lustre_handle* conn, struct obdo *oa,
                 CERROR("Error mknod obj %s, err %ld\n", name, PTR_ERR(file));
                 return -ENOENT;
         }
-        filp_close(file, 0);
 
         /* Set flags for fields we have set in the inode struct */
-        oa->o_valid |= OBD_MD_FLID | OBD_MD_FLBLKSZ | OBD_MD_FLBLOCKS |
+        oa->o_valid = OBD_MD_FLID | OBD_MD_FLBLKSZ | OBD_MD_FLBLOCKS |
                  OBD_MD_FLMTIME | OBD_MD_FLATIME | OBD_MD_FLCTIME |
                  OBD_MD_FLUID | OBD_MD_FLGID;
+        filter_from_inode(oa, file->f_dentry->d_inode, oa->o_valid);
+        filp_close(file, 0);
 
-        /* XXX Hmm, shouldn't we copy the fields into the obdo here? */
         return 0;
 }
 
@@ -812,36 +787,6 @@ out:
         pop_ctxt(&saved);
         error = (retval >= 0) ? 0 : retval;
         return error;
-}
-
-
-struct inode *ioobj_to_inode(struct lustre_handle *conn, struct obd_ioobj *o)
-{
-        struct obd_device *obd = class_conn2obd(conn);
-        struct super_block *sb = obd->u.filter.fo_sb;
-        struct inode *inode = NULL;
-        ENTRY;
-
-        if (!sb || !sb->s_dev) {
-                CDEBUG(D_SUPER, "fatal: device not initialized.\n");
-                RETURN(NULL);
-        }
-
-        if (!o->ioo_id) {
-                CDEBUG(D_INODE, "fatal: invalid obdo %lu\n", (long)o->ioo_id);
-                RETURN(NULL);
-        }
-
-        inode = filter_inode_from_obj(obd, o->ioo_id, S_IFREG);
-        if (!inode || inode->i_nlink == 0 || is_bad_inode(inode)) {
-                CERROR("from obdo - fatal: invalid inode %ld (%s).\n",
-                       (long)o->ioo_id, inode ? inode->i_nlink ? "bad inode" :
-                       "no links" : "NULL");
-                iput(inode);
-                RETURN(NULL);
-        }
-
-        RETURN(inode);
 }
 
 /*
