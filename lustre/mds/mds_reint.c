@@ -73,7 +73,7 @@ static int mds_reint_create(struct mds_update_record *rec,
         de = mds_fid2dentry(mds, rec->ur_fid1, NULL);
         if (IS_ERR(de) || OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_CREATE)) {
                 LBUG();
-                GOTO(out_reint_de, (rc = -ESTALE));
+                GOTO(out_create_de, rc = -ESTALE);
         }
         dir = de->d_inode;
         CDEBUG(D_INODE, "ino %ld\n", dir->i_ino);
@@ -84,14 +84,14 @@ static int mds_reint_create(struct mds_update_record *rec,
                 CERROR("child lookup error %ld\n", PTR_ERR(dchild));
                 up(&dir->i_sem);
                 LBUG();
-                GOTO(out_reint_dchild, (rc = -ESTALE));
+                GOTO(out_create_dchild, rc = -ESTALE);
         }
 
         if (dchild->d_inode) {
                 CERROR("child exists (dir %ld, name %s)\n",
                        dir->i_ino, rec->ur_name);
                 LBUG();
-                GOTO(out_reint_dchild, (rc = -EEXIST));
+                GOTO(out_create_dchild, rc = -EEXIST);
         }
 
         OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_CREATE_WRITE, dir->i_sb->s_dev);
@@ -100,7 +100,7 @@ static int mds_reint_create(struct mds_update_record *rec,
         case S_IFREG: {
                 handle = mds_fs_start(mds, dir, MDS_FSOP_CREATE);
                 if (!handle)
-                        GOTO(out_reint_dchild, PTR_ERR(handle));
+                        GOTO(out_create_dchild, PTR_ERR(handle));
                 rc = vfs_create(dir, dchild, rec->ur_mode);
                 EXIT;
                 break;
@@ -108,7 +108,7 @@ static int mds_reint_create(struct mds_update_record *rec,
         case S_IFDIR: {
                 handle = mds_fs_start(mds, dir, MDS_FSOP_MKDIR);
                 if (!handle)
-                        GOTO(out_reint_dchild, PTR_ERR(handle));
+                        GOTO(out_create_dchild, PTR_ERR(handle));
                 rc = vfs_mkdir(dir, dchild, rec->ur_mode);
                 EXIT;
                 break;
@@ -116,7 +116,7 @@ static int mds_reint_create(struct mds_update_record *rec,
         case S_IFLNK: {
                 handle = mds_fs_start(mds, dir, MDS_FSOP_SYMLINK);
                 if (!handle)
-                        GOTO(out_reint_dchild, PTR_ERR(handle));
+                        GOTO(out_create_dchild, PTR_ERR(handle));
                 rc = vfs_symlink(dir, dchild, rec->ur_tgt);
                 EXIT;
                 break;
@@ -128,20 +128,20 @@ static int mds_reint_create(struct mds_update_record *rec,
                 int rdev = rec->ur_id;
                 handle = mds_fs_start(mds, dir, MDS_FSOP_MKNOD);
                 if (!handle)
-                        GOTO(out_reint_dchild, PTR_ERR(handle));
+                        GOTO(out_create_dchild, PTR_ERR(handle));
                 rc = vfs_mknod(dir, dchild, rec->ur_mode, rdev);
                 EXIT;
                 break;
         }
         default:
                 CERROR("bad file type %d for create of %s\n",type,rec->ur_name);
-                GOTO(out_reint_dchild, rc = -EINVAL);
+                GOTO(out_create_dchild, rc = -EINVAL);
         }
 
         if (rc) {
                 CERROR("error during create: %d\n", rc);
                 LBUG();
-                GOTO(out_reint_commit, rc);
+                GOTO(out_create_commit, rc);
         } else {
                 struct iattr iattr;
                 struct inode *inode = dchild->d_inode;
@@ -150,8 +150,8 @@ static int mds_reint_create(struct mds_update_record *rec,
                 if (type == S_IFREG) {
                         rc = mds_fs_set_objid(mds, inode, handle, rec->ur_id);
                         if (rc)
-                                CERROR("error setting objid for %ld\n",
-                                       inode->i_ino);
+                                CERROR("error %d setting objid for %ld\n",
+                                       rc, inode->i_ino);
                 }
 
                 iattr.ia_atime = rec->ur_time;
@@ -163,18 +163,20 @@ static int mds_reint_create(struct mds_update_record *rec,
                         ATTR_MTIME | ATTR_CTIME;
 
                 rc = mds_fs_setattr(mds, dchild, handle, &iattr);
+                /* XXX should we abort here in case of error? */
 
                 body = lustre_msg_buf(req->rq_repmsg, 0);
                 body->ino = inode->i_ino;
                 body->generation = inode->i_generation;
         }
 
-out_reint_commit:
+out_create_commit:
+        /* FIXME: keep rc intact */
         rc = mds_fs_commit(mds, dir, handle);
-out_reint_dchild:
+out_create_dchild:
         l_dput(dchild);
         up(&dir->i_sem);
-out_reint_de:
+out_create_de:
         l_dput(de);
         req->rq_status = rc;
         return 0;
@@ -186,14 +188,14 @@ static int mds_reint_unlink(struct mds_update_record *rec,
         struct dentry *de = NULL;
         struct dentry *dchild = NULL;
         struct mds_obd *mds = &req->rq_obd->u.mds;
-        struct inode *dir;
+        struct inode *dir, *inode;
         int rc = 0;
         ENTRY;
 
         de = mds_fid2dentry(mds, rec->ur_fid1, NULL);
         if (IS_ERR(de) || OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_UNLINK)) {
                 LBUG();
-                GOTO(out_unlink, (rc = -ESTALE));
+                GOTO(out_unlink, rc = -ESTALE);
         }
         dir = de->d_inode;
         CDEBUG(D_INODE, "ino %ld\n", dir->i_ino);
@@ -203,20 +205,29 @@ static int mds_reint_unlink(struct mds_update_record *rec,
         if (IS_ERR(dchild)) {
                 CERROR("child lookup error %ld\n", PTR_ERR(dchild));
                 LBUG();
-                GOTO(out_unlink_de, (rc = -ESTALE));
+                GOTO(out_unlink_de, rc = -ESTALE);
         }
 
-        if (!dchild->d_inode) {
+        inode = dchild->d_inode;
+        if (!inode) {
                 CERROR("child doesn't exist (dir %ld, name %s\n",
                        dir->i_ino, rec->ur_name);
                 LBUG();
-                GOTO(out_unlink_dchild, (rc = -ESTALE));
+                GOTO(out_unlink_dchild, rc = -ESTALE);
         }
 
-        if (dchild->d_inode->i_ino != rec->ur_fid2->id)
+        if (inode->i_ino != rec->ur_fid2->id) {
+                CERROR("inode and FID ID do not match (%ld != %Ld)\n",
+                       inode->i_ino, rec->ur_fid2->id);
                 LBUG();
-        if (dchild->d_inode->i_generation != rec->ur_fid2->generation)
+                GOTO(out_unlink_dchild, rc = -ESTALE);
+        }
+        if (inode->i_generation != rec->ur_fid2->generation) {
+                CERROR("inode and FID GENERATION do not match (%d != %d)\n",
+                       inode->i_generation, rec->ur_fid2->generation);
                 LBUG();
+                GOTO(out_unlink_dchild, rc = -ESTALE);
+        }
 
         OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_UNLINK_WRITE, dir->i_sb->s_dev);
 
@@ -248,30 +259,31 @@ static int mds_reint_link(struct mds_update_record *rec,
         struct dentry *de_src = NULL;
         struct dentry *de_tgt_dir = NULL;
         struct dentry *dchild = NULL;
+        struct mds_obd *mds = &req->rq_obd->u.mds;
         int rc = 0;
 
         ENTRY;
-        de_src = mds_fid2dentry(&req->rq_obd->u.mds, rec->ur_fid1, NULL);
+        de_src = mds_fid2dentry(mds, rec->ur_fid1, NULL);
         if (IS_ERR(de_src) || OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_LINK)) {
-                GOTO(out_link, (rc = -ESTALE));
+                GOTO(out_link, rc = -ESTALE);
         }
 
-        de_tgt_dir = mds_fid2dentry(&req->rq_obd->u.mds, rec->ur_fid2, NULL);
+        de_tgt_dir = mds_fid2dentry(mds, rec->ur_fid2, NULL);
         if (IS_ERR(de_tgt_dir)) {
-                GOTO(out_link_de_src, (rc = -ESTALE));
+                GOTO(out_link_de_src, rc = -ESTALE);
         }
 
         down(&de_tgt_dir->d_inode->i_sem);
         dchild = lookup_one_len(rec->ur_name, de_tgt_dir, rec->ur_namelen - 1);
         if (IS_ERR(dchild)) {
                 CERROR("child lookup error %ld\n", PTR_ERR(dchild));
-                GOTO(out_link_de_tgt_dir, (rc = -ESTALE));
+                GOTO(out_link_de_tgt_dir, rc = -ESTALE);
         }
 
         if (dchild->d_inode) {
                 CERROR("child exists (dir %ld, name %s\n",
                        de_tgt_dir->d_inode->i_ino, rec->ur_name);
-                GOTO(out_link_dchild, (rc = -EEXIST));
+                GOTO(out_link_dchild, rc = -EEXIST);
         }
 
         OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_LINK_WRITE,
@@ -299,29 +311,30 @@ static int mds_reint_rename(struct mds_update_record *rec,
         struct dentry *de_tgtdir = NULL;
         struct dentry *de_old = NULL;
         struct dentry *de_new = NULL;
+        struct mds_obd *mds = &req->rq_obd->u.mds;
         int rc = 0;
         ENTRY;
 
-        de_srcdir = mds_fid2dentry(&req->rq_obd->u.mds, rec->ur_fid1, NULL);
+        de_srcdir = mds_fid2dentry(mds, rec->ur_fid1, NULL);
         if (IS_ERR(de_srcdir)) {
-                GOTO(out_rename, (rc = -ESTALE));
+                GOTO(out_rename, rc = -ESTALE);
         }
 
-        de_tgtdir = mds_fid2dentry(&req->rq_obd->u.mds, rec->ur_fid2, NULL);
+        de_tgtdir = mds_fid2dentry(mds, rec->ur_fid2, NULL);
         if (IS_ERR(de_tgtdir)) {
-                GOTO(out_rename, (rc = -ESTALE));
+                GOTO(out_rename_srcdir, rc = -ESTALE);
         }
 
         de_old = lookup_one_len(rec->ur_name, de_srcdir, rec->ur_namelen - 1);
         if (IS_ERR(de_old)) {
-                CERROR("child lookup error %ld\n", PTR_ERR(de_old));
-                GOTO(out_rename, (rc = -ESTALE));
+                CERROR("old child lookup error %ld\n", PTR_ERR(de_old));
+                GOTO(out_rename_tgtdir, rc = -ESTALE);
         }
 
         de_new = lookup_one_len(rec->ur_tgt, de_tgtdir, rec->ur_tgtlen - 1);
         if (IS_ERR(de_new)) {
-                CERROR("child lookup error %ld\n", PTR_ERR(de_new));
-                GOTO(out_rename, (rc = -ESTALE));
+                CERROR("new child lookup error %ld\n", PTR_ERR(de_new));
+                GOTO(out_rename_deold, rc = -ESTALE);
         }
 
         OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_RENAME_WRITE,
@@ -330,12 +343,15 @@ static int mds_reint_rename(struct mds_update_record *rec,
         rc = vfs_rename(de_srcdir->d_inode, de_old, de_tgtdir->d_inode, de_new);
         EXIT;
 
- out_rename:
-        req->rq_status = rc;
         l_dput(de_new);
+out_rename_deold:
         l_dput(de_old);
+out_rename_tgtdir:
         l_dput(de_tgtdir);
+out_rename_srcdir:
         l_dput(de_srcdir);
+out_rename:
+        req->rq_status = rc;
         return 0;
 }
 
