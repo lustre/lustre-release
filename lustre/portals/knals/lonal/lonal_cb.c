@@ -50,7 +50,7 @@ klonal_send (lib_nal_t    *nal,
                 .klod_niov    = payload_niov,
                 .klod_offset  = payload_offset,
                 .klod_nob     = payload_nob,
-                .klod_iov.iov = payload_iov};
+                .klod_iov     = { .iov = payload_iov } };
         ptl_err_t rc;
 
         LASSERT(nid == klonal_lib.libnal_ni.ni_pid.nid);
@@ -80,7 +80,7 @@ klonal_send_pages (lib_nal_t    *nal,
                 .klod_niov     = payload_niov,
                 .klod_offset   = payload_offset,
                 .klod_nob      = payload_nob,
-                .klod_iov.kiov = payload_kiov};
+                .klod_iov      = { .kiov = payload_kiov } };
         ptl_err_t   rc;
 
         LASSERT(nid == klonal_lib.libnal_ni.ni_pid.nid);
