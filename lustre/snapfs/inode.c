@@ -64,8 +64,6 @@ void init_filter_data(struct inode *inode,
 		return;
 	}
 	snapops = filter_c2csnapops(cache->cache_filter);
-
-	if (inode->i_filterdata) return;
 	
 	inode->i_filterdata = (struct filter_inode_info *) \
 			      kmem_cache_alloc(filter_info_cache, SLAB_KERNEL);
@@ -106,95 +104,7 @@ void set_filter_ops(struct snap_cache *cache, struct inode *inode)
 		       inode->i_ino, inode->i_op);
 	}
 }
-int currentfs_setxattr(struct dentry *dentry, const char *name, 
-		       const void *value, size_t size, int flags)
-{
-        struct snap_cache 	*cache;
-	struct inode	  	*inode = dentry->d_inode;
-	struct inode_operations *iops;
-	int    rc;
 
-	ENTRY;
- 
-	cache = snap_find_cache(inode->i_dev);
-	if (!cache) {
-		CERROR("currentfs_setxattr: cannot find cache\n");
-		RETURN(-EINVAL);
-	}
-
-	iops = filter_c2cfiops(cache->cache_filter);
- 
-	if (!iops || !iops->setxattr) {
-		RETURN(-EINVAL);		
-	}
-        if ( snap_needs_cow(inode) != -1 ) {
-                CDEBUG(D_SNAP, "snap_needs_cow for ino %lu \n",inode->i_ino);
-                snap_do_cow(inode, dentry->d_parent->d_inode->i_ino, 0);
-	}
-
-	rc = iops->setxattr(dentry, name, value, size, flags);
-
-	RETURN(rc);
-}
-int currentfs_removexattr(struct dentry *dentry, const char *name)
-{
-        struct snap_cache 	*cache;
-	struct inode	  	*inode = dentry->d_inode;
-	struct inode_operations *iops;
-	int    rc;
-
-	ENTRY;
- 
-	cache = snap_find_cache(inode->i_dev);
-	if (!cache) {
-		CERROR("currentfs_setxattr: cannot find cache\n");
-		RETURN(-EINVAL);
-	}
-
-	iops = filter_c2cfiops(cache->cache_filter);
- 
-	if (!iops || !iops->removexattr) {
-		RETURN(-EINVAL);		
-	}
-        
-	if (snap_needs_cow(inode) != -1) {
-                CDEBUG(D_SNAP, "snap_needs_cow for ino %lu \n",inode->i_ino);
-                snap_do_cow(inode, dentry->d_parent->d_inode->i_ino, 0);
-	}
-	rc = iops->removexattr(dentry, name);
-
-	RETURN(rc);
-}
-
-int currentfs_setattr(struct dentry *dentry, struct iattr *attr)
-{
-        struct snap_cache 	*cache;
-	struct inode	  	*inode = dentry->d_inode;
-	struct inode_operations *iops;
-	int    rc;
-
-	ENTRY;
- 
-	cache = snap_find_cache(inode->i_dev);
-	if (!cache) {
-		CERROR("currentfs_setxattr: cannot find cache\n");
-		RETURN(-EINVAL);
-	}
-
-	iops = filter_c2cfiops(cache->cache_filter);
- 
-	if (!iops || !iops->setattr) {
-		RETURN(-EINVAL);		
-	}
-        if ( snap_needs_cow(inode) != -1 ) {
-                CDEBUG(D_SNAP, "snap_needs_cow for ino %lu \n",inode->i_ino);
-                snap_do_cow(inode, dentry->d_parent->d_inode->i_ino, 0);
-	}
-
-	rc = iops->setattr(dentry, attr);
-
-	RETURN(rc);
-}
 /* Superblock operations. */
 static void currentfs_read_inode(struct inode *inode)
 {
@@ -203,6 +113,7 @@ static void currentfs_read_inode(struct inode *inode)
 
 	if( !inode ) 
 		return;
+
 	CDEBUG(D_INODE, "read_inode ino %lu\n", inode->i_ino);
 
 	cache = snap_find_cache(inode->i_dev);
@@ -220,14 +131,10 @@ static void currentfs_read_inode(struct inode *inode)
 	if(filter_c2csops(cache->cache_filter))
 		filter_c2csops(cache->cache_filter)->read_inode(inode);
 
-	CDEBUG(D_INODE, "read_inode ino %lu icount %d \n", 
-	       inode->i_ino, atomic_read(&inode->i_count));
 	set_filter_ops(cache, inode);
 	/*init filter_data struct 
 	 * FIXME flag should be set future*/
 	init_filter_data(inode, 0); 
-	CDEBUG(D_INODE, "read_inode ino %lu icount %d \n", 
-	       inode->i_ino, atomic_read(&inode->i_count));
 	return; 
 }
 
@@ -310,8 +217,3 @@ struct super_operations currentfs_super_ops = {
 	put_super:	currentfs_put_super,
 	clear_inode:	currentfs_clear_inode,
 };
-
-
-
-
-

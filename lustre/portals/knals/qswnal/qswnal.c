@@ -35,6 +35,27 @@ kpr_nal_interface_t kqswnal_router_interface = {
 	kprni_notify:   NULL,			/* we're connectionless */
 };
 
+#if CONFIG_SYSCTL
+#define QSWNAL_SYSCTL  201
+
+#define QSWNAL_SYSCTL_OPTIMIZED_GETS     1
+#define QSWNAL_SYSCTL_COPY_SMALL_FWD     2
+
+static ctl_table kqswnal_ctl_table[] = {
+	{QSWNAL_SYSCTL_OPTIMIZED_GETS, "optimized_gets",
+	 &kqswnal_data.kqn_optimized_gets, sizeof (int),
+	 0644, NULL, &proc_dointvec},
+	{QSWNAL_SYSCTL_COPY_SMALL_FWD, "copy_small_fwd",
+	 &kqswnal_data.kqn_copy_small_fwd, sizeof (int),
+	 0644, NULL, &proc_dointvec},
+	{0}
+};
+
+static ctl_table kqswnal_top_ctl_table[] = {
+	{QSWNAL_SYSCTL, "qswnal", NULL, 0, 0555, kqswnal_ctl_table},
+	{0}
+};
+#endif
 
 static int
 kqswnal_forward(nal_t   *nal,
@@ -178,6 +199,10 @@ kqswnal_finalise (void)
 		LASSERT (0);
 
 	case KQN_INIT_ALL:
+#if CONFIG_SYSCTL
+                if (kqswnal_data.kqn_sysctl != NULL)
+                        unregister_sysctl_table (kqswnal_data.kqn_sysctl);
+#endif		
 		PORTAL_SYMBOL_UNREGISTER (kqswnal_ni);
                 kportal_nal_unregister(QSWNAL);
 		/* fall through */
@@ -200,9 +225,43 @@ kqswnal_finalise (void)
 	kpr_shutdown (&kqswnal_data.kqn_router);
 
 	/**********************************************************************/
-	/* flag threads to terminate, wake them and wait for them to die */
+	/* flag threads we've started to terminate and wait for all to ack */
 
 	kqswnal_data.kqn_shuttingdown = 1;
+	wake_up_all (&kqswnal_data.kqn_sched_waitq);
+
+	while (atomic_read (&kqswnal_data.kqn_nthreads_running) != 0) {
+		CDEBUG(D_NET, "waiting for %d threads to start shutting down\n",
+		       atomic_read (&kqswnal_data.kqn_nthreads_running));
+		set_current_state (TASK_UNINTERRUPTIBLE);
+		schedule_timeout (HZ);
+	}
+
+	/**********************************************************************/
+	/* close elan comms */
+#if MULTIRAIL_EKC
+	if (kqswnal_data.kqn_eprx_small != NULL)
+		ep_free_rcvr (kqswnal_data.kqn_eprx_small);
+
+	if (kqswnal_data.kqn_eprx_large != NULL)
+		ep_free_rcvr (kqswnal_data.kqn_eprx_large);
+
+	if (kqswnal_data.kqn_eptx != NULL)
+		ep_free_xmtr (kqswnal_data.kqn_eptx);
+#else
+	if (kqswnal_data.kqn_eprx_small != NULL)
+		ep_remove_large_rcvr (kqswnal_data.kqn_eprx_small);
+
+	if (kqswnal_data.kqn_eprx_large != NULL)
+		ep_remove_large_rcvr (kqswnal_data.kqn_eprx_large);
+
+	if (kqswnal_data.kqn_eptx != NULL)
+		ep_free_large_xmtr (kqswnal_data.kqn_eptx);
+#endif
+	/**********************************************************************/
+	/* flag threads to terminate, wake them and wait for them to die */
+
+	kqswnal_data.kqn_shuttingdown = 2;
 	wake_up_all (&kqswnal_data.kqn_sched_waitq);
 
 	while (atomic_read (&kqswnal_data.kqn_nthreads) != 0) {
@@ -213,21 +272,13 @@ kqswnal_finalise (void)
 	}
 
 	/**********************************************************************/
-	/* close elan comms */
-
-	if (kqswnal_data.kqn_eprx_small != NULL)
-		ep_remove_large_rcvr (kqswnal_data.kqn_eprx_small);
-
-	if (kqswnal_data.kqn_eprx_large != NULL)
-		ep_remove_large_rcvr (kqswnal_data.kqn_eprx_large);
-
-	if (kqswnal_data.kqn_eptx != NULL)
-		ep_free_large_xmtr (kqswnal_data.kqn_eptx);
-
-	/**********************************************************************/
 	/* No more threads.  No more portals, router or comms callbacks!
 	 * I control the horizontals and the verticals...
 	 */
+
+#if MULTIRAIL_EKC
+	LASSERT (list_empty (&kqswnal_data.kqn_readyrxds));
+#endif
 
 	/**********************************************************************/
 	/* Complete any blocked forwarding packets with error
@@ -260,27 +311,73 @@ kqswnal_finalise (void)
 	/* Unmap message buffers and free all descriptors and buffers
 	 */
 
+#if MULTIRAIL_EKC
+	/* FTTB, we need to unmap any remaining mapped memory.  When
+	 * ep_dvma_release() get fixed (and releases any mappings in the
+	 * region), we can delete all the code from here -------->  */
+
+	if (kqswnal_data.kqn_txds != NULL) {
+	        int  i;
+
+		for (i = 0; i < KQSW_NTXMSGS + KQSW_NNBLK_TXMSGS; i++) {
+			kqswnal_tx_t *ktx = &kqswnal_data.kqn_txds[i];
+
+			/* If ktx has a buffer, it got mapped; unmap now.
+			 * NB only the pre-mapped stuff is still mapped
+			 * since all tx descs must be idle */
+
+			if (ktx->ktx_buffer != NULL)
+				ep_dvma_unload(kqswnal_data.kqn_ep,
+					       kqswnal_data.kqn_ep_tx_nmh,
+					       &ktx->ktx_ebuffer);
+		}
+	}
+
+	if (kqswnal_data.kqn_rxds != NULL) {
+	        int   i;
+
+		for (i = 0; i < KQSW_NRXMSGS_SMALL + KQSW_NRXMSGS_LARGE; i++) {
+			kqswnal_rx_t *krx = &kqswnal_data.kqn_rxds[i];
+
+			/* If krx_pages[0] got allocated, it got mapped.
+			 * NB subsequent pages get merged */
+
+			if (krx->krx_pages[0] != NULL)
+				ep_dvma_unload(kqswnal_data.kqn_ep,
+					       kqswnal_data.kqn_ep_rx_nmh,
+					       &krx->krx_elanbuffer);
+		}
+	}
+	/* <----------- to here */
+
+	if (kqswnal_data.kqn_ep_rx_nmh != NULL)
+		ep_dvma_release(kqswnal_data.kqn_ep, kqswnal_data.kqn_ep_rx_nmh);
+
+	if (kqswnal_data.kqn_ep_tx_nmh != NULL)
+		ep_dvma_release(kqswnal_data.kqn_ep, kqswnal_data.kqn_ep_tx_nmh);
+#else
 	if (kqswnal_data.kqn_eprxdmahandle != NULL)
 	{
-		elan3_dvma_unload(kqswnal_data.kqn_epdev->DmaState,
+		elan3_dvma_unload(kqswnal_data.kqn_ep->DmaState,
 				  kqswnal_data.kqn_eprxdmahandle, 0,
 				  KQSW_NRXMSGPAGES_SMALL * KQSW_NRXMSGS_SMALL +
 				  KQSW_NRXMSGPAGES_LARGE * KQSW_NRXMSGS_LARGE);
 
-		elan3_dma_release(kqswnal_data.kqn_epdev->DmaState,
+		elan3_dma_release(kqswnal_data.kqn_ep->DmaState,
 				  kqswnal_data.kqn_eprxdmahandle);
 	}
 
 	if (kqswnal_data.kqn_eptxdmahandle != NULL)
 	{
-		elan3_dvma_unload(kqswnal_data.kqn_epdev->DmaState,
+		elan3_dvma_unload(kqswnal_data.kqn_ep->DmaState,
 				  kqswnal_data.kqn_eptxdmahandle, 0,
 				  KQSW_NTXMSGPAGES * (KQSW_NTXMSGS +
 						      KQSW_NNBLK_TXMSGS));
 
-		elan3_dma_release(kqswnal_data.kqn_epdev->DmaState,
+		elan3_dma_release(kqswnal_data.kqn_ep->DmaState,
 				  kqswnal_data.kqn_eptxdmahandle);
 	}
+#endif
 
 	if (kqswnal_data.kqn_txds != NULL)
 	{
@@ -331,7 +428,11 @@ kqswnal_finalise (void)
 static int __init
 kqswnal_initialise (void)
 {
+#if MULTIRAIL_EKC
+	EP_RAILMASK       all_rails = EP_RAILMASK_ALL;
+#else
 	ELAN3_DMA_REQUEST dmareq;
+#endif
 	int               rc;
 	int               i;
 	int               elan_page_idx;
@@ -351,8 +452,18 @@ kqswnal_initialise (void)
 
 	kqswnal_lib.nal_data = &kqswnal_data;
 
+	memset(&kqswnal_rpc_success, 0, sizeof(kqswnal_rpc_success));
+	memset(&kqswnal_rpc_failed, 0, sizeof(kqswnal_rpc_failed));
+#if MULTIRAIL_EKC
+	kqswnal_rpc_failed.Data[0] = -ECONNREFUSED;
+#else
+	kqswnal_rpc_failed.Status = -ECONNREFUSED;
+#endif
 	/* ensure all pointers NULL etc */
 	memset (&kqswnal_data, 0, sizeof (kqswnal_data));
+
+	kqswnal_data.kqn_optimized_gets = KQSW_OPTIMIZED_GETS;
+	kqswnal_data.kqn_copy_small_fwd = KQSW_COPY_SMALL_FWD;
 
 	kqswnal_data.kqn_cb = &kqswnal_lib;
 
@@ -375,24 +486,38 @@ kqswnal_initialise (void)
 	/* pointers/lists/locks initialised */
 	kqswnal_data.kqn_init = KQN_INIT_DATA;
 
+#if MULTIRAIL_EKC
+	kqswnal_data.kqn_ep = ep_system();
+	if (kqswnal_data.kqn_ep == NULL) {
+		CERROR("Can't initialise EKC\n");
+		return (-ENODEV);
+	}
+
+	if (ep_waitfor_nodeid(kqswnal_data.kqn_ep) == ELAN_INVALID_NODE) {
+		CERROR("Can't get elan ID\n");
+		kqswnal_finalise();
+		return (-ENODEV);
+	}
+#else
 	/**********************************************************************/
 	/* Find the first Elan device */
 
-	kqswnal_data.kqn_epdev = ep_device (0);
-	if (kqswnal_data.kqn_epdev == NULL)
+	kqswnal_data.kqn_ep = ep_device (0);
+	if (kqswnal_data.kqn_ep == NULL)
 	{
 		CERROR ("Can't get elan device 0\n");
-		return (-ENOMEM);
+		return (-ENODEV);
 	}
+#endif
 
 	kqswnal_data.kqn_nid_offset = 0;
-	kqswnal_data.kqn_nnodes     = ep_numnodes (kqswnal_data.kqn_epdev);
-	kqswnal_data.kqn_elanid     = ep_nodeid (kqswnal_data.kqn_epdev);
+	kqswnal_data.kqn_nnodes     = ep_numnodes (kqswnal_data.kqn_ep);
+	kqswnal_data.kqn_elanid     = ep_nodeid (kqswnal_data.kqn_ep);
 	
 	/**********************************************************************/
 	/* Get the transmitter */
 
-	kqswnal_data.kqn_eptx = ep_alloc_large_xmtr (kqswnal_data.kqn_epdev);
+	kqswnal_data.kqn_eptx = ep_alloc_xmtr (kqswnal_data.kqn_ep);
 	if (kqswnal_data.kqn_eptx == NULL)
 	{
 		CERROR ("Can't allocate transmitter\n");
@@ -403,9 +528,9 @@ kqswnal_initialise (void)
 	/**********************************************************************/
 	/* Get the receivers */
 
-	kqswnal_data.kqn_eprx_small = ep_install_large_rcvr (kqswnal_data.kqn_epdev,
-							     EP_SVC_LARGE_PORTALS_SMALL,
-							     KQSW_EP_ENVELOPES_SMALL);
+	kqswnal_data.kqn_eprx_small = ep_alloc_rcvr (kqswnal_data.kqn_ep,
+						     EP_MSG_SVC_PORTALS_SMALL,
+						     KQSW_EP_ENVELOPES_SMALL);
 	if (kqswnal_data.kqn_eprx_small == NULL)
 	{
 		CERROR ("Can't install small msg receiver\n");
@@ -413,9 +538,9 @@ kqswnal_initialise (void)
 		return (-ENOMEM);
 	}
 
-	kqswnal_data.kqn_eprx_large = ep_install_large_rcvr (kqswnal_data.kqn_epdev,
-							     EP_SVC_LARGE_PORTALS_LARGE,
-							     KQSW_EP_ENVELOPES_LARGE);
+	kqswnal_data.kqn_eprx_large = ep_alloc_rcvr (kqswnal_data.kqn_ep,
+						     EP_MSG_SVC_PORTALS_LARGE,
+						     KQSW_EP_ENVELOPES_LARGE);
 	if (kqswnal_data.kqn_eprx_large == NULL)
 	{
 		CERROR ("Can't install large msg receiver\n");
@@ -427,13 +552,23 @@ kqswnal_initialise (void)
 	/* Reserve Elan address space for transmit descriptors NB we may
 	 * either send the contents of associated buffers immediately, or
 	 * map them for the peer to suck/blow... */
-
+#if MULTIRAIL_EKC
+	kqswnal_data.kqn_ep_tx_nmh = 
+		ep_dvma_reserve(kqswnal_data.kqn_ep,
+				KQSW_NTXMSGPAGES*(KQSW_NTXMSGS+KQSW_NNBLK_TXMSGS),
+				EP_PERM_WRITE);
+	if (kqswnal_data.kqn_ep_tx_nmh == NULL) {
+		CERROR("Can't reserve tx dma space\n");
+		kqswnal_finalise();
+		return (-ENOMEM);
+	}
+#else
         dmareq.Waitfn   = DDI_DMA_SLEEP;
         dmareq.ElanAddr = (E3_Addr) 0;
         dmareq.Attr     = PTE_LOAD_LITTLE_ENDIAN;
         dmareq.Perm     = ELAN_PERM_REMOTEWRITE;
 
-	rc = elan3_dma_reserve(kqswnal_data.kqn_epdev->DmaState,
+	rc = elan3_dma_reserve(kqswnal_data.kqn_ep->DmaState,
 			      KQSW_NTXMSGPAGES*(KQSW_NTXMSGS+KQSW_NNBLK_TXMSGS),
 			      &dmareq, &kqswnal_data.kqn_eptxdmahandle);
 	if (rc != DDI_SUCCESS)
@@ -442,16 +577,27 @@ kqswnal_initialise (void)
 		kqswnal_finalise ();
 		return (-ENOMEM);
 	}
-
+#endif
 	/**********************************************************************/
 	/* Reserve Elan address space for receive buffers */
-
+#if MULTIRAIL_EKC
+	kqswnal_data.kqn_ep_rx_nmh =
+		ep_dvma_reserve(kqswnal_data.kqn_ep,
+				KQSW_NRXMSGPAGES_SMALL * KQSW_NRXMSGS_SMALL +
+				KQSW_NRXMSGPAGES_LARGE * KQSW_NRXMSGS_LARGE,
+				EP_PERM_WRITE);
+	if (kqswnal_data.kqn_ep_tx_nmh == NULL) {
+		CERROR("Can't reserve rx dma space\n");
+		kqswnal_finalise();
+		return (-ENOMEM);
+	}
+#else
         dmareq.Waitfn   = DDI_DMA_SLEEP;
         dmareq.ElanAddr = (E3_Addr) 0;
         dmareq.Attr     = PTE_LOAD_LITTLE_ENDIAN;
         dmareq.Perm     = ELAN_PERM_REMOTEWRITE;
 
-	rc = elan3_dma_reserve (kqswnal_data.kqn_epdev->DmaState,
+	rc = elan3_dma_reserve (kqswnal_data.kqn_ep->DmaState,
 				KQSW_NRXMSGPAGES_SMALL * KQSW_NRXMSGS_SMALL +
 				KQSW_NRXMSGPAGES_LARGE * KQSW_NRXMSGS_LARGE,
 				&dmareq, &kqswnal_data.kqn_eprxdmahandle);
@@ -461,7 +607,7 @@ kqswnal_initialise (void)
 		kqswnal_finalise ();
 		return (-ENOMEM);
 	}
-
+#endif
 	/**********************************************************************/
 	/* Allocate/Initialise transmit descriptors */
 
@@ -492,12 +638,17 @@ kqswnal_initialise (void)
 		/* Map pre-allocated buffer NOW, to save latency on transmit */
 		premapped_pages = kqswnal_pages_spanned(ktx->ktx_buffer,
 							KQSW_TX_BUFFER_SIZE);
-
-		elan3_dvma_kaddr_load (kqswnal_data.kqn_epdev->DmaState,
+#if MULTIRAIL_EKC
+		ep_dvma_load(kqswnal_data.kqn_ep, NULL, 
+			     ktx->ktx_buffer, KQSW_TX_BUFFER_SIZE, 
+			     kqswnal_data.kqn_ep_tx_nmh, basepage,
+			     &all_rails, &ktx->ktx_ebuffer);
+#else
+		elan3_dvma_kaddr_load (kqswnal_data.kqn_ep->DmaState,
 				       kqswnal_data.kqn_eptxdmahandle,
 				       ktx->ktx_buffer, KQSW_TX_BUFFER_SIZE,
 				       basepage, &ktx->ktx_ebuffer);
-
+#endif
 		ktx->ktx_basepage = basepage + premapped_pages; /* message mapping starts here */
 		ktx->ktx_npages = KQSW_NTXMSGPAGES - premapped_pages; /* for this many pages */
 
@@ -527,7 +678,11 @@ kqswnal_initialise (void)
 	elan_page_idx = 0;
 	for (i = 0; i < KQSW_NRXMSGS_SMALL + KQSW_NRXMSGS_LARGE; i++)
 	{
-		E3_Addr       elanaddr;
+#if MULTIRAIL_EKC
+		EP_NMD        elanbuffer;
+#else
+		E3_Addr       elanbuffer;
+#endif
 		int           j;
 		kqswnal_rx_t *krx = &kqswnal_data.kqn_rxds[i];
 
@@ -554,18 +709,35 @@ kqswnal_initialise (void)
 
 			LASSERT(page_address(krx->krx_pages[j]) != NULL);
 
-			elan3_dvma_kaddr_load(kqswnal_data.kqn_epdev->DmaState,
+#if MULTIRAIL_EKC
+			ep_dvma_load(kqswnal_data.kqn_ep, NULL,
+				     page_address(krx->krx_pages[j]),
+				     PAGE_SIZE, kqswnal_data.kqn_ep_rx_nmh,
+				     elan_page_idx, &all_rails, &elanbuffer);
+			
+			if (j == 0) {
+				krx->krx_elanbuffer = elanbuffer;
+			} else {
+				rc = ep_nmd_merge(&krx->krx_elanbuffer,
+						  &krx->krx_elanbuffer, 
+						  &elanbuffer);
+				/* NB contiguous mapping */
+				LASSERT(rc);
+			}
+#else
+			elan3_dvma_kaddr_load(kqswnal_data.kqn_ep->DmaState,
 					      kqswnal_data.kqn_eprxdmahandle,
 					      page_address(krx->krx_pages[j]),
 					      PAGE_SIZE, elan_page_idx,
-					      &elanaddr);
+					      &elanbuffer);
+			if (j == 0)
+				krx->krx_elanbuffer = elanbuffer;
+
+			/* NB contiguous mapping */
+			LASSERT (elanbuffer == krx->krx_elanbuffer + j * PAGE_SIZE);
+#endif
 			elan_page_idx++;
 
-			if (j == 0)
-				krx->krx_elanaddr = elanaddr;
-
-			/* NB we assume a contiguous  */
-			LASSERT (elanaddr == krx->krx_elanaddr + j * PAGE_SIZE);
 		}
 	}
 	LASSERT (elan_page_idx ==
@@ -593,10 +765,15 @@ kqswnal_initialise (void)
 		kqswnal_rx_t *krx = &kqswnal_data.kqn_rxds[i];
 
 		/* NB this enqueue can allocate/sleep (attr == 0) */
+#if MULTIRAIL_EKC
 		rc = ep_queue_receive(krx->krx_eprx, kqswnal_rxhandler, krx,
-				      krx->krx_elanaddr,
+				      &krx->krx_elanbuffer, 0);
+#else
+		rc = ep_queue_receive(krx->krx_eprx, kqswnal_rxhandler, krx,
+				      krx->krx_elanbuffer,
 				      krx->krx_npages * PAGE_SIZE, 0);
-		if (rc != ESUCCESS)
+#endif
+		if (rc != EP_SUCCESS)
 		{
 			CERROR ("failed ep_queue_receive %d\n", rc);
 			kqswnal_finalise ();
@@ -629,6 +806,11 @@ kqswnal_initialise (void)
 		return (rc);
 	}
 
+#if CONFIG_SYSCTL
+        /* Press on regardless even if registering sysctl doesn't work */
+        kqswnal_data.kqn_sysctl = register_sysctl_table (kqswnal_top_ctl_table, 0);
+#endif
+
 	PORTAL_SYMBOL_REGISTER(kqswnal_ni);
 	kqswnal_data.kqn_init = KQN_INIT_ALL;
 
@@ -642,8 +824,8 @@ kqswnal_initialise (void)
 }
 
 
-MODULE_AUTHOR("W. Marcus Miller <marcusm@llnl.gov>");
-MODULE_DESCRIPTION("Kernel Quadrics Switch NAL v1.00");
+MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
+MODULE_DESCRIPTION("Kernel Quadrics/Elan NAL v1.01");
 MODULE_LICENSE("GPL");
 
 module_init (kqswnal_initialise);

@@ -239,13 +239,6 @@ void filter_setup_dir_ops(struct filter_fs *cache,
 			u_iops->mknod = filter_iops->mknod;
 		if (cache_iops->permission && filter_iops->permission)
 			u_iops->permission = filter_iops->permission;
-		if (cache_iops->setattr && filter_iops->setattr)
-			u_iops->setattr = filter_iops->setattr;
-		if (cache_iops->setxattr && filter_iops->setxattr)
-			u_iops->setxattr = filter_iops->setxattr;
-		if (cache_iops->removexattr && filter_iops->removexattr)
-			u_iops->removexattr = filter_iops->removexattr;
-
 	}
 	/* copy dir fops */
 	
@@ -297,12 +290,6 @@ void filter_setup_file_ops(struct filter_fs 	   *cache,
 	if (filter_iops) {
 		if (filter_iops->revalidate)
 			u_iops->revalidate = filter_iops->revalidate;
-		if (filter_iops->removexattr)
-			u_iops->removexattr = filter_iops->removexattr;
-		if (filter_iops->setxattr)
-			u_iops->setxattr = filter_iops->setxattr;
-		if (filter_iops->setattr)
-			u_iops->setattr = filter_iops->setattr;
 	}
 	if (filter_fops) {
 		if (filter_fops->read)
@@ -350,11 +337,6 @@ void filter_setup_symlink_ops(struct filter_fs *cache,
 			u_iops->readlink = filter_iops->readlink;
 		if (cache_iops->follow_link && filter_iops->follow_link)
 			u_iops->follow_link = filter_iops->follow_link;
-		if (cache_iops->getxattr && filter_iops->getxattr) 
-			u_iops->getxattr = filter_iops->getxattr;
-		if (cache_iops->listxattr && filter_iops->listxattr)
-			u_iops->listxattr = filter_iops->listxattr;
-
 	}
 	EXIT;
 }

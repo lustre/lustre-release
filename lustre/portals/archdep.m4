@@ -244,16 +244,23 @@ else
   AC_MSG_RESULT(no)
 fi
 
-AC_ARG_ENABLE(zerocopy, [  --enable-zerocopy enable socknal zerocopy],enable_zerocopy=$enable_zerocopy_temp, enable_zerocopy="")
+AC_ARG_ENABLE(zerocopy, [  --disable-zerocopy disable socknal zerocopy],enable_zerocopy="", enable_zerocopy=$enable_zerocopy_temp)
 
-AC_ARG_ENABLE(affinity, [  --enable-affinity enable process/irq affinity],enable_affinity="-DCPU_AFFINITY=1", enable_affinity=$enable_affinity_temp)
+AC_ARG_ENABLE(affinity, [  --disable-affinity disable process/irq affinity],enable_affinity="", enable_affinity=$enable_affinity_temp)
 #####################################
 
 AC_MSG_CHECKING(if quadrics kernel headers are present)
 if test -d $LINUX/drivers/net/qsnet ; then
   AC_MSG_RESULT(yes)
   QSWNAL="qswnal"
-  with_quadrics="-I$LINUX/drivers/net/qsnet/include"
+  AC_MSG_CHECKING(for multirail EKC)
+  if test -f $LINUX/include/elan/epcomms.h; then
+	AC_MSG_RESULT(supported)
+	with_quadrics="-DMULTIRAIL_EKC=1"
+  else
+	AC_MSG_RESULT(not supported)
+	with_quadrics="-I$LINUX/drivers/net/qsnet/include"
+  fi
   :
 elif test -d $LINUX/drivers/qsnet1 ; then
   AC_MSG_RESULT(yes)

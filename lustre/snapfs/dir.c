@@ -37,13 +37,10 @@ static ino_t get_parent_ino(struct inode * inode)
 
 static void d_unadd_iput(struct dentry *dentry)
 {
-	spin_lock(&dcache_lock);
 	list_del(&dentry->d_alias);
 	INIT_LIST_HEAD(&dentry->d_alias);
 	list_del(&dentry->d_hash);
 	INIT_LIST_HEAD(&dentry->d_hash);
-	spin_unlock(&dcache_lock);
-	
 	iput(dentry->d_inode);
 	dentry->d_inode = NULL;
 }
@@ -79,8 +76,7 @@ static struct dentry *currentfs_lookup(struct inode * dir,struct dentry *dentry)
 
 		ino = 0xF0000000 | dir->i_ino;
 		snap = iget(dir->i_sb, ino);
-		CDEBUG(D_INODE, ".snap inode ino %ld, mode %o\n", 
-		       snap->i_ino, snap->i_mode);
+		CDEBUG(D_INODE, ".snap inode ino %ld, mode %o\n", snap->i_ino, snap->i_mode);
 		d_add(dentry, snap);
 		RETURN(NULL);
 	}
@@ -91,14 +87,10 @@ static struct dentry *currentfs_lookup(struct inode * dir,struct dentry *dentry)
 	}
 
 	rc = iops->lookup(dir, dentry);
-	if (rc || !dentry->d_inode || 
-            is_bad_inode(dentry->d_inode) ||
-	    IS_ERR(dentry->d_inode)) {
+	if ( rc || !dentry->d_inode) {
 		RETURN(NULL);
 	}
-
-	CDEBUG(D_INODE, "cache inode ino %lu, mode %o\n", 
-	       dentry->d_inode->i_ino, dentry->d_inode->i_mode);
+	
 	/*
 	 * If we are under dotsnap, we need save extra data into
 	 * dentry->d_fsdata:  For dir, we only need _this_ snapshot's index; 
@@ -168,13 +160,13 @@ static int currentfs_create(struct inode *dir, struct dentry *dentry, int mode)
 	}
 
 	cache = snap_find_cache(dir->i_dev);
-	if (!cache) { 
+	if ( !cache ) { 
 		RETURN(-EINVAL);
 	}
 
 	handle = snap_trans_start(cache, dir, SNAP_OP_CREATE);
 
-	if (snap_needs_cow(dir) != -1) {
+	if ( snap_needs_cow(dir) != -1 ) {
 		CDEBUG(D_INODE, "snap_needs_cow for ino %lu \n",dir->i_ino);
 		snap_debug_device_fail(dir->i_dev, SNAP_OP_CREATE, 1);
 		if ((snap_do_cow(dir, get_parent_ino(dir), 0))) {
@@ -250,12 +242,7 @@ static int currentfs_mkdir(struct inode *dir, struct dentry *dentry, int mode)
                 CERROR("Error in currentfs_mkdir, dentry->d_inode is NULL\n");
         }
 
-	set_filter_ops(cache, dentry->d_inode);
-	init_filter_data(dentry->d_inode, 0); 
-	
-	CDEBUG(D_INODE, "inode %lu, i_op %p\n", dentry->d_inode->i_ino, dentry->d_inode->i_op);
-	snap_debug_device_fail(dir->i_dev, SNAP_OP_CREATE, 3);
-
+	snap_debug_device_fail(dir->i_dev, SNAP_OP_MKDIR, 3);
 	
 exit:
 	snap_trans_commit(cache, handle);
@@ -333,11 +320,8 @@ static int currentfs_symlink(struct inode *dir, struct dentry *dentry,
 
 	snap_debug_device_fail(dir->i_dev, SNAP_OP_SYMLINK, 2);
 	rc = iops->symlink(dir, dentry, symname);
-	
-	set_filter_ops(cache, dentry->d_inode);
-	init_filter_data(dentry->d_inode, 0); 
-	
 	snap_debug_device_fail(dir->i_dev, SNAP_OP_SYMLINK, 3);
+	
 exit:
 	snap_trans_commit(cache, handle);
 	RETURN(rc);
@@ -376,9 +360,6 @@ static int currentfs_mknod(struct inode *dir, struct dentry *dentry, int mode,
 
 	snap_debug_device_fail(dir->i_dev, SNAP_OP_MKNOD, 2);
 	rc = iops->mknod(dir, dentry, mode, rdev);
-	
-	set_filter_ops(cache, dentry->d_inode);
-	init_filter_data(dentry->d_inode, 0); 
 	snap_debug_device_fail(dir->i_dev, SNAP_OP_MKNOD, 3);
 	
 	/* XXX do we need to set the correct snap_{*}_iops */
@@ -399,6 +380,7 @@ static int currentfs_rmdir(struct inode *dir, struct dentry *dentry)
 	off_t	i_size = 0;
 	ino_t ino = 0;
 	int keep_inode = 0;
+//	struct dentry_operations *save_dop = NULL;
 	void *handle = NULL;
 
 	ENTRY;
@@ -434,10 +416,23 @@ static int currentfs_rmdir(struct inode *dir, struct dentry *dentry)
 	if (snap_needs_cow(dentry->d_inode) != -1 || 
 	    snap_is_redirector(dentry->d_inode)) {
 		snap_debug_device_fail(dir->i_dev, SNAP_OP_RMDIR, 2);
-		snap_do_cow (dentry->d_inode, get_parent_ino(dentry->d_inode), 
-			     SNAP_CREATE_IND_DEL_PRI);
+		snap_do_cow (dir, get_parent_ino(dir), SNAP_CREATE_IND_DEL_PRI);
 		keep_inode = 1;
 	}
+#if 0
+	if ( keep_inode ) {	
+       		printk("set up dentry ops, before %p\n",dentry->d_op);
+		save_dop = dentry->d_op;
+
+     		filter_setup_dentry_ops(cache->cache_filter,
+                                dentry->d_op, &currentfs_dentry_ops);
+        	dentry->d_op = filter_c2udops(cache->cache_filter);
+
+       		printk("set up dentry ops, after %p\n",dentry->d_op);
+
+	}
+
+#endif
 
 	if( keep_inode && dentry->d_inode ) {
 		ino = dentry->d_inode->i_ino;
@@ -450,20 +445,31 @@ static int currentfs_rmdir(struct inode *dir, struct dentry *dentry)
 	rc = iops->rmdir(dir, dentry);
 	snap_debug_device_fail(dir->i_dev, SNAP_OP_RMDIR, 5);
 
+	/* XXX : check this */
+#if 0
+	if ( keep_inode ) {
+		dentry->d_op = save_dop;
+		printk("restore dentry ops, now at %p\n",dentry->d_op);
+	}
+
+#endif
+
 	if( keep_inode && ino) {
-		inode = iget (dir->i_sb, ino);
+		inode = iget ( dir->i_sb, ino);
 		if( inode) {
 //			inode->i_ctime = i_ctime;
 			inode->i_nlink = i_nlink;
 			inode->i_size = i_size;
 			mark_inode_dirty(inode);
 			iput( inode);
+#ifdef CONFIG_SNAPFS_EXT3
 			/*
 			 * In Ext3, rmdir() will put this inode into
 			 * orphan list, we must remove it out. It's ugly!!
 			 */
 			if( cache->cache_type == FILTER_FS_EXT3 )
 				ext3_orphan_del(handle, inode);
+#endif
 			snap_debug_device_fail(dir->i_dev, SNAP_OP_RMDIR, 6);
 		}
 	}
@@ -692,8 +698,5 @@ struct inode_operations currentfs_dir_iops = {
 	rmdir: 		currentfs_rmdir,
 	unlink: 	currentfs_unlink,
 	rename: 	currentfs_rename,
-	lookup:		currentfs_lookup,
-	removexattr:	currentfs_removexattr,
-	setattr:	currentfs_setattr,
-	setxattr:	currentfs_setxattr,
+	lookup:		currentfs_lookup
 };
