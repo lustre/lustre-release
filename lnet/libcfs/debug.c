@@ -954,6 +954,7 @@ extern int is_kernel_text_address(unsigned long addr);
 char *portals_debug_dumpstack(void)
 {
         asm("int $3");
+        return "dump stack";
 }
 
 #elif defined(__i386__)
