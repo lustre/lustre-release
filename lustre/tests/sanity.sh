@@ -1687,6 +1687,10 @@ test_48a() { # bug 2399
 	mkdir $DIR/d48a || error "recreate directory failed"
 	touch foo || error "'touch foo' failed after recreating cwd"
 	mkdir bar || error "'mkdir foo' failed after recreating cwd"
+	if check_kernel_version 44; then
+		touch .foo || error "'touch .foo' failed after recreating cwd"
+		mkdir .bar || error "'mkdir .foo' failed after recreating cwd"
+	fi
 	ls . || error "'ls .' failed after recreating cwd"
 	ls .. || error "'ls ..' failed after removing cwd"
 	cd . || error "'cd .' failed after recreating cwd"
@@ -1704,6 +1708,10 @@ test_48b() { # bug 2399
 	rmdir $DIR/d48b || error "remove cwd $DIR/d48b failed"
 	touch foo && error "'touch foo' worked after removing cwd"
 	mkdir foo && error "'mkdir foo' worked after removing cwd"
+	if check_kernel_version 44; then
+		touch .foo && error "'touch .foo' worked after removing cwd"
+		mkdir .foo && error "'mkdir .foo' worked after removing cwd"
+	fi
 	ls . && error "'ls .' worked after removing cwd"
 	ls .. || error "'ls ..' failed after removing cwd"
 	cd . && error "'cd .' worked after removing cwd"
@@ -1723,6 +1731,10 @@ test_48c() { # bug 2350
 	$TRACE rmdir $DIR/d48c/dir || error "remove cwd $DIR/d48c/dir failed"
 	$TRACE touch foo && error "'touch foo' worked after removing cwd"
 	$TRACE mkdir foo && error "'mkdir foo' worked after removing cwd"
+	if check_kernel_version 44; then
+		touch .foo && error "'touch .foo' worked after removing cwd"
+		mkdir .foo && error "'mkdir .foo' worked after removing cwd"
+	fi
 	$TRACE ls . && error "'ls .' worked after removing cwd"
 	$TRACE ls .. || error "'ls ..' failed after removing cwd"
 	$TRACE cd . && error "'cd .' worked after removing cwd"
@@ -1743,6 +1755,10 @@ test_48d() { # bug 2350
 	$TRACE rmdir $DIR/d48d || error "remove parent $DIR/d48d failed"
 	$TRACE touch foo && error "'touch foo' worked after removing parent"
 	$TRACE mkdir foo && error "'mkdir foo' worked after removing parent"
+	if check_kernel_version 44; then
+		touch .foo && error "'touch .foo' worked after removing parent"
+		mkdir .foo && error "'mkdir .foo' worked after removing parent"
+	fi
 	$TRACE ls . && error "'ls .' worked after removing parent"
 	$TRACE ls .. && error "'ls ..' worked after removing parent"
 	$TRACE cd . && error "'cd .' worked after recreate parent"
@@ -1760,7 +1776,7 @@ test_48e() { # bug 4134
 	mkdir -p $DIR/d48e/dir
 	# On a buggy kernel addition of "; touch file" after cd .. will
 	# produce kernel oops in lookup_hash_it
-	( cd $DIR/d48e/dir ; sleep 2 ; cd -P .. ) &
+	( cd $DIR/d48e/dir ; sleep 2 ; cd -P ..; touch foo ) &
 	cdpid=$!
 	$TRACE rmdir $DIR/d48e/dir || error "remove cwd $DIR/d48e/dir failed"
 	$TRACE rmdir $DIR/d48e || error "remove parent $DIR/d48e failed"

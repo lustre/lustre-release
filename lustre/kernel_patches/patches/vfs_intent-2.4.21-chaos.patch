@@ -300,7 +300,15 @@ Index: linux-ia64/fs/namei.c
  				break;
  		}
  		goto return_base;
-@@ -643,6 +680,27 @@ return_reval:
+@@ -637,12 +672,42 @@ return_reval:
+ 			nd->last_type = LAST_DOT;
+ 		else if (this.len == 2 && this.name[1] == '.')
+ 			nd->last_type = LAST_DOTDOT;
++		else
++			goto return_base;
+ return_reval:
+ 		/*
+ 		 * We bypassed the ordinary revalidation routines.
  		 * Check the cached dentry for staleness.
  		 */
  		dentry = nd->dentry;

@@ -22,6 +22,7 @@
  */
 
 
+#define _GNU_SOURCE
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -29,7 +30,6 @@
 #include <string.h>
 #include <sys/mount.h>
 #include <mntent.h>
-#define _GNU_SOURCE
 #include <getopt.h>
 
 #include "obdctl.h"
@@ -259,7 +259,7 @@ static const struct opt_map opt_map[] = {
 
 static int parse_one_option(const char *check, int *flagp)
 {
-        struct opt_map *opt;
+        const struct opt_map *opt;
 
         for (opt = &opt_map[0]; opt->opt != NULL; opt++) {
                 if (strcmp(check, opt->opt) == 0) {
@@ -375,7 +375,7 @@ set_local(struct lustre_mount_data *lmd)
                 fprintf(stderr, "%s: Unknown network type: %d\n",
                         progname, lmd->lmd_nal);
                 return 1;
-                
+
         case SOCKNAL:
         case TCPNAL:
         case OPENIBNAL:
@@ -439,7 +439,7 @@ set_peer(char *hostname, struct lustre_mount_data *lmd)
                 fprintf(stderr, "%s: Unknown network type: %d\n",
                         progname, lmd->lmd_nal);
                 return 1;
-                
+
         case IIBNAL:
         case VIBNAL:
                 if (lmd->lmd_server_nid != PTL_NID_ANY)

@@ -35,6 +35,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- support common vfs-enforced mount options (nodev,nosuid,noexec) (5637)
 	- fix several locking issues related to i_size (5492,5624,5654,5672)
 	- don't move pending lock onto export if it is already evicted (5683)
+	- fix kernel oops when creating .foo in unlinked directory (5548)
        * miscellania
 	- service request history (4965)
 	- put {ll,lov,osc}_async_page structs in a single slab (4699)
