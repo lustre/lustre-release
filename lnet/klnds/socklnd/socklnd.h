@@ -241,7 +241,7 @@ typedef struct
         
         /* READER */
         struct list_head    ksnc_rx_list;       /* where I enq waiting input or a forwarding descriptor */
-        unsigned long       ksnc_rx_ready;      /* data ready to read */
+        int                 ksnc_rx_ready;      /* data ready to read */
         int                 ksnc_rx_scheduled;  /* being progressed */
         int                 ksnc_rx_state;      /* what is being read */
         int                 ksnc_rx_nob_left;   /* # bytes to next hdr/body  */
@@ -257,7 +257,7 @@ typedef struct
         /* WRITER */
         struct list_head    ksnc_tx_list;       /* where I enq waiting for output space */
         struct list_head    ksnc_tx_queue;      /* packets waiting to be sent */
-        unsigned long       ksnc_tx_ready;      /* write space */
+        int                 ksnc_tx_ready;      /* write space */
         int                 ksnc_tx_scheduled;  /* being progressed */
 
 } ksock_conn_t;

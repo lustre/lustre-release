@@ -47,11 +47,11 @@
 #include <asm/semaphore.h>
 
 #define STDSIZE (sizeof(int) + sizeof(int) + sizeof(struct timeval))
-#define MAXSIZE (16*1024*1024)
+#define MAXSIZE (16*1024)
 
 static unsigned ping_head_magic;
 static unsigned ping_bulk_magic;
-static int nal  = 1;                            // Your NAL,
+static int nal  = SOCKNAL;                            // Your NAL,
 static unsigned long packets_valid = 0;         // Valid packets 
 static int running = 1;
 atomic_t pkt;

@@ -1514,7 +1514,7 @@ ksocknal_write_space (struct sock *sk)
 
         CDEBUG(D_NET, "sk %p wspace %d low water %d conn %p%s%s%s\n",
                sk, tcp_wspace(sk), SOCKNAL_TX_LOW_WATER(sk), conn,
-               (conn == NULL) ? "" : (test_bit (0, &conn->ksnc_tx_ready) ?
+               (conn == NULL) ? "" : (conn->ksnc_tx_ready ?
                                       " ready" : " blocked"),
                (conn == NULL) ? "" : (conn->ksnc_tx_scheduled ?
                                       " scheduled" : " idle"),
