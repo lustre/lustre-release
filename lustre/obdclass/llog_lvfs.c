@@ -163,25 +163,30 @@ static int llog_lvfs_read_header(struct llog_handle *handle)
         rc = llog_lvfs_read_blob(obd, handle->lgh_file, handle->lgh_hdr,
                                  LLOG_CHUNK_SIZE, 0);
         if (rc) {
-                CERROR("error reading log header\n");
+                CERROR("error reading log header from %*s\n",
+                       handle->lgh_file->f_dentry->d_name.len,
+                       handle->lgh_file->f_dentry->d_name.name);
         } else {
                 struct llog_rec_hdr *llh_hdr = &handle->lgh_hdr->llh_hdr;
                 /*
                  * These need to be fixed for bug 1987
                  */
                 if (llh_hdr->lrh_type != LLOG_HDR_MAGIC) {
-                        CERROR("bad log header magic: %#x (expecting %#x)\n",
+                        CERROR("bad log %*s header magic: %#x (expected %#x)\n",
+                               handle->lgh_file->f_dentry->d_name.len,
+                               handle->lgh_file->f_dentry->d_name.name,
                                llh_hdr->lrh_type, LLOG_HDR_MAGIC);
                         rc = -EIO;
                 } else if (llh_hdr->lrh_len != LLOG_CHUNK_SIZE) {
-                        CERROR("incorrectly sized log header: %#x "
-                               "(expecting %#x)\n",
+                        CERROR("incorrectly sized log %*s header: %#x "
+                               "(expected %#x)\n",
+                               handle->lgh_file->f_dentry->d_name.len,
+                               handle->lgh_file->f_dentry->d_name.name,
                                llh_hdr->lrh_len, LLOG_CHUNK_SIZE);
                         CERROR("you may need to re-run lconf --write_conf.\n");
                         rc = -EIO;
                 }
         }
-        
 
         handle->lgh_last_idx = handle->lgh_hdr->llh_tail.lrt_index;
         handle->lgh_file->f_pos = handle->lgh_file->f_dentry->d_inode->i_size;
@@ -555,17 +560,25 @@ static int llog_lvfs_destroy(struct llog_handle *handle)
         int rc;
         ENTRY;
 
-        fdentry = handle->lgh_file->f_dentry; 
+        fdentry = handle->lgh_file->f_dentry;
         if (!strcmp(fdentry->d_parent->d_name.name, "LOGS")) {
+                struct obd_device *obd = handle->lgh_ctxt->loc_exp->exp_obd;
                 struct inode *inode = fdentry->d_parent->d_inode;
-                rc = llog_lvfs_close(handle);
-                if (rc)
-                        RETURN(rc);
+                struct obd_run_ctxt saved;
 
-                down(&inode->i_sem);
-                rc = vfs_unlink(inode, fdentry);
-                up(&inode->i_sem);
-                RETURN(rc); 
+                push_ctxt(&saved, &obd->obd_ctxt, NULL);
+                dget(fdentry);
+                rc = llog_lvfs_close(handle);
+
+                if (rc == 0) {
+                        down(&inode->i_sem);
+                        rc = vfs_unlink(inode, fdentry);
+                        up(&inode->i_sem);
+                }
+
+                dput(fdentry);
+                pop_ctxt(&saved, &obd->obd_ctxt, NULL);
+                RETURN(rc);
         }
 
         oa = obdo_alloc();
@@ -727,14 +740,14 @@ static int llog_lvfs_destroy(struct llog_handle *handle)
 }
 
 int llog_get_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
-                      char *name, int count, struct llog_logid *idarray)
+                      char *name, int count, struct llog_catid *idarray)
 {
         LBUG();
         return 0;
 }
 
 int llog_put_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
-                      char *name, int count, struct llog_logid *idarray)
+                      char *name, int count, struct llog_catid *idarray)
 {
         LBUG();
         return 0;

@@ -10,6 +10,8 @@
 #ifndef _LIB_TYPES_H_
 #define _LIB_TYPES_H_
 
+#include "build_check.h"
+
 #include <portals/types.h>
 #ifdef __KERNEL__
 # include <linux/uio.h>
@@ -133,9 +135,8 @@ typedef struct {
 } lib_counters_t;
 
 /* temporary expedient: limit number of entries in discontiguous MDs */
-# define PTL_MTU        (512<<10)
-# define PTL_MD_MAX_IOV 128
-# define PTL_MD_MAX_PAGES min_t(int, PTL_MD_MAX_IOV, PTL_MTU / PAGE_SIZE)
+#define PTL_MTU        (512<<10)
+#define PTL_MD_MAX_IOV 128
 
 struct lib_msg_t {
         struct list_head  msg_list;
@@ -191,7 +192,6 @@ struct lib_md_t {
         ptl_size_t        max_size;
         int               threshold;
         int               pending;
-        ptl_unlink_t      unlink;
         unsigned int      options;
         unsigned int      md_flags;
         void             *user_ptr;
@@ -204,7 +204,15 @@ struct lib_md_t {
         } md_iov;
 };
 
-#define PTL_MD_FLAG_UNLINK            (1 << 0)
+#define PTL_MD_FLAG_ZOMBIE            (1 << 0)
+#define PTL_MD_FLAG_AUTO_UNLINK       (1 << 1)
+
+static inline int lib_md_exhausted (lib_md_t *md) 
+{
+        return (md->threshold == 0 ||
+                ((md->options & PTL_MD_MAX_SIZE) != 0 &&
+                 md->offset + md->max_size > md->length));
+}
 
 #ifdef PTL_USE_LIB_FREELIST
 typedef struct
