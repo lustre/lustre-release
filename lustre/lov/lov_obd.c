@@ -619,7 +619,14 @@ static inline int lov_brw(int cmd, struct lustre_handle *conn,
         }
 
         cbd->cb = callback;
-        atomic_set(&cbd->refcount, stripe_count);
+
+        /* This is the only race-free way I can think of to get the refcount
+         * correct. -phil */
+        atomic_set(&cbd->refcount, 0);
+        for (i = 0; i < stripe_count; i++)
+                if (stripeinfo[i].bufct)
+                        atomic_inc(&cbd->refcount);
+
         for (i = 0; i < stripe_count; i++) {
                 int shift = stripeinfo[i].index;
                 if (stripeinfo[i].bufct)

@@ -187,6 +187,7 @@ int ptlrpc_register_bulk(struct ptlrpc_bulk_desc *desc)
         int rc;
         __u32 xid = 0;
         struct iovec *iov;
+        ptl_process_id_t source_id;
         ENTRY;
 
         iov = ptlrpc_get_bulk_iov (desc);
@@ -220,8 +221,11 @@ int ptlrpc_register_bulk(struct ptlrpc_bulk_desc *desc)
         LASSERT (desc->bd_md.niov == desc->bd_page_count);
         LASSERT (desc->bd_md.niov != 0);
 
+        source_id.nid = desc->bd_connection->c_peer.peer_nid;
+        source_id.pid = PTL_PID_ANY;
+
         rc = PtlMEAttach(desc->bd_connection->c_peer.peer_ni,
-                         desc->bd_portal, local_id, xid, 0,
+                         desc->bd_portal, source_id, xid, 0,
                          PTL_UNLINK, PTL_INS_AFTER, &desc->bd_me_h);
 
         ptlrpc_put_bulk_iov (desc, iov);
@@ -303,6 +307,7 @@ int ptl_send_rpc(struct ptlrpc_request *request)
 {
         int rc;
         char *repbuf;
+        ptl_process_id_t source_id;
 
         ENTRY;
 
@@ -330,9 +335,12 @@ int ptl_send_rpc(struct ptlrpc_request *request)
 
         // down(&request->rq_client->cli_rpc_sem);
 
+        source_id.nid = request->rq_connection->c_peer.peer_nid;
+        source_id.pid = PTL_PID_ANY;
+
         rc = PtlMEAttach(request->rq_connection->c_peer.peer_ni,
                          request->rq_import->imp_client->cli_reply_portal,
-                         local_id, request->rq_xid, 0, PTL_UNLINK,
+                         source_id, request->rq_xid, 0, PTL_UNLINK,
                          PTL_INS_AFTER, &request->rq_reply_me_h);
         if (rc != PTL_OK) {
                 CERROR("PtlMEAttach failed: %d\n", rc);

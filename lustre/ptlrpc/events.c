@@ -87,7 +87,7 @@ static int reply_in_callback(ptl_event_t *ev)
 
         if (req->rq_xid != ev->match_bits) {
                 CERROR("Reply packet for wrong request\n");
-                LBUG(); 
+                LBUG();
         }
 
         if (ev->type == PTL_EVENT_PUT) {
@@ -108,7 +108,7 @@ int request_in_callback(ptl_event_t *ev)
         struct ptlrpc_service *service = ev->mem_desc.user_ptr;
 
         LASSERT ((ev->mem_desc.options & PTL_MD_IOV) == 0); /* requests always contiguous */
-        
+
         if (ev->rlength != ev->mlength)
                 CERROR("Warning: Possibly truncated rpc (%d/%d)\n",
                        ev->mlength, ev->rlength);
@@ -131,15 +131,16 @@ static int bulk_source_callback(ptl_event_t *ev)
 
         /* 1 fragment for each page always */
         LASSERT (ev->mem_desc.niov == desc->bd_page_count);
-        
+
         if (ev->type == PTL_EVENT_SENT) {
                 CDEBUG(D_NET, "got SENT event\n");
         } else if (ev->type == PTL_EVENT_ACK) {
                 CDEBUG(D_NET, "got ACK event\n");
-                
+
                 list_for_each_safe(tmp, next, &desc->bd_page_list) {
-                        bulk = list_entry(tmp, struct ptlrpc_bulk_page, bp_link);
-                        
+                        bulk = list_entry(tmp, struct ptlrpc_bulk_page,
+                                          bp_link);
+
                         if (bulk->bp_cb != NULL)
                                 bulk->bp_cb(bulk);
                 }
@@ -173,16 +174,17 @@ static int bulk_sink_callback(ptl_event_t *ev)
                 LASSERT (ev->mem_desc.niov == desc->bd_page_count);
 
                 list_for_each_safe (tmp, next, &desc->bd_page_list) {
-                        bulk = list_entry(tmp, struct ptlrpc_bulk_page, bp_link);
+                        bulk = list_entry(tmp, struct ptlrpc_bulk_page,
+                                          bp_link);
 
                         total += bulk->bp_buflen;
-                        
+
                         if (bulk->bp_cb != NULL)
                                 bulk->bp_cb(bulk);
                 }
 
                 LASSERT (ev->mem_desc.length == total);
-                
+
                 desc->bd_flags |= PTL_BULK_FL_RCVD;
                 wake_up(&desc->bd_waitq);
                 if (desc->bd_cb != NULL)
