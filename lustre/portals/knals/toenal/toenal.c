@@ -354,23 +354,23 @@ ktoenal_free_buffers (void)
 }
 
 int
-ktoenal_cmd(struct portal_ioctl_data * data, void * private)
+ktoenal_cmd(struct portals_cfg *pcfg, void * private)
 {
         int rc = -EINVAL;
 
-        LASSERT (data != NULL);
+        LASSERT (pcfg != NULL);
 
-        switch(data->ioc_nal_cmd) {
+        switch(pcfg->pcfg_command) {
         case NAL_CMD_REGISTER_PEER_FD: {
-                rc = ktoenal_add_sock(data->ioc_nid, data->ioc_fd);
+                rc = ktoenal_add_sock(pcfg->pcfg_nid, pcfg->pcfg_fd);
                 break;
         }
         case NAL_CMD_CLOSE_CONNECTION: {
-                rc = ktoenal_close_sock(data->ioc_nid);
+                rc = ktoenal_close_sock(pcfg->pcfg_nid);
                 break;
         }
         case NAL_CMD_REGISTER_MYNID: {
-                rc = ktoenal_set_mynid (data->ioc_nid);
+                rc = ktoenal_set_mynid (pcfg->pcfg_nid);
                 break;
         }
         }

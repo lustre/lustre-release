@@ -18,8 +18,8 @@
 #include <unistd.h>
 #include <sys/time.h>
 #include <portals/types.h>
-#include <portals/ptlctl.h>
 #include <linux/kp30.h>
+#include <portals/ptlctl.h>
 #include <linux/limits.h>
 #include <asm/page.h>
 #include <linux/version.h>

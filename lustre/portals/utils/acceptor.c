@@ -409,6 +409,7 @@ int main(int argc, char **argv)
                 int len = sizeof(clntaddr);
                 int cfd;
                 struct portal_ioctl_data data;
+                struct portals_cfg pcfg;
                 ptl_nid_t peer_nid;
                 
                 cfd = accept(fd, (struct sockaddr *)&clntaddr, &len);
@@ -441,13 +442,16 @@ int main(int argc, char **argv)
                 }
 
                 show_connection (cfd, clntaddr.sin_addr.s_addr, peer_nid);
-                
+
+                PCFG_INIT(pcfg, NAL_CMD_REGISTER_PEER_FD);
+                pcfg.pcfg_nal = nal;
+                pcfg.pcfg_fd = cfd;
+                pcfg.pcfg_nid = peer_nid;
+                pcfg.pcfg_flags = bind_irq;
+
                 PORTAL_IOC_INIT(data);
-                data.ioc_fd = cfd;
-                data.ioc_nal = nal;
-                data.ioc_nal_cmd = NAL_CMD_REGISTER_PEER_FD;
-                data.ioc_nid = peer_nid;
-                data.ioc_flags = bind_irq;
+                data.ioc_pbuf1 = (char*)&pcfg;
+                data.ioc_plen1 = sizeof(pcfg);
                 
                 if (ioctl(pfd, IOC_PORTAL_NAL_CMD, &data) < 0) {
                         perror("ioctl failed");

@@ -113,12 +113,12 @@ kqswnal_init(int interface, ptl_pt_index_t ptl_size, ptl_ac_index_t ac_size,
 }
 
 int
-kqswnal_get_tx_desc (struct portal_ioctl_data *data)
+kqswnal_get_tx_desc (struct portals_cfg *pcfg)
 {
 	unsigned long      flags;
 	struct list_head  *tmp;
 	kqswnal_tx_t      *ktx;
-	int                index = data->ioc_count;
+	int                index = pcfg->pcfg_count;
 	int                rc = -ENOENT;
 
 	spin_lock_irqsave (&kqswnal_data.kqn_idletxd_lock, flags);
@@ -129,13 +129,13 @@ kqswnal_get_tx_desc (struct portal_ioctl_data *data)
 
 		ktx = list_entry (tmp, kqswnal_tx_t, ktx_list);
 
-		data->ioc_pbuf1 = (char *)ktx;
-		data->ioc_count = NTOH__u32(ktx->ktx_wire_hdr->type);
-		data->ioc_size  = NTOH__u32(PTL_HDR_LENGTH(ktx->ktx_wire_hdr));
-		data->ioc_nid   = NTOH__u64(ktx->ktx_wire_hdr->dest_nid);
-		data->ioc_nid2  = ktx->ktx_nid;
-		data->ioc_misc  = ktx->ktx_launcher;
-		data->ioc_flags = (list_empty (&ktx->ktx_delayed_list) ? 0 : 1) |
+		pcfg->pcfg_pbuf1 = (char *)ktx;
+		pcfg->pcfg_count = NTOH__u32(ktx->ktx_wire_hdr->type);
+		pcfg->pcfg_size  = NTOH__u32(PTL_HDR_LENGTH(ktx->ktx_wire_hdr));
+		pcfg->pcfg_nid   = NTOH__u64(ktx->ktx_wire_hdr->dest_nid);
+		pcfg->pcfg_nid2  = ktx->ktx_nid;
+		pcfg->pcfg_misc  = ktx->ktx_launcher;
+		pcfg->pcfg_flags = (list_empty (&ktx->ktx_delayed_list) ? 0 : 1) |
 				  (!ktx->ktx_isnblk                    ? 0 : 2) |
 				  (ktx->ktx_state << 2);
 		rc = 0;
@@ -147,21 +147,21 @@ kqswnal_get_tx_desc (struct portal_ioctl_data *data)
 }
 
 int
-kqswnal_cmd (struct portal_ioctl_data *data, void *private)
+kqswnal_cmd (struct portals_cfg *pcfg, void *private)
 {
-	LASSERT (data != NULL);
+	LASSERT (pcfg != NULL);
 	
-	switch (data->ioc_nal_cmd) {
+	switch (pcfg->pcfg_command) {
 	case NAL_CMD_GET_TXDESC:
-		return (kqswnal_get_tx_desc (data));
+		return (kqswnal_get_tx_desc (pcfg));
 
 	case NAL_CMD_REGISTER_MYNID:
 		CDEBUG (D_IOCTL, "setting NID offset to "LPX64" (was "LPX64")\n",
-			data->ioc_nid - kqswnal_data.kqn_elanid,
+			pcfg->pcfg_nid - kqswnal_data.kqn_elanid,
 			kqswnal_data.kqn_nid_offset);
 		kqswnal_data.kqn_nid_offset =
-			data->ioc_nid - kqswnal_data.kqn_elanid;
-		kqswnal_lib.ni.nid = data->ioc_nid;
+			pcfg->pcfg_nid - kqswnal_data.kqn_elanid;
+		kqswnal_lib.ni.nid = pcfg->pcfg_nid;
 		return (0);
 		
 	default:

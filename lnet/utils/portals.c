@@ -69,6 +69,38 @@ static name2num_t nalnames[] = {
         {NULL,		-1}
 };
 
+static cfg_record_cb_t g_record_cb;
+
+int 
+ptl_set_cfg_record_cb(cfg_record_cb_t cb)
+{
+        g_record_cb = cb;
+        return 0;
+}
+
+int 
+pcfg_ioctl(struct portals_cfg *pcfg) 
+{
+        int rc;
+
+        pcfg->pcfg_nal    = g_nal;
+
+        if (g_record_cb) {
+                rc = g_record_cb(PORTALS_CFG_TYPE, sizeof(*pcfg), pcfg);
+        } else {
+                struct portal_ioctl_data data;
+                PORTAL_IOC_INIT (data);
+                data.ioc_pbuf1   = (char*)pcfg;
+                data.ioc_plen1   = sizeof(*pcfg);
+
+                rc = l_ioctl (PORTALS_DEV_ID, IOC_PORTAL_NAL_CMD, &data);
+        }
+
+        return (rc);
+}
+
+
+
 static name2num_t *
 name2num_lookup_name (name2num_t *table, char *str)
 {
@@ -387,7 +419,7 @@ int jt_ptl_network(int argc, char **argv)
 int 
 jt_ptl_print_autoconnects (int argc, char **argv)
 {
-        struct portal_ioctl_data data;
+        struct portals_cfg        pcfg;
         char                     buffer[64];
         int                      index;
         int                      rc;
@@ -396,24 +428,22 @@ jt_ptl_print_autoconnects (int argc, char **argv)
                 return -1;
 
         for (index = 0;;index++) {
-                PORTAL_IOC_INIT (data);
-                data.ioc_nal     = g_nal;
-                data.ioc_nal_cmd = NAL_CMD_GET_AUTOCONN;
-                data.ioc_count   = index;
-                
-                rc = l_ioctl (PORTALS_DEV_ID, IOC_PORTAL_NAL_CMD, &data);
+                PCFG_INIT (pcfg, NAL_CMD_GET_AUTOCONN);
+                pcfg.pcfg_count   = index;
+
+                rc = pcfg_ioctl (&pcfg);
                 if (rc != 0)
                         break;
 
                 printf (LPX64"@%s:%d #%d buffer %d nonagle %s xchg %s "
                         "affinity %s eager %s share %d\n",
-                        data.ioc_nid, ptl_ipaddr_2_str (data.ioc_id, buffer),
-                        data.ioc_misc, data.ioc_count, data.ioc_size, 
-                        (data.ioc_flags & 1) ? "on" : "off",
-                        (data.ioc_flags & 2) ? "on" : "off",
-                        (data.ioc_flags & 4) ? "on" : "off",
-                        (data.ioc_flags & 8) ? "on" : "off",
-                        data.ioc_wait);
+                        pcfg.pcfg_nid, ptl_ipaddr_2_str (pcfg.pcfg_id, buffer),
+                        pcfg.pcfg_misc, pcfg.pcfg_count, pcfg.pcfg_size, 
+                        (pcfg.pcfg_flags & 1) ? "on" : "off",
+                        (pcfg.pcfg_flags & 2) ? "on" : "off",
+                        (pcfg.pcfg_flags & 4) ? "on" : "off",
+                        (pcfg.pcfg_flags & 8) ? "on" : "off",
+                        pcfg.pcfg_wait);
         }
 
         if (index == 0)
@@ -424,7 +454,7 @@ jt_ptl_print_autoconnects (int argc, char **argv)
 int 
 jt_ptl_add_autoconnect (int argc, char **argv)
 {
-        struct portal_ioctl_data data;
+        struct portals_cfg        pcfg;
         ptl_nid_t                nid;
         __u32                    ip;
         int                      port;
@@ -482,21 +512,19 @@ jt_ptl_add_autoconnect (int argc, char **argv)
                         }
         }
 
-        PORTAL_IOC_INIT (data);
-        data.ioc_nal     = g_nal;
-        data.ioc_nal_cmd = NAL_CMD_ADD_AUTOCONN;
-        data.ioc_nid     = nid;
-        data.ioc_id      = ip;
-        data.ioc_misc    = port;
+        PCFG_INIT(pcfg, NAL_CMD_ADD_AUTOCONN);
+        pcfg.pcfg_nid     = nid;
+        pcfg.pcfg_id      = ip;
+        pcfg.pcfg_misc    = port;
         /* only passing one buffer size! */
-        data.ioc_size    = MAX (g_socket_rxmem, g_socket_txmem);
-        data.ioc_flags   = (g_socket_nonagle ? 0x01 : 0) |
+        pcfg.pcfg_size    = MAX (g_socket_rxmem, g_socket_txmem);
+        pcfg.pcfg_flags   = (g_socket_nonagle ? 0x01 : 0) |
                            (xchange_nids     ? 0x02 : 0) |
                            (irq_affinity     ? 0x04 : 0) |
                            (share            ? 0x08 : 0) |
                            (eager            ? 0x10 : 0);
 
-        rc = l_ioctl (PORTALS_DEV_ID, IOC_PORTAL_NAL_CMD, &data);
+        rc = pcfg_ioctl (&pcfg);
         if (rc != 0) {
                 fprintf (stderr, "failed to enable autoconnect: %s\n",
                          strerror (errno));
@@ -509,7 +537,7 @@ jt_ptl_add_autoconnect (int argc, char **argv)
 int 
 jt_ptl_del_autoconnect (int argc, char **argv)
 {
-        struct portal_ioctl_data data;
+        struct portals_cfg       pcfg;
         ptl_nid_t                nid = PTL_NID_ANY;
         __u32                    ip  = 0;
         int                      share = 0;
@@ -555,15 +583,13 @@ jt_ptl_del_autoconnect (int argc, char **argv)
                         }
         }
 
-        PORTAL_IOC_INIT (data);
-        data.ioc_nal     = g_nal;
-        data.ioc_nal_cmd = NAL_CMD_DEL_AUTOCONN;
-        data.ioc_nid     = nid;
-        data.ioc_id      = ip;
-        data.ioc_flags   = (share     ? 1 : 0) |
+        PCFG_INIT(pcfg, NAL_CMD_DEL_AUTOCONN);
+        pcfg.pcfg_nid     = nid;
+        pcfg.pcfg_id      = ip;
+        pcfg.pcfg_flags   = (share     ? 1 : 0) |
                            (keep_conn ? 2 : 0);
-        
-        rc = l_ioctl (PORTALS_DEV_ID, IOC_PORTAL_NAL_CMD, &data);
+
+        rc = pcfg_ioctl (&pcfg);
         if (rc != 0) {
                 fprintf (stderr, "failed to remove autoconnect route: %s\n",
                          strerror (errno));
@@ -576,7 +602,7 @@ jt_ptl_del_autoconnect (int argc, char **argv)
 int 
 jt_ptl_print_connections (int argc, char **argv)
 {
-        struct portal_ioctl_data data;
+        struct portals_cfg       pcfg;
         char                     buffer[64];
         int                      index;
         int                      rc;
@@ -585,19 +611,17 @@ jt_ptl_print_connections (int argc, char **argv)
                 return -1;
 
         for (index = 0;;index++) {
-                PORTAL_IOC_INIT (data);
-                data.ioc_nal     = g_nal;
-                data.ioc_nal_cmd = NAL_CMD_GET_CONN;
-                data.ioc_count   = index;
+                PCFG_INIT (pcfg,  NAL_CMD_GET_CONN);
+                pcfg.pcfg_count   = index;
                 
-                rc = l_ioctl (PORTALS_DEV_ID, IOC_PORTAL_NAL_CMD, &data);
+                rc = pcfg_ioctl (&pcfg);
                 if (rc != 0)
                         break;
 
                 printf (LPX64"@%s:%d\n",
-                        data.ioc_nid, 
-                        ptl_ipaddr_2_str (data.ioc_id, buffer),
-                        data.ioc_misc);
+                        pcfg.pcfg_nid, 
+                        ptl_ipaddr_2_str (pcfg.pcfg_id, buffer),
+                        pcfg.pcfg_misc);
         }
 
         if (index == 0)
@@ -681,6 +705,7 @@ int jt_ptl_connect(int argc, char **argv)
 {
         ptl_nid_t peer_nid;
         struct portal_ioctl_data data;
+        struct portals_cfg pcfg;
         struct sockaddr_in srvaddr;
         __u32 ipaddr;
         char *flag;
@@ -805,14 +830,12 @@ int jt_ptl_connect(int argc, char **argv)
         printf("Connected host: %s NID "LPX64" snd: %d rcv: %d nagle: %s\n", argv[1],
                peer_nid, txmem, rxmem, nonagle ? "Disabled" : "Enabled");
 
-        PORTAL_IOC_INIT(data);
-        data.ioc_fd = fd;
-        data.ioc_nal = g_nal;
-        data.ioc_nal_cmd = NAL_CMD_REGISTER_PEER_FD;
-        data.ioc_nid = peer_nid;
-        data.ioc_flags = bind_irq;
+        PCFG_INIT(pcfg, NAL_CMD_REGISTER_PEER_FD);
+        pcfg.pcfg_fd = fd;
+        pcfg.pcfg_nid = peer_nid;
+        pcfg.pcfg_flags = bind_irq;
 
-        rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_NAL_CMD, &data);
+        rc = pcfg_ioctl(&pcfg);
         if (rc) {
                 fprintf(stderr, "failed to register fd with portals: %s\n", 
                         strerror(errno));
@@ -831,7 +854,7 @@ int jt_ptl_connect(int argc, char **argv)
 
 int jt_ptl_disconnect(int argc, char **argv)
 {
-        struct portal_ioctl_data data;
+        struct portals_cfg        pcfg;
         ptl_nid_t                nid = PTL_NID_ANY;
         __u32                    ipaddr = 0;
         int                      rc;
@@ -856,13 +879,11 @@ int jt_ptl_disconnect(int argc, char **argv)
                 return -1;
         }
 
-        PORTAL_IOC_INIT(data);
-        data.ioc_nal     = g_nal;
-        data.ioc_nal_cmd = NAL_CMD_CLOSE_CONNECTION;
-        data.ioc_nid     = nid;
-        data.ioc_id      = ipaddr;
+        PCFG_INIT(pcfg, NAL_CMD_CLOSE_CONNECTION);
+        pcfg.pcfg_nid     = nid;
+        pcfg.pcfg_id      = ipaddr;
         
-        rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_NAL_CMD, &data);
+        rc = pcfg_ioctl(&pcfg);
         if (rc) {
                 fprintf(stderr, "failed to remove connection: %s\n",
                         strerror(errno));
@@ -874,7 +895,7 @@ int jt_ptl_disconnect(int argc, char **argv)
 
 int jt_ptl_push_connection (int argc, char **argv)
 {
-        struct portal_ioctl_data data;
+        struct portals_cfg        pcfg;
         int                      rc;
         ptl_nid_t                nid = PTL_NID_ANY;
         __u32                    ipaddr = 0;
@@ -898,13 +919,11 @@ int jt_ptl_push_connection (int argc, char **argv)
                 fprintf(stderr, "Can't parse ipaddr: %s\n", argv[2]);
         }
 
-        PORTAL_IOC_INIT(data);
-        data.ioc_nal     = g_nal;
-        data.ioc_nal_cmd = NAL_CMD_PUSH_CONNECTION;
-        data.ioc_nid     = nid;
-        data.ioc_id      = ipaddr;
-
-        rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_NAL_CMD, &data);
+        PCFG_INIT(pcfg, NAL_CMD_PUSH_CONNECTION);
+        pcfg.pcfg_nid     = nid;
+        pcfg.pcfg_id      = ipaddr;
+        
+        rc = pcfg_ioctl(&pcfg);
         if (rc) {
                 fprintf(stderr, "failed to push connection: %s\n",
                         strerror(errno));
@@ -917,7 +936,7 @@ int jt_ptl_push_connection (int argc, char **argv)
 int 
 jt_ptl_print_active_txs (int argc, char **argv)
 {
-        struct portal_ioctl_data data;
+        struct portals_cfg        pcfg;
         int                      index;
         int                      rc;
 
@@ -925,28 +944,26 @@ jt_ptl_print_active_txs (int argc, char **argv)
                 return -1;
 
         for (index = 0;;index++) {
-                PORTAL_IOC_INIT (data);
-                data.ioc_nal     = g_nal;
-                data.ioc_nal_cmd = NAL_CMD_GET_TXDESC;
-                data.ioc_count   = index;
-                
-                rc = l_ioctl (PORTALS_DEV_ID, IOC_PORTAL_NAL_CMD, &data);
+                PCFG_INIT(pcfg, NAL_CMD_GET_TXDESC);
+                pcfg.pcfg_count   = index;
+        
+                rc = pcfg_ioctl(&pcfg);
                 if (rc != 0)
                         break;
 
                 printf ("%p: %5s payload %6d bytes to "LPX64" via "LPX64" by pid %6d: %s, %s, state %d\n",
-                        data.ioc_pbuf1,
-                        data.ioc_count == PTL_MSG_ACK ? "ACK" :
-                        data.ioc_count == PTL_MSG_PUT ? "PUT" :
-                        data.ioc_count == PTL_MSG_GET ? "GET" :
-                        data.ioc_count == PTL_MSG_REPLY ? "REPLY" : "<wierd message>",
-                        data.ioc_size,
-                        data.ioc_nid,
-                        data.ioc_nid2,
-                        data.ioc_misc,
-                        (data.ioc_flags & 1) ? "delayed" : "immediate",
-                        (data.ioc_flags & 2) ? "nblk"    : "normal",
-                        data.ioc_flags >> 2);
+                        pcfg.pcfg_pbuf1,
+                        pcfg.pcfg_count == PTL_MSG_ACK ? "ACK" :
+                        pcfg.pcfg_count == PTL_MSG_PUT ? "PUT" :
+                        pcfg.pcfg_count == PTL_MSG_GET ? "GET" :
+                        pcfg.pcfg_count == PTL_MSG_REPLY ? "REPLY" : "<wierd message>",
+                        pcfg.pcfg_size,
+                        pcfg.pcfg_nid,
+                        pcfg.pcfg_nid2,
+                        pcfg.pcfg_misc,
+                        (pcfg.pcfg_flags & 1) ? "delayed" : "immediate",
+                        (pcfg.pcfg_flags & 2) ? "nblk"    : "normal",
+                        pcfg.pcfg_flags >> 2);
         }
 
         if (index == 0)
@@ -1039,7 +1056,7 @@ int jt_ptl_mynid(int argc, char **argv)
         int rc;
         char hostname[1024];
         char *nidstr;
-        struct portal_ioctl_data data;
+        struct portals_cfg pcfg;
         ptl_nid_t mynid;
         
         if (argc > 2) {
@@ -1067,12 +1084,10 @@ int jt_ptl_mynid(int argc, char **argv)
                 return -1;
         }
         
-        PORTAL_IOC_INIT(data);
-        data.ioc_nid = mynid;
-        data.ioc_nal = g_nal;
-        data.ioc_nal_cmd = NAL_CMD_REGISTER_MYNID;
+        PCFG_INIT(pcfg, NAL_CMD_REGISTER_MYNID);
+        pcfg.pcfg_nid = mynid;
 
-        rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_NAL_CMD, &data);
+        rc = pcfg_ioctl(&pcfg);
         if (rc < 0)
                 fprintf(stderr, "setting my NID failed: %s\n",
                        strerror(errno));

@@ -51,6 +51,9 @@ int mds_lov_write_objids(struct obd_device *obd);
 void mds_lov_update_objids(struct obd_device *obd, obd_id *ids);
 int mds_lov_set_growth(struct mds_obd *mds, int count);
 int mds_lov_set_nextid(struct obd_device *obd);
+int mds_set_lovdesc(struct obd_device *obd, struct lov_desc *desc,
+                    struct obd_uuid *uuidarray);
+int mds_post_mds_lovconf(struct obd_device *obd);
 
 /* mds/mds_open.c */
 int mds_query_write_access(struct inode *inode);
@@ -73,7 +76,6 @@ int mds_obd_create(struct obd_export *exp, struct obdo *oa,
 extern struct lvfs_callback_ops mds_lvfs_ops;
 extern int mds_iocontrol(unsigned int cmd, struct obd_export *exp,
                          int len, void *karg, void *uarg);
-
 #ifdef __KERNEL__
 void mds_pack_inode2fid(struct ll_fid *fid, struct inode *inode);
 void mds_pack_inode2body(struct mds_body *body, struct inode *inode);

@@ -71,6 +71,8 @@ int jt_dbg_mark_debug_buf(int argc, char **argv);
 int jt_dbg_modules(int argc, char **argv);
 int jt_dbg_panic(int argc, char **argv);
 
+int ptl_set_cfg_record_cb(cfg_record_cb_t cb);
+
 /* l_ioctl.c */
 int register_ioc_dev(int dev_id, const char * dev_name);
 void unregister_ioc_dev(int dev_id);
