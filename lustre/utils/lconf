@@ -629,7 +629,7 @@ class Module:
         """Unload the modules in the list in reverse order."""
         rev = self.kmodule_list
         rev.reverse()
-        for mod in rev:
+        for dev_dir, mod in rev:
             if not self.mod_loaded(mod):
                 continue
             log('unloading module:', mod)
