@@ -464,7 +464,7 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
 
         LASSERT(oti != NULL);
         oti->oti_handle = fsfilt_brw_start(exp->exp_obd, objcount, fso,
-                                           niocount, oti->oti_handle);
+                                           niocount, oti);
         if (IS_ERR(oti->oti_handle)) {
                 rc = PTR_ERR(oti->oti_handle);
                 CDEBUG(rc == -ENOSPC ? D_INODE : D_ERROR,
