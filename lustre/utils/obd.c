@@ -4,7 +4,8 @@
  *  Copyright (C) 2002 Cluster File Systems, Inc.
  *   Author: Peter J. Braam <braam@clusterfs.com>
  *   Author: Phil Schwan <phil@clusterfs.com>
- *   Author: Robert Read <rread@clusterfs.com> 
+ *   Author: Andreas Dilger <adilger@clusterfs.com>
+ *   Author: Robert Read <rread@clusterfs.com>
  *
  *   This file is part of Lustre, http://www.lustre.org.
  *
@@ -175,17 +176,17 @@ static int do_name2dev(char *func, char *name)
         return data.ioc_dev + N2D_OFF;
 }
 
-/* 
+/*
  * resolve a device name to a device number.
- * supports a number or name.  
- * FIXME: support UUID 
+ * supports a number or name.
+ * FIXME: support UUID
  */
-static int parse_devname(char * func, char *name) 
+static int parse_devname(char * func, char *name)
 {
         int rc;
         int ret = -1;
 
-        if (!name) 
+        if (!name)
                 return ret;
         if (name[0] == '$') {
                 rc = do_name2dev(func, name + 1);
@@ -197,9 +198,9 @@ static int parse_devname(char * func, char *name)
                         fprintf(stderr, "error: %s: %s: %s\n", cmdname(func),
                                 name, "device not found");
                 }
-                        
         } else
                 ret = strtoul(name, NULL, 0);
+
         return ret;
 }
 
@@ -422,13 +423,12 @@ int jt_obd_device(int argc, char **argv)
         int rc, dev;
         do_disconnect(argv[0], 1);
 
-        if (argc != 2) 
+        if (argc != 2)
                 return CMD_HELP;
 
         dev = parse_devname(argv[0], argv[1]);
-        if (dev < 0) {
-                return -1; 
-        }
+        if (dev < 0)
+                return -1;
 
         rc = do_device(argv[0], dev);
         if (rc < 0)
@@ -447,6 +447,7 @@ int jt_obd_connect(int argc, char **argv)
 
         do_disconnect(argv[0], 1);
 
+#warning Robert: implement timeout per lctl usage for probe
         if (argc != 1)
                 return CMD_HELP;
 
@@ -594,7 +595,7 @@ int jt_obd_detach(int argc, char **argv)
 
         IOCINIT(data);
 
-        if (argc != 1) 
+        if (argc != 1)
                 return CMD_HELP;
 
         if (obd_ioctl_pack(&data, &buf, max)) {
@@ -617,7 +618,7 @@ int jt_obd_cleanup(int argc, char **argv)
 
         IOCINIT(data);
 
-        if (argc != 1) 
+        if (argc != 1)
                 return CMD_HELP;
 
         rc = ioctl(fd, OBD_IOC_CLEANUP, &data);
@@ -638,7 +639,7 @@ int jt_obd_newdev(int argc, char **argv)
 
         IOCINIT(data);
 
-        if (argc != 1) 
+        if (argc != 1)
                 return CMD_HELP;
 
         rc = ioctl(fd, OBD_IOC_NEWDEV, &data);
@@ -668,7 +669,7 @@ int jt_obd_list(int argc, char **argv)
         data->ioc_len = sizeof(buf);
         data->ioc_inllen1 = sizeof(buf) - size_round(sizeof(*data));
 
-        if (argc != 1) 
+        if (argc != 1)
                 return CMD_HELP;
 
         rc = ioctl(fd, OBD_IOC_LIST, data);
@@ -689,7 +690,7 @@ int jt_obd_attach(int argc, char **argv)
 
         IOCINIT(data);
 
-        if (argc != 2 && argc != 3 && argc != 4) 
+        if (argc != 2 && argc != 3 && argc != 4)
                 return CMD_HELP;
 
         data.ioc_inllen1 = strlen(argv[1]) + 1;
@@ -732,7 +733,8 @@ int jt_obd_attach(int argc, char **argv)
 int jt_obd_name2dev(int argc, char **argv)
 {
         int rc;
-        if (argc != 2) 
+
+        if (argc != 2)
                 return CMD_HELP;
 
         rc = do_name2dev(argv[0], argv[1]);
@@ -752,7 +754,7 @@ int jt_obd_setup(int argc, char **argv)
 
         IOCINIT(data);
 
-        if (argc > 3) 
+        if (argc > 3)
                 return CMD_HELP;
 
         data.ioc_dev = -1;
@@ -786,15 +788,13 @@ int jt_obd_create(int argc, char **argv)
         struct obd_ioctl_data data;
         struct timeval next_time;
         int count = 1, next_count;
-        int verbose;
+        int verbose = 1;
         int rc = 0, i;
 
         IOCINIT(data);
-        if (argc < 2 || argc > 4) {
-                fprintf(stderr, "usage: %s num [mode] [verbose]\n",
-                        cmdname(argv[0]));
-                return -1;
-        }
+        if (argc < 2 || argc > 4)
+                return CMD_HELP;
+
         count = strtoul(argv[1], NULL, 0);
 
         if (argc > 2)
@@ -803,9 +803,10 @@ int jt_obd_create(int argc, char **argv)
                 data.ioc_obdo1.o_mode = 0100644;
         data.ioc_obdo1.o_valid = OBD_MD_FLMODE;
 
-        verbose = get_verbose(argv[3]);
+        if (argc > 3)
+                verbose = get_verbose(argv[3]);
 
-        printf("%s: %d obdos\n", cmdname(argv[0]), count);
+        printf("%s: %d objects\n", cmdname(argv[0]), count);
         gettimeofday(&next_time, NULL);
         next_time.tv_sec -= verbose;
 
@@ -851,10 +852,8 @@ int jt_obd_destroy(int argc, char **argv)
         int rc;
 
         IOCINIT(data);
-        if (argc != 2) {
-                fprintf(stderr, "usage: %s id\n", cmdname(argv[0]));
-                return -1;
-        }
+        if (argc != 2)
+                return CMD_HELP;
 
         data.ioc_obdo1.o_id = strtoul(argv[1], NULL, 0);
         data.ioc_obdo1.o_mode = S_IFREG | 0644;
@@ -872,7 +871,7 @@ int jt_obd_getattr(int argc, char **argv)
         struct obd_ioctl_data data;
         int rc;
 
-        if (argc != 2) 
+        if (argc != 2)
                 return CMD_HELP;
 
         IOCINIT(data);
@@ -964,7 +963,7 @@ int jt_obd_test_brw(int argc, char **argv)
         int len;
         int rc = 0;
 
-        if (argc < 2 || argc > 6) 
+        if (argc < 2 || argc > 6)
                 return CMD_HELP;
 
         count = strtoul(argv[1], NULL, 0);
@@ -1055,7 +1054,7 @@ int jt_obd_lov_config(int argc, char **argv)
         strcpy(desc.ld_uuid, argv[1]);
         desc.ld_default_stripe_count = strtoul(argv[2], NULL, 0);
         desc.ld_default_stripe_size = strtoul(argv[3], NULL, 0);
-        desc.ld_default_stripe_offset = (__u64) strtoul(argv[4], NULL, 0); 
+        desc.ld_default_stripe_offset = (__u64) strtoul(argv[4], NULL, 0);
         desc.ld_pattern = strtoul(argv[5], NULL, 0);
         desc.ld_tgt_count = argc - 6;
 
@@ -1102,7 +1101,7 @@ int jt_obd_test_ldlm(int argc, char **argv)
         int rc;
 
         IOCINIT(data);
-        if (argc != 1) 
+        if (argc != 1)
                 return CMD_HELP;
 
         rc = ioctl(fd, IOC_LDLM_TEST, &data);
@@ -1118,10 +1117,8 @@ int jt_obd_dump_ldlm(int argc, char **argv)
         int rc;
 
         IOCINIT(data);
-        if (argc != 1) {
-                fprintf(stderr, "usage: %s\n", cmdname(argv[0]));
-                return 1;
-        }
+        if (argc != 1)
+                return CMD_HELP;
 
         rc = ioctl(fd, IOC_LDLM_DUMP, &data);
         if (rc)
@@ -1137,10 +1134,10 @@ int jt_obd_ldlm_regress_start(int argc, char **argv)
 
         IOCINIT(data);
 
-        if (argc > 2) {
-                fprintf(stderr, "usage: %s [numthreads]\n", cmdname(argv[0]));
-                return 1;
-        } else if (argc == 2) {
+        if (argc > 2)
+                return CMD_HELP;
+
+        if (argc == 2) {
                 data.ioc_inllen1 =  strlen(argv[1]) + 1;
                 data.ioc_inlbuf1 = argv[1];
         } else {
@@ -1167,10 +1164,8 @@ int jt_obd_ldlm_regress_stop(int argc, char **argv)
         struct obd_ioctl_data data;
         IOCINIT(data);
 
-        if (argc != 1) {
-                fprintf(stderr, "usage: %s\n", cmdname(argv[0]));
-                return 1;
-        }
+        if (argc != 1)
+                return CMD_HELP;
 
         rc = ioctl(fd, IOC_LDLM_REGRESS_STOP, &data);
 
@@ -1186,7 +1181,7 @@ int jt_obd_newconn(int argc, char **argv)
         struct obd_ioctl_data data;
 
         IOCINIT(data);
-        if (argc != 1) 
+        if (argc != 1)
                 return CMD_HELP;
 
         rc = ioctl(fd, OBD_IOC_RECOVD_NEWCONN, &data);
@@ -1206,14 +1201,14 @@ static void signal_server(int sig)
                 fprintf(stderr, "%s: got signal %d\n", cmdname("sigint"), sig);
 }
 
-int obd_initialize(int argc, char **argv) 
+int obd_initialize(int argc, char **argv)
 {
         SHMEM_SETUP();
         return 0;
 }
 
 
-void obd_cleanup(int argc, char **argv) 
+void obd_cleanup(int argc, char **argv)
 {
         struct sigaction sigact;
 

@@ -41,9 +41,12 @@ static int jt_noop(int argc, char **argv) {
 
 command_t cmdlist[] = {
         /* Metacommands */
-        {"--device", jt_opt_device, 0, "--device <devno> <command [args ...]>"},
+        {"--device", jt_opt_device, 0,
+         "run <command> after connecting to device <devno>\n"
+         "--device <devno> <command [args ...]>"},
         {"--threads", jt_opt_threads, 0,
-                "--threads <threads> <devno> <command [args ...]>"},
+         "run <threads> separate instances of <command> on device <devno>\n"
+         "--threads <threads> <devno> <command [args ...]>"},
 
         /* Network configuration commands */
         {"==== network config ====", jt_noop, 0, "network config"},
@@ -85,27 +88,29 @@ command_t cmdlist[] = {
          "usage: newdev"},
 #if 0
         {"uuid2dev", jt_obd_uuid2dev, 0,
-         "find a uuid and make it the current device\n"
+         "find device attached with <uuid> and make it the current device\n"
          "usage: uuid2dev <uuid>"},
 #endif
         {"name2dev", jt_obd_name2dev, 0,
-         "find a name and make it the current device\n"
+         "find device attached with <name> and make it the current device\n"
          "usage: name2dev <name>"},
-        {"device", jt_obd_device, 0, "set current device to devno\n"
+        {"device", jt_obd_device, 0, "set current device to <devno>\n"
          "usage: device <devno>"},
         {"device_list", jt_obd_list, 0, "show all devices\n"
          "usage: device_list"},
          
         /* Device configuration commands */
         {"==== device config =====", jt_noop, 0, "device config"},
-        {"attach", jt_obd_attach, 0, "name and type the device\n"
+        {"attach", jt_obd_attach, 0,
+         "set the type of the current device (with <name> and <uuid>)\n"
          "usage: attach type [name [uuid]]"},
         {"setup", jt_obd_setup, 0,
          "type specific device configuration information\n"
          "usage: setup <args...>"},
-        {"cleanup", jt_obd_cleanup, 0, "cleanup setup\n"
+        {"cleanup", jt_obd_cleanup, 0, "cleanup previously setup device\n"
          "usage: cleanup"},
-        {"detach", jt_obd_detach, 0, "un-name a device\n"
+        {"detach", jt_obd_detach, 0,
+         "remove driver (and name and uuid) from current device\n"
          "usage: detach"},
         {"lovconfig", jt_obd_lov_config, 0,
          "write lov configuration to an mds device\n"
@@ -114,23 +119,25 @@ command_t cmdlist[] = {
         /* Device operations */
         {"=== device operations ==", jt_noop, 0, "device operations"},
         {"probe", jt_obd_connect, 0,
-         "build a connection handle to a device.  This command is used too "
+         "build a connection handle to a device.  This command is used to "
          "suspend configuration until lctl has ensured that the mds and osc "
          "services are available.  This is to avoid mount failures in a "
-         "rebooting cluster.\n"
+         "rebooting cluster.  k\n"
          "usage: probe [<timeout]"},
         {"close", jt_obd_disconnect, 0, "close the connection handle\n"
          "usage: close"},
-        {"getattr", jt_obd_getattr, 0, "get attribute for id\n"
-         "usage: getattr <id>"},
-        {"setattr", jt_obd_setattr, 0, "set attribute for id\n"
-         "usage: setattr <id> <mode>"},
-        {"test_getattr", jt_obd_test_getattr, 0,
-         "perform count number of getattr's\n"
-         "usage: test_getattr <count> [verbose]"},
+        {"getattr", jt_obd_getattr, 0, "get attribute for OST object <objid>\n"
+         "usage: getattr <objid>"},
+        {"setattr", jt_obd_setattr, 0, "set attribute for OST object <objid>\n"
+         "usage: setattr <objid> <mode>"},
+        {"create", jt_obd_create, 0, "create <num> OST objects (with <mode>)\n"
+         "create [num [mode [verbose]]]"},
+        {"destroy", jt_obd_destroy, 0, "destroy OST object <objid>"},
+        {"test_getattr", jt_obd_test_getattr, 0, "perform <num> OST getattr's\n"
+         "usage: test_getattr <num> [verbose]"},
         {"test_brw", jt_obd_test_brw, 0,
-         "perform count number of bulk read/writes\n"
-         "usage: test_brw <count> [write [verbose [pages [objid]]]]"},
+         "do <num> bulk read/writes (<npages> per I/O, on OST object <objid>)\n"
+         "usage: test_brw <num> [write [verbose [npages [objid]]]]"},
         {"test_ldlm", jt_obd_test_ldlm, 0, "perform lock manager test\n"
          "usage: test_ldlm"},
         {"ldlm_regress_start", jt_obd_ldlm_regress_start, 0,
@@ -142,8 +149,6 @@ command_t cmdlist[] = {
          "dump all lock manager state (no args)"},
 
 #if 0
-        {"create", jt_create, 0, "create [count [mode [verbose]]]"},
-        {"destroy", jt_destroy, 0, "destroy <id>"},
         {"newconn", jt_newconn, 0, "newconn [newuuid]"},
 #endif
         /* Debug commands */
