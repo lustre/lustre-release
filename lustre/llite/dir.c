@@ -66,12 +66,12 @@ static int ll_dir_readpage(struct file *file, struct page *page)
         int rc = 0;
         ENTRY;
 
-        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p)\n", inode->i_ino,
-               inode->i_generation, inode);
+        offset = (__u64)page->index << PAGE_SHIFT;
+        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p) off "LPU64"\n",
+               inode->i_ino, inode->i_generation, inode, offset);
 
         mdc_pack_fid(&mdc_fid, inode->i_ino, inode->i_generation, S_IFDIR);
 
-        offset = page->index << PAGE_SHIFT;
         rc = mdc_readpage(ll_i2sbi(inode)->ll_mdc_exp, &mdc_fid,
                           offset, page, &request);
         if (!rc) {
