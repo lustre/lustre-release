@@ -107,7 +107,7 @@ int connmgr_iocontrol(long cmd, struct obd_conn *conn, int len, void *karg,
         struct recovd_obd *recovd = &conn->oc_dev->u.recovd;
 
         ENTRY;
-        if (cmd == OBD_RECOVD_NEWCONN) { 
+        if (cmd == OBD_IOC_RECOVD_NEWCONN) { 
                 spin_lock(&recovd->recovd_lock);
                 recovd->recovd_flags |= RECOVD_UPCALL_ANSWER;
                 recovd->recovd_wakeup_flag = 1;

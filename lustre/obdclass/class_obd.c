@@ -9,10 +9,10 @@
  *              This program is free software; you can redistribute it and/or
  *              modify it under the terms of the GNU General Public License
  *              version 2 as published by the Free Software Foundation.
- * 
+ *
  *              Adapted to become the Linux 2.0 Coda pseudo device
- *              Peter  Braam  <braam@maths.ox.ac.uk> 
- *              Michael Callahan <mjc@emmy.smith.edu>           
+ *              Peter  Braam  <braam@maths.ox.ac.uk>
+ *              Michael Callahan <mjc@emmy.smith.edu>
  *
  *              Changes for Linux 2.1
  *              Copyright (c) 1997 Carnegie-Mellon University
@@ -26,7 +26,7 @@
  *              Copyright (C) 1999 Seagate Technology, Inc.
  *              Copyright (C) 2001 Cluster File Systems, Inc.
  *
- * 
+ *
  */
 
 #define EXPORT_SYMTAB
@@ -103,8 +103,8 @@ static int obd_class_name2dev(char *name)
         return res;
 }
 
-/* 
- * support functions: we could use inter-module communication, but this 
+/*
+ * support functions: we could use inter-module communication, but this
  * is more portable to other OS's
  */
 static struct obd_type *obd_search_type(char *nm)
@@ -112,7 +112,7 @@ static struct obd_type *obd_search_type(char *nm)
         struct list_head *tmp;
         struct obd_type *type;
         CDEBUG(D_INFO, "SEARCH %s\n", nm);
-        
+
         tmp = &obd_types;
         while ( (tmp = tmp->next) != &obd_types ) {
                 type = list_entry(tmp, struct obd_type, typ_chain);
@@ -125,7 +125,7 @@ static struct obd_type *obd_search_type(char *nm)
         return NULL;
 }
 
-static struct obd_type *obd_nm_to_type(char *nm) 
+static struct obd_type *obd_nm_to_type(char *nm)
 {
         struct obd_type *type = obd_search_type(nm);
 
@@ -143,7 +143,7 @@ static struct obd_type *obd_nm_to_type(char *nm)
 }
 
 /* to control /dev/obd */
-static int obd_class_ioctl (struct inode * inode, struct file * filp, 
+static int obd_class_ioctl (struct inode * inode, struct file * filp,
                             unsigned int cmd, unsigned long arg)
 {
         /* NOTE this must be larger than any of the ioctl data structs */
@@ -157,8 +157,8 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 
         memset(buf, 0, sizeof(buf));
 
-        if (!obd && cmd != OBD_IOC_DEVICE && cmd != TCGETS
-            && cmd != OBD_IOC_NAME2DEV && cmd != OBD_IOC_NEWDEV) {
+        if (!obd && cmd != OBD_IOC_DEVICE && cmd != TCGETS &&
+            cmd != OBD_IOC_NAME2DEV && cmd != OBD_IOC_NEWDEV) {
                 CERROR("OBD ioctl: No device\n");
                 RETURN(-EINVAL);
         }
@@ -212,19 +212,19 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 int i;
 
                 filp->private_data = NULL;
-                for (i = 0 ; i < MAX_OBD_DEVICES ; i++) { 
+                for (i = 0 ; i < MAX_OBD_DEVICES ; i++) {
                         struct obd_device *obd = &obd_dev[i];
-                        if (!obd->obd_type) { 
+                        if (!obd->obd_type) {
                                 filp->private_data = obd;
                                 dev = i;
                                 break;
                         }
                 }
 
-                
-                data->ioc_dev = dev; 
-                if (dev == -1) 
-                        RETURN(-EINVAL); 
+
+                data->ioc_dev = dev;
+                if (dev == -1)
+                        RETURN(-EINVAL);
 
                 err = copy_to_user((int *)arg, data, sizeof(*data));
                 RETURN(err);
@@ -336,7 +336,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 if ( OBT(obd) && OBP(obd, setup) )
                         err = obd_setup(obd, sizeof(*data), data);
 
-                if (!err) { 
+                if (!err) {
                         obd->obd_type->typ_refcnt++;
                         obd->obd_flags |= OBD_SET_UP;
                 }
@@ -362,7 +362,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 
         case OBD_IOC_CONNECT: {
                 conn.oc_id = data->ioc_conn1;
-                conn.oc_dev = obd; 
+                conn.oc_dev = obd;
 
                 err = obd_connect(&conn);
 
@@ -375,15 +375,15 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 RETURN(err);
         }
 
-        case OBD_IOC_DISCONNECT: { 
+        case OBD_IOC_DISCONNECT: {
                 conn.oc_id = data->ioc_conn1;
                 conn.oc_dev = obd;
 
                 err = obd_disconnect(&conn);
                 RETURN(err);
-        }               
+        }
 
-        case OBD_IOC_DEC_USE_COUNT: { 
+        case OBD_IOC_DEC_USE_COUNT: {
                 MOD_DEC_USE_COUNT;
                 RETURN(0);
         }
@@ -614,7 +614,7 @@ EXPORT_SYMBOL(gen_connect);
 EXPORT_SYMBOL(gen_client);
 EXPORT_SYMBOL(gen_cleanup);
 EXPORT_SYMBOL(gen_disconnect);
-EXPORT_SYMBOL(gen_copy_data); 
+EXPORT_SYMBOL(gen_copy_data);
 EXPORT_SYMBOL(obdo_cachep);
 
 /* EXPORT_SYMBOL(gen_multi_attach); */
@@ -661,9 +661,8 @@ static void __exit cleanup_obdclass(void)
         misc_deregister(&obd_psdev);
         for (i = 0; i < MAX_OBD_DEVICES; i++) {
                 struct obd_device *obd = &obd_dev[i];
-                if ( obd->obd_type && 
-                     (obd->obd_flags & OBD_SET_UP) &&
-                     OBT(obd) && OBP(obd, detach) ) {
+                if (obd->obd_type && (obd->obd_flags & OBD_SET_UP) &&
+                    OBT(obd) && OBP(obd, detach)) {
                         /* XXX should this call generic detach otherwise? */
                         OBP(obd, detach)(obd);
                 }
@@ -678,7 +677,7 @@ static void __exit cleanup_obdclass(void)
 
 MODULE_AUTHOR("Cluster File Systems, Inc. <braam@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre Class Driver v1.0");
-MODULE_LICENSE("GPL"); 
+MODULE_LICENSE("GPL");
 
 module_init(init_obdclass);
 module_exit(cleanup_obdclass);

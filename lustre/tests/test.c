@@ -13,12 +13,7 @@
 #include <sys/stat.h>
 #include <asm/statfs.h>
 #include <unistd.h>
-
-#define OBD_IOC_CREATE                 _IOR('f', 3, long)
-#define OBD_IOC_SETUP                  _IOW('f', 4, long)
-#define OBD_IOC_SYNC                   _IOR('f', 16, long)
-#define OBD_IOC_DESTROY                _IOW('f', 6, long)
-#define OBD_IOC_STATFS                _IORW('f', 15, long)
+#include <linux/lustre_idl.h>
 
 #define LOOP_DEVICE "/dev/loop0"
 #define OBD_DEVICE "/dev/obd"

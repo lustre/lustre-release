@@ -506,16 +506,16 @@ static int jt_attach(int argc, char **argv)
         if (rc < 0)
                 fprintf(stderr, "error: %s: %x %s\n", cmdname(argv[0]),
                         OBD_IOC_ATTACH, strerror(rc = errno));
-        else if (argc == 3) { 
+        else if (argc == 3) {
                 char name[1024];
-                if (strlen(argv[2]) > 128) { 
+                if (strlen(argv[2]) > 128) {
                         printf("Name too long to set environment\n");
                         return -EINVAL;
                 }
                 snprintf(name, 512, "LUSTRE_DEV_%s", argv[2]);
-                rc = setenv(name, argv[1], 1); 
-                if (rc) { 
-                        printf("error setting env variable %s\n", name); 
+                rc = setenv(name, argv[1], 1);
+                if (rc) {
+                        printf("error setting env variable %s\n", name);
                 }
         }
 
@@ -673,7 +673,7 @@ static int jt_setattr(int argc, char **argv)
 
         data.ioc_obdo1.o_id = strtoul(argv[1], NULL, 0);
         data.ioc_obdo1.o_mode = S_IFREG | strtoul(argv[2], NULL, 0);
-        data.ioc_obdo1.o_valid = OBD_MD_FLMODE; 
+        data.ioc_obdo1.o_valid = OBD_MD_FLMODE;
 
         rc = ioctl(fd, OBD_IOC_SETATTR , &data);
         if (rc < 0)
@@ -717,7 +717,7 @@ static int jt_getattr(int argc, char **argv)
 
         IOCINIT(data);
         data.ioc_obdo1.o_id = strtoul(argv[1], NULL, 0);
-        /* to help obd filter */ 
+        /* to help obd filter */
         data.ioc_obdo1.o_mode = 0100644;
         data.ioc_obdo1.o_valid = 0xffffffff;
         printf("%s: object id %Ld\n", cmdname(argv[0]), data.ioc_obdo1.o_id);
@@ -936,7 +936,7 @@ static int jt_newconn(int argc, char **argv)
                 return -1;
         }
 
-        rc = ioctl(fd, OBD_RECOVD_NEWCONN , &data);
+        rc = ioctl(fd, OBD_IOC_RECOVD_NEWCONN , &data);
         if (rc < 0)
                 fprintf(stderr, "error: %s: %s\n", cmdname(argv[0]),
                         strerror(rc = errno));
@@ -984,7 +984,7 @@ command_t cmdlist[] = {
 
 static void signal_server(int sig)
 {
-        if (sig == SIGINT) { 
+        if (sig == SIGINT) {
                 do_disconnect("sigint", 1);
                 exit(1);
         } else {
