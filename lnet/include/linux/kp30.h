@@ -80,7 +80,7 @@ extern unsigned int portal_printk;
 #define D_RPCTRACE  (1 << 20) /* for distributed debugging */
 #define D_VFSTRACE  (1 << 21)
 
-#ifndef THREAD_SIZE
+#ifndef __KERNEL__
 #define THREAD_SIZE 8192
 #endif
 #ifdef  __arch_ia64__
