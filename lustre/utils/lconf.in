@@ -106,7 +106,7 @@ class Config:
         self._gdb_script = '/tmp/ogdb'
         self._debug_path = '/tmp/lustre-log'
         self._dump_file = None
-        self._src_dir = None
+        self._src_dir = ''
 	self._minlevel = 0
 	self._maxlevel = 100
 
