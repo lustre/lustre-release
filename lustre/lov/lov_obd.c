@@ -637,6 +637,8 @@ static int lov_enqueue(struct lustre_handle *conn, struct lov_stripe_md *md,
 
                 submd.lmd_object_id = md->lmd_objects[i].l_object_id;
                 submd.lmd_easize = sizeof(submd);
+                submd.lmd_stripe_count = md->lmd_stripe_count;
+                /* XXX submd is not fully initialized here */
                 rc = obd_enqueue(&(lov->tgts[i].conn), &submd, parent_lock,  type, 
                                  &sub_ext, sizeof(sub_ext), mode, flags, cb, data, datalen, &(lockhs[i]));
                 // XXX add a lock debug statement here
