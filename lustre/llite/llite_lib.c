@@ -652,7 +652,7 @@ void lustre_put_super(struct super_block *sb)
 {
         struct obd_device *obd;
         struct ll_sb_info *sbi = ll_s2sbi(sb);
-        int force_umount;
+        int force_umount = 0;
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op: sb %p\n", sb);
