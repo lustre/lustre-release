@@ -92,7 +92,7 @@ make distdir distdir=lustre-source/lustre-%{version}
 %attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/llite.o
 %attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/mdc.o
 %attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/mds.o
-%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/mds_extN.o
+%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/fsfilt_extN.o
 %attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/obdclass.o
 %attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/obdecho.o
 %attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/obdfilter.o

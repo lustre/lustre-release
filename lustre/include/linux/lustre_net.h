@@ -344,12 +344,11 @@ void *lustre_msg_buf(struct lustre_msg *m, int n);
 
 static inline void ptlrpc_bulk_decref(struct ptlrpc_bulk_desc *desc)
 {
+        CDEBUG(D_PAGE, "%p -> %d\n", desc, atomic_read(&desc->bd_refcount) - 1);
+
         if (atomic_dec_and_test(&desc->bd_refcount)) {
                 CDEBUG(D_PAGE, "Released last ref on %p, freeing\n", desc);
                 ptlrpc_free_bulk(desc);
-        } else {
-                CDEBUG(D_PAGE, "%p -> %d\n", desc,
-                       atomic_read(&desc->bd_refcount));
         }
 }
 

@@ -804,25 +804,25 @@ static int ll_inode_revalidate(struct dentry *dentry)
         struct lov_stripe_md *lsm;
         ENTRY;
 
-        if (!inode) { 
+        if (!inode) {
                 CERROR("REPORT THIS LINE TO PETER\n");
                 RETURN(0);
         }
-        
-        if (! ll_have_md_lock(dentry)) { 
-                struct ptlrpc_request *req;
+
+        if (!ll_have_md_lock(dentry)) {
+                struct ptlrpc_request *req = NULL;
                 struct ll_sb_info *sbi = ll_i2sbi(dentry->d_inode);
-                struct mds_body *body; 
-                int rc, datalen, valid; 
+                struct mds_body *body;
+                unsigned long valid = 0;
+                int datalen = 0;
+                int rc;
 
                 if (S_ISREG(inode->i_mode)) {
                         datalen = obd_size_wiremd(&sbi->ll_osc_conn, NULL);
                         valid |= OBD_MD_FLEASIZE;
                 }
-                rc = mdc_getattr(&sbi->ll_mdc_conn, 
-                                 inode->i_ino, 
-                                 inode->i_mode, valid,
-                                 datalen, &req);
+                rc = mdc_getattr(&sbi->ll_mdc_conn, inode->i_ino,
+                                 inode->i_mode, valid, datalen, &req);
                 if (rc) {
                         CERROR("failure %d inode "LPX64"\n", rc, inode->i_ino);
                         ptlrpc_req_finished(req);
@@ -832,9 +832,7 @@ static int ll_inode_revalidate(struct dentry *dentry)
                 body = lustre_msg_buf(req->rq_repmsg, 0);
                 ll_update_inode(inode, body);
                 ptlrpc_req_finished(req);
-        } 
-                
-        
+        }
 
         lsm = ll_i2info(inode)->lli_smd;
         if (!lsm)       /* object not yet allocated, don't validate size */

@@ -280,7 +280,7 @@ int ptlrpc_abort_bulk(struct ptlrpc_bulk_desc *desc)
 
 void obd_brw_set_add(struct obd_brw_set *set, struct ptlrpc_bulk_desc *desc)
 {
-        atomic_inc(&desc->bd_refcount);
+        ptlrpc_bulk_addref(desc);
         atomic_inc(&set->brw_refcount);
         desc->bd_brw_set = set;
         list_add(&desc->bd_set_chain, &set->brw_desc_head);

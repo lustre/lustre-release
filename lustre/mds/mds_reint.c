@@ -35,9 +35,19 @@
 #include <linux/lustre_idl.h>
 #include <linux/lustre_mds.h>
 #include <linux/lustre_dlm.h>
-#include <linux/obd_class.h>
+#include <linux/lustre_fsfilt.h>
 
 extern inline struct mds_obd *mds_req2mds(struct ptlrpc_request *req);
+
+static void mds_last_rcvd_cb(struct obd_device *obd, __u64 last_rcvd, int error)
+{
+        struct mds_obd *mds = &obd->u.mds;
+
+        CDEBUG(D_HA, "got callback for last_rcvd "LPD64": rc = %d\n",
+               last_rcvd, error);
+        if (!error && last_rcvd > mds->mds_last_committed)
+                mds->mds_last_committed = last_rcvd;
+}
 
 void mds_start_transno(struct mds_obd *mds)
 {
@@ -57,13 +67,11 @@ int mds_finish_transno(struct mds_obd *mds, void *handle,
 
         /* Propagate error code. */
         if (rc)
-                goto out;
+                GOTO(out, rc);
 
         /* we don't allocate new transnos for replayed requests */
-        if (req->rq_level == LUSTRE_CONN_RECOVD) {
-                rc = 0;
-                goto out;
-        }
+        if (req->rq_level == LUSTRE_CONN_RECOVD)
+                GOTO(out, rc = 0);
 
         off = MDS_LR_CLIENT + med->med_off * MDS_LR_SIZE;
 
@@ -73,7 +81,8 @@ int mds_finish_transno(struct mds_obd *mds, void *handle,
         mcd->mcd_mount_count = cpu_to_le64(mds->mds_mount_count);
         mcd->mcd_last_xid = cpu_to_le64(req->rq_xid);
 
-        mds_fs_set_last_rcvd(mds, handle);
+        fsfilt_set_last_rcvd(req->rq_export->exp_obd, last_rcvd, handle,
+                             mds_last_rcvd_cb);
         written = lustre_fwrite(mds->mds_rcvd_filp, (char *)mcd, sizeof(*mcd),
                                 &off);
         CDEBUG(D_INODE, "wrote trans #"LPD64" for client %s at #%d: written = "
@@ -87,8 +96,8 @@ int mds_finish_transno(struct mds_obd *mds, void *handle,
 
         rc = 0;
 
- out:
         EXIT;
+ out:
         up(&mds->mds_transno_sem);
         return rc;
 }
@@ -144,14 +153,14 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                        to_kdev_t(inode->i_sb->s_dev));
 
         mds_start_transno(mds);
-        handle = mds_fs_start(mds, inode, MDS_FSOP_SETATTR);
+        handle = fsfilt_start(obd, inode, FSFILT_OP_SETATTR);
         if (IS_ERR(handle)) {
                 rc = PTR_ERR(handle);
                 (void)mds_finish_transno(mds, handle, req, rc);
                 GOTO(out_setattr_de, rc);
         }
 
-        rc = mds_fs_setattr(mds, de, handle, &rec->ur_iattr);
+        rc = fsfilt_setattr(obd, de, handle, &rec->ur_iattr);
 
         if (offset) {
                 body = lustre_msg_buf(req->rq_repmsg, 1);
@@ -161,7 +170,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
 
         rc = mds_finish_transno(mds, handle, req, rc);
 
-        err = mds_fs_commit(mds, de->d_inode, handle);
+        err = fsfilt_commit(obd, de->d_inode, handle);
         if (err) {
                 CERROR("error on commit: err = %d\n", err);
                 if (!rc)
@@ -264,7 +273,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
 
         switch (type) {
         case S_IFREG:{
-                handle = mds_fs_start(mds, dir, MDS_FSOP_CREATE);
+                handle = fsfilt_start(obd, dir, FSFILT_OP_CREATE);
                 if (IS_ERR(handle))
                         GOTO(out_transno_dchild, rc = PTR_ERR(handle));
                 rc = vfs_create(dir, dchild, rec->ur_mode);
@@ -272,7 +281,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 break;
         }
         case S_IFDIR:{
-                handle = mds_fs_start(mds, dir, MDS_FSOP_MKDIR);
+                handle = fsfilt_start(obd, dir, FSFILT_OP_MKDIR);
                 if (IS_ERR(handle))
                         GOTO(out_transno_dchild, rc = PTR_ERR(handle));
                 rc = vfs_mkdir(dir, dchild, rec->ur_mode);
@@ -280,7 +289,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 break;
         }
         case S_IFLNK:{
-                handle = mds_fs_start(mds, dir, MDS_FSOP_SYMLINK);
+                handle = fsfilt_start(obd, dir, FSFILT_OP_SYMLINK);
                 if (IS_ERR(handle))
                         GOTO(out_transno_dchild, rc = PTR_ERR(handle));
                 rc = vfs_symlink(dir, dchild, rec->ur_tgt);
@@ -292,7 +301,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
         case S_IFIFO:
         case S_IFSOCK:{
                 int rdev = rec->ur_rdev;
-                handle = mds_fs_start(mds, dir, MDS_FSOP_MKNOD);
+                handle = fsfilt_start(obd, dir, FSFILT_OP_MKNOD);
                 if (IS_ERR(handle))
                         GOTO(out_transno_dchild, rc = PTR_ERR(handle));
                 rc = vfs_mknod(dir, dchild, rec->ur_mode, rdev);
@@ -331,7 +340,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                         CDEBUG(D_INODE, "created ino %lu\n", inode->i_ino);
                 }
 
-                rc = mds_fs_setattr(mds, dchild, handle, &iattr);
+                rc = fsfilt_setattr(obd, dchild, handle, &iattr);
                 if (rc) {
                         CERROR("error on setattr: rc = %d\n", rc);
                         /* XXX should we abort here in case of error? */
@@ -350,7 +359,7 @@ out_create_commit:
                 if (rc)
                         GOTO(out_create_unlink, rc);
         }
-        err = mds_fs_commit(mds, dir, handle);
+        err = fsfilt_commit(obd, dir, handle);
         if (err) {
                 CERROR("error on commit: err = %d\n", err);
                 if (!rc)
@@ -466,7 +475,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
         mds_start_transno(mds);
         switch (rec->ur_mode /* & S_IFMT ? */) {
         case S_IFDIR:
-                handle = mds_fs_start(mds, dir, MDS_FSOP_RMDIR);
+                handle = fsfilt_start(obd, dir, FSFILT_OP_RMDIR);
                 if (IS_ERR(handle))
                         GOTO(out_unlink_cancel_transno, rc = PTR_ERR(handle));
                 rc = vfs_rmdir(dir, dchild);
@@ -481,7 +490,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
         case S_IFBLK:
         case S_IFIFO:
         case S_IFSOCK:
-                handle = mds_fs_start(mds, dir, MDS_FSOP_UNLINK);
+                handle = fsfilt_start(obd, dir, FSFILT_OP_UNLINK);
                 if (IS_ERR(handle))
                         GOTO(out_unlink_cancel_transno, rc = PTR_ERR(handle));
                 rc = vfs_unlink(dir, dchild);
@@ -494,7 +503,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
         }
 
         rc = mds_finish_transno(mds, handle, req, rc);
-        err = mds_fs_commit(mds, dir, handle);
+        err = fsfilt_commit(obd, dir, handle);
         if (err) {
                 CERROR("error on commit: err = %d\n", err);
                 if (!rc)
@@ -626,7 +635,7 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
                        to_kdev_t(de_src->d_inode->i_sb->s_dev));
 
         mds_start_transno(mds);
-        handle = mds_fs_start(mds, de_tgt_dir->d_inode, MDS_FSOP_LINK);
+        handle = fsfilt_start(obd, de_tgt_dir->d_inode, FSFILT_OP_LINK);
         if (IS_ERR(handle)) {
                 rc = PTR_ERR(handle);
                 mds_finish_transno(mds, handle, req, rc);
@@ -638,7 +647,7 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
                 CERROR("link error %d\n", rc);
         rc = mds_finish_transno(mds, handle, req, rc);
 
-        err = mds_fs_commit(mds, de_tgt_dir->d_inode, handle);
+        err = fsfilt_commit(obd, de_tgt_dir->d_inode, handle);
         if (err) {
                 CERROR("error on commit: err = %d\n", err);
                 if (!rc)
@@ -760,7 +769,7 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
                        to_kdev_t(de_srcdir->d_inode->i_sb->s_dev));
 
         mds_start_transno(mds);
-        handle = mds_fs_start(mds, de_tgtdir->d_inode, MDS_FSOP_RENAME);
+        handle = fsfilt_start(obd, de_tgtdir->d_inode, FSFILT_OP_RENAME);
         if (IS_ERR(handle)) {
                 rc = PTR_ERR(handle);
                 mds_finish_transno(mds, handle, req, rc);
@@ -774,7 +783,7 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
 
         rc = mds_finish_transno(mds, handle, req, rc);
 
-        err = mds_fs_commit(mds, de_tgtdir->d_inode, handle);
+        err = fsfilt_commit(obd, de_tgtdir->d_inode, handle);
         if (err) {
                 CERROR("error on commit: err = %d\n", err);
                 if (!rc)

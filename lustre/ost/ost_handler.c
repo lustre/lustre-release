@@ -270,6 +270,7 @@ static int ost_brw_read(struct ptlrpc_request *req)
         desc = ptlrpc_prep_bulk(req->rq_connection);
         if (desc == NULL)
                 GOTO(out_local, rc = -ENOMEM);
+        desc->bd_ptl_ev_hdlr = NULL;
         desc->bd_portal = OST_BULK_PORTAL;
 
         for (i = 0; i < niocount; i++) {
@@ -287,7 +288,8 @@ static int ost_brw_read(struct ptlrpc_request *req)
                 GOTO(out_bulk, rc);
 
         lwi = LWI_TIMEOUT(obd_timeout * HZ, ost_bulk_timeout, desc);
-        rc = l_wait_event(desc->bd_waitq, desc->bd_flags &PTL_BULK_FL_SENT, &lwi);
+        rc = l_wait_event(desc->bd_waitq, desc->bd_flags & PTL_BULK_FL_SENT,
+                          &lwi);
         if (rc) {
                 LASSERT(rc == -ETIMEDOUT);
                 GOTO(out_bulk, rc);
@@ -299,7 +301,7 @@ static int ost_brw_read(struct ptlrpc_request *req)
         rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repmsg);
 
 out_bulk:
-        ptlrpc_free_bulk(desc);
+        ptlrpc_bulk_decref(desc);
 out_local:
         OBD_FREE(local_nb, sizeof(*local_nb) * niocount);
 out:
@@ -418,7 +420,7 @@ static int ost_brw_write(struct ptlrpc_request *req)
 
         rc = obd_commitrw(cmd, conn, objcount, tmp1, niocount, local_nb,
                           desc->bd_desc_private);
-        ptlrpc_free_bulk(desc);
+        ptlrpc_bulk_decref(desc);
         EXIT;
 out_free:
         OBD_FREE(local_nb, niocount * sizeof(*local_nb));

@@ -203,7 +203,7 @@ static int mdc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                         ll_invalidate_inode_pages(inode);
                 }
 
-                if ( inode != inode->i_sb->s_root->d_inode ) {
+                if (inode != inode->i_sb->s_root->d_inode) {
                         /* XXX should this igrab move up 12 lines? */
                         LASSERT(igrab(inode) == inode);
                         d_delete_aliases(inode);
@@ -569,6 +569,7 @@ int mdc_readpage(struct lustre_handle *conn, obd_id ino, int type, __u64 offset,
         bulk->bp_buflen = PAGE_SIZE;
         bulk->bp_buf = addr;
         bulk->bp_xid = req->rq_xid;
+        desc->bd_ptl_ev_hdlr = NULL;
         desc->bd_portal = MDS_BULK_PORTAL;
 
         rc = ptlrpc_register_bulk(desc);
@@ -591,7 +592,7 @@ int mdc_readpage(struct lustre_handle *conn, obd_id ino, int type, __u64 offset,
 
         EXIT;
  out2:
-        ptlrpc_free_bulk(desc);
+        ptlrpc_bulk_decref(desc);
  out:
         *request = req;
         return rc;

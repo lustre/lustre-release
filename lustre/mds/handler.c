@@ -40,6 +40,8 @@
 #include <linux/buffer_head.h>
 #endif
 #include <linux/obd_lov.h>
+#include <linux/lustre_mds.h>
+#include <linux/lustre_fsfilt.h>
 #include <linux/lprocfs_status.h>
 
 static kmem_cache_t *mds_file_cache;
@@ -73,12 +75,11 @@ static int mds_bulk_timeout(void *data)
 static int mds_sendpage(struct ptlrpc_request *req, struct file *file,
                         __u64 offset)
 {
-        int rc = 0;
-        struct mds_obd *mds = mds_req2mds(req);
         struct ptlrpc_bulk_desc *desc;
         struct ptlrpc_bulk_page *bulk;
         struct l_wait_info lwi;
         char *buf;
+        int rc = 0;
         ENTRY;
 
         desc = ptlrpc_prep_bulk(req->rq_connection);
@@ -93,7 +94,8 @@ static int mds_sendpage(struct ptlrpc_request *req, struct file *file,
         if (buf == NULL)
                 GOTO(cleanup_bulk, rc = -ENOMEM);
 
-        rc = mds_fs_readpage(mds, file, buf, PAGE_SIZE, (loff_t *)&offset);
+        rc = fsfilt_readpage(req->rq_export->exp_obd, file, buf, PAGE_SIZE,
+                             (loff_t *)&offset);
 
         if (rc != PAGE_SIZE)
                 GOTO(cleanup_buf, rc = -EIO);
@@ -101,6 +103,7 @@ static int mds_sendpage(struct ptlrpc_request *req, struct file *file,
         bulk->bp_xid = req->rq_xid;
         bulk->bp_buf = buf;
         bulk->bp_buflen = PAGE_SIZE;
+        desc->bd_ptl_ev_hdlr = NULL;
         desc->bd_portal = MDS_BULK_PORTAL;
 
         rc = ptlrpc_send_bulk(desc);
@@ -127,7 +130,7 @@ static int mds_sendpage(struct ptlrpc_request *req, struct file *file,
  cleanup_buf:
         OBD_FREE(buf, PAGE_SIZE);
  cleanup_bulk:
-        ptlrpc_free_bulk(desc);
+        ptlrpc_bulk_decref(desc);
  out:
         return rc;
 }
@@ -596,8 +599,9 @@ int mds_pack_md(struct mds_obd *mds, struct ptlrpc_request *req,
          * discarded right after unpacking, and the LOV can figure out the
          * size itself from the ost count.
          */
-        if ((rc = mds_fs_get_md(mds, inode, lmm, lmm_size)) < 0) {
-                CDEBUG(D_INFO, "No md for ino %lu: rc = %d\n", inode->i_ino, rc);
+        if ((rc = fsfilt_get_md(req->rq_export->exp_obd, inode,
+                                lmm, lmm_size)) < 0) {
+                CDEBUG(D_INFO, "No md for ino %lu: rc = %d\n", inode->i_ino,rc);
         } else if (rc > 0) {
                 body->valid |= OBD_MD_FLEASIZE;
                 rc = 0;
@@ -623,7 +627,7 @@ static int mds_getattr_internal(struct mds_obd *mds, struct dentry *dentry,
         mds_pack_inode2fid(&body->fid1, inode);
         mds_pack_inode2body(body, inode);
 
-        if (S_ISREG(inode->i_mode)) {
+        if (S_ISREG(inode->i_mode) /* && reqbody->valid & OBD_MD_FLEASIZE */) {
                 rc = mds_pack_md(mds, req, reply_off + 1, body, inode);
         } else if (S_ISLNK(inode->i_mode) && reqbody->valid & OBD_MD_LINKNAME) {
                 char *symname = lustre_msg_buf(req->rq_repmsg, reply_off + 1);
@@ -656,7 +660,7 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req)
         __u64 res_id[3] = {0, 0, 0};
         ENTRY;
 
-        LASSERT(!strcmp(req->rq_export->exp_obd->obd_type->typ_name, "mds"));
+        LASSERT(!strcmp(obd->obd_type->typ_name, "mds"));
 
         if (req->rq_reqmsg->bufcount <= offset + 1) {
                 LBUG();
@@ -748,7 +752,7 @@ static int mds_getattr(int offset, struct ptlrpc_request *req)
 
         inode = de->d_inode;
         if (S_ISREG(body->fid1.f_type)) {
-                int rc = mds_fs_get_md(mds, inode, NULL, 0);
+                int rc = fsfilt_get_md(req->rq_export->exp_obd, inode, NULL, 0);
                 CDEBUG(D_INODE, "got %d bytes MD data for inode %lu\n",
                        rc, inode->i_ino);
                 if (rc < 0) {
@@ -786,18 +790,18 @@ static int mds_getattr(int offset, struct ptlrpc_request *req)
 
         req->rq_status = mds_getattr_internal(mds, de, req, body, 0);
 
+        EXIT;
 out:
         l_dput(de);
 out_pop:
         pop_ctxt(&saved, &mds->mds_ctxt, &uc);
-        RETURN(rc);
+        return rc;
 }
 
 static int mds_statfs(struct ptlrpc_request *req)
 {
-        struct mds_obd *mds = mds_req2mds(req);
+        struct obd_device *obd = req->rq_export->exp_obd;
         struct obd_statfs *osfs;
-        struct statfs sfs;
         int rc, size = sizeof(*osfs);
         ENTRY;
 
@@ -807,24 +811,24 @@ static int mds_statfs(struct ptlrpc_request *req)
                 GOTO(out, rc);
         }
 
-        rc = mds_fs_statfs(mds, &sfs);
+        osfs = lustre_msg_buf(req->rq_repmsg, 0);
+        rc = fsfilt_statfs(obd, obd->u.mds.mds_sb, osfs);
         if (rc) {
                 CERROR("mds: statfs failed: rc %d\n", rc);
                 GOTO(out, rc);
         }
-        osfs = lustre_msg_buf(req->rq_repmsg, 0);
-        memset(osfs, 0, size);
-        statfs_pack(osfs, &sfs);
         obd_statfs_pack(osfs, osfs);
 
+        EXIT;
 out:
         req->rq_status = rc;
-        RETURN(0);
+        return 0;
 }
 
 static struct mds_file_data *mds_handle2mfd(struct lustre_handle *handle)
 {
         struct mds_file_data *mfd = NULL;
+        ENTRY;
 
         if (!handle || !handle->addr)
                 RETURN(NULL);
@@ -836,12 +840,13 @@ static struct mds_file_data *mds_handle2mfd(struct lustre_handle *handle)
         if (mfd->mfd_servercookie != handle->cookie)
                 RETURN(NULL);
 
-        return mfd;
+        RETURN(mfd);
 }
 
 static int mds_store_md(struct mds_obd *mds, struct ptlrpc_request *req,
                         int offset, struct mds_body *body, struct inode *inode)
 {
+        struct obd_device *obd = req->rq_export->exp_obd;
         struct lov_mds_md *lmm = lustre_msg_buf(req->rq_reqmsg, offset);
         int lmm_size = req->rq_reqmsg->buflens[offset];
         struct obd_run_ctxt saved;
@@ -866,17 +871,17 @@ static int mds_store_md(struct mds_obd *mds, struct ptlrpc_request *req,
         uc.ouc_cap = body->capability;
         push_ctxt(&saved, &mds->mds_ctxt, &uc);
         mds_start_transno(mds);
-        handle = mds_fs_start(mds, inode, MDS_FSOP_SETATTR);
+        handle = fsfilt_start(obd, inode,FSFILT_OP_SETATTR);
         if (IS_ERR(handle)) {
                 rc = PTR_ERR(handle);
                 mds_finish_transno(mds, handle, req, rc);
                 GOTO(out_ea, rc);
         }
 
-        rc = mds_fs_set_md(mds, inode, handle, lmm, lmm_size);
+        rc = fsfilt_set_md(obd, inode,handle,lmm,lmm_size);
         rc = mds_finish_transno(mds, handle, req, rc);
 
-        rc2 = mds_fs_commit(mds, inode, handle);
+        rc2 = fsfilt_commit(obd, inode, handle);
         if (rc2 && !rc)
                 rc = rc2;
 out_ea:
@@ -1096,7 +1101,7 @@ int mds_handle(struct ptlrpc_request *req);
 static int check_for_next_transno(struct mds_obd *mds)
 {
         struct ptlrpc_request *req;
-        req = list_entry(mds->mds_recovery_queue.next, 
+        req = list_entry(mds->mds_recovery_queue.next,
                          struct ptlrpc_request, rq_list);
         return req->rq_reqmsg->transno == mds->mds_next_recovery_transno;
 }
@@ -1104,10 +1109,10 @@ static int check_for_next_transno(struct mds_obd *mds)
 static void process_recovery_queue(struct mds_obd *mds)
 {
         struct ptlrpc_request *req;
-        
+
         for (;;) {
                 spin_lock(&mds->mds_processing_task_lock);
-                req = list_entry(mds->mds_recovery_queue.next, 
+                req = list_entry(mds->mds_recovery_queue.next,
                                  struct ptlrpc_request, rq_list);
 
                 if (req->rq_reqmsg->transno != mds->mds_next_recovery_transno) {
@@ -1121,7 +1126,7 @@ static void process_recovery_queue(struct mds_obd *mds)
 
                 DEBUG_REQ(D_HA, req, "");
                 mds_handle(req);
-                
+
                 if (list_empty(&mds->mds_recovery_queue))
                         break;
         }
@@ -1148,7 +1153,7 @@ static int queue_recovery_request(struct ptlrpc_request *req,
 
         /* XXX O(n^2) */
         list_for_each(tmp, &mds->mds_recovery_queue) {
-                struct ptlrpc_request *reqiter = 
+                struct ptlrpc_request *reqiter =
                         list_entry(tmp, struct ptlrpc_request, rq_list);
                 if (reqiter->rq_reqmsg->transno > transno) {
                         list_add_tail(&req->rq_list, &reqiter->rq_list);
@@ -1180,7 +1185,7 @@ static int queue_recovery_request(struct ptlrpc_request *req,
         return 0;
 }
 
-static int filter_recovery_request(struct ptlrpc_request *req, 
+static int filter_recovery_request(struct ptlrpc_request *req,
                                    struct mds_obd *mds, int *process)
 {
         switch (req->rq_reqmsg->opc) {
@@ -1189,13 +1194,13 @@ static int filter_recovery_request(struct ptlrpc_request *req,
         case MDS_OPEN:
                *process = 1;
                RETURN(0);
-            
+
         case MDS_GETSTATUS: /* used in unmounting */
         case MDS_REINT:
         case LDLM_ENQUEUE:
                 *process = queue_recovery_request(req, mds);
                 RETURN(0);
-                
+
         default:
                 DEBUG_REQ(D_ERROR, req, "not permitted during recovery");
                 *process = 0;
@@ -1324,13 +1329,13 @@ int mds_handle(struct ptlrpc_request *req)
 
         case MDS_REINT: {
                 int size = sizeof(struct mds_body);
-                int opc = *(u32 *)lustre_msg_buf(req->rq_reqmsg, 0), 
+                int opc = *(u32 *)lustre_msg_buf(req->rq_reqmsg, 0),
                         realopc = opc & REINT_OPCODE_MASK;
-                        
+
                 DEBUG_REQ(D_INODE, req, "reint (%s%s)",
                           reint_names[realopc],
                           opc & REINT_REPLAYING ? "|REPLAYING" : "");
-                          
+
                 OBD_FAIL_RETURN(OBD_FAIL_MDS_REINT_NET, 0);
 
                 rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen,
@@ -1400,7 +1405,7 @@ int mds_handle(struct ptlrpc_request *req)
                 DEBUG_REQ(D_HA, req, "LAST_REPLAY, queuing reply");
                 return mds_queue_final_reply(req, rc);
         }
-        
+
         /* MDS_CONNECT / EALREADY (note: not -EALREADY!) isn't an error */
         if (rc && (req->rq_reqmsg->opc != MDS_CONNECT ||
                    rc != EALREADY)) {
@@ -1488,16 +1493,18 @@ static int mds_setup(struct obd_device *obddev, obd_count len, void *buf)
         if (!data->ioc_inlbuf1 || !data->ioc_inlbuf2)
                 GOTO(err_dec, rc = -EINVAL);
 
-        mds->mds_fstype = strdup(data->ioc_inlbuf2);
+        obddev->obd_fsops = fsfilt_get_ops(data->ioc_inlbuf2);
+        if (IS_ERR(obddev->obd_fsops))
+                GOTO(err_dec, rc = PTR_ERR(obddev->obd_fsops));
 
-        mnt = do_kern_mount(mds->mds_fstype, 0, data->ioc_inlbuf1, NULL);
+        mnt = do_kern_mount(data->ioc_inlbuf2, 0, data->ioc_inlbuf1, NULL);
         if (IS_ERR(mnt)) {
                 rc = PTR_ERR(mnt);
                 CERROR("do_kern_mount failed: rc = %d\n", rc);
-                GOTO(err_kfree, rc);
+                GOTO(err_ops, rc);
         }
 
-        CERROR("%s: mnt is %p\n", data->ioc_inlbuf1, mnt);
+        CDEBUG(D_SUPER, "%s: mnt = %p\n", data->ioc_inlbuf1, mnt);
         mds->mds_sb = mnt->mnt_root->d_inode->i_sb;
         if (!mds->mds_sb)
                 GOTO(err_put, rc = -ENODEV);
@@ -1524,7 +1531,7 @@ static int mds_setup(struct obd_device *obddev, obd_count len, void *buf)
         mds->mds_processing_task = 0;
         INIT_LIST_HEAD(&mds->mds_recovery_queue);
         INIT_LIST_HEAD(&mds->mds_delayed_reply_queue);
-        
+
         RETURN(0);
 
 err_fs:
@@ -1534,8 +1541,8 @@ err_put:
         mntput(mds->mds_vfsmnt);
         mds->mds_sb = 0;
         lock_kernel();
-err_kfree:
-        kfree(mds->mds_fstype);
+err_ops:
+        fsfilt_put_ops(obddev->obd_fsops);
 err_dec:
         MOD_DEC_USE_COUNT;
         RETURN(rc);
@@ -1567,7 +1574,6 @@ static int mds_cleanup(struct obd_device *obddev)
         unlock_kernel();
         mntput(mds->mds_vfsmnt);
         mds->mds_sb = 0;
-        kfree(mds->mds_fstype);
 
         ldlm_namespace_free(obddev->obd_namespace);
 
@@ -1576,6 +1582,7 @@ static int mds_cleanup(struct obd_device *obddev)
         dev_clear_rdonly(2);
 #endif
         mds_fs_cleanup(obddev);
+        fsfilt_put_ops(obddev->obd_fsops);
 
         MOD_DEC_USE_COUNT;
         RETURN(0);
@@ -1806,7 +1813,6 @@ static struct obd_ops mdt_obd_ops = {
 
 static int __init mds_init(void)
 {
-
         mds_file_cache = kmem_cache_create("ll_mds_file_data",
                                            sizeof(struct mds_file_data),
                                            0, 0, NULL, NULL);
@@ -1816,20 +1822,17 @@ static int __init mds_init(void)
         class_register_type(&mds_obd_ops, status_class_var, LUSTRE_MDS_NAME);
         class_register_type(&mdt_obd_ops, 0, LUSTRE_MDT_NAME);
         ldlm_register_intent(ldlm_intent_policy);
-        return 0;
 
+        return 0;
 }
 
 static void __exit mds_exit(void)
 {
-
-
         ldlm_unregister_intent();
         class_unregister_type(LUSTRE_MDS_NAME);
         class_unregister_type(LUSTRE_MDT_NAME);
         if (kmem_cache_destroy(mds_file_cache))
                 CERROR("couldn't free MDS file cache\n");
-
 }
 
 MODULE_AUTHOR("Cluster File Systems <info@clusterfs.com>");

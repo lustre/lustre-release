@@ -284,7 +284,6 @@ struct obd_statfs {
 struct obd_ioobj {
         obd_id               ioo_id;
         obd_gr               ioo_gr;
-        /* struct lustre_handle ioo_handle; XXX in the future */
         __u32                ioo_type;
         __u32                ioo_bufcnt;
 };

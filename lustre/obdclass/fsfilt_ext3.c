@@ -1,8 +1,8 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  lustre/mds/mds_ext3.c
- *  Lustre Metadata Server (mds) journal abstraction routines
+ *  lustre/lib/fsfilt_ext3.c
+ *  Lustre filesystem abstraction routines
  *
  *  Copyright (C) 2002 Cluster File Systems, Inc.
  *   Author: Andreas Dilger <adilger@clusterfs.com>
@@ -23,7 +23,7 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#define DEBUG_SUBSYSTEM S_MDS
+#define DEBUG_SUBSYSTEM S_FILTER
 
 #include <linux/fs.h>
 #include <linux/jbd.h>
@@ -31,20 +31,20 @@
 #include <linux/init.h>
 #include <linux/ext3_fs.h>
 #include <linux/ext3_jbd.h>
-#include <../fs/ext3/xattr.h>
+#include <linux/ext3_xattr.h>
 #include <linux/kp30.h>
-#include <linux/lustre_mds.h>
+#include <linux/lustre_fsfilt.h>
 #include <linux/obd.h>
 #include <linux/module.h>
 
-static struct mds_fs_operations mds_ext3_fs_ops;
-static kmem_cache_t *mcb_cache;
-static int mcb_cache_count;
+static kmem_cache_t *fcb_cache;
+static int fcb_cache_count;
 
-struct mds_cb_data {
-        struct journal_callback cb_jcb;
-        struct mds_obd *cb_mds;
-        __u64 cb_last_rcvd;
+struct fsfilt_cb_data {
+        struct journal_callback cb_jcb; /* data private to jbd */
+        fsfilt_cb_t cb_func;            /* MDS/OBD completion function */
+        struct obd_device *cb_obd;      /* MDS/OBD completion device */
+        __u64 cb_last_rcvd;             /* MDS/OST last committed operation */
 };
 
 #define EXT3_XATTR_INDEX_LUSTRE         5
@@ -56,33 +56,33 @@ struct mds_cb_data {
  * the inode (which we will be changing anyways as part of this
  * transaction).
  */
-static void *mds_ext3_start(struct inode *inode, int op)
+static void *fsfilt_ext3_start(struct inode *inode, int op)
 {
         /* For updates to the last recieved file */
         int nblocks = EXT3_DATA_TRANS_BLOCKS;
         void *handle;
 
         switch(op) {
-        case MDS_FSOP_RMDIR:
-        case MDS_FSOP_UNLINK:
+        case FSFILT_OP_RMDIR:
+        case FSFILT_OP_UNLINK:
                 nblocks += EXT3_DELETE_TRANS_BLOCKS;
                 break;
-        case MDS_FSOP_RENAME:
+        case FSFILT_OP_RENAME:
                 /* We may be modifying two directories */
                 nblocks += EXT3_DATA_TRANS_BLOCKS;
-        case MDS_FSOP_SYMLINK:
+        case FSFILT_OP_SYMLINK:
                 /* Possible new block + block bitmap + GDT for long symlink */
                 nblocks += 3;
-        case MDS_FSOP_CREATE:
-        case MDS_FSOP_MKDIR:
-        case MDS_FSOP_MKNOD:
+        case FSFILT_OP_CREATE:
+        case FSFILT_OP_MKDIR:
+        case FSFILT_OP_MKNOD:
                 /* New inode + block bitmap + GDT for new file */
                 nblocks += 3;
-        case MDS_FSOP_LINK:
+        case FSFILT_OP_LINK:
                 /* Change parent directory */
                 nblocks += EXT3_INDEX_EXTRA_TRANS_BLOCKS+EXT3_DATA_TRANS_BLOCKS;
                 break;
-        case MDS_FSOP_SETATTR:
+        case FSFILT_OP_SETATTR:
                 /* Setattr on inode */
                 nblocks += 1;
                 break;
@@ -97,7 +97,7 @@ static void *mds_ext3_start(struct inode *inode, int op)
         return handle;
 }
 
-static int mds_ext3_commit(struct inode *inode, void *handle)
+static int fsfilt_ext3_commit(struct inode *inode, void *handle)
 {
         int rc;
 
@@ -108,8 +108,8 @@ static int mds_ext3_commit(struct inode *inode, void *handle)
         return rc;
 }
 
-static int mds_ext3_setattr(struct dentry *dentry, void *handle,
-                            struct iattr *iattr)
+static int fsfilt_ext3_setattr(struct dentry *dentry, void *handle,
+                               struct iattr *iattr)
 {
         struct inode *inode = dentry->d_inode;
         int rc;
@@ -125,8 +125,8 @@ static int mds_ext3_setattr(struct dentry *dentry, void *handle,
         return rc;
 }
 
-static int mds_ext3_set_md(struct inode *inode, void *handle,
-                           struct lov_mds_md *lmm, int lmm_size)
+static int fsfilt_ext3_set_md(struct inode *inode, void *handle,
+                              void *lmm, int lmm_size)
 {
         int rc;
 
@@ -138,14 +138,14 @@ static int mds_ext3_set_md(struct inode *inode, void *handle,
         up(&inode->i_sem);
 
         if (rc) {
-                CERROR("error adding objectid "LPX64" to inode %lu: %d\n",
-                       lmm->lmm_object_id, inode->i_ino, rc);
+                CERROR("error adding MD data to inode %lu: rc = %d\n",
+                       inode->i_ino, rc);
                 if (rc != -ENOSPC) LBUG();
         }
         return rc;
 }
 
-static int mds_ext3_get_md(struct inode *inode, struct lov_mds_md *lmm,int size)
+static int fsfilt_ext3_get_md(struct inode *inode, void *lmm, int size)
 {
         int rc;
 
@@ -161,21 +161,17 @@ static int mds_ext3_get_md(struct inode *inode, struct lov_mds_md *lmm,int size)
                 return (rc == -ENODATA) ? 0 : rc;
 
         if (rc < 0) {
-                CDEBUG(D_INFO, "error getting EA %s from MDS inode %lu: "
+                CDEBUG(D_INFO, "error getting EA %s from inode %lu: "
                        "rc = %d\n", XATTR_LUSTRE_MDS_OBJID, inode->i_ino, rc);
                 memset(lmm, 0, size);
                 return (rc == -ENODATA) ? 0 : rc;
         }
 
-        /* This field is byteswapped because it appears in the
-         * catalogue.  All others are opaque to the MDS */
-        lmm->lmm_object_id = le64_to_cpu(lmm->lmm_object_id);
-
         return rc;
 }
 
-static ssize_t mds_ext3_readpage(struct file *file, char *buf, size_t count,
-                                 loff_t *offset)
+static ssize_t fsfilt_ext3_readpage(struct file *file, char *buf, size_t count,
+                                    loff_t *offset)
 {
         struct inode *inode = file->f_dentry->d_inode;
         int rc = 0;
@@ -201,64 +197,39 @@ static ssize_t mds_ext3_readpage(struct file *file, char *buf, size_t count,
         return rc;
 }
 
-static void mds_ext3_delete_inode(struct inode *inode)
+static void fsfilt_ext3_cb_func(struct journal_callback *jcb, int error)
 {
-        if (S_ISREG(inode->i_mode)) {
-                void *handle = mds_ext3_start(inode, MDS_FSOP_UNLINK);
+        struct fsfilt_cb_data *fcb = (struct fsfilt_cb_data *)jcb;
 
-                if (IS_ERR(handle)) {
-                        CERROR("unable to start transaction");
-                        EXIT;
-                        return;
-                }
-                if (mds_ext3_set_md(inode, handle, NULL, 0))
-                        CERROR("error clearing objid on %lu\n", inode->i_ino);
+        fcb->cb_func(fcb->cb_obd, fcb->cb_last_rcvd, error);
 
-                if (mds_ext3_fs_ops.cl_delete_inode)
-                        mds_ext3_fs_ops.cl_delete_inode(inode);
-
-                if (mds_ext3_commit(inode, handle))
-                        CERROR("error closing handle on %lu\n", inode->i_ino);
-        } else
-                mds_ext3_fs_ops.cl_delete_inode(inode);
+        kmem_cache_free(fcb_cache, fcb);
+        --fcb_cache_count;
 }
 
-static void mds_ext3_callback_status(struct journal_callback *jcb, int error)
+static int fsfilt_ext3_set_last_rcvd(struct obd_device *obd, __u64 last_rcvd,
+                                     void *handle, fsfilt_cb_t cb_func)
 {
-        struct mds_cb_data *mcb = (struct mds_cb_data *)jcb;
+#ifdef HAVE_JOURNAL_CALLBACK_STATUS
+        struct fsfilt_cb_data *fcb;
 
-        CDEBUG(D_EXT2, "got callback for last_rcvd "LPD64": rc = %d\n",
-               mcb->cb_last_rcvd, error);
-        if (!error && mcb->cb_last_rcvd > mcb->cb_mds->mds_last_committed)
-                mcb->cb_mds->mds_last_committed = mcb->cb_last_rcvd;
-
-        kmem_cache_free(mcb_cache, mcb);
-        --mcb_cache_count;
-}
-
-static int mds_ext3_set_last_rcvd(struct mds_obd *mds, void *handle)
-{
-        struct mds_cb_data *mcb;
-
-        mcb = kmem_cache_alloc(mcb_cache, GFP_NOFS);
-        if (!mcb)
+        fcb = kmem_cache_alloc(fcb_cache, GFP_NOFS);
+        if (!fcb)
                 RETURN(-ENOMEM);
 
-        ++mcb_cache_count;
-        mcb->cb_mds = mds;
-        mcb->cb_last_rcvd = mds->mds_last_rcvd;
+        ++fcb_cache_count;
+        fcb->cb_func = cb_func;
+        fcb->cb_obd = obd;
+        fcb->cb_last_rcvd = last_rcvd;
 
-#ifdef HAVE_JOURNAL_CALLBACK_STATUS
-        CDEBUG(D_EXT2, "set callback for last_rcvd: "LPD64"\n",
-               mcb->cb_last_rcvd);
+        CDEBUG(D_EXT2, "set callback for last_rcvd: "LPD64"\n", last_rcvd);
         lock_kernel();
         /* Note that an "incompatible pointer" warning here is OK for now */
-        journal_callback_set(handle, mds_ext3_callback_status,
-                             (struct journal_callback *)mcb);
+        journal_callback_set(handle, fsfilt_ext3_cb_func,
+                             (struct journal_callback *)fcb);
         unlock_kernel();
 #else
 #warning "no journal callback kernel patch, faking it..."
-        {
         static long next = 0;
 
         if (time_after(jiffies, next)) {
@@ -266,13 +237,13 @@ static int mds_ext3_set_last_rcvd(struct mds_obd *mds, void *handle)
                 next = jiffies + 300 * HZ;
         }
 
-        mds_ext3_callback_status((struct journal_callback *)mcb, 0);
+        cb_func(obd, last_rcvd, 0);
 #endif
 
         return 0;
 }
 
-static int mds_ext3_journal_data(struct file *filp)
+static int fsfilt_ext3_journal_data(struct file *filp)
 {
         struct inode *inode = filp->f_dentry->d_inode;
 
@@ -288,7 +259,7 @@ static int mds_ext3_journal_data(struct file *filp)
  *
  * This can be removed when the ext3 EA code is fixed.
  */
-static int mds_ext3_statfs(struct super_block *sb, struct statfs *sfs)
+static int fsfilt_ext3_statfs(struct super_block *sb, struct statfs *sfs)
 {
         int rc = vfs_statfs(sb, sfs);
 
@@ -298,60 +269,59 @@ static int mds_ext3_statfs(struct super_block *sb, struct statfs *sfs)
         return rc;
 }
 
-static struct mds_fs_operations mds_ext3_fs_ops = {
+static struct fsfilt_operations fsfilt_ext3_ops = {
+        fs_type:                "ext3",
         fs_owner:               THIS_MODULE,
-        fs_start:               mds_ext3_start,
-        fs_commit:              mds_ext3_commit,
-        fs_setattr:             mds_ext3_setattr,
-        fs_set_md:              mds_ext3_set_md,
-        fs_get_md:              mds_ext3_get_md,
-        fs_readpage:            mds_ext3_readpage,
-        fs_delete_inode:        mds_ext3_delete_inode,
-        cl_delete_inode:        clear_inode,
-        fs_journal_data:        mds_ext3_journal_data,
-        fs_set_last_rcvd:       mds_ext3_set_last_rcvd,
-        fs_statfs:              mds_ext3_statfs,
+        fs_start:               fsfilt_ext3_start,
+        fs_commit:              fsfilt_ext3_commit,
+        fs_setattr:             fsfilt_ext3_setattr,
+        fs_set_md:              fsfilt_ext3_set_md,
+        fs_get_md:              fsfilt_ext3_get_md,
+        fs_readpage:            fsfilt_ext3_readpage,
+        fs_journal_data:        fsfilt_ext3_journal_data,
+        fs_set_last_rcvd:       fsfilt_ext3_set_last_rcvd,
+        fs_statfs:              fsfilt_ext3_statfs,
 };
 
-static int __init mds_ext3_init(void)
+static int __init fsfilt_ext3_init(void)
 {
         int rc;
 
         //rc = ext3_xattr_register();
-        mcb_cache = kmem_cache_create("mds_ext3_mcb",
-                                      sizeof(struct mds_cb_data), 0,
+        fcb_cache = kmem_cache_create("fsfilt_ext3_fcb",
+                                      sizeof(struct fsfilt_cb_data), 0,
                                       0, NULL, NULL);
-        if (!mcb_cache) {
-                CERROR("error allocating MDS journal callback cache\n");
+        if (!fcb_cache) {
+                CERROR("error allocating fsfilt journal callback cache\n");
                 GOTO(out, rc = -ENOMEM);
         }
 
-        rc = mds_register_fs_type(&mds_ext3_fs_ops, "ext3");
+        rc = fsfilt_register_ops(&fsfilt_ext3_fs_ops);
 
         if (rc)
-                kmem_cache_destroy(mcb_cache);
+                kmem_cache_destroy(fcb_cache);
 out:
         return rc;
 }
 
-static void __exit mds_ext3_exit(void)
+static void __exit fsfilt_ext3_exit(void)
 {
         int rc;
 
-        mds_unregister_fs_type("ext3");
-        rc = kmem_cache_destroy(mcb_cache);
+        fsfilt_unregister_ops(&fsfilt_ext3_fs_ops);
+        rc = kmem_cache_destroy(fcb_cache);
 
-        if (rc || mcb_cache_count) {
-                CERROR("can't free MDS callback cache: count %d, rc = %d\n",
-                       mcb_cache_count, rc);
+        if (rc || fcb_cache_count) {
+                CERROR("can't free fsfilt callback cache: count %d, rc = %d\n",
+                       fcb_cache_count, rc);
         }
 
         //rc = ext3_xattr_unregister();
 }
 
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
-MODULE_DESCRIPTION("Lustre MDS ext3 Filesystem Helper v0.1");
+MODULE_DESCRIPTION("Lustre ext3 Filesystem Helper v0.1");
 MODULE_LICENSE("GPL");
 
-module_init(mds_ext3_init);
-module_exit(mds_ext3_exit);
+module_init(fsfilt_ext3_init);
+module_exit(fsfilt_ext3_exit);

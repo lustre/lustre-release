@@ -123,15 +123,12 @@ struct client_obd {
 struct mds_obd {
         struct ptlrpc_service           *mds_service;
 
-        char                            *mds_fstype;
         struct super_block              *mds_sb;
-        struct super_operations         *mds_sop;
         struct vfsmount                 *mds_vfsmnt;
         struct obd_run_ctxt              mds_ctxt;
         struct file_operations          *mds_fop;
         struct inode_operations         *mds_iop;
         struct address_space_operations *mds_aops;
-        struct mds_fs_operations        *mds_fsops;
 
         int                              mds_max_mdsize;
         struct file                     *mds_rcvd_filp;
@@ -250,6 +247,7 @@ struct obd_device {
         struct ptlrpc_client   obd_ldlm_client; /* XXX OST/MDS only */
         /* a spinlock is OK for what we do now, may need a semaphore later */
         spinlock_t obd_dev_lock;
+        struct fsfilt_operations *obd_fsops;
         union {
                 struct ext2_obd ext2;
                 struct filter_obd filter;
@@ -257,7 +255,6 @@ struct obd_device {
                 struct client_obd cli;
                 struct ost_obd ost;
                 struct echo_client_obd echo_client;;
-                //                struct osc_obd osc;
                 struct ldlm_obd ldlm;
                 struct echo_obd echo;
                 struct recovd_obd recovd;
@@ -269,7 +266,7 @@ struct obd_device {
         } u;
        /* Fields used by LProcFS */
         unsigned int cntr_mem_size;
-        void* counters;
+        void *counters;
 };
 
 struct obd_ops {
@@ -342,79 +339,6 @@ struct obd_ops {
                         __u32 mode, struct lustre_handle *);
         int (*o_cancel_unused)(struct lustre_handle *, struct lov_stripe_md *,
                                int local_only);
-        
 };
-
-static inline void *mds_fs_start(struct mds_obd *mds, struct inode *inode,
-                                 int op)
-{
-        return mds->mds_fsops->fs_start(inode, op);
-}
-
-static inline int mds_fs_commit(struct mds_obd *mds, struct inode *inode,
-                                void *handle)
-{
-        return mds->mds_fsops->fs_commit(inode, handle);
-}
-
-static inline int mds_fs_setattr(struct mds_obd *mds, struct dentry *dentry,
-                                 void *handle, struct iattr *iattr)
-{
-        int rc;
-        /*
-         * NOTE: we probably don't need to take i_sem here when changing
-         *       ATTR_SIZE because the MDS never needs to truncate a file.
-         *       The ext2/ext3 code never truncates a directory, and files
-         *       stored on the MDS are entirely sparse (no data blocks).
-         *       If we do need to get it, we can do it here.
-         */
-        lock_kernel();
-        rc = mds->mds_fsops->fs_setattr(dentry, handle, iattr);
-        unlock_kernel();
-
-        return rc;
-}
-
-static inline int mds_fs_set_md(struct mds_obd *mds, struct inode *inode,
-                                void *handle, struct lov_mds_md *md,
-                                int size)
-{
-        return mds->mds_fsops->fs_set_md(inode, handle, md, size);
-}
-
-static inline int mds_fs_get_md(struct mds_obd *mds, struct inode *inode,
-                                struct lov_mds_md *md, int size)
-{
-        return mds->mds_fsops->fs_get_md(inode, md, size);
-}
-
-static inline ssize_t mds_fs_readpage(struct mds_obd *mds, struct file *file,
-                                      char *buf, size_t count, loff_t *offset)
-{
-        return mds->mds_fsops->fs_readpage(file, buf, count, offset);
-}
-
-/* Set up callback to update mds->mds_last_committed with the current
- * value of mds->mds_last_recieved when this transaction is on disk.
- */
-static inline int mds_fs_set_last_rcvd(struct mds_obd *mds, void *handle)
-{
-        return mds->mds_fsops->fs_set_last_rcvd(mds, handle);
-}
-
-/* Enable data journaling on the given file */
-static inline ssize_t mds_fs_journal_data(struct mds_obd *mds,
-                                          struct file *file)
-{
-        return mds->mds_fsops->fs_journal_data(file);
-}
-
-static inline int mds_fs_statfs(struct mds_obd *mds, struct statfs *sfs)
-{
-        if (mds->mds_fsops->fs_statfs)
-                return mds->mds_fsops->fs_statfs(mds->mds_sb, sfs);
-
-        return vfs_statfs(mds->mds_sb, sfs);
-}
 #endif /* __KERNEL */
 #endif /* __OBD_H */

@@ -377,7 +377,7 @@ int ll_intent_lock(struct inode *parent, struct dentry **de,
         RETURN(rc);
 
  drop_req:
-        ptlrpc_free_req(request);
+        ptlrpc_req_finished(request);
  drop_lock:
 #warning FIXME: must release lock here
         RETURN(rc);

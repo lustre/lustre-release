@@ -68,23 +68,19 @@ struct ldlm_namespace *ldlm_namespace_new(char *name, __u32 client)
         ENTRY;
 
         OBD_ALLOC(ns, sizeof(*ns));
-        if (!ns) {
-                LBUG();
-                GOTO(out, NULL);
-        }
+        if (!ns)
+                RETURN(NULL);
 
         ns->ns_hash = vmalloc(sizeof(*ns->ns_hash) * RES_HASH_SIZE);
-        if (!ns->ns_hash) {
-                LBUG();
-                GOTO(out, ns);
-        }
-        obd_memory += sizeof(*ns->ns_hash) * RES_HASH_SIZE;
+        if (!ns->ns_hash)
+                GOTO(out_ns, NULL);
+
+        atomic_add(sizeof(*ns->ns_hash) * RES_HASH_SIZE, &obd_memory);
 
         OBD_ALLOC(ns->ns_name, strlen(name) + 1);
-        if (!ns->ns_name) {
-                LBUG();
-                GOTO(out, ns);
-        }
+        if (!ns->ns_name)
+                GOTO(out_hash, NULL);
+
         strcpy(ns->ns_name, name);
 
         INIT_LIST_HEAD(&ns->ns_root_list);
@@ -109,16 +105,12 @@ struct ldlm_namespace *ldlm_namespace_new(char *name, __u32 client)
         ldlm_proc_namespace(ns);
         RETURN(ns);
 
- out:
-        if (ns && ns->ns_hash) {
-                memset(ns->ns_hash, 0x5a, sizeof(*ns->ns_hash) * RES_HASH_SIZE);
-                vfree(ns->ns_hash);
-                obd_memory -= sizeof(*ns->ns_hash) * RES_HASH_SIZE;
-        }
-        if (ns && ns->ns_name)
-                OBD_FREE(ns->ns_name, strlen(name) + 1);
-        if (ns)
-                OBD_FREE(ns, sizeof(*ns));
+out_hash:
+        memset(ns->ns_hash, 0x5a, sizeof(*ns->ns_hash) * RES_HASH_SIZE);
+        vfree(ns->ns_hash);
+        atomic_sub(sizeof(*ns->ns_hash) * RES_HASH_SIZE, &obd_memory);
+out_ns:
+        OBD_FREE(ns, sizeof(*ns));
         return NULL;
 }
 
@@ -212,7 +204,7 @@ int ldlm_namespace_free(struct ldlm_namespace *ns)
 
         memset(ns->ns_hash, 0x5a, sizeof(*ns->ns_hash) * RES_HASH_SIZE);
         vfree(ns->ns_hash /* , sizeof(*ns->ns_hash) * RES_HASH_SIZE */);
-        obd_memory -= sizeof(*ns->ns_hash) * RES_HASH_SIZE;
+        atomic_sub(sizeof(*ns->ns_hash) * RES_HASH_SIZE, &obd_memory);
         OBD_FREE(ns->ns_name, strlen(ns->ns_name) + 1);
         OBD_FREE(ns, sizeof(*ns));
 
@@ -411,7 +403,6 @@ int ldlm_resource_putref(struct ldlm_resource *res)
                 ENTRY;
                 CDEBUG(D_INFO, "putref res: %p count: %d\n", res,
                        atomic_read(&res->lr_refcount));
-        out:
                 LASSERT(atomic_read(&res->lr_refcount) >= 0);
         }
 

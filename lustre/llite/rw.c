@@ -241,23 +241,27 @@ static int ll_prepare_write(struct file *file, struct page *page, unsigned from,
         return rc;
 }
 
-/* returns the page unlocked, but with a reference */
-static int ll_writepage(struct page *page)
-{
-        struct inode *inode = page->mapping->host;
-        int err;
-        ENTRY;
+/* Write a page from kupdated or kswapd.
+ *
+ * We unlock the page even in the face of an error, otherwise dirty
+ * pages could OOM the system if they cannot be written.  Also, there
+ * is nobody to return an error code to from here - the application
+ * may not even be running anymore.
+ *
+ * Returns the page unlocked, but with a reference.
+ */
+static int ll_writepage(struct page *page) {
+        struct inode *inode = page->mapping->host; int err; ENTRY;
 
-        if (!PageLocked(page))
-                LBUG();
+        LASSERT(PageLocked(page));
 
+        /* XXX need to make sure we have LDLM lock on this page */
         err = ll_brw(OBD_BRW_WRITE, inode, page, 1);
-        if ( !err ) {
-                //SetPageUptodate(page);
-                set_page_clean(page);
-        } else {
+        if (err)
                 CERROR("ll_brw failure %d\n", err);
-        }
+        else
+                set_page_clean(page);
+
         unlock_page(page);
         RETURN(err);
 }

@@ -153,6 +153,10 @@ int mds_reint(struct ptlrpc_request *req, int offset);
 int mds_pack_md(struct mds_obd *mds, struct ptlrpc_request *req,
                 int offset, struct mds_body *body, struct inode *inode);
 
+/* mds/mds_fs.c */
+int mds_fs_setup(struct obd_device *obddev, struct vfsmount *mnt);
+void mds_fs_cleanup(struct obd_device *obddev);
+
 /* mdc/mdc_request.c */
 int mdc_enqueue(struct lustre_handle *conn, int lock_type,
                 struct lookup_intent *it, int lock_mode, struct inode *dir,
@@ -197,41 +201,6 @@ void mdc_store_inode_generation(struct ptlrpc_request *req, int reqoff,
 int mds_client_add(struct mds_obd *mds, struct mds_export_data *med,
                    int cl_off);
 int mds_client_free(struct obd_export *exp);
-
-/* mds/mds_fs.c */
-struct mds_fs_operations {
-        struct module *fs_owner;
-        void   *(* fs_start)(struct inode *inode, int op);
-        int     (* fs_commit)(struct inode *inode, void *handle);
-        int     (* fs_setattr)(struct dentry *dentry, void *handle,
-                               struct iattr *iattr);
-        int     (* fs_set_md)(struct inode *inode, void *handle,
-                              struct lov_mds_md *md, int size);
-        int     (* fs_get_md)(struct inode *inode, struct lov_mds_md *md,
-                              int size);
-        ssize_t (* fs_readpage)(struct file *file, char *buf, size_t count,
-                                loff_t *offset);
-        void    (* fs_delete_inode)(struct inode *inode);
-        void    (* cl_delete_inode)(struct inode *inode);
-        int     (* fs_journal_data)(struct file *file);
-        int     (* fs_set_last_rcvd)(struct mds_obd *mds, void *handle);
-        int     (* fs_statfs)(struct super_block *sb, struct statfs *sfs);
-};
-
-extern int mds_register_fs_type(struct mds_fs_operations *op, const char *name);
-extern void mds_unregister_fs_type(const char *name);
-extern int mds_fs_setup(struct obd_device *obddev, struct vfsmount *mnt);
-extern void mds_fs_cleanup(struct obd_device *obddev);
-
-#define MDS_FSOP_UNLINK         1
-#define MDS_FSOP_RMDIR          2
-#define MDS_FSOP_RENAME         3
-#define MDS_FSOP_CREATE         4
-#define MDS_FSOP_MKDIR          5
-#define MDS_FSOP_SYMLINK        6
-#define MDS_FSOP_MKNOD          7
-#define MDS_FSOP_SETATTR        8
-#define MDS_FSOP_LINK           9
 
 #endif /* __KERNEL__ */
 

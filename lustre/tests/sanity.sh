@@ -1,17 +1,21 @@
 #!/bin/bash
 
+set -e
+
+CHECKSTAT=${CHECKSTAT:-"./checkstat -v"}
+MOUNT=${MOUNT:-/mnt/lustre}
 export NAME=$NAME
 clean() {
         echo -n "cleanup..."
         sh llmountcleanup.sh > /dev/null
 }
-CLEAN=clean
+CLEAN=${CLEAN:-clean}
 start() {
         echo -n "mounting..."
         sh llrmount.sh > /dev/null
         echo -n "mounted"
 }
-START=start
+START=${START:-start}
 
 error () { 
     echo FAIL
@@ -23,283 +27,373 @@ pass() {
 }
 
 echo '== touch .../f ; rm .../f ======================== test 0'
-touch /mnt/lustre/f
-[ -f /mnt/lustre/f ] || error 
-rm /mnt/lustre/f
-[ ! -f /mnt/lustre/f ] || error
+touch $MOUNT/f
+$CHECKSTAT -t file $MOUNT/f || error 
+rm $MOUNT/f
+$CHECKSTAT -a $MOUNT/f || error
 pass
 $CLEAN
 $START
 
 echo '== mkdir .../d1; mkdir .../d1/d2 ================= test 1'
-mkdir /mnt/lustre/d1
-mkdir /mnt/lustre/d1/d2
-[ -d /mnt/lustre/d1/d2 ] || error
+mkdir $MOUNT/d1
+mkdir $MOUNT/d1/d2
+$CHECKSTAT -t dir $MOUNT/d1/d2 || error
 pass
 $CLEAN
 $START
 
 echo '== rmdir .../d1/d2; rmdir .../d1 ================= test 1b'
-rmdir /mnt/lustre/d1/d2
-rmdir /mnt/lustre/d1
-[ ! -d /mnt/lustre/d1 ] || error
+rmdir $MOUNT/d1/d2
+rmdir $MOUNT/d1
+$CHECKSTAT -a $MOUNT/d1 || error
 pass
 $CLEAN
 $START
 
 echo '== mkdir .../d2; touch .../d2/f ================== test 2'
-mkdir /mnt/lustre/d2
-touch /mnt/lustre/d2/f
+mkdir $MOUNT/d2
+touch $MOUNT/d2/f
+$CHECKSTAT -t file $MOUNT/d2/f || error
+pass
 $CLEAN
 $START
 
 echo '== rm -r .../d2; touch .../d2/f ================== test 2b'
-rm -r /mnt/lustre/d2
+rm -r $MOUNT/d2
+$CHECKSTAT -a $MOUNT/d2 || error
+pass
 $CLEAN
 $START
 
 echo '== mkdir .../d3 ================================== test 3'
-mkdir /mnt/lustre/d3
+mkdir $MOUNT/d3
+$CHECKSTAT -t dir $MOUNT/d3 || error
+pass
 $CLEAN
 $START
 echo '== touch .../d3/f ================================ test 3b'
-touch /mnt/lustre/d3/f
+touch $MOUNT/d3/f
+$CHECKSTAT -t file $MOUNT/d3/f || error
+pass
 $CLEAN
 $START
 echo '== rm -r .../d3 ================================== test 3c'
-rm -r /mnt/lustre/d3
+rm -r $MOUNT/d3
+$CHECKSTAT -a $MOUNT/d3 || error
+pass
 $CLEAN
 $START
 
 echo '== mkdir .../d4 ================================== test 4'
-mkdir /mnt/lustre/d4
+mkdir $MOUNT/d4
+$CHECKSTAT -t dir $MOUNT/d4 || error
+pass
 $CLEAN
 $START
 echo '== mkdir .../d4/d2 =============================== test 4b'
-mkdir /mnt/lustre/d4/d2
+mkdir $MOUNT/d4/d2
+$CHECKSTAT -t dir $MOUNT/d4/d2 || error
+pass
 $CLEAN
 $START
 
 echo '== mkdir .../d5; mkdir .../d5/d2; chmod .../d5/d2 = test 5'
-mkdir /mnt/lustre/d5
-mkdir /mnt/lustre/d5/d2
-chmod 0666 /mnt/lustre/d5/d2
+mkdir $MOUNT/d5
+mkdir $MOUNT/d5/d2
+chmod 0666 $MOUNT/d5/d2
+$CHECKSTAT -t dir -p 0666 $MOUNT/d5/d2 || error
+pass
 $CLEAN
 $START
 
 echo '== touch .../f6; chmod .../f6 ==================== test 6'
-touch /mnt/lustre/f6
-chmod 0666 /mnt/lustre/f6
+touch $MOUNT/f6
+chmod 0666 $MOUNT/f6
+$CHECKSTAT -t file -p 0666 $MOUNT/f6 || error
+pass
 $CLEAN
 $START
 
 echo '== mkdir .../d7; mcreate .../d7/f; chmod .../d7/f = test 7'
-mkdir /mnt/lustre/d7
-./mcreate /mnt/lustre/d7/f
-chmod 0666 /mnt/lustre/d7/f
+mkdir $MOUNT/d7
+./mcreate $MOUNT/d7/f
+chmod 0666 $MOUNT/d7/f
+$CHECKSTAT -t file -p 0666 $MOUNT/d7/f || error
+pass
 $CLEAN
 $START
 
 echo '== mkdir .../d8; touch .../d8/f; chmod .../d8/f == test 8'
-mkdir /mnt/lustre/d8
-touch /mnt/lustre/d8/f
-chmod 0666 /mnt/lustre/d8/f
+mkdir $MOUNT/d8
+touch $MOUNT/d8/f
+chmod 0666 $MOUNT/d8/f
+$CHECKSTAT -t file -p 0666 $MOUNT/d8/f || error
+pass
 $CLEAN
 $START
 
 
-echo '== mkdir .../d9; mkdir .../d9/d2; mkdir .../d9/d2/d3 == test 9'
-mkdir /mnt/lustre/d9
-mkdir /mnt/lustre/d9/d2
-mkdir /mnt/lustre/d9/d2/d3
+echo '== mkdir .../d9 .../d9/d2 .../d9/d2/d3 =========== test 9'
+mkdir $MOUNT/d9
+mkdir $MOUNT/d9/d2
+mkdir $MOUNT/d9/d2/d3
+$CHECKSTAT -t dir $MOUNT/d9/d2/d3 || error
+pass
 $CLEAN
 $START
 
 
 echo '== mkdir .../d10; mkdir .../d10/d2; touch .../d10/d2/f = test 10'
-mkdir /mnt/lustre/d10
-mkdir /mnt/lustre/d10/d2
-touch /mnt/lustre/d10/d2/f
+mkdir $MOUNT/d10
+mkdir $MOUNT/d10/d2
+touch $MOUNT/d10/d2/f
+$CHECKSTAT -t file $MOUNT/d10/d2/f || error
+pass
 $CLEAN
 $START
 
-echo '=================================================== test 11'
-mkdir /mnt/lustre/d11
-mkdir /mnt/lustre/d11/d2
-chmod 0666 /mnt/lustre/d11/d2
-chmod 0555 /mnt/lustre/d11/d2
+echo '== mkdir .../d11 d11/d2; chmod .../d11/d2 .../d11/d2 == test 11'
+mkdir $MOUNT/d11
+mkdir $MOUNT/d11/d2
+chmod 0666 $MOUNT/d11/d2
+chmod 0555 $MOUNT/d11/d2
+$CHECKSTAT -t dir -p 0555 $MOUNT/d11/d2 || error
+pass
 $CLEAN
 $START
 
-echo '=================================================== test 12'
-mkdir /mnt/lustre/d12
-touch /mnt/lustre/d12/f
-chmod 0666 /mnt/lustre/d12/f
-chmod 0555 /mnt/lustre/d12/f
+echo '== mkdir .../d12; touch .../d12/f; chmod .../d12/f d12/f == test 12'
+mkdir $MOUNT/d12
+touch $MOUNT/d12/f
+chmod 0666 $MOUNT/d12/f
+chmod 0555 $MOUNT/d12/f
+$CHECKSTAT -t file -p 0555 $MOUNT/d12/f || error
+pass
 $CLEAN
 $START
 
-echo '=================================================== test 13'
-mkdir /mnt/lustre/d13
-cp /etc/passwd /mnt/lustre/d13/f
->  /mnt/lustre/d13/f
-$CLEAN
-$START
-
-
-echo '=================================================== test 14'
-mkdir /mnt/lustre/d14
-touch /mnt/lustre/d14/f
-rm /mnt/lustre/d14/f
+echo '== mkdir .../d13; cp /etc/passwd .../d13/f; > .../d13/f == test 13'
+mkdir $MOUNT/d13
+cp /etc/hosts $MOUNT/d13/f
+>  $MOUNT/d13/f
+$CHECKSTAT -t file -s 0 $MOUNT/d13/f || error
+pass
 $CLEAN
 $START
 
 
-echo '=================================================== test 15'
-mkdir /mnt/lustre/d15
-touch /mnt/lustre/d15/f
-mv /mnt/lustre/d15/f /mnt/lustre/d15/f2
+echo '================================================== test 14'
+mkdir $MOUNT/d14
+touch $MOUNT/d14/f
+rm $MOUNT/d14/f
+$CHECKSTAT -a $MOUNT/d14/f || error
+pass
 $CLEAN
 $START
 
-echo '=================================================== test 16'
-mkdir /mnt/lustre/d16
-touch /mnt/lustre/d16/f
-rm -rf /mnt/lustre/d16/f
+
+echo '================================================== test 15'
+mkdir $MOUNT/d15
+touch $MOUNT/d15/f
+mv $MOUNT/d15/f $MOUNT/d15/f2
+$CHECKSTAT -t file $MOUNT/d15/f2 || error
+pass
 $CLEAN
 $START
 
-echo '== symlinks: create, remove (dangling and real) === test 17'
-mkdir /mnt/lustre/d17
-touch /mnt/lustre/d17/f
-ln -s /mnt/lustre/d17/f /mnt/lustre/d17/l-exist
-ln -s no-such-file /mnt/lustre/d17/l-dangle
-ls -l /mnt/lustre/d17
-rm -f /mnt/lustre/l-dangle
-rm -f /mnt/lustre/l-exist
+echo '================================================== test 16'
+mkdir $MOUNT/d16
+touch $MOUNT/d16/f
+rm -rf $MOUNT/d16/f
+$CHECKSTAT -a $MOUNT/d16/f || error
+pass
 $CLEAN
 $START
 
-echo '== touch /mnt/lustre/f ; ls /mnt/lustre ========== test 18'
-touch /mnt/lustre/f
-ls /mnt/lustre
+echo '== symlinks: create, remove (dangling and real) == test 17'
+mkdir $MOUNT/d17
+touch $MOUNT/d17/f
+ln -s $MOUNT/d17/f $MOUNT/d17/l-exist
+ln -s no-such-file $MOUNT/d17/l-dangle
+ls -l $MOUNT/d17
+$CHECKSTAT -l $MOUNT/d17/f $MOUNT/d17/l-exist || error
+$CHECKSTAT -f -t f $MOUNT/d17/l-exist || error
+$CHECKSTAT -l no-such-file $MOUNT/d17/l-dangle || error
+$CHECKSTAT -fa $MOUNT/d17/l-dangle || error
+rm -f $MOUNT/l-dangle
+rm -f $MOUNT/l-exist
+$CHECKSTAT -a $MOUNT/l-dangle || error
+$CHECKSTAT -a $MOUNT/l-exist || error
+pass
 $CLEAN
 $START
 
-echo '== touch /mnt/lustre/f ; ls -l /mnt/lustre ======= test 19'
-touch /mnt/lustre/f
-ls -l /mnt/lustre
-rm /mnt/lustre/f
+echo "== touch $MOUNT/f ; ls $MOUNT ==================== test 18"
+touch $MOUNT/f
+ls $MOUNT || error
+pass
 $CLEAN
 $START
 
-echo '== touch /mnt/lustre/f ; ls -l /mnt/lustre ======= test 20'
-touch /mnt/lustre/f
-rm /mnt/lustre/f
+echo "== touch $MOUNT/f ; ls -l $MOUNT ================= test 19"
+touch $MOUNT/f
+ls -l $MOUNT
+rm $MOUNT/f
+$CHECKSTAT -a $MOUNT/f || error
+pass
+$CLEAN
+$START
+
+echo "== touch $MOUNT/f ; ls -l $MOUNT ================= test 20"
+touch $MOUNT/f
+rm $MOUNT/f
 echo "1 done"
-touch /mnt/lustre/f
-rm /mnt/lustre/f
+touch $MOUNT/f
+rm $MOUNT/f
 echo "2 done"
-touch /mnt/lustre/f
-rm /mnt/lustre/f
+touch $MOUNT/f
+rm $MOUNT/f
 echo "3 done"
+$CHECKSTAT -a $MOUNT/f || error
+pass
 $CLEAN
 $START
 
-echo '== write to dangling link ======================= test 21'
-mkdir /mnt/lustre/d21
-ln -s dangle /mnt/lustre/d21/link
-echo foo >> /mnt/lustre/d21/link
-cat /mnt/lustre/d21/dangle
+echo '== write to dangling link ======================== test 21'
+mkdir $MOUNT/d21
+[ -f $MOUNT/d21/dangle ] && rm -f $MOUNT/d21/dangle
+ln -s dangle $MOUNT/d21/link
+echo foo >> $MOUNT/d21/link
+cat $MOUNT/d21/dangle
+$CHECKSTAT -t link $MOUNT/d21/link || error
+$CHECKSTAT -f -t file $MOUNT/d21/link || error
+pass
 $CLEAN
 $START
 
-echo '== unpack tar archive as nonroot user =========== test 22'
-mkdir /mnt/lustre/d22
-chown 4711 /mnt/lustre/d22
-sudo -u \#4711 tar cf - /etc/hosts /etc/sysconfig/network | sudo -u \#4711 tar xfC - /mnt/lustre/d22
-ls -lR /mnt/lustre/d22/etc
+echo '== unpack tar archive as non-root user =========== test 22'
+mkdir $MOUNT/d22
+which sudo && chown 4711 $MOUNT/d22
+SUDO=`which sudo 2> /dev/null` && SUDO="$SUDO -u #4711" || SUDO=""
+$SUDO tar cf - /etc/hosts /etc/sysconfig/network | $SUDO tar xfC - $MOUNT/d22
+ls -lR $MOUNT/d22/etc
+$CHECKSTAT -t dir $MOUNT/d22/etc || error
+[ -z "$SUDO" ] || $CHECKSTAT -u \#4711 $MOUNT/d22/etc || error
+pass
 $CLEAN
 $START
 
-echo '== O_CREAT|O_EXCL in subdir ===================== test 23'
-mkdir /mnt/lustre/d23
-./toexcl /mnt/lustre/d23/f23
-./toexcl /mnt/lustre/d23/f23
+echo '== O_CREAT|O_EXCL in subdir ====================== test 23'
+mkdir $MOUNT/d23
+./toexcl $MOUNT/d23/f23
+./toexcl -e $MOUNT/d23/f23 || error
+pass
 $CLEAN
 $START
 
-echo '== rename sanity ============================= test24'
+echo '== rename sanity ================================= test24'
 echo '-- same directory rename'
 echo '-- test 24-R1: touch a ; rename a b'
-mkdir /mnt/lustre/R1
-touch /mnt/lustre/R1/f
-mv /mnt/lustre/R1/f /mnt/lustre/R1/g
+mkdir $MOUNT/R1
+touch $MOUNT/R1/f
+mv $MOUNT/R1/f $MOUNT/R1/g
+$CHECKSTAT -t file $MOUNT/R1/g || error
+pass
 $CLEAN
 $START
 
 echo '-- test 24-R2: touch a b ; rename a b;'
-mkdir /mnt/lustre/R2
-touch /mnt/lustre/R2/{f,g}
-mv /mnt/lustre/R2/f /mnt/lustre/R2/g
+mkdir $MOUNT/R2
+touch $MOUNT/R2/{f,g}
+mv $MOUNT/R2/f $MOUNT/R2/g
+$CHECKSTAT -a $MOUNT/R2/f || error
+$CHECKSTAT -t file $MOUNT/R2/g || error
+pass
 $CLEAN
 $START
 
 echo '-- test 24-R3: mkdir a  ; rename a b;'
-mkdir /mnt/lustre/R3
-mkdir /mnt/lustre/R3/f
-mv /mnt/lustre/R3/f /mnt/lustre/R3/g
+mkdir $MOUNT/R3
+mkdir $MOUNT/R3/f
+mv $MOUNT/R3/f $MOUNT/R3/g
+$CHECKSTAT -a $MOUNT/R3/f || error
+$CHECKSTAT -t dir $MOUNT/R3/g || error
+pass
 $CLEAN
 $START
 
 echo '-- test 24-R4: mkdir a b ; rename a b;'
-mkdir /mnt/lustre/R4
-mkdir /mnt/lustre/R4/{f,g}
-perl -e 'rename "/mnt/lustre/R3/f", "/mnt/lustre/R3/g";'
+mkdir $MOUNT/R4
+mkdir $MOUNT/R4/{f,g}
+perl -e "rename \"$MOUNT/R4/f\", \"$MOUNT/R4/g\";"
+$CHECKSTAT -a $MOUNT/R4/f || error
+$CHECKSTAT -t dir $MOUNT/R4/g || error
+pass
 $CLEAN
 $START
 
 echo '-- cross directory renames --' 
 echo '-- test 24-R5: touch a ; rename a b'
-mkdir /mnt/lustre/R5{a,b}
-touch /mnt/lustre/R5a/f
-mv /mnt/lustre/R5a/f /mnt/lustre/R5b/g
+mkdir $MOUNT/R5{a,b}
+touch $MOUNT/R5a/f
+mv $MOUNT/R5a/f $MOUNT/R5b/g
+$CHECKSTAT -a $MOUNT/R5a/f || error
+$CHECKSTAT -t file $MOUNT/R5b/g || error
+pass
 $CLEAN
 $START
 
 echo '-- test 24-R6: touch a ; rename a b'
-mkdir /mnt/lustre/R6{a,b}
-touch /mnt/lustre/R6a/f /mnt/lustre/R6b/g
-mv /mnt/lustre/R6a/f /mnt/lustre/R6b/g
+mkdir $MOUNT/R6{a,b}
+touch $MOUNT/R6a/f $MOUNT/R6b/g
+mv $MOUNT/R6a/f $MOUNT/R6b/g
+$CHECKSTAT -a $MOUNT/R6a/f || error
+$CHECKSTAT -t file $MOUNT/R6b/g || error
+pass
 $CLEAN
 $START
 
 echo '-- test 24-R7: touch a ; rename a b'
-mkdir /mnt/lustre/R7{a,b}
-mkdir /mnt/lustre/R7a/f
-mv /mnt/lustre/R7a/f /mnt/lustre/R7b/g
+mkdir $MOUNT/R7{a,b}
+mkdir $MOUNT/R7a/f
+mv $MOUNT/R7a/f $MOUNT/R7b/g
+$CHECKSTAT -a $MOUNT/R7a/f || error
+$CHECKSTAT -t dir $MOUNT/R7b/g || error
+pass
 $CLEAN
 $START
 
 echo '-- test 24-R8: touch a ; rename a b'
-mkdir /mnt/lustre/R8{a,b}
-mkdir /mnt/lustre/R8a/f /mnt/lustre/R8b/g
-perl -e 'rename "/mnt/lustre/R8a/f", "/mnt/lustre/R8b/g";'
+mkdir $MOUNT/R8{a,b}
+mkdir $MOUNT/R8a/f $MOUNT/R8b/g
+perl -e "rename \"$MOUNT/R8a/f\", \"$MOUNT/R8b/g\";"
+$CHECKSTAT -a $MOUNT/R8a/f || error
+$CHECKSTAT -t dir $MOUNT/R8b/g || error
+pass
 $CLEAN
 $START
 
 echo "-- rename error cases"
 echo "-- test 24-R9 target error: touch f ; mkdir a ; rename f a"
-mkdir /mnt/lustre/R9
-mkdir /mnt/lustre/R9/a
-touch /mnt/lustre/R9/f
-perl -e 'rename "/mnt/lustre/R9/f", "/mnt/lustre/R9/a";'
+mkdir $MOUNT/R9
+mkdir $MOUNT/R9/a
+touch $MOUNT/R9/f
+perl -e "rename \"$MOUNT/R9/f\", \"$MOUNT/R9/a\";"
+$CHECKSTAT -t file $MOUNT/R9/f || error
+$CHECKSTAT -t dir  $MOUNT/R9/a || error
+$CHECKSTAT -a file $MOUNT/R9/a/f || error
+pass
 $CLEAN
 $START
 
 echo "--test 24-R10 source does not exist" 
-mkdir /mnt/lustre/R10
-mv /mnt/lustre/R10/f /mnt/lustre/R10/g 
+mkdir $MOUNT/R10
+perl -e "rename \"$MOUNT/R10/f\", \"$MOUNT/R10/g\"" 
+$CHECKSTAT -t dir $MOUNT/R10 || error
+$CHECKSTAT -a $MOUNT/R10/f || error
+$CHECKSTAT -a $MOUNT/R10/g || error
+pass
 $CLEAN
 $START
 

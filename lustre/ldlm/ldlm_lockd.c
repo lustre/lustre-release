@@ -142,6 +142,15 @@ static int ldlm_server_blocking_ast(struct ldlm_lock *lock,
                 RETURN(0);
         }
 
+        LASSERT(lock);
+
+        l_lock(&lock->l_resource->lr_namespace->ns_lock);
+        if (lock->l_destroyed) {
+                /* What's the point? */
+                l_unlock(&lock->l_resource->lr_namespace->ns_lock);
+                RETURN(0);
+        }
+
         req = ptlrpc_prep_req(&lock->l_export->exp_ldlm_data.led_import,
                               LDLM_BL_CALLBACK, 1, &size, NULL);
         if (!req)
@@ -156,6 +165,8 @@ static int ldlm_server_blocking_ast(struct ldlm_lock *lock,
         req->rq_replen = 0; /* no reply needed */
 
         ldlm_add_waiting_lock(lock);
+        l_unlock(&lock->l_resource->lr_namespace->ns_lock);
+
         (void)ptl_send_rpc(req);
 
         /* not waiting for reply */
@@ -247,6 +258,13 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req)
                sizeof(lock->l_remote_handle));
         LDLM_DEBUG(lock, "server-side enqueue handler, new lock created");
 
+        LASSERT(req->rq_export);
+        lock->l_export = req->rq_export;
+        l_lock(&lock->l_resource->lr_namespace->ns_lock);
+        list_add(&lock->l_export_chain,
+                 &lock->l_export->exp_ldlm_data.led_held_locks);
+        l_unlock(&lock->l_resource->lr_namespace->ns_lock);
+
         err = ldlm_lock_enqueue(lock, cookie, cookielen, &flags,
                                 ldlm_server_completion_ast,
                                 ldlm_server_blocking_ast);
@@ -264,14 +282,6 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req)
                 memcpy(dlm_rep->lock_resource_name, lock->l_resource->lr_name,
                        sizeof(dlm_rep->lock_resource_name));
                 dlm_rep->lock_mode = lock->l_req_mode;
-        }
-
-        lock->l_export = req->rq_export;
-        if (lock->l_export) {
-                l_lock(&lock->l_resource->lr_namespace->ns_lock);
-                list_add(&lock->l_export_chain,
-                         &lock->l_export->exp_ldlm_data.led_held_locks);
-                l_unlock(&lock->l_resource->lr_namespace->ns_lock);
         }
 
         EXIT;
@@ -481,11 +491,16 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
         }
 
         if (req->rq_export == NULL) {
+                struct ldlm_request *dlm_req;
+
                 CERROR("operation %d with bad export (ptl req %d/rep %d)\n",
                        req->rq_reqmsg->opc, req->rq_request_portal,
                        req->rq_reply_portal);
                 CERROR("--> export addr: "LPX64", cookie: "LPX64"\n",
                        req->rq_reqmsg->addr, req->rq_reqmsg->cookie);
+                dlm_req = lustre_msg_buf(req->rq_reqmsg, 0);
+                CERROR("--> lock addr: "LPX64", cookie: "LPX64"\n",
+                       dlm_req->lock_handle1.addr,dlm_req->lock_handle1.cookie);
                 CERROR("--> ignoring this error as a temporary workaround!  "
                        "beware!\n");
                 //RETURN(-ENOTCONN);
@@ -554,7 +569,7 @@ static int ldlm_cancel_handler(struct ptlrpc_request *req)
 }
 
 
-static int ldlm_iocontrol(long cmd, struct lustre_handle *conn, int len,
+static int ldlm_iocontrol(unsigned int cmd, struct lustre_handle *conn, int len,
                           void *karg, void *uarg)
 {
         struct obd_device *obddev = class_conn2obd(conn);

@@ -131,6 +131,10 @@ void ptlrpc_free_bulk(struct ptlrpc_bulk_desc *desc)
 
         LASSERT(list_empty(&desc->bd_set_chain));
 
+        if (atomic_read(&desc->bd_refcount) != 0)
+                CERROR("freeing desc %p with refcount %d!\n", desc,
+                       atomic_read(&desc->bd_refcount));
+
         list_for_each_safe(tmp, next, &desc->bd_page_list) {
                 struct ptlrpc_bulk_page *bulk;
                 bulk = list_entry(tmp, struct ptlrpc_bulk_page, bp_link);
@@ -253,10 +257,13 @@ int ll_brw_sync_wait(struct obd_brw_set *set, int phase)
 struct ptlrpc_request *ptlrpc_prep_req(struct obd_import *imp, int opcode,
                                        int count, int *lengths, char **bufs)
 {
-        struct ptlrpc_connection *conn = imp->imp_connection;
+        struct ptlrpc_connection *conn;
         struct ptlrpc_request *request;
         int rc;
         ENTRY;
+
+        LASSERT(imp);
+        conn = imp->imp_connection;
 
         OBD_ALLOC(request, sizeof(*request));
         if (!request) {
@@ -726,8 +733,8 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
                         imp->imp_max_transno = req->rq_transno;
                 } else if (req->rq_transno != 0 &&
                            imp->imp_level == LUSTRE_CONN_FULL) {
-                        CERROR("got transno "LPD64" after "LPD64": recovery "
-                               "may not work\n", req->rq_transno,
+                        CDEBUG(D_HA, "got transno "LPD64" after "LPD64
+                               ": recovery may not work\n", req->rq_transno,
                                imp->imp_max_transno);
                 }
 

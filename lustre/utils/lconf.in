@@ -37,6 +37,7 @@ DEFAULT_TCPBUF = 1048576
 # Maximum number of devices to search for.
 # (the /dev/loop* nodes need to be created beforehand)
 MAX_LOOP_DEVICES = 256
+PORTALS_DIR = '@PORTALSLOC@'
 
 first_cleanup_error = 0
 def cleanup_error(rc):
@@ -470,9 +471,10 @@ def find_prog(cmd):
     syspath = string.split(os.environ['PATH'], ':')
     cmdpath = os.path.dirname(sys.argv[0])
     syspath.insert(0, cmdpath);
-    syspath.insert(0, os.path.join(cmdpath, '../../portals/linux/utils/'))
+    syspath.insert(0, os.path.join(cmdpath, PORTALS_DIR+'/linux/utils/'))
     for d in syspath:
         prog = os.path.join(d,cmd)
+	debug(prog)
         if os.access(prog, os.X_OK):
             return prog
     return ''
@@ -489,9 +491,10 @@ def do_find_file(base, mod):
             if module:
                 return module
 
-def find_module(src_dir, dev_dir, modname):
+def find_module(dev_dir, modname):
     mod = '%s.o' % (modname)
-    module = src_dir +'/'+ dev_dir +'/'+ mod
+
+    module = dev_dir +'/'+ mod
     try: 
        if os.access(module, os.R_OK):
             return module
@@ -738,7 +741,7 @@ class Module:
                 continue
             log ('loading module:', mod)
             if config.src_dir():
-                module = find_module(config.src_dir(),dev_dir,  mod)
+                module = find_module(dev_dir,  mod)
                 if not module:
                     panic('module not found:', mod)
                 (rc, out)  = run('/sbin/insmod', module)
@@ -782,19 +785,19 @@ class Network(Module):
                 panic("unable to set nid for", self.net_type, self.nid)
             debug("nid:", self.nid)
 
-        self.add_module('portals/linux/oslib/', 'portals')
+        self.add_module(PORTALS_DIR+"/linux/oslib", 'portals')
         if node_needs_router():
-            self.add_module('portals/linux/router', 'kptlrouter')
+            self.add_module(PORTALS_DIR+"/linux/router", 'kptlrouter')
         if self.net_type == 'tcp':
-            self.add_module('portals/linux/socknal', 'ksocknal')
+            self.add_module(PORTALS_DIR+"/linux/socknal", 'ksocknal')
         if self.net_type == 'toe':
-            self.add_module('portals/linux/toenal', 'ktoenal')
+            self.add_module(PORTALS_DIR+"/linux/toenal", 'ktoenal')
         if self.net_type == 'elan':
-            self.add_module('portals/linux/rqswnal', 'kqswnal')
+            self.add_module(PORTALS_DIR+"/linux/rqswnal", 'kqswnal')
         if self.net_type == 'gm':
-            self.add_module('portals/linux/gmnal', 'kgmnal')
-        self.add_module('lustre/obdclass', 'obdclass')
-        self.add_module('lustre/ptlrpc', 'ptlrpc')
+            self.add_module(PORTALS_DIR+"/linux/gmnal", 'kgmnal')
+        self.add_module(config.src_dir()+'obdclass', 'obdclass')
+        self.add_module(config.src_dir()+'ptlrpc', 'ptlrpc')
 
     def prepare(self):
         self.info(self.net_type, self.nid, self.port)
@@ -868,7 +871,7 @@ class Network(Module):
 class LDLM(Module):
     def __init__(self,dom_node):
         Module.__init__(self, 'LDLM', dom_node)
-        self.add_module('lustre/ldlm', 'ldlm')
+        self.add_module(config.src_dir()+'ldlm', 'ldlm') 
     def prepare(self):
         if is_prepared(self.uuid):
             return
@@ -890,8 +893,8 @@ class LOV(Module):
             self.pattern = get_attr_int(dev_node, 'pattern', 0)
             self.devlist = get_all_refs(dev_node, 'osc')
             self.stripe_cnt = get_attr_int(dev_node, 'stripecount', len(self.devlist))
-        self.add_module('lustre/mdc', 'mdc')
-        self.add_module('lustre/lov', 'lov')
+        self.add_module(config.src_dir()+'mdc', 'mdc')
+        self.add_module(config.src_dir()+'lov', 'lov')
 
     def prepare(self):
         if is_prepared(self.uuid):
@@ -979,9 +982,9 @@ class MDS(Module):
         # FIXME: if fstype not set, then determine based on kernel version
         self.format = get_text(dom_node, 'autoformat', "no")
         if self.fstype == 'extN':
-            self.add_module('lustre/extN', 'extN') 
-        self.add_module('lustre/mds', 'mds')
-        self.add_module('lustre/mds', 'mds_%s' % (self.fstype))
+            self.add_module(config.src_dir()+'extN', 'extN') 
+        self.add_module(config.src_dir()+'mds', 'mds')
+        self.add_module(config.src_dir()+'obdclass', 'fsfilt_%s'%(self.fstype))
             
     def prepare(self):
         if is_prepared(self.uuid):
@@ -1023,7 +1026,7 @@ class MDC(Module):
                                       int(random.random() * 1048576))
 
         self.lookup_server(self.mds.uuid)
-        self.add_module('lustre/mdc', 'mdc')
+        self.add_module(config.src_dir()+'mdc', 'mdc')
 
     def prepare(self):
         if is_prepared(self.uuid):
@@ -1043,8 +1046,9 @@ class OBD(Module):
         # FIXME: if fstype not set, then determine based on kernel version
         self.format = get_text(dom_node, 'autoformat', 'yes')
         if self.fstype == 'extN':
-            self.add_module('lustre/extN', 'extN') 
-        self.add_module('lustre/' + self.obdtype, self.obdtype)
+            self.add_module(config.src_dir()+'extN', 'extN') 
+        self.add_module(config.src_dir()+'' + self.obdtype, self.obdtype)
+        self.add_module(config.src_dir()+'obdclass' , 'fsfilt_%s' % (self.fstype))
 
     # need to check /proc/mounts and /etc/mtab before
     # formatting anything.
@@ -1070,7 +1074,7 @@ class OST(Module):
     def __init__(self,dom_node):
         Module.__init__(self, 'OST', dom_node)
         self.obd_uuid = get_first_ref(dom_node, 'obd')
-        self.add_module('lustre/ost', 'ost')
+        self.add_module(config.src_dir()+'ost', 'ost')
 
     def prepare(self):
         if is_prepared(self.uuid):
@@ -1104,7 +1108,7 @@ class OSC(Module):
         self.obd_uuid = get_first_ref(dom_node, 'obd')
         self.ost_uuid = get_first_ref(dom_node, 'ost')
         self.lookup_server(self.ost_uuid)
-        self.add_module('lustre/osc', 'osc')
+        self.add_module(config.src_dir()+'osc', 'osc')
 
     def prepare(self, ignore_connect_failure = 0):
         if is_prepared(self.uuid):
@@ -1182,8 +1186,8 @@ class Mountpoint(Module):
         self.path = get_text(dom_node, 'path')
         self.mds_uuid = get_first_ref(dom_node, 'mds')
         self.lov_uuid = get_first_ref(dom_node, 'osc')
-        self.add_module('lustre/mdc', 'mdc')
-        self.add_module('lustre/llite', 'llite')
+        self.add_module(config.src_dir()+'mdc', 'mdc')
+        self.add_module(config.src_dir()+'llite', 'llite')
         l = lookup(self.dom_node.parentNode, self.lov_uuid)
         self.osc = VOSC(l)
 
@@ -1566,9 +1570,8 @@ def doHost(lustreNode, hosts):
         dom_node = getByName(lustreNode, h, 'node')
         if dom_node:
             break
-
     if not dom_node:
-        print 'No host entry found.'
+        print 'lconf: No host entry found in '+sys.argv[1]
         return
 
     if not get_attr(dom_node, 'router'):
@@ -1661,9 +1664,12 @@ def fetch(url):
     return data
 
 def setupModulePath(cmd):
+    global PORTALS_DIR
     base = os.path.dirname(cmd)
     if os.access(base+"/Makefile", os.R_OK):
-        config.src_dir(base + "/../../")
+        config.src_dir(base + "/../")  
+    if PORTALS_DIR[0] != '/':
+	PORTALS_DIR= config.src_dir()+PORTALS_DIR
 
 def sys_set_debug_path():
     debug("debug path: ", config.debug_path())
@@ -1720,6 +1726,8 @@ def sanitise_path():
 #
 def main():
     global TCP_ACCEPTOR, lctl, MAXTCPBUF
+    setupModulePath(sys.argv[0])
+
     host = socket.gethostname()
 
     # the PRNG is normally seeded with time(), which is not so good for starting
@@ -1769,7 +1777,6 @@ def main():
 
     lctl = LCTLInterface('lctl')
 
-    setupModulePath(sys.argv[0])
     sys_make_devices()
     sys_set_netmem_max('/proc/sys/net/core/rmem_max', MAXTCPBUF)
     sys_set_netmem_max('/proc/sys/net/core/wmem_max', MAXTCPBUF)

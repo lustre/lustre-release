@@ -51,7 +51,7 @@
 struct semaphore obd_conf_sem;   /* serialize configuration commands */
 struct obd_device obd_dev[MAX_OBD_DEVICES];
 struct list_head obd_types;
-unsigned long obd_memory;
+atomic_t obd_memory;
 
 /* The following are visible and mutable through /proc/sys/lustre/. */
 unsigned long obd_fail_loc;

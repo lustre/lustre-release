@@ -139,25 +139,28 @@ struct dentry *simple_mknod(struct dentry *dir, char *name, int mode)
         down(&dir->d_inode->i_sem);
         dchild = lookup_one_len(name, dir, strlen(name));
         if (IS_ERR(dchild))
-                GOTO(out, PTR_ERR(dchild));
+                GOTO(out_up, dchild);
 
         if (dchild->d_inode) {
                 if ((dchild->d_inode->i_mode & S_IFMT) != S_IFREG)
-                        GOTO(out, err = -EEXIST);
+                        GOTO(out_err, err = -EEXIST);
 
-                GOTO(out, dchild);
+                GOTO(out_up, dchild);
         }
 
         err = vfs_create(dir->d_inode, dchild, (mode & ~S_IFMT) | S_IFREG);
-        EXIT;
-out:
-        up(&dir->d_inode->i_sem);
-        if (err) {
-                dput(dchild);
-                RETURN(ERR_PTR(err));
-        }
+        if (err)
+                GOTO(out_err, err);
 
+        up(&dir->d_inode->i_sem);
         RETURN(dchild);
+
+out_err:
+        dput(dchild);
+        dchild = ERR_PTR(err);
+out_up:
+        up(&dir->d_inode->i_sem);
+        return dchild;
 }
 
 /* utility to make a directory */
@@ -172,25 +175,28 @@ struct dentry *simple_mkdir(struct dentry *dir, char *name, int mode)
         down(&dir->d_inode->i_sem);
         dchild = lookup_one_len(name, dir, strlen(name));
         if (IS_ERR(dchild))
-                GOTO(out, PTR_ERR(dchild));
+                GOTO(out_up, dchild);
 
         if (dchild->d_inode) {
                 if (!S_ISDIR(dchild->d_inode->i_mode))
-                        GOTO(out, err = -ENOTDIR);
+                        GOTO(out_err, err = -ENOTDIR);
 
-                GOTO(out, dchild);
+                GOTO(out_up, dchild);
         }
 
         err = vfs_mkdir(dir->d_inode, dchild, mode);
-        EXIT;
-out:
-        up(&dir->d_inode->i_sem);
-        if (err) {
-                dput(dchild);
-                RETURN(ERR_PTR(err));
-        }
+        if (err)
+                GOTO(out_err, err);
 
+        up(&dir->d_inode->i_sem);
         RETURN(dchild);
+
+out_err:
+        dput(dchild);
+        dchild = ERR_PTR(err);
+out_up:
+        up(&dir->d_inode->i_sem);
+        return dchild;
 }
 
 /*

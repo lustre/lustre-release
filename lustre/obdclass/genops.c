@@ -84,25 +84,44 @@ int class_register_type(struct obd_ops *ops, struct lprocfs_vars *vars,
 
         ENTRY;
 
+        LASSERT (strnlen (nm, 1024) < 1024);    /* sanity check */
+        
         if (class_search_type(nm)) {
                 CDEBUG(D_IOCTL, "Type %s already registered\n", nm);
                 RETURN(-EEXIST);
         }
 
+        rc = -ENOMEM;
         OBD_ALLOC(type, sizeof(*type));
+        if (type == NULL)
+                RETURN(rc);
+
         OBD_ALLOC(type->typ_ops, sizeof(*type->typ_ops));
         OBD_ALLOC(type->typ_name, strlen(nm) + 1);
-        if (!type)
-                RETURN(-ENOMEM);
-        INIT_LIST_HEAD(&type->typ_chain);
+        if (type->typ_ops == NULL ||
+            type->typ_name == NULL)
+                GOTO (failed, rc);
+        
+        *(type->typ_ops) = *ops;
+        strcpy(type->typ_name, nm);
+        list_add(&type->typ_chain, &obd_types);
+
+        rc = lprocfs_reg_class(type, vars, type);
+        if (rc != 0) {
+                list_del (&type->typ_chain);
+                GOTO (failed, rc);
+        }
+        
         CDEBUG(D_INFO, "MOD_INC_USE for register_type: count = %d\n",
                atomic_read(&(THIS_MODULE)->uc.usecount));
         MOD_INC_USE_COUNT;
-        list_add(&type->typ_chain, &obd_types);
-        memcpy(type->typ_ops, ops, sizeof(*type->typ_ops));
-        strcpy(type->typ_name, nm);
-        rc = lprocfs_reg_class(type, vars, type);
+        RETURN (0);
 
+ failed:
+        if (type->typ_ops != NULL)
+                OBD_FREE (type->typ_name, strlen (nm) + 1);
+        if (type->typ_ops != NULL)
+                OBD_FREE (type->typ_ops, sizeof (*type->typ_ops));
         RETURN(rc);
 }
 
