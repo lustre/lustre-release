@@ -33,7 +33,7 @@ ldapsearch $LDAP_AUTH -b $LDAP_BASE > /dev/null 2>&1 ||
 ldapsearch $LDAP_AUTH -b config=$NAME,$LDAP_BASE > /dev/null 2>&1 && 
     ldapdelete $LDAP_AUTH -r config=$NAME,$LDAP_BASE
 
-4xslt --define config=$NAME $XML $LUSTRE/conf/lustre2ldif.xsl  > $LDIF
+4xslt -D config=$NAME $XML $LUSTRE/conf/lustre2ldif.xsl  > $LDIF
 
 echo "Loading config to 'config=$NAME,$LDAP_BASE' ..."
 ldapadd $LDAP_AUTH -f $LDIF
