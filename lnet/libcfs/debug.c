@@ -879,11 +879,7 @@ void portals_run_upcall(char **argv)
 
         LASSERT(argc >= 2);
         
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-        rc = call_usermodehelper(argv[0], argv, envp);
-#else
-        rc = call_usermodehelper(argv[0], argv, envp, 1);
-#endif
+        rc = USERMODEHELPER(argv[0], argv, envp);
         if (rc < 0) {
                 CERROR("Error %d invoking portals upcall %s %s%s%s%s%s%s%s%s; "
                        "check /proc/sys/portals/upcall\n",
