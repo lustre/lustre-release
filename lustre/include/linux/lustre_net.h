@@ -177,6 +177,7 @@ struct ptlrpc_request {
 
         struct ptlrpc_connection *rq_connection;
         struct ptlrpc_client *rq_client;
+        struct ptlrpc_service *rq_svc;
 };
 
 struct ptlrpc_bulk_page {
@@ -244,16 +245,12 @@ struct ptlrpc_service {
         spinlock_t srv_lock;
         struct list_head srv_reqs;
         struct list_head srv_threads;
-        int (*srv_handler)(struct obd_device *obddev, 
-                           struct ptlrpc_service *svc,
-                           struct ptlrpc_request *req);
+        int (*srv_handler)(struct ptlrpc_request *req);
 };
 
 typedef void (*bulk_callback_t)(struct ptlrpc_bulk_desc *, void *);
 
-typedef int (*svc_handler_t)(struct obd_device *obddev,
-                             struct ptlrpc_service *svc,
-                             struct ptlrpc_request *req);
+typedef int (*svc_handler_t)(struct ptlrpc_request *req);
 
 /* rpc/connection.c */
 void ptlrpc_readdress_connection(struct ptlrpc_connection *conn, char *uuid);

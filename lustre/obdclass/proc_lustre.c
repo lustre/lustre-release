@@ -79,55 +79,47 @@ static int read_lustre_status(char *page, char **start, off_t offset,
 
 	p = sprintf(&page[0], "/dev/obd%d: ", obddev->obd_minor);
 	
-	if (obddev->obd_refcnt==0) { 
-		/* obd is unused */
-		p += sprintf(&page[p], "open but unused\n");
-	}
-	else {	/* obd in use */
-		p += sprintf(&page[p], "refcnt(%d)", obddev->obd_refcnt);
+        if  (obddev->obd_flags & OBD_ATTACHED) {
+                p += sprintf(&page[p], ", attached(%s)", 
+                             obddev->obd_type->typ_name);
+        }
+        
+        if  (obddev->obd_flags & OBD_SET_UP) {
+                struct dentry   *my_dentry;
+                struct vfsmount *root_mnt;
+                char *path;
+                char *pathpage;
+                
+                if (!(pathpage = (char*) __get_free_page(GFP_KERNEL)))
+                        return -ENOMEM;
 		
-		if  (obddev->obd_flags & OBD_ATTACHED) {
-			p += sprintf(&page[p], ", attached(%s)", 
-				     obddev->obd_type->typ_name);
-		}
-		
-		if  (obddev->obd_flags & OBD_SET_UP) {
-			struct dentry   *my_dentry;
-			struct vfsmount *root_mnt;
-			char *path;
-			char *pathpage;
-			
-			if (!(pathpage = (char*) __get_free_page(GFP_KERNEL)))
-				return -ENOMEM;
-		
-			my_dentry = obddev->obd_fsname.dentry;
-			root_mnt = mntget(current->fs->rootmnt);
-			path = d_path(my_dentry,root_mnt,pathpage,PAGE_SIZE);
-
-			p += sprintf(&page[p], ", setup(%s)", path);
-			
-			free_page((unsigned long) pathpage);
-		}
-		
-		/* print connections */
-		{
-			struct list_head * lh;
-			struct obd_client * cli=0;
-			
-			lh = &obddev->obd_gen_clients;
-			while ((lh = lh->next) != &obddev->obd_gen_clients) {
-				p += sprintf(&page[p],
-					     ((cli==0) ? ", connections(" : ",") );
-				cli = list_entry(lh, struct obd_client, cli_chain);
-				p += sprintf(&page[p], "%d", cli->cli_id);
-			} /* while */
-			if (cli!=0) { /* there was at least one client */
-				p += sprintf(&page[p], ")");
-			}
-		}
-		
-		p += sprintf(&page[p], "\n");
-	}
+                my_dentry = NULL;
+                root_mnt = mntget(current->fs->rootmnt);
+                path = d_path(my_dentry,root_mnt,pathpage,PAGE_SIZE);
+                
+                p += sprintf(&page[p], ", setup(%s)", path);
+                
+                free_page((unsigned long) pathpage);
+        }
+        
+        /* print connections */
+        {
+                struct list_head * lh;
+                struct obd_export * export=0;
+                
+                lh = &obddev->obd_exports;
+                while ((lh = lh->next) != &obddev->obd_exports) {
+                        p += sprintf(&page[p],
+                                     ((export==0) ? ", connections(" : ",") );
+                        export = list_entry(lh, struct obd_export, export_chain);
+                        p += sprintf(&page[p], "%d", export->export_id);
+                } /* while */
+                if (export!=0) { /* there was at least one export */
+                        p += sprintf(&page[p], ")");
+                }
+        }
+        
+        p += sprintf(&page[p], "\n");
 
 	/* Compute eof and return value */
 

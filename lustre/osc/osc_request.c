@@ -25,10 +25,18 @@
 #include <linux/obd_ost.h>
 #include <linux/obd_lov.h>
 
+static void osc_obd2cl(struct obd_device *obd, struct ptlrpc_client **cl,
+                       struct ptlrpc_connection **connection)
+{
+        struct osc_obd *osc = &obd->u.osc;
+        *cl = osc->osc_client;
+        *connection = osc->osc_conn;
+}
+
 static void osc_con2cl(struct obd_conn *conn, struct ptlrpc_client **cl,
                        struct ptlrpc_connection **connection)
 {
-        struct osc_obd *osc = &conn->oc_dev->u.osc;
+        struct osc_obd *osc = &gen_conn2obd(conn)->u.osc;
         *cl = osc->osc_client;
         *connection = osc->osc_conn;
 }
@@ -36,14 +44,14 @@ static void osc_con2cl(struct obd_conn *conn, struct ptlrpc_client **cl,
 static void osc_con2dlmcl(struct obd_conn *conn, struct ptlrpc_client **cl,
                           struct ptlrpc_connection **connection)
 {
-        struct osc_obd *osc = &conn->oc_dev->u.osc;
+        struct osc_obd *osc = &gen_conn2obd(conn)->u.osc;
         *cl = osc->osc_ldlm_client;
         *connection = osc->osc_conn;
 }
 
-static int osc_connect(struct obd_conn *conn)
+static int osc_connect(struct obd_conn *conn, struct obd_device *obd)
 {
-        struct osc_obd *osc = &conn->oc_dev->u.osc;
+        struct osc_obd *osc = &obd->u.osc;
         struct ptlrpc_request *request;
         struct ptlrpc_client *cl;
         struct ptlrpc_connection *connection;
@@ -52,7 +60,7 @@ static int osc_connect(struct obd_conn *conn)
         int rc, size = sizeof(osc->osc_target_uuid);
         ENTRY;
 
-        osc_con2cl(conn, &cl, &connection);
+        osc_obd2cl(obd, &cl, &connection);
         request = ptlrpc_prep_req(cl, connection, OST_CONNECT, 1, &size, &tmp);
         if (!request)
                 RETURN(-ENOMEM);
@@ -649,7 +657,7 @@ static int osc_enqueue(struct obd_conn *oconn,
                        int *flags, void *callback, void *data, int datalen,
                        struct lustre_handle *lockh)
 {
-        struct obd_device *obddev = oconn->oc_dev;
+        struct obd_device *obddev = gen_conn2obd(oconn);
         struct ptlrpc_connection *conn;
         struct ptlrpc_client *cl;
         struct ldlm_extent *extent = extentp;

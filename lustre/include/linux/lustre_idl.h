@@ -370,13 +370,19 @@ struct ldlm_reply {
 struct obd_ioctl_data {
         uint32_t ioc_len;
         uint32_t ioc_version;
+
+        uint64_t ioc_addr;
+        uint64_t ioc_cookie;
         uint32_t ioc_conn1;
         uint32_t ioc_conn2;
+
         struct obdo ioc_obdo1;
         struct obdo ioc_obdo2;
+
         obd_size         ioc_count;
         obd_off          ioc_offset;
         uint32_t         ioc_dev;
+        uint32_t         ____padding;
 
         /* buffers the kernel will treat as user pointers */
         uint32_t ioc_plen1;
@@ -389,6 +395,8 @@ struct obd_ioctl_data {
         char    *ioc_inlbuf1;
         uint32_t ioc_inllen2;
         char    *ioc_inlbuf2;
+        uint32_t ioc_inllen3;
+        char    *ioc_inlbuf3;
 
         char    ioc_bulk[0];
 };
@@ -400,9 +408,10 @@ struct obd_ioctl_hdr {
 
 static inline int obd_ioctl_packlen(struct obd_ioctl_data *data)
 {
-        int len = sizeof(struct obd_ioctl_data);
+        int len = size_round(sizeof(struct obd_ioctl_data));
         len += size_round(data->ioc_inllen1);
         len += size_round(data->ioc_inllen2);
+        len += size_round(data->ioc_inllen3);
         return len;
 }
 
@@ -420,12 +429,21 @@ static inline int obd_ioctl_is_invalid(struct obd_ioctl_data *data)
                 printk("OBD ioctl: ioc_inllen2 larger than 1<<30\n");
                 return 1;
         }
+
+        if (data->ioc_inllen3 > (1<<30)) {
+                printk("OBD ioctl: ioc_inllen3 larger than 1<<30\n");
+                return 1;
+        }
         if (data->ioc_inlbuf1 && !data->ioc_inllen1) {
                 printk("OBD ioctl: inlbuf1 pointer but 0 length\n");
                 return 1;
         }
         if (data->ioc_inlbuf2 && !data->ioc_inllen2) {
                 printk("OBD ioctl: inlbuf2 pointer but 0 length\n");
+                return 1;
+        }
+        if (data->ioc_inlbuf3 && !data->ioc_inllen3) {
+                printk("OBD ioctl: inlbuf3 pointer but 0 length\n");
                 return 1;
         }
         if (data->ioc_pbuf1 && !data->ioc_plen1) {
@@ -445,6 +463,11 @@ static inline int obd_ioctl_is_invalid(struct obd_ioctl_data *data)
                 printk("OBD ioctl: inllen2 set but NULL pointer\n");
                 return 1;
         }
+        if (data->ioc_inllen3 && !data->ioc_inlbuf3) {
+                printk("OBD ioctl: inllen3 set but NULL pointer\n");
+                return 1;
+        }
+        */
         if (data->ioc_plen1 && !data->ioc_pbuf1) {
                 printk("OBD ioctl: plen1 set but NULL pointer\n");
                 return 1;
@@ -453,7 +476,6 @@ static inline int obd_ioctl_is_invalid(struct obd_ioctl_data *data)
                 printk("OBD ioctl: plen2 set but NULL pointer\n");
                 return 1;
         }
-        */
         if (obd_ioctl_packlen(data) != data->ioc_len ) {
                 printk("OBD ioctl: packlen exceeds ioc_len\n");
                 return 1;
@@ -466,6 +488,12 @@ static inline int obd_ioctl_is_invalid(struct obd_ioctl_data *data)
         if (data->ioc_inllen2 &&
             data->ioc_bulk[size_round(data->ioc_inllen1) + data->ioc_inllen2 - 1] != '\0') {
                 printk("OBD ioctl: inlbuf2 not 0 terminated\n");
+                return 1;
+        }
+        if (data->ioc_inllen3 &&
+            data->ioc_bulk[size_round(data->ioc_inllen1) + size_round(data->ioc_inllen2) 
+                           + data->ioc_inllen3 - 1] != '\0') {
+                printk("OBD ioctl: inlbuf3 not 0 terminated\n");
                 return 1;
         }
         return 0;
@@ -495,6 +523,8 @@ static inline int obd_ioctl_pack(struct obd_ioctl_data *data, char **pbuf,
                 LOGL(data->ioc_inlbuf1, data->ioc_inllen1, ptr);
         if (data->ioc_inlbuf2)
                 LOGL(data->ioc_inlbuf2, data->ioc_inllen2, ptr);
+        if (data->ioc_inlbuf3)
+                LOGL(data->ioc_inlbuf3, data->ioc_inllen3, ptr);
         if (obd_ioctl_is_invalid(overlay))
                 return 1;
 
@@ -504,7 +534,7 @@ static inline int obd_ioctl_pack(struct obd_ioctl_data *data, char **pbuf,
 
 
 /* buffer MUST be at least the size of obd_ioctl_hdr */
-static inline int obd_ioctl_getdata(char *buf, char *end, void *arg)
+static inline int obd_ioctl_getdata(char *buf, int *len, void *arg)
 {
         struct obd_ioctl_hdr *hdr;
         struct obd_ioctl_data *data;
@@ -525,7 +555,7 @@ static inline int obd_ioctl_getdata(char *buf, char *end, void *arg)
                 return -EINVAL;
         }
 
-        if (hdr->ioc_len + buf >= end) {
+        if (hdr->ioc_len > *len) {
                 printk("OBD: user buffer exceeds kernel buffer\n");
                 return -EINVAL;
         }
@@ -553,6 +583,11 @@ static inline int obd_ioctl_getdata(char *buf, char *end, void *arg)
 
         if (data->ioc_inllen2) {
                 data->ioc_inlbuf2 = &data->ioc_bulk[0] + size_round(data->ioc_inllen1);
+        }
+
+        if (data->ioc_inllen3) {
+                data->ioc_inlbuf3 = &data->ioc_bulk[0] + size_round(data->ioc_inllen1) + 
+                        size_round(data->ioc_inllen2);
         }
 
         EXIT;
@@ -589,6 +624,8 @@ static inline int obd_ioctl_getdata(char *buf, char *end, void *arg)
 #define OBD_IOC_BRW_WRITE              _IOWR('f', 126, long)
 #define OBD_IOC_NAME2DEV               _IOWR('f', 127, long)
 #define OBD_IOC_NEWDEV                 _IOWR('f', 128, long)
+#define OBD_IOC_LIST                   _IOWR('f', 129, long)
+#define OBD_IOC_UUID2DEV               _IOWR('f', 130, long)
 
 #define OBD_IOC_RECOVD_NEWCONN         _IOWR('f', 131, long)
 

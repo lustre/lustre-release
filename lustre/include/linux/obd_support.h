@@ -110,6 +110,11 @@ do {                                                                         \
 #include <linux/types.h>
 #include <linux/blkdev.h>
 
+static inline void fixme(void)
+{
+        CERROR("FIXME\n");
+}
+
 static inline void OBD_FAIL_WRITE(int id, kdev_t dev)
 {
         if (OBD_FAIL_CHECK(id)) {

@@ -101,7 +101,8 @@ int connmgr_cleanup(struct obd_device *dev)
 int connmgr_iocontrol(long cmd, struct obd_conn *conn, int len, void *karg,
                       void *uarg)
 {
-        struct recovd_obd *recovd = &conn->oc_dev->u.recovd;
+        struct obd_device *obd = gen_conn2obd(conn);
+        struct recovd_obd *recovd = &obd->u.recovd;
 
         ENTRY;
         if (cmd == OBD_IOC_RECOVD_NEWCONN) { 

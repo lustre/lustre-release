@@ -288,7 +288,7 @@ setup_mds() {
 
 	$OBDCTL <<- EOF || return $?
 	newdev
-	attach mds MDSDEV
+	attach mds MDSDEV MDSUUID
 	setup ${MDS} ${MDSFS}
 	quit
 	EOF
@@ -341,13 +341,13 @@ setup_ost() {
 
 	$OBDCTL <<- EOF || return $?
 	newdev
-	attach ${OSTTYPE} OBDDEV
+	attach ${OSTTYPE} OBDDEV OBDUUID
 	setup ${OBD} ${OBDARG}
 	quit
 	EOF
 	$OBDCTL <<- EOF || return $?
 	newdev
-	attach ost OSTDEV
+	attach ost OSTDEV OSTUUID
 	setup \$OBDDEV
 	quit
 	EOF
@@ -372,7 +372,7 @@ setup_osc() {
 	$OBDCTL <<- EOF || return $rc
 	newdev
 	attach osc $THEOSC
-	setup OSTDEV $OSTNODE
+	setup OBDUUID $OSTNODE
 	quit
 	EOF
         done

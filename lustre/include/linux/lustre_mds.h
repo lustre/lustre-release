@@ -139,7 +139,7 @@ int mds_reint(int offset, struct ptlrpc_request *req);
 /* mdc/mdc_request.c */
 static inline struct mdc_obd *mdc_conn2mdc(struct obd_conn *conn)
 {
-        return &conn->oc_dev->u.mdc;
+        return &gen_conn2obd(conn)->u.mdc;
 }
 
 int mdc_enqueue(struct obd_conn *conn, int lock_type, struct lookup_intent *it, 

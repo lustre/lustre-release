@@ -145,6 +145,7 @@ static int handle_incoming_request(struct obd_device *obddev,
          * on the stack of mds_handle instead. */
         start = event->mem_desc.start;
         memset(&request, 0, sizeof(request));
+        request.rq_svc = svc;
         request.rq_obd = obddev;
         request.rq_xid = event->match_bits;
         request.rq_reqmsg = event->mem_desc.start + event->offset;
@@ -184,7 +185,7 @@ static int handle_incoming_request(struct obd_device *obddev,
         }
 
         spin_unlock(&svc->srv_lock);
-        rc = svc->srv_handler(obddev, svc, &request);
+        rc = svc->srv_handler(&request);
         ptlrpc_put_connection(request.rq_connection);
         ptl_handled_rpc(svc, start);
         return rc;

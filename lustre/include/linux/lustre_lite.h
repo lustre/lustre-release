@@ -82,7 +82,7 @@ static inline struct obd_conn *ll_s2obdconn(struct super_block *sb)
 
 static inline struct mdc_obd *sbi2mdc(struct ll_sb_info *sbi)
 {
-        struct obd_device *obd = sbi->ll_mdc_conn.oc_dev;
+        struct obd_device *obd = gen_conn2obd(&sbi->ll_mdc_conn);
         return &obd->u.mdc;
 }
 

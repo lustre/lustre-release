@@ -119,8 +119,7 @@ static struct super_block * ll_read_super(struct super_block *sb,
                 GOTO(out_free, sb = NULL);
         }
 
-        sbi->ll_osc_conn.oc_dev = &obd_dev[devno];
-        err = obd_connect(&sbi->ll_osc_conn);
+        err = obd_connect(&sbi->ll_osc_conn, &obd_dev[devno]);
         if (err) {
                 CERROR("cannot connect to %s: rc = %d\n", ost, err);
                 GOTO(out_free, sb = NULL);
@@ -132,8 +131,7 @@ static struct super_block * ll_read_super(struct super_block *sb,
                 GOTO(out_free, sb = NULL);
         }
 
-        sbi->ll_mdc_conn.oc_dev = &obd_dev[devno];
-        err = obd_connect(&sbi->ll_mdc_conn);
+        err = obd_connect(&sbi->ll_mdc_conn, &obd_dev[devno]);
         if (err) {
                 CERROR("cannot connect to %s: rc = %d\n", mds, err);
                 GOTO(out_free, sb = NULL);

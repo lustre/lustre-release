@@ -688,9 +688,10 @@ int mds_reint(int offset, struct ptlrpc_request *req)
         return rc;
 }
 
-int mds_handle(struct obd_device *dev, struct ptlrpc_service *svc,
-               struct ptlrpc_request *req)
+int mds_handle(struct ptlrpc_request *req)
 {
+        struct obd_device *dev = req->rq_obd;
+        struct ptlrpc_service *svc = req->rq_svc;
         struct mds_obd *mds = NULL;
         int rc;
         ENTRY;
@@ -978,8 +979,8 @@ static int mds_cleanup(struct obd_device * obddev)
 
         ENTRY;
 
-        if ( !list_empty(&obddev->obd_gen_clients) ) {
-                CERROR("still has clients!\n");
+        if ( !list_empty(&obddev->obd_exports) ) {
+                CERROR("still has exports!\n");
                 RETURN(-EBUSY);
         }
 

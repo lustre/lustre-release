@@ -33,12 +33,12 @@ static struct obdo OA;
 static obd_count GEN;
 static long echo_pages = 0;
 
-static int echo_connect(struct obd_conn *conn)
+static int echo_connect(struct obd_conn *conn, struct obd_device *obd)
 {
         int rc;
 
         MOD_INC_USE_COUNT;
-        rc = gen_connect(conn);
+        rc = gen_connect(conn, obd);
 
         if (rc)
                 MOD_DEC_USE_COUNT;

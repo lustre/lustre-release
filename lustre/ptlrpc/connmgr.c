@@ -113,8 +113,7 @@ static int connmgr_handle_connect(struct ptlrpc_request *req)
         RETURN(0);
 }
 
-int connmgr_handle(struct obd_device *dev, struct ptlrpc_service *svc,
-                   struct ptlrpc_request *req)
+int connmgr_handle(struct ptlrpc_request *req)
 {
         int rc;
         ENTRY;
@@ -138,17 +137,17 @@ int connmgr_handle(struct obd_device *dev, struct ptlrpc_service *svc,
                 break;
 
         default:
-                rc = ptlrpc_error(svc, req);
+                rc = ptlrpc_error(req->rq_svc, req);
                 RETURN(rc);
         }
 
         EXIT;
 out:
         if (rc) {
-                ptlrpc_error(svc, req);
+                ptlrpc_error(req->rq_svc, req);
         } else {
                 CDEBUG(D_NET, "sending reply\n");
-                ptlrpc_reply(svc, req);
+                ptlrpc_reply(req->rq_svc, req);
         }
 
         return 0;

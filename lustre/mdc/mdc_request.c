@@ -165,7 +165,7 @@ int mdc_enqueue(struct obd_conn *conn, int lock_type, struct lookup_intent *it,
                 void *data, int datalen)
 {
         struct ptlrpc_request *req;
-        struct obd_device *obddev = conn->oc_dev;
+        struct obd_device *obddev = gen_conn2obd(conn);
         struct mdc_obd *mdc = mdc_conn2mdc(conn);
         __u64 res_id[RES_NAME_SIZE] = {dir->i_ino};
         int size[5] = {sizeof(struct ldlm_request), sizeof(struct ldlm_intent)};
@@ -725,18 +725,18 @@ static int mdc_cleanup(struct obd_device * obddev)
         return 0;
 }
 
-static int mdc_connect(struct obd_conn *conn)
+static int mdc_connect(struct obd_conn *conn, struct obd_device *obd)
 {
-        struct mdc_obd *mdc = mdc_conn2mdc(conn);
+        struct mdc_obd *mdc = &obd->u.mdc;
         struct ptlrpc_request *request;
         int rc, size = sizeof(mdc->mdc_target_uuid);
         char *tmp = mdc->mdc_target_uuid;
 
         ENTRY;
 
-        conn->oc_dev->obd_namespace =
+        obd->obd_namespace =
                 ldlm_namespace_new("mdc", LDLM_NAMESPACE_CLIENT);
-        if (conn->oc_dev->obd_namespace == NULL)
+        if (obd->obd_namespace == NULL)
                 RETURN(-ENOMEM);
 
         request = ptlrpc_prep_req(mdc->mdc_client, mdc->mdc_conn, 
@@ -762,12 +762,13 @@ static int mdc_connect(struct obd_conn *conn)
 static int mdc_disconnect(struct obd_conn *conn)
 {
         struct mdc_obd *mdc = mdc_conn2mdc(conn);
+        struct obd_device *obd = gen_conn2obd(conn);
         struct ptlrpc_request *request;
         struct mds_body *body;
         int rc, size = sizeof(*body);
         ENTRY;
 
-        ldlm_namespace_free(conn->oc_dev->obd_namespace);
+        ldlm_namespace_free(obd->obd_namespace);
         request = ptlrpc_prep_req(mdc->mdc_client, mdc->mdc_conn, 
                                   MDS_DISCONNECT, 1, &size,
                                   NULL);

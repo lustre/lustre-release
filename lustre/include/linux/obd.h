@@ -15,10 +15,6 @@
 
 #include <linux/lustre_idl.h>
 
-struct obd_conn_info {
-        unsigned int conn_id;     /* handle */
-};
-
 struct obd_type {
         struct list_head typ_chain;
         struct obd_ops *typ_ops;
@@ -28,7 +24,6 @@ struct obd_type {
 
 #define OBD_RUN_CTXT_MAGIC      0xC0FFEEAA
 #define OBD_CTXT_DEBUG          /* development-only debugging */
-
 struct obd_run_ctxt {
         struct vfsmount *pwdmnt;
         struct dentry   *pwd;
@@ -38,18 +33,14 @@ struct obd_run_ctxt {
 #endif
 };
 
+
+
 struct obd_conn {
+        __u64 addr;
+        __u64 cookie;
         struct obd_device *oc_dev;
         uint32_t oc_id;
 };
-
-struct obd_devicename {
-        uint32_t len;
-        char *name;
-        struct dentry *dentry;   /* file system obd device names */
-        __u8 _uuid[16];          /* uuid obd device names */
-};
-
 
 /* Individual type definitions */
 
@@ -151,19 +142,10 @@ struct snap_obd {
         int snap_tableno;
 };
 
-struct raid1_obd {
-        unsigned int raid1_count; /* how many replicas */
-        /* devices to replicate on */
-        struct obd_device *raid1_devlist[MAX_RAID1];
-        /* connections we make */
-        struct obd_conn_info raid1_connections[MAX_RAID1];
-        struct list_head raid1_clients;  /* clients we have */
-};
 #endif
 
 struct ost_obd {
         struct ptlrpc_service *ost_service;
-        struct obd_device *ost_tgt; /* the exported OBD */ 
         struct obd_conn ost_conn;   /* the local connection to the OBD */
 };
 
@@ -193,21 +175,21 @@ struct lov_obd {
 /* corresponds to one of the obd's */
 struct obd_device {
         struct obd_type *obd_type;
+
+        /* common and UUID name of this device */
         char *obd_name;
         __u8 obd_uuid[37];
 
         int obd_minor;
         int obd_flags;
-        int obd_refcnt;
-        struct obd_devicename obd_fsname;
         struct proc_dir_entry *obd_proc_entry;
         int obd_multi_count;
         struct obd_conn obd_multi_conn[MAX_MULTI];
         unsigned int obd_gen_last_id;
         unsigned long obd_gen_prealloc_quota;
-        struct list_head obd_gen_clients;
-        struct list_head obd_req_list;
-        wait_queue_head_t obd_req_waitq;
+        //        struct obd_device *obd_target; /* for anything that simply layers */ 
+        struct list_head obd_exports;
+        struct list_head obd_imports;
         struct ldlm_namespace *obd_namespace;
         union {
                 struct ext2_obd ext2;
@@ -222,7 +204,6 @@ struct obd_device {
                 struct trace_obd trace;
                 struct lov_obd lov;
 #if 0
-                struct raid1_obd raid1;
                 struct snap_obd snap;
 #endif
         } u;
@@ -239,7 +220,7 @@ struct obd_ops {
         int (*o_detach)(struct obd_device *dev);
         int (*o_setup) (struct obd_device *dev, obd_count len, void *data);
         int (*o_cleanup)(struct obd_device *dev);
-        int (*o_connect)(struct obd_conn *conn);
+        int (*o_connect)(struct obd_conn *conn, struct obd_device *src);
         int (*o_disconnect)(struct obd_conn *conn);
 
 
@@ -251,10 +232,6 @@ struct obd_ops {
         int (*o_getattr)(struct obd_conn *conn, struct obdo *oa);
         int (*o_open)(struct obd_conn *conn, struct obdo *oa);
         int (*o_close)(struct obd_conn *conn, struct obdo *oa);
-        int (*o_read)(struct obd_conn *conn, struct obdo *oa, char *buf,
-                      obd_size *count, obd_off offset);
-        int (*o_write)(struct obd_conn *conn, struct obdo *oa, char *buf,
-                       obd_size *count, obd_off offset);
         int (*o_brw)(int rw, struct obd_conn *conn, obd_count num_oa,
                      struct obdo **oa, obd_count *oa_bufs, struct page **buf,
                      obd_size *count, obd_off *offset, obd_flag *flags,

@@ -129,9 +129,8 @@ static struct super_block * obdfs_read_super(struct super_block *sb,
 
         obddev = &obd_dev[devno];
         sbi->osi_obd = obddev;
-        sbi->osi_conn.oc_dev = obddev;
 
-        err = obd_connect(&sbi->osi_conn);
+        err = obd_connect(&sbi->osi_conn, obddev);
         if ( err ) {
                 CERROR("OBDFS: cannot connect to %s\n", device);
                 EXIT;

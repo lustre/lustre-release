@@ -26,8 +26,7 @@ struct connmgr_body {
 };
 
 int connmgr_connect(struct recovd_obd *mgr, struct ptlrpc_connection *conn);
-int connmgr_handle(struct obd_device *dev, struct ptlrpc_service *svc,
-                   struct ptlrpc_request *req);
+int connmgr_handle(struct ptlrpc_request *req);
 void recovd_cli_fail(struct ptlrpc_client *cli);
 void recovd_cli_manage(struct recovd_obd *mgr, struct ptlrpc_client *cli);
 void recovd_cli_fixed(struct ptlrpc_client *cli);

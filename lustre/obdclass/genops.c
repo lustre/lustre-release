@@ -13,105 +13,150 @@
 #define DEBUG_SUBSYSTEM S_CLASS
 
 #include <linux/obd_class.h>
+#include <linux/random.h>
+#include <linux/slab.h>
 
 extern struct obd_device obd_dev[MAX_OBD_DEVICES];
 kmem_cache_t *obdo_cachep = NULL;
+kmem_cache_t *export_cachep = NULL;
+kmem_cache_t *import_cachep = NULL;
 
-int obd_init_obdo_cache(void)
+void obd_cleanup_caches(void)
+{
+        int rc;
+        ENTRY;
+        if (obdo_cachep) { 
+                rc = kmem_cache_destroy(obdo_cachep);
+                if (rc)
+                        CERROR("Cannot destory obdo_cachep\n");
+                obdo_cachep = NULL;
+        }
+        if (import_cachep) { 
+                rc = kmem_cache_destroy(import_cachep);
+                if (rc)
+                        CERROR("Cannot destory import_cachep\n");
+                import_cachep = NULL;
+        }
+        if (export_cachep) { 
+                rc = kmem_cache_destroy(export_cachep);
+                if (rc)
+                        CERROR("Cannot destory import_cachep\n");
+                export_cachep = NULL;
+        }
+        EXIT;
+}
+
+int obd_init_caches(void)
 {
         ENTRY;
         if (obdo_cachep == NULL) {
-                CDEBUG(D_CACHE, "allocating obdo_cache\n");
                 obdo_cachep = kmem_cache_create("obdo_cache",
                                                 sizeof(struct obdo),
                                                 0, SLAB_HWCACHE_ALIGN,
                                                 NULL, NULL);
                 if (obdo_cachep == NULL)
-                        RETURN(-ENOMEM);
-                else
-                        CDEBUG(D_CACHE, "allocated cache at %p\n", obdo_cachep);
-        } else {
-                CDEBUG(D_CACHE, "using existing cache at %p\n", obdo_cachep);
+                        GOTO(out, -ENOMEM);
+        }
+
+        if (export_cachep == NULL) {
+                export_cachep = kmem_cache_create("export_cache",
+                                                sizeof(struct obd_export),
+                                                0, SLAB_HWCACHE_ALIGN,
+                                                NULL, NULL);
+                if (export_cachep == NULL)
+                        GOTO(out, -ENOMEM);
+        }
+
+        if (import_cachep == NULL) {
+                import_cachep = kmem_cache_create("import_cache",
+                                                sizeof(struct obd_import),
+                                                0, SLAB_HWCACHE_ALIGN,
+                                                NULL, NULL);
+                if (import_cachep == NULL)
+                        GOTO(out, -ENOMEM);
         }
         RETURN(0);
-}
+ out:
+        obd_cleanup_caches();
+        RETURN(-ENOMEM);
 
-void obd_cleanup_obdo_cache(void)
-{
-        ENTRY;
-        if (obdo_cachep != NULL) {
-                CDEBUG(D_CACHE, "destroying obdo_cache at %p\n", obdo_cachep);
-                if (kmem_cache_destroy(obdo_cachep))
-                        CERROR("unable to free cache\n");
-        } else
-                CERROR("called with NULL cache pointer\n");
-
-        obdo_cachep = NULL;
-        EXIT;
 }
 
 
 /* map connection to client */
-struct obd_client *gen_client(const struct obd_conn *conn)
+struct obd_export *gen_client(struct obd_conn *conn)
 {
-        struct obd_device * obddev;
-        struct list_head * lh, * next;
-        struct obd_client * cli;
+        struct obd_export * export;
 
         if (!conn)
-                return NULL;
+                RETURN(NULL);
 
-        obddev = conn->oc_dev;
-        lh = next = &obddev->obd_gen_clients;
-        while ((lh = lh->next) != &obddev->obd_gen_clients) {
-                cli = list_entry(lh, struct obd_client, cli_chain);
-
-                if (cli->cli_id == conn->oc_id)
-                        return cli;
+        if (!conn->addr || conn->addr == -1 ) { 
+                fixme();
+                RETURN(NULL);
         }
+              
+        export = (struct obd_export *) (unsigned long)conn->addr;
+        if (!kmem_cache_validate(export_cachep, (void *)export))
+                RETURN(NULL);
 
-        return NULL;
+        if (export->export_cookie != conn->cookie)
+                return NULL;
+        return export;
 } /* gen_client */
 
+struct obd_device *gen_conn2obd(struct obd_conn *conn)
+{
+        struct obd_export *export;
+        export = gen_client(conn); 
+        if (export) 
+                return export->export_obd;
+        fixme();
+        return NULL;
+}
 
 /* a connection defines a context in which preallocation can be managed. */
-int gen_connect (struct obd_conn *conn)
+int gen_connect (struct obd_conn *conn, struct obd_device *obd)
 {
-        struct obd_client * cli;
+        struct obd_export * export;
 
-        OBD_ALLOC(cli, sizeof(*cli));
-        if ( !cli ) {
-                CERROR("no memory! (minor %d)\n", conn->oc_dev->obd_minor);
+        export = kmem_cache_alloc(export_cachep, GFP_KERNEL); 
+        if ( !export ) {
+                CERROR("no memory! (minor %d)\n", obd->obd_minor);
                 return -ENOMEM;
         }
 
-        INIT_LIST_HEAD(&cli->cli_prealloc_inodes);
+        memset(export, 0, sizeof(*export));
+        get_random_bytes(&export->export_cookie, sizeof(__u64));
         /* XXX this should probably spinlocked? */
-        cli->cli_id = ++conn->oc_dev->obd_gen_last_id;
-        cli->cli_prealloc_quota = 0;
-        cli->cli_obd = conn->oc_dev;
-        list_add(&(cli->cli_chain), conn->oc_dev->obd_gen_clients.prev);
+        export->export_id = ++obd->obd_gen_last_id;
+        export->export_obd = obd; 
+        export->export_import.addr = conn->addr;
+        export->export_import.cookie = conn->cookie;
+        
+        list_add(&(export->export_chain), export->export_obd->obd_exports.prev);
 
-        CDEBUG(D_INFO, "connect: new ID %u\n", cli->cli_id);
-        conn->oc_id = cli->cli_id;
+        CDEBUG(D_INFO, "connect: new ID %u\n", export->export_id);
+        conn->oc_id = export->export_id;
+        conn->addr = (__u64) (unsigned long)export;
+        conn->cookie = export->export_cookie;
         return 0;
 } /* gen_connect */
 
 
 int gen_disconnect(struct obd_conn *conn)
 {
-        struct obd_client * cli;
+        struct obd_export * export;
         ENTRY;
 
-        if (!(cli = gen_client(conn))) {
+        if (!(export = gen_client(conn))) {
+                fixme();
                 CDEBUG(D_IOCTL, "disconnect: attempting to free "
                        "nonexistent client %u\n", conn->oc_id);
                 RETURN(-EINVAL);
         }
-
-
-        list_del(&(cli->cli_chain));
-        OBD_FREE(cli, sizeof(*cli));
+        list_del(&export->export_chain);
+        kmem_cache_free(export_cachep, export);
 
         CDEBUG(D_INFO, "disconnect: ID %u\n", conn->oc_id);
 
@@ -134,9 +179,14 @@ int gen_multi_setup(struct obd_device *obddev, uint32_t len, void *data)
                         CERROR("invalid device ID starting at: %s\n", p);
                         GOTO(err_disconnect, rc = -EINVAL);
                 }
+                
+                if (tmp < 0 || tmp >= MAX_OBD_DEVICES) { 
+                        CERROR("Trying to sub dev %d  - dev no too large\n", 
+                               tmp);
+                        GOTO(err_disconnect, rc); 
+                }
 
-                obddev->obd_multi_conn[count].oc_dev = &obd_dev[tmp];
-                rc = obd_connect(&obddev->obd_multi_conn[count]);
+                rc = obd_connect(&obddev->obd_multi_conn[count], &obd_dev[tmp]);
                 if (rc) {
                         CERROR("cannot connect to device %d: rc = %d\n", tmp,
                                rc);
@@ -169,10 +219,17 @@ int gen_multi_cleanup(struct obd_device *obddev)
         int i;
 
         for (i = 0; i < obddev->obd_multi_count; i++) {
-                int rc = obd_disconnect(&obddev->obd_multi_conn[i]);
+                int rc;
+                struct obd_device *obd = gen_conn2obd(&obddev->obd_multi_conn[i]);
+
+                if (!obd) { 
+                        CERROR("no such device [i %d]\n", i); 
+                        RETURN(-EINVAL);
+                }
+
+                rc = obd_disconnect(&obddev->obd_multi_conn[i]);
                 if (rc)
-                        CERROR("disconnect failure %d\n",
-                               obddev->obd_multi_conn[i].oc_dev->obd_minor);
+                        CERROR("disconnect failure %d\n", obd->obd_minor);
         }
         return 0;
 }
@@ -186,15 +243,15 @@ int gen_multi_cleanup(struct obd_device *obddev)
 int gen_cleanup(struct obd_device * obddev)
 {
         struct list_head * lh, * tmp;
-        struct obd_client * cli;
+        struct obd_export * export;
 
         ENTRY;
 
-        lh = tmp = &obddev->obd_gen_clients;
+        lh = tmp = &obddev->obd_exports;
         while ((tmp = tmp->next) != lh) {
-                cli = list_entry(tmp, struct obd_client, cli_chain);
+                export = list_entry(tmp, struct obd_export, export_chain);
                 CDEBUG(D_INFO, "Disconnecting obd_connection %d, at %p\n",
-                       cli->cli_id, cli);
+                       export->export_id, export);
         }
         return 0;
 } /* sim_cleanup_device */

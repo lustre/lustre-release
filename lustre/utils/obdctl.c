@@ -63,7 +63,8 @@ static int jt_setup(int argc, char **argv);
 
 
 int fd = -1;
-int connid = -1;
+uint64_t conn_addr = -1;
+uint64_t conn_cookie;
 char rawbuf[8192];
 char *buf = rawbuf;
 int max = 8192;
@@ -74,7 +75,8 @@ int rc = 0;
 do {                                                                    \
         memset(&data, 0, sizeof(data));                                 \
         data.ioc_version = OBD_IOCTL_VERSION;                           \
-        data.ioc_conn1 = connid;                                        \
+        data.ioc_addr = conn_addr;                                      \
+        data.ioc_cookie = conn_cookie;                                  \
         data.ioc_len = sizeof(data);                                    \
         if (fd < 0) {                                                   \
                 fprintf(stderr, "No device open, use device\n");        \
@@ -157,15 +159,9 @@ int getfd(char *func)
         return 0;
 }
 
-#if 1
 #define difftime(a, b)                                          \
         ((double)(a)->tv_sec - (b)->tv_sec +                    \
          ((double)((a)->tv_usec - (b)->tv_usec) / 1000000))
-#else
-
-#define difftime(a, b)  (((a)->tv_sec - (b)->tv_sec) + \
-                        (((a)->tv_usec - (b)->tv_usec) / 1000000))
-#endif
 
 static int be_verbose(int verbose, struct timeval *next_time,
                       int num, int *next_num, int num_total)
@@ -226,8 +222,8 @@ static int do_disconnect(char *func, int verbose)
 {
         struct obd_ioctl_data data;
 
-        if (connid == -1)
-                return 0;
+        if (conn_addr == -1) 
+                return 0; 
 
         IOCINIT(data);
 
@@ -237,9 +233,9 @@ static int do_disconnect(char *func, int verbose)
                         OBD_IOC_DISCONNECT, strerror(errno));
         } else {
                 if (verbose)
-                        printf("%s: disconnected connid %d\n", cmdname(func),
-                               connid);
-                connid = -1;
+                        printf("%s: disconnected conn %Lx\n", cmdname(func),
+                               conn_addr);
+                conn_addr = -1;
         }
 
         return rc;
@@ -745,8 +741,8 @@ static int jt_connect(int argc, char **argv)
                 fprintf(stderr, "error: %s: %x %s\n", cmdname(argv[0]),
                         OBD_IOC_CONNECT, strerror(rc = errno));
         else
-                connid = data.ioc_conn1;
-
+                conn_addr = data.ioc_addr;
+                conn_cookie = data.ioc_cookie;
         return rc;
 }
 
@@ -756,6 +752,9 @@ static int jt_disconnect(int argc, char **argv)
                 fprintf(stderr, "usage: %s\n", cmdname(argv[0]));
                 return -1;
         }
+
+        if (conn_addr == -1)
+                return 0;
 
         return do_disconnect(argv[0], 0);
 }
@@ -940,13 +939,44 @@ static int jt_newdev(int argc, char **argv)
         return rc;
 }
 
+static int jt_list(int argc, char **argv)
+{
+        char buf[1024];
+        struct obd_ioctl_data *data = (struct obd_ioctl_data *)buf;
+
+        if (getfd(argv[0]))
+                return -1;
+
+        memset(buf, 0, sizeof(buf));
+        data->ioc_version = OBD_IOCTL_VERSION;
+        data->ioc_addr = conn_addr;
+        data->ioc_cookie = conn_addr;
+        data->ioc_len = sizeof(buf);
+        data->ioc_inllen1 = sizeof(buf) - size_round(sizeof(*data));
+
+        if (argc != 1) {
+                fprintf(stderr, "usage: %s\n", cmdname(argv[0]));
+                return -1;
+        }
+
+        rc = ioctl(fd, OBD_IOC_LIST , data);
+        if (rc < 0)
+                fprintf(stderr, "error: %s: %s\n", cmdname(argv[0]),
+                        strerror(rc=errno));
+        else {
+                printf("%s", data->ioc_bulk);
+        }
+
+        return rc;
+}
+
 static int jt_attach(int argc, char **argv)
 {
         struct obd_ioctl_data data;
 
         IOCINIT(data);
 
-        if (argc != 2 && argc != 3) {
+        if (argc != 2 && argc != 3 && argc != 4) {
                 fprintf(stderr, "usage: %s type [name [uuid]]\n",
                         cmdname(argv[0]));
                 return -1;
@@ -954,9 +984,14 @@ static int jt_attach(int argc, char **argv)
 
         data.ioc_inllen1 =  strlen(argv[1]) + 1;
         data.ioc_inlbuf1 = argv[1];
-        if (argc == 3) {
+        if (argc >= 3) {
                 data.ioc_inllen2 = strlen(argv[2]) + 1;
                 data.ioc_inlbuf2 = argv[2];
+        }
+
+        if (argc == 4) {
+                data.ioc_inllen3 = strlen(argv[3]) + 1;
+                data.ioc_inlbuf3 = argv[3];
         }
 
         if (obd_ioctl_pack(&data, &buf, max)) {
@@ -1291,7 +1326,6 @@ static int jt_test_brw(int argc, char **argv)
                 return -2;
         }
         IOCINIT(data);
-        data.ioc_conn2 = connid;
         data.ioc_obdo1.o_id = 2;
         data.ioc_count = len;
         data.ioc_offset = 0;
@@ -1413,6 +1447,7 @@ command_t cmdlist[] = {
                 "--threads <threads> <devno> <command [args ...]>"},
 
         /* Device configuration commands */
+        {"list", jt_list, 0, "list the devices (no args)"},
         {"newdev", jt_newdev, 0, "set device to a new unused obd (no args)"},
         {"device", jt_device, 0, "set current device (args device_no name)"},
         {"name2dev", jt_name2dev, 0, "set device by name (args name)"},

@@ -269,9 +269,9 @@ static int ldlm_handle_callback(struct ptlrpc_service *svc,
         RETURN(0);
 }
 
-static int lustre_handle(struct obd_device *dev, struct ptlrpc_service *svc,
-                         struct ptlrpc_request *req)
+static int lustre_handle(struct ptlrpc_request *req)
 {
+        struct ptlrpc_service *svc = req->rq_svc;
         struct obd_device *req_dev;
         int id, rc;
         ENTRY;
@@ -333,7 +333,7 @@ out:
 static int ldlm_iocontrol(long cmd, struct obd_conn *conn, int len, void *karg,
                           void *uarg)
 {
-        struct obd_device *obddev = conn->oc_dev;
+        struct obd_device *obddev = gen_conn2obd(conn);
         struct ptlrpc_connection *connection;
         int err;
         ENTRY;
