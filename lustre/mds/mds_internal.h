@@ -25,6 +25,7 @@ int mds_finish_transno(struct mds_obd *mds, struct inode *inode, void *handle,
                        struct ptlrpc_request *req, int rc, __u32 op_data);
 void mds_reconstruct_generic(struct ptlrpc_request *req);
 void mds_req_from_mcd(struct ptlrpc_request *req, struct mds_client_data *mcd);
+int mds_cleanup_orphans(struct obd_device *);
 
 /* mds/mds_lib.c */
 int mds_update_unpack(struct ptlrpc_request *, int offset,
