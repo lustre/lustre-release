@@ -236,9 +236,6 @@ AC_ARG_ENABLE([utils],
 	AC_HELP_STRING([--disable-utils],
 			[disable building of Lustre utility programs]),
 	[],[enable_utils='yes'])
-if test x$cray_portals = xyes ; then
-	enable_utils='no'
-fi
 AC_MSG_RESULT([$enable_utils])
 if test x$enable_utils = xyes ; then 
 	LB_CONFIG_INIT_SCRIPTS
