@@ -1,0 +1,81 @@
+#!/bin/sh
+
+SRCDIR="`dirname $0`"
+. $SRCDIR/common.sh
+
+NETWORK=tcp
+LOCALHOST=localhost
+SERVER=localhost
+PORT=1234
+
+setup
+setup_portals
+
+new_fs ext2 /tmp/ost 10000
+OST=$LOOPDEV
+MDSFS=ext3
+new_fs ${MDSFS} /tmp/mds 10000
+MDS=$LOOPDEV
+
+echo 0xffffffff > /proc/sys/portals/debug
+
+$OBDCTL <<EOF
+device 0
+attach mds
+setup ${MDS} ${MDSFS}
+device 1
+attach obdext2
+setup ${OST}
+device 2
+attach ost
+setup 1
+device 3
+attach osc
+setup -1
+quit
+EOF
+
+mount -t lustre_light -o device=3 none /mnt/obd
+
+test_fail() {
+	echo $1 > /proc/sys/lustre/fail_loc
+	shift
+	echo "Running '$*'"
+	$* 
+
+	echo 0 > /proc/sys/lustre/fail_loc
+
+	echo "Cleaning up and restarting MDS"
+	umount /mnt/obd
+	$OBDCTL <<- EOF
+	device 0
+	cleanup
+	detach
+	attach mds
+	setup ${MDS} ${MDSFS}
+	EOF
+	mount -t lustre_light -o device=3 none /mnt/obd
+}
+
+set -vx
+
+touch /mnt/obd/foo
+sync
+
+# OBD_FAIL_MDS_REINT_SETATTR_WRITE - MDS will discard data from setattr
+test_fail 0x10a chmod 000 /mnt/obd/foo
+ls -l /mnt/obd/foo
+
+# OBD_FAIL_MDS_REINT_CREATE_WRITE - MDS will discard data from create
+test_fail 0x10c touch /mnt/obd/bar
+ls /mnt/obd
+
+# OBD_FAIL_MDS_REINT_UNLINK_WRITE - MDS will discard data from create
+test_fail 0x10e rm /mnt/obd/foo
+ls /mnt/obd
+
+# OBD_FAIL_MDS_REINT_RENAME_WRITE - MDS will discard data from create
+test_fail 0x112 mv /mnt/obd/foo /mnt/obd/bar
+ls /mnt/obd
+
+echo "Done."
