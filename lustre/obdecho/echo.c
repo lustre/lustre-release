@@ -11,8 +11,8 @@
  * by Peter Braam <braam@clusterfs.com>
  */
 
-static char rcsid[] __attribute ((unused)) = "$Id: echo.c,v 1.22 2002/08/12 22:25:53 pschwan Exp $";
-#define OBDECHO_VERSION "$Revision: 1.22 $"
+static char rcsid[] __attribute ((unused)) = "$Id: echo.c,v 1.23 2002/08/19 21:51:33 adilger Exp $";
+#define OBDECHO_VERSION "$Revision: 1.23 $"
 
 #define EXPORT_SYMTAB
 
@@ -32,6 +32,7 @@ static char rcsid[] __attribute ((unused)) = "$Id: echo.c,v 1.22 2002/08/12 22:2
 #include <linux/obd_support.h>
 #include <linux/obd_class.h>
 #include <linux/obd_echo.h>
+#include <linux/lustre_debug.h>
 #include <linux/lustre_dlm.h>
 
 extern struct obd_device obd_dev[MAX_OBD_DEVICES];
@@ -50,13 +51,13 @@ echo_proc_read (char *page, char **start, off_t off, int count, int *eof, void *
 	int                len;
         int                attrs = atomic_read (&echo_getattrs);
         int                pages = atomic_read (&echo_page_rws);
-	
+
 	*eof = 1;
 	if (off != 0)
 		return (0);
-	
+
 	len = sprintf (page, "%d %d\n", pages, attrs);
-	
+
 	*start = page;
 	return (len);
 }
@@ -67,17 +68,18 @@ echo_proc_write (struct file *file, const char *ubuffer, unsigned long count, vo
 	/* Ignore what we've been asked to write, and just zero the stats counters */
         atomic_set (&echo_page_rws, 0);
         atomic_set (&echo_getattrs, 0);
-        
+
 	return (count);
 }
 
 void
 echo_proc_init(void)
 {
-        struct proc_dir_entry *entry = create_proc_entry (ECHO_PROC_STAT, S_IFREG | S_IRUGO | S_IWUSR, NULL);
+        struct proc_dir_entry *entry;
 
-        if (entry == NULL) 
-	{
+        entry = create_proc_entry(ECHO_PROC_STAT, S_IFREG|S_IRUGO|S_IWUSR,NULL);
+
+        if (entry == NULL) {
                 CERROR("couldn't create proc entry %s\n", ECHO_PROC_STAT);
                 return;
         }
@@ -87,8 +89,7 @@ echo_proc_init(void)
 	entry->write_proc = echo_proc_write;
 }
 
-void 
-echo_proc_fini(void)
+void echo_proc_fini(void)
 {
         remove_proc_entry(ECHO_PROC_STAT, 0);
 }
@@ -118,7 +119,7 @@ static int echo_disconnect(struct lustre_handle *conn)
         return rc;
 }
 
-static int echo_getattr(struct lustre_handle *conn, struct obdo *oa, 
+static int echo_getattr(struct lustre_handle *conn, struct obdo *oa,
                         struct lov_stripe_md *md)
 {
         memcpy(oa, &OA, sizeof(*oa));
@@ -150,11 +151,10 @@ int echo_preprw(int cmd, struct lustre_handle *conn, int objcount,
                 for (j = 0 ; j < obj->ioo_bufcnt ; j++, nb++, r++) {
                         unsigned long address;
 
-                        address = get_zeroed_page(GFP_KERNEL);
+                        address = __get_free_pages(GFP_KERNEL, 0);
                         if (!address) {
-                                CERROR("can't get new page %d/%d for id %Ld\n",
-                                       j, obj->ioo_bufcnt,
-                                       (unsigned long long)obj->ioo_id);
+                                CERROR("can't get page %d/%d for id "LPU64"\n",
+                                       j, obj->ioo_bufcnt, obj->ioo_id);
                                 GOTO(preprw_cleanup, rc = -ENOMEM);
                         }
                         echo_pages++;
@@ -163,6 +163,10 @@ int echo_preprw(int cmd, struct lustre_handle *conn, int objcount,
                         r->page = virt_to_page(address);
                         r->addr = kmap(r->page);
                         r->len = nb->len;
+
+                        if (cmd & OBD_BRW_READ)
+                                page_debug_setup(r->addr, r->len, r->offset,
+                                                 obj->ioo_id);
                 }
         }
         CDEBUG(D_PAGE, "%ld pages allocated after prep\n", echo_pages);
@@ -214,14 +218,17 @@ int echo_commitrw(int cmd, struct lustre_handle *conn, int objcount,
                             !(addr = (unsigned long)page_address(page)) ||
                             !kern_addr_valid(addr)) {
 
-                                CERROR("bad page %p, id %Ld (%d), buf %d/%d\n",
-                                       page, (unsigned long long)obj->ioo_id, i,
-                                       j, obj->ioo_bufcnt);
+                                CERROR("bad page "LPU64":%p, buf %d/%d\n",
+                                       obj->ioo_id, page, j,obj->ioo_bufcnt);
                                 GOTO(commitrw_cleanup, rc = -EFAULT);
                         }
 
                         atomic_inc (&echo_page_rws);
-                        
+
+                        if (cmd & OBD_BRW_WRITE)
+                                page_debug_check("echo", (void *)addr,PAGE_SIZE,
+                                                 r->offset, obj->ioo_id);
+
                         kunmap(page);
                         __free_pages(page, 0);
                         echo_pages--;
@@ -281,21 +288,21 @@ static int __init obdecho_init(void)
         printk(KERN_INFO "Echo OBD driver " OBDECHO_VERSION " info@clusterfs.com\n");
 
         echo_proc_init();
-        
+
         return class_register_type(&echo_obd_ops, OBD_ECHO_DEVICENAME);
 }
 
 static void __exit obdecho_exit(void)
 {
         echo_proc_fini ();
-        
+
         CERROR("%ld prep/commitrw pages leaked\n", echo_pages);
         class_unregister_type(OBD_ECHO_DEVICENAME);
 }
 
 MODULE_AUTHOR("Cluster Filesystems Inc. <info@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre Testing Echo OBD driver " OBDECHO_VERSION);
-MODULE_LICENSE("GPL"); 
+MODULE_LICENSE("GPL");
 
 module_init(obdecho_init);
 module_exit(obdecho_exit);

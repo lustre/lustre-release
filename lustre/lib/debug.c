@@ -12,8 +12,10 @@
 
 #define DEBUG_SUBSYSTEM D_OTHER
 
+#define EXPORT_SYMTAB
 #include <linux/obd_ost.h>
 #include <linux/lustre_debug.h>
+#include <linux/lustre_net.h>
 
 int dump_ioo(struct obd_ioobj *ioo)
 {
@@ -73,17 +75,78 @@ int dump_obdo(struct obdo *oa)
 }
 
 /* XXX assumes only a single page in request */
+/*
 int dump_req(struct ptlrpc_request *req)
 {
         struct ost_body *body = lustre_msg_buf(req->rq_reqmsg, 0);
         struct obd_ioobj *ioo = lustre_msg_buf(req->rq_reqmsg, 1);
         //struct niobuf *nb = lustre_msg_buf(req->rq_reqmsg, 2);
 
-        CERROR("ost_body: connid = %d, data = %d\n", body->connid, body->data);
         dump_obdo(&body->oa);
         //dump_niobuf(nb);
         dump_ioo(ioo);
 
         return -EINVAL;
 }
+*/
 
+#define LPDS sizeof(__u64)
+int page_debug_setup(void *addr, int len, __u64 off, __u64 id)
+{
+        LASSERT(addr);
+
+        off = HTON__u64(off);
+        id = HTON__u64(id);
+        memcpy(addr, (char *)&off, LPDS);
+        memcpy(addr + LPDS, (char *)&id, LPDS);
+
+        addr += len - LPDS - LPDS;
+        memcpy(addr, (char *)&off, LPDS);
+        memcpy(addr + LPDS, (char *)&id, LPDS);
+
+        return 0;
+}
+
+int page_debug_check(char *who, void *addr, int end, __u64 off, __u64 id)
+{
+        __u64 ne_off;
+        int err = 0;
+
+        LASSERT(addr);
+
+        ne_off = HTON__u64(off);
+        id = HTON__u64(id);
+        if (memcmp(addr, (char *)&ne_off, LPDS)) {
+                CERROR("%s: for offset "LPU64" off: "LPX64" != "LPX64"\n",
+                       who, off, *(__u64 *)addr, ne_off);
+                err = -EINVAL;
+        }
+        if (memcmp(addr + LPDS, (char *)&id, LPDS)) {
+                CERROR("%s: for offset "LPU64" id: "LPX64" != "LPX64"\n",
+                       who, off, *(__u64 *)(addr + LPDS), id);
+                err = -EINVAL;
+        }
+
+        addr += end - LPDS - LPDS;
+        if (memcmp(addr, (char *)&ne_off, LPDS)) {
+                CERROR("%s: for offset "LPU64" end off: "LPX64" != "LPX64"\n",
+                       who, off, *(__u64 *)addr, ne_off);
+                err = -EINVAL;
+        }
+        if (memcmp(addr + LPDS, (char *)&id, LPDS)) {
+                CERROR("%s: for offset "LPU64" end id: "LPX64" != "LPX64"\n",
+                       who, off, *(__u64 *)(addr + LPDS), id);
+                err = -EINVAL;
+        }
+
+        return err;
+}
+#undef LPDS
+
+EXPORT_SYMBOL(dump_lniobuf);
+EXPORT_SYMBOL(dump_rniobuf);
+EXPORT_SYMBOL(dump_ioo);
+//EXPORT_SYMBOL(dump_req);
+EXPORT_SYMBOL(dump_obdo);
+EXPORT_SYMBOL(page_debug_setup);
+EXPORT_SYMBOL(page_debug_check);

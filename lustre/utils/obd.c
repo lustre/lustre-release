@@ -957,10 +957,10 @@ int jt_obd_test_brw(int argc, char **argv)
 {
         struct obd_ioctl_data data;
         struct timeval start, next_time;
-        char *bulk, *b;
-        int pages = 1, obdos = 1, count, next_count;
+        int pages = 1, objid = 3, count, next_count;
         int verbose = 1, write = 0, rw;
-        int i, o, p;
+        long long offset;
+        int i;
         int len;
         int rc = 0;
 
@@ -981,65 +981,26 @@ int jt_obd_test_brw(int argc, char **argv)
         if (argc >= 5)
                 pages = strtoul(argv[4], NULL, 0);
         if (argc >= 6)
-                obdos = strtoul(argv[5], NULL, 0);
-
-        if (obdos != 1 && obdos != 2) {
-                fprintf(stderr, "error: %s: only 1 or 2 obdos supported\n",
-                        cmdname(argv[0]));
-                return -2;
-        }
+                objid = strtoul(argv[5], NULL, 0);
 
         len = pages * PAGE_SIZE;
 
-        bulk = calloc(obdos, len);
-        if (!bulk) {
-                fprintf(stderr, "error: %s: no memory allocating %dx%d pages\n",
-                        cmdname(argv[0]), obdos, pages);
-                return -2;
-        }
         IOCINIT(data);
-        data.ioc_obdo1.o_id = 2;
+        data.ioc_obdo1.o_id = objid;
         data.ioc_count = len;
         data.ioc_offset = 0;
-        data.ioc_plen1 = len;
-        data.ioc_pbuf1 = bulk;
-        if (obdos > 1) {
-                data.ioc_obdo2.o_id = 3;
-                data.ioc_plen2 = len;
-                data.ioc_pbuf2 = bulk + len;
-        }
 
         gettimeofday(&start, NULL);
         next_time.tv_sec = start.tv_sec - verbose;
         next_time.tv_usec = start.tv_usec;
 
         if (verbose != 0)
-                printf("%s: %s %d (%dx%d pages) (testing only): %s",
+                printf("%s: %s %dx%d pages (testing only): %s",
                        cmdname(argv[0]), write ? "writing" : "reading",
-                       count, obdos, pages, ctime(&start.tv_sec));
-
-        /*
-         * We will put in the start time (and loop count inside the loop)
-         * at the beginning of each page so that we will be able to validate
-         * (at some later time) whether the data actually made it or not.
-         *
-         * XXX we do not currently use any of this memory in OBD_IOC_BRW_*
-         *     just to avoid the overhead of the copy_{to,from}_user.  It
-         *     can be fixed if we ever need to send real data around.
-         */
-        for (o = 0, b = bulk; o < obdos; o++)
-                for (p = 0; p < pages; p++, b += PAGE_SIZE)
-                        memcpy(b, &start, sizeof(start));
+                       count, pages, ctime(&start.tv_sec));
 
         rw = write ? OBD_IOC_BRW_WRITE : OBD_IOC_BRW_READ;
-        for (i = 1, next_count = verbose; i <= count; i++) {
-                if (write) {
-                        b = bulk + sizeof(struct timeval);
-                        for (o = 0; o < obdos; o++)
-                                for (p = 0; p < pages; p++, b += PAGE_SIZE)
-                                        memcpy(b, &count, sizeof(count));
-                }
-
+        for (i = 1, next_count = verbose, offset = 0; i <= count; i++) {
                 rc = ioctl(fd, rw, &data);
                 SHMEM_BUMP();
                 if (rc) {
@@ -1051,9 +1012,9 @@ int jt_obd_test_brw(int argc, char **argv)
                            (verbose, &next_time, i, &next_count, count))
                         printf("%s: %s number %d\n", cmdname(argv[0]),
                                write ? "write" : "read", i);
-        }
 
-        free(bulk);
+                data.ioc_offset += len;
+        }
 
         if (!rc) {
                 struct timeval end;
@@ -1065,10 +1026,9 @@ int jt_obd_test_brw(int argc, char **argv)
 
                 --i;
                 if (verbose != 0)
-                        printf("%s: %s %dx%dx%d pages in %.4gs (%.4g pg/s): %s",
+                        printf("%s: %s %dx%d pages in %.4gs (%.4g pg/s): %s",
                                cmdname(argv[0]), write ? "wrote" : "read",
-                               obdos, pages, i, diff,
-                               (double)obdos * i * pages / diff,
+                               i, pages, diff, (double)i * pages / diff,
                                ctime(&end.tv_sec));
         }
         return rc;

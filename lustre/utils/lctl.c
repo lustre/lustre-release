@@ -130,7 +130,7 @@ command_t cmdlist[] = {
          "usage: test_getattr <count> [verbose]"},
         {"test_brw", jt_obd_test_brw, 0,
          "perform count number of bulk read/writes\n"
-         "usage: test_brw <count> [write [verbose [pages [obdos]]]]"},
+         "usage: test_brw <count> [write [verbose [pages [objid]]]]"},
         {"test_ldlm", jt_obd_test_ldlm, 0, "perform lock manager test\n"
          "usage: test_ldlm"},
         {"ldlm_regress_start", jt_obd_ldlm_regress_start, 0,

@@ -278,4 +278,9 @@ struct obd_ops {
         int (*o_cancel)(struct lustre_handle *, struct lov_stripe_md *md, __u32 mode, struct lustre_handle *);
 };
 
+/* FIXME: for 64-bit arch */
+#define LPU64 "%Lu"
+#define LPD64 "%Ld"
+#define LPX64 "%Lx"
+
 #endif

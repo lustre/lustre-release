@@ -40,6 +40,7 @@
 
 #include <linux/obd_support.h>
 #include <linux/obd_class.h>
+#include <linux/lustre_debug.h>
 #include <linux/smp_lock.h>
 
 struct semaphore obd_conf_sem;   /* serialize configuration commands */
@@ -99,6 +100,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
         int len = 0;
         struct obd_ioctl_data *data;
         struct obd_device *obd = filp->private_data;
+        
         struct lustre_handle conn;
         int rw = OBD_BRW_READ;
         int err = 0;
@@ -480,17 +482,17 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 struct lov_stripe_md smd;
                 struct io_cb_data *cbd = ll_init_cb();
                 obd_count       pages = 0;
-                struct brw_page *pga;
+                struct brw_page *pga, *pgp;
                 int             j;
                 unsigned long off;
-                void *from;
-                
+                __u64 id;
+
                 if (!cbd)
-                        GOTO(out, -ENOMEM); 
+                        GOTO(out, err = -ENOMEM);
 
                 obd_data2conn(&conn, data);
 
-                pages = data->ioc_plen1 / PAGE_SIZE;
+                pages = data->ioc_count / PAGE_SIZE;
 
                 CDEBUG(D_INODE, "BRW %s with %d pages\n",
                        rw == OBD_BRW_READ ? "read" : "write", pages);
@@ -501,37 +503,47 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 }
 
                 memset(&smd, 0, sizeof(smd));
-                smd.lmd_object_id = data->ioc_obdo1.o_id;
+                id = smd.lmd_object_id = data->ioc_obdo1.o_id;
 
-                from = (&data->ioc_pbuf1)[0];
                 off = data->ioc_offset;
 
-                for (j = 0; j < pages;
-                     j++, off += PAGE_SIZE, from += PAGE_SIZE) {
+                for (j = 0, pgp = pga; j < pages; j++, off += PAGE_SIZE, pgp++){
                         unsigned long to;
 
                         to = __get_free_pages(GFP_KERNEL, 0);
                         if (!to) {
-                                /*      ||
-                                        copy_from_user((void
-                                        *)to,from,PAGE_SIZE))
-                                        free_pages(to, 0);
-                                */
                                 CERROR("no memory for brw pages\n");
                                 GOTO(brw_cleanup, err = -ENOMEM);
                         }
-                        pga[j].pg = virt_to_page(to);
-                        pga[j].count = PAGE_SIZE;
-                        pga[j].off = off;
-                        pga[j].flag = 0;
+                        pgp->pg = virt_to_page(to);
+                        pgp->count = PAGE_SIZE;
+                        pgp->off = off;
+                        pgp->flag = 0;
+
+                        if (rw == OBD_BRW_WRITE) {
+                                void *addr = kmap(pgp->pg);
+
+                                LASSERT(addr == (void *)to);
+
+                                page_debug_setup(addr, PAGE_SIZE, off, id);
+                                kunmap(pgp->pg);
+                        }
                 }
 
                 err = obd_brw(rw, &conn, &smd, j, pga, ll_sync_io_cb, cbd);
                 EXIT;
         brw_cleanup:
-                for (j = 0; j < pages; j++)
-                        if (pga[j].pg != NULL)
-                                __free_pages(pga[j].pg, 0);
+                for (j = 0, pgp = pga; j < pages; j++) {
+                        if (pgp->pg != NULL) {
+                                void *addr = kmap(pgp->pg);
+
+                                page_debug_check("test_brw", addr, PAGE_SIZE,
+                                                 pgp->off, id);
+                                kunmap(pgp->pg);
+
+                                __free_pages(pgp->pg, 0);
+                        }
+                }
         brw_free:
                 OBD_FREE(pga, pages * sizeof(*pga));
                 GOTO(out, err);

@@ -48,4 +48,6 @@ int dump_rniobuf(struct niobuf_remote *rnb);
 int dump_ioo(struct obd_ioobj *nb);
 int dump_req(struct ptlrpc_request *req);
 int dump_obdo(struct obdo *oa);
+int page_debug_setup(void *addr, int len, __u64 off, __u64 id);
+int page_debug_check(char *who, void *addr, int len, __u64 off, __u64 id);
 #endif
