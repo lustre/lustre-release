@@ -377,7 +377,7 @@ Index: linux-2.4.20/fs/namei.c
 +				if (err)
 +					break;
 +				new = real_lookup(dentry->d_parent,
-+						  &dentry->d_name, 0, NULL);
++						  &dentry->d_name, 0, it);
 +				d_invalidate(dentry);
 +				dput(dentry);
 +				if (IS_ERR(new)) {

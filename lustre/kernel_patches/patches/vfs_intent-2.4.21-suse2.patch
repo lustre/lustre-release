@@ -309,11 +309,11 @@ Index: linux-2.4.21-x86_64/fs/namei.c
 +			if (!dentry->d_op->d_revalidate_it(dentry, 0, it)) {
 +				struct dentry *new;
 +				err = permission(dentry->d_parent->d_inode,
-+						MAY_EXEC);
++						 MAY_EXEC);
 +				if (err)
 +					break;
 +				new = real_lookup(dentry->d_parent,
-+						&dentry->d_name, 0, NULL);
++						  &dentry->d_name, 0, it);
 +				d_invalidate(dentry);
 +				dput(dentry);
 +				if (IS_ERR(new)) {
