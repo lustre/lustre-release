@@ -242,6 +242,7 @@ void ll_try_done_writing(struct inode *inode);
 void ll_queue_done_writing(struct inode *inode);
 void ll_close_thread_shutdown(struct ll_close_queue *lcq);
 int ll_close_thread_start(struct ll_close_queue **lcq_ret);
+int ll_dir_process_mount_object(struct dentry *, struct nameidata *);
 
 /* generic */
 #define LL_SUPER_MAGIC 0x0BD00BD0
