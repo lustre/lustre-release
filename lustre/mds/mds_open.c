@@ -238,6 +238,5 @@ int mds_open(struct mds_update_record *rec, int offset,
  out_step_2:
         l_dput(parent);
         ldlm_lock_decref(&parent_lockh, parent_mode);
- out_step_1:
         RETURN(rc);
 }
