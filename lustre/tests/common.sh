@@ -121,7 +121,7 @@ new_fs () {
 	fi
 
 	# Enable hash-indexed directories for extN filesystems
-#	[ "$1" = "extN" ] && echo "feature FEATURE_C5" | debugfs -w $2
+	[ "$1" = "extN" ] && echo "feature FEATURE_C5" | debugfs -w $2
 }
 
 # Set up to use an existing filesystem.  We take the same parameters as
@@ -199,8 +199,13 @@ setup_portals() {
 		return 0
 	fi
 
-	if [ -z "$NETWORK" -o -z "$LOCALHOST" -o -z "$SERVER" ]; then
-		echo "$0: NETWORK or LOCALHOST or SERVER is not set" 1>&2
+	if [ -z "$NETWORK" -o -z "$LOCALHOST" ]; then
+		echo "$0: NETWORK or LOCALHOST is not set" 1>&2
+		exit -1
+	fi
+
+	if [ -z "$OSTNODE" -o -z "$MDSNODE" -o -z "$DLM" ]; then
+		echo "$0: SERVER (or OSTNODE and MDSNODE and DLM) not set" 1>&2
 		exit -1
 	fi
 
