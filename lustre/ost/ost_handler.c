@@ -445,7 +445,8 @@ static int ost_brw_write(struct ost_obd *obddev, struct ptlrpc_request *req)
         memcpy(&(desc->b_conn), &conn, sizeof(conn));
 
         /* Save journal context for commit callbacks */
-        CERROR("journal_info: saved %p->%p\n", current, current->journal_info);
+        CDEBUG(D_BUFFS, "journal_info: saved %p->%p\n", current,
+               current->journal_info);
         desc->b_journal_info = current->journal_info;
 
         for (i = 0, lnb = local_nb; i < niocount; i++, lnb++) {

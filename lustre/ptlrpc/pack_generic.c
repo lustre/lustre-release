@@ -36,7 +36,7 @@ int lustre_pack_msg(int count, int *lens, char **bufs, int *len,
         for (i = 0; i < count; i++)
                 size += size_round(lens[i]);
 
-        *len = sizeof(*m) + count * sizeof(__u32) + size;
+        *len = size_round(sizeof(*m) + count * sizeof(__u32)) + size;
 
         OBD_ALLOC(*msg, *len);
         if (!*msg)
@@ -47,7 +47,7 @@ int lustre_pack_msg(int count, int *lens, char **bufs, int *len,
         for (i = 0; i < count; i++)
                 m->buflens[i] = HTON__u32(lens[i]);
 
-        ptr = (char *)m + sizeof(*m) + sizeof(__u32) * count;
+        ptr = (char *)m + size_round(sizeof(*m) + count * sizeof(__u32));
         for (i = 0; i < count; i++) {
                 char *tmp = NULL;
                 if (bufs)
@@ -62,12 +62,12 @@ int lustre_pack_msg(int count, int *lens, char **bufs, int *len,
  * with the given sub-buffer lengths. */
 int lustre_msg_size(int count, int *lengths)
 {
-        int size = sizeof(struct lustre_msg), i;
+        int size, i;
 
         for (i = 0; i < count; i++)
                 size += size_round(lengths[i]);
 
-        size += count * sizeof(__u32);
+        size += size_round(sizeof(struct lustre_msg) + count * sizeof(__u32));
 
         return size;
 }
@@ -76,7 +76,7 @@ int lustre_unpack_msg(struct lustre_msg *m, int len)
 {
         int required_len, i;
 
-        required_len = sizeof(*m);
+        required_len = size_round(sizeof(*m));
         if (len < required_len)
                 RETURN(-EINVAL);
 
@@ -89,7 +89,7 @@ int lustre_unpack_msg(struct lustre_msg *m, int len)
         m->last_rcvd = NTOH__u64(m->last_rcvd);
         m->last_committed = NTOH__u64(m->last_committed);
 
-        required_len += m->bufcount * sizeof(__u32);
+        required_len = size_round(sizeof(*m) + m->bufcount * sizeof(__u32));
         if (len < required_len)
                 RETURN(-EINVAL);
 
@@ -119,7 +119,7 @@ void *lustre_msg_buf(struct lustre_msg *m, int n)
         if (m->buflens[n] == 0)
                 return NULL;
 
-        offset = sizeof(*m) + m->bufcount * sizeof(__u32);
+        offset = size_round(sizeof(*m) + m->bufcount * sizeof(__u32));
 
         for (i = 0; i < n; i++)
                 offset += size_round(m->buflens[i]);
